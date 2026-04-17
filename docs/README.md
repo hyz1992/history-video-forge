@@ -29,7 +29,8 @@
 15. [旧项目可复用内容清单](./migration/reusable-assets-inventory.md)
 16. [Harness 工程规则与风险规避](./standards/harness-engineering-rules.md)
 17. [Greenfield 实施路线图](./plans/2026-04-17-greenfield-roadmap.md)
-18. [当前总 Todo](./todos/roadmap-todo.md)
+18. [Topic + Script 第一阶段实现计划](./plans/2026-04-17-topic-script-foundation-implementation-plan.md)
+19. [当前总 Todo](./todos/roadmap-todo.md)
 
 ## 当前文档结构
 
@@ -74,6 +75,7 @@
 ### 计划与执行
 
 - [Greenfield 实施路线图](./plans/2026-04-17-greenfield-roadmap.md)
+- [Topic + Script 第一阶段实现计划](./plans/2026-04-17-topic-script-foundation-implementation-plan.md)
 - [当前总 Todo](./todos/roadmap-todo.md)
 
 ## 当前已确认范围
@@ -89,6 +91,7 @@
 - script 阶段的实现级阈值与返回 schema
 - 旧项目可复用与不可复用部分
 - 分阶段讨论留档
+- 第一阶段实现计划与任务清单
 
 ## 当前仍为 TBD 的区域
 

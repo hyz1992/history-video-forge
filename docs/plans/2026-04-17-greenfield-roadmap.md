@@ -23,6 +23,10 @@
 
 - 跑通三入口到 `Topic Package`
 
+实施计划：
+
+- [Topic + Script 第一阶段实现计划](./2026-04-17-topic-script-foundation-implementation-plan.md)
+
 子任务：
 
 - Event Registry 最小实现
@@ -48,6 +52,10 @@
 目标：
 
 - 跑通 `Topic Package -> Script Input Bundle -> Script Draft Package`
+
+实施计划：
+
+- [Topic + Script 第一阶段实现计划](./2026-04-17-topic-script-foundation-implementation-plan.md)
 
 子任务：
 
