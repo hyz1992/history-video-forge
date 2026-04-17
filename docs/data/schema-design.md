@@ -117,6 +117,7 @@
 - `scope_label`
 - `core_conflict`
 - `stakes`
+- `narrative_tension_map_json`
 - `must_include_beats_json`
 - `forbidden_expansions_json`
 - `risk_hints_json`
@@ -135,6 +136,8 @@
 说明：
 - 一个 project 可以保留多个历史 `Topic Package` 快照
 - 但 `projects.active_topic_package_id` 只能指向其中一个
+- `narrative_tension_map_json` 第一版建议直接作为 JSON 字段落库，避免过早拆表
+- 它属于 topic 合同本体，不属于交付层缓存
 
 ### F. `recommendation_candidate_cache`
 
@@ -149,6 +152,7 @@
 - `one_line_angle`
 - `family_label`
 - `scope_label`
+- `viral_rubric_json`
 - `estimated_duration_band_json`
 - `strong_scene`
 - `core_conflict`
@@ -167,6 +171,7 @@
 - 它不是正式知识库
 - 它可以过期、淘汰、重评分
 - 它不应该污染 `Event Registry`
+- `viral_rubric_json` 用于保存推荐阶段已计算过的势能维度，供短期复用与重评分参考
 
 ### G. `script_records`
 
@@ -184,6 +189,8 @@
 - `beat_trace_json`
 - `quote_trace_json`
 - `review_status`
+- `validation_result_json`
+- `semantic_review_result_json`
 - `created_at`
 
 关系：
@@ -193,6 +200,26 @@
 说明：
 - script 阶段仍然允许 patch / regen，因此保留历史记录有价值
 - 但 `projects.active_script_record_id` 只指向最终当前版本
+- `validation_result_json` 用于保存本地硬校验返回对象
+- `semantic_review_result_json` 用于保存单一语义审校返回对象，第一版允许直接存 JSON
+
+### H. `candidate_exposure_logs`（可选但推荐）
+
+定位：
+- 记录某个 project 在主题阶段实际向用户展示过哪些 candidate
+
+建议包含：
+- `id`
+- `project_id`
+- `candidate_id`
+- `event_id`
+- `shown_at`
+- `source_mode`
+- `exposure_batch`
+
+说明：
+- 这张表不是第一版绝对必需，但如果希望 `Recent Memory` 更可靠，建议尽早预留
+- 它可以支撑“最近看过但没选”的冷却与排序分析
 
 ## 3. Recent Memory 的落地策略
 

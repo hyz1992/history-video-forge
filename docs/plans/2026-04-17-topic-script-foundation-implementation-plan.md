@@ -129,6 +129,13 @@ git commit -m "feat: 初始化 monorepo 与最小 workspace 骨架"
 - `ScriptDraftPackage`
 - `ScriptValidationResult`
 
+并额外断言以下新增字段已进入 schema：
+
+- `TopicCandidateCard.viral_rubric`
+- `TopicPackage.narrative_tension_map`
+- `TopicDeliveryPack.hook_claim / hook_emotion / reveal_position`
+- `ScriptValidationResult.patch_intent`
+
 **Step 2: Run test to verify it fails**
 
 Run: `npm test -- tests/shared/schema-contracts.test.ts`
@@ -138,6 +145,7 @@ Expected: FAIL，因为 schema 尚不存在
 
 - 用 Zod 实现最小 schema
 - 只覆盖已确认字段，不提前拍死 storyboard/assets
+- 将“爆款化优化层”中已确认的轻量字段一并纳入第一版共享 schema，避免后续 schema 二次返工
 
 **Step 4: Run test to verify it passes**
 
@@ -177,6 +185,13 @@ git commit -m "feat: 增加 topic 与 script 最小共享 schema"
 - `saveTopicPackage`
 - `saveCachedCandidate`
 
+并断言以下字段可被持久化：
+
+- `topic_packages.narrative_tension_map_json`
+- `recommendation_candidate_cache.viral_rubric_json`
+- `script_records.validation_result_json`
+- `script_records.semantic_review_result_json`
+
 **Step 2: Run test to verify it fails**
 
 Run: `npm test -- tests/backend/repositories/repository-contracts.test.ts`
@@ -186,6 +201,7 @@ Expected: FAIL
 
 - 建立最小 Prisma schema
 - 先实现接口壳与 in-memory/mock 实现均可，但接口名必须稳定
+- 新增字段第一版优先 JSON 落库，不提前拆复杂子表
 
 **Step 4: Run test to verify it passes**
 
@@ -219,6 +235,8 @@ git commit -m "feat: 建立 backend 与 topic 数据层最小骨架"
 
 - 给定标准 event，能产出 3 个 family 槽位 candidate
 - candidate 的 `one_line_angle` 彼此不完全重复
+- candidate 带有最小 `viral_rubric`
+- 当 `hook_power` 与 `visual_promise` 同时偏低时，candidate 会被淘汰
 
 `event-normalizer.test.ts` 至少覆盖：
 
@@ -234,6 +252,7 @@ Expected: FAIL
 
 - 先实现 deterministic 壳与 mock candidate 生成
 - 不要求第一版就接入真实 LLM 推荐
+- `viral_rubric` 第一版先按规则壳生成，不引入复杂评分模型
 
 **Step 4: Run test to verify it passes**
 
@@ -268,6 +287,12 @@ git commit -m "feat: 实现 topic builder 与事件归一化基础壳"
 
 并断言确认后项目推进到 `script_ready`。
 
+并额外断言确认后冻结出的 `TopicPackage` 至少包含：
+
+- `narrative_tension_map`
+- `strong_scene`
+- `duration_band`
+
 **Step 2: Run test to verify it fails**
 
 Run: `npm test -- tests/backend/api/topic-api.test.ts`
@@ -278,6 +303,7 @@ Expected: FAIL
 - 按当前 API 文档实现最小路由
 - 候选先可用 mock store
 - 确认后冻结 `TopicPackage` 并回写项目状态
+- `narrative_tension_map` 在 confirm 时即冻结，不拖到 script 阶段临时生成
 
 **Step 4: Run test to verify it passes**
 
@@ -309,6 +335,14 @@ git commit -m "feat: 实现 topic API 与 Topic Package 冻结"
 - 能组装出 `ScriptInputBundle`
 - `Hard Lane / Soft Lane / Packaging Lane` 均存在
 
+并额外断言：
+
+- Packaging Lane 至少包含：
+  - `hook_claim`
+  - `hook_emotion`
+  - `reveal_position`
+- `hook_claim` 与 `TopicPackage.narrative_tension_map.hook_claim` 同源
+
 **Step 2: Run test to verify it fails**
 
 Run: `npm test -- tests/backend/script/script-input-bundle.test.ts`
@@ -318,6 +352,7 @@ Expected: FAIL
 
 - Delivery Planner 先按规则配置返回
 - Script Input Bundle 先做纯组装，不接入真正正文生成
+- 第一版允许 `hook_claim` 做包装化表达，但不得偏离 `narrative_tension_map.hook_claim` 的核心 promise
 
 **Step 4: Run test to verify it passes**
 
@@ -353,6 +388,10 @@ git commit -m "feat: 实现 delivery planner 与 script 输入组装"
   - `regen_once`
   - `hard_fail`
 
+并额外断言：
+
+- 本地硬校验结果可序列化为 `validation_result_json`
+
 **Step 2: Run test to verify it fails**
 
 Run: `npm test -- tests/backend/script/script-draft.test.ts tests/backend/script/script-local-validator.test.ts`
@@ -362,6 +401,7 @@ Expected: FAIL
 
 - 正文生成先允许 mock writer / stub LLM
 - 本地硬校验先实现已确认阈值，不实现复杂 NLP
+- 本地硬校验返回对象 schema 需与文档保持一致，便于后续直接落库
 
 **Step 4: Run test to verify it passes**
 
@@ -397,6 +437,12 @@ git commit -m "feat: 实现 script 草稿生成与本地硬校验壳"
   - `regen_once`
   - `return_topic`
 
+并额外断言：
+
+- 语义审校结果可返回 `patch_intent`
+- 当命中进攻性标签时，优先导向 `patch_once(intent=lift)`
+- `patch_intent=lift` 不会修改 `must_include_beats / scope / narrative_tension_map`
+
 **Step 2: Run test to verify it fails**
 
 Run: `npm test -- tests/backend/api/script-api.test.ts`
@@ -406,6 +452,7 @@ Expected: FAIL
 
 - 语义审校先做接口壳与固定返回格式
 - patch / regen / return_topic 流程先跑通状态流，不做复杂内容优化
+- `patch_intent` 第一版即纳入返回对象，避免后续 API 二次改形
 
 **Step 4: Run test to verify it passes**
 
@@ -535,4 +582,3 @@ git commit -m "feat: 增加 topic-script 最小 harness 样例回归"
 - 视觉细稿与高级交互 polish
 - 运营后台
 - 推荐模型质量优化
-

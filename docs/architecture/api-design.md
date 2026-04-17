@@ -110,6 +110,23 @@
 - `Topic Package` 摘要
 - 新的项目状态（应推进到 `script_ready`）
 
+`Topic Package` 摘要第一版至少应包含：
+
+- `event_id`
+- `canonical_title`
+- `selected_angle`
+- `family_label`
+- `scope_label`
+- `core_conflict`
+- `strong_scene`
+- `duration_band`
+- `narrative_tension_map`
+
+说明：
+
+- `narrative_tension_map` 属于 topic 合同本体，应在确认接口后正式可见
+- Packaging 层使用的 `hook_claim` 可以由后续 Delivery Planner 从 `narrative_tension_map.hook_claim` 派生，但两者不能承诺不同内容
+
 ## 5. Script 阶段 API
 
 ### `POST /api/projects/:projectId/script/generate`
@@ -132,6 +149,11 @@ SSE 后续事件：
 - `script_failed`
 - `script_returned_to_topic`
 
+补充说明：
+
+- 如果本轮 patch 是提升型 patch，应允许事件流中带出 `patch_intent=lift`
+- `patch_intent` 不是新的阶段状态，只是 `script_patch_started` 的补充上下文
+
 ### `GET /api/projects/:projectId/script`
 
 用途：
@@ -140,6 +162,25 @@ SSE 后续事件：
 返回：
 - script 摘要
 - 当前 review 决议
+
+script 摘要第一版建议至少包含：
+
+- `script_text`
+- `estimated_duration_sec`
+- `opening_span`
+- `ending_span`
+- `review_decision`
+- `patch_intent`
+- `hard_issue_labels`
+- `soft_issue_labels`
+
+说明：
+
+- `patch_intent` 允许为：
+  - `fix`
+  - `lift`
+  - `null`
+- 这样前端或 harness 在读取 script 结果时，能明确知道当前稿件是“修 bug 后通过”还是“提势能后通过”
 
 ## 6. 错误与状态处理原则
 
