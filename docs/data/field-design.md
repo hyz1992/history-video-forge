@@ -96,6 +96,35 @@
 | `source_hint` | 主要来源提示 | 提供史料感知 |
 | `recent_usage_hint` | 与近期选题关系 | 提醒是否过近重复 |
 
+### `viral_rubric`
+
+定位：
+
+- 这是 `Topic Candidate Card` 的内部创意势能描述
+- 它不是用户要编辑的对象
+- 它也不是黑箱总分
+
+作用：
+
+- 帮助推荐阶段从“能讲”进一步走到“更有爆款潜力”
+- 给轻评审和 candidate 排序一个统一的进攻性参考
+
+最小字段建议：
+
+| 字段 | 含义 | 备注 |
+|---|---|---|
+| `hook_power` | 首屏停留力是否足够 | 第一优先维度 |
+| `novelty_gap` | 是否存在反常识张力 | 第二优先维度 |
+| `emotion_gap` | 是否存在强情绪缺口 | 辅助维度 |
+| `share_impulse` | 是否容易引发评论/转发欲 | 第三优先维度 |
+| `visual_promise` | 是否承诺强场面、强器物、强动作 | 第四优先维度 |
+
+设计边界：
+
+- 不做单一总分
+- 不直接定义 hard fail
+- 主要用于 candidate 排序、淘汰和轻评审
+
 ## 3. Topic Package
 
 定位：
@@ -129,10 +158,40 @@
 | `source_anchor_refs` | 主要来源名 | 史料来源锚点 |
 | `canonical_quotes` | 短原文锚句 | 只做锚点，不做大段原文输入 |
 | `ambiguity_notes` | 版本/归属歧义说明 | 防止误写 |
+| `narrative_tension_map` | 叙事张力图 | 轻量描述这条内容的张力递进 |
 | `duration_band` | 合理时长区间 | 后验范围检查参考 |
 | `voice_hint` | 建议声线 | 轻量偏置，不是强模板 |
 | `strong_scene` | 最抓人的场面 | 给开头与分镜提供高价值锚 |
 | `packaging_seed` | 包装抓点一句话 | 服务标题/封面/开头包装 |
+
+### `narrative_tension_map`
+
+定位：
+
+- 它属于 `Topic Package`
+- 它描述的是这条内容的叙事张力骨架，而不是交付微调
+
+作用：
+
+- 把“topic 边界”与“script 递进”连接起来
+- 避免 script 在 beats 都齐的情况下仍然写得平
+
+最小字段建议：
+
+| 字段 | 含义 |
+|---|---|
+| `hook_claim` | 开头最核心的 promise 是什么 |
+| `pressure_escalation` | 中段压力如何升级 |
+| `mid_reveal` | 中段关键信息揭示或翻面 |
+| `peak_payoff` | 观众真正等的高潮兑现点 |
+| `ending_residue` | 结尾想留下的余味 |
+
+设计边界：
+
+- 不是新大纲
+- 不是段落模板
+- 不是分镜合同
+- 每个字段只允许短句
 
 ## 4. Project Style Pack
 
@@ -192,8 +251,16 @@
 | `pacing_tilt` | 节奏微偏置 | 不得反向覆盖 duration_band |
 | `ending_tilt` | 结尾收束偏向 | 不得强迫正文结构 |
 | `visual_tilt` | 画面侧重点 | 主要服务后续视觉层 |
-| `packaging_hook` | 包装抓点一句话 | 不得变成正文硬约束 |
+| `hook_claim` | 包装层抓点命题 | 与 `narrative_tension_map.hook_claim` 同源，但表达更包装化 |
+| `hook_emotion` | 包装层激发的核心情绪 | 例如好奇、不信、压迫、震惊 |
+| `reveal_position` | 包装 promise 在正文中的大致兑现位置 | `early / mid / late` |
 | `caution_notes` | 本题交付注意事项 | 只做提醒，不做硬边界 |
+
+补充说明：
+
+- `Topic Package.narrative_tension_map.hook_claim` 定义的是叙事 promise
+- `Topic Delivery Pack.hook_claim` 定义的是包装表达
+- 二者必须同源，不能说两件不同的事
 
 ## 7. Script Input Bundle
 
@@ -247,6 +314,9 @@
 - 主要服务标题、封面、开头包装；正文只能弱参考
 
 - `packaging_hook`
+- `hook_claim`
+- `hook_emotion`
+- `reveal_position`
 - `title_profile`
 - `cover_profile`
 - `risk_posture`

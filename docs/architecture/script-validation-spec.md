@@ -260,7 +260,24 @@ duration_delta_ratio =
 | `name_stack_heavy` | 人名/关系名词堆砌，理解成本过高 |
 | `quote_misuse_major` | 原文关键意思被写反，影响全稿可信度 |
 
-#### C. topic 合同冲突标签
+#### C. 进攻性标签
+
+这些标签不直接构成 `hard_fail`，也不直接构成 `return_topic`。
+
+它们的作用是：
+
+- 将“结构合格但不够有势能”的稿件从普通 `pass` 中识别出来
+- 优先导向 `patch_once(intent=lift)`
+- 在少数明显全局偏平的场景下，辅助 `regen_once`
+
+| 标签 | 含义 | 默认动作 |
+|---|---|---|
+| `hook_kill_power_weak` | 开头虽然没错，但停留力不足 | `patch_once(intent=lift, zone=opening)` |
+| `suspense_density_low` | 中段缺少持续往下听的理由 | 局部问题时 `patch_once(intent=lift, zone=middle)`；若明显全局则可辅助 `regen_once` |
+| `peak_missing` | 全文缺少明确高潮或兑现点 | `patch_once(intent=lift, zone=middle 或 ending)` |
+| `ending_residue_weak` | 结尾收住了，但没有余味或讨论欲 | `patch_once(intent=lift, zone=ending)` |
+
+#### D. topic 合同冲突标签
 
 只允许触发 `return_topic`。
 
@@ -281,6 +298,8 @@ duration_delta_ratio =
 - 没有 topic 合同冲突标签
 - 没有全局问题标签
 - `patch_targets` 不超过 `3` 个区域
+- 若命中进攻性标签，默认不应直接 `pass`
+- 进攻性标签优先转化为 `patch_once(intent=lift)`
 
 #### `regen_once`
 
@@ -289,6 +308,7 @@ duration_delta_ratio =
 - 出现任意 `1` 个全局问题标签
 - 局部问题标签数量 `>= 3`
 - `patch_targets` 已覆盖 `opening + middle + ending`
+- `suspense_density_low` 若呈现为全局偏平，可辅助触发 `regen_once`
 
 #### `return_topic`
 
@@ -383,6 +403,7 @@ duration_delta_ratio =
 {
   "stage": "script_semantic_review",
   "decision": "pass | patch_once | regen_once | return_topic",
+  "patch_intent": "fix | lift | null",
   "hard_issues": [],
   "soft_issues": [],
   "patch_targets": [],
@@ -391,7 +412,37 @@ duration_delta_ratio =
 }
 ```
 
-### 7.3 当前仍未拍死的实现级问题
+### 7.3 `patch_once(intent=lift)` 边界
+
+`intent=lift` 不是新的状态，而是 `patch_once` 的受控意图。
+
+它的目标是：
+
+- 在不重开 topic 的前提下
+- 对已经结构合格但偏平的稿件
+- 做一次小范围进攻性提升
+
+约束如下：
+
+1. 一次只允许作用于一个区域：
+   - `opening`
+   - `middle`
+   - `ending`
+2. 一次只允许解决一个核心问题：
+   - `hook`
+   - `suspense`
+   - `peak`
+   - `ending_residue`
+3. 推荐修改幅度不超过正文总长度的 `25%`
+4. 不允许同时覆盖 `opening + middle + ending`
+5. 不允许修改：
+   - `must_include_beats`
+   - `forbidden_expansions`
+   - `narrative_tension_map`
+   - `scope`
+   - `selected_angle`
+
+### 7.4 当前仍未拍死的实现级问题
 
 `TBD`
 

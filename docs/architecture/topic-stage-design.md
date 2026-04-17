@@ -198,6 +198,40 @@
 - `source_hint`
 - `recent_usage_hint`
 
+### `viral_rubric`
+
+为了让 topic 阶段不只会挑“能讲的题”，还会挑“更有势能的讲法”，当前建议给每个 candidate 增加一组轻量 `viral_rubric`。
+
+它不是黑箱总分，也不是独立阶段，只是 topic candidate 的内部创意评估维度。
+
+最小维度：
+
+- `hook_power`
+- `novelty_gap`
+- `emotion_gap`
+- `share_impulse`
+- `visual_promise`
+
+当前建议的最小使用规则：
+
+1. 只有通过本地硬筛和身份/重复筛的 candidate，才进入 `viral_rubric` 排序。
+2. `viral_rubric` 不决定“能不能讲”，只影响“优先推哪个”。
+3. 推荐排序优先级建议为：
+   - 第一优先：`hook_power`
+   - 第二优先：`novelty_gap`
+   - 第三优先：`share_impulse`
+   - 第四优先：`visual_promise`
+   - 第五优先：`emotion_gap`
+4. 若满足以下任一情况，可直接从推荐候选中淘汰：
+   - `hook_power` 与 `visual_promise` 同时低
+   - 5 个维度中有 4 个及以上为低
+   - `novelty_gap / emotion_gap / share_impulse` 全部低
+
+这条规则的目标是：
+
+- 不把 topic 阶段做成新的创意黑箱
+- 但也不让 `viral_rubric` 退化成“写在文档里但排序不用”的装饰字段
+
 ## 10. Topic Package
 
 `Topic Package` 是 script 阶段唯一正式输入源。
@@ -209,6 +243,7 @@
 - 必讲桥段
 - 禁止扩写
 - 事实锚点
+- 叙事张力图
 - 声线建议
 - 包装种子
 
@@ -218,6 +253,46 @@
 - 分镜
 - 全文草稿
 - 重型 prompt 指导
+
+### `narrative_tension_map`
+
+当前明确结论：
+
+- `narrative_tension_map` 归属 `Topic Package`
+- 它定义的是叙事张力骨架，而不是交付微调
+
+最小字段：
+
+- `hook_claim`
+- `pressure_escalation`
+- `mid_reveal`
+- `peak_payoff`
+- `ending_residue`
+
+这层的作用是：
+
+- 把 `core_conflict / stakes / must_include_beats` 连接成一条有张力的递进线
+- 避免 script 虽然“讲对了”，却没有明确的中段翻面、高潮兑现和结尾余味
+
+边界：
+
+- 它不是新大纲
+- 它不是分镜合同
+- 它不是新的 narrative brief
+- 每个字段只允许短句
+
+### 与 Packaging Lane 的关系
+
+`narrative_tension_map.hook_claim` 与后续 Packaging Lane 中的 `hook_claim` 必须同源。
+
+区别在于：
+
+- `Topic Package.narrative_tension_map.hook_claim`
+  - 定义叙事 promise
+- `Packaging Lane.hook_claim`
+  - 定义包装表达
+
+它们可以是不同表述，但不能承诺两件不同的事
 
 ## 11. 当前已确认风险与规避
 

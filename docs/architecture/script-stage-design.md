@@ -60,14 +60,21 @@ Topic Package
 - 口播微偏置
 - 节奏微偏置
 - 结尾收束倾向
-- 包装抓点一句话
+- 包装层抓点表达
 
 它不能做的事：
 
 - 修改 `must_include_beats`
 - 修改 `forbidden_expansions`
 - 修改 `family_label` 或 `scope_label`
-- 把 `packaging_hook` 变成正文硬模板
+- 修改 `narrative_tension_map`
+- 把 Packaging Lane 变成正文硬模板
+
+补充说明：
+
+- `narrative_tension_map` 属于 `Topic Package`，因为它描述的是这条内容的叙事张力骨架
+- `Topic Delivery Pack` 只负责把这条张力骨架转换成更适合本题交付的开头动作、声线微调、节奏微调与包装表达
+- Packaging `hook_claim` 必须与 `narrative_tension_map.hook_claim` 同源，但表达可以更外显、更适合标题/封面/开头
 
 ## 6. Script Input Bundle 三通道
 
@@ -101,7 +108,9 @@ Topic Package
 
 负责标题 / 封面 / 开头包装参考，例如：
 
-- 包装抓点
+- `hook_claim`
+- `hook_emotion`
+- `reveal_position`
 - 标题 profile
 - 封面 profile
 - 风险姿态
@@ -111,6 +120,28 @@ Topic Package
 - script 正文必须服从 `Hard Lane`
 - script 正文可以吸收 `Soft Lane`
 - script 正文不得被 `Packaging Lane` 绑死
+
+### 创意引导层的最小补充
+
+为了避免“结构稳定但稿子偏平”，当前建议在不新增阶段的前提下，为 script 增加极轻的创意引导输入：
+
+- 来自 topic 阶段的 `viral_rubric`
+- 来自 `Topic Package` 的 `narrative_tension_map`
+- 来自 Packaging Lane 的：
+  - `hook_claim`
+  - `hook_emotion`
+  - `reveal_position`
+
+这些对象的职责分工是：
+
+- `viral_rubric`
+  - 帮助 topic 阶段挑出更有势能的 candidate
+- `narrative_tension_map`
+  - 给 script 正文提供张力递进目标
+- Packaging Lane
+  - 给标题/封面/开头提供外包装抓点
+
+script 阶段不应该自己重新发明这一层。
 
 ## 7. Script Draft Package
 
@@ -245,6 +276,9 @@ script 生成阶段不只输出正文，还要输出轻量 sidecar：
 - 是否开头太弱
 - 是否结尾拔高
 - 是否口播不自然
+- 是否缺少明显高潮
+- 是否中段缺少持续悬念
+- 是否结尾缺少余味
 
 它不能做的事：
 
@@ -290,6 +324,23 @@ script 生成阶段不只输出正文，还要输出轻量 sidecar：
 
 这些都应优先在 script 阶段内部 patch / regenerate 解决。
 
+### 进攻性标签
+
+在不新增第二个审校器的前提下，单一语义审校允许补充以下进攻性标签：
+
+- `hook_kill_power_weak`
+- `suspense_density_low`
+- `peak_missing`
+- `ending_residue_weak`
+
+这些标签的作用不是触发 hard fail，而是触发**有边界的提升型修补**。
+
+也就是说：
+
+- 它们不单独构成 `hard_fail`
+- 但它们不能只是“记录一下就算了”
+- 它们应优先导向 `patch_once(intent=lift)`
+
 补充阈值：
 
 - `patch_once`
@@ -328,6 +379,34 @@ script 生成阶段不只输出正文，还要输出轻量 sidecar：
 
 - 只修局部
 - 最多一次
+
+当前建议在实现上把 patch intent 进一步拆为：
+
+- `intent=fix`
+- `intent=lift`
+
+其中：
+
+- `fix` 用于修 bug、修局部违约、修表达问题
+- `lift` 用于提升开头抓力、中段悬念、高潮兑现或结尾余味
+
+`intent=lift` 的边界：
+
+- 一次只允许作用于一个区域：
+  - `opening`
+  - `middle`
+  - `ending`
+- 一次只解决一个核心问题：
+  - `hook`
+  - `suspense`
+  - `peak`
+  - `ending_residue`
+- 改动范围不应超过正文总长度的 `25%`
+- 不允许修改：
+  - `must_include_beats`
+  - `forbidden_expansions`
+  - `narrative_tension_map`
+  - `scope`
 
 ### regenerate
 
