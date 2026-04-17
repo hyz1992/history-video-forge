@@ -9,6 +9,23 @@
 - 旧项目 `story-video-forge` 仅作为迁移参考，不作为新项目正式规范来源
 - 当后续讨论形成阶段性结论时，优先更新本目录下的正式文档
 
+## 推荐阅读顺序
+
+对于一个**完全没有上下文**的新 agent，建议按下面顺序建立认知：
+
+1. [原始需求文档](./requirements/product-requirements.md)
+2. [技术栈规范](./standards/tech-stack-spec.md)
+3. [主题阶段设计](./architecture/topic-stage-design.md)
+4. [Script 阶段设计](./architecture/script-stage-design.md)
+5. [流水线阶段输入输出规范](./architecture/pipeline-io-spec.md)
+6. [字段设计](./data/field-design.md)
+7. [主题阶段讨论留档](./records/2026-04-17-topic-stage-conclusions.md)
+8. [Script 阶段讨论留档](./records/2026-04-17-script-stage-conclusions.md)
+9. [旧项目可复用内容清单](./migration/reusable-assets-inventory.md)
+10. [Harness 工程规则与风险规避](./standards/harness-engineering-rules.md)
+11. [Greenfield 实施路线图](./plans/2026-04-17-greenfield-roadmap.md)
+12. [当前总 Todo](./todos/roadmap-todo.md)
+
 ## 当前文档结构
 
 ### 需求与范围
@@ -18,6 +35,7 @@
 ### 架构与阶段设计
 
 - [主题阶段设计](./architecture/topic-stage-design.md)
+- [Script 阶段设计](./architecture/script-stage-design.md)
 - [流水线阶段输入输出规范](./architecture/pipeline-io-spec.md)
 
 ### 数据与字段
@@ -37,6 +55,11 @@
 
 - [旧项目可复用内容清单](./migration/reusable-assets-inventory.md)
 
+### 阶段性留档
+
+- [主题阶段讨论结论留档](./records/2026-04-17-topic-stage-conclusions.md)
+- [Script 阶段讨论结论留档](./records/2026-04-17-script-stage-conclusions.md)
+
 ### 计划与执行
 
 - [Greenfield 实施路线图](./plans/2026-04-17-greenfield-roadmap.md)
@@ -53,6 +76,7 @@
 - `Project Style Pack / Family Bias Pack / Topic Delivery Pack`
 - script 阶段的最小闭环规则
 - 旧项目可复用与不可复用部分
+- 分阶段讨论留档
 
 ## 当前仍为 TBD 的区域
 
@@ -65,5 +89,6 @@
 ## 更新策略
 
 - 原则性结论：更新对应正式规范文档
+- 某阶段已连续讨论并形成阶段性结论：同时更新对应 `records/` 留档
 - 讨论过程性推导：不要写入正式规范，除非已经收敛
 - 重大收口：同步更新路线图与 todo
