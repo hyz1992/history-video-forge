@@ -133,6 +133,10 @@
 - `beat_trace.excerpt` 少于 `8` 个汉字等价长度时，按“命中过弱”处理，进入 `regen_once`
 - `quote_trace` 仅在正文使用了 `canonical_quotes` 时强制要求存在
 
+更细的返回对象 schema、错误码定义与阈值说明，详见：
+
+- [Script 校验与决策规范](./script-validation-spec.md)
+
 ### 2.5 单一语义审校
 
 输入：
@@ -159,6 +163,10 @@
   - 或 `patch_targets` 已覆盖 `opening + middle + ending`
 - `return_topic`：
   - 只在 `selected_angle / scope / must_include_beats / forbidden_expansions / source anchors` 发生合同冲突时触发
+
+更细的标签全集、决策阈值和第二稿触发规则，详见：
+
+- [Script 校验与决策规范](./script-validation-spec.md)
 
 ## 3. 后续阶段
 

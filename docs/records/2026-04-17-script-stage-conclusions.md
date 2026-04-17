@@ -6,6 +6,7 @@
 对应正式规范请以下列文档为准：
 
 - [Script 阶段设计](../architecture/script-stage-design.md)
+- [Script 校验与决策规范](../architecture/script-validation-spec.md)
 - [流水线阶段输入输出规范](../architecture/pipeline-io-spec.md)
 - [字段设计](../data/field-design.md)
 
