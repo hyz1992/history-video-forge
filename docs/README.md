@@ -3,28 +3,32 @@
 本文档集用于在一个新的空项目目录中，稳定指导 `story-video-forge2` 从零开发。
 
 原则：
-
-- 只记录当前已确认结论
+- 只记录当前已经确认的结论
 - 未确认项明确标注 `TBD`
 - 旧项目 `story-video-forge` 仅作为迁移参考，不作为新项目正式规范来源
-- 当后续讨论形成阶段性结论时，优先更新本目录下的正式文档
+- 后续讨论形成阶段性结论时，优先更新本目录下的正式文档
 
 ## 推荐阅读顺序
 
-对于一个**完全没有上下文**的新 agent，建议按下面顺序建立认知：
+对于一个完全没有上下文的新 agent，建议按下面顺序建立认知：
 
 1. [原始需求文档](./requirements/product-requirements.md)
 2. [技术栈规范](./standards/tech-stack-spec.md)
-3. [主题阶段设计](./architecture/topic-stage-design.md)
-4. [Script 阶段设计](./architecture/script-stage-design.md)
-5. [流水线阶段输入输出规范](./architecture/pipeline-io-spec.md)
-6. [字段设计](./data/field-design.md)
-7. [主题阶段讨论留档](./records/2026-04-17-topic-stage-conclusions.md)
-8. [Script 阶段讨论留档](./records/2026-04-17-script-stage-conclusions.md)
-9. [旧项目可复用内容清单](./migration/reusable-assets-inventory.md)
-10. [Harness 工程规则与风险规避](./standards/harness-engineering-rules.md)
-11. [Greenfield 实施路线图](./plans/2026-04-17-greenfield-roadmap.md)
-12. [当前总 Todo](./todos/roadmap-todo.md)
+3. [数据层最小 Schema 设计](./data/schema-design.md)
+4. [项目生命周期设计](./architecture/project-lifecycle.md)
+5. [主题阶段设计](./architecture/topic-stage-design.md)
+6. [Recent Memory 设计](./architecture/recent-memory-design.md)
+7. [Script 阶段设计](./architecture/script-stage-design.md)
+8. [流水线阶段输入输出规范](./architecture/pipeline-io-spec.md)
+9. [字段设计](./data/field-design.md)
+10. [API 设计（第一版）](./architecture/api-design.md)
+11. [Prompt 管理规范](./standards/prompt-management.md)
+12. [主题阶段讨论留档](./records/2026-04-17-topic-stage-conclusions.md)
+13. [Script 阶段讨论留档](./records/2026-04-17-script-stage-conclusions.md)
+14. [旧项目可复用内容清单](./migration/reusable-assets-inventory.md)
+15. [Harness 工程规则与风险规避](./standards/harness-engineering-rules.md)
+16. [Greenfield 实施路线图](./plans/2026-04-17-greenfield-roadmap.md)
+17. [当前总 Todo](./todos/roadmap-todo.md)
 
 ## 当前文档结构
 
@@ -34,13 +38,17 @@
 
 ### 架构与阶段设计
 
+- [项目生命周期设计](./architecture/project-lifecycle.md)
 - [主题阶段设计](./architecture/topic-stage-design.md)
+- [Recent Memory 设计](./architecture/recent-memory-design.md)
 - [Script 阶段设计](./architecture/script-stage-design.md)
 - [流水线阶段输入输出规范](./architecture/pipeline-io-spec.md)
+- [API 设计（第一版）](./architecture/api-design.md)
 
 ### 数据与字段
 
 - [字段设计](./data/field-design.md)
+- [数据层最小 Schema 设计](./data/schema-design.md)
 
 ### UI
 
@@ -49,6 +57,7 @@
 ### 标准与规范
 
 - [技术栈规范](./standards/tech-stack-spec.md)
+- [Prompt 管理规范](./standards/prompt-management.md)
 - [Harness 工程规则与风险规避](./standards/harness-engineering-rules.md)
 
 ### 迁移参考
@@ -84,7 +93,7 @@
 - asset planning / assets / compose 的细化输入输出
 - 更完整的 UI 视觉稿与组件级规范
 - 推荐轻评审阈值与本地硬校验数值阈值
-- `event_family` 命中算法与 `family_confidence` 具体计算方法
+- `event_family` 命中算法与 `family_confidence` 计算方法
 
 ## 更新策略
 

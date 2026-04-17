@@ -7,39 +7,33 @@
 ### 1.1 启动输入
 
 输入：
-
 - 项目基础设置
 - `Project Style Pack`
 - 用户当前主题页选择的入口与筛选偏好
-- Recent Memory
-- Event Registry
-- Candidate Cache
+- `Recent Memory`
+- `Event Registry`
+- `Candidate Cache`
 
 输出：
-
-- 原始候选事件/讲法集合
+- 原始候选事件 / 讲法集合
 
 ### 1.2 事件识别或开放发现
 
 输入：
-
-- 推荐入口：用户偏好 + Recent Memory + 开放发现
+- 推荐入口：用户偏好 + `Recent Memory` + 开放发现
 - 事件库入口：用户选中的 event
 - 自定义入口：用户原始输入
 
 输出：
-
 - 规范化候选事件语义
 
 ### 1.3 Event Registry 归一化
 
 输入：
-
 - 候选事件语义
-- Event Registry
+- `Event Registry`
 
 输出：
-
 - 复用已有 `event_id`
 - 或创建 `provisional event`
 - 或进入歧义待确认路径
@@ -47,7 +41,6 @@
 ### 1.4 Topic Candidate Builder
 
 输入：
-
 - `event_id`
 - `event_family`
 - `family_confidence`
@@ -55,30 +48,25 @@
 - 用户偏好
 
 输出：
-
 - `3` 个 family 槽位 candidate
 
 ### 1.5 推荐审核与排序
 
 输入：
-
 - 原始 candidate
-- Recent Memory
-- Event Registry
-- Candidate Cache
+- `Recent Memory`
+- `Event Registry`
+- `Candidate Cache`
 
 输出：
-
 - `3-5` 个可展示 `Topic Candidate Card`
 
 ### 1.6 用户确认
 
 输入：
-
 - 用户确认的 `Topic Candidate Card`
 
 输出：
-
 - 冻结 `Topic Package`
 - 更新 Event Registry 和记忆层
 - 推进项目到 `script_ready`
@@ -88,61 +76,56 @@
 ### 2.1 Delivery 微调
 
 输入：
-
 - `Project Style Pack`
 - `Narrator Persona`
 - `Family Bias Pack`
 - `Topic Package`
 
 输出：
-
 - `Topic Delivery Pack`
 
 ### 2.2 Script 输入收束
 
 输入：
-
 - `Topic Package`
 - `Topic Delivery Pack`
 - `Project Style Pack`
 - `Family Bias Pack`
 
 输出：
-
 - `Script Input Bundle`
 
 ### 2.3 正文生成
 
 输入：
-
 - `Script Input Bundle`
 
 输出：
-
 - `Script Draft Package`
 
 ### 2.4 本地硬校验
 
 输入：
-
 - `Script Input Bundle`
 - `Script Draft Package`
 
 输出：
-
 - `pass`
-- 或一次重生触发
-- 或 fail
+- `regen_once`
+- `hard_fail`
+
+说明：
+- `regen_once` 只用于可恢复的结构性失败，例如 beat 覆盖缺失、占位符残留、严重时长异常
+- `hard_fail` 表示本地硬校验已经不能继续自动推进，本轮 script 直接失败退出
+- 本地硬校验不负责 topic 回退判定，`return_topic` 只来自单一语义审校
 
 ### 2.5 单一语义审校
 
 输入：
-
 - `Script Input Bundle`
 - `Script Draft Package`
 
 输出：
-
 - `pass`
 - `patch_once`
 - `regen_once`
