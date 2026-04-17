@@ -21,16 +21,17 @@
 7. [Script 阶段设计](./architecture/script-stage-design.md)
 8. [Script 校验与决策规范](./architecture/script-validation-spec.md)
 9. [流水线阶段输入输出规范](./architecture/pipeline-io-spec.md)
-10. [字段设计](./data/field-design.md)
-11. [API 设计（第一版）](./architecture/api-design.md)
-12. [Prompt 管理规范](./standards/prompt-management.md)
-13. [主题阶段讨论留档](./records/2026-04-17-topic-stage-conclusions.md)
-14. [Script 阶段讨论留档](./records/2026-04-17-script-stage-conclusions.md)
-15. [旧项目可复用内容清单](./migration/reusable-assets-inventory.md)
-16. [Harness 工程规则与风险规避](./standards/harness-engineering-rules.md)
-17. [Greenfield 实施路线图](./plans/2026-04-17-greenfield-roadmap.md)
-18. [Topic + Script 第一阶段实现计划](./plans/2026-04-17-topic-script-foundation-implementation-plan.md)
-19. [当前总 Todo](./todos/roadmap-todo.md)
+10. [后续阶段高层设计（留档版）](./architecture/downstream-stage-high-level-design.md)
+11. [字段设计](./data/field-design.md)
+12. [API 设计（第一版）](./architecture/api-design.md)
+13. [Prompt 管理规范](./standards/prompt-management.md)
+14. [主题阶段讨论留档](./records/2026-04-17-topic-stage-conclusions.md)
+15. [Script 阶段讨论留档](./records/2026-04-17-script-stage-conclusions.md)
+16. [旧项目可复用内容清单](./migration/reusable-assets-inventory.md)
+17. [Harness 工程规则与风险规避](./standards/harness-engineering-rules.md)
+18. [Greenfield 实施路线图](./plans/2026-04-17-greenfield-roadmap.md)
+19. [Topic + Script 第一阶段实现计划](./plans/2026-04-17-topic-script-foundation-implementation-plan.md)
+20. [当前总 Todo](./todos/roadmap-todo.md)
 
 ## 当前文档结构
 
@@ -46,6 +47,7 @@
 - [Script 阶段设计](./architecture/script-stage-design.md)
 - [Script 校验与决策规范](./architecture/script-validation-spec.md)
 - [流水线阶段输入输出规范](./architecture/pipeline-io-spec.md)
+- [后续阶段高层设计（留档版）](./architecture/downstream-stage-high-level-design.md)
 - [API 设计（第一版）](./architecture/api-design.md)
 
 ### 数据与字段

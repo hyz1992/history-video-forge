@@ -176,3 +176,10 @@
 - asset planning 阶段输入输出
 - assets 阶段输入输出
 - compose 阶段输入输出
+
+补充说明：
+
+- 当前并非完全没有后续阶段高层约束
+- 只是尚未进入可实施设计状态
+- 高层边界与推进顺序留档见：
+  - [downstream-stage-high-level-design.md](./downstream-stage-high-level-design.md)
