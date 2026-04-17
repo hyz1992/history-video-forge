@@ -336,7 +336,140 @@
 | `opening_span` | 开头片段 |
 | `ending_span` | 结尾片段 |
 
-## 9. 当前待补充
+## 9. ScriptValidationResult
+
+定位：
+
+- script 阶段统一的校验/裁判结果对象
+- 第一版建议做成判别联合，而不是单一扁平对象
+
+作用：
+
+- 统一本地硬校验与单一语义审校的返回格式
+- 避免 API、持久化、runtime 各自发明结果对象
+
+### 变体 A：本地硬校验
+
+| 字段 | 含义 |
+|---|---|
+| `stage` | 固定为 `script_local_validation` |
+| `decision` | `pass / regen_once / hard_fail` |
+| `errors` | 结构性错误列表 |
+| `warnings` | 警告列表，不直接阻断流程 |
+| `metrics` | 轻量统计，如时长偏差、beat 覆盖情况 |
+
+### 变体 B：单一语义审校
+
+| 字段 | 含义 |
+|---|---|
+| `stage` | 固定为 `script_semantic_review` |
+| `decision` | `pass / patch_once / regen_once / return_topic` |
+| `patch_intent` | `fix / lift / null` |
+| `hard_issues` | 硬问题标签列表 |
+| `soft_issues` | 软问题标签列表 |
+| `patch_targets` | 最多 3 个定点修补目标 |
+| `summary` | 一句总评 |
+| `confidence` | 0-1 置信度 |
+
+补充说明：
+
+- `patch_intent=lift` 只表示“提升势能”，不允许改 `must_include_beats / forbidden_expansions / narrative_tension_map / scope`
+- `return_topic` 只用于 topic 合同自身冲突，不能拿来替代“稿子一般”
+
+## 10. Task 2 共享 Schema 最小落地
+
+本节回答一个实现前问题：
+
+- 当前已确认的对象很多，但第一阶段真正要落成 shared schema 的最小集合到底是什么
+
+当前推荐第一版 shared schema 只明确落以下 4 个对象：
+
+### A. `TopicCandidateCard`
+
+建议至少包含：
+
+- `candidate_id`
+- `event_id`
+- `title`
+- `one_line_angle`
+- `family_label`
+- `scope_label`
+- `estimated_duration_band`
+- `why_this_now`
+- `core_conflict`
+- `strong_scene`
+- `must_cover_preview`
+- `risk_hints`
+- `source_hint`
+- `recent_usage_hint`
+- `viral_rubric`
+
+其中：
+
+- `viral_rubric` 第一版只允许 `low / medium / high`
+- 不在 shared schema 中提前引入复杂数值打分
+
+### B. `TopicPackage`
+
+建议至少包含：
+
+- `topic_package_id`
+- `source_mode`
+- `event_id`
+- `canonical_title`
+- `selected_angle`
+- `family_label`
+- `scope_label`
+- `core_conflict`
+- `stakes`
+- `must_include_beats`
+- `forbidden_expansions`
+- `risk_hints`
+- `source_anchor_refs`
+- `canonical_quotes`
+- `ambiguity_notes`
+- `duration_band`
+- `voice_hint`
+- `strong_scene`
+- `packaging_seed`
+- `narrative_tension_map`
+
+### C. `TopicDeliveryPack`
+
+第一版建议纳入 shared schema，而不是只停留在 prose 规则：
+
+- `opening_move`
+- `opening_pressure_level`
+- `voice_tilt`
+- `pacing_tilt`
+- `ending_tilt`
+- `visual_tilt`
+- `hook_claim`
+- `hook_emotion`
+- `reveal_position`
+- `caution_notes`
+
+说明：
+
+- `hook_claim` 与 `TopicPackage.narrative_tension_map.hook_claim` 同源
+- 但表达更偏包装，不要求逐字相同
+
+### D. `ScriptValidationResult`
+
+shared schema 层应实现为判别联合，而不是扁平对象：
+
+- `script_local_validation` 变体
+- `script_semantic_review` 变体
+
+这样后续：
+
+- API 返回
+- 持久化 JSON
+- runtime 事件
+
+都可以共用同一套结果合同。
+
+## 11. 当前待补充
 
 `TBD`
 

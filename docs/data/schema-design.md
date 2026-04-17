@@ -253,7 +253,81 @@
 - 不为尚未拍板的 storyboard/assets 阶段提前设计大而全 schema
 - 不直接复用旧项目的 pipeline state 表结构
 
-## 6. 当前仍为 TBD 的点
+## 6. Task 2 共享 Schema 与持久化映射
+
+本节不回答 Prisma 细节，而回答一个更上游的问题：
+
+- 第一阶段真正要落成 shared schema 的对象，与当前数据层设计应如何对应
+
+### A. `TopicCandidateCard`
+
+定位：
+
+- shared schema 层的用户选择对象
+- 第一版不建议整表长期持久化
+- 真正需要长期持久化的是：
+  - `event_id`
+  - `fingerprint`
+  - `one_line_angle`
+  - `viral_rubric_json`
+  - 以及若干推荐缓存字段
+
+当前映射建议：
+
+- `TopicCandidateCard` 运行时对象
+- `recommendation_candidate_cache` 持久化其可复用部分
+
+### B. `TopicPackage`
+
+定位：
+
+- topic 阶段正式冻结对象
+- script 阶段唯一正式上游
+
+当前映射建议：
+
+- `TopicPackage` 直接映射到 `topic_packages`
+- 其中：
+  - `must_include_beats` -> `must_include_beats_json`
+  - `forbidden_expansions` -> `forbidden_expansions_json`
+  - `risk_hints` -> `risk_hints_json`
+  - `source_anchor_refs` -> `source_anchor_refs_json`
+  - `canonical_quotes` -> `canonical_quotes_json`
+  - `duration_band` -> `duration_band_json`
+  - `narrative_tension_map` -> `narrative_tension_map_json`
+
+### C. `TopicDeliveryPack`
+
+定位：
+
+- script 前的单题交付微调对象
+- 第一版更适合作为运行时组装对象，而不是单独持久化主表
+
+当前映射建议：
+
+- 第一版由 `Project Style Pack + Family Bias Pack + TopicPackage` 运行时组装
+- 不单独建持久化表
+- 若后续需要审计或复跑，可再考虑在 `script_records` 中保留快照 JSON
+
+### D. `ScriptValidationResult`
+
+定位：
+
+- script 阶段统一裁判结果对象
+- 第一版建议用判别联合 shared schema 表达，而不是扁平结构
+
+当前映射建议：
+
+- 本地硬校验结果 -> `script_records.validation_result_json`
+- 单一语义审校结果 -> `script_records.semantic_review_result_json`
+
+补充说明：
+
+- 这两个 JSON 字段不要求共享完全相同的 shape
+- 但都必须实现为 `ScriptValidationResult` 的变体
+- 这样 API、runtime、持久化三处才能保持同一口径
+
+## 7. 当前仍为 TBD 的点
 
 - Prisma 具体模型定义
 - 索引策略与查询优化

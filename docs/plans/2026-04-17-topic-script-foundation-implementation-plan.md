@@ -113,6 +113,7 @@ git commit -m "feat: 初始化 monorepo 与最小 workspace 骨架"
 **Files:**
 - Create: `shared/src/topic/topic-candidate-card.schema.ts`
 - Create: `shared/src/topic/topic-package.schema.ts`
+- Create: `shared/src/topic/topic-delivery-pack.schema.ts`
 - Create: `shared/src/script/script-input-bundle.schema.ts`
 - Create: `shared/src/script/script-draft-package.schema.ts`
 - Create: `shared/src/script/script-validation.schema.ts`
@@ -125,6 +126,7 @@ git commit -m "feat: 初始化 monorepo 与最小 workspace 骨架"
 
 - `TopicCandidateCard`
 - `TopicPackage`
+- `TopicDeliveryPack`
 - `ScriptInputBundle`
 - `ScriptDraftPackage`
 - `ScriptValidationResult`
@@ -136,6 +138,14 @@ git commit -m "feat: 初始化 monorepo 与最小 workspace 骨架"
 - `TopicDeliveryPack.hook_claim / hook_emotion / reveal_position`
 - `ScriptValidationResult.patch_intent`
 
+并额外断言以下结构边界：
+
+- `viral_rubric` 的值域先固定为 `low / medium / high`
+- `TopicDeliveryPack.reveal_position` 的值域先固定为 `early / mid / late`
+- `ScriptValidationResult` 是判别联合，而不是单一扁平对象
+- `script_local_validation` 变体不要求 `patch_intent`
+- `script_semantic_review` 变体才允许 `patch_intent`
+
 **Step 2: Run test to verify it fails**
 
 Run: `npm test -- tests/shared/schema-contracts.test.ts`
@@ -146,6 +156,8 @@ Expected: FAIL，因为 schema 尚不存在
 - 用 Zod 实现最小 schema
 - 只覆盖已确认字段，不提前拍死 storyboard/assets
 - 将“爆款化优化层”中已确认的轻量字段一并纳入第一版共享 schema，避免后续 schema 二次返工
+- `TopicDeliveryPack` 这一轮直接纳入 shared schema，不再只停留在 prose 规则
+- `ScriptValidationResult` 这一轮直接实现为判别联合，避免后续 API / 持久化再次改形
 
 **Step 4: Run test to verify it passes**
 
