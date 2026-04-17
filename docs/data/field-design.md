@@ -313,7 +313,6 @@
 
 - 主要服务标题、封面、开头包装；正文只能弱参考
 
-- `packaging_hook`
 - `hook_claim`
 - `hook_emotion`
 - `reveal_position`
@@ -469,7 +468,178 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 
 都可以共用同一套结果合同。
 
-## 11. 当前待补充
+## 11. 最小 JSON 示例
+
+本节只给“第一阶段最小可实现形态”的对象示例。
+
+注意：
+
+- 这些示例的目标是减少字段理解偏差
+- 它们不是最终 API 完整返回
+- 也不是数据库持久化后的完整快照
+
+### A. `TopicCandidateCard`
+
+```json
+{
+  "candidate_id": "cand_evt_yan_zi_shi_chu_reversal",
+  "event_id": "evt_yan_zi_shi_chu",
+  "title": "晏子使楚",
+  "one_line_angle": "楚王连压三次，晏子一次没退",
+  "family_label": "外交压场型",
+  "scope_label": "完整事件",
+  "estimated_duration_band": {
+    "min_sec": 75,
+    "max_sec": 95
+  },
+  "why_this_now": "强反转、强对抗、近期未做同簇题材",
+  "core_conflict": "楚王在公开场合连续压场，晏子必须当场顶回去",
+  "strong_scene": "楚王设局压人，晏子一句话当场翻盘",
+  "must_cover_preview": [
+    "狗门羞辱",
+    "齐国无人",
+    "橘生淮南淮北"
+  ],
+  "risk_hints": [
+    "不要只讲狗门",
+    "不要写成成语串烧"
+  ],
+  "source_hint": "主要史料：晏子春秋",
+  "recent_usage_hint": "近期未出现同 event_id",
+  "viral_rubric": {
+    "hook_power": "high",
+    "novelty_gap": "medium",
+    "emotion_gap": "high",
+    "share_impulse": "high",
+    "visual_promise": "high"
+  }
+}
+```
+
+### B. `TopicPackage`
+
+```json
+{
+  "topic_package_id": "tpk_20260417_yanzi_full",
+  "source_mode": "recommended",
+  "event_id": "evt_yan_zi_shi_chu",
+  "canonical_title": "晏子使楚",
+  "selected_angle": "楚王连压三次，晏子一次没退",
+  "family_label": "外交压场型",
+  "scope_label": "完整事件",
+  "core_conflict": "楚王借公开场合连续羞辱晏子与齐国，晏子必须当场顶回去",
+  "stakes": "一旦退让，就不只是个人丢脸，而是齐国在场面上被压一头",
+  "must_include_beats": [
+    "狗门羞辱",
+    "齐国无人",
+    "晏子以使臣规制反击",
+    "楚国借盗贼羞辱齐人",
+    "晏子以橘枳之喻反顶"
+  ],
+  "forbidden_expansions": [
+    "不要拔高为改变历史格局",
+    "不要追加无史料依据的群臣反应"
+  ],
+  "risk_hints": [
+    "不要写成课堂讲义",
+    "不要把三轮攻防压成一句总结"
+  ],
+  "source_anchor_refs": [
+    "《晏子春秋》"
+  ],
+  "canonical_quotes": [
+    "使狗国者，从狗门入",
+    "橘生淮南则为橘，生于淮北则为枳"
+  ],
+  "ambiguity_notes": "",
+  "duration_band": {
+    "min_sec": 75,
+    "max_sec": 95
+  },
+  "voice_hint": "强旁白解说",
+  "strong_scene": "楚王连续压场，晏子当场一句句顶回去",
+  "packaging_seed": "楚王连压三次，晏子一次没退",
+  "narrative_tension_map": {
+    "hook_claim": "楚王不是只压了晏子一次，而是连压三次",
+    "pressure_escalation": "从羞辱身形，升级到羞辱齐国，再升级到羞辱齐人风气",
+    "mid_reveal": "晏子不是在逞口舌，而是在守住齐国场面",
+    "peak_payoff": "橘枳之喻把楚王的第三次压场原样顶回",
+    "ending_residue": "这种场面，一退就不只是退掉自己"
+  }
+}
+```
+
+### C. `TopicDeliveryPack`
+
+```json
+{
+  "opening_move": "question",
+  "opening_pressure_level": "high",
+  "voice_tilt": "sharper",
+  "pacing_tilt": "neutral",
+  "ending_tilt": "judgment",
+  "visual_tilt": [
+    "faces",
+    "courtroom"
+  ],
+  "hook_claim": "如果有人当着所有人的面羞辱你，你敢不敢当场顶回去？",
+  "hook_emotion": "压迫",
+  "reveal_position": "mid",
+  "caution_notes": [
+    "不要把 hook 写成课堂导入",
+    "不要让包装 promise 偏离 narrative_tension_map.hook_claim"
+  ]
+}
+```
+
+### D. `ScriptValidationResult`
+
+本地硬校验示例：
+
+```json
+{
+  "stage": "script_local_validation",
+  "decision": "pass",
+  "errors": [],
+  "warnings": [
+    "duration_slightly_out_of_band"
+  ],
+  "metrics": {
+    "estimated_duration_sec": 88,
+    "duration_band_min_sec": 75,
+    "duration_band_max_sec": 95,
+    "beat_coverage_count": 5,
+    "beat_expected_count": 5
+  }
+}
+```
+
+单一语义审校示例：
+
+```json
+{
+  "stage": "script_semantic_review",
+  "decision": "patch_once",
+  "patch_intent": "lift",
+  "hard_issues": [],
+  "soft_issues": [
+    "hook_kill_power_weak",
+    "ending_residue_weak"
+  ],
+  "patch_targets": [
+    {
+      "zone": "opening",
+      "issue": "hook_kill_power_weak",
+      "instruction": "在不改变 selected_angle 的前提下增强第一屏 promise",
+      "max_scope": "1段"
+    }
+  ],
+  "summary": "结构合格，但开头抓力不足，建议做一次 lift 型 patch。",
+  "confidence": 0.78
+}
+```
+
+## 12. 当前待补充
 
 `TBD`
 

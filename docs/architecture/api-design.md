@@ -28,6 +28,32 @@
 - 初始状态
 - 默认 topic 页面所需基础信息
 
+请求示例：
+
+```json
+{
+  "project_name": "春秋历史短视频实验",
+  "source_mode": "recommended"
+}
+```
+
+响应示例：
+
+```json
+{
+  "project_id": "proj_20260417_001",
+  "current_status": "topic_idle",
+  "topic_context": {
+    "default_tab": "recommended",
+    "available_tabs": [
+      "recommended",
+      "library",
+      "custom"
+    ]
+  }
+}
+```
+
 ### `GET /api/projects/:projectId`
 
 用途：
@@ -69,6 +95,70 @@
 返回：
 - 一个异步任务确认
 - 候选完成后通过 SSE 或轮询获取结果
+
+请求示例：
+
+```json
+{
+  "filters": {
+    "preferred_eras": [
+      "春秋",
+      "战国"
+    ],
+    "preferred_families": [
+      "外交压场型",
+      "刺杀政变型"
+    ],
+    "avoid_tags": [
+      "三国过热",
+      "已高频人物"
+    ],
+    "length_preference": "standard"
+  },
+  "allow_cache_reuse": true
+}
+```
+
+异步确认响应示例：
+
+```json
+{
+  "job_id": "job_topic_reco_001",
+  "project_id": "proj_20260417_001",
+  "status": "queued"
+}
+```
+
+`topic_candidates_ready` SSE 示例：
+
+```json
+{
+  "event": "topic_candidates_ready",
+  "project_id": "proj_20260417_001",
+  "candidates": [
+    {
+      "candidate_id": "cand_evt_yan_zi_shi_chu_reversal",
+      "event_id": "evt_yan_zi_shi_chu",
+      "title": "晏子使楚",
+      "one_line_angle": "楚王连压三次，晏子一次没退",
+      "family_label": "外交压场型",
+      "scope_label": "完整事件",
+      "estimated_duration_band": {
+        "min_sec": 75,
+        "max_sec": 95
+      },
+      "why_this_now": "强反转、强对抗、近期未做同簇题材",
+      "viral_rubric": {
+        "hook_power": "high",
+        "novelty_gap": "medium",
+        "emotion_gap": "high",
+        "share_impulse": "high",
+        "visual_promise": "high"
+      }
+    }
+  ]
+}
+```
 
 ### B. 事件库入口
 
@@ -126,6 +216,46 @@
 
 - `narrative_tension_map` 属于 topic 合同本体，应在确认接口后正式可见
 - Packaging 层使用的 `hook_claim` 可以由后续 Delivery Planner 从 `narrative_tension_map.hook_claim` 派生，但两者不能承诺不同内容
+- 这些对象的最小 JSON 示例见：
+  - [field-design.md](../data/field-design.md) 中的“最小 JSON 示例”
+
+请求示例：
+
+```json
+{
+  "confirm_reason": "user_selected"
+}
+```
+
+响应示例：
+
+```json
+{
+  "project_id": "proj_20260417_001",
+  "current_status": "script_ready",
+  "topic_package": {
+    "topic_package_id": "tpk_20260417_yanzi_full",
+    "event_id": "evt_yan_zi_shi_chu",
+    "canonical_title": "晏子使楚",
+    "selected_angle": "楚王连压三次，晏子一次没退",
+    "family_label": "外交压场型",
+    "scope_label": "完整事件",
+    "core_conflict": "楚王借公开场合连续羞辱晏子与齐国，晏子必须当场顶回去",
+    "strong_scene": "楚王连续压场，晏子一句句顶回去",
+    "duration_band": {
+      "min_sec": 75,
+      "max_sec": 95
+    },
+    "narrative_tension_map": {
+      "hook_claim": "楚王不是只压了晏子一次，而是连压三次",
+      "pressure_escalation": "从羞辱身形升级到羞辱齐国，再升级到羞辱齐人风气",
+      "mid_reveal": "晏子不是逞口舌，而是在守住齐国场面",
+      "peak_payoff": "橘枳之喻把第三次压场原样顶回",
+      "ending_residue": "这种场面，一退就不只是退掉自己"
+    }
+  }
+}
+```
 
 ## 5. Script 阶段 API
 
@@ -154,6 +284,36 @@ SSE 后续事件：
 - 如果本轮 patch 是提升型 patch，应允许事件流中带出 `patch_intent=lift`
 - `patch_intent` 不是新的阶段状态，只是 `script_patch_started` 的补充上下文
 
+请求示例：
+
+```json
+{
+  "allow_patch": true,
+  "allow_regen": true
+}
+```
+
+异步确认响应示例：
+
+```json
+{
+  "job_id": "job_script_001",
+  "project_id": "proj_20260417_001",
+  "status": "queued"
+}
+```
+
+`script_patch_started` SSE 示例：
+
+```json
+{
+  "event": "script_patch_started",
+  "project_id": "proj_20260417_001",
+  "patch_intent": "lift",
+  "reason": "hook_kill_power_weak"
+}
+```
+
 ### `GET /api/projects/:projectId/script`
 
 用途：
@@ -181,6 +341,28 @@ script 摘要第一版建议至少包含：
   - `lift`
   - `null`
 - 这样前端或 harness 在读取 script 结果时，能明确知道当前稿件是“修 bug 后通过”还是“提势能后通过”
+- 具体对象示例见：
+  - [field-design.md](../data/field-design.md) 中的“最小 JSON 示例”
+
+响应示例：
+
+```json
+{
+  "project_id": "proj_20260417_001",
+  "script_record_id": "scr_20260417_001",
+  "script_text": "如果有人当着所有人的面羞辱你，你敢不敢当场顶回去？晏子敢……",
+  "estimated_duration_sec": 88,
+  "opening_span": "如果有人当着所有人的面羞辱你，你敢不敢当场顶回去？",
+  "ending_span": "因为这种场面，你一退，丢掉的就不只是你自己。",
+  "review_decision": "patch_once",
+  "patch_intent": "lift",
+  "hard_issue_labels": [],
+  "soft_issue_labels": [
+    "hook_kill_power_weak",
+    "ending_residue_weak"
+  ]
+}
+```
 
 ## 6. 错误与状态处理原则
 
