@@ -1,0 +1,3 @@
+harness/scripts/runtime/output/*
+!harness/scripts/runtime/output/.gitkeep
+
