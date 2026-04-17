@@ -103,6 +103,14 @@
 输出：
 - `Script Draft Package`
 
+补充原则：
+- 默认单稿
+- 只有少数 family 允许在第一稿明显整体失真时补第二稿
+- 当前允许默认预备第二稿的核心 family：
+  - `变法治术型`
+  - `人物命运型`
+- `朝堂博弈型` 只在第一稿明显写糊时条件性允许第二稿，不作为默认
+
 ### 2.4 本地硬校验
 
 输入：
@@ -118,6 +126,12 @@
 - `regen_once` 只用于可恢复的结构性失败，例如 beat 覆盖缺失、占位符残留、严重时长异常
 - `hard_fail` 表示本地硬校验已经不能继续自动推进，本轮 script 直接失败退出
 - 本地硬校验不负责 topic 回退判定，`return_topic` 只来自单一语义审校
+- 时长偏差口径：
+  - 不超过 `15%`：只告警
+  - `15% ~ 35%`：`regen_once`
+  - 超过 `35%`：`hard_fail`
+- `beat_trace.excerpt` 少于 `8` 个汉字等价长度时，按“命中过弱”处理，进入 `regen_once`
+- `quote_trace` 仅在正文使用了 `canonical_quotes` 时强制要求存在
 
 ### 2.5 单一语义审校
 
@@ -130,6 +144,21 @@
 - `patch_once`
 - `regen_once`
 - `return_topic`
+
+补充原则：
+- 局部问题优先 `patch_once`
+- 全稿腔调或气口错误才 `regen_once`
+- 只有 topic 自身矛盾才 `return_topic`
+- `patch_once`：
+  - 无合同冲突
+  - 无全局问题标签
+  - `patch_targets` 不超过 `3` 个区域
+- `regen_once`：
+  - 出现任意 `1` 个全局问题标签
+  - 或局部问题标签数量 `>= 3`
+  - 或 `patch_targets` 已覆盖 `opening + middle + ending`
+- `return_topic`：
+  - 只在 `selected_angle / scope / must_include_beats / forbidden_expansions / source anchors` 发生合同冲突时触发
 
 ## 3. 后续阶段
 
