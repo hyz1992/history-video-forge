@@ -11,9 +11,9 @@
 - 当前项目处于 `greenfield-first` 模式。
 - 当前唯一可实施范围：`topic + script` 第一阶段及其配套 harness。
 - 当前优先事项：
-  - 先落地 harness v1
+  - 先把 harness v1 立稳
   - 再进入 `topic + script` 第一阶段实现
-  - 暂不实现 downstream 阶段
+  - 暂不实现 downstream 详细阶段
 
 ---
 
@@ -36,7 +36,7 @@
 
 ---
 
-## 建议阅读顺序
+## 推荐阅读顺序
 
 1. `D:/myproject/story-video-forge2/docs/requirements/product-requirements.md`
 2. `D:/myproject/story-video-forge2/docs/architecture/topic-stage-design.md`
@@ -85,6 +85,7 @@
 - 如果回改 shared schema / API / prompt 规则，必须回跑相关最小验证。
 - `topic` 合同未冻结，不得进入 `script` 生成。
 - `script` 本地硬校验与单一语义审校未通过，不得宣称该阶段完成。
+- runtime harness 是当前阶段的 P0 保障；在 `topic + script` 第一阶段，必须尽早建立并持续可运行。
 
 ---
 
@@ -94,6 +95,7 @@
 - 所有正式 prompt **必须存放在** `D:/myproject/story-video-forge2/harness/prompts/`。
 - prompt 的元数据必须显式声明 `language: zh-CN`。
 - 不允许把正式 prompt 散落在业务代码、临时 notes 或多个重复文档中。
+- Prompt Registry 的正式规范位于 `D:/myproject/story-video-forge2/harness/docs/prompt-registry-spec.md`。
 
 ---
 
@@ -120,5 +122,4 @@
 - `Topic Package` 是 script 阶段唯一正式上游。
 - `Topic Delivery Pack` 只能微调交付方式，不能改 narrative 合同。
 - `narrative_tension_map` 属于 `Topic Package`，不是 delivery 层。
-- `viral_rubric` / `narrative_tension_map` / `patch_intent=lift` 已进入正式设计，不得在实现时随意改语义。
-
+- `viral_rubric / narrative_tension_map / patch_intent=lift` 已进入正式设计，不得在实现时随意改语义。

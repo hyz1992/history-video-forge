@@ -3,12 +3,15 @@
 本文档集用于在一个新的空项目目录中，稳定指导 `story-video-forge2` 从零开发。
 
 原则：
+
 - 只记录当前已经确认的结论
 - 未确认项明确标注 `TBD`
-- 旧项目 `story-video-forge` 仅作为迁移参考，不作为新项目正式规范来源
+- 旧项目 `story-video-forge` 只作迁移参考，不作为新项目正式规范来源
 - 后续讨论形成阶段性结论时，优先更新本目录下的正式文档
 
-## 推荐阅读顺序
+---
+
+## 先看什么
 
 对于一个完全没有上下文的新 agent，建议按下面顺序建立认知：
 
@@ -24,14 +27,16 @@
 10. [后续阶段高层设计（留档版）](./architecture/downstream-stage-high-level-design.md)
 11. [字段设计](./data/field-design.md)
 12. [API 设计（第一版）](./architecture/api-design.md)
-13. [Prompt 管理规范](./standards/prompt-management.md)
-14. [主题阶段讨论留档](./records/2026-04-17-topic-stage-conclusions.md)
-15. [Script 阶段讨论留档](./records/2026-04-17-script-stage-conclusions.md)
-16. [旧项目可复用内容清单](./migration/reusable-assets-inventory.md)
-17. [Harness 工程规则与风险规避](./standards/harness-engineering-rules.md)
-18. [Greenfield 实施路线图](./plans/2026-04-17-greenfield-roadmap.md)
-19. [Topic + Script 第一阶段实现计划](./plans/2026-04-17-topic-script-foundation-implementation-plan.md)
-20. [当前总 Todo](./todos/roadmap-todo.md)
+13. [旧项目可复用内容清单](./migration/reusable-assets-inventory.md)
+14. [Greenfield 路线图](./plans/2026-04-17-greenfield-roadmap.md)
+15. [Topic + Script 第一阶段实现计划](./plans/2026-04-17-topic-script-foundation-implementation-plan.md)
+16. [当前总 Todo](./todos/roadmap-todo.md)
+
+执行治理、prompt 规则、检查脚本与 runtime harness 不再由 `docs/` 承担，请改看：
+
+- [harness/README.md](../harness/README.md)
+
+---
 
 ## 当前文档结构
 
@@ -57,13 +62,11 @@
 
 ### UI
 
-- [主题页面 UI 设计](./ui/topic-page-design.md)
+- [主题页 UI 设计](./ui/topic-page-design.md)
 
 ### 标准与规范
 
 - [技术栈规范](./standards/tech-stack-spec.md)
-- [Prompt 管理规范](./standards/prompt-management.md)
-- [Harness 工程规则与风险规避](./standards/harness-engineering-rules.md)
 
 ### 迁移参考
 
@@ -71,14 +74,20 @@
 
 ### 阶段性留档
 
-- [主题阶段讨论结论留档](./records/2026-04-17-topic-stage-conclusions.md)
-- [Script 阶段讨论结论留档](./records/2026-04-17-script-stage-conclusions.md)
+- [主题阶段结论留档](./records/2026-04-17-topic-stage-conclusions.md)
+- [Script 阶段结论留档](./records/2026-04-17-script-stage-conclusions.md)
+- [爆款化优化结论留档](./records/2026-04-17-viral-optimization-conclusions.md)
+- [Harness 架构评估留档](./records/2026-04-17-harness-architecture-assessment.md)
 
 ### 计划与执行
 
-- [Greenfield 实施路线图](./plans/2026-04-17-greenfield-roadmap.md)
+- [Greenfield 路线图](./plans/2026-04-17-greenfield-roadmap.md)
+- [Harness v1 目录设计](./plans/2026-04-17-harness-v1-directory-design.md)
+- [Harness v1 实施计划](./plans/2026-04-17-harness-v1-implementation-plan.md)
 - [Topic + Script 第一阶段实现计划](./plans/2026-04-17-topic-script-foundation-implementation-plan.md)
 - [当前总 Todo](./todos/roadmap-todo.md)
+
+---
 
 ## 当前已确认范围
 
@@ -95,6 +104,8 @@
 - 分阶段讨论留档
 - 第一阶段实现计划与任务清单
 
+---
+
 ## 当前仍为 TBD 的区域
 
 - storyboard 阶段详细规则
@@ -103,9 +114,11 @@
 - 推荐轻评审阈值
 - `event_family` 命中算法与 `family_confidence` 计算方法
 
+---
+
 ## 更新策略
 
 - 原则性结论：更新对应正式规范文档
 - 某阶段已连续讨论并形成阶段性结论：同时更新对应 `records/` 留档
-- 讨论过程性推导：不要写入正式规范，除非已经收敛
+- 讨论过程性的推导：不要写入正式规范，除非已经收敛
 - 重大收口：同步更新路线图与 todo

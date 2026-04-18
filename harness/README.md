@@ -15,18 +15,7 @@
 
 ---
 
-## 阅读顺序
-
-1. 根目录 `AGENTS.md`
-2. `harness/docs/definition-of-done.md`
-3. `harness/docs/review-checklist.md`
-4. `harness/docs/prompt-management.md`
-5. `harness/docs/prompt-registry-spec.md`
-6. `harness/docs/harness-engineering-rules.md`
-
----
-
-## 当前 harness v1 范围
+## 当前定位
 
 当前 harness v1 只服务于：
 
@@ -39,6 +28,21 @@
 - CI 平台化
 - hook 强制化
 - 业务 runtime 编排
+
+runtime harness 在当前阶段属于 **P0**：  
+它用于尽早验证 `topic -> script` 这条链路在真实样例上是否能稳定跑通，而不是只停留在文档层。
+
+---
+
+## 阅读顺序
+
+1. 根目录 `AGENTS.md`
+2. `harness/docs/definition-of-done.md`
+3. `harness/docs/review-checklist.md`
+4. `harness/docs/regression-checklist.md`
+5. `harness/docs/prompt-management.md`
+6. `harness/docs/prompt-registry-spec.md`
+7. `harness/docs/harness-engineering-rules.md`
 
 ---
 
@@ -54,7 +58,14 @@
 - prompt 管理
 - Prompt Registry 规范
 - harness 工程规则
-- todo 模板
+- `todo-list-template.md`
+
+注意：
+
+- `task-template.md`
+- `review-template.md`
+
+不属于 harness v1 最小集；它们的核心约束应体现在 `AGENTS.md`、`definition-of-done.md`、`review-checklist.md` 中。
 
 ### `harness/prompts/`
 
@@ -97,10 +108,23 @@
 ## 当前阶段闸门
 
 - harness v1 未成型，不进入业务实现
-- `topic + script` 业务实现前，先落地：
+- 上一个任务未通过最小验证，不进入下一个任务
+- `topic + script` 业务实现前，先立稳：
   - 根目录 `AGENTS.md`
   - harness docs 最小集
   - prompt 目录
   - 检查脚本骨架
   - runtime harness 骨架
 
+---
+
+## 与 `docs/` 的关系
+
+- `docs/`：系统是什么、对象怎么设计、阶段如何编排
+- `harness/`：如何把它做对、如何检查、如何防止跑偏
+
+如果二者冲突：
+
+1. 先检查是否是 `docs/` 中的产品真相源与 `harness/` 中的执行规则在越权
+2. 不允许让 harness 重新定义产品对象
+3. 不允许让 `docs/` 重新承载活的治理规则
