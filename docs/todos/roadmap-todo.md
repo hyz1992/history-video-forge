@@ -9,10 +9,11 @@
 - [x] 固定风格层三层结构
 - [x] 将 `topic + script` 第一阶段实施计划细化为正式 Task/Step 执行清单
 - [x] 完成 `Task 1`：建立 monorepo 与最小 workspace 骨架
+- [x] 完成 `Task 2`：实现 shared schema 最小骨架
 
 ## 进行中
 
-- [ ] 准备执行 `Task 2`：shared schema 最小骨架
+- [ ] 准备执行 `Task 3`：backend 项目与持久化最小骨架
 
 ## 待做
 
@@ -46,11 +47,11 @@
 
 ### Task 2：实现 shared schema 最小骨架
 
-- [ ] Step 1：新增 `tests/shared/schema-contracts.test.ts`
-- [ ] Step 2：运行 `npm test -- tests/shared/schema-contracts.test.ts` 并确认红灯
-- [ ] Step 3：实现最小 Zod schema 与 `shared/src/index.ts` 导出
-- [ ] Step 4：重跑 `npm test -- tests/shared/schema-contracts.test.ts` 并确认绿灯
-- [ ] Step 5：提交 `增加 topic 与 script 最小共享 schema`
+- [x] Step 1：新增 `tests/shared/schema-contracts.test.ts`
+- [x] Step 2：运行 `npm test -- tests/shared/schema-contracts.test.ts` 并确认红灯
+- [x] Step 3：实现最小 Zod schema 与 `shared/src/index.ts` 导出
+- [x] Step 4：重跑 `npm test -- tests/shared/schema-contracts.test.ts` 并确认绿灯
+- [x] Step 5：提交 `增加 topic 与 script 最小共享 schema`
 
 ### Task 3：建立 backend 项目与持久化最小骨架
 

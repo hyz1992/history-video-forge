@@ -1,0 +1,33 @@
+import { z } from "zod";
+
+export const NarrativeTensionMap = z
+  .object({
+    hook_claim: z.string().min(1),
+    pressure_escalation: z.string().min(1),
+    mid_reveal: z.string().min(1),
+    peak_payoff: z.string().min(1),
+    ending_residue: z.string().min(1),
+  })
+  .strict();
+
+export const TopicPackage = z
+  .object({
+    topic_id: z.string().min(1),
+    title: z.string().min(1),
+    selected_angle: z.string().min(1),
+    family_label: z.string().min(1),
+    scope_label: z.string().min(1),
+    core_conflict: z.string().min(1),
+    strong_scene: z.string().min(1),
+    packaging_seed: z.string().min(1),
+    must_include_beats: z.array(z.string()),
+    forbidden_expansions: z.array(z.string()),
+    risk_hints: z.array(z.string()),
+    canonical_quotes: z.array(z.string()),
+    duration_band: z.string().min(1),
+    narrative_tension_map: NarrativeTensionMap,
+  })
+  .strict();
+
+export type NarrativeTensionMap = z.infer<typeof NarrativeTensionMap>;
+export type TopicPackage = z.infer<typeof TopicPackage>;
