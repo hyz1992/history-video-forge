@@ -8,19 +8,34 @@ consumes:
   - PatchTargets
 produces:
   - ScriptDraftPackage
-status: draft
+status: active
 ---
 
-# 用途
+# 任务
 
-在不改合同边界的前提下，对脚本执行局部修补或势能提升。
+在不改动合同边界的前提下，对脚本执行一次局部修补或势能提升。
 
-# 约束
+## 输入对象
+
+- `ScriptInputBundle`
+- `ScriptDraftPackage`
+- `PatchTargets`
+
+## 输出对象
+
+- 更新后的 `ScriptDraftPackage`
+
+## 硬约束
 
 - `intent=fix` 只修局部问题
-- `intent=lift` 只提开头、悬念、高潮或余味
-- 不得改 `must_include_beats`
-- 不得改 `forbidden_expansions`
-- 不得改 `scope`
-- 所有说明与正文使用中文
+- `intent=lift` 只提升开头、悬念、高潮或余味
+- 单次改动范围不得超过正文总长度的 25%
+- 所有说明与正文都使用中文
 
+## 禁止事项
+
+- 不修改 `must_include_beats`
+- 不修改 `forbidden_expansions`
+- 不修改 `scope`
+- 不修改 `narrative_tension_map`
+- 不把局部 patch 变成整稿重写
