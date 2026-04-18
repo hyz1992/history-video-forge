@@ -1,3 +1,13 @@
+> 说明：本文档是 **harness 架构评估的历史留档**，用于保留当时的判断依据、取舍过程与阶段性结论。
+>
+> 当前正式执行规则 **不以本文为准**，而以以下位置为准：
+>
+> - [AGENTS.md](</D:/myproject/story-video-forge2/AGENTS.md>)
+> - [harness/README.md](</D:/myproject/story-video-forge2/harness/README.md>)
+> - `D:/myproject/story-video-forge2/harness/docs/*`
+>
+> 若本文与上述正式规则源存在表述差异，应以正式规则源为准。本文保留的主要价值是：记录当时为什么决定为新项目建立专用 harness，以及为何将 `runtime harness` 提升为当前阶段的 `P0`。
+
 # Harness 架构评估结论（阶段性留档）
 
 日期：2026-04-17

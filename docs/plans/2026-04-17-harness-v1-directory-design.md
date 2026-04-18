@@ -1,3 +1,13 @@
+> 说明：本文档是 **harness v1 目录结构设计的历史留档**，用于记录目录分层、迁移原则与当时的设计判断。
+>
+> 当前正式执行规则 **不以本文为准**，而以以下位置为准：
+>
+> - [AGENTS.md](</D:/myproject/story-video-forge2/AGENTS.md>)
+> - [harness/README.md](</D:/myproject/story-video-forge2/harness/README.md>)
+> - `D:/myproject/story-video-forge2/harness/docs/*`
+>
+> 若本文与上述正式规则源存在表述差异，应以正式规则源为准。本文保留的主要价值是：说明为什么采用“根目录保留 `AGENTS.md`，其余 harness 内容集中到 `harness/`”这一结构，以及当时的目录划分依据。
+
 # Harness v1 目录结构设计
 
 日期：2026-04-17
