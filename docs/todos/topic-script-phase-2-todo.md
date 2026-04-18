@@ -3,7 +3,8 @@
 ## 状态
 
 - [x] 第二阶段实施计划已起草完成
-- [ ] 准备执行第二阶段 `Task 0`
+- [x] 第二阶段 `Task 0` 已完成
+- [ ] 准备执行第二阶段 `Task 1`
 
 ## 对应计划
 
@@ -18,11 +19,11 @@
 
 ### Task 0：旧项目基础设施迁移审查与裁剪清单
 
-- [ ] Step 1：新增 `docs/migration/2026-04-18-runtime-infra-reuse-cut-list.md`
-- [ ] Step 2：运行 `powershell -NoProfile -Command "Select-String -Path docs/migration/2026-04-18-runtime-infra-reuse-cut-list.md -Pattern '可直接迁移|只借思路|明确禁止迁入|新项目目标落点|必须剥离的旧依赖' -Encoding UTF8"` 并确认命中
-- [ ] Step 3：冻结 `Task 1` 与 `Task 8` 的迁移边界
-- [ ] Step 4：运行 `powershell -NoProfile -Command "Select-String -Path docs/migration/2026-04-18-runtime-infra-reuse-cut-list.md -Pattern 'Task 1|Task 8|llm.ts|external-errors.ts|llm-auto-fix.ts|trace-logger-safe.ts|pipeline-diagnostics.ts' -Encoding UTF8"` 并确认命中
-- [ ] Step 5：提交 `冻结第二阶段基础设施迁移裁剪清单`
+- [x] Step 1：新增 `docs/migration/2026-04-18-runtime-infra-reuse-cut-list.md`
+- [x] Step 2：运行 `powershell -NoProfile -Command "Select-String -Path docs/migration/2026-04-18-runtime-infra-reuse-cut-list.md -Pattern '可直接迁移|只借思路|明确禁止迁入|新项目目标落点|必须剥离的旧依赖' -Encoding UTF8"` 并确认命中
+- [x] Step 3：冻结 `Task 1` 与 `Task 8` 的迁移边界
+- [x] Step 4：运行 `powershell -NoProfile -Command "Select-String -Path docs/migration/2026-04-18-runtime-infra-reuse-cut-list.md -Pattern 'Task 1|Task 8|llm.ts|external-errors.ts|llm-auto-fix.ts|trace-logger-safe.ts|pipeline-diagnostics.ts' -Encoding UTF8"` 并确认命中
+- [x] Step 5：提交 `冻结第二阶段基础设施迁移裁剪清单`
 
 ### Task 1：建立正式 runtime LLM 调用层与 Prompt Loader
 

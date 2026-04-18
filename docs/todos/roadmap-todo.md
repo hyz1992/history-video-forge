@@ -20,14 +20,15 @@
 - [x] 完成 `Task 10`：建立最小 harness 与样例回归
 - [x] 完成第一阶段收口检查：全量 `npm test` 通过
 - [x] 起草第二阶段 `topic + script` 真实可用闭环计划
+- [x] 完成第二阶段 `Task 0`：冻结旧项目基础设施迁移裁剪清单
 
 ## 进行中
 
-- [ ] 准备执行第二阶段 `Task 0`：完成旧项目基础设施迁移审查与裁剪清单
+- [ ] 准备执行第二阶段 `Task 1`：建立正式 runtime LLM 调用层与 Prompt Loader
 
 ## 待做
 
-- [ ] 按顺序执行第二阶段 `Task 0` 至 `Task 9`
+- [ ] 按顺序执行第二阶段 `Task 1` 至 `Task 9`
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 细化 Event Registry 匹配阈值
 - [ ] 细化 Candidate Cache 生命周期
