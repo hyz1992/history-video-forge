@@ -16,10 +16,11 @@
 - [x] 完成 `Task 6`：Delivery Planner 与 Script Input Bundle 组装
 - [x] 完成 `Task 7`：Script Draft Package 生成与本地硬校验壳
 - [x] 完成 `Task 8`：单一语义审校接口壳与 script API
+- [x] 完成 `Task 9`：frontend 主题页最小闭环
 
 ## 进行中
 
-- [ ] 准备执行 `Task 9`：frontend 主题页最小闭环
+- [ ] 准备执行 `Task 10`：建立最小 harness 与样例回归
 
 ## 待做
 
@@ -109,11 +110,11 @@
 
 ### Task 9：实现 frontend 主题页最小闭环
 
-- [ ] Step 1：新增 `tests/frontend/topic-page.spec.ts`
-- [ ] Step 2：运行 `npm test -- tests/frontend/topic-page.spec.ts` 并确认红灯
-- [ ] Step 3：实现 topic 页面、tabs、candidate list 与 drawer 最小闭环
-- [ ] Step 4：重跑 `npm test -- tests/frontend/topic-page.spec.ts` 并确认绿灯
-- [ ] Step 5：提交 `实现主题页三入口最小闭环`
+- [x] Step 1：新增 `tests/frontend/topic-page.spec.ts`
+- [x] Step 2：运行 `npm test -- tests/frontend/topic-page.spec.ts` 并确认红灯
+- [x] Step 3：实现 topic 页面、tabs、candidate list 与 drawer 最小闭环
+- [x] Step 4：重跑 `npm test -- tests/frontend/topic-page.spec.ts` 并确认绿灯
+- [x] Step 5：提交 `实现主题页三入口最小闭环`
 
 ### Task 10：建立最小 harness 与样例回归
 

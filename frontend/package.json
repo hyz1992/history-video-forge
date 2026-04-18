@@ -3,5 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "main": "src/main.ts"
+  "main": "src/main.ts",
+  "dependencies": {
+    "vue": "^3.5.17",
+    "vue-router": "^4.5.1"
+  }
 }
