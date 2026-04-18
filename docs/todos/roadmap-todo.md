@@ -11,10 +11,11 @@
 - [x] 完成 `Task 1`：建立 monorepo 与最小 workspace 骨架
 - [x] 完成 `Task 2`：实现 shared schema 最小骨架
 - [x] 完成 `Task 3`：建立 backend 项目与持久化最小骨架
+- [x] 完成 `Task 4`：实现 topic 阶段基础服务与 Builder 壳
 
 ## 进行中
 
-- [ ] 准备执行 `Task 4`：topic 阶段基础服务与 Builder 壳
+- [ ] 准备执行 `Task 5`：topic API 与 Topic Package 冻结
 
 ## 待做
 
@@ -64,11 +65,11 @@
 
 ### Task 4：实现 topic 阶段基础服务与 Builder 壳
 
-- [ ] Step 1：新增 `tests/backend/topic/topic-builder.test.ts` 与 `tests/backend/topic/event-normalizer.test.ts`
-- [ ] Step 2：运行 `npm test -- tests/backend/topic/topic-builder.test.ts tests/backend/topic/event-normalizer.test.ts` 并确认红灯
-- [ ] Step 3：实现 deterministic builder 壳、family classifier 与 event normalizer
-- [ ] Step 4：重跑 `npm test -- tests/backend/topic/topic-builder.test.ts tests/backend/topic/event-normalizer.test.ts` 并确认绿灯
-- [ ] Step 5：提交 `实现 topic builder 与事件归一化基础壳`
+- [x] Step 1：新增 `tests/backend/topic/topic-builder.test.ts` 与 `tests/backend/topic/event-normalizer.test.ts`
+- [x] Step 2：运行 `npm test -- tests/backend/topic/topic-builder.test.ts tests/backend/topic/event-normalizer.test.ts` 并确认红灯
+- [x] Step 3：实现 deterministic builder 壳、family classifier 与 event normalizer
+- [x] Step 4：重跑 `npm test -- tests/backend/topic/topic-builder.test.ts tests/backend/topic/event-normalizer.test.ts` 并确认绿灯
+- [x] Step 5：提交 `实现 topic builder 与事件归一化基础壳`
 
 ### Task 5：实现 topic API 与 Topic Package 冻结
 
