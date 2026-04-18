@@ -13,10 +13,11 @@
 - [x] 完成 `Task 3`：建立 backend 项目与持久化最小骨架
 - [x] 完成 `Task 4`：实现 topic 阶段基础服务与 Builder 壳
 - [x] 完成 `Task 5`：实现 topic API 与 Topic Package 冻结
+- [x] 完成 `Task 6`：Delivery Planner 与 Script Input Bundle 组装
 
 ## 进行中
 
-- [ ] 准备执行 `Task 6`：Delivery Planner 与 Script Input Bundle 组装
+- [ ] 准备执行 `Task 7`：Script Draft Package 生成与本地硬校验壳
 
 ## 待做
 
@@ -82,11 +83,11 @@
 
 ### Task 6：实现 Delivery Planner 与 Script Input Bundle 组装
 
-- [ ] Step 1：新增 `tests/backend/script/script-input-bundle.test.ts`
-- [ ] Step 2：运行 `npm test -- tests/backend/script/script-input-bundle.test.ts` 并确认红灯
-- [ ] Step 3：实现 `TopicDeliveryPack` 生成与 `ScriptInputBundle` 组装壳
-- [ ] Step 4：重跑 `npm test -- tests/backend/script/script-input-bundle.test.ts` 并确认绿灯
-- [ ] Step 5：提交 `实现 delivery planner 与 script 输入组装`
+- [x] Step 1：新增 `tests/backend/script/script-input-bundle.test.ts`
+- [x] Step 2：运行 `npm test -- tests/backend/script/script-input-bundle.test.ts` 并确认红灯
+- [x] Step 3：实现 `TopicDeliveryPack` 生成与 `ScriptInputBundle` 组装壳
+- [x] Step 4：重跑 `npm test -- tests/backend/script/script-input-bundle.test.ts` 并确认绿灯
+- [x] Step 5：提交 `实现 delivery planner 与 script 输入组装`
 
 ### Task 7：实现 Script Draft Package 生成与本地硬校验壳
 
