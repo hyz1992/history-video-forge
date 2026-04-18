@@ -39,8 +39,14 @@ model TopicPackage {
   event_registry_entry_id     String?
   title                       String
   selected_angle              String
+  family_label                String
+  scope_label                 String
   core_conflict               String
+  strong_scene                String
   stakes                      String?
+  packaging_seed              String
+  canonical_quotes_json       Json
+  duration_band_json          Json
   narrative_tension_map_json  Json
   must_include_beats_json     Json
   forbidden_expansions_json   Json

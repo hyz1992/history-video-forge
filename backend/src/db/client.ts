@@ -26,8 +26,14 @@ export interface TopicPackageRecord {
   eventRegistryEntryId: string | null;
   title: string;
   selectedAngle: string;
+  familyLabel: string;
+  scopeLabel: string;
   coreConflict: string;
+  strongScene: string;
   stakes: string | null;
+  packagingSeed: string;
+  canonicalQuotesJson: string[];
+  durationBandJson: Record<string, unknown>;
   narrativeTensionMapJson: Record<string, unknown>;
   mustIncludeBeatsJson: unknown[];
   forbiddenExpansionsJson: unknown[];

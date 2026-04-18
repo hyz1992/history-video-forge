@@ -5,8 +5,14 @@ export interface SaveTopicPackageInput {
   eventRegistryEntryId?: string | null;
   title: string;
   selectedAngle: string;
+  familyLabel: string;
+  scopeLabel: string;
   coreConflict: string;
+  strongScene: string;
   stakes?: string | null;
+  packagingSeed: string;
+  canonicalQuotesJson?: string[];
+  durationBandJson: Record<string, unknown>;
   narrativeTensionMapJson: Record<string, unknown>;
   mustIncludeBeatsJson?: unknown[];
   forbiddenExpansionsJson?: unknown[];
@@ -24,8 +30,14 @@ export async function saveTopicPackage(
     eventRegistryEntryId: input.eventRegistryEntryId ?? null,
     title: input.title,
     selectedAngle: input.selectedAngle,
+    familyLabel: input.familyLabel,
+    scopeLabel: input.scopeLabel,
     coreConflict: input.coreConflict,
+    strongScene: input.strongScene,
     stakes: input.stakes ?? null,
+    packagingSeed: input.packagingSeed,
+    canonicalQuotesJson: input.canonicalQuotesJson ?? [],
+    durationBandJson: input.durationBandJson,
     narrativeTensionMapJson: input.narrativeTensionMapJson,
     mustIncludeBeatsJson: input.mustIncludeBeatsJson ?? [],
     forbiddenExpansionsJson: input.forbiddenExpansionsJson ?? [],
