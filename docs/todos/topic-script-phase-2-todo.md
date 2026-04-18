@@ -3,7 +3,7 @@
 ## 状态
 
 - [x] 第二阶段实施计划已起草完成
-- [ ] 准备执行第二阶段 `Task 1`
+- [ ] 准备执行第二阶段 `Task 0`
 
 ## 对应计划
 
@@ -15,6 +15,14 @@
 - 一次只执行一个低耦合子任务
 - 未通过当前任务最小验证前，不进入下一个 Task
 - 不进入 storyboard / assets / compose
+
+### Task 0：旧项目基础设施迁移审查与裁剪清单
+
+- [ ] Step 1：新增 `docs/migration/2026-04-18-runtime-infra-reuse-cut-list.md`
+- [ ] Step 2：运行 `powershell -NoProfile -Command "Select-String -Path docs/migration/2026-04-18-runtime-infra-reuse-cut-list.md -Pattern '可直接迁移|只借思路|明确禁止迁入|新项目目标落点|必须剥离的旧依赖' -Encoding UTF8"` 并确认命中
+- [ ] Step 3：冻结 `Task 1` 与 `Task 8` 的迁移边界
+- [ ] Step 4：运行 `powershell -NoProfile -Command "Select-String -Path docs/migration/2026-04-18-runtime-infra-reuse-cut-list.md -Pattern 'Task 1|Task 8|llm.ts|external-errors.ts|llm-auto-fix.ts|trace-logger-safe.ts|pipeline-diagnostics.ts' -Encoding UTF8"` 并确认命中
+- [ ] Step 5：提交 `冻结第二阶段基础设施迁移裁剪清单`
 
 ### Task 1：建立正式 runtime LLM 调用层与 Prompt Loader
 
@@ -72,13 +80,13 @@
 - [ ] Step 4：重跑 `npm test -- tests/frontend/topic-to-script-flow.spec.ts` 并确认绿灯
 - [ ] Step 5：提交 `打通主题页到脚本页主链路切换`
 
-### Task 8：升级 runtime harness 为真实样例回归
+### Task 8：升级 runtime harness 为双层回归
 
 - [ ] Step 1：新增 `tests/harness/topic-script-regression.test.ts`
 - [ ] Step 2：运行 `npm test -- tests/harness/topic-script-regression.test.ts` 并确认红灯
-- [ ] Step 3：实现多样例真实样例回归 harness
+- [ ] Step 3：实现自动化稳定回归层与真实巡检脚本
 - [ ] Step 4：重跑 `npm test -- tests/harness/topic-script-regression.test.ts` 并确认绿灯
-- [ ] Step 5：提交 `升级主题脚本真实样例回归`
+- [ ] Step 5：提交 `升级主题脚本双层回归能力`
 
 ### Task 9：完成第二阶段收口检查
 
