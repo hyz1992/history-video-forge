@@ -1,10 +1,10 @@
-import test from "node:test";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 
 import { validatePromptContent } from "./check-prompt-language.ts";
 
-test("缺少必需元数据时返回错误", () => {
-  const content = `---
+describe("check prompt language", () => {
+  it("缺少必需元数据时返回错误", () => {
+    const content = `---
 id: topic.candidate-builder
 stage: topic
 consumes:
@@ -18,16 +18,16 @@ status: active
 
 生成选题候选。`;
 
-  const issues = validatePromptContent(
-    "harness/prompts/topic/candidate-builder.prompt.md",
-    content,
-  );
+    const issues = validatePromptContent(
+      "harness/prompts/topic/candidate-builder.prompt.md",
+      content,
+    );
 
-  assert.ok(issues.some((issue) => issue.includes("language")));
-});
+    expect(issues.some((issue) => issue.includes("language"))).toBe(true);
+  });
 
-test("正文缺少中文时返回错误", () => {
-  const content = `---
+  it("正文缺少中文时返回错误", () => {
+    const content = `---
 id: script.writer
 stage: script
 language: zh-CN
@@ -42,16 +42,16 @@ status: active
 
 Write the script draft package.`;
 
-  const issues = validatePromptContent(
-    "harness/prompts/script/script-writer.prompt.md",
-    content,
-  );
+    const issues = validatePromptContent(
+      "harness/prompts/script/script-writer.prompt.md",
+      content,
+    );
 
-  assert.ok(issues.some((issue) => issue.includes("中文")));
-});
+    expect(issues.some((issue) => issue.includes("中文"))).toBe(true);
+  });
 
-test("stage 与目录不一致时返回错误", () => {
-  const content = `---
+  it("stage 与目录不一致时返回错误", () => {
+    const content = `---
 id: topic.light-review
 stage: script
 language: zh-CN
@@ -66,16 +66,16 @@ status: active
 
 对候选选题做轻量语义评审。`;
 
-  const issues = validatePromptContent(
-    "harness/prompts/topic/light-review.prompt.md",
-    content,
-  );
+    const issues = validatePromptContent(
+      "harness/prompts/topic/light-review.prompt.md",
+      content,
+    );
 
-  assert.ok(issues.some((issue) => issue.includes("stage")));
-});
+    expect(issues.some((issue) => issue.includes("stage"))).toBe(true);
+  });
 
-test("合法 prompt 不返回错误", () => {
-  const content = `---
+  it("合法 prompt 不返回错误", () => {
+    const content = `---
 id: script.semantic-reviewer
 stage: script
 language: zh-CN
@@ -91,10 +91,11 @@ status: active
 
 对脚本草稿进行单一语义审校，并且只输出结构化结论。`;
 
-  const issues = validatePromptContent(
-    "harness/prompts/script/semantic-reviewer.prompt.md",
-    content,
-  );
+    const issues = validatePromptContent(
+      "harness/prompts/script/semantic-reviewer.prompt.md",
+      content,
+    );
 
-  assert.deepEqual(issues, []);
+    expect(issues).toEqual([]);
+  });
 });

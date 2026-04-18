@@ -18,14 +18,14 @@
 - [x] 完成 `Task 8`：单一语义审校接口壳与 script API
 - [x] 完成 `Task 9`：frontend 主题页最小闭环
 - [x] 完成 `Task 10`：建立最小 harness 与样例回归
+- [x] 完成第一阶段收口检查：全量 `npm test` 通过
 
 ## 进行中
 
-- [ ] 等待第一阶段收口与后续任务确认
+- [ ] 等待第二阶段范围与进入条件确认
 
 ## 待做
 
-- [ ] 按顺序执行 `Task 3` 至 `Task 10`
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 细化 Event Registry 匹配阈值
 - [ ] 细化 Candidate Cache 生命周期
