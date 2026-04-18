@@ -1,5 +1,32 @@
-import type { AppInstance } from "../../app";
+import type { AppInstance, AppResponse, RouteContext } from "../../app";
+import { getProjectById } from "../projects/project.repository";
+import { runScriptGeneration } from "./script-run.service";
 
-export function registerScriptRoutes(_app: AppInstance) {
-  // Task 7 only establishes the file/module boundary.
+async function generateScriptController(
+  context: RouteContext,
+): Promise<AppResponse> {
+  const project = await getProjectById(context.app.db, context.params.projectId);
+  if (!project) {
+    return {
+      statusCode: 404,
+      body: {
+        error: "project_not_found",
+      },
+    };
+  }
+
+  return runScriptGeneration({
+    db: context.app.db,
+    project,
+    allowPatch: context.payload?.allow_patch,
+    allowRegen: context.payload?.allow_regen,
+  });
+}
+
+export function registerScriptRoutes(app: AppInstance) {
+  app.addRoute(
+    "POST",
+    "/api/projects/:projectId/script/generate",
+    generateScriptController,
+  );
 }

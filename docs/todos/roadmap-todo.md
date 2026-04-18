@@ -15,10 +15,11 @@
 - [x] 完成 `Task 5`：实现 topic API 与 Topic Package 冻结
 - [x] 完成 `Task 6`：Delivery Planner 与 Script Input Bundle 组装
 - [x] 完成 `Task 7`：Script Draft Package 生成与本地硬校验壳
+- [x] 完成 `Task 8`：单一语义审校接口壳与 script API
 
 ## 进行中
 
-- [ ] 准备执行 `Task 8`：单一语义审校接口壳与 script API
+- [ ] 准备执行 `Task 9`：frontend 主题页最小闭环
 
 ## 待做
 
@@ -100,11 +101,11 @@
 
 ### Task 8：实现单一语义审校接口壳与 script API
 
-- [ ] Step 1：新增 `tests/backend/api/script-api.test.ts`
-- [ ] Step 2：运行 `npm test -- tests/backend/api/script-api.test.ts` 并确认红灯
-- [ ] Step 3：实现 script API、semantic review 壳与 run service
-- [ ] Step 4：重跑 `npm test -- tests/backend/api/script-api.test.ts` 并确认绿灯
-- [ ] Step 5：提交 `实现 script API 与单一语义审校壳`
+- [x] Step 1：新增 `tests/backend/api/script-api.test.ts`
+- [x] Step 2：运行 `npm test -- tests/backend/api/script-api.test.ts` 并确认红灯
+- [x] Step 3：实现 script API、semantic review 壳与 run service
+- [x] Step 4：重跑 `npm test -- tests/backend/api/script-api.test.ts` 并确认绿灯
+- [x] Step 5：提交 `实现 script API 与单一语义审校壳`
 
 ### Task 9：实现 frontend 主题页最小闭环
 

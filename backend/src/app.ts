@@ -1,6 +1,7 @@
 import { env } from "./config/env";
 import { createDbClient, type DbClient } from "./db/client";
 import { registerTopicRoutes } from "./modules/topic/topic.routes";
+import { registerScriptRoutes } from "./modules/script/script.routes";
 import type { StoredTopicCandidate } from "./modules/topic/topic-confirm.service";
 
 export interface InjectRequest {
@@ -128,6 +129,7 @@ export function buildApp(): AppInstance {
   };
 
   registerTopicRoutes(app);
+  registerScriptRoutes(app);
 
   return app;
 }
