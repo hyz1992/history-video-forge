@@ -1,0 +1,7 @@
+{
+  "name": "@story-video-forge2/frontend",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/main.ts"
+}
