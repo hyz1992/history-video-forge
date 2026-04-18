@@ -1,0 +1,18 @@
+{
+  "sample_id": "zhuanzhu-ciwangliao",
+  "project_name": "专诸刺王僚 Smoke",
+  "topic_request": {
+    "canonical_name": "专诸刺王僚",
+    "summary": "一场被安排进宴席的刺杀，决定了吴国权力翻盘的起点。",
+    "core_conflict": "动手只有一次机会，失手就是全盘皆输。",
+    "strong_scene": "鱼腹藏剑，专诸在席间暴起。",
+    "source_hint": "《史记·刺客列传》",
+    "recent_usage_hint": "固定 smoke 样例，不代表真实推荐状态",
+    "tags": ["assassination", "coup", "sacrifice", "showdown"]
+  },
+  "confirm_candidate_index": 0,
+  "script_request": {
+    "allow_patch": true,
+    "allow_regen": true
+  }
+}

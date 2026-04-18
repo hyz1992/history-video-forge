@@ -17,10 +17,11 @@
 - [x] 完成 `Task 7`：Script Draft Package 生成与本地硬校验壳
 - [x] 完成 `Task 8`：单一语义审校接口壳与 script API
 - [x] 完成 `Task 9`：frontend 主题页最小闭环
+- [x] 完成 `Task 10`：建立最小 harness 与样例回归
 
 ## 进行中
 
-- [ ] 准备执行 `Task 10`：建立最小 harness 与样例回归
+- [ ] 等待第一阶段收口与后续任务确认
 
 ## 待做
 
@@ -118,11 +119,11 @@
 
 ### Task 10：建立最小 harness 与样例回归
 
-- [ ] Step 1：新增 `tests/harness/topic-script-smoke.test.ts` 与两份 sample 文件
-- [ ] Step 2：运行 `npm test -- tests/harness/topic-script-smoke.test.ts` 并确认红灯
-- [ ] Step 3：实现最小 sample runner 与 smoke chain
-- [ ] Step 4：重跑 `npm test -- tests/harness/topic-script-smoke.test.ts` 并确认绿灯
-- [ ] Step 5：提交 `增加 topic-script 最小 harness 样例回归`
+- [x] Step 1：新增 `tests/harness/topic-script-smoke.test.ts` 与两份 sample 文件
+- [x] Step 2：运行 `npm test -- tests/harness/topic-script-smoke.test.ts` 并确认红灯
+- [x] Step 3：实现最小 sample runner 与 smoke chain
+- [x] Step 4：重跑 `npm test -- tests/harness/topic-script-smoke.test.ts` 并确认绿灯
+- [x] Step 5：提交 `增加 topic-script 最小 harness 样例回归`
 
 ## 阻塞项
 

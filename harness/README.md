@@ -92,6 +92,22 @@ runtime harness 在当前阶段属于 **P0**：
 - `check-schema-doc-drift.ts`
 - `detect-duplicate-prompts.ts`
 - `runtime/run-topic-to-script-sample.ts`
+- `runtime/topic-script-smoke.ts`
+
+### `harness/samples/`
+
+放 runtime harness 的最小样例输入。
+
+当前阶段保留：
+
+- `topic-script/yanzi-shichu.sample.json`
+- `topic-script/zhuanzhu-ciwangliao.sample.json`
+
+说明：
+
+- 样例只服务 `topic -> script` 第一阶段 smoke 回归
+- 不承载 storyboard / assets / compose 的下游对象
+- sample runner 应优先读取这里的固定样例，而不是把正式样例长期内联在脚本里
 
 ### `harness/scripts/runtime/output/`
 

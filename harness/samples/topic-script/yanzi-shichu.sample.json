@@ -1,0 +1,18 @@
+{
+  "sample_id": "yanzi-shichu",
+  "project_name": "晏子使楚 Smoke",
+  "topic_request": {
+    "canonical_name": "晏子使楚",
+    "summary": "楚王在公开场合连续压场，晏子必须当场顶回去。",
+    "core_conflict": "楚王当众羞辱，晏子不能退。",
+    "strong_scene": "楚王连番压场，晏子一句句顶回去。",
+    "source_hint": "《晏子春秋》",
+    "recent_usage_hint": "固定 smoke 样例，不代表真实推荐状态",
+    "tags": ["diplomacy", "court", "humiliation", "showdown"]
+  },
+  "confirm_candidate_index": 0,
+  "script_request": {
+    "allow_patch": true,
+    "allow_regen": true
+  }
+}
