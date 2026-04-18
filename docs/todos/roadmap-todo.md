@@ -14,10 +14,11 @@
 - [x] 完成 `Task 4`：实现 topic 阶段基础服务与 Builder 壳
 - [x] 完成 `Task 5`：实现 topic API 与 Topic Package 冻结
 - [x] 完成 `Task 6`：Delivery Planner 与 Script Input Bundle 组装
+- [x] 完成 `Task 7`：Script Draft Package 生成与本地硬校验壳
 
 ## 进行中
 
-- [ ] 准备执行 `Task 7`：Script Draft Package 生成与本地硬校验壳
+- [ ] 准备执行 `Task 8`：单一语义审校接口壳与 script API
 
 ## 待做
 
@@ -91,11 +92,11 @@
 
 ### Task 7：实现 Script Draft Package 生成与本地硬校验壳
 
-- [ ] Step 1：新增 `tests/backend/script/script-draft.test.ts` 与 `tests/backend/script/script-local-validator.test.ts`
-- [ ] Step 2：运行 `npm test -- tests/backend/script/script-draft.test.ts tests/backend/script/script-local-validator.test.ts` 并确认红灯
-- [ ] Step 3：实现 `ScriptDraftPackage` 生成壳与本地硬校验器
-- [ ] Step 4：重跑 `npm test -- tests/backend/script/script-draft.test.ts tests/backend/script/script-local-validator.test.ts` 并确认绿灯
-- [ ] Step 5：提交 `实现 script 草稿生成与本地硬校验壳`
+- [x] Step 1：新增 `tests/backend/script/script-draft.test.ts` 与 `tests/backend/script/script-local-validator.test.ts`
+- [x] Step 2：运行 `npm test -- tests/backend/script/script-draft.test.ts tests/backend/script/script-local-validator.test.ts` 并确认红灯
+- [x] Step 3：实现 `ScriptDraftPackage` 生成壳与本地硬校验器
+- [x] Step 4：重跑 `npm test -- tests/backend/script/script-draft.test.ts tests/backend/script/script-local-validator.test.ts` 并确认绿灯
+- [x] Step 5：提交 `实现 script 草稿生成与本地硬校验壳`
 
 ### Task 8：实现单一语义审校接口壳与 script API
 
