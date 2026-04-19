@@ -8,6 +8,11 @@ import {
   projectStoreKey,
 } from "./stores/project";
 import {
+  createFetchScriptApi,
+  createScriptStore,
+  scriptStoreKey,
+} from "./stores/script";
+import {
   createFetchTopicApi,
   createTopicStore,
   topicStoreKey,
@@ -19,6 +24,10 @@ const topicStore = createTopicStore({
   projectStore,
   api: createFetchTopicApi(),
 });
+const scriptStore = createScriptStore({
+  projectStore,
+  api: createFetchScriptApi(),
+});
 
 const app = createApp({
   render: () => h(RouterView),
@@ -27,6 +36,7 @@ const app = createApp({
 app.use(router);
 app.provide(projectStoreKey, projectStore);
 app.provide(topicStoreKey, topicStore);
+app.provide(scriptStoreKey, scriptStore);
 
 if (typeof document !== "undefined") {
   app.mount("#app");

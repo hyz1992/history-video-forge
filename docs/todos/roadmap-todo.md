@@ -27,12 +27,13 @@
 - [x] 完成第二阶段 `Task 3`：接通真实 Script Writer 链路
 - [x] 完成第二阶段 `Task 4`：落实单一语义审校与受控 Patch / Regenerate 执行流
 - [x] 完成第二阶段 `Task 5`：建立项目快照与脚本恢复持久化
+- [x] 完成第二阶段 `Task 6`：实现 frontend Script 页面最小闭环
 
 ## 进行中
-- [ ] 准备执行第二阶段 `Task 6`：实现 frontend Script 页面最小闭环
+- [ ] 准备执行第二阶段 `Task 7`：打通 Topic 页面到 Script 页面的真实主链路状态切换
 
 ## 待做
-- [ ] 按顺序执行第二阶段剩余任务：`Task 6` 至 `Task 9`
+- [ ] 按顺序执行第二阶段剩余任务：`Task 7` 至 `Task 9`
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 细化 Event Registry 匹配阈值
 - [ ] 细化 Candidate Cache 生命周期
