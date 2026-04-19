@@ -10,7 +10,8 @@
 - [x] 第二阶段 `Task 4` 已完成
 - [x] 第二阶段 `Task 5` 已完成
 - [x] 第二阶段 `Task 6` 已完成
-- [ ] 准备执行第二阶段 `Task 7`
+- [x] 第二阶段 `Task 7` 已完成
+- [ ] 准备执行第二阶段 `Task 8`
 
 ## 对应计划
 - [2026-04-18-topic-script-phase-2-implementation-plan.md](../plans/2026-04-18-topic-script-phase-2-implementation-plan.md)
@@ -87,11 +88,11 @@
 - [x] Step 5：提交 `实现脚本页面最小闭环`
 
 ### Task 7：打通 Topic 页面到 Script 页面的真实主链路状态切换
-- [ ] Step 1：新增 `tests/frontend/topic-to-script-flow.spec.ts`
-- [ ] Step 2：运行 `npm test -- tests/frontend/topic-to-script-flow.spec.ts` 并确认红灯
-- [ ] Step 3：实现主题页到脚本页主链路切换
-- [ ] Step 4：重跑 `npm test -- tests/frontend/topic-to-script-flow.spec.ts` 并确认绿灯
-- [ ] Step 5：提交 `打通主题页到脚本页主链路切换`
+- [x] Step 1：新增 `tests/frontend/topic-to-script-flow.spec.ts`
+- [x] Step 2：运行 `npm test -- tests/frontend/topic-to-script-flow.spec.ts` 并确认红灯
+- [x] Step 3：实现主题页到脚本页主链路切换
+- [x] Step 4：重跑 `npm test -- tests/frontend/topic-to-script-flow.spec.ts` 并确认绿灯
+- [x] Step 5：提交 `打通主题页到脚本页主链路切换`
 
 ### Task 8：升级 runtime harness 为双层回归
 - [ ] Step 1：读取 `docs/migration/2026-04-18-runtime-infra-reuse-cut-list.md` 并按 `Task 8` 冻结边界执行

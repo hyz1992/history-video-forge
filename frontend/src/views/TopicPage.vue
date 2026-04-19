@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { inject, watch } from "vue";
+import { routerKey, type Router } from "vue-router";
+
 import TopicCandidateDrawer from "../components/topic/TopicCandidateDrawer.vue";
 import TopicCandidateList from "../components/topic/TopicCandidateList.vue";
 import TopicTabs from "../components/topic/TopicTabs.vue";
@@ -7,6 +10,16 @@ import { useTopicStore } from "../stores/topic";
 
 const projectStore = useProjectStore();
 const topicStore = useTopicStore();
+const router = inject<Router | null>(routerKey, null);
+
+watch(
+  () => projectStore.state.currentStatus,
+  async (status) => {
+    if (status === "script_ready" && router && router.currentRoute.value.path !== "/script") {
+      await router.push("/script");
+    }
+  },
+);
 </script>
 
 <template>
