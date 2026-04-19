@@ -1,5 +1,6 @@
 import { env } from "./config/env";
 import { createDbClient, type DbClient } from "./db/client";
+import { registerProjectRoutes } from "./modules/projects/project.routes";
 import { registerTopicRoutes } from "./modules/topic/topic.routes";
 import { registerScriptRoutes } from "./modules/script/script.routes";
 import type { StoredTopicCandidate } from "./modules/topic/topic-confirm.service";
@@ -128,6 +129,7 @@ export function buildApp(): AppInstance {
     },
   };
 
+  registerProjectRoutes(app);
   registerTopicRoutes(app);
   registerScriptRoutes(app);
 

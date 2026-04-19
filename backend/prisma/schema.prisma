@@ -82,11 +82,15 @@ model ScriptRecord {
   project_id                  String
   topic_package_id            String
   script_text                 String
+  opening_span                String
+  ending_span                 String
+  estimated_duration_sec      Int
   beat_trace_json             Json
   quote_trace_json            Json
   review_status               String
   validation_result_json      Json?
   semantic_review_result_json Json?
+  execution_state_json        Json?
   created_at                  DateTime @default(now())
 
   project       Project      @relation(fields: [project_id], references: [id])

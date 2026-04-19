@@ -63,11 +63,15 @@ export interface ScriptRecord {
   projectId: string;
   topicPackageId: string;
   scriptText: string;
+  openingSpan: string;
+  endingSpan: string;
+  estimatedDurationSec: number;
   beatTraceJson: unknown[];
   quoteTraceJson: unknown[];
   reviewStatus: string;
   validationResultJson: Record<string, unknown> | null;
   semanticReviewResultJson: Record<string, unknown> | null;
+  executionStateJson: Record<string, unknown> | null;
   createdAt: Date;
 }
 

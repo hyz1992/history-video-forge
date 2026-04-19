@@ -4,6 +4,7 @@ import { validateScriptDraft } from "./script-local-validator";
 import { buildScriptInputBundle } from "./script-input-bundle.builder";
 import { patchScriptDraft } from "./script-patch.service";
 import { regenerateScriptDraft } from "./script-regenerate.service";
+import { saveScriptRecord } from "./script-record.repository";
 import { reviewScriptSemantics } from "./script-semantic-review.service";
 import { planTopicDelivery } from "./topic-delivery-planner";
 
@@ -105,6 +106,7 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
   });
   let patchUsed = false;
   let regenerateUsed = false;
+  let lastPatchIntent: "fix" | "lift" | null = null;
   let localValidation = validateScriptDraft({
     bundle: inputBundle,
     draft,
@@ -153,6 +155,7 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
       (input.allowPatch ?? false) &&
       !patchUsed
     ) {
+      lastPatchIntent = semanticReview.patch_intent;
       draft = await patchScriptDraft({
         bundle: inputBundle,
         draft,
@@ -182,6 +185,39 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
 
     break;
   }
+
+  if (
+    semanticReview.decision === "pass" &&
+    semanticReview.patch_intent === null &&
+    lastPatchIntent
+  ) {
+    semanticReview = {
+      ...semanticReview,
+      patch_intent: lastPatchIntent,
+    };
+  }
+
+  const scriptRecord = await saveScriptRecord(input.db, {
+    projectId: input.project.id,
+    topicPackageId: record.id,
+    scriptText: draft.script_text,
+    openingSpan: draft.opening_span,
+    endingSpan: draft.ending_span,
+    estimatedDurationSec: draft.estimated_duration_sec,
+    beatTraceJson: draft.beat_trace,
+    quoteTraceJson: draft.quote_trace,
+    reviewStatus: semanticReview.decision,
+    validationResultJson: localValidation as Record<string, unknown>,
+    semanticReviewResultJson: semanticReview as Record<string, unknown>,
+    executionStateJson: {
+      patch_used: patchUsed,
+      regenerate_used: regenerateUsed,
+    },
+  });
+
+  input.project.activeScriptRecordId = scriptRecord.id;
+  input.project.status = "script_ready";
+  input.project.updatedAt = new Date();
 
   return {
     statusCode: 200,
