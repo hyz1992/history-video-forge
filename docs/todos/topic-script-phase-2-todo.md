@@ -27,11 +27,12 @@
 
 ### Task 1：建立正式 runtime LLM 调用层与 Prompt Loader
 
-- [ ] Step 1：新增 `tests/backend/runtime/prompt-runtime.test.ts`
-- [ ] Step 2：运行 `npm test -- tests/backend/runtime/prompt-runtime.test.ts` 并确认红灯
-- [ ] Step 3：实现正式 runtime LLM gateway 与 prompt loader / registry
-- [ ] Step 4：重跑 `npm test -- tests/backend/runtime/prompt-runtime.test.ts` 并确认绿灯
-- [ ] Step 5：提交 `建立正式运行时 LLM 调用层与 Prompt Loader`
+- [ ] Step 1：读取 `docs/migration/2026-04-18-runtime-infra-reuse-cut-list.md` 并按 `Task 1` 冻结边界执行
+- [ ] Step 2：新增 `tests/backend/runtime/prompt-runtime.test.ts`
+- [ ] Step 3：运行 `npm test -- tests/backend/runtime/prompt-runtime.test.ts` 并确认红灯
+- [ ] Step 4：实现正式 runtime LLM gateway 与 prompt loader / registry
+- [ ] Step 5：重跑 `npm test -- tests/backend/runtime/prompt-runtime.test.ts` 并确认绿灯
+- [ ] Step 6：提交 `建立正式运行时 LLM 调用层与 Prompt Loader`
 
 ### Task 2：接通系统自动推荐入口的真实 Topic Candidate 生成链路
 
@@ -83,11 +84,12 @@
 
 ### Task 8：升级 runtime harness 为双层回归
 
-- [ ] Step 1：新增 `tests/harness/topic-script-regression.test.ts`
-- [ ] Step 2：运行 `npm test -- tests/harness/topic-script-regression.test.ts` 并确认红灯
-- [ ] Step 3：实现自动化稳定回归层与真实巡检脚本
-- [ ] Step 4：重跑 `npm test -- tests/harness/topic-script-regression.test.ts` 并确认绿灯
-- [ ] Step 5：提交 `升级主题脚本双层回归能力`
+- [ ] Step 1：读取 `docs/migration/2026-04-18-runtime-infra-reuse-cut-list.md` 并按 `Task 8` 冻结边界执行
+- [ ] Step 2：新增 `tests/harness/topic-script-regression.test.ts`
+- [ ] Step 3：运行 `npm test -- tests/harness/topic-script-regression.test.ts` 并确认红灯
+- [ ] Step 4：实现自动化稳定回归层与真实巡检脚本
+- [ ] Step 5：重跑 `npm test -- tests/harness/topic-script-regression.test.ts` 并确认绿灯
+- [ ] Step 6：提交 `升级主题脚本双层回归能力`
 
 ### Task 9：完成第二阶段收口检查
 

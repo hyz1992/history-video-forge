@@ -136,7 +136,15 @@ git commit -m "冻结第二阶段基础设施迁移裁剪清单"
 - Modify: `backend/src/config/env.ts`
 - Test: `tests/backend/runtime/prompt-runtime.test.ts`
 
-**Step 1: Write the failing test**
+**Step 1: Review the migration cut-list**
+
+先读取 `docs/migration/2026-04-18-runtime-infra-reuse-cut-list.md`，并按其中冻结边界执行本任务：
+
+- 只允许消费 `external-errors.ts`、`llm.ts` 与 `llm-auto-fix.ts` 的框架性片段
+- 不得提前引入 `trace-logger-safe.ts`、`pipeline-diagnostics.ts`、`run-historical-topic-to-script.ts`
+- 本任务实现不得超出 `Task 1` 迁移边界冻结范围
+
+**Step 2: Write the failing test**
 
 在 `tests/backend/runtime/prompt-runtime.test.ts` 中至少覆盖：
 
@@ -146,23 +154,24 @@ git commit -m "冻结第二阶段基础设施迁移裁剪清单"
 - 元数据中必须包含 `language: zh-CN`
 - provider contract 暴露统一 `invokeStructuredPrompt` 能力
 
-**Step 2: Run test to verify it fails**
+**Step 3: Run test to verify it fails**
 
 Run: `npm test -- tests/backend/runtime/prompt-runtime.test.ts`
 Expected: FAIL
 
-**Step 3: Write minimal implementation**
+**Step 4: Write minimal implementation**
 
 - 建立唯一正式 runtime LLM gateway
 - 建立基于 `harness/prompts/` 的 prompt loader / registry
 - 先允许 test stub provider，不在这一步完成真实 provider 细节
+- 如需借旧基础设施，只能落在迁移裁剪清单允许的目标文件与目标范围内
 
-**Step 4: Run test to verify it passes**
+**Step 5: Run test to verify it passes**
 
 Run: `npm test -- tests/backend/runtime/prompt-runtime.test.ts`
 Expected: PASS
 
-**Step 5: Commit**
+**Step 6: Commit**
 
 ```bash
 git add backend/src/runtime backend/src/config/env.ts tests/backend/runtime/prompt-runtime.test.ts
@@ -470,7 +479,15 @@ git commit -m "打通主题页到脚本页主链路切换"
 - Modify: `harness/README.md`
 - Test: `tests/harness/topic-script-regression.test.ts`
 
-**Step 1: Write the failing test**
+**Step 1: Review the migration cut-list**
+
+先读取 `docs/migration/2026-04-18-runtime-infra-reuse-cut-list.md`，并按其中冻结边界执行本任务：
+
+- 只允许参考 `trace-logger-safe.ts`、`pipeline-diagnostics.ts`、`run-historical-topic-to-script.ts`
+- 不得把旧 topic/script 业务编排复制到新项目
+- 本任务实现不得超出 `Task 8` 迁移边界冻结范围
+
+**Step 2: Write the failing test**
 
 在 `tests/harness/topic-script-regression.test.ts` 中至少覆盖：
 
@@ -485,25 +502,26 @@ git commit -m "打通主题页到脚本页主链路切换"
   - validation result
   - semantic review result
 
-**Step 2: Run test to verify it fails**
+**Step 3: Run test to verify it fails**
 
 Run: `npm test -- tests/harness/topic-script-regression.test.ts`
 Expected: FAIL
 
-**Step 3: Write minimal implementation**
+**Step 4: Write minimal implementation**
 
 - 让 `tests/harness/topic-script-regression.test.ts` 只承担自动化稳定回归
 - 新增独立真实巡检脚本，例如 `npm run harness:real`
 - 真实巡检脚本通过正式 runtime LLM 链路跑样例，但不作为脆弱的单测 gate
 - 只保留一套正式业务实现，harness 不复制逻辑
 - 补充 family 覆盖说明文档
+- 如需借旧基础设施，只能复用裁剪清单允许的外壳组织与 trace / diagnostics 表现层思路
 
-**Step 4: Run test to verify it passes**
+**Step 5: Run test to verify it passes**
 
 Run: `npm test -- tests/harness/topic-script-regression.test.ts`
 Expected: PASS
 
-**Step 5: Commit**
+**Step 6: Commit**
 
 ```bash
 git add harness package.json tests/harness/topic-script-regression.test.ts
