@@ -144,3 +144,16 @@ runtime harness 在当前阶段属于 **P0**：
 1. 先检查是否是 `docs/` 中的产品真相源与 `harness/` 中的执行规则在越权
 2. 不允许让 harness 重新定义产品对象
 3. 不允许让 `docs/` 重新承载活的治理规则
+
+---
+
+## Task 8 Runtime Regression
+
+- `harness/scripts/runtime/topic-script-smoke.ts`
+  - 单样本官方 topic -> script smoke 链路。
+- `harness/scripts/runtime/topic-script-regression.ts`
+  - 自动化稳定回归层，按固定 family set 批量调用 smoke runner。
+- `harness/scripts/runtime/topic-script-real-regression.ts`
+  - 真实模型巡检层的计划外壳，不作为默认自动化门。
+- `harness/samples/topic-script/family-set.md`
+  - 固定第二阶段双层回归样本集。

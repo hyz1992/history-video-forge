@@ -30,11 +30,13 @@
 - [x] 完成第二阶段 `Task 6`：实现 frontend Script 页面最小闭环
 - [x] 完成第二阶段 `Task 7`：打通 Topic 页面到 Script 页面的真实主链路状态切换
 
+## 已完成
+- [x] 完成第二阶段 `Task 8`：升级 runtime harness 为双层回归
 ## 进行中
-- [ ] 准备执行第二阶段 `Task 8`：升级 runtime harness 为双层回归
+- [ ] 准备执行第二阶段 `Task 9`：完成第二阶段收口检查
 
 ## 待做
-- [ ] 按顺序执行第二阶段剩余任务：`Task 8` 至 `Task 9`
+- [ ] 按顺序执行第二阶段剩余任务：`Task 9`
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 细化 Event Registry 匹配阈值
 - [ ] 细化 Candidate Cache 生命周期

@@ -11,7 +11,8 @@
 - [x] 第二阶段 `Task 5` 已完成
 - [x] 第二阶段 `Task 6` 已完成
 - [x] 第二阶段 `Task 7` 已完成
-- [ ] 准备执行第二阶段 `Task 8`
+- [x] 第二阶段 `Task 8` 已完成
+- [ ] 准备执行第二阶段 `Task 9`
 
 ## 对应计划
 - [2026-04-18-topic-script-phase-2-implementation-plan.md](../plans/2026-04-18-topic-script-phase-2-implementation-plan.md)
@@ -95,12 +96,12 @@
 - [x] Step 5：提交 `打通主题页到脚本页主链路切换`
 
 ### Task 8：升级 runtime harness 为双层回归
-- [ ] Step 1：读取 `docs/migration/2026-04-18-runtime-infra-reuse-cut-list.md` 并按 `Task 8` 冻结边界执行
-- [ ] Step 2：新增 `tests/harness/topic-script-regression.test.ts`
-- [ ] Step 3：运行 `npm test -- tests/harness/topic-script-regression.test.ts` 并确认红灯
-- [ ] Step 4：实现自动化稳定回归层与真实巡检脚本
-- [ ] Step 5：重跑 `npm test -- tests/harness/topic-script-regression.test.ts` 并确认绿灯
-- [ ] Step 6：提交 `升级主题脚本双层回归能力`
+- [x] Step 1：读取 `docs/migration/2026-04-18-runtime-infra-reuse-cut-list.md` 并按 `Task 8` 冻结边界执行
+- [x] Step 2：新增 `tests/harness/topic-script-regression.test.ts`
+- [x] Step 3：运行 `npm test -- tests/harness/topic-script-regression.test.ts` 并确认红灯
+- [x] Step 4：实现自动化稳定回归层与真实巡检脚本
+- [x] Step 5：重跑 `npm test -- tests/harness/topic-script-regression.test.ts` 并确认绿灯
+- [x] Step 6：提交 `升级主题脚本双层回归能力`
 
 ### Task 9：完成第二阶段收口检查
 - [ ] Step 1：运行第二阶段全量验证并记录剩余缺口

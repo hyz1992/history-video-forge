@@ -11,7 +11,8 @@
     "shared"
   ],
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:harness:topic-script-regression": "vitest run tests/harness/topic-script-regression.test.ts"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.1",
