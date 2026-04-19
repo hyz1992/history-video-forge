@@ -27,11 +27,11 @@
 
 ## 进行中
 
-- [ ] 准备执行第二阶段 `Task 3`：接通真实 Script Writer 链路
+- [ ] 准备执行第二阶段 `Task 2A`：运行接入收口与 LangGraph 编排规划
 
 ## 待做
 
-- [ ] 按顺序执行第二阶段剩余任务：`Task 3` 至 `Task 9`
+- [ ] 按顺序执行第二阶段剩余任务：`Task 2A` 至 `Task 9`
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 细化 Event Registry 匹配阈值
 - [ ] 细化 Candidate Cache 生命周期

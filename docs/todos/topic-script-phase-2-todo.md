@@ -6,7 +6,7 @@
 - [x] 第二阶段 `Task 0` 已完成
 - [x] 第二阶段 `Task 1` 已完成
 - [x] 第二阶段 `Task 2` 已完成
-- [ ] 准备执行第二阶段 `Task 3`
+- [ ] 准备执行第二阶段 `Task 2A`
 
 ## 对应计划
 
@@ -54,6 +54,15 @@
 
 - `Task 1` Step 7-12 未完成前，不得进入 `Task 2`
 - 后续每完成一个小 Step，先更新 todolist，再进入下一步
+
+### Task 2A：运行接入收口与 LangGraph 编排规划
+
+- [ ] Step 1：新增 `tests/backend/runtime/env-loading.test.ts` 与 `tests/harness/topic-runtime-manual.test.ts`
+- [ ] Step 2：运行 `npm test -- tests/backend/runtime/env-loading.test.ts tests/harness/topic-runtime-manual.test.ts` 并确认红灯
+- [ ] Step 3：补齐 `.env.example`、`env.ts` 本地加载与旧 `OPENAI_*` 兼容映射，以及 `topic-runtime-manual.ts`
+- [ ] Step 4：新增 `docs/architecture/runtime-orchestration-design.md`，明确 LangGraph 只做 backend orchestration 规划落点
+- [ ] Step 5：重跑 `npm test -- tests/backend/runtime/env-loading.test.ts tests/harness/topic-runtime-manual.test.ts` 并确认绿灯
+- [ ] Step 6：提交 `补齐运行接入收口与编排规划`
 
 ### Task 3：接通真实 Script Writer 链路
 

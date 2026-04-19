@@ -63,6 +63,7 @@
 4. `patch_once / regen_once` 必须是受控单次行为，不回到多稿、多审、多轮重试。
 5. 历史故事仍是第二阶段唯一正式领域，不做多题材实现。
 6. 借鉴旧项目基础设施必须先完成显式迁移审查与裁剪清单；只借成熟基础设施，不继承旧内容链路与旧阶段语义。
+7. LangGraph 作为 backend runtime orchestration 方向需要在第二阶段内显式规划落点，但不在 topic 推荐刚接通时仓促引入重状态机实现。
 
 ## 实施顺序
 
@@ -71,6 +72,7 @@
 0. 旧项目基础设施迁移审查与裁剪清单
 1. 正式 runtime LLM 调用层与 prompt loader
 2. topic 系统推荐真实链路
+2A. 运行接入收口与 LangGraph 编排规划
 3. script writer 真实链路
 4. semantic review + patch/regenerate 执行收口
 5. 项目快照与可恢复持久化
@@ -272,6 +274,70 @@ Expected: PASS
 ```bash
 git add backend/src/modules/topic backend/src/modules/cache tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/api/topic-api-runtime.test.ts
 git commit -m "接通系统推荐真实选题生成链路"
+```
+
+---
+
+### Task 2A: 运行接入收口与 LangGraph 编排规划
+
+**Files:**
+- Create: `.env.example`
+- Modify: `backend/src/config/env.ts`
+- Create: `tests/backend/runtime/env-loading.test.ts`
+- Create: `harness/scripts/runtime/topic-runtime-manual.ts`
+- Create: `tests/harness/topic-runtime-manual.test.ts`
+- Create: `docs/architecture/runtime-orchestration-design.md`
+
+**Step 1: Write the failing tests**
+
+`env-loading.test.ts` 至少覆盖：
+
+- 新项目默认读取 `LLM_PROVIDER / LLM_BASE_URL / LLM_API_KEY / LLM_MODEL / LLM_STRUCTURED_MODEL / LLM_TIMEOUT_MS`
+- 若未提供 `LLM_*`，可兼容旧项目 `OPENAI_BASE_URL / OPENAI_API_KEY / OPENAI_MODEL`
+- 缺少真实运行必要配置时返回明确错误，而不是静默回落到看似真实可用的状态
+
+`topic-runtime-manual.test.ts` 至少覆盖：
+
+- 可在无前端情况下手动触发 topic recommendations runtime 链路
+- 运行产物保留第一阶段冻结的 topic recommendation API 形状
+- manual runner 不复制业务逻辑，而是驱动正式 backend runtime 入口
+
+**Step 2: Run tests to verify they fail**
+
+Run: `npm test -- tests/backend/runtime/env-loading.test.ts tests/harness/topic-runtime-manual.test.ts`
+Expected: FAIL
+
+**Step 3: Write minimal implementation**
+
+- 增加 `.env.example`，明确当前 runtime 所需最小变量
+- 让 `env.ts` 显式支持本地 `.env` 读取，并兼容旧项目 `OPENAI_*` 键名，以便平滑复用旧 `.env` 中的大模型 `base_url / api_key / model`
+- 增加 `topic-runtime-manual.ts`，用于无前端条件下手动触发 topic 推荐真实链路
+- 明确该 manual runner 是“人工试跑入口”，不是新的业务实现副本
+
+**Step 4: Add LangGraph planning note**
+
+在 `docs/architecture/runtime-orchestration-design.md` 中至少写清：
+
+- LangGraph 只作为 backend runtime orchestration 层候选，不进入 prompt registry / provider adapter / frontend
+- 当前计划中的 graph 节点边界：
+  - `topic-candidate-generate`
+  - `script-generate`
+  - `semantic-review`
+  - `patch-once`
+  - `regen-once`
+- 当前不引入旧项目重 `workflow-state`；只保留轻量状态穿透与节点编排边界
+- 实施时机：不早于 `Task 4` 完成后，再决定是否以独立任务接入
+
+**Step 5: Run tests to verify they pass**
+
+Run: `npm test -- tests/backend/runtime/env-loading.test.ts tests/harness/topic-runtime-manual.test.ts`
+Expected: PASS
+
+**Step 6: Commit**
+
+```bash
+git add .env.example backend/src/config/env.ts tests/backend/runtime/env-loading.test.ts harness/scripts/runtime/topic-runtime-manual.ts tests/harness/topic-runtime-manual.test.ts docs/architecture/runtime-orchestration-design.md
+git commit -m "补齐运行接入收口与编排规划"
 ```
 
 ---
