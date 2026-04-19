@@ -131,6 +131,9 @@ git commit -m "冻结第二阶段基础设施迁移裁剪清单"
 **Files:**
 - Create: `backend/src/runtime/llm/llm-gateway.ts`
 - Create: `backend/src/runtime/llm/provider-contract.ts`
+- Create: `backend/src/runtime/llm/external-errors.ts`
+- Create: `backend/src/runtime/llm/openai-compatible-provider.ts`
+- Create: `backend/src/runtime/llm/structured-output-fix.ts`
 - Create: `backend/src/runtime/prompts/prompt-loader.ts`
 - Create: `backend/src/runtime/prompts/prompt-registry.ts`
 - Modify: `backend/src/config/env.ts`
@@ -176,6 +179,50 @@ Expected: PASS
 ```bash
 git add backend/src/runtime backend/src/config/env.ts tests/backend/runtime/prompt-runtime.test.ts
 git commit -m "建立正式运行时 LLM 调用层与 Prompt Loader"
+```
+
+**Correction Note**
+
+上面 Step 1-6 只能视为 `Task 1` 第一段落地，用于先立住 registry / loader / contract 接缝。  
+若未把迁移裁剪清单中明确允许的旧基础设施能力补齐，不得宣称 `Task 1` 完成，也不得进入 `Task 2`。
+
+**Step 7: Extend failing tests for migration-backed runtime pieces**
+
+在 `tests/backend/runtime/prompt-runtime.test.ts` 中追加至少以下覆盖：
+
+- `ExternalServiceError` 分类与最小 retry 包装可用
+- provider adapter 通过统一合同接收 prompt、输入与 operation name
+- runtime LLM 调用具备 timeout / retry 基础模式
+- structured output fix 具备 deterministic recovery -> auto-fix 两段式入口壳
+
+**Step 8: Run test to verify the new coverage fails**
+
+Run: `npm test -- tests/backend/runtime/prompt-runtime.test.ts`
+Expected: FAIL
+
+**Step 9: Implement migration-backed runtime pieces**
+
+- 从旧 `external-errors.ts` 抽取低耦合外部错误包装、错误分类与最小 retry 包装
+- 从旧 `llm.ts` 抽取 OpenAI-compatible provider adapter 思路，以及 timeout / retry 基础模式
+- 从旧 `llm-auto-fix.ts` 只抽结构化修复框架与通用 JSON 补救壳
+- 明确剥离旧 `StoryBrief / ScriptBrief` 语义、旧 enum alias 归一化表与历史工作流修复规则
+
+**Step 10: Run test to verify it passes**
+
+Run: `npm test -- tests/backend/runtime/prompt-runtime.test.ts`
+Expected: PASS
+
+**Step 11: Update todo state before moving on**
+
+- 更新 `docs/todos/topic-script-phase-2-todo.md`
+- 更新 `docs/todos/roadmap-todo.md`
+- 只有在这里显式标记 `Task 1` 补完完成后，才允许进入 `Task 2`
+
+**Step 12: Commit**
+
+```bash
+git add docs/todos/topic-script-phase-2-todo.md docs/todos/roadmap-todo.md backend/src/runtime backend/src/config/env.ts tests/backend/runtime/prompt-runtime.test.ts
+git commit -m "补完运行时 LLM 迁移基础设施"
 ```
 
 ---

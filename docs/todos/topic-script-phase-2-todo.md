@@ -4,7 +4,8 @@
 
 - [x] 第二阶段实施计划已起草完成
 - [x] 第二阶段 `Task 0` 已完成
-- [ ] 准备执行第二阶段 `Task 1`
+- [ ] 第二阶段 `Task 1` 补完中
+- [ ] 准备执行第二阶段 `Task 2`
 
 ## 对应计划
 
@@ -27,12 +28,18 @@
 
 ### Task 1：建立正式 runtime LLM 调用层与 Prompt Loader
 
-- [ ] Step 1：读取 `docs/migration/2026-04-18-runtime-infra-reuse-cut-list.md` 并按 `Task 1` 冻结边界执行
-- [ ] Step 2：新增 `tests/backend/runtime/prompt-runtime.test.ts`
-- [ ] Step 3：运行 `npm test -- tests/backend/runtime/prompt-runtime.test.ts` 并确认红灯
-- [ ] Step 4：实现正式 runtime LLM gateway 与 prompt loader / registry
-- [ ] Step 5：重跑 `npm test -- tests/backend/runtime/prompt-runtime.test.ts` 并确认绿灯
-- [ ] Step 6：提交 `建立正式运行时 LLM 调用层与 Prompt Loader`
+- [x] Step 1：读取 `docs/migration/2026-04-18-runtime-infra-reuse-cut-list.md` 并按 `Task 1` 冻结边界执行
+- [x] Step 2：新增 `tests/backend/runtime/prompt-runtime.test.ts`
+- [x] Step 3：运行 `npm test -- tests/backend/runtime/prompt-runtime.test.ts` 并确认红灯
+- [x] Step 4：实现正式 runtime LLM gateway 与 prompt loader / registry
+- [x] Step 5：重跑 `npm test -- tests/backend/runtime/prompt-runtime.test.ts` 并确认绿灯
+- [x] Step 6：提交 `建立正式运行时 LLM 调用层与 Prompt Loader`
+- [ ] Step 7：在 `tests/backend/runtime/prompt-runtime.test.ts` 中补充旧项目迁移项的失败测试
+- [ ] Step 8：运行 `npm test -- tests/backend/runtime/prompt-runtime.test.ts` 并确认针对补充覆盖的红灯
+- [ ] Step 9：补齐 `external-errors.ts`、OpenAI-compatible provider 与 `structured-output-fix.ts` 的最小迁移实现
+- [ ] Step 10：重跑 `npm test -- tests/backend/runtime/prompt-runtime.test.ts` 并确认绿灯
+- [ ] Step 11：更新 `docs/todos/topic-script-phase-2-todo.md` 与 `docs/todos/roadmap-todo.md`
+- [ ] Step 12：提交 `补完运行时 LLM 迁移基础设施`
 
 ### Task 2：接通系统自动推荐入口的真实 Topic Candidate 生成链路
 
@@ -41,6 +48,11 @@
 - [ ] Step 3：实现系统推荐真实 candidate 生成链路
 - [ ] Step 4：重跑 `npm test -- tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/api/topic-api-runtime.test.ts` 并确认绿灯
 - [ ] Step 5：提交 `接通系统推荐真实选题生成链路`
+
+注意：
+
+- `Task 1` Step 7-12 未完成前，不得进入 `Task 2`
+- 后续每完成一个小 Step，先更新 todolist，再进入下一步
 
 ### Task 3：接通真实 Script Writer 链路
 
