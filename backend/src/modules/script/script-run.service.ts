@@ -97,7 +97,7 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
     projectStylePack,
     familyBiasPack,
   });
-  const draft = generateScriptDraft({
+  const draft = await generateScriptDraft({
     bundle: inputBundle,
   });
   const localValidation = validateScriptDraft({
@@ -125,7 +125,7 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
     statusCode: 200,
     body: {
       project_id: input.project.id,
-      run_mode: "sync_mock",
+      run_mode: "sync_runtime",
       allow_patch: input.allowPatch ?? false,
       allow_regen: input.allowRegen ?? false,
       input_bundle: inputBundle,

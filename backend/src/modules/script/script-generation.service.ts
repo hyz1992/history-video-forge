@@ -1,4 +1,9 @@
-import { ScriptDraftPackage } from "../../../../shared/src/index";
+import { ScriptDraftPackage } from "../../../../shared/src/index.js";
+import { env, getValidatedRuntimeEnv } from "../../config/env.js";
+import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
+import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider.js";
+import type { StructuredPromptProvider } from "../../runtime/llm/provider-contract.js";
+import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 
 interface ScriptInputBundleInput {
   hard_lane: {
@@ -26,23 +31,57 @@ interface ScriptInputBundleInput {
 
 export interface GenerateScriptDraftInput {
   bundle: ScriptInputBundleInput;
+  llmGateway?: LlmGateway;
 }
 
-export function generateScriptDraft(input: GenerateScriptDraftInput) {
-  const beats = input.bundle.hard_lane.must_include_beats;
-  const quote = input.bundle.topic_package.canonical_quotes?.[0];
-  const openingSpan = input.bundle.packaging_lane.hook_claim;
-  const endingSpan = input.bundle.soft_lane.narrative_tension_map.ending_residue;
+export async function generateScriptDraft(input: GenerateScriptDraftInput) {
+  const gateway = input.llmGateway ?? createScriptWriterGateway();
+  const draft = await gateway.invokeStructuredPrompt<unknown>({
+    promptId: "script.writer",
+    input: input.bundle,
+  });
+
+  return ScriptDraftPackage.parse(draft);
+}
+
+function createScriptWriterGateway(): LlmGateway {
+  const provider =
+    env.llm.provider === "stub"
+      ? createStubScriptWriterProvider()
+      : createOpenAiCompatibleProvider({
+          ...getValidatedRuntimeEnv().llm,
+        });
+
+  return createLlmGateway({
+    registry: createPromptRegistry(),
+    provider,
+  });
+}
+
+function createStubScriptWriterProvider(): StructuredPromptProvider {
+  return {
+    async invokeStructuredPrompt<T>({ input }): Promise<T> {
+      return buildDeterministicDraft(input as ScriptInputBundleInput) as T;
+    },
+  };
+}
+
+function buildDeterministicDraft(input: ScriptInputBundleInput) {
+  const bundle = input;
+  const beats = bundle.hard_lane.must_include_beats;
+  const quote = bundle.topic_package.canonical_quotes?.[0];
+  const openingSpan = bundle.packaging_lane.hook_claim;
+  const endingSpan = bundle.soft_lane.narrative_tension_map.ending_residue;
 
   const lines = [
     openingSpan,
-    `${input.bundle.hard_lane.event_identity}这件事里，最先顶上来的不是答案，而是公开压场。`,
+    `${bundle.hard_lane.event_identity}这件事里，最先顶上来的不是答案，而是公开压场。`,
     ...beats.map(
       (beat, index) =>
         `${index + 1}. ${beat}，真正把局势往前推了一层。`,
     ),
-    `${input.bundle.soft_lane.narrative_tension_map.mid_reveal}。`,
-    `${input.bundle.soft_lane.narrative_tension_map.peak_payoff}。`,
+    `${bundle.soft_lane.narrative_tension_map.mid_reveal}。`,
+    `${bundle.soft_lane.narrative_tension_map.peak_payoff}。`,
   ];
 
   if (quote) {
@@ -53,7 +92,7 @@ export function generateScriptDraft(input: GenerateScriptDraftInput) {
 
   const scriptText = lines.join("\n");
 
-  return ScriptDraftPackage.parse({
+  return {
     script_text: scriptText,
     estimated_duration_sec: 88,
     beat_trace: beats.map((beat) => ({
@@ -72,5 +111,5 @@ export function generateScriptDraft(input: GenerateScriptDraftInput) {
       : [],
     opening_span: openingSpan,
     ending_span: endingSpan,
-  });
+  };
 }

@@ -42,7 +42,7 @@ describe("script api", () => {
     };
   }
 
-  it("POST /api/projects/:projectId/script/generate returns a sync mock result", async () => {
+  it("POST /api/projects/:projectId/script/generate returns a sync runtime result", async () => {
     const app = buildApp();
     const prepared = await prepareConfirmedTopic(app);
 
@@ -59,7 +59,7 @@ describe("script api", () => {
 
     const body = response.json();
     expect(body.project_id).toBe(prepared.projectId);
-    expect(body.run_mode).toBe("sync_mock");
+    expect(body.run_mode).toBe("sync_runtime");
     expect(body.local_validation.stage).toBe("script_local_validation");
     expect(body.semantic_review.stage).toBe("script_semantic_review");
   });

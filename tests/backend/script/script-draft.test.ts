@@ -74,8 +74,8 @@ const scriptInputBundle = ScriptInputBundle.parse({
 });
 
 describe("script generation service", () => {
-  it("returns a ScriptDraftPackage with required sidecars", () => {
-    const draft = generateScriptDraft({
+  it("returns a ScriptDraftPackage with required sidecars", async () => {
+    const draft = await generateScriptDraft({
       bundle: scriptInputBundle,
     });
 
