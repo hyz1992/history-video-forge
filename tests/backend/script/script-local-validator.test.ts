@@ -76,8 +76,8 @@ const scriptInputBundle = ScriptInputBundle.parse({
 });
 
 describe("script local validator", () => {
-  it("returns pass for a structurally valid draft and stays serializable", () => {
-    const draft = generateScriptDraft({
+  it("returns pass for a structurally valid draft and stays serializable", async () => {
+    const draft = await generateScriptDraft({
       bundle: scriptInputBundle,
     });
 
@@ -92,8 +92,8 @@ describe("script local validator", () => {
     expect(() => ScriptValidationResult.parse(persisted)).not.toThrow();
   });
 
-  it("returns regen_once for recoverable structural issues", () => {
-    const draft = generateScriptDraft({
+  it("returns regen_once for recoverable structural issues", async () => {
+    const draft = await generateScriptDraft({
       bundle: scriptInputBundle,
     });
 
@@ -109,8 +109,8 @@ describe("script local validator", () => {
     expect(result.errors).toContain("opening_missing");
   });
 
-  it("returns hard_fail for unrecoverable bundle or draft issues", () => {
-    const draft = generateScriptDraft({
+  it("returns hard_fail for unrecoverable bundle or draft issues", async () => {
+    const draft = await generateScriptDraft({
       bundle: scriptInputBundle,
     });
 

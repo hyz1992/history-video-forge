@@ -12,7 +12,7 @@
 - [x] 第二阶段 `Task 6` 已完成
 - [x] 第二阶段 `Task 7` 已完成
 - [x] 第二阶段 `Task 8` 已完成
-- [ ] 准备执行第二阶段 `Task 9`
+- [x] 第二阶段 `Task 9` 已完成
 
 ## 对应计划
 - [2026-04-18-topic-script-phase-2-implementation-plan.md](../plans/2026-04-18-topic-script-phase-2-implementation-plan.md)
@@ -104,8 +104,8 @@
 - [x] Step 6：提交 `升级主题脚本双层回归能力`
 
 ### Task 9：完成第二阶段收口检查
-- [ ] Step 1：运行第二阶段全量验证并记录剩余缺口
-- [ ] Step 2：修复阻碍第二阶段完成的最小问题
-- [ ] Step 3：更新 `roadmap-todo.md` 与必要结论文档
-- [ ] Step 4：重跑 `npm test` 并确认全绿
-- [ ] Step 5：提交 `完成第二阶段收口检查`
+- [x] Step 1：运行第二阶段全量验证并记录剩余缺口
+- [x] Step 2：修复阻碍第二阶段完成的最小问题
+- [x] Step 3：更新 `roadmap-todo.md` 与必要结论文档
+- [x] Step 4：重跑 `npm test` 并确认全绿
+- [x] Step 5：提交 `完成第二阶段收口检查`
