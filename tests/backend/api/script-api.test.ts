@@ -85,7 +85,7 @@ describe("script api", () => {
     expect([null, "fix", "lift"]).toContain(body.semantic_review.patch_intent);
   });
 
-  it("patch_intent=lift does not mutate must_include_beats, scope, or narrative_tension_map", async () => {
+  it("internal lift patch does not mutate must_include_beats, scope, or narrative_tension_map", async () => {
     const app = buildApp();
     const prepared = await prepareConfirmedTopic(app);
 
@@ -100,9 +100,8 @@ describe("script api", () => {
 
     const body = response.json();
 
-    expect(body.semantic_review.decision).toBe("patch_once");
-    expect(body.semantic_review.patch_intent).toBe("lift");
-    expect(body.semantic_review.soft_issues).toContain("hook_kill_power_weak");
+    expect(body.semantic_review.decision).toBe("pass");
+    expect(body.draft.opening_span).toContain("所有人");
     expect(body.input_bundle.hard_lane.must_include_beats).toEqual([
       "楚王连续压场，晏子一句句顶回去。",
     ]);

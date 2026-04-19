@@ -2,8 +2,10 @@ import type { DbClient, ProjectRecord, TopicPackageRecord } from "../../db/clien
 import { generateScriptDraft } from "./script-generation.service";
 import { validateScriptDraft } from "./script-local-validator";
 import { buildScriptInputBundle } from "./script-input-bundle.builder";
-import { planTopicDelivery } from "./topic-delivery-planner";
+import { patchScriptDraft } from "./script-patch.service";
+import { regenerateScriptDraft } from "./script-regenerate.service";
 import { reviewScriptSemantics } from "./script-semantic-review.service";
+import { planTopicDelivery } from "./topic-delivery-planner";
 
 function buildProjectStylePack() {
   return {
@@ -97,29 +99,89 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
     projectStylePack,
     familyBiasPack,
   });
-  const draft = await generateScriptDraft({
+
+  let draft = await generateScriptDraft({
     bundle: inputBundle,
   });
-  const localValidation = validateScriptDraft({
+  let patchUsed = false;
+  let regenerateUsed = false;
+  let localValidation = validateScriptDraft({
     bundle: inputBundle,
     draft,
   });
-  const semanticReview =
-    localValidation.decision === "pass"
-      ? reviewScriptSemantics({
-          bundle: inputBundle,
-          draft,
-        })
-      : {
-          stage: "script_semantic_review",
-          decision: input.allowRegen ? "regen_once" : "pass",
-          patch_intent: null,
-          hard_issues: [],
-          soft_issues: [],
-          patch_targets: [],
-          summary: "本地硬校验未通过，未进入语义审校。",
-          confidence: 0.5,
-        };
+  let semanticReview = buildSkippedSemanticReview({
+    localDecision: localValidation.decision,
+    allowRegen: input.allowRegen ?? false,
+  });
+
+  while (true) {
+    localValidation = validateScriptDraft({
+      bundle: inputBundle,
+      draft,
+    });
+
+    if (
+      localValidation.decision === "regen_once" &&
+      (input.allowRegen ?? false) &&
+      !regenerateUsed
+    ) {
+      draft = await regenerateScriptDraft({
+        bundle: inputBundle,
+        regenerateUsed,
+        generateDraft: () =>
+          generateScriptDraft({
+            bundle: inputBundle,
+          }),
+      });
+      regenerateUsed = true;
+      continue;
+    }
+
+    semanticReview =
+      localValidation.decision === "pass"
+        ? reviewScriptSemantics({
+            bundle: inputBundle,
+            draft,
+          })
+        : buildSkippedSemanticReview({
+            localDecision: localValidation.decision,
+            allowRegen: input.allowRegen ?? false,
+          });
+
+    if (
+      semanticReview.decision === "patch_once" &&
+      (input.allowPatch ?? false) &&
+      !patchUsed
+    ) {
+      draft = await patchScriptDraft({
+        bundle: inputBundle,
+        draft,
+        semanticReview,
+        patchUsed,
+      });
+      patchUsed = true;
+      continue;
+    }
+
+    if (
+      semanticReview.decision === "regen_once" &&
+      (input.allowRegen ?? false) &&
+      !regenerateUsed
+    ) {
+      draft = await regenerateScriptDraft({
+        bundle: inputBundle,
+        regenerateUsed,
+        generateDraft: () =>
+          generateScriptDraft({
+            bundle: inputBundle,
+          }),
+      });
+      regenerateUsed = true;
+      continue;
+    }
+
+    break;
+  }
 
   return {
     statusCode: 200,
@@ -133,5 +195,24 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
       local_validation: localValidation,
       semantic_review: semanticReview,
     },
+  };
+}
+
+function buildSkippedSemanticReview(input: {
+  localDecision: "pass" | "regen_once" | "hard_fail";
+  allowRegen: boolean;
+}) {
+  return {
+    stage: "script_semantic_review" as const,
+    decision:
+      input.localDecision === "regen_once" && input.allowRegen
+        ? ("regen_once" as const)
+        : ("pass" as const),
+    patch_intent: null,
+    hard_issues: [],
+    soft_issues: [],
+    patch_targets: [],
+    summary: "本地硬校验未通过，未进入语义审校。",
+    confidence: 0.5,
   };
 }

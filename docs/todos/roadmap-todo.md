@@ -25,12 +25,13 @@
 - [x] 完成第二阶段 `Task 2`：接通系统推荐真实选题生成链路
 - [x] 完成第二阶段 `Task 2A`：补齐运行接入收口与编排规划
 - [x] 完成第二阶段 `Task 3`：接通真实 Script Writer 链路
+- [x] 完成第二阶段 `Task 4`：落实单一语义审校与受控 Patch / Regenerate 执行流
 
 ## 进行中
-- [ ] 准备执行第二阶段 `Task 4`：落实单一语义审校与受控 Patch / Regenerate 执行流
+- [ ] 准备执行第二阶段 `Task 5`：建立项目快照与最小可恢复持久化
 
 ## 待做
-- [ ] 按顺序执行第二阶段剩余任务：`Task 4` 至 `Task 9`
+- [ ] 按顺序执行第二阶段剩余任务：`Task 5` 至 `Task 9`
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 细化 Event Registry 匹配阈值
 - [ ] 细化 Candidate Cache 生命周期

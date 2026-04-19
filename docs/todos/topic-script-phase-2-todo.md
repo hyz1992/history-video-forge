@@ -7,7 +7,8 @@
 - [x] 第二阶段 `Task 2` 已完成
 - [x] 第二阶段 `Task 2A` 已完成
 - [x] 第二阶段 `Task 3` 已完成
-- [ ] 准备执行第二阶段 `Task 4`
+- [x] 第二阶段 `Task 4` 已完成
+- [ ] 准备执行第二阶段 `Task 5`
 
 ## 对应计划
 - [2026-04-18-topic-script-phase-2-implementation-plan.md](../plans/2026-04-18-topic-script-phase-2-implementation-plan.md)
@@ -63,11 +64,11 @@
 - [x] Step 5：提交 `接通真实脚本生成链路`
 
 ### Task 4：落实单一语义审校与受控 Patch / Regenerate 执行流
-- [ ] Step 1：新增 `tests/backend/script/script-patch-regen.test.ts` 与 `tests/backend/api/script-review-actions.test.ts`
-- [ ] Step 2：运行 `npm test -- tests/backend/script/script-patch-regen.test.ts tests/backend/api/script-review-actions.test.ts` 并确认红灯
-- [ ] Step 3：实现单次 patch / regenerate 执行流
-- [ ] Step 4：重跑 `npm test -- tests/backend/script/script-patch-regen.test.ts tests/backend/api/script-review-actions.test.ts` 并确认绿灯
-- [ ] Step 5：提交 `落实脚本审校与单次修补重生流程`
+- [x] Step 1：新增 `tests/backend/script/script-patch-regen.test.ts` 与 `tests/backend/api/script-review-actions.test.ts`
+- [x] Step 2：运行 `npm test -- tests/backend/script/script-patch-regen.test.ts tests/backend/api/script-review-actions.test.ts` 并确认红灯
+- [x] Step 3：实现单次 patch / regenerate 执行流
+- [x] Step 4：重跑 `npm test -- tests/backend/script/script-patch-regen.test.ts tests/backend/api/script-review-actions.test.ts` 并确认绿灯
+- [x] Step 5：提交 `落实脚本审校与单次修补重生流程`
 
 ### Task 5：建立项目快照与最小可恢复持久化
 - [ ] Step 1：新增 `tests/backend/projects/project-snapshot.test.ts` 与 `tests/backend/api/project-snapshot-api.test.ts`
