@@ -23,14 +23,15 @@
 - [x] 完成第二阶段 `Task 0`：冻结旧项目基础设施迁移裁剪清单
 - [x] 完成第二阶段 `Task 1`：建立正式 runtime LLM 调用层与 Prompt Loader
 - [x] 完成第二阶段 `Task 1` 补完：落实运行时 LLM 迁移基础设施
+- [x] 完成第二阶段 `Task 2`：接通系统推荐真实选题生成链路
 
 ## 进行中
 
-- [ ] 准备执行第二阶段 `Task 2`：接通系统自动推荐入口的真实 Topic Candidate 生成链路
+- [ ] 准备执行第二阶段 `Task 3`：接通真实 Script Writer 链路
 
 ## 待做
 
-- [ ] 按顺序执行第二阶段剩余任务：`Task 2` 至 `Task 9`
+- [ ] 按顺序执行第二阶段剩余任务：`Task 3` 至 `Task 9`
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 细化 Event Registry 匹配阈值
 - [ ] 细化 Candidate Cache 生命周期

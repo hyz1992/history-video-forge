@@ -42,11 +42,7 @@ export function createOpenAiCompatibleProvider(
     });
   const fixer =
     options.structuredOutputFixer ??
-    createStructuredOutputFixer({
-      autoFix: async () => {
-        throw new Error("Structured output auto-fix is not configured.");
-      },
-    });
+    createStructuredOutputFixer();
 
   return {
     async invokeStructuredPrompt<T>(

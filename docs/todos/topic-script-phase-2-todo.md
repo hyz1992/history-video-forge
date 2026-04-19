@@ -5,7 +5,8 @@
 - [x] 第二阶段实施计划已起草完成
 - [x] 第二阶段 `Task 0` 已完成
 - [x] 第二阶段 `Task 1` 已完成
-- [ ] 准备执行第二阶段 `Task 2`
+- [x] 第二阶段 `Task 2` 已完成
+- [ ] 准备执行第二阶段 `Task 3`
 
 ## 对应计划
 
@@ -43,11 +44,11 @@
 
 ### Task 2：接通系统自动推荐入口的真实 Topic Candidate 生成链路
 
-- [ ] Step 1：新增 `tests/backend/topic/topic-runtime-recommendation.test.ts` 与 `tests/backend/api/topic-api-runtime.test.ts`
-- [ ] Step 2：运行 `npm test -- tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/api/topic-api-runtime.test.ts` 并确认红灯
-- [ ] Step 3：实现系统推荐真实 candidate 生成链路
-- [ ] Step 4：重跑 `npm test -- tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/api/topic-api-runtime.test.ts` 并确认绿灯
-- [ ] Step 5：提交 `接通系统推荐真实选题生成链路`
+- [x] Step 1：新增 `tests/backend/topic/topic-runtime-recommendation.test.ts` 与 `tests/backend/api/topic-api-runtime.test.ts`
+- [x] Step 2：运行 `npm test -- tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/api/topic-api-runtime.test.ts` 并确认红灯
+- [x] Step 3：实现系统推荐真实 candidate 生成链路
+- [x] Step 4：重跑 `npm test -- tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/api/topic-api-runtime.test.ts` 并确认绿灯
+- [x] Step 5：提交 `接通系统推荐真实选题生成链路`
 
 注意：
 

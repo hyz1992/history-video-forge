@@ -44,15 +44,21 @@ export async function createTopicRecommendationsController(
     sourceType: "system_recommendation",
   });
 
-  const candidates = recommendTopicCandidates(context.app.db, {
-    canonicalName: context.payload.canonical_name,
-    summary: context.payload.summary,
-    coreConflict: context.payload.core_conflict,
-    strongScene: context.payload.strong_scene,
-    sourceHint: context.payload.source_hint,
-    recentUsageHint: context.payload.recent_usage_hint,
-    tags: context.payload.tags,
-  });
+  const candidates = await recommendTopicCandidates(
+    context.app.db,
+    {
+      canonicalName: context.payload.canonical_name,
+      summary: context.payload.summary,
+      coreConflict: context.payload.core_conflict,
+      strongScene: context.payload.strong_scene,
+      sourceHint: context.payload.source_hint,
+      recentUsageHint: context.payload.recent_usage_hint,
+      tags: context.payload.tags,
+    },
+    {
+      projectId: project.id,
+    },
+  );
 
   const storedCandidates = new Map<string, StoredTopicCandidate>();
   const responseCandidates = candidates.map((candidate) => {
