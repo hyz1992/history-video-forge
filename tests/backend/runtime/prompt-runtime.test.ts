@@ -84,4 +84,175 @@ describe("prompt runtime", () => {
       operationName: "topic.candidate-builder",
     });
   });
+
+  it("classifies rate limits as retryable external service errors and retries once", async () => {
+    const { ExternalServiceError, withRetry } = await import(
+      "../../../backend/src/runtime/llm/external-errors.js"
+    );
+
+    let attempts = 0;
+    const result = await withRetry(
+      async () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new Error("429 rate limit exceeded");
+        }
+
+        return "ok";
+      },
+      {
+        provider: "llm",
+        operation: "topic.candidate-builder",
+        maxAttempts: 2,
+        baseDelayMs: 0,
+        maxDelayMs: 0,
+      },
+    );
+
+    expect(result).toBe("ok");
+    expect(attempts).toBe(2);
+
+    try {
+      await withRetry(
+        async () => {
+          throw new Error("401 unauthorized api key");
+        },
+        {
+          provider: "llm",
+          operation: "topic.candidate-builder",
+          maxAttempts: 1,
+          baseDelayMs: 0,
+          maxDelayMs: 0,
+        },
+      );
+    } catch (error) {
+      expect(error).toBeInstanceOf(ExternalServiceError);
+      expect(error).toMatchObject({
+        retryable: false,
+        code: "configuration",
+        operation: "topic.candidate-builder",
+        provider: "llm",
+      });
+    }
+  });
+
+  it("uses the openai-compatible provider through the unified prompt contract", async () => {
+    const { createOpenAiCompatibleProvider } = await import(
+      "../../../backend/src/runtime/llm/openai-compatible-provider.js"
+    );
+    const invokeApi = vi.fn(async ({ prompt, input, operationName }) =>
+      JSON.stringify({
+        promptId: prompt.metadata.id,
+        operationName,
+        input,
+      }),
+    );
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-4.5",
+      invokeApi,
+    });
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    const result = await provider.invokeStructuredPrompt<{
+      promptId: string;
+      operationName: string;
+      input: { seed: string };
+    }>({
+      prompt,
+      input: {
+        seed: "family-slot",
+      },
+      operationName: "topic.candidate-builder",
+    });
+
+    expect(invokeApi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt,
+        input: {
+          seed: "family-slot",
+        },
+        operationName: "topic.candidate-builder",
+        model: "glm-4.5",
+      }),
+    );
+    expect(result).toEqual({
+      promptId: "topic.candidate-builder",
+      operationName: "topic.candidate-builder",
+      input: {
+        seed: "family-slot",
+      },
+    });
+  });
+
+  it("retries timeout failures inside the openai-compatible provider", async () => {
+    const { createOpenAiCompatibleProvider } = await import(
+      "../../../backend/src/runtime/llm/openai-compatible-provider.js"
+    );
+    const invokeApi = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error("request timeout"), { name: "AbortError" }))
+      .mockResolvedValueOnce('{"ok":true}');
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-4.5",
+      invokeApi,
+      timeoutMs: 10,
+      maxAttempts: 2,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+    });
+
+    const result = await provider.invokeStructuredPrompt<{ ok: boolean }>({
+      prompt: createPromptRegistry().getPrompt("topic.candidate-builder"),
+      input: {
+        seed: "family-slot",
+      },
+      operationName: "topic.candidate-builder",
+    });
+
+    expect(invokeApi).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("runs deterministic recovery before auto-fix for structured output repair", async () => {
+    const { createStructuredOutputFixer } = await import(
+      "../../../backend/src/runtime/llm/structured-output-fix.js"
+    );
+    const autoFix = vi.fn(async () => '{"value": 3}');
+    const fixer = createStructuredOutputFixer({
+      autoFix,
+    });
+
+    const result = await fixer.fix<{ value: number }>({
+      operationName: "topic.candidate-builder",
+      rawOutput: '{"value": 2',
+      parse: (candidate) => JSON.parse(candidate) as { value: number },
+      deterministicRecovery: (rawOutput) => `${rawOutput}}`,
+    });
+
+    expect(result).toEqual({ value: 2 });
+    expect(autoFix).not.toHaveBeenCalled();
+  });
+
+  it("falls back to auto-fix after deterministic recovery cannot repair structured output", async () => {
+    const { createStructuredOutputFixer } = await import(
+      "../../../backend/src/runtime/llm/structured-output-fix.js"
+    );
+    const autoFix = vi.fn(async ({ rawOutput }) => {
+      expect(rawOutput).toBe("not-json");
+      return '{"value": 4}';
+    });
+    const fixer = createStructuredOutputFixer({
+      autoFix,
+    });
+
+    const result = await fixer.fix<{ value: number }>({
+      operationName: "script.semantic-reviewer",
+      rawOutput: "not-json",
+      parse: (candidate) => JSON.parse(candidate) as { value: number },
+      deterministicRecovery: () => null,
+    });
+
+    expect(autoFix).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ value: 4 });
+  });
 });

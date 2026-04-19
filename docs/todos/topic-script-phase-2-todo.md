@@ -4,7 +4,7 @@
 
 - [x] 第二阶段实施计划已起草完成
 - [x] 第二阶段 `Task 0` 已完成
-- [ ] 第二阶段 `Task 1` 补完中
+- [x] 第二阶段 `Task 1` 已完成
 - [ ] 准备执行第二阶段 `Task 2`
 
 ## 对应计划
@@ -34,12 +34,12 @@
 - [x] Step 4：实现正式 runtime LLM gateway 与 prompt loader / registry
 - [x] Step 5：重跑 `npm test -- tests/backend/runtime/prompt-runtime.test.ts` 并确认绿灯
 - [x] Step 6：提交 `建立正式运行时 LLM 调用层与 Prompt Loader`
-- [ ] Step 7：在 `tests/backend/runtime/prompt-runtime.test.ts` 中补充旧项目迁移项的失败测试
-- [ ] Step 8：运行 `npm test -- tests/backend/runtime/prompt-runtime.test.ts` 并确认针对补充覆盖的红灯
-- [ ] Step 9：补齐 `external-errors.ts`、OpenAI-compatible provider 与 `structured-output-fix.ts` 的最小迁移实现
-- [ ] Step 10：重跑 `npm test -- tests/backend/runtime/prompt-runtime.test.ts` 并确认绿灯
-- [ ] Step 11：更新 `docs/todos/topic-script-phase-2-todo.md` 与 `docs/todos/roadmap-todo.md`
-- [ ] Step 12：提交 `补完运行时 LLM 迁移基础设施`
+- [x] Step 7：在 `tests/backend/runtime/prompt-runtime.test.ts` 中补充旧项目迁移项的失败测试
+- [x] Step 8：运行 `npm test -- tests/backend/runtime/prompt-runtime.test.ts` 并确认针对补充覆盖的红灯
+- [x] Step 9：补齐 `external-errors.ts`、OpenAI-compatible provider 与 `structured-output-fix.ts` 的最小迁移实现
+- [x] Step 10：重跑 `npm test -- tests/backend/runtime/prompt-runtime.test.ts` 并确认绿灯
+- [x] Step 11：更新 `docs/todos/topic-script-phase-2-todo.md` 与 `docs/todos/roadmap-todo.md`
+- [x] Step 12：提交 `补完运行时 LLM 迁移基础设施`
 
 ### Task 2：接通系统自动推荐入口的真实 Topic Candidate 生成链路
 
