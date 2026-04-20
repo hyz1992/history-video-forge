@@ -1,3 +1,4 @@
 node_modules/
 harness/scripts/runtime/output/*
 !harness/scripts/runtime/output/.gitkeep
+.env
