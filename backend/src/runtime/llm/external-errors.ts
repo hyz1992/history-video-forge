@@ -12,6 +12,14 @@ export interface RetryOptions extends ExternalErrorContext {
   shouldRetry?: (error: ExternalServiceError, attempt: number) => boolean;
 }
 
+export interface FailureMetadata {
+  failure_reason: string;
+  provider: ExternalProvider;
+  operation: string;
+  retryable: boolean;
+  attempt_count: number;
+}
+
 export class ExternalServiceError extends Error {
   readonly provider: ExternalProvider;
   readonly operation: string;
@@ -19,6 +27,8 @@ export class ExternalServiceError extends Error {
   readonly code: string;
   readonly userMessage: string;
   readonly debugMessage: string;
+  readonly attemptCount: number;
+  readonly failureMetadata: FailureMetadata;
   readonly cause?: unknown;
 
   constructor(options: {
@@ -28,6 +38,7 @@ export class ExternalServiceError extends Error {
     code: string;
     userMessage: string;
     debugMessage: string;
+    attemptCount?: number;
     cause?: unknown;
   }) {
     super(options.debugMessage);
@@ -38,6 +49,14 @@ export class ExternalServiceError extends Error {
     this.code = options.code;
     this.userMessage = options.userMessage;
     this.debugMessage = options.debugMessage;
+    this.attemptCount = options.attemptCount ?? 1;
+    this.failureMetadata = {
+      failure_reason: options.code,
+      provider: options.provider,
+      operation: options.operation,
+      retryable: options.retryable,
+      attempt_count: this.attemptCount,
+    };
     this.cause = options.cause;
   }
 }
@@ -120,7 +139,10 @@ export async function withRetry<T>(
     try {
       return await operation();
     } catch (error) {
-      const classified = classifyExternalError(error, options);
+      const classified = withAttemptCount(
+        classifyExternalError(error, options),
+        attempt,
+      );
       lastError = classified;
 
       const shouldRetry =
@@ -146,6 +168,22 @@ export async function withRetry<T>(
   throw lastError ?? classifyExternalError(new Error("Unknown external error"), options);
 }
 
+export function withAttemptCount(
+  error: ExternalServiceError,
+  attemptCount: number,
+): ExternalServiceError {
+  return new ExternalServiceError({
+    provider: error.provider,
+    operation: error.operation,
+    retryable: error.retryable,
+    code: error.code,
+    userMessage: error.userMessage,
+    debugMessage: error.debugMessage,
+    attemptCount,
+    cause: error.cause,
+  });
+}
+
 function extractStatus(message: string): number | null {
   const match = message.match(/\b(400|401|403|408|409|422|429|500|502|503|504)\b/u);
   return match ? Number(match[1]) : null;
@@ -165,6 +203,8 @@ function buildUserMessage(code: string): string {
       return "外部服务拒绝了当前请求，请检查输入参数或提示词。";
     case "invalid_response":
       return "外部服务返回了不符合约束的结果，请稍后重试。";
+    case "budget_exceeded":
+      return "运行时请求预算已耗尽，请稍后重试或收紧范围。";
     default:
       return "外部服务调用失败，请稍后重试。";
   }

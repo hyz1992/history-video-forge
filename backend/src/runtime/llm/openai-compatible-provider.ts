@@ -1,6 +1,7 @@
 import { env } from "../../config/env.js";
 import type { LoadedPrompt } from "../prompts/prompt-loader.js";
 import { withRetry } from "./external-errors.js";
+import { createRequestBudget, type RequestBudget } from "./request-budget.js";
 import type {
   StructuredPromptInvocation,
   StructuredPromptProvider,
@@ -25,6 +26,7 @@ export interface OpenAiCompatibleProviderOptions {
   maxAttempts?: number;
   baseDelayMs?: number;
   maxDelayMs?: number;
+  requestBudget?: RequestBudget;
   invokeApi?: (request: OpenAiCompatibleInvokeRequest) => Promise<string>;
   structuredOutputFixer?: StructuredOutputFixer;
 }
@@ -43,14 +45,21 @@ export function createOpenAiCompatibleProvider(
   const fixer =
     options.structuredOutputFixer ??
     createStructuredOutputFixer();
+  const requestBudget =
+    options.requestBudget ??
+    createRequestBudget({
+      maxRequests: env.llm.requestBudgetMaxRequests,
+    });
 
   return {
     async invokeStructuredPrompt<T>(
       request: StructuredPromptInvocation,
     ): Promise<T> {
       const rawOutput = await withRetry(
-        () =>
-          withTimeout(
+        () => {
+          requestBudget.consume(request.operationName);
+
+          return withTimeout(
             invokeApi({
               prompt: request.prompt,
               input: request.input,
@@ -59,11 +68,12 @@ export function createOpenAiCompatibleProvider(
             }),
             options.timeoutMs ?? env.llm.timeoutMs,
             request.operationName,
-          ),
+          );
+        },
         {
           provider: "llm",
           operation: request.operationName,
-          maxAttempts: options.maxAttempts ?? 3,
+          maxAttempts: options.maxAttempts ?? env.llm.maxAttempts,
           baseDelayMs: options.baseDelayMs ?? 1500,
           maxDelayMs: options.maxDelayMs ?? 8000,
         },

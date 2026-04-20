@@ -50,13 +50,13 @@
 - [x] Step 2：运行 `npm test -- tests/backend/projects/project-snapshot.test.ts tests/harness/topic-script-regression.test.ts` 并确认红灯
 - [x] Step 3：实现 `graph-trace.ts`、`runtime-diagnostics.ts`，并让 snapshot / harness 消费统一 graph 摘要
 - [x] Step 4：重跑 `npm test -- tests/backend/projects/project-snapshot.test.ts tests/harness/topic-script-regression.test.ts` 并确认绿灯
-- [ ] Step 5：提交 `贯通编排图诊断与快照摘要`
+- [x] Step 5：提交 `贯通编排图诊断与快照摘要`
 
 ### Task 5：运行时硬化与模型治理
-- [ ] Step 1：新增 `tests/backend/runtime/provider-hardening.test.ts`
-- [ ] Step 2：运行 `npm test -- tests/backend/runtime/provider-hardening.test.ts` 并确认红灯
-- [ ] Step 3：实现 budget / limit / failure metadata，并新增 `docs/records/2026-04-19-runtime-hardening-notes.md`
-- [ ] Step 4：重跑 `npm test -- tests/backend/runtime/provider-hardening.test.ts` 并确认绿灯
+- [x] Step 1：新增 `tests/backend/runtime/provider-hardening.test.ts`
+- [x] Step 2：运行 `npm test -- tests/backend/runtime/provider-hardening.test.ts` 并确认红灯
+- [x] Step 3：实现 budget / limit / failure metadata，并新增 `docs/records/2026-04-19-runtime-hardening-notes.md`
+- [x] Step 4：重跑 `npm test -- tests/backend/runtime/provider-hardening.test.ts` 并确认绿灯
 - [ ] Step 5：提交 `补齐运行时硬化与模型治理`
 
 ### Task 6：实现 frontend script workspace 的生产化最小闭环

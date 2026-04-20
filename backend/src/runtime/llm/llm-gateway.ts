@@ -1,4 +1,5 @@
 import type { PromptRegistry } from "../prompts/prompt-registry.js";
+import { classifyExternalError } from "./external-errors.js";
 import type { StructuredPromptProvider } from "./provider-contract.js";
 
 export interface InvokeStructuredPromptOptions {
@@ -21,12 +22,20 @@ class DefaultLlmGateway implements LlmGateway {
     options: InvokeStructuredPromptOptions,
   ): Promise<T> {
     const prompt = this.registry.getPrompt(options.promptId);
+    const operationName = options.operationName ?? options.promptId;
 
-    return this.provider.invokeStructuredPrompt<T>({
-      prompt,
-      input: options.input,
-      operationName: options.operationName ?? options.promptId,
-    });
+    try {
+      return await this.provider.invokeStructuredPrompt<T>({
+        prompt,
+        input: options.input,
+        operationName,
+      });
+    } catch (error) {
+      throw classifyExternalError(error, {
+        provider: "llm",
+        operation: operationName,
+      });
+    }
   }
 }
 

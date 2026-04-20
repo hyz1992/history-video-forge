@@ -14,6 +14,8 @@ export interface AppEnv {
     model: string;
     structuredModel?: string;
     timeoutMs: number;
+    maxAttempts: number;
+    requestBudgetMaxRequests: number;
   };
 }
 
@@ -72,6 +74,10 @@ function buildEnv(dotEnvValues: Record<string, string>): AppEnv {
         readEnvValue("LLM_MODEL", dotEnvValues) ??
         readEnvValue("OPENAI_MODEL", dotEnvValues),
       timeoutMs: Number(readEnvValue("LLM_TIMEOUT_MS", dotEnvValues) ?? "45000"),
+      maxAttempts: Number(readEnvValue("LLM_MAX_ATTEMPTS", dotEnvValues) ?? "3"),
+      requestBudgetMaxRequests: Number(
+        readEnvValue("LLM_REQUEST_BUDGET_MAX_REQUESTS", dotEnvValues) ?? "20",
+      ),
     },
   };
 }
