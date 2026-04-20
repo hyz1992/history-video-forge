@@ -21,6 +21,7 @@ const originalEnv = new Map<string, string | undefined>(
 
 afterEach(() => {
   vi.resetModules();
+  vi.unmock("node:fs");
   for (const key of RUNTIME_ENV_KEYS) {
     const value = originalEnv.get(key);
     if (value === undefined) {
@@ -85,5 +86,26 @@ describe("runtime env loading", () => {
     expect(() => getValidatedRuntimeEnv()).toThrow(
       /LLM_BASE_URL|OPENAI_BASE_URL|LLM_API_KEY|OPENAI_API_KEY|LLM_MODEL|OPENAI_MODEL/u,
     );
+  });
+
+  it("does not read local .env files while running under test", async () => {
+    process.env.NODE_ENV = "test";
+    delete process.env.LLM_PROVIDER;
+    delete process.env.LLM_BASE_URL;
+    delete process.env.LLM_API_KEY;
+    delete process.env.LLM_MODEL;
+
+    vi.doMock("node:fs", () => ({
+      existsSync: () => true,
+      readFileSync: () =>
+        "LLM_PROVIDER=openai\nLLM_BASE_URL=https://real.example.test/v1\nLLM_API_KEY=real-key\nLLM_MODEL=real-model",
+    }));
+
+    const { env } = await import("../../../backend/src/config/env.js");
+
+    expect(env.llm.provider).toBe("stub");
+    expect(env.llm.baseUrl).toBeUndefined();
+    expect(env.llm.apiKey).toBeUndefined();
+    expect(env.llm.model).toBe("stub-model");
   });
 });

@@ -24,6 +24,29 @@
 - 结果：通过
 - 汇总：`35` 个测试文件、`82` 个用例全部通过
 
+## 第三阶段真实 `.env` live check 结果
+
+- 运行时间：2026-04-20
+- 单样本验证命令：`npx tsx harness/scripts/runtime/topic-script-live-check.ts --sample harness/samples/topic-script/yanzi-shichu.sample.json`
+- 单样本结果：通过
+- 单样本汇总：`total_samples=1`，`passed_samples=1`，`failed_samples=0`
+- 官方 family set 命令：`npm run harness:topic-script-live-check`
+- 官方 family set 结果：通过
+- 官方 family set 汇总：`total_samples=2`，`passed_samples=2`，`failed_samples=0`
+- 对应产物：
+  - `harness/scripts/runtime/output/topic-script-live-check/live-check-summary.json`
+  - `harness/scripts/runtime/output/topic-script-live-check/yanzi-shichu/*`
+  - `harness/scripts/runtime/output/topic-script-live-check/zhuanzhu-ciwangliao/*`
+
+### live check 过程中补齐的最小兼容修复
+
+1. topic recommendation 真实返回会以对象包裹数组，且 `viral_rubric` 使用数值评分字段
+   - 处理：在 graph node 边界做最小归一化，兼容真实 provider 返回，再映射回正式 `TopicCandidateCard`
+2. script writer 真实返回的 `beat_trace / quote_trace / opening_span / ending_span` 形态会漂移
+   - 处理：在 `generateScriptDraft()` 进入 `ScriptDraftPackage.parse()` 前做最小合同归一化
+3. 本地真实 `.env` 会污染自动化测试环境
+   - 处理：测试环境下不再读取本地 `.env`，避免 `npm test` 意外变成真实 provider 集成调用
+
 ## 第三阶段收口结论
 
 - 第三阶段自动化收口已经完成：
@@ -31,5 +54,9 @@
   - topic / script runtime 已共享 graph-compatible 编排语义
   - graph trace / diagnostics / snapshot / harness / frontend script workspace 已贯通
   - runtime hardening、harness live gate 与 release checklist 已落地
-- 当前唯一剩余缺口是补记一次真实 `.env` 下的 live check 结果
-- 在补齐该运行记录前，不应把第三阶段表述为“真实环境巡检已完成”；但可以明确表述为“第三阶段自动化验证已全绿并完成代码收口”
+- 第三阶段真实环境巡检也已完成：
+  - 官方 family set 两个样本均通过真实 `.env` live check
+- 当前可以明确表述为：
+  - 第三阶段自动化验证已全绿
+  - 第三阶段真实 `.env` live check 已完成
+  - `topic + script` 第三阶段已完成代码与运行验证收口

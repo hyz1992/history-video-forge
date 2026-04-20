@@ -3,7 +3,7 @@
 ## 状态
 - [x] 第三阶段实施计划已起草完成
 - [x] 第三阶段 `Task 0` 至 `Task 8` 已完成
-- [ ] 待补一次真实 `.env` 下的 live check 结果
+- [x] 已完成一次真实 `.env` 下的 live check 结果记录
 
 ## 对应计划
 - [2026-04-19-topic-script-phase-3-implementation-plan.md](../plans/2026-04-19-topic-script-phase-3-implementation-plan.md)
@@ -78,4 +78,4 @@
 - [x] Step 2：修复阻碍第三阶段完成的最小问题
 - [x] Step 3：更新 `topic-script-phase-3-todo.md`、`roadmap-todo.md` 与结论文档
 - [x] Step 4：重跑 `npm test` 并确认全绿
-- [ ] Step 5：提交 `完成第三阶段收口检查`
+- [x] Step 5：提交 `完成第三阶段收口检查`

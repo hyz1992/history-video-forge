@@ -156,15 +156,19 @@ runtime harness 在当前阶段属于 **P0**：
 - `harness/scripts/runtime/topic-script-real-regression.ts`
   - 真实模型巡检层的计划外壳，不作为默认自动化门。
 - `harness/scripts/runtime/topic-script-live-check.ts`
-  - 真实 `.env` 条件下的 live check 入口，只生成可复用巡检计划，不并入默认自动化 gate。
+  - 真实 `.env` 条件下的 live check 入口，默认执行真实 live check，不并入默认自动化 gate。
 - `harness/samples/topic-script/family-set.md`
   - 固定第二阶段双层回归样本集。
 
 ### Live Check Entry
 
 - `npm run harness:topic-script-live-check`
-  - 生成真实巡检计划，默认读取 `harness/samples/topic-script/family-set.md`。
-- `npm run harness:topic-script-live-check -- --sample harness/samples/topic-script/yanzi-shichu.sample.json`
-  - 对单样本生成 live check 计划。
+  - 执行真实 live check，默认读取 `harness/samples/topic-script/family-set.md`。
+- `npm run harness:topic-script-live-check -- harness/samples/topic-script/family-set.md`
+  - 显式指定 family set，并避开 npm 11 对未知 flag 的告警。
+- `npx tsx harness/scripts/runtime/topic-script-live-check.ts --sample harness/samples/topic-script/yanzi-shichu.sample.json`
+  - 对单样本执行真实 live check。
+- `npx tsx harness/scripts/runtime/topic-script-live-check.ts --plan-only`
+  - 仅生成 live check 计划，不实际执行样本。
 - live check 输出应至少覆盖 graph trace、runtime diagnostics 与 script artifact。
 - live check 只作为人工巡检入口，不替代自动化稳定回归。

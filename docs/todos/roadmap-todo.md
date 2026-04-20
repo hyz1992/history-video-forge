@@ -39,12 +39,11 @@
 - [x] 完成第三阶段 `Task 6`：实现 frontend script workspace 的生产化最小闭环
 - [x] 完成第三阶段 `Task 7`：升级 harness live regression 与 release gate
 - [x] 完成第三阶段 `Task 8`：完成第三阶段自动化收口检查
+- [x] 完成第三阶段真实 `.env` live check：官方 family set 两个样本均通过
 
 ## 进行中
-- [ ] 补记一次第三阶段真实 `.env` 下的 live check 结果
-
-## 待做
 - [ ] 细化 `family_confidence` 计算规则
+## 待做
 - [ ] 细化 Event Registry 匹配阈值
 - [ ] 细化 Candidate Cache 生命周期
 - [ ] 细化 storyboard 阶段设计

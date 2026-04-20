@@ -90,6 +90,10 @@ function readEnvValue(
 }
 
 function loadLocalDotEnv(): Record<string, string> {
+  if (process.env.NODE_ENV === "test" || process.env.VITEST) {
+    return {};
+  }
+
   const candidates = [
     path.resolve(process.cwd(), ".env"),
     path.resolve(process.cwd(), "backend/.env"),

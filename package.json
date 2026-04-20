@@ -20,6 +20,7 @@
     "harness:topic-script-live-check": "tsx harness/scripts/runtime/topic-script-live-check.ts"
   },
   "devDependencies": {
+    "@types/node": "^24.3.0",
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/compiler-sfc": "^3.5.17",
     "@vue/test-utils": "^2.4.6",

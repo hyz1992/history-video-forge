@@ -57,7 +57,7 @@ export function buildTopicScriptRealRegressionPlan(
       input.outputDir ??
       resolve(process.cwd(), "harness/scripts/runtime/output/topic-script-real-regression"),
     suggested_live_check_command:
-      "npm run harness:topic-script-live-check -- --family-set harness/samples/topic-script/family-set.md",
+      "npm run harness:topic-script-live-check -- harness/samples/topic-script/family-set.md",
     required_checks: [
       "确认 topic candidates、topic package、script input bundle、script draft 全部落盘",
       "确认 local validation 为 pass，semantic review 为 pass 或 patch_once",
