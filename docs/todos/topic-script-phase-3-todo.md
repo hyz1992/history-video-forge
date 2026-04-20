@@ -36,13 +36,13 @@
 - [x] Step 2：运行 `npm test -- tests/backend/script/script-graph-run.test.ts tests/backend/api/script-review-actions.test.ts tests/backend/api/script-generate-runtime.test.ts` 并确认红灯
 - [x] Step 3：实现 `script-run-graph.ts`、`script-run-nodes.ts`，并让 `script-run.service.ts` 改为调用 graph runner
 - [x] Step 4：重跑 `npm test -- tests/backend/script/script-graph-run.test.ts tests/backend/api/script-review-actions.test.ts tests/backend/api/script-generate-runtime.test.ts` 并确认绿灯
-- [ ] Step 5：提交 `将脚本执行主链路迁入编排图`
+- [x] Step 5：提交 `将脚本执行主链路迁入编排图`
 
 ### Task 3：收口 topic recommendation 的 graph-compatible 运行语义
-- [ ] Step 1：新增 `tests/backend/topic/topic-graph-recommendation.test.ts`
-- [ ] Step 2：运行 `npm test -- tests/backend/topic/topic-graph-recommendation.test.ts tests/backend/api/topic-api-runtime.test.ts` 并确认红灯
-- [ ] Step 3：实现 `topic-recommendation-graph.ts`、`topic-recommendation-nodes.ts`，并让 topic runtime 共享统一 graph 语义
-- [ ] Step 4：重跑 `npm test -- tests/backend/topic/topic-graph-recommendation.test.ts tests/backend/api/topic-api-runtime.test.ts` 并确认绿灯
+- [x] Step 1：新增 `tests/backend/topic/topic-graph-recommendation.test.ts`
+- [x] Step 2：运行 `npm test -- tests/backend/topic/topic-graph-recommendation.test.ts tests/backend/api/topic-api-runtime.test.ts` 并确认红灯
+- [x] Step 3：实现 `topic-recommendation-graph.ts`、`topic-recommendation-nodes.ts`，并让 topic runtime 共享统一 graph 语义
+- [x] Step 4：重跑 `npm test -- tests/backend/topic/topic-graph-recommendation.test.ts tests/backend/api/topic-api-runtime.test.ts` 并确认绿灯
 - [ ] Step 5：提交 `统一选题生成编排语义`
 
 ### Task 4：贯通 graph trace / diagnostics / execution snapshot

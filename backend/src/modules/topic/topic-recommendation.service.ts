@@ -6,6 +6,7 @@ import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway
 import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider.js";
 import type { StructuredPromptProvider } from "../../runtime/llm/provider-contract.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
+import { runTopicRecommendationGraph } from "../../runtime/orchestration/topic-recommendation-graph.js";
 
 import {
   buildTopicCandidates,
@@ -23,30 +24,19 @@ export async function recommendTopicCandidates(
   options?: TopicRecommendationOptions,
 ) {
   const gateway = options?.llmGateway ?? createTopicRecommendationGateway();
-  const runtimeCandidates = await gateway.invokeStructuredPrompt<unknown[]>({
-    promptId: "topic.candidate-builder",
-    input,
-  });
-  const candidates = runtimeCandidates.map((candidate) =>
-    TopicCandidateCard.parse(candidate),
+  const result = await runTopicRecommendationGraph(
+    {
+      db,
+      input,
+      projectId: options?.projectId ?? null,
+    },
+    {
+      invokeStructuredPrompt: (runnerInput) =>
+        gateway.invokeStructuredPrompt<unknown[]>(runnerInput),
+    },
   );
 
-  for (const candidate of candidates) {
-    await saveCachedCandidate(db, {
-      projectId: options?.projectId ?? null,
-      fingerprint: buildCandidateFingerprint(input.canonicalName, candidate.one_line_angle),
-      oneLineAngle: candidate.one_line_angle,
-      familyLabel: candidate.family_label,
-      scopeLabel: candidate.scope_label,
-      viralRubricJson: candidate.viral_rubric,
-      estimatedDurationBandJson: candidate.estimated_duration_band,
-      strongScene: candidate.strong_scene,
-      coreConflict: candidate.core_conflict,
-      mustCoverPreviewJson: candidate.must_cover_preview,
-    });
-  }
-
-  return candidates;
+  return result.candidates;
 }
 
 function createTopicRecommendationGateway(): LlmGateway {
@@ -67,11 +57,4 @@ function createStubTopicRecommendationProvider(): StructuredPromptProvider {
       return buildTopicCandidates(input as BuildTopicCandidatesInput) as T;
     },
   };
-}
-
-function buildCandidateFingerprint(
-  canonicalName: string,
-  oneLineAngle: string,
-): string {
-  return `${canonicalName}::${oneLineAngle}`;
 }
