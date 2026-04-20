@@ -2,7 +2,8 @@
 
 ## 状态
 - [x] 第三阶段实施计划已起草完成
-- [ ] 准备执行第三阶段 `Task 0`
+- [x] 第三阶段 `Task 0` 已完成
+- [ ] 准备执行第三阶段 `Task 1`
 
 ## 对应计划
 - [2026-04-19-topic-script-phase-3-implementation-plan.md](../plans/2026-04-19-topic-script-phase-3-implementation-plan.md)
@@ -17,11 +18,11 @@
 - 继续坚持 TDD、先红后绿、最小实现、最小提交
 
 ### Task 0：冻结第三阶段边界并建立执行清单
-- [ ] Step 1：新增 `docs/todos/topic-script-phase-3-todo.md`
-- [ ] Step 2：运行 `powershell -NoProfile -Command "Select-String -Path docs/todos/topic-script-phase-3-todo.md -Pattern 'Task 0|Task 1|Task 8|第三阶段执行规则' -Encoding UTF8"` 并确认命中
-- [ ] Step 3：更新 `docs/architecture/runtime-orchestration-design.md`，写入第三阶段正式接入 LangGraph 的执行决议
-- [ ] Step 4：运行 `powershell -NoProfile -Command "Select-String -Path docs/todos/roadmap-todo.md -Pattern '第三阶段|phase-3|Phase 3' -Encoding UTF8"` 并确认命中
-- [ ] Step 5：提交 `冻结第三阶段执行边界`
+- [x] Step 1：新增 `docs/todos/topic-script-phase-3-todo.md`
+- [x] Step 2：运行 `powershell -NoProfile -Command "Select-String -Path docs/todos/topic-script-phase-3-todo.md -Pattern 'Task 0|Task 1|Task 8|第三阶段执行规则' -Encoding UTF8"` 并确认命中
+- [x] Step 3：更新 `docs/architecture/runtime-orchestration-design.md`，写入第三阶段正式接入 LangGraph 的执行决议
+- [x] Step 4：运行 `powershell -NoProfile -Command "Select-String -Path docs/todos/roadmap-todo.md -Pattern '第三阶段|phase-3|Phase 3' -Encoding UTF8"` 并确认命中
+- [x] Step 5：提交 `冻结第三阶段执行边界`
 
 ### Task 1：引入 LangGraph 基础依赖与 orchestration scaffold
 - [ ] Step 1：新增 `tests/backend/runtime/topic-script-graph.test.ts`
