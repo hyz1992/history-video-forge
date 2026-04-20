@@ -19,6 +19,7 @@ export interface TopicScriptRealRegressionPlan {
   total_samples: number;
   sample_paths: string[];
   output_dir: string;
+  suggested_live_check_command: string;
   required_checks: string[];
 }
 
@@ -55,6 +56,8 @@ export function buildTopicScriptRealRegressionPlan(
     output_dir:
       input.outputDir ??
       resolve(process.cwd(), "harness/scripts/runtime/output/topic-script-real-regression"),
+    suggested_live_check_command:
+      "npm run harness:topic-script-live-check -- --family-set harness/samples/topic-script/family-set.md",
     required_checks: [
       "确认 topic candidates、topic package、script input bundle、script draft 全部落盘",
       "确认 local validation 为 pass，semantic review 为 pass 或 patch_once",
@@ -85,6 +88,7 @@ export function writeTopicScriptRealRegressionPlan(
       `- total_samples: ${plan.total_samples}`,
       `- family_set_path: ${plan.family_set_path}`,
       `- output_dir: ${plan.output_dir}`,
+      `- suggested_live_check_command: ${plan.suggested_live_check_command}`,
       "",
       "## Required Checks",
       "",

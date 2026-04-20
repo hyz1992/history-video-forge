@@ -64,13 +64,13 @@
 - [x] Step 2：运行 `npm test -- tests/frontend/script-workspace.spec.ts tests/frontend/topic-to-script-flow.spec.ts` 并确认红灯
 - [x] Step 3：实现 `ScriptTracePanel.vue`、`ScriptHistoryPanel.vue` 与脚本工作台状态增强
 - [x] Step 4：重跑 `npm test -- tests/frontend/script-workspace.spec.ts tests/frontend/topic-to-script-flow.spec.ts` 并确认绿灯
-- [ ] Step 5：提交 `补齐脚本工作台生产化最小体验`
+- [x] Step 5：提交 `补齐脚本工作台生产化最小体验`
 
 ### Task 7：升级 harness live regression 与 release gate
-- [ ] Step 1：新增 `tests/harness/topic-script-live-check.test.ts`
-- [ ] Step 2：运行 `npm test -- tests/harness/topic-script-live-check.test.ts` 并确认红灯
-- [ ] Step 3：实现 `topic-script-live-check.ts`，并补 `README`、package script 与 live checklist
-- [ ] Step 4：重跑 `npm test -- tests/harness/topic-script-live-check.test.ts` 并确认绿灯
+- [x] Step 1：新增 `tests/harness/topic-script-live-check.test.ts`
+- [x] Step 2：运行 `npm test -- tests/harness/topic-script-live-check.test.ts` 并确认红灯
+- [x] Step 3：实现 `topic-script-live-check.ts`，并补 `README`、package script 与 live checklist
+- [x] Step 4：重跑 `npm test -- tests/harness/topic-script-live-check.test.ts` 并确认绿灯
 - [ ] Step 5：提交 `建立真实巡检与发布门禁`
 
 ### Task 8：完成第三阶段收口检查

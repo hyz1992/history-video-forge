@@ -16,13 +16,15 @@
   ],
   "scripts": {
     "test": "vitest run",
-    "test:harness:topic-script-regression": "vitest run tests/harness/topic-script-regression.test.ts"
+    "test:harness:topic-script-regression": "vitest run tests/harness/topic-script-regression.test.ts",
+    "harness:topic-script-live-check": "tsx harness/scripts/runtime/topic-script-live-check.ts"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/compiler-sfc": "^3.5.17",
     "@vue/test-utils": "^2.4.6",
     "jsdom": "^26.1.0",
+    "tsx": "^4.20.6",
     "typescript": "^5.8.3",
     "vitest": "^3.2.4"
   }
