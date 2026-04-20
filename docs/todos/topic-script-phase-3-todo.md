@@ -57,13 +57,13 @@
 - [x] Step 2：运行 `npm test -- tests/backend/runtime/provider-hardening.test.ts` 并确认红灯
 - [x] Step 3：实现 budget / limit / failure metadata，并新增 `docs/records/2026-04-19-runtime-hardening-notes.md`
 - [x] Step 4：重跑 `npm test -- tests/backend/runtime/provider-hardening.test.ts` 并确认绿灯
-- [ ] Step 5：提交 `补齐运行时硬化与模型治理`
+- [x] Step 5：提交 `补齐运行时硬化与模型治理`
 
 ### Task 6：实现 frontend script workspace 的生产化最小闭环
-- [ ] Step 1：新增 `tests/frontend/script-workspace.spec.ts`
-- [ ] Step 2：运行 `npm test -- tests/frontend/script-workspace.spec.ts tests/frontend/topic-to-script-flow.spec.ts` 并确认红灯
-- [ ] Step 3：实现 `ScriptTracePanel.vue`、`ScriptHistoryPanel.vue` 与脚本工作台状态增强
-- [ ] Step 4：重跑 `npm test -- tests/frontend/script-workspace.spec.ts tests/frontend/topic-to-script-flow.spec.ts` 并确认绿灯
+- [x] Step 1：新增 `tests/frontend/script-workspace.spec.ts`
+- [x] Step 2：运行 `npm test -- tests/frontend/script-workspace.spec.ts tests/frontend/topic-to-script-flow.spec.ts` 并确认红灯
+- [x] Step 3：实现 `ScriptTracePanel.vue`、`ScriptHistoryPanel.vue` 与脚本工作台状态增强
+- [x] Step 4：重跑 `npm test -- tests/frontend/script-workspace.spec.ts tests/frontend/topic-to-script-flow.spec.ts` 并确认绿灯
 - [ ] Step 5：提交 `补齐脚本工作台生产化最小体验`
 
 ### Task 7：升级 harness live regression 与 release gate

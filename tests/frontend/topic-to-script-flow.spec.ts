@@ -26,7 +26,7 @@ function flushPromises() {
 }
 
 describe("topic to script flow", () => {
-  it("navigates from the confirmed system topic flow into /script and renders the restored active script", async () => {
+  it("navigates from topic confirmation into /script and renders trace plus history panels", async () => {
     const calls = {
       createProject: 0,
       recommend: [] as string[],
@@ -58,14 +58,14 @@ describe("topic to script flow", () => {
             candidates: [
               {
                 candidate_id: "candidate-1",
-                title: "晏子使楚",
-                one_line_angle: "他不是会说话，他是当场把局面翻过来了。",
+                title: "Yanzi mission",
+                one_line_angle: "The king pressed in public, and Yanzi hit back in public.",
                 family_label: "court_showdown",
                 scope_label: "single_turning_point",
-                why_now: "羞辱与反击的冲突很适合短视频开场。",
-                strong_scene: "楚王连番压场，晏子一句句顶回去。",
-                must_cover_preview: ["楚王压场", "晏子反顶"],
-                risk_hints: ["避免写成纯鸡汤"],
+                why_now: "Short-form story needs immediate public pressure.",
+                strong_scene: "The king keeps escalating and Yanzi answers in place.",
+                must_cover_preview: ["public pressure", "public comeback"],
+                risk_hints: ["avoid classroom tone"],
               },
             ],
           };
@@ -80,7 +80,7 @@ describe("topic to script flow", () => {
             current_status: "script_ready",
             topic_package: {
               topic_package_id: "topic-package-1",
-              canonical_title: "晏子使楚",
+              canonical_title: "Yanzi mission",
             },
           };
         },
@@ -97,10 +97,9 @@ describe("topic to script flow", () => {
             current_status: "script_ready",
             active_script: {
               script_record_id: "script-1",
-              script_text:
-                "如果有人当着所有人的面羞辱你，你敢不敢当场顶回去？晏子敢。",
-              opening_span: "如果有人当着所有人的面羞辱你，你敢不敢当场顶回去？",
-              ending_span: "这种场面，一退掉的就不只是自己。",
+              script_text: "First script draft",
+              opening_span: "Opening hook",
+              ending_span: "Closing residue",
               review_decision: "pass",
               patch_intent: "lift",
               local_validation: {
@@ -115,6 +114,24 @@ describe("topic to script flow", () => {
               execution_state: {
                 patch_used: true,
                 regenerate_used: false,
+              },
+              graph_trace_summary: {
+                nodes: [
+                  {
+                    node_name: "script-generate",
+                    input_ref: "script-input-bundle:project-1",
+                    output_ref: "script-draft:current",
+                    failure_reason: null,
+                  },
+                ],
+              },
+              runtime_diagnostics: {
+                checks: [
+                  {
+                    code: "semantic_review_passed",
+                    level: "info",
+                  },
+                ],
               },
             },
           };
@@ -155,7 +172,13 @@ describe("topic to script flow", () => {
       },
     ]);
     expect(calls.loadSnapshot).toEqual(["project-1"]);
-    expect(wrapper.get("[data-testid='script-text']").text()).toContain("晏子敢");
+    expect(wrapper.get("[data-testid='script-text']").text()).toContain("First script");
+    expect(wrapper.get("[data-testid='script-trace-panel']").text()).toContain(
+      "script-generate",
+    );
+    expect(wrapper.get("[data-testid='script-history-panel']").text()).toContain(
+      "历史版本",
+    );
   });
 
   it("restores the active script when the page reloads directly on /script", async () => {
@@ -202,9 +225,9 @@ describe("topic to script flow", () => {
             current_status: "script_ready",
             active_script: {
               script_record_id: "script-2",
-              script_text: "刷新后仍然可以恢复 active script。",
-              opening_span: "刷新后开头。",
-              ending_span: "刷新后结尾。",
+              script_text: "Reloaded script draft",
+              opening_span: "Reloaded opening",
+              ending_span: "Reloaded ending",
               review_decision: "pass",
               patch_intent: null,
               local_validation: {
@@ -219,6 +242,24 @@ describe("topic to script flow", () => {
               execution_state: {
                 patch_used: false,
                 regenerate_used: false,
+              },
+              graph_trace_summary: {
+                nodes: [
+                  {
+                    node_name: "script-generate",
+                    input_ref: "script-input-bundle:project-2",
+                    output_ref: "script-draft:current",
+                    failure_reason: null,
+                  },
+                ],
+              },
+              runtime_diagnostics: {
+                checks: [
+                  {
+                    code: "script_snapshot_restored",
+                    level: "info",
+                  },
+                ],
               },
             },
           };
@@ -248,8 +289,9 @@ describe("topic to script flow", () => {
 
     expect(router.currentRoute.value.path).toBe("/script");
     expect(calls.loadSnapshot).toEqual(["project-2"]);
-    expect(wrapper.get("[data-testid='script-text']").text()).toContain(
-      "刷新后仍然可以恢复 active script",
+    expect(wrapper.get("[data-testid='script-text']").text()).toContain("Reloaded script");
+    expect(wrapper.get("[data-testid='script-trace-panel']").text()).toContain(
+      "script-generate",
     );
   });
 });
