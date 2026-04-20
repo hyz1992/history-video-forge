@@ -43,13 +43,13 @@
 - [x] Step 2：运行 `npm test -- tests/backend/topic/topic-graph-recommendation.test.ts tests/backend/api/topic-api-runtime.test.ts` 并确认红灯
 - [x] Step 3：实现 `topic-recommendation-graph.ts`、`topic-recommendation-nodes.ts`，并让 topic runtime 共享统一 graph 语义
 - [x] Step 4：重跑 `npm test -- tests/backend/topic/topic-graph-recommendation.test.ts tests/backend/api/topic-api-runtime.test.ts` 并确认绿灯
-- [ ] Step 5：提交 `统一选题生成编排语义`
+- [x] Step 5：提交 `统一选题生成编排语义`
 
 ### Task 4：贯通 graph trace / diagnostics / execution snapshot
-- [ ] Step 1：新增 `tests/backend/projects/project-snapshot.test.ts` 与 `tests/harness/topic-script-regression.test.ts` 的 graph 摘要覆盖
-- [ ] Step 2：运行 `npm test -- tests/backend/projects/project-snapshot.test.ts tests/harness/topic-script-regression.test.ts` 并确认红灯
-- [ ] Step 3：实现 `graph-trace.ts`、`runtime-diagnostics.ts`，并让 snapshot / harness 消费统一 graph 摘要
-- [ ] Step 4：重跑 `npm test -- tests/backend/projects/project-snapshot.test.ts tests/harness/topic-script-regression.test.ts` 并确认绿灯
+- [x] Step 1：新增 `tests/backend/projects/project-snapshot.test.ts` 与 `tests/harness/topic-script-regression.test.ts` 的 graph 摘要覆盖
+- [x] Step 2：运行 `npm test -- tests/backend/projects/project-snapshot.test.ts tests/harness/topic-script-regression.test.ts` 并确认红灯
+- [x] Step 3：实现 `graph-trace.ts`、`runtime-diagnostics.ts`，并让 snapshot / harness 消费统一 graph 摘要
+- [x] Step 4：重跑 `npm test -- tests/backend/projects/project-snapshot.test.ts tests/harness/topic-script-regression.test.ts` 并确认绿灯
 - [ ] Step 5：提交 `贯通编排图诊断与快照摘要`
 
 ### Task 5：运行时硬化与模型治理

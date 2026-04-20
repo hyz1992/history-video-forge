@@ -14,6 +14,12 @@ export interface TopicScriptRegressionSampleResult {
   output_dir: string;
   status: string;
   stage: string;
+  graph_nodes?: Array<{
+    node_name: string;
+    input_ref: string | null;
+    output_ref: string | null;
+    failure_reason: string | null;
+  }>;
   project_id?: string;
   error_code?: string;
 }
@@ -103,6 +109,7 @@ export async function runTopicScriptRegression(
         output_dir: sampleOutputDir,
         status: smokeResult.status.status,
         stage: smokeResult.status.stage,
+        graph_nodes: smokeResult.status.graphTraceSummary.nodes,
         project_id: smokeResult.status.projectId,
       });
     } catch (error) {

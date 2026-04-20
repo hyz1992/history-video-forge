@@ -12,7 +12,7 @@ import {
 } from "../../harness/scripts/runtime/topic-script-real-regression";
 
 describe("topic script regression harness", () => {
-  it("runs the official topic to script runtime chain for a fixed sample family set", async () => {
+  it("runs the official topic to script runtime chain for a fixed sample family set and carries graph node summaries", async () => {
     const outputDir = mkdtempSync(join(tmpdir(), "svf2-topic-script-regression-"));
     const samplePaths = [
       "harness/samples/topic-script/yanzi-shichu.sample.json",
@@ -45,6 +45,12 @@ describe("topic script regression harness", () => {
         output_dir: string;
         status: string;
         stage: string;
+        graph_nodes?: Array<{
+          node_name: string;
+          input_ref: string | null;
+          output_ref: string | null;
+          failure_reason: string | null;
+        }>;
       }>;
     };
 
@@ -59,6 +65,26 @@ describe("topic script regression harness", () => {
     for (const sample of summary.samples) {
       expect(sample.status).toBe("sample-ready");
       expect(sample.stage).toBe("topic-to-script");
+      expect(sample.graph_nodes).toEqual([
+        {
+          node_name: "topic-candidate-generate",
+          input_ref: expect.any(String),
+          output_ref: expect.any(String),
+          failure_reason: null,
+        },
+        {
+          node_name: "script-generate",
+          input_ref: expect.any(String),
+          output_ref: expect.any(String),
+          failure_reason: null,
+        },
+        {
+          node_name: "semantic-review",
+          input_ref: expect.any(String),
+          output_ref: expect.any(String),
+          failure_reason: null,
+        },
+      ]);
       expect(existsSync(join(sample.output_dir, "topic-candidates.json"))).toBe(true);
       expect(existsSync(join(sample.output_dir, "topic-package.json"))).toBe(true);
       expect(existsSync(join(sample.output_dir, "script-input-bundle.json"))).toBe(true);
@@ -87,5 +113,11 @@ describe("topic script regression harness", () => {
       total_samples: 2,
       sample_paths: samplePaths,
     });
+    expect(plan.required_checks).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("trace"),
+        expect.stringContaining("diagnostics"),
+      ]),
+    );
   });
 });

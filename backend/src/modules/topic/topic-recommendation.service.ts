@@ -18,7 +18,7 @@ export interface TopicRecommendationOptions {
   projectId?: string | null;
 }
 
-export async function recommendTopicCandidates(
+export async function recommendTopicCandidatesWithTrace(
   db: DbClient,
   input: BuildTopicCandidatesInput,
   options?: TopicRecommendationOptions,
@@ -35,6 +35,16 @@ export async function recommendTopicCandidates(
         gateway.invokeStructuredPrompt<unknown[]>(runnerInput),
     },
   );
+
+  return result;
+}
+
+export async function recommendTopicCandidates(
+  db: DbClient,
+  input: BuildTopicCandidatesInput,
+  options?: TopicRecommendationOptions,
+) {
+  const result = await recommendTopicCandidatesWithTrace(db, input, options);
 
   return result.candidates;
 }

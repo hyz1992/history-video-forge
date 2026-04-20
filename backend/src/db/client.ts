@@ -72,6 +72,8 @@ export interface ScriptRecord {
   validationResultJson: Record<string, unknown> | null;
   semanticReviewResultJson: Record<string, unknown> | null;
   executionStateJson: Record<string, unknown> | null;
+  graphTraceSummaryJson: Record<string, unknown> | null;
+  runtimeDiagnosticsJson: Record<string, unknown> | null;
   createdAt: Date;
 }
 

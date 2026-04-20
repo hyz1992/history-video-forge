@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { AppResponse, RouteContext } from "../../app";
 import { createProject, getProjectById } from "../projects/project.repository";
 import { normalizeEventInput } from "./event-normalizer";
-import { recommendTopicCandidates } from "./topic-recommendation.service";
+import { recommendTopicCandidatesWithTrace } from "./topic-recommendation.service";
 import {
   confirmTopicCandidate,
   type StoredTopicCandidate,
@@ -44,7 +44,7 @@ export async function createTopicRecommendationsController(
     sourceType: "system_recommendation",
   });
 
-  const candidates = await recommendTopicCandidates(
+  const recommendation = await recommendTopicCandidatesWithTrace(
     context.app.db,
     {
       canonicalName: context.payload.canonical_name,
@@ -59,6 +59,7 @@ export async function createTopicRecommendationsController(
       projectId: project.id,
     },
   );
+  const candidates = recommendation.candidates;
 
   const storedCandidates = new Map<string, StoredTopicCandidate>();
   const responseCandidates = candidates.map((candidate) => {
@@ -91,6 +92,8 @@ export async function createTopicRecommendationsController(
       project_id: project.id,
       event_id: normalized.event.id,
       candidates: responseCandidates,
+      graph_trace_summary: recommendation.trace,
+      runtime_diagnostics: recommendation.diagnostics,
     },
   };
 }

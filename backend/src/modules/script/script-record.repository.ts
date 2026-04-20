@@ -13,6 +13,8 @@ export interface SaveScriptRecordInput {
   validationResultJson: Record<string, unknown> | null;
   semanticReviewResultJson: Record<string, unknown> | null;
   executionStateJson: Record<string, unknown> | null;
+  graphTraceSummaryJson?: Record<string, unknown> | null;
+  runtimeDiagnosticsJson?: Record<string, unknown> | null;
 }
 
 export async function saveScriptRecord(
@@ -33,6 +35,8 @@ export async function saveScriptRecord(
     validationResultJson: input.validationResultJson,
     semanticReviewResultJson: input.semanticReviewResultJson,
     executionStateJson: input.executionStateJson,
+    graphTraceSummaryJson: input.graphTraceSummaryJson ?? null,
+    runtimeDiagnosticsJson: input.runtimeDiagnosticsJson ?? null,
     createdAt: new Date(),
   };
 

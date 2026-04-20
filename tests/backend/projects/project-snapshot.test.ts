@@ -7,7 +7,7 @@ import { saveScriptRecord } from "../../../backend/src/modules/script/script-rec
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
 
 describe("project snapshot service", () => {
-  it("restores active topic, active script, latest validation results, and patch/regen execution state", async () => {
+  it("restores active topic, active script, latest validation results, patch/regen execution state, and graph trace summary", async () => {
     const db = createDbClient();
     const project = await createProject(db, {
       name: "Snapshot Project",
@@ -82,6 +82,30 @@ describe("project snapshot service", () => {
         patch_used: true,
         regenerate_used: false,
       },
+      graphTraceSummaryJson: {
+        nodes: [
+          {
+            node_name: "script-generate",
+            input_ref: "script-input-bundle:topic-yanzi",
+            output_ref: "script-draft:current",
+            failure_reason: null,
+          },
+          {
+            node_name: "semantic-review",
+            input_ref: "script-local-validation:current",
+            output_ref: "script-semantic-review:current",
+            failure_reason: null,
+          },
+        ],
+      },
+      runtimeDiagnosticsJson: {
+        checks: [
+          {
+            code: "semantic_review_passed",
+            level: "info",
+          },
+        ],
+      },
     });
 
     project.activeScriptRecordId = scriptRecord.id;
@@ -104,6 +128,30 @@ describe("project snapshot service", () => {
         execution_state: {
           patch_used: true,
           regenerate_used: false,
+        },
+        graph_trace_summary: {
+          nodes: [
+            {
+              node_name: "script-generate",
+              input_ref: "script-input-bundle:topic-yanzi",
+              output_ref: "script-draft:current",
+              failure_reason: null,
+            },
+            {
+              node_name: "semantic-review",
+              input_ref: "script-local-validation:current",
+              output_ref: "script-semantic-review:current",
+              failure_reason: null,
+            },
+          ],
+        },
+        runtime_diagnostics: {
+          checks: [
+            {
+              code: "semantic_review_passed",
+              level: "info",
+            },
+          ],
         },
       },
     });

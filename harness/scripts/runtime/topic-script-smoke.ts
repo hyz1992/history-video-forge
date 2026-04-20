@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { buildApp } from "../../../backend/src/app";
+import { mergeGraphTraceSummaries } from "../../../backend/src/runtime/orchestration/graph-trace";
 
 export interface TopicScriptSmokeSample {
   sample_id: string;
@@ -37,6 +38,14 @@ export interface RunTopicScriptSmokeResult {
     sampleId: string;
     projectId: string;
     outputDir: string;
+    graphTraceSummary: {
+      nodes: Array<{
+        node_name: string;
+        input_ref: string | null;
+        output_ref: string | null;
+        failure_reason: string | null;
+      }>;
+    };
   };
 }
 
@@ -114,6 +123,18 @@ export async function runTopicScriptSmoke(
     "semantic-review-result.json",
     scriptBody.semantic_review,
   );
+  const graphTraceSummary = mergeGraphTraceSummaries(
+    recommendationBody.graph_trace_summary,
+    scriptBody.graph_trace_summary,
+  );
+  const runtimeDiagnostics = {
+    checks: [
+      ...(recommendationBody.runtime_diagnostics?.checks ?? []),
+      ...(scriptBody.runtime_diagnostics?.checks ?? []),
+    ],
+  };
+  writeJson(finalOutputDir, "graph-trace-summary.json", graphTraceSummary);
+  writeJson(finalOutputDir, "runtime-diagnostics.json", runtimeDiagnostics);
 
   const generatedAt = new Date().toISOString();
   const status = {
@@ -123,6 +144,7 @@ export async function runTopicScriptSmoke(
     sampleId: sample.sample_id,
     projectId,
     outputDir: finalOutputDir,
+    graphTraceSummary,
   };
 
   writeJson(finalOutputDir, "status.json", status);
@@ -136,6 +158,13 @@ export async function runTopicScriptSmoke(
       `- generated_at: ${generatedAt}`,
       "- flow: create-project -> topic-recommendations -> topic-confirm -> script-generate",
       `- output_dir: ${finalOutputDir}`,
+      "",
+      "## Graph Summary",
+      "",
+      ...graphTraceSummary.nodes.map(
+        (node) =>
+          `- ${node.node_name}: ${node.input_ref ?? "null"} -> ${node.output_ref ?? "null"}`,
+      ),
       "",
       "## 说明",
       "",

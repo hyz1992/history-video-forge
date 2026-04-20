@@ -14,6 +14,11 @@ import {
   type ScriptRunGraphDependencies,
   type ScriptRunGraphRuntime,
 } from "./script-run-nodes.js";
+import {
+  createGraphTraceSummary,
+  type GraphTraceNodeSummary,
+} from "./graph-trace.js";
+import { createRuntimeDiagnosticsSummary } from "./runtime-diagnostics.js";
 
 export interface RunScriptRunGraphInput {
   bundle: ScriptRunGraphRuntime["bundle"];
@@ -128,6 +133,23 @@ export async function runScriptRunGraph(
           patch_intent: runtime.lastPatchIntent,
         }
       : semanticReview;
+  const traceNodes: GraphTraceNodeSummary[] = [
+    {
+      node_name: "script-generate",
+      input_ref: `script-input-bundle:${input.bundle.topic_package.topic_id}`,
+      output_ref: "script-draft:current",
+      failure_reason: null,
+    },
+    {
+      node_name: "semantic-review",
+      input_ref: "script-local-validation:current",
+      output_ref: "script-semantic-review:current",
+      failure_reason:
+        finalSemanticReview.decision === "hard_fail"
+          ? finalSemanticReview.summary
+          : null,
+    },
+  ];
 
   return {
     draft: runtime.draft,
@@ -137,5 +159,16 @@ export async function runScriptRunGraph(
       patch_used: finalState.patch_used,
       regenerate_used: finalState.regenerate_used,
     },
+    graphTraceSummary: createGraphTraceSummary(traceNodes),
+    runtimeDiagnostics: createRuntimeDiagnosticsSummary([
+      {
+        code:
+          finalSemanticReview.decision === "pass"
+            ? "semantic_review_passed"
+            : finalSemanticReview.decision,
+        level:
+          finalSemanticReview.decision === "hard_fail" ? "error" : "info",
+      },
+    ]),
   };
 }

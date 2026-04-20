@@ -8,6 +8,8 @@ import {
   type TopicRecommendationGraphDependencies,
   type TopicRecommendationGraphRuntime,
 } from "./topic-recommendation-nodes.js";
+import { createGraphTraceSummary } from "./graph-trace.js";
+import { createRuntimeDiagnosticsSummary } from "./runtime-diagnostics.js";
 
 const TopicRecommendationGraphStateSchema = z.object({
   node_name: z.enum(["topic-candidate-generate"]).nullable(),
@@ -54,8 +56,12 @@ export async function runTopicRecommendationGraph(
 
   return {
     candidates: runtime.candidates,
-    trace: {
-      nodes: [finalState],
-    },
+    trace: createGraphTraceSummary([finalState]),
+    diagnostics: createRuntimeDiagnosticsSummary([
+      {
+        code: "topic_candidate_generate_passed",
+        level: "info",
+      },
+    ]),
   };
 }

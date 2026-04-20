@@ -48,6 +48,8 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
             patch_used: false,
             regenerate_used: false,
           },
+          graph_trace_summary: scriptRecord.graphTraceSummaryJson,
+          runtime_diagnostics: scriptRecord.runtimeDiagnosticsJson,
         }
       : null,
   };

@@ -106,6 +106,8 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
     localValidation,
     semanticReview,
     executionState,
+    graphTraceSummary,
+    runtimeDiagnostics,
   } = await runScriptRunGraph(
     {
       bundle: inputBundle,
@@ -134,6 +136,8 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
     validationResultJson: localValidation as Record<string, unknown>,
     semanticReviewResultJson: semanticReview as Record<string, unknown>,
     executionStateJson: executionState,
+    graphTraceSummaryJson: graphTraceSummary as Record<string, unknown>,
+    runtimeDiagnosticsJson: runtimeDiagnostics as Record<string, unknown>,
   });
 
   input.project.activeScriptRecordId = scriptRecord.id;
@@ -151,6 +155,8 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
       draft,
       local_validation: localValidation,
       semantic_review: semanticReview,
+      graph_trace_summary: graphTraceSummary,
+      runtime_diagnostics: runtimeDiagnostics,
     },
   };
 }
