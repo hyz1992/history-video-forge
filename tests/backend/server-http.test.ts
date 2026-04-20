@@ -1,0 +1,92 @@
+import { afterEach, describe, expect, it } from "vitest";
+import type { Server } from "node:http";
+
+import { createHttpServer } from "../../backend/src/server.js";
+
+async function listen(server: Server) {
+  await new Promise<void>((resolve, reject) => {
+    server.listen(0, "127.0.0.1", (error?: Error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    });
+  });
+
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    throw new Error("server_address_unavailable");
+  }
+
+  return address.port;
+}
+
+async function close(server: Server) {
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    });
+  });
+}
+
+describe("backend http server", () => {
+  const servers: Server[] = [];
+
+  afterEach(async () => {
+    while (servers.length > 0) {
+      const server = servers.pop();
+      if (server) {
+        await close(server);
+      }
+    }
+  });
+
+  it("exposes the app healthcheck over real HTTP", async () => {
+    const server = createHttpServer();
+    servers.push(server);
+    const port = await listen(server);
+
+    const response = await fetch(`http://127.0.0.1:${port}/healthz`);
+    const body = (await response.json()) as {
+      status: string;
+      nodeEnv: string;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      status: "ok",
+      nodeEnv: expect.any(String),
+    });
+  });
+
+  it("accepts JSON requests for the existing API routes", async () => {
+    const server = createHttpServer();
+    servers.push(server);
+    const port = await listen(server);
+
+    const response = await fetch(`http://127.0.0.1:${port}/api/projects`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "HTTP Server Contract",
+      }),
+    });
+    const body = (await response.json()) as {
+      project_id: string;
+      current_status: string;
+    };
+
+    expect(response.status).toBe(201);
+    expect(body.project_id).toBeTypeOf("string");
+    expect(body.current_status).toBe("topic_pending");
+  });
+});

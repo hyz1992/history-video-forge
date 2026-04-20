@@ -18,7 +18,7 @@ import {
   topicStoreKey,
 } from "./stores/topic";
 
-const router = createAppRouter();
+const router = createAppRouter("web");
 const projectStore = createProjectStore(createFetchProjectApi());
 const topicStore = createTopicStore({
   projectStore,

@@ -15,6 +15,8 @@
     "shared"
   ],
   "scripts": {
+    "dev:backend": "node --import tsx backend/src/server.ts",
+    "dev:frontend": "vite --config frontend/vite.config.ts",
     "test": "vitest run",
     "test:harness:topic-script-regression": "vitest run tests/harness/topic-script-regression.test.ts",
     "harness:topic-script-live-check": "tsx harness/scripts/runtime/topic-script-live-check.ts"
@@ -27,6 +29,7 @@
     "jsdom": "^26.1.0",
     "tsx": "^4.20.6",
     "typescript": "^5.8.3",
+    "vite": "^7.3.2",
     "vitest": "^3.2.4"
   }
 }
