@@ -2,8 +2,8 @@
 
 ## 状态
 - [x] 第三阶段实施计划已起草完成
-- [x] 第三阶段 `Task 0` 已完成
-- [ ] 准备执行第三阶段 `Task 1`
+- [x] 第三阶段 `Task 0` 至 `Task 8` 已完成
+- [ ] 待补一次真实 `.env` 下的 live check 结果
 
 ## 对应计划
 - [2026-04-19-topic-script-phase-3-implementation-plan.md](../plans/2026-04-19-topic-script-phase-3-implementation-plan.md)
@@ -71,11 +71,11 @@
 - [x] Step 2：运行 `npm test -- tests/harness/topic-script-live-check.test.ts` 并确认红灯
 - [x] Step 3：实现 `topic-script-live-check.ts`，并补 `README`、package script 与 live checklist
 - [x] Step 4：重跑 `npm test -- tests/harness/topic-script-live-check.test.ts` 并确认绿灯
-- [ ] Step 5：提交 `建立真实巡检与发布门禁`
+- [x] Step 5：提交 `建立真实巡检与发布门禁`
 
 ### Task 8：完成第三阶段收口检查
-- [ ] Step 1：运行第三阶段全量验证并记录剩余缺口
-- [ ] Step 2：修复阻碍第三阶段完成的最小问题
-- [ ] Step 3：更新 `topic-script-phase-3-todo.md`、`roadmap-todo.md` 与结论文档
-- [ ] Step 4：重跑 `npm test` 并确认全绿
+- [x] Step 1：运行第三阶段全量验证并记录剩余缺口
+- [x] Step 2：修复阻碍第三阶段完成的最小问题
+- [x] Step 3：更新 `topic-script-phase-3-todo.md`、`roadmap-todo.md` 与结论文档
+- [x] Step 4：重跑 `npm test` 并确认全绿
 - [ ] Step 5：提交 `完成第三阶段收口检查`

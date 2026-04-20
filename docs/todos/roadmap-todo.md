@@ -31,13 +31,19 @@
 - [x] 完成第二阶段 `Task 7`：打通 Topic 页面到 Script 页面的真实主链路状态切换
 - [x] 完成第二阶段 `Task 8`：升级 runtime harness 为双层回归
 - [x] 完成第二阶段 `Task 9`：完成第二阶段收口检查
+- [x] 完成第三阶段 `Task 1`：引入 LangGraph 基础依赖与 orchestration scaffold
+- [x] 完成第三阶段 `Task 2`：把 script 执行主链路迁入 LangGraph
+- [x] 完成第三阶段 `Task 3`：收口 topic recommendation 的 graph-compatible 运行语义
+- [x] 完成第三阶段 `Task 4`：贯通 graph trace / diagnostics / execution snapshot
+- [x] 完成第三阶段 `Task 5`：运行时硬化与模型治理
+- [x] 完成第三阶段 `Task 6`：实现 frontend script workspace 的生产化最小闭环
+- [x] 完成第三阶段 `Task 7`：升级 harness live regression 与 release gate
+- [x] 完成第三阶段 `Task 8`：完成第三阶段自动化收口检查
 
 ## 进行中
-- [x] 完成第三阶段 `Task 0`：冻结第三阶段执行边界
-- [ ] 准备执行第三阶段 `Task 1`
+- [ ] 补记一次第三阶段真实 `.env` 下的 live check 结果
 
 ## 待做
-- [ ] 按顺序执行第三阶段剩余任务：`Task 1` 至 `Task 8`
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 细化 Event Registry 匹配阈值
 - [ ] 细化 Candidate Cache 生命周期
