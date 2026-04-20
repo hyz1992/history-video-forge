@@ -29,13 +29,13 @@
 - [x] Step 2：运行 `npm test -- tests/backend/runtime/topic-script-graph.test.ts` 并确认红灯
 - [x] Step 3：实现 `graph-state.ts`、`topic-script-graph.ts`、`graph-node-contract.ts` 与 LangGraph 基础依赖
 - [x] Step 4：重跑 `npm test -- tests/backend/runtime/topic-script-graph.test.ts` 并确认绿灯
-- [ ] Step 5：提交 `建立第三阶段编排图基础骨架`
+- [x] Step 5：提交 `建立第三阶段编排图基础骨架`
 
 ### Task 2：把 script 执行主链路迁入 LangGraph
-- [ ] Step 1：新增 `tests/backend/script/script-graph-run.test.ts`
-- [ ] Step 2：运行 `npm test -- tests/backend/script/script-graph-run.test.ts tests/backend/api/script-review-actions.test.ts tests/backend/api/script-generate-runtime.test.ts` 并确认红灯
-- [ ] Step 3：实现 `script-run-graph.ts`、`script-run-nodes.ts`，并让 `script-run.service.ts` 改为调用 graph runner
-- [ ] Step 4：重跑 `npm test -- tests/backend/script/script-graph-run.test.ts tests/backend/api/script-review-actions.test.ts tests/backend/api/script-generate-runtime.test.ts` 并确认绿灯
+- [x] Step 1：新增 `tests/backend/script/script-graph-run.test.ts`
+- [x] Step 2：运行 `npm test -- tests/backend/script/script-graph-run.test.ts tests/backend/api/script-review-actions.test.ts tests/backend/api/script-generate-runtime.test.ts` 并确认红灯
+- [x] Step 3：实现 `script-run-graph.ts`、`script-run-nodes.ts`，并让 `script-run.service.ts` 改为调用 graph runner
+- [x] Step 4：重跑 `npm test -- tests/backend/script/script-graph-run.test.ts tests/backend/api/script-review-actions.test.ts tests/backend/api/script-generate-runtime.test.ts` 并确认绿灯
 - [ ] Step 5：提交 `将脚本执行主链路迁入编排图`
 
 ### Task 3：收口 topic recommendation 的 graph-compatible 运行语义
