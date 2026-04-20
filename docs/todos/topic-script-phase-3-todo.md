@@ -25,10 +25,10 @@
 - [x] Step 5：提交 `冻结第三阶段执行边界`
 
 ### Task 1：引入 LangGraph 基础依赖与 orchestration scaffold
-- [ ] Step 1：新增 `tests/backend/runtime/topic-script-graph.test.ts`
-- [ ] Step 2：运行 `npm test -- tests/backend/runtime/topic-script-graph.test.ts` 并确认红灯
-- [ ] Step 3：实现 `graph-state.ts`、`topic-script-graph.ts`、`graph-node-contract.ts` 与 LangGraph 基础依赖
-- [ ] Step 4：重跑 `npm test -- tests/backend/runtime/topic-script-graph.test.ts` 并确认绿灯
+- [x] Step 1：新增 `tests/backend/runtime/topic-script-graph.test.ts`
+- [x] Step 2：运行 `npm test -- tests/backend/runtime/topic-script-graph.test.ts` 并确认红灯
+- [x] Step 3：实现 `graph-state.ts`、`topic-script-graph.ts`、`graph-node-contract.ts` 与 LangGraph 基础依赖
+- [x] Step 4：重跑 `npm test -- tests/backend/runtime/topic-script-graph.test.ts` 并确认绿灯
 - [ ] Step 5：提交 `建立第三阶段编排图基础骨架`
 
 ### Task 2：把 script 执行主链路迁入 LangGraph
