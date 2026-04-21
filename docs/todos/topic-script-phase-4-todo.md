@@ -4,8 +4,9 @@
 
 - [x] 第四阶段最终设计已冻结
 - [x] 第四阶段实施计划已完成
-- [ ] 第四阶段 `Task 0` 正在收口，待提交文档入口
-- [ ] 第四阶段 `Task 1` 至 `Task 8` 尚未开始
+- [x] 第四阶段 `Task 0` 已收口
+- [x] 第四阶段 `Task 1` 已完成
+- [ ] 第四阶段 `Task 2` 至 `Task 8` 尚未开始
 
 ## 对应设计
 
@@ -30,15 +31,15 @@
 - [x] Step 2：确认设计文档包含 `project_id / 草稿项目 / 正式项目 / step trace / 可读目录 / 自动开始生成`
 - [x] Step 3：重写第四阶段实施计划与执行清单，并统一切到 `2026-04-21` 版文档入口
 - [x] Step 4：运行 `powershell -NoProfile -Command "Select-String -Path docs/todos/topic-script-phase-4-todo.md,docs/todos/roadmap-todo.md -Pattern '2026-04-21-topic-script-phase-4-design|2026-04-21-topic-script-phase-4-implementation-plan' -Encoding UTF8"` 并确认命中
-- [ ] Step 5：提交第四阶段最终方案文档
+- [x] Step 5：提交第四阶段最终方案文档
 
 ### Task 1：建立首页、项目列表与项目驱动路由骨架
 
-- [ ] Step 1：先写 `tests/frontend/topic-page.spec.ts` 与 `tests/frontend/topic-to-script-flow.spec.ts` 的失败用例
-- [ ] Step 2：运行 `npm test -- tests/frontend/topic-page.spec.ts tests/frontend/topic-to-script-flow.spec.ts` 并确认红灯
-- [ ] Step 3：做首页、我的项目、项目工作区三层路由的最小实现
-- [ ] Step 4：运行 `npm test -- tests/frontend/topic-page.spec.ts tests/frontend/topic-to-script-flow.spec.ts` 并确认绿灯
-- [ ] Step 5：提交 `Task 1`
+- [x] Step 1：先写 `tests/frontend/topic-page.spec.ts` 与 `tests/frontend/topic-to-script-flow.spec.ts` 的失败用例
+- [x] Step 2：运行 `npm test -- tests/frontend/topic-page.spec.ts tests/frontend/topic-to-script-flow.spec.ts` 并确认红灯
+- [x] Step 3：做首页、我的项目、项目工作区三层路由的最小实现
+- [x] Step 4：运行 `npm test -- tests/frontend/topic-page.spec.ts tests/frontend/topic-to-script-flow.spec.ts` 并确认绿灯
+- [x] Step 5：提交 `Task 1`
 
 ### Task 2：接入项目态 topic 工作区与多轮候选历史
 

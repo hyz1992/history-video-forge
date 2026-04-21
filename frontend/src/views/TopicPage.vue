@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { inject, watch } from "vue";
-import { routerKey, type Router } from "vue-router";
+import { onMounted, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
 import TopicCandidateDrawer from "../components/topic/TopicCandidateDrawer.vue";
 import TopicCandidateList from "../components/topic/TopicCandidateList.vue";
@@ -10,13 +10,38 @@ import { useTopicStore } from "../stores/topic";
 
 const projectStore = useProjectStore();
 const topicStore = useTopicStore();
-const router = inject<Router | null>(routerKey, null);
+const route = useRoute();
+const router = useRouter();
+
+onMounted(() => {
+  const projectId = route.params.projectId;
+  if (typeof projectId !== "string" || !projectId) {
+    return;
+  }
+
+  if (projectStore.state.projectId === projectId) {
+    return;
+  }
+
+  projectStore.syncProject({
+    project_id: projectId,
+    current_status: projectStore.state.currentStatus,
+  });
+});
 
 watch(
-  () => projectStore.state.currentStatus,
+  () => [projectStore.state.projectId, projectStore.state.currentStatus] as const,
   async (status) => {
-    if (status === "script_ready" && router && router.currentRoute.value.path !== "/script") {
-      await router.push("/script");
+    const [projectId, currentStatus] = status;
+    if (!projectId) {
+      return;
+    }
+
+    if (currentStatus === "script_ready") {
+      const nextPath = projectStore.resolveProjectWorkspacePath(projectId, currentStatus);
+      if (router.currentRoute.value.path !== nextPath) {
+        await router.push(nextPath);
+      }
     }
   },
 );

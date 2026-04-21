@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted } from "vue";
+import { useRoute } from "vue-router";
 
 import ScriptDraftPanel from "../components/script/ScriptDraftPanel.vue";
 import ScriptHistoryPanel from "../components/script/ScriptHistoryPanel.vue";
@@ -11,6 +12,7 @@ import { useScriptStore } from "../stores/script";
 
 const projectStore = useProjectStore();
 const scriptStore = useScriptStore();
+const route = useRoute();
 
 const selectedHistoryEntry = computed(() =>
   scriptStore.state.history.find(
@@ -23,6 +25,14 @@ const visibleScript = computed(
 );
 
 onMounted(async () => {
+  const projectId = route.params.projectId;
+  if (typeof projectId === "string" && projectId && projectStore.state.projectId !== projectId) {
+    projectStore.syncProject({
+      project_id: projectId,
+      current_status: "script_ready",
+    });
+  }
+
   await scriptStore.loadActiveScriptSnapshot();
 });
 </script>

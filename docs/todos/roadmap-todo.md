@@ -40,9 +40,10 @@
 - [x] 完成第三阶段 `Task 7`：升级 harness live regression 与 release gate
 - [x] 完成第三阶段 `Task 8`：完成第三阶段自动化收口检查
 - [x] 完成第三阶段真实 `.env` live check：官方 family set 两个样本均通过
+- [x] 完成第四阶段 `Task 0`：冻结第四阶段项目驱动方案文档入口
+- [x] 完成第四阶段 `Task 1`：建立首页、我的项目与项目驱动工作区骨架
 
 ## 进行中
-- [ ] 启动第四阶段 `Task 1`：建立首页、我的项目与项目驱动工作区骨架
 - [ ] 细化 `family_confidence` 计算规则
 ## 待做
 - [ ] 细化 Event Registry 匹配阈值

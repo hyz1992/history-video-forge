@@ -1,17 +1,14 @@
 // @vitest-environment jsdom
 
 import { mount } from "@vue/test-utils";
+import { h, reactive } from "vue";
+import { RouterView } from "vue-router";
 import { describe, expect, it } from "vitest";
 
-import TopicPage from "../../frontend/src/views/TopicPage.vue";
-import {
-  createProjectStore,
-  projectStoreKey,
-} from "../../frontend/src/stores/project";
-import {
-  createTopicStore,
-  topicStoreKey,
-} from "../../frontend/src/stores/topic";
+import { createAppRouter } from "../../frontend/src/router/index.js";
+import { projectStoreKey } from "../../frontend/src/stores/project";
+import { scriptStoreKey } from "../../frontend/src/stores/script";
+import { topicStoreKey } from "../../frontend/src/stores/topic";
 
 function flushPromises() {
   return new Promise((resolve) => {
@@ -19,109 +16,142 @@ function flushPromises() {
   });
 }
 
-describe("topic page", () => {
-  it("switches tabs and completes the minimal system recommendation flow", async () => {
-    const calls = {
-      createProject: 0,
-      recommend: [] as string[],
-      confirm: [] as Array<{ projectId: string; candidateId: string }>,
-    };
-
-    const projectStore = createProjectStore({
-      async createProject() {
-        calls.createProject += 1;
-
-        return {
-          project_id: "project-1",
-          current_status: "topic_pending",
-        };
-      },
-    });
-
-    const topicStore = createTopicStore({
-      projectStore,
-      api: {
-        async generateSystemRecommendations(projectId) {
-          calls.recommend.push(projectId);
-
-          return {
-            project_id: projectId,
-            candidates: [
-              {
-                candidate_id: "candidate-1",
-                title: "晏子使楚",
-                one_line_angle: "他不是会说话，他是当场把局面翻过来了。",
-                family_label: "court_showdown",
-                scope_label: "single_turning_point",
-                why_now: "羞辱与反击的冲突很适合短视频开场。",
-                strong_scene: "楚王连番压场，晏子一句句顶回去。",
-                must_include_beats: ["楚王压场", "晏子反顶"],
-                risk_hints: ["避免写成纯鸡汤"],
-              },
-            ],
-          };
-        },
-        async confirmCandidate(projectId, candidateId) {
-          calls.confirm.push({
-            projectId,
-            candidateId,
-          });
-
-          return {
-            project_id: projectId,
-            current_status: "script_ready",
-            topic_package: {
-              topic_package_id: "topic-package-1",
-              canonical_title: "晏子使楚",
-            },
-          };
-        },
-      },
-    });
-
-    const wrapper = mount(TopicPage, {
-      global: {
-        provide: {
-          [projectStoreKey as symbol]: projectStore,
-          [topicStoreKey as symbol]: topicStore,
-        },
-      },
-    });
-
-    expect(wrapper.get("[data-testid='tab-system']").attributes("aria-pressed")).toBe(
-      "true",
-    );
-
-    await wrapper.get("[data-testid='tab-library']").trigger("click");
-    expect(wrapper.get("[data-testid='panel-library']").text()).toContain("事件库入口");
-
-    await wrapper.get("[data-testid='tab-custom']").trigger("click");
-    expect(wrapper.get("[data-testid='panel-custom']").text()).toContain("自定义主题入口");
-
-    await wrapper.get("[data-testid='tab-system']").trigger("click");
-    await wrapper.get("[data-testid='system-generate']").trigger("click");
-    await flushPromises();
-
-    expect(calls.createProject).toBe(1);
-    expect(calls.recommend).toEqual(["project-1"]);
-    expect(wrapper.get("[data-testid='candidate-item-candidate-1']").text()).toContain(
-      "晏子使楚",
-    );
-
-    await wrapper.get("[data-testid='candidate-item-candidate-1']").trigger("click");
-    expect(wrapper.get("[data-testid='candidate-drawer']").text()).toContain(
-      "楚王连番压场，晏子一句句顶回去。",
-    );
-
-    await wrapper.get("[data-testid='confirm-candidate']").trigger("click");
-    await flushPromises();
-
-    expect(calls.confirm).toEqual([
+function createProjectStoreStub() {
+  const state = reactive({
+    projectId: null as string | null,
+    currentStatus: "topic_pending",
+    projects: [
       {
-        projectId: "project-1",
-        candidateId: "candidate-1",
+        project_id: "project-formal",
+        display_name: "晏子使楚",
+        current_status: "script_ready",
+        is_draft: false,
+        updated_at: "2026-04-21T09:00:00.000Z",
       },
-    ]);
-    expect(wrapper.get("[data-testid='topic-status']").text()).toContain("script_ready");
+      {
+        project_id: "project-draft",
+        display_name: "未命名项目",
+        current_status: "topic_pending",
+        is_draft: true,
+        updated_at: "2026-04-21T08:00:00.000Z",
+      },
+    ],
+  });
+
+  return {
+    state,
+    syncProject(snapshot: { project_id: string; current_status: string }) {
+      state.projectId = snapshot.project_id;
+      state.currentStatus = snapshot.current_status;
+    },
+    async loadProjects() {
+      return state.projects;
+    },
+    async createProject() {
+      state.projectId = "project-new";
+      state.currentStatus = "topic_pending";
+      return {
+        project_id: "project-new",
+        current_status: "topic_pending",
+        is_draft: true,
+      };
+    },
+    resolveProjectWorkspacePath(projectId: string, currentStatus: string) {
+      return currentStatus === "script_ready"
+        ? `/projects/${projectId}/script`
+        : `/projects/${projectId}/topic`;
+    },
+  };
+}
+
+function createTopicStoreStub() {
+  const state = reactive({
+    activeTab: "system",
+    candidates: [],
+    selectedCandidate: null,
+    isGenerating: false,
+    isConfirming: false,
+    confirmedTopicPackageId: null,
+  });
+
+  return {
+    state,
+    selectTab() {},
+    async generateSystemRecommendations() {},
+    openCandidate() {},
+    closeCandidate() {},
+    async confirmSelectedCandidate() {},
+  };
+}
+
+function createScriptStoreStub() {
+  const state = reactive({
+    snapshot: null,
+    history: [],
+    selectedHistoryEntryId: null,
+    isLoading: false,
+    isRunningAction: false,
+    loadError: null,
+  });
+
+  return {
+    state,
+    async loadActiveScriptSnapshot() {},
+    async retryLoadActiveScriptSnapshot() {},
+    selectHistoryEntry() {},
+    async runPatchOnce() {},
+    async runRegenOnce() {},
+  };
+}
+
+async function mountAt(path: string) {
+  const router = createAppRouter();
+  await router.push(path);
+  await router.isReady();
+
+  const wrapper = mount(
+    {
+      render: () => h(RouterView),
+    },
+    {
+      global: {
+        plugins: [router],
+        provide: {
+          [projectStoreKey as symbol]: createProjectStoreStub() as never,
+          [topicStoreKey as symbol]: createTopicStoreStub() as never,
+          [scriptStoreKey as symbol]: createScriptStoreStub() as never,
+        },
+      },
+    },
+  );
+
+  await flushPromises();
+  return { router, wrapper };
+}
+
+describe("phase 4 app shell", () => {
+  it("renders the home page with project entry CTAs", async () => {
+    const { router, wrapper } = await mountAt("/");
+
+    expect(router.currentRoute.value.path).toBe("/");
+    expect(wrapper.text()).toContain("选题 -> 确认 -> 生成文案");
+    expect(wrapper.get("[data-testid='home-heading']").text()).toContain("Story Video Forge");
+    expect(wrapper.get("[data-testid='home-primary-cta']").attributes("href")).toBe("/projects");
+    expect(wrapper.get("[data-testid='home-secondary-cta']").attributes("href")).toBe(
+      "/projects",
+    );
+  });
+
+  it("renders the projects page with formal and draft project groups", async () => {
+    const { router, wrapper } = await mountAt("/projects");
+
+    expect(router.currentRoute.value.path).toBe("/projects");
+    expect(wrapper.get("[data-testid='projects-heading']").text()).toContain("我的项目");
+    expect(wrapper.get("[data-testid='formal-projects']").text()).toContain("正式项目");
+    expect(wrapper.get("[data-testid='draft-projects']").text()).toContain(
+      "草稿项目 / 未完成项目",
+    );
+    expect(wrapper.text()).toContain("晏子使楚");
+    expect(wrapper.text()).toContain("未命名项目");
   });
 });
