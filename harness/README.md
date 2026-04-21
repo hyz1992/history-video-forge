@@ -93,6 +93,9 @@ runtime harness 在当前阶段属于 **P0**：
 - `detect-duplicate-prompts.ts`
 - `runtime/run-topic-to-script-sample.ts`
 - `runtime/topic-script-smoke.ts`
+- `ui-acceptance/ui-acceptance-smoke.ts`
+- `ui-acceptance/ui-acceptance-full.ts`
+- `ui-acceptance/ui-acceptance-report.ts`
 
 ### `harness/samples/`
 
@@ -172,3 +175,29 @@ runtime harness 在当前阶段属于 **P0**：
   - 仅生成 live check 计划，不实际执行样本。
 - live check 输出应至少覆盖 graph trace、runtime diagnostics 与 script artifact。
 - live check 只作为人工巡检入口，不替代自动化稳定回归。
+
+## UI Acceptance Entry
+
+- `npm run harness:ui-acceptance:smoke`
+  - 自动启动 backend / frontend，使用 Chromium 跑单主链路，并输出首页、项目页、topic、script 的截图、trace、summary。
+- `npm run harness:ui-acceptance:full`
+  - 在 `smoke` 基础上覆盖 `regen_once`、返回 topic、再次确认主题、再次进入 script 的完整链路。
+- `npm run harness:ui-acceptance:report`
+  - 读取最近一次 UI acceptance 的 `summary.json`，输出可读摘要，不重跑浏览器。
+
+### UI Acceptance Output
+
+- 输出目录：`harness/scripts/runtime/output/ui-acceptance/<run-id>/`
+- 关键产物至少包括：
+  - `summary.json`
+  - `screenshots/`
+  - `trace.zip`
+  - `console-summary.json`
+  - `network-summary.json`
+
+### 当前结论
+
+- UI acceptance 机制已作为仓库内正式能力接入。
+- 当前最新 `smoke / full` 命令可稳定运行并生成产物。
+- 当前页面规则结论仍可能是 `FAIL`；最新已知阻塞为 `topic-history-section`。
+- 详细收口记录见 `docs/records/2026-04-21-ui-acceptance-conclusions.md`。
