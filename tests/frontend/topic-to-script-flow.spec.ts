@@ -290,5 +290,7 @@ describe("phase 4 project routing", () => {
     expect(router.currentRoute.value.path).toBe("/projects/project-1/script");
     expect(calls.loadSnapshot).toBe(1);
     expect(calls.generateInitialScript).toBe(1);
+    expect(wrapper.get("[data-testid='script-page-header']").text()).toContain("文案工作区");
+    expect(wrapper.get("[data-testid='script-trace-entry']").text()).toContain("查看运行详情");
   });
 });

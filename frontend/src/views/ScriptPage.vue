@@ -78,8 +78,20 @@ async function confirmReturnToTopic() {
 
 <template>
   <section class="script-page">
-    <header>
-      <h1>脚本页最小闭环</h1>
+    <header class="script-page-header">
+      <div>
+        <p class="script-kicker">Project Workspace</p>
+        <h1 data-testid="script-page-header">文案工作区</h1>
+        <p class="script-page-summary">围绕当前文案、风险判断、可执行动作和运行追踪展开审阅。</p>
+      </div>
+
+      <button
+        type="button"
+        data-testid="return-topic"
+        @click="requestReturnToTopic"
+      >
+        返回选题
+      </button>
     </header>
 
     <ScriptStatusPanel
@@ -87,6 +99,11 @@ async function confirmReturnToTopic() {
       :is-loading="scriptStore.state.isLoading"
       :execution-state="visibleScript?.execution_state ?? null"
     />
+
+    <section data-testid="script-trace-entry" class="script-trace-entry">
+      <strong>查看运行详情</strong>
+      <span>graph trace 与 runtime diagnostics 会在文案生成后继续补全。</span>
+    </section>
 
     <section
       v-if="scriptStore.state.loadError"
@@ -105,14 +122,11 @@ async function confirmReturnToTopic() {
     </section>
 
     <div v-if="visibleScript" class="script-page-body">
-      <section class="script-actions">
-        <button
-          type="button"
-          data-testid="return-topic"
-          @click="requestReturnToTopic"
-        >
-          返回选题
-        </button>
+      <section data-testid="script-action-panel" class="script-action-panel">
+        <div>
+          <h2>可执行动作</h2>
+          <p>保留返回选题、patch_once、regen_once 的最小操作闭环。</p>
+        </div>
         <button
           v-if="isReturnTopicConfirmationVisible"
           type="button"
@@ -122,17 +136,46 @@ async function confirmReturnToTopic() {
           确认返回选题
         </button>
       </section>
-      <ScriptDraftPanel :active-script="visibleScript" />
-      <ScriptReviewPanel
-        :active-script="visibleScript"
-        :is-running-action="scriptStore.state.isRunningAction"
-        @patch-once="scriptStore.runPatchOnce"
-        @regen-once="scriptStore.runRegenOnce"
-      />
-      <ScriptTracePanel
-        :graph-trace-summary="visibleScript.graph_trace_summary ?? null"
-        :runtime-diagnostics="visibleScript.runtime_diagnostics ?? null"
-      />
+
+      <section data-testid="script-main-panel" class="script-main-panel">
+        <div>
+          <h2>当前文案</h2>
+          <p>当前版本优先展示，必要时可切换历史版本查看。</p>
+        </div>
+        <ScriptDraftPanel :active-script="visibleScript" />
+      </section>
+
+      <section data-testid="script-risk-panel" class="script-risk-panel">
+        <h2>风险</h2>
+        <p>审校结论：{{ visibleScript.review_decision }}</p>
+        <p>补丁意图：{{ visibleScript.patch_intent ?? "无" }}</p>
+        <p>
+          执行状态：
+          patch={{ visibleScript.execution_state?.patch_used ? "已使用" : "未使用" }} /
+          regen={{ visibleScript.execution_state?.regenerate_used ? "已使用" : "未使用" }}
+        </p>
+      </section>
+
+      <section class="script-review-panel-shell">
+        <ScriptReviewPanel
+          :active-script="visibleScript"
+          :is-running-action="scriptStore.state.isRunningAction"
+          @patch-once="scriptStore.runPatchOnce"
+          @regen-once="scriptStore.runRegenOnce"
+        />
+      </section>
+
+      <section class="script-trace-shell">
+        <div class="script-trace-intro">
+          <strong>查看运行详情</strong>
+          <span>graph trace 与 runtime diagnostics 在下方展开。</span>
+        </div>
+        <ScriptTracePanel
+          :graph-trace-summary="visibleScript.graph_trace_summary ?? null"
+          :runtime-diagnostics="visibleScript.runtime_diagnostics ?? null"
+        />
+      </section>
+
       <ScriptHistoryPanel
         :entries="
           scriptStore.state.history.map((entry) => ({
@@ -168,3 +211,74 @@ async function confirmReturnToTopic() {
     </p>
   </section>
 </template>
+
+<style scoped>
+.script-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.script-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.script-kicker,
+.script-page-summary {
+  margin: 0;
+}
+
+.script-kicker {
+  color: #8d6e63;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.script-page-body,
+.script-main-panel,
+.script-risk-panel,
+.script-action-panel,
+.script-review-panel-shell,
+.script-trace-shell {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.script-main-panel,
+.script-risk-panel,
+.script-action-panel,
+.script-review-panel-shell,
+.script-trace-shell {
+  padding: 1rem;
+  border: 1px solid #d7ccc8;
+  background: #fffaf5;
+}
+
+.script-action-panel {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.script-trace-entry {
+  display: grid;
+  gap: 0.25rem;
+  padding: 1rem;
+  border: 1px solid #d7ccc8;
+  background: #fff8f2;
+}
+
+.script-trace-intro {
+  display: grid;
+  gap: 0.25rem;
+}
+
+@media (max-width: 720px) {
+  .script-page-header,
+  .script-action-panel {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+}
+</style>

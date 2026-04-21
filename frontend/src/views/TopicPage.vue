@@ -49,9 +49,17 @@ watch(
 
 <template>
   <section class="topic-page">
-    <header>
-      <h1>主题页最小闭环</h1>
-      <p data-testid="topic-status">当前状态：{{ projectStore.state.currentStatus }}</p>
+    <header class="topic-page-header">
+      <div>
+        <p class="topic-kicker">Project Workspace</p>
+        <h1 data-testid="topic-page-header">选题工作区</h1>
+        <p data-testid="topic-status">当前状态：{{ projectStore.state.currentStatus }}</p>
+      </div>
+
+      <section data-testid="topic-summary" class="topic-summary-panel">
+        <h2>多轮候选</h2>
+        <p>当前轮与候选历史拆开展示，支持从任意轮确认主题。</p>
+      </section>
     </header>
 
     <TopicTabs
@@ -75,6 +83,7 @@ watch(
         class="topic-round-panel"
       >
         <h2>当前轮</h2>
+        <p class="topic-panel-caption">优先查看本轮结果，必要时再回看历史轮。</p>
         <TopicCandidateList
           :candidates="topicStore.state.currentRound.candidates"
           @select="(candidate) => topicStore.openCandidate(candidate, topicStore.state.currentRound?.round_id)"
@@ -93,6 +102,7 @@ watch(
         class="topic-history-panel"
       >
         <h2>候选历史</h2>
+        <p class="topic-panel-caption">保留之前轮次，支持从历史轮直接确认。</p>
 
         <article
           v-for="round in topicStore.state.historyRounds"
@@ -131,3 +141,56 @@ watch(
     />
   </section>
 </template>
+
+<style scoped>
+.topic-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.topic-page-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(16rem, 1fr);
+  gap: 1rem;
+}
+
+.topic-kicker,
+.topic-panel-caption {
+  margin: 0;
+}
+
+.topic-kicker {
+  color: #8d6e63;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.topic-summary-panel,
+.topic-round-panel,
+.topic-history-panel {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid #d7ccc8;
+  background: #fffaf5;
+}
+
+.topic-history-round {
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #efebe9;
+}
+
+.topic-history-candidate {
+  display: grid;
+  gap: 0.25rem;
+  text-align: left;
+}
+
+@media (max-width: 720px) {
+  .topic-page-header {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

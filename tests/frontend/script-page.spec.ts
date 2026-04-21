@@ -109,6 +109,8 @@ describe("script page", () => {
     expect(wrapper.get("[data-testid='script-status']").text()).toContain(
       "script_ready",
     );
+    expect(wrapper.get("[data-testid='script-page-header']").text()).toContain("文案工作区");
+    expect(wrapper.get("[data-testid='script-main-panel']").text()).toContain("当前文案");
     expect(wrapper.get("[data-testid='script-text']").text()).toContain("晏子敢");
     expect(wrapper.get("[data-testid='local-validation']").text()).toContain(
       "script_local_validation",
@@ -116,6 +118,8 @@ describe("script page", () => {
     expect(wrapper.get("[data-testid='semantic-review']").text()).toContain(
       "script_semantic_review",
     );
+    expect(wrapper.get("[data-testid='script-risk-panel']").text()).toContain("风险");
+    expect(wrapper.get("[data-testid='script-trace-entry']").text()).toContain("查看运行详情");
     expect(wrapper.find("[data-testid='patch-once']").exists()).toBe(false);
     expect(wrapper.find("[data-testid='regen-once']").exists()).toBe(false);
   });
@@ -265,6 +269,7 @@ describe("script page", () => {
     expect(calls.regen).toEqual(["project-2"]);
     expect(calls.loadSnapshot).toEqual(["project-2", "project-2", "project-2"]);
     expect(wrapper.get("[data-testid='script-text']").text()).toContain("重生后最终通过");
+    expect(wrapper.get("[data-testid='script-action-panel']").text()).toContain("可执行动作");
     expect(wrapper.get("[data-testid='history-entry-0']").text()).toContain("重生后最终通过");
     expect(wrapper.get("[data-testid='history-entry-1']").text()).toContain("修补后通过");
     expect(wrapper.get("[data-testid='history-entry-2']").text()).toContain("初版脚本");

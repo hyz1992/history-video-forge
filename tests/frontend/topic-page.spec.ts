@@ -141,6 +141,9 @@ describe("phase 4 app shell", () => {
     expect(wrapper.get("[data-testid='home-secondary-cta']").attributes("href")).toBe(
       "/projects",
     );
+    expect(wrapper.get("[data-testid='home-kicker']").text()).toContain("项目驱动");
+    expect(wrapper.get("[data-testid='home-capability-list']").text()).toContain("Topic 候选历史");
+    expect(wrapper.get("[data-testid='home-capability-list']").text()).toContain("Script 运行追踪");
   });
 
   it("renders the projects page with formal and draft project groups", async () => {
@@ -154,6 +157,15 @@ describe("phase 4 app shell", () => {
     );
     expect(wrapper.text()).toContain("晏子使楚");
     expect(wrapper.text()).toContain("未命名项目");
+    expect(wrapper.get("[data-testid='projects-search']").attributes("placeholder")).toContain(
+      "搜索项目",
+    );
+    expect(wrapper.get("[data-testid='project-card-project-formal']").text()).toContain(
+      "继续文案",
+    );
+    expect(wrapper.get("[data-testid='project-card-project-draft']").text()).toContain(
+      "继续选题",
+    );
   });
 });
 
@@ -256,6 +268,8 @@ describe("topic workspace rounds", () => {
       },
     });
 
+    expect(wrapper.get("[data-testid='topic-page-header']").text()).toContain("选题工作区");
+    expect(wrapper.get("[data-testid='topic-summary']").text()).toContain("多轮候选");
     expect(wrapper.get("[data-testid='current-topic-round']").text()).toContain("当前轮主题");
     expect(wrapper.get("[data-testid='topic-history']").text()).toContain("历史轮主题");
 
