@@ -85,4 +85,72 @@ describe("project snapshot api", () => {
       "script_semantic_review",
     );
   });
+
+  it("returns restore metadata for draft and formal projects", async () => {
+    const app = buildApp();
+
+    const projectResponse = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: {
+        name: "Restore Metadata Flow",
+      },
+    });
+    const projectId = projectResponse.json().project_id as string;
+
+    const draftSnapshot = await app.inject({
+      method: "GET",
+      url: `/api/projects/${projectId}`,
+    });
+
+    expect(draftSnapshot.statusCode).toBe(200);
+    expect(draftSnapshot.json()).toMatchObject({
+      project_id: projectId,
+      current_status: "topic_pending",
+      is_draft: true,
+      restore_route: `/projects/${projectId}/topic`,
+      active_topic_package: null,
+      active_script: null,
+    });
+
+    const recommendationResponse = await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectId}/topic/recommendations`,
+      payload: {
+        canonical_name: "晏子使楚",
+        summary: "楚王在公开场合连续压场，晏子当场顶回去。",
+        core_conflict: "楚王当众压场，晏子必须当场顶回。",
+        strong_scene: "楚王连续压场，晏子一句句顶回去。",
+        source_hint: "《晏子春秋》",
+        recent_usage_hint: "近期未出现同 event_id",
+        tags: ["diplomacy", "court", "humiliation", "showdown"],
+      },
+    });
+    const candidateId = recommendationResponse.json().candidates[0].candidate_id as string;
+
+    await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectId}/topic/candidates/${candidateId}/confirm`,
+      payload: {
+        confirm_reason: "user_selected",
+      },
+    });
+
+    const formalSnapshot = await app.inject({
+      method: "GET",
+      url: `/api/projects/${projectId}`,
+    });
+
+    expect(formalSnapshot.statusCode).toBe(200);
+    expect(formalSnapshot.json()).toMatchObject({
+      project_id: projectId,
+      current_status: "script_ready",
+      is_draft: false,
+      restore_route: `/projects/${projectId}/script`,
+      active_topic_package: {
+        topic_package_id: expect.any(String),
+      },
+      active_script: null,
+    });
+  });
 });

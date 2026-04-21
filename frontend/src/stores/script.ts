@@ -45,6 +45,10 @@ export interface ActiveScriptSnapshot {
 export interface ScriptSnapshot {
   project_id: string;
   current_status: string;
+  active_topic_package?: {
+    topic_package_id: string;
+    canonical_title?: string;
+  } | null;
   active_script: ActiveScriptSnapshot | null;
 }
 
@@ -56,6 +60,7 @@ export interface ScriptHistoryEntry {
 
 export interface ScriptApi {
   loadSnapshot(projectId: string): Promise<ScriptSnapshot>;
+  generateInitialScript(projectId: string): Promise<void>;
   runPatchOnce(projectId: string): Promise<void>;
   runRegenOnce(projectId: string): Promise<void>;
 }
@@ -71,6 +76,7 @@ export interface ScriptStoreState {
 
 export interface ScriptStore {
   state: Readonly<ScriptStoreState>;
+  generateInitialScript: () => Promise<void>;
   loadActiveScriptSnapshot: () => Promise<void>;
   retryLoadActiveScriptSnapshot: () => Promise<void>;
   selectHistoryEntry: (entryId: string) => void;
@@ -90,6 +96,18 @@ export function createFetchScriptApi(baseUrl = ""): ScriptApi {
     async loadSnapshot(projectId) {
       const response = await fetch(`${baseUrl}/api/projects/${projectId}`);
       return response.json();
+    },
+    async generateInitialScript(projectId) {
+      await fetch(`${baseUrl}/api/projects/${projectId}/script/generate`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({
+          allow_patch: false,
+          allow_regen: false,
+        }),
+      });
     },
     async runPatchOnce(projectId) {
       await fetch(`${baseUrl}/api/projects/${projectId}/script/generate`, {
@@ -238,6 +256,45 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
     await loadActiveScriptSnapshot();
   }
 
+  async function generateInitialScript() {
+    const projectId = input.projectStore.state.projectId;
+    if (!projectId) {
+      return;
+    }
+
+    state.isLoading = true;
+    state.loadError = null;
+    state.snapshot = {
+      project_id: projectId,
+      current_status: "script_generating",
+      active_topic_package: state.snapshot?.active_topic_package ?? null,
+      active_script: null,
+    };
+    input.projectStore.syncProject({
+      project_id: projectId,
+      current_status: "script_generating",
+    });
+
+    try {
+      await input.api.generateInitialScript(projectId);
+      await loadActiveScriptSnapshot();
+    } catch (error) {
+      state.loadError = toErrorMessage(error);
+      state.snapshot = {
+        project_id: projectId,
+        current_status: "script_failed",
+        active_topic_package: state.snapshot?.active_topic_package ?? null,
+        active_script: null,
+      };
+      input.projectStore.syncProject({
+        project_id: projectId,
+        current_status: "script_failed",
+      });
+    } finally {
+      state.isLoading = false;
+    }
+  }
+
   function selectHistoryEntry(entryId: string) {
     state.selectedHistoryEntryId = entryId;
   }
@@ -274,6 +331,7 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
 
   return {
     state: readonly(state),
+    generateInitialScript,
     loadActiveScriptSnapshot,
     retryLoadActiveScriptSnapshot,
     selectHistoryEntry,

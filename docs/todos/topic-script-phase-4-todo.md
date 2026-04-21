@@ -7,7 +7,8 @@
 - [x] 第四阶段 `Task 0` 已收口
 - [x] 第四阶段 `Task 1` 已完成
 - [x] 第四阶段 `Task 2` 已完成
-- [ ] 第四阶段 `Task 3` 至 `Task 8` 尚未开始
+- [x] 第四阶段 `Task 3` 已完成
+- [ ] 第四阶段 `Task 4` 至 `Task 8` 尚未开始
 
 ## 对应设计
 
@@ -52,11 +53,11 @@
 
 ### Task 3：打通 confirm 后自动 script generate 与项目恢复落点
 
-- [ ] Step 1：先写 `tests/frontend/topic-to-script-flow.spec.ts`、`tests/frontend/script-workspace.spec.ts`、`tests/backend/api/project-snapshot-api.test.ts` 的失败用例
-- [ ] Step 2：运行 `npm test -- tests/frontend/topic-to-script-flow.spec.ts tests/frontend/script-workspace.spec.ts tests/backend/api/project-snapshot-api.test.ts` 并确认红灯
-- [ ] Step 3：做 confirm 后自动生成文案与项目恢复落点的最小实现
-- [ ] Step 4：运行同一组测试并确认绿灯
-- [ ] Step 5：提交 `Task 3`
+- [x] Step 1：先写 `tests/frontend/topic-to-script-flow.spec.ts`、`tests/frontend/script-workspace.spec.ts`、`tests/backend/api/project-snapshot-api.test.ts` 的失败用例
+- [x] Step 2：运行 `npm test -- tests/frontend/topic-to-script-flow.spec.ts tests/frontend/script-workspace.spec.ts tests/backend/api/project-snapshot-api.test.ts` 并确认红灯
+- [x] Step 3：做 confirm 后自动生成文案与项目恢复落点的最小实现
+- [x] Step 4：运行同一组测试并确认绿灯
+- [x] Step 5：提交 `Task 3`
 
 ### Task 4：补齐 topic 候选数量守卫与单次补位
 

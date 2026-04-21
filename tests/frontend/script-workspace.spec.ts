@@ -4,6 +4,7 @@ import { mount } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { describe, expect, it, vi } from "vitest";
 
+import { createAppRouter } from "../../frontend/src/router/index.js";
 import ScriptPage from "../../frontend/src/views/ScriptPage.vue";
 import {
   createProjectStore,
@@ -87,7 +88,11 @@ function createSnapshot(
   };
 }
 
-function mountScriptPage(loadSnapshot: (projectId: string) => Promise<ScriptSnapshot>) {
+async function mountScriptPage(loadSnapshot: (projectId: string) => Promise<ScriptSnapshot>) {
+  const router = createAppRouter();
+  await router.push("/projects/project-6/script");
+  await router.isReady();
+
   const projectStore = createProjectStore({
     async createProject() {
       return {
@@ -105,6 +110,7 @@ function mountScriptPage(loadSnapshot: (projectId: string) => Promise<ScriptSnap
     projectStore,
     api: {
       loadSnapshot,
+      async generateInitialScript() {},
       async runPatchOnce() {},
       async runRegenOnce() {},
     },
@@ -112,6 +118,7 @@ function mountScriptPage(loadSnapshot: (projectId: string) => Promise<ScriptSnap
 
   const wrapper = mount(ScriptPage, {
     global: {
+      plugins: [router],
       provide: {
         [projectStoreKey as symbol]: projectStore,
         [scriptStoreKey as symbol]: scriptStore,
@@ -134,7 +141,7 @@ describe("script workspace", () => {
       .mockImplementationOnce(() => firstLoad.promise)
       .mockImplementationOnce(() => secondLoad.promise);
 
-    const { wrapper } = mountScriptPage(loadSnapshot);
+    const { wrapper } = await mountScriptPage(loadSnapshot);
 
     await nextTick();
     expect(wrapper.text()).toContain("正在加载脚本快照");
@@ -175,7 +182,7 @@ describe("script workspace", () => {
       createSnapshot("Second draft", "patch-script", "patch_applied"),
     ];
 
-    const { wrapper, scriptStore } = mountScriptPage(async () => {
+    const { wrapper, scriptStore } = await mountScriptPage(async () => {
       const snapshot = snapshots.shift();
       if (!snapshot) {
         throw new Error("snapshot queue exhausted");
@@ -203,5 +210,31 @@ describe("script workspace", () => {
     expect(wrapper.get("[data-testid='history-viewing']").text()).toContain("历史版本");
     expect(wrapper.get("[data-testid='script-text']").text()).toContain("First draft");
     expect(wrapper.get("[data-testid='trace-node-0']").text()).toContain("script-generate");
+  });
+
+  it("shows an in-progress workspace state instead of an empty placeholder when the first script run has started", async () => {
+    const { wrapper } = await mountScriptPage(async () => ({
+      project_id: "project-6",
+      current_status: "script_generating",
+      active_script: null,
+    }));
+
+    await flushPromises();
+
+    expect(wrapper.find("[data-testid='script-empty']").exists()).toBe(false);
+    expect(wrapper.get("[data-testid='script-running-state']").text()).toContain("正在生成文案");
+  });
+
+  it("shows a failed workspace state instead of an empty placeholder when no current script is available", async () => {
+    const { wrapper } = await mountScriptPage(async () => ({
+      project_id: "project-6",
+      current_status: "script_failed",
+      active_script: null,
+    }));
+
+    await flushPromises();
+
+    expect(wrapper.find("[data-testid='script-empty']").exists()).toBe(false);
+    expect(wrapper.get("[data-testid='script-failed-state']").text()).toContain("生成失败");
   });
 });

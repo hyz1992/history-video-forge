@@ -17,6 +17,10 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
     project_id: project.id,
     name: project.name,
     current_status: project.status,
+    is_draft: project.status.startsWith("topic"),
+    restore_route: project.status.startsWith("topic")
+      ? `/projects/${project.id}/topic`
+      : `/projects/${project.id}/script`,
     active_topic_package: topicRecord
       ? {
           topic_package_id: topicRecord.id,

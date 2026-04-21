@@ -24,6 +24,16 @@ const visibleScript = computed(
   () => selectedHistoryEntry.value?.script ?? scriptStore.state.snapshot?.active_script ?? null,
 );
 
+const isInitialGenerationPending = computed(() =>
+  !visibleScript.value &&
+  scriptStore.state.snapshot?.current_status === "script_generating",
+);
+
+const isInitialGenerationFailed = computed(() =>
+  !visibleScript.value &&
+  scriptStore.state.snapshot?.current_status === "script_failed",
+);
+
 onMounted(async () => {
   const projectId = route.params.projectId;
   if (typeof projectId === "string" && projectId && projectStore.state.projectId !== projectId) {
@@ -34,6 +44,13 @@ onMounted(async () => {
   }
 
   await scriptStore.loadActiveScriptSnapshot();
+
+  if (
+    !scriptStore.state.snapshot?.active_script &&
+    scriptStore.state.snapshot?.current_status === "script_ready"
+  ) {
+    await scriptStore.generateInitialScript();
+  }
 });
 </script>
 
@@ -88,6 +105,22 @@ onMounted(async () => {
         @restore-history="scriptStore.selectHistoryEntry"
       />
     </div>
+    <section
+      v-else-if="isInitialGenerationPending"
+      data-testid="script-running-state"
+      class="script-running-state"
+    >
+      <p>正在生成文案，请稍候。</p>
+    </section>
+
+    <section
+      v-else-if="isInitialGenerationFailed"
+      data-testid="script-failed-state"
+      class="script-failed-state"
+    >
+      <p>生成失败，请重试或返回选题重新确认。</p>
+    </section>
+
     <p
       v-else-if="!scriptStore.state.isLoading && !scriptStore.state.loadError"
       data-testid="script-empty"

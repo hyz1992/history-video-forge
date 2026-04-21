@@ -76,7 +76,10 @@ function createTopicStoreStub() {
   const state = reactive({
     activeTab: "system",
     candidates: [],
+    currentRound: null,
+    historyRounds: [],
     selectedCandidate: null,
+    selectedRoundId: null,
     isGenerating: false,
     isConfirming: false,
     confirmedTopicPackageId: null,
@@ -87,7 +90,10 @@ function createTopicStoreStub() {
     selectTab() {},
     async generateSystemRecommendations() {},
     openCandidate() {},
-    closeCandidate() {},
+    closeCandidate() {
+      state.selectedCandidate = null;
+      state.selectedRoundId = null;
+    },
     async confirmSelectedCandidate() {},
   };
 }
@@ -162,5 +168,127 @@ describe("phase 4 project routing", () => {
     await wrapper.get("[data-testid='open-project-project-formal']").trigger("click");
     await flushPromises();
     expect(router.currentRoute.value.path).toBe("/projects/project-formal/script");
+  });
+
+  it("navigates to the project script workspace and auto-starts script generation after topic confirmation", async () => {
+    const router = createAppRouter();
+    await router.push("/projects/project-1/topic");
+    await router.isReady();
+
+    const projectStore = createProjectStoreStub();
+    projectStore.store.syncProject({
+      project_id: "project-1",
+      current_status: "topic_candidates_ready",
+    });
+
+    const topicState = reactive({
+      activeTab: "system",
+      candidates: [],
+      currentRound: {
+        round_id: "round-1",
+        candidates: [
+          {
+            candidate_id: "candidate-1",
+            title: "晏子使楚",
+            one_line_angle: "确认主题后自动进入文案工作区。",
+            family_label: "court_showdown",
+            scope_label: "single_turning_point",
+            strong_scene: "楚王压场，晏子顶回。",
+            risk_hints: [],
+          },
+        ],
+      },
+      historyRounds: [],
+      selectedCandidate: null as null | {
+        candidate_id: string;
+        title: string;
+        one_line_angle: string;
+        family_label: string;
+        scope_label: string;
+        strong_scene: string;
+        risk_hints: string[];
+      },
+      selectedRoundId: null as string | null,
+      isGenerating: false,
+      isConfirming: false,
+      confirmedTopicPackageId: null as string | null,
+    });
+
+    const calls = {
+      generateInitialScript: 0,
+      loadSnapshot: 0,
+    };
+
+    const topicStore = {
+      state: topicState,
+      selectTab() {},
+      async generateSystemRecommendations() {},
+      openCandidate(candidate: typeof topicState.currentRound.candidates[number], roundId?: string | null) {
+        topicState.selectedCandidate = candidate;
+        topicState.selectedRoundId = roundId ?? topicState.currentRound?.round_id ?? null;
+      },
+      closeCandidate() {
+        topicState.selectedCandidate = null;
+        topicState.selectedRoundId = null;
+      },
+      async confirmSelectedCandidate() {
+        projectStore.store.syncProject({
+          project_id: "project-1",
+          current_status: "script_ready",
+        });
+        topicState.confirmedTopicPackageId = "topic-package-1";
+      },
+    };
+
+    const scriptState = reactive({
+      snapshot: null,
+      history: [],
+      selectedHistoryEntryId: null,
+      isLoading: false,
+      isRunningAction: false,
+      loadError: null,
+    });
+    const scriptStore = {
+      state: scriptState,
+      async loadActiveScriptSnapshot() {
+        calls.loadSnapshot += 1;
+        scriptState.snapshot = {
+          project_id: "project-1",
+          current_status: "script_ready",
+          active_script: null,
+        };
+      },
+      async retryLoadActiveScriptSnapshot() {},
+      selectHistoryEntry() {},
+      async runPatchOnce() {},
+      async runRegenOnce() {},
+      async generateInitialScript() {
+        calls.generateInitialScript += 1;
+      },
+    };
+
+    const wrapper = mount(
+      {
+        render: () => h(RouterView),
+      },
+      {
+        global: {
+          plugins: [router],
+          provide: {
+            [projectStoreKey as symbol]: projectStore.store as never,
+            [topicStoreKey as symbol]: topicStore as never,
+            [scriptStoreKey as symbol]: scriptStore as never,
+          },
+        },
+      },
+    );
+
+    await wrapper.get("[data-testid='candidate-item-candidate-1']").trigger("click");
+    await wrapper.get("[data-testid='confirm-candidate']").trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/projects/project-1/script");
+    expect(calls.loadSnapshot).toBe(1);
+    expect(calls.generateInitialScript).toBe(1);
   });
 });
