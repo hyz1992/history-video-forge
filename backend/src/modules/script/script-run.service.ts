@@ -8,6 +8,7 @@ import { saveScriptRecord } from "./script-record.repository";
 import { reviewScriptSemantics } from "./script-semantic-review.service";
 import { planTopicDelivery } from "./topic-delivery-planner";
 import { runScriptRunGraph } from "../../runtime/orchestration/script-run-graph.js";
+import { persistProjectRunArtifacts } from "../../runtime/trace/project-storage.js";
 
 function buildProjectStylePack() {
   return {
@@ -65,6 +66,7 @@ export interface RunScriptGenerationInput {
   project: ProjectRecord;
   allowPatch?: boolean;
   allowRegen?: boolean;
+  forceRegen?: boolean;
 }
 
 export async function runScriptGeneration(input: RunScriptGenerationInput) {
@@ -113,6 +115,7 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
       bundle: inputBundle,
       allowPatch: input.allowPatch ?? false,
       allowRegen: input.allowRegen ?? false,
+      forceRegen: input.forceRegen ?? false,
     },
     {
       generateDraft: generateScriptDraft,
@@ -141,8 +144,19 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
   });
 
   input.project.activeScriptRecordId = scriptRecord.id;
+  input.project.latestScriptRunTraceJson = graphTraceSummary as Record<string, unknown>;
   input.project.status = "script_ready";
   input.project.updatedAt = new Date();
+  persistProjectRunArtifacts({
+    project: input.project,
+    phase: "script",
+    runId:
+      typeof graphTraceSummary.run_id === "string"
+        ? graphTraceSummary.run_id
+        : scriptRecord.id,
+    traceSummary: graphTraceSummary as Record<string, unknown>,
+    runtimeDiagnostics: runtimeDiagnostics as Record<string, unknown>,
+  });
 
   return {
     statusCode: 200,

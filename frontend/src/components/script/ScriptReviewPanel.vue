@@ -52,7 +52,7 @@ defineEmits<{
 
     <button
       v-if="
-        activeScript.review_decision === 'regen_once' &&
+        activeScript.review_decision !== 'return_topic' &&
         !activeScript.execution_state.regenerate_used
       "
       data-testid="regen-once"

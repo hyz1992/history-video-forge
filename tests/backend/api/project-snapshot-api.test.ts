@@ -1,6 +1,11 @@
+import { existsSync, readdirSync, rmSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
+
+const rootDir = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 
 describe("project snapshot api", () => {
   async function prepareProjectWithScript(app: ReturnType<typeof buildApp>) {
@@ -152,5 +157,126 @@ describe("project snapshot api", () => {
       },
       active_script: null,
     });
+  });
+
+  it("persists readable trace directories and keeps latest topic/script run summaries after re-confirming a topic", async () => {
+    const app = buildApp();
+
+    const projectResponse = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: {
+        name: "Snapshot Trace Flow",
+      },
+    });
+    const projectId = projectResponse.json().project_id as string;
+
+    const firstRecommendation = await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectId}/topic/recommendations`,
+      payload: {
+        canonical_name: "晏子使楚",
+        summary: "楚王在公开场合连续压场，晏子当场顶回去。",
+        core_conflict: "楚王当众压场，晏子必须当场顶回。",
+        strong_scene: "楚王连续压场，晏子一句句顶回去。",
+        source_hint: "《晏子春秋》",
+        recent_usage_hint: "近期未出现同 event_id",
+        tags: ["diplomacy", "court", "humiliation", "showdown"],
+      },
+    });
+    const firstCandidateId = firstRecommendation.json().candidates[0].candidate_id as string;
+
+    await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectId}/topic/candidates/${firstCandidateId}/confirm`,
+      payload: {
+        confirm_reason: "user_selected",
+      },
+    });
+
+    await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectId}/script/generate`,
+      payload: {
+        allow_patch: false,
+        allow_regen: false,
+      },
+    });
+
+    const firstSnapshotResponse = await app.inject({
+      method: "GET",
+      url: `/api/projects/${projectId}`,
+    });
+    const firstSnapshot = firstSnapshotResponse.json();
+    const storageRootPath = resolve(
+      rootDir,
+      firstSnapshot.trace_summary.project_storage.root_dir as string,
+    );
+
+    try {
+      expect(firstSnapshot.trace_summary.latest_topic_run).toMatchObject({
+        phase: "topic",
+        run_id: expect.any(String),
+      });
+      expect(firstSnapshot.trace_summary.latest_script_run).toMatchObject({
+        phase: "script",
+        run_id: expect.any(String),
+      });
+      expect(existsSync(storageRootPath)).toBe(true);
+      expect(existsSync(resolve(storageRootPath, "trace", "topic-runs"))).toBe(true);
+      expect(existsSync(resolve(storageRootPath, "trace", "script-runs"))).toBe(true);
+      expect(readdirSync(resolve(storageRootPath, "trace", "topic-runs")).length).toBeGreaterThan(0);
+      expect(readdirSync(resolve(storageRootPath, "trace", "script-runs")).length).toBeGreaterThan(0);
+
+      const secondRecommendation = await app.inject({
+        method: "POST",
+        url: `/api/projects/${projectId}/topic/recommendations`,
+        payload: {
+          canonical_name: "晏子使楚",
+          summary: "楚王第二次换角度压场，晏子仍然当场顶回去。",
+          core_conflict: "公开压场继续升级，晏子不能退。",
+          strong_scene: "楚王再次压场，晏子换方式顶回。",
+          source_hint: "《晏子春秋》",
+          recent_usage_hint: "近期未出现同 event_id",
+          tags: ["diplomacy", "court", "humiliation", "showdown"],
+        },
+      });
+      const secondCandidateId = secondRecommendation.json().candidates[0].candidate_id as string;
+
+      await app.inject({
+        method: "POST",
+        url: `/api/projects/${projectId}/topic/candidates/${secondCandidateId}/confirm`,
+        payload: {
+          confirm_reason: "user_selected_again",
+        },
+      });
+
+      const secondSnapshotResponse = await app.inject({
+        method: "GET",
+        url: `/api/projects/${projectId}`,
+      });
+
+      expect(secondSnapshotResponse.statusCode).toBe(200);
+      expect(secondSnapshotResponse.json()).toMatchObject({
+        project_id: projectId,
+        current_status: "script_ready",
+        active_script: null,
+        trace_summary: {
+          latest_topic_run: {
+            phase: "topic",
+            run_id: expect.any(String),
+          },
+          latest_script_run: {
+            phase: "script",
+            run_id: expect.any(String),
+          },
+        },
+      });
+    } finally {
+      rmSync(storageRootPath, {
+        recursive: true,
+        force: true,
+      });
+    }
   });
 });

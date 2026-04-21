@@ -121,7 +121,7 @@ describe("script page", () => {
     expect(wrapper.get("[data-testid='script-risk-panel']").text()).toContain("风险");
     expect(wrapper.get("[data-testid='script-trace-entry']").text()).toContain("查看运行详情");
     expect(wrapper.find("[data-testid='patch-once']").exists()).toBe(false);
-    expect(wrapper.find("[data-testid='regen-once']").exists()).toBe(false);
+    expect(wrapper.get("[data-testid='regen-once']").text()).toContain("regen_once");
   });
 
   it("shows patch/regen actions when review allows them and refreshes snapshot after the action", async () => {
@@ -356,5 +356,85 @@ describe("script page", () => {
     await flushPromises();
 
     expect(router.currentRoute.value.fullPath).toBe("/projects/project-3/topic");
+  });
+
+  it("allows a manual regen action even when the current review already passed", async () => {
+    const calls = {
+      loadSnapshot: [] as string[],
+      regen: [] as string[],
+    };
+
+    const router = await createScriptRouter("project-4");
+
+    const projectStore = createProjectStore({
+      async createProject() {
+        return {
+          project_id: "project-4",
+          current_status: "script_ready",
+        };
+      },
+    });
+    projectStore.syncProject({
+      project_id: "project-4",
+      current_status: "script_ready",
+    });
+
+    const scriptStore = createScriptStore({
+      projectStore,
+      api: {
+        async loadSnapshot(projectId) {
+          calls.loadSnapshot.push(projectId);
+          return {
+            project_id: projectId,
+            current_status: "script_ready",
+            active_script: {
+              script_record_id: "script-4",
+              script_text: "当前稿件已经通过，但仍允许手动重生一次。",
+              opening_span: "当前稿件已经通过。",
+              ending_span: "仍允许手动重生一次。",
+              review_decision: "pass",
+              patch_intent: null,
+              local_validation: {
+                stage: "script_local_validation",
+                decision: "pass",
+              },
+              semantic_review: {
+                stage: "script_semantic_review",
+                decision: "pass",
+                patch_intent: null,
+              },
+              execution_state: {
+                patch_used: false,
+                regenerate_used: false,
+              },
+            },
+          };
+        },
+        async generateInitialScript() {},
+        async runPatchOnce() {
+          throw new Error("patch should not be called");
+        },
+        async runRegenOnce(projectId) {
+          calls.regen.push(projectId);
+        },
+      },
+    });
+
+    const wrapper = mount(ScriptPage, {
+      global: {
+        plugins: [router],
+        provide: {
+          [projectStoreKey as symbol]: projectStore,
+          [scriptStoreKey as symbol]: scriptStore,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    await wrapper.get("[data-testid='regen-once']").trigger("click");
+    await flushPromises();
+
+    expect(calls.regen).toEqual(["project-4"]);
   });
 });

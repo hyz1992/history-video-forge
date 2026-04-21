@@ -281,4 +281,65 @@ describe("script run graph", () => {
       regenerate_used: true,
     });
   });
+
+  it("forces one explicit regen run when the caller requests manual regen", async () => {
+    const calls: string[] = [];
+    const generateDraft = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        calls.push("script-generate");
+        return passDraft;
+      })
+      .mockImplementationOnce(async () => {
+        calls.push("script-generate");
+        return regeneratedDraft;
+      });
+
+    const result = await runScriptRunGraph(
+      {
+        bundle: inputBundle,
+        allowPatch: false,
+        allowRegen: true,
+        forceRegen: true,
+      },
+      {
+        generateDraft,
+        validateDraft: vi
+          .fn()
+          .mockImplementation(() => {
+            calls.push("local-validate");
+            return createPassLocalValidation();
+          }),
+        reviewSemantics: vi
+          .fn()
+          .mockImplementation(() => {
+            calls.push("semantic-review");
+            return createPassSemanticReview();
+          }),
+        patchDraft: vi.fn(async () => {
+          calls.push("patch-once");
+          return patchedDraft;
+        }),
+        regenerateDraft: vi.fn(async ({ generateDraft: rerunGenerateDraft }) => {
+          calls.push("regen-once");
+          return rerunGenerateDraft();
+        }),
+      },
+    );
+
+    expect(calls).toEqual([
+      "script-generate",
+      "local-validate",
+      "semantic-review",
+      "regen-once",
+      "script-generate",
+      "local-validate",
+      "semantic-review",
+    ]);
+    expect(result.draft).toEqual(regeneratedDraft);
+    expect(result.executionState).toEqual({
+      patch_used: false,
+      regenerate_used: true,
+    });
+  });
 });

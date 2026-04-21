@@ -20,6 +20,7 @@ async function generateScriptController(
     project,
     allowPatch: context.payload?.allow_patch,
     allowRegen: context.payload?.allow_regen,
+    forceRegen: context.payload?.force_regen,
   });
 }
 

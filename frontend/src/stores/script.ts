@@ -130,6 +130,7 @@ export function createFetchScriptApi(baseUrl = ""): ScriptApi {
         body: JSON.stringify({
           allow_patch: false,
           allow_regen: true,
+          force_regen: true,
         }),
       });
     },

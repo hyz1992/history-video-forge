@@ -6,6 +6,8 @@ export interface ProjectRecord {
   status: string;
   activeTopicPackageId: string | null;
   activeScriptRecordId: string | null;
+  latestTopicRunTraceJson: Record<string, unknown> | null;
+  latestScriptRunTraceJson: Record<string, unknown> | null;
   storageDisplayName: string;
   storageShortId: string;
   storageRootDir: string;

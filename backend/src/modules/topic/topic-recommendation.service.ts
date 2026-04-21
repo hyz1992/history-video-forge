@@ -7,6 +7,7 @@ import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compati
 import type { StructuredPromptProvider } from "../../runtime/llm/provider-contract.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 import { runTopicRecommendationGraph } from "../../runtime/orchestration/topic-recommendation-graph.js";
+import { persistProjectRunArtifacts } from "../../runtime/trace/project-storage.js";
 
 import {
   buildTopicCandidates,
@@ -38,6 +39,21 @@ export async function recommendTopicCandidatesWithTrace(
 
   if (!options?.projectId) {
     return result;
+  }
+
+  const project = db.projects.get(options.projectId);
+  if (project) {
+    project.latestTopicRunTraceJson = result.trace as Record<string, unknown>;
+    persistProjectRunArtifacts({
+      project,
+      phase: "topic",
+      runId:
+        typeof result.trace.run_id === "string"
+          ? result.trace.run_id
+          : `topic_run_${db.generateId()}`,
+      traceSummary: result.trace as Record<string, unknown>,
+      runtimeDiagnostics: result.diagnostics as Record<string, unknown>,
+    });
   }
 
   const previousRoundCount = db.topicRunCounts.get(options.projectId) ?? 0;

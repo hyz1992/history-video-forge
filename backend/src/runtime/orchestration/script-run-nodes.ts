@@ -28,6 +28,7 @@ export interface ScriptRunGraphRuntime {
   bundle: ScriptInputBundle;
   allowPatch: boolean;
   allowRegen: boolean;
+  forceRegen: boolean;
   draft: ScriptDraft | null;
   localValidation: LocalValidation | null;
   semanticReview: SemanticReview | ReturnType<typeof buildSkippedSemanticReview> | null;

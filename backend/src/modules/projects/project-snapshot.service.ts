@@ -33,6 +33,14 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
   const scriptRecord = project.activeScriptRecordId
     ? db.scriptRecords.get(project.activeScriptRecordId) ?? null
     : null;
+  const latestProjectScriptRecord = [...db.scriptRecords.values()]
+    .filter((record) => record.projectId === project.id)
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .at(0) ?? null;
+  const latestScriptTrace =
+    (project.latestScriptRunTraceJson as Record<string, unknown> | null | undefined) ??
+    (latestProjectScriptRecord?.graphTraceSummaryJson as Record<string, unknown> | null | undefined) ??
+    null;
 
   return {
     project_id: project.id,
@@ -46,10 +54,10 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
       project_storage: {
         root_dir: storageProfile.root_dir,
       },
-      latest_topic_run: null,
-      latest_script_run: summarizeTraceRun(
-        scriptRecord?.graphTraceSummaryJson as Record<string, unknown> | null | undefined,
+      latest_topic_run: summarizeTraceRun(
+        project.latestTopicRunTraceJson as Record<string, unknown> | null | undefined,
       ),
+      latest_script_run: summarizeTraceRun(latestScriptTrace),
     },
     active_topic_package: topicRecord
       ? {

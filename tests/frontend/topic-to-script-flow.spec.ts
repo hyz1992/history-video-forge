@@ -293,4 +293,155 @@ describe("phase 4 project routing", () => {
     expect(wrapper.get("[data-testid='script-page-header']").text()).toContain("文案工作区");
     expect(wrapper.get("[data-testid='script-trace-entry']").text()).toContain("查看运行详情");
   });
+
+  it("returns to the script workspace and restarts initial generation after confirming a new topic from topic again", async () => {
+    const router = createAppRouter();
+    await router.push("/projects/project-2/topic");
+    await router.isReady();
+
+    const projectStore = createProjectStoreStub();
+    projectStore.store.syncProject({
+      project_id: "project-2",
+      current_status: "topic_candidates_ready",
+    });
+
+    const topicState = reactive({
+      activeTab: "system",
+      candidates: [],
+      currentRound: {
+        round_id: "round-2",
+        candidates: [
+          {
+            candidate_id: "candidate-current",
+            title: "当前轮主题",
+            one_line_angle: "当前轮主题角度",
+            family_label: "court_showdown",
+            scope_label: "single_turning_point",
+            strong_scene: "当前轮强场面",
+            risk_hints: [],
+          },
+        ],
+      },
+      historyRounds: [
+        {
+          round_id: "round-1",
+          candidates: [
+            {
+              candidate_id: "candidate-history",
+              title: "历史轮主题",
+              one_line_angle: "历史轮主题角度",
+              family_label: "court_showdown",
+              scope_label: "single_turning_point",
+              strong_scene: "历史轮强场面",
+              risk_hints: [],
+            },
+          ],
+        },
+      ],
+      selectedCandidate: null as null | {
+        candidate_id: string;
+        title: string;
+        one_line_angle: string;
+        family_label: string;
+        scope_label: string;
+        strong_scene: string;
+        risk_hints: string[];
+      },
+      selectedRoundId: null as string | null,
+      isGenerating: false,
+      isConfirming: false,
+      confirmedTopicPackageId: null as string | null,
+    });
+
+    const calls = {
+      loadSnapshot: 0,
+      generateInitialScript: 0,
+    };
+
+    const topicStore = {
+      state: topicState,
+      selectTab() {},
+      async generateSystemRecommendations() {},
+      openCandidate(candidate: typeof topicState.currentRound.candidates[number], roundId?: string | null) {
+        topicState.selectedCandidate = candidate;
+        topicState.selectedRoundId = roundId ?? topicState.currentRound?.round_id ?? null;
+      },
+      closeCandidate() {
+        topicState.selectedCandidate = null;
+        topicState.selectedRoundId = null;
+      },
+      async confirmSelectedCandidate() {
+        projectStore.store.syncProject({
+          project_id: "project-2",
+          current_status: "script_ready",
+        });
+        topicState.confirmedTopicPackageId = `topic-package-${Date.now()}`;
+      },
+    };
+
+    const scriptState = reactive({
+      snapshot: null as null | {
+        project_id: string;
+        current_status: string;
+        active_script: null;
+      },
+      history: [],
+      selectedHistoryEntryId: null,
+      isLoading: false,
+      isRunningAction: false,
+      loadError: null,
+    });
+    const scriptStore = {
+      state: scriptState,
+      async loadActiveScriptSnapshot() {
+        calls.loadSnapshot += 1;
+        scriptState.snapshot = {
+          project_id: "project-2",
+          current_status: "script_ready",
+          active_script: null,
+        };
+      },
+      async retryLoadActiveScriptSnapshot() {},
+      selectHistoryEntry() {},
+      async runPatchOnce() {},
+      async runRegenOnce() {},
+      async generateInitialScript() {
+        calls.generateInitialScript += 1;
+      },
+    };
+
+    const wrapper = mount(
+      {
+        render: () => h(RouterView),
+      },
+      {
+        global: {
+          plugins: [router],
+          provide: {
+            [projectStoreKey as symbol]: projectStore.store as never,
+            [topicStoreKey as symbol]: topicStore as never,
+            [scriptStoreKey as symbol]: scriptStore as never,
+          },
+        },
+      },
+    );
+
+    await wrapper.get("[data-testid='history-candidate-candidate-history']").trigger("click");
+    await wrapper.get("[data-testid='confirm-candidate']").trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/projects/project-2/script");
+    expect(calls.generateInitialScript).toBe(1);
+
+    await router.push("/projects/project-2/topic");
+    await flushPromises();
+
+    await wrapper.get("[data-testid='candidate-item-candidate-current']").trigger("click");
+    await wrapper.get("[data-testid='confirm-candidate']").trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/projects/project-2/script");
+    expect(calls.loadSnapshot).toBe(2);
+    expect(calls.generateInitialScript).toBe(2);
+  });
 });

@@ -45,6 +45,20 @@ watch(
     }
   },
 );
+
+watch(
+  () => [projectStore.state.projectId, topicStore.state.confirmedTopicPackageId] as const,
+  async ([projectId, confirmedTopicPackageId]) => {
+    if (!projectId || !confirmedTopicPackageId) {
+      return;
+    }
+
+    const nextPath = projectStore.resolveProjectWorkspacePath(projectId, "script_ready");
+    if (router.currentRoute.value.path !== nextPath) {
+      await router.push(nextPath);
+    }
+  },
+);
 </script>
 
 <template>

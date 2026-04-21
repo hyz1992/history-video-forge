@@ -16,6 +16,8 @@ export async function createProject(
     status: "topic_pending",
     activeTopicPackageId: null,
     activeScriptRecordId: null,
+    latestTopicRunTraceJson: null,
+    latestScriptRunTraceJson: null,
     storageDisplayName: "",
     storageShortId: "",
     storageRootDir: "",

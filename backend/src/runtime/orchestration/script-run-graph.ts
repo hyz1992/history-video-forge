@@ -25,6 +25,7 @@ export interface RunScriptRunGraphInput {
   bundle: ScriptRunGraphRuntime["bundle"];
   allowPatch?: boolean;
   allowRegen?: boolean;
+  forceRegen?: boolean;
 }
 
 export async function runScriptRunGraph(
@@ -35,6 +36,7 @@ export async function runScriptRunGraph(
     bundle: input.bundle,
     allowPatch: input.allowPatch ?? false,
     allowRegen: input.allowRegen ?? false,
+    forceRegen: input.forceRegen ?? false,
     draft: null,
     localValidation: null,
     semanticReview: null,
@@ -93,6 +95,10 @@ export async function runScriptRunGraph(
 
         if (next === "patch-once" && runtime.allowPatch) {
           return "patch-once" as const;
+        }
+
+        if (runtime.forceRegen && !state.regenerate_used) {
+          return "regen-once" as const;
         }
 
         if (next === "regen-once" && runtime.allowRegen) {

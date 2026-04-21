@@ -12,7 +12,7 @@
 - [x] 第四阶段 `Task 5` 已完成
 - [x] 第四阶段 `Task 6` 已完成
 - [x] 第四阶段 `Task 7` 已完成
-- [ ] 第四阶段 `Task 8` 尚未开始
+- [x] 第四阶段 `Task 8` 已完成
 
 ## 对应设计
 
@@ -97,8 +97,22 @@
 
 ### Task 8：完成第四阶段收口验证
 
-- [ ] Step 1：运行 `npm test`、`npm run harness:topic-script-live-check`，并记录剩余缺口
-- [ ] Step 2：完成一轮正式手动联调并记录结果
-- [ ] Step 3：只修补阻碍第四阶段收口的最小问题
-- [ ] Step 4：更新结论文档与路线图后重新运行最终验证
-- [ ] Step 5：提交 `Task 8`
+- [x] Step 1：运行 `npm test`、`npm run harness:topic-script-live-check`，并记录剩余缺口
+- [x] Step 2：完成一轮正式手动联调并记录结果
+- 手动联调记录（2026-04-21）：
+- 已验证：首页 -> 我的项目 -> 新建项目 -> 连续生成两轮候选 -> 从历史轮确认主题 -> 自动进入 script -> 首轮 script 成功生成。
+- 已验证：从 script 返回 topic 的二次确认可用；第二次确认主题后，backend snapshot 已切到 `script_ready`，且旧 `active_script` 已被清空，不再作为现行版本。
+- 阻塞 1：本轮 live run 未出现 `patch_once / regen_once` 按钮，无法完成正式手动动作链路验证。
+- 阻塞 2：第二次确认主题后，前端在 240 秒内未重新跳转到 `/projects/:projectId/script`，自动 script generate 也未完成，需要作为 `Step 3` 最小补丁处理。
+- 阻塞 3：snapshot 返回了 `storage/projects/2026-04-21/晏子使楚：外交尊严的捍卫 [p_4e12e503]`，但磁盘上未生成对应可读目录，且 `latest_topic_run / latest_script_run` 仍为 `null`，trace 与目录追溯未在真实联调中成立。
+- [x] Step 3：只修补阻碍第四阶段收口的最小问题
+- Step 3 最小补丁结果（2026-04-21）：
+- 已修补：从 script 返回 topic 后再次确认主题时，前端现在会再次自动进入 `/projects/:projectId/script`，并重新触发首轮 script generate。
+- 已修补：script 工作区现在始终保留一次显式手动 `regen_once` 入口；manual action 会真正触发单次 regenerate，而不再只是“允许但不执行”。
+- 已修补：topic/script run 现在会把最新 trace 摘要挂到项目级 snapshot，并把 trace 与 diagnostics 写入 `storage/projects/<date>/<中文名 + 短稳定标识>/trace/...` 可读目录。
+- [x] Step 4：更新结论文档与路线图后重新运行最终验证
+- Step 4 最终复验结果（2026-04-21）：
+- 已验证：`npm test` 通过，汇总为 `36` 个测试文件、`107` 个测试全部通过。
+- 已验证：`npm run harness:topic-script-live-check` 通过，汇总为 `total_samples=2`、`passed_samples=2`、`failed_samples=0`。
+- 已验证：正式手动联调复验通过，项目 `264e0ef7-fc0d-4a48-ac5f-157033e3a9eb` 已完成首页 -> 项目列表 -> 新建项目 -> topic 多轮候选 -> 历史轮确认 -> 自动进入 script -> 手动 `regen_once` -> 返回 topic 重选 -> 再次自动进入 script -> trace 目录落盘的全链路验证。
+- [x] Step 5：提交 `Task 8`
