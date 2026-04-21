@@ -20,6 +20,13 @@ describe("ui acceptance smoke", () => {
         width: 1440,
         height: 960,
       },
+      scriptOutcomeTimeoutMs: 180000,
+      scriptOutcomeSelectors: {
+        success: "[data-testid='script-text']",
+        loading: "[data-testid='script-running-state']",
+        failed: "[data-testid='script-failed-state']",
+        empty: "[data-testid='script-empty']",
+      },
       screenshots: [
         "home",
         "projects",

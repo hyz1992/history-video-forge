@@ -4,6 +4,11 @@ import { join } from "node:path";
 import { chromium, type ConsoleMessage, type Page, type Response } from "@playwright/test";
 
 import { uiAcceptanceDynamicSelectors, uiAcceptanceSelectors } from "./dom-selectors";
+import {
+  captureUiAcceptancePageSnapshot,
+  type UiAcceptanceAuditPageId,
+} from "./page-auditor";
+import type { UiAcceptancePageSnapshot } from "./page-rules";
 import type { UiAcceptanceSmokePlan } from "./ui-acceptance-smoke";
 
 export interface RunUiAcceptanceBrowserInput {
@@ -19,6 +24,7 @@ export interface RunUiAcceptanceBrowserResult {
   finalUrl: string;
   projectId: string | null;
   screenshotPaths: Record<string, string>;
+  pageSnapshots: UiAcceptancePageSnapshot[];
   consoleMessages: Array<{
     type: string;
     text: string;
@@ -62,26 +68,67 @@ async function captureScreenshot(page: Page, screenshotsDir: string, name: strin
   return outputPath;
 }
 
-async function runSmokeMainline(page: Page, screenshotsDir: string) {
+async function captureAuditSnapshot(
+  page: Page,
+  pageSnapshots: UiAcceptancePageSnapshot[],
+  pageId: UiAcceptanceAuditPageId,
+) {
+  pageSnapshots.push(await captureUiAcceptancePageSnapshot(page, pageId));
+}
+
+async function isSelectorVisible(page: Page, selector: string) {
+  const locator = page.locator(selector).first();
+  if ((await locator.count()) === 0) {
+    return false;
+  }
+
+  return locator.isVisible();
+}
+
+async function waitForScriptOutcome(page: Page, plan: UiAcceptanceSmokePlan) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < plan.scriptOutcomeTimeoutMs) {
+    if (await isSelectorVisible(page, plan.scriptOutcomeSelectors.success)) {
+      return;
+    }
+
+    if (await isSelectorVisible(page, plan.scriptOutcomeSelectors.failed)) {
+      throw new Error("script_page_failed");
+    }
+
+    if (await isSelectorVisible(page, plan.scriptOutcomeSelectors.empty)) {
+      throw new Error("script_page_empty");
+    }
+
+    await page.waitForTimeout(500);
+  }
+
+  throw new Error("script_page_timeout");
+}
+
+async function runSmokeMainline(
+  page: Page,
+  screenshotsDir: string,
+  plan: UiAcceptanceSmokePlan,
+) {
   const screenshotPaths: Record<string, string> = {};
+  const pageSnapshots: UiAcceptancePageSnapshot[] = [];
 
   await page.goto("/");
   await page.waitForSelector(uiAcceptanceSelectors.homePrimaryCta);
+  await captureAuditSnapshot(page, pageSnapshots, "home");
   screenshotPaths.home = await captureScreenshot(page, screenshotsDir, "home");
 
   await page.click(uiAcceptanceSelectors.homePrimaryCta);
   await page.waitForURL("**/projects");
   await page.waitForSelector(uiAcceptanceSelectors.createProject);
+  await captureAuditSnapshot(page, pageSnapshots, "projects");
   screenshotPaths.projects = await captureScreenshot(page, screenshotsDir, "projects");
 
   await page.click(uiAcceptanceSelectors.createProject);
   await page.waitForURL(/\/projects\/[^/]+\/topic$/);
   await page.waitForSelector(uiAcceptanceSelectors.generateTopic);
-  screenshotPaths["topic-workspace"] = await captureScreenshot(
-    page,
-    screenshotsDir,
-    "topic-workspace",
-  );
 
   await page.click(uiAcceptanceSelectors.generateTopic);
   await page.waitForSelector(uiAcceptanceDynamicSelectors.firstCandidateItem, {
@@ -89,15 +136,20 @@ async function runSmokeMainline(page: Page, screenshotsDir: string) {
   });
   await page.click(uiAcceptanceDynamicSelectors.firstCandidateItem);
   await page.waitForSelector(uiAcceptanceSelectors.candidateDrawer);
+  await captureAuditSnapshot(page, pageSnapshots, "topic");
+  screenshotPaths["topic-workspace"] = await captureScreenshot(
+    page,
+    screenshotsDir,
+    "topic-workspace",
+  );
   await page.click(uiAcceptanceSelectors.confirmCandidate);
 
   await page.waitForURL(/\/projects\/[^/]+\/script$/, {
     timeout: 60000,
   });
-  await page.waitForSelector(uiAcceptanceSelectors.scriptText, {
-    timeout: 60000,
-  });
+  await waitForScriptOutcome(page, plan);
   await page.waitForSelector(uiAcceptanceSelectors.scriptTraceEntry);
+  await captureAuditSnapshot(page, pageSnapshots, "script");
   screenshotPaths["script-workspace"] = await captureScreenshot(
     page,
     screenshotsDir,
@@ -106,6 +158,7 @@ async function runSmokeMainline(page: Page, screenshotsDir: string) {
 
   return {
     screenshotPaths,
+    pageSnapshots,
     finalUrl: page.url(),
   };
 }
@@ -138,7 +191,7 @@ export async function runUiAcceptanceBrowser(
   });
 
   try {
-    const smokeResult = await runSmokeMainline(page, input.screenshotsDir);
+    const smokeResult = await runSmokeMainline(page, input.screenshotsDir, input.plan);
     await context.tracing.stop({
       path: input.tracePath,
     });
@@ -152,6 +205,7 @@ export async function runUiAcceptanceBrowser(
       finalUrl: new URL(smokeResult.finalUrl).pathname,
       projectId,
       screenshotPaths: smokeResult.screenshotPaths,
+      pageSnapshots: smokeResult.pageSnapshots,
       consoleMessages,
       networkErrors,
     };

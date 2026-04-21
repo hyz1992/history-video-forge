@@ -4,7 +4,12 @@ import { pathToFileURL } from "node:url";
 
 import { runUiAcceptanceBrowser } from "./browser-runner";
 import { buildUiAcceptanceOutputPaths } from "./output-paths";
-import { createUiAcceptanceSummary, type UiAcceptanceSummary } from "./report-model";
+import { auditUiAcceptancePages } from "./page-auditor";
+import type { UiAcceptancePageRuleResult } from "./page-rules";
+import {
+  createUiAcceptanceSummary,
+  type UiAcceptanceSummary,
+} from "./report-model";
 import { runWithUiAcceptanceServices } from "./service-manager";
 
 export interface UiAcceptanceSmokePlan {
@@ -13,6 +18,13 @@ export interface UiAcceptanceSmokePlan {
   viewport: {
     width: number;
     height: number;
+  };
+  scriptOutcomeTimeoutMs: number;
+  scriptOutcomeSelectors: {
+    success: string;
+    loading: string;
+    failed: string;
+    empty: string;
   };
   screenshots: string[];
   steps: string[];
@@ -25,6 +37,7 @@ export interface CreateUiAcceptanceSmokeSummaryInput {
   finalUrl: string | null;
   startedAt?: string;
   completedAt?: string;
+  pageRuleResult?: UiAcceptancePageRuleResult;
 }
 
 export type UiAcceptanceSmokeSummary = UiAcceptanceSummary & {
@@ -57,6 +70,13 @@ export function buildUiAcceptanceSmokePlan(): UiAcceptanceSmokePlan {
     viewport: {
       width: 1440,
       height: 960,
+    },
+    scriptOutcomeTimeoutMs: 180000,
+    scriptOutcomeSelectors: {
+      success: "[data-testid='script-text']",
+      loading: "[data-testid='script-running-state']",
+      failed: "[data-testid='script-failed-state']",
+      empty: "[data-testid='script-empty']",
     },
     screenshots: [...SMOKE_SCREENSHOTS],
     steps: [...SMOKE_STEPS],
@@ -92,7 +112,7 @@ export function createUiAcceptanceSmokeSummary(
 
   return {
     ...summary,
-    status: "PASS",
+    status: input.pageRuleResult?.status ?? "PASS",
     completed_at: input.completedAt ?? input.startedAt ?? input.runId,
     project: {
       project_id: input.projectId,
@@ -102,6 +122,12 @@ export function createUiAcceptanceSmokeSummary(
       final_url: input.finalUrl,
     },
     actions: [...SMOKE_STEPS],
+    checks: {
+      chain: [],
+      structure: input.pageRuleResult?.structureChecks ?? [],
+      delivery: input.pageRuleResult?.deliveryChecks ?? [],
+    },
+    totals: input.pageRuleResult?.totals ?? summary.totals,
     artifacts: {
       ...summary.artifacts,
       screenshot_points: buildScreenshotPoints(input.outputDir),
@@ -129,6 +155,7 @@ export async function runUiAcceptanceSmoke() {
       screenshotsDir: outputPaths.screenshotsDir,
     });
   });
+  const pageRuleResult = auditUiAcceptancePages(browserResult.pageSnapshots);
 
   const summary = createUiAcceptanceSmokeSummary({
     runId,
@@ -137,6 +164,7 @@ export async function runUiAcceptanceSmoke() {
     finalUrl: browserResult.finalUrl,
     startedAt,
     completedAt: new Date().toISOString(),
+    pageRuleResult,
   });
 
   writeFileSync(outputPaths.summaryPath, JSON.stringify(summary, null, 2), "utf8");
