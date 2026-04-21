@@ -9,6 +9,18 @@ import {
   type StoredTopicCandidate,
 } from "./topic-confirm.service";
 
+function toResponseCandidate(candidate: StoredTopicCandidate) {
+  return {
+    candidate_id: candidate.candidateId,
+    title: candidate.title,
+    one_line_angle: candidate.oneLineAngle,
+    family_label: candidate.familyLabel,
+    scope_label: candidate.scopeLabel,
+    strong_scene: candidate.strongScene,
+    risk_hints: [],
+  };
+}
+
 export async function createProjectController(
   context: RouteContext,
 ): Promise<AppResponse> {
@@ -84,7 +96,33 @@ export async function createTopicRecommendationsController(
     };
   });
 
-  context.app.topicCandidateStore.set(project.id, storedCandidates);
+  const topicRun = recommendation.topic_run ?? {
+    project_id: project.id,
+    round_id: `topic_run_${randomUUID()}`,
+    round_index:
+      (context.app.topicCandidateStore.get(project.id)?.rounds.length ?? 0) + 1,
+    previous_round_count:
+      context.app.topicCandidateStore.get(project.id)?.rounds.length ?? 0,
+  };
+  const projectTopicState = context.app.topicCandidateStore.get(project.id) ?? {
+    candidatesById: new Map<string, StoredTopicCandidate>(),
+    rounds: [],
+  };
+
+  for (const [candidateId, storedCandidate] of storedCandidates.entries()) {
+    projectTopicState.candidatesById.set(candidateId, storedCandidate);
+  }
+
+  projectTopicState.rounds.push({
+    roundId: topicRun.round_id,
+    roundIndex: topicRun.round_index,
+    createdAt: new Date().toISOString(),
+    candidates: [...storedCandidates.values()],
+  });
+  context.app.topicCandidateStore.set(project.id, projectTopicState);
+
+  const currentRound = projectTopicState.rounds.at(-1);
+  const historyRounds = projectTopicState.rounds.slice(0, -1);
 
   return {
     statusCode: 200,
@@ -92,6 +130,20 @@ export async function createTopicRecommendationsController(
       project_id: project.id,
       event_id: normalized.event.id,
       candidates: responseCandidates,
+      current_round: currentRound
+        ? {
+            round_id: currentRound.roundId,
+            round_index: currentRound.roundIndex,
+            created_at: currentRound.createdAt,
+            candidates: currentRound.candidates.map(toResponseCandidate),
+          }
+        : null,
+      history_rounds: historyRounds.map((round) => ({
+        round_id: round.roundId,
+        round_index: round.roundIndex,
+        created_at: round.createdAt,
+        candidates: round.candidates.map(toResponseCandidate),
+      })),
       graph_trace_summary: recommendation.trace,
       runtime_diagnostics: recommendation.diagnostics,
     },
@@ -111,7 +163,7 @@ export async function confirmTopicCandidateController(
     };
   }
 
-  const projectCandidates = context.app.topicCandidateStore.get(project.id);
+  const projectCandidates = context.app.topicCandidateStore.get(project.id)?.candidatesById;
   const candidate = projectCandidates?.get(context.params.candidateId);
   if (!candidate) {
     return {

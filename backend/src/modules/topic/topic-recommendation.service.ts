@@ -36,7 +36,23 @@ export async function recommendTopicCandidatesWithTrace(
     },
   );
 
-  return result;
+  if (!options?.projectId) {
+    return result;
+  }
+
+  const previousRoundCount = db.topicRunCounts.get(options.projectId) ?? 0;
+  const roundIndex = previousRoundCount + 1;
+  db.topicRunCounts.set(options.projectId, roundIndex);
+
+  return {
+    ...result,
+    topic_run: {
+      project_id: options.projectId,
+      round_id: `topic_run_${db.generateId()}`,
+      round_index: roundIndex,
+      previous_round_count: previousRoundCount,
+    },
+  };
 }
 
 export async function recommendTopicCandidates(

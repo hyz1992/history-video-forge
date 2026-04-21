@@ -69,10 +69,51 @@ watch(
         {{ topicStore.state.isGenerating ? "生成中..." : "开始生成选题" }}
       </button>
 
+      <section
+        v-if="topicStore.state.currentRound"
+        data-testid="current-topic-round"
+        class="topic-round-panel"
+      >
+        <h2>当前轮</h2>
+        <TopicCandidateList
+          :candidates="topicStore.state.currentRound.candidates"
+          @select="(candidate) => topicStore.openCandidate(candidate, topicStore.state.currentRound?.round_id)"
+        />
+      </section>
+
       <TopicCandidateList
+        v-else
         :candidates="topicStore.state.candidates"
         @select="topicStore.openCandidate"
       />
+
+      <section
+        v-if="topicStore.state.historyRounds.length > 0"
+        data-testid="topic-history"
+        class="topic-history-panel"
+      >
+        <h2>候选历史</h2>
+
+        <article
+          v-for="round in topicStore.state.historyRounds"
+          :key="round.round_id"
+          class="topic-history-round"
+        >
+          <h3>第 {{ round.round_index ?? "-" }} 轮</h3>
+
+          <button
+            v-for="candidate in round.candidates"
+            :key="candidate.candidate_id"
+            :data-testid="`history-candidate-${candidate.candidate_id}`"
+            type="button"
+            class="topic-history-candidate"
+            @click="topicStore.openCandidate(candidate, round.round_id)"
+          >
+            <strong>{{ candidate.title }}</strong>
+            <span>{{ candidate.one_line_angle }}</span>
+          </button>
+        </article>
+      </section>
     </div>
 
     <div v-else-if="topicStore.state.activeTab === 'library'" data-testid="panel-library">

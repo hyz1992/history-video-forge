@@ -5,6 +5,18 @@ import { registerTopicRoutes } from "./modules/topic/topic.routes";
 import { registerScriptRoutes } from "./modules/script/script.routes";
 import type { StoredTopicCandidate } from "./modules/topic/topic-confirm.service";
 
+export interface StoredTopicCandidateRound {
+  roundId: string;
+  roundIndex: number;
+  createdAt: string;
+  candidates: StoredTopicCandidate[];
+}
+
+export interface ProjectTopicCandidateState {
+  candidatesById: Map<string, StoredTopicCandidate>;
+  rounds: StoredTopicCandidateRound[];
+}
+
 export interface InjectRequest {
   method: string;
   url: string;
@@ -38,7 +50,7 @@ interface RouteRecord {
 export interface AppInstance {
   env: typeof env;
   db: DbClient;
-  topicCandidateStore: Map<string, Map<string, StoredTopicCandidate>>;
+  topicCandidateStore: Map<string, ProjectTopicCandidateState>;
   addRoute: (method: string, pattern: string, handler: RouteHandler) => void;
   inject: (request: InjectRequest) => Promise<InjectResponse>;
   healthcheck: () => { status: string; nodeEnv: string };
@@ -81,7 +93,7 @@ export function buildApp(): AppInstance {
   const app: AppInstance = {
     env,
     db: createDbClient(),
-    topicCandidateStore: new Map<string, Map<string, StoredTopicCandidate>>(),
+    topicCandidateStore: new Map<string, ProjectTopicCandidateState>(),
     addRoute(method, pattern, handler) {
       routes.push({
         method: method.toUpperCase(),

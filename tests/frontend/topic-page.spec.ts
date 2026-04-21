@@ -6,6 +6,7 @@ import { RouterView } from "vue-router";
 import { describe, expect, it } from "vitest";
 
 import { createAppRouter } from "../../frontend/src/router/index.js";
+import TopicPage from "../../frontend/src/views/TopicPage.vue";
 import { projectStoreKey } from "../../frontend/src/stores/project";
 import { scriptStoreKey } from "../../frontend/src/stores/script";
 import { topicStoreKey } from "../../frontend/src/stores/topic";
@@ -153,5 +154,119 @@ describe("phase 4 app shell", () => {
     );
     expect(wrapper.text()).toContain("晏子使楚");
     expect(wrapper.text()).toContain("未命名项目");
+  });
+});
+
+describe("topic workspace rounds", () => {
+  it("renders the current round separately from candidate history and allows confirming from history", async () => {
+    const router = createAppRouter();
+    await router.push("/projects/project-1/topic");
+    await router.isReady();
+
+    const projectStore = createProjectStoreStub();
+    projectStore.syncProject({
+      project_id: "project-1",
+      current_status: "topic_candidates_ready",
+    });
+
+    const calls = {
+      confirm: [] as Array<{ roundId: string; candidateId: string }>,
+    };
+
+    const topicState = reactive({
+        activeTab: "system",
+        candidates: [],
+        currentRound: {
+          round_id: "round-2",
+          label: "第 2 轮",
+          candidates: [
+            {
+              candidate_id: "candidate-current",
+              title: "当前轮主题",
+              one_line_angle: "当前轮角度",
+              family_label: "family",
+              scope_label: "scope",
+              strong_scene: "当前轮场景",
+              risk_hints: [],
+            },
+          ],
+        },
+        historyRounds: [
+          {
+            round_id: "round-1",
+            label: "第 1 轮",
+            candidates: [
+              {
+                candidate_id: "candidate-history",
+                title: "历史轮主题",
+                one_line_angle: "历史轮角度",
+                family_label: "family",
+                scope_label: "scope",
+                strong_scene: "历史轮场景",
+                risk_hints: [],
+              },
+            ],
+          },
+        ],
+        selectedCandidate: null as null | {
+          candidate_id: string;
+          title: string;
+          one_line_angle: string;
+          family_label: string;
+          scope_label: string;
+          strong_scene: string;
+          risk_hints: string[];
+        },
+        selectedRoundId: null as string | null,
+        isGenerating: false,
+        isConfirming: false,
+        confirmedTopicPackageId: null,
+      });
+    const topicStore = {
+      state: topicState,
+      selectTab() {},
+      async generateSystemRecommendations() {},
+      openCandidate(candidate: { candidate_id: string }, roundId = "round-2") {
+        topicState.selectedCandidate = candidate;
+        topicState.selectedRoundId = roundId;
+      },
+      closeCandidate() {
+        topicState.selectedCandidate = null;
+        topicState.selectedRoundId = null;
+      },
+      async confirmSelectedCandidate() {
+        if (!topicState.selectedCandidate || !topicState.selectedRoundId) {
+          return;
+        }
+
+        calls.confirm.push({
+          roundId: topicState.selectedRoundId,
+          candidateId: topicState.selectedCandidate.candidate_id,
+        });
+      },
+    };
+
+    const wrapper = mount(TopicPage, {
+      global: {
+        plugins: [router],
+        provide: {
+          [projectStoreKey as symbol]: projectStore as never,
+          [topicStoreKey as symbol]: topicStore as never,
+        },
+      },
+    });
+
+    expect(wrapper.get("[data-testid='current-topic-round']").text()).toContain("当前轮主题");
+    expect(wrapper.get("[data-testid='topic-history']").text()).toContain("历史轮主题");
+
+    await wrapper.get("[data-testid='history-candidate-candidate-history']").trigger("click");
+    await wrapper.get("[data-testid='confirm-candidate']").trigger("click");
+
+    expect(calls.confirm).toEqual([
+      {
+        roundId: "round-1",
+        candidateId: "candidate-history",
+      },
+    ]);
   });
 });

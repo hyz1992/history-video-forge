@@ -5,7 +5,10 @@ import { createDbClient } from "../../../backend/src/db/client.js";
 import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
 import { createOpenAiCompatibleProvider } from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
-import { recommendTopicCandidates } from "../../../backend/src/modules/topic/topic-recommendation.service.js";
+import {
+  recommendTopicCandidates,
+  recommendTopicCandidatesWithTrace,
+} from "../../../backend/src/modules/topic/topic-recommendation.service.js";
 
 const runtimeCandidate = {
   title: "晏子使楚",
@@ -151,6 +154,60 @@ describe("topic runtime recommendation", () => {
       name: "ExternalServiceError",
       code: "invalid_response",
       operation: "topic.candidate-builder",
+    });
+  });
+
+  it("emits project-scoped topic run metadata when the same project generates multiple rounds", async () => {
+    const db = createDbClient();
+    const invokeApi = vi.fn(async () => JSON.stringify([runtimeCandidate]));
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const firstRun = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "晏子使楚",
+        summary: "第一轮生成。",
+        coreConflict: "楚王当众压场，晏子必须当场顶回。",
+        strongScene: "楚王连续压场，晏子一句句顶回去。",
+        sourceHint: "《晏子春秋》",
+        recentUsageHint: "第一次运行",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    const secondRun = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "晏子使楚",
+        summary: "第二轮生成。",
+        coreConflict: "同一项目再次生成候选。",
+        strongScene: "第二轮生成结束后仍能查看上一轮。",
+        sourceHint: "《晏子春秋》",
+        recentUsageHint: "第二次运行",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect((firstRun as any).topic_run).toMatchObject({
+      project_id: "project-1",
+      round_index: 1,
+    });
+    expect((secondRun as any).topic_run).toMatchObject({
+      project_id: "project-1",
+      round_index: 2,
+      previous_round_count: 1,
     });
   });
 });

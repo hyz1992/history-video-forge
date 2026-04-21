@@ -83,6 +83,7 @@ export interface DbClient {
   events: Map<string, EventRegistryRecord>;
   topicPackages: Map<string, TopicPackageRecord>;
   candidateCache: Map<string, CandidateCacheRecord>;
+  topicRunCounts: Map<string, number>;
   scriptRecords: Map<string, ScriptRecord>;
 }
 
@@ -93,6 +94,7 @@ export function createDbClient(): DbClient {
     events: new Map<string, EventRegistryRecord>(),
     topicPackages: new Map<string, TopicPackageRecord>(),
     candidateCache: new Map<string, CandidateCacheRecord>(),
+    topicRunCounts: new Map<string, number>(),
     scriptRecords: new Map<string, ScriptRecord>(),
   };
 }

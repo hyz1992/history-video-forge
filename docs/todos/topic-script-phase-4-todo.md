@@ -6,7 +6,8 @@
 - [x] 第四阶段实施计划已完成
 - [x] 第四阶段 `Task 0` 已收口
 - [x] 第四阶段 `Task 1` 已完成
-- [ ] 第四阶段 `Task 2` 至 `Task 8` 尚未开始
+- [x] 第四阶段 `Task 2` 已完成
+- [ ] 第四阶段 `Task 3` 至 `Task 8` 尚未开始
 
 ## 对应设计
 
@@ -43,11 +44,11 @@
 
 ### Task 2：接入项目态 topic 工作区与多轮候选历史
 
-- [ ] Step 1：先写 `tests/frontend/topic-page.spec.ts`、`tests/backend/api/topic-api-runtime.test.ts`、`tests/backend/topic/topic-runtime-recommendation.test.ts` 的失败用例
-- [ ] Step 2：运行 `npm test -- tests/frontend/topic-page.spec.ts tests/backend/api/topic-api-runtime.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts` 并确认红灯
-- [ ] Step 3：做 topic 当前轮、候选历史和从任意轮确认的最小实现
-- [ ] Step 4：运行同一组测试并确认绿灯
-- [ ] Step 5：提交 `Task 2`
+- [x] Step 1：先写 `tests/frontend/topic-page.spec.ts`、`tests/backend/api/topic-api-runtime.test.ts`、`tests/backend/topic/topic-runtime-recommendation.test.ts` 的失败用例
+- [x] Step 2：运行 `npm test -- tests/frontend/topic-page.spec.ts tests/backend/api/topic-api-runtime.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts` 并确认红灯
+- [x] Step 3：做 topic 当前轮、候选历史和从任意轮确认的最小实现
+- [x] Step 4：运行同一组测试并确认绿灯
+- [x] Step 5：提交 `Task 2`
 
 ### Task 3：打通 confirm 后自动 script generate 与项目恢复落点
 
