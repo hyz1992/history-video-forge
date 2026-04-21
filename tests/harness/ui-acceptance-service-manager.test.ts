@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildUiAcceptanceServiceSpawnOptions,
+  buildUiAcceptanceServiceStopCommand,
   buildUiAcceptanceServiceDefinitions,
   runWithUiAcceptanceServices,
   type UiAcceptanceServiceHandle,
@@ -31,6 +33,36 @@ describe("ui acceptance service manager", () => {
         timeoutMs: 30000,
       },
     ]);
+  });
+
+  it("uses shell-based npm spawning on Windows to avoid spawn EINVAL", () => {
+    expect(
+      buildUiAcceptanceServiceSpawnOptions({
+        name: "backend",
+        command: "npm",
+        args: ["run", "dev:backend"],
+        cwd: "D:/myproject/story-video-forge2",
+        readyUrl: "http://127.0.0.1:3000/healthz",
+        intervalMs: 500,
+        timeoutMs: 30000,
+      }),
+    ).toEqual({
+      cwd: "D:/myproject/story-video-forge2",
+      stdio: "pipe",
+      shell: process.platform === "win32",
+    });
+  });
+
+  it("uses taskkill tree termination on Windows service cleanup", () => {
+    expect(buildUiAcceptanceServiceStopCommand(12345)).toEqual(
+      process.platform === "win32"
+        ? {
+            command: "taskkill",
+            args: ["/pid", "12345", "/T", "/F"],
+            shell: true,
+          }
+        : null,
+    );
   });
 
   it("polls readiness until the target becomes reachable", async () => {

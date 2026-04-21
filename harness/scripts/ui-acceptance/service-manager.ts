@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess, type SpawnOptions } from "node:child_process";
 
 import { waitForReady } from "./wait-for-ready";
 
@@ -54,12 +54,57 @@ export function buildUiAcceptanceServiceDefinitions(
   ];
 }
 
-function getSpawnCommand(command: string) {
-  if (process.platform === "win32" && command === "npm") {
-    return "npm.cmd";
+export function buildUiAcceptanceServiceSpawnOptions(
+  service: UiAcceptanceServiceDefinition,
+): SpawnOptions {
+  return {
+    cwd: service.cwd,
+    stdio: "pipe",
+    shell: process.platform === "win32" && service.command === "npm",
+  };
+}
+
+export function buildUiAcceptanceServiceStopCommand(pid: number) {
+  if (process.platform !== "win32") {
+    return null;
   }
 
-  return command;
+  return {
+    command: "taskkill",
+    args: ["/pid", String(pid), "/T", "/F"],
+    shell: true,
+  } as const;
+}
+
+async function stopChildProcess(childProcess: ChildProcess) {
+  if (childProcess.exitCode !== null) {
+    return;
+  }
+
+  await new Promise<void>((resolve) => {
+    childProcess.once("exit", () => resolve());
+
+    const stopCommand =
+      typeof childProcess.pid === "number"
+        ? buildUiAcceptanceServiceStopCommand(childProcess.pid)
+        : null;
+
+    if (stopCommand) {
+      const killer = spawn(stopCommand.command, stopCommand.args, {
+        shell: stopCommand.shell,
+        stdio: "ignore",
+      });
+
+      killer.once("exit", () => {
+        if (childProcess.exitCode !== null) {
+          resolve();
+        }
+      });
+      return;
+    }
+
+    childProcess.kill();
+  });
 }
 
 function createChildProcessHandle(
@@ -69,14 +114,7 @@ function createChildProcessHandle(
   return {
     name: service.name,
     stop: async () => {
-      if (childProcess.exitCode !== null) {
-        return;
-      }
-
-      await new Promise<void>((resolve) => {
-        childProcess.once("exit", () => resolve());
-        childProcess.kill();
-      });
+      await stopChildProcess(childProcess);
     },
   };
 }
@@ -84,10 +122,11 @@ function createChildProcessHandle(
 async function defaultSpawnService(
   service: UiAcceptanceServiceDefinition,
 ): Promise<UiAcceptanceServiceHandle> {
-  const childProcess = spawn(getSpawnCommand(service.command), service.args, {
-    cwd: service.cwd,
-    stdio: "pipe",
-  });
+  const childProcess = spawn(
+    service.command,
+    service.args,
+    buildUiAcceptanceServiceSpawnOptions(service),
+  );
 
   return createChildProcessHandle(service, childProcess);
 }
