@@ -10,7 +10,8 @@
 - [x] 第四阶段 `Task 3` 已完成
 - [x] 第四阶段 `Task 4` 已完成
 - [x] 第四阶段 `Task 5` 已完成
-- [ ] 第四阶段 `Task 6` 至 `Task 8` 尚未开始
+- [x] 第四阶段 `Task 6` 已完成
+- [ ] 第四阶段 `Task 7` 至 `Task 8` 尚未开始
 
 ## 对应设计
 
@@ -79,11 +80,11 @@
 
 ### Task 6：重做 script 状态机、历史归档与重选题闭环
 
-- [ ] Step 1：先写 `tests/frontend/script-workspace.spec.ts`、`tests/frontend/script-page.spec.ts`、`tests/backend/api/script-review-actions.test.ts` 的失败用例
-- [ ] Step 2：运行 `npm test -- tests/frontend/script-workspace.spec.ts tests/frontend/script-page.spec.ts tests/backend/api/script-review-actions.test.ts` 并确认红灯
-- [ ] Step 3：做 script 状态机、历史归档和重选题确认的最小实现
-- [ ] Step 4：运行同一组测试并确认绿灯
-- [ ] Step 5：提交 `Task 6`
+- [x] Step 1：先写 `tests/frontend/script-workspace.spec.ts`、`tests/frontend/script-page.spec.ts`、`tests/backend/api/script-review-actions.test.ts` 的失败用例
+- [x] Step 2：运行 `npm test -- tests/frontend/script-workspace.spec.ts tests/frontend/script-page.spec.ts tests/backend/api/script-review-actions.test.ts` 并确认红灯
+- [x] Step 3：做 script 状态机、历史归档和重选题确认的最小实现
+- [x] Step 4：运行同一组测试并确认绿灯
+- [x] Step 5：提交 `Task 6`
 
 ### Task 7：按旧项目经验重做首页、项目列表与 topic/script 产品化 UI
 

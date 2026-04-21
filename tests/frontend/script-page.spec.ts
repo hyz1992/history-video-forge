@@ -2,6 +2,7 @@
 
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
+import { createAppRouter } from "../../frontend/src/router/index.js";
 
 import ScriptPage from "../../frontend/src/views/ScriptPage.vue";
 import {
@@ -19,6 +20,13 @@ function flushPromises() {
   });
 }
 
+async function createScriptRouter(projectId: string) {
+  const router = createAppRouter();
+  await router.push(`/projects/${projectId}/script`);
+  await router.isReady();
+  return router;
+}
+
 describe("script page", () => {
   it("loads active script snapshot and renders draft/local validation/semantic review", async () => {
     const calls = {
@@ -26,6 +34,8 @@ describe("script page", () => {
       patch: [] as string[],
       regen: [] as string[],
     };
+
+    const router = await createScriptRouter("project-1");
 
     const projectStore = createProjectStore({
       async createProject() {
@@ -85,6 +95,7 @@ describe("script page", () => {
 
     const wrapper = mount(ScriptPage, {
       global: {
+        plugins: [router],
         provide: {
           [projectStoreKey as symbol]: projectStore,
           [scriptStoreKey as symbol]: scriptStore,
@@ -194,6 +205,8 @@ describe("script page", () => {
       },
     ];
 
+    const router = await createScriptRouter("project-2");
+
     const projectStore = createProjectStore({
       async createProject() {
         return {
@@ -229,6 +242,7 @@ describe("script page", () => {
 
     const wrapper = mount(ScriptPage, {
       global: {
+        plugins: [router],
         provide: {
           [projectStoreKey as symbol]: projectStore,
           [scriptStoreKey as symbol]: scriptStore,
@@ -251,7 +265,91 @@ describe("script page", () => {
     expect(calls.regen).toEqual(["project-2"]);
     expect(calls.loadSnapshot).toEqual(["project-2", "project-2", "project-2"]);
     expect(wrapper.get("[data-testid='script-text']").text()).toContain("重生后最终通过");
+    expect(wrapper.get("[data-testid='history-entry-0']").text()).toContain("重生后最终通过");
+    expect(wrapper.get("[data-testid='history-entry-1']").text()).toContain("修补后通过");
+    expect(wrapper.get("[data-testid='history-entry-2']").text()).toContain("初版脚本");
     expect(wrapper.find("[data-testid='patch-once']").exists()).toBe(false);
     expect(wrapper.find("[data-testid='regen-once']").exists()).toBe(false);
+  });
+
+  it("requires a second confirmation before returning from script to topic", async () => {
+    const router = createAppRouter();
+    await router.push("/projects/project-3/script");
+    await router.isReady();
+
+    const projectStore = createProjectStore({
+      async createProject() {
+        return {
+          project_id: "project-3",
+          current_status: "script_ready",
+        };
+      },
+    });
+    projectStore.syncProject({
+      project_id: "project-3",
+      current_status: "script_ready",
+    });
+
+    const scriptStore = createScriptStore({
+      projectStore,
+      api: {
+        async loadSnapshot(projectId) {
+          return {
+            project_id: projectId,
+            current_status: "script_ready",
+            active_script: {
+              script_record_id: "script-3",
+              script_text: "Current draft",
+              opening_span: "Current opening",
+              ending_span: "Current ending",
+              review_decision: "pass",
+              patch_intent: null,
+              local_validation: {
+                stage: "script_local_validation",
+                decision: "pass",
+              },
+              semantic_review: {
+                stage: "script_semantic_review",
+                decision: "pass",
+                patch_intent: null,
+              },
+              execution_state: {
+                patch_used: false,
+                regenerate_used: false,
+              },
+            },
+          };
+        },
+        async runPatchOnce() {
+          throw new Error("patch should not be called");
+        },
+        async runRegenOnce() {
+          throw new Error("regen should not be called");
+        },
+      },
+    });
+
+    const wrapper = mount(ScriptPage, {
+      global: {
+        plugins: [router],
+        provide: {
+          [projectStoreKey as symbol]: projectStore,
+          [scriptStoreKey as symbol]: scriptStore,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    await wrapper.get("[data-testid='return-topic']").trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.fullPath).toBe("/projects/project-3/script");
+    expect(wrapper.get("[data-testid='confirm-return-topic']").text()).toContain("确认");
+
+    await wrapper.get("[data-testid='confirm-return-topic']").trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.fullPath).toBe("/projects/project-3/topic");
   });
 });

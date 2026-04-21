@@ -139,4 +139,59 @@ describe("script review actions api", () => {
     expect(body.local_validation.decision).toBe("pass");
     expect(body.semantic_review.decision).toBe("pass");
   });
+  it("archives the previous current script when a new topic is confirmed for the same project", async () => {
+    generateScriptDraft.mockReset();
+    generateScriptDraft.mockResolvedValueOnce(regeneratedDraft);
+
+    const app = buildApp();
+    const projectId = await prepareConfirmedTopic(app);
+
+    const firstScriptResponse = await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectId}/script/generate`,
+      payload: {
+        allow_patch: false,
+        allow_regen: false,
+      },
+    });
+
+    expect(firstScriptResponse.statusCode).toBe(200);
+
+    const secondRecommendationResponse = await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectId}/topic/recommendations`,
+      payload: {
+        canonical_name: "寮犲贰瀹堝煄",
+        summary: "寮犲贰瀹堝煄鍚庝粛瑕佸湪瀛ょ珛鏃犳彺鏃堕《浣忓叏鍩庡帇鍔涖€?",
+        core_conflict: "瀛ょ珛鏃犳彺锛屼絾涓嶈兘閫€銆?",
+        strong_scene: "鍩庡ご涓嬩汉蹇冨姩鎽囷紝寮犲贰褰撳満鎶婂満闈㈢珛浣忋€?",
+        source_hint: "銆婃柊鍞愪功銆?",
+        recent_usage_hint: "鍚屼竴椤圭洰閲嶉€夋柊涓婚",
+        tags: ["battle", "showdown", "defense"],
+      },
+    });
+    const nextCandidateId = secondRecommendationResponse.json().candidates[0].candidate_id as string;
+
+    const confirmResponse = await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectId}/topic/candidates/${nextCandidateId}/confirm`,
+      payload: {
+        confirm_reason: "replace_current_topic",
+      },
+    });
+
+    expect(confirmResponse.statusCode).toBe(200);
+
+    const snapshotResponse = await app.inject({
+      method: "GET",
+      url: `/api/projects/${projectId}`,
+    });
+
+    expect(snapshotResponse.statusCode).toBe(200);
+
+    const snapshot = snapshotResponse.json();
+    expect(snapshot.active_topic_package.canonical_title).toBe("寮犲贰瀹堝煄");
+    expect(snapshot.active_script).toBeNull();
+    expect(app.db.scriptRecords.size).toBe(1);
+  });
 });

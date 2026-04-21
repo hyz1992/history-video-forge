@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
-import { useRoute } from "vue-router";
+import { computed, onMounted, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
 
 import ScriptDraftPanel from "../components/script/ScriptDraftPanel.vue";
 import ScriptHistoryPanel from "../components/script/ScriptHistoryPanel.vue";
@@ -13,6 +13,8 @@ import { useScriptStore } from "../stores/script";
 const projectStore = useProjectStore();
 const scriptStore = useScriptStore();
 const route = useRoute();
+const router = useRouter();
+const isReturnTopicConfirmationVisible = ref(false);
 
 const selectedHistoryEntry = computed(() =>
   scriptStore.state.history.find(
@@ -21,7 +23,13 @@ const selectedHistoryEntry = computed(() =>
 );
 
 const visibleScript = computed(
-  () => selectedHistoryEntry.value?.script ?? scriptStore.state.snapshot?.active_script ?? null,
+  () =>
+    selectedHistoryEntry.value?.script ??
+    scriptStore.state.snapshot?.active_script ??
+    ((scriptStore.state.snapshot?.current_status === "script_reviewing" ||
+      scriptStore.state.snapshot?.current_status === "script_failed")
+      ? scriptStore.state.history[0]?.script ?? null
+      : null),
 );
 
 const isInitialGenerationPending = computed(() =>
@@ -52,6 +60,20 @@ onMounted(async () => {
     await scriptStore.generateInitialScript();
   }
 });
+
+function requestReturnToTopic() {
+  isReturnTopicConfirmationVisible.value = true;
+}
+
+async function confirmReturnToTopic() {
+  const projectId = projectStore.state.projectId;
+  if (!projectId) {
+    return;
+  }
+
+  isReturnTopicConfirmationVisible.value = false;
+  await router.push(`/projects/${projectId}/topic`);
+}
 </script>
 
 <template>
@@ -83,6 +105,23 @@ onMounted(async () => {
     </section>
 
     <div v-if="visibleScript" class="script-page-body">
+      <section class="script-actions">
+        <button
+          type="button"
+          data-testid="return-topic"
+          @click="requestReturnToTopic"
+        >
+          返回选题
+        </button>
+        <button
+          v-if="isReturnTopicConfirmationVisible"
+          type="button"
+          data-testid="confirm-return-topic"
+          @click="confirmReturnToTopic"
+        >
+          确认返回选题
+        </button>
+      </section>
       <ScriptDraftPanel :active-script="visibleScript" />
       <ScriptReviewPanel
         :active-script="visibleScript"

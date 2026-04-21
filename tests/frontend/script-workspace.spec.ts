@@ -42,10 +42,11 @@ function createSnapshot(
   scriptText: string,
   nodeName: string,
   diagnosticCode: string,
+  currentStatus = "script_ready",
 ): ScriptSnapshot {
   return {
     project_id: "project-6",
-    current_status: "script_ready",
+    current_status: currentStatus,
     active_script: {
       script_record_id: "script-6",
       script_text: scriptText,
@@ -207,9 +208,41 @@ describe("script workspace", () => {
     await wrapper.get("[data-testid='restore-history-1']").trigger("click");
     await flushPromises();
 
+    expect(wrapper.get("[data-testid='script-status']").text()).toContain(
+      "history_restored",
+    );
     expect(wrapper.get("[data-testid='history-viewing']").text()).toContain("历史版本");
     expect(wrapper.get("[data-testid='script-text']").text()).toContain("First draft");
     expect(wrapper.get("[data-testid='trace-node-0']").text()).toContain("script-generate");
+  });
+
+  it("keeps the latest successful draft visible while the workspace is in script_reviewing", async () => {
+    const snapshots = [
+      createSnapshot("Stable draft", "script-generate", "draft_created"),
+      {
+        project_id: "project-6",
+        current_status: "script_reviewing",
+        active_script: null,
+      } satisfies ScriptSnapshot,
+    ];
+
+    const { wrapper, scriptStore } = await mountScriptPage(async () => {
+      const snapshot = snapshots.shift();
+      if (!snapshot) {
+        throw new Error("snapshot queue exhausted");
+      }
+      return snapshot;
+    });
+
+    await flushPromises();
+    await scriptStore.loadActiveScriptSnapshot();
+    await flushPromises();
+
+    expect(wrapper.find("[data-testid='script-empty']").exists()).toBe(false);
+    expect(wrapper.get("[data-testid='script-status']").text()).toContain(
+      "script_reviewing",
+    );
+    expect(wrapper.get("[data-testid='script-text']").text()).toContain("Stable draft");
   });
 
   it("shows an in-progress workspace state instead of an empty placeholder when the first script run has started", async () => {

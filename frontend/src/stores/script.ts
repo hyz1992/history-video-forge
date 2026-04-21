@@ -208,6 +208,10 @@ function toErrorMessage(error: unknown) {
   return "script_snapshot_load_failed";
 }
 
+function getLatestHistoryEntry(history: ScriptHistoryEntry[]) {
+  return history[0] ?? null;
+}
+
 export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
   const state = reactive<ScriptStoreState>({
     snapshot: null,
@@ -242,8 +246,16 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
         state.history = appendHistoryEntry(state.history, snapshot.active_script);
         state.selectedHistoryEntryId = state.history[0]?.entry_id ?? null;
       } else {
-        state.history = [];
-        state.selectedHistoryEntryId = null;
+        const latestHistoryEntry = getLatestHistoryEntry(state.history);
+        if (
+          latestHistoryEntry &&
+          (snapshot.current_status === "script_reviewing" ||
+            snapshot.current_status === "script_failed")
+        ) {
+          state.selectedHistoryEntryId = latestHistoryEntry.entry_id;
+        } else {
+          state.selectedHistoryEntryId = null;
+        }
       }
     } catch (error) {
       state.loadError = toErrorMessage(error);
@@ -297,6 +309,13 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
 
   function selectHistoryEntry(entryId: string) {
     state.selectedHistoryEntryId = entryId;
+    input.projectStore.syncProject({
+      project_id: input.projectStore.state.projectId ?? state.snapshot?.project_id ?? "",
+      current_status:
+        entryId === getLatestHistoryEntry(state.history)?.entry_id
+          ? (state.snapshot?.current_status ?? "script_ready")
+          : "history_restored",
+    });
   }
 
   async function runPatchOnce() {
@@ -306,6 +325,16 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
     }
 
     state.isRunningAction = true;
+    if (state.snapshot) {
+      state.snapshot = {
+        ...state.snapshot,
+        current_status: "script_reviewing",
+      };
+    }
+    input.projectStore.syncProject({
+      project_id: projectId,
+      current_status: "script_reviewing",
+    });
     try {
       await input.api.runPatchOnce(projectId);
       await loadActiveScriptSnapshot();
@@ -321,6 +350,16 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
     }
 
     state.isRunningAction = true;
+    if (state.snapshot) {
+      state.snapshot = {
+        ...state.snapshot,
+        current_status: "script_reviewing",
+      };
+    }
+    input.projectStore.syncProject({
+      project_id: projectId,
+      current_status: "script_reviewing",
+    });
     try {
       await input.api.runRegenOnce(projectId);
       await loadActiveScriptSnapshot();

@@ -85,6 +85,7 @@ export async function confirmTopicCandidate(input: ConfirmTopicCandidateInput) {
   migrateProjectStorageOnTopicConfirm(input.project, saved.title);
   input.project.status = "script_ready";
   input.project.activeTopicPackageId = saved.id;
+  input.project.activeScriptRecordId = null;
   input.project.updatedAt = new Date();
 
   return {
