@@ -2,6 +2,9 @@ import { TopicCandidateCard } from "../../../../shared/src/index.js";
 import type { DbClient } from "../../db/client.js";
 import { saveCachedCandidate } from "../../modules/cache/candidate-cache.repository.js";
 import type { BuildTopicCandidatesInput } from "../../modules/topic/topic-candidate.builder.js";
+import type { GraphTraceNodeSummary } from "./graph-trace.js";
+
+export const TOPIC_CANDIDATE_TARGET_COUNT = 3;
 
 export interface TopicRecommendationGraphDependencies {
   invokeStructuredPrompt: <T>(input: {
@@ -15,6 +18,9 @@ export interface TopicRecommendationGraphRuntime {
   input: BuildTopicCandidatesInput;
   projectId?: string | null;
   candidates: ReturnType<typeof TopicCandidateCard.parse>[];
+  traceNodes: GraphTraceNodeSummary[];
+  repairTriggered: boolean;
+  slotsInsufficient: boolean;
 }
 
 function buildCandidateFingerprint(
@@ -22,6 +28,29 @@ function buildCandidateFingerprint(
   oneLineAngle: string,
 ): string {
   return `${canonicalName}::${oneLineAngle}`;
+}
+
+async function persistTopicCandidates(
+  runtime: TopicRecommendationGraphRuntime,
+  candidates: ReturnType<typeof TopicCandidateCard.parse>[],
+) {
+  for (const candidate of candidates) {
+    await saveCachedCandidate(runtime.db, {
+      projectId: runtime.projectId ?? null,
+      fingerprint: buildCandidateFingerprint(
+        runtime.input.canonicalName,
+        candidate.one_line_angle,
+      ),
+      oneLineAngle: candidate.one_line_angle,
+      familyLabel: candidate.family_label,
+      scopeLabel: candidate.scope_label,
+      viralRubricJson: candidate.viral_rubric,
+      estimatedDurationBandJson: candidate.estimated_duration_band,
+      strongScene: candidate.strong_scene,
+      coreConflict: candidate.core_conflict,
+      mustCoverPreviewJson: candidate.must_cover_preview,
+    });
+  }
 }
 
 function normalizeTopicCandidateOutputs(rawOutput: unknown): unknown[] {
@@ -156,6 +185,68 @@ function toRubricLevel(value: unknown): "low" | "medium" | "high" {
   return "medium";
 }
 
+async function applyRuntimeCandidates(input: {
+  rawOutput: unknown;
+  runtime: TopicRecommendationGraphRuntime;
+  append: boolean;
+}) {
+  const { rawOutput, runtime, append } = input;
+  const runtimeCandidates = normalizeTopicCandidateOutputs(rawOutput);
+  const normalizedCandidates = runtimeCandidates
+    .map((candidate) =>
+      normalizeTopicCandidateCard(candidate as Record<string, unknown>, runtime),
+    )
+    .slice(0, TOPIC_CANDIDATE_TARGET_COUNT);
+
+  if (!append) {
+    await persistTopicCandidates(runtime, normalizedCandidates);
+    runtime.candidates = normalizedCandidates;
+    return;
+  }
+
+  const existingFingerprints = new Set(
+    runtime.candidates.map((candidate) =>
+      buildCandidateFingerprint(
+        runtime.input.canonicalName,
+        candidate.one_line_angle,
+      ),
+    ),
+  );
+  const repairCandidates = normalizedCandidates.filter((candidate) => {
+    const fingerprint = buildCandidateFingerprint(
+      runtime.input.canonicalName,
+      candidate.one_line_angle,
+    );
+    if (existingFingerprints.has(fingerprint)) {
+      return false;
+    }
+    existingFingerprints.add(fingerprint);
+    return true;
+  });
+  const availableSlots =
+    TOPIC_CANDIDATE_TARGET_COUNT - runtime.candidates.length;
+  const nextCandidates = repairCandidates.slice(0, Math.max(availableSlots, 0));
+
+  await persistTopicCandidates(runtime, nextCandidates);
+  runtime.candidates = [...runtime.candidates, ...nextCandidates];
+}
+
+function createTraceNode(
+  runtime: TopicRecommendationGraphRuntime,
+  node_name: "topic-candidate-generate" | "topic-candidate-repair",
+): GraphTraceNodeSummary {
+  const node = {
+    node_name,
+    input_ref: `topic-event:${runtime.input.canonicalName}`,
+    output_ref: `topic-candidate-list:${runtime.candidates.length}`,
+    failure_reason: null,
+  };
+
+  runtime.traceNodes.push(node);
+
+  return node;
+}
+
 export function createTopicRecommendationNodes(input: {
   runtime: TopicRecommendationGraphRuntime;
   dependencies: TopicRecommendationGraphDependencies;
@@ -168,39 +259,39 @@ export function createTopicRecommendationNodes(input: {
         promptId: "topic.candidate-builder",
         input: runtime.input,
       });
-      const runtimeCandidates = normalizeTopicCandidateOutputs(rawOutput);
-      const candidates = runtimeCandidates.map((candidate) =>
-        normalizeTopicCandidateCard(
-          candidate as Record<string, unknown>,
-          runtime,
-        ),
-      );
-
-      for (const candidate of candidates) {
-        await saveCachedCandidate(runtime.db, {
-          projectId: runtime.projectId ?? null,
-          fingerprint: buildCandidateFingerprint(
-            runtime.input.canonicalName,
-            candidate.one_line_angle,
-          ),
-          oneLineAngle: candidate.one_line_angle,
-          familyLabel: candidate.family_label,
-          scopeLabel: candidate.scope_label,
-          viralRubricJson: candidate.viral_rubric,
-          estimatedDurationBandJson: candidate.estimated_duration_band,
-          strongScene: candidate.strong_scene,
-          coreConflict: candidate.core_conflict,
-          mustCoverPreviewJson: candidate.must_cover_preview,
-        });
-      }
-
-      runtime.candidates = candidates;
+      await applyRuntimeCandidates({
+        rawOutput,
+        runtime,
+        append: false,
+      });
+      runtime.slotsInsufficient =
+        runtime.candidates.length < TOPIC_CANDIDATE_TARGET_COUNT;
+      const node = createTraceNode(runtime, "topic-candidate-generate");
 
       return {
-        node_name: "topic-candidate-generate" as const,
-        input_ref: `topic-event:${runtime.input.canonicalName}`,
-        output_ref: `topic-candidate-list:${candidates.length}`,
-        failure_reason: null,
+        ...node,
+        should_repair: runtime.slotsInsufficient,
+      };
+    },
+    async topicCandidateRepair() {
+      runtime.repairTriggered = true;
+
+      const rawOutput = await dependencies.invokeStructuredPrompt<unknown>({
+        promptId: "topic.candidate-builder",
+        input: runtime.input,
+      });
+      await applyRuntimeCandidates({
+        rawOutput,
+        runtime,
+        append: true,
+      });
+      runtime.slotsInsufficient =
+        runtime.candidates.length < TOPIC_CANDIDATE_TARGET_COUNT;
+      const node = createTraceNode(runtime, "topic-candidate-repair");
+
+      return {
+        ...node,
+        should_repair: false,
       };
     },
   };

@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
+const { invokeStructuredPromptMock } = vi.hoisted(() => ({
+  invokeStructuredPromptMock: vi.fn(),
+}));
+
 const runtimeCandidate = {
   title: "晏子使楚",
   one_line_angle: "运行时返回的角度，不应再走 deterministic builder。",
@@ -21,6 +25,14 @@ const runtimeCandidate = {
     visual_promise: "high",
   },
 };
+
+function createRuntimeCandidate(title: string, angle: string) {
+  return {
+    ...runtimeCandidate,
+    title,
+    one_line_angle: angle,
+  };
+}
 
 vi.mock("../../../backend/src/config/env.js", () => ({
   env: {
@@ -45,7 +57,7 @@ vi.mock("../../../backend/src/modules/topic/topic-candidate.builder.js", () => (
 
 vi.mock("../../../backend/src/runtime/llm/openai-compatible-provider.js", () => ({
   createOpenAiCompatibleProvider: vi.fn(() => ({
-    invokeStructuredPrompt: vi.fn(async () => [runtimeCandidate]),
+    invokeStructuredPrompt: invokeStructuredPromptMock,
   })),
 }));
 
@@ -53,6 +65,13 @@ import { buildApp } from "../../../backend/src/app.js";
 
 describe("topic api runtime", () => {
   it("uses the runtime path for topic recommendations while preserving the frozen api shape", async () => {
+    invokeStructuredPromptMock.mockReset();
+    invokeStructuredPromptMock.mockResolvedValue([
+      createRuntimeCandidate("晏子使楚", "第一槽位"),
+      createRuntimeCandidate("张巡守城", "第二槽位"),
+      createRuntimeCandidate("于谦守京", "第三槽位"),
+    ]);
+
     const app = buildApp();
     const projectResponse = await app.inject({
       method: "POST",
@@ -84,18 +103,70 @@ describe("topic api runtime", () => {
       project_id: projectId,
       event_id: expect.any(String),
     });
-    expect(body.candidates).toHaveLength(1);
+    expect(body.candidates).toHaveLength(3);
     expect(body.candidates[0]).toMatchObject({
       candidate_id: expect.any(String),
       title: "晏子使楚",
-      one_line_angle: "运行时返回的角度，不应再走 deterministic builder。",
+      one_line_angle: "第一槽位",
       family_label: "外交压场型",
       scope_label: "单事件",
       viral_rubric: runtimeCandidate.viral_rubric,
     });
   });
 
+  it("repairs to three slots and exposes diagnostics when the initial runtime output is insufficient", async () => {
+    invokeStructuredPromptMock.mockReset();
+    invokeStructuredPromptMock
+      .mockResolvedValueOnce([createRuntimeCandidate("晏子使楚", "第一槽位")])
+      .mockResolvedValueOnce([
+        createRuntimeCandidate("张巡守城", "第二槽位"),
+        createRuntimeCandidate("于谦守京", "第三槽位"),
+      ]);
+
+    const app = buildApp();
+    const projectResponse = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: {
+        name: "Runtime Recommendation Flow",
+      },
+    });
+    const projectId = projectResponse.json().project_id as string;
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectId}/topic/recommendations`,
+      payload: {
+        canonical_name: "晏子使楚",
+        summary: "楚王在公开场合连续压场，晏子当场顶回去。",
+        core_conflict: "楚王当众压场，晏子必须当场顶回。",
+        strong_scene: "楚王连续压场，晏子一句句顶回去。",
+        source_hint: "《晏子春秋》",
+        recent_usage_hint: "近期未出现同 event_id",
+        tags: ["diplomacy", "court", "humiliation", "showdown"],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const body = response.json();
+    expect(body.candidates).toHaveLength(3);
+    expect(body.runtime_diagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "topic_candidate_repair_triggered",
+      }),
+    );
+    expect(invokeStructuredPromptMock).toHaveBeenCalledTimes(2);
+  });
+
   it("returns project-scoped current and historical topic rounds after multiple recommendation runs", async () => {
+    invokeStructuredPromptMock.mockReset();
+    invokeStructuredPromptMock.mockResolvedValue([
+      createRuntimeCandidate("晏子使楚", "第一槽位"),
+      createRuntimeCandidate("张巡守城", "第二槽位"),
+      createRuntimeCandidate("于谦守京", "第三槽位"),
+    ]);
+
     const app = buildApp();
     const projectResponse = await app.inject({
       method: "POST",
@@ -145,11 +216,12 @@ describe("topic api runtime", () => {
       },
       history_rounds: expect.any(Array),
     });
-    expect(body.current_round.candidates).toHaveLength(1);
+    expect(body.current_round.candidates).toHaveLength(3);
     expect(body.history_rounds).toHaveLength(1);
     expect(body.history_rounds[0]).toMatchObject({
       round_id: expect.any(String),
       candidates: expect.any(Array),
     });
+    expect(body.history_rounds[0].candidates).toHaveLength(3);
   });
 });

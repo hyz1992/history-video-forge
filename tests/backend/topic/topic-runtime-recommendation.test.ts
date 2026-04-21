@@ -32,10 +32,24 @@ const runtimeCandidate = {
   },
 };
 
+function createRuntimeCandidate(title: string, angle: string) {
+  return {
+    ...runtimeCandidate,
+    title,
+    one_line_angle: angle,
+  };
+}
+
 describe("topic runtime recommendation", () => {
   it("drives candidate generation through the formal prompt registry and caches runtime fields", async () => {
     const db = createDbClient();
-    const invokeApi = vi.fn(async () => JSON.stringify([runtimeCandidate]));
+    const invokeApi = vi.fn(async () =>
+      JSON.stringify([
+        createRuntimeCandidate("晏子使楚", "第一槽位"),
+        createRuntimeCandidate("张巡守城", "第二槽位"),
+        createRuntimeCandidate("于谦守京", "第三槽位"),
+      ]),
+    );
     const gateway = createLlmGateway({
       registry: createPromptRegistry(),
       provider: createOpenAiCompatibleProvider({
@@ -72,13 +86,13 @@ describe("topic runtime recommendation", () => {
         }),
       }),
     );
-    expect(candidates).toHaveLength(1);
+    expect(candidates).toHaveLength(3);
     expect(() => TopicCandidateCard.parse(candidates[0])).not.toThrow();
 
     const cacheRecords = [...db.candidateCache.values()];
-    expect(cacheRecords).toHaveLength(1);
+    expect(cacheRecords).toHaveLength(3);
     expect(cacheRecords[0]).toMatchObject({
-      oneLineAngle: runtimeCandidate.one_line_angle,
+      oneLineAngle: "第一槽位",
       familyLabel: runtimeCandidate.family_label,
       scopeLabel: runtimeCandidate.scope_label,
       coreConflict: runtimeCandidate.core_conflict,
@@ -92,7 +106,9 @@ describe("topic runtime recommendation", () => {
     const invokeApi = vi.fn(
       async () => `\`\`\`json
 [
-  ${JSON.stringify(runtimeCandidate)}
+  ${JSON.stringify(createRuntimeCandidate("晏子使楚", "第一槽位"))},
+  ${JSON.stringify(createRuntimeCandidate("张巡守城", "第二槽位"))},
+  ${JSON.stringify(createRuntimeCandidate("于谦守京", "第三槽位"))}
 ]
 \`\`\``,
     );
@@ -121,6 +137,94 @@ describe("topic runtime recommendation", () => {
 
     expect(invokeApi).toHaveBeenCalledTimes(1);
     expect(() => TopicCandidateCard.parse(candidates[0])).not.toThrow();
+  });
+
+  it("performs a single repair call when the first runtime response contains fewer than three candidates", async () => {
+    const db = createDbClient();
+    const invokeApi = vi
+      .fn()
+      .mockResolvedValueOnce(
+        JSON.stringify([createRuntimeCandidate("晏子使楚", "第一槽位")]),
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify([
+          createRuntimeCandidate("张巡守城", "第二槽位"),
+          createRuntimeCandidate("于谦守京", "第三槽位"),
+        ]),
+      );
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "晏子使楚",
+        summary: "楚王在公开场合连续压场，晏子当场顶回去。",
+        coreConflict: "楚王当众压场，晏子必须当场顶回。",
+        strongScene: "楚王连续压场，晏子一句句顶回去。",
+        sourceHint: "《晏子春秋》",
+        recentUsageHint: "近期未出现同 event_id",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(invokeApi).toHaveBeenCalledTimes(2);
+    expect(result.candidates).toHaveLength(3);
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "topic_candidate_repair_triggered",
+      }),
+    );
+  });
+
+  it("returns explicit diagnostics when the repair call still cannot fill all three slots", async () => {
+    const db = createDbClient();
+    const invokeApi = vi
+      .fn()
+      .mockResolvedValueOnce(
+        JSON.stringify([createRuntimeCandidate("晏子使楚", "第一槽位")]),
+      )
+      .mockResolvedValueOnce(JSON.stringify([]));
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "晏子使楚",
+        summary: "楚王在公开场合连续压场，晏子当场顶回去。",
+        coreConflict: "楚王当众压场，晏子必须当场顶回。",
+        strongScene: "楚王连续压场，晏子一句句顶回去。",
+        sourceHint: "《晏子春秋》",
+        recentUsageHint: "近期未出现同 event_id",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(invokeApi).toHaveBeenCalledTimes(2);
+    expect(result.candidates).toHaveLength(1);
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "topic_candidate_slots_insufficient",
+        level: "error",
+      }),
+    );
   });
 
   it("fails clearly when runtime output cannot be repaired into TopicCandidateCard", async () => {

@@ -8,7 +8,8 @@
 - [x] 第四阶段 `Task 1` 已完成
 - [x] 第四阶段 `Task 2` 已完成
 - [x] 第四阶段 `Task 3` 已完成
-- [ ] 第四阶段 `Task 4` 至 `Task 8` 尚未开始
+- [x] 第四阶段 `Task 4` 已完成
+- [ ] 第四阶段 `Task 5` 至 `Task 8` 尚未开始
 
 ## 对应设计
 
@@ -61,11 +62,11 @@
 
 ### Task 4：补齐 topic 候选数量守卫与单次补位
 
-- [ ] Step 1：先写 `tests/backend/topic/topic-graph-recommendation.test.ts`、`tests/backend/api/topic-api-runtime.test.ts`、`tests/backend/topic/topic-runtime-recommendation.test.ts` 的失败用例
-- [ ] Step 2：运行 `npm test -- tests/backend/topic/topic-graph-recommendation.test.ts tests/backend/api/topic-api-runtime.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts` 并确认红灯
-- [ ] Step 3：做固定 3 槽位、单次补位和显式 diagnostics 的最小实现
-- [ ] Step 4：运行同一组测试并确认绿灯
-- [ ] Step 5：提交 `Task 4`
+- [x] Step 1：先写 `tests/backend/topic/topic-graph-recommendation.test.ts`、`tests/backend/api/topic-api-runtime.test.ts`、`tests/backend/topic/topic-runtime-recommendation.test.ts` 的失败用例
+- [x] Step 2：运行 `npm test -- tests/backend/topic/topic-graph-recommendation.test.ts tests/backend/api/topic-api-runtime.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts` 并确认红灯
+- [x] Step 3：做固定 3 槽位、单次补位和显式 diagnostics 的最小实现
+- [x] Step 4：运行同一组测试并确认绿灯
+- [x] Step 5：提交 `Task 4`
 
 ### Task 5：建立项目级 step trace 与可读存储路径
 
