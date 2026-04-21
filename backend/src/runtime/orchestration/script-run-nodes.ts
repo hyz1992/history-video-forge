@@ -4,6 +4,8 @@ import type { regenerateScriptDraft } from "../../modules/script/script-regenera
 import type { generateScriptDraft } from "../../modules/script/script-generation.service.js";
 import type { reviewScriptSemantics } from "../../modules/script/script-semantic-review.service.js";
 import type { validateScriptDraft } from "../../modules/script/script-local-validator.js";
+import type { StepTraceLogEntry } from "../trace/step-trace-log.js";
+import { createStepTraceLog } from "../trace/step-trace-log.js";
 
 import {
   createNodeStateUpdate,
@@ -30,6 +32,7 @@ export interface ScriptRunGraphRuntime {
   localValidation: LocalValidation | null;
   semanticReview: SemanticReview | ReturnType<typeof buildSkippedSemanticReview> | null;
   lastPatchIntent: "fix" | "lift" | null;
+  stepLogs: StepTraceLogEntry[];
 }
 
 function requireDraft(draft: ScriptDraft | null, nodeName: string): ScriptDraft {
@@ -87,20 +90,43 @@ export function createScriptRunNodes(input: {
 }) {
   const { runtime, dependencies } = input;
 
+  function recordStepTrace(
+    stepName: string,
+    startedAt: Date,
+    stateUpdate: Partial<TopicScriptGraphState>,
+  ) {
+    runtime.stepLogs.push(
+      createStepTraceLog({
+        stepName,
+        phase: "script",
+        startedAt,
+        endedAt: new Date(),
+        inputRef: stateUpdate.input_ref ?? null,
+        outputRef: stateUpdate.output_ref ?? null,
+        failureReason: stateUpdate.failure_reason ?? null,
+      }),
+    );
+  }
+
   return {
     async scriptGenerate() {
+      const startedAt = new Date();
       runtime.draft = await dependencies.generateDraft({
         bundle: runtime.bundle,
       });
 
-      return createNodeStateUpdate("script-generate", {
+      const stateUpdate = createNodeStateUpdate("script-generate", {
         input_ref: `script-input-bundle:${runtime.bundle.topic_package.topic_id}`,
         output_ref: "script-draft:current",
         failure_reason: null,
       });
+      recordStepTrace("script-generate", startedAt, stateUpdate);
+
+      return stateUpdate;
     },
 
     localValidate() {
+      const startedAt = new Date();
       const draft = requireDraft(runtime.draft, "local-validate");
       runtime.localValidation = dependencies.validateDraft({
         bundle: runtime.bundle,
@@ -114,7 +140,7 @@ export function createScriptRunNodes(input: {
         });
       }
 
-      return createNodeStateUpdate("local-validate", {
+      const stateUpdate = createNodeStateUpdate("local-validate", {
         input_ref: "script-draft:current",
         output_ref: "script-local-validation:current",
         failure_reason:
@@ -122,9 +148,13 @@ export function createScriptRunNodes(input: {
             ? runtime.localValidation.summary
             : null,
       });
+      recordStepTrace("local-validate", startedAt, stateUpdate);
+
+      return stateUpdate;
     },
 
     semanticReview() {
+      const startedAt = new Date();
       const draft = requireDraft(runtime.draft, "semantic-review");
       const localValidation = requireLocalValidation(
         runtime.localValidation,
@@ -139,10 +169,10 @@ export function createScriptRunNodes(input: {
             })
           : buildSkippedSemanticReview({
               localDecision: localValidation.decision,
-              allowRegen: runtime.allowRegen,
-            });
+            allowRegen: runtime.allowRegen,
+          });
 
-      return createNodeStateUpdate("semantic-review", {
+      const stateUpdate = createNodeStateUpdate("semantic-review", {
         input_ref: "script-local-validation:current",
         output_ref: "script-semantic-review:current",
         failure_reason:
@@ -150,9 +180,13 @@ export function createScriptRunNodes(input: {
             ? runtime.semanticReview.summary
             : null,
       });
+      recordStepTrace("semantic-review", startedAt, stateUpdate);
+
+      return stateUpdate;
     },
 
     async patchOnce(state: TopicScriptGraphState) {
+      const startedAt = new Date();
       const draft = requireDraft(runtime.draft, "patch-once");
       const semanticReview = requireSemanticReview(
         runtime.semanticReview,
@@ -167,15 +201,19 @@ export function createScriptRunNodes(input: {
         patchUsed: state.patch_used,
       });
 
-      return createNodeStateUpdate("patch-once", {
+      const stateUpdate = createNodeStateUpdate("patch-once", {
         input_ref: "script-semantic-review:current",
         output_ref: "script-draft:current",
         patch_used: true,
         failure_reason: null,
       });
+      recordStepTrace("patch-once", startedAt, stateUpdate);
+
+      return stateUpdate;
     },
 
     async regenOnce(state: TopicScriptGraphState) {
+      const startedAt = new Date();
       runtime.draft = await dependencies.regenerateDraft({
         bundle: runtime.bundle,
         regenerateUsed: state.regenerate_used,
@@ -185,7 +223,7 @@ export function createScriptRunNodes(input: {
           }),
       });
 
-      return createNodeStateUpdate("regen-once", {
+      const stateUpdate = createNodeStateUpdate("regen-once", {
         input_ref: runtime.localValidation
           ? "script-local-validation:current"
           : "script-semantic-review:current",
@@ -193,6 +231,9 @@ export function createScriptRunNodes(input: {
         regenerate_used: true,
         failure_reason: null,
       });
+      recordStepTrace("regen-once", startedAt, stateUpdate);
+
+      return stateUpdate;
     },
   };
 }

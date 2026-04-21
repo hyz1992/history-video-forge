@@ -1,10 +1,31 @@
 import type { DbClient } from "../../db/client";
+import { getProjectStorageProfile } from "../../runtime/trace/project-storage.js";
+
+function summarizeTraceRun(trace: Record<string, unknown> | null | undefined) {
+  if (!trace) {
+    return null;
+  }
+
+  const steps = Array.isArray(trace.steps) ? trace.steps : [];
+  const latestStep = steps.at(-1);
+
+  return {
+    run_id: typeof trace.run_id === "string" ? trace.run_id : null,
+    phase: typeof trace.phase === "string" ? trace.phase : null,
+    step_count: steps.length,
+    latest_step:
+      latestStep && typeof latestStep === "object" && latestStep
+        ? ((latestStep as Record<string, unknown>).step_name as string | undefined) ?? null
+        : null,
+  };
+}
 
 export async function getProjectSnapshot(db: DbClient, projectId: string) {
   const project = db.projects.get(projectId);
   if (!project) {
     return null;
   }
+  const storageProfile = getProjectStorageProfile(project);
 
   const topicRecord = project.activeTopicPackageId
     ? db.topicPackages.get(project.activeTopicPackageId) ?? null
@@ -21,6 +42,15 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
     restore_route: project.status.startsWith("topic")
       ? `/projects/${project.id}/topic`
       : `/projects/${project.id}/script`,
+    trace_summary: {
+      project_storage: {
+        root_dir: storageProfile.root_dir,
+      },
+      latest_topic_run: null,
+      latest_script_run: summarizeTraceRun(
+        scriptRecord?.graphTraceSummaryJson as Record<string, unknown> | null | undefined,
+      ),
+    },
     active_topic_package: topicRecord
       ? {
           topic_package_id: topicRecord.id,

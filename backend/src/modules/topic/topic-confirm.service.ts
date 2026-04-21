@@ -4,6 +4,7 @@ import type {
   EventRegistryRecord,
   ProjectRecord,
 } from "../../db/client";
+import { migrateProjectStorageOnTopicConfirm } from "../../runtime/trace/project-storage.js";
 import { saveTopicPackage } from "./topic-package.repository";
 
 export interface StoredTopicCandidate {
@@ -80,6 +81,8 @@ export async function confirmTopicCandidate(input: ConfirmTopicCandidateInput) {
     sourceAnchorRefsJson: [input.candidate.sourceHint],
   });
 
+  input.project.name = saved.title;
+  migrateProjectStorageOnTopicConfirm(input.project, saved.title);
   input.project.status = "script_ready";
   input.project.activeTopicPackageId = saved.id;
   input.project.updatedAt = new Date();

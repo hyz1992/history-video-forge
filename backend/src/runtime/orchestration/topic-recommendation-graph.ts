@@ -11,6 +11,7 @@ import {
 } from "./topic-recommendation-nodes.js";
 import { createGraphTraceSummary } from "./graph-trace.js";
 import { createRuntimeDiagnosticsSummary } from "./runtime-diagnostics.js";
+import { createSyntheticStepTraceLogs } from "../trace/step-trace-log.js";
 
 const TopicRecommendationGraphStateSchema = z.object({
   node_name: z
@@ -96,7 +97,15 @@ export async function runTopicRecommendationGraph(
 
   return {
     candidates: runtime.candidates,
-    trace: createGraphTraceSummary(runtime.traceNodes),
+    trace: createGraphTraceSummary({
+      phase: "topic",
+      run_id: `topic_run_${input.db.generateId()}`,
+      nodes: runtime.traceNodes,
+      steps: createSyntheticStepTraceLogs({
+        phase: "topic",
+        nodes: runtime.traceNodes,
+      }),
+    }),
     diagnostics: createRuntimeDiagnosticsSummary(diagnostics),
   };
 }

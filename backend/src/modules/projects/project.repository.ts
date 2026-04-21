@@ -1,4 +1,5 @@
 import type { DbClient, ProjectRecord } from "../../db/client";
+import { initializeProjectStorage } from "../../runtime/trace/project-storage.js";
 
 export interface CreateProjectInput {
   name: string;
@@ -15,9 +16,15 @@ export async function createProject(
     status: "topic_pending",
     activeTopicPackageId: null,
     activeScriptRecordId: null,
+    storageDisplayName: "",
+    storageShortId: "",
+    storageRootDir: "",
+    storageRenameLocked: false,
     createdAt: now,
     updatedAt: now,
   };
+
+  initializeProjectStorage(project);
 
   db.projects.set(project.id, project);
 

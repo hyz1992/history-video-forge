@@ -83,6 +83,8 @@ describe("project snapshot service", () => {
         regenerate_used: false,
       },
       graphTraceSummaryJson: {
+        phase: "script",
+        run_id: "script_run_snapshot_1",
         nodes: [
           {
             node_name: "script-generate",
@@ -95,6 +97,32 @@ describe("project snapshot service", () => {
             input_ref: "script-local-validation:current",
             output_ref: "script-semantic-review:current",
             failure_reason: null,
+          },
+        ],
+        steps: [
+          {
+            step_name: "script-generate",
+            phase: "script",
+            status: "succeeded",
+            started_at: "2026-04-21T09:00:00.000Z",
+            ended_at: "2026-04-21T09:00:01.000Z",
+            duration_ms: 1000,
+          },
+          {
+            step_name: "local-validate",
+            phase: "script",
+            status: "succeeded",
+            started_at: "2026-04-21T09:00:01.000Z",
+            ended_at: "2026-04-21T09:00:01.200Z",
+            duration_ms: 200,
+          },
+          {
+            step_name: "semantic-review",
+            phase: "script",
+            status: "succeeded",
+            started_at: "2026-04-21T09:00:01.200Z",
+            ended_at: "2026-04-21T09:00:02.000Z",
+            duration_ms: 800,
           },
         ],
       },
@@ -161,5 +189,18 @@ describe("project snapshot service", () => {
     expect(snapshot?.active_script?.semantic_review.stage).toBe(
       "script_semantic_review",
     );
+    expect(snapshot?.trace_summary).toMatchObject({
+      project_storage: {
+        root_dir: expect.stringMatching(
+          /storage\/projects\/\d{4}-\d{2}-\d{2}\/Snapshot Project \[p_[a-z0-9]{8}\]/i,
+        ),
+      },
+      latest_script_run: {
+        run_id: "script_run_snapshot_1",
+        phase: "script",
+        step_count: 3,
+        latest_step: "semantic-review",
+      },
+    });
   });
 });

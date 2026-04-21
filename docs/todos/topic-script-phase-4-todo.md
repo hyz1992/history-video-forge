@@ -9,7 +9,8 @@
 - [x] 第四阶段 `Task 2` 已完成
 - [x] 第四阶段 `Task 3` 已完成
 - [x] 第四阶段 `Task 4` 已完成
-- [ ] 第四阶段 `Task 5` 至 `Task 8` 尚未开始
+- [x] 第四阶段 `Task 5` 已完成
+- [ ] 第四阶段 `Task 6` 至 `Task 8` 尚未开始
 
 ## 对应设计
 
@@ -70,11 +71,11 @@
 
 ### Task 5：建立项目级 step trace 与可读存储路径
 
-- [ ] Step 1：先写 `tests/backend/projects/project-snapshot.test.ts`、`tests/backend/script/script-graph-run.test.ts`、`tests/backend/topic/topic-graph-recommendation.test.ts`、`tests/workspace/workspace-layout.test.ts` 的失败用例
-- [ ] Step 2：运行 `npm test -- tests/backend/projects/project-snapshot.test.ts tests/backend/script/script-graph-run.test.ts tests/backend/topic/topic-graph-recommendation.test.ts tests/workspace/workspace-layout.test.ts` 并确认红灯
-- [ ] Step 3：做项目级 trace、run/step 记录和可读目录规则的最小实现
-- [ ] Step 4：运行同一组测试并确认绿灯
-- [ ] Step 5：提交 `Task 5`
+- [x] Step 1：先写 `tests/backend/projects/project-snapshot.test.ts`、`tests/backend/script/script-graph-run.test.ts`、`tests/backend/topic/topic-graph-recommendation.test.ts`、`tests/workspace/workspace-layout.test.ts` 的失败用例
+- [x] Step 2：运行 `npm test -- tests/backend/projects/project-snapshot.test.ts tests/backend/script/script-graph-run.test.ts tests/backend/topic/topic-graph-recommendation.test.ts tests/workspace/workspace-layout.test.ts` 并确认红灯
+- [x] Step 3：做项目级 trace、run/step 记录和可读目录规则的最小实现
+- [x] Step 4：运行同一组测试并确认绿灯
+- [x] Step 5：提交 `Task 5`
 
 ### Task 6：重做 script 状态机、历史归档与重选题闭环
 

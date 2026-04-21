@@ -69,6 +69,22 @@ describe("topic recommendation graph", () => {
       output_ref: "topic-candidate-list:3",
       failure_reason: null,
     });
+    expect(result.trace).toMatchObject({
+      phase: "topic",
+      run_id: expect.stringMatching(/^topic_run_/),
+    });
+    expect(result.trace.steps).toEqual([
+      expect.objectContaining({
+        step_name: "topic-candidate-generate",
+        phase: "topic",
+        status: "succeeded",
+        input_ref: "topic-event:晏子使楚",
+        output_ref: "topic-candidate-list:3",
+        started_at: expect.any(String),
+        ended_at: expect.any(String),
+        duration_ms: expect.any(Number),
+      }),
+    ]);
     expect(result.candidates).toHaveLength(3);
     expect(result.diagnostics.checks).toContainEqual(
       expect.objectContaining({
@@ -111,6 +127,10 @@ describe("topic recommendation graph", () => {
     expect(result.trace.nodes.map((node) => node.node_name)).toContain(
       "topic-candidate-repair",
     );
+    expect(result.trace.steps.map((step) => step.step_name)).toEqual([
+      "topic-candidate-generate",
+      "topic-candidate-repair",
+    ]);
     expect(result.diagnostics.checks).toContainEqual(
       expect.objectContaining({
         code: "topic_candidate_repair_triggered",

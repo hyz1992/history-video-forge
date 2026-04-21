@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { END, START, StateGraph } from "@langchain/langgraph";
 
 import {
@@ -38,6 +39,7 @@ export async function runScriptRunGraph(
     localValidation: null,
     semanticReview: null,
     lastPatchIntent: null,
+    stepLogs: [],
   };
   const nodes = createScriptRunNodes({
     runtime,
@@ -159,7 +161,12 @@ export async function runScriptRunGraph(
       patch_used: finalState.patch_used,
       regenerate_used: finalState.regenerate_used,
     },
-    graphTraceSummary: createGraphTraceSummary(traceNodes),
+    graphTraceSummary: createGraphTraceSummary({
+      phase: "script",
+      run_id: `script_run_${randomUUID().replace(/-/g, "").slice(0, 8)}`,
+      nodes: traceNodes,
+      steps: runtime.stepLogs,
+    }),
     runtimeDiagnostics: createRuntimeDiagnosticsSummary([
       {
         code:

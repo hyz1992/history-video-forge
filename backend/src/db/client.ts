@@ -6,6 +6,10 @@ export interface ProjectRecord {
   status: string;
   activeTopicPackageId: string | null;
   activeScriptRecordId: string | null;
+  storageDisplayName: string;
+  storageShortId: string;
+  storageRootDir: string;
+  storageRenameLocked: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

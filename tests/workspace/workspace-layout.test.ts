@@ -41,4 +41,17 @@ describe("workspace layout", () => {
       "dev:frontend": expect.any(String),
     });
   });
+
+  it("reserves the project trace storage skeleton for readable project directories", () => {
+    const requiredPaths = [
+      "backend/src/runtime/trace",
+      "backend/src/runtime/trace/project-storage.ts",
+      "backend/src/runtime/trace/step-trace-log.ts",
+      "storage/projects",
+    ].map((relativePath) => resolve(rootDir, relativePath));
+
+    for (const path of requiredPaths) {
+      expect(existsSync(path)).toBe(true);
+    }
+  });
 });

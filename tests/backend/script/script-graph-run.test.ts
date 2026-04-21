@@ -121,6 +121,36 @@ describe("script run graph", () => {
       patch_used: false,
       regenerate_used: false,
     });
+    expect(result.graphTraceSummary).toMatchObject({
+      phase: "script",
+      run_id: expect.stringMatching(/^script_run_/),
+    });
+    expect(result.graphTraceSummary.steps).toEqual([
+      expect.objectContaining({
+        step_name: "script-generate",
+        phase: "script",
+        status: "succeeded",
+        started_at: expect.any(String),
+        ended_at: expect.any(String),
+        duration_ms: expect.any(Number),
+      }),
+      expect.objectContaining({
+        step_name: "local-validate",
+        phase: "script",
+        status: "succeeded",
+        started_at: expect.any(String),
+        ended_at: expect.any(String),
+        duration_ms: expect.any(Number),
+      }),
+      expect.objectContaining({
+        step_name: "semantic-review",
+        phase: "script",
+        status: "succeeded",
+        started_at: expect.any(String),
+        ended_at: expect.any(String),
+        duration_ms: expect.any(Number),
+      }),
+    ]);
   });
 
   it("allows patch_once only once and keeps the final response contract stable", async () => {
