@@ -20,7 +20,9 @@
     "test": "vitest run",
     "test:harness:topic-script-regression": "vitest run tests/harness/topic-script-regression.test.ts",
     "harness:topic-script-live-check": "tsx harness/scripts/runtime/topic-script-live-check.ts",
-    "harness:ui-acceptance:smoke": "tsx harness/scripts/ui-acceptance/ui-acceptance-smoke.ts"
+    "harness:ui-acceptance:smoke": "tsx harness/scripts/ui-acceptance/ui-acceptance-smoke.ts",
+    "harness:ui-acceptance:full": "tsx harness/scripts/ui-acceptance/ui-acceptance-full.ts",
+    "harness:ui-acceptance:report": "tsx harness/scripts/ui-acceptance/ui-acceptance-report.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.58.2",
