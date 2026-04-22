@@ -75,6 +75,19 @@ function auditHomePage(snapshot: UiAcceptancePageSnapshot) {
       createPresenceCheck(snapshot, "homeHeading", "home-main-heading", "首页主标题必须可见"),
       createPresenceCheck(snapshot, "homeSummary", "home-main-summary", "首页主说明必须可见"),
       createPresenceCheck(snapshot, "homePrimaryCta", "home-primary-cta", "首页主 CTA 必须可见"),
+      createPresenceCheck(snapshot, "homeHero", "home-hero-shell", "首页必须存在 hero 主舞台"),
+      createPresenceCheck(
+        snapshot,
+        "homeCapabilitySection",
+        "home-capability-section",
+        "首页必须存在正式工作区能力区",
+      ),
+      createPresenceCheck(
+        snapshot,
+        "homeFlowStrip",
+        "home-flow-strip",
+        "首页必须存在产品主链路流程带",
+      ),
     ],
     deliveryChecks: [
       createViewportCheck(

@@ -136,6 +136,13 @@ describe("phase 4 app shell", () => {
     const { router, wrapper } = await mountAt("/");
 
     expect(router.currentRoute.value.path).toBe("/");
+    expect(wrapper.get("[data-testid='home-hero']").exists()).toBe(true);
+    expect(wrapper.get("[data-testid='home-capability-section']").text()).toContain(
+      "正式工作区能力",
+    );
+    expect(wrapper.get("[data-testid='home-flow-strip']").text()).toContain(
+      "新建项目",
+    );
     expect(wrapper.text()).toContain("选题 -> 确认 -> 生成文案");
     expect(wrapper.get("[data-testid='home-heading']").text()).toContain("Story Video Forge");
     expect(wrapper.get("[data-testid='home-primary-cta']").attributes("href")).toBe("/projects");

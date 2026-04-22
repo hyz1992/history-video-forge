@@ -9,9 +9,17 @@ describe("ui acceptance page rules", () => {
   it("passes the required home, projects, topic, and script structure rules", () => {
     const result = auditUiAcceptancePageSnapshots([
       createSnapshot("home", {
-        visibleSelectors: ["homeHeading", "homeSummary", "homePrimaryCta"],
+        visibleSelectors: [
+          "homeHeading",
+          "homeSummary",
+          "homePrimaryCta",
+          "homeHero",
+          "homeCapabilitySection",
+          "homeFlowStrip",
+        ],
         inViewportSelectors: ["homeHeading", "homePrimaryCta"],
-        bodyText: "Story Video Forge 进入我的项目 把选题和文案工作区收拢到项目内",
+        bodyText:
+          "Story Video Forge 进入我的项目 把选题和文案工作区收拢到项目内 新建项目 生成选题 确认主题 生成文案",
       }),
       createSnapshot("projects", {
         visibleSelectors: ["projectsHeading", "formalProjects", "draftProjects"],
@@ -50,7 +58,7 @@ describe("ui acceptance page rules", () => {
     expect(result.deliveryChecks.every((check) => check.status === "PASS")).toBe(true);
   });
 
-  it("fails when the home page heading or primary cta is outside the first viewport", () => {
+  it("fails when the home page shell hooks are missing or the primary entry falls outside the first viewport", () => {
     const result = auditUiAcceptancePageSnapshots([
       createSnapshot("home", {
         visibleSelectors: ["homeHeading", "homeSummary", "homePrimaryCta"],
@@ -68,6 +76,22 @@ describe("ui acceptance page rules", () => {
         }),
         expect.objectContaining({
           code: "home-primary-cta-in-viewport",
+          status: "FAIL",
+        }),
+      ]),
+    );
+    expect(result.structureChecks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "home-hero-shell",
+          status: "FAIL",
+        }),
+        expect.objectContaining({
+          code: "home-capability-section",
+          status: "FAIL",
+        }),
+        expect.objectContaining({
+          code: "home-flow-strip",
           status: "FAIL",
         }),
       ]),
