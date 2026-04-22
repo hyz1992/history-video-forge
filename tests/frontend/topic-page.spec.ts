@@ -137,21 +137,18 @@ describe("phase 4 app shell", () => {
 
     expect(router.currentRoute.value.path).toBe("/");
     expect(wrapper.get("[data-testid='home-hero']").exists()).toBe(true);
-    expect(wrapper.get("[data-testid='home-capability-section']").text()).toContain(
-      "正式工作区能力",
-    );
-    expect(wrapper.get("[data-testid='home-flow-strip']").text()).toContain(
-      "新建项目",
-    );
-    expect(wrapper.text()).toContain("选题 -> 确认 -> 生成文案");
+    expect(wrapper.get("[data-testid='home-tagline']").text()).toContain("历史叙事短视频工作台");
+    expect(wrapper.get("[data-testid='home-feature-rail']").text()).toContain("选题生成");
+    expect(wrapper.get("[data-testid='home-feature-rail']").text()).toContain("文案生成");
+    expect(wrapper.get("[data-testid='home-flow-strip']").text()).toContain("当前阶段聚焦 Topic 与 Script");
+    expect(wrapper.text()).not.toContain("正式工作区能力");
+    expect(wrapper.text()).not.toContain("WORKSPACE");
     expect(wrapper.get("[data-testid='home-heading']").text()).toContain("Story Video Forge");
     expect(wrapper.get("[data-testid='home-primary-cta']").attributes("href")).toBe("/projects");
     expect(wrapper.get("[data-testid='home-secondary-cta']").attributes("href")).toBe(
       "/projects",
     );
     expect(wrapper.get("[data-testid='home-kicker']").text()).toContain("项目驱动");
-    expect(wrapper.get("[data-testid='home-capability-list']").text()).toContain("Topic 候选历史");
-    expect(wrapper.get("[data-testid='home-capability-list']").text()).toContain("Script 运行追踪");
   });
 
   it("renders the projects page with formal and draft project groups", async () => {

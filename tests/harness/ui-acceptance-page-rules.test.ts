@@ -12,14 +12,15 @@ describe("ui acceptance page rules", () => {
         visibleSelectors: [
           "homeHeading",
           "homeSummary",
+          "homeTagline",
           "homePrimaryCta",
           "homeHero",
-          "homeCapabilitySection",
+          "homeFeatureRail",
           "homeFlowStrip",
         ],
         inViewportSelectors: ["homeHeading", "homePrimaryCta"],
         bodyText:
-          "Story Video Forge 进入我的项目 把选题和文案工作区收拢到项目内 新建项目 生成选题 确认主题 生成文案",
+          "Story Video Forge 历史叙事短视频工作台 进入我的项目 新建项目 选题生成 文案生成 多轮确认 当前阶段聚焦 Topic 与 Script",
       }),
       createSnapshot("projects", {
         visibleSelectors: ["projectsHeading", "formalProjects", "draftProjects"],
@@ -87,11 +88,42 @@ describe("ui acceptance page rules", () => {
           status: "FAIL",
         }),
         expect.objectContaining({
-          code: "home-capability-section",
+          code: "home-tagline",
+          status: "FAIL",
+        }),
+        expect.objectContaining({
+          code: "home-feature-rail",
           status: "FAIL",
         }),
         expect.objectContaining({
           code: "home-flow-strip",
+          status: "FAIL",
+        }),
+      ]),
+    );
+  });
+
+  it("fails when generic filler copy leaks into the home page", () => {
+    const result = auditUiAcceptancePageSnapshots([
+      createSnapshot("home", {
+        visibleSelectors: [
+          "homeHeading",
+          "homeSummary",
+          "homePrimaryCta",
+          "homeHero",
+          "homeCapabilitySection",
+          "homeFlowStrip",
+        ],
+        inViewportSelectors: ["homeHeading", "homePrimaryCta"],
+        bodyText: "Story Video Forge WORKSPACE 正式工作区能力 进入我的项目",
+      }),
+    ]);
+
+    expect(result.status).toBe("FAIL");
+    expect(result.deliveryChecks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "home-generic-filler-copy",
           status: "FAIL",
         }),
       ]),

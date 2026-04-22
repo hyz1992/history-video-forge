@@ -22,6 +22,7 @@ export interface UiAcceptancePageRuleResult {
 
 const DEV_SHELL_COPY_PATTERN = /\b(todo|debug|placeholder)\b/i;
 const SCRIPT_LOADING_PATTERN = /正在生成文案|暂无 active script snapshot|加载失败/i;
+const HOME_GENERIC_FILLER_PATTERN = /\bworkspace\b/i;
 
 function hasVisibleSelector(snapshot: UiAcceptancePageSnapshot, selectorKey: string) {
   return snapshot.visibleSelectors.includes(selectorKey);
@@ -74,13 +75,14 @@ function auditHomePage(snapshot: UiAcceptancePageSnapshot) {
     structureChecks: [
       createPresenceCheck(snapshot, "homeHeading", "home-main-heading", "首页主标题必须可见"),
       createPresenceCheck(snapshot, "homeSummary", "home-main-summary", "首页主说明必须可见"),
+      createPresenceCheck(snapshot, "homeTagline", "home-tagline", "首页副标题必须可见"),
       createPresenceCheck(snapshot, "homePrimaryCta", "home-primary-cta", "首页主 CTA 必须可见"),
       createPresenceCheck(snapshot, "homeHero", "home-hero-shell", "首页必须存在 hero 主舞台"),
       createPresenceCheck(
         snapshot,
-        "homeCapabilitySection",
-        "home-capability-section",
-        "首页必须存在正式工作区能力区",
+        "homeFeatureRail",
+        "home-feature-rail",
+        "首页必须存在旧项目风格的 feature rail",
       ),
       createPresenceCheck(
         snapshot,
@@ -101,6 +103,11 @@ function auditHomePage(snapshot: UiAcceptancePageSnapshot) {
         "homePrimaryCta",
         "home-primary-cta-in-viewport",
         "首页主 CTA 必须在可视区域内",
+      ),
+      createCheck(
+        "home-generic-filler-copy",
+        HOME_GENERIC_FILLER_PATTERN.test(snapshot.bodyText) ? "FAIL" : "PASS",
+        "首页不能出现 WORKSPACE 这类无意义泛化标签",
       ),
     ],
   };

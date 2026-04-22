@@ -26,9 +26,10 @@ const uiAcceptanceAuditDefinitions: Record<
     selectors: {
       homeHeading: "[data-testid='home-heading']",
       homeSummary: ".home-summary",
+      homeTagline: "[data-testid='home-tagline']",
       homePrimaryCta: uiAcceptanceSelectors.homePrimaryCta,
       homeHero: "[data-testid='home-hero']",
-      homeCapabilitySection: "[data-testid='home-capability-section']",
+      homeFeatureRail: "[data-testid='home-feature-rail']",
       homeFlowStrip: "[data-testid='home-flow-strip']",
     },
     viewportSelectors: ["homeHeading", "homePrimaryCta"],
