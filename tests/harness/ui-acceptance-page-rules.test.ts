@@ -23,7 +23,16 @@ describe("ui acceptance page rules", () => {
           "Story Video Forge 历史叙事短视频工作台 进入我的项目 新建项目 选题生成 文案生成 多轮确认 当前阶段聚焦 Topic 与 Script",
       }),
       createSnapshot("projects", {
-        visibleSelectors: ["projectsHeading", "formalProjects", "draftProjects"],
+        visibleSelectors: [
+          "projectsHeading",
+          "projectsToolbar",
+          "projectsDashboardShell",
+          "formalProjects",
+          "draftProjects",
+        ],
+        counts: {
+          projectCards: 2,
+        },
         bodyText: "我的项目 正式项目 草稿项目 / 未完成项目",
       }),
       createSnapshot("topic", {
@@ -124,6 +133,40 @@ describe("ui acceptance page rules", () => {
       expect.arrayContaining([
         expect.objectContaining({
           code: "home-generic-filler-copy",
+          status: "FAIL",
+        }),
+      ]),
+    );
+  });
+
+  it("fails when the projects dashboard loses its toolbar or card grid", () => {
+    const result = auditUiAcceptancePageSnapshots([
+      createSnapshot("projects", {
+        visibleSelectors: ["projectsHeading", "formalProjects", "draftProjects"],
+        counts: {
+          projectCards: 0,
+        },
+        bodyText: "我的项目 正式项目 草稿项目 / 未完成项目",
+      }),
+    ]);
+
+    expect(result.status).toBe("FAIL");
+    expect(result.structureChecks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "projects-toolbar-shell",
+          status: "FAIL",
+        }),
+        expect.objectContaining({
+          code: "projects-dashboard-shell",
+          status: "FAIL",
+        }),
+      ]),
+    );
+    expect(result.deliveryChecks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "projects-project-card-count",
           status: "FAIL",
         }),
       ]),

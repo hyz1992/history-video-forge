@@ -114,6 +114,11 @@ function auditHomePage(snapshot: UiAcceptancePageSnapshot) {
 }
 
 function auditProjectsPage(snapshot: UiAcceptancePageSnapshot) {
+  const projectCards = snapshot.counts.projectCards ?? 0;
+  const hasEmptyState =
+    hasVisibleSelector(snapshot, "formalProjectsEmpty") &&
+    hasVisibleSelector(snapshot, "draftProjectsEmpty");
+
   return {
     structureChecks: [
       createPresenceCheck(
@@ -121,6 +126,18 @@ function auditProjectsPage(snapshot: UiAcceptancePageSnapshot) {
         "projectsHeading",
         "projects-main-heading",
         "项目页主标题必须可见",
+      ),
+      createPresenceCheck(
+        snapshot,
+        "projectsToolbar",
+        "projects-toolbar-shell",
+        "项目页必须展示搜索与创建工具栏",
+      ),
+      createPresenceCheck(
+        snapshot,
+        "projectsDashboardShell",
+        "projects-dashboard-shell",
+        "项目页必须具备仪表盘卡片容器",
       ),
       createPresenceCheck(
         snapshot,
@@ -135,7 +152,13 @@ function auditProjectsPage(snapshot: UiAcceptancePageSnapshot) {
         "项目页必须展示草稿项目区",
       ),
     ],
-    deliveryChecks: [],
+    deliveryChecks: [
+      createCheck(
+        "projects-project-card-count",
+        projectCards > 0 || hasEmptyState ? "PASS" : "FAIL",
+        "项目页必须展示项目卡片，或在空列表场景下展示明确空态",
+      ),
+    ],
   };
 }
 

@@ -38,8 +38,15 @@ const uiAcceptanceAuditDefinitions: Record<
     pageId: "projects",
     selectors: {
       projectsHeading: "[data-testid='projects-heading']",
+      projectsToolbar: "[data-testid='projects-toolbar']",
+      projectsDashboardShell: "[data-testid='projects-dashboard-shell']",
       formalProjects: "[data-testid='formal-projects']",
       draftProjects: "[data-testid='draft-projects']",
+      formalProjectsEmpty: "[data-testid='formal-projects-empty']",
+      draftProjectsEmpty: "[data-testid='draft-projects-empty']",
+    },
+    countSelectors: {
+      projectCards: "[data-testid^='project-card-']",
     },
   },
   topic: {
