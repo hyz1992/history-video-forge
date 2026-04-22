@@ -77,7 +77,7 @@ async function confirmReturnToTopic() {
 </script>
 
 <template>
-  <section class="script-page">
+  <section class="script-page workspace-shell workspace-shell--script">
     <header class="script-page-header">
       <div>
         <p class="script-kicker">Project Workspace</p>

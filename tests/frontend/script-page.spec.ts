@@ -106,6 +106,8 @@ describe("script page", () => {
     await flushPromises();
 
     expect(calls.loadSnapshot).toEqual(["project-1"]);
+    expect(wrapper.classes()).toContain("workspace-shell");
+    expect(wrapper.classes()).toContain("workspace-shell--script");
     expect(wrapper.get("[data-testid='script-status']").text()).toContain(
       "script_ready",
     );

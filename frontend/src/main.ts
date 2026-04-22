@@ -1,6 +1,7 @@
 import { createApp, h } from "vue";
 import { RouterView } from "vue-router";
 
+import "./styles/main.css";
 import { createAppRouter } from "./router";
 import {
   createFetchProjectApi,

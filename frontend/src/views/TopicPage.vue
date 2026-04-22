@@ -62,7 +62,7 @@ watch(
 </script>
 
 <template>
-  <section class="topic-page">
+  <section class="topic-page workspace-shell workspace-shell--topic">
     <header class="topic-page-header">
       <div>
         <p class="topic-kicker">Project Workspace</p>

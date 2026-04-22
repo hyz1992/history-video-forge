@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from "node:fs";
 import { mount } from "@vue/test-utils";
 import { h, reactive } from "vue";
 import { RouterView } from "vue-router";
@@ -268,6 +269,11 @@ describe("topic workspace rounds", () => {
       },
     });
 
+    const mainSource = readFileSync("frontend/src/main.ts", "utf8");
+
+    expect(mainSource).toContain('import "./styles/main.css";');
+    expect(wrapper.classes()).toContain("workspace-shell");
+    expect(wrapper.classes()).toContain("workspace-shell--topic");
     expect(wrapper.get("[data-testid='topic-page-header']").text()).toContain("选题工作区");
     expect(wrapper.get("[data-testid='topic-summary']").text()).toContain("多轮候选");
     expect(wrapper.get("[data-testid='current-topic-round']").text()).toContain("当前轮主题");
