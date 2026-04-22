@@ -70,7 +70,10 @@ function createTopicStoreStub() {
   const state = reactive({
     activeTab: "system",
     candidates: [],
+    currentRound: null,
+    historyRounds: [],
     selectedCandidate: null,
+    selectedRoundId: null,
     isGenerating: false,
     isConfirming: false,
     confirmedTopicPackageId: null,
@@ -143,12 +146,23 @@ describe("phase 4 app shell", () => {
     expect(wrapper.get("[data-testid='home-flow-strip']").text()).toContain("当前阶段聚焦 Topic 与 Script");
     expect(wrapper.text()).not.toContain("正式工作区能力");
     expect(wrapper.text()).not.toContain("WORKSPACE");
+    expect(wrapper.find("[data-testid='home-kicker']").exists()).toBe(false);
     expect(wrapper.get("[data-testid='home-heading']").text()).toContain("Story Video Forge");
+    expect(wrapper.get("[data-testid='home-primary-cta']").text()).toContain("我的项目");
     expect(wrapper.get("[data-testid='home-primary-cta']").attributes("href")).toBe("/projects");
-    expect(wrapper.get("[data-testid='home-secondary-cta']").attributes("href")).toBe(
-      "/projects",
+    expect(wrapper.get("[data-testid='home-primary-cta']").classes()).toContain("btn-primary");
+    expect(wrapper.get("[data-testid='home-primary-cta']").classes()).not.toContain(
+      "hero-cta-filled",
     );
-    expect(wrapper.get("[data-testid='home-kicker']").text()).toContain("项目驱动");
+    expect(wrapper.get("[data-testid='home-secondary-cta']").classes()).toContain("btn-secondary");
+    expect(wrapper.get("[data-testid='home-secondary-cta']").classes()).not.toContain(
+      "hero-cta-filled",
+    );
+
+    await wrapper.get("[data-testid='home-secondary-cta']").trigger("click");
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe("/projects/project-new/topic");
   });
 
   it("renders the projects page with formal and draft project groups", async () => {

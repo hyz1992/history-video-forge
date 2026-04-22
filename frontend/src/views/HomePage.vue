@@ -4,8 +4,6 @@
       <div class="hero-bg-pattern" />
 
       <div class="hero-content">
-        <p data-testid="home-kicker" class="home-kicker">项目驱动 Topic + Script</p>
-
         <h1 data-testid="home-heading" class="hero-title">
           <span class="hero-icon">🏛️</span>
           <span>Story Video </span>
@@ -19,16 +17,21 @@
         </p>
 
         <div class="hero-actions">
-          <RouterLink data-testid="home-primary-cta" to="/projects" class="btn btn-primary btn-lg">
-            进入我的项目
-          </RouterLink>
           <RouterLink
-            data-testid="home-secondary-cta"
+            data-testid="home-primary-cta"
             to="/projects"
+            class="btn btn-primary btn-lg"
+          >
+            我的项目
+          </RouterLink>
+          <button
+            data-testid="home-secondary-cta"
             class="btn btn-secondary btn-lg"
+            type="button"
+            @click="handleCreateProject"
           >
             新建项目
-          </RouterLink>
+          </button>
         </div>
 
         <div data-testid="home-feature-rail" class="hero-features">
@@ -59,7 +62,19 @@
 </template>
 
 <script setup lang="ts">
-import { RouterLink } from "vue-router";
+import { RouterLink, useRouter } from "vue-router";
+
+import { useProjectStore } from "../stores/project";
+
+const projectStore = useProjectStore();
+const router = useRouter();
+
+async function handleCreateProject() {
+  const project = await projectStore.createProject();
+  await router.push(
+    projectStore.resolveProjectWorkspacePath(project.project_id, project.current_status),
+  );
+}
 </script>
 
 <style scoped>
@@ -70,11 +85,11 @@ import { RouterLink } from "vue-router";
 .hero {
   position: relative;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  min-height: 100vh;
+  min-height: 88vh;
   overflow: hidden;
-  padding: 2rem 1.5rem;
+  padding: 3.5rem 1.5rem 2rem;
 }
 
 .hero-bg-pattern {
@@ -91,16 +106,7 @@ import { RouterLink } from "vue-router";
   z-index: 1;
   text-align: center;
   max-width: 760px;
-  padding: 2.5rem;
-}
-
-.home-kicker {
-  margin-bottom: 1rem;
-  color: var(--workspace-accent);
-  font-size: 0.95rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  padding: 1.25rem 2.5rem 2rem;
 }
 
 .hero-title {
@@ -149,11 +155,6 @@ import { RouterLink } from "vue-router";
   margin-bottom: 2rem;
 }
 
-.btn {
-  min-width: 10.5rem;
-  text-decoration: none;
-}
-
 .hero-features {
   display: flex;
   gap: 1.5rem;
@@ -182,6 +183,11 @@ import { RouterLink } from "vue-router";
 }
 
 @media (max-width: 768px) {
+  .hero {
+    min-height: auto;
+    padding-top: 2.5rem;
+  }
+
   .hero-content {
     padding: 1.25rem;
   }

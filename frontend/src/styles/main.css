@@ -71,6 +71,55 @@ button {
   box-shadow: var(--workspace-shadow-soft);
 }
 
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.5rem;
+  border: none;
+  border-radius: var(--workspace-radius-sm);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 250ms ease;
+  font-family:
+    "Noto Serif SC",
+    "Source Han Serif SC",
+    "Microsoft YaHei UI",
+    sans-serif;
+  text-decoration: none;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #c0392b, #96281b);
+  color: #fff;
+  box-shadow: 0 0 20px rgba(192, 57, 43, 0.15);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  transform: translateY(-1px);
+  box-shadow: 0 0 30px rgba(192, 57, 43, 0.3);
+}
+
+.btn-secondary {
+  background: rgba(212, 165, 116, 0.1);
+  color: #d4a574;
+  border: 1px solid rgba(212, 163, 95, 0.22);
+}
+
+.btn-secondary:hover {
+  background: rgba(212, 165, 116, 0.2);
+  border-color: #d4a574;
+}
+
+.btn-lg {
+  padding: 1rem 2.5rem;
+  font-size: 1.125rem;
+  border-radius: var(--workspace-radius-md);
+}
+
 button:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
