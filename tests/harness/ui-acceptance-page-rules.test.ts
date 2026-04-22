@@ -25,8 +25,9 @@ describe("ui acceptance page rules", () => {
       createSnapshot("projects", {
         visibleSelectors: [
           "projectsHeading",
-          "projectsToolbar",
+          "projectsOverviewStrip",
           "projectsDashboardShell",
+          "projectsMainStage",
           "formalProjects",
           "draftProjects",
         ],
@@ -154,11 +155,15 @@ describe("ui acceptance page rules", () => {
     expect(result.structureChecks).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: "projects-toolbar-shell",
+          code: "projects-overview-strip",
           status: "FAIL",
         }),
         expect.objectContaining({
           code: "projects-dashboard-shell",
+          status: "FAIL",
+        }),
+        expect.objectContaining({
+          code: "projects-main-stage",
           status: "FAIL",
         }),
       ]),

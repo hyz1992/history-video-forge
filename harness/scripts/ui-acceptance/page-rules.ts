@@ -129,15 +129,21 @@ function auditProjectsPage(snapshot: UiAcceptancePageSnapshot) {
       ),
       createPresenceCheck(
         snapshot,
-        "projectsToolbar",
-        "projects-toolbar-shell",
-        "项目页必须展示搜索与创建工具栏",
+        "projectsOverviewStrip",
+        "projects-overview-strip",
+        "项目页必须展示搜索、计数与创建动作摘要带",
       ),
       createPresenceCheck(
         snapshot,
         "projectsDashboardShell",
         "projects-dashboard-shell",
         "项目页必须具备仪表盘卡片容器",
+      ),
+      createPresenceCheck(
+        snapshot,
+        "projectsMainStage",
+        "projects-main-stage",
+        "项目页必须具备左主右辅的项目主舞台",
       ),
       createPresenceCheck(
         snapshot,
