@@ -111,32 +111,41 @@ watch(
       />
 
       <section
-        v-if="topicStore.state.historyRounds.length > 0"
         data-testid="topic-history"
         class="topic-history-panel"
       >
         <h2>候选历史</h2>
         <p class="topic-panel-caption">保留之前轮次，支持从历史轮直接确认。</p>
 
-        <article
-          v-for="round in topicStore.state.historyRounds"
-          :key="round.round_id"
-          class="topic-history-round"
-        >
-          <h3>第 {{ round.round_index ?? "-" }} 轮</h3>
-
-          <button
-            v-for="candidate in round.candidates"
-            :key="candidate.candidate_id"
-            :data-testid="`history-candidate-${candidate.candidate_id}`"
-            type="button"
-            class="topic-history-candidate"
-            @click="topicStore.openCandidate(candidate, round.round_id)"
+        <template v-if="topicStore.state.historyRounds.length > 0">
+          <article
+            v-for="round in topicStore.state.historyRounds"
+            :key="round.round_id"
+            class="topic-history-round"
           >
-            <strong>{{ candidate.title }}</strong>
-            <span>{{ candidate.one_line_angle }}</span>
-          </button>
-        </article>
+            <h3>第 {{ round.round_index ?? "-" }} 轮</h3>
+
+            <button
+              v-for="candidate in round.candidates"
+              :key="candidate.candidate_id"
+              :data-testid="`history-candidate-${candidate.candidate_id}`"
+              type="button"
+              class="topic-history-candidate"
+              @click="topicStore.openCandidate(candidate, round.round_id)"
+            >
+              <strong>{{ candidate.title }}</strong>
+              <span>{{ candidate.one_line_angle }}</span>
+            </button>
+          </article>
+        </template>
+
+        <p
+          v-else
+          data-testid="topic-history-empty"
+          class="topic-history-empty"
+        >
+          暂无历史轮次，生成新一轮后会在这里保留历史候选。
+        </p>
       </section>
     </div>
 
@@ -200,6 +209,10 @@ watch(
   display: grid;
   gap: 0.25rem;
   text-align: left;
+}
+
+.topic-history-empty {
+  margin: 0;
 }
 
 @media (max-width: 720px) {

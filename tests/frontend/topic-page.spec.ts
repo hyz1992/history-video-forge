@@ -283,4 +283,64 @@ describe("topic workspace rounds", () => {
       },
     ]);
   });
+
+  it("renders an empty history section when no previous rounds exist", async () => {
+    const router = createAppRouter();
+    await router.push("/projects/project-1/topic");
+    await router.isReady();
+
+    const projectStore = createProjectStoreStub();
+    projectStore.syncProject({
+      project_id: "project-1",
+      current_status: "topic_candidates_ready",
+    });
+
+    const topicState = reactive({
+      activeTab: "system",
+      candidates: [],
+      currentRound: {
+        round_id: "round-1",
+        label: "第 1 轮",
+        candidates: [
+          {
+            candidate_id: "candidate-current",
+            title: "当前轮主题",
+            one_line_angle: "当前轮角度",
+            family_label: "family",
+            scope_label: "scope",
+            strong_scene: "当前轮场景",
+            risk_hints: [],
+          },
+        ],
+      },
+      historyRounds: [],
+      selectedCandidate: null,
+      selectedRoundId: null,
+      isGenerating: false,
+      isConfirming: false,
+      confirmedTopicPackageId: null,
+    });
+    const topicStore = {
+      state: topicState,
+      selectTab() {},
+      async generateSystemRecommendations() {},
+      openCandidate() {},
+      closeCandidate() {},
+      async confirmSelectedCandidate() {},
+    };
+
+    const wrapper = mount(TopicPage, {
+      global: {
+        plugins: [router],
+        provide: {
+          [projectStoreKey as symbol]: projectStore as never,
+          [topicStoreKey as symbol]: topicStore as never,
+        },
+      },
+    });
+
+    expect(wrapper.get("[data-testid='topic-history']").text()).toContain("候选历史");
+    expect(wrapper.get("[data-testid='topic-history']").text()).toContain("暂无历史轮次");
+    expect(wrapper.find("[data-testid='topic-history-empty']").exists()).toBe(true);
+  });
 });
