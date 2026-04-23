@@ -172,24 +172,27 @@ describe("phase 4 app shell", () => {
     expect(wrapper.get("[data-testid='projects-heading']").text()).toContain("我的项目");
     expect(wrapper.find("[data-testid='projects-kicker']").exists()).toBe(false);
     expect(wrapper.get("[data-testid='projects-overview-strip']").text()).toContain("搜索项目");
-    expect(wrapper.get("[data-testid='projects-overview-strip']").text()).toContain("正式项目");
-    expect(wrapper.get("[data-testid='projects-overview-strip']").text()).toContain("草稿项目");
+    expect(wrapper.get("[data-testid='projects-overview-strip']").text()).not.toContain("Topic + Script");
     expect(wrapper.get("[data-testid='projects-dashboard-shell']").exists()).toBe(true);
     expect(wrapper.get("[data-testid='projects-main-stage']").exists()).toBe(true);
     expect(wrapper.get("[data-testid='formal-projects']").text()).toContain("正式项目");
-    expect(wrapper.get("[data-testid='draft-projects']").text()).toContain(
-      "草稿项目 / 未完成项目",
-    );
+    expect(wrapper.get("[data-testid='draft-projects']").text()).toContain("草稿箱");
+    expect(wrapper.get("[data-testid='projects-draft-entry']").exists()).toBe(true);
+    expect(wrapper.find("[data-testid='projects-draft-list']").exists()).toBe(false);
     expect(wrapper.get("[data-testid='projects-formal-list']").exists()).toBe(true);
-    expect(wrapper.get("[data-testid='projects-draft-list']").exists()).toBe(true);
     expect(wrapper.text()).toContain("晏子使楚");
-    expect(wrapper.text()).toContain("未命名项目");
+    expect(wrapper.text()).not.toContain("未命名项目");
     expect(wrapper.get("[data-testid='projects-search']").attributes("placeholder")).toContain(
       "搜索项目",
     );
     expect(wrapper.get("[data-testid='project-card-project-formal']").text()).toContain(
       "继续文案工作区",
     );
+
+    await wrapper.get("[data-testid='projects-draft-toggle']").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.get("[data-testid='projects-draft-list']").exists()).toBe(true);
     expect(wrapper.get("[data-testid='project-card-project-draft']").text()).toContain(
       "继续选题工作区",
     );

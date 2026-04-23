@@ -10,6 +10,7 @@ import {
 const projectStore = useProjectStore();
 const router = useRouter();
 const searchQuery = ref("");
+const isDraftTrayOpen = ref(false);
 
 const normalizedSearchQuery = computed(() => searchQuery.value.trim().toLowerCase());
 
@@ -29,6 +30,9 @@ const formalProjects = computed(() =>
 const draftProjects = computed(() =>
   visibleProjects.value.filter((project) => project.is_draft),
 );
+const shouldShowDraftList = computed(() =>
+  isDraftTrayOpen.value || normalizedSearchQuery.value.length > 0,
+);
 
 onMounted(async () => {
   await projectStore.loadProjects();
@@ -42,6 +46,10 @@ async function handleCreateProject() {
 async function openProject(project: ProjectListItem) {
   projectStore.syncProject(project);
   await router.push(projectStore.resolveProjectWorkspacePath(project.project_id, project.current_status));
+}
+
+function toggleDraftTray() {
+  isDraftTrayOpen.value = !isDraftTrayOpen.value;
 }
 
 function formatUpdatedAt(value: string) {
@@ -60,7 +68,7 @@ function formatUpdatedAt(value: string) {
       <div class="projects-header-copy">
         <h1 data-testid="projects-heading">我的项目</h1>
         <p class="projects-summary">
-          正式项目直接回到文案工作区，草稿项目继续补齐选题。这个页面只做一件事：把你送回当前该处理的项目。
+          这里只保留一个主入口：把你送回当前该继续的项目。正式项目直接进入文案工作区，草稿箱退为二级入口。
         </p>
       </div>
 
@@ -74,7 +82,7 @@ function formatUpdatedAt(value: string) {
       </button>
     </header>
 
-    <section data-testid="projects-toolbar" class="projects-overview workspace-panel workspace-panel--strong">
+    <section data-testid="projects-toolbar" class="projects-toolbar workspace-panel">
       <div data-testid="projects-overview-strip" class="projects-overview-strip">
         <label class="projects-search-panel">
           <span class="projects-panel-label">搜索项目</span>
@@ -86,23 +94,10 @@ function formatUpdatedAt(value: string) {
           >
         </label>
 
-        <div class="projects-overview-stats" aria-label="项目概览">
-          <article class="projects-stat-card">
-            <span class="projects-panel-label">正式项目</span>
-            <strong>{{ formalProjects.length }}</strong>
-            <p>已确认主题，可直接进入文案工作区。</p>
-          </article>
-          <article class="projects-stat-card">
-            <span class="projects-panel-label">草稿项目</span>
-            <strong>{{ draftProjects.length }}</strong>
-            <p>主题尚未定稿，继续留在 Topic 工作区。</p>
-          </article>
+        <div class="projects-overview-copy" aria-label="项目概览">
+          <span class="workspace-badge">正式项目 {{ formalProjects.length }}</span>
+          <p>优先回到已确认主题的项目，草稿箱只在需要时展开。</p>
         </div>
-
-        <aside class="projects-overview-note">
-          <span class="workspace-badge">Topic + Script</span>
-          <p>当前页面只服务于第一阶段工作流，不引入下游阶段入口。</p>
-        </aside>
       </div>
     </section>
 
@@ -167,24 +162,31 @@ function formatUpdatedAt(value: string) {
         </section>
 
         <section data-testid="draft-projects" class="project-group project-group--draft workspace-panel">
-          <header class="project-group-header">
-            <div>
-              <h2>草稿项目 / 未完成项目</h2>
-              <p>尚未确认正式主题，继续回到选题工作区。</p>
+          <div data-testid="projects-draft-entry" class="projects-draft-entry">
+            <div class="projects-draft-copy">
+              <h2>草稿箱</h2>
+              <p>尚未确认正式主题的项目保留在这里，不占主舞台。</p>
             </div>
-            <span class="workspace-badge">待完成 Topic</span>
-          </header>
+            <button
+              data-testid="projects-draft-toggle"
+              class="btn btn-secondary projects-draft-toggle"
+              type="button"
+              @click="toggleDraftTray"
+            >
+              {{ shouldShowDraftList ? "收起草稿箱" : `查看草稿箱（${draftProjects.length}）` }}
+            </button>
+          </div>
 
           <p
             v-if="draftProjects.length === 0"
             data-testid="draft-projects-empty"
-            class="project-group-empty"
+            class="draft-projects-empty"
           >
             暂无草稿项目
           </p>
 
           <div
-            v-else
+            v-else-if="shouldShowDraftList"
             data-testid="projects-draft-list"
             class="project-list project-list--draft"
           >
@@ -241,15 +243,15 @@ function formatUpdatedAt(value: string) {
 
 .projects-header {
   display: flex;
-  align-items: end;
+  align-items: center;
   justify-content: space-between;
-  gap: 1.25rem;
+  gap: 1rem;
 }
 
 .projects-header-copy {
   display: grid;
-  gap: 0.75rem;
-  max-width: 46rem;
+  gap: 0.55rem;
+  max-width: 48rem;
 }
 
 .projects-header h1,
@@ -259,50 +261,33 @@ function formatUpdatedAt(value: string) {
 }
 
 .projects-header h1 {
-  font-size: clamp(2.4rem, 4vw, 3.6rem);
+  font-size: clamp(2.6rem, 4vw, 3.75rem);
 }
 
 .projects-summary {
   margin: 0;
-  max-width: 42rem;
   color: var(--workspace-text-muted);
-  line-height: 1.75;
+  line-height: 1.7;
 }
 
 .projects-create-button {
   flex: 0 0 auto;
 }
 
-.projects-overview {
-  position: relative;
-  overflow: hidden;
-  padding: 1.25rem;
-}
-
-.projects-overview::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 18% 22%, rgba(212, 163, 95, 0.16), transparent 26%),
-    radial-gradient(circle at 82% 18%, rgba(192, 57, 43, 0.16), transparent 22%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.03), transparent 42%);
+.projects-toolbar {
+  padding: 1rem 1.1rem;
 }
 
 .projects-overview-strip {
-  position: relative;
-  z-index: 1;
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(20rem, 0.95fr) minmax(14rem, 0.72fr);
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 1rem;
-  align-items: stretch;
+  align-items: center;
 }
 
 .projects-search-panel {
   display: grid;
-  gap: 0.65rem;
-  align-content: center;
+  gap: 0.45rem;
 }
 
 .projects-panel-label {
@@ -314,7 +299,7 @@ function formatUpdatedAt(value: string) {
 
 .projects-search-panel input {
   width: 100%;
-  padding: 0.9rem 1rem;
+  padding: 0.8rem 0.95rem;
   border: 1px solid var(--workspace-border);
   border-radius: var(--workspace-radius-sm);
   background: rgba(7, 10, 18, 0.82);
@@ -322,44 +307,23 @@ function formatUpdatedAt(value: string) {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
-.projects-overview-stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.9rem;
-}
-
-.projects-stat-card,
-.projects-overview-note {
-  border: 1px solid rgba(212, 163, 95, 0.14);
-  border-radius: var(--workspace-radius-md);
-  background: rgba(8, 12, 21, 0.54);
-  padding: 1rem;
-  backdrop-filter: blur(10px);
-}
-
-.projects-stat-card {
-  display: grid;
-  gap: 0.35rem;
-}
-
-.projects-stat-card strong {
-  font-size: 2rem;
-  line-height: 1;
-  color: var(--workspace-text);
-}
-
-.projects-stat-card p,
-.projects-overview-note p,
+.projects-overview-copy,
 .project-group-header p {
-  margin: 0;
   color: var(--workspace-text-muted);
-  line-height: 1.6;
 }
 
-.projects-overview-note {
-  display: grid;
-  gap: 0.8rem;
-  align-content: center;
+.projects-overview-copy {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.projects-overview-copy p {
+  margin: 0;
+  max-width: 22rem;
+  line-height: 1.5;
 }
 
 .projects-dashboard-shell {
@@ -367,13 +331,13 @@ function formatUpdatedAt(value: string) {
 }
 
 .projects-main-stage {
-  grid-template-columns: minmax(0, 1.35fr) minmax(21rem, 0.85fr);
-  align-items: start;
-  gap: 1.25rem;
+  grid-template-columns: 1fr;
+  align-items: stretch;
+  gap: 1rem;
 }
 
 .project-group {
-  padding: 1.25rem;
+  padding: 1.15rem 1.2rem;
   align-content: start;
 }
 
@@ -387,6 +351,7 @@ function formatUpdatedAt(value: string) {
   background:
     linear-gradient(180deg, rgba(18, 25, 39, 0.94), rgba(10, 15, 25, 0.92)),
     var(--workspace-bg-panel);
+  gap: 0.75rem;
 }
 
 .project-group-header {
@@ -399,7 +364,7 @@ function formatUpdatedAt(value: string) {
 .project-group-empty {
   margin: 0;
   color: var(--workspace-text-muted);
-  min-height: 10rem;
+  min-height: 8rem;
   display: grid;
   place-items: center;
   text-align: center;
@@ -410,11 +375,11 @@ function formatUpdatedAt(value: string) {
 
 .project-list-track {
   display: grid;
-  gap: 1rem;
+  gap: 0.85rem;
 }
 
 .project-card {
-  padding: 1.1rem 1.15rem;
+  padding: 1rem 1.05rem;
   border-radius: calc(var(--workspace-radius-md) - 4px);
   border: 1px solid rgba(212, 163, 95, 0.14);
   transition:
@@ -438,7 +403,7 @@ function formatUpdatedAt(value: string) {
 }
 
 .project-card:hover {
-  transform: translateY(-3px);
+  transform: translateY(-2px);
   border-color: var(--workspace-border-strong);
   box-shadow: var(--workspace-shadow-soft);
 }
@@ -455,7 +420,7 @@ function formatUpdatedAt(value: string) {
 
 .project-card-title-block {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.25rem;
 }
 
 .project-card-kicker {
@@ -482,28 +447,52 @@ function formatUpdatedAt(value: string) {
   line-height: 1.6;
 }
 
-@media (max-width: 1100px) {
-  .projects-overview-strip,
-  .projects-main-stage {
-    grid-template-columns: 1fr;
-  }
+.projects-draft-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.projects-draft-copy {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.projects-draft-copy p,
+.draft-projects-empty {
+  margin: 0;
+  color: var(--workspace-text-muted);
+  line-height: 1.6;
+}
+
+.projects-draft-toggle {
+  white-space: nowrap;
 }
 
 @media (max-width: 900px) {
-  .projects-overview-stats {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 720px) {
+  .projects-overview-strip,
+  .projects-draft-entry,
   .projects-header {
+    grid-template-columns: 1fr;
     display: grid;
     align-items: start;
   }
 
+  .projects-overview-copy {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
   .projects-create-button,
+  .projects-draft-toggle,
   .project-card-footer .btn {
     width: 100%;
+  }
+
+  .project-card-date {
+    white-space: normal;
   }
 }
 </style>

@@ -43,6 +43,7 @@ const uiAcceptanceAuditDefinitions: Record<
       projectsMainStage: "[data-testid='projects-main-stage']",
       formalProjects: "[data-testid='formal-projects']",
       draftProjects: "[data-testid='draft-projects']",
+      projectsDraftEntry: "[data-testid='projects-draft-entry']",
       formalProjectsEmpty: "[data-testid='formal-projects-empty']",
       draftProjectsEmpty: "[data-testid='draft-projects-empty']",
     },

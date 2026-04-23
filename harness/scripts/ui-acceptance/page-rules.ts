@@ -143,7 +143,7 @@ function auditProjectsPage(snapshot: UiAcceptancePageSnapshot) {
         snapshot,
         "projectsMainStage",
         "projects-main-stage",
-        "项目页必须具备左主右辅的项目主舞台",
+        "项目页必须具备正式项目主舞台",
       ),
       createPresenceCheck(
         snapshot,
@@ -155,7 +155,13 @@ function auditProjectsPage(snapshot: UiAcceptancePageSnapshot) {
         snapshot,
         "draftProjects",
         "projects-draft-section",
-        "项目页必须展示草稿项目区",
+        "项目页必须展示草稿箱入口",
+      ),
+      createPresenceCheck(
+        snapshot,
+        "projectsDraftEntry",
+        "projects-draft-secondary-entry",
+        "项目页必须把草稿箱作为二级入口展示",
       ),
     ],
     deliveryChecks: [

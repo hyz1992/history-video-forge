@@ -30,11 +30,12 @@ describe("ui acceptance page rules", () => {
           "projectsMainStage",
           "formalProjects",
           "draftProjects",
+          "projectsDraftEntry",
         ],
         counts: {
           projectCards: 2,
         },
-        bodyText: "我的项目 正式项目 草稿项目 / 未完成项目",
+        bodyText: "我的项目 正式项目 草稿箱 查看草稿箱",
       }),
       createSnapshot("topic", {
         visibleSelectors: [
@@ -164,6 +165,10 @@ describe("ui acceptance page rules", () => {
         }),
         expect.objectContaining({
           code: "projects-main-stage",
+          status: "FAIL",
+        }),
+        expect.objectContaining({
+          code: "projects-draft-secondary-entry",
           status: "FAIL",
         }),
       ]),
