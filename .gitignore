@@ -1,6 +1,6 @@
 node_modules/
 harness/scripts/runtime/output/*
 !harness/scripts/runtime/output/.gitkeep
-!harness/scripts/runtime/output/ui-acceptance/
-!harness/scripts/runtime/output/ui-acceptance/.gitkeep
 .env
+storage/projects/
+.playwright-mcp/

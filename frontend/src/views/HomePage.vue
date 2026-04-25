@@ -80,16 +80,17 @@ async function handleCreateProject() {
 <style scoped>
 .landing-page {
   min-height: 100vh;
+  display: grid;
 }
 
 .hero {
   position: relative;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  min-height: 88vh;
+  min-height: 100vh;
   overflow: hidden;
-  padding: 3.5rem 1.5rem 2rem;
+  padding: 2.5rem 1.5rem;
 }
 
 .hero-bg-pattern {
@@ -185,7 +186,7 @@ async function handleCreateProject() {
 @media (max-width: 768px) {
   .hero {
     min-height: auto;
-    padding-top: 2.5rem;
+    padding: 2.5rem 1.25rem 2rem;
   }
 
   .hero-content {

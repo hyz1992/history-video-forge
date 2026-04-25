@@ -115,9 +115,7 @@ function auditHomePage(snapshot: UiAcceptancePageSnapshot) {
 
 function auditProjectsPage(snapshot: UiAcceptancePageSnapshot) {
   const projectCards = snapshot.counts.projectCards ?? 0;
-  const hasEmptyState =
-    hasVisibleSelector(snapshot, "formalProjectsEmpty") &&
-    hasVisibleSelector(snapshot, "draftProjectsEmpty");
+  const hasEmptyState = hasVisibleSelector(snapshot, "projectsEmptyState");
 
   return {
     structureChecks: [
@@ -129,39 +127,33 @@ function auditProjectsPage(snapshot: UiAcceptancePageSnapshot) {
       ),
       createPresenceCheck(
         snapshot,
-        "projectsOverviewStrip",
-        "projects-overview-strip",
-        "项目页必须展示搜索、计数与创建动作摘要带",
+        "projectsContentColumn",
+        "projects-content-column",
+        "项目页必须使用居中的有界内容列",
       ),
       createPresenceCheck(
         snapshot,
-        "projectsDashboardShell",
-        "projects-dashboard-shell",
-        "项目页必须具备仪表盘卡片容器",
+        "projectsHeaderActions",
+        "projects-header-actions",
+        "项目页必须在标题区展示主次按钮组",
       ),
       createPresenceCheck(
         snapshot,
-        "projectsMainStage",
-        "projects-main-stage",
-        "项目页必须具备正式项目主舞台",
+        "projectsToolbar",
+        "projects-toolbar-shell",
+        "项目页必须展示搜索与阶段筛选工具栏",
       ),
       createPresenceCheck(
         snapshot,
-        "formalProjects",
-        "projects-formal-section",
-        "项目页必须展示正式项目区",
+        "projectsTableShell",
+        "projects-table-shell",
+        "项目页必须展示项目表格主舞台",
       ),
       createPresenceCheck(
         snapshot,
-        "draftProjects",
-        "projects-draft-section",
-        "项目页必须展示草稿箱入口",
-      ),
-      createPresenceCheck(
-        snapshot,
-        "projectsDraftEntry",
-        "projects-draft-secondary-entry",
-        "项目页必须把草稿箱作为二级入口展示",
+        "projectsDraftButton",
+        "projects-draft-entry",
+        "项目页必须把草稿箱作为顶部次按钮入口展示",
       ),
     ],
     deliveryChecks: [

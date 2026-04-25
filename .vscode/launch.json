@@ -25,7 +25,7 @@
       "name": "Debug Frontend (Chrome)",
       "type": "pwa-chrome",
       "request": "launch",
-      "url": "http://127.0.0.1:5173/topic",
+      "url": "http://127.0.0.1:5173",
       "webRoot": "${workspaceFolder}/frontend",
       "breakOnLoad": true,
       "breakOnLoadStrategy": "instrument",

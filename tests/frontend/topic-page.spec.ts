@@ -24,6 +24,13 @@ function createProjectStoreStub() {
     currentStatus: "topic_pending",
     projects: [
       {
+        project_id: "project-pending",
+        display_name: "商鞅变法",
+        current_status: "topic_pending",
+        is_draft: true,
+        updated_at: "2026-04-22T09:00:00.000Z",
+      },
+      {
         project_id: "project-formal",
         display_name: "晏子使楚",
         current_status: "script_ready",
@@ -32,10 +39,10 @@ function createProjectStoreStub() {
       },
       {
         project_id: "project-draft",
-        display_name: "未命名项目",
-        current_status: "topic_pending",
+        display_name: "荆轲刺秦",
+        current_status: "topic_candidates_ready",
         is_draft: true,
-        updated_at: "2026-04-21T08:00:00.000Z",
+        updated_at: "2026-04-23T08:00:00.000Z",
       },
     ],
   });
@@ -137,6 +144,7 @@ async function mountAt(path: string) {
 describe("phase 4 app shell", () => {
   it("renders the home page with project entry CTAs", async () => {
     const { router, wrapper } = await mountAt("/");
+    const homeSource = readFileSync("frontend/src/views/HomePage.vue", "utf8");
 
     expect(router.currentRoute.value.path).toBe("/");
     expect(wrapper.get("[data-testid='home-hero']").exists()).toBe(true);
@@ -158,6 +166,11 @@ describe("phase 4 app shell", () => {
     expect(wrapper.get("[data-testid='home-secondary-cta']").classes()).not.toContain(
       "hero-cta-filled",
     );
+    expect(homeSource).toContain(".landing-page {");
+    expect(homeSource).toContain("display: grid;");
+    expect(homeSource).toContain(".hero {");
+    expect(homeSource).toContain("align-items: center;");
+    expect(homeSource).toContain("min-height: 100vh;");
 
     await wrapper.get("[data-testid='home-secondary-cta']").trigger("click");
     await flushPromises();
@@ -165,37 +178,117 @@ describe("phase 4 app shell", () => {
     expect(router.currentRoute.value.path).toBe("/projects/project-new/topic");
   });
 
-  it("renders the projects page with formal and draft project groups", async () => {
+  it("renders the projects page as a bounded project table with a draft drawer", async () => {
     const { router, wrapper } = await mountAt("/projects");
+    const projectsSource = readFileSync("frontend/src/views/ProjectsPage.vue", "utf8");
 
     expect(router.currentRoute.value.path).toBe("/projects");
     expect(wrapper.get("[data-testid='projects-heading']").text()).toContain("我的项目");
     expect(wrapper.find("[data-testid='projects-kicker']").exists()).toBe(false);
-    expect(wrapper.get("[data-testid='projects-overview-strip']").text()).toContain("搜索项目");
-    expect(wrapper.get("[data-testid='projects-overview-strip']").text()).not.toContain("Topic + Script");
-    expect(wrapper.get("[data-testid='projects-dashboard-shell']").exists()).toBe(true);
-    expect(wrapper.get("[data-testid='projects-main-stage']").exists()).toBe(true);
-    expect(wrapper.get("[data-testid='formal-projects']").text()).toContain("正式项目");
-    expect(wrapper.get("[data-testid='draft-projects']").text()).toContain("草稿箱");
-    expect(wrapper.get("[data-testid='projects-draft-entry']").exists()).toBe(true);
-    expect(wrapper.find("[data-testid='projects-draft-list']").exists()).toBe(false);
-    expect(wrapper.get("[data-testid='projects-formal-list']").exists()).toBe(true);
+    expect(wrapper.get("[data-testid='projects-content-column']").exists()).toBe(true);
+    expect(wrapper.get("[data-testid='projects-header-actions']").exists()).toBe(true);
+    expect(wrapper.find("[data-testid='projects-toolbar']").exists()).toBe(false);
+    expect(wrapper.get("[data-testid='projects-table-shell']").exists()).toBe(true);
+    expect(wrapper.get("[data-testid='projects-table-toolbar']").text()).toContain("搜索项目");
+    expect(wrapper.get("[data-testid='projects-table-toolbar']").text()).toContain("阶段");
+    expect(wrapper.get("[data-testid='projects-search-shell']").classes()).toContain(
+      "projects-filter-field--wide",
+    );
+    expect(wrapper.get("[data-testid='projects-stage-filter-shell']").classes()).toContain(
+      "projects-filter-field--select",
+    );
+    expect(wrapper.get("[data-testid='projects-table-head']").text()).toContain("标题");
+    expect(wrapper.get("[data-testid='projects-table-head']").text()).toContain("生成时间");
+    expect(wrapper.get("[data-testid='projects-table-head']").text()).toContain("阶段");
+    expect(wrapper.text()).not.toContain("正式项目");
+    expect(wrapper.get("[data-testid='projects-draft-button']").text()).toContain("草稿箱");
+    expect(wrapper.get("[data-testid='projects-draft-button']").classes()).toContain("projects-draft-button");
+    expect(wrapper.get("[data-testid='projects-draft-button']").classes()).toContain(
+      "projects-header-button",
+    );
+    expect(wrapper.get("[data-testid='create-project']").classes()).toContain(
+      "projects-header-button",
+    );
+    expect(wrapper.find("[data-testid='projects-draft-drawer']").exists()).toBe(false);
+    expect(wrapper.find("[data-testid='project-card-project-draft']").exists()).toBe(false);
     expect(wrapper.text()).toContain("晏子使楚");
-    expect(wrapper.text()).not.toContain("未命名项目");
+    expect(wrapper.text()).toContain("商鞅变法");
+    expect(wrapper.text()).not.toContain("荆轲刺秦");
     expect(wrapper.get("[data-testid='projects-search']").attributes("placeholder")).toContain(
       "搜索项目",
     );
-    expect(wrapper.get("[data-testid='project-card-project-formal']").text()).toContain(
-      "继续文案工作区",
+    expect(wrapper.get("[data-testid='projects-sort-updated-at']").attributes("type")).toBe("button");
+    expect(wrapper.get("[data-testid='projects-sort-stage']").attributes("type")).toBe("button");
+    expect(wrapper.get("[data-testid='project-row-project-pending']").text()).toContain("打开");
+    expect(wrapper.get("[data-testid='project-row-project-formal']").find("[data-testid='project-stage-project-formal']").exists()).toBe(true);
+    expect(wrapper.get("[data-testid='delete-project-project-formal']").classes()).toContain("btn-icon");
+    expect(wrapper.get("[data-testid='open-project-project-formal']").classes()).toContain(
+      "projects-row-open",
     );
+    expect(wrapper.get("[data-testid='projects-table-footer']").text()).toContain("2 个项目");
 
-    await wrapper.get("[data-testid='projects-draft-toggle']").trigger("click");
+    await wrapper.get("[data-testid='projects-sort-updated-at']").trigger("click");
     await flushPromises();
 
-    expect(wrapper.get("[data-testid='projects-draft-list']").exists()).toBe(true);
-    expect(wrapper.get("[data-testid='project-card-project-draft']").text()).toContain(
-      "继续选题工作区",
+    expect(wrapper.findAll("[data-testid^='project-row-']")[0]?.text()).toContain("晏子使楚");
+
+    await wrapper.get("[data-testid='projects-stage-filter']").setValue("topic_pending");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("商鞅变法");
+    expect(wrapper.text()).not.toContain("晏子使楚");
+
+    await wrapper.get("[data-testid='projects-draft-button']").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).not.toContain("搜索草稿");
+    expect(wrapper.get("[data-testid='projects-draft-close']").attributes("aria-label")).toBe(
+      "关闭草稿箱",
     );
+    expect(wrapper.get("[data-testid='projects-draft-close']").classes()).toContain(
+      "projects-draft-close-button",
+    );
+    expect(wrapper.get("[data-testid='projects-draft-drawer']").text()).toContain("草稿箱");
+    expect(wrapper.get("[data-testid='projects-draft-drawer']").text()).toContain(
+      "仅显示已生成候选题、但尚未确认主题的项目",
+    );
+    expect(wrapper.get("[data-testid='projects-draft-card-list']").exists()).toBe(true);
+    expect(wrapper.get("[data-testid='project-card-project-draft']").text()).toContain("继续查看");
+    expect(wrapper.get("[data-testid='project-card-project-draft']").text()).toContain("荆轲刺秦");
+    expect(wrapper.get("[data-testid='project-card-project-draft']").text()).toContain("候选题已生成");
+    expect(wrapper.get("[data-testid='projects-draft-drawer']").text()).not.toContain("商鞅变法");
+    expect(projectsSource).toContain("width: min(100%, 1000px);");
+    expect(projectsSource).toContain("font-size: 48px;");
+    expect(projectsSource).toContain("line-height: 56px;");
+    expect(projectsSource).toContain("gap: 12px;");
+    expect(projectsSource).toContain("max-width: 560px;");
+    expect(projectsSource).toContain("flex: 0 0 140px;");
+    expect(projectsSource).toContain("min-height: 40px;");
+    expect(projectsSource).toContain("border-radius: 8px;");
+    expect(projectsSource).toContain("min-height: 48px;");
+    expect(projectsSource).toContain("min-height: 64px;");
+    expect(projectsSource).toContain("width: 360px;");
+    expect(projectsSource).toContain("grid-template-rows: auto auto 1fr;");
+    expect(projectsSource).toContain("align-self: end;");
+    expect(projectsSource).not.toMatch(
+      /@media \(max-width: 960px\)\s*{\s*\.projects-table-toolbar,\s*\.projects-header\s*{\s*align-items: stretch;\s*flex-direction: column;/,
+    );
+    expect(projectsSource).not.toMatch(
+      /\.projects-header-actions\s*{\s*flex-direction: column;\s*align-items: stretch;/,
+    );
+    expect(projectsSource).toContain("justify-self: center;");
+    expect(projectsSource).toContain("text-align: center;");
+    expect(projectsSource).toContain("@media (max-width: 1279px)");
+    expect(projectsSource).toContain("width: min(100%, 960px);");
+    expect(projectsSource).toContain("@media (max-width: 819px)");
+    expect(projectsSource).toContain("grid-template-columns: minmax(0, 280px) 140px;");
+    expect(projectsSource).toContain("justify-content: center;");
+    expect(projectsSource).toContain("@media (max-width: 479px)");
+    expect(projectsSource).toContain("grid-template-columns: 1fr;");
+    expect(projectsSource).toContain("width: 140px;");
+    expect(projectsSource).toContain(".projects-page {");
+    expect(projectsSource).toContain("justify-items: center;");
+    expect(projectsSource).toContain("margin: 0 auto;");
   });
 });
 

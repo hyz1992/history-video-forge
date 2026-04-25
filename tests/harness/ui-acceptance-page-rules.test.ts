@@ -25,17 +25,16 @@ describe("ui acceptance page rules", () => {
       createSnapshot("projects", {
         visibleSelectors: [
           "projectsHeading",
-          "projectsOverviewStrip",
-          "projectsDashboardShell",
-          "projectsMainStage",
-          "formalProjects",
-          "draftProjects",
-          "projectsDraftEntry",
+          "projectsContentColumn",
+          "projectsHeaderActions",
+          "projectsToolbar",
+          "projectsTableShell",
+          "projectsDraftButton",
         ],
         counts: {
           projectCards: 2,
         },
-        bodyText: "我的项目 正式项目 草稿箱 查看草稿箱",
+        bodyText: "我的项目 新建项目 草稿箱 搜索项目 阶段 标题 生成时间 打开 删除",
       }),
       createSnapshot("topic", {
         visibleSelectors: [
@@ -141,14 +140,14 @@ describe("ui acceptance page rules", () => {
     );
   });
 
-  it("fails when the projects dashboard loses its toolbar or card grid", () => {
+  it("fails when the projects page loses its bounded content column or project table", () => {
     const result = auditUiAcceptancePageSnapshots([
       createSnapshot("projects", {
-        visibleSelectors: ["projectsHeading", "formalProjects", "draftProjects"],
+        visibleSelectors: ["projectsHeading"],
         counts: {
           projectCards: 0,
         },
-        bodyText: "我的项目 正式项目 草稿项目 / 未完成项目",
+        bodyText: "我的项目",
       }),
     ]);
 
@@ -156,19 +155,23 @@ describe("ui acceptance page rules", () => {
     expect(result.structureChecks).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: "projects-overview-strip",
+          code: "projects-content-column",
           status: "FAIL",
         }),
         expect.objectContaining({
-          code: "projects-dashboard-shell",
+          code: "projects-header-actions",
           status: "FAIL",
         }),
         expect.objectContaining({
-          code: "projects-main-stage",
+          code: "projects-toolbar-shell",
           status: "FAIL",
         }),
         expect.objectContaining({
-          code: "projects-draft-secondary-entry",
+          code: "projects-table-shell",
+          status: "FAIL",
+        }),
+        expect.objectContaining({
+          code: "projects-draft-entry",
           status: "FAIL",
         }),
       ]),
