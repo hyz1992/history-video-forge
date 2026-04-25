@@ -1,0 +1,97 @@
+{
+  "page": "replace-with-page-name",
+  "status": "draft",
+  "scope": {
+    "inScope": [
+      "replace-with-primary-page-scope"
+    ],
+    "outOfScope": [
+      "backend",
+      "store",
+      "api",
+      "route-semantics"
+    ]
+  },
+  "references": {
+    "approvedMock": "approved-mock.png",
+    "annotatedSpec": "annotated-spec.png"
+  },
+  "layout": {
+    "contentMaxWidth": 1000,
+    "contentPaddingX": 24,
+    "sectionGap": 24
+  },
+  "breakpoints": {
+    "desktop": 1280,
+    "tablet": 819,
+    "mobile": 479
+  },
+  "header": {
+    "titleFontSize": 48,
+    "titleLineHeight": 56,
+    "titleLetterSpacing": -0.5,
+    "summaryFontSize": 14,
+    "summaryLineHeight": 22,
+    "actionGap": 12,
+    "buttonHeight": 36,
+    "buttonRadius": 8
+  },
+  "toolbar": {
+    "sameRowUntil": 479,
+    "gap": 12,
+    "searchWidth": 280,
+    "searchHeight": 40,
+    "filterWidth": 140,
+    "filterHeight": 40,
+    "controlRadius": 8
+  },
+  "table": {
+    "headerHeight": 48,
+    "rowHeight": 64,
+    "columnGap": 12,
+    "viewportHeight": 448,
+    "footerPaddingBottom": 16
+  },
+  "drawer": {
+    "width": 360,
+    "padding": 20,
+    "sectionGap": 20,
+    "cardGap": 12,
+    "cardMinHeight": 72
+  },
+  "visual": {
+    "primaryBackground": "replace-with-token-or-rgba",
+    "panelBackground": "replace-with-token-or-rgba",
+    "accentColor": "replace-with-token-or-rgba",
+    "textColor": "replace-with-token-or-rgba",
+    "mutedTextColor": "replace-with-token-or-rgba",
+    "borderColor": "replace-with-token-or-rgba",
+    "shadow": "replace-with-token-or-shadow-value"
+  },
+  "states": [
+    "default",
+    "empty",
+    "with-data",
+    "expanded",
+    "narrow-screen"
+  ],
+  "testHooks": {
+    "preserveDataTestIds": true,
+    "criticalSelectors": [
+      "replace-with-critical-testid-or-class"
+    ]
+  },
+  "verification": {
+    "unitOrComponentTests": [
+      "replace-with-test-command"
+    ],
+    "uiAcceptance": [
+      "npm run harness:ui-acceptance:smoke"
+    ],
+    "manualChecks": [
+      "compare coded page against approved mock",
+      "compare coded page against annotated spec",
+      "verify breakpoint transitions match spec"
+    ]
+  }
+}
