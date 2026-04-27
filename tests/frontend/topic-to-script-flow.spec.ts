@@ -426,7 +426,7 @@ describe("phase 4 project routing", () => {
       },
     );
 
-    await wrapper.get("[data-testid='history-candidate-candidate-history']").trigger("click");
+    await wrapper.get("[data-testid='candidate-item-candidate-history']").trigger("click");
     await wrapper.get("[data-testid='confirm-candidate']").trigger("click");
     await flushPromises();
 

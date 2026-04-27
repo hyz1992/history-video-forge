@@ -52,10 +52,11 @@ const uiAcceptanceAuditDefinitions: Record<
   topic: {
     pageId: "topic",
     selectors: {
-      topicPageHeader: "[data-testid='topic-page-header']",
-      currentTopicRound: "[data-testid='current-topic-round']",
-      topicHistory: "[data-testid='topic-history']",
-      confirmCandidate: uiAcceptanceSelectors.confirmCandidate,
+      topicPipelineTabs: "[data-testid='topic-pipeline-tabs']",
+      topicEntryTabs: "[data-testid='topic-entry-tabs']",
+      topicToolbar: "[data-testid='topic-toolbar']",
+      topicResults: "[data-testid='topic-results-shell']",
+      generateTopic: "[data-testid='system-generate']",
     },
     countSelectors: {
       candidateItems: uiAcceptanceDynamicSelectors.firstCandidateItem,

@@ -38,15 +38,16 @@ describe("ui acceptance page rules", () => {
       }),
       createSnapshot("topic", {
         visibleSelectors: [
-          "topicPageHeader",
-          "currentTopicRound",
-          "topicHistory",
-          "confirmCandidate",
+          "topicPipelineTabs",
+          "topicEntryTabs",
+          "topicToolbar",
+          "topicResults",
+          "generateTopic",
         ],
         counts: {
           candidateItems: 3,
         },
-        bodyText: "选题工作区 当前轮 候选历史 确认这个题",
+        bodyText: "选题 文案 分镜 素材 合成 系统自动推荐 事件库 自定义主题 历史时期 叙事张力 开始生成选题",
       }),
       createSnapshot("script", {
         visibleSelectors: [
@@ -189,11 +190,11 @@ describe("ui acceptance page rules", () => {
   it("fails when topic candidates are missing or confirm entry is not reachable", () => {
     const result = auditUiAcceptancePageSnapshots([
       createSnapshot("topic", {
-        visibleSelectors: ["topicPageHeader", "currentTopicRound"],
+        visibleSelectors: ["topicPipelineTabs", "topicToolbar"],
         counts: {
           candidateItems: 0,
         },
-        bodyText: "选题工作区 当前轮",
+        bodyText: "选题 历史时期",
       }),
     ]);
 
@@ -201,11 +202,15 @@ describe("ui acceptance page rules", () => {
     expect(result.structureChecks).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: "topic-history-section",
+          code: "topic-entry-tabs",
           status: "FAIL",
         }),
         expect.objectContaining({
-          code: "topic-confirm-entry",
+          code: "topic-results-shell",
+          status: "FAIL",
+        }),
+        expect.objectContaining({
+          code: "topic-generate-action",
           status: "FAIL",
         }),
       ]),

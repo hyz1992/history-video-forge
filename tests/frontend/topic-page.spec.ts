@@ -392,16 +392,56 @@ describe("topic workspace rounds", () => {
     });
 
     const mainSource = readFileSync("frontend/src/main.ts", "utf8");
+    const topicSource = readFileSync("frontend/src/views/TopicPage.vue", "utf8");
+    const topicTabsSource = readFileSync("frontend/src/components/topic/TopicTabs.vue", "utf8");
+    const candidateListSource = readFileSync(
+      "frontend/src/components/topic/TopicCandidateList.vue",
+      "utf8",
+    );
+    const topicDrawerSource = readFileSync(
+      "frontend/src/components/topic/TopicCandidateDrawer.vue",
+      "utf8",
+    );
 
     expect(mainSource).toContain('import "./styles/main.css";');
     expect(wrapper.classes()).toContain("workspace-shell");
     expect(wrapper.classes()).toContain("workspace-shell--topic");
-    expect(wrapper.get("[data-testid='topic-page-header']").text()).toContain("选题工作区");
-    expect(wrapper.get("[data-testid='topic-summary']").text()).toContain("多轮候选");
-    expect(wrapper.get("[data-testid='current-topic-round']").text()).toContain("当前轮主题");
-    expect(wrapper.get("[data-testid='topic-history']").text()).toContain("历史轮主题");
+    expect(wrapper.find("[data-testid='topic-page-header']").exists()).toBe(false);
+    expect(wrapper.get("[data-testid='topic-workspace']").exists()).toBe(true);
+    expect(wrapper.get("[data-testid='topic-pipeline-tabs']").text()).toContain("① 选题");
+    expect(wrapper.get("[data-testid='topic-pipeline-tabs']").text()).toContain("② 文案");
+    expect(wrapper.get("[data-testid='topic-pipeline-tabs']").text()).toContain("↔");
+    expect(wrapper.get("[data-testid='topic-entry-tabs']").text()).toContain("系统自动推荐");
+    expect(wrapper.get("[data-testid='topic-entry-tabs']").text()).toContain("事件库");
+    expect(wrapper.get("[data-testid='topic-entry-tabs']").text()).toContain("自定义主题");
+    expect(wrapper.get("[data-testid='topic-toolbar']").text()).toContain("历史时期");
+    expect(wrapper.get("[data-testid='topic-toolbar']").text()).toContain("叙事张力");
+    expect(wrapper.get("[data-testid='system-generate']").text()).toContain("开始生成选题");
+    expect(wrapper.get("[data-testid='system-generate']").classes()).toContain("btn-primary");
+    expect(wrapper.get("[data-testid='topic-results-shell']").text()).toContain("当前轮主题");
+    expect(wrapper.get("[data-testid='topic-history-shell']").text()).toContain("历史轮主题");
+    expect(topicSource).toContain("width: min(100%, 1000px);");
+    expect(topicSource).toContain("grid-template-columns: minmax(0, 1fr) auto;");
+    expect(topicSource).toContain("justify-self: end;");
+    expect(topicSource).toContain("background: transparent;");
+    expect(topicSource).toContain("position: relative;");
+    expect(topicTabsSource).toContain("topic-pipeline-tabs");
+    expect(topicTabsSource).toContain("topic-entry-tabs");
+    expect(topicTabsSource).toContain("① 选题");
+    expect(topicTabsSource).toContain("↔");
+    expect(topicTabsSource).toContain("background: linear-gradient(135deg, #c0392b, #96281b);");
+    expect(topicTabsSource).toContain("border-bottom: 2px solid rgba(212, 163, 95, 0.18);");
+    expect(topicTabsSource).toContain("topic-entry-tab--active");
+    expect(topicTabsSource).toContain("border-bottom-color: var(--workspace-accent);");
+    expect(candidateListSource).toContain("grid-template-columns: minmax(0, 1fr) auto;");
+    expect(candidateListSource).toContain("align-items: center;");
+    expect(candidateListSource).toContain("min-height: 96px;");
+    expect(candidateListSource).toContain("padding: 1.125rem 1.25rem;");
+    expect(topicDrawerSource).toContain("position: fixed;");
+    expect(topicDrawerSource).toContain("right: 0;");
+    expect(topicDrawerSource).toContain("确认主题，生成文案");
 
-    await wrapper.get("[data-testid='history-candidate-candidate-history']").trigger("click");
+    await wrapper.get("[data-testid='candidate-item-candidate-history']").trigger("click");
     await wrapper.get("[data-testid='confirm-candidate']").trigger("click");
 
     expect(calls.confirm).toEqual([
@@ -467,8 +507,8 @@ describe("topic workspace rounds", () => {
       },
     });
 
-    expect(wrapper.get("[data-testid='topic-history']").text()).toContain("候选历史");
-    expect(wrapper.get("[data-testid='topic-history']").text()).toContain("暂无历史轮次");
+    expect(wrapper.get("[data-testid='topic-history-shell']").text()).toContain("候选历史");
+    expect(wrapper.get("[data-testid='topic-history-shell']").text()).toContain("暂无历史轮次");
     expect(wrapper.find("[data-testid='topic-history-empty']").exists()).toBe(true);
   });
 });
