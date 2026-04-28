@@ -1,11 +1,13 @@
 import type { PromptRegistry } from "../prompts/prompt-registry.js";
 import { classifyExternalError } from "./external-errors.js";
+import type { LlmInteractionLogWriter } from "./interaction-log.js";
 import type { StructuredPromptProvider } from "./provider-contract.js";
 
 export interface InvokeStructuredPromptOptions {
   promptId: string;
   input: unknown;
   operationName?: string;
+  interactionLogWriter?: LlmInteractionLogWriter;
 }
 
 export interface LlmGateway {
@@ -29,6 +31,7 @@ class DefaultLlmGateway implements LlmGateway {
         prompt,
         input: options.input,
         operationName,
+        interactionLogWriter: options.interactionLogWriter,
       });
     } catch (error) {
       throw classifyExternalError(error, {

@@ -7,7 +7,10 @@ import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compati
 import type { StructuredPromptProvider } from "../../runtime/llm/provider-contract.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 import { runTopicRecommendationGraph } from "../../runtime/orchestration/topic-recommendation-graph.js";
-import { persistProjectRunArtifacts } from "../../runtime/trace/project-storage.js";
+import {
+  createProjectRunInteractionLogWriter,
+  persistProjectRunArtifacts,
+} from "../../runtime/trace/project-storage.js";
 
 import {
   buildTopicCandidates,
@@ -25,15 +28,28 @@ export async function recommendTopicCandidatesWithTrace(
   options?: TopicRecommendationOptions,
 ) {
   const gateway = options?.llmGateway ?? createTopicRecommendationGateway();
+  const project = options?.projectId ? db.projects.get(options.projectId) : null;
+  const runId = `topic_run_${db.generateId()}`;
+  const interactionLogWriter = project
+    ? createProjectRunInteractionLogWriter({
+        project,
+        phase: "topic",
+        runId,
+      })
+    : undefined;
   const result = await runTopicRecommendationGraph(
     {
       db,
       input,
       projectId: options?.projectId ?? null,
+      runId,
     },
     {
       invokeStructuredPrompt: (runnerInput) =>
-        gateway.invokeStructuredPrompt<unknown[]>(runnerInput),
+        gateway.invokeStructuredPrompt<unknown[]>({
+          ...runnerInput,
+          interactionLogWriter,
+        }),
     },
   );
 
@@ -41,16 +57,12 @@ export async function recommendTopicCandidatesWithTrace(
     return result;
   }
 
-  const project = db.projects.get(options.projectId);
   if (project) {
     project.latestTopicRunTraceJson = result.trace as Record<string, unknown>;
     persistProjectRunArtifacts({
       project,
       phase: "topic",
-      runId:
-        typeof result.trace.run_id === "string"
-          ? result.trace.run_id
-          : `topic_run_${db.generateId()}`,
+      runId,
       traceSummary: result.trace as Record<string, unknown>,
       runtimeDiagnostics: result.diagnostics as Record<string, unknown>,
     });
@@ -95,8 +107,28 @@ function createTopicRecommendationGateway(): LlmGateway {
 
 function createStubTopicRecommendationProvider(): StructuredPromptProvider {
   return {
-    async invokeStructuredPrompt<T>({ input }): Promise<T> {
-      return buildTopicCandidates(input as BuildTopicCandidatesInput) as T;
+    async invokeStructuredPrompt<T>(request): Promise<T> {
+      const candidates = buildTopicCandidates(
+        request.input as BuildTopicCandidatesInput,
+      ) as T;
+
+      await request.interactionLogWriter?.write({
+        generatedAt: new Date().toISOString(),
+        provider: "stub",
+        model: "stub",
+        operationName: request.operationName,
+        promptId: request.prompt.metadata.id,
+        promptStage: request.prompt.metadata.stage,
+        promptLanguage: request.prompt.metadata.language,
+        promptFilePath: request.prompt.filePath,
+        systemPrompt: request.prompt.body,
+        input: request.input,
+        rawOutput: JSON.stringify(candidates, null, 2),
+        parsedOutput: candidates,
+        errorMessage: null,
+      });
+
+      return candidates;
     },
   };
 }

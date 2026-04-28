@@ -55,36 +55,75 @@ export function createOpenAiCompatibleProvider(
     async invokeStructuredPrompt<T>(
       request: StructuredPromptInvocation,
     ): Promise<T> {
-      const rawOutput = await withRetry(
-        () => {
-          requestBudget.consume(request.operationName);
+      let rawOutput = "";
 
-          return withTimeout(
-            invokeApi({
-              prompt: request.prompt,
-              input: request.input,
-              operationName: request.operationName,
-              model,
-            }),
-            options.timeoutMs ?? env.llm.timeoutMs,
-            request.operationName,
-          );
-        },
-        {
-          provider: "llm",
-          operation: request.operationName,
-          maxAttempts: options.maxAttempts ?? env.llm.maxAttempts,
-          baseDelayMs: options.baseDelayMs ?? 1500,
-          maxDelayMs: options.maxDelayMs ?? 8000,
-        },
-      );
+      try {
+        rawOutput = await withRetry(
+          () => {
+            requestBudget.consume(request.operationName);
 
-      return fixer.fix<T>({
-        operationName: request.operationName,
-        rawOutput,
-        parse: (candidate) => JSON.parse(candidate) as T,
-        deterministicRecovery: recoverJsonCandidate,
-      });
+            return withTimeout(
+              invokeApi({
+                prompt: request.prompt,
+                input: request.input,
+                operationName: request.operationName,
+                model,
+              }),
+              options.timeoutMs ?? env.llm.timeoutMs,
+              request.operationName,
+            );
+          },
+          {
+            provider: "llm",
+            operation: request.operationName,
+            maxAttempts: options.maxAttempts ?? env.llm.maxAttempts,
+            baseDelayMs: options.baseDelayMs ?? 1500,
+            maxDelayMs: options.maxDelayMs ?? 8000,
+          },
+        );
+
+        const parsedOutput = await fixer.fix<T>({
+          operationName: request.operationName,
+          rawOutput,
+          parse: (candidate) => JSON.parse(candidate) as T,
+          deterministicRecovery: recoverJsonCandidate,
+        });
+
+        await request.interactionLogWriter?.write({
+          generatedAt: new Date().toISOString(),
+          provider: "openai-compatible",
+          model,
+          operationName: request.operationName,
+          promptId: request.prompt.metadata.id,
+          promptStage: request.prompt.metadata.stage,
+          promptLanguage: request.prompt.metadata.language,
+          promptFilePath: request.prompt.filePath,
+          systemPrompt: request.prompt.body,
+          input: request.input,
+          rawOutput,
+          parsedOutput,
+          errorMessage: null,
+        });
+
+        return parsedOutput;
+      } catch (error) {
+        await request.interactionLogWriter?.write({
+          generatedAt: new Date().toISOString(),
+          provider: "openai-compatible",
+          model,
+          operationName: request.operationName,
+          promptId: request.prompt.metadata.id,
+          promptStage: request.prompt.metadata.stage,
+          promptLanguage: request.prompt.metadata.language,
+          promptFilePath: request.prompt.filePath,
+          systemPrompt: request.prompt.body,
+          input: request.input,
+          rawOutput,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+
+        throw error;
+      }
     },
   };
 }

@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -6,10 +8,16 @@ import {
   TopicDeliveryPack,
   TopicPackage,
 } from "../../../shared/src/index.js";
+import { createDbClient } from "../../../backend/src/db/client.js";
+import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
 import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
 import { createOpenAiCompatibleProvider } from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 import { generateScriptDraft } from "../../../backend/src/modules/script/script-generation.service.js";
+import { runScriptGeneration } from "../../../backend/src/modules/script/script-run.service.js";
+import type { LlmInteractionLogEntry } from "../../../backend/src/runtime/llm/interaction-log.js";
+import { getProjectStorageProfile } from "../../../backend/src/runtime/trace/project-storage.js";
 
 const topicPackage = TopicPackage.parse({
   topic_id: "topic_yanzi_shichu",
@@ -180,5 +188,104 @@ ${JSON.stringify(runtimeDraft)}
       code: "invalid_response",
       operation: "script.writer",
     });
+  });
+
+  it("passes a complete llm interaction entry to the script writer logger", async () => {
+    const entries: LlmInteractionLogEntry[] = [];
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi: vi.fn(async () => JSON.stringify(runtimeDraft)),
+      }),
+    });
+
+    await generateScriptDraft({
+      bundle: scriptInputBundle,
+      llmGateway: gateway,
+      interactionLogWriter: {
+        write(entry) {
+          entries.push(entry);
+        },
+      },
+    });
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      provider: "openai-compatible",
+      model: "glm-4.5",
+      operationName: "script.writer",
+      promptId: "script.writer",
+      promptStage: "script",
+      promptLanguage: "zh-CN",
+      input: scriptInputBundle,
+      rawOutput: JSON.stringify(runtimeDraft),
+      parsedOutput: runtimeDraft,
+      errorMessage: null,
+    });
+    expect(entries[0]?.systemPrompt).toContain("# 任务");
+    expect(entries[0]?.systemPrompt).toContain("ScriptInputBundle");
+    expect(entries[0]?.systemPrompt).toContain("ScriptDraftPackage");
+  });
+
+  it("persists readable llm interaction markdown under the script run directory", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Script Runtime Logging",
+    });
+    const topicPackageRecord = await saveTopicPackage(db, {
+      projectId: project.id,
+      title: "晏子使楚",
+      selectedAngle: topicPackage.selected_angle,
+      familyLabel: topicPackage.family_label,
+      scopeLabel: topicPackage.scope_label,
+      coreConflict: topicPackage.core_conflict,
+      strongScene: topicPackage.strong_scene,
+      packagingSeed: topicPackage.packaging_seed,
+      canonicalQuotesJson: topicPackage.canonical_quotes,
+      durationBandJson: {
+        label: "medium",
+        min_sec: 75,
+        max_sec: 95,
+      },
+      narrativeTensionMapJson: topicPackage.narrative_tension_map,
+      mustIncludeBeatsJson: topicPackage.must_include_beats,
+      forbiddenExpansionsJson: topicPackage.forbidden_expansions,
+      riskHintsJson: topicPackage.risk_hints,
+      sourceAnchorRefsJson: [],
+    });
+    project.activeTopicPackageId = topicPackageRecord.id;
+    project.status = "script_ready";
+
+    const response = await runScriptGeneration({
+      db,
+      project,
+      allowPatch: false,
+      allowRegen: false,
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const profile = getProjectStorageProfile(project);
+    const graphTraceSummary = response.body.graph_trace_summary as Record<string, unknown>;
+    const runId = String(graphTraceSummary.run_id);
+    const interactionLogPath = resolve(
+      process.cwd(),
+      profile.script_runs_dir,
+      runId,
+      "llm-interactions",
+      "01-script.writer.md",
+    );
+
+    expect(existsSync(interactionLogPath)).toBe(true);
+
+    const logContent = readFileSync(interactionLogPath, "utf8");
+    expect(logContent).toContain("# LLM 交互日志 01");
+    expect(logContent).toContain("- prompt_id: script.writer");
+    expect(logContent).toContain("## 输入对象");
+    expect(logContent).toContain("## System Prompt");
+    expect(logContent).toContain("## 原始模型响应");
+    expect(logContent).toContain("## 归一化结果");
+    expect(logContent).toContain("晏子使楚");
   });
 });

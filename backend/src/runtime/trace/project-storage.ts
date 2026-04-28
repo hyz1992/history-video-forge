@@ -3,6 +3,10 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { ProjectRecord } from "../../db/client.js";
+import {
+  renderLlmInteractionMarkdown,
+  type LlmInteractionLogWriter,
+} from "../llm/interaction-log.js";
 
 export interface ProjectStorageProfile {
   display_name: string;
@@ -51,6 +55,23 @@ function writeJsonFile(filePath: string, payload: unknown) {
     recursive: true,
   });
   writeFileSync(filePath, JSON.stringify(payload, null, 2), "utf8");
+}
+
+function ensureRunDir(input: {
+  project: ProjectRecord;
+  phase: "topic" | "script";
+  runId: string;
+}) {
+  const profile = ensureProjectStorageStructure(input.project);
+  const runRootDir =
+    input.phase === "topic" ? profile.topic_runs_dir : profile.script_runs_dir;
+  const runDir = resolveStoragePath(`${runRootDir}/${input.runId}`);
+
+  mkdirSync(runDir, {
+    recursive: true,
+  });
+
+  return runDir;
 }
 
 export function createProjectStorageProfile(input: {
@@ -178,14 +199,7 @@ export function persistProjectRunArtifacts(input: {
   traceSummary: Record<string, unknown>;
   runtimeDiagnostics?: Record<string, unknown> | null;
 }) {
-  const profile = ensureProjectStorageStructure(input.project);
-  const runRootDir =
-    input.phase === "topic" ? profile.topic_runs_dir : profile.script_runs_dir;
-  const runDir = resolveStoragePath(`${runRootDir}/${input.runId}`);
-
-  mkdirSync(runDir, {
-    recursive: true,
-  });
+  const runDir = ensureRunDir(input);
   writeJsonFile(resolve(runDir, "graph-trace-summary.json"), input.traceSummary);
 
   if (input.runtimeDiagnostics) {
@@ -193,4 +207,37 @@ export function persistProjectRunArtifacts(input: {
   }
 
   return runDir;
+}
+
+export function createProjectRunInteractionLogWriter(input: {
+  project: ProjectRecord;
+  phase: "topic" | "script";
+  runId: string;
+}): LlmInteractionLogWriter {
+  const runDir = ensureRunDir(input);
+  const interactionsDir = resolve(runDir, "llm-interactions");
+  mkdirSync(interactionsDir, {
+    recursive: true,
+  });
+
+  let index = 0;
+
+  return {
+    write(entry) {
+      index += 1;
+      const filename = `${String(index).padStart(2, "0")}-${sanitizeSlug(entry.operationName)}.md`;
+      writeFileSync(
+        resolve(interactionsDir, filename),
+        renderLlmInteractionMarkdown({
+          ...entry,
+          sequence: index,
+        }),
+        "utf8",
+      );
+    },
+  };
+}
+
+function sanitizeSlug(value: string) {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/-+/g, "-");
 }

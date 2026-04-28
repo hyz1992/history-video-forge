@@ -26,6 +26,7 @@ export interface RunScriptRunGraphInput {
   allowPatch?: boolean;
   allowRegen?: boolean;
   forceRegen?: boolean;
+  runId?: string;
 }
 
 export async function runScriptRunGraph(
@@ -169,7 +170,9 @@ export async function runScriptRunGraph(
     },
     graphTraceSummary: createGraphTraceSummary({
       phase: "script",
-      run_id: `script_run_${randomUUID().replace(/-/g, "").slice(0, 8)}`,
+      run_id:
+        input.runId ??
+        `script_run_${randomUUID().replace(/-/g, "").slice(0, 8)}`,
       nodes: traceNodes,
       steps: runtime.stepLogs,
     }),

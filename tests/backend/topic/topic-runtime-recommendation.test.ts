@@ -1,10 +1,14 @@
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import { TopicCandidateCard } from "../../../shared/src/index.js";
 import { createDbClient } from "../../../backend/src/db/client.js";
+import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
 import { createOpenAiCompatibleProvider } from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
+import { getProjectStorageProfile } from "../../../backend/src/runtime/trace/project-storage.js";
 import {
   recommendTopicCandidates,
   recommendTopicCandidatesWithTrace,
@@ -313,5 +317,64 @@ describe("topic runtime recommendation", () => {
       round_index: 2,
       previous_round_count: 1,
     });
+  });
+
+  it("persists readable llm interaction markdown under the topic run directory", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Topic Runtime Logging",
+    });
+    const invokeApi = vi.fn(async () =>
+      JSON.stringify([
+        createRuntimeCandidate("晏子使楚", "第一槽位"),
+        createRuntimeCandidate("张巡守城", "第二槽位"),
+        createRuntimeCandidate("于谦守京", "第三槽位"),
+      ]),
+    );
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "晏子使楚",
+        summary: "楚王在公开场合连续压场，晏子当场顶回去。",
+        coreConflict: "楚王当众压场，晏子必须当场顶回。",
+        strongScene: "楚王连续压场，晏子一句句顶回去。",
+        sourceHint: "《晏子春秋》",
+        recentUsageHint: "近期未出现同 event_id",
+      },
+      {
+        llmGateway: gateway,
+        projectId: project.id,
+      },
+    );
+
+    const profile = getProjectStorageProfile(project);
+    const runId = String((result.trace as Record<string, unknown>).run_id);
+    const interactionLogPath = resolve(
+      process.cwd(),
+      profile.topic_runs_dir,
+      runId,
+      "llm-interactions",
+      "01-topic.candidate-builder.md",
+    );
+
+    expect(existsSync(interactionLogPath)).toBe(true);
+
+    const logContent = readFileSync(interactionLogPath, "utf8");
+    expect(logContent).toContain("# LLM 交互日志 01");
+    expect(logContent).toContain("## 元数据");
+    expect(logContent).toContain("- prompt_id: topic.candidate-builder");
+    expect(logContent).toContain("## 输入对象");
+    expect(logContent).toContain("## System Prompt");
+    expect(logContent).toContain("## 原始模型响应");
+    expect(logContent).toContain("## 归一化结果");
+    expect(logContent).toContain("晏子使楚");
   });
 });

@@ -8,7 +8,10 @@ import { saveScriptRecord } from "./script-record.repository";
 import { reviewScriptSemantics } from "./script-semantic-review.service";
 import { planTopicDelivery } from "./topic-delivery-planner";
 import { runScriptRunGraph } from "../../runtime/orchestration/script-run-graph.js";
-import { persistProjectRunArtifacts } from "../../runtime/trace/project-storage.js";
+import {
+  createProjectRunInteractionLogWriter,
+  persistProjectRunArtifacts,
+} from "../../runtime/trace/project-storage.js";
 
 function buildProjectStylePack() {
   return {
@@ -103,6 +106,12 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
     projectStylePack,
     familyBiasPack,
   });
+  const runId = `script_run_${input.db.generateId()}`;
+  const interactionLogWriter = createProjectRunInteractionLogWriter({
+    project: input.project,
+    phase: "script",
+    runId,
+  });
   const {
     draft,
     localValidation,
@@ -116,9 +125,14 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
       allowPatch: input.allowPatch ?? false,
       allowRegen: input.allowRegen ?? false,
       forceRegen: input.forceRegen ?? false,
+      runId,
     },
     {
-      generateDraft: generateScriptDraft,
+      generateDraft: (generateInput) =>
+        generateScriptDraft({
+          ...generateInput,
+          interactionLogWriter,
+        }),
       validateDraft: validateScriptDraft,
       reviewSemantics: reviewScriptSemantics,
       patchDraft: patchScriptDraft,
@@ -150,10 +164,7 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
   persistProjectRunArtifacts({
     project: input.project,
     phase: "script",
-    runId:
-      typeof graphTraceSummary.run_id === "string"
-        ? graphTraceSummary.run_id
-        : scriptRecord.id,
+    runId,
     traceSummary: graphTraceSummary as Record<string, unknown>,
     runtimeDiagnostics: runtimeDiagnostics as Record<string, unknown>,
   });

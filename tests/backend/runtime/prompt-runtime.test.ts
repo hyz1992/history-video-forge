@@ -38,6 +38,9 @@ describe("prompt runtime", () => {
   });
 
   it("delegates invokeStructuredPrompt through the provider contract", async () => {
+    const interactionLogWriter = {
+      write: vi.fn(),
+    };
     const provider: StructuredPromptProvider = {
       invokeStructuredPrompt: vi.fn(async ({ prompt, input, operationName }) => ({
         promptId: prompt.metadata.id,
@@ -59,6 +62,7 @@ describe("prompt runtime", () => {
       input: {
         requestId: "seed-1",
       },
+      interactionLogWriter,
     });
 
     expect(provider.invokeStructuredPrompt).toHaveBeenCalledTimes(1);
@@ -68,6 +72,7 @@ describe("prompt runtime", () => {
           requestId: "seed-1",
         },
         operationName: "topic.candidate-builder",
+        interactionLogWriter,
         prompt: expect.objectContaining({
           metadata: expect.objectContaining({
             id: "topic.candidate-builder",

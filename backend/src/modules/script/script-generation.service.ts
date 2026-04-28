@@ -2,6 +2,7 @@ import { ScriptDraftPackage } from "../../../../shared/src/index.js";
 import { env, getValidatedRuntimeEnv } from "../../config/env.js";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
 import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider.js";
+import type { LlmInteractionLogWriter } from "../../runtime/llm/interaction-log.js";
 import type { StructuredPromptProvider } from "../../runtime/llm/provider-contract.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 
@@ -32,6 +33,7 @@ interface ScriptInputBundleInput {
 export interface GenerateScriptDraftInput {
   bundle: ScriptInputBundleInput;
   llmGateway?: LlmGateway;
+  interactionLogWriter?: LlmInteractionLogWriter;
 }
 
 export async function generateScriptDraft(input: GenerateScriptDraftInput) {
@@ -39,6 +41,7 @@ export async function generateScriptDraft(input: GenerateScriptDraftInput) {
   const rawDraft = await gateway.invokeStructuredPrompt<unknown>({
     promptId: "script.writer",
     input: input.bundle,
+    interactionLogWriter: input.interactionLogWriter,
   });
   const draft = normalizeScriptDraft(rawDraft);
 
@@ -175,8 +178,28 @@ function createScriptWriterGateway(): LlmGateway {
 
 function createStubScriptWriterProvider(): StructuredPromptProvider {
   return {
-    async invokeStructuredPrompt<T>({ input }): Promise<T> {
-      return buildDeterministicDraft(input as ScriptInputBundleInput) as T;
+    async invokeStructuredPrompt<T>(request): Promise<T> {
+      const draft = buildDeterministicDraft(
+        request.input as ScriptInputBundleInput,
+      ) as T;
+
+      await request.interactionLogWriter?.write({
+        generatedAt: new Date().toISOString(),
+        provider: "stub",
+        model: "stub",
+        operationName: request.operationName,
+        promptId: request.prompt.metadata.id,
+        promptStage: request.prompt.metadata.stage,
+        promptLanguage: request.prompt.metadata.language,
+        promptFilePath: request.prompt.filePath,
+        systemPrompt: request.prompt.body,
+        input: request.input,
+        rawOutput: JSON.stringify(draft, null, 2),
+        parsedOutput: draft,
+        errorMessage: null,
+      });
+
+      return draft;
     },
   };
 }

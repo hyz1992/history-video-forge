@@ -27,6 +27,7 @@ export interface RunTopicRecommendationGraphInput {
   db: DbClient;
   input: BuildTopicCandidatesInput;
   projectId?: string | null;
+  runId?: string;
 }
 
 export async function runTopicRecommendationGraph(
@@ -99,7 +100,7 @@ export async function runTopicRecommendationGraph(
     candidates: runtime.candidates,
     trace: createGraphTraceSummary({
       phase: "topic",
-      run_id: `topic_run_${input.db.generateId()}`,
+      run_id: input.runId ?? `topic_run_${input.db.generateId()}`,
       nodes: runtime.traceNodes,
       steps: createSyntheticStepTraceLogs({
         phase: "topic",

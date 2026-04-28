@@ -71,6 +71,13 @@ watch(
 function openCurrentCandidate(candidate: (typeof currentCandidates.value)[number]) {
   topicStore.openCandidate(candidate, topicStore.state.currentRound?.round_id);
 }
+
+function generateRecommendations() {
+  return topicStore.generateSystemRecommendations({
+    era: eraFilter.value,
+    tension: tensionFilter.value,
+  });
+}
 </script>
 
 <template>
@@ -112,7 +119,7 @@ function openCurrentCandidate(candidate: (typeof currentCandidates.value)[number
             type="button"
             class="btn btn-primary topic-generate-button"
             :disabled="topicStore.state.isGenerating"
-            @click="topicStore.generateSystemRecommendations"
+            @click="generateRecommendations"
           >
             {{ topicStore.state.isGenerating ? "生成中..." : "开始生成选题" }}
           </button>
