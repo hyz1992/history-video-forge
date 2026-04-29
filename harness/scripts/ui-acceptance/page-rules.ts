@@ -76,7 +76,12 @@ function auditHomePage(snapshot: UiAcceptancePageSnapshot) {
       createPresenceCheck(snapshot, "homeHeading", "home-main-heading", "首页主标题必须可见"),
       createPresenceCheck(snapshot, "homeSummary", "home-main-summary", "首页主说明必须可见"),
       createPresenceCheck(snapshot, "homeTagline", "home-tagline", "首页副标题必须可见"),
-      createPresenceCheck(snapshot, "homePrimaryCta", "home-primary-cta", "首页主 CTA 必须可见"),
+      createPresenceCheck(
+        snapshot,
+        "homePrimaryCta",
+        "home-primary-cta",
+        "首页主 CTA 必须可见",
+      ),
       createPresenceCheck(snapshot, "homeHero", "home-hero-shell", "首页必须存在 hero 主舞台"),
       createPresenceCheck(
         snapshot,
@@ -195,6 +200,18 @@ function auditTopicPage(snapshot: UiAcceptancePageSnapshot) {
       ),
       createPresenceCheck(
         snapshot,
+        "currentTopicRound",
+        "topic-current-round",
+        "Topic page must keep the current recommendation round visible.",
+      ),
+      createPresenceCheck(
+        snapshot,
+        "candidateDrawer",
+        "topic-candidate-drawer",
+        "Topic page must allow inspecting the selected candidate drawer.",
+      ),
+      createPresenceCheck(
+        snapshot,
         "generateTopic",
         "topic-generate-action",
         "topic 页面必须存在开始生成选题入口",
@@ -275,6 +292,32 @@ function auditGlobalDelivery(snapshot: UiAcceptancePageSnapshot) {
   ];
 }
 
+function auditTopicRecommendationTraceability(snapshots: UiAcceptancePageSnapshot[]) {
+  const topicSnapshots = snapshots.filter((snapshot) => snapshot.pageId === "topic");
+  if (topicSnapshots.length === 0) {
+    return [];
+  }
+
+  const hasCompletedRecommendationRound = topicSnapshots.some(
+    (snapshot) =>
+      (snapshot.counts.candidateItems ?? 0) > 0 &&
+      hasVisibleSelector(snapshot, "currentTopicRound") &&
+      hasVisibleSelector(snapshot, "candidateDrawer"),
+  );
+  const hasInspectableTraceEntry = snapshots.some(
+    (snapshot) =>
+      snapshot.pageId === "script" && hasVisibleSelector(snapshot, "scriptTraceEntry"),
+  );
+
+  return [
+    createCheck(
+      "topic-recommendation-diagnostics",
+      hasCompletedRecommendationRound && hasInspectableTraceEntry ? "PASS" : "FAIL",
+      "A topic recommendation run must keep candidate details and a downstream trace hook inspectable.",
+    ),
+  ];
+}
+
 export function auditUiAcceptancePageSnapshots(
   snapshots: UiAcceptancePageSnapshot[],
 ): UiAcceptancePageRuleResult {
@@ -302,6 +345,8 @@ export function auditUiAcceptancePageSnapshots(
 
     deliveryChecks.push(...auditGlobalDelivery(snapshot));
   }
+
+  deliveryChecks.push(...auditTopicRecommendationTraceability(snapshots));
 
   const summary = summarizeUiAcceptanceChecks([...structureChecks, ...deliveryChecks]);
   return {

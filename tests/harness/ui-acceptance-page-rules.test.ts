@@ -42,6 +42,8 @@ describe("ui acceptance page rules", () => {
           "topicEntryTabs",
           "topicToolbar",
           "topicResults",
+          "currentTopicRound",
+          "candidateDrawer",
           "generateTopic",
         ],
         counts: {
@@ -68,6 +70,14 @@ describe("ui acceptance page rules", () => {
     expect(result.status).toBe("PASS");
     expect(result.structureChecks.every((check) => check.status === "PASS")).toBe(true);
     expect(result.deliveryChecks.every((check) => check.status === "PASS")).toBe(true);
+    expect(result.deliveryChecks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "topic-recommendation-diagnostics",
+          status: "PASS",
+        }),
+      ]),
+    );
   });
 
   it("fails when the home page shell hooks are missing or the primary entry falls outside the first viewport", () => {
@@ -219,6 +229,49 @@ describe("ui acceptance page rules", () => {
       expect.arrayContaining([
         expect.objectContaining({
           code: "topic-candidate-count",
+          status: "FAIL",
+        }),
+      ]),
+    );
+  });
+
+  it("fails when a topic recommendation round does not leave an inspectable downstream trace hook", () => {
+    const result = auditUiAcceptancePageSnapshots([
+      createSnapshot("topic", {
+        visibleSelectors: [
+          "topicPipelineTabs",
+          "topicEntryTabs",
+          "topicToolbar",
+          "topicResults",
+          "currentTopicRound",
+          "candidateDrawer",
+          "generateTopic",
+        ],
+        counts: {
+          candidateItems: 3,
+        },
+        bodyText: "选题 当前轮主题 系统自动推荐 候选详情 开始生成选题",
+      }),
+      createSnapshot("script", {
+        visibleSelectors: [
+          "scriptPageHeader",
+          "scriptActionPanel",
+          "scriptMainPanel",
+          "regenOnce",
+          "scriptText",
+        ],
+        counts: {
+          scriptTextLength: 88,
+        },
+        bodyText: "文案工作区 可执行动作 当前文案",
+      }),
+    ]);
+
+    expect(result.status).toBe("FAIL");
+    expect(result.deliveryChecks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "topic-recommendation-diagnostics",
           status: "FAIL",
         }),
       ]),
