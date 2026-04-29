@@ -15,6 +15,19 @@ export interface NormalizedEventResult {
   created: boolean;
 }
 
+export function normalizeEventIdentityValue(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+export function buildEventIdentityFingerprint(input: {
+  eventIdentity: string;
+  angle: string;
+}): string {
+  return `${normalizeEventIdentityValue(input.eventIdentity)}::${normalizeEventIdentityValue(
+    input.angle,
+  )}`;
+}
+
 export async function normalizeEventInput(
   db: DbClient,
   input: NormalizeEventInput,

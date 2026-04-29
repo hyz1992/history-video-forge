@@ -7,6 +7,8 @@ import { TopicCandidateCard } from "../../../shared/src/index.js";
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import * as topicRecommendationServiceModule from "../../../backend/src/modules/topic/topic-recommendation.service.js";
+import { saveCachedCandidate } from "../../../backend/src/modules/cache/candidate-cache.repository.js";
+import { normalizeEventInput } from "../../../backend/src/modules/topic/event-normalizer.js";
 import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
 import { createOpenAiCompatibleProvider } from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
@@ -44,6 +46,63 @@ function createRuntimeCandidate(title: string, angle: string) {
     title,
     one_line_angle: angle,
   };
+}
+
+function uniqueEventFingerprints(
+  candidates: Array<{ title: string; one_line_angle: string }>,
+) {
+  return [
+    ...new Set(
+      candidates.map((candidate) =>
+        `${candidate.title.trim()}::${candidate.one_line_angle.trim()}`,
+      ),
+    ),
+  ];
+}
+
+async function seedRecentEventUsage(
+  db: ReturnType<typeof createDbClient>,
+  canonicalName: string,
+  projectId = "project-1",
+) {
+  const normalized = await normalizeEventInput(db, {
+    rawInput: canonicalName,
+    sourceType: "system_recommendation",
+  });
+
+  await saveCachedCandidate(db, {
+    projectId,
+    eventRegistryEntryId: normalized.event.id,
+    fingerprint: `${canonicalName.trim()}::recent-usage`,
+    oneLineAngle: "recently used candidate angle",
+    familyLabel: runtimeCandidate.family_label,
+    scopeLabel: runtimeCandidate.scope_label,
+    viralRubricJson: runtimeCandidate.viral_rubric,
+    estimatedDurationBandJson: runtimeCandidate.estimated_duration_band,
+    strongScene: runtimeCandidate.strong_scene,
+    coreConflict: runtimeCandidate.core_conflict,
+    mustCoverPreviewJson: runtimeCandidate.must_cover_preview,
+  });
+}
+
+async function seedRawCandidateCacheEntry(
+  db: ReturnType<typeof createDbClient>,
+  canonicalName: string,
+  angle: string,
+  projectId = "project-1",
+) {
+  await saveCachedCandidate(db, {
+    projectId,
+    fingerprint: `${canonicalName.trim().toLowerCase()}::${angle.trim().toLowerCase()}`,
+    oneLineAngle: angle,
+    familyLabel: runtimeCandidate.family_label,
+    scopeLabel: runtimeCandidate.scope_label,
+    viralRubricJson: runtimeCandidate.viral_rubric,
+    estimatedDurationBandJson: runtimeCandidate.estimated_duration_band,
+    strongScene: runtimeCandidate.strong_scene,
+    coreConflict: runtimeCandidate.core_conflict,
+    mustCoverPreviewJson: runtimeCandidate.must_cover_preview,
+  });
 }
 
 describe("topic runtime recommendation", () => {
@@ -329,6 +388,196 @@ describe("topic runtime recommendation", () => {
         level: "error",
       }),
     );
+  });
+
+  it("filters duplicate event identities from a single open-discovery recommendation round", async () => {
+    const db = createDbClient();
+    const invokeApi = vi.fn(async () =>
+      JSON.stringify([
+        createRuntimeCandidate("event-a", "shared-angle"),
+        createRuntimeCandidate("event-a", "shared-angle"),
+        createRuntimeCandidate("event-b", "fresh-angle"),
+      ]),
+    );
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "single-round duplicate filtering",
+        coreConflict: "the same event and angle should not occupy two slots",
+        strongScene: "duplicate outputs must be removed locally before ranking",
+        sourceHint: "test",
+        recentUsageHint: "no duplicate slots",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(uniqueEventFingerprints(result.candidates)).toHaveLength(
+      result.candidates.length,
+    );
+  });
+
+  it("demotes recently used events through a fatigue penalty before returning final candidates", async () => {
+    const db = createDbClient();
+    await seedRecentEventUsage(db, "event-a");
+    const invokeApi = vi.fn(async () =>
+      JSON.stringify([
+        createRuntimeCandidate("event-a", "angle-a"),
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+      ]),
+    );
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "recent final candidates should be demoted",
+        coreConflict: "fatigue should lower the priority of the recently kept event",
+        strongScene: "the freshest candidate should rise ahead of the repeated event",
+        sourceHint: "test",
+        recentUsageHint: "avoid the just-used event",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "topic_candidate_fatigue_penalty_applied",
+      }),
+    );
+    expect(result.candidates[0]?.title).toBe("event-b");
+  });
+
+  it("ignores raw cache entries when building the fatigue baseline", async () => {
+    const db = createDbClient();
+    await seedRawCandidateCacheEntry(db, "event-a", "angle-a");
+    const invokeApi = vi.fn(async () =>
+      JSON.stringify([
+        createRuntimeCandidate("event-a", "angle-a"),
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+      ]),
+    );
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "raw cache should not affect fatigue baseline",
+        coreConflict: "raw cache entries must not be mixed with final kept history",
+        strongScene: "the same event should stay first when only raw cache exists",
+        sourceHint: "test",
+        recentUsageHint: "no fatigue expected from raw cache",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(result.diagnostics.checks).not.toContainEqual(
+      expect.objectContaining({
+        code: "topic_candidate_fatigue_penalty_applied",
+      }),
+    );
+    expect(result.candidates[0]?.title).toBe("event-a");
+  });
+
+  it("uses project round history for fatigue even after candidate cache is cleared", async () => {
+    const db = createDbClient();
+    const invokeApi = vi
+      .fn()
+      .mockResolvedValueOnce(
+        JSON.stringify([
+          createRuntimeCandidate("event-a", "angle-a"),
+          createRuntimeCandidate("event-a", "angle-a-alt-1"),
+          createRuntimeCandidate("event-a", "angle-a-alt-2"),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify([
+          createRuntimeCandidate("event-a", "angle-a"),
+          createRuntimeCandidate("event-b", "angle-b"),
+          createRuntimeCandidate("event-c", "angle-c"),
+        ]),
+      );
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "first round establishes project history",
+        coreConflict: "first-round kept candidates should become round-to-round fatigue input",
+        strongScene: "project history must survive beyond immediate cache state",
+        sourceHint: "test",
+        recentUsageHint: "first round has no fatigue",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    db.candidateCache.clear();
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "second round validates round-to-round fatigue",
+        coreConflict: "project round history should still demote the previous event",
+        strongScene: "cache removal must not erase round-to-round fatigue memory",
+        sourceHint: "test",
+        recentUsageHint: "second round should avoid the previous event",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "topic_candidate_fatigue_penalty_applied",
+      }),
+    );
+    expect(result.candidates[0]?.title).toBe("event-b");
   });
 
   it("fails clearly when runtime output cannot be repaired into TopicCandidateCard", async () => {

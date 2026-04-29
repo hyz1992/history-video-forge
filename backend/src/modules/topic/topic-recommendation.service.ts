@@ -1,12 +1,18 @@
 import { TopicCandidateCard } from "../../../../shared/src/index.js";
 import { env } from "../../config/env.js";
 import type { DbClient } from "../../db/client";
-import { saveCachedCandidate } from "../cache/candidate-cache.repository.js";
+import {
+  listRecentCachedCandidates,
+  listRecentProjectRecommendationRounds,
+  recordProjectRecommendationRound,
+  saveCachedCandidate,
+} from "../cache/candidate-cache.repository.js";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
 import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider.js";
 import type { StructuredPromptProvider } from "../../runtime/llm/provider-contract.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 import { runTopicRecommendationGraph } from "../../runtime/orchestration/topic-recommendation-graph.js";
+import { TOPIC_CANDIDATE_TARGET_COUNT } from "../../runtime/orchestration/topic-recommendation-nodes.js";
 import {
   createProjectRunInteractionLogWriter,
   persistProjectRunArtifacts,
@@ -16,6 +22,11 @@ import {
   buildTopicCandidates,
   type BuildTopicCandidatesInput,
 } from "./topic-candidate.builder.js";
+import {
+  buildEventIdentityFingerprint,
+  normalizeEventIdentityValue,
+  normalizeEventInput,
+} from "./event-normalizer.js";
 
 export interface TopicRecommendationOptions {
   llmGateway?: LlmGateway;
@@ -27,6 +38,8 @@ export async function recommendTopicCandidatesWithTrace(
   input: BuildTopicCandidatesInput,
   options?: TopicRecommendationOptions,
 ) {
+  const recommendationStartedAt = new Date();
+  const existingCacheRecordIds = [...db.candidateCache.keys()];
   const gateway = options?.llmGateway ?? createTopicRecommendationGateway();
   const project = options?.projectId ? db.projects.get(options.projectId) : null;
   const runId = `topic_run_${db.generateId()}`;
@@ -49,12 +62,28 @@ export async function recommendTopicCandidatesWithTrace(
         gateway.invokeStructuredPrompt<unknown[]>({
           ...runnerInput,
           interactionLogWriter,
-        }),
+      }),
     },
   );
+  const postProcessed = await postProcessTopicCandidates({
+    db,
+    candidates: result.candidates,
+    projectId: options?.projectId ?? null,
+    createdBefore: recommendationStartedAt,
+    existingCacheRecordIds,
+  });
+  const finalDiagnostics = finalizeRecommendationDiagnostics({
+    checks: result.diagnostics.checks,
+    finalCandidateCount: postProcessed.candidates.length,
+    additionalChecks: postProcessed.diagnostics,
+  });
 
   if (!options?.projectId) {
-    return result;
+    return {
+      ...result,
+      candidates: postProcessed.candidates,
+      diagnostics: finalDiagnostics,
+    };
   }
 
   if (project) {
@@ -64,9 +93,22 @@ export async function recommendTopicCandidatesWithTrace(
       phase: "topic",
       runId,
       traceSummary: result.trace as Record<string, unknown>,
-      runtimeDiagnostics: result.diagnostics as Record<string, unknown>,
+      runtimeDiagnostics: finalDiagnostics as Record<string, unknown>,
     });
   }
+
+  await persistPostProcessedCandidates(db, {
+    projectId: options.projectId,
+    candidates: postProcessed.rankings,
+  });
+  await recordProjectRecommendationRound(db, {
+    projectId: options.projectId,
+    createdAt: recommendationStartedAt,
+    candidates: postProcessed.rankings.map((candidate) => ({
+      eventRegistryEntryId: candidate.eventId,
+      fingerprint: candidate.fingerprint,
+    })),
+  });
 
   const previousRoundCount = db.topicRunCounts.get(options.projectId) ?? 0;
   const roundIndex = previousRoundCount + 1;
@@ -74,6 +116,8 @@ export async function recommendTopicCandidatesWithTrace(
 
   return {
     ...result,
+    candidates: postProcessed.candidates,
+    diagnostics: finalDiagnostics,
     topic_run: {
       project_id: options.projectId,
       round_id: `topic_run_${db.generateId()}`,
@@ -131,4 +175,223 @@ function createStubTopicRecommendationProvider(): StructuredPromptProvider {
       return candidates;
     },
   };
+}
+
+type RecommendationCandidate = ReturnType<typeof TopicCandidateCard.parse>;
+
+interface RankedRecommendationCandidate {
+  candidate: RecommendationCandidate;
+  eventId: string;
+  eventIdentity: string;
+  fingerprint: string;
+  originalIndex: number;
+  fatigueScore: number;
+}
+
+async function postProcessTopicCandidates(input: {
+  db: DbClient;
+  candidates: RecommendationCandidate[];
+  projectId?: string | null;
+  createdBefore: Date;
+  existingCacheRecordIds: string[];
+}) {
+  const deduplicatedCandidates: Omit<RankedRecommendationCandidate, "fatigueScore">[] = [];
+  const seenFingerprints = new Set<string>();
+  let duplicateRemoved = false;
+
+  for (const [originalIndex, candidate] of input.candidates.entries()) {
+    const normalized = await normalizeEventInput(input.db, {
+      rawInput: candidate.title,
+      sourceType: "system_recommendation",
+    });
+    const eventIdentity = normalizeEventIdentityValue(normalized.event.canonicalName);
+    const fingerprint = buildEventIdentityFingerprint({
+      eventIdentity,
+      angle: candidate.one_line_angle,
+    });
+
+    if (seenFingerprints.has(fingerprint)) {
+      duplicateRemoved = true;
+      continue;
+    }
+
+    seenFingerprints.add(fingerprint);
+    deduplicatedCandidates.push({
+      candidate,
+      eventId: normalized.event.id,
+      eventIdentity,
+      fingerprint,
+      originalIndex,
+    });
+  }
+
+  const recentCandidates = input.projectId
+    ? await listRecentCachedCandidates(input.db, {
+      projectId: input.projectId,
+      createdBefore: input.createdBefore,
+      finalOnly: true,
+      recordIds: input.existingCacheRecordIds,
+    })
+    : [];
+  const recentProjectRounds = input.projectId
+    ? await listRecentProjectRecommendationRounds(input.db, {
+        projectId: input.projectId,
+        createdBefore: input.createdBefore,
+      })
+    : [];
+  const cacheFatigueByEventId = new Map<string, number>();
+  const cacheFatigueByIdentity = new Map<string, number>();
+  const roundFatigueByEventId = new Map<string, number>();
+  const roundFatigueByIdentity = new Map<string, number>();
+
+  for (const record of recentCandidates) {
+    if (record.eventRegistryEntryId) {
+      cacheFatigueByEventId.set(
+        record.eventRegistryEntryId,
+        (cacheFatigueByEventId.get(record.eventRegistryEntryId) ?? 0) + 1,
+      );
+    }
+
+    const [eventIdentity] = record.fingerprint.split("::");
+    if (eventIdentity) {
+      cacheFatigueByIdentity.set(
+        eventIdentity,
+        (cacheFatigueByIdentity.get(eventIdentity) ?? 0) + 1,
+      );
+    }
+  }
+
+  for (const round of recentProjectRounds) {
+    for (const candidate of round.candidates) {
+      roundFatigueByEventId.set(
+        candidate.eventRegistryEntryId,
+        (roundFatigueByEventId.get(candidate.eventRegistryEntryId) ?? 0) + 1,
+      );
+
+      const [eventIdentity] = candidate.fingerprint.split("::");
+      if (!eventIdentity) {
+        continue;
+      }
+
+      roundFatigueByIdentity.set(
+        eventIdentity,
+        (roundFatigueByIdentity.get(eventIdentity) ?? 0) + 1,
+      );
+    }
+  }
+
+  let fatiguePenaltyApplied = false;
+  const rankings = deduplicatedCandidates
+    .map((candidate) => {
+      const cacheFatigueScore = Math.max(
+        cacheFatigueByEventId.get(candidate.eventId) ?? 0,
+        cacheFatigueByIdentity.get(candidate.eventIdentity) ?? 0,
+      );
+      const roundFatigueScore = Math.max(
+        roundFatigueByEventId.get(candidate.eventId) ?? 0,
+        roundFatigueByIdentity.get(candidate.eventIdentity) ?? 0,
+      );
+      const fatigueScore = Math.max(cacheFatigueScore, roundFatigueScore);
+      if (fatigueScore > 0) {
+        fatiguePenaltyApplied = true;
+      }
+
+      return {
+        ...candidate,
+        fatigueScore,
+      };
+    })
+    .sort(
+      (left, right) =>
+        left.fatigueScore - right.fatigueScore ||
+        left.originalIndex - right.originalIndex,
+    );
+
+  const diagnostics = [];
+  if (duplicateRemoved) {
+    diagnostics.push({
+      code: "topic_candidate_duplicate_removed",
+      level: "info" as const,
+    });
+  }
+  if (fatiguePenaltyApplied) {
+    diagnostics.push({
+      code: "topic_candidate_fatigue_penalty_applied",
+      level: "info" as const,
+    });
+  }
+
+  return {
+    candidates: rankings.map((entry) => entry.candidate),
+    rankings,
+    diagnostics,
+  };
+}
+
+function finalizeRecommendationDiagnostics(input: {
+  checks: Array<{ code: string; level: "info" | "warning" | "error" }>;
+  finalCandidateCount: number;
+  additionalChecks: Array<{ code: string; level: "info" | "warning" | "error" }>;
+}) {
+  const checks = input.checks.filter((check) => {
+    if (check.code === "topic_candidate_slot_guard_passed") {
+      return input.finalCandidateCount === TOPIC_CANDIDATE_TARGET_COUNT;
+    }
+
+    if (check.code === "topic_candidate_slots_insufficient") {
+      return input.finalCandidateCount < TOPIC_CANDIDATE_TARGET_COUNT;
+    }
+
+    return true;
+  });
+
+  checks.push(...input.additionalChecks);
+
+  if (
+    input.finalCandidateCount === TOPIC_CANDIDATE_TARGET_COUNT &&
+    !checks.some((check) => check.code === "topic_candidate_slot_guard_passed")
+  ) {
+    checks.push({
+      code: "topic_candidate_slot_guard_passed",
+      level: "info",
+    });
+  }
+
+  if (
+    input.finalCandidateCount < TOPIC_CANDIDATE_TARGET_COUNT &&
+    !checks.some((check) => check.code === "topic_candidate_slots_insufficient")
+  ) {
+    checks.push({
+      code: "topic_candidate_slots_insufficient",
+      level: "error",
+    });
+  }
+
+  return {
+    checks,
+  };
+}
+
+async function persistPostProcessedCandidates(
+  db: DbClient,
+  input: {
+    projectId: string;
+    candidates: RankedRecommendationCandidate[];
+  },
+) {
+  for (const candidate of input.candidates) {
+    await saveCachedCandidate(db, {
+      projectId: input.projectId,
+      eventRegistryEntryId: candidate.eventId,
+      fingerprint: candidate.fingerprint,
+      oneLineAngle: candidate.candidate.one_line_angle,
+      familyLabel: candidate.candidate.family_label,
+      scopeLabel: candidate.candidate.scope_label,
+      viralRubricJson: candidate.candidate.viral_rubric,
+      estimatedDurationBandJson: candidate.candidate.estimated_duration_band,
+      strongScene: candidate.candidate.strong_scene,
+      coreConflict: candidate.candidate.core_conflict,
+      mustCoverPreviewJson: candidate.candidate.must_cover_preview,
+    });
+  }
 }
