@@ -19,6 +19,9 @@ export interface UiAcceptanceServiceHandle {
 
 export interface RunWithUiAcceptanceServicesDependencies {
   cwd?: string;
+  prepareService?: (
+    service: UiAcceptanceServiceDefinition,
+  ) => Promise<void> | void;
   spawnService?: (
     service: UiAcceptanceServiceDefinition,
   ) => Promise<UiAcceptanceServiceHandle> | UiAcceptanceServiceHandle;
@@ -27,6 +30,8 @@ export interface RunWithUiAcceptanceServicesDependencies {
     handle: UiAcceptanceServiceHandle,
   ) => Promise<void> | void;
   stopService?: (handle: UiAcceptanceServiceHandle) => Promise<void> | void;
+  findListeningProcessIds?: (port: number) => Promise<number[]>;
+  killProcessTree?: (pid: number) => Promise<void> | void;
 }
 
 export function buildUiAcceptanceServiceDefinitions(
@@ -146,11 +151,125 @@ async function defaultStopService(handle: UiAcceptanceServiceHandle): Promise<vo
   await handle.stop();
 }
 
+function readPortFromReadyUrl(readyUrl: string): number | null {
+  try {
+    const url = new URL(readyUrl);
+    if (url.port) {
+      return Number(url.port);
+    }
+
+    return url.protocol === "https:" ? 443 : 80;
+  } catch {
+    return null;
+  }
+}
+
+function runCommand(command: string, args: string[]) {
+  return new Promise<{ stdout: string; stderr: string; exitCode: number | null }>((resolve) => {
+    const childProcess = spawn(command, args, {
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+
+    childProcess.stdout?.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+    childProcess.stderr?.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    childProcess.once("error", () => {
+      resolve({
+        stdout,
+        stderr,
+        exitCode: null,
+      });
+    });
+    childProcess.once("exit", (exitCode) => {
+      resolve({
+        stdout,
+        stderr,
+        exitCode,
+      });
+    });
+  });
+}
+
+async function defaultFindListeningProcessIds(port: number): Promise<number[]> {
+  if (process.platform === "win32") {
+    const result = await runCommand("netstat", ["-ano", "-p", "tcp"]);
+    return result.stdout
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && line.includes(`:${port}`) && line.includes("LISTENING"))
+      .map((line) => line.split(/\s+/u).at(-1) ?? "")
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0);
+  }
+
+  const result = await runCommand("lsof", [`-nP`, `-iTCP:${port}`, `-sTCP:LISTEN`, `-t`]);
+  return result.stdout
+    .split(/\r?\n/u)
+    .map((line) => Number(line.trim()))
+    .filter((value) => Number.isInteger(value) && value > 0);
+}
+
+async function defaultKillProcessTree(pid: number) {
+  const stopCommand = buildUiAcceptanceServiceStopCommand(pid);
+  if (stopCommand) {
+    await new Promise<void>((resolve) => {
+      const killer = spawn(stopCommand.command, stopCommand.args, {
+        shell: stopCommand.shell,
+        stdio: "ignore",
+      });
+      killer.once("error", () => resolve());
+      killer.once("exit", () => resolve());
+    });
+    return;
+  }
+
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {
+    // Ignore missing-process races in preflight cleanup.
+  }
+}
+
+export async function ensureServicePortAvailable(
+  service: UiAcceptanceServiceDefinition,
+  dependencies: Pick<
+    RunWithUiAcceptanceServicesDependencies,
+    "findListeningProcessIds" | "killProcessTree"
+  > = {},
+) {
+  const port = readPortFromReadyUrl(service.readyUrl);
+  if (!port) {
+    return;
+  }
+
+  const findListeningProcessIds =
+    dependencies.findListeningProcessIds ?? defaultFindListeningProcessIds;
+  const killProcessTree = dependencies.killProcessTree ?? defaultKillProcessTree;
+  const processIds = await findListeningProcessIds(port);
+
+  for (const processId of processIds) {
+    await killProcessTree(processId);
+  }
+}
+
 export async function runWithUiAcceptanceServices<T>(
   task: (context: { services: UiAcceptanceServiceHandle[] }) => Promise<T> | T,
   dependencies: RunWithUiAcceptanceServicesDependencies = {},
 ): Promise<T> {
   const services = buildUiAcceptanceServiceDefinitions(dependencies.cwd);
+  const prepareService =
+    dependencies.prepareService ??
+    ((service: UiAcceptanceServiceDefinition) =>
+      ensureServicePortAvailable(service, {
+        findListeningProcessIds: dependencies.findListeningProcessIds,
+        killProcessTree: dependencies.killProcessTree,
+      }));
   const spawnService = dependencies.spawnService ?? defaultSpawnService;
   const waitForService = dependencies.waitForService ?? defaultWaitForService;
   const stopService = dependencies.stopService ?? defaultStopService;
@@ -158,6 +277,7 @@ export async function runWithUiAcceptanceServices<T>(
 
   try {
     for (const service of services) {
+      await prepareService(service);
       const handle = await spawnService(service);
       startedServices.push(handle);
       await waitForService(service, handle);

@@ -4,6 +4,7 @@ import {
   buildUiAcceptanceServiceSpawnOptions,
   buildUiAcceptanceServiceStopCommand,
   buildUiAcceptanceServiceDefinitions,
+  ensureServicePortAvailable,
   runWithUiAcceptanceServices,
   type UiAcceptanceServiceHandle,
 } from "../../harness/scripts/ui-acceptance/service-manager";
@@ -63,6 +64,70 @@ describe("ui acceptance service manager", () => {
           }
         : null,
     );
+  });
+
+  it("cleans up stale listeners on the service port before startup", async () => {
+    const killed: number[] = [];
+
+    await ensureServicePortAvailable(
+      {
+        name: "backend",
+        command: "npm",
+        args: ["run", "dev:backend"],
+        cwd: "D:/myproject/story-video-forge2",
+        readyUrl: "http://127.0.0.1:3000/healthz",
+        intervalMs: 500,
+        timeoutMs: 30000,
+      },
+      {
+        findListeningProcessIds: async () => [32156, 42156],
+        killProcessTree: async (pid) => {
+          killed.push(pid);
+        },
+      },
+    );
+
+    expect(killed).toEqual([32156, 42156]);
+  });
+
+  it("preflights service ports before waiting for readiness", async () => {
+    const lifecycle: string[] = [];
+
+    const result = await runWithUiAcceptanceServices(
+      async () => {
+        lifecycle.push("task");
+        return "ok";
+      },
+      {
+        cwd: "D:/myproject/story-video-forge2",
+        prepareService: async (service) => {
+          lifecycle.push(`prepare:${service.name}`);
+        },
+        spawnService: async (service) => {
+          lifecycle.push(`spawn:${service.name}`);
+          return createHandle(service.name, lifecycle);
+        },
+        waitForService: async (service) => {
+          lifecycle.push(`wait:${service.name}`);
+        },
+        stopService: async (handle) => {
+          lifecycle.push(`stop:${handle.name}`);
+        },
+      },
+    );
+
+    expect(result).toBe("ok");
+    expect(lifecycle).toEqual([
+      "prepare:backend",
+      "spawn:backend",
+      "wait:backend",
+      "prepare:frontend",
+      "spawn:frontend",
+      "wait:frontend",
+      "task",
+      "stop:frontend",
+      "stop:backend",
+    ]);
   });
 
   it("polls readiness until the target becomes reachable", async () => {
