@@ -169,6 +169,25 @@
 
 如果截图与参数图差距仍然明显，不得仅以“测试通过”宣称完成。
 
+如果改动影响 `Topic` 页面、推荐工作台、trace 入口或 runtime diagnostics 展示，还要补一条最小可追溯记录：
+
+- 本次 smoke 的 `run_id`
+- `summary.json` 中的 `project.project_id`
+- 由 `project_id` 推导出的 `p_<前 8 位>` short id
+- 用该 short id 在 `storage/projects/` 下递归搜索命中的项目 trace 目录
+
+推荐直接记录成可复跑的 PowerShell 片段：
+
+```powershell
+$projectId = '<summary.json.project.project_id>'
+$shortId = 'p_' + (($projectId -replace '[^a-zA-Z0-9]', '').ToLower().Substring(0, 8))
+Get-ChildItem 'storage/projects' -Directory -Recurse |
+  Where-Object { $_.Name -match ("\[" + [regex]::Escape($shortId) + "\]$") } |
+  Select-Object FullName, LastWriteTime
+```
+
+这样做的目的不是替代 harness，而是确保 UI smoke 产物、项目级 trace 与人工巡检记录之间有稳定映射，不依赖人工记住 storage 日期或项目改名前的路径。
+
 ---
 
 ## 4. 页面级产物规范

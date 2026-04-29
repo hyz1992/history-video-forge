@@ -195,6 +195,36 @@ runtime harness 在当前阶段属于 **P0**：
   - `console-summary.json`
   - `network-summary.json`
 
+## Open Discovery Recommendation Observability
+
+- UI acceptance 的 `summary.json` 会给出本次 `run_id`、`output_dir` 与 `project.project_id`。后续定位不要依赖人工猜测 storage 日期。
+- 先把 `project.project_id` 转成项目短标识：
+  - 去掉连字符等非字母数字字符
+  - 转小写
+  - 取前 8 位
+  - 前缀补成 `p_<前 8 位>`
+- 例如 `26afa129-cc4e-4fea-8244-93077665f40d -> p_26afa129`。
+- 再从仓库根目录直接搜索整个 `storage/projects/`，而不是先猜日期目录：
+
+```powershell
+$projectId = '26afa129-cc4e-4fea-8244-93077665f40d'
+$shortId = 'p_' + (($projectId -replace '[^a-zA-Z0-9]', '').ToLower().Substring(0, 8))
+Get-ChildItem 'storage/projects' -Directory -Recurse |
+  Where-Object { $_.Name -match ("\[" + [regex]::Escape($shortId) + "\]$") } |
+  Select-Object FullName, LastWriteTime
+```
+
+- 命中的项目目录即 `<project-root>`；继续进入 `<project-root>/trace/`。
+- topic 运行日志位于 `<project-root>/trace/topic-runs/<topic_run_id>/`，script 运行日志位于 `<project-root>/trace/script-runs/<script_run_id>/`。
+- smoke 对应项目通常至少能看到这些文件：
+  - `graph-trace-summary.json`
+  - `runtime-diagnostics.json`
+- 当对应 topic run 已落盘开放发现推荐交互日志时，继续检查：
+  - `llm-interactions/*.md`：看 prompt 元数据、`输入对象` 里的 recommendation seed，以及模型原始响应/归一化结果。
+  - `recommendation-diagnostics.md`：看最终保留候选、剔除原因与诊断说明。
+- 如果搜索结果多于一个目录，不要靠日期猜测；先确认目录名后缀与 `[p_<前 8 位>]` 完全一致，再优先选择最近一次写入、且 `trace/topic-runs` 或 `trace/script-runs` 中 run 文件时间与 smoke 时间相邻的目录。
+- 如果只想确认 UI acceptance 本身是否产生产物，继续看 `harness/scripts/runtime/output/ui-acceptance/<run-id>/summary.json`；如果要追 topic/script 对应 trace，必须用 `project.project_id -> short_id -> storage/projects 递归搜索` 这条链路。
+
 ### 当前结论
 
 - UI acceptance 机制已作为仓库内正式能力接入。
