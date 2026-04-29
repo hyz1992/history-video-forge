@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -108,6 +108,7 @@ async function seedRawCandidateCacheEntry(
 describe("topic runtime recommendation", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it("rejects malformed topic recommendation payloads missing seed fields", async () => {
@@ -426,6 +427,12 @@ describe("topic runtime recommendation", () => {
     expect(uniqueEventFingerprints(result.candidates)).toHaveLength(
       result.candidates.length,
     );
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "topic_candidate_duplicate_removed",
+        reason: expect.any(String),
+      }),
+    );
   });
 
   it("demotes recently used events through a fatigue penalty before returning final candidates", async () => {
@@ -455,6 +462,51 @@ describe("topic runtime recommendation", () => {
         strongScene: "the freshest candidate should rise ahead of the repeated event",
         sourceHint: "test",
         recentUsageHint: "avoid the just-used event",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "topic_candidate_fatigue_penalty_applied",
+      }),
+    );
+    expect(result.candidates[0]?.title).toBe("event-b");
+  });
+
+  it("applies fatigue even when the recent cache record and recommendation start share the same millisecond", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-29T00:00:00.000Z"));
+
+    const db = createDbClient();
+    await seedRecentEventUsage(db, "event-a");
+    const invokeApi = vi.fn(async () =>
+      JSON.stringify([
+        createRuntimeCandidate("event-a", "angle-a"),
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+      ]),
+    );
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "same-millisecond history should still count as prior fatigue input",
+        coreConflict: "strict timestamp cutoffs must not drop immediately previous cache history",
+        strongScene: "the recently used event should still be demoted at equal-millisecond boundaries",
+        sourceHint: "test",
+        recentUsageHint: "equal timestamp boundary",
       },
       {
         llmGateway: gateway,
@@ -668,16 +720,16 @@ describe("topic runtime recommendation", () => {
     });
   });
 
-  it("persists readable llm interaction markdown under the topic run directory", async () => {
+  it("writes recommendation diagnostics outside llm-interactions using a stable markdown contract", async () => {
     const db = createDbClient();
     const project = await createProject(db, {
-      name: "Topic Runtime Logging",
+      name: "Topic Runtime Diagnostics",
     });
     const invokeApi = vi.fn(async () =>
       JSON.stringify([
-        createRuntimeCandidate("晏子使楚", "第一槽位"),
-        createRuntimeCandidate("张巡守城", "第二槽位"),
-        createRuntimeCandidate("于谦守京", "第三槽位"),
+        createRuntimeCandidate("event-a", "shared-angle"),
+        createRuntimeCandidate("event-a", "shared-angle"),
+        createRuntimeCandidate("event-b", "fresh-angle"),
       ]),
     );
     const gateway = createLlmGateway({
@@ -691,12 +743,12 @@ describe("topic runtime recommendation", () => {
     const result = await recommendTopicCandidatesWithTrace(
       db,
       {
-        canonicalName: "晏子使楚",
-        summary: "楚王在公开场合连续压场，晏子当场顶回去。",
-        coreConflict: "楚王当众压场，晏子必须当场顶回。",
-        strongScene: "楚王连续压场，晏子一句句顶回去。",
-        sourceHint: "《晏子春秋》",
-        recentUsageHint: "近期未出现同 event_id",
+        canonicalName: "seed-a",
+        summary: "topic run writes runtime artifacts",
+        coreConflict: "diagnostics should not masquerade as llm interactions",
+        strongScene: "duplicate filtering should be readable without depending on numbered filenames",
+        sourceHint: "test",
+        recentUsageHint: "none",
       },
       {
         llmGateway: gateway,
@@ -706,24 +758,19 @@ describe("topic runtime recommendation", () => {
 
     const profile = getProjectStorageProfile(project);
     const runId = String((result.trace as Record<string, unknown>).run_id);
-    const interactionLogPath = resolve(
-      process.cwd(),
-      profile.topic_runs_dir,
-      runId,
-      "llm-interactions",
-      "01-topic.candidate-builder.md",
-    );
+    const runDir = resolve(process.cwd(), profile.topic_runs_dir, runId);
+    const llmInteractionsDir = resolve(runDir, "llm-interactions");
+    const llmInteractionFiles = readdirSync(llmInteractionsDir);
+    const diagnosticsLogPath = resolve(runDir, "recommendation-diagnostics.md");
 
-    expect(existsSync(interactionLogPath)).toBe(true);
+    expect(llmInteractionFiles).toContain("01-topic.candidate-builder.md");
+    expect(llmInteractionFiles.some((name) => name.includes("diagnostics"))).toBe(false);
+    expect(existsSync(diagnosticsLogPath)).toBe(true);
 
-    const logContent = readFileSync(interactionLogPath, "utf8");
-    expect(logContent).toContain("# LLM 交互日志 01");
-    expect(logContent).toContain("## 元数据");
-    expect(logContent).toContain("- prompt_id: topic.candidate-builder");
-    expect(logContent).toContain("## 输入对象");
-    expect(logContent).toContain("## System Prompt");
-    expect(logContent).toContain("## 原始模型响应");
-    expect(logContent).toContain("## 归一化结果");
-    expect(logContent).toContain("晏子使楚");
+    const diagnosticsLogContent = readFileSync(diagnosticsLogPath, "utf8");
+    expect(diagnosticsLogContent).toContain("topic_candidate_duplicate_removed");
+    expect(diagnosticsLogContent).toContain("event-a");
+    expect(diagnosticsLogContent).not.toContain("# LLM 交互日志");
+    expect(diagnosticsLogContent).not.toContain("prompt_id:");
   });
 });

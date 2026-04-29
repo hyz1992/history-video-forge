@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
+import { renderLlmInteractionMarkdown } from "../../../backend/src/runtime/llm/interaction-log.js";
 import type { StructuredPromptProvider } from "../../../backend/src/runtime/llm/provider-contract.js";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 
@@ -14,6 +15,44 @@ describe("prompt runtime", () => {
     expect(prompt.metadata.language).toBe("zh-CN");
     expect(prompt.filePath.replace(/\\/g, "/")).toContain("/harness/prompts/topic/");
     expect(prompt.body).toContain("根据当前推荐种子");
+  });
+
+  it("keeps prompt metadata zh-CN and includes diversity instructions for open discovery", () => {
+    const registry = createPromptRegistry();
+
+    const prompt = registry.getPrompt("topic.candidate-builder");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("开放发现差异化要求");
+    expect(prompt.body).toMatch(/事件.*多样性/);
+    expect(prompt.body).toMatch(/角度.*明显不同/);
+  });
+
+  it("normalizes annotation lines before rendering markdown interaction notes", () => {
+    const markdown = renderLlmInteractionMarkdown({
+      sequence: 1,
+      generatedAt: "2026-04-29T00:00:00.000Z",
+      provider: "stub",
+      model: "stub",
+      operationName: "topic.candidate-builder",
+      promptId: "topic.candidate-builder",
+      promptStage: "topic",
+      promptLanguage: "zh-CN",
+      promptFilePath: "harness/prompts/topic/candidate-builder.prompt.md",
+      systemPrompt: "prompt",
+      input: {
+        seed: "topic",
+      },
+      rawOutput: "[]",
+      parsedOutput: [],
+      annotations: ["候选保留：第一槽位\n- 注入项\n```code```"],
+      errorMessage: null,
+    });
+
+    expect(markdown).toContain("## 归因注记");
+    expect(markdown).toContain("- 候选保留：第一槽位");
+    expect(markdown).not.toContain("\n- 注入项");
+    expect(markdown).not.toContain("```code```");
   });
 
   it("loads script.script-writer through registry compatibility lookup", () => {

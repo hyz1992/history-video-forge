@@ -11,11 +11,26 @@ export interface LlmInteractionLogEntry {
   input: unknown;
   rawOutput: string;
   parsedOutput?: unknown;
+  annotations?: string[];
   errorMessage?: string | null;
 }
 
 export interface LlmInteractionLogWriter {
   write(entry: LlmInteractionLogEntry): Promise<void> | void;
+}
+
+export interface RecommendationDiagnosticsMarkdownInput {
+  generatedAt: string;
+  diagnostics: Array<{
+    code: string;
+    level: "info" | "warning" | "error";
+    reason?: string;
+  }>;
+  candidates: Array<{
+    title: string;
+    one_line_angle: string;
+  }>;
+  annotations: string[];
 }
 
 export function renderLlmInteractionMarkdown(
@@ -65,6 +80,13 @@ export function renderLlmInteractionMarkdown(
     );
   }
 
+  if (entry.annotations?.length) {
+    lines.push("", "## 归因注记", "");
+    for (const annotation of entry.annotations) {
+      lines.push(`- ${normalizeMarkdownAnnotation(annotation)}`);
+    }
+  }
+
   if (entry.errorMessage) {
     lines.push(
       "",
@@ -78,6 +100,57 @@ export function renderLlmInteractionMarkdown(
 
   lines.push("");
   return lines.join("\n");
+}
+
+export function renderRecommendationDiagnosticsMarkdown(
+  input: RecommendationDiagnosticsMarkdownInput,
+) {
+  const lines = [
+    "# Recommendation Diagnostics",
+    "",
+    `- generated_at: ${input.generatedAt}`,
+    `- candidate_count: ${input.candidates.length}`,
+    "",
+    "## Diagnostics",
+    "",
+  ];
+
+  for (const check of input.diagnostics) {
+    const reasonSuffix = check.reason
+      ? ` - ${normalizeMarkdownAnnotation(check.reason)}`
+      : "";
+    lines.push(`- [${check.level}] ${check.code}${reasonSuffix}`);
+  }
+
+  lines.push("", "## Candidates", "");
+  for (const candidate of input.candidates) {
+    lines.push(
+      `- ${normalizeMarkdownAnnotation(candidate.title)} | ${normalizeMarkdownAnnotation(candidate.one_line_angle)}`,
+    );
+  }
+
+  if (input.annotations.length > 0) {
+    lines.push("", "## Notes", "");
+    for (const annotation of input.annotations) {
+      lines.push(`- ${normalizeMarkdownAnnotation(annotation)}`);
+    }
+  }
+
+  lines.push("");
+  return lines.join("\n");
+}
+
+export function normalizeMarkdownAnnotation(annotation: string) {
+  return annotation
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(" / ")
+    .replace(/`/g, "\\`")
+    .replace(/^[-+*]\s+/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 function stableStringify(value: unknown) {

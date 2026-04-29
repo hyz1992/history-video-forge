@@ -1,3 +1,6 @@
+import { mkdirSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { TopicCandidateCard } from "../../../../shared/src/index.js";
 import { env } from "../../config/env.js";
 import type { DbClient } from "../../db/client";
@@ -8,6 +11,7 @@ import {
   saveCachedCandidate,
 } from "../cache/candidate-cache.repository.js";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
+import { renderRecommendationDiagnosticsMarkdown } from "../../runtime/llm/interaction-log.js";
 import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider.js";
 import type { StructuredPromptProvider } from "../../runtime/llm/provider-contract.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
@@ -15,6 +19,7 @@ import { runTopicRecommendationGraph } from "../../runtime/orchestration/topic-r
 import { TOPIC_CANDIDATE_TARGET_COUNT } from "../../runtime/orchestration/topic-recommendation-nodes.js";
 import {
   createProjectRunInteractionLogWriter,
+  getProjectStorageProfile,
   persistProjectRunArtifacts,
 } from "../../runtime/trace/project-storage.js";
 
@@ -77,6 +82,16 @@ export async function recommendTopicCandidatesWithTrace(
     finalCandidateCount: postProcessed.candidates.length,
     additionalChecks: postProcessed.diagnostics,
   });
+
+  if (project) {
+    writeRecommendationDiagnosticsMarkdown({
+      project,
+      runId,
+      diagnostics: finalDiagnostics.checks,
+      candidates: postProcessed.candidates,
+      annotations: postProcessed.annotations,
+    });
+  }
 
   if (!options?.projectId) {
     return {
@@ -188,6 +203,16 @@ interface RankedRecommendationCandidate {
   fatigueScore: number;
 }
 
+interface RecommendationDiagnostic {
+  code: string;
+  level: "info" | "warning" | "error";
+  reason?: string;
+}
+
+type TopicRecommendationProject = NonNullable<
+  DbClient["projects"] extends Map<string, infer T> ? T : never
+>;
+
 async function postProcessTopicCandidates(input: {
   db: DbClient;
   candidates: RecommendationCandidate[];
@@ -195,9 +220,10 @@ async function postProcessTopicCandidates(input: {
   createdBefore: Date;
   existingCacheRecordIds: string[];
 }) {
+  const historyUpperBound = new Date(input.createdBefore.getTime() + 1);
   const deduplicatedCandidates: Omit<RankedRecommendationCandidate, "fatigueScore">[] = [];
   const seenFingerprints = new Set<string>();
-  let duplicateRemoved = false;
+  const duplicateReasons: string[] = [];
 
   for (const [originalIndex, candidate] of input.candidates.entries()) {
     const normalized = await normalizeEventInput(input.db, {
@@ -211,7 +237,9 @@ async function postProcessTopicCandidates(input: {
     });
 
     if (seenFingerprints.has(fingerprint)) {
-      duplicateRemoved = true;
+      duplicateReasons.push(
+        `${candidate.title}｜${candidate.one_line_angle} 与已保留候选事件/角度重复`,
+      );
       continue;
     }
 
@@ -228,7 +256,7 @@ async function postProcessTopicCandidates(input: {
   const recentCandidates = input.projectId
     ? await listRecentCachedCandidates(input.db, {
       projectId: input.projectId,
-      createdBefore: input.createdBefore,
+      createdBefore: historyUpperBound,
       finalOnly: true,
       recordIds: input.existingCacheRecordIds,
     })
@@ -236,7 +264,7 @@ async function postProcessTopicCandidates(input: {
   const recentProjectRounds = input.projectId
     ? await listRecentProjectRecommendationRounds(input.db, {
         projectId: input.projectId,
-        createdBefore: input.createdBefore,
+        createdBefore: historyUpperBound,
       })
     : [];
   const cacheFatigueByEventId = new Map<string, number>();
@@ -280,7 +308,7 @@ async function postProcessTopicCandidates(input: {
     }
   }
 
-  let fatiguePenaltyApplied = false;
+  const fatigueReasons: string[] = [];
   const rankings = deduplicatedCandidates
     .map((candidate) => {
       const cacheFatigueScore = Math.max(
@@ -293,7 +321,9 @@ async function postProcessTopicCandidates(input: {
       );
       const fatigueScore = Math.max(cacheFatigueScore, roundFatigueScore);
       if (fatigueScore > 0) {
-        fatiguePenaltyApplied = true;
+        fatigueReasons.push(
+          `${candidate.candidate.title}｜${candidate.candidate.one_line_angle} 命中近期历史 ${fatigueScore} 次`,
+        );
       }
 
       return {
@@ -307,17 +337,19 @@ async function postProcessTopicCandidates(input: {
         left.originalIndex - right.originalIndex,
     );
 
-  const diagnostics = [];
-  if (duplicateRemoved) {
+  const diagnostics: RecommendationDiagnostic[] = [];
+  if (duplicateReasons.length > 0) {
     diagnostics.push({
       code: "topic_candidate_duplicate_removed",
-      level: "info" as const,
+      level: "info",
+      reason: `已剔除重复候选：${duplicateReasons.join("；")}`,
     });
   }
-  if (fatiguePenaltyApplied) {
+  if (fatigueReasons.length > 0) {
     diagnostics.push({
       code: "topic_candidate_fatigue_penalty_applied",
-      level: "info" as const,
+      level: "info",
+      reason: `已对近期重复候选施加疲劳降权：${fatigueReasons.join("；")}`,
     });
   }
 
@@ -325,15 +357,24 @@ async function postProcessTopicCandidates(input: {
     candidates: rankings.map((entry) => entry.candidate),
     rankings,
     diagnostics,
+    annotations: [
+      ...rankings.map(
+        (entry, index) =>
+          `候选保留：第 ${index + 1} 槽位 ${entry.candidate.title}｜${entry.candidate.one_line_angle}`,
+      ),
+      ...duplicateReasons.map((reason) => `候选剔除：${reason}`),
+      ...fatigueReasons.map((reason) => `排序降权：${reason}`),
+    ],
   };
 }
 
 function finalizeRecommendationDiagnostics(input: {
-  checks: Array<{ code: string; level: "info" | "warning" | "error" }>;
+  checks: RecommendationDiagnostic[];
   finalCandidateCount: number;
-  additionalChecks: Array<{ code: string; level: "info" | "warning" | "error" }>;
+  additionalChecks: RecommendationDiagnostic[];
 }) {
-  const checks = input.checks.filter((check) => {
+  const checks = input.checks
+    .filter((check) => {
     if (check.code === "topic_candidate_slot_guard_passed") {
       return input.finalCandidateCount === TOPIC_CANDIDATE_TARGET_COUNT;
     }
@@ -343,7 +384,8 @@ function finalizeRecommendationDiagnostics(input: {
     }
 
     return true;
-  });
+    })
+    .map((check) => enrichDiagnosticReason(check, input.finalCandidateCount));
 
   checks.push(...input.additionalChecks);
 
@@ -354,6 +396,7 @@ function finalizeRecommendationDiagnostics(input: {
     checks.push({
       code: "topic_candidate_slot_guard_passed",
       level: "info",
+      reason: `最终保留 ${input.finalCandidateCount} 个候选，已满足目标槽位数`,
     });
   }
 
@@ -364,12 +407,38 @@ function finalizeRecommendationDiagnostics(input: {
     checks.push({
       code: "topic_candidate_slots_insufficient",
       level: "error",
+      reason: `最终仅保留 ${input.finalCandidateCount} 个候选，未满足目标槽位数 ${TOPIC_CANDIDATE_TARGET_COUNT}`,
     });
   }
 
   return {
     checks,
   };
+}
+
+function enrichDiagnosticReason(
+  check: RecommendationDiagnostic,
+  finalCandidateCount: number,
+): RecommendationDiagnostic {
+  if (check.reason) {
+    return check;
+  }
+
+  if (check.code === "topic_candidate_repair_triggered") {
+    return {
+      ...check,
+      reason: `首轮候选不足 ${TOPIC_CANDIDATE_TARGET_COUNT} 个，已触发补位回填`,
+    };
+  }
+
+  if (check.code === "topic_candidate_slots_insufficient") {
+    return {
+      ...check,
+      reason: `最终仅保留 ${finalCandidateCount} 个候选，仍低于目标槽位数 ${TOPIC_CANDIDATE_TARGET_COUNT}`,
+    };
+  }
+
+  return check;
 }
 
 async function persistPostProcessedCandidates(
@@ -394,4 +463,65 @@ async function persistPostProcessedCandidates(
       mustCoverPreviewJson: candidate.candidate.must_cover_preview,
     });
   }
+}
+
+function writeRecommendationDiagnosticsMarkdown(input: {
+  project: TopicRecommendationProject;
+  runId: string;
+  diagnostics: RecommendationDiagnostic[];
+  candidates: RecommendationCandidate[];
+  annotations: string[];
+}) {
+  const profile = getProjectStorageProfile(input.project);
+  const runDir = resolve(process.cwd(), profile.topic_runs_dir, input.runId);
+
+  mkdirSync(runDir, { recursive: true });
+  writeFileSync(
+    resolve(runDir, "recommendation-diagnostics.md"),
+    renderRecommendationDiagnosticsMarkdown({
+      generatedAt: new Date().toISOString(),
+      diagnostics: input.diagnostics,
+      candidates: input.candidates.map((candidate) => ({
+        title: candidate.title,
+        one_line_angle: candidate.one_line_angle,
+      })),
+      annotations: input.annotations,
+    }),
+    "utf8",
+  );
+
+  /*
+  return {
+    generatedAt: new Date().toISOString(),
+    provider: "runtime",
+    model: "post-process",
+    operationName: "topic.candidate-builder.diagnostics",
+    promptId: prompt.metadata.id,
+    promptStage: prompt.metadata.stage,
+    promptLanguage: prompt.metadata.language,
+    promptFilePath: prompt.filePath,
+    systemPrompt:
+      "记录开放发现推荐在本地后处理阶段的保留、剔除、降权与补位归因，不重新生成候选。",
+    input: {
+      canonicalName: input.input.canonicalName,
+      tags: input.input.tags ?? [],
+    },
+    rawOutput: JSON.stringify(
+      {
+        diagnostics: input.diagnostics,
+        candidates: input.candidates,
+      },
+      null,
+      2,
+    ),
+    parsedOutput: {
+      diagnostics: input.diagnostics,
+      candidates: input.candidates,
+    },
+    annotations: input.annotations.length > 0
+      ? input.annotations
+      : ["候选保留：本轮未触发额外过滤或降权"],
+    errorMessage: null,
+  };
+  */
 }
