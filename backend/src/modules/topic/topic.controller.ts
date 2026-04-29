@@ -9,6 +9,17 @@ import {
   type StoredTopicCandidate,
 } from "./topic-confirm.service";
 
+interface TopicRecommendationSeedPayload {
+  canonical_name: string;
+  summary: string;
+  core_conflict: string;
+  strong_scene: string;
+  source_hint: string;
+  recent_usage_hint: string;
+  tags: string[];
+  aliases?: string[];
+}
+
 function toResponseCandidate(candidate: StoredTopicCandidate) {
   return {
     candidate_id: candidate.candidateId,
@@ -18,6 +29,91 @@ function toResponseCandidate(candidate: StoredTopicCandidate) {
     scope_label: candidate.scopeLabel,
     strong_scene: candidate.strongScene,
     risk_hints: [],
+  };
+}
+
+function readNonEmptyStringField(
+  payload: Record<string, unknown>,
+  field: keyof TopicRecommendationSeedPayload,
+  invalidFields: string[],
+) {
+  const value = payload[field];
+  if (typeof value !== "string" || value.trim().length === 0) {
+    invalidFields.push(field);
+    return "";
+  }
+
+  return value;
+}
+
+function validateTopicRecommendationSeed(
+  payload: unknown,
+):
+  | {
+      ok: true;
+      value: TopicRecommendationSeedPayload;
+    }
+  | {
+      ok: false;
+      invalidFields: string[];
+    } {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return {
+      ok: false,
+      invalidFields: [
+        "canonical_name",
+        "summary",
+        "core_conflict",
+        "strong_scene",
+        "source_hint",
+        "recent_usage_hint",
+        "tags",
+      ],
+    };
+  }
+
+  const record = payload as Record<string, unknown>;
+  const invalidFields: string[] = [];
+  const value: TopicRecommendationSeedPayload = {
+    canonical_name: readNonEmptyStringField(record, "canonical_name", invalidFields),
+    summary: readNonEmptyStringField(record, "summary", invalidFields),
+    core_conflict: readNonEmptyStringField(record, "core_conflict", invalidFields),
+    strong_scene: readNonEmptyStringField(record, "strong_scene", invalidFields),
+    source_hint: readNonEmptyStringField(record, "source_hint", invalidFields),
+    recent_usage_hint: readNonEmptyStringField(record, "recent_usage_hint", invalidFields),
+    tags: [],
+  };
+
+  if (!Array.isArray(record.tags) || record.tags.length === 0) {
+    invalidFields.push("tags");
+  } else {
+    const normalizedTags = record.tags
+      .filter((tag): tag is string => typeof tag === "string")
+      .map((tag) => tag.trim())
+      .filter((tag) => tag.length > 0);
+    if (normalizedTags.length === 0) {
+      invalidFields.push("tags");
+    } else {
+      value.tags = normalizedTags;
+    }
+  }
+
+  if (Array.isArray(record.aliases)) {
+    value.aliases = record.aliases.filter(
+      (alias): alias is string => typeof alias === "string" && alias.trim().length > 0,
+    );
+  }
+
+  if (invalidFields.length > 0) {
+    return {
+      ok: false,
+      invalidFields,
+    };
+  }
+
+  return {
+    ok: true,
+    value,
   };
 }
 
@@ -40,6 +136,17 @@ export async function createProjectController(
 export async function createTopicRecommendationsController(
   context: RouteContext,
 ): Promise<AppResponse> {
+  const validatedPayload = validateTopicRecommendationSeed(context.payload);
+  if (!validatedPayload.ok) {
+    return {
+      statusCode: 400,
+      body: {
+        error: "invalid_topic_recommendation_seed",
+        invalid_fields: validatedPayload.invalidFields,
+      },
+    };
+  }
+
   const project = await getProjectById(context.app.db, context.params.projectId);
   if (!project) {
     return {
@@ -50,22 +157,16 @@ export async function createTopicRecommendationsController(
     };
   }
 
-  const normalized = await normalizeEventInput(context.app.db, {
-    rawInput: context.payload.canonical_name,
-    aliases: context.payload.aliases,
-    sourceType: "system_recommendation",
-  });
-
   const recommendation = await recommendTopicCandidatesWithTrace(
     context.app.db,
     {
-      canonicalName: context.payload.canonical_name,
-      summary: context.payload.summary,
-      coreConflict: context.payload.core_conflict,
-      strongScene: context.payload.strong_scene,
-      sourceHint: context.payload.source_hint,
-      recentUsageHint: context.payload.recent_usage_hint,
-      tags: context.payload.tags,
+      canonicalName: validatedPayload.value.canonical_name,
+      summary: validatedPayload.value.summary,
+      coreConflict: validatedPayload.value.core_conflict,
+      strongScene: validatedPayload.value.strong_scene,
+      sourceHint: validatedPayload.value.source_hint,
+      recentUsageHint: validatedPayload.value.recent_usage_hint,
+      tags: validatedPayload.value.tags,
     },
     {
       projectId: project.id,
@@ -74,12 +175,18 @@ export async function createTopicRecommendationsController(
   const candidates = recommendation.candidates;
 
   const storedCandidates = new Map<string, StoredTopicCandidate>();
-  const responseCandidates = candidates.map((candidate) => {
+  const responseCandidates = [];
+
+  for (const candidate of candidates) {
+    const normalizedCandidate = await normalizeEventInput(context.app.db, {
+      rawInput: candidate.title,
+      sourceType: "system_recommendation",
+    });
     const candidateId = randomUUID();
     storedCandidates.set(candidateId, {
       candidateId,
       projectId: project.id,
-      event: normalized.event,
+      event: normalizedCandidate.event,
       title: candidate.title,
       oneLineAngle: candidate.one_line_angle,
       familyLabel: candidate.family_label,
@@ -90,11 +197,11 @@ export async function createTopicRecommendationsController(
       recentUsageHint: candidate.recent_usage_hint,
     });
 
-    return {
+    responseCandidates.push({
       candidate_id: candidateId,
       ...candidate,
-    };
-  });
+    });
+  }
 
   const topicRun = recommendation.topic_run ?? {
     project_id: project.id,
@@ -128,7 +235,7 @@ export async function createTopicRecommendationsController(
     statusCode: 200,
     body: {
       project_id: project.id,
-      event_id: normalized.event.id,
+      event_id: projectTopicState.rounds.at(-1)?.candidates[0]?.event.id ?? null,
       candidates: responseCandidates,
       current_round: currentRound
         ? {

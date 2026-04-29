@@ -7,7 +7,7 @@ describe("topic store recommendation input", () => {
     vi.restoreAllMocks();
   });
 
-  it("builds topic recommendation payloads from the current system filters instead of a fixed sample event", async () => {
+  it("sends canonical recommendation seed fields derived from system filters", async () => {
     const fetchMock = vi.fn(async () => ({
       json: async () => ({
         project_id: "project-1",
@@ -35,14 +35,37 @@ describe("topic store recommendation input", () => {
     );
 
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
-    expect(body.canonical_name).toContain("元明清");
-    expect(body.canonical_name).toContain("传播切口优先");
-    expect(body.summary).toContain("元明清");
-    expect(body.core_conflict).toContain("传播切口优先");
-    expect(body.strong_scene).toContain("元明清");
-    expect(body.tags).toContain("late_imperial");
-    expect(body.tags).toContain("hook_first");
+    expect(body).toMatchObject({
+      canonical_name: expect.stringContaining("元明清"),
+      summary: expect.stringContaining("元明清"),
+      core_conflict: expect.stringContaining("传播切口优先"),
+      strong_scene: expect.stringContaining("元明清"),
+      source_hint: expect.stringContaining("元明清"),
+      recent_usage_hint: expect.stringContaining("元明清"),
+      tags: expect.arrayContaining(["late_imperial", "hook_first", "system_recommendation"]),
+    });
     expect(body.canonical_name).not.toContain("晏子使楚");
+  });
+
+  it("throws instead of treating non-2xx topic recommendation responses as successful candidates", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: false,
+      status: 400,
+      json: async () => ({
+        error: "invalid_topic_recommendation_seed",
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = createFetchTopicApi();
+
+    await expect(
+      api.generateSystemRecommendations("project-1", {
+        era: "medieval",
+        tension: "balanced",
+      }),
+    ).rejects.toMatchObject({
+      message: expect.stringContaining("invalid_topic_recommendation_seed"),
+    });
   });
 
   it("forwards system filters through the topic store when generating recommendations", async () => {

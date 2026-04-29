@@ -82,6 +82,16 @@ export interface TopicRecommendationFilters {
   tension: "high" | "balanced" | "hook-first";
 }
 
+export interface TopicRecommendationSeed {
+  canonical_name: string;
+  summary: string;
+  core_conflict: string;
+  strong_scene: string;
+  source_hint: string;
+  recent_usage_hint: string;
+  tags: string[];
+}
+
 export const topicStoreKey: InjectionKey<TopicStore> = Symbol("topic-store");
 
 export function createFetchTopicApi(baseUrl = ""): TopicApi {
@@ -98,7 +108,7 @@ export function createFetchTopicApi(baseUrl = ""): TopicApi {
         },
       );
 
-      return response.json();
+      return readJsonResponse<TopicRecommendationsResponse>(response);
     },
     async confirmCandidate(projectId, candidateId) {
       const response = await fetch(
@@ -114,7 +124,7 @@ export function createFetchTopicApi(baseUrl = ""): TopicApi {
         },
       );
 
-      return response.json();
+      return readJsonResponse<TopicConfirmResponse>(response);
     },
   };
 }
@@ -214,7 +224,9 @@ export function useTopicStore() {
   return store;
 }
 
-function buildRecommendationSeed(filters: TopicRecommendationFilters) {
+function buildRecommendationSeed(
+  filters: TopicRecommendationFilters,
+): TopicRecommendationSeed {
   const eraLabel = mapEraLabel(filters.era);
   const tensionLabel = mapTensionLabel(filters.tension);
 
@@ -253,4 +265,18 @@ function mapTensionLabel(tension: TopicRecommendationFilters["tension"]) {
 
 function normalizeTag(value: string) {
   return value.replace(/-/g, "_");
+}
+
+async function readJsonResponse<T>(response: Response): Promise<T> {
+  const body = await response.json();
+
+  if (response.ok === false) {
+    const errorMessage =
+      typeof body?.error === "string"
+        ? body.error
+        : `topic_api_request_failed:${response.status}`;
+    throw new Error(errorMessage);
+  }
+
+  return body as T;
 }

@@ -6,15 +6,15 @@ import TopicCandidateDrawer from "../components/topic/TopicCandidateDrawer.vue";
 import TopicCandidateList from "../components/topic/TopicCandidateList.vue";
 import TopicTabs from "../components/topic/TopicTabs.vue";
 import { useProjectStore } from "../stores/project";
-import { useTopicStore } from "../stores/topic";
+import { useTopicStore, type TopicRecommendationFilters } from "../stores/topic";
 
 const projectStore = useProjectStore();
 const topicStore = useTopicStore();
 const route = useRoute();
 const router = useRouter();
 
-const eraFilter = ref("ancient");
-const tensionFilter = ref("high");
+const eraFilter = ref<TopicRecommendationFilters["era"]>("ancient");
+const tensionFilter = ref<TopicRecommendationFilters["tension"]>("high");
 
 const currentCandidates = computed(() =>
   topicStore.state.currentRound?.candidates ?? topicStore.state.candidates,

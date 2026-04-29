@@ -1,10 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { buildApp } from "../../../backend/src/app.js";
 import { TopicCandidateCard } from "../../../shared/src/index.js";
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import * as topicRecommendationServiceModule from "../../../backend/src/modules/topic/topic-recommendation.service.js";
 import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
 import { createOpenAiCompatibleProvider } from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
@@ -45,6 +47,104 @@ function createRuntimeCandidate(title: string, angle: string) {
 }
 
 describe("topic runtime recommendation", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("rejects malformed topic recommendation payloads missing seed fields", async () => {
+    const app = buildApp();
+    const projectResponse = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: {
+        name: "Malformed Recommendation Payload",
+      },
+    });
+    const projectId = projectResponse.json().project_id as string;
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectId}/topic/recommendations`,
+      payload: {
+        canonical_name: "",
+        summary: "楚王在公开场合连续压场，晏子当场顶回去。",
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      error: "invalid_topic_recommendation_seed",
+      invalid_fields: expect.arrayContaining([
+        "canonical_name",
+        "core_conflict",
+        "strong_scene",
+        "source_hint",
+        "recent_usage_hint",
+        "tags",
+      ]),
+    });
+  });
+
+  it("normalizes each recommended candidate into its own event identity instead of reusing the seed identity", async () => {
+    vi.spyOn(topicRecommendationServiceModule, "recommendTopicCandidatesWithTrace").mockResolvedValue({
+      candidates: [
+        createRuntimeCandidate("晏子使楚", "第一槽位"),
+        createRuntimeCandidate("张巡守城", "第二槽位"),
+        createRuntimeCandidate("于谦守京", "第三槽位"),
+      ],
+      diagnostics: {
+        checks: [],
+      },
+      trace: {
+        run_id: "topic-run-test",
+      },
+      topic_run: {
+        project_id: "project-1",
+        round_id: "topic-run-test",
+        round_index: 1,
+        previous_round_count: 0,
+      },
+    } as any);
+
+    const app = buildApp();
+    const projectResponse = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: {
+        name: "Candidate Event Identity",
+      },
+    });
+    const projectId = projectResponse.json().project_id as string;
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectId}/topic/recommendations`,
+      payload: {
+        canonical_name: "魏晋至唐宋：均衡叙事历史事件推荐",
+        summary: "围绕魏晋至唐宋寻找适合直接进入文案阶段的主题。",
+        core_conflict: "重点筛选冲突关系清晰的历史事件。",
+        strong_scene: "优先寻找能快速建立场面压迫感的关键场景。",
+        source_hint: "魏晋至唐宋相关史事与人物记载",
+        recent_usage_hint: "魏晋至唐宋范围内近期未重复的候选优先",
+        tags: ["medieval", "balanced", "system_recommendation"],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const storedCandidates = [
+      ...(app.topicCandidateStore.get(projectId)?.candidatesById.values() ?? []),
+    ];
+    expect(storedCandidates).toHaveLength(3);
+    expect(storedCandidates.map((candidate) => candidate.event.canonicalName)).toEqual([
+      "晏子使楚",
+      "张巡守城",
+      "于谦守京",
+    ]);
+    expect(new Set(storedCandidates.map((candidate) => candidate.event.id)).size).toBe(3);
+    expect(response.json().event_id).toBe(storedCandidates[0]?.event.id);
+  });
+
   it("drives candidate generation through the formal prompt registry and caches runtime fields", async () => {
     const db = createDbClient();
     const invokeApi = vi.fn(async () =>
