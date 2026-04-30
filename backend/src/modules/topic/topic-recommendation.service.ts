@@ -592,6 +592,7 @@ function normalizeSelectorDecision(rawOutput: unknown): TopicSelectorDecision {
   const record = rawOutput as Record<string, unknown>;
   const ids =
     record.answer ??
+    record.selected_candidates ??
     record.selected_candidate_ids ??
     record.selectedIds ??
     record.candidate_ids ??

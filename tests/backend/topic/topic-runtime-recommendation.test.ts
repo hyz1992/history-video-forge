@@ -700,6 +700,63 @@ describe("topic runtime recommendation", () => {
     ]);
   });
 
+  it("accepts selector outputs returned through selected_candidates", async () => {
+    const db = createDbClient();
+    const invokeApi = vi
+      .fn()
+      .mockResolvedValueOnce(
+        JSON.stringify([
+          createRuntimeCandidate("event-a", "angle-a"),
+          createRuntimeCandidate("event-b", "angle-b"),
+          createRuntimeCandidate("event-c", "angle-c"),
+          createRuntimeCandidate("event-d", "angle-d"),
+          createRuntimeCandidate("event-e", "angle-e"),
+          createRuntimeCandidate("event-f", "angle-f"),
+          createRuntimeCandidate("event-g", "angle-g"),
+          createRuntimeCandidate("event-h", "angle-h"),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          selected_candidates: [
+            "selector_candidate_1",
+            "selector_candidate_2",
+            "selector_candidate_5",
+            "selector_candidate_6",
+          ],
+        }),
+      );
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "selector outputs may also arrive through selected_candidates",
+        coreConflict: "selector normalization must tolerate another real-provider wrapper",
+        strongScene: "the final candidates should still be resolved from ids inside selected_candidates",
+        sourceHint: "test",
+        recentUsageHint: "none",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(result.candidates.map((candidate) => candidate.title)).toEqual([
+      "event-a",
+      "event-b",
+      "event-e",
+    ]);
+  });
+
   it("rejects selector outputs that reference unknown candidate ids", async () => {
     const db = createDbClient();
     const invokeApi = vi
