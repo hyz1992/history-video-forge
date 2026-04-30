@@ -44,6 +44,7 @@ describe("ui acceptance page rules", () => {
           "topicResults",
           "currentTopicRound",
           "candidateDrawer",
+          "topicTraceEntry",
           "generateTopic",
         ],
         counts: {
@@ -74,6 +75,10 @@ describe("ui acceptance page rules", () => {
       expect.arrayContaining([
         expect.objectContaining({
           code: "topic-recommendation-diagnostics",
+          status: "PASS",
+        }),
+        expect.objectContaining({
+          code: "topic-selector-diagnostics",
           status: "PASS",
         }),
       ]),

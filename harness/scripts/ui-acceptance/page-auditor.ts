@@ -58,6 +58,7 @@ const uiAcceptanceAuditDefinitions: Record<
       topicResults: "[data-testid='topic-results-shell']",
       currentTopicRound: "[data-testid='current-topic-round']",
       candidateDrawer: uiAcceptanceSelectors.candidateDrawer,
+      topicTraceEntry: "[data-testid='topic-current-round']",
       generateTopic: "[data-testid='system-generate']",
     },
     countSelectors: {

@@ -591,6 +591,7 @@ function normalizeSelectorDecision(rawOutput: unknown): TopicSelectorDecision {
 
   const record = rawOutput as Record<string, unknown>;
   const ids =
+    record.answer ??
     record.selected_candidate_ids ??
     record.selectedIds ??
     record.candidate_ids ??
@@ -650,14 +651,13 @@ function inspectSelectorDecision(input: {
 
   const targetCount = input.allowedCount ?? TOPIC_CANDIDATE_TARGET_COUNT;
 
-  if (selected.length > targetCount) {
-    throw new Error("topic_selector_invalid_selection");
-  }
+  const trimmedSelected = selected.slice(0, targetCount);
+  const trimmedSelectedIds = selectedIds.slice(0, targetCount);
 
   return {
-    selected,
-    selectedIds,
-    missingSlotCount: targetCount - selected.length,
+    selected: trimmedSelected,
+    selectedIds: trimmedSelectedIds,
+    missingSlotCount: targetCount - trimmedSelected.length,
     excludedCandidateIds: [...excludedCandidateIds],
     excludedEventIdentities: [...excludedEventIdentities],
   };

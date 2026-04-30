@@ -304,6 +304,12 @@ function auditTopicRecommendationTraceability(snapshots: UiAcceptancePageSnapsho
       hasVisibleSelector(snapshot, "currentTopicRound") &&
       hasVisibleSelector(snapshot, "candidateDrawer"),
   );
+  const hasTopicSelectorHook = topicSnapshots.some(
+    (snapshot) =>
+      (snapshot.counts.candidateItems ?? 0) > 0 &&
+      hasVisibleSelector(snapshot, "topicResults") &&
+      hasVisibleSelector(snapshot, "topicTraceEntry"),
+  );
   const hasInspectableTraceEntry = snapshots.some(
     (snapshot) =>
       snapshot.pageId === "script" && hasVisibleSelector(snapshot, "scriptTraceEntry"),
@@ -314,6 +320,11 @@ function auditTopicRecommendationTraceability(snapshots: UiAcceptancePageSnapsho
       "topic-recommendation-diagnostics",
       hasCompletedRecommendationRound && hasInspectableTraceEntry ? "PASS" : "FAIL",
       "A topic recommendation run must keep candidate details and a downstream trace hook inspectable.",
+    ),
+    createCheck(
+      "topic-selector-diagnostics",
+      hasTopicSelectorHook && hasInspectableTraceEntry ? "PASS" : "FAIL",
+      "A topic recommendation run must expose selector-stage diagnostics hooks alongside the downstream trace entry.",
     ),
   ];
 }

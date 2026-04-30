@@ -643,6 +643,63 @@ describe("topic runtime recommendation", () => {
     ]);
   });
 
+  it("accepts selector outputs returned through the common answer field and trims extra valid ids", async () => {
+    const db = createDbClient();
+    const invokeApi = vi
+      .fn()
+      .mockResolvedValueOnce(
+        JSON.stringify([
+          createRuntimeCandidate("event-a", "angle-a"),
+          createRuntimeCandidate("event-b", "angle-b"),
+          createRuntimeCandidate("event-c", "angle-c"),
+          createRuntimeCandidate("event-d", "angle-d"),
+          createRuntimeCandidate("event-e", "angle-e"),
+          createRuntimeCandidate("event-f", "angle-f"),
+          createRuntimeCandidate("event-g", "angle-g"),
+          createRuntimeCandidate("event-h", "angle-h"),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          answer: [
+            "selector_candidate_1",
+            "selector_candidate_2",
+            "selector_candidate_4",
+            "selector_candidate_6",
+          ],
+        }),
+      );
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "selector outputs may arrive through a generic answer field",
+        coreConflict: "selector normalization must tolerate primary-provider response wrappers",
+        strongScene: "the final candidates should still be resolved from ids inside answer",
+        sourceHint: "test",
+        recentUsageHint: "none",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(result.candidates.map((candidate) => candidate.title)).toEqual([
+      "event-a",
+      "event-b",
+      "event-d",
+    ]);
+  });
+
   it("rejects selector outputs that reference unknown candidate ids", async () => {
     const db = createDbClient();
     const invokeApi = vi
