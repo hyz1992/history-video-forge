@@ -60,6 +60,16 @@ function uniqueEventFingerprints(
   ];
 }
 
+function uniqueEventIdentities(
+  candidates: Array<{ normalized_event_identity: string }>,
+) {
+  return [
+    ...new Set(
+      candidates.map((candidate) => candidate.normalized_event_identity.trim()),
+    ),
+  ];
+}
+
 async function seedRecentEventUsage(
   db: ReturnType<typeof createDbClient>,
   canonicalName: string,
@@ -485,6 +495,94 @@ describe("topic runtime recommendation", () => {
         reason: expect.any(String),
       }),
     );
+  });
+
+  it("only keeps one entry per normalized event identity in the selector pool", async () => {
+    const db = createDbClient();
+    const invokeApi = vi.fn(async () =>
+      JSON.stringify([
+        createRuntimeCandidate("event-a", "angle-a"),
+        createRuntimeCandidate("event-a", "angle-a-alt"),
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+        createRuntimeCandidate("event-d", "angle-d"),
+        createRuntimeCandidate("event-e", "angle-e"),
+        createRuntimeCandidate("event-f", "angle-f"),
+        createRuntimeCandidate("event-g", "angle-g"),
+      ]),
+    );
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "selector pool should deduplicate by normalized event identity",
+        coreConflict: "the selector pool must not keep multiple entries for the same event",
+        strongScene: "identity deduplication should happen before selector input is constructed",
+        sourceHint: "test",
+        recentUsageHint: "no duplicate event identities",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(uniqueEventIdentities(result.selector_pool)).toHaveLength(
+      result.selector_pool.length,
+    );
+  });
+
+  it("includes fatigue metadata for selector instead of directly finalizing the top 3", async () => {
+    const db = createDbClient();
+    await seedRecentEventUsage(db, "event-a");
+    const invokeApi = vi.fn(async () =>
+      JSON.stringify([
+        createRuntimeCandidate("event-a", "angle-a"),
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+        createRuntimeCandidate("event-d", "angle-d"),
+        createRuntimeCandidate("event-e", "angle-e"),
+        createRuntimeCandidate("event-f", "angle-f"),
+        createRuntimeCandidate("event-g", "angle-g"),
+        createRuntimeCandidate("event-h", "angle-h"),
+      ]),
+    );
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "selector pool should carry fatigue metadata",
+        coreConflict: "fatigue annotations belong to selector input preparation",
+        strongScene: "recently used events should be marked before final semantic selection",
+        sourceHint: "test",
+        recentUsageHint: "avoid the just-used event",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(result.selector_pool[0]).toMatchObject({
+      fatigue_score: expect.any(Number),
+      recently_seen: expect.any(Boolean),
+    });
   });
 
   it("demotes recently used events through a fatigue penalty before returning final candidates", async () => {

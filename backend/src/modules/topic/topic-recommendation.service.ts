@@ -100,6 +100,7 @@ export async function recommendTopicCandidatesWithTrace(
     return {
       ...result,
       raw_candidates: result.candidates,
+      selector_pool: postProcessed.selectorPool,
       candidates: postProcessed.candidates,
       diagnostics: finalDiagnostics,
     };
@@ -136,6 +137,7 @@ export async function recommendTopicCandidatesWithTrace(
   return {
     ...result,
     raw_candidates: result.candidates,
+    selector_pool: postProcessed.selectorPool,
     candidates: postProcessed.candidates,
     diagnostics: finalDiagnostics,
     topic_run: {
@@ -200,12 +202,25 @@ function createStubTopicRecommendationProvider(): StructuredPromptProvider {
 type RecommendationCandidate = ReturnType<typeof TopicCandidateCard.parse>;
 
 interface RankedRecommendationCandidate {
+  candidateId: string;
   candidate: RecommendationCandidate;
   eventId: string;
   eventIdentity: string;
   fingerprint: string;
   originalIndex: number;
   fatigueScore: number;
+  recentlySeen: boolean;
+}
+
+interface SelectorPoolCandidate {
+  candidate_id: string;
+  normalized_event_identity: string;
+  title: string;
+  one_line_angle: string;
+  family_label: string;
+  scope_label: string;
+  fatigue_score: number;
+  recently_seen: boolean;
 }
 
 interface RecommendationDiagnostic {
@@ -226,8 +241,11 @@ async function postProcessTopicCandidates(input: {
   existingCacheRecordIds: string[];
 }) {
   const historyUpperBound = new Date(input.createdBefore.getTime() + 1);
-  const deduplicatedCandidates: Omit<RankedRecommendationCandidate, "fatigueScore">[] = [];
-  const seenFingerprints = new Set<string>();
+  const deduplicatedCandidates: Omit<
+    RankedRecommendationCandidate,
+    "fatigueScore" | "recentlySeen"
+  >[] = [];
+  const seenEventIdentities = new Set<string>();
   const duplicateReasons: string[] = [];
 
   for (const [originalIndex, candidate] of input.candidates.entries()) {
@@ -241,15 +259,16 @@ async function postProcessTopicCandidates(input: {
       angle: candidate.one_line_angle,
     });
 
-    if (seenFingerprints.has(fingerprint)) {
+    if (seenEventIdentities.has(eventIdentity)) {
       duplicateReasons.push(
-        `${candidate.title}｜${candidate.one_line_angle} 与已保留候选事件/角度重复`,
+        `${candidate.title}｜${candidate.one_line_angle} 与已保留候选事件 identity 重复`,
       );
       continue;
     }
 
-    seenFingerprints.add(fingerprint);
+    seenEventIdentities.add(eventIdentity);
     deduplicatedCandidates.push({
+      candidateId: `selector_candidate_${originalIndex + 1}`,
       candidate,
       eventId: normalized.event.id,
       eventIdentity,
@@ -334,6 +353,7 @@ async function postProcessTopicCandidates(input: {
       return {
         ...candidate,
         fatigueScore,
+        recentlySeen: fatigueScore > 0,
       };
     })
     .sort(
@@ -358,11 +378,23 @@ async function postProcessTopicCandidates(input: {
     });
   }
 
+  const selectorPool: SelectorPoolCandidate[] = rankings.map((entry) => ({
+    candidate_id: entry.candidateId,
+    normalized_event_identity: entry.eventIdentity,
+    title: entry.candidate.title,
+    one_line_angle: entry.candidate.one_line_angle,
+    family_label: entry.candidate.family_label,
+    scope_label: entry.candidate.scope_label,
+    fatigue_score: entry.fatigueScore,
+    recently_seen: entry.recentlySeen,
+  }));
+
   return {
     candidates: rankings
       .slice(0, TOPIC_CANDIDATE_TARGET_COUNT)
       .map((entry) => entry.candidate),
     rankings: rankings.slice(0, TOPIC_CANDIDATE_TARGET_COUNT),
+    selectorPool,
     diagnostics,
     annotations: [
       ...rankings.map(
