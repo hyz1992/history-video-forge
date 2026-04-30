@@ -95,6 +95,7 @@
 - 所有正式 prompt **必须存放在** `D:/myproject/story-video-forge2/harness/prompts/`。
 - prompt 的元数据必须显式声明 `language: zh-CN`。
 - 不允许把正式 prompt 散落在业务代码、临时 notes 或多个重复文档中。
+- 设计或调整 prompt 约束时，必须优先避免 prompt 冗余；新增约束前要先确认不会与现有约束打架、重复表达或相互抵消。
 - Prompt Registry 的正式规范位于 `D:/myproject/story-video-forge2/harness/docs/prompt-registry-spec.md`。
 
 ---
@@ -112,6 +113,8 @@
 - 不新增阶段去重写当前稳定链路。
 - 不恢复多稿竞赛、多头审校、无限重试。
 - 不让 prompt 漫游到业务代码里。
+- 不在本地后处理中抢做只有 LLM 才能完成的语义判断；本地逻辑只允许做结构、缓存、去重、排序、疲劳惩罚、合同与运行时编排相关工作。
+- 不允许用字符串匹配、关键词黑名单或类似糊弄方式冒充正式语义校验。
 - 不在未定阶段顺手发明 downstream 对象。
 - 不在没有验证的情况下声称完成。
 
