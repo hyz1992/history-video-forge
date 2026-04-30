@@ -3,6 +3,20 @@ import { describe, expect, it } from "vitest";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 
 describe("topic prompt contract", () => {
+  it("registers a zh-CN topic.selector prompt dedicated to final diversity selection", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.selector");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("只从给定候选池中选择");
+  });
+
+  it("keeps selector responsibilities separate from builder responsibilities", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.selector");
+
+    expect(prompt.body).toContain("不得发明新的候选");
+    expect(prompt.body).toContain("优先选择事件不同的候选");
+  });
+
   it("requires candidate-builder to generate a larger raw candidate pool", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 
