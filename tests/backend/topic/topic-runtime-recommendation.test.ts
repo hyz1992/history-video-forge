@@ -1019,6 +1019,46 @@ describe("topic runtime recommendation", () => {
     expect(result.candidates[0]?.title).toBe("event-b");
   });
 
+  it("applies fatigue to repeated event variants that collapse to the same quoted document title", async () => {
+    const db = createDbClient();
+    await seedRecentEventUsage(db, "1215年英国《大宪章》签署");
+    const { gateway } = createGatewayWithSelectorResponses([
+      [
+        createRuntimeCandidate("《大宪章》签署：王权与贵族的权力博弈", "angle-a"),
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+        createRuntimeCandidate("event-d", "angle-d"),
+        createRuntimeCandidate("event-e", "angle-e"),
+        createRuntimeCandidate("event-f", "angle-f"),
+        createRuntimeCandidate("event-g", "angle-g"),
+        createRuntimeCandidate("event-h", "angle-h"),
+      ],
+    ]);
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "quoted document titles should still count as recent fatigue input",
+        coreConflict: "fatigue should still apply when the repeated event collapses to the same quoted title core",
+        strongScene: "country and year prefixes must not let the same charter event bypass recent history",
+        sourceHint: "test",
+        recentUsageHint: "avoid the just-used charter event",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "topic_candidate_fatigue_penalty_applied",
+      }),
+    );
+    expect(result.candidates[0]?.title).toBe("event-b");
+  });
+
   it("applies fatigue even when the recent cache record and recommendation start share the same millisecond", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-29T00:00:00.000Z"));

@@ -289,11 +289,18 @@ function buildFatigueRoot(value: string): string {
 }
 
 function buildStableFatigueIdentity(value: string): string {
-  return normalizeEventIdentityValue(value)
+  const normalized = normalizeEventIdentityValue(value)
     .replace(/^\d{3,4}(?:-\d{2,4})?\u5e74/g, "")
     .replace(/^\u7b2c[\u4e00-\u9fa50-9\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07]+\u6b21/g, "")
     .split(/[:\uff1a]/, 1)[0]
     .trim();
+
+  const quotedTitle = normalized.match(/《([^》]+)》/u)?.[1]?.trim();
+  if (quotedTitle) {
+    return quotedTitle;
+  }
+
+  return normalized;
 }
 
 function buildStableFatigueRoot(value: string): string {
