@@ -232,12 +232,18 @@ function buildRecommendationSeed(
 
   return {
     canonical_name: `${eraLabel}：${tensionLabel}历史事件推荐`,
-    summary: `请围绕${eraLabel}中具备${tensionLabel}特征的历史事件，优先推荐适合直接进入文案阶段的主题。`,
-    core_conflict: `重点筛选能体现${tensionLabel}、并且冲突关系清晰的历史事件。`,
-    strong_scene: `优先寻找发生在${eraLabel}、能够快速建立场面压迫感或戏剧反转的关键场景。`,
+    summary: `请围绕${eraLabel}中具备${tensionLabel}特征的具体历史事件生成候选，禁止返回“王朝更迭”“古代战争”“百家争鸣”这类泛主题，优先推荐适合直接进入文案阶段的单事件主题。`,
+    core_conflict: `重点筛选能体现${tensionLabel}、并且冲突关系清晰、人物立场可对撞的具体历史事件。`,
+    strong_scene: `优先寻找发生在${eraLabel}、具备宫廷裁决、当众对抗、临阵翻盘、焚毁文献、政变处决等强场景的关键历史瞬间。`,
     source_hint: `${eraLabel}相关史事与人物记载`,
     recent_usage_hint: `${eraLabel}范围内近期未重复的候选优先`,
-    tags: [normalizeTag(filters.era), normalizeTag(filters.tension), "system_recommendation"],
+    tags: [
+      normalizeTag(filters.era),
+      normalizeTag(filters.tension),
+      "system_recommendation",
+      "single_event",
+      "concrete_scene",
+    ],
   };
 }
 

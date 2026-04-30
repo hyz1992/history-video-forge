@@ -42,9 +42,20 @@ describe("topic store recommendation input", () => {
       strong_scene: expect.stringContaining("元明清"),
       source_hint: expect.stringContaining("元明清"),
       recent_usage_hint: expect.stringContaining("元明清"),
-      tags: expect.arrayContaining(["late_imperial", "hook_first", "system_recommendation"]),
+      tags: expect.arrayContaining([
+        "late_imperial",
+        "hook_first",
+        "system_recommendation",
+        "single_event",
+        "concrete_scene",
+      ]),
     });
     expect(body.canonical_name).not.toContain("晏子使楚");
+    expect(body.summary).toContain("具体");
+    expect(body.summary).toContain("历史事件");
+    expect(body.summary).toContain("禁止返回");
+    expect(body.strong_scene).toContain("宫廷");
+    expect(body.strong_scene).toContain("当众对抗");
   });
 
   it("throws instead of treating non-2xx topic recommendation responses as successful candidates", async () => {
