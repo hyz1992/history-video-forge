@@ -5,6 +5,7 @@ import type { BuildTopicCandidatesInput } from "../../modules/topic/topic-candid
 import type { GraphTraceNodeSummary } from "./graph-trace.js";
 
 export const TOPIC_CANDIDATE_TARGET_COUNT = 3;
+export const TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT = 8;
 
 export interface TopicRecommendationGraphDependencies {
   invokeStructuredPrompt: <T>(input: {
@@ -196,10 +197,13 @@ async function applyRuntimeCandidates(input: {
     .map((candidate) =>
       normalizeTopicCandidateCard(candidate as Record<string, unknown>, runtime),
     )
-    .slice(0, TOPIC_CANDIDATE_TARGET_COUNT);
+    .slice(0, TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT);
 
   if (!append) {
-    await persistTopicCandidates(runtime, normalizedCandidates);
+    await persistTopicCandidates(
+      runtime,
+      normalizedCandidates.slice(0, TOPIC_CANDIDATE_TARGET_COUNT),
+    );
     runtime.candidates = normalizedCandidates;
     return;
   }
@@ -224,10 +228,13 @@ async function applyRuntimeCandidates(input: {
     return true;
   });
   const availableSlots =
-    TOPIC_CANDIDATE_TARGET_COUNT - runtime.candidates.length;
+    TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT - runtime.candidates.length;
   const nextCandidates = repairCandidates.slice(0, Math.max(availableSlots, 0));
 
-  await persistTopicCandidates(runtime, nextCandidates);
+  await persistTopicCandidates(
+    runtime,
+    nextCandidates.slice(0, TOPIC_CANDIDATE_TARGET_COUNT),
+  );
   runtime.candidates = [...runtime.candidates, ...nextCandidates];
 }
 
@@ -265,7 +272,7 @@ export function createTopicRecommendationNodes(input: {
         append: false,
       });
       runtime.slotsInsufficient =
-        runtime.candidates.length < TOPIC_CANDIDATE_TARGET_COUNT;
+        runtime.candidates.length < TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT;
       const node = createTraceNode(runtime, "topic-candidate-generate");
 
       return {
@@ -286,7 +293,7 @@ export function createTopicRecommendationNodes(input: {
         append: true,
       });
       runtime.slotsInsufficient =
-        runtime.candidates.length < TOPIC_CANDIDATE_TARGET_COUNT;
+        runtime.candidates.length < TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT;
       const node = createTraceNode(runtime, "topic-candidate-repair");
 
       return {

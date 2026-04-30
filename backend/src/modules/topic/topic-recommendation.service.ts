@@ -16,7 +16,10 @@ import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compati
 import type { StructuredPromptProvider } from "../../runtime/llm/provider-contract.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 import { runTopicRecommendationGraph } from "../../runtime/orchestration/topic-recommendation-graph.js";
-import { TOPIC_CANDIDATE_TARGET_COUNT } from "../../runtime/orchestration/topic-recommendation-nodes.js";
+import {
+  TOPIC_CANDIDATE_TARGET_COUNT,
+  TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT,
+} from "../../runtime/orchestration/topic-recommendation-nodes.js";
 import {
   createProjectRunInteractionLogWriter,
   getProjectStorageProfile,
@@ -96,6 +99,7 @@ export async function recommendTopicCandidatesWithTrace(
   if (!options?.projectId) {
     return {
       ...result,
+      raw_candidates: result.candidates,
       candidates: postProcessed.candidates,
       diagnostics: finalDiagnostics,
     };
@@ -131,6 +135,7 @@ export async function recommendTopicCandidatesWithTrace(
 
   return {
     ...result,
+    raw_candidates: result.candidates,
     candidates: postProcessed.candidates,
     diagnostics: finalDiagnostics,
     topic_run: {
@@ -354,8 +359,10 @@ async function postProcessTopicCandidates(input: {
   }
 
   return {
-    candidates: rankings.map((entry) => entry.candidate),
-    rankings,
+    candidates: rankings
+      .slice(0, TOPIC_CANDIDATE_TARGET_COUNT)
+      .map((entry) => entry.candidate),
+    rankings: rankings.slice(0, TOPIC_CANDIDATE_TARGET_COUNT),
     diagnostics,
     annotations: [
       ...rankings.map(
@@ -427,7 +434,7 @@ function enrichDiagnosticReason(
   if (check.code === "topic_candidate_repair_triggered") {
     return {
       ...check,
-      reason: `首轮候选不足 ${TOPIC_CANDIDATE_TARGET_COUNT} 个，已触发补位回填`,
+      reason: `首轮原始候选不足 ${TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT} 个，已触发补位回填`,
     };
   }
 

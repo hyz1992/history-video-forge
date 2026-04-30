@@ -3,6 +3,12 @@ import { describe, expect, it } from "vitest";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 
 describe("topic prompt contract", () => {
+  it("requires candidate-builder to generate a larger raw candidate pool", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.body).toContain("输出 8 个候选");
+  });
+
   it("demands concrete single-event recommendation topics instead of abstract buckets", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 

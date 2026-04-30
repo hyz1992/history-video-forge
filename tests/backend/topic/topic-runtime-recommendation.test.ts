@@ -212,6 +212,11 @@ describe("topic runtime recommendation", () => {
         createRuntimeCandidate("晏子使楚", "第一槽位"),
         createRuntimeCandidate("张巡守城", "第二槽位"),
         createRuntimeCandidate("于谦守京", "第三槽位"),
+        createRuntimeCandidate("李牧守边", "第四槽位"),
+        createRuntimeCandidate("冯异定关中", "第五槽位"),
+        createRuntimeCandidate("寇准守澶渊", "第六槽位"),
+        createRuntimeCandidate("卫青奇袭", "第七槽位"),
+        createRuntimeCandidate("岳飞郾城", "第八槽位"),
       ]),
     );
     const gateway = createLlmGateway({
@@ -265,6 +270,48 @@ describe("topic runtime recommendation", () => {
     expect(cacheRecords[0]).not.toHaveProperty("title");
   });
 
+  it("keeps raw recommendation pool larger than final delivery size", async () => {
+    const db = createDbClient();
+    const invokeApi = vi.fn(async () =>
+      JSON.stringify([
+        createRuntimeCandidate("event-a", "angle-a"),
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+        createRuntimeCandidate("event-d", "angle-d"),
+        createRuntimeCandidate("event-e", "angle-e"),
+        createRuntimeCandidate("event-f", "angle-f"),
+        createRuntimeCandidate("event-g", "angle-g"),
+        createRuntimeCandidate("event-h", "angle-h"),
+      ]),
+    );
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "builder should preserve a larger raw pool for downstream selection",
+        coreConflict: "raw pool must stay larger than the final delivered set",
+        strongScene: "the selector stage needs more than three raw candidates to choose from",
+        sourceHint: "test",
+        recentUsageHint: "no recent repeats",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(result.raw_candidates).toHaveLength(8);
+    expect(result.candidates).toHaveLength(3);
+  });
+
   it("repairs minimally malformed runtime output before validating TopicCandidateCard", async () => {
     const db = createDbClient();
     const invokeApi = vi.fn(
@@ -272,7 +319,12 @@ describe("topic runtime recommendation", () => {
 [
   ${JSON.stringify(createRuntimeCandidate("晏子使楚", "第一槽位"))},
   ${JSON.stringify(createRuntimeCandidate("张巡守城", "第二槽位"))},
-  ${JSON.stringify(createRuntimeCandidate("于谦守京", "第三槽位"))}
+  ${JSON.stringify(createRuntimeCandidate("于谦守京", "第三槽位"))},
+  ${JSON.stringify(createRuntimeCandidate("李牧守边", "第四槽位"))},
+  ${JSON.stringify(createRuntimeCandidate("冯异定关中", "第五槽位"))},
+  ${JSON.stringify(createRuntimeCandidate("寇准守澶渊", "第六槽位"))},
+  ${JSON.stringify(createRuntimeCandidate("卫青奇袭", "第七槽位"))},
+  ${JSON.stringify(createRuntimeCandidate("岳飞郾城", "第八槽位"))}
 ]
 \`\`\``,
     );
@@ -573,6 +625,11 @@ describe("topic runtime recommendation", () => {
           createRuntimeCandidate("event-a", "angle-a"),
           createRuntimeCandidate("event-a", "angle-a-alt-1"),
           createRuntimeCandidate("event-a", "angle-a-alt-2"),
+          createRuntimeCandidate("event-a", "angle-a-alt-3"),
+          createRuntimeCandidate("event-a", "angle-a-alt-4"),
+          createRuntimeCandidate("event-a", "angle-a-alt-5"),
+          createRuntimeCandidate("event-a", "angle-a-alt-6"),
+          createRuntimeCandidate("event-a", "angle-a-alt-7"),
         ]),
       )
       .mockResolvedValueOnce(
@@ -580,6 +637,11 @@ describe("topic runtime recommendation", () => {
           createRuntimeCandidate("event-a", "angle-a"),
           createRuntimeCandidate("event-b", "angle-b"),
           createRuntimeCandidate("event-c", "angle-c"),
+          createRuntimeCandidate("event-d", "angle-d"),
+          createRuntimeCandidate("event-e", "angle-e"),
+          createRuntimeCandidate("event-f", "angle-f"),
+          createRuntimeCandidate("event-g", "angle-g"),
+          createRuntimeCandidate("event-h", "angle-h"),
         ]),
       );
     const gateway = createLlmGateway({
