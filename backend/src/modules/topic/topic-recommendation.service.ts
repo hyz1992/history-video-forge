@@ -235,8 +235,6 @@ interface RankedRecommendationCandidate {
   candidate: RecommendationCandidate;
   eventId: string;
   eventIdentity: string;
-  fatigueIdentity: string;
-  fatigueRoot: string;
   fingerprint: string;
   originalIndex: number;
   fatigueScore: number;
@@ -269,54 +267,6 @@ type TopicRecommendationProject = NonNullable<
   DbClient["projects"] extends Map<string, infer T> ? T : never
 >;
 
-function buildFatigueIdentity(value: string): string {
-  return normalizeEventIdentityValue(value)
-    .replace(/^\d{3,4}(?:-\d{2,4})?年/g, "")
-    .replace(/^第[一二三四五六七八九十百千万0-9]+次/g, "")
-    .split(/[：:]/, 1)[0]
-    .trim();
-}
-
-function buildFatigueRoot(value: string): string {
-  const normalized = buildFatigueIdentity(value).replace(/\s+/g, "");
-  const chars = Array.from(normalized);
-
-  if (chars.length <= 4) {
-    return normalized;
-  }
-
-  return chars.slice(0, 4).join("");
-}
-
-function buildStableFatigueIdentity(value: string): string {
-  const normalized = normalizeEventIdentityValue(value)
-    .replace(/^\d{3,4}(?:-\d{2,4})?\u5e74/g, "")
-    .replace(/^\u7b2c[\u4e00-\u9fa50-9\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u767e\u5343\u4e07]+\u6b21/g, "")
-    .split(/[:\uff1a]/, 1)[0]
-    .trim();
-
-  const quotedTitle = normalized.match(/《([^》]+)》/u)?.[1]?.trim();
-  if (quotedTitle) {
-    return quotedTitle;
-  }
-
-  return normalized;
-}
-
-function buildStableFatigueRoot(value: string): string {
-  const normalized = buildStableFatigueIdentity(value).replace(/\s+/g, "");
-  if (/^[a-z0-9-]+$/i.test(normalized)) {
-    return normalized;
-  }
-
-  const chars = Array.from(normalized);
-  if (chars.length <= 3) {
-    return normalized;
-  }
-
-  return chars.slice(0, 3).join("");
-}
-
 async function postProcessTopicCandidates(input: {
   db: DbClient;
   candidates: RecommendationCandidate[];
@@ -338,8 +288,6 @@ async function postProcessTopicCandidates(input: {
       sourceType: "system_recommendation",
     });
     const eventIdentity = normalizeEventIdentityValue(normalized.event.canonicalName);
-    const fatigueIdentity = buildStableFatigueIdentity(normalized.event.canonicalName);
-    const fatigueRoot = buildStableFatigueRoot(normalized.event.canonicalName);
     const fingerprint = buildEventIdentityFingerprint({
       eventIdentity,
       angle: candidate.one_line_angle,
@@ -358,8 +306,6 @@ async function postProcessTopicCandidates(input: {
       candidate,
       eventId: normalized.event.id,
       eventIdentity,
-      fatigueIdentity,
-      fatigueRoot,
       fingerprint,
       originalIndex,
     });
@@ -381,10 +327,8 @@ async function postProcessTopicCandidates(input: {
     : [];
   const cacheFatigueByEventId = new Map<string, number>();
   const cacheFatigueByIdentity = new Map<string, number>();
-  const cacheFatigueByRoot = new Map<string, number>();
   const roundFatigueByEventId = new Map<string, number>();
   const roundFatigueByIdentity = new Map<string, number>();
-  const roundFatigueByRoot = new Map<string, number>();
 
   for (const record of recentCandidates) {
     if (record.eventRegistryEntryId) {
@@ -396,15 +340,9 @@ async function postProcessTopicCandidates(input: {
 
     const [eventIdentity] = record.fingerprint.split("::");
     if (eventIdentity) {
-      const fatigueIdentity = buildStableFatigueIdentity(eventIdentity);
-      const fatigueRoot = buildStableFatigueRoot(eventIdentity);
       cacheFatigueByIdentity.set(
-        fatigueIdentity,
-        (cacheFatigueByIdentity.get(fatigueIdentity) ?? 0) + 1,
-      );
-      cacheFatigueByRoot.set(
-        fatigueRoot,
-        (cacheFatigueByRoot.get(fatigueRoot) ?? 0) + 1,
+        eventIdentity,
+        (cacheFatigueByIdentity.get(eventIdentity) ?? 0) + 1,
       );
     }
   }
@@ -420,16 +358,10 @@ async function postProcessTopicCandidates(input: {
       if (!eventIdentity) {
         continue;
       }
-      const fatigueIdentity = buildStableFatigueIdentity(eventIdentity);
-      const fatigueRoot = buildStableFatigueRoot(eventIdentity);
 
       roundFatigueByIdentity.set(
-        fatigueIdentity,
-        (roundFatigueByIdentity.get(fatigueIdentity) ?? 0) + 1,
-      );
-      roundFatigueByRoot.set(
-        fatigueRoot,
-        (roundFatigueByRoot.get(fatigueRoot) ?? 0) + 1,
+        eventIdentity,
+        (roundFatigueByIdentity.get(eventIdentity) ?? 0) + 1,
       );
     }
   }
@@ -439,13 +371,11 @@ async function postProcessTopicCandidates(input: {
     .map((candidate) => {
       const cacheFatigueScore = Math.max(
         cacheFatigueByEventId.get(candidate.eventId) ?? 0,
-        cacheFatigueByIdentity.get(candidate.fatigueIdentity) ?? 0,
-        cacheFatigueByRoot.get(candidate.fatigueRoot) ?? 0,
+        cacheFatigueByIdentity.get(candidate.eventIdentity) ?? 0,
       );
       const roundFatigueScore = Math.max(
         roundFatigueByEventId.get(candidate.eventId) ?? 0,
-        roundFatigueByIdentity.get(candidate.fatigueIdentity) ?? 0,
-        roundFatigueByRoot.get(candidate.fatigueRoot) ?? 0,
+        roundFatigueByIdentity.get(candidate.eventIdentity) ?? 0,
       );
       const fatigueScore = Math.max(cacheFatigueScore, roundFatigueScore);
       if (fatigueScore > 0) {
