@@ -23,6 +23,8 @@ status: active
 
 - 输出 `TopicCandidateCard[]`
 - 先输出 8 个候选，作为原始候选池
+- 每个候选都必须给出 `event_identity`
+- `event_identity` 只用于标识“这是哪个事件”，不能把包装文案、角度句式或脚本化表达写进这个字段
 - 每个候选都必须完整给出最小字段
 - 每个候选都必须带 `viral_rubric`
 

@@ -12,6 +12,7 @@ import {
 describe("shared schema contracts", () => {
   it("parses the topic and script shared contracts", () => {
     const candidate = TopicCandidateCard.parse({
+      event_identity: "晏子使楚",
       title: "晏子使楚",
       one_line_angle: "楚王不是只压了晏子一次，而是连压三次。",
       family_label: "君臣博弈",
@@ -152,6 +153,7 @@ describe("shared schema contracts", () => {
   it("restricts viral rubric and reveal position enum values", () => {
     expect(() =>
       TopicCandidateCard.parse({
+        event_identity: "test",
         title: "test",
         one_line_angle: "angle",
         family_label: "family",

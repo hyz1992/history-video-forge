@@ -14,6 +14,7 @@ export const ViralRubric = z
 
 export const TopicCandidateCard = z
   .object({
+    event_identity: z.string().min(1),
     title: z.string().min(1),
     one_line_angle: z.string().min(1),
     family_label: z.string().min(1),
