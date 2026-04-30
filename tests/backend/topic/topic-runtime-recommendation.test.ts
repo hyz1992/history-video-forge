@@ -695,6 +695,93 @@ describe("topic runtime recommendation", () => {
     ).rejects.toThrow("topic_selector_invalid_selection");
   });
 
+  it("triggers one controlled repair when selector pool cannot supply three valid final picks", async () => {
+    const db = createDbClient();
+    const { gateway } = createGatewayWithSelectorResponses(
+      [
+        [
+          createRuntimeCandidate("event-a", "angle-a"),
+          createRuntimeCandidate("event-b", "angle-b"),
+          createRuntimeCandidate("event-c", "angle-c"),
+          createRuntimeCandidate("event-d", "angle-d"),
+          createRuntimeCandidate("event-e", "angle-e"),
+          createRuntimeCandidate("event-f", "angle-f"),
+          createRuntimeCandidate("event-g", "angle-g"),
+          createRuntimeCandidate("event-h", "angle-h"),
+        ],
+      ],
+      [
+        ["selector_candidate_4", "selector_candidate_2"],
+        ["selector_candidate_6"],
+      ],
+    );
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "selector repair should backfill missing valid picks once",
+        coreConflict: "the first selector pass returns too few valid ids",
+        strongScene: "repair should fill the last missing slot without replacing the valid kept picks",
+        sourceHint: "test",
+        recentUsageHint: "none",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({ code: "topic_selector_repair_triggered" }),
+    );
+    expect(result.candidates.map((candidate) => candidate.title)).toEqual([
+      "event-d",
+      "event-b",
+      "event-f",
+    ]);
+  });
+
+  it("does not retry selector repairs indefinitely", async () => {
+    const db = createDbClient();
+    const { gateway } = createGatewayWithSelectorResponses(
+      [
+        [
+          createRuntimeCandidate("event-a", "angle-a"),
+          createRuntimeCandidate("event-b", "angle-b"),
+          createRuntimeCandidate("event-c", "angle-c"),
+          createRuntimeCandidate("event-d", "angle-d"),
+          createRuntimeCandidate("event-e", "angle-e"),
+          createRuntimeCandidate("event-f", "angle-f"),
+          createRuntimeCandidate("event-g", "angle-g"),
+          createRuntimeCandidate("event-h", "angle-h"),
+        ],
+      ],
+      [
+        ["selector_candidate_4", "selector_candidate_2"],
+        ["selector_candidate_6"],
+      ],
+    );
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "selector repair should stop after one extra attempt",
+        coreConflict: "repair count must stay bounded at one additional selector pass",
+        strongScene: "the trace should show at most one repair attempt",
+        sourceHint: "test",
+        recentUsageHint: "none",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(result.selector_trace?.repair_attempts ?? 0).toBeLessThanOrEqual(1);
+  });
+
   it("demotes recently used events through a fatigue penalty before returning final candidates", async () => {
     const db = createDbClient();
     await seedRecentEventUsage(db, "event-a");

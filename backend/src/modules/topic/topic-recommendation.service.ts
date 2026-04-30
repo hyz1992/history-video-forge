@@ -96,11 +96,12 @@ export async function recommendTopicCandidatesWithTrace(
         candidates: postProcessed.candidates,
         rankings: postProcessed.rankings,
         selectorTrace: null,
+        diagnostics: [],
       };
   const finalDiagnostics = finalizeRecommendationDiagnostics({
     checks: result.diagnostics.checks,
     finalCandidateCount: selected.candidates.length,
-    additionalChecks: postProcessed.diagnostics,
+    additionalChecks: [...postProcessed.diagnostics, ...selected.diagnostics],
   });
 
   if (project) {
@@ -253,6 +254,7 @@ interface SelectorPoolCandidate {
 
 interface SelectorTrace {
   selected_candidate_ids: string[];
+  repair_attempts: number;
 }
 
 interface RecommendationDiagnostic {
@@ -496,27 +498,81 @@ async function selectFinalCandidatesWithTrace(input: {
     write: (...args: unknown[]) => Promise<void> | void;
   };
 }) {
-  const rawDecision = await input.llmGateway.invokeStructuredPrompt<unknown>({
-    promptId: "topic.selector",
-    input: {
-      recommendation_seed: input.input,
-      selector_pool: input.selectorPool,
-    },
-    interactionLogWriter: input.interactionLogWriter,
-  });
-  const decision = normalizeSelectorDecision(rawDecision);
-  const selection = validateSelectorDecision({
-    decision,
+  const diagnostics: RecommendationDiagnostic[] = [];
+  const firstDecision = normalizeSelectorDecision(
+    await input.llmGateway.invokeStructuredPrompt<unknown>({
+      promptId: "topic.selector",
+      input: {
+        recommendation_seed: input.input,
+        selector_pool: input.selectorPool,
+      },
+      interactionLogWriter: input.interactionLogWriter,
+    }),
+  );
+  const firstPass = inspectSelectorDecision({
+    decision: firstDecision,
     selectorPool: input.selectorPool,
     rankings: input.rankings,
   });
 
+  let finalSelection = firstPass.selected;
+  let finalIds = [...firstPass.selectedIds];
+  let repairAttempts = 0;
+
+  if (firstPass.missingSlotCount > 0) {
+    repairAttempts = 1;
+    diagnostics.push({
+      code: "topic_selector_repair_triggered",
+      level: "info",
+      reason: `selector 首轮仅返回 ${firstPass.selectedIds.length} 个有效候选，已触发一次受控补位`,
+    });
+
+    const repairDecision = normalizeSelectorDecision(
+      await input.llmGateway.invokeStructuredPrompt<unknown>({
+        promptId: "topic.selector",
+        input: {
+          recommendation_seed: input.input,
+          selector_pool: input.selectorPool,
+          repair_context: {
+            missing_slot_count: firstPass.missingSlotCount,
+            kept_candidate_ids: firstPass.selectedIds,
+            excluded_candidate_ids: firstPass.excludedCandidateIds,
+            excluded_event_identities: firstPass.excludedEventIdentities,
+          },
+        },
+        interactionLogWriter: input.interactionLogWriter,
+      }),
+    );
+
+    const repairPass = inspectSelectorDecision({
+      decision: repairDecision,
+      selectorPool: input.selectorPool,
+      rankings: input.rankings,
+      allowedCount: firstPass.missingSlotCount,
+      excludedCandidateIds: new Set(firstPass.excludedCandidateIds),
+      excludedEventIdentities: new Set(firstPass.excludedEventIdentities),
+    });
+
+    if (repairPass.missingSlotCount > 0) {
+      throw new Error("topic_selector_invalid_selection");
+    }
+
+    finalSelection = [...firstPass.selected, ...repairPass.selected];
+    finalIds = [...firstPass.selectedIds, ...repairPass.selectedIds];
+  }
+
+  if (finalSelection.length !== TOPIC_CANDIDATE_TARGET_COUNT) {
+    throw new Error("topic_selector_invalid_selection");
+  }
+
   return {
-    candidates: selection.map((entry) => entry.candidate),
-    rankings: selection,
+    candidates: finalSelection.map((entry) => entry.candidate),
+    rankings: finalSelection,
     selectorTrace: {
-      selected_candidate_ids: decision.selected_candidate_ids,
+      selected_candidate_ids: finalIds,
+      repair_attempts: repairAttempts,
     } satisfies SelectorTrace,
+    diagnostics,
   };
 }
 
@@ -551,34 +607,60 @@ function normalizeSelectorDecision(rawOutput: unknown): TopicSelectorDecision {
   };
 }
 
-function validateSelectorDecision(input: {
+function inspectSelectorDecision(input: {
   decision: TopicSelectorDecision;
   selectorPool: SelectorPoolCandidate[];
   rankings: RankedRecommendationCandidate[];
+  allowedCount?: number;
+  excludedCandidateIds?: Set<string>;
+  excludedEventIdentities?: Set<string>;
 }) {
-  if (input.decision.selected_candidate_ids.length !== TOPIC_CANDIDATE_TARGET_COUNT) {
-    throw new Error("topic_selector_invalid_selection");
-  }
-
   const rankingsById = new Map(
     input.rankings.map((candidate) => [candidate.candidateId, candidate] as const),
   );
-  const selected = input.decision.selected_candidate_ids.map((candidateId) => {
+  const knownIds = new Set(input.selectorPool.map((candidate) => candidate.candidate_id));
+  const excludedCandidateIds = input.excludedCandidateIds ?? new Set<string>();
+  const excludedEventIdentities = input.excludedEventIdentities ?? new Set<string>();
+  const selected: RankedRecommendationCandidate[] = [];
+  const selectedIds: string[] = [];
+
+  for (const candidateId of input.decision.selected_candidate_ids) {
+    if (!knownIds.has(candidateId) || excludedCandidateIds.has(candidateId)) {
+      throw new Error("topic_selector_invalid_selection");
+    }
+
     const match = rankingsById.get(candidateId);
     if (!match) {
       throw new Error("topic_selector_invalid_selection");
     }
-    return match;
-  });
 
-  const knownIds = new Set(input.selectorPool.map((candidate) => candidate.candidate_id));
-  for (const candidateId of input.decision.selected_candidate_ids) {
-    if (!knownIds.has(candidateId)) {
+    if (selectedIds.includes(candidateId)) {
       throw new Error("topic_selector_invalid_selection");
     }
+
+    if (excludedEventIdentities.has(match.eventIdentity)) {
+      throw new Error("topic_selector_invalid_selection");
+    }
+
+    selected.push(match);
+    selectedIds.push(candidateId);
+    excludedCandidateIds.add(candidateId);
+    excludedEventIdentities.add(match.eventIdentity);
   }
 
-  return selected;
+  const targetCount = input.allowedCount ?? TOPIC_CANDIDATE_TARGET_COUNT;
+
+  if (selected.length > targetCount) {
+    throw new Error("topic_selector_invalid_selection");
+  }
+
+  return {
+    selected,
+    selectedIds,
+    missingSlotCount: targetCount - selected.length,
+    excludedCandidateIds: [...excludedCandidateIds],
+    excludedEventIdentities: [...excludedEventIdentities],
+  };
 }
 
 function enrichDiagnosticReason(
