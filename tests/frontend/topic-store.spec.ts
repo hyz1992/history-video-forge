@@ -9,6 +9,7 @@ describe("topic store recommendation input", () => {
 
   it("sends canonical recommendation seed fields derived from system filters", async () => {
     const fetchMock = vi.fn(async () => ({
+      ok: true,
       json: async () => ({
         project_id: "project-1",
         candidates: [],
@@ -42,20 +43,27 @@ describe("topic store recommendation input", () => {
       strong_scene: expect.stringContaining("元明清"),
       source_hint: expect.stringContaining("元明清"),
       recent_usage_hint: expect.stringContaining("元明清"),
-      tags: expect.arrayContaining([
+    });
+    expect(body.tags).toEqual(
+      expect.arrayContaining([
         "late_imperial",
         "hook_first",
         "system_recommendation",
         "single_event",
         "concrete_scene",
+        "strict_era_boundary",
       ]),
-    });
+    );
     expect(body.canonical_name).not.toContain("晏子使楚");
     expect(body.summary).toContain("具体");
     expect(body.summary).toContain("历史事件");
     expect(body.summary).toContain("禁止返回");
+    expect(body.summary).toContain("不得超出元明清范围");
     expect(body.strong_scene).toContain("宫廷");
     expect(body.strong_scene).toContain("当众对抗");
+    expect(body.strong_scene).toContain("必须发生在元明清范围内");
+    expect(body.source_hint).toContain("超出元明清");
+    expect(body.recent_usage_hint).toContain("严格排除超出元明清范围");
   });
 
   it("throws instead of treating non-2xx topic recommendation responses as successful candidates", async () => {
