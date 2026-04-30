@@ -48,6 +48,50 @@ function createRuntimeCandidate(title: string, angle: string) {
   };
 }
 
+function createSelectorDecision(...candidateIds: string[]) {
+  return {
+    selected_candidate_ids: candidateIds,
+  };
+}
+
+function createGatewayWithSelectorResponses(
+  builderOutputs: Array<unknown>,
+  selectorOutputs?: Array<string[]>,
+) {
+  let builderCallIndex = 0;
+  let selectorCallIndex = 0;
+  const invokeApi = vi.fn(async ({ operationName, input }: { operationName: string; input: { selector_pool?: Array<{ candidate_id: string }> } }) => {
+    if (operationName === "topic.selector") {
+      const selectedIds =
+        selectorOutputs?.[selectorCallIndex] ??
+        (input.selector_pool ?? [])
+          .slice(0, 3)
+          .map((candidate) => candidate.candidate_id);
+      selectorCallIndex += 1;
+      return JSON.stringify(createSelectorDecision(...selectedIds));
+    }
+
+    const builderOutput = builderOutputs[builderCallIndex];
+    builderCallIndex += 1;
+
+    return typeof builderOutput === "string"
+      ? builderOutput
+      : JSON.stringify(builderOutput);
+  });
+  const gateway = createLlmGateway({
+    registry: createPromptRegistry(),
+    provider: createOpenAiCompatibleProvider({
+      model: "glm-4.5",
+      invokeApi,
+    }),
+  });
+
+  return {
+    gateway,
+    invokeApi,
+  };
+}
+
 function uniqueEventFingerprints(
   candidates: Array<{ title: string; one_line_angle: string }>,
 ) {
@@ -217,8 +261,8 @@ describe("topic runtime recommendation", () => {
 
   it("drives candidate generation through the formal prompt registry and caches runtime fields", async () => {
     const db = createDbClient();
-    const invokeApi = vi.fn(async () =>
-      JSON.stringify([
+    const { gateway, invokeApi } = createGatewayWithSelectorResponses([
+      [
         createRuntimeCandidate("晏子使楚", "第一槽位"),
         createRuntimeCandidate("张巡守城", "第二槽位"),
         createRuntimeCandidate("于谦守京", "第三槽位"),
@@ -227,15 +271,8 @@ describe("topic runtime recommendation", () => {
         createRuntimeCandidate("寇准守澶渊", "第六槽位"),
         createRuntimeCandidate("卫青奇袭", "第七槽位"),
         createRuntimeCandidate("岳飞郾城", "第八槽位"),
-      ]),
-    );
-    const gateway = createLlmGateway({
-      registry: createPromptRegistry(),
-      provider: createOpenAiCompatibleProvider({
-        model: "glm-4.5",
-        invokeApi,
-      }),
-    });
+      ],
+    ]);
 
     const candidates = await (recommendTopicCandidates as any)(
       db,
@@ -253,7 +290,7 @@ describe("topic runtime recommendation", () => {
       },
     );
 
-    expect(invokeApi).toHaveBeenCalledTimes(1);
+    expect(invokeApi).toHaveBeenCalledTimes(2);
     expect(invokeApi).toHaveBeenCalledWith(
       expect.objectContaining({
         operationName: "topic.candidate-builder",
@@ -282,8 +319,8 @@ describe("topic runtime recommendation", () => {
 
   it("keeps raw recommendation pool larger than final delivery size", async () => {
     const db = createDbClient();
-    const invokeApi = vi.fn(async () =>
-      JSON.stringify([
+    const { gateway } = createGatewayWithSelectorResponses([
+      [
         createRuntimeCandidate("event-a", "angle-a"),
         createRuntimeCandidate("event-b", "angle-b"),
         createRuntimeCandidate("event-c", "angle-c"),
@@ -292,15 +329,8 @@ describe("topic runtime recommendation", () => {
         createRuntimeCandidate("event-f", "angle-f"),
         createRuntimeCandidate("event-g", "angle-g"),
         createRuntimeCandidate("event-h", "angle-h"),
-      ]),
-    );
-    const gateway = createLlmGateway({
-      registry: createPromptRegistry(),
-      provider: createOpenAiCompatibleProvider({
-        model: "glm-4.5",
-        invokeApi,
-      }),
-    });
+      ],
+    ]);
 
     const result = await recommendTopicCandidatesWithTrace(
       db,
@@ -324,8 +354,8 @@ describe("topic runtime recommendation", () => {
 
   it("repairs minimally malformed runtime output before validating TopicCandidateCard", async () => {
     const db = createDbClient();
-    const invokeApi = vi.fn(
-      async () => `\`\`\`json
+    const { gateway, invokeApi } = createGatewayWithSelectorResponses([
+      `\`\`\`json
 [
   ${JSON.stringify(createRuntimeCandidate("晏子使楚", "第一槽位"))},
   ${JSON.stringify(createRuntimeCandidate("张巡守城", "第二槽位"))},
@@ -337,14 +367,7 @@ describe("topic runtime recommendation", () => {
   ${JSON.stringify(createRuntimeCandidate("岳飞郾城", "第八槽位"))}
 ]
 \`\`\``,
-    );
-    const gateway = createLlmGateway({
-      registry: createPromptRegistry(),
-      provider: createOpenAiCompatibleProvider({
-        model: "glm-4.5",
-        invokeApi,
-      }),
-    });
+    ]);
 
     const candidates = await (recommendTopicCandidates as any)(
       db,
@@ -361,30 +384,21 @@ describe("topic runtime recommendation", () => {
       },
     );
 
-    expect(invokeApi).toHaveBeenCalledTimes(1);
+    expect(invokeApi).toHaveBeenCalledTimes(2);
     expect(() => TopicCandidateCard.parse(candidates[0])).not.toThrow();
   });
 
   it("performs a single repair call when the first runtime response contains fewer than three candidates", async () => {
     const db = createDbClient();
-    const invokeApi = vi
-      .fn()
-      .mockResolvedValueOnce(
-        JSON.stringify([createRuntimeCandidate("晏子使楚", "第一槽位")]),
-      )
-      .mockResolvedValueOnce(
-        JSON.stringify([
+    const { gateway, invokeApi } = createGatewayWithSelectorResponses([
+      [createRuntimeCandidate("晏子使楚", "第一槽位")],
+      [
           createRuntimeCandidate("张巡守城", "第二槽位"),
           createRuntimeCandidate("于谦守京", "第三槽位"),
-        ]),
-      );
-    const gateway = createLlmGateway({
-      registry: createPromptRegistry(),
-      provider: createOpenAiCompatibleProvider({
-        model: "glm-4.5",
-        invokeApi,
-      }),
-    });
+        ],
+      ],
+      [["selector_candidate_1", "selector_candidate_2", "selector_candidate_3"]],
+    );
 
     const result = await recommendTopicCandidatesWithTrace(
       db,
@@ -402,7 +416,7 @@ describe("topic runtime recommendation", () => {
       },
     );
 
-    expect(invokeApi).toHaveBeenCalledTimes(2);
+    expect(invokeApi).toHaveBeenCalledTimes(3);
     expect(result.candidates).toHaveLength(3);
     expect(result.diagnostics.checks).toContainEqual(
       expect.objectContaining({
@@ -499,8 +513,8 @@ describe("topic runtime recommendation", () => {
 
   it("only keeps one entry per normalized event identity in the selector pool", async () => {
     const db = createDbClient();
-    const invokeApi = vi.fn(async () =>
-      JSON.stringify([
+    const { gateway } = createGatewayWithSelectorResponses([
+      [
         createRuntimeCandidate("event-a", "angle-a"),
         createRuntimeCandidate("event-a", "angle-a-alt"),
         createRuntimeCandidate("event-b", "angle-b"),
@@ -509,15 +523,8 @@ describe("topic runtime recommendation", () => {
         createRuntimeCandidate("event-e", "angle-e"),
         createRuntimeCandidate("event-f", "angle-f"),
         createRuntimeCandidate("event-g", "angle-g"),
-      ]),
-    );
-    const gateway = createLlmGateway({
-      registry: createPromptRegistry(),
-      provider: createOpenAiCompatibleProvider({
-        model: "glm-4.5",
-        invokeApi,
-      }),
-    });
+      ],
+    ]);
 
     const result = await recommendTopicCandidatesWithTrace(
       db,
@@ -543,8 +550,8 @@ describe("topic runtime recommendation", () => {
   it("includes fatigue metadata for selector instead of directly finalizing the top 3", async () => {
     const db = createDbClient();
     await seedRecentEventUsage(db, "event-a");
-    const invokeApi = vi.fn(async () =>
-      JSON.stringify([
+    const { gateway } = createGatewayWithSelectorResponses([
+      [
         createRuntimeCandidate("event-a", "angle-a"),
         createRuntimeCandidate("event-b", "angle-b"),
         createRuntimeCandidate("event-c", "angle-c"),
@@ -553,15 +560,8 @@ describe("topic runtime recommendation", () => {
         createRuntimeCandidate("event-f", "angle-f"),
         createRuntimeCandidate("event-g", "angle-g"),
         createRuntimeCandidate("event-h", "angle-h"),
-      ]),
-    );
-    const gateway = createLlmGateway({
-      registry: createPromptRegistry(),
-      provider: createOpenAiCompatibleProvider({
-        model: "glm-4.5",
-        invokeApi,
-      }),
-    });
+      ],
+    ]);
 
     const result = await recommendTopicCandidatesWithTrace(
       db,
@@ -585,16 +585,31 @@ describe("topic runtime recommendation", () => {
     });
   });
 
-  it("demotes recently used events through a fatigue penalty before returning final candidates", async () => {
+  it("asks topic.selector to choose final candidates from the selector pool", async () => {
     const db = createDbClient();
-    await seedRecentEventUsage(db, "event-a");
-    const invokeApi = vi.fn(async () =>
-      JSON.stringify([
-        createRuntimeCandidate("event-a", "angle-a"),
-        createRuntimeCandidate("event-b", "angle-b"),
-        createRuntimeCandidate("event-c", "angle-c"),
-      ]),
-    );
+    const invokeApi = vi
+      .fn()
+      .mockResolvedValueOnce(
+        JSON.stringify([
+          createRuntimeCandidate("event-a", "angle-a"),
+          createRuntimeCandidate("event-b", "angle-b"),
+          createRuntimeCandidate("event-c", "angle-c"),
+          createRuntimeCandidate("event-d", "angle-d"),
+          createRuntimeCandidate("event-e", "angle-e"),
+          createRuntimeCandidate("event-f", "angle-f"),
+          createRuntimeCandidate("event-g", "angle-g"),
+          createRuntimeCandidate("event-h", "angle-h"),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify(
+          createSelectorDecision(
+            "selector_candidate_4",
+            "selector_candidate_2",
+            "selector_candidate_6",
+          ),
+        ),
+      );
     const gateway = createLlmGateway({
       registry: createPromptRegistry(),
       provider: createOpenAiCompatibleProvider({
@@ -602,6 +617,99 @@ describe("topic runtime recommendation", () => {
         invokeApi,
       }),
     });
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "selector should choose the final delivered candidates",
+        coreConflict: "the final three should come from selector output rather than direct local truncation",
+        strongScene: "selector picks a non-top-three combination from the prepared pool",
+        sourceHint: "test",
+        recentUsageHint: "none",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(result.selector_trace).toBeDefined();
+    expect(result.candidates).toHaveLength(3);
+    expect(result.candidates.map((candidate) => candidate.title)).toEqual([
+      "event-d",
+      "event-b",
+      "event-f",
+    ]);
+  });
+
+  it("rejects selector outputs that reference unknown candidate ids", async () => {
+    const db = createDbClient();
+    const invokeApi = vi
+      .fn()
+      .mockResolvedValueOnce(
+        JSON.stringify([
+          createRuntimeCandidate("event-a", "angle-a"),
+          createRuntimeCandidate("event-b", "angle-b"),
+          createRuntimeCandidate("event-c", "angle-c"),
+          createRuntimeCandidate("event-d", "angle-d"),
+          createRuntimeCandidate("event-e", "angle-e"),
+          createRuntimeCandidate("event-f", "angle-f"),
+          createRuntimeCandidate("event-g", "angle-g"),
+          createRuntimeCandidate("event-h", "angle-h"),
+        ]),
+      )
+      .mockResolvedValueOnce(
+        JSON.stringify(
+          createSelectorDecision(
+            "selector_candidate_1",
+            "selector_candidate_999",
+            "selector_candidate_3",
+          ),
+        ),
+      );
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    await expect(
+      recommendTopicCandidatesWithTrace(
+        db,
+        {
+          canonicalName: "seed-a",
+          summary: "invalid selector ids should fail loudly",
+          coreConflict: "selector must not reference candidates outside the pool",
+          strongScene: "unknown ids should be rejected before final candidates are published",
+          sourceHint: "test",
+          recentUsageHint: "none",
+        },
+        {
+          llmGateway: gateway,
+          projectId: "project-1",
+        },
+      ),
+    ).rejects.toThrow("topic_selector_invalid_selection");
+  });
+
+  it("demotes recently used events through a fatigue penalty before returning final candidates", async () => {
+    const db = createDbClient();
+    await seedRecentEventUsage(db, "event-a");
+    const { gateway } = createGatewayWithSelectorResponses([
+      [
+        createRuntimeCandidate("event-a", "angle-a"),
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+        createRuntimeCandidate("event-d", "angle-d"),
+        createRuntimeCandidate("event-e", "angle-e"),
+        createRuntimeCandidate("event-f", "angle-f"),
+        createRuntimeCandidate("event-g", "angle-g"),
+        createRuntimeCandidate("event-h", "angle-h"),
+      ],
+    ]);
 
     const result = await recommendTopicCandidatesWithTrace(
       db,
@@ -633,20 +741,18 @@ describe("topic runtime recommendation", () => {
 
     const db = createDbClient();
     await seedRecentEventUsage(db, "event-a");
-    const invokeApi = vi.fn(async () =>
-      JSON.stringify([
+    const { gateway } = createGatewayWithSelectorResponses([
+      [
         createRuntimeCandidate("event-a", "angle-a"),
         createRuntimeCandidate("event-b", "angle-b"),
         createRuntimeCandidate("event-c", "angle-c"),
-      ]),
-    );
-    const gateway = createLlmGateway({
-      registry: createPromptRegistry(),
-      provider: createOpenAiCompatibleProvider({
-        model: "glm-4.5",
-        invokeApi,
-      }),
-    });
+        createRuntimeCandidate("event-d", "angle-d"),
+        createRuntimeCandidate("event-e", "angle-e"),
+        createRuntimeCandidate("event-f", "angle-f"),
+        createRuntimeCandidate("event-g", "angle-g"),
+        createRuntimeCandidate("event-h", "angle-h"),
+      ],
+    ]);
 
     const result = await recommendTopicCandidatesWithTrace(
       db,
@@ -675,20 +781,18 @@ describe("topic runtime recommendation", () => {
   it("ignores raw cache entries when building the fatigue baseline", async () => {
     const db = createDbClient();
     await seedRawCandidateCacheEntry(db, "event-a", "angle-a");
-    const invokeApi = vi.fn(async () =>
-      JSON.stringify([
+    const { gateway } = createGatewayWithSelectorResponses([
+      [
         createRuntimeCandidate("event-a", "angle-a"),
         createRuntimeCandidate("event-b", "angle-b"),
         createRuntimeCandidate("event-c", "angle-c"),
-      ]),
-    );
-    const gateway = createLlmGateway({
-      registry: createPromptRegistry(),
-      provider: createOpenAiCompatibleProvider({
-        model: "glm-4.5",
-        invokeApi,
-      }),
-    });
+        createRuntimeCandidate("event-d", "angle-d"),
+        createRuntimeCandidate("event-e", "angle-e"),
+        createRuntimeCandidate("event-f", "angle-f"),
+        createRuntimeCandidate("event-g", "angle-g"),
+        createRuntimeCandidate("event-h", "angle-h"),
+      ],
+    ]);
 
     const result = await recommendTopicCandidatesWithTrace(
       db,
@@ -716,10 +820,9 @@ describe("topic runtime recommendation", () => {
 
   it("uses project round history for fatigue even after candidate cache is cleared", async () => {
     const db = createDbClient();
-    const invokeApi = vi
-      .fn()
-      .mockResolvedValueOnce(
-        JSON.stringify([
+    const { gateway } = createGatewayWithSelectorResponses(
+      [
+        [
           createRuntimeCandidate("event-a", "angle-a"),
           createRuntimeCandidate("event-a", "angle-a-alt-1"),
           createRuntimeCandidate("event-a", "angle-a-alt-2"),
@@ -728,10 +831,8 @@ describe("topic runtime recommendation", () => {
           createRuntimeCandidate("event-a", "angle-a-alt-5"),
           createRuntimeCandidate("event-a", "angle-a-alt-6"),
           createRuntimeCandidate("event-a", "angle-a-alt-7"),
-        ]),
-      )
-      .mockResolvedValueOnce(
-        JSON.stringify([
+        ],
+        [
           createRuntimeCandidate("event-a", "angle-a"),
           createRuntimeCandidate("event-b", "angle-b"),
           createRuntimeCandidate("event-c", "angle-c"),
@@ -740,15 +841,12 @@ describe("topic runtime recommendation", () => {
           createRuntimeCandidate("event-f", "angle-f"),
           createRuntimeCandidate("event-g", "angle-g"),
           createRuntimeCandidate("event-h", "angle-h"),
-        ]),
-      );
-    const gateway = createLlmGateway({
-      registry: createPromptRegistry(),
-      provider: createOpenAiCompatibleProvider({
-        model: "glm-4.5",
-        invokeApi,
-      }),
-    });
+        ],
+      ],
+      [
+        ["selector_candidate_2", "selector_candidate_3", "selector_candidate_4"],
+      ],
+    );
 
     await recommendTopicCandidatesWithTrace(
       db,

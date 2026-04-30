@@ -41,6 +41,10 @@ export interface TopicRecommendationOptions {
   projectId?: string | null;
 }
 
+interface TopicSelectorDecision {
+  selected_candidate_ids: string[];
+}
+
 export async function recommendTopicCandidatesWithTrace(
   db: DbClient,
   input: BuildTopicCandidatesInput,
@@ -80,9 +84,22 @@ export async function recommendTopicCandidatesWithTrace(
     createdBefore: recommendationStartedAt,
     existingCacheRecordIds,
   });
+  const selected = postProcessed.selectorPool.length >= TOPIC_CANDIDATE_TARGET_COUNT
+    ? await selectFinalCandidatesWithTrace({
+        input,
+        llmGateway: gateway,
+        selectorPool: postProcessed.selectorPool,
+        rankings: postProcessed.rankings,
+        interactionLogWriter,
+      })
+    : {
+        candidates: postProcessed.candidates,
+        rankings: postProcessed.rankings,
+        selectorTrace: null,
+      };
   const finalDiagnostics = finalizeRecommendationDiagnostics({
     checks: result.diagnostics.checks,
-    finalCandidateCount: postProcessed.candidates.length,
+    finalCandidateCount: selected.candidates.length,
     additionalChecks: postProcessed.diagnostics,
   });
 
@@ -101,7 +118,8 @@ export async function recommendTopicCandidatesWithTrace(
       ...result,
       raw_candidates: result.candidates,
       selector_pool: postProcessed.selectorPool,
-      candidates: postProcessed.candidates,
+      selector_trace: selected.selectorTrace,
+      candidates: selected.candidates,
       diagnostics: finalDiagnostics,
     };
   }
@@ -119,12 +137,12 @@ export async function recommendTopicCandidatesWithTrace(
 
   await persistPostProcessedCandidates(db, {
     projectId: options.projectId,
-    candidates: postProcessed.rankings,
+    candidates: selected.rankings,
   });
   await recordProjectRecommendationRound(db, {
     projectId: options.projectId,
     createdAt: recommendationStartedAt,
-    candidates: postProcessed.rankings.map((candidate) => ({
+    candidates: selected.rankings.map((candidate) => ({
       eventRegistryEntryId: candidate.eventId,
       fingerprint: candidate.fingerprint,
     })),
@@ -138,7 +156,8 @@ export async function recommendTopicCandidatesWithTrace(
     ...result,
     raw_candidates: result.candidates,
     selector_pool: postProcessed.selectorPool,
-    candidates: postProcessed.candidates,
+    selector_trace: selected.selectorTrace,
+    candidates: selected.candidates,
     diagnostics: finalDiagnostics,
     topic_run: {
       project_id: options.projectId,
@@ -174,9 +193,18 @@ function createTopicRecommendationGateway(): LlmGateway {
 function createStubTopicRecommendationProvider(): StructuredPromptProvider {
   return {
     async invokeStructuredPrompt<T>(request): Promise<T> {
-      const candidates = buildTopicCandidates(
-        request.input as BuildTopicCandidatesInput,
-      ) as T;
+      const candidates = request.operationName === "topic.selector"
+        ? ({
+            selected_candidate_ids: (
+              (request.input as { selector_pool?: Array<{ candidate_id: string }> })
+                .selector_pool ?? []
+            )
+              .slice(0, TOPIC_CANDIDATE_TARGET_COUNT)
+              .map((candidate) => candidate.candidate_id),
+          } as T)
+        : (buildTopicCandidates(
+            request.input as BuildTopicCandidatesInput,
+          ) as T);
 
       await request.interactionLogWriter?.write({
         generatedAt: new Date().toISOString(),
@@ -221,6 +249,10 @@ interface SelectorPoolCandidate {
   scope_label: string;
   fatigue_score: number;
   recently_seen: boolean;
+}
+
+interface SelectorTrace {
+  selected_candidate_ids: string[];
 }
 
 interface RecommendationDiagnostic {
@@ -393,7 +425,7 @@ async function postProcessTopicCandidates(input: {
     candidates: rankings
       .slice(0, TOPIC_CANDIDATE_TARGET_COUNT)
       .map((entry) => entry.candidate),
-    rankings: rankings.slice(0, TOPIC_CANDIDATE_TARGET_COUNT),
+    rankings,
     selectorPool,
     diagnostics,
     annotations: [
@@ -453,6 +485,100 @@ function finalizeRecommendationDiagnostics(input: {
   return {
     checks,
   };
+}
+
+async function selectFinalCandidatesWithTrace(input: {
+  input: BuildTopicCandidatesInput;
+  llmGateway: LlmGateway;
+  selectorPool: SelectorPoolCandidate[];
+  rankings: RankedRecommendationCandidate[];
+  interactionLogWriter?: {
+    write: (...args: unknown[]) => Promise<void> | void;
+  };
+}) {
+  const rawDecision = await input.llmGateway.invokeStructuredPrompt<unknown>({
+    promptId: "topic.selector",
+    input: {
+      recommendation_seed: input.input,
+      selector_pool: input.selectorPool,
+    },
+    interactionLogWriter: input.interactionLogWriter,
+  });
+  const decision = normalizeSelectorDecision(rawDecision);
+  const selection = validateSelectorDecision({
+    decision,
+    selectorPool: input.selectorPool,
+    rankings: input.rankings,
+  });
+
+  return {
+    candidates: selection.map((entry) => entry.candidate),
+    rankings: selection,
+    selectorTrace: {
+      selected_candidate_ids: decision.selected_candidate_ids,
+    } satisfies SelectorTrace,
+  };
+}
+
+function normalizeSelectorDecision(rawOutput: unknown): TopicSelectorDecision {
+  if (Array.isArray(rawOutput)) {
+    return {
+      selected_candidate_ids: rawOutput.filter(
+        (candidateId): candidateId is string => typeof candidateId === "string",
+      ),
+    };
+  }
+
+  if (!rawOutput || typeof rawOutput !== "object") {
+    throw new Error("topic_selector_invalid_selection");
+  }
+
+  const record = rawOutput as Record<string, unknown>;
+  const ids =
+    record.selected_candidate_ids ??
+    record.selectedIds ??
+    record.candidate_ids ??
+    record.ids;
+
+  if (!Array.isArray(ids)) {
+    throw new Error("topic_selector_invalid_selection");
+  }
+
+  return {
+    selected_candidate_ids: ids.filter(
+      (candidateId): candidateId is string => typeof candidateId === "string",
+    ),
+  };
+}
+
+function validateSelectorDecision(input: {
+  decision: TopicSelectorDecision;
+  selectorPool: SelectorPoolCandidate[];
+  rankings: RankedRecommendationCandidate[];
+}) {
+  if (input.decision.selected_candidate_ids.length !== TOPIC_CANDIDATE_TARGET_COUNT) {
+    throw new Error("topic_selector_invalid_selection");
+  }
+
+  const rankingsById = new Map(
+    input.rankings.map((candidate) => [candidate.candidateId, candidate] as const),
+  );
+  const selected = input.decision.selected_candidate_ids.map((candidateId) => {
+    const match = rankingsById.get(candidateId);
+    if (!match) {
+      throw new Error("topic_selector_invalid_selection");
+    }
+    return match;
+  });
+
+  const knownIds = new Set(input.selectorPool.map((candidate) => candidate.candidate_id));
+  for (const candidateId of input.decision.selected_candidate_ids) {
+    if (!knownIds.has(candidateId)) {
+      throw new Error("topic_selector_invalid_selection");
+    }
+  }
+
+  return selected;
 }
 
 function enrichDiagnosticReason(
