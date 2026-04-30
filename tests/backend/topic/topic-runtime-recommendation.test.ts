@@ -936,6 +936,49 @@ describe("topic runtime recommendation", () => {
     expect(result.candidates[0]?.title).toBe("event-b");
   });
 
+  it("applies fatigue to repeated event variants that only change ordinal or packaging text", async () => {
+    const db = createDbClient();
+    await seedRecentEventUsage(
+      db,
+      "第一次十字军东征：耶路撒冷陷落与宗教狂热的巅峰",
+    );
+    const { gateway } = createGatewayWithSelectorResponses([
+      [
+        createRuntimeCandidate("十字军东征：宗教狂热与文明碰撞", "angle-a"),
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+        createRuntimeCandidate("event-d", "angle-d"),
+        createRuntimeCandidate("event-e", "angle-e"),
+        createRuntimeCandidate("event-f", "angle-f"),
+        createRuntimeCandidate("event-g", "angle-g"),
+        createRuntimeCandidate("event-h", "angle-h"),
+      ],
+    ]);
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "same event variants should still count as recent fatigue input",
+        coreConflict: "fatigue should hit even when the repeated event title changes surface packaging",
+        strongScene: "ordinal prefixes and post-colon packaging should not bypass recent history",
+        sourceHint: "test",
+        recentUsageHint: "avoid the just-used event family",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "topic_candidate_fatigue_penalty_applied",
+      }),
+    );
+    expect(result.candidates[0]?.title).toBe("event-b");
+  });
+
   it("applies fatigue even when the recent cache record and recommendation start share the same millisecond", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-29T00:00:00.000Z"));
