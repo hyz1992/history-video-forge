@@ -240,6 +240,7 @@ export function buildTopicCandidates(input: BuildTopicCandidatesInput) {
       }
 
       return TopicCandidateCard.parse({
+        event_identity: input.canonicalName,
         title: input.canonicalName,
         one_line_angle: slot.angle(input),
         family_label: familyLabel,

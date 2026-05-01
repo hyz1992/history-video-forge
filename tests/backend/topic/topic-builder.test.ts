@@ -6,12 +6,12 @@ import { buildTopicCandidates } from "../../../backend/src/modules/topic/topic-c
 describe("topic candidate builder", () => {
   it("builds 3 family-slot candidates for a standard event", () => {
     const candidates = buildTopicCandidates({
-      canonicalName: "晏子使楚",
-      summary: "楚王在公开场合连续压场，晏子当场顶回去。",
-      coreConflict: "楚王当众压场，晏子必须当场顶回。",
-      strongScene: "楚王连续压场，晏子一句句顶回去。",
-      sourceHint: "《晏子春秋》",
-      recentUsageHint: "近期未出现同 event_id",
+      canonicalName: "event-a",
+      summary: "public pressure around a diplomatic showdown",
+      coreConflict: "the protagonist must answer direct public pressure",
+      strongScene: "the protagonist pushes back in front of everyone",
+      sourceHint: "historical source",
+      recentUsageHint: "not used recently",
       tags: ["diplomacy", "court", "humiliation", "showdown"],
     });
 
@@ -31,14 +31,14 @@ describe("topic candidate builder", () => {
 
   it("filters out candidates when hook_power and visual_promise are both low", () => {
     const candidates = buildTopicCandidates({
-      canonicalName: "礼部旧案",
-      summary: "一段过程平直、场面感偏弱的旧案整理。",
-      coreConflict: "冲突弱，缺少当场对顶。",
-      strongScene: "卷宗翻阅，没有强场面。",
-      sourceHint: "地方志摘录",
-      recentUsageHint: "近期未出现同 event_id",
+      canonicalName: "archive-case",
+      summary: "a quiet archival process without visual pressure",
+      coreConflict: "weak conflict with little direct confrontation",
+      strongScene: "paperwork and review without a strong scene",
+      sourceHint: "local archive",
+      recentUsageHint: "not used recently",
       tags: ["archive"],
-      familyHint: "通用安全槽位",
+      familyHint: "safe",
       slotRubricOverrides: [
         {
           hook_power: "low",
@@ -72,5 +72,20 @@ describe("topic candidate builder", () => {
           candidate.viral_rubric.visual_promise === "low",
       ),
     ).toBe(false);
+  });
+
+  it("builds candidate cards with event_identity", () => {
+    const candidates = buildTopicCandidates({
+      canonicalName: "event-a",
+      summary: "summary-a",
+      coreConflict: "conflict-a",
+      strongScene: "scene-a",
+      sourceHint: "source-a",
+      recentUsageHint: "recent-a",
+      tags: ["diplomacy", "court", "humiliation", "showdown"],
+    });
+
+    expect(candidates[0]?.event_identity).toBeTruthy();
+    expect(candidates[0]?.event_identity).toBe("event-a");
   });
 });

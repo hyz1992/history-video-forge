@@ -94,6 +94,10 @@ function normalizeTopicCandidateCard(
   const viralRubric = normalizeViralRubric(candidate.viral_rubric);
 
   return TopicCandidateCard.parse({
+    event_identity:
+      typeof candidate.event_identity === "string" && candidate.event_identity
+        ? candidate.event_identity
+        : runtime.input.canonicalName,
     title:
       typeof candidate.title === "string" && candidate.title
         ? candidate.title

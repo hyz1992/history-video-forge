@@ -19,6 +19,7 @@ import {
 } from "../../../backend/src/modules/topic/topic-recommendation.service.js";
 
 const runtimeCandidate = {
+  event_identity: "鏅忓瓙浣挎",
   title: "晏子使楚",
   one_line_angle: "晏子使楚真正抓人的，不是出使本身，而是当场连续顶回压场。",
   family_label: "外交压场型",
@@ -43,6 +44,7 @@ const runtimeCandidate = {
 function createRuntimeCandidate(title: string, angle: string) {
   return {
     ...runtimeCandidate,
+    event_identity: title,
     title,
     one_line_angle: angle,
   };
@@ -350,6 +352,40 @@ describe("topic runtime recommendation", () => {
 
     expect(result.raw_candidates).toHaveLength(8);
     expect(result.candidates).toHaveLength(3);
+  });
+
+  it("keeps builder event_identity in raw_candidates", async () => {
+    const db = createDbClient();
+    const { gateway } = createGatewayWithSelectorResponses([
+      [
+        createRuntimeCandidate("event-a", "angle-a"),
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+        createRuntimeCandidate("event-d", "angle-d"),
+        createRuntimeCandidate("event-e", "angle-e"),
+        createRuntimeCandidate("event-f", "angle-f"),
+        createRuntimeCandidate("event-g", "angle-g"),
+        createRuntimeCandidate("event-h", "angle-h"),
+      ],
+    ]);
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "builder event identity should remain visible in the raw candidate pool",
+        coreConflict: "the runtime must not drop event identity before post-processing",
+        strongScene: "raw candidates should preserve builder-declared event identity",
+        sourceHint: "test",
+        recentUsageHint: "no recent repeats",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(result.raw_candidates[0]).toHaveProperty("event_identity", "event-a");
   });
 
   it("repairs minimally malformed runtime output before validating TopicCandidateCard", async () => {
