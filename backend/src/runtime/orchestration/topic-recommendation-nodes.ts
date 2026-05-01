@@ -77,12 +77,20 @@ function normalizeTopicCandidateCard(
   candidate: Record<string, unknown>,
   runtime: TopicRecommendationGraphRuntime,
 ) {
-  if ("one_line_angle" in candidate) {
-    return TopicCandidateCard.parse(candidate);
+  const parsedCandidate = TopicCandidateCard.safeParse(candidate);
+  if (parsedCandidate.success) {
+    return parsedCandidate.data;
   }
 
+  const rubricMetadata =
+    candidate.viral_rubric && typeof candidate.viral_rubric === "object"
+      ? (candidate.viral_rubric as Record<string, unknown>)
+      : null;
+
   const description =
-    typeof candidate.description === "string"
+    typeof candidate.one_line_angle === "string" && candidate.one_line_angle
+      ? candidate.one_line_angle
+      : typeof candidate.description === "string"
       ? candidate.description
       : typeof candidate.summary === "string"
         ? candidate.summary
@@ -107,10 +115,16 @@ function normalizeTopicCandidateCard(
     family_label:
       typeof candidate.family_label === "string" && candidate.family_label
         ? candidate.family_label
+        : typeof rubricMetadata?.family_label === "string" &&
+            rubricMetadata.family_label
+          ? rubricMetadata.family_label
         : "通用安全槽位",
     scope_label:
       typeof candidate.scope_label === "string" && candidate.scope_label
         ? candidate.scope_label
+        : typeof rubricMetadata?.scope_label === "string" &&
+            rubricMetadata.scope_label
+          ? rubricMetadata.scope_label
         : "单事件",
     estimated_duration_band: "medium",
     why_this_now: `${runtime.input.recentUsageHint}，且当前具备可讲张力。`,

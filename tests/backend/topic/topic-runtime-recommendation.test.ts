@@ -1910,4 +1910,57 @@ describe("topic runtime recommendation", () => {
       repair_attempts: 1,
     });
   });
+
+  it("repairs hybrid builder candidates that expose one_line_angle before the full TopicCandidateCard contract", async () => {
+    const db = createDbClient();
+    const { gateway } = createGatewayWithSelectorResponses([
+      [
+        {
+          event_identity: "黑死病",
+          title: "黑死病：欧洲社会的崩塌与重生",
+          one_line_angle: "人口崩塌如何重塑欧洲社会",
+          viral_rubric: {
+            family_label: "瘟疫冲击型",
+            scope_label: "单事件",
+            historical_significance: "high",
+            cultural_resonance: "high",
+            shareability_score: "medium",
+            drama_score: "high",
+            dialogue_sharpness: "medium",
+          },
+        },
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+        createRuntimeCandidate("event-d", "angle-d"),
+        createRuntimeCandidate("event-e", "angle-e"),
+        createRuntimeCandidate("event-f", "angle-f"),
+        createRuntimeCandidate("event-g", "angle-g"),
+        createRuntimeCandidate("event-h", "angle-h"),
+      ],
+    ]);
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "中世纪欧洲重大历史事件",
+        summary: "测试真实 builder 混合返回结构的最小修复。",
+        coreConflict: "builder 先给出 angle，但还没补齐完整合同字段。",
+        strongScene: "候选本身可用，但当前 runtime 不能直接 parse。",
+        sourceHint: "test",
+        recentUsageHint: "hybrid builder output",
+      },
+      {
+        llmGateway: gateway,
+      },
+    );
+
+    expect(result.raw_candidates[0]).toMatchObject({
+      event_identity: "黑死病",
+      title: "黑死病：欧洲社会的崩塌与重生",
+      one_line_angle: "人口崩塌如何重塑欧洲社会",
+      family_label: "瘟疫冲击型",
+      scope_label: "单事件",
+    });
+    expect(result.candidates).toHaveLength(3);
+  });
 });
