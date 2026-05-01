@@ -8,6 +8,7 @@
 
 - builder 是否先产出 `8` 个原始候选池
 - builder 产出的每个候选是否显式带有 `event_identity`
+- builder 在遇到近期已出现过的同一事件时，是否复用了已有 `event_identity`
 - selector 是否只从 `selector_pool` 中选择最终 `3` 个候选
 - selector 输入里是否显式带有 `recent_event_memory`
 - selector repair 是否最多只触发一次
@@ -34,7 +35,8 @@ npm run harness:ui-acceptance:smoke
 
 ## 当前预期
 
-- `01-topic.candidate-builder.md` 中能看到 recommendation seed、原始候选池，以及每个候选的 `event_identity`
+- `01-topic.candidate-builder.md` 中能看到 recommendation seed、`recent_event_memory`、原始候选池，以及每个候选的 `event_identity`
+- 抽查 `01-topic.candidate-builder.md` 时，要检查 builder 是否复用了近期 identity，而不是把同一事件重新发明成新 key
 - `02-topic.selector.md` 中能看到 `selector_pool` 和 `recent_event_memory`
 - 若触发 repair，`02-topic.selector.md` 中还能看到 `repair_context`
 - `recommendation-diagnostics.md` 中应能看到：

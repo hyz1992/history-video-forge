@@ -1739,6 +1739,20 @@ describe("topic runtime recommendation", () => {
     expect(builderLogContent).toContain("event-a");
   });
 
+  it("documents builder identity reuse checks in the topic diversity inspection notes", () => {
+    const notesPath = resolve(
+      process.cwd(),
+      "docs",
+      "records",
+      "2026-04-30-topic-recommendation-diversity-notes.md",
+    );
+
+    const notesContent = readFileSync(notesPath, "utf8");
+
+    expect(notesContent).toContain("检查 builder 是否复用了近期 identity");
+    expect(notesContent).toContain("01-topic.candidate-builder.md");
+  });
+
   it("accepts selector repair outputs returned through answer.selected_candidates", async () => {
     const db = createDbClient();
     const { gateway } = createGatewayWithSelectorResponses(
