@@ -25,6 +25,7 @@ status: active
 
 - 输出 `TopicCandidateCard[]`
 - 先输出 8 个候选，作为原始候选池
+- 必须直接输出候选数组，不得包 `TopicCandidateCard` 外层对象
 - 每个候选都必须给出 `event_identity`
 - `event_identity` 只用于标识“这是哪个事件”，不能把包装文案、角度句式或脚本化表达写进这个字段
 - `event_identity` 必须使用中文
@@ -34,6 +35,8 @@ status: active
 - 若候选与 `recent_event_memory` 中为同一事件，应复用已有 `event_identity`，不得重新发明新 key
 - 每个候选都必须完整给出最小字段
 - 每个候选都必须带 `viral_rubric`
+- `viral_rubric` 只能使用正式字段：`hook_power`、`novelty_gap`、`emotion_gap`、`share_impulse`、`visual_promise`
+- `viral_rubric` 不得自定义额外评分键，不得改名，不得混入其他元数据
 
 ## 开放发现差异化要求
 

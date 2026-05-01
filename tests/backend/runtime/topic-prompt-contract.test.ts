@@ -39,6 +39,14 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("recent_event_memory");
   });
 
+  it("requires candidate-builder to define a strict structured output contract", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.body).toContain("不得包 `TopicCandidateCard` 外层对象");
+    expect(prompt.body).toContain("`viral_rubric` 只能使用正式字段");
+    expect(prompt.body).toContain("不得自定义额外评分键");
+  });
+
   it("demands concrete single-event recommendation topics instead of abstract buckets", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 
