@@ -28,6 +28,16 @@ describe("prompt runtime", () => {
     expect(prompt.body).toMatch(/角度.*明显不同/);
   });
 
+  it("keeps builder focused on open discovery while reusing prior event identities from recent memory", () => {
+    const registry = createPromptRegistry();
+
+    const prompt = registry.getPrompt("topic.candidate-builder");
+
+    expect(prompt.body).toContain("recent_event_memory");
+    expect(prompt.body).toContain("复用已有");
+    expect(prompt.body).toContain("`event_identity`");
+  });
+
   it("normalizes annotation lines before rendering markdown interaction notes", () => {
     const markdown = renderLlmInteractionMarkdown({
       sequence: 1,

@@ -5,6 +5,7 @@ language: zh-CN
 consumes:
   - RecommendationSeedSet
   - EventRegistryContext
+  - recent_event_memory
 produces:
   - TopicCandidateCard[]
 status: active
@@ -18,6 +19,7 @@ status: active
 
 - `RecommendationSeedSet`
 - `EventRegistryContext`
+- `recent_event_memory`
 
 ## 输出对象
 
@@ -29,6 +31,7 @@ status: active
 - `event_identity` 必须使用稳定、简短、偏史学命名的事件级短语，而不是临时代码名
 - `event_identity` 非必要不带年份；只有在不带年份会与另一常见事件混淆时，才允许加入年份或必要限定语
 - 不得把包装文案、角度句式或脚本化表达写进 `event_identity`
+- 若候选与 `recent_event_memory` 中为同一事件，应复用已有 `event_identity`，不得重新发明新 key
 - 每个候选都必须完整给出最小字段
 - 每个候选都必须带 `viral_rubric`
 
@@ -37,6 +40,7 @@ status: active
 - 候选之间必须明显区分，不能只是在同一事件上换措辞
 - 优先拉开事件多样性，尽量分散到不同人物、不同事件链或不同冲突场景
 - 同一事件如果保留多个候选，角度也必须明显不同，不能只是细微改写
+- 若近期记忆里某个事件已经高频出现，优先扩展到其他事件，而不是只换包装重复推荐同一事件
 - 不能收敛成清一色名人话题，避免把开放发现压扁成单一知名人物清单
 - 候选标题必须落在具体历史事件，不能停留在朝代阶段、战争类型、思想流派或人物群像级别的泛主题
 - 不得使用“王朝更迭”“古代战争”“百家争鸣”“名臣故事”这类抽象题桶充当候选标题

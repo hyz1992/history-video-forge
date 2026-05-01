@@ -33,6 +33,12 @@ describe("topic prompt contract", () => {
     );
   });
 
+  it("requires candidate-builder to consume recent_event_memory", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.body).toContain("recent_event_memory");
+  });
+
   it("demands concrete single-event recommendation topics instead of abstract buckets", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 
