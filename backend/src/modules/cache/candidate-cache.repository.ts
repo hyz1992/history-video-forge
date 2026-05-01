@@ -80,6 +80,7 @@ export async function listRecentCachedCandidates(
 export interface ProjectRecommendationRoundCandidateRecord {
   eventRegistryEntryId: string;
   eventIdentity: string | null;
+  title: string | null;
   fingerprint: string;
   createdAt: Date;
 }
@@ -113,6 +114,7 @@ export async function recordProjectRecommendationRound(
     candidates: Array<{
       eventRegistryEntryId: string;
       eventIdentity?: string | null;
+      title?: string | null;
       fingerprint: string;
     }>;
   },
@@ -125,6 +127,7 @@ export async function recordProjectRecommendationRound(
     candidates: input.candidates.map((candidate) => ({
       eventRegistryEntryId: candidate.eventRegistryEntryId,
       eventIdentity: candidate.eventIdentity ?? null,
+      title: candidate.title ?? null,
       fingerprint: candidate.fingerprint,
       createdAt: input.createdAt ?? new Date(),
     })),

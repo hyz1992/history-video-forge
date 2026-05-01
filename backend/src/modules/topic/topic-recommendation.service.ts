@@ -157,6 +157,7 @@ export async function recommendTopicCandidatesWithTrace(
     candidates: selected.rankings.map((candidate) => ({
       eventRegistryEntryId: candidate.eventId,
       eventIdentity: candidate.eventIdentity,
+      title: candidate.candidate.title,
       fingerprint: candidate.fingerprint,
     })),
   });
@@ -771,7 +772,7 @@ async function buildRecentEventMemory(input: {
 
       recentEventMemory.push({
         event_identity: candidate.eventIdentity,
-        title: candidate.eventIdentity,
+        title: candidate.title ?? candidate.eventIdentity,
         one_line_angle: cachedCandidate?.oneLineAngle ?? fingerprintAngle,
       });
       seenEventIdentities.add(normalizedIdentity);

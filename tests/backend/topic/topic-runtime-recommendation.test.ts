@@ -1739,6 +1739,111 @@ describe("topic runtime recommendation", () => {
     expect(builderLogContent).toContain("event-a");
   });
 
+  it("preserves prior selected title and angle in builder recent_event_memory for identity reuse", async () => {
+    const db = createDbClient();
+    const { gateway, invokeApi } = createGatewayWithSelectorResponses(
+      [
+        [
+          {
+            ...createRuntimeCandidate(
+              "黑斯廷斯战役：诺曼征服英格兰的关键转折",
+              "诺曼征服英格兰的决定性一战",
+            ),
+            event_identity: "黑斯廷斯战役",
+          },
+          {
+            ...createRuntimeCandidate(
+              "《大宪章》签署：王权与贵族的权力博弈",
+              "限制王权的关键文书时刻",
+            ),
+            event_identity: "《大宪章》签署",
+          },
+          {
+            ...createRuntimeCandidate(
+              "黑死病爆发：中世纪欧洲的灾难与变革",
+              "人口崩塌如何重塑欧洲社会",
+            ),
+            event_identity: "黑死病欧洲大流行",
+          },
+          createRuntimeCandidate("event-d", "angle-d"),
+          createRuntimeCandidate("event-e", "angle-e"),
+          createRuntimeCandidate("event-f", "angle-f"),
+          createRuntimeCandidate("event-g", "angle-g"),
+          createRuntimeCandidate("event-h", "angle-h"),
+        ],
+        [
+          createRuntimeCandidate("event-a-2", "angle-a-2"),
+          createRuntimeCandidate("event-b-2", "angle-b-2"),
+          createRuntimeCandidate("event-c-2", "angle-c-2"),
+          createRuntimeCandidate("event-d-2", "angle-d-2"),
+          createRuntimeCandidate("event-e-2", "angle-e-2"),
+          createRuntimeCandidate("event-f-2", "angle-f-2"),
+          createRuntimeCandidate("event-g-2", "angle-g-2"),
+          createRuntimeCandidate("event-h-2", "angle-h-2"),
+        ],
+      ],
+      [
+        ["selector_candidate_1", "selector_candidate_2", "selector_candidate_3"],
+        ["selector_candidate_2", "selector_candidate_3", "selector_candidate_4"],
+      ],
+    );
+
+    await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "first round establishes realistic recent event memory",
+        coreConflict: "builder should later see the actual selected title and angle",
+        strongScene: "the first round stores final selections for later builder reuse",
+        sourceHint: "test",
+        recentUsageHint: "first round",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "second round should receive prior selected title and angle",
+        coreConflict: "builder memory should preserve the prior title packaging context",
+        strongScene: "recent event memory should carry the actual title and angle",
+        sourceHint: "test",
+        recentUsageHint: "second round",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    const builderCalls = invokeApi.mock.calls.filter(
+      ([request]) => request.operationName === "topic.candidate-builder",
+    );
+    const secondBuilderInput = builderCalls[1]?.[0]?.input as
+      | {
+          recent_event_memory?: Array<{
+            event_identity: string;
+            title: string;
+            one_line_angle: string;
+          }>;
+        }
+      | undefined;
+
+    expect(secondBuilderInput?.recent_event_memory).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event_identity: "黑斯廷斯战役",
+          title: "黑斯廷斯战役：诺曼征服英格兰的关键转折",
+          one_line_angle: "诺曼征服英格兰的决定性一战",
+        }),
+      ]),
+    );
+  });
+
   it("documents builder identity reuse checks in the topic diversity inspection notes", () => {
     const notesPath = resolve(
       process.cwd(),
