@@ -58,7 +58,7 @@ function createSelectorDecision(...candidateIds: string[]) {
 
 function createGatewayWithSelectorResponses(
   builderOutputs: Array<unknown>,
-  selectorOutputs?: Array<string[]>,
+  selectorOutputs?: Array<unknown>,
 ) {
   let builderCallIndex = 0;
   let selectorCallIndex = 0;
@@ -70,7 +70,11 @@ function createGatewayWithSelectorResponses(
           .slice(0, 3)
           .map((candidate) => candidate.candidate_id);
       selectorCallIndex += 1;
-      return JSON.stringify(createSelectorDecision(...selectedIds));
+      return typeof selectedIds === "string"
+        ? selectedIds
+        : Array.isArray(selectedIds)
+          ? JSON.stringify(createSelectorDecision(...selectedIds))
+          : JSON.stringify(selectedIds);
     }
 
     const builderOutput = builderOutputs[builderCallIndex];
@@ -615,6 +619,40 @@ describe("topic runtime recommendation", () => {
     );
 
     expect(result.selector_pool.filter((candidate) => candidate.normalized_event_identity === "event-a")).toHaveLength(1);
+  });
+
+  it("keeps explicit event_identity visible in selector outputs", async () => {
+    const db = createDbClient();
+    const { gateway } = createGatewayWithSelectorResponses([
+      [
+        { ...createRuntimeCandidate("title-a", "angle-a"), event_identity: "event-a" },
+        { ...createRuntimeCandidate("title-b", "angle-b"), event_identity: "event-b" },
+        { ...createRuntimeCandidate("title-c", "angle-c"), event_identity: "event-c" },
+        { ...createRuntimeCandidate("title-d", "angle-d"), event_identity: "event-d" },
+        { ...createRuntimeCandidate("title-e", "angle-e"), event_identity: "event-e" },
+        { ...createRuntimeCandidate("title-f", "angle-f"), event_identity: "event-f" },
+        { ...createRuntimeCandidate("title-g", "angle-g"), event_identity: "event-g" },
+        { ...createRuntimeCandidate("title-h", "angle-h"), event_identity: "event-h" },
+      ],
+    ]);
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "selector outputs should expose explicit event identity",
+        coreConflict: "explicit event identity should stay visible after selector pool preparation",
+        strongScene: "event identity must not disappear into normalized-only fields",
+        sourceHint: "test",
+        recentUsageHint: "none",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(result.selector_pool[0]).toHaveProperty("event_identity", "event-a");
   });
 
   it("includes fatigue metadata for selector instead of directly finalizing the top 3", async () => {
@@ -1372,6 +1410,7 @@ describe("topic runtime recommendation", () => {
     const diagnosticsLogContent = readFileSync(diagnosticsLogPath, "utf8");
     expect(diagnosticsLogContent).toContain("topic_candidate_duplicate_removed");
     expect(diagnosticsLogContent).toContain("event-a");
+    expect(diagnosticsLogContent).toContain("event_identity");
     expect(diagnosticsLogContent).not.toContain("# LLM 交互日志");
     expect(diagnosticsLogContent).not.toContain("prompt_id:");
   });
@@ -1536,5 +1575,58 @@ describe("topic runtime recommendation", () => {
     const selectorLogContent = readFileSync(selectorLogPath, "utf8");
     expect(selectorLogContent).toContain("recent_event_memory");
     expect(selectorLogContent).toContain("event-a");
+  });
+
+  it("accepts selector repair outputs returned through answer.selected_candidates", async () => {
+    const db = createDbClient();
+    const { gateway } = createGatewayWithSelectorResponses(
+      [[
+        createRuntimeCandidate("event-a", "angle-a"),
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+        createRuntimeCandidate("event-d", "angle-d"),
+        createRuntimeCandidate("event-e", "angle-e"),
+        createRuntimeCandidate("event-f", "angle-f"),
+        createRuntimeCandidate("event-g", "angle-g"),
+        createRuntimeCandidate("event-h", "angle-h"),
+      ]],
+      [
+        ["selector_candidate_1", "selector_candidate_2"],
+        {
+          answer: {
+            selected_candidates: ["selector_candidate_3"],
+          },
+        },
+      ],
+    );
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "selector repair may wrap ids under answer.selected_candidates",
+        coreConflict: "repair output shape should still be accepted",
+        strongScene: "the selector keeps two ids and repairs one missing slot",
+        sourceHint: "test",
+        recentUsageHint: "repair nested answer",
+      },
+      {
+        llmGateway: gateway,
+      },
+    );
+
+    expect(result.candidates.map((candidate) => candidate.title)).toEqual([
+      "event-a",
+      "event-b",
+      "event-c",
+    ]);
+    expect(result.selector_trace).toMatchObject({
+      selected_candidate_ids: [
+        "selector_candidate_1",
+        "selector_candidate_2",
+        "selector_candidate_3",
+      ],
+      repair_attempts: 1,
+    });
   });
 });

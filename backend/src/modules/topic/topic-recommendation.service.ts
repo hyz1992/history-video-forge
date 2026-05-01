@@ -251,6 +251,7 @@ interface RankedRecommendationCandidate {
 
 interface SelectorPoolCandidate {
   candidate_id: string;
+  event_identity: string;
   normalized_event_identity: string;
   title: string;
   one_line_angle: string;
@@ -428,6 +429,7 @@ async function postProcessTopicCandidates(input: {
 
   const selectorPool: SelectorPoolCandidate[] = rankings.map((entry) => ({
     candidate_id: entry.candidateId,
+    event_identity: entry.candidate.event_identity,
     normalized_event_identity: entry.eventIdentity,
     title: entry.candidate.title,
     one_line_angle: entry.candidate.one_line_angle,
@@ -607,8 +609,17 @@ function normalizeSelectorDecision(rawOutput: unknown): TopicSelectorDecision {
   }
 
   const record = rawOutput as Record<string, unknown>;
+  const answerRecord =
+    record.answer && typeof record.answer === "object" && !Array.isArray(record.answer)
+      ? (record.answer as Record<string, unknown>)
+      : null;
   const ids =
-    record.answer ??
+    (Array.isArray(record.answer) ? record.answer : undefined) ??
+    answerRecord?.selected_candidates ??
+    answerRecord?.selected_candidate_ids ??
+    answerRecord?.selectedIds ??
+    answerRecord?.candidate_ids ??
+    answerRecord?.ids ??
     record.selected_candidates ??
     record.selected_candidate_ids ??
     record.selectedIds ??
@@ -808,6 +819,7 @@ function writeRecommendationDiagnosticsMarkdown(input: {
       generatedAt: new Date().toISOString(),
       diagnostics: input.diagnostics,
       candidates: input.candidates.map((candidate) => ({
+        event_identity: candidate.event_identity,
         title: candidate.title,
         one_line_angle: candidate.one_line_angle,
       })),

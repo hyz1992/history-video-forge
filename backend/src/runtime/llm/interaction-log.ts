@@ -27,6 +27,7 @@ export interface RecommendationDiagnosticsMarkdownInput {
     reason?: string;
   }>;
   candidates: Array<{
+    event_identity?: string;
     title: string;
     one_line_angle: string;
   }>;
@@ -124,8 +125,11 @@ export function renderRecommendationDiagnosticsMarkdown(
 
   lines.push("", "## Candidates", "");
   for (const candidate of input.candidates) {
+    const eventIdentityPrefix = candidate.event_identity
+      ? `event_identity=${normalizeMarkdownAnnotation(candidate.event_identity)} | `
+      : "";
     lines.push(
-      `- ${normalizeMarkdownAnnotation(candidate.title)} | ${normalizeMarkdownAnnotation(candidate.one_line_angle)}`,
+      `- ${eventIdentityPrefix}${normalizeMarkdownAnnotation(candidate.title)} | ${normalizeMarkdownAnnotation(candidate.one_line_angle)}`,
     );
   }
 
