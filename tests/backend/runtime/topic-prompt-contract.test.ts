@@ -23,6 +23,16 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("输出 8 个候选");
   });
 
+  it("requires candidate-builder to define stable event_identity naming rules", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.body).toContain("必须使用中文");
+    expect(prompt.body).toContain("非必要不带年份");
+    expect(prompt.body).toContain(
+      "不得把包装文案、角度句式或脚本化表达写进 `event_identity`",
+    );
+  });
+
   it("demands concrete single-event recommendation topics instead of abstract buckets", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 
@@ -40,6 +50,7 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("魏晋至唐宋");
     expect(prompt.body).toContain("元明清");
   });
+
   it("requires topic.selector prompt to consume recent_event_memory", () => {
     const prompt = createPromptRegistry().getPrompt("topic.selector");
 

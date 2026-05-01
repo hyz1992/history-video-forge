@@ -25,6 +25,10 @@ status: active
 - 先输出 8 个候选，作为原始候选池
 - 每个候选都必须给出 `event_identity`
 - `event_identity` 只用于标识“这是哪个事件”，不能把包装文案、角度句式或脚本化表达写进这个字段
+- `event_identity` 必须使用中文
+- `event_identity` 必须使用稳定、简短、偏史学命名的事件级短语，而不是临时代码名
+- `event_identity` 非必要不带年份；只有在不带年份会与另一常见事件混淆时，才允许加入年份或必要限定语
+- 不得把包装文案、角度句式或脚本化表达写进 `event_identity`
 - 每个候选都必须完整给出最小字段
 - 每个候选都必须带 `viral_rubric`
 
