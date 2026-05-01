@@ -40,4 +40,9 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("魏晋至唐宋");
     expect(prompt.body).toContain("元明清");
   });
+  it("requires topic.selector prompt to consume recent_event_memory", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.selector");
+
+    expect(prompt.body).toContain("recent_event_memory");
+  });
 });

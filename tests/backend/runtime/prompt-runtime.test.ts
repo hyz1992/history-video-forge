@@ -299,4 +299,11 @@ describe("prompt runtime", () => {
     expect(autoFix).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ value: 4 });
   });
+  it("keeps selector focused on choosing from the pool while considering recent event memory", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.selector");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("recent_event_memory");
+    expect(prompt.body).toContain("语义上等价或明显过近");
+  });
 });

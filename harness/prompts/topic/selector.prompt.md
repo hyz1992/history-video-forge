@@ -5,6 +5,7 @@ language: zh-CN
 consumes:
   - RecommendationSeedSet
   - TopicSelectorPool
+  - RecentEventMemory
 produces:
   - TopicSelectorDecision
 status: active
@@ -18,6 +19,7 @@ status: active
 
 - `RecommendationSeedSet`
 - `TopicSelectorPool`
+- `recent_event_memory`
 - 可选 `repair_context`
 
 ## 输出对象
@@ -30,6 +32,7 @@ status: active
 - 只从给定候选池中选择，不得发明新的候选
 - 优先选择事件不同的候选
 - 尽量拉开冲突类型、叙事切口与场景分布
+- 若候选与 `recent_event_memory` 中的近期已推荐事件语义上等价或明显过近，应优先避让
 - 对 `recently_seen=true` 或 `fatigue_score` 更高的候选保持谨慎，除非它仍明显优于其他候选
 - 如果存在 `repair_context`，只补齐缺失槽位，不重选已保留候选
 - `repair_context` 中的排除 id、排除 event identity 与已保留候选必须严格服从
