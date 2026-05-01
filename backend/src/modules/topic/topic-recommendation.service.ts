@@ -84,11 +84,18 @@ export async function recommendTopicCandidatesWithTrace(
     createdBefore: recommendationStartedAt,
     existingCacheRecordIds,
   });
+  const recentEventMemory = await buildRecentEventMemory({
+    db,
+    projectId: options?.projectId ?? null,
+    createdBefore: recommendationStartedAt,
+    existingCacheRecordIds,
+  });
   const selected = postProcessed.selectorPool.length >= TOPIC_CANDIDATE_TARGET_COUNT
     ? await selectFinalCandidatesWithTrace({
         input,
         llmGateway: gateway,
         selectorPool: postProcessed.selectorPool,
+        recentEventMemory,
         rankings: postProcessed.rankings,
         interactionLogWriter,
       })
@@ -251,6 +258,12 @@ interface SelectorPoolCandidate {
   scope_label: string;
   fatigue_score: number;
   recently_seen: boolean;
+}
+
+interface RecentEventMemoryEntry {
+  event_identity: string;
+  title: string;
+  one_line_angle: string;
 }
 
 interface SelectorTrace {
@@ -494,6 +507,7 @@ async function selectFinalCandidatesWithTrace(input: {
   input: BuildTopicCandidatesInput;
   llmGateway: LlmGateway;
   selectorPool: SelectorPoolCandidate[];
+  recentEventMemory: RecentEventMemoryEntry[];
   rankings: RankedRecommendationCandidate[];
   interactionLogWriter?: {
     write: (...args: unknown[]) => Promise<void> | void;
@@ -506,6 +520,7 @@ async function selectFinalCandidatesWithTrace(input: {
       input: {
         recommendation_seed: input.input,
         selector_pool: input.selectorPool,
+        recent_event_memory: input.recentEventMemory,
       },
       interactionLogWriter: input.interactionLogWriter,
     }),
@@ -534,6 +549,7 @@ async function selectFinalCandidatesWithTrace(input: {
         input: {
           recommendation_seed: input.input,
           selector_pool: input.selectorPool,
+          recent_event_memory: input.recentEventMemory,
           repair_context: {
             missing_slot_count: firstPass.missingSlotCount,
             kept_candidate_ids: firstPass.selectedIds,
@@ -688,6 +704,66 @@ function enrichDiagnosticReason(
   }
 
   return check;
+}
+
+async function buildRecentEventMemory(input: {
+  db: DbClient;
+  projectId?: string | null;
+  createdBefore: Date;
+  existingCacheRecordIds: string[];
+}): Promise<RecentEventMemoryEntry[]> {
+  if (!input.projectId) {
+    return [];
+  }
+
+  const historyUpperBound = new Date(input.createdBefore.getTime() + 1);
+  const recentRounds = await listRecentProjectRecommendationRounds(input.db, {
+    projectId: input.projectId,
+    createdBefore: historyUpperBound,
+    limit: 3,
+  });
+  const recentCandidates = await listRecentCachedCandidates(input.db, {
+    projectId: input.projectId,
+    createdBefore: historyUpperBound,
+    finalOnly: true,
+    recordIds: input.existingCacheRecordIds,
+    limit: 12,
+  });
+  const recentCandidatesByIdentity = new Map(
+    recentCandidates
+      .filter((candidate) => candidate.eventIdentity)
+      .map((candidate) => [
+        normalizeEventIdentityValue(candidate.eventIdentity as string),
+        candidate,
+      ] as const),
+  );
+  const recentEventMemory: RecentEventMemoryEntry[] = [];
+  const seenEventIdentities = new Set<string>();
+
+  for (const round of recentRounds) {
+    for (const candidate of round.candidates) {
+      if (!candidate.eventIdentity) {
+        continue;
+      }
+
+      const normalizedIdentity = normalizeEventIdentityValue(candidate.eventIdentity);
+      if (seenEventIdentities.has(normalizedIdentity)) {
+        continue;
+      }
+
+      const cachedCandidate = recentCandidatesByIdentity.get(normalizedIdentity);
+      const [, fingerprintAngle = ""] = candidate.fingerprint.split("::");
+
+      recentEventMemory.push({
+        event_identity: candidate.eventIdentity,
+        title: candidate.eventIdentity,
+        one_line_angle: cachedCandidate?.oneLineAngle ?? fingerprintAngle,
+      });
+      seenEventIdentities.add(normalizedIdentity);
+    }
+  }
+
+  return recentEventMemory;
 }
 
 async function persistPostProcessedCandidates(

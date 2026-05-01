@@ -222,7 +222,7 @@ Get-ChildItem 'storage/projects' -Directory -Recurse |
 - 当对应 topic run 已落盘开放发现推荐交互日志时，继续检查：
   - `llm-interactions/*.md`
     - `01-topic.candidate-builder.md`：看 builder prompt 元数据、`输入对象` 里的 recommendation seed、原始候选池与归一化结果。
-    - `02-topic.selector.md`：看 selector 输入的 `selector_pool`、repair_context（若有）与最终选择结果。
+    - `02-topic.selector.md`：看 selector 输入的 `selector_pool`、`recent_event_memory`、repair_context（若有）与最终选择结果。
   - `recommendation-diagnostics.md`
     - 看最终保留候选、剔除原因、fatigue 降权说明。
     - 如果触发 selector repair，应能看到 `topic_selector_repair_triggered`。
@@ -236,6 +236,7 @@ Get-ChildItem 'storage/projects' -Directory -Recurse |
   - builder 输出是否仍保持具体事件粒度
 - selector 阶段至少要能回答：
   - `selector_pool` 中有哪些 candidate id / normalized event identity
+  - `recent_event_memory` 中有哪些最近 2-3 轮事件被显式送入 selector
   - 最终 `3` 个候选是由 selector 选出的哪些 id
   - 是否触发了单次 repair 补位
 - UI acceptance 侧的页面规则当前至少要求保留两个钩子：

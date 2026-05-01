@@ -1375,4 +1375,166 @@ describe("topic runtime recommendation", () => {
     expect(diagnosticsLogContent).not.toContain("# LLM 交互日志");
     expect(diagnosticsLogContent).not.toContain("prompt_id:");
   });
+
+  it("sends recent_event_memory to topic.selector", async () => {
+    const db = createDbClient();
+    const { gateway, invokeApi } = createGatewayWithSelectorResponses(
+      [
+        [
+          createRuntimeCandidate("event-a", "angle-a"),
+          createRuntimeCandidate("event-b", "angle-b"),
+          createRuntimeCandidate("event-c", "angle-c"),
+          createRuntimeCandidate("event-d", "angle-d"),
+          createRuntimeCandidate("event-e", "angle-e"),
+          createRuntimeCandidate("event-f", "angle-f"),
+          createRuntimeCandidate("event-g", "angle-g"),
+          createRuntimeCandidate("event-h", "angle-h"),
+        ],
+        [
+          createRuntimeCandidate("event-a-2", "angle-a-2"),
+          createRuntimeCandidate("event-b-2", "angle-b-2"),
+          createRuntimeCandidate("event-c-2", "angle-c-2"),
+          createRuntimeCandidate("event-d-2", "angle-d-2"),
+          createRuntimeCandidate("event-e-2", "angle-e-2"),
+          createRuntimeCandidate("event-f-2", "angle-f-2"),
+          createRuntimeCandidate("event-g-2", "angle-g-2"),
+          createRuntimeCandidate("event-h-2", "angle-h-2"),
+        ],
+      ],
+      [
+        ["selector_candidate_1", "selector_candidate_2", "selector_candidate_3"],
+        ["selector_candidate_2", "selector_candidate_3", "selector_candidate_4"],
+      ],
+    );
+
+    await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "first round establishes recent event memory",
+        coreConflict: "selector should later see prior selected events",
+        strongScene: "the first round fills project history",
+        sourceHint: "test",
+        recentUsageHint: "first round",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "second round should send recent event memory to selector",
+        coreConflict: "selector input should include prior selected events",
+        strongScene: "recent event memory must be present before final selection",
+        sourceHint: "test",
+        recentUsageHint: "second round",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    const selectorCalls = invokeApi.mock.calls.filter(
+      ([request]) => request.operationName === "topic.selector",
+    );
+    const secondSelectorInput = selectorCalls[1]?.[0]?.input as
+      | { recent_event_memory?: Array<{ event_identity: string }> }
+      | undefined;
+
+    expect(secondSelectorInput?.recent_event_memory).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event_identity: "event-a",
+        }),
+      ]),
+    );
+  });
+
+  it("records selector recent event memory in llm interaction trace", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Topic Selector Recent Memory Trace",
+    });
+    const { gateway } = createGatewayWithSelectorResponses(
+      [
+        [
+          createRuntimeCandidate("event-a", "angle-a"),
+          createRuntimeCandidate("event-b", "angle-b"),
+          createRuntimeCandidate("event-c", "angle-c"),
+          createRuntimeCandidate("event-d", "angle-d"),
+          createRuntimeCandidate("event-e", "angle-e"),
+          createRuntimeCandidate("event-f", "angle-f"),
+          createRuntimeCandidate("event-g", "angle-g"),
+          createRuntimeCandidate("event-h", "angle-h"),
+        ],
+        [
+          createRuntimeCandidate("event-a-2", "angle-a-2"),
+          createRuntimeCandidate("event-b-2", "angle-b-2"),
+          createRuntimeCandidate("event-c-2", "angle-c-2"),
+          createRuntimeCandidate("event-d-2", "angle-d-2"),
+          createRuntimeCandidate("event-e-2", "angle-e-2"),
+          createRuntimeCandidate("event-f-2", "angle-f-2"),
+          createRuntimeCandidate("event-g-2", "angle-g-2"),
+          createRuntimeCandidate("event-h-2", "angle-h-2"),
+        ],
+      ],
+      [
+        ["selector_candidate_1", "selector_candidate_2", "selector_candidate_3"],
+        ["selector_candidate_2", "selector_candidate_3", "selector_candidate_4"],
+      ],
+    );
+
+    await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "first round establishes recent event memory",
+        coreConflict: "selector should later see prior selected events",
+        strongScene: "the first round fills project history",
+        sourceHint: "test",
+        recentUsageHint: "first round",
+      },
+      {
+        llmGateway: gateway,
+        projectId: project.id,
+      },
+    );
+
+    const secondRun = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "second round should write recent event memory into selector trace",
+        coreConflict: "selector trace should show the recent event memory it consumed",
+        strongScene: "trace inspection should expose recent event memory clearly",
+        sourceHint: "test",
+        recentUsageHint: "second round",
+      },
+      {
+        llmGateway: gateway,
+        projectId: project.id,
+      },
+    );
+
+    const profile = getProjectStorageProfile(project);
+    const runId = String((secondRun.trace as Record<string, unknown>).run_id);
+    const selectorLogPath = resolve(
+      process.cwd(),
+      profile.topic_runs_dir,
+      runId,
+      "llm-interactions",
+      "02-topic.selector.md",
+    );
+
+    expect(existsSync(selectorLogPath)).toBe(true);
+
+    const selectorLogContent = readFileSync(selectorLogPath, "utf8");
+    expect(selectorLogContent).toContain("recent_event_memory");
+    expect(selectorLogContent).toContain("event-a");
+  });
 });
