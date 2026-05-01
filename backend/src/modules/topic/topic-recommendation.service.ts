@@ -55,6 +55,16 @@ export async function recommendTopicCandidatesWithTrace(
   const gateway = options?.llmGateway ?? createTopicRecommendationGateway();
   const project = options?.projectId ? db.projects.get(options.projectId) : null;
   const runId = `topic_run_${db.generateId()}`;
+  const recentEventMemory = await buildRecentEventMemory({
+    db,
+    projectId: options?.projectId ?? null,
+    createdBefore: recommendationStartedAt,
+    existingCacheRecordIds,
+  });
+  const graphInput = {
+    ...input,
+    recent_event_memory: recentEventMemory,
+  };
   const interactionLogWriter = project
     ? createProjectRunInteractionLogWriter({
         project,
@@ -65,7 +75,7 @@ export async function recommendTopicCandidatesWithTrace(
   const result = await runTopicRecommendationGraph(
     {
       db,
-      input,
+      input: graphInput,
       projectId: options?.projectId ?? null,
       runId,
     },
@@ -80,12 +90,6 @@ export async function recommendTopicCandidatesWithTrace(
   const postProcessed = await postProcessTopicCandidates({
     db,
     candidates: result.candidates,
-    projectId: options?.projectId ?? null,
-    createdBefore: recommendationStartedAt,
-    existingCacheRecordIds,
-  });
-  const recentEventMemory = await buildRecentEventMemory({
-    db,
     projectId: options?.projectId ?? null,
     createdBefore: recommendationStartedAt,
     existingCacheRecordIds,

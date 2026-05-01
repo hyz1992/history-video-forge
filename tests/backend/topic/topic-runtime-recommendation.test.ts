@@ -1494,6 +1494,85 @@ describe("topic runtime recommendation", () => {
     );
   });
 
+  it("sends recent_event_memory to topic.candidate-builder on later rounds", async () => {
+    const db = createDbClient();
+    const { gateway, invokeApi } = createGatewayWithSelectorResponses(
+      [
+        [
+          createRuntimeCandidate("event-a", "angle-a"),
+          createRuntimeCandidate("event-b", "angle-b"),
+          createRuntimeCandidate("event-c", "angle-c"),
+          createRuntimeCandidate("event-d", "angle-d"),
+          createRuntimeCandidate("event-e", "angle-e"),
+          createRuntimeCandidate("event-f", "angle-f"),
+          createRuntimeCandidate("event-g", "angle-g"),
+          createRuntimeCandidate("event-h", "angle-h"),
+        ],
+        [
+          createRuntimeCandidate("event-a-2", "angle-a-2"),
+          createRuntimeCandidate("event-b-2", "angle-b-2"),
+          createRuntimeCandidate("event-c-2", "angle-c-2"),
+          createRuntimeCandidate("event-d-2", "angle-d-2"),
+          createRuntimeCandidate("event-e-2", "angle-e-2"),
+          createRuntimeCandidate("event-f-2", "angle-f-2"),
+          createRuntimeCandidate("event-g-2", "angle-g-2"),
+          createRuntimeCandidate("event-h-2", "angle-h-2"),
+        ],
+      ],
+      [
+        ["selector_candidate_1", "selector_candidate_2", "selector_candidate_3"],
+        ["selector_candidate_2", "selector_candidate_3", "selector_candidate_4"],
+      ],
+    );
+
+    await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "first round establishes recent event memory for builder",
+        coreConflict: "builder should later see prior selected events",
+        strongScene: "the first round fills project history",
+        sourceHint: "test",
+        recentUsageHint: "first round",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "second round should send recent event memory to builder",
+        coreConflict: "builder input should include prior selected events",
+        strongScene: "recent event memory must be present before open discovery",
+        sourceHint: "test",
+        recentUsageHint: "second round",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    const builderCalls = invokeApi.mock.calls.filter(
+      ([request]) => request.operationName === "topic.candidate-builder",
+    );
+    const secondBuilderInput = builderCalls[1]?.[0]?.input as
+      | { recent_event_memory?: Array<{ event_identity: string }> }
+      | undefined;
+
+    expect(secondBuilderInput?.recent_event_memory).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event_identity: "event-a",
+        }),
+      ]),
+    );
+  });
+
   it("records selector recent event memory in llm interaction trace", async () => {
     const db = createDbClient();
     const project = await createProject(db, {
@@ -1575,6 +1654,89 @@ describe("topic runtime recommendation", () => {
     const selectorLogContent = readFileSync(selectorLogPath, "utf8");
     expect(selectorLogContent).toContain("recent_event_memory");
     expect(selectorLogContent).toContain("event-a");
+  });
+
+  it("records builder recent event memory in llm interaction trace", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Topic Builder Recent Memory Trace",
+    });
+    const { gateway } = createGatewayWithSelectorResponses(
+      [
+        [
+          createRuntimeCandidate("event-a", "angle-a"),
+          createRuntimeCandidate("event-b", "angle-b"),
+          createRuntimeCandidate("event-c", "angle-c"),
+          createRuntimeCandidate("event-d", "angle-d"),
+          createRuntimeCandidate("event-e", "angle-e"),
+          createRuntimeCandidate("event-f", "angle-f"),
+          createRuntimeCandidate("event-g", "angle-g"),
+          createRuntimeCandidate("event-h", "angle-h"),
+        ],
+        [
+          createRuntimeCandidate("event-a-2", "angle-a-2"),
+          createRuntimeCandidate("event-b-2", "angle-b-2"),
+          createRuntimeCandidate("event-c-2", "angle-c-2"),
+          createRuntimeCandidate("event-d-2", "angle-d-2"),
+          createRuntimeCandidate("event-e-2", "angle-e-2"),
+          createRuntimeCandidate("event-f-2", "angle-f-2"),
+          createRuntimeCandidate("event-g-2", "angle-g-2"),
+          createRuntimeCandidate("event-h-2", "angle-h-2"),
+        ],
+      ],
+      [
+        ["selector_candidate_1", "selector_candidate_2", "selector_candidate_3"],
+        ["selector_candidate_2", "selector_candidate_3", "selector_candidate_4"],
+      ],
+    );
+
+    await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "first round establishes recent event memory for builder trace",
+        coreConflict: "builder trace should later show prior selected events",
+        strongScene: "the first round fills project history",
+        sourceHint: "test",
+        recentUsageHint: "first round",
+      },
+      {
+        llmGateway: gateway,
+        projectId: project.id,
+      },
+    );
+
+    const secondRun = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "second round should write recent event memory into builder trace",
+        coreConflict: "builder trace should show the recent event memory it consumed",
+        strongScene: "trace inspection should expose builder recent event memory clearly",
+        sourceHint: "test",
+        recentUsageHint: "second round",
+      },
+      {
+        llmGateway: gateway,
+        projectId: project.id,
+      },
+    );
+
+    const profile = getProjectStorageProfile(project);
+    const runId = String((secondRun.trace as Record<string, unknown>).run_id);
+    const builderLogPath = resolve(
+      process.cwd(),
+      profile.topic_runs_dir,
+      runId,
+      "llm-interactions",
+      "01-topic.candidate-builder.md",
+    );
+
+    expect(existsSync(builderLogPath)).toBe(true);
+
+    const builderLogContent = readFileSync(builderLogPath, "utf8");
+    expect(builderLogContent).toContain("recent_event_memory");
+    expect(builderLogContent).toContain("event-a");
   });
 
   it("accepts selector repair outputs returned through answer.selected_candidates", async () => {
