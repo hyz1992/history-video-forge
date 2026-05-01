@@ -145,6 +145,7 @@ export async function recommendTopicCandidatesWithTrace(
     createdAt: recommendationStartedAt,
     candidates: selected.rankings.map((candidate) => ({
       eventRegistryEntryId: candidate.eventId,
+      eventIdentity: candidate.eventIdentity,
       fingerprint: candidate.fingerprint,
     })),
   });
@@ -284,10 +285,10 @@ async function postProcessTopicCandidates(input: {
 
   for (const [originalIndex, candidate] of input.candidates.entries()) {
     const normalized = await normalizeEventInput(input.db, {
-      rawInput: candidate.title,
+      rawInput: candidate.event_identity,
       sourceType: "system_recommendation",
     });
-    const eventIdentity = normalizeEventIdentityValue(normalized.event.canonicalName);
+    const eventIdentity = normalizeEventIdentityValue(candidate.event_identity);
     const fingerprint = buildEventIdentityFingerprint({
       eventIdentity,
       angle: candidate.one_line_angle,
@@ -338,8 +339,8 @@ async function postProcessTopicCandidates(input: {
       );
     }
 
-    const [eventIdentity] = record.fingerprint.split("::");
-    if (eventIdentity) {
+    if (record.eventIdentity) {
+      const eventIdentity = normalizeEventIdentityValue(record.eventIdentity);
       cacheFatigueByIdentity.set(
         eventIdentity,
         (cacheFatigueByIdentity.get(eventIdentity) ?? 0) + 1,
@@ -354,10 +355,10 @@ async function postProcessTopicCandidates(input: {
         (roundFatigueByEventId.get(candidate.eventRegistryEntryId) ?? 0) + 1,
       );
 
-      const [eventIdentity] = candidate.fingerprint.split("::");
-      if (!eventIdentity) {
+      if (!candidate.eventIdentity) {
         continue;
       }
+      const eventIdentity = normalizeEventIdentityValue(candidate.eventIdentity);
 
       roundFatigueByIdentity.set(
         eventIdentity,
@@ -700,6 +701,7 @@ async function persistPostProcessedCandidates(
     await saveCachedCandidate(db, {
       projectId: input.projectId,
       eventRegistryEntryId: candidate.eventId,
+      eventIdentity: candidate.eventIdentity,
       fingerprint: candidate.fingerprint,
       oneLineAngle: candidate.candidate.one_line_angle,
       familyLabel: candidate.candidate.family_label,

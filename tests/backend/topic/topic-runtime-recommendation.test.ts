@@ -583,6 +583,40 @@ describe("topic runtime recommendation", () => {
     );
   });
 
+  it("deduplicates selector_pool by explicit event_identity instead of title-derived identity", async () => {
+    const db = createDbClient();
+    const { gateway } = createGatewayWithSelectorResponses([
+      [
+        { ...createRuntimeCandidate("title-a-v1", "angle-a"), event_identity: "event-a" },
+        { ...createRuntimeCandidate("title-a-v2", "angle-a-alt"), event_identity: "event-a" },
+        { ...createRuntimeCandidate("title-b", "angle-b"), event_identity: "event-b" },
+        { ...createRuntimeCandidate("title-c", "angle-c"), event_identity: "event-c" },
+        { ...createRuntimeCandidate("title-d", "angle-d"), event_identity: "event-d" },
+        { ...createRuntimeCandidate("title-e", "angle-e"), event_identity: "event-e" },
+        { ...createRuntimeCandidate("title-f", "angle-f"), event_identity: "event-f" },
+        { ...createRuntimeCandidate("title-g", "angle-g"), event_identity: "event-g" },
+      ],
+    ]);
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "selector pool should deduplicate by explicit event identity",
+        coreConflict: "different titles with the same event identity must collapse into one slot",
+        strongScene: "local post-processing should trust the declared event identity instead of deriving from title",
+        sourceHint: "test",
+        recentUsageHint: "avoid duplicate explicit identities",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(result.selector_pool.filter((candidate) => candidate.normalized_event_identity === "event-a")).toHaveLength(1);
+  });
+
   it("includes fatigue metadata for selector instead of directly finalizing the top 3", async () => {
     const db = createDbClient();
     await seedRecentEventUsage(db, "event-a");
@@ -619,6 +653,79 @@ describe("topic runtime recommendation", () => {
       fatigue_score: expect.any(Number),
       recently_seen: expect.any(Boolean),
     });
+  });
+
+  it("applies fatigue when the same explicit event_identity appears in recent history", async () => {
+    const db = createDbClient();
+    const { gateway } = createGatewayWithSelectorResponses(
+      [
+        [
+          { ...createRuntimeCandidate("title-a-v1", "angle-a"), event_identity: "event-a" },
+          { ...createRuntimeCandidate("title-b-v1", "angle-b"), event_identity: "event-b" },
+          { ...createRuntimeCandidate("title-c-v1", "angle-c"), event_identity: "event-c" },
+          { ...createRuntimeCandidate("title-d-v1", "angle-d"), event_identity: "event-d" },
+          { ...createRuntimeCandidate("title-e-v1", "angle-e"), event_identity: "event-e" },
+          { ...createRuntimeCandidate("title-f-v1", "angle-f"), event_identity: "event-f" },
+          { ...createRuntimeCandidate("title-g-v1", "angle-g"), event_identity: "event-g" },
+          { ...createRuntimeCandidate("title-h-v1", "angle-h"), event_identity: "event-h" },
+        ],
+        [
+          { ...createRuntimeCandidate("title-a-v2", "angle-a-2"), event_identity: "event-a" },
+          { ...createRuntimeCandidate("title-b-v2", "angle-b-2"), event_identity: "event-b" },
+          { ...createRuntimeCandidate("title-c-v2", "angle-c-2"), event_identity: "event-c" },
+          { ...createRuntimeCandidate("title-d-v2", "angle-d-2"), event_identity: "event-d" },
+          { ...createRuntimeCandidate("title-e-v2", "angle-e-2"), event_identity: "event-e" },
+          { ...createRuntimeCandidate("title-f-v2", "angle-f-2"), event_identity: "event-f" },
+          { ...createRuntimeCandidate("title-g-v2", "angle-g-2"), event_identity: "event-g" },
+          { ...createRuntimeCandidate("title-h-v2", "angle-h-2"), event_identity: "event-h" },
+        ],
+      ],
+      [
+        ["selector_candidate_1", "selector_candidate_2", "selector_candidate_3"],
+        ["selector_candidate_2", "selector_candidate_3", "selector_candidate_4"],
+      ],
+    );
+
+    await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "first round establishes explicit event identity history",
+        coreConflict: "first-round event identities should become precise fatigue input",
+        strongScene: "project history should remember the declared event identity",
+        sourceHint: "test",
+        recentUsageHint: "first round has no fatigue",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    db.candidateCache.clear();
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "second round validates explicit event identity fatigue",
+        coreConflict: "the same event identity should be penalized even when the title changes",
+        strongScene: "cross-round fatigue should follow explicit identity rather than title packaging",
+        sourceHint: "test",
+        recentUsageHint: "second round should avoid the previous event identity",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "topic_candidate_fatigue_penalty_applied",
+      }),
+    );
+    expect(result.candidates[0]?.title).toBe("title-b-v2");
   });
 
   it("asks topic.selector to choose final candidates from the selector pool", async () => {

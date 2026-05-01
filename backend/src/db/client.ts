@@ -52,6 +52,7 @@ export interface CandidateCacheRecord {
   id: string;
   projectId: string | null;
   eventRegistryEntryId: string | null;
+  eventIdentity: string | null;
   fingerprint: string;
   oneLineAngle: string;
   familyLabel: string;

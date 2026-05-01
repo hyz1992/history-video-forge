@@ -38,6 +38,7 @@ async function persistTopicCandidates(
   for (const candidate of candidates) {
     await saveCachedCandidate(runtime.db, {
       projectId: runtime.projectId ?? null,
+      eventIdentity: candidate.event_identity,
       fingerprint: buildCandidateFingerprint(
         runtime.input.canonicalName,
         candidate.one_line_angle,

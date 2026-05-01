@@ -3,6 +3,7 @@ import type { CandidateCacheRecord, DbClient } from "../../db/client";
 export interface SaveCachedCandidateInput {
   projectId?: string | null;
   eventRegistryEntryId?: string | null;
+  eventIdentity?: string | null;
   fingerprint: string;
   oneLineAngle: string;
   familyLabel: string;
@@ -22,6 +23,7 @@ export async function saveCachedCandidate(
     id: db.generateId(),
     projectId: input.projectId ?? null,
     eventRegistryEntryId: input.eventRegistryEntryId ?? null,
+    eventIdentity: input.eventIdentity ?? null,
     fingerprint: input.fingerprint,
     oneLineAngle: input.oneLineAngle,
     familyLabel: input.familyLabel,
@@ -77,6 +79,7 @@ export async function listRecentCachedCandidates(
 
 export interface ProjectRecommendationRoundCandidateRecord {
   eventRegistryEntryId: string;
+  eventIdentity: string | null;
   fingerprint: string;
   createdAt: Date;
 }
@@ -109,6 +112,7 @@ export async function recordProjectRecommendationRound(
     createdAt?: Date;
     candidates: Array<{
       eventRegistryEntryId: string;
+      eventIdentity?: string | null;
       fingerprint: string;
     }>;
   },
@@ -120,6 +124,7 @@ export async function recordProjectRecommendationRound(
     createdAt: input.createdAt ?? new Date(),
     candidates: input.candidates.map((candidate) => ({
       eventRegistryEntryId: candidate.eventRegistryEntryId,
+      eventIdentity: candidate.eventIdentity ?? null,
       fingerprint: candidate.fingerprint,
       createdAt: input.createdAt ?? new Date(),
     })),
