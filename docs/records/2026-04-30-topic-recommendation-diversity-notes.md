@@ -112,3 +112,50 @@ npm run harness:ui-acceptance:smoke
   - builder 首轮是否已完整交付 `TopicCandidateCard` 最小字段
   - 若未完整交付，是否只触发了一次字段补全 repair
   - repair 后是正式通过，还是进入 degraded fallback
+
+## 2026-05-02 中国 Seed 5 轮回归补充（builder 字段完整性）
+
+- 自动验证：
+  - `npm test -- tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts`
+  - 结果：通过
+- 真实回归项目：
+  - `project_id = 1f749f92-363d-4189-8027-a7dcc8a79051`
+  - trace 根目录：
+    - `D:/myproject/story-video-forge2/storage/projects/2026-05-02/Task6 China Topic 5-Round Recheck [p_1f749f92]/trace/topic-runs`
+
+### 本轮确认
+
+- `5/5` 全部成功，没有出现 topic 接口失败。
+- builder 字段补全 repair：
+  - `triggered = 5/5`
+  - `passed = 5/5`
+  - `degraded = 0/5`
+- 最终 `title / one_line_angle` 不再大面积退化成 seed 文本；用户可见结果已经恢复成可读的具体事件标题。
+- 末轮抽查可见：
+  - `01-topic.candidate-builder.md` 首轮原始响应仍然主要只有 `event_identity + viral_rubric`
+  - `02-topic.candidate-builder-repair.md` 明确带有 `missing_fields_by_candidate`
+  - repair 后补齐了 `title / one_line_angle / family_label / scope_label`
+
+### 最终结果概览
+
+- 第 1 轮：`鸿门宴 / 焚书坑儒 / 张骞出使西域`
+- 第 2 轮：`商鞅变法 / 陈胜吴广起义 / 赤壁之战`
+- 第 3 轮：`春秋五霸争雄 / 独尊儒术 / 司马迁著史记`
+- 第 4 轮：`百家争鸣 / 李广难封 / 汉武帝求仙`
+- 第 5 轮：`长平之战 / 文景之治 / 张骞通西域`
+
+### 新的判断
+
+- 这条链路已经把“字段不全导致用户侧结果退化”收住了，但并没有从根上提升 builder 首轮正式字段服从率。
+- builder 首轮当前仍接近“每轮都需要 repair”，说明 repair 是稳定兜底，不是偶发补漏。
+- 事件标识稳定性仍有残余问题。当前 5 轮最终结果里已经出现：
+  - `张骞出使西域`
+  - `张骞通西域`
+- 这说明同一事件仍可能跨轮换用不同 `event_identity`，fatigue 与 recent memory 还不能稳定压住这类轻度改写。
+
+### 当前优先级
+
+- 若继续优化，优先级应放在：
+  - 提升 builder 首轮完整交付 `TopicCandidateCard` 最小字段的服从率
+  - 提升 builder 对既有 `event_identity` 的稳定复用
+- 不建议回到本地字符串归一或本地语义补丁。
