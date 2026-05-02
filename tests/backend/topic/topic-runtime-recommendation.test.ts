@@ -495,6 +495,74 @@ describe("topic runtime recommendation", () => {
     ]);
   });
 
+  it("keeps serving fallback candidates and marks diagnostics degraded when builder repair still leaves required fields missing", async () => {
+    const db = createDbClient();
+    const invokeApi = vi.fn(
+      async ({
+        operationName,
+        input,
+      }: {
+        operationName: string;
+        input: {
+          selector_pool?: Array<{ candidate_id: string }>;
+        };
+      }) => {
+        if (operationName === "topic.selector") {
+          return JSON.stringify(
+            createSelectorDecision(
+              ...((input.selector_pool ?? [])
+                .slice(0, 3)
+                .map((candidate) => candidate.candidate_id)),
+            ),
+          );
+        }
+
+        return JSON.stringify([
+          createIncompleteBuilderCandidate("event-a"),
+          createIncompleteBuilderCandidate("event-b"),
+          createIncompleteBuilderCandidate("event-c"),
+          createIncompleteBuilderCandidate("event-d"),
+          createIncompleteBuilderCandidate("event-e"),
+          createIncompleteBuilderCandidate("event-f"),
+          createIncompleteBuilderCandidate("event-g"),
+          createIncompleteBuilderCandidate("event-h"),
+        ]);
+      },
+    );
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "repair should not hard-fail when the builder still omits required fields",
+        coreConflict: "fallback must keep the user flow alive",
+        strongScene: "builder repair returns the same incomplete candidates again",
+        sourceHint: "test",
+        recentUsageHint: "no recent repeats",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(result.candidates).toHaveLength(3);
+    expect(result.candidates[0]?.title).toBe("seed-a");
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "topic_candidate_builder_degraded",
+        level: "warning",
+      }),
+    );
+  });
+
   it("repairs minimally malformed runtime output before validating TopicCandidateCard", async () => {
     const db = createDbClient();
     const { gateway, invokeApi } = createGatewayWithSelectorResponses([

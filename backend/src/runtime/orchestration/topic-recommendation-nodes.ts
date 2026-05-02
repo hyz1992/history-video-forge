@@ -10,8 +10,15 @@ export const TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT = 8;
 export interface TopicRecommendationGraphDependencies {
   invokeStructuredPrompt: <T>(input: {
     promptId: string;
-    input: BuildTopicCandidatesInput;
+    input: unknown;
   }) => Promise<T>;
+}
+
+interface CandidateFieldIssue {
+  candidate_index: number;
+  event_identity: string;
+  missing_fields: string[];
+  raw_candidate: Record<string, unknown>;
 }
 
 export interface TopicRecommendationGraphRuntime {
@@ -22,6 +29,10 @@ export interface TopicRecommendationGraphRuntime {
   traceNodes: GraphTraceNodeSummary[];
   repairTriggered: boolean;
   slotsInsufficient: boolean;
+  pendingFieldRepair: boolean;
+  builderDegraded: boolean;
+  pendingFieldIssues: CandidateFieldIssue[];
+  pendingRawBuilderCandidates: Record<string, unknown>[];
 }
 
 function buildCandidateFingerprint(
@@ -53,6 +64,60 @@ async function persistTopicCandidates(
       mustCoverPreviewJson: candidate.must_cover_preview,
     });
   }
+}
+
+function collectCandidateFieldIssues(
+  candidate: Record<string, unknown>,
+): string[] {
+  const parsedCandidate = TopicCandidateCard.safeParse(candidate);
+  if (parsedCandidate.success) {
+    return [];
+  }
+
+  const rubricMetadata =
+    candidate.viral_rubric && typeof candidate.viral_rubric === "object"
+      ? (candidate.viral_rubric as Record<string, unknown>)
+      : null;
+  const repairRequiredFields = new Set([
+    "event_identity",
+    "title",
+    "one_line_angle",
+    "family_label",
+    "scope_label",
+    "viral_rubric",
+  ]);
+
+  return [
+    ...new Set(
+      parsedCandidate.error.issues
+        .map((issue) => issue.path[0])
+        .filter((path): path is string => typeof path === "string" && path.length > 0)
+        .filter((path) => repairRequiredFields.has(path))
+        .filter((path) => {
+          if (path === "family_label") {
+            return !(
+              (typeof candidate.family_label === "string" && candidate.family_label) ||
+              (typeof rubricMetadata?.family_label === "string" &&
+                rubricMetadata.family_label)
+            );
+          }
+
+          if (path === "scope_label") {
+            return !(
+              (typeof candidate.scope_label === "string" && candidate.scope_label) ||
+              (typeof rubricMetadata?.scope_label === "string" &&
+                rubricMetadata.scope_label)
+            );
+          }
+
+          if (path === "viral_rubric") {
+            return !candidate.viral_rubric;
+          }
+
+          return true;
+        }),
+    ),
+  ];
 }
 
 function normalizeTopicCandidateOutputs(rawOutput: unknown): unknown[] {
@@ -211,20 +276,44 @@ async function applyRuntimeCandidates(input: {
   append: boolean;
 }) {
   const { rawOutput, runtime, append } = input;
-  const runtimeCandidates = normalizeTopicCandidateOutputs(rawOutput);
+  const runtimeCandidates = normalizeTopicCandidateOutputs(rawOutput)
+    .filter(
+      (candidate): candidate is Record<string, unknown> =>
+        !!candidate && typeof candidate === "object" && !Array.isArray(candidate),
+    );
   const normalizedCandidates = runtimeCandidates
-    .map((candidate) =>
-      normalizeTopicCandidateCard(candidate as Record<string, unknown>, runtime),
-    )
+    .map((candidate) => normalizeTopicCandidateCard(candidate, runtime))
     .slice(0, TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT);
+  const fieldIssues = runtimeCandidates
+    .map((candidate, index) => {
+      const missingFields = collectCandidateFieldIssues(candidate);
+      if (missingFields.length === 0) {
+        return null;
+      }
+
+      return {
+        candidate_index: index,
+        event_identity:
+          typeof candidate.event_identity === "string" && candidate.event_identity
+            ? candidate.event_identity
+            : runtime.input.canonicalName,
+        missing_fields: missingFields,
+        raw_candidate: candidate,
+      } satisfies CandidateFieldIssue;
+    })
+    .filter((issue): issue is CandidateFieldIssue => issue !== null);
 
   if (!append) {
-    await persistTopicCandidates(
-      runtime,
-      normalizedCandidates.slice(0, TOPIC_CANDIDATE_TARGET_COUNT),
+    runtime.pendingRawBuilderCandidates = runtimeCandidates.slice(
+      0,
+      TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT,
     );
+    runtime.pendingFieldIssues = fieldIssues;
+    runtime.pendingFieldRepair = fieldIssues.length > 0;
     runtime.candidates = normalizedCandidates;
-    return;
+    return {
+      fieldIssues,
+    };
   }
 
   const existingFingerprints = new Set(
@@ -250,11 +339,10 @@ async function applyRuntimeCandidates(input: {
     TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT - runtime.candidates.length;
   const nextCandidates = repairCandidates.slice(0, Math.max(availableSlots, 0));
 
-  await persistTopicCandidates(
-    runtime,
-    nextCandidates.slice(0, TOPIC_CANDIDATE_TARGET_COUNT),
-  );
   runtime.candidates = [...runtime.candidates, ...nextCandidates];
+  return {
+    fieldIssues,
+  };
 }
 
 function createTraceNode(
@@ -293,24 +381,64 @@ export function createTopicRecommendationNodes(input: {
       runtime.slotsInsufficient =
         runtime.candidates.length < TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT;
       const node = createTraceNode(runtime, "topic-candidate-generate");
+      const shouldRepair =
+        runtime.pendingFieldRepair || runtime.slotsInsufficient;
+
+      if (!shouldRepair) {
+        await persistTopicCandidates(
+          runtime,
+          runtime.candidates.slice(0, TOPIC_CANDIDATE_TARGET_COUNT),
+        );
+      }
 
       return {
         ...node,
-        should_repair: runtime.slotsInsufficient,
+        should_repair: shouldRepair,
       };
     },
     async topicCandidateRepair() {
       runtime.repairTriggered = true;
 
-      const rawOutput = await dependencies.invokeStructuredPrompt<unknown>({
-        promptId: "topic.candidate-builder",
-        input: runtime.input,
-      });
-      await applyRuntimeCandidates({
-        rawOutput,
+      if (runtime.pendingFieldRepair) {
+        const rawOutput = await dependencies.invokeStructuredPrompt<unknown>({
+          promptId: "topic.candidate-builder-repair",
+          input: {
+            recommendation_seed: runtime.input,
+            recent_event_memory:
+              (runtime.input as BuildTopicCandidatesInput & {
+                recent_event_memory?: unknown[];
+              }).recent_event_memory ?? [],
+            raw_builder_candidates: runtime.pendingRawBuilderCandidates,
+            missing_fields_by_candidate: runtime.pendingFieldIssues.map((issue) => ({
+              candidate_index: issue.candidate_index,
+              event_identity: issue.event_identity,
+              missing_fields: issue.missing_fields,
+            })),
+          },
+        });
+        const repairResult = await applyRuntimeCandidates({
+          rawOutput,
+          runtime,
+          append: false,
+        });
+        runtime.builderDegraded = repairResult.fieldIssues.length > 0;
+        runtime.pendingFieldRepair = false;
+      } else {
+        const rawOutput = await dependencies.invokeStructuredPrompt<unknown>({
+          promptId: "topic.candidate-builder",
+          input: runtime.input,
+        });
+        await applyRuntimeCandidates({
+          rawOutput,
+          runtime,
+          append: true,
+        });
+      }
+
+      await persistTopicCandidates(
         runtime,
-        append: true,
-      });
+        runtime.candidates.slice(0, TOPIC_CANDIDATE_TARGET_COUNT),
+      );
       runtime.slotsInsufficient =
         runtime.candidates.length < TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT;
       const node = createTraceNode(runtime, "topic-candidate-repair");

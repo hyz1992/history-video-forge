@@ -42,6 +42,10 @@ export async function runTopicRecommendationGraph(
     traceNodes: [],
     repairTriggered: false,
     slotsInsufficient: false,
+    pendingFieldRepair: false,
+    builderDegraded: false,
+    pendingFieldIssues: [],
+    pendingRawBuilderCandidates: [],
   };
   const nodes = createTopicRecommendationNodes({
     runtime,
@@ -79,6 +83,13 @@ export async function runTopicRecommendationGraph(
     diagnostics.push({
       code: "topic_candidate_repair_triggered",
       level: "info" as const,
+    });
+  }
+
+  if (runtime.builderDegraded) {
+    diagnostics.push({
+      code: "topic_candidate_builder_degraded",
+      level: "warning" as const,
     });
   }
 
