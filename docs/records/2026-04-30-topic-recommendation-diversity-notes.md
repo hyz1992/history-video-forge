@@ -159,3 +159,43 @@ npm run harness:ui-acceptance:smoke
   - 提升 builder 首轮完整交付 `TopicCandidateCard` 最小字段的服从率
   - 提升 builder 对既有 `event_identity` 的稳定复用
 - 不建议回到本地字符串归一或本地语义补丁。
+## 2026-05-02 Builder 首轮交付优化 Task 5 回归
+
+- 自动验证：
+  - `npm test -- tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts`
+  - 结果：通过
+- 真实回归项目：
+  - `project_id = 6a2a965b-1b25-4bd4-a73b-f1e9b574f64c`
+  - trace 根目录：
+    - `D:/myproject/story-video-forge2/storage/projects/2026-05-02/Task5 China Topic 5-Round Recheck [p_6a2a965b]/trace/topic-runs`
+
+### 本轮确认
+
+- `5/5` 全部成功，HTTP 状态均为 `200`
+- builder 字段补全 repair：
+  - `triggered = 0/5`
+  - `passed = 0/5`
+  - `degraded = 0/5`
+- `02-topic.candidate-builder-repair.md` 在 5 轮里都没有出现，说明首轮 builder 已能直接交付完整候选，不再依赖 repair 常态兜底
+- 抽查首轮与末轮 `01-topic.candidate-builder.md`，原始模型响应都已直接包含：
+  - `event_identity`
+  - `title`
+  - `one_line_angle`
+  - `family_label`
+  - `scope_label`
+  - `why_this_now`
+  - `must_cover_preview`
+  - `viral_rubric`
+
+### 最终结果概览
+
+- 第 1 轮：`商鞅变法 / 楚汉争霸 / 独尊儒术`
+- 第 2 轮：`秦始皇统一六国 / 张骞出使西域 / 党锢之祸`
+- 第 3 轮：`赤壁之战 / 贞观之治 / 郑和下西洋`
+- 第 4 轮：`淝水之战 / 玄武门之变 / 文景之治`
+- 第 5 轮：`安史之乱 / 靖难之役 / 戊戌变法`
+
+### 当前判断
+
+- 这轮优化对“builder 首轮字段完整性交付率”是明显有效的；关键指标已经从上一轮的 `repair 5/5` 下降到这轮的 `repair 0/5`
+- 当前主问题已不再是“首轮字段经常缺失”，而是 topic seed 边界本身较宽时，候选会自然跨到更长历史范围；这属于后续 seed 设计与分布策略问题，不是本轮首轮交付优化的回退信号
