@@ -56,6 +56,13 @@ function createSelectorDecision(...candidateIds: string[]) {
   };
 }
 
+function createIncompleteBuilderCandidate(eventIdentity: string) {
+  return {
+    event_identity: eventIdentity,
+    viral_rubric: runtimeCandidate.viral_rubric,
+  };
+}
+
 function createGatewayWithSelectorResponses(
   builderOutputs: Array<unknown>,
   selectorOutputs?: Array<unknown>,
@@ -390,6 +397,102 @@ describe("topic runtime recommendation", () => {
     );
 
     expect(result.raw_candidates[0]).toHaveProperty("event_identity", "event-a");
+  });
+
+  it("triggers topic.candidate-builder-repair when builder omits required TopicCandidateCard fields", async () => {
+    const db = createDbClient();
+    const repairedCandidates = [
+      createRuntimeCandidate("event-a", "angle-a"),
+      createRuntimeCandidate("event-b", "angle-b"),
+      createRuntimeCandidate("event-c", "angle-c"),
+      createRuntimeCandidate("event-d", "angle-d"),
+      createRuntimeCandidate("event-e", "angle-e"),
+      createRuntimeCandidate("event-f", "angle-f"),
+      createRuntimeCandidate("event-g", "angle-g"),
+      createRuntimeCandidate("event-h", "angle-h"),
+    ];
+    const invokeApi = vi.fn(
+      async ({
+        operationName,
+        input,
+      }: {
+        operationName: string;
+        input: {
+          selector_pool?: Array<{ candidate_id: string }>;
+          missing_fields_by_candidate?: Array<{ missing_fields: string[] }>;
+        };
+      }) => {
+        if (operationName === "topic.selector") {
+          return JSON.stringify(
+            createSelectorDecision(
+              ...((input.selector_pool ?? [])
+                .slice(0, 3)
+                .map((candidate) => candidate.candidate_id)),
+            ),
+          );
+        }
+
+        if (operationName === "topic.candidate-builder-repair") {
+          return JSON.stringify(repairedCandidates);
+        }
+
+        return JSON.stringify([
+          createIncompleteBuilderCandidate("event-a"),
+          createIncompleteBuilderCandidate("event-b"),
+          createIncompleteBuilderCandidate("event-c"),
+          createIncompleteBuilderCandidate("event-d"),
+          createIncompleteBuilderCandidate("event-e"),
+          createIncompleteBuilderCandidate("event-f"),
+          createIncompleteBuilderCandidate("event-g"),
+          createIncompleteBuilderCandidate("event-h"),
+        ]);
+      },
+    );
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "builder repair should fill missing topic candidate fields",
+        coreConflict: "missing fields should stay on the builder side",
+        strongScene: "repair must complete the same candidates instead of reopening discovery",
+        sourceHint: "test",
+        recentUsageHint: "no recent repeats",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(invokeApi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationName: "topic.candidate-builder-repair",
+        input: expect.objectContaining({
+          missing_fields_by_candidate: expect.arrayContaining([
+            expect.objectContaining({
+              missing_fields: expect.arrayContaining([
+                "title",
+                "one_line_angle",
+                "family_label",
+              ]),
+            }),
+          ]),
+        }),
+      }),
+    );
+    expect(result.candidates.map((candidate) => candidate.title)).toEqual([
+      "event-a",
+      "event-b",
+      "event-c",
+    ]);
   });
 
   it("repairs minimally malformed runtime output before validating TopicCandidateCard", async () => {
