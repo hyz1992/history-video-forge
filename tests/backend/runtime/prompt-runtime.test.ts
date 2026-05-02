@@ -51,6 +51,21 @@ describe("prompt runtime", () => {
     expect(prompt.body).not.toContain("至少覆盖 3 个朝代");
   });
 
+  it("gives builder a single legal TopicCandidateCard[] output skeleton", () => {
+    const registry = createPromptRegistry();
+
+    const prompt = registry.getPrompt("topic.candidate-builder");
+
+    expect(prompt.body).toContain("唯一合法输出骨架");
+    expect(prompt.body).toContain("`TopicCandidateCard[]`");
+    expect(prompt.body).toContain("\"event_identity\"");
+    expect(prompt.body).toContain("\"title\"");
+    expect(prompt.body).toContain("\"one_line_angle\"");
+    expect(prompt.body).toContain("\"family_label\"");
+    expect(prompt.body).toContain("\"scope_label\"");
+    expect(prompt.body).not.toContain("\"TopicCandidateCard\": [");
+  });
+
   it("keeps builder-repair focused on filling missing fields without reopening discovery", () => {
     const registry = createPromptRegistry();
 

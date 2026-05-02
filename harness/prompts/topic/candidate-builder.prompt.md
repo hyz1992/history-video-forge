@@ -25,9 +25,37 @@ status: active
 
 - 首轮输出的第一优先级，是先完整满足 `TopicCandidateCard` 最小字段合同
 - 多样性、分布、recent memory 与时代边界等要求，都建立在先完整交付字段之后
+- 参考以下唯一合法输出骨架组织输出；必须直接输出 `TopicCandidateCard[]`，不得包 `TopicCandidateCard` 外层对象
+- 该骨架只用于约束字段形状；具体内容必须结合当前 seed、recent_event_memory 与候选事件重新生成
 - 输出 `TopicCandidateCard[]`
 - 先输出 8 个候选，作为原始候选池
 - 必须直接输出候选数组，不得包 `TopicCandidateCard` 外层对象
+- 唯一合法输出骨架：
+
+```json
+[
+  {
+    "event_identity": "事件标识",
+    "title": "候选标题",
+    "one_line_angle": "一句话切口",
+    "family_label": "题材家族标签",
+    "scope_label": "事件范围标签",
+    "why_this_now": "当下值得讲的原因",
+    "must_cover_preview": [
+      "必须覆盖点1",
+      "必须覆盖点2"
+    ],
+    "viral_rubric": {
+      "novelty": 4,
+      "conflict": 5,
+      "emotion": 4,
+      "discussion": 4,
+      "visual": 4
+    }
+  }
+]
+```
+
 - 每个候选都必须给出 `event_identity`
 - `event_identity` 只用于标识“这是哪个事件”，不能把包装文案、角度句式或脚本化表达写进这个字段
 - `event_identity` 必须使用中文
