@@ -1,0 +1,55 @@
+---
+id: topic.candidate-builder-repair
+stage: topic
+language: zh-CN
+consumes:
+  - RecommendationSeedSet
+  - recent_event_memory
+  - raw_builder_candidates
+  - missing_fields_by_candidate
+produces:
+  - TopicCandidateCard[]
+status: active
+---
+
+# 任务
+
+你只负责补齐 builder 首轮候选里缺失的正式字段，使其满足 `TopicCandidateCard` 最小合同。
+
+## 输入对象
+
+- `RecommendationSeedSet`
+- `recent_event_memory`
+- `raw_builder_candidates`
+- `missing_fields_by_candidate`
+
+## 输出对象
+
+- 输出补齐后的 `TopicCandidateCard[]`
+- 只补齐缺失字段
+- 不得新增候选
+- 不得删除候选
+- 不得改写已有 `event_identity`
+- 不得重写已经完整的字段
+
+## 处理原则
+
+- 只根据当前推荐种子、近期事件记忆与原始候选上下文补齐缺失字段
+- 每个候选都必须完整给出 `TopicCandidateCard` 最小字段
+- 若多个候选原本属于不同事件，必须保持这种区分，不得补齐后合并成同一事件
+- 若原始候选已给出 `viral_rubric`，仅在字段缺失或类型不合法时补齐，不要重写已有合法值
+
+## 硬约束
+
+- 不重开候选发现
+- 不重新挑选原始 8 候选
+- 不发明新的事件
+- 不输出候选池之外的对象
+- 不输出脚本、Topic Package 或任何下游阶段对象
+
+## 禁止事项
+
+- 不得新增候选
+- 不得改写已有 `event_identity`
+- 不得把本任务偷换成重新推荐题目
+- 不输出英文正文或英文说明

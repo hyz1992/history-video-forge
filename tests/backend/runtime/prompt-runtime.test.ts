@@ -51,6 +51,18 @@ describe("prompt runtime", () => {
     expect(prompt.body).not.toContain("至少覆盖 3 个朝代");
   });
 
+  it("keeps builder-repair focused on filling missing fields without reopening discovery", () => {
+    const registry = createPromptRegistry();
+
+    const prompt = registry.getPrompt("topic.candidate-builder-repair");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("缺失字段");
+    expect(prompt.body).toContain("不重开候选发现");
+    expect(prompt.body).toContain("不得新增候选");
+    expect(prompt.body).toContain("不得改写已有 `event_identity`");
+  });
+
   it("normalizes annotation lines before rendering markdown interaction notes", () => {
     const markdown = renderLlmInteractionMarkdown({
       sequence: 1,

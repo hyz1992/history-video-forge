@@ -86,4 +86,19 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("必须且只能返回 3 个候选 id");
     expect(prompt.body).toContain("多于 3 个也属于违规");
   });
+
+  it("registers a zh-CN topic.candidate-builder-repair prompt dedicated to filling missing fields", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder-repair");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("只补齐缺失字段");
+  });
+
+  it("keeps builder-repair from reopening candidate discovery or rewriting event_identity", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder-repair");
+
+    expect(prompt.body).toContain("不得新增候选");
+    expect(prompt.body).toContain("不得改写已有 `event_identity`");
+    expect(prompt.body).toContain("不重开候选发现");
+  });
 });
