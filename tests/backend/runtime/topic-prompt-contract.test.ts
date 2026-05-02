@@ -54,6 +54,16 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("先完整交付字段");
   });
 
+  it("requires candidate-builder to include a short pre-output field checklist", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.body).toContain("## 输出前自检");
+    expect(prompt.body).toContain("title");
+    expect(prompt.body).toContain("one_line_angle");
+    expect(prompt.body).toContain("family_label");
+    expect(prompt.body).toContain("scope_label");
+  });
+
   it("requires candidate-builder to avoid letting recent high-frequency events dominate the raw pool", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 

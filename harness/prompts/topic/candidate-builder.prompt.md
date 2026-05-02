@@ -103,3 +103,7 @@ status: active
 - 不重写上游事件识别结论
 - 不把包装语言当成正式叙事合同
 - 不输出英文正文或英文说明
+
+## 输出前自检
+
+- `title`、`one_line_angle`、`family_label`、`scope_label` 是否都已完整给出
