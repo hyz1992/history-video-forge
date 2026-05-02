@@ -1,4 +1,5 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -9,6 +10,7 @@ import { createProject } from "../../../backend/src/modules/projects/project.rep
 import * as topicRecommendationServiceModule from "../../../backend/src/modules/topic/topic-recommendation.service.js";
 import { saveCachedCandidate } from "../../../backend/src/modules/cache/candidate-cache.repository.js";
 import { normalizeEventInput } from "../../../backend/src/modules/topic/event-normalizer.js";
+import { createTopicCandidateLibraryRepository } from "../../../backend/src/modules/topic/topic-candidate-library.repository.js";
 import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
 import { createOpenAiCompatibleProvider } from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
@@ -176,6 +178,67 @@ describe("topic runtime recommendation", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();
+  });
+
+  it("persists raw, selector pool, and final selected candidates into the topic candidate library", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Topic Candidate Library Persistence",
+    });
+    const tempRootDir = mkdtempSync(resolve(tmpdir(), "topic-candidate-library-runtime-"));
+    const repository = createTopicCandidateLibraryRepository({
+      rootDir: tempRootDir,
+    });
+    const { gateway } = createGatewayWithSelectorResponses([
+      [
+        createRuntimeCandidate("event-a", "angle-a"),
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+        createRuntimeCandidate("event-d", "angle-d"),
+        createRuntimeCandidate("event-e", "angle-e"),
+        createRuntimeCandidate("event-f", "angle-f"),
+        createRuntimeCandidate("event-g", "angle-g"),
+        createRuntimeCandidate("event-h", "angle-h"),
+      ],
+    ]);
+
+    try {
+      await recommendTopicCandidatesWithTrace(
+        db,
+        {
+          canonicalName: "Han Court Showdown",
+          familyHint: "History Diplomacy",
+          summary: "persist candidates into the text library after one recommendation round",
+          coreConflict: "raw, selector pool, and final candidates should all be archived",
+          strongScene: "the runtime should write candidate documents after recommendation completes",
+          sourceHint: "test",
+          recentUsageHint: "no recent repeats",
+        },
+        {
+          llmGateway: gateway,
+          projectId: project.id,
+          topicCandidateLibraryRepository: repository,
+        },
+      );
+
+      const records = await repository.listBySeed({
+        seedFamily: "History Diplomacy",
+        seedProfile: "Han Court Showdown",
+      });
+
+      expect(records).toHaveLength(19);
+      expect(records.filter((record) => record.status === "raw_generated")).toHaveLength(8);
+      expect(records.filter((record) => record.status === "selector_pool")).toHaveLength(8);
+      expect(records.filter((record) => record.status === "final_selected")).toHaveLength(3);
+      expect(records.every((record) => record.sourceProjectId === project.id)).toBe(true);
+      expect(records.every((record) => record.seedFamily === "History Diplomacy")).toBe(true);
+      expect(records.every((record) => record.seedProfile === "Han Court Showdown")).toBe(true);
+    } finally {
+      rmSync(tempRootDir, {
+        recursive: true,
+        force: true,
+      });
+    }
   });
 
   it("rejects malformed topic recommendation payloads missing seed fields", async () => {

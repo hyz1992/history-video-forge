@@ -35,10 +35,15 @@ import {
   normalizeEventIdentityValue,
   normalizeEventInput,
 } from "./event-normalizer.js";
+import {
+  createTopicCandidateLibraryRepository,
+  type TopicCandidateLibraryRepository,
+} from "./topic-candidate-library.repository.js";
 
 export interface TopicRecommendationOptions {
   llmGateway?: LlmGateway;
   projectId?: string | null;
+  topicCandidateLibraryRepository?: TopicCandidateLibraryRepository;
 }
 
 interface TopicSelectorDecision {
@@ -146,6 +151,21 @@ export async function recommendTopicCandidatesWithTrace(
       runtimeDiagnostics: finalDiagnostics as Record<string, unknown>,
     });
   }
+
+  const topicCandidateLibraryRepository =
+    options?.topicCandidateLibraryRepository ??
+    createTopicCandidateLibraryRepository();
+
+  await persistTopicCandidateLibraryEntries({
+    input,
+    projectId: options.projectId,
+    runId,
+    rawCandidates: result.candidates,
+    selectorPool: postProcessed.selectorPool,
+    finalRankings: selected.rankings,
+    repository: topicCandidateLibraryRepository,
+    persistedAt: recommendationStartedAt,
+  });
 
   await persistPostProcessedCandidates(db, {
     projectId: options.projectId,
@@ -275,6 +295,11 @@ interface RecentEventMemoryEntry {
 interface SelectorTrace {
   selected_candidate_ids: string[];
   repair_attempts: number;
+}
+
+interface TopicCandidateLibrarySeedContext {
+  seedFamily: string;
+  seedProfile: string;
 }
 
 interface RecommendationDiagnostic {
@@ -826,6 +851,98 @@ async function persistPostProcessedCandidates(
       mustCoverPreviewJson: candidate.candidate.must_cover_preview,
     });
   }
+}
+
+async function persistTopicCandidateLibraryEntries(input: {
+  input: BuildTopicCandidatesInput;
+  projectId: string;
+  runId: string;
+  rawCandidates: RecommendationCandidate[];
+  selectorPool: SelectorPoolCandidate[];
+  finalRankings: RankedRecommendationCandidate[];
+  repository: TopicCandidateLibraryRepository;
+  persistedAt: Date;
+}) {
+  const seedContext = buildTopicCandidateLibrarySeedContext(input.input);
+  const persistedAtIso = input.persistedAt.toISOString();
+
+  for (const [index, candidate] of input.rawCandidates.entries()) {
+    await input.repository.save({
+      candidateId: `raw-${input.runId}-${index + 1}`,
+      seedFamily: seedContext.seedFamily,
+      seedProfile: seedContext.seedProfile,
+      status: "raw_generated",
+      sourceProjectId: input.projectId,
+      sourceTopicRunId: input.runId,
+      eventIdentity: candidate.event_identity,
+      title: candidate.title,
+      oneLineAngle: candidate.one_line_angle,
+      familyLabel: candidate.family_label,
+      scopeLabel: candidate.scope_label,
+      firstGeneratedAt: persistedAtIso,
+      timesSelected: 0,
+      timesSeenInPool: 0,
+      notes: buildTopicCandidateLibraryNotes("raw_generated"),
+    });
+  }
+
+  for (const candidate of input.selectorPool) {
+    await input.repository.save({
+      candidateId: `selector-pool-${input.runId}-${candidate.candidate_id}`,
+      seedFamily: seedContext.seedFamily,
+      seedProfile: seedContext.seedProfile,
+      status: "selector_pool",
+      sourceProjectId: input.projectId,
+      sourceTopicRunId: input.runId,
+      eventIdentity: candidate.event_identity,
+      title: candidate.title,
+      oneLineAngle: candidate.one_line_angle,
+      familyLabel: candidate.family_label,
+      scopeLabel: candidate.scope_label,
+      firstGeneratedAt: persistedAtIso,
+      timesSelected: 0,
+      timesSeenInPool: 1,
+      notes: buildTopicCandidateLibraryNotes("selector_pool"),
+    });
+  }
+
+  for (const candidate of input.finalRankings) {
+    await input.repository.save({
+      candidateId: `final-selected-${input.runId}-${candidate.candidateId}`,
+      seedFamily: seedContext.seedFamily,
+      seedProfile: seedContext.seedProfile,
+      status: "final_selected",
+      sourceProjectId: input.projectId,
+      sourceTopicRunId: input.runId,
+      eventIdentity: candidate.candidate.event_identity,
+      title: candidate.candidate.title,
+      oneLineAngle: candidate.candidate.one_line_angle,
+      familyLabel: candidate.candidate.family_label,
+      scopeLabel: candidate.candidate.scope_label,
+      firstGeneratedAt: persistedAtIso,
+      lastSelectedAt: persistedAtIso,
+      timesSelected: 1,
+      timesSeenInPool: 1,
+      notes: buildTopicCandidateLibraryNotes("final_selected"),
+    });
+  }
+}
+
+function buildTopicCandidateLibrarySeedContext(
+  input: BuildTopicCandidatesInput,
+): TopicCandidateLibrarySeedContext {
+  return {
+    seedFamily: input.familyHint?.trim() || input.canonicalName.trim(),
+    seedProfile: input.canonicalName.trim(),
+  };
+}
+
+function buildTopicCandidateLibraryNotes(status: string) {
+  return `## 系统备注
+
+- 沉淀状态：${status}
+- 由 topic recommendation runtime 自动写入
+`;
 }
 
 function writeRecommendationDiagnosticsMarkdown(input: {
