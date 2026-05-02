@@ -79,4 +79,11 @@ describe("topic prompt contract", () => {
 
     expect(prompt.body).toContain("recent_event_memory");
   });
+
+  it("requires topic.selector to return exactly three candidate ids", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.selector");
+
+    expect(prompt.body).toContain("必须且只能返回 3 个候选 id");
+    expect(prompt.body).toContain("多于 3 个也属于违规");
+  });
 });
