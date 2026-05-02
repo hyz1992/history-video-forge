@@ -99,25 +99,54 @@ export async function recommendTopicCandidatesWithTrace(
     createdBefore: recommendationStartedAt,
     existingCacheRecordIds,
   });
-  const selected = postProcessed.selectorPool.length >= TOPIC_CANDIDATE_TARGET_COUNT
+  const topicCandidateLibraryRepository =
+    options?.topicCandidateLibraryRepository ??
+    createTopicCandidateLibraryRepository();
+  const fallbackCandidates = options?.projectId
+    ? await loadFallbackCandidates({
+        db,
+        input,
+        repository: topicCandidateLibraryRepository,
+        existingRankings: postProcessed.rankings,
+      })
+    : {
+        rankings: [],
+        selectorPool: [],
+        diagnostics: [],
+      };
+  const selectorRankings = [
+    ...postProcessed.rankings,
+    ...fallbackCandidates.rankings,
+  ];
+  const selectorPool = [
+    ...postProcessed.selectorPool,
+    ...fallbackCandidates.selectorPool,
+  ];
+  const selected = selectorPool.length >= TOPIC_CANDIDATE_TARGET_COUNT
     ? await selectFinalCandidatesWithTrace({
         input,
         llmGateway: gateway,
-        selectorPool: postProcessed.selectorPool,
+        selectorPool,
         recentEventMemory,
-        rankings: postProcessed.rankings,
+        rankings: selectorRankings,
         interactionLogWriter,
       })
     : {
-        candidates: postProcessed.candidates,
-        rankings: postProcessed.rankings,
+        candidates: selectorRankings
+          .slice(0, TOPIC_CANDIDATE_TARGET_COUNT)
+          .map((entry) => entry.candidate),
+        rankings: selectorRankings.slice(0, TOPIC_CANDIDATE_TARGET_COUNT),
         selectorTrace: null,
-        diagnostics: [],
+        diagnostics: [...fallbackCandidates.diagnostics],
       };
   const finalDiagnostics = finalizeRecommendationDiagnostics({
     checks: result.diagnostics.checks,
     finalCandidateCount: selected.candidates.length,
-    additionalChecks: [...postProcessed.diagnostics, ...selected.diagnostics],
+    additionalChecks: [
+      ...postProcessed.diagnostics,
+      ...fallbackCandidates.diagnostics,
+      ...selected.diagnostics,
+    ],
   });
 
   if (project) {
@@ -134,7 +163,7 @@ export async function recommendTopicCandidatesWithTrace(
     return {
       ...result,
       raw_candidates: result.candidates,
-      selector_pool: postProcessed.selectorPool,
+      selector_pool: selectorPool,
       selector_trace: selected.selectorTrace,
       candidates: selected.candidates,
       diagnostics: finalDiagnostics,
@@ -152,16 +181,12 @@ export async function recommendTopicCandidatesWithTrace(
     });
   }
 
-  const topicCandidateLibraryRepository =
-    options?.topicCandidateLibraryRepository ??
-    createTopicCandidateLibraryRepository();
-
   await persistTopicCandidateLibraryEntries({
     input,
     projectId: options.projectId,
     runId,
     rawCandidates: result.candidates,
-    selectorPool: postProcessed.selectorPool,
+    selectorPool,
     finalRankings: selected.rankings,
     repository: topicCandidateLibraryRepository,
     persistedAt: recommendationStartedAt,
@@ -851,6 +876,99 @@ async function persistPostProcessedCandidates(
       mustCoverPreviewJson: candidate.candidate.must_cover_preview,
     });
   }
+}
+
+async function loadFallbackCandidates(input: {
+  db: DbClient;
+  input: BuildTopicCandidatesInput;
+  repository: TopicCandidateLibraryRepository;
+  existingRankings: RankedRecommendationCandidate[];
+}) {
+  const seedContext = buildTopicCandidateLibrarySeedContext(input.input);
+  const fallbackDocuments = await input.repository.listBySeed({
+    seedFamily: seedContext.seedFamily,
+    seedProfile: seedContext.seedProfile,
+    statuses: ["fallback_ready"],
+  });
+  const existingEventIdentities = new Set(
+    input.existingRankings.map((candidate) => candidate.eventIdentity),
+  );
+  const diagnostics: RecommendationDiagnostic[] = [];
+  const fallbackRankings: RankedRecommendationCandidate[] = [];
+
+  for (const [index, document] of fallbackDocuments.entries()) {
+    const eventIdentity = normalizeEventIdentityValue(document.eventIdentity);
+    if (existingEventIdentities.has(eventIdentity)) {
+      continue;
+    }
+
+    const normalized = await normalizeEventInput(input.db, {
+      rawInput: document.eventIdentity,
+      sourceType: "system_recommendation",
+    });
+    const candidate = TopicCandidateCard.parse({
+      event_identity: document.eventIdentity,
+      title: document.title,
+      one_line_angle: document.oneLineAngle,
+      family_label: document.familyLabel ?? "通用安全槽位",
+      scope_label: document.scopeLabel ?? "单事件",
+      estimated_duration_band: "medium",
+      why_this_now: "同 seed family/profile 下的受控 fallback 候选。",
+      core_conflict: document.notes?.trim() || "受控 fallback 候选，等待 selector 再决策。",
+      strong_scene: document.oneLineAngle,
+      must_cover_preview: [document.oneLineAngle],
+      risk_hints: ["fallback 候选仍需经过 selector，不得直接顶替最终结果"],
+      source_hint: `topic-candidate-library:${document.sourceProjectId}`,
+      recent_usage_hint: "受控 fallback 复用",
+      viral_rubric: {
+        hook_power: "medium",
+        novelty_gap: "medium",
+        emotion_gap: "medium",
+        share_impulse: "medium",
+        visual_promise: "medium",
+      },
+    });
+    const fingerprint = buildEventIdentityFingerprint({
+      eventIdentity,
+      angle: candidate.one_line_angle,
+    });
+
+    fallbackRankings.push({
+      candidateId: `fallback_candidate_${index + 1}`,
+      candidate,
+      eventId: normalized.event.id,
+      eventIdentity,
+      fingerprint,
+      originalIndex: input.existingRankings.length + index,
+      fatigueScore: 0,
+      recentlySeen: false,
+    });
+    existingEventIdentities.add(eventIdentity);
+  }
+
+  if (fallbackRankings.length > 0) {
+    diagnostics.push({
+      code: "topic_candidate_library_fallback_loaded",
+      level: "info",
+      reason: `已从同 seed family/profile 的候选库加载 ${fallbackRankings.length} 个 fallback 候选进入 selector pool`,
+    });
+  }
+
+  return {
+    rankings: fallbackRankings,
+    selectorPool: fallbackRankings.map((entry) => ({
+      candidate_id: entry.candidateId,
+      event_identity: entry.candidate.event_identity,
+      normalized_event_identity: entry.eventIdentity,
+      title: entry.candidate.title,
+      one_line_angle: entry.candidate.one_line_angle,
+      family_label: entry.candidate.family_label,
+      scope_label: entry.candidate.scope_label,
+      fatigue_score: entry.fatigueScore,
+      recently_seen: entry.recentlySeen,
+    })),
+    diagnostics,
+  };
 }
 
 async function persistTopicCandidateLibraryEntries(input: {

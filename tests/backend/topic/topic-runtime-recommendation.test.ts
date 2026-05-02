@@ -241,6 +241,131 @@ describe("topic runtime recommendation", () => {
     }
   });
 
+  it("only reads same family/profile fallback_ready candidates into selector pool", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Topic Candidate Library Fallback",
+    });
+    const tempRootDir = mkdtempSync(resolve(tmpdir(), "topic-candidate-library-fallback-"));
+    const repository = createTopicCandidateLibraryRepository({
+      rootDir: tempRootDir,
+    });
+    const { gateway, invokeApi } = createGatewayWithSelectorResponses(
+      [[
+        createRuntimeCandidate("event-a", "angle-a"),
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-a", "angle-a-duplicate-1"),
+        createRuntimeCandidate("event-a", "angle-a-duplicate-2"),
+        createRuntimeCandidate("event-a", "angle-a-duplicate-3"),
+        createRuntimeCandidate("event-b", "angle-b-duplicate-1"),
+        createRuntimeCandidate("event-b", "angle-b-duplicate-2"),
+        createRuntimeCandidate("event-b", "angle-b-duplicate-3"),
+      ]],
+      [["selector_candidate_1", "selector_candidate_2", "fallback_candidate_1"]],
+    );
+
+    await repository.save({
+      candidateId: "fallback-allowed",
+      seedFamily: "History Diplomacy",
+      seedProfile: "Han Court Showdown",
+      status: "fallback_ready",
+      sourceProjectId: "project-1",
+      sourceTopicRunId: "topic-run-1",
+      eventIdentity: "event-fallback",
+      title: "fallback-allowed-title",
+      oneLineAngle: "fallback-allowed-angle",
+      familyLabel: "外交压场型",
+      scopeLabel: "单事件",
+    });
+    await repository.save({
+      candidateId: "fallback-other-family",
+      seedFamily: "Battle Reversal",
+      seedProfile: "Han Court Showdown",
+      status: "fallback_ready",
+      sourceProjectId: "project-1",
+      sourceTopicRunId: "topic-run-1",
+      eventIdentity: "event-other-family",
+      title: "fallback-other-family-title",
+      oneLineAngle: "fallback-other-family-angle",
+      familyLabel: "战场翻盘型",
+      scopeLabel: "单事件",
+    });
+    await repository.save({
+      candidateId: "fallback-other-profile",
+      seedFamily: "History Diplomacy",
+      seedProfile: "Tang Frontier Defense",
+      status: "fallback_ready",
+      sourceProjectId: "project-1",
+      sourceTopicRunId: "topic-run-1",
+      eventIdentity: "event-other-profile",
+      title: "fallback-other-profile-title",
+      oneLineAngle: "fallback-other-profile-angle",
+      familyLabel: "外交压场型",
+      scopeLabel: "单事件",
+    });
+    await repository.save({
+      candidateId: "unused-same-seed",
+      seedFamily: "History Diplomacy",
+      seedProfile: "Han Court Showdown",
+      status: "unused",
+      sourceProjectId: "project-1",
+      sourceTopicRunId: "topic-run-1",
+      eventIdentity: "event-unused",
+      title: "unused-same-seed-title",
+      oneLineAngle: "unused-same-seed-angle",
+      familyLabel: "外交压场型",
+      scopeLabel: "单事件",
+    });
+
+    try {
+      const result = await recommendTopicCandidatesWithTrace(
+        db,
+        {
+          canonicalName: "Han Court Showdown",
+          familyHint: "History Diplomacy",
+          summary: "selector should receive fallback_ready candidates from the same family/profile only",
+          coreConflict: "fallback candidates must stay inside the selector instead of directly replacing final output",
+          strongScene: "the selector pool should be expanded by one controlled fallback candidate",
+          sourceHint: "test",
+          recentUsageHint: "no recent repeats",
+        },
+        {
+          llmGateway: gateway,
+          projectId: project.id,
+          topicCandidateLibraryRepository: repository,
+        },
+      );
+
+      const selectorCalls = invokeApi.mock.calls.filter(
+        ([request]) => request.operationName === "topic.selector",
+      );
+      const selectorInput = selectorCalls[0]?.[0]?.input as
+        | { selector_pool?: Array<{ candidate_id: string; title: string }> }
+        | undefined;
+      const selectorTitles = selectorInput?.selector_pool?.map((candidate) => candidate.title) ?? [];
+
+      expect(selectorTitles).toContain("fallback-allowed-title");
+      expect(selectorTitles).not.toContain("fallback-other-family-title");
+      expect(selectorTitles).not.toContain("fallback-other-profile-title");
+      expect(selectorTitles).not.toContain("unused-same-seed-title");
+      expect(result.candidates.map((candidate) => candidate.title)).toEqual([
+        "event-a",
+        "event-b",
+        "fallback-allowed-title",
+      ]);
+      expect(result.selector_trace?.selected_candidate_ids).toEqual([
+        "selector_candidate_1",
+        "selector_candidate_2",
+        "fallback_candidate_1",
+      ]);
+    } finally {
+      rmSync(tempRootDir, {
+        recursive: true,
+        force: true,
+      });
+    }
+  });
+
   it("rejects malformed topic recommendation payloads missing seed fields", async () => {
     const app = buildApp();
     const projectResponse = await app.inject({
