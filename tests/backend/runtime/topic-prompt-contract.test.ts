@@ -47,6 +47,15 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("不得自定义额外评分键");
   });
 
+  it("requires candidate-builder to avoid letting recent high-frequency events dominate the raw pool", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.body).toContain("不要继续让这些近期高频事件占据原始 8 候选的大多数槽位");
+    expect(prompt.body).toContain("朝代分布");
+    expect(prompt.body).toContain("冲突类型");
+    expect(prompt.body).toContain("叙事结构");
+  });
+
   it("demands concrete single-event recommendation topics instead of abstract buckets", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 

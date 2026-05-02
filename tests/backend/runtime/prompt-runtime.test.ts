@@ -38,6 +38,19 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("`event_identity`");
   });
 
+  it("keeps builder source expansion lightweight while preventing recent hot events from dominating the raw pool", () => {
+    const registry = createPromptRegistry();
+
+    const prompt = registry.getPrompt("topic.candidate-builder");
+
+    expect(prompt.body).toContain("原始 8 候选");
+    expect(prompt.body).toContain("大多数槽位");
+    expect(prompt.body).toContain("朝代分布");
+    expect(prompt.body).toContain("冲突类型");
+    expect(prompt.body).toContain("叙事结构");
+    expect(prompt.body).not.toContain("至少覆盖 3 个朝代");
+  });
+
   it("normalizes annotation lines before rendering markdown interaction notes", () => {
     const markdown = renderLlmInteractionMarkdown({
       sequence: 1,
