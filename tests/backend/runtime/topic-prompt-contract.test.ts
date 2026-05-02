@@ -47,6 +47,13 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("不得自定义额外评分键");
   });
 
+  it("requires candidate-builder to prioritize first-pass field completeness ahead of diversity tactics", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.body).toContain("首轮输出的第一优先级");
+    expect(prompt.body).toContain("先完整交付字段");
+  });
+
   it("requires candidate-builder to avoid letting recent high-frequency events dominate the raw pool", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 

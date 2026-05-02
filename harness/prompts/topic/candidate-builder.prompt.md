@@ -23,6 +23,8 @@ status: active
 
 ## 输出对象
 
+- 首轮输出的第一优先级，是先完整满足 `TopicCandidateCard` 最小字段合同
+- 多样性、分布、recent memory 与时代边界等要求，都建立在先完整交付字段之后
 - 输出 `TopicCandidateCard[]`
 - 先输出 8 个候选，作为原始候选池
 - 必须直接输出候选数组，不得包 `TopicCandidateCard` 外层对象
