@@ -42,6 +42,8 @@ export async function runTopicRecommendationGraph(
     traceNodes: [],
     repairTriggered: false,
     slotsInsufficient: false,
+    builderRepairTriggered: false,
+    builderRepairPassed: false,
     pendingFieldRepair: false,
     builderDegraded: false,
     pendingFieldIssues: [],
@@ -82,6 +84,20 @@ export async function runTopicRecommendationGraph(
   if (runtime.repairTriggered) {
     diagnostics.push({
       code: "topic_candidate_repair_triggered",
+      level: "info" as const,
+    });
+  }
+
+  if (runtime.builderRepairTriggered) {
+    diagnostics.push({
+      code: "topic_candidate_builder_repair_triggered",
+      level: "info" as const,
+    });
+  }
+
+  if (runtime.builderRepairPassed) {
+    diagnostics.push({
+      code: "topic_candidate_builder_repair_passed",
       level: "info" as const,
     });
   }

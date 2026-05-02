@@ -97,3 +97,18 @@ npm run harness:ui-acceptance:smoke
 - 后续如果继续优化，优先级应该放在：
   - 提升 builder 对完整 `TopicCandidateCard` 最小字段的服从率
   - 而不是继续堆更多多样性条款
+
+## 2026-05-02 Builder 字段补全巡检补充
+
+- 若 builder 首轮候选缺少正式字段，应在 `recommendation-diagnostics.md` 中出现：
+  - `topic_candidate_builder_repair_triggered`
+  - `topic_candidate_builder_repair_passed`
+  - 或 `topic_candidate_builder_degraded`
+- 巡检时优先结合：
+  - `llm-interactions/01-topic.candidate-builder.md`
+  - `llm-interactions/02-topic.candidate-builder-repair.md`（若存在）
+  - `recommendation-diagnostics.md`
+- 人工检查点：
+  - builder 首轮是否已完整交付 `TopicCandidateCard` 最小字段
+  - 若未完整交付，是否只触发了一次字段补全 repair
+  - repair 后是正式通过，还是进入 degraded fallback

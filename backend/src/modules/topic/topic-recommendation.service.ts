@@ -712,6 +712,27 @@ function enrichDiagnosticReason(
     };
   }
 
+  if (check.code === "topic_candidate_builder_repair_triggered") {
+    return {
+      ...check,
+      reason: "builder 首轮候选缺少正式字段，已触发一次字段补全 repair",
+    };
+  }
+
+  if (check.code === "topic_candidate_builder_repair_passed") {
+    return {
+      ...check,
+      reason: "builder 字段补全 repair 后已满足 TopicCandidateCard 最小字段合同",
+    };
+  }
+
+  if (check.code === "topic_candidate_builder_degraded") {
+    return {
+      ...check,
+      reason: "builder 字段补全 repair 后仍有缺失字段，已降级为本地 fallback 结果",
+    };
+  }
+
   if (check.code === "topic_candidate_slots_insufficient") {
     return {
       ...check,

@@ -29,6 +29,8 @@ export interface TopicRecommendationGraphRuntime {
   traceNodes: GraphTraceNodeSummary[];
   repairTriggered: boolean;
   slotsInsufficient: boolean;
+  builderRepairTriggered: boolean;
+  builderRepairPassed: boolean;
   pendingFieldRepair: boolean;
   builderDegraded: boolean;
   pendingFieldIssues: CandidateFieldIssue[];
@@ -400,6 +402,7 @@ export function createTopicRecommendationNodes(input: {
       runtime.repairTriggered = true;
 
       if (runtime.pendingFieldRepair) {
+        runtime.builderRepairTriggered = true;
         const rawOutput = await dependencies.invokeStructuredPrompt<unknown>({
           promptId: "topic.candidate-builder-repair",
           input: {
@@ -422,6 +425,7 @@ export function createTopicRecommendationNodes(input: {
           append: false,
         });
         runtime.builderDegraded = repairResult.fieldIssues.length > 0;
+        runtime.builderRepairPassed = repairResult.fieldIssues.length === 0;
         runtime.pendingFieldRepair = false;
       } else {
         const rawOutput = await dependencies.invokeStructuredPrompt<unknown>({

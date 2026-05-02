@@ -493,6 +493,18 @@ describe("topic runtime recommendation", () => {
       "event-b",
       "event-c",
     ]);
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "topic_candidate_builder_repair_triggered",
+        level: "info",
+      }),
+    );
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "topic_candidate_builder_repair_passed",
+        level: "info",
+      }),
+    );
   });
 
   it("keeps serving fallback candidates and marks diagnostics degraded when builder repair still leaves required fields missing", async () => {
@@ -559,6 +571,12 @@ describe("topic runtime recommendation", () => {
       expect.objectContaining({
         code: "topic_candidate_builder_degraded",
         level: "warning",
+      }),
+    );
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "topic_candidate_builder_repair_triggered",
+        level: "info",
       }),
     );
   });
@@ -1586,6 +1604,82 @@ describe("topic runtime recommendation", () => {
     expect(diagnosticsLogContent).not.toContain("prompt_id:");
   });
 
+  it("writes builder repair diagnostics into recommendation-diagnostics markdown", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Topic Builder Repair Diagnostics",
+    });
+    const repairedCandidates = [
+      createRuntimeCandidate("event-a", "angle-a"),
+      createRuntimeCandidate("event-b", "angle-b"),
+      createRuntimeCandidate("event-c", "angle-c"),
+      createRuntimeCandidate("event-d", "angle-d"),
+      createRuntimeCandidate("event-e", "angle-e"),
+      createRuntimeCandidate("event-f", "angle-f"),
+      createRuntimeCandidate("event-g", "angle-g"),
+      createRuntimeCandidate("event-h", "angle-h"),
+    ];
+    const invokeApi = vi.fn(async ({ operationName }: { operationName: string }) => {
+      if (operationName === "topic.selector") {
+        return JSON.stringify(
+          createSelectorDecision(
+            "selector_candidate_1",
+            "selector_candidate_2",
+            "selector_candidate_3",
+          ),
+        );
+      }
+
+      if (operationName === "topic.candidate-builder-repair") {
+        return JSON.stringify(repairedCandidates);
+      }
+
+      return JSON.stringify([
+        createIncompleteBuilderCandidate("event-a"),
+        createIncompleteBuilderCandidate("event-b"),
+        createIncompleteBuilderCandidate("event-c"),
+        createIncompleteBuilderCandidate("event-d"),
+        createIncompleteBuilderCandidate("event-e"),
+        createIncompleteBuilderCandidate("event-f"),
+        createIncompleteBuilderCandidate("event-g"),
+        createIncompleteBuilderCandidate("event-h"),
+      ]);
+    });
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "builder repair diagnostics should be visible in recommendation markdown",
+        coreConflict: "field completeness repair must leave observable diagnostics",
+        strongScene: "builder omits required fields and repair fills them once",
+        sourceHint: "test",
+        recentUsageHint: "none",
+      },
+      {
+        llmGateway: gateway,
+        projectId: project.id,
+      },
+    );
+
+    const profile = getProjectStorageProfile(project);
+    const runId = String((result.trace as Record<string, unknown>).run_id);
+    const runDir = resolve(process.cwd(), profile.topic_runs_dir, runId);
+    const diagnosticsLogPath = resolve(runDir, "recommendation-diagnostics.md");
+    const diagnosticsLogContent = readFileSync(diagnosticsLogPath, "utf8");
+
+    expect(diagnosticsLogContent).toContain("topic_candidate_builder_repair_triggered");
+    expect(diagnosticsLogContent).toContain("topic_candidate_builder_repair_passed");
+    expect(diagnosticsLogContent).not.toContain("topic_candidate_builder_degraded");
+  });
+
   it("sends recent_event_memory to topic.selector", async () => {
     const db = createDbClient();
     const { gateway, invokeApi } = createGatewayWithSelectorResponses(
@@ -2027,6 +2121,9 @@ describe("topic runtime recommendation", () => {
 
     expect(notesContent).toContain("检查 builder 是否复用了近期 identity");
     expect(notesContent).toContain("01-topic.candidate-builder.md");
+    expect(notesContent).toContain("topic_candidate_builder_repair_triggered");
+    expect(notesContent).toContain("topic_candidate_builder_repair_passed");
+    expect(notesContent).toContain("topic_candidate_builder_degraded");
   });
 
   it("accepts selector repair outputs returned through answer.selected_candidates", async () => {
