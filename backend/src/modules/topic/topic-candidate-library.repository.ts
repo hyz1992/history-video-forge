@@ -4,6 +4,7 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
+import { resolve } from "node:path";
 
 import {
   parseTopicCandidateLibraryJsonDocument,
@@ -13,7 +14,11 @@ import {
   TOPIC_CANDIDATE_LIBRARY_JSON_SCHEMA_VERSION,
   type TopicCandidateLibraryJsonDocument,
 } from "./topic-candidate-library-json.types.js";
-import { buildTopicCandidateLibraryDirectory } from "./topic-candidate-library.path.js";
+import {
+  TOPIC_CANDIDATE_LIBRARY_ROOT_DIR,
+  buildTopicCandidateLibraryDirectory,
+  buildTopicCandidateLibrarySlugs,
+} from "./topic-candidate-library.path.js";
 import type { TopicCandidateLibraryStatus } from "./topic-candidate-library.types.js";
 
 export interface TopicCandidateLibraryDocument {
@@ -49,6 +54,7 @@ interface CreateTopicCandidateLibraryRepositoryOptions {
 }
 
 const CANDIDATES_JSON_FILENAME = "candidates.json";
+const LIBRARY_INDEX_FILENAME = "library-index.json";
 
 export function createTopicCandidateLibraryRepository(
   options: CreateTopicCandidateLibraryRepositoryOptions = {},
@@ -89,6 +95,12 @@ export function createTopicCandidateLibraryRepository(
         serializeTopicCandidateLibraryJsonDocument(nextDocument),
         "utf8",
       );
+      writeLibraryIndex({
+        rootDir,
+        seedFamily: document.seedFamily,
+        seedProfile: document.seedProfile,
+        updatedAt: nextDocument.updated_at,
+      });
     },
 
     async listBySeed(input) {
@@ -115,6 +127,73 @@ export function createTopicCandidateLibraryRepository(
         .map(fromJsonCandidate);
     },
   };
+}
+
+interface TopicCandidateLibraryIndexDocument {
+  entries: Array<{
+    seed_family: string;
+    seed_profile: string;
+    seed_family_slug: string;
+    seed_profile_slug: string;
+    directory: string;
+    candidate_file: string;
+    updated_at: string;
+  }>;
+}
+
+function writeLibraryIndex(input: {
+  rootDir: string;
+  seedFamily: string;
+  seedProfile: string;
+  updatedAt: string;
+}) {
+  const indexPath = resolve(
+    input.rootDir,
+    TOPIC_CANDIDATE_LIBRARY_ROOT_DIR,
+    LIBRARY_INDEX_FILENAME,
+  );
+  const relativeDirectory = buildTopicCandidateLibraryDirectory({
+    seedFamily: input.seedFamily,
+    seedProfile: input.seedProfile,
+  });
+  const { seedFamilySlug, seedProfileSlug } = buildTopicCandidateLibrarySlugs({
+    seedFamily: input.seedFamily,
+    seedProfile: input.seedProfile,
+  });
+  const current: TopicCandidateLibraryIndexDocument = existsSync(indexPath)
+    ? JSON.parse(readFileSync(indexPath, "utf8"))
+    : { entries: [] };
+
+  const nextEntry = {
+    seed_family: input.seedFamily,
+    seed_profile: input.seedProfile,
+    seed_family_slug: seedFamilySlug,
+    seed_profile_slug: seedProfileSlug,
+    directory: relativeDirectory,
+    candidate_file: `${relativeDirectory}/${CANDIDATES_JSON_FILENAME}`,
+    updated_at: input.updatedAt,
+  };
+
+  const nextEntries = current.entries.filter(
+    (entry) =>
+      !(
+        entry.seed_family === input.seedFamily
+        && entry.seed_profile === input.seedProfile
+      ),
+  );
+  nextEntries.push(nextEntry);
+  nextEntries.sort((left, right) =>
+    `${left.seed_family}::${left.seed_profile}`.localeCompare(
+      `${right.seed_family}::${right.seed_profile}`,
+      "zh-CN",
+    ),
+  );
+
+  writeFileSync(
+    indexPath,
+    JSON.stringify({ entries: nextEntries }, null, 2),
+    "utf8",
+  );
 }
 
 function createEmptyJsonDocument(

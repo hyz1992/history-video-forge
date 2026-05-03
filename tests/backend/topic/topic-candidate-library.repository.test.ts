@@ -180,6 +180,56 @@ describe("topic candidate library repository", () => {
     );
   });
 
+  it("writes a global library-index.json that maps readable seed text to the aggregated candidate file", async () => {
+    const { repository, rootDir } = createTestRepository(tempDirs);
+
+    await repository.save({
+      candidateId: "candidate-1",
+      seedFamily: "中国古代重大历史事件",
+      seedProfile: "中国古代重大历史事件",
+      status: "unused",
+      sourceProjectId: "project-1",
+      sourceTopicRunId: "topic-run-1",
+      eventIdentity: "商鞅变法",
+      title: "商鞅变法：秦国崛起的制度革命",
+      oneLineAngle: "一场改变秦国命运的激进改革",
+      notes: "用于验证跨项目查找索引。",
+    });
+
+    const indexPath = resolve(
+      rootDir,
+      "storage/topic-candidate-library/library-index.json",
+    );
+
+    expect(existsSync(indexPath)).toBe(true);
+
+    const indexDocument = JSON.parse(readFileSync(indexPath, "utf8")) as {
+      entries: Array<{
+        seed_family: string;
+        seed_profile: string;
+        seed_family_slug: string;
+        seed_profile_slug: string;
+        directory: string;
+        candidate_file: string;
+      }>;
+    };
+
+    expect(indexDocument.entries).toEqual([
+      expect.objectContaining({
+        seed_family: "中国古代重大历史事件",
+        seed_profile: "中国古代重大历史事件",
+        seed_family_slug:
+          "u8-e4b8ade59bbde58fa4e4bba3e9878de5a4a7e58e86e58fb2e4ba8be4bbb6",
+        seed_profile_slug:
+          "u8-e4b8ade59bbde58fa4e4bba3e9878de5a4a7e58e86e58fb2e4ba8be4bbb6",
+        directory:
+          "storage/topic-candidate-library/u8-e4b8ade59bbde58fa4e4bba3e9878de5a4a7e58e86e58fb2e4ba8be4bbb6/u8-e4b8ade59bbde58fa4e4bba3e9878de5a4a7e58e86e58fb2e4ba8be4bbb6",
+        candidate_file:
+          "storage/topic-candidate-library/u8-e4b8ade59bbde58fa4e4bba3e9878de5a4a7e58e86e58fb2e4ba8be4bbb6/u8-e4b8ade59bbde58fa4e4bba3e9878de5a4a7e58e86e58fb2e4ba8be4bbb6/candidates.json",
+      }),
+    ]);
+  });
+
   it("keeps markdown codec as legacy only and does not require markdown files for formal storage", () => {
     const repositorySource = readFileSync(
       resolve(
