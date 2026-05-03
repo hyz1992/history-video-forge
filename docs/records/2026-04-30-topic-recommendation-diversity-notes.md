@@ -52,6 +52,31 @@ npm run harness:ui-acceptance:smoke
 
 两者都应保持可审查；前者强调候选、事件标识与下游 trace 可追踪，后者强调 selector 阶段的输入上下文没有丢失。
 
+## Topic Candidate Library 巡检补充
+
+- 候选库根目录：
+  - `storage/topic-candidate-library/`
+- 进入目标条目前，先确认：
+  - `seed-family`
+  - `seed-profile`
+  - 当前巡检是否与本轮 recommendation seed 完全一致
+- 巡检时至少区分这些状态：
+  - `raw_generated`
+  - `unused`
+  - `fallback_ready`
+  - `expired`
+- 人工检查点：
+  - 本轮原始 8 候选是否已沉淀到 `raw_generated`
+  - 未入选但保留的候选是否能在 `unused` 中看到
+  - 允许受控复用的条目是否明确标成 `fallback_ready`
+  - 不再参与主动复用的条目是否明确标成 `expired`
+  - 当本轮触发候选库补位时，是否仍能在 `02-topic.selector.md` 看到 fallback 候选进入 selector，而不是绕过 selector 直接出现在最终结果
+- 巡检组合：
+  - `storage/topic-candidate-library/<seed-family>/<seed-profile>/`
+  - `llm-interactions/01-topic.candidate-builder.md`
+  - `llm-interactions/02-topic.selector.md`
+  - `recommendation-diagnostics.md`
+
 ## 2026-05-02 中国 Seed 回归补充
 
 - 自动验证：

@@ -2312,6 +2312,11 @@ describe("topic runtime recommendation", () => {
     expect(notesContent).toContain("topic_candidate_builder_repair_triggered");
     expect(notesContent).toContain("topic_candidate_builder_repair_passed");
     expect(notesContent).toContain("topic_candidate_builder_degraded");
+    expect(notesContent).toContain("topic-candidate-library");
+    expect(notesContent).toContain("fallback_ready");
+    expect(notesContent).toContain("raw_generated");
+    expect(notesContent).toContain("unused");
+    expect(notesContent).toContain("expired");
   });
 
   it("accepts selector repair outputs returned through answer.selected_candidates", async () => {

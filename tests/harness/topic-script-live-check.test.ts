@@ -184,6 +184,9 @@ describe("topic script live check", () => {
     expect(readme).toContain(
       "npm run harness:topic-script-live-check -- harness/samples/topic-script/family-set.md",
     );
+    expect(readme).toContain("Topic Candidate Library Observability");
+    expect(readme).toContain("storage/topic-candidate-library/<seed-family>/<seed-profile>/");
+    expect(readme).toContain("raw_generated / unused / fallback_ready / expired");
 
     const checklist = readFileSync(
       join(process.cwd(), "docs/records/2026-04-19-topic-script-live-checklist.md"),

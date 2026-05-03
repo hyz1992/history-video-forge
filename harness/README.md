@@ -243,6 +243,27 @@ Get-ChildItem 'storage/projects' -Directory -Recurse |
   - `topic-recommendation-diagnostics`
   - `topic-selector-diagnostics`
 
+## Topic Candidate Library Observability
+
+- 候选库目录：
+  - `storage/topic-candidate-library/<seed-family>/<seed-profile>/`
+- 先按 `seed family / seed profile` 进入目标目录，再查看对应 `.md` 条目。
+- 当前最小人工检查点：
+  - 状态速查：`raw_generated / unused / fallback_ready / expired`
+  - 是否能看到本轮沉淀的 `raw_generated`
+  - 是否能区分未入选但保留的 `unused`
+  - 是否能区分允许受控复用的 `fallback_ready`
+  - 是否能区分已退出主动复用的 `expired`
+- 当 topic 推荐结果需要人工复盘时，优先结合：
+  - 候选库条目正文里的 `notes`
+  - `<project-root>/trace/topic-runs/<topic_run_id>/recommendation-diagnostics.md`
+  - `llm-interactions/01-topic.candidate-builder.md`
+  - `llm-interactions/02-topic.selector.md`
+- 当前候选库只服务：
+  - 更多候选预览
+  - 同 family/profile 下的受控 fallback 复用
+- 不允许把候选库条目直接当成最终结果；任何 `fallback_ready` 候选仍必须经过 selector。
+
 ### 当前结论
 
 - UI acceptance 机制已作为仓库内正式能力接入。
