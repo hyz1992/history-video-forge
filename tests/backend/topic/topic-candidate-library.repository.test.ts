@@ -179,6 +179,27 @@ describe("topic candidate library repository", () => {
       ]),
     );
   });
+
+  it("keeps markdown codec as legacy only and does not require markdown files for formal storage", () => {
+    const repositorySource = readFileSync(
+      resolve(
+        process.cwd(),
+        "backend/src/modules/topic/topic-candidate-library.repository.ts",
+      ),
+      "utf8",
+    );
+    const markdownCodecSource = readFileSync(
+      resolve(
+        process.cwd(),
+        "backend/src/modules/topic/topic-candidate-library.codec.ts",
+      ),
+      "utf8",
+    );
+
+    expect(repositorySource).toContain("topic-candidate-library-json.codec");
+    expect(repositorySource).not.toContain('topic-candidate-library.codec');
+    expect(markdownCodecSource).toContain("@deprecated");
+  });
 });
 
 function createTestRepository(tempDirs: string[]): {

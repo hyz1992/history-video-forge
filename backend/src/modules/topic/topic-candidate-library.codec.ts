@@ -1,3 +1,7 @@
+/**
+ * @deprecated Legacy Markdown-only codec kept for historical migration reference.
+ * Formal topic candidate library storage is now based on aggregated candidates.json.
+ */
 import type { TopicCandidateLibraryEntry } from "./topic-candidate-library.types.js";
 
 export interface TopicCandidateLibraryDocument
