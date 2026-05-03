@@ -52,4 +52,16 @@ describe("topic candidate library path", () => {
 
     expect(first).toBe(second);
   });
+
+  it("does not collapse pure Chinese seed fields to unknown", () => {
+    const slugs = buildTopicCandidateLibrarySlugs({
+      seedFamily: "中国古代重大历史事件",
+      seedProfile: "中国古代重大历史事件",
+    });
+
+    expect(slugs.seedFamilySlug).not.toBe("unknown");
+    expect(slugs.seedProfileSlug).not.toBe("unknown");
+    expect(slugs.seedFamilySlug).toBe(slugs.seedProfileSlug);
+    expect(/^[a-z0-9-]+$/u.test(slugs.seedFamilySlug)).toBe(true);
+  });
 });

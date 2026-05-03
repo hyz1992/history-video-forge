@@ -26,11 +26,28 @@ export function buildTopicCandidateLibraryDirectory(
 }
 
 function toAsciiSlug(value: string) {
-  const normalized = value
+  const trimmed = value.trim();
+  const normalized = trimmed
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-  return normalized || "unknown";
+  if (normalized) {
+    return normalized;
+  }
+
+  const unicodeSegments = trimmed
+    .toLowerCase()
+    .split(/[^\p{Letter}\p{Number}]+/u)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+
+  if (unicodeSegments.length === 0) {
+    return "unknown";
+  }
+
+  return unicodeSegments
+    .map((segment) => `u8-${Buffer.from(segment, "utf8").toString("hex")}`)
+    .join("-");
 }
