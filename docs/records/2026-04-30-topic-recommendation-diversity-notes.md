@@ -238,3 +238,39 @@ npm run harness:ui-acceptance:smoke
   - `raw_generated / selector_pool / final_selected / fallback_ready` 状态继续可观察
   - `fallback_ready` 仍然只能进入 selector pool
   - selector 仍然是最终结果唯一正式出口
+
+## 2026-05-03 Topic Candidate Library JSON 主存储回归
+
+- 自动化验证：
+  - `npm test -- tests/backend/topic/topic-candidate-library-json.types.test.ts tests/backend/topic/topic-candidate-library-json.codec.test.ts tests/backend/topic/topic-candidate-library.path.test.ts tests/backend/topic/topic-candidate-library.repository.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts tests/harness/topic-script-live-check.test.ts tests/harness/topic-candidate-library-real-check.test.ts`
+  - 结果：通过，`7` 个测试文件、`58` 个测试通过
+- 真实 5 轮回归项目：
+  - `project_id = 18b2617e-c00b-48b2-bcbb-0849d87e1d64`
+  - 摘要文件：
+    - `D:/myproject/story-video-forge2/harness/scripts/runtime/output/topic-candidate-library-real-check/summary.json`
+  - 当前 seed-profile 目录：
+    - `D:/myproject/story-video-forge2/storage/topic-candidate-library/u8-e4b8ade59bbde58fa4e4bba3e9878de5a4a7e58e86e58fb2e4ba8be4bbb6/u8-e4b8ade59bbde58fa4e4bba3e9878de5a4a7e58e86e58fb2e4ba8be4bbb6`
+
+### 本轮确认
+
+- 真实回归脚本默认中国 seed 请求已恢复为 UTF-8 正常中文；程序化抽查 `summary.json`，`request.canonical_name = 中国古代重大历史事件`。
+- 真实 5 轮全部返回 `200`，当前摘要记录了 `5` 轮结果。
+- 最新 seed-profile 目录内已经生成聚合主文件：
+  - `candidates.json`
+- 程序化抽查 `candidates.json`，当前可见状态计数：
+  - `raw_generated = 80`
+  - `selector_pool = 80`
+  - `final_selected = 30`
+- 这说明 JSON 主存储下，`raw / selector_pool / final_selected` 三类状态都可继续观察。
+
+### 当前风险
+
+- 同一个 seed-profile 目录里仍残留旧 Markdown 方案留下的历史 `.md` 文件；因此本轮只能确认：
+  - 新的正式写入已经落到 `candidates.json`
+  - 但当前工作区还不能宣称“目录里只剩 JSON”
+- 这次真实 5 轮没有触发 `fallback_ready`，所以 live 回归没有直接覆盖受控 fallback；该边界当前仍主要由自动化测试保障：
+  - `tests/backend/topic/topic-runtime-recommendation.test.ts`
+- 当前没有看到新的“本地伪语义判断”回流迹象；现有 fallback 约束仍保持为：
+  - 同 family/profile 才可读取
+  - 只允许 `fallback_ready`
+  - 仍必须经过 selector
