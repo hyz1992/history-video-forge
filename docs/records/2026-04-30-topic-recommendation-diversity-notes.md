@@ -56,23 +56,26 @@ npm run harness:ui-acceptance:smoke
 
 - 候选库根目录：
   - `storage/topic-candidate-library/`
-- 进入目标条目前，先确认：
+- 进入目标 seed-profile 目录前，先确认：
   - `seed-family`
   - `seed-profile`
   - 当前巡检是否与本轮 recommendation seed 完全一致
+- 当前正式巡检入口：
+  - `storage/topic-candidate-library/<seed-family>/<seed-profile>/candidates.json`
+- 不再把单候选 `.md` 文件当作正式主存储巡检入口。
 - 巡检时至少区分这些状态：
   - `raw_generated`
   - `unused`
   - `fallback_ready`
   - `expired`
 - 人工检查点：
-  - 本轮原始 8 候选是否已沉淀到 `raw_generated`
+  - 本轮原始 8 候选是否已沉淀到 `candidates.json` 内的 `raw_generated`
   - 未入选但保留的候选是否能在 `unused` 中看到
   - 允许受控复用的条目是否明确标成 `fallback_ready`
   - 不再参与主动复用的条目是否明确标成 `expired`
   - 当本轮触发候选库补位时，是否仍能在 `02-topic.selector.md` 看到 fallback 候选进入 selector，而不是绕过 selector 直接出现在最终结果
 - 巡检组合：
-  - `storage/topic-candidate-library/<seed-family>/<seed-profile>/`
+  - `storage/topic-candidate-library/<seed-family>/<seed-profile>/candidates.json`
   - `llm-interactions/01-topic.candidate-builder.md`
   - `llm-interactions/02-topic.selector.md`
   - `recommendation-diagnostics.md`
@@ -227,46 +230,11 @@ npm run harness:ui-acceptance:smoke
 
 ## 2026-05-03 Topic Candidate Library Task 8 回归
 
-- 自动验证：
-  - `npm test -- tests/backend/topic/topic-candidate-library.types.test.ts tests/backend/topic/topic-candidate-library.path.test.ts tests/backend/topic/topic-candidate-library.codec.test.ts tests/backend/topic/topic-candidate-library.repository.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts`
-  - 结果：通过
-- 真实 5 轮回归项目：
-  - `project_id = 1dc86b93-8b16-4a39-8cca-be5bfa220e3b`
-  - trace 根目录：
-    - `D:/myproject/story-video-forge2/storage/projects/2026-05-03/Task8 China Topic Candidate Library 5-Round Recheck 2026-05-03T03-15-08-000Z [p_1dc86b93]/trace/topic-runs`
-  - 回归摘要：
-    - `D:/myproject/story-video-forge2/harness/scripts/runtime/output/task8-topic-candidate-library-5round-last-run/summary.json`
-- 受控 fallback 补充检查：
-  - `project_id = 0cd62ba4-8dac-4aeb-a12d-ed3ef254cc4f`
-  - trace 根目录：
-    - `D:/myproject/story-video-forge2/storage/projects/2026-05-03/Task8 Fallback Control Check 2026-05-03T03-19-59-831Z [p_0cd62ba4]/trace/topic-runs`
-  - 检查摘要：
-    - `D:/myproject/story-video-forge2/harness/scripts/runtime/output/task8-topic-candidate-library-5round-last-run/fallback-control-check.json`
-
-### 本轮确认
-
-- 中国 seed 真实 5 轮全部成功，HTTP 状态均为 `200`。
-- 候选库真实落盘已经发生；抽查本轮项目对应条目，可见：
-  - `raw_generated`
-  - `selector_pool`
-  - `final_selected`
-- 受控 fallback 补充检查中，我在同一项目内把首轮 `8` 个 `raw_generated` 条目手工提升为 `fallback_ready`，随后再次请求推荐：
-  - `runtime-diagnostics.json` 出现 `topic_candidate_library_fallback_loaded`
-  - `llm-interactions/02-topic.selector.md` 出现 `fallback_candidate_`
-  - 说明 fallback 候选是进入 selector pool 后再参与选择，而不是绕过 selector 直接顶替最终结果
-- 本轮没有看到新的“本地伪语义判断”回流迹象；当前 fallback 仍然是：
-  - 先按同 seed family/profile 读文本库
-  - 再把候选交给 selector
-
-### 新的判断
-
-- 文本候选库的文件形态已经满足第一版最小目标：可落盘、可人工改状态、可结合 trace/diagnostics 做巡检。
-- 当前真实中国 seed 的实际目录落点仍是：
-  - `D:/myproject/story-video-forge2/storage/topic-candidate-library/unknown/unknown/`
-- 这说明当前 runtime 的最小 seed 分类实现还不足以支撑“按 seed family / seed profile 精确分类”的正式目标；对纯中文真实 seed，真实链路还不能证明“不会跨 profile 串味”。
-- 因此，`Task 8` 可以确认：
-  - 候选库落盘成立
-  - 受控 fallback 成立
-  - selector 边界成立
-- 但也必须保留一个明确风险：
-  - 中文 seed 在真实运行时退化到 `unknown/unknown`，后续仍需要正式收口 seed family/profile 的稳定来源，否则跨项目精确分类目标并未真正闭环
+- 这段记录对应旧的“单候选文本文件”方案。
+- 当前正式主存储已经切换为：
+  - `storage/topic-candidate-library/<seed-family>/<seed-profile>/candidates.json`
+- 因此后续巡检与真实回归，应优先读取聚合 `candidates.json`，而不是逐个单候选 `.md` 文件。
+- 仍然保留不变的运行时边界：
+  - `raw_generated / selector_pool / final_selected / fallback_ready` 状态继续可观察
+  - `fallback_ready` 仍然只能进入 selector pool
+  - selector 仍然是最终结果唯一正式出口

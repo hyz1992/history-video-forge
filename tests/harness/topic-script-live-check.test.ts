@@ -186,7 +186,9 @@ describe("topic script live check", () => {
     );
     expect(readme).toContain("Topic Candidate Library Observability");
     expect(readme).toContain("storage/topic-candidate-library/<seed-family>/<seed-profile>/");
+    expect(readme).toContain("candidates.json");
     expect(readme).toContain("raw_generated / unused / fallback_ready / expired");
+    expect(readme).not.toContain("再查看对应 `.md` 条目");
 
     const checklist = readFileSync(
       join(process.cwd(), "docs/records/2026-04-19-topic-script-live-checklist.md"),
@@ -195,5 +197,13 @@ describe("topic script live check", () => {
     expect(checklist).toContain("自动化回归通过");
     expect(checklist).toContain("真实巡检通过");
     expect(checklist).toContain("手工 spot check 通过");
+    const diversityNotes = readFileSync(
+      join(process.cwd(), "docs/records/2026-04-30-topic-recommendation-diversity-notes.md"),
+      "utf8",
+    );
+    expect(diversityNotes).toContain("candidates.json");
+    expect(diversityNotes).toContain("fallback_ready");
+    expect(diversityNotes).toContain("selector");
+    expect(diversityNotes).not.toContain("再查看对应 `.md` 条目");
   });
 });
