@@ -214,7 +214,7 @@ export async function recommendTopicCandidatesWithTrace(
   return {
     ...result,
     raw_candidates: result.candidates,
-    selector_pool: postProcessed.selectorPool,
+    selector_pool: selectorPool,
     selector_trace: selected.selectorTrace,
     candidates: selected.candidates,
     diagnostics: finalDiagnostics,

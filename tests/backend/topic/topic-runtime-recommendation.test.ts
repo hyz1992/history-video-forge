@@ -353,11 +353,17 @@ describe("topic runtime recommendation", () => {
         | { selector_pool?: Array<{ candidate_id: string; title: string }> }
         | undefined;
       const selectorTitles = selectorInput?.selector_pool?.map((candidate) => candidate.title) ?? [];
+      const returnedSelectorTitles =
+        result.selector_pool?.map((candidate) => candidate.title) ?? [];
 
       expect(selectorTitles).toContain("fallback-allowed-title");
       expect(selectorTitles).not.toContain("fallback-other-family-title");
       expect(selectorTitles).not.toContain("fallback-other-profile-title");
       expect(selectorTitles).not.toContain("unused-same-seed-title");
+      expect(returnedSelectorTitles).toContain("fallback-allowed-title");
+      expect(returnedSelectorTitles).not.toContain("fallback-other-family-title");
+      expect(returnedSelectorTitles).not.toContain("fallback-other-profile-title");
+      expect(returnedSelectorTitles).not.toContain("unused-same-seed-title");
       expect(result.candidates.map((candidate) => candidate.title)).toEqual([
         "event-a",
         "event-b",
