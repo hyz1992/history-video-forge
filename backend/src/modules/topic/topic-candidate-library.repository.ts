@@ -4,7 +4,6 @@ import {
   readFileSync,
   writeFileSync,
 } from "node:fs";
-import { resolve } from "node:path";
 
 import {
   parseTopicCandidateLibraryJsonDocument,
@@ -58,14 +57,12 @@ export function createTopicCandidateLibraryRepository(
 
   return {
     async save(document) {
-      const directoryPath = resolve(
+      const directoryPath = buildTopicCandidateLibraryDirectory({
         rootDir,
-        buildTopicCandidateLibraryDirectory({
-          seedFamily: document.seedFamily,
-          seedProfile: document.seedProfile,
-        }),
-      );
-      const filePath = resolve(directoryPath, CANDIDATES_JSON_FILENAME);
+        seedFamily: document.seedFamily,
+        seedProfile: document.seedProfile,
+      });
+      const filePath = `${directoryPath}/${CANDIDATES_JSON_FILENAME}`;
 
       mkdirSync(directoryPath, {
         recursive: true,
@@ -95,14 +92,12 @@ export function createTopicCandidateLibraryRepository(
     },
 
     async listBySeed(input) {
-      const directoryPath = resolve(
+      const directoryPath = buildTopicCandidateLibraryDirectory({
         rootDir,
-        buildTopicCandidateLibraryDirectory({
-          seedFamily: input.seedFamily,
-          seedProfile: input.seedProfile,
-        }),
-      );
-      const filePath = resolve(directoryPath, CANDIDATES_JSON_FILENAME);
+        seedFamily: input.seedFamily,
+        seedProfile: input.seedProfile,
+      });
+      const filePath = `${directoryPath}/${CANDIDATES_JSON_FILENAME}`;
 
       if (!existsSync(filePath)) {
         return [];

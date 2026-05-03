@@ -24,6 +24,18 @@ describe("topic candidate library path", () => {
     expect(first.startsWith(`${TOPIC_CANDIDATE_LIBRARY_ROOT_DIR}/`)).toBe(true);
   });
 
+  it("can resolve the same seed directory under a custom rootDir", () => {
+    const directory = buildTopicCandidateLibraryDirectory({
+      rootDir: "D:/tmp/topic-candidate-library-runtime-123",
+      seedFamily: "History Diplomacy",
+      seedProfile: "Han Court Showdown",
+    });
+
+    expect(directory).toBe(
+      "D:\\tmp\\topic-candidate-library-runtime-123\\storage\\topic-candidate-library\\history-diplomacy\\han-court-showdown",
+    );
+  });
+
   it("generates readable ASCII-safe slugs from explicit seed fields", () => {
     const slugs = buildTopicCandidateLibrarySlugs({
       seedFamily: "History / Diplomacy",

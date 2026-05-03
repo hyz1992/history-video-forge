@@ -1,7 +1,10 @@
+import { resolve } from "node:path";
+
 export const TOPIC_CANDIDATE_LIBRARY_ROOT_DIR =
   "storage/topic-candidate-library";
 
 interface TopicCandidateLibraryPathInput {
+  rootDir?: string;
   seedFamily: string;
   seedProfile: string;
   title?: string;
@@ -21,8 +24,12 @@ export function buildTopicCandidateLibraryDirectory(
 ) {
   const { seedFamilySlug, seedProfileSlug } =
     buildTopicCandidateLibrarySlugs(input);
+  const relativeDirectory =
+    `${TOPIC_CANDIDATE_LIBRARY_ROOT_DIR}/${seedFamilySlug}/${seedProfileSlug}`;
 
-  return `${TOPIC_CANDIDATE_LIBRARY_ROOT_DIR}/${seedFamilySlug}/${seedProfileSlug}`;
+  return input.rootDir
+    ? resolve(input.rootDir, relativeDirectory)
+    : relativeDirectory;
 }
 
 function toAsciiSlug(value: string) {

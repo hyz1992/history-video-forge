@@ -11,6 +11,8 @@ import * as topicRecommendationServiceModule from "../../../backend/src/modules/
 import { saveCachedCandidate } from "../../../backend/src/modules/cache/candidate-cache.repository.js";
 import { normalizeEventInput } from "../../../backend/src/modules/topic/event-normalizer.js";
 import { createTopicCandidateLibraryRepository } from "../../../backend/src/modules/topic/topic-candidate-library.repository.js";
+import { parseTopicCandidateLibraryJsonDocument } from "../../../backend/src/modules/topic/topic-candidate-library-json.codec.js";
+import { buildTopicCandidateLibraryDirectory } from "../../../backend/src/modules/topic/topic-candidate-library.path.js";
 import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
 import { createOpenAiCompatibleProvider } from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
@@ -221,18 +223,26 @@ describe("topic runtime recommendation", () => {
         },
       );
 
-      const records = await repository.listBySeed({
+      const seedDirectory = buildTopicCandidateLibraryDirectory({
+        rootDir: tempRootDir,
         seedFamily: "History Diplomacy",
         seedProfile: "Han Court Showdown",
       });
+      const directoryEntries = readdirSync(seedDirectory).sort();
+      const candidatesJsonPath = resolve(seedDirectory, "candidates.json");
+      const document = parseTopicCandidateLibraryJsonDocument(
+        readFileSync(candidatesJsonPath, "utf8"),
+      );
 
-      expect(records).toHaveLength(19);
-      expect(records.filter((record) => record.status === "raw_generated")).toHaveLength(8);
-      expect(records.filter((record) => record.status === "selector_pool")).toHaveLength(8);
-      expect(records.filter((record) => record.status === "final_selected")).toHaveLength(3);
-      expect(records.every((record) => record.sourceProjectId === project.id)).toBe(true);
-      expect(records.every((record) => record.seedFamily === "History Diplomacy")).toBe(true);
-      expect(records.every((record) => record.seedProfile === "Han Court Showdown")).toBe(true);
+      expect(directoryEntries).toEqual(["candidates.json"]);
+      expect(existsSync(candidatesJsonPath)).toBe(true);
+      expect(document.seed_family).toBe("History Diplomacy");
+      expect(document.seed_profile).toBe("Han Court Showdown");
+      expect(document.candidates).toHaveLength(19);
+      expect(document.candidates.filter((record) => record.status === "raw_generated")).toHaveLength(8);
+      expect(document.candidates.filter((record) => record.status === "selector_pool")).toHaveLength(8);
+      expect(document.candidates.filter((record) => record.status === "final_selected")).toHaveLength(3);
+      expect(document.candidates.every((record) => record.source_project_id === project.id)).toBe(true);
     } finally {
       rmSync(tempRootDir, {
         recursive: true,
