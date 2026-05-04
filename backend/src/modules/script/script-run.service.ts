@@ -44,12 +44,15 @@ function mapTopicPackage(record: TopicPackageRecord) {
     family_label: record.familyLabel,
     scope_label: record.scopeLabel,
     core_conflict: record.coreConflict,
+    stakes: record.stakes ?? "该事件的公开场面与后续代价不能被轻描淡写。",
     strong_scene: record.strongScene,
     packaging_seed: record.packagingSeed,
     must_include_beats: record.mustIncludeBeatsJson as string[],
     forbidden_expansions: record.forbiddenExpansionsJson as string[],
     risk_hints: record.riskHintsJson as string[],
+    source_anchor_refs: record.sourceAnchorRefsJson as string[],
     canonical_quotes: record.canonicalQuotesJson,
+    ambiguity_notes: record.ambiguityNotesJson as string[],
     duration_band:
       typeof record.durationBandJson.label === "string"
         ? (record.durationBandJson.label as string)
@@ -102,6 +105,7 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
   });
   const inputBundle = buildScriptInputBundle({
     topicPackage,
+    eventIdentity: record.eventRegistryEntryId ?? record.id,
     topicDeliveryPack,
     projectStylePack,
     familyBiasPack,

@@ -7,10 +7,21 @@ import type { StructuredPromptProvider } from "../../runtime/llm/provider-contra
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 
 interface ScriptInputBundleInput {
+  topic_package: {
+    stakes?: string;
+    source_anchor_refs?: string[];
+    canonical_quotes?: string[];
+    ambiguity_notes?: string[];
+  };
   hard_lane: {
     event_identity: string;
     selected_angle: string;
+    core_conflict?: string;
+    stakes?: string;
     must_include_beats: string[];
+    source_anchor_refs?: string[];
+    canonical_quotes?: string[];
+    ambiguity_notes?: string[];
   };
   soft_lane: {
     narrative_tension_map: {
@@ -24,9 +35,6 @@ interface ScriptInputBundleInput {
   };
   packaging_lane: {
     hook_claim: string;
-  };
-  topic_package: {
-    canonical_quotes?: string[];
   };
 }
 

@@ -26,12 +26,15 @@ const topicPackage = TopicPackage.parse({
   family_label: "外交压场型",
   scope_label: "完整事件",
   core_conflict: "楚王借公开场合连续羞辱晏子与齐国，晏子必须当场顶回去。",
+  stakes: "一旦退让，就不只是晏子个人失场，而是齐国当场被楚国压住。",
   strong_scene: "楚王连续压场，晏子一句句顶回去。",
   packaging_seed: "楚王连压三次，晏子一次没退。",
   must_include_beats: ["入楚受辱", "橘枳之喻"],
   forbidden_expansions: ["不要扩写到未定 downstream 阶段"],
   risk_hints: ["不要把内容写成课堂导入"],
+  source_anchor_refs: ["《晏子春秋》"],
   canonical_quotes: ["橘生淮南则为橘"],
+  ambiguity_notes: [],
   duration_band: "medium",
   narrative_tension_map: {
     hook_claim: "楚王不是只压了晏子一次，而是连压三次",
@@ -65,8 +68,13 @@ const scriptInputBundle = ScriptInputBundle.parse({
     event_identity: "晏子使楚",
     selected_angle: topicPackage.selected_angle,
     scope_label: topicPackage.scope_label,
+    core_conflict: topicPackage.core_conflict,
+    stakes: topicPackage.stakes,
     must_include_beats: topicPackage.must_include_beats,
     forbidden_expansions: topicPackage.forbidden_expansions,
+    source_anchor_refs: topicPackage.source_anchor_refs,
+    canonical_quotes: topicPackage.canonical_quotes,
+    ambiguity_notes: topicPackage.ambiguity_notes,
     duration_band: topicPackage.duration_band,
   },
   soft_lane: {
@@ -241,8 +249,9 @@ ${JSON.stringify(runtimeDraft)}
       scopeLabel: topicPackage.scope_label,
       coreConflict: topicPackage.core_conflict,
       strongScene: topicPackage.strong_scene,
+      stakes: topicPackage.stakes,
       packagingSeed: topicPackage.packaging_seed,
-      canonicalQuotesJson: topicPackage.canonical_quotes,
+      canonicalQuotesJson: [],
       durationBandJson: {
         label: "medium",
         min_sec: 75,
@@ -252,7 +261,8 @@ ${JSON.stringify(runtimeDraft)}
       mustIncludeBeatsJson: topicPackage.must_include_beats,
       forbiddenExpansionsJson: topicPackage.forbidden_expansions,
       riskHintsJson: topicPackage.risk_hints,
-      sourceAnchorRefsJson: [],
+      sourceAnchorRefsJson: topicPackage.source_anchor_refs,
+      ambiguityNotesJson: ["《晏子春秋》版本存在后世转述差异"],
     });
     project.activeTopicPackageId = topicPackageRecord.id;
     project.status = "script_ready";
@@ -265,6 +275,13 @@ ${JSON.stringify(runtimeDraft)}
     });
 
     expect(response.statusCode).toBe(200);
+    expect(response.body.input_bundle.hard_lane).toMatchObject({
+      core_conflict: topicPackage.core_conflict,
+      stakes: topicPackage.stakes,
+      source_anchor_refs: topicPackage.source_anchor_refs,
+      canonical_quotes: [],
+      ambiguity_notes: ["《晏子春秋》版本存在后世转述差异"],
+    });
 
     const profile = getProjectStorageProfile(project);
     const graphTraceSummary = response.body.graph_trace_summary as Record<string, unknown>;
