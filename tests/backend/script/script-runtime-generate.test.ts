@@ -369,6 +369,8 @@ ${JSON.stringify(runtimeDraft)}
     expect(entries[0]?.systemPrompt).toContain("不要先讲背景百科");
     expect(entries[0]?.systemPrompt).toContain("第一句就要落在冲突、危险、反常识或即将出事的场面上");
     expect(entries[0]?.systemPrompt).toContain("不要只用泛问句空转起手");
+    expect(entries[0]?.systemPrompt).toContain("直接借用 `hook_claim` 或 `strong_scene`");
+    expect(entries[0]?.systemPrompt).toContain("不要先做抽象概括");
     expect(entries[0]?.systemPrompt).toContain("`ending_span`");
     expect(entries[0]?.systemPrompt).toContain("回收到 `ending_residue` 或 `stakes`");
   });
