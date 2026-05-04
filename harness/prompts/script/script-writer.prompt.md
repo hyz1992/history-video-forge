@@ -35,6 +35,7 @@ status: active
 - `Packaging Lane` 只能弱参考，不能反向绑死正文
 - 不得改写 `TopicPackage` 合同
 - 正文和 sidecar 一律使用中文
+- `beat_trace` 的每条 `beat` 必须逐字复用 `hard_lane.must_include_beats` 中对应原文，不得自行改名或改写
 
 ## 禁止事项
 

@@ -286,6 +286,9 @@ ${JSON.stringify(runtimeDraft)}
     expect(entries[0]?.systemPrompt).toContain("# 任务");
     expect(entries[0]?.systemPrompt).toContain("ScriptInputBundle");
     expect(entries[0]?.systemPrompt).toContain("ScriptDraftPackage");
+    expect(entries[0]?.systemPrompt).toContain(
+      "`beat_trace` 的每条 `beat` 必须逐字复用 `hard_lane.must_include_beats` 中对应原文",
+    );
   });
 
   it("persists readable llm interaction markdown under the script run directory", async () => {
