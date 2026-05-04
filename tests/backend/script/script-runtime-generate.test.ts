@@ -361,6 +361,10 @@ ${JSON.stringify(runtimeDraft)}
     expect(entries[0]?.systemPrompt).toContain("`estimated_duration_sec`");
     expect(entries[0]?.systemPrompt).toContain("`hard_lane.duration_band`");
     expect(entries[0]?.systemPrompt).toContain("`script_text`");
+    expect(entries[0]?.systemPrompt).toContain("short=45-70秒");
+    expect(entries[0]?.systemPrompt).toContain("medium=75-95秒");
+    expect(entries[0]?.systemPrompt).toContain("long=90-140秒");
+    expect(entries[0]?.systemPrompt).toContain("先按档位控制正文体量，再回填");
   });
 
   it("persists readable llm interaction markdown under the script run directory", async () => {
