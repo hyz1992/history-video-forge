@@ -365,6 +365,10 @@ ${JSON.stringify(runtimeDraft)}
     expect(entries[0]?.systemPrompt).toContain("medium=75-95秒");
     expect(entries[0]?.systemPrompt).toContain("long=90-140秒");
     expect(entries[0]?.systemPrompt).toContain("先按档位控制正文体量，再回填");
+    expect(entries[0]?.systemPrompt).toContain("`opening_span`");
+    expect(entries[0]?.systemPrompt).toContain("不要先讲背景百科");
+    expect(entries[0]?.systemPrompt).toContain("`ending_span`");
+    expect(entries[0]?.systemPrompt).toContain("回收到 `ending_residue` 或 `stakes`");
   });
 
   it("persists readable llm interaction markdown under the script run directory", async () => {
