@@ -38,6 +38,7 @@ status: active
 - `beat_trace` 的每条 `beat` 必须逐字复用 `hard_lane.must_include_beats` 中对应原文，不得自行改名或改写
 - `script_text` 的口播体量必须服务于 `hard_lane.duration_band`；先按档位控制正文体量，再回填 `estimated_duration_sec`；`short=45-70秒`，`medium=75-95秒`，`long=90-140秒`；`estimated_duration_sec` 必须落在对应时长区间内，且不得与正文体量明显失真
 - `opening_span` 必须直接起压、起冲突或起问题，不要先讲背景百科；`ending_span` 必须回收到 `ending_residue` 或 `stakes`，不要空泛拔高或喊口号收尾
+- `opening_span` 的第一句就要落在冲突、危险、反常识或即将出事的场面上，不要只用泛问句空转起手
 
 ## 禁止事项
 
