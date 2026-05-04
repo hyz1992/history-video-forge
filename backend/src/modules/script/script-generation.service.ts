@@ -87,7 +87,7 @@ function normalizeBeatTrace(value: unknown, requiredBeats: string[]) {
 
   const unmatchedRequiredBeats = [...requiredBeats];
 
-  return value.map((item) => {
+  return value.map((item, index) => {
     if (item && typeof item === "object") {
       const record = item as Record<string, unknown>;
       const beatLabel =
@@ -102,6 +102,23 @@ function normalizeBeatTrace(value: unknown, requiredBeats: string[]) {
           : typeof record.beat === "string"
             ? record.beat
             : extractFirstString(record) ?? "未提供 excerpt";
+      const ordinalBeat = resolveOrdinalBeatPlaceholder(
+        beatLabel,
+        excerpt,
+        index,
+        requiredBeats,
+        unmatchedRequiredBeats,
+      );
+      if (ordinalBeat) {
+        return {
+          beat: ordinalBeat,
+          excerpt: ordinalBeat,
+          confidence:
+            typeof record.confidence === "number"
+              ? record.confidence
+              : 0.7,
+        };
+      }
       return {
         beat: canonicalizeBeatLabel(beatLabel, excerpt, unmatchedRequiredBeats),
         excerpt,
@@ -113,12 +130,54 @@ function normalizeBeatTrace(value: unknown, requiredBeats: string[]) {
     }
 
     const excerpt = typeof item === "string" ? item : String(item);
+    const ordinalBeat = resolveOrdinalBeatPlaceholder(
+      excerpt,
+      excerpt,
+      index,
+      requiredBeats,
+      unmatchedRequiredBeats,
+    );
+    if (ordinalBeat) {
+      return {
+        beat: ordinalBeat,
+        excerpt: ordinalBeat,
+        confidence: 0.7,
+      };
+    }
     return {
       beat: canonicalizeBeatLabel(excerpt, excerpt, unmatchedRequiredBeats),
       excerpt,
       confidence: 0.7,
     };
   });
+}
+
+function resolveOrdinalBeatPlaceholder(
+  beatLabel: string,
+  excerpt: string,
+  index: number,
+  requiredBeats: string[],
+  unmatchedRequiredBeats: string[],
+) {
+  const normalizedBeatLabel = beatLabel.trim();
+  const normalizedExcerpt = excerpt.trim();
+  if (!/^\d+$/.test(normalizedBeatLabel) && !/^\d+$/.test(normalizedExcerpt)) {
+    return null;
+  }
+
+  const candidateBeat =
+    requiredBeats[index] ??
+    unmatchedRequiredBeats.find((requiredBeat) => requiredBeat.length > 0);
+  if (!candidateBeat) {
+    return null;
+  }
+
+  const matchedIndex = unmatchedRequiredBeats.indexOf(candidateBeat);
+  if (matchedIndex >= 0) {
+    unmatchedRequiredBeats.splice(matchedIndex, 1);
+  }
+
+  return candidateBeat;
 }
 
 function canonicalizeBeatLabel(

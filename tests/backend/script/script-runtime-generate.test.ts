@@ -205,6 +205,46 @@ ${JSON.stringify(runtimeDraft)}
     expect(() => ScriptDraftPackage.parse(draft)).not.toThrow();
   });
 
+  it("maps ordinal beat placeholders back to hard-lane beats before local validation", async () => {
+    const invokeApi = vi.fn(
+      async () =>
+        JSON.stringify({
+          ...runtimeDraft,
+          beat_trace: [1, 2],
+        }),
+    );
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const draft = await (generateScriptDraft as any)({
+      bundle: scriptInputBundle,
+      llmGateway: gateway,
+    });
+
+    expect(draft.beat_trace).toMatchObject([
+      {
+        beat: scriptInputBundle.hard_lane.must_include_beats[0],
+        excerpt: scriptInputBundle.hard_lane.must_include_beats[0],
+      },
+      {
+        beat: scriptInputBundle.hard_lane.must_include_beats[1],
+        excerpt: scriptInputBundle.hard_lane.must_include_beats[1],
+      },
+    ]);
+
+    const validation = validateScriptDraft({
+      bundle: scriptInputBundle,
+      draft,
+    });
+
+    expect(validation.errors).not.toContain("beat_missing");
+  });
+
   it("canonicalizes beat trace labels back to hard-lane beats before local validation", async () => {
     const invokeApi = vi.fn(
       async () =>
