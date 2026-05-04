@@ -18,6 +18,7 @@ export interface SaveTopicPackageInput {
   forbiddenExpansionsJson?: unknown[];
   riskHintsJson?: unknown[];
   sourceAnchorRefsJson?: unknown[];
+  ambiguityNotesJson?: unknown[];
 }
 
 export async function saveTopicPackage(
@@ -43,6 +44,7 @@ export async function saveTopicPackage(
     forbiddenExpansionsJson: input.forbiddenExpansionsJson ?? [],
     riskHintsJson: input.riskHintsJson ?? [],
     sourceAnchorRefsJson: input.sourceAnchorRefsJson ?? [],
+    ambiguityNotesJson: input.ambiguityNotesJson ?? [],
     createdAt: new Date(),
   };
 

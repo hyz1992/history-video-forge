@@ -45,6 +45,7 @@ export interface TopicPackageRecord {
   forbiddenExpansionsJson: unknown[];
   riskHintsJson: unknown[];
   sourceAnchorRefsJson: unknown[];
+  ambiguityNotesJson: unknown[];
   createdAt: Date;
 }
 
