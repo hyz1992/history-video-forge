@@ -33,9 +33,9 @@ function createPassLocalValidation() {
   return {
     stage: "script_local_validation" as const,
     decision: "pass" as const,
-    hard_issues: [],
-    soft_issues: [],
-    summary: "local validation passed",
+    errors: [],
+    warnings: [],
+    metrics: {},
   };
 }
 
@@ -43,9 +43,19 @@ function createRegenLocalValidation() {
   return {
     stage: "script_local_validation" as const,
     decision: "regen_once" as const,
-    hard_issues: ["script_too_short"],
-    soft_issues: [],
-    summary: "local validation requests regenerate once",
+    errors: ["script_too_short"],
+    warnings: [],
+    metrics: {},
+  };
+}
+
+function createHardFailLocalValidation() {
+  return {
+    stage: "script_local_validation" as const,
+    decision: "hard_fail" as const,
+    errors: ["duration_extreme"],
+    warnings: [],
+    metrics: {},
   };
 }
 
@@ -341,5 +351,42 @@ describe("script run graph", () => {
       patch_used: false,
       regenerate_used: true,
     });
+  });
+
+  it("does not expose semantic pass when local validation hard-fails before semantic review", async () => {
+    const reviewSemantics = vi.fn(() => {
+      throw new Error("semantic review should not run");
+    });
+
+    const result = await runScriptRunGraph(
+      {
+        bundle: inputBundle,
+        allowPatch: true,
+        allowRegen: false,
+      },
+      {
+        generateDraft: vi.fn(async () => passDraft),
+        validateDraft: vi.fn(() => createHardFailLocalValidation()),
+        reviewSemantics,
+        patchDraft: vi.fn(async () => patchedDraft),
+        regenerateDraft: vi.fn(async () => regeneratedDraft),
+      },
+    );
+
+    expect(reviewSemantics).not.toHaveBeenCalled();
+    expect(result.localValidation.decision).toBe("hard_fail");
+    expect(result.semanticReview.decision).toBe("skipped");
+    expect(result.semanticReview.summary).toContain("未进入语义审校");
+    expect(result.runtimeDiagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "semantic_review_skipped",
+        level: "warning",
+      }),
+    );
+    expect(result.runtimeDiagnostics.checks).not.toContainEqual(
+      expect.objectContaining({
+        code: "semantic_review_passed",
+      }),
+    );
   });
 });

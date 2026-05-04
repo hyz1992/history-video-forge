@@ -27,7 +27,13 @@ export const ScriptLocalValidationResult = z
 export const ScriptSemanticReviewResult = z
   .object({
     stage: z.literal("script_semantic_review"),
-    decision: z.enum(["pass", "patch_once", "regen_once", "return_topic"]),
+    decision: z.enum([
+      "pass",
+      "patch_once",
+      "regen_once",
+      "return_topic",
+      "skipped",
+    ]),
     patch_intent: z.enum(["fix", "lift"]).nullable(),
     hard_issues: z.array(z.union([z.string(), ValidationMessage])),
     soft_issues: z.array(z.union([z.string(), ValidationMessage])),

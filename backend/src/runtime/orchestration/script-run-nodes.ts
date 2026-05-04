@@ -72,10 +72,7 @@ export function buildSkippedSemanticReview(input: {
 }) {
   return {
     stage: "script_semantic_review" as const,
-    decision:
-      input.localDecision === "regen_once" && input.allowRegen
-        ? ("regen_once" as const)
-        : ("pass" as const),
+    decision: "skipped" as const,
     patch_intent: null,
     hard_issues: [],
     soft_issues: [],
