@@ -180,6 +180,31 @@ ${JSON.stringify(runtimeDraft)}
     expect(() => ScriptDraftPackage.parse(draft)).not.toThrow();
   });
 
+  it("unwraps a single script_draft_package envelope before validating ScriptDraftPackage", async () => {
+    const invokeApi = vi.fn(
+      async () =>
+        JSON.stringify({
+          script_draft_package: runtimeDraft,
+        }),
+    );
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const draft = await (generateScriptDraft as any)({
+      bundle: scriptInputBundle,
+      llmGateway: gateway,
+    });
+
+    expect(invokeApi).toHaveBeenCalledTimes(1);
+    expect(draft).toMatchObject(runtimeDraft);
+    expect(() => ScriptDraftPackage.parse(draft)).not.toThrow();
+  });
+
   it("canonicalizes beat trace labels back to hard-lane beats before local validation", async () => {
     const invokeApi = vi.fn(
       async () =>

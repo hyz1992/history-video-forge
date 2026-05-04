@@ -64,7 +64,14 @@ function normalizeScriptDraft(rawDraft: unknown, requiredBeats: string[]) {
     return rawDraft;
   }
 
-  const draft = { ...(rawDraft as Record<string, unknown>) };
+  const record = rawDraft as Record<string, unknown>;
+  const unwrappedDraft =
+    record.script_draft_package &&
+    typeof record.script_draft_package === "object" &&
+    !Array.isArray(record.script_draft_package)
+      ? (record.script_draft_package as Record<string, unknown>)
+      : record;
+  const draft = { ...unwrappedDraft };
   draft.beat_trace = normalizeBeatTrace(draft.beat_trace, requiredBeats);
   draft.quote_trace = normalizeQuoteTrace(draft.quote_trace);
   draft.opening_span = normalizeTextSpan(draft.opening_span);
