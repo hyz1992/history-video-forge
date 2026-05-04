@@ -37,6 +37,25 @@ function buildNarrativeTensionMap(candidate: StoredTopicCandidate) {
   };
 }
 
+function buildStakes(candidate: StoredTopicCandidate) {
+  return `${candidate.coreConflict}这件事一旦退让，丢掉的就不只是个人场面，还会让对方当场压住自己这一边。`;
+}
+
+function buildMustIncludeBeats(candidate: StoredTopicCandidate) {
+  return [
+    `${candidate.title}被公开压场，局势先被对方抢走。`,
+    candidate.strongScene,
+    `${candidate.title}必须把这口气当场顶回去，否则代价会继续外溢。`,
+  ];
+}
+
+function buildForbiddenExpansions(candidate: StoredTopicCandidate) {
+  return [
+    `不要脱离${candidate.title}当前已确认范围去扩写未定史实`,
+    "不要扩写到未定 downstream 阶段",
+  ];
+}
+
 export async function confirmTopicCandidate(input: ConfirmTopicCandidateInput) {
   const durationBand = {
     label: "medium",
@@ -44,6 +63,12 @@ export async function confirmTopicCandidate(input: ConfirmTopicCandidateInput) {
     max_sec: 95,
   };
   const narrativeTensionMap = buildNarrativeTensionMap(input.candidate);
+  const stakes = buildStakes(input.candidate);
+  const mustIncludeBeats = buildMustIncludeBeats(input.candidate);
+  const forbiddenExpansions = buildForbiddenExpansions(input.candidate);
+  const sourceAnchorRefs = [input.candidate.sourceHint];
+  const canonicalQuotes: string[] = [];
+  const ambiguityNotes: string[] = [];
 
   const topicPackage = TopicPackage.parse({
     topic_id: `topic_${input.candidate.candidateId}`,
@@ -52,12 +77,15 @@ export async function confirmTopicCandidate(input: ConfirmTopicCandidateInput) {
     family_label: input.candidate.familyLabel,
     scope_label: input.candidate.scopeLabel,
     core_conflict: input.candidate.coreConflict,
+    stakes,
     strong_scene: input.candidate.strongScene,
     packaging_seed: input.candidate.oneLineAngle,
-    must_include_beats: [input.candidate.strongScene],
-    forbidden_expansions: [],
+    must_include_beats: mustIncludeBeats,
+    forbidden_expansions: forbiddenExpansions,
     risk_hints: ["不要扩写到未定 downstream 阶段"],
-    canonical_quotes: [],
+    source_anchor_refs: sourceAnchorRefs,
+    canonical_quotes: canonicalQuotes,
+    ambiguity_notes: ambiguityNotes,
     duration_band: "medium",
     narrative_tension_map: narrativeTensionMap,
   });
@@ -71,6 +99,7 @@ export async function confirmTopicCandidate(input: ConfirmTopicCandidateInput) {
     scopeLabel: topicPackage.scope_label,
     coreConflict: topicPackage.core_conflict,
     strongScene: topicPackage.strong_scene,
+    stakes: topicPackage.stakes,
     packagingSeed: topicPackage.packaging_seed,
     canonicalQuotesJson: topicPackage.canonical_quotes,
     durationBandJson: durationBand,
@@ -78,7 +107,8 @@ export async function confirmTopicCandidate(input: ConfirmTopicCandidateInput) {
     mustIncludeBeatsJson: topicPackage.must_include_beats,
     forbiddenExpansionsJson: topicPackage.forbidden_expansions,
     riskHintsJson: topicPackage.risk_hints,
-    sourceAnchorRefsJson: [input.candidate.sourceHint],
+    sourceAnchorRefsJson: topicPackage.source_anchor_refs,
+    ambiguityNotesJson: topicPackage.ambiguity_notes,
   });
 
   input.project.name = saved.title;
@@ -99,7 +129,13 @@ export async function confirmTopicCandidate(input: ConfirmTopicCandidateInput) {
       family_label: saved.familyLabel,
       scope_label: saved.scopeLabel,
       core_conflict: saved.coreConflict,
+      stakes: saved.stakes ?? "",
       strong_scene: saved.strongScene,
+      must_include_beats: saved.mustIncludeBeatsJson,
+      forbidden_expansions: saved.forbiddenExpansionsJson,
+      source_anchor_refs: saved.sourceAnchorRefsJson,
+      canonical_quotes: saved.canonicalQuotesJson,
+      ambiguity_notes: saved.ambiguityNotesJson,
       duration_band: saved.durationBandJson,
       narrative_tension_map: saved.narrativeTensionMapJson,
     },
