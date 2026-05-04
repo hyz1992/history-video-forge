@@ -23,8 +23,13 @@ interface TopicPackageInput {
   title: string;
   selected_angle: string;
   scope_label: string;
+  core_conflict: string;
+  stakes: string;
   must_include_beats: string[];
   forbidden_expansions: string[];
+  source_anchor_refs: string[];
+  canonical_quotes: string[];
+  ambiguity_notes: string[];
   duration_band: string;
   narrative_tension_map: {
     hook_claim: string;
@@ -44,6 +49,7 @@ interface TopicDeliveryPackInput {
 
 export interface BuildScriptInputBundleInput {
   topicPackage: TopicPackageInput;
+  eventIdentity: string;
   topicDeliveryPack: TopicDeliveryPackInput & Record<string, unknown>;
   projectStylePack: ProjectStylePack;
   familyBiasPack: FamilyBiasPack;
@@ -54,11 +60,16 @@ export function buildScriptInputBundle(input: BuildScriptInputBundleInput) {
     topic_package: input.topicPackage,
     topic_delivery_pack: input.topicDeliveryPack,
     hard_lane: {
-      event_identity: input.topicPackage.title,
+      event_identity: input.eventIdentity,
       selected_angle: input.topicPackage.selected_angle,
       scope_label: input.topicPackage.scope_label,
+      core_conflict: input.topicPackage.core_conflict,
+      stakes: input.topicPackage.stakes,
       must_include_beats: input.topicPackage.must_include_beats,
       forbidden_expansions: input.topicPackage.forbidden_expansions,
+      source_anchor_refs: input.topicPackage.source_anchor_refs,
+      canonical_quotes: input.topicPackage.canonical_quotes,
+      ambiguity_notes: input.topicPackage.ambiguity_notes,
       duration_band: input.topicPackage.duration_band,
     },
     soft_lane: {

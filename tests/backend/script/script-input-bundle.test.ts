@@ -93,6 +93,7 @@ describe("script input bundle", () => {
 
     const bundle = buildScriptInputBundle({
       topicPackage,
+      eventIdentity: "evt_yanzi_shichu",
       topicDeliveryPack: deliveryPack,
       projectStylePack,
       familyBiasPack,
@@ -102,6 +103,20 @@ describe("script input bundle", () => {
     expect(bundle.hard_lane).toBeDefined();
     expect(bundle.soft_lane).toBeDefined();
     expect(bundle.packaging_lane).toBeDefined();
+    expect(bundle.hard_lane).toMatchObject({
+      event_identity: "evt_yanzi_shichu",
+      selected_angle: topicPackage.selected_angle,
+      scope_label: topicPackage.scope_label,
+      core_conflict: topicPackage.core_conflict,
+      stakes: topicPackage.stakes,
+      must_include_beats: topicPackage.must_include_beats,
+      forbidden_expansions: topicPackage.forbidden_expansions,
+      source_anchor_refs: topicPackage.source_anchor_refs,
+      canonical_quotes: topicPackage.canonical_quotes,
+      ambiguity_notes: topicPackage.ambiguity_notes,
+      duration_band: topicPackage.duration_band,
+    });
+    expect(bundle.hard_lane.event_identity).not.toBe(topicPackage.title);
     expect(bundle.packaging_lane).toMatchObject({
       hook_claim: expect.any(String),
       hook_emotion: expect.any(String),

@@ -15,8 +15,13 @@ export const ScriptInputBundle = z
         event_identity: z.string().min(1),
         selected_angle: z.string().min(1),
         scope_label: z.string().min(1),
+        core_conflict: z.string().min(1),
+        stakes: z.string().min(1),
         must_include_beats: z.array(z.string()),
         forbidden_expansions: z.array(z.string()),
+        source_anchor_refs: z.array(z.string().min(1)).min(1),
+        canonical_quotes: z.array(z.string()),
+        ambiguity_notes: z.array(z.string().min(1)),
         duration_band: z.string().min(1),
       })
       .strict(),
