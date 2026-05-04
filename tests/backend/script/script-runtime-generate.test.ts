@@ -369,6 +369,9 @@ ${JSON.stringify(runtimeDraft)}
     expect(entries[0]?.systemPrompt).toContain(
       "前两句必须直接复用 `hook_claim` 或 `strong_scene` 的具体场面起手，第一句就要落在冲突、危险、反常识或即将出事的局面上，禁止背景铺垫、抽象概括和泛问句空转",
     );
+    expect(entries[0]?.systemPrompt).toContain(
+      "先单独确定一个可独立成立的 `opening_span`，再让 `script_text` 以 `opening_span` 原文起手顺势展开",
+    );
     expect(entries[0]?.systemPrompt).not.toContain("不要只用泛问句空转起手");
     expect(entries[0]?.systemPrompt).toContain("`ending_span`");
     expect(entries[0]?.systemPrompt).toContain("回收到 `ending_residue` 或 `stakes`");
