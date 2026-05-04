@@ -247,6 +247,16 @@
 - 声线建议
 - 包装种子
 
+当前冻结给 script 的最小故事合同，至少要显式包含这些字段名：
+
+- `core_conflict`
+- `stakes`
+- `must_include_beats`
+- `forbidden_expansions`
+- `source_anchor_refs`
+- `canonical_quotes`
+- `ambiguity_notes`
+
 它不负责：
 
 - 完整大纲

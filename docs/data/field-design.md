@@ -290,6 +290,10 @@
 - `canonical_quotes`
 - `ambiguity_notes`
 
+承接关系：
+
+- `Script Input Bundle.hard_lane` 负责把 `Topic Package` 中的 `core_conflict / stakes / must_include_beats / forbidden_expansions / source_anchor_refs / canonical_quotes / ambiguity_notes` 原样送进 script 运行时，不再让 script 自己猜测故事硬边界或史料硬锚点。
+
 ### Soft Lane
 
 定义：

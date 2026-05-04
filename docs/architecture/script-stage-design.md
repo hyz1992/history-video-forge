@@ -92,6 +92,16 @@ Topic Package
 - 史料来源锚点
 - 短原文锚句
 
+当前第一阶段正式承接关系应写实为：
+
+- `hard_lane.core_conflict <- Topic Package.core_conflict`
+- `hard_lane.stakes <- Topic Package.stakes`
+- `hard_lane.must_include_beats <- Topic Package.must_include_beats`
+- `hard_lane.forbidden_expansions <- Topic Package.forbidden_expansions`
+- `hard_lane.source_anchor_refs <- Topic Package.source_anchor_refs`
+- `hard_lane.canonical_quotes <- Topic Package.canonical_quotes`
+- `hard_lane.ambiguity_notes <- Topic Package.ambiguity_notes`
+
 ### B. Soft Lane
 
 负责 script 的风格偏置，例如：

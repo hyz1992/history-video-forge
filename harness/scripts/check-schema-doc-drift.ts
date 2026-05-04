@@ -16,6 +16,10 @@ export const DOC_TERM_RULES: Record<string, string[]> = {
     "patch_intent",
     "script_local_validation",
     "script_semantic_review",
+    "stakes",
+    "source_anchor_refs",
+    "canonical_quotes",
+    "ambiguity_notes",
   ],
   "docs/data/schema-design.md": [
     "TopicCandidateCard",
@@ -31,6 +35,22 @@ export const DOC_TERM_RULES: Record<string, string[]> = {
     "hook_claim",
     "patch_intent",
     "script_local_validation",
+  ],
+  "docs/architecture/topic-stage-design.md": [
+    "Topic Package",
+    "stakes",
+    "source_anchor_refs",
+    "canonical_quotes",
+    "ambiguity_notes",
+  ],
+  "docs/architecture/script-stage-design.md": [
+    "Script Input Bundle",
+    "hard_lane",
+    "core_conflict",
+    "stakes",
+    "source_anchor_refs",
+    "canonical_quotes",
+    "ambiguity_notes",
   ],
 };
 

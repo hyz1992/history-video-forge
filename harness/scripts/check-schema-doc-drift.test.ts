@@ -62,13 +62,63 @@ describe("check schema doc drift", () => {
   it("合法最小文档集合不返回错误", () => {
     const result = validateDocuments({
       "docs/data/field-design.md":
-        "TopicCandidateCard TopicPackage TopicDeliveryPack ScriptValidationResult viral_rubric narrative_tension_map hook_claim hook_emotion reveal_position patch_intent script_local_validation script_semantic_review",
+        "TopicCandidateCard TopicPackage TopicDeliveryPack ScriptValidationResult viral_rubric narrative_tension_map hook_claim hook_emotion reveal_position patch_intent script_local_validation script_semantic_review stakes source_anchor_refs canonical_quotes ambiguity_notes",
       "docs/data/schema-design.md":
         "TopicCandidateCard TopicPackage TopicDeliveryPack ScriptValidationResult viral_rubric narrative_tension_map",
       "docs/architecture/api-design.md":
         "viral_rubric narrative_tension_map hook_claim patch_intent script_local_validation",
+      "docs/architecture/topic-stage-design.md":
+        "Topic Package stakes source_anchor_refs canonical_quotes ambiguity_notes",
+      "docs/architecture/script-stage-design.md":
+        "Script Input Bundle hard_lane core_conflict stakes source_anchor_refs canonical_quotes ambiguity_notes",
     });
 
     expect(result).toEqual([]);
+  });
+
+  it("topic-stage-design 缺少 Topic Package 故事合同字段时返回错误", () => {
+    const result = validateDocuments({
+      "docs/data/field-design.md":
+        "TopicCandidateCard TopicPackage TopicDeliveryPack ScriptValidationResult viral_rubric narrative_tension_map hook_claim hook_emotion reveal_position patch_intent script_local_validation script_semantic_review stakes source_anchor_refs canonical_quotes ambiguity_notes",
+      "docs/data/schema-design.md":
+        "TopicCandidateCard TopicPackage TopicDeliveryPack ScriptValidationResult viral_rubric narrative_tension_map",
+      "docs/architecture/api-design.md":
+        "viral_rubric narrative_tension_map hook_claim patch_intent script_local_validation",
+      "docs/architecture/topic-stage-design.md":
+        "Topic Package stakes canonical_quotes",
+      "docs/architecture/script-stage-design.md":
+        "Script Input Bundle hard_lane core_conflict stakes source_anchor_refs canonical_quotes ambiguity_notes",
+    });
+
+    expect(
+      result.some(
+        (issue) =>
+          issue.includes("docs/architecture/topic-stage-design.md") &&
+          issue.includes("source_anchor_refs"),
+      ),
+    ).toBe(true);
+  });
+
+  it("script-stage-design 缺少 hard_lane 承接关系时返回错误", () => {
+    const result = validateDocuments({
+      "docs/data/field-design.md":
+        "TopicCandidateCard TopicPackage TopicDeliveryPack ScriptValidationResult viral_rubric narrative_tension_map hook_claim hook_emotion reveal_position patch_intent script_local_validation script_semantic_review stakes source_anchor_refs canonical_quotes ambiguity_notes",
+      "docs/data/schema-design.md":
+        "TopicCandidateCard TopicPackage TopicDeliveryPack ScriptValidationResult viral_rubric narrative_tension_map",
+      "docs/architecture/api-design.md":
+        "viral_rubric narrative_tension_map hook_claim patch_intent script_local_validation",
+      "docs/architecture/topic-stage-design.md":
+        "Topic Package stakes source_anchor_refs canonical_quotes ambiguity_notes",
+      "docs/architecture/script-stage-design.md":
+        "Script Input Bundle core_conflict stakes canonical_quotes",
+    });
+
+    expect(
+      result.some(
+        (issue) =>
+          issue.includes("docs/architecture/script-stage-design.md") &&
+          issue.includes("hard_lane"),
+      ),
+    ).toBe(true);
   });
 });
