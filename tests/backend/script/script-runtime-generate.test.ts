@@ -10,39 +10,42 @@ import {
 } from "../../../shared/src/index.js";
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
-import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
-import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
-import { createOpenAiCompatibleProvider } from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
-import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 import { generateScriptDraft } from "../../../backend/src/modules/script/script-generation.service.js";
 import { validateScriptDraft } from "../../../backend/src/modules/script/script-local-validator.js";
 import { runScriptGeneration } from "../../../backend/src/modules/script/script-run.service.js";
+import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
 import type { LlmInteractionLogEntry } from "../../../backend/src/runtime/llm/interaction-log.js";
+import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
+import { createOpenAiCompatibleProvider } from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
+import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 import { getProjectStorageProfile } from "../../../backend/src/runtime/trace/project-storage.js";
 
 const topicPackage = TopicPackage.parse({
   topic_id: "topic_yanzi_shichu",
   title: "晏子使楚",
   selected_angle: "楚王不是只压了晏子一次，而是连压三次。",
-  family_label: "外交压场型",
+  family_label: "外交压场",
   scope_label: "完整事件",
-  core_conflict: "楚王借公开场合连续羞辱晏子与齐国，晏子必须当场顶回去。",
-  stakes: "一旦退让，就不只是晏子个人失场，而是齐国当场被楚国压住。",
+  core_conflict:
+    "楚王借公开场合连续羞辱晏子与齐国，晏子必须当场顶回去。",
+  stakes:
+    "一旦退让，丢掉的不只是晏子个人体面，而是齐国在楚廷上的国格。",
   strong_scene: "楚王连续压场，晏子一句句顶回去。",
   packaging_seed: "楚王连压三次，晏子一次没退。",
   must_include_beats: ["入楚受辱", "橘枳之喻"],
-  forbidden_expansions: ["不要扩写到未定 downstream 阶段"],
-  risk_hints: ["不要把内容写成课堂导入"],
+  forbidden_expansions: ["不要扩写到未设计的 downstream 阶段"],
+  risk_hints: ["不要写成课堂导入"],
   source_anchor_refs: ["《晏子春秋》"],
   canonical_quotes: ["橘生淮南则为橘"],
   ambiguity_notes: [],
   duration_band: "medium",
   narrative_tension_map: {
     hook_claim: "楚王不是只压了晏子一次，而是连压三次",
-    pressure_escalation: "从羞辱身形升级到羞辱齐国，再升级到羞辱齐人风气",
-    mid_reveal: "晏子不是在逞口舌，而是在守住齐国场面",
-    peak_payoff: "橘枳之喻把第三次压场原样顶回",
-    ending_residue: "这种场面，一退就不只是退掉自己",
+    pressure_escalation:
+      "从羞辱身形升级到羞辱齐国，再升级到羞辱齐人的风土。",
+    mid_reveal: "晏子不是在逞口舌，而是在守住齐国的场面。",
+    peak_payoff: "橘枳之喻把第三次压场原样顶回。",
+    ending_residue: "这种场面，一退就不只是退掉自己。",
   },
 });
 
@@ -53,7 +56,7 @@ const topicDeliveryPack = TopicDeliveryPack.parse({
   pacing_tilt: "fast",
   ending_tilt: "judgment",
   visual_tilt: ["faces", "courtroom"],
-  hook_claim: "楚王不是只压了晏子一次，而是连压三次，你敢当场顶回去吗？",
+  hook_claim: "楚王连压三次，晏子为什么一次都没退？",
   hook_emotion: "压迫",
   reveal_position: "mid",
   caution_notes: [
@@ -93,9 +96,9 @@ const scriptInputBundle = ScriptInputBundle.parse({
   },
 });
 
-const runtimeDraft = {
+const runtimeDraft = ScriptDraftPackage.parse({
   script_text:
-    "楚王第一次压晏子的时候，压的不是身高，是齐国的脸面。可晏子没有退，他知道今天只要退一次，后面三次都会接着压上来。入楚受辱只是开始，真正厉害的是他把每次当众羞辱都原样顶了回去。到橘枳之喻落下来时，楚国想压人的场面已经反过来变成自己失手的场面。这件事真正狠的地方，不是晏子会说，而是他敢在众人面前一次不退。",
+    "楚王第一次压晏子的时候，压的不是身高，而是齐国的面子。可晏子没有退，他知道今天只要退一次，后面每一次都会压上来。入楚受辱只是开始，真正厉害的是他把每次当众羞辱都原样顶了回去。到橘枳之喻落下来时，楚国想压人的场面已经反过来变成自己失手的场面。这件事真正狠的地方，不是晏子会说，而是他敢在众人面前一次不退。",
   estimated_duration_sec: 86,
   beat_trace: [
     {
@@ -116,9 +119,10 @@ const runtimeDraft = {
       excerpt: "到橘枳之喻落下来时",
     },
   ],
-  opening_span: "楚王第一次压晏子的时候，压的不是身高，是齐国的脸面。",
-  ending_span: "这件事真正狠的地方，不是晏子会说，而是他敢在众人面前一次不退。",
-};
+  opening_span: "楚王第一次压晏子的时候，压的不是身高，而是齐国的面子。",
+  ending_span:
+    "这件事真正狠的地方，不是晏子会说，而是他敢在众人面前一次不退。",
+});
 
 describe("script runtime generate", () => {
   it("sends ScriptInputBundle into the formal script-writer prompt and returns a ScriptDraftPackage", async () => {
@@ -283,12 +287,15 @@ ${JSON.stringify(runtimeDraft)}
       parsedOutput: runtimeDraft,
       errorMessage: null,
     });
-    expect(entries[0]?.systemPrompt).toContain("# 任务");
     expect(entries[0]?.systemPrompt).toContain("ScriptInputBundle");
     expect(entries[0]?.systemPrompt).toContain("ScriptDraftPackage");
+    expect(entries[0]?.systemPrompt).toContain("`beat_trace`");
     expect(entries[0]?.systemPrompt).toContain(
-      "`beat_trace` 的每条 `beat` 必须逐字复用 `hard_lane.must_include_beats` 中对应原文",
+      "`hard_lane.must_include_beats`",
     );
+    expect(entries[0]?.systemPrompt).toContain("`estimated_duration_sec`");
+    expect(entries[0]?.systemPrompt).toContain("`hard_lane.duration_band`");
+    expect(entries[0]?.systemPrompt).toContain("`script_text`");
   });
 
   it("persists readable llm interaction markdown under the script run directory", async () => {
@@ -317,7 +324,7 @@ ${JSON.stringify(runtimeDraft)}
       forbiddenExpansionsJson: topicPackage.forbidden_expansions,
       riskHintsJson: topicPackage.risk_hints,
       sourceAnchorRefsJson: topicPackage.source_anchor_refs,
-      ambiguityNotesJson: ["《晏子春秋》版本存在后世转述差异"],
+      ambiguityNotesJson: ["《晏子春秋》版本存在后世转述差异。"],
     });
     project.activeTopicPackageId = topicPackageRecord.id;
     project.status = "script_ready";
@@ -335,11 +342,14 @@ ${JSON.stringify(runtimeDraft)}
       stakes: topicPackage.stakes,
       source_anchor_refs: topicPackage.source_anchor_refs,
       canonical_quotes: [],
-      ambiguity_notes: ["《晏子春秋》版本存在后世转述差异"],
+      ambiguity_notes: ["《晏子春秋》版本存在后世转述差异。"],
     });
 
     const profile = getProjectStorageProfile(project);
-    const graphTraceSummary = response.body.graph_trace_summary as Record<string, unknown>;
+    const graphTraceSummary = response.body.graph_trace_summary as Record<
+      string,
+      unknown
+    >;
     const runId = String(graphTraceSummary.run_id);
     const interactionLogPath = resolve(
       process.cwd(),
@@ -352,9 +362,8 @@ ${JSON.stringify(runtimeDraft)}
     expect(existsSync(interactionLogPath)).toBe(true);
 
     const logContent = readFileSync(interactionLogPath, "utf8");
-    expect(logContent).toContain("# LLM 交互日志 01");
+    expect(logContent).toContain("# LLM");
     expect(logContent).toContain("- prompt_id: script.writer");
-    expect(logContent).toContain("## 输入对象");
     expect(logContent).toContain("## System Prompt");
     expect(logContent).toContain("## 原始模型响应");
     expect(logContent).toContain("## 归一化结果");

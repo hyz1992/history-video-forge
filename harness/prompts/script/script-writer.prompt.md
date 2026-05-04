@@ -36,6 +36,7 @@ status: active
 - 不得改写 `TopicPackage` 合同
 - 正文和 sidecar 一律使用中文
 - `beat_trace` 的每条 `beat` 必须逐字复用 `hard_lane.must_include_beats` 中对应原文，不得自行改名或改写
+- `script_text` 的口播体量必须服务于 `hard_lane.duration_band`；`estimated_duration_sec` 必须落在对应时长区间内，且不得与正文体量明显失真
 
 ## 禁止事项
 
