@@ -37,6 +37,21 @@ function getDurationRange(durationBand: unknown) {
   return { min: 90, max: 140 };
 }
 
+function getDurationDeltaRatio(
+  estimatedDurationSec: number,
+  durationRange: { min: number; max: number },
+) {
+  if (estimatedDurationSec < durationRange.min) {
+    return (durationRange.min - estimatedDurationSec) / durationRange.min;
+  }
+
+  if (estimatedDurationSec > durationRange.max) {
+    return (estimatedDurationSec - durationRange.max) / durationRange.max;
+  }
+
+  return 0;
+}
+
 function pushUnique(target: string[], code: string) {
   if (!target.includes(code)) {
     target.push(code);
@@ -122,9 +137,10 @@ export function validateScriptDraft(input: ValidateScriptDraftInput) {
   }
 
   const durationRange = getDurationRange(input.bundle.hard_lane.duration_band);
-  const durationCenter = (durationRange.min + durationRange.max) / 2;
-  const durationDeviation =
-    Math.abs(draft.estimated_duration_sec - durationCenter) / durationCenter;
+  const durationDeviation = getDurationDeltaRatio(
+    draft.estimated_duration_sec,
+    durationRange,
+  );
 
   if (durationDeviation > 0.35) {
     pushUnique(errors, "duration_extreme");
