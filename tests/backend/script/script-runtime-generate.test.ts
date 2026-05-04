@@ -15,6 +15,7 @@ import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.j
 import { createOpenAiCompatibleProvider } from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 import { generateScriptDraft } from "../../../backend/src/modules/script/script-generation.service.js";
+import { validateScriptDraft } from "../../../backend/src/modules/script/script-local-validator.js";
 import { runScriptGeneration } from "../../../backend/src/modules/script/script-run.service.js";
 import type { LlmInteractionLogEntry } from "../../../backend/src/runtime/llm/interaction-log.js";
 import { getProjectStorageProfile } from "../../../backend/src/runtime/trace/project-storage.js";
@@ -173,6 +174,57 @@ ${JSON.stringify(runtimeDraft)}
 
     expect(invokeApi).toHaveBeenCalledTimes(1);
     expect(() => ScriptDraftPackage.parse(draft)).not.toThrow();
+  });
+
+  it("canonicalizes beat trace labels back to hard-lane beats before local validation", async () => {
+    const invokeApi = vi.fn(
+      async () =>
+        JSON.stringify({
+          ...runtimeDraft,
+          beat_trace: [
+            {
+              label: "入楚受辱只是开始",
+              excerpt: "入楚受辱只是开始",
+              confidence: 0.95,
+            },
+            {
+              label: "到橘枳之喻落下来时",
+              excerpt: "到橘枳之喻落下来时",
+              confidence: 0.96,
+            },
+          ],
+        }),
+    );
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const draft = await (generateScriptDraft as any)({
+      bundle: scriptInputBundle,
+      llmGateway: gateway,
+    });
+
+    expect(draft.beat_trace).toMatchObject([
+      {
+        beat: "入楚受辱",
+        excerpt: "入楚受辱只是开始",
+      },
+      {
+        beat: "橘枳之喻",
+        excerpt: "到橘枳之喻落下来时",
+      },
+    ]);
+
+    const validation = validateScriptDraft({
+      bundle: scriptInputBundle,
+      draft,
+    });
+
+    expect(validation.errors).not.toContain("beat_missing");
   });
 
   it("fails clearly when script-writer output cannot be repaired", async () => {

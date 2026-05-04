@@ -51,18 +51,21 @@ export async function generateScriptDraft(input: GenerateScriptDraftInput) {
     input: input.bundle,
     interactionLogWriter: input.interactionLogWriter,
   });
-  const draft = normalizeScriptDraft(rawDraft);
+  const draft = normalizeScriptDraft(
+    rawDraft,
+    input.bundle.hard_lane.must_include_beats,
+  );
 
   return ScriptDraftPackage.parse(draft);
 }
 
-function normalizeScriptDraft(rawDraft: unknown) {
+function normalizeScriptDraft(rawDraft: unknown, requiredBeats: string[]) {
   if (!rawDraft || typeof rawDraft !== "object") {
     return rawDraft;
   }
 
   const draft = { ...(rawDraft as Record<string, unknown>) };
-  draft.beat_trace = normalizeBeatTrace(draft.beat_trace);
+  draft.beat_trace = normalizeBeatTrace(draft.beat_trace, requiredBeats);
   draft.quote_trace = normalizeQuoteTrace(draft.quote_trace);
   draft.opening_span = normalizeTextSpan(draft.opening_span);
   draft.ending_span = normalizeTextSpan(draft.ending_span);
@@ -70,27 +73,31 @@ function normalizeScriptDraft(rawDraft: unknown) {
   return draft;
 }
 
-function normalizeBeatTrace(value: unknown) {
+function normalizeBeatTrace(value: unknown, requiredBeats: string[]) {
   if (!Array.isArray(value)) {
     return value;
   }
 
+  const unmatchedRequiredBeats = [...requiredBeats];
+
   return value.map((item) => {
     if (item && typeof item === "object") {
       const record = item as Record<string, unknown>;
-      return {
-        beat:
-          typeof record.beat === "string"
+      const beatLabel =
+        typeof record.beat === "string"
+          ? record.beat
+          : typeof record.label === "string"
+            ? record.label
+            : extractFirstString(record) ?? "未命名 beat";
+      const excerpt =
+        typeof record.excerpt === "string"
+          ? record.excerpt
+          : typeof record.beat === "string"
             ? record.beat
-            : typeof record.label === "string"
-              ? record.label
-              : extractFirstString(record) ?? "未命名 beat",
-        excerpt:
-          typeof record.excerpt === "string"
-            ? record.excerpt
-            : typeof record.beat === "string"
-              ? record.beat
-              : extractFirstString(record) ?? "未提供 excerpt",
+            : extractFirstString(record) ?? "未提供 excerpt";
+      return {
+        beat: canonicalizeBeatLabel(beatLabel, excerpt, unmatchedRequiredBeats),
+        excerpt,
         confidence:
           typeof record.confidence === "number"
             ? record.confidence
@@ -100,11 +107,36 @@ function normalizeBeatTrace(value: unknown) {
 
     const excerpt = typeof item === "string" ? item : String(item);
     return {
-      beat: excerpt,
+      beat: canonicalizeBeatLabel(excerpt, excerpt, unmatchedRequiredBeats),
       excerpt,
       confidence: 0.7,
     };
   });
+}
+
+function canonicalizeBeatLabel(
+  beatLabel: string,
+  excerpt: string,
+  unmatchedRequiredBeats: string[],
+) {
+  const normalizedBeatLabel = beatLabel.trim();
+  const normalizedExcerpt = excerpt.trim();
+  const matchedIndex = unmatchedRequiredBeats.findIndex((requiredBeat) =>
+    [normalizedBeatLabel, normalizedExcerpt].some(
+      (text) =>
+        text.length > 0 &&
+        (text === requiredBeat ||
+          text.includes(requiredBeat) ||
+          requiredBeat.includes(text)),
+    ),
+  );
+
+  if (matchedIndex === -1) {
+    return normalizedBeatLabel;
+  }
+
+  const [matchedBeat] = unmatchedRequiredBeats.splice(matchedIndex, 1);
+  return matchedBeat ?? normalizedBeatLabel;
 }
 
 function normalizeQuoteTrace(value: unknown) {
