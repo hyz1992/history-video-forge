@@ -15,12 +15,15 @@ const topicPackage = TopicPackage.parse({
   family_label: "外交压场型",
   scope_label: "完整事件",
   core_conflict: "楚王借公开场合连续羞辱晏子与齐国，晏子必须当场顶回去。",
+  stakes: "一旦退让，就不只是晏子个人失场，而是齐国当场被楚国压住。",
   strong_scene: "楚王连续压场，晏子一句句顶回去。",
   packaging_seed: "楚王连压三次，晏子一次没退。",
   must_include_beats: ["入楚受辱", "橘枳之喻"],
   forbidden_expansions: ["不要扩写到未定 downstream 阶段"],
   risk_hints: ["不要把内容写成课堂导入"],
+  source_anchor_refs: ["《晏子春秋》"],
   canonical_quotes: ["橘生淮南则为橘"],
+  ambiguity_notes: [],
   duration_band: "medium",
   narrative_tension_map: {
     hook_claim: "楚王不是只压了晏子一次，而是连压三次",
@@ -51,6 +54,18 @@ const familyBiasPack = {
 };
 
 describe("script input bundle", () => {
+  it("accepts and preserves story completeness fields on TopicPackage", () => {
+    const parsed = TopicPackage.parse({
+      ...topicPackage,
+      canonical_quotes: [],
+    });
+
+    expect(parsed.stakes).toBe(topicPackage.stakes);
+    expect(parsed.source_anchor_refs).toEqual(topicPackage.source_anchor_refs);
+    expect(parsed.ambiguity_notes).toEqual(topicPackage.ambiguity_notes);
+    expect(parsed.canonical_quotes).toEqual([]);
+  });
+
   it("plans TopicDeliveryPack from TopicPackage plus style and family bias", () => {
     const deliveryPack = planTopicDelivery({
       topicPackage,
