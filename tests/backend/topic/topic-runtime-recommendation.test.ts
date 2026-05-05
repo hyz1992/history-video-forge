@@ -1014,6 +1014,48 @@ describe("topic runtime recommendation", () => {
     expect(result.selector_pool.filter((candidate) => candidate.normalized_event_identity === "event-a")).toHaveLength(1);
   });
 
+  it("keeps multiple same-event candidates when a single-event seed only varies the angle", async () => {
+    const db = createDbClient();
+    const { gateway } = createGatewayWithSelectorResponses(
+      [[
+        { ...createRuntimeCandidate("event-a-title-1", "angle-a-1"), event_identity: "event-a" },
+        { ...createRuntimeCandidate("event-a-title-2", "angle-a-2"), event_identity: "event-a" },
+        { ...createRuntimeCandidate("event-a-title-3", "angle-a-3"), event_identity: "event-a" },
+        { ...createRuntimeCandidate("event-a-title-4", "angle-a-4"), event_identity: "event-a" },
+        { ...createRuntimeCandidate("event-a-title-5", "angle-a-5"), event_identity: "event-a" },
+        { ...createRuntimeCandidate("event-a-title-6", "angle-a-6"), event_identity: "event-a" },
+        { ...createRuntimeCandidate("event-a-title-7", "angle-a-7"), event_identity: "event-a" },
+        { ...createRuntimeCandidate("event-a-title-8", "angle-a-8"), event_identity: "event-a" },
+      ]],
+      [["selector_candidate_1", "selector_candidate_2", "selector_candidate_3"]],
+    );
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "event-a",
+        summary: "single-event seeds should keep multiple angles in the selector pool",
+        coreConflict: "angle variation should stay selectable instead of collapsing to one slot",
+        strongScene: "the same event is being opened from multiple distinct angles",
+        sourceHint: "test",
+        recentUsageHint: "single-event focus mode",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    expect(result.selector_pool).toHaveLength(8);
+    expect(result.candidates).toHaveLength(3);
+    expect(result.selector_pool.every((candidate) => candidate.normalized_event_identity === "event-a")).toBe(true);
+    expect(result.diagnostics.checks).not.toContainEqual(
+      expect.objectContaining({
+        code: "topic_candidate_slots_insufficient",
+      }),
+    );
+  });
+
   it("keeps explicit event_identity visible in selector outputs", async () => {
     const db = createDbClient();
     const { gateway } = createGatewayWithSelectorResponses([

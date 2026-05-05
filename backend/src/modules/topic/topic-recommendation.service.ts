@@ -381,6 +381,51 @@ async function postProcessTopicCandidates(input: {
     });
   }
 
+  if (deduplicatedCandidates.length === 1 && input.candidates.length > 1) {
+    const anchoredEventIdentity = deduplicatedCandidates[0]?.eventIdentity;
+    const allCandidatesShareSameEventIdentity =
+      typeof anchoredEventIdentity === "string" &&
+      input.candidates.every(
+        (candidate) =>
+          normalizeEventIdentityValue(candidate.event_identity) === anchoredEventIdentity,
+      );
+
+    if (allCandidatesShareSameEventIdentity && anchoredEventIdentity) {
+      deduplicatedCandidates.length = 0;
+      duplicateReasons.length = 0;
+      const seenFingerprints = new Set<string>();
+
+      for (const [originalIndex, candidate] of input.candidates.entries()) {
+        const fingerprint = buildEventIdentityFingerprint({
+          eventIdentity: anchoredEventIdentity,
+          angle: candidate.one_line_angle,
+        });
+
+        if (seenFingerprints.has(fingerprint)) {
+          duplicateReasons.push(
+            `${candidate.title}锝?{candidate.one_line_angle} 涓庡凡淇濈暀鍊欓€夊垏鍙ｅ畬鍏ㄩ噸澶?`,
+          );
+          continue;
+        }
+
+        seenFingerprints.add(fingerprint);
+        const normalized = await normalizeEventInput(input.db, {
+          rawInput: candidate.event_identity,
+          sourceType: "system_recommendation",
+        });
+
+        deduplicatedCandidates.push({
+          candidateId: `selector_candidate_${originalIndex + 1}`,
+          candidate,
+          eventId: normalized.event.id,
+          eventIdentity: anchoredEventIdentity,
+          fingerprint,
+          originalIndex,
+        });
+      }
+    }
+  }
+
   const recentCandidates = input.projectId
     ? await listRecentCachedCandidates(input.db, {
       projectId: input.projectId,
@@ -706,6 +751,8 @@ function inspectSelectorDecision(input: {
   const knownIds = new Set(input.selectorPool.map((candidate) => candidate.candidate_id));
   const excludedCandidateIds = input.excludedCandidateIds ?? new Set<string>();
   const excludedEventIdentities = input.excludedEventIdentities ?? new Set<string>();
+  const allowRepeatedEventIdentities =
+    new Set(input.selectorPool.map((candidate) => candidate.normalized_event_identity)).size === 1;
   const selected: RankedRecommendationCandidate[] = [];
   const selectedIds: string[] = [];
 
@@ -723,14 +770,16 @@ function inspectSelectorDecision(input: {
       throw new Error("topic_selector_invalid_selection");
     }
 
-    if (excludedEventIdentities.has(match.eventIdentity)) {
+    if (!allowRepeatedEventIdentities && excludedEventIdentities.has(match.eventIdentity)) {
       throw new Error("topic_selector_invalid_selection");
     }
 
     selected.push(match);
     selectedIds.push(candidateId);
     excludedCandidateIds.add(candidateId);
-    excludedEventIdentities.add(match.eventIdentity);
+    if (!allowRepeatedEventIdentities) {
+      excludedEventIdentities.add(match.eventIdentity);
+    }
   }
 
   const targetCount = input.allowedCount ?? TOPIC_CANDIDATE_TARGET_COUNT;
