@@ -72,7 +72,11 @@ function normalizeScriptDraft(rawDraft: unknown, requiredBeats: string[]) {
       ? (record.script_draft_package as Record<string, unknown>)
       : record;
   const draft = { ...unwrappedDraft };
-  draft.beat_trace = normalizeBeatTrace(draft.beat_trace, requiredBeats);
+  draft.beat_trace = normalizeBeatTrace(
+    draft.beat_trace,
+    requiredBeats,
+    typeof draft.script_text === "string" ? draft.script_text : "",
+  );
   draft.quote_trace = normalizeQuoteTrace(draft.quote_trace);
   draft.opening_span = normalizeTextSpan(draft.opening_span);
   draft.ending_span = normalizeTextSpan(draft.ending_span);
@@ -80,7 +84,11 @@ function normalizeScriptDraft(rawDraft: unknown, requiredBeats: string[]) {
   return draft;
 }
 
-function normalizeBeatTrace(value: unknown, requiredBeats: string[]) {
+function normalizeBeatTrace(
+  value: unknown,
+  requiredBeats: string[],
+  scriptText: string,
+) {
   if (!Array.isArray(value)) {
     return value;
   }
@@ -112,16 +120,21 @@ function normalizeBeatTrace(value: unknown, requiredBeats: string[]) {
       if (ordinalBeat) {
         return {
           beat: ordinalBeat,
-          excerpt: ordinalBeat,
+          excerpt: strengthenBeatExcerpt(ordinalBeat, ordinalBeat, scriptText),
           confidence:
             typeof record.confidence === "number"
               ? record.confidence
               : 0.7,
         };
       }
-      return {
-        beat: canonicalizeBeatLabel(beatLabel, excerpt, unmatchedRequiredBeats),
+      const beat = canonicalizeBeatLabel(
+        beatLabel,
         excerpt,
+        unmatchedRequiredBeats,
+      );
+      return {
+        beat,
+        excerpt: strengthenBeatExcerpt(beat, excerpt, scriptText),
         confidence:
           typeof record.confidence === "number"
             ? record.confidence
@@ -140,16 +153,48 @@ function normalizeBeatTrace(value: unknown, requiredBeats: string[]) {
     if (ordinalBeat) {
       return {
         beat: ordinalBeat,
-        excerpt: ordinalBeat,
+        excerpt: strengthenBeatExcerpt(ordinalBeat, ordinalBeat, scriptText),
         confidence: 0.7,
       };
     }
+    const beat = canonicalizeBeatLabel(excerpt, excerpt, unmatchedRequiredBeats);
     return {
-      beat: canonicalizeBeatLabel(excerpt, excerpt, unmatchedRequiredBeats),
-      excerpt,
+      beat,
+      excerpt: strengthenBeatExcerpt(beat, excerpt, scriptText),
       confidence: 0.7,
     };
   });
+}
+
+function strengthenBeatExcerpt(
+  beat: string,
+  excerpt: string,
+  scriptText: string,
+) {
+  const trimmedExcerpt = excerpt.trim();
+  if (trimmedExcerpt.length >= 8) {
+    return trimmedExcerpt;
+  }
+
+  return findSentenceContainingBeat(scriptText, beat) ?? trimmedExcerpt;
+}
+
+function findSentenceContainingBeat(scriptText: string, beat: string) {
+  const trimmedBeat = beat.trim();
+  if (!trimmedBeat) {
+    return null;
+  }
+
+  const sentences = scriptText
+    .split(/(?<=[。！？!?；;])/u)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+
+  return (
+    sentences.find(
+      (sentence) => sentence.includes(trimmedBeat) && sentence.length >= 8,
+    ) ?? null
+  );
 }
 
 function resolveOrdinalBeatPlaceholder(

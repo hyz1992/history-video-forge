@@ -229,11 +229,13 @@ ${JSON.stringify(runtimeDraft)}
     expect(draft.beat_trace).toMatchObject([
       {
         beat: scriptInputBundle.hard_lane.must_include_beats[0],
-        excerpt: scriptInputBundle.hard_lane.must_include_beats[0],
+        excerpt:
+          "入楚受辱只是开始，真正厉害的是他把每次当众羞辱都原样顶了回去。",
       },
       {
         beat: scriptInputBundle.hard_lane.must_include_beats[1],
-        excerpt: scriptInputBundle.hard_lane.must_include_beats[1],
+        excerpt:
+          "到橘枳之喻落下来时，楚国想压人的场面已经反过来变成自己失手的场面。",
       },
     ]);
 
@@ -294,6 +296,56 @@ ${JSON.stringify(runtimeDraft)}
     });
 
     expect(validation.errors).not.toContain("beat_missing");
+  });
+
+  it("expands weak beat trace excerpts from script text before local validation", async () => {
+    const weakTraceDraft = {
+      ...runtimeDraft,
+      script_text:
+        "楚王连续压场，晏子一句句顶回去。入楚受辱这一刻，不只是晏子被压，也是齐国被当众压住。到橘枳之喻落下来时，楚国想压人的场面已经反过来变成自己失手的场面。这种场面，一退就不只是退掉自己。",
+      beat_trace: [
+        {
+          beat: "入楚受辱",
+          excerpt: "入楚受辱",
+          confidence: 0.95,
+        },
+        {
+          beat: "橘枳之喻",
+          excerpt: "橘枳之喻",
+          confidence: 0.96,
+        },
+      ],
+    };
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi: vi.fn(async () => JSON.stringify(weakTraceDraft)),
+      }),
+    });
+
+    const draft = await (generateScriptDraft as any)({
+      bundle: scriptInputBundle,
+      llmGateway: gateway,
+    });
+
+    expect(draft.beat_trace).toMatchObject([
+      {
+        beat: "入楚受辱",
+        excerpt: "入楚受辱这一刻，不只是晏子被压，也是齐国被当众压住。",
+      },
+      {
+        beat: "橘枳之喻",
+        excerpt: "到橘枳之喻落下来时，楚国想压人的场面已经反过来变成自己失手的场面。",
+      },
+    ]);
+
+    const validation = validateScriptDraft({
+      bundle: scriptInputBundle,
+      draft,
+    });
+
+    expect(validation.errors).not.toContain("beat_trace_weak");
   });
 
   it("fails clearly when script-writer output cannot be repaired", async () => {
@@ -358,6 +410,10 @@ ${JSON.stringify(runtimeDraft)}
     expect(entries[0]?.systemPrompt).toContain(
       "`hard_lane.must_include_beats`",
     );
+    expect(entries[0]?.systemPrompt).toContain(
+      "`beat_trace.excerpt` 必须从 `script_text` 中截取",
+    );
+    expect(entries[0]?.systemPrompt).toContain("不少于 8 个汉字等价长度");
     expect(entries[0]?.systemPrompt).toContain("`estimated_duration_sec`");
     expect(entries[0]?.systemPrompt).toContain("`hard_lane.duration_band`");
     expect(entries[0]?.systemPrompt).toContain("`script_text`");
