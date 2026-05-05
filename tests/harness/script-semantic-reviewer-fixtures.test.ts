@@ -1,9 +1,14 @@
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_SCRIPT_SEMANTIC_REVIEWER_FIXTURE_SET_PATH,
   buildScriptSemanticReviewerFixturePlan,
   loadScriptSemanticReviewerFixtureSet,
+  runScriptSemanticReviewerFixtureShadowCheck,
 } from "../../harness/scripts/runtime/script-semantic-reviewer-fixtures";
 
 describe("script semantic reviewer calibration fixtures", () => {
@@ -57,5 +62,52 @@ describe("script semantic reviewer calibration fixtures", () => {
     expect(plan.required_checks).toContain(
       "不得把 fixture 期望决策接入自动 patch 主链路",
     );
+  });
+
+  it("runs fixture shadow check, writes report artifacts, and exposes a non-default npm command", async () => {
+    const outputDir = mkdtempSync(join(tmpdir(), "svf2-script-semantic-fixtures-"));
+    const result = await runScriptSemanticReviewerFixtureShadowCheck(
+      { outputDir },
+      {
+        reviewFixture: async (fixture) => ({
+          stage: "script_semantic_review",
+          decision: fixture.expected_decision,
+          patch_intent: fixture.expected_patch_intent,
+          hard_issues: [],
+          soft_issues: [],
+          patch_targets: [],
+          summary: `matched ${fixture.sample_id}`,
+          confidence: 0.9,
+        }),
+      },
+    );
+
+    expect(result).toMatchObject({
+      mode: "script_semantic_reviewer_fixture_shadow_check",
+      automated_gate: false,
+      reviewer_mode: "shadow_only",
+      total_fixtures: 3,
+      matched_fixtures: 3,
+      mismatched_fixtures: 0,
+    });
+    expect(existsSync(join(outputDir, "fixture-shadow-plan.json"))).toBe(true);
+    expect(existsSync(join(outputDir, "fixture-shadow-summary.json"))).toBe(true);
+    expect(existsSync(join(outputDir, "trace.md"))).toBe(true);
+
+    const trace = readFileSync(join(outputDir, "trace.md"), "utf8");
+    expect(trace).toContain("script semantic reviewer fixture shadow check");
+    expect(trace).toContain("shadow_only");
+    expect(trace).toContain("semantic-good-enough-yanzishichu");
+    expect(trace).toContain("matched");
+
+    const packageJson = JSON.parse(
+      readFileSync(join(process.cwd(), "package.json"), "utf8"),
+    ) as {
+      scripts?: Record<string, string>;
+    };
+    expect(packageJson.scripts).toMatchObject({
+      "harness:script-semantic-fixtures":
+        "tsx harness/scripts/runtime/script-semantic-reviewer-fixtures.ts",
+    });
   });
 });
