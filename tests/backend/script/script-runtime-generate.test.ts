@@ -820,4 +820,16 @@ ${JSON.stringify(runtimeDraft)}
     expect(prompt.body).toContain("`summary`");
     expect(prompt.body).toContain("`confidence`");
   });
+
+  it("requires semantic reviewer prompt to calibrate pass versus lift for first-pass drafts", () => {
+    const prompt = createPromptRegistry().getPrompt("script.semantic-reviewer");
+
+    expect(prompt.body).toContain("首稿可接受");
+    expect(prompt.body).toContain("必须判为 `pass`");
+    expect(prompt.body).toContain("不要把首稿当成终稿精修");
+    expect(prompt.body).toContain("不能因为还可以更有画面感");
+    expect(prompt.body).toContain("泛泛的“更丰富”");
+    expect(prompt.body).toContain("明确定位到局部");
+    expect(prompt.body).toContain("只作为 shadow 量尺");
+  });
 });
