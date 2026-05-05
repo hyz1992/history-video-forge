@@ -416,6 +416,28 @@ ${JSON.stringify(runtimeDraft)}
     });
 
     expect(response.statusCode).toBe(200);
+    expect(response.body.semantic_review).toMatchObject({
+      stage: "script_semantic_review",
+      decision: "skipped",
+      patch_intent: null,
+      hard_issues: [],
+      soft_issues: [],
+      patch_targets: [],
+    });
+    expect(response.body.semantic_review.soft_issues).not.toContain(
+      "hook_kill_power_weak",
+    );
+    expect(response.body.runtime_diagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "semantic_review_skipped",
+        level: "warning",
+      }),
+    );
+    expect(response.body.runtime_diagnostics.checks).not.toContainEqual(
+      expect.objectContaining({
+        code: "patch_once",
+      }),
+    );
     expect(response.body.input_bundle.hard_lane).toMatchObject({
       core_conflict: topicPackage.core_conflict,
       stakes: topicPackage.stakes,

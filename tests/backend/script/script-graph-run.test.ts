@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { reviewScriptSemantics } from "../../../backend/src/modules/script/script-semantic-review.service.js";
 import { runScriptRunGraph } from "../../../backend/src/runtime/orchestration/script-run-graph.js";
 
 const inputBundle = {
@@ -386,6 +387,71 @@ describe("script run graph", () => {
     expect(result.runtimeDiagnostics.checks).not.toContainEqual(
       expect.objectContaining({
         code: "semantic_review_passed",
+      }),
+    );
+  });
+
+  it("keeps the no-reviewer semantic step skipped instead of driving patch_once", async () => {
+    const calls: string[] = [];
+    const reviewSemantics = vi.fn((reviewInput) => {
+      calls.push("semantic-review");
+      return reviewScriptSemantics(reviewInput as any);
+    });
+    const patchDraft = vi.fn(async () => {
+      calls.push("patch-once");
+      return patchedDraft;
+    });
+
+    const result = await runScriptRunGraph(
+      {
+        bundle: inputBundle,
+        allowPatch: true,
+        allowRegen: true,
+      },
+      {
+        generateDraft: vi.fn(async () => {
+          calls.push("script-generate");
+          return passDraft;
+        }),
+        validateDraft: vi.fn(() => {
+          calls.push("local-validate");
+          return createPassLocalValidation();
+        }),
+        reviewSemantics,
+        patchDraft,
+        regenerateDraft: vi.fn(async () => {
+          calls.push("regen-once");
+          return regeneratedDraft;
+        }),
+      },
+    );
+
+    expect(calls).toEqual([
+      "script-generate",
+      "local-validate",
+      "semantic-review",
+    ]);
+    expect(patchDraft).not.toHaveBeenCalled();
+    expect(result.semanticReview).toMatchObject({
+      stage: "script_semantic_review",
+      decision: "skipped",
+      patch_intent: null,
+      hard_issues: [],
+      soft_issues: [],
+      patch_targets: [],
+    });
+    expect(result.semanticReview.soft_issues).not.toContain(
+      "hook_kill_power_weak",
+    );
+    expect(result.runtimeDiagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "semantic_review_skipped",
+        level: "warning",
+      }),
+    );
+    expect(result.runtimeDiagnostics.checks).not.toContainEqual(
+      expect.objectContaining({
+        code: "patch_once",
       }),
     );
   });
