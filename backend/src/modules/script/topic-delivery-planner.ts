@@ -69,7 +69,7 @@ export function planTopicDelivery(input: PlanTopicDeliveryInput) {
     pacing_tilt: input.familyBiasPack.pacing_bias,
     ending_tilt: "judgment",
     visual_tilt: ["faces", "courtroom"],
-    hook_claim: `${input.topicPackage.narrative_tension_map.hook_claim}，你敢当场顶回去吗？`,
+    hook_claim: input.topicPackage.narrative_tension_map.hook_claim,
     hook_emotion: resolveHookEmotion(input),
     reveal_position: resolveRevealPosition(input),
     caution_notes: [
