@@ -35,6 +35,8 @@ export const DOC_TERM_RULES: Record<string, string[]> = {
     "hook_claim",
     "patch_intent",
     "script_local_validation",
+    "discovery seed",
+    "focus seed",
   ],
   "docs/architecture/topic-stage-design.md": [
     "Topic Package",
@@ -42,6 +44,8 @@ export const DOC_TERM_RULES: Record<string, string[]> = {
     "source_anchor_refs",
     "canonical_quotes",
     "ambiguity_notes",
+    "discovery seed",
+    "focus seed",
   ],
   "docs/architecture/script-stage-design.md": [
     "Script Input Bundle",

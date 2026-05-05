@@ -66,6 +66,28 @@
 - 再生成 candidate
 - 不再暴露内部 draft 编辑
 
+## 3.1 seed 任务语义边界
+
+当前第一阶段正式承认 topic recommendation 内部存在两类不同任务语义：
+
+- `discovery seed`
+  - 宽边界 seed
+  - 常见形态是时代区间、题材偏好、人物群像范围或冲突偏好
+  - 目标是开放发现值得讲的事件
+  - 允许跨事件发散，再由本地层做去重、疲劳惩罚与风险约束
+- `focus seed`
+  - 单事件 seed
+  - 常见形态是已经归一化到具体事件名、事件简介或明确事件场景
+  - 目标是在同一事件内生成多个明显不同的 candidate angle
+  - 不允许漂移到相邻事件、同人物其他阶段、制度时期标签或结果阶段标签
+
+当前结论是：
+
+- 系统需要同时支持 `discovery seed` 与 `focus seed`
+- 但它们不应被当成同一种 recommendation 任务去评估
+- 第一阶段先在 prompt、本地去重与 selector 边界上承认这一区别
+- 暂不要求现在就把它重构成显式双模式架构
+
 ## 4. Event Registry
 
 定位：

@@ -88,6 +88,18 @@
 用途：
 - 根据当前筛选偏好触发系统自动推荐
 
+补充语义边界：
+
+- 当前 recommendation seed 允许两类任务语义：
+  - `discovery seed`
+    - 宽边界 seed
+    - 用于开放发现，允许跨事件发散
+  - `focus seed`
+    - 单事件 seed
+    - 用于同一事件内的多角度 candidate 生成，不允许漂移到相邻事件
+- 第一阶段 API 暂不要求显式增加 `seed_mode`
+- 当前实现允许 runtime 根据结构化 seed 的形态推断更接近 `discovery seed` 还是 `focus seed`
+
 输入：
 - 用户筛选偏好
 - 是否允许复用缓存候选

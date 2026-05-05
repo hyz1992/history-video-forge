@@ -66,9 +66,9 @@ describe("check schema doc drift", () => {
       "docs/data/schema-design.md":
         "TopicCandidateCard TopicPackage TopicDeliveryPack ScriptValidationResult viral_rubric narrative_tension_map",
       "docs/architecture/api-design.md":
-        "viral_rubric narrative_tension_map hook_claim patch_intent script_local_validation",
+        "viral_rubric narrative_tension_map hook_claim patch_intent script_local_validation discovery seed focus seed",
       "docs/architecture/topic-stage-design.md":
-        "Topic Package stakes source_anchor_refs canonical_quotes ambiguity_notes",
+        "Topic Package stakes source_anchor_refs canonical_quotes ambiguity_notes discovery seed focus seed",
       "docs/architecture/script-stage-design.md":
         "Script Input Bundle hard_lane core_conflict stakes source_anchor_refs canonical_quotes ambiguity_notes",
     });
@@ -83,9 +83,9 @@ describe("check schema doc drift", () => {
       "docs/data/schema-design.md":
         "TopicCandidateCard TopicPackage TopicDeliveryPack ScriptValidationResult viral_rubric narrative_tension_map",
       "docs/architecture/api-design.md":
-        "viral_rubric narrative_tension_map hook_claim patch_intent script_local_validation",
+        "viral_rubric narrative_tension_map hook_claim patch_intent script_local_validation discovery seed focus seed",
       "docs/architecture/topic-stage-design.md":
-        "Topic Package stakes canonical_quotes",
+        "Topic Package stakes canonical_quotes discovery seed focus seed",
       "docs/architecture/script-stage-design.md":
         "Script Input Bundle hard_lane core_conflict stakes source_anchor_refs canonical_quotes ambiguity_notes",
     });
@@ -106,9 +106,9 @@ describe("check schema doc drift", () => {
       "docs/data/schema-design.md":
         "TopicCandidateCard TopicPackage TopicDeliveryPack ScriptValidationResult viral_rubric narrative_tension_map",
       "docs/architecture/api-design.md":
-        "viral_rubric narrative_tension_map hook_claim patch_intent script_local_validation",
+        "viral_rubric narrative_tension_map hook_claim patch_intent script_local_validation discovery seed focus seed",
       "docs/architecture/topic-stage-design.md":
-        "Topic Package stakes source_anchor_refs canonical_quotes ambiguity_notes",
+        "Topic Package stakes source_anchor_refs canonical_quotes ambiguity_notes discovery seed focus seed",
       "docs/architecture/script-stage-design.md":
         "Script Input Bundle core_conflict stakes canonical_quotes",
     });
@@ -118,6 +118,37 @@ describe("check schema doc drift", () => {
         (issue) =>
           issue.includes("docs/architecture/script-stage-design.md") &&
           issue.includes("hard_lane"),
+      ),
+    ).toBe(true);
+  });
+
+  it("topic/api 设计文档缺少 discovery 与 focus seed 边界时返回错误", () => {
+    const result = validateDocuments({
+      "docs/data/field-design.md":
+        "TopicCandidateCard TopicPackage TopicDeliveryPack ScriptValidationResult viral_rubric narrative_tension_map hook_claim hook_emotion reveal_position patch_intent script_local_validation script_semantic_review stakes source_anchor_refs canonical_quotes ambiguity_notes",
+      "docs/data/schema-design.md":
+        "TopicCandidateCard TopicPackage TopicDeliveryPack ScriptValidationResult viral_rubric narrative_tension_map",
+      "docs/architecture/api-design.md":
+        "viral_rubric narrative_tension_map hook_claim patch_intent script_local_validation discovery seed",
+      "docs/architecture/topic-stage-design.md":
+        "Topic Package stakes source_anchor_refs canonical_quotes ambiguity_notes focus seed",
+      "docs/architecture/script-stage-design.md":
+        "Script Input Bundle hard_lane core_conflict stakes source_anchor_refs canonical_quotes ambiguity_notes",
+    });
+
+    expect(
+      result.some(
+        (issue) =>
+          issue.includes("docs/architecture/topic-stage-design.md") &&
+          issue.includes("discovery seed"),
+      ),
+    ).toBe(true);
+
+    expect(
+      result.some(
+        (issue) =>
+          issue.includes("docs/architecture/api-design.md") &&
+          issue.includes("focus seed"),
       ),
     ).toBe(true);
   });
