@@ -22,6 +22,16 @@ status: active
 ## 输出对象
 
 - `ScriptSemanticReviewResult`
+- 必须输出一个顶层 JSON 对象，不得包在 `answer`、`result`、`data` 或任何其他外层字段里
+- 顶层字段必须使用：
+  - `stage`: `script_semantic_review`
+  - `decision`
+  - `patch_intent`
+  - `hard_issues`
+  - `soft_issues`
+  - `patch_targets`
+  - `summary`
+  - `confidence`
 - 决策只允许：
   - `pass`
   - `patch_once`

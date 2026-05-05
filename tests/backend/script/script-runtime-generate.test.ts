@@ -617,4 +617,207 @@ ${JSON.stringify(runtimeDraft)}
       }),
     );
   });
+
+  it("normalizes wrapped semantic reviewer output without entering patch", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Script Semantic Reviewer Wrapped Output",
+    });
+    const topicPackageRecord = await saveTopicPackage(db, {
+      projectId: project.id,
+      title: "晏子使楚",
+      selectedAngle: topicPackage.selected_angle,
+      familyLabel: topicPackage.family_label,
+      scopeLabel: topicPackage.scope_label,
+      coreConflict: topicPackage.core_conflict,
+      strongScene: topicPackage.strong_scene,
+      stakes: topicPackage.stakes,
+      packagingSeed: topicPackage.packaging_seed,
+      canonicalQuotesJson: [],
+      durationBandJson: {
+        label: "medium",
+        min_sec: 75,
+        max_sec: 95,
+      },
+      narrativeTensionMapJson: topicPackage.narrative_tension_map,
+      mustIncludeBeatsJson: topicPackage.must_include_beats,
+      forbiddenExpansionsJson: topicPackage.forbidden_expansions,
+      riskHintsJson: topicPackage.risk_hints,
+      sourceAnchorRefsJson: topicPackage.source_anchor_refs,
+      ambiguityNotesJson: [],
+    });
+    project.activeTopicPackageId = topicPackageRecord.id;
+    project.status = "script_ready";
+
+    const invokeApi = vi.fn(
+      async () =>
+        JSON.stringify({
+          answer: {
+            decision: "patch_once",
+            tags: ["pressure_escalation_missing", "narrative_tension_weak"],
+            explanation: "三次压迫层次不够清晰，但本轮只作为 shadow 量尺。",
+            patch_points: [
+              {
+                location: "opening",
+                issue: "开头压迫升级不足",
+                suggestion: "补足楚王连续压场的递进关系",
+              },
+            ],
+          },
+        }),
+    );
+    const semanticReviewGateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const response = await runScriptGeneration({
+      db,
+      project,
+      allowPatch: true,
+      allowRegen: true,
+      semanticReviewGateway,
+    } as any);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.semantic_review).toMatchObject({
+      stage: "script_semantic_review",
+      decision: "patch_once",
+      patch_intent: "lift",
+      hard_issues: [],
+      soft_issues: ["pressure_escalation_missing", "narrative_tension_weak"],
+      patch_targets: ["opening"],
+      summary: "三次压迫层次不够清晰，但本轮只作为 shadow 量尺。",
+    });
+    expect(response.body.semantic_review.confidence).toBeLessThanOrEqual(0.7);
+    expect(response.body.graph_trace_summary.steps).not.toContainEqual(
+      expect.objectContaining({
+        step_name: "patch-once",
+      }),
+    );
+  });
+
+  it("normalizes loose top-level semantic reviewer fields into the formal schema", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Script Semantic Reviewer Loose Fields",
+    });
+    const topicPackageRecord = await saveTopicPackage(db, {
+      projectId: project.id,
+      title: "晏子使楚",
+      selectedAngle: topicPackage.selected_angle,
+      familyLabel: topicPackage.family_label,
+      scopeLabel: topicPackage.scope_label,
+      coreConflict: topicPackage.core_conflict,
+      strongScene: topicPackage.strong_scene,
+      stakes: topicPackage.stakes,
+      packagingSeed: topicPackage.packaging_seed,
+      canonicalQuotesJson: [],
+      durationBandJson: {
+        label: "medium",
+        min_sec: 75,
+        max_sec: 95,
+      },
+      narrativeTensionMapJson: topicPackage.narrative_tension_map,
+      mustIncludeBeatsJson: topicPackage.must_include_beats,
+      forbiddenExpansionsJson: topicPackage.forbidden_expansions,
+      riskHintsJson: topicPackage.risk_hints,
+      sourceAnchorRefsJson: topicPackage.source_anchor_refs,
+      ambiguityNotesJson: [],
+    });
+    project.activeTopicPackageId = topicPackageRecord.id;
+    project.status = "script_ready";
+
+    const invokeApi = vi.fn(
+      async () =>
+        JSON.stringify({
+          stage: "script_semantic_review",
+          decision: "patch_once",
+          patch_intent: "调整脚本节奏，增强画面感和冲突张力",
+          hard_issues: [
+            {
+              issue_type: "节奏过快",
+              description: "脚本整体节奏过快，缺乏必要的场景铺垫。",
+              severity: "high",
+            },
+          ],
+          soft_issues: [
+            {
+              issue_type: "情感铺垫不足",
+              description: "缺乏足够的情感铺垫。",
+              severity: "medium",
+            },
+          ],
+          patch_targets: [
+            {
+              target_type: "opening_span",
+              suggestion: "增加场景描写。",
+            },
+          ],
+          summary: "脚本核心内容符合主题要求，但需要增强画面感。",
+          confidence: 0.85,
+        }),
+    );
+    const semanticReviewGateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const response = await runScriptGeneration({
+      db,
+      project,
+      allowPatch: true,
+      allowRegen: true,
+      semanticReviewGateway,
+    } as any);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body.semantic_review).toMatchObject({
+      stage: "script_semantic_review",
+      decision: "patch_once",
+      patch_intent: "lift",
+      hard_issues: [
+        {
+          code: "节奏过快",
+          message: "脚本整体节奏过快，缺乏必要的场景铺垫。",
+          severity: "high",
+        },
+      ],
+      soft_issues: [
+        {
+          code: "情感铺垫不足",
+          message: "缺乏足够的情感铺垫。",
+          severity: "medium",
+        },
+      ],
+      patch_targets: ["opening_span"],
+      summary: "脚本核心内容符合主题要求，但需要增强画面感。",
+      confidence: 0.85,
+    });
+    expect(response.body.graph_trace_summary.steps).not.toContainEqual(
+      expect.objectContaining({
+        step_name: "patch-once",
+      }),
+    );
+  });
+
+  it("requires semantic reviewer prompt to output top-level ScriptSemanticReviewResult fields", () => {
+    const prompt = createPromptRegistry().getPrompt("script.semantic-reviewer");
+
+    expect(prompt.body).toContain("顶层 JSON 对象");
+    expect(prompt.body).toContain("不得包在 `answer`");
+    expect(prompt.body).toContain("`stage`: `script_semantic_review`");
+    expect(prompt.body).toContain("`patch_intent`");
+    expect(prompt.body).toContain("`hard_issues`");
+    expect(prompt.body).toContain("`soft_issues`");
+    expect(prompt.body).toContain("`patch_targets`");
+    expect(prompt.body).toContain("`summary`");
+    expect(prompt.body).toContain("`confidence`");
+  });
 });

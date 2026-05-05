@@ -51,10 +51,115 @@ export async function reviewScriptSemantics(input: ReviewScriptSemanticsInput) {
       interactionLogWriter: input.interactionLogWriter,
     });
 
-    return ScriptSemanticReviewResult.parse(rawReview);
+    return ScriptSemanticReviewResult.parse(normalizeSemanticReview(rawReview));
   } catch {
     return buildSkippedSemanticReview();
   }
+}
+
+function normalizeSemanticReview(rawReview: unknown) {
+  if (!rawReview || typeof rawReview !== "object") {
+    return rawReview;
+  }
+
+  const record = rawReview as Record<string, unknown>;
+  const review = record.stage === "script_semantic_review" ? record : getWrappedAnswer(record);
+
+  if (!review) {
+    return rawReview;
+  }
+
+  const decision = review.decision;
+  if (
+    decision !== "pass" &&
+    decision !== "patch_once" &&
+    decision !== "regen_once" &&
+    decision !== "return_topic"
+  ) {
+    return rawReview;
+  }
+
+  const summary =
+    typeof review.summary === "string"
+      ? review.summary
+      : typeof review.explanation === "string"
+        ? review.explanation
+        : "";
+
+  return {
+    stage: "script_semantic_review",
+    decision,
+    patch_intent:
+      review.patch_intent === "fix" || review.patch_intent === "lift"
+        ? review.patch_intent
+        : decision === "patch_once"
+          ? "lift"
+          : null,
+    hard_issues: normalizeIssueList(review.hard_issues),
+    soft_issues: normalizeIssueList(review.soft_issues ?? review.tags),
+    patch_targets: normalizePatchTargets(review.patch_targets ?? review.patch_points),
+    summary,
+    confidence: typeof review.confidence === "number" ? review.confidence : 0.6,
+  };
+}
+
+function getWrappedAnswer(record: Record<string, unknown>) {
+  return record.answer &&
+    typeof record.answer === "object" &&
+    !Array.isArray(record.answer)
+    ? (record.answer as Record<string, unknown>)
+    : null;
+}
+
+function normalizeIssueList(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => {
+      if (typeof item === "string") {
+        return item.length > 0 ? item : null;
+      }
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      const record = item as Record<string, unknown>;
+      const code = record.code ?? record.issue_type;
+      const message = record.message ?? record.description;
+      return {
+        ...(typeof code === "string" && code.length > 0 ? { code } : {}),
+        ...(typeof message === "string" && message.length > 0 ? { message } : {}),
+        ...(typeof record.field === "string" || record.field === null
+          ? { field: record.field }
+          : {}),
+        ...(typeof record.severity === "string" && record.severity.length > 0
+          ? { severity: record.severity }
+          : {}),
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+}
+
+function normalizePatchTargets(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => {
+      if (typeof item === "string") {
+        return item;
+      }
+      if (item && typeof item === "object") {
+        const record = item as Record<string, unknown>;
+        const location = record.location ?? record.target_type;
+        return typeof location === "string" ? location : null;
+      }
+      return null;
+    })
+    .filter((item): item is string => typeof item === "string" && item.length > 0);
 }
 
 function buildSkippedSemanticReview() {
