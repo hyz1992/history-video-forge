@@ -1,0 +1,92 @@
+{
+  "sample_id": "semantic-good-enough-yanzishichu",
+  "category": "good_enough",
+  "expected_decision": "pass",
+  "expected_patch_intent": null,
+  "rationale": "首稿覆盖必须情节，未偏离选题角度，开头、递进、结尾均成立；仍有润色空间但不应触发 patch。",
+  "bundle": {
+    "topic_package": {
+      "topic_id": "topic_yanzi_good_enough",
+      "title": "晏子使楚",
+      "selected_angle": "楚王连压三次，晏子一次没退",
+      "family_label": "外交压场",
+      "scope_label": "完整事件",
+      "core_conflict": "楚王借公开场合连续羞辱晏子与齐国，晏子必须当场顶回去。",
+      "stakes": "一旦退让，丢掉的不只是晏子个人体面，而是齐国在楚廷上的国格。",
+      "strong_scene": "楚王连续压场，晏子一句句顶回去。",
+      "packaging_seed": "楚王连压三次，晏子一次没退。",
+      "must_include_beats": ["狗门羞辱", "齐国无人", "橘枳之喻"],
+      "forbidden_expansions": ["不要扩写到未设计的 downstream 阶段"],
+      "risk_hints": ["不要写成课堂导入"],
+      "source_anchor_refs": ["《晏子春秋》"],
+      "canonical_quotes": ["橘生淮南则为橘，生于淮北则为枳"],
+      "ambiguity_notes": [],
+      "duration_band": "medium",
+      "narrative_tension_map": {
+        "hook_claim": "楚王不是只压了晏子一次，而是连压三次",
+        "pressure_escalation": "从羞辱身形升级到羞辱齐国，再升级到羞辱齐人的风土。",
+        "mid_reveal": "晏子不是在逞口舌，而是在守住齐国的场面。",
+        "peak_payoff": "橘枳之喻把第三次压场原样顶回。",
+        "ending_residue": "这种场面，一退就不只是退掉自己。"
+      }
+    },
+    "topic_delivery_pack": {
+      "opening_move": "scene",
+      "opening_pressure_level": "high",
+      "voice_tilt": "sharper",
+      "pacing_tilt": "fast",
+      "ending_tilt": "judgment",
+      "visual_tilt": ["faces", "courtroom"],
+      "hook_claim": "楚王连压三次，晏子为什么一次都没退？",
+      "hook_emotion": "压迫",
+      "reveal_position": "mid",
+      "caution_notes": ["不要把 hook 写成课堂导入"]
+    },
+    "hard_lane": {
+      "event_identity": "晏子使楚",
+      "selected_angle": "楚王连压三次，晏子一次没退",
+      "scope_label": "完整事件",
+      "core_conflict": "楚王借公开场合连续羞辱晏子与齐国，晏子必须当场顶回去。",
+      "stakes": "一旦退让，丢掉的不只是晏子个人体面，而是齐国在楚廷上的国格。",
+      "must_include_beats": ["狗门羞辱", "齐国无人", "橘枳之喻"],
+      "forbidden_expansions": ["不要扩写到未设计的 downstream 阶段"],
+      "source_anchor_refs": ["《晏子春秋》"],
+      "canonical_quotes": ["橘生淮南则为橘，生于淮北则为枳"],
+      "ambiguity_notes": [],
+      "duration_band": "medium"
+    },
+    "soft_lane": {
+      "narrative_tension_map": {
+        "hook_claim": "楚王不是只压了晏子一次，而是连压三次",
+        "pressure_escalation": "从羞辱身形升级到羞辱齐国，再升级到羞辱齐人的风土。",
+        "mid_reveal": "晏子不是在逞口舌，而是在守住齐国的场面。",
+        "peak_payoff": "橘枳之喻把第三次压场原样顶回。",
+        "ending_residue": "这种场面，一退就不只是退掉自己。"
+      },
+      "strong_scene": "楚王连续压场，晏子一句句顶回去。",
+      "voice_hint": "冷静压迫型旁白 / sharper"
+    },
+    "packaging_lane": {
+      "hook_claim": "楚王连压三次，晏子为什么一次都没退？",
+      "hook_emotion": "压迫",
+      "reveal_position": "mid",
+      "title_profile": "conflict_first",
+      "cover_profile": "faces_closeup",
+      "risk_posture": "controlled"
+    }
+  },
+  "draft": {
+    "script_text": "楚王设宴，却故意不开正门，只让晏子从旁边的小门进去。第一下压的是晏子的身形，也是在压齐国的脸面。晏子没有退，他说出使狗国才从狗门入，今天来的是楚国，就不该走这扇门。楚王没压住，又当众说齐国是不是没人了，怎么派你这样的人来。晏子把使臣规制抬出来，贤者使贤主，不肖者使不肖主，我被派到楚国，答案已经摆在场上。最后楚王借盗贼羞辱齐人风土，晏子才把橘枳之喻压回去：橘生淮南则为橘，生于淮北则为枳。楚王想把齐国压低，结果反而让自己的场面失手。这种场面里，一退就不只是退掉自己。",
+    "estimated_duration_sec": 88,
+    "beat_trace": [
+      { "beat": "狗门羞辱", "excerpt": "楚王设宴，却故意不开正门，只让晏子从旁边的小门进去。", "confidence": 0.93 },
+      { "beat": "齐国无人", "excerpt": "楚王没压住，又当众说齐国是不是没人了，怎么派你这样的人来。", "confidence": 0.91 },
+      { "beat": "橘枳之喻", "excerpt": "晏子才把橘枳之喻压回去：橘生淮南则为橘，生于淮北则为枳。", "confidence": 0.94 }
+    ],
+    "quote_trace": [
+      { "quote": "橘生淮南则为橘，生于淮北则为枳", "usage_type": "exact", "excerpt": "橘生淮南则为橘，生于淮北则为枳" }
+    ],
+    "opening_span": "楚王设宴，却故意不开正门，只让晏子从旁边的小门进去。",
+    "ending_span": "这种场面里，一退就不只是退掉自己。"
+  }
+}
