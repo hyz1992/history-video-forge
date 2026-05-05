@@ -73,6 +73,14 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("叙事结构");
   });
 
+  it("keeps concrete single-event seeds anchored to the same event instead of drifting to adjacent events", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.body).toContain("若 `RecommendationSeedSet` 已经明确锚定具体单事件");
+    expect(prompt.body).toContain("原始 8 候选必须全部围绕同一 `event_identity` 展开");
+    expect(prompt.body).toContain("不得改写成相邻事件、同人物其他阶段、制度时期标签或结果阶段标签");
+  });
+
   it("demands concrete single-event recommendation topics instead of abstract buckets", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 
@@ -102,6 +110,14 @@ describe("topic prompt contract", () => {
 
     expect(prompt.body).toContain("必须且只能返回 3 个候选 id");
     expect(prompt.body).toContain("多于 3 个也属于违规");
+  });
+
+  it("keeps selector anchored when recommendation_seed already points to a concrete single event", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.selector");
+
+    expect(prompt.body).toContain("若 `recommendation_seed` 已经明确锚定具体单事件");
+    expect(prompt.body).toContain("优先保留与该事件同一 `event_identity` 的候选");
+    expect(prompt.body).toContain("不得把不同 `event_identity` 的相邻事件、同人物其他阶段或结果阶段当作同题替代");
   });
 
   it("registers a zh-CN topic.candidate-builder-repair prompt dedicated to filling missing fields", () => {
