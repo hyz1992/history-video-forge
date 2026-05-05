@@ -19,8 +19,20 @@ describe("script semantic reviewer calibration fixtures", () => {
       "semantic-good-enough-yanzishichu",
       "semantic-weak-opening-yanzishichu",
       "semantic-off-contract-yanzishichu",
+      "semantic-good-enough-zhuanzhu",
+      "semantic-weak-opening-zhuanzhu",
+      "semantic-off-contract-zhuanzhu",
+      "semantic-good-enough-julu",
+      "semantic-weak-opening-julu",
+      "semantic-off-contract-julu",
     ]);
     expect(fixtures.map((item) => item.expected_decision)).toEqual([
+      "pass",
+      "patch_once",
+      "return_topic",
+      "pass",
+      "patch_once",
+      "return_topic",
       "pass",
       "patch_once",
       "return_topic",
@@ -29,7 +41,17 @@ describe("script semantic reviewer calibration fixtures", () => {
       null,
       "lift",
       null,
+      null,
+      "lift",
+      null,
+      null,
+      "lift",
+      null,
     ]);
+
+    expect(new Set(fixtures.map((item) => item.bundle.topic_package.family_label))).toEqual(
+      new Set(["外交压场", "刺杀政变", "战场翻盘型"]),
+    );
 
     for (const fixture of fixtures) {
       expect(fixture.bundle.hard_lane.must_include_beats.length).toBeGreaterThan(0);
@@ -52,11 +74,11 @@ describe("script semantic reviewer calibration fixtures", () => {
       automated_gate: false,
       reviewer_mode: "shadow_only",
       fixture_set_path: DEFAULT_SCRIPT_SEMANTIC_REVIEWER_FIXTURE_SET_PATH,
-      total_fixtures: 3,
+      total_fixtures: 9,
       expected_distribution: {
-        pass: 1,
-        patch_once: 1,
-        return_topic: 1,
+        pass: 3,
+        patch_once: 3,
+        return_topic: 3,
       },
     });
     expect(plan.required_checks).toContain(
@@ -86,8 +108,8 @@ describe("script semantic reviewer calibration fixtures", () => {
       mode: "script_semantic_reviewer_fixture_shadow_check",
       automated_gate: false,
       reviewer_mode: "shadow_only",
-      total_fixtures: 3,
-      matched_fixtures: 3,
+      total_fixtures: 9,
+      matched_fixtures: 9,
       mismatched_fixtures: 0,
     });
     expect(existsSync(join(outputDir, "fixture-shadow-plan.json"))).toBe(true);

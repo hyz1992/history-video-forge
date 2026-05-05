@@ -1,0 +1,93 @@
+{
+  "sample_id": "semantic-good-enough-julu",
+  "category": "good_enough",
+  "expected_decision": "pass",
+  "expected_patch_intent": null,
+  "rationale": "首稿覆盖巨鹿围困、诸侯观望、破釜沉舟和九战破秦，战场翻盘张力成立。",
+  "bundle": {
+    "topic_package": {
+      "topic_id": "topic_julu_good_enough",
+      "title": "巨鹿之战",
+      "selected_angle": "项羽真正狠的不是喊冲，而是先把退路砸碎",
+      "family_label": "战场翻盘型",
+      "scope_label": "完整事件",
+      "core_conflict": "秦军围巨鹿，诸侯观望，项羽必须用极端方式逼楚军死战。",
+      "stakes": "退路一断，不胜就只能死在秦军面前。",
+      "strong_scene": "项羽渡河后砸锅沉船，把楚军的退路亲手断掉。",
+      "packaging_seed": "项羽真正狠的不是喊冲，而是先把退路砸碎。",
+      "must_include_beats": ["秦军围巨鹿", "诸侯观望", "破釜沉舟", "九战破秦"],
+      "forbidden_expansions": ["不要扩写到未设计的 downstream 阶段"],
+      "risk_hints": ["不要写成战争百科"],
+      "source_anchor_refs": ["《史记·项羽本纪》"],
+      "canonical_quotes": ["破釜沉舟"],
+      "ambiguity_notes": [],
+      "duration_band": "medium",
+      "narrative_tension_map": {
+        "hook_claim": "项羽真正狠的不是喊冲，而是先把退路砸碎",
+        "pressure_escalation": "从诸侯不敢救，升级到楚军无路可退。",
+        "mid_reveal": "项羽不是鼓舞士气，而是把选择题变成生死题。",
+        "peak_payoff": "九战之后，秦军主力被打穿。",
+        "ending_residue": "有些翻盘，是先把自己逼到不能退。"
+      }
+    },
+    "topic_delivery_pack": {
+      "opening_move": "scene",
+      "opening_pressure_level": "high",
+      "voice_tilt": "sharper",
+      "pacing_tilt": "fast",
+      "ending_tilt": "judgment",
+      "visual_tilt": ["battlefield", "river"],
+      "hook_claim": "项羽为什么先砸掉自己的退路？",
+      "hook_emotion": "压迫",
+      "reveal_position": "mid",
+      "caution_notes": ["不要写成战争百科"]
+    },
+    "hard_lane": {
+      "event_identity": "巨鹿之战",
+      "selected_angle": "项羽真正狠的不是喊冲，而是先把退路砸碎",
+      "scope_label": "完整事件",
+      "core_conflict": "秦军围巨鹿，诸侯观望，项羽必须用极端方式逼楚军死战。",
+      "stakes": "退路一断，不胜就只能死在秦军面前。",
+      "must_include_beats": ["秦军围巨鹿", "诸侯观望", "破釜沉舟", "九战破秦"],
+      "forbidden_expansions": ["不要扩写到未设计的 downstream 阶段"],
+      "source_anchor_refs": ["《史记·项羽本纪》"],
+      "canonical_quotes": ["破釜沉舟"],
+      "ambiguity_notes": [],
+      "duration_band": "medium"
+    },
+    "soft_lane": {
+      "narrative_tension_map": {
+        "hook_claim": "项羽真正狠的不是喊冲，而是先把退路砸碎",
+        "pressure_escalation": "从诸侯不敢救，升级到楚军无路可退。",
+        "mid_reveal": "项羽不是鼓舞士气，而是把选择题变成生死题。",
+        "peak_payoff": "九战之后，秦军主力被打穿。",
+        "ending_residue": "有些翻盘，是先把自己逼到不能退。"
+      },
+      "strong_scene": "项羽渡河后砸锅沉船，把楚军的退路亲手断掉。",
+      "voice_hint": "冷静压迫型旁白 / sharper"
+    },
+    "packaging_lane": {
+      "hook_claim": "项羽为什么先砸掉自己的退路？",
+      "hook_emotion": "压迫",
+      "reveal_position": "mid",
+      "title_profile": "conflict_first",
+      "cover_profile": "faces_closeup",
+      "risk_posture": "controlled"
+    }
+  },
+  "draft": {
+    "script_text": "秦军围住巨鹿，各路诸侯都在营垒里观望，谁也不愿先撞上秦军主力。项羽渡河之后，没有先喊豪言，而是下令破釜沉舟，把锅砸了，把船沉了。楚军这才明白，退路已经被主帅亲手断掉，眼前只剩一条路：打穿秦军。诸侯还在犹豫，项羽已经带人连战，九战破秦，把巨鹿战场的局势硬生生翻过来。项羽真正狠的地方，不是喊冲，而是先把自己逼到不能退。",
+    "estimated_duration_sec": 88,
+    "beat_trace": [
+      { "beat": "秦军围巨鹿", "excerpt": "秦军围住巨鹿，各路诸侯都在营垒里观望。", "confidence": 0.93 },
+      { "beat": "诸侯观望", "excerpt": "各路诸侯都在营垒里观望，谁也不愿先撞上秦军主力。", "confidence": 0.93 },
+      { "beat": "破釜沉舟", "excerpt": "项羽渡河之后，下令破釜沉舟，把锅砸了，把船沉了。", "confidence": 0.94 },
+      { "beat": "九战破秦", "excerpt": "项羽已经带人连战，九战破秦，把巨鹿战场的局势硬生生翻过来。", "confidence": 0.92 }
+    ],
+    "quote_trace": [
+      { "quote": "破釜沉舟", "usage_type": "exact", "excerpt": "破釜沉舟" }
+    ],
+    "opening_span": "秦军围住巨鹿，各路诸侯都在营垒里观望，谁也不愿先撞上秦军主力。",
+    "ending_span": "项羽真正狠的地方，不是喊冲，而是先把自己逼到不能退。"
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "sample_id": "semantic-weak-opening-zhuanzhu",
+  "category": "weak_lift",
+  "expected_decision": "patch_once",
+  "expected_patch_intent": "lift",
+  "rationale": "情节覆盖但写法概括，饭局压迫和近身危险没有展开，适合局部 lift。",
+  "bundle": {
+    "topic_package": {
+      "topic_id": "topic_zhuanzhu_weak_lift",
+      "title": "专诸刺王僚",
+      "selected_angle": "最危险的刺杀，不在战场，而在一桌饭局上",
+      "family_label": "刺杀政变",
+      "scope_label": "完整事件",
+      "core_conflict": "公子光要夺位，专诸必须在王僚防备最严的宴席上完成刺杀。",
+      "stakes": "鱼腹藏剑一旦失败，专诸和公子光都没有退路。",
+      "strong_scene": "宴席上甲士环立，专诸端着鱼一步步靠近王僚。",
+      "packaging_seed": "最危险的刺杀，不在战场，而在一桌饭局上。",
+      "must_include_beats": ["公子光设宴", "鱼腹藏剑", "专诸近身", "王僚被刺"],
+      "forbidden_expansions": ["不要扩写到未设计的 downstream 阶段"],
+      "risk_hints": ["不要写成刺客传记百科"],
+      "source_anchor_refs": ["《史记·刺客列传》"],
+      "canonical_quotes": [],
+      "ambiguity_notes": [],
+      "duration_band": "medium",
+      "narrative_tension_map": {
+        "hook_claim": "最危险的刺杀，不在战场，而在一桌饭局上",
+        "pressure_escalation": "从夺位密谋升级到甲士环立下的近身刺杀。",
+        "mid_reveal": "鱼不是菜，而是唯一能把剑送到王僚面前的路。",
+        "peak_payoff": "专诸抽出鱼肠剑，饭局瞬间变成夺位现场。",
+        "ending_residue": "这场刺杀狠在它没有第二次机会。"
+      }
+    },
+    "topic_delivery_pack": {
+      "opening_move": "scene",
+      "opening_pressure_level": "high",
+      "voice_tilt": "sharper",
+      "pacing_tilt": "fast",
+      "ending_tilt": "judgment",
+      "visual_tilt": ["table", "blade"],
+      "hook_claim": "最危险的刺杀，为什么藏在一条鱼里？",
+      "hook_emotion": "紧张",
+      "reveal_position": "mid",
+      "caution_notes": ["不要写成百科导入"]
+    },
+    "hard_lane": {
+      "event_identity": "专诸刺王僚",
+      "selected_angle": "最危险的刺杀，不在战场，而在一桌饭局上",
+      "scope_label": "完整事件",
+      "core_conflict": "公子光要夺位，专诸必须在王僚防备最严的宴席上完成刺杀。",
+      "stakes": "鱼腹藏剑一旦失败，专诸和公子光都没有退路。",
+      "must_include_beats": ["公子光设宴", "鱼腹藏剑", "专诸近身", "王僚被刺"],
+      "forbidden_expansions": ["不要扩写到未设计的 downstream 阶段"],
+      "source_anchor_refs": ["《史记·刺客列传》"],
+      "canonical_quotes": [],
+      "ambiguity_notes": [],
+      "duration_band": "medium"
+    },
+    "soft_lane": {
+      "narrative_tension_map": {
+        "hook_claim": "最危险的刺杀，不在战场，而在一桌饭局上",
+        "pressure_escalation": "从夺位密谋升级到甲士环立下的近身刺杀。",
+        "mid_reveal": "鱼不是菜，而是唯一能把剑送到王僚面前的路。",
+        "peak_payoff": "专诸抽出鱼肠剑，饭局瞬间变成夺位现场。",
+        "ending_residue": "这场刺杀狠在它没有第二次机会。"
+      },
+      "strong_scene": "宴席上甲士环立，专诸端着鱼一步步靠近王僚。",
+      "voice_hint": "冷静压迫型旁白 / sharper"
+    },
+    "packaging_lane": {
+      "hook_claim": "最危险的刺杀，为什么藏在一条鱼里？",
+      "hook_emotion": "紧张",
+      "reveal_position": "mid",
+      "title_profile": "conflict_first",
+      "cover_profile": "faces_closeup",
+      "risk_posture": "controlled"
+    }
+  },
+  "draft": {
+    "script_text": "专诸刺王僚是一个刺杀故事。公子光设宴，专诸把剑藏在鱼肚子里，然后靠近王僚并完成刺杀。这个故事说明计划很重要，也说明古代夺位很危险。",
+    "estimated_duration_sec": 80,
+    "beat_trace": [
+      { "beat": "公子光设宴", "excerpt": "公子光设宴，专诸把剑藏在鱼肚子里。", "confidence": 0.82 },
+      { "beat": "鱼腹藏剑", "excerpt": "专诸把剑藏在鱼肚子里，然后靠近王僚并完成刺杀。", "confidence": 0.82 },
+      { "beat": "专诸近身", "excerpt": "然后靠近王僚并完成刺杀。", "confidence": 0.82 },
+      { "beat": "王僚被刺", "excerpt": "然后靠近王僚并完成刺杀。", "confidence": 0.82 }
+    ],
+    "quote_trace": [],
+    "opening_span": "专诸刺王僚是一个刺杀故事。",
+    "ending_span": "这个故事说明计划很重要，也说明古代夺位很危险。"
+  }
+}
