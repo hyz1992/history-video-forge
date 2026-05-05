@@ -1,4 +1,5 @@
 import type { DbClient, ProjectRecord, TopicPackageRecord } from "../../db/client";
+import type { LlmGateway } from "../../runtime/llm/llm-gateway.js";
 import { generateScriptDraft } from "./script-generation.service";
 import { validateScriptDraft } from "./script-local-validator";
 import { buildScriptInputBundle } from "./script-input-bundle.builder";
@@ -73,6 +74,7 @@ export interface RunScriptGenerationInput {
   allowPatch?: boolean;
   allowRegen?: boolean;
   forceRegen?: boolean;
+  semanticReviewGateway?: LlmGateway;
 }
 
 export async function runScriptGeneration(input: RunScriptGenerationInput) {
@@ -126,7 +128,7 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
   } = await runScriptRunGraph(
     {
       bundle: inputBundle,
-      allowPatch: input.allowPatch ?? false,
+      allowPatch: false,
       allowRegen: input.allowRegen ?? false,
       forceRegen: input.forceRegen ?? false,
       runId,
@@ -138,7 +140,12 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
           interactionLogWriter,
         }),
       validateDraft: validateScriptDraft,
-      reviewSemantics: reviewScriptSemantics,
+      reviewSemantics: (reviewInput) =>
+        reviewScriptSemantics({
+          ...reviewInput,
+          llmGateway: input.semanticReviewGateway,
+          interactionLogWriter,
+        }),
       patchDraft: patchScriptDraft,
       regenerateDraft: regenerateScriptDraft,
     },

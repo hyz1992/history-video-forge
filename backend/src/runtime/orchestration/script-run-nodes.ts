@@ -14,7 +14,7 @@ import {
 
 type ScriptDraft = Awaited<ReturnType<typeof generateScriptDraft>>;
 type LocalValidation = ReturnType<typeof validateScriptDraft>;
-type SemanticReview = ReturnType<typeof reviewScriptSemantics>;
+type SemanticReview = Awaited<ReturnType<typeof reviewScriptSemantics>>;
 
 export interface ScriptRunGraphDependencies {
   generateDraft: typeof generateScriptDraft;
@@ -151,7 +151,7 @@ export function createScriptRunNodes(input: {
       return stateUpdate;
     },
 
-    semanticReview() {
+    async semanticReview() {
       const startedAt = new Date();
       const draft = requireDraft(runtime.draft, "semantic-review");
       const localValidation = requireLocalValidation(
@@ -161,7 +161,7 @@ export function createScriptRunNodes(input: {
 
       runtime.semanticReview =
         localValidation.decision === "pass"
-          ? dependencies.reviewSemantics({
+          ? await dependencies.reviewSemantics({
               bundle: runtime.bundle,
               draft,
             })

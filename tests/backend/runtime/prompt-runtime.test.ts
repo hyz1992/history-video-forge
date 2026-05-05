@@ -140,6 +140,78 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("执行单一语义审校");
   });
 
+  it("invokes script.semantic-reviewer through the prompt registry and llm gateway", async () => {
+    const { reviewScriptSemantics } = await import(
+      "../../../backend/src/modules/script/script-semantic-review.service.js"
+    );
+    const { createOpenAiCompatibleProvider } = await import(
+      "../../../backend/src/runtime/llm/openai-compatible-provider.js"
+    );
+    const reviewerOutput = {
+      stage: "script_semantic_review",
+      decision: "patch_once",
+      patch_intent: "lift",
+      hard_issues: [],
+      soft_issues: ["hook_kill_power_weak"],
+      patch_targets: ["opening"],
+      summary: "开头抓力不足，建议只做影子评估记录。",
+      confidence: 0.78,
+    };
+    const invokeApi = vi.fn(async () => JSON.stringify(reviewerOutput));
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const bundle = {
+      hard_lane: {
+        must_include_beats: ["入楚受辱"],
+        scope_label: "完整事件",
+        selected_angle: "楚王连压三次，晏子一次没退。",
+      },
+      soft_lane: {
+        narrative_tension_map: {
+          hook_claim: "楚王连压三次",
+          pressure_escalation: "压力逐层升级",
+          mid_reveal: "晏子守住场面",
+          peak_payoff: "橘枳之喻顶回去",
+          ending_residue: "一退就不只是退掉自己",
+        },
+      },
+    };
+    const draft = {
+      script_text: "楚王连续压场，晏子一句句顶回去。",
+      opening_span: "楚王连续压场，晏子一句句顶回去。",
+      ending_span: "一退就不只是退掉自己。",
+    };
+
+    const result = await reviewScriptSemantics({
+      bundle,
+      draft,
+      llmGateway: gateway,
+    } as any);
+
+    expect(result).toMatchObject(reviewerOutput);
+    expect(invokeApi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationName: "script.semantic-reviewer",
+        prompt: expect.objectContaining({
+          metadata: expect.objectContaining({
+            id: "script.semantic-reviewer",
+            language: "zh-CN",
+          }),
+        }),
+        input: {
+          bundle,
+          draft,
+        },
+      }),
+    );
+  });
+
   it("delegates invokeStructuredPrompt through the provider contract", async () => {
     const interactionLogWriter = {
       write: vi.fn(),

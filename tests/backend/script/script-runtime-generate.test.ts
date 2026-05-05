@@ -486,4 +486,79 @@ ${JSON.stringify(runtimeDraft)}
     expect(logContent).toContain("## 归一化结果");
     expect(logContent).toContain("晏子使楚");
   });
+
+  it("returns real semantic reviewer output in shadow mode without entering patch", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Script Semantic Reviewer Shadow",
+    });
+    const topicPackageRecord = await saveTopicPackage(db, {
+      projectId: project.id,
+      title: "晏子使楚",
+      selectedAngle: topicPackage.selected_angle,
+      familyLabel: topicPackage.family_label,
+      scopeLabel: topicPackage.scope_label,
+      coreConflict: topicPackage.core_conflict,
+      strongScene: topicPackage.strong_scene,
+      stakes: topicPackage.stakes,
+      packagingSeed: topicPackage.packaging_seed,
+      canonicalQuotesJson: [],
+      durationBandJson: {
+        label: "medium",
+        min_sec: 75,
+        max_sec: 95,
+      },
+      narrativeTensionMapJson: topicPackage.narrative_tension_map,
+      mustIncludeBeatsJson: topicPackage.must_include_beats,
+      forbiddenExpansionsJson: topicPackage.forbidden_expansions,
+      riskHintsJson: topicPackage.risk_hints,
+      sourceAnchorRefsJson: topicPackage.source_anchor_refs,
+      ambiguityNotesJson: [],
+    });
+    project.activeTopicPackageId = topicPackageRecord.id;
+    project.status = "script_ready";
+
+    const reviewerOutput = {
+      stage: "script_semantic_review",
+      decision: "patch_once",
+      patch_intent: "lift",
+      hard_issues: [],
+      soft_issues: ["hook_kill_power_weak"],
+      patch_targets: ["opening"],
+      summary: "开头抓力不足，但本轮只做 shadow 评估。",
+      confidence: 0.79,
+    };
+    const invokeApi = vi.fn(async () => JSON.stringify(reviewerOutput));
+    const semanticReviewGateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+
+    const response = await runScriptGeneration({
+      db,
+      project,
+      allowPatch: true,
+      allowRegen: true,
+      semanticReviewGateway,
+    } as any);
+
+    expect(response.statusCode).toBe(200);
+    expect(invokeApi).toHaveBeenCalledTimes(1);
+    expect(response.body.semantic_review).toMatchObject(reviewerOutput);
+    expect(response.body.execution_state).toBeUndefined();
+    expect(response.body.graph_trace_summary.steps).not.toContainEqual(
+      expect.objectContaining({
+        step_name: "patch-once",
+      }),
+    );
+    expect(response.body.runtime_diagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "patch_once",
+        level: "info",
+      }),
+    );
+  });
 });

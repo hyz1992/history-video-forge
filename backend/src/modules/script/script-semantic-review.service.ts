@@ -1,4 +1,9 @@
 import { ScriptSemanticReviewResult } from "../../../../shared/src/index";
+import { env, getValidatedRuntimeEnv } from "../../config/env.js";
+import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
+import type { LlmInteractionLogWriter } from "../../runtime/llm/interaction-log.js";
+import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider.js";
+import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 
 interface ScriptInputBundleInput {
   hard_lane: {
@@ -26,9 +31,33 @@ interface ScriptDraftInput {
 export interface ReviewScriptSemanticsInput {
   bundle: ScriptInputBundleInput;
   draft: ScriptDraftInput;
+  llmGateway?: LlmGateway;
+  interactionLogWriter?: LlmInteractionLogWriter;
 }
 
-export function reviewScriptSemantics(_input: ReviewScriptSemanticsInput) {
+export async function reviewScriptSemantics(input: ReviewScriptSemanticsInput) {
+  const gateway = input.llmGateway ?? createSemanticReviewerGateway();
+  if (!gateway) {
+    return buildSkippedSemanticReview();
+  }
+
+  try {
+    const rawReview = await gateway.invokeStructuredPrompt<unknown>({
+      promptId: "script.semantic-reviewer",
+      input: {
+        bundle: input.bundle,
+        draft: input.draft,
+      },
+      interactionLogWriter: input.interactionLogWriter,
+    });
+
+    return ScriptSemanticReviewResult.parse(rawReview);
+  } catch {
+    return buildSkippedSemanticReview();
+  }
+}
+
+function buildSkippedSemanticReview() {
   return ScriptSemanticReviewResult.parse({
     stage: "script_semantic_review",
     decision: "skipped",
@@ -38,5 +67,18 @@ export function reviewScriptSemantics(_input: ReviewScriptSemanticsInput) {
     patch_targets: [],
     summary: "当前环境未接入真实语义审校，跳过语义裁判。",
     confidence: 0.5,
+  });
+}
+
+function createSemanticReviewerGateway(): LlmGateway | null {
+  if (env.llm.provider === "stub") {
+    return null;
+  }
+
+  return createLlmGateway({
+    registry: createPromptRegistry(),
+    provider: createOpenAiCompatibleProvider({
+      ...getValidatedRuntimeEnv().llm,
+    }),
   });
 }
