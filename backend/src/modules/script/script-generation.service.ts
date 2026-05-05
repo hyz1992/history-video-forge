@@ -314,7 +314,10 @@ function buildDeterministicDraft(input: ScriptInputBundleInput) {
   const bundle = input;
   const beats = bundle.hard_lane.must_include_beats;
   const quote = bundle.topic_package.canonical_quotes?.[0];
-  const openingSpan = bundle.packaging_lane.hook_claim;
+  const openingSpan =
+    bundle.soft_lane.strong_scene.trim() ||
+    bundle.hard_lane.core_conflict?.trim() ||
+    bundle.packaging_lane.hook_claim;
   const endingSpan = bundle.soft_lane.narrative_tension_map.ending_residue;
 
   const lines = [

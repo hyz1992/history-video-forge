@@ -367,7 +367,16 @@ ${JSON.stringify(runtimeDraft)}
     expect(entries[0]?.systemPrompt).toContain("先按档位控制正文体量，再回填");
     expect(entries[0]?.systemPrompt).toContain("`opening_span`");
     expect(entries[0]?.systemPrompt).toContain(
-      "前两句必须直接复用 `hook_claim` 或 `strong_scene` 的具体场面起手，第一句就要落在冲突、危险、反常识或即将出事的局面上，禁止背景铺垫、抽象概括和泛问句空转",
+      "优先从 `soft_lane.strong_scene`",
+    );
+    expect(entries[0]?.systemPrompt).toContain("具体场面、动作或危险局面起手");
+    expect(entries[0]?.systemPrompt).toContain(
+      "`hook_claim` 只是包装 promise 弱参考",
+    );
+    expect(entries[0]?.systemPrompt).toContain("不能机械复述或照搬");
+    expect(entries[0]?.systemPrompt).toContain("禁止默认使用统一挑战句模板");
+    expect(entries[0]?.systemPrompt).not.toContain(
+      "前两句必须直接复用 `hook_claim` 或 `strong_scene`",
     );
     expect(entries[0]?.systemPrompt).toContain(
       "先单独确定一个可独立成立的 `opening_span`，再让 `script_text` 以 `opening_span` 原文起手顺势展开",
@@ -416,6 +425,13 @@ ${JSON.stringify(runtimeDraft)}
     });
 
     expect(response.statusCode).toBe(200);
+    expect(response.body.draft.opening_span).toBe(topicPackage.strong_scene);
+    expect(response.body.draft.opening_span).not.toBe(
+      response.body.input_bundle.packaging_lane.hook_claim,
+    );
+    expect(response.body.draft.script_text).toMatch(
+      new RegExp(`^${topicPackage.strong_scene.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
+    );
     expect(response.body.semantic_review).toMatchObject({
       stage: "script_semantic_review",
       decision: "skipped",

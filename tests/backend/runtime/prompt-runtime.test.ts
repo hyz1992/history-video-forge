@@ -116,6 +116,20 @@ describe("prompt runtime", () => {
     expect(prompt.filePath.replace(/\\/g, "/")).toContain("/harness/prompts/script/");
   });
 
+  it("keeps script writer opening contract scene-first without treating hook_claim as a draft template", () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("优先从 `soft_lane.strong_scene`");
+    expect(prompt.body).toContain("具体场面、动作或危险局面起手");
+    expect(prompt.body).toContain("`hook_claim` 只是包装 promise 弱参考");
+    expect(prompt.body).toContain("不能机械复述或照搬");
+    expect(prompt.body).toContain("禁止默认使用统一挑战句模板");
+    expect(prompt.body).not.toContain(
+      "前两句必须直接复用 `hook_claim` 或 `strong_scene`",
+    );
+  });
+
   it("loads script.semantic-reviewer from harness prompts with zh-CN metadata", () => {
     const registry = createPromptRegistry();
 
