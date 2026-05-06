@@ -162,6 +162,17 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("不得只重排、改写或缩短上一稿");
   });
 
+  it("requires thin-draft regeneration to clear the floor comfortably with beat-level substance", () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("script_body_too_thin");
+    expect(prompt.body).toContain("不能只刚刚贴线");
+    expect(prompt.body).toContain("要明显高于 `min_script_chars_for_band`");
+    expect(prompt.body).toContain("每条 beat 至少补足一个动作、一个反应、一个后果");
+    expect(prompt.body).toContain("不得写成比上一稿稍长一点的压缩摘要");
+  });
+
   it("requires medium body volume to come from narrative substance instead of padding", () => {
     const prompt = createPromptRegistry().getPrompt("script.writer");
 
