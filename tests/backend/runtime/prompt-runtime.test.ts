@@ -130,6 +130,17 @@ describe("prompt runtime", () => {
     );
   });
 
+  it("keeps script writer focused on oral story drafts instead of summaries", () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("不能写成摘要稿");
+    expect(prompt.body).toContain("每个 `must_include_beats` 要写成局面推进");
+    expect(prompt.body).toContain("至少一个核心场面包含人物、动作、压力源、即时后果");
+    expect(prompt.body).toContain("问句后必须进入具体场面");
+    expect(prompt.body).toContain("结尾要留下代价、反讽或判断");
+  });
+
   it("loads script.semantic-reviewer from harness prompts with zh-CN metadata", () => {
     const registry = createPromptRegistry();
 
