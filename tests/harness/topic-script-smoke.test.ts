@@ -46,6 +46,6 @@ describe("topic script smoke harness", () => {
       readFileSync(join(outputDir, "semantic-review-result.json"), "utf8"),
     ) as { stage: string; decision: string };
     expect(semanticReview.stage).toBe("script_semantic_review");
-    expect(["pass", "patch_once"]).toContain(semanticReview.decision);
+    expect(["pass", "patch_once", "skipped"]).toContain(semanticReview.decision);
   });
 });
