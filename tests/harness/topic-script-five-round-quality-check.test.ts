@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -132,6 +132,129 @@ describe("topic script five round quality check", () => {
 
     expect(parseFiveRoundQualityCheckCliArgs([outputDir])).toEqual({
       outputDir,
+    });
+  });
+
+  it("reports sample readiness separately from local validation and semantic shadow results", async () => {
+    const outputDir = mkdtempSync(join(tmpdir(), "svf2-five-round-quality-stats-"));
+
+    const result = await runTopicScriptFiveRoundQualityCheck(
+      { outputDir },
+      {
+        requireRealEnv: false,
+        sampleRunner: async ({ samplePath, outputDir: sampleOutputDir }) => {
+          mkdirSync(sampleOutputDir, { recursive: true });
+          const localValidationDecision = samplePath.includes("hongmenyan")
+            ? "regen_once"
+            : "pass";
+          const semanticReviewDecision = samplePath.includes("hongmenyan")
+            ? "skipped"
+            : "pass";
+
+          writeFileSync(
+            join(sampleOutputDir, "validation-result.json"),
+            JSON.stringify(
+              {
+                stage: "script_local_validation",
+                decision: localValidationDecision,
+              },
+              null,
+              2,
+            ),
+            "utf8",
+          );
+          writeFileSync(
+            join(sampleOutputDir, "semantic-review-result.json"),
+            JSON.stringify(
+              {
+                stage: "script_semantic_review",
+                decision: semanticReviewDecision,
+              },
+              null,
+              2,
+            ),
+            "utf8",
+          );
+
+          return {
+            outputDir: sampleOutputDir,
+            sample: {
+              sample_id: samplePath.includes("hongmenyan")
+                ? "hongmenyan"
+                : "sample-pass",
+              project_name: "five-round-quality-check",
+              topic_request: {
+                canonical_name: "test",
+                summary: "test",
+                core_conflict: "test",
+                strong_scene: "test",
+                source_hint: "test",
+                recent_usage_hint: "test",
+                tags: ["test"],
+              },
+            },
+            status: {
+              generatedAt: "2026-05-06T00:00:00.000Z",
+              status: "sample-ready",
+              stage: "topic-to-script",
+              sampleId: "sample",
+              projectId: `project-${samplePath}`,
+              outputDir: sampleOutputDir,
+              graphTraceSummary: {
+                nodes: [
+                  {
+                    node_name: "semantic-review",
+                    input_ref: "script-local-validation:current",
+                    output_ref:
+                      semanticReviewDecision === "skipped"
+                        ? null
+                        : "script-semantic-review:current",
+                    failure_reason:
+                      semanticReviewDecision === "skipped"
+                        ? "本地硬校验未通过，未进入语义审校。"
+                        : null,
+                  },
+                ],
+              },
+            },
+          } satisfies RunTopicScriptSmokeResult;
+        },
+      },
+    );
+
+    expect(result).toMatchObject({
+      sample_ready_samples: 5,
+      local_validation_passed_samples: 4,
+      local_validation_failed_samples: 1,
+      semantic_shadow_passed_samples: 4,
+      semantic_shadow_skipped_samples: 1,
+    });
+
+    const summary = JSON.parse(
+      readFileSync(join(outputDir, "live-check-summary.json"), "utf8"),
+    ) as {
+      sample_ready_samples: number;
+      local_validation_passed_samples: number;
+      local_validation_failed_samples: number;
+      semantic_shadow_passed_samples: number;
+      semantic_shadow_skipped_samples: number;
+      samples: Array<{
+        sample_id: string;
+        local_validation_decision: string | null;
+        semantic_review_decision: string | null;
+      }>;
+    };
+
+    expect(summary).toMatchObject({
+      sample_ready_samples: 5,
+      local_validation_passed_samples: 4,
+      local_validation_failed_samples: 1,
+      semantic_shadow_passed_samples: 4,
+      semantic_shadow_skipped_samples: 1,
+    });
+    expect(summary.samples.find((sample) => sample.sample_id === "hongmenyan")).toMatchObject({
+      local_validation_decision: "regen_once",
+      semantic_review_decision: "skipped",
     });
   });
 });

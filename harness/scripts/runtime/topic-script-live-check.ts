@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -36,6 +36,8 @@ export interface TopicScriptLiveCheckSampleResult {
   project_id: string;
   status: string;
   output_dir: string;
+  local_validation_decision: string | null;
+  semantic_review_decision: string | null;
   graph_nodes: Array<{
     node_name: string;
     input_ref: string | null;
@@ -47,6 +49,14 @@ export interface TopicScriptLiveCheckSampleResult {
 export interface TopicScriptLiveCheckResult extends TopicScriptLiveCheckPlan {
   passed_samples: number;
   failed_samples: number;
+  sample_ready_samples: number;
+  local_validation_passed_samples: number;
+  local_validation_failed_samples: number;
+  local_validation_unknown_samples: number;
+  semantic_shadow_passed_samples: number;
+  semantic_shadow_skipped_samples: number;
+  semantic_shadow_attention_samples: number;
+  semantic_shadow_unknown_samples: number;
   results: TopicScriptLiveCheckSampleResult[];
 }
 
@@ -81,6 +91,19 @@ function resolveLiveCheckSamplePaths(
 
 function writeJson(outputDir: string, filename: string, value: unknown) {
   writeFileSync(resolve(outputDir, filename), JSON.stringify(value, null, 2), "utf8");
+}
+
+function readDecisionArtifact(outputDir: string, filename: string): string | null {
+  const artifactPath = resolve(outputDir, filename);
+  if (!existsSync(artifactPath)) {
+    return null;
+  }
+
+  const artifact = JSON.parse(readFileSync(artifactPath, "utf8")) as {
+    decision?: unknown;
+  };
+
+  return typeof artifact.decision === "string" ? artifact.decision : null;
 }
 
 function getSampleOutputDir(baseOutputDir: string, samplePath: string, occurrence = 1) {
@@ -187,17 +210,61 @@ export async function runTopicScriptLiveCheck(
       project_id: smokeResult.status.projectId,
       status: smokeResult.status.status,
       output_dir: smokeResult.outputDir,
+      local_validation_decision: readDecisionArtifact(
+        smokeResult.outputDir,
+        "validation-result.json",
+      ),
+      semantic_review_decision: readDecisionArtifact(
+        smokeResult.outputDir,
+        "semantic-review-result.json",
+      ),
       graph_nodes: smokeResult.status.graphTraceSummary.nodes,
     });
   }
+
+  const sampleReadySamples = results.filter((item) => item.status === "sample-ready").length;
+  const failedSamples = results.filter((item) => item.status !== "sample-ready").length;
+  const localValidationPassedSamples = results.filter(
+    (item) => item.local_validation_decision === "pass",
+  ).length;
+  const localValidationFailedSamples = results.filter(
+    (item) =>
+      item.local_validation_decision !== null && item.local_validation_decision !== "pass",
+  ).length;
+  const localValidationUnknownSamples = results.filter(
+    (item) => item.local_validation_decision === null,
+  ).length;
+  const semanticShadowPassedSamples = results.filter(
+    (item) => item.semantic_review_decision === "pass",
+  ).length;
+  const semanticShadowSkippedSamples = results.filter(
+    (item) => item.semantic_review_decision === "skipped",
+  ).length;
+  const semanticShadowAttentionSamples = results.filter(
+    (item) =>
+      item.semantic_review_decision !== null &&
+      item.semantic_review_decision !== "pass" &&
+      item.semantic_review_decision !== "skipped",
+  ).length;
+  const semanticShadowUnknownSamples = results.filter(
+    (item) => item.semantic_review_decision === null,
+  ).length;
 
   const summary = {
     mode: plan.mode,
     automated_gate: plan.automated_gate,
     requires_real_env: plan.requires_real_env,
     total_samples: plan.total_samples,
-    passed_samples: results.filter((item) => item.status === "sample-ready").length,
-    failed_samples: results.filter((item) => item.status !== "sample-ready").length,
+    passed_samples: sampleReadySamples,
+    failed_samples: failedSamples,
+    sample_ready_samples: sampleReadySamples,
+    local_validation_passed_samples: localValidationPassedSamples,
+    local_validation_failed_samples: localValidationFailedSamples,
+    local_validation_unknown_samples: localValidationUnknownSamples,
+    semantic_shadow_passed_samples: semanticShadowPassedSamples,
+    semantic_shadow_skipped_samples: semanticShadowSkippedSamples,
+    semantic_shadow_attention_samples: semanticShadowAttentionSamples,
+    semantic_shadow_unknown_samples: semanticShadowUnknownSamples,
     samples: results,
   };
 
@@ -213,6 +280,14 @@ export async function runTopicScriptLiveCheck(
       `- total_samples: ${plan.total_samples}`,
       `- passed_samples: ${summary.passed_samples}`,
       `- failed_samples: ${summary.failed_samples}`,
+      `- sample_ready_samples: ${summary.sample_ready_samples}`,
+      `- local_validation_passed_samples: ${summary.local_validation_passed_samples}`,
+      `- local_validation_failed_samples: ${summary.local_validation_failed_samples}`,
+      `- local_validation_unknown_samples: ${summary.local_validation_unknown_samples}`,
+      `- semantic_shadow_passed_samples: ${summary.semantic_shadow_passed_samples}`,
+      `- semantic_shadow_skipped_samples: ${summary.semantic_shadow_skipped_samples}`,
+      `- semantic_shadow_attention_samples: ${summary.semantic_shadow_attention_samples}`,
+      `- semantic_shadow_unknown_samples: ${summary.semantic_shadow_unknown_samples}`,
       `- family_set_path: ${plan.family_set_path}`,
       `- output_dir: ${plan.output_dir}`,
       "",
@@ -225,6 +300,8 @@ export async function runTopicScriptLiveCheck(
       ...results.flatMap((item) => [
         `- ${item.sample_id}: ${item.status}`,
         `  - output_dir: ${item.output_dir}`,
+        `  - local_validation_decision: ${item.local_validation_decision ?? "unknown"}`,
+        `  - semantic_review_decision: ${item.semantic_review_decision ?? "unknown"}`,
         ...item.graph_nodes.map(
           (node) =>
             `  - ${node.node_name}: ${node.input_ref ?? "null"} -> ${node.output_ref ?? "null"}`,
@@ -238,6 +315,14 @@ export async function runTopicScriptLiveCheck(
     ...plan,
     passed_samples: summary.passed_samples,
     failed_samples: summary.failed_samples,
+    sample_ready_samples: summary.sample_ready_samples,
+    local_validation_passed_samples: summary.local_validation_passed_samples,
+    local_validation_failed_samples: summary.local_validation_failed_samples,
+    local_validation_unknown_samples: summary.local_validation_unknown_samples,
+    semantic_shadow_passed_samples: summary.semantic_shadow_passed_samples,
+    semantic_shadow_skipped_samples: summary.semantic_shadow_skipped_samples,
+    semantic_shadow_attention_samples: summary.semantic_shadow_attention_samples,
+    semantic_shadow_unknown_samples: summary.semantic_shadow_unknown_samples,
     results,
   };
 }
@@ -310,6 +395,14 @@ async function main() {
         total_samples: result.total_samples,
         passed_samples: result.passed_samples,
         failed_samples: result.failed_samples,
+        sample_ready_samples: result.sample_ready_samples,
+        local_validation_passed_samples: result.local_validation_passed_samples,
+        local_validation_failed_samples: result.local_validation_failed_samples,
+        local_validation_unknown_samples: result.local_validation_unknown_samples,
+        semantic_shadow_passed_samples: result.semantic_shadow_passed_samples,
+        semantic_shadow_skipped_samples: result.semantic_shadow_skipped_samples,
+        semantic_shadow_attention_samples: result.semantic_shadow_attention_samples,
+        semantic_shadow_unknown_samples: result.semantic_shadow_unknown_samples,
       },
       null,
       2,
