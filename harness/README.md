@@ -105,6 +105,7 @@ runtime harness 在当前阶段属于 **P0**：
 - `runtime/topic-script-regression.ts`
 - `runtime/topic-script-real-regression.ts`
 - `runtime/topic-script-live-check.ts`
+- `runtime/topic-script-five-round-quality-check.ts`
 - `runtime/script-semantic-reviewer-fixtures.ts`
 - `runtime/topic-candidate-library-real-check.ts`
 - `ui-acceptance/ui-acceptance-smoke.ts`
@@ -178,6 +179,8 @@ runtime harness 在当前阶段属于 **P0**：
   - 真实模型巡检层的计划外壳，不作为默认自动化门。
 - `harness/scripts/runtime/topic-script-live-check.ts`
   - 真实 `.env` 条件下的 live check 入口，默认执行真实 live check，不并入默认自动化 gate。
+- `harness/scripts/runtime/topic-script-five-round-quality-check.ts`
+  - 固定 5 轮真实 topic -> script 首稿质量巡检入口，不并入默认自动化 gate。
 - `harness/scripts/runtime/script-semantic-reviewer-fixtures.ts`
   - semantic reviewer shadow 对照样本巡检入口，不并入默认自动化 gate。
 - `harness/samples/topic-script/family-set.md`
@@ -199,6 +202,47 @@ runtime harness 在当前阶段属于 **P0**：
   - 仅生成 live check 计划，不实际执行样本。
 - live check 输出应至少覆盖 graph trace、runtime diagnostics 与 script artifact。
 - live check 只作为人工巡检入口，不替代自动化稳定回归。
+
+### Five-round Script Quality Check
+
+新 agent 做 script 首稿质量抽检时，优先使用固定命令：
+
+```powershell
+npm run harness:topic-script-five-round-quality-check
+```
+
+该命令会在真实 `.env` 下顺序执行 5 个 topic -> script 样本：
+
+1. `yanzi-shichu`
+2. `zhuanzhu-ciwangliao`
+3. `julu-zhizhan`
+4. `hongmenyan`
+5. `yanzi-shichu` repeat
+
+可显式指定输出目录：
+
+```powershell
+npm run harness:topic-script-five-round-quality-check -- --output-dir harness/scripts/runtime/output/<run-id>
+```
+
+输出目录默认是：
+
+```text
+harness/scripts/runtime/output/topic-script-five-round-quality-check
+```
+
+读取顺序：
+
+1. `live-check-summary.json`：确认 `total_samples / passed_samples / failed_samples`。
+2. 每个样本目录的 `script-draft.json`：人工抽读 opening、场景密度、动作/压力/后果、结尾余震。
+3. 每个样本目录的 `semantic-review-result.json`：只观察 shadow-only 分布，不驱动 patch。
+4. `trace.md` 与 `runtime-diagnostics.json`：确认链路与诊断信息没有异常。
+
+约束：
+
+- 该命令要求真实 `.env`，不作为默认自动化 gate。
+- 5 轮质量巡检用于观察 script 首稿质量，不等同于发布质量验收。
+- reviewer 结果只作为 shadow-only 量尺，不得因为单次结果直接堆 prompt 或接入 patch 主路径。
 
 ### Semantic Reviewer Fixture Entry
 

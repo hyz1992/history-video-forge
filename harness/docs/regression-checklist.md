@@ -54,4 +54,5 @@
 - 是否区分了“可用线”“爆款首稿线”“发布线”。
 - local validator 是否只做结构性质量下限，没有冒充语义审校。
 - semantic reviewer 是否仍只作为 shadow 量尺。
-- 是否通过 5 轮真实 topic -> script 观测记录抽读质量。
+- 是否通过 `npm run harness:topic-script-five-round-quality-check` 做 5 轮真实 topic -> script 观测记录抽读质量。
+- 是否记录了 5 轮输出目录，并读取 `live-check-summary.json`、各样本 `script-draft.json`、`semantic-review-result.json`。
