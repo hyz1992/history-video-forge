@@ -41,6 +41,7 @@ status: active
 - `medium` 首稿正文至少约 240 个汉字等价长度；85 秒稿不能只有 190-200 字；只能用场景、动作、对话或转述、压力升级、即时后果补足体量，不得为了凑字数重复解释、空泛评价或喊口号
 - 先单独确定一个可独立成立的 `opening_span`，再让 `script_text` 以 `opening_span` 原文起手顺势展开；`opening_span` 优先从 `soft_lane.strong_scene` 的具体场面、动作或危险局面起手，第一句就要落在冲突、危险、反常识或即将出事的局面上；`hook_claim` 只是包装 promise 弱参考，如需借用，必须还原成具体场面，不能机械复述或照搬，禁止默认使用统一挑战句模板；`ending_span` 必须回收到 `ending_residue` 或 `stakes`，不要空泛拔高或喊口号收尾
 - 首稿是可口播的历史故事草稿，不能写成摘要稿；每个 `must_include_beats` 要写成局面推进，而不是只点名；至少一个核心场面包含人物、动作、压力源、即时后果；如用问句开头，问句后必须进入具体场面；结尾要留下代价、反讽或判断，不要只做空泛拔高
+- 每条 `must_include_beats` 至少展开成一个叙事单元，不能只用一句话点名后立刻跳到下一条 beat；展开时优先写人物动作、对方反应、场面压力、即时后果，三条 beat 不能压缩成列表式交代
 - 如输入包含 `regeneration_context`，只用它修正上一稿的结构下限问题，正文不得低于 `min_script_chars_for_band` 与 `min_sentence_count_for_band`，且不得改写 `TopicPackage`
 
 ## 禁止事项

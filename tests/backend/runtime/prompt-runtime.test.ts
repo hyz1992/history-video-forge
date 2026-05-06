@@ -162,6 +162,16 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("不得为了凑字数重复解释、空泛评价或喊口号");
   });
 
+  it("requires each script beat to become a developed narrative unit instead of compressed coverage", () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("每条 `must_include_beats` 至少展开成一个叙事单元");
+    expect(prompt.body).toContain("不能只用一句话点名后立刻跳到下一条 beat");
+    expect(prompt.body).toContain("人物动作、对方反应、场面压力、即时后果");
+    expect(prompt.body).toContain("三条 beat 不能压缩成列表式交代");
+  });
+
   it("loads script.semantic-reviewer from harness prompts with zh-CN metadata", () => {
     const registry = createPromptRegistry();
 
