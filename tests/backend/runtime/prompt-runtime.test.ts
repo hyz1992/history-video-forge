@@ -173,6 +173,18 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("不得写成比上一稿稍长一点的压缩摘要");
   });
 
+  it("requires sparse-material thin regen to add pre-action reaction and consequence around existing beats", () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("script_body_too_thin");
+    expect(prompt.body).toContain("quote_trace");
+    expect(prompt.body).toContain("动作前一拍");
+    expect(prompt.body).toContain("即时反应");
+    expect(prompt.body).toContain("后果句");
+    expect(prompt.body).toContain("不能添加额外事实");
+  });
+
   it("requires medium body volume to come from narrative substance instead of padding", () => {
     const prompt = createPromptRegistry().getPrompt("script.writer");
 
