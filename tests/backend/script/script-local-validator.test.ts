@@ -148,6 +148,93 @@ describe("script local validator", () => {
     expect(result.errors).toContain("opening_missing");
   });
 
+  it("returns regen_once when a medium draft is too thin to be an oral script", async () => {
+    const draft = await generateScriptDraft({
+      bundle: scriptInputBundle,
+    });
+    const thinScript =
+      "楚王接连羞辱晏子，晏子没有退让。他先借入门规制反击，又在橘淮之辩中顶回楚王。整件事说明外交场面不能软，一退就会丢掉齐国体面。";
+
+    const result = validateScriptDraft({
+      bundle: scriptInputBundle,
+      draft: {
+        ...draft,
+        script_text: thinScript,
+        estimated_duration_sec: 85,
+        opening_span: "楚王接连羞辱晏子，晏子没有退让。",
+        ending_span: "一退就会丢掉齐国体面。",
+        beat_trace: [
+          {
+            beat: "入楚受辱",
+            excerpt: "楚王接连羞辱晏子，晏子没有退让。",
+            confidence: 0.9,
+          },
+          {
+            beat: "橘淮之辩",
+            excerpt: "又在橘淮之辩中顶回楚王。",
+            confidence: 0.9,
+          },
+        ],
+      },
+    });
+
+    expect(result.decision).toBe("regen_once");
+    expect(result.errors).toContain("script_body_too_thin");
+    expect(result.metrics).toMatchObject({
+      script_char_count: thinScript.length,
+      min_script_chars_for_band: 240,
+      min_sentence_count_for_band: 7,
+    });
+  });
+
+  it("keeps structurally complete drafts with reasonable body volume passing", async () => {
+    const draft = await generateScriptDraft({
+      bundle: scriptInputBundle,
+    });
+    const body = [
+      "楚王把门开在侧边，意思很明白：你晏子个子矮，就从这里进去。",
+      "晏子没有急，也没有退，他站在门前先把规矩抬出来。",
+      "他说，出使狗国的人，才从狗门入；现在他来的是楚国，就该走楚国使臣该走的门。",
+      "第一下羞辱被顶回去，楚王没有收手，又把话压到齐国头上。",
+      "晏子顺势把压力接住，让这场争脸面的话，变成两国礼法的较量。",
+      "到橘淮之辩时，楚王想借盗贼羞辱齐人，晏子反把问题推回楚地。",
+      "橘生淮南为橘，生于淮北为枳；人到楚国才变坏，难道不是楚国水土的问题？",
+      "这不是逞口舌，是在所有人面前守住齐国的场面。",
+      "所以这一退，退掉的就不只是晏子自己，而是齐国被人按下去的资格。",
+    ].join("");
+
+    const result = validateScriptDraft({
+      bundle: scriptInputBundle,
+      draft: {
+        ...draft,
+        script_text: body,
+        estimated_duration_sec: 85,
+        opening_span: "楚王把门开在侧边，意思很明白：你晏子个子矮，就从这里进去。",
+        ending_span: "所以这一退，退掉的就不只是晏子自己，而是齐国被人按下去的资格。",
+        beat_trace: [
+          {
+            beat: "入楚受辱",
+            excerpt: "楚王把门开在侧边，意思很明白：你晏子个子矮，就从这里进去。",
+            confidence: 0.9,
+          },
+          {
+            beat: "橘淮之辩",
+            excerpt: "到橘淮之辩时，楚王想借盗贼羞辱齐人，晏子反把问题推回楚地。",
+            confidence: 0.9,
+          },
+        ],
+      },
+    });
+
+    expect(result.decision).toBe("pass");
+    expect(result.errors).not.toContain("script_body_too_thin");
+    expect(result.metrics).toMatchObject({
+      script_char_count: body.length,
+      min_script_chars_for_band: 240,
+      min_sentence_count_for_band: 7,
+    });
+  });
+
   it("returns hard_fail for unrecoverable bundle or draft issues", async () => {
     const draft = await generateScriptDraft({
       bundle: scriptInputBundle,
