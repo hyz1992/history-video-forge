@@ -43,6 +43,8 @@ export async function runScriptRunGraph(
     semanticReview: null,
     lastPatchIntent: null,
     stepLogs: [],
+    runtimeDiagnostics: [],
+    pendingThinRegenCheck: null,
   };
   const nodes = createScriptRunNodes({
     runtime,
@@ -178,6 +180,7 @@ export async function runScriptRunGraph(
       steps: runtime.stepLogs,
     }),
     runtimeDiagnostics: createRuntimeDiagnosticsSummary([
+      ...runtime.runtimeDiagnostics,
       {
         code:
           finalSemanticReview.decision === "pass"

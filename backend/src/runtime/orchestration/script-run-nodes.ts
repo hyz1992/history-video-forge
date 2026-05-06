@@ -11,10 +11,15 @@ import {
   createNodeStateUpdate,
   type TopicScriptGraphState,
 } from "./graph-state.js";
+import type { RuntimeDiagnosticCheck } from "./runtime-diagnostics.js";
 
 type ScriptDraft = Awaited<ReturnType<typeof generateScriptDraft>>;
 type LocalValidation = ReturnType<typeof validateScriptDraft>;
 type SemanticReview = Awaited<ReturnType<typeof reviewScriptSemantics>>;
+
+interface PendingThinRegenCheck {
+  previousScriptText: string;
+}
 
 export interface ScriptRunGraphDependencies {
   generateDraft: typeof generateScriptDraft;
@@ -34,6 +39,8 @@ export interface ScriptRunGraphRuntime {
   semanticReview: SemanticReview | ReturnType<typeof buildSkippedSemanticReview> | null;
   lastPatchIntent: "fix" | "lift" | null;
   stepLogs: StepTraceLogEntry[];
+  runtimeDiagnostics: RuntimeDiagnosticCheck[];
+  pendingThinRegenCheck: PendingThinRegenCheck | null;
 }
 
 function requireDraft(draft: ScriptDraft | null, nodeName: string): ScriptDraft {
@@ -138,6 +145,19 @@ export function createScriptRunNodes(input: {
         });
       }
 
+      if (
+        runtime.pendingThinRegenCheck &&
+        runtime.localValidation.errors.includes("script_body_too_thin") &&
+        draft.script_text.trim() ===
+          runtime.pendingThinRegenCheck.previousScriptText
+      ) {
+        runtime.runtimeDiagnostics.push({
+          code: "regen_output_unchanged_after_thin_context",
+          level: "warning",
+        });
+      }
+      runtime.pendingThinRegenCheck = null;
+
       const stateUpdate = createNodeStateUpdate("local-validate", {
         input_ref: "script-draft:current",
         output_ref: "script-local-validation:current",
@@ -212,6 +232,16 @@ export function createScriptRunNodes(input: {
 
     async regenOnce(state: TopicScriptGraphState) {
       const startedAt = new Date();
+      const previousDraft = runtime.draft;
+      const previousLocalValidation = runtime.localValidation;
+      runtime.pendingThinRegenCheck =
+        previousDraft &&
+        previousLocalValidation?.errors.includes("script_body_too_thin")
+          ? {
+              previousScriptText: previousDraft.script_text.trim(),
+            }
+          : null;
+
       runtime.draft = await dependencies.regenerateDraft({
         bundle: runtime.bundle,
         draft: runtime.draft ?? undefined,

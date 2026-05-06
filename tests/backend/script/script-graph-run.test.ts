@@ -312,6 +312,63 @@ describe("script run graph", () => {
     });
   });
 
+  it("records a diagnostic when thin regen returns unchanged script text", async () => {
+    const calls: string[] = [];
+    const unchangedThinDraft = {
+      ...passDraft,
+      script_text: "same thin script text",
+      opening_span: "same thin opening",
+    };
+    const generateDraft = vi.fn(async () => {
+      calls.push("script-generate");
+      return unchangedThinDraft;
+    });
+    const validateDraft = vi.fn(() => {
+      calls.push("local-validate");
+      return createRegenLocalValidation();
+    });
+
+    const result = await runScriptRunGraph(
+      {
+        bundle: inputBundle,
+        allowPatch: true,
+        allowRegen: true,
+      },
+      {
+        generateDraft,
+        validateDraft,
+        reviewSemantics: vi.fn(() => {
+          calls.push("semantic-review");
+          return createPassSemanticReview();
+        }),
+        patchDraft: vi.fn(async () => {
+          calls.push("patch-once");
+          return patchedDraft;
+        }),
+        regenerateDraft: vi.fn(async ({ generateDraft: rerunGenerateDraft }) => {
+          calls.push("regen-once");
+          return rerunGenerateDraft();
+        }),
+      },
+    );
+
+    expect(calls).toEqual([
+      "script-generate",
+      "local-validate",
+      "regen-once",
+      "script-generate",
+      "local-validate",
+    ]);
+    expect(result.draft).toEqual(unchangedThinDraft);
+    expect(result.localValidation.decision).toBe("regen_once");
+    expect(result.runtimeDiagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "regen_output_unchanged_after_thin_context",
+        level: "warning",
+      }),
+    );
+  });
+
   it("forces one explicit regen run when the caller requests manual regen", async () => {
     const calls: string[] = [];
     const generateDraft = vi
