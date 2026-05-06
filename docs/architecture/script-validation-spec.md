@@ -53,6 +53,12 @@
 5. `patch_once` 和 `regen_once` 都必须有限次。
 6. `beat_trace / quote_trace` 是校验 sidecar，不是新大纲。
 
+当前阶段注记（2026-05-06）：
+
+- 本文档保留 `patch_once / regen_once / return_topic` 的完整设计语义，供 reviewer shadow 与后续 patch integration 设计使用。
+- 当前 `Script Writer Viral First-draft Quality` 执行不把 semantic reviewer 决策升级为自动门禁，也不执行 patch / regen 主链路动作。
+- 本轮如果真实 reviewer 返回 `return_topic / regen_once`，先做人工抽读和上游材料归因，不得直接为了迎合单次 reviewer 输出改 prompt 或接 patch。
+
 ---
 
 ## 4. 本地硬校验

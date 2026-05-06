@@ -40,6 +40,12 @@ Topic Package
 -> 确认 script
 ```
 
+当前阶段注记（2026-05-06）：
+
+- 上述 `patch / regen` 是 script 阶段的设计态能力，不是当前实现主路径。
+- `Script Writer Viral First-draft Quality` 执行期间，semantic reviewer 只作为 shadow-only 量尺。
+- 本轮不得把 `patch_once / regen_once` 接入自动主链路；如需进入主路径，必须先有独立 patch integration 设计与执行指令。
+
 ## 4. 设计原则
 
 1. 默认单稿，不默认多稿并行。

@@ -39,6 +39,7 @@
 - prompt 没有明确要求口播节奏、动作/对话/压力源、关键场面展开。
 - 质量验证目前依赖人工读稿和 semantic reviewer summary，缺少面向爆款口播的观测记录格式。
 - deterministic stub 仍带模板化表达，适合结构测试，不适合质量测试。
+- 5 轮质量巡检入口已经固化为 `npm run harness:topic-script-five-round-quality-check`，后续不应再手工拼多个 `--sample` 命令。
 
 ## 爆款口播质量标准
 
@@ -124,6 +125,7 @@
 - opening 是否短到过度空泛。
 - script_text 是否包含足够句子数。
 - beat_trace excerpt 是否只是 beat 本身或过短。
+- 输出 `script_char_count / script_sentence_count / min_script_chars_for_band / min_sentence_count_for_band` 等 metrics，方便判断是否只是结构过薄。
 
 不能做：
 
@@ -139,6 +141,7 @@
 
 - 固定 5 轮样本：晏子、专诸、巨鹿、鸿门宴、晏子 repeat。
 - 记录 local validation、semantic shadow、字数、opening、scene density 人工观察、结尾质量。
+- 同时记录上游材料充足度：`strong_scene / stakes / must_include_beats / source_anchor_refs / canonical_quotes` 是否足够支撑展开。
 - 对比修复前后的质量分布。
 
 ### 方案 D：暂不做 patch integration
@@ -152,8 +155,8 @@ patch 不是本轮主路径。当前问题应先让首稿更强，而不是生�
 | Prompt 合同 | `script.writer` | prompt-runtime 测试 | 包含口播密度、场面展开、beat 推进、结尾余震约束 |
 | Local validator | 短摘要稿 | 单元测试 | 100 字左右 medium 稿不再 pass |
 | Runtime stub | deterministic draft | 单元测试 | stub 不再生成明显模板化/过短稿 |
-| Live smoke | 5 轮真实 topic -> script | 显式命令 | 5 / 5 sample-ready，本地校验 pass |
-| Shadow reviewer | semantic review | 真实输出统计 | 不出现 `return_topic / regen_once`，`patch_once/lift` 可解释 |
+| Live smoke | 5 轮真实 topic -> script | `npm run harness:topic-script-five-round-quality-check -- --output-dir ...` | 5 / 5 sample-ready，本地校验 pass |
+| Shadow reviewer | semantic review | 真实输出统计 + 人工归因 | `return_topic / regen_once` 只作为异常观察项；出现时先复核归因，不直接驱动 prompt 或 patch |
 | 人工抽读 | 完整 script_text | 记录表 | 无模板污染，开头进入场面，核心场面有展开 |
 
 ## 风险与边界
@@ -161,6 +164,7 @@ patch 不是本轮主路径。当前问题应先让首稿更强，而不是生�
 - prompt 加太重会互相打架，必须小步加约束。
 - local validator 只能做结构性质量下限，不能替代语义审校。
 - reviewer 仍是 shadow-only，不驱动主链路。
+- semantic reviewer 的单次 `return_topic / regen_once` 不作为硬失败结论，必须结合人工抽读和上游材料归因。
 - 不能为了追求爆款味而编造史实或伪造引号。
 - 不能把这轮扩展到 storyboard、asset、compose。
 - 不能把 patch 提前拉进主路径。
