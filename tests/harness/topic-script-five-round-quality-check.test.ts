@@ -175,6 +175,78 @@ describe("topic script five round quality check", () => {
             ),
             "utf8",
           );
+          const repeatedAngle =
+            "A banquet assassination decides the first turn in Wu power.";
+          const topicPackage = samplePath.includes("hongmenyan")
+            ? {
+                topic_id: "topic_attention",
+                title: "Attention Sample",
+                selected_angle: repeatedAngle,
+                family_label: "assassination pressure",
+                scope_label: "single event",
+                core_conflict: "There is only one chance to strike.",
+                stakes: `There is only one chance to strike. ${repeatedAngle}`,
+                strong_scene: "The sword is hidden inside the fish.",
+                packaging_seed: repeatedAngle,
+                must_include_beats: [
+                  "There is only one chance to strike.",
+                  "The sword is hidden inside the fish.",
+                  repeatedAngle,
+                ],
+                forbidden_expansions: [],
+                risk_hints: [],
+                source_anchor_refs: ["Shiji"],
+                canonical_quotes: [],
+                ambiguity_notes: [],
+                duration_band: "medium",
+                narrative_tension_map: {
+                  hook_claim: repeatedAngle,
+                  pressure_escalation: "There is only one chance to strike.",
+                  mid_reveal: repeatedAngle,
+                  peak_payoff: "The sword is hidden inside the fish.",
+                  ending_residue: repeatedAngle,
+                },
+              }
+            : {
+                topic_id: "topic_ok",
+                title: "Ok Sample",
+                selected_angle:
+                  "A banquet starts with one quiet move toward danger.",
+                family_label: "assassination pressure",
+                scope_label: "single event",
+                core_conflict: "There is only one chance to strike.",
+                stakes:
+                  "If the strike fails, the whole faction is exposed at once.",
+                strong_scene: "The sword is hidden inside the fish.",
+                packaging_seed:
+                  "A banquet starts with one quiet move toward danger.",
+                must_include_beats: [
+                  "The cook carries the fish into the inner banquet.",
+                  "The blade comes out from the fish at the serving table.",
+                  "The guards close in as the assassin pays the price.",
+                ],
+                forbidden_expansions: [],
+                risk_hints: [],
+                source_anchor_refs: ["Shiji"],
+                canonical_quotes: [],
+                ambiguity_notes: [],
+                duration_band: "medium",
+                narrative_tension_map: {
+                  hook_claim:
+                    "A banquet starts with one quiet move toward danger.",
+                  pressure_escalation: "There is only one chance to strike.",
+                  mid_reveal:
+                    "The blade comes out from the fish at the serving table.",
+                  peak_payoff: "The sword is hidden inside the fish.",
+                  ending_residue:
+                    "The guards close in as the assassin pays the price.",
+                },
+              };
+          writeFileSync(
+            join(sampleOutputDir, "topic-package.json"),
+            JSON.stringify(topicPackage, null, 2),
+            "utf8",
+          );
 
           return {
             outputDir: sampleOutputDir,
@@ -238,10 +310,18 @@ describe("topic script five round quality check", () => {
       local_validation_failed_samples: number;
       semantic_shadow_passed_samples: number;
       semantic_shadow_skipped_samples: number;
+      topic_package_sufficiency_ok_samples: number;
+      topic_package_sufficiency_observe_samples: number;
+      topic_package_sufficiency_needs_attention_samples: number;
+      topic_package_sufficiency_unknown_samples: number;
       samples: Array<{
         sample_id: string;
         local_validation_decision: string | null;
         semantic_review_decision: string | null;
+        topic_package_sufficiency: {
+          status: string;
+          warnings: string[];
+        } | null;
       }>;
     };
 
@@ -251,10 +331,21 @@ describe("topic script five round quality check", () => {
       local_validation_failed_samples: 1,
       semantic_shadow_passed_samples: 4,
       semantic_shadow_skipped_samples: 1,
+      topic_package_sufficiency_ok_samples: 4,
+      topic_package_sufficiency_observe_samples: 0,
+      topic_package_sufficiency_needs_attention_samples: 1,
+      topic_package_sufficiency_unknown_samples: 0,
     });
     expect(summary.samples.find((sample) => sample.sample_id === "hongmenyan")).toMatchObject({
       local_validation_decision: "regen_once",
       semantic_review_decision: "skipped",
+      topic_package_sufficiency: {
+        status: "needs_attention",
+        warnings: expect.arrayContaining([
+          "tension_map_repetition_risk",
+          "selected_angle_repetition_risk",
+        ]),
+      },
     });
   });
 });

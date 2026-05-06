@@ -2,6 +2,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import type { TopicPackage } from "../../../shared/src/index";
+import {
+  assessTopicPackageScriptSufficiency,
+  type TopicPackageScriptSufficiencyReport,
+} from "../../../backend/src/modules/topic/topic-package-script-sufficiency";
 import {
   runTopicScriptSmoke,
   type RunTopicScriptSmokeInput,
@@ -38,6 +43,7 @@ export interface TopicScriptLiveCheckSampleResult {
   output_dir: string;
   local_validation_decision: string | null;
   semantic_review_decision: string | null;
+  topic_package_sufficiency: TopicPackageScriptSufficiencyReport | null;
   graph_nodes: Array<{
     node_name: string;
     input_ref: string | null;
@@ -57,6 +63,10 @@ export interface TopicScriptLiveCheckResult extends TopicScriptLiveCheckPlan {
   semantic_shadow_skipped_samples: number;
   semantic_shadow_attention_samples: number;
   semantic_shadow_unknown_samples: number;
+  topic_package_sufficiency_ok_samples: number;
+  topic_package_sufficiency_observe_samples: number;
+  topic_package_sufficiency_needs_attention_samples: number;
+  topic_package_sufficiency_unknown_samples: number;
   results: TopicScriptLiveCheckSampleResult[];
 }
 
@@ -104,6 +114,19 @@ function readDecisionArtifact(outputDir: string, filename: string): string | nul
   };
 
   return typeof artifact.decision === "string" ? artifact.decision : null;
+}
+
+function readTopicPackageSufficiency(
+  outputDir: string,
+): TopicPackageScriptSufficiencyReport | null {
+  const artifactPath = resolve(outputDir, "topic-package.json");
+  if (!existsSync(artifactPath)) {
+    return null;
+  }
+
+  const topicPackage = JSON.parse(readFileSync(artifactPath, "utf8")) as TopicPackage;
+
+  return assessTopicPackageScriptSufficiency(topicPackage);
 }
 
 function getSampleOutputDir(baseOutputDir: string, samplePath: string, occurrence = 1) {
@@ -218,6 +241,7 @@ export async function runTopicScriptLiveCheck(
         smokeResult.outputDir,
         "semantic-review-result.json",
       ),
+      topic_package_sufficiency: readTopicPackageSufficiency(smokeResult.outputDir),
       graph_nodes: smokeResult.status.graphTraceSummary.nodes,
     });
   }
@@ -249,6 +273,18 @@ export async function runTopicScriptLiveCheck(
   const semanticShadowUnknownSamples = results.filter(
     (item) => item.semantic_review_decision === null,
   ).length;
+  const topicPackageSufficiencyOkSamples = results.filter(
+    (item) => item.topic_package_sufficiency?.status === "ok",
+  ).length;
+  const topicPackageSufficiencyObserveSamples = results.filter(
+    (item) => item.topic_package_sufficiency?.status === "observe",
+  ).length;
+  const topicPackageSufficiencyNeedsAttentionSamples = results.filter(
+    (item) => item.topic_package_sufficiency?.status === "needs_attention",
+  ).length;
+  const topicPackageSufficiencyUnknownSamples = results.filter(
+    (item) => item.topic_package_sufficiency === null,
+  ).length;
 
   const summary = {
     mode: plan.mode,
@@ -265,6 +301,12 @@ export async function runTopicScriptLiveCheck(
     semantic_shadow_skipped_samples: semanticShadowSkippedSamples,
     semantic_shadow_attention_samples: semanticShadowAttentionSamples,
     semantic_shadow_unknown_samples: semanticShadowUnknownSamples,
+    topic_package_sufficiency_ok_samples: topicPackageSufficiencyOkSamples,
+    topic_package_sufficiency_observe_samples: topicPackageSufficiencyObserveSamples,
+    topic_package_sufficiency_needs_attention_samples:
+      topicPackageSufficiencyNeedsAttentionSamples,
+    topic_package_sufficiency_unknown_samples:
+      topicPackageSufficiencyUnknownSamples,
     samples: results,
   };
 
@@ -288,6 +330,10 @@ export async function runTopicScriptLiveCheck(
       `- semantic_shadow_skipped_samples: ${summary.semantic_shadow_skipped_samples}`,
       `- semantic_shadow_attention_samples: ${summary.semantic_shadow_attention_samples}`,
       `- semantic_shadow_unknown_samples: ${summary.semantic_shadow_unknown_samples}`,
+      `- topic_package_sufficiency_ok_samples: ${summary.topic_package_sufficiency_ok_samples}`,
+      `- topic_package_sufficiency_observe_samples: ${summary.topic_package_sufficiency_observe_samples}`,
+      `- topic_package_sufficiency_needs_attention_samples: ${summary.topic_package_sufficiency_needs_attention_samples}`,
+      `- topic_package_sufficiency_unknown_samples: ${summary.topic_package_sufficiency_unknown_samples}`,
       `- family_set_path: ${plan.family_set_path}`,
       `- output_dir: ${plan.output_dir}`,
       "",
@@ -302,6 +348,7 @@ export async function runTopicScriptLiveCheck(
         `  - output_dir: ${item.output_dir}`,
         `  - local_validation_decision: ${item.local_validation_decision ?? "unknown"}`,
         `  - semantic_review_decision: ${item.semantic_review_decision ?? "unknown"}`,
+        `  - topic_package_sufficiency: ${item.topic_package_sufficiency?.status ?? "unknown"}`,
         ...item.graph_nodes.map(
           (node) =>
             `  - ${node.node_name}: ${node.input_ref ?? "null"} -> ${node.output_ref ?? "null"}`,
@@ -323,6 +370,14 @@ export async function runTopicScriptLiveCheck(
     semantic_shadow_skipped_samples: summary.semantic_shadow_skipped_samples,
     semantic_shadow_attention_samples: summary.semantic_shadow_attention_samples,
     semantic_shadow_unknown_samples: summary.semantic_shadow_unknown_samples,
+    topic_package_sufficiency_ok_samples:
+      summary.topic_package_sufficiency_ok_samples,
+    topic_package_sufficiency_observe_samples:
+      summary.topic_package_sufficiency_observe_samples,
+    topic_package_sufficiency_needs_attention_samples:
+      summary.topic_package_sufficiency_needs_attention_samples,
+    topic_package_sufficiency_unknown_samples:
+      summary.topic_package_sufficiency_unknown_samples,
     results,
   };
 }
@@ -403,6 +458,14 @@ async function main() {
         semantic_shadow_skipped_samples: result.semantic_shadow_skipped_samples,
         semantic_shadow_attention_samples: result.semantic_shadow_attention_samples,
         semantic_shadow_unknown_samples: result.semantic_shadow_unknown_samples,
+        topic_package_sufficiency_ok_samples:
+          result.topic_package_sufficiency_ok_samples,
+        topic_package_sufficiency_observe_samples:
+          result.topic_package_sufficiency_observe_samples,
+        topic_package_sufficiency_needs_attention_samples:
+          result.topic_package_sufficiency_needs_attention_samples,
+        topic_package_sufficiency_unknown_samples:
+          result.topic_package_sufficiency_unknown_samples,
       },
       null,
       2,

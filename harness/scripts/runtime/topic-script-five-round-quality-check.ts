@@ -107,6 +107,14 @@ async function main() {
         semantic_shadow_skipped_samples: result.semantic_shadow_skipped_samples,
         semantic_shadow_attention_samples: result.semantic_shadow_attention_samples,
         semantic_shadow_unknown_samples: result.semantic_shadow_unknown_samples,
+        topic_package_sufficiency_ok_samples:
+          result.topic_package_sufficiency_ok_samples,
+        topic_package_sufficiency_observe_samples:
+          result.topic_package_sufficiency_observe_samples,
+        topic_package_sufficiency_needs_attention_samples:
+          result.topic_package_sufficiency_needs_attention_samples,
+        topic_package_sufficiency_unknown_samples:
+          result.topic_package_sufficiency_unknown_samples,
       },
       null,
       2,
