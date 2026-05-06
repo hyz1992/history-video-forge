@@ -28,28 +28,39 @@ export interface ConfirmTopicCandidateInput {
   candidate: StoredTopicCandidate;
 }
 
-function buildNarrativeTensionMap(candidate: StoredTopicCandidate) {
-  return {
-    hook_claim: candidate.oneLineAngle.replace(/[。.!！]+$/u, ""),
-    pressure_escalation: candidate.coreConflict,
-    mid_reveal: candidate.oneLineAngle,
-    peak_payoff: candidate.strongScene,
-    ending_residue: candidate.oneLineAngle,
-  };
-}
-
-function buildStakes(candidate: StoredTopicCandidate) {
-  return `${candidate.coreConflict}${candidate.oneLineAngle}`;
-}
-
-function buildMustIncludeBeats(candidate: StoredTopicCandidate) {
-  const previewBeats = Array.from(
+function getCandidatePreviewBeats(candidate: StoredTopicCandidate) {
+  return Array.from(
     new Set(
       (candidate.mustCoverPreview ?? [])
         .map((beat) => beat.trim())
         .filter(Boolean),
     ),
   );
+}
+
+function buildNarrativeTensionMap(candidate: StoredTopicCandidate) {
+  const previewBeats = getCandidatePreviewBeats(candidate);
+
+  return {
+    hook_claim: candidate.oneLineAngle.replace(/[。.!！]+$/u, ""),
+    pressure_escalation: candidate.coreConflict,
+    mid_reveal: previewBeats[1] ?? previewBeats[0] ?? candidate.strongScene,
+    peak_payoff: candidate.strongScene,
+    ending_residue:
+      previewBeats[2] ?? previewBeats[1] ?? candidate.coreConflict,
+  };
+}
+
+function buildStakes(candidate: StoredTopicCandidate) {
+  const previewBeats = getCandidatePreviewBeats(candidate);
+  const stakesMaterial =
+    previewBeats[2] ?? previewBeats[1] ?? candidate.strongScene;
+
+  return `${candidate.coreConflict} ${stakesMaterial}`;
+}
+
+function buildMustIncludeBeats(candidate: StoredTopicCandidate) {
+  const previewBeats = getCandidatePreviewBeats(candidate);
 
   if (previewBeats.length >= 3) {
     return previewBeats;

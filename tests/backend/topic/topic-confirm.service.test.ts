@@ -4,6 +4,8 @@ import { createDbClient } from "../../../backend/src/db/client.js";
 import { createProvisionalEvent } from "../../../backend/src/modules/events/event-registry.repository.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import { confirmTopicCandidate } from "../../../backend/src/modules/topic/topic-confirm.service.js";
+import { assessTopicPackageScriptSufficiency } from "../../../backend/src/modules/topic/topic-package-script-sufficiency.js";
+import type { TopicPackage } from "../../../shared/src/index.js";
 
 describe("topic confirm service", () => {
   it("builds a minimally complete story contract when confirming a candidate", async () => {
@@ -125,5 +127,79 @@ describe("topic confirm service", () => {
     });
 
     expect(result.topic_package.must_include_beats).toEqual(mustCoverPreview);
+  });
+
+  it("uses candidate preview material to reduce topic package repetition", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Topic Repetition Reduction",
+    });
+    const event = await createProvisionalEvent(db, {
+      canonicalName: "Zhuanzhu Assassinates Wang Liao",
+      aliases: ["Fish belly dagger"],
+    });
+    const oneLineAngle =
+      "A banquet assassination turns Wu power in one instant.";
+    const coreConflict = "There is only one chance to strike at the banquet.";
+    const strongScene = "The sword is hidden inside the fish.";
+    const mustCoverPreview = [
+      "The cook carries the fish into the inner banquet.",
+      "The blade comes out from the fish at the serving table.",
+      "The guards close in as the assassin pays the price.",
+    ];
+
+    const result = await confirmTopicCandidate({
+      projectDb: db,
+      project,
+      candidate: {
+        candidateId: "zhuanzhu-ciwangliao",
+        projectId: project.id,
+        event,
+        title: "Zhuanzhu Assassinates Wang Liao",
+        oneLineAngle,
+        familyLabel: "assassination pressure",
+        scopeLabel: "single event",
+        coreConflict,
+        strongScene,
+        mustCoverPreview,
+        sourceHint: "Shiji",
+        recentUsageHint: "No recent same event.",
+      },
+    });
+
+    const topicPackage: TopicPackage = {
+      topic_id: result.topic_package.topic_package_id,
+      title: result.topic_package.canonical_title,
+      selected_angle: result.topic_package.selected_angle,
+      family_label: result.topic_package.family_label,
+      scope_label: result.topic_package.scope_label,
+      core_conflict: result.topic_package.core_conflict,
+      stakes: result.topic_package.stakes,
+      strong_scene: result.topic_package.strong_scene,
+      packaging_seed: result.topic_package.selected_angle,
+      must_include_beats: result.topic_package.must_include_beats as string[],
+      forbidden_expansions: result.topic_package
+        .forbidden_expansions as string[],
+      risk_hints: [],
+      source_anchor_refs: result.topic_package.source_anchor_refs as string[],
+      canonical_quotes: result.topic_package.canonical_quotes as string[],
+      ambiguity_notes: result.topic_package.ambiguity_notes as string[],
+      duration_band: "medium",
+      narrative_tension_map: result.topic_package
+        .narrative_tension_map as TopicPackage["narrative_tension_map"],
+    };
+    const report = assessTopicPackageScriptSufficiency(topicPackage);
+
+    expect(result.topic_package.narrative_tension_map.mid_reveal).toBe(
+      mustCoverPreview[1],
+    );
+    expect(result.topic_package.narrative_tension_map.ending_residue).toBe(
+      mustCoverPreview[2],
+    );
+    expect(result.topic_package.stakes).not.toBe(
+      `${coreConflict}${oneLineAngle}`,
+    );
+    expect(report.metrics.distinctTensionFieldCount).toBeGreaterThanOrEqual(4);
+    expect(report.metrics.selectedAngleRepeatCount).toBeLessThanOrEqual(2);
   });
 });
