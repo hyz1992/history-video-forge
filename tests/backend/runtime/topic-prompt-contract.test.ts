@@ -47,6 +47,17 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("不得自定义额外评分键");
   });
 
+  it("requires candidate-builder must_cover_preview to carry script-writable beats", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain(
+      "`must_cover_preview` 必须给出 3 条可写入脚本的具体 beat",
+    );
+    expect(prompt.body).toContain("进入局面、关键动作、压力/代价");
+    expect(prompt.body).toContain("不得把同一句角度摘要改写三遍");
+  });
+
   it("requires candidate-builder to prioritize first-pass field completeness ahead of diversity tactics", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 

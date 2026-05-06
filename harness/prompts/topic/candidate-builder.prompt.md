@@ -42,8 +42,9 @@ status: active
     "scope_label": "事件范围标签",
     "why_this_now": "当下值得讲的原因",
     "must_cover_preview": [
-      "必须覆盖点1",
-      "必须覆盖点2"
+      "进入局面的具体 beat",
+      "关键动作的具体 beat",
+      "压力或代价的具体 beat"
     ],
     "viral_rubric": {
       "novelty": 4,
@@ -64,6 +65,7 @@ status: active
 - 不得把包装文案、角度句式或脚本化表达写进 `event_identity`
 - 若候选与 `recent_event_memory` 中为同一事件，应复用已有 `event_identity`，不得重新发明新 key
 - 每个候选都必须完整给出最小字段
+- `must_cover_preview` 必须给出 3 条可写入脚本的具体 beat：进入局面、关键动作、压力/代价；不得把同一句角度摘要改写三遍
 - 每个候选都必须带 `viral_rubric`
 - `viral_rubric` 只能使用正式字段：`hook_power`、`novelty_gap`、`emotion_gap`、`share_impulse`、`visual_promise`
 - `viral_rubric` 不得自定义额外评分键，不得改名，不得混入其他元数据
