@@ -152,6 +152,16 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("下限");
   });
 
+  it("requires thin-draft regeneration to expand existing beats instead of rephrasing the same short draft", () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("如 `regeneration_context` 指出 `script_body_too_thin`");
+    expect(prompt.body).toContain("必须沿用既有 `must_include_beats` 扩写");
+    expect(prompt.body).toContain("新增场景动作、对方反应、压力后果");
+    expect(prompt.body).toContain("不得只重排、改写或缩短上一稿");
+  });
+
   it("requires medium body volume to come from narrative substance instead of padding", () => {
     const prompt = createPromptRegistry().getPrompt("script.writer");
 
