@@ -28,12 +28,17 @@
 - prompt 是否带有 `Prompt Registry` 所要求的最小元数据？
 - 是否存在 prompt 漫游进业务代码或散落文档的情况？
 - 本轮是否评估了 `runtime harness` 受影响范围？
+- 如果涉及 script writer，是否避免把结构摘要误判为爆款口播？
+- 如果涉及 semantic reviewer，是否保持 shadow-only，不驱动主链路？
+- 如果涉及 live check，是否明确它不是默认自动化门？
 
 ## 五、验证
 
 - 是否运行了该任务对应的最小验证？
 - 如果未运行，是否解释了原因与风险？
 - 是否留下了明确剩余风险？
+- 涉及 topic runtime 写库的测试是否串行运行？
+- 涉及 script 首稿质量时，是否有真实输出抽读或质量记录，而不只是 pass/fail？
 
 ## 六、提交
 

@@ -75,7 +75,13 @@ prompt 只能建立在已经收敛的正式对象之上，例如：
 
 - script 起草
 - 语义审校
-- 局部 patch / lift
+- 局部 patch / lift 的提示资产维护
+
+当前边界：
+
+- `script.writer` 的目标是生成可口播的历史故事首稿，不是结构摘要。
+- `script.semantic-reviewer` 当前只作为 shadow-only 量尺，不驱动主链路。
+- `patch-lift.prompt.md` 可以作为正式 prompt 资产存在，但 patch integration 不属于当前主路径。
 
 不能偷偷定义：
 
@@ -107,3 +113,10 @@ prompt 只能建立在已经收敛的正式对象之上，例如：
 - 能产出可追踪对象与结果
 
 正式 prompt 一旦导致 runtime harness 难以稳定运行，应优先收紧 prompt 边界，而不是继续堆 prompt 说明。
+
+## Script Writer 质量提示原则
+
+- prompt 质量约束要少而清楚，避免重复堆“爆款”“抓人”等空泛词。
+- writer prompt 应要求 opening 进入具体局面，beat 推动局面升级，核心场面有动作/压力/后果，结尾有余震。
+- writer prompt 不得要求伪造历史引号；无准确引文时只能转述。
+- writer prompt 不得通过固定跨题材模板句制造口播感。

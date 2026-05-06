@@ -17,20 +17,29 @@
 
 ## 当前定位
 
-当前 harness v1 只服务于：
+当前 harness 服务于：
 
-- harness 自身落地
-- `topic + script` 第一阶段
+- `topic + script` 第一阶段的稳定回归
+- 真实 topic -> script live check
+- semantic reviewer shadow 量尺校准
+- script 首稿质量观测
 
 当前不扩展到：
 
 - downstream 详细设计
 - CI 平台化
 - hook 强制化
-- 业务 runtime 编排
+- patch integration 主路径
 
 runtime harness 在当前阶段属于 **P0**：  
-它用于尽早验证 `topic -> script` 这条链路在真实样例上是否能稳定跑通，而不是只停留在文档层。
+它用于验证 `topic -> script` 这条链路在固定样例和真实样例上是否能稳定跑通，并持续观察 script 首稿质量。
+
+当前特别注意：
+
+- fake semantic review 已移除；无真实 reviewer 时允许 `skipped`。
+- semantic reviewer 只作为 shadow-only 量尺，不驱动主链路。
+- patch 不进入当前主路径；任何 patch integration 都必须另写设计计划。
+- script 首稿当前处于“可用线”，后续目标是“爆款首稿线”。
 
 ---
 
@@ -93,6 +102,11 @@ runtime harness 在当前阶段属于 **P0**：
 - `detect-duplicate-prompts.ts`
 - `runtime/run-topic-to-script-sample.ts`
 - `runtime/topic-script-smoke.ts`
+- `runtime/topic-script-regression.ts`
+- `runtime/topic-script-real-regression.ts`
+- `runtime/topic-script-live-check.ts`
+- `runtime/script-semantic-reviewer-fixtures.ts`
+- `runtime/topic-candidate-library-real-check.ts`
 - `ui-acceptance/ui-acceptance-smoke.ts`
 - `ui-acceptance/ui-acceptance-full.ts`
 - `ui-acceptance/ui-acceptance-report.ts`
@@ -103,12 +117,19 @@ runtime harness 在当前阶段属于 **P0**：
 
 当前阶段保留：
 
+- `topic-script/family-set.md`
+- `topic-script/expanded-family-set.md`
 - `topic-script/yanzi-shichu.sample.json`
 - `topic-script/zhuanzhu-ciwangliao.sample.json`
+- `topic-script/julu-zhizhan.sample.json`
+- `topic-script/hongmenyan.sample.json`
+- `script-semantic-reviewer/fixture-set.md`
 
 说明：
 
-- 样例只服务 `topic -> script` 第一阶段 smoke 回归
+- `family-set.md` 是默认稳定回归样本集
+- `expanded-family-set.md` 只用于显式真实巡检和质量观测
+- `script-semantic-reviewer/fixture-set.md` 用于 reviewer shadow 对照校准
 - 不承载 storyboard / assets / compose 的下游对象
 - sample runner 应优先读取这里的固定样例，而不是把正式样例长期内联在脚本里
 
@@ -126,14 +147,11 @@ runtime harness 在当前阶段属于 **P0**：
 
 ## 当前阶段闸门
 
-- harness v1 未成型，不进入业务实现
-- 上一个任务未通过最小验证，不进入下一个任务
-- `topic + script` 业务实现前，先立稳：
-  - 根目录 `AGENTS.md`
-  - harness docs 最小集
-  - prompt 目录
-  - 检查脚本骨架
-  - runtime harness 骨架
+- 上一个任务未通过最小验证，不进入下一个任务。
+- 回改 topic/script/prompt/validator 时，必须回跑对应最小验证。
+- 真实 live check 不作为默认自动化门；必须显式运行并记录输出。
+- semantic reviewer 只作为 shadow-only 量尺；不得把 `patch_once/lift` 直接接入主链路。
+- 涉及 `storage/topic-candidate-library/` 写入的测试应串行运行，避免并行写同一生成态 JSON。
 
 ---
 
@@ -150,7 +168,7 @@ runtime harness 在当前阶段属于 **P0**：
 
 ---
 
-## Task 8 Runtime Regression
+## Topic -> Script Runtime Harness
 
 - `harness/scripts/runtime/topic-script-smoke.ts`
   - 单样本官方 topic -> script smoke 链路。
@@ -160,21 +178,49 @@ runtime harness 在当前阶段属于 **P0**：
   - 真实模型巡检层的计划外壳，不作为默认自动化门。
 - `harness/scripts/runtime/topic-script-live-check.ts`
   - 真实 `.env` 条件下的 live check 入口，默认执行真实 live check，不并入默认自动化 gate。
+- `harness/scripts/runtime/script-semantic-reviewer-fixtures.ts`
+  - semantic reviewer shadow 对照样本巡检入口，不并入默认自动化 gate。
 - `harness/samples/topic-script/family-set.md`
-  - 固定第二阶段双层回归样本集。
+  - 默认稳定回归样本集。
+- `harness/samples/topic-script/expanded-family-set.md`
+  - 扩展真实巡检样本集，不替代默认稳定回归。
 
 ### Live Check Entry
 
 - `npm run harness:topic-script-live-check`
   - 执行真实 live check，默认读取 `harness/samples/topic-script/family-set.md`。
 - `npm run harness:topic-script-live-check -- harness/samples/topic-script/family-set.md`
-  - 显式指定 family set，并避开 npm 11 对未知 flag 的告警。
+  - 显式指定 family set。
 - `npx tsx harness/scripts/runtime/topic-script-live-check.ts --sample harness/samples/topic-script/yanzi-shichu.sample.json`
   - 对单样本执行真实 live check。
+- `npx tsx harness/scripts/runtime/topic-script-live-check.ts --family-set harness/samples/topic-script/expanded-family-set.md --output-dir harness/scripts/runtime/output/<run-id>`
+  - 对扩展样本集执行真实巡检，并显式指定输出目录。
 - `npx tsx harness/scripts/runtime/topic-script-live-check.ts --plan-only`
   - 仅生成 live check 计划，不实际执行样本。
 - live check 输出应至少覆盖 graph trace、runtime diagnostics 与 script artifact。
 - live check 只作为人工巡检入口，不替代自动化稳定回归。
+
+### Semantic Reviewer Fixture Entry
+
+- `npm run harness:script-semantic-fixtures`
+  - 执行 semantic reviewer fixture shadow check。
+- `npm run harness:script-semantic-fixtures -- harness/scripts/runtime/output/<run-id>`
+  - 显式指定输出目录。
+- fixture 结果用于校准 reviewer 量尺，不得直接驱动 script 主链路或 patch。
+
+### Vitest Notes
+
+- 当前 Node/Vite 组合下，后端/harness 测试建议使用：
+
+```powershell
+npx vitest run --configLoader runner <tests>
+```
+
+- 涉及 topic runtime 写库的多文件测试建议串行：
+
+```powershell
+npx vitest run --configLoader runner <tests> --no-file-parallelism
+```
 
 ## UI Acceptance Entry
 
@@ -270,6 +316,21 @@ Get-ChildItem 'storage/projects' -Directory -Recurse |
 ### 当前结论
 
 - UI acceptance 机制已作为仓库内正式能力接入。
-- 当前最新 `smoke / full` 命令可稳定运行并生成产物。
-- 当前页面规则结论仍可能是 `FAIL`；最新已知阻塞为 `topic-history-section`。
-- 详细收口记录见 `docs/records/2026-04-21-ui-acceptance-conclusions.md`。
+- `smoke / full / report` 命令可用于显式巡检并生成产物。
+- UI acceptance 的最新结论必须以最近一次 `summary.json` 为准，不得沿用旧记录里的页面阻塞判断。
+
+## Script First-draft Quality Observability
+
+当前 script 首稿质量观测不只看 pass/fail：
+
+- local validation 是否 pass
+- semantic reviewer shadow 分布
+- script 字数与时长档位是否明显失真
+- opening 是否进入具体局面
+- 核心场面是否有动作、压力源、即时后果
+- 结尾是否有余震，而不是空泛拔高
+
+相关计划：
+
+- `docs/plans/2026-05-06-script-writer-viral-first-draft-quality-design.md`
+- `docs/plans/2026-05-06-script-writer-viral-first-draft-quality-implementation-plan.md`

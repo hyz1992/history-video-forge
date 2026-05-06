@@ -40,3 +40,7 @@
 - 没有文档同步，不算真正完成。
 - 当前阶段 `runtime harness` 是 `P0` 保障项；凡是会影响 `topic -> script` 运行链路的改动，都必须评估是否影响 runtime harness。
 - 正式 LLM prompt 必须使用中文，并且受 `Prompt Registry` 约束。
+- semantic reviewer 当前只作为 shadow-only 量尺；不得把 reviewer 决策当作自动门禁或主链路动作。
+- script 首稿质量不能只看结构字段是否完整；涉及 writer 质量时，必须说明是否达到“可用线”还是“爆款首稿线”。
+- 真实 live check 需要显式记录命令、输出目录和结果；它不替代默认自动化回归。
+- 涉及 `storage/topic-candidate-library/` 写入的测试应串行运行。

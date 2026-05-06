@@ -31,8 +31,13 @@ Graph 节点边界以当前 `topic + script` 主链路为准：
 - `topic-candidate-generate`
 - `script-generate`
 - `semantic-review`
+
+当前主链路不启用：
+
 - `patch-once`
 - `regen-once`
+
+`patch-once / regen-once` 只保留为未来 patch integration 设计候选，不属于当前默认运行路径。
 
 这些节点只负责：
 
@@ -89,17 +94,21 @@ graph state 只保留轻量状态穿透：
 - graph node 只允许消费既有 service 能力
 - 现有 prompt registry / loader、LLM gateway、provider adapter、structured-output-fix 的职责边界保持不变
 - 不引入旧项目重 `workflow-state`
-- `patch_once / regen_once` 仍然受单次机会约束
+- semantic reviewer 仍然只作为 shadow-only 量尺，不驱动主链路动作
+- `patch_once / regen_once` 进入主路径前，必须先有独立 patch integration 设计
 
 第三阶段实现优先顺序：
 
 1. 先建立 LangGraph orchestration scaffold
-2. 再把 `script-generate -> local-validate -> semantic-review -> patch-once / regen-once` 迁入 graph
+2. 再把 `script-generate -> local-validate -> semantic-review` 迁入 graph
 3. 再让 topic recommendation 与 graph trace / diagnostics 共享统一编排语义
+4. patch integration 另行设计，不随手并入第三阶段默认主链路
 
 ## 当前结论
 
 - 第二阶段已经完成 orchestration 规划与主链路收口
 - 第三阶段开始正式实现 LangGraph
 - LangGraph 的唯一正式落点是 backend runtime orchestration
+- 当前 semantic reviewer 是 shadow-only
+- 当前 patch 不进入主路径
 - 后续如果 graph 设计与业务代码发生冲突，以本文件定义的边界为先，再回到实施计划和 todolist 做显式调整
