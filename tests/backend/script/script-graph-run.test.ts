@@ -44,9 +44,14 @@ function createRegenLocalValidation() {
   return {
     stage: "script_local_validation" as const,
     decision: "regen_once" as const,
-    errors: ["script_too_short"],
+    errors: ["script_body_too_thin"],
     warnings: [],
-    metrics: {},
+    metrics: {
+      script_char_count: 67,
+      script_sentence_count: 3,
+      min_script_chars_for_band: 240,
+      min_sentence_count_for_band: 7,
+    },
   };
 }
 
@@ -268,8 +273,18 @@ describe("script run graph", () => {
           calls.push("patch-once");
           return patchedDraft;
         }),
-        regenerateDraft: vi.fn(async ({ generateDraft: rerunGenerateDraft }) => {
+        regenerateDraft: vi.fn(async ({ generateDraft: rerunGenerateDraft, localValidation }) => {
           calls.push("regen-once");
+          expect(localValidation).toMatchObject({
+            decision: "regen_once",
+            errors: ["script_body_too_thin"],
+            metrics: {
+              script_char_count: 67,
+              script_sentence_count: 3,
+              min_script_chars_for_band: 240,
+              min_sentence_count_for_band: 7,
+            },
+          });
           return rerunGenerateDraft();
         }),
       },

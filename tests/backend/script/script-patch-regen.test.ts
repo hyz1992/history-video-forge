@@ -16,12 +16,15 @@ const topicPackage = TopicPackage.parse({
   family_label: "外交压场型",
   scope_label: "完整事件",
   core_conflict: "楚王借公开场合连续羞辱晏子与齐国，晏子必须当场顶回去。",
+  stakes: "一旦退让，丢掉的不只是晏子个人体面，而是齐国在楚廷上的国格。",
   strong_scene: "楚王连续压场，晏子一句句顶回去。",
   packaging_seed: "楚王连压三次，晏子一次没退。",
   must_include_beats: ["入楚受辱", "橘枳之喻"],
   forbidden_expansions: ["不要扩写到未定 downstream 阶段"],
   risk_hints: ["不要把内容写成课堂导入"],
+  source_anchor_refs: ["《晏子春秋》"],
   canonical_quotes: ["橘生淮南则为橘"],
+  ambiguity_notes: [],
   duration_band: "medium",
   narrative_tension_map: {
     hook_claim: "楚王不是只压了晏子一次，而是连压三次",
@@ -55,8 +58,13 @@ const scriptInputBundle = ScriptInputBundle.parse({
     event_identity: "晏子使楚",
     selected_angle: topicPackage.selected_angle,
     scope_label: topicPackage.scope_label,
+    core_conflict: topicPackage.core_conflict,
+    stakes: topicPackage.stakes,
     must_include_beats: topicPackage.must_include_beats,
     forbidden_expansions: topicPackage.forbidden_expansions,
+    source_anchor_refs: topicPackage.source_anchor_refs,
+    canonical_quotes: topicPackage.canonical_quotes,
+    ambiguity_notes: topicPackage.ambiguity_notes,
     duration_band: topicPackage.duration_band,
   },
   soft_lane: {
@@ -178,10 +186,32 @@ describe("script patch / regenerate services", () => {
     const regenerated = await regenerateScriptDraft({
       bundle: scriptInputBundle,
       regenerateUsed: false,
+      localValidation: {
+        decision: "regen_once",
+        errors: ["script_body_too_thin"],
+        metrics: {
+          script_char_count: 67,
+          script_sentence_count: 3,
+          min_script_chars_for_band: 240,
+          min_sentence_count_for_band: 7,
+        },
+      },
       generateDraft,
     });
 
     expect(generateDraft).toHaveBeenCalledTimes(1);
+    expect(generateDraft).toHaveBeenCalledWith({
+      regenerationContext: {
+        reason: "local_validation_regen_once",
+        errors: ["script_body_too_thin"],
+        metrics: {
+          script_char_count: 67,
+          script_sentence_count: 3,
+          min_script_chars_for_band: 240,
+          min_sentence_count_for_band: 7,
+        },
+      },
+    });
     expect(() => ScriptDraftPackage.parse(regenerated)).not.toThrow();
     expect(regenerated.script_text).toContain("所有人");
 

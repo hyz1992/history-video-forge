@@ -215,9 +215,11 @@ export function createScriptRunNodes(input: {
       runtime.draft = await dependencies.regenerateDraft({
         bundle: runtime.bundle,
         regenerateUsed: state.regenerate_used,
-        generateDraft: () =>
+        localValidation: runtime.localValidation ?? undefined,
+        generateDraft: (generateInput) =>
           dependencies.generateDraft({
             bundle: runtime.bundle,
+            regenerationContext: generateInput?.regenerationContext,
           }),
       });
 

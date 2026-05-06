@@ -42,13 +42,18 @@ export interface GenerateScriptDraftInput {
   bundle: ScriptInputBundleInput;
   llmGateway?: LlmGateway;
   interactionLogWriter?: LlmInteractionLogWriter;
+  regenerationContext?: {
+    reason: "local_validation_regen_once";
+    errors: string[];
+    metrics: Record<string, unknown>;
+  };
 }
 
 export async function generateScriptDraft(input: GenerateScriptDraftInput) {
   const gateway = input.llmGateway ?? createScriptWriterGateway();
   const rawDraft = await gateway.invokeStructuredPrompt<unknown>({
     promptId: "script.writer",
-    input: input.bundle,
+    input: buildScriptWriterPromptInput(input),
     interactionLogWriter: input.interactionLogWriter,
   });
   const draft = normalizeScriptDraft(
@@ -57,6 +62,17 @@ export async function generateScriptDraft(input: GenerateScriptDraftInput) {
   );
 
   return ScriptDraftPackage.parse(draft);
+}
+
+function buildScriptWriterPromptInput(input: GenerateScriptDraftInput) {
+  if (!input.regenerationContext) {
+    return input.bundle;
+  }
+
+  return {
+    bundle: input.bundle,
+    regeneration_context: input.regenerationContext,
+  };
 }
 
 function normalizeScriptDraft(rawDraft: unknown, requiredBeats: string[]) {
@@ -330,9 +346,11 @@ function createScriptWriterGateway(): LlmGateway {
 function createStubScriptWriterProvider(): StructuredPromptProvider {
   return {
     async invokeStructuredPrompt<T>(request): Promise<T> {
-      const draft = buildDeterministicDraft(
-        request.input as ScriptInputBundleInput,
-      ) as T;
+      const promptInput = request.input as
+        | ScriptInputBundleInput
+        | { bundle: ScriptInputBundleInput };
+      const bundle = "bundle" in promptInput ? promptInput.bundle : promptInput;
+      const draft = buildDeterministicDraft(bundle) as T;
 
       await request.interactionLogWriter?.write({
         generatedAt: new Date().toISOString(),

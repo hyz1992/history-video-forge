@@ -157,6 +157,44 @@ describe("script runtime generate", () => {
     expect(draft.script_text).toContain("楚王");
   });
 
+  it("passes regen context into the script-writer prompt input without changing the bundle", async () => {
+    const invokeApi = vi.fn(async () => JSON.stringify(runtimeDraft));
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-4.5",
+        invokeApi,
+      }),
+    });
+    const regenerationContext = {
+      reason: "local_validation_regen_once" as const,
+      errors: ["script_body_too_thin"],
+      metrics: {
+        script_char_count: 67,
+        script_sentence_count: 3,
+        min_script_chars_for_band: 240,
+        min_sentence_count_for_band: 7,
+      },
+    };
+
+    await generateScriptDraft({
+      bundle: scriptInputBundle,
+      llmGateway: gateway,
+      regenerationContext,
+    } as any);
+
+    expect(invokeApi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationName: "script.writer",
+        input: {
+          bundle: scriptInputBundle,
+          regeneration_context: regenerationContext,
+        },
+      }),
+    );
+    expect(scriptInputBundle).not.toHaveProperty("regeneration_context");
+  });
+
   it("builds deterministic stub drafts with the current first-draft body floor", async () => {
     const draft = await generateScriptDraft({
       bundle: scriptInputBundle,

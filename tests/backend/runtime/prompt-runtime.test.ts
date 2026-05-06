@@ -141,6 +141,17 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("结尾要留下代价、反讽或判断");
   });
 
+  it("tells script writer to honor regen context structural floors without changing topic contract", () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("`regeneration_context`");
+    expect(prompt.body).toContain("不得改写 `TopicPackage`");
+    expect(prompt.body).toContain("min_script_chars_for_band");
+    expect(prompt.body).toContain("min_sentence_count_for_band");
+    expect(prompt.body).toContain("下限");
+  });
+
   it("loads script.semantic-reviewer from harness prompts with zh-CN metadata", () => {
     const registry = createPromptRegistry();
 
