@@ -140,6 +140,18 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("执行单一语义审校");
   });
 
+  it("keeps script semantic reviewer calibrated for off-contract and weak-lift boundaries", () => {
+    const prompt = createPromptRegistry().getPrompt("script.semantic-reviewer");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("完全换成无关题材");
+    expect(prompt.body).toContain("优先判为 `return_topic`");
+    expect(prompt.body).toContain("结构覆盖但表达像梗概");
+    expect(prompt.body).toContain("可判 `patch_once/lift`");
+    expect(prompt.body).toContain("不能因此压低首稿通过率");
+    expect(prompt.body).toContain("不能仅因所有 `must_include_beats` 已覆盖就判 `pass`");
+  });
+
   it("invokes script.semantic-reviewer through the prompt registry and llm gateway", async () => {
     const { reviewScriptSemantics } = await import(
       "../../../backend/src/modules/script/script-semantic-review.service.js"

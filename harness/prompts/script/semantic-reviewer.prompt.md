@@ -46,6 +46,8 @@ status: active
 - 当前只作为 shadow 量尺，不驱动主链路；不要把首稿当成终稿精修来审
 - 首稿可接受的标准：已覆盖 `must_include_beats`，未偏离 `scope_label / selected_angle / narrative_tension_map`，开头、递进、结尾能成立，即使仍有可优化空间，也必须判为 `pass`
 - `patch_once/lift` 只用于明确定位到局部、且会显著影响首稿完成度的问题；不能因为还可以更有画面感、节奏还能更紧、表达还能更丰富就判 `patch_once`
+- 如果脚本完全换成无关题材，缺失核心人物、事件或 `must_include_beats`，优先判为 `return_topic`，不要让 script 端继续自修
+- 如果脚本结构覆盖但表达像梗概，开头或关键场面缺少具体压力、动作和不可逆后果，且局部补强即可显著提升首稿完成度，可判 `patch_once/lift`；不能仅因所有 `must_include_beats` 已覆盖就判 `pass`，也不能因此压低首稿通过率
 - 所有判断、标签与说明都使用中文
 
 ## 禁止事项
