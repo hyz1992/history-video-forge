@@ -88,4 +88,42 @@ describe("topic confirm service", () => {
     expect(contractText).toContain("退路还在，士气就散");
     expect(contractText).toContain("项羽下令砸锅沉船");
   });
+
+  it("prefers candidate must cover preview as script-writable beats", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Topic Must Cover Preview",
+    });
+    const event = await createProvisionalEvent(db, {
+      canonicalName: "Zhuanzhu Assassinates Wang Liao",
+      aliases: ["Fish belly dagger"],
+    });
+    const mustCoverPreview = [
+      "The cook carries the fish into the inner banquet.",
+      "The blade comes out from the fish at the serving table.",
+      "The guards close in as the assassin pays the price.",
+    ];
+
+    const result = await confirmTopicCandidate({
+      projectDb: db,
+      project,
+      candidate: {
+        candidateId: "zhuanzhu-ciwangliao",
+        projectId: project.id,
+        event,
+        title: "Zhuanzhu Assassinates Wang Liao",
+        oneLineAngle:
+          "A banquet assassination turns Wu power in one instant.",
+        familyLabel: "assassination pressure",
+        scopeLabel: "single event",
+        coreConflict: "There is only one chance to strike at the banquet.",
+        strongScene: "The sword is hidden inside the fish.",
+        mustCoverPreview,
+        sourceHint: "Shiji",
+        recentUsageHint: "No recent same event.",
+      },
+    });
+
+    expect(result.topic_package.must_include_beats).toEqual(mustCoverPreview);
+  });
 });

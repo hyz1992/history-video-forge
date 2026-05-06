@@ -17,6 +17,7 @@ export interface StoredTopicCandidate {
   scopeLabel: string;
   coreConflict: string;
   strongScene: string;
+  mustCoverPreview?: string[];
   sourceHint: string;
   recentUsageHint: string;
 }
@@ -42,6 +43,18 @@ function buildStakes(candidate: StoredTopicCandidate) {
 }
 
 function buildMustIncludeBeats(candidate: StoredTopicCandidate) {
+  const previewBeats = Array.from(
+    new Set(
+      (candidate.mustCoverPreview ?? [])
+        .map((beat) => beat.trim())
+        .filter(Boolean),
+    ),
+  );
+
+  if (previewBeats.length >= 3) {
+    return previewBeats;
+  }
+
   return [
     candidate.coreConflict,
     candidate.strongScene,
