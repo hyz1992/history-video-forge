@@ -28,6 +28,7 @@ function toResponseCandidate(candidate: StoredTopicCandidate) {
     family_label: candidate.familyLabel,
     scope_label: candidate.scopeLabel,
     strong_scene: candidate.strongScene,
+    must_cover_preview: candidate.mustCoverPreview ?? [],
     risk_hints: [],
   };
 }
@@ -193,6 +194,7 @@ export async function createTopicRecommendationsController(
       scopeLabel: candidate.scope_label,
       coreConflict: candidate.core_conflict,
       strongScene: candidate.strong_scene,
+      mustCoverPreview: candidate.must_cover_preview,
       sourceHint: candidate.source_hint,
       recentUsageHint: candidate.recent_usage_hint,
     });
