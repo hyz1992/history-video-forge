@@ -83,9 +83,10 @@ function writeJson(outputDir: string, filename: string, value: unknown) {
   writeFileSync(resolve(outputDir, filename), JSON.stringify(value, null, 2), "utf8");
 }
 
-function getSampleOutputDir(baseOutputDir: string, samplePath: string) {
+function getSampleOutputDir(baseOutputDir: string, samplePath: string, occurrence = 1) {
   const sampleName = basename(samplePath, ".sample.json");
-  return resolve(baseOutputDir, sampleName);
+  const outputName = occurrence > 1 ? `${sampleName}-repeat-${occurrence}` : sampleName;
+  return resolve(baseOutputDir, outputName);
 }
 
 export function buildTopicScriptLiveCheckPlan(
@@ -168,9 +169,13 @@ export async function runTopicScriptLiveCheck(
   }
 
   const results: TopicScriptLiveCheckSampleResult[] = [];
+  const sampleNameCounts = new Map<string, number>();
 
   for (const samplePath of plan.sample_paths) {
-    const sampleOutputDir = getSampleOutputDir(plan.output_dir, samplePath);
+    const sampleName = basename(samplePath, ".sample.json");
+    const occurrence = (sampleNameCounts.get(sampleName) ?? 0) + 1;
+    sampleNameCounts.set(sampleName, occurrence);
+    const sampleOutputDir = getSampleOutputDir(plan.output_dir, samplePath, occurrence);
     const smokeResult = await sampleRunner({
       samplePath,
       outputDir: sampleOutputDir,

@@ -67,7 +67,7 @@ export async function runTopicScriptFiveRoundQualityCheck(
   );
 }
 
-function parseCliArgs(argv: string[]) {
+export function parseFiveRoundQualityCheckCliArgs(argv: string[]) {
   const result: TopicScriptFiveRoundQualityCheckInput = {};
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -78,13 +78,19 @@ function parseCliArgs(argv: string[]) {
       result.outputDir = next;
       index += 1;
     }
+
+    if (!current.startsWith("--") && !result.outputDir) {
+      result.outputDir = current;
+    }
   }
 
   return result;
 }
 
 async function main() {
-  const result = await runTopicScriptFiveRoundQualityCheck(parseCliArgs(process.argv.slice(2)));
+  const result = await runTopicScriptFiveRoundQualityCheck(
+    parseFiveRoundQualityCheckCliArgs(process.argv.slice(2)),
+  );
   process.stdout.write(
     `${JSON.stringify(
       {
