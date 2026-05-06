@@ -364,20 +364,30 @@ function buildDeterministicDraft(input: ScriptInputBundleInput) {
     bundle.hard_lane.core_conflict?.trim() ||
     bundle.packaging_lane.hook_claim;
   const endingSpan = bundle.soft_lane.narrative_tension_map.ending_residue;
+  const coreConflict = bundle.hard_lane.core_conflict?.trim();
+  const stakes = bundle.hard_lane.stakes?.trim() || bundle.topic_package.stakes?.trim();
+  const beatSentences = beats.map((beat, index) => {
+    const pressurePrefix =
+      index === 0 ? "第一层压力落下来时" : `第${index + 1}层压力再压上来时`;
+    return `${pressurePrefix}，${beat}不只是被提到，而是把局面逼到更难退的一步，当事人必须当场接住。`;
+  });
 
   const lines = [
     openingSpan,
-    `${bundle.hard_lane.event_identity}这件事里，最先顶上来的不是答案，而是公开压场。`,
-    ...beats.map(
-      (beat, index) =>
-        `${index + 1}. ${beat}，真正把局势往前推了一层。`,
-    ),
-    `${bundle.soft_lane.narrative_tension_map.mid_reveal}。`,
-    `${bundle.soft_lane.narrative_tension_map.peak_payoff}。`,
+    coreConflict
+      ? `${bundle.hard_lane.event_identity}这件事的核心冲突很直接：${coreConflict}`
+      : `${bundle.hard_lane.event_identity}这件事里，压力先落到人身上，再落到场面上。`,
+    stakes
+      ? `当事人不能随便低头，因为${stakes}`
+      : "当事人不能随便低头，因为一退就会让后面的压力继续压上来。",
+    bundle.soft_lane.narrative_tension_map.pressure_escalation,
+    ...beatSentences,
+    bundle.soft_lane.narrative_tension_map.mid_reveal,
+    bundle.soft_lane.narrative_tension_map.peak_payoff,
   ];
 
   if (quote) {
-    lines.push(`那句最关键的话就是“${quote}”。`);
+    lines.push(`如果要用原文锚点，就落在这句：“${quote}”。这不是装饰，而是高潮兑现的抓手。`);
   }
 
   lines.push(endingSpan);
@@ -387,9 +397,9 @@ function buildDeterministicDraft(input: ScriptInputBundleInput) {
   return {
     script_text: scriptText,
     estimated_duration_sec: 88,
-    beat_trace: beats.map((beat) => ({
+    beat_trace: beats.map((beat, index) => ({
       beat,
-      excerpt: `${beat}，真正把局势往前推了一层。`,
+      excerpt: beatSentences[index],
       confidence: 0.92,
     })),
     quote_trace: quote

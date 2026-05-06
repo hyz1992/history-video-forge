@@ -157,6 +157,30 @@ describe("script runtime generate", () => {
     expect(draft.script_text).toContain("楚王");
   });
 
+  it("builds deterministic stub drafts with the current first-draft body floor", async () => {
+    const draft = await generateScriptDraft({
+      bundle: scriptInputBundle,
+    });
+    const validation = validateScriptDraft({
+      bundle: scriptInputBundle,
+      draft,
+    });
+
+    expect(draft.opening_span).toBe(topicPackage.strong_scene);
+    expect(draft.script_text).toMatch(
+      new RegExp(`^${topicPackage.strong_scene.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
+    );
+    expect(draft.script_text).not.toContain("公开压场");
+    expect(validation.decision).toBe("pass");
+    expect(validation.errors).not.toContain("script_body_too_thin");
+    expect(validation.metrics).toMatchObject({
+      min_script_chars_for_band: 240,
+      min_sentence_count_for_band: 7,
+    });
+    expect(validation.metrics.script_char_count).toBeGreaterThanOrEqual(240);
+    expect(validation.metrics.script_sentence_count).toBeGreaterThanOrEqual(7);
+  });
+
   it("repairs minimally malformed runtime output before validating ScriptDraftPackage", async () => {
     const invokeApi = vi.fn(
       async () => `\`\`\`json
