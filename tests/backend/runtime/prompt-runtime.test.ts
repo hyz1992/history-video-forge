@@ -152,6 +152,16 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("下限");
   });
 
+  it("requires medium body volume to come from narrative substance instead of padding", () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("`medium` 首稿正文至少约 240 个汉字等价长度");
+    expect(prompt.body).toContain("85 秒稿不能只有 190-200 字");
+    expect(prompt.body).toContain("只能用场景、动作、对话或转述、压力升级、即时后果补足体量");
+    expect(prompt.body).toContain("不得为了凑字数重复解释、空泛评价或喊口号");
+  });
+
   it("loads script.semantic-reviewer from harness prompts with zh-CN metadata", () => {
     const registry = createPromptRegistry();
 
