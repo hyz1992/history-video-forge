@@ -45,4 +45,47 @@ describe("topic confirm service", () => {
     expect(result.topic_package.canonical_quotes).toEqual([]);
     expect(result.topic_package.ambiguity_notes).toEqual([]);
   });
+
+  it("keeps topic package tension map and beats free of reusable pressure templates", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Topic Template Pollution",
+    });
+    const event = await createProvisionalEvent(db, {
+      canonicalName: "巨鹿之战",
+      aliases: ["破釜沉舟"],
+    });
+
+    const result = await confirmTopicCandidate({
+      projectDb: db,
+      project,
+      candidate: {
+        candidateId: "julu-zhizhan",
+        projectId: project.id,
+        event,
+        title: "巨鹿之战",
+        oneLineAngle: "项羽真正狠的不是喊冲，而是先把退路砸碎。",
+        familyLabel: "战场翻盘型",
+        scopeLabel: "完整事件",
+        coreConflict: "退路还在，士气就散；退路砸碎，所有人只能向前。",
+        strongScene: "项羽下令砸锅沉船，楚军回头看见退路已经没了。",
+        sourceHint: "《史记·项羽本纪》",
+        recentUsageHint: "扩展 smoke 样例",
+      },
+    });
+
+    const contractText = [
+      result.topic_package.narrative_tension_map.pressure_escalation,
+      result.topic_package.narrative_tension_map.mid_reveal,
+      result.topic_package.narrative_tension_map.ending_residue,
+      ...result.topic_package.must_include_beats,
+    ].join("\n");
+
+    expect(contractText).not.toContain("公开压场");
+    expect(contractText).not.toContain("局势先被对方抢走");
+    expect(contractText).not.toContain("必须把这口气当场顶回去");
+    expect(contractText).not.toContain("这类场面一旦退掉");
+    expect(contractText).toContain("退路还在，士气就散");
+    expect(contractText).toContain("项羽下令砸锅沉船");
+  });
 });

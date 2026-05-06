@@ -30,22 +30,22 @@ export interface ConfirmTopicCandidateInput {
 function buildNarrativeTensionMap(candidate: StoredTopicCandidate) {
   return {
     hook_claim: candidate.oneLineAngle.replace(/[。.!！]+$/u, ""),
-    pressure_escalation: `${candidate.title}面对的不是一次轻碰，而是持续升级的公开压场。`,
-    mid_reveal: `${candidate.title}真正守住的不是一句话，而是当场不能退的场面。`,
+    pressure_escalation: candidate.coreConflict,
+    mid_reveal: candidate.oneLineAngle,
     peak_payoff: candidate.strongScene,
-    ending_residue: "这类场面一旦退掉，就不只是退掉自己。",
+    ending_residue: candidate.oneLineAngle,
   };
 }
 
 function buildStakes(candidate: StoredTopicCandidate) {
-  return `${candidate.coreConflict}这件事一旦退让，丢掉的就不只是个人场面，还会让对方当场压住自己这一边。`;
+  return `${candidate.coreConflict}${candidate.oneLineAngle}`;
 }
 
 function buildMustIncludeBeats(candidate: StoredTopicCandidate) {
   return [
-    `${candidate.title}被公开压场，局势先被对方抢走。`,
+    candidate.coreConflict,
     candidate.strongScene,
-    `${candidate.title}必须把这口气当场顶回去，否则代价会继续外溢。`,
+    candidate.oneLineAngle,
   ];
 }
 
