@@ -1,0 +1,18 @@
+{
+  "sample_id": "hongmenyan",
+  "project_name": "鸿门宴 Smoke",
+  "topic_request": {
+    "canonical_name": "鸿门宴",
+    "summary": "刘邦走进项羽的宴席，桌面上是赔罪，桌下是生死局。",
+    "core_conflict": "项羽一念之间可以杀刘邦，但每一次犹豫都在放走未来的敌人。",
+    "strong_scene": "项庄拔剑起舞，剑锋一次次擦向刘邦。",
+    "source_hint": "《史记·项羽本纪》",
+    "recent_usage_hint": "扩展 smoke 样例，不代表真实推荐状态",
+    "tags": ["banquet", "political-trap", "survival", "showdown"]
+  },
+  "confirm_candidate_index": 0,
+  "script_request": {
+    "allow_patch": true,
+    "allow_regen": true
+  }
+}

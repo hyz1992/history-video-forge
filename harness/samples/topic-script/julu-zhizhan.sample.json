@@ -1,0 +1,18 @@
+{
+  "sample_id": "julu-zhizhan",
+  "project_name": "巨鹿之战 Smoke",
+  "topic_request": {
+    "canonical_name": "巨鹿之战",
+    "summary": "秦军围困巨鹿，诸侯观望不救，项羽必须用破釜沉舟把楚军逼进没有退路的战场。",
+    "core_conflict": "退路还在，士气就散；退路砸碎，所有人只能向前。",
+    "strong_scene": "项羽下令砸锅沉船，楚军回头看见退路已经没了。",
+    "source_hint": "《史记·项羽本纪》",
+    "recent_usage_hint": "扩展 smoke 样例，不代表真实推荐状态",
+    "tags": ["battle", "reversal", "high-stakes", "command"]
+  },
+  "confirm_candidate_index": 0,
+  "script_request": {
+    "allow_patch": true,
+    "allow_regen": true
+  }
+}
