@@ -227,6 +227,12 @@ function shouldKeepCandidate(rubric: CandidateRubric): boolean {
   return true;
 }
 
+function buildMustCoverPreview(input: BuildTopicCandidatesInput): string[] {
+  return [input.summary, input.strongScene, input.coreConflict].map((item) =>
+    item.trim(),
+  );
+}
+
 export function buildTopicCandidates(input: BuildTopicCandidatesInput) {
   const familyLabel = classifyEventFamily(input);
   const slots = FAMILY_SLOTS[familyLabel];
@@ -249,7 +255,7 @@ export function buildTopicCandidates(input: BuildTopicCandidatesInput) {
         why_this_now: `${input.recentUsageHint}，且当前具备可讲张力。`,
         core_conflict: input.coreConflict,
         strong_scene: input.strongScene,
-        must_cover_preview: [input.strongScene],
+        must_cover_preview: buildMustCoverPreview(input),
         risk_hints: ["避免扩成下游阶段对象"],
         source_hint: input.sourceHint,
         recent_usage_hint: input.recentUsageHint,

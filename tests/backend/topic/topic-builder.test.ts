@@ -19,6 +19,11 @@ describe("topic candidate builder", () => {
 
     for (const candidate of candidates) {
       expect(() => TopicCandidateCard.parse(candidate)).not.toThrow();
+      expect(candidate.must_cover_preview).toEqual([
+        "public pressure around a diplomatic showdown",
+        "the protagonist pushes back in front of everyone",
+        "the protagonist must answer direct public pressure",
+      ]);
     }
 
     const angles = candidates.map((candidate) => candidate.one_line_angle);

@@ -140,13 +140,54 @@ function normalizeTopicCandidateOutputs(rawOutput: unknown): unknown[] {
   throw new TypeError("topic_candidate_output_not_array");
 }
 
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function completeMustCoverPreview(
+  preview: string[],
+  runtime: TopicRecommendationGraphRuntime,
+  description: string,
+): string[] {
+  const normalizedPreview = uniqueStrings(preview);
+  if (normalizedPreview.length >= 3) {
+    return normalizedPreview;
+  }
+
+  return uniqueStrings([
+    ...normalizedPreview,
+    runtime.input.summary.trim(),
+    runtime.input.strongScene.trim(),
+    runtime.input.coreConflict.trim(),
+    description.trim(),
+  ].filter((item) => item.length > 0)).slice(0, 3);
+}
+
 function normalizeTopicCandidateCard(
   candidate: Record<string, unknown>,
   runtime: TopicRecommendationGraphRuntime,
 ) {
   const parsedCandidate = TopicCandidateCard.safeParse(candidate);
   if (parsedCandidate.success) {
-    return parsedCandidate.data;
+    return {
+      ...parsedCandidate.data,
+      must_cover_preview: completeMustCoverPreview(
+        parsedCandidate.data.must_cover_preview,
+        runtime,
+        parsedCandidate.data.one_line_angle,
+      ),
+    };
   }
 
   const rubricMetadata =
@@ -162,11 +203,15 @@ function normalizeTopicCandidateCard(
       : typeof candidate.summary === "string"
         ? candidate.summary
         : `${runtime.input.canonicalName}具备进入 topic 候选的讲述张力。`;
-  const keyElements = Array.isArray(candidate.key_elements)
-    ? candidate.key_elements
-    : Array.isArray(candidate.core_elements)
-      ? candidate.core_elements
-      : [];
+  const formalMustCoverPreview = normalizeStringArray(candidate.must_cover_preview);
+  const normalizedKeyElements = normalizeStringArray(candidate.key_elements);
+  const coreElements = normalizeStringArray(candidate.core_elements);
+  const keyElements =
+    formalMustCoverPreview.length > 0
+      ? formalMustCoverPreview
+      : normalizedKeyElements.length > 0
+        ? normalizedKeyElements
+        : coreElements;
   const viralRubric = normalizeViralRubric(candidate.viral_rubric);
 
   return TopicCandidateCard.parse({
@@ -197,8 +242,10 @@ function normalizeTopicCandidateCard(
     why_this_now: `${runtime.input.recentUsageHint}，且当前具备可讲张力。`,
     core_conflict: runtime.input.coreConflict,
     strong_scene: runtime.input.strongScene,
-    must_cover_preview: keyElements.filter(
-      (item): item is string => typeof item === "string" && item.length > 0,
+    must_cover_preview: completeMustCoverPreview(
+      keyElements,
+      runtime,
+      description,
     ),
     risk_hints: ["真实模型候选已做最小合同归一化"],
     source_hint: runtime.input.sourceHint,

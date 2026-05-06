@@ -2430,6 +2430,100 @@ describe("topic runtime recommendation", () => {
     });
   });
 
+  it("preserves formal must_cover_preview while normalizing hybrid builder candidates", async () => {
+    const db = createDbClient();
+    const mustCoverPreview = [
+      "The envoy enters a hostile court before the ruler speaks.",
+      "The ruler turns the exchange into public humiliation.",
+      "The answer forces the room to absorb the political cost.",
+    ];
+    const { gateway } = createGatewayWithSelectorResponses([
+      [
+        {
+          event_identity: "hybrid-event",
+          title: "Hybrid Event",
+          one_line_angle: "A public answer turns pressure back on the ruler.",
+          must_cover_preview: mustCoverPreview,
+          viral_rubric: {
+            family_label: "外交压场型",
+            scope_label: "单事件",
+            historical_significance: "high",
+            cultural_resonance: "high",
+            shareability_score: "medium",
+            drama_score: "high",
+            dialogue_sharpness: "medium",
+          },
+        },
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+        createRuntimeCandidate("event-d", "angle-d"),
+        createRuntimeCandidate("event-e", "angle-e"),
+        createRuntimeCandidate("event-f", "angle-f"),
+        createRuntimeCandidate("event-g", "angle-g"),
+        createRuntimeCandidate("event-h", "angle-h"),
+      ],
+    ]);
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "hybrid builder output may already contain script-ready beats",
+        coreConflict: "normalization should preserve formal script material",
+        strongScene: "the first candidate carries must_cover_preview directly",
+        sourceHint: "test",
+        recentUsageHint: "hybrid builder output",
+      },
+      {
+        llmGateway: gateway,
+      },
+    );
+
+    expect(result.raw_candidates[0]?.must_cover_preview).toEqual(
+      mustCoverPreview,
+    );
+  });
+
+  it("fills empty must_cover_preview from existing seed material before exposing raw candidates", async () => {
+    const db = createDbClient();
+    const { gateway } = createGatewayWithSelectorResponses([
+      [
+        {
+          ...createRuntimeCandidate("event-a", "angle-a"),
+          must_cover_preview: [],
+        },
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+        createRuntimeCandidate("event-d", "angle-d"),
+        createRuntimeCandidate("event-e", "angle-e"),
+        createRuntimeCandidate("event-f", "angle-f"),
+        createRuntimeCandidate("event-g", "angle-g"),
+        createRuntimeCandidate("event-h", "angle-h"),
+      ],
+    ]);
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "the seed starts with a public standoff",
+        coreConflict: "the protagonist must answer pressure in front of everyone",
+        strongScene: "the room goes silent after the public answer",
+        sourceHint: "test",
+        recentUsageHint: "empty preview from builder",
+      },
+      {
+        llmGateway: gateway,
+      },
+    );
+
+    expect(result.raw_candidates[0]?.must_cover_preview).toEqual([
+      "the seed starts with a public standoff",
+      "the room goes silent after the public answer",
+      "the protagonist must answer pressure in front of everyone",
+    ]);
+  });
+
   it("repairs hybrid builder candidates that expose one_line_angle before the full TopicCandidateCard contract", async () => {
     const db = createDbClient();
     const { gateway } = createGatewayWithSelectorResponses([
