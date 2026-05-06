@@ -141,7 +141,7 @@ export function validateScriptDraft(input: ValidateScriptDraftInput) {
   const scriptCharCount = draft.script_text.trim().length;
   const scriptSentenceCount = countScriptSentences(draft.script_text);
   if (
-    scriptCharCount < bodyFloor.minScriptChars &&
+    scriptCharCount < bodyFloor.minScriptChars ||
     scriptSentenceCount < bodyFloor.minSentenceCount
   ) {
     pushUnique(errors, "script_body_too_thin");

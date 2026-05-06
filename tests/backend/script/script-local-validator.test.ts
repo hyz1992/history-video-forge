@@ -187,6 +187,56 @@ describe("script local validator", () => {
     });
   });
 
+  it("returns regen_once when a medium draft has enough short sentences but remains below body volume", async () => {
+    const draft = await generateScriptDraft({
+      bundle: scriptInputBundle,
+    });
+    const shortSentenceSummary = [
+      "楚王设宴羞辱晏子。",
+      "晏子没有退。",
+      "他先接住第一轮讥讽。",
+      "又把齐国被羞辱的场面顶回去。",
+      "楚王继续追问。",
+      "晏子借橘淮之辩反击。",
+      "这一场外交交锋就此翻转。",
+      "齐国体面被守住。",
+      "楚王也丢了场面。",
+    ].join("");
+
+    const result = validateScriptDraft({
+      bundle: scriptInputBundle,
+      draft: {
+        ...draft,
+        script_text: shortSentenceSummary,
+        estimated_duration_sec: 85,
+        opening_span: "楚王设宴羞辱晏子。",
+        ending_span: "楚王也丢了场面。",
+        beat_trace: [
+          {
+            beat: "入楚受辱",
+            excerpt: "楚王设宴羞辱晏子。",
+            confidence: 0.9,
+          },
+          {
+            beat: "橘淮之辩",
+            excerpt: "晏子借橘淮之辩反击。",
+            confidence: 0.9,
+          },
+        ],
+      },
+    });
+
+    expect(shortSentenceSummary.length).toBeLessThan(240);
+    expect(result.decision).toBe("regen_once");
+    expect(result.errors).toContain("script_body_too_thin");
+    expect(result.metrics).toMatchObject({
+      script_char_count: shortSentenceSummary.length,
+      script_sentence_count: 9,
+      min_script_chars_for_band: 240,
+      min_sentence_count_for_band: 7,
+    });
+  });
+
   it("keeps structurally complete drafts with reasonable body volume passing", async () => {
     const draft = await generateScriptDraft({
       bundle: scriptInputBundle,
