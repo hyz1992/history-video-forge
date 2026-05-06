@@ -273,8 +273,9 @@ describe("script run graph", () => {
           calls.push("patch-once");
           return patchedDraft;
         }),
-        regenerateDraft: vi.fn(async ({ generateDraft: rerunGenerateDraft, localValidation }) => {
+        regenerateDraft: vi.fn(async (regenInput) => {
           calls.push("regen-once");
+          const { generateDraft: rerunGenerateDraft, localValidation } = regenInput;
           expect(localValidation).toMatchObject({
             decision: "regen_once",
             errors: ["script_body_too_thin"],
@@ -284,6 +285,9 @@ describe("script run graph", () => {
               min_script_chars_for_band: 240,
               min_sentence_count_for_band: 7,
             },
+          });
+          expect(regenInput).toMatchObject({
+            draft: passDraft,
           });
           return rerunGenerateDraft();
         }),

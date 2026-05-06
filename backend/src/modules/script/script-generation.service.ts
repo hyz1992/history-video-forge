@@ -3,7 +3,10 @@ import { env, getValidatedRuntimeEnv } from "../../config/env.js";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
 import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider.js";
 import type { LlmInteractionLogWriter } from "../../runtime/llm/interaction-log.js";
-import type { StructuredPromptProvider } from "../../runtime/llm/provider-contract.js";
+import type {
+  StructuredPromptInvocation,
+  StructuredPromptProvider,
+} from "../../runtime/llm/provider-contract.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 
 interface ScriptInputBundleInput {
@@ -46,6 +49,15 @@ export interface GenerateScriptDraftInput {
     reason: "local_validation_regen_once";
     errors: string[];
     metrics: Record<string, unknown>;
+    previous_draft?: {
+      script_text_excerpt: string;
+      opening_span: string;
+      ending_span: string;
+      beat_trace_summary: Array<{
+        beat: string;
+        excerpt: string;
+      }>;
+    };
   };
 }
 
@@ -345,7 +357,9 @@ function createScriptWriterGateway(): LlmGateway {
 
 function createStubScriptWriterProvider(): StructuredPromptProvider {
   return {
-    async invokeStructuredPrompt<T>(request): Promise<T> {
+    async invokeStructuredPrompt<T>(
+      request: StructuredPromptInvocation,
+    ): Promise<T> {
       const promptInput = request.input as
         | ScriptInputBundleInput
         | { bundle: ScriptInputBundleInput };

@@ -214,6 +214,7 @@ export function createScriptRunNodes(input: {
       const startedAt = new Date();
       runtime.draft = await dependencies.regenerateDraft({
         bundle: runtime.bundle,
+        draft: runtime.draft ?? undefined,
         regenerateUsed: state.regenerate_used,
         localValidation: runtime.localValidation ?? undefined,
         generateDraft: (generateInput) =>

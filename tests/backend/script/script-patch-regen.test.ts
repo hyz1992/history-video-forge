@@ -225,4 +225,51 @@ describe("script patch / regenerate services", () => {
       message: expect.stringContaining("regen_once"),
     });
   });
+
+  it("passes local validation metrics and previous draft summary into regen context", async () => {
+    const generateDraft = vi
+      .fn<() => Promise<typeof regeneratedDraft>>()
+      .mockResolvedValue(regeneratedDraft);
+
+    await regenerateScriptDraft({
+      bundle: scriptInputBundle,
+      draft: weakDraft,
+      regenerateUsed: false,
+      localValidation: {
+        decision: "regen_once",
+        errors: ["script_body_too_thin"],
+        metrics: {
+          script_char_count: 67,
+          script_sentence_count: 3,
+          min_script_chars_for_band: 240,
+          min_sentence_count_for_band: 7,
+        },
+      },
+      generateDraft,
+    });
+
+    expect(generateDraft).toHaveBeenCalledWith({
+      regenerationContext: {
+        reason: "local_validation_regen_once",
+        errors: ["script_body_too_thin"],
+        metrics: {
+          script_char_count: 67,
+          script_sentence_count: 3,
+          min_script_chars_for_band: 240,
+          min_sentence_count_for_band: 7,
+        },
+        previous_draft: {
+          script_text_excerpt: expect.stringContaining(
+            weakDraft.script_text.slice(0, 24),
+          ),
+          opening_span: weakDraft.opening_span,
+          ending_span: weakDraft.ending_span,
+          beat_trace_summary: weakDraft.beat_trace.map((trace) => ({
+            beat: trace.beat,
+            excerpt: trace.excerpt,
+          })),
+        },
+      },
+    });
+  });
 });
