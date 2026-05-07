@@ -201,7 +201,7 @@ describe("script patch / regenerate services", () => {
 
     expect(generateDraft).toHaveBeenCalledTimes(1);
     expect(generateDraft).toHaveBeenCalledWith({
-      regenerationContext: {
+      regenerationContext: expect.objectContaining({
         reason: "local_validation_regen_once",
         errors: ["script_body_too_thin"],
         metrics: {
@@ -210,7 +210,7 @@ describe("script patch / regenerate services", () => {
           min_script_chars_for_band: 240,
           min_sentence_count_for_band: 7,
         },
-      },
+      }),
     });
     expect(() => ScriptDraftPackage.parse(regenerated)).not.toThrow();
     expect(regenerated.script_text).toContain("所有人");
@@ -249,7 +249,7 @@ describe("script patch / regenerate services", () => {
     });
 
     expect(generateDraft).toHaveBeenCalledWith({
-      regenerationContext: {
+      regenerationContext: expect.objectContaining({
         reason: "local_validation_regen_once",
         errors: ["script_body_too_thin"],
         metrics: {
@@ -269,7 +269,55 @@ describe("script patch / regenerate services", () => {
             excerpt: trace.excerpt,
           })),
         },
+      }),
+    });
+  });
+
+  it("adds thin body repair context when local validation reports script_body_too_thin", async () => {
+    const generateDraft = vi
+      .fn<() => Promise<typeof regeneratedDraft>>()
+      .mockResolvedValue(regeneratedDraft);
+
+    await regenerateScriptDraft({
+      bundle: scriptInputBundle,
+      draft: weakDraft,
+      regenerateUsed: false,
+      localValidation: {
+        decision: "regen_once",
+        errors: ["script_body_too_thin"],
+        metrics: {
+          script_char_count: 205,
+          script_sentence_count: 6,
+          min_script_chars_for_band: 240,
+          min_sentence_count_for_band: 7,
+        },
       },
+      generateDraft,
+    });
+
+    expect(generateDraft).toHaveBeenCalledWith({
+      regenerationContext: expect.objectContaining({
+        reason: "local_validation_regen_once",
+        errors: ["script_body_too_thin"],
+        thin_body_repair: {
+          issue: "script_body_too_thin",
+          previous_script_chars: 205,
+          previous_sentence_count: 6,
+          min_script_chars_for_band: 240,
+          min_sentence_count_for_band: 7,
+          target_script_chars: 280,
+          target_sentence_count: 8,
+          shortfall_chars: 35,
+          shortfall_sentences: 1,
+          repair_instruction:
+            "正文仍是压缩摘要体。请只围绕既有 must_include_beats 扩写场面动作、对方反应和压力后果，明显越过结构下限；不得用解释、评价或口号凑字数，不得新增人物、事件、结局或改写因果。",
+          beat_expansion_targets: weakDraft.beat_trace.map((trace) => ({
+            beat: trace.beat,
+            previous_excerpt: trace.excerpt,
+            expand_with: ["action", "reaction", "consequence"],
+          })),
+        },
+      }),
     });
   });
 });
