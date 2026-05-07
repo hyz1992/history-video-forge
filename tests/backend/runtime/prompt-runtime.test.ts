@@ -182,7 +182,8 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("动作前一拍");
     expect(prompt.body).toContain("即时反应");
     expect(prompt.body).toContain("后果句");
-    expect(prompt.body).toContain("不能添加额外事实");
+    expect(prompt.body).toContain("不得新增人物、事件、结局或改写因果");
+    expect(prompt.body).toContain("可以补原场景内不改变事实的动作、反应、停顿、目光、场面压力");
   });
 
   it("requires medium body volume to come from narrative substance instead of padding", () => {
