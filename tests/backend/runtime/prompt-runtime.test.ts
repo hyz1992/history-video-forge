@@ -141,6 +141,15 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("结尾要留下代价、反讽或判断");
   });
 
+  it("keeps script writer endings anchored to residue instead of generic historical praise", () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("ending_span");
+    expect(prompt.body).toContain("代价、反讽、未平后果或场景内判断");
+    expect(prompt.body).toContain("不要默认写成改变历史、成为典范、留名史册式空泛收尾");
+  });
+
   it("tells script writer to honor regen context structural floors without changing topic contract", () => {
     const prompt = createPromptRegistry().getPrompt("script.writer");
 
