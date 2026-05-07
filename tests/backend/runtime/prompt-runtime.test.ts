@@ -120,7 +120,7 @@ describe("prompt runtime", () => {
     const prompt = createPromptRegistry().getPrompt("script.writer");
 
     expect(prompt.metadata.language).toBe("zh-CN");
-    expect(prompt.body).toContain("再立刻落到具体历史场面、动作或危险局面");
+    expect(prompt.body).toContain("第二分句立刻落到具体历史场面、动作或危险局面");
     expect(prompt.body).toContain("`hook_claim` 只是包装 promise 弱参考");
     expect(prompt.body).toContain("不能机械复述或照搬");
     expect(prompt.body).toContain("不使用固定统一开头模板");
@@ -134,21 +134,21 @@ describe("prompt runtime", () => {
 
     expect(prompt.metadata.language).toBe("zh-CN");
     expect(prompt.body).toContain("破壁开头");
-    expect(prompt.body).toContain("先用一句面向观众的反问或短判断");
-    expect(prompt.body).toContain("再立刻落到具体历史场面");
+    expect(prompt.body).toContain("第一分句必须包含本事件的具体人物或势力");
+    expect(prompt.body).toContain("第二分句立刻落到具体历史场面");
     expect(prompt.body).toContain("不得为了开头铺垫而空泛解释背景");
     expect(prompt.body).toContain("不使用固定统一开头模板");
   });
 
-  it("keeps break-wall openings event-specific instead of generic question templates", () => {
+  it("requires break-wall openings to start from concrete actors and pressure", () => {
     const prompt = createPromptRegistry().getPrompt("script.writer");
 
     expect(prompt.metadata.language).toBe("zh-CN");
-    expect(prompt.body).toContain("破壁句必须绑定本事件的具体压力源、选择或代价");
-    expect(prompt.body).toContain("不得使用泛模板反问");
-    expect(prompt.body).toContain("你敢相信吗");
-    expect(prompt.body).toContain("你有没有想过");
-    expect(prompt.body).toContain("你可曾想过");
+    expect(prompt.body).toContain("第一分句必须包含本事件的具体人物或势力");
+    expect(prompt.body).toContain("压力源、选择或代价");
+    expect(prompt.body).toContain("优先从 `core_conflict`、`stakes` 或 `narrative_tension_map` 提炼");
+    expect(prompt.body).toContain("不要用泛称惊叹替代具体压力");
+    expect(prompt.body).not.toContain("如“你敢相信吗”“你有没有想过”“你可曾想过”");
   });
 
   it("keeps script writer focused on oral story drafts instead of summaries", () => {
