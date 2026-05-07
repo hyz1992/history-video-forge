@@ -148,6 +148,15 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("只补齐缺失字段");
   });
 
+  it("requires builder-repair to fill missing must_cover_preview as beat nodes", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder-repair");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("如果补齐 `must_cover_preview`");
+    expect(prompt.body).toContain("叙事节点，不是正文句");
+    expect(prompt.body).toContain("不写解释性评价或完整总结句");
+  });
+
   it("keeps builder-repair from reopening candidate discovery or rewriting event_identity", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder-repair");
 
