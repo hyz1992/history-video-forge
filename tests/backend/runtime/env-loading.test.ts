@@ -8,11 +8,15 @@ const RUNTIME_ENV_KEYS = [
   "LLM_BASE_URL",
   "LLM_API_KEY",
   "LLM_MODEL",
+  "LLM_STRUCTURED_BASE_URL",
+  "LLM_STRUCTURED_API_KEY",
   "LLM_STRUCTURED_MODEL",
   "LLM_TIMEOUT_MS",
   "OPENAI_BASE_URL",
   "OPENAI_API_KEY",
   "OPENAI_MODEL",
+  "OPENAI_STRUCTURED_BASE_URL",
+  "OPENAI_STRUCTURED_API_KEY",
 ] as const;
 
 const originalEnv = new Map<string, string | undefined>(
@@ -38,6 +42,8 @@ describe("runtime env loading", () => {
     process.env.LLM_BASE_URL = "https://llm.example.test/v1";
     process.env.LLM_API_KEY = "llm-key";
     process.env.LLM_MODEL = "glm-4.5";
+    process.env.LLM_STRUCTURED_BASE_URL = "https://structured.example.test/v1";
+    process.env.LLM_STRUCTURED_API_KEY = "structured-key";
     process.env.LLM_STRUCTURED_MODEL = "glm-4.5-structured";
     process.env.LLM_TIMEOUT_MS = "32000";
 
@@ -48,6 +54,8 @@ describe("runtime env loading", () => {
       baseUrl: "https://llm.example.test/v1",
       apiKey: "llm-key",
       model: "glm-4.5",
+      structuredBaseUrl: "https://structured.example.test/v1",
+      structuredApiKey: "structured-key",
       structuredModel: "glm-4.5-structured",
       timeoutMs: 32000,
     });

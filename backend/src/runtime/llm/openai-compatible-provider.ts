@@ -1,4 +1,4 @@
-import { env } from "../../config/env.js";
+import { env, type AppEnv } from "../../config/env.js";
 import type { LoadedPrompt } from "../prompts/prompt-loader.js";
 import { withRetry } from "./external-errors.js";
 import { createRequestBudget, type RequestBudget } from "./request-budget.js";
@@ -19,6 +19,7 @@ export interface OpenAiCompatibleInvokeRequest {
 }
 
 export interface OpenAiCompatibleProviderOptions {
+  profile?: "main" | "structured";
   model?: string;
   baseUrl?: string;
   apiKey?: string;
@@ -34,12 +35,16 @@ export interface OpenAiCompatibleProviderOptions {
 export function createOpenAiCompatibleProvider(
   options: OpenAiCompatibleProviderOptions,
 ): StructuredPromptProvider {
-  const model = options.model ?? env.llm.structuredModel ?? env.llm.model;
+  const providerConfig = resolveOpenAiCompatibleProviderConfig({
+    envConfig: env.llm,
+    options,
+  });
+  const model = providerConfig.model;
   const invokeApi =
     options.invokeApi ??
     createDefaultInvokeApi({
-      apiKey: options.apiKey ?? env.llm.apiKey,
-      baseUrl: options.baseUrl ?? env.llm.baseUrl,
+      apiKey: providerConfig.apiKey,
+      baseUrl: providerConfig.baseUrl,
       model,
     });
   const fixer =
@@ -125,6 +130,42 @@ export function createOpenAiCompatibleProvider(
         throw error;
       }
     },
+  };
+}
+
+export function resolveOpenAiCompatibleProviderConfig(options: {
+  envConfig: AppEnv["llm"];
+  options: OpenAiCompatibleProviderOptions;
+}): {
+  apiKey?: string;
+  baseUrl?: string;
+  model: string;
+} {
+  const useStructuredProfile =
+    options.options.profile === "structured" ||
+    (!options.options.profile && !options.options.model);
+
+  if (useStructuredProfile) {
+    return {
+      apiKey:
+        options.options.apiKey ??
+        options.envConfig.structuredApiKey ??
+        options.envConfig.apiKey,
+      baseUrl:
+        options.options.baseUrl ??
+        options.envConfig.structuredBaseUrl ??
+        options.envConfig.baseUrl,
+      model:
+        options.options.model ??
+        options.envConfig.structuredModel ??
+        options.envConfig.model,
+    };
+  }
+
+  return {
+    apiKey: options.options.apiKey ?? options.envConfig.apiKey,
+    baseUrl: options.options.baseUrl ?? options.envConfig.baseUrl,
+    model: options.options.model ?? options.envConfig.model,
   };
 }
 

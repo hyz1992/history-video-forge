@@ -12,6 +12,8 @@ export interface AppEnv {
     baseUrl?: string;
     apiKey?: string;
     model: string;
+    structuredBaseUrl?: string;
+    structuredApiKey?: string;
     structuredModel?: string;
     timeoutMs: number;
     maxAttempts: number;
@@ -69,6 +71,12 @@ function buildEnv(dotEnvValues: Record<string, string>): AppEnv {
         readEnvValue("LLM_MODEL", dotEnvValues) ??
         readEnvValue("OPENAI_MODEL", dotEnvValues) ??
         "stub-model",
+      structuredBaseUrl:
+        readEnvValue("LLM_STRUCTURED_BASE_URL", dotEnvValues) ??
+        readEnvValue("OPENAI_STRUCTURED_BASE_URL", dotEnvValues),
+      structuredApiKey:
+        readEnvValue("LLM_STRUCTURED_API_KEY", dotEnvValues) ??
+        readEnvValue("OPENAI_STRUCTURED_API_KEY", dotEnvValues),
       structuredModel:
         readEnvValue("LLM_STRUCTURED_MODEL", dotEnvValues) ??
         readEnvValue("LLM_MODEL", dotEnvValues) ??

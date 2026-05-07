@@ -342,16 +342,21 @@ function extractFirstString(record: Record<string, unknown>) {
 }
 
 function createScriptWriterGateway(): LlmGateway {
-  const provider =
-    env.llm.provider === "stub"
-      ? createStubScriptWriterProvider()
-      : createOpenAiCompatibleProvider({
-          ...getValidatedRuntimeEnv().llm,
-        });
+  const provider = env.llm.provider === "stub"
+    ? createStubScriptWriterProvider()
+    : createValidatedScriptWriterProvider();
 
   return createLlmGateway({
     registry: createPromptRegistry(),
     provider,
+  });
+}
+
+function createValidatedScriptWriterProvider(): StructuredPromptProvider {
+  getValidatedRuntimeEnv();
+
+  return createOpenAiCompatibleProvider({
+    profile: "main",
   });
 }
 

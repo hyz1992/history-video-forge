@@ -5,11 +5,55 @@ import {
   ExternalServiceError,
   withRetry,
 } from "../../../backend/src/runtime/llm/external-errors.js";
-import { createOpenAiCompatibleProvider } from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
+import {
+  createOpenAiCompatibleProvider,
+  resolveOpenAiCompatibleProviderConfig,
+} from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 import { createRequestBudget } from "../../../backend/src/runtime/llm/request-budget.js";
 
 describe("provider hardening", () => {
+  it("routes structured profile to structured endpoint while preserving main profile", () => {
+    const config = {
+      provider: "openai" as const,
+      baseUrl: "https://main.example.test/v1",
+      apiKey: "main-key",
+      model: "deepseek-v4-pro",
+      structuredBaseUrl: "https://structured.example.test/v1",
+      structuredApiKey: "structured-key",
+      structuredModel: "glm-4",
+      timeoutMs: 45000,
+      maxAttempts: 3,
+      requestBudgetMaxRequests: 20,
+    };
+
+    expect(
+      resolveOpenAiCompatibleProviderConfig({
+        envConfig: config,
+        options: {
+          profile: "structured",
+        },
+      }),
+    ).toMatchObject({
+      model: "glm-4",
+      baseUrl: "https://structured.example.test/v1",
+      apiKey: "structured-key",
+    });
+
+    expect(
+      resolveOpenAiCompatibleProviderConfig({
+        envConfig: config,
+        options: {
+          profile: "main",
+        },
+      }),
+    ).toMatchObject({
+      model: "deepseek-v4-pro",
+      baseUrl: "https://main.example.test/v1",
+      apiKey: "main-key",
+    });
+  });
+
   it("keeps timeout / retry classification stable and records final attempt metadata", async () => {
     await expect(
       withRetry(
