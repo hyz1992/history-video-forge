@@ -147,12 +147,15 @@ export function createScriptRunNodes(input: {
 
       if (
         runtime.pendingThinRegenCheck &&
-        runtime.localValidation.errors.includes("script_body_too_thin") &&
-        draft.script_text.trim() ===
-          runtime.pendingThinRegenCheck.previousScriptText
+        runtime.localValidation.errors.includes("script_body_too_thin")
       ) {
+        const outputUnchanged =
+          draft.script_text.trim() ===
+          runtime.pendingThinRegenCheck.previousScriptText;
         runtime.runtimeDiagnostics.push({
-          code: "regen_output_unchanged_after_thin_context",
+          code: outputUnchanged
+            ? "regen_output_unchanged_after_thin_context"
+            : "regen_output_still_too_thin_after_repair_context",
           level: "warning",
         });
       }

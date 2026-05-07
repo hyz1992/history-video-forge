@@ -369,6 +369,79 @@ describe("script run graph", () => {
     );
   });
 
+  it("records a diagnostic when thin regen changes output but remains too thin", async () => {
+    const calls: string[] = [];
+    const initialThinDraft = {
+      ...passDraft,
+      script_text: "initial thin script text",
+      opening_span: "initial thin opening",
+    };
+    const changedStillThinDraft = {
+      ...passDraft,
+      script_text: "changed but still thin script text",
+      opening_span: "changed thin opening",
+    };
+    const generateDraft = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        calls.push("script-generate");
+        return initialThinDraft;
+      })
+      .mockImplementationOnce(async () => {
+        calls.push("script-generate");
+        return changedStillThinDraft;
+      });
+    const validateDraft = vi.fn(() => {
+      calls.push("local-validate");
+      return createRegenLocalValidation();
+    });
+
+    const result = await runScriptRunGraph(
+      {
+        bundle: inputBundle,
+        allowPatch: true,
+        allowRegen: true,
+      },
+      {
+        generateDraft,
+        validateDraft,
+        reviewSemantics: vi.fn(() => {
+          calls.push("semantic-review");
+          return createPassSemanticReview();
+        }),
+        patchDraft: vi.fn(async () => {
+          calls.push("patch-once");
+          return patchedDraft;
+        }),
+        regenerateDraft: vi.fn(async ({ generateDraft: rerunGenerateDraft }) => {
+          calls.push("regen-once");
+          return rerunGenerateDraft();
+        }),
+      },
+    );
+
+    expect(calls).toEqual([
+      "script-generate",
+      "local-validate",
+      "regen-once",
+      "script-generate",
+      "local-validate",
+    ]);
+    expect(result.draft).toEqual(changedStillThinDraft);
+    expect(result.localValidation.decision).toBe("regen_once");
+    expect(result.runtimeDiagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "regen_output_still_too_thin_after_repair_context",
+        level: "warning",
+      }),
+    );
+    expect(result.runtimeDiagnostics.checks).not.toContainEqual(
+      expect.objectContaining({
+        code: "regen_output_unchanged_after_thin_context",
+      }),
+    );
+  });
+
   it("forces one explicit regen run when the caller requests manual regen", async () => {
     const calls: string[] = [];
     const generateDraft = vi
