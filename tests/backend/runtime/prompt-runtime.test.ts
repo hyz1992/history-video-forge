@@ -236,6 +236,16 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("三条 beat 不能压缩成列表式交代");
   });
 
+  it("separates natural script text from beat trace audit fields", () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("`beat_trace.beat` 逐字复用输入 beat");
+    expect(prompt.body).toContain("`script_text` 不要把 `must_include_beats` 原句当正文逐条交代");
+    expect(prompt.body).toContain("每个 beat 在正文中写成局面推进");
+    expect(prompt.body).toContain("`beat_trace.excerpt` 从自然正文中截取证明片段");
+  });
+
   it("requires script writer to honor canonical quote intents when present", () => {
     const prompt = createPromptRegistry().getPrompt("script.writer");
 

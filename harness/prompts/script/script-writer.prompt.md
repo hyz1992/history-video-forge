@@ -37,6 +37,7 @@ status: active
 - 正文和 sidecar 一律使用中文
 - `beat_trace` 的每条 `beat` 必须逐字复用 `hard_lane.must_include_beats` 中对应原文，不得自行改名或改写
 - `beat_trace.excerpt` 必须从 `script_text` 中截取能证明该 beat 已写到的完整短句，不少于 8 个汉字等价长度；不得只填 beat 名称、序号或概括标签
+- `beat_trace.beat` 逐字复用输入 beat，用于审计；`script_text` 不要把 `must_include_beats` 原句当正文逐条交代，而要把每个 beat 在正文中写成局面推进，至少用动作、反应、压力后果中的一到两个具体元素承接；`beat_trace.excerpt` 从自然正文中截取证明片段，不要求正文写成 beat 列表。
 - 如 `hard_lane.canonical_quote_intents`（即 `canonical_quote_intents`）存在，引用或转述对应名句时必须按该条 `intent` 解释其用途，不得改写成其他寓意
 - `script_text` 的口播体量必须服务于 `hard_lane.duration_band`；先按档位控制正文体量，再回填 `estimated_duration_sec`；`short=45-70秒`，`medium=75-95秒`，`long=90-140秒`；`estimated_duration_sec` 必须落在对应时长区间内，且不得与正文体量明显失真
 - `medium` 首稿正文至少约 240 个汉字等价长度；85 秒稿不能只有 190-200 字；只能用场景、动作、对话或转述、压力升级、即时后果补足体量，不得为了凑字数重复解释、空泛评价或喊口号
