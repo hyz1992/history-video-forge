@@ -116,6 +116,20 @@ describe("prompt runtime", () => {
     expect(prompt.filePath.replace(/\\/g, "/")).toContain("/harness/prompts/script/");
   });
 
+  it("loads script.writing-brief-shadow as a shadow-only prompt contract", () => {
+    const prompt = createPromptRegistry().getPrompt("script.writing-brief-shadow");
+
+    expect(prompt.metadata.id).toBe("script.writing-brief-shadow");
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("shadow-only");
+    expect(prompt.body).toContain("涓嶅緱鐢熸垚 `script_text`");
+    expect(prompt.body).toContain("涓嶅緱淇敼 `TopicPackage`");
+    expect(prompt.body).toContain("涓嶅緱鏂板銆佸垹闄ゆ垨鏀瑰悕 `must_include_beats`");
+    expect(prompt.body).toContain("涓嶅緱鍒涘缓 storyboard銆乤sset銆乧ompose 鎴栭暅澶村璞?");
+    expect(prompt.body).toContain("鏉愭枡涓嶈冻鏃跺啓鍏?`material_gaps`");
+    expect(prompt.body).toContain("涓嶅緱鎶婃帹鏂啓鎴愬彶瀹?");
+  });
+
   it("keeps script writer opening contract scene-grounded without treating hook_claim as a draft template", () => {
     const prompt = createPromptRegistry().getPrompt("script.writer");
 
