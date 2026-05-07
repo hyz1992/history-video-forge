@@ -2,6 +2,12 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` to implement this plan task-by-task. Use `superpowers:test-driven-development` for every code or prompt contract task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+## Stop Status
+
+ScriptWritingBrief path stopped.
+
+Reason: Task 8 observation recorded `continue_to_ab_design: no`; real shadow output failed the strict schema and included forbidden script/downstream fields. This implementation plan is retained as historical evidence only. Do not resume remaining Brief implementation, do not create A/B design, and do not connect Brief to writer.
+
 **Goal:** Build a cautious, shadow-only workflow for auditing `script.writer` prompt debt and observing whether `ScriptWritingBrief` has real incremental value before any main-chain integration is considered.
 
 **Architecture:** The first two tasks create document-only audit scaffolding and a current prompt debt record. Later tasks add a schema, prompt contract, and harness-only shadow generator that writes observation artifacts without feeding writer, validator, reviewer, patch, regen, API, or downstream stages. The plan stops before any A/B main-chain integration.

@@ -2,6 +2,12 @@
 
 日期：2026-05-07
 
+## Stop Status
+
+ScriptWritingBrief path stopped.
+
+Reason: the real shadow observation recorded `continue_to_ab_design: no`; the attempted shadow output crossed explicit boundaries by producing script/downstream planning fields and did not produce valid `ScriptWritingBriefShadow` artifacts. Keep this document as decision evidence only. Do not continue Brief shadow implementation or connect Brief to writer.
+
 ## 背景
 
 `Script Writer Viral First-draft Quality` 已经把 script 首稿从结构恢复推进到更强的可用线，但最近多轮优化暴露出一个新的风险：继续把所有质量要求都塞进 `script.writer` prompt，边际收益正在下降，并且可能让系统变得更不可控。
