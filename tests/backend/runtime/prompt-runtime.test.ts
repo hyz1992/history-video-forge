@@ -236,6 +236,15 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("三条 beat 不能压缩成列表式交代");
   });
 
+  it("requires script writer to honor canonical quote intents when present", () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("`canonical_quote_intents`");
+    expect(prompt.body).toContain("`intent`");
+    expect(prompt.body).toContain("不得改写成其他寓意");
+  });
+
   it("loads script.semantic-reviewer from harness prompts with zh-CN metadata", () => {
     const registry = createPromptRegistry();
 

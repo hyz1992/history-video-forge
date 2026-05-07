@@ -23,6 +23,13 @@ const topicPackage = TopicPackage.parse({
   risk_hints: ["不要把内容写成课堂导入"],
   source_anchor_refs: ["《晏子春秋》"],
   canonical_quotes: ["橘生淮南则为橘"],
+  canonical_quote_intents: [
+    {
+      quote: "橘生淮南则为橘，生于淮北则为枳",
+      intent:
+        "用于反击楚王以齐人善盗羞辱齐国：齐人在齐不盗，入楚为盗，是楚国水土/环境使然。",
+    },
+  ],
   ambiguity_notes: [],
   duration_band: "medium",
   narrative_tension_map: {
@@ -113,6 +120,7 @@ describe("script input bundle", () => {
       forbidden_expansions: topicPackage.forbidden_expansions,
       source_anchor_refs: topicPackage.source_anchor_refs,
       canonical_quotes: topicPackage.canonical_quotes,
+      canonical_quote_intents: topicPackage.canonical_quote_intents,
       ambiguity_notes: topicPackage.ambiguity_notes,
       duration_band: topicPackage.duration_band,
     });

@@ -15,6 +15,7 @@ export interface TopicScriptSmokeSample {
     source_hint: string;
     recent_usage_hint: string;
     canonical_quotes?: string[];
+    canonical_quote_intents?: Array<{ quote: string; intent: string }>;
     tags: string[];
   };
   confirm_candidate_index?: number;

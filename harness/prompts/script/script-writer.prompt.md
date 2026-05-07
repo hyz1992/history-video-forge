@@ -37,6 +37,7 @@ status: active
 - 正文和 sidecar 一律使用中文
 - `beat_trace` 的每条 `beat` 必须逐字复用 `hard_lane.must_include_beats` 中对应原文，不得自行改名或改写
 - `beat_trace.excerpt` 必须从 `script_text` 中截取能证明该 beat 已写到的完整短句，不少于 8 个汉字等价长度；不得只填 beat 名称、序号或概括标签
+- 如 `hard_lane.canonical_quote_intents`（即 `canonical_quote_intents`）存在，引用或转述对应名句时必须按该条 `intent` 解释其用途，不得改写成其他寓意
 - `script_text` 的口播体量必须服务于 `hard_lane.duration_band`；先按档位控制正文体量，再回填 `estimated_duration_sec`；`short=45-70秒`，`medium=75-95秒`，`long=90-140秒`；`estimated_duration_sec` 必须落在对应时长区间内，且不得与正文体量明显失真
 - `medium` 首稿正文至少约 240 个汉字等价长度；85 秒稿不能只有 190-200 字；只能用场景、动作、对话或转述、压力升级、即时后果补足体量，不得为了凑字数重复解释、空泛评价或喊口号
 - 先单独确定一个可独立成立的 `opening_span`，再让 `script_text` 以 `opening_span` 原文起手顺势展开；`opening_span` 采用破壁开头：第一分句必须包含本事件的具体人物或势力，并绑定压力源、选择或代价，优先从 `core_conflict`、`stakes` 或 `narrative_tension_map` 提炼；第二分句立刻落到具体历史场面、动作或危险局面；不要用泛称惊叹替代具体压力；不得为了开头铺垫而空泛解释背景；`hook_claim` 只是包装 promise 弱参考，如需借用，必须还原成具体场面，不能机械复述或照搬，不使用固定统一开头模板；`ending_span` 必须回收到 `ending_residue` 或 `stakes`，不要空泛拔高或喊口号收尾

@@ -23,6 +23,7 @@ export interface BuildTopicCandidatesInput {
   sourceHint: string;
   recentUsageHint: string;
   canonicalQuotes?: string[];
+  canonicalQuoteIntents?: Array<{ quote: string; intent: string }>;
   tags?: string[];
   familyHint?: string;
   slotRubricOverrides?: CandidateRubric[];

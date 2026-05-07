@@ -10,6 +10,13 @@ export const NarrativeTensionMap = z
   })
   .strict();
 
+export const CanonicalQuoteIntent = z
+  .object({
+    quote: z.string().min(1),
+    intent: z.string().min(1),
+  })
+  .strict();
+
 export const TopicPackage = z
   .object({
     topic_id: z.string().min(1),
@@ -26,6 +33,7 @@ export const TopicPackage = z
     risk_hints: z.array(z.string()),
     source_anchor_refs: z.array(z.string().min(1)).min(1),
     canonical_quotes: z.array(z.string()),
+    canonical_quote_intents: z.array(CanonicalQuoteIntent).default([]),
     ambiguity_notes: z.array(z.string().min(1)),
     duration_band: z.string().min(1),
     narrative_tension_map: NarrativeTensionMap,
@@ -33,4 +41,5 @@ export const TopicPackage = z
   .strict();
 
 export type NarrativeTensionMap = z.infer<typeof NarrativeTensionMap>;
+export type CanonicalQuoteIntent = z.infer<typeof CanonicalQuoteIntent>;
 export type TopicPackage = z.infer<typeof TopicPackage>;

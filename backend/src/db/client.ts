@@ -21,6 +21,7 @@ export interface EventRegistryRecord {
   canonicalName: string;
   aliases: string[];
   canonicalQuotesJson: string[];
+  canonicalQuoteIntentsJson: Array<{ quote: string; intent: string }>;
   sourceType: string;
   isProvisional: boolean;
   createdAt: Date;
@@ -40,6 +41,7 @@ export interface TopicPackageRecord {
   stakes: string | null;
   packagingSeed: string;
   canonicalQuotesJson: string[];
+  canonicalQuoteIntentsJson: Array<{ quote: string; intent: string }>;
   durationBandJson: Record<string, unknown>;
   narrativeTensionMapJson: Record<string, unknown>;
   mustIncludeBeatsJson: unknown[];

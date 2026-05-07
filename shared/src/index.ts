@@ -4,6 +4,7 @@ export {
   ViralRubricLevel,
 } from "./topic/topic-candidate-card.schema";
 export {
+  CanonicalQuoteIntent,
   NarrativeTensionMap,
   TopicPackage,
 } from "./topic/topic-package.schema";

@@ -8,6 +8,7 @@ export interface NormalizeEventInput {
   rawInput: string;
   aliases?: string[];
   canonicalQuotes?: string[];
+  canonicalQuoteIntents?: Array<{ quote: string; intent: string }>;
   sourceType?: string;
 }
 
@@ -39,6 +40,7 @@ export async function normalizeEventInput(
     const existing = await findEventByCanonicalOrAlias(db, term.trim());
     if (existing) {
       mergeCanonicalQuotes(existing, input.canonicalQuotes);
+      mergeCanonicalQuoteIntents(existing, input.canonicalQuoteIntents);
       return {
         event: existing,
         created: false,
@@ -50,6 +52,7 @@ export async function normalizeEventInput(
     canonicalName: input.rawInput.trim(),
     aliases: input.aliases?.map((alias) => alias.trim()).filter(Boolean),
     canonicalQuotes: input.canonicalQuotes,
+    canonicalQuoteIntents: input.canonicalQuoteIntents,
     sourceType: input.sourceType ?? "provisional",
   });
 
@@ -57,6 +60,33 @@ export async function normalizeEventInput(
     event: provisional,
     created: true,
   };
+}
+
+function mergeCanonicalQuoteIntents(
+  event: EventRegistryRecord,
+  intents: Array<{ quote: string; intent: string }> | undefined,
+): void {
+  const seen = new Set(
+    (event.canonicalQuoteIntentsJson ?? []).map(
+      (item) => `${item.quote.trim()}\n${item.intent.trim()}`,
+    ),
+  );
+  event.canonicalQuoteIntentsJson = event.canonicalQuoteIntentsJson ?? [];
+
+  for (const item of intents ?? []) {
+    const quote = item.quote.trim();
+    const intent = item.intent.trim();
+    const key = `${quote}\n${intent}`;
+
+    if (!quote || !intent || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    event.canonicalQuoteIntentsJson.push({ quote, intent });
+  }
+
+  event.updatedAt = new Date();
 }
 
 function mergeCanonicalQuotes(

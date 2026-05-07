@@ -29,6 +29,7 @@ interface TopicPackageInput {
   forbidden_expansions: string[];
   source_anchor_refs: string[];
   canonical_quotes: string[];
+  canonical_quote_intents?: Array<{ quote: string; intent: string }>;
   ambiguity_notes: string[];
   duration_band: string;
   narrative_tension_map: {
@@ -69,6 +70,7 @@ export function buildScriptInputBundle(input: BuildScriptInputBundleInput) {
       forbidden_expansions: input.topicPackage.forbidden_expansions,
       source_anchor_refs: input.topicPackage.source_anchor_refs,
       canonical_quotes: input.topicPackage.canonical_quotes,
+      canonical_quote_intents: input.topicPackage.canonical_quote_intents ?? [],
       ambiguity_notes: input.topicPackage.ambiguity_notes,
       duration_band: input.topicPackage.duration_band,
     },

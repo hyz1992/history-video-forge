@@ -19,6 +19,7 @@ interface TopicRecommendationSeedPayload {
   tags: string[];
   aliases?: string[];
   canonical_quotes?: string[];
+  canonical_quote_intents?: Array<{ quote: string; intent: string }>;
 }
 
 function toResponseCandidate(candidate: StoredTopicCandidate) {
@@ -117,6 +118,23 @@ function validateTopicRecommendationSeed(
     );
   }
 
+  if (Array.isArray(record.canonical_quote_intents)) {
+    value.canonical_quote_intents = record.canonical_quote_intents
+      .filter(
+        (item): item is { quote: string; intent: string } =>
+          !!item &&
+          typeof item === "object" &&
+          !Array.isArray(item) &&
+          typeof (item as Record<string, unknown>).quote === "string" &&
+          typeof (item as Record<string, unknown>).intent === "string",
+      )
+      .map((item) => ({
+        quote: item.quote.trim(),
+        intent: item.intent.trim(),
+      }))
+      .filter((item) => item.quote.length > 0 && item.intent.length > 0);
+  }
+
   if (invalidFields.length > 0) {
     return {
       ok: false,
@@ -180,6 +198,7 @@ export async function createTopicRecommendationsController(
       sourceHint: validatedPayload.value.source_hint,
       recentUsageHint: validatedPayload.value.recent_usage_hint,
       canonicalQuotes: validatedPayload.value.canonical_quotes,
+      canonicalQuoteIntents: validatedPayload.value.canonical_quote_intents,
       tags: validatedPayload.value.tags,
     },
     {
@@ -195,6 +214,7 @@ export async function createTopicRecommendationsController(
     const normalizedCandidate = await normalizeEventInput(context.app.db, {
       rawInput: candidate.title,
       canonicalQuotes: validatedPayload.value.canonical_quotes,
+      canonicalQuoteIntents: validatedPayload.value.canonical_quote_intents,
       sourceType: "system_recommendation",
     });
     const candidateId = randomUUID();

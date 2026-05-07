@@ -358,6 +358,7 @@ async function postProcessTopicCandidates(input: {
     const normalized = await normalizeEventInput(input.db, {
       rawInput: candidate.event_identity,
       canonicalQuotes: input.seedInput.canonicalQuotes,
+      canonicalQuoteIntents: input.seedInput.canonicalQuoteIntents,
       sourceType: "system_recommendation",
     });
     const eventIdentity = normalizeEventIdentityValue(candidate.event_identity);

@@ -4,6 +4,7 @@ export interface CreateProvisionalEventInput {
   canonicalName: string;
   aliases?: string[];
   canonicalQuotes?: string[];
+  canonicalQuoteIntents?: Array<{ quote: string; intent: string }>;
   sourceType?: string;
 }
 
@@ -30,6 +31,9 @@ export async function createProvisionalEvent(
     canonicalName: input.canonicalName,
     aliases: input.aliases ?? [],
     canonicalQuotesJson: normalizeCanonicalQuotes(input.canonicalQuotes),
+    canonicalQuoteIntentsJson: normalizeCanonicalQuoteIntents(
+      input.canonicalQuoteIntents,
+    ),
     sourceType: input.sourceType ?? "provisional",
     isProvisional: true,
     createdAt: now,
@@ -45,4 +49,26 @@ function normalizeCanonicalQuotes(quotes: string[] | undefined): string[] {
   return Array.from(
     new Set((quotes ?? []).map((quote) => quote.trim()).filter(Boolean)),
   );
+}
+
+function normalizeCanonicalQuoteIntents(
+  intents: Array<{ quote: string; intent: string }> | undefined,
+): Array<{ quote: string; intent: string }> {
+  const seen = new Set<string>();
+  const normalized: Array<{ quote: string; intent: string }> = [];
+
+  for (const item of intents ?? []) {
+    const quote = item.quote.trim();
+    const intent = item.intent.trim();
+    const key = `${quote}\n${intent}`;
+
+    if (!quote || !intent || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    normalized.push({ quote, intent });
+  }
+
+  return normalized;
 }

@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import { NarrativeTensionMap, TopicPackage } from "../topic/topic-package.schema";
+import {
+  CanonicalQuoteIntent,
+  NarrativeTensionMap,
+  TopicPackage,
+} from "../topic/topic-package.schema";
 import {
   RevealPosition,
   TopicDeliveryPack,
@@ -21,6 +25,7 @@ export const ScriptInputBundle = z
         forbidden_expansions: z.array(z.string()),
         source_anchor_refs: z.array(z.string().min(1)).min(1),
         canonical_quotes: z.array(z.string()),
+        canonical_quote_intents: z.array(CanonicalQuoteIntent).default([]),
         ambiguity_notes: z.array(z.string().min(1)),
         duration_band: z.string().min(1),
       })

@@ -53,6 +53,7 @@ function mapTopicPackage(record: TopicPackageRecord) {
     risk_hints: record.riskHintsJson as string[],
     source_anchor_refs: record.sourceAnchorRefsJson as string[],
     canonical_quotes: record.canonicalQuotesJson,
+    canonical_quote_intents: record.canonicalQuoteIntentsJson,
     ambiguity_notes: record.ambiguityNotesJson as string[],
     duration_band:
       typeof record.durationBandJson.label === "string"

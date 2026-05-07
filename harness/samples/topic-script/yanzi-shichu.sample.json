@@ -12,6 +12,16 @@
       "使狗国者，从狗门入",
       "橘生淮南则为橘，生于淮北则为枳"
     ],
+    "canonical_quote_intents": [
+      {
+        "quote": "使狗国者，从狗门入",
+        "intent": "用于反击楚王以狗门羞辱齐国使节：只有出使狗国才走狗门，出使楚国不应走狗门。"
+      },
+      {
+        "quote": "橘生淮南则为橘，生于淮北则为枳",
+        "intent": "用于反击楚王以齐人善盗羞辱齐国：齐人在齐不盗，入楚为盗，是楚国水土/环境使然。"
+      }
+    ],
     "tags": ["diplomacy", "court", "humiliation", "showdown"]
   },
   "confirm_candidate_index": 0,

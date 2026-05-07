@@ -81,6 +81,28 @@ function getEventCanonicalQuotes(event: EventRegistryRecord): string[] {
   );
 }
 
+function getEventCanonicalQuoteIntents(
+  event: EventRegistryRecord,
+): Array<{ quote: string; intent: string }> {
+  const seen = new Set<string>();
+  const intents: Array<{ quote: string; intent: string }> = [];
+
+  for (const item of event.canonicalQuoteIntentsJson ?? []) {
+    const quote = item.quote.trim();
+    const intent = item.intent.trim();
+    const key = `${quote}\n${intent}`;
+
+    if (!quote || !intent || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    intents.push({ quote, intent });
+  }
+
+  return intents;
+}
+
 function buildForbiddenExpansions(candidate: StoredTopicCandidate) {
   return [
     `不要脱离${candidate.title}当前已确认范围去扩写未定史实`,
@@ -100,6 +122,9 @@ export async function confirmTopicCandidate(input: ConfirmTopicCandidateInput) {
   const forbiddenExpansions = buildForbiddenExpansions(input.candidate);
   const sourceAnchorRefs = [input.candidate.sourceHint];
   const canonicalQuotes = getEventCanonicalQuotes(input.candidate.event);
+  const canonicalQuoteIntents = getEventCanonicalQuoteIntents(
+    input.candidate.event,
+  );
   const ambiguityNotes: string[] = [];
 
   const topicPackage = TopicPackage.parse({
@@ -117,6 +142,7 @@ export async function confirmTopicCandidate(input: ConfirmTopicCandidateInput) {
     risk_hints: ["不要扩写到未定 downstream 阶段"],
     source_anchor_refs: sourceAnchorRefs,
     canonical_quotes: canonicalQuotes,
+    canonical_quote_intents: canonicalQuoteIntents,
     ambiguity_notes: ambiguityNotes,
     duration_band: "medium",
     narrative_tension_map: narrativeTensionMap,
@@ -134,6 +160,7 @@ export async function confirmTopicCandidate(input: ConfirmTopicCandidateInput) {
     stakes: topicPackage.stakes,
     packagingSeed: topicPackage.packaging_seed,
     canonicalQuotesJson: topicPackage.canonical_quotes,
+    canonicalQuoteIntentsJson: topicPackage.canonical_quote_intents,
     durationBandJson: durationBand,
     narrativeTensionMapJson: topicPackage.narrative_tension_map,
     mustIncludeBeatsJson: topicPackage.must_include_beats,
@@ -167,6 +194,7 @@ export async function confirmTopicCandidate(input: ConfirmTopicCandidateInput) {
       forbidden_expansions: saved.forbiddenExpansionsJson,
       source_anchor_refs: saved.sourceAnchorRefsJson,
       canonical_quotes: saved.canonicalQuotesJson,
+      canonical_quote_intents: saved.canonicalQuoteIntentsJson,
       ambiguity_notes: saved.ambiguityNotesJson,
       duration_band: saved.durationBandJson,
       narrative_tension_map: saved.narrativeTensionMapJson,

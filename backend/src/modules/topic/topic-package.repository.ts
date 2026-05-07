@@ -12,6 +12,7 @@ export interface SaveTopicPackageInput {
   stakes?: string | null;
   packagingSeed: string;
   canonicalQuotesJson?: string[];
+  canonicalQuoteIntentsJson?: Array<{ quote: string; intent: string }>;
   durationBandJson: Record<string, unknown>;
   narrativeTensionMapJson: Record<string, unknown>;
   mustIncludeBeatsJson?: unknown[];
@@ -38,6 +39,7 @@ export async function saveTopicPackage(
     stakes: input.stakes ?? null,
     packagingSeed: input.packagingSeed,
     canonicalQuotesJson: input.canonicalQuotesJson ?? [],
+    canonicalQuoteIntentsJson: input.canonicalQuoteIntentsJson ?? [],
     durationBandJson: input.durationBandJson,
     narrativeTensionMapJson: input.narrativeTensionMapJson,
     mustIncludeBeatsJson: input.mustIncludeBeatsJson ?? [],

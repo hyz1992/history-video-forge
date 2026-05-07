@@ -485,14 +485,14 @@ ${JSON.stringify(runtimeDraft)}
     expect(entries[0]?.systemPrompt).toContain("先按档位控制正文体量，再回填");
     expect(entries[0]?.systemPrompt).toContain("`opening_span`");
     expect(entries[0]?.systemPrompt).toContain(
-      "优先从 `soft_lane.strong_scene`",
+      "优先从 `core_conflict`、`stakes` 或 `narrative_tension_map` 提炼",
     );
-    expect(entries[0]?.systemPrompt).toContain("具体场面、动作或危险局面起手");
+    expect(entries[0]?.systemPrompt).toContain("具体历史场面、动作或危险局面");
     expect(entries[0]?.systemPrompt).toContain(
       "`hook_claim` 只是包装 promise 弱参考",
     );
     expect(entries[0]?.systemPrompt).toContain("不能机械复述或照搬");
-    expect(entries[0]?.systemPrompt).toContain("禁止默认使用统一挑战句模板");
+    expect(entries[0]?.systemPrompt).toContain("不使用固定统一开头模板");
     expect(entries[0]?.systemPrompt).not.toContain(
       "前两句必须直接复用 `hook_claim` 或 `strong_scene`",
     );
