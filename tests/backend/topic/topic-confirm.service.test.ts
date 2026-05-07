@@ -16,6 +16,10 @@ describe("topic confirm service", () => {
     const event = await createProvisionalEvent(db, {
       canonicalName: "晏子使楚",
       aliases: ["晏子出使楚国"],
+      canonicalQuotes: [
+        "使狗国者，从狗门入",
+        "橘生淮南则为橘，生于淮北则为枳",
+      ],
     });
 
     const result = await confirmTopicCandidate({
@@ -44,7 +48,17 @@ describe("topic confirm service", () => {
     expect(result.topic_package.must_include_beats).not.toEqual([
       result.topic_package.strong_scene,
     ]);
-    expect(result.topic_package.canonical_quotes).toEqual([]);
+    expect(result.topic_package.canonical_quotes).toEqual([
+      "使狗国者，从狗门入",
+      "橘生淮南则为橘，生于淮北则为枳",
+    ]);
+    expect(
+      db.topicPackages.get(result.topic_package.topic_package_id)
+        ?.canonicalQuotesJson,
+    ).toEqual([
+      "使狗国者，从狗门入",
+      "橘生淮南则为橘，生于淮北则为枳",
+    ]);
     expect(result.topic_package.ambiguity_notes).toEqual([]);
   });
 

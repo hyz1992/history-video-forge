@@ -3,6 +3,7 @@ import type { DbClient, EventRegistryRecord } from "../../db/client";
 export interface CreateProvisionalEventInput {
   canonicalName: string;
   aliases?: string[];
+  canonicalQuotes?: string[];
   sourceType?: string;
 }
 
@@ -28,6 +29,7 @@ export async function createProvisionalEvent(
     id: db.generateId(),
     canonicalName: input.canonicalName,
     aliases: input.aliases ?? [],
+    canonicalQuotesJson: normalizeCanonicalQuotes(input.canonicalQuotes),
     sourceType: input.sourceType ?? "provisional",
     isProvisional: true,
     createdAt: now,
@@ -37,4 +39,10 @@ export async function createProvisionalEvent(
   db.events.set(event.id, event);
 
   return event;
+}
+
+function normalizeCanonicalQuotes(quotes: string[] | undefined): string[] {
+  return Array.from(
+    new Set((quotes ?? []).map((quote) => quote.trim()).filter(Boolean)),
+  );
 }

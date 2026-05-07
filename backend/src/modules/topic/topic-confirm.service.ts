@@ -73,6 +73,14 @@ function buildMustIncludeBeats(candidate: StoredTopicCandidate) {
   ];
 }
 
+function getEventCanonicalQuotes(event: EventRegistryRecord): string[] {
+  return Array.from(
+    new Set(
+      event.canonicalQuotesJson.map((quote) => quote.trim()).filter(Boolean),
+    ),
+  );
+}
+
 function buildForbiddenExpansions(candidate: StoredTopicCandidate) {
   return [
     `不要脱离${candidate.title}当前已确认范围去扩写未定史实`,
@@ -91,7 +99,7 @@ export async function confirmTopicCandidate(input: ConfirmTopicCandidateInput) {
   const mustIncludeBeats = buildMustIncludeBeats(input.candidate);
   const forbiddenExpansions = buildForbiddenExpansions(input.candidate);
   const sourceAnchorRefs = [input.candidate.sourceHint];
-  const canonicalQuotes: string[] = [];
+  const canonicalQuotes = getEventCanonicalQuotes(input.candidate.event);
   const ambiguityNotes: string[] = [];
 
   const topicPackage = TopicPackage.parse({

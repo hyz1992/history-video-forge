@@ -20,6 +20,7 @@ export interface EventRegistryRecord {
   id: string;
   canonicalName: string;
   aliases: string[];
+  canonicalQuotesJson: string[];
   sourceType: string;
   isProvisional: boolean;
   createdAt: Date;
