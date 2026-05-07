@@ -66,6 +66,7 @@ status: active
 - 若候选与 `recent_event_memory` 中为同一事件，应复用已有 `event_identity`，不得重新发明新 key
 - 每个候选都必须完整给出最小字段
 - `must_cover_preview` 必须给出 3 条可写入脚本的具体 beat：进入局面、关键动作、压力/代价；不得把同一句角度摘要改写三遍
+- `must_cover_preview` 是叙事节点，不是正文句；优先写成场景、动作或转折短语，不写解释性评价或完整总结句；名句可以作为节点锚点，但不要附带完整解释。
 - 每个候选都必须带 `viral_rubric`
 - `viral_rubric` 只能使用正式字段：`hook_power`、`novelty_gap`、`emotion_gap`、`share_impulse`、`visual_promise`
 - `viral_rubric` 不得自定义额外评分键，不得改名，不得混入其他元数据

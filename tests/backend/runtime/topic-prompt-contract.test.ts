@@ -58,6 +58,16 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("不得把同一句角度摘要改写三遍");
   });
 
+  it("requires candidate-builder must_cover_preview to be beat nodes instead of prose sentences", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("`must_cover_preview` 是叙事节点，不是正文句");
+    expect(prompt.body).toContain("优先写成场景、动作或转折短语");
+    expect(prompt.body).toContain("不写解释性评价或完整总结句");
+    expect(prompt.body).toContain("名句可以作为节点锚点，但不要附带完整解释");
+  });
+
   it("requires candidate-builder to prioritize first-pass field completeness ahead of diversity tactics", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 
