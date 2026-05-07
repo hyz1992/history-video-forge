@@ -320,4 +320,33 @@ describe("script patch / regenerate services", () => {
       }),
     });
   });
+
+  it("does not add thin body repair context for non-thin local validation errors", async () => {
+    const generateDraft = vi
+      .fn<() => Promise<typeof regeneratedDraft>>()
+      .mockResolvedValue(regeneratedDraft);
+
+    await regenerateScriptDraft({
+      bundle: scriptInputBundle,
+      draft: weakDraft,
+      regenerateUsed: false,
+      localValidation: {
+        decision: "regen_once",
+        errors: ["opening_missing"],
+        metrics: {
+          script_char_count: 260,
+          script_sentence_count: 8,
+          min_script_chars_for_band: 240,
+          min_sentence_count_for_band: 7,
+        },
+      },
+      generateDraft,
+    });
+
+    expect(generateDraft).toHaveBeenCalledWith({
+      regenerationContext: expect.not.objectContaining({
+        thin_body_repair: expect.anything(),
+      }),
+    });
+  });
 });
