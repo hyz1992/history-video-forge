@@ -69,4 +69,37 @@ describe("script writing brief shadow harness helper", () => {
       }),
     );
   });
+
+  it("accepts a provider response wrapped under script_writing_brief_shadow", async () => {
+    const outputDir = mkdtempSync(join(tmpdir(), "svf2-brief-shadow-wrapped-"));
+    const topicPackagePath = join(outputDir, "topic-package.json");
+    writeFileSync(
+      topicPackagePath,
+      JSON.stringify({
+        topic_id: "topic_yanzi_shichu",
+        must_include_beats: ["鍏ユ鍙楄颈"],
+      }),
+      "utf8",
+    );
+    const fixture = JSON.parse(
+      readFileSync(
+        "harness/samples/script-writing-brief-shadow/yanzi-shichu.fixture.json",
+        "utf8",
+      ),
+    );
+    const llmGateway = {
+      invokeStructuredPrompt: vi.fn(async () => ({
+        script_writing_brief_shadow: fixture,
+      })),
+    };
+
+    const result = await runScriptWritingBriefShadow({
+      topicPackagePath,
+      outputDir,
+      llmGateway: llmGateway as any,
+    });
+
+    expect(result.brief.stage).toBe("script_writing_brief_shadow");
+    expect(existsSync(result.outputPath)).toBe(true);
+  });
 });

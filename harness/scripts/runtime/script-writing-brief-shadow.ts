@@ -31,7 +31,7 @@ export async function runScriptWritingBriefShadow(
       topic_package: topicPackage,
     },
   });
-  const brief = ScriptWritingBriefShadow.parse(rawBrief);
+  const brief = ScriptWritingBriefShadow.parse(unwrapShadowBrief(rawBrief));
   const finalOutputDir = resolve(process.cwd(), input.outputDir);
   mkdirSync(finalOutputDir, { recursive: true });
   const outputPath = join(finalOutputDir, "script-writing-brief-shadow.json");
@@ -41,4 +41,17 @@ export async function runScriptWritingBriefShadow(
     outputPath,
     brief,
   };
+}
+
+function unwrapShadowBrief(rawBrief: unknown): unknown {
+  if (
+    rawBrief &&
+    typeof rawBrief === "object" &&
+    "script_writing_brief_shadow" in rawBrief
+  ) {
+    return (rawBrief as { script_writing_brief_shadow: unknown })
+      .script_writing_brief_shadow;
+  }
+
+  return rawBrief;
 }
