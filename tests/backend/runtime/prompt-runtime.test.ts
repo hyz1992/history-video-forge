@@ -140,6 +140,17 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("不使用固定统一开头模板");
   });
 
+  it("keeps break-wall openings event-specific instead of generic question templates", () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("破壁句必须绑定本事件的具体压力源、选择或代价");
+    expect(prompt.body).toContain("不得使用泛模板反问");
+    expect(prompt.body).toContain("你敢相信吗");
+    expect(prompt.body).toContain("你有没有想过");
+    expect(prompt.body).toContain("你可曾想过");
+  });
+
   it("keeps script writer focused on oral story drafts instead of summaries", () => {
     const prompt = createPromptRegistry().getPrompt("script.writer");
 
