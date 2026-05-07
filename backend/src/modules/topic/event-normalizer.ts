@@ -7,6 +7,7 @@ import {
 export interface NormalizeEventInput {
   rawInput: string;
   aliases?: string[];
+  canonicalQuotes?: string[];
   sourceType?: string;
 }
 
@@ -37,6 +38,7 @@ export async function normalizeEventInput(
   for (const term of searchTerms) {
     const existing = await findEventByCanonicalOrAlias(db, term.trim());
     if (existing) {
+      mergeCanonicalQuotes(existing, input.canonicalQuotes);
       return {
         event: existing,
         created: false,
@@ -47,6 +49,7 @@ export async function normalizeEventInput(
   const provisional = await createProvisionalEvent(db, {
     canonicalName: input.rawInput.trim(),
     aliases: input.aliases?.map((alias) => alias.trim()).filter(Boolean),
+    canonicalQuotes: input.canonicalQuotes,
     sourceType: input.sourceType ?? "provisional",
   });
 
@@ -54,4 +57,17 @@ export async function normalizeEventInput(
     event: provisional,
     created: true,
   };
+}
+
+function mergeCanonicalQuotes(
+  event: EventRegistryRecord,
+  quotes: string[] | undefined,
+): void {
+  event.canonicalQuotesJson = Array.from(
+    new Set([
+      ...event.canonicalQuotesJson,
+      ...(quotes ?? []).map((quote) => quote.trim()).filter(Boolean),
+    ]),
+  );
+  event.updatedAt = new Date();
 }

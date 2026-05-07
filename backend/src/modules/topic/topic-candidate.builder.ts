@@ -22,6 +22,7 @@ export interface BuildTopicCandidatesInput {
   strongScene: string;
   sourceHint: string;
   recentUsageHint: string;
+  canonicalQuotes?: string[];
   tags?: string[];
   familyHint?: string;
   slotRubricOverrides?: CandidateRubric[];

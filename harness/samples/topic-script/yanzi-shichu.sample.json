@@ -8,6 +8,10 @@
     "strong_scene": "楚王连番压场，晏子一句句顶回去。",
     "source_hint": "《晏子春秋》",
     "recent_usage_hint": "固定 smoke 样例，不代表真实推荐状态",
+    "canonical_quotes": [
+      "使狗国者，从狗门入",
+      "橘生淮南则为橘，生于淮北则为枳"
+    ],
     "tags": ["diplomacy", "court", "humiliation", "showdown"]
   },
   "confirm_candidate_index": 0,

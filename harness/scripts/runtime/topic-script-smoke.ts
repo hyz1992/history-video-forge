@@ -14,6 +14,7 @@ export interface TopicScriptSmokeSample {
     strong_scene: string;
     source_hint: string;
     recent_usage_hint: string;
+    canonical_quotes?: string[];
     tags: string[];
   };
   confirm_candidate_index?: number;

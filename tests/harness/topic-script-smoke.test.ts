@@ -31,9 +31,14 @@ describe("topic script smoke harness", () => {
       readFileSync(join(outputDir, "topic-package.json"), "utf8"),
     ) as {
       canonical_title: string;
+      canonical_quotes: string[];
       narrative_tension_map: { hook_claim: string };
     };
     expect(topicPackage.canonical_title).toBe("晏子使楚");
+    expect(topicPackage.canonical_quotes).toEqual([
+      "使狗国者，从狗门入",
+      "橘生淮南则为橘，生于淮北则为枳",
+    ]);
     expect(topicPackage.narrative_tension_map.hook_claim.length).toBeGreaterThan(0);
 
     const validationResult = JSON.parse(

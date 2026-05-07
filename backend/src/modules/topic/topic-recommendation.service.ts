@@ -94,6 +94,7 @@ export async function recommendTopicCandidatesWithTrace(
   );
   const postProcessed = await postProcessTopicCandidates({
     db,
+    seedInput: input,
     candidates: result.candidates,
     projectId: options?.projectId ?? null,
     createdBefore: recommendationStartedAt,
@@ -339,6 +340,7 @@ type TopicRecommendationProject = NonNullable<
 
 async function postProcessTopicCandidates(input: {
   db: DbClient;
+  seedInput: BuildTopicCandidatesInput;
   candidates: RecommendationCandidate[];
   projectId?: string | null;
   createdBefore: Date;
@@ -355,6 +357,7 @@ async function postProcessTopicCandidates(input: {
   for (const [originalIndex, candidate] of input.candidates.entries()) {
     const normalized = await normalizeEventInput(input.db, {
       rawInput: candidate.event_identity,
+      canonicalQuotes: input.seedInput.canonicalQuotes,
       sourceType: "system_recommendation",
     });
     const eventIdentity = normalizeEventIdentityValue(candidate.event_identity);

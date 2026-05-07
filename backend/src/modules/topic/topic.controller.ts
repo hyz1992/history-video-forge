@@ -18,6 +18,7 @@ interface TopicRecommendationSeedPayload {
   recent_usage_hint: string;
   tags: string[];
   aliases?: string[];
+  canonical_quotes?: string[];
 }
 
 function toResponseCandidate(candidate: StoredTopicCandidate) {
@@ -105,6 +106,17 @@ function validateTopicRecommendationSeed(
     );
   }
 
+  if (Array.isArray(record.canonical_quotes)) {
+    value.canonical_quotes = Array.from(
+      new Set(
+        record.canonical_quotes
+          .filter((quote): quote is string => typeof quote === "string")
+          .map((quote) => quote.trim())
+          .filter(Boolean),
+      ),
+    );
+  }
+
   if (invalidFields.length > 0) {
     return {
       ok: false,
@@ -167,6 +179,7 @@ export async function createTopicRecommendationsController(
       strongScene: validatedPayload.value.strong_scene,
       sourceHint: validatedPayload.value.source_hint,
       recentUsageHint: validatedPayload.value.recent_usage_hint,
+      canonicalQuotes: validatedPayload.value.canonical_quotes,
       tags: validatedPayload.value.tags,
     },
     {
@@ -181,6 +194,7 @@ export async function createTopicRecommendationsController(
   for (const candidate of candidates) {
     const normalizedCandidate = await normalizeEventInput(context.app.db, {
       rawInput: candidate.title,
+      canonicalQuotes: validatedPayload.value.canonical_quotes,
       sourceType: "system_recommendation",
     });
     const candidateId = randomUUID();
