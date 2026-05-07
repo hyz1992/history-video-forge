@@ -116,18 +116,28 @@ describe("prompt runtime", () => {
     expect(prompt.filePath.replace(/\\/g, "/")).toContain("/harness/prompts/script/");
   });
 
-  it("keeps script writer opening contract scene-first without treating hook_claim as a draft template", () => {
+  it("keeps script writer opening contract scene-grounded without treating hook_claim as a draft template", () => {
     const prompt = createPromptRegistry().getPrompt("script.writer");
 
     expect(prompt.metadata.language).toBe("zh-CN");
-    expect(prompt.body).toContain("优先从 `soft_lane.strong_scene`");
-    expect(prompt.body).toContain("具体场面、动作或危险局面起手");
+    expect(prompt.body).toContain("再立刻落到具体历史场面、动作或危险局面");
     expect(prompt.body).toContain("`hook_claim` 只是包装 promise 弱参考");
     expect(prompt.body).toContain("不能机械复述或照搬");
-    expect(prompt.body).toContain("禁止默认使用统一挑战句模板");
+    expect(prompt.body).toContain("不使用固定统一开头模板");
     expect(prompt.body).not.toContain(
       "前两句必须直接复用 `hook_claim` 或 `strong_scene`",
     );
+  });
+
+  it("requires script writer openings to break the fourth wall before entering the scene", () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("破壁开头");
+    expect(prompt.body).toContain("先用一句面向观众的反问或短判断");
+    expect(prompt.body).toContain("再立刻落到具体历史场面");
+    expect(prompt.body).toContain("不得为了开头铺垫而空泛解释背景");
+    expect(prompt.body).toContain("不使用固定统一开头模板");
   });
 
   it("keeps script writer focused on oral story drafts instead of summaries", () => {
