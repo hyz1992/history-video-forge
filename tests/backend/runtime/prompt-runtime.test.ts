@@ -240,10 +240,26 @@ describe("prompt runtime", () => {
     const prompt = createPromptRegistry().getPrompt("script.writer");
 
     expect(prompt.metadata.language).toBe("zh-CN");
-    expect(prompt.body).toContain("`beat_trace.beat` 逐字复用输入 beat");
-    expect(prompt.body).toContain("`script_text` 不要把 `must_include_beats` 原句当正文逐条交代");
-    expect(prompt.body).toContain("每个 beat 在正文中写成局面推进");
-    expect(prompt.body).toContain("`beat_trace.excerpt` 从自然正文中截取证明片段");
+    expect(prompt.body).toContain("`beat_trace.beat` 是审计字段");
+    expect(prompt.body).toContain("`script_text` 是口播正文");
+    expect(prompt.body).toContain("每条 beat 必须吸收成局面推进");
+    expect(prompt.body).toContain("`beat_trace.excerpt` 必须从自然正文截取");
+  });
+
+  it("keeps script writer audit fields separate from spoken prose without label recitation", () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("审计字段与正文边界");
+    expect(prompt.body).toContain("`beat_trace.beat` 是审计字段，必须逐字复用输入 beat");
+    expect(prompt.body).toContain(
+      "`script_text` 是口播正文，不得把 `must_include_beats` 原句当标签、清单或解释句逐条复述",
+    );
+    expect(prompt.body).toContain(
+      "每条 beat 必须吸收成局面推进，至少包含动作、反应、压力变化或后果中的一个具体元素",
+    );
+    expect(prompt.body).toContain("`beat_trace.excerpt` 必须从自然正文截取");
+    expect(prompt.body).toContain("`canonical_quote_intents` 必须通过场面目的和结尾回响兑现");
   });
 
   it("requires script writer to honor canonical quote intents when present", () => {
@@ -252,7 +268,7 @@ describe("prompt runtime", () => {
     expect(prompt.metadata.language).toBe("zh-CN");
     expect(prompt.body).toContain("`canonical_quote_intents`");
     expect(prompt.body).toContain("`intent`");
-    expect(prompt.body).toContain("不得改写成其他寓意");
+    expect(prompt.body).toContain("不改成其他寓意");
   });
 
   it("loads script.semantic-reviewer from harness prompts with zh-CN metadata", () => {

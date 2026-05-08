@@ -13,6 +13,13 @@ const executableEntries = [
   "tests/harness/script-brief-shadow-five-round-check.test.ts",
 ];
 
+const runtimeSurfaceEntries = [
+  "package.json",
+  "shared/src/index.ts",
+  "backend/src/modules/script/script-generation.service.ts",
+  "harness/prompts/script/script-writer.prompt.md",
+];
+
 describe("script brief shadow stopped state", () => {
   it("removes executable ScriptWritingBrief shadow entry points", () => {
     for (const entry of executableEntries) {
@@ -43,5 +50,16 @@ describe("script brief shadow stopped state", () => {
     expect(design).toContain("ScriptWritingBrief path stopped");
     expect(implementationPlan).toContain("ScriptWritingBrief path stopped");
     expect(observation).toContain("continue_to_ab_design: no");
+  });
+
+  it("does not reintroduce Brief-like runtime surfaces under another name", () => {
+    for (const entry of runtimeSurfaceEntries) {
+      const content = readFileSync(entry, "utf8");
+
+      expect(content, entry).not.toContain("ScriptWritingBrief");
+      expect(content, entry).not.toContain("materialization_brief");
+      expect(content, entry).not.toContain("script_brief");
+      expect(content, entry).not.toContain("ScriptBrief");
+    }
   });
 });
