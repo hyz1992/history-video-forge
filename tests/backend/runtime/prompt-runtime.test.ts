@@ -51,6 +51,17 @@ describe("prompt runtime", () => {
     expect(prompt.body).not.toContain("至少覆盖 3 个朝代");
   });
 
+  it("keeps candidate must_cover_preview ordered for peak scene absorption", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("`must_cover_preview` 三条顺序");
+    expect(prompt.body).toContain("第一条：进入压力");
+    expect(prompt.body).toContain("第二条：峰值动作或高潮兑现");
+    expect(prompt.body).toContain("第三条：代价、余震或第二名句回响");
+    expect(prompt.body).toContain("第二条不得只写准备、训练、铺垫或泛泛强场面");
+  });
+
   it("gives builder a single legal TopicCandidateCard[] output skeleton", () => {
     const registry = createPromptRegistry();
 
