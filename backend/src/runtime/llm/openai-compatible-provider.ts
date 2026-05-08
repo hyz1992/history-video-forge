@@ -3,6 +3,9 @@ import type { LoadedPrompt } from "../prompts/prompt-loader.js";
 import { withRetry } from "./external-errors.js";
 import { createRequestBudget, type RequestBudget } from "./request-budget.js";
 import type {
+  StrictStructuredInvocation,
+  StrictStructuredStrategy,
+  StrictStructuredToolSchema,
   StructuredPromptInvocation,
   StructuredPromptProvider,
 } from "./provider-contract.js";
@@ -18,6 +21,26 @@ export interface OpenAiCompatibleInvokeRequest {
   model: string;
 }
 
+export interface OpenAiCompatibleStrictInvokeRequest {
+  prompt: LoadedPrompt;
+  input: unknown;
+  operationName: string;
+  model: string;
+  schema: StrictStructuredToolSchema;
+  options: {
+    strategy: StrictStructuredStrategy;
+    temperature?: number;
+    topP?: number;
+    maxTokens?: number;
+    thinking?: "enabled" | "disabled";
+  };
+}
+
+export interface OpenAiCompatibleStrictInvokeResult {
+  rawOutput: string;
+  argumentsJson: string;
+}
+
 export interface OpenAiCompatibleProviderOptions {
   profile?: "main" | "structured";
   model?: string;
@@ -29,6 +52,9 @@ export interface OpenAiCompatibleProviderOptions {
   maxDelayMs?: number;
   requestBudget?: RequestBudget;
   invokeApi?: (request: OpenAiCompatibleInvokeRequest) => Promise<string>;
+  invokeStrictApi?: (
+    request: OpenAiCompatibleStrictInvokeRequest,
+  ) => Promise<OpenAiCompatibleStrictInvokeResult>;
   structuredOutputFixer?: StructuredOutputFixer;
 }
 
@@ -47,6 +73,13 @@ export function createOpenAiCompatibleProvider(
       baseUrl: providerConfig.baseUrl,
       model,
     });
+  const invokeStrictApi =
+    options.invokeStrictApi ??
+    createDefaultInvokeStrictApi({
+      apiKey: providerConfig.apiKey,
+      baseUrl: providerConfig.baseUrl,
+      model,
+    });
   const fixer =
     options.structuredOutputFixer ??
     createStructuredOutputFixer();
@@ -57,6 +90,12 @@ export function createOpenAiCompatibleProvider(
     });
 
   return {
+    capabilities: {
+      jsonObject: true,
+      toolCall: true,
+      thinkingControl: true,
+      samplingControl: true,
+    },
     async invokeStructuredPrompt<T>(
       request: StructuredPromptInvocation,
     ): Promise<T> {
@@ -130,6 +169,95 @@ export function createOpenAiCompatibleProvider(
         throw error;
       }
     },
+    async invokeStrictStructured<T>(
+      request: StrictStructuredInvocation<T>,
+    ): Promise<T> {
+      let rawOutput = "";
+      let parsedOutput: T | undefined;
+
+      try {
+        const strictResult = await withRetry(
+          () => {
+            requestBudget.consume(request.operationName);
+
+            return withTimeout(
+              invokeStrictApi({
+                prompt: request.prompt,
+                input: request.input,
+                operationName: request.operationName,
+                model,
+                schema: request.schema,
+                options: {
+                  strategy:
+                    request.options?.strategy ??
+                    providerConfig.structuredStrategy ??
+                    "json_object",
+                  temperature:
+                    request.options?.temperature ??
+                    providerConfig.structuredTemperature,
+                  topP:
+                    request.options?.topP ??
+                    providerConfig.structuredTopP,
+                  maxTokens:
+                    request.options?.maxTokens ??
+                    providerConfig.structuredMaxTokens,
+                  thinking:
+                    request.options?.thinking ??
+                    providerConfig.structuredThinking,
+                },
+              }),
+              options.timeoutMs ?? env.llm.timeoutMs,
+              request.operationName,
+            );
+          },
+          {
+            provider: "llm",
+            operation: request.operationName,
+            maxAttempts: options.maxAttempts ?? env.llm.maxAttempts,
+            baseDelayMs: options.baseDelayMs ?? 1500,
+            maxDelayMs: options.maxDelayMs ?? 8000,
+          },
+        );
+
+        rawOutput = strictResult.rawOutput;
+        parsedOutput = request.parse(JSON.parse(strictResult.argumentsJson));
+
+        await request.interactionLogWriter?.write({
+          generatedAt: new Date().toISOString(),
+          provider: "openai-compatible",
+          model,
+          operationName: request.operationName,
+          promptId: request.prompt.metadata.id,
+          promptStage: request.prompt.metadata.stage,
+          promptLanguage: request.prompt.metadata.language,
+          promptFilePath: request.prompt.filePath,
+          systemPrompt: request.prompt.body,
+          input: request.input,
+          rawOutput,
+          parsedOutput,
+          errorMessage: null,
+        });
+
+        return parsedOutput;
+      } catch (error) {
+        await request.interactionLogWriter?.write({
+          generatedAt: new Date().toISOString(),
+          provider: "openai-compatible",
+          model,
+          operationName: request.operationName,
+          promptId: request.prompt.metadata.id,
+          promptStage: request.prompt.metadata.stage,
+          promptLanguage: request.prompt.metadata.language,
+          promptFilePath: request.prompt.filePath,
+          systemPrompt: request.prompt.body,
+          input: request.input,
+          rawOutput,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        });
+
+        throw error;
+      }
+    },
   };
 }
 
@@ -140,6 +268,11 @@ export function resolveOpenAiCompatibleProviderConfig(options: {
   apiKey?: string;
   baseUrl?: string;
   model: string;
+  structuredStrategy?: StrictStructuredStrategy;
+  structuredThinking?: "enabled" | "disabled";
+  structuredTemperature?: number;
+  structuredTopP?: number;
+  structuredMaxTokens?: number;
 } {
   const useStructuredProfile =
     options.options.profile === "structured" ||
@@ -159,6 +292,11 @@ export function resolveOpenAiCompatibleProviderConfig(options: {
         options.options.model ??
         options.envConfig.structuredModel ??
         options.envConfig.model,
+      structuredStrategy: options.envConfig.structuredStrategy,
+      structuredThinking: options.envConfig.structuredThinking,
+      structuredTemperature: options.envConfig.structuredTemperature,
+      structuredTopP: options.envConfig.structuredTopP,
+      structuredMaxTokens: options.envConfig.structuredMaxTokens,
     };
   }
 
@@ -166,6 +304,11 @@ export function resolveOpenAiCompatibleProviderConfig(options: {
     apiKey: options.options.apiKey ?? options.envConfig.apiKey,
     baseUrl: options.options.baseUrl ?? options.envConfig.baseUrl,
     model: options.options.model ?? options.envConfig.model,
+    structuredStrategy: options.envConfig.structuredStrategy,
+    structuredThinking: options.envConfig.structuredThinking,
+    structuredTemperature: options.envConfig.structuredTemperature,
+    structuredTopP: options.envConfig.structuredTopP,
+    structuredMaxTokens: options.envConfig.structuredMaxTokens,
   };
 }
 
@@ -229,6 +372,97 @@ function createDefaultInvokeApi(options: {
     }
 
     throw new Error("LLM response did not contain message content.");
+  };
+}
+
+function createDefaultInvokeStrictApi(options: {
+  apiKey?: string;
+  baseUrl?: string;
+  model: string;
+}): (
+  request: OpenAiCompatibleStrictInvokeRequest,
+) => Promise<OpenAiCompatibleStrictInvokeResult> {
+  return async (request) => {
+    if (!options.apiKey || !options.baseUrl) {
+      throw new Error("LLM API key or base URL is not configured.");
+    }
+
+    if (request.options.strategy !== "tool_call") {
+      throw new Error("strict_structured_strategy_not_supported");
+    }
+
+    const body: Record<string, unknown> = {
+      model: options.model,
+      messages: [
+        {
+          role: "system",
+          content: request.prompt.body,
+        },
+        {
+          role: "user",
+          content: JSON.stringify(request.input, null, 2),
+        },
+      ],
+      tools: [
+        {
+          type: "function",
+          function: request.schema,
+        },
+      ],
+      tool_choice: "auto",
+    };
+
+    if (request.options.temperature !== undefined) {
+      body.temperature = request.options.temperature;
+    }
+    if (request.options.topP !== undefined) {
+      body.top_p = request.options.topP;
+    }
+    if (request.options.maxTokens !== undefined) {
+      body.max_tokens = request.options.maxTokens;
+    }
+    if (request.options.thinking !== undefined) {
+      body.thinking = {
+        type: request.options.thinking,
+      };
+    }
+
+    const response = await fetch(`${trimTrailingSlash(options.baseUrl)}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${options.apiKey}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      throw new Error(`${response.status} ${response.statusText}`);
+    }
+
+    const payload = (await response.json()) as {
+      choices?: Array<{
+        message?: {
+          tool_calls?: Array<{
+            function?: {
+              arguments?: string;
+            };
+          }>;
+        };
+      }>;
+    };
+    const rawOutput = JSON.stringify(payload);
+    const argumentsJson =
+      payload.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+
+    if (typeof argumentsJson !== "string" || !argumentsJson.trim()) {
+      throw new Error("strict_structured_no_tool_call");
+    }
+
+    return {
+      rawOutput,
+      argumentsJson,
+    };
   };
 }
 

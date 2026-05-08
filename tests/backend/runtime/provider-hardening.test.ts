@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
 import {
@@ -119,6 +119,146 @@ describe("provider hardening", () => {
         operation: "topic.candidate-builder",
       },
     });
+  });
+
+  it("invokes strict structured requests through tool calls and parses function arguments", async () => {
+    const prompt = createPromptRegistry().getPrompt("topic.selector");
+    const argumentsJson = JSON.stringify({
+      selected_candidate_ids: [
+        "selector_candidate_1",
+        "selector_candidate_2",
+        "selector_candidate_3",
+      ],
+    });
+    const invokeStrictApi = vi.fn(async () => ({
+      rawOutput: JSON.stringify({
+        choices: [
+          {
+            message: {
+              tool_calls: [
+                {
+                  type: "function",
+                  function: {
+                    name: "select_topic_candidates",
+                    arguments: argumentsJson,
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+      argumentsJson,
+    }));
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-5.1",
+      invokeStrictApi,
+    });
+
+    const result = await provider.invokeStrictStructured?.({
+      prompt,
+      input: {
+        selector_pool: [],
+      },
+      operationName: "topic.selector",
+      schema: {
+        name: "select_topic_candidates",
+        description: "Select topic candidates.",
+        parameters: {
+          type: "object",
+          properties: {
+            selected_candidate_ids: {
+              type: "array",
+              items: { type: "string" },
+            },
+          },
+          required: ["selected_candidate_ids"],
+          additionalProperties: false,
+        },
+      },
+      parse: (candidate) => candidate as { selected_candidate_ids: string[] },
+      options: {
+        strategy: "tool_call",
+        thinking: "disabled",
+        temperature: 0.5,
+        topP: 0.9,
+        maxTokens: 2048,
+      },
+    });
+
+    expect(result).toEqual({
+      selected_candidate_ids: [
+        "selector_candidate_1",
+        "selector_candidate_2",
+        "selector_candidate_3",
+      ],
+    });
+    expect(invokeStrictApi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: "glm-5.1",
+        operationName: "topic.selector",
+        schema: expect.objectContaining({
+          name: "select_topic_candidates",
+        }),
+        options: expect.objectContaining({
+          strategy: "tool_call",
+          thinking: "disabled",
+        }),
+      }),
+    );
+  });
+
+  it("fails strict structured tool calls when arguments use an answer wrapper", async () => {
+    const prompt = createPromptRegistry().getPrompt("topic.selector");
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-5.1",
+      invokeStrictApi: async () => ({
+        rawOutput: "tool-response",
+        argumentsJson: JSON.stringify({
+          answer: {
+            selected_ids: [
+              "selector_candidate_1",
+              "selector_candidate_2",
+              "selector_candidate_3",
+            ],
+          },
+        }),
+      }),
+    });
+
+    await expect(
+      provider.invokeStrictStructured?.({
+        prompt,
+        input: {},
+        operationName: "topic.selector",
+        schema: {
+          name: "select_topic_candidates",
+          description: "Select topic candidates.",
+          parameters: {
+            type: "object",
+            properties: {
+              selected_candidate_ids: {
+                type: "array",
+                items: { type: "string" },
+              },
+            },
+            required: ["selected_candidate_ids"],
+            additionalProperties: false,
+          },
+        },
+        parse: (candidate) => {
+          const record = candidate as Record<string, unknown>;
+          if (!Array.isArray(record.selected_candidate_ids)) {
+            throw new Error("topic_selector_strict_schema_failed");
+          }
+
+          return record as { selected_candidate_ids: string[] };
+        },
+        options: {
+          strategy: "tool_call",
+        },
+      }),
+    ).rejects.toThrow("topic_selector_strict_schema_failed");
   });
 
   it("preserves provider failure metadata so graph runners can consume failure reasons", async () => {
