@@ -395,7 +395,8 @@ function createStubScriptWriterProvider(): StructuredPromptProvider {
 function buildDeterministicDraft(input: ScriptInputBundleInput) {
   const bundle = input;
   const beats = bundle.hard_lane.must_include_beats;
-  const quote = bundle.topic_package.canonical_quotes?.[0];
+  const canonicalQuotes = bundle.topic_package.canonical_quotes ?? [];
+  const quote = canonicalQuotes[0];
   const openingSpan =
     bundle.soft_lane.strong_scene.trim() ||
     bundle.hard_lane.core_conflict?.trim() ||
@@ -430,6 +431,13 @@ function buildDeterministicDraft(input: ScriptInputBundleInput) {
   lines.push(endingSpan);
 
   const scriptText = lines.join("\n");
+  const quoteTrace = canonicalQuotes
+    .filter((canonicalQuote) => scriptText.includes(canonicalQuote))
+    .map((canonicalQuote) => ({
+      quote: canonicalQuote,
+      usage_type: "exact" as const,
+      excerpt: `“${canonicalQuote}”`,
+    }));
 
   return {
     script_text: scriptText,
@@ -439,15 +447,7 @@ function buildDeterministicDraft(input: ScriptInputBundleInput) {
       excerpt: beatSentences[index],
       confidence: 0.92,
     })),
-    quote_trace: quote
-      ? [
-          {
-            quote,
-            usage_type: "exact" as const,
-            excerpt: `“${quote}”`,
-          },
-        ]
-      : [],
+    quote_trace: quoteTrace,
     opening_span: openingSpan,
     ending_span: endingSpan,
   };

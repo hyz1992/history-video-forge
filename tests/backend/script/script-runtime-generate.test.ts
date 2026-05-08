@@ -219,6 +219,54 @@ describe("script runtime generate", () => {
     expect(validation.metrics.script_sentence_count).toBeGreaterThanOrEqual(7);
   });
 
+  it("traces every canonical quote used by deterministic stub drafts", async () => {
+    const twoQuoteTopicPackage = TopicPackage.parse({
+      ...topicPackage,
+      canonical_quotes: [
+        "使狗国者，从狗门入",
+        "橘生淮南则为橘",
+      ],
+      must_include_beats: [
+        "使狗国者，从狗门入",
+        "橘生淮南则为橘",
+      ],
+      narrative_tension_map: {
+        ...topicPackage.narrative_tension_map,
+        ending_residue: "橘生淮南则为橘",
+      },
+    });
+    const twoQuoteBundle = ScriptInputBundle.parse({
+      ...scriptInputBundle,
+      topic_package: twoQuoteTopicPackage,
+      hard_lane: {
+        ...scriptInputBundle.hard_lane,
+        must_include_beats: twoQuoteTopicPackage.must_include_beats,
+        canonical_quotes: twoQuoteTopicPackage.canonical_quotes,
+      },
+      soft_lane: {
+        ...scriptInputBundle.soft_lane,
+        narrative_tension_map: twoQuoteTopicPackage.narrative_tension_map,
+      },
+    });
+
+    const draft = await generateScriptDraft({
+      bundle: twoQuoteBundle,
+    });
+    const validation = validateScriptDraft({
+      bundle: twoQuoteBundle,
+      draft,
+    });
+
+    expect(draft.script_text).toContain("使狗国者，从狗门入");
+    expect(draft.script_text).toContain("橘生淮南则为橘");
+    expect(draft.quote_trace.map((trace) => trace.quote)).toEqual([
+      "使狗国者，从狗门入",
+      "橘生淮南则为橘",
+    ]);
+    expect(validation.errors).not.toContain("quote_trace_incomplete");
+    expect(validation.decision).toBe("pass");
+  });
+
   it("repairs minimally malformed runtime output before validating ScriptDraftPackage", async () => {
     const invokeApi = vi.fn(
       async () => `\`\`\`json
