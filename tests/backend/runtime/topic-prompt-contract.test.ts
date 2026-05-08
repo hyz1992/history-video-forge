@@ -134,6 +134,24 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("多于 3 个也属于违规");
   });
 
+  it("keeps topic.selector prompt aligned with tool-call structured output", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.selector");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("select_topic_candidates");
+    expect(prompt.body).toContain("selected_candidate_ids");
+    expect(prompt.body).toContain(
+      "不要输出 answer、result、explanation 或任何解释字段",
+    );
+  });
+
+  it("does not invite topic.selector to attach explanations outside the schema", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.selector");
+
+    expect(prompt.body).not.toContain("可附带极简选择说明");
+    expect(prompt.body).not.toContain("解释选择理由");
+  });
+
   it("keeps selector anchored when recommendation_seed already points to a concrete single event", () => {
     const prompt = createPromptRegistry().getPrompt("topic.selector");
 

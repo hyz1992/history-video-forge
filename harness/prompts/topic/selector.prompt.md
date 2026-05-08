@@ -24,10 +24,11 @@ status: active
 
 ## 输出对象
 
-- 只输出最终选中的 candidate id 列表
-- 必须且只能返回 3 个候选 id
-- 多于 3 个也属于违规，少于 3 个只允许在 repair 补位场景下由当前轮显式说明
-- 可附带极简选择说明
+- 必须通过 `select_topic_candidates` 返回选择结果
+- 唯一正式字段是 `selected_candidate_ids`
+- `selected_candidate_ids` 必须且只能返回 3 个候选 id
+- 不要输出 answer、result、explanation 或任何解释字段
+- 多于 3 个也属于违规，少于 3 个只允许在 repair 补位场景下由当前轮显式处理
 
 ## 选择原则
 
