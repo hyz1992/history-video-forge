@@ -59,6 +59,16 @@ export function getValidatedRuntimeEnv(): AppEnv {
 }
 
 function buildEnv(dotEnvValues: Record<string, string>): AppEnv {
+  const model =
+    readEnvValue("LLM_MODEL", dotEnvValues) ??
+    readEnvValue("OPENAI_MODEL", dotEnvValues) ??
+    "stub-model";
+  const structuredModel =
+    readEnvValue("LLM_STRUCTURED_MODEL", dotEnvValues) ??
+    model;
+  const structuredDefaults =
+    readStrictStructuredModelDefaults(structuredModel);
+
   return {
     nodeEnv: readEnvValue("NODE_ENV", dotEnvValues) ?? "development",
     databaseUrl: readEnvValue("DATABASE_URL", dotEnvValues) ?? "file:./dev.db",
@@ -74,35 +84,33 @@ function buildEnv(dotEnvValues: Record<string, string>): AppEnv {
       apiKey:
         readEnvValue("LLM_API_KEY", dotEnvValues) ??
         readEnvValue("OPENAI_API_KEY", dotEnvValues),
-      model:
-        readEnvValue("LLM_MODEL", dotEnvValues) ??
-        readEnvValue("OPENAI_MODEL", dotEnvValues) ??
-        "stub-model",
+      model,
       structuredBaseUrl:
         readEnvValue("LLM_STRUCTURED_BASE_URL", dotEnvValues) ??
         readEnvValue("OPENAI_STRUCTURED_BASE_URL", dotEnvValues),
       structuredApiKey:
         readEnvValue("LLM_STRUCTURED_API_KEY", dotEnvValues) ??
         readEnvValue("OPENAI_STRUCTURED_API_KEY", dotEnvValues),
-      structuredModel:
-        readEnvValue("LLM_STRUCTURED_MODEL", dotEnvValues) ??
-        readEnvValue("LLM_MODEL", dotEnvValues) ??
-        readEnvValue("OPENAI_MODEL", dotEnvValues),
+      structuredModel,
       structuredStrategy: readStrictStructuredStrategy(
         readEnvValue("LLM_STRUCTURED_STRATEGY", dotEnvValues),
+        structuredDefaults.strategy,
       ),
-      structuredThinking: readStrictStructuredThinking(
-        readEnvValue("LLM_STRUCTURED_THINKING", dotEnvValues),
-      ),
-      structuredTemperature: readOptionalNumber(
-        readEnvValue("LLM_STRUCTURED_TEMPERATURE", dotEnvValues),
-      ),
-      structuredTopP: readOptionalNumber(
-        readEnvValue("LLM_STRUCTURED_TOP_P", dotEnvValues),
-      ),
-      structuredMaxTokens: readOptionalNumber(
-        readEnvValue("LLM_STRUCTURED_MAX_TOKENS", dotEnvValues),
-      ),
+      structuredThinking:
+        readStrictStructuredThinking(
+          readEnvValue("LLM_STRUCTURED_THINKING", dotEnvValues),
+        ) ?? structuredDefaults.thinking,
+      structuredTemperature:
+        readOptionalNumber(
+          readEnvValue("LLM_STRUCTURED_TEMPERATURE", dotEnvValues),
+        ) ?? structuredDefaults.temperature,
+      structuredTopP:
+        readOptionalNumber(readEnvValue("LLM_STRUCTURED_TOP_P", dotEnvValues)) ??
+        structuredDefaults.topP,
+      structuredMaxTokens:
+        readOptionalNumber(
+          readEnvValue("LLM_STRUCTURED_MAX_TOKENS", dotEnvValues),
+        ) ?? structuredDefaults.maxTokens,
       timeoutMs: Number(readEnvValue("LLM_TIMEOUT_MS", dotEnvValues) ?? "45000"),
       maxAttempts: Number(readEnvValue("LLM_MAX_ATTEMPTS", dotEnvValues) ?? "3"),
       requestBudgetMaxRequests: Number(
@@ -121,12 +129,17 @@ function readEnvValue(
 
 function readStrictStructuredStrategy(
   value: string | undefined,
+  defaultValue: StrictStructuredStrategy = "json_object",
 ): StrictStructuredStrategy {
   if (value === "tool_call" || value === "auto") {
     return value;
   }
 
-  return "json_object";
+  if (value === "json_object") {
+    return value;
+  }
+
+  return defaultValue;
 }
 
 function readStrictStructuredThinking(
@@ -147,6 +160,31 @@ function readOptionalNumber(value: string | undefined): number | undefined {
   const parsed = Number(value);
 
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function readStrictStructuredModelDefaults(model: string | undefined): {
+  strategy: StrictStructuredStrategy;
+  thinking?: StrictStructuredThinking;
+  temperature?: number;
+  topP?: number;
+  maxTokens?: number;
+} {
+  // GLM-5.1 live probes showed stable tool-call output for topic.selector.
+  // Keep these as model-aware defaults so operators only choose the model,
+  // while explicit LLM_STRUCTURED_* values can still override experiments.
+  if (model === "glm-5.1") {
+    return {
+      strategy: "tool_call",
+      thinking: "disabled",
+      temperature: 0.5,
+      topP: 0.9,
+      maxTokens: 2048,
+    };
+  }
+
+  return {
+    strategy: "json_object",
+  };
 }
 
 function loadLocalDotEnv(): Record<string, string> {

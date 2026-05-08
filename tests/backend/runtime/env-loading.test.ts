@@ -98,6 +98,41 @@ describe("runtime env loading", () => {
     expect(env.llm.structuredMaxTokens).toBeUndefined();
   });
 
+  it("uses GLM-5.1 strict structured defaults when only the structured model is configured", async () => {
+    process.env.LLM_MODEL = "glm-5.1";
+    process.env.LLM_STRUCTURED_MODEL = "glm-5.1";
+    delete process.env.LLM_STRUCTURED_STRATEGY;
+    delete process.env.LLM_STRUCTURED_THINKING;
+    delete process.env.LLM_STRUCTURED_TEMPERATURE;
+    delete process.env.LLM_STRUCTURED_TOP_P;
+    delete process.env.LLM_STRUCTURED_MAX_TOKENS;
+
+    const { env } = await import("../../../backend/src/config/env.js");
+
+    expect(env.llm.structuredStrategy).toBe("tool_call");
+    expect(env.llm.structuredThinking).toBe("disabled");
+    expect(env.llm.structuredTemperature).toBe(0.5);
+    expect(env.llm.structuredTopP).toBe(0.9);
+    expect(env.llm.structuredMaxTokens).toBe(2048);
+  });
+
+  it("lets explicit strict structured env values override GLM-5.1 defaults", async () => {
+    process.env.LLM_STRUCTURED_MODEL = "glm-5.1";
+    process.env.LLM_STRUCTURED_STRATEGY = "json_object";
+    process.env.LLM_STRUCTURED_THINKING = "enabled";
+    process.env.LLM_STRUCTURED_TEMPERATURE = "0.2";
+    process.env.LLM_STRUCTURED_TOP_P = "0.7";
+    process.env.LLM_STRUCTURED_MAX_TOKENS = "1024";
+
+    const { env } = await import("../../../backend/src/config/env.js");
+
+    expect(env.llm.structuredStrategy).toBe("json_object");
+    expect(env.llm.structuredThinking).toBe("enabled");
+    expect(env.llm.structuredTemperature).toBe(0.2);
+    expect(env.llm.structuredTopP).toBe(0.7);
+    expect(env.llm.structuredMaxTokens).toBe(1024);
+  });
+
   it("exposes a clear guard for missing real-provider runtime configuration", async () => {
     process.env.LLM_PROVIDER = "openai";
     delete process.env.LLM_BASE_URL;
