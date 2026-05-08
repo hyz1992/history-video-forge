@@ -16,6 +16,7 @@ import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compati
 import type { StructuredPromptProvider } from "../../runtime/llm/provider-contract.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 import { runTopicRecommendationGraph } from "../../runtime/orchestration/topic-recommendation-graph.js";
+import type { CandidatePreviewTrace } from "../../runtime/orchestration/runtime-diagnostics.js";
 import {
   TOPIC_CANDIDATE_TARGET_COUNT,
   TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT,
@@ -140,6 +141,12 @@ export async function recommendTopicCandidatesWithTrace(
         selectorTrace: null,
         diagnostics: [...fallbackCandidates.diagnostics],
       };
+  const candidatePreviewTrace = buildCandidatePreviewTrace({
+    rawCandidates: result.candidates,
+    rankings: selectorRankings,
+    selectorPool,
+    finalRankings: selected.rankings,
+  });
   const finalDiagnostics = finalizeRecommendationDiagnostics({
     checks: result.diagnostics.checks,
     finalCandidateCount: selected.candidates.length,
@@ -148,6 +155,7 @@ export async function recommendTopicCandidatesWithTrace(
       ...fallbackCandidates.diagnostics,
       ...selected.diagnostics,
     ],
+    candidatePreviewTrace,
   });
 
   if (project) {
@@ -337,6 +345,54 @@ interface RecommendationDiagnostic {
 type TopicRecommendationProject = NonNullable<
   DbClient["projects"] extends Map<string, infer T> ? T : never
 >;
+
+function toCandidatePreviewTraceEntry(input: {
+  candidateId: string;
+  candidate: RecommendationCandidate;
+}) {
+  return {
+    candidate_id: input.candidateId,
+    event_identity: input.candidate.event_identity,
+    title: input.candidate.title,
+    one_line_angle: input.candidate.one_line_angle,
+    must_cover_preview: input.candidate.must_cover_preview,
+  };
+}
+
+function buildCandidatePreviewTrace(input: {
+  rawCandidates: RecommendationCandidate[];
+  rankings: RankedRecommendationCandidate[];
+  selectorPool: SelectorPoolCandidate[];
+  finalRankings: RankedRecommendationCandidate[];
+}): CandidatePreviewTrace {
+  const rankingsById = new Map(
+    input.rankings.map((entry) => [entry.candidateId, entry] as const),
+  );
+
+  return {
+    raw_candidates: input.rawCandidates.map((candidate, index) =>
+      toCandidatePreviewTraceEntry({
+        candidateId: `raw_candidate_${index + 1}`,
+        candidate,
+      }),
+    ),
+    selector_pool: input.selectorPool
+      .map((candidate) => rankingsById.get(candidate.candidate_id))
+      .filter((entry): entry is RankedRecommendationCandidate => Boolean(entry))
+      .map((entry) =>
+        toCandidatePreviewTraceEntry({
+          candidateId: entry.candidateId,
+          candidate: entry.candidate,
+        }),
+      ),
+    final_candidates: input.finalRankings.map((entry) =>
+      toCandidatePreviewTraceEntry({
+        candidateId: entry.candidateId,
+        candidate: entry.candidate,
+      }),
+    ),
+  };
+}
 
 async function postProcessTopicCandidates(input: {
   db: DbClient;
@@ -565,6 +621,7 @@ function finalizeRecommendationDiagnostics(input: {
   checks: RecommendationDiagnostic[];
   finalCandidateCount: number;
   additionalChecks: RecommendationDiagnostic[];
+  candidatePreviewTrace?: CandidatePreviewTrace;
 }) {
   const checks = input.checks
     .filter((check) => {
@@ -606,6 +663,7 @@ function finalizeRecommendationDiagnostics(input: {
 
   return {
     checks,
+    candidate_preview_trace: input.candidatePreviewTrace,
   };
 }
 

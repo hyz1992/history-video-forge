@@ -603,6 +603,83 @@ describe("topic runtime recommendation", () => {
     expect(result.raw_candidates[0]).toHaveProperty("event_identity", "event-a");
   });
 
+  it("exposes candidate preview trace across raw selector pool and final choices", async () => {
+    const db = createDbClient();
+    const { gateway } = createGatewayWithSelectorResponses([
+      [
+        {
+          ...createRuntimeCandidate("event-a", "angle-a"),
+          must_cover_preview: ["a-entry", "a-action", "a-cost"],
+        },
+        {
+          ...createRuntimeCandidate("event-b", "angle-b"),
+          must_cover_preview: ["b-entry", "b-action", "b-cost"],
+        },
+        {
+          ...createRuntimeCandidate("event-c", "angle-c"),
+          must_cover_preview: ["c-entry", "c-action", "c-cost"],
+        },
+        createRuntimeCandidate("event-d", "angle-d"),
+        createRuntimeCandidate("event-e", "angle-e"),
+        createRuntimeCandidate("event-f", "angle-f"),
+        createRuntimeCandidate("event-g", "angle-g"),
+        createRuntimeCandidate("event-h", "angle-h"),
+      ],
+    ]);
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "preview trace should show raw and selected preview material",
+        coreConflict: "preview diagnostics must not become a selector gate",
+        strongScene: "preview trace is written only for observation",
+        sourceHint: "test",
+        recentUsageHint: "preview trace",
+      },
+      {
+        llmGateway: gateway,
+      },
+    );
+
+    const previewTrace = result.diagnostics.candidate_preview_trace;
+    expect(previewTrace?.raw_candidates).toHaveLength(8);
+    expect(previewTrace?.selector_pool).toHaveLength(8);
+    expect(previewTrace?.final_candidates).toHaveLength(3);
+    expect(previewTrace?.raw_candidates[0]).toMatchObject({
+      candidate_id: "raw_candidate_1",
+      title: "event-a",
+      one_line_angle: "angle-a",
+      must_cover_preview: ["a-entry", "a-action", "a-cost"],
+    });
+    expect(previewTrace?.selector_pool[0]).toMatchObject({
+      candidate_id: "selector_candidate_1",
+      title: "event-a",
+      one_line_angle: "angle-a",
+      must_cover_preview: ["a-entry", "a-action", "a-cost"],
+    });
+    expect(previewTrace?.final_candidates).toMatchObject([
+      {
+        candidate_id: "selector_candidate_1",
+        title: "event-a",
+        one_line_angle: "angle-a",
+        must_cover_preview: ["a-entry", "a-action", "a-cost"],
+      },
+      {
+        candidate_id: "selector_candidate_2",
+        title: "event-b",
+        one_line_angle: "angle-b",
+        must_cover_preview: ["b-entry", "b-action", "b-cost"],
+      },
+      {
+        candidate_id: "selector_candidate_3",
+        title: "event-c",
+        one_line_angle: "angle-c",
+        must_cover_preview: ["c-entry", "c-action", "c-cost"],
+      },
+    ]);
+  });
+
   it("triggers topic.candidate-builder-repair when builder omits required TopicCandidateCard fields", async () => {
     const db = createDbClient();
     const repairedCandidates = [
