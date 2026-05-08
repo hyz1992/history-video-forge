@@ -229,10 +229,18 @@ function shouldKeepCandidate(rubric: CandidateRubric): boolean {
   return true;
 }
 
-function buildMustCoverPreview(input: BuildTopicCandidatesInput): string[] {
-  return [input.summary, input.strongScene, input.coreConflict].map((item) =>
-    item.trim(),
+function compactUnique(values: Array<string | undefined>): string[] {
+  return Array.from(
+    new Set(values.map((value) => value?.trim()).filter(Boolean) as string[]),
   );
+}
+
+function buildMustCoverPreview(input: BuildTopicCandidatesInput): string[] {
+  return compactUnique([
+    input.strongScene,
+    ...(input.canonicalQuotes ?? []),
+    input.coreConflict,
+  ]).slice(0, 3);
 }
 
 export function buildTopicCandidates(input: BuildTopicCandidatesInput) {
