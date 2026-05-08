@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 type RuntimeProvider = "stub" | "openai";
+type StrictStructuredStrategy = "json_object" | "tool_call" | "auto";
+type StrictStructuredThinking = "enabled" | "disabled";
 
 export interface AppEnv {
   nodeEnv: string;
@@ -15,6 +17,11 @@ export interface AppEnv {
     structuredBaseUrl?: string;
     structuredApiKey?: string;
     structuredModel?: string;
+    structuredStrategy: StrictStructuredStrategy;
+    structuredThinking?: StrictStructuredThinking;
+    structuredTemperature?: number;
+    structuredTopP?: number;
+    structuredMaxTokens?: number;
     timeoutMs: number;
     maxAttempts: number;
     requestBudgetMaxRequests: number;
@@ -81,6 +88,21 @@ function buildEnv(dotEnvValues: Record<string, string>): AppEnv {
         readEnvValue("LLM_STRUCTURED_MODEL", dotEnvValues) ??
         readEnvValue("LLM_MODEL", dotEnvValues) ??
         readEnvValue("OPENAI_MODEL", dotEnvValues),
+      structuredStrategy: readStrictStructuredStrategy(
+        readEnvValue("LLM_STRUCTURED_STRATEGY", dotEnvValues),
+      ),
+      structuredThinking: readStrictStructuredThinking(
+        readEnvValue("LLM_STRUCTURED_THINKING", dotEnvValues),
+      ),
+      structuredTemperature: readOptionalNumber(
+        readEnvValue("LLM_STRUCTURED_TEMPERATURE", dotEnvValues),
+      ),
+      structuredTopP: readOptionalNumber(
+        readEnvValue("LLM_STRUCTURED_TOP_P", dotEnvValues),
+      ),
+      structuredMaxTokens: readOptionalNumber(
+        readEnvValue("LLM_STRUCTURED_MAX_TOKENS", dotEnvValues),
+      ),
       timeoutMs: Number(readEnvValue("LLM_TIMEOUT_MS", dotEnvValues) ?? "45000"),
       maxAttempts: Number(readEnvValue("LLM_MAX_ATTEMPTS", dotEnvValues) ?? "3"),
       requestBudgetMaxRequests: Number(
@@ -95,6 +117,36 @@ function readEnvValue(
   dotEnvValues: Record<string, string>,
 ): string | undefined {
   return process.env[key] ?? dotEnvValues[key];
+}
+
+function readStrictStructuredStrategy(
+  value: string | undefined,
+): StrictStructuredStrategy {
+  if (value === "tool_call" || value === "auto") {
+    return value;
+  }
+
+  return "json_object";
+}
+
+function readStrictStructuredThinking(
+  value: string | undefined,
+): StrictStructuredThinking | undefined {
+  if (value === "enabled" || value === "disabled") {
+    return value;
+  }
+
+  return undefined;
+}
+
+function readOptionalNumber(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function loadLocalDotEnv(): Record<string, string> {

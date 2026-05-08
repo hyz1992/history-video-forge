@@ -11,6 +11,11 @@ const RUNTIME_ENV_KEYS = [
   "LLM_STRUCTURED_BASE_URL",
   "LLM_STRUCTURED_API_KEY",
   "LLM_STRUCTURED_MODEL",
+  "LLM_STRUCTURED_STRATEGY",
+  "LLM_STRUCTURED_THINKING",
+  "LLM_STRUCTURED_TEMPERATURE",
+  "LLM_STRUCTURED_TOP_P",
+  "LLM_STRUCTURED_MAX_TOKENS",
   "LLM_TIMEOUT_MS",
   "OPENAI_BASE_URL",
   "OPENAI_API_KEY",
@@ -45,6 +50,11 @@ describe("runtime env loading", () => {
     process.env.LLM_STRUCTURED_BASE_URL = "https://structured.example.test/v1";
     process.env.LLM_STRUCTURED_API_KEY = "structured-key";
     process.env.LLM_STRUCTURED_MODEL = "glm-4.5-structured";
+    process.env.LLM_STRUCTURED_STRATEGY = "tool_call";
+    process.env.LLM_STRUCTURED_THINKING = "disabled";
+    process.env.LLM_STRUCTURED_TEMPERATURE = "0.5";
+    process.env.LLM_STRUCTURED_TOP_P = "0.9";
+    process.env.LLM_STRUCTURED_MAX_TOKENS = "2048";
     process.env.LLM_TIMEOUT_MS = "32000";
 
     const { env } = await import("../../../backend/src/config/env.js");
@@ -57,6 +67,11 @@ describe("runtime env loading", () => {
       structuredBaseUrl: "https://structured.example.test/v1",
       structuredApiKey: "structured-key",
       structuredModel: "glm-4.5-structured",
+      structuredStrategy: "tool_call",
+      structuredThinking: "disabled",
+      structuredTemperature: 0.5,
+      structuredTopP: 0.9,
+      structuredMaxTokens: 2048,
       timeoutMs: 32000,
     });
   });
@@ -76,6 +91,11 @@ describe("runtime env loading", () => {
     expect(env.llm.apiKey).toBe("openai-key");
     expect(env.llm.model).toBe("glm-4.5");
     expect(env.llm.structuredModel).toBe("glm-4.5");
+    expect(env.llm.structuredStrategy).toBe("json_object");
+    expect(env.llm.structuredThinking).toBeUndefined();
+    expect(env.llm.structuredTemperature).toBeUndefined();
+    expect(env.llm.structuredTopP).toBeUndefined();
+    expect(env.llm.structuredMaxTokens).toBeUndefined();
   });
 
   it("exposes a clear guard for missing real-provider runtime configuration", async () => {
