@@ -38,6 +38,16 @@ function getCandidatePreviewBeats(candidate: StoredTopicCandidate) {
   );
 }
 
+function trimTerminalPunctuation(value: string) {
+  return value.trim().replace(/[。.!！?？；;：:]+$/u, "");
+}
+
+function buildHookClaim(candidate: StoredTopicCandidate, entryPressure?: string) {
+  const selectedAngle = trimTerminalPunctuation(candidate.oneLineAngle);
+
+  return [entryPressure, selectedAngle].filter(Boolean).join(" ");
+}
+
 function buildNarrativeTensionMap(candidate: StoredTopicCandidate) {
   const previewBeats = getCandidatePreviewBeats(candidate);
   const entryPressure = previewBeats[0] ?? candidate.strongScene;
@@ -45,8 +55,8 @@ function buildNarrativeTensionMap(candidate: StoredTopicCandidate) {
   const endingResidue = previewBeats[2] ?? peakPayoff ?? candidate.coreConflict;
 
   return {
-    hook_claim: candidate.oneLineAngle.replace(/[。.!！]+$/u, ""),
-    pressure_escalation: [candidate.coreConflict, entryPressure]
+    hook_claim: buildHookClaim(candidate, entryPressure),
+    pressure_escalation: [candidate.coreConflict, entryPressure, peakPayoff]
       .filter(Boolean)
       .join(" "),
     mid_reveal: entryPressure,
