@@ -51,15 +51,24 @@ export interface TopicCandidateLibraryRepository {
 
 interface CreateTopicCandidateLibraryRepositoryOptions {
   rootDir?: string;
+  writeTextFile?: WriteTextFile;
 }
 
 const CANDIDATES_JSON_FILENAME = "candidates.json";
 const LIBRARY_INDEX_FILENAME = "library-index.json";
+const TRANSIENT_WRITE_ERROR_CODES = new Set(["UNKNOWN", "EBUSY", "EPERM"]);
+
+type WriteTextFile = (
+  filePath: string,
+  contents: string,
+  encoding: BufferEncoding,
+) => void;
 
 export function createTopicCandidateLibraryRepository(
   options: CreateTopicCandidateLibraryRepositoryOptions = {},
 ): TopicCandidateLibraryRepository {
   const rootDir = options.rootDir ?? process.cwd();
+  const writeTextFile = options.writeTextFile ?? writeFileSync;
 
   return {
     async save(document) {
@@ -90,7 +99,8 @@ export function createTopicCandidateLibraryRepository(
         candidates: nextCandidates,
       };
 
-      writeFileSync(
+      writeTextFileWithRetry(
+        writeTextFile,
         filePath,
         serializeTopicCandidateLibraryJsonDocument(nextDocument),
         "utf8",
@@ -100,6 +110,7 @@ export function createTopicCandidateLibraryRepository(
         seedFamily: document.seedFamily,
         seedProfile: document.seedProfile,
         updatedAt: nextDocument.updated_at,
+        writeTextFile,
       });
     },
 
@@ -146,6 +157,7 @@ function writeLibraryIndex(input: {
   seedFamily: string;
   seedProfile: string;
   updatedAt: string;
+  writeTextFile: WriteTextFile;
 }) {
   const indexPath = resolve(
     input.rootDir,
@@ -189,11 +201,44 @@ function writeLibraryIndex(input: {
     ),
   );
 
-  writeFileSync(
+  writeTextFileWithRetry(
+    input.writeTextFile,
     indexPath,
     JSON.stringify({ entries: nextEntries }, null, 2),
     "utf8",
   );
+}
+
+function writeTextFileWithRetry(
+  writeTextFile: WriteTextFile,
+  filePath: string,
+  contents: string,
+  encoding: BufferEncoding,
+) {
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      writeTextFile(filePath, contents, encoding);
+      return;
+    } catch (error) {
+      if (attempt === maxAttempts || !isTransientWriteError(error)) {
+        throw error;
+      }
+      waitForNextWriteAttempt();
+    }
+  }
+}
+
+function isTransientWriteError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" && TRANSIENT_WRITE_ERROR_CODES.has(code);
+}
+
+function waitForNextWriteAttempt() {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
 }
 
 function createEmptyJsonDocument(

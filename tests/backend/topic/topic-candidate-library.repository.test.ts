@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -228,6 +228,49 @@ describe("topic candidate library repository", () => {
           "storage/topic-candidate-library/u8-e4b8ade59bbde58fa4e4bba3e9878de5a4a7e58e86e58fb2e4ba8be4bbb6/u8-e4b8ade59bbde58fa4e4bba3e9878de5a4a7e58e86e58fb2e4ba8be4bbb6/candidates.json",
       }),
     ]);
+  });
+
+  it("retries transient candidate json write failures before surfacing the error", async () => {
+    const rootDir = mkdtempSync(join(tmpdir(), "topic-candidate-library-"));
+    tempDirs.push(rootDir);
+    let candidateJsonWriteAttempts = 0;
+
+    const repository = createTopicCandidateLibraryRepository({
+      rootDir,
+      writeTextFile: (filePath, contents, encoding) => {
+        if (filePath.endsWith("candidates.json")) {
+          candidateJsonWriteAttempts += 1;
+          if (candidateJsonWriteAttempts === 1) {
+            const error = new Error("transient write failure") as NodeJS.ErrnoException;
+            error.code = "UNKNOWN";
+            throw error;
+          }
+        }
+        writeFileSync(filePath, contents, encoding);
+      },
+    });
+
+    await repository.save({
+      candidateId: "candidate-1",
+      seedFamily: "history-diplomacy",
+      seedProfile: "han-court-showdown",
+      status: "unused",
+      sourceProjectId: "project-1",
+      sourceTopicRunId: "topic-run-1",
+      eventIdentity: "yanzi-shichu",
+      title: "yanzi-shichu",
+      oneLineAngle: "a court humiliation must be answered in public",
+      notes: "",
+    });
+
+    const records = await repository.listBySeed({
+      seedFamily: "history-diplomacy",
+      seedProfile: "han-court-showdown",
+    });
+
+    expect(candidateJsonWriteAttempts).toBe(2);
+    expect(records).toHaveLength(1);
+    expect(records[0]?.candidateId).toBe("candidate-1");
   });
 
   it("keeps markdown codec as legacy only and does not require markdown files for formal storage", () => {
