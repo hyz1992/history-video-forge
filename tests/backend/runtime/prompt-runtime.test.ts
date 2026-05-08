@@ -56,10 +56,21 @@ describe("prompt runtime", () => {
 
     expect(prompt.metadata.language).toBe("zh-CN");
     expect(prompt.body).toContain("`must_cover_preview` 三条顺序");
-    expect(prompt.body).toContain("第一条：进入压力");
-    expect(prompt.body).toContain("第二条：峰值动作或高潮兑现");
-    expect(prompt.body).toContain("第三条：代价、余震或第二名句回响");
+    expect(prompt.body).toContain("第一条必须是具体开场压力");
+    expect(prompt.body).toContain("第二条必须是压力转折或高潮兑现");
+    expect(prompt.body).toContain("第三条必须是故事内余震");
     expect(prompt.body).toContain("第二条不得只写准备、训练、铺垫或泛泛强场面");
+  });
+
+  it("keeps candidate preview grounded for opening pressure and story residue", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("第一条必须是具体开场压力");
+    expect(prompt.body).toContain("人物、逼迫动作、即将失去的东西");
+    expect(prompt.body).toContain("第二条必须是压力转折或高潮兑现");
+    expect(prompt.body).toContain("第三条必须是故事内余震");
+    expect(prompt.body).toContain("不得写成脱离故事的现代金句");
   });
 
   it("gives builder a single legal TopicCandidateCard[] output skeleton", () => {
