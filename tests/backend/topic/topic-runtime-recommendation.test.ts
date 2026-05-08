@@ -2484,7 +2484,7 @@ describe("topic runtime recommendation", () => {
     );
   });
 
-  it("fills empty must_cover_preview from existing seed material before exposing raw candidates", async () => {
+  it("fills empty must_cover_preview without prioritizing summary prose", async () => {
     const db = createDbClient();
     const { gateway } = createGatewayWithSelectorResponses([
       [
@@ -2511,6 +2511,10 @@ describe("topic runtime recommendation", () => {
         strongScene: "the room goes silent after the public answer",
         sourceHint: "test",
         recentUsageHint: "empty preview from builder",
+        canonicalQuotes: [
+          "first quote anchor",
+          "second quote anchor",
+        ],
       },
       {
         llmGateway: gateway,
@@ -2518,10 +2522,13 @@ describe("topic runtime recommendation", () => {
     );
 
     expect(result.raw_candidates[0]?.must_cover_preview).toEqual([
-      "the seed starts with a public standoff",
       "the room goes silent after the public answer",
-      "the protagonist must answer pressure in front of everyone",
+      "first quote anchor",
+      "second quote anchor",
     ]);
+    expect(result.raw_candidates[0]?.must_cover_preview).not.toContain(
+      "the seed starts with a public standoff",
+    );
   });
 
   it("repairs hybrid builder candidates that expose one_line_angle before the full TopicCandidateCard contract", async () => {

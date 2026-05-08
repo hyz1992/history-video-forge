@@ -167,8 +167,8 @@ function completeMustCoverPreview(
 
   return uniqueStrings([
     ...normalizedPreview,
-    runtime.input.summary.trim(),
     runtime.input.strongScene.trim(),
+    ...(runtime.input.canonicalQuotes ?? []).map((quote) => quote.trim()),
     runtime.input.coreConflict.trim(),
     description.trim(),
   ].filter((item) => item.length > 0)).slice(0, 3);
