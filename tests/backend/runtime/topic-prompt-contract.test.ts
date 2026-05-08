@@ -47,15 +47,16 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("不得自定义额外评分键");
   });
 
-  it("requires candidate-builder must_cover_preview to carry script-writable beats", () => {
+  it("requires candidate-builder must_cover_preview to carry auditable narrative nodes", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 
     expect(prompt.metadata.language).toBe("zh-CN");
     expect(prompt.body).toContain(
-      "`must_cover_preview` 必须给出 3 条可写入脚本的具体 beat",
+      "`must_cover_preview` 必须给出 3 条可交给脚本审计的叙事节点",
     );
     expect(prompt.body).toContain("进入局面、关键动作、压力/代价");
     expect(prompt.body).toContain("不得把同一句角度摘要改写三遍");
+    expect(prompt.body).not.toContain("可写入脚本的具体 beat");
   });
 
   it("requires candidate-builder must_cover_preview to be beat nodes instead of prose sentences", () => {
@@ -148,12 +149,13 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("只补齐缺失字段");
   });
 
-  it("requires builder-repair to fill missing must_cover_preview as beat nodes", () => {
+  it("requires builder-repair to fill missing must_cover_preview as auditable narrative nodes", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder-repair");
 
     expect(prompt.metadata.language).toBe("zh-CN");
     expect(prompt.body).toContain("如果补齐 `must_cover_preview`");
-    expect(prompt.body).toContain("叙事节点，不是正文句");
+    expect(prompt.body).toContain("可交给脚本审计的叙事节点");
+    expect(prompt.body).toContain("不是正文句");
     expect(prompt.body).toContain("不写解释性评价或完整总结句");
   });
 
