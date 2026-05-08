@@ -65,5 +65,18 @@ describe("topic script smoke harness", () => {
     ) as { stage: string; decision: string };
     expect(semanticReview.stage).toBe("script_semantic_review");
     expect(["pass", "patch_once", "skipped"]).toContain(semanticReview.decision);
+
+    const previewTrace = JSON.parse(
+      readFileSync(join(outputDir, "topic-candidate-preview-trace.json"), "utf8"),
+    ) as {
+      raw_candidates: Array<{ must_cover_preview: string[] }>;
+      selector_pool: Array<{ must_cover_preview: string[] }>;
+      final_candidates: Array<{ must_cover_preview: string[] }>;
+    };
+
+    expect(previewTrace.final_candidates.length).toBeGreaterThan(0);
+    expect(previewTrace.final_candidates[0]?.must_cover_preview.length).toBeGreaterThan(0);
+    expect(Array.isArray(previewTrace.raw_candidates)).toBe(true);
+    expect(Array.isArray(previewTrace.selector_pool)).toBe(true);
   });
 });

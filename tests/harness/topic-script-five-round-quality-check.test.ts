@@ -30,6 +30,7 @@ describe("topic script five round quality check", () => {
       "harness/samples/topic-script/hongmenyan.sample.json",
       "harness/samples/topic-script/yanzi-shichu.sample.json",
     ]);
+    expect(plan.required_artifacts).toContain("topic-candidate-preview-trace.json");
   });
 
   it("runs through the live check runner and keeps npm documentation discoverable", async () => {

@@ -84,6 +84,10 @@ export async function runTopicScriptSmoke(
   const recommendationBody = recommendationResponse.json();
   const candidates = recommendationBody.candidates as Array<{
     candidate_id: string;
+    event_identity: string;
+    title: string;
+    one_line_angle: string;
+    must_cover_preview: string[];
   }>;
 
   const selectedCandidate =
@@ -116,6 +120,21 @@ export async function runTopicScriptSmoke(
   mkdirSync(finalOutputDir, { recursive: true });
 
   writeJson(finalOutputDir, "topic-candidates.json", recommendationBody.candidates);
+  writeJson(
+    finalOutputDir,
+    "topic-candidate-preview-trace.json",
+    recommendationBody.runtime_diagnostics?.candidate_preview_trace ?? {
+      raw_candidates: [],
+      selector_pool: [],
+      final_candidates: candidates.map((candidate) => ({
+        candidate_id: candidate.candidate_id,
+        event_identity: candidate.event_identity,
+        title: candidate.title,
+        one_line_angle: candidate.one_line_angle,
+        must_cover_preview: candidate.must_cover_preview,
+      })),
+    },
+  );
   writeJson(finalOutputDir, "topic-package.json", confirmBody.topic_package);
   writeJson(finalOutputDir, "script-input-bundle.json", scriptBody.input_bundle);
   writeJson(finalOutputDir, "script-draft.json", scriptBody.draft);

@@ -153,6 +153,7 @@ export function buildTopicScriptLiveCheckPlan(
       "topic-package.json",
       "script-input-bundle.json",
       "script-draft.json",
+      "topic-candidate-preview-trace.json",
       "graph-trace-summary.json",
       "runtime-diagnostics.json",
       "trace.md",

@@ -35,6 +35,7 @@ describe("topic script live check", () => {
       expect.arrayContaining([
         "graph-trace-summary.json",
         "runtime-diagnostics.json",
+        "topic-candidate-preview-trace.json",
         "script-draft.json",
       ]),
     );
