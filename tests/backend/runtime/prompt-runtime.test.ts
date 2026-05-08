@@ -402,6 +402,82 @@ describe("prompt runtime", () => {
     });
   });
 
+  it("delegates invokeStrictStructured through the provider contract", async () => {
+    const interactionLogWriter = {
+      write: vi.fn(),
+    };
+    const provider: StructuredPromptProvider = {
+      invokeStructuredPrompt: vi.fn(),
+      invokeStrictStructured: vi.fn(async ({ schema, parse }) =>
+        parse({
+          schemaName: schema.name,
+        }),
+      ),
+    };
+    const gateway = createLlmGateway({
+      provider,
+      registry: createPromptRegistry(),
+    });
+
+    const result = await gateway.invokeStrictStructured<{
+      schemaName: string;
+    }>({
+      promptId: "topic.selector",
+      input: {
+        selector_pool: [],
+      },
+      operationName: "topic.selector",
+      schema: {
+        name: "select_topic_candidates",
+        description: "Select topic candidates.",
+        parameters: {
+          type: "object",
+          properties: {
+            selected_candidate_ids: {
+              type: "array",
+              items: {
+                type: "string",
+              },
+            },
+          },
+          required: ["selected_candidate_ids"],
+          additionalProperties: false,
+        },
+      },
+      parse: (candidate) => candidate as { schemaName: string },
+      options: {
+        strategy: "tool_call",
+        thinking: "disabled",
+      },
+      interactionLogWriter,
+    });
+
+    expect(provider.invokeStrictStructured).toHaveBeenCalledTimes(1);
+    expect(provider.invokeStrictStructured).toHaveBeenCalledWith(
+      expect.objectContaining({
+        input: {
+          selector_pool: [],
+        },
+        operationName: "topic.selector",
+        interactionLogWriter,
+        schema: expect.objectContaining({
+          name: "select_topic_candidates",
+        }),
+        options: expect.objectContaining({
+          strategy: "tool_call",
+          thinking: "disabled",
+        }),
+        prompt: expect.objectContaining({
+          metadata: expect.objectContaining({
+            id: "topic.selector",
+            language: "zh-CN",
+          }),
+        }),
+      }),
+    );
+    expect(result.schemaName).toBe("select_topic_candidates");
+  });
+
   it("classifies rate limits as retryable external service errors and retries once", async () => {
     const { ExternalServiceError, withRetry } = await import(
       "../../../backend/src/runtime/llm/external-errors.js"
