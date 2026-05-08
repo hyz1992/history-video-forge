@@ -40,23 +40,27 @@ function getCandidatePreviewBeats(candidate: StoredTopicCandidate) {
 
 function buildNarrativeTensionMap(candidate: StoredTopicCandidate) {
   const previewBeats = getCandidatePreviewBeats(candidate);
+  const entryPressure = previewBeats[0] ?? candidate.strongScene;
+  const peakPayoff = previewBeats[1] ?? candidate.strongScene;
+  const endingResidue = previewBeats[2] ?? peakPayoff ?? candidate.coreConflict;
 
   return {
     hook_claim: candidate.oneLineAngle.replace(/[。.!！]+$/u, ""),
-    pressure_escalation: candidate.coreConflict,
-    mid_reveal: previewBeats[1] ?? previewBeats[0] ?? candidate.strongScene,
-    peak_payoff: candidate.strongScene,
-    ending_residue:
-      previewBeats[2] ?? previewBeats[1] ?? candidate.coreConflict,
+    pressure_escalation: [candidate.coreConflict, entryPressure]
+      .filter(Boolean)
+      .join(" "),
+    mid_reveal: entryPressure,
+    peak_payoff: peakPayoff,
+    ending_residue: endingResidue,
   };
 }
 
 function buildStakes(candidate: StoredTopicCandidate) {
   const previewBeats = getCandidatePreviewBeats(candidate);
-  const stakesMaterial =
+  const peakOrResidue =
     previewBeats[2] ?? previewBeats[1] ?? candidate.strongScene;
 
-  return `${candidate.coreConflict} ${stakesMaterial}`;
+  return `${candidate.coreConflict} ${peakOrResidue}`;
 }
 
 function buildMustIncludeBeats(candidate: StoredTopicCandidate) {
