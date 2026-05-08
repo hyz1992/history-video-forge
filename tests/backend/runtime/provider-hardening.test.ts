@@ -121,6 +121,55 @@ describe("provider hardening", () => {
     });
   });
 
+  it("includes provider error response body when structured requests are rejected", async () => {
+    const originalFetch = globalThis.fetch;
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+    globalThis.fetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          error: {
+            message:
+              "When response_format is json_object, messages must include json.",
+            type: "invalid_request_error",
+          },
+        }),
+        {
+          status: 400,
+          statusText: "Bad Request",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ),
+    ) as typeof fetch;
+    const provider = createOpenAiCompatibleProvider({
+      model: "deepseek-v4-pro",
+      baseUrl: "https://api.deepseek.example",
+      apiKey: "test-key",
+      maxAttempts: 1,
+    });
+
+    try {
+      await expect(
+        provider.invokeStructuredPrompt({
+          prompt,
+          input: {
+            bundle: {},
+          },
+          operationName: "script.writer",
+        }),
+      ).rejects.toMatchObject({
+        name: "ExternalServiceError",
+        code: "invalid_request",
+        debugMessage: expect.stringContaining(
+          "messages must include json",
+        ) as unknown,
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("invokes strict structured requests through tool calls and parses function arguments", async () => {
     const prompt = createPromptRegistry().getPrompt("topic.selector");
     const argumentsJson = JSON.stringify({

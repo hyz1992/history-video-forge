@@ -184,6 +184,19 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("结尾要留下代价、反讽或判断");
   });
 
+  it("keeps script writer compatible with JSON mode providers", () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("合法 JSON 对象");
+    expect(prompt.body).toContain("JSON 输出骨架");
+    expect(prompt.body).toContain('"script_text"');
+    expect(prompt.body).toContain('"estimated_duration_sec"');
+    expect(prompt.body).toContain('"opening_span"');
+    expect(prompt.body).toContain('"ending_span"');
+    expect(prompt.body).toContain("不得输出 Markdown 或解释文字");
+  });
+
   it("keeps script writer endings anchored to residue instead of generic historical praise", () => {
     const prompt = createPromptRegistry().getPrompt("script.writer");
 

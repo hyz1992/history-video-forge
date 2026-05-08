@@ -20,6 +20,7 @@ status: active
 ## 输出对象
 
 - `ScriptDraftPackage`
+- 必须输出合法 JSON 对象，且只能输出 JSON；不得输出 Markdown 或解释文字
 - 必须包含：
   - `script_text`
   - `estimated_duration_sec`
@@ -27,6 +28,30 @@ status: active
   - `quote_trace`
   - `opening_span`
   - `ending_span`
+- JSON 输出骨架：
+
+```json
+{
+  "script_text": "可口播的历史故事正文",
+  "estimated_duration_sec": 85,
+  "beat_trace": [
+    {
+      "beat": "逐字复用 hard_lane.must_include_beats 中的一条 beat",
+      "excerpt": "从 script_text 截取的完整短句",
+      "confidence": 0.9
+    }
+  ],
+  "quote_trace": [
+    {
+      "quote": "输入中的名句",
+      "usage_type": "exact",
+      "excerpt": "从 script_text 截取的完整短句"
+    }
+  ],
+  "opening_span": "script_text 的开头片段",
+  "ending_span": "script_text 的结尾片段"
+}
+```
 
 ## 硬约束
 

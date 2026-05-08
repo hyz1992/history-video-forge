@@ -345,7 +345,7 @@ function createDefaultInvokeApi(options: {
     });
 
     if (!response.ok) {
-      throw new Error(`${response.status} ${response.statusText}`);
+      throw new Error(await buildHttpErrorMessage(response));
     }
 
     const payload = (await response.json()) as {
@@ -437,7 +437,7 @@ function createDefaultInvokeStrictApi(options: {
     });
 
     if (!response.ok) {
-      throw new Error(`${response.status} ${response.statusText}`);
+      throw new Error(await buildHttpErrorMessage(response));
     }
 
     const payload = (await response.json()) as {
@@ -482,6 +482,19 @@ function recoverJsonCandidate(rawOutput: string): string | null {
 
 function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/u, "");
+}
+
+async function buildHttpErrorMessage(response: Response): Promise<string> {
+  const statusLine = `${response.status} ${response.statusText}`.trim();
+
+  try {
+    const body = await response.text();
+    const trimmed = body.trim();
+
+    return trimmed ? `${statusLine}: ${trimmed}` : statusLine;
+  } catch {
+    return statusLine;
+  }
 }
 
 function withTimeout<T>(
