@@ -1336,6 +1336,124 @@ describe("topic runtime recommendation", () => {
     ]);
   });
 
+  it("uses strict structured invocation for topic.selector when the gateway supports it", async () => {
+    const db = createDbClient();
+    const strictCalls: unknown[] = [];
+    const structuredCalls: unknown[] = [];
+    const gateway = {
+      invokeStructuredPrompt: vi.fn(async (request) => {
+        structuredCalls.push(request);
+        return [
+          createRuntimeCandidate("event-a", "angle-a"),
+          createRuntimeCandidate("event-b", "angle-b"),
+          createRuntimeCandidate("event-c", "angle-c"),
+          createRuntimeCandidate("event-d", "angle-d"),
+          createRuntimeCandidate("event-e", "angle-e"),
+          createRuntimeCandidate("event-f", "angle-f"),
+          createRuntimeCandidate("event-g", "angle-g"),
+          createRuntimeCandidate("event-h", "angle-h"),
+        ];
+      }),
+      invokeStrictStructured: vi.fn(async (request) => {
+        strictCalls.push(request);
+        return {
+          selected_candidate_ids: [
+            "selector_candidate_1",
+            "selector_candidate_2",
+            "selector_candidate_3",
+          ],
+        };
+      }),
+    };
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "selector should prefer strict structured output when available",
+        coreConflict: "strict selector output should stay machine-contract shaped",
+        strongScene: "the selector returns exactly three ids through the strict path",
+        sourceHint: "test",
+        recentUsageHint: "none",
+      },
+      {
+        llmGateway: gateway,
+      },
+    );
+
+    expect(result.selector_trace?.selected_candidate_ids).toEqual([
+      "selector_candidate_1",
+      "selector_candidate_2",
+      "selector_candidate_3",
+    ]);
+    expect(gateway.invokeStrictStructured).toHaveBeenCalledWith(
+      expect.objectContaining({
+        promptId: "topic.selector",
+        schema: expect.objectContaining({
+          name: "select_topic_candidates",
+        }),
+        options: expect.objectContaining({
+          strategy: "tool_call",
+          thinking: "disabled",
+        }),
+      }),
+    );
+    expect(
+      structuredCalls.filter(
+        (request) =>
+          (request as { operationName?: string; promptId?: string }).operationName ===
+            "topic.selector" ||
+          (request as { operationName?: string; promptId?: string }).promptId ===
+            "topic.selector",
+      ),
+    ).toHaveLength(0);
+    expect(strictCalls).toHaveLength(1);
+  });
+
+  it("rejects strict topic.selector output that uses answer.selected_ids instead of selected_candidate_ids", async () => {
+    const db = createDbClient();
+    const gateway = {
+      invokeStructuredPrompt: vi.fn(async () => [
+        createRuntimeCandidate("event-a", "angle-a"),
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+        createRuntimeCandidate("event-d", "angle-d"),
+        createRuntimeCandidate("event-e", "angle-e"),
+        createRuntimeCandidate("event-f", "angle-f"),
+        createRuntimeCandidate("event-g", "angle-g"),
+        createRuntimeCandidate("event-h", "angle-h"),
+      ]),
+      invokeStrictStructured: vi.fn(async (request) =>
+        request.parse({
+          answer: {
+            selected_ids: [
+              "selector_candidate_1",
+              "selector_candidate_2",
+              "selector_candidate_3",
+            ],
+          },
+        }),
+      ),
+    };
+
+    await expect(
+      recommendTopicCandidatesWithTrace(
+        db,
+        {
+          canonicalName: "seed-a",
+          summary: "strict selector output should not accept answer wrappers",
+          coreConflict: "field aliases must not hide strict schema drift",
+          strongScene: "the selector returns a wrapped answer shape",
+          sourceHint: "test",
+          recentUsageHint: "none",
+        },
+        {
+          llmGateway: gateway,
+        },
+      ),
+    ).rejects.toThrow("topic_selector_strict_schema_failed");
+  });
+
   it("accepts selector outputs returned through the common answer field and trims extra valid ids", async () => {
     const db = createDbClient();
     const invokeApi = vi

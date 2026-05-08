@@ -51,6 +51,26 @@ interface TopicSelectorDecision {
   selected_candidate_ids: string[];
 }
 
+const TOPIC_SELECTOR_STRICT_SCHEMA = {
+  name: "select_topic_candidates",
+  description: "Select exactly three topic candidate ids from the selector pool.",
+  parameters: {
+    type: "object",
+    properties: {
+      selected_candidate_ids: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+        minItems: TOPIC_CANDIDATE_TARGET_COUNT,
+        maxItems: TOPIC_CANDIDATE_TARGET_COUNT,
+      },
+    },
+    required: ["selected_candidate_ids"],
+    additionalProperties: false,
+  },
+} as const;
+
 export async function recommendTopicCandidatesWithTrace(
   db: DbClient,
   input: BuildTopicCandidatesInput,
@@ -678,17 +698,15 @@ async function selectFinalCandidatesWithTrace(input: {
   };
 }) {
   const diagnostics: RecommendationDiagnostic[] = [];
-  const firstDecision = normalizeSelectorDecision(
-    await input.llmGateway.invokeStructuredPrompt<unknown>({
-      promptId: "topic.selector",
-      input: {
-        recommendation_seed: input.input,
-        selector_pool: input.selectorPool,
-        recent_event_memory: input.recentEventMemory,
-      },
-      interactionLogWriter: input.interactionLogWriter,
-    }),
-  );
+  const firstDecision = await invokeTopicSelector({
+    llmGateway: input.llmGateway,
+    selectorInput: {
+      recommendation_seed: input.input,
+      selector_pool: input.selectorPool,
+      recent_event_memory: input.recentEventMemory,
+    },
+    interactionLogWriter: input.interactionLogWriter,
+  });
   const firstPass = inspectSelectorDecision({
     decision: firstDecision,
     selectorPool: input.selectorPool,
@@ -707,23 +725,21 @@ async function selectFinalCandidatesWithTrace(input: {
       reason: `selector 首轮仅返回 ${firstPass.selectedIds.length} 个有效候选，已触发一次受控补位`,
     });
 
-    const repairDecision = normalizeSelectorDecision(
-      await input.llmGateway.invokeStructuredPrompt<unknown>({
-        promptId: "topic.selector",
-        input: {
-          recommendation_seed: input.input,
-          selector_pool: input.selectorPool,
-          recent_event_memory: input.recentEventMemory,
-          repair_context: {
-            missing_slot_count: firstPass.missingSlotCount,
-            kept_candidate_ids: firstPass.selectedIds,
-            excluded_candidate_ids: firstPass.excludedCandidateIds,
-            excluded_event_identities: firstPass.excludedEventIdentities,
-          },
+    const repairDecision = await invokeTopicSelector({
+      llmGateway: input.llmGateway,
+      selectorInput: {
+        recommendation_seed: input.input,
+        selector_pool: input.selectorPool,
+        recent_event_memory: input.recentEventMemory,
+        repair_context: {
+          missing_slot_count: firstPass.missingSlotCount,
+          kept_candidate_ids: firstPass.selectedIds,
+          excluded_candidate_ids: firstPass.excludedCandidateIds,
+          excluded_event_identities: firstPass.excludedEventIdentities,
         },
-        interactionLogWriter: input.interactionLogWriter,
-      }),
-    );
+      },
+      interactionLogWriter: input.interactionLogWriter,
+    });
 
     const repairPass = inspectSelectorDecision({
       decision: repairDecision,
@@ -754,6 +770,82 @@ async function selectFinalCandidatesWithTrace(input: {
       repair_attempts: repairAttempts,
     } satisfies SelectorTrace,
     diagnostics,
+  };
+}
+
+async function invokeTopicSelector(input: {
+  llmGateway: LlmGateway;
+  selectorInput: unknown;
+  interactionLogWriter?: {
+    write: (...args: unknown[]) => Promise<void> | void;
+  };
+}): Promise<TopicSelectorDecision> {
+  if (input.llmGateway.invokeStrictStructured) {
+    try {
+      return await input.llmGateway.invokeStrictStructured<TopicSelectorDecision>({
+        promptId: "topic.selector",
+        input: input.selectorInput,
+        schema: TOPIC_SELECTOR_STRICT_SCHEMA,
+        parse: parseStrictSelectorDecision,
+        options: {
+          strategy: "tool_call",
+          thinking: "disabled",
+        },
+        interactionLogWriter: input.interactionLogWriter,
+      });
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        (error.message.includes("strict_structured_provider_not_supported") ||
+          error.message.includes("LLM API key or base URL is not configured."))
+      ) {
+        return normalizeSelectorDecision(
+          await input.llmGateway.invokeStructuredPrompt<unknown>({
+            promptId: "topic.selector",
+            input: input.selectorInput,
+            interactionLogWriter: input.interactionLogWriter,
+          }),
+        );
+      }
+
+      throw error;
+    }
+  }
+
+  return normalizeSelectorDecision(
+    await input.llmGateway.invokeStructuredPrompt<unknown>({
+      promptId: "topic.selector",
+      input: input.selectorInput,
+      interactionLogWriter: input.interactionLogWriter,
+    }),
+  );
+}
+
+function parseStrictSelectorDecision(rawOutput: unknown): TopicSelectorDecision {
+  if (!rawOutput || typeof rawOutput !== "object" || Array.isArray(rawOutput)) {
+    throw new Error("topic_selector_strict_schema_failed");
+  }
+
+  const record = rawOutput as Record<string, unknown>;
+  const ids = record.selected_candidate_ids;
+
+  if (!Array.isArray(ids)) {
+    throw new Error("topic_selector_strict_schema_failed");
+  }
+
+  if (ids.some((candidateId) => typeof candidateId !== "string")) {
+    throw new Error("topic_selector_strict_schema_failed");
+  }
+
+  const extraKeys = Object.keys(record).filter(
+    (key) => key !== "selected_candidate_ids",
+  );
+  if (extraKeys.length > 0) {
+    throw new Error("topic_selector_strict_schema_failed");
+  }
+
+  return {
+    selected_candidate_ids: ids,
   };
 }
 
