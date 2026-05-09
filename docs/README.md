@@ -34,16 +34,18 @@
 4. [项目生命周期设计](./architecture/project-lifecycle.md)
 5. [Pipeline IO 规范](./architecture/pipeline-io-spec.md)
 6. [Downstream 高层设计留档](./architecture/downstream-stage-high-level-design.md)
-7. [Topic 阶段设计](./architecture/topic-stage-design.md)
-8. [Script 阶段设计](./architecture/script-stage-design.md)
-9. [Script 校验规范](./architecture/script-validation-spec.md)
-10. [字段设计](./data/field-design.md)
-11. [Schema 设计](./data/schema-design.md)
-12. [API 设计](./architecture/api-design.md)
-13. [Follow-up Backlog 整理](./records/2026-05-01-follow-up-backlog.md)
-14. [Plans 状态说明](./plans/README.md)
-15. [Records 状态说明](./records/README.md)
-16. [当前 Todo](./todos/roadmap-todo.md)
+7. [Storyboard 阶段设计计划](./plans/2026-05-09-storyboard-stage-design.md)
+8. [Storyboard 阶段实施计划](./plans/2026-05-09-storyboard-stage-implementation-plan.md)
+9. [Topic 阶段设计](./architecture/topic-stage-design.md)
+10. [Script 阶段设计](./architecture/script-stage-design.md)
+11. [Script 校验规范](./architecture/script-validation-spec.md)
+12. [字段设计](./data/field-design.md)
+13. [Schema 设计](./data/schema-design.md)
+14. [API 设计](./architecture/api-design.md)
+15. [Follow-up Backlog 整理](./records/2026-05-01-follow-up-backlog.md)
+16. [Plans 状态说明](./plans/README.md)
+17. [Records 状态说明](./records/README.md)
+18. [当前 Todo](./todos/roadmap-todo.md)
 
 ---
 
@@ -105,6 +107,8 @@
 ### 计划与执行
 
 - [Plans 状态说明](./plans/README.md)
+- [Storyboard 阶段设计计划](./plans/2026-05-09-storyboard-stage-design.md)
+- [Storyboard 阶段实施计划](./plans/2026-05-09-storyboard-stage-implementation-plan.md)
 - [Topic + Script 历史计划归档](./plans/archive/topic-script/)
 - [当前 Todo](./todos/roadmap-todo.md)
 

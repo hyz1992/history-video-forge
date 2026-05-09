@@ -9,6 +9,9 @@
 截至 2026-05-09：
 
 - `topic + script` 第一阶段已暂时冻结。
+- 当前未归档计划：
+  - [Storyboard Stage Design](./2026-05-09-storyboard-stage-design.md)
+  - [Storyboard Stage Implementation Plan](./2026-05-09-storyboard-stage-implementation-plan.md)
 - 既有 topic/script/harness/UI acceptance 计划已归档到 [archive/topic-script](./archive/topic-script/)。
 - archive 中的计划只作为历史证据和追溯材料，不是当前任务入口。
 - 新 agent 不应从 archive 中挑选旧 implementation plan 继续执行。
@@ -19,4 +22,3 @@
 - 如果 archive 计划与正式架构文档冲突，以正式架构文档为准。
 - 如果需要重启 archive 中的某个方向，应先重新写当前日期的 design + implementation plan，而不是直接续跑旧计划。
 - 新的视频流水线阶段计划应先放在 `docs/plans/` 根目录；完成并被正式文档吸收后再归档。
-
