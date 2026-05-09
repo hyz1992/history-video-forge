@@ -141,6 +141,23 @@ describe("prompt runtime", () => {
     expect(prompt.filePath.replace(/\\/g, "/")).toContain("/harness/prompts/script/");
   });
 
+  it("loads storyboard.storyboard-planner from harness prompts with zh-CN metadata", () => {
+    const registry = createPromptRegistry();
+
+    const prompt = registry.getPrompt("storyboard.storyboard-planner");
+
+    expect(prompt.metadata.id).toBe("storyboard.planner");
+    expect(prompt.metadata.stage).toBe("storyboard");
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.filePath.replace(/\\/g, "/")).toContain(
+      "/harness/prompts/storyboard/",
+    );
+    expect(prompt.body).toContain("StoryboardPlan");
+    expect(prompt.body).toContain("script_excerpt");
+    expect(prompt.body).toContain("不得改写 script_text");
+    expect(prompt.body).toContain("不得输出素材生成任务");
+  });
+
   it("keeps script writer opening contract scene-grounded without treating hook_claim as a draft template", () => {
     const prompt = createPromptRegistry().getPrompt("script.writer");
 

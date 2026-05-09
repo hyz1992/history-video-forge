@@ -98,4 +98,28 @@ status: active
 
     expect(issues).toEqual([]);
   });
+
+  it("允许 storyboard prompt 使用 storyboard stage 并匹配目录", () => {
+    const content = `---
+id: storyboard.planner
+stage: storyboard
+language: zh-CN
+consumes:
+  - ScriptDraftPackage
+produces:
+  - StoryboardPlan
+status: active
+---
+
+# 任务
+
+生成视觉段落计划。`;
+
+    const issues = validatePromptContent(
+      "harness/prompts/storyboard/storyboard-planner.prompt.md",
+      content,
+    );
+
+    expect(issues).toEqual([]);
+  });
 });

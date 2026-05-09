@@ -3,7 +3,7 @@ import { join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REQUIRED_FIELDS = ["id", "stage", "language", "consumes", "produces", "status"] as const;
-const VALID_STAGES = new Set(["topic", "script"]);
+const VALID_STAGES = new Set(["topic", "script", "storyboard"]);
 const VALID_STATUSES = new Set(["active", "draft", "deprecated"]);
 
 type PromptMetadata = Record<string, string | string[]>;
@@ -109,7 +109,7 @@ export function validatePromptContent(filePath: string, content: string): string
 
   const stage = metadata.stage;
   if (typeof stage !== "string" || !VALID_STAGES.has(stage)) {
-    issues.push("stage 必须是 topic 或 script");
+    issues.push("stage 必须是 topic、script 或 storyboard");
   } else if (!stageMatchesPath(filePath, stage)) {
     issues.push(`stage 与 prompt 所在目录不一致：${stage}`);
   }
