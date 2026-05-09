@@ -249,8 +249,11 @@ script 生成阶段不只输出正文，还要输出轻量 sidecar：
 | `bundle 完整性` | `Script Input Bundle` 必需字段缺失 | `hard_fail` |
 | `draft 完整性` | `script_text / estimated_duration_sec / beat_trace / opening_span / ending_span` 缺失 | `hard_fail` |
 | `正文非空` | `script_text` 为空或明显残缺 | `regen_once` |
+| `正文体量过薄` | 正文低于当前时长档位的结构下限 | `regen_once` |
+| `估时与正文体量失真` | `estimated_duration_sec` 明显高于正文体量可支撑的口播时长 | `regen_once` |
 | `beat 覆盖缺失` | 任一 `must_include_beat` 没有 trace | `regen_once` |
 | `beat_trace excerpt 过短` | excerpt 明显不足以证明命中 | `regen_once` |
+| `beat_trace excerpt 脱离正文` | excerpt 无法在 `script_text` 中找到 | `regen_once` |
 | `quote_trace 缺失` | 使用了锚句但未标明 `exact/paraphrase` | `regen_once` |
 | `严重时长异常` | 明显超出当前档位合理范围 | `regen_once` |
 | `极端时长异常` | 明显说明 topic 与正文完全错位 | `hard_fail` |
@@ -266,7 +269,9 @@ script 生成阶段不只输出正文，还要输出轻量 sidecar：
   - 偏离 `duration_band` 不超过 `15%`：只记 `warning`
   - 偏离 `duration_band` 在 `15% ~ 35%`：`regen_once`
   - 偏离 `duration_band` 超过 `35%`：`hard_fail`
-- `beat_trace.excerpt` 少于 `8` 个汉字等价长度时，视为“命中过弱”，按 `regen_once` 处理
+- 正文体量下限：`short=180字/6句`，`medium=320字/8句`，`long=420字/10句`
+- 若 `script_char_count / estimated_duration_sec < 3.6`，视为估时明显虚高，按 `regen_once` 处理
+- `beat_trace.excerpt` 少于 `14` 个汉字等价长度，或 excerpt 无法在 `script_text` 中找到时，视为 trace 命中不足，按 `regen_once` 处理
 - `quote_trace` 只有在正文实际使用了 `canonical_quotes` 时才强制要求存在；若使用了锚句但未标明 `usage_type` 或 excerpt 为空，按 `regen_once` 处理
 - 本地硬校验建议返回：
   - `decision`

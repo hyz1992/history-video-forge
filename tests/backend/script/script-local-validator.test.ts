@@ -105,10 +105,14 @@ describe("script local validator", () => {
       bundle: scriptInputBundle,
     });
 
+    const volumeReadyDraft = {
+      ...draft,
+      script_text: `${draft.script_text}\n楚王退到案后，满堂一时无人接话，晏子把被压住的场面重新夺回来，也让这场羞辱变成楚王自己的难堪。`,
+    };
     const upperBoundaryResult = validateScriptDraft({
       bundle: scriptInputBundle,
       draft: {
-        ...draft,
+        ...volumeReadyDraft,
         estimated_duration_sec: 95,
       },
     });
@@ -182,8 +186,8 @@ describe("script local validator", () => {
     expect(result.errors).toContain("script_body_too_thin");
     expect(result.metrics).toMatchObject({
       script_char_count: thinScript.length,
-      min_script_chars_for_band: 240,
-      min_sentence_count_for_band: 7,
+      min_script_chars_for_band: 320,
+      min_sentence_count_for_band: 8,
     });
   });
 
@@ -226,15 +230,106 @@ describe("script local validator", () => {
       },
     });
 
-    expect(shortSentenceSummary.length).toBeLessThan(240);
+    expect(shortSentenceSummary.length).toBeLessThan(320);
     expect(result.decision).toBe("regen_once");
     expect(result.errors).toContain("script_body_too_thin");
     expect(result.metrics).toMatchObject({
       script_char_count: shortSentenceSummary.length,
       script_sentence_count: 9,
-      min_script_chars_for_band: 240,
-      min_sentence_count_for_band: 7,
+      min_script_chars_for_band: 320,
+      min_sentence_count_for_band: 8,
     });
+  });
+
+  it("returns regen_once when estimated duration is too high for the body volume", async () => {
+    const draft = await generateScriptDraft({
+      bundle: scriptInputBundle,
+    });
+    const body =
+      Array.from(
+        { length: 9 },
+        () => "楚王把羞辱压到晏子面前，晏子当场接住压力，满堂甲士和侍臣沉默看他反击。",
+      ).join("") +
+      "楚王脸色转冷，场面彻底翻转。";
+
+    expect(body.length).toBeGreaterThanOrEqual(320);
+    expect(body.length).toBeLessThan(Math.ceil(95 * 3.6));
+
+    const result = validateScriptDraft({
+      bundle: scriptInputBundle,
+      draft: {
+        ...draft,
+        script_text: body,
+        estimated_duration_sec: 95,
+        opening_span: "楚王把狗门摆在晏子面前，第一眼就是羞辱。",
+        ending_span: "两次压场都被顶回，楚王想立威，反倒把自己的粗鄙暴露出来。",
+        beat_trace: [
+          {
+            beat: "入楚受辱",
+            excerpt: "楚王把狗门摆在晏子面前，第一眼就是羞辱。",
+            confidence: 0.9,
+          },
+          {
+            beat: "橘淮之辩",
+            excerpt: "晏子借橘淮之辩反击，把问题重新推回楚国水土。",
+            confidence: 0.9,
+          },
+        ],
+      },
+    });
+
+    expect(result.decision).toBe("regen_once");
+    expect(result.errors).toContain("duration_body_mismatch");
+    expect(result.metrics).toMatchObject({
+      script_char_count: body.length,
+      estimated_duration_sec: 95,
+    });
+    expect(Number(result.metrics.chars_per_estimated_second)).toBeLessThan(3.6);
+  });
+
+  it("returns regen_once when beat trace excerpts are detached from script text", async () => {
+    const draft = await generateScriptDraft({
+      bundle: scriptInputBundle,
+    });
+    const body = [
+      "楚王把门开在侧边，意思很明白：你晏子个子矮，就从这里进去。",
+      "晏子没有急，也没有退，他站在门前先把规矩抬出来。",
+      "他说，出使狗国的人，才从狗门入；现在他来的是楚国，就该走楚国使臣该走的门。",
+      "第一下羞辱被顶回去，楚王没有收手，又把话压到齐国头上。",
+      "晏子顺势把压力接住，让这场争脸面的话，变成两国礼法的较量。",
+      "到橘淮之辩时，楚王想借盗贼羞辱齐人，晏子反把问题推回楚地。",
+      "橘生淮南为橘，生于淮北为枳；人到楚国才变坏，难道不是楚国水土的问题？",
+      "这不是逞口舌，是在所有人面前守住齐国的场面。",
+      "楚王原本想让晏子低头，却被迫把自己的礼法漏洞摆给众人看。",
+      "满堂从看笑话变成不敢接话，压力已经从齐国使节身上转回楚王席前。",
+      "所以这一退，退掉的就不只是晏子自己，而是齐国被人按下去的资格。",
+    ].join("");
+
+    const result = validateScriptDraft({
+      bundle: scriptInputBundle,
+      draft: {
+        ...draft,
+        script_text: body,
+        estimated_duration_sec: 85,
+        opening_span: "楚王把门开在侧边，意思很明白：你晏子个子矮，就从这里进去。",
+        ending_span: "所以这一退，退掉的就不只是晏子自己，而是齐国被人按下去的资格。",
+        beat_trace: [
+          {
+            beat: "入楚受辱",
+            excerpt: "这一句并不存在于正文里，但看起来像是完整证明。",
+            confidence: 0.9,
+          },
+          {
+            beat: "橘淮之辩",
+            excerpt: "到橘淮之辩时，楚王想借盗贼羞辱齐人，晏子反把问题推回楚地。",
+            confidence: 0.9,
+          },
+        ],
+      },
+    });
+
+    expect(result.decision).toBe("regen_once");
+    expect(result.errors).toContain("beat_trace_excerpt_not_in_script");
   });
 
   it("keeps structurally complete drafts with reasonable body volume passing", async () => {
@@ -250,6 +345,8 @@ describe("script local validator", () => {
       "到橘淮之辩时，楚王想借盗贼羞辱齐人，晏子反把问题推回楚地。",
       "橘生淮南为橘，生于淮北为枳；人到楚国才变坏，难道不是楚国水土的问题？",
       "这不是逞口舌，是在所有人面前守住齐国的场面。",
+      "楚王原本想让晏子低头，却被迫把自己的礼法漏洞摆给众人看。",
+      "满堂从看笑话变成不敢接话，压力已经从齐国使节身上转回楚王席前。",
       "所以这一退，退掉的就不只是晏子自己，而是齐国被人按下去的资格。",
     ].join("");
 
@@ -280,8 +377,8 @@ describe("script local validator", () => {
     expect(result.errors).not.toContain("script_body_too_thin");
     expect(result.metrics).toMatchObject({
       script_char_count: body.length,
-      min_script_chars_for_band: 240,
-      min_sentence_count_for_band: 7,
+      min_script_chars_for_band: 320,
+      min_sentence_count_for_band: 8,
     });
   });
 

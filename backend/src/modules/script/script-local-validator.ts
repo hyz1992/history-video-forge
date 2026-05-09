@@ -60,14 +60,14 @@ function pushUnique(target: string[], code: string) {
 
 function getBodyFloor(durationBand: string) {
   if (durationBand === "short") {
-    return { minScriptChars: 140, minSentenceCount: 5 };
+    return { minScriptChars: 180, minSentenceCount: 6 };
   }
 
   if (durationBand === "medium") {
-    return { minScriptChars: 240, minSentenceCount: 7 };
+    return { minScriptChars: 320, minSentenceCount: 8 };
   }
 
-  return { minScriptChars: 320, minSentenceCount: 9 };
+  return { minScriptChars: 420, minSentenceCount: 10 };
 }
 
 function countScriptSentences(scriptText: string) {
@@ -75,6 +75,21 @@ function countScriptSentences(scriptText: string) {
     .split(/(?<=[。！？!?；;])/u)
     .map((sentence) => sentence.trim())
     .filter(Boolean).length;
+}
+
+function getMinimumCharsForEstimatedDuration(estimatedDurationSec: number) {
+  return Math.ceil(estimatedDurationSec * 3.6);
+}
+
+function getCharsPerEstimatedSecond(
+  scriptCharCount: number,
+  estimatedDurationSec: number,
+) {
+  if (estimatedDurationSec <= 0) {
+    return null;
+  }
+
+  return Math.round((scriptCharCount / estimatedDurationSec) * 100) / 100;
 }
 
 export function validateScriptDraft(input: ValidateScriptDraftInput) {
@@ -140,11 +155,23 @@ export function validateScriptDraft(input: ValidateScriptDraftInput) {
   const bodyFloor = getBodyFloor(input.bundle.hard_lane.duration_band);
   const scriptCharCount = draft.script_text.trim().length;
   const scriptSentenceCount = countScriptSentences(draft.script_text);
+  const minScriptCharsForEstimatedDuration =
+    getMinimumCharsForEstimatedDuration(draft.estimated_duration_sec);
+  const charsPerEstimatedSecond = getCharsPerEstimatedSecond(
+    scriptCharCount,
+    draft.estimated_duration_sec,
+  );
   if (
     scriptCharCount < bodyFloor.minScriptChars ||
     scriptSentenceCount < bodyFloor.minSentenceCount
   ) {
     pushUnique(errors, "script_body_too_thin");
+  }
+  if (
+    draft.estimated_duration_sec > 0 &&
+    scriptCharCount < minScriptCharsForEstimatedDuration
+  ) {
+    pushUnique(errors, "duration_body_mismatch");
   }
 
   if (draft.opening_span.trim().length === 0) {
@@ -187,8 +214,13 @@ export function validateScriptDraft(input: ValidateScriptDraftInput) {
       continue;
     }
 
-    if (typeof matched.excerpt !== "string" || matched.excerpt.trim().length < 8) {
+    if (typeof matched.excerpt !== "string" || matched.excerpt.trim().length < 14) {
       pushUnique(errors, "beat_trace_weak");
+      continue;
+    }
+
+    if (!draft.script_text.includes(matched.excerpt.trim())) {
+      pushUnique(errors, "beat_trace_excerpt_not_in_script");
     }
   }
 
@@ -230,6 +262,8 @@ export function validateScriptDraft(input: ValidateScriptDraftInput) {
       script_sentence_count: scriptSentenceCount,
       min_script_chars_for_band: bodyFloor.minScriptChars,
       min_sentence_count_for_band: bodyFloor.minSentenceCount,
+      min_script_chars_for_estimated_duration: minScriptCharsForEstimatedDuration,
+      chars_per_estimated_second: charsPerEstimatedSecond,
       beat_trace_count: beatTrace.length,
       quote_trace_count: quoteTrace.length,
     },

@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
 import { renderLlmInteractionMarkdown } from "../../../backend/src/runtime/llm/interaction-log.js";
-import type { StructuredPromptProvider } from "../../../backend/src/runtime/llm/provider-contract.js";
+import type {
+  StructuredPromptInvocation,
+  StructuredPromptProvider,
+} from "../../../backend/src/runtime/llm/provider-contract.js";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 
 describe("prompt runtime", () => {
@@ -255,10 +258,29 @@ describe("prompt runtime", () => {
     const prompt = createPromptRegistry().getPrompt("script.writer");
 
     expect(prompt.metadata.language).toBe("zh-CN");
-    expect(prompt.body).toContain("`medium` 首稿正文至少约 240 个汉字等价长度");
-    expect(prompt.body).toContain("85 秒稿不能只有 190-200 字");
+    expect(prompt.body).toContain("`medium` 首稿正文优先写到约 330-450 个汉字等价长度");
+    expect(prompt.body).toContain("如果正文只有 320-360 字，估时应更保守");
     expect(prompt.body).toContain("只能用场景、动作、对话或转述、压力升级、即时后果补足体量");
     expect(prompt.body).toContain("不得为了凑字数重复解释、空泛评价或喊口号");
+  });
+
+  it("requires script writer duration estimates to be backed by body volume", () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("`medium` 首稿正文优先写到约 330-450 个汉字等价长度");
+    expect(prompt.body).toContain("按约 3.6-4.6 个汉字等价长度/秒回填");
+    expect(prompt.body).toContain("如果正文只有 320-360 字，估时应更保守");
+    expect(prompt.body).toContain("不能硬标 85-90 秒");
+  });
+
+  it("requires script writer to maintain pacing and scene density through the middle", () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("每 2-3 句必须出现新的动作、对方反应、场面压力变化或即时后果");
+    expect(prompt.body).toContain("每条 beat 至少写出一个可见动作和一个反应或后果");
+    expect(prompt.body).toContain("不要连续写三句以上背景解释、抽象评价或历史意义");
   });
 
   it("requires each script beat to become a developed narrative unit instead of compressed coverage", () => {
@@ -404,12 +426,18 @@ describe("prompt runtime", () => {
     const interactionLogWriter = {
       write: vi.fn(),
     };
-    const provider: StructuredPromptProvider = {
-      invokeStructuredPrompt: vi.fn(async ({ prompt, input, operationName }) => ({
+    const invokeStructuredPrompt = vi.fn(async (request: StructuredPromptInvocation) => {
+      const { prompt, input, operationName } = request;
+
+      return {
         promptId: prompt.metadata.id,
         input,
         operationName,
-      })),
+      };
+    });
+    const provider: StructuredPromptProvider = {
+      invokeStructuredPrompt: async <T>(request: StructuredPromptInvocation): Promise<T> =>
+        invokeStructuredPrompt(request) as Promise<T>,
     };
     const gateway = createLlmGateway({
       provider,
@@ -428,8 +456,8 @@ describe("prompt runtime", () => {
       interactionLogWriter,
     });
 
-    expect(provider.invokeStructuredPrompt).toHaveBeenCalledTimes(1);
-    expect(provider.invokeStructuredPrompt).toHaveBeenCalledWith(
+    expect(invokeStructuredPrompt).toHaveBeenCalledTimes(1);
+    expect(invokeStructuredPrompt).toHaveBeenCalledWith(
       expect.objectContaining({
         input: {
           requestId: "seed-1",

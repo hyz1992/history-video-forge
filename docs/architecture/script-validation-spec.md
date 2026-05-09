@@ -123,8 +123,11 @@
 | 错误码 | 含义 | 典型触发 |
 |---|---|---|
 | `script_empty_or_short` | 正文过短或明显残缺 | 空文本、极短残稿 |
+| `script_body_too_thin` | 正文体量或句子数低于当前时长档位结构下限 | `medium` 稿低于 `320` 汉字等价长度或少于 `8` 句 |
+| `duration_body_mismatch` | 估时明显高于正文体量可支撑的口播时长 | `script_char_count / estimated_duration_sec < 3.6` |
 | `beat_missing` | 缺关键 beat | 任一 `must_include_beat` 无 trace |
-| `beat_trace_weak` | beat 命中过弱 | `excerpt` 少于 `8` 个汉字等价长度 |
+| `beat_trace_weak` | beat 命中过弱 | `excerpt` 少于 `14` 个汉字等价长度 |
+| `beat_trace_excerpt_not_in_script` | trace 与正文脱节 | `excerpt` 无法在 `script_text` 中找到 |
 | `quote_trace_incomplete` | 原文锚句使用追踪不完整 | 用了锚句但没标 `usage_type` |
 | `opening_missing` | 缺开头片段 | `opening_span` 为空 |
 | `ending_missing` | 缺结尾片段 | `ending_span` 为空 |
@@ -163,12 +166,31 @@ duration_delta_ratio =
 - 不按精确秒数卡死。
 - 本质上是“当前稿是否已经和所选范围明显失真”的判断。
 
+#### 正文体量与估时匹配
+
+正文结构下限：
+
+| 档位 | 最小正文体量 | 最小句子数 |
+|---|---:|---:|
+| `short` | `180` 个汉字等价长度 | `6` |
+| `medium` | `320` 个汉字等价长度 | `8` |
+| `long` | `420` 个汉字等价长度 | `10` |
+
+估时体量匹配：
+
+```text
+chars_per_estimated_second = script_char_count / estimated_duration_sec
+```
+
+当 `chars_per_estimated_second < 3.6` 时，记 `duration_body_mismatch` 并触发 `regen_once`。该规则只防止明显虚高估时，不作为真实语速或稿件质量判断。
+
 #### `beat_trace` 最小命中质量
 
 判定规则：
 
 - 每条 `must_include_beat` 都必须有一条 trace
-- `excerpt` 少于 `8` 个汉字等价长度，按 `beat_trace_weak`
+- `excerpt` 少于 `14` 个汉字等价长度，按 `beat_trace_weak`
+- `excerpt` 必须能在 `script_text` 中找到，否则按 `beat_trace_excerpt_not_in_script`
 - `confidence` 仅作辅助，不单独决定失败
 
 #### `quote_trace`
