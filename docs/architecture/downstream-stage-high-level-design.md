@@ -148,7 +148,7 @@
 
 ## 7. 后续阶段详细设计时必须回答的问题
 
-后续正式设计时，至少要明确：
+后续正式设计时，至少要明确以下问题。**设计开始前，必须详细阅读 `docs/records/2026-05-09-video-pipeline-engineering-notes.md` 中记录的已知问题清单。**
 
 ### storyboard
 - 分镜输入是否直接消费 `Script Draft Package`

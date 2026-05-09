@@ -43,9 +43,10 @@
 13. [Schema 设计](./data/schema-design.md)
 14. [API 设计](./architecture/api-design.md)
 15. [Follow-up Backlog 整理](./records/2026-05-01-follow-up-backlog.md)
-16. [Plans 状态说明](./plans/README.md)
-17. [Records 状态说明](./records/README.md)
-18. [当前 Todo](./todos/roadmap-todo.md)
+16. [视频流水线工程经验笔记](./records/2026-05-09-video-pipeline-engineering-notes.md)
+17. [Plans 状态说明](./plans/README.md)
+18. [Records 状态说明](./records/README.md)
+19. [当前 Todo](./todos/roadmap-todo.md)
 
 ---
 
@@ -85,9 +86,10 @@
 
 - [技术栈规范](./standards/tech-stack-spec.md)
 
-### 迁移参考
+### 迁移与工程经验参考
 
 - [旧项目可复用资产清单](./migration/reusable-assets-inventory.md)
+- [视频流水线工程经验笔记](./records/2026-05-09-video-pipeline-engineering-notes.md)
 
 ### 阶段留档
 

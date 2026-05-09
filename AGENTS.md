@@ -60,12 +60,15 @@
 10. `D:/myproject/story-video-forge2/docs/architecture/api-design.md`
 11. `D:/myproject/story-video-forge2/harness/README.md`
 12. `D:/myproject/story-video-forge2/docs/records/2026-05-01-follow-up-backlog.md`
-13. `D:/myproject/story-video-forge2/docs/plans/README.md`
+13. `D:/myproject/story-video-forge2/docs/records/2026-05-09-video-pipeline-engineering-notes.md`（asset planning / assets / compose 阶段设计前必读；记录口播音频、字幕、分镜图/视频的工程约束与已知问题清单）
+14. `D:/myproject/story-video-forge2/docs/plans/README.md`
 
 说明：
 
 - `docs/plans/archive/` 中的文件是历史设计与实施证据，不是当前任务入口。
-- `docs/records/` 中的文件是历史运行、质量检查与恢复记录，不是当前设计真相源。
+- `docs/records/` 中的文件分两类：
+  - 历史运行、质量检查与恢复记录（不作为当前设计真相源）
+  - 工程经验参考文档（如 `video-pipeline-engineering-notes.md`，是 downstream 阶段设计的输入约束，进入相关阶段设计前应主动阅读）
 - 若历史计划与 `AGENTS.md`、`docs/README.md`、`docs/architecture/` 或 `harness/README.md` 冲突，以当前入口文档和正式架构文档为准。
 
 ---
