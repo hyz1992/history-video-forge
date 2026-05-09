@@ -15,7 +15,7 @@
 - [x] 第二阶段 `Task 9` 已完成
 
 ## 对应计划
-- [2026-04-18-topic-script-phase-2-implementation-plan.md](../plans/2026-04-18-topic-script-phase-2-implementation-plan.md)
+- [2026-04-18-topic-script-phase-2-implementation-plan.md](../plans/archive/topic-script/2026-04-18-topic-script-phase-2-implementation-plan.md)
 
 ## 执行规则
 - 第二阶段唯一正式主链路是 `系统自动推荐 -> confirm -> script generate -> review -> patch/regenerate -> script view`

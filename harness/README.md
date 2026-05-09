@@ -376,5 +376,5 @@ Get-ChildItem 'storage/projects' -Directory -Recurse |
 
 相关计划：
 
-- `docs/plans/2026-05-06-script-writer-viral-first-draft-quality-design.md`
-- `docs/plans/2026-05-06-script-writer-viral-first-draft-quality-implementation-plan.md`
+- `docs/plans/archive/topic-script/2026-05-06-script-writer-viral-first-draft-quality-design.md`
+- `docs/plans/archive/topic-script/2026-05-06-script-writer-viral-first-draft-quality-implementation-plan.md`

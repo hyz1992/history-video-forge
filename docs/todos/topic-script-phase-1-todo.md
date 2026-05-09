@@ -8,7 +8,7 @@
 
 ## 对应计划
 
-- [2026-04-17-topic-script-foundation-implementation-plan.md](../plans/2026-04-17-topic-script-foundation-implementation-plan.md)
+- [2026-04-17-topic-script-foundation-implementation-plan.md](../plans/archive/topic-script/2026-04-17-topic-script-foundation-implementation-plan.md)
 
 ## 执行规则
 

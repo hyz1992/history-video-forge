@@ -16,8 +16,8 @@
 
 ## 对应设计
 
-- [第四阶段设计文档](../plans/2026-04-21-topic-script-phase-4-design.md)
-- [第四阶段实施计划](../plans/2026-04-21-topic-script-phase-4-implementation-plan.md)
+- [第四阶段设计文档](../plans/archive/topic-script/2026-04-21-topic-script-phase-4-design.md)
+- [第四阶段实施计划](../plans/archive/topic-script/2026-04-21-topic-script-phase-4-implementation-plan.md)
 
 ## 第四阶段执行规则
 

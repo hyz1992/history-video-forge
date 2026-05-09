@@ -4,8 +4,8 @@ Date: 2026-05-08
 
 ## Source
 
-- Design: `docs/plans/2026-05-08-topic-package-opening-pressure-ending-material-shape-design.md`
-- Implementation plan: `docs/plans/2026-05-08-topic-package-opening-pressure-ending-material-shape-implementation-plan.md`
+- Design: `docs/plans/archive/topic-script/2026-05-08-topic-package-opening-pressure-ending-material-shape-design.md`
+- Implementation plan: `docs/plans/archive/topic-script/2026-05-08-topic-package-opening-pressure-ending-material-shape-implementation-plan.md`
 - Output dir: `harness/scripts/runtime/output/2026-05-08-glm51-opening-pressure-ending-five-round`
 
 ## Configuration

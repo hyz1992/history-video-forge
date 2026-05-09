@@ -65,11 +65,11 @@
 - [第四阶段执行清单](./topic-script-phase-4-todo.md)
 
 ## 阶段计划
-- [第一阶段实施计划](../plans/2026-04-17-topic-script-foundation-implementation-plan.md)
-- [第二阶段实施计划](../plans/2026-04-18-topic-script-phase-2-implementation-plan.md)
-- [第三阶段实施计划](../plans/2026-04-19-topic-script-phase-3-implementation-plan.md)
-- [第四阶段设计文档](../plans/2026-04-21-topic-script-phase-4-design.md)
-- [第四阶段实施计划](../plans/2026-04-21-topic-script-phase-4-implementation-plan.md)
+- [第一阶段实施计划](../plans/archive/topic-script/2026-04-17-topic-script-foundation-implementation-plan.md)
+- [第二阶段实施计划](../plans/archive/topic-script/2026-04-18-topic-script-phase-2-implementation-plan.md)
+- [第三阶段实施计划](../plans/archive/topic-script/2026-04-19-topic-script-phase-3-implementation-plan.md)
+- [第四阶段设计文档](../plans/archive/topic-script/2026-04-21-topic-script-phase-4-design.md)
+- [第四阶段实施计划](../plans/archive/topic-script/2026-04-21-topic-script-phase-4-implementation-plan.md)
 
 ## 阻塞项
 - [ ] 继续讨论 storyboard / assets 阶段目标态

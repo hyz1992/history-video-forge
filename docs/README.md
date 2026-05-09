@@ -8,6 +8,19 @@
 - 未确认项明确标注为 `TBD`
 - 旧项目 `story-video-forge` 仅作迁移参考，不作为新项目正式规范来源
 - prompt 规则、runtime harness、执行治理优先查看 [harness/README.md](../harness/README.md)
+- `docs/plans/archive/` 只保存历史设计与实施证据，不作为当前任务入口
+- `docs/records/` 只保存历史运行、质量检查与恢复记录，不作为当前设计真相源
+
+---
+
+## 当前阶段状态
+
+截至 2026-05-09：
+
+- `topic + script` 第一阶段已达到当前及格标准，可以暂时冻结。
+- 下一步工作应先围绕视频流水线后续阶段补设计文档与 implementation plan。
+- 旧的 topic/script 计划已归档到 [plans/archive/topic-script](./plans/archive/topic-script/)。
+- 进入新任务时，优先阅读正式架构文档、当前阶段说明与最新计划；不要把 archive 或 records 中的历史内容直接当作当前约束。
 
 ---
 
@@ -17,20 +30,19 @@
 
 1. [产品需求文档](./requirements/product-requirements.md)
 2. [技术栈规范](./standards/tech-stack-spec.md)
-3. [Schema 设计](./data/schema-design.md)
-4. [项目生命周期设计](./architecture/project-lifecycle.md)
-5. [Topic 阶段设计](./architecture/topic-stage-design.md)
-6. [Recent Memory 设计](./architecture/recent-memory-design.md)
+3. [项目生命周期设计](./architecture/project-lifecycle.md)
+4. [Pipeline IO 规范](./architecture/pipeline-io-spec.md)
+5. [Downstream 高层设计留档](./architecture/downstream-stage-high-level-design.md)
+6. [Topic 阶段设计](./architecture/topic-stage-design.md)
 7. [Script 阶段设计](./architecture/script-stage-design.md)
 8. [Script 校验规范](./architecture/script-validation-spec.md)
-9. [Pipeline IO 规范](./architecture/pipeline-io-spec.md)
-10. [Downstream 高层设计留档](./architecture/downstream-stage-high-level-design.md)
-11. [字段设计](./data/field-design.md)
-12. [API 设计](./architecture/api-design.md)
-13. [旧项目可复用资产清单](./migration/reusable-assets-inventory.md)
-14. [Greenfield 路线图](./plans/2026-04-17-greenfield-roadmap.md)
-15. [Topic + Script 第一阶段实现计划](./plans/2026-04-17-topic-script-foundation-implementation-plan.md)
-16. [当前 Todo](./todos/roadmap-todo.md)
+9. [字段设计](./data/field-design.md)
+10. [Schema 设计](./data/schema-design.md)
+11. [API 设计](./architecture/api-design.md)
+12. [Follow-up Backlog 整理](./records/2026-05-01-follow-up-backlog.md)
+13. [Plans 状态说明](./plans/README.md)
+14. [Records 状态说明](./records/README.md)
+15. [当前 Todo](./todos/roadmap-todo.md)
 
 ---
 
@@ -75,6 +87,8 @@
 
 ### 阶段留档
 
+说明：以下文件是历史证据，不是当前设计入口。若与正式架构文档或 `AGENTS.md` 冲突，以正式入口文档为准。
+
 - [Harness 架构评估](./records/2026-04-17-harness-architecture-assessment.md)
 - [Topic 阶段结论](./records/2026-04-17-topic-stage-conclusions.md)
 - [Script 阶段结论](./records/2026-04-17-script-stage-conclusions.md)
@@ -88,10 +102,8 @@
 
 ### 计划与执行
 
-- [Greenfield 路线图](./plans/2026-04-17-greenfield-roadmap.md)
-- [Harness v1 目录设计](./plans/2026-04-17-harness-v1-directory-design.md)
-- [Harness v1 实施计划](./plans/2026-04-17-harness-v1-implementation-plan.md)
-- [Topic + Script 第一阶段实现计划](./plans/2026-04-17-topic-script-foundation-implementation-plan.md)
+- [Plans 状态说明](./plans/README.md)
+- [Topic + Script 历史计划归档](./plans/archive/topic-script/)
 - [当前 Todo](./todos/roadmap-todo.md)
 
 ---
@@ -109,7 +121,7 @@
 - Script 阶段的实现级阈值与返回 schema
 - 旧项目可复用与不可复用部分
 - 分阶段讨论留档
-- 第一阶段实现计划与任务清单
+- 第一阶段历史计划与任务清单归档
 
 ---
 
@@ -129,3 +141,4 @@
 - 连续讨论形成阶段性结论：同步更新 `records/`
 - 过程性推导：不直接写入正式规范，除非已经收敛
 - 重大收口：同步更新路线图与 todo
+- 已执行完毕的 design / implementation plan：移动到 `docs/plans/archive/`，不要继续留在 `docs/plans/` 根目录误导新任务

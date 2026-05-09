@@ -21,20 +21,20 @@
 - `docs/data/field-design.md`
 - `docs/data/schema-design.md`
 - `docs/architecture/api-design.md`
-- `docs/plans/2026-04-17-topic-script-foundation-implementation-plan.md`
+- `docs/plans/archive/topic-script/2026-04-17-topic-script-foundation-implementation-plan.md`
 
 ### 修改 prompt 或审校规则
 
 - `harness/docs/prompt-management.md`
 - `harness/docs/prompt-registry-spec.md`
 - `docs/architecture/script-validation-spec.md`
-- 如果修改 `script.writer`，还必须回看 `docs/plans/2026-05-06-script-writer-viral-first-draft-quality-design.md`
+- 如果修改 `script.writer`，还必须回看 `docs/plans/archive/topic-script/2026-05-06-script-writer-viral-first-draft-quality-design.md`
 
 ### 修改 harness 入口或目录结构
 
 - `AGENTS.md`
 - `harness/README.md`
-- `docs/plans/2026-04-17-harness-v1-directory-design.md`
+- `docs/plans/archive/topic-script/2026-04-17-harness-v1-directory-design.md`
 
 ### 修改 topic -> script 运行链路
 

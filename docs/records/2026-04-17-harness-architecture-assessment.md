@@ -277,7 +277,7 @@
 
 - `docs/standards/harness-engineering-rules.md`
 - `docs/standards/prompt-management.md`
-- `docs/plans/2026-04-17-topic-script-foundation-implementation-plan.md`
+- `docs/plans/archive/topic-script/2026-04-17-topic-script-foundation-implementation-plan.md`
 - 各类 `records/*.md`
 
 这说明：

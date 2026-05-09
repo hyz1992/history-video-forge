@@ -6,7 +6,7 @@
 - [x] 已完成一次真实 `.env` 下的 live check 结果记录
 
 ## 对应计划
-- [2026-04-19-topic-script-phase-3-implementation-plan.md](../plans/2026-04-19-topic-script-phase-3-implementation-plan.md)
+- [2026-04-19-topic-script-phase-3-implementation-plan.md](../plans/archive/topic-script/2026-04-19-topic-script-phase-3-implementation-plan.md)
 
 ## 执行规则
 - 第三阶段唯一正式范围仍然是 `topic + script`

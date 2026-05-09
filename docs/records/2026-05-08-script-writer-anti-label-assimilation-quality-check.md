@@ -4,7 +4,7 @@ Date: 2026-05-08
 
 ## Source
 
-- Design: `docs/plans/2026-05-08-script-writer-anti-label-assimilation-design.md`
+- Design: `docs/plans/archive/topic-script/2026-05-08-script-writer-anti-label-assimilation-design.md`
 - Implementation commit: `5cc1cb3`
 - Output dir: `harness/scripts/runtime/output/2026-05-08-glm51-anti-label-five-round`
 

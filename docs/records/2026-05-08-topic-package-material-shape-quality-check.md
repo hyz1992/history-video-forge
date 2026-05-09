@@ -2,7 +2,7 @@
 
 日期：2026-05-08
 
-范围：执行 `docs/plans/2026-05-08-topic-package-material-shape-for-peak-scene-absorption-implementation-plan.md` Task 5，观察 TopicPackage material-shape 调整后，`must_cover_preview` 的第二节点是否更稳定进入 `narrative_tension_map.peak_payoff`，并被 script writer 吸收到正文峰值场面。
+范围：执行 `docs/plans/archive/topic-script/2026-05-08-topic-package-material-shape-for-peak-scene-absorption-implementation-plan.md` Task 5，观察 TopicPackage material-shape 调整后，`must_cover_preview` 的第二节点是否更稳定进入 `narrative_tension_map.peak_payoff`，并被 script writer 吸收到正文峰值场面。
 
 ## 运行配置
 

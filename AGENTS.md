@@ -9,19 +9,19 @@
 ## 当前阶段目标
 
 - 当前项目处于 `greenfield-first` 模式。
-- 当前唯一可实施范围：`topic + script` 第一阶段及其配套 harness。
+- `topic + script` 第一阶段已达到当前及格标准，可以暂时冻结。
 - 当前优先事项：
-  - 继续巩固 `topic -> script` 首稿质量
-  - 把 script 从“结构可用线”推进到“爆款首稿线”
-  - 重点提升历史故事口播脚本的场景、动作、对话、压力升级与结尾余震
-  - 暂不实现 downstream 详细阶段
+  - 保持 `topic -> script` 首稿链路稳定，不主动重开已冻结范围
+  - 在开启视频流水线下一步前，先补必要的文档治理与阶段边界说明
+  - 下一步视频流水线只能先进入设计与 implementation plan，不得顺手实现未设计的 downstream 详细阶段
 
 当前已完成的关键恢复：
 
 - fake semantic review 已收掉；无真实 reviewer 时允许 `skipped`，不得冒充语义审校。
 - `TopicPackage` 模板污染已收掉，不再向 script 注入跨题材固定句。
 - script 首稿链路、local validation、semantic reviewer shadow、扩展 smoke 已恢复稳定。
-- 当前 script 产物达到“可用线”，但还没达到“爆款首稿线”；后续重点是 writer 细节密度与口播质量。
+- 当前 `topic` 自动推荐与 `script` 首稿已达到“可用线”，可以作为视频流水线下一步的上游基础。
+- 第 3 项 follow-up backlog（项目内持久化候选池与受控 fallback 复用）主体已完成；剩余为后续运营生命周期尾项。
 
 ---
 
@@ -29,11 +29,10 @@
 
 当前允许进入实现的范围：
 
-- `harness v1`
-- `topic` 阶段
-- `script` 阶段
-- `topic -> script` 之间的 schema / API / 校验链路
-- script 首稿质量专项，包括 writer prompt、结构性 validator 下限、harness 观测记录
+- 文档治理、阶段冻结说明、旧计划归档
+- 视频流水线下一步的设计文档与 implementation plan
+- `topic + script` 冻结后的必要维护、回归修复、观测记录
+- 明确获得执行指令后的低风险 harness 验证补强
 
 当前**不允许**顺手实现的范围：
 
@@ -41,26 +40,33 @@
 - `asset planning`
 - `assets`
 - `compose`
-- 任何未正式设计的 downstream 结构
+- 任何未正式设计并通过 implementation plan 收口的 downstream 结构
 - patch integration 主路径，除非先完成单独设计计划并获得明确执行指令
+- 为了下一阶段方便而回改已冻结的 topic/script prompt、schema 或 API，除非问题被明确定位为阻塞或回归
 
 ---
 
 ## 推荐阅读顺序
 
 1. `D:/myproject/story-video-forge2/docs/requirements/product-requirements.md`
-2. `D:/myproject/story-video-forge2/docs/architecture/topic-stage-design.md`
-3. `D:/myproject/story-video-forge2/docs/architecture/script-stage-design.md`
-4. `D:/myproject/story-video-forge2/docs/architecture/script-validation-spec.md`
-5. `D:/myproject/story-video-forge2/docs/data/field-design.md`
-6. `D:/myproject/story-video-forge2/docs/data/schema-design.md`
-7. `D:/myproject/story-video-forge2/docs/architecture/api-design.md`
-8. `D:/myproject/story-video-forge2/harness/README.md`
-9. `D:/myproject/story-video-forge2/docs/records/2026-05-06-script-first-pass-quality-recovery-final-check.md`
-10. `D:/myproject/story-video-forge2/docs/records/2026-05-06-topic-package-template-pollution-recovery.md`
-11. `D:/myproject/story-video-forge2/docs/records/2026-05-06-script-first-pass-quality-recheck-after-template-fix.md`
-12. `D:/myproject/story-video-forge2/docs/plans/2026-05-06-script-writer-viral-first-draft-quality-design.md`
-13. `D:/myproject/story-video-forge2/docs/plans/2026-05-06-script-writer-viral-first-draft-quality-implementation-plan.md`
+2. `D:/myproject/story-video-forge2/docs/README.md`
+3. `D:/myproject/story-video-forge2/docs/architecture/pipeline-io-spec.md`
+4. `D:/myproject/story-video-forge2/docs/architecture/downstream-stage-high-level-design.md`
+5. `D:/myproject/story-video-forge2/docs/architecture/topic-stage-design.md`
+6. `D:/myproject/story-video-forge2/docs/architecture/script-stage-design.md`
+7. `D:/myproject/story-video-forge2/docs/architecture/script-validation-spec.md`
+8. `D:/myproject/story-video-forge2/docs/data/field-design.md`
+9. `D:/myproject/story-video-forge2/docs/data/schema-design.md`
+10. `D:/myproject/story-video-forge2/docs/architecture/api-design.md`
+11. `D:/myproject/story-video-forge2/harness/README.md`
+12. `D:/myproject/story-video-forge2/docs/records/2026-05-01-follow-up-backlog.md`
+13. `D:/myproject/story-video-forge2/docs/plans/README.md`
+
+说明：
+
+- `docs/plans/archive/` 中的文件是历史设计与实施证据，不是当前任务入口。
+- `docs/records/` 中的文件是历史运行、质量检查与恢复记录，不是当前设计真相源。
+- 若历史计划与 `AGENTS.md`、`docs/README.md`、`docs/architecture/` 或 `harness/README.md` 冲突，以当前入口文档和正式架构文档为准。
 
 ---
 
