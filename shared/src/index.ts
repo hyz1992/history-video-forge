@@ -19,3 +19,8 @@ export {
   ScriptSemanticReviewResult,
   ScriptValidationResult,
 } from "./script/script-validation.schema";
+export {
+  StoryboardPlan,
+  StoryboardSegment,
+} from "./storyboard/storyboard-plan.schema";
+export { StoryboardValidationResult } from "./storyboard/storyboard-validation.schema";

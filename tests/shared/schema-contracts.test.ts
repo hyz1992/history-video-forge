@@ -4,6 +4,8 @@ import {
   ScriptDraftPackage,
   ScriptInputBundle,
   ScriptValidationResult,
+  StoryboardPlan,
+  StoryboardValidationResult,
   TopicCandidateCard,
   TopicDeliveryPack,
   TopicPackage,
@@ -238,5 +240,125 @@ describe("shared schema contracts", () => {
     });
 
     expect(skippedSemanticReview.decision).toBe("skipped");
+  });
+
+  it("parses the storyboard shared contracts", () => {
+    const plan = StoryboardPlan.parse({
+      plan_version: "storyboard_v1",
+      source_script_record_id: "scr_001",
+      source_topic_package_id: "topic_001",
+      estimated_total_duration_sec: 90,
+      segments: [
+        {
+          segment_id: "sb_001",
+          order: 0,
+          script_excerpt: "楚王第一次压场时，晏子没有退。",
+          start_hint_sec: 0,
+          end_hint_sec: 9,
+          narrative_role: "opening",
+          visual_intent: "让观众先看见公开压场的压力。",
+          scene_description: "宫廷中众人注视，晏子站在楚王面前。",
+          visual_elements: ["楚王", "晏子", "宫廷"],
+          framing_hint: "wide",
+          content_type: "live_action",
+          motion_hint: "push_in",
+          editing_hint: "single",
+          on_screen_text: ["第一次压场"],
+          linked_beats: ["入楚受辱"],
+          linked_quotes: [],
+          risk_notes: [],
+        },
+      ],
+      global_visual_notes: [],
+    });
+
+    const validation = StoryboardValidationResult.parse({
+      stage: "storyboard_local_validation",
+      decision: "pass",
+      errors: [],
+      warnings: [],
+      metrics: {
+        segment_count: 1,
+      },
+    });
+
+    expect(plan.plan_version).toBe("storyboard_v1");
+    expect(validation.stage).toBe("storyboard_local_validation");
+  });
+
+  it("rejects invalid storyboard timing and enum values", () => {
+    const validSegment = {
+      segment_id: "sb_001",
+      order: 0,
+      script_excerpt: "楚王第一次压场时，晏子没有退。",
+      start_hint_sec: 10,
+      end_hint_sec: 20,
+      narrative_role: "opening",
+      visual_intent: "让观众先看见公开压场的压力。",
+      scene_description: "宫廷中众人注视，晏子站在楚王面前。",
+      visual_elements: ["楚王", "晏子", "宫廷"],
+      framing_hint: "wide",
+      content_type: "live_action",
+      motion_hint: "push_in",
+      editing_hint: "single",
+      on_screen_text: [],
+      linked_beats: ["入楚受辱"],
+      linked_quotes: [],
+      risk_notes: [],
+    };
+    const validPlan = {
+      plan_version: "storyboard_v1",
+      source_script_record_id: "scr_001",
+      source_topic_package_id: "topic_001",
+      estimated_total_duration_sec: 90,
+      segments: [validSegment],
+      global_visual_notes: [],
+    };
+
+    expect(() =>
+      StoryboardPlan.parse({
+        ...validPlan,
+        segments: [{ ...validSegment, end_hint_sec: 10 }],
+      }),
+    ).toThrow();
+    expect(() =>
+      StoryboardPlan.parse({
+        ...validPlan,
+        segments: [{ ...validSegment, narrative_role: "recap" }],
+      }),
+    ).toThrow();
+    expect(() =>
+      StoryboardPlan.parse({
+        ...validPlan,
+        segments: [{ ...validSegment, framing_hint: "drone" }],
+      }),
+    ).toThrow();
+    expect(() =>
+      StoryboardPlan.parse({
+        ...validPlan,
+        segments: [{ ...validSegment, content_type: "asset_task" }],
+      }),
+    ).toThrow();
+    expect(() =>
+      StoryboardPlan.parse({
+        ...validPlan,
+        segments: [{ ...validSegment, motion_hint: "orbit" }],
+      }),
+    ).toThrow();
+    expect(() =>
+      StoryboardPlan.parse({
+        ...validPlan,
+        segments: [{ ...validSegment, editing_hint: "timeline" }],
+      }),
+    ).toThrow();
+    expect(() =>
+      StoryboardValidationResult.parse({
+        stage: "script_local_validation",
+        decision: "pass",
+        errors: [],
+        warnings: [],
+        metrics: {},
+      }),
+    ).toThrow();
   });
 });
