@@ -11,12 +11,23 @@ import {
   saveCachedCandidate,
 } from "../cache/candidate-cache.repository.js";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
-import { renderRecommendationDiagnosticsMarkdown } from "../../runtime/llm/interaction-log.js";
+import {
+  renderRecommendationDiagnosticsMarkdown,
+  type LlmInteractionLogWriter,
+} from "../../runtime/llm/interaction-log.js";
 import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider.js";
-import type { StructuredPromptProvider } from "../../runtime/llm/provider-contract.js";
+import type {
+  StrictStructuredToolSchema,
+  StructuredPromptInvocation,
+  StructuredPromptProvider,
+} from "../../runtime/llm/provider-contract.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 import { runTopicRecommendationGraph } from "../../runtime/orchestration/topic-recommendation-graph.js";
-import type { CandidatePreviewTrace } from "../../runtime/orchestration/runtime-diagnostics.js";
+import type {
+  CandidatePreviewTrace,
+  CandidateQualityScorecard,
+  TopicCandidateDeduction,
+} from "../../runtime/orchestration/runtime-diagnostics.js";
 import {
   TOPIC_CANDIDATE_TARGET_COUNT,
   TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT,
@@ -47,29 +58,99 @@ export interface TopicRecommendationOptions {
   topicCandidateLibraryRepository?: TopicCandidateLibraryRepository;
 }
 
-interface TopicSelectorDecision {
-  selected_candidate_ids: string[];
+type SelectorDeductionAxis =
+  | "opening_hook"
+  | "conflict_pressure"
+  | "scene_visibility"
+  | "angle_freshness"
+  | "script_expandability"
+  | "ending_aftershock"
+  | "fatigue_or_repetition"
+  | "source_or_scope_risk";
+
+interface TopicSelectorRankedCandidate extends CandidateQualityScorecard {
+  candidate_id: string;
+  deductions: Array<TopicCandidateDeduction & { axis: SelectorDeductionAxis }>;
 }
 
-const TOPIC_SELECTOR_STRICT_SCHEMA = {
-  name: "select_topic_candidates",
-  description: "Select exactly three topic candidate ids from the selector pool.",
+interface TopicSelectorDecision {
+  ranked_candidates: TopicSelectorRankedCandidate[];
+}
+
+const TOPIC_SELECTOR_STRICT_SCHEMA: StrictStructuredToolSchema = {
+  name: "rank_topic_candidates",
+  description: "Rank every topic candidate in the selector pool with scorecards.",
   parameters: {
     type: "object",
     properties: {
-      selected_candidate_ids: {
+      ranked_candidates: {
         type: "array",
         items: {
-          type: "string",
+          type: "object",
+          properties: {
+            candidate_id: {
+              type: "string",
+            },
+            quality_rank: {
+              type: "integer",
+              minimum: 1,
+            },
+            quality_score: {
+              type: "integer",
+              minimum: 0,
+              maximum: 100,
+            },
+            deductions: {
+              type: "array",
+              maxItems: 4,
+              items: {
+                type: "object",
+                properties: {
+                  axis: {
+                    type: "string",
+                    enum: [
+                      "opening_hook",
+                      "conflict_pressure",
+                      "scene_visibility",
+                      "angle_freshness",
+                      "script_expandability",
+                      "ending_aftershock",
+                      "fatigue_or_repetition",
+                      "source_or_scope_risk",
+                    ],
+                  },
+                  points_lost: {
+                    type: "integer",
+                    minimum: 1,
+                    maximum: 30,
+                  },
+                  reason: {
+                    type: "string",
+                  },
+                },
+                required: ["axis", "points_lost", "reason"],
+                additionalProperties: false,
+              },
+            },
+            risk_summary: {
+              type: "string",
+            },
+          },
+          required: [
+            "candidate_id",
+            "quality_rank",
+            "quality_score",
+            "deductions",
+            "risk_summary",
+          ],
+          additionalProperties: false,
         },
-        minItems: TOPIC_CANDIDATE_TARGET_COUNT,
-        maxItems: TOPIC_CANDIDATE_TARGET_COUNT,
       },
     },
-    required: ["selected_candidate_ids"],
+    required: ["ranked_candidates"],
     additionalProperties: false,
   },
-} as const;
+};
 
 export async function recommendTopicCandidatesWithTrace(
   db: DbClient,
@@ -106,8 +187,11 @@ export async function recommendTopicCandidatesWithTrace(
       runId,
     },
     {
-      invokeStructuredPrompt: (runnerInput) =>
-        gateway.invokeStructuredPrompt<unknown[]>({
+      invokeStructuredPrompt: <T>(runnerInput: {
+        promptId: string;
+        input: unknown;
+      }) =>
+        gateway.invokeStructuredPrompt<T>({
           ...runnerInput,
           interactionLogWriter,
       }),
@@ -166,6 +250,7 @@ export async function recommendTopicCandidatesWithTrace(
     rankings: selectorRankings,
     selectorPool,
     finalRankings: selected.rankings,
+    selectorTrace: selected.selectorTrace,
   });
   const finalDiagnostics = finalizeRecommendationDiagnostics({
     checks: result.diagnostics.checks,
@@ -200,12 +285,12 @@ export async function recommendTopicCandidatesWithTrace(
   }
 
   if (project) {
-    project.latestTopicRunTraceJson = result.trace as Record<string, unknown>;
+    project.latestTopicRunTraceJson = result.trace as unknown as Record<string, unknown>;
     persistProjectRunArtifacts({
       project,
       phase: "topic",
       runId,
-      traceSummary: result.trace as Record<string, unknown>,
+      traceSummary: result.trace as unknown as Record<string, unknown>,
       runtimeDiagnostics: finalDiagnostics as Record<string, unknown>,
     });
   }
@@ -280,16 +365,14 @@ function createTopicRecommendationGateway(): LlmGateway {
 
 function createStubTopicRecommendationProvider(): StructuredPromptProvider {
   return {
-    async invokeStructuredPrompt<T>(request): Promise<T> {
+    async invokeStructuredPrompt<T>(
+      request: StructuredPromptInvocation,
+    ): Promise<T> {
       const candidates = request.operationName === "topic.selector"
-        ? ({
-            selected_candidate_ids: (
-              (request.input as { selector_pool?: Array<{ candidate_id: string }> })
-                .selector_pool ?? []
-            )
-              .slice(0, TOPIC_CANDIDATE_TARGET_COUNT)
-              .map((candidate) => candidate.candidate_id),
-          } as T)
+        ? (createDefaultSelectorDecision(
+            (request.input as { selector_pool?: Array<{ candidate_id: string }> })
+              .selector_pool ?? [],
+          ) as T)
         : (buildTopicCandidates(
             request.input as BuildTopicCandidatesInput,
           ) as T);
@@ -315,6 +398,20 @@ function createStubTopicRecommendationProvider(): StructuredPromptProvider {
   };
 }
 
+function createDefaultSelectorDecision(
+  selectorPool: Array<{ candidate_id: string }>,
+): TopicSelectorDecision {
+  return {
+    ranked_candidates: selectorPool.map((candidate, index) => ({
+      candidate_id: candidate.candidate_id,
+      quality_rank: index + 1,
+      quality_score: Math.max(1, 100 - index),
+      deductions: [],
+      risk_summary: "stub selector ranking",
+    })),
+  };
+}
+
 type RecommendationCandidate = ReturnType<typeof TopicCandidateCard.parse>;
 
 interface RankedRecommendationCandidate {
@@ -336,6 +433,11 @@ interface SelectorPoolCandidate {
   one_line_angle: string;
   family_label: string;
   scope_label: string;
+  core_conflict: string;
+  strong_scene: string;
+  must_cover_preview: string[];
+  risk_hints: string[];
+  viral_rubric: RecommendationCandidate["viral_rubric"];
   fatigue_score: number;
   recently_seen: boolean;
 }
@@ -348,6 +450,8 @@ interface RecentEventMemoryEntry {
 
 interface SelectorTrace {
   selected_candidate_ids: string[];
+  ranked_candidates: TopicSelectorRankedCandidate[];
+  skipped_candidate_ids: string[];
   repair_attempts: number;
 }
 
@@ -369,6 +473,7 @@ type TopicRecommendationProject = NonNullable<
 function toCandidatePreviewTraceEntry(input: {
   candidateId: string;
   candidate: RecommendationCandidate;
+  scorecard?: TopicSelectorRankedCandidate;
 }) {
   return {
     candidate_id: input.candidateId,
@@ -376,6 +481,14 @@ function toCandidatePreviewTraceEntry(input: {
     title: input.candidate.title,
     one_line_angle: input.candidate.one_line_angle,
     must_cover_preview: input.candidate.must_cover_preview,
+    ...(input.scorecard
+      ? {
+          quality_rank: input.scorecard.quality_rank,
+          quality_score: input.scorecard.quality_score,
+          deductions: input.scorecard.deductions,
+          risk_summary: input.scorecard.risk_summary,
+        }
+      : {}),
   };
 }
 
@@ -384,9 +497,15 @@ function buildCandidatePreviewTrace(input: {
   rankings: RankedRecommendationCandidate[];
   selectorPool: SelectorPoolCandidate[];
   finalRankings: RankedRecommendationCandidate[];
+  selectorTrace?: SelectorTrace | null;
 }): CandidatePreviewTrace {
   const rankingsById = new Map(
     input.rankings.map((entry) => [entry.candidateId, entry] as const),
+  );
+  const scorecardsById = new Map(
+    (input.selectorTrace?.ranked_candidates ?? []).map(
+      (scorecard) => [scorecard.candidate_id, scorecard] as const,
+    ),
   );
 
   return {
@@ -403,12 +522,26 @@ function buildCandidatePreviewTrace(input: {
         toCandidatePreviewTraceEntry({
           candidateId: entry.candidateId,
           candidate: entry.candidate,
+          scorecard: scorecardsById.get(entry.candidateId),
         }),
       ),
+    ranked_candidates: (input.selectorTrace?.ranked_candidates ?? [])
+      .flatMap((scorecard) => {
+        const entry = rankingsById.get(scorecard.candidate_id);
+
+        return entry
+          ? [toCandidatePreviewTraceEntry({
+              candidateId: entry.candidateId,
+              candidate: entry.candidate,
+              scorecard,
+            })]
+          : [];
+      }),
     final_candidates: input.finalRankings.map((entry) =>
       toCandidatePreviewTraceEntry({
         candidateId: entry.candidateId,
         candidate: entry.candidate,
+        scorecard: scorecardsById.get(entry.candidateId),
       }),
     ),
   };
@@ -589,7 +722,11 @@ async function postProcessTopicCandidates(input: {
       (left, right) =>
         left.fatigueScore - right.fatigueScore ||
         left.originalIndex - right.originalIndex,
-    );
+    )
+    .map((candidate, index) => ({
+      ...candidate,
+      candidateId: `selector_candidate_${index + 1}`,
+    }));
 
   const diagnostics: RecommendationDiagnostic[] = [];
   if (duplicateReasons.length > 0) {
@@ -615,6 +752,11 @@ async function postProcessTopicCandidates(input: {
     one_line_angle: entry.candidate.one_line_angle,
     family_label: entry.candidate.family_label,
     scope_label: entry.candidate.scope_label,
+    core_conflict: entry.candidate.core_conflict,
+    strong_scene: entry.candidate.strong_scene,
+    must_cover_preview: entry.candidate.must_cover_preview,
+    risk_hints: entry.candidate.risk_hints,
+    viral_rubric: entry.candidate.viral_rubric,
     fatigue_score: entry.fatigueScore,
     recently_seen: entry.recentlySeen,
   }));
@@ -693,12 +835,10 @@ async function selectFinalCandidatesWithTrace(input: {
   selectorPool: SelectorPoolCandidate[];
   recentEventMemory: RecentEventMemoryEntry[];
   rankings: RankedRecommendationCandidate[];
-  interactionLogWriter?: {
-    write: (...args: unknown[]) => Promise<void> | void;
-  };
+  interactionLogWriter?: LlmInteractionLogWriter;
 }) {
   const diagnostics: RecommendationDiagnostic[] = [];
-  const firstDecision = await invokeTopicSelector({
+  const decision = await invokeTopicSelector({
     llmGateway: input.llmGateway,
     selectorInput: {
       recommendation_seed: input.input,
@@ -707,67 +847,25 @@ async function selectFinalCandidatesWithTrace(input: {
     },
     interactionLogWriter: input.interactionLogWriter,
   });
-  const firstPass = inspectSelectorDecision({
-    decision: firstDecision,
+
+  const selection = selectRankedCandidates({
+    decision,
     selectorPool: input.selectorPool,
     rankings: input.rankings,
   });
 
-  let finalSelection = firstPass.selected;
-  let finalIds = [...firstPass.selectedIds];
-  let repairAttempts = 0;
-
-  if (firstPass.missingSlotCount > 0) {
-    repairAttempts = 1;
-    diagnostics.push({
-      code: "topic_selector_repair_triggered",
-      level: "info",
-      reason: `selector 首轮仅返回 ${firstPass.selectedIds.length} 个有效候选，已触发一次受控补位`,
-    });
-
-    const repairDecision = await invokeTopicSelector({
-      llmGateway: input.llmGateway,
-      selectorInput: {
-        recommendation_seed: input.input,
-        selector_pool: input.selectorPool,
-        recent_event_memory: input.recentEventMemory,
-        repair_context: {
-          missing_slot_count: firstPass.missingSlotCount,
-          kept_candidate_ids: firstPass.selectedIds,
-          excluded_candidate_ids: firstPass.excludedCandidateIds,
-          excluded_event_identities: firstPass.excludedEventIdentities,
-        },
-      },
-      interactionLogWriter: input.interactionLogWriter,
-    });
-
-    const repairPass = inspectSelectorDecision({
-      decision: repairDecision,
-      selectorPool: input.selectorPool,
-      rankings: input.rankings,
-      allowedCount: firstPass.missingSlotCount,
-      excludedCandidateIds: new Set(firstPass.excludedCandidateIds),
-      excludedEventIdentities: new Set(firstPass.excludedEventIdentities),
-    });
-
-    if (repairPass.missingSlotCount > 0) {
-      throw new Error("topic_selector_invalid_selection");
-    }
-
-    finalSelection = [...firstPass.selected, ...repairPass.selected];
-    finalIds = [...firstPass.selectedIds, ...repairPass.selectedIds];
-  }
-
-  if (finalSelection.length !== TOPIC_CANDIDATE_TARGET_COUNT) {
+  if (selection.selected.length !== TOPIC_CANDIDATE_TARGET_COUNT) {
     throw new Error("topic_selector_invalid_selection");
   }
 
   return {
-    candidates: finalSelection.map((entry) => entry.candidate),
-    rankings: finalSelection,
+    candidates: selection.selected.map((entry) => entry.candidate),
+    rankings: selection.selected,
     selectorTrace: {
-      selected_candidate_ids: finalIds,
-      repair_attempts: repairAttempts,
+      selected_candidate_ids: selection.selectedIds,
+      ranked_candidates: selection.rankedCandidates,
+      skipped_candidate_ids: selection.skippedCandidateIds,
+      repair_attempts: 0,
     } satisfies SelectorTrace,
     diagnostics,
   };
@@ -776,9 +874,7 @@ async function selectFinalCandidatesWithTrace(input: {
 async function invokeTopicSelector(input: {
   llmGateway: LlmGateway;
   selectorInput: unknown;
-  interactionLogWriter?: {
-    write: (...args: unknown[]) => Promise<void> | void;
-  };
+  interactionLogWriter?: LlmInteractionLogWriter;
 }): Promise<TopicSelectorDecision> {
   if (input.llmGateway.invokeStrictStructured) {
     try {
@@ -794,11 +890,7 @@ async function invokeTopicSelector(input: {
         interactionLogWriter: input.interactionLogWriter,
       });
     } catch (error) {
-      if (
-        error instanceof Error &&
-        (error.message.includes("strict_structured_provider_not_supported") ||
-          error.message.includes("LLM API key or base URL is not configured."))
-      ) {
+      if (shouldFallbackToStructuredSelector(error)) {
         return normalizeSelectorDecision(
           await input.llmGateway.invokeStructuredPrompt<unknown>({
             promptId: "topic.selector",
@@ -821,43 +913,50 @@ async function invokeTopicSelector(input: {
   );
 }
 
+function shouldFallbackToStructuredSelector(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  return [
+    "strict_structured_provider_not_supported",
+    "strict_structured_no_tool_call",
+    "strict_structured_strategy_not_supported",
+    "LLM API key or base URL is not configured.",
+    "Unexpected token",
+    "is not valid JSON",
+    "invalid tool arguments",
+  ].some((pattern) => error.message.includes(pattern));
+}
+
 function parseStrictSelectorDecision(rawOutput: unknown): TopicSelectorDecision {
   if (!rawOutput || typeof rawOutput !== "object" || Array.isArray(rawOutput)) {
     throw new Error("topic_selector_strict_schema_failed");
   }
 
   const record = rawOutput as Record<string, unknown>;
-  const ids = record.selected_candidate_ids;
+  const rankedCandidates = record.ranked_candidates;
 
-  if (!Array.isArray(ids)) {
-    throw new Error("topic_selector_strict_schema_failed");
-  }
-
-  if (ids.some((candidateId) => typeof candidateId !== "string")) {
+  if (!Array.isArray(rankedCandidates)) {
     throw new Error("topic_selector_strict_schema_failed");
   }
 
   const extraKeys = Object.keys(record).filter(
-    (key) => key !== "selected_candidate_ids",
+    (key) => key !== "ranked_candidates",
   );
   if (extraKeys.length > 0) {
     throw new Error("topic_selector_strict_schema_failed");
   }
 
   return {
-    selected_candidate_ids: ids,
+    ranked_candidates: parseSelectorScorecards(
+      rankedCandidates,
+      "topic_selector_strict_schema_failed",
+    ),
   };
 }
 
 function normalizeSelectorDecision(rawOutput: unknown): TopicSelectorDecision {
-  if (Array.isArray(rawOutput)) {
-    return {
-      selected_candidate_ids: rawOutput.filter(
-        (candidateId): candidateId is string => typeof candidateId === "string",
-      ),
-    };
-  }
-
   if (!rawOutput || typeof rawOutput !== "object") {
     throw new Error("topic_selector_invalid_selection");
   }
@@ -867,86 +966,201 @@ function normalizeSelectorDecision(rawOutput: unknown): TopicSelectorDecision {
     record.answer && typeof record.answer === "object" && !Array.isArray(record.answer)
       ? (record.answer as Record<string, unknown>)
       : null;
-  const ids =
+  const rankedCandidates =
     (Array.isArray(record.answer) ? record.answer : undefined) ??
-    answerRecord?.selected_candidates ??
-    answerRecord?.selected_candidate_ids ??
-    answerRecord?.selectedIds ??
-    answerRecord?.candidate_ids ??
-    answerRecord?.ids ??
-    record.selected_candidates ??
-    record.selected_candidate_ids ??
-    record.selectedIds ??
-    record.candidate_ids ??
-    record.ids;
+    answerRecord?.ranked_candidates ??
+    answerRecord?.rankedCandidates ??
+    record.ranked_candidates ??
+    record.rankedCandidates;
 
-  if (!Array.isArray(ids)) {
+  if (!Array.isArray(rankedCandidates)) {
     throw new Error("topic_selector_invalid_selection");
   }
 
   return {
-    selected_candidate_ids: ids.filter(
-      (candidateId): candidateId is string => typeof candidateId === "string",
+    ranked_candidates: parseSelectorScorecards(
+      rankedCandidates,
+      "topic_selector_invalid_selection",
     ),
   };
 }
 
-function inspectSelectorDecision(input: {
+function parseSelectorScorecards(
+  rawScorecards: unknown[],
+  errorCode: "topic_selector_invalid_selection" | "topic_selector_strict_schema_failed",
+): TopicSelectorRankedCandidate[] {
+  const seenRanks = new Set<number>();
+
+  return rawScorecards.map((rawScorecard) => {
+    if (
+      !rawScorecard ||
+      typeof rawScorecard !== "object" ||
+      Array.isArray(rawScorecard)
+    ) {
+      throw new Error(errorCode);
+    }
+
+    const record = rawScorecard as Record<string, unknown>;
+    const candidateId = record.candidate_id;
+    const qualityRank = record.quality_rank;
+    const qualityScore = record.quality_score;
+    const deductions = record.deductions;
+    const riskSummary = record.risk_summary;
+
+    if (
+      typeof candidateId !== "string" ||
+      typeof qualityRank !== "number" ||
+      !Number.isInteger(qualityRank) ||
+      typeof qualityScore !== "number" ||
+      !Number.isInteger(qualityScore) ||
+      !Array.isArray(deductions) ||
+      typeof riskSummary !== "string"
+    ) {
+      throw new Error(errorCode);
+    }
+
+    if (qualityRank < 1 || qualityScore < 0 || qualityScore > 100) {
+      throw new Error(errorCode);
+    }
+
+    if (seenRanks.has(qualityRank)) {
+      throw new Error(errorCode);
+    }
+    seenRanks.add(qualityRank);
+
+    return {
+      candidate_id: candidateId,
+      quality_rank: qualityRank,
+      quality_score: qualityScore,
+      deductions: parseSelectorDeductions(deductions, errorCode),
+      risk_summary: riskSummary,
+    };
+  });
+}
+
+function parseSelectorDeductions(
+  rawDeductions: unknown[],
+  errorCode: "topic_selector_invalid_selection" | "topic_selector_strict_schema_failed",
+): TopicSelectorRankedCandidate["deductions"] {
+  return rawDeductions.map((rawDeduction) => {
+    if (
+      !rawDeduction ||
+      typeof rawDeduction !== "object" ||
+      Array.isArray(rawDeduction)
+    ) {
+      throw new Error(errorCode);
+    }
+
+    const record = rawDeduction as Record<string, unknown>;
+    const axis = record.axis;
+    const pointsLost = record.points_lost;
+    const reason = record.reason;
+
+    if (
+      typeof axis !== "string" ||
+      !isSelectorDeductionAxis(axis) ||
+      typeof pointsLost !== "number" ||
+      !Number.isInteger(pointsLost) ||
+      typeof reason !== "string"
+    ) {
+      throw new Error(errorCode);
+    }
+
+    if (pointsLost < 1 || pointsLost > 30) {
+      throw new Error(errorCode);
+    }
+
+    return {
+      axis,
+      points_lost: pointsLost,
+      reason,
+    };
+  });
+}
+
+function isSelectorDeductionAxis(axis: string): axis is SelectorDeductionAxis {
+  return [
+    "opening_hook",
+    "conflict_pressure",
+    "scene_visibility",
+    "angle_freshness",
+    "script_expandability",
+    "ending_aftershock",
+    "fatigue_or_repetition",
+    "source_or_scope_risk",
+  ].includes(axis);
+}
+
+function selectRankedCandidates(input: {
   decision: TopicSelectorDecision;
   selectorPool: SelectorPoolCandidate[];
   rankings: RankedRecommendationCandidate[];
-  allowedCount?: number;
-  excludedCandidateIds?: Set<string>;
-  excludedEventIdentities?: Set<string>;
 }) {
   const rankingsById = new Map(
     input.rankings.map((candidate) => [candidate.candidateId, candidate] as const),
   );
   const knownIds = new Set(input.selectorPool.map((candidate) => candidate.candidate_id));
-  const excludedCandidateIds = input.excludedCandidateIds ?? new Set<string>();
-  const excludedEventIdentities = input.excludedEventIdentities ?? new Set<string>();
+  const coveredKnownIds = new Set<string>();
+
+  for (const scorecard of input.decision.ranked_candidates) {
+    if (!knownIds.has(scorecard.candidate_id)) {
+      throw new Error("topic_selector_invalid_selection");
+    }
+    coveredKnownIds.add(scorecard.candidate_id);
+  }
+
+  for (const candidateId of knownIds) {
+    if (!coveredKnownIds.has(candidateId)) {
+      throw new Error("topic_selector_invalid_selection");
+    }
+  }
+
   const allowRepeatedEventIdentities =
     new Set(input.selectorPool.map((candidate) => candidate.normalized_event_identity)).size === 1;
   const selected: RankedRecommendationCandidate[] = [];
   const selectedIds: string[] = [];
+  const selectedEventIdentities = new Set<string>();
+  const seenCandidateIds = new Set<string>();
+  const skippedCandidateIds: string[] = [];
+  const rankedCandidates = [...input.decision.ranked_candidates].sort(
+    (left, right) =>
+      left.quality_rank - right.quality_rank ||
+      right.quality_score - left.quality_score,
+  );
 
-  for (const candidateId of input.decision.selected_candidate_ids) {
-    if (!knownIds.has(candidateId) || excludedCandidateIds.has(candidateId)) {
-      throw new Error("topic_selector_invalid_selection");
+  for (const scorecard of rankedCandidates) {
+    if (seenCandidateIds.has(scorecard.candidate_id)) {
+      skippedCandidateIds.push(scorecard.candidate_id);
+      continue;
     }
+    seenCandidateIds.add(scorecard.candidate_id);
 
-    const match = rankingsById.get(candidateId);
+    const match = rankingsById.get(scorecard.candidate_id);
     if (!match) {
       throw new Error("topic_selector_invalid_selection");
     }
 
-    if (selectedIds.includes(candidateId)) {
-      throw new Error("topic_selector_invalid_selection");
-    }
-
-    if (!allowRepeatedEventIdentities && excludedEventIdentities.has(match.eventIdentity)) {
-      throw new Error("topic_selector_invalid_selection");
+    if (!allowRepeatedEventIdentities && selectedEventIdentities.has(match.eventIdentity)) {
+      skippedCandidateIds.push(scorecard.candidate_id);
+      continue;
     }
 
     selected.push(match);
-    selectedIds.push(candidateId);
-    excludedCandidateIds.add(candidateId);
+    selectedIds.push(scorecard.candidate_id);
     if (!allowRepeatedEventIdentities) {
-      excludedEventIdentities.add(match.eventIdentity);
+      selectedEventIdentities.add(match.eventIdentity);
+    }
+
+    if (selected.length === TOPIC_CANDIDATE_TARGET_COUNT) {
+      break;
     }
   }
 
-  const targetCount = input.allowedCount ?? TOPIC_CANDIDATE_TARGET_COUNT;
-
-  const trimmedSelected = selected.slice(0, targetCount);
-  const trimmedSelectedIds = selectedIds.slice(0, targetCount);
-
   return {
-    selected: trimmedSelected,
-    selectedIds: trimmedSelectedIds,
-    missingSlotCount: targetCount - trimmedSelected.length,
-    excludedCandidateIds: [...excludedCandidateIds],
-    excludedEventIdentities: [...excludedEventIdentities],
+    selected,
+    selectedIds,
+    rankedCandidates,
+    skippedCandidateIds,
   };
 }
 
@@ -1167,6 +1381,11 @@ async function loadFallbackCandidates(input: {
       one_line_angle: entry.candidate.one_line_angle,
       family_label: entry.candidate.family_label,
       scope_label: entry.candidate.scope_label,
+      core_conflict: entry.candidate.core_conflict,
+      strong_scene: entry.candidate.strong_scene,
+      must_cover_preview: entry.candidate.must_cover_preview,
+      risk_hints: entry.candidate.risk_hints,
+      viral_rubric: entry.candidate.viral_rubric,
       fatigue_score: entry.fatigueScore,
       recently_seen: entry.recentlySeen,
     })),

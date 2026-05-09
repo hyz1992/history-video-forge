@@ -69,6 +69,15 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("名句可以作为节点锚点，但不要附带完整解释");
   });
 
+  it("requires candidate-builder angles to be closed by preview beats", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("`one_line_angle` 必须被三条 `must_cover_preview` 共同支撑");
+    expect(prompt.body).toContain("不得为了锋利感新增 preview 无法兑现的压力点");
+    expect(prompt.body).toContain("三条 preview 不得只是同一句角度摘要的改写");
+  });
+
   it("requires candidate-builder to prioritize first-pass field completeness ahead of diversity tactics", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 
@@ -127,22 +136,32 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("recent_event_memory");
   });
 
-  it("requires topic.selector to return exactly three candidate ids", () => {
+  it("requires topic.selector to return a complete ranked candidate scorecard", () => {
     const prompt = createPromptRegistry().getPrompt("topic.selector");
 
-    expect(prompt.body).toContain("必须且只能返回 3 个候选 id");
-    expect(prompt.body).toContain("多于 3 个也属于违规");
+    expect(prompt.body).toContain("`ranked_candidates` 必须覆盖 `selector_pool` 中全部候选 id");
+    expect(prompt.body).toContain("`quality_rank` 必须从 1 开始且不得重复");
+    expect(prompt.body).toContain("`quality_score` 必须是 0 到 100 的整数");
+    expect(prompt.body).toContain("`deductions` 只写扣分项");
+    expect(prompt.body).toContain("`risk_summary` 必须是一句话风险摘要");
   });
 
   it("keeps topic.selector prompt aligned with tool-call structured output", () => {
     const prompt = createPromptRegistry().getPrompt("topic.selector");
 
     expect(prompt.metadata.language).toBe("zh-CN");
-    expect(prompt.body).toContain("select_topic_candidates");
-    expect(prompt.body).toContain("selected_candidate_ids");
+    expect(prompt.body).toContain("rank_topic_candidates");
+    expect(prompt.body).toContain("ranked_candidates");
     expect(prompt.body).toContain(
-      "不要输出 answer、result、explanation 或任何解释字段",
+      "不要输出 answer、result、explanation 或任何 schema 外字段",
     );
+  });
+
+  it("keeps topic.selector scorecard text JSON-safe for strict tool-call arguments", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.selector");
+
+    expect(prompt.body).toContain("`reason` 和 `risk_summary` 必须是合法 JSON 字符串");
+    expect(prompt.body).toContain("不要使用单引号包裹字符串");
   });
 
   it("does not invite topic.selector to attach explanations outside the schema", () => {

@@ -13,8 +13,16 @@ import { normalizeEventInput } from "../../../backend/src/modules/topic/event-no
 import { createTopicCandidateLibraryRepository } from "../../../backend/src/modules/topic/topic-candidate-library.repository.js";
 import { parseTopicCandidateLibraryJsonDocument } from "../../../backend/src/modules/topic/topic-candidate-library-json.codec.js";
 import { buildTopicCandidateLibraryDirectory } from "../../../backend/src/modules/topic/topic-candidate-library.path.js";
-import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
-import { createOpenAiCompatibleProvider } from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
+import {
+  createLlmGateway,
+  type InvokeStrictStructuredOptions,
+  type InvokeStructuredPromptOptions,
+  type LlmGateway,
+} from "../../../backend/src/runtime/llm/llm-gateway.js";
+import {
+  createOpenAiCompatibleProvider,
+  type OpenAiCompatibleInvokeRequest,
+} from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 import { getProjectStorageProfile } from "../../../backend/src/runtime/trace/project-storage.js";
 import {
@@ -45,6 +53,11 @@ const runtimeCandidate = {
   },
 };
 
+type SelectorApiInput = {
+  selector_pool?: Array<{ candidate_id: string }>;
+  missing_fields_by_candidate?: Array<{ missing_fields: string[] }>;
+};
+
 function createRuntimeCandidate(title: string, angle: string) {
   return {
     ...runtimeCandidate,
@@ -54,10 +67,41 @@ function createRuntimeCandidate(title: string, angle: string) {
   };
 }
 
+function createSelectorScorecard(candidateId: string, qualityRank: number) {
+  return {
+    candidate_id: candidateId,
+    quality_rank: qualityRank,
+    quality_score: Math.max(1, 100 - qualityRank),
+    deductions: [
+      {
+        axis: "angle_freshness",
+        points_lost: qualityRank,
+        reason: `rank ${qualityRank} deduction`,
+      },
+    ],
+    risk_summary: `rank ${qualityRank} risk`,
+  };
+}
+
 function createSelectorDecision(...candidateIds: string[]) {
   return {
-    selected_candidate_ids: candidateIds,
+    ranked_candidates: candidateIds.map((candidateId, index) =>
+      createSelectorScorecard(candidateId, index + 1),
+    ),
   };
+}
+
+function createSelectorDecisionFromPool(
+  selectorPool: Array<{ candidate_id: string }>,
+  preferredCandidateIds: string[] = [],
+) {
+  const poolIds = selectorPool.map((candidate) => candidate.candidate_id);
+  const orderedIds = [
+    ...preferredCandidateIds,
+    ...poolIds.filter((candidateId) => !preferredCandidateIds.includes(candidateId)),
+  ];
+
+  return createSelectorDecision(...orderedIds);
 }
 
 function createIncompleteBuilderCandidate(eventIdentity: string) {
@@ -73,18 +117,20 @@ function createGatewayWithSelectorResponses(
 ) {
   let builderCallIndex = 0;
   let selectorCallIndex = 0;
-  const invokeApi = vi.fn(async ({ operationName, input }: { operationName: string; input: { selector_pool?: Array<{ candidate_id: string }> } }) => {
+  const invokeApi = vi.fn(async (request: OpenAiCompatibleInvokeRequest) => {
+    const { operationName } = request;
+    const input = request.input as SelectorApiInput;
+
     if (operationName === "topic.selector") {
       const selectedIds =
         selectorOutputs?.[selectorCallIndex] ??
         (input.selector_pool ?? [])
-          .slice(0, 3)
           .map((candidate) => candidate.candidate_id);
       selectorCallIndex += 1;
       return typeof selectedIds === "string"
         ? selectedIds
         : Array.isArray(selectedIds)
-          ? JSON.stringify(createSelectorDecision(...selectedIds))
+          ? JSON.stringify(createSelectorDecisionFromPool(input.selector_pool ?? [], selectedIds))
           : JSON.stringify(selectedIds);
     }
 
@@ -664,18 +710,48 @@ describe("topic runtime recommendation", () => {
         title: "event-a",
         one_line_angle: "angle-a",
         must_cover_preview: ["a-entry", "a-action", "a-cost"],
+        quality_rank: 1,
+        quality_score: 99,
+        deductions: [
+          {
+            axis: "angle_freshness",
+            points_lost: 1,
+            reason: "rank 1 deduction",
+          },
+        ],
+        risk_summary: "rank 1 risk",
       },
       {
         candidate_id: "selector_candidate_2",
         title: "event-b",
         one_line_angle: "angle-b",
         must_cover_preview: ["b-entry", "b-action", "b-cost"],
+        quality_rank: 2,
+        quality_score: 98,
+        deductions: [
+          {
+            axis: "angle_freshness",
+            points_lost: 2,
+            reason: "rank 2 deduction",
+          },
+        ],
+        risk_summary: "rank 2 risk",
       },
       {
         candidate_id: "selector_candidate_3",
         title: "event-c",
         one_line_angle: "angle-c",
         must_cover_preview: ["c-entry", "c-action", "c-cost"],
+        quality_rank: 3,
+        quality_score: 97,
+        deductions: [
+          {
+            axis: "angle_freshness",
+            points_lost: 3,
+            reason: "rank 3 deduction",
+          },
+        ],
+        risk_summary: "rank 3 risk",
       },
     ]);
   });
@@ -693,23 +769,13 @@ describe("topic runtime recommendation", () => {
       createRuntimeCandidate("event-h", "angle-h"),
     ];
     const invokeApi = vi.fn(
-      async ({
-        operationName,
-        input,
-      }: {
-        operationName: string;
-        input: {
-          selector_pool?: Array<{ candidate_id: string }>;
-          missing_fields_by_candidate?: Array<{ missing_fields: string[] }>;
-        };
-      }) => {
+      async (request: OpenAiCompatibleInvokeRequest) => {
+        const { operationName } = request;
+        const input = request.input as SelectorApiInput;
+
         if (operationName === "topic.selector") {
           return JSON.stringify(
-            createSelectorDecision(
-              ...((input.selector_pool ?? [])
-                .slice(0, 3)
-                .map((candidate) => candidate.candidate_id)),
-            ),
+            createSelectorDecisionFromPool(input.selector_pool ?? []),
           );
         }
 
@@ -791,22 +857,13 @@ describe("topic runtime recommendation", () => {
   it("keeps serving fallback candidates and marks diagnostics degraded when builder repair still leaves required fields missing", async () => {
     const db = createDbClient();
     const invokeApi = vi.fn(
-      async ({
-        operationName,
-        input,
-      }: {
-        operationName: string;
-        input: {
-          selector_pool?: Array<{ candidate_id: string }>;
-        };
-      }) => {
+      async (request: OpenAiCompatibleInvokeRequest) => {
+        const { operationName } = request;
+        const input = request.input as SelectorApiInput;
+
         if (operationName === "topic.selector") {
           return JSON.stringify(
-            createSelectorDecision(
-              ...((input.selector_pool ?? [])
-                .slice(0, 3)
-                .map((candidate) => candidate.candidate_id)),
-            ),
+            createSelectorDecisionFromPool(input.selector_pool ?? []),
           );
         }
 
@@ -1055,6 +1112,9 @@ describe("topic runtime recommendation", () => {
     expect(uniqueEventIdentities(result.selector_pool)).toHaveLength(
       result.selector_pool.length,
     );
+    expect(result.selector_pool.map((candidate) => candidate.candidate_id)).toEqual(
+      result.selector_pool.map((_, index) => `selector_candidate_${index + 1}`),
+    );
   });
 
   it("deduplicates selector_pool by explicit event_identity instead of title-derived identity", async () => {
@@ -1202,6 +1262,11 @@ describe("topic runtime recommendation", () => {
     expect(result.selector_pool[0]).toMatchObject({
       fatigue_score: expect.any(Number),
       recently_seen: expect.any(Boolean),
+      core_conflict: runtimeCandidate.core_conflict,
+      strong_scene: runtimeCandidate.strong_scene,
+      must_cover_preview: expect.arrayContaining(runtimeCandidate.must_cover_preview),
+      risk_hints: runtimeCandidate.risk_hints,
+      viral_rubric: runtimeCandidate.viral_rubric,
     });
   });
 
@@ -1300,6 +1365,11 @@ describe("topic runtime recommendation", () => {
             "selector_candidate_4",
             "selector_candidate_2",
             "selector_candidate_6",
+            "selector_candidate_1",
+            "selector_candidate_3",
+            "selector_candidate_5",
+            "selector_candidate_7",
+            "selector_candidate_8",
           ),
         ),
       );
@@ -1340,8 +1410,8 @@ describe("topic runtime recommendation", () => {
     const db = createDbClient();
     const strictCalls: unknown[] = [];
     const structuredCalls: unknown[] = [];
-    const gateway = {
-      invokeStructuredPrompt: vi.fn(async (request) => {
+    const invokeStructuredPrompt = vi.fn(
+      async <T>(request: InvokeStructuredPromptOptions): Promise<T> => {
         structuredCalls.push(request);
         return [
           createRuntimeCandidate("event-a", "angle-a"),
@@ -1352,18 +1422,33 @@ describe("topic runtime recommendation", () => {
           createRuntimeCandidate("event-f", "angle-f"),
           createRuntimeCandidate("event-g", "angle-g"),
           createRuntimeCandidate("event-h", "angle-h"),
-        ];
-      }),
-      invokeStrictStructured: vi.fn(async (request) => {
+        ] as T;
+      },
+    );
+    const invokeStrictStructured = vi.fn(
+      async <T>(request: InvokeStrictStructuredOptions<T>): Promise<T> => {
         strictCalls.push(request);
-        return {
-          selected_candidate_ids: [
+        return request.parse(
+          createSelectorDecision(
             "selector_candidate_1",
             "selector_candidate_2",
             "selector_candidate_3",
-          ],
-        };
-      }),
+            "selector_candidate_4",
+            "selector_candidate_5",
+            "selector_candidate_6",
+            "selector_candidate_7",
+            "selector_candidate_8",
+          ),
+        );
+      },
+    );
+    const gateway: LlmGateway = {
+      invokeStructuredPrompt: async <T>(
+        options: InvokeStructuredPromptOptions,
+      ): Promise<T> => (await invokeStructuredPrompt(options)) as T,
+      invokeStrictStructured: async <T>(
+        options: InvokeStrictStructuredOptions<T>,
+      ): Promise<T> => (await invokeStrictStructured(options)) as T,
     };
 
     const result = await recommendTopicCandidatesWithTrace(
@@ -1386,11 +1471,11 @@ describe("topic runtime recommendation", () => {
       "selector_candidate_2",
       "selector_candidate_3",
     ]);
-    expect(gateway.invokeStrictStructured).toHaveBeenCalledWith(
+    expect(invokeStrictStructured).toHaveBeenCalledWith(
       expect.objectContaining({
         promptId: "topic.selector",
         schema: expect.objectContaining({
-          name: "select_topic_candidates",
+          name: "rank_topic_candidates",
         }),
         options: expect.objectContaining({
           strategy: "tool_call",
@@ -1410,30 +1495,45 @@ describe("topic runtime recommendation", () => {
     expect(strictCalls).toHaveLength(1);
   });
 
-  it("rejects strict topic.selector output that uses answer.selected_ids instead of selected_candidate_ids", async () => {
+  it("rejects strict topic.selector output that wraps ranked_candidates under answer", async () => {
     const db = createDbClient();
-    const gateway = {
-      invokeStructuredPrompt: vi.fn(async () => [
-        createRuntimeCandidate("event-a", "angle-a"),
-        createRuntimeCandidate("event-b", "angle-b"),
-        createRuntimeCandidate("event-c", "angle-c"),
-        createRuntimeCandidate("event-d", "angle-d"),
-        createRuntimeCandidate("event-e", "angle-e"),
-        createRuntimeCandidate("event-f", "angle-f"),
-        createRuntimeCandidate("event-g", "angle-g"),
-        createRuntimeCandidate("event-h", "angle-h"),
-      ]),
-      invokeStrictStructured: vi.fn(async (request) =>
+    const invokeStructuredPrompt = vi.fn(
+      async <T>(_request: InvokeStructuredPromptOptions): Promise<T> =>
+        [
+          createRuntimeCandidate("event-a", "angle-a"),
+          createRuntimeCandidate("event-b", "angle-b"),
+          createRuntimeCandidate("event-c", "angle-c"),
+          createRuntimeCandidate("event-d", "angle-d"),
+          createRuntimeCandidate("event-e", "angle-e"),
+          createRuntimeCandidate("event-f", "angle-f"),
+          createRuntimeCandidate("event-g", "angle-g"),
+          createRuntimeCandidate("event-h", "angle-h"),
+        ] as T,
+    );
+    const invokeStrictStructured = vi.fn(
+      async <T>(request: InvokeStrictStructuredOptions<T>): Promise<T> =>
         request.parse({
           answer: {
-            selected_ids: [
+            ranked_candidates: createSelectorDecision(
               "selector_candidate_1",
               "selector_candidate_2",
               "selector_candidate_3",
-            ],
+              "selector_candidate_4",
+              "selector_candidate_5",
+              "selector_candidate_6",
+              "selector_candidate_7",
+              "selector_candidate_8",
+            ).ranked_candidates,
           },
         }),
-      ),
+    );
+    const gateway: LlmGateway = {
+      invokeStructuredPrompt: async <T>(
+        options: InvokeStructuredPromptOptions,
+      ): Promise<T> => (await invokeStructuredPrompt(options)) as T,
+      invokeStrictStructured: async <T>(
+        options: InvokeStrictStructuredOptions<T>,
+      ): Promise<T> => (await invokeStrictStructured(options)) as T,
     };
 
     await expect(
@@ -1454,7 +1554,86 @@ describe("topic runtime recommendation", () => {
     ).rejects.toThrow("topic_selector_strict_schema_failed");
   });
 
-  it("accepts selector outputs returned through the common answer field and trims extra valid ids", async () => {
+  it("falls back to regular structured selector output when strict tool-call arguments are malformed", async () => {
+    const db = createDbClient();
+    const structuredCalls: unknown[] = [];
+    const invokeStructuredPrompt = vi.fn(
+      async <T>(request: InvokeStructuredPromptOptions): Promise<T> => {
+        structuredCalls.push(request);
+        const promptId =
+          (request as { promptId?: string; operationName?: string }).promptId ??
+          (request as { promptId?: string; operationName?: string }).operationName;
+
+        if (promptId === "topic.selector") {
+          return createSelectorDecision(
+            "selector_candidate_4",
+            "selector_candidate_2",
+            "selector_candidate_6",
+            "selector_candidate_1",
+            "selector_candidate_3",
+            "selector_candidate_5",
+            "selector_candidate_7",
+            "selector_candidate_8",
+          ) as T;
+        }
+
+        return [
+          createRuntimeCandidate("event-a", "angle-a"),
+          createRuntimeCandidate("event-b", "angle-b"),
+          createRuntimeCandidate("event-c", "angle-c"),
+          createRuntimeCandidate("event-d", "angle-d"),
+          createRuntimeCandidate("event-e", "angle-e"),
+          createRuntimeCandidate("event-f", "angle-f"),
+          createRuntimeCandidate("event-g", "angle-g"),
+          createRuntimeCandidate("event-h", "angle-h"),
+        ] as T;
+      },
+    );
+    const invokeStrictStructured = vi.fn(
+      async <T>(_request: InvokeStrictStructuredOptions<T>): Promise<T> => {
+        throw new Error("Unexpected token ''', invalid tool arguments is not valid JSON");
+      },
+    );
+    const gateway: LlmGateway = {
+      invokeStructuredPrompt: async <T>(
+        options: InvokeStructuredPromptOptions,
+      ): Promise<T> => (await invokeStructuredPrompt(options)) as T,
+      invokeStrictStructured: async <T>(
+        options: InvokeStrictStructuredOptions<T>,
+      ): Promise<T> => (await invokeStrictStructured(options)) as T,
+    };
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "strict selector may produce malformed tool-call arguments",
+        coreConflict: "fallback structured selector should keep the live run moving",
+        strongScene: "the selector retries through regular json response format",
+        sourceHint: "test",
+        recentUsageHint: "strict fallback",
+      },
+      { llmGateway: gateway },
+    );
+
+    expect(result.candidates.map((candidate) => candidate.title)).toEqual([
+      "event-d",
+      "event-b",
+      "event-f",
+    ]);
+    expect(invokeStrictStructured).toHaveBeenCalledTimes(1);
+    expect(
+      structuredCalls.filter((request) => {
+        const promptId =
+          (request as { promptId?: string; operationName?: string }).promptId ??
+          (request as { promptId?: string; operationName?: string }).operationName;
+
+        return promptId === "topic.selector";
+      }),
+    ).toHaveLength(1);
+  });
+
+  it("accepts ranked selector outputs returned through the common answer field", async () => {
     const db = createDbClient();
     const invokeApi = vi
       .fn()
@@ -1472,12 +1651,16 @@ describe("topic runtime recommendation", () => {
       )
       .mockResolvedValueOnce(
         JSON.stringify({
-          answer: [
+          answer: createSelectorDecision(
             "selector_candidate_1",
             "selector_candidate_2",
             "selector_candidate_4",
             "selector_candidate_6",
-          ],
+            "selector_candidate_3",
+            "selector_candidate_5",
+            "selector_candidate_7",
+            "selector_candidate_8",
+          ),
         }),
       );
     const gateway = createLlmGateway({
@@ -1511,7 +1694,7 @@ describe("topic runtime recommendation", () => {
     ]);
   });
 
-  it("accepts selector outputs returned through selected_candidates", async () => {
+  it("accepts selector outputs returned through ranked_candidates", async () => {
     const db = createDbClient();
     const invokeApi = vi
       .fn()
@@ -1528,14 +1711,18 @@ describe("topic runtime recommendation", () => {
         ]),
       )
       .mockResolvedValueOnce(
-        JSON.stringify({
-          selected_candidates: [
+        JSON.stringify(
+          createSelectorDecision(
             "selector_candidate_1",
             "selector_candidate_2",
             "selector_candidate_5",
             "selector_candidate_6",
-          ],
-        }),
+            "selector_candidate_3",
+            "selector_candidate_4",
+            "selector_candidate_7",
+            "selector_candidate_8",
+          ),
+        ),
       );
     const gateway = createLlmGateway({
       registry: createPromptRegistry(),
@@ -1549,9 +1736,9 @@ describe("topic runtime recommendation", () => {
       db,
       {
         canonicalName: "seed-a",
-        summary: "selector outputs may also arrive through selected_candidates",
+        summary: "selector outputs may also arrive directly as ranked_candidates",
         coreConflict: "selector normalization must tolerate another real-provider wrapper",
-        strongScene: "the final candidates should still be resolved from ids inside selected_candidates",
+        strongScene: "the final candidates should still be resolved from ids inside ranked_candidates",
         sourceHint: "test",
         recentUsageHint: "none",
       },
@@ -1590,6 +1777,12 @@ describe("topic runtime recommendation", () => {
             "selector_candidate_1",
             "selector_candidate_999",
             "selector_candidate_3",
+            "selector_candidate_2",
+            "selector_candidate_4",
+            "selector_candidate_5",
+            "selector_candidate_6",
+            "selector_candidate_7",
+            "selector_candidate_8",
           ),
         ),
       );
@@ -1620,7 +1813,7 @@ describe("topic runtime recommendation", () => {
     ).rejects.toThrow("topic_selector_invalid_selection");
   });
 
-  it("triggers one controlled repair when selector pool cannot supply three valid final picks", async () => {
+  it("uses the complete selector ranking as a deterministic backfill queue when ranked ids repeat", async () => {
     const db = createDbClient();
     const { gateway } = createGatewayWithSelectorResponses(
       [
@@ -1636,8 +1829,12 @@ describe("topic runtime recommendation", () => {
         ],
       ],
       [
-        ["selector_candidate_4", "selector_candidate_2"],
-        ["selector_candidate_6"],
+        [
+          "selector_candidate_4",
+          "selector_candidate_4",
+          "selector_candidate_2",
+          "selector_candidate_6",
+        ],
       ],
     );
 
@@ -1645,9 +1842,9 @@ describe("topic runtime recommendation", () => {
       db,
       {
         canonicalName: "seed-a",
-        summary: "selector repair should backfill missing valid picks once",
-        coreConflict: "the first selector pass returns too few valid ids",
-        strongScene: "repair should fill the last missing slot without replacing the valid kept picks",
+        summary: "selector ranked queue should backfill repeated ids without a second LLM call",
+        coreConflict: "the first ranked id is repeated and the backend should continue down the queue",
+        strongScene: "the complete ranking gives enough candidates to fill the final three",
         sourceHint: "test",
         recentUsageHint: "none",
       },
@@ -1657,19 +1854,18 @@ describe("topic runtime recommendation", () => {
       },
     );
 
-    expect(result.diagnostics.checks).toContainEqual(
-      expect.objectContaining({ code: "topic_selector_repair_triggered" }),
-    );
     expect(result.candidates.map((candidate) => candidate.title)).toEqual([
       "event-d",
       "event-b",
       "event-f",
     ]);
+    expect(result.selector_trace?.repair_attempts).toBe(0);
+    expect(result.selector_trace?.skipped_candidate_ids).toContain("selector_candidate_4");
   });
 
-  it("does not retry selector repairs indefinitely", async () => {
+  it("invokes topic.selector once when the complete ranking can fill final slots", async () => {
     const db = createDbClient();
-    const { gateway } = createGatewayWithSelectorResponses(
+    const { gateway, invokeApi } = createGatewayWithSelectorResponses(
       [
         [
           createRuntimeCandidate("event-a", "angle-a"),
@@ -1683,8 +1879,12 @@ describe("topic runtime recommendation", () => {
         ],
       ],
       [
-        ["selector_candidate_4", "selector_candidate_2"],
-        ["selector_candidate_6"],
+        [
+          "selector_candidate_4",
+          "selector_candidate_4",
+          "selector_candidate_2",
+          "selector_candidate_6",
+        ],
       ],
     );
 
@@ -1692,9 +1892,9 @@ describe("topic runtime recommendation", () => {
       db,
       {
         canonicalName: "seed-a",
-        summary: "selector repair should stop after one extra attempt",
-        coreConflict: "repair count must stay bounded at one additional selector pass",
-        strongScene: "the trace should show at most one repair attempt",
+        summary: "selector should not need a repair pass when ranking includes all candidates",
+        coreConflict: "complete ranking should be enough for deterministic backend selection",
+        strongScene: "the trace should show no repair attempt",
         sourceHint: "test",
         recentUsageHint: "none",
       },
@@ -1704,7 +1904,10 @@ describe("topic runtime recommendation", () => {
       },
     );
 
-    expect(result.selector_trace?.repair_attempts ?? 0).toBeLessThanOrEqual(1);
+    expect(
+      invokeApi.mock.calls.filter(([request]) => request.operationName === "topic.selector"),
+    ).toHaveLength(1);
+    expect(result.selector_trace?.repair_attempts).toBe(0);
   });
 
   it("demotes recently used events through a fatigue penalty before returning final candidates", async () => {
@@ -2027,7 +2230,7 @@ describe("topic runtime recommendation", () => {
     );
 
     const profile = getProjectStorageProfile(project);
-    const runId = String((result.trace as Record<string, unknown>).run_id);
+    const runId = String((result.trace as unknown as Record<string, unknown>).run_id);
     const runDir = resolve(process.cwd(), profile.topic_runs_dir, runId);
     const llmInteractionsDir = resolve(runDir, "llm-interactions");
     const llmInteractionFiles = readdirSync(llmInteractionsDir);
@@ -2060,14 +2263,14 @@ describe("topic runtime recommendation", () => {
       createRuntimeCandidate("event-g", "angle-g"),
       createRuntimeCandidate("event-h", "angle-h"),
     ];
-    const invokeApi = vi.fn(async ({ operationName }: { operationName: string }) => {
+    const invokeApi = vi.fn(
+      async (request: OpenAiCompatibleInvokeRequest) => {
+        const { operationName } = request;
+        const input = request.input as SelectorApiInput;
+
       if (operationName === "topic.selector") {
         return JSON.stringify(
-          createSelectorDecision(
-            "selector_candidate_1",
-            "selector_candidate_2",
-            "selector_candidate_3",
-          ),
+          createSelectorDecisionFromPool(input.selector_pool ?? []),
         );
       }
 
@@ -2111,7 +2314,7 @@ describe("topic runtime recommendation", () => {
     );
 
     const profile = getProjectStorageProfile(project);
-    const runId = String((result.trace as Record<string, unknown>).run_id);
+    const runId = String((result.trace as unknown as Record<string, unknown>).run_id);
     const runDir = resolve(process.cwd(), profile.topic_runs_dir, runId);
     const diagnosticsLogPath = resolve(runDir, "recommendation-diagnostics.md");
     const diagnosticsLogContent = readFileSync(diagnosticsLogPath, "utf8");
@@ -2346,7 +2549,7 @@ describe("topic runtime recommendation", () => {
     );
 
     const profile = getProjectStorageProfile(project);
-    const runId = String((secondRun.trace as Record<string, unknown>).run_id);
+    const runId = String((secondRun.trace as unknown as Record<string, unknown>).run_id);
     const selectorLogPath = resolve(
       process.cwd(),
       profile.topic_runs_dir,
@@ -2429,7 +2632,7 @@ describe("topic runtime recommendation", () => {
     );
 
     const profile = getProjectStorageProfile(project);
-    const runId = String((secondRun.trace as Record<string, unknown>).run_id);
+    const runId = String((secondRun.trace as unknown as Record<string, unknown>).run_id);
     const builderLogPath = resolve(
       process.cwd(),
       profile.topic_runs_dir,
@@ -2572,7 +2775,7 @@ describe("topic runtime recommendation", () => {
     expect(notesContent).toContain("expired");
   });
 
-  it("accepts selector repair outputs returned through answer.selected_candidates", async () => {
+  it("accepts ranked selector outputs returned through answer.ranked_candidates", async () => {
     const db = createDbClient();
     const { gateway } = createGatewayWithSelectorResponses(
       [[
@@ -2586,11 +2789,17 @@ describe("topic runtime recommendation", () => {
         createRuntimeCandidate("event-h", "angle-h"),
       ]],
       [
-        ["selector_candidate_1", "selector_candidate_2"],
         {
-          answer: {
-            selected_candidates: ["selector_candidate_3"],
-          },
+          answer: createSelectorDecision(
+            "selector_candidate_1",
+            "selector_candidate_2",
+            "selector_candidate_3",
+            "selector_candidate_4",
+            "selector_candidate_5",
+            "selector_candidate_6",
+            "selector_candidate_7",
+            "selector_candidate_8",
+          ),
         },
       ],
     );
@@ -2599,11 +2808,11 @@ describe("topic runtime recommendation", () => {
       db,
       {
         canonicalName: "seed-a",
-        summary: "selector repair may wrap ids under answer.selected_candidates",
-        coreConflict: "repair output shape should still be accepted",
-        strongScene: "the selector keeps two ids and repairs one missing slot",
+        summary: "selector ranked output may be wrapped under answer",
+        coreConflict: "fallback structured output shape should still be accepted",
+        strongScene: "the selector returns a complete ranked scorecard through answer",
         sourceHint: "test",
-        recentUsageHint: "repair nested answer",
+        recentUsageHint: "ranked nested answer",
       },
       {
         llmGateway: gateway,
@@ -2621,7 +2830,7 @@ describe("topic runtime recommendation", () => {
         "selector_candidate_2",
         "selector_candidate_3",
       ],
-      repair_attempts: 1,
+      repair_attempts: 0,
     });
   });
 
