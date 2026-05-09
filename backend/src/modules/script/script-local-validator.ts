@@ -92,6 +92,21 @@ function getCharsPerEstimatedSecond(
   return Math.round((scriptCharCount / estimatedDurationSec) * 100) / 100;
 }
 
+function stripQuoteBoundaryPunctuation(value: string) {
+  return value.replace(/[“”"‘’'「」『』]/gu, "");
+}
+
+function scriptContainsTraceExcerpt(scriptText: string, excerpt: string) {
+  const trimmedExcerpt = excerpt.trim();
+  if (scriptText.includes(trimmedExcerpt)) {
+    return true;
+  }
+
+  return stripQuoteBoundaryPunctuation(scriptText).includes(
+    stripQuoteBoundaryPunctuation(trimmedExcerpt),
+  );
+}
+
 export function validateScriptDraft(input: ValidateScriptDraftInput) {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -219,7 +234,7 @@ export function validateScriptDraft(input: ValidateScriptDraftInput) {
       continue;
     }
 
-    if (!draft.script_text.includes(matched.excerpt.trim())) {
+    if (!scriptContainsTraceExcerpt(draft.script_text, matched.excerpt)) {
       pushUnique(errors, "beat_trace_excerpt_not_in_script");
     }
   }

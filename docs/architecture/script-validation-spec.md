@@ -191,6 +191,7 @@ chars_per_estimated_second = script_char_count / estimated_duration_sec
 - 每条 `must_include_beat` 都必须有一条 trace
 - `excerpt` 少于 `14` 个汉字等价长度，按 `beat_trace_weak`
 - `excerpt` 必须能在 `script_text` 中找到，否则按 `beat_trace_excerpt_not_in_script`
+- 若 `excerpt` 与正文只差中文或英文引号边界符，可视为结构性命中；该容错只用于避免对话摘录漏带引号导致误触发，不允许 `……` 拼接、改写或跨片段合并
 - `confidence` 仅作辅助，不单独决定失败
 
 #### `quote_trace`

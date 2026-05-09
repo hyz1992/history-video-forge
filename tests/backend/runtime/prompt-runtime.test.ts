@@ -303,6 +303,16 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("`beat_trace.excerpt` 必须从自然正文截取");
   });
 
+  it("requires beat trace excerpts to be continuous verbatim script substrings", () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("`beat_trace.excerpt` 必须是 `script_text` 中连续、逐字一致的原文子串");
+    expect(prompt.body).toContain("不得用 `……`、省略号、改写或拼接多个不相邻片段");
+    expect(prompt.body).toContain("截取对话时连同正文里的引号和标点一起复制");
+    expect(prompt.body).toContain("不少于 14 个汉字等价长度");
+  });
+
   it("keeps script writer audit fields separate from spoken prose without label recitation", () => {
     const prompt = createPromptRegistry().getPrompt("script.writer");
 

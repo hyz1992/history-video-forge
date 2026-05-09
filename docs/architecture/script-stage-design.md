@@ -271,7 +271,7 @@ script 生成阶段不只输出正文，还要输出轻量 sidecar：
   - 偏离 `duration_band` 超过 `35%`：`hard_fail`
 - 正文体量下限：`short=180字/6句`，`medium=320字/8句`，`long=420字/10句`
 - 若 `script_char_count / estimated_duration_sec < 3.6`，视为估时明显虚高，按 `regen_once` 处理
-- `beat_trace.excerpt` 少于 `14` 个汉字等价长度，或 excerpt 无法在 `script_text` 中找到时，视为 trace 命中不足，按 `regen_once` 处理
+- `beat_trace.excerpt` 少于 `14` 个汉字等价长度，或 excerpt 无法在 `script_text` 中找到时，视为 trace 命中不足，按 `regen_once` 处理；若 excerpt 与正文只差中英文引号边界符，可按结构性命中处理，但不得允许 `……` 拼接、改写或跨片段合并
 - `quote_trace` 只有在正文实际使用了 `canonical_quotes` 时才强制要求存在；若使用了锚句但未标明 `usage_type` 或 excerpt 为空，按 `regen_once` 处理
 - 本地硬校验建议返回：
   - `decision`

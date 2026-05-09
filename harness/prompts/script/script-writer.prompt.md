@@ -66,7 +66,7 @@ status: active
 - `beat_trace.beat` 是审计字段，必须逐字复用输入 beat；输入 beat 来自 `hard_lane.must_include_beats`，不得自行改名、改写或补充。
 - `script_text` 是口播正文，不得把 `must_include_beats` 原句当标签、清单或解释句逐条复述。
 - 每条 beat 必须吸收成局面推进，至少包含动作、反应、压力变化或后果中的一个具体元素；正文要像故事推进，不像字段验收。
-- `beat_trace.excerpt` 必须从自然正文截取能证明该 beat 已写到的完整短句，不少于 8 个汉字等价长度；`beat_trace.excerpt` 必须从 `script_text` 中截取，不得只填 beat 名称、序号或概括标签。
+- `beat_trace.excerpt` 必须从自然正文截取能证明该 beat 已写到的完整短句，不少于 14 个汉字等价长度；`beat_trace.excerpt` 必须是 `script_text` 中连续、逐字一致的原文子串；截取对话时连同正文里的引号和标点一起复制；不得用 `……`、省略号、改写或拼接多个不相邻片段；不得只填 beat 名称、序号或概括标签。
 - `canonical_quote_intents` 必须通过场面目的和结尾回响兑现；引用或转述名句时按对应 `intent` 使用，不改成其他寓意，也不把名句贴成脱离场面的解释。
 
 ## 口播草稿约束
