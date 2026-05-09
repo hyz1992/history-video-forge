@@ -30,19 +30,20 @@
 
 1. [产品需求文档](./requirements/product-requirements.md)
 2. [技术栈规范](./standards/tech-stack-spec.md)
-3. [项目生命周期设计](./architecture/project-lifecycle.md)
-4. [Pipeline IO 规范](./architecture/pipeline-io-spec.md)
-5. [Downstream 高层设计留档](./architecture/downstream-stage-high-level-design.md)
-6. [Topic 阶段设计](./architecture/topic-stage-design.md)
-7. [Script 阶段设计](./architecture/script-stage-design.md)
-8. [Script 校验规范](./architecture/script-validation-spec.md)
-9. [字段设计](./data/field-design.md)
-10. [Schema 设计](./data/schema-design.md)
-11. [API 设计](./architecture/api-design.md)
-12. [Follow-up Backlog 整理](./records/2026-05-01-follow-up-backlog.md)
-13. [Plans 状态说明](./plans/README.md)
-14. [Records 状态说明](./records/README.md)
-15. [当前 Todo](./todos/roadmap-todo.md)
+3. [项目现状与后续流水线作战地图](./project-current-state-and-next-pipeline.md)
+4. [项目生命周期设计](./architecture/project-lifecycle.md)
+5. [Pipeline IO 规范](./architecture/pipeline-io-spec.md)
+6. [Downstream 高层设计留档](./architecture/downstream-stage-high-level-design.md)
+7. [Topic 阶段设计](./architecture/topic-stage-design.md)
+8. [Script 阶段设计](./architecture/script-stage-design.md)
+9. [Script 校验规范](./architecture/script-validation-spec.md)
+10. [字段设计](./data/field-design.md)
+11. [Schema 设计](./data/schema-design.md)
+12. [API 设计](./architecture/api-design.md)
+13. [Follow-up Backlog 整理](./records/2026-05-01-follow-up-backlog.md)
+14. [Plans 状态说明](./plans/README.md)
+15. [Records 状态说明](./records/README.md)
+16. [当前 Todo](./todos/roadmap-todo.md)
 
 ---
 
@@ -54,6 +55,7 @@
 
 ### 架构与阶段设计
 
+- [项目现状与后续流水线作战地图](./project-current-state-and-next-pipeline.md)
 - [项目生命周期设计](./architecture/project-lifecycle.md)
 - [Topic 阶段设计](./architecture/topic-stage-design.md)
 - [Recent Memory 设计](./architecture/recent-memory-design.md)
