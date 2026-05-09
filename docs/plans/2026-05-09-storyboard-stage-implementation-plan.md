@@ -43,11 +43,13 @@
 - `backend/src/app.ts`
 - `backend/src/modules/projects/project.repository.ts`
 - `backend/src/modules/projects/project-snapshot.service.ts`
+- `backend/src/modules/script/script-run.service.ts`
 - `backend/src/runtime/prompts/prompt-loader.ts`
 - `backend/src/runtime/trace/project-storage.ts`
 - `harness/scripts/check-prompt-language.ts`
 - `harness/scripts/check-prompt-language.test.ts`
 - `tests/backend/runtime/prompt-runtime.test.ts`
+- `tests/backend/script/script-runtime-generate.test.ts`
 - `backend/prisma/schema.prisma`
 - `docs/architecture/pipeline-io-spec.md`
 - `docs/data/field-design.md`
@@ -59,7 +61,7 @@
 ## 不改文件
 
 - 不改 topic 推荐、确认、candidate cache 或 event registry 主链路。
-- 不改 script writer、script validator、semantic reviewer 或 patch/regen 主链路。
+- 不改 script writer、script validator、semantic reviewer 或 patch/regen 语义主链路；仅在新 script 激活时清空过期 active storyboard 指针。
 - 不写入或提交 `storage/topic-candidate-library/`。
 - 不实现前端 storyboard 页面。
 - 不实现 asset planning、assets、compose。
@@ -75,7 +77,7 @@
 - 一个合法 `storyboard_v1` 对象可解析。
 - `segments[0].end_hint_sec <= start_hint_sec` 会失败。
 - `narrative_role` 非枚举值会失败。
-- `framing_hint` / `motion_hint` 非枚举值会失败。
+- `framing_hint` / `content_type` / `motion_hint` / `editing_hint` 非枚举值会失败。
 - `StoryboardValidationResult.stage` 只能是 `storyboard_local_validation`。
 
 运行：
@@ -112,23 +114,10 @@ export const StoryboardSegment = z
     visual_intent: z.string().min(1),
     scene_description: z.string().min(1),
     visual_elements: z.array(z.string().min(1)).min(1),
-    framing_hint: z.enum([
-      "wide",
-      "medium",
-      "close",
-      "detail",
-      "text",
-      "map",
-      "symbolic",
-    ]),
-    motion_hint: z.enum([
-      "static",
-      "push_in",
-      "pull_back",
-      "pan",
-      "cutaway",
-      "montage",
-    ]),
+    framing_hint: z.enum(["wide", "medium", "close", "detail", "symbolic"]),
+    content_type: z.enum(["live_action", "text_card", "map", "illustration"]),
+    motion_hint: z.enum(["static", "push_in", "pull_back", "pan"]),
+    editing_hint: z.enum(["single", "cutaway", "montage"]),
     on_screen_text: z.array(z.string().min(1)),
     linked_beats: z.array(z.string().min(1)),
     linked_quotes: z.array(z.string().min(1)),
@@ -211,6 +200,7 @@ npx vitest run --configLoader runner tests/backend/runtime/prompt-runtime.test.t
 
 - `VALID_STAGES` 加入 `storyboard`。
 - 错误文案同步为 `stage 必须是 topic、script 或 storyboard`。
+- `stageMatchesPath()` 不需要改实现；它按 `harness/prompts/<stage>` 目录片段匹配，新增 `harness/prompts/storyboard/` 后会自然通过。测试里要覆盖这一隐式依赖，防止未来改坏。
 
 新增 `harness/prompts/storyboard/storyboard-planner.prompt.md`。
 
@@ -263,6 +253,7 @@ npx vitest run --configLoader runner harness/scripts/check-prompt-language.test.
 - 第一段没有覆盖 opening 附近返回 `storyboard_opening_not_covered`。
 - 最后一段没有覆盖 ending 附近返回 `storyboard_ending_not_covered`。
 - linked beat 或 quote 不存在返回 `storyboard_trace_ref_invalid`。
+- 上游 beat 或 quote 没有被任何 segment 关联返回 `storyboard_trace_coverage_missing`。
 - `visual_intent` 或 `scene_description` 空字符串返回 `storyboard_empty_visual_description`。
 
 运行：
@@ -300,10 +291,14 @@ export function validateStoryboardPlan(input: {
 - 使用 `start_hint_sec` / `end_hint_sec` 判断时间单调递增。
 - 使用 `scriptText.indexOf(segment.script_excerpt, searchStart)` 定位 excerpt。
 - 记录每段 start/end index，检查顺序与重叠。
-- 用 raw span 覆盖字符数计算 `coverage_ratio`。
+- 若有任意 excerpt 无法定位，记录 `storyboard_excerpt_not_in_script` 并跳过 coverage/opening/ending 相关检查，避免同一根因产生误导性覆盖率错误。
+- 所有 excerpt 均定位成功后，用 raw span 覆盖字符数计算 `coverage_ratio`。
 - `opening_span` 和 `ending_span` 只用于位置辅助，不用本地语义判断。
 - linked beat 必须存在于 `draft.beat_trace[].beat`。
 - linked quote 必须存在于 `draft.quote_trace[].quote`。
+- plan 级别要求每个 `draft.beat_trace[].beat` 至少被一个 segment 的 `linked_beats` 引用；若 `draft.quote_trace` 非空，每个 quote 至少被一个 segment 的 `linked_quotes` 引用。
+- 单个 segment 的 `linked_beats` / `linked_quotes` 可以为空数组。
+- opening/ending 阈值按 JavaScript string index 计算：`20` 表示距离正文开头超过 20 个 UTF-16 code unit 位置，`40` 表示距离正文结尾超过 40 个 UTF-16 code unit 位置。这里是保守结构阈值，不做汉字权重估算。
 - schema parse 失败由调用方捕获为 `storyboard_schema_invalid`。
 
 metrics 至少包含：
@@ -375,18 +370,34 @@ export interface GenerateStoryboardPlanInput {
 
 - 默认 gateway 与 script writer 一样使用 `createLlmGateway()`。
 - prompt id 使用 `storyboard.planner`。
-- stub provider 按句子分组生成确定性 `StoryboardPlan`。
+- stub provider 按 beat trace 优先分组生成确定性 `StoryboardPlan`。
 - normalize 只做安全拆包和轻微字段补齐，不替 LLM 做语义视觉化。
 - 生成后用 `StoryboardPlan.parse()`。
+- 如果传入 `regenerationContext`，`buildStoryboardPlannerPromptInput()` 必须返回：
+
+```ts
+{
+  draft,
+  topic_boundary_context,
+  source_script_record_id,
+  source_topic_package_id,
+  regeneration_context: input.regenerationContext,
+}
+```
+
+- 不通过拼接 prompt body 或临时系统消息注入 regen 信息，保持与 script 阶段的结构化 input 方式一致。
+- prompt 正文必须说明：`regeneration_context` 只允许修复结构问题，不允许改写 `script_text`。
 
 stub 生成策略：
 
-- 将 `script_text` 按句号、问号、叹号、分号切句。
-- 每 1-2 句合并为一个 segment。
+- 优先按 `beat_trace` 分组生成 segment：每个 beat trace 命中的 excerpt 所在正文区域至少落入一个 segment。
+- opening 与 ending 单独保留为候选边界，避免被中段 beat 合并吞掉。
+- 没有足够 beat trace 时，再按句号、问号、叹号、分号切句，并把过短句子合并到相邻 segment。
 - 时间按 segment 字符占比切分 `estimated_duration_sec`。
 - `visual_intent` 用“让观众看清这一段压力如何推进”之类通用但不污染正式 prompt 的描述。
 - `linked_beats` 根据 excerpt 是否包含 `beat_trace.excerpt` 或 `beat` 进行保守匹配。
 - `linked_quotes` 根据 excerpt 是否包含 quote 匹配。
+- `global_visual_notes` 没有明确风险时返回 `[]`。
 
 再次运行 generation 测试，预期通过。
 
@@ -401,13 +412,15 @@ stub 生成策略：
 
 - 可以保存 `StoryboardRecord`。
 - `ProjectRecord` 新增 `activeStoryboardRecordId` 默认为 `null`。
+- 新 script 激活后 `activeStoryboardRecordId` 被清空为 null。
+- 新 script 激活后 `latestStoryboardRunTraceJson` 也被清空为 null（防止旧 storyboard trace 泄漏到 snapshot）。
 - snapshot 返回 `active_storyboard`。
 - latest trace summary 支持 storyboard。
 
 运行：
 
 ```powershell
-npx vitest run --configLoader runner tests/backend/repositories/repository-contracts.test.ts tests/backend/projects/project-snapshot.test.ts
+npx vitest run --configLoader runner tests/backend/repositories/repository-contracts.test.ts tests/backend/projects/project-snapshot.test.ts tests/backend/script/script-runtime-generate.test.ts
 ```
 
 预期：新增测试失败。
@@ -420,6 +433,17 @@ npx vitest run --configLoader runner tests/backend/repositories/repository-contr
   - `activeStoryboardRecordId: string | null`
   - `latestStoryboardRunTraceJson: Record<string, unknown> | null`
 - 新增 `StoryboardRecord` interface。
+- `StoryboardRecord` 必须包含：
+  - `id`
+  - `projectId`
+  - `topicPackageId`
+  - `scriptRecordId`
+  - `planJson`
+  - `validationResultJson`
+  - `executionStateJson`
+  - `graphTraceSummaryJson`
+  - `runtimeDiagnosticsJson`
+  - `createdAt`
 - `DbClient` 增加 `storyboardRecords: Map<string, StoryboardRecord>`。
 - `createDbClient()` 初始化 map。
 
@@ -435,6 +459,18 @@ npx vitest run --configLoader runner tests/backend/repositories/repository-contr
 修改 `backend/src/modules/projects/project-snapshot.service.ts`：
 
 - 读取 `activeStoryboardRecordId`。
+- `restore_route` 必须显式处理 `storyboard_ready`：
+  - 如果本次不实现前端 storyboard 页面，暂时返回 `/projects/:id/script`，并在代码注释中说明这是 UI 未落地前的临时 fallback。
+  - 如果同步实现 storyboard 页面，则返回 `/projects/:id/storyboard`。
+  - 不允许继续依赖“非 topic 一律 script”的默认分支。
+- 在 `trace_summary` 中新增 `latest_storyboard_run` 字段，与 `latest_topic_run` / `latest_script_run` 保持结构对称：
+
+```ts
+latest_storyboard_run: summarizeTraceRun(
+  project.latestStoryboardRunTraceJson as Record<string, unknown> | null | undefined,
+),
+```
+
 - 返回：
 
 ```ts
@@ -451,10 +487,15 @@ active_storyboard: storyboardRecord
   : null
 ```
 
+- §9 的 `project-snapshot.test.ts` 中需要补充：storyboard 成功后 `trace_summary.latest_storyboard_run` 不为 null；script 重生成激活后 `latest_storyboard_run` 回到 null。
+
 修改 `backend/src/runtime/trace/project-storage.ts`：
 
 - `ProjectStorageProfile` 增加 `storyboard_runs_dir`。
-- phase union 加入 `storyboard`。
+- phase union 加入 `storyboard`，并且必须同时修改三处函数签名：
+  - `ensureRunDir()`
+  - `persistProjectRunArtifacts()`
+  - `createProjectRunInteractionLogWriter()`
 - `ensureProjectStorageStructure()` 创建 `trace/storyboard-runs`。
 - `ensureRunDir()` 支持 storyboard。
 
@@ -463,7 +504,25 @@ active_storyboard: storyboardRecord
 - `Project` 增加 `active_storyboard_record_id String?`。
 - `Project` 增加 `storyboard_records StoryboardRecord[]`。
 - `ScriptRecord` 增加 `storyboard_records StoryboardRecord[]`。
-- 新增 `StoryboardRecord` model。
+- `TopicPackage` 增加 `storyboard_records StoryboardRecord[]`。
+- 新增 `StoryboardRecord` model，字段至少包括：
+  - `id`
+  - `project_id`
+  - `topic_package_id`
+  - `script_record_id`
+  - `plan_json`
+  - `validation_result_json`
+  - `execution_state_json`
+  - `graph_trace_summary_json`
+  - `runtime_diagnostics_json`
+  - `created_at`
+
+修改 `backend/src/modules/script/script-run.service.ts`：
+
+- 成功保存并激活新的 `ScriptRecord` 后，必须清空：
+  - `input.project.activeStoryboardRecordId`
+  - `input.project.latestStoryboardRunTraceJson`
+- 状态保持或回到 `script_ready`，防止 active storyboard 指向旧 script 的脏状态。
 
 再次运行 repository/snapshot 测试，预期通过。
 
@@ -476,6 +535,7 @@ active_storyboard: storyboardRecord
 - project 不存在返回 404 `project_not_found`。
 - 无 active script 返回 409 `active_script_record_missing`。
 - script record 丢失返回 404 `script_record_not_found`。
+- topic package 不存在返回 404 `topic_package_not_found`（script record 存在但对应 topic package 被删除的场景）。
 - 已有 active script 时，`POST /api/projects/:projectId/storyboard/generate` 返回 200。
 - 返回体包含：
   - `project_id`
@@ -569,13 +629,14 @@ npx vitest run --configLoader runner tests/backend/storyboard/storyboard-local-v
 npx vitest run --configLoader runner tests/backend/storyboard/storyboard-generation.test.ts
 npx vitest run --configLoader runner tests/backend/api/storyboard-api.test.ts
 npx vitest run --configLoader runner tests/backend/projects/project-snapshot.test.ts
+npx vitest run --configLoader runner tests/backend/script/script-runtime-generate.test.ts
 ```
 
 再运行 touched-file TypeScript 过滤检查：
 
 ```powershell
 $out = npx tsc --noEmit --pretty false 2>&1
-$filtered = $out | Select-String -Pattern 'shared/src/storyboard|backend/src/modules/storyboard|backend/src/db/client.ts|backend/src/app.ts|backend/src/runtime/prompts/prompt-loader.ts|backend/src/runtime/trace/project-storage.ts|tests/backend/storyboard|tests/backend/api/storyboard-api.test.ts|tests/shared/schema-contracts.test.ts'
+$filtered = $out | Select-String -Pattern 'shared/src/storyboard|backend/src/modules/storyboard|backend/src/modules/script/script-run.service.ts|backend/src/db/client.ts|backend/src/app.ts|backend/src/runtime/prompts/prompt-loader.ts|backend/src/runtime/trace/project-storage.ts|tests/backend/storyboard|tests/backend/api/storyboard-api.test.ts|tests/shared/schema-contracts.test.ts'
 if ($filtered) { $filtered | ForEach-Object { $_.ToString() }; exit 1 } else { 'No TypeScript errors in touched files.'; exit 0 }
 ```
 

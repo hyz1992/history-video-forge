@@ -141,12 +141,21 @@ Storyboard 可以读取对应的 `Topic Package` 作为边界参考，但只能�
 | `visual_intent` | string | 这段画面要帮助观众感受到什么 |
 | `scene_description` | string | 可视化场面描述 |
 | `visual_elements` | string[] | 人物、地点、器物、动作、文字牌等高层元素 |
-| `framing_hint` | enum | 粗粒度构图提示 |
-| `motion_hint` | enum | 粗粒度运动提示 |
+| `framing_hint` | enum | 景别/构图类型（镜头语言维度） |
+| `content_type` | enum | 画面内容形态（内容类型维度） |
+| `motion_hint` | enum | 镜头运动方式（运镜维度） |
+| `editing_hint` | enum | 剪辑手法（剪辑节奏维度） |
 | `on_screen_text` | string[] | 少量需要上屏强调的文字，不是完整字幕 |
 | `linked_beats` | string[] | 关联 `beat_trace.beat` |
 | `linked_quotes` | string[] | 关联 `quote_trace.quote` |
 | `risk_notes` | string[] | 视觉表达风险或人工注意点 |
+
+补充边界：
+
+- `global_visual_notes` 允许为空数组。没有全局视觉注意事项时必须返回 `[]`，不得为了填字段编造泛泛提醒。
+- 单个 segment 的 `linked_beats` / `linked_quotes` 允许为空数组，因为 opening、bridge 或 ending 可能只承担节奏和情绪衔接。
+- 但 plan 级别必须覆盖上游 trace：`draft.beat_trace[].beat` 中的每个 beat 至少要被一个 segment 的 `linked_beats` 引用；`draft.quote_trace[].quote` 中实际存在的 quote 至少要被一个 segment 的 `linked_quotes` 引用。
+- `linked_beats` 和 `linked_quotes` 只做追踪，不允许把 beat 标签或 quote 解释硬塞进画面描述。
 
 ### 枚举建议
 
@@ -160,26 +169,35 @@ Storyboard 可以读取对应的 `Topic Package` 作为边界参考，但只能�
 - `ending`
 - `bridge`
 
-`framing_hint`：
+`framing_hint`（景别/构图类型，不含内容形态）：
 
-- `wide`
-- `medium`
-- `close`
-- `detail`
-- `text`
-- `map`
-- `symbolic`
+- `wide` — 全景/远景
+- `medium` — 中景
+- `close` — 近景/特写
+- `detail` — 细节/极近景
+- `symbolic` — 象征性构图
 
-`motion_hint`：
+`content_type`（画面内容形态，与 framing_hint 正交）：
 
-- `static`
-- `push_in`
-- `pull_back`
-- `pan`
-- `cutaway`
-- `montage`
+- `live_action` — 人物/场景实景画面
+- `text_card` — 文字牌/字幕卡
+- `map` — 地图/示意图
+- `illustration` — 插画/图示
 
-这些枚举只是视觉段落层的粗提示，不等于镜头清单。
+`motion_hint`（镜头运动方式，不含剪辑手法）：
+
+- `static` — 固定镜头
+- `push_in` — 推进
+- `pull_back` — 拉出
+- `pan` — 摇镜
+
+`editing_hint`（剪辑手法，与 motion_hint 正交）：
+
+- `single` — 单镜/单张素材
+- `cutaway` — 插入相关场景
+- `montage` — 多张/多段连切
+
+这四个枚举各自对应一个独立维度，asset planning 可以分别读取，不会产生混用歧义。
 
 ## 段落粒度
 
@@ -232,6 +250,7 @@ Storyboard 本地校验只做结构和合同边界检查，不判断“画面是
 | `storyboard_opening_not_covered` | `regen_once` | 第一段没有覆盖开头附近内容 |
 | `storyboard_ending_not_covered` | `regen_once` | 最后一段没有覆盖结尾附近内容 |
 | `storyboard_trace_ref_invalid` | `regen_once` | linked beat / quote 不存在于上游 trace |
+| `storyboard_trace_coverage_missing` | `regen_once` | 上游 beat / quote 没有被任何 segment 关联 |
 | `storyboard_empty_visual_description` | `regen_once` | 画面意图或场面描述为空 |
 
 ### 建议阈值
@@ -246,6 +265,13 @@ Storyboard 本地校验只做结构和合同边界检查，不判断“画面是
 - segment 时间总长与 `estimated_duration_sec` 偏差超过 `25%` 记 warning，超过 `40%` 触发 `storyboard_timing_invalid`
 
 覆盖率检查只用于防止 LLM 漏掉大段口播，不要求逐字切满所有连接词。
+
+错误处理顺序：
+
+- schema 无法解析时直接 `hard_fail`，不继续做结构检查。
+- 如果任意 `script_excerpt` 无法在 `script_text` 中定位，先返回 `storyboard_excerpt_not_in_script`，并跳过覆盖率计算，避免把定位失败误报成覆盖率不足。
+- 如果所有 excerpt 均可定位，再计算顺序、覆盖率、opening/ending 覆盖和 trace 覆盖。
+- `errors` 可以包含多个可恢复错误；只要没有 hard fail，最终 `decision` 统一为 `regen_once`。
 
 ## LLM 使用
 
@@ -262,6 +288,14 @@ Storyboard v1 需要 LLM 参与，因为“把口播翻译成可观看段落”�
 - 只输出 `StoryboardPlan`
 - 必须要求 `script_excerpt` 从 `script_text` 连续截取
 - 必须要求不改写脚本、不新增剧情、不做资产任务
+
+当本地结构校验返回 `regen_once` 时，第二次生成不修改 prompt 文件本身，而是在 prompt input 中加入：
+
+- `regeneration_context.reason`
+- `regeneration_context.errors`
+- `regeneration_context.metrics`
+
+正式 prompt 必须说明：第二次生成只能修复 segment 切分、excerpt 对齐、trace 关联、时间提示和空画面描述，不得借机改写 `script_text` 或扩展剧情。
 
 现有 prompt registry 只支持 `topic / script`，实现 storyboard 时必须同步扩展 registry 与 prompt language check 的 stage 枚举。
 
@@ -315,6 +349,8 @@ project.active_script_record_id
 
 - 成功生成并校验通过：`storyboard_ready`
 - 失败：维持原状态，通常仍为 `script_ready`
+- 当生成新的 active script 时，必须清空 `project.active_storyboard_record_id`，并将状态回到 `script_ready`。旧 `StoryboardRecord` 可以保留作历史记录，但不得继续作为当前 active storyboard。
+- `project-snapshot` 的 `restore_route` 必须识别 `storyboard_ready`。第一版没有前端 storyboard 页面时，可以暂时指向 `/projects/:id/script` 并附带 TODO；一旦新增页面，应改为 `/projects/:id/storyboard`。不能让该行为保持隐式默认。
 
 ## API 边界
 
@@ -323,6 +359,8 @@ project.active_script_record_id
 ```text
 POST /api/projects/:projectId/storyboard/generate
 ```
+
+第一版 API 使用同步模式：请求内完成 LLM 生成、本地校验、可选一次 regen、持久化和返回结果。不引入 `job_id`、SSE 或后台队列。后续如果 storyboard 变慢或接入批量处理，再单独设计异步接口，不在本阶段预留半成品协议。
 
 成功返回：
 
