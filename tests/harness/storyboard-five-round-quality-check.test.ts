@@ -84,6 +84,51 @@ function writeFixedSource(sourceDir: string) {
   );
 }
 
+function writeArchivedTopicPackageShape(sourceDir: string) {
+  writeFileSync(
+    join(sourceDir, "topic-package.json"),
+    JSON.stringify(
+      {
+        topic_package_id: "archived-topic-package",
+        event_id: "archived-event",
+        canonical_title: "晏子使楚",
+        selected_angle: "弱国外交官如何在强国宫廷用智慧捍卫国家尊严",
+        family_label: "外交智慧",
+        scope_label: "春秋外交",
+        core_conflict: "楚王当众羞辱，晏子不能退。",
+        stakes: "一退就会让齐国在楚廷失掉体面。",
+        strong_scene: "楚王连番压场，晏子一句句顶回去。",
+        must_include_beats: ["入楚受辱", "橘枳之喻"],
+        forbidden_expansions: [],
+        source_anchor_refs: ["《晏子春秋》"],
+        canonical_quotes: ["橘生淮南则为橘"],
+        canonical_quote_intents: [
+          {
+            quote: "橘生淮南则为橘",
+            intent: "反击楚王以齐人善盗羞辱齐国。",
+          },
+        ],
+        ambiguity_notes: [],
+        duration_band: {
+          label: "medium",
+          min_sec: 75,
+          max_sec: 95,
+        },
+        narrative_tension_map: {
+          hook_claim: "楚王连压三次，晏子为什么一次都没退？",
+          pressure_escalation: "从门口羞辱升级到大殿压场。",
+          mid_reveal: "晏子不是争口气，而是在守齐国场面。",
+          peak_payoff: "橘枳之喻把羞辱推回楚王身上。",
+          ending_residue: "这种局面，一退就不只是退掉自己。",
+        },
+      },
+      null,
+      2,
+    ),
+    "utf8",
+  );
+}
+
 describe("storyboard five round quality check", () => {
   it("defines a discoverable five-round storyboard plan from a fixed script artifact", () => {
     const plan = buildStoryboardFiveRoundQualityCheckPlan({
@@ -202,5 +247,53 @@ describe("storyboard five round quality check", () => {
       sourceDir: "fixed-source",
       outputDir: "storyboard-output",
     });
+  });
+
+  it("normalizes archived topic-package artifacts used by historical high-quality script outputs", async () => {
+    const sourceDir = mkdtempSync(join(tmpdir(), "svf2-storyboard-archived-source-"));
+    const outputDir = mkdtempSync(join(tmpdir(), "svf2-storyboard-archived-output-"));
+    writeFixedSource(sourceDir);
+    writeArchivedTopicPackageShape(sourceDir);
+
+    const result = await runStoryboardFiveRoundQualityCheck(
+      { sourceDir, outputDir, rounds: 1 },
+      {
+        requireRealEnv: false,
+        planGenerator: async ({ sourceTopicPackageId, topicBoundaryContext, draft }) => {
+          expect(sourceTopicPackageId).toBe("archived-topic-package");
+          expect(topicBoundaryContext.title).toBe("晏子使楚");
+          return {
+            plan_version: "storyboard_v1",
+            source_script_record_id: "fixed-script-record",
+            source_topic_package_id: sourceTopicPackageId,
+            estimated_total_duration_sec: draft.estimated_duration_sec,
+            segments: [
+              {
+                segment_id: "sb_001",
+                order: 0,
+                script_excerpt: draft.script_text,
+                start_hint_sec: 0,
+                end_hint_sec: draft.estimated_duration_sec,
+                narrative_role: "opening",
+                visual_intent: "把楚廷压场拍成连续升级的视觉段落。",
+                scene_description: topicBoundaryContext.strong_scene,
+                visual_elements: ["晏子", "楚廷"],
+                framing_hint: "medium",
+                content_type: "live_action",
+                motion_hint: "push_in",
+                editing_hint: "single",
+                on_screen_text: [],
+                linked_beats: draft.beat_trace.map((trace) => trace.beat),
+                linked_quotes: draft.quote_trace.map((trace) => trace.quote),
+                risk_notes: [],
+              },
+            ],
+            global_visual_notes: [],
+          };
+        },
+      },
+    );
+
+    expect(result.passed_rounds).toBe(1);
   });
 });

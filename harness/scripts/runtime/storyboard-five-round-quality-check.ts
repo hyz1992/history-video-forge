@@ -269,13 +269,48 @@ function loadStoryboardFixedSource(sourceDir: string) {
     readJson(resolve(sourceDir, "script-draft.json")),
   );
   const topicPackage = TopicPackage.parse(
-    readJson(resolve(sourceDir, "topic-package.json")),
+    normalizeTopicPackageArtifact(readJson(resolve(sourceDir, "topic-package.json"))),
   );
 
   return {
     draft,
     topicPackage,
     topicBoundaryContext: toTopicBoundaryContext(topicPackage),
+  };
+}
+
+function normalizeTopicPackageArtifact(rawArtifact: unknown) {
+  if (!rawArtifact || typeof rawArtifact !== "object") {
+    return rawArtifact;
+  }
+
+  const artifact = rawArtifact as Record<string, unknown>;
+  const durationBand = artifact.duration_band;
+  const durationBandLabel =
+    typeof durationBand === "object" && durationBand !== null
+      ? (durationBand as Record<string, unknown>).label
+      : durationBand;
+
+  return {
+    topic_id: artifact.topic_id ?? artifact.topic_package_id,
+    title: artifact.title ?? artifact.canonical_title,
+    selected_angle: artifact.selected_angle,
+    family_label: artifact.family_label,
+    scope_label: artifact.scope_label,
+    core_conflict: artifact.core_conflict,
+    stakes: artifact.stakes,
+    strong_scene: artifact.strong_scene,
+    packaging_seed:
+      artifact.packaging_seed ?? artifact.selected_angle ?? artifact.core_conflict,
+    must_include_beats: artifact.must_include_beats,
+    forbidden_expansions: artifact.forbidden_expansions ?? [],
+    risk_hints: artifact.risk_hints ?? [],
+    source_anchor_refs: artifact.source_anchor_refs ?? [],
+    canonical_quotes: artifact.canonical_quotes ?? [],
+    canonical_quote_intents: artifact.canonical_quote_intents ?? [],
+    ambiguity_notes: artifact.ambiguity_notes ?? [],
+    duration_band: durationBandLabel,
+    narrative_tension_map: artifact.narrative_tension_map,
   };
 }
 
