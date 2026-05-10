@@ -21,6 +21,7 @@
 
 - `topic + script` 第一阶段的稳定回归
 - 真实 topic -> script live check
+- 真实 script -> storyboard planning live check
 - semantic reviewer shadow 量尺校准
 - script 首稿质量观测
 
@@ -83,6 +84,7 @@ runtime harness 在当前阶段属于 **P0**：
 
 - `topic/`
 - `script/`
+- `storyboard/`
 
 所有正式 prompt 必须：
 
@@ -106,6 +108,7 @@ runtime harness 在当前阶段属于 **P0**：
 - `runtime/topic-script-real-regression.ts`
 - `runtime/topic-script-live-check.ts`
 - `runtime/topic-script-five-round-quality-check.ts`
+- `runtime/storyboard-five-round-quality-check.ts`
 - `runtime/script-semantic-reviewer-fixtures.ts`
 - `runtime/topic-candidate-library-real-check.ts`
 - `ui-acceptance/ui-acceptance-smoke.ts`
@@ -181,6 +184,8 @@ runtime harness 在当前阶段属于 **P0**：
   - 真实 `.env` 条件下的 live check 入口，默认执行真实 live check，不并入默认自动化 gate。
 - `harness/scripts/runtime/topic-script-five-round-quality-check.ts`
   - 固定 5 轮真实 topic -> script 首稿质量巡检入口，不并入默认自动化 gate。
+- `harness/scripts/runtime/storyboard-five-round-quality-check.ts`
+  - 固定高质量 script 产物的 5 轮真实 storyboard planning 巡检入口，不并入默认自动化 gate。
 - `harness/scripts/runtime/script-semantic-reviewer-fixtures.ts`
   - semantic reviewer shadow 对照样本巡检入口，不并入默认自动化 gate。
 - `harness/samples/topic-script/family-set.md`
@@ -218,6 +223,26 @@ npm run harness:topic-script-five-round-quality-check
 3. `julu-zhizhan`
 4. `hongmenyan`
 5. `yanzi-shichu` repeat
+
+### Five-round Storyboard Quality Check
+
+新 agent 做 storyboard planning 抽检时，优先使用固定命令：
+
+```powershell
+npm run harness:storyboard-five-round-quality-check
+```
+
+该命令固定读取一份已通过质量观察的 script 产物作为输入，顺序执行 5 轮 storyboard planning。它不重新运行 topic 或 script，不进入 asset planning、assets、compose，也不生成镜头级 shot list。
+
+默认输入：
+
+- `harness/scripts/runtime/output/2026-05-09-script-writer-duration-pacing-scene-density-five-round/yanzi-shichu`
+
+常用显式参数：
+
+```powershell
+npm run harness:storyboard-five-round-quality-check -- --source-dir harness/scripts/runtime/output/2026-05-09-script-writer-duration-pacing-scene-density-five-round/yanzi-shichu --output-dir harness/scripts/runtime/output/<run-id>
+```
 
 可显式指定输出目录：
 

@@ -20,6 +20,7 @@
     "test": "vitest run",
     "test:harness:topic-script-regression": "vitest run tests/harness/topic-script-regression.test.ts",
     "harness:script-semantic-fixtures": "tsx harness/scripts/runtime/script-semantic-reviewer-fixtures.ts",
+    "harness:storyboard-five-round-quality-check": "tsx harness/scripts/runtime/storyboard-five-round-quality-check.ts",
     "harness:topic-script-five-round-quality-check": "tsx harness/scripts/runtime/topic-script-five-round-quality-check.ts",
     "harness:topic-script-live-check": "tsx harness/scripts/runtime/topic-script-live-check.ts",
     "harness:ui-acceptance:smoke": "tsx harness/scripts/ui-acceptance/ui-acceptance-smoke.ts",
