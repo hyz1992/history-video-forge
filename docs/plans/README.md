@@ -6,12 +6,15 @@
 
 ## 当前状态
 
-截至 2026-05-09：
+截至 2026-05-10：
 
 - `topic + script` 第一阶段已暂时冻结。
+- `storyboard` 第一版已达到当前可用线，可作为 asset planning 的上游暂时冻结。
 - 当前未归档计划：
   - [Storyboard Stage Design](./2026-05-09-storyboard-stage-design.md)
   - [Storyboard Stage Implementation Plan](./2026-05-09-storyboard-stage-implementation-plan.md)
+  - [Asset Planning Stage Design](./2026-05-10-asset-planning-stage-design.md)
+  - [Asset Planning Design Guidelines](./2026-05-10-asset-planning-design-guidelines.md)（参考资料，不是 implementation plan）
 - 既有 topic/script/harness/UI acceptance 计划已归档到 [archive/topic-script](./archive/topic-script/)。
 - archive 中的计划只作为历史证据和追溯材料，不是当前任务入口。
 - 新 agent 不应从 archive 中挑选旧 implementation plan 继续执行。
