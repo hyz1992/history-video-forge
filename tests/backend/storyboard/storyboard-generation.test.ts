@@ -200,4 +200,50 @@ describe("generateStoryboardPlan", () => {
     expect(plan.plan_version).toBe("storyboard_v1");
     expect(plan.source_script_record_id).toBe("scr_001");
   });
+
+  it("normalizes camelCase riskNotes on returned segments", async () => {
+    const gateway: LlmGateway = {
+      async invokeStructuredPrompt<T>(
+        options: InvokeStructuredPromptOptions,
+      ): Promise<T> {
+        const promptInput = options.input as ReturnType<
+          typeof buildStoryboardPlannerPromptInput
+        >;
+
+        return {
+          plan_version: "storyboard_v1",
+          source_script_record_id: promptInput.source_script_record_id,
+          source_topic_package_id: promptInput.source_topic_package_id,
+          estimated_total_duration_sec: promptInput.draft.estimated_duration_sec,
+          segments: [
+            {
+              segment_id: "sb_001",
+              order: 0,
+              script_excerpt: promptInput.draft.script_text,
+              start_hint_sec: 0,
+              end_hint_sec: promptInput.draft.estimated_duration_sec,
+              narrative_role: "opening",
+              visual_intent: "让观众看清整段压力推进。",
+              scene_description: "按口播顺序呈现主要场面。",
+              visual_elements: ["晏子", "楚王"],
+              framing_hint: "medium",
+              content_type: "live_action",
+              motion_hint: "static",
+              editing_hint: "single",
+              on_screen_text: [],
+              linked_beats: promptInput.draft.beat_trace.map((trace) => trace.beat),
+              linked_quotes: promptInput.draft.quote_trace.map((trace) => trace.quote),
+              riskNotes: ["注意不要补写素材生成任务"],
+            },
+          ],
+          global_visual_notes: [],
+        } as T;
+      },
+      invokeStrictStructured: vi.fn(),
+    };
+
+    const plan = await generateStoryboardPlan(makeInput(gateway));
+
+    expect(plan.segments[0]?.risk_notes).toEqual(["注意不要补写素材生成任务"]);
+  });
 });

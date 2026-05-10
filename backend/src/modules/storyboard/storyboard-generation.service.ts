@@ -98,9 +98,29 @@ function normalizeStoryboardPlan(
       unwrapped.source_topic_package_id ?? input.sourceTopicPackageId,
     estimated_total_duration_sec:
       unwrapped.estimated_total_duration_sec ?? input.draft.estimated_duration_sec,
+    segments: Array.isArray(unwrapped.segments)
+      ? unwrapped.segments.map(normalizeStoryboardSegment)
+      : unwrapped.segments,
     global_visual_notes: Array.isArray(unwrapped.global_visual_notes)
       ? unwrapped.global_visual_notes
       : [],
+  };
+}
+
+function normalizeStoryboardSegment(rawSegment: unknown) {
+  if (!rawSegment || typeof rawSegment !== "object" || Array.isArray(rawSegment)) {
+    return rawSegment;
+  }
+
+  const segment = rawSegment as Record<string, unknown>;
+  if ("risk_notes" in segment || !("riskNotes" in segment)) {
+    return segment;
+  }
+
+  const { riskNotes, ...rest } = segment;
+  return {
+    ...rest,
+    risk_notes: riskNotes,
   };
 }
 
