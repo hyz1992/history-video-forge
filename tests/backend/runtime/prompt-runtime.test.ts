@@ -158,6 +158,22 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("不得输出素材生成任务");
   });
 
+  it("guides storyboard planning quality through prompt constraints instead of local semantic validation", () => {
+    const prompt = createPromptRegistry().getPrompt("storyboard.storyboard-planner");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("战争、刺杀、伏击、兵刃逼近");
+    expect(prompt.body).toContain("risk_notes");
+    expect(prompt.body).toContain("避免现代物件或现代隐喻");
+    expect(prompt.body).toContain("轮椅");
+    expect(prompt.body).toContain("绞肉机");
+    expect(prompt.body).toContain("象征镜头必须保持历史质感");
+    expect(prompt.body).toContain("直接承载上游 beat 的 segment 必须填写 linked_beats");
+    expect(prompt.body).toContain("桥接段、纯氛围段或结尾余韵段可以留空");
+    expect(prompt.body).toContain("不得把脚本里的结尾判断扩写成未在 script_text 出现的后续剧情");
+    expect(prompt.body).not.toContain("本地 validator 判断是否爆款");
+  });
+
   it("keeps script writer opening contract scene-grounded without treating hook_claim as a draft template", () => {
     const prompt = createPromptRegistry().getPrompt("script.writer");
 
