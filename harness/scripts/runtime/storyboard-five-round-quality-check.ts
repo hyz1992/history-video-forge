@@ -21,10 +21,13 @@ import {
   type LlmInteractionLogWriter,
 } from "../../../backend/src/runtime/llm/interaction-log";
 
-const DEFAULT_SOURCE_SCRIPT_DIR = resolve(
-  process.cwd(),
+const DEFAULT_SOURCE_SCRIPT_DIRS = [
   "harness/scripts/runtime/output/2026-05-09-script-writer-duration-pacing-scene-density-five-round/yanzi-shichu",
-);
+  "harness/scripts/runtime/output/2026-05-09-script-writer-duration-pacing-scene-density-five-round/zhuanzhu-ciwangliao",
+  "harness/scripts/runtime/output/2026-05-09-script-writer-duration-pacing-scene-density-five-round/julu-zhizhan",
+  "harness/scripts/runtime/output/2026-05-09-script-writer-duration-pacing-scene-density-five-round/hongmenyan",
+  "harness/scripts/runtime/output/2026-05-10-storyboard-fifth-source/tianji-saima",
+].map((item) => resolve(process.cwd(), item));
 const DEFAULT_OUTPUT_DIR = resolve(
   process.cwd(),
   "harness/scripts/runtime/output/storyboard-five-round-quality-check",
@@ -33,6 +36,7 @@ const DEFAULT_ROUNDS = 5;
 
 export interface StoryboardFiveRoundQualityCheckInput {
   sourceDir?: string;
+  sourceDirs?: string[];
   outputDir?: string;
   rounds?: number;
 }
@@ -41,7 +45,7 @@ export interface StoryboardFiveRoundQualityCheckPlan {
   mode: "storyboard_real_runtime_live_check";
   automated_gate: false;
   requires_real_env: true;
-  source_script_dir: string;
+  source_script_dirs: string[];
   total_rounds: number;
   output_dir: string;
   required_artifacts: string[];
@@ -51,6 +55,8 @@ export interface StoryboardFiveRoundQualityCheckPlan {
 export interface StoryboardFiveRoundRoundResult {
   round: number;
   status: "round-ready" | "round-failed";
+  source_script_dir: string;
+  source_title: string;
   output_dir: string;
   validation_decision: string;
   validation_errors: string[];
@@ -86,12 +92,13 @@ export interface StoryboardFiveRoundQualityCheckDependencies {
 export function buildStoryboardFiveRoundQualityCheckPlan(
   input: StoryboardFiveRoundQualityCheckInput = {},
 ): StoryboardFiveRoundQualityCheckPlan {
+  const sourceScriptDirs = resolveSourceScriptDirs(input);
   return {
     mode: "storyboard_real_runtime_live_check",
     automated_gate: false,
     requires_real_env: true,
-    source_script_dir: input.sourceDir ?? DEFAULT_SOURCE_SCRIPT_DIR,
-    total_rounds: input.rounds ?? DEFAULT_ROUNDS,
+    source_script_dirs: sourceScriptDirs,
+    total_rounds: input.rounds ?? sourceScriptDirs.length,
     output_dir: input.outputDir ?? DEFAULT_OUTPUT_DIR,
     required_artifacts: [
       "source-script-draft.json",
@@ -104,7 +111,7 @@ export function buildStoryboardFiveRoundQualityCheckPlan(
     ],
     required_checks: [
       "Requires real .env and must be run explicitly outside the default automated gate.",
-      "每轮固定读取同一份已通过质量观察的 script 产物，不重新运行 topic 或 script。",
+      "默认 5 轮分别读取 5 个不同主题的高质量 script 产物，不重新运行 topic 或 script。",
       "只观察 storyboard planning 的稳定性、覆盖率、段落切分与视觉计划质量。",
       "不执行 asset planning、assets、compose，也不生成镜头级 shot list。",
     ],
@@ -122,7 +129,6 @@ export async function runStoryboardFiveRoundQualityCheck(
     throw new Error("storyboard_live_check_real_env_missing");
   }
 
-  const source = loadStoryboardFixedSource(plan.source_script_dir);
   const planGenerator =
     dependencies.planGenerator ??
     ((generatorInput: StoryboardFiveRoundPlanGeneratorInput) =>
@@ -130,6 +136,9 @@ export async function runStoryboardFiveRoundQualityCheck(
   const rounds: StoryboardFiveRoundRoundResult[] = [];
 
   for (let round = 1; round <= plan.total_rounds; round += 1) {
+    const sourceScriptDir =
+      plan.source_script_dirs[(round - 1) % plan.source_script_dirs.length];
+    const source = loadStoryboardFixedSource(sourceScriptDir);
     const roundOutputDir = resolve(plan.output_dir, `round-${round}`);
     mkdirSync(roundOutputDir, { recursive: true });
     writeJson(roundOutputDir, "source-script-draft.json", source.draft);
@@ -167,6 +176,8 @@ export async function runStoryboardFiveRoundQualityCheck(
     writeJson(roundOutputDir, "runtime-diagnostics.json", runtimeDiagnostics);
     writeRoundTrace(roundOutputDir, {
       round,
+      sourceScriptDir,
+      sourceTitle: source.topicPackage.title,
       validationDecision: validation.decision,
       validationErrors: validation.errors,
       segmentCount: generatedPlan.segments.length,
@@ -176,6 +187,8 @@ export async function runStoryboardFiveRoundQualityCheck(
     rounds.push({
       round,
       status: validation.decision === "pass" ? "round-ready" : "round-failed",
+      source_script_dir: sourceScriptDir,
+      source_title: source.topicPackage.title,
       output_dir: roundOutputDir,
       validation_decision: validation.decision,
       validation_errors: validation.errors,
@@ -212,7 +225,7 @@ export function parseStoryboardFiveRoundQualityCheckCliArgs(argv: string[]) {
     }
 
     if (current === "--source-dir" && next) {
-      result.sourceDir = next;
+      result.sourceDirs = [...(result.sourceDirs ?? []), next];
       index += 1;
       continue;
     }
@@ -246,8 +259,11 @@ function writeStoryboardFiveRoundQualityCheckPlan(
       `- automated_gate: ${plan.automated_gate}`,
       `- requires_real_env: ${plan.requires_real_env}`,
       `- total_rounds: ${plan.total_rounds}`,
-      `- source_script_dir: ${plan.source_script_dir}`,
       `- output_dir: ${plan.output_dir}`,
+      "",
+      "## Source Script Dirs",
+      "",
+      ...plan.source_script_dirs.map((item, index) => `${index + 1}. ${item}`),
       "",
       "## Required Checks",
       "",
@@ -262,6 +278,18 @@ function writeStoryboardFiveRoundQualityCheckPlan(
   );
 
   return plan;
+}
+
+function resolveSourceScriptDirs(input: StoryboardFiveRoundQualityCheckInput) {
+  if (input.sourceDirs && input.sourceDirs.length > 0) {
+    return input.sourceDirs.map((item) => resolve(process.cwd(), item));
+  }
+
+  if (input.sourceDir) {
+    return [resolve(process.cwd(), input.sourceDir)];
+  }
+
+  return DEFAULT_SOURCE_SCRIPT_DIRS;
 }
 
 function loadStoryboardFixedSource(sourceDir: string) {
@@ -352,6 +380,8 @@ function writeRoundTrace(
   roundOutputDir: string,
   input: {
     round: number;
+    sourceScriptDir: string;
+    sourceTitle: string;
     validationDecision: string;
     validationErrors: string[];
     segmentCount: number;
@@ -364,6 +394,8 @@ function writeRoundTrace(
       "# storyboard round trace",
       "",
       `- round: ${input.round}`,
+      `- source_title: ${input.sourceTitle}`,
+      `- source_script_dir: ${input.sourceScriptDir}`,
       `- validation_decision: ${input.validationDecision}`,
       `- segment_count: ${input.segmentCount}`,
       `- coverage_ratio: ${input.coverageRatio ?? "unknown"}`,
@@ -397,7 +429,7 @@ async function main() {
       {
         status: "storyboard-five-round-quality-check-completed",
         output_dir: result.output_dir,
-        source_script_dir: result.source_script_dir,
+        source_script_dirs: result.source_script_dirs,
         total_rounds: result.total_rounds,
         passed_rounds: result.passed_rounds,
         failed_rounds: result.failed_rounds,

@@ -13,7 +13,12 @@ import {
 const scriptText =
   "楚王第一次压晏子的时候，压的不是身高，而是齐国的面子。晏子站在门前没有弯腰，他知道只要退一次，后面每一次羞辱都会压上来。等到大殿上又有人拿齐人做文章，他没有急着争辩，而是把楚王的问题一点点推回去。最后橘枳之喻落下来，场面反而变成楚国自己失手。";
 
-function writeFixedSource(sourceDir: string) {
+function writeFixedSource(
+  sourceDir: string,
+  input: { topicId?: string; title?: string } = {},
+) {
+  const topicId = input.topicId ?? "topic_yanzi_shichu";
+  const title = input.title ?? "晏子使楚";
   mkdirSync(sourceDir, { recursive: true });
   writeFileSync(
     join(sourceDir, "script-draft.json"),
@@ -53,8 +58,8 @@ function writeFixedSource(sourceDir: string) {
     join(sourceDir, "topic-package.json"),
     JSON.stringify(
       {
-        topic_id: "topic_yanzi_shichu",
-        title: "晏子使楚",
+        topic_id: topicId,
+        title,
         selected_angle: "楚王连续羞辱晏子，晏子一次都不能退。",
         family_label: "外交压场",
         scope_label: "完整事件",
@@ -130,9 +135,8 @@ function writeArchivedTopicPackageShape(sourceDir: string) {
 }
 
 describe("storyboard five round quality check", () => {
-  it("defines a discoverable five-round storyboard plan from a fixed script artifact", () => {
+  it("defines a discoverable five-round storyboard plan from different fixed script artifacts", () => {
     const plan = buildStoryboardFiveRoundQualityCheckPlan({
-      sourceDir: "fixed-script",
       outputDir: "storyboard-output",
     });
 
@@ -141,9 +145,10 @@ describe("storyboard five round quality check", () => {
       automated_gate: false,
       requires_real_env: true,
       total_rounds: 5,
-      source_script_dir: "fixed-script",
       output_dir: "storyboard-output",
     });
+    expect(plan.source_script_dirs).toHaveLength(5);
+    expect(new Set(plan.source_script_dirs).size).toBe(5);
     expect(plan.required_artifacts).toEqual(
       expect.arrayContaining([
         "storyboard-plan.json",
@@ -153,20 +158,32 @@ describe("storyboard five round quality check", () => {
       ]),
     );
     expect(plan.required_checks).toContain(
-      "每轮固定读取同一份已通过质量观察的 script 产物，不重新运行 topic 或 script。",
+      "默认 5 轮分别读取 5 个不同主题的高质量 script 产物，不重新运行 topic 或 script。",
     );
   });
 
   it("runs five storyboard planning rounds and writes reviewable artifacts", async () => {
-    const sourceDir = mkdtempSync(join(tmpdir(), "svf2-storyboard-source-"));
+    const sourceDirs = Array.from({ length: 5 }, (_, index) =>
+      mkdtempSync(join(tmpdir(), `svf2-storyboard-source-${index + 1}-`)),
+    );
     const outputDir = mkdtempSync(join(tmpdir(), "svf2-storyboard-five-round-"));
-    writeFixedSource(sourceDir);
+    sourceDirs.forEach((sourceDir, index) => {
+      writeFixedSource(sourceDir, {
+        topicId: `topic_${index + 1}`,
+        title: `测试主题${index + 1}`,
+      });
+    });
 
     const result = await runStoryboardFiveRoundQualityCheck(
-      { sourceDir, outputDir },
+      { sourceDirs, outputDir },
       {
         requireRealEnv: false,
-        planGenerator: async ({ sourceScriptRecordId, sourceTopicPackageId, draft }) => ({
+        planGenerator: async ({
+          sourceScriptRecordId,
+          sourceTopicPackageId,
+          draft,
+          topicBoundaryContext,
+        }) => ({
           plan_version: "storyboard_v1",
           source_script_record_id: sourceScriptRecordId,
           source_topic_package_id: sourceTopicPackageId,
@@ -179,9 +196,9 @@ describe("storyboard five round quality check", () => {
               start_hint_sec: 0,
               end_hint_sec: draft.estimated_duration_sec,
               narrative_role: "opening",
-              visual_intent: "把楚廷压场拍成连续升级的视觉段落。",
-              scene_description: "晏子停在门前，大殿压力随后压过来。",
-              visual_elements: ["晏子", "楚廷", "门口", "大殿"],
+              visual_intent: `把${topicBoundaryContext.title}拍成连续升级的视觉段落。`,
+              scene_description: `${topicBoundaryContext.title}的压力场面。`,
+              visual_elements: [topicBoundaryContext.title, "压力场面"],
               framing_hint: "medium",
               content_type: "live_action",
               motion_hint: "push_in",
@@ -209,9 +226,21 @@ describe("storyboard five round quality check", () => {
       readFileSync(join(outputDir, "live-check-summary.json"), "utf8"),
     ) as {
       total_rounds: number;
-      rounds: Array<{ round: number; output_dir: string; validation_decision: string }>;
+      rounds: Array<{
+        round: number;
+        output_dir: string;
+        source_title: string;
+        validation_decision: string;
+      }>;
     };
     expect(summary.total_rounds).toBe(5);
+    expect(summary.rounds.map((round) => round.source_title)).toEqual([
+      "测试主题1",
+      "测试主题2",
+      "测试主题3",
+      "测试主题4",
+      "测试主题5",
+    ]);
     expect(summary.rounds.map((round) => round.validation_decision)).toEqual([
       "pass",
       "pass",
@@ -233,7 +262,7 @@ describe("storyboard five round quality check", () => {
 
     const readme = readFileSync("harness/README.md", "utf8");
     expect(readme).toContain("harness:storyboard-five-round-quality-check");
-    expect(readme).toContain("固定高质量 script 产物");
+    expect(readme).toContain("5 个不同主题的高质量 script 产物");
   });
 
   it("accepts positional output directory and explicit source directory", () => {
@@ -244,7 +273,7 @@ describe("storyboard five round quality check", () => {
         "storyboard-output",
       ]),
     ).toEqual({
-      sourceDir: "fixed-source",
+      sourceDirs: ["fixed-source"],
       outputDir: "storyboard-output",
     });
   });
