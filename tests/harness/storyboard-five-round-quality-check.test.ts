@@ -325,4 +325,77 @@ describe("storyboard five round quality check", () => {
 
     expect(result.passed_rounds).toBe(1);
   });
+
+  it("regenerates once when local storyboard validation requests regen_once", async () => {
+    const sourceDir = mkdtempSync(join(tmpdir(), "svf2-storyboard-regen-source-"));
+    const outputDir = mkdtempSync(join(tmpdir(), "svf2-storyboard-regen-output-"));
+    writeFixedSource(sourceDir);
+    let callCount = 0;
+
+    const result = await runStoryboardFiveRoundQualityCheck(
+      { sourceDirs: [sourceDir], outputDir, rounds: 1 },
+      {
+        requireRealEnv: false,
+        planGenerator: async ({
+          sourceScriptRecordId,
+          sourceTopicPackageId,
+          draft,
+          regenerationContext,
+        }) => {
+          callCount += 1;
+          expect(callCount === 1 ? regenerationContext : regenerationContext?.reason).toBe(
+            callCount === 1 ? undefined : "storyboard_local_validation_regen_once",
+          );
+          return {
+            plan_version: "storyboard_v1",
+            source_script_record_id: sourceScriptRecordId,
+            source_topic_package_id: sourceTopicPackageId,
+            estimated_total_duration_sec: draft.estimated_duration_sec,
+            segments: [
+              {
+                segment_id: "sb_001",
+                order: 0,
+                script_excerpt:
+                  callCount === 1
+                    ? draft.script_text.slice(0, 30)
+                    : draft.script_text,
+                start_hint_sec: 0,
+                end_hint_sec: draft.estimated_duration_sec,
+                narrative_role: "opening",
+                visual_intent: "把压力场面拍成连续升级的视觉段落。",
+                scene_description: "压力场面。",
+                visual_elements: ["压力场面"],
+                framing_hint: "medium",
+                content_type: "live_action",
+                motion_hint: "push_in",
+                editing_hint: "single",
+                on_screen_text: [],
+                linked_beats:
+                  callCount === 1 ? [] : draft.beat_trace.map((trace) => trace.beat),
+                linked_quotes:
+                  callCount === 1 ? [] : draft.quote_trace.map((trace) => trace.quote),
+                risk_notes: [],
+              },
+            ],
+            global_visual_notes: [],
+          };
+        },
+      },
+    );
+
+    expect(callCount).toBe(2);
+    expect(result.rounds[0]).toMatchObject({
+      validation_decision: "pass",
+      regenerated: true,
+    });
+    expect(
+      JSON.parse(
+        readFileSync(join(outputDir, "round-1", "runtime-diagnostics.json"), "utf8"),
+      ),
+    ).toMatchObject({
+      checks: expect.arrayContaining([
+        expect.objectContaining({ code: "storyboard_regen_once" }),
+      ]),
+    });
+  });
 });

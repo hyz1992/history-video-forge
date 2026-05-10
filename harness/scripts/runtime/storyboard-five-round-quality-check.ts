@@ -57,6 +57,7 @@ export interface StoryboardFiveRoundRoundResult {
   status: "round-ready" | "round-failed";
   source_script_dir: string;
   source_title: string;
+  regenerated: boolean;
   output_dir: string;
   validation_decision: string;
   validation_errors: string[];
@@ -80,6 +81,11 @@ export interface StoryboardFiveRoundPlanGeneratorInput {
   topicBoundaryContext: TopicBoundaryContext;
   interactionLogWriter: LlmInteractionLogWriter;
   round: number;
+  regenerationContext?: {
+    reason: "storyboard_local_validation_regen_once";
+    errors: string[];
+    metrics: Record<string, unknown>;
+  };
 }
 
 export interface StoryboardFiveRoundQualityCheckDependencies {
@@ -145,7 +151,7 @@ export async function runStoryboardFiveRoundQualityCheck(
     writeJson(roundOutputDir, "source-topic-package.json", source.topicPackage);
 
     const interactionLogWriter = createRoundInteractionLogWriter(roundOutputDir);
-    const generatedPlan = StoryboardPlan.parse(
+    let generatedPlan = StoryboardPlan.parse(
       await planGenerator({
         sourceScriptRecordId: "fixed-script-record",
         sourceTopicPackageId: source.topicPackage.topic_id,
@@ -155,12 +161,45 @@ export async function runStoryboardFiveRoundQualityCheck(
         round,
       }),
     );
-    const validation = validateStoryboardPlan({
+    let validation = validateStoryboardPlan({
       draft: source.draft,
       plan: generatedPlan,
     });
+    let regenerated = false;
+
+    if (validation.decision === "regen_once") {
+      regenerated = true;
+      generatedPlan = StoryboardPlan.parse(
+        await planGenerator({
+          sourceScriptRecordId: "fixed-script-record",
+          sourceTopicPackageId: source.topicPackage.topic_id,
+          draft: source.draft,
+          topicBoundaryContext: source.topicBoundaryContext,
+          interactionLogWriter,
+          round,
+          regenerationContext: {
+            reason: "storyboard_local_validation_regen_once",
+            errors: validation.errors,
+            metrics: validation.metrics,
+          },
+        }),
+      );
+      validation = validateStoryboardPlan({
+        draft: source.draft,
+        plan: generatedPlan,
+      });
+    }
+
     const runtimeDiagnostics = {
       checks: [
+        ...(regenerated
+          ? [
+              {
+                code: "storyboard_regen_once",
+                level: "info",
+              },
+            ]
+          : []),
         {
           code:
             validation.decision === "pass"
@@ -178,6 +217,7 @@ export async function runStoryboardFiveRoundQualityCheck(
       round,
       sourceScriptDir,
       sourceTitle: source.topicPackage.title,
+      regenerated,
       validationDecision: validation.decision,
       validationErrors: validation.errors,
       segmentCount: generatedPlan.segments.length,
@@ -189,6 +229,7 @@ export async function runStoryboardFiveRoundQualityCheck(
       status: validation.decision === "pass" ? "round-ready" : "round-failed",
       source_script_dir: sourceScriptDir,
       source_title: source.topicPackage.title,
+      regenerated,
       output_dir: roundOutputDir,
       validation_decision: validation.decision,
       validation_errors: validation.errors,
@@ -382,6 +423,7 @@ function writeRoundTrace(
     round: number;
     sourceScriptDir: string;
     sourceTitle: string;
+    regenerated: boolean;
     validationDecision: string;
     validationErrors: string[];
     segmentCount: number;
@@ -396,6 +438,7 @@ function writeRoundTrace(
       `- round: ${input.round}`,
       `- source_title: ${input.sourceTitle}`,
       `- source_script_dir: ${input.sourceScriptDir}`,
+      `- regenerated: ${input.regenerated}`,
       `- validation_decision: ${input.validationDecision}`,
       `- segment_count: ${input.segmentCount}`,
       `- coverage_ratio: ${input.coverageRatio ?? "unknown"}`,
