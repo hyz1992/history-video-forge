@@ -135,7 +135,6 @@
 
 ## 当前仍为 TBD 的区域
 
-- storyboard 阶段详细规则
 - asset planning / assets / compose 的细化输入输出
 - 更完整的 UI 组件级规范
 - 推荐轻评审阈值
@@ -150,3 +149,20 @@
 - 过程性推导：不直接写入正式规范，除非已经收敛
 - 重大收口：同步更新路线图与 todo
 - 已执行完毕的 design / implementation plan：移动到 `docs/plans/archive/`，不要继续留在 `docs/plans/` 根目录误导新任务
+
+## 2026-05-10 Storyboard v1 文档状态
+
+`storyboard` 已完成第一版设计、实施计划和最小后端实现。新 agent 阅读时应按以下状态理解：
+
+- `topic + script`：仍作为当前稳定上游，不主动回改。
+- `storyboard`：已有 shared schema、prompt registry 支持、prompt、local validator、generation service、record persistence、生成 API、snapshot `active_storyboard`。
+- `asset planning / assets / compose`：仍未进入可实施设计与实现，不得顺手补对象或 API。
+
+当前 storyboard 相关入口：
+
+- [Storyboard 阶段设计计划](./plans/2026-05-09-storyboard-stage-design.md)
+- [Storyboard 阶段实施计划](./plans/2026-05-09-storyboard-stage-implementation-plan.md)
+- [Pipeline IO 规范](./architecture/pipeline-io-spec.md)
+- [字段设计](./data/field-design.md)
+- [Schema 设计](./data/schema-design.md)
+- [API 设计](./architecture/api-design.md)

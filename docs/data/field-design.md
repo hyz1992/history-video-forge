@@ -648,5 +648,56 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 `TBD`
 
 - cache object 字段细化
-- storyboard / asset manifest 字段
+- asset manifest 字段
 - 审校输出对象字段的落盘形式
+
+## Storyboard v1 字段（2026-05-10 已实现）
+
+`StoryboardPlan` 是 storyboard 阶段的正式输出对象，定位为“视觉叙事计划”，不是素材计划、镜头资产清单或 compose timeline。
+
+### `StoryboardPlan`
+
+| 字段 | 含义 |
+|---|---|
+| `plan_version` | 固定为 `storyboard_v1` |
+| `source_script_record_id` | 来源 active script record |
+| `source_topic_package_id` | 来源 topic package |
+| `estimated_total_duration_sec` | 分镜计划对应的总时长 hint |
+| `segments` | 分镜段落数组 |
+| `global_visual_notes` | 全局视觉注意事项，第一版只做轻量 notes |
+
+### `StoryboardSegment`
+
+| 字段 | 含义 |
+|---|---|
+| `segment_id` | 分镜段唯一标识 |
+| `order` | 段落顺序，从 0 开始 |
+| `script_excerpt` | 来自 `script_text` 的连续原文片段 |
+| `start_hint_sec` / `end_hint_sec` | 对口播时长的粗略时间 hint |
+| `narrative_role` | `opening/setup/pressure/turn/peak/ending/bridge` |
+| `visual_intent` | 本段希望观众看见的视觉意图 |
+| `scene_description` | 场面描述 |
+| `visual_elements` | 主要可视元素 |
+| `framing_hint` | `wide/medium/close/detail/symbolic` |
+| `content_type` | `live_action/text_card/map/illustration` |
+| `motion_hint` | `static/push_in/pull_back/pan` |
+| `editing_hint` | `single/cutaway/montage` |
+| `on_screen_text` | 屏幕文字建议 |
+| `linked_beats` | 对应 script beat trace |
+| `linked_quotes` | 对应 script quote trace |
+| `risk_notes` | 结构性风险提示 |
+
+### `StoryboardValidationResult`
+
+| 字段 | 含义 |
+|---|---|
+| `stage` | 固定为 `storyboard_local_validation` |
+| `decision` | `pass / regen_once / hard_fail` |
+| `errors` | 结构错误码 |
+| `warnings` | 非阻断警告 |
+| `metrics` | 覆盖率、段落数、时长 hint 等结构指标 |
+
+边界：
+- 本地 validator 只判断结构，不判断“爆款感”或视觉审美。
+- `StoryboardPlan` 不包含资产生成参数，不替代 asset planning。
+- `StoryboardPlan` 不回写 topic/script。

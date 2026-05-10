@@ -14,7 +14,7 @@
 2. 用户显式操作触发 API；内部 patch / regenerate 不单独暴露成用户 API。
 3. topic 与 script 的长时任务优先采用异步任务 + SSE 状态流。
 4. API 只暴露当前已确认阶段。
-5. storyboard / assets / compose 相关 endpoint 暂不承诺。
+5. storyboard v1 已承诺并实现生成 endpoint；asset planning / assets / compose 相关 endpoint 暂不承诺。
 
 ## 2. 顶层资源
 
@@ -394,6 +394,45 @@ script 摘要第一版建议至少包含：
 
 ## 7. 当前不在本轮承诺的 API
 
-- storyboard 阶段 API
 - asset planning / assets / compose API
 - 管理后台校正 Event Registry 的运营 API
+
+## Storyboard v1 API（2026-05-10 已实现）
+
+### `POST /api/projects/:projectId/storyboard/generate`
+
+用途：
+- 从当前 active script 生成 storyboard v1。
+- 成功后保存 `StoryboardRecord`，并把项目推进到 `storyboard_ready`。
+
+输入：
+- URL 中的 `projectId`。
+- 第一版请求体可为空。
+
+前置条件：
+- project 必须存在，否则返回 `404 project_not_found`。
+- project 必须有 `active_script_record_id`，否则返回 `409 active_script_record_missing`。
+- active script record 必须存在，否则返回 `404 script_record_not_found`。
+- script record 对应的 topic package 必须存在，否则返回 `404 topic_package_not_found`。
+
+成功响应字段：
+- `project_id`
+- `run_mode`
+- `storyboard_record_id`
+- `source_script_record_id`
+- `source_topic_package_id`
+- `plan`
+- `local_validation`
+- `execution_state`
+- `graph_trace_summary`
+- `runtime_diagnostics`
+
+失败语义：
+- 本地结构校验若返回 `regen_once`，runtime 允许用结构化 `regeneration_context` 再生成一次。
+- 第二次仍未 `pass` 时返回 `422 storyboard_local_validation_failed`。
+- `422` 时不得保存新的 active storyboard，也不得把 project status 推到 `storyboard_ready`。
+
+边界：
+- storyboard API 不调用 semantic reviewer。
+- storyboard API 不修改 `script_text` 或 `TopicPackage`。
+- storyboard API 不生成 asset planning/assets/compose 对象。

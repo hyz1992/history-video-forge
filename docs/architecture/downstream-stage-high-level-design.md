@@ -108,7 +108,7 @@
 
 在正式设计这些阶段之前，当前明确不建议：
 
-- 直接开始实现 storyboard / assets / compose
+- 在 storyboard v1 之外直接开始实现 asset planning / assets / compose
 - 让实现端自由发明下游对象
 - 把 `script` 输出直接等同于分镜输入而不做设计收口
 - 为了赶进度，把后续阶段先写成大量自由 prompt
@@ -185,8 +185,29 @@
 
 `TBD`
 
-- storyboard 详细字段
 - asset planning 详细字段
 - assets 统一状态模型
 - compose 时间轴对象
 - 后续阶段 API / 校验 / harness 规则
+
+## 2026-05-10 状态更新：Storyboard v1 已进入第一版实现
+
+本文件原先将 storyboard 与 asset planning/assets/compose 一并标为尚未进入可实施设计。当前状态需要细分：
+
+- `storyboard`：已经完成第一版 design、implementation plan 与最小实现。
+- `asset planning`：仍为 TBD，未设计、未实现。
+- `assets`：仍为 TBD，未设计、未实现。
+- `compose`：仍为 TBD，未设计、未实现。
+
+Storyboard v1 当前边界：
+- 输入来自 active `ScriptRecord` 与对应 `TopicPackage` 边界信息。
+- 输出 `StoryboardPlan`、`StoryboardValidationResult`、`StoryboardRecord`。
+- 提供 `POST /api/projects/:projectId/storyboard/generate`。
+- project snapshot 返回 `active_storyboard` 与 `latest_storyboard_run`。
+- 新 script 激活后清空过期 active storyboard 指针。
+
+仍然禁止：
+- 在 storyboard 阶段回写 topic/script。
+- 在 storyboard 阶段实现 asset planning/assets/compose。
+- 让 semantic reviewer 参与 storyboard 主链路。
+- 用本地 validator 判断爆款、审美或语义质量。

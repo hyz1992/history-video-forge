@@ -14,7 +14,8 @@
 4. 只为当前已确认阶段建模：
    - topic
    - topic -> script
-5. storyboard / assets / compose 暂不在本文档里提前拍死。
+   - storyboard v1
+5. asset planning / assets / compose 暂不在本文档里提前拍死。
 
 ## 2. 当前建议的核心实体
 
@@ -250,7 +251,7 @@
 
 - 不把 `Event Registry`、`Candidate Cache`、`Recent Memory` 混成一张表
 - 不把全部数组型字段都塞进单 JSON 大字段里不区分职责
-- 不为尚未拍板的 storyboard/assets 阶段提前设计大而全 schema
+- 不为尚未拍板的 asset planning/assets/compose 阶段提前设计大而全 schema
 - 不直接复用旧项目的 pipeline state 表结构
 
 ## 6. Task 2 共享 Schema 与持久化映射
@@ -333,4 +334,42 @@
 - 索引策略与查询优化
 - `recommendation candidate exposure log` 是否独立成表
 - `Recent Memory` 第一版是否纯查询层，还是做物化表
-- future 阶段（storyboard/assets/compose）的持久化对象
+- future 阶段（asset planning/assets/compose）的持久化对象
+
+## StoryboardRecord 持久化映射（2026-05-10 已实现）
+
+Storyboard v1 已有第一版持久化记录。它是 `ScriptRecord` 之后的派生记录，source-of-truth 仍是 active script 与对应 topic package。
+
+### `projects` 增量字段
+
+- `active_storyboard_record_id`：当前激活的 storyboard record。
+- `latest_storyboard_run_trace_json`：当前项目最近一次 storyboard run 的 trace summary（内存实现字段名为 `latestStoryboardRunTraceJson`）。
+
+当新的 script 被激活时，必须清空：
+- `active_storyboard_record_id`
+- `latest_storyboard_run_trace_json`
+
+### `storyboard_records`
+
+建议字段：
+- `id`
+- `project_id`
+- `topic_package_id`
+- `script_record_id`
+- `plan_json`
+- `validation_result_json`
+- `execution_state_json`
+- `graph_trace_summary_json`
+- `runtime_diagnostics_json`
+- `created_at`
+
+关系：
+- `projects (1) -> storyboard_records (N)`
+- `topic_packages (1) -> storyboard_records (N)`
+- `script_records (1) -> storyboard_records (N)`
+
+说明：
+- `plan_json` 保存 `StoryboardPlan`。
+- `validation_result_json` 保存 `StoryboardValidationResult`。
+- `execution_state_json` 第一版至少记录 `regenerate_used`。
+- `storyboard_records` 不保存 asset planning、asset manifest 或 compose timeline。

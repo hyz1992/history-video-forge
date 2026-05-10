@@ -172,7 +172,6 @@
 
 `TBD`
 
-- storyboard 阶段输入输出
 - asset planning 阶段输入输出
 - assets 阶段输入输出
 - compose 阶段输入输出
@@ -183,3 +182,43 @@
 - 只是尚未进入可实施设计状态
 - 高层边界与推进顺序留档见：
   - [downstream-stage-high-level-design.md](./downstream-stage-high-level-design.md)
+
+## 4. Storyboard v1 阶段（2026-05-10 已进入第一版实现）
+
+Storyboard v1 已从纯 TBD 收口为第一版可运行阶段。它只消费已经激活的 `ScriptRecord` 及其来源 `TopicPackage` 边界信息，不反向修改 topic/script。
+
+输入：
+- active `ScriptRecord`
+  - `script_text`
+  - `estimated_duration_sec`
+  - `opening_span`
+  - `ending_span`
+  - `beat_trace_json`
+  - `quote_trace_json`
+- 对应 `TopicPackage`
+  - `title`
+  - `selected_angle`
+  - `core_conflict`
+  - `strong_scene`
+  - `forbidden_expansions_json`
+  - `risk_hints_json`
+  - `source_anchor_refs_json`
+  - `canonical_quotes_json`
+  - `narrative_tension_map_json`
+
+输出：
+- `StoryboardPlan`
+- `StoryboardValidationResult`
+- `StoryboardRecord`
+- project snapshot 中的 `active_storyboard`
+
+本地校验：
+- 只做结构检查，例如 segment 顺序、时间 hint、`script_excerpt` 是否来自 script、覆盖率、开头/结尾覆盖、trace ref 是否能对上 beat/quote、画面描述是否为空。
+- 不做“爆款”“视觉效果好坏”等语义判断。
+- semantic reviewer 不参与 storyboard 主链路。
+
+边界：
+- storyboard 不改 `script_text`。
+- storyboard 不改 `TopicPackage`。
+- storyboard 不生成资产。
+- storyboard 不决定 asset planning/assets/compose 的详细任务对象。
