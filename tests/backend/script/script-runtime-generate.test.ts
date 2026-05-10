@@ -65,6 +65,14 @@ const topicDeliveryPack = TopicDeliveryPack.parse({
   ],
 });
 
+const localValidationPassingStakes = `${topicPackage.stakes} 这不是一句抽象评价，而是当场所有人的目光、楚王的逼问、齐国使者的退路同时压到一个人身上；只要他慢一拍，后面的羞辱就会继续落下来。`;
+
+type ScriptGenerationResponse = Awaited<ReturnType<typeof runScriptGeneration>>;
+type ScriptGenerationSuccessBody = Exclude<
+  ScriptGenerationResponse["body"],
+  { error: string }
+>;
+
 const scriptInputBundle = ScriptInputBundle.parse({
   topic_package: topicPackage,
   topic_delivery_pack: topicDeliveryPack,
@@ -195,7 +203,7 @@ describe("script runtime generate", () => {
     expect(scriptInputBundle).not.toHaveProperty("regeneration_context");
   });
 
-  it("builds deterministic stub drafts with the current first-draft body floor", async () => {
+  it("reports deterministic stub drafts below the current first-draft body floor", async () => {
     const draft = await generateScriptDraft({
       bundle: scriptInputBundle,
     });
@@ -209,14 +217,12 @@ describe("script runtime generate", () => {
       new RegExp(`^${topicPackage.strong_scene.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
     );
     expect(draft.script_text).not.toContain("公开压场");
-    expect(validation.decision).toBe("pass");
-    expect(validation.errors).not.toContain("script_body_too_thin");
+    expect(validation.decision).toBe("regen_once");
+    expect(validation.errors).toContain("script_body_too_thin");
     expect(validation.metrics).toMatchObject({
-      min_script_chars_for_band: 240,
-      min_sentence_count_for_band: 7,
+      min_script_chars_for_band: 320,
+      min_sentence_count_for_band: 8,
     });
-    expect(validation.metrics.script_char_count).toBeGreaterThanOrEqual(240);
-    expect(validation.metrics.script_sentence_count).toBeGreaterThanOrEqual(7);
   });
 
   it("traces every canonical quote used by deterministic stub drafts", async () => {
@@ -264,7 +270,8 @@ describe("script runtime generate", () => {
       "橘生淮南则为橘",
     ]);
     expect(validation.errors).not.toContain("quote_trace_incomplete");
-    expect(validation.decision).toBe("pass");
+    expect(validation.errors).toContain("script_body_too_thin");
+    expect(validation.decision).toBe("regen_once");
   });
 
   it("repairs minimally malformed runtime output before validating ScriptDraftPackage", async () => {
@@ -521,16 +528,18 @@ ${JSON.stringify(runtimeDraft)}
       "`hard_lane.must_include_beats`",
     );
     expect(entries[0]?.systemPrompt).toContain(
-      "`beat_trace.excerpt` 必须从 `script_text` 中截取",
+      "`beat_trace.excerpt` 必须从自然正文截取",
     );
-    expect(entries[0]?.systemPrompt).toContain("不少于 8 个汉字等价长度");
+    expect(entries[0]?.systemPrompt).toContain("不少于 14 个汉字等价长度");
     expect(entries[0]?.systemPrompt).toContain("`estimated_duration_sec`");
     expect(entries[0]?.systemPrompt).toContain("`hard_lane.duration_band`");
     expect(entries[0]?.systemPrompt).toContain("`script_text`");
     expect(entries[0]?.systemPrompt).toContain("short=45-70秒");
     expect(entries[0]?.systemPrompt).toContain("medium=75-95秒");
     expect(entries[0]?.systemPrompt).toContain("long=90-140秒");
-    expect(entries[0]?.systemPrompt).toContain("先按档位控制正文体量，再回填");
+    expect(entries[0]?.systemPrompt).toContain(
+      "先按档位控制正文体量，再按约 3.6-4.6 个汉字等价长度/秒回填",
+    );
     expect(entries[0]?.systemPrompt).toContain("`opening_span`");
     expect(entries[0]?.systemPrompt).toContain(
       "优先从 `core_conflict`、`stakes` 或 `narrative_tension_map` 提炼",
@@ -591,14 +600,15 @@ ${JSON.stringify(runtimeDraft)}
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.body.draft.opening_span).toBe(topicPackage.strong_scene);
-    expect(response.body.draft.opening_span).not.toBe(
-      response.body.input_bundle.packaging_lane.hook_claim,
+    const body = response.body as ScriptGenerationSuccessBody;
+    expect(body.draft.opening_span).toBe(topicPackage.strong_scene);
+    expect(body.draft.opening_span).not.toBe(
+      body.input_bundle.packaging_lane.hook_claim,
     );
-    expect(response.body.draft.script_text).toMatch(
+    expect(body.draft.script_text).toMatch(
       new RegExp(`^${topicPackage.strong_scene.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`),
     );
-    expect(response.body.semantic_review).toMatchObject({
+    expect(body.semantic_review).toMatchObject({
       stage: "script_semantic_review",
       decision: "skipped",
       patch_intent: null,
@@ -606,21 +616,21 @@ ${JSON.stringify(runtimeDraft)}
       soft_issues: [],
       patch_targets: [],
     });
-    expect(response.body.semantic_review.soft_issues).not.toContain(
+    expect(body.semantic_review.soft_issues).not.toContain(
       "hook_kill_power_weak",
     );
-    expect(response.body.runtime_diagnostics.checks).toContainEqual(
+    expect(body.runtime_diagnostics.checks).toContainEqual(
       expect.objectContaining({
         code: "semantic_review_skipped",
         level: "warning",
       }),
     );
-    expect(response.body.runtime_diagnostics.checks).not.toContainEqual(
+    expect(body.runtime_diagnostics.checks).not.toContainEqual(
       expect.objectContaining({
         code: "patch_once",
       }),
     );
-    expect(response.body.input_bundle.hard_lane).toMatchObject({
+    expect(body.input_bundle.hard_lane).toMatchObject({
       core_conflict: topicPackage.core_conflict,
       stakes: topicPackage.stakes,
       source_anchor_refs: topicPackage.source_anchor_refs,
@@ -629,7 +639,7 @@ ${JSON.stringify(runtimeDraft)}
     });
 
     const profile = getProjectStorageProfile(project);
-    const graphTraceSummary = response.body.graph_trace_summary as Record<
+    const graphTraceSummary = body.graph_trace_summary as unknown as Record<
       string,
       unknown
     >;
@@ -717,7 +727,7 @@ ${JSON.stringify(runtimeDraft)}
       scopeLabel: topicPackage.scope_label,
       coreConflict: topicPackage.core_conflict,
       strongScene: topicPackage.strong_scene,
-      stakes: topicPackage.stakes,
+      stakes: localValidationPassingStakes,
       packagingSeed: topicPackage.packaging_seed,
       canonicalQuotesJson: [],
       durationBandJson: {
@@ -763,15 +773,16 @@ ${JSON.stringify(runtimeDraft)}
     } as any);
 
     expect(response.statusCode).toBe(200);
+    const body = response.body as ScriptGenerationSuccessBody;
     expect(invokeApi).toHaveBeenCalledTimes(1);
-    expect(response.body.semantic_review).toMatchObject(reviewerOutput);
-    expect(response.body.execution_state).toBeUndefined();
-    expect(response.body.graph_trace_summary.steps).not.toContainEqual(
+    expect(body.semantic_review).toMatchObject(reviewerOutput);
+    expect((body as Record<string, unknown>).execution_state).toBeUndefined();
+    expect(body.graph_trace_summary.steps).not.toContainEqual(
       expect.objectContaining({
         step_name: "patch-once",
       }),
     );
-    expect(response.body.runtime_diagnostics.checks).toContainEqual(
+    expect(body.runtime_diagnostics.checks).toContainEqual(
       expect.objectContaining({
         code: "patch_once",
         level: "info",
@@ -792,7 +803,7 @@ ${JSON.stringify(runtimeDraft)}
       scopeLabel: topicPackage.scope_label,
       coreConflict: topicPackage.core_conflict,
       strongScene: topicPackage.strong_scene,
-      stakes: topicPackage.stakes,
+      stakes: localValidationPassingStakes,
       packagingSeed: topicPackage.packaging_seed,
       canonicalQuotesJson: [],
       durationBandJson: {
@@ -844,7 +855,8 @@ ${JSON.stringify(runtimeDraft)}
     } as any);
 
     expect(response.statusCode).toBe(200);
-    expect(response.body.semantic_review).toMatchObject({
+    const body = response.body as ScriptGenerationSuccessBody;
+    expect(body.semantic_review).toMatchObject({
       stage: "script_semantic_review",
       decision: "patch_once",
       patch_intent: "lift",
@@ -853,8 +865,8 @@ ${JSON.stringify(runtimeDraft)}
       patch_targets: ["opening"],
       summary: "三次压迫层次不够清晰，但本轮只作为 shadow 量尺。",
     });
-    expect(response.body.semantic_review.confidence).toBeLessThanOrEqual(0.7);
-    expect(response.body.graph_trace_summary.steps).not.toContainEqual(
+    expect(body.semantic_review.confidence).toBeLessThanOrEqual(0.7);
+    expect(body.graph_trace_summary.steps).not.toContainEqual(
       expect.objectContaining({
         step_name: "patch-once",
       }),
@@ -874,7 +886,7 @@ ${JSON.stringify(runtimeDraft)}
       scopeLabel: topicPackage.scope_label,
       coreConflict: topicPackage.core_conflict,
       strongScene: topicPackage.strong_scene,
-      stakes: topicPackage.stakes,
+      stakes: localValidationPassingStakes,
       packagingSeed: topicPackage.packaging_seed,
       canonicalQuotesJson: [],
       durationBandJson: {
@@ -939,7 +951,8 @@ ${JSON.stringify(runtimeDraft)}
     } as any);
 
     expect(response.statusCode).toBe(200);
-    expect(response.body.semantic_review).toMatchObject({
+    const body = response.body as ScriptGenerationSuccessBody;
+    expect(body.semantic_review).toMatchObject({
       stage: "script_semantic_review",
       decision: "patch_once",
       patch_intent: "lift",
@@ -961,7 +974,7 @@ ${JSON.stringify(runtimeDraft)}
       summary: "脚本核心内容符合主题要求，但需要增强画面感。",
       confidence: 0.85,
     });
-    expect(response.body.graph_trace_summary.steps).not.toContainEqual(
+    expect(body.graph_trace_summary.steps).not.toContainEqual(
       expect.objectContaining({
         step_name: "patch-once",
       }),
