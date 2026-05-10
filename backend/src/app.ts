@@ -3,6 +3,7 @@ import { createDbClient, type DbClient } from "./db/client";
 import { registerProjectRoutes } from "./modules/projects/project.routes";
 import { registerTopicRoutes } from "./modules/topic/topic.routes";
 import { registerScriptRoutes } from "./modules/script/script.routes";
+import { registerStoryboardRoutes } from "./modules/storyboard/storyboard.routes";
 import type { StoredTopicCandidate } from "./modules/topic/topic-confirm.service";
 
 export interface StoredTopicCandidateRound {
@@ -144,6 +145,7 @@ export function buildApp(): AppInstance {
   registerProjectRoutes(app);
   registerTopicRoutes(app);
   registerScriptRoutes(app);
+  registerStoryboardRoutes(app);
 
   return app;
 }
