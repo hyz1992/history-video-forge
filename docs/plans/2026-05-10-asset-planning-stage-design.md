@@ -2,7 +2,7 @@
 
 日期：2026-05-10
 
-状态：设计草案，待 implementation plan
+状态：设计草案，已同步 implementation plan
 
 ## 任务
 
@@ -14,7 +14,7 @@
 
 第一版 asset planning 输出独立对象 `AssetPlan`：
 
-> 以当前 active storyboard 及其 source script 为只读输入，生成项目级美术设定、TTS 切片计划、视觉资产任务、低成本动效建议、音效/配乐占位和任务依赖图。
+> 以当前 active storyboard 及其 source script 为只读输入，本地确定性生成 TTS / 字幕任务骨架，使用 LLM 生成项目级美术设定与分块视觉 / 音效规划，再由本地 merger 合成视觉资产任务、低成本动效建议、音效/配乐占位和任务依赖图。
 
 它不改 storyboard，不生成物理素材，不决定 compose 的最终时间轴。
 
@@ -41,10 +41,10 @@
 - 读取该 storyboard 的 source `ScriptRecord` 和 source `TopicPackage` 摘要作为边界参考。
 - 生成项目级 `ProjectArtBible`，用于统一人物、场景、时代风格和视觉禁区。
 - 把 storyboard segments 拆成资产生产任务：
-  - TTS 口播切片任务。
+  - 本地确定性生成的 TTS 口播切片任务。
   - 静态图任务。
   - 少量真视频候选任务。
-  - 字幕生成任务。
+  - 本地确定性生成的字幕生成任务。
   - 音效 / 配乐占位任务。
 - 为每个任务记录：
   - 来源 storyboard segment。
@@ -69,6 +69,37 @@
 - 不以 storyboard 的 `start_hint_sec / end_hint_sec` 作为最终剪辑时间。
 - 不实现用户上传、预览、重生成 UI。
 - 不让 semantic reviewer 参与主链路。
+
+## 生成架构
+
+第一版不让 LLM 一次性生成完整 `AssetPlan`。该做法容易触发超时、JSON 截断、任务 ID 混乱、跨 chunk 依赖漂移和输出膨胀。
+
+v1 采用四层生成架构：
+
+1. **本地确定性骨架**
+   - 根据 source `script_text`、storyboard segment 顺序和文本边界生成 `tts_plan`。
+   - 本地创建 `tts_audio` 与 `subtitle_track` 任务。
+   - 本地分配 TTS / 字幕任务 ID，并创建字幕依赖 TTS 的关系。
+   - LLM 不得规划、切分、命名或重写 TTS / 字幕任务。
+
+2. **全局规划调用**
+   - LLM 只生成 `ProjectArtBible`、视觉预算、全局降级策略和音频张力策略。
+   - 全局调用不得输出资产任务 ID，不得输出 TTS / 字幕任务。
+
+3. **分块 segment planning**
+   - 将 storyboard segments 按 2-3 个 segment 一组发送给 LLM。
+   - 每个 chunk 只能生成视觉与情绪音频草稿：`image_still`、`render_motion_cue`、少量 `video_clip` 候选、`sfx_cue`，以及局部 `bgm_cue` 建议。
+   - chunk 输出只能使用局部临时 ID，例如 `local_img_1`、`local_motion_1`。
+   - chunk 不得引用其他 chunk 的局部 ID，不得推断全局任务 ID。
+
+4. **本地 merger**
+   - 本地统一分配全局 `task_id`。
+   - 本地重写依赖关系。
+   - 本地挂载视觉 / 动效 / SFX 任务到对应 storyboard segment。
+   - 本地合并全局 BGM 策略和局部 BGM 建议，生成最终 `bgm_cue` 占位任务。
+   - 本地计算 `cost_summary` 和结构校验指标。
+
+持久化或激活前，run service 必须重新确认 source script / storyboard 仍是项目当前 active 指针；如果生成期间用户激活了新 script 或新 storyboard，旧结果不得覆盖新的 active asset plan。
 
 ## 输入边界
 
@@ -237,16 +268,18 @@ Asset planning 阶段只创建任务，不执行任务。状态机主要服务�
 ### TTS
 
 - TTS 是最终时间轴的根。
-- Asset planning 应生成 TTS 切片任务，但不能生成音频。
-- 切片只能发生在自然语言边界，如句号、问号、感叹号、较强停顿。
+- Asset planning 阶段应生成 TTS 切片任务，但这些任务必须由本地服务确定性创建，不能由 LLM 规划。
+- 切片只能发生在自然语言边界，如句号、问号、感叹号、较强停顿；第一版优先按 script / storyboard 对齐边界生成。
 - 所有 TTS 任务必须共享同一个 `voice_profile` / `voice_id`。
 - 第一版可先记录默认 voice hint；试听、换音色和全量重生成属于后续设计。
+- LLM 可以给出旁白情绪或节奏建议，但不得输出 `tts_audio` 任务、不得改写口播文本、不得决定最终时长。
 
 ### 字幕
 
-- 字幕任务依赖 TTS 任务完成。
+- 字幕任务由本地服务确定性创建，并依赖对应 TTS 任务完成。
 - 字幕时间戳应来自 TTS API 的词级 / 字级时间戳，或后续 forced alignment。
 - Asset planning 不按字数直接切字幕，只记录字幕生成任务和可读性约束。
+- LLM 不得输出 `subtitle_track` 任务，不得切分字幕，不得决定字幕时间戳。
 
 ### 静态图
 
@@ -256,10 +289,13 @@ Asset planning 阶段只创建任务，不执行任务。状态机主要服务�
 
 | storyboard 条件 | 规划建议 |
 |---|---|
-| `editing_hint: single` | 1 张主图 |
-| `editing_hint: cutaway` | 1 张主图 + 1 张插入图 |
-| `editing_hint: montage` | 3-5 张连切图 |
+| 普通 segment | 1 张主视觉锚点图 |
+| `narrative_role: turn` 或 `peak` | 1 张主图 + 最多 1 张 support 图 |
+| 关键道具揭示、动作爆点、视角明显切换、风险规避 | 可增加 1-2 张 support 图 |
 | 长段落且动作变化明显 | 可拆 2 张图 |
+| `editing_hint: montage` | 最多 3 张连切图，必须说明理由 |
+
+全片平均图片数应控制在每个 segment 约 1.5 张以内。超过该预算必须在 `cost_summary.notes` 中解释原因。
 
 图片 prompt 必须同时参考：
 
@@ -393,12 +429,15 @@ Asset planning 本地 validator 只做结构和引用检查，不做美学判断
 
 - 放在 `harness/prompts/asset-planning/`。
 - 元数据声明 `stage: asset_planning` 和 `language: zh-CN`。
-- 只生成 `AssetPlan`。
+- 支持全局规划和 segment chunk planning 两类输入模式。
+- 只生成可被本地 merger 合并进 `AssetPlan` 的结构化规划草稿。
 - 不生成素材文件。
 - 不改写 script 或 storyboard。
+- 不输出 `tts_audio` 或 `subtitle_track` 任务。
+- 不分配全局任务 ID；chunk 内只能使用局部临时 ID。
 - 不做最终视频时间轴。
 
-Prompt Registry 目前只支持 `topic | script | storyboard`。进入 implementation plan 前，需要单独设计是否将 stage enum 扩展为 `asset_planning`。
+Prompt Registry 当前实现需要在 implementation plan 中扩展 stage enum，使 `asset_planning` 成为正式 prompt stage。
 
 ## 与下游阶段关系
 
@@ -425,15 +464,15 @@ Compose 的时间轴 source-of-truth 是 TTS 完成后的真实音频，而不�
 - 不实现真实 BGM 生成。
 - 不实现复杂角色一致性技术，如 ControlNet、参考图链路或模型级 seed 策略。
 
-## 进入 implementation plan 前的检查点
+## Implementation Plan 锚点
 
-正式写 implementation plan 前，需要确认：
+当前 implementation plan 应遵守：
 
 1. 是否接受 `AssetPlan` 同时包含物理资产任务和 `render_motion_cue` 这种 compose 建议。
 2. `asset planning` stage enum 是否使用 `asset_planning`，以及 prompt registry 如何扩展。
 3. 第一版是否只做后端 schema/service/API，不做前端。
-4. 第一版是否需要真实 LLM prompt，还是先用结构化 stub / deterministic planner 起步。
-5. active storyboard 更新后清空 active asset plan 指针的具体范围。
+4. 第一版使用真实 LLM prompt，但只用于全局设定和 segment chunk 视觉/音效规划；TTS / 字幕任务由本地确定性生成。
+5. active script / storyboard 更新后清空 active asset plan 指针，并在长耗时生成激活前做 stale source guard。
 
 ## 参考来源
 

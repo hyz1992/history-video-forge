@@ -4,7 +4,7 @@
 
 **Goal:** Implement the first backend-only `asset planning` stage that turns an active `StoryboardPlan` into an `AssetPlan` task contract without generating physical assets.
 
-**Architecture:** The stage consumes the active storyboard, its source script, and its source topic boundary context. A formal zh-CN LLM prompt generates `AssetPlan`; a local validator only checks structure, references, dependency integrity, and source coverage. The run service validates, persists, activates, snapshots, and exposes the plan through a project-scoped API.
+**Architecture:** The stage consumes the active storyboard, its source script, and its source topic boundary context. The service locally creates deterministic TTS/subtitle task skeletons, uses a formal zh-CN LLM prompt for global art bible plus chunked visual/SFX planning, and locally merges the drafts into `AssetPlan`. A local validator only checks structure, references, dependency integrity, and source coverage. The run service validates stale source pointers before activation, persists, snapshots, and exposes the plan through a project-scoped API.
 
 **Tech Stack:** TypeScript, Zod shared schemas, Vitest, existing prompt registry, existing LLM gateway, in-memory backend repository patterns, project trace storage.
 
@@ -41,8 +41,10 @@ Follow `AGENTS.md` strictly.
 1. `AssetPlan` includes both physical asset production tasks and `render_motion_cue` compose suggestions, because render motion is part of production planning even though it does not generate files.
 2. Prompt registry stage expands to `asset_planning`.
 3. v1 is backend-only.
-4. v1 uses a formal LLM planner prompt for `ProjectArtBible` and task planning, with deterministic/stub behavior only in tests. Do not build a deterministic production planner that pretends to understand characters or art direction.
-5. New active script or new active storyboard invalidates active asset plan pointers.
+4. v1 uses a formal LLM planner prompt for `ProjectArtBible` and chunked visual/SFX planning, with deterministic/stub behavior only in tests. Do not build a deterministic production planner that pretends to understand characters or art direction.
+5. TTS and subtitle tasks are generated locally and deterministically from source script/storyboard boundaries. The LLM must not output `tts_audio` or `subtitle_track` tasks.
+6. Segment planning is chunked in groups of 2-3 storyboard segments. Chunk outputs use local temporary IDs only; the local merger owns global task IDs and cross-task dependencies.
+7. New active script or new active storyboard invalidates active asset plan pointers, and a long-running asset planning job must re-check source pointers before activation.
 
 ## Files
 
@@ -161,8 +163,56 @@ it("parses the asset planning shared contracts", () => {
     },
     tasks: [
       {
-        task_id: "img_001",
+        task_id: "tts_001",
         order: 0,
+        task_type: "tts_audio",
+        source_segment_id: null,
+        source_excerpt: "楚王把齐国使节逼到狗洞前。",
+        production_intent: "生成口播音频切片",
+        recommended_mode: "auto",
+        provider_hint: "default_tts",
+        prompt_draft: null,
+        parameters: {
+          chunk_id: "tts_001",
+          voice_profile_id: "voice_default_male_storyteller",
+        },
+        manual_upload_policy: {
+          allowed: false,
+          required: false,
+          accepted_file_types: [],
+          acceptance_notes: [],
+        },
+        risk_notes: [],
+        cost_tier: "low",
+        initial_status: "planned",
+      },
+      {
+        task_id: "subtitle_001",
+        order: 1,
+        task_type: "subtitle_track",
+        source_segment_id: null,
+        source_excerpt: "楚王把齐国使节逼到狗洞前。",
+        production_intent: "根据 TTS 时间戳生成字幕轨",
+        recommended_mode: "auto",
+        provider_hint: null,
+        prompt_draft: null,
+        parameters: {
+          format: "srt",
+          source_tts_task_id: "tts_001",
+        },
+        manual_upload_policy: {
+          allowed: false,
+          required: false,
+          accepted_file_types: [],
+          acceptance_notes: [],
+        },
+        risk_notes: [],
+        cost_tier: "free",
+        initial_status: "planned",
+      },
+      {
+        task_id: "img_001",
+        order: 2,
         task_type: "image_still",
         source_segment_id: "sb_001",
         source_excerpt: "楚王把齐国使节逼到狗洞前。",
@@ -186,7 +236,7 @@ it("parses the asset planning shared contracts", () => {
       },
       {
         task_id: "motion_001",
-        order: 1,
+        order: 3,
         task_type: "render_motion_cue",
         source_segment_id: "sb_001",
         source_excerpt: "楚王把齐国使节逼到狗洞前。",
@@ -211,6 +261,12 @@ it("parses the asset planning shared contracts", () => {
     ],
     dependencies: [
       {
+        dependency_id: "dep_subtitle_after_tts",
+        task_id: "subtitle_001",
+        depends_on_task_id: "tts_001",
+        dependency_type: "requires_timing",
+      },
+      {
         dependency_id: "dep_motion_after_image",
         task_id: "motion_001",
         depends_on_task_id: "img_001",
@@ -218,19 +274,21 @@ it("parses the asset planning shared contracts", () => {
       },
     ],
     cost_summary: {
-      total_tasks: 2,
+      total_tasks: 4,
       by_type: {
+        tts_audio: 1,
+        subtitle_track: 1,
         image_still: 1,
         render_motion_cue: 1,
       },
       by_cost_tier: {
-        free: 1,
-        low: 1,
+        free: 2,
+        low: 2,
         medium: 0,
         high: 0,
       },
-      estimated_provider_calls: 1,
-      notes: ["默认以静态图加低成本运镜为主"],
+      estimated_provider_calls: 2,
+      notes: ["TTS 与字幕任务由本地服务确定性创建；默认以静态图加低成本运镜为主"],
     },
     global_production_notes: ["不生成物理文件，只生成任务合同"],
   });
@@ -573,6 +631,9 @@ it("loads asset-planning.asset-planner from harness prompts with zh-CN metadata"
   expect(prompt.body).toContain("sfx_cue");
   expect(prompt.body).toContain("bgm_cue");
   expect(prompt.body).toContain("opening、turn、peak");
+  expect(prompt.body).toContain("不得输出 `tts_audio` 或 `subtitle_track` 任务");
+  expect(prompt.body).toContain("局部临时 ID");
+  expect(prompt.body).toContain("segment chunk");
   expect(prompt.body).toContain("不得生成图片、视频、音频、字幕或 compose 时间轴");
   expect(prompt.body).toContain("不得修改 script_text、StoryboardPlan 或 TopicPackage");
 });
@@ -656,26 +717,28 @@ status: active
 
 # 任务
 
-你是历史短视频流水线中的 asset planning planner。你的任务是生成 `AssetPlan`：把已经冻结的 `StoryboardPlan` 拆成后续 assets 阶段可以执行的资产任务清单。
+你是历史短视频流水线中的 asset planning planner。你的任务是生成可被本地 merger 合并进 `AssetPlan` 的结构化规划草稿：把已经冻结的 `StoryboardPlan` 拆成后续 assets 阶段可以执行的视觉、动效和情绪音频任务意图。
 
 `script_text`、`StoryboardPlan` 和 `TopicPackage` 都是只读输入。你不得修改 script_text、StoryboardPlan 或 TopicPackage，不得重写剧情，不得补写史实，不得回改分镜。
 
-你只生成计划对象，不得生成图片、视频、音频、字幕或 compose 时间轴。不得输出素材文件名、真实下载链接、供应商调用结果或最终剪辑时间轴。
+你只生成计划草稿，不得生成图片、视频、音频、字幕或 compose 时间轴。不得输出素材文件名、真实下载链接、供应商调用结果或最终剪辑时间轴。
 
-必须生成 `ProjectArtBible`，但它只是文本级美术一致性合同，不是模型级一致性保证。人物描述应使用服饰、身份、姿态、气质和场景关系，不要把历史人物姓名直接当成图片 prompt 主体。
+在全局模式下必须生成 `ProjectArtBible`，但它只是文本级美术一致性合同，不是模型级一致性保证。人物描述应使用服饰、身份、姿态、气质和场景关系，不要把历史人物姓名直接当成图片 prompt 主体。segment chunk 模式只能引用已生成的 `ProjectArtBible`，不得重写它。
 
 默认视觉路径是 `image_still + render_motion_cue`。只有 segment 有持续动作、静态图无法表达核心转折，或风险备注明确需要视频候选时，才规划 `video_clip`；即便规划真视频，也必须保留静态图降级说明。
 
-TTS 是最终时间轴的根。你可以规划 TTS 切片任务，但不能决定 compose 最终时间轴；最终时间轴只能由后续 assets 阶段生成的 TTS 实际音频和时间戳决定。
+TTS 是最终时间轴的根，但 TTS 和字幕任务由本地服务确定性生成。你不得输出 `tts_audio` 或 `subtitle_track` 任务，不得切分 TTS，不得切分字幕，不得决定 compose 最终时间轴；最终时间轴只能由后续 assets 阶段生成的 TTS 实际音频和时间戳决定。
+
+你会收到 `planning_mode`。在全局模式下，只输出 `ProjectArtBible`、视觉预算、降级策略和全局音频张力策略；在 `segment chunk` 模式下，只输出当前 chunk 的 `image_still`、`render_motion_cue`、少量必要 `video_clip` 候选、`sfx_cue` 和局部 `bgm_cue` 建议。segment chunk 输出只能使用局部临时 ID，不得引用其他 chunk 的 ID，也不得分配全局任务 ID。
 
 必须根据 `StoryboardSegment.narrative_role` 规划听觉张力。`opening、turn、peak` 等段落应优先插入 `sfx_cue` 音效占位任务，用本地标签库或占位参数描述鼓点、撞击、低频冲击、环境声等意图；全片或关键情绪段落应插入 `bgm_cue` 配乐占位任务。不得默认调用外部音乐生成 API，也不得把音频占位写成已经生成的真实素材。
 
-本阶段允许规划手动上传旁路：视觉类任务默认 `manual_allowed`，TTS 任务默认不允许手动上传。
+本阶段允许规划手动上传旁路：视觉类任务默认 `manual_allowed`；TTS 和字幕任务不在你的输出范围内。
 
-输出必须是合法 JSON 对象，不输出 Markdown，不输出解释文字。JSON 顶层必须是 `AssetPlan`。
+输出必须是合法 JSON 对象，不输出 Markdown，不输出解释文字。JSON 顶层必须与当前 `planning_mode` 对应，并能被本地 merger 合并成 `AssetPlan`。
 ```
 
-Include the full JSON skeleton from `AssetPlan` fields in the prompt, mirroring the storyboard prompt style. Keep it concise and avoid repeated slogans.
+Include concise JSON skeletons for global planning draft and segment chunk planning draft, mirroring the storyboard prompt style. Keep it concise and avoid repeated slogans.
 
 - [ ] **Step 5: Run prompt tests**
 
@@ -832,23 +895,34 @@ git commit -m "新增 asset planning 本地结构校验"
 
 Test that `generateAssetPlan()`:
 
-- Invokes prompt id `asset-planning.planner`.
-- Sends `storyboard`, `script`, `topic_boundary_context`, source ids, and optional regeneration context.
-- Parses and returns `AssetPlan`.
+- Builds `tts_plan`, `tts_audio` tasks, `subtitle_track` tasks, and subtitle timing dependencies locally without asking the LLM.
+- Invokes prompt id `asset-planning.planner` once with `planning_mode: "global"` to get `ProjectArtBible`, visual budget, downgrade policy, and global audio strategy.
+- Splits storyboard segments into chunks of 2-3 segments and invokes the same prompt with `planning_mode: "segment_chunk"` once per chunk.
+- Sends `storyboard`, `script`, `topic_boundary_context`, source ids, `art_bible`, budget constraints, chunk segments, and optional regeneration context as structured input.
+- Rejects any LLM draft that contains `tts_audio` or `subtitle_track` tasks.
+- Merges chunk-local IDs into globally unique `task_id` values and rewrites dependencies locally.
+- Parses and returns final `AssetPlan`.
 - Preserves source ids.
 - Does not call assets providers.
 
-Use a fake `LlmGateway` that returns a valid `AssetPlan` object.
+Use a fake `LlmGateway` that returns one global draft and multiple chunk drafts. Do not make the fake gateway return a finished `AssetPlan`; the service is responsible for final assembly.
 
 Expected test outline:
 
 ```ts
-it("invokes the LLM gateway with asset-planning.planner", async () => {
+it("builds local audio skeleton and invokes chunked planning prompts", async () => {
   const calls: Array<{ promptId: string; input: unknown }> = [];
   const gateway = {
     invokeStructuredPrompt: async (request) => {
       calls.push({ promptId: request.prompt.metadata.id, input: request.input });
-      return validAssetPlan;
+      const input = request.input as {
+        planning_mode: "global" | "segment_chunk";
+        chunk?: { segment_ids: string[] };
+      };
+      if (input.planning_mode === "global") {
+        return validGlobalPlanningDraft;
+      }
+      return validChunkPlanningDraftFor(input.chunk?.segment_ids ?? []);
     },
   } satisfies Partial<LlmGateway> as LlmGateway;
 
@@ -860,12 +934,30 @@ it("invokes the LLM gateway with asset-planning.planner", async () => {
     draft: baseScriptDraft,
     topicBoundaryContext: baseTopicBoundaryContext,
     llmGateway: gateway,
+    chunkSize: 2,
   });
 
-  expect(calls[0]?.promptId).toBe("asset-planning.planner");
+  expect(calls.map((call) => call.promptId)).toEqual([
+    "asset-planning.planner",
+    "asset-planning.planner",
+    "asset-planning.planner",
+  ]);
+  expect(calls[0]?.input).toMatchObject({ planning_mode: "global" });
+  expect(calls[1]?.input).toMatchObject({ planning_mode: "segment_chunk" });
   expect(plan.plan_version).toBe("asset_plan_v1");
+  expect(plan.tts_plan.chunks.length).toBeGreaterThan(0);
+  expect(plan.tasks.some((task) => task.task_type === "tts_audio")).toBe(true);
+  expect(plan.tasks.some((task) => task.task_type === "subtitle_track")).toBe(true);
 });
 ```
+
+Add focused tests for:
+
+- LLM global draft is not allowed to include asset tasks.
+- LLM chunk draft is rejected if it includes `tts_audio` or `subtitle_track`.
+- Chunk-local dependencies cannot reference IDs from another chunk.
+- `video_clip` chunk drafts must include a static fallback reference or produce a validation failure after merge.
+- Image budget defaults to one anchor image per segment and only allows support images when the draft includes an explicit reason.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -903,6 +995,7 @@ export interface GenerateAssetPlanInput {
   };
   llmGateway?: LlmGateway;
   interactionLogWriter?: LlmInteractionLogWriter;
+  chunkSize?: number;
   regenerationContext?: {
     reason: "asset_planning_local_validation_regen_once";
     errors: string[];
@@ -916,8 +1009,26 @@ Implementation requirements:
 - Use `createPromptRegistry().getPrompt("asset-planning.asset-planner")`.
 - Use `createLlmGateway()` when no gateway is provided.
 - Pass structured input; do not concatenate JSON into prompt text.
-- Parse with `AssetPlan.parse()`.
-- Allow wrapped outputs `{ AssetPlan: { ... } }` only as a safe unwrap, matching storyboard generation compatibility.
+- Define private Zod schemas inside the generation service for:
+  - global planning draft: `ProjectArtBible`, visual budget, downgrade policy, global audio strategy, manual review notes.
+  - segment chunk draft: visual tasks, motion cues, SFX cues, local BGM suggestions, local dependencies.
+- Build TTS locally before LLM chunk planning:
+  - derive `tts_plan.chunks` from source `script_text` and storyboard segment/script boundaries.
+  - create one or more `tts_audio` tasks locally.
+  - create `subtitle_track` tasks locally and add `requires_timing` dependencies to TTS tasks.
+  - never accept `tts_audio` or `subtitle_track` from LLM outputs.
+- Call the LLM once with `planning_mode: "global"`.
+- Split storyboard segments into chunk arrays of default size 2, max size 3.
+- Call the LLM once per chunk with `planning_mode: "segment_chunk"`, passing the global `art_bible`, visual budget, audio strategy, source ids, and only that chunk's segments.
+- Require chunk drafts to use local temporary IDs only.
+- Reject chunk drafts that reference local IDs outside their own chunk.
+- Merge locally:
+  - assign global `task_id` values.
+  - rewrite dependencies from local IDs to global IDs.
+  - attach tasks to source storyboard segment ids.
+  - merge global BGM strategy and local BGM suggestions into final `bgm_cue` placeholders.
+  - compute `cost_summary`.
+- Parse the assembled object with `AssetPlan.parse()`.
 - Do not call image/video/TTS/assets providers.
 
 - [ ] **Step 4: Run generation tests**
@@ -1192,6 +1303,7 @@ Test `POST /api/projects/:projectId/asset-plan/generate`:
   - `runtime_diagnostics`
 - Success sets project status to `asset_plan_ready`.
 - Failed local validation returns `422 asset_plan_local_validation_failed` and does not activate a new asset plan.
+- If the active storyboard or its source script changes while generation is running, returns `409 stale_asset_plan_source` and does not activate the stale result.
 
 - [ ] **Step 2: Run API tests to verify they fail**
 
@@ -1215,10 +1327,13 @@ load source ScriptRecord
 load source TopicPackage
 build ScriptDraftPackage from ScriptRecord
 build topic boundary context
-generate AssetPlan
+capture active storyboard/script source pointers
+generate AssetPlan with local TTS/subtitle skeleton + global LLM planning + chunked segment planning + local merge
 validate AssetPlan
 if validation decision is regen_once -> regenerate once with validation context
 if final decision !== pass -> return 422 without saving active asset plan
+reload project and active storyboard
+if active storyboard/script source pointers changed during generation -> return 409 stale_asset_plan_source without activating old result
 save AssetPlanRecord
 set project.activeAssetPlanRecordId
 set project.latestAssetPlanRunTraceJson
@@ -1230,12 +1345,17 @@ return response
 Trace summary first version:
 
 - `asset-planning-generate`
+- `asset-planning-local-audio-skeleton`
+- `asset-planning-global-plan`
+- `asset-planning-segment-chunk-plan`
+- `asset-planning-local-merge`
 - `asset-planning-local-validate`
 
 Runtime diagnostics first version:
 
 - `asset_planning_local_validation_passed`
 - `asset_planning_regen_once`
+- `asset_planning_stale_source_detected`
 - failure error codes from validator
 
 - [ ] **Step 4: Implement route and register app**
