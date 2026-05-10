@@ -83,6 +83,10 @@ function normalizeStoryboardPlan(
     typeof record.storyboard_plan === "object" &&
     !Array.isArray(record.storyboard_plan)
       ? (record.storyboard_plan as Record<string, unknown>)
+      : record.StoryboardPlan &&
+          typeof record.StoryboardPlan === "object" &&
+          !Array.isArray(record.StoryboardPlan)
+        ? (record.StoryboardPlan as Record<string, unknown>)
       : record;
 
   return {
