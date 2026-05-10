@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   ScriptDraftPackage,
   ScriptInputBundle,
+  ScriptSemanticReviewResult,
   ScriptValidationResult,
   StoryboardPlan,
   StoryboardValidationResult,
@@ -142,7 +143,7 @@ describe("shared schema contracts", () => {
       },
     });
 
-    const semanticReview = ScriptValidationResult.parse({
+    const semanticReview = ScriptSemanticReviewResult.parse({
       stage: "script_semantic_review",
       decision: "patch_once",
       patch_intent: "lift",

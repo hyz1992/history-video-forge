@@ -33,6 +33,9 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
   const scriptRecord = project.activeScriptRecordId
     ? db.scriptRecords.get(project.activeScriptRecordId) ?? null
     : null;
+  const storyboardRecord = project.activeStoryboardRecordId
+    ? db.storyboardRecords.get(project.activeStoryboardRecordId) ?? null
+    : null;
   const latestProjectScriptRecord = [...db.scriptRecords.values()]
     .filter((record) => record.projectId === project.id)
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
@@ -40,6 +43,17 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
   const latestScriptTrace =
     (project.latestScriptRunTraceJson as Record<string, unknown> | null | undefined) ??
     (latestProjectScriptRecord?.graphTraceSummaryJson as Record<string, unknown> | null | undefined) ??
+    null;
+  const latestProjectStoryboardRecord = [...db.storyboardRecords.values()]
+    .filter((record) => record.projectId === project.id)
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .at(0) ?? null;
+  const latestStoryboardTrace =
+    (project.latestStoryboardRunTraceJson as Record<string, unknown> | null | undefined) ??
+    (latestProjectStoryboardRecord?.graphTraceSummaryJson as
+      | Record<string, unknown>
+      | null
+      | undefined) ??
     null;
 
   return {
@@ -58,6 +72,7 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
         project.latestTopicRunTraceJson as Record<string, unknown> | null | undefined,
       ),
       latest_script_run: summarizeTraceRun(latestScriptTrace),
+      latest_storyboard_run: summarizeTraceRun(latestStoryboardTrace),
     },
     active_topic_package: topicRecord
       ? {
@@ -92,6 +107,19 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
           },
           graph_trace_summary: scriptRecord.graphTraceSummaryJson,
           runtime_diagnostics: scriptRecord.runtimeDiagnosticsJson,
+        }
+      : null,
+    active_storyboard: storyboardRecord
+      ? {
+          storyboard_record_id: storyboardRecord.id,
+          source_script_record_id: storyboardRecord.scriptRecordId,
+          plan: storyboardRecord.planJson,
+          local_validation: storyboardRecord.validationResultJson,
+          execution_state: storyboardRecord.executionStateJson ?? {
+            regenerate_used: false,
+          },
+          graph_trace_summary: storyboardRecord.graphTraceSummaryJson,
+          runtime_diagnostics: storyboardRecord.runtimeDiagnosticsJson,
         }
       : null,
   };

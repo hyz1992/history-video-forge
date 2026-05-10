@@ -15,8 +15,11 @@ export interface ProjectStorageProfile {
   trace_dir: string;
   topic_runs_dir: string;
   script_runs_dir: string;
+  storyboard_runs_dir: string;
   rename_locked: boolean;
 }
+
+type ProjectRunPhase = "topic" | "script" | "storyboard";
 
 const workspaceRoot = resolve(fileURLToPath(new URL("../../../../", import.meta.url)));
 
@@ -59,12 +62,16 @@ function writeJsonFile(filePath: string, payload: unknown) {
 
 function ensureRunDir(input: {
   project: ProjectRecord;
-  phase: "topic" | "script";
+  phase: ProjectRunPhase;
   runId: string;
 }) {
   const profile = ensureProjectStorageStructure(input.project);
   const runRootDir =
-    input.phase === "topic" ? profile.topic_runs_dir : profile.script_runs_dir;
+    input.phase === "topic"
+      ? profile.topic_runs_dir
+      : input.phase === "script"
+        ? profile.script_runs_dir
+        : profile.storyboard_runs_dir;
   const runDir = resolveStoragePath(`${runRootDir}/${input.runId}`);
 
   mkdirSync(runDir, {
@@ -95,6 +102,7 @@ export function createProjectStorageProfile(input: {
     trace_dir: `${rootDir}/trace`,
     topic_runs_dir: `${rootDir}/trace/topic-runs`,
     script_runs_dir: `${rootDir}/trace/script-runs`,
+    storyboard_runs_dir: `${rootDir}/trace/storyboard-runs`,
     rename_locked: input.renameLocked ?? false,
   };
 }
@@ -171,6 +179,7 @@ export function getProjectStorageProfile(project: ProjectRecord): ProjectStorage
     trace_dir: `${rootDir}/trace`,
     topic_runs_dir: `${rootDir}/trace/topic-runs`,
     script_runs_dir: `${rootDir}/trace/script-runs`,
+    storyboard_runs_dir: `${rootDir}/trace/storyboard-runs`,
     rename_locked: project.storageRenameLocked,
   };
 }
@@ -183,6 +192,7 @@ export function ensureProjectStorageStructure(project: ProjectRecord) {
     profile.trace_dir,
     profile.topic_runs_dir,
     profile.script_runs_dir,
+    profile.storyboard_runs_dir,
   ]) {
     mkdirSync(resolveStoragePath(directoryPath), {
       recursive: true,
@@ -194,7 +204,7 @@ export function ensureProjectStorageStructure(project: ProjectRecord) {
 
 export function persistProjectRunArtifacts(input: {
   project: ProjectRecord;
-  phase: "topic" | "script";
+  phase: ProjectRunPhase;
   runId: string;
   traceSummary: Record<string, unknown>;
   runtimeDiagnostics?: Record<string, unknown> | null;
@@ -211,7 +221,7 @@ export function persistProjectRunArtifacts(input: {
 
 export function createProjectRunInteractionLogWriter(input: {
   project: ProjectRecord;
-  phase: "topic" | "script";
+  phase: ProjectRunPhase;
   runId: string;
 }): LlmInteractionLogWriter {
   const runDir = ensureRunDir(input);

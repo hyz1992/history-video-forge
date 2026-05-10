@@ -653,6 +653,57 @@ ${JSON.stringify(runtimeDraft)}
     expect(logContent).toContain("晏子使楚");
   });
 
+  it("clears stale active storyboard pointers after activating a new script", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Script Clears Storyboard",
+    });
+    const topicPackageRecord = await saveTopicPackage(db, {
+      projectId: project.id,
+      title: "Storyboard stale pointer topic",
+      selectedAngle: topicPackage.selected_angle,
+      familyLabel: topicPackage.family_label,
+      scopeLabel: topicPackage.scope_label,
+      coreConflict: topicPackage.core_conflict,
+      strongScene: topicPackage.strong_scene,
+      stakes: topicPackage.stakes,
+      packagingSeed: topicPackage.packaging_seed,
+      canonicalQuotesJson: [],
+      durationBandJson: {
+        label: "medium",
+        min_sec: 75,
+        max_sec: 95,
+      },
+      narrativeTensionMapJson: topicPackage.narrative_tension_map,
+      mustIncludeBeatsJson: topicPackage.must_include_beats,
+      forbiddenExpansionsJson: topicPackage.forbidden_expansions,
+      riskHintsJson: topicPackage.risk_hints,
+      sourceAnchorRefsJson: topicPackage.source_anchor_refs,
+      ambiguityNotesJson: [],
+    });
+    project.activeTopicPackageId = topicPackageRecord.id;
+    project.activeStoryboardRecordId = "storyboard_record_old";
+    project.latestStoryboardRunTraceJson = {
+      phase: "storyboard",
+      run_id: "storyboard_run_old",
+      steps: [],
+    };
+    project.status = "storyboard_ready";
+
+    const response = await runScriptGeneration({
+      db,
+      project,
+      allowPatch: false,
+      allowRegen: false,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(project.status).toBe("script_ready");
+    expect(project.activeScriptRecordId).toBeTypeOf("string");
+    expect(project.activeStoryboardRecordId).toBeNull();
+    expect(project.latestStoryboardRunTraceJson).toBeNull();
+  });
+
   it("returns real semantic reviewer output in shadow mode without entering patch", async () => {
     const db = createDbClient();
     const project = await createProject(db, {

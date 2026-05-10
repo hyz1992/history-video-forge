@@ -4,6 +4,7 @@ import { createDbClient } from "../../../backend/src/db/client.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import { getProjectSnapshot } from "../../../backend/src/modules/projects/project-snapshot.service.js";
 import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository.js";
+import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/storyboard-record.repository.js";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
 
 describe("project snapshot service", () => {
@@ -200,6 +201,161 @@ describe("project snapshot service", () => {
         phase: "script",
         step_count: 3,
         latest_step: "semantic-review",
+      },
+    });
+  });
+
+  it("restores active storyboard and latest storyboard trace summary", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Storyboard Snapshot",
+    });
+    const topicPackage = await saveTopicPackage(db, {
+      projectId: project.id,
+      title: "Storyboard Topic",
+      selectedAngle: "A public answer reverses the pressure.",
+      familyLabel: "diplomacy",
+      scopeLabel: "single_event",
+      coreConflict: "The envoy must answer in front of everyone.",
+      strongScene: "The hall falls quiet after the answer.",
+      packagingSeed: "One sentence changes the room.",
+      durationBandJson: {
+        label: "medium",
+      },
+      narrativeTensionMapJson: {
+        hook_claim: "A public pressure scene begins.",
+        pressure_escalation: "The insult keeps rising.",
+        mid_reveal: "The answer is guarding the state's face.",
+        peak_payoff: "The reply reverses the pressure.",
+        ending_residue: "Retreat would cost more than silence.",
+      },
+    });
+    const scriptRecord = await saveScriptRecord(db, {
+      projectId: project.id,
+      topicPackageId: topicPackage.id,
+      scriptText:
+        "Opening pressure. The envoy answers in public. The room goes quiet. The ending leaves a cost.",
+      openingSpan: "Opening pressure.",
+      endingSpan: "The ending leaves a cost.",
+      estimatedDurationSec: 82,
+      beatTraceJson: [],
+      quoteTraceJson: [],
+      reviewStatus: "pass",
+      validationResultJson: {
+        stage: "script_local_validation",
+        decision: "pass",
+      },
+      semanticReviewResultJson: {
+        stage: "script_semantic_review",
+        decision: "pass",
+        patch_intent: null,
+      },
+      executionStateJson: {
+        patch_used: false,
+        regenerate_used: false,
+      },
+    });
+    const storyboardTrace = {
+      phase: "storyboard",
+      run_id: "storyboard_run_snapshot_1",
+      steps: [
+        {
+          step_name: "storyboard-generate",
+          phase: "storyboard",
+          status: "succeeded",
+        },
+        {
+          step_name: "local-validate",
+          phase: "storyboard",
+          status: "succeeded",
+        },
+      ],
+    };
+    const storyboardRecord = await saveStoryboardRecord(db, {
+      projectId: project.id,
+      topicPackageId: topicPackage.id,
+      scriptRecordId: scriptRecord.id,
+      planJson: {
+        storyboard_id: "storyboard_plan_snapshot_1",
+        source_script_record_id: scriptRecord.id,
+        segments: [
+          {
+            segment_id: "seg_001",
+            start_sec: 0,
+            end_sec: 8,
+            script_excerpt: "Opening pressure.",
+            scene_description: "A tense public hall.",
+            visual_intent: "faces under pressure",
+            camera_plan: "slow push-in",
+            on_screen_text: null,
+            asset_brief: "court hall",
+            continuity_notes: [],
+            trace_refs: ["opening_span"],
+          },
+        ],
+      },
+      validationResultJson: {
+        stage: "storyboard_local_validation",
+        decision: "pass",
+        errors: [],
+        warnings: [],
+        metrics: {
+          segment_count: 1,
+        },
+      },
+      executionStateJson: {
+        regenerate_used: false,
+      },
+      graphTraceSummaryJson: storyboardTrace,
+      runtimeDiagnosticsJson: {
+        checks: [
+          {
+            code: "storyboard_local_validation_passed",
+            level: "info",
+          },
+        ],
+      },
+    });
+
+    project.activeTopicPackageId = topicPackage.id;
+    project.activeScriptRecordId = scriptRecord.id;
+    project.activeStoryboardRecordId = storyboardRecord.id;
+    project.latestStoryboardRunTraceJson = storyboardTrace;
+    project.status = "storyboard_ready";
+
+    const snapshot = await getProjectSnapshot(db, project.id);
+
+    expect(snapshot).toMatchObject({
+      project_id: project.id,
+      current_status: "storyboard_ready",
+      restore_route: `/projects/${project.id}/script`,
+      active_storyboard: {
+        storyboard_record_id: storyboardRecord.id,
+        source_script_record_id: scriptRecord.id,
+        local_validation: {
+          stage: "storyboard_local_validation",
+          decision: "pass",
+        },
+        execution_state: {
+          regenerate_used: false,
+        },
+        graph_trace_summary: storyboardTrace,
+        runtime_diagnostics: {
+          checks: [
+            {
+              code: "storyboard_local_validation_passed",
+              level: "info",
+            },
+          ],
+        },
+      },
+      trace_summary: {
+        latest_storyboard_run: {
+          run_id: "storyboard_run_snapshot_1",
+          phase: "storyboard",
+          step_count: 2,
+          latest_step: "local-validate",
+        },
       },
     });
   });

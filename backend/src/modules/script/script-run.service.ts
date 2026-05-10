@@ -165,20 +165,23 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
     validationResultJson: localValidation as Record<string, unknown>,
     semanticReviewResultJson: semanticReview as Record<string, unknown>,
     executionStateJson: executionState,
-    graphTraceSummaryJson: graphTraceSummary as Record<string, unknown>,
-    runtimeDiagnosticsJson: runtimeDiagnostics as Record<string, unknown>,
+    graphTraceSummaryJson: graphTraceSummary as unknown as Record<string, unknown>,
+    runtimeDiagnosticsJson: runtimeDiagnostics as unknown as Record<string, unknown>,
   });
 
   input.project.activeScriptRecordId = scriptRecord.id;
-  input.project.latestScriptRunTraceJson = graphTraceSummary as Record<string, unknown>;
+  input.project.activeStoryboardRecordId = null;
+  input.project.latestScriptRunTraceJson =
+    graphTraceSummary as unknown as Record<string, unknown>;
+  input.project.latestStoryboardRunTraceJson = null;
   input.project.status = "script_ready";
   input.project.updatedAt = new Date();
   persistProjectRunArtifacts({
     project: input.project,
     phase: "script",
     runId,
-    traceSummary: graphTraceSummary as Record<string, unknown>,
-    runtimeDiagnostics: runtimeDiagnostics as Record<string, unknown>,
+    traceSummary: graphTraceSummary as unknown as Record<string, unknown>,
+    runtimeDiagnostics: runtimeDiagnostics as unknown as Record<string, unknown>,
   });
 
   return {
