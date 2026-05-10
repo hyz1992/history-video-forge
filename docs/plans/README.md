@@ -14,6 +14,7 @@
   - [Storyboard Stage Design](./2026-05-09-storyboard-stage-design.md)
   - [Storyboard Stage Implementation Plan](./2026-05-09-storyboard-stage-implementation-plan.md)
   - [Asset Planning Stage Design](./2026-05-10-asset-planning-stage-design.md)
+  - [Asset Planning Stage Implementation Plan](./2026-05-10-asset-planning-stage-implementation-plan.md)
   - [Asset Planning Design Guidelines](./2026-05-10-asset-planning-design-guidelines.md)（参考资料，不是 implementation plan）
 - 既有 topic/script/harness/UI acceptance 计划已归档到 [archive/topic-script](./archive/topic-script/)。
 - archive 中的计划只作为历史证据和追溯材料，不是当前任务入口。
