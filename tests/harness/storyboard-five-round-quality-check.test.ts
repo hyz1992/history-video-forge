@@ -160,6 +160,9 @@ describe("storyboard five round quality check", () => {
     expect(plan.required_checks).toContain(
       "默认 5 轮分别读取 5 个不同主题的高质量 script 产物，不重新运行 topic 或 script。",
     );
+    expect(plan.required_checks).toContain(
+      "真实 storyboard live check 建议显式设置 LLM_TIMEOUT_MS=240000；该参数只用于人工巡检运行，不改变默认自动化 gate。",
+    );
   });
 
   it("runs five storyboard planning rounds and writes reviewable artifacts", async () => {
@@ -263,6 +266,8 @@ describe("storyboard five round quality check", () => {
     const readme = readFileSync("harness/README.md", "utf8");
     expect(readme).toContain("harness:storyboard-five-round-quality-check");
     expect(readme).toContain("5 个不同主题的高质量 script 产物");
+    expect(readme).toContain("LLM_TIMEOUT_MS=240000");
+    expect(readme).toContain("只作为 storyboard live check 的显式运行参数");
   });
 
   it("accepts positional output directory and explicit source directory", () => {

@@ -234,6 +234,15 @@ npm run harness:storyboard-five-round-quality-check
 
 该命令默认固定读取 5 个不同主题的高质量 script 产物作为输入，顺序执行 5 轮 storyboard planning。它不重新运行 topic 或 script，不进入 asset planning、assets、compose，也不生成镜头级 shot list。
 
+真实 storyboard planning 调用可能超过默认 LLM 请求超时。人工巡检时建议显式设置：
+
+```powershell
+$env:LLM_TIMEOUT_MS='240000'
+npm run harness:storyboard-five-round-quality-check
+```
+
+`LLM_TIMEOUT_MS=240000` 只作为 storyboard live check 的显式运行参数，用于降低真实模型慢响应导致的巡检中断；它不改变默认自动化 gate，也不改变 topic/script 或 storyboard 主链路语义。
+
 默认输入：
 
 - `harness/scripts/runtime/output/2026-05-09-script-writer-duration-pacing-scene-density-five-round/yanzi-shichu`

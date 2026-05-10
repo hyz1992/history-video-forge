@@ -120,6 +120,7 @@ export function buildStoryboardFiveRoundQualityCheckPlan(
       "默认 5 轮分别读取 5 个不同主题的高质量 script 产物，不重新运行 topic 或 script。",
       "只观察 storyboard planning 的稳定性、覆盖率、段落切分与视觉计划质量。",
       "不执行 asset planning、assets、compose，也不生成镜头级 shot list。",
+      "真实 storyboard live check 建议显式设置 LLM_TIMEOUT_MS=240000；该参数只用于人工巡检运行，不改变默认自动化 gate。",
     ],
   };
 }
