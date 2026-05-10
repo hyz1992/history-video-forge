@@ -569,6 +569,10 @@ it("loads asset-planning.asset-planner from harness prompts with zh-CN metadata"
   );
   expect(prompt.body).toContain("AssetPlan");
   expect(prompt.body).toContain("ProjectArtBible");
+  expect(prompt.body).toContain("根据 `StoryboardSegment.narrative_role` 规划听觉张力");
+  expect(prompt.body).toContain("sfx_cue");
+  expect(prompt.body).toContain("bgm_cue");
+  expect(prompt.body).toContain("opening、turn、peak");
   expect(prompt.body).toContain("不得生成图片、视频、音频、字幕或 compose 时间轴");
   expect(prompt.body).toContain("不得修改 script_text、StoryboardPlan 或 TopicPackage");
 });
@@ -663,6 +667,8 @@ status: active
 默认视觉路径是 `image_still + render_motion_cue`。只有 segment 有持续动作、静态图无法表达核心转折，或风险备注明确需要视频候选时，才规划 `video_clip`；即便规划真视频，也必须保留静态图降级说明。
 
 TTS 是最终时间轴的根。你可以规划 TTS 切片任务，但不能决定 compose 最终时间轴；最终时间轴只能由后续 assets 阶段生成的 TTS 实际音频和时间戳决定。
+
+必须根据 `StoryboardSegment.narrative_role` 规划听觉张力。`opening、turn、peak` 等段落应优先插入 `sfx_cue` 音效占位任务，用本地标签库或占位参数描述鼓点、撞击、低频冲击、环境声等意图；全片或关键情绪段落应插入 `bgm_cue` 配乐占位任务。不得默认调用外部音乐生成 API，也不得把音频占位写成已经生成的真实素材。
 
 本阶段允许规划手动上传旁路：视觉类任务默认 `manual_allowed`，TTS 任务默认不允许手动上传。
 
