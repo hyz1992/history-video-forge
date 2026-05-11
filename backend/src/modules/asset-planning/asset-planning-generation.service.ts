@@ -225,7 +225,7 @@ async function mapWithConcurrency<TInput, TOutput>(
 
 function normalizeChunkConcurrency(value: number | undefined) {
   if (value === undefined || !Number.isFinite(value)) {
-    return 2;
+    return 4;
   }
 
   return Math.min(4, Math.max(1, Math.floor(value)));
@@ -296,8 +296,8 @@ function buildChunkPromptInput(
     visual_budget: globalDraft.visual_budget,
     downgrade_policy: globalDraft.downgrade_policy,
     global_audio_strategy: globalDraft.global_audio_strategy,
-    storyboard_outline: buildStoryboardOutline(input.storyboard),
-    script_context: buildChunkScriptContext(input.draft, segments),
+    storyboard: input.storyboard,
+    draft: input.draft,
     chunk: {
       chunk_id: `chunk_${String(chunkIndex + 1).padStart(3, "0")}`,
       segment_ids: segmentIds,
@@ -305,35 +305,6 @@ function buildChunkPromptInput(
     },
     regeneration_context: input.regenerationContext ?? null,
   };
-}
-
-function buildStoryboardOutline(storyboard: StoryboardPlan) {
-  return storyboard.segments.map((segment) => ({
-    segment_id: segment.segment_id,
-    order: segment.order,
-    narrative_role: segment.narrative_role,
-    brief: truncateText(segment.visual_intent || segment.scene_description, 80),
-  }));
-}
-
-function buildChunkScriptContext(
-  draft: ScriptDraftPackage,
-  segments: StoryboardPlan["segments"],
-) {
-  return {
-    estimated_duration_sec: draft.estimated_duration_sec,
-    chunk_excerpt: segments.map((segment) => segment.script_excerpt).join("\n"),
-    opening_excerpt: truncateText(draft.opening_span, 120),
-    ending_excerpt: truncateText(draft.ending_span, 120),
-  };
-}
-
-function truncateText(value: string, maxLength: number) {
-  if (value.length <= maxLength) {
-    return value;
-  }
-
-  return value.slice(0, maxLength);
 }
 
 function buildLocalAudioSkeleton(input: GenerateAssetPlanInput) {

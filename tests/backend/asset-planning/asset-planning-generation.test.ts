@@ -376,13 +376,13 @@ describe("generateAssetPlan", () => {
     );
   });
 
-  it("runs segment chunk planning with bounded concurrency by default", async () => {
+  it("runs up to four segment chunk planning calls concurrently by default", async () => {
     const startedChunks: string[] = [];
-    let releaseFirstChunk!: () => void;
-    const firstChunkGate = new Promise<void>((resolve) => {
-      releaseFirstChunk = resolve;
+    let releaseChunks!: () => void;
+    const chunkGate = new Promise<void>((resolve) => {
+      releaseChunks = resolve;
     });
-    const storyboard = makeStoryboardWithSegmentCount(4);
+    const storyboard = makeStoryboardWithSegmentCount(5);
     const { gateway } = makeGateway(async (options) => {
       const input = options.input as {
         planning_mode: "global" | "segment_chunk";
@@ -393,9 +393,7 @@ describe("generateAssetPlan", () => {
       }
 
       startedChunks.push(input.chunk?.chunk_id ?? "missing_chunk_id");
-      if (input.chunk?.chunk_id === "chunk_001") {
-        await firstChunkGate;
-      }
+      await chunkGate;
 
       return validChunkPlanningDraftFor(input.chunk?.segment_ids ?? [], storyboard);
     });
@@ -407,11 +405,18 @@ describe("generateAssetPlan", () => {
 
     let waitError: unknown = null;
     try {
-      await waitUntil(() => startedChunks.includes("chunk_002"));
+      await waitUntil(() => startedChunks.length === 4);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(startedChunks).toEqual([
+        "chunk_001",
+        "chunk_002",
+        "chunk_003",
+        "chunk_004",
+      ]);
     } catch (error) {
       waitError = error;
     } finally {
-      releaseFirstChunk();
+      releaseChunks();
     }
 
     const plan = await running;
@@ -424,7 +429,7 @@ describe("generateAssetPlan", () => {
       plan.tasks
         .filter((task) => task.task_type === "image_still")
         .map((task) => task.source_segment_id),
-    ).toEqual(["sb_001", "sb_002", "sb_003", "sb_004"]);
+    ).toEqual(["sb_001", "sb_002", "sb_003", "sb_004", "sb_005"]);
   });
 
   it("keeps chunk planning serial when chunkConcurrency is 1", async () => {
@@ -577,33 +582,16 @@ describe("generateAssetPlan", () => {
       visual_budget: validGlobalPlanningDraft.visual_budget,
       downgrade_policy: validGlobalPlanningDraft.downgrade_policy,
       global_audio_strategy: validGlobalPlanningDraft.global_audio_strategy,
-      storyboard_outline: expect.arrayContaining([
-        expect.objectContaining({
-          segment_id: "sb_001",
-          order: 0,
-          narrative_role: "opening",
-          brief: expect.any(String),
-        }),
-      ]),
-      script_context: expect.objectContaining({
-        estimated_duration_sec: baseScriptDraft.estimated_duration_sec,
-        chunk_excerpt: expect.stringContaining(
-          baseStoryboardPlan.segments[0].script_excerpt,
-        ),
-        opening_excerpt: expect.any(String),
-        ending_excerpt: expect.any(String),
-      }),
+      storyboard: baseStoryboardPlan,
+      draft: baseScriptDraft,
       chunk: {
         chunk_id: "chunk_001",
         segment_ids: ["sb_001", "sb_002"],
         segments: baseStoryboardPlan.segments.slice(0, 2),
       },
     });
-    expect(calls[1]?.input).not.toHaveProperty("storyboard");
-    expect(calls[1]?.input).not.toHaveProperty("draft");
-    expect(JSON.stringify(calls[1]?.input)).not.toContain(
-      baseScriptDraft.script_text,
-    );
+    expect(calls[1]?.input).not.toHaveProperty("storyboard_outline");
+    expect(calls[1]?.input).not.toHaveProperty("script_context");
   });
 
   it("rejects global drafts that include asset tasks", async () => {
