@@ -158,6 +158,30 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("不得输出素材生成任务");
   });
 
+  it("loads asset-planning.asset-planner from harness prompts with zh-CN metadata", () => {
+    const registry = createPromptRegistry();
+
+    const prompt = registry.getPrompt("asset-planning.asset-planner");
+
+    expect(prompt.metadata.id).toBe("asset-planning.planner");
+    expect(prompt.metadata.stage).toBe("asset_planning");
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.filePath.replace(/\\/g, "/")).toContain(
+      "/harness/prompts/asset-planning/",
+    );
+    expect(prompt.body).toContain("AssetPlan");
+    expect(prompt.body).toContain("ProjectArtBible");
+    expect(prompt.body).toContain("根据 `StoryboardSegment.narrative_role` 规划听觉张力");
+    expect(prompt.body).toContain("sfx_cue");
+    expect(prompt.body).toContain("bgm_cue");
+    expect(prompt.body).toContain("opening、turn、peak");
+    expect(prompt.body).toContain("不得输出 `tts_audio` 或 `subtitle_track` 任务");
+    expect(prompt.body).toContain("局部临时 ID");
+    expect(prompt.body).toContain("segment chunk");
+    expect(prompt.body).toContain("不得生成图片、视频、音频、字幕或 compose 时间轴");
+    expect(prompt.body).toContain("不得修改 script_text、StoryboardPlan 或 TopicPackage");
+  });
+
   it("guides storyboard planning quality through prompt constraints instead of local semantic validation", () => {
     const prompt = createPromptRegistry().getPrompt("storyboard.storyboard-planner");
 

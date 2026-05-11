@@ -122,4 +122,28 @@ status: active
 
     expect(issues).toEqual([]);
   });
+
+  it("允许 asset planning prompt 使用 asset_planning stage 并匹配目录", () => {
+    const content = `---
+id: asset-planning.planner
+stage: asset_planning
+language: zh-CN
+consumes:
+  - StoryboardPlan
+produces:
+  - AssetPlan
+status: active
+---
+
+# 任务
+
+生成 AssetPlan。`;
+
+    const issues = validatePromptContent(
+      "harness/prompts/asset-planning/asset-planner.prompt.md",
+      content,
+    );
+
+    expect(issues).toEqual([]);
+  });
 });

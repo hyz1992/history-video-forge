@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-export type PromptStage = "topic" | "script" | "storyboard";
+export type PromptStage = "topic" | "script" | "storyboard" | "asset_planning";
 export type PromptStatus = "active" | "draft" | "deprecated";
 
 export interface PromptMetadata {
@@ -51,7 +51,7 @@ export function buildPromptFileAlias(
   stage: string,
 ): string {
   const basename = path.basename(filePath).replace(/\.prompt\.md$/u, "");
-  return `${stage}.${basename}`;
+  return `${promptStageAliasPrefix(stage)}.${basename}`;
 }
 
 function parseFrontmatter(source: string): ParsedFrontmatter {
@@ -131,7 +131,12 @@ function readStringArrayField(
 }
 
 function asPromptStage(value: string): PromptStage {
-  if (value === "topic" || value === "script" || value === "storyboard") {
+  if (
+    value === "topic" ||
+    value === "script" ||
+    value === "storyboard" ||
+    value === "asset_planning"
+  ) {
     return value;
   }
 
@@ -144,4 +149,12 @@ function asPromptStatus(value: string): PromptStatus {
   }
 
   throw new Error(`Unsupported prompt status: ${value}`);
+}
+
+function promptStageAliasPrefix(stage: string): string {
+  if (stage === "asset_planning") {
+    return "asset-planning";
+  }
+
+  return stage;
 }
