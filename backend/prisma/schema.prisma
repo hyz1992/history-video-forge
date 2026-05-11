@@ -14,12 +14,15 @@ model Project {
   active_topic_package_id String?
   active_script_record_id String?
   active_storyboard_record_id String?
+  active_asset_plan_record_id String?
+  latest_asset_plan_run_trace_json Json?
   created_at              DateTime @default(now())
   updated_at              DateTime @updatedAt
 
   topic_packages TopicPackage[]
   script_records ScriptRecord[]
   storyboard_records StoryboardRecord[]
+  asset_plan_records AssetPlanRecord[]
 }
 
 model EventRegistryEntry {
@@ -60,6 +63,7 @@ model TopicPackage {
   event_registry_entry EventRegistryEntry? @relation(fields: [event_registry_entry_id], references: [id])
   script_records       ScriptRecord[]
   storyboard_records   StoryboardRecord[]
+  asset_plan_records   AssetPlanRecord[]
 }
 
 model RecommendationCandidateCache {
@@ -99,6 +103,7 @@ model ScriptRecord {
   project       Project      @relation(fields: [project_id], references: [id])
   topic_package TopicPackage @relation(fields: [topic_package_id], references: [id])
   storyboard_records StoryboardRecord[]
+  asset_plan_records AssetPlanRecord[]
 }
 
 model StoryboardRecord {
@@ -116,4 +121,24 @@ model StoryboardRecord {
   project       Project      @relation(fields: [project_id], references: [id])
   topic_package TopicPackage @relation(fields: [topic_package_id], references: [id])
   script_record ScriptRecord @relation(fields: [script_record_id], references: [id])
+  asset_plan_records AssetPlanRecord[]
+}
+
+model AssetPlanRecord {
+  id                       String   @id @default(cuid())
+  project_id               String
+  topic_package_id         String
+  script_record_id         String
+  storyboard_record_id     String
+  plan_json                Json
+  validation_result_json   Json
+  execution_state_json     Json
+  graph_trace_summary_json Json?
+  runtime_diagnostics_json Json?
+  created_at               DateTime @default(now())
+
+  project           Project          @relation(fields: [project_id], references: [id])
+  topic_package     TopicPackage     @relation(fields: [topic_package_id], references: [id])
+  script_record     ScriptRecord     @relation(fields: [script_record_id], references: [id])
+  storyboard_record StoryboardRecord @relation(fields: [storyboard_record_id], references: [id])
 }

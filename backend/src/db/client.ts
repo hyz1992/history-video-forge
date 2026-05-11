@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
 
+import type {
+  AssetPlan,
+  AssetPlanningValidationResult,
+} from "../../../shared/src/index.js";
+
 export interface ProjectRecord {
   id: string;
   name: string;
@@ -7,9 +12,11 @@ export interface ProjectRecord {
   activeTopicPackageId: string | null;
   activeScriptRecordId: string | null;
   activeStoryboardRecordId: string | null;
+  activeAssetPlanRecordId: string | null;
   latestTopicRunTraceJson: Record<string, unknown> | null;
   latestScriptRunTraceJson: Record<string, unknown> | null;
   latestStoryboardRunTraceJson: Record<string, unknown> | null;
+  latestAssetPlanRunTraceJson: Record<string, unknown> | null;
   storageDisplayName: string;
   storageShortId: string;
   storageRootDir: string;
@@ -103,6 +110,20 @@ export interface StoryboardRecord {
   createdAt: Date;
 }
 
+export interface AssetPlanRecord {
+  id: string;
+  projectId: string;
+  topicPackageId: string;
+  scriptRecordId: string;
+  storyboardRecordId: string;
+  planJson: AssetPlan;
+  validationResultJson: AssetPlanningValidationResult;
+  executionStateJson: Record<string, unknown>;
+  graphTraceSummaryJson: Record<string, unknown> | null;
+  runtimeDiagnosticsJson: Record<string, unknown> | null;
+  createdAt: Date;
+}
+
 export interface DbClient {
   generateId: () => string;
   projects: Map<string, ProjectRecord>;
@@ -112,6 +133,7 @@ export interface DbClient {
   topicRunCounts: Map<string, number>;
   scriptRecords: Map<string, ScriptRecord>;
   storyboardRecords: Map<string, StoryboardRecord>;
+  assetPlanRecords: Map<string, AssetPlanRecord>;
 }
 
 export function createDbClient(): DbClient {
@@ -124,5 +146,6 @@ export function createDbClient(): DbClient {
     topicRunCounts: new Map<string, number>(),
     scriptRecords: new Map<string, ScriptRecord>(),
     storyboardRecords: new Map<string, StoryboardRecord>(),
+    assetPlanRecords: new Map<string, AssetPlanRecord>(),
   };
 }

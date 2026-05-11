@@ -36,6 +36,9 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
   const storyboardRecord = project.activeStoryboardRecordId
     ? db.storyboardRecords.get(project.activeStoryboardRecordId) ?? null
     : null;
+  const assetPlanRecord = project.activeAssetPlanRecordId
+    ? db.assetPlanRecords.get(project.activeAssetPlanRecordId) ?? null
+    : null;
   const latestProjectScriptRecord = [...db.scriptRecords.values()]
     .filter((record) => record.projectId === project.id)
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
@@ -51,6 +54,17 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
   const latestStoryboardTrace =
     (project.latestStoryboardRunTraceJson as Record<string, unknown> | null | undefined) ??
     (latestProjectStoryboardRecord?.graphTraceSummaryJson as
+      | Record<string, unknown>
+      | null
+      | undefined) ??
+    null;
+  const latestProjectAssetPlanRecord = [...db.assetPlanRecords.values()]
+    .filter((record) => record.projectId === project.id)
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .at(0) ?? null;
+  const latestAssetPlanTrace =
+    (project.latestAssetPlanRunTraceJson as Record<string, unknown> | null | undefined) ??
+    (latestProjectAssetPlanRecord?.graphTraceSummaryJson as
       | Record<string, unknown>
       | null
       | undefined) ??
@@ -73,6 +87,7 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
       ),
       latest_script_run: summarizeTraceRun(latestScriptTrace),
       latest_storyboard_run: summarizeTraceRun(latestStoryboardTrace),
+      latest_asset_plan_run: summarizeTraceRun(latestAssetPlanTrace),
     },
     active_topic_package: topicRecord
       ? {
@@ -120,6 +135,19 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
           },
           graph_trace_summary: storyboardRecord.graphTraceSummaryJson,
           runtime_diagnostics: storyboardRecord.runtimeDiagnosticsJson,
+        }
+      : null,
+    active_asset_plan: assetPlanRecord
+      ? {
+          asset_plan_record_id: assetPlanRecord.id,
+          source_storyboard_record_id: assetPlanRecord.storyboardRecordId,
+          source_script_record_id: assetPlanRecord.scriptRecordId,
+          source_topic_package_id: assetPlanRecord.topicPackageId,
+          plan: assetPlanRecord.planJson,
+          local_validation: assetPlanRecord.validationResultJson,
+          execution_state: assetPlanRecord.executionStateJson,
+          graph_trace_summary: assetPlanRecord.graphTraceSummaryJson,
+          runtime_diagnostics: assetPlanRecord.runtimeDiagnosticsJson,
         }
       : null,
   };

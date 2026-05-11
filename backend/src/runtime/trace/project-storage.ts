@@ -16,10 +16,11 @@ export interface ProjectStorageProfile {
   topic_runs_dir: string;
   script_runs_dir: string;
   storyboard_runs_dir: string;
+  asset_plan_runs_dir: string;
   rename_locked: boolean;
 }
 
-type ProjectRunPhase = "topic" | "script" | "storyboard";
+type ProjectRunPhase = "topic" | "script" | "storyboard" | "asset_planning";
 
 const workspaceRoot = resolve(fileURLToPath(new URL("../../../../", import.meta.url)));
 
@@ -71,7 +72,9 @@ function ensureRunDir(input: {
       ? profile.topic_runs_dir
       : input.phase === "script"
         ? profile.script_runs_dir
-        : profile.storyboard_runs_dir;
+        : input.phase === "storyboard"
+          ? profile.storyboard_runs_dir
+          : profile.asset_plan_runs_dir;
   const runDir = resolveStoragePath(`${runRootDir}/${input.runId}`);
 
   mkdirSync(runDir, {
@@ -103,6 +106,7 @@ export function createProjectStorageProfile(input: {
     topic_runs_dir: `${rootDir}/trace/topic-runs`,
     script_runs_dir: `${rootDir}/trace/script-runs`,
     storyboard_runs_dir: `${rootDir}/trace/storyboard-runs`,
+    asset_plan_runs_dir: `${rootDir}/trace/asset-planning-runs`,
     rename_locked: input.renameLocked ?? false,
   };
 }
@@ -180,6 +184,7 @@ export function getProjectStorageProfile(project: ProjectRecord): ProjectStorage
     topic_runs_dir: `${rootDir}/trace/topic-runs`,
     script_runs_dir: `${rootDir}/trace/script-runs`,
     storyboard_runs_dir: `${rootDir}/trace/storyboard-runs`,
+    asset_plan_runs_dir: `${rootDir}/trace/asset-planning-runs`,
     rename_locked: project.storageRenameLocked,
   };
 }
@@ -193,6 +198,7 @@ export function ensureProjectStorageStructure(project: ProjectRecord) {
     profile.topic_runs_dir,
     profile.script_runs_dir,
     profile.storyboard_runs_dir,
+    profile.asset_plan_runs_dir,
   ]) {
     mkdirSync(resolveStoragePath(directoryPath), {
       recursive: true,
