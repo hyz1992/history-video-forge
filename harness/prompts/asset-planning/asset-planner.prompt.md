@@ -142,6 +142,8 @@ TTS 是最终时间轴的根，但 TTS 和字幕任务由本地服务确定性�
 
 每个 segment 最多一个主锚点 `image_still`；主图必须在 `parameters.image_role` 写 `"anchor"`。如确实需要额外辅助图，额外 `image_still` 必须在 `parameters.image_role` 写 `"support"`，并填写非空 `"support_reason"` 说明为什么主图不足。默认不要规划 support 图。
 
+每个 task 都必须填写非空 source_excerpt，且必须直接来自当前 chunk 覆盖的 `StoryboardSegment.script_excerpt` 或其连续子串；sfx_cue 和 bgm_cue 也不得省略 source_excerpt。不得把 `source_excerpt` 留空、写成 null，或用 production_intent 替代。
+
 视觉类任务包括 `image_still`、`render_motion_cue`、`video_clip`，视觉类任务 risk_notes 必须非空。遇到战争、刺杀、伏击、尸骨、血战、处刑、穿刺、逃亡等题材时，必须写明平台安全、历史准确性和生成稳定性风险：优先远景、剪影、旗帜倒伏、局部道具、尘土、火光、人物背影，不要写血液喷溅、断肢、穿刺特写或尸体堆叠。涉及孙膑行动不便时，使用“古代木制乘舆”“军榻”“低矮木车”等历史质感描述，并在 negative prompts 或 risk_notes 中避免现代轮椅、金属轮椅、橡胶轮胎、现代医疗器械。象征镜头必须保持历史正剧质感，不得把奇幻毒果、怪诞植物等象征物固化为核心资产；应优先用破碎铁锅、残旗、阴影、背影、裂纹、远景等历史质感元素表达余震。
 
 `dependencies[].dependency_type` 只能使用 `requires_output / requires_timing / requires_selection`，不得自造 `fallback_source`、`fallback` 或其他枚举值。降级关系应写进 `risk_notes` 或 `budget_notes`，不要写成依赖类型。

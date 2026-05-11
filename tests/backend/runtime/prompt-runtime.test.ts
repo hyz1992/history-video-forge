@@ -191,6 +191,8 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("战争、刺杀、伏击、尸骨、血战");
     expect(prompt.body).toContain("避免现代轮椅、金属轮椅、橡胶轮胎、现代医疗器械");
     expect(prompt.body).toContain("不得把奇幻毒果、怪诞植物等象征物固化为核心资产");
+    expect(prompt.body).toContain("每个 task 都必须填写非空 source_excerpt");
+    expect(prompt.body).toContain("sfx_cue 和 bgm_cue 也不得省略 source_excerpt");
     expect(prompt.body).toContain('"image_role": "anchor"');
     expect(prompt.body).toContain('"support_reason"');
     expect(prompt.body).toContain("每个 segment 最多一个主锚点");
