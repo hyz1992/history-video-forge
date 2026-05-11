@@ -187,6 +187,9 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("video_clip 只给连续动作是叙事核心的镜头");
     expect(prompt.body).toContain("why_static_insufficient");
     expect(prompt.body).toContain("人物说话、表情变化、象征画面、短促碎裂动作默认不得规划 video_clip");
+    expect(prompt.body).toContain("每个 video_clip 必须依赖同 segment 的 image_still");
+    expect(prompt.body).toContain("static_fallback_task_id");
+    expect(prompt.body).toContain("video_clip 到 image_still 的 requires_output 依赖");
     expect(prompt.body).toContain("视觉类任务 risk_notes 必须非空");
     expect(prompt.body).toContain("战争、刺杀、伏击、尸骨、血战");
     expect(prompt.body).toContain("避免现代轮椅、金属轮椅、橡胶轮胎、现代医疗器械");

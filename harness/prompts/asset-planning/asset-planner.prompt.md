@@ -142,6 +142,8 @@ TTS 是最终时间轴的根，但 TTS 和字幕任务由本地服务确定性�
 
 每个 segment 最多一个主锚点 `image_still`；主图必须在 `parameters.image_role` 写 `"anchor"`。如确实需要额外辅助图，额外 `image_still` 必须在 `parameters.image_role` 写 `"support"`，并填写非空 `"support_reason"` 说明为什么主图不足。默认不要规划 support 图。
 
+每个 video_clip 必须依赖同 segment 的 image_still 作为静态 fallback/视觉锚点。优先在 `video_clip.parameters.static_fallback_task_id` 写入同 segment 的本地 image_still 任务 ID；也可以在 `dependencies` 中写 video_clip 到 image_still 的 requires_output 依赖。不得规划没有 image_still fallback 的 `video_clip`。
+
 每个 task 都必须填写非空 source_excerpt，且必须直接来自当前 chunk 覆盖的 `StoryboardSegment.script_excerpt` 或其连续子串；sfx_cue 和 bgm_cue 也不得省略 source_excerpt。不得把 `source_excerpt` 留空、写成 null，或用 production_intent 替代。
 
 recommended_mode 只能使用 auto、manual_allowed、manual_preferred、placeholder_only 这四个枚举值。视觉类任务默认使用 manual_allowed；自动派生的 render_motion_cue、sfx_cue、bgm_cue 使用 auto。不得输出 automatic、manual、manual_ok、auto_allowed 或其他近义词。
