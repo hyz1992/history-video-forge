@@ -162,9 +162,12 @@ const validGlobalPlanningDraft = {
   manual_review_notes: [],
 };
 
-function validChunkPlanningDraftFor(segmentIds: string[]) {
+function validChunkPlanningDraftFor(
+  segmentIds: string[],
+  storyboard: StoryboardPlan = baseStoryboardPlan,
+) {
   const tasks = segmentIds.flatMap((segmentId, index) => {
-    const segment = baseStoryboardPlan.segments.find(
+    const segment = storyboard.segments.find(
       (candidate) => candidate.segment_id === segmentId,
     );
     if (!segment) {
@@ -307,6 +310,35 @@ function makeInput(llmGateway: LlmGateway, chunkSize = 2) {
   };
 }
 
+function makeStoryboardWithSegmentCount(count: number): StoryboardPlan {
+  return {
+    ...baseStoryboardPlan,
+    segments: Array.from({ length: count }, (_, index) => {
+      const baseSegment =
+        baseStoryboardPlan.segments[index % baseStoryboardPlan.segments.length];
+      const order = index;
+      return {
+        ...baseSegment,
+        segment_id: `sb_${String(index + 1).padStart(3, "0")}`,
+        order,
+        script_excerpt: `${baseSegment.script_excerpt}（并发测试段落 ${index + 1}）`,
+        start_hint_sec: order * 10,
+        end_hint_sec: order * 10 + 10,
+      };
+    }),
+  };
+}
+
+async function waitUntil(predicate: () => boolean) {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    if (predicate()) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error("condition_not_met");
+}
+
 describe("generateAssetPlan", () => {
   it("builds local audio skeleton and invokes chunked planning prompts", async () => {
     const { gateway, calls } = makeGateway();
@@ -342,6 +374,57 @@ describe("generateAssetPlan", () => {
         dependency_type: "requires_timing",
       }),
     );
+  });
+
+  it("runs segment chunk planning with bounded concurrency by default", async () => {
+    const startedChunks: string[] = [];
+    let releaseFirstChunk!: () => void;
+    const firstChunkGate = new Promise<void>((resolve) => {
+      releaseFirstChunk = resolve;
+    });
+    const storyboard = makeStoryboardWithSegmentCount(4);
+    const { gateway } = makeGateway(async (options) => {
+      const input = options.input as {
+        planning_mode: "global" | "segment_chunk";
+        chunk?: { chunk_id: string; segment_ids: string[] };
+      };
+      if (input.planning_mode === "global") {
+        return validGlobalPlanningDraft;
+      }
+
+      startedChunks.push(input.chunk?.chunk_id ?? "missing_chunk_id");
+      if (input.chunk?.chunk_id === "chunk_001") {
+        await firstChunkGate;
+      }
+
+      return validChunkPlanningDraftFor(input.chunk?.segment_ids ?? [], storyboard);
+    });
+
+    const running = generateAssetPlan({
+      ...makeInput(gateway, 1),
+      storyboard,
+    });
+
+    let waitError: unknown = null;
+    try {
+      await waitUntil(() => startedChunks.includes("chunk_002"));
+    } catch (error) {
+      waitError = error;
+    } finally {
+      releaseFirstChunk();
+    }
+
+    const plan = await running;
+    if (waitError) {
+      throw waitError;
+    }
+
+    expect(startedChunks.slice(0, 2)).toEqual(["chunk_001", "chunk_002"]);
+    expect(
+      plan.tasks
+        .filter((task) => task.task_type === "image_still")
+        .map((task) => task.source_segment_id),
+    ).toEqual(["sb_001", "sb_002", "sb_003", "sb_004"]);
   });
 
   it("sends structured source inputs, art bible, budget constraints, and regeneration context", async () => {

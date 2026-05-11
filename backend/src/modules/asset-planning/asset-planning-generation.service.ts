@@ -43,6 +43,7 @@ export interface GenerateAssetPlanInput {
   llmGateway?: LlmGateway;
   interactionLogWriter?: LlmInteractionLogWriter;
   chunkSize?: number;
+  chunkConcurrency?: number;
   regenerationContext?: {
     reason: "asset_planning_local_validation_regen_once";
     errors: string[];
@@ -147,19 +148,22 @@ export async function generateAssetPlan(
   }
   const globalDraft = GlobalPlanningDraft.parse(rawGlobalDraft);
 
-  const chunkDrafts: SegmentChunkPlanningDraft[] = [];
   const chunks = chunkStoryboardSegments(input.storyboard, input.chunkSize);
-  for (const [index, segments] of chunks.entries()) {
-    const rawChunkDraft = await gateway.invokeStructuredPrompt<unknown>({
-      promptId: PROMPT_ID,
-      input: buildChunkPromptInput(input, globalDraft, segments, index),
-      interactionLogWriter: input.interactionLogWriter,
-    });
-    rejectForbiddenChunkTasks(rawChunkDraft);
-    const chunkDraft = SegmentChunkPlanningDraft.parse(rawChunkDraft);
-    validateChunkDraft(chunkDraft, segments);
-    chunkDrafts.push(chunkDraft);
-  }
+  const chunkDrafts = await mapWithConcurrency(
+    chunks,
+    normalizeChunkConcurrency(input.chunkConcurrency),
+    async (segments, index) => {
+      const rawChunkDraft = await gateway.invokeStructuredPrompt<unknown>({
+        promptId: PROMPT_ID,
+        input: buildChunkPromptInput(input, globalDraft, segments, index),
+        interactionLogWriter: input.interactionLogWriter,
+      });
+      rejectForbiddenChunkTasks(rawChunkDraft);
+      const chunkDraft = SegmentChunkPlanningDraft.parse(rawChunkDraft);
+      validateChunkDraft(chunkDraft, segments);
+      return chunkDraft;
+    },
+  );
 
   return AssetPlan.parse(
     mergeAssetPlan(input, audioSkeleton, globalDraft, chunkDrafts),
@@ -168,6 +172,39 @@ export async function generateAssetPlan(
 
 function hasObjectKey(value: unknown, key: string) {
   return Boolean(value && typeof value === "object" && key in value);
+}
+
+async function mapWithConcurrency<TInput, TOutput>(
+  items: TInput[],
+  concurrency: number,
+  worker: (item: TInput, index: number) => Promise<TOutput>,
+): Promise<TOutput[]> {
+  const safeConcurrency = normalizeChunkConcurrency(concurrency);
+  const results: TOutput[] = new Array(items.length);
+  let nextIndex = 0;
+
+  async function runNext(): Promise<void> {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      results[currentIndex] = await worker(
+        items[currentIndex] as TInput,
+        currentIndex,
+      );
+    }
+  }
+
+  const workerCount = Math.min(safeConcurrency, items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => runNext()));
+  return results;
+}
+
+function normalizeChunkConcurrency(value: number | undefined) {
+  if (value === undefined || !Number.isFinite(value)) {
+    return 2;
+  }
+
+  return Math.min(3, Math.max(1, Math.floor(value)));
 }
 
 function rejectForbiddenChunkTasks(rawChunkDraft: unknown) {
