@@ -19,6 +19,8 @@
   - [Asset Planning 质量护栏实施计划](./2026-05-11-asset-planning-quality-guardrails-plan.md)
   - [Asset Planning Chunk Concurrency Design](./2026-05-11-asset-planning-chunk-concurrency-design.md)
   - [Asset Planning Chunk Concurrency Implementation Plan](./2026-05-11-asset-planning-chunk-concurrency-implementation-plan.md)
+  - [Asset Planning Chunk Input Slimming Design](./2026-05-11-asset-planning-chunk-input-slimming-design.md)
+  - [Asset Planning Chunk Input Slimming Implementation Plan](./2026-05-11-asset-planning-chunk-input-slimming-implementation-plan.md)
 - 既有 topic/script/harness/UI acceptance 计划已归档到 [archive/topic-script](./archive/topic-script/)。
 - archive 中的计划只作为历史证据和追溯材料，不是当前任务入口。
 - 新 agent 不应从 archive 中挑选旧 implementation plan 继续执行。
