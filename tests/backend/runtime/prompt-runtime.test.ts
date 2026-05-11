@@ -187,6 +187,10 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("video_clip 只给连续动作是叙事核心的镜头");
     expect(prompt.body).toContain("why_static_insufficient");
     expect(prompt.body).toContain("人物说话、表情变化、象征画面、短促碎裂动作默认不得规划 video_clip");
+    expect(prompt.body).toContain("视觉类任务 risk_notes 必须非空");
+    expect(prompt.body).toContain("战争、刺杀、伏击、尸骨、血战");
+    expect(prompt.body).toContain("避免现代轮椅、金属轮椅、橡胶轮胎、现代医疗器械");
+    expect(prompt.body).toContain("不得把奇幻毒果、怪诞植物等象征物固化为核心资产");
     expect(prompt.body).toContain('"image_role": "anchor"');
     expect(prompt.body).toContain('"support_reason"');
     expect(prompt.body).toContain("每个 segment 最多一个主锚点");
