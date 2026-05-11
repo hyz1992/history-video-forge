@@ -427,6 +427,71 @@ describe("generateAssetPlan", () => {
     ).toEqual(["sb_001", "sb_002", "sb_003", "sb_004"]);
   });
 
+  it("keeps chunk planning serial when chunkConcurrency is 1", async () => {
+    const startedChunks: string[] = [];
+    let releaseFirstChunk!: () => void;
+    const firstChunkGate = new Promise<void>((resolve) => {
+      releaseFirstChunk = resolve;
+    });
+    const storyboard = makeStoryboardWithSegmentCount(3);
+    const { gateway } = makeGateway(async (options) => {
+      const input = options.input as {
+        planning_mode: "global" | "segment_chunk";
+        chunk?: { chunk_id: string; segment_ids: string[] };
+      };
+      if (input.planning_mode === "global") {
+        return validGlobalPlanningDraft;
+      }
+
+      startedChunks.push(input.chunk?.chunk_id ?? "missing_chunk_id");
+      if (input.chunk?.chunk_id === "chunk_001") {
+        await firstChunkGate;
+      }
+
+      return validChunkPlanningDraftFor(input.chunk?.segment_ids ?? [], storyboard);
+    });
+
+    const running = generateAssetPlan({
+      ...makeInput(gateway, 1),
+      storyboard,
+      chunkConcurrency: 1,
+    });
+
+    await waitUntil(() => startedChunks.includes("chunk_001"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(startedChunks).toEqual(["chunk_001"]);
+
+    releaseFirstChunk();
+    await running;
+    expect(startedChunks).toEqual(["chunk_001", "chunk_002", "chunk_003"]);
+  });
+
+  it("rejects the asset plan when any concurrent chunk fails", async () => {
+    const storyboard = makeStoryboardWithSegmentCount(3);
+    const { gateway } = makeGateway((options) => {
+      const input = options.input as {
+        planning_mode: "global" | "segment_chunk";
+        chunk?: { chunk_id: string; segment_ids: string[] };
+      };
+      if (input.planning_mode === "global") {
+        return validGlobalPlanningDraft;
+      }
+      if (input.chunk?.chunk_id === "chunk_002") {
+        throw new Error("chunk_002_failed");
+      }
+
+      return validChunkPlanningDraftFor(input.chunk?.segment_ids ?? [], storyboard);
+    });
+
+    await expect(
+      generateAssetPlan({
+        ...makeInput(gateway, 1),
+        storyboard,
+        chunkConcurrency: 2,
+      }),
+    ).rejects.toThrow("chunk_002_failed");
+  });
+
   it("sends structured source inputs, art bible, budget constraints, and regeneration context", async () => {
     const { gateway, calls } = makeGateway();
 
