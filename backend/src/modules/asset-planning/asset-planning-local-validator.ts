@@ -1,0 +1,275 @@
+import type {
+  AssetPlan,
+  AssetPlanningValidationResult,
+  AssetTask,
+  StoryboardPlan,
+} from "../../../../shared/src/index.js";
+import { AssetPlanningValidationResult as AssetPlanningValidationResultSchema } from "../../../../shared/src/index.js";
+
+interface LocatedExcerpt {
+  start: number;
+  end: number;
+}
+
+const NULL_SEGMENT_ALLOWED_TASK_TYPES = new Set([
+  "tts_audio",
+  "subtitle_track",
+  "sfx_cue",
+  "bgm_cue",
+]);
+
+function pushUnique(target: string[], code: string) {
+  if (!target.includes(code)) {
+    target.push(code);
+  }
+}
+
+function sumCoveredChars(spans: LocatedExcerpt[]) {
+  if (spans.length === 0) {
+    return 0;
+  }
+
+  const sorted = [...spans].sort((a, b) => a.start - b.start);
+  let covered = 0;
+  let current = sorted[0];
+
+  for (const span of sorted.slice(1)) {
+    if (span.start <= current.end) {
+      current = {
+        start: current.start,
+        end: Math.max(current.end, span.end),
+      };
+      continue;
+    }
+
+    covered += current.end - current.start;
+    current = span;
+  }
+
+  covered += current.end - current.start;
+  return covered;
+}
+
+function getTaskById(plan: AssetPlan) {
+  return new Map(plan.tasks.map((task) => [task.task_id, task]));
+}
+
+function hasDependencyCycle(plan: AssetPlan, existingTaskIds: Set<string>) {
+  const graph = new Map<string, string[]>();
+  for (const task of plan.tasks) {
+    graph.set(task.task_id, []);
+  }
+  for (const dependency of plan.dependencies) {
+    if (
+      !existingTaskIds.has(dependency.task_id) ||
+      !existingTaskIds.has(dependency.depends_on_task_id)
+    ) {
+      continue;
+    }
+
+    graph.get(dependency.task_id)?.push(dependency.depends_on_task_id);
+  }
+
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+
+  function visit(taskId: string): boolean {
+    if (visiting.has(taskId)) {
+      return true;
+    }
+    if (visited.has(taskId)) {
+      return false;
+    }
+
+    visiting.add(taskId);
+    for (const next of graph.get(taskId) ?? []) {
+      if (visit(next)) {
+        return true;
+      }
+    }
+    visiting.delete(taskId);
+    visited.add(taskId);
+    return false;
+  }
+
+  return [...graph.keys()].some((taskId) => visit(taskId));
+}
+
+function getTtsCoverage(scriptText: string, plan: AssetPlan) {
+  const spans: LocatedExcerpt[] = [];
+  for (const chunk of plan.tts_plan.chunks) {
+    const start = scriptText.indexOf(chunk.script_excerpt);
+    if (start === -1) {
+      return {
+        coveredCharCount: 0,
+        coverageRatio: 0,
+        hasMissingExcerpt: true,
+      };
+    }
+
+    spans.push({
+      start,
+      end: start + chunk.script_excerpt.length,
+    });
+  }
+
+  const coveredCharCount = sumCoveredChars(spans);
+  return {
+    coveredCharCount,
+    coverageRatio: scriptText.length > 0 ? coveredCharCount / scriptText.length : 0,
+    hasMissingExcerpt: false,
+  };
+}
+
+function hasSubtitleTtsTimingDependency(
+  subtitleTask: AssetTask,
+  plan: AssetPlan,
+  tasksById: Map<string, AssetTask>,
+) {
+  return plan.dependencies.some((dependency) => {
+    const upstream = tasksById.get(dependency.depends_on_task_id);
+    return (
+      dependency.task_id === subtitleTask.task_id &&
+      dependency.dependency_type === "requires_timing" &&
+      upstream?.task_type === "tts_audio"
+    );
+  });
+}
+
+function hasStaticFallback(
+  videoTask: AssetTask,
+  plan: AssetPlan,
+  tasksById: Map<string, AssetTask>,
+) {
+  const fallbackTaskId =
+    typeof videoTask.parameters.static_fallback_task_id === "string"
+      ? videoTask.parameters.static_fallback_task_id
+      : null;
+  if (fallbackTaskId && tasksById.get(fallbackTaskId)?.task_type === "image_still") {
+    return true;
+  }
+
+  return plan.dependencies.some((dependency) => {
+    const upstream = tasksById.get(dependency.depends_on_task_id);
+    return (
+      dependency.task_id === videoTask.task_id &&
+      dependency.dependency_type === "requires_output" &&
+      upstream?.task_type === "image_still"
+    );
+  });
+}
+
+export function validateAssetPlan(input: {
+  storyboardRecordId: string;
+  scriptRecordId: string;
+  topicPackageId: string;
+  storyboard: StoryboardPlan;
+  scriptText: string;
+  plan: AssetPlan;
+}): AssetPlanningValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const { plan } = input;
+
+  if (plan.source_storyboard_record_id !== input.storyboardRecordId) {
+    pushUnique(errors, "asset_plan_source_storyboard_mismatch");
+  }
+  if (plan.source_script_record_id !== input.scriptRecordId) {
+    pushUnique(errors, "asset_plan_source_script_mismatch");
+  }
+  if (plan.source_topic_package_id !== input.topicPackageId) {
+    pushUnique(errors, "asset_plan_source_topic_mismatch");
+  }
+
+  const segmentIds = new Set(
+    input.storyboard.segments.map((segment) => segment.segment_id),
+  );
+  const taskIds = new Set<string>();
+  const duplicateTaskIds = new Set<string>();
+  for (const task of plan.tasks) {
+    if (taskIds.has(task.task_id)) {
+      duplicateTaskIds.add(task.task_id);
+    }
+    taskIds.add(task.task_id);
+
+    if (task.order < 0 || task.order >= plan.tasks.length) {
+      pushUnique(errors, "asset_task_order_invalid");
+    }
+
+    if (task.source_segment_id === null) {
+      if (!NULL_SEGMENT_ALLOWED_TASK_TYPES.has(task.task_type)) {
+        pushUnique(errors, "asset_task_source_segment_invalid");
+      }
+    } else if (!segmentIds.has(task.source_segment_id)) {
+      pushUnique(errors, "asset_task_source_segment_invalid");
+    }
+
+    if (
+      (task.task_type === "image_still" || task.task_type === "video_clip") &&
+      (!task.prompt_draft || task.prompt_draft.trim().length === 0)
+    ) {
+      pushUnique(errors, "asset_visual_prompt_missing");
+    }
+  }
+
+  if (duplicateTaskIds.size > 0) {
+    pushUnique(errors, "asset_task_id_duplicate");
+  }
+
+  const sortedOrders = plan.tasks.map((task) => task.order).sort((a, b) => a - b);
+  for (let index = 0; index < sortedOrders.length; index += 1) {
+    if (sortedOrders[index] !== index) {
+      pushUnique(errors, "asset_task_order_invalid");
+      break;
+    }
+  }
+
+  for (const dependency of plan.dependencies) {
+    if (
+      !taskIds.has(dependency.task_id) ||
+      !taskIds.has(dependency.depends_on_task_id)
+    ) {
+      pushUnique(errors, "asset_dependency_task_missing");
+    }
+  }
+
+  if (hasDependencyCycle(plan, taskIds)) {
+    pushUnique(errors, "asset_dependency_cycle_detected");
+  }
+
+  const ttsCoverage = getTtsCoverage(input.scriptText, plan);
+  if (ttsCoverage.hasMissingExcerpt || ttsCoverage.coverageRatio < 0.95) {
+    pushUnique(errors, "asset_tts_script_coverage_missing");
+  }
+
+  const tasksById = getTaskById(plan);
+  for (const task of plan.tasks) {
+    if (
+      task.task_type === "subtitle_track" &&
+      !hasSubtitleTtsTimingDependency(task, plan, tasksById)
+    ) {
+      pushUnique(errors, "asset_subtitle_missing_tts_dependency");
+    }
+
+    if (
+      task.task_type === "video_clip" &&
+      !hasStaticFallback(task, plan, tasksById)
+    ) {
+      pushUnique(errors, "asset_video_missing_static_fallback");
+    }
+  }
+
+  return AssetPlanningValidationResultSchema.parse({
+    stage: "asset_planning_local_validation",
+    decision: errors.length > 0 ? "regen_once" : "pass",
+    errors,
+    warnings,
+    metrics: {
+      task_count: plan.tasks.length,
+      dependency_count: plan.dependencies.length,
+      tts_coverage_ratio: ttsCoverage.coverageRatio,
+      tts_covered_char_count: ttsCoverage.coveredCharCount,
+      script_char_count: input.scriptText.length,
+    },
+  });
+}
