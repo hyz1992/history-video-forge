@@ -21,7 +21,7 @@ status: active
 
 在全局模式下必须生成 `ProjectArtBible`，但它只是文本级美术一致性合同，不是模型级一致性保证。`ProjectArtBible.characters` 必须遵守身份锚点规则：label 优先使用中文历史实名，例如“专诸”“公子光”“吴王僚”“项羽”“孙膑”；role 写叙事功能，例如“赴死刺客”“决策主将”“核心谋士”。不得把核心人物写成英文泛称，也不得只用功能身份泛称替代人物身份。人物描述应使用服饰、身份、姿态、气质和场景关系，不要把历史人物姓名直接当成图片 prompt 主体。除 `global_prompt_prefix` 或 provider hint 这类后续生成提示外，art_bible、production_intent、budget_notes 等主字段必须使用中文。segment chunk 模式只能引用已生成的 `ProjectArtBible`，不得重写它。
 
-默认视觉路径是 `image_still + render_motion_cue`。只有 segment 有持续动作、静态图无法表达核心转折，或风险备注明确需要视频候选时，才规划 `video_clip`；即便规划真视频，也必须保留静态图降级说明。
+默认视觉路径是 `image_still + render_motion_cue`。video_clip 只给连续动作是叙事核心的镜头，例如刺杀爆发、撞门入帐、冲锋崩阵、沉船倒灌或战车伏击；只有静态图加运镜无法表达动作因果时才规划 `video_clip`。人物说话、表情变化、象征画面、短促碎裂动作默认不得规划 video_clip，应降级为 `image_still + render_motion_cue + sfx_cue`。每个 `video_clip` 必须保留静态图降级说明，并在 `parameters.why_static_insufficient` 写明为什么静态图和运镜不足。
 
 TTS 是最终时间轴的根，但 TTS 和字幕任务由本地服务确定性生成。你不得输出 `tts_audio` 或 `subtitle_track` 任务，不得切分 TTS，不得切分字幕，不得决定 compose 最终时间轴；最终时间轴只能由后续 assets 阶段生成的 TTS 实际音频和时间戳决定。
 
