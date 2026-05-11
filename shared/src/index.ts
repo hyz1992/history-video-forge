@@ -24,3 +24,9 @@ export {
   StoryboardSegment,
 } from "./storyboard/storyboard-plan.schema";
 export { StoryboardValidationResult } from "./storyboard/storyboard-validation.schema";
+export {
+  AssetPlan,
+  AssetTask,
+  ProjectArtBible,
+} from "./asset-planning/asset-plan.schema";
+export { AssetPlanningValidationResult } from "./asset-planning/asset-planning-validation.schema";
