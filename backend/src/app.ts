@@ -4,6 +4,7 @@ import { registerProjectRoutes } from "./modules/projects/project.routes";
 import { registerTopicRoutes } from "./modules/topic/topic.routes";
 import { registerScriptRoutes } from "./modules/script/script.routes";
 import { registerStoryboardRoutes } from "./modules/storyboard/storyboard.routes";
+import { registerAssetPlanningRoutes } from "./modules/asset-planning/asset-planning.routes";
 import type { StoredTopicCandidate } from "./modules/topic/topic-confirm.service";
 
 export interface StoredTopicCandidateRound {
@@ -146,6 +147,7 @@ export function buildApp(): AppInstance {
   registerTopicRoutes(app);
   registerScriptRoutes(app);
   registerStoryboardRoutes(app);
+  registerAssetPlanningRoutes(app);
 
   return app;
 }

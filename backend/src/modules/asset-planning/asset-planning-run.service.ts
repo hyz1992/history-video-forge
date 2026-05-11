@@ -1,0 +1,419 @@
+import {
+  ScriptDraftPackage,
+  StoryboardPlan,
+  type AssetPlan,
+} from "../../../../shared/src/index.js";
+import type {
+  DbClient,
+  ProjectRecord,
+  ScriptRecord,
+  StoryboardRecord,
+  TopicPackageRecord,
+} from "../../db/client";
+import {
+  createProjectRunInteractionLogWriter,
+  persistProjectRunArtifacts,
+} from "../../runtime/trace/project-storage.js";
+import { generateAssetPlan } from "./asset-planning-generation.service";
+import { validateAssetPlan } from "./asset-planning-local-validator";
+import { saveAssetPlanRecord } from "./asset-plan-record.repository";
+
+export interface RunAssetPlanningGenerationInput {
+  db: DbClient;
+  project: ProjectRecord;
+}
+
+function mapScriptDraft(record: ScriptRecord) {
+  return ScriptDraftPackage.parse({
+    script_text: record.scriptText,
+    estimated_duration_sec: record.estimatedDurationSec,
+    beat_trace: record.beatTraceJson,
+    quote_trace: record.quoteTraceJson,
+    opening_span: record.openingSpan,
+    ending_span: record.endingSpan,
+  });
+}
+
+function mapTopicBoundaryContext(record: TopicPackageRecord) {
+  return {
+    title: record.title,
+    selected_angle: record.selectedAngle,
+    family_label: record.familyLabel,
+    scope_label: record.scopeLabel,
+    core_conflict: record.coreConflict,
+    strong_scene: record.strongScene,
+    forbidden_expansions: record.forbiddenExpansionsJson,
+    risk_hints: record.riskHintsJson,
+    source_anchor_refs: record.sourceAnchorRefsJson,
+    canonical_quotes: record.canonicalQuotesJson,
+    narrative_tension_map: record.narrativeTensionMapJson,
+  };
+}
+
+function buildTraceSummary(input: {
+  runId: string;
+  validationDecision: string;
+  regenerated: boolean;
+  staleSourceDetected: boolean;
+}) {
+  const now = new Date().toISOString();
+  const steps = [
+    "asset-planning-generate",
+    "asset-planning-local-audio-skeleton",
+    "asset-planning-global-plan",
+    "asset-planning-segment-chunk-plan",
+    "asset-planning-local-merge",
+  ].map((stepName) => ({
+    step_name: stepName,
+    phase: "asset_planning",
+    status: "succeeded",
+    started_at: now,
+    ended_at: now,
+    duration_ms: 0,
+  }));
+
+  if (input.regenerated) {
+    steps.push({
+      step_name: "asset-planning-regenerate",
+      phase: "asset_planning",
+      status: "succeeded",
+      started_at: now,
+      ended_at: now,
+      duration_ms: 0,
+    });
+  }
+
+  steps.push({
+    step_name: "asset-planning-local-validate",
+    phase: "asset_planning",
+    status: input.validationDecision === "pass" ? "succeeded" : "failed",
+    started_at: now,
+    ended_at: now,
+    duration_ms: 0,
+  });
+
+  if (input.staleSourceDetected) {
+    steps.push({
+      step_name: "asset-planning-source-recheck",
+      phase: "asset_planning",
+      status: "failed",
+      started_at: now,
+      ended_at: now,
+      duration_ms: 0,
+    });
+  }
+
+  return {
+    phase: "asset_planning",
+    run_id: input.runId,
+    nodes: [
+      {
+        node_name: "asset-planning-generate",
+        input_ref: "active-storyboard:current",
+        output_ref: "asset-plan:candidate",
+        failure_reason: null,
+      },
+      {
+        node_name: "asset-planning-local-validate",
+        input_ref: "asset-plan:candidate",
+        output_ref: "asset-planning-local-validation:current",
+        failure_reason:
+          input.validationDecision === "pass"
+            ? null
+            : "asset_plan_local_validation_failed",
+      },
+      {
+        node_name: "asset-planning-source-recheck",
+        input_ref: "active-storyboard:current",
+        output_ref: "asset-plan-activation:current",
+        failure_reason: input.staleSourceDetected
+          ? "stale_asset_plan_source"
+          : null,
+      },
+    ],
+    steps,
+  };
+}
+
+function buildRuntimeDiagnostics(input: {
+  validationDecision: string;
+  validationErrors: string[];
+  regenerated: boolean;
+  staleSourceDetected: boolean;
+}) {
+  const checks = [
+    {
+      code:
+        input.validationDecision === "pass"
+          ? "asset_planning_local_validation_passed"
+          : "asset_planning_local_validation_failed",
+      level: input.validationDecision === "pass" ? "info" : "error",
+    },
+    ...input.validationErrors.map((error) => ({
+      code: error,
+      level: "error",
+    })),
+  ];
+
+  if (input.regenerated) {
+    checks.push({
+      code: "asset_planning_regen_once",
+      level: "warning",
+    });
+  }
+
+  if (input.staleSourceDetected) {
+    checks.push({
+      code: "asset_planning_stale_source_detected",
+      level: "error",
+    });
+  }
+
+  return { checks };
+}
+
+function isStaleSource(input: {
+  db: DbClient;
+  projectId: string;
+  capturedStoryboardRecordId: string;
+  capturedScriptRecordId: string;
+}) {
+  const currentProject = input.db.projects.get(input.projectId);
+  if (!currentProject) {
+    return true;
+  }
+  if (currentProject.activeStoryboardRecordId !== input.capturedStoryboardRecordId) {
+    return true;
+  }
+
+  const currentStoryboard = input.db.storyboardRecords.get(
+    input.capturedStoryboardRecordId,
+  );
+  return currentStoryboard?.scriptRecordId !== input.capturedScriptRecordId;
+}
+
+function buildValidationInput(input: {
+  storyboardRecord: StoryboardRecord;
+  scriptRecord: ScriptRecord;
+  topicPackage: TopicPackageRecord;
+  storyboard: StoryboardPlan;
+  plan: AssetPlan;
+}) {
+  return {
+    storyboardRecordId: input.storyboardRecord.id,
+    scriptRecordId: input.scriptRecord.id,
+    topicPackageId: input.topicPackage.id,
+    storyboard: input.storyboard,
+    scriptText: input.scriptRecord.scriptText,
+    plan: input.plan,
+  };
+}
+
+export async function runAssetPlanningGeneration(
+  input: RunAssetPlanningGenerationInput,
+) {
+  if (!input.project.activeStoryboardRecordId) {
+    return {
+      statusCode: 409,
+      body: {
+        error: "active_storyboard_missing",
+      },
+    };
+  }
+
+  const storyboardRecord = input.db.storyboardRecords.get(
+    input.project.activeStoryboardRecordId,
+  );
+  if (!storyboardRecord) {
+    return {
+      statusCode: 404,
+      body: {
+        error: "storyboard_record_not_found",
+      },
+    };
+  }
+
+  const scriptRecord = input.db.scriptRecords.get(storyboardRecord.scriptRecordId);
+  const topicPackage = input.db.topicPackages.get(storyboardRecord.topicPackageId);
+  if (!scriptRecord || !topicPackage) {
+    return {
+      statusCode: 404,
+      body: {
+        error: "source_record_not_found",
+      },
+    };
+  }
+
+  const storyboard = StoryboardPlan.parse(storyboardRecord.planJson);
+  const draft = mapScriptDraft(scriptRecord);
+  const topicBoundaryContext = mapTopicBoundaryContext(topicPackage);
+  const runId = `asset_plan_run_${input.db.generateId()}`;
+  const interactionLogWriter = createProjectRunInteractionLogWriter({
+    project: input.project,
+    phase: "asset_planning",
+    runId,
+  });
+
+  let plan = await generateAssetPlan({
+    sourceStoryboardRecordId: storyboardRecord.id,
+    sourceScriptRecordId: scriptRecord.id,
+    sourceTopicPackageId: topicPackage.id,
+    storyboard,
+    draft,
+    topicBoundaryContext,
+    interactionLogWriter,
+  });
+  let localValidation = validateAssetPlan(
+    buildValidationInput({
+      storyboardRecord,
+      scriptRecord,
+      topicPackage,
+      storyboard,
+      plan,
+    }),
+  );
+  let regenerated = false;
+
+  if (localValidation.decision === "regen_once") {
+    regenerated = true;
+    plan = await generateAssetPlan({
+      sourceStoryboardRecordId: storyboardRecord.id,
+      sourceScriptRecordId: scriptRecord.id,
+      sourceTopicPackageId: topicPackage.id,
+      storyboard,
+      draft,
+      topicBoundaryContext,
+      interactionLogWriter,
+      regenerationContext: {
+        reason: "asset_planning_local_validation_regen_once",
+        errors: localValidation.errors,
+        metrics: localValidation.metrics,
+      },
+    });
+    localValidation = validateAssetPlan(
+      buildValidationInput({
+        storyboardRecord,
+        scriptRecord,
+        topicPackage,
+        storyboard,
+        plan,
+      }),
+    );
+  }
+
+  let staleSourceDetected = false;
+  let graphTraceSummary = buildTraceSummary({
+    runId,
+    validationDecision: localValidation.decision,
+    regenerated,
+    staleSourceDetected,
+  });
+  let runtimeDiagnostics = buildRuntimeDiagnostics({
+    validationDecision: localValidation.decision,
+    validationErrors: localValidation.errors,
+    regenerated,
+    staleSourceDetected,
+  });
+  const executionState = {
+    regenerate_used: regenerated,
+  };
+
+  if (localValidation.decision !== "pass") {
+    return {
+      statusCode: 422,
+      body: {
+        error: "asset_plan_local_validation_failed",
+        project_id: input.project.id,
+        run_mode: "sync_runtime",
+        source_storyboard_record_id: storyboardRecord.id,
+        source_script_record_id: scriptRecord.id,
+        source_topic_package_id: topicPackage.id,
+        plan,
+        local_validation: localValidation,
+        execution_state: executionState,
+        graph_trace_summary: graphTraceSummary,
+        runtime_diagnostics: runtimeDiagnostics,
+      },
+    };
+  }
+
+  staleSourceDetected = isStaleSource({
+    db: input.db,
+    projectId: input.project.id,
+    capturedStoryboardRecordId: storyboardRecord.id,
+    capturedScriptRecordId: scriptRecord.id,
+  });
+  if (staleSourceDetected) {
+    graphTraceSummary = buildTraceSummary({
+      runId,
+      validationDecision: localValidation.decision,
+      regenerated,
+      staleSourceDetected,
+    });
+    runtimeDiagnostics = buildRuntimeDiagnostics({
+      validationDecision: localValidation.decision,
+      validationErrors: localValidation.errors,
+      regenerated,
+      staleSourceDetected,
+    });
+
+    return {
+      statusCode: 409,
+      body: {
+        error: "stale_asset_plan_source",
+        project_id: input.project.id,
+        run_mode: "sync_runtime",
+        source_storyboard_record_id: storyboardRecord.id,
+        source_script_record_id: scriptRecord.id,
+        source_topic_package_id: topicPackage.id,
+        plan,
+        local_validation: localValidation,
+        execution_state: executionState,
+        graph_trace_summary: graphTraceSummary,
+        runtime_diagnostics: runtimeDiagnostics,
+      },
+    };
+  }
+
+  const assetPlanRecord = await saveAssetPlanRecord(input.db, {
+    projectId: input.project.id,
+    topicPackageId: topicPackage.id,
+    scriptRecordId: scriptRecord.id,
+    storyboardRecordId: storyboardRecord.id,
+    planJson: plan,
+    validationResultJson: localValidation,
+    executionStateJson: executionState,
+    graphTraceSummaryJson: graphTraceSummary,
+    runtimeDiagnosticsJson: runtimeDiagnostics,
+  });
+
+  input.project.activeAssetPlanRecordId = assetPlanRecord.id;
+  input.project.latestAssetPlanRunTraceJson =
+    graphTraceSummary as unknown as Record<string, unknown>;
+  input.project.status = "asset_plan_ready";
+  input.project.updatedAt = new Date();
+  persistProjectRunArtifacts({
+    project: input.project,
+    phase: "asset_planning",
+    runId,
+    traceSummary: graphTraceSummary as unknown as Record<string, unknown>,
+    runtimeDiagnostics: runtimeDiagnostics as unknown as Record<string, unknown>,
+  });
+
+  return {
+    statusCode: 200,
+    body: {
+      project_id: input.project.id,
+      run_mode: "sync_runtime",
+      asset_plan_record_id: assetPlanRecord.id,
+      source_storyboard_record_id: storyboardRecord.id,
+      source_script_record_id: scriptRecord.id,
+      source_topic_package_id: topicPackage.id,
+      plan,
+      local_validation: localValidation,
+      execution_state: executionState,
+      graph_trace_summary: graphTraceSummary,
+      runtime_diagnostics: runtimeDiagnostics,
+    },
+  };
+}
