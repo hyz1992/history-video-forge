@@ -175,6 +175,15 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("sfx_cue");
     expect(prompt.body).toContain("bgm_cue");
     expect(prompt.body).toContain("opening、turn、peak");
+    expect(prompt.body).toContain('"character_id"');
+    expect(prompt.body).toContain('"visual_description"');
+    expect(prompt.body).toContain('"location_id"');
+    expect(prompt.body).toContain('"prop_id"');
+    expect(prompt.body).toContain("locations 和 props 不得包含 `role`");
+    expect(prompt.body).toContain('"image_role": "anchor"');
+    expect(prompt.body).toContain('"support_reason"');
+    expect(prompt.body).toContain("每个 segment 最多一个主锚点");
+    expect(prompt.body).toContain("requires_output / requires_timing / requires_selection");
     expect(prompt.body).toContain("不得输出 `tts_audio` 或 `subtitle_track` 任务");
     expect(prompt.body).toContain("局部临时 ID");
     expect(prompt.body).toContain("segment chunk");

@@ -43,9 +43,31 @@ TTS 是最终时间轴的根，但 TTS 和字幕任务由本地服务确定性�
   "art_bible": {
     "era_style": "",
     "visual_tone": "",
-    "characters": [],
-    "locations": [],
-    "props": [],
+    "characters": [
+      {
+        "character_id": "char_1",
+        "label": "",
+        "role": "",
+        "visual_description": "",
+        "consistency_notes": []
+      }
+    ],
+    "locations": [
+      {
+        "location_id": "loc_1",
+        "label": "",
+        "visual_description": "",
+        "consistency_notes": []
+      }
+    ],
+    "props": [
+      {
+        "prop_id": "prop_1",
+        "label": "",
+        "visual_description": "",
+        "consistency_notes": []
+      }
+    ],
     "global_prompt_prefix": "",
     "global_negative_prompts": [],
     "consistency_notes": []
@@ -73,6 +95,8 @@ TTS 是最终时间轴的根，但 TTS 和字幕任务由本地服务确定性�
 }
 ```
 
+`ProjectArtBible.characters / locations / props` 的数组元素必须严格使用上述字段名；不得把 `character_id` 改成 `identity`，不得把 `visual_description` 改成 `appearance` 或 `description`，不得使用 `location_name`、`prop_name` 等替代字段。`role` 只属于 characters，locations 和 props 不得包含 `role`。
+
 ## Segment Chunk 模式输出骨架
 
 当 `planning_mode` 为 `segment_chunk` 时，只输出当前 chunk 的局部草稿：
@@ -91,7 +115,9 @@ TTS 是最终时间轴的根，但 TTS 和字幕任务由本地服务确定性�
       "recommended_mode": "manual_allowed",
       "provider_hint": null,
       "prompt_draft": "",
-      "parameters": {},
+      "parameters": {
+        "image_role": "anchor"
+      },
       "manual_upload_policy": {
         "allowed": true,
         "required": false,
@@ -113,5 +139,9 @@ TTS 是最终时间轴的根，但 TTS 和字幕任务由本地服务确定性�
   "budget_notes": []
 }
 ```
+
+每个 segment 最多一个主锚点 `image_still`；主图必须在 `parameters.image_role` 写 `"anchor"`。如确实需要额外辅助图，额外 `image_still` 必须在 `parameters.image_role` 写 `"support"`，并填写非空 `"support_reason"` 说明为什么主图不足。默认不要规划 support 图。
+
+`dependencies[].dependency_type` 只能使用 `requires_output / requires_timing / requires_selection`，不得自造 `fallback_source`、`fallback` 或其他枚举值。降级关系应写进 `risk_notes` 或 `budget_notes`，不要写成依赖类型。
 
 `tasks` 中不得出现 `tts_audio` 或 `subtitle_track`。所有 `local_task_id` 和局部依赖只在当前 chunk 内有效。

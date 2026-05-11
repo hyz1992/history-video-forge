@@ -109,6 +109,7 @@ runtime harness 在当前阶段属于 **P0**：
 - `runtime/topic-script-live-check.ts`
 - `runtime/topic-script-five-round-quality-check.ts`
 - `runtime/storyboard-five-round-quality-check.ts`
+- `runtime/asset-planning-five-round-quality-check.ts`
 - `runtime/script-semantic-reviewer-fixtures.ts`
 - `runtime/topic-candidate-library-real-check.ts`
 - `ui-acceptance/ui-acceptance-smoke.ts`
@@ -186,6 +187,8 @@ runtime harness 在当前阶段属于 **P0**：
   - 固定 5 轮真实 topic -> script 首稿质量巡检入口，不并入默认自动化 gate。
 - `harness/scripts/runtime/storyboard-five-round-quality-check.ts`
   - 固定 5 个不同主题高质量 script 产物的真实 storyboard planning 巡检入口，不并入默认自动化 gate。
+- `harness/scripts/runtime/asset-planning-five-round-quality-check.ts`
+  - 固定 5 个 storyboard 产物的真实 asset planning 巡检入口，不并入默认自动化 gate。
 - `harness/scripts/runtime/script-semantic-reviewer-fixtures.ts`
   - semantic reviewer shadow 对照样本巡检入口，不并入默认自动化 gate。
 - `harness/samples/topic-script/family-set.md`
@@ -243,44 +246,85 @@ npm run harness:storyboard-five-round-quality-check
 
 `LLM_TIMEOUT_MS=240000` 只作为 storyboard live check 的显式运行参数，用于降低真实模型慢响应导致的巡检中断；它不改变默认自动化 gate，也不改变 topic/script 或 storyboard 主链路语义。
 
+### Five-round Asset Planning Quality Check
+
+Asset planning 抽检使用 fixed storyboard artifacts，不从 topic 重新开始，也不重跑 script/storyboard。优先使用固定命令：
+
+```powershell
+npm run harness:asset-planning-five-round-quality-check
+```
+
+该命令默认读取 5 轮 storyboard 产物，顺序执行 5 轮 asset planning，并在每轮输出：
+
+- `source-script-draft.json`
+- `source-topic-package.json`
+- `source-storyboard-plan.json`
+- `asset-plan.json`
+- `asset-planning-validation-result.json`
+- `runtime-diagnostics.json`
+- `review.md`
+- `llm-interactions/*.md`
+
+根目录还会输出 `gemini-review-pack.md`，用于把 script、storyboard、asset planning 放在一起给人工或外部评审阅读。
+
+边界：
+
+- 只生成 `AssetPlan`，不调用 assets providers。
+- 不生成图片、视频、TTS、字幕等物理文件。
+- 不实现上传、预览、accept/reject UI 或 compose timeline。
+- local validator 只检查结构、引用、依赖和覆盖，不判断审美或爆款。
+
+真实 asset planning 调用可能超过默认 LLM 请求超时。人工巡检时建议显式设置：
+
+```powershell
+$env:LLM_TIMEOUT_MS='240000'
+npm run harness:asset-planning-five-round-quality-check
+```
+
+如果真实调用中断，可以用 `--resume` 复用已经通过本地结构校验的轮次，只补未完成轮次。带参数运行时也可以直接使用 `tsx` 入口：
+
+```powershell
+npx tsx harness/scripts/runtime/asset-planning-five-round-quality-check.ts --resume --output-dir harness/scripts/runtime/output/<run-id>
+```
+
 默认输入：
 
-- `harness/scripts/runtime/output/2026-05-09-script-writer-duration-pacing-scene-density-five-round/yanzi-shichu`
-- `harness/scripts/runtime/output/2026-05-09-script-writer-duration-pacing-scene-density-five-round/zhuanzhu-ciwangliao`
-- `harness/scripts/runtime/output/2026-05-09-script-writer-duration-pacing-scene-density-five-round/julu-zhizhan`
-- `harness/scripts/runtime/output/2026-05-09-script-writer-duration-pacing-scene-density-five-round/hongmenyan`
-- `harness/scripts/runtime/output/2026-05-10-storyboard-fifth-source/tianji-saima`
+- `harness/scripts/runtime/output/2026-05-10-storyboard-five-theme-review/round-1`
+- `harness/scripts/runtime/output/2026-05-10-storyboard-five-theme-review/round-2`
+- `harness/scripts/runtime/output/2026-05-10-storyboard-five-theme-review/round-3`
+- `harness/scripts/runtime/output/2026-05-10-storyboard-five-theme-review/round-4`
+- `harness/scripts/runtime/output/2026-05-10-storyboard-five-theme-review/round-5`
 
 常用显式参数：
 
 ```powershell
-npm run harness:storyboard-five-round-quality-check -- --source-dir harness/scripts/runtime/output/2026-05-09-script-writer-duration-pacing-scene-density-five-round/yanzi-shichu --source-dir harness/scripts/runtime/output/2026-05-09-script-writer-duration-pacing-scene-density-five-round/zhuanzhu-ciwangliao --output-dir harness/scripts/runtime/output/<run-id>
+npx tsx harness/scripts/runtime/asset-planning-five-round-quality-check.ts --source-dir harness/scripts/runtime/output/2026-05-10-storyboard-five-theme-review/round-1 --source-dir harness/scripts/runtime/output/2026-05-10-storyboard-five-theme-review/round-2 --output-dir harness/scripts/runtime/output/<run-id>
 ```
 
 可显式指定输出目录：
 
 ```powershell
-npm run harness:topic-script-five-round-quality-check -- --output-dir harness/scripts/runtime/output/<run-id>
+npx tsx harness/scripts/runtime/asset-planning-five-round-quality-check.ts --output-dir harness/scripts/runtime/output/<run-id>
 ```
 
 输出目录默认是：
 
 ```text
-harness/scripts/runtime/output/topic-script-five-round-quality-check
+harness/scripts/runtime/output/asset-planning-five-round-quality-check
 ```
 
 读取顺序：
 
-1. `live-check-summary.json`：确认 `total_samples / passed_samples / failed_samples`。
-2. 每个样本目录的 `script-draft.json`：人工抽读 opening、场景密度、动作/压力/后果、结尾余震。
-3. 每个样本目录的 `semantic-review-result.json`：只观察 shadow-only 分布，不驱动 patch。
-4. `trace.md` 与 `runtime-diagnostics.json`：确认链路与诊断信息没有异常。
+1. `gemini-review-pack.md`：一次性阅读每轮 script、storyboard 和 asset planning。
+2. `live-check-summary.json`：确认 `total_rounds / passed_rounds / failed_rounds`。
+3. 每个 round 的 `asset-plan.json` 与 `asset-planning-validation-result.json`：确认任务覆盖、依赖和结构校验。
+4. 每个 round 的 `review.md` 与 `llm-interactions/*.md`：人工抽读生成质量和 prompt/响应轨迹。
 
 约束：
 
 - 该命令要求真实 `.env`，不作为默认自动化 gate。
-- 5 轮质量巡检用于观察 script 首稿质量，不等同于发布质量验收。
-- reviewer 结果只作为 shadow-only 量尺，不得因为单次结果直接堆 prompt 或接入 patch 主路径。
+- 5 轮质量巡检用于观察 asset planning 规划质量，不等同于 assets 生成或发布质量验收。
+- semantic reviewer 不参与 asset planning 主链路。
 
 ### Semantic Reviewer Fixture Entry
 
