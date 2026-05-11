@@ -701,3 +701,70 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 - 本地 validator 只判断结构，不判断“爆款感”或视觉审美。
 - `StoryboardPlan` 不包含资产生成参数，不替代 asset planning。
 - `StoryboardPlan` 不回写 topic/script。
+
+## Asset Planning v1 字段（2026-05-11 已实现）
+
+`AssetPlan` 是 asset planning 阶段的正式输出对象。它描述后续素材生产任务合同，但不代表任何物理文件已经生成。
+
+### `AssetPlan`
+
+| 字段 | 含义 |
+|---|---|
+| `plan_version` | 固定为 `asset_plan_v1` |
+| `source_storyboard_record_id` | 来源 active storyboard record |
+| `source_script_record_id` | 来源 script record |
+| `source_topic_package_id` | 来源 topic package |
+| `art_bible` | 全局视觉一致性说明，类型为 `ProjectArtBible` |
+| `tts_plan` | 本地确定性 TTS 分块计划 |
+| `tasks` | 素材生产任务列表，元素为 `AssetTask` |
+| `dependencies` | 任务依赖关系 |
+| `cost_summary` | 本地汇总的任务数量、成本档位和预估 provider 调用数 |
+| `global_production_notes` | 全局生产注意事项 |
+
+### `ProjectArtBible`
+
+| 字段 | 含义 |
+|---|---|
+| `era_style` | 时代、服化道、空间质感等全局时代风格 |
+| `visual_tone` | 全片视觉情绪与光色倾向 |
+| `characters` | 角色一致性描述 |
+| `locations` | 场景一致性描述 |
+| `props` | 道具一致性描述 |
+| `global_prompt_prefix` | 视觉任务可复用的全局 prompt 前缀 |
+| `global_negative_prompts` | 全局负向提示词 |
+| `consistency_notes` | 跨任务一致性约束 |
+
+### `AssetTask`
+
+| 字段 | 含义 |
+|---|---|
+| `task_id` | 全局任务 ID，由本地 merger 分配 |
+| `order` | 任务排序，从 0 开始 |
+| `task_type` | `tts_audio / image_still / video_clip / subtitle_track / sfx_cue / bgm_cue / render_motion_cue` |
+| `source_segment_id` | 对应 storyboard segment；全片级任务可为 `null` |
+| `source_excerpt` | 任务依据的 script excerpt |
+| `production_intent` | 生产意图 |
+| `recommended_mode` | `auto / manual_allowed / manual_preferred / placeholder_only` |
+| `provider_hint` | 可选 provider 提示，不代表已调用 provider |
+| `prompt_draft` | 视觉类任务的 prompt 草稿；TTS、字幕、音效、BGM、运镜 cue 可为 `null` |
+| `parameters` | 结构化参数 |
+| `manual_upload_policy` | 是否允许或要求人工上传替代素材 |
+| `risk_notes` | 结构性风险提示 |
+| `cost_tier` | `free / low / medium / high` |
+| `initial_status` | `planned / blocked` |
+
+### `AssetPlanningValidationResult`
+
+| 字段 | 含义 |
+|---|---|
+| `stage` | 固定为 `asset_planning_local_validation` |
+| `decision` | `pass / regen_once / hard_fail` |
+| `errors` | 结构、引用、依赖或覆盖错误码 |
+| `warnings` | 非阻断警告 |
+| `metrics` | 任务数、依赖数、TTS 覆盖率等结构指标 |
+
+边界：
+
+- `AssetPlan` 不包含真实文件路径、上传状态、生成结果 URL 或 compose timeline。
+- local validator 不判断审美、爆款、历史相似度或 prompt 质量。
+- `render_motion_cue` 是 compose 建议任务，不等于已实现 compose。

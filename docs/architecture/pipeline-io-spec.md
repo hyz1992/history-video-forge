@@ -222,3 +222,62 @@ Storyboard v1 已从纯 TBD 收口为第一版可运行阶段。它只消费已�
 - storyboard 不改 `TopicPackage`。
 - storyboard 不生成资产。
 - storyboard 不决定 asset planning/assets/compose 的详细任务对象。
+
+## 5. Asset Planning v1 阶段（2026-05-11 已完成第一版后端实现）
+
+Asset Planning v1 消费 active `StoryboardRecord` 及其来源 `ScriptRecord` / `TopicPackage`，输出可持久化的素材任务计划。它只生成计划合同，不生成图片、视频、音频文件，不执行上传、预览或 compose。
+
+输入：
+
+- active `StoryboardRecord`
+  - `plan_json` 中的 `StoryboardPlan`
+  - `script_record_id`
+  - `topic_package_id`
+- 来源 `ScriptRecord`
+  - `script_text`
+  - `estimated_duration_sec`
+  - `opening_span`
+  - `ending_span`
+  - `beat_trace_json`
+  - `quote_trace_json`
+- 来源 `TopicPackage`
+  - `title`
+  - `selected_angle`
+  - `family_label`
+  - `scope_label`
+  - `core_conflict`
+  - `strong_scene`
+  - `forbidden_expansions_json`
+  - `risk_hints_json`
+  - `source_anchor_refs_json`
+  - `canonical_quotes_json`
+  - `narrative_tension_map_json`
+
+输出：
+
+- `AssetPlan`
+- `AssetPlanningValidationResult`
+- `AssetPlanRecord`
+- project snapshot 中的 `active_asset_plan`
+- trace summary 中的 `latest_asset_plan_run`
+
+生成边界：
+
+- `tts_audio` 与 `subtitle_track` 任务由本地确定性生成。
+- LLM 只负责全局 `ProjectArtBible` 和分块视觉 / SFX / BGM 草稿。
+- 本地 merger 负责全局 `task_id`、依赖重写、成本汇总和最终 `AssetPlan` 组装。
+- local validator 只做结构、引用、依赖和覆盖检查，不判断审美、爆款、历史相似度或 prompt 质量。
+- semantic reviewer 不参与 asset planning 主链路。
+
+失效规则：
+
+- 新 active script 激活后，必须清空 active storyboard 与 active asset plan 指针。
+- 新 active storyboard 激活后，必须清空 active asset plan 指针。
+- asset planning 长耗时运行在激活前必须复查 active storyboard 与来源 script 是否仍一致；若不一致，返回 stale source，不激活旧结果。
+
+仍未进入本阶段实现的内容：
+
+- assets provider 调用。
+- 图片、视频、TTS、字幕等物理文件生成。
+- 手动上传、预览、accept/reject UI。
+- compose timeline 或最终视频导出。

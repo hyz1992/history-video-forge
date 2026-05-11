@@ -211,3 +211,30 @@ Storyboard v1 当前边界：
 - 在 storyboard 阶段实现 asset planning/assets/compose。
 - 让 semantic reviewer 参与 storyboard 主链路。
 - 用本地 validator 判断爆款、审美或语义质量。
+
+## 2026-05-11 状态更新：Asset Planning v1 已完成第一版后端实现
+
+当前 downstream 状态需要再次细分：
+
+- `storyboard`：已完成第一版 design、implementation plan 与最小后端实现。
+- `asset planning`：已完成第一版 design、implementation plan 与最小后端实现。
+- `assets`：仍为 TBD，未设计、未实现。
+- `compose`：仍为 TBD，未设计、未实现。
+
+Asset Planning v1 当前边界：
+
+- 输入来自 active `StoryboardRecord` 及其来源 `ScriptRecord` / `TopicPackage`。
+- 输出 `AssetPlan`、`AssetPlanningValidationResult`、`AssetPlanRecord`。
+- 提供 `POST /api/projects/:projectId/asset-plan/generate`。
+- project snapshot 返回 `active_asset_plan` 与 `latest_asset_plan_run`。
+- 新 script 或 storyboard 激活后会清空过期 active asset plan 指针。
+- 长耗时 asset planning run 在激活前会复查来源指针，避免 stale plan 覆盖当前状态。
+
+仍然禁止：
+
+- 在 asset planning 阶段回写 topic/script/storyboard。
+- 在 asset planning 阶段生成真实图片、视频、TTS、字幕文件。
+- 在 asset planning 阶段实现上传 UI、预览 UI、accept/reject UI。
+- 在 asset planning 阶段实现 assets provider 执行或 compose timeline。
+- 让 semantic reviewer 参与 asset planning 主链路。
+- 用本地 validator 判断审美、爆款、历史相似度或 prompt 质量。

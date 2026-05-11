@@ -373,3 +373,48 @@ Storyboard v1 已有第一版持久化记录。它是 `ScriptRecord` 之后的�
 - `validation_result_json` 保存 `StoryboardValidationResult`。
 - `execution_state_json` 第一版至少记录 `regenerate_used`。
 - `storyboard_records` 不保存 asset planning、asset manifest 或 compose timeline。
+
+## AssetPlanRecord 持久化映射（2026-05-11 已实现）
+
+Asset planning v1 已有第一版持久化记录。它是 `StoryboardRecord` 之后的派生记录，source-of-truth 仍是 active storyboard 及其来源 script/topic。
+
+### `projects` 增量字段
+
+- `active_asset_plan_record_id`：当前激活的 asset plan record。
+- `latest_asset_plan_run_trace_json`：当前项目最近一次 asset planning run 的 trace summary。
+
+失效规则：
+
+- 新 script 激活时，清空 `active_storyboard_record_id`、`latest_storyboard_run_trace_json`、`active_asset_plan_record_id`、`latest_asset_plan_run_trace_json`。
+- 新 storyboard 激活时，清空 `active_asset_plan_record_id`、`latest_asset_plan_run_trace_json`。
+- project snapshot 只根据信任的 active 指针暴露 `active_asset_plan`，不会在指针清空后从旧记录回填。
+
+### `asset_plan_records`
+
+建议字段：
+
+- `id`
+- `project_id`
+- `topic_package_id`
+- `script_record_id`
+- `storyboard_record_id`
+- `plan_json`
+- `validation_result_json`
+- `execution_state_json`
+- `graph_trace_summary_json`
+- `runtime_diagnostics_json`
+- `created_at`
+
+关系：
+
+- `projects (1) -> asset_plan_records (N)`
+- `topic_packages (1) -> asset_plan_records (N)`
+- `script_records (1) -> asset_plan_records (N)`
+- `storyboard_records (1) -> asset_plan_records (N)`
+
+说明：
+
+- `plan_json` 保存 `AssetPlan`。
+- `validation_result_json` 保存 `AssetPlanningValidationResult`。
+- `execution_state_json` 第一版至少记录 `regenerate_used`。
+- `asset_plan_records` 不保存真实 asset 文件、不保存上传对象、不保存 compose timeline。

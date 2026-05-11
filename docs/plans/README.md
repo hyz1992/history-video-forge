@@ -26,3 +26,9 @@
 - 如果 archive 计划与正式架构文档冲突，以正式架构文档为准。
 - 如果需要重启 archive 中的某个方向，应先重新写当前日期的 design + implementation plan，而不是直接续跑旧计划。
 - 新的视频流水线阶段计划应先放在 `docs/plans/` 根目录；完成并被正式文档吸收后再归档。
+
+## 2026-05-11 Asset Planning v1 状态
+
+- `asset planning` 第一版 design 与 implementation plan 已执行到后端最小实现完成，并已被正式架构、数据和 API 文档吸收。
+- 当前仍保留未归档的 asset planning 计划文件，直到最终最小验证完成并确认是否归档。
+- `assets` 与 `compose` 仍未进入可实施设计，不得从 asset planning 计划中顺手实现。

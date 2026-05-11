@@ -166,3 +166,21 @@
 - [字段设计](./data/field-design.md)
 - [Schema 设计](./data/schema-design.md)
 - [API 设计](./architecture/api-design.md)
+
+## 2026-05-11 Asset Planning v1 文档状态
+
+`asset planning` 已完成第一版设计、实施计划和最小后端实现。新 agent 阅读时应按以下状态理解：
+
+- `topic + script`：仍作为当前稳定上游，不主动回改。
+- `storyboard`：作为 asset planning 的已冻结上游输入。
+- `asset planning`：已有 shared schema、prompt registry 支持、正式 prompt、本地结构 validator、generation service、record persistence、生成 API、snapshot `active_asset_plan`。
+- `assets / compose`：仍未设计、未实现，不得顺手补对象、provider、UI 或 timeline。
+
+当前 asset planning 相关入口：
+
+- [Asset Planning Stage Design](./plans/2026-05-10-asset-planning-stage-design.md)
+- [Asset Planning Stage Implementation Plan](./plans/2026-05-10-asset-planning-stage-implementation-plan.md)
+- [Pipeline IO 规范](./architecture/pipeline-io-spec.md)
+- [字段设计](./data/field-design.md)
+- [Schema 设计](./data/schema-design.md)
+- [API 设计](./architecture/api-design.md)

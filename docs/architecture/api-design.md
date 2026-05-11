@@ -436,3 +436,53 @@ script 摘要第一版建议至少包含：
 - storyboard API 不调用 semantic reviewer。
 - storyboard API 不修改 `script_text` 或 `TopicPackage`。
 - storyboard API 不生成 asset planning/assets/compose 对象。
+
+## Asset Planning v1 API（2026-05-11 已实现）
+
+### `POST /api/projects/:projectId/asset-plan/generate`
+
+用途：
+
+- 从当前 active storyboard 生成 asset planning v1。
+- 成功后保存 `AssetPlanRecord`，并把项目推进到 `asset_plan_ready`。
+- 该接口只生成计划合同，不生成物理素材文件。
+
+输入：
+
+- URL 中的 `projectId`。
+- 第一版请求体可为空。
+
+前置条件与错误：
+
+- project 必须存在，否则返回 `404 project_not_found`。
+- project 必须有 `active_storyboard_record_id`，否则返回 `409 active_storyboard_missing`。
+- active storyboard record 必须存在，否则返回 `404 storyboard_record_not_found`。
+- storyboard 来源 script 或 topic package 必须存在，否则返回 `404 source_record_not_found`。
+- 若生成期间 active storyboard 或其来源 script 发生变化，返回 `409 stale_asset_plan_source`，不激活旧结果。
+
+成功响应字段：
+
+- `project_id`
+- `run_mode`
+- `asset_plan_record_id`
+- `source_storyboard_record_id`
+- `source_script_record_id`
+- `source_topic_package_id`
+- `plan`
+- `local_validation`
+- `execution_state`
+- `graph_trace_summary`
+- `runtime_diagnostics`
+
+失败语义：
+
+- 本地结构校验若返回 `regen_once`，runtime 允许带 `regeneration_context` 再生成一次。
+- 第二次仍未 `pass` 时返回 `422 asset_plan_local_validation_failed`。
+- `422` 和 `409 stale_asset_plan_source` 都不得保存新的 active asset plan，也不得把 project status 推进到 `asset_plan_ready`。
+
+边界：
+
+- asset planning API 不调用 semantic reviewer。
+- asset planning API 不修改 `script_text`、`TopicPackage` 或 `StoryboardPlan`。
+- asset planning API 不调用图片、视频、TTS、字幕或上传 provider。
+- asset planning API 不生成 compose timeline 或最终视频。
