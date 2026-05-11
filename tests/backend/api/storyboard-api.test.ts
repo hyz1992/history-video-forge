@@ -195,6 +195,12 @@ describe("storyboard api", () => {
   it("generates, validates, persists, and activates storyboard from active script", async () => {
     const app = buildApp();
     const prepared = await prepareActiveScript(app);
+    prepared.project.activeAssetPlanRecordId = "asset_plan_record_old";
+    prepared.project.latestAssetPlanRunTraceJson = {
+      phase: "asset_planning",
+      run_id: "asset_plan_run_old",
+      steps: [],
+    };
     generateStoryboardPlanMock.mockResolvedValueOnce(
       makeValidPlan({
         sourceScriptRecordId: prepared.scriptRecord.id,
@@ -231,12 +237,16 @@ describe("storyboard api", () => {
     });
     expect(prepared.project.status).toBe("storyboard_ready");
     expect(prepared.project.activeStoryboardRecordId).toBe(body.storyboard_record_id);
+    expect(prepared.project.activeAssetPlanRecordId).toBeNull();
+    expect(prepared.project.latestAssetPlanRunTraceJson).toBeNull();
 
     const snapshot = await getProjectSnapshot(app.db, prepared.project.id);
     expect(snapshot?.active_storyboard).toMatchObject({
       storyboard_record_id: body.storyboard_record_id,
       source_script_record_id: prepared.scriptRecord.id,
     });
+    expect(snapshot?.active_asset_plan).toBeNull();
+    expect(snapshot?.trace_summary.latest_asset_plan_run).toBeNull();
   });
 
   it("does not activate storyboard when local validation still fails after regen once", async () => {

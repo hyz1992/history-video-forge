@@ -663,7 +663,7 @@ ${JSON.stringify(runtimeDraft)}
     expect(logContent).toContain("晏子使楚");
   });
 
-  it("clears stale active storyboard pointers after activating a new script", async () => {
+  it("clears stale active storyboard and asset plan pointers after activating a new script", async () => {
     const db = createDbClient();
     const project = await createProject(db, {
       name: "Script Clears Storyboard",
@@ -693,9 +693,15 @@ ${JSON.stringify(runtimeDraft)}
     });
     project.activeTopicPackageId = topicPackageRecord.id;
     project.activeStoryboardRecordId = "storyboard_record_old";
+    project.activeAssetPlanRecordId = "asset_plan_record_old";
     project.latestStoryboardRunTraceJson = {
       phase: "storyboard",
       run_id: "storyboard_run_old",
+      steps: [],
+    };
+    project.latestAssetPlanRunTraceJson = {
+      phase: "asset_planning",
+      run_id: "asset_plan_run_old",
       steps: [],
     };
     project.status = "storyboard_ready";
@@ -712,6 +718,8 @@ ${JSON.stringify(runtimeDraft)}
     expect(project.activeScriptRecordId).toBeTypeOf("string");
     expect(project.activeStoryboardRecordId).toBeNull();
     expect(project.latestStoryboardRunTraceJson).toBeNull();
+    expect(project.activeAssetPlanRecordId).toBeNull();
+    expect(project.latestAssetPlanRunTraceJson).toBeNull();
   });
 
   it("returns real semantic reviewer output in shadow mode without entering patch", async () => {

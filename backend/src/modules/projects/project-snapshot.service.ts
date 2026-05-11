@@ -58,17 +58,8 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
       | null
       | undefined) ??
     null;
-  const latestProjectAssetPlanRecord = [...db.assetPlanRecords.values()]
-    .filter((record) => record.projectId === project.id)
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    .at(0) ?? null;
   const latestAssetPlanTrace =
-    (project.latestAssetPlanRunTraceJson as Record<string, unknown> | null | undefined) ??
-    (latestProjectAssetPlanRecord?.graphTraceSummaryJson as
-      | Record<string, unknown>
-      | null
-      | undefined) ??
-    null;
+    (project.latestAssetPlanRunTraceJson as Record<string, unknown> | null | undefined) ?? null;
 
   return {
     project_id: project.id,

@@ -602,4 +602,116 @@ describe("project snapshot service", () => {
       },
     });
   });
+
+  it("does not expose stale asset plan records when active pointers are cleared", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Cleared Asset Plan Snapshot",
+    });
+    const assetPlan: AssetPlan = {
+      plan_version: "asset_plan_v1",
+      source_storyboard_record_id: "storyboard_record_old",
+      source_script_record_id: "script_record_old",
+      source_topic_package_id: "topic_package_old",
+      art_bible: {
+        era_style: "战国宫廷",
+        visual_tone: "冷色压迫",
+        characters: [],
+        locations: [],
+        props: [],
+        global_prompt_prefix: "古代中国历史短视频画面",
+        global_negative_prompts: ["现代建筑"],
+        consistency_notes: [],
+      },
+      tts_plan: {
+        voice_profile_id: "voice_default",
+        estimated_total_duration_sec: 30,
+        chunking_strategy: "segment_boundary",
+        chunks: [
+          {
+            chunk_id: "tts_001",
+            order: 0,
+            script_excerpt: "Opening pressure.",
+            estimated_duration_sec: 5,
+          },
+        ],
+      },
+      tasks: [
+        {
+          task_id: "tts_001",
+          order: 0,
+          task_type: "tts_audio",
+          source_segment_id: null,
+          source_excerpt: "Opening pressure.",
+          production_intent: "Generate narration.",
+          recommended_mode: "auto",
+          provider_hint: "default_tts",
+          prompt_draft: null,
+          parameters: {},
+          manual_upload_policy: {
+            allowed: false,
+            required: false,
+            accepted_file_types: [],
+            acceptance_notes: [],
+          },
+          risk_notes: [],
+          cost_tier: "low",
+          initial_status: "planned",
+        },
+      ],
+      dependencies: [],
+      cost_summary: {
+        total_tasks: 1,
+        by_type: {
+          tts_audio: 1,
+        },
+        by_cost_tier: {
+          free: 0,
+          low: 1,
+          medium: 0,
+          high: 0,
+        },
+        estimated_provider_calls: 1,
+        notes: [],
+      },
+      global_production_notes: ["No physical assets generated."],
+    };
+    const assetPlanRecord = await saveAssetPlanRecord(db, {
+      projectId: project.id,
+      topicPackageId: "topic_package_old",
+      scriptRecordId: "script_record_old",
+      storyboardRecordId: "storyboard_record_old",
+      planJson: assetPlan,
+      validationResultJson: {
+        stage: "asset_planning_local_validation",
+        decision: "pass",
+        errors: [],
+        warnings: [],
+        metrics: {},
+      },
+      executionStateJson: {
+        regenerate_used: false,
+      },
+      graphTraceSummaryJson: {
+        phase: "asset_planning",
+        run_id: "asset_plan_run_old",
+        steps: [],
+      },
+      runtimeDiagnosticsJson: null,
+    });
+    project.activeAssetPlanRecordId = assetPlanRecord.id;
+    project.latestAssetPlanRunTraceJson = {
+      phase: "asset_planning",
+      run_id: "asset_plan_run_old",
+      steps: [],
+    };
+
+    project.activeAssetPlanRecordId = null;
+    project.latestAssetPlanRunTraceJson = null;
+
+    const snapshot = await getProjectSnapshot(db, project.id);
+
+    expect(snapshot?.active_asset_plan).toBeNull();
+    expect(snapshot?.trace_summary.latest_asset_plan_run).toBeNull();
+  });
 });
