@@ -180,6 +180,10 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain('"location_id"');
     expect(prompt.body).toContain('"prop_id"');
     expect(prompt.body).toContain("locations 和 props 不得包含 `role`");
+    expect(prompt.body).toContain("label 优先使用中文历史实名");
+    expect(prompt.body).toContain("role 写叙事功能");
+    expect(prompt.body).toContain("主字段必须使用中文");
+    expect(prompt.body).toContain("不得把核心人物写成英文泛称");
     expect(prompt.body).toContain('"image_role": "anchor"');
     expect(prompt.body).toContain('"support_reason"');
     expect(prompt.body).toContain("每个 segment 最多一个主锚点");
