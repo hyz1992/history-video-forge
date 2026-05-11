@@ -397,14 +397,45 @@ describe("asset planning five round quality check", () => {
       parseAssetPlanningFiveRoundQualityCheckCliArgs([
         "--source-dir",
         "fixed-storyboard",
+        "--chunk-concurrency",
+        "4",
         "--resume",
         "asset-planning-output",
       ]),
     ).toEqual({
       sourceDirs: ["fixed-storyboard"],
+      chunkConcurrency: 4,
       resume: true,
       outputDir: "asset-planning-output",
     });
+  });
+
+  it("passes chunk concurrency override to the asset plan generator", async () => {
+    const sourceDir = mkdtempSync(join(tmpdir(), "svf2-asset-planning-source-"));
+    const outputDir = mkdtempSync(join(tmpdir(), "svf2-asset-planning-concurrency-"));
+    writeFixedStoryboardSource(sourceDir, 1);
+    const planGenerator = vi.fn(
+      async ({ sourceStoryboardRecordId, sourceScriptRecordId, sourceTopicPackageId }) =>
+        makeAssetPlan({
+          storyboardRecordId: sourceStoryboardRecordId,
+          scriptRecordId: sourceScriptRecordId,
+          topicPackageId: sourceTopicPackageId,
+        }),
+    );
+
+    await runAssetPlanningFiveRoundQualityCheck(
+      { sourceDirs: [sourceDir], outputDir, chunkConcurrency: 4 },
+      {
+        requireRealEnv: false,
+        planGenerator,
+      },
+    );
+
+    expect(planGenerator).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chunkConcurrency: 4,
+      }),
+    );
   });
 
   it("resumes completed rounds without calling the planner again", async () => {

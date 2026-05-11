@@ -228,7 +228,7 @@ function normalizeChunkConcurrency(value: number | undefined) {
     return 2;
   }
 
-  return Math.min(3, Math.max(1, Math.floor(value)));
+  return Math.min(4, Math.max(1, Math.floor(value)));
 }
 
 function rejectForbiddenChunkTasks(rawChunkDraft: unknown) {

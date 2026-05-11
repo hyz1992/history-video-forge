@@ -466,6 +466,60 @@ describe("generateAssetPlan", () => {
     expect(startedChunks).toEqual(["chunk_001", "chunk_002", "chunk_003"]);
   });
 
+  it("allows four segment chunks to run concurrently when chunkConcurrency is 4", async () => {
+    const startedChunks: string[] = [];
+    let releaseChunks!: () => void;
+    const chunkGate = new Promise<void>((resolve) => {
+      releaseChunks = resolve;
+    });
+    const storyboard = makeStoryboardWithSegmentCount(4);
+    const { gateway } = makeGateway(async (options) => {
+      const input = options.input as {
+        planning_mode: "global" | "segment_chunk";
+        chunk?: { chunk_id: string; segment_ids: string[] };
+      };
+      if (input.planning_mode === "global") {
+        return validGlobalPlanningDraft;
+      }
+
+      startedChunks.push(input.chunk?.chunk_id ?? "missing_chunk_id");
+      await chunkGate;
+      return validChunkPlanningDraftFor(input.chunk?.segment_ids ?? [], storyboard);
+    });
+
+    const running = generateAssetPlan({
+      ...makeInput(gateway, 1),
+      storyboard,
+      chunkConcurrency: 4,
+    });
+
+    let waitError: unknown = null;
+    try {
+      await waitUntil(() => startedChunks.length === 4);
+    } catch (error) {
+      waitError = error;
+    } finally {
+      releaseChunks();
+    }
+
+    const plan = await running;
+    if (waitError) {
+      throw waitError;
+    }
+
+    expect(startedChunks).toEqual([
+      "chunk_001",
+      "chunk_002",
+      "chunk_003",
+      "chunk_004",
+    ]);
+    expect(
+      plan.tasks
+        .filter((task) => task.task_type === "image_still")
+        .map((task) => task.source_segment_id),
+    ).toEqual(["sb_001", "sb_002", "sb_003", "sb_004"]);
+  });
+
   it("rejects the asset plan when any concurrent chunk fails", async () => {
     const storyboard = makeStoryboardWithSegmentCount(3);
     const { gateway } = makeGateway((options) => {

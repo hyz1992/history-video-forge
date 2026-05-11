@@ -42,6 +42,7 @@ export interface AssetPlanningFiveRoundQualityCheckInput {
   sourceDirs?: string[];
   outputDir?: string;
   rounds?: number;
+  chunkConcurrency?: number;
   resume?: boolean;
 }
 
@@ -200,6 +201,7 @@ export async function runAssetPlanningFiveRoundQualityCheck(
         draft: source.draft,
         topicBoundaryContext: source.topicBoundaryContext,
         interactionLogWriter,
+        chunkConcurrency: input.chunkConcurrency,
         round,
       }),
     );
@@ -224,6 +226,7 @@ export async function runAssetPlanningFiveRoundQualityCheck(
           draft: source.draft,
           topicBoundaryContext: source.topicBoundaryContext,
           interactionLogWriter,
+          chunkConcurrency: input.chunkConcurrency,
           round,
           regenerationContext: {
             reason: "asset_planning_local_validation_regen_once",
@@ -349,6 +352,12 @@ export function parseAssetPlanningFiveRoundQualityCheckCliArgs(argv: string[]) {
 
     if (current === "--rounds" && next) {
       result.rounds = Number(next);
+      index += 1;
+      continue;
+    }
+
+    if (current === "--chunk-concurrency" && next) {
+      result.chunkConcurrency = Number(next);
       index += 1;
       continue;
     }
