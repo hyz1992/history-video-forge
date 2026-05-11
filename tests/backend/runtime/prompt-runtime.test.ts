@@ -184,6 +184,9 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("role 写叙事功能");
     expect(prompt.body).toContain("主字段必须使用中文");
     expect(prompt.body).toContain("不得把核心人物写成英文泛称");
+    expect(prompt.body).toContain("prompt_draft 必须优先使用中文");
+    expect(prompt.body).toContain("prompt_draft 不得整段写成英文");
+    expect(prompt.body).toContain("risk_notes 等主字段必须使用中文");
     expect(prompt.body).toContain("video_clip 只给连续动作是叙事核心的镜头");
     expect(prompt.body).toContain("why_static_insufficient");
     expect(prompt.body).toContain("人物说话、表情变化、象征画面、短促碎裂动作默认不得规划 video_clip");
