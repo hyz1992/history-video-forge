@@ -517,13 +517,39 @@ describe("generateAssetPlan", () => {
       },
     });
     expect(calls[1]?.input).toMatchObject({
+      planning_mode: "segment_chunk",
+      topic_boundary_context: baseTopicBoundaryContext,
       art_bible: validGlobalPlanningDraft.art_bible,
       visual_budget: validGlobalPlanningDraft.visual_budget,
+      downgrade_policy: validGlobalPlanningDraft.downgrade_policy,
       global_audio_strategy: validGlobalPlanningDraft.global_audio_strategy,
+      storyboard_outline: expect.arrayContaining([
+        expect.objectContaining({
+          segment_id: "sb_001",
+          order: 0,
+          narrative_role: "opening",
+          brief: expect.any(String),
+        }),
+      ]),
+      script_context: expect.objectContaining({
+        estimated_duration_sec: baseScriptDraft.estimated_duration_sec,
+        chunk_excerpt: expect.stringContaining(
+          baseStoryboardPlan.segments[0].script_excerpt,
+        ),
+        opening_excerpt: expect.any(String),
+        ending_excerpt: expect.any(String),
+      }),
       chunk: {
+        chunk_id: "chunk_001",
+        segment_ids: ["sb_001", "sb_002"],
         segments: baseStoryboardPlan.segments.slice(0, 2),
       },
     });
+    expect(calls[1]?.input).not.toHaveProperty("storyboard");
+    expect(calls[1]?.input).not.toHaveProperty("draft");
+    expect(JSON.stringify(calls[1]?.input)).not.toContain(
+      baseScriptDraft.script_text,
+    );
   });
 
   it("rejects global drafts that include asset tasks", async () => {

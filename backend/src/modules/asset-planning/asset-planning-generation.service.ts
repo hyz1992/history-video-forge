@@ -291,13 +291,13 @@ function buildChunkPromptInput(
     source_storyboard_record_id: input.sourceStoryboardRecordId,
     source_script_record_id: input.sourceScriptRecordId,
     source_topic_package_id: input.sourceTopicPackageId,
-    storyboard: input.storyboard,
-    draft: input.draft,
     topic_boundary_context: input.topicBoundaryContext,
     art_bible: globalDraft.art_bible,
     visual_budget: globalDraft.visual_budget,
     downgrade_policy: globalDraft.downgrade_policy,
     global_audio_strategy: globalDraft.global_audio_strategy,
+    storyboard_outline: buildStoryboardOutline(input.storyboard),
+    script_context: buildChunkScriptContext(input.draft, segments),
     chunk: {
       chunk_id: `chunk_${String(chunkIndex + 1).padStart(3, "0")}`,
       segment_ids: segmentIds,
@@ -305,6 +305,35 @@ function buildChunkPromptInput(
     },
     regeneration_context: input.regenerationContext ?? null,
   };
+}
+
+function buildStoryboardOutline(storyboard: StoryboardPlan) {
+  return storyboard.segments.map((segment) => ({
+    segment_id: segment.segment_id,
+    order: segment.order,
+    narrative_role: segment.narrative_role,
+    brief: truncateText(segment.visual_intent || segment.scene_description, 80),
+  }));
+}
+
+function buildChunkScriptContext(
+  draft: ScriptDraftPackage,
+  segments: StoryboardPlan["segments"],
+) {
+  return {
+    estimated_duration_sec: draft.estimated_duration_sec,
+    chunk_excerpt: segments.map((segment) => segment.script_excerpt).join("\n"),
+    opening_excerpt: truncateText(draft.opening_span, 120),
+    ending_excerpt: truncateText(draft.ending_span, 120),
+  };
+}
+
+function truncateText(value: string, maxLength: number) {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  return value.slice(0, maxLength);
 }
 
 function buildLocalAudioSkeleton(input: GenerateAssetPlanInput) {
