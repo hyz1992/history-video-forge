@@ -141,7 +141,7 @@ export async function generateAssetPlan(
   const rawGlobalDraft = await gateway.invokeStructuredPrompt<unknown>({
     promptId: PROMPT_ID,
     input: buildGlobalPromptInput(input, audioSkeleton.tts_plan),
-    interactionLogWriter: input.interactionLogWriter,
+    interactionLogWriter: createTimedInteractionLogWriter(input.interactionLogWriter),
   });
   if (hasObjectKey(rawGlobalDraft, "tasks")) {
     throw new Error("asset_planning_global_draft_must_not_include_tasks");
@@ -156,7 +156,7 @@ export async function generateAssetPlan(
       const rawChunkDraft = await gateway.invokeStructuredPrompt<unknown>({
         promptId: PROMPT_ID,
         input: buildChunkPromptInput(input, globalDraft, segments, index),
-        interactionLogWriter: input.interactionLogWriter,
+        interactionLogWriter: createTimedInteractionLogWriter(input.interactionLogWriter),
       });
       rejectForbiddenChunkTasks(rawChunkDraft);
       const chunkDraft = SegmentChunkPlanningDraft.parse(rawChunkDraft);
@@ -172,6 +172,30 @@ export async function generateAssetPlan(
 
 function hasObjectKey(value: unknown, key: string) {
   return Boolean(value && typeof value === "object" && key in value);
+}
+
+function createTimedInteractionLogWriter(
+  writer: LlmInteractionLogWriter | undefined,
+): LlmInteractionLogWriter | undefined {
+  if (!writer) {
+    return undefined;
+  }
+
+  const startedAtMs = Date.now();
+  const startedAt = new Date(startedAtMs).toISOString();
+  return {
+    write(entry) {
+      const finishedAtMs = Date.now();
+      return writer.write({
+        ...entry,
+        timing: {
+          startedAt,
+          finishedAt: new Date(finishedAtMs).toISOString(),
+          durationMs: Math.max(0, finishedAtMs - startedAtMs),
+        },
+      });
+    },
+  };
 }
 
 async function mapWithConcurrency<TInput, TOutput>(

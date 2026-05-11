@@ -11,6 +11,11 @@ export interface LlmInteractionLogEntry {
   input: unknown;
   rawOutput: string;
   parsedOutput?: unknown;
+  timing?: {
+    startedAt: string;
+    finishedAt: string;
+    durationMs: number;
+  };
   annotations?: string[];
   errorMessage?: string | null;
 }

@@ -92,6 +92,16 @@ export interface AssetPlanningFiveRoundQualityCheckDependencies {
   ) => Promise<AssetPlanType>;
 }
 
+interface RuntimeLlmCallDiagnostics {
+  sequence: number;
+  prompt_id: string;
+  planning_mode: string | null;
+  chunk_id: string | null;
+  started_at: string;
+  finished_at: string;
+  duration_ms: number;
+}
+
 export function buildAssetPlanningFiveRoundQualityCheckPlan(
   input: AssetPlanningFiveRoundQualityCheckInput = {},
 ): AssetPlanningFiveRoundQualityCheckPlan {
@@ -175,7 +185,11 @@ export async function runAssetPlanningFiveRoundQualityCheck(
       }
     }
 
-    const interactionLogWriter = createRoundInteractionLogWriter(roundOutputDir);
+    const llmCallDiagnostics: RuntimeLlmCallDiagnostics[] = [];
+    const interactionLogWriter = createRoundInteractionLogWriter(
+      roundOutputDir,
+      llmCallDiagnostics,
+    );
 
     let assetPlan = AssetPlan.parse(
       await planGenerator({
@@ -229,6 +243,7 @@ export async function runAssetPlanningFiveRoundQualityCheck(
     }
 
     const runtimeDiagnostics = {
+      llm_calls: llmCallDiagnostics,
       checks: [
         ...(regenerated
           ? [
@@ -531,7 +546,10 @@ function toAssetPlanningTopicBoundaryContext(
   };
 }
 
-function createRoundInteractionLogWriter(roundOutputDir: string): LlmInteractionLogWriter {
+function createRoundInteractionLogWriter(
+  roundOutputDir: string,
+  llmCallDiagnostics: RuntimeLlmCallDiagnostics[],
+): LlmInteractionLogWriter {
   let sequence = 0;
   const logDir = resolve(roundOutputDir, "llm-interactions");
   mkdirSync(logDir, { recursive: true });
@@ -539,6 +557,20 @@ function createRoundInteractionLogWriter(roundOutputDir: string): LlmInteraction
   return {
     write(entry: LlmInteractionLogEntry) {
       sequence += 1;
+      const finishedAt = entry.timing?.finishedAt ?? new Date().toISOString();
+      const startedAt = entry.timing?.startedAt ?? entry.generatedAt ?? finishedAt;
+      const durationMs =
+        entry.timing?.durationMs ??
+        Math.max(0, Date.parse(finishedAt) - Date.parse(startedAt));
+      llmCallDiagnostics.push({
+        sequence,
+        prompt_id: entry.promptId,
+        planning_mode: readPlanningMode(entry.input),
+        chunk_id: readChunkId(entry.input),
+        started_at: startedAt,
+        finished_at: finishedAt,
+        duration_ms: Number.isFinite(durationMs) ? durationMs : 0,
+      });
       const filename = `${String(sequence).padStart(2, "0")}-${entry.promptId}.md`;
       writeFileSync(
         resolve(logDir, filename),
@@ -547,6 +579,29 @@ function createRoundInteractionLogWriter(roundOutputDir: string): LlmInteraction
       );
     },
   };
+}
+
+function readPlanningMode(input: unknown) {
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+
+  const planningMode = (input as Record<string, unknown>).planning_mode;
+  return typeof planningMode === "string" ? planningMode : null;
+}
+
+function readChunkId(input: unknown) {
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+
+  const chunk = (input as Record<string, unknown>).chunk;
+  if (!chunk || typeof chunk !== "object") {
+    return null;
+  }
+
+  const chunkId = (chunk as Record<string, unknown>).chunk_id;
+  return typeof chunkId === "string" ? chunkId : null;
 }
 
 function writeRoundTrace(

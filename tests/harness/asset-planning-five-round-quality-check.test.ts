@@ -261,12 +261,55 @@ describe("asset planning five round quality check", () => {
           sourceStoryboardRecordId,
           sourceScriptRecordId,
           sourceTopicPackageId,
-        }) =>
-          makeAssetPlan({
+          interactionLogWriter,
+        }) => {
+          interactionLogWriter?.write({
+            generatedAt: "2026-05-11T00:00:00.000Z",
+            provider: "test-provider",
+            model: "test-model",
+            operationName: "asset-planning.planner",
+            promptId: "asset-planning.planner",
+            promptStage: "asset-planning",
+            promptLanguage: "zh-CN",
+            promptFilePath: "harness/prompts/asset-planning/asset-planner.prompt.md",
+            systemPrompt: "test prompt",
+            input: {
+              planning_mode: "global",
+            },
+            rawOutput: "{}",
+            parsedOutput: {
+              planning_mode: "global",
+            },
+          });
+          interactionLogWriter?.write({
+            generatedAt: "2026-05-11T00:00:01.000Z",
+            provider: "test-provider",
+            model: "test-model",
+            operationName: "asset-planning.planner",
+            promptId: "asset-planning.planner",
+            promptStage: "asset-planning",
+            promptLanguage: "zh-CN",
+            promptFilePath: "harness/prompts/asset-planning/asset-planner.prompt.md",
+            systemPrompt: "test prompt",
+            input: {
+              planning_mode: "segment_chunk",
+              chunk: {
+                chunk_id: "chunk_001",
+                segment_ids: ["sb_001"],
+              },
+            },
+            rawOutput: "{}",
+            parsedOutput: {
+              planning_mode: "segment_chunk",
+              chunk_id: "chunk_001",
+            },
+          });
+          return makeAssetPlan({
             storyboardRecordId: sourceStoryboardRecordId,
             scriptRecordId: sourceScriptRecordId,
             topicPackageId: sourceTopicPackageId,
-          }),
+          });
+        },
       },
     );
 
@@ -297,6 +340,42 @@ describe("asset planning five round quality check", () => {
     expect(existsSync(join(outputDir, "round-1", "asset-plan.json"))).toBe(true);
     expect(readFileSync(join(outputDir, "round-1", "review.md"), "utf8")).toContain(
       "## Script",
+    );
+    const runtimeDiagnostics = JSON.parse(
+      readFileSync(join(outputDir, "round-1", "runtime-diagnostics.json"), "utf8"),
+    ) as {
+      llm_calls?: Array<{
+        sequence: number;
+        prompt_id: string;
+        planning_mode: string;
+        chunk_id: string | null;
+        started_at: string;
+        finished_at: string;
+        duration_ms: number;
+      }>;
+    };
+    expect(runtimeDiagnostics.llm_calls).toEqual([
+      expect.objectContaining({
+        sequence: 1,
+        prompt_id: "asset-planning.planner",
+        planning_mode: "global",
+        chunk_id: null,
+      }),
+      expect.objectContaining({
+        sequence: 2,
+        prompt_id: "asset-planning.planner",
+        planning_mode: "segment_chunk",
+        chunk_id: "chunk_001",
+      }),
+    ]);
+    expect(runtimeDiagnostics.llm_calls?.[0]?.started_at).toEqual(
+      expect.any(String),
+    );
+    expect(runtimeDiagnostics.llm_calls?.[0]?.finished_at).toEqual(
+      expect.any(String),
+    );
+    expect(runtimeDiagnostics.llm_calls?.[0]?.duration_ms).toEqual(
+      expect.any(Number),
     );
 
     const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
