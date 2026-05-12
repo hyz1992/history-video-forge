@@ -113,6 +113,42 @@ const ChunkDependencyDraft = z
   })
   .strict();
 
+const ChunkTaskStructuralPatch = z
+  .object({
+    local_task_id: z.string().min(1),
+    recommended_mode: z
+      .enum(["auto", "manual_allowed", "manual_preferred", "placeholder_only"])
+      .optional(),
+    provider_hint: z.string().min(1).nullable().optional(),
+    prompt_draft: z.string().min(1).nullable().optional(),
+    parameters: z.record(z.string(), z.unknown()).optional(),
+    manual_upload_policy: ManualUploadPolicyDraft.optional(),
+    risk_notes: z.array(z.string().min(1)).optional(),
+    cost_tier: z.enum(["free", "low", "medium", "high"]).optional(),
+  })
+  .strict();
+
+const ChunkDependencyStructuralPatch = z
+  .object({
+    local_dependency_id: z.string().min(1),
+    task_local_id: z.string().min(1),
+    depends_on_local_task_id: z.string().min(1),
+    dependency_type: z.enum([
+      "requires_output",
+      "requires_timing",
+      "requires_selection",
+    ]),
+  })
+  .strict();
+
+const SegmentChunkStructuralPatch = z
+  .object({
+    patch_type: z.literal("segment_chunk_structural_patch"),
+    task_patches: z.array(ChunkTaskStructuralPatch),
+    dependency_patches: z.array(ChunkDependencyStructuralPatch),
+  })
+  .strict();
+
 const SegmentChunkPlanningDraft = z
   .object({
     planning_mode: z.literal("segment_chunk"),
@@ -126,6 +162,7 @@ const SegmentChunkPlanningDraft = z
 type GlobalPlanningDraft = z.infer<typeof GlobalPlanningDraft>;
 type SegmentChunkPlanningDraft = z.infer<typeof SegmentChunkPlanningDraft>;
 type ChunkTaskDraft = z.infer<typeof ChunkTaskDraft>;
+type SegmentChunkStructuralPatch = z.infer<typeof SegmentChunkStructuralPatch>;
 
 interface LocalTaskMapping {
   chunkIndex: number;
@@ -338,20 +375,31 @@ async function parseOrRepairChunkDraft(input: {
   try {
     return parseAndValidateChunkDraft(input.rawChunkDraft, input.segments);
   } catch (error) {
-    const repairedChunkDraft = await input.gateway.invokeStructuredPrompt<unknown>({
+    if (!(error instanceof z.ZodError)) {
+      throw error;
+    }
+
+    const repairedPatch = await input.gateway.invokeStructuredPrompt<unknown>({
       promptId: STRUCTURAL_REPAIR_PROMPT_ID,
       input: {
-        repair_mode: "segment_chunk_structural_repair",
-        chunk_prompt_input: input.chunkPromptInput,
+        repair_mode: "segment_chunk_structural_patch",
         chunk: input.chunkPromptInput.chunk,
-        raw_chunk_draft: input.rawChunkDraft,
+        storyboard_segments: input.segments,
+        art_bible: input.chunkPromptInput.art_bible,
+        raw_task_summaries: summarizeRawChunkTasks(input.rawChunkDraft),
+        raw_dependency_summaries: summarizeRawChunkDependencies(input.rawChunkDraft),
         structural_errors: serializeStructuralError(error),
       },
       interactionLogWriter: createTimedInteractionLogWriter(input.interactionLogWriter),
     });
 
     try {
-      return parseAndValidateChunkDraft(repairedChunkDraft, input.segments);
+      const patch = SegmentChunkStructuralPatch.parse(repairedPatch);
+      const patchedChunkDraft = applyChunkStructuralPatch(
+        input.rawChunkDraft,
+        patch,
+      );
+      return parseAndValidateChunkDraft(patchedChunkDraft, input.segments);
     } catch {
       throw error;
     }
@@ -427,6 +475,140 @@ function normalizeChunkTaskStructure(task: unknown): unknown {
     },
     risk_notes: "risk_notes" in taskRecord ? taskRecord.risk_notes : [],
   };
+}
+
+function summarizeRawChunkTasks(rawChunkDraft: unknown) {
+  if (!rawChunkDraft || typeof rawChunkDraft !== "object") {
+    return [];
+  }
+
+  const tasks = (rawChunkDraft as Record<string, unknown>).tasks;
+  if (!Array.isArray(tasks)) {
+    return [];
+  }
+
+  return tasks.map((task) => {
+    if (!task || typeof task !== "object") {
+      return task;
+    }
+
+    const record = task as Record<string, unknown>;
+    return {
+      local_task_id: record.local_task_id,
+      task_type: record.task_type,
+      source_segment_id: record.source_segment_id,
+      production_intent: record.production_intent,
+      recommended_mode: record.recommended_mode,
+      provider_hint: record.provider_hint,
+      has_prompt_draft:
+        typeof record.prompt_draft === "string" &&
+        record.prompt_draft.trim().length > 0,
+      has_risk_notes:
+        Array.isArray(record.risk_notes) && record.risk_notes.length > 0,
+      cost_tier: record.cost_tier,
+    };
+  });
+}
+
+function summarizeRawChunkDependencies(rawChunkDraft: unknown) {
+  if (!rawChunkDraft || typeof rawChunkDraft !== "object") {
+    return [];
+  }
+
+  const dependencies = (rawChunkDraft as Record<string, unknown>).dependencies;
+  if (!Array.isArray(dependencies)) {
+    return [];
+  }
+
+  return dependencies.map((dependency) => {
+    if (!dependency || typeof dependency !== "object") {
+      return dependency;
+    }
+
+    const record = dependency as Record<string, unknown>;
+    return {
+      local_dependency_id: record.local_dependency_id,
+      task_local_id: record.task_local_id,
+      depends_on_local_task_id: record.depends_on_local_task_id,
+      dependency_type: record.dependency_type,
+    };
+  });
+}
+
+function applyChunkStructuralPatch(
+  rawChunkDraft: unknown,
+  patch: SegmentChunkStructuralPatch,
+) {
+  if (!rawChunkDraft || typeof rawChunkDraft !== "object") {
+    return rawChunkDraft;
+  }
+
+  const draft = rawChunkDraft as Record<string, unknown>;
+  const tasks = Array.isArray(draft.tasks) ? draft.tasks : [];
+  const localIds = new Set(
+    tasks
+      .filter((task) => task && typeof task === "object")
+      .map((task) => (task as Record<string, unknown>).local_task_id)
+      .filter((localTaskId): localTaskId is string => typeof localTaskId === "string"),
+  );
+  for (const taskPatch of patch.task_patches) {
+    if (!localIds.has(taskPatch.local_task_id)) {
+      throw new Error("asset_planning_chunk_patch_task_missing");
+    }
+  }
+  for (const dependencyPatch of patch.dependency_patches) {
+    if (
+      !localIds.has(dependencyPatch.task_local_id) ||
+      !localIds.has(dependencyPatch.depends_on_local_task_id)
+    ) {
+      throw new Error("asset_planning_chunk_patch_dependency_task_missing");
+    }
+  }
+
+  const patchedTasks = tasks.map((task) => {
+    if (!task || typeof task !== "object") {
+      return task;
+    }
+
+    const taskRecord = task as Record<string, unknown>;
+    const localTaskId = taskRecord.local_task_id;
+    const taskPatch = patch.task_patches.find(
+      (candidate) => candidate.local_task_id === localTaskId,
+    );
+    if (!taskPatch) {
+      return taskRecord;
+    }
+
+    const { local_task_id: _localTaskId, parameters, ...restPatch } = taskPatch;
+    const definedPatch = Object.fromEntries(
+      Object.entries(restPatch).filter(([, value]) => value !== undefined),
+    );
+    return {
+      ...taskRecord,
+      ...definedPatch,
+      ...(parameters === undefined
+        ? {}
+        : {
+            parameters: {
+              ...(isRecord(taskRecord.parameters) ? taskRecord.parameters : {}),
+              ...parameters,
+            },
+          }),
+    };
+  });
+
+  return {
+    ...draft,
+    tasks: patchedTasks,
+    dependencies: [
+      ...(Array.isArray(draft.dependencies) ? draft.dependencies : []),
+      ...patch.dependency_patches,
+    ],
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function buildGlobalPromptInput(

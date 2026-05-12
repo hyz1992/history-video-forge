@@ -729,24 +729,25 @@ describe("generateAssetPlan", () => {
       const input = options.input as {
         planning_mode?: "global" | "segment_chunk";
         chunk?: { segment_ids: string[] };
-        raw_chunk_draft?: { tasks?: Array<Record<string, unknown>> };
+        raw_task_summaries?: Array<Record<string, unknown>>;
       };
       if (input.planning_mode === "global") {
         return validGlobalPlanningDraft;
       }
 
       if (options.promptId === "asset-planning.asset-structural-repair") {
-        const segmentIds =
-          input.raw_chunk_draft?.tasks
-            ?.map((task) => String(task.source_segment_id))
-            .filter(Boolean) ?? ["sb_001"];
-        const repairedDraft = validChunkPlanningDraftFor([...new Set(segmentIds)]);
         return {
-          ...repairedDraft,
-          tasks: repairedDraft.tasks.map((task) => ({
-            ...task,
+          patch_type: "segment_chunk_structural_patch",
+          task_patches: (input.raw_task_summaries ?? []).map((task) => ({
+            local_task_id: String(task.local_task_id),
+            ...(task.task_type === "image_still" && !task.has_prompt_draft
+              ? {
+                  prompt_draft: `战国历史短视频，${String(task.production_intent)}`,
+                }
+              : {}),
             risk_notes: ["保持历史正剧质感，避免现代物件和夸张血腥表现"],
           })),
+          dependency_patches: [],
         };
       }
 
@@ -778,6 +779,61 @@ describe("generateAssetPlan", () => {
         )
         .every((task) => task.risk_notes.length > 0),
     ).toBe(true);
+  });
+
+  it("repairs invalid chunk drafts with compact structural patches", async () => {
+    let repairInput: Record<string, unknown> | null = null;
+    const { gateway } = makeGateway((options) => {
+      const input = options.input as {
+        planning_mode?: "global" | "segment_chunk";
+        repair_mode?: string;
+        chunk?: { segment_ids: string[] };
+      };
+      if (input.planning_mode === "global") {
+        return validGlobalPlanningDraft;
+      }
+
+      if (options.promptId === "asset-planning.asset-structural-repair") {
+        repairInput = options.input as Record<string, unknown>;
+        return {
+          patch_type: "segment_chunk_structural_patch",
+          task_patches: [
+            {
+              local_task_id: "local_img_sb_001",
+              recommended_mode: "manual_allowed",
+              cost_tier: "low",
+            },
+          ],
+          dependency_patches: [],
+        };
+      }
+
+      const draft = validChunkPlanningDraftFor(input.chunk?.segment_ids ?? []);
+      return {
+        ...draft,
+        tasks: draft.tasks.map((task, index) =>
+          index === 0
+            ? {
+                ...task,
+                local_task_id: "local_img_sb_001",
+                recommended_mode: undefined,
+                cost_tier: undefined,
+              }
+            : task,
+        ),
+      };
+    });
+
+    const plan = await generateAssetPlan(makeInput(gateway, 3));
+
+    expect(plan.tasks.some((task) => task.task_id === "img_003")).toBe(true);
+    expect(repairInput).toMatchObject({
+      repair_mode: "segment_chunk_structural_patch",
+    });
+    expect(repairInput).not.toHaveProperty("chunk_prompt_input");
+    expect(repairInput).not.toHaveProperty("raw_chunk_draft");
+    expect(repairInput).toHaveProperty("raw_task_summaries");
+    expect(repairInput).toHaveProperty("structural_errors");
   });
 
   it("retries global provider content filter errors once with safety retry context", async () => {
