@@ -229,6 +229,16 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("本地逻辑只定位缺口，不代写风险文案");
   });
 
+  it("documents compact asset planning chunk structural patch mode", () => {
+    const registry = createPromptRegistry();
+    const prompt = registry.getPrompt("asset-planning.asset-structural-repair");
+
+    expect(prompt.body).toContain("segment_chunk_structural_patch");
+    expect(prompt.body).toContain("只输出 task_patches 和 dependency_patches");
+    expect(prompt.body).toContain("不要返回完整 chunk draft");
+    expect(prompt.body).toContain("不得新增当前 chunk 之外的 local_task_id");
+  });
+
   it("does not show empty risk_notes in the asset planning visual task skeleton", () => {
     const prompt = createPromptRegistry().getPrompt("asset-planning.asset-planner");
 

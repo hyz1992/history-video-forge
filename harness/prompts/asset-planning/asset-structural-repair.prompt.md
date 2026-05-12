@@ -44,6 +44,19 @@ status: active
 - `video_clip` 的静态兜底只能引用同 segment 已有或修复输出中的 `image_still`。
 - 若输入要求输出 task patch，只能 patch 已有 task。
 
+## segment_chunk_structural_patch 模式
+
+当输入的 `repair_mode` 为 `segment_chunk_structural_patch` 时：
+
+- 只输出 task_patches 和 dependency_patches，不要返回完整 chunk draft。
+- `patch_type` 必须是 `segment_chunk_structural_patch`。
+- `task_patches` 只能引用输入 `raw_task_summaries` 中已经存在的 `local_task_id`。
+- `dependency_patches` 只能引用当前 chunk 内已有 local task id。
+- 不得新增当前 chunk 之外的 local_task_id。
+- 不得输出 tts_audio 或 subtitle_track。
+- 不要输出未改变的字段；只 patch 缺失、空值或枚举不合法的字段。
+- `prompt_draft` 和 `risk_notes` 必须基于 `storyboard_segments`、`art_bible`、已有 `production_intent` 补齐，不得扩写剧情。
+
 ## 禁止
 
 - 不要输出解释性文字。
