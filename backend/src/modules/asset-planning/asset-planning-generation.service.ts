@@ -139,10 +139,11 @@ export async function generateAssetPlan(
   const gateway = input.llmGateway ?? createAssetPlannerGateway();
   const audioSkeleton = buildLocalAudioSkeleton(input);
 
-  const rawGlobalDraft = await gateway.invokeStructuredPrompt<unknown>({
+  const rawGlobalDraft = await invokePlanningPromptWithSafetyRetry({
+    gateway,
     promptId: PROMPT_ID,
-    input: buildGlobalPromptInput(input, audioSkeleton.tts_plan),
-    interactionLogWriter: createTimedInteractionLogWriter(input.interactionLogWriter),
+    promptInput: buildGlobalPromptInput(input, audioSkeleton.tts_plan),
+    interactionLogWriter: input.interactionLogWriter,
   });
   if (hasObjectKey(rawGlobalDraft, "tasks")) {
     throw new Error("asset_planning_global_draft_must_not_include_tasks");
@@ -160,10 +161,11 @@ export async function generateAssetPlan(
         segments,
         index,
       );
-      const rawChunkDraft = await gateway.invokeStructuredPrompt<unknown>({
+      const rawChunkDraft = await invokePlanningPromptWithSafetyRetry({
+        gateway,
         promptId: PROMPT_ID,
-        input: chunkPromptInput,
-        interactionLogWriter: createTimedInteractionLogWriter(input.interactionLogWriter),
+        promptInput: chunkPromptInput,
+        interactionLogWriter: input.interactionLogWriter,
       });
       return parseOrRepairChunkDraft({
         gateway,
@@ -177,6 +179,68 @@ export async function generateAssetPlan(
 
   return AssetPlan.parse(
     mergeAssetPlan(input, audioSkeleton, globalDraft, chunkDrafts),
+  );
+}
+
+async function invokePlanningPromptWithSafetyRetry(input: {
+  gateway: LlmGateway;
+  promptId: string;
+  promptInput: Record<string, unknown>;
+  interactionLogWriter: LlmInteractionLogWriter | undefined;
+}): Promise<unknown> {
+  try {
+    return await input.gateway.invokeStructuredPrompt<unknown>({
+      promptId: input.promptId,
+      input: input.promptInput,
+      interactionLogWriter: createTimedInteractionLogWriter(
+        input.interactionLogWriter,
+      ),
+    });
+  } catch (error) {
+    if (!isProviderContentFilterError(error)) {
+      throw error;
+    }
+
+    try {
+      return await input.gateway.invokeStructuredPrompt<unknown>({
+        promptId: input.promptId,
+        input: {
+          ...input.promptInput,
+          safety_retry_context: {
+            reason: "provider_content_filter",
+            instruction:
+              "改用远景、剪影、道具、尘土、旗帜、人物反应表达冲突，避免血腥、穿刺、尸体、咽喉等直接表述。",
+          },
+        },
+        interactionLogWriter: createTimedInteractionLogWriter(
+          input.interactionLogWriter,
+        ),
+      });
+    } catch {
+      throw error;
+    }
+  }
+}
+
+function isProviderContentFilterError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const record = error as Record<string, unknown>;
+  const code = record.code;
+  const status = record.status ?? record.statusCode;
+  const message = error instanceof Error ? error.message : "";
+  const codeText = typeof code === "string" ? code : String(code ?? "");
+  const statusMatches =
+    status === undefined || status === 400 || status === "400";
+
+  return (
+    statusMatches &&
+    (code === 1301 ||
+      code === "1301" ||
+      /content[_ -]?filter/i.test(codeText) ||
+      /content[_ -]?filter/i.test(message))
   );
 }
 

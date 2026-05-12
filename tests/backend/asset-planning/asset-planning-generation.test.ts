@@ -732,6 +732,75 @@ describe("generateAssetPlan", () => {
     ).toBe(true);
   });
 
+  it("retries global provider content filter errors once with safety retry context", async () => {
+    const globalInputs: Array<Record<string, unknown>> = [];
+    let globalAttempts = 0;
+    const { gateway } = makeGateway((options) => {
+      const input = options.input as {
+        planning_mode?: "global" | "segment_chunk";
+        chunk?: { segment_ids: string[] };
+        safety_retry_context?: unknown;
+      };
+      if (input.planning_mode === "global") {
+        globalAttempts += 1;
+        globalInputs.push(input as unknown as Record<string, unknown>);
+        if (globalAttempts === 1) {
+          throw Object.assign(new Error("content filter blocked"), {
+            status: 400,
+            code: "content_filter",
+          });
+        }
+        return validGlobalPlanningDraft;
+      }
+
+      return validChunkPlanningDraftFor(input.chunk?.segment_ids ?? []);
+    });
+
+    const plan = await generateAssetPlan(makeInput(gateway, 3));
+
+    expect(plan.plan_version).toBe("asset_plan_v1");
+    expect(globalAttempts).toBe(2);
+    expect(globalInputs[0]?.safety_retry_context).toBeUndefined();
+    expect(globalInputs[1]?.safety_retry_context).toMatchObject({
+      reason: "provider_content_filter",
+    });
+  });
+
+  it("retries provider content filter errors once with safety retry context", async () => {
+    const chunkInputs: Array<Record<string, unknown>> = [];
+    let chunkAttempts = 0;
+    const { gateway } = makeGateway((options) => {
+      const input = options.input as {
+        planning_mode?: "global" | "segment_chunk";
+        chunk?: { segment_ids: string[] };
+        safety_retry_context?: unknown;
+      };
+      if (input.planning_mode === "global") {
+        return validGlobalPlanningDraft;
+      }
+
+      chunkAttempts += 1;
+      chunkInputs.push(input as unknown as Record<string, unknown>);
+      if (chunkAttempts === 1) {
+        throw Object.assign(new Error("contentFilter level 2"), {
+          status: 400,
+          code: "1301",
+        });
+      }
+
+      return validChunkPlanningDraftFor(input.chunk?.segment_ids ?? []);
+    });
+
+    const plan = await generateAssetPlan(makeInput(gateway, 3));
+
+    expect(plan.plan_version).toBe("asset_plan_v1");
+    expect(chunkAttempts).toBe(2);
+    expect(chunkInputs[0]?.safety_retry_context).toBeUndefined();
+    expect(chunkInputs[1]?.safety_retry_context).toMatchObject({
+      reason: "provider_content_filter",
+    });
+  });
+
   it("rewrites video static fallback local ids to global task ids", async () => {
     const { gateway } = makeGateway((options) => {
       const input = options.input as {
