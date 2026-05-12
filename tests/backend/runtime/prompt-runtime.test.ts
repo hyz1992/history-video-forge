@@ -212,6 +212,23 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("不得修改 script_text、StoryboardPlan 或 TopicPackage");
   });
 
+  it("loads asset-planning.asset-structural-repair from harness prompts with zh-CN metadata", () => {
+    const registry = createPromptRegistry();
+
+    const prompt = registry.getPrompt("asset-planning.asset-structural-repair");
+
+    expect(prompt.metadata.id).toBe("asset-planning.asset-structural-repair");
+    expect(prompt.metadata.stage).toBe("asset_planning");
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.filePath.replace(/\\/g, "/")).toContain(
+      "/harness/prompts/asset-planning/",
+    );
+    expect(prompt.body).toContain("只修复结构性缺口");
+    expect(prompt.body).toContain("不得修改 topic、script、storyboard");
+    expect(prompt.body).toContain("不得输出 tts_audio 或 subtitle_track");
+    expect(prompt.body).toContain("本地逻辑只定位缺口，不代写风险文案");
+  });
+
   it("does not show empty risk_notes in the asset planning visual task skeleton", () => {
     const prompt = createPromptRegistry().getPrompt("asset-planning.asset-planner");
 
