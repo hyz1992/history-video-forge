@@ -16,6 +16,7 @@ import {
 } from "../../runtime/trace/project-storage.js";
 import { generateAssetPlan } from "./asset-planning-generation.service";
 import { validateAssetPlan } from "./asset-planning-local-validator";
+import { repairAssetPlanStructure } from "./asset-planning-structural-repair.service";
 import { saveAssetPlanRecord } from "./asset-plan-record.repository";
 
 export interface RunAssetPlanningGenerationInput {
@@ -54,6 +55,7 @@ function buildTraceSummary(input: {
   runId: string;
   validationDecision: string;
   regenerated: boolean;
+  planStructuralRepairUsed: boolean;
   staleSourceDetected: boolean;
 }) {
   const now = new Date().toISOString();
@@ -75,6 +77,17 @@ function buildTraceSummary(input: {
   if (input.regenerated) {
     steps.push({
       step_name: "asset-planning-regenerate",
+      phase: "asset_planning",
+      status: "succeeded",
+      started_at: now,
+      ended_at: now,
+      duration_ms: 0,
+    });
+  }
+
+  if (input.planStructuralRepairUsed) {
+    steps.push({
+      step_name: "asset-planning-structural-repair",
       phase: "asset_planning",
       status: "succeeded",
       started_at: now,
@@ -139,6 +152,7 @@ function buildRuntimeDiagnostics(input: {
   validationDecision: string;
   validationErrors: string[];
   regenerated: boolean;
+  planStructuralRepairUsed: boolean;
   staleSourceDetected: boolean;
 }) {
   const checks = [
@@ -158,6 +172,13 @@ function buildRuntimeDiagnostics(input: {
   if (input.regenerated) {
     checks.push({
       code: "asset_planning_regen_once",
+      level: "warning",
+    });
+  }
+
+  if (input.planStructuralRepairUsed) {
+    checks.push({
+      code: "asset_planning_plan_structural_repair_used",
       level: "warning",
     });
   }
@@ -273,6 +294,29 @@ export async function runAssetPlanningGeneration(
     }),
   );
   let regenerated = false;
+  let planStructuralRepairUsed = false;
+
+  if (localValidation.decision === "regen_once") {
+    const repairResult = await repairAssetPlanStructure({
+      plan,
+      validation: localValidation,
+      storyboard,
+      interactionLogWriter,
+    });
+    plan = repairResult.plan;
+    planStructuralRepairUsed = repairResult.repairUsed;
+    if (planStructuralRepairUsed) {
+      localValidation = validateAssetPlan(
+        buildValidationInput({
+          storyboardRecord,
+          scriptRecord,
+          topicPackage,
+          storyboard,
+          plan,
+        }),
+      );
+    }
+  }
 
   if (localValidation.decision === "regen_once") {
     regenerated = true;
@@ -306,16 +350,19 @@ export async function runAssetPlanningGeneration(
     runId,
     validationDecision: localValidation.decision,
     regenerated,
+    planStructuralRepairUsed,
     staleSourceDetected,
   });
   let runtimeDiagnostics = buildRuntimeDiagnostics({
     validationDecision: localValidation.decision,
     validationErrors: localValidation.errors,
     regenerated,
+    planStructuralRepairUsed,
     staleSourceDetected,
   });
   const executionState = {
     regenerate_used: regenerated,
+    plan_structural_repair_used: planStructuralRepairUsed,
   };
 
   if (localValidation.decision !== "pass") {
@@ -348,12 +395,14 @@ export async function runAssetPlanningGeneration(
       runId,
       validationDecision: localValidation.decision,
       regenerated,
+      planStructuralRepairUsed,
       staleSourceDetected,
     });
     runtimeDiagnostics = buildRuntimeDiagnostics({
       validationDecision: localValidation.decision,
       validationErrors: localValidation.errors,
       regenerated,
+      planStructuralRepairUsed,
       staleSourceDetected,
     });
 

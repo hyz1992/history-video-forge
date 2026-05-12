@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const generateAssetPlanMock = vi.hoisted(() => vi.fn());
+const repairAssetPlanStructureMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../../../backend/src/modules/asset-planning/asset-planning-generation.service.js", () => ({
   generateAssetPlan: generateAssetPlanMock,
+}));
+vi.mock("../../../backend/src/modules/asset-planning/asset-planning-structural-repair.service.js", () => ({
+  repairAssetPlanStructure: repairAssetPlanStructureMock,
 }));
 
 import { buildApp } from "../../../backend/src/app.js";
@@ -44,7 +48,7 @@ function makeStoryboardPlan(input: {
         on_screen_text: [],
         linked_beats: ["public answer"],
         linked_quotes: [],
-        risk_notes: [],
+        risk_notes: ["Keep historical texture and avoid modern elements."],
       },
     ],
     global_visual_notes: [],
@@ -105,7 +109,7 @@ function makeAssetPlan(input: {
           accepted_file_types: [],
           acceptance_notes: [],
         },
-        risk_notes: [],
+        risk_notes: ["Keep motion subtle and avoid unsafe visual emphasis."],
         cost_tier: "low",
         initial_status: "planned",
       },
@@ -128,7 +132,7 @@ function makeAssetPlan(input: {
           accepted_file_types: [],
           acceptance_notes: [],
         },
-        risk_notes: [],
+        risk_notes: ["Keep historical texture and avoid modern elements."],
         cost_tier: "free",
         initial_status: "planned",
       },
@@ -151,7 +155,7 @@ function makeAssetPlan(input: {
           accepted_file_types: ["image/png", "image/jpeg"],
           acceptance_notes: [],
         },
-        risk_notes: [],
+        risk_notes: ["Keep motion subtle and avoid unsafe visual emphasis."],
         cost_tier: "low",
         initial_status: "planned",
       },
@@ -174,7 +178,7 @@ function makeAssetPlan(input: {
           accepted_file_types: [],
           acceptance_notes: [],
         },
-        risk_notes: [],
+        risk_notes: ["Keep motion subtle and avoid unsafe visual emphasis."],
         cost_tier: "free",
         initial_status: "planned",
       },
@@ -305,6 +309,11 @@ async function prepareActiveStoryboard(app: ReturnType<typeof buildApp>) {
 describe("asset planning api", () => {
   beforeEach(() => {
     generateAssetPlanMock.mockReset();
+    repairAssetPlanStructureMock.mockReset();
+    repairAssetPlanStructureMock.mockImplementation(async (input) => ({
+      plan: input.plan,
+      repairUsed: false,
+    }));
   });
 
   it("returns 404 when the project does not exist", async () => {
@@ -487,6 +496,58 @@ describe("asset planning api", () => {
     );
     expect(prepared.project.status).toBe("storyboard_ready");
     expect(prepared.project.activeAssetPlanRecordId).toBeNull();
+  });
+
+  it("repairs a structurally invalid asset plan before using full regen", async () => {
+    const app = buildApp();
+    const prepared = await prepareActiveStoryboard(app);
+    const invalidPlan = makeAssetPlan({
+      storyboardRecordId: prepared.storyboardRecord.id,
+      scriptRecordId: prepared.scriptRecord.id,
+      topicPackageId: prepared.topicPackage.id,
+    });
+    invalidPlan.tasks[2].risk_notes = [];
+    const repairedPlan = makeAssetPlan({
+      storyboardRecordId: prepared.storyboardRecord.id,
+      scriptRecordId: prepared.scriptRecord.id,
+      topicPackageId: prepared.topicPackage.id,
+    });
+    generateAssetPlanMock.mockResolvedValueOnce(invalidPlan);
+    repairAssetPlanStructureMock.mockResolvedValueOnce({
+      plan: repairedPlan,
+      repairUsed: true,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/asset-plan/generate`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(generateAssetPlanMock).toHaveBeenCalledTimes(1);
+    expect(repairAssetPlanStructureMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plan: invalidPlan,
+        storyboard: prepared.storyboardPlan,
+        validation: expect.objectContaining({
+          errors: ["asset_visual_risk_notes_missing"],
+        }),
+      }),
+    );
+    expect(response.json()).toMatchObject({
+      execution_state: {
+        regenerate_used: false,
+        plan_structural_repair_used: true,
+      },
+      runtime_diagnostics: {
+        checks: expect.arrayContaining([
+          {
+            code: "asset_planning_plan_structural_repair_used",
+            level: "warning",
+          },
+        ]),
+      },
+    });
   });
 
   it("returns 409 and does not activate when the active storyboard changes during generation", async () => {
