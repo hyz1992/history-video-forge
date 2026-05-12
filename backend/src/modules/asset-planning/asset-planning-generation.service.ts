@@ -883,6 +883,9 @@ function mergeAssetPlan(
     source_script_record_id: input.sourceScriptRecordId,
     source_topic_package_id: input.sourceTopicPackageId,
     art_bible: globalDraft.art_bible,
+    visual_budget: globalDraft.visual_budget,
+    downgrade_policy: globalDraft.downgrade_policy,
+    global_audio_strategy: globalDraft.global_audio_strategy,
     tts_plan: audioSkeleton.tts_plan,
     tasks,
     dependencies,
@@ -967,10 +970,7 @@ function buildCostSummary(
     estimated_provider_calls: tasks.filter((task) =>
       ["tts_audio", "image_still", "video_clip"].includes(task.task_type),
     ).length,
-    notes: [
-      `visual_budget: ${JSON.stringify(globalDraft.visual_budget)}`,
-      ...budgetNotes,
-    ],
+    notes: budgetNotes,
   };
 }
 

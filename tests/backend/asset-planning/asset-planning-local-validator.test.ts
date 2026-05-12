@@ -377,6 +377,33 @@ describe("validateAssetPlan", () => {
         delete (plan.tasks[4].parameters as Record<string, unknown>).static_fallback_task_id;
       },
     ],
+    [
+      "asset_dependency_timing_source_invalid",
+      (plan: AssetPlan) => {
+        plan.dependencies.push({
+          dependency_id: "dep_bad_timing",
+          task_id: "sfx_new",
+          depends_on_task_id: "img_001",
+          dependency_type: "requires_timing",
+        });
+        plan.tasks.push({
+          task_id: "sfx_new",
+          order: plan.tasks.length,
+          task_type: "sfx_cue",
+          source_segment_id: "sb_001",
+          source_excerpt: "音效",
+          production_intent: "测试用",
+          recommended_mode: "auto",
+          provider_hint: null,
+          prompt_draft: null,
+          parameters: {},
+          manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] },
+          risk_notes: [],
+          cost_tier: "low",
+          initial_status: "planned",
+        });
+      },
+    ],
   ])("reports %s", (errorCode, mutate) => {
     const plan = makeBaseAssetPlan();
     mutate(plan);
@@ -423,5 +450,127 @@ describe("validateAssetPlan", () => {
         }),
       ]),
     );
+  });
+
+  describe("audio cue input contract", () => {
+    it("warns when sfx_cue has no prompt_draft and no tag parameters", () => {
+      const plan = makeBaseAssetPlan();
+      plan.tasks.push({
+        task_id: "sfx_bare",
+        order: plan.tasks.length,
+        task_type: "sfx_cue",
+        source_segment_id: "sb_001",
+        source_excerpt: "音效",
+        production_intent: "测试用",
+        recommended_mode: "auto",
+        provider_hint: null,
+        prompt_draft: null,
+        parameters: {},
+        manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] },
+        risk_notes: [],
+        cost_tier: "low",
+        initial_status: "planned",
+      });
+
+      const result = runValidation(plan);
+
+      expect(result.decision).toBe("pass");
+      expect(result.warnings).toEqual(
+        expect.arrayContaining([expect.stringContaining("asset_audio_cue_no_input_contract:sfx_bare")]),
+      );
+    });
+
+    it("does not warn when sfx_cue has prompt_draft", () => {
+      const plan = makeBaseAssetPlan();
+      plan.tasks.push({
+        task_id: "sfx_ok",
+        order: plan.tasks.length,
+        task_type: "sfx_cue",
+        source_segment_id: "sb_001",
+        source_excerpt: "音效",
+        production_intent: "测试用",
+        recommended_mode: "auto",
+        provider_hint: null,
+        prompt_draft: "低频战鼓声",
+        parameters: {},
+        manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] },
+        risk_notes: [],
+        cost_tier: "low",
+        initial_status: "planned",
+      });
+
+      const result = runValidation(plan);
+
+      expect(result.warnings).not.toEqual(
+        expect.arrayContaining([expect.stringContaining("asset_audio_cue_no_input_contract:sfx_ok")]),
+      );
+    });
+
+    it("does not warn when sfx_cue has sfx_tags parameter", () => {
+      const plan = makeBaseAssetPlan();
+      plan.tasks.push({
+        task_id: "sfx_tags",
+        order: plan.tasks.length,
+        task_type: "sfx_cue",
+        source_segment_id: "sb_001",
+        source_excerpt: "音效",
+        production_intent: "测试用",
+        recommended_mode: "auto",
+        provider_hint: null,
+        prompt_draft: null,
+        parameters: { sfx_tags: ["drum", "impact"] },
+        manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] },
+        risk_notes: [],
+        cost_tier: "low",
+        initial_status: "planned",
+      });
+
+      const result = runValidation(plan);
+
+      expect(result.warnings).not.toEqual(
+        expect.arrayContaining([expect.stringContaining("asset_audio_cue_no_input_contract:sfx_tags")]),
+      );
+    });
+  });
+
+  describe("zero video_clip explanation", () => {
+    it("warns when plan has zero video_clip and only boilerplate production notes", () => {
+      const plan = makeBaseAssetPlan();
+      plan.tasks = plan.tasks.filter((t) => t.task_type !== "video_clip");
+      plan.dependencies = plan.dependencies.filter(
+        (d) => d.task_id !== "video_001" && d.depends_on_task_id !== "video_001",
+      );
+      plan.global_production_notes = [
+        "TTS 与字幕任务由本地服务确定性创建，LLM 不输出 tts_audio 或 subtitle_track。",
+      ];
+
+      const result = runValidation(plan);
+
+      expect(result.warnings).toContain("asset_plan_zero_video_clip_without_explanation");
+    });
+
+    it("does not warn when plan has zero video_clip but LLM provided production notes", () => {
+      const plan = makeBaseAssetPlan();
+      plan.tasks = plan.tasks.filter((t) => t.task_type !== "video_clip");
+      plan.dependencies = plan.dependencies.filter(
+        (d) => d.task_id !== "video_001" && d.depends_on_task_id !== "video_001",
+      );
+      plan.global_production_notes = [
+        "TTS 与字幕任务由本地服务确定性创建，LLM 不输出 tts_audio 或 subtitle_track。",
+        "题材偏话术对峙，全静态+运镜足够表达动作因果。",
+      ];
+
+      const result = runValidation(plan);
+
+      expect(result.warnings).not.toContain("asset_plan_zero_video_clip_without_explanation");
+    });
+
+    it("does not warn when plan has at least one video_clip", () => {
+      const plan = makeBaseAssetPlan();
+
+      const result = runValidation(plan);
+
+      expect(result.warnings).not.toContain("asset_plan_zero_video_clip_without_explanation");
+    });
   });
 });

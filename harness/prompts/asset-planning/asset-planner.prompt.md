@@ -95,6 +95,8 @@ TTS 是最终时间轴的根，但 TTS 和字幕任务由本地服务确定性�
 }
 ```
 
+如果全片不规划任何 video_clip，请在 `manual_review_notes` 中说明原因（例如：题材偏话术对峙，全静态+运镜足够表达动作因果；或全片节奏适合图文叙事）。
+
 `ProjectArtBible.characters / locations / props` 的数组元素必须严格使用上述字段名；不得把 `character_id` 改成 `identity`，不得把 `visual_description` 改成 `appearance` 或 `description`，不得使用 `location_name`、`prop_name` 等替代字段。`role` 只属于 characters，locations 和 props 不得包含 `role`。
 
 ## Segment Chunk 模式输出骨架

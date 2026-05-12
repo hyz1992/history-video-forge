@@ -18,6 +18,13 @@ interface AssetPlanningRepairHint {
   missing_fields: string[];
 }
 
+const TIMING_SOURCE_ALLOWED_TASK_TYPES = new Set([
+  "tts_audio",
+  "subtitle_track",
+  "video_clip",
+  "bgm_cue",
+]);
+
 const NULL_SEGMENT_ALLOWED_TASK_TYPES = new Set([
   "tts_audio",
   "subtitle_track",
@@ -195,6 +202,26 @@ function hasNonEmptyRiskNotes(task: AssetTask) {
   return task.risk_notes.some((note) => note.trim().length > 0);
 }
 
+const AUDIO_INPUT_TAG_KEYS = new Set([
+  "sfx_tags",
+  "bgm_style_tags",
+  "mood_tags",
+  "style_tags",
+]);
+
+function hasAudioInputContract(task: AssetTask): boolean {
+  if (task.prompt_draft && task.prompt_draft.trim().length > 0) {
+    return true;
+  }
+  for (const [key, value] of Object.entries(task.parameters)) {
+    if (AUDIO_INPUT_TAG_KEYS.has(key)) {
+      if (Array.isArray(value) && value.length > 0) return true;
+      if (typeof value === "string" && value.trim().length > 0) return true;
+    }
+  }
+  return false;
+}
+
 export function validateAssetPlan(input: {
   storyboardRecordId: string;
   scriptRecordId: string;
@@ -286,6 +313,15 @@ export function validateAssetPlan(input: {
   }
 
   const tasksById = getTaskById(plan);
+  for (const dependency of plan.dependencies) {
+    if (dependency.dependency_type === "requires_timing") {
+      const upstream = tasksById.get(dependency.depends_on_task_id);
+      if (upstream && !TIMING_SOURCE_ALLOWED_TASK_TYPES.has(upstream.task_type)) {
+        pushUnique(errors, "asset_dependency_timing_source_invalid");
+      }
+    }
+  }
+
   for (const task of plan.tasks) {
     if (
       task.task_type === "subtitle_track" &&
@@ -301,6 +337,18 @@ export function validateAssetPlan(input: {
       pushUnique(errors, "asset_video_missing_static_fallback");
       pushRepairHint(repairHints, task, "static_fallback_task_id");
     }
+
+    if (
+      (task.task_type === "sfx_cue" || task.task_type === "bgm_cue") &&
+      !hasAudioInputContract(task)
+    ) {
+      pushUnique(warnings, `asset_audio_cue_no_input_contract:${task.task_id}`);
+    }
+  }
+
+  const hasVideoClip = plan.tasks.some((task) => task.task_type === "video_clip");
+  if (!hasVideoClip && plan.global_production_notes.length <= 1) {
+    pushUnique(warnings, "asset_plan_zero_video_clip_without_explanation");
   }
 
   return AssetPlanningValidationResultSchema.parse({

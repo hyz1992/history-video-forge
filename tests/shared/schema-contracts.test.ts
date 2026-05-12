@@ -493,6 +493,109 @@ describe("shared schema contracts", () => {
     expect(validation.stage).toBe("asset_planning_local_validation");
   });
 
+  it("parses asset plan with new global strategy fields", () => {
+    const plan = AssetPlan.parse({
+      plan_version: "asset_plan_v1",
+      source_storyboard_record_id: "storyboard_record_1",
+      source_script_record_id: "script_record_1",
+      source_topic_package_id: "topic_package_1",
+      art_bible: {
+        era_style: "战国",
+        visual_tone: "冷色压迫",
+        characters: [],
+        locations: [],
+        props: [],
+        global_prompt_prefix: "历史短视频",
+        global_negative_prompts: [],
+        consistency_notes: [],
+      },
+      visual_budget: { default_path: "image_still_plus_render_motion_cue", video_clip_policy: "conservative" },
+      downgrade_policy: { video_to_still_fallback: true },
+      global_audio_strategy: { bgm_cue_policy: "minimal" },
+      tts_plan: {
+        voice_profile_id: "voice_1",
+        estimated_total_duration_sec: 85,
+        chunking_strategy: "sentence_boundary",
+        chunks: [],
+      },
+      tasks: [
+        {
+          task_id: "tts_001",
+          order: 0,
+          task_type: "tts_audio",
+          source_segment_id: null,
+          source_excerpt: "全片口播",
+          production_intent: "TTS",
+          recommended_mode: "auto",
+          provider_hint: null,
+          prompt_draft: null,
+          parameters: {},
+          manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] },
+          risk_notes: [],
+          cost_tier: "low",
+          initial_status: "planned",
+        },
+      ],
+      dependencies: [],
+      cost_summary: { total_tasks: 1, by_type: {}, by_cost_tier: {}, estimated_provider_calls: 1, notes: [] },
+      global_production_notes: [],
+    });
+
+    expect(plan.visual_budget).toEqual({ default_path: "image_still_plus_render_motion_cue", video_clip_policy: "conservative" });
+    expect(plan.downgrade_policy).toEqual({ video_to_still_fallback: true });
+    expect(plan.global_audio_strategy).toEqual({ bgm_cue_policy: "minimal" });
+  });
+
+  it("provides defaults for new global strategy fields when omitted", () => {
+    const plan = AssetPlan.parse({
+      plan_version: "asset_plan_v1",
+      source_storyboard_record_id: "storyboard_record_1",
+      source_script_record_id: "script_record_1",
+      source_topic_package_id: "topic_package_1",
+      art_bible: {
+        era_style: "战国",
+        visual_tone: "冷色压迫",
+        characters: [],
+        locations: [],
+        props: [],
+        global_prompt_prefix: "历史短视频",
+        global_negative_prompts: [],
+        consistency_notes: [],
+      },
+      tts_plan: {
+        voice_profile_id: "voice_1",
+        estimated_total_duration_sec: 85,
+        chunking_strategy: "sentence_boundary",
+        chunks: [],
+      },
+      tasks: [
+        {
+          task_id: "tts_001",
+          order: 0,
+          task_type: "tts_audio",
+          source_segment_id: null,
+          source_excerpt: "全片口播",
+          production_intent: "TTS",
+          recommended_mode: "auto",
+          provider_hint: null,
+          prompt_draft: null,
+          parameters: {},
+          manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] },
+          risk_notes: [],
+          cost_tier: "low",
+          initial_status: "planned",
+        },
+      ],
+      dependencies: [],
+      cost_summary: { total_tasks: 1, by_type: {}, by_cost_tier: {}, estimated_provider_calls: 1, notes: [] },
+      global_production_notes: [],
+    });
+
+    expect(plan.visual_budget).toEqual({});
+    expect(plan.downgrade_policy).toEqual({});
+    expect(plan.global_audio_strategy).toEqual({});
+  });
+
   it("rejects invalid asset planning enums and empty required prompt drafts", () => {
     expect(() =>
       AssetPlan.parse({
