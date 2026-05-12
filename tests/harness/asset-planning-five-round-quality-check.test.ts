@@ -304,6 +304,62 @@ describe("asset planning five round quality check", () => {
               chunk_id: "chunk_001",
             },
           });
+          interactionLogWriter?.write({
+            generatedAt: "2026-05-11T00:00:02.000Z",
+            provider: "test-provider",
+            model: "test-model",
+            operationName: "asset-planning.asset-structural-repair",
+            promptId: "asset-planning.asset-structural-repair",
+            promptStage: "asset-planning",
+            promptLanguage: "zh-CN",
+            promptFilePath:
+              "harness/prompts/asset-planning/asset-structural-repair.prompt.md",
+            systemPrompt: "test repair prompt",
+            input: {
+              repair_mode: "segment_chunk_structural_repair",
+            },
+            rawOutput: "{}",
+            parsedOutput: {
+              planning_mode: "segment_chunk",
+              chunk_id: "chunk_001",
+            },
+            timing: {
+              startedAt: "2026-05-11T00:00:02.000Z",
+              finishedAt: "2026-05-11T00:00:02.025Z",
+              durationMs: 25,
+            },
+          });
+          interactionLogWriter?.write({
+            generatedAt: "2026-05-11T00:00:03.000Z",
+            provider: "test-provider",
+            model: "test-model",
+            operationName: "asset-planning.planner",
+            promptId: "asset-planning.planner",
+            promptStage: "asset-planning",
+            promptLanguage: "zh-CN",
+            promptFilePath: "harness/prompts/asset-planning/asset-planner.prompt.md",
+            systemPrompt: "test prompt",
+            input: {
+              planning_mode: "segment_chunk",
+              chunk: {
+                chunk_id: "chunk_001",
+                segment_ids: ["sb_001"],
+              },
+              safety_retry_context: {
+                reason: "provider_content_filter",
+              },
+            },
+            rawOutput: "{}",
+            parsedOutput: {
+              planning_mode: "segment_chunk",
+              chunk_id: "chunk_001",
+            },
+            timing: {
+              startedAt: "2026-05-11T00:00:03.000Z",
+              finishedAt: "2026-05-11T00:00:03.035Z",
+              durationMs: 35,
+            },
+          });
           return makeAssetPlan({
             storyboardRecordId: sourceStoryboardRecordId,
             scriptRecordId: sourceScriptRecordId,
@@ -325,7 +381,18 @@ describe("asset planning five round quality check", () => {
       readFileSync(join(outputDir, "live-check-summary.json"), "utf8"),
     ) as {
       total_rounds: number;
-      rounds: Array<{ validation_decision: string; source_title: string }>;
+      rounds: Array<{
+        validation_decision: string;
+        source_title: string;
+        chunk_structural_repair_used: boolean;
+        plan_structural_repair_used: boolean;
+        provider_safety_retry_used: boolean;
+        full_regen_used: boolean;
+        first_pass_wall_time_ms: number;
+        repair_wall_time_ms: number;
+        regen_wall_time_ms: number;
+        llm_call_count: number;
+      }>;
     };
     expect(summary.total_rounds).toBe(5);
     expect(summary.rounds.map((round) => round.validation_decision)).toEqual([
@@ -335,7 +402,20 @@ describe("asset planning five round quality check", () => {
       "pass",
       "pass",
     ]);
+    expect(summary.rounds[0]).toMatchObject({
+      chunk_structural_repair_used: true,
+      plan_structural_repair_used: false,
+      provider_safety_retry_used: true,
+      full_regen_used: false,
+      repair_wall_time_ms: 25,
+      regen_wall_time_ms: 0,
+      llm_call_count: 4,
+    });
+    expect(summary.rounds[0]?.first_pass_wall_time_ms).toEqual(expect.any(Number));
     expect(existsSync(join(outputDir, "gemini-review-pack.md"))).toBe(true);
+    expect(readFileSync(join(outputDir, "gemini-review-pack.md"), "utf8")).toContain(
+      "chunk_repair=true",
+    );
     expect(existsSync(join(outputDir, "round-1", "source-storyboard-plan.json"))).toBe(true);
     expect(existsSync(join(outputDir, "round-1", "asset-plan.json"))).toBe(true);
     expect(readFileSync(join(outputDir, "round-1", "review.md"), "utf8")).toContain(
@@ -352,9 +432,12 @@ describe("asset planning five round quality check", () => {
         started_at: string;
         finished_at: string;
         duration_ms: number;
+        repair_mode: string | null;
+        safety_retry_context_reason: string | null;
       }>;
     };
-    expect(runtimeDiagnostics.llm_calls).toEqual([
+    expect(runtimeDiagnostics.llm_calls).toHaveLength(4);
+    expect(runtimeDiagnostics.llm_calls?.slice(0, 2)).toEqual([
       expect.objectContaining({
         sequence: 1,
         prompt_id: "asset-planning.planner",
@@ -368,6 +451,16 @@ describe("asset planning five round quality check", () => {
         chunk_id: "chunk_001",
       }),
     ]);
+    expect(runtimeDiagnostics.llm_calls?.[2]).toMatchObject({
+      prompt_id: "asset-planning.asset-structural-repair",
+      repair_mode: "segment_chunk_structural_repair",
+      duration_ms: 25,
+    });
+    expect(runtimeDiagnostics.llm_calls?.[3]).toMatchObject({
+      prompt_id: "asset-planning.planner",
+      safety_retry_context_reason: "provider_content_filter",
+      duration_ms: 35,
+    });
     expect(runtimeDiagnostics.llm_calls?.[0]?.started_at).toEqual(
       expect.any(String),
     );

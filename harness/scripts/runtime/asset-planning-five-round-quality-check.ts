@@ -63,6 +63,14 @@ export interface AssetPlanningFiveRoundRoundResult {
   source_storyboard_dir: string;
   source_title: string;
   regenerated: boolean;
+  full_regen_used: boolean;
+  chunk_structural_repair_used: boolean;
+  plan_structural_repair_used: boolean;
+  provider_safety_retry_used: boolean;
+  first_pass_wall_time_ms: number;
+  repair_wall_time_ms: number;
+  regen_wall_time_ms: number;
+  llm_call_count: number;
   output_dir: string;
   validation_decision: string;
   validation_errors: string[];
@@ -101,6 +109,25 @@ interface RuntimeLlmCallDiagnostics {
   started_at: string;
   finished_at: string;
   duration_ms: number;
+  repair_mode: string | null;
+  safety_retry_context_reason: string | null;
+}
+
+interface RuntimeDiagnosticCheck {
+  code: string;
+  level: "info" | "warning" | "error";
+  message?: string;
+}
+
+interface RepairChainMetrics {
+  chunk_structural_repair_used: boolean;
+  plan_structural_repair_used: boolean;
+  provider_safety_retry_used: boolean;
+  full_regen_used: boolean;
+  first_pass_wall_time_ms: number;
+  repair_wall_time_ms: number;
+  regen_wall_time_ms: number;
+  llm_call_count: number;
 }
 
 export function buildAssetPlanningFiveRoundQualityCheckPlan(
@@ -191,21 +218,29 @@ export async function runAssetPlanningFiveRoundQualityCheck(
       roundOutputDir,
       llmCallDiagnostics,
     );
+    let firstPassWallTimeMs = 0;
+    let regenWallTimeMs = 0;
 
     try {
-      let assetPlan = AssetPlan.parse(
-        await planGenerator({
-          sourceStoryboardRecordId,
-          sourceScriptRecordId,
-          sourceTopicPackageId,
-          storyboard: source.storyboard,
-          draft: source.draft,
-          topicBoundaryContext: source.topicBoundaryContext,
-          interactionLogWriter,
-          chunkConcurrency: input.chunkConcurrency,
-          round,
-        }),
-      );
+      const firstPassStartedAt = Date.now();
+      let assetPlan: AssetPlanType;
+      try {
+        assetPlan = AssetPlan.parse(
+          await planGenerator({
+            sourceStoryboardRecordId,
+            sourceScriptRecordId,
+            sourceTopicPackageId,
+            storyboard: source.storyboard,
+            draft: source.draft,
+            topicBoundaryContext: source.topicBoundaryContext,
+            interactionLogWriter,
+            chunkConcurrency: input.chunkConcurrency,
+            round,
+          }),
+        );
+      } finally {
+        firstPassWallTimeMs = Date.now() - firstPassStartedAt;
+      }
       let validation = validateAssetPlan({
         storyboardRecordId: sourceStoryboardRecordId,
         scriptRecordId: sourceScriptRecordId,
@@ -218,24 +253,29 @@ export async function runAssetPlanningFiveRoundQualityCheck(
 
       if (validation.decision === "regen_once") {
         regenerated = true;
-        assetPlan = AssetPlan.parse(
-          await planGenerator({
-            sourceStoryboardRecordId,
-            sourceScriptRecordId,
-            sourceTopicPackageId,
-            storyboard: source.storyboard,
-            draft: source.draft,
-            topicBoundaryContext: source.topicBoundaryContext,
-            interactionLogWriter,
-            chunkConcurrency: input.chunkConcurrency,
-            round,
-            regenerationContext: {
-              reason: "asset_planning_local_validation_regen_once",
-              errors: validation.errors,
-              metrics: validation.metrics,
-            },
-          }),
-        );
+        const regenStartedAt = Date.now();
+        try {
+          assetPlan = AssetPlan.parse(
+            await planGenerator({
+              sourceStoryboardRecordId,
+              sourceScriptRecordId,
+              sourceTopicPackageId,
+              storyboard: source.storyboard,
+              draft: source.draft,
+              topicBoundaryContext: source.topicBoundaryContext,
+              interactionLogWriter,
+              chunkConcurrency: input.chunkConcurrency,
+              round,
+              regenerationContext: {
+                reason: "asset_planning_local_validation_regen_once",
+                errors: validation.errors,
+                metrics: validation.metrics,
+              },
+            }),
+          );
+        } finally {
+          regenWallTimeMs = Date.now() - regenStartedAt;
+        }
         validation = validateAssetPlan({
           storyboardRecordId: sourceStoryboardRecordId,
           scriptRecordId: sourceScriptRecordId,
@@ -246,29 +286,41 @@ export async function runAssetPlanningFiveRoundQualityCheck(
         });
       }
 
+      const baseChecks: RuntimeDiagnosticCheck[] = [
+        ...(regenerated
+          ? [
+              {
+                code: "asset_planning_regen_once",
+                level: "info" as const,
+              },
+            ]
+          : []),
+        {
+          code:
+            validation.decision === "pass"
+              ? "asset_planning_local_validation_passed"
+              : "asset_planning_local_validation_failed",
+          level: validation.decision === "pass" ? "info" : "error",
+        },
+        ...validation.errors.map((error) => ({
+          code: error,
+          level: "error" as const,
+        })),
+      ];
+      const repairChainMetrics = buildRepairChainMetrics({
+        llmCalls: llmCallDiagnostics,
+        checks: baseChecks,
+        fullRegenUsed: regenerated,
+        firstPassWallTimeMs,
+        regenWallTimeMs,
+      });
       const runtimeDiagnostics = {
         llm_calls: llmCallDiagnostics,
         checks: [
-          ...(regenerated
-            ? [
-                {
-                  code: "asset_planning_regen_once",
-                  level: "info",
-                },
-              ]
-            : []),
-          {
-            code:
-              validation.decision === "pass"
-                ? "asset_planning_local_validation_passed"
-                : "asset_planning_local_validation_failed",
-            level: validation.decision === "pass" ? "info" : "error",
-          },
-          ...validation.errors.map((error) => ({
-            code: error,
-            level: "error",
-          })),
+          ...baseChecks,
+          ...buildRepairChainChecks(repairChainMetrics),
         ],
+        repair_chain_metrics: repairChainMetrics,
       };
 
       writeJson(roundOutputDir, "asset-plan.json", assetPlan);
@@ -284,6 +336,7 @@ export async function runAssetPlanningFiveRoundQualityCheck(
         taskCount: assetPlan.tasks.length,
         dependencyCount: assetPlan.dependencies.length,
         segmentCount: source.storyboard.segments.length,
+        repairChainMetrics,
       });
 
       const reviewMarkdown = renderRoundReviewMarkdown({
@@ -304,6 +357,16 @@ export async function runAssetPlanningFiveRoundQualityCheck(
         source_storyboard_dir: sourceStoryboardDir,
         source_title: source.topicPackage.title,
         regenerated,
+        full_regen_used: repairChainMetrics.full_regen_used,
+        chunk_structural_repair_used:
+          repairChainMetrics.chunk_structural_repair_used,
+        plan_structural_repair_used:
+          repairChainMetrics.plan_structural_repair_used,
+        provider_safety_retry_used: repairChainMetrics.provider_safety_retry_used,
+        first_pass_wall_time_ms: repairChainMetrics.first_pass_wall_time_ms,
+        repair_wall_time_ms: repairChainMetrics.repair_wall_time_ms,
+        regen_wall_time_ms: repairChainMetrics.regen_wall_time_ms,
+        llm_call_count: repairChainMetrics.llm_call_count,
         output_dir: roundOutputDir,
         validation_decision: validation.decision,
         validation_errors: validation.errors,
@@ -315,15 +378,27 @@ export async function runAssetPlanningFiveRoundQualityCheck(
       });
     } catch (error) {
       const errorMessage = getErrorMessage(error);
+      const baseChecks: RuntimeDiagnosticCheck[] = [
+        {
+          code: "asset_planning_external_error",
+          level: "error",
+          message: errorMessage,
+        },
+      ];
+      const repairChainMetrics = buildRepairChainMetrics({
+        llmCalls: llmCallDiagnostics,
+        checks: baseChecks,
+        fullRegenUsed: false,
+        firstPassWallTimeMs,
+        regenWallTimeMs,
+      });
       const runtimeDiagnostics = {
         llm_calls: llmCallDiagnostics,
         checks: [
-          {
-            code: "asset_planning_external_error",
-            level: "error",
-            message: errorMessage,
-          },
+          ...baseChecks,
+          ...buildRepairChainChecks(repairChainMetrics),
         ],
+        repair_chain_metrics: repairChainMetrics,
       };
       writeJson(roundOutputDir, "runtime-diagnostics.json", runtimeDiagnostics);
       writeRoundTrace(roundOutputDir, {
@@ -336,6 +411,7 @@ export async function runAssetPlanningFiveRoundQualityCheck(
         taskCount: 0,
         dependencyCount: 0,
         segmentCount: source.storyboard.segments.length,
+        repairChainMetrics,
       });
       const reviewMarkdown = renderFailedRoundReviewMarkdown({
         round,
@@ -354,6 +430,16 @@ export async function runAssetPlanningFiveRoundQualityCheck(
         source_storyboard_dir: sourceStoryboardDir,
         source_title: source.topicPackage.title,
         regenerated: false,
+        full_regen_used: repairChainMetrics.full_regen_used,
+        chunk_structural_repair_used:
+          repairChainMetrics.chunk_structural_repair_used,
+        plan_structural_repair_used:
+          repairChainMetrics.plan_structural_repair_used,
+        provider_safety_retry_used: repairChainMetrics.provider_safety_retry_used,
+        first_pass_wall_time_ms: repairChainMetrics.first_pass_wall_time_ms,
+        repair_wall_time_ms: repairChainMetrics.repair_wall_time_ms,
+        regen_wall_time_ms: repairChainMetrics.regen_wall_time_ms,
+        llm_call_count: repairChainMetrics.llm_call_count,
         output_dir: roundOutputDir,
         validation_decision: "external_error",
         validation_errors: ["asset_planning_external_error"],
@@ -457,6 +543,26 @@ function readCompletedRoundIfAvailable(input: {
   }
 
   const reviewMarkdown = readFileSync(reviewPath, "utf8");
+  const runtimeDiagnosticsPath = resolve(
+    input.roundOutputDir,
+    "runtime-diagnostics.json",
+  );
+  const runtimeDiagnostics = existsSync(runtimeDiagnosticsPath)
+    ? (readJson(runtimeDiagnosticsPath) as {
+        repair_chain_metrics?: Partial<RepairChainMetrics>;
+        llm_calls?: RuntimeLlmCallDiagnostics[];
+        checks?: RuntimeDiagnosticCheck[];
+      })
+    : {};
+  const repairChainMetrics =
+    runtimeDiagnostics.repair_chain_metrics ??
+    buildRepairChainMetrics({
+      llmCalls: runtimeDiagnostics.llm_calls ?? [],
+      checks: runtimeDiagnostics.checks ?? [],
+      fullRegenUsed: false,
+      firstPassWallTimeMs: 0,
+      regenWallTimeMs: 0,
+    });
   return {
     reviewMarkdown,
     roundResult: {
@@ -465,6 +571,20 @@ function readCompletedRoundIfAvailable(input: {
       source_storyboard_dir: input.sourceStoryboardDir,
       source_title: input.source.topicPackage.title,
       regenerated: false,
+      full_regen_used: Boolean(repairChainMetrics.full_regen_used),
+      chunk_structural_repair_used: Boolean(
+        repairChainMetrics.chunk_structural_repair_used,
+      ),
+      plan_structural_repair_used: Boolean(
+        repairChainMetrics.plan_structural_repair_used,
+      ),
+      provider_safety_retry_used: Boolean(
+        repairChainMetrics.provider_safety_retry_used,
+      ),
+      first_pass_wall_time_ms: repairChainMetrics.first_pass_wall_time_ms ?? 0,
+      repair_wall_time_ms: repairChainMetrics.repair_wall_time_ms ?? 0,
+      regen_wall_time_ms: repairChainMetrics.regen_wall_time_ms ?? 0,
+      llm_call_count: repairChainMetrics.llm_call_count ?? 0,
       output_dir: input.roundOutputDir,
       validation_decision: validation.decision,
       validation_errors: validation.errors,
@@ -631,6 +751,8 @@ function createRoundInteractionLogWriter(
         started_at: startedAt,
         finished_at: finishedAt,
         duration_ms: Number.isFinite(durationMs) ? durationMs : 0,
+        repair_mode: readRepairMode(entry.input),
+        safety_retry_context_reason: readSafetyRetryContextReason(entry.input),
       });
       const filename = `${String(sequence).padStart(2, "0")}-${entry.promptId}.md`;
       writeFileSync(
@@ -665,6 +787,90 @@ function readChunkId(input: unknown) {
   return typeof chunkId === "string" ? chunkId : null;
 }
 
+function readRepairMode(input: unknown) {
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+
+  const repairMode = (input as Record<string, unknown>).repair_mode;
+  return typeof repairMode === "string" ? repairMode : null;
+}
+
+function readSafetyRetryContextReason(input: unknown) {
+  if (!input || typeof input !== "object") {
+    return null;
+  }
+
+  const safetyRetryContext = (input as Record<string, unknown>)
+    .safety_retry_context;
+  if (!safetyRetryContext || typeof safetyRetryContext !== "object") {
+    return null;
+  }
+
+  const reason = (safetyRetryContext as Record<string, unknown>).reason;
+  return typeof reason === "string" ? reason : null;
+}
+
+function buildRepairChainMetrics(input: {
+  llmCalls: RuntimeLlmCallDiagnostics[];
+  checks: RuntimeDiagnosticCheck[];
+  fullRegenUsed: boolean;
+  firstPassWallTimeMs: number;
+  regenWallTimeMs: number;
+}): RepairChainMetrics {
+  const checkCodes = new Set(input.checks.map((check) => check.code));
+  const chunkStructuralRepairUsed = input.llmCalls.some(
+    (call) => call.repair_mode === "segment_chunk_structural_repair",
+  );
+  const planStructuralRepairUsed =
+    input.llmCalls.some(
+      (call) => call.repair_mode === "asset_plan_structural_patch",
+    ) || checkCodes.has("asset_planning_plan_structural_repair_used");
+  const providerSafetyRetryUsed =
+    input.llmCalls.some((call) => Boolean(call.safety_retry_context_reason)) ||
+    checkCodes.has("asset_planning_provider_safety_retry_used");
+  const fullRegenUsed =
+    input.fullRegenUsed || checkCodes.has("asset_planning_regen_once");
+
+  return {
+    chunk_structural_repair_used: chunkStructuralRepairUsed,
+    plan_structural_repair_used: planStructuralRepairUsed,
+    provider_safety_retry_used: providerSafetyRetryUsed,
+    full_regen_used: fullRegenUsed,
+    first_pass_wall_time_ms: Math.max(0, input.firstPassWallTimeMs),
+    repair_wall_time_ms: input.llmCalls
+      .filter((call) => call.prompt_id === "asset-planning.asset-structural-repair")
+      .reduce((sum, call) => sum + call.duration_ms, 0),
+    regen_wall_time_ms: Math.max(0, input.regenWallTimeMs),
+    llm_call_count: input.llmCalls.length,
+  };
+}
+
+function buildRepairChainChecks(
+  metrics: RepairChainMetrics,
+): RuntimeDiagnosticCheck[] {
+  const checks: RuntimeDiagnosticCheck[] = [];
+  if (metrics.chunk_structural_repair_used) {
+    checks.push({
+      code: "asset_planning_chunk_structural_repair_used",
+      level: "warning",
+    });
+  }
+  if (metrics.plan_structural_repair_used) {
+    checks.push({
+      code: "asset_planning_plan_structural_repair_used",
+      level: "warning",
+    });
+  }
+  if (metrics.provider_safety_retry_used) {
+    checks.push({
+      code: "asset_planning_provider_safety_retry_used",
+      level: "warning",
+    });
+  }
+  return checks;
+}
+
 function writeRoundTrace(
   roundOutputDir: string,
   input: {
@@ -677,6 +883,7 @@ function writeRoundTrace(
     taskCount: number;
     dependencyCount: number;
     segmentCount: number;
+    repairChainMetrics: RepairChainMetrics;
   },
 ) {
   writeFileSync(
@@ -688,6 +895,14 @@ function writeRoundTrace(
       `- source_title: ${input.sourceTitle}`,
       `- source_storyboard_dir: ${input.sourceStoryboardDir}`,
       `- regenerated: ${input.regenerated}`,
+      `- full_regen_used: ${input.repairChainMetrics.full_regen_used}`,
+      `- chunk_structural_repair_used: ${input.repairChainMetrics.chunk_structural_repair_used}`,
+      `- plan_structural_repair_used: ${input.repairChainMetrics.plan_structural_repair_used}`,
+      `- provider_safety_retry_used: ${input.repairChainMetrics.provider_safety_retry_used}`,
+      `- first_pass_wall_time_ms: ${input.repairChainMetrics.first_pass_wall_time_ms}`,
+      `- repair_wall_time_ms: ${input.repairChainMetrics.repair_wall_time_ms}`,
+      `- regen_wall_time_ms: ${input.repairChainMetrics.regen_wall_time_ms}`,
+      `- llm_call_count: ${input.repairChainMetrics.llm_call_count}`,
       `- validation_decision: ${input.validationDecision}`,
       `- segment_count: ${input.segmentCount}`,
       `- task_count: ${input.taskCount}`,
@@ -814,7 +1029,7 @@ function renderGeminiReviewPack(
     "",
     ...result.rounds.map(
       (round) =>
-        `- round ${round.round}: ${round.source_title}, validation=${round.validation_decision}, tasks=${round.task_count}, output=${round.output_dir}`,
+        `- round ${round.round}: ${round.source_title}, validation=${round.validation_decision}, tasks=${round.task_count}, llm_calls=${round.llm_call_count}, first_pass_ms=${round.first_pass_wall_time_ms}, repair_ms=${round.repair_wall_time_ms}, regen_ms=${round.regen_wall_time_ms}, chunk_repair=${round.chunk_structural_repair_used}, plan_repair=${round.plan_structural_repair_used}, safety_retry=${round.provider_safety_retry_used}, full_regen=${round.full_regen_used}, output=${round.output_dir}`,
     ),
     "",
     "---",
