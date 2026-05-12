@@ -140,6 +140,25 @@ TTS 是最终时间轴的根，但 TTS 和字幕任务由本地服务确定性�
 }
 ```
 
+## Chunk task 必填字段清单
+
+每个 chunk task 必须显式输出：
+
+- `local_task_id`
+- `task_type`
+- `source_segment_id`
+- `source_excerpt`
+- `production_intent`
+- `recommended_mode`
+- `provider_hint`：无供应商也要写 `null`
+- `prompt_draft`：无提示词也要写 `null`
+- `parameters`：无参数也要写 `{}`
+- `manual_upload_policy`
+- `risk_notes`：无明显风险也要写一条结构化生产风险说明
+- `cost_tier`
+
+video_clip 必须说明 static_fallback_task_id：在 `parameters.static_fallback_task_id` 中引用同 segment 的 `image_still` local task，并在 `parameters.why_static_insufficient` 中说明为什么静态图不足。
+
 每个 segment 最多一个主锚点 `image_still`；主图必须在 `parameters.image_role` 写 `"anchor"`。如确实需要额外辅助图，额外 `image_still` 必须在 `parameters.image_role` 写 `"support"`，并填写非空 `"support_reason"` 说明为什么主图不足。默认不要规划 support 图。
 
 每个 video_clip 必须依赖同 segment 的 image_still 作为静态 fallback/视觉锚点。优先在 `video_clip.parameters.static_fallback_task_id` 写入同 segment 的本地 image_still 任务 ID；也可以在 `dependencies` 中写 video_clip 到 image_still 的 requires_output 依赖。不得规划没有 image_still fallback 的 `video_clip`。

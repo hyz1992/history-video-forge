@@ -229,6 +229,18 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("本地逻辑只定位缺口，不代写风险文案");
   });
 
+  it("documents asset planning chunk required field checklist", () => {
+    const registry = createPromptRegistry();
+    const prompt = registry.getPrompt("asset-planning.planner");
+
+    expect(prompt.body).toContain("每个 chunk task 必须显式输出");
+    expect(prompt.body).toContain("provider_hint");
+    expect(prompt.body).toContain("prompt_draft");
+    expect(prompt.body).toContain("manual_upload_policy");
+    expect(prompt.body).toContain("risk_notes");
+    expect(prompt.body).toContain("video_clip 必须说明 static_fallback_task_id");
+  });
+
   it("documents compact asset planning chunk structural patch mode", () => {
     const registry = createPromptRegistry();
     const prompt = registry.getPrompt("asset-planning.asset-structural-repair");
