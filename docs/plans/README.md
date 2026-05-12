@@ -37,3 +37,10 @@
 - `asset planning` 第一版 design 与 implementation plan 已执行到后端最小实现完成，并已被正式架构、数据和 API 文档吸收。
 - 当前仍保留未归档的 asset planning 计划文件，直到最终最小验证完成并确认是否归档。
 - `assets` 与 `compose` 仍未进入可实施设计，不得从 asset planning 计划中顺手实现。
+
+## 2026-05-12 Asset Planning 结构性局部修复
+
+- 新增 [Asset Planning 结构性局部修复设计](./2026-05-12-asset-planning-structural-repair-design.md)。
+- 新增 [Asset Planning 结构性局部修复实施计划](./2026-05-12-asset-planning-structural-repair-implementation-plan.md)。
+- 本轮计划只处理 asset planning 结构稳定性：空 `prompt_draft`、缺失 `risk_notes`、缺少 `video_clip` 静态兜底、供应商内容过滤安全重试。
+- 该计划不引入 semantic reviewer，不实现 assets / compose / 前端，不修改 topic / script / storyboard 语义链路。
