@@ -212,6 +212,16 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("不得修改 script_text、StoryboardPlan 或 TopicPackage");
   });
 
+  it("does not show empty risk_notes in the asset planning visual task skeleton", () => {
+    const prompt = createPromptRegistry().getPrompt("asset-planning.asset-planner");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).not.toContain('"risk_notes": []');
+    expect(prompt.body).toContain(
+      '"risk_notes": ["说明平台安全、历史准确性或生成稳定性风险"]',
+    );
+  });
+
   it("guides storyboard planning quality through prompt constraints instead of local semantic validation", () => {
     const prompt = createPromptRegistry().getPrompt("storyboard.storyboard-planner");
 
