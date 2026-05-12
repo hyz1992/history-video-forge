@@ -159,7 +159,9 @@ export async function generateAssetPlan(
         interactionLogWriter: createTimedInteractionLogWriter(input.interactionLogWriter),
       });
       rejectForbiddenChunkTasks(rawChunkDraft);
-      const chunkDraft = SegmentChunkPlanningDraft.parse(rawChunkDraft);
+      const chunkDraft = SegmentChunkPlanningDraft.parse(
+        normalizeChunkDraftStructure(rawChunkDraft),
+      );
       validateChunkDraft(chunkDraft, segments);
       return chunkDraft;
     },
@@ -252,6 +254,41 @@ function rejectForbiddenChunkTasks(rawChunkDraft: unknown) {
   ) {
     throw new Error("asset_planning_chunk_draft_forbidden_task_type");
   }
+}
+
+function normalizeChunkDraftStructure(rawChunkDraft: unknown): unknown {
+  if (!rawChunkDraft || typeof rawChunkDraft !== "object") {
+    return rawChunkDraft;
+  }
+
+  const draft = rawChunkDraft as Record<string, unknown>;
+  if (!Array.isArray(draft.tasks)) {
+    return rawChunkDraft;
+  }
+
+  return {
+    ...draft,
+    tasks: draft.tasks.map((task) => {
+      if (!task || typeof task !== "object") {
+        return task;
+      }
+
+      const taskRecord = task as Record<string, unknown>;
+      if (taskRecord.manual_upload_policy !== null) {
+        return task;
+      }
+
+      return {
+        ...taskRecord,
+        manual_upload_policy: {
+          allowed: false,
+          required: false,
+          accepted_file_types: [],
+          acceptance_notes: [],
+        },
+      };
+    }),
+  };
 }
 
 function buildGlobalPromptInput(

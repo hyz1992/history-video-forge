@@ -638,6 +638,42 @@ describe("generateAssetPlan", () => {
     );
   });
 
+  it("normalizes null manual upload policies in chunk task drafts", async () => {
+    const { gateway } = makeGateway((options) => {
+      const input = options.input as {
+        planning_mode: "global" | "segment_chunk";
+        chunk?: { segment_ids: string[] };
+      };
+      if (input.planning_mode === "global") {
+        return validGlobalPlanningDraft;
+      }
+      const draft = validChunkPlanningDraftFor(input.chunk?.segment_ids ?? []);
+      return {
+        ...draft,
+        tasks: draft.tasks.map((task, index) =>
+          index === 0
+            ? {
+                ...task,
+                manual_upload_policy: null,
+              }
+            : task,
+        ),
+      };
+    });
+
+    const plan = await generateAssetPlan(makeInput(gateway, 3));
+
+    expect(
+      plan.tasks.find((task) => task.task_id === "img_003")
+        ?.manual_upload_policy,
+    ).toEqual({
+      allowed: false,
+      required: false,
+      accepted_file_types: [],
+      acceptance_notes: [],
+    });
+  });
+
   it("rejects chunk-local dependencies that reference missing local ids", async () => {
     const { gateway } = makeGateway((options) => {
       const input = options.input as {
