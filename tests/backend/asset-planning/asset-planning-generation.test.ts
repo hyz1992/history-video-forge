@@ -716,7 +716,9 @@ describe("generateAssetPlan", () => {
               accepted_file_types: ["video/mp4"],
               acceptance_notes: [],
             },
-            risk_notes: ["避免血腥特写，优先远景和剪影"],
+            risk_notes: [
+              `若视频生成失败，降级为 local_img_${segment.segment_id} 配合音效。`,
+            ],
             cost_tier: "high",
           },
         ],
@@ -728,7 +730,9 @@ describe("generateAssetPlan", () => {
             dependency_type: "requires_output",
           },
         ],
-        budget_notes: [],
+        budget_notes: [
+          `local_video_${segment.segment_id} 成本高，local_img_${segment.segment_id} 是兜底。`,
+        ],
       };
     });
 
@@ -736,6 +740,12 @@ describe("generateAssetPlan", () => {
     const videoTask = plan.tasks.find((task) => task.task_type === "video_clip");
 
     expect(videoTask?.parameters.static_fallback_task_id).toBe("img_003");
+    expect(videoTask?.risk_notes).toContain(
+      "若视频生成失败，降级为 img_003 配合音效。",
+    );
+    expect(plan.cost_summary.notes).toContain(
+      `video_004 成本高，img_003 是兜底。`,
+    );
     expect(plan.dependencies).toContainEqual(
       expect.objectContaining({
         task_id: videoTask?.task_id,

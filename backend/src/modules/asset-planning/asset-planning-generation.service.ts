@@ -521,7 +521,7 @@ function mergeAssetPlan(
         prompt_draft: taskDraft.prompt_draft,
         parameters: rewriteTaskParameterLocalIds(taskDraft.parameters, localToGlobal),
         manual_upload_policy: taskDraft.manual_upload_policy,
-        risk_notes: taskDraft.risk_notes,
+        risk_notes: rewriteLocalTaskIdsInTextList(taskDraft.risk_notes, localToGlobal),
         cost_tier: taskDraft.cost_tier,
         initial_status: "planned",
       });
@@ -547,7 +547,15 @@ function mergeAssetPlan(
     }
   }
 
-  const costSummary = buildCostSummary(tasks, globalDraft, chunkDrafts);
+  const budgetNotes = chunkDrafts.flatMap((chunkDraft, chunkIndex) => {
+    const localToGlobal = new Map(
+      localMappings
+        .filter((mapping) => mapping.chunkIndex === chunkIndex)
+        .map((mapping) => [mapping.localTaskId, mapping.globalTaskId]),
+    );
+    return rewriteLocalTaskIdsInTextList(chunkDraft.budget_notes, localToGlobal);
+  });
+  const costSummary = buildCostSummary(tasks, globalDraft, budgetNotes);
 
   return {
     plan_version: "asset_plan_v1",
@@ -586,6 +594,24 @@ function rewriteTaskParameterLocalIds(
   };
 }
 
+function rewriteLocalTaskIdsInTextList(
+  textList: string[],
+  localToGlobal: Map<string, string>,
+) {
+  return textList.map((text) => rewriteLocalTaskIdsInText(text, localToGlobal));
+}
+
+function rewriteLocalTaskIdsInText(
+  text: string,
+  localToGlobal: Map<string, string>,
+) {
+  let rewritten = text;
+  for (const [localTaskId, globalTaskId] of localToGlobal) {
+    rewritten = rewritten.replaceAll(localTaskId, globalTaskId);
+  }
+  return rewritten;
+}
+
 function buildGlobalTaskId(taskDraft: ChunkTaskDraft, sequence: number) {
   const prefixByType: Record<ChunkTaskDraft["task_type"], string> = {
     image_still: "img",
@@ -600,7 +626,7 @@ function buildGlobalTaskId(taskDraft: ChunkTaskDraft, sequence: number) {
 function buildCostSummary(
   tasks: AssetTask[],
   globalDraft: GlobalPlanningDraft,
-  chunkDrafts: SegmentChunkPlanningDraft[],
+  budgetNotes: string[],
 ) {
   const byType: Record<string, number> = {};
   const byCostTier: Record<string, number> = {
@@ -623,7 +649,7 @@ function buildCostSummary(
     ).length,
     notes: [
       `visual_budget: ${JSON.stringify(globalDraft.visual_budget)}`,
-      ...chunkDrafts.flatMap((chunkDraft) => chunkDraft.budget_notes),
+      ...budgetNotes,
     ],
   };
 }
