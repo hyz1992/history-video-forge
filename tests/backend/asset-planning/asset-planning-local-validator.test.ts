@@ -386,4 +386,42 @@ describe("validateAssetPlan", () => {
     expect(result.decision).toBe("regen_once");
     expect(result.errors).toContain(errorCode);
   });
+
+  it("reports repair_hints for repairable structural task gaps", () => {
+    const plan = makeBaseAssetPlan();
+    plan.tasks[2].prompt_draft = null;
+    plan.tasks[3].risk_notes = [];
+    plan.tasks[4].source_segment_id = "sb_001";
+    plan.dependencies = plan.dependencies.filter(
+      (dependency) => dependency.task_id !== "video_001",
+    );
+    delete (plan.tasks[4].parameters as Record<string, unknown>)
+      .static_fallback_task_id;
+
+    const result = runValidation(plan);
+
+    expect(result.decision).toBe("regen_once");
+    expect(result.metrics.repair_hints).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          task_id: "img_001",
+          task_type: "image_still",
+          source_segment_id: "sb_001",
+          missing_fields: ["prompt_draft"],
+        }),
+        expect.objectContaining({
+          task_id: "motion_001",
+          task_type: "render_motion_cue",
+          source_segment_id: "sb_001",
+          missing_fields: ["risk_notes"],
+        }),
+        expect.objectContaining({
+          task_id: "video_001",
+          task_type: "video_clip",
+          source_segment_id: "sb_001",
+          missing_fields: ["static_fallback_task_id"],
+        }),
+      ]),
+    );
+  });
 });

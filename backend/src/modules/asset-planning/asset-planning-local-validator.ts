@@ -11,6 +11,13 @@ interface LocatedExcerpt {
   end: number;
 }
 
+interface AssetPlanningRepairHint {
+  task_id: string;
+  task_type: AssetTask["task_type"];
+  source_segment_id: string | null;
+  missing_fields: string[];
+}
+
 const NULL_SEGMENT_ALLOWED_TASK_TYPES = new Set([
   "tts_audio",
   "subtitle_track",
@@ -28,6 +35,25 @@ function pushUnique(target: string[], code: string) {
   if (!target.includes(code)) {
     target.push(code);
   }
+}
+
+function pushRepairHint(
+  target: AssetPlanningRepairHint[],
+  task: AssetTask,
+  missingField: string,
+) {
+  let hint = target.find((item) => item.task_id === task.task_id);
+  if (!hint) {
+    hint = {
+      task_id: task.task_id,
+      task_type: task.task_type,
+      source_segment_id: task.source_segment_id,
+      missing_fields: [],
+    };
+    target.push(hint);
+  }
+
+  pushUnique(hint.missing_fields, missingField);
 }
 
 function sumCoveredChars(spans: LocatedExcerpt[]) {
@@ -179,6 +205,7 @@ export function validateAssetPlan(input: {
 }): AssetPlanningValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
+  const repairHints: AssetPlanningRepairHint[] = [];
   const { plan } = input;
 
   if (plan.source_storyboard_record_id !== input.storyboardRecordId) {
@@ -219,10 +246,12 @@ export function validateAssetPlan(input: {
       (!task.prompt_draft || task.prompt_draft.trim().length === 0)
     ) {
       pushUnique(errors, "asset_visual_prompt_missing");
+      pushRepairHint(repairHints, task, "prompt_draft");
     }
 
     if (VISUAL_TASK_TYPES.has(task.task_type) && !hasNonEmptyRiskNotes(task)) {
       pushUnique(errors, "asset_visual_risk_notes_missing");
+      pushRepairHint(repairHints, task, "risk_notes");
     }
   }
 
@@ -270,6 +299,7 @@ export function validateAssetPlan(input: {
       !hasStaticFallback(task, plan, tasksById)
     ) {
       pushUnique(errors, "asset_video_missing_static_fallback");
+      pushRepairHint(repairHints, task, "static_fallback_task_id");
     }
   }
 
@@ -284,6 +314,7 @@ export function validateAssetPlan(input: {
       tts_coverage_ratio: ttsCoverage.coverageRatio,
       tts_covered_char_count: ttsCoverage.coveredCharCount,
       script_char_count: input.scriptText.length,
+      repair_hints: repairHints,
     },
   });
 }
