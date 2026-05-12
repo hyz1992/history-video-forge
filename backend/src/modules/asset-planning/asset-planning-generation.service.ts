@@ -18,6 +18,7 @@ import type {
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 
 const PROMPT_ID = "asset-planning.planner";
+const STRUCTURAL_REPAIR_PROMPT_ID = "asset-planning.asset-structural-repair";
 
 export interface AssetPlanningTopicBoundaryContext {
   title: string;
@@ -153,17 +154,24 @@ export async function generateAssetPlan(
     chunks,
     normalizeChunkConcurrency(input.chunkConcurrency),
     async (segments, index) => {
+      const chunkPromptInput = buildChunkPromptInput(
+        input,
+        globalDraft,
+        segments,
+        index,
+      );
       const rawChunkDraft = await gateway.invokeStructuredPrompt<unknown>({
         promptId: PROMPT_ID,
-        input: buildChunkPromptInput(input, globalDraft, segments, index),
+        input: chunkPromptInput,
         interactionLogWriter: createTimedInteractionLogWriter(input.interactionLogWriter),
       });
-      rejectForbiddenChunkTasks(rawChunkDraft);
-      const chunkDraft = SegmentChunkPlanningDraft.parse(
-        normalizeChunkDraftStructure(rawChunkDraft),
-      );
-      validateChunkDraft(chunkDraft, segments);
-      return chunkDraft;
+      return parseOrRepairChunkDraft({
+        gateway,
+        interactionLogWriter: input.interactionLogWriter,
+        rawChunkDraft,
+        chunkPromptInput,
+        segments,
+      });
     },
   );
 
@@ -254,6 +262,68 @@ function rejectForbiddenChunkTasks(rawChunkDraft: unknown) {
   ) {
     throw new Error("asset_planning_chunk_draft_forbidden_task_type");
   }
+}
+
+async function parseOrRepairChunkDraft(input: {
+  gateway: LlmGateway;
+  interactionLogWriter: LlmInteractionLogWriter | undefined;
+  rawChunkDraft: unknown;
+  chunkPromptInput: ReturnType<typeof buildChunkPromptInput>;
+  segments: StoryboardPlan["segments"];
+}): Promise<SegmentChunkPlanningDraft> {
+  try {
+    return parseAndValidateChunkDraft(input.rawChunkDraft, input.segments);
+  } catch (error) {
+    const repairedChunkDraft = await input.gateway.invokeStructuredPrompt<unknown>({
+      promptId: STRUCTURAL_REPAIR_PROMPT_ID,
+      input: {
+        repair_mode: "segment_chunk_structural_repair",
+        chunk_prompt_input: input.chunkPromptInput,
+        chunk: input.chunkPromptInput.chunk,
+        raw_chunk_draft: input.rawChunkDraft,
+        structural_errors: serializeStructuralError(error),
+      },
+      interactionLogWriter: createTimedInteractionLogWriter(input.interactionLogWriter),
+    });
+
+    try {
+      return parseAndValidateChunkDraft(repairedChunkDraft, input.segments);
+    } catch {
+      throw error;
+    }
+  }
+}
+
+function parseAndValidateChunkDraft(
+  rawChunkDraft: unknown,
+  segments: StoryboardPlan["segments"],
+): SegmentChunkPlanningDraft {
+  rejectForbiddenChunkTasks(rawChunkDraft);
+  const chunkDraft = SegmentChunkPlanningDraft.parse(
+    normalizeChunkDraftStructure(rawChunkDraft),
+  );
+  validateChunkDraft(chunkDraft, segments);
+  return chunkDraft;
+}
+
+function serializeStructuralError(error: unknown) {
+  if (error instanceof z.ZodError) {
+    return error.issues;
+  }
+
+  if (error instanceof Error) {
+    return [
+      {
+        message: error.message,
+      },
+    ];
+  }
+
+  return [
+    {
+      message: String(error),
+    },
+  ];
 }
 
 function normalizeChunkDraftStructure(rawChunkDraft: unknown): unknown {

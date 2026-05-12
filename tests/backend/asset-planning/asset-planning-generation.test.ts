@@ -674,6 +674,64 @@ describe("generateAssetPlan", () => {
     });
   });
 
+  it("repairs invalid chunk draft structure once with the structural repair prompt", async () => {
+    const promptIds: string[] = [];
+    const { gateway } = makeGateway((options) => {
+      promptIds.push(options.promptId);
+      const input = options.input as {
+        planning_mode?: "global" | "segment_chunk";
+        chunk?: { segment_ids: string[] };
+        raw_chunk_draft?: { tasks?: Array<Record<string, unknown>> };
+      };
+      if (input.planning_mode === "global") {
+        return validGlobalPlanningDraft;
+      }
+
+      if (options.promptId === "asset-planning.asset-structural-repair") {
+        const segmentIds =
+          input.raw_chunk_draft?.tasks
+            ?.map((task) => String(task.source_segment_id))
+            .filter(Boolean) ?? ["sb_001"];
+        const repairedDraft = validChunkPlanningDraftFor([...new Set(segmentIds)]);
+        return {
+          ...repairedDraft,
+          tasks: repairedDraft.tasks.map((task) => ({
+            ...task,
+            risk_notes: ["保持历史正剧质感，避免现代物件和夸张血腥表现"],
+          })),
+        };
+      }
+
+      const draft = validChunkPlanningDraftFor(input.chunk?.segment_ids ?? []);
+      return {
+        ...draft,
+        tasks: draft.tasks.map((task, index) =>
+          index === 0
+            ? {
+                ...task,
+                prompt_draft: "",
+                risk_notes: [],
+              }
+            : task,
+        ),
+      };
+    });
+
+    const plan = await generateAssetPlan(makeInput(gateway, 3));
+
+    expect(promptIds).toContain("asset-planning.asset-structural-repair");
+    expect(plan.tasks.some((task) => task.task_type === "image_still")).toBe(true);
+    expect(
+      plan.tasks
+        .filter((task) =>
+          ["image_still", "render_motion_cue", "video_clip"].includes(
+            task.task_type,
+          ),
+        )
+        .every((task) => task.risk_notes.length > 0),
+    ).toBe(true);
+  });
+
   it("rewrites video static fallback local ids to global task ids", async () => {
     const { gateway } = makeGateway((options) => {
       const input = options.input as {
