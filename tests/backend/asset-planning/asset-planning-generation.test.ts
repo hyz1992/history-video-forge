@@ -674,6 +674,76 @@ describe("generateAssetPlan", () => {
     });
   });
 
+  it("rewrites video static fallback local ids to global task ids", async () => {
+    const { gateway } = makeGateway((options) => {
+      const input = options.input as {
+        planning_mode: "global" | "segment_chunk";
+        chunk?: { segment_ids: string[] };
+      };
+      if (input.planning_mode === "global") {
+        return validGlobalPlanningDraft;
+      }
+
+      const segmentId = input.chunk?.segment_ids[0] ?? "sb_001";
+      const segment =
+        baseStoryboardPlan.segments.find(
+          (candidate) => candidate.segment_id === segmentId,
+        ) ?? baseStoryboardPlan.segments[0];
+      return {
+        planning_mode: "segment_chunk",
+        chunk_id: "chunk_video_with_fallback",
+        tasks: [
+          {
+            ...validChunkPlanningDraftFor([segment.segment_id]).tasks[0],
+            local_task_id: `local_img_${segment.segment_id}`,
+          },
+          {
+            local_task_id: `local_video_${segment.segment_id}`,
+            task_type: "video_clip",
+            source_segment_id: segment.segment_id,
+            source_excerpt: segment.script_excerpt,
+            production_intent: "生成需要静态图兜底的视频片段",
+            recommended_mode: "manual_preferred",
+            provider_hint: "video_provider",
+            prompt_draft: `战国历史短视频，${segment.scene_description}`,
+            parameters: {
+              static_fallback_task_id: `local_img_${segment.segment_id}`,
+              why_static_insufficient: "连续动作是本段叙事核心",
+            },
+            manual_upload_policy: {
+              allowed: true,
+              required: false,
+              accepted_file_types: ["video/mp4"],
+              acceptance_notes: [],
+            },
+            risk_notes: ["避免血腥特写，优先远景和剪影"],
+            cost_tier: "high",
+          },
+        ],
+        dependencies: [
+          {
+            local_dependency_id: "dep_video_after_img",
+            task_local_id: `local_video_${segment.segment_id}`,
+            depends_on_local_task_id: `local_img_${segment.segment_id}`,
+            dependency_type: "requires_output",
+          },
+        ],
+        budget_notes: [],
+      };
+    });
+
+    const plan = await generateAssetPlan(makeInput(gateway, 3));
+    const videoTask = plan.tasks.find((task) => task.task_type === "video_clip");
+
+    expect(videoTask?.parameters.static_fallback_task_id).toBe("img_003");
+    expect(plan.dependencies).toContainEqual(
+      expect.objectContaining({
+        task_id: videoTask?.task_id,
+        depends_on_task_id: "img_003",
+      }),
+    );
+  });
+
   it("rejects chunk-local dependencies that reference missing local ids", async () => {
     const { gateway } = makeGateway((options) => {
       const input = options.input as {

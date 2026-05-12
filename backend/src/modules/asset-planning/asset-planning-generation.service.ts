@@ -493,8 +493,17 @@ function mergeAssetPlan(
   const tasks: AssetTask[] = [...audioSkeleton.tasks];
 
   for (const [chunkIndex, chunkDraft] of chunkDrafts.entries()) {
+    const localToGlobal = new Map(
+      chunkDraft.tasks.map((taskDraft, taskIndex) => [
+        taskDraft.local_task_id,
+        buildGlobalTaskId(taskDraft, tasks.length + taskIndex + 1),
+      ]),
+    );
     for (const taskDraft of chunkDraft.tasks) {
-      const globalTaskId = buildGlobalTaskId(taskDraft, tasks.length + 1);
+      const globalTaskId = localToGlobal.get(taskDraft.local_task_id);
+      if (!globalTaskId) {
+        throw new Error("asset_planning_task_local_id_mapping_missing");
+      }
       localMappings.push({
         chunkIndex,
         localTaskId: taskDraft.local_task_id,
@@ -510,7 +519,7 @@ function mergeAssetPlan(
         recommended_mode: taskDraft.recommended_mode,
         provider_hint: taskDraft.provider_hint,
         prompt_draft: taskDraft.prompt_draft,
-        parameters: taskDraft.parameters,
+        parameters: rewriteTaskParameterLocalIds(taskDraft.parameters, localToGlobal),
         manual_upload_policy: taskDraft.manual_upload_policy,
         risk_notes: taskDraft.risk_notes,
         cost_tier: taskDraft.cost_tier,
@@ -554,6 +563,26 @@ function mergeAssetPlan(
       "TTS 与字幕任务由本地服务确定性创建，LLM 不输出 tts_audio 或 subtitle_track。",
       ...globalDraft.manual_review_notes,
     ],
+  };
+}
+
+function rewriteTaskParameterLocalIds(
+  parameters: Record<string, unknown>,
+  localToGlobal: Map<string, string>,
+) {
+  const staticFallbackTaskId = parameters.static_fallback_task_id;
+  if (typeof staticFallbackTaskId !== "string") {
+    return parameters;
+  }
+
+  const globalTaskId = localToGlobal.get(staticFallbackTaskId);
+  if (!globalTaskId) {
+    return parameters;
+  }
+
+  return {
+    ...parameters,
+    static_fallback_task_id: globalTaskId,
   };
 }
 
