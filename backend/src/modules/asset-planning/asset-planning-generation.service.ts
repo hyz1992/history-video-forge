@@ -402,26 +402,30 @@ function normalizeChunkDraftStructure(rawChunkDraft: unknown): unknown {
 
   return {
     ...draft,
-    tasks: draft.tasks.map((task) => {
-      if (!task || typeof task !== "object") {
-        return task;
-      }
+    dependencies: Array.isArray(draft.dependencies) ? draft.dependencies : [],
+    budget_notes: Array.isArray(draft.budget_notes) ? draft.budget_notes : [],
+    tasks: draft.tasks.map(normalizeChunkTaskStructure),
+  };
+}
 
-      const taskRecord = task as Record<string, unknown>;
-      if (taskRecord.manual_upload_policy !== null) {
-        return task;
-      }
+function normalizeChunkTaskStructure(task: unknown): unknown {
+  if (!task || typeof task !== "object") {
+    return task;
+  }
 
-      return {
-        ...taskRecord,
-        manual_upload_policy: {
-          allowed: false,
-          required: false,
-          accepted_file_types: [],
-          acceptance_notes: [],
-        },
-      };
-    }),
+  const taskRecord = task as Record<string, unknown>;
+  return {
+    ...taskRecord,
+    provider_hint: "provider_hint" in taskRecord ? taskRecord.provider_hint : null,
+    prompt_draft: "prompt_draft" in taskRecord ? taskRecord.prompt_draft : null,
+    parameters: "parameters" in taskRecord ? taskRecord.parameters : {},
+    manual_upload_policy: taskRecord.manual_upload_policy ?? {
+      allowed: false,
+      required: false,
+      accepted_file_types: [],
+      acceptance_notes: [],
+    },
+    risk_notes: "risk_notes" in taskRecord ? taskRecord.risk_notes : [],
   };
 }
 

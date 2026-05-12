@@ -674,6 +674,54 @@ describe("generateAssetPlan", () => {
     });
   });
 
+  it("normalizes missing defaultable chunk task fields without invoking structural repair", async () => {
+    const promptIds: string[] = [];
+    const { gateway } = makeGateway((options) => {
+      promptIds.push(options.promptId);
+      const input = options.input as {
+        planning_mode?: "global" | "segment_chunk";
+        chunk?: { segment_ids: string[] };
+      };
+      if (input.planning_mode === "global") {
+        return validGlobalPlanningDraft;
+      }
+
+      const draft = validChunkPlanningDraftFor(input.chunk?.segment_ids ?? []);
+      return {
+        ...draft,
+        tasks: draft.tasks.map((task, index) =>
+          index === 0
+            ? {
+                local_task_id: task.local_task_id,
+                task_type: task.task_type,
+                source_segment_id: task.source_segment_id,
+                source_excerpt: task.source_excerpt,
+                production_intent: task.production_intent,
+                recommended_mode: task.recommended_mode,
+                prompt_draft: task.prompt_draft,
+                risk_notes: task.risk_notes,
+                cost_tier: task.cost_tier,
+              }
+            : task,
+        ),
+      };
+    });
+
+    const plan = await generateAssetPlan(makeInput(gateway, 3));
+
+    expect(promptIds).not.toContain("asset-planning.asset-structural-repair");
+    expect(plan.tasks.find((task) => task.task_id === "img_003")).toMatchObject({
+      provider_hint: null,
+      parameters: {},
+      manual_upload_policy: {
+        allowed: false,
+        required: false,
+        accepted_file_types: [],
+        acceptance_notes: [],
+      },
+    });
+  });
+
   it("repairs invalid chunk draft structure once with the structural repair prompt", async () => {
     const promptIds: string[] = [];
     const { gateway } = makeGateway((options) => {
