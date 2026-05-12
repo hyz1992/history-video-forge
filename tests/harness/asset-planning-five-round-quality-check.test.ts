@@ -438,6 +438,103 @@ describe("asset planning five round quality check", () => {
     );
   });
 
+  it("records failed rounds when the planner throws instead of aborting the live summary", async () => {
+    const sourceDirs = Array.from({ length: 2 }, (_, index) =>
+      mkdtempSync(join(tmpdir(), `svf2-asset-planning-failure-source-${index + 1}-`)),
+    );
+    const outputDir = mkdtempSync(join(tmpdir(), "svf2-asset-planning-failure-"));
+    sourceDirs.forEach((sourceDir, index) => {
+      writeFixedStoryboardSource(sourceDir, index + 1);
+    });
+    const planGenerator = vi.fn(
+      async ({
+        round,
+        sourceStoryboardRecordId,
+        sourceScriptRecordId,
+        sourceTopicPackageId,
+        interactionLogWriter,
+      }) => {
+        interactionLogWriter?.write({
+          generatedAt: "2026-05-11T00:00:00.000Z",
+          provider: "test-provider",
+          model: "test-model",
+          operationName: "asset-planning.planner",
+          promptId: "asset-planning.planner",
+          promptStage: "asset-planning",
+          promptLanguage: "zh-CN",
+          promptFilePath:
+            "harness/prompts/asset-planning/asset-planner.prompt.md",
+          systemPrompt: "test prompt",
+          input: {
+            planning_mode: "segment_chunk",
+            chunk: {
+              chunk_id: "chunk_001",
+              segment_ids: ["sb_001"],
+            },
+          },
+          rawOutput: round === 2 ? "" : "{}",
+          parsedOutput:
+            round === 2
+              ? null
+              : {
+                  planning_mode: "segment_chunk",
+                  chunk_id: "chunk_001",
+                },
+          errorMessage: round === 2 ? "400 contentFilter" : null,
+        });
+        if (round === 2) {
+          throw Object.assign(new Error("400 contentFilter"), {
+            code: "invalid_request",
+            retryable: false,
+          });
+        }
+
+        return makeAssetPlan({
+          storyboardRecordId: sourceStoryboardRecordId,
+          scriptRecordId: sourceScriptRecordId,
+          topicPackageId: sourceTopicPackageId,
+        });
+      },
+    );
+
+    const result = await runAssetPlanningFiveRoundQualityCheck(
+      { sourceDirs, outputDir, rounds: 2 },
+      {
+        requireRealEnv: false,
+        planGenerator,
+      },
+    );
+
+    expect(result.passed_rounds).toBe(1);
+    expect(result.failed_rounds).toBe(1);
+    expect(result.rounds[1]).toMatchObject({
+      round: 2,
+      status: "round-failed",
+      validation_decision: "external_error",
+      validation_errors: ["asset_planning_external_error"],
+      task_count: 0,
+      dependency_count: 0,
+    });
+    expect(existsSync(join(outputDir, "live-check-summary.json"))).toBe(true);
+    expect(existsSync(join(outputDir, "round-2", "runtime-diagnostics.json"))).toBe(
+      true,
+    );
+    expect(readFileSync(join(outputDir, "round-2", "review.md"), "utf8")).toContain(
+      "400 contentFilter",
+    );
+    const diagnostics = JSON.parse(
+      readFileSync(join(outputDir, "round-2", "runtime-diagnostics.json"), "utf8"),
+    ) as { checks?: Array<{ code: string; level: string }> };
+    expect(diagnostics.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "asset_planning_external_error",
+          level: "error",
+        }),
+      ]),
+    );
+  });
+
   it("resumes completed rounds without calling the planner again", async () => {
     const sourceDirs = Array.from({ length: 5 }, (_, index) =>
       mkdtempSync(join(tmpdir(), `svf2-asset-planning-resume-source-${index + 1}-`)),

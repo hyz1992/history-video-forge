@@ -192,32 +192,8 @@ export async function runAssetPlanningFiveRoundQualityCheck(
       llmCallDiagnostics,
     );
 
-    let assetPlan = AssetPlan.parse(
-      await planGenerator({
-        sourceStoryboardRecordId,
-        sourceScriptRecordId,
-        sourceTopicPackageId,
-        storyboard: source.storyboard,
-        draft: source.draft,
-        topicBoundaryContext: source.topicBoundaryContext,
-        interactionLogWriter,
-        chunkConcurrency: input.chunkConcurrency,
-        round,
-      }),
-    );
-    let validation = validateAssetPlan({
-      storyboardRecordId: sourceStoryboardRecordId,
-      scriptRecordId: sourceScriptRecordId,
-      topicPackageId: sourceTopicPackageId,
-      storyboard: source.storyboard,
-      scriptText: source.draft.script_text,
-      plan: assetPlan,
-    });
-    let regenerated = false;
-
-    if (validation.decision === "regen_once") {
-      regenerated = true;
-      assetPlan = AssetPlan.parse(
+    try {
+      let assetPlan = AssetPlan.parse(
         await planGenerator({
           sourceStoryboardRecordId,
           sourceScriptRecordId,
@@ -228,14 +204,9 @@ export async function runAssetPlanningFiveRoundQualityCheck(
           interactionLogWriter,
           chunkConcurrency: input.chunkConcurrency,
           round,
-          regenerationContext: {
-            reason: "asset_planning_local_validation_regen_once",
-            errors: validation.errors,
-            metrics: validation.metrics,
-          },
         }),
       );
-      validation = validateAssetPlan({
+      let validation = validateAssetPlan({
         storyboardRecordId: sourceStoryboardRecordId,
         scriptRecordId: sourceScriptRecordId,
         topicPackageId: sourceTopicPackageId,
@@ -243,75 +214,156 @@ export async function runAssetPlanningFiveRoundQualityCheck(
         scriptText: source.draft.script_text,
         plan: assetPlan,
       });
+      let regenerated = false;
+
+      if (validation.decision === "regen_once") {
+        regenerated = true;
+        assetPlan = AssetPlan.parse(
+          await planGenerator({
+            sourceStoryboardRecordId,
+            sourceScriptRecordId,
+            sourceTopicPackageId,
+            storyboard: source.storyboard,
+            draft: source.draft,
+            topicBoundaryContext: source.topicBoundaryContext,
+            interactionLogWriter,
+            chunkConcurrency: input.chunkConcurrency,
+            round,
+            regenerationContext: {
+              reason: "asset_planning_local_validation_regen_once",
+              errors: validation.errors,
+              metrics: validation.metrics,
+            },
+          }),
+        );
+        validation = validateAssetPlan({
+          storyboardRecordId: sourceStoryboardRecordId,
+          scriptRecordId: sourceScriptRecordId,
+          topicPackageId: sourceTopicPackageId,
+          storyboard: source.storyboard,
+          scriptText: source.draft.script_text,
+          plan: assetPlan,
+        });
+      }
+
+      const runtimeDiagnostics = {
+        llm_calls: llmCallDiagnostics,
+        checks: [
+          ...(regenerated
+            ? [
+                {
+                  code: "asset_planning_regen_once",
+                  level: "info",
+                },
+              ]
+            : []),
+          {
+            code:
+              validation.decision === "pass"
+                ? "asset_planning_local_validation_passed"
+                : "asset_planning_local_validation_failed",
+            level: validation.decision === "pass" ? "info" : "error",
+          },
+          ...validation.errors.map((error) => ({
+            code: error,
+            level: "error",
+          })),
+        ],
+      };
+
+      writeJson(roundOutputDir, "asset-plan.json", assetPlan);
+      writeJson(roundOutputDir, "asset-planning-validation-result.json", validation);
+      writeJson(roundOutputDir, "runtime-diagnostics.json", runtimeDiagnostics);
+      writeRoundTrace(roundOutputDir, {
+        round,
+        sourceStoryboardDir,
+        sourceTitle: source.topicPackage.title,
+        regenerated,
+        validationDecision: validation.decision,
+        validationErrors: validation.errors,
+        taskCount: assetPlan.tasks.length,
+        dependencyCount: assetPlan.dependencies.length,
+        segmentCount: source.storyboard.segments.length,
+      });
+
+      const reviewMarkdown = renderRoundReviewMarkdown({
+        round,
+        sourceTitle: source.topicPackage.title,
+        sourceStoryboardDir,
+        draft: source.draft,
+        storyboard: source.storyboard,
+        assetPlan,
+        validation,
+      });
+      writeFileSync(resolve(roundOutputDir, "review.md"), reviewMarkdown, "utf8");
+      reviewSections.push(reviewMarkdown);
+
+      rounds.push({
+        round,
+        status: validation.decision === "pass" ? "round-ready" : "round-failed",
+        source_storyboard_dir: sourceStoryboardDir,
+        source_title: source.topicPackage.title,
+        regenerated,
+        output_dir: roundOutputDir,
+        validation_decision: validation.decision,
+        validation_errors: validation.errors,
+        validation_warnings: validation.warnings,
+        task_count: assetPlan.tasks.length,
+        dependency_count: assetPlan.dependencies.length,
+        segment_count: source.storyboard.segments.length,
+        task_type_counts: countTasksByType(assetPlan),
+      });
+    } catch (error) {
+      const errorMessage = getErrorMessage(error);
+      const runtimeDiagnostics = {
+        llm_calls: llmCallDiagnostics,
+        checks: [
+          {
+            code: "asset_planning_external_error",
+            level: "error",
+            message: errorMessage,
+          },
+        ],
+      };
+      writeJson(roundOutputDir, "runtime-diagnostics.json", runtimeDiagnostics);
+      writeRoundTrace(roundOutputDir, {
+        round,
+        sourceStoryboardDir,
+        sourceTitle: source.topicPackage.title,
+        regenerated: false,
+        validationDecision: "external_error",
+        validationErrors: ["asset_planning_external_error"],
+        taskCount: 0,
+        dependencyCount: 0,
+        segmentCount: source.storyboard.segments.length,
+      });
+      const reviewMarkdown = renderFailedRoundReviewMarkdown({
+        round,
+        sourceTitle: source.topicPackage.title,
+        sourceStoryboardDir,
+        draft: source.draft,
+        storyboard: source.storyboard,
+        errorMessage,
+      });
+      writeFileSync(resolve(roundOutputDir, "review.md"), reviewMarkdown, "utf8");
+      reviewSections.push(reviewMarkdown);
+
+      rounds.push({
+        round,
+        status: "round-failed",
+        source_storyboard_dir: sourceStoryboardDir,
+        source_title: source.topicPackage.title,
+        regenerated: false,
+        output_dir: roundOutputDir,
+        validation_decision: "external_error",
+        validation_errors: ["asset_planning_external_error"],
+        validation_warnings: [],
+        task_count: 0,
+        dependency_count: 0,
+        segment_count: source.storyboard.segments.length,
+        task_type_counts: {},
+      });
     }
-
-    const runtimeDiagnostics = {
-      llm_calls: llmCallDiagnostics,
-      checks: [
-        ...(regenerated
-          ? [
-              {
-                code: "asset_planning_regen_once",
-                level: "info",
-              },
-            ]
-          : []),
-        {
-          code:
-            validation.decision === "pass"
-              ? "asset_planning_local_validation_passed"
-              : "asset_planning_local_validation_failed",
-          level: validation.decision === "pass" ? "info" : "error",
-        },
-        ...validation.errors.map((error) => ({
-          code: error,
-          level: "error",
-        })),
-      ],
-    };
-
-    writeJson(roundOutputDir, "asset-plan.json", assetPlan);
-    writeJson(roundOutputDir, "asset-planning-validation-result.json", validation);
-    writeJson(roundOutputDir, "runtime-diagnostics.json", runtimeDiagnostics);
-    writeRoundTrace(roundOutputDir, {
-      round,
-      sourceStoryboardDir,
-      sourceTitle: source.topicPackage.title,
-      regenerated,
-      validationDecision: validation.decision,
-      validationErrors: validation.errors,
-      taskCount: assetPlan.tasks.length,
-      dependencyCount: assetPlan.dependencies.length,
-      segmentCount: source.storyboard.segments.length,
-    });
-
-    const reviewMarkdown = renderRoundReviewMarkdown({
-      round,
-      sourceTitle: source.topicPackage.title,
-      sourceStoryboardDir,
-      draft: source.draft,
-      storyboard: source.storyboard,
-      assetPlan,
-      validation,
-    });
-    writeFileSync(resolve(roundOutputDir, "review.md"), reviewMarkdown, "utf8");
-    reviewSections.push(reviewMarkdown);
-
-    rounds.push({
-      round,
-      status: validation.decision === "pass" ? "round-ready" : "round-failed",
-      source_storyboard_dir: sourceStoryboardDir,
-      source_title: source.topicPackage.title,
-      regenerated,
-      output_dir: roundOutputDir,
-      validation_decision: validation.decision,
-      validation_errors: validation.errors,
-      validation_warnings: validation.warnings,
-      task_count: assetPlan.tasks.length,
-      dependency_count: assetPlan.dependencies.length,
-      segment_count: source.storyboard.segments.length,
-      task_type_counts: countTasksByType(assetPlan),
-    });
   }
 
   const result: AssetPlanningFiveRoundQualityCheckResult = {
@@ -707,6 +759,45 @@ function renderRoundReviewMarkdown(input: {
   ].join("\n");
 }
 
+function renderFailedRoundReviewMarkdown(input: {
+  round: number;
+  sourceTitle: string;
+  sourceStoryboardDir: string;
+  draft: ScriptDraftPackageType;
+  storyboard: StoryboardPlanType;
+  errorMessage: string;
+}) {
+  return [
+    `# Round ${input.round}: ${input.sourceTitle}`,
+    "",
+    `- source_storyboard_dir: ${input.sourceStoryboardDir}`,
+    "- validation_decision: external_error",
+    "- validation_errors: asset_planning_external_error",
+    `- segment_count: ${input.storyboard.segments.length}`,
+    "- task_count: 0",
+    "",
+    "## Failure",
+    "",
+    input.errorMessage,
+    "",
+    "## Script",
+    "",
+    input.draft.script_text,
+    "",
+    "## Storyboard",
+    "",
+    ...input.storyboard.segments.flatMap((segment) => [
+      `### ${segment.segment_id} (${segment.narrative_role})`,
+      "",
+      `- excerpt: ${segment.script_excerpt}`,
+      `- visual_intent: ${segment.visual_intent}`,
+      `- scene_description: ${segment.scene_description}`,
+      `- motion_hint: ${segment.motion_hint}`,
+      "",
+    ]),
+  ].join("\n");
+}
+
 function renderGeminiReviewPack(
   result: AssetPlanningFiveRoundQualityCheckResult,
   reviewSections: string[],
@@ -746,6 +837,16 @@ function readJson(filePath: string) {
 
 function writeJson(outputDir: string, filename: string, value: unknown) {
   writeFileSync(resolve(outputDir, filename), JSON.stringify(value, null, 2), "utf8");
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  return JSON.stringify(error);
 }
 
 async function main() {
