@@ -170,7 +170,7 @@ function makeBaseAssetPlan(): AssetPlan {
           accepted_file_types: ["image/png", "image/jpeg"],
           acceptance_notes: [],
         },
-        risk_notes: [],
+        risk_notes: ["避免现代建筑和服饰，保持战国历史质感"],
         cost_tier: "low",
         initial_status: "planned",
       },
@@ -193,7 +193,7 @@ function makeBaseAssetPlan(): AssetPlan {
           accepted_file_types: [],
           acceptance_notes: [],
         },
-        risk_notes: [],
+        risk_notes: ["运镜保持平稳，避免破坏历史正剧质感"],
         cost_tier: "free",
         initial_status: "planned",
       },
@@ -216,7 +216,7 @@ function makeBaseAssetPlan(): AssetPlan {
           accepted_file_types: ["video/mp4"],
           acceptance_notes: [],
         },
-        risk_notes: [],
+        risk_notes: ["避免夸张血腥或奇幻化表现"],
         cost_tier: "high",
         initial_status: "planned",
       },
@@ -360,6 +360,12 @@ describe("validateAssetPlan", () => {
       "asset_visual_prompt_missing",
       (plan: AssetPlan) => {
         plan.tasks[2].prompt_draft = "" as never;
+      },
+    ],
+    [
+      "asset_visual_risk_notes_missing",
+      (plan: AssetPlan) => {
+        plan.tasks[3].risk_notes = [];
       },
     ],
     [

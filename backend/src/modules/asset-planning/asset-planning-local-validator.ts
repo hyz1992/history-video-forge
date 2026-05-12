@@ -18,6 +18,12 @@ const NULL_SEGMENT_ALLOWED_TASK_TYPES = new Set([
   "bgm_cue",
 ]);
 
+const VISUAL_TASK_TYPES = new Set([
+  "image_still",
+  "render_motion_cue",
+  "video_clip",
+]);
+
 function pushUnique(target: string[], code: string) {
   if (!target.includes(code)) {
     target.push(code);
@@ -159,6 +165,10 @@ function hasStaticFallback(
   });
 }
 
+function hasNonEmptyRiskNotes(task: AssetTask) {
+  return task.risk_notes.some((note) => note.trim().length > 0);
+}
+
 export function validateAssetPlan(input: {
   storyboardRecordId: string;
   scriptRecordId: string;
@@ -209,6 +219,10 @@ export function validateAssetPlan(input: {
       (!task.prompt_draft || task.prompt_draft.trim().length === 0)
     ) {
       pushUnique(errors, "asset_visual_prompt_missing");
+    }
+
+    if (VISUAL_TASK_TYPES.has(task.task_type) && !hasNonEmptyRiskNotes(task)) {
+      pushUnique(errors, "asset_visual_risk_notes_missing");
     }
   }
 

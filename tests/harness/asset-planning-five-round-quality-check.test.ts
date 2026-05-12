@@ -185,7 +185,7 @@ function makeAssetPlan(input: {
           accepted_file_types: ["image/png"],
           acceptance_notes: [],
         },
-        risk_notes: [],
+        risk_notes: ["Keep the visual historically grounded and avoid modern elements."],
         cost_tier: "low",
         initial_status: "planned",
       },
