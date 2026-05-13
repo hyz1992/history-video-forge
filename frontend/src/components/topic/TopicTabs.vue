@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { computed } from "vue";
+import { useRoute, useRouter } from "vue-router";
+
 import type { TopicTab } from "../../stores/topic";
 
-defineProps<{
+const props = defineProps<{
   activeTab: TopicTab;
 }>();
 
@@ -9,13 +12,37 @@ defineEmits<{
   "update:activeTab": [tab: TopicTab];
 }>();
 
+const route = useRoute();
+const router = useRouter();
+const projectId = computed(() => route.params.projectId as string);
+
 const pipelineStages = [
-  { key: "topic", label: "① 选题", disabled: false },
-  { key: "script", label: "② 文案", disabled: true },
-  { key: "storyboard", label: "③ 分镜", disabled: true },
-  { key: "assets", label: "④ 素材", disabled: true },
-  { key: "compose", label: "⑤ 合成", disabled: true },
+  { key: "topic", label: "① 选题", path: "topic" },
+  { key: "script", label: "② 文案", path: "script" },
+  { key: "storyboard", label: "③ 分镜", path: "storyboard" },
+  { key: "assets", label: "④ 素材", path: "assets" },
+  { key: "compose", label: "⑤ 合成", path: "compose" },
 ] as const;
+
+function isActive(key: string) {
+  return route.path.endsWith(`/${key}`);
+}
+
+function isDisabled(key: string) {
+  const currentPath = route.path.split("/").pop() ?? "";
+  const order = ["topic", "script", "storyboard", "assets", "compose"];
+  const currentIdx = order.indexOf(currentPath);
+  const tabIdx = order.indexOf(key);
+  return tabIdx > currentIdx || (key === "assets" || key === "compose");
+}
+
+function navigate(key: string) {
+  if (isDisabled(key) || !projectId.value) return;
+  const stage = pipelineStages.find((s) => s.key === key);
+  if (stage) {
+    router.push(`/projects/${projectId.value}/${stage.path}`);
+  }
+}
 </script>
 
 <template>
@@ -30,12 +57,13 @@ const pipelineStages = [
           type="button"
           class="topic-pipeline-tab"
           :class="{
-            'topic-pipeline-tab--active': stage.key === 'topic',
-            'topic-pipeline-tab--disabled': stage.disabled,
+            'topic-pipeline-tab--active': isActive(stage.key),
+            'topic-pipeline-tab--disabled': isDisabled(stage.key),
           }"
-          :disabled="stage.disabled"
+          :disabled="isDisabled(stage.key)"
           :data-testid="`topic-stage-tab-${stage.key}`"
-          :aria-current="stage.key === 'topic' ? 'step' : undefined"
+          :aria-current="isActive(stage.key) ? 'step' : undefined"
+          @click="navigate(stage.key)"
         >
           {{ stage.label }}
         </button>

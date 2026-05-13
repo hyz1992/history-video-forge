@@ -14,6 +14,16 @@ import {
   scriptStoreKey,
 } from "./stores/script";
 import {
+  createFetchAssetPlanningApi,
+  createAssetPlanningStore,
+  assetPlanningStoreKey,
+} from "./stores/asset-planning";
+import {
+  createFetchStoryboardApi,
+  createStoryboardStore,
+  storyboardStoreKey,
+} from "./stores/storyboard";
+import {
   createFetchTopicApi,
   createTopicStore,
   topicStoreKey,
@@ -29,6 +39,14 @@ const scriptStore = createScriptStore({
   projectStore,
   api: createFetchScriptApi(),
 });
+const storyboardStore = createStoryboardStore({
+  projectStore,
+  api: createFetchStoryboardApi(),
+});
+const assetPlanningStore = createAssetPlanningStore({
+  projectStore,
+  api: createFetchAssetPlanningApi(),
+});
 
 const app = createApp({
   render: () => h(RouterView),
@@ -38,6 +56,8 @@ app.use(router);
 app.provide(projectStoreKey, projectStore);
 app.provide(topicStoreKey, topicStore);
 app.provide(scriptStoreKey, scriptStore);
+app.provide(storyboardStoreKey, storyboardStore);
+app.provide(assetPlanningStoreKey, assetPlanningStore);
 
 if (typeof document !== "undefined") {
   app.mount("#app");

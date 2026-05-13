@@ -117,9 +117,19 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
   }
 
   function resolveProjectWorkspacePath(projectId: string, currentStatus: string) {
-    return isDraftStatus(currentStatus)
-      ? `/projects/${projectId}/topic`
-      : `/projects/${projectId}/script`;
+    if (isDraftStatus(currentStatus)) {
+      return `/projects/${projectId}/topic`;
+    }
+    if (currentStatus.startsWith("script")) {
+      return `/projects/${projectId}/script`;
+    }
+    if (currentStatus.startsWith("storyboard")) {
+      return `/projects/${projectId}/storyboard`;
+    }
+    if (currentStatus.startsWith("asset_plan")) {
+      return `/projects/${projectId}/asset-plan`;
+    }
+    return `/projects/${projectId}/script`;
   }
 
   async function ensureProject() {
