@@ -127,7 +127,7 @@ async function navigateToAssetPlan() {
 <template>
   <section class="storyboard-page workspace-shell workspace-shell--storyboard">
     <div class="storyboard-workspace">
-      <TopicTabs :show-entry-tabs="false" />
+      <TopicTabs :show-entry-tabs="false" :current-status="projectStore.state.currentStatus" />
 
       <header class="storyboard-page-header">
         <div>

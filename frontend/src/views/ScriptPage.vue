@@ -103,7 +103,7 @@ async function confirmReturnToTopic() {
 
 <template>
   <section class="script-page workspace-shell workspace-shell--script">
-    <TopicTabs :show-entry-tabs="false" />
+    <TopicTabs :show-entry-tabs="false" :current-status="projectStore.state.currentStatus" />
 
     <header class="script-page-header">
       <div>

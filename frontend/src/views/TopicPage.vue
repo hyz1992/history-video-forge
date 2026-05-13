@@ -85,6 +85,7 @@ function generateRecommendations() {
     <div data-testid="topic-workspace" class="topic-workspace">
       <TopicTabs
         :active-tab="topicStore.state.activeTab"
+        :current-status="projectStore.state.currentStatus"
         @update:active-tab="topicStore.selectTab"
       />
 

@@ -7,9 +7,11 @@ import type { TopicTab } from "../../stores/topic";
 const props = withDefaults(defineProps<{
   activeTab?: TopicTab;
   showEntryTabs?: boolean;
+  currentStatus?: string;
 }>(), {
   activeTab: "system",
   showEntryTabs: true,
+  currentStatus: "",
 });
 
 defineEmits<{
@@ -28,16 +30,38 @@ const pipelineStages = [
   { key: "compose", label: "⑤ 合成", path: "compose" },
 ] as const;
 
+const stageOrder = ["topic", "script", "storyboard", "assets", "compose"] as const;
+
+/**
+ * Derive the furthest stage the project has reached from its status string.
+ * This determines which tabs are clickable — all stages up to and including
+ * the reached stage are navigable, everything beyond is disabled.
+ */
+function statusToReachedStage(status: string): string {
+  if (!status) return "topic";
+  if (status.startsWith("asset_plan")) return "assets";
+  if (status.startsWith("storyboard")) return "storyboard";
+  if (status.startsWith("script")) return "script";
+  return "topic";
+}
+
+const reachedStage = computed(() => statusToReachedStage(props.currentStatus));
+
 function isActive(key: string) {
   return route.path.endsWith(`/${key}`);
 }
 
 function isDisabled(key: string) {
-  const currentPath = route.path.split("/").pop() ?? "";
-  const order = ["topic", "script", "storyboard", "assets", "compose"];
-  const currentIdx = order.indexOf(currentPath);
-  const tabIdx = order.indexOf(key);
-  return tabIdx > currentIdx || (key === "assets" || key === "compose");
+  const reachedIdx = stageOrder.indexOf(reachedStage.value);
+  const tabIdx = stageOrder.indexOf(key as typeof stageOrder[number]);
+
+  // Stages beyond what the project has reached are disabled
+  if (tabIdx > reachedIdx) return true;
+
+  // assets and compose are always disabled for now (not implemented)
+  if (key === "assets" || key === "compose") return true;
+
+  return false;
 }
 
 function navigate(key: string) {
