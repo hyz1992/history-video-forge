@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted } from "vue";
 import { ElMessage } from "element-plus";
 
 import { useScriptStore } from "../../stores/script";
 
 const scriptStore = useScriptStore();
+
+onMounted(() => {
+  scriptStore.loadActiveScriptSnapshot();
+});
 
 /** Resolve the visible script: selected history entry > active snapshot > fallback from history. */
 const visibleScript = computed(() => {
@@ -93,6 +97,13 @@ async function handlePatch() {
   }
 }
 
+async function handleGenerate() {
+  await scriptStore.generateInitialScript();
+  if (!scriptStore.state.loadError) {
+    ElMessage.success("文案已生成");
+  }
+}
+
 async function handleRegen() {
   await scriptStore.runRegenOnce();
   if (!scriptStore.state.loadError) {
@@ -157,6 +168,13 @@ function handleSelectHistory(entryId: string) {
       class="script-empty"
     >
       <p>暂无文案快照</p>
+      <el-button
+        type="primary"
+        :loading="scriptStore.state.isLoading"
+        @click="handleGenerate"
+      >
+        开始生成文案
+      </el-button>
     </div>
 
     <!-- Main two-column layout -->

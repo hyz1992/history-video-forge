@@ -64,9 +64,7 @@ onMounted(() => {
     <div class="workspace-main">
       <WorkspaceHeader />
       <div class="workspace-content">
-        <Transition name="fade" mode="out-in">
           <component :is="currentPanel" :key="workspaceStore.currentStepKey()" />
-        </Transition>
       </div>
       <WorkspaceFooter />
     </div>
@@ -94,15 +92,5 @@ onMounted(() => {
   flex: 1;
   overflow-y: auto;
   background: var(--bg-base);
-}
-
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.15s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
 }
 </style>
