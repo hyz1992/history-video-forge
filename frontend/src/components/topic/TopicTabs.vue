@@ -4,9 +4,13 @@ import { useRoute, useRouter } from "vue-router";
 
 import type { TopicTab } from "../../stores/topic";
 
-const props = defineProps<{
-  activeTab: TopicTab;
-}>();
+const props = withDefaults(defineProps<{
+  activeTab?: TopicTab;
+  showEntryTabs?: boolean;
+}>(), {
+  activeTab: "system",
+  showEntryTabs: true,
+});
 
 defineEmits<{
   "update:activeTab": [tab: TopicTab];
@@ -78,6 +82,7 @@ function navigate(key: string) {
     </nav>
 
     <nav
+      v-if="showEntryTabs"
       data-testid="topic-entry-tabs"
       class="topic-entry-tabs"
       aria-label="topic entry tabs"
@@ -143,23 +148,20 @@ function navigate(key: string) {
 
 .topic-pipeline-tab {
   min-height: 40px;
+  min-width: 92px;
   padding: 0 1.25rem;
   border: 1px solid rgba(212, 163, 95, 0.16);
   border-radius: 8px;
   background: rgba(22, 28, 42, 0.72);
   color: var(--workspace-text-muted);
   box-shadow: none;
+  cursor: default;
+  font-size: 1rem;
   transition:
     border-color 160ms ease,
     color 160ms ease,
     background-color 160ms ease,
     transform 160ms ease;
-}
-
-.topic-pipeline-tab {
-  min-width: 92px;
-  cursor: default;
-  font-size: 1rem;
 }
 
 .topic-pipeline-tab--active {

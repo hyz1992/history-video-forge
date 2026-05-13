@@ -7,6 +7,7 @@ import ScriptHistoryPanel from "../components/script/ScriptHistoryPanel.vue";
 import ScriptReviewPanel from "../components/script/ScriptReviewPanel.vue";
 import ScriptStatusPanel from "../components/script/ScriptStatusPanel.vue";
 import ScriptTracePanel from "../components/script/ScriptTracePanel.vue";
+import TopicTabs from "../components/topic/TopicTabs.vue";
 import { useProjectStore } from "../stores/project";
 import { useScriptStore } from "../stores/script";
 
@@ -15,6 +16,18 @@ const scriptStore = useScriptStore();
 const route = useRoute();
 const router = useRouter();
 const isReturnTopicConfirmationVisible = ref(false);
+
+const reviewDecisionLabels: Record<string, string> = {
+  pass: "通过",
+  patch_once: "需修订",
+  regen_once: "需重写",
+  return_topic: "需返回选题",
+};
+
+const patchIntentLabels: Record<string, string> = {
+  fix: "修正问题",
+  lift: "提升质量",
+};
 
 const selectedHistoryEntry = computed(() =>
   scriptStore.state.history.find(
@@ -41,6 +54,18 @@ const isInitialGenerationFailed = computed(() =>
   !visibleScript.value &&
   scriptStore.state.snapshot?.current_status === "script_failed",
 );
+
+const canNavigateToStoryboard = computed(() =>
+  projectStore.state.currentStatus === "script_ready" ||
+  projectStore.state.currentStatus === "storyboard_ready" ||
+  projectStore.state.currentStatus?.startsWith("asset_plan"),
+);
+
+async function navigateToStoryboard() {
+  const projectId = projectStore.state.projectId;
+  if (!projectId) return;
+  await router.push(`/projects/${projectId}/storyboard`);
+}
 
 onMounted(async () => {
   const projectId = route.params.projectId;
@@ -78,6 +103,8 @@ async function confirmReturnToTopic() {
 
 <template>
   <section class="script-page workspace-shell workspace-shell--script">
+    <TopicTabs :show-entry-tabs="false" />
+
     <header class="script-page-header">
       <div>
         <p class="script-kicker">Project Workspace</p>
@@ -85,13 +112,25 @@ async function confirmReturnToTopic() {
         <p class="script-page-summary">围绕当前文案、风险判断、可执行动作和运行追踪展开审阅。</p>
       </div>
 
-      <button
-        type="button"
-        data-testid="return-topic"
-        @click="requestReturnToTopic"
-      >
-        返回选题
-      </button>
+      <div class="script-header-actions">
+        <button
+          type="button"
+          class="btn btn-secondary"
+          data-testid="return-topic"
+          @click="requestReturnToTopic"
+        >
+          返回选题
+        </button>
+        <button
+          v-if="canNavigateToStoryboard"
+          type="button"
+          class="btn btn-primary"
+          data-testid="navigate-storyboard"
+          @click="navigateToStoryboard"
+        >
+          进入分镜规划
+        </button>
+      </div>
     </header>
 
     <ScriptStatusPanel
@@ -100,10 +139,10 @@ async function confirmReturnToTopic() {
       :execution-state="visibleScript?.execution_state ?? null"
     />
 
-    <section data-testid="script-trace-entry" class="script-trace-entry">
-      <strong>查看运行详情</strong>
-      <span>graph trace 与 runtime diagnostics 会在文案生成后继续补全。</span>
-    </section>
+    <details data-testid="script-trace-entry" class="script-trace-entry">
+      <summary class="script-trace-summary">执行追踪与诊断信息</summary>
+      <span>文案生成完成后，执行追踪与诊断信息将在此处补全。</span>
+    </details>
 
     <section
       v-if="scriptStore.state.loadError"
@@ -113,6 +152,7 @@ async function confirmReturnToTopic() {
       <p>加载失败：{{ scriptStore.state.loadError }}</p>
       <button
         type="button"
+        class="btn btn-secondary"
         data-testid="retry-load"
         :disabled="scriptStore.state.isLoading"
         @click="scriptStore.retryLoadActiveScriptSnapshot"
@@ -125,11 +165,12 @@ async function confirmReturnToTopic() {
       <section data-testid="script-action-panel" class="script-action-panel">
         <div>
           <h2>可执行动作</h2>
-          <p>保留返回选题、patch_once、regen_once 的最小操作闭环。</p>
+          <p>可对当前文案进行修订、重写或返回选题重新选择。</p>
         </div>
         <button
           v-if="isReturnTopicConfirmationVisible"
           type="button"
+          class="btn btn-secondary"
           data-testid="confirm-return-topic"
           @click="confirmReturnToTopic"
         >
@@ -146,13 +187,11 @@ async function confirmReturnToTopic() {
       </section>
 
       <section data-testid="script-risk-panel" class="script-risk-panel">
-        <h2>风险</h2>
-        <p>审校结论：{{ visibleScript.review_decision }}</p>
-        <p>补丁意图：{{ visibleScript.patch_intent ?? "无" }}</p>
+        <h2>审校结论</h2>
+        <p>结论：{{ reviewDecisionLabels[visibleScript.review_decision] ?? visibleScript.review_decision }}</p>
+        <p>修订方向：{{ visibleScript.patch_intent ? (patchIntentLabels[visibleScript.patch_intent] ?? visibleScript.patch_intent) : "无" }}</p>
         <p>
-          执行状态：
-          patch={{ visibleScript.execution_state?.patch_used ? "已使用" : "未使用" }} /
-          regen={{ visibleScript.execution_state?.regenerate_used ? "已使用" : "未使用" }}
+          修订状态：{{ visibleScript.execution_state?.patch_used ? "已使用" : "未使用" }}　重写状态：{{ visibleScript.execution_state?.regenerate_used ? "已使用" : "未使用" }}
         </p>
       </section>
 
@@ -165,16 +204,13 @@ async function confirmReturnToTopic() {
         />
       </section>
 
-      <section class="script-trace-shell">
-        <div class="script-trace-intro">
-          <strong>查看运行详情</strong>
-          <span>graph trace 与 runtime diagnostics 在下方展开。</span>
-        </div>
+      <details class="script-trace-shell">
+        <summary class="script-trace-summary">执行追踪与诊断信息</summary>
         <ScriptTracePanel
           :graph-trace-summary="visibleScript.graph_trace_summary ?? null"
           :runtime-diagnostics="visibleScript.runtime_diagnostics ?? null"
         />
-      </section>
+      </details>
 
       <ScriptHistoryPanel
         :entries="
@@ -207,7 +243,7 @@ async function confirmReturnToTopic() {
       v-else-if="!scriptStore.state.isLoading && !scriptStore.state.loadError"
       data-testid="script-empty"
     >
-      暂无 active script snapshot
+      暂无文案快照
     </p>
   </section>
 </template>
@@ -215,7 +251,7 @@ async function confirmReturnToTopic() {
 <style scoped>
 .script-page {
   display: grid;
-  gap: 1rem;
+  gap: 1.5rem;
 }
 
 .script-page-header {
@@ -225,15 +261,25 @@ async function confirmReturnToTopic() {
   gap: 1rem;
 }
 
+.script-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
 .script-kicker,
 .script-page-summary {
   margin: 0;
 }
 
 .script-kicker {
-  color: #8d6e63;
+  color: var(--workspace-text-soft);
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.script-page-summary {
+  color: var(--workspace-text-muted);
 }
 
 .script-page-body,
@@ -252,8 +298,8 @@ async function confirmReturnToTopic() {
 .script-review-panel-shell,
 .script-trace-shell {
   padding: 1rem;
-  border: 1px solid #d7ccc8;
-  background: #fffaf5;
+  border: 1px solid var(--workspace-border);
+  background: var(--workspace-bg-panel);
 }
 
 .script-action-panel {
@@ -262,23 +308,79 @@ async function confirmReturnToTopic() {
 }
 
 .script-trace-entry {
-  display: grid;
-  gap: 0.25rem;
   padding: 1rem;
-  border: 1px solid #d7ccc8;
-  background: #fff8f2;
+  border: 1px solid var(--workspace-border);
+  background: var(--workspace-bg-panel);
 }
 
-.script-trace-intro {
+.script-trace-summary {
+  cursor: pointer;
+  color: var(--workspace-text-muted);
+  font-size: 0.95rem;
+  font-weight: 500;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.script-trace-summary::before {
+  content: "▸";
+  font-size: 0.8rem;
+  transition: transform 150ms ease;
+}
+
+details[open] > .script-trace-summary::before {
+  transform: rotate(90deg);
+}
+
+.script-trace-shell {
+  padding: 1rem;
+  border: 1px solid var(--workspace-border);
+  background: var(--workspace-bg-panel);
+}
+
+.script-trace-shell[open] {
   display: grid;
-  gap: 0.25rem;
+  gap: 0.75rem;
 }
 
-@media (max-width: 720px) {
+.script-load-error {
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--workspace-accent-strong, #c0392b);
+  background: rgba(192, 57, 43, 0.08);
+  color: var(--workspace-text);
+  display: grid;
+  gap: 0.5rem;
+}
+
+.script-running-state,
+.script-failed-state {
+  padding: 1.25rem;
+  text-align: center;
+  color: var(--workspace-text-muted);
+}
+
+@media (max-width: 819px) {
   .script-page-header,
   .script-action-panel {
     grid-template-columns: 1fr;
     display: grid;
+  }
+
+  .script-header-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 639px) {
+  .script-header-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .script-header-actions .btn {
+    width: 100%;
   }
 }
 </style>
