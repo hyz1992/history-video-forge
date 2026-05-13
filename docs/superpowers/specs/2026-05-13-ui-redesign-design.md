@@ -131,55 +131,242 @@
 
 ## 5. 视觉系统
 
-### 5.1 配色方案
+### 5.1 主题架构
 
-| 类别 | 变量 | 值 | 用途 |
-|------|------|------|------|
-| 背景-主色 | --bg-base | #0a0f18 | 页面底层背景 |
-| 背景-面板 | --bg-panel | #111827 | 面板/表格背景 |
-| 背景-卡片 | --bg-card | #1a2332 | 卡片/输入框背景 |
-| 背景-侧边栏 | --bg-sidebar | #0d1117 | 侧边栏背景 |
-| 强调-金 | --accent-gold | #d4a35f | 主要强调色 |
-| 强调-赤 | --accent-terracotta | #c56b47 | 次要强调色/CTA |
-| 强调-渐变 | --accent-gradient | #d4a35f → #c56b47 | 主按钮渐变 |
-| 文字-主 | --text-primary | #f4ebd7 | 标题/正文 |
-| 文字-次 | --text-secondary | #b7af9c | 描述文字 |
-| 文字-弱 | --text-muted | #857f73 | 辅助信息 |
-| 边框 | --border | rgba(212,163,95,0.15) | 默认边框 |
-| 边框-强调 | --border-active | rgba(212,163,95,0.25) | 选中态边框 |
+所有视觉 token 通过 CSS 自定义属性（CSS Variables）定义，挂载在 `document.documentElement` 上。切换主题只需替换一组变量值，组件代码和样式表无需任何修改。
 
-### 5.2 状态色
+**切换机制：**
+- `<html>` 标签上设置 `data-theme="cinematic-dark"` 属性标识当前主题
+- 每个主题对应一个 CSS 文件（如 `theme-cinematic-dark.css`），通过 `[data-theme="cinematic-dark"]` 选择器定义变量
+- 切换时修改 `data-theme` 属性值，所有 CSS 变量自动生效
+- Element Plus 通过 CSS 变量覆盖（`--el-color-primary` 等）同步主题
 
-| 状态 | 色值 | 用途 |
-|------|------|------|
-| 进行中 | #42a5f5 | 生成中、处理中 |
-| 已完成 | #66bb6a | 成功、通过 |
-| 警告 | #ffa726 | 建议优化、中等风险 |
-| 错误 | #ef5350 | 失败、高风险 |
-| 特殊 | #ab47bc | 语音、特殊类型 |
+**文件结构：**
+```
+frontend/src/styles/
+  theme-cinematic-dark.css    — 默认主题：暗色电影风（当前设计）
+  theme-light-modern.css      — 预留：明亮现代风（未来可选）
+  tokens.css                  — 语义化变量声明（不带值的引用层）
+  element-overrides.css       — Element Plus 变量 → 自定义 token 的映射
+  main.css                    — 全局基础样式（使用变量，不硬编码色值）
+```
 
-### 5.3 字体
+**切换代码示例：**
+```typescript
+// 切换主题
+function setTheme(name: string) {
+  document.documentElement.setAttribute('data-theme', name)
+  localStorage.setItem('theme', name)
+}
+// 恢复上次选择
+const saved = localStorage.getItem('theme') || 'cinematic-dark'
+setTheme(saved)
+```
 
-- **字体栈**: `'Noto Sans SC', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif`
+### 5.2 设计 Token 完整定义
+
+所有组件和页面样式只引用语义化变量名，不直接使用色值。Token 分三层：
+
+**第一层：语义化 Token（组件使用的变量）**
+```css
+/* 所有组件和页面样式只引用这些变量 */
+[data-theme] {
+  /* 背景 */
+  --bg-base: var(--t-bg-base);
+  --bg-panel: var(--t-bg-panel);
+  --bg-card: var(--t-bg-card);
+  --bg-sidebar: var(--t-bg-sidebar);
+  --bg-input: var(--t-bg-input);
+  --bg-hover: var(--t-bg-hover);
+
+  /* 强调色 */
+  --accent-primary: var(--t-accent-primary);
+  --accent-primary-light: var(--t-accent-primary-light);
+  --accent-gradient: var(--t-accent-gradient);
+  --accent-text: var(--t-accent-text);
+
+  /* 文字 */
+  --text-heading: var(--t-text-heading);
+  --text-body: var(--t-text-body);
+  --text-secondary: var(--t-text-secondary);
+  --text-muted: var(--t-text-muted);
+  --text-inverse: var(--t-text-inverse);
+
+  /* 边框 */
+  --border-default: var(--t-border-default);
+  --border-active: var(--t-border-active);
+  --border-hover: var(--t-border-hover);
+
+  /* 状态色（语义化） */
+  --color-info: var(--t-color-info);
+  --color-success: var(--t-color-success);
+  --color-warning: var(--t-color-warning);
+  --color-danger: var(--t-color-danger);
+
+  /* 阴影 */
+  --shadow-card: var(--t-shadow-card);
+  --shadow-elevated: var(--t-shadow-elevated);
+
+  /* 间距 */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+
+  /* 圆角 */
+  --radius-sm: 4px;
+  --radius-button: 6px;
+  --radius-card: 8px;
+  --radius-panel: 10px;
+  --radius-dialog: 12px;
+
+  /* 字体 */
+  --font-family: 'Noto Sans SC', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-heading: 700;
+  --font-subheading: 600;
+  --font-body: 400;
+}
+```
+
+**第二层：主题原始值（每个主题一份）**
+
+**默认主题：cinematic-dark（暗色电影风）**
+```css
+[data-theme="cinematic-dark"] {
+  --t-bg-base: #0a0f18;
+  --t-bg-panel: #111827;
+  --t-bg-card: #1a2332;
+  --t-bg-sidebar: #0d1117;
+  --t-bg-input: #111827;
+  --t-bg-hover: rgba(212, 163, 95, 0.06);
+
+  --t-accent-primary: #d4a35f;
+  --t-accent-primary-light: #e8c88a;
+  --t-accent-gradient: linear-gradient(135deg, #d4a35f, #c56b47);
+  --t-accent-text: #d4a35f;
+
+  --t-text-heading: #f4ebd7;
+  --t-text-body: #e0d8c8;
+  --t-text-secondary: #b7af9c;
+  --t-text-muted: #857f73;
+  --t-text-inverse: #0a0f18;
+
+  --t-border-default: rgba(212, 163, 95, 0.15);
+  --t-border-active: rgba(212, 163, 95, 0.25);
+  --t-border-hover: rgba(212, 163, 95, 0.20);
+
+  --t-color-info: #42a5f5;
+  --t-color-success: #66bb6a;
+  --t-color-warning: #ffa726;
+  --t-color-danger: #ef5350;
+
+  --t-shadow-card: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --t-shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+```
+
+**预留主题：light-modern（明亮现代风）**
+```css
+[data-theme="light-modern"] {
+  --t-bg-base: #f5f5f5;
+  --t-bg-panel: #ffffff;
+  --t-bg-card: #ffffff;
+  --t-bg-sidebar: #fafafa;
+  --t-bg-input: #f0f0f0;
+  --t-bg-hover: rgba(0, 0, 0, 0.04);
+
+  --t-accent-primary: #c0392b;
+  --t-accent-primary-light: #e74c3c;
+  --t-accent-gradient: linear-gradient(135deg, #c0392b, #e74c3c);
+  --t-accent-text: #c0392b;
+
+  --t-text-heading: #1a1a1a;
+  --t-text-body: #333333;
+  --t-text-secondary: #666666;
+  --t-text-muted: #999999;
+  --t-text-inverse: #ffffff;
+
+  --t-border-default: #e0e0e0;
+  --t-border-active: #c0392b;
+  --t-border-hover: #cccccc;
+
+  --t-color-info: #2196f3;
+  --t-color-success: #4caf50;
+  --t-color-warning: #ff9800;
+  --t-color-danger: #f44336;
+
+  --t-shadow-card: 0 1px 4px rgba(0, 0, 0, 0.08);
+  --t-shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+```
+
+**第三层：Element Plus 变量映射**
+```css
+/* element-overrides.css — 将 Element Plus 变量桥接到自定义 token */
+[data-theme] {
+  --el-color-primary: var(--accent-primary);
+  --el-color-primary-light-3: var(--accent-primary-light);
+  --el-color-success: var(--color-success);
+  --el-color-warning: var(--color-warning);
+  --el-color-danger: var(--color-danger);
+  --el-color-info: var(--color-info);
+  --el-bg-color: var(--bg-base);
+  --el-bg-color-overlay: var(--bg-panel);
+  --el-bg-color-page: var(--bg-base);
+  --el-text-color-primary: var(--text-heading);
+  --el-text-color-regular: var(--text-body);
+  --el-text-color-secondary: var(--text-secondary);
+  --el-text-color-placeholder: var(--text-muted);
+  --el-border-color: var(--border-default);
+  --el-border-color-light: var(--border-default);
+  --el-border-color-hover: var(--border-hover);
+  --el-fill-color-blank: var(--bg-input);
+  --el-border-radius-base: var(--radius-button);
+  --el-font-family: var(--font-family);
+  --el-mask-color: rgba(0, 0, 0, 0.5);
+}
+```
+
+### 5.3 组件样式规范
+
+**规则：所有组件样式只使用语义化变量，绝不硬编码色值。**
+
+```css
+/* 正确 ✅ */
+.my-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  color: var(--text-body);
+}
+
+/* 错误 ❌ */
+.my-card {
+  background: #1a2332;
+  border: 1px solid rgba(212, 163, 95, 0.15);
+  color: #e0d8c8;
+}
+```
+
+**Element Plus 暗色补丁：**
+Element Plus 默认不适配深色背景，需额外覆盖以下组件：
+- el-menu、el-tabs、el-table：背景色/文字色/选中态
+- el-dialog、el-drawer：overlay 和面板背景
+- el-message、el-notification：浮层背景
+- el-input、el-select：输入框背景和边框色
+
+### 5.4 字体
+
+- **字体栈**: `var(--font-family)` → `'Noto Sans SC', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif`
 - **字号层级**: 20px(页面标题) / 14px(区域标题) / 12px(正文) / 10px(辅助)
-- **字重**: 700(标题) / 600(小标题) / 400(正文)
+- **字重**: var(--font-heading)=700 / var(--font-subheading)=600 / var(--font-body)=400
 
-### 5.4 组件样式（Element Plus 主题覆盖）
+### 5.5 主题切换入口
 
-- **按钮**:
-  - Primary: 金→赤渐变背景 `#d4a35f → #c56b47`，白色文字
-  - Secondary: 透明背景，金色边框 `rgba(212,163,95,0.25)`，金色文字
-  - Ghost: 透明背景，弱边框，灰色文字
-  - Danger: 红色透明背景，红色文字
-- **卡片**: `#1a2332` 背景，`rgba(212,163,95,0.15)` 边框，8px 圆角
-- **选中态**: 加强边框 `rgba(212,163,95,0.25)` + 微光阴影
-- **输入框**: `#111827` 背景，金色聚焦边框 + 光晕
-- **标签/徽章**: 各状态色的 12% 透明度背景 + 对应色文字
-
-### 5.5 间距与圆角
-
-- **间距**: 4px / 8px / 12px / 16px / 24px / 32px
-- **圆角**: 4px(小标签) / 6px(按钮) / 8px(卡片) / 10px(面板) / 12px(对话框)
+- 侧边栏底部（或工作区右上角）放一个主题切换按钮
+- 点击切换 cinematic-dark ↔ light-modern（未来可扩展更多主题）
+- 切换时全局 CSS 变量瞬间生效，无需重新加载
+- 当前主题持久化到 localStorage
 
 ## 6. 交互模式
 
@@ -300,11 +487,13 @@
 
 ```
 frontend/src/
-  main.ts                    — 注册 Element Plus + 主题
+  main.ts                    — 注册 Element Plus + 主题初始化
   styles/
-    element-theme.scss       — Element Plus 暗色主题覆盖
-    variables.css            — CSS 自定义属性（新版设计 tokens）
-    main.css                 — 全局基础样式（精简）
+    theme-cinematic-dark.css — 默认主题：暗色电影风 token 值
+    theme-light-modern.css   — 预留主题：明亮现代风 token 值
+    tokens.css               — 语义化变量声明（组件使用的变量层）
+    element-overrides.css    — Element Plus 变量 → 自定义 token 映射
+    main.css                 — 全局基础样式（使用变量，不硬编码色值）
   views/
     HomePage.vue             — 简洁欢迎页
     ProjectsPage.vue         — 项目列表（虚拟滚动）
