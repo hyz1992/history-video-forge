@@ -922,6 +922,7 @@ function shouldFallbackToStructuredSelector(error: unknown): boolean {
     "strict_structured_provider_not_supported",
     "strict_structured_no_tool_call",
     "strict_structured_strategy_not_supported",
+    "topic_selector_strict_schema_failed",
     "LLM API key or base URL is not configured.",
     "Unexpected token",
     "is not valid JSON",
