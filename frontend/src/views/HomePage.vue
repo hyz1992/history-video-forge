@@ -1,105 +1,143 @@
 <template>
-  <section class="landing-page">
+  <section class="home-page">
+    <!-- Hero -->
     <section data-testid="home-hero" class="hero">
       <div class="hero-bg-pattern" />
 
       <div class="hero-content">
         <h1 data-testid="home-heading" class="hero-title">
-          <span class="hero-icon">🏛️</span>
           <span>Story Video </span>
-          <span class="text-accent">Forge</span>
+          <span class="title-accent">Forge</span>
         </h1>
 
-        <p data-testid="home-tagline" class="hero-tagline">历史叙事短视频工作台</p>
+        <p data-testid="home-tagline" class="hero-tagline">
+          历史叙事短视频工作台
+        </p>
 
-        <p class="home-summary hero-desc">
+        <p class="hero-desc">
           从项目创建开始，先完成选题生成与确认，再进入文案生成和审阅，把当前阶段的主链路集中在一个入口里。
         </p>
 
         <div class="hero-actions">
-          <RouterLink
+          <el-button
             data-testid="home-primary-cta"
-            to="/projects"
-            class="btn btn-primary btn-lg"
+            type="primary"
+            size="large"
+            @click="router.push('/projects')"
           >
             我的项目
-          </RouterLink>
-          <button
+          </el-button>
+          <el-button
             data-testid="home-secondary-cta"
-            class="btn btn-secondary btn-lg"
-            type="button"
+            size="large"
             @click="handleCreateProject"
           >
             新建项目
-          </button>
+          </el-button>
         </div>
-
-        <div data-testid="home-feature-rail" class="hero-features">
-          <div class="feature-item">
-            <span class="feature-icon">📁</span>
-            <span>项目驱动</span>
-          </div>
-          <div class="feature-item">
-            <span class="feature-icon">✨</span>
-            <span>选题生成</span>
-          </div>
-          <div class="feature-item">
-            <span class="feature-icon">🧭</span>
-            <span>多轮确认</span>
-          </div>
-          <div class="feature-item">
-            <span class="feature-icon">📝</span>
-            <span>文案生成</span>
-          </div>
-        </div>
-
-        <p data-testid="home-flow-strip" class="home-flow-strip">
-          当前阶段聚焦 Topic 与 Script，不引入 storyboard、assets、compose。
-        </p>
       </div>
     </section>
+
+    <!-- Pipeline Feature Cards -->
+    <section data-testid="home-feature-rail" class="pipeline-section">
+      <h2 class="section-title">创作流水线</h2>
+      <p class="section-subtitle">从选题到成片，六大阶段一键贯通</p>
+
+      <el-row :gutter="20" class="pipeline-cards" justify="center">
+        <el-col
+          v-for="(step, index) in pipelineSteps"
+          :key="step.key"
+          :xs="12"
+          :sm="8"
+          :md="8"
+          :lg="4"
+        >
+          <el-card
+            shadow="hover"
+            class="pipeline-card"
+            :body-style="{ padding: 'var(--space-lg) var(--space-md)' }"
+          >
+            <div class="card-step-number">{{ index + 1 }}</div>
+            <div class="card-icon">{{ step.icon }}</div>
+            <div class="card-label">{{ step.label }}</div>
+          </el-card>
+        </el-col>
+      </el-row>
+    </section>
+
+    <!-- Footer hint -->
+    <p data-testid="home-flow-strip" class="flow-strip">
+      当前阶段聚焦 Topic 与 Script，不引入 storyboard、assets、compose。
+    </p>
   </section>
 </template>
 
 <script setup lang="ts">
-import { RouterLink, useRouter } from "vue-router";
+import { useRouter } from "vue-router";
 
 import { useProjectStore } from "../stores/project";
 
 const projectStore = useProjectStore();
 const router = useRouter();
 
+const pipelineSteps = [
+  { key: "topic", icon: "💡", label: "选题" },
+  { key: "script", icon: "📝", label: "文案" },
+  { key: "storyboard", icon: "🎬", label: "分镜" },
+  { key: "asset-planning", icon: "📋", label: "资产规划" },
+  { key: "asset", icon: "🖼️", label: "资产" },
+  { key: "compose", icon: "🎥", label: "合成视频" },
+];
+
 async function handleCreateProject() {
   const project = await projectStore.createProject();
   await router.push(
-    projectStore.resolveProjectWorkspacePath(project.project_id, project.current_status),
+    projectStore.resolveProjectWorkspacePath(
+      project.project_id,
+      project.current_status,
+    ),
   );
 }
 </script>
 
 <style scoped>
-.landing-page {
+.home-page {
   min-height: 100vh;
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-base);
 }
 
+/* ── Hero ── */
 .hero {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
+  min-height: 70vh;
   overflow: hidden;
-  padding: 2.5rem 1.5rem;
+  padding: var(--space-xl) var(--space-lg);
 }
 
 .hero-bg-pattern {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse at 20% 50%, rgba(192, 57, 43, 0.08) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 20%, rgba(212, 165, 116, 0.06) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 80%, rgba(44, 62, 80, 0.1) 0%, transparent 50%);
+    radial-gradient(
+      ellipse at 20% 50%,
+      color-mix(in srgb, var(--accent-primary) 8%, transparent) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse at 80% 20%,
+      color-mix(in srgb, var(--accent-primary-light) 6%, transparent) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse at 50% 80%,
+      color-mix(in srgb, var(--bg-panel) 10%, transparent) 0%,
+      transparent 50%
+    );
 }
 
 .hero-content {
@@ -107,94 +145,135 @@ async function handleCreateProject() {
   z-index: 1;
   text-align: center;
   max-width: 760px;
-  padding: 1.25rem 2.5rem 2rem;
 }
 
 .hero-title {
-  font-size: clamp(3rem, 8vw, 4.8rem);
+  font-size: clamp(2.8rem, 8vw, 4.8rem);
   font-weight: 900;
   letter-spacing: -0.03em;
-  margin-bottom: 1rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  color: #fff2d8;
+  margin-bottom: var(--space-md);
+  color: var(--text-heading);
 }
 
-.hero-icon {
-  font-size: clamp(2.6rem, 7vw, 3.6rem);
-}
-
-.text-accent {
-  background: linear-gradient(135deg, var(--workspace-accent), #e48c5c);
+.title-accent {
+  background: var(--accent-gradient);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
 .hero-tagline {
-  margin: 0 0 1rem;
+  margin: 0 0 var(--space-md);
   font-size: clamp(1.25rem, 3vw, 1.7rem);
-  color: var(--workspace-text-muted);
+  color: var(--text-secondary);
 }
 
 .hero-desc {
-  margin: 0 auto 1.75rem;
+  margin: 0 auto var(--space-lg);
   max-width: 42rem;
-  font-size: 1.12rem;
-  color: #c9bea9;
+  font-size: 1.05rem;
+  color: var(--text-secondary);
   line-height: 1.8;
 }
 
 .hero-actions {
   display: flex;
   justify-content: center;
-  gap: 0.9rem;
+  gap: var(--space-md);
   flex-wrap: wrap;
-  margin-bottom: 2rem;
 }
 
-.hero-features {
-  display: flex;
-  gap: 1.5rem;
-  justify-content: center;
-  flex-wrap: wrap;
-  margin-bottom: 1.25rem;
+.hero-actions .el-button--large {
+  min-width: 140px;
+  font-weight: 600;
 }
 
-.feature-item {
+/* ── Pipeline Section ── */
+.pipeline-section {
+  padding: var(--space-xl) var(--space-lg) var(--space-lg);
+  text-align: center;
+}
+
+.section-title {
+  font-size: clamp(1.4rem, 3vw, 1.8rem);
+  font-weight: var(--font-heading);
+  color: var(--text-heading);
+  margin-bottom: var(--space-sm);
+}
+
+.section-subtitle {
+  font-size: 1rem;
+  color: var(--text-muted);
+  margin-bottom: var(--space-xl);
+}
+
+.pipeline-cards {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.pipeline-card {
+  text-align: center;
+  margin-bottom: var(--space-md);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.pipeline-card:hover {
+  border-color: var(--border-active);
+  box-shadow: var(--shadow-elevated);
+  transform: translateY(-2px);
+}
+
+.card-step-number {
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
-  color: var(--workspace-text-muted);
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-inverse);
+  background: var(--accent-gradient);
+  margin-bottom: var(--space-sm);
+}
+
+.card-icon {
+  font-size: 2rem;
+  margin-bottom: var(--space-xs);
+}
+
+.card-label {
   font-size: 0.95rem;
+  font-weight: var(--font-subheading);
+  color: var(--text-heading);
 }
 
-.feature-icon {
-  font-size: 1.1rem;
-}
-
-.home-flow-strip {
+/* ── Flow strip ── */
+.flow-strip {
+  text-align: center;
+  padding: var(--space-md) var(--space-lg) var(--space-xl);
   margin: 0;
-  color: #aa9e87;
-  font-size: 0.95rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
   line-height: 1.7;
 }
 
+/* ── Responsive ── */
 @media (max-width: 768px) {
   .hero {
     min-height: auto;
-    padding: 2.5rem 1.25rem 2rem;
+    padding: var(--space-xl) var(--space-md);
   }
 
-  .hero-content {
-    padding: 1.25rem;
-  }
-
-  .hero-features {
-    gap: 1rem;
+  .pipeline-section {
+    padding: var(--space-lg) var(--space-md) var(--space-md);
   }
 }
 </style>
