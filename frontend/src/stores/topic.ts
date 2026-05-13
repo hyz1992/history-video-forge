@@ -48,6 +48,7 @@ export interface TopicCandidateRound {
   round_id: string;
   round_index?: number;
   created_at?: string;
+  label?: string;
   candidates: TopicCandidate[];
 }
 
