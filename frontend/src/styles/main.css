@@ -1,191 +1,82 @@
-:root {
-  color-scheme: dark;
-  --workspace-bg: #0a0f18;
-  --workspace-bg-elevated: rgba(18, 24, 38, 0.92);
-  --workspace-bg-panel: rgba(20, 27, 42, 0.88);
-  --workspace-bg-panel-strong: rgba(28, 37, 58, 0.96);
-  --workspace-text: #f4ebd7;
-  --workspace-text-muted: #b7af9c;
-  --workspace-text-soft: #857f73;
-  --workspace-accent: #d4a35f;
-  --workspace-accent-strong: #c56b47;
-  --workspace-border: rgba(212, 163, 95, 0.22);
-  --workspace-border-strong: rgba(212, 163, 95, 0.36);
-  --workspace-shadow: 0 24px 80px rgba(3, 6, 14, 0.45);
-  --workspace-shadow-soft: 0 18px 42px rgba(4, 8, 18, 0.28);
-  --workspace-radius-sm: 12px;
-  --workspace-radius-md: 18px;
-  --workspace-radius-lg: 28px;
-  --workspace-gap-sm: 0.75rem;
-  --workspace-gap-md: 1rem;
-  --workspace-gap-lg: 1.5rem;
-  --workspace-gap-xl: 2rem;
-  --workspace-button-bg:
-    linear-gradient(135deg, rgba(212, 163, 95, 0.22), rgba(197, 107, 71, 0.28));
-  --workspace-button-border: rgba(212, 163, 95, 0.28);
-  --workspace-badge-bg: rgba(212, 163, 95, 0.14);
-}
+@import "./tokens.css";
+@import "./theme-cinematic-dark.css";
+@import "./theme-light-modern.css";
+@import "./element-overrides.css";
 
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-html,
-body,
-#app {
-  min-height: 100%;
+html {
+  font-family: var(--font-family);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  margin: 0;
-  background:
-    radial-gradient(circle at top, rgba(212, 163, 95, 0.16), transparent 34%),
-    radial-gradient(circle at 85% 20%, rgba(197, 107, 71, 0.16), transparent 24%),
-    linear-gradient(180deg, #121826 0%, var(--workspace-bg) 42%, #06090f 100%);
-  color: var(--workspace-text);
-  font-family:
-    "Noto Serif SC",
-    "Source Han Serif SC",
-    "Microsoft YaHei UI",
-    sans-serif;
+  min-height: 100vh;
+  background: var(--bg-base);
+  color: var(--text-body);
 }
 
 a {
-  color: inherit;
-}
-
-button,
-input,
-textarea,
-select {
-  font: inherit;
-}
-
-button {
-  border: 1px solid var(--workspace-button-border);
-  border-radius: var(--workspace-radius-sm);
-  background: var(--workspace-button-bg);
-  color: var(--workspace-text);
-  box-shadow: var(--workspace-shadow-soft);
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1.5rem;
-  border: none;
-  border-radius: var(--workspace-radius-sm);
-  font-size: 1rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 250ms ease;
-  font-family:
-    "Noto Serif SC",
-    "Source Han Serif SC",
-    "Microsoft YaHei UI",
-    sans-serif;
+  color: var(--accent-primary);
   text-decoration: none;
 }
 
-.btn-primary {
-  background: linear-gradient(135deg, #c0392b, #96281b);
-  color: #fff;
-  box-shadow: 0 0 20px rgba(192, 57, 43, 0.15);
+a:hover {
+  color: var(--accent-primary-light);
 }
 
-.btn-primary:hover {
-  background: linear-gradient(135deg, #e74c3c, #c0392b);
-  transform: translateY(-1px);
-  box-shadow: 0 0 30px rgba(192, 57, 43, 0.3);
+/* Element Plus dark component patches */
+.el-menu {
+  background-color: var(--bg-sidebar) !important;
+  border-right: none !important;
 }
 
-.btn-secondary {
-  background: rgba(212, 165, 116, 0.1);
-  color: #d4a574;
-  border: 1px solid rgba(212, 163, 95, 0.22);
+.el-menu-item {
+  color: var(--text-secondary) !important;
 }
 
-.btn-secondary:hover {
-  background: rgba(212, 165, 116, 0.2);
-  border-color: #d4a574;
+.el-menu-item.is-active {
+  color: var(--accent-primary) !important;
+  background-color: var(--bg-hover) !important;
 }
 
-.btn-lg {
-  padding: 1rem 2.5rem;
-  font-size: 1.125rem;
-  border-radius: var(--workspace-radius-md);
+.el-dialog {
+  background-color: var(--bg-panel) !important;
+  border: 1px solid var(--border-default);
 }
 
-button:focus-visible,
-input:focus-visible,
-textarea:focus-visible,
-select:focus-visible {
-  outline: 2px solid rgba(212, 163, 95, 0.72);
-  outline-offset: 2px;
+.el-drawer {
+  background-color: var(--bg-panel) !important;
 }
 
-.workspace-shell {
-  position: relative;
-  display: grid;
-  gap: var(--workspace-gap-lg);
-  min-height: 100vh;
-  padding: clamp(1.25rem, 2vw, 2rem);
-  color: var(--workspace-text);
+.el-table {
+  --el-table-bg-color: var(--bg-panel);
+  --el-table-tr-bg-color: var(--bg-panel);
+  --el-table-header-bg-color: var(--bg-card);
+  --el-table-row-hover-bg-color: var(--bg-hover);
+  --el-table-border-color: var(--border-default);
+  --el-table-text-color: var(--text-body);
+  --el-table-header-text-color: var(--text-secondary);
 }
 
-.workspace-shell::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.03), transparent 45%),
-    linear-gradient(180deg, rgba(212, 163, 95, 0.06), transparent 35%);
+.el-message-box {
+  background-color: var(--bg-panel) !important;
+  border: 1px solid var(--border-default) !important;
 }
 
-.workspace-shell > * {
-  position: relative;
-  z-index: 1;
+/* Global transitions */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
 }
-
-.workspace-shell--topic,
-.workspace-shell--script {
-  align-content: start;
-}
-
-.workspace-shell :where(button, input, textarea, select) {
-  min-height: 2.75rem;
-}
-
-.workspace-shell :where(section, article, aside, nav, header) {
-  border-radius: var(--workspace-radius-md);
-}
-
-.workspace-panel {
-  border: 1px solid var(--workspace-border);
-  background: var(--workspace-bg-panel);
-  box-shadow: var(--workspace-shadow-soft);
-}
-
-.workspace-panel--strong {
-  border-color: var(--workspace-border-strong);
-  background: var(--workspace-bg-panel-strong);
-  box-shadow: var(--workspace-shadow);
-}
-
-.workspace-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.3rem 0.65rem;
-  border: 1px solid var(--workspace-border);
-  border-radius: 999px;
-  background: var(--workspace-badge-bg);
-  color: var(--workspace-text-muted);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }

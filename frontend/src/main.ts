@@ -1,5 +1,8 @@
 import { createApp, h } from "vue";
 import { RouterView } from "vue-router";
+import ElementPlus from "element-plus";
+import "element-plus/dist/index.css";
+import "element-plus/theme-chalk/dark/css-vars.css";
 
 import "./styles/main.css";
 import { createAppRouter } from "./router";
@@ -52,6 +55,7 @@ const app = createApp({
   render: () => h(RouterView),
 });
 
+app.use(ElementPlus);
 app.use(router);
 app.provide(projectStoreKey, projectStore);
 app.provide(topicStoreKey, topicStore);
