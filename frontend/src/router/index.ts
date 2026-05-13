@@ -2,6 +2,7 @@ import { createMemoryHistory, createRouter, createWebHistory } from "vue-router"
 
 import AssetPlanningPage from "../views/AssetPlanningPage.vue";
 import HomePage from "../views/HomePage.vue";
+import ProjectWorkspace from "../views/ProjectWorkspace.vue";
 import ProjectsPage from "../views/ProjectsPage.vue";
 import ScriptPage from "../views/ScriptPage.vue";
 import StoryboardPage from "../views/StoryboardPage.vue";
@@ -18,6 +19,10 @@ export function createAppRouter(mode: "memory" | "web" = "memory") {
       {
         path: "/projects",
         component: ProjectsPage,
+      },
+      {
+        path: "/projects/:projectId",
+        component: ProjectWorkspace,
       },
       {
         path: "/projects/:projectId/topic",
