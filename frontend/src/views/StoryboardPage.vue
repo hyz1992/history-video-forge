@@ -3,6 +3,7 @@ import { computed, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 import StoryboardSegmentList from "../components/storyboard/StoryboardSegmentList.vue";
+import TopicTabs from "../components/topic/TopicTabs.vue";
 import { useProjectStore } from "../stores/project";
 import { useStoryboardStore } from "../stores/storyboard";
 
@@ -47,6 +48,29 @@ const hasWarnings = computed(
   () => validationResult.value?.warnings?.length > 0,
 );
 
+const statusLabels: Record<string, string> = {
+  topic_pending: "选题待确认",
+  script_generating: "文案生成中",
+  script_ready: "文案就绪",
+  storyboard_generating: "分镜生成中",
+  storyboard_ready: "分镜就绪",
+  asset_plan_ready: "素材规划就绪",
+};
+
+const decisionLabels: Record<string, string> = {
+  pass: "通过",
+  fail: "未通过",
+  pending: "待验证",
+};
+
+const currentStatusLabel = computed(
+  () => statusLabels[currentStatus.value ?? ""] ?? currentStatus.value ?? "未知",
+);
+
+const validationDecisionLabel = computed(
+  () => decisionLabels[validationResult.value?.decision ?? ""] ?? validationResult.value?.decision ?? "",
+);
+
 onMounted(async () => {
   const projectId = route.params.projectId;
   if (typeof projectId !== "string" || !projectId) {
@@ -87,11 +111,24 @@ function goBackToScript() {
   }
   router.push(`/projects/${projectId}/script`);
 }
+
+const canNavigateToAssetPlan = computed(() =>
+  projectStore.state.currentStatus === "storyboard_ready" ||
+  projectStore.state.currentStatus?.startsWith("asset_plan"),
+);
+
+async function navigateToAssetPlan() {
+  const projectId = projectStore.state.projectId;
+  if (!projectId) return;
+  await router.push(`/projects/${projectId}/asset-plan`);
+}
 </script>
 
 <template>
   <section class="storyboard-page workspace-shell workspace-shell--storyboard">
     <div class="storyboard-workspace">
+      <TopicTabs :show-entry-tabs="false" />
+
       <header class="storyboard-page-header">
         <div>
           <p class="storyboard-kicker">Project Workspace</p>
@@ -101,14 +138,25 @@ function goBackToScript() {
           </p>
         </div>
 
-        <button
-          type="button"
-          data-testid="return-script"
-          class="btn btn-secondary"
-          @click="goBackToScript"
-        >
-          返回文案
-        </button>
+        <div class="storyboard-header-actions">
+          <button
+            type="button"
+            data-testid="return-script"
+            class="btn btn-secondary"
+            @click="goBackToScript"
+          >
+            返回文案
+          </button>
+          <button
+            v-if="canNavigateToAssetPlan"
+            type="button"
+            class="btn btn-primary"
+            data-testid="navigate-asset-plan"
+            @click="navigateToAssetPlan"
+          >
+            进入素材规划
+          </button>
+        </div>
       </header>
 
       <section
@@ -122,7 +170,7 @@ function goBackToScript() {
             class="workspace-badge"
             data-testid="storyboard-current-status"
           >
-            {{ currentStatus }}
+            {{ currentStatusLabel }}
           </span>
           <span
             v-if="storyboardStore.state.isLoading"
@@ -196,7 +244,7 @@ function goBackToScript() {
                   'badge--fail': validationResult.decision !== 'pass',
                 }"
               >
-                {{ validationResult.decision }}
+                {{ validationDecisionLabel }}
               </span>
             </div>
             <div class="storyboard-validation-field">
@@ -247,30 +295,25 @@ function goBackToScript() {
           <StoryboardSegmentList :segments="segments" />
         </section>
 
-        <section
-          v-if="executionState"
-          data-testid="storyboard-execution-state"
-          class="storyboard-panel"
-        >
-          <h2>执行状态</h2>
-          <pre class="storyboard-pre">{{ JSON.stringify(executionState, null, 2) }}</pre>
-        </section>
-
-        <section
-          v-if="graphTraceSummary || runtimeDiagnostics"
+        <details
+          v-if="executionState || graphTraceSummary || runtimeDiagnostics"
           data-testid="storyboard-trace"
-          class="storyboard-panel"
+          class="storyboard-panel storyboard-trace-details"
         >
-          <h2>运行追踪</h2>
+          <summary class="storyboard-trace-summary">执行追踪与诊断信息</summary>
+          <div v-if="executionState" class="storyboard-trace-section">
+            <h3>执行状态</h3>
+            <pre class="storyboard-pre">{{ JSON.stringify(executionState, null, 2) }}</pre>
+          </div>
           <div v-if="graphTraceSummary" class="storyboard-trace-section">
-            <h3>Graph Trace</h3>
+            <h3>执行追踪</h3>
             <pre class="storyboard-pre">{{ JSON.stringify(graphTraceSummary, null, 2) }}</pre>
           </div>
           <div v-if="runtimeDiagnostics" class="storyboard-trace-section">
-            <h3>Runtime Diagnostics</h3>
+            <h3>运行诊断</h3>
             <pre class="storyboard-pre">{{ JSON.stringify(runtimeDiagnostics, null, 2) }}</pre>
           </div>
-        </section>
+        </details>
 
         <section class="storyboard-panel storyboard-regenerate-panel">
           <div>
@@ -332,7 +375,7 @@ function goBackToScript() {
 }
 
 .storyboard-kicker {
-  color: #8d6e63;
+  color: var(--workspace-text-soft);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -479,13 +522,63 @@ function goBackToScript() {
   line-height: 1.75;
 }
 
+.storyboard-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.storyboard-trace-details {
+  cursor: pointer;
+}
+
+.storyboard-trace-summary {
+  cursor: pointer;
+  color: var(--workspace-text-muted);
+  font-size: 0.95rem;
+  font-weight: 500;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.storyboard-trace-summary::before {
+  content: "▸";
+  font-size: 0.8rem;
+  transition: transform 150ms ease;
+}
+
+.storyboard-trace-details[open] > .storyboard-trace-summary::before {
+  transform: rotate(90deg);
+}
+
+.storyboard-trace-details .storyboard-trace-section {
+  margin-top: 0.75rem;
+}
+
 @media (max-width: 819px) {
   .storyboard-page-header {
     flex-direction: column;
   }
 
+  .storyboard-header-actions {
+    justify-content: flex-start;
+  }
+
   .storyboard-regenerate-panel {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 639px) {
+  .storyboard-header-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .storyboard-header-actions .btn {
+    width: 100%;
   }
 }
 </style>
