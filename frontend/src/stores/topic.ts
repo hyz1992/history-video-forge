@@ -61,6 +61,7 @@ export interface TopicStoreState {
   isGenerating: boolean;
   isConfirming: boolean;
   confirmedTopicPackageId: string | null;
+  loadError: string | null;
 }
 
 export interface TopicStore {
@@ -140,6 +141,7 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
     isGenerating: false,
     isConfirming: false,
     confirmedTopicPackageId: null,
+    loadError: null,
   });
 
   function selectTab(tab: TopicTab) {
@@ -153,6 +155,7 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
     },
   ) {
     state.isGenerating = true;
+    state.loadError = null;
 
     try {
       const projectId = await input.projectStore.ensureProject();
@@ -166,6 +169,9 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
       state.historyRounds = response.history_rounds ?? [];
       state.selectedCandidate = null;
       state.selectedRoundId = null;
+    } catch (error) {
+      state.loadError =
+        error instanceof Error ? error.message : "topic_generation_failed";
     } finally {
       state.isGenerating = false;
     }

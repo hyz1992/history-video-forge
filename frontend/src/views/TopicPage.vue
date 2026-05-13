@@ -123,6 +123,14 @@ function generateRecommendations() {
           >
             {{ topicStore.state.isGenerating ? "生成中..." : "开始生成选题" }}
           </button>
+
+          <p
+            v-if="topicStore.state.loadError"
+            data-testid="topic-error"
+            class="topic-error"
+          >
+            生成失败：{{ topicStore.state.loadError }}
+          </p>
         </section>
 
         <section
@@ -368,5 +376,14 @@ function generateRecommendations() {
     min-width: 0;
     width: 100%;
   }
+}
+
+.topic-error {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--workspace-accent, #c0392b);
+  background: rgba(192, 57, 43, 0.08);
+  color: var(--workspace-text, #e0d6c8);
+  font-size: 0.9rem;
 }
 </style>
