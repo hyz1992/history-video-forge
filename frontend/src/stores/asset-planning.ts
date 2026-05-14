@@ -21,15 +21,18 @@ export interface TtsPlanChunk {
 }
 
 export interface TtsPlan {
+  voice_profile_id?: string;
+  estimated_total_duration_sec?: number;
+  chunking_strategy?: string;
   chunks?: readonly TtsPlanChunk[];
 }
 
 export interface AssetTask {
   task_id: string;
   task_type: string;
-  source_segment_id: string;
+  source_segment_id: string | null;
   production_intent?: string;
-  prompt_draft?: string;
+  prompt_draft?: string | null;
   parameters?: Record<string, unknown>;
   risk_notes?: readonly string[];
   cost_tier?: string;

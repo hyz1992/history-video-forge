@@ -96,8 +96,8 @@ const STORYBOARD_STEP_INDEX = PIPELINE_STEPS.findIndex(
   (s) => s.key === "storyboard",
 );
 
-const ASSET_PLANNING_STEP_INDEX = PIPELINE_STEPS.findIndex(
-  (s) => s.key === "asset-planning",
+const ASSET_STEP_INDEX = PIPELINE_STEPS.findIndex(
+  (s) => s.key === "asset",
 );
 
 /* -------------------------------------------------------------------------- */
@@ -124,7 +124,7 @@ function handleRetry() {
 }
 
 function handleConfirm() {
-  workspaceStore.setCurrentStep(ASSET_PLANNING_STEP_INDEX);
+  workspaceStore.setCurrentStep(ASSET_STEP_INDEX);
 }
 </script>
 

@@ -50,8 +50,7 @@ const stepIcons: Record<string, any> = {
   topic: Edit,
   script: Document,
   storyboard: Film,
-  "asset-planning": Box,
-  asset: PictureFilled,
+  asset: Box,
   compose: VideoCameraFilled,
 };
 
@@ -65,9 +64,8 @@ function getReachedStepIndex(): number {
   if (status.startsWith("topic")) return 0;
   if (status.startsWith("script")) return 1;
   if (status.startsWith("storyboard")) return 2;
-  if (status.startsWith("asset_plan")) return 3;
-  if (status.startsWith("asset")) return 4;
-  if (status.startsWith("compose")) return 5;
+  if (status.startsWith("asset_plan") || status.startsWith("asset")) return 3;
+  if (status.startsWith("compose")) return 4;
   return 0;
 }
 

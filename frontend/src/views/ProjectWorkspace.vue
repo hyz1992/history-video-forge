@@ -17,7 +17,6 @@ import WorkspaceFooter from "../components/workspace/WorkspaceFooter.vue";
 import TopicPanel from "../components/topic/TopicPanel.vue";
 import ScriptPanel from "../components/script/ScriptPanel.vue";
 import StoryboardPanel from "../components/storyboard/StoryboardPanel.vue";
-import AssetPlanningPanel from "../components/asset-planning/AssetPlanningPanel.vue";
 import AssetPanel from "../components/asset/AssetPanel.vue";
 import ComposePanel from "../components/compose/ComposePanel.vue";
 
@@ -32,7 +31,6 @@ const panelMap: Record<PipelineStep, Component> = {
   topic: TopicPanel,
   script: ScriptPanel,
   storyboard: StoryboardPanel,
-  "asset-planning": AssetPlanningPanel,
   asset: AssetPanel,
   compose: ComposePanel,
 };
