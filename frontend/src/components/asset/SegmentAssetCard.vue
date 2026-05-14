@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { ElTooltip, ElTag, ElButton } from "element-plus";
-import { Upload, Refresh } from "@element-plus/icons-vue";
+import { ElTooltip, ElTag, ElButton, ElIcon } from "element-plus";
+import { Upload, Refresh, CopyDocument } from "@element-plus/icons-vue";
 
 import type { StoryboardSegment } from "../../stores/storyboard";
 import type { AssetTask } from "../../stores/asset-planning";
@@ -141,6 +141,36 @@ function nextMedia() {
 // TODO: wire to actual TTS audio URL from asset store
 const audioUrl = ref<string | null>(null);
 const hasAudio = computed(() => !!audioUrl.value);
+
+const copyFeedback = ref(false);
+
+function copyPrompt() {
+  const text = activePromptText.value;
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => showCopyFeedback(),
+      () => fallbackCopy(text),
+    );
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text: string) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.cssText = "position:fixed;left:-9999px";
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand("copy");
+  document.body.removeChild(ta);
+  showCopyFeedback();
+}
+
+function showCopyFeedback() {
+  copyFeedback.value = true;
+  setTimeout(() => { copyFeedback.value = false; }, 1500);
+}
 </script>
 
 <template>
@@ -228,29 +258,34 @@ const hasAudio = computed(() => !!audioUrl.value);
     <div class="segment-info">
       <!-- Prompt synced with tab & carousel -->
       <div class="segment-info-prompt">
-        <span class="segment-info-prompt-label">
-          {{ activeTab === 'image' ? '图片提示词' : '视频提示词' }}
-        </span>
+        <div class="segment-info-prompt-header">
+          <div class="segment-info-prompt-labels">
+            <span class="segment-info-prompt-label">
+              {{ activeTab === 'image' ? '图片提示词' : '视频提示词' }}
+            </span>
+            <ElTooltip v-if="riskLevel" popper-class="risk-tooltip" placement="top">
+              <template #content>
+                <div class="risk-tooltip-content">
+                  <p v-for="(note, i) in activeRiskNotes" :key="i">{{ note }}</p>
+                </div>
+              </template>
+              <ElTag
+                size="small"
+                :type="riskLevel === 'high' ? 'danger' : 'warning'"
+              >
+                {{ riskLevel === 'high' ? '高风险' : '注意' }}
+              </ElTag>
+            </ElTooltip>
+          </div>
+          <ElTooltip :content="copyFeedback ? '已复制' : '复制提示词'" placement="top">
+            <button class="prompt-copy-btn" @click="copyPrompt">
+              <ElIcon :size="12"><CopyDocument /></ElIcon>
+            </button>
+          </ElTooltip>
+        </div>
         <p class="segment-info-prompt-text">
           {{ activePromptText }}
         </p>
-      </div>
-
-      <!-- Risk tag -->
-      <div v-if="riskLevel" class="segment-info-risk">
-        <ElTooltip popper-class="risk-tooltip" placement="top">
-          <template #content>
-            <div class="risk-tooltip-content">
-              <p v-for="(note, i) in activeRiskNotes" :key="i">{{ note }}</p>
-            </div>
-          </template>
-          <ElTag
-            size="small"
-            :type="riskLevel === 'high' ? 'danger' : 'warning'"
-          >
-            {{ riskLevel === 'high' ? '高风险' : '注意' }}
-          </ElTag>
-        </ElTooltip>
       </div>
 
       <!-- Action buttons -->
@@ -523,10 +558,41 @@ const hasAudio = computed(() => !!audioUrl.value);
   gap: 2px;
 }
 
+.segment-info-prompt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.segment-info-prompt-labels {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
 .segment-info-prompt-label {
   font-size: 0.78rem;
   color: var(--text-muted);
   font-weight: 500;
+}
+
+.prompt-copy-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 150ms, color 150ms;
+}
+
+.segment-info-prompt:hover .prompt-copy-btn {
+  opacity: 1;
+}
+
+.prompt-copy-btn:hover {
+  color: var(--accent-text);
 }
 
 .segment-info-prompt-text {
@@ -534,15 +600,9 @@ const hasAudio = computed(() => !!audioUrl.value);
   font-size: 0.84rem;
   line-height: 1.6;
   color: var(--text-secondary);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.segment-info-risk {
-  display: flex;
-  gap: var(--space-xs);
+  max-height: 6.4em;
+  overflow-y: auto;
+  word-break: break-word;
 }
 
 .risk-tooltip-content p {

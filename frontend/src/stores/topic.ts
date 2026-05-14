@@ -33,6 +33,19 @@ export interface TopicConfirmResponse {
   };
 }
 
+export interface TopicPackageSnapshot {
+  topic_package_id: string;
+  canonical_title?: string;
+  selected_angle?: string;
+  family_label?: string;
+  scope_label?: string;
+}
+
+export interface TopicSnapshotResponse {
+  active_topic_package: TopicPackageSnapshot | null;
+  current_status: string;
+}
+
 export interface TopicApi {
   generateSystemRecommendations: (
     projectId: string,
@@ -42,6 +55,7 @@ export interface TopicApi {
     projectId: string,
     candidateId: string,
   ) => Promise<TopicConfirmResponse>;
+  loadSnapshot: (projectId: string) => Promise<TopicSnapshotResponse>;
 }
 
 export interface TopicCandidateRound {
@@ -72,6 +86,7 @@ export interface TopicStore {
   openCandidate: (candidate: TopicCandidate, roundId?: string | null) => void;
   closeCandidate: () => void;
   confirmSelectedCandidate: () => Promise<void>;
+  loadExistingTopic: () => Promise<void>;
 }
 
 export interface CreateTopicStoreInput {
@@ -98,6 +113,14 @@ export const topicStoreKey: InjectionKey<TopicStore> = Symbol("topic-store");
 
 export function createFetchTopicApi(baseUrl = ""): TopicApi {
   return {
+    async loadSnapshot(projectId) {
+      const response = await fetch(`${baseUrl}/api/projects/${projectId}`);
+      const data = await response.json();
+      return {
+        active_topic_package: data.active_topic_package ?? null,
+        current_status: data.current_status ?? "",
+      };
+    },
     async generateSystemRecommendations(projectId, filters) {
       const response = await fetch(
         `${baseUrl}/api/projects/${projectId}/topic/recommendations`,
@@ -204,11 +227,50 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
       input.projectStore.syncProject({
         project_id: response.project_id,
         current_status: response.current_status,
+        display_name: response.topic_package.canonical_title,
       });
       state.confirmedTopicPackageId = response.topic_package.topic_package_id;
       state.selectedCandidate = null;
     } finally {
       state.isConfirming = false;
+    }
+  }
+
+  async function loadExistingTopic() {
+    if (state.currentRound || state.candidates.length > 0) return;
+
+    const projectId = input.projectStore.state.projectId;
+    if (!projectId) return;
+
+    try {
+      const snapshot = await input.api.loadSnapshot(projectId);
+      input.projectStore.syncProject({
+        project_id: projectId,
+        current_status: snapshot.current_status,
+        display_name: snapshot.active_topic_package?.canonical_title,
+      });
+
+      const pkg = snapshot.active_topic_package;
+      if (pkg) {
+        state.confirmedTopicPackageId = pkg.topic_package_id;
+        const candidate: TopicCandidate = {
+          candidate_id: pkg.topic_package_id,
+          title: pkg.canonical_title ?? "",
+          one_line_angle: pkg.selected_angle ?? "",
+          family_label: pkg.family_label ?? "",
+          scope_label: pkg.scope_label ?? "",
+          strong_scene: "",
+          risk_hints: [],
+        };
+        state.selectedCandidate = candidate;
+        state.candidates = [candidate];
+        state.currentRound = {
+          round_id: "confirmed",
+          candidates: [candidate],
+        };
+      }
+    } catch {
+      // Silently fail — the empty state will prompt the user to generate
     }
   }
 
@@ -219,6 +281,7 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
     openCandidate,
     closeCandidate,
     confirmSelectedCandidate,
+    loadExistingTopic,
   };
 }
 

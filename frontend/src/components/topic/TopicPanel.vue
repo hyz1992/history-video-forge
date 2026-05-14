@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { ElMessage } from "element-plus";
 
 import { useTopicStore, type TopicRecommendationFilters } from "../../stores/topic";
@@ -7,6 +7,10 @@ import { useProjectStore } from "../../stores/project";
 
 const topicStore = useTopicStore();
 const projectStore = useProjectStore();
+
+onMounted(() => {
+  topicStore.loadExistingTopic();
+});
 
 const eraFilter = ref<TopicRecommendationFilters["era"]>("ancient");
 const tensionFilter = ref<TopicRecommendationFilters["tension"]>("high");
