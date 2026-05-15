@@ -48,6 +48,7 @@ export function createFetchProjectApi(baseUrl = ""): ProjectApi {
   return {
     async getProject(projectId) {
       const response = await fetch(`${baseUrl}/api/projects/${projectId}`);
+      if (!response.ok) throw new Error(`project_load_failed:${response.status}`);
       const data = await response.json();
       return {
         project_id: data.project_id ?? projectId,
@@ -59,9 +60,10 @@ export function createFetchProjectApi(baseUrl = ""): ProjectApi {
       };
     },
     async deleteProject(projectId) {
-      await fetch(`${baseUrl}/api/projects/${projectId}`, {
+      const response = await fetch(`${baseUrl}/api/projects/${projectId}`, {
         method: "DELETE",
       });
+      if (!response.ok) throw new Error(`project_delete_failed:${response.status}`);
     },
     async createProject(input) {
       const response = await fetch(`${baseUrl}/api/projects`, {
@@ -73,6 +75,15 @@ export function createFetchProjectApi(baseUrl = ""): ProjectApi {
           name: input?.name ?? "未命名项目",
         }),
       });
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(
+          typeof body?.error === "string"
+            ? body.error
+            : `project_create_failed:${response.status}`,
+        );
+      }
 
       return response.json();
     },
@@ -86,8 +97,8 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
     projects: [],
   });
 
-  function isDraftStatus(currentStatus: string) {
-    return currentStatus.startsWith("topic");
+  function isDraftStatus(currentStatus: string | undefined) {
+    return !!currentStatus?.startsWith("topic");
   }
 
   function toProjectListItem(snapshot: ProjectSnapshot): ProjectListItem {
@@ -164,20 +175,8 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
     }
   }
 
-  function resolveProjectWorkspacePath(projectId: string, currentStatus: string) {
-    if (isDraftStatus(currentStatus)) {
-      return `/projects/${projectId}/topic`;
-    }
-    if (currentStatus.startsWith("script")) {
-      return `/projects/${projectId}/script`;
-    }
-    if (currentStatus.startsWith("storyboard")) {
-      return `/projects/${projectId}/storyboard`;
-    }
-    if (currentStatus.startsWith("asset_plan")) {
-      return `/projects/${projectId}/asset-plan`;
-    }
-    return `/projects/${projectId}/script`;
+  function resolveProjectWorkspacePath(projectId: string, _currentStatus: string) {
+    return `/projects/${projectId}`;
   }
 
   async function ensureProject() {
