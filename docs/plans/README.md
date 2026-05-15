@@ -44,3 +44,10 @@
 - 新增 [Asset Planning 结构性局部修复实施计划](./2026-05-12-asset-planning-structural-repair-implementation-plan.md)。
 - 本轮计划只处理 asset planning 结构稳定性：空 `prompt_draft`、缺失 `risk_notes`、缺少 `video_clip` 静态兜底、供应商内容过滤安全重试。
 - 该计划不引入 semantic reviewer，不实现 assets / compose / 前端，不修改 topic / script / storyboard 语义链路。
+
+## 2026-05-15 Assets 阶段设计
+
+- 新增 [Assets Stage Design](./2026-05-15-assets-stage-design.md)。
+- 新增 [Assets Stage Implementation Plan](./2026-05-15-assets-stage-implementation-plan.md)。
+- 本轮计划只设计 `AssetPlan` 之后的资产执行结果合同：`AssetManifest`、任务执行状态、artifact metadata、分镜 route、BGM placement、手动素材登记和结构校验。
+- 第一版实施计划不接真实 provider、不实现物理上传 UI、不实现 compose timeline 或最终视频导出。
