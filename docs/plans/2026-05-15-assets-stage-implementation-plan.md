@@ -138,7 +138,7 @@ Implement `AssetExecutionOptions` with:
 
 - `execution_mode: "auto_available" | "dry_run"`
 - `voice_profile_id: string | null`
-- `enabled_provider_types: string[]`
+- `enabled_provider_types: Array<"tts" | "image" | "video" | "sfx" | "bgm">`
 - `allow_manual_placeholders: boolean`
 
 Implement minimal metadata validation for:
@@ -154,7 +154,10 @@ Implement minimal metadata validation for:
 - `bgm_audio`: `duration_sec`, `loopable`
 - `bgm_selection`: `library_item_id` or `selection_label`
 
-Also add rejection tests for missing required metadata on one audio, one image, and one video artifact.
+Also add rejection tests for:
+
+- missing required metadata on one audio, one image, and one video artifact
+- invalid `enabled_provider_types` value such as `"ttss"`
 
 - [ ] **Step 4: Export schemas**
 
@@ -274,7 +277,9 @@ Assert that the builder:
 
 - creates one `AssetTaskExecution` per task
 - creates `motion_recipe` inline artifact for `render_motion_cue`
-- records `tts_chunk_routes` and `tts_chunk_audio.metadata.segment_ids` when TTS artifacts exist in fixtures
+- records `tts_chunk_routes` using order alignment: `tts_plan.chunks[i]` maps to `storyboard.segments[i]`
+- records `tts_chunk_audio.metadata.segment_ids` when test fixtures include completed TTS chunk artifacts
+- marks routes blocked instead of guessing when TTS chunk count and storyboard segment count differ
 - creates segment route `image_with_motion` when image + motion exist
 - marks provider-dependent tasks as `planned` or `waiting_manual_upload` according to `manual_upload_policy.required`
 - creates `BgmPlacement` from `bgm_cue` tasks
@@ -477,6 +482,7 @@ Cover:
 - unknown task id returns `404 asset_task_not_found`
 - disallowed MIME type returns `422 asset_manual_upload_type_not_allowed`
 - allowed manual image registration appends artifact, sets selected artifact, sets task execution `status` to `completed`, and sets `completion_origin` to `manual_upload`
+- if registering the final required artifact resolves all blocking items, local validation is re-run and manifest readiness changes from `blocked` to `partial` or `ready_for_compose`
 - accepting an existing artifact updates `selected_artifact_id`
 
 - [ ] **Step 2: Run focused test and confirm failure**
@@ -495,6 +501,8 @@ Add:
 - `POST /api/projects/:projectId/assets/tasks/:taskId/accept`
 
 Only register metadata. Do not implement binary upload.
+
+After registration or accept, rebuild affected routes, re-run `validateAssetsManifest()`, and update `manifest.readiness` plus the stored validation result. Do not leave readiness stale after manual changes.
 
 - [ ] **Step 4: Verify**
 

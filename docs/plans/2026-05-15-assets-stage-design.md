@@ -92,7 +92,7 @@
 |---|---|---|
 | `execution_mode` | enum | `auto_available / dry_run` |
 | `voice_profile_id` | string \| null | 本次 TTS 使用音色；为空时使用 `AssetPlan.tts_plan.voice_profile_id` |
-| `enabled_provider_types` | string[] | 本次允许自动执行的 provider 类型，例如 `tts / image / video / sfx / bgm` |
+| `enabled_provider_types` | enum[] | 本次允许自动执行的 provider 类型；只允许 `tts / image / video / sfx / bgm` |
 | `allow_manual_placeholders` | boolean | 自动能力缺失时是否创建等待人工处理的执行状态 |
 
 `dry_run` 只创建 execution、route、blocking 清单和本地派生的 inline artifact，不调用任何外部 provider，不登记伪造的图片、视频或音频文件。
@@ -257,6 +257,8 @@
 | `segment_ids` | string[] | 覆盖的 storyboard segment；第一版通常是一个 segment |
 | `script_excerpt` | string | 与 `AssetPlan.tts_plan.chunks[]` 对齐的口播文本 |
 
+`AssetPlan.tts_plan.chunks[]` 第一版没有显式 `segment_ids` 字段，但当前 asset planning 本地音频骨架按 `StoryboardPlan.segments` 顺序创建 TTS chunks：`tts_plan.chunks[i]` 对应 `storyboard.segments[i]`。assets 第一版 builder 必须使用这个顺序对齐规则填充 `TtsChunkRoute.segment_ids` 和 `tts_chunk_audio.metadata.segment_ids`。如果未来 TTS chunking 改为跨 segment 或句子边界切分，必须先扩展 `AssetPlan.tts_plan.chunks[]` 的映射合同，不能让 assets 阶段用文本相似度反推。
+
 `SegmentAssetRoute.tts_artifact_id` 应指向该 segment 对应的 `tts_chunk_audio` artifact，而不是合并后的全片口播 artifact。全片合并音频通过 `audio_summary.tts_merged_artifact_id` 暴露给 compose。
 
 当 `BgmPlacement.scope=segment_span` 时，`start_policy=segment_start` 指 `segment_ids` 中第一个 segment 的开始，`end_policy=segment_end` 指 `segment_ids` 中最后一个 segment 的结束；不是对每个 segment 分别重复起止。
@@ -270,6 +272,7 @@
 - 所有 TTS chunk 必须使用同一个 `voice_profile_id`。
 - 每个 `tts_plan.chunks[]` 生成一个 `tts_chunk_audio` artifact。
 - `tts_chunk_audio.metadata` 必须记录 `tts_chunk_id`、`segment_ids` 和 `script_excerpt`，避免 compose 反推 chunk 与 segment 的关系。
+- 第一版 `segment_ids` 来自顺序对齐：第 `i` 个 TTS chunk 对应第 `i` 个 storyboard segment。若 chunk 数与 segment 数不一致，builder 不得猜测，应把相关 route 标为 blocked 并让 validator 报结构错误。
 - 所有 chunk 合并后生成一个 `tts_merged_audio` artifact。
 - TTS provider 如果返回词级或字级时间戳，必须保存在 artifact metadata 中，供字幕任务使用。
 - 变更音色后，必须重新生成所有 TTS chunk 和字幕；视觉资产不必自动失效。
