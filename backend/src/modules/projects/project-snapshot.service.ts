@@ -39,6 +39,9 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
   const assetPlanRecord = project.activeAssetPlanRecordId
     ? db.assetPlanRecords.get(project.activeAssetPlanRecordId) ?? null
     : null;
+  const assetManifestRecord = project.activeAssetManifestRecordId
+    ? db.assetManifestRecords.get(project.activeAssetManifestRecordId) ?? null
+    : null;
   const latestProjectScriptRecord = [...db.scriptRecords.values()]
     .filter((record) => record.projectId === project.id)
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
@@ -60,6 +63,8 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
     null;
   const latestAssetPlanTrace =
     (project.latestAssetPlanRunTraceJson as Record<string, unknown> | null | undefined) ?? null;
+  const latestAssetsTrace =
+    (project.latestAssetsRunTraceJson as Record<string, unknown> | null | undefined) ?? null;
 
   return {
     project_id: project.id,
@@ -79,6 +84,7 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
       latest_script_run: summarizeTraceRun(latestScriptTrace),
       latest_storyboard_run: summarizeTraceRun(latestStoryboardTrace),
       latest_asset_plan_run: summarizeTraceRun(latestAssetPlanTrace),
+      latest_assets_run: summarizeTraceRun(latestAssetsTrace),
     },
     active_topic_package: topicRecord
       ? {
@@ -139,6 +145,20 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
           execution_state: assetPlanRecord.executionStateJson,
           graph_trace_summary: assetPlanRecord.graphTraceSummaryJson,
           runtime_diagnostics: assetPlanRecord.runtimeDiagnosticsJson,
+        }
+      : null,
+    active_assets: assetManifestRecord
+      ? {
+          asset_manifest_record_id: assetManifestRecord.id,
+          source_topic_package_id: assetManifestRecord.topicPackageId,
+          source_script_record_id: assetManifestRecord.scriptRecordId,
+          source_storyboard_record_id: assetManifestRecord.storyboardRecordId,
+          source_asset_plan_record_id: assetManifestRecord.assetPlanRecordId,
+          manifest: assetManifestRecord.manifestJson,
+          local_validation: assetManifestRecord.validationResultJson,
+          execution_state: assetManifestRecord.executionStateJson,
+          graph_trace_summary: assetManifestRecord.graphTraceSummaryJson,
+          runtime_diagnostics: assetManifestRecord.runtimeDiagnosticsJson,
         }
       : null,
   };

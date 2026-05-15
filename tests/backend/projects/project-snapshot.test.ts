@@ -8,6 +8,9 @@ import { createDbClient } from "../../../backend/src/db/client.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import { getProjectSnapshot } from "../../../backend/src/modules/projects/project-snapshot.service.js";
 import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning/asset-plan-record.repository.js";
+import {
+  saveAssetManifestRecord,
+} from "../../../backend/src/modules/assets/asset-manifest-record.repository.js";
 import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository.js";
 import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/storyboard-record.repository.js";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
@@ -713,5 +716,175 @@ describe("project snapshot service", () => {
 
     expect(snapshot?.active_asset_plan).toBeNull();
     expect(snapshot?.trace_summary.latest_asset_plan_run).toBeNull();
+  });
+
+  it("restores active asset manifest when project has active manifest pointer", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Asset Manifest Snapshot",
+    });
+    const topicPackage = await saveTopicPackage(db, {
+      projectId: project.id,
+      title: "Asset Manifest Topic",
+      selectedAngle: "A public answer reverses the pressure.",
+      familyLabel: "diplomacy",
+      scopeLabel: "single_event",
+      coreConflict: "The envoy must answer in front of everyone.",
+      strongScene: "The hall falls quiet after the answer.",
+      packagingSeed: "One sentence changes the room.",
+      durationBandJson: { label: "medium" },
+      narrativeTensionMapJson: {
+        hook_claim: "A public pressure scene begins.",
+        pressure_escalation: "The insult keeps rising.",
+        mid_reveal: "The answer is guarding the state's face.",
+        peak_payoff: "The reply reverses the pressure.",
+        ending_residue: "Retreat would cost more than silence.",
+      },
+    });
+    const assetsTrace = {
+      phase: "assets",
+      run_id: "assets_run_snapshot_1",
+      steps: [
+        {
+          step_name: "assets-generate",
+          phase: "assets",
+          status: "succeeded",
+        },
+        {
+          step_name: "assets-local-validate",
+          phase: "assets",
+          status: "succeeded",
+        },
+      ],
+    };
+    const manifestRecord = await saveAssetManifestRecord(db, {
+      projectId: project.id,
+      topicPackageId: topicPackage.id,
+      scriptRecordId: "script_record_1",
+      storyboardRecordId: "storyboard_record_1",
+      assetPlanRecordId: "asset_plan_record_1",
+      manifestJson: {
+        manifest_version: "asset_manifest_v1",
+        source_asset_plan_record_id: "asset_plan_record_1",
+        segments: [
+          {
+            segment_id: "seg_001",
+            asset_route: "image",
+          },
+        ],
+        task_executions: [
+          {
+            task_id: "task_001",
+            status: "completed",
+          },
+        ],
+        bgm_placements: [],
+      },
+      validationResultJson: {
+        stage: "assets_local_validation",
+        decision: "pass",
+        errors: [],
+        warnings: [],
+        metrics: { segment_count: 1 },
+      },
+      executionStateJson: {
+        execution_mode: "full_auto",
+        activated: true,
+      },
+      graphTraceSummaryJson: assetsTrace,
+      runtimeDiagnosticsJson: null,
+    });
+
+    project.activeAssetManifestRecordId = manifestRecord.id;
+    project.latestAssetsRunTraceJson = assetsTrace;
+    project.status = "assets_ready";
+
+    const snapshot = await getProjectSnapshot(db, project.id);
+
+    expect(snapshot).toMatchObject({
+      project_id: project.id,
+      current_status: "assets_ready",
+      active_assets: {
+        asset_manifest_record_id: manifestRecord.id,
+        source_topic_package_id: topicPackage.id,
+        source_script_record_id: "script_record_1",
+        source_storyboard_record_id: "storyboard_record_1",
+        source_asset_plan_record_id: "asset_plan_record_1",
+        manifest: {
+          manifest_version: "asset_manifest_v1",
+        },
+        local_validation: {
+          stage: "assets_local_validation",
+          decision: "pass",
+        },
+        execution_state: {
+          execution_mode: "full_auto",
+          activated: true,
+        },
+        graph_trace_summary: assetsTrace,
+      },
+      trace_summary: {
+        latest_assets_run: {
+          run_id: "assets_run_snapshot_1",
+          phase: "assets",
+          step_count: 2,
+          latest_step: "assets-local-validate",
+        },
+      },
+    });
+    expect(snapshot?.active_assets?.runtime_diagnostics).toBeNull();
+  });
+
+  it("does not expose stale asset manifest when active pointer is cleared", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Cleared Asset Manifest Snapshot",
+    });
+    const manifestRecord = await saveAssetManifestRecord(db, {
+      projectId: project.id,
+      topicPackageId: "topic_pkg_old",
+      scriptRecordId: "script_old",
+      storyboardRecordId: "storyboard_old",
+      assetPlanRecordId: "asset_plan_old",
+      manifestJson: {
+        manifest_version: "asset_manifest_v1",
+        segments: [],
+        task_executions: [],
+        bgm_placements: [],
+      },
+      validationResultJson: {
+        stage: "assets_local_validation",
+        decision: "pass",
+        errors: [],
+        warnings: [],
+        metrics: {},
+      },
+      executionStateJson: {
+        execution_mode: "full_auto",
+        activated: false,
+      },
+      graphTraceSummaryJson: {
+        phase: "assets",
+        run_id: "assets_run_old",
+        steps: [],
+      },
+      runtimeDiagnosticsJson: null,
+    });
+
+    project.activeAssetManifestRecordId = manifestRecord.id;
+    project.latestAssetsRunTraceJson = {
+      phase: "assets",
+      run_id: "assets_run_old",
+      steps: [],
+    };
+
+    // Clear the pointers
+    project.activeAssetManifestRecordId = null;
+    project.latestAssetsRunTraceJson = null;
+
+    const snapshot = await getProjectSnapshot(db, project.id);
+
+    expect(snapshot?.active_assets).toBeNull();
+    expect(snapshot?.trace_summary.latest_assets_run).toBeNull();
   });
 });

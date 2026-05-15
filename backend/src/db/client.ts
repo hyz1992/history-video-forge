@@ -13,10 +13,12 @@ export interface ProjectRecord {
   activeScriptRecordId: string | null;
   activeStoryboardRecordId: string | null;
   activeAssetPlanRecordId: string | null;
+  activeAssetManifestRecordId: string | null;
   latestTopicRunTraceJson: Record<string, unknown> | null;
   latestScriptRunTraceJson: Record<string, unknown> | null;
   latestStoryboardRunTraceJson: Record<string, unknown> | null;
   latestAssetPlanRunTraceJson: Record<string, unknown> | null;
+  latestAssetsRunTraceJson: Record<string, unknown> | null;
   storageDisplayName: string;
   storageShortId: string;
   storageRootDir: string;
@@ -124,6 +126,21 @@ export interface AssetPlanRecord {
   createdAt: Date;
 }
 
+export interface AssetManifestRecord {
+  id: string;
+  projectId: string;
+  topicPackageId: string;
+  scriptRecordId: string;
+  storyboardRecordId: string;
+  assetPlanRecordId: string;
+  manifestJson: Record<string, unknown>;
+  validationResultJson: Record<string, unknown>;
+  executionStateJson: Record<string, unknown> | null;
+  graphTraceSummaryJson: Record<string, unknown> | null;
+  runtimeDiagnosticsJson: Record<string, unknown> | null;
+  createdAt: Date;
+}
+
 export interface DbClient {
   generateId: () => string;
   projects: Map<string, ProjectRecord>;
@@ -134,6 +151,7 @@ export interface DbClient {
   scriptRecords: Map<string, ScriptRecord>;
   storyboardRecords: Map<string, StoryboardRecord>;
   assetPlanRecords: Map<string, AssetPlanRecord>;
+  assetManifestRecords: Map<string, AssetManifestRecord>;
 }
 
 export function createDbClient(): DbClient {
@@ -147,5 +165,6 @@ export function createDbClient(): DbClient {
     scriptRecords: new Map<string, ScriptRecord>(),
     storyboardRecords: new Map<string, StoryboardRecord>(),
     assetPlanRecords: new Map<string, AssetPlanRecord>(),
+    assetManifestRecords: new Map<string, AssetManifestRecord>(),
   };
 }
