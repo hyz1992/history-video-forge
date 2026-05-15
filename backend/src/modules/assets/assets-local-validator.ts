@@ -1,0 +1,169 @@
+import type {
+  AssetManifest,
+  AssetPlan,
+  AssetsValidationResult,
+} from "../../../../shared/src/index.js";
+import { AssetsValidationResult as AssetsValidationResultSchema } from "../../../../shared/src/index.js";
+
+/**
+ * Segment-bound task types that should have a corresponding segment route
+ * when they reference a source_segment_id.
+ */
+const VISUAL_TASK_TYPES = new Set(["image_still", "video_clip", "render_motion_cue"]);
+
+function pushUnique(target: string[], code: string) {
+  if (!target.includes(code)) {
+    target.push(code);
+  }
+}
+
+export function validateAssetsManifest(input: {
+  assetPlanRecordId: string;
+  storyboardRecordId: string;
+  scriptRecordId: string;
+  topicPackageId: string;
+  assetPlan: AssetPlan;
+  manifest: AssetManifest;
+}): AssetsValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const { assetPlan, manifest } = input;
+
+  // ── Source ID checks ────────────────────────────────────────────────────
+
+  if (manifest.source_asset_plan_id !== input.assetPlanRecordId) {
+    pushUnique(errors, "assets_source_asset_plan_mismatch");
+  }
+  if (manifest.source_storyboard_record_id !== input.storyboardRecordId) {
+    pushUnique(errors, "assets_source_storyboard_mismatch");
+  }
+  if (manifest.source_script_record_id !== input.scriptRecordId) {
+    pushUnique(errors, "assets_source_script_mismatch");
+  }
+  // Topic package id lives on the AssetPlan, not on the manifest
+  if (assetPlan.source_topic_package_id !== input.topicPackageId) {
+    pushUnique(errors, "assets_source_topic_mismatch");
+  }
+
+  // ── Build lookup sets ───────────────────────────────────────────────────
+
+  const artifactIds = new Set(manifest.artifacts.map((a) => a.artifact_id));
+  const executionTaskIds = new Set(manifest.executions.map((e) => e.task_id));
+  const routeSegmentIds = new Set(manifest.segment_routes.map((r) => r.segment_id));
+
+  // ── Each plan task must have an execution ───────────────────────────────
+
+  const taskSegmentIds = new Set<string>();
+
+  for (const task of assetPlan.tasks) {
+    if (!executionTaskIds.has(task.task_id)) {
+      pushUnique(errors, "assets_task_execution_missing");
+    }
+
+    if (task.source_segment_id && VISUAL_TASK_TYPES.has(task.task_type)) {
+      taskSegmentIds.add(task.source_segment_id);
+    }
+  }
+
+  // ── Execution artifact ids must exist in artifacts ──────────────────────
+
+  for (const execution of manifest.executions) {
+    for (const artifactId of execution.output_artifact_ids) {
+      if (!artifactIds.has(artifactId)) {
+        pushUnique(errors, "assets_selected_artifact_missing");
+      }
+    }
+  }
+
+  // ── Segment routes for visual tasks ─────────────────────────────────────
+
+  for (const segmentId of taskSegmentIds) {
+    if (!routeSegmentIds.has(segmentId)) {
+      pushUnique(errors, "assets_segment_route_missing");
+    }
+  }
+
+  // ── Route visual references ─────────────────────────────────────────────
+
+  let videoFallbackUsed = false;
+
+  for (const route of manifest.segment_routes) {
+    if (route.visual_route_type === "missing") {
+      continue;
+    }
+
+    // Check primary visual artifact exists
+    if (route.primary_visual_artifact_id && !artifactIds.has(route.primary_visual_artifact_id)) {
+      pushUnique(errors, "assets_segment_visual_missing");
+    }
+
+    // Check motion artifact exists when route says image_with_motion
+    if (
+      route.visual_route_type === "image_with_motion" &&
+      route.motion_artifact_id &&
+      !artifactIds.has(route.motion_artifact_id)
+    ) {
+      pushUnique(errors, "assets_segment_visual_missing");
+    }
+
+    // Detect video fallback: route uses image_with_motion instead of video_clip
+    // for a segment that has a video_clip task
+    if (route.visual_route_type === "image_with_motion") {
+      const hasVideoTask = assetPlan.tasks.some(
+        (t) =>
+          t.task_type === "video_clip" &&
+          t.source_segment_id === route.segment_id,
+      );
+      if (hasVideoTask) {
+        videoFallbackUsed = true;
+      }
+    }
+  }
+
+  // ── Missing route visuals when route_type is not "missing" ──────────────
+
+  for (const route of manifest.segment_routes) {
+    if (route.visual_route_type === "missing") {
+      continue;
+    }
+    if (!route.primary_visual_artifact_id) {
+      pushUnique(errors, "assets_segment_visual_missing");
+    }
+  }
+
+  // ── Video fallback warning ──────────────────────────────────────────────
+
+  if (videoFallbackUsed) {
+    pushUnique(warnings, "assets_video_fallback_used");
+  }
+
+  // ── BGM warning ─────────────────────────────────────────────────────────
+
+  if (manifest.audio_summary.bgm_placements.length === 0) {
+    pushUnique(warnings, "assets_bgm_missing_optional");
+  }
+
+  // ── Decision logic ──────────────────────────────────────────────────────
+
+  let decision: "ready_for_compose" | "blocked" | "partial";
+  if (errors.length > 0) {
+    decision = "blocked";
+  } else if (warnings.length > 0) {
+    decision = "partial";
+  } else {
+    decision = "ready_for_compose";
+  }
+
+  return AssetsValidationResultSchema.parse({
+    stage: "assets_local_validation",
+    decision,
+    errors,
+    warnings,
+    metrics: {
+      task_count: assetPlan.tasks.length,
+      execution_count: manifest.executions.length,
+      artifact_count: manifest.artifacts.length,
+      segment_route_count: manifest.segment_routes.length,
+    },
+  });
+}
