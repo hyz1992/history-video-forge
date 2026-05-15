@@ -394,7 +394,7 @@ script 摘要第一版建议至少包含：
 
 ## 7. 当前不在本轮承诺的 API
 
-- asset planning / assets / compose API
+- compose API
 - 管理后台校正 Event Registry 的运营 API
 
 ## Storyboard v1 API（2026-05-10 已实现）
@@ -486,3 +486,109 @@ script 摘要第一版建议至少包含：
 - asset planning API 不修改 `script_text`、`TopicPackage` 或 `StoryboardPlan`。
 - asset planning API 不调用图片、视频、TTS、字幕或上传 provider。
 - asset planning API 不生成 compose timeline 或最终视频。
+
+## Assets v1 API（2026-05-15 已实现后端骨架）
+
+### `POST /api/projects/:projectId/assets/generate`
+
+用途：
+
+- 从当前 active asset plan 生成 assets manifest v1。
+- 成功后保存 `AssetManifestRecord`，并把项目推进到 `assets_ready` 或 `assets_blocked`。
+- 第一版只构建 manifest 骨架和结构校验，不调用真实 provider。
+
+输入：
+
+- URL 中的 `projectId`。
+- 可选请求体字段：
+  - `voice_profile_id`：TTS 声线 ID，默认 `"voice_default_male_storyteller"`。
+  - `execution_mode`：`"auto_available"` 或 `"dry_run"`，默认 `"auto_available"`。
+
+前置条件与错误：
+
+- project 必须存在，否则返回 `404 project_not_found`。
+- project 必须有 `active_asset_plan_record_id`，否则返回 `409 active_asset_plan_missing`。
+- active asset plan record 必须存在，否则返回 `404 asset_plan_record_not_found`。
+- asset plan 对应的 storyboard record 必须存在，否则返回 `404 storyboard_record_not_found`。
+- 若生成期间 active asset plan 指针发生变化，返回 `409 stale_assets_source`，不激活旧结果。
+
+成功响应字段：
+
+- `project_id`
+- `asset_manifest_record_id`
+- `source_asset_plan_record_id`
+- `manifest`
+- `local_validation`
+- `execution_state`
+- `graph_trace_summary`
+- `runtime_diagnostics`
+
+### `POST /api/projects/:projectId/assets/tasks/:taskId/artifacts/register`
+
+用途：
+
+- 为指定 task 手动登记一个 artifact（例如用户上传素材后调用）。
+- 将 artifact 添加到 manifest 的 artifacts 列表，关联到对应 execution。
+- 更新 execution 状态为 `completed`，origin 为 `manual_upload`。
+- 重新校验 manifest 并更新 readiness 和 project status。
+
+输入：
+
+- URL 中的 `projectId` 和 `taskId`。
+- 请求体字段：
+  - `artifact_type`：artifact 类型字符串。
+  - `file_uri`：文件 URI。
+  - `mime_type`：MIME 类型。
+  - `metadata`：结构化元数据（可选，默认 `{}`）。
+
+前置条件与错误：
+
+- project 必须存在，否则返回 `404 project_not_found`。
+- project 必须有 active manifest record，否则返回 `409 active_assets_missing`。
+- active manifest record 必须存在，否则返回 `409 active_assets_missing`。
+- manifest 中必须存在 `task_id` 匹配的 execution，否则返回 `404 asset_task_not_found`。
+- asset plan record 必须存在，否则返回 `404 asset_plan_record_not_found`。
+- MIME 类型必须在 plan task 的 `manual_upload_policy.accepted_file_types` 中，否则返回 `422 asset_manual_upload_type_not_allowed`。
+
+成功响应字段：
+
+- `project_id`
+- `asset_manifest_record_id`
+- `manifest`
+- `local_validation`
+
+### `POST /api/projects/:projectId/assets/tasks/:taskId/accept`
+
+用途：
+
+- 确认接受指定 task 的某个 artifact 为选中结果。
+- 将 artifact 移到 execution 的 `output_artifact_ids` 首位（标记选中）。
+- 更新 execution 状态为 `accepted`。
+- 重新校验 manifest 并更新 readiness 和 project status。
+
+输入：
+
+- URL 中的 `projectId` 和 `taskId`。
+- 请求体字段：
+  - `artifact_id`：要确认的 artifact ID。
+
+前置条件与错误：
+
+- project 必须存在，否则返回 `404 project_not_found`。
+- project 必须有 active manifest record，否则返回 `409 active_assets_missing`。
+- active manifest record 必须存在，否则返回 `409 active_assets_missing`。
+- manifest 中必须存在 `task_id` 匹配的 execution，否则返回 `404 asset_task_not_found`。
+- `artifact_id` 必须在 execution 的 `output_artifact_ids` 中，否则返回 `404 artifact_not_found_in_execution`。
+
+成功响应字段：
+
+- `project_id`
+- `asset_manifest_record_id`
+- `manifest`
+
+边界：
+
+- assets API 不调用真实 provider（TTS、图片、视频、SFX、BGM）。
+- assets API 不修改 `script_text`、`TopicPackage`、`StoryboardPlan` 或 `AssetPlan`。
+- assets API 不生成 compose timeline 或最终视频。
+- assets API 不实现前端 UI、物理文件上传或预览功能。

@@ -648,8 +648,7 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 `TBD`
 
 - cache object 字段细化
-- asset manifest 字段
-- 审校输出对象字段的落盘形式
+- compose timeline 字段
 
 ## Storyboard v1 字段（2026-05-10 已实现）
 
@@ -768,3 +767,144 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 - `AssetPlan` 不包含真实文件路径、上传状态、生成结果 URL 或 compose timeline。
 - local validator 不判断审美、爆款、历史相似度或 prompt 质量。
 - `render_motion_cue` 是 compose 建议任务，不等于已实现 compose。
+
+## Assets v1 字段（2026-05-15 已实现后端骨架）
+
+`AssetManifest` 是 assets 阶段的正式输出对象。它描述资产执行结果清单，包含任务执行状态、artifact 元数据、分镜 route 和音频摘要。第一版只构建 manifest 骨架和结构校验，不调用真实 provider。
+
+### `AssetManifest`
+
+| 字段 | 含义 |
+|---|---|
+| `manifest_version` | 固定为 `asset_manifest_v1` |
+| `source_asset_plan_id` | 来源 active asset plan record |
+| `source_storyboard_record_id` | 来源 storyboard record |
+| `source_script_record_id` | 来源 script record |
+| `execution_options` | 执行选项，类型为 `AssetExecutionOptions` |
+| `executions` | 任务执行记录列表，元素为 `AssetTaskExecution` |
+| `artifacts` | 已生成的 artifact 列表，元素为 `AssetArtifact`（discriminated union） |
+| `audio_summary` | 音频摘要，类型为 `AssetAudioSummary` |
+| `segment_routes` | 分镜资产路由列表，元素为 `SegmentAssetRoute` |
+| `readiness` | 整体就绪状态：`ready_for_compose / blocked / partial` |
+| `notes` | 全局备注列表 |
+
+### `AssetExecutionOptions`
+
+| 字段 | 含义 |
+|---|---|
+| `execution_mode` | `auto_available / dry_run` |
+| `voice_profile_id` | TTS 声线 ID，可为 `null` |
+| `enabled_provider_types` | 启用的 provider 类型列表，元素为 `tts / image / video / sfx / bgm` |
+| `allow_manual_placeholders` | 是否允许手动占位 |
+
+### `AssetTaskExecution`
+
+| 字段 | 含义 |
+|---|---|
+| `execution_id` | 执行唯一 ID |
+| `task_id` | 对应 `AssetPlan` 中的 task_id |
+| `task_type` | 与 `AssetTask.task_type` 相同枚举 |
+| `status` | 执行状态：`planned / ready / running / waiting_manual_upload / waiting_manual_selection / completed / skipped_with_fallback / failed / accepted / rejected` |
+| `origin` | artifact 来源：`provider / local / manual_upload / library / inline / external_url` |
+| `started_at` | 开始时间 ISO 字符串，初始为 `null` |
+| `completed_at` | 完成时间 ISO 字符串，初始为 `null` |
+| `provider_id` | 实际调用 provider 的 ID，可为 `null` |
+| `attempts` | 尝试次数，初始为 `0` |
+| `output_artifact_ids` | 产出的 artifact ID 列表；首元素在 `accept` 后为选中 artifact |
+| `notes` | 执行备注列表 |
+
+### `AssetArtifact`（discriminated union on `artifact_type`）
+
+基础字段（所有变体共享）：
+
+| 字段 | 含义 |
+|---|---|
+| `artifact_id` | artifact 唯一 ID |
+| `artifact_type` | 判别键，见下表 |
+| `origin` | 来源类型 |
+| `file_uri` | 文件 URI；占位 artifact 使用 `planned://` 或 `inline://` 前缀 |
+| `created_at` | 创建时间 ISO 字符串 |
+| `metadata` | 按类型不同的结构化元数据 |
+
+`artifact_type` 变体与元数据字段：
+
+| artifact_type | 元数据关键字段 |
+|---|---|
+| `tts_chunk_audio` | `duration_sec`、`voice_profile_id`、`tts_chunk_id`、`segment_ids`、`script_excerpt` |
+| `tts_merged_audio` | `duration_sec`、`voice_profile_id`、`chunk_artifact_ids` |
+| `subtitle_track` | `format`、`source_tts_artifact_id`、`caption_count` |
+| `image` | `width`、`height` |
+| `video` | `duration_sec`、`width`、`height`、`fps` |
+| `motion_recipe` | `recipe_type`、`source_image_artifact_id`、`parameters` |
+| `sfx_audio` | `duration_sec` |
+| `sfx_selection` | `library_item_id` 或 `selection_label`（至少一个） |
+| `bgm_audio` | `duration_sec`、`loopable` |
+| `bgm_selection` | `library_item_id` 或 `selection_label`（至少一个） |
+
+### `SegmentAssetRoute`
+
+| 字段 | 含义 |
+|---|---|
+| `segment_id` | 对应 storyboard segment ID |
+| `tts_artifact_id` | 对应 TTS chunk artifact，可为 `null` |
+| `subtitle_artifact_id` | 对应字幕 artifact，可为 `null` |
+| `primary_visual_artifact_id` | 主视觉 artifact，可为 `null` |
+| `visual_route_type` | `video_clip / image_with_motion / image_only / missing` |
+| `motion_artifact_id` | 运动配方 artifact，可为 `null` |
+| `fallback_visual_artifact_id` | 后备视觉 artifact，可为 `null` |
+| `sfx_artifact_ids` | 音效 artifact ID 列表 |
+| `bgm_placement_ids` | BGM placement ID 列表 |
+| `readiness` | 段落就绪状态：`ready / blocked / fallback_ready` |
+| `notes` | 段落备注列表 |
+
+### `AssetAudioSummary`
+
+| 字段 | 含义 |
+|---|---|
+| `voice_profile_id` | TTS 声线 ID |
+| `tts_total_duration_sec` | TTS 总时长，可为 `null` |
+| `tts_chunk_artifact_ids` | TTS 分块 artifact ID 列表 |
+| `tts_chunk_routes` | TTS 分块路由列表，元素为 `TtsChunkRoute` |
+| `tts_merged_artifact_id` | TTS 合并 artifact，可为 `null` |
+| `subtitle_artifact_id` | 字幕 artifact，可为 `null` |
+| `bgm_placements` | BGM placement 列表，元素为 `BgmPlacement` |
+| `sfx_artifact_ids` | 音效 artifact ID 列表 |
+
+### `BgmPlacement`
+
+| 字段 | 含义 |
+|---|---|
+| `bgm_placement_id` | placement 唯一 ID |
+| `scope` | `global / segment / segment_span` |
+| `artifact_id` | BGM audio artifact，可为 `null` |
+| `start_policy` | `timeline_start / segment_start` |
+| `end_policy` | `timeline_end / segment_end / fade_out_after_span` |
+| `segment_ids` | 关联的 segment ID 列表 |
+| `volume` | 音量，0-1 范围，默认 `0.3` |
+| `fade_in_sec` | 淡入时长（秒），默认 `0` |
+| `fade_out_sec` | 淡出时长（秒），默认 `0` |
+
+### `TtsChunkRoute`
+
+| 字段 | 含义 |
+|---|---|
+| `tts_chunk_id` | TTS 分块 ID |
+| `artifact_id` | 对应 artifact，可为 `null` |
+| `segment_ids` | 关联的 segment ID 列表 |
+| `script_excerpt` | 对应的口播原文片段 |
+
+### `AssetsValidationResult`
+
+| 字段 | 含义 |
+|---|---|
+| `stage` | 固定为 `assets_local_validation` |
+| `decision` | `ready_for_compose / blocked / partial` |
+| `errors` | 结构错误码列表 |
+| `warnings` | 非阻断警告列表 |
+| `metrics` | 结构指标（task_count、execution_count、artifact_count、segment_route_count） |
+
+边界：
+
+- `AssetManifest` 不包含 compose timeline 或最终视频导出。
+- local validator 不判断审美、爆款、语义质量或 provider 生成质量。
+- 第一版 `buildInitialAssetManifest` 是纯确定性函数，不调用任何外部 provider。

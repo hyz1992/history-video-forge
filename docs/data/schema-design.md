@@ -15,7 +15,9 @@
    - topic
    - topic -> script
    - storyboard v1
-5. asset planning / assets / compose 暂不在本文档里提前拍死。
+   - asset planning v1
+   - assets v1
+5. compose 暂不在本文档里提前拍死。
 
 ## 2. 当前建议的核心实体
 
@@ -246,12 +248,16 @@
 - `event_registry_entries (1) -> event_registry_confusions (N)`
 - `event_registry_entries (1) -> topic_packages (N)`
 - `event_registry_entries (1) -> recommendation_candidate_cache (N)`
+- `projects (1) -> asset_manifest_records (N)`
+- `storyboard_records (1) -> asset_manifest_records (N)`
+- `script_records (1) -> asset_manifest_records (N)`
+- `asset_plan_records (1) -> asset_manifest_records (N)`
 
 ## 5. 当前明确不建议这样做
 
 - 不把 `Event Registry`、`Candidate Cache`、`Recent Memory` 混成一张表
 - 不把全部数组型字段都塞进单 JSON 大字段里不区分职责
-- 不为尚未拍板的 asset planning/assets/compose 阶段提前设计大而全 schema
+- 不为尚未拍板的 compose 阶段提前设计大而全 schema
 - 不直接复用旧项目的 pipeline state 表结构
 
 ## 6. Task 2 共享 Schema 与持久化映射
@@ -334,7 +340,7 @@
 - 索引策略与查询优化
 - `recommendation candidate exposure log` 是否独立成表
 - `Recent Memory` 第一版是否纯查询层，还是做物化表
-- future 阶段（asset planning/assets/compose）的持久化对象
+- compose 阶段的持久化对象
 
 ## StoryboardRecord 持久化映射（2026-05-10 已实现）
 
@@ -418,3 +424,51 @@ Asset planning v1 已有第一版持久化记录。它是 `StoryboardRecord` 之
 - `validation_result_json` 保存 `AssetPlanningValidationResult`。
 - `execution_state_json` 第一版至少记录 `regenerate_used`。
 - `asset_plan_records` 不保存真实 asset 文件、不保存上传对象、不保存 compose timeline。
+
+## AssetManifestRecord 持久化映射（2026-05-15 已实现）
+
+Assets v1 已有第一版持久化记录。它是 `AssetPlanRecord` 之后的派生记录，source-of-truth 仍是 active asset plan 及其上游链路。
+
+### `projects` 增量字段
+
+- `active_asset_manifest_record_id`：当前激活的 asset manifest record。
+- `latest_assets_run_trace_json`：当前项目最近一次 assets run 的 trace summary。
+
+失效规则：
+
+- 新 script 激活时，清空 `active_storyboard_record_id`、`latest_storyboard_run_trace_json`、`active_asset_plan_record_id`、`latest_asset_plan_run_trace_json`、`active_asset_manifest_record_id`、`latest_assets_run_trace_json`。
+- 新 storyboard 激活时，清空 `active_asset_plan_record_id`、`latest_asset_plan_run_trace_json`、`active_asset_manifest_record_id`、`latest_assets_run_trace_json`。
+- 新 asset plan 激活时，清空 `active_asset_manifest_record_id`、`latest_assets_run_trace_json`。
+- project snapshot 只根据信任的 active 指针暴露 `active_assets`，不会在指针清空后从旧记录回填。
+
+### `asset_manifest_records`
+
+建议字段：
+
+- `id`
+- `project_id`
+- `topic_package_id`
+- `script_record_id`
+- `storyboard_record_id`
+- `asset_plan_record_id`
+- `manifest_json`
+- `validation_result_json`
+- `execution_state_json`
+- `graph_trace_summary_json`
+- `runtime_diagnostics_json`
+- `created_at`
+
+关系：
+
+- `projects (1) -> asset_manifest_records (N)`
+- `topic_packages (1) -> asset_manifest_records (N)`
+- `script_records (1) -> asset_manifest_records (N)`
+- `storyboard_records (1) -> asset_manifest_records (N)`
+- `asset_plan_records (1) -> asset_manifest_records (N)`
+
+说明：
+
+- `manifest_json` 保存 `AssetManifest`。
+- `validation_result_json` 保存 `AssetsValidationResult`。
+- `execution_state_json` 记录 `execution_mode`、`voice_profile_id`、`activated` 等执行状态。
+- `asset_manifest_records` 不保存 compose timeline 或最终视频导出。

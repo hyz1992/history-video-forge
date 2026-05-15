@@ -51,3 +51,10 @@
 - 新增 [Assets Stage Implementation Plan](./2026-05-15-assets-stage-implementation-plan.md)。
 - 本轮计划只设计 `AssetPlan` 之后的资产执行结果合同：`AssetManifest`、任务执行状态、artifact metadata、分镜 route、BGM placement、手动素材登记和结构校验。
 - 第一版实施计划不接真实 provider、不实现物理上传 UI、不实现 compose timeline 或最终视频导出。
+
+## 2026-05-15 Assets 阶段实施状态
+
+- assets v1 后端骨架已实现：manifest builder、local validator、manual artifact registration、artifact accept、persistence、API routes。
+- 架构文档、字段文档、schema 文档和 API 文档已同步更新。
+- 当前仍保留未归档的 assets 计划文件，直到完整验证完成。
+- `compose` 仍未进入可实施设计，不得从 assets 计划中顺手实现。

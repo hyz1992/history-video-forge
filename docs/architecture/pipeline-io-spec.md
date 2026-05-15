@@ -168,12 +168,10 @@
 
 - [Script 校验与决策规范](./script-validation-spec.md)
 
-## 3. 后续阶段
+## 3. Compose 阶段
 
 `TBD`
 
-- asset planning 阶段输入输出
-- assets 阶段输入输出
 - compose 阶段输入输出
 
 补充说明：
@@ -281,3 +279,65 @@ Asset Planning v1 消费 active `StoryboardRecord` 及其来源 `ScriptRecord` /
 - 图片、视频、TTS、字幕等物理文件生成。
 - 手动上传、预览、accept/reject UI。
 - compose timeline 或最终视频导出。
+
+## 6. Assets v1 阶段（2026-05-15 已完成后端骨架实现）
+
+Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `ScriptRecord` / `TopicPackage`，输出可持久化的资产执行结果清单。第一版只构建 manifest 骨架和结构校验，不调用真实 provider、不生成物理文件、不实现 compose timeline。
+
+输入：
+
+- active `AssetPlanRecord`
+  - `plan_json` 中的 `AssetPlan`（包含 `tasks`、`tts_plan`、`art_bible` 等）
+  - `storyboard_record_id`
+  - `script_record_id`
+  - `topic_package_id`
+- 来源 `StoryboardRecord`
+  - `plan_json` 中的 segment ID 列表
+- 执行选项
+  - `execution_mode`：`auto_available` / `dry_run`
+  - `voice_profile_id`
+  - `enabled_provider_types`
+  - `allow_manual_placeholders`
+
+输出：
+
+- `AssetManifest`
+- `AssetsValidationResult`
+- `AssetManifestRecord`
+- project snapshot 中的 `active_assets` 与 `latest_assets_run`
+
+生成边界：
+
+- `buildInitialAssetManifest` 从 `AssetPlan` 确定性构建：为每个 plan task 创建 `AssetTaskExecution`，为 `render_motion_cue` 创建 inline artifact，为 TTS chunk 创建占位 artifact，构建 `SegmentAssetRoute` 和 `AssetAudioSummary`。
+- 不调用任何真实 provider（TTS、图片、视频、SFX、BGM）。
+- 不生成物理文件或上传对象。
+- 不实现 compose timeline 或最终视频导出。
+
+手动素材登记：
+
+- `POST /api/projects/:projectId/assets/tasks/:taskId/artifacts/register`：向指定 execution 追加一个 `origin=manual_upload` 的 artifact，更新 execution 状态为 `completed`，重新校验 manifest。
+
+Artifact 确认：
+
+- `POST /api/projects/:projectId/assets/tasks/:taskId/accept`：将指定 artifact 移到 `output_artifact_ids` 首位（标记为选中），更新 execution 状态为 `accepted`，重新校验 manifest。
+
+本地校验：
+
+- 只做结构检查：source ID 一致性、plan task 到 execution 映射完整性、execution artifact 引用有效性、segment route 覆盖率、visual route 引用有效性。
+- 不做审美、爆款、语义质量判断。
+- 校验结果 `AssetsValidationResult.decision` 为 `ready_for_compose / blocked / partial`。
+
+失效规则：
+
+- 新 script 激活后，清空 active storyboard、active asset plan、active asset manifest 指针。
+- 新 storyboard 激活后，清空 active asset plan、active asset manifest 指针。
+- 新 asset plan 激活后，清空 active asset manifest 指针。
+- assets run 在激活前必须复查 active asset plan 是否仍一致；若不一致，返回 `409 stale_assets_source`，不激活旧结果。
+
+仍未进入本阶段实现的内容：
+
+- 真实 provider 调用（TTS 生成、图片生成、视频生成、SFX/BGM 选择）。
+- 物理文件上传、存储、预览 UI。
+- 前端 assets 面板 UI。
+- compose timeline 或最终视频导出。
+- 质量判断（审美、爆款、历史相似度）。

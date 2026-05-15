@@ -185,10 +185,8 @@
 
 `TBD`
 
-- asset planning 详细字段
-- assets 统一状态模型
 - compose 时间轴对象
-- 后续阶段 API / 校验 / harness 规则
+- 后续阶段 compose API / 校验 / harness 规则
 
 ## 2026-05-10 状态更新：Storyboard v1 已进入第一版实现
 
@@ -238,3 +236,46 @@ Asset Planning v1 当前边界：
 - 在 asset planning 阶段实现 assets provider 执行或 compose timeline。
 - 让 semantic reviewer 参与 asset planning 主链路。
 - 用本地 validator 判断审美、爆款、历史相似度或 prompt 质量。
+
+## 2026-05-15 状态更新：Assets v1 已完成后端骨架实现
+
+当前 downstream 状态需要再次细分：
+
+- `storyboard`：已完成第一版 design、implementation plan 与最小后端实现。
+- `asset planning`：已完成第一版 design、implementation plan 与最小后端实现。
+- `assets`：已完成第一版 design、implementation plan 与后端骨架实现。
+- `compose`：仍为 TBD，未设计、未实现。
+
+Assets v1 当前边界：
+
+- 输入来自 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `ScriptRecord` / `TopicPackage`。
+- 输出 `AssetManifest`、`AssetsValidationResult`、`AssetManifestRecord`。
+- 提供 `POST /api/projects/:projectId/assets/generate`（生成 manifest）。
+- 提供 `POST /api/projects/:projectId/assets/tasks/:taskId/artifacts/register`（手动素材登记）。
+- 提供 `POST /api/projects/:projectId/assets/tasks/:taskId/accept`（artifact 确认）。
+- project snapshot 返回 `active_assets` 与 `latest_assets_run`。
+- 新 script / storyboard / asset plan 激活后会清空过期 active asset manifest 指针。
+- assets run 在激活前会复查来源 asset plan 指针，避免 stale manifest 覆盖当前状态。
+
+Assets v1 当前实现范围：
+
+- `buildInitialAssetManifest`：从 `AssetPlan` 确定性构建初始 manifest 骨架。
+- `validateAssetsManifest`：结构校验（source ID 一致性、execution 映射、artifact 引用、segment route 覆盖）。
+- `registerManualArtifact`：向 execution 追加 `manual_upload` artifact。
+- `acceptArtifact`：将 artifact 标记为选中。
+- `AssetManifestRecord`：持久化记录。
+
+仍然禁止：
+
+- 在 assets 阶段回写 topic/script/storyboard/asset plan。
+- 在 assets 阶段调用真实 provider（TTS 生成、图片生成、视频生成、SFX/BGM 选择）。
+- 在 assets 阶段实现物理文件上传、存储、预览 UI。
+- 在 assets 阶段实现 compose timeline 或最终视频导出。
+- 让 semantic reviewer 参与 assets 主链路。
+- 用本地 validator 判断审美、爆款、语义质量或 provider 生成质量。
+
+显边界面：
+
+- 第一版不接真实 provider。
+- 第一版不实现前端 assets 面板 UI。
+- 第一版不实现 compose timeline 或最终视频导出。
