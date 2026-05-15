@@ -196,9 +196,15 @@ describe("storyboard api", () => {
     const app = buildApp();
     const prepared = await prepareActiveScript(app);
     prepared.project.activeAssetPlanRecordId = "asset_plan_record_old";
+    prepared.project.activeAssetManifestRecordId = "asset_manifest_record_old";
     prepared.project.latestAssetPlanRunTraceJson = {
       phase: "asset_planning",
       run_id: "asset_plan_run_old",
+      steps: [],
+    };
+    prepared.project.latestAssetsRunTraceJson = {
+      phase: "assets",
+      run_id: "assets_run_old",
       steps: [],
     };
     generateStoryboardPlanMock.mockResolvedValueOnce(
@@ -239,6 +245,8 @@ describe("storyboard api", () => {
     expect(prepared.project.activeStoryboardRecordId).toBe(body.storyboard_record_id);
     expect(prepared.project.activeAssetPlanRecordId).toBeNull();
     expect(prepared.project.latestAssetPlanRunTraceJson).toBeNull();
+    expect(prepared.project.activeAssetManifestRecordId).toBeNull();
+    expect(prepared.project.latestAssetsRunTraceJson).toBeNull();
 
     const snapshot = await getProjectSnapshot(app.db, prepared.project.id);
     expect(snapshot?.active_storyboard).toMatchObject({

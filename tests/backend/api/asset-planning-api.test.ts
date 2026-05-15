@@ -400,6 +400,12 @@ describe("asset planning api", () => {
   it("generates, validates, persists, and activates an asset plan from active storyboard", async () => {
     const app = buildApp();
     const prepared = await prepareActiveStoryboard(app);
+    prepared.project.activeAssetManifestRecordId = "asset_manifest_record_old";
+    prepared.project.latestAssetsRunTraceJson = {
+      phase: "assets",
+      run_id: "assets_run_old",
+      steps: [],
+    };
     generateAssetPlanMock.mockResolvedValueOnce(
       makeAssetPlan({
         storyboardRecordId: prepared.storyboardRecord.id,
@@ -449,6 +455,8 @@ describe("asset planning api", () => {
     });
     expect(prepared.project.status).toBe("asset_plan_ready");
     expect(prepared.project.activeAssetPlanRecordId).toBe(body.asset_plan_record_id);
+    expect(prepared.project.activeAssetManifestRecordId).toBeNull();
+    expect(prepared.project.latestAssetsRunTraceJson).toBeNull();
     expect(prepared.project.latestAssetPlanRunTraceJson).toMatchObject({
       phase: "asset_planning",
     });

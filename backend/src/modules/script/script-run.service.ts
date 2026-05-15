@@ -172,10 +172,12 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
   input.project.activeScriptRecordId = scriptRecord.id;
   input.project.activeStoryboardRecordId = null;
   input.project.activeAssetPlanRecordId = null;
+  input.project.activeAssetManifestRecordId = null;
   input.project.latestScriptRunTraceJson =
     graphTraceSummary as unknown as Record<string, unknown>;
   input.project.latestStoryboardRunTraceJson = null;
   input.project.latestAssetPlanRunTraceJson = null;
+  input.project.latestAssetsRunTraceJson = null;
   input.project.status = "script_ready";
   input.project.updatedAt = new Date();
   persistProjectRunArtifacts({

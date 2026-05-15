@@ -694,6 +694,7 @@ ${JSON.stringify(runtimeDraft)}
     project.activeTopicPackageId = topicPackageRecord.id;
     project.activeStoryboardRecordId = "storyboard_record_old";
     project.activeAssetPlanRecordId = "asset_plan_record_old";
+    project.activeAssetManifestRecordId = "asset_manifest_record_old";
     project.latestStoryboardRunTraceJson = {
       phase: "storyboard",
       run_id: "storyboard_run_old",
@@ -702,6 +703,11 @@ ${JSON.stringify(runtimeDraft)}
     project.latestAssetPlanRunTraceJson = {
       phase: "asset_planning",
       run_id: "asset_plan_run_old",
+      steps: [],
+    };
+    project.latestAssetsRunTraceJson = {
+      phase: "assets",
+      run_id: "assets_run_old",
       steps: [],
     };
     project.status = "storyboard_ready";
@@ -720,6 +726,8 @@ ${JSON.stringify(runtimeDraft)}
     expect(project.latestStoryboardRunTraceJson).toBeNull();
     expect(project.activeAssetPlanRecordId).toBeNull();
     expect(project.latestAssetPlanRunTraceJson).toBeNull();
+    expect(project.activeAssetManifestRecordId).toBeNull();
+    expect(project.latestAssetsRunTraceJson).toBeNull();
   });
 
   it("returns real semantic reviewer output in shadow mode without entering patch", async () => {

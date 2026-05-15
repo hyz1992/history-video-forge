@@ -222,8 +222,10 @@ export async function runStoryboardGeneration(
 
   input.project.activeStoryboardRecordId = storyboardRecord.id;
   input.project.activeAssetPlanRecordId = null;
+  input.project.activeAssetManifestRecordId = null;
   input.project.latestStoryboardRunTraceJson = graphTraceSummary;
   input.project.latestAssetPlanRunTraceJson = null;
+  input.project.latestAssetsRunTraceJson = null;
   input.project.status = "storyboard_ready";
   input.project.updatedAt = new Date();
   persistProjectRunArtifacts({
