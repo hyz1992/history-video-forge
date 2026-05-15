@@ -16,7 +16,8 @@ import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning
 import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository.js";
 import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/storyboard-record.repository.js";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
-import type { AssetManifest, AssetPlan, StoryboardPlan } from "../../../shared/src/index.js";
+import { saveAssetManifestRecord } from "../../../backend/src/modules/assets/asset-manifest-record.repository.js";
+import type { AssetManifest, AssetPlan, AssetsValidationResult, StoryboardPlan } from "../../../shared/src/index.js";
 
 const scriptText =
   "Opening pressure. The envoy answers in public. The ending leaves a cost.";
@@ -264,6 +265,11 @@ interface PreparedSetup {
   storyboardPlan: StoryboardPlan;
 }
 
+interface PreparedManifestSetup extends PreparedSetup {
+  assetManifestRecord: any;
+  manifest: AssetManifest;
+}
+
 async function prepareActiveAssetPlan(app: ReturnType<typeof buildApp>): Promise<PreparedSetup> {
   const project = await createProject(app.db, {
     name: "Assets API Flow",
@@ -355,6 +361,52 @@ async function prepareActiveAssetPlan(app: ReturnType<typeof buildApp>): Promise
     assetPlanRecord,
     assetPlan,
     storyboardPlan,
+  };
+}
+
+async function prepareActiveManifest(app: ReturnType<typeof buildApp>): Promise<PreparedManifestSetup> {
+  const prepared = await prepareActiveAssetPlan(app);
+
+  const manifest = makeAssetManifest({
+    assetPlanRecordId: prepared.assetPlanRecord.id,
+    storyboardRecordId: prepared.storyboardRecord.id,
+    scriptRecordId: prepared.scriptRecord.id,
+    assetPlan: prepared.assetPlan,
+  });
+
+  const validationResult: AssetsValidationResult = {
+    stage: "assets_local_validation",
+    decision: "blocked",
+    errors: [],
+    warnings: [],
+    metrics: {
+      task_count: 2,
+      execution_count: 2,
+      artifact_count: 1,
+      segment_route_count: 1,
+    },
+  };
+
+  const assetManifestRecord = await saveAssetManifestRecord(app.db, {
+    projectId: prepared.project.id,
+    topicPackageId: prepared.topicPackage.id,
+    scriptRecordId: prepared.scriptRecord.id,
+    storyboardRecordId: prepared.storyboardRecord.id,
+    assetPlanRecordId: prepared.assetPlanRecord.id,
+    manifestJson: manifest as unknown as Record<string, unknown>,
+    validationResultJson: validationResult as unknown as Record<string, unknown>,
+    executionStateJson: { execution_mode: "auto_available", activated: true },
+    graphTraceSummaryJson: null,
+    runtimeDiagnosticsJson: null,
+  });
+
+  prepared.project.activeAssetManifestRecordId = assetManifestRecord.id;
+  prepared.project.status = "assets_blocked";
+
+  return {
+    ...prepared,
+    assetManifestRecord,
+    manifest,
   };
 }
 
@@ -610,5 +662,286 @@ describe("assets generate api", () => {
     expect(prepared.project.activeAssetManifestRecordId).toBe(
       body.asset_manifest_record_id,
     );
+  });
+});
+
+describe("manual artifact registration", () => {
+  beforeEach(() => {
+    buildInitialAssetManifestMock.mockReset();
+    validateAssetsManifestMock.mockReset();
+  });
+
+  it("returns 404 project_not_found for missing project on register", async () => {
+    const app = buildApp();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/projects/missing/assets/tasks/img_001/artifacts/register",
+      payload: {
+        artifact_type: "image",
+        file_uri: "manual://upload.png",
+        mime_type: "image/png",
+        metadata: { width: 1080, height: 1920 },
+      },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({
+      error: "project_not_found",
+    });
+  });
+
+  it("returns 409 active_assets_missing when no active manifest on register", async () => {
+    const app = buildApp();
+    const project = await createProject(app.db, {
+      name: "No Manifest",
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/assets/tasks/img_001/artifacts/register`,
+      payload: {
+        artifact_type: "image",
+        file_uri: "manual://upload.png",
+        mime_type: "image/png",
+        metadata: { width: 1080, height: 1920 },
+      },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      error: "active_assets_missing",
+    });
+  });
+
+  it("returns 404 asset_task_not_found for unknown task id on register", async () => {
+    const app = buildApp();
+    const prepared = await prepareActiveManifest(app);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/assets/tasks/nonexistent_task/artifacts/register`,
+      payload: {
+        artifact_type: "image",
+        file_uri: "manual://upload.png",
+        mime_type: "image/png",
+        metadata: { width: 1080, height: 1920 },
+      },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({
+      error: "asset_task_not_found",
+    });
+  });
+
+  it("returns 422 asset_manual_upload_type_not_allowed for disallowed MIME type", async () => {
+    const app = buildApp();
+    const prepared = await prepareActiveManifest(app);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/assets/tasks/img_001/artifacts/register`,
+      payload: {
+        artifact_type: "image",
+        file_uri: "manual://upload.gif",
+        mime_type: "image/gif",
+        metadata: { width: 1080, height: 1920 },
+      },
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toEqual({
+      error: "asset_manual_upload_type_not_allowed",
+    });
+  });
+
+  it("registers manual artifact, sets execution to completed, and re-validates", async () => {
+    const app = buildApp();
+    const prepared = await prepareActiveManifest(app);
+
+    // The img_001 execution in the test manifest starts with status "planned"
+    // After registration it should become "completed" with origin "manual_upload"
+
+    // Mock validator to return partial (still has warnings)
+    validateAssetsManifestMock.mockReturnValueOnce({
+      stage: "assets_local_validation",
+      decision: "partial",
+      errors: [],
+      warnings: ["assets_bgm_missing_optional"],
+      metrics: {
+        task_count: 2,
+        execution_count: 2,
+        artifact_count: 2,
+        segment_route_count: 1,
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/assets/tasks/img_001/artifacts/register`,
+      payload: {
+        artifact_type: "image",
+        file_uri: "manual://upload.png",
+        mime_type: "image/png",
+        metadata: { width: 1080, height: 1920 },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    const returnedManifest = body.manifest as AssetManifest;
+
+    // Verify the new artifact was added
+    expect(returnedManifest.artifacts.length).toBe(2);
+    const newArtifact = returnedManifest.artifacts.find(
+      (a) => a.artifact_type === "image",
+    );
+    expect(newArtifact).toBeDefined();
+    expect(newArtifact!.origin).toBe("manual_upload");
+    expect(newArtifact!.file_uri).toBe("manual://upload.png");
+
+    // Verify execution was updated
+    const imgExecution = returnedManifest.executions.find(
+      (e) => e.task_id === "img_001",
+    );
+    expect(imgExecution).toBeDefined();
+    expect(imgExecution!.status).toBe("completed");
+    expect(imgExecution!.origin).toBe("manual_upload");
+    expect(imgExecution!.output_artifact_ids).toContain(newArtifact!.artifact_id);
+    expect(imgExecution!.completed_at).toBeDefined();
+
+    // Verify validator was called
+    expect(validateAssetsManifestMock).toHaveBeenCalledOnce();
+
+    // Verify readiness was updated based on validation result
+    expect(returnedManifest.readiness).toBe("partial");
+
+    // Verify the stored record was updated
+    const storedRecord = app.db.assetManifestRecords.get(
+      prepared.assetManifestRecord.id,
+    );
+    expect(storedRecord).toBeDefined();
+    const storedManifest = storedRecord!.manifestJson as AssetManifest;
+    expect(storedManifest.readiness).toBe("partial");
+  });
+
+  it("updates readiness from blocked to ready_for_compose when all blocking items resolved", async () => {
+    const app = buildApp();
+    const prepared = await prepareActiveManifest(app);
+
+    // Mock validator to return ready_for_compose after the image is registered
+    validateAssetsManifestMock.mockReturnValueOnce({
+      stage: "assets_local_validation",
+      decision: "ready_for_compose",
+      errors: [],
+      warnings: [],
+      metrics: {
+        task_count: 2,
+        execution_count: 2,
+        artifact_count: 2,
+        segment_route_count: 1,
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/assets/tasks/img_001/artifacts/register`,
+      payload: {
+        artifact_type: "image",
+        file_uri: "manual://upload.png",
+        mime_type: "image/png",
+        metadata: { width: 1080, height: 1920 },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    const returnedManifest = body.manifest as AssetManifest;
+
+    // Readiness should change from blocked to ready_for_compose
+    expect(returnedManifest.readiness).toBe("ready_for_compose");
+
+    // Project status should update
+    expect(prepared.project.status).toBe("assets_ready");
+  });
+
+  it("accepts an existing artifact and updates execution status to accepted", async () => {
+    const app = buildApp();
+    const prepared = await prepareActiveManifest(app);
+
+    // First, register a manual artifact so there is one to accept
+    validateAssetsManifestMock.mockReturnValueOnce({
+      stage: "assets_local_validation",
+      decision: "partial",
+      errors: [],
+      warnings: ["assets_bgm_missing_optional"],
+      metrics: {
+        task_count: 2,
+        execution_count: 2,
+        artifact_count: 2,
+        segment_route_count: 1,
+      },
+    });
+
+    const registerResponse = await app.inject({
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/assets/tasks/img_001/artifacts/register`,
+      payload: {
+        artifact_type: "image",
+        file_uri: "manual://upload.png",
+        mime_type: "image/png",
+        metadata: { width: 1080, height: 1920 },
+      },
+    });
+
+    expect(registerResponse.statusCode).toBe(200);
+    const registerBody = registerResponse.json();
+    const registeredManifest = registerBody.manifest as AssetManifest;
+    const imgExecution = registeredManifest.executions.find(
+      (e) => e.task_id === "img_001",
+    )!;
+    const artifactId = imgExecution.output_artifact_ids[0];
+
+    // Now accept the artifact
+    validateAssetsManifestMock.mockReturnValueOnce({
+      stage: "assets_local_validation",
+      decision: "partial",
+      errors: [],
+      warnings: ["assets_bgm_missing_optional"],
+      metrics: {
+        task_count: 2,
+        execution_count: 2,
+        artifact_count: 2,
+        segment_route_count: 1,
+      },
+    });
+
+    const acceptResponse = await app.inject({
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/assets/tasks/img_001/accept`,
+      payload: {
+        artifact_id: artifactId,
+      },
+    });
+
+    expect(acceptResponse.statusCode).toBe(200);
+    const acceptBody = acceptResponse.json();
+    const acceptedManifest = acceptBody.manifest as AssetManifest;
+
+    const updatedExecution = acceptedManifest.executions.find(
+      (e) => e.task_id === "img_001",
+    );
+    expect(updatedExecution!.status).toBe("accepted");
+
+    // Verify the stored record was updated
+    const storedRecord = app.db.assetManifestRecords.get(
+      prepared.assetManifestRecord.id,
+    );
+    const storedManifest = storedRecord!.manifestJson as AssetManifest;
+    const storedExec = storedManifest.executions.find(
+      (e) => e.task_id === "img_001",
+    );
+    expect(storedExec!.status).toBe("accepted");
   });
 });
