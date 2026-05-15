@@ -84,6 +84,19 @@
 
 `AssetManifest` 不复制完整 `AssetPlan`，只保存 source id 和执行结果。需要计划细节时读取 `AssetPlanRecord.plan_json`。
 
+#### `AssetExecutionOptions`
+
+`execution_options` 第一版使用以下结构，所有字段都必须被持久化到 manifest，避免后续无法复现本次 run 的执行策略。
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `execution_mode` | enum | `auto_available / dry_run` |
+| `voice_profile_id` | string \| null | 本次 TTS 使用音色；为空时使用 `AssetPlan.tts_plan.voice_profile_id` |
+| `enabled_provider_types` | string[] | 本次允许自动执行的 provider 类型，例如 `tts / image / video / sfx / bgm` |
+| `allow_manual_placeholders` | boolean | 自动能力缺失时是否创建等待人工处理的执行状态 |
+
+`dry_run` 只创建 execution、route、blocking 清单和本地派生的 inline artifact，不调用任何外部 provider，不登记伪造的图片、视频或音频文件。
+
 ### 4.2 `AssetTaskExecution`
 
 `AssetTaskExecution` 记录一个 `AssetTask` 的执行状态。
@@ -99,6 +112,7 @@
 | `attempt_count` | number | 已尝试次数 |
 | `selected_artifact_id` | string \| null | 当前被选中的 artifact |
 | `artifact_ids` | string[] | 该任务产生或登记的 artifact |
+| `completion_origin` | enum \| null | 完成来源；完成前为 null，完成后与选中 artifact 的 `origin` 对齐 |
 | `provider_job_id` | string \| null | 外部 provider job id |
 | `provider_name` | string \| null | provider 名称 |
 | `failure_code` | string \| null | 结构化失败码 |
@@ -115,13 +129,13 @@
 | `running` | provider 或本地执行中 |
 | `waiting_manual_upload` | 等待人工上传 |
 | `waiting_manual_selection` | 等待用户从素材库或候选结果中选择 |
-| `completed_by_provider` | provider 生成完成 |
-| `completed_by_local` | 本地派生完成 |
-| `completed_by_manual` | 人工上传完成 |
+| `completed` | 任务已有可用选中 artifact，来源通过 `completion_origin` 和 `AssetArtifact.origin` 判断 |
 | `skipped_with_fallback` | 该任务跳过，但已有 fallback 路由 |
 | `failed` | 执行失败且无可用结果 |
 | `accepted` | 已验收通过 |
 | `rejected` | 结果被拒绝，等待重试或替换 |
+
+`completed_by_provider / completed_by_local / completed_by_manual` 不作为 execution status，避免状态与 artifact origin 重复编码。
 
 ### 4.3 `AssetArtifact`
 
@@ -141,6 +155,23 @@
 | `mime_type` | string \| null | MIME 类型 |
 | `metadata` | object | 宽高、时长、字幕格式、音频参数等 |
 | `created_at` | ISO datetime string | 创建时间 |
+
+#### 最小 metadata 合同
+
+`metadata` 允许 provider 扩展字段，但第一版 shared schema 必须对关键 artifact 类型做最低结构约束。实现时可以使用 discriminated union，或使用按 `artifact_type` 的 Zod `superRefine`。
+
+| artifact type | metadata 最小字段 |
+|---|---|
+| `tts_chunk_audio` | `duration_sec`、`voice_profile_id`、`tts_chunk_id`、`segment_ids`、`script_excerpt`；如 provider 返回时间戳，记录 `word_timestamps` 或 `char_timestamps` |
+| `tts_merged_audio` | `duration_sec`、`voice_profile_id`、`chunk_artifact_ids` |
+| `subtitle_track` | `format`、`source_tts_artifact_id`、`caption_count` |
+| `image` | `width`、`height` |
+| `video` | `duration_sec`、`width`、`height`、`fps` |
+| `motion_recipe` | `recipe_type`、`source_image_artifact_id`、`parameters` |
+| `sfx_audio` | `duration_sec` |
+| `sfx_selection` | `library_item_id` 或 `selection_label` |
+| `bgm_audio` | `duration_sec`、`loopable` |
+| `bgm_selection` | `library_item_id` 或 `selection_label` |
 
 建议 `artifact_type`：
 
@@ -195,6 +226,7 @@
 | `voice_profile_id` | string | 本次 TTS 使用音色 |
 | `tts_total_duration_sec` | number \| null | 合并后口播实际时长 |
 | `tts_chunk_artifact_ids` | string[] | TTS 分段音频 |
+| `tts_chunk_routes` | `TtsChunkRoute[]` | TTS chunk 到 segment 的映射 |
 | `tts_merged_artifact_id` | string \| null | 合并后口播音频 |
 | `subtitle_artifact_id` | string \| null | 全片字幕轨 |
 | `bgm_placements` | `BgmPlacement[]` | BGM 播放安排 |
@@ -216,6 +248,19 @@
 | `fade_out_sec` | number | 淡出秒数 |
 | `duck_under_tts` | boolean | 是否在口播下自动压低 |
 
+`TtsChunkRoute` 建议字段：
+
+| 字段 | 类型 | 含义 |
+|---|---|---|
+| `tts_chunk_id` | string | `AssetPlan.tts_plan.chunks[].chunk_id` |
+| `artifact_id` | string \| null | 对应 `tts_chunk_audio` artifact |
+| `segment_ids` | string[] | 覆盖的 storyboard segment；第一版通常是一个 segment |
+| `script_excerpt` | string | 与 `AssetPlan.tts_plan.chunks[]` 对齐的口播文本 |
+
+`SegmentAssetRoute.tts_artifact_id` 应指向该 segment 对应的 `tts_chunk_audio` artifact，而不是合并后的全片口播 artifact。全片合并音频通过 `audio_summary.tts_merged_artifact_id` 暴露给 compose。
+
+当 `BgmPlacement.scope=segment_span` 时，`start_policy=segment_start` 指 `segment_ids` 中第一个 segment 的开始，`end_policy=segment_end` 指 `segment_ids` 中最后一个 segment 的结束；不是对每个 segment 分别重复起止。
+
 ## 5. 各资产类型处理规则
 
 ### 5.1 TTS 口播音频
@@ -224,6 +269,7 @@
 - `tts_plan.voice_profile_id` 是默认音色；assets run 可通过 `execution_options.voice_profile_id` 覆盖，但覆盖必须记录在 manifest 中。
 - 所有 TTS chunk 必须使用同一个 `voice_profile_id`。
 - 每个 `tts_plan.chunks[]` 生成一个 `tts_chunk_audio` artifact。
+- `tts_chunk_audio.metadata` 必须记录 `tts_chunk_id`、`segment_ids` 和 `script_excerpt`，避免 compose 反推 chunk 与 segment 的关系。
 - 所有 chunk 合并后生成一个 `tts_merged_audio` artifact。
 - TTS provider 如果返回词级或字级时间戳，必须保存在 artifact metadata 中，供字幕任务使用。
 - 变更音色后，必须重新生成所有 TTS chunk 和字幕；视觉资产不必自动失效。

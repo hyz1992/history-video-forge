@@ -41,6 +41,7 @@ Expected create:
 - `shared/src/assets/asset-manifest.schema.ts`
 - `shared/src/assets/assets-validation.schema.ts`
 - `backend/src/modules/assets/assets-local-validator.ts`
+- `backend/src/modules/assets/assets-provider-adapter.ts`
 - `backend/src/modules/assets/asset-manifest-record.repository.ts`
 - `backend/src/modules/assets/assets-manifest-builder.ts`
 - `backend/src/modules/assets/assets-run.service.ts`
@@ -128,10 +129,32 @@ Use these literal values:
 - `manifest_version`: `asset_manifest_v1`
 - `AssetsValidationResult.stage`: `assets_local_validation`
 - validation `decision`: `ready_for_compose / blocked / partial`
-- execution statuses from the design document
+- execution statuses from the design document; use `completed`, not `completed_by_provider / completed_by_local / completed_by_manual`
 - artifact types from the design document
 - origins from the design document
 - visual route types: `video_clip / image_with_motion / image_only / missing`
+
+Implement `AssetExecutionOptions` with:
+
+- `execution_mode: "auto_available" | "dry_run"`
+- `voice_profile_id: string | null`
+- `enabled_provider_types: string[]`
+- `allow_manual_placeholders: boolean`
+
+Implement minimal metadata validation for:
+
+- `tts_chunk_audio`: `duration_sec`, `voice_profile_id`, `tts_chunk_id`, `segment_ids`, `script_excerpt`
+- `tts_merged_audio`: `duration_sec`, `voice_profile_id`, `chunk_artifact_ids`
+- `subtitle_track`: `format`, `source_tts_artifact_id`, `caption_count`
+- `image`: `width`, `height`
+- `video`: `duration_sec`, `width`, `height`, `fps`
+- `motion_recipe`: `recipe_type`, `source_image_artifact_id`, `parameters`
+- `sfx_audio`: `duration_sec`
+- `sfx_selection`: `library_item_id` or `selection_label`
+- `bgm_audio`: `duration_sec`, `loopable`
+- `bgm_selection`: `library_item_id` or `selection_label`
+
+Also add rejection tests for missing required metadata on one audio, one image, and one video artifact.
 
 - [ ] **Step 4: Export schemas**
 
@@ -231,6 +254,7 @@ git commit -m "新增 assets 本地结构校验"
 
 **Files:**
 
+- Create: `backend/src/modules/assets/assets-provider-adapter.ts`
 - Create: `backend/src/modules/assets/assets-manifest-builder.ts`
 - Test: `tests/backend/assets/assets-manifest-builder.test.ts`
 
@@ -250,10 +274,12 @@ Assert that the builder:
 
 - creates one `AssetTaskExecution` per task
 - creates `motion_recipe` inline artifact for `render_motion_cue`
+- records `tts_chunk_routes` and `tts_chunk_audio.metadata.segment_ids` when TTS artifacts exist in fixtures
 - creates segment route `image_with_motion` when image + motion exist
 - marks provider-dependent tasks as `planned` or `waiting_manual_upload` according to `manual_upload_policy.required`
 - creates `BgmPlacement` from `bgm_cue` tasks
 - sets readiness `blocked` when TTS/subtitle/image artifacts are not complete
+- validates the builder output with `validateAssetsManifest()` and expects decision `blocked` or `partial`, not schema failure
 
 - [ ] **Step 2: Run test and confirm failure**
 
@@ -266,6 +292,15 @@ npx vitest run --configLoader runner tests/backend/assets/assets-manifest-builde
 Expected: fail because builder does not exist.
 
 - [ ] **Step 3: Implement builder**
+
+Create `assets-provider-adapter.ts` with type-only contracts:
+
+- `AssetProviderAdapter`
+- `AssetProviderContext`
+- `AssetProviderRunResult`
+- methods: `canHandle`, `run`, `poll`, `cancel`, `normalizeResult`
+
+Do not implement real provider adapters in this task.
 
 Implement `buildInitialAssetManifest(input)`:
 
@@ -289,7 +324,7 @@ git diff --check
 - [ ] **Step 5: Commit**
 
 ```bash
-git add backend/src/modules/assets/assets-manifest-builder.ts tests/backend/assets/assets-manifest-builder.test.ts
+git add backend/src/modules/assets/assets-provider-adapter.ts backend/src/modules/assets/assets-manifest-builder.ts tests/backend/assets/assets-manifest-builder.test.ts
 git commit -m "新增 assets manifest 构建骨架"
 ```
 
@@ -300,6 +335,7 @@ git commit -m "新增 assets manifest 构建骨架"
 - Create: `backend/src/modules/assets/asset-manifest-record.repository.ts`
 - Modify: `backend/src/db/client.ts`
 - Modify: `backend/prisma/schema.prisma`
+- Modify: `backend/src/modules/projects/project.repository.ts`
 - Modify: `backend/src/modules/projects/project-snapshot.service.ts`
 - Test: `tests/backend/repositories/repository-contracts.test.ts`
 - Test: `tests/backend/projects/project-snapshot.test.ts`
@@ -333,7 +369,15 @@ Add:
 - `assetManifestRecords` map in `DbClient`
 - repository save/get helpers
 - Prisma `AssetManifestRecord` model and project relation fields
+- `ProjectRecord.activeAssetManifestRecordId`
+- `ProjectRecord.latestAssetsRunTraceJson`
+- project repository cleanup helpers that remove manifest records with the project
 - snapshot `active_assets` payload
+
+First-version record payload rules:
+
+- `execution_state_json` stores `{ "execution_mode": "...", "activated": true | false }`.
+- `runtime_diagnostics_json` may be `null`; do not invent provider diagnostics before providers exist.
 
 - [ ] **Step 4: Verify**
 
@@ -347,7 +391,7 @@ git diff --check
 - [ ] **Step 5: Commit**
 
 ```bash
-git add backend/src/db/client.ts backend/prisma/schema.prisma backend/src/modules/assets/asset-manifest-record.repository.ts backend/src/modules/projects/project-snapshot.service.ts tests/backend/repositories/repository-contracts.test.ts tests/backend/projects/project-snapshot.test.ts
+git add backend/src/db/client.ts backend/prisma/schema.prisma backend/src/modules/assets/asset-manifest-record.repository.ts backend/src/modules/projects/project.repository.ts backend/src/modules/projects/project-snapshot.service.ts tests/backend/repositories/repository-contracts.test.ts tests/backend/projects/project-snapshot.test.ts
 git commit -m "新增 assets manifest 持久化与快照"
 ```
 
@@ -367,6 +411,7 @@ Cover:
 - `POST /api/projects/:projectId/assets/generate` returns `404 project_not_found`
 - returns `409 active_asset_plan_missing` when no active asset plan
 - creates, validates, persists, and activates a manifest from active asset plan
+- supports `execution_mode: "dry_run"` and confirms no provider adapter is invoked
 - returns `409 stale_assets_source` if active asset plan changes before activation
 - project status becomes `assets_blocked` when manifest is not ready
 
@@ -396,6 +441,8 @@ Status rules:
 - validation `ready_for_compose` -> `assets_ready`
 - validation `partial` or `blocked` -> `assets_blocked`
 - stale source -> do not save active manifest
+
+Do not introduce a shared project status enum in this task. The existing project status model is a string; this task only documents and tests the new string values `assets_ready` and `assets_blocked`.
 
 - [ ] **Step 4: Verify**
 
@@ -429,7 +476,7 @@ Cover:
 - missing active manifest returns `409 active_assets_missing`
 - unknown task id returns `404 asset_task_not_found`
 - disallowed MIME type returns `422 asset_manual_upload_type_not_allowed`
-- allowed manual image registration appends artifact, sets selected artifact, and updates task execution to `completed_by_manual`
+- allowed manual image registration appends artifact, sets selected artifact, sets task execution `status` to `completed`, and sets `completion_origin` to `manual_upload`
 - accepting an existing artifact updates `selected_artifact_id`
 
 - [ ] **Step 2: Run focused test and confirm failure**
@@ -485,6 +532,7 @@ Assert:
 - new storyboard activation clears active asset plan and active asset manifest pointers
 - new asset plan activation clears active asset manifest pointer
 - related latest run trace pointers are cleared
+- existing test fixtures are updated to include `activeAssetManifestRecordId` and `latestAssetsRunTraceJson` where `ProjectRecord` is constructed directly
 
 - [ ] **Step 2: Run tests and confirm failure**
 
