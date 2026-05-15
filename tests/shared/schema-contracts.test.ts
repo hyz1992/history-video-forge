@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  AssetManifest,
   AssetPlan,
   AssetPlanningValidationResult,
+  AssetsValidationResult,
   ScriptDraftPackage,
   ScriptInputBundle,
   ScriptSemanticReviewResult,
@@ -651,6 +653,406 @@ describe("shared schema contracts", () => {
           notes: [],
         },
         global_production_notes: [],
+      }),
+    ).toThrow();
+  });
+
+  it("parses a minimal AssetManifest with tts execution, artifact, segment route, and blocked readiness", () => {
+    const manifest = AssetManifest.parse({
+      manifest_version: "asset_manifest_v1",
+      source_asset_plan_id: "plan_001",
+      source_storyboard_record_id: "storyboard_001",
+      source_script_record_id: "script_001",
+      execution_options: {
+        execution_mode: "auto_available",
+        voice_profile_id: "voice_1",
+        enabled_provider_types: ["tts", "image"],
+        allow_manual_placeholders: true,
+      },
+      executions: [
+        {
+          execution_id: "exec_tts_001",
+          task_id: "tts_001",
+          task_type: "tts_audio",
+          status: "completed",
+          origin: "provider",
+          started_at: "2025-01-01T00:00:00Z",
+          completed_at: "2025-01-01T00:00:05Z",
+          provider_id: "default_tts",
+          attempts: 1,
+          output_artifact_ids: ["art_tts_001"],
+          notes: [],
+        },
+      ],
+      artifacts: [
+        {
+          artifact_id: "art_tts_merged_001",
+          artifact_type: "tts_merged_audio",
+          origin: "provider",
+          file_uri: "memory://tts_merged.wav",
+          created_at: "2025-01-01T00:00:05Z",
+          metadata: {
+            duration_sec: 85.0,
+            voice_profile_id: "voice_1",
+            chunk_artifact_ids: ["art_tts_001"],
+          },
+        },
+      ],
+      audio_summary: {
+        voice_profile_id: "voice_1",
+        tts_total_duration_sec: 85.0,
+        tts_chunk_artifact_ids: ["art_tts_001"],
+        tts_chunk_routes: [
+          {
+            tts_chunk_id: "tts_chunk_001",
+            artifact_id: "art_tts_001",
+            segment_ids: ["sb_001"],
+            script_excerpt: "楚王第一次压场时，晏子没有退。",
+          },
+        ],
+        tts_merged_artifact_id: "art_tts_merged_001",
+        subtitle_artifact_id: null,
+        bgm_placements: [],
+        sfx_artifact_ids: [],
+      },
+      segment_routes: [
+        {
+          segment_id: "sb_001",
+          tts_artifact_id: "art_tts_001",
+          subtitle_artifact_id: null,
+          primary_visual_artifact_id: null,
+          visual_route_type: "missing",
+          motion_artifact_id: null,
+          fallback_visual_artifact_id: null,
+          sfx_artifact_ids: [],
+          bgm_placement_ids: [],
+          readiness: "blocked",
+          notes: ["视觉资产未就绪"],
+        },
+      ],
+      readiness: "blocked",
+      notes: [],
+    });
+
+    expect(manifest.manifest_version).toBe("asset_manifest_v1");
+    expect(manifest.executions).toHaveLength(1);
+    expect(manifest.artifacts).toHaveLength(1);
+    expect(manifest.segment_routes).toHaveLength(1);
+    expect(manifest.readiness).toBe("blocked");
+    expect(manifest.segment_routes[0].visual_route_type).toBe("missing");
+  });
+
+  it("parses AssetsValidationResult with stage assets_local_validation", () => {
+    const result = AssetsValidationResult.parse({
+      stage: "assets_local_validation",
+      decision: "blocked",
+      errors: ["segment sb_002 missing tts artifact"],
+      warnings: ["no bgm configured"],
+      metrics: { total_segments: 3, ready_segments: 2 },
+    });
+
+    expect(result.stage).toBe("assets_local_validation");
+    expect(result.decision).toBe("blocked");
+    expect(result.errors).toHaveLength(1);
+    expect(result.warnings).toHaveLength(1);
+  });
+
+  it("rejects unknown execution status in AssetManifest", () => {
+    expect(() =>
+      AssetManifest.parse({
+        manifest_version: "asset_manifest_v1",
+        source_asset_plan_id: "plan_001",
+        source_storyboard_record_id: "storyboard_001",
+        source_script_record_id: "script_001",
+        execution_options: {
+          execution_mode: "auto_available",
+          voice_profile_id: null,
+          enabled_provider_types: ["tts"],
+          allow_manual_placeholders: false,
+        },
+        executions: [
+          {
+            execution_id: "exec_001",
+            task_id: "tts_001",
+            task_type: "tts_audio",
+            status: "unknown_status",
+            origin: "provider",
+            started_at: "2025-01-01T00:00:00Z",
+            completed_at: null,
+            provider_id: "default_tts",
+            attempts: 1,
+            output_artifact_ids: [],
+            notes: [],
+          },
+        ],
+        artifacts: [],
+        audio_summary: {
+          voice_profile_id: "voice_1",
+          tts_total_duration_sec: null,
+          tts_chunk_artifact_ids: [],
+          tts_chunk_routes: [],
+          tts_merged_artifact_id: null,
+          subtitle_artifact_id: null,
+          bgm_placements: [],
+          sfx_artifact_ids: [],
+        },
+        segment_routes: [],
+        readiness: "blocked",
+        notes: [],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects artifact with empty artifact_id", () => {
+    expect(() =>
+      AssetManifest.parse({
+        manifest_version: "asset_manifest_v1",
+        source_asset_plan_id: "plan_001",
+        source_storyboard_record_id: "storyboard_001",
+        source_script_record_id: "script_001",
+        execution_options: {
+          execution_mode: "auto_available",
+          voice_profile_id: null,
+          enabled_provider_types: ["tts"],
+          allow_manual_placeholders: false,
+        },
+        executions: [],
+        artifacts: [
+          {
+            artifact_id: "",
+            artifact_type: "tts_chunk_audio",
+            origin: "provider",
+            file_uri: "memory://test.wav",
+            created_at: "2025-01-01T00:00:00Z",
+            metadata: {
+              duration_sec: 5.0,
+              voice_profile_id: "voice_1",
+              tts_chunk_id: "chunk_001",
+              segment_ids: ["sb_001"],
+              script_excerpt: "测试",
+            },
+          },
+        ],
+        audio_summary: {
+          voice_profile_id: "voice_1",
+          tts_total_duration_sec: null,
+          tts_chunk_artifact_ids: [],
+          tts_chunk_routes: [],
+          tts_merged_artifact_id: null,
+          subtitle_artifact_id: null,
+          bgm_placements: [],
+          sfx_artifact_ids: [],
+        },
+        segment_routes: [],
+        readiness: "blocked",
+        notes: [],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects segment route with invalid visual_route_type", () => {
+    expect(() =>
+      AssetManifest.parse({
+        manifest_version: "asset_manifest_v1",
+        source_asset_plan_id: "plan_001",
+        source_storyboard_record_id: "storyboard_001",
+        source_script_record_id: "script_001",
+        execution_options: {
+          execution_mode: "auto_available",
+          voice_profile_id: null,
+          enabled_provider_types: ["tts"],
+          allow_manual_placeholders: false,
+        },
+        executions: [],
+        artifacts: [],
+        audio_summary: {
+          voice_profile_id: "voice_1",
+          tts_total_duration_sec: null,
+          tts_chunk_artifact_ids: [],
+          tts_chunk_routes: [],
+          tts_merged_artifact_id: null,
+          subtitle_artifact_id: null,
+          bgm_placements: [],
+          sfx_artifact_ids: [],
+        },
+        segment_routes: [
+          {
+            segment_id: "sb_001",
+            tts_artifact_id: null,
+            subtitle_artifact_id: null,
+            primary_visual_artifact_id: null,
+            visual_route_type: "3d_render",
+            motion_artifact_id: null,
+            fallback_visual_artifact_id: null,
+            sfx_artifact_ids: [],
+            bgm_placement_ids: [],
+            readiness: "blocked",
+            notes: [],
+          },
+        ],
+        readiness: "blocked",
+        notes: [],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects missing required metadata on tts_chunk_audio artifact", () => {
+    expect(() =>
+      AssetManifest.parse({
+        manifest_version: "asset_manifest_v1",
+        source_asset_plan_id: "plan_001",
+        source_storyboard_record_id: "storyboard_001",
+        source_script_record_id: "script_001",
+        execution_options: {
+          execution_mode: "auto_available",
+          voice_profile_id: null,
+          enabled_provider_types: ["tts"],
+          allow_manual_placeholders: false,
+        },
+        executions: [],
+        artifacts: [
+          {
+            artifact_id: "art_001",
+            artifact_type: "tts_chunk_audio",
+            origin: "provider",
+            file_uri: "memory://test.wav",
+            created_at: "2025-01-01T00:00:00Z",
+            metadata: {
+              // missing duration_sec, voice_profile_id, tts_chunk_id, segment_ids, script_excerpt
+            },
+          },
+        ],
+        audio_summary: {
+          voice_profile_id: "voice_1",
+          tts_total_duration_sec: null,
+          tts_chunk_artifact_ids: [],
+          tts_chunk_routes: [],
+          tts_merged_artifact_id: null,
+          subtitle_artifact_id: null,
+          bgm_placements: [],
+          sfx_artifact_ids: [],
+        },
+        segment_routes: [],
+        readiness: "blocked",
+        notes: [],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects missing required metadata on image artifact", () => {
+    expect(() =>
+      AssetManifest.parse({
+        manifest_version: "asset_manifest_v1",
+        source_asset_plan_id: "plan_001",
+        source_storyboard_record_id: "storyboard_001",
+        source_script_record_id: "script_001",
+        execution_options: {
+          execution_mode: "auto_available",
+          voice_profile_id: null,
+          enabled_provider_types: ["tts"],
+          allow_manual_placeholders: false,
+        },
+        executions: [],
+        artifacts: [
+          {
+            artifact_id: "art_001",
+            artifact_type: "image",
+            origin: "provider",
+            file_uri: "memory://test.png",
+            created_at: "2025-01-01T00:00:00Z",
+            metadata: {
+              // missing width, height
+            },
+          },
+        ],
+        audio_summary: {
+          voice_profile_id: "voice_1",
+          tts_total_duration_sec: null,
+          tts_chunk_artifact_ids: [],
+          tts_chunk_routes: [],
+          tts_merged_artifact_id: null,
+          subtitle_artifact_id: null,
+          bgm_placements: [],
+          sfx_artifact_ids: [],
+        },
+        segment_routes: [],
+        readiness: "blocked",
+        notes: [],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects missing required metadata on video artifact", () => {
+    expect(() =>
+      AssetManifest.parse({
+        manifest_version: "asset_manifest_v1",
+        source_asset_plan_id: "plan_001",
+        source_storyboard_record_id: "storyboard_001",
+        source_script_record_id: "script_001",
+        execution_options: {
+          execution_mode: "auto_available",
+          voice_profile_id: null,
+          enabled_provider_types: ["tts"],
+          allow_manual_placeholders: false,
+        },
+        executions: [],
+        artifacts: [
+          {
+            artifact_id: "art_001",
+            artifact_type: "video",
+            origin: "provider",
+            file_uri: "memory://test.mp4",
+            created_at: "2025-01-01T00:00:00Z",
+            metadata: {
+              // missing duration_sec, width, height, fps
+            },
+          },
+        ],
+        audio_summary: {
+          voice_profile_id: "voice_1",
+          tts_total_duration_sec: null,
+          tts_chunk_artifact_ids: [],
+          tts_chunk_routes: [],
+          tts_merged_artifact_id: null,
+          subtitle_artifact_id: null,
+          bgm_placements: [],
+          sfx_artifact_ids: [],
+        },
+        segment_routes: [],
+        readiness: "blocked",
+        notes: [],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects invalid enabled_provider_types value", () => {
+    expect(() =>
+      AssetManifest.parse({
+        manifest_version: "asset_manifest_v1",
+        source_asset_plan_id: "plan_001",
+        source_storyboard_record_id: "storyboard_001",
+        source_script_record_id: "script_001",
+        execution_options: {
+          execution_mode: "auto_available",
+          voice_profile_id: null,
+          enabled_provider_types: ["ttss"],
+          allow_manual_placeholders: false,
+        },
+        executions: [],
+        artifacts: [],
+        audio_summary: {
+          voice_profile_id: "voice_1",
+          tts_total_duration_sec: null,
+          tts_chunk_artifact_ids: [],
+          tts_chunk_routes: [],
+          tts_merged_artifact_id: null,
+          subtitle_artifact_id: null,
+          bgm_placements: [],
+          sfx_artifact_ids: [],
+        },
+        segment_routes: [],
+        readiness: "blocked",
+        notes: [],
       }),
     ).toThrow();
   });

@@ -30,3 +30,14 @@ export {
   ProjectArtBible,
 } from "./asset-planning/asset-plan.schema";
 export { AssetPlanningValidationResult } from "./asset-planning/asset-planning-validation.schema";
+export {
+  AssetManifest,
+  AssetArtifact,
+  AssetAudioSummary,
+  AssetExecutionOptions,
+  AssetTaskExecution,
+  BgmPlacement,
+  SegmentAssetRoute,
+  TtsChunkRoute,
+} from "./assets/asset-manifest.schema";
+export { AssetsValidationResult } from "./assets/assets-validation.schema";
