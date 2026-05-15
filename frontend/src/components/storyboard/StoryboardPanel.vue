@@ -124,6 +124,7 @@ function handleRetry() {
 }
 
 function handleConfirm() {
+  ElMessage.success("分镜已确认，进入资产阶段");
   workspaceStore.setCurrentStep(ASSET_STEP_INDEX);
 }
 </script>

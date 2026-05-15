@@ -12,7 +12,6 @@ import { useProjectStore } from "../stores/project";
 
 import WorkspaceSidebar from "../components/workspace/WorkspaceSidebar.vue";
 import WorkspaceHeader from "../components/workspace/WorkspaceHeader.vue";
-import WorkspaceFooter from "../components/workspace/WorkspaceFooter.vue";
 
 import TopicPanel from "../components/topic/TopicPanel.vue";
 import ScriptPanel from "../components/script/ScriptPanel.vue";
@@ -39,19 +38,17 @@ const currentPanel = computed(
   () => panelMap[workspaceStore.currentStepKey()],
 );
 
-onMounted(() => {
+onMounted(async () => {
   const projectId = route.params.projectId as string;
   if (projectId) {
-    // Look up the project from the loaded list to get its current_status
+    // Prefer local data for instant UI, then refresh from backend
     const project = projectStore.state.projects.find(
       (p) => p.project_id === projectId,
     );
-    projectStore.syncProject(
-      project ?? {
-        project_id: projectId,
-        current_status: projectStore.state.currentStatus,
-      },
-    );
+    if (project) {
+      projectStore.syncProject(project);
+    }
+    await projectStore.loadProject(projectId);
   }
 });
 </script>
@@ -64,7 +61,6 @@ onMounted(() => {
       <div class="workspace-content">
           <component :is="currentPanel" :key="workspaceStore.currentStepKey()" />
       </div>
-      <WorkspaceFooter />
     </div>
   </div>
 </template>

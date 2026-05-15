@@ -191,8 +191,8 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
           candidates: response.candidates,
         };
       state.historyRounds = response.history_rounds ?? [];
-      state.selectedCandidate = null;
-      state.selectedRoundId = null;
+      state.selectedCandidate = response.candidates[0] ?? null;
+      state.selectedRoundId = state.currentRound?.round_id ?? null;
     } catch (error) {
       state.loadError =
         error instanceof Error ? error.message : "topic_generation_failed";

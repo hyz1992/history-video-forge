@@ -94,6 +94,10 @@ async function openProject(project: ProjectListItem) {
   await router.push(`/projects/${project.project_id}`);
 }
 
+async function handleDelete(projectId: string) {
+  await projectStore.deleteProject(projectId);
+}
+
 function handleRowClick(row: ProjectListItem) {
   openProject(row);
 }
@@ -210,7 +214,7 @@ function handleRowClick(row: ProjectListItem) {
                 confirm-button-text="删除"
                 cancel-button-text="取消"
                 width="220"
-                @confirm.stop
+                @confirm="handleDelete(row.project_id)"
               >
                 <template #reference>
                   <el-button
@@ -218,7 +222,6 @@ function handleRowClick(row: ProjectListItem) {
                     type="danger"
                     link
                     size="small"
-                    disabled
                     @click.stop
                   >
                     删除

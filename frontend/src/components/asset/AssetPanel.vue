@@ -128,6 +128,7 @@ function handleRetry() {
 }
 
 function handleConfirm() {
+  ElMessage.success("资产规划已确认，进入合成阶段");
   workspaceStore.setCurrentStep(COMPOSE_STEP_INDEX);
 }
 

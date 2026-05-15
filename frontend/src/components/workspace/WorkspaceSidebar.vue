@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { useRouter } from "vue-router";
 import {
   ElMenu,
   ElMenuItem,
@@ -13,11 +12,9 @@ import {
   Document,
   Film,
   Box,
-  PictureFilled,
   VideoCameraFilled,
   Fold,
   Expand,
-  ArrowLeft,
 } from "@element-plus/icons-vue";
 
 import { PIPELINE_STEPS, useWorkspaceStore } from "../../stores/workspace";
@@ -25,7 +22,6 @@ import { useProjectStore } from "../../stores/project";
 
 const workspaceStore = useWorkspaceStore();
 const projectStore = useProjectStore();
-const router = useRouter();
 
 const collapsed = computed(() => workspaceStore.state.value.sidebarCollapsed);
 const currentStepIndex = computed(
@@ -74,6 +70,9 @@ function isStepCompleted(stepIndex: number): boolean {
 }
 
 function handleStepClick(index: number) {
+  // Only allow navigation to the current or previously reached steps
+  const maxReachable = getReachedStepIndex();
+  if (index > maxReachable) return;
   workspaceStore.setCurrentStep(index);
 }
 
@@ -110,7 +109,11 @@ function goBack() {
           placement="right"
           :show-after="300"
         >
-          <ElMenuItem :index="String(step.index)" class="step-menu-item">
+          <ElMenuItem
+            :index="String(step.index)"
+            :disabled="step.index > getReachedStepIndex()"
+            class="step-menu-item"
+          >
             <ElIcon class="step-icon">
               <component :is="stepIcons[step.key]" />
             </ElIcon>
@@ -124,7 +127,12 @@ function goBack() {
             </template>
           </ElMenuItem>
         </ElTooltip>
-        <ElMenuItem v-else :index="String(step.index)" class="step-menu-item">
+        <ElMenuItem
+          v-else
+          :index="String(step.index)"
+          :disabled="step.index > getReachedStepIndex()"
+          class="step-menu-item"
+        >
           <ElIcon class="step-icon">
             <component :is="stepIcons[step.key]" />
           </ElIcon>
@@ -139,22 +147,6 @@ function goBack() {
         </ElMenuItem>
       </template>
     </ElMenu>
-
-    <!-- Footer -->
-    <div class="sidebar-footer">
-      <ElTooltip
-        v-if="collapsed"
-        content="返回项目列表"
-        placement="right"
-        :show-after="300"
-      >
-        <ElButton class="back-btn" :icon="ArrowLeft" text @click="goBack" />
-      </ElTooltip>
-      <ElButton v-else class="back-btn" text @click="goBack">
-        <ElIcon><ArrowLeft /></ElIcon>
-        <span>返回项目列表</span>
-      </ElButton>
-    </div>
   </aside>
 </template>
 
@@ -240,19 +232,9 @@ function goBack() {
   font-weight: 700;
 }
 
-.sidebar-footer {
-  padding: 8px 12px;
-  border-top: 1px solid var(--border-default);
-}
-
-.back-btn {
-  width: 100%;
-  justify-content: flex-start;
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.back-btn:hover {
-  color: var(--accent-text);
+/* Disabled menu items - greyed out, no pointer */
+.step-menu-item.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 </style>

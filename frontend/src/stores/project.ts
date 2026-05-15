@@ -20,6 +20,8 @@ export interface ProjectListItem extends ProjectSnapshot {
 
 export interface ProjectApi {
   listProjects?: () => Promise<ProjectListItem[]>;
+  getProject?: (projectId: string) => Promise<ProjectSnapshot>;
+  deleteProject?: (projectId: string) => Promise<void>;
   createProject(input?: CreateProjectInput): Promise<ProjectSnapshot>;
 }
 
@@ -33,6 +35,8 @@ export interface ProjectStore {
   state: Readonly<ProjectStoreState>;
   createProject: (input?: CreateProjectInput) => Promise<ProjectListItem>;
   ensureProject: () => Promise<string>;
+  deleteProject: (projectId: string) => Promise<void>;
+  loadProject: (projectId: string) => Promise<void>;
   loadProjects: () => Promise<ProjectListItem[]>;
   resolveProjectWorkspacePath: (projectId: string, currentStatus: string) => string;
   syncProject: (snapshot: ProjectSnapshot) => void;
@@ -42,6 +46,23 @@ export const projectStoreKey: InjectionKey<ProjectStore> = Symbol("project-store
 
 export function createFetchProjectApi(baseUrl = ""): ProjectApi {
   return {
+    async getProject(projectId) {
+      const response = await fetch(`${baseUrl}/api/projects/${projectId}`);
+      const data = await response.json();
+      return {
+        project_id: data.project_id ?? projectId,
+        current_status: data.current_status ?? "",
+        display_name:
+          data.display_name ??
+          data.active_topic_package?.canonical_title ??
+          undefined,
+      };
+    },
+    async deleteProject(projectId) {
+      await fetch(`${baseUrl}/api/projects/${projectId}`, {
+        method: "DELETE",
+      });
+    },
     async createProject(input) {
       const response = await fetch(`${baseUrl}/api/projects`, {
         method: "POST",
@@ -116,6 +137,33 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
     return toProjectListItem(snapshot);
   }
 
+  async function loadProject(projectId: string) {
+    if (!api.getProject) return;
+
+    try {
+      const snapshot = await api.getProject(projectId);
+      syncProject(snapshot);
+    } catch {
+      // Silently fail — local data will be used as fallback
+    }
+  }
+
+  async function deleteProject(projectId: string) {
+    if (api.deleteProject) {
+      await api.deleteProject(projectId);
+    }
+    const index = state.projects.findIndex(
+      (p) => p.project_id === projectId,
+    );
+    if (index >= 0) {
+      state.projects.splice(index, 1);
+    }
+    if (state.projectId === projectId) {
+      state.projectId = null;
+      state.currentStatus = "topic_pending";
+    }
+  }
+
   function resolveProjectWorkspacePath(projectId: string, currentStatus: string) {
     if (isDraftStatus(currentStatus)) {
       return `/projects/${projectId}/topic`;
@@ -145,6 +193,8 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
     state: readonly(state),
     createProject,
     ensureProject,
+    deleteProject,
+    loadProject,
     loadProjects,
     resolveProjectWorkspacePath,
     syncProject,

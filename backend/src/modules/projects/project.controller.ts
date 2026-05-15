@@ -1,5 +1,6 @@
 import type { AppResponse, RouteContext } from "../../app";
 import { getProjectSnapshot } from "./project-snapshot.service";
+import { deleteProject } from "./project.repository";
 
 export async function getProjectSnapshotController(
   context: RouteContext,
@@ -20,5 +21,25 @@ export async function getProjectSnapshotController(
   return {
     statusCode: 200,
     body: snapshot,
+  };
+}
+
+export async function deleteProjectController(
+  context: RouteContext,
+): Promise<AppResponse> {
+  const deleted = await deleteProject(
+    context.app.db,
+    context.params.projectId,
+  );
+  if (!deleted) {
+    return {
+      statusCode: 404,
+      body: { error: "project_not_found" },
+    };
+  }
+
+  return {
+    statusCode: 200,
+    body: { deleted: true },
   };
 }

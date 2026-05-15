@@ -4,9 +4,13 @@ import { ElMessage } from "element-plus";
 
 import { useTopicStore, type TopicRecommendationFilters } from "../../stores/topic";
 import { useProjectStore } from "../../stores/project";
+import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 
 const topicStore = useTopicStore();
 const projectStore = useProjectStore();
+const workspaceStore = useWorkspaceStore();
+
+const SCRIPT_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "script");
 
 onMounted(() => {
   topicStore.loadExistingTopic();
@@ -77,7 +81,8 @@ async function handleRegenerate() {
 async function confirmCandidate() {
   await topicStore.confirmSelectedCandidate();
   if (topicStore.state.confirmedTopicPackageId) {
-    ElMessage.success("选题已确认");
+    ElMessage.success("选题已确认，自动进入文案阶段");
+    workspaceStore.setCurrentStep(SCRIPT_STEP_INDEX);
   }
 }
 

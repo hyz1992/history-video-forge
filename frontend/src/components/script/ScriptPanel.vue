@@ -3,11 +3,23 @@ import { computed, onMounted } from "vue";
 import { ElMessage } from "element-plus";
 
 import { useScriptStore } from "../../stores/script";
+import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 
 const scriptStore = useScriptStore();
+const workspaceStore = useWorkspaceStore();
 
-onMounted(() => {
-  scriptStore.loadActiveScriptSnapshot();
+const STORYBOARD_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "storyboard");
+
+onMounted(async () => {
+  await scriptStore.loadActiveScriptSnapshot();
+  // Auto-start generation when arriving from topic confirmation
+  const s = scriptStore.state.snapshot;
+  if (s && !s.active_script && s.current_status === "script_pending") {
+    await scriptStore.generateInitialScript();
+    if (!scriptStore.state.loadError) {
+      ElMessage.success("文案已生成");
+    }
+  }
 });
 
 /** Resolve the visible script: selected history entry > active snapshot > fallback from history. */
@@ -117,6 +129,11 @@ function handleRetry() {
 
 function handleSelectHistory(entryId: string) {
   scriptStore.selectHistoryEntry(entryId);
+}
+
+function handleConfirm() {
+  ElMessage.success("文案已确认，进入分镜规划");
+  workspaceStore.setCurrentStep(STORYBOARD_STEP_INDEX);
 }
 </script>
 
@@ -314,6 +331,16 @@ function handleSelectHistory(entryId: string) {
                 </template>
               </el-popconfirm>
             </div>
+
+            <!-- Confirm button -->
+            <el-button
+              v-if="visibleScript && !isViewingHistory"
+              type="primary"
+              :disabled="scriptStore.state.isRunningAction"
+              @click="handleConfirm"
+            >
+              确认文案，进入分镜规划
+            </el-button>
 
             <!-- Remaining counts -->
             <div class="script-remaining">
