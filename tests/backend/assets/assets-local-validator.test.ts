@@ -1,10 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { afterEach, describe, expect, it } from "vitest";
 
 import type {
   AssetArtifact,
   AssetManifest,
   AssetPlan,
   AssetTaskExecution,
+  MediaLibraryItem,
   SegmentAssetRoute,
 } from "../../../shared/src/index.js";
 import { validateAssetsManifest } from "../../../backend/src/modules/assets/assets-local-validator.js";
@@ -201,6 +205,54 @@ function makeBgmArtifact(id: string): AssetArtifact {
   };
 }
 
+function makeSfxSelectionArtifact(id: string, libraryItemId: string): AssetArtifact {
+  return {
+    artifact_id: id,
+    artifact_type: "sfx_selection",
+    origin: "library",
+    file_uri: `library://sfx/${libraryItemId}`,
+    created_at: "2026-01-01T00:04:00Z",
+    metadata: {
+      library_item_id: libraryItemId,
+    },
+  };
+}
+
+function makeBgmSelectionArtifact(id: string, libraryItemId: string): AssetArtifact {
+  return {
+    artifact_id: id,
+    artifact_type: "bgm_selection",
+    origin: "library",
+    file_uri: `library://bgm/${libraryItemId}`,
+    created_at: "2026-01-01T00:04:00Z",
+    metadata: {
+      library_item_id: libraryItemId,
+    },
+  };
+}
+
+function makeMediaLibraryItem(overrides: Partial<MediaLibraryItem> = {}): MediaLibraryItem {
+  return {
+    library_item_id: "lib_item_1",
+    type: "sfx",
+    file_uri: "file:///media/sfx/lib_item_1.wav",
+    mime_type: "audio/wav",
+    duration_sec: 3,
+    loopable: false,
+    tags: ["sword"],
+    mood_tags: ["tense"],
+    license: {
+      license_type: "cc0",
+      commercial_use_allowed: true,
+      attribution_required: false,
+    },
+    file_hash: "abc123",
+    imported_at: "2026-01-01T00:00:00Z",
+    approved_for_use: true,
+    ...overrides,
+  };
+}
+
 function makeBaseSegmentRoute(overrides: Partial<SegmentAssetRoute> = {}): SegmentAssetRoute {
   return {
     segment_id: "sb_001",
@@ -281,9 +333,10 @@ function makeBaseManifest(overrides: Partial<AssetManifest> = {}): AssetManifest
   };
 }
 
-function runValidation(
+async function runValidation(
   manifestOverrides: Partial<AssetManifest> = {},
   planOverrides: Partial<AssetPlan> = {},
+  extraOptions?: { projectStorageRootDir?: string; mediaLibraryItems?: MediaLibraryItem[] },
 ) {
   const manifest = makeBaseManifest(manifestOverrides);
   const plan = makeBaseAssetPlan(planOverrides);
@@ -294,6 +347,8 @@ function runValidation(
     topicPackageId: TOPIC_PACKAGE_ID,
     assetPlan: plan,
     manifest,
+    projectStorageRootDir: extraOptions?.projectStorageRootDir,
+    mediaLibraryItems: extraOptions?.mediaLibraryItems,
   });
 }
 
@@ -302,9 +357,9 @@ function runValidation(
 describe("validateAssetsManifest", () => {
   // ── Passing case ──────────────────────────────────────────────────────────
 
-  it("passes a structurally valid manifest", () => {
+  it("passes a structurally valid manifest", async () => {
     const bgmArtifact = makeBgmArtifact("artifact_bgm_1");
-    const result = runValidation({
+    const result = await runValidation({
       artifacts: [
         makeBaseArtifact(),
         makeImageArtifact("artifact_img_1"),
@@ -356,29 +411,29 @@ describe("validateAssetsManifest", () => {
 
   // ── Source ID mismatches ──────────────────────────────────────────────────
 
-  it("reports assets_source_asset_plan_mismatch when plan id does not match", () => {
-    const result = runValidation({ source_asset_plan_id: "wrong_plan_id" });
+  it("reports assets_source_asset_plan_mismatch when plan id does not match", async () => {
+    const result = await runValidation({ source_asset_plan_id: "wrong_plan_id" });
 
     expect(result.decision).toBe("blocked");
     expect(result.errors).toContain("assets_source_asset_plan_mismatch");
   });
 
-  it("reports assets_source_storyboard_mismatch when storyboard id does not match", () => {
-    const result = runValidation({ source_storyboard_record_id: "wrong_sb_id" });
+  it("reports assets_source_storyboard_mismatch when storyboard id does not match", async () => {
+    const result = await runValidation({ source_storyboard_record_id: "wrong_sb_id" });
 
     expect(result.decision).toBe("blocked");
     expect(result.errors).toContain("assets_source_storyboard_mismatch");
   });
 
-  it("reports assets_source_script_mismatch when script id does not match", () => {
-    const result = runValidation({ source_script_record_id: "wrong_script_id" });
+  it("reports assets_source_script_mismatch when script id does not match", async () => {
+    const result = await runValidation({ source_script_record_id: "wrong_script_id" });
 
     expect(result.decision).toBe("blocked");
     expect(result.errors).toContain("assets_source_script_mismatch");
   });
 
-  it("reports assets_source_topic_mismatch when topic id does not match", () => {
-    const result = runValidation({}, { source_topic_package_id: "wrong_topic_id" });
+  it("reports assets_source_topic_mismatch when topic id does not match", async () => {
+    const result = await runValidation({}, { source_topic_package_id: "wrong_topic_id" });
 
     expect(result.decision).toBe("blocked");
     expect(result.errors).toContain("assets_source_topic_mismatch");
@@ -386,7 +441,7 @@ describe("validateAssetsManifest", () => {
 
   // ── Missing execution for a task ──────────────────────────────────────────
 
-  it("reports assets_task_execution_missing when a plan task has no execution", () => {
+  it("reports assets_task_execution_missing when a plan task has no execution", async () => {
     // Add a task to the plan that has no corresponding execution
     const plan = makeBaseAssetPlan();
     plan.tasks.push({
@@ -407,7 +462,7 @@ describe("validateAssetsManifest", () => {
     });
 
     const manifest = makeBaseManifest();
-    const result = validateAssetsManifest({
+    const result = await validateAssetsManifest({
       assetPlanRecordId: ASSET_PLAN_ID,
       storyboardRecordId: STORYBOARD_RECORD_ID,
       scriptRecordId: SCRIPT_RECORD_ID,
@@ -422,8 +477,8 @@ describe("validateAssetsManifest", () => {
 
   // ── Dangling selected artifact ────────────────────────────────────────────
 
-  it("reports assets_selected_artifact_missing when an artifact_id in execution does not exist in artifacts", () => {
-    const result = runValidation({
+  it("reports assets_selected_artifact_missing when an artifact_id in execution does not exist in artifacts", async () => {
+    const result = await runValidation({
       executions: [
         makeBaseExecution(),
         makeBaseExecution({
@@ -445,8 +500,8 @@ describe("validateAssetsManifest", () => {
     expect(result.decision).toBe("blocked");
   });
 
-  it("blocks compose when a task execution is not terminal", () => {
-    const result = runValidation({
+  it("blocks compose when a task execution is not terminal", async () => {
+    const result = await runValidation({
       executions: [
         makeBaseExecution({
           status: "planned",
@@ -473,8 +528,8 @@ describe("validateAssetsManifest", () => {
     expect(result.decision).toBe("blocked");
   });
 
-  it("blocks compose when a referenced artifact is still a planned placeholder", () => {
-    const result = runValidation({
+  it("blocks compose when a referenced artifact is still a planned placeholder", async () => {
+    const result = await runValidation({
       artifacts: [
         makeBaseArtifact({
           file_uri: "planned://tts-chunk/chunk_1",
@@ -490,9 +545,9 @@ describe("validateAssetsManifest", () => {
 
   // ── Missing segment route ─────────────────────────────────────────────────
 
-  it("reports assets_segment_route_missing when a visual task's segment has no route", () => {
+  it("reports assets_segment_route_missing when a visual task's segment has no route", async () => {
     // Plan has tasks for sb_001 and sb_002, but manifest only has a route for sb_001
-    const result = runValidation({
+    const result = await runValidation({
       segment_routes: [
         makeBaseSegmentRoute(), // only sb_001
       ],
@@ -504,8 +559,8 @@ describe("validateAssetsManifest", () => {
 
   // ── Segment route missing visual ──────────────────────────────────────────
 
-  it("reports assets_segment_visual_missing when route has missing visual but visual_route_type is not 'missing'", () => {
-    const result = runValidation({
+  it("reports assets_segment_visual_missing when route has missing visual but visual_route_type is not 'missing'", async () => {
+    const result = await runValidation({
       segment_routes: [
         makeBaseSegmentRoute({
           primary_visual_artifact_id: null,
@@ -525,11 +580,11 @@ describe("validateAssetsManifest", () => {
 
   // ── Video fallback: image+motion is acceptable with warning ───────────────
 
-  it("allows video task with image+motion fallback but warns assets_video_fallback_used", () => {
+  it("allows video task with image+motion fallback but warns assets_video_fallback_used", async () => {
     // video task execution has no video artifact, but uses image + motion
     const motionArtifact = makeMotionArtifact("artifact_motion_1", "artifact_img_1");
 
-    const result = runValidation({
+    const result = await runValidation({
       executions: [
         makeBaseExecution(),
         makeBaseExecution({
@@ -569,17 +624,17 @@ describe("validateAssetsManifest", () => {
 
   // ── Missing optional BGM is a warning, not an error ───────────────────────
 
-  it("warns assets_bgm_missing_optional when no BGM placements exist", () => {
-    const result = runValidation();
+  it("warns assets_bgm_missing_optional when no BGM placements exist", async () => {
+    const result = await runValidation();
 
     // base manifest has no BGM placements
     expect(result.warnings).toContain("assets_bgm_missing_optional");
     expect(result.decision).toBe("partial");
   });
 
-  it("does not warn about BGM when bgm_placements exist", () => {
+  it("does not warn about BGM when bgm_placements exist", async () => {
     const bgmArtifact = makeBgmArtifact("artifact_bgm_1");
-    const result = runValidation({
+    const result = await runValidation({
       artifacts: [
         makeBaseArtifact(),
         makeImageArtifact("artifact_img_1"),
@@ -623,25 +678,25 @@ describe("validateAssetsManifest", () => {
 
   // ── Decision logic ────────────────────────────────────────────────────────
 
-  it("returns blocked when any error exists", () => {
-    const result = runValidation({ source_asset_plan_id: "wrong" });
+  it("returns blocked when any error exists", async () => {
+    const result = await runValidation({ source_asset_plan_id: "wrong" });
 
     expect(result.decision).toBe("blocked");
     expect(result.errors.length).toBeGreaterThan(0);
   });
 
-  it("returns partial when only warnings exist", () => {
+  it("returns partial when only warnings exist", async () => {
     // Base manifest has no BGM = warning only
-    const result = runValidation();
+    const result = await runValidation();
 
     expect(result.errors).toEqual([]);
     expect(result.warnings).toContain("assets_bgm_missing_optional");
     expect(result.decision).toBe("partial");
   });
 
-  it("returns ready_for_compose when no errors and no warnings", () => {
+  it("returns ready_for_compose when no errors and no warnings", async () => {
     const bgmArtifact = makeBgmArtifact("artifact_bgm_1");
-    const result = runValidation({
+    const result = await runValidation({
       artifacts: [
         makeBaseArtifact(),
         makeImageArtifact("artifact_img_1"),
@@ -686,8 +741,8 @@ describe("validateAssetsManifest", () => {
 
   // ── Segment route visual_route_type=missing does not error ────────────────
 
-  it("does not report visual missing when route explicitly has visual_route_type 'missing'", () => {
-    const result = runValidation({
+  it("does not report visual missing when route explicitly has visual_route_type 'missing'", async () => {
+    const result = await runValidation({
       segment_routes: [
         makeBaseSegmentRoute(),
         makeBaseSegmentRoute({
@@ -704,8 +759,8 @@ describe("validateAssetsManifest", () => {
 
   // ── Multiple errors are all reported ──────────────────────────────────────
 
-  it("reports multiple source mismatches at once", () => {
-    const result = runValidation(
+  it("reports multiple source mismatches at once", async () => {
+    const result = await runValidation(
       { source_asset_plan_id: "wrong_plan", source_storyboard_record_id: "wrong_sb" },
       { source_topic_package_id: "wrong_topic" },
     );
@@ -714,5 +769,243 @@ describe("validateAssetsManifest", () => {
     expect(result.errors).toContain("assets_source_storyboard_mismatch");
     expect(result.errors).toContain("assets_source_topic_mismatch");
     expect(result.decision).toBe("blocked");
+  });
+
+  // ── File existence checks ─────────────────────────────────────────────────
+
+  describe("file existence checks", () => {
+    let tempDir: string;
+
+    afterEach(async () => {
+      if (tempDir) {
+        await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+      }
+    });
+
+    it("reports assets_artifact_file_missing when a referenced artifact file does not exist on disk", async () => {
+      tempDir = join(tmpdir(), `validator-test-${Date.now()}`);
+      await mkdir(tempDir, { recursive: true });
+
+      // artifact has a file_uri pointing to a non-existent file
+      const result = await runValidation(
+        {
+          artifacts: [
+            makeBaseArtifact({
+              file_uri: join(tempDir, "nonexistent.wav"),
+            }),
+            makeImageArtifact("artifact_img_1"),
+            makeVideoArtifact("artifact_video_1"),
+          ],
+        },
+        {},
+        { projectStorageRootDir: tempDir },
+      );
+
+      expect(result.errors).toContain("assets_artifact_file_missing");
+      expect(result.decision).toBe("blocked");
+    });
+
+    it("does not report assets_artifact_file_missing when file exists on disk", async () => {
+      tempDir = join(tmpdir(), `validator-test-${Date.now()}`);
+      await mkdir(tempDir, { recursive: true });
+
+      // Create the file on disk
+      const audioPath = join(tempDir, "chunk1.wav");
+      await writeFile(audioPath, "fake audio data");
+
+      const imgDir = join(tempDir, "images");
+      await mkdir(imgDir, { recursive: true });
+      const imgPath = join(imgDir, "artifact_img_1.png");
+      await writeFile(imgPath, "fake image");
+
+      const videoDir = join(tempDir, "videos");
+      await mkdir(videoDir, { recursive: true });
+      const videoPath = join(videoDir, "artifact_video_1.mp4");
+      await writeFile(videoPath, "fake video");
+
+      const result = await runValidation(
+        {
+          artifacts: [
+            makeBaseArtifact({ file_uri: audioPath }),
+            { ...makeImageArtifact("artifact_img_1"), file_uri: imgPath },
+            { ...makeVideoArtifact("artifact_video_1"), file_uri: videoPath },
+          ],
+        },
+        {},
+        { projectStorageRootDir: tempDir },
+      );
+
+      expect(result.errors).not.toContain("assets_artifact_file_missing");
+    });
+
+    it("skips file existence checks when projectStorageRootDir is not provided", async () => {
+      // artifact has a file:// URI, but no storage root dir provided => no file check
+      const result = await runValidation({
+        artifacts: [
+          makeBaseArtifact({ file_uri: "file:///nonexistent/path.wav" }),
+          makeImageArtifact("artifact_img_1"),
+          makeVideoArtifact("artifact_video_1"),
+        ],
+      });
+
+      expect(result.errors).not.toContain("assets_artifact_file_missing");
+    });
+
+    it("skips file existence check for planned:// URIs", async () => {
+      tempDir = join(tmpdir(), `validator-test-${Date.now()}`);
+      await mkdir(tempDir, { recursive: true });
+
+      // Create real files for non-planned artifacts so they pass file check
+      const imgDir = join(tempDir, "images");
+      await mkdir(imgDir, { recursive: true });
+      const imgPath = join(imgDir, "artifact_img_1.png");
+      await writeFile(imgPath, "fake image");
+
+      const videoDir = join(tempDir, "videos");
+      await mkdir(videoDir, { recursive: true });
+      const videoPath = join(videoDir, "artifact_video_1.mp4");
+      await writeFile(videoPath, "fake video");
+
+      const result = await runValidation(
+        {
+          artifacts: [
+            makeBaseArtifact({ file_uri: "planned://tts-chunk/chunk_1" }),
+            { ...makeImageArtifact("artifact_img_1"), file_uri: imgPath },
+            { ...makeVideoArtifact("artifact_video_1"), file_uri: videoPath },
+          ],
+        },
+        {},
+        { projectStorageRootDir: tempDir },
+      );
+
+      // planned:// still triggers placeholder error, not file_missing
+      expect(result.errors).toContain("assets_artifact_placeholder_unresolved");
+      expect(result.errors).not.toContain("assets_artifact_file_missing");
+    });
+  });
+
+  // ── Media library checks ──────────────────────────────────────────────────
+
+  describe("media library checks", () => {
+    it("reports assets_media_library_item_missing when library_item_id is not found", async () => {
+      const sfxArtifact = makeSfxSelectionArtifact("sfx_sel_1", "lib_item_missing");
+
+      const result = await runValidation(
+        {
+          artifacts: [
+            makeBaseArtifact(),
+            makeImageArtifact("artifact_img_1"),
+            makeVideoArtifact("artifact_video_1"),
+            sfxArtifact,
+          ],
+        },
+        {},
+        { mediaLibraryItems: [] },
+      );
+
+      expect(result.errors).toContain("assets_media_library_item_missing");
+    });
+
+    it("reports assets_media_library_item_unapproved when item exists but is not approved", async () => {
+      const libraryItemId = "lib_item_unapproved";
+      const sfxArtifact = makeSfxSelectionArtifact("sfx_sel_1", libraryItemId);
+      const unapprovedItem = makeMediaLibraryItem({
+        library_item_id: libraryItemId,
+        approved_for_use: false,
+      });
+
+      const result = await runValidation(
+        {
+          artifacts: [
+            makeBaseArtifact(),
+            makeImageArtifact("artifact_img_1"),
+            makeVideoArtifact("artifact_video_1"),
+            sfxArtifact,
+          ],
+        },
+        {},
+        { mediaLibraryItems: [unapprovedItem] },
+      );
+
+      expect(result.errors).toContain("assets_media_library_item_unapproved");
+      expect(result.errors).not.toContain("assets_media_library_item_missing");
+    });
+
+    it("reports assets_media_library_item_license_blocked when item lacks commercial use", async () => {
+      const libraryItemId = "lib_item_no_commercial";
+      const bgmArtifact = makeBgmSelectionArtifact("bgm_sel_1", libraryItemId);
+      // An item that is approved but doesn't allow commercial use
+      // Note: the schema superRefine prevents this, but for validation we test the check
+      const blockedItem = makeMediaLibraryItem({
+        library_item_id: libraryItemId,
+        type: "bgm",
+        approved_for_use: true,
+        license: {
+          license_type: "royalty_free",
+          commercial_use_allowed: false,
+          attribution_required: true,
+          attribution_text: "Some attribution",
+        },
+      });
+
+      const result = await runValidation(
+        {
+          artifacts: [
+            makeBaseArtifact(),
+            makeImageArtifact("artifact_img_1"),
+            makeVideoArtifact("artifact_video_1"),
+            bgmArtifact,
+          ],
+        },
+        {},
+        { mediaLibraryItems: [blockedItem] },
+      );
+
+      expect(result.errors).toContain("assets_media_library_item_license_blocked");
+      expect(result.errors).not.toContain("assets_media_library_item_unapproved");
+      expect(result.errors).not.toContain("assets_media_library_item_missing");
+    });
+
+    it("does not report media library errors when item is approved and allows commercial use", async () => {
+      const libraryItemId = "lib_item_ok";
+      const sfxArtifact = makeSfxSelectionArtifact("sfx_sel_1", libraryItemId);
+      const approvedItem = makeMediaLibraryItem({
+        library_item_id: libraryItemId,
+        approved_for_use: true,
+      });
+
+      const result = await runValidation(
+        {
+          artifacts: [
+            makeBaseArtifact(),
+            makeImageArtifact("artifact_img_1"),
+            makeVideoArtifact("artifact_video_1"),
+            sfxArtifact,
+          ],
+        },
+        {},
+        { mediaLibraryItems: [approvedItem] },
+      );
+
+      expect(result.errors).not.toContain("assets_media_library_item_missing");
+      expect(result.errors).not.toContain("assets_media_library_item_unapproved");
+      expect(result.errors).not.toContain("assets_media_library_item_license_blocked");
+    });
+
+    it("skips media library checks when mediaLibraryItems is not provided", async () => {
+      const sfxArtifact = makeSfxSelectionArtifact("sfx_sel_1", "lib_item_1");
+
+      const result = await runValidation({
+        artifacts: [
+          makeBaseArtifact(),
+          makeImageArtifact("artifact_img_1"),
+          makeVideoArtifact("artifact_video_1"),
+          sfxArtifact,
+        ],
+      });
+
+      expect(result.errors).not.toContain("assets_media_library_item_missing");
+      expect(result.errors).not.toContain("assets_media_library_item_unapproved");
+    });
   });
 });

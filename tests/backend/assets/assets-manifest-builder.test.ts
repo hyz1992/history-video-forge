@@ -463,7 +463,7 @@ describe("buildInitialAssetManifest", () => {
 
   // ── 10. Validate with validator ─────────────────────────────────────────────
 
-  it("validates the builder output with validateAssetsManifest and expects decision blocked or partial", () => {
+  it("validates the builder output with validateAssetsManifest and expects decision blocked or partial", async () => {
     const plan = makeFullPlan();
     const manifest = buildInitialAssetManifest({
       assetPlanRecordId: ASSET_PLAN_ID,
@@ -471,7 +471,7 @@ describe("buildInitialAssetManifest", () => {
       segmentIds: SEGMENT_IDS,
     });
 
-    const result = validateAssetsManifest({
+    const result = await validateAssetsManifest({
       assetPlanRecordId: ASSET_PLAN_ID,
       storyboardRecordId: STORYBOARD_RECORD_ID,
       scriptRecordId: SCRIPT_RECORD_ID,

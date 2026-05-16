@@ -1,7 +1,10 @@
+import { stat } from "node:fs/promises";
+
 import type {
   AssetManifest,
   AssetPlan,
   AssetsValidationResult,
+  MediaLibraryItem,
 } from "../../../../shared/src/index.js";
 import { AssetsValidationResult as AssetsValidationResultSchema } from "../../../../shared/src/index.js";
 
@@ -22,14 +25,16 @@ function pushUnique(target: string[], code: string) {
   }
 }
 
-export function validateAssetsManifest(input: {
+export async function validateAssetsManifest(input: {
   assetPlanRecordId: string;
   storyboardRecordId: string;
   scriptRecordId: string;
   topicPackageId: string;
   assetPlan: AssetPlan;
   manifest: AssetManifest;
-}): AssetsValidationResult {
+  projectStorageRootDir?: string;
+  mediaLibraryItems?: MediaLibraryItem[];
+}): Promise<AssetsValidationResult> {
   const errors: string[] = [];
   const warnings: string[] = [];
   const { assetPlan, manifest } = input;
@@ -200,6 +205,67 @@ export function validateAssetsManifest(input: {
       artifact.file_uri.startsWith("planned://")
     ) {
       pushUnique(errors, "assets_artifact_placeholder_unresolved");
+    }
+  }
+
+  // ── File existence checks ─────────────────────────────────────────────
+
+  const { projectStorageRootDir } = input;
+  if (projectStorageRootDir) {
+    const checkedPaths = new Set<string>();
+    for (const artifact of manifest.artifacts) {
+      if (
+        !referencedArtifactIds.has(artifact.artifact_id) ||
+        artifact.file_uri.startsWith("planned://")
+      ) {
+        continue;
+      }
+      const uri = artifact.file_uri;
+      if (checkedPaths.has(uri)) continue;
+      checkedPaths.add(uri);
+
+      try {
+        await stat(uri);
+      } catch {
+        pushUnique(errors, "assets_artifact_file_missing");
+      }
+    }
+  }
+
+  // ── Media library checks ──────────────────────────────────────────────
+
+  const { mediaLibraryItems } = input;
+  if (mediaLibraryItems) {
+    const libItemMap = new Map(
+      mediaLibraryItems.map((item) => [item.library_item_id, item]),
+    );
+
+    for (const artifact of manifest.artifacts) {
+      if (
+        artifact.artifact_type !== "sfx_selection" &&
+        artifact.artifact_type !== "bgm_selection"
+      ) {
+        continue;
+      }
+
+      const libraryItemId = (
+        artifact.metadata as { library_item_id?: string }
+      ).library_item_id;
+      if (!libraryItemId) continue;
+
+      const libItem = libItemMap.get(libraryItemId);
+      if (!libItem) {
+        pushUnique(errors, "assets_media_library_item_missing");
+        continue;
+      }
+
+      if (!libItem.approved_for_use) {
+        pushUnique(errors, "assets_media_library_item_unapproved");
+      }
+
+      if (!libItem.license.commercial_use_allowed) {
+        pushUnique(errors, "assets_media_library_item_license_blocked");
+      }
     }
   }
 

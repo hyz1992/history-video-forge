@@ -336,13 +336,14 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   }
 
   // Step 6: Validate manifest (after engine execution for auto_available)
-  const localValidation = validateAssetsManifest({
+  const localValidation = await validateAssetsManifest({
     assetPlanRecordId: assetPlanRecord.id,
     storyboardRecordId: assetPlanRecord.storyboardRecordId,
     scriptRecordId: assetPlanRecord.scriptRecordId,
     topicPackageId: assetPlanRecord.topicPackageId,
     assetPlan: assetPlanRecord.planJson,
     manifest,
+    projectStorageRootDir: project.storageRootDir,
   });
 
   // Step 7: Stale check — verify activeAssetPlanRecordId hasn't changed
@@ -562,13 +563,14 @@ export async function registerManualArtifact(input: RegisterManualArtifactInput)
   });
 
   // Step 10: Re-run validator
-  const localValidation = validateAssetsManifest({
+  const localValidation = await validateAssetsManifest({
     assetPlanRecordId: manifestRecord.assetPlanRecordId,
     storyboardRecordId: manifestRecord.storyboardRecordId,
     scriptRecordId: manifestRecord.scriptRecordId,
     topicPackageId: manifestRecord.topicPackageId,
     assetPlan,
     manifest,
+    projectStorageRootDir: project.storageRootDir,
   });
 
   // Step 11: Update manifest readiness
@@ -660,13 +662,14 @@ export async function acceptArtifact(input: AcceptArtifactInput) {
   if (assetPlanRecord) {
     const assetPlan = assetPlanRecord.planJson as unknown as AssetPlan;
 
-    const localValidation = validateAssetsManifest({
+    const localValidation = await validateAssetsManifest({
       assetPlanRecordId: manifestRecord.assetPlanRecordId,
       storyboardRecordId: manifestRecord.storyboardRecordId,
       scriptRecordId: manifestRecord.scriptRecordId,
       topicPackageId: manifestRecord.topicPackageId,
       assetPlan,
       manifest,
+      projectStorageRootDir: project.storageRootDir,
     });
 
     manifest.readiness = localValidation.decision;
