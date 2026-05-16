@@ -259,12 +259,25 @@ function areDependenciesSatisfied(
 }
 
 /**
- * Apply generated artifacts to the manifest's segment routes.
+ * Apply generated artifacts to the manifest's segment routes and summaries.
  *
  * For `image` artifacts:
  * - If the route's `visual_route_type` is `"video_clip"`: set fallback and
  *   mark readiness as `"fallback_ready"`.
  * - Otherwise: set primary visual, keep `image_only`, mark `"ready"`.
+ *
+ * For `tts_chunk_audio` artifacts:
+ * - Append to `audio_summary.tts_chunk_artifact_ids`.
+ * - Update matching `audio_summary.tts_chunk_routes[].artifact_id` by `tts_chunk_id`.
+ * - Set matching `segment_routes[].tts_artifact_id` for segments in `segment_ids`.
+ *
+ * For `tts_merged_audio` artifacts:
+ * - Set `audio_summary.tts_merged_artifact_id`.
+ * - Set `audio_summary.tts_total_duration_sec` from metadata.
+ *
+ * For `subtitle_track` artifacts (first SRT):
+ * - Set `audio_summary.subtitle_artifact_id` to the first SRT artifact.
+ * - Set all `segment_routes[].subtitle_artifact_id`.
  */
 function applyArtifactRoutes(
   manifest: AssetManifest,
@@ -272,21 +285,83 @@ function applyArtifactRoutes(
   planTask: AssetPlan["tasks"][number],
 ): void {
   for (const artifact of artifacts) {
-    if (artifact.artifact_type !== "image") continue;
+    switch (artifact.artifact_type) {
+      case "image": {
+        const segmentId = planTask.source_segment_id;
+        const route = manifest.segment_routes.find(
+          (r) => r.segment_id === segmentId,
+        );
+        if (!route) break;
 
-    const segmentId = planTask.source_segment_id;
-    const route = manifest.segment_routes.find(
-      (r) => r.segment_id === segmentId,
-    );
-    if (!route) continue;
+        if (route.visual_route_type === "video_clip") {
+          route.fallback_visual_artifact_id = artifact.artifact_id;
+          route.readiness = "fallback_ready";
+        } else {
+          route.primary_visual_artifact_id = artifact.artifact_id;
+          route.visual_route_type = "image_only";
+          route.readiness = "ready";
+        }
+        break;
+      }
 
-    if (route.visual_route_type === "video_clip") {
-      route.fallback_visual_artifact_id = artifact.artifact_id;
-      route.readiness = "fallback_ready";
-    } else {
-      route.primary_visual_artifact_id = artifact.artifact_id;
-      route.visual_route_type = "image_only";
-      route.readiness = "ready";
+      case "tts_chunk_audio": {
+        const meta = artifact.metadata as {
+          tts_chunk_id: string;
+          segment_ids: string[];
+        };
+
+        // Add to tts_chunk_artifact_ids
+        manifest.audio_summary.tts_chunk_artifact_ids.push(
+          artifact.artifact_id,
+        );
+
+        // Update matching tts_chunk_route
+        const chunkRoute = manifest.audio_summary.tts_chunk_routes.find(
+          (r) => r.tts_chunk_id === meta.tts_chunk_id,
+        );
+        if (chunkRoute) {
+          chunkRoute.artifact_id = artifact.artifact_id;
+        }
+
+        // Set segment route tts_artifact_id for each segment
+        for (const segId of meta.segment_ids) {
+          const segRoute = manifest.segment_routes.find(
+            (r) => r.segment_id === segId,
+          );
+          if (segRoute) {
+            segRoute.tts_artifact_id = artifact.artifact_id;
+          }
+        }
+        break;
+      }
+
+      case "tts_merged_audio": {
+        const meta = artifact.metadata as { duration_sec: number };
+        manifest.audio_summary.tts_merged_artifact_id = artifact.artifact_id;
+        manifest.audio_summary.tts_total_duration_sec = meta.duration_sec;
+        break;
+      }
+
+      case "subtitle_track": {
+        const meta = artifact.metadata as { format: string };
+
+        // Set subtitle_artifact_id for the first SRT artifact
+        if (
+          meta.format === "srt" &&
+          !manifest.audio_summary.subtitle_artifact_id
+        ) {
+          manifest.audio_summary.subtitle_artifact_id = artifact.artifact_id;
+
+          // Set all segment route subtitle_artifact_ids
+          for (const segRoute of manifest.segment_routes) {
+            segRoute.subtitle_artifact_id = artifact.artifact_id;
+          }
+        }
+        break;
+      }
+
+      default:
+        break;
     }
   }
 }
