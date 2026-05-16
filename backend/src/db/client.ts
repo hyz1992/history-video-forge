@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import type {
   AssetPlan,
   AssetPlanningValidationResult,
+  MediaLibraryItem,
 } from "../../../shared/src/index.js";
 
 export interface ProjectRecord {
@@ -183,6 +184,7 @@ export interface DbClient {
   assetPlanRecords: Map<string, AssetPlanRecord>;
   assetManifestRecords: Map<string, AssetManifestRecord>;
   assetProviderJobRecords: Map<string, AssetProviderJobRecord>;
+  mediaLibraryItems: Map<string, MediaLibraryItem>;
 }
 
 export function createDbClient(): DbClient {
@@ -198,5 +200,6 @@ export function createDbClient(): DbClient {
     assetPlanRecords: new Map<string, AssetPlanRecord>(),
     assetManifestRecords: new Map<string, AssetManifestRecord>(),
     assetProviderJobRecords: new Map<string, AssetProviderJobRecord>(),
+    mediaLibraryItems: new Map<string, MediaLibraryItem>(),
   };
 }
