@@ -58,3 +58,9 @@
 - 架构文档、字段文档、schema 文档和 API 文档已同步更新。
 - 当前仍保留未归档的 assets 计划文件，直到完整验证完成。
 - `compose` 仍未进入可实施设计，不得从 assets 计划中顺手实现。
+
+## 2026-05-16 真实 Assets 生成与媒体库设计
+
+- 新增 [真实 Assets 生成与媒体库设计](./2026-05-16-real-assets-generation-and-media-library-design.md)。
+- 本设计只收束真实 provider、TTS、字幕文件、Remotion 局部分镜、SFX/BGM 本地素材库和授权治理的阶段边界。
+- 当前仍未进入 implementation plan；不得从本设计中顺手实现真实 API、素材下载、compose 或上传/预览 UI。
