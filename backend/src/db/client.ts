@@ -141,6 +141,36 @@ export interface AssetManifestRecord {
   createdAt: Date;
 }
 
+export type AssetProviderJobStatus =
+  | "prepared"
+  | "submitted"
+  | "running"
+  | "completed"
+  | "failed"
+  | "canceled";
+
+export interface AssetProviderJobRecord {
+  id: string;
+  assetManifestRecordId: string;
+  assetRunId: string;
+  executionId: string;
+  taskId: string;
+  providerType: string;
+  providerName: string;
+  providerJobId: string | null;
+  status: AssetProviderJobStatus;
+  attemptCount: number;
+  rawRequestJson: Record<string, unknown> | null;
+  rawResponseJson: Record<string, unknown> | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  submittedAt: Date | null;
+  lastPolledAt: Date | null;
+  completedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface DbClient {
   generateId: () => string;
   projects: Map<string, ProjectRecord>;
@@ -152,6 +182,7 @@ export interface DbClient {
   storyboardRecords: Map<string, StoryboardRecord>;
   assetPlanRecords: Map<string, AssetPlanRecord>;
   assetManifestRecords: Map<string, AssetManifestRecord>;
+  assetProviderJobRecords: Map<string, AssetProviderJobRecord>;
 }
 
 export function createDbClient(): DbClient {
@@ -166,5 +197,6 @@ export function createDbClient(): DbClient {
     storyboardRecords: new Map<string, StoryboardRecord>(),
     assetPlanRecords: new Map<string, AssetPlanRecord>(),
     assetManifestRecords: new Map<string, AssetManifestRecord>(),
+    assetProviderJobRecords: new Map<string, AssetProviderJobRecord>(),
   };
 }

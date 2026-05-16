@@ -165,3 +165,25 @@ model AssetManifestRecord {
   script_record     ScriptRecord     @relation(fields: [script_record_id], references: [id])
   storyboard_record StoryboardRecord @relation(fields: [storyboard_record_id], references: [id])
 }
+
+model AssetProviderJobRecord {
+  id                       String   @id @default(cuid())
+  asset_manifest_record_id String
+  asset_run_id             String
+  execution_id             String
+  task_id                  String
+  provider_type            String
+  provider_name            String
+  provider_job_id          String?
+  status                   String
+  attempt_count            Int
+  raw_request_json         Json?
+  raw_response_json        Json?
+  error_code               String?
+  error_message            String?
+  submitted_at             DateTime?
+  last_polled_at           DateTime?
+  completed_at             DateTime?
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+}
