@@ -19,6 +19,11 @@ import { saveAssetManifestRecord } from "./asset-manifest-record.repository";
 import { getAssetManifestRecordById } from "./asset-manifest-record.repository";
 import { buildInitialAssetManifest } from "./assets-manifest-builder";
 import { validateAssetsManifest } from "./assets-local-validator";
+import { createAssetProviderRegistry } from "./assets-provider-registry.js";
+import { executeAssetManifest } from "./assets-execution-engine.js";
+import { createFakeTtsProvider } from "./providers/fake-tts-provider.js";
+import { createFakeImageProvider } from "./providers/fake-image-provider.js";
+import { createLocalSubtitleProvider } from "./providers/local-subtitle-provider.js";
 
 export interface RunAssetsGenerationInput {
   db: DbClient;
@@ -295,14 +300,42 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   const executionOptions = executionOptionsResult.data;
 
   // Step 5: Build manifest
-  const manifest = buildInitialAssetManifest({
+  let manifest = buildInitialAssetManifest({
     assetPlanRecordId: assetPlanRecord.id,
     assetPlan: assetPlanRecord.planJson,
     segmentIds,
     executionOptions,
   });
 
-  // Step 6: Validate manifest
+  // Step 5a: Execution engine integration
+  const runId = `assets_run_${db.generateId()}`;
+
+  if (executionOptions.execution_mode === "dry_run") {
+    // dry_run: manifest-only, strip all placeholder artifacts
+    manifest.artifacts = [];
+  } else if (executionOptions.execution_mode === "auto_available") {
+    // auto_available: create registry with fake/local providers and execute
+    const registry = createAssetProviderRegistry([
+      createFakeTtsProvider(),
+      createLocalSubtitleProvider(),
+      createFakeImageProvider(),
+    ]);
+
+    const tempManifestRecordId = `manifest_${db.generateId()}`;
+    const engineResult = await executeAssetManifest({
+      db,
+      assetManifestRecordId: tempManifestRecordId,
+      assetRunId: runId,
+      manifest,
+      registry,
+      assetPlan: assetPlanRecord.planJson,
+      projectStorageRootDir: project.storageRootDir,
+    });
+
+    manifest = engineResult.manifest;
+  }
+
+  // Step 6: Validate manifest (after engine execution for auto_available)
   const localValidation = validateAssetsManifest({
     assetPlanRecordId: assetPlanRecord.id,
     storyboardRecordId: assetPlanRecord.storyboardRecordId,
@@ -311,8 +344,6 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     assetPlan: assetPlanRecord.planJson,
     manifest,
   });
-
-  const runId = `assets_run_${db.generateId()}`;
 
   // Step 7: Stale check — verify activeAssetPlanRecordId hasn't changed
   let staleSourceDetected = false;

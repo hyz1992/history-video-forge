@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { mkdir, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
@@ -47,8 +50,50 @@ function makeAssetPlan(): AssetPlan {
     },
     tasks: [
       {
-        task_id: "img_001",
+        task_id: "tts_001",
         order: 0,
+        task_type: "tts_audio",
+        source_segment_id: null,
+        source_excerpt: "Narration for segment one.",
+        production_intent: "Generate narration audio.",
+        recommended_mode: "auto",
+        provider_hint: "fake_tts",
+        prompt_draft: null,
+        parameters: {},
+        manual_upload_policy: {
+          allowed: false,
+          required: false,
+          accepted_file_types: [],
+          acceptance_notes: [],
+        },
+        risk_notes: [],
+        cost_tier: "low",
+        initial_status: "planned",
+      },
+      {
+        task_id: "sub_001",
+        order: 1,
+        task_type: "subtitle_track",
+        source_segment_id: null,
+        source_excerpt: "Narration for segment one.",
+        production_intent: "Generate subtitle track from TTS.",
+        recommended_mode: "auto",
+        provider_hint: "local_subtitle",
+        prompt_draft: null,
+        parameters: {},
+        manual_upload_policy: {
+          allowed: false,
+          required: false,
+          accepted_file_types: [],
+          acceptance_notes: [],
+        },
+        risk_notes: [],
+        cost_tier: "low",
+        initial_status: "planned",
+      },
+      {
+        task_id: "img_001",
+        order: 2,
         task_type: "image_still",
         source_segment_id: "sb_001",
         source_excerpt: "Image source excerpt.",
@@ -70,10 +115,10 @@ function makeAssetPlan(): AssetPlan {
     ],
     dependencies: [],
     cost_summary: {
-      total_tasks: 1,
-      by_type: { image_still: 1 },
-      by_cost_tier: { low: 1 },
-      estimated_provider_calls: 1,
+      total_tasks: 3,
+      by_type: { tts_audio: 1, subtitle_track: 1, image_still: 1 },
+      by_cost_tier: { low: 3 },
+      estimated_provider_calls: 3,
       notes: [],
     },
     global_production_notes: [],
@@ -221,5 +266,45 @@ describe("assets run service integration", () => {
     expect(response.body).toMatchObject({
       error: "asset_manual_artifact_invalid",
     });
+  });
+});
+
+describe("execution engine integration", () => {
+  let tempDir: string;
+
+  afterEach(async () => {
+    if (tempDir) {
+      await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("keeps dry_run as manifest-only without generated artifacts", async () => {
+    const { db, project } = await prepareProjectWithAssetPlan();
+    const response = await runAssetsGeneration({
+      db,
+      project,
+      voiceProfileId: "voice_custom",
+      executionMode: "dry_run",
+    });
+    const body = response.body as { manifest: AssetManifest };
+    expect(body.manifest.artifacts).toHaveLength(0);
+  });
+
+  it("auto_available runs fake providers and persists generated artifacts", async () => {
+    tempDir = join(tmpdir(), `assets-test-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+
+    const { db, project } = await prepareProjectWithAssetPlan();
+    project.storageRootDir = tempDir;
+
+    const response = await runAssetsGeneration({
+      db,
+      project,
+      voiceProfileId: "voice_custom",
+      executionMode: "auto_available",
+    });
+    const body = response.body as { manifest: AssetManifest };
+    expect(body.manifest.artifacts.length).toBeGreaterThan(0);
+    expect(db.assetProviderJobRecords.size).toBeGreaterThan(0);
   });
 });
