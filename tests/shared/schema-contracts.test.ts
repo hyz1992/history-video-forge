@@ -5,6 +5,7 @@ import {
   AssetPlan,
   AssetPlanningValidationResult,
   AssetsValidationResult,
+  MediaLibraryItem,
   ScriptDraftPackage,
   ScriptInputBundle,
   ScriptSemanticReviewResult,
@@ -1055,6 +1056,53 @@ describe("shared schema contracts", () => {
         notes: [],
       }),
     ).toThrow();
+  });
+
+  it("accepts approved media library items with traceable license metadata", () => {
+    const result = MediaLibraryItem.safeParse({
+      library_item_id: "bgm_001",
+      type: "bgm",
+      file_uri: "library://bgm/drum-loop.wav",
+      mime_type: "audio/wav",
+      duration_sec: 12.5,
+      loopable: true,
+      tags: ["war", "drum"],
+      mood_tags: ["tense"],
+      license: {
+        license_type: "cc0",
+        commercial_use_allowed: true,
+        attribution_required: false,
+        source_url: "https://example.test/source",
+      },
+      file_hash: "sha256:abc",
+      imported_at: "2026-05-16T00:00:00.000Z",
+      approved_for_use: true,
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects media library items that are approved without commercial permission", () => {
+    const result = MediaLibraryItem.safeParse({
+      library_item_id: "sfx_bad",
+      type: "sfx",
+      file_uri: "library://sfx/bad.wav",
+      mime_type: "audio/wav",
+      duration_sec: 1,
+      loopable: false,
+      tags: [],
+      mood_tags: [],
+      license: {
+        license_type: "unknown",
+        commercial_use_allowed: false,
+        attribution_required: false,
+      },
+      file_hash: "sha256:bad",
+      imported_at: "2026-05-16T00:00:00.000Z",
+      approved_for_use: true,
+    });
+
+    expect(result.success).toBe(false);
   });
 
   it("rejects invalid storyboard timing and enum values", () => {

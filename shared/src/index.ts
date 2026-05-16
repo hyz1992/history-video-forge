@@ -41,3 +41,7 @@ export {
   TtsChunkRoute,
 } from "./assets/asset-manifest.schema";
 export { AssetsValidationResult } from "./assets/assets-validation.schema";
+export {
+  MediaLibraryItem,
+  MediaLibraryLicense,
+} from "./assets/media-library.schema";
