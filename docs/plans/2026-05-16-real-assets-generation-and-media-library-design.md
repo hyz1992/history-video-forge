@@ -123,7 +123,24 @@ provider job record 只服务恢复、排错和审计；正式产物仍然必须
 
 implementation plan 中可以把 `prepare/submit/poll/download/normalizeResult` 设计成 `(ctx, previousStepResult)` 的上下文传参形式，而不是为每一步创建完全独立的 input 类型。两种写法语义一致；第一版优先选择 context 形式，便于稳定传入 `manifest`、`assetPlan`、`planTask`、`assetRunId` 和存储根目录。
 
-## 6. 并发、重试与恢复
+## 6. 执行顺序
+
+执行引擎必须保证任务按依赖关系排序后执行，不能依赖 `manifest.executions[]` 的原始数组顺序。
+
+建议硬编码 task_type 执行优先级：
+
+1. `tts_audio` — 时间轴根任务，必须最先完成。
+2. `subtitle_track` — 依赖 `tts_chunk_audio` artifact 的 duration/metadata。
+3. `image_still` — 无依赖，但应在 video 之前。
+4. `video_clip` — 依赖同 segment 的 image artifact。
+5. `render_motion_cue` — 依赖 image artifact（第一版走 inline，不走引擎）。
+6. `sfx_cue` / `bgm_cue` — 无前置 artifact 依赖。
+
+引擎在每次执行前应对 `manifest.executions[]` 按上述优先级排序。已进入 terminal status 的 execution 直接跳过。如果前置 execution 尚未完成，当前 execution 应跳过（不标记失败），等待下次恢复或轮询时重试。
+
+`render_motion_cue` 当前由 v1 builder 直接生成 inline artifact，不走 provider adapter 执行引擎。如果未来接入 Remotion 或其他本地渲染 provider，应先扩展 `AssetProviderType` 增加 `"remotion"` 类型，再注册对应 adapter。
+
+## 7. 并发、重试与恢复
 
 不同 provider 类型必须独立限流：
 
@@ -142,7 +159,7 @@ implementation plan 中可以把 `prepare/submit/poll/download/normalizeResult` 
 - provider job 无法恢复时，标记 execution failed，并保留 raw diagnostics。
 - video_clip 失败时，如果同 segment 的 image 和 motion fallback 就绪，可标记 `skipped_with_fallback`，不得阻断 compose。
 
-## 7. 生图设计
+## 8. 生图设计
 
 旧项目里 DashScope 生图调用有两个经验可复用：
 
@@ -165,7 +182,7 @@ implementation plan 中可以把 `prepare/submit/poll/download/normalizeResult` 
 
 多图场景包括：同一分镜需要人物特写、道具特写、场景 establishing shot，或 video provider 需要多输入参考图。
 
-## 8. 生视频设计
+## 9. 生视频设计
 
 video provider adapter 应以 image artifact 为优先输入。旧项目中的关键经验：
 
@@ -187,7 +204,7 @@ video provider adapter 应以 image artifact 为优先输入。旧项目中的�
 - 不因为本地判断“高潮”而新增视频任务。
 - 不把人物说话、表情变化、象征画面自动升级为 video_clip。
 
-## 9. TTS 口播设计
+## 10. TTS 口播设计
 
 旧项目 TTS 的可复用经验：
 
@@ -223,7 +240,7 @@ TTS metadata 至少包含：
 2. 未生成真实音频时，读取 `AssetPlan.tts_plan.chunks[].estimated_duration_sec`。
 3. 如果二者都缺失，执行应失败并返回结构错误，不得凭本地语义猜测。
 
-## 10. 字幕文件设计
+## 11. 字幕文件设计
 
 字幕必须成为一等 artifact，而不是只存在于前端状态或 compose 内存中。
 
@@ -251,7 +268,7 @@ subtitle artifact metadata 至少包含：
 - `timing_source`
 - `language: zh-CN`
 
-## 11. Remotion 本地片段设计
+## 12. Remotion 本地片段设计
 
 Remotion 不应替代真实 compose 阶段，但可以承担两个角色：
 
@@ -270,7 +287,7 @@ Remotion 不应替代真实 compose 阶段，但可以承担两个角色：
 - Remotion 输出落为 `video` 或 `remotion_clip` artifact。
 - 第一版只做局部分镜片段，不做最终整片 compose。
 
-## 12. SFX/BGM 本地媒体库
+## 13. SFX/BGM 本地媒体库
 
 SFX 和 BGM 第一版建议优先走本地素材库，而不是立即接音乐生成 API。原因：
 
@@ -325,7 +342,7 @@ SFX selection 应输出 `sfx` artifact 或 library reference artifact，并写�
 - 音量建议。
 - 是否可省略。
 
-## 13. 音乐与音效生成 API
+## 14. 音乐与音效生成 API
 
 音乐/音效生成 API 可以作为后续 provider adapter，不应阻塞第一版本地素材库。
 
@@ -346,7 +363,7 @@ SFX selection 应输出 `sfx` artifact 或 library reference artifact，并写�
 - `loopable`
 - `loudness_lufs`（如可取得）
 
-## 14. 存储布局
+## 15. 存储布局
 
 建议每个 assets run 使用独立目录：
 
@@ -378,7 +395,7 @@ manifest 和数据库只保存 URI、metadata、hash 和 provenance，不直接�
 
 第一版单机运行可以在 `file_uri` 中保存绝对路径，但 artifact metadata 应同时记录相对路径，例如 `relative_path: "assets-runs/<run_id>/images/img_001.png"`。后续如果引入对象存储或跨机器迁移，compose 和下载接口应优先使用相对路径或 storage resolver，而不是硬编码本机绝对路径。
 
-## 15. API 边界
+## 16. API 边界
 
 现有 assets API 可继续作为入口：
 
@@ -398,7 +415,7 @@ manifest 和数据库只保存 URI、metadata、hash 和 provenance，不直接�
 
 第一版 implementation plan 可以先不做媒体库 API，只实现本地 service 与测试 fixture。
 
-## 16. Validator 边界
+## 17. Validator 边界
 
 assets validator 只能检查结构与可执行性：
 
@@ -421,7 +438,7 @@ validator 不得检查：
 
 这些问题只能通过人工 review、真实 provider 结果预览或后续专门设计的 reviewer shadow 机制处理，不能混进本地门禁。
 
-## 17. 推荐实施顺序
+## 18. 推荐实施顺序
 
 后续应另写 implementation plan，建议拆成以下低耦合任务：
 
@@ -438,7 +455,7 @@ validator 不得检查：
 
 其中真实 API 接入必须默认关闭，通过显式环境变量和 live test 命令运行，不进入默认 CI。
 
-## 18. 开放问题
+## 19. 开放问题
 
 - 是否把 `media-library` 存在项目库内，还是作为用户级全局库。
 - 是否优先支持 SRT/VTT，还是在第一版就支持 ASS 样式字幕。
@@ -447,7 +464,7 @@ validator 不得检查：
 - BGM 是默认全片一条主轨加局部 cue，还是完全按 segment span 选择多条素材。
 - 手动上传大文件是否需要预签名、分片上传或本地 copy 第一版即可。
 
-## 19. 结论
+## 20. 结论
 
 真实 assets 阶段不应把旧项目整体搬过来，而应吸收旧项目已经踩过的 API 调用经验：异步 submit/poll/download、provider payload 差异、TTS chunk 合并、ffmpeg 时长处理、Remotion 本地片段渲染。
 

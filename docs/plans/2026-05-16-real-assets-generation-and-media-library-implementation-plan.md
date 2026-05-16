@@ -1052,6 +1052,10 @@ import type {
 } from "../../../../shared/src/index.js";
 
 export type AssetProviderType = "tts" | "image" | "video" | "sfx" | "bgm";
+// Note: render_motion_cue is not included here. It currently produces inline
+// artifacts via the v1 builder and does not go through the provider engine.
+// If a real Remotion or motion rendering provider is added later, extend this
+// union with "remotion" and register a corresponding adapter.
 
 export interface AssetProviderCanHandleInput {
   taskType: AssetTaskExecution["task_type"];
@@ -1158,7 +1162,9 @@ export function createAssetProviderRegistry(
 
 Create `backend/src/modules/assets/assets-execution-engine.ts`. Minimal behavior:
 
+- sort executions by task_type priority before processing: `tts_audio` first, then `subtitle_track`, then `image_still`, then `video_clip`, then `sfx_cue`/`bgm_cue`, then `render_motion_cue`;
 - skip terminal executions;
+- skip non-terminal executions whose dependency is not yet completed (e.g. `subtitle_track` if no `tts_chunk_audio` artifacts exist in manifest);
 - require `assetPlan` and resolve `planTask` by `execution.task_id` before calling any adapter;
 - fail the execution with a diagnostic note if no matching plan task exists;
 - select adapter by task type and enabled provider types;
@@ -1363,17 +1369,18 @@ Use temp project storage and inspect that generated fake audio files exist.
 The core assertion block should be:
 
 ```ts
-expect(body.manifest.artifacts.filter((item) => item.artifact_type === "tts_chunk_audio")).toHaveLength(2);
-expect(body.manifest.artifacts.filter((item) => item.artifact_type === "tts_merged_audio")).toHaveLength(1);
-expect(body.manifest.artifacts.filter((item) => item.artifact_type === "subtitle_track")).toHaveLength(0);
-expect(body.manifest.audio_summary.tts_chunk_artifact_ids).toHaveLength(2);
-expect(body.manifest.audio_summary.tts_merged_artifact_id).toBe("artifact_tts_merged_tts_001");
-expect(body.manifest.audio_summary.subtitle_artifact_id).toBeNull();
+const result = await executeAssetManifest({...});
+expect(result.manifest.artifacts.filter((item) => item.artifact_type === "tts_chunk_audio")).toHaveLength(2);
+expect(result.manifest.artifacts.filter((item) => item.artifact_type === "tts_merged_audio")).toHaveLength(1);
+expect(result.manifest.artifacts.filter((item) => item.artifact_type === "subtitle_track")).toHaveLength(0);
+expect(result.manifest.audio_summary.tts_chunk_artifact_ids).toHaveLength(2);
+expect(result.manifest.audio_summary.tts_merged_artifact_id).toBe("artifact_tts_merged_tts_001");
+expect(result.manifest.audio_summary.subtitle_artifact_id).toBeNull();
 ```
 
 - [ ] **Step 2: Write failing local subtitle provider test**
 
-Create `tests/backend/assets/local-subtitle-provider.test.ts`. The test should first execute fake TTS, then execute `subtitle_track`, and assert:
+Create `tests/backend/assets/local-subtitle-provider.test.ts`. The test should build a manifest and matching asset plan with one `tts_audio` task and one `subtitle_track` task, register both the fake TTS provider and the local subtitle provider in the registry, call `executeAssetManifest` **once** (the engine sorts by priority so TTS runs before subtitle), and assert:
 
 - one SRT `subtitle_track` artifact exists;
 - one VTT `subtitle_track` artifact exists;
@@ -1385,13 +1392,14 @@ Create `tests/backend/assets/local-subtitle-provider.test.ts`. The test should f
 The core assertion block should be:
 
 ```ts
-const subtitleArtifacts = body.manifest.artifacts.filter(
+const result = await executeAssetManifest({...});
+const subtitleArtifacts = result.manifest.artifacts.filter(
   (item) => item.artifact_type === "subtitle_track",
 );
 expect(subtitleArtifacts).toHaveLength(2);
-expect(body.manifest.audio_summary.subtitle_artifact_id).toBe("artifact_subtitle_srt_subtitle_001");
-expect(body.manifest.segment_routes.every((route) => route.subtitle_artifact_id === "artifact_subtitle_srt_subtitle_001")).toBe(true);
-const subtitleExecution = body.manifest.executions.find((item) => item.task_type === "subtitle_track");
+expect(result.manifest.audio_summary.subtitle_artifact_id).toBe("artifact_subtitle_srt_subtitle_001");
+expect(result.manifest.segment_routes.every((route) => route.subtitle_artifact_id === "artifact_subtitle_srt_subtitle_001")).toBe(true);
+const subtitleExecution = result.manifest.executions.find((item) => item.task_type === "subtitle_track");
 expect(subtitleExecution?.output_artifact_ids).toEqual([
   "artifact_subtitle_srt_subtitle_001",
   "artifact_subtitle_vtt_subtitle_001",
