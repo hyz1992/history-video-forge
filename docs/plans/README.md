@@ -62,5 +62,6 @@
 ## 2026-05-16 真实 Assets 生成与媒体库设计
 
 - 新增 [真实 Assets 生成与媒体库设计](./2026-05-16-real-assets-generation-and-media-library-design.md)。
+- 新增 [真实 Assets 生成与媒体库实施计划](./2026-05-16-real-assets-generation-and-media-library-implementation-plan.md)。
 - 本设计只收束真实 provider、TTS、字幕文件、Remotion 局部分镜、SFX/BGM 本地素材库和授权治理的阶段边界。
-- 当前仍未进入 implementation plan；不得从本设计中顺手实现真实 API、素材下载、compose 或上传/预览 UI。
+- 当前实施计划只覆盖 provider job、文件存储、fake provider、TTS/subtitle/image 最小执行、媒体库基础与 DashScope provider 外壳；不得顺手实现真实视频、Remotion compose、素材下载或上传/预览 UI。
