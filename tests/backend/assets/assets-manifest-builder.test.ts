@@ -486,6 +486,28 @@ describe("buildInitialAssetManifest", () => {
     expect(result.stage).toBe("assets_local_validation");
   });
 
+  it("uses caller-provided execution options instead of hard-coded defaults", () => {
+    const plan = makeBaseAssetPlan([imageTask("sb_001")]);
+    const manifest = buildInitialAssetManifest({
+      assetPlanRecordId: ASSET_PLAN_ID,
+      assetPlan: plan,
+      segmentIds: SEGMENT_IDS,
+      executionOptions: {
+        execution_mode: "dry_run",
+        voice_profile_id: "voice_custom",
+        enabled_provider_types: ["image"],
+        allow_manual_placeholders: true,
+      },
+    });
+
+    expect(manifest.execution_options).toEqual({
+      execution_mode: "dry_run",
+      voice_profile_id: "voice_custom",
+      enabled_provider_types: ["image"],
+      allow_manual_placeholders: true,
+    });
+  });
+
   // ── 11. Manifest structure ──────────────────────────────────────────────────
 
   it("produces a manifest with correct source IDs and version", () => {

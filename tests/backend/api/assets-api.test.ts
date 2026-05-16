@@ -500,7 +500,9 @@ describe("assets generate api", () => {
         execution_mode: "auto_available",
         activated: true,
       },
-      graph_trace_summary: null,
+      graph_trace_summary: {
+        phase: "assets",
+      },
       runtime_diagnostics: null,
     });
     expect(body.asset_manifest_record_id).toBeDefined();
@@ -510,6 +512,12 @@ describe("assets generate api", () => {
       assetPlanRecordId: prepared.assetPlanRecord.id,
       assetPlan: prepared.assetPlan,
       segmentIds: ["sb_001"],
+      executionOptions: {
+        execution_mode: "auto_available",
+        voice_profile_id: "voice_default_male_storyteller",
+        enabled_provider_types: ["tts", "image", "video", "sfx", "bgm"],
+        allow_manual_placeholders: false,
+      },
     });
 
     // Verify project state was updated
@@ -528,6 +536,9 @@ describe("assets generate api", () => {
     expect(savedRecord).toBeDefined();
     expect(savedRecord!.projectId).toBe(prepared.project.id);
     expect(savedRecord!.assetPlanRecordId).toBe(prepared.assetPlanRecord.id);
+    expect(savedRecord!.graphTraceSummaryJson).toMatchObject({
+      phase: "assets",
+    });
   });
 
   it("supports execution_mode dry_run and confirms no provider adapter is invoked", async () => {

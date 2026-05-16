@@ -10,6 +10,11 @@ import { AssetsValidationResult as AssetsValidationResultSchema } from "../../..
  * when they reference a source_segment_id.
  */
 const VISUAL_TASK_TYPES = new Set(["image_still", "video_clip", "render_motion_cue"]);
+const TERMINAL_EXECUTION_STATUSES = new Set([
+  "completed",
+  "accepted",
+  "skipped_with_fallback",
+]);
 
 function pushUnique(target: string[], code: string) {
   if (!target.includes(code)) {
@@ -50,6 +55,7 @@ export function validateAssetsManifest(input: {
   const artifactIds = new Set(manifest.artifacts.map((a) => a.artifact_id));
   const executionTaskIds = new Set(manifest.executions.map((e) => e.task_id));
   const routeSegmentIds = new Set(manifest.segment_routes.map((r) => r.segment_id));
+  const referencedArtifactIds = new Set<string>();
 
   // ── Each plan task must have an execution ───────────────────────────────
 
@@ -68,7 +74,12 @@ export function validateAssetsManifest(input: {
   // ── Execution artifact ids must exist in artifacts ──────────────────────
 
   for (const execution of manifest.executions) {
+    if (!TERMINAL_EXECUTION_STATUSES.has(execution.status)) {
+      pushUnique(errors, "assets_execution_incomplete");
+    }
+
     for (const artifactId of execution.output_artifact_ids) {
+      referencedArtifactIds.add(artifactId);
       if (!artifactIds.has(artifactId)) {
         pushUnique(errors, "assets_selected_artifact_missing");
       }
@@ -93,7 +104,24 @@ export function validateAssetsManifest(input: {
     }
 
     // Check primary visual artifact exists
-    if (route.primary_visual_artifact_id && !artifactIds.has(route.primary_visual_artifact_id)) {
+    for (const artifactId of [
+      route.tts_artifact_id,
+      route.subtitle_artifact_id,
+      route.primary_visual_artifact_id,
+      route.motion_artifact_id,
+      route.fallback_visual_artifact_id,
+      ...route.sfx_artifact_ids,
+      ...route.bgm_placement_ids,
+    ]) {
+      if (artifactId) {
+        referencedArtifactIds.add(artifactId);
+      }
+    }
+
+    if (
+      route.primary_visual_artifact_id &&
+      !artifactIds.has(route.primary_visual_artifact_id)
+    ) {
       pushUnique(errors, "assets_segment_visual_missing");
     }
 
@@ -141,6 +169,38 @@ export function validateAssetsManifest(input: {
 
   if (manifest.audio_summary.bgm_placements.length === 0) {
     pushUnique(warnings, "assets_bgm_missing_optional");
+  }
+
+  for (const artifactId of [
+    ...manifest.audio_summary.tts_chunk_artifact_ids,
+    manifest.audio_summary.tts_merged_artifact_id,
+    manifest.audio_summary.subtitle_artifact_id,
+    ...manifest.audio_summary.sfx_artifact_ids,
+  ]) {
+    if (artifactId) {
+      referencedArtifactIds.add(artifactId);
+    }
+  }
+
+  for (const route of manifest.audio_summary.tts_chunk_routes) {
+    if (route.artifact_id) {
+      referencedArtifactIds.add(route.artifact_id);
+    }
+  }
+
+  for (const placement of manifest.audio_summary.bgm_placements) {
+    if (placement.artifact_id) {
+      referencedArtifactIds.add(placement.artifact_id);
+    }
+  }
+
+  for (const artifact of manifest.artifacts) {
+    if (
+      referencedArtifactIds.has(artifact.artifact_id) &&
+      artifact.file_uri.startsWith("planned://")
+    ) {
+      pushUnique(errors, "assets_artifact_placeholder_unresolved");
+    }
   }
 
   // ── Decision logic ──────────────────────────────────────────────────────

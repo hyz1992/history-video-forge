@@ -445,6 +445,49 @@ describe("validateAssetsManifest", () => {
     expect(result.decision).toBe("blocked");
   });
 
+  it("blocks compose when a task execution is not terminal", () => {
+    const result = runValidation({
+      executions: [
+        makeBaseExecution({
+          status: "planned",
+          output_artifact_ids: ["artifact_tts_1"],
+        }),
+        makeBaseExecution({
+          execution_id: "exec_img_1",
+          task_id: "task_img_1",
+          task_type: "image_still",
+          status: "completed",
+          output_artifact_ids: ["artifact_img_1"],
+        }),
+        makeBaseExecution({
+          execution_id: "exec_video_1",
+          task_id: "task_video_1",
+          task_type: "video_clip",
+          status: "completed",
+          output_artifact_ids: ["artifact_video_1"],
+        }),
+      ],
+    });
+
+    expect(result.errors).toContain("assets_execution_incomplete");
+    expect(result.decision).toBe("blocked");
+  });
+
+  it("blocks compose when a referenced artifact is still a planned placeholder", () => {
+    const result = runValidation({
+      artifacts: [
+        makeBaseArtifact({
+          file_uri: "planned://tts-chunk/chunk_1",
+        }),
+        makeImageArtifact("artifact_img_1"),
+        makeVideoArtifact("artifact_video_1"),
+      ],
+    });
+
+    expect(result.errors).toContain("assets_artifact_placeholder_unresolved");
+    expect(result.decision).toBe("blocked");
+  });
+
   // ── Missing segment route ─────────────────────────────────────────────────
 
   it("reports assets_segment_route_missing when a visual task's segment has no route", () => {

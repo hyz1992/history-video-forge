@@ -25,6 +25,7 @@ export interface BuildManifestInput {
   assetPlan: AssetPlan;
   /** Storyboard segment IDs, needed for TTS chunk-to-segment order alignment. */
   segmentIds: string[];
+  executionOptions?: AssetExecutionOptions;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -135,6 +136,7 @@ function buildTtsChunkArtifacts(
   ttsPlan: AssetPlan["tts_plan"],
   segmentIds: string[],
   chunkCountMismatch: boolean,
+  voiceProfileId: string,
 ): {
   artifacts: AssetArtifact[];
   chunkRoutes: TtsChunkRoute[];
@@ -169,7 +171,7 @@ function buildTtsChunkArtifacts(
       created_at: nowISO(),
       metadata: {
         duration_sec: chunk.estimated_duration_sec,
-        voice_profile_id: ttsPlan.voice_profile_id,
+        voice_profile_id: voiceProfileId,
         tts_chunk_id: chunk.chunk_id,
         segment_ids: segmentId ? [segmentId] : [],
         script_excerpt: chunk.script_excerpt,
@@ -319,9 +321,10 @@ function buildAudioSummary(
   plan: AssetPlan,
   chunkRoutes: TtsChunkRoute[],
   bgmPlacements: BgmPlacement[],
+  voiceProfileId: string,
 ): AssetAudioSummary {
   return {
-    voice_profile_id: plan.tts_plan.voice_profile_id,
+    voice_profile_id: voiceProfileId,
     tts_total_duration_sec: plan.tts_plan.estimated_total_duration_sec,
     tts_chunk_artifact_ids: chunkRoutes
       .map((cr) => cr.artifact_id)
@@ -366,6 +369,14 @@ function determineReadiness(
 
 export function buildInitialAssetManifest(input: BuildManifestInput): AssetManifest {
   const { assetPlanRecordId, assetPlan, segmentIds } = input;
+  const executionOptions: AssetExecutionOptions = input.executionOptions ?? {
+    execution_mode: "auto_available",
+    voice_profile_id: assetPlan.tts_plan.voice_profile_id,
+    enabled_provider_types: ["tts", "image", "video", "sfx", "bgm"],
+    allow_manual_placeholders: false,
+  };
+  const voiceProfileId =
+    executionOptions.voice_profile_id ?? assetPlan.tts_plan.voice_profile_id;
 
   // ── Executions ───────────────────────────────────────────────────────────
   const executions = buildExecutions(assetPlan.tasks);
@@ -392,6 +403,7 @@ export function buildInitialAssetManifest(input: BuildManifestInput): AssetManif
     assetPlan.tts_plan,
     segmentIds,
     chunkCountMismatch,
+    voiceProfileId,
   );
 
   // Wire TTS chunk artifacts to the tts_audio execution
@@ -416,15 +428,12 @@ export function buildInitialAssetManifest(input: BuildManifestInput): AssetManif
   const bgmPlacements = buildBgmPlacements(assetPlan.tasks);
 
   // ── Audio summary ────────────────────────────────────────────────────────
-  const audioSummary = buildAudioSummary(assetPlan, chunkRoutes, bgmPlacements);
-
-  // ── Execution options (default) ──────────────────────────────────────────
-  const executionOptions: AssetExecutionOptions = {
-    execution_mode: "auto_available",
-    voice_profile_id: assetPlan.tts_plan.voice_profile_id,
-    enabled_provider_types: ["tts", "image", "video", "sfx", "bgm"],
-    allow_manual_placeholders: false,
-  };
+  const audioSummary = buildAudioSummary(
+    assetPlan,
+    chunkRoutes,
+    bgmPlacements,
+    voiceProfileId,
+  );
 
   // ── Combine all artifacts ────────────────────────────────────────────────
   const allArtifacts: AssetArtifact[] = [...ttsArtifacts, ...motionArtifacts];

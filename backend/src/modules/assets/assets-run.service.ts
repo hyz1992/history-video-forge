@@ -7,12 +7,16 @@ import {
 } from "../../runtime/trace/project-storage.js";
 import type {
   AssetArtifact,
+  AssetExecutionOptions,
   AssetManifest,
   AssetPlan,
-} from "../../../shared/src/index.js";
+} from "../../../../shared/src/index.js";
+import {
+  AssetArtifact as AssetArtifactSchema,
+  AssetExecutionOptions as AssetExecutionOptionsSchema,
+} from "../../../../shared/src/index.js";
 import { saveAssetManifestRecord } from "./asset-manifest-record.repository";
 import { getAssetManifestRecordById } from "./asset-manifest-record.repository";
-import { getProjectById } from "../projects/project.repository";
 import { buildInitialAssetManifest } from "./assets-manifest-builder";
 import { validateAssetsManifest } from "./assets-local-validator";
 
@@ -30,25 +34,26 @@ function buildTraceSummary(input: {
 }) {
   const now = new Date().toISOString();
   const steps = [
-    "assets-manifest-build",
-    "assets-local-validate",
-  ].map((stepName) => ({
-    step_name: stepName,
-    phase: "assets",
-    status: "succeeded",
-    started_at: now,
-    ended_at: now,
-    duration_ms: 0,
-  }));
-
-  steps.push({
-    step_name: "assets-local-validate",
-    phase: "assets",
-    status: input.validationDecision === "ready_for_compose" ? "succeeded" : "failed",
-    started_at: now,
-    ended_at: now,
-    duration_ms: 0,
-  });
+    {
+      step_name: "assets-manifest-build",
+      phase: "assets",
+      status: "succeeded",
+      started_at: now,
+      ended_at: now,
+      duration_ms: 0,
+    },
+    {
+      step_name: "assets-local-validate",
+      phase: "assets",
+      status:
+        input.validationDecision === "ready_for_compose"
+          ? "succeeded"
+          : "failed",
+      started_at: now,
+      ended_at: now,
+      duration_ms: 0,
+    },
+  ];
 
   if (input.staleSourceDetected) {
     steps.push({
@@ -91,6 +96,144 @@ function buildTraceSummary(input: {
     ],
     steps,
   };
+}
+
+function buildExecutionOptions(input: {
+  executionMode: string;
+  voiceProfileId: string;
+}) {
+  return AssetExecutionOptionsSchema.safeParse({
+    execution_mode: input.executionMode,
+    voice_profile_id: input.voiceProfileId,
+    enabled_provider_types: ["tts", "image", "video", "sfx", "bgm"],
+    allow_manual_placeholders: false,
+  });
+}
+
+function allowedArtifactTypesForTask(taskType: AssetPlan["tasks"][number]["task_type"]) {
+  switch (taskType) {
+    case "tts_audio":
+      return ["tts_chunk_audio", "tts_merged_audio"];
+    case "image_still":
+      return ["image"];
+    case "video_clip":
+      return ["video"];
+    case "subtitle_track":
+      return ["subtitle_track"];
+    case "sfx_cue":
+      return ["sfx_audio", "sfx_selection"];
+    case "bgm_cue":
+      return ["bgm_audio", "bgm_selection"];
+    case "render_motion_cue":
+      return ["motion_recipe"];
+  }
+}
+
+function applyArtifactToManifestRoutes(input: {
+  manifest: AssetManifest;
+  planTask: AssetPlan["tasks"][number];
+  artifact: AssetArtifact;
+}) {
+  const { manifest, planTask, artifact } = input;
+
+  if (artifact.artifact_type === "subtitle_track") {
+    manifest.audio_summary.subtitle_artifact_id = artifact.artifact_id;
+    for (const route of manifest.segment_routes) {
+      route.subtitle_artifact_id = artifact.artifact_id;
+    }
+    return;
+  }
+
+  if (artifact.artifact_type === "tts_merged_audio") {
+    manifest.audio_summary.tts_merged_artifact_id = artifact.artifact_id;
+    return;
+  }
+
+  if (artifact.artifact_type === "tts_chunk_audio") {
+    const chunkId = artifact.metadata.tts_chunk_id;
+    const segmentIds = artifact.metadata.segment_ids;
+    const chunkRoute = manifest.audio_summary.tts_chunk_routes.find(
+      (route) => route.tts_chunk_id === chunkId,
+    );
+    if (chunkRoute) {
+      chunkRoute.artifact_id = artifact.artifact_id;
+    }
+    for (const segmentId of segmentIds) {
+      const route = manifest.segment_routes.find(
+        (item) => item.segment_id === segmentId,
+      );
+      if (route) {
+        route.tts_artifact_id = artifact.artifact_id;
+      }
+    }
+    if (!manifest.audio_summary.tts_chunk_artifact_ids.includes(artifact.artifact_id)) {
+      manifest.audio_summary.tts_chunk_artifact_ids.push(artifact.artifact_id);
+    }
+    return;
+  }
+
+  if (artifact.artifact_type === "sfx_audio" || artifact.artifact_type === "sfx_selection") {
+    if (!manifest.audio_summary.sfx_artifact_ids.includes(artifact.artifact_id)) {
+      manifest.audio_summary.sfx_artifact_ids.push(artifact.artifact_id);
+    }
+    if (planTask.source_segment_id) {
+      const route = manifest.segment_routes.find(
+        (item) => item.segment_id === planTask.source_segment_id,
+      );
+      if (route && !route.sfx_artifact_ids.includes(artifact.artifact_id)) {
+        route.sfx_artifact_ids.push(artifact.artifact_id);
+      }
+    }
+    return;
+  }
+
+  if (artifact.artifact_type === "bgm_audio" || artifact.artifact_type === "bgm_selection") {
+    const placement = manifest.audio_summary.bgm_placements.find(
+      (item) => item.artifact_id === null,
+    );
+    if (placement) {
+      placement.artifact_id = artifact.artifact_id;
+    }
+    return;
+  }
+
+  if (!planTask.source_segment_id) {
+    return;
+  }
+
+  const route = manifest.segment_routes.find(
+    (item) => item.segment_id === planTask.source_segment_id,
+  );
+  if (!route) {
+    return;
+  }
+
+  if (artifact.artifact_type === "image") {
+    if (route.visual_route_type === "video_clip") {
+      route.fallback_visual_artifact_id = artifact.artifact_id;
+      route.readiness = "fallback_ready";
+    } else {
+      route.primary_visual_artifact_id = artifact.artifact_id;
+      route.visual_route_type = route.motion_artifact_id
+        ? "image_with_motion"
+        : "image_only";
+      route.readiness = "ready";
+    }
+  }
+
+  if (artifact.artifact_type === "video") {
+    route.primary_visual_artifact_id = artifact.artifact_id;
+    route.visual_route_type = "video_clip";
+    route.readiness = "ready";
+  }
+
+  if (artifact.artifact_type === "motion_recipe") {
+    route.motion_artifact_id = artifact.artifact_id;
+    if (route.primary_visual_artifact_id) {
+      route.visual_route_type = "image_with_motion";
+      route.readiness = "ready";
+    }
+  }
 }
 
 export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
@@ -137,16 +280,26 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   const segmentIds = storyboardPlan.segments?.map((s) => s.segment_id) ?? [];
 
   // Step 4: Build execution options from request body
-  const executionOptions = {
-    execution_mode: input.executionMode,
-    voice_profile_id: input.voiceProfileId,
-  };
+  const executionOptionsResult = buildExecutionOptions({
+    executionMode: input.executionMode,
+    voiceProfileId: input.voiceProfileId,
+  });
+  if (!executionOptionsResult.success) {
+    return {
+      statusCode: 422,
+      body: {
+        error: "assets_execution_options_invalid",
+      },
+    };
+  }
+  const executionOptions = executionOptionsResult.data;
 
   // Step 5: Build manifest
   const manifest = buildInitialAssetManifest({
     assetPlanRecordId: assetPlanRecord.id,
     assetPlan: assetPlanRecord.planJson,
     segmentIds,
+    executionOptions,
   });
 
   // Step 6: Validate manifest
@@ -194,9 +347,16 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
 
   // Step 8: Create and save manifest record
   const executionState = {
-    ...executionOptions,
+    execution_mode: executionOptions.execution_mode,
+    voice_profile_id: executionOptions.voice_profile_id,
     activated: true,
   };
+
+  const traceSummary = buildTraceSummary({
+    runId,
+    validationDecision: localValidation.decision,
+    staleSourceDetected: false,
+  });
 
   const assetManifestRecord = await saveAssetManifestRecord(db, {
     projectId: project.id,
@@ -207,7 +367,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     manifestJson: manifest,
     validationResultJson: localValidation,
     executionStateJson: executionState,
-    graphTraceSummaryJson: null,
+    graphTraceSummaryJson: traceSummary,
     runtimeDiagnosticsJson: null,
   });
 
@@ -222,17 +382,12 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     project.status = "assets_blocked";
   }
 
-  const traceSummary = buildTraceSummary({
-    runId,
-    validationDecision: localValidation.decision,
-    staleSourceDetected: false,
-  });
   project.latestAssetsRunTraceJson = traceSummary as unknown as Record<string, unknown>;
   project.updatedAt = new Date();
 
   persistProjectRunArtifacts({
     project,
-    phase: "asset_planning",
+    phase: "assets",
     runId,
     traceSummary: traceSummary as unknown as Record<string, unknown>,
   });
@@ -246,7 +401,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
       manifest,
       local_validation: localValidation,
       execution_state: executionState,
-      graph_trace_summary: null,
+      graph_trace_summary: traceSummary,
       runtime_diagnostics: null,
     },
   };
@@ -312,6 +467,13 @@ export async function registerManualArtifact(input: RegisterManualArtifactInput)
     };
   }
 
+  if (!planTask.manual_upload_policy.allowed && !planTask.manual_upload_policy.required) {
+    return {
+      statusCode: 422,
+      body: { error: "asset_manual_upload_not_allowed" },
+    };
+  }
+
   // Step 5: Validate MIME type
   const allowedTypes = planTask.manual_upload_policy.accepted_file_types;
   if (!allowedTypes.includes(mimeType)) {
@@ -321,18 +483,35 @@ export async function registerManualArtifact(input: RegisterManualArtifactInput)
     };
   }
 
+  const allowedArtifactTypes = allowedArtifactTypesForTask(planTask.task_type);
+  if (!allowedArtifactTypes.includes(artifactType)) {
+    return {
+      statusCode: 422,
+      body: { error: "asset_manual_artifact_type_not_allowed" },
+    };
+  }
+
   // Step 6: Create new artifact
   const now = new Date().toISOString();
   const artifactId = `artifact_manual_${db.generateId()}`;
 
-  const newArtifact: AssetArtifact = {
+  const newArtifactCandidate = {
     artifact_id: artifactId,
-    artifact_type: artifactType as AssetArtifact["artifact_type"],
+    artifact_type: artifactType,
     origin: "manual_upload",
     file_uri: fileUri,
     created_at: now,
-    metadata: metadata as AssetArtifact["metadata"],
+    metadata,
   };
+
+  const parsedArtifact = AssetArtifactSchema.safeParse(newArtifactCandidate);
+  if (!parsedArtifact.success) {
+    return {
+      statusCode: 422,
+      body: { error: "asset_manual_artifact_invalid" },
+    };
+  }
+  const newArtifact = parsedArtifact.data;
 
   // Step 7: Add artifact to manifest
   manifest.artifacts.push(newArtifact);
@@ -344,6 +523,12 @@ export async function registerManualArtifact(input: RegisterManualArtifactInput)
   execution.status = "completed";
   execution.origin = "manual_upload";
   execution.completed_at = now;
+
+  applyArtifactToManifestRoutes({
+    manifest,
+    planTask,
+    artifact: newArtifact,
+  });
 
   // Step 10: Re-run validator
   const localValidation = validateAssetsManifest({
