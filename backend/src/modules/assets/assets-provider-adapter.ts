@@ -1,72 +1,92 @@
 /**
- * Type-only contracts for asset provider adapters.
+ * Provider adapter contracts for the asset execution engine.
  *
- * Real provider adapters are NOT implemented in this task — these types define
- * the interface that future adapters (TTS, image, video, SFX, BGM) must satisfy.
+ * Each adapter implements the full lifecycle of one category of asset tasks
+ * (e.g. TTS generation, image generation, video rendering).
+ * Adapters are registered in the provider registry and selected by the
+ * execution engine based on `canHandle(taskType)` and enabled provider types.
  */
 
 import type {
   AssetArtifact,
+  AssetPlan,
+  AssetManifest,
   AssetTaskExecution,
 } from "../../../../shared/src/index.js";
 
-// ─── Adapter Context ──────────────────────────────────────────────────────────
+// ─── Provider Type ─────────────────────────────────────────────────────────
 
-/**
- * Contextual information passed to every adapter invocation.
- * Populated by the manifest builder / execution engine.
- */
+export type AssetProviderType = "tts" | "image" | "video" | "sfx" | "bgm";
+// Note: render_motion_cue is not included here. It currently produces inline
+// artifacts via the v1 builder and does not go through the provider engine.
+// If a real Remotion or motion rendering provider is added later, extend this
+// union with "remotion" and register a corresponding adapter.
+
+// ─── Adapter Inputs ────────────────────────────────────────────────────────
+
+export interface AssetProviderCanHandleInput {
+  taskType: AssetTaskExecution["task_type"];
+}
+
 export interface AssetProviderContext {
-  /** The task execution record to process. */
+  manifest: AssetManifest;
+  assetPlan: AssetPlan;
   execution: AssetTaskExecution;
-  /** IDs of artifacts produced by upstream dependencies (already completed). */
-  inputArtifactIds: string[];
-  /** Arbitrary parameters from the task's `parameters` field. */
-  taskParameters: Record<string, unknown>;
+  planTask: AssetPlan["tasks"][number];
+  assetManifestRecordId: string;
+  assetRunId: string;
+  projectStorageRootDir: string;
 }
 
-// ─── Adapter Run Result ───────────────────────────────────────────────────────
+export interface AssetProviderPreparedJob {
+  providerJobId: string | null;
+  rawRequestJson: Record<string, unknown>;
+}
 
-/**
- * The outcome of a single provider adapter run.
- */
-export interface AssetProviderRunResult {
-  /** Updated execution status. */
-  status: AssetTaskExecution["status"];
-  /** Artifacts produced by this run (may be empty if still pending). */
+export interface AssetProviderSubmittedJob {
+  providerJobId: string | null;
+  rawResponseJson: Record<string, unknown> | null;
+}
+
+export interface AssetProviderPollResult {
+  status: "running" | "completed" | "failed";
+  rawResponseJson: Record<string, unknown> | null;
+  errorCode?: string;
+  errorMessage?: string;
+}
+
+export interface AssetProviderNormalizeInput {
+  ctx: AssetProviderContext;
+  downloadedArtifacts: AssetArtifact[];
+  rawResponseJson: Record<string, unknown> | null;
+}
+
+export interface AssetProviderNormalizeResult {
   artifacts: AssetArtifact[];
-  /** Optional provider-specific notes to append to the execution. */
-  notes?: string[];
+  notes: string[];
 }
 
-// ─── Provider Adapter Interface ───────────────────────────────────────────────
+// ─── Provider Adapter Interface ────────────────────────────────────────────
 
-/**
- * A provider adapter handles the lifecycle of one category of asset tasks
- * (e.g. TTS generation, image generation, video rendering).
- *
- * Implementations will be registered in a provider registry and selected
- * by the execution engine based on `canHandle(taskType)`.
- */
 export interface AssetProviderAdapter {
-  /** Unique identifier for this provider (e.g. "wanx_image", "default_tts"). */
-  readonly providerId: string;
-
-  /** The task types this adapter can handle. */
-  canHandle(taskType: string): boolean;
-
-  /** Start (or queue) an asset generation job. */
-  run(ctx: AssetProviderContext): Promise<AssetProviderRunResult>;
-
-  /** Poll a running job for completion. */
-  poll(ctx: AssetProviderContext): Promise<AssetProviderRunResult>;
-
-  /** Cancel a running job. */
-  cancel(ctx: AssetProviderContext): Promise<void>;
-
-  /** Normalize provider-specific output into a standard AssetArtifact. */
-  normalizeResult(
-    rawOutput: unknown,
+  readonly providerName: string;
+  readonly providerType: AssetProviderType;
+  canHandle(input: AssetProviderCanHandleInput): boolean;
+  prepare(ctx: AssetProviderContext): Promise<AssetProviderPreparedJob>;
+  submit(
     ctx: AssetProviderContext,
-  ): AssetArtifact;
+    prepared: AssetProviderPreparedJob,
+  ): Promise<AssetProviderSubmittedJob>;
+  poll(
+    ctx: AssetProviderContext,
+    submitted: AssetProviderSubmittedJob,
+  ): Promise<AssetProviderPollResult>;
+  download(
+    ctx: AssetProviderContext,
+    pollResult: AssetProviderPollResult,
+  ): Promise<AssetArtifact[]>;
+  normalizeResult(
+    input: AssetProviderNormalizeInput,
+  ): Promise<AssetProviderNormalizeResult>;
+  cancel(ctx: AssetProviderContext): Promise<void>;
 }
