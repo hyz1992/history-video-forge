@@ -66,7 +66,7 @@ export async function writeAssetFile(input: {
   storage: AssetsRunStorage;
   category: AssetStorageCategory;
   fileName: string;
-  data: string;
+  data: string | Buffer;
 }): Promise<WrittenAssetFile> {
   const { storage, category, fileName, data } = input;
 
@@ -76,7 +76,7 @@ export async function writeAssetFile(input: {
   const dir = join(storage.runDir, category);
   await mkdir(dir, { recursive: true });
 
-  await writeFile(absolutePath, data, "utf8");
+  await writeFile(absolutePath, data);
 
   const fileHash = await hashFileSha256(absolutePath);
   const relativePath = join("assets-runs", storage.runId, category, fileName);

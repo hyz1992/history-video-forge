@@ -118,7 +118,7 @@ export async function executeAssetManifest(
     };
 
     // 6. Run the pipeline.
-    await runAdapterPipeline(db, ctx, adapter, assetManifestRecordId, assetRunId, manifestCopy);
+    await runAdapterPipeline(db, ctx, adapter, assetManifestRecordId, assetRunId, manifestCopy, planTask);
   }
 
   return { manifest: manifestCopy };
@@ -133,6 +133,7 @@ async function runAdapterPipeline(
   assetManifestRecordId: string,
   assetRunId: string,
   manifest: AssetManifest,
+  planTask: AssetPlan["tasks"][number],
 ): Promise<void> {
   const execution = ctx.execution;
   const startedAt = new Date().toISOString();
@@ -219,6 +220,9 @@ async function runAdapterPipeline(
     execution.status = "completed";
     execution.completed_at = new Date().toISOString();
     execution.notes = [...execution.notes, ...normalized.notes];
+
+    // Apply artifacts to segment routes
+    applyArtifactRoutes(manifest, validArtifacts, planTask);
   } catch (err) {
     execution.status = "failed";
     execution.completed_at = new Date().toISOString();
@@ -252,4 +256,37 @@ function areDependenciesSatisfied(
   }
 
   return true;
+}
+
+/**
+ * Apply generated artifacts to the manifest's segment routes.
+ *
+ * For `image` artifacts:
+ * - If the route's `visual_route_type` is `"video_clip"`: set fallback and
+ *   mark readiness as `"fallback_ready"`.
+ * - Otherwise: set primary visual, keep `image_only`, mark `"ready"`.
+ */
+function applyArtifactRoutes(
+  manifest: AssetManifest,
+  artifacts: AssetArtifact[],
+  planTask: AssetPlan["tasks"][number],
+): void {
+  for (const artifact of artifacts) {
+    if (artifact.artifact_type !== "image") continue;
+
+    const segmentId = planTask.source_segment_id;
+    const route = manifest.segment_routes.find(
+      (r) => r.segment_id === segmentId,
+    );
+    if (!route) continue;
+
+    if (route.visual_route_type === "video_clip") {
+      route.fallback_visual_artifact_id = artifact.artifact_id;
+      route.readiness = "fallback_ready";
+    } else {
+      route.primary_visual_artifact_id = artifact.artifact_id;
+      route.visual_route_type = "image_only";
+      route.readiness = "ready";
+    }
+  }
 }
