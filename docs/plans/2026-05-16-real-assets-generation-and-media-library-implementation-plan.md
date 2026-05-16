@@ -4,7 +4,7 @@
 
 **Goal:** Build the first real-assets execution foundation after `AssetManifest`: provider jobs, file storage, fake TDD providers, TTS/subtitle/image execution, local media-library contracts, and opt-in real provider shells.
 
-**Architecture:** Keep `AssetManifest` as the only execution input. Add a small assets execution engine that records provider jobs, writes artifact files, and normalizes all provider/manual/library outputs into shared `AssetArtifact` records. Default tests use fake providers only; real provider calls are opt-in live checks behind explicit environment variables.
+**Architecture:** Keep `AssetManifest` as the only execution state and route input, paired with the active `AssetPlan` for creative task parameters. Add a small assets execution engine that records provider jobs, writes artifact files, and normalizes all provider/manual/library outputs into shared `AssetArtifact` records. Default tests use fake providers only; real provider calls are opt-in live checks behind explicit environment variables.
 
 **Tech Stack:** TypeScript, Node.js `fs/promises`, Node.js `crypto`, Vitest, Zod shared schemas, existing in-memory `DbClient`, existing assets API/service structure.
 
@@ -25,6 +25,10 @@ The slice should produce a deterministic local manifest with:
 - local media-library schema and selection validation;
 - mocked DashScope adapter payload tests;
 - no default live API calls.
+
+Important contract correction: `AssetManifest` is the execution state and route contract, not a complete creative input bundle. The execution engine must receive the active `AssetPlan` together with the manifest so adapters can read `prompt_draft`, `parameters`, `tts_plan.chunks[].script_excerpt`, `estimated_duration_sec`, upload policies, and provider hints by `task_id`. Adapters must not read storyboard/script/topic directly.
+
+`assetRunId` means one assets execution attempt ID, for example `assets_run_<id>`. It is not part of the current shared `AssetManifest` schema. It is stored in provider job records and used for files/trace paths.
 
 ## 1. File Structure
 
@@ -70,11 +74,14 @@ The slice should produce a deterministic local manifest with:
 
 - Create: `backend/src/modules/assets/providers/fake-tts-provider.ts`
   - Generate deterministic text-backed fake audio artifacts for tests.
+- Create: `backend/src/modules/assets/providers/local-subtitle-provider.ts`
+  - Generate subtitle artifacts for `subtitle_track` executions from TTS chunk metadata.
 - Create: `backend/src/modules/assets/providers/fake-image-provider.ts`
   - Generate deterministic tiny PNG artifacts for tests.
 - Create: `backend/src/modules/assets/assets-subtitle-generator.ts`
   - Generate SRT and VTT from TTS chunk routes and durations.
 - Test: `tests/backend/assets/fake-tts-provider.test.ts`
+- Test: `tests/backend/assets/local-subtitle-provider.test.ts`
 - Test: `tests/backend/assets/fake-image-provider.test.ts`
 - Test: `tests/backend/assets/assets-subtitle-generator.test.ts`
 
@@ -602,7 +609,9 @@ describe("assets file storage", () => {
         data: "1\n00:00:00,000 --> 00:00:01,000\nhello\n",
       });
 
-      expect(written.fileUri).toContain("assets-runs/assets_run_001/subtitles/main.srt");
+      expect(written.fileUri.replaceAll("\\", "/")).toContain(
+        "assets-runs/assets_run_001/subtitles/main.srt",
+      );
       expect(await readFile(written.absolutePath, "utf8")).toContain("hello");
 
       const hash = await hashFileSha256(written.absolutePath);
@@ -675,6 +684,7 @@ export type AssetStorageCategory =
 
 export interface AssetsRunStorage {
   rootDir: string;
+  runId: string;
   runDir: string;
 }
 
@@ -684,6 +694,7 @@ export function resolveAssetsRunStorage(input: {
 }): AssetsRunStorage {
   return {
     rootDir: input.projectStorageRootDir,
+    runId: input.runId,
     runDir: join(input.projectStorageRootDir, "assets-runs", input.runId),
   };
 }
@@ -706,16 +717,23 @@ export async function writeAssetFile(input: {
   category: AssetStorageCategory;
   fileName: string;
   data: string | Buffer;
-}): Promise<{ absolutePath: string; fileUri: string; fileHash: string }> {
+}): Promise<{
+  absolutePath: string;
+  fileUri: string;
+  relativePath: string;
+  fileHash: string;
+}> {
   const dir = join(input.storage.runDir, input.category);
   const absolutePath = join(dir, input.fileName);
   assertInsideRunDir(input.storage, absolutePath);
   await mkdir(dir, { recursive: true });
   await writeFile(absolutePath, input.data);
   const fileHash = await hashFileSha256(absolutePath);
+  const relativePath = join("assets-runs", input.storage.runId, input.category, input.fileName);
   return {
     absolutePath,
     fileUri: absolutePath,
+    relativePath,
     fileHash,
   };
 }
@@ -725,16 +743,23 @@ export async function copyAssetFile(input: {
   category: AssetStorageCategory;
   sourcePath: string;
   fileName: string;
-}): Promise<{ absolutePath: string; fileUri: string; fileHash: string }> {
+}): Promise<{
+  absolutePath: string;
+  fileUri: string;
+  relativePath: string;
+  fileHash: string;
+}> {
   const dir = join(input.storage.runDir, input.category);
   const absolutePath = join(dir, input.fileName);
   assertInsideRunDir(input.storage, absolutePath);
   await mkdir(dir, { recursive: true });
   await copyFile(input.sourcePath, absolutePath);
   const fileHash = await hashFileSha256(absolutePath);
+  const relativePath = join("assets-runs", input.storage.runId, input.category, input.fileName);
   return {
     absolutePath,
     fileUri: absolutePath,
+    relativePath,
     fileHash,
   };
 }
@@ -831,7 +856,7 @@ import { createDbClient } from "../../../backend/src/db/client.js";
 import { executeAssetManifest } from "../../../backend/src/modules/assets/assets-execution-engine.js";
 import { createAssetProviderRegistry } from "../../../backend/src/modules/assets/assets-provider-registry.js";
 import type { AssetProviderAdapter } from "../../../backend/src/modules/assets/assets-provider-adapter.js";
-import type { AssetManifest } from "../../../shared/src/index.js";
+import type { AssetManifest, AssetPlan } from "../../../shared/src/index.js";
 
 function makeManifest(): AssetManifest {
   return {
@@ -891,6 +916,66 @@ function makeManifest(): AssetManifest {
   };
 }
 
+function makeAssetPlan(): AssetPlan {
+  return {
+    plan_version: "asset_plan_v1",
+    source_storyboard_record_id: "storyboard_001",
+    source_script_record_id: "script_001",
+    source_topic_package_id: "topic_001",
+    art_bible: {
+      era_style: "春秋战国",
+      visual_tone: "冷峻",
+      characters: [],
+      locations: [],
+      props: [],
+      global_prompt_prefix: "中国古代历史短视频",
+      global_negative_prompts: [],
+      consistency_notes: [],
+    },
+    visual_budget: {},
+    downgrade_policy: {},
+    global_audio_strategy: {},
+    tts_plan: {
+      voice_profile_id: "voice_001",
+      estimated_total_duration_sec: 2,
+      chunking_strategy: "segment_boundary",
+      chunks: [],
+    },
+    tasks: [
+      {
+        task_id: "img_001",
+        order: 0,
+        task_type: "image_still",
+        source_segment_id: "sb_001",
+        source_excerpt: "画面输入",
+        production_intent: "生成分镜主图",
+        recommended_mode: "auto",
+        provider_hint: "fake_image",
+        prompt_draft: "古代宫殿中景",
+        parameters: {},
+        manual_upload_policy: {
+          allowed: true,
+          required: false,
+          accepted_file_types: ["image/png"],
+          acceptance_notes: [],
+        },
+        risk_notes: [],
+        cost_tier: "low",
+        initial_status: "planned",
+      },
+    ],
+    dependencies: [],
+    cost_summary: {
+      total_tasks: 1,
+      by_type: { image_still: 1 },
+      by_cost_tier: { low: 1 },
+      estimated_provider_calls: 1,
+      notes: [],
+    },
+    global_production_notes: [],
+  };
+}
+
 describe("assets execution engine", () => {
   it("runs an enabled adapter and records output artifacts", async () => {
     const db = createDbClient();
@@ -924,7 +1009,7 @@ describe("assets execution engine", () => {
       assetRunId: "assets_run_001",
       manifest: makeManifest(),
       registry: createAssetProviderRegistry([adapter]),
-      assetPlan: null,
+      assetPlan: makeAssetPlan(),
       projectStorageRootDir: "unused",
     });
 
@@ -950,11 +1035,18 @@ Expected: fail because modules and expanded adapter contract do not exist.
 
 - [ ] **Step 4: Implement adapter contract**
 
-Replace the adapter interface with submit/poll/download/normalize-oriented types. Keep names stable:
+Before editing, run:
+
+```bash
+rg -n "AssetProviderAdapter|AssetProviderContext|assets-provider-adapter" backend/src tests shared/src
+```
+
+If any production code beyond assets tests imports the old `run/poll/cancel/normalizeResult` shape, update that caller in the same task. Then replace the adapter interface with submit/poll/download/normalize-oriented types. Keep names stable:
 
 ```ts
 import type {
   AssetArtifact,
+  AssetPlan,
   AssetManifest,
   AssetTaskExecution,
 } from "../../../../shared/src/index.js";
@@ -967,7 +1059,10 @@ export interface AssetProviderCanHandleInput {
 
 export interface AssetProviderContext {
   manifest: AssetManifest;
+  assetPlan: AssetPlan;
   execution: AssetTaskExecution;
+  planTask: AssetPlan["tasks"][number];
+  assetManifestRecordId: string;
   assetRunId: string;
   projectStorageRootDir: string;
 }
@@ -1064,6 +1159,8 @@ export function createAssetProviderRegistry(
 Create `backend/src/modules/assets/assets-execution-engine.ts`. Minimal behavior:
 
 - skip terminal executions;
+- require `assetPlan` and resolve `planTask` by `execution.task_id` before calling any adapter;
+- fail the execution with a diagnostic note if no matching plan task exists;
 - select adapter by task type and enabled provider types;
 - create a provider job record;
 - run prepare/submit/poll/download/normalize;
@@ -1150,10 +1247,22 @@ describe("assets subtitle generator", () => {
     expect(buildSrtFromCaptions(captions)).toContain(
       "00:00:00,000 --> 00:00:02,000",
     );
+    expect(buildSrtFromCaptions(captions)).toContain(
+      "00:00:02,000 --> 00:00:05,000",
+    );
     expect(buildVttFromCaptions(captions)).toContain("WEBVTT");
     expect(buildVttFromCaptions(captions)).toContain(
       "00:00:02.000 --> 00:00:05.000",
     );
+    expect(buildSrtFromCaptions([
+      {
+        index: 1,
+        start_sec: 1.25,
+        end_sec: 2.75,
+        text: "小数秒字幕",
+        segment_ids: ["sb_001"],
+      },
+    ])).toContain("00:00:01,250 --> 00:00:02,750");
   });
 });
 ```
@@ -1228,47 +1337,85 @@ git commit -m "新增 assets 字幕文件生成器"
 
 ---
 
-## Task 6: Fake TTS Provider with Subtitle Artifacts
+## Task 6: Fake TTS Provider and Local Subtitle Provider
 
 **Files:**
 
 - Create: `backend/src/modules/assets/providers/fake-tts-provider.ts`
+- Create: `backend/src/modules/assets/providers/local-subtitle-provider.ts`
 - Modify: `backend/src/modules/assets/assets-execution-engine.ts`
 - Test: `tests/backend/assets/fake-tts-provider.test.ts`
+- Test: `tests/backend/assets/local-subtitle-provider.test.ts`
 
 - [ ] **Step 1: Write failing fake TTS provider test**
 
-Create `tests/backend/assets/fake-tts-provider.test.ts`. The test should build a manifest with `tts_chunk_routes`, run the fake provider through the execution engine, and assert:
+Create `tests/backend/assets/fake-tts-provider.test.ts`. The test should build a manifest and matching asset plan with one `tts_audio` task and two `tts_plan.chunks`, run the fake provider through the execution engine, and assert:
 
 - one `tts_chunk_audio` artifact per route;
 - one `tts_merged_audio` artifact;
-- one `subtitle_track` SRT artifact;
-- one `subtitle_track` VTT artifact;
 - `audio_summary.tts_chunk_artifact_ids` is filled;
 - `audio_summary.tts_merged_artifact_id` is filled;
-- `audio_summary.subtitle_artifact_id` points to the SRT artifact.
+- each `tts_chunk_audio.metadata.duration_sec` comes from `AssetPlan.tts_plan.chunks[].estimated_duration_sec`;
+- no subtitle artifact is produced by the TTS execution.
 
-Use temp project storage and inspect that generated subtitle files exist.
+Use temp project storage and inspect that generated fake audio files exist.
 
-- [ ] **Step 2: Run failing test**
+The core assertion block should be:
+
+```ts
+expect(body.manifest.artifacts.filter((item) => item.artifact_type === "tts_chunk_audio")).toHaveLength(2);
+expect(body.manifest.artifacts.filter((item) => item.artifact_type === "tts_merged_audio")).toHaveLength(1);
+expect(body.manifest.artifacts.filter((item) => item.artifact_type === "subtitle_track")).toHaveLength(0);
+expect(body.manifest.audio_summary.tts_chunk_artifact_ids).toHaveLength(2);
+expect(body.manifest.audio_summary.tts_merged_artifact_id).toBe("artifact_tts_merged_tts_001");
+expect(body.manifest.audio_summary.subtitle_artifact_id).toBeNull();
+```
+
+- [ ] **Step 2: Write failing local subtitle provider test**
+
+Create `tests/backend/assets/local-subtitle-provider.test.ts`. The test should first execute fake TTS, then execute `subtitle_track`, and assert:
+
+- one SRT `subtitle_track` artifact exists;
+- one VTT `subtitle_track` artifact exists;
+- the SRT artifact belongs to the `subtitle_track` execution output IDs;
+- `audio_summary.subtitle_artifact_id` points to the SRT artifact;
+- every segment route receives `subtitle_artifact_id`;
+- subtitle files exist under `subtitles`.
+
+The core assertion block should be:
+
+```ts
+const subtitleArtifacts = body.manifest.artifacts.filter(
+  (item) => item.artifact_type === "subtitle_track",
+);
+expect(subtitleArtifacts).toHaveLength(2);
+expect(body.manifest.audio_summary.subtitle_artifact_id).toBe("artifact_subtitle_srt_subtitle_001");
+expect(body.manifest.segment_routes.every((route) => route.subtitle_artifact_id === "artifact_subtitle_srt_subtitle_001")).toBe(true);
+const subtitleExecution = body.manifest.executions.find((item) => item.task_type === "subtitle_track");
+expect(subtitleExecution?.output_artifact_ids).toEqual([
+  "artifact_subtitle_srt_subtitle_001",
+  "artifact_subtitle_vtt_subtitle_001",
+]);
+```
+
+- [ ] **Step 3: Run failing tests**
 
 Run:
 
 ```bash
-npx vitest run --configLoader runner tests/backend/assets/fake-tts-provider.test.ts
+npx vitest run --configLoader runner tests/backend/assets/fake-tts-provider.test.ts tests/backend/assets/local-subtitle-provider.test.ts
 ```
 
-Expected: fail because provider does not exist and engine does not route generated artifacts into audio summary.
+Expected: fail because providers do not exist and engine does not route generated artifacts into audio summary.
 
-- [ ] **Step 3: Implement fake TTS provider**
+- [ ] **Step 4: Implement fake TTS provider**
 
 Create provider that:
 
 - handles `tts_audio`;
 - writes deterministic `.txt` files as fake audio bytes under `audio/tts`;
-- uses `estimated_duration_sec` from `tts_chunk_routes` if available through task/manifest context, otherwise uses `1`;
+- uses `AssetPlan.tts_plan.chunks[].estimated_duration_sec` as the pre-generation duration source;
 - writes merged fake audio file;
-- writes SRT and VTT subtitle files using `assets-subtitle-generator`;
 - returns artifacts with schema-valid metadata.
 
 Artifact IDs should be deterministic from task/chunk IDs:
@@ -1276,33 +1423,49 @@ Artifact IDs should be deterministic from task/chunk IDs:
 ```ts
 artifact_tts_chunk_${ttsChunkId}
 artifact_tts_merged_${execution.task_id}
+```
+
+- [ ] **Step 5: Implement local subtitle provider**
+
+Create provider that:
+
+- handles `subtitle_track`;
+- reads completed `tts_chunk_audio` artifacts from `manifest.audio_summary.tts_chunk_artifact_ids`;
+- uses `metadata.duration_sec`, `metadata.segment_ids`, and `metadata.script_excerpt` to build captions;
+- writes both SRT and VTT using `assets-subtitle-generator`;
+- returns two `subtitle_track` artifacts.
+
+Artifact IDs should be deterministic from the subtitle task ID:
+
+```ts
 artifact_subtitle_srt_${execution.task_id}
 artifact_subtitle_vtt_${execution.task_id}
 ```
 
-- [ ] **Step 4: Update execution engine route application**
+- [ ] **Step 6: Update execution engine route application**
 
 When normalized artifacts are returned:
 
 - `tts_chunk_audio`: add to `tts_chunk_artifact_ids`, update matching `tts_chunk_routes[].artifact_id`, set matching segment routes `tts_artifact_id`.
 - `tts_merged_audio`: set `audio_summary.tts_merged_artifact_id` and total duration.
 - first SRT `subtitle_track`: set `audio_summary.subtitle_artifact_id` and all segment routes `subtitle_artifact_id`.
+- all returned artifacts must be appended to the execution that produced them.
 
-- [ ] **Step 5: Run tests**
+- [ ] **Step 7: Run tests**
 
 Run:
 
 ```bash
-npx vitest run --configLoader runner tests/backend/assets/fake-tts-provider.test.ts tests/backend/assets/assets-execution-engine.test.ts
+npx vitest run --configLoader runner tests/backend/assets/fake-tts-provider.test.ts tests/backend/assets/local-subtitle-provider.test.ts tests/backend/assets/assets-execution-engine.test.ts
 git diff --check
 ```
 
 Expected: pass.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add backend/src/modules/assets/providers/fake-tts-provider.ts backend/src/modules/assets/assets-execution-engine.ts tests/backend/assets/fake-tts-provider.test.ts
+git add backend/src/modules/assets/providers/fake-tts-provider.ts backend/src/modules/assets/providers/local-subtitle-provider.ts backend/src/modules/assets/assets-execution-engine.ts tests/backend/assets/fake-tts-provider.test.ts tests/backend/assets/local-subtitle-provider.test.ts
 git commit -m "新增 fake TTS 与字幕执行"
 ```
 
@@ -1325,6 +1488,39 @@ Create a manifest with one `image_still` execution and one segment route. Run en
 - metadata includes `width: 1080`, `height: 1920`, `file_hash`;
 - segment route `primary_visual_artifact_id` is set;
 - route readiness becomes `ready`.
+
+The core test body should be:
+
+```ts
+const result = await executeAssetManifest({
+  db,
+  assetManifestRecordId: "manifest_001",
+  assetRunId: "assets_run_001",
+  manifest: makeImageManifest(),
+  assetPlan: makeImageAssetPlan(),
+  registry: createAssetProviderRegistry([createFakeImageProvider()]),
+  projectStorageRootDir: root,
+});
+
+const imageArtifact = result.manifest.artifacts.find(
+  (item) => item.artifact_type === "image",
+);
+expect(imageArtifact).toMatchObject({
+  artifact_id: "artifact_img_img_001",
+  artifact_type: "image",
+  metadata: {
+    width: 1080,
+    height: 1920,
+  },
+});
+expect(imageArtifact?.metadata).toHaveProperty("file_hash");
+expect(await stat(imageArtifact!.file_uri)).toBeTruthy();
+expect(result.manifest.segment_routes[0]).toMatchObject({
+  primary_visual_artifact_id: "artifact_img_img_001",
+  visual_route_type: "image_only",
+  readiness: "ready",
+});
+```
 
 - [ ] **Step 2: Run failing test**
 
@@ -1430,6 +1626,7 @@ Expected: auto execution test fails because service only builds manifest.
 In `assets-run.service.ts`:
 
 - after building manifest and stale check, if `execution_options.execution_mode === "auto_available"`, create registry with fake TTS and fake image providers;
+- include local subtitle provider in the same default test registry, so `subtitle_track` executions are completed after TTS artifacts exist;
 - run `executeAssetManifest`;
 - re-run `validateAssetsManifest`;
 - persist generated manifest and provider job diagnostics.
@@ -1462,7 +1659,9 @@ git commit -m "接入 assets fake provider 执行"
 **Files:**
 
 - Modify: `backend/src/modules/assets/assets-local-validator.ts`
+- Modify: `backend/src/modules/assets/assets-run.service.ts`
 - Test: `tests/backend/assets/assets-local-validator.test.ts`
+- Test: `tests/backend/assets/assets-run-service.test.ts`
 
 - [ ] **Step 1: Write failing validator tests**
 
@@ -1472,6 +1671,15 @@ Add tests that assert:
 - `planned://` referenced artifact still yields `assets_artifact_placeholder_unresolved`;
 - approved media library selection passes;
 - unapproved media library selection yields `assets_media_library_item_unapproved`.
+
+Use explicit fixture data instead of semantic checks. The core failing assertions should be:
+
+```ts
+expect(result.errors).toContain("assets_artifact_file_missing");
+expect(result.errors).toContain("assets_artifact_placeholder_unresolved");
+expect(approvedResult.errors).not.toContain("assets_media_library_item_unapproved");
+expect(unapprovedResult.errors).toContain("assets_media_library_item_unapproved");
+```
 
 - [ ] **Step 2: Run failing test**
 
@@ -1507,21 +1715,27 @@ Rules:
 - unapproved item yields `assets_media_library_item_unapproved`;
 - commercial-use false yields `assets_media_library_item_license_blocked`.
 
-- [ ] **Step 5: Run tests**
+- [ ] **Step 5: Update validator callers**
+
+Update `runAssetsGeneration`, `registerManualArtifact`, and `acceptArtifact` so validation calls pass `project.storageRootDir` as `projectStorageRootDir`.
+
+Do not wire media-library items into service here; Task 10 adds the DbClient-backed repository and selector. Until then, media-library checks are covered by direct validator unit tests using the optional `mediaLibraryItems` parameter.
+
+- [ ] **Step 6: Run tests**
 
 Run:
 
 ```bash
-npx vitest run --configLoader runner tests/backend/assets/assets-local-validator.test.ts
+npx vitest run --configLoader runner tests/backend/assets/assets-local-validator.test.ts tests/backend/assets/assets-run-service.test.ts
 git diff --check
 ```
 
 Expected: pass.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add backend/src/modules/assets/assets-local-validator.ts tests/backend/assets/assets-local-validator.test.ts
+git add backend/src/modules/assets/assets-local-validator.ts backend/src/modules/assets/assets-run.service.ts tests/backend/assets/assets-local-validator.test.ts tests/backend/assets/assets-run-service.test.ts
 git commit -m "增强 assets 本地文件与媒体库校验"
 ```
 
@@ -1531,6 +1745,7 @@ git commit -m "增强 assets 本地文件与媒体库校验"
 
 **Files:**
 
+- Modify: `backend/src/db/client.ts`
 - Create: `backend/src/modules/assets/media-library.repository.ts`
 - Create: `backend/src/modules/assets/media-library-selector.ts`
 - Test: `tests/backend/assets/media-library-selector.test.ts`
@@ -1544,6 +1759,22 @@ Create tests that:
 - ignore unapproved items;
 - return null when no approved item matches.
 
+The core test body should be:
+
+```ts
+const db = createDbClient();
+await saveMediaLibraryItem(db, approvedBgmItem);
+await saveMediaLibraryItem(db, unapprovedBgmItem);
+
+const selected = await selectMediaLibraryItem(db, {
+  type: "bgm",
+  requiredTags: ["war"],
+  moodTags: ["tense"],
+});
+
+expect(selected?.library_item_id).toBe(approvedBgmItem.library_item_id);
+```
+
 - [ ] **Step 2: Run failing test**
 
 Run:
@@ -1554,31 +1785,38 @@ npx vitest run --configLoader runner tests/backend/assets/media-library-selector
 
 Expected: fail because modules do not exist.
 
-- [ ] **Step 3: Implement repository**
+- [ ] **Step 3: Add DbClient media library storage**
 
-Use a module-local `Map<string, MediaLibraryItem>` for first version, because project DB does not yet include media-library persistence:
+Add to `backend/src/db/client.ts`:
 
 ```ts
-const mediaLibraryItems = new Map<string, MediaLibraryItem>();
+mediaLibraryItems: Map<string, MediaLibraryItem>;
 ```
 
-Exports:
+Initialize it in `createDbClient()`:
 
-- `saveMediaLibraryItem(item: MediaLibraryItem): MediaLibraryItem`
-- `getMediaLibraryItem(id: string): MediaLibraryItem | null`
-- `listMediaLibraryItems(): MediaLibraryItem[]`
-- `clearMediaLibraryItemsForTests(): void`
+```ts
+mediaLibraryItems: new Map<string, MediaLibraryItem>(),
+```
 
-- [ ] **Step 4: Implement selector**
+- [ ] **Step 4: Implement repository**
+
+Use the `DbClient` map, not a module-level singleton. Exports:
+
+- `saveMediaLibraryItem(db: DbClient, item: MediaLibraryItem): Promise<MediaLibraryItem>`
+- `getMediaLibraryItem(db: DbClient, id: string): Promise<MediaLibraryItem | null>`
+- `listMediaLibraryItems(db: DbClient): Promise<MediaLibraryItem[]>`
+
+- [ ] **Step 5: Implement selector**
 
 Function:
 
 ```ts
-export function selectMediaLibraryItem(input: {
+export async function selectMediaLibraryItem(db: DbClient, input: {
   type: "sfx" | "bgm";
   requiredTags: string[];
   moodTags: string[];
-}): MediaLibraryItem | null
+}): Promise<MediaLibraryItem | null>
 ```
 
 Selection:
@@ -1589,21 +1827,25 @@ Selection:
 - prefer the item with the highest count of matching `moodTags`;
 - tie-break by `library_item_id` lexical order for deterministic tests.
 
-- [ ] **Step 5: Run tests**
+- [ ] **Step 6: Update service media-library validation input**
+
+Where `assets-run.service.ts` calls `validateAssetsManifest`, pass `mediaLibraryItems: await listMediaLibraryItems(db)`. This activates the optional media-library checks added in Task 9.
+
+- [ ] **Step 7: Run tests**
 
 Run:
 
 ```bash
-npx vitest run --configLoader runner tests/backend/assets/media-library-selector.test.ts
+npx vitest run --configLoader runner tests/backend/assets/media-library-selector.test.ts tests/backend/assets/assets-run-service.test.ts
 git diff --check
 ```
 
 Expected: pass.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add backend/src/modules/assets/media-library.repository.ts backend/src/modules/assets/media-library-selector.ts tests/backend/assets/media-library-selector.test.ts
+git add backend/src/db/client.ts backend/src/modules/assets/media-library.repository.ts backend/src/modules/assets/media-library-selector.ts backend/src/modules/assets/assets-run.service.ts tests/backend/assets/media-library-selector.test.ts tests/backend/assets/assets-run-service.test.ts
 git commit -m "新增本地媒体库选择器"
 ```
 
@@ -1635,6 +1877,30 @@ If the official docs differ from old project assumptions, stop and update `docs/
 - download returns a Buffer;
 - failed provider status normalizes to an error result.
 
+Use this shape for the fetch stub:
+
+```ts
+const fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+  fetchCalls.push({ url, init });
+  return new Response(JSON.stringify({ output: { task_id: "task_001" } }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+});
+
+await submitDashscopeAsyncTask({
+  apiKey: "test-key",
+  endpoint: "https://dashscope.test/api/v1/services/aigc/image-generation/generation",
+  payload: { model: "wan-test" },
+});
+
+expect(fetchCalls[0].init?.headers).toMatchObject({
+  Authorization: "Bearer test-key",
+  "X-DashScope-Async": "enable",
+});
+```
+
 - [ ] **Step 3: Write image payload tests**
 
 `dashscope-image-provider.test.ts` should assert:
@@ -1644,6 +1910,20 @@ If the official docs differ from old project assumptions, stop and update `docs/
 - local output normalizes to an `image` artifact with width/height/provider metadata;
 - no network call happens in this test.
 
+Core payload assertion:
+
+```ts
+const payload = buildDashscopeImagePayload({
+  model: "wan2.6-test",
+  prompt: "古代宫殿中景",
+  negativePrompt: "现代建筑",
+  size: "1080*1920",
+});
+
+expect(JSON.stringify(payload)).toContain("古代宫殿中景");
+expect(JSON.stringify(payload)).toContain("现代建筑");
+```
+
 - [ ] **Step 4: Write TTS payload tests**
 
 `dashscope-tts-provider.test.ts` should assert:
@@ -1651,6 +1931,20 @@ If the official docs differ from old project assumptions, stop and update `docs/
 - payload includes text and `voice_profile_id`;
 - provider output normalizes to `tts_chunk_audio`;
 - no network call happens in this test.
+
+Core payload assertion:
+
+```ts
+const payload = buildDashscopeTtsPayload({
+  model: "qwen-tts-test",
+  text: "第一句旁白。",
+  voiceProfileId: "voice_001",
+  format: "wav",
+});
+
+expect(JSON.stringify(payload)).toContain("第一句旁白。");
+expect(JSON.stringify(payload)).toContain("voice_001");
+```
 
 - [ ] **Step 5: Run failing tests**
 
@@ -1718,6 +2012,32 @@ Assert:
 - local validation has no file-missing errors;
 - provider jobs are recorded;
 - project status becomes `assets_ready` only when all required tasks are terminal.
+
+Use these core assertions:
+
+```ts
+const dryRun = await runAssetsGeneration({
+  db,
+  project,
+  voiceProfileId: "voice_001",
+  executionMode: "dry_run",
+});
+expect((dryRun.body as { manifest: AssetManifest }).manifest.artifacts).toEqual([]);
+
+const autoRun = await runAssetsGeneration({
+  db,
+  project,
+  voiceProfileId: "voice_001",
+  executionMode: "auto_available",
+});
+const manifest = (autoRun.body as { manifest: AssetManifest }).manifest;
+expect(manifest.artifacts.some((item) => item.artifact_type === "tts_chunk_audio")).toBe(true);
+expect(manifest.artifacts.some((item) => item.artifact_type === "tts_merged_audio")).toBe(true);
+expect(manifest.artifacts.filter((item) => item.artifact_type === "subtitle_track")).toHaveLength(2);
+expect(manifest.artifacts.filter((item) => item.artifact_type === "image").length).toBeGreaterThanOrEqual(2);
+expect(db.assetProviderJobRecords.size).toBeGreaterThan(0);
+expect((autoRun.body as { local_validation: { errors: string[] } }).local_validation.errors).not.toContain("assets_artifact_file_missing");
+```
 
 - [ ] **Step 2: Run focused regression**
 

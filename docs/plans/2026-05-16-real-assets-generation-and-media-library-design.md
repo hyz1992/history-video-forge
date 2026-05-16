@@ -48,9 +48,22 @@
 
 ## 4. 总体原则
 
-### 4.1 Manifest-first
+### 4.1 Manifest-first，不等于 Manifest 自足
 
-真实生成必须以 `AssetManifest` 为唯一执行入口。provider adapter 不直接读取 storyboard 或 asset plan，而是读取 manifest 中的 execution、task、artifact route 和 execution options。
+真实生成必须以 `AssetManifest` 为执行状态入口：哪些 execution 要跑、哪些 artifact 已存在、哪些 route 已就绪，都以 manifest 为准。
+
+但 `AssetManifest` 不承载完整创意输入。`prompt_draft`、`parameters`、TTS chunk 原文、预估时长、negative prompt、任务成本和人工上传策略仍来自对应的 `AssetPlan`。执行引擎的正式输入应是：
+
+```ts
+{
+  manifest: AssetManifest;
+  assetPlan: AssetPlan;
+  assetManifestRecordId: string;
+  assetRunId: string;
+}
+```
+
+provider adapter 不能直接读取 storyboard、script 或 topic；它只能通过 execution engine 传入的 `AssetPlan` task 快照取得生成参数。这样既避免 manifest 胀成第二份 asset plan，也避免 provider 绕过阶段合同。
 
 ### 4.2 Artifact-first
 
@@ -71,6 +84,8 @@
 ## 5. 执行层设计
 
 新增 provider 执行层应围绕现有 `AssetTaskExecution` 扩展，而不是另起一套任务系统。
+
+执行层需要为每个 execution 解析对应的 `AssetPlan.tasks[]` 条目。解析失败时应标记运行时错误，而不是让 provider 自行猜测任务参数。
 
 建议抽象：
 
@@ -103,6 +118,10 @@ interface AssetProviderAdapter {
 - `error_message`
 
 provider job record 只服务恢复、排错和审计；正式产物仍然必须落到 `AssetArtifact`。
+
+`assetRunId` 是 assets 阶段一次执行尝试的运行 ID，用于文件目录、trace 和 provider job 分组。第一版可继续由 `runAssetsGeneration` 生成 `assets_run_*`，不要求写入 `AssetManifest` schema；provider job record 必须保存 `assetRunId`，`AssetManifestRecord` 继续作为当前 manifest 的持久化记录。
+
+implementation plan 中可以把 `prepare/submit/poll/download/normalizeResult` 设计成 `(ctx, previousStepResult)` 的上下文传参形式，而不是为每一步创建完全独立的 input 类型。两种写法语义一致；第一版优先选择 context 形式，便于稳定传入 `manifest`、`assetPlan`、`planTask`、`assetRunId` 和存储根目录。
 
 ## 6. 并发、重试与恢复
 
@@ -182,6 +201,8 @@ video provider adapter 应以 image artifact 为优先输入。旧项目中的�
 - `tts_merged_audio`：合并后的全片口播音频。
 - `subtitle_track`：由 TTS timing 派生的字幕文件。
 
+字幕 artifact 的执行归属应明确：`AssetPlan` 中仍应存在本地确定性生成的 `subtitle_track` task，manifest builder 为它创建 `AssetTaskExecution`。TTS provider 只负责生成 `tts_chunk_audio` 和 `tts_merged_audio`；字幕文件由本地 subtitle execution 消费 TTS artifact metadata 后生成。若实现为了效率让同一个本地 adapter 连续生成 TTS 与字幕，也必须把字幕 artifact 归到 `subtitle_track` execution 的 `output_artifact_ids`，不能让字幕成为无 execution 归属的“顺手产物”。
+
 TTS metadata 至少包含：
 
 - `duration_sec`
@@ -195,6 +216,12 @@ TTS metadata 至少包含：
 - 可选 `word_timestamps` 或 `caption_timestamps`
 
 `voice_profile_id` 来自 `AssetExecutionOptions`。如果未指定，执行层只能使用项目默认音色；不得在 provider adapter 内部随机选择音色。
+
+`TtsChunkRoute` 当前只表达 chunk 到 segment 的 route，不存 `duration_sec`。字幕 timing 的时长来源按优先级处理：
+
+1. 已生成 `tts_chunk_audio.metadata.duration_sec`。
+2. 未生成真实音频时，读取 `AssetPlan.tts_plan.chunks[].estimated_duration_sec`。
+3. 如果二者都缺失，执行应失败并返回结构错误，不得凭本地语义猜测。
 
 ## 10. 字幕文件设计
 
@@ -348,6 +375,8 @@ storage/media-library/
 ```
 
 manifest 和数据库只保存 URI、metadata、hash 和 provenance，不直接保存二进制内容。
+
+第一版单机运行可以在 `file_uri` 中保存绝对路径，但 artifact metadata 应同时记录相对路径，例如 `relative_path: "assets-runs/<run_id>/images/img_001.png"`。后续如果引入对象存储或跨机器迁移，compose 和下载接口应优先使用相对路径或 storage resolver，而不是硬编码本机绝对路径。
 
 ## 15. API 边界
 
