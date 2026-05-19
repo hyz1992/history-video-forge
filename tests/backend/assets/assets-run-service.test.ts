@@ -521,7 +521,7 @@ describe("assets run service integration", () => {
     const response = await runAssetsGeneration({
       db,
       project,
-      voiceProfileId: "voice_custom",
+      voiceProfileId: "voice_system_ethan",
       executionMode: "auto_available",
       providerMode: "dashscope",
       dashscope: {
@@ -545,6 +545,113 @@ describe("assets run service integration", () => {
         (artifact.metadata as Record<string, unknown>).provider_name === "dashscope_image",
     )).toBe(true);
     expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it("reuses a persisted provider voice id for DashScope TTS without voice design", async () => {
+    integrationTempDir = join(tmpdir(), `assets-persisted-voice-${Date.now()}`);
+    await mkdir(integrationTempDir, { recursive: true });
+
+    const setupDb = createDbClient();
+    configureVoiceProfilePersistence(setupDb, { rootDir: integrationTempDir });
+    await seedGlobalVoiceProfiles(setupDb);
+    await updateVoiceProfileProviderState(
+      setupDb,
+      "voice_preset_cold_authority",
+      {
+        provider_status: "ready",
+        provider_voice_id: "provider-voice-ready-001",
+        preview_audio_uri: "data:audio/wav;base64,cHJldmlldw==",
+      },
+    );
+
+    let voiceDesignCalls = 0;
+    let ttsPayload: Record<string, any> | null = null;
+    const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const urlText = String(url);
+
+      if (urlText.endsWith("/api/v1/services/audio/tts/customization")) {
+        voiceDesignCalls += 1;
+        throw new Error("voice design should not be called");
+      }
+
+      if (urlText.endsWith("/api/v1/services/aigc/multimodal-generation/generation")) {
+        ttsPayload = JSON.parse(String(init?.body));
+        return new Response(
+          JSON.stringify({
+            output: {
+              audio: {
+                url: "https://example.test/audio.wav",
+              },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (urlText.endsWith("/api/v1/services/aigc/image-generation/generation")) {
+        return new Response(
+          JSON.stringify({
+            output: {
+              task_id: "task_dashscope_image_001",
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (urlText.endsWith("/api/v1/tasks/task_dashscope_image_001")) {
+        return new Response(
+          JSON.stringify({
+            output: {
+              task_status: "SUCCEEDED",
+              results: [{ url: "https://example.test/image.png" }],
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (urlText === "https://example.test/audio.wav") {
+        return new Response(new Uint8Array([1, 2, 3, 4]), {
+          status: 200,
+          headers: { "content-type": "audio/wav" },
+        });
+      }
+
+      if (urlText === "https://example.test/image.png") {
+        return new Response(new Uint8Array([137, 80, 78, 71]), {
+          status: 200,
+          headers: { "content-type": "image/png" },
+        });
+      }
+
+      throw new Error(`unexpected fetch: ${urlText}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { db, project } = await prepareProjectWithAssetPlan();
+    configureVoiceProfilePersistence(db, { rootDir: integrationTempDir });
+    project.storageRootDir = integrationTempDir;
+
+    const response = await runAssetsGeneration({
+      db,
+      project,
+      voiceProfileId: "voice_preset_cold_authority",
+      executionMode: "auto_available",
+      providerMode: "dashscope",
+      dashscope: {
+        apiKey: "test-key",
+        baseUrl: "https://dashscope.test",
+        imageModel: "wan2.6-t2i",
+        ttsModel: "qwen3-tts-instruct-flash",
+        imagePollIntervalMs: 0,
+        imageMaxPollAttempts: 1,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(voiceDesignCalls).toBe(0);
+    expect(ttsPayload?.input.voice).toBe("provider-voice-ready-001");
   });
 
   it("uses dashscope image-to-video provider when explicitly configured", async () => {

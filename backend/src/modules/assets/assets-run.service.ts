@@ -188,6 +188,7 @@ function readOptionalNumber(value: string | undefined): number | undefined {
 }
 
 function buildProviderRegistry(input: {
+  db: DbClient;
   providerMode: AssetsProviderMode | undefined;
   dashscope: DashscopeProviderConfig | undefined;
 }) {
@@ -440,6 +441,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   } else if (executionOptions.execution_mode === "auto_available") {
     // auto_available: execute with fake providers unless a real provider mode is explicit.
     const registry = buildProviderRegistry({
+      db,
       providerMode: input.providerMode,
       dashscope: input.dashscope,
     });
