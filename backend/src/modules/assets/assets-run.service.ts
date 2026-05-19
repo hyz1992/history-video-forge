@@ -201,6 +201,7 @@ function buildProviderRegistry(input: {
         model: dashscope.ttsModel,
         format: dashscope.ttsFormat,
         sampleRate: dashscope.ttsSampleRate,
+        db: input.db,
       }),
       createLocalSubtitleProvider(),
       createDashscopeImageProvider({

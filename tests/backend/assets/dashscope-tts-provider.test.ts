@@ -16,6 +16,7 @@ import {
   buildDashscopeTtsPayload,
   createDashscopeTtsProvider,
 } from "../../../backend/src/modules/assets/providers/dashscope/dashscope-tts-provider.js";
+import { seedGlobalVoiceProfiles } from "../../../backend/src/modules/assets/voice/voice-profile.repository.js";
 import type { AssetManifest, AssetPlan } from "../../../shared/src/index.js";
 
 describe("dashscope TTS payload builder", () => {
@@ -23,7 +24,7 @@ describe("dashscope TTS payload builder", () => {
     const payload = buildDashscopeTtsPayload({
       model: "qwen-tts-test",
       text: "第一句旁白。",
-      voiceProfileId: "voice_001",
+      providerVoiceId: "voice_001",
       format: "wav",
     });
 
@@ -39,7 +40,7 @@ describe("dashscope TTS payload builder", () => {
     const payload = buildDashscopeTtsPayload({
       model: "qwen-tts",
       text: "test",
-      voiceProfileId: "voice_001",
+      providerVoiceId: "voice_001",
     });
 
     expect(payload.parameters.format).toBe("wav");
@@ -50,18 +51,18 @@ describe("dashscope TTS payload builder", () => {
     const payload = buildDashscopeTtsPayload({
       model: "qwen-tts",
       text: "test",
-      voiceProfileId: "voice_001",
+      providerVoiceId: "voice_001",
       format: "mp3",
     });
 
     expect(payload.parameters.format).toBe("mp3");
   });
 
-  it("uses voiceProfileId as voice in input", () => {
+  it("uses providerVoiceId as voice in input", () => {
     const payload = buildDashscopeTtsPayload({
       model: "qwen-tts",
       text: "测试文本",
-      voiceProfileId: "Cherry",
+      providerVoiceId: "Cherry",
     });
 
     expect(payload.input.voice).toBe("Cherry");
@@ -271,5 +272,88 @@ describe("dashscope TTS provider adapter", () => {
     });
     await expect(stat(chunkArtifact!.file_uri)).resolves.toBeTruthy();
     await expect(stat(mergedArtifact!.file_uri)).resolves.toBeTruthy();
+  });
+
+  it("creates missing provider voice before TTS and keeps local voice metadata", async () => {
+    tempDir = join(tmpdir(), `dashscope-designed-tts-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+
+    const db = createDbClient();
+    await seedGlobalVoiceProfiles(db);
+
+    const manifest = makeTtsManifest();
+    manifest.execution_options.voice_profile_id = "voice_preset_cold_authority";
+    manifest.audio_summary.voice_profile_id = "voice_preset_cold_authority";
+
+    const assetPlan = makeTtsAssetPlan();
+    assetPlan.tts_plan.voice_profile_id = "voice_preset_cold_authority";
+
+    let ttsPayload: Record<string, any> | null = null;
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/api/v1/services/audio/tts/customization")) {
+        return new Response(
+          JSON.stringify({
+            output: {
+              voice: "voice-provider-001",
+              preview_audio: {
+                data: Buffer.from("preview").toString("base64"),
+                sample_rate: 24000,
+                response_format: "wav",
+              },
+            },
+            request_id: "req_voice_001",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (url.includes("/api/v1/services/aigc/multimodal-generation/generation")) {
+        ttsPayload = JSON.parse(String(init?.body));
+        return new Response(
+          JSON.stringify({
+            output: { audio: { url: "https://download.test/chunk.wav" } },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      return new Response(new Uint8Array([1, 2, 3]).buffer, { status: 200 });
+    });
+
+    const result = await executeAssetManifest({
+      db,
+      assetManifestRecordId: "manifest_001",
+      assetRunId: "assets_run_001",
+      manifest,
+      assetPlan,
+      registry: createAssetProviderRegistry([
+        createDashscopeTtsProvider({
+          apiKey: "test-key",
+          baseUrl: "https://dashscope.test",
+          model: "qwen3-tts-vd-2026-01-26",
+          db,
+        }),
+      ]),
+      projectStorageRootDir: tempDir,
+    });
+
+    expect(ttsPayload?.input.voice).toBe("voice-provider-001");
+    expect(result.manifest.audio_summary.voice_profile_id).toBe(
+      "voice_preset_cold_authority",
+    );
+
+    const chunkArtifact = result.manifest.artifacts.find(
+      (artifact) => artifact.artifact_type === "tts_chunk_audio",
+    );
+    const mergedArtifact = result.manifest.artifacts.find(
+      (artifact) => artifact.artifact_type === "tts_merged_audio",
+    );
+
+    expect(chunkArtifact?.metadata.provider_voice_id).toBe("voice-provider-001");
+    expect(mergedArtifact?.metadata.provider_voice_id).toBe("voice-provider-001");
+
+    const profile = db.voiceProfiles.get("voice_preset_cold_authority");
+    expect(profile?.provider_status).toBe("ready");
+    expect(profile?.provider_voice_id).toBe("voice-provider-001");
   });
 });

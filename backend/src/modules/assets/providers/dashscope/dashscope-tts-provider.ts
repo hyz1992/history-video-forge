@@ -6,17 +6,21 @@
  * Checked docs: https://help.aliyun.com/zh/model-studio/ (2026-05-16).
  */
 
-import type { AssetArtifact } from "../../../../../../shared/src/index.js";
+import type {
+  AssetArtifact,
+} from "../../../../../../shared/src/index.js";
+import type { DbClient } from "../../../../db/client.js";
 import type { AssetProviderAdapter } from "../../assets-provider-adapter.js";
 import {
   resolveAssetsRunStorage,
   writeAssetFile,
 } from "../../assets-file-storage.js";
+import { resolveProviderVoice } from "../../voice/provider-voice-resolution.service.js";
 
 export interface DashScopeTtsInput {
   model: string;
   text: string;
-  voiceProfileId: string;
+  providerVoiceId: string;
   format?: "mp3" | "wav" | "flac" | "pcm";
   sampleRate?: number;
 }
@@ -39,6 +43,7 @@ export interface DashScopeTtsProviderOptions {
   model: string;
   format?: "mp3" | "wav" | "flac" | "pcm";
   sampleRate?: number;
+  db?: DbClient;
 }
 
 export function buildDashscopeTtsPayload(
@@ -48,7 +53,7 @@ export function buildDashscopeTtsPayload(
     model: input.model,
     input: {
       text: input.text,
-      voice: input.voiceProfileId,
+      voice: input.providerVoiceId,
     },
     parameters: {
       format: input.format ?? "wav",
@@ -130,13 +135,27 @@ export function createDashscopeTtsProvider(
 
       const endpoint = String(prepared.rawRequestJson.endpoint);
       const voiceProfileId = ctx.manifest.audio_summary.voice_profile_id;
+      const providerVoice = options.db
+        ? await resolveProviderVoice({
+            db: options.db,
+            localVoiceProfileId: voiceProfileId,
+            apiKey: options.apiKey,
+            baseUrl: options.baseUrl,
+          })
+        : {
+            localVoiceProfileId: voiceProfileId,
+            providerVoiceId: voiceProfileId,
+            targetModel: options.model,
+            matchScore: null,
+            matchReasons: [] as string[],
+          };
       const chunks = [];
 
       for (const chunk of ctx.assetPlan.tts_plan.chunks) {
         const payload = buildDashscopeTtsPayload({
-          model: options.model,
+          model: providerVoice.targetModel,
           text: chunk.script_excerpt,
-          voiceProfileId,
+          providerVoiceId: providerVoice.providerVoiceId,
           format: options.format,
           sampleRate: options.sampleRate,
         });
@@ -150,6 +169,10 @@ export function createDashscopeTtsProvider(
           script_excerpt: chunk.script_excerpt,
           estimated_duration_sec: chunk.estimated_duration_sec,
           audio_url: extractAudioUrl(rawResponse),
+          provider_voice_id: providerVoice.providerVoiceId,
+          voice_profile_match_score: providerVoice.matchScore,
+          voice_profile_match_reasons: providerVoice.matchReasons,
+          target_model: providerVoice.targetModel,
           raw_response: rawResponse,
         });
       }
@@ -173,6 +196,10 @@ export function createDashscopeTtsProvider(
               script_excerpt: string;
               estimated_duration_sec: number;
               audio_url: string;
+              provider_voice_id?: string;
+              voice_profile_match_score?: number | null;
+              voice_profile_match_reasons?: string[];
+              target_model?: string;
             }>
           | undefined) ?? [];
       const storage = resolveAssetsRunStorage({
@@ -211,10 +238,18 @@ export function createDashscopeTtsProvider(
           metadata: {
             duration_sec: chunk.estimated_duration_sec,
             voice_profile_id: voiceProfileId,
+            provider_voice_id: chunk.provider_voice_id,
+            voice_profile_match_score:
+              chunk.voice_profile_match_score ?? undefined,
+            voice_profile_match_reasons:
+              chunk.voice_profile_match_reasons ?? [],
+            timing_source: "estimated",
+            sample_rate: options.sampleRate ?? 24000,
+            format: options.format ?? "wav",
             tts_chunk_id: chunk.chunk_id,
             segment_ids: route?.segment_ids ?? [],
             script_excerpt: chunk.script_excerpt,
-            model: options.model,
+            model: chunk.target_model ?? options.model,
             provider_name: "dashscope_tts",
             file_hash: written.fileHash,
             relative_path: written.relativePath,
@@ -237,8 +272,16 @@ export function createDashscopeTtsProvider(
         metadata: {
           duration_sec: totalDuration,
           voice_profile_id: voiceProfileId,
+          provider_voice_id: rawChunks[0]?.provider_voice_id,
+          voice_profile_match_score:
+            rawChunks[0]?.voice_profile_match_score ?? undefined,
+          voice_profile_match_reasons:
+            rawChunks[0]?.voice_profile_match_reasons ?? [],
+          timing_source: "estimated",
+          sample_rate: options.sampleRate ?? 24000,
+          format: options.format ?? "wav",
           chunk_artifact_ids: chunkArtifactIds,
-          model: options.model,
+          model: rawChunks[0]?.target_model ?? options.model,
           provider_name: "dashscope_tts",
           file_hash: merged.fileHash,
           relative_path: merged.relativePath,
