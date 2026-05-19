@@ -224,6 +224,11 @@ export interface DbClient {
   assetProviderJobRecords: Map<string, AssetProviderJobRecord>;
   mediaLibraryItems: Map<string, MediaLibraryItem>;
   voiceProfiles: Map<string, VoiceProfile>;
+  voiceProfilePersistence: {
+    rootDir?: string;
+    enabled: boolean;
+    loaded: boolean;
+  };
 }
 
 export function createDbClient(): DbClient {
@@ -243,5 +248,9 @@ export function createDbClient(): DbClient {
     assetProviderJobRecords: new Map<string, AssetProviderJobRecord>(),
     mediaLibraryItems: new Map<string, MediaLibraryItem>(),
     voiceProfiles: new Map<string, VoiceProfile>(),
+    voiceProfilePersistence: {
+      enabled: false,
+      loaded: false,
+    },
   };
 }
