@@ -21,6 +21,15 @@ import {
   type TtsSubtitleChunk,
 } from "../assets-subtitle-generator.js";
 
+type SubtitleTimingSource =
+  | "estimated"
+  | "audio_probe"
+  | "provider_timestamp"
+  | "forced_alignment"
+  | "mixed"
+  | "provider"
+  | "aligned";
+
 export function createLocalSubtitleProvider(): AssetProviderAdapter {
   return {
     providerName: "local_subtitle",
@@ -52,7 +61,12 @@ export function createLocalSubtitleProvider(): AssetProviderAdapter {
 
       // Gather TTS chunk data from completed artifacts
       const chunkArtifactIds = ctx.manifest.audio_summary.tts_chunk_artifact_ids;
-      const ttsChunks: TtsSubtitleChunk[] = [];
+      const ttsChunks: Array<
+        TtsSubtitleChunk & {
+          source_artifact_id: string;
+          timing_source: SubtitleTimingSource;
+        }
+      > = [];
 
       for (const artifactId of chunkArtifactIds) {
         const artifact = ctx.manifest.artifacts.find(
@@ -65,12 +79,15 @@ export function createLocalSubtitleProvider(): AssetProviderAdapter {
           tts_chunk_id: string;
           segment_ids: string[];
           script_excerpt: string;
+          timing_source?: string;
         };
         ttsChunks.push({
           tts_chunk_id: meta.tts_chunk_id,
           segment_ids: meta.segment_ids,
           script_excerpt: meta.script_excerpt,
           duration_sec: meta.duration_sec,
+          source_artifact_id: artifact.artifact_id,
+          timing_source: readTimingSource(meta.timing_source),
         });
       }
 
@@ -82,6 +99,14 @@ export function createLocalSubtitleProvider(): AssetProviderAdapter {
       const captions = estimateCaptionsFromTtsChunks(ttsChunks);
       const srtContent = buildSrtFromCaptions(captions);
       const vttContent = buildVttFromCaptions(captions);
+      const subtitleDurationSec =
+        captions.length > 0 ? captions[captions.length - 1]!.end_sec : undefined;
+      const sourceTtsChunkArtifactIds = ttsChunks.map(
+        (chunk) => chunk.source_artifact_id,
+      );
+      const subtitleTimingSource = mergeTimingSources(
+        ttsChunks.map((chunk) => chunk.timing_source),
+      );
 
       // Use the merged TTS artifact as the source reference
       const sourceTtsArtifactId =
@@ -118,7 +143,12 @@ export function createLocalSubtitleProvider(): AssetProviderAdapter {
           metadata: {
             format: "srt",
             source_tts_artifact_id: sourceTtsArtifactId,
+            source_tts_chunk_artifact_ids: sourceTtsChunkArtifactIds,
             caption_count: captions.length,
+            ...(subtitleDurationSec === undefined
+              ? {}
+              : { duration_sec: subtitleDurationSec }),
+            timing_source: subtitleTimingSource,
           },
         },
         {
@@ -130,7 +160,12 @@ export function createLocalSubtitleProvider(): AssetProviderAdapter {
           metadata: {
             format: "vtt",
             source_tts_artifact_id: sourceTtsArtifactId,
+            source_tts_chunk_artifact_ids: sourceTtsChunkArtifactIds,
             caption_count: captions.length,
+            ...(subtitleDurationSec === undefined
+              ? {}
+              : { duration_sec: subtitleDurationSec }),
+            timing_source: subtitleTimingSource,
           },
         },
       ];
@@ -140,4 +175,26 @@ export function createLocalSubtitleProvider(): AssetProviderAdapter {
 
     cancel: async () => {},
   };
+}
+
+function readTimingSource(value: string | undefined): SubtitleTimingSource {
+  switch (value) {
+    case "audio_probe":
+    case "provider_timestamp":
+    case "forced_alignment":
+    case "mixed":
+    case "provider":
+    case "aligned":
+      return value;
+    case "estimated":
+    default:
+      return "estimated";
+  }
+}
+
+function mergeTimingSources(
+  sources: SubtitleTimingSource[],
+): SubtitleTimingSource {
+  const unique = new Set(sources.length > 0 ? sources : ["estimated"]);
+  return unique.size === 1 ? [...unique][0]! : "mixed";
 }

@@ -203,6 +203,56 @@ function makeTtsAndSubtitleAssetPlan(): AssetPlan {
   };
 }
 
+function makeSubtitleOnlyManifest(input: {
+  timingSources: Array<"audio_probe" | "estimated">;
+}): AssetManifest {
+  const chunkArtifacts = input.timingSources.map((timingSource, index) => {
+    const chunkNumber = index + 1;
+    return {
+      artifact_id: `artifact_tts_chunk_00${chunkNumber}`,
+      artifact_type: "tts_chunk_audio" as const,
+      origin: "provider" as const,
+      file_uri: `memory://tts-chunk-${chunkNumber}.wav`,
+      created_at: "2026-05-19T00:00:00.000Z",
+      metadata: {
+        duration_sec: chunkNumber,
+        voice_profile_id: "voice_001",
+        timing_source: timingSource,
+        sample_rate: 24000,
+        format: "wav",
+        tts_chunk_id: `chunk_00${chunkNumber}`,
+        segment_ids: [`sb_00${chunkNumber}`],
+        script_excerpt: `第${chunkNumber}句旁白。`,
+      },
+    };
+  });
+
+  return {
+    ...makeTtsAndSubtitleManifest(),
+    executions: [
+      {
+        execution_id: "exec_sub_001",
+        task_id: "sub_001",
+        task_type: "subtitle_track",
+        status: "planned",
+        origin: "provider",
+        started_at: null,
+        completed_at: null,
+        provider_id: null,
+        attempts: 0,
+        output_artifact_ids: [],
+        notes: [],
+      },
+    ],
+    artifacts: chunkArtifacts,
+    audio_summary: {
+      ...makeTtsAndSubtitleManifest().audio_summary,
+      tts_chunk_artifact_ids: chunkArtifacts.map((artifact) => artifact.artifact_id),
+      tts_merged_artifact_id: "artifact_tts_merged",
+    },
+  };
+}
+
 // ─── Tests ─────────────────────────────────────────────────────────────────
 
 describe("local subtitle provider (via execution engine)", () => {
@@ -286,5 +336,62 @@ describe("local subtitle provider (via execution engine)", () => {
     // Subtitle files exist on disk
     expect(await stat(srtArtifact!.file_uri)).toBeTruthy();
     expect(await stat(vttArtifact!.file_uri)).toBeTruthy();
+  });
+
+  it("records subtitle timing metadata from source TTS chunks", async () => {
+    const result = await executeAssetManifest({
+      db: createDbClient(),
+      assetManifestRecordId: "manifest_001",
+      assetRunId: "assets_run_001",
+      manifest: makeSubtitleOnlyManifest({
+        timingSources: ["audio_probe", "audio_probe"],
+      }),
+      assetPlan: makeTtsAndSubtitleAssetPlan(),
+      registry: createAssetProviderRegistry([createLocalSubtitleProvider()]),
+      projectStorageRootDir: root,
+    });
+
+    const srtArtifact = result.manifest.artifacts.find(
+      (artifact) =>
+        artifact.artifact_type === "subtitle_track" &&
+        artifact.metadata.format === "srt",
+    );
+
+    expect(srtArtifact?.metadata).toMatchObject({
+      format: "srt",
+      source_tts_artifact_id: "artifact_tts_merged",
+      source_tts_chunk_artifact_ids: [
+        "artifact_tts_chunk_001",
+        "artifact_tts_chunk_002",
+      ],
+      caption_count: 2,
+      duration_sec: 3,
+      timing_source: "audio_probe",
+    });
+  });
+
+  it("marks subtitle timing source as mixed when source TTS chunks differ", async () => {
+    const result = await executeAssetManifest({
+      db: createDbClient(),
+      assetManifestRecordId: "manifest_001",
+      assetRunId: "assets_run_001",
+      manifest: makeSubtitleOnlyManifest({
+        timingSources: ["audio_probe", "estimated"],
+      }),
+      assetPlan: makeTtsAndSubtitleAssetPlan(),
+      registry: createAssetProviderRegistry([createLocalSubtitleProvider()]),
+      projectStorageRootDir: root,
+    });
+
+    const srtArtifact = result.manifest.artifacts.find(
+      (artifact) =>
+        artifact.artifact_type === "subtitle_track" &&
+        artifact.metadata.format === "srt",
+    );
+
+    expect(srtArtifact?.metadata).toMatchObject({
+      timing_source: "mixed",
+      duration_sec: 3,
+    });
   });
 });
