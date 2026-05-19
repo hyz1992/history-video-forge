@@ -31,7 +31,8 @@
 
 ## P0: TTS 分句、真实时长与字幕 timing
 
-- [x] 设计 TTS chunking 策略：按句、按 segment、按最大字符数和停顿规则切分。
+- [x] 完成 TTS chunking / 真实时长 / 字幕 timing 正式 design + implementation plan。
+- [ ] 实现 TTS chunking 策略：按句、按 segment、按最大字符数和停顿规则切分。
 - [ ] 记录每个 TTS chunk 的真实音频时长，替代纯 estimated duration。
 - [ ] 字幕 artifact 增加 timing source 分层：`estimated / provider_timestamp / forced_alignment`。
 - [ ] 接入 provider timestamps 或本地 forced alignment 的设计方案。

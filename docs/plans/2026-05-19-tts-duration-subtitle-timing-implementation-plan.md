@@ -29,6 +29,7 @@
 - Create `backend/src/modules/assets/audio-duration-probe.ts`: dependency-free WAV/PCM duration helper.
 - Create `tests/backend/assets/audio-duration-probe.test.ts`: synthetic audio duration tests.
 - Modify `backend/src/modules/assets/assets-run.service.ts`: apply normalized TTS plan for manifest build and provider execution.
+- Modify `backend/src/modules/assets/assets-manifest-builder.ts`: accept explicit normalized TTS chunk routes instead of relying only on chunk index to segment index.
 - Modify `backend/src/modules/assets/providers/dashscope/dashscope-tts-provider.ts`: probe downloaded audio duration and set timing metadata.
 - Modify `backend/src/modules/assets/providers/fake-tts-provider.ts`: preserve explicit estimated timing metadata.
 - Modify `backend/src/modules/assets/providers/local-subtitle-provider.ts`: write subtitle duration and timing metadata.
@@ -91,12 +92,21 @@ const TimingSource = z.enum([
   "audio_probe",
   "provider_timestamp",
   "forced_alignment",
+  "mixed",
   "provider",
   "aligned",
 ]);
 ```
 
 Use it for TTS chunk, merged TTS, and subtitle metadata. Add optional `estimated_duration_sec` and `duration_source` to TTS metadata, and add `source_tts_chunk_artifact_ids`, `duration_sec`, and `timing_source` to subtitle metadata.
+
+Before moving to Task 2, inspect existing fixtures:
+
+```bash
+rg -n "timing_source" tests backend/src shared/src
+```
+
+Keep existing `timing_source: "estimated"` assertions where fake/local providers still use estimates, and update only tests whose expected source changes because of this plan.
 
 - [ ] **Step 4: Run the focused test and verify green**
 
@@ -201,7 +211,9 @@ git commit -m "新增 TTS 分块规范化"
 
 - [ ] **Step 1: Write failing service integration test**
 
-Add a dry-run test with one long `tts_plan.chunks` item and two sentences. Assert the resulting manifest has derived `tts_chunk_routes` ids and does not mutate the stored `assetPlanRecord.planJson`.
+Add a dry-run test with one long `tts_plan.chunks` item and two sentences. Assert the resulting manifest has derived `tts_chunk_routes` ids, all derived routes inherit the parent segment id, and the stored `assetPlanRecord.planJson` is not mutated.
+
+Keep the existing artifact id convention for derived chunks: `artifact_tts_chunk_${chunk_id}`. For example, `chunk_1_part_1` becomes `artifact_tts_chunk_chunk_1_part_1`.
 
 - [ ] **Step 2: Run test and verify red**
 
@@ -218,10 +230,15 @@ Expected: fail because the manifest still uses the original single chunk.
 In `runAssetsGeneration()`, derive:
 
 ```ts
-const executionAssetPlan = normalizeAssetPlanTtsForExecution(assetPlanRecord.planJson);
+const normalizedTts = normalizeAssetPlanTtsForExecution({
+  assetPlan: assetPlanRecord.planJson,
+  segmentIds,
+});
 ```
 
-Use `executionAssetPlan` for `resolveVoiceProfile`, `buildInitialAssetManifest`, `executeAssetManifest`, and `validateAssetsManifest`. Keep `assetPlanRecord.planJson` unchanged in the database.
+Use `normalizedTts.assetPlan` for `resolveVoiceProfile`, `buildInitialAssetManifest`, `executeAssetManifest`, and `validateAssetsManifest`. Pass `normalizedTts.ttsChunkRoutes` into `buildInitialAssetManifest()` so `assets-manifest-builder.ts` does not re-derive segment ownership by normalized chunk index. Keep `assetPlanRecord.planJson` unchanged in the database.
+
+In `backend/src/modules/assets/assets-manifest-builder.ts`, extend the builder input with an optional `ttsChunkRoutes` array. When provided, use it to create placeholder TTS artifacts and `audio_summary.tts_chunk_routes`; when omitted, preserve the current positional behavior for compatibility.
 
 - [ ] **Step 4: Run service tests and verify green**
 
@@ -234,7 +251,7 @@ npx vitest run --configLoader runner tests/backend/assets/assets-run-service.tes
 - [ ] **Step 5: Commit**
 
 ```bash
-git add backend/src/modules/assets/assets-run.service.ts tests/backend/assets/assets-run-service.test.ts
+git add backend/src/modules/assets/assets-run.service.ts backend/src/modules/assets/assets-manifest-builder.ts tests/backend/assets/assets-run-service.test.ts
 git commit -m "接入 TTS 执行分块"
 ```
 
@@ -257,6 +274,8 @@ expect(readAudioDurationSec({
 ```
 
 Add fallback tests for unknown data returning `null`.
+
+Add a PCM test that passes explicit `sampleRate`, `bytesPerSample`, and `channels`, plus a test that relies on the intended 16-bit mono PCM defaults only when `format: "pcm"` is provided.
 
 - [ ] **Step 2: Run tests and verify red**
 
@@ -332,11 +351,13 @@ const probedDurationSec = readAudioDurationSec({
   data: buffer,
   format: options.format ?? "wav",
   sampleRate: options.sampleRate ?? 24000,
+  bytesPerSample: 2,
+  channels: 1,
 });
 const durationSec = probedDurationSec ?? chunk.estimated_duration_sec;
 ```
 
-Set `estimated_duration_sec`, `duration_source`, `timing_source`, and optional `duration_probe_error`. Merged duration is the sum of final chunk durations.
+Ensure `submit()` includes `estimated_duration_sec` in each raw chunk so `download()` can preserve the original estimate after audio probing. Set `estimated_duration_sec`, `duration_source`, `timing_source`, and optional `duration_probe_error`. Merged duration is the sum of final chunk durations.
 
 - [ ] **Step 4: Run provider tests and verify green**
 
@@ -373,6 +394,8 @@ expect(srt.metadata).toMatchObject({
 });
 ```
 
+Add a mixed-source test with one `audio_probe` chunk and one `estimated` chunk. Assert subtitle metadata uses `timing_source="mixed"`.
+
 - [ ] **Step 2: Run tests and verify red**
 
 Run:
@@ -383,7 +406,7 @@ npx vitest run --configLoader runner tests/backend/assets/local-subtitle-provide
 
 - [ ] **Step 3: Write subtitle timing metadata**
 
-When all source TTS chunks share a non-estimated timing source, propagate that source. Otherwise set subtitle `timing_source="estimated"`. Set `duration_sec` to the last cue end time and include `source_tts_chunk_artifact_ids`.
+When all source TTS chunks share one timing source, propagate that source. When the set contains more than one timing source, set subtitle `timing_source="mixed"`. If a source chunk omits timing source, treat it as `estimated`. Set `duration_sec` to the last cue end time and include `source_tts_chunk_artifact_ids`.
 
 - [ ] **Step 4: Run tests and verify green**
 
@@ -408,13 +431,13 @@ git commit -m "记录字幕计时来源"
 
 - [ ] **Step 1: Write compose regression test**
 
-Create a manifest with two TTS chunk artifacts whose durations are 1.5 and 2.5 seconds, and a merged TTS duration of 4. Assert:
+Create a manifest with three TTS chunk artifacts: two chunks route to `sb_001` with durations 1.5 and 2.5 seconds, and one chunk routes to `sb_002` with duration 3 seconds. The merged TTS duration is 7. Assert:
 
 ```ts
-expect(timeline.duration_sec).toBe(4);
+expect(timeline.duration_sec).toBe(7);
 expect(timeline.segments.map((segment) => segment.duration_sec)).toEqual([
-  1.5,
-  2.5,
+  4,
+  3,
 ]);
 expect(timeline.notes).not.toContain("compose_chunk_timing_fallback_used");
 ```
@@ -427,9 +450,20 @@ Run:
 npx vitest run --configLoader runner tests/backend/compose/compose-timeline-builder.test.ts
 ```
 
-Expected: pass if existing compose behavior already consumes chunk durations; otherwise fail and fix only the exposed gap.
+Expected: fail in the current code if multiple chunks target the same segment, because `chunkDurationBySegment.set()` overwrites rather than accumulates.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Fix accumulation only if the test fails**
+
+In `backend/src/modules/compose/compose-timeline-builder.ts`, replace overwrite behavior with accumulation:
+
+```ts
+chunkDurationBySegment.set(
+  segmentId,
+  (chunkDurationBySegment.get(segmentId) ?? 0) + perSegmentDuration,
+);
+```
+
+- [ ] **Step 4: Commit**
 
 ```bash
 git add tests/backend/compose/compose-timeline-builder.test.ts backend/src/modules/compose/compose-timeline-builder.ts

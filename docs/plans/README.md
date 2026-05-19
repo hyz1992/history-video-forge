@@ -140,6 +140,7 @@
 - 新增 [TTS Duration and Subtitle Timing Design](./2026-05-19-tts-duration-subtitle-timing-design.md)。
 - 新增 [TTS Duration and Subtitle Timing Implementation Plan](./2026-05-19-tts-duration-subtitle-timing-implementation-plan.md)。
 - 本轮设计只收口 assets-owned timing：本地规范化 TTS chunks、下载后音频时长探测、字幕 chunk 边界 timing metadata、compose 消费 chunk duration。
+- 审查修订后，计划明确子分块继承父 chunk 的 segment routes、manifest builder 消费显式 routes，并用回归测试覆盖 compose 对同一 segment 多个 TTS chunk 的时长累加。
 - 第一版不实现 word-level forced alignment、不默认真实 DashScope、不改 topic/script/storyboard/asset planning 语义链路，也不处理字幕样式或 renderer UI。
 
 ## 2026-05-19 视频流水线后续缺口清单
