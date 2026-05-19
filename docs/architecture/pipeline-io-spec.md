@@ -282,7 +282,7 @@ Asset Planning v1 消费 active `StoryboardRecord` 及其来源 `ScriptRecord` /
 
 ## 6. Assets v1 阶段（2026-05-18 已同步后端执行基础）
 
-Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `ScriptRecord` / `TopicPackage`，输出可持久化的资产执行结果清单。当前后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础，以及显式 DashScope TTS/文生图路径。它不实现 compose timeline，也不负责最终视频导出。
+Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `ScriptRecord` / `TopicPackage`，输出可持久化的资产执行结果清单。当前后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础、全局音色库解析，以及显式 DashScope TTS/文生图/image-to-video 路径。它不实现 compose timeline，也不负责最终视频导出。
 
 输入：
 
@@ -310,9 +310,13 @@ Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `Scr
 
 - `buildInitialAssetManifest` 从 `AssetPlan` 确定性构建：为每个 plan task 创建 `AssetTaskExecution`，为 `render_motion_cue` 创建 inline artifact，为 TTS chunk 创建占位 artifact，构建 `SegmentAssetRoute` 和 `AssetAudioSummary`。
 - 默认测试与自动化路径不调用真实 provider；显式 `provider_mode=dashscope` 可调用 DashScope TTS、文生图 provider，并在 `AssetPlan.tasks` 存在 `video_clip` 任务时调用 DashScope image-to-video provider。
+- 音色库属于 assets 阶段的全局共享能力，不随单个项目复制。`AssetPlan.global_audio_strategy.voice_intent` 可携带 `VoiceIntent`；assets 执行前会 seed 全局预设音色、用 deterministic matcher 产出 `VoiceMatchResult`，并在没有合适音色时只创建本地 `VoiceProfile` 档案，不立即调用供应商。
+- DashScope TTS 执行时才做供应商音色懒解析：若选中的本地 `VoiceProfile` 已有 `provider_voice_id` 或属于系统音色，则直接用于 TTS；若缺失且 provider 为 `dashscope`，才调用声音设计接口创建 provider voice，并回写本地音色状态。
+- DashScope TTS artifact metadata 同时保留本地 `voice_profile_id` 与供应商 `provider_voice_id`，并记录 `sample_rate`、`format`、`timing_source` 以及可用的匹配信息。字幕仍由本地 subtitle provider 基于 TTS 文本/估算时长生成，`timing_source` 保持 `estimated`，直到后续接入 provider timestamp 或 forced alignment。
 - DashScope image-to-video 仍属于 assets 阶段：它消费同 segment 已生成或已登记的 `image` artifact，产出本地 `video` artifact，并把该 segment route 推进为 `visual_route_type=video_clip`。
 - 若 `video_clip` 任务缺失、图生视频未启用或 provider 失败，既有 image + `motion_recipe` fallback 仍保留给 compose/renderer 消费。
 - 图生视频真实调用只通过显式 live check 或显式 `provider_mode=dashscope` 请求触发，不属于默认自动化门。
+- `harness:assets-dashscope-tts-live-check` 是低成本 TTS-only 显式检查入口；`harness:assets-dashscope-voice-live-check` 会创建供应商音色并合成一句测试音频，仍然是 opt-in，不进入默认测试门。
 - fake/local provider 与显式 DashScope 路径会在项目 storage 下写入本地 artifact 文件；物理上传 UI 与对象存储发布链路仍不属于 assets v1。
 - 不实现 compose timeline 或最终视频导出。
 

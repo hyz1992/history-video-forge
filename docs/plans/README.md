@@ -117,3 +117,11 @@
 - 供应商音色创建采用 assets 阶段懒创建：只有实际生成 TTS 时，才检查 `provider_voice_id` 并按需创建/查询供应商音色。
 - 默认测试不得调用真实 TTS 或真实图生视频；视频生成相关验证继续优先走 Remotion 本地合成。
 - Implementation plan 已拆为 9 个 TDD 任务：shared voice schemas、全局音色库 seed/repository、匹配器与本地音色创建、assets voice resolution、DashScope voice design provider boundary、designed voice TTS 集成、metadata/subtitle continuity、显式 live-check harness 和正式文档同步。
+
+## 2026-05-19 TTS / Voice Assets 实施进展
+
+- Implementation plan Task 1-9 已完成：shared voice schemas、全局音色库、deterministic matcher、本地音色创建、assets voice resolution、DashScope voice design provider boundary、designed voice TTS、artifact metadata/subtitle continuity、显式 voice live-check harness 与正式文档同步。
+- 音色库当前为 assets-owned 全局共享能力；`VoiceIntent` 可由 `AssetPlan.global_audio_strategy.voice_intent` 提供，assets 阶段产出 `VoiceMatchResult` 并选择本地 `VoiceProfile`。
+- 供应商音色创建采用懒创建：只有显式 DashScope TTS 执行需要且本地音色缺少 `provider_voice_id` 时，才调用声音设计接口。
+- `harness:assets-dashscope-tts-live-check` 是 TTS-only 低成本真实检查入口，已用系统音色跑通过一次小样本；`harness:assets-dashscope-voice-live-check` 会创建供应商音色，仍必须显式 opt-in。
+- 默认自动化测试仍不调用真实 provider；图生视频真实测试仍暂不默认执行。

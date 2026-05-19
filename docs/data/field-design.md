@@ -714,6 +714,7 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 | `source_script_record_id` | 来源 script record |
 | `source_topic_package_id` | 来源 topic package |
 | `art_bible` | 全局视觉一致性说明，类型为 `ProjectArtBible` |
+| `global_audio_strategy` | 全局音频策略；当前可包含 `voice_intent`，用于 assets 阶段匹配全局音色 |
 | `tts_plan` | 本地确定性 TTS 分块计划 |
 | `tasks` | 素材生产任务列表，元素为 `AssetTask` |
 | `dependencies` | 任务依赖关系 |
@@ -732,6 +733,23 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 | `global_prompt_prefix` | 视觉任务可复用的全局 prompt 前缀 |
 | `global_negative_prompts` | 全局负向提示词 |
 | `consistency_notes` | 跨任务一致性约束 |
+
+### `VoiceIntent`
+
+`VoiceIntent` 是 asset planning 到 assets 的结构化音色意图，可放在 `AssetPlan.global_audio_strategy.voice_intent` 中。它只描述匹配目标，不代表供应商音色已经创建。
+
+| 字段 | 含义 |
+|---|---|
+| `content_family` | 内容类型，例如 `historical_power`、`documentary`、`suspense` |
+| `narrator_persona` | 旁白人格描述 |
+| `desired_traits` | 期望音色特征列表 |
+| `avoid_traits` | 需要避开的音色特征列表 |
+| `gender_tone` | 性别/声线倾向，可为 `null` |
+| `age_band` | 年龄段倾向，可为 `null` |
+| `pitch` | 音高倾向，可为 `null` |
+| `pace` | 语速倾向，可为 `null` |
+| `energy` / `authority` / `suspense` / `warmth` | 0-1 区间的数值偏好，可为 `null` |
+| `style_notes` | 补充风格说明 |
 
 ### `AssetTask`
 
@@ -761,6 +779,41 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 | `errors` | 结构、引用、依赖或覆盖错误码 |
 | `warnings` | 非阻断警告 |
 | `metrics` | 任务数、依赖数、TTS 覆盖率等结构指标 |
+
+### `VoiceProfile`
+
+`VoiceProfile` 是 assets 阶段维护的全局共享音色档案，不属于单个视频任务私有数据。系统会 seed 预设音色与系统 fallback 音色；当 `VoiceIntent` 无法匹配到足够合适的已有音色时，可以只创建本地 `generated` 音色档案，供应商音色仍延后到 TTS 执行时懒创建。
+
+| 字段 | 含义 |
+|---|---|
+| `voice_profile_id` | 本地全局音色 ID |
+| `kind` | `preset / generated / system` |
+| `name` / `description` | 便于检索和人工理解的音色名称与摘要 |
+| `design_prompt` | 供应商声音设计提示词 |
+| `preview_text` | 声音设计预览文本 |
+| `provider_name` | 当前供应商，现阶段为 `dashscope` |
+| `provider_voice_id` | 供应商真实音色 ID；未创建时为 `null` |
+| `provider_status` | `missing / creating / ready / failed / deleted` |
+| `target_model` | 供应商目标 TTS 模型 |
+| `recommended_content_families` | 推荐匹配的内容类型 |
+| `voice_traits` / `avoid_traits` | 匹配用的正向与反向特征 |
+| `gender_tone` / `age_band` / `pitch` / `pace` | 匹配用的声线维度 |
+| `energy` / `authority` / `suspense` / `warmth` | 0-1 区间的匹配维度 |
+| `preview_audio_uri` | 供应商预览音频 URI，可为 `null` |
+| `usage_count` / `last_used_at` / `quality_score` | 后续运营与排序字段 |
+| `created_at` / `updated_at` | 创建与更新时间 |
+
+### `VoiceMatchResult`
+
+`VoiceMatchResult` 记录 assets 阶段选择本地音色的确定性结果。它用于解释为什么选中某个 `VoiceProfile`，不代表供应商调用结果。
+
+| 字段 | 含义 |
+|---|---|
+| `selected_voice_profile_id` | 最终选中的本地音色 ID |
+| `match_score` | 0-1 区间匹配分 |
+| `match_decision` | `matched_existing / created_local_profile / fallback_system` |
+| `match_reasons` | 可读匹配原因 |
+| `rejected_profile_ids` | 未选中候选及原因 |
 
 边界：
 
@@ -830,8 +883,8 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 
 | artifact_type | 元数据关键字段 |
 |---|---|
-| `tts_chunk_audio` | `duration_sec`、`voice_profile_id`、`tts_chunk_id`、`segment_ids`、`script_excerpt` |
-| `tts_merged_audio` | `duration_sec`、`voice_profile_id`、`chunk_artifact_ids` |
+| `tts_chunk_audio` | `duration_sec`、`voice_profile_id`、`provider_voice_id`、`voice_profile_match_score`、`voice_profile_match_reasons`、`timing_source`、`sample_rate`、`format`、`tts_chunk_id`、`segment_ids`、`script_excerpt` |
+| `tts_merged_audio` | `duration_sec`、`voice_profile_id`、`provider_voice_id`、`voice_profile_match_score`、`voice_profile_match_reasons`、`timing_source`、`sample_rate`、`format`、`chunk_artifact_ids` |
 | `subtitle_track` | `format`、`source_tts_artifact_id`、`caption_count` |
 | `image` | `width`、`height` |
 | `video` | `duration_sec`、`width`、`height`、`fps`、`provider_name`、`provider_job_id`、`source_image_artifact_id`、`model`、`resolution` |
@@ -862,6 +915,7 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 - DashScope image-to-video 成功时，`video` artifact 作为该 segment 的 `primary_visual_artifact_id`，`visual_route_type` 为 `video_clip`。
 - 同 segment 的 source image 会保留为 `fallback_visual_artifact_id`；图生视频缺失或失败时，compose/renderer 仍可使用 image + `motion_recipe` fallback。
 - DashScope image-to-video provider job 只属于 assets 阶段字段和 provider job 记录，不进入 compose 或 renderer 字段语义。
+- 字幕 artifact 当前来自本地 subtitle provider，跟随 TTS artifact 路由；字幕时间仍是估算值，直到后续接入 provider timestamps 或 forced alignment。
 
 ### `AssetAudioSummary`
 

@@ -425,6 +425,7 @@ Asset planning v1 已有第一版持久化记录。它是 `StoryboardRecord` 之
 说明：
 
 - `plan_json` 保存 `AssetPlan`。
+- `AssetPlan.global_audio_strategy.voice_intent` 可保存 `VoiceIntent`，供 assets 阶段匹配全局音色；该字段不表示供应商音色已创建。
 - `validation_result_json` 保存 `AssetPlanningValidationResult`。
 - `execution_state_json` 第一版至少记录 `regenerate_used`。
 - `asset_plan_records` 不保存真实 asset 文件、不保存上传对象、不保存 compose timeline。
@@ -474,8 +475,50 @@ Assets v1 已有第一版持久化记录。它是 `AssetPlanRecord` 之后的派
 
 - `manifest_json` 保存 `AssetManifest`，可包含 DashScope image-to-video 产出的 `video` artifact 及其 image fallback route。
 - `validation_result_json` 保存 `AssetsValidationResult`。
-- `execution_state_json` 记录 `execution_mode`、`voice_profile_id`、`activated` 等执行状态；显式 `provider_mode=dashscope` 的 TTS、image 和 image-to-video provider 调用由 assets provider job 记录和 manifest artifact metadata 表达。
+- `execution_state_json` 记录 `execution_mode`、`voice_profile_id`、`voice_match_result`、`activated` 等执行状态；显式 `provider_mode=dashscope` 的 TTS、image 和 image-to-video provider 调用由 assets provider job 记录和 manifest artifact metadata 表达。
+- DashScope TTS artifact metadata 会保存本地 `voice_profile_id`、供应商 `provider_voice_id`、`sample_rate`、`format`、`timing_source` 以及可用的音色匹配信息。
 - `asset_manifest_records` 不保存 compose timeline 或最终视频导出；图生视频只作为 assets artifact，不等同于最终导出 MP4。
+
+## VoiceProfile 全局音色库映射（2026-05-19 已实现）
+
+当前 greenfield 后端以 `DbClient.voiceProfiles` 保存全局共享音色库；后续落库时可映射为独立 `voice_profiles` 表。该库属于 assets 能力，不属于某个项目的私有记录。
+
+建议字段：
+
+- `voice_profile_id`
+- `kind`
+- `name`
+- `description`
+- `design_prompt`
+- `preview_text`
+- `provider_name`
+- `provider_voice_id`
+- `provider_status`
+- `target_model`
+- `recommended_content_families`
+- `voice_traits`
+- `avoid_traits`
+- `gender_tone`
+- `age_band`
+- `pitch`
+- `pace`
+- `energy`
+- `authority`
+- `suspense`
+- `warmth`
+- `preview_audio_uri`
+- `usage_count`
+- `last_used_at`
+- `quality_score`
+- `created_at`
+- `updated_at`
+
+说明：
+
+- 系统启动 assets 解析时会 seed 预设音色和系统 fallback 音色。
+- `provider_voice_id` 为空时，表示只存在本地音色档案；DashScope 供应商音色只在 TTS 执行需要时懒创建。
+- `VoiceMatchResult` 不单独建表；当前随 assets execution state 记录，用于解释本次视频任务选中哪个本地音色。
+- 默认测试与默认 provider mode 不调用真实声音设计或真实 TTS；显式 `harness:assets-dashscope-tts-live-check` 可只测低成本 TTS，显式 `harness:assets-dashscope-voice-live-check` 才会创建供应商音色。
 
 ## ComposeRecord 持久化映射（2026-05-17 已实现）
 

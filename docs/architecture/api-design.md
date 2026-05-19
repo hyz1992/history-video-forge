@@ -496,15 +496,15 @@ script 摘要第一版建议至少包含：
 
 - 从当前 active asset plan 生成 assets manifest v1。
 - 成功后保存 `AssetManifestRecord`，并把项目推进到 `assets_ready` 或 `assets_blocked`。
-- 当前默认路径使用 fake/local provider 与本地文件存储；显式 `provider_mode=dashscope` 可调用 DashScope TTS、文生图 provider，并在 active `AssetPlan` 存在 `video_clip` 任务时调用 DashScope image-to-video provider。该 API 仍不包含真实 BGM/SFX、前端上传/预览 UI 或发布级素材运营流。
+- 当前默认路径使用 fake/local provider 与本地文件存储；显式 `provider_mode=dashscope` 可调用 DashScope TTS、文生图 provider，并在 active `AssetPlan` 存在 `video_clip` 任务时调用 DashScope image-to-video provider。若 TTS 选中的本地全局音色缺少 `provider_voice_id`，DashScope TTS 执行会在 assets 阶段懒创建供应商音色。该 API 仍不包含真实 BGM/SFX、前端上传/预览 UI 或发布级素材运营流。
 
 输入：
 
 - URL 中的 `projectId`。
 - 可选请求体字段：
-  - `voice_profile_id`：TTS 声线 ID，默认 `"voice_default_male_storyteller"`。
+  - `voice_profile_id`：TTS 声线 ID，默认 `"voice_default_male_storyteller"`；若该 ID 未命中全局音色库，assets 会根据 `AssetPlan.global_audio_strategy.voice_intent` 做确定性匹配或创建本地音色档案。
   - `execution_mode`：`"auto_available"` 或 `"dry_run"`，默认 `"auto_available"`。
-  - `provider_mode`：可选；仅显式传 `"dashscope"` 时启用 DashScope TTS/文生图/image-to-video provider，否则默认 fake/local。
+  - `provider_mode`：可选；仅显式传 `"dashscope"` 时启用 DashScope TTS/文生图/image-to-video provider，以及 TTS 所需的供应商音色懒创建；否则默认 fake/local。
   - `dashscope`：可选 DashScope 配置覆盖，包括 `api_key`、`base_url`、`tts_model`、`tts_format`、`tts_sample_rate`、`image_model`、`image_size`、`image_poll_interval_ms`、`image_max_poll_attempts`、`image_to_video_model`、`image_to_video_resolution`、`image_to_video_duration_sec`、`image_to_video_poll_interval_ms`、`image_to_video_max_poll_attempts`。
 
 前置条件与错误：
@@ -591,7 +591,7 @@ script 摘要第一版建议至少包含：
 
 边界：
 
-- assets API 默认不调用真实 provider；显式 `provider_mode=dashscope` 允许 TTS、文生图与图生视频 provider。图生视频只在 assets 阶段处理 `video_clip` 任务，真实 SFX/BGM 仍未接入。
+- assets API 默认不调用真实 provider；显式 `provider_mode=dashscope` 允许 TTS、文生图与图生视频 provider。TTS 的供应商音色创建只在 assets TTS 执行中按需发生，不在 asset planning 或默认测试中发生；图生视频只在 assets 阶段处理 `video_clip` 任务，真实 SFX/BGM 仍未接入。
 - assets API 不修改 `script_text`、`TopicPackage`、`StoryboardPlan` 或 `AssetPlan`。
 - assets API 不生成 compose timeline 或最终视频。
 - assets API 不实现前端 UI、物理文件上传或预览功能。
