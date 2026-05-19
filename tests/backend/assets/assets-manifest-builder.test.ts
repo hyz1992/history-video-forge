@@ -5,6 +5,7 @@ import type {
   AssetPlan,
   AssetTask,
 } from "../../../shared/src/index.js";
+import { AssetArtifact } from "../../../shared/src/index.js";
 import { validateAssetsManifest } from "../../../backend/src/modules/assets/assets-local-validator.js";
 import { buildInitialAssetManifest } from "../../../backend/src/modules/assets/assets-manifest-builder.js";
 
@@ -224,6 +225,50 @@ function makeFullPlan(): AssetPlan {
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
+
+describe("AssetArtifact timing metadata schema", () => {
+  it("accepts audio_probe timing metadata on TTS chunk and subtitle artifacts", () => {
+    expect(() =>
+      AssetArtifact.parse({
+        artifact_id: "artifact_tts_chunk_001",
+        artifact_type: "tts_chunk_audio",
+        origin: "provider",
+        file_uri: "memory://tts-chunk.wav",
+        created_at: "2026-05-19T00:00:00.000Z",
+        metadata: {
+          duration_sec: 3.2,
+          estimated_duration_sec: 4,
+          duration_source: "audio_probe",
+          voice_profile_id: "voice_001",
+          timing_source: "audio_probe",
+          sample_rate: 24000,
+          format: "wav",
+          tts_chunk_id: "chunk_001",
+          segment_ids: ["sb_001"],
+          script_excerpt: "第一段旁白",
+        },
+      }),
+    ).not.toThrow();
+
+    expect(() =>
+      AssetArtifact.parse({
+        artifact_id: "artifact_subtitle_srt_001",
+        artifact_type: "subtitle_track",
+        origin: "provider",
+        file_uri: "memory://subtitle.srt",
+        created_at: "2026-05-19T00:00:00.000Z",
+        metadata: {
+          format: "srt",
+          source_tts_artifact_id: "artifact_tts_merged",
+          source_tts_chunk_artifact_ids: ["artifact_tts_chunk_001"],
+          caption_count: 1,
+          duration_sec: 3.2,
+          timing_source: "audio_probe",
+        },
+      }),
+    ).not.toThrow();
+  });
+});
 
 describe("buildInitialAssetManifest", () => {
   // ── 1. One execution per task ────────────────────────────────────────────────

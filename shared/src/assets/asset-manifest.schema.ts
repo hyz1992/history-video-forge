@@ -74,14 +74,26 @@ export const AssetExecutionOptions = z
 // .strict().passthrough() means: require listed fields, reject unknown top-level
 // keys, but the passthrough override re-allows extra provider-specific fields.
 
+const TimingSource = z.enum([
+  "estimated",
+  "audio_probe",
+  "provider_timestamp",
+  "forced_alignment",
+  "mixed",
+  "provider",
+  "aligned",
+]);
+
 const TtsChunkAudioMetadata = z
   .object({
     duration_sec: z.number().positive(),
+    estimated_duration_sec: z.number().positive().optional(),
+    duration_source: TimingSource.optional(),
     voice_profile_id: z.string().min(1),
     provider_voice_id: z.string().min(1).nullable().optional(),
     voice_profile_match_score: z.number().min(0).max(1).nullable().optional(),
     voice_profile_match_reasons: z.array(z.string().min(1)).optional(),
-    timing_source: z.enum(["provider", "estimated", "aligned"]).optional(),
+    timing_source: TimingSource.optional(),
     sample_rate: z.number().int().positive().optional(),
     format: z.string().min(1).optional(),
     tts_chunk_id: z.string().min(1),
@@ -94,11 +106,13 @@ const TtsChunkAudioMetadata = z
 const TtsMergedAudioMetadata = z
   .object({
     duration_sec: z.number().positive(),
+    estimated_duration_sec: z.number().positive().optional(),
+    duration_source: TimingSource.optional(),
     voice_profile_id: z.string().min(1),
     provider_voice_id: z.string().min(1).nullable().optional(),
     voice_profile_match_score: z.number().min(0).max(1).nullable().optional(),
     voice_profile_match_reasons: z.array(z.string().min(1)).optional(),
-    timing_source: z.enum(["provider", "estimated", "aligned"]).optional(),
+    timing_source: TimingSource.optional(),
     sample_rate: z.number().int().positive().optional(),
     format: z.string().min(1).optional(),
     chunk_artifact_ids: z.array(z.string().min(1)),
@@ -110,7 +124,10 @@ const SubtitleTrackMetadata = z
   .object({
     format: z.string().min(1),
     source_tts_artifact_id: z.string().min(1),
+    source_tts_chunk_artifact_ids: z.array(z.string().min(1)).optional(),
     caption_count: z.number().int().nonnegative(),
+    duration_sec: z.number().positive().optional(),
+    timing_source: TimingSource.optional(),
   })
   .strict()
   .passthrough();
