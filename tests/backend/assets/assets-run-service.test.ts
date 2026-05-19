@@ -9,6 +9,11 @@ import {
   registerManualArtifact,
   runAssetsGeneration,
 } from "../../../backend/src/modules/assets/assets-run.service.js";
+import {
+  configureVoiceProfilePersistence,
+  seedGlobalVoiceProfiles,
+  updateVoiceProfileProviderState,
+} from "../../../backend/src/modules/assets/voice/voice-profile.repository.js";
 import type { AssetManifest, AssetPlan } from "../../../shared/src/index.js";
 
 const TOPIC_PACKAGE_ID = "topic_001";
@@ -341,6 +346,44 @@ describe("assets run service integration", () => {
     expect(body.manifest.execution_options.voice_profile_id).toBe(
       resolvedVoiceProfileId,
     );
+  });
+
+  it("loads a persisted ready voice profile before assets voice resolution", async () => {
+    integrationTempDir = join(tmpdir(), `assets-persisted-voice-${Date.now()}`);
+    await mkdir(integrationTempDir, { recursive: true });
+
+    const setupDb = createDbClient();
+    configureVoiceProfilePersistence(setupDb, { rootDir: integrationTempDir });
+    await seedGlobalVoiceProfiles(setupDb);
+    await updateVoiceProfileProviderState(
+      setupDb,
+      "voice_preset_cold_authority",
+      {
+        provider_status: "ready",
+        provider_voice_id: "provider-voice-ready-001",
+        preview_audio_uri: "data:audio/wav;base64,cHJldmlldw==",
+      },
+    );
+
+    const { db, project } = await prepareProjectWithAssetPlan();
+    configureVoiceProfilePersistence(db, { rootDir: integrationTempDir });
+
+    const response = await runAssetsGeneration({
+      db,
+      project,
+      voiceProfileId: "voice_preset_cold_authority",
+      executionMode: "dry_run",
+    });
+    const body = response.body as { manifest: AssetManifest };
+
+    expect(response.statusCode).toBe(200);
+    expect(body.manifest.audio_summary.voice_profile_id).toBe(
+      "voice_preset_cold_authority",
+    );
+    expect(db.voiceProfiles.get("voice_preset_cold_authority")).toMatchObject({
+      provider_status: "ready",
+      provider_voice_id: "provider-voice-ready-001",
+    });
   });
 
   it("registers a manual image artifact into the segment route before revalidation", async () => {
