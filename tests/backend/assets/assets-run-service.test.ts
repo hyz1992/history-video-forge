@@ -455,6 +455,54 @@ describe("assets run service integration", () => {
     expect(persistedProfile?.last_used_at).toBe(profile?.last_used_at);
   });
 
+  it("uses normalized TTS chunks for execution without mutating the stored asset plan", async () => {
+    const { db, project } = await prepareProjectWithAssetPlan();
+    const assetPlanRecord = db.assetPlanRecords.get(ASSET_PLAN_RECORD_ID)!;
+    const originalText = `${"甲".repeat(100)}。${"乙".repeat(100)}。`;
+    assetPlanRecord.planJson = {
+      ...makeAssetPlan(),
+      tts_plan: {
+        ...makeAssetPlan().tts_plan,
+        chunks: [
+          {
+            chunk_id: "tts_001",
+            order: 0,
+            script_excerpt: originalText,
+            estimated_duration_sec: 12,
+          },
+        ],
+      },
+    };
+    const storedPlanBeforeRun = JSON.stringify(assetPlanRecord.planJson);
+
+    const response = await runAssetsGeneration({
+      db,
+      project,
+      voiceProfileId: "voice_plan",
+      executionMode: "dry_run",
+    });
+    const body = response.body as { manifest: AssetManifest };
+
+    expect(response.statusCode).toBe(200);
+    expect(body.manifest.audio_summary.tts_chunk_routes).toMatchObject([
+      {
+        tts_chunk_id: "tts_001_part_1",
+        segment_ids: ["sb_001"],
+      },
+      {
+        tts_chunk_id: "tts_001_part_2",
+        segment_ids: ["sb_001"],
+      },
+    ]);
+    expect(
+      body.manifest.audio_summary.tts_chunk_routes.map(
+        (route) => route.script_excerpt,
+      ),
+    ).toEqual([`${"甲".repeat(100)}。`, `${"乙".repeat(100)}。`]);
+    expect(JSON.stringify(assetPlanRecord.planJson)).toBe(storedPlanBeforeRun);
+    expect(assetPlanRecord.planJson.tts_plan.chunks).toHaveLength(1);
+  });
+
   it("registers a manual image artifact into the segment route before revalidation", async () => {
     const { db, project } = await prepareProjectWithAssetPlan();
 

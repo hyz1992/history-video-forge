@@ -29,6 +29,7 @@ import { createDashscopeImageProvider } from "./providers/dashscope/dashscope-im
 import { createDashscopeImageToVideoProvider } from "./providers/dashscope/dashscope-image-to-video-provider.js";
 import { configureVoiceProfilePersistence } from "./voice/voice-profile.repository.js";
 import { resolveVoiceProfile } from "./voice/voice-resolution.service.js";
+import { normalizeAssetPlanTtsForExecution } from "./tts-chunking.service.js";
 
 type AssetsProviderMode = "fake" | "dashscope";
 type DashscopeTtsFormat = "mp3" | "wav" | "flac" | "pcm";
@@ -407,12 +408,16 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   // Extract segment IDs from storyboard plan
   const storyboardPlan = storyboardRecord.planJson as { segments?: Array<{ segment_id: string }> };
   const segmentIds = storyboardPlan.segments?.map((s) => s.segment_id) ?? [];
+  const normalizedTts = normalizeAssetPlanTtsForExecution({
+    assetPlan: assetPlanRecord.planJson,
+    segmentIds,
+  });
 
   // Step 4: Resolve local global voice profile before manifest build
   const voiceResolution = await resolveVoiceProfile({
     db,
     requestedVoiceProfileId: input.voiceProfileId,
-    assetPlan: assetPlanRecord.planJson,
+    assetPlan: normalizedTts.assetPlan,
   });
 
   // Step 5: Build execution options from resolved voice profile
@@ -433,8 +438,9 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   // Step 6: Build manifest
   let manifest = buildInitialAssetManifest({
     assetPlanRecordId: assetPlanRecord.id,
-    assetPlan: assetPlanRecord.planJson,
+    assetPlan: normalizedTts.assetPlan,
     segmentIds,
+    ttsChunkRoutes: normalizedTts.ttsChunkRoutes,
     executionOptions,
   });
 
@@ -461,7 +467,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
       assetRunId: runId,
       manifest,
       registry,
-      assetPlan: assetPlanRecord.planJson,
+      assetPlan: normalizedTts.assetPlan,
       projectStorageRootDir: project.storageRootDir,
     });
 
@@ -474,7 +480,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     storyboardRecordId: assetPlanRecord.storyboardRecordId,
     scriptRecordId: assetPlanRecord.scriptRecordId,
     topicPackageId: assetPlanRecord.topicPackageId,
-    assetPlan: assetPlanRecord.planJson,
+    assetPlan: normalizedTts.assetPlan,
     manifest,
     projectStorageRootDir: project.storageRootDir,
   });

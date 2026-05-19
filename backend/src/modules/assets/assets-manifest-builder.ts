@@ -25,6 +25,8 @@ export interface BuildManifestInput {
   assetPlan: AssetPlan;
   /** Storyboard segment IDs, needed for TTS chunk-to-segment order alignment. */
   segmentIds: string[];
+  /** Optional precomputed TTS chunk routes, used when execution normalizes chunks. */
+  ttsChunkRoutes?: TtsChunkRoute[];
   executionOptions?: AssetExecutionOptions;
 }
 
@@ -135,8 +137,8 @@ function buildMotionRecipeArtifacts(
 function buildTtsChunkArtifacts(
   ttsPlan: AssetPlan["tts_plan"],
   segmentIds: string[],
-  chunkCountMismatch: boolean,
   voiceProfileId: string,
+  explicitChunkRoutes?: TtsChunkRoute[],
 ): {
   artifacts: AssetArtifact[];
   chunkRoutes: TtsChunkRoute[];
@@ -150,14 +152,19 @@ function buildTtsChunkArtifacts(
   for (let i = 0; i < ttsPlan.chunks.length; i++) {
     const chunk = ttsPlan.chunks[i]!;
     const segmentId = i < segmentIds.length ? segmentIds[i]! : null;
+    const explicitRoute = explicitChunkRoutes?.find(
+      (route) => route.tts_chunk_id === chunk.chunk_id,
+    );
+    const routeSegmentIds =
+      explicitRoute?.segment_ids ?? (segmentId ? [segmentId] : []);
     const artifactId = generateId("artifact_tts_chunk", chunk.chunk_id);
 
     // Build the chunk route — maps TTS chunk to segment
     chunkRoutes.push({
       tts_chunk_id: chunk.chunk_id,
       artifact_id: artifactId,
-      segment_ids: segmentId ? [segmentId] : [],
-      script_excerpt: chunk.script_excerpt,
+      segment_ids: routeSegmentIds,
+      script_excerpt: explicitRoute?.script_excerpt ?? chunk.script_excerpt,
     });
 
     // Build a placeholder TTS chunk artifact
@@ -173,7 +180,7 @@ function buildTtsChunkArtifacts(
         duration_sec: chunk.estimated_duration_sec,
         voice_profile_id: voiceProfileId,
         tts_chunk_id: chunk.chunk_id,
-        segment_ids: segmentId ? [segmentId] : [],
+        segment_ids: routeSegmentIds,
         script_excerpt: chunk.script_excerpt,
       },
     });
@@ -397,13 +404,19 @@ export function buildInitialAssetManifest(input: BuildManifestInput): AssetManif
 
   // ── TTS chunk artifacts and routes ───────────────────────────────────────
   const chunkCountMismatch =
-    assetPlan.tts_plan.chunks.length !== segmentIds.length;
+    input.ttsChunkRoutes
+      ? !segmentIds.every((segmentId) =>
+          input.ttsChunkRoutes!.some((route) =>
+            route.segment_ids.includes(segmentId),
+          ),
+        )
+      : assetPlan.tts_plan.chunks.length !== segmentIds.length;
 
   const { artifacts: ttsArtifacts, chunkRoutes } = buildTtsChunkArtifacts(
     assetPlan.tts_plan,
     segmentIds,
-    chunkCountMismatch,
     voiceProfileId,
+    input.ttsChunkRoutes,
   );
 
   // Wire TTS chunk artifacts to the tts_audio execution

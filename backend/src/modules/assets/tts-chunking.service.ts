@@ -1,4 +1,7 @@
-import type { AssetPlan } from "../../../../shared/src/index.js";
+import type {
+  AssetPlan,
+  TtsChunkRoute,
+} from "../../../../shared/src/index.js";
 
 type TtsPlan = AssetPlan["tts_plan"];
 type TtsPlanChunk = TtsPlan["chunks"][number];
@@ -32,6 +35,72 @@ export function normalizeTtsPlanForExecution(input: {
     ...input.ttsPlan,
     estimated_total_duration_sec: sumDurations(orderedChunks),
     chunks: orderedChunks,
+  };
+}
+
+export function normalizeAssetPlanTtsForExecution(input: {
+  assetPlan: AssetPlan;
+  segmentIds: string[];
+  maxCharsPerChunk?: number;
+  targetCharsPerChunk?: number;
+  minDurationSec?: number;
+}): {
+  assetPlan: AssetPlan;
+  ttsChunkRoutes: TtsChunkRoute[];
+} {
+  const maxCharsPerChunk = Math.max(
+    1,
+    Math.floor(input.maxCharsPerChunk ?? DEFAULT_MAX_CHARS_PER_CHUNK),
+  );
+  const minDurationSec =
+    input.minDurationSec ?? MIN_TTS_CHUNK_DURATION_SEC;
+
+  const chunksWithRoutes: Array<{
+    chunk: TtsPlanChunk;
+    segmentIds: string[];
+  }> = [];
+
+  for (let i = 0; i < input.assetPlan.tts_plan.chunks.length; i++) {
+    const chunk = input.assetPlan.tts_plan.chunks[i]!;
+    const parentSegmentIds =
+      i < input.segmentIds.length ? [input.segmentIds[i]!] : [];
+    const normalizedChunks = normalizeChunk(
+      chunk,
+      maxCharsPerChunk,
+      minDurationSec,
+    );
+
+    for (const normalizedChunk of normalizedChunks) {
+      chunksWithRoutes.push({
+        chunk: normalizedChunk,
+        segmentIds: parentSegmentIds,
+      });
+    }
+  }
+
+  const orderedChunks = chunksWithRoutes.map((item, order) => ({
+    ...item.chunk,
+    order,
+  }));
+  const ttsChunkRoutes = orderedChunks.map((chunk, index) => ({
+    tts_chunk_id: chunk.chunk_id,
+    artifact_id: null,
+    segment_ids: chunksWithRoutes[index]!.segmentIds,
+    script_excerpt: chunk.script_excerpt,
+  }));
+
+  const normalizedTtsPlan: TtsPlan = {
+    ...input.assetPlan.tts_plan,
+    estimated_total_duration_sec: sumDurations(orderedChunks),
+    chunks: orderedChunks,
+  };
+
+  return {
+    assetPlan: {
+      ...input.assetPlan,
+      tts_plan: normalizedTtsPlan,
+    },
+    ttsChunkRoutes,
   };
 }
 
