@@ -125,3 +125,8 @@
 - 供应商音色创建采用懒创建：只有显式 DashScope TTS 执行需要且本地音色缺少 `provider_voice_id` 时，才调用声音设计接口。
 - `harness:assets-dashscope-tts-live-check` 是 TTS-only 低成本真实检查入口，已用系统音色跑通过一次小样本；`harness:assets-dashscope-voice-live-check` 会创建供应商音色，仍必须显式 opt-in。
 - 默认自动化测试仍不调用真实 provider；图生视频真实测试仍暂不默认执行。
+
+## 2026-05-19 视频流水线后续缺口清单
+
+- 新增 [Video Pipeline Follow-up Backlog](../records/2026-05-19-video-pipeline-follow-up-backlog.md)。
+- 该文档是可勾选的后续缺口清单，不是正式 implementation plan；进入音色库持久化、字幕 timing、BGM/SFX、Remotion 成片质量或图生视频真实验证前，仍需先写独立 design / implementation plan。
