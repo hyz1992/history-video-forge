@@ -19,6 +19,35 @@ import {
 import { seedGlobalVoiceProfiles } from "../../../backend/src/modules/assets/voice/voice-profile.repository.js";
 import type { AssetManifest, AssetPlan } from "../../../shared/src/index.js";
 
+function makeWavBuffer(input: {
+  durationSec: number;
+  sampleRate: number;
+  channels?: number;
+  bytesPerSample?: number;
+}): Buffer {
+  const channels = input.channels ?? 1;
+  const bytesPerSample = input.bytesPerSample ?? 2;
+  const byteRate = input.sampleRate * channels * bytesPerSample;
+  const dataSize = Math.round(input.durationSec * byteRate);
+  const buffer = Buffer.alloc(44 + dataSize);
+
+  buffer.write("RIFF", 0, "ascii");
+  buffer.writeUInt32LE(36 + dataSize, 4);
+  buffer.write("WAVE", 8, "ascii");
+  buffer.write("fmt ", 12, "ascii");
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(channels, 22);
+  buffer.writeUInt32LE(input.sampleRate, 24);
+  buffer.writeUInt32LE(byteRate, 28);
+  buffer.writeUInt16LE(channels * bytesPerSample, 32);
+  buffer.writeUInt16LE(bytesPerSample * 8, 34);
+  buffer.write("data", 36, "ascii");
+  buffer.writeUInt32LE(dataSize, 40);
+
+  return buffer;
+}
+
 describe("dashscope TTS payload builder", () => {
   it("payload includes text and voice_profile_id", () => {
     const payload = buildDashscopeTtsPayload({
@@ -272,6 +301,119 @@ describe("dashscope TTS provider adapter", () => {
     });
     await expect(stat(chunkArtifact!.file_uri)).resolves.toBeTruthy();
     await expect(stat(mergedArtifact!.file_uri)).resolves.toBeTruthy();
+  });
+
+  it("records probed WAV duration metadata for chunk and merged artifacts", async () => {
+    tempDir = join(tmpdir(), `dashscope-tts-duration-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+
+    const assetPlan = makeTtsAssetPlan();
+    assetPlan.tts_plan.estimated_total_duration_sec = 4;
+    assetPlan.tts_plan.chunks[0]!.estimated_duration_sec = 4;
+    const wavBuffer = makeWavBuffer({
+      durationSec: 1.5,
+      sampleRate: 24000,
+    });
+
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.includes("/api/v1/services/aigc/multimodal-generation/generation")) {
+        return new Response(
+          JSON.stringify({
+            output: { audio: { url: "https://download.test/chunk.wav" } },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(wavBuffer, { status: 200 });
+    });
+
+    const result = await executeAssetManifest({
+      db: createDbClient(),
+      assetManifestRecordId: "manifest_001",
+      assetRunId: "assets_run_001",
+      manifest: makeTtsManifest(),
+      assetPlan,
+      registry: createAssetProviderRegistry([
+        createDashscopeTtsProvider({
+          apiKey: "test-key",
+          baseUrl: "https://dashscope.test",
+          model: "qwen3-tts-instruct-flash",
+          format: "wav",
+          sampleRate: 24000,
+        }),
+      ]),
+      projectStorageRootDir: tempDir,
+    });
+
+    const chunkArtifact = result.manifest.artifacts.find(
+      (artifact) => artifact.artifact_type === "tts_chunk_audio",
+    );
+    const mergedArtifact = result.manifest.artifacts.find(
+      (artifact) => artifact.artifact_type === "tts_merged_audio",
+    );
+
+    expect(chunkArtifact?.metadata).toMatchObject({
+      duration_sec: 1.5,
+      estimated_duration_sec: 4,
+      duration_source: "audio_probe",
+      timing_source: "audio_probe",
+    });
+    expect(mergedArtifact?.metadata).toMatchObject({
+      duration_sec: 1.5,
+      estimated_duration_sec: 4,
+      duration_source: "audio_probe",
+      timing_source: "audio_probe",
+    });
+  });
+
+  it("falls back to estimated duration when downloaded audio cannot be probed", async () => {
+    tempDir = join(tmpdir(), `dashscope-tts-duration-fallback-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+
+    const assetPlan = makeTtsAssetPlan();
+    assetPlan.tts_plan.estimated_total_duration_sec = 4;
+    assetPlan.tts_plan.chunks[0]!.estimated_duration_sec = 4;
+
+    vi.stubGlobal("fetch", async (url: string) => {
+      if (url.includes("/api/v1/services/aigc/multimodal-generation/generation")) {
+        return new Response(
+          JSON.stringify({
+            output: { audio: { url: "https://download.test/chunk.mp3" } },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(Buffer.from("not-probeable-audio"), { status: 200 });
+    });
+
+    const result = await executeAssetManifest({
+      db: createDbClient(),
+      assetManifestRecordId: "manifest_001",
+      assetRunId: "assets_run_001",
+      manifest: makeTtsManifest(),
+      assetPlan,
+      registry: createAssetProviderRegistry([
+        createDashscopeTtsProvider({
+          apiKey: "test-key",
+          baseUrl: "https://dashscope.test",
+          model: "qwen3-tts-instruct-flash",
+          format: "mp3",
+        }),
+      ]),
+      projectStorageRootDir: tempDir,
+    });
+
+    const chunkArtifact = result.manifest.artifacts.find(
+      (artifact) => artifact.artifact_type === "tts_chunk_audio",
+    );
+
+    expect(chunkArtifact?.metadata).toMatchObject({
+      duration_sec: 4,
+      estimated_duration_sec: 4,
+      duration_source: "estimated",
+      timing_source: "estimated",
+      duration_probe_error: "audio_duration_probe_unavailable",
+    });
   });
 
   it("creates missing provider voice before TTS and keeps local voice metadata", async () => {

@@ -15,6 +15,7 @@ import {
   resolveAssetsRunStorage,
   writeAssetFile,
 } from "../../assets-file-storage.js";
+import { readAudioDurationSec } from "../../audio-duration-probe.js";
 import { resolveProviderVoice } from "../../voice/provider-voice-resolution.service.js";
 
 export interface DashScopeTtsInput {
@@ -211,10 +212,24 @@ export function createDashscopeTtsProvider(
       const chunkArtifactIds: string[] = [];
       const chunkBuffers: Buffer[] = [];
       let totalDuration = 0;
+      let totalEstimatedDuration = 0;
+      let allDurationsProbed = true;
 
       for (const chunk of rawChunks) {
         const buffer = await downloadAudio(chunk.audio_url);
         chunkBuffers.push(buffer);
+        const probedDurationSec = readAudioDurationSec({
+          data: buffer,
+          format: options.format ?? "wav",
+          sampleRate: options.sampleRate ?? 24000,
+          bytesPerSample: 2,
+          channels: 1,
+        });
+        const durationWasProbed = probedDurationSec !== null;
+        const durationSec = probedDurationSec ?? chunk.estimated_duration_sec;
+        if (!durationWasProbed) {
+          allDurationsProbed = false;
+        }
 
         const written = await writeAssetFile({
           storage,
@@ -227,7 +242,8 @@ export function createDashscopeTtsProvider(
         );
         const artifactId = `artifact_tts_chunk_${chunk.chunk_id}`;
         chunkArtifactIds.push(artifactId);
-        totalDuration += chunk.estimated_duration_sec;
+        totalDuration += durationSec;
+        totalEstimatedDuration += chunk.estimated_duration_sec;
 
         artifacts.push({
           artifact_id: artifactId,
@@ -236,14 +252,19 @@ export function createDashscopeTtsProvider(
           file_uri: written.fileUri,
           created_at: new Date().toISOString(),
           metadata: {
-            duration_sec: chunk.estimated_duration_sec,
+            duration_sec: durationSec,
+            estimated_duration_sec: chunk.estimated_duration_sec,
+            duration_source: durationWasProbed ? "audio_probe" : "estimated",
             voice_profile_id: voiceProfileId,
             provider_voice_id: chunk.provider_voice_id,
             voice_profile_match_score:
               chunk.voice_profile_match_score ?? null,
             voice_profile_match_reasons:
               chunk.voice_profile_match_reasons ?? [],
-            timing_source: "estimated",
+            timing_source: durationWasProbed ? "audio_probe" : "estimated",
+            ...(durationWasProbed
+              ? {}
+              : { duration_probe_error: "audio_duration_probe_unavailable" }),
             sample_rate: options.sampleRate ?? 24000,
             format: options.format ?? "wav",
             tts_chunk_id: chunk.chunk_id,
@@ -271,13 +292,18 @@ export function createDashscopeTtsProvider(
         created_at: new Date().toISOString(),
         metadata: {
           duration_sec: totalDuration,
+          estimated_duration_sec: totalEstimatedDuration,
+          duration_source: allDurationsProbed ? "audio_probe" : "estimated",
           voice_profile_id: voiceProfileId,
           provider_voice_id: rawChunks[0]?.provider_voice_id,
           voice_profile_match_score:
             rawChunks[0]?.voice_profile_match_score ?? null,
           voice_profile_match_reasons:
             rawChunks[0]?.voice_profile_match_reasons ?? [],
-          timing_source: "estimated",
+          timing_source: allDurationsProbed ? "audio_probe" : "estimated",
+          ...(allDurationsProbed
+            ? {}
+            : { duration_probe_error: "audio_duration_probe_unavailable" }),
           sample_rate: options.sampleRate ?? 24000,
           format: options.format ?? "wav",
           chunk_artifact_ids: chunkArtifactIds,
