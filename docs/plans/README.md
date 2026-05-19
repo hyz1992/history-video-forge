@@ -126,6 +126,16 @@
 - `harness:assets-dashscope-tts-live-check` 是 TTS-only 低成本真实检查入口，已用系统音色跑通过一次小样本；`harness:assets-dashscope-voice-live-check` 会创建供应商音色，仍必须显式 opt-in。
 - 默认自动化测试仍不调用真实 provider；图生视频真实测试仍暂不默认执行。
 
+## 2026-05-19 音色库持久化实施进展
+
+- 新增 [Voice Profile Persistence Design](./2026-05-19-voice-profile-persistence-design.md)。
+- 新增 [Voice Profile Persistence Implementation Plan](./2026-05-19-voice-profile-persistence-implementation-plan.md)。
+- 已完成本地 JSON store、repository persistence、非破坏性 seed、assets 加载守卫、项目 `storageRootDir` 自动接线与 mocked DashScope TTS 跨任务复用验证。
+- 当前持久化文件路径为 `storage/voice-profiles/voice-profiles.json`，schema version 为 `voice_profiles_v1`；测试使用临时目录，默认不写真实项目根目录。
+- 已完成提交：`958065c`、`e3e4459`、`0fcd40d`、`1bfa221`、`57ca1e2`、`d23e8e1`。
+- 尚未完成独立文档收口：`docs/data/schema-design.md`、`docs/data/field-design.md`、`docs/architecture/pipeline-io-spec.md` 与 `.gitignore` 是否忽略 `storage/voice-profiles/` 的最终决定仍需单独任务处理。
+- 下一步建议先做使用统计回写：成功选择/复用音色后更新 `usage_count` 与 `last_used_at`，继续按 TDD 小步提交。
+
 ## 2026-05-19 视频流水线后续缺口清单
 
 - 新增 [Video Pipeline Follow-up Backlog](../records/2026-05-19-video-pipeline-follow-up-backlog.md)。

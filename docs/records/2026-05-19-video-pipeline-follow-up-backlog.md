@@ -15,18 +15,19 @@
 
 ## P0: 音色库持久化与跨任务复用
 
-- [ ] 设计 `voice_profiles` 持久化映射，明确是否先用本地 JSON / SQLite / 后续数据库表。
-- [ ] 将当前 `DbClient.voiceProfiles` 的内存模型映射到长期存储。
-- [ ] 保存真实创建后的 `provider_voice_id`、`provider_status`、`preview_audio_uri`、`updated_at`。
-- [ ] 启动或 assets 执行前加载全局音色库，并只 seed 缺失预设，不覆盖已 ready 的 provider voice。
-- [ ] 增加跨项目/跨任务复用测试：已有 `provider_voice_id` 时不调用声音设计。
+- [x] 设计 `voice_profiles` 持久化映射，明确先用本地 JSON，后续数据库表仍作为迁移目标。
+- [x] 将当前 `DbClient.voiceProfiles` 的内存模型映射到长期存储：`storage/voice-profiles/voice-profiles.json`。
+- [x] 保存真实创建后的 `provider_voice_id`、`provider_status`、`preview_audio_uri`、`updated_at`。
+- [x] assets 执行前可从项目 `storageRootDir` 自动接线全局音色库，并只 seed 缺失预设，不覆盖已 ready 的 provider voice。
+- [x] 增加跨项目/跨任务复用测试：已有 `provider_voice_id` 时不调用声音设计。
 - [ ] 增加迁移/初始化说明，避免真实 provider voice 丢失后重复付费创建。
+- [ ] 增加使用统计回写：成功复用/选择音色后更新 `usage_count` 与 `last_used_at`。
 
 验收建议：
 
-- [ ] 单元测试覆盖 seed 不覆盖 ready provider voice。
-- [ ] 集成测试覆盖 assets run 使用既有 provider voice 生成 TTS。
-- [ ] `git diff --check` 通过，并中文提交。
+- [x] 单元测试覆盖 seed 不覆盖 ready provider voice。
+- [x] 集成测试覆盖 assets run 使用既有 provider voice 生成 TTS。
+- [x] `git diff --check` 通过，并中文提交。
 
 ## P0: TTS 分句、真实时长与字幕 timing
 

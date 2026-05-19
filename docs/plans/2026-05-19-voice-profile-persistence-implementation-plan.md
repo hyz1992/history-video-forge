@@ -10,6 +10,33 @@
 
 ---
 
+## Implementation Progress
+
+Status as of 2026-05-19:
+
+- [x] Task 1: Voice Profile JSON Store.
+  - Commit: `958065c` / `e3e4459` path created and verified.
+  - Evidence: `tests/backend/assets/voice-profile-library-store.test.ts`.
+- [x] Task 2: Repository Persistence and Non-Destructive Seed.
+  - Commit: `0fcd40d`.
+  - Evidence: `tests/backend/assets/voice-profile-repository.test.ts`.
+- [x] Task 3: Assets Loading Guard.
+  - Commit: `1bfa221`.
+  - Evidence: `tests/backend/assets/assets-run-service.test.ts`.
+- [x] Task 4: Cross-Task Provider Voice Reuse.
+  - Commit: `57ca1e2`.
+  - Evidence: mocked DashScope TTS reuse test proves persisted `provider_voice_id` bypasses voice design.
+- [x] Project storage-root persistence wiring.
+  - Commit: `d23e8e1`.
+  - Evidence: service-level test proves `runAssetsGeneration()` auto-configures persistence from `project.storageRootDir` when no explicit config exists.
+- [ ] Task 5: Docs, Ignore Rules, and Final Regression.
+  - Not fully executed in this plan yet.
+  - Remaining scope: sync formal data/architecture docs, decide whether `.gitignore` should ignore `storage/voice-profiles/`, and run the final focused regression set.
+
+Next recommended low-coupling implementation task: persist voice profile usage telemetry (`usage_count` and `last_used_at`) after successful assets/TTS resolution, with a focused failing repository or service test first.
+
+---
+
 ## Session Rules
 
 - Read `AGENTS.md` before execution.
