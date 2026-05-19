@@ -46,6 +46,13 @@ export {
   MediaLibraryLicense,
 } from "./assets/media-library.schema";
 export {
+  VoiceIntent,
+  VoiceMatchResult,
+  VoiceProfile,
+  VoiceProfileKind,
+  VoiceProviderStatus,
+} from "./voice/voice-profile.schema";
+export {
   ComposeClip,
   ComposeClipKind,
   ComposeReadiness,

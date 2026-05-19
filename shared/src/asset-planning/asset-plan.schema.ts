@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { VoiceIntent } from "../voice/voice-profile.schema";
+
 export const AssetTaskType = z.enum([
   "tts_audio",
   "image_still",
@@ -155,7 +157,12 @@ export const AssetPlan = z
     art_bible: ProjectArtBible,
     visual_budget: z.record(z.string(), z.unknown()).default({}),
     downgrade_policy: z.record(z.string(), z.unknown()).default({}),
-    global_audio_strategy: z.record(z.string(), z.unknown()).default({}),
+    global_audio_strategy: z
+      .object({
+        voice_intent: VoiceIntent.optional(),
+      })
+      .passthrough()
+      .default({}),
     tts_plan: TtsPlanningSummary,
     tasks: z.array(AssetTask).min(1),
     dependencies: z.array(AssetTaskDependency),

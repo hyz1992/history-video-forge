@@ -78,6 +78,12 @@ const TtsChunkAudioMetadata = z
   .object({
     duration_sec: z.number().positive(),
     voice_profile_id: z.string().min(1),
+    provider_voice_id: z.string().min(1).nullable().optional(),
+    voice_profile_match_score: z.number().min(0).max(1).optional(),
+    voice_profile_match_reasons: z.array(z.string().min(1)).optional(),
+    timing_source: z.enum(["provider", "estimated", "aligned"]).optional(),
+    sample_rate: z.number().int().positive().optional(),
+    format: z.string().min(1).optional(),
     tts_chunk_id: z.string().min(1),
     segment_ids: z.array(z.string().min(1)),
     script_excerpt: z.string().min(1),
@@ -89,6 +95,12 @@ const TtsMergedAudioMetadata = z
   .object({
     duration_sec: z.number().positive(),
     voice_profile_id: z.string().min(1),
+    provider_voice_id: z.string().min(1).nullable().optional(),
+    voice_profile_match_score: z.number().min(0).max(1).optional(),
+    voice_profile_match_reasons: z.array(z.string().min(1)).optional(),
+    timing_source: z.enum(["provider", "estimated", "aligned"]).optional(),
+    sample_rate: z.number().int().positive().optional(),
+    format: z.string().min(1).optional(),
     chunk_artifact_ids: z.array(z.string().min(1)),
   })
   .strict()

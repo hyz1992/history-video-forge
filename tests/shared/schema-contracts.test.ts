@@ -19,9 +19,83 @@ import {
   TopicCandidateCard,
   TopicDeliveryPack,
   TopicPackage,
+  VoiceIntent,
+  VoiceMatchResult,
+  VoiceProfile,
 } from "../../shared/src/index.js";
 
 describe("shared schema contracts", () => {
+  it("parses shared voice intent, profile, and match result contracts", () => {
+    const intent = VoiceIntent.parse({
+      content_family: "historical_power",
+      narrator_persona: "冷静旁白",
+      desired_traits: ["cold", "authoritative", "restrained"],
+      avoid_traits: ["shouting", "broadcast_exaggeration"],
+      gender_tone: "male_leaning",
+      age_band: "35-45",
+      pitch: "mid_low",
+      pace: "medium_slow",
+      energy: 0.45,
+      authority: 0.9,
+      suspense: 0.7,
+      warmth: 0.2,
+      style_notes: ["短停顿", "重音明确"],
+    });
+
+    expect(intent.content_family).toBe("historical_power");
+
+    const profile = VoiceProfile.parse({
+      voice_profile_id: "voice_cold_authority",
+      kind: "preset",
+      name: "冷峻权谋型",
+      description: "冷静、有压迫感的历史权谋旁白",
+      design_prompt:
+        "35 到 45 岁偏男中低音，声线收紧，低沉克制，重音明确，停顿短促，情绪冷静而有压迫感，适合权谋、战争、内幕和高风险叙事。避免怒吼、恐吓腔、舞台表演感和过重气泡音。",
+      preview_text: "诏令还没出宫门，刀兵就先到了阶下。",
+      provider_name: "dashscope",
+      provider_voice_id: null,
+      provider_status: "missing",
+      target_model: "qwen3-tts-vd-2026-01-26",
+      recommended_content_families: ["historical_power", "war"],
+      voice_traits: ["cold", "authoritative", "restrained"],
+      avoid_traits: ["shouting", "stage_acting"],
+      gender_tone: "male_leaning",
+      age_band: "35-45",
+      pitch: "mid_low",
+      pace: "medium_slow",
+      energy: 0.45,
+      authority: 0.9,
+      suspense: 0.7,
+      warmth: 0.2,
+      preview_audio_uri: null,
+      usage_count: 0,
+      last_used_at: null,
+      quality_score: null,
+      created_at: "2026-05-19T00:00:00.000Z",
+      updated_at: "2026-05-19T00:00:00.000Z",
+    });
+
+    expect(profile.provider_status).toBe("missing");
+
+    const match = VoiceMatchResult.parse({
+      selected_voice_profile_id: "voice_cold_authority",
+      match_score: 0.91,
+      match_decision: "matched_existing",
+      match_reasons: [
+        "content_family:historical_power",
+        "traits:cold,authoritative",
+      ],
+      rejected_profile_ids: [
+        {
+          voice_profile_id: "voice_crisp_storyteller",
+          reason: "trait_mismatch",
+        },
+      ],
+    });
+
+    expect(match.match_decision).toBe("matched_existing");
+  });
+
   it("parses the topic and script shared contracts", () => {
     const candidate = TopicCandidateCard.parse({
       event_identity: "yanzi-envoy-to-chu",
@@ -691,6 +765,26 @@ describe("shared schema contracts", () => {
       ],
       artifacts: [
         {
+          artifact_id: "art_tts_001",
+          artifact_type: "tts_chunk_audio",
+          origin: "provider",
+          file_uri: "memory://tts_chunk.wav",
+          created_at: "2025-01-01T00:00:05Z",
+          metadata: {
+            duration_sec: 5.0,
+            voice_profile_id: "voice_1",
+            provider_voice_id: "voice-provider-001",
+            voice_profile_match_score: 0.91,
+            voice_profile_match_reasons: ["matched existing preset"],
+            timing_source: "estimated",
+            sample_rate: 24000,
+            format: "wav",
+            tts_chunk_id: "tts_chunk_001",
+            segment_ids: ["sb_001"],
+            script_excerpt: "楚王第一次压场时，晏子没有退。",
+          },
+        },
+        {
           artifact_id: "art_tts_merged_001",
           artifact_type: "tts_merged_audio",
           origin: "provider",
@@ -699,6 +793,12 @@ describe("shared schema contracts", () => {
           metadata: {
             duration_sec: 85.0,
             voice_profile_id: "voice_1",
+            provider_voice_id: "voice-provider-001",
+            voice_profile_match_score: 0.91,
+            voice_profile_match_reasons: ["matched existing preset"],
+            timing_source: "estimated",
+            sample_rate: 24000,
+            format: "wav",
             chunk_artifact_ids: ["art_tts_001"],
           },
         },
@@ -741,7 +841,7 @@ describe("shared schema contracts", () => {
 
     expect(manifest.manifest_version).toBe("asset_manifest_v1");
     expect(manifest.executions).toHaveLength(1);
-    expect(manifest.artifacts).toHaveLength(1);
+    expect(manifest.artifacts).toHaveLength(2);
     expect(manifest.segment_routes).toHaveLength(1);
     expect(manifest.readiness).toBe("blocked");
     expect(manifest.segment_routes[0].visual_route_type).toBe("missing");
