@@ -240,7 +240,7 @@ export function createDashscopeTtsProvider(
             voice_profile_id: voiceProfileId,
             provider_voice_id: chunk.provider_voice_id,
             voice_profile_match_score:
-              chunk.voice_profile_match_score ?? undefined,
+              chunk.voice_profile_match_score ?? null,
             voice_profile_match_reasons:
               chunk.voice_profile_match_reasons ?? [],
             timing_source: "estimated",
@@ -274,7 +274,7 @@ export function createDashscopeTtsProvider(
           voice_profile_id: voiceProfileId,
           provider_voice_id: rawChunks[0]?.provider_voice_id,
           voice_profile_match_score:
-            rawChunks[0]?.voice_profile_match_score ?? undefined,
+            rawChunks[0]?.voice_profile_match_score ?? null,
           voice_profile_match_reasons:
             rawChunks[0]?.voice_profile_match_reasons ?? [],
           timing_source: "estimated",

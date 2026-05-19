@@ -260,11 +260,15 @@ describe("local subtitle provider (via execution engine)", () => {
     expect((vttArtifact!.metadata as Record<string, unknown>).format).toBe("vtt");
 
     // audio_summary.subtitle_artifact_id points to the SRT artifact
+    expect(result.manifest.audio_summary.subtitle_artifact_id).toBeTruthy();
     expect(result.manifest.audio_summary.subtitle_artifact_id).toBe(
       srtArtifact!.artifact_id,
     );
 
     // Every segment route has subtitle_artifact_id set
+    expect(
+      result.manifest.segment_routes.every((route) => route.subtitle_artifact_id),
+    ).toBe(true);
     expect(
       result.manifest.segment_routes.every(
         (route) => route.subtitle_artifact_id !== null,

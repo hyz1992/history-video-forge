@@ -349,8 +349,24 @@ describe("dashscope TTS provider adapter", () => {
       (artifact) => artifact.artifact_type === "tts_merged_audio",
     );
 
-    expect(chunkArtifact?.metadata.provider_voice_id).toBe("voice-provider-001");
-    expect(mergedArtifact?.metadata.provider_voice_id).toBe("voice-provider-001");
+    expect(chunkArtifact?.metadata).toMatchObject({
+      voice_profile_id: "voice_preset_cold_authority",
+      provider_voice_id: "voice-provider-001",
+      voice_profile_match_score: null,
+      voice_profile_match_reasons: [],
+      sample_rate: 24000,
+      format: "wav",
+      timing_source: "estimated",
+    });
+    expect(mergedArtifact?.metadata).toMatchObject({
+      voice_profile_id: "voice_preset_cold_authority",
+      provider_voice_id: "voice-provider-001",
+      voice_profile_match_score: null,
+      voice_profile_match_reasons: [],
+      sample_rate: 24000,
+      format: "wav",
+      timing_source: "estimated",
+    });
 
     const profile = db.voiceProfiles.get("voice_preset_cold_authority");
     expect(profile?.provider_status).toBe("ready");
