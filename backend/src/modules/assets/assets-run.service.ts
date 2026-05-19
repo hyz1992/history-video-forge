@@ -27,6 +27,7 @@ import { createLocalSubtitleProvider } from "./providers/local-subtitle-provider
 import { createDashscopeTtsProvider } from "./providers/dashscope/dashscope-tts-provider.js";
 import { createDashscopeImageProvider } from "./providers/dashscope/dashscope-image-provider.js";
 import { createDashscopeImageToVideoProvider } from "./providers/dashscope/dashscope-image-to-video-provider.js";
+import { resolveVoiceProfile } from "./voice/voice-resolution.service.js";
 
 type AssetsProviderMode = "fake" | "dashscope";
 type DashscopeTtsFormat = "mp3" | "wav" | "flac" | "pcm";
@@ -398,10 +399,17 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   const storyboardPlan = storyboardRecord.planJson as { segments?: Array<{ segment_id: string }> };
   const segmentIds = storyboardPlan.segments?.map((s) => s.segment_id) ?? [];
 
-  // Step 4: Build execution options from request body
+  // Step 4: Resolve local global voice profile before manifest build
+  const voiceResolution = await resolveVoiceProfile({
+    db,
+    requestedVoiceProfileId: input.voiceProfileId,
+    assetPlan: assetPlanRecord.planJson,
+  });
+
+  // Step 5: Build execution options from resolved voice profile
   const executionOptionsResult = buildExecutionOptions({
     executionMode: input.executionMode,
-    voiceProfileId: input.voiceProfileId,
+    voiceProfileId: voiceResolution.voiceProfileId,
   });
   if (!executionOptionsResult.success) {
     return {
@@ -413,7 +421,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   }
   const executionOptions = executionOptionsResult.data;
 
-  // Step 5: Build manifest
+  // Step 6: Build manifest
   let manifest = buildInitialAssetManifest({
     assetPlanRecordId: assetPlanRecord.id,
     assetPlan: assetPlanRecord.planJson,
@@ -421,7 +429,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     executionOptions,
   });
 
-  // Step 5a: Execution engine integration
+  // Step 6a: Execution engine integration
   const runId = `assets_run_${db.generateId()}`;
   let executionManifestRecordId: string | null = null;
 
@@ -450,7 +458,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     manifest = engineResult.manifest;
   }
 
-  // Step 6: Validate manifest (after engine execution for auto_available)
+  // Step 7: Validate manifest (after engine execution for auto_available)
   const localValidation = await validateAssetsManifest({
     assetPlanRecordId: assetPlanRecord.id,
     storyboardRecordId: assetPlanRecord.storyboardRecordId,
@@ -461,7 +469,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     projectStorageRootDir: project.storageRootDir,
   });
 
-  // Step 7: Stale check — verify activeAssetPlanRecordId hasn't changed
+  // Step 8: Stale check — verify activeAssetPlanRecordId hasn't changed
   let staleSourceDetected = false;
   if (project.activeAssetPlanRecordId !== capturedAssetPlanRecordId) {
     staleSourceDetected = true;
@@ -492,7 +500,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     };
   }
 
-  // Step 8: Create and save manifest record
+  // Step 9: Create and save manifest record
   const executionState = {
     execution_mode: executionOptions.execution_mode,
     voice_profile_id: executionOptions.voice_profile_id,

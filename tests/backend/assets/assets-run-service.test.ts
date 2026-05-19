@@ -251,13 +251,13 @@ describe("assets run service integration", () => {
     }
   });
 
-  it("writes request execution options into the manifest and stored trace", async () => {
+  it("keeps an explicit existing voice profile in the manifest and stored trace", async () => {
     const { db, project } = await prepareProjectWithAssetPlan();
 
     const response = await runAssetsGeneration({
       db,
       project,
-      voiceProfileId: "voice_custom",
+      voiceProfileId: "voice_preset_cold_authority",
       executionMode: "dry_run",
     });
 
@@ -269,7 +269,7 @@ describe("assets run service integration", () => {
 
     expect(body.manifest.execution_options).toMatchObject({
       execution_mode: "dry_run",
-      voice_profile_id: "voice_custom",
+      voice_profile_id: "voice_preset_cold_authority",
     });
     expect(body.graph_trace_summary).toMatchObject({
       phase: "assets",
@@ -281,6 +281,66 @@ describe("assets run service integration", () => {
     expect(manifestRecord?.graphTraceSummaryJson).toMatchObject({
       phase: "assets",
     });
+  });
+
+  it("resolves an empty requested voice profile to the default historical voice", async () => {
+    const { db, project } = await prepareProjectWithAssetPlan();
+
+    const response = await runAssetsGeneration({
+      db,
+      project,
+      voiceProfileId: "",
+      executionMode: "dry_run",
+    });
+    const body = response.body as { manifest: AssetManifest };
+
+    expect(response.statusCode).toBe(200);
+    expect(body.manifest.audio_summary.voice_profile_id).toBe(
+      "voice_preset_cold_authority",
+    );
+    expect(body.manifest.execution_options.voice_profile_id).toBe(
+      "voice_preset_cold_authority",
+    );
+  });
+
+  it("creates a generated local voice profile for a low-match voice intent", async () => {
+    const { db, project } = await prepareProjectWithAssetPlan();
+    db.assetPlanRecords.get(ASSET_PLAN_RECORD_ID)!.planJson = {
+      ...makeAssetPlan(),
+      global_audio_strategy: {
+        voice_intent: {
+          content_family: "gentle_healing",
+          narrator_persona: "温柔疗愈旁白",
+          desired_traits: ["warm", "soft", "healing"],
+          avoid_traits: ["cold", "authoritative"],
+          gender_tone: "female_leaning",
+          age_band: "25-35",
+          pitch: "mid_high",
+          pace: "slow",
+          energy: 0.25,
+          authority: 0.2,
+          suspense: 0.1,
+          warmth: 0.95,
+          style_notes: ["轻柔停顿"],
+        },
+      },
+    };
+
+    const response = await runAssetsGeneration({
+      db,
+      project,
+      voiceProfileId: "",
+      executionMode: "dry_run",
+    });
+    const body = response.body as { manifest: AssetManifest };
+    const resolvedVoiceProfileId = body.manifest.audio_summary.voice_profile_id;
+
+    expect(response.statusCode).toBe(200);
+    expect(String(resolvedVoiceProfileId)).toMatch(/^voice_generated_/);
+    expect(db.voiceProfiles.has(resolvedVoiceProfileId)).toBe(true);
+    expect(body.manifest.execution_options.voice_profile_id).toBe(
+      resolvedVoiceProfileId,
+    );
   });
 
   it("registers a manual image artifact into the segment route before revalidation", async () => {
