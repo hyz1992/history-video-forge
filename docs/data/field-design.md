@@ -803,6 +803,14 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 | `usage_count` / `last_used_at` / `quality_score` | 后续运营与排序字段 |
 | `created_at` / `updated_at` | 创建与更新时间 |
 
+持久化说明：
+
+- 当前实现使用 `storage/voice-profiles/voice-profiles.json` 作为全局音色库 JSON backing store，文档版本为 `voice_profiles_v1`。
+- `provider_voice_id`、`provider_status`、`preview_audio_uri`、`usage_count`、`last_used_at` 与 `updated_at` 会随 repository 写入持久化；`usage_count` 和 `last_used_at` 在 assets 成功选择/复用音色后回写。
+- seed 只补齐缺失的预设/system 音色，不覆盖已有同 ID 档案；这保证已 ready 的供应商音色不会被预设默认值覆盖。
+- `preview_audio_uri` 当前可保存声音设计返回的 data URI；若后续预览音频变大，应迁移到 media storage，只在 `VoiceProfile` 保留引用。
+- 该文件不保存 API key 或原始 provider request/response；迁移、备份、清理 storage 时必须保留它，避免重复创建付费 provider voice。
+
 ### `VoiceMatchResult`
 
 `VoiceMatchResult` 记录 assets 阶段选择本地音色的确定性结果。它用于解释为什么选中某个 `VoiceProfile`，不代表供应商调用结果。

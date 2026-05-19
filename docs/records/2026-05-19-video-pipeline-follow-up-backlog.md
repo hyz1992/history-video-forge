@@ -20,7 +20,7 @@
 - [x] 保存真实创建后的 `provider_voice_id`、`provider_status`、`preview_audio_uri`、`updated_at`。
 - [x] assets 执行前可从项目 `storageRootDir` 自动接线全局音色库，并只 seed 缺失预设，不覆盖已 ready 的 provider voice。
 - [x] 增加跨项目/跨任务复用测试：已有 `provider_voice_id` 时不调用声音设计。
-- [ ] 增加迁移/初始化说明，避免真实 provider voice 丢失后重复付费创建。
+- [x] 增加迁移/初始化说明，避免真实 provider voice 丢失后重复付费创建。
 - [x] 增加使用统计回写：成功复用/选择音色后更新 `usage_count` 与 `last_used_at`。
 
 验收建议：

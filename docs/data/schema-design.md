@@ -520,6 +520,20 @@ Assets v1 已有第一版持久化记录。它是 `AssetPlanRecord` 之后的派
 - `VoiceMatchResult` 不单独建表；当前随 assets execution state 记录，用于解释本次视频任务选中哪个本地音色。
 - 默认测试与默认 provider mode 不调用真实声音设计或真实 TTS；显式 `harness:assets-dashscope-tts-live-check` 可只测低成本 TTS，显式 `harness:assets-dashscope-voice-live-check` 才会创建供应商音色。
 
+### 当前 JSON 持久化实现（2026-05-19）
+
+第一版已实现本地 JSON backing store：
+
+- 文件路径：`storage/voice-profiles/voice-profiles.json`
+- 文档版本：`voice_profiles_v1`
+- 文档结构：`schema_version`、`updated_at`、`profiles`
+
+运行时仍以 `DbClient.voiceProfiles` 作为 repository surface。repository 会先加载 JSON，再只 seed 缺失的预设/system 音色；seed 不覆盖已有档案，尤其不能把已 `ready` 的 `provider_voice_id` 回退成 `missing`。`saveVoiceProfile()`、`updateVoiceProfileProviderState()` 与 usage 回写会重新保存经过 `VoiceProfile` shared schema 校验并按 `voice_profile_id` 排序的完整列表。
+
+`provider_voice_id`、`provider_status`、`preview_audio_uri`、`usage_count`、`last_used_at` 与 `updated_at` 都属于需要保留的运营状态。该文件不保存 API key，也不保存原始 provider request/response。真实 provider voice 创建后，运维迁移或清理 storage 时必须保留该文件，否则可能导致后续重复创建付费供应商音色。
+
+后续数据库化时，`storage/voice-profiles/voice-profiles.json` 应一次性迁移到独立 `voice_profiles` 表，并保持 `voice_profile_id`、provider id 与 provider status 不变；JSON 备份至少保留到一次跨任务 TTS 复用验证通过之后。
+
 ## ComposeRecord 持久化映射（2026-05-17 已实现）
 
 Compose v1 已有第一版持久化记录。它是 `AssetManifestRecord` 之后的派生记录，source-of-truth 仍是 active asset manifest 及其上游链路。

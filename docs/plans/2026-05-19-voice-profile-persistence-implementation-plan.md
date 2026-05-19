@@ -29,11 +29,14 @@ Status as of 2026-05-19:
 - [x] Project storage-root persistence wiring.
   - Commit: `d23e8e1`.
   - Evidence: service-level test proves `runAssetsGeneration()` auto-configures persistence from `project.storageRootDir` when no explicit config exists.
-- [ ] Task 5: Docs, Ignore Rules, and Final Regression.
-  - Not fully executed in this plan yet.
-  - Remaining scope: sync formal data/architecture docs, decide whether `.gitignore` should ignore `storage/voice-profiles/`, and run the final focused regression set.
+- [x] Voice usage telemetry.
+  - Commit: `e17a11b`.
+  - Evidence: service-level test proves `usage_count` and `last_used_at` persist after voice resolution.
+- [x] Task 5: Docs, Ignore Rules, and Final Regression.
+  - Formal docs synchronized: `docs/data/schema-design.md`, `docs/data/field-design.md`, `docs/architecture/pipeline-io-spec.md`.
+  - `.gitignore` ignores generated `storage/voice-profiles/`.
 
-Next recommended low-coupling implementation task: persist voice profile usage telemetry (`usage_count` and `last_used_at`) after successful assets/TTS resolution, with a focused failing repository or service test first.
+Next recommended low-coupling task: start the next P0 backlog item, `TTS 分句、真实时长与字幕 timing`, by writing a formal design and implementation plan before touching code.
 
 ---
 

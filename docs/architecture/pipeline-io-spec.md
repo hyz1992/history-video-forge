@@ -313,6 +313,9 @@ Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `Scr
 - 音色库属于 assets 阶段的全局共享能力，不随单个项目复制。`AssetPlan.global_audio_strategy.voice_intent` 可携带 `VoiceIntent`；assets 执行前会 seed 全局预设音色、用 deterministic matcher 产出 `VoiceMatchResult`，并在没有合适音色时只创建本地 `VoiceProfile` 档案，不立即调用供应商。
 - DashScope TTS 执行时才做供应商音色懒解析：若选中的本地 `VoiceProfile` 已有 `provider_voice_id` 或属于系统音色，则直接用于 TTS；若缺失且 provider 为 `dashscope`，才调用声音设计接口创建 provider voice，并回写本地音色状态。
 - DashScope TTS artifact metadata 同时保留本地 `voice_profile_id` 与供应商 `provider_voice_id`，并记录 `sample_rate`、`format`、`timing_source` 以及可用的匹配信息。字幕仍由本地 subtitle provider 基于 TTS 文本/估算时长生成，`timing_source` 保持 `estimated`，直到后续接入 provider timestamp 或 forced alignment。
+- 全局音色库当前通过 `storage/voice-profiles/voice-profiles.json` 持久化，文档版本为 `voice_profiles_v1`。`runAssetsGeneration()` 会在项目存在 `storageRootDir` 且 db 尚未显式配置时自动接线该库；测试和脚本也可显式配置临时 root。
+- 音色库加载后只 seed 缺失预设，不覆盖已存在档案。成功选择/复用音色会回写 `usage_count` 与 `last_used_at`；供应商音色创建成功会回写 `provider_voice_id`、`provider_status`、`preview_audio_uri` 与 `updated_at`。
+- `storage/voice-profiles/voice-profiles.json` 属于需要备份的运营状态，不进入默认 git 提交；清理或迁移 storage 时必须保留该文件，避免丢失真实 provider voice id 后重复创建付费供应商音色。
 - DashScope image-to-video 仍属于 assets 阶段：它消费同 segment 已生成或已登记的 `image` artifact，产出本地 `video` artifact，并把该 segment route 推进为 `visual_route_type=video_clip`。
 - 若 `video_clip` 任务缺失、图生视频未启用或 provider 失败，既有 image + `motion_recipe` fallback 仍保留给 compose/renderer 消费。
 - 图生视频真实调用只通过显式 live check 或显式 `provider_mode=dashscope` 请求触发，不属于默认自动化门。
