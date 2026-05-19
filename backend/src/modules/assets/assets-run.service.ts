@@ -24,12 +24,37 @@ import { executeAssetManifest } from "./assets-execution-engine.js";
 import { createFakeTtsProvider } from "./providers/fake-tts-provider.js";
 import { createFakeImageProvider } from "./providers/fake-image-provider.js";
 import { createLocalSubtitleProvider } from "./providers/local-subtitle-provider.js";
+import { createDashscopeTtsProvider } from "./providers/dashscope/dashscope-tts-provider.js";
+import { createDashscopeImageProvider } from "./providers/dashscope/dashscope-image-provider.js";
+import { createDashscopeImageToVideoProvider } from "./providers/dashscope/dashscope-image-to-video-provider.js";
+
+type AssetsProviderMode = "fake" | "dashscope";
+type DashscopeTtsFormat = "mp3" | "wav" | "flac" | "pcm";
+
+interface DashscopeProviderConfig {
+  apiKey?: string;
+  baseUrl?: string;
+  imageModel?: string;
+  imageSize?: string;
+  imagePollIntervalMs?: number;
+  imageMaxPollAttempts?: number;
+  imageToVideoModel?: string;
+  imageToVideoResolution?: string;
+  imageToVideoDurationSec?: number;
+  imageToVideoPollIntervalMs?: number;
+  imageToVideoMaxPollAttempts?: number;
+  ttsModel?: string;
+  ttsFormat?: DashscopeTtsFormat;
+  ttsSampleRate?: number;
+}
 
 export interface RunAssetsGenerationInput {
   db: DbClient;
   project: ProjectRecord;
   voiceProfileId: string;
   executionMode: string;
+  providerMode?: AssetsProviderMode;
+  dashscope?: DashscopeProviderConfig;
 }
 
 function buildTraceSummary(input: {
@@ -113,6 +138,95 @@ function buildExecutionOptions(input: {
     enabled_provider_types: ["tts", "image", "video", "sfx", "bgm"],
     allow_manual_placeholders: false,
   });
+}
+
+function readDashscopeConfig(input: DashscopeProviderConfig | undefined) {
+  return {
+    apiKey: input?.apiKey ?? process.env.ALIYUN_DASHSCOPE_API_KEY ?? "",
+    baseUrl: input?.baseUrl ?? process.env.ALIYUN_DASHSCOPE_BASE_URL,
+    imageModel:
+      input?.imageModel ??
+      process.env.ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL ??
+      process.env.ALIYUN_DASHSCOPE_MODEL ??
+      "wan2.6-t2i",
+    imageSize: input?.imageSize,
+    imagePollIntervalMs: input?.imagePollIntervalMs,
+    imageMaxPollAttempts: input?.imageMaxPollAttempts,
+    imageToVideoModel:
+      input?.imageToVideoModel ??
+      process.env.ALIYUN_DASHSCOPE_IMAGE_TO_VIDEO_MODEL ??
+      "wan2.7-i2v-2026-04-25",
+    imageToVideoResolution:
+      input?.imageToVideoResolution ??
+      process.env.ALIYUN_DASHSCOPE_IMAGE_TO_VIDEO_RESOLUTION,
+    imageToVideoDurationSec:
+      input?.imageToVideoDurationSec ??
+      readOptionalNumber(process.env.ALIYUN_DASHSCOPE_IMAGE_TO_VIDEO_DURATION_SEC),
+    imageToVideoPollIntervalMs:
+      input?.imageToVideoPollIntervalMs ??
+      readOptionalNumber(process.env.ALIYUN_DASHSCOPE_IMAGE_TO_VIDEO_POLL_INTERVAL_MS),
+    imageToVideoMaxPollAttempts:
+      input?.imageToVideoMaxPollAttempts ??
+      readOptionalNumber(process.env.ALIYUN_DASHSCOPE_IMAGE_TO_VIDEO_MAX_POLL_ATTEMPTS),
+    ttsModel:
+      input?.ttsModel ??
+      process.env.ALIYUN_DASHSCOPE_TTS_MODEL ??
+      process.env.TTS_MODEL ??
+      "qwen3-tts-instruct-flash",
+    ttsFormat: input?.ttsFormat,
+    ttsSampleRate: input?.ttsSampleRate,
+  };
+}
+
+function readOptionalNumber(value: string | undefined): number | undefined {
+  if (value === undefined || value.trim() === "") {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function buildProviderRegistry(input: {
+  providerMode: AssetsProviderMode | undefined;
+  dashscope: DashscopeProviderConfig | undefined;
+}) {
+  if (input.providerMode === "dashscope") {
+    const dashscope = readDashscopeConfig(input.dashscope);
+
+    return createAssetProviderRegistry([
+      createDashscopeTtsProvider({
+        apiKey: dashscope.apiKey,
+        baseUrl: dashscope.baseUrl,
+        model: dashscope.ttsModel,
+        format: dashscope.ttsFormat,
+        sampleRate: dashscope.ttsSampleRate,
+      }),
+      createLocalSubtitleProvider(),
+      createDashscopeImageProvider({
+        apiKey: dashscope.apiKey,
+        baseUrl: dashscope.baseUrl,
+        model: dashscope.imageModel,
+        size: dashscope.imageSize,
+        pollIntervalMs: dashscope.imagePollIntervalMs,
+        maxPollAttempts: dashscope.imageMaxPollAttempts,
+      }),
+      createDashscopeImageToVideoProvider({
+        apiKey: dashscope.apiKey,
+        baseUrl: dashscope.baseUrl,
+        model: dashscope.imageToVideoModel,
+        resolution: dashscope.imageToVideoResolution,
+        durationSec: dashscope.imageToVideoDurationSec,
+        pollIntervalMs: dashscope.imageToVideoPollIntervalMs,
+        maxPollAttempts: dashscope.imageToVideoMaxPollAttempts,
+      }),
+    ]);
+  }
+
+  return createAssetProviderRegistry([
+    createFakeTtsProvider(),
+    createLocalSubtitleProvider(),
+    createFakeImageProvider(),
+  ]);
 }
 
 function allowedArtifactTypesForTask(taskType: AssetPlan["tasks"][number]["task_type"]) {
@@ -309,19 +423,20 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
 
   // Step 5a: Execution engine integration
   const runId = `assets_run_${db.generateId()}`;
+  let executionManifestRecordId: string | null = null;
 
   if (executionOptions.execution_mode === "dry_run") {
     // dry_run: manifest-only, strip all placeholder artifacts
     manifest.artifacts = [];
   } else if (executionOptions.execution_mode === "auto_available") {
-    // auto_available: create registry with fake/local providers and execute
-    const registry = createAssetProviderRegistry([
-      createFakeTtsProvider(),
-      createLocalSubtitleProvider(),
-      createFakeImageProvider(),
-    ]);
+    // auto_available: execute with fake providers unless a real provider mode is explicit.
+    const registry = buildProviderRegistry({
+      providerMode: input.providerMode,
+      dashscope: input.dashscope,
+    });
 
     const tempManifestRecordId = `manifest_${db.generateId()}`;
+    executionManifestRecordId = tempManifestRecordId;
     const engineResult = await executeAssetManifest({
       db,
       assetManifestRecordId: tempManifestRecordId,
@@ -403,8 +518,22 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     runtimeDiagnosticsJson: null,
   });
 
+  if (executionManifestRecordId) {
+    for (const job of db.assetProviderJobRecords.values()) {
+      if (
+        job.assetManifestRecordId === executionManifestRecordId &&
+        job.assetRunId === runId
+      ) {
+        job.assetManifestRecordId = assetManifestRecord.id;
+        job.updatedAt = new Date();
+      }
+    }
+  }
+
   // Step 9: Update project state
   project.activeAssetManifestRecordId = assetManifestRecord.id;
+  project.activeComposeRecordId = null;
+  project.activeRenderJobRecordId = null;
 
   // Step 10: Update project status based on validation decision
   if (localValidation.decision === "ready_for_compose") {
@@ -415,6 +544,8 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   }
 
   project.latestAssetsRunTraceJson = traceSummary as unknown as Record<string, unknown>;
+  project.latestComposeRunTraceJson = null;
+  project.latestRenderRunTraceJson = null;
   project.updatedAt = new Date();
 
   persistProjectRunArtifacts({

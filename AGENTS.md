@@ -12,8 +12,9 @@
 - `topic + script` 第一阶段已达到当前及格标准，可以暂时冻结。
 - 当前优先事项：
   - 保持 `topic -> script` 首稿链路稳定，不主动重开已冻结范围
-  - 在开启视频流水线下一步前，先补必要的文档治理与阶段边界说明
-  - 下一步视频流水线只能先进入设计与 implementation plan，不得顺手实现未设计的 downstream 详细阶段
+  - 保持 `storyboard -> asset planning -> assets -> compose` 已完成 v1 链路的阶段边界
+  - 当前下一步是 `renderer / export`：已完成 design 与 implementation plan，可以按计划从 Task 1 小步实施
+  - 不得顺手实现未设计的 DashScope 图生视频、前端预览 UI、发布流或人工审稿流
 
 当前已完成的关键恢复：
 
@@ -22,6 +23,8 @@
 - script 首稿链路、local validation、semantic reviewer shadow、扩展 smoke 已恢复稳定。
 - 当前 `topic` 自动推荐与 `script` 首稿已达到“可用线”，可以作为视频流水线下一步的上游基础。
 - 第 3 项 follow-up backlog（项目内持久化候选池与受控 fallback 复用）主体已完成；剩余为后续运营生命周期尾项。
+- `storyboard`、`asset planning`、`assets`、`compose` 均已完成 v1 后端链路；当前不能再按旧文档把它们视为“未设计、禁止触碰”的阶段。
+- `compose` v1 的完成线是 timeline contract，不是最终视频导出。
 
 ---
 
@@ -30,17 +33,15 @@
 当前允许进入实现的范围：
 
 - 文档治理、阶段冻结说明、旧计划归档
-- 视频流水线下一步的设计文档与 implementation plan
+- `renderer / export` implementation plan 的小步实现，优先从 shared schema / source validator 等低风险任务开始
 - `topic + script` 冻结后的必要维护、回归修复、观测记录
 - 明确获得执行指令后的低风险 harness 验证补强
 
 当前**不允许**顺手实现的范围：
 
-- `storyboard`
-- `asset planning`
-- `assets`
-- `compose`
 - 任何未正式设计并通过 implementation plan 收口的 downstream 结构
+- DashScope 图生视频 provider，除非先完成单独设计计划并获得明确执行指令
+- renderer plan 范围外的 Remotion 复杂能力、前端预览 UI、平台发布、人工审稿或质量评分系统
 - patch integration 主路径，除非先完成单独设计计划并获得明确执行指令
 - 为了下一阶段方便而回改已冻结的 topic/script prompt、schema 或 API，除非问题被明确定位为阻塞或回归
 

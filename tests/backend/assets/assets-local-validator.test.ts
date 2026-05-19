@@ -632,6 +632,57 @@ describe("validateAssetsManifest", () => {
     expect(result.decision).toBe("partial");
   });
 
+  it("does not block compose for incomplete optional BGM execution", async () => {
+    const plan = makeBaseAssetPlan();
+    plan.tasks.push({
+      task_id: "task_bgm_optional",
+      order: 3,
+      task_type: "bgm_cue",
+      source_segment_id: null,
+      source_excerpt: "optional bgm",
+      production_intent: "optional background music",
+      recommended_mode: "auto",
+      provider_hint: null,
+      prompt_draft: null,
+      parameters: {},
+      manual_upload_policy: {
+        allowed: false,
+        required: false,
+        accepted_file_types: [],
+        acceptance_notes: [],
+      },
+      risk_notes: [],
+      cost_tier: "low",
+      initial_status: "planned",
+    });
+
+    const manifest = makeBaseManifest({
+      executions: [
+        ...makeBaseManifest().executions,
+        makeBaseExecution({
+          execution_id: "exec_bgm_optional",
+          task_id: "task_bgm_optional",
+          task_type: "bgm_cue",
+          status: "planned",
+          output_artifact_ids: [],
+        }),
+      ],
+    });
+
+    const result = await validateAssetsManifest({
+      assetPlanRecordId: ASSET_PLAN_ID,
+      storyboardRecordId: STORYBOARD_RECORD_ID,
+      scriptRecordId: SCRIPT_RECORD_ID,
+      topicPackageId: TOPIC_PACKAGE_ID,
+      assetPlan: plan,
+      manifest,
+    });
+
+    expect(result.errors).not.toContain("assets_execution_incomplete");
+    expect(result.warnings).toContain("assets_bgm_missing_optional");
+    expect(result.decision).toBe("partial");
+  });
+
   it("does not warn about BGM when bgm_placements exist", async () => {
     const bgmArtifact = makeBgmArtifact("artifact_bgm_1");
     const result = await runValidation({

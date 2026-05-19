@@ -12,13 +12,15 @@
 
 ## 1. 当前状态
 
+> 2026-05-19 修订说明：本文档早期段落保留了从 `topic + script` 冻结后进入 downstream 设计前的历史基线。当前正式状态是：`storyboard`、`asset planning`、`assets`、`compose` 均已完成 v1 后端链路；`renderer/export` 已完成 v1 后端首批实现与回归；DashScope 图生视频已作为显式 opt-in 的 assets provider 后端路径接入。后续仍未进入范围的是真实 BGM/SFX 生产链路、上传/预览 UI、发布流、人工审稿流和质量评分系统。
+
 当前项目已经比较完整地设计并收口了：
 
 - `topic`
 - `script`
 - `topic -> script` 的对象、校验、API 与第一阶段实施计划
 
-后续阶段当前**尚未进入可实施设计状态**：
+以下是本文档最初写作时尚未进入可实施设计的后续阶段，现已由后文各日期状态段落覆盖：
 
 - `storyboard`
 - `asset planning`
@@ -193,9 +195,9 @@
 本文件原先将 storyboard 与 asset planning/assets/compose 一并标为尚未进入可实施设计。当前状态需要细分：
 
 - `storyboard`：已经完成第一版 design、implementation plan 与最小实现。
-- `asset planning`：仍为 TBD，未设计、未实现。
-- `assets`：仍为 TBD，未设计、未实现。
-- `compose`：仍为 TBD，未设计、未实现。
+- `asset planning`：历史基线为 TBD；当前已完成 v1 后端实现。
+- `assets`：历史基线为 TBD；当前已完成 v1 后端执行基础。
+- `compose`：历史基线为 TBD；当前已完成 v1 后端 timeline contract。
 
 Storyboard v1 当前边界：
 - 输入来自 active `ScriptRecord` 与对应 `TopicPackage` 边界信息。
@@ -216,8 +218,8 @@ Storyboard v1 当前边界：
 
 - `storyboard`：已完成第一版 design、implementation plan 与最小后端实现。
 - `asset planning`：已完成第一版 design、implementation plan 与最小后端实现。
-- `assets`：仍为 TBD，未设计、未实现。
-- `compose`：仍为 TBD，未设计、未实现。
+- `assets`：历史基线为 TBD；当前已完成 v1 后端执行基础。
+- `compose`：历史基线为 TBD；当前已完成 v1 后端 timeline contract。
 
 Asset Planning v1 当前边界：
 
@@ -244,7 +246,7 @@ Asset Planning v1 当前边界：
 - `storyboard`：已完成第一版 design、implementation plan 与最小后端实现。
 - `asset planning`：已完成第一版 design、implementation plan 与最小后端实现。
 - `assets`：已完成第一版 design、implementation plan 与后端骨架实现。
-- `compose`：仍为 TBD，未设计、未实现。
+- `compose`：历史基线为 TBD；当前已完成 v1 后端 timeline contract。
 
 Assets v1 当前边界：
 
@@ -268,7 +270,7 @@ Assets v1 当前实现范围：
 仍然禁止：
 
 - 在 assets 阶段回写 topic/script/storyboard/asset plan。
-- 在 assets 阶段调用真实 provider（TTS 生成、图片生成、视频生成、SFX/BGM 选择）。
+- 在 assets 阶段顺手接入未设计的真实 provider。当前显式 DashScope TTS/文生图/image-to-video 路径已存在；真实 BGM/SFX 仍必须先单独设计。
 - 在 assets 阶段实现物理文件上传、存储、预览 UI。
 - 在 assets 阶段实现 compose timeline 或最终视频导出。
 - 让 semantic reviewer 参与 assets 主链路。
@@ -276,6 +278,108 @@ Assets v1 当前实现范围：
 
 显边界面：
 
-- 第一版不接真实 provider。
+- 历史说明：第一版初始骨架不接真实 provider；截至 2026-05-19，显式 DashScope TTS/文生图/image-to-video 路径已存在，默认自动化仍使用 fake/local。
 - 第一版不实现前端 assets 面板 UI。
 - 第一版不实现 compose timeline 或最终视频导出。
+
+## 2026-05-17 状态更新：Compose v1 已完成后端 timeline 合同
+
+当前 downstream 状态需要再次细分：
+
+- `storyboard`：已完成第一版 design、implementation plan 与最小后端实现。
+- `asset planning`：已完成第一版 design、implementation plan 与最小后端实现。
+- `assets`：已完成第一版 design、implementation plan、真实 provider 外壳与后端执行骨架。
+- `compose`：已完成第一版 design、implementation plan 与后端 timeline 合同实现。
+
+Compose v1 当前边界：
+
+- 输入来自 active `AssetManifestRecord`。
+- 输出 `ComposeTimeline`、`ComposeValidationResult`、`ComposeRecord`。
+- 提供 `POST /api/projects/:projectId/compose/generate`。
+- project snapshot 返回 `active_compose` 与 `latest_compose_run`。
+- compose run 在激活前会复查来源 asset manifest 指针，避免 stale timeline 覆盖当前状态。
+- 新 script / storyboard / asset plan / asset manifest 激活后会清空过期 active compose 指针。
+- 新增 `harness:compose-runtime-smoke`，覆盖 fake/local assets -> compose -> assets refresh 后 compose 失效的最小闭环。
+
+Compose v1 当前实现范围：
+
+- `buildComposeTimeline`：从 `AssetManifest` 确定性构建时间轴。
+- `validateComposeTimeline`：结构校验 narration、subtitle、visual、artifact 引用、duration 与本地文件存在性。
+- `ComposeRecord`：持久化记录。
+- `compose/generate` API：保存并激活 ready 或 blocked compose 记录。
+
+仍然禁止：
+
+- 在 compose 阶段回写 topic/script/storyboard/asset planning/assets。
+- 在 compose 阶段调用 Remotion。
+- 在 compose 阶段导出最终 MP4。
+- 在 compose 阶段调用 DashScope 图生视频或任何视频 provider。
+- 在 compose 阶段实现前端预览 UI。
+- 让 semantic reviewer 参与 compose 主链路。
+- 用本地 validator 判断审美、爆款、历史相似度或素材生成质量。
+
+## 2026-05-17 状态记录：Renderer / Export 完成设计与实施计划
+
+当前 downstream 状态需要再次细分：
+
+- `storyboard`：已完成第一版 design、implementation plan 与最小后端实现。
+- `asset planning`：已完成第一版 design、implementation plan 与最小后端实现。
+- `assets`：已完成第一版 design、implementation plan、真实 provider 外壳与后端执行骨架。
+- `compose`：已完成第一版 design、implementation plan 与后端 timeline 合同实现。
+- `renderer / export`：此处为 2026-05-17 计划状态；截至 2026-05-18 已完成 v1 后端首批实现，见下一节。
+
+Renderer / Export v1 当前设计边界：
+
+- 输入来自 active `ComposeRecord` 及其 `ComposeTimeline`。
+- 目标输出为本地可预览的 MP4 render artifact。
+- 第一版优先使用本地 still-image motion / Remotion 路径，把图片、motion recipe、口播、字幕和可选音轨导出为视频文件。
+- DashScope 图生视频不属于 renderer v1；截至 2026-05-19，它已作为 assets provider 产出 `video` artifact 的后端路径接入，再由 compose/renderer 消费。
+- renderer run 激活前必须复查 active compose 指针，避免 stale render 覆盖当前状态。
+- 新 script / storyboard / asset plan / asset manifest / compose 激活后都必须清空过期 active render 指针。
+
+Renderer / Export v1 在 2026-05-17 计划中待实施的内容（2026-05-18 已部分完成，见下一节）：
+
+- shared render schema、`RenderJobRecord`、`ExportArtifact`、`RenderValidationResult`。
+- `POST /api/projects/:projectId/render/generate`。
+- Local Remotion adapter 与 MP4 输出 probing。
+- project snapshot 中的 `active_render` 与 `latest_render_run`。
+- render runtime smoke。
+
+仍然禁止：
+
+- 在 renderer 阶段回写 topic/script/storyboard/asset planning/assets/compose。
+- 在 renderer 阶段调用 DashScope 图生视频或生成缺失素材。
+- 在 renderer 阶段实现前端预览 UI、发布流或人工审稿流。
+- 用 renderer validator 判断审美、爆款、历史相似度或素材生成质量。
+
+## 2026-05-18 状态更新：Renderer / Export v1 后端首批实现
+
+Renderer / Export 已不再只是 design + implementation plan。当前已按 renderer implementation plan 完成后端首批小步实现，并保持 renderer 阶段边界：消费 active compose timeline，生成本地 render artifact 和 render job 记录，不回写上游语义链路。
+
+已实现范围：
+
+- shared render schemas：`ExportArtifact`、`RenderValidationResult`、`RenderJobRecord` 相关 schema 与 shared export。
+- render source validator：只做 source readiness、结构、引用与本地文件存在性检查。
+- render persistence/snapshot：`RenderJobRecord`、project `active_render`、`latest_render_run`。
+- adapter boundary：`RenderAdapter` 接口与 deterministic fake adapter。
+- local Remotion adapter：已有后端适配边界和最小测试；不等同于完整产品化预览 UI。
+- render generate API：`POST /api/projects/:projectId/render/generate`。
+- upstream invalidation：新 script/storyboard/asset plan/asset manifest/compose 激活后清空 active render 与 latest render trace。
+- fake runtime smoke：覆盖 assets -> compose -> render -> compose refresh 后 render 失效的最小闭环。
+
+仍未完成或仍不属于当前范围：
+
+- 阶段归档、提交或 PR 收口仍待单独决定。
+- DashScope 图生视频真实 live check 仍待显式批准后运行；mocked provider、service/API config 与 explicit harness 已完成。
+- 前端 preview UI、发布流、人工审稿流或质量评分系统。
+- renderer 阶段生成缺失素材或修改上游 topic/script/storyboard/asset planning/assets/compose 语义内容。
+
+## 2026-05-19 状态更新：DashScope 图生视频 provider 后端路径已接入
+
+DashScope 图生视频不再是未设计项；它已按单独 design + implementation plan 收口为 assets-stage provider：
+
+- 只在显式 `provider_mode=dashscope` 且 active `AssetPlan` 存在 `video_clip` task 时进入。
+- provider 名称为 `dashscope_image_to_video`，消费同 segment 的 `image` artifact，产出本地 `video` artifact。
+- 成功时 segment route 使用 `visual_route_type=video_clip`，并保留 image + motion fallback。
+- compose 和 renderer 只消费 `AssetManifest` / `ComposeTimeline` 中的 `video` artifact 引用，不调用 DashScope，也不生成缺失素材。
+- `harness:assets-dashscope-image-to-video-live-check` 是显式 live check，不是默认 CI 或自动门禁。

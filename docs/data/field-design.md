@@ -768,9 +768,9 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 - local validator 不判断审美、爆款、历史相似度或 prompt 质量。
 - `render_motion_cue` 是 compose 建议任务，不等于已实现 compose。
 
-## Assets v1 字段（2026-05-15 已实现后端骨架）
+## Assets v1 字段（2026-05-18 已同步后端执行基础）
 
-`AssetManifest` 是 assets 阶段的正式输出对象。它描述资产执行结果清单，包含任务执行状态、artifact 元数据、分镜 route 和音频摘要。第一版只构建 manifest 骨架和结构校验，不调用真实 provider。
+`AssetManifest` 是 assets 阶段的正式输出对象。它描述资产执行结果清单，包含任务执行状态、artifact 元数据、分镜 route 和音频摘要。当前 assets 后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础，以及显式 DashScope TTS/文生图/image-to-video 路径；仍不包含真实 BGM/SFX provider、上传/预览 UI 或发布级素材运营流。
 
 ### `AssetManifest`
 
@@ -834,7 +834,7 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 | `tts_merged_audio` | `duration_sec`、`voice_profile_id`、`chunk_artifact_ids` |
 | `subtitle_track` | `format`、`source_tts_artifact_id`、`caption_count` |
 | `image` | `width`、`height` |
-| `video` | `duration_sec`、`width`、`height`、`fps` |
+| `video` | `duration_sec`、`width`、`height`、`fps`、`provider_name`、`provider_job_id`、`source_image_artifact_id`、`model`、`resolution` |
 | `motion_recipe` | `recipe_type`、`source_image_artifact_id`、`parameters` |
 | `sfx_audio` | `duration_sec` |
 | `sfx_selection` | `library_item_id` 或 `selection_label`（至少一个） |
@@ -856,6 +856,12 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 | `bgm_placement_ids` | BGM placement ID 列表 |
 | `readiness` | 段落就绪状态：`ready / blocked / fallback_ready` |
 | `notes` | 段落备注列表 |
+
+说明：
+
+- DashScope image-to-video 成功时，`video` artifact 作为该 segment 的 `primary_visual_artifact_id`，`visual_route_type` 为 `video_clip`。
+- 同 segment 的 source image 会保留为 `fallback_visual_artifact_id`；图生视频缺失或失败时，compose/renderer 仍可使用 image + `motion_recipe` fallback。
+- DashScope image-to-video provider job 只属于 assets 阶段字段和 provider job 记录，不进入 compose 或 renderer 字段语义。
 
 ### `AssetAudioSummary`
 
@@ -908,3 +914,123 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 - `AssetManifest` 不包含 compose timeline 或最终视频导出。
 - local validator 不判断审美、爆款、语义质量或 provider 生成质量。
 - 第一版 `buildInitialAssetManifest` 是纯确定性函数，不调用任何外部 provider。
+
+## Compose v1 字段（2026-05-17 已实现后端 timeline 合同）
+
+`ComposeTimeline` 是 compose 阶段的正式输出对象。它描述从 `AssetManifest` 派生出来的时间轴合同，供后续 renderer 消费。第一版只生成 timeline，不渲染视频。
+
+### `ComposeTimeline`
+
+| 字段 | 含义 |
+|---|---|
+| `timeline_version` | 固定为 `compose_timeline_v1` |
+| `source_asset_manifest_record_id` | 来源 active asset manifest record |
+| `source_asset_plan_record_id` | 来源 asset plan record |
+| `source_storyboard_record_id` | 来源 storyboard record |
+| `source_script_record_id` | 来源 script record |
+| `output_profile` | 输出规格，第一版固定为 9:16、1080x1920、30fps |
+| `duration_sec` | 时间轴总时长，优先来自 merged TTS artifact |
+| `tracks` | 轨道列表，元素为 `ComposeTrack` |
+| `segments` | segment 时间片列表，元素为 `ComposeTimelineSegment` |
+| `readiness` | 整体就绪状态：`ready_for_render / partial / blocked` |
+| `notes` | 全局备注列表 |
+
+### `ComposeTrack`
+
+| 字段 | 含义 |
+|---|---|
+| `track_id` | 轨道 ID |
+| `track_type` | `visual / narration / subtitle / bgm / sfx` |
+| `clips` | clip 列表，元素为 `ComposeClip` |
+
+### `ComposeClip`
+
+| 字段 | 含义 |
+|---|---|
+| `clip_id` | clip ID |
+| `segment_id` | 关联 storyboard segment；全片 narration 可为 `null` |
+| `artifact_id` | 引用的 asset artifact ID |
+| `start_sec` | 起始时间，单位秒 |
+| `duration_sec` | 持续时间，单位秒 |
+| `clip_kind` | `video / image_with_motion / image_only / audio / subtitle` |
+| `motion_artifact_id` | motion recipe artifact，可为 `null` |
+| `notes` | clip 级备注 |
+
+### `ComposeTimelineSegment`
+
+| 字段 | 含义 |
+|---|---|
+| `segment_id` | storyboard segment ID |
+| `start_sec` | segment 起始时间，单位秒 |
+| `duration_sec` | segment 持续时间，单位秒 |
+| `visual_clip_ids` | 对应 visual clip ID 列表 |
+| `narration_clip_ids` | 对应 narration clip ID 列表 |
+| `subtitle_clip_ids` | 对应 subtitle clip ID 列表 |
+| `notes` | segment 级备注 |
+
+### `ComposeValidationResult`
+
+| 字段 | 含义 |
+|---|---|
+| `stage` | 固定为 `compose_local_validation` |
+| `decision` | `ready_for_render / partial / blocked` |
+| `errors` | 结构与引用错误码列表 |
+| `warnings` | 非阻断警告列表 |
+| `metrics` | 结构指标，如 track_count、clip_count、segment_count、duration_sec |
+
+边界：
+
+- `ComposeTimeline` 不包含最终 MP4、Remotion composition 或 provider job；若输入 `AssetManifest` 已有 `video` artifact，timeline 只保存对该 artifact 的引用。
+- compose local validator 不判断画面质量、声音质量、审美、爆款节奏或历史相似度。
+- 缺失可选 BGM 只产生 warning，不阻断 `ready_for_render`。
+
+## Renderer / Export v1 字段（2026-05-18 后端首批实现）
+
+Renderer v1 字段只描述 `ComposeTimeline` 之后的渲染与导出结果，不改变上游 topic/script/storyboard/asset planning/assets/compose 字段语义。
+
+### `ExportArtifact`
+
+| 字段 | 含义 |
+|---|---|
+| `artifact_id` | 导出 artifact ID |
+| `artifact_type` | 当前为 `mp4` |
+| `uri` | 本地输出文件 URI 或路径引用 |
+| `mime_type` | 当前为 `video/mp4` |
+| `duration_sec` | 导出视频时长 |
+| `width` | 导出宽度 |
+| `height` | 导出高度 |
+| `fps` | 导出帧率 |
+| `file_size_bytes` | 输出文件大小 |
+| `checksum` | 可选校验信息 |
+| `metadata` | adapter、probe 或运行时补充信息 |
+
+### `RenderValidationResult`
+
+| 字段 | 含义 |
+|---|---|
+| `stage` | 固定为 `render_source_validation` |
+| `decision` | `ready_for_render / blocked` |
+| `errors` | 阻塞类结构、引用或文件错误 |
+| `warnings` | 非阻塞告警，例如缺失可选 BGM/SFX |
+| `metrics` | timeline、track、clip、artifact、duration 等结构指标 |
+
+### `RenderJobRecord`
+
+| 字段 | 含义 |
+|---|---|
+| `id` | render job record ID |
+| `project_id` | 所属项目 |
+| `compose_record_id` | source compose record |
+| `output_artifact_json` | `ExportArtifact` |
+| `validation_result_json` | `RenderValidationResult` |
+| `execution_state_json` | render 状态、adapter、source 与 activation 信息 |
+| `graph_trace_summary_json` | run trace summary |
+| `runtime_diagnostics_json` | runtime diagnostics |
+| `created_at` | 创建时间 |
+| `updated_at` | 更新时间 |
+
+边界：
+
+- renderer 字段不表达素材审美、爆款评分、历史相似度或人工审稿结论。
+- renderer 字段不表达 DashScope 图生视频 provider job。
+- renderer 字段不替代 compose timeline；最终视频的时间轴 source 仍是 `ComposeTimeline`。

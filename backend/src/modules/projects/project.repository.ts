@@ -19,11 +19,15 @@ export async function createProject(
     activeStoryboardRecordId: null,
     activeAssetPlanRecordId: null,
     activeAssetManifestRecordId: null,
+    activeComposeRecordId: null,
+    activeRenderJobRecordId: null,
     latestTopicRunTraceJson: null,
     latestScriptRunTraceJson: null,
     latestStoryboardRunTraceJson: null,
     latestAssetPlanRunTraceJson: null,
     latestAssetsRunTraceJson: null,
+    latestComposeRunTraceJson: null,
+    latestRenderRunTraceJson: null,
     storageDisplayName: "",
     storageShortId: "",
     storageRootDir: "",
@@ -68,6 +72,12 @@ export async function deleteProject(
   }
   for (const [id, record] of db.assetManifestRecords) {
     if (record.projectId === projectId) db.assetManifestRecords.delete(id);
+  }
+  for (const [id, record] of db.composeRecords) {
+    if (record.projectId === projectId) db.composeRecords.delete(id);
+  }
+  for (const [id, record] of db.renderJobRecords) {
+    if (record.projectId === projectId) db.renderJobRecords.delete(id);
   }
   db.topicCandidateStore.delete(projectId);
 

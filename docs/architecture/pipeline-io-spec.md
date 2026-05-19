@@ -280,9 +280,9 @@ Asset Planning v1 消费 active `StoryboardRecord` 及其来源 `ScriptRecord` /
 - 手动上传、预览、accept/reject UI。
 - compose timeline 或最终视频导出。
 
-## 6. Assets v1 阶段（2026-05-15 已完成后端骨架实现）
+## 6. Assets v1 阶段（2026-05-18 已同步后端执行基础）
 
-Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `ScriptRecord` / `TopicPackage`，输出可持久化的资产执行结果清单。第一版只构建 manifest 骨架和结构校验，不调用真实 provider、不生成物理文件、不实现 compose timeline。
+Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `ScriptRecord` / `TopicPackage`，输出可持久化的资产执行结果清单。当前后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础，以及显式 DashScope TTS/文生图路径。它不实现 compose timeline，也不负责最终视频导出。
 
 输入：
 
@@ -309,8 +309,11 @@ Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `Scr
 生成边界：
 
 - `buildInitialAssetManifest` 从 `AssetPlan` 确定性构建：为每个 plan task 创建 `AssetTaskExecution`，为 `render_motion_cue` 创建 inline artifact，为 TTS chunk 创建占位 artifact，构建 `SegmentAssetRoute` 和 `AssetAudioSummary`。
-- 不调用任何真实 provider（TTS、图片、视频、SFX、BGM）。
-- 不生成物理文件或上传对象。
+- 默认测试与自动化路径不调用真实 provider；显式 `provider_mode=dashscope` 可调用 DashScope TTS、文生图 provider，并在 `AssetPlan.tasks` 存在 `video_clip` 任务时调用 DashScope image-to-video provider。
+- DashScope image-to-video 仍属于 assets 阶段：它消费同 segment 已生成或已登记的 `image` artifact，产出本地 `video` artifact，并把该 segment route 推进为 `visual_route_type=video_clip`。
+- 若 `video_clip` 任务缺失、图生视频未启用或 provider 失败，既有 image + `motion_recipe` fallback 仍保留给 compose/renderer 消费。
+- 图生视频真实调用只通过显式 live check 或显式 `provider_mode=dashscope` 请求触发，不属于默认自动化门。
+- fake/local provider 与显式 DashScope 路径会在项目 storage 下写入本地 artifact 文件；物理上传 UI 与对象存储发布链路仍不属于 assets v1。
 - 不实现 compose timeline 或最终视频导出。
 
 手动素材登记：
@@ -336,8 +339,108 @@ Artifact 确认：
 
 仍未进入本阶段实现的内容：
 
-- 真实 provider 调用（TTS 生成、图片生成、视频生成、SFX/BGM 选择）。
-- 物理文件上传、存储、预览 UI。
+- renderer-side DashScope 调用或任何非 assets-stage 视频 provider 调用。
+- 真实 BGM/SFX provider、导入、授权和运营生命周期。
+- 物理文件上传 UI、对象存储发布链路、预览 UI。
 - 前端 assets 面板 UI。
 - compose timeline 或最终视频导出。
 - 质量判断（审美、爆款、历史相似度）。
+
+## 7. Compose v1 阶段（2026-05-17 已完成后端 timeline 合同）
+
+> 修订说明：本文档早期 `Compose 阶段` 小节曾标记为 `TBD`。截至 2026-05-17，compose v1 已收束为“timeline-first”的后端合同；本节覆盖早期 TBD 表述。
+
+Compose v1 消费 active `AssetManifestRecord`，输出可持久化的 `ComposeTimeline`。它只负责把已就绪资产组织成时间轴合同，不执行最终渲染。
+
+输入：
+
+- active `AssetManifestRecord`
+  - `manifest_json` 中的 `AssetManifest`
+  - `asset_plan_record_id`
+  - `storyboard_record_id`
+  - `script_record_id`
+- 项目存储根目录，用于本地 artifact 引用存在性检查
+
+输出：
+
+- `ComposeTimeline`
+- `ComposeValidationResult`
+- `ComposeRecord`
+- project snapshot 中的 `active_compose`
+- trace summary 中的 `latest_compose_run`
+
+生成边界：
+
+- `buildComposeTimeline` 从 `AssetManifest` 确定性构建时间轴。
+- 总时长优先来自 merged TTS artifact 的 `metadata.duration_sec`。
+- segment 起止时间优先来自 TTS chunk duration；缺失时可用总时长按 segment route 做 fallback，并在 notes 中记录 `compose_chunk_timing_fallback_used`。
+- visual track 来自 `segment_routes` 的主视觉 artifact、fallback 视觉 artifact 与 motion recipe。
+- narration track 来自 `audio_summary.tts_merged_artifact_id`。
+- subtitle track 来自 `audio_summary.subtitle_artifact_id`。
+- BGM/SFX track 只在 manifest 中已有对应 artifact 时进入时间轴。
+
+本地校验：
+
+- 校验结果 `ComposeValidationResult.decision` 为 `ready_for_render / partial / blocked`。
+- validator 只做结构与引用检查：narration、subtitle、segment visual、artifact 引用、duration、可选本地文件存在性。
+- 缺失可选 BGM 只产生 warning，不阻塞 compose。
+- validator 不判断画面质量、声音质量、审美、节奏是否爆款，也不回改上游文案或素材计划。
+
+失效规则：
+
+- compose run 在激活前必须复查 active asset manifest 是否仍一致；若不一致，返回 `409 stale_compose_source`，不保存也不激活旧结果。
+- 新 script 激活后，必须清空 active storyboard、asset plan、asset manifest、compose 指针及对应 latest trace。
+- 新 storyboard 激活后，必须清空 active asset plan、asset manifest、compose 指针及对应 latest trace。
+- 新 asset plan 激活后，必须清空 active asset manifest、compose 指针及对应 latest trace。
+- 新 asset manifest 激活后，必须清空 active compose 指针及 `latest_compose_run_trace_json`。
+- project snapshot 只根据信任的 active 指针暴露 `active_compose`，不会在指针清空后从历史记录回填。
+
+仍不属于 compose v1 的内容：
+
+- Remotion 渲染。
+- DashScope 图生视频或任何视频 provider 调用。
+- 最终 MP4 导出。
+- 前端 compose preview UI。
+- 对 topic/script/storyboard/asset planning/assets 语义内容做自动修补。
+
+## 8. Renderer / Export v1 阶段（2026-05-18 后端首批实现）
+
+本节覆盖 renderer implementation plan 已完成的 Task 1-8，修正早期 “renderer 尚未实现” 的表述。Renderer v1 消费 active `ComposeRecord` 及其 `ComposeTimeline`，只负责把已经形成的 timeline contract 渲染为本地导出 artifact，不回写或修正 topic/script/storyboard/asset planning/assets/compose 的语义内容。
+
+输入：
+
+- active `ComposeRecord`
+- `ComposeTimeline`，其中 `readiness` 必须为 `ready_for_render`
+- source `AssetManifestRecord` 及其本地 artifact 文件引用
+- project storage root
+- render profile，优先来自 `ComposeTimeline.output_profile`
+
+输出：
+
+- `RenderJobRecord`
+- `ExportArtifact`
+- `RenderValidationResult`
+- project snapshot 中的 `active_render`
+- trace summary 中的 `latest_render_run`
+
+本地校验：
+
+- `RenderValidationResult.stage` 固定为 `render_source_validation`。
+- `decision` 为 `ready_for_render / blocked`。
+- validator 只做结构、引用与本地文件存在性检查：active compose、timeline readiness、asset manifest、artifact record、artifact file、narration、subtitle、visual track 等。
+- 缺失可选 BGM/SFX 只产生 warning，不阻塞 render。
+- renderer validator 不判断审美、爆款、历史相似度、素材生成质量，也不修复上游语义。
+
+激活与失效：
+
+- `POST /api/projects/:projectId/render/generate` 在激活前必须复查 active compose 指针仍与 source compose 一致。
+- 若 source compose 已变化，返回 `409 stale_render_source`，不激活旧 render 结果。
+- 新 script/storyboard/asset plan/asset manifest/compose 激活后，必须清空 `active_render_job_record_id` 与 `latest_render_run_trace_json`。
+- project snapshot 只根据可信 active 指针暴露 `active_render`，不会从历史 render job 回填。
+
+当前非目标：
+
+- 不在 renderer 阶段实现或调用 DashScope 图生视频 provider；renderer 只消费 assets 阶段已产出的 `video` artifact 或 image + motion fallback。
+- 不由 renderer 生成缺失素材。
+- 不实现前端预览 UI、发布流、人工审稿流或质量评分。
+- 不把 compose v1 扩展成最终视频语义链路。

@@ -5,7 +5,11 @@ import {
   AssetPlan,
   AssetPlanningValidationResult,
   AssetsValidationResult,
+  ComposeTimeline,
+  ComposeValidationResult,
+  ExportArtifact,
   MediaLibraryItem,
+  RenderValidationResult,
   ScriptDraftPackage,
   ScriptInputBundle,
   ScriptSemanticReviewResult,
@@ -756,6 +760,164 @@ describe("shared schema contracts", () => {
     expect(result.decision).toBe("blocked");
     expect(result.errors).toHaveLength(1);
     expect(result.warnings).toHaveLength(1);
+  });
+
+  it("accepts a minimal compose timeline", () => {
+    const result = ComposeTimeline.safeParse({
+      timeline_version: "compose_timeline_v1",
+      source_asset_manifest_record_id: "asset_manifest_001",
+      source_asset_plan_record_id: "asset_plan_001",
+      source_storyboard_record_id: "storyboard_001",
+      source_script_record_id: "script_001",
+      output_profile: {
+        aspect_ratio: "9:16",
+        width: 1080,
+        height: 1920,
+        fps: 30,
+      },
+      duration_sec: 12,
+      tracks: [
+        {
+          track_id: "track_visual",
+          track_type: "visual",
+          clips: [
+            {
+              clip_id: "clip_visual_sb_001",
+              segment_id: "sb_001",
+              artifact_id: "artifact_img_001",
+              start_sec: 0,
+              duration_sec: 12,
+              clip_kind: "image_with_motion",
+              motion_artifact_id: "artifact_motion_001",
+              notes: [],
+            },
+          ],
+        },
+        {
+          track_id: "track_narration",
+          track_type: "narration",
+          clips: [
+            {
+              clip_id: "clip_narration",
+              segment_id: null,
+              artifact_id: "artifact_tts_merged",
+              start_sec: 0,
+              duration_sec: 12,
+              clip_kind: "audio",
+              motion_artifact_id: null,
+              notes: [],
+            },
+          ],
+        },
+      ],
+      segments: [
+        {
+          segment_id: "sb_001",
+          start_sec: 0,
+          duration_sec: 12,
+          visual_clip_ids: ["clip_visual_sb_001"],
+          narration_clip_ids: ["clip_narration"],
+          subtitle_clip_ids: [],
+          notes: [],
+        },
+      ],
+      readiness: "ready_for_render",
+      notes: [],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects compose timelines with invalid clip timing", () => {
+    const result = ComposeTimeline.safeParse({
+      timeline_version: "compose_timeline_v1",
+      source_asset_manifest_record_id: "asset_manifest_001",
+      source_asset_plan_record_id: "asset_plan_001",
+      source_storyboard_record_id: "storyboard_001",
+      source_script_record_id: "script_001",
+      output_profile: {
+        aspect_ratio: "9:16",
+        width: 1080,
+        height: 1920,
+        fps: 30,
+      },
+      duration_sec: 12,
+      tracks: [
+        {
+          track_id: "track_visual",
+          track_type: "visual",
+          clips: [
+            {
+              clip_id: "clip_bad",
+              segment_id: "sb_001",
+              artifact_id: "artifact_img_001",
+              start_sec: -1,
+              duration_sec: 12,
+              clip_kind: "image_only",
+              motion_artifact_id: null,
+              notes: [],
+            },
+          ],
+        },
+      ],
+      segments: [],
+      readiness: "blocked",
+      notes: [],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a compose validation result", () => {
+    const result = ComposeValidationResult.safeParse({
+      stage: "compose_local_validation",
+      decision: "ready_for_render",
+      errors: [],
+      warnings: [],
+      metrics: {
+        track_count: 2,
+        clip_count: 2,
+        segment_count: 1,
+        duration_sec: 12,
+      },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a rendered video export artifact", () => {
+    const result = ExportArtifact.safeParse({
+      artifact_id: "render_export_001",
+      artifact_type: "rendered_video",
+      file_uri: "file://storage/projects/proj_001/renders/render_001/output.mp4",
+      mime_type: "video/mp4",
+      duration_sec: 12,
+      width: 1080,
+      height: 1920,
+      fps: 30,
+      source_compose_record_id: "compose_001",
+      source_asset_manifest_record_id: "asset_manifest_001",
+      metadata: { renderer: "fake" },
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a render validation result", () => {
+    const result = RenderValidationResult.safeParse({
+      stage: "render_local_validation",
+      decision: "rendered",
+      errors: [],
+      warnings: [],
+      metrics: {
+        duration_sec: 12,
+        width: 1080,
+        height: 1920,
+        fps: 30,
+      },
+    });
+
+    expect(result.success).toBe(true);
   });
 
   it("rejects unknown execution status in AssetManifest", () => {

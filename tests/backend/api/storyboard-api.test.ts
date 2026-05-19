@@ -197,6 +197,8 @@ describe("storyboard api", () => {
     const prepared = await prepareActiveScript(app);
     prepared.project.activeAssetPlanRecordId = "asset_plan_record_old";
     prepared.project.activeAssetManifestRecordId = "asset_manifest_record_old";
+    prepared.project.activeComposeRecordId = "compose_record_old";
+    prepared.project.activeRenderJobRecordId = "render_job_record_old";
     prepared.project.latestAssetPlanRunTraceJson = {
       phase: "asset_planning",
       run_id: "asset_plan_run_old",
@@ -205,6 +207,16 @@ describe("storyboard api", () => {
     prepared.project.latestAssetsRunTraceJson = {
       phase: "assets",
       run_id: "assets_run_old",
+      steps: [],
+    };
+    prepared.project.latestComposeRunTraceJson = {
+      phase: "compose",
+      run_id: "compose_run_old",
+      steps: [],
+    };
+    prepared.project.latestRenderRunTraceJson = {
+      phase: "render",
+      run_id: "render_run_old",
       steps: [],
     };
     generateStoryboardPlanMock.mockResolvedValueOnce(
@@ -247,6 +259,10 @@ describe("storyboard api", () => {
     expect(prepared.project.latestAssetPlanRunTraceJson).toBeNull();
     expect(prepared.project.activeAssetManifestRecordId).toBeNull();
     expect(prepared.project.latestAssetsRunTraceJson).toBeNull();
+    expect(prepared.project.activeComposeRecordId).toBeNull();
+    expect(prepared.project.latestComposeRunTraceJson).toBeNull();
+    expect(prepared.project.activeRenderJobRecordId).toBeNull();
+    expect(prepared.project.latestRenderRunTraceJson).toBeNull();
 
     const snapshot = await getProjectSnapshot(app.db, prepared.project.id);
     expect(snapshot?.active_storyboard).toMatchObject({
@@ -255,6 +271,10 @@ describe("storyboard api", () => {
     });
     expect(snapshot?.active_asset_plan).toBeNull();
     expect(snapshot?.trace_summary.latest_asset_plan_run).toBeNull();
+    expect(snapshot?.active_compose).toBeNull();
+    expect(snapshot?.trace_summary.latest_compose_run).toBeNull();
+    expect(snapshot?.active_render).toBeNull();
+    expect(snapshot?.trace_summary.latest_render_run).toBeNull();
   });
 
   it("does not activate storyboard when local validation still fails after regen once", async () => {

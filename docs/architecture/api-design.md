@@ -14,7 +14,7 @@
 2. 用户显式操作触发 API；内部 patch / regenerate 不单独暴露成用户 API。
 3. topic 与 script 的长时任务优先采用异步任务 + SSE 状态流。
 4. API 只暴露当前已确认阶段。
-5. storyboard v1 已承诺并实现生成 endpoint；asset planning / assets / compose 相关 endpoint 暂不承诺。
+5. storyboard / asset planning / assets / compose v1 已承诺并实现后端 endpoint；renderer/export v1 后端最小闭环已按 implementation plan 进入实现；运营后台、发布流、前端预览和人工审稿 API 仍不在本轮承诺范围。
 
 ## 2. 顶层资源
 
@@ -394,8 +394,9 @@ script 摘要第一版建议至少包含：
 
 ## 7. 当前不在本轮承诺的 API
 
-- compose API
 - 管理后台校正 Event Registry 的运营 API
+- renderer / export v1 后端 API 已由 2026-05-18 `POST /api/projects/:projectId/render/generate` 合同覆盖；完整前端预览、发布流和人工审稿 API 仍不在本轮承诺范围。
+- DashScope 图生视频专用 API；图生视频当前只通过 assets generate 的显式 `provider_mode=dashscope` 配置进入。
 
 ## Storyboard v1 API（2026-05-10 已实现）
 
@@ -487,7 +488,7 @@ script 摘要第一版建议至少包含：
 - asset planning API 不调用图片、视频、TTS、字幕或上传 provider。
 - asset planning API 不生成 compose timeline 或最终视频。
 
-## Assets v1 API（2026-05-15 已实现后端骨架）
+## Assets v1 API（2026-05-18 已同步后端执行基础）
 
 ### `POST /api/projects/:projectId/assets/generate`
 
@@ -495,7 +496,7 @@ script 摘要第一版建议至少包含：
 
 - 从当前 active asset plan 生成 assets manifest v1。
 - 成功后保存 `AssetManifestRecord`，并把项目推进到 `assets_ready` 或 `assets_blocked`。
-- 第一版只构建 manifest 骨架和结构校验，不调用真实 provider。
+- 当前默认路径使用 fake/local provider 与本地文件存储；显式 `provider_mode=dashscope` 可调用 DashScope TTS、文生图 provider，并在 active `AssetPlan` 存在 `video_clip` 任务时调用 DashScope image-to-video provider。该 API 仍不包含真实 BGM/SFX、前端上传/预览 UI 或发布级素材运营流。
 
 输入：
 
@@ -503,6 +504,8 @@ script 摘要第一版建议至少包含：
 - 可选请求体字段：
   - `voice_profile_id`：TTS 声线 ID，默认 `"voice_default_male_storyteller"`。
   - `execution_mode`：`"auto_available"` 或 `"dry_run"`，默认 `"auto_available"`。
+  - `provider_mode`：可选；仅显式传 `"dashscope"` 时启用 DashScope TTS/文生图/image-to-video provider，否则默认 fake/local。
+  - `dashscope`：可选 DashScope 配置覆盖，包括 `api_key`、`base_url`、`tts_model`、`tts_format`、`tts_sample_rate`、`image_model`、`image_size`、`image_poll_interval_ms`、`image_max_poll_attempts`、`image_to_video_model`、`image_to_video_resolution`、`image_to_video_duration_sec`、`image_to_video_poll_interval_ms`、`image_to_video_max_poll_attempts`。
 
 前置条件与错误：
 
@@ -588,7 +591,108 @@ script 摘要第一版建议至少包含：
 
 边界：
 
-- assets API 不调用真实 provider（TTS、图片、视频、SFX、BGM）。
+- assets API 默认不调用真实 provider；显式 `provider_mode=dashscope` 允许 TTS、文生图与图生视频 provider。图生视频只在 assets 阶段处理 `video_clip` 任务，真实 SFX/BGM 仍未接入。
 - assets API 不修改 `script_text`、`TopicPackage`、`StoryboardPlan` 或 `AssetPlan`。
 - assets API 不生成 compose timeline 或最终视频。
 - assets API 不实现前端 UI、物理文件上传或预览功能。
+
+## Compose v1 API（2026-05-17 已实现后端 timeline 合同）
+
+> 修订说明：本文档早期“当前不在本轮承诺的 API”曾列出 compose API。截至 2026-05-17，`POST /api/projects/:projectId/compose/generate` 已进入已实现后端合同；本节覆盖早期列表中的 compose TBD 表述。
+
+### `POST /api/projects/:projectId/compose/generate`
+
+用途：
+
+- 从当前 active assets manifest 生成 compose timeline v1。
+- 成功后保存 `ComposeRecord`，并把项目推进到 `compose_ready` 或 `compose_blocked`。
+- 第一版只生成可持久化时间轴，不渲染最终视频。
+
+输入：
+
+- URL 中的 `projectId`。
+- 第一版请求体可为空。
+
+前置条件与错误：
+
+- project 必须存在，否则返回 `404 project_not_found`。
+- project 必须有 `active_asset_manifest_record_id`，否则返回 `409 active_assets_missing`。
+- active asset manifest record 必须存在，否则返回 `409 active_assets_missing`。
+- 若生成期间 active asset manifest 指针发生变化，返回 `409 stale_compose_source`，不保存也不激活旧 compose 结果。
+
+成功响应字段：
+
+- `project_id`
+- `compose_record_id`
+- `source_asset_manifest_record_id`
+- `timeline`
+- `local_validation`
+- `execution_state`
+- `graph_trace_summary`
+- `runtime_diagnostics`
+
+状态推进：
+
+- `local_validation.decision = ready_for_render` 时，project status 进入 `compose_ready`。
+- `local_validation.decision = partial / blocked` 时，project status 进入 `compose_blocked`，但仍保存本次 `ComposeRecord` 作为可诊断记录。
+
+边界：
+
+- compose API 不调用 provider。
+- compose API 不调用 Remotion。
+- compose API 不导出 MP4。
+- compose API 不生成 DashScope 图生视频。
+- compose API 不修改 `script_text`、`TopicPackage`、`StoryboardPlan`、`AssetPlan` 或 `AssetManifest`。
+- compose API 不实现前端预览 UI。
+
+## Renderer / Export v1 API（2026-05-18 后端首批实现）
+
+本节覆盖 `POST /api/projects/:projectId/render/generate` 当前后端合同，修正早期 “renderer / Remotion / MP4 export API 不在本轮承诺” 的表述。当前实现只进入 renderer implementation plan 的后端最小闭环，不代表 renderer API 会调用 DashScope 图生视频、前端预览、发布流或人工审稿流已进入范围。
+
+### `POST /api/projects/:projectId/render/generate`
+
+用途：
+
+- 从当前 active `ComposeRecord` 生成 render job。
+- 成功后保存 `RenderJobRecord`，并将 project 推进到 `render_ready`。
+- blocked source 保存可诊断 render job，并将 project 推进到 `render_blocked`。
+- adapter 通过后端边界注入；测试和 runtime smoke 默认使用 deterministic fake adapter。Local Remotion adapter 已有后端适配边界与最小测试，但不把 DashScope 或前端预览纳入该 API。
+
+输入：
+
+- URL 中的 `projectId`。
+- 第一版请求体可为空；renderer 使用 active compose 及其上游 asset manifest。
+
+前置条件与错误：
+
+- project 必须存在，否则返回 `404 project_not_found`。
+- project 必须有 `active_compose_record_id`，否则返回 `409 active_compose_missing`。
+- active compose record 必须存在，否则返回 `409 active_compose_missing`。
+- compose timeline 必须达到 `ready_for_render`，否则返回阻塞类 `409`。
+- render source validator 若发现结构、引用或文件缺失，返回阻塞结果并保存诊断记录。
+- 若生成期间 active compose 指针发生变化，返回 `409 stale_render_source`，不激活旧 render 结果。
+- adapter 失败时保存 failed render job，并返回 render failed 类错误。
+
+成功响应字段：
+
+- `project_id`
+- `render_job_record_id`
+- `source_compose_record_id`
+- `output_artifact`
+- `local_validation`
+- `execution_state`
+- `graph_trace_summary`
+- `runtime_diagnostics`
+
+状态推进：
+
+- `local_validation.decision = ready_for_render` 且 adapter 成功时，project status 进入 `render_ready`。
+- source validation blocked 时，project status 进入 `render_blocked`。
+- adapter/runtime failed 时，project status 进入 `render_failed`。
+
+边界：
+
+- render API 不调用 DashScope 图生视频。
+- render API 不生成缺失素材。
+- render API 不修改 `script_text`、`TopicPackage`、`StoryboardPlan`、`AssetPlan`、`AssetManifest` 或 `ComposeTimeline`。
+- render API 不实现前端 preview UI、发布流或人工审稿流。

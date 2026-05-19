@@ -438,9 +438,13 @@ export async function runAssetPlanningGeneration(
 
   input.project.activeAssetPlanRecordId = assetPlanRecord.id;
   input.project.activeAssetManifestRecordId = null;
+  input.project.activeComposeRecordId = null;
+  input.project.activeRenderJobRecordId = null;
   input.project.latestAssetPlanRunTraceJson =
     graphTraceSummary as unknown as Record<string, unknown>;
   input.project.latestAssetsRunTraceJson = null;
+  input.project.latestComposeRunTraceJson = null;
+  input.project.latestRenderRunTraceJson = null;
   input.project.status = "asset_plan_ready";
   input.project.updatedAt = new Date();
   persistProjectRunArtifacts({

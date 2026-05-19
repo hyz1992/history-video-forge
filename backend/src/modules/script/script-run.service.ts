@@ -173,11 +173,15 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
   input.project.activeStoryboardRecordId = null;
   input.project.activeAssetPlanRecordId = null;
   input.project.activeAssetManifestRecordId = null;
+  input.project.activeComposeRecordId = null;
+  input.project.activeRenderJobRecordId = null;
   input.project.latestScriptRunTraceJson =
     graphTraceSummary as unknown as Record<string, unknown>;
   input.project.latestStoryboardRunTraceJson = null;
   input.project.latestAssetPlanRunTraceJson = null;
   input.project.latestAssetsRunTraceJson = null;
+  input.project.latestComposeRunTraceJson = null;
+  input.project.latestRenderRunTraceJson = null;
   input.project.status = "script_ready";
   input.project.updatedAt = new Date();
   persistProjectRunArtifacts({

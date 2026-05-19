@@ -45,3 +45,18 @@ export {
   MediaLibraryItem,
   MediaLibraryLicense,
 } from "./assets/media-library.schema";
+export {
+  ComposeClip,
+  ComposeClipKind,
+  ComposeReadiness,
+  ComposeTimeline,
+  ComposeTimelineSegment,
+  ComposeTrack,
+  ComposeTrackType,
+} from "./compose/compose-timeline.schema";
+export { ComposeValidationResult } from "./compose/compose-validation.schema";
+export {
+  ExportArtifact,
+  RenderJobStatus,
+} from "./render/render-job.schema";
+export { RenderValidationResult } from "./render/render-validation.schema";

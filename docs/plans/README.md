@@ -36,7 +36,7 @@
 
 - `asset planning` 第一版 design 与 implementation plan 已执行到后端最小实现完成，并已被正式架构、数据和 API 文档吸收。
 - 当前仍保留未归档的 asset planning 计划文件，直到最终最小验证完成并确认是否归档。
-- `assets` 与 `compose` 仍未进入可实施设计，不得从 asset planning 计划中顺手实现。
+- 历史说明：该条是 2026-05-11 当日状态；截至 2026-05-18，`assets`、`compose` 与 `renderer/export` 均已有 v1 后端实现，当前边界以 `AGENTS.md`、正式架构文档和本 README 后续状态段落为准。
 
 ## 2026-05-12 Asset Planning 结构性局部修复
 
@@ -50,14 +50,14 @@
 - 新增 [Assets Stage Design](./2026-05-15-assets-stage-design.md)。
 - 新增 [Assets Stage Implementation Plan](./2026-05-15-assets-stage-implementation-plan.md)。
 - 本轮计划只设计 `AssetPlan` 之后的资产执行结果合同：`AssetManifest`、任务执行状态、artifact metadata、分镜 route、BGM placement、手动素材登记和结构校验。
-- 第一版实施计划不接真实 provider、不实现物理上传 UI、不实现 compose timeline 或最终视频导出。
+- 历史说明：该条是 2026-05-15 初始 assets v1 边界；截至 2026-05-19，assets 已具备 fake/local 执行、本地文件存储、显式 DashScope TTS/文生图/image-to-video 路径和 provider job 记录，但仍不包含真实 BGM/SFX、上传/预览 UI 或发布级素材运营流。
 
 ## 2026-05-15 Assets 阶段实施状态
 
 - assets v1 后端骨架已实现：manifest builder、local validator、manual artifact registration、artifact accept、persistence、API routes。
 - 架构文档、字段文档、schema 文档和 API 文档已同步更新。
 - 当前仍保留未归档的 assets 计划文件，直到完整验证完成。
-- `compose` 仍未进入可实施设计，不得从 assets 计划中顺手实现。
+- 历史说明：该条是 assets 骨架完成时的状态；截至 2026-05-19，compose v1、renderer/export v1 和显式 DashScope image-to-video provider 后端路径均已有独立计划与实现；仍不得从 assets 计划顺手扩展的是上传/预览 UI、发布流和人工审稿流。
 
 ## 2026-05-16 真实 Assets 生成与媒体库设计
 
@@ -65,3 +65,55 @@
 - 新增 [真实 Assets 生成与媒体库实施计划](./2026-05-16-real-assets-generation-and-media-library-implementation-plan.md)。
 - 本设计只收束真实 provider、TTS、字幕文件、Remotion 局部分镜、SFX/BGM 本地素材库和授权治理的阶段边界。
 - 当前实施计划只覆盖 provider job、文件存储、fake provider、TTS/subtitle/image 最小执行、媒体库基础与 DashScope provider 外壳；不得顺手实现真实视频、Remotion compose、素材下载或上传/预览 UI。
+
+## 2026-05-17 Compose 阶段设计
+
+- 新增 [Compose Stage Design](../architecture/compose-stage-design.md)。
+- 新增 [Compose Stage Implementation Plan](./2026-05-17-compose-stage-implementation-plan.md)。
+- 本轮只收束 assets 之后的 compose timeline 合同：`ComposeTimeline`、`ComposeValidationResult`、`ComposeRecord`、本地结构校验、生成 API、上游失效规则和文档更新。
+- 第一版 compose 实施计划只允许生成可持久化的 timeline contract；不得顺手实现 Remotion 渲染、DashScope 生视频、最终 MP4 导出或前端预览 UI。
+
+## 2026-05-17 Compose 阶段实施收口
+
+- compose v1 后端 timeline 合同已实现：shared schema、timeline builder、local validator、persistence、snapshot、API、上游失效规则与 runtime smoke。
+- 正式架构、API、schema、field 与 downstream 高层文档已同步 compose v1 当前边界。
+- 当前仍保留未归档的 compose 计划文件，直到完整回归验证和是否归档确认完成。
+- 历史说明：renderer/export 已在 2026-05-18 按正式 implementation plan 完成后端首批实现；DashScope 图生视频已在 2026-05-19 按单独 design + implementation plan 作为 assets provider 后端路径接入。
+
+## 2026-05-17 Renderer / Export 阶段设计
+
+- 新增 [Renderer / Export Stage Design](../architecture/renderer-stage-design.md)。
+- 新增 [Renderer / Export Stage Implementation Plan](./2026-05-17-renderer-stage-implementation-plan.md)。
+- 本轮设计选择先做本地 renderer/export v1：消费 `ComposeTimeline`，用静态图片 motion recipe、口播、字幕和可选音轨导出 MP4，并持久化 render job。
+- DashScope 图生视频不进入 renderer v1；截至 2026-05-19，它已作为 assets provider 生成 `video` artifact 的后端路径接入，再由 compose/renderer 消费。
+- 该条为 2026-05-17 设计入口记录；截至 2026-05-19，renderer/export v1 已按 implementation plan 完成后端首批实现，DashScope 图生视频 provider 已按单独计划接入 assets；前端预览 UI、发布流和人工审稿流仍不得顺手实现。
+
+## 2026-05-18 Renderer / Export 实施进展
+
+- Renderer / Export implementation plan 已完成 Task 1-10：shared render schemas、source validator、persistence/snapshot、adapter boundary、local Remotion adapter、render generate API、upstream invalidation、fake runtime smoke、正式文档同步与回归收口。
+- Task 9 已由正式文档吸收当前实现事实：pipeline IO、API、schema、field、downstream high-level 与 plans 入口文档同步 renderer v1 后端边界。
+- Task 10 已完成 renderer-focused tests、`render:remotion:smoke`、affected downstream tests 与 diff/status 检查；renderer 计划文件是否归档仍待单独收口决定。
+- Renderer/export 当前实现不调用 DashScope 图生视频，不包含前端 preview UI、发布流、人工审稿流，也不改变 topic/script/storyboard/asset planning/assets/compose 语义链路。
+
+## 2026-05-18 DashScope 图生视频 provider 设计
+
+- 新增 [DashScope Image-to-Video Provider Design](./2026-05-18-dashscope-image-to-video-provider-design.md)。
+- 新增 [DashScope Image-to-Video Provider Implementation Plan](./2026-05-18-dashscope-image-to-video-provider-implementation-plan.md)。
+- 本轮设计明确图生视频属于 assets provider：消费已规划的 `video_clip` task 和同 segment 的 image artifact，产出 `video` artifact，再由 compose/renderer 消费。
+- 第一版 implementation plan 只允许做显式 opt-in 的 DashScope image-to-video provider、mocked tests、service/API config、explicit live-check 和正式文档同步；不实现前端预览、上传 UI、发布流、人工审稿流、质量评分或 renderer-side provider 调用。
+
+## 2026-05-19 DashScope 图生视频 provider 实施进展
+
+- Implementation plan Task 1-8 已完成：payload helper、provider adapter、route fallback、service/API config、explicit live-check harness、focused regression 与正式文档同步。
+- `provider_mode=dashscope` 现在在 `video_clip` task 存在时可启用 `dashscope_image_to_video` provider；默认 fake/local 测试仍不调用真实网络。
+- compose 与 renderer 仍只消费 `video` artifact 或 image + motion fallback，不调用 DashScope。
+- `harness:assets-dashscope-image-to-video-live-check` 已存在但未在本轮执行真实 DashScope 调用；它是显式检查，不是默认自动化门。
+
+## 2026-05-19 TTS / Voice Assets 设计
+
+- 新增 [TTS / Voice Assets Design](./2026-05-19-tts-voice-assets-design.md)。
+- 新增 [TTS / Voice Assets Implementation Plan](./2026-05-19-tts-voice-assets-implementation-plan.md)。
+- 本轮设计明确音色库是全局共享 assets 能力：视频任务先通过结构化 voice intent 精准匹配本地音色，匹配不到时只创建本地音色档案。
+- 供应商音色创建采用 assets 阶段懒创建：只有实际生成 TTS 时，才检查 `provider_voice_id` 并按需创建/查询供应商音色。
+- 默认测试不得调用真实 TTS 或真实图生视频；视频生成相关验证继续优先走 Remotion 本地合成。
+- Implementation plan 已拆为 9 个 TDD 任务：shared voice schemas、全局音色库 seed/repository、匹配器与本地音色创建、assets voice resolution、DashScope voice design provider boundary、designed voice TTS 集成、metadata/subtitle continuity、显式 live-check harness 和正式文档同步。

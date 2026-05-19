@@ -42,6 +42,12 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
   const assetManifestRecord = project.activeAssetManifestRecordId
     ? db.assetManifestRecords.get(project.activeAssetManifestRecordId) ?? null
     : null;
+  const composeRecord = project.activeComposeRecordId
+    ? db.composeRecords.get(project.activeComposeRecordId) ?? null
+    : null;
+  const renderJobRecord = project.activeRenderJobRecordId
+    ? db.renderJobRecords.get(project.activeRenderJobRecordId) ?? null
+    : null;
   const latestProjectScriptRecord = [...db.scriptRecords.values()]
     .filter((record) => record.projectId === project.id)
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
@@ -65,6 +71,10 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
     (project.latestAssetPlanRunTraceJson as Record<string, unknown> | null | undefined) ?? null;
   const latestAssetsTrace =
     (project.latestAssetsRunTraceJson as Record<string, unknown> | null | undefined) ?? null;
+  const latestComposeTrace =
+    (project.latestComposeRunTraceJson as Record<string, unknown> | null | undefined) ?? null;
+  const latestRenderTrace =
+    (project.latestRenderRunTraceJson as Record<string, unknown> | null | undefined) ?? null;
 
   return {
     project_id: project.id,
@@ -85,6 +95,8 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
       latest_storyboard_run: summarizeTraceRun(latestStoryboardTrace),
       latest_asset_plan_run: summarizeTraceRun(latestAssetPlanTrace),
       latest_assets_run: summarizeTraceRun(latestAssetsTrace),
+      latest_compose_run: summarizeTraceRun(latestComposeTrace),
+      latest_render_run: summarizeTraceRun(latestRenderTrace),
     },
     active_topic_package: topicRecord
       ? {
@@ -159,6 +171,31 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
           execution_state: assetManifestRecord.executionStateJson,
           graph_trace_summary: assetManifestRecord.graphTraceSummaryJson,
           runtime_diagnostics: assetManifestRecord.runtimeDiagnosticsJson,
+        }
+      : null,
+    active_compose: composeRecord
+      ? {
+          compose_record_id: composeRecord.id,
+          source_asset_manifest_record_id: composeRecord.assetManifestRecordId,
+          timeline: composeRecord.timelineJson,
+          local_validation: composeRecord.validationResultJson,
+          execution_state: composeRecord.executionStateJson,
+          graph_trace_summary: composeRecord.graphTraceSummaryJson,
+          runtime_diagnostics: composeRecord.runtimeDiagnosticsJson,
+        }
+      : null,
+    active_render: renderJobRecord
+      ? {
+          render_job_record_id: renderJobRecord.id,
+          source_compose_record_id: renderJobRecord.composeRecordId,
+          source_asset_manifest_record_id: renderJobRecord.assetManifestRecordId,
+          status: renderJobRecord.status,
+          profile: renderJobRecord.profileJson,
+          output_artifact: renderJobRecord.outputArtifactJson,
+          validation_result: renderJobRecord.validationResultJson,
+          execution_state: renderJobRecord.executionStateJson,
+          graph_trace_summary: renderJobRecord.graphTraceSummaryJson,
+          runtime_diagnostics: renderJobRecord.runtimeDiagnosticsJson,
         }
       : null,
   };

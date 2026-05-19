@@ -3,7 +3,10 @@ import { randomUUID } from "node:crypto";
 import type {
   AssetPlan,
   AssetPlanningValidationResult,
+  ExportArtifact,
   MediaLibraryItem,
+  RenderJobStatus,
+  RenderValidationResult,
 } from "../../../shared/src/index.js";
 
 export interface ProjectRecord {
@@ -15,11 +18,15 @@ export interface ProjectRecord {
   activeStoryboardRecordId: string | null;
   activeAssetPlanRecordId: string | null;
   activeAssetManifestRecordId: string | null;
+  activeComposeRecordId: string | null;
+  activeRenderJobRecordId: string | null;
   latestTopicRunTraceJson: Record<string, unknown> | null;
   latestScriptRunTraceJson: Record<string, unknown> | null;
   latestStoryboardRunTraceJson: Record<string, unknown> | null;
   latestAssetPlanRunTraceJson: Record<string, unknown> | null;
   latestAssetsRunTraceJson: Record<string, unknown> | null;
+  latestComposeRunTraceJson: Record<string, unknown> | null;
+  latestRenderRunTraceJson: Record<string, unknown> | null;
   storageDisplayName: string;
   storageShortId: string;
   storageRootDir: string;
@@ -142,6 +149,34 @@ export interface AssetManifestRecord {
   createdAt: Date;
 }
 
+export interface ComposeRecord {
+  id: string;
+  projectId: string;
+  assetManifestRecordId: string;
+  timelineJson: Record<string, unknown>;
+  validationResultJson: Record<string, unknown>;
+  executionStateJson: Record<string, unknown> | null;
+  graphTraceSummaryJson: Record<string, unknown> | null;
+  runtimeDiagnosticsJson: Record<string, unknown> | null;
+  createdAt: Date;
+}
+
+export interface RenderJobRecord {
+  id: string;
+  projectId: string;
+  composeRecordId: string;
+  assetManifestRecordId: string;
+  status: RenderJobStatus;
+  profileJson: Record<string, unknown>;
+  outputArtifactJson: ExportArtifact | null;
+  validationResultJson: RenderValidationResult;
+  executionStateJson: Record<string, unknown> | null;
+  graphTraceSummaryJson: Record<string, unknown> | null;
+  runtimeDiagnosticsJson: Record<string, unknown> | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export type AssetProviderJobStatus =
   | "prepared"
   | "submitted"
@@ -183,6 +218,8 @@ export interface DbClient {
   storyboardRecords: Map<string, StoryboardRecord>;
   assetPlanRecords: Map<string, AssetPlanRecord>;
   assetManifestRecords: Map<string, AssetManifestRecord>;
+  composeRecords: Map<string, ComposeRecord>;
+  renderJobRecords: Map<string, RenderJobRecord>;
   assetProviderJobRecords: Map<string, AssetProviderJobRecord>;
   mediaLibraryItems: Map<string, MediaLibraryItem>;
 }
@@ -199,6 +236,8 @@ export function createDbClient(): DbClient {
     storyboardRecords: new Map<string, StoryboardRecord>(),
     assetPlanRecords: new Map<string, AssetPlanRecord>(),
     assetManifestRecords: new Map<string, AssetManifestRecord>(),
+    composeRecords: new Map<string, ComposeRecord>(),
+    renderJobRecords: new Map<string, RenderJobRecord>(),
     assetProviderJobRecords: new Map<string, AssetProviderJobRecord>(),
     mediaLibraryItems: new Map<string, MediaLibraryItem>(),
   };

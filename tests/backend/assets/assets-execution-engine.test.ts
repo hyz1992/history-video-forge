@@ -168,4 +168,116 @@ describe("assets execution engine", () => {
     });
     expect(db.assetProviderJobRecords.size).toBe(1);
   });
+
+  it("routes generated video artifacts as primary visual while preserving image fallback", async () => {
+    const db = createDbClient();
+    const manifest = makeManifest();
+    manifest.execution_options.enabled_provider_types = ["video"];
+    manifest.executions = [
+      {
+        execution_id: "exec_video_001",
+        task_id: "task_video_001",
+        task_type: "video_clip",
+        status: "planned",
+        origin: "provider",
+        started_at: null,
+        completed_at: null,
+        provider_id: null,
+        attempts: 0,
+        output_artifact_ids: [],
+        notes: [],
+      },
+    ];
+    manifest.artifacts = [
+      {
+        artifact_id: "artifact_img_001",
+        artifact_type: "image",
+        origin: "provider",
+        file_uri: "generated://image.png",
+        created_at: "2026-05-16T00:00:00.000Z",
+        metadata: { width: 1080, height: 1920 },
+      },
+    ];
+    manifest.segment_routes[0] = {
+      ...manifest.segment_routes[0]!,
+      primary_visual_artifact_id: "artifact_img_001",
+      visual_route_type: "image_with_motion",
+      motion_artifact_id: "artifact_motion_001",
+      fallback_visual_artifact_id: "artifact_img_001",
+      readiness: "fallback_ready",
+    };
+
+    const assetPlan = makeAssetPlan();
+    assetPlan.tasks = [
+      {
+        task_id: "task_video_001",
+        order: 0,
+        task_type: "video_clip",
+        source_segment_id: "sb_001",
+        source_excerpt: "video source excerpt",
+        production_intent: "Generate a video clip from the segment image.",
+        recommended_mode: "auto",
+        provider_hint: "fake_video",
+        prompt_draft: "slow push-in on an ancient court confrontation",
+        parameters: {},
+        manual_upload_policy: {
+          allowed: false,
+          required: false,
+          accepted_file_types: [],
+          acceptance_notes: [],
+        },
+        risk_notes: [],
+        cost_tier: "high",
+        initial_status: "planned",
+      },
+    ];
+
+    const adapter: AssetProviderAdapter = {
+      providerName: "fake_video",
+      providerType: "video",
+      canHandle: ({ taskType }) => taskType === "video_clip",
+      prepare: async () => ({ providerJobId: null, rawRequestJson: {} }),
+      submit: async () => ({ providerJobId: "job_video_001", rawResponseJson: {} }),
+      poll: async () => ({ status: "completed", rawResponseJson: {} }),
+      download: async () => [
+        {
+          artifact_id: "artifact_video_task_video_001",
+          artifact_type: "video",
+          origin: "provider",
+          file_uri: "generated://video.mp4",
+          created_at: "2026-05-16T00:01:00.000Z",
+          metadata: {
+            duration_sec: 5,
+            width: 720,
+            height: 1280,
+            fps: 24,
+          },
+        },
+      ],
+      normalizeResult: async ({ downloadedArtifacts }) => ({
+        artifacts: downloadedArtifacts,
+        notes: ["fake video generated"],
+      }),
+      cancel: async () => undefined,
+    };
+
+    const result = await executeAssetManifest({
+      db,
+      assetManifestRecordId: "manifest_001",
+      assetRunId: "assets_run_001",
+      manifest,
+      registry: createAssetProviderRegistry([adapter]),
+      assetPlan,
+      projectStorageRootDir: "unused",
+    });
+    const route = result.manifest.segment_routes.find(
+      (item) => item.segment_id === "sb_001",
+    );
+
+    expect(route?.visual_route_type).toBe("video_clip");
+    expect(route?.primary_visual_artifact_id).toBe(
+      "artifact_video_task_video_001",
+    );
+    expect(route?.fallback_visual_artifact_id).toBe("artifact_img_001");
+  });
 });

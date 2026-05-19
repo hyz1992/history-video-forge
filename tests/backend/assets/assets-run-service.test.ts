@@ -1,7 +1,7 @@
 import { mkdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
@@ -125,6 +125,70 @@ function makeAssetPlan(): AssetPlan {
   };
 }
 
+function makeImageToVideoAssetPlan(): AssetPlan {
+  const plan = makeAssetPlan();
+  plan.tasks.push(
+    {
+      task_id: "motion_001",
+      order: 3,
+      task_type: "render_motion_cue",
+      source_segment_id: "sb_001",
+      source_excerpt: "Image source excerpt.",
+      production_intent: "Create fallback motion over the segment image.",
+      recommended_mode: "auto",
+      provider_hint: "local_motion",
+      prompt_draft: null,
+      parameters: {
+        recipe_type: "slow_push_in",
+      },
+      manual_upload_policy: {
+        allowed: false,
+        required: false,
+        accepted_file_types: [],
+        acceptance_notes: [],
+      },
+      risk_notes: [],
+      cost_tier: "low",
+      initial_status: "planned",
+    },
+    {
+      task_id: "video_001",
+      order: 4,
+      task_type: "video_clip",
+      source_segment_id: "sb_001",
+      source_excerpt: "Image source excerpt.",
+      production_intent: "Create the segment video clip from the image.",
+      recommended_mode: "auto",
+      provider_hint: "dashscope_image_to_video",
+      prompt_draft: "A tense historical close-up, slow push-in.",
+      parameters: {},
+      manual_upload_policy: {
+        allowed: false,
+        required: false,
+        accepted_file_types: [],
+        acceptance_notes: [],
+      },
+      risk_notes: [],
+      cost_tier: "high",
+      initial_status: "planned",
+    },
+  );
+  plan.cost_summary = {
+    total_tasks: 5,
+    by_type: {
+      tts_audio: 1,
+      subtitle_track: 1,
+      image_still: 1,
+      render_motion_cue: 1,
+      video_clip: 1,
+    },
+    by_cost_tier: { low: 4, high: 1 },
+    estimated_provider_calls: 4,
+    notes: [],
+  };
+  return plan;
+}
+
 async function prepareProjectWithAssetPlan() {
   const db = createDbClient();
   const project = await createProject(db, { name: "assets service test" });
@@ -174,6 +238,19 @@ async function prepareProjectWithAssetPlan() {
 }
 
 describe("assets run service integration", () => {
+  let integrationTempDir: string;
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  afterEach(async () => {
+    if (integrationTempDir) {
+      await rm(integrationTempDir, { recursive: true, force: true }).catch(() => {});
+      integrationTempDir = "";
+    }
+  });
+
   it("writes request execution options into the manifest and stored trace", async () => {
     const { db, project } = await prepareProjectWithAssetPlan();
 
@@ -266,6 +343,240 @@ describe("assets run service integration", () => {
     expect(response.body).toMatchObject({
       error: "asset_manual_artifact_invalid",
     });
+  });
+
+  it("uses DashScope providers only when explicitly requested", async () => {
+    integrationTempDir = join(tmpdir(), `assets-dashscope-${Date.now()}`);
+    await mkdir(integrationTempDir, { recursive: true });
+
+    const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const urlText = String(url);
+      const headers = new Headers(init?.headers);
+      if (urlText.startsWith("https://dashscope.test/")) {
+        expect(headers.get("authorization")).toBe("Bearer test-key");
+      }
+
+      if (urlText.endsWith("/api/v1/services/aigc/multimodal-generation/generation")) {
+        expect(headers.get("x-dashscope-async")).toBe("disable");
+        return new Response(
+          JSON.stringify({
+            output: {
+              audio: {
+                url: "https://example.test/audio.wav",
+              },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (urlText.endsWith("/api/v1/services/aigc/image-generation/generation")) {
+        expect(headers.get("x-dashscope-async")).toBe("enable");
+        return new Response(
+          JSON.stringify({
+            output: {
+              task_id: "task_dashscope_image_001",
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (urlText.endsWith("/api/v1/tasks/task_dashscope_image_001")) {
+        return new Response(
+          JSON.stringify({
+            output: {
+              task_status: "SUCCEEDED",
+              results: [{ url: "https://example.test/image.png" }],
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (urlText === "https://example.test/audio.wav") {
+        return new Response(new Uint8Array([1, 2, 3, 4]), {
+          status: 200,
+          headers: { "content-type": "audio/wav" },
+        });
+      }
+
+      if (urlText === "https://example.test/image.png") {
+        return new Response(new Uint8Array([137, 80, 78, 71]), {
+          status: 200,
+          headers: { "content-type": "image/png" },
+        });
+      }
+
+      throw new Error(`unexpected fetch: ${urlText}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { db, project } = await prepareProjectWithAssetPlan();
+    project.storageRootDir = integrationTempDir;
+
+    const response = await runAssetsGeneration({
+      db,
+      project,
+      voiceProfileId: "voice_custom",
+      executionMode: "auto_available",
+      providerMode: "dashscope",
+      dashscope: {
+        apiKey: "test-key",
+        baseUrl: "https://dashscope.test",
+        imageModel: "wan2.6-t2i",
+        ttsModel: "qwen3-tts-instruct-flash",
+        imagePollIntervalMs: 0,
+        imageMaxPollAttempts: 1,
+      },
+    });
+    const body = response.body as { manifest: AssetManifest };
+
+    expect(response.statusCode).toBe(200);
+    expect(body.manifest.artifacts.some(
+      (artifact) =>
+        (artifact.metadata as Record<string, unknown>).provider_name === "dashscope_tts",
+    )).toBe(true);
+    expect(body.manifest.artifacts.some(
+      (artifact) =>
+        (artifact.metadata as Record<string, unknown>).provider_name === "dashscope_image",
+    )).toBe(true);
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it("uses dashscope image-to-video provider when explicitly configured", async () => {
+    integrationTempDir = join(tmpdir(), `assets-dashscope-i2v-${Date.now()}`);
+    await mkdir(integrationTempDir, { recursive: true });
+
+    const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const urlText = String(url);
+      const headers = new Headers(init?.headers);
+      if (urlText.startsWith("https://dashscope.test/")) {
+        expect(headers.get("authorization")).toBe("Bearer test-key");
+      }
+
+      if (urlText.endsWith("/api/v1/services/aigc/multimodal-generation/generation")) {
+        expect(headers.get("x-dashscope-async")).toBe("disable");
+        return new Response(
+          JSON.stringify({
+            output: {
+              audio: {
+                url: "https://example.test/audio.wav",
+              },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (urlText.endsWith("/api/v1/services/aigc/image-generation/generation")) {
+        expect(headers.get("x-dashscope-async")).toBe("enable");
+        return new Response(
+          JSON.stringify({
+            output: {
+              task_id: "task_dashscope_image_001",
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (urlText.endsWith("/api/v1/tasks/task_dashscope_image_001")) {
+        return new Response(
+          JSON.stringify({
+            output: {
+              task_status: "SUCCEEDED",
+              results: [{ url: "https://example.test/image.png" }],
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (urlText.endsWith("/api/v1/services/aigc/video-generation/video-synthesis")) {
+        expect(headers.get("x-dashscope-async")).toBe("enable");
+        return new Response(
+          JSON.stringify({
+            output: {
+              task_id: "task_dashscope_i2v_001",
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (urlText.endsWith("/api/v1/tasks/task_dashscope_i2v_001")) {
+        return new Response(
+          JSON.stringify({
+            output: {
+              task_id: "task_dashscope_i2v_001",
+              task_status: "SUCCEEDED",
+              video_url: "https://example.test/video.mp4",
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (urlText === "https://example.test/audio.wav") {
+        return new Response(new Uint8Array([1, 2, 3, 4]), {
+          status: 200,
+          headers: { "content-type": "audio/wav" },
+        });
+      }
+
+      if (urlText === "https://example.test/image.png") {
+        return new Response(new Uint8Array([137, 80, 78, 71]), {
+          status: 200,
+          headers: { "content-type": "image/png" },
+        });
+      }
+
+      if (urlText === "https://example.test/video.mp4") {
+        return new Response(new Uint8Array([0, 0, 0, 24]), {
+          status: 200,
+          headers: { "content-type": "video/mp4" },
+        });
+      }
+
+      throw new Error(`unexpected fetch: ${urlText}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { db, project } = await prepareProjectWithAssetPlan();
+    project.storageRootDir = integrationTempDir;
+    db.assetPlanRecords.get(ASSET_PLAN_RECORD_ID)!.planJson =
+      makeImageToVideoAssetPlan();
+    const dashscope = {
+      apiKey: "test-key",
+      baseUrl: "https://dashscope.test",
+      ttsModel: "qwen3-tts-instruct-flash",
+      imageModel: "wan2.6-t2i",
+      imageToVideoModel: "wan2.7-i2v-2026-04-25",
+      imagePollIntervalMs: 0,
+      imageMaxPollAttempts: 1,
+      imageToVideoPollIntervalMs: 0,
+      imageToVideoMaxPollAttempts: 1,
+    };
+
+    const response = await runAssetsGeneration({
+      db,
+      project,
+      voiceProfileId: "voice_custom",
+      executionMode: "auto_available",
+      providerMode: "dashscope",
+      dashscope,
+    });
+    const body = response.body as { manifest: AssetManifest };
+
+    expect(response.statusCode).toBe(200);
+    expect(body.manifest.artifacts.some(
+      (artifact) => artifact.artifact_type === "video",
+    )).toBe(true);
+    expect(body.manifest.segment_routes[0]?.visual_route_type).toBe("video_clip");
+    expect([...db.assetProviderJobRecords.values()].some(
+      (job) => job.providerName === "dashscope_image_to_video",
+    )).toBe(true);
   });
 });
 

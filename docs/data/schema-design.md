@@ -252,12 +252,16 @@
 - `storyboard_records (1) -> asset_manifest_records (N)`
 - `script_records (1) -> asset_manifest_records (N)`
 - `asset_plan_records (1) -> asset_manifest_records (N)`
+- `projects (1) -> compose_records (N)`
+- `asset_manifest_records (1) -> compose_records (N)`
+- `projects (1) -> render_job_records (N)`
+- `compose_records (1) -> render_job_records (N)`
 
 ## 5. 当前明确不建议这样做
 
 - 不把 `Event Registry`、`Candidate Cache`、`Recent Memory` 混成一张表
 - 不把全部数组型字段都塞进单 JSON 大字段里不区分职责
-- 不为尚未拍板的 compose 阶段提前设计大而全 schema
+- 不为尚未拍板的发布、运营后台、人工审稿、质量评分等后续阶段提前设计大而全 schema
 - 不直接复用旧项目的 pipeline state 表结构
 
 ## 6. Task 2 共享 Schema 与持久化映射
@@ -340,7 +344,7 @@
 - 索引策略与查询优化
 - `recommendation candidate exposure log` 是否独立成表
 - `Recent Memory` 第一版是否纯查询层，还是做物化表
-- compose 阶段的持久化对象
+- 发布、运营后台、人工审稿、质量评分等后续阶段的持久化对象
 
 ## StoryboardRecord 持久化映射（2026-05-10 已实现）
 
@@ -468,7 +472,95 @@ Assets v1 已有第一版持久化记录。它是 `AssetPlanRecord` 之后的派
 
 说明：
 
-- `manifest_json` 保存 `AssetManifest`。
+- `manifest_json` 保存 `AssetManifest`，可包含 DashScope image-to-video 产出的 `video` artifact 及其 image fallback route。
 - `validation_result_json` 保存 `AssetsValidationResult`。
-- `execution_state_json` 记录 `execution_mode`、`voice_profile_id`、`activated` 等执行状态。
-- `asset_manifest_records` 不保存 compose timeline 或最终视频导出。
+- `execution_state_json` 记录 `execution_mode`、`voice_profile_id`、`activated` 等执行状态；显式 `provider_mode=dashscope` 的 TTS、image 和 image-to-video provider 调用由 assets provider job 记录和 manifest artifact metadata 表达。
+- `asset_manifest_records` 不保存 compose timeline 或最终视频导出；图生视频只作为 assets artifact，不等同于最终导出 MP4。
+
+## ComposeRecord 持久化映射（2026-05-17 已实现）
+
+Compose v1 已有第一版持久化记录。它是 `AssetManifestRecord` 之后的派生记录，source-of-truth 仍是 active asset manifest 及其上游链路。
+
+### `projects` 增量字段
+
+- `active_compose_record_id`：当前激活的 compose record。
+- `latest_compose_run_trace_json`：当前项目最近一次 compose run 的 trace summary。
+
+失效规则：
+
+- 新 script 激活时，清空 `active_storyboard_record_id`、`latest_storyboard_run_trace_json`、`active_asset_plan_record_id`、`latest_asset_plan_run_trace_json`、`active_asset_manifest_record_id`、`latest_assets_run_trace_json`、`active_compose_record_id`、`latest_compose_run_trace_json`。
+- 新 storyboard 激活时，清空 `active_asset_plan_record_id`、`latest_asset_plan_run_trace_json`、`active_asset_manifest_record_id`、`latest_assets_run_trace_json`、`active_compose_record_id`、`latest_compose_run_trace_json`。
+- 新 asset plan 激活时，清空 `active_asset_manifest_record_id`、`latest_assets_run_trace_json`、`active_compose_record_id`、`latest_compose_run_trace_json`。
+- 新 asset manifest 激活时，清空 `active_compose_record_id` 与 `latest_compose_run_trace_json`。
+- project snapshot 只根据信任的 active 指针暴露 `active_compose`，不会在指针清空后从旧记录回填。
+
+### `compose_records`
+
+建议字段：
+
+- `id`
+- `project_id`
+- `asset_manifest_record_id`
+- `timeline_json`
+- `validation_result_json`
+- `execution_state_json`
+- `graph_trace_summary_json`
+- `runtime_diagnostics_json`
+- `created_at`
+
+关系：
+
+- `projects (1) -> compose_records (N)`
+- `asset_manifest_records (1) -> compose_records (N)`
+
+说明：
+
+- `timeline_json` 保存 `ComposeTimeline`。
+- `validation_result_json` 保存 `ComposeValidationResult`。
+- `execution_state_json` 第一版至少记录 `activated`。
+- `compose_records` 不保存 Remotion project、不保存最终 MP4、不保存 DashScope provider job；若 timeline 使用 `video` artifact，只保存来自 `AssetManifest` 的引用。
+
+## RenderJobRecord 持久化映射（2026-05-18 后端首批实现）
+
+Renderer / Export v1 已有第一版持久化记录。它是 `ComposeRecord` 之后的派生记录，source-of-truth 仍是 active compose 及其上游链路。
+
+### `projects` 增量字段
+
+- `active_render_job_record_id`：当前激活的 render job record。
+- `latest_render_run_trace_json`：当前项目最近一次 render run 的 trace summary。
+
+失效规则：
+
+- 新 script 激活时，清空 storyboard、asset plan、asset manifest、compose、render 相关 active 指针与 latest trace。
+- 新 storyboard 激活时，清空 asset plan、asset manifest、compose、render 相关 active 指针与 latest trace。
+- 新 asset plan 激活时，清空 asset manifest、compose、render 相关 active 指针与 latest trace。
+- 新 asset manifest 激活时，清空 compose、render 相关 active 指针与 latest trace。
+- 新 compose 激活时，清空 `active_render_job_record_id` 与 `latest_render_run_trace_json`。
+- project snapshot 只根据可信 active 指针暴露 `active_render`，不会在指针清空后从历史记录回填。
+
+### `render_job_records`
+
+建议字段：
+
+- `id`
+- `project_id`
+- `compose_record_id`
+- `output_artifact_json`
+- `validation_result_json`
+- `execution_state_json`
+- `graph_trace_summary_json`
+- `runtime_diagnostics_json`
+- `created_at`
+- `updated_at`
+
+关系：
+
+- `projects (1) -> render_job_records (N)`
+- `compose_records (1) -> render_job_records (N)`
+
+说明：
+
+- `output_artifact_json` 保存 `ExportArtifact`。
+- `validation_result_json` 保存 `RenderValidationResult`。
+- `execution_state_json` 至少记录 `status`、`activated`、`adapter` 与 source compose 信息。
+- `render_job_records` 不保存 DashScope 图生视频 job，不保存发布流状态，不保存人工审稿状态。

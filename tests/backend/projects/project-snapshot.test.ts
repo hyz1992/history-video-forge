@@ -11,6 +11,8 @@ import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning
 import {
   saveAssetManifestRecord,
 } from "../../../backend/src/modules/assets/asset-manifest-record.repository.js";
+import { saveComposeRecord } from "../../../backend/src/modules/compose/compose-record.repository.js";
+import { saveRenderJobRecord } from "../../../backend/src/modules/render/render-record.repository.js";
 import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository.js";
 import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/storyboard-record.repository.js";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
@@ -886,5 +888,337 @@ describe("project snapshot service", () => {
 
     expect(snapshot?.active_assets).toBeNull();
     expect(snapshot?.trace_summary.latest_assets_run).toBeNull();
+  });
+
+  it("restores active compose timeline when project has active compose pointer", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Compose Snapshot",
+    });
+    const manifestRecord = await saveAssetManifestRecord(db, {
+      projectId: project.id,
+      topicPackageId: "topic_pkg_1",
+      scriptRecordId: "script_record_1",
+      storyboardRecordId: "storyboard_record_1",
+      assetPlanRecordId: "asset_plan_record_1",
+      manifestJson: {
+        manifest_version: "asset_manifest_v1",
+      },
+      validationResultJson: {
+        stage: "assets_local_validation",
+        decision: "pass",
+        errors: [],
+        warnings: [],
+        metrics: {},
+      },
+      executionStateJson: {
+        activated: true,
+      },
+      graphTraceSummaryJson: null,
+      runtimeDiagnosticsJson: null,
+    });
+    const composeTrace = {
+      phase: "compose",
+      run_id: "compose_run_snapshot_1",
+      steps: [
+        {
+          step_name: "compose-build-timeline",
+          phase: "compose",
+          status: "succeeded",
+        },
+        {
+          step_name: "compose-local-validate",
+          phase: "compose",
+          status: "succeeded",
+        },
+      ],
+    };
+    const composeRecord = await saveComposeRecord(db, {
+      projectId: project.id,
+      assetManifestRecordId: manifestRecord.id,
+      timelineJson: {
+        timeline_version: "compose_timeline_v1",
+        duration_sec: 12,
+        tracks: [],
+        segments: [],
+      },
+      validationResultJson: {
+        stage: "compose_local_validation",
+        decision: "ready_for_render",
+        errors: [],
+        warnings: [],
+        metrics: {
+          duration_sec: 12,
+        },
+      },
+      executionStateJson: {
+        activated: true,
+      },
+      graphTraceSummaryJson: composeTrace,
+      runtimeDiagnosticsJson: {
+        checks: [
+          {
+            code: "compose_local_validation_passed",
+            level: "info",
+          },
+        ],
+      },
+    });
+
+    project.activeAssetManifestRecordId = manifestRecord.id;
+    project.activeComposeRecordId = composeRecord.id;
+    project.latestComposeRunTraceJson = composeTrace;
+    project.status = "compose_ready";
+
+    const snapshot = await getProjectSnapshot(db, project.id);
+
+    expect(snapshot).toMatchObject({
+      project_id: project.id,
+      current_status: "compose_ready",
+      active_compose: {
+        compose_record_id: composeRecord.id,
+        source_asset_manifest_record_id: manifestRecord.id,
+        timeline: {
+          timeline_version: "compose_timeline_v1",
+          duration_sec: 12,
+        },
+        local_validation: {
+          stage: "compose_local_validation",
+          decision: "ready_for_render",
+        },
+        execution_state: {
+          activated: true,
+        },
+        graph_trace_summary: composeTrace,
+        runtime_diagnostics: {
+          checks: [
+            {
+              code: "compose_local_validation_passed",
+              level: "info",
+            },
+          ],
+        },
+      },
+      trace_summary: {
+        latest_compose_run: {
+          run_id: "compose_run_snapshot_1",
+          phase: "compose",
+          step_count: 2,
+          latest_step: "compose-local-validate",
+        },
+      },
+    });
+  });
+
+  it("does not expose stale compose when active pointer is cleared", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Cleared Compose Snapshot",
+    });
+    const composeRecord = await saveComposeRecord(db, {
+      projectId: project.id,
+      assetManifestRecordId: "asset_manifest_old",
+      timelineJson: {
+        timeline_version: "compose_timeline_v1",
+        duration_sec: 12,
+        tracks: [],
+        segments: [],
+      },
+      validationResultJson: {
+        stage: "compose_local_validation",
+        decision: "ready_for_render",
+        errors: [],
+        warnings: [],
+        metrics: {},
+      },
+      executionStateJson: {
+        activated: false,
+      },
+      graphTraceSummaryJson: {
+        phase: "compose",
+        run_id: "compose_run_old",
+        steps: [],
+      },
+      runtimeDiagnosticsJson: null,
+    });
+
+    project.activeComposeRecordId = composeRecord.id;
+    project.latestComposeRunTraceJson = {
+      phase: "compose",
+      run_id: "compose_run_old",
+      steps: [],
+    };
+
+    project.activeComposeRecordId = null;
+    project.latestComposeRunTraceJson = null;
+
+    const snapshot = await getProjectSnapshot(db, project.id);
+
+    expect(snapshot?.active_compose).toBeNull();
+    expect(snapshot?.trace_summary.latest_compose_run).toBeNull();
+  });
+
+  it("restores active render job when project has active render pointer", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Render Snapshot",
+    });
+    const renderTrace = {
+      phase: "render",
+      run_id: "render_run_snapshot_1",
+      steps: [
+        {
+          step_name: "render-local-validate",
+          phase: "render",
+          status: "succeeded",
+        },
+        {
+          step_name: "render-export",
+          phase: "render",
+          status: "succeeded",
+        },
+      ],
+    };
+    const outputArtifact = {
+      artifact_id: "render_export_001",
+      artifact_type: "rendered_video",
+      file_uri: "file://storage/projects/proj_001/renders/render_001/output.mp4",
+      mime_type: "video/mp4",
+      duration_sec: 12,
+      width: 1080,
+      height: 1920,
+      fps: 30,
+      source_compose_record_id: "compose_001",
+      source_asset_manifest_record_id: "asset_manifest_001",
+      metadata: { renderer: "fake" },
+    };
+    const validationResult = {
+      stage: "render_local_validation",
+      decision: "rendered",
+      errors: [],
+      warnings: [],
+      metrics: {
+        duration_sec: 12,
+      },
+    };
+    const renderJobRecord = await saveRenderJobRecord(db, {
+      projectId: project.id,
+      composeRecordId: "compose_001",
+      assetManifestRecordId: "asset_manifest_001",
+      status: "completed",
+      profileJson: {
+        width: 1080,
+        height: 1920,
+        fps: 30,
+      },
+      outputArtifactJson: outputArtifact,
+      validationResultJson: validationResult,
+      executionStateJson: {
+        activated: true,
+      },
+      graphTraceSummaryJson: renderTrace,
+      runtimeDiagnosticsJson: {
+        checks: [
+          {
+            code: "render_output_probe_passed",
+            level: "info",
+          },
+        ],
+      },
+    });
+
+    project.activeRenderJobRecordId = renderJobRecord.id;
+    project.latestRenderRunTraceJson = renderTrace;
+    project.status = "render_ready";
+
+    const snapshot = await getProjectSnapshot(db, project.id);
+
+    expect(snapshot).toMatchObject({
+      project_id: project.id,
+      current_status: "render_ready",
+      active_render: {
+        render_job_record_id: renderJobRecord.id,
+        source_compose_record_id: "compose_001",
+        source_asset_manifest_record_id: "asset_manifest_001",
+        status: "completed",
+        profile: {
+          width: 1080,
+          height: 1920,
+          fps: 30,
+        },
+        output_artifact: outputArtifact,
+        validation_result: validationResult,
+        execution_state: {
+          activated: true,
+        },
+        graph_trace_summary: renderTrace,
+        runtime_diagnostics: {
+          checks: [
+            {
+              code: "render_output_probe_passed",
+              level: "info",
+            },
+          ],
+        },
+      },
+      trace_summary: {
+        latest_render_run: {
+          run_id: "render_run_snapshot_1",
+          phase: "render",
+          step_count: 2,
+          latest_step: "render-export",
+        },
+      },
+    });
+  });
+
+  it("does not expose stale render when active pointer is cleared", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Cleared Render Snapshot",
+    });
+    const renderJobRecord = await saveRenderJobRecord(db, {
+      projectId: project.id,
+      composeRecordId: "compose_old",
+      assetManifestRecordId: "asset_manifest_old",
+      status: "completed",
+      profileJson: {
+        width: 1080,
+        height: 1920,
+        fps: 30,
+      },
+      outputArtifactJson: null,
+      validationResultJson: {
+        stage: "render_local_validation",
+        decision: "rendered",
+        errors: [],
+        warnings: [],
+        metrics: {},
+      },
+      executionStateJson: {
+        activated: false,
+      },
+      graphTraceSummaryJson: {
+        phase: "render",
+        run_id: "render_run_old",
+        steps: [],
+      },
+      runtimeDiagnosticsJson: null,
+    });
+
+    project.activeRenderJobRecordId = renderJobRecord.id;
+    project.latestRenderRunTraceJson = {
+      phase: "render",
+      run_id: "render_run_old",
+      steps: [],
+    };
+
+    project.activeRenderJobRecordId = null;
+    project.latestRenderRunTraceJson = null;
+
+    const snapshot = await getProjectSnapshot(db, project.id);
+
+    expect(snapshot?.active_render).toBeNull();
+    expect(snapshot?.trace_summary.latest_render_run).toBeNull();
   });
 });

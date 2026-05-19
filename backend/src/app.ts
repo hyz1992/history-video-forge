@@ -6,6 +6,9 @@ import { registerScriptRoutes } from "./modules/script/script.routes";
 import { registerStoryboardRoutes } from "./modules/storyboard/storyboard.routes";
 import { registerAssetPlanningRoutes } from "./modules/asset-planning/asset-planning.routes";
 import { registerAssetsRoutes } from "./modules/assets/assets.routes";
+import { registerComposeRoutes } from "./modules/compose/compose.routes";
+import { registerRenderRoutes } from "./modules/render/render.routes";
+import type { RenderAdapter } from "./modules/render/render-adapter";
 import type { StoredTopicCandidate } from "./modules/topic/topic-confirm.service";
 
 export interface StoredTopicCandidateRound {
@@ -53,6 +56,7 @@ interface RouteRecord {
 export interface AppInstance {
   env: typeof env;
   db: DbClient;
+  renderAdapter?: RenderAdapter;
   topicCandidateStore: Map<string, ProjectTopicCandidateState>;
   addRoute: (method: string, pattern: string, handler: RouteHandler) => void;
   inject: (request: InjectRequest) => Promise<InjectResponse>;
@@ -90,12 +94,17 @@ function matchRoute(pattern: string, url: string): Record<string, string> | null
   return params;
 }
 
-export function buildApp(): AppInstance {
+export interface BuildAppOptions {
+  renderAdapter?: RenderAdapter;
+}
+
+export function buildApp(options: BuildAppOptions = {}): AppInstance {
   const routes: RouteRecord[] = [];
 
   const app: AppInstance = {
     env,
     db: createDbClient(),
+    renderAdapter: options.renderAdapter,
     topicCandidateStore: new Map<string, ProjectTopicCandidateState>(),
     addRoute(method, pattern, handler) {
       routes.push({
@@ -150,6 +159,8 @@ export function buildApp(): AppInstance {
   registerStoryboardRoutes(app);
   registerAssetPlanningRoutes(app);
   registerAssetsRoutes(app);
+  registerComposeRoutes(app);
+  registerRenderRoutes(app);
 
   return app;
 }

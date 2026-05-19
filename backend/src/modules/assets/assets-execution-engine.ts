@@ -210,12 +210,16 @@ async function runAdapterPipeline(
       return true;
     });
 
-    // Append artifacts and update execution
+    // Append artifacts and update execution. Provider outputs replace any
+    // planned placeholders with the same artifact id.
     const artifactIds = validArtifacts.map((a) => a.artifact_id);
+    const artifactIdSet = new Set(artifactIds);
+    manifest.artifacts = manifest.artifacts.filter(
+      (artifact) => !artifactIdSet.has(artifact.artifact_id),
+    );
     manifest.artifacts.push(...validArtifacts);
     execution.output_artifact_ids = [
-      ...execution.output_artifact_ids,
-      ...artifactIds,
+      ...new Set([...execution.output_artifact_ids, ...artifactIds]),
     ];
     execution.status = "completed";
     execution.completed_at = new Date().toISOString();
@@ -258,6 +262,12 @@ function areDependenciesSatisfied(
   return true;
 }
 
+function pushUnique(target: string[], value: string): void {
+  if (!target.includes(value)) {
+    target.push(value);
+  }
+}
+
 /**
  * Apply generated artifacts to the manifest's segment routes and summaries.
  *
@@ -298,9 +308,27 @@ function applyArtifactRoutes(
           route.readiness = "fallback_ready";
         } else {
           route.primary_visual_artifact_id = artifact.artifact_id;
-          route.visual_route_type = "image_only";
+          route.visual_route_type = route.motion_artifact_id
+            ? "image_with_motion"
+            : "image_only";
           route.readiness = "ready";
         }
+        break;
+      }
+
+      case "video": {
+        const segmentId = planTask.source_segment_id;
+        const route = manifest.segment_routes.find(
+          (item) => item.segment_id === segmentId,
+        );
+        if (!route) break;
+
+        if (!route.fallback_visual_artifact_id && route.primary_visual_artifact_id) {
+          route.fallback_visual_artifact_id = route.primary_visual_artifact_id;
+        }
+        route.primary_visual_artifact_id = artifact.artifact_id;
+        route.visual_route_type = "video_clip";
+        route.readiness = "ready";
         break;
       }
 
@@ -311,7 +339,8 @@ function applyArtifactRoutes(
         };
 
         // Add to tts_chunk_artifact_ids
-        manifest.audio_summary.tts_chunk_artifact_ids.push(
+        pushUnique(
+          manifest.audio_summary.tts_chunk_artifact_ids,
           artifact.artifact_id,
         );
 

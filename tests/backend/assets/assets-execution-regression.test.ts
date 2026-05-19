@@ -14,6 +14,7 @@ import { createDbClient } from "../../../backend/src/db/client.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import { runAssetsGeneration } from "../../../backend/src/modules/assets/assets-run.service.js";
 import { saveMediaLibraryItem } from "../../../backend/src/modules/assets/media-library.repository.js";
+import { listAssetProviderJobRecordsByManifest } from "../../../backend/src/modules/assets/asset-provider-job.repository.js";
 import type {
   AssetManifest,
   AssetPlan,
@@ -262,6 +263,7 @@ describe("assets execution regression", () => {
       executionMode: "auto_available",
     });
     const body = response.body as {
+      asset_manifest_record_id: string;
       manifest: AssetManifest;
       local_validation: { decision: string; errors: string[]; warnings: string[] };
     };
@@ -281,8 +283,13 @@ describe("assets execution regression", () => {
     const imageArtifacts = manifest.artifacts.filter((a) => a.artifact_type === "image");
     expect(imageArtifacts.length).toBeGreaterThanOrEqual(2);
 
-    // Provider jobs recorded
+    // Provider jobs are recorded under the final persisted manifest id
     expect(db.assetProviderJobRecords.size).toBeGreaterThan(0);
+    const finalManifestJobs = await listAssetProviderJobRecordsByManifest(
+      db,
+      body.asset_manifest_record_id,
+    );
+    expect(finalManifestJobs.length).toBeGreaterThan(0);
 
     // Generated (non-placeholder) artifacts should have real file URIs
     const generatedArtifacts = manifest.artifacts.filter(
@@ -292,6 +299,10 @@ describe("assets execution regression", () => {
     for (const artifact of generatedArtifacts) {
       expect(artifact.file_uri).not.toMatch(/^planned:\/\//);
     }
+    expect(manifest.artifacts.some((a) => a.file_uri.startsWith("planned://"))).toBe(false);
+    expect(body.local_validation.errors).not.toContain(
+      "assets_artifact_placeholder_unresolved",
+    );
 
     // bgm_cue has no adapter → stays planned, and execution doesn't produce a bgm artifact
     const bgmExec = manifest.executions.find((e) => e.task_id === "task_bgm");
@@ -306,6 +317,8 @@ describe("assets execution regression", () => {
     // Segment routes should have visual artifacts
     const route1 = manifest.segment_routes.find((r) => r.segment_id === "sb_001");
     expect(route1?.primary_visual_artifact_id).toBeDefined();
+    expect(route1?.visual_route_type).toBe("image_with_motion");
+    expect(route1?.motion_artifact_id).toBeDefined();
 
     const route2 = manifest.segment_routes.find((r) => r.segment_id === "sb_002");
     expect(route2?.primary_visual_artifact_id).toBeDefined();
@@ -314,6 +327,7 @@ describe("assets execution regression", () => {
     expect(manifest.audio_summary.tts_chunk_artifact_ids.length).toBeGreaterThan(0);
     expect(manifest.audio_summary.tts_merged_artifact_id).toBeDefined();
     expect(manifest.audio_summary.subtitle_artifact_id).toBeDefined();
+    expect(body.local_validation.errors).not.toContain("assets_execution_incomplete");
   });
 
   it("dry_run blocks readiness when required tasks are not terminal", async () => {

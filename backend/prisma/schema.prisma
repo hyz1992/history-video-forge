@@ -16,8 +16,12 @@ model Project {
   active_storyboard_record_id String?
   active_asset_plan_record_id String?
   active_asset_manifest_record_id String?
+  active_compose_record_id String?
+  active_render_job_record_id String?
   latest_asset_plan_run_trace_json Json?
   latest_assets_run_trace_json Json?
+  latest_compose_run_trace_json Json?
+  latest_render_run_trace_json Json?
   created_at              DateTime @default(now())
   updated_at              DateTime @updatedAt
 
@@ -26,6 +30,8 @@ model Project {
   storyboard_records StoryboardRecord[]
   asset_plan_records AssetPlanRecord[]
   asset_manifest_records AssetManifestRecord[]
+  compose_records ComposeRecord[]
+  render_job_records RenderJobRecord[]
 }
 
 model EventRegistryEntry {
@@ -164,6 +170,44 @@ model AssetManifestRecord {
   topic_package     TopicPackage     @relation(fields: [topic_package_id], references: [id])
   script_record     ScriptRecord     @relation(fields: [script_record_id], references: [id])
   storyboard_record StoryboardRecord @relation(fields: [storyboard_record_id], references: [id])
+  compose_records   ComposeRecord[]
+  render_job_records RenderJobRecord[]
+}
+
+model ComposeRecord {
+  id                       String   @id @default(cuid())
+  project_id               String
+  asset_manifest_record_id String
+  timeline_json            Json
+  validation_result_json   Json
+  execution_state_json     Json?
+  graph_trace_summary_json Json?
+  runtime_diagnostics_json Json?
+  created_at               DateTime @default(now())
+
+  project               Project             @relation(fields: [project_id], references: [id])
+  asset_manifest_record AssetManifestRecord @relation(fields: [asset_manifest_record_id], references: [id])
+  render_job_records    RenderJobRecord[]
+}
+
+model RenderJobRecord {
+  id                       String   @id @default(cuid())
+  project_id               String
+  compose_record_id        String
+  asset_manifest_record_id String
+  status                   String
+  profile_json             Json
+  output_artifact_json     Json?
+  validation_result_json   Json
+  execution_state_json     Json?
+  graph_trace_summary_json Json?
+  runtime_diagnostics_json Json?
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+
+  project               Project             @relation(fields: [project_id], references: [id])
+  compose_record        ComposeRecord       @relation(fields: [compose_record_id], references: [id])
+  asset_manifest_record AssetManifestRecord @relation(fields: [asset_manifest_record_id], references: [id])
 }
 
 model AssetProviderJobRecord {

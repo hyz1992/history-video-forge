@@ -1,0 +1,201 @@
+import { describe, expect, it } from "vitest";
+
+import { buildComposeTimeline } from "../../../backend/src/modules/compose/compose-timeline-builder.js";
+import type { AssetManifest } from "../../../shared/src/index.js";
+
+function makeArtifactManifest(): AssetManifest {
+  return {
+    manifest_version: "asset_manifest_v1",
+    source_asset_plan_id: "asset_plan_001",
+    source_storyboard_record_id: "storyboard_001",
+    source_script_record_id: "script_001",
+    execution_options: {
+      execution_mode: "auto_available",
+      voice_profile_id: "voice_1",
+      enabled_provider_types: ["tts", "image"],
+      allow_manual_placeholders: false,
+    },
+    executions: [],
+    artifacts: [
+      {
+        artifact_id: "artifact_tts_chunk_001",
+        artifact_type: "tts_chunk_audio",
+        origin: "provider",
+        file_uri: "memory://tts-chunk-001.wav",
+        created_at: "2026-05-17T00:00:00.000Z",
+        metadata: {
+          duration_sec: 12,
+          voice_profile_id: "voice_1",
+          tts_chunk_id: "tts_chunk_001",
+          segment_ids: ["sb_001"],
+          script_excerpt: "first segment narration",
+        },
+      },
+      {
+        artifact_id: "artifact_tts_merged",
+        artifact_type: "tts_merged_audio",
+        origin: "provider",
+        file_uri: "memory://tts-merged.wav",
+        created_at: "2026-05-17T00:00:00.000Z",
+        metadata: {
+          duration_sec: 12,
+          voice_profile_id: "voice_1",
+          chunk_artifact_ids: ["artifact_tts_chunk_001"],
+        },
+      },
+      {
+        artifact_id: "artifact_subtitle",
+        artifact_type: "subtitle_track",
+        origin: "local",
+        file_uri: "memory://subtitle.srt",
+        created_at: "2026-05-17T00:00:00.000Z",
+        metadata: {
+          format: "srt",
+          source_tts_artifact_id: "artifact_tts_merged",
+          caption_count: 1,
+        },
+      },
+      {
+        artifact_id: "artifact_img_001",
+        artifact_type: "image",
+        origin: "provider",
+        file_uri: "memory://image-001.png",
+        created_at: "2026-05-17T00:00:00.000Z",
+        metadata: {
+          width: 1080,
+          height: 1920,
+        },
+      },
+      {
+        artifact_id: "artifact_motion_001",
+        artifact_type: "motion_recipe",
+        origin: "local",
+        file_uri: "inline://motion-001",
+        created_at: "2026-05-17T00:00:00.000Z",
+        metadata: {
+          recipe_type: "push_in",
+          source_image_artifact_id: "artifact_img_001",
+          parameters: { intensity: "subtle" },
+        },
+      },
+    ],
+    audio_summary: {
+      voice_profile_id: "voice_1",
+      tts_total_duration_sec: 12,
+      tts_chunk_artifact_ids: ["artifact_tts_chunk_001"],
+      tts_chunk_routes: [
+        {
+          tts_chunk_id: "tts_chunk_001",
+          artifact_id: "artifact_tts_chunk_001",
+          segment_ids: ["sb_001"],
+          script_excerpt: "first segment narration",
+        },
+      ],
+      tts_merged_artifact_id: "artifact_tts_merged",
+      subtitle_artifact_id: "artifact_subtitle",
+      bgm_placements: [],
+      sfx_artifact_ids: [],
+    },
+    segment_routes: [
+      {
+        segment_id: "sb_001",
+        tts_artifact_id: "artifact_tts_chunk_001",
+        subtitle_artifact_id: "artifact_subtitle",
+        primary_visual_artifact_id: "artifact_img_001",
+        visual_route_type: "image_with_motion",
+        motion_artifact_id: "artifact_motion_001",
+        fallback_visual_artifact_id: null,
+        sfx_artifact_ids: [],
+        bgm_placement_ids: [],
+        readiness: "ready",
+        notes: [],
+      },
+    ],
+    readiness: "ready_for_compose",
+    notes: [],
+  };
+}
+
+describe("buildComposeTimeline", () => {
+  it("builds a ready timeline from image motion, narration, and subtitle artifacts", () => {
+    const timeline = buildComposeTimeline({
+      assetManifestRecordId: "asset_manifest_record_001",
+      assetPlanRecordId: "asset_plan_record_001",
+      storyboardRecordId: "storyboard_record_001",
+      scriptRecordId: "script_record_001",
+      manifest: makeArtifactManifest(),
+    });
+
+    expect(timeline).toMatchObject({
+      timeline_version: "compose_timeline_v1",
+      source_asset_manifest_record_id: "asset_manifest_record_001",
+      source_asset_plan_record_id: "asset_plan_record_001",
+      source_storyboard_record_id: "storyboard_record_001",
+      source_script_record_id: "script_record_001",
+      duration_sec: 12,
+      readiness: "ready_for_render",
+    });
+    expect(timeline.output_profile).toEqual({
+      aspect_ratio: "9:16",
+      width: 1080,
+      height: 1920,
+      fps: 30,
+    });
+    expect(
+      timeline.tracks.find((track) => track.track_type === "visual")?.clips[0],
+    ).toMatchObject({
+      segment_id: "sb_001",
+      artifact_id: "artifact_img_001",
+      start_sec: 0,
+      duration_sec: 12,
+      clip_kind: "image_with_motion",
+      motion_artifact_id: "artifact_motion_001",
+    });
+    expect(
+      timeline.tracks.find((track) => track.track_type === "narration")
+        ?.clips[0],
+    ).toMatchObject({
+      artifact_id: "artifact_tts_merged",
+      start_sec: 0,
+      duration_sec: 12,
+      clip_kind: "audio",
+    });
+    expect(
+      timeline.tracks.find((track) => track.track_type === "subtitle")
+        ?.clips[0],
+    ).toMatchObject({
+      artifact_id: "artifact_subtitle",
+      start_sec: 0,
+      duration_sec: 12,
+      clip_kind: "subtitle",
+    });
+  });
+
+  it("falls back to merged narration duration when chunk timing is unavailable", () => {
+    const manifest = makeArtifactManifest();
+    manifest.audio_summary.tts_chunk_routes = [];
+    manifest.audio_summary.tts_chunk_artifact_ids = [];
+    manifest.segment_routes = [
+      manifest.segment_routes[0],
+      {
+        ...manifest.segment_routes[0],
+        segment_id: "sb_002",
+        tts_artifact_id: null,
+      },
+    ];
+
+    const timeline = buildComposeTimeline({
+      assetManifestRecordId: "asset_manifest_record_001",
+      assetPlanRecordId: "asset_plan_record_001",
+      storyboardRecordId: "storyboard_record_001",
+      scriptRecordId: "script_record_001",
+      manifest,
+    });
+
+    expect(timeline.notes).toContain("compose_chunk_timing_fallback_used");
+    expect(timeline.segments).toMatchObject([
+      { segment_id: "sb_001", start_sec: 0, duration_sec: 6 },
+      { segment_id: "sb_002", start_sec: 6, duration_sec: 6 },
+    ]);
+  });
+});

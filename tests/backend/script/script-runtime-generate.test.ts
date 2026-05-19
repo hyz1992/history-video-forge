@@ -695,6 +695,8 @@ ${JSON.stringify(runtimeDraft)}
     project.activeStoryboardRecordId = "storyboard_record_old";
     project.activeAssetPlanRecordId = "asset_plan_record_old";
     project.activeAssetManifestRecordId = "asset_manifest_record_old";
+    project.activeComposeRecordId = "compose_record_old";
+    project.activeRenderJobRecordId = "render_job_record_old";
     project.latestStoryboardRunTraceJson = {
       phase: "storyboard",
       run_id: "storyboard_run_old",
@@ -708,6 +710,16 @@ ${JSON.stringify(runtimeDraft)}
     project.latestAssetsRunTraceJson = {
       phase: "assets",
       run_id: "assets_run_old",
+      steps: [],
+    };
+    project.latestComposeRunTraceJson = {
+      phase: "compose",
+      run_id: "compose_run_old",
+      steps: [],
+    };
+    project.latestRenderRunTraceJson = {
+      phase: "render",
+      run_id: "render_run_old",
       steps: [],
     };
     project.status = "storyboard_ready";
@@ -728,6 +740,10 @@ ${JSON.stringify(runtimeDraft)}
     expect(project.latestAssetPlanRunTraceJson).toBeNull();
     expect(project.activeAssetManifestRecordId).toBeNull();
     expect(project.latestAssetsRunTraceJson).toBeNull();
+    expect(project.activeComposeRecordId).toBeNull();
+    expect(project.latestComposeRunTraceJson).toBeNull();
+    expect(project.activeRenderJobRecordId).toBeNull();
+    expect(project.latestRenderRunTraceJson).toBeNull();
   });
 
   it("returns real semantic reviewer output in shadow mode without entering patch", async () => {

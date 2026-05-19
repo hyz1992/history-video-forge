@@ -27,6 +27,14 @@ import {
   getAssetManifestRecordById,
   saveAssetManifestRecord,
 } from "../../../backend/src/modules/assets/asset-manifest-record.repository.js";
+import {
+  getComposeRecordById,
+  saveComposeRecord,
+} from "../../../backend/src/modules/compose/compose-record.repository.js";
+import {
+  getRenderJobRecordById,
+  saveRenderJobRecord,
+} from "../../../backend/src/modules/render/render-record.repository.js";
 import { saveCachedCandidate } from "../../../backend/src/modules/cache/candidate-cache.repository.js";
 
 const rootDir = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
@@ -52,6 +60,10 @@ describe("backend repository contracts", () => {
     expect(typeof saveCachedCandidate).toBe("function");
     expect(typeof saveAssetManifestRecord).toBe("function");
     expect(typeof getAssetManifestRecordById).toBe("function");
+    expect(typeof saveComposeRecord).toBe("function");
+    expect(typeof getComposeRecordById).toBe("function");
+    expect(typeof saveRenderJobRecord).toBe("function");
+    expect(typeof getRenderJobRecordById).toBe("function");
 
     const db = createDbClient();
     const project = await createProject(db, {
@@ -65,6 +77,10 @@ describe("backend repository contracts", () => {
     expect(project.latestAssetPlanRunTraceJson).toBeNull();
     expect(project.activeAssetManifestRecordId).toBeNull();
     expect(project.latestAssetsRunTraceJson).toBeNull();
+    expect(project.activeComposeRecordId).toBeNull();
+    expect(project.latestComposeRunTraceJson).toBeNull();
+    expect(project.activeRenderJobRecordId).toBeNull();
+    expect(project.latestRenderRunTraceJson).toBeNull();
     await expect(getProjectById(db, project.id)).resolves.toMatchObject({
       id: project.id,
       name: "Task 4 contract test",
@@ -285,6 +301,12 @@ describe("backend repository contracts", () => {
     expect(schema).toContain("active_asset_manifest_record_id");
     expect(schema).toContain("latest_assets_run_trace_json");
     expect(schema).toContain("model AssetManifestRecord");
+    expect(schema).toContain("active_compose_record_id");
+    expect(schema).toContain("latest_compose_run_trace_json");
+    expect(schema).toContain("model ComposeRecord");
+    expect(schema).toContain("active_render_job_record_id");
+    expect(schema).toContain("latest_render_run_trace_json");
+    expect(schema).toContain("model RenderJobRecord");
   });
 
   it("persists asset manifest records in the repository contract", async () => {
@@ -330,6 +352,104 @@ describe("backend repository contracts", () => {
       scriptRecordId: "script_record_1",
       storyboardRecordId: "storyboard_record_1",
       assetPlanRecordId: "asset_plan_record_1",
+    });
+  });
+
+  it("persists compose records in the repository contract", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Compose repository contract",
+    });
+    const composeRecord = await saveComposeRecord(db, {
+      projectId: project.id,
+      assetManifestRecordId: "asset_manifest_record_1",
+      timelineJson: {
+        timeline_version: "compose_timeline_v1",
+        duration_sec: 12,
+        tracks: [],
+        segments: [],
+      },
+      validationResultJson: {
+        stage: "compose_local_validation",
+        decision: "ready_for_render",
+        errors: [],
+        warnings: [],
+        metrics: {},
+      },
+      executionStateJson: {
+        activated: true,
+      },
+      graphTraceSummaryJson: {
+        phase: "compose",
+        run_id: "compose_run_1",
+        steps: [],
+      },
+      runtimeDiagnosticsJson: null,
+    });
+
+    await expect(getComposeRecordById(db, composeRecord.id)).resolves.toMatchObject({
+      id: composeRecord.id,
+      projectId: project.id,
+      assetManifestRecordId: "asset_manifest_record_1",
+      validationResultJson: {
+        stage: "compose_local_validation",
+      },
+    });
+  });
+
+  it("persists render job records in the repository contract", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Render repository contract",
+    });
+    const record = await saveRenderJobRecord(db, {
+      projectId: project.id,
+      composeRecordId: "compose_001",
+      assetManifestRecordId: "asset_manifest_001",
+      status: "completed",
+      profileJson: { width: 1080, height: 1920, fps: 30 },
+      outputArtifactJson: {
+        artifact_id: "render_export_001",
+        artifact_type: "rendered_video",
+        file_uri: "file://storage/projects/proj_001/renders/render_001/output.mp4",
+        mime_type: "video/mp4",
+        duration_sec: 12,
+        width: 1080,
+        height: 1920,
+        fps: 30,
+        source_compose_record_id: "compose_001",
+        source_asset_manifest_record_id: "asset_manifest_001",
+        metadata: { renderer: "fake" },
+      },
+      validationResultJson: {
+        stage: "render_local_validation",
+        decision: "rendered",
+        errors: [],
+        warnings: [],
+        metrics: {
+          duration_sec: 12,
+        },
+      },
+      executionStateJson: {
+        activated: true,
+      },
+      graphTraceSummaryJson: {
+        phase: "render",
+        run_id: "render_run_1",
+        nodes: [],
+      },
+      runtimeDiagnosticsJson: null,
+    });
+
+    await expect(getRenderJobRecordById(db, record.id)).resolves.toMatchObject({
+      id: record.id,
+      projectId: project.id,
+      composeRecordId: "compose_001",
+      assetManifestRecordId: "asset_manifest_001",
+      status: "completed",
+      validationResultJson: {
+        stage: "render_local_validation",
+      },
     });
   });
 });

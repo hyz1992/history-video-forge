@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdir, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const buildInitialAssetManifestMock = vi.hoisted(() => vi.fn());
 const validateAssetsManifestMock = vi.hoisted(() => vi.fn());
@@ -76,6 +79,9 @@ function makeAssetPlan(input: {
       global_negative_prompts: ["modern building"],
       consistency_notes: [],
     },
+    visual_budget: {},
+    downgrade_policy: {},
+    global_audio_strategy: {},
     tts_plan: {
       voice_profile_id: "voice_default_male_storyteller",
       estimated_total_duration_sec: 82,
@@ -155,6 +161,78 @@ function makeAssetPlan(input: {
     },
     global_production_notes: ["No physical assets are generated."],
   };
+}
+
+function makeImageToVideoAssetPlan(input: {
+  storyboardRecordId: string;
+  scriptRecordId: string;
+  topicPackageId: string;
+}): AssetPlan {
+  const plan = makeAssetPlan(input);
+  plan.tasks.push(
+    {
+      task_id: "motion_001",
+      order: 2,
+      task_type: "render_motion_cue",
+      source_segment_id: "sb_001",
+      source_excerpt: scriptText,
+      production_intent: "Create fallback motion over the anchor image.",
+      recommended_mode: "auto",
+      provider_hint: "local_motion",
+      prompt_draft: null,
+      parameters: {
+        recipe_type: "slow_push_in",
+      },
+      manual_upload_policy: {
+        allowed: false,
+        required: false,
+        accepted_file_types: [],
+        acceptance_notes: [],
+      },
+      risk_notes: ["Keep motion subtle."],
+      cost_tier: "low",
+      initial_status: "planned",
+    },
+    {
+      task_id: "video_001",
+      order: 3,
+      task_type: "video_clip",
+      source_segment_id: "sb_001",
+      source_excerpt: scriptText,
+      production_intent: "Create the segment video clip from the anchor image.",
+      recommended_mode: "auto",
+      provider_hint: "dashscope_image_to_video",
+      prompt_draft: "A tense historical close-up, slow push-in.",
+      parameters: {},
+      manual_upload_policy: {
+        allowed: false,
+        required: false,
+        accepted_file_types: [],
+        acceptance_notes: [],
+      },
+      risk_notes: ["Keep video generation explicitly configured."],
+      cost_tier: "high",
+      initial_status: "planned",
+    },
+  );
+  plan.cost_summary = {
+    total_tasks: 4,
+    by_type: {
+      tts_audio: 1,
+      image_still: 1,
+      render_motion_cue: 1,
+      video_clip: 1,
+    },
+    by_cost_tier: {
+      free: 0,
+      low: 3,
+      medium: 0,
+      high: 1,
+    },
+    estimated_provider_calls: 3,
+    notes: [],
+  };
+  return plan;
 }
 
 function makeAssetManifest(input: {
@@ -253,6 +331,65 @@ function makeAssetManifest(input: {
     readiness: "blocked",
     notes: [],
   };
+}
+
+function makeImageToVideoAssetManifest(input: {
+  assetPlanRecordId: string;
+  storyboardRecordId: string;
+  scriptRecordId: string;
+  assetPlan: AssetPlan;
+}): AssetManifest {
+  const manifest = makeAssetManifest(input);
+  manifest.execution_options.enabled_provider_types = ["tts", "image", "video"];
+  manifest.executions.push(
+    {
+      execution_id: "exec_motion_001",
+      task_id: "motion_001",
+      task_type: "render_motion_cue",
+      status: "completed",
+      origin: "local",
+      started_at: null,
+      completed_at: new Date().toISOString(),
+      provider_id: "local_motion",
+      attempts: 0,
+      output_artifact_ids: ["artifact_motion_motion_001"],
+      notes: [],
+    },
+    {
+      execution_id: "exec_video_001",
+      task_id: "video_001",
+      task_type: "video_clip",
+      status: "planned",
+      origin: "provider",
+      started_at: null,
+      completed_at: null,
+      provider_id: "dashscope_image_to_video",
+      attempts: 0,
+      output_artifact_ids: [],
+      notes: [],
+    },
+  );
+  manifest.artifacts.push({
+    artifact_id: "artifact_motion_motion_001",
+    artifact_type: "motion_recipe",
+    origin: "inline",
+    file_uri: "inline://motion-recipe/motion_001",
+    created_at: new Date().toISOString(),
+    metadata: {
+      recipe_type: "slow_push_in",
+      source_image_artifact_id: "pending-image-for-motion_001",
+      parameters: {
+        recipe_type: "slow_push_in",
+      },
+    },
+  });
+  manifest.segment_routes[0] = {
+    ...manifest.segment_routes[0]!,
+    visual_route_type: "video_clip",
+    motion_artifact_id: "artifact_motion_motion_001",
+    readiness: "blocked",
+  };
+  return manifest;
 }
 
 interface PreparedSetup {
@@ -411,9 +548,19 @@ async function prepareActiveManifest(app: ReturnType<typeof buildApp>): Promise<
 }
 
 describe("assets generate api", () => {
+  let tempDir = "";
+
   beforeEach(() => {
     buildInitialAssetManifestMock.mockReset();
     validateAssetsManifestMock.mockReset();
+  });
+
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+    if (tempDir) {
+      await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+      tempDir = "";
+    }
   });
 
   it("returns 404 when the project does not exist", async () => {
@@ -452,6 +599,18 @@ describe("assets generate api", () => {
   it("creates, validates, persists, and activates a manifest from active asset plan", async () => {
     const app = buildApp();
     const prepared = await prepareActiveAssetPlan(app);
+    prepared.project.activeComposeRecordId = "compose_record_old";
+    prepared.project.activeRenderJobRecordId = "render_job_record_old";
+    prepared.project.latestComposeRunTraceJson = {
+      phase: "compose",
+      run_id: "compose_run_old",
+      steps: [],
+    };
+    prepared.project.latestRenderRunTraceJson = {
+      phase: "render",
+      run_id: "render_run_old",
+      steps: [],
+    };
 
     const manifest = makeAssetManifest({
       assetPlanRecordId: prepared.assetPlanRecord.id,
@@ -528,6 +687,10 @@ describe("assets generate api", () => {
     expect(prepared.project.latestAssetsRunTraceJson).toMatchObject({
       phase: "assets",
     });
+    expect(prepared.project.activeComposeRecordId).toBeNull();
+    expect(prepared.project.latestComposeRunTraceJson).toBeNull();
+    expect(prepared.project.activeRenderJobRecordId).toBeNull();
+    expect(prepared.project.latestRenderRunTraceJson).toBeNull();
 
     // Verify record was persisted
     const savedRecord = app.db.assetManifestRecords.get(
@@ -539,6 +702,273 @@ describe("assets generate api", () => {
     expect(savedRecord!.graphTraceSummaryJson).toMatchObject({
       phase: "assets",
     });
+  });
+
+  it("passes explicit DashScope provider mode from API payload to assets execution", async () => {
+    const app = buildApp();
+    const prepared = await prepareActiveAssetPlan(app);
+    tempDir = join(tmpdir(), `assets-api-dashscope-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+    prepared.project.storageRootDir = tempDir;
+
+    const manifest = makeAssetManifest({
+      assetPlanRecordId: prepared.assetPlanRecord.id,
+      storyboardRecordId: prepared.storyboardRecord.id,
+      scriptRecordId: prepared.scriptRecord.id,
+      assetPlan: prepared.assetPlan,
+    });
+
+    buildInitialAssetManifestMock.mockReturnValueOnce(manifest);
+    validateAssetsManifestMock.mockReturnValueOnce({
+      stage: "assets_local_validation",
+      decision: "ready_for_compose",
+      errors: [],
+      warnings: [],
+      metrics: {
+        task_count: 2,
+        execution_count: 2,
+        artifact_count: 4,
+        segment_route_count: 1,
+      },
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL, init?: RequestInit) => {
+        const urlText = String(url);
+        const headers = new Headers(init?.headers);
+        if (urlText.startsWith("https://dashscope.test/")) {
+          expect(headers.get("authorization")).toBe("Bearer test-key");
+        }
+
+        if (urlText.endsWith("/api/v1/services/aigc/multimodal-generation/generation")) {
+          return new Response(
+            JSON.stringify({ output: { audio: { url: "https://example.test/audio.wav" } } }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        if (urlText.endsWith("/api/v1/services/aigc/image-generation/generation")) {
+          return new Response(
+            JSON.stringify({ output: { task_id: "task_dashscope_api_image" } }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        if (urlText.endsWith("/api/v1/tasks/task_dashscope_api_image")) {
+          return new Response(
+            JSON.stringify({
+              output: {
+                task_status: "SUCCEEDED",
+                results: [{ url: "https://example.test/image.png" }],
+              },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        if (urlText === "https://example.test/audio.wav") {
+          return new Response(new Uint8Array([1, 2, 3, 4]), {
+            status: 200,
+            headers: { "content-type": "audio/wav" },
+          });
+        }
+
+        if (urlText === "https://example.test/image.png") {
+          return new Response(new Uint8Array([137, 80, 78, 71]), {
+            status: 200,
+            headers: { "content-type": "image/png" },
+          });
+        }
+
+        throw new Error(`unexpected fetch: ${urlText}`);
+      }),
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/assets/generate`,
+      payload: {
+        voice_profile_id: "voice_default_male_storyteller",
+        execution_mode: "auto_available",
+        provider_mode: "dashscope",
+        dashscope: {
+          api_key: "test-key",
+          base_url: "https://dashscope.test",
+          image_model: "wan2.6-t2i",
+          tts_model: "qwen3-tts-instruct-flash",
+          image_poll_interval_ms: 0,
+          image_max_poll_attempts: 1,
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.manifest.artifacts.some(
+      (artifact: AssetManifest["artifacts"][number]) =>
+        (artifact.metadata as Record<string, unknown>).provider_name === "dashscope_tts",
+    )).toBe(true);
+    expect(body.manifest.artifacts.some(
+      (artifact: AssetManifest["artifacts"][number]) =>
+        (artifact.metadata as Record<string, unknown>).provider_name === "dashscope_image",
+    )).toBe(true);
+  });
+
+  it("passes DashScope image-to-video config from API payload to assets execution", async () => {
+    const app = buildApp();
+    const prepared = await prepareActiveAssetPlan(app);
+    const assetPlan = makeImageToVideoAssetPlan({
+      storyboardRecordId: prepared.storyboardRecord.id,
+      scriptRecordId: prepared.scriptRecord.id,
+      topicPackageId: prepared.topicPackage.id,
+    });
+    prepared.assetPlanRecord.planJson = assetPlan;
+    tempDir = join(tmpdir(), `assets-api-dashscope-i2v-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+    prepared.project.storageRootDir = tempDir;
+
+    const manifest = makeImageToVideoAssetManifest({
+      assetPlanRecordId: prepared.assetPlanRecord.id,
+      storyboardRecordId: prepared.storyboardRecord.id,
+      scriptRecordId: prepared.scriptRecord.id,
+      assetPlan,
+    });
+
+    buildInitialAssetManifestMock.mockReturnValueOnce(manifest);
+    validateAssetsManifestMock.mockReturnValueOnce({
+      stage: "assets_local_validation",
+      decision: "ready_for_compose",
+      errors: [],
+      warnings: [],
+      metrics: {
+        task_count: 4,
+        execution_count: 4,
+        artifact_count: 5,
+        segment_route_count: 1,
+      },
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string | URL, init?: RequestInit) => {
+        const urlText = String(url);
+        const headers = new Headers(init?.headers);
+        if (urlText.startsWith("https://dashscope.test/")) {
+          expect(headers.get("authorization")).toBe("Bearer test-key");
+        }
+
+        if (urlText.endsWith("/api/v1/services/aigc/multimodal-generation/generation")) {
+          return new Response(
+            JSON.stringify({ output: { audio: { url: "https://example.test/audio.wav" } } }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        if (urlText.endsWith("/api/v1/services/aigc/image-generation/generation")) {
+          return new Response(
+            JSON.stringify({ output: { task_id: "task_dashscope_api_image" } }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        if (urlText.endsWith("/api/v1/tasks/task_dashscope_api_image")) {
+          return new Response(
+            JSON.stringify({
+              output: {
+                task_status: "SUCCEEDED",
+                results: [{ url: "https://example.test/image.png" }],
+              },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        if (urlText.endsWith("/api/v1/services/aigc/video-generation/video-synthesis")) {
+          const body = JSON.parse(String(init?.body)) as {
+            model: string;
+            parameters: {
+              resolution: string;
+              duration: number;
+            };
+          };
+          expect(body.model).toBe("wan2.7-i2v-api-test");
+          expect(body.parameters.resolution).toBe("1080P");
+          expect(body.parameters.duration).toBe(7);
+          return new Response(
+            JSON.stringify({ output: { task_id: "task_dashscope_api_i2v" } }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        if (urlText.endsWith("/api/v1/tasks/task_dashscope_api_i2v")) {
+          return new Response(
+            JSON.stringify({
+              output: {
+                task_id: "task_dashscope_api_i2v",
+                task_status: "SUCCEEDED",
+                video_url: "https://example.test/video.mp4",
+              },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        if (urlText === "https://example.test/audio.wav") {
+          return new Response(new Uint8Array([1, 2, 3, 4]), {
+            status: 200,
+            headers: { "content-type": "audio/wav" },
+          });
+        }
+
+        if (urlText === "https://example.test/image.png") {
+          return new Response(new Uint8Array([137, 80, 78, 71]), {
+            status: 200,
+            headers: { "content-type": "image/png" },
+          });
+        }
+
+        if (urlText === "https://example.test/video.mp4") {
+          return new Response(new Uint8Array([0, 0, 0, 24]), {
+            status: 200,
+            headers: { "content-type": "video/mp4" },
+          });
+        }
+
+        throw new Error(`unexpected fetch: ${urlText}`);
+      }),
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/assets/generate`,
+      payload: {
+        voice_profile_id: "voice_default_male_storyteller",
+        execution_mode: "auto_available",
+        provider_mode: "dashscope",
+        dashscope: {
+          api_key: "test-key",
+          base_url: "https://dashscope.test",
+          image_model: "wan2.6-t2i",
+          tts_model: "qwen3-tts-instruct-flash",
+          image_poll_interval_ms: 0,
+          image_max_poll_attempts: 1,
+          image_to_video_model: "wan2.7-i2v-api-test",
+          image_to_video_resolution: "1080P",
+          image_to_video_duration_sec: 7,
+          image_to_video_poll_interval_ms: 0,
+          image_to_video_max_poll_attempts: 1,
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.manifest.artifacts.some(
+      (artifact: AssetManifest["artifacts"][number]) =>
+        artifact.artifact_type === "video",
+    )).toBe(true);
+    expect(body.manifest.segment_routes[0]?.visual_route_type).toBe("video_clip");
   });
 
   it("supports execution_mode dry_run and confirms no provider adapter is invoked", async () => {

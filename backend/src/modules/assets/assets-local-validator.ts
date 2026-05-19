@@ -19,6 +19,22 @@ const TERMINAL_EXECUTION_STATUSES = new Set([
   "skipped_with_fallback",
 ]);
 
+function isOptionalIncompleteExecution(
+  execution: AssetManifest["executions"][number],
+  assetPlan: AssetPlan,
+): boolean {
+  const task = assetPlan.tasks.find((item) => item.task_id === execution.task_id);
+  if (!task) {
+    return false;
+  }
+
+  if (task.manual_upload_policy.required) {
+    return false;
+  }
+
+  return task.task_type === "bgm_cue" || task.task_type === "sfx_cue";
+}
+
 function pushUnique(target: string[], code: string) {
   if (!target.includes(code)) {
     target.push(code);
@@ -79,7 +95,10 @@ export async function validateAssetsManifest(input: {
   // ── Execution artifact ids must exist in artifacts ──────────────────────
 
   for (const execution of manifest.executions) {
-    if (!TERMINAL_EXECUTION_STATUSES.has(execution.status)) {
+    if (
+      !TERMINAL_EXECUTION_STATUSES.has(execution.status) &&
+      !isOptionalIncompleteExecution(execution, assetPlan)
+    ) {
       pushUnique(errors, "assets_execution_incomplete");
     }
 

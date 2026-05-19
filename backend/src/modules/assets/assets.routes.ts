@@ -2,6 +2,16 @@ import type { AppInstance, AppResponse, RouteContext } from "../../app";
 import { getProjectById } from "../projects/project.repository";
 import { runAssetsGeneration, registerManualArtifact, acceptArtifact } from "./assets-run.service";
 
+function readOptionalNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function readDashscopeTtsFormat(value: unknown) {
+  return value === "mp3" || value === "wav" || value === "flac" || value === "pcm"
+    ? value
+    : undefined;
+}
+
 async function generateAssetsController(
   context: RouteContext,
 ): Promise<AppResponse> {
@@ -21,12 +31,36 @@ async function generateAssetsController(
   const executionMode =
     (context.payload as Record<string, unknown>).execution_mode as string | undefined
       ?? "auto_available";
+  const payload = context.payload as Record<string, unknown>;
+  const providerMode =
+    payload.provider_mode === "dashscope" ? "dashscope" : undefined;
+  const dashscopePayload =
+    typeof payload.dashscope === "object" && payload.dashscope !== null
+      ? payload.dashscope as Record<string, unknown>
+      : {};
 
   return runAssetsGeneration({
     db: context.app.db,
     project,
     voiceProfileId,
     executionMode,
+    providerMode,
+    dashscope: {
+      apiKey: dashscopePayload.api_key as string | undefined,
+      baseUrl: dashscopePayload.base_url as string | undefined,
+      imageModel: dashscopePayload.image_model as string | undefined,
+      imageSize: dashscopePayload.image_size as string | undefined,
+      imagePollIntervalMs: readOptionalNumber(dashscopePayload.image_poll_interval_ms),
+      imageMaxPollAttempts: readOptionalNumber(dashscopePayload.image_max_poll_attempts),
+      imageToVideoModel: dashscopePayload.image_to_video_model as string | undefined,
+      imageToVideoResolution: dashscopePayload.image_to_video_resolution as string | undefined,
+      imageToVideoDurationSec: readOptionalNumber(dashscopePayload.image_to_video_duration_sec),
+      imageToVideoPollIntervalMs: readOptionalNumber(dashscopePayload.image_to_video_poll_interval_ms),
+      imageToVideoMaxPollAttempts: readOptionalNumber(dashscopePayload.image_to_video_max_poll_attempts),
+      ttsModel: dashscopePayload.tts_model as string | undefined,
+      ttsFormat: readDashscopeTtsFormat(dashscopePayload.tts_format),
+      ttsSampleRate: readOptionalNumber(dashscopePayload.tts_sample_rate),
+    },
   });
 }
 

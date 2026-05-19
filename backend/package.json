@@ -3,5 +3,9 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "main": "src/index.ts"
+  "main": "src/index.ts",
+  "dependencies": {
+    "@remotion/bundler": "^4.0.462",
+    "@remotion/renderer": "^4.0.462"
+  }
 }

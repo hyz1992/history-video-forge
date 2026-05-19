@@ -401,9 +401,21 @@ describe("asset planning api", () => {
     const app = buildApp();
     const prepared = await prepareActiveStoryboard(app);
     prepared.project.activeAssetManifestRecordId = "asset_manifest_record_old";
+    prepared.project.activeComposeRecordId = "compose_record_old";
+    prepared.project.activeRenderJobRecordId = "render_job_record_old";
     prepared.project.latestAssetsRunTraceJson = {
       phase: "assets",
       run_id: "assets_run_old",
+      steps: [],
+    };
+    prepared.project.latestComposeRunTraceJson = {
+      phase: "compose",
+      run_id: "compose_run_old",
+      steps: [],
+    };
+    prepared.project.latestRenderRunTraceJson = {
+      phase: "render",
+      run_id: "render_run_old",
       steps: [],
     };
     generateAssetPlanMock.mockResolvedValueOnce(
@@ -457,6 +469,10 @@ describe("asset planning api", () => {
     expect(prepared.project.activeAssetPlanRecordId).toBe(body.asset_plan_record_id);
     expect(prepared.project.activeAssetManifestRecordId).toBeNull();
     expect(prepared.project.latestAssetsRunTraceJson).toBeNull();
+    expect(prepared.project.activeComposeRecordId).toBeNull();
+    expect(prepared.project.latestComposeRunTraceJson).toBeNull();
+    expect(prepared.project.activeRenderJobRecordId).toBeNull();
+    expect(prepared.project.latestRenderRunTraceJson).toBeNull();
     expect(prepared.project.latestAssetPlanRunTraceJson).toMatchObject({
       phase: "asset_planning",
     });
