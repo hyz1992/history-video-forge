@@ -11,6 +11,7 @@ import {
 } from "../../../backend/src/modules/assets/assets-run.service.js";
 import {
   configureVoiceProfilePersistence,
+  getVoiceProfileById,
   seedGlobalVoiceProfiles,
   updateVoiceProfileProviderState,
 } from "../../../backend/src/modules/assets/voice/voice-profile.repository.js";
@@ -384,6 +385,42 @@ describe("assets run service integration", () => {
       provider_status: "ready",
       provider_voice_id: "provider-voice-ready-001",
     });
+  });
+
+  it("enables voice profile persistence from project storage root", async () => {
+    integrationTempDir = join(tmpdir(), `assets-storage-root-voice-${Date.now()}`);
+    await mkdir(integrationTempDir, { recursive: true });
+
+    const setupDb = createDbClient();
+    configureVoiceProfilePersistence(setupDb, { rootDir: integrationTempDir });
+    await seedGlobalVoiceProfiles(setupDb);
+    await updateVoiceProfileProviderState(
+      setupDb,
+      "voice_preset_cold_authority",
+      {
+        provider_status: "ready",
+        provider_voice_id: "provider-voice-ready-001",
+        preview_audio_uri: "data:audio/wav;base64,cHJldmlldw==",
+      },
+    );
+
+    const { db, project } = await prepareProjectWithAssetPlan();
+    project.storageRootDir = integrationTempDir;
+
+    const response = await runAssetsGeneration({
+      db,
+      project,
+      voiceProfileId: "voice_preset_cold_authority",
+      executionMode: "dry_run",
+    });
+
+    const profile = await getVoiceProfileById(
+      db,
+      "voice_preset_cold_authority",
+    );
+    expect(response.statusCode).toBe(200);
+    expect(profile?.provider_status).toBe("ready");
+    expect(profile?.provider_voice_id).toBe("provider-voice-ready-001");
   });
 
   it("registers a manual image artifact into the segment route before revalidation", async () => {

@@ -637,7 +637,7 @@ describe("assets generate api", () => {
       method: "POST",
       url: `/api/projects/${prepared.project.id}/assets/generate`,
       payload: {
-        voice_profile_id: "voice_default_male_storyteller",
+        voice_profile_id: "voice_preset_cold_authority",
         execution_mode: "auto_available",
       },
     });
@@ -673,7 +673,7 @@ describe("assets generate api", () => {
       segmentIds: ["sb_001"],
       executionOptions: {
         execution_mode: "auto_available",
-        voice_profile_id: "voice_default_male_storyteller",
+        voice_profile_id: "voice_preset_cold_authority",
         enabled_provider_types: ["tts", "image", "video", "sfx", "bgm"],
         allow_manual_placeholders: false,
       },
@@ -717,6 +717,8 @@ describe("assets generate api", () => {
       scriptRecordId: prepared.scriptRecord.id,
       assetPlan: prepared.assetPlan,
     });
+    manifest.execution_options.voice_profile_id = "voice_system_ethan";
+    manifest.audio_summary.voice_profile_id = "voice_system_ethan";
 
     buildInitialAssetManifestMock.mockReturnValueOnce(manifest);
     validateAssetsManifestMock.mockReturnValueOnce({
@@ -789,7 +791,7 @@ describe("assets generate api", () => {
       method: "POST",
       url: `/api/projects/${prepared.project.id}/assets/generate`,
       payload: {
-        voice_profile_id: "voice_default_male_storyteller",
+        voice_profile_id: "voice_system_ethan",
         execution_mode: "auto_available",
         provider_mode: "dashscope",
         dashscope: {

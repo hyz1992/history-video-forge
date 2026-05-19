@@ -27,6 +27,7 @@ import { createLocalSubtitleProvider } from "./providers/local-subtitle-provider
 import { createDashscopeTtsProvider } from "./providers/dashscope/dashscope-tts-provider.js";
 import { createDashscopeImageProvider } from "./providers/dashscope/dashscope-image-provider.js";
 import { createDashscopeImageToVideoProvider } from "./providers/dashscope/dashscope-image-to-video-provider.js";
+import { configureVoiceProfilePersistence } from "./voice/voice-profile.repository.js";
 import { resolveVoiceProfile } from "./voice/voice-resolution.service.js";
 
 type AssetsProviderMode = "fake" | "dashscope";
@@ -360,6 +361,12 @@ function applyArtifactToManifestRoutes(input: {
 
 export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   const { db, project } = input;
+  if (
+    !db.voiceProfilePersistence.enabled &&
+    project.storageRootDir.trim()
+  ) {
+    configureVoiceProfilePersistence(db, { rootDir: project.storageRootDir });
+  }
 
   // Step 1: Check project has active asset plan
   if (!project.activeAssetPlanRecordId) {
