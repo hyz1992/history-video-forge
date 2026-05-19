@@ -15,7 +15,6 @@ interface DashscopeVoiceLiveCheckEnv {
   ALIYUN_DASHSCOPE_API_KEY?: string;
   ALIYUN_DASHSCOPE_BASE_URL?: string;
   ALIYUN_DASHSCOPE_VOICE_DESIGN_TARGET_MODEL?: string;
-  ALIYUN_DASHSCOPE_TTS_MODEL?: string;
 }
 
 interface VoiceLiveCheckPlan {
@@ -43,13 +42,19 @@ interface VoiceLiveCheckInput {
   env?: DashscopeVoiceLiveCheckEnv;
 }
 
+interface VoiceLiveCheckRuntimeConfig {
+  apiKey: string;
+  baseUrl: string;
+  voiceDesignTargetModel: string;
+  ttsModel: string;
+}
+
 const DEFAULT_OUTPUT_DIR = resolve(
   process.cwd(),
   "harness/scripts/runtime/output/assets-dashscope-voice-live-check",
 );
 const DEFAULT_BASE_URL = "https://dashscope.aliyuncs.com";
 const DEFAULT_TARGET_MODEL = "qwen3-tts-vd-2026-01-26";
-const DEFAULT_TTS_MODEL = "qwen3-tts-instruct-flash";
 const LIVE_CHECK_CONFIRMATION_KEY = "RUN_DASHSCOPE_VOICE_LIVE_CHECK";
 
 export function buildAssetsDashscopeVoiceLiveCheckPlan(
@@ -68,7 +73,6 @@ export function buildAssetsDashscopeVoiceLiveCheckPlan(
     optional_env_keys: [
       "ALIYUN_DASHSCOPE_BASE_URL",
       "ALIYUN_DASHSCOPE_VOICE_DESIGN_TARGET_MODEL",
-      "ALIYUN_DASHSCOPE_TTS_MODEL",
     ],
     required_artifacts: [
       "live-check-plan.json",
@@ -105,11 +109,11 @@ export async function runAssetsDashscopeVoiceLiveCheck(
   mkdirSync(plan.output_dir, { recursive: true });
   writeJson(plan.output_dir, "live-check-plan.json", plan);
 
-  const resolvedEnv = withDefaults(env);
+  const resolvedEnv = resolveAssetsDashscopeVoiceLiveCheckRuntimeConfig({ env });
   const voiceDesign = await createDashscopeDesignedVoice({
-    apiKey: resolvedEnv.ALIYUN_DASHSCOPE_API_KEY,
-    baseUrl: resolvedEnv.ALIYUN_DASHSCOPE_BASE_URL,
-    targetModel: resolvedEnv.ALIYUN_DASHSCOPE_VOICE_DESIGN_TARGET_MODEL,
+    apiKey: resolvedEnv.apiKey,
+    baseUrl: resolvedEnv.baseUrl,
+    targetModel: resolvedEnv.voiceDesignTargetModel,
     preferredName: sanitizePreferredVoiceName("storyforge voice check"),
     voicePrompt:
       "30到45岁之间的中低音旁白，吐字清晰，语速中等偏慢，情绪克制但有叙事张力，适合历史故事短视频。",
@@ -135,9 +139,9 @@ export async function runAssetsDashscopeVoiceLiveCheck(
   });
 
   const ttsResponse = await submitTts({
-    apiKey: resolvedEnv.ALIYUN_DASHSCOPE_API_KEY,
-    baseUrl: resolvedEnv.ALIYUN_DASHSCOPE_BASE_URL,
-    model: resolvedEnv.ALIYUN_DASHSCOPE_TTS_MODEL,
+    apiKey: resolvedEnv.apiKey,
+    baseUrl: resolvedEnv.baseUrl,
+    model: resolvedEnv.ttsModel,
     providerVoiceId: voiceDesign.providerVoiceId,
     text: "这是一段声音设计后的本地显式测试音频。",
   });
@@ -192,21 +196,16 @@ function assertRequiredEnv(env: DashscopeVoiceLiveCheckEnv): void {
   }
 }
 
-function withDefaults(env: DashscopeVoiceLiveCheckEnv): Required<Pick<
-  DashscopeVoiceLiveCheckEnv,
-  | "ALIYUN_DASHSCOPE_API_KEY"
-  | "ALIYUN_DASHSCOPE_BASE_URL"
-  | "ALIYUN_DASHSCOPE_VOICE_DESIGN_TARGET_MODEL"
-  | "ALIYUN_DASHSCOPE_TTS_MODEL"
->> {
+export function resolveAssetsDashscopeVoiceLiveCheckRuntimeConfig(input: {
+  env: DashscopeVoiceLiveCheckEnv;
+}): VoiceLiveCheckRuntimeConfig {
+  const voiceDesignTargetModel =
+    input.env.ALIYUN_DASHSCOPE_VOICE_DESIGN_TARGET_MODEL ?? DEFAULT_TARGET_MODEL;
   return {
-    ALIYUN_DASHSCOPE_API_KEY: env.ALIYUN_DASHSCOPE_API_KEY ?? "",
-    ALIYUN_DASHSCOPE_BASE_URL:
-      env.ALIYUN_DASHSCOPE_BASE_URL ?? DEFAULT_BASE_URL,
-    ALIYUN_DASHSCOPE_VOICE_DESIGN_TARGET_MODEL:
-      env.ALIYUN_DASHSCOPE_VOICE_DESIGN_TARGET_MODEL ?? DEFAULT_TARGET_MODEL,
-    ALIYUN_DASHSCOPE_TTS_MODEL:
-      env.ALIYUN_DASHSCOPE_TTS_MODEL ?? DEFAULT_TTS_MODEL,
+    apiKey: input.env.ALIYUN_DASHSCOPE_API_KEY ?? "",
+    baseUrl: input.env.ALIYUN_DASHSCOPE_BASE_URL ?? DEFAULT_BASE_URL,
+    voiceDesignTargetModel,
+    ttsModel: voiceDesignTargetModel,
   };
 }
 

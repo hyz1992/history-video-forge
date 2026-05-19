@@ -5,6 +5,9 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import packageJson from "../../package.json";
+import {
+  resolveAssetsDashscopeVoiceLiveCheckRuntimeConfig,
+} from "../../harness/scripts/runtime/assets-dashscope-voice-live-check";
 
 const scriptPath = resolve(
   process.cwd(),
@@ -47,5 +50,17 @@ describe("assets DashScope voice live check", () => {
 
     expect(output).toContain("live_check_not_enabled");
     expect(output).not.toContain("ALIYUN_DASHSCOPE_API_KEY=");
+  });
+
+  it("uses the voice design target model for designed-voice TTS", () => {
+    const config = resolveAssetsDashscopeVoiceLiveCheckRuntimeConfig({
+      env: {
+        ALIYUN_DASHSCOPE_API_KEY: "test-key",
+        ALIYUN_DASHSCOPE_VOICE_DESIGN_TARGET_MODEL: "qwen3-tts-vd-test",
+      },
+    });
+
+    expect(config.ttsModel).toBe("qwen3-tts-vd-test");
+    expect(config.voiceDesignTargetModel).toBe("qwen3-tts-vd-test");
   });
 });
