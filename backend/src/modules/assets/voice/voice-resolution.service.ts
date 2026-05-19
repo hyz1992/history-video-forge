@@ -10,6 +10,7 @@ import { createLocalVoiceProfileFromIntent } from "./voice-profile-creator.js";
 import {
   getVoiceProfileById,
   listVoiceProfiles,
+  recordVoiceProfileUsage,
   saveVoiceProfile,
   seedGlobalVoiceProfiles,
 } from "./voice-profile.repository.js";
@@ -57,6 +58,7 @@ export async function resolveVoiceProfile(
   if (requestedId) {
     const requested = await getVoiceProfileById(input.db, requestedId);
     if (requested && requested.provider_status !== "deleted") {
+      await recordVoiceProfileUsage(input.db, requested.voice_profile_id);
       return {
         voiceProfileId: requested.voice_profile_id,
         matchResult: VoiceMatchResult.parse({
@@ -87,6 +89,7 @@ export async function resolveVoiceProfile(
         voiceProfileId: `voice_generated_${input.db.generateId()}`,
       }),
     );
+    await recordVoiceProfileUsage(input.db, profile.voice_profile_id);
 
     return {
       voiceProfileId: profile.voice_profile_id,
@@ -96,6 +99,8 @@ export async function resolveVoiceProfile(
       }),
     };
   }
+
+  await recordVoiceProfileUsage(input.db, matchResult.selected_voice_profile_id);
 
   return {
     voiceProfileId: matchResult.selected_voice_profile_id,

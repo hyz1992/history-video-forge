@@ -124,3 +124,26 @@ export async function updateVoiceProfileProviderState(
   await persistVoiceProfiles(db);
   return updated;
 }
+
+export async function recordVoiceProfileUsage(
+  db: DbClient,
+  id: string,
+  nowIso: string = new Date().toISOString(),
+): Promise<VoiceProfileRecord | null> {
+  await loadPersistedVoiceProfiles(db);
+  const existing = db.voiceProfiles.get(id);
+  if (!existing || existing.provider_status === "deleted") {
+    return null;
+  }
+
+  const updated = VoiceProfile.parse({
+    ...existing,
+    usage_count: existing.usage_count + 1,
+    last_used_at: nowIso,
+    updated_at: nowIso,
+  });
+
+  db.voiceProfiles.set(id, updated);
+  await persistVoiceProfiles(db);
+  return updated;
+}

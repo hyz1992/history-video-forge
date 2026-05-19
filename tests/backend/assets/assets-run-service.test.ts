@@ -423,6 +423,38 @@ describe("assets run service integration", () => {
     expect(profile?.provider_voice_id).toBe("provider-voice-ready-001");
   });
 
+  it("persists voice profile usage after assets voice resolution", async () => {
+    integrationTempDir = join(tmpdir(), `assets-voice-usage-${Date.now()}`);
+    await mkdir(integrationTempDir, { recursive: true });
+
+    const { db, project } = await prepareProjectWithAssetPlan();
+    project.storageRootDir = integrationTempDir;
+
+    const response = await runAssetsGeneration({
+      db,
+      project,
+      voiceProfileId: "voice_preset_cold_authority",
+      executionMode: "dry_run",
+    });
+
+    const profile = await getVoiceProfileById(
+      db,
+      "voice_preset_cold_authority",
+    );
+    expect(response.statusCode).toBe(200);
+    expect(profile?.usage_count).toBe(1);
+    expect(profile?.last_used_at).toEqual(expect.any(String));
+
+    const nextDb = createDbClient();
+    configureVoiceProfilePersistence(nextDb, { rootDir: integrationTempDir });
+    const persistedProfile = await getVoiceProfileById(
+      nextDb,
+      "voice_preset_cold_authority",
+    );
+    expect(persistedProfile?.usage_count).toBe(1);
+    expect(persistedProfile?.last_used_at).toBe(profile?.last_used_at);
+  });
+
   it("registers a manual image artifact into the segment route before revalidation", async () => {
     const { db, project } = await prepareProjectWithAssetPlan();
 
