@@ -7,6 +7,7 @@ import type {
   MediaLibraryItem,
   RenderJobStatus,
   RenderValidationResult,
+  VoiceProfile,
 } from "../../../shared/src/index.js";
 
 export interface ProjectRecord {
@@ -222,6 +223,7 @@ export interface DbClient {
   renderJobRecords: Map<string, RenderJobRecord>;
   assetProviderJobRecords: Map<string, AssetProviderJobRecord>;
   mediaLibraryItems: Map<string, MediaLibraryItem>;
+  voiceProfiles: Map<string, VoiceProfile>;
 }
 
 export function createDbClient(): DbClient {
@@ -240,5 +242,6 @@ export function createDbClient(): DbClient {
     renderJobRecords: new Map<string, RenderJobRecord>(),
     assetProviderJobRecords: new Map<string, AssetProviderJobRecord>(),
     mediaLibraryItems: new Map<string, MediaLibraryItem>(),
+    voiceProfiles: new Map<string, VoiceProfile>(),
   };
 }
