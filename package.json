@@ -26,6 +26,7 @@
     "harness:topic-script-five-round-quality-check": "tsx harness/scripts/runtime/topic-script-five-round-quality-check.ts",
     "harness:topic-script-live-check": "tsx harness/scripts/runtime/topic-script-live-check.ts",
     "harness:assets-dashscope-live-check": "tsx harness/scripts/runtime/assets-dashscope-live-check.ts",
+    "harness:assets-dashscope-voice-live-check": "tsx harness/scripts/runtime/assets-dashscope-voice-live-check.ts",
     "harness:assets-dashscope-image-to-video-live-check": "tsx harness/scripts/runtime/assets-dashscope-image-to-video-live-check.ts",
     "harness:compose-runtime-smoke": "tsx harness/scripts/runtime/compose-runtime-smoke.ts",
     "harness:render-runtime-smoke": "tsx harness/scripts/runtime/render-runtime-smoke.ts",
