@@ -43,8 +43,17 @@ interface TtsLiveCheckInput {
   outputDir?: string;
   text?: string;
   voice?: string;
+  providerVoiceId?: string;
   model?: string;
   env?: DashscopeTtsLiveCheckEnv;
+}
+
+interface TtsLiveCheckRuntimeConfig {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  voice: string;
+  text: string;
 }
 
 const DEFAULT_OUTPUT_DIR = resolve(
@@ -113,7 +122,13 @@ export async function runAssetsDashscopeTtsLiveCheck(
   mkdirSync(plan.output_dir, { recursive: true });
   writeJson(plan.output_dir, "live-check-plan.json", plan);
 
-  const resolved = withDefaults(env, input);
+  const resolved = resolveAssetsDashscopeTtsLiveCheckRuntimeConfig({
+    env,
+    model: input.model,
+    voice: input.voice,
+    providerVoiceId: input.providerVoiceId,
+    text: input.text,
+  });
   const ttsResponse = await submitTts({
     apiKey: resolved.apiKey,
     baseUrl: resolved.baseUrl,
@@ -178,12 +193,23 @@ function assertRequiredEnv(env: DashscopeTtsLiveCheckEnv): void {
   }
 }
 
-function withDefaults(env: DashscopeTtsLiveCheckEnv, input: TtsLiveCheckInput) {
+export function resolveAssetsDashscopeTtsLiveCheckRuntimeConfig(input: {
+  env: DashscopeTtsLiveCheckEnv;
+  text?: string;
+  voice?: string;
+  providerVoiceId?: string;
+  model?: string;
+}): TtsLiveCheckRuntimeConfig {
   return {
-    apiKey: env.ALIYUN_DASHSCOPE_API_KEY ?? "",
-    baseUrl: env.ALIYUN_DASHSCOPE_BASE_URL ?? DEFAULT_BASE_URL,
-    model: input.model ?? env.ALIYUN_DASHSCOPE_TTS_MODEL ?? DEFAULT_TTS_MODEL,
-    voice: input.voice ?? env.ALIYUN_DASHSCOPE_TTS_VOICE ?? DEFAULT_TTS_VOICE,
+    apiKey: input.env.ALIYUN_DASHSCOPE_API_KEY ?? "",
+    baseUrl: input.env.ALIYUN_DASHSCOPE_BASE_URL ?? DEFAULT_BASE_URL,
+    model:
+      input.model ?? input.env.ALIYUN_DASHSCOPE_TTS_MODEL ?? DEFAULT_TTS_MODEL,
+    voice:
+      input.providerVoiceId ??
+      input.voice ??
+      input.env.ALIYUN_DASHSCOPE_TTS_VOICE ??
+      DEFAULT_TTS_VOICE,
     text: input.text ?? DEFAULT_TEXT,
   };
 }
@@ -311,6 +337,7 @@ function parseCliArgs(argv: string[]) {
     outputDir?: string;
     text?: string;
     voice?: string;
+    providerVoiceId?: string;
     model?: string;
   } = {};
 
@@ -329,6 +356,11 @@ function parseCliArgs(argv: string[]) {
     }
     if (current === "--voice" && next) {
       result.voice = next;
+      index += 1;
+      continue;
+    }
+    if (current === "--provider-voice-id" && next) {
+      result.providerVoiceId = next;
       index += 1;
       continue;
     }
