@@ -130,11 +130,17 @@
 
 - 新增 [Voice Profile Persistence Design](./2026-05-19-voice-profile-persistence-design.md)。
 - 新增 [Voice Profile Persistence Implementation Plan](./2026-05-19-voice-profile-persistence-implementation-plan.md)。
-- 已完成本地 JSON store、repository persistence、非破坏性 seed、assets 加载守卫、项目 `storageRootDir` 自动接线与 mocked DashScope TTS 跨任务复用验证。
+- 已完成本地 JSON store、repository persistence、非破坏性 seed、assets 加载守卫、项目 `storageRootDir` 自动接线、mocked DashScope TTS 跨任务复用验证、使用统计回写与正式文档收口。
 - 当前持久化文件路径为 `storage/voice-profiles/voice-profiles.json`，schema version 为 `voice_profiles_v1`；测试使用临时目录，默认不写真实项目根目录。
-- 已完成提交：`958065c`、`e3e4459`、`0fcd40d`、`1bfa221`、`57ca1e2`、`d23e8e1`。
-- 尚未完成独立文档收口：`docs/data/schema-design.md`、`docs/data/field-design.md`、`docs/architecture/pipeline-io-spec.md` 与 `.gitignore` 是否忽略 `storage/voice-profiles/` 的最终决定仍需单独任务处理。
-- 下一步建议先做使用统计回写：成功选择/复用音色后更新 `usage_count` 与 `last_used_at`，继续按 TDD 小步提交。
+- 已完成提交：`958065c`、`e3e4459`、`0fcd40d`、`1bfa221`、`57ca1e2`、`d23e8e1`、`6cdf161`、`e17a11b`、`3c2b13d`。
+- `docs/data/schema-design.md`、`docs/data/field-design.md`、`docs/architecture/pipeline-io-spec.md` 与 `.gitignore` 已同步当前持久化事实；`storage/voice-profiles/` 为本地运营态文件，不进入默认 git 提交。
+
+## 2026-05-19 TTS 时长与字幕 Timing 设计
+
+- 新增 [TTS Duration and Subtitle Timing Design](./2026-05-19-tts-duration-subtitle-timing-design.md)。
+- 新增 [TTS Duration and Subtitle Timing Implementation Plan](./2026-05-19-tts-duration-subtitle-timing-implementation-plan.md)。
+- 本轮设计只收口 assets-owned timing：本地规范化 TTS chunks、下载后音频时长探测、字幕 chunk 边界 timing metadata、compose 消费 chunk duration。
+- 第一版不实现 word-level forced alignment、不默认真实 DashScope、不改 topic/script/storyboard/asset planning 语义链路，也不处理字幕样式或 renderer UI。
 
 ## 2026-05-19 视频流水线后续缺口清单
 
