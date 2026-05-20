@@ -14,6 +14,7 @@ import {
   getActiveSubtitleCue,
   makeSubtitleContainerStyle,
 } from "./subtitle-rendering";
+import { makeMotionTransform } from "./motion-rendering";
 import {
   getVisibleVisualLayers,
   makeVisualLayerStyle,
@@ -120,7 +121,17 @@ export function TimelineVideo(props: TimelineVideoProps) {
         ? visualLayers.map((layer) => (
             <div
               key={layer.clip.clipId}
-              style={makeVisualLayerStyle({ opacity: layer.opacity })}
+              style={makeVisualLayerStyle({
+                opacity: layer.opacity,
+                transform: makeMotionTransform({
+                  recipeType: layer.clip.motion?.recipeType ?? "hold",
+                  progress:
+                    layer.clip.durationSec > 0
+                      ? layer.localSec / layer.clip.durationSec
+                      : 0,
+                  parameters: layer.clip.motion?.parameters ?? {},
+                }),
+              })}
             >
               {renderVisualClip(layer.clip)}
             </div>
