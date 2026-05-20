@@ -55,6 +55,13 @@ Review checkpoints:
 - Prefer focused tests over broad suites until Task 9 regression.
 - If a task touches shared schema, compose, or API-facing docs, run its focused schema/docs tests in the same task.
 
+Implementation status (2026-05-20):
+
+- Task 1-9 are complete and committed in focused Chinese commits.
+- Actual PNG helper path is `tests/_helpers/png-decoder.ts`; it is shared by subtitle and local quality smoke tests.
+- Runtime smoke now verifies nonzero `audio_clip_count`, `visual_clip_count`, and `subtitle_cue_count` for the Remotion adapter path.
+- Known residual limits remain: headless Chromium is required for Remotion smoke tests; pixel checks prove visibility, not publish-grade quality; long local audio may later need static resource serving instead of data URI inlining.
+
 ## Scope
 
 This plan implements:
@@ -126,7 +133,7 @@ Create:
 - `tests/renderer/motion-rendering.test.ts`
 - `tests/renderer/audio-rendering.test.ts`
 - `tests/backend/render/remotion-local-quality-smoke.test.ts`
-- `tests/backend/render/png-smoke-helper.ts`
+- `tests/_helpers/png-decoder.ts`
 
 Modify:
 
@@ -1031,7 +1038,7 @@ git commit -m "合成口播音频轨"
 **Files:**
 
 - Create: `tests/backend/render/remotion-local-quality-smoke.test.ts`
-- Create: `tests/backend/render/png-smoke-helper.ts`
+- Create: `tests/_helpers/png-decoder.ts`
 - Modify: `tests/backend/render/remotion-subtitle-still-smoke.test.ts`
 - Test: `tests/backend/render/remotion-local-quality-smoke.test.ts`
 
@@ -1071,7 +1078,7 @@ Expected: fail until the shared PNG helper is extracted and the smoke fixture is
 
 - [ ] **Step 3: Share PNG test helpers without adding dependencies**
 
-Create `tests/backend/render/png-smoke-helper.ts` and move the PNG helper functions from `tests/backend/render/remotion-subtitle-still-smoke.test.ts` into that file:
+Create `tests/_helpers/png-decoder.ts` and move the PNG helper functions from `tests/backend/render/remotion-subtitle-still-smoke.test.ts` into that file:
 
 ```ts
 export interface DecodedPng {
@@ -1105,7 +1112,7 @@ Expected: both Remotion static smoke tests pass. These tests require headless Ch
 
 ```bash
 git add tests/backend/render/remotion-local-quality-smoke.test.ts tests/backend/render/remotion-subtitle-still-smoke.test.ts
-git add tests/backend/render/png-smoke-helper.ts
+git add tests/_helpers/png-decoder.ts
 git commit -m "增加本地成片画面质量冒烟测试"
 ```
 

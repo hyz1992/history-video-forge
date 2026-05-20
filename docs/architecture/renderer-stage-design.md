@@ -120,6 +120,15 @@ BGM/SFX:
 - included only when referenced artifacts exist;
 - missing optional audio should warn, not block, unless the timeline explicitly marks the clip required.
 
+Current local Remotion implementation note (2026-05-20):
+
+- the backend adapter normalizes `ComposeTimeline` + `AssetManifest` into render-ready `visualClips`, `audioClips`, `subtitleCues`, and `subtitleStyle` props before calling Remotion;
+- `TimelineVideo` consumes normalized props and does not infer upstream intent from raw project storage;
+- image and video visual clips are scheduled by start/duration, with image + `motion_recipe` fallback supporting `hold`, `slow_push_in`, `push_in`, `pan_left`, `pan_right`, `pan_up`, `pan_down`, `zoom_in`, `zoom_out`, and crossfade between adjacent clips;
+- narration audio is muxed when a renderable audio artifact exists; optional BGM/SFX are rendered only when concrete artifacts already exist and are referenced by the timeline;
+- fake TTS writes deterministic render-ready WAV files for offline Remotion smoke tests;
+- static quality smoke uses Remotion `renderStill` plus PNG pixel checks, so it requires headless Chromium and only proves nonblank visuals plus visible subtitles.
+
 ## Validation
 
 `RenderValidationResult` should be structural and file-oriented.

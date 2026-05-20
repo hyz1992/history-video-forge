@@ -1079,7 +1079,7 @@ Renderer v1 字段只描述 `ComposeTimeline` 之后的渲染与导出结果，�
 
 | 字段 | 含义 |
 |---|---|
-| `stage` | 固定为 `render_source_validation` |
+| `stage` | 固定为 `render_local_validation` |
 | `decision` | `ready_for_render / blocked` |
 | `errors` | 阻塞类结构、引用或文件错误 |
 | `warnings` | 非阻塞告警，例如缺失可选 BGM/SFX |
@@ -1106,3 +1106,5 @@ Renderer v1 字段只描述 `ComposeTimeline` 之后的渲染与导出结果，�
 - renderer 字段不表达 DashScope 图生视频 provider job。
 - renderer 字段不替代 compose timeline；最终视频的时间轴 source 仍是 `ComposeTimeline`。
 - renderer 当前不实现前端预览 UI、word-level forced alignment、karaoke captions 或字幕人工编辑流。
+
+补充说明（2026-05-20）：本地 Remotion adapter 会在运行时把 `ComposeTimeline` + `AssetManifest` 派生为 `visualClips`、`audioClips`、`subtitleCues` 和 `subtitleStyle`。`visualClips` 支持 image、video、image + `motion_recipe` fallback、基础 pan/zoom/hold/push-in 与 crossfade；`audioClips` 支持 narration 以及已存在 artifact 的 BGM/SFX。fake TTS 产物已改为 render-ready WAV，以便离线 smoke 生成带音频的 MP4。当前像素级 smoke 依赖 headless Chromium，只证明画面非空和字幕可见，不承担审美或发布质量判断。

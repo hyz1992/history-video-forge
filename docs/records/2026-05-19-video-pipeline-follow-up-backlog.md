@@ -56,11 +56,11 @@
 
 ## P1: Remotion 本地成片质量
 
-- [ ] 扩展 renderer 本地 Remotion adapter，支持 image、video、motion_recipe、subtitle、narration 多轨组合。
-- [ ] 增加基础镜头动效：slow push-in、pan、zoom、hold、crossfade。
-- [ ] 增加音频轨合成：narration、subtitle timing、后续 BGM/SFX。
-- [ ] 增加 Playwright 或渲染截图验证，确认画面非空、文本不重叠、媒体引用有效。
-- [ ] 建立低成本端到端 smoke：冻结上游样例 + fake/local assets + Remotion 本地导出。
+- [x] 扩展 renderer 本地 Remotion adapter，支持 image、video、motion_recipe、subtitle、narration 多轨组合。
+- [x] 增加基础镜头动效：slow push-in、pan、zoom、hold、crossfade。
+- [x] 增加音频轨合成：narration、subtitle timing、已存在 artifact 的 BGM/SFX。
+- [x] 增加 Remotion `renderStill` 像素级 smoke，确认画面非空、字幕可见、媒体引用有效；文本不重叠仍需后续真实画面样本继续观察。
+- [x] 建立低成本端到端 smoke：冻结上游样例 + fake/local assets + Remotion 本地导出，并断言 audio/visual/subtitle 诊断计数非零。
 
 ## P1: BGM / SFX
 
@@ -107,7 +107,7 @@
 2. [ ] 写 `TTS / Subtitle / Audio Completion Implementation Plan`。
 3. [ ] 先做音色库持久化与 provider voice 跨任务复用。
 4. [x] 再做 TTS 真实时长回写与字幕 timing；provider timestamp / forced alignment 仍作为后续增强。
-5. [ ] 然后补 Remotion 本地成片 smoke。
+5. [x] 然后补 Remotion 本地成片 smoke。
 6. [ ] 最后再安排图生视频真实小样本验证。
 
 ## 交接规则

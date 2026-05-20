@@ -164,4 +164,6 @@
 - 本轮计划面向 backlog P1「Remotion 本地成片质量」，目标是让本地 Remotion renderer 从最小 MP4 proof 演进到可审查的多轨竖屏成片路径。
 - 计划明确由 backend adapter 先把 `ComposeTimeline` + `AssetManifest` 规范化为 Remotion props，renderer 只消费规范化后的 visual/audio/subtitle clips，不在 React 侧猜测上游语义。
 - Implementation plan 拆为输入 props 规范化、多段视觉轨、镜头动效、fake TTS WAV 化、可选 BGM/SFX 轨、口播与可选音频轨、本地画面质量 smoke、runtime smoke 增强和正式文档同步 9 个 TDD 任务。
+- 截至 2026-05-20，Implementation plan Task 1-9 已完成：Remotion input builder、timed visual clips、motion recipes、fake TTS WAV、可选 BGM/SFX timeline 暴露、audio clips 渲染与 unmuted MP4、本地静帧质量 smoke、runtime smoke 诊断增强和正式文档同步。
+- 当前验证入口包括 `tests/backend/render/remotion-local-quality-smoke.test.ts`、`tests/backend/render/remotion-subtitle-still-smoke.test.ts`、`tests/harness/render-runtime-smoke.test.ts` 与 `npm run render:remotion:smoke`。静帧 smoke 需要 headless Chromium；本地音频当前以内联 data URI 供 Remotion 消费，长音频静态资源服务仍可作为后续优化。
 - 本轮仍不实现 DashScope 图生视频真实调用、BGM/SFX provider、前端预览 UI、发布流、人工审稿流或质量评分。

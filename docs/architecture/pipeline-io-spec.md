@@ -434,7 +434,7 @@ Compose v1 消费 active `AssetManifestRecord`，输出可持久化的 `ComposeT
 
 本地校验：
 
-- `RenderValidationResult.stage` 固定为 `render_source_validation`。
+- `RenderValidationResult.stage` 固定为 `render_local_validation`。
 - `decision` 为 `ready_for_render / blocked`。
 - validator 只做结构、引用与本地文件存在性检查：active compose、timeline readiness、asset manifest、artifact record、artifact file、narration、subtitle、visual track 等。
 - 缺失可选 BGM/SFX 只产生 warning，不阻塞 render。
@@ -445,7 +445,11 @@ Compose v1 消费 active `AssetManifestRecord`，输出可持久化的 `ComposeT
 - local Remotion adapter 从 source `AssetManifest` 中找到 subtitle artifact，读取 SRT/VTT 文件并解析为 `subtitleCues`。
 - adapter 将 `subtitle_track.metadata.subtitle_style` 规范化为 `subtitleStyle`；缺失或非法样式回落到 shared `DEFAULT_SUBTITLE_STYLE`。
 - `TimelineVideo` 按当前 frame/fps 选择 active cue，并用安全区、描边、阴影、最大行数和最大宽度约束渲染字幕。
-- 当前已有 Remotion `renderStill` 静帧 smoke，通过 Node 内置 PNG 像素扫描确认下方安全区存在可见字幕像素。
+- local Remotion adapter 还会把 `ComposeTimeline` + `AssetManifest` 规范化为运行时 props：`visualClips`、`audioClips`、`subtitleCues` 与 `subtitleStyle`。这些 props 是 adapter 内部渲染输入合同，不回写到 `ComposeTimeline`。
+- `visualClips` 支持 `image`、`video` 与 image + `motion_recipe` fallback；当前本地 motion recipes 覆盖 `hold`、`slow_push_in`、`push_in`、`pan_left`、`pan_right`、`pan_up`、`pan_down`、`zoom_in`、`zoom_out`，相邻视觉 clip 可使用 crossfade。
+- narration 在存在可渲染音频时默认 mux；BGM/SFX 仅在 `AssetManifest` 已存在具体 `bgm_audio` / `sfx_audio` artifact 且 timeline 引用它们时渲染，不由 renderer 生成。
+- fake TTS 当前写入 render-ready WAV，用于离线 Remotion smoke；本地长音频当前以内联 data URI 交给 Remotion，后续如样片变长可改为静态资源服务路径。
+- 当前已有 Remotion `renderStill` 静帧 smoke，通过 Node 内置 PNG 像素扫描确认下方安全区存在可见字幕像素；本地成片质量 smoke 还会确认画面非黑像素。此类 smoke 需要可用的 headless Chromium。
 
 激活与失效：
 

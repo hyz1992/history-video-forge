@@ -621,5 +621,6 @@ Renderer / Export v1 已有第一版持久化记录。它是 `ComposeRecord` 之
 - `output_artifact_json` 保存 `ExportArtifact`。
 - `validation_result_json` 保存 `RenderValidationResult`。
 - `execution_state_json` 至少记录 `status`、`activated`、`adapter` 与 source compose 信息。
-- Renderer 运行时从 source `AssetManifestRecord.manifest_json` 读取 subtitle artifact，解析 SRT/VTT 为 `subtitleCues`，并把 `subtitle_track.metadata.subtitle_style` 作为 `subtitleStyle` 传入 Remotion；这些渲染输入是运行时派生 props，不单独持久化为 render job 字段。
+- Renderer 运行时从 source `AssetManifestRecord.manifest_json` 与 `ComposeTimeline` 派生 Remotion props：`visualClips`、`audioClips`、`subtitleCues` 与 `subtitleStyle`。其中 subtitle artifact 会被解析为 SRT/VTT cues，`subtitle_track.metadata.subtitle_style` 会作为 `subtitleStyle` 传入 Remotion；这些渲染输入是运行时派生 props，不单独持久化为 render job 字段。
+- 本地 Remotion renderer 当前支持 image/video 视觉 clip、image + `motion_recipe` fallback、基础 pan/zoom/hold/push-in/crossfade、narration 音频 mux，以及已存在 artifact 的 BGM/SFX clip。fake TTS 写入 render-ready WAV 以支持离线 smoke。
 - `render_job_records` 不保存 DashScope 图生视频 job，不保存发布流状态，不保存人工审稿状态。
