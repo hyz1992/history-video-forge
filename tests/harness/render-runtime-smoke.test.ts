@@ -103,7 +103,10 @@ describe("render runtime smoke harness", () => {
       readFileSync(join(outputDir, "assets-response.json"), "utf8"),
     ) as {
       manifest?: {
-        artifacts?: Array<{ artifact_type: string }>;
+        artifacts?: Array<{
+          artifact_type: string;
+          metadata?: { library_item_id?: string };
+        }>;
       };
     };
     const artifactTypes =
@@ -112,5 +115,19 @@ describe("render runtime smoke harness", () => {
       ) ?? [];
     expect(artifactTypes).toContain("bgm_audio");
     expect(artifactTypes).toContain("sfx_audio");
+    expect(
+      assetsResponse.manifest?.artifacts?.some(
+        (artifact) =>
+          artifact.artifact_type === "bgm_audio" &&
+          artifact.metadata?.library_item_id === "bgm_tense_dark_drone_001",
+      ),
+    ).toBe(true);
+    expect(
+      assetsResponse.manifest?.artifacts?.some(
+        (artifact) =>
+          artifact.artifact_type === "sfx_audio" &&
+          artifact.metadata?.library_item_id === "sfx_hit_sharp_001",
+      ),
+    ).toBe(true);
   }, 180_000);
 });

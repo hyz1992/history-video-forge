@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 
 import { buildApp } from "../../../backend/src/app";
 import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning/asset-plan-record.repository";
+import { DEFAULT_AUDIO_LIBRARY_ITEMS } from "../../../backend/src/modules/assets/default-audio-library";
 import { saveMediaLibraryItem } from "../../../backend/src/modules/assets/media-library.repository";
 import { createFakeRenderAdapter } from "../../../backend/src/modules/render/fake-render-adapter";
 import { createLocalRemotionRenderAdapter } from "../../../backend/src/modules/render/local-remotion-render-adapter";
@@ -147,7 +148,7 @@ function makeAssetPlan(): AssetPlan {
         prompt_draft: null,
         parameters: {
           sfx_tags: ["hit"],
-          mood_tags: ["sharp"],
+          mood_tags: ["sharp", "impact"],
         },
         manual_upload_policy: {
           allowed: false,
@@ -170,10 +171,12 @@ function makeAssetPlan(): AssetPlan {
         provider_hint: "local_bgm",
         prompt_draft: null,
         parameters: {
-          required_tags: ["background"],
-          mood_tags: ["tense"],
+          required_tags: ["background", "drone"],
+          mood_tags: ["tense", "dark"],
           scope: "global",
-          volume: 0.22,
+          volume: 0.25,
+          fade_in_sec: 1,
+          fade_out_sec: 1,
         },
         manual_upload_policy: {
           allowed: false,
@@ -207,43 +210,9 @@ function makeAssetPlan(): AssetPlan {
 }
 
 async function seedSmokeMediaLibrary(app: ReturnType<typeof buildApp>) {
-  await saveMediaLibraryItem(app.db, {
-    library_item_id: "bgm_smoke_background",
-    type: "bgm",
-    file_uri: "library://bgm/smoke-background.wav",
-    mime_type: "audio/wav",
-    duration_sec: 12,
-    loopable: true,
-    tags: ["background"],
-    mood_tags: ["tense"],
-    license: {
-      license_type: "cc0",
-      commercial_use_allowed: true,
-      attribution_required: false,
-    },
-    file_hash: "sha256:bgm-smoke",
-    imported_at: "2026-05-20T00:00:00.000Z",
-    approved_for_use: true,
-  });
-
-  await saveMediaLibraryItem(app.db, {
-    library_item_id: "sfx_smoke_hit",
-    type: "sfx",
-    file_uri: "library://sfx/smoke-hit.wav",
-    mime_type: "audio/wav",
-    duration_sec: 1,
-    loopable: false,
-    tags: ["hit"],
-    mood_tags: ["sharp"],
-    license: {
-      license_type: "cc0",
-      commercial_use_allowed: true,
-      attribution_required: false,
-    },
-    file_hash: "sha256:sfx-smoke",
-    imported_at: "2026-05-20T00:00:00.000Z",
-    approved_for_use: true,
-  });
+  for (const item of DEFAULT_AUDIO_LIBRARY_ITEMS) {
+    await saveMediaLibraryItem(app.db, item);
+  }
 }
 
 async function seedActiveAssetPlan(input: {
