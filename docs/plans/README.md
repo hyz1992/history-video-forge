@@ -157,3 +157,11 @@
 - Implementation plan 拆为 shared schema、local subtitle 默认样式、subtitle cue reader、Remotion adapter props、TimelineVideo 样式渲染、静帧可见性 smoke、正式文档同步 7 个 TDD 任务。
 - 截至 2026-05-20，Implementation plan Task 1-7 已完成：shared `SubtitleStyle` / `DEFAULT_SUBTITLE_STYLE`、local subtitle metadata 写入、SRT/VTT cue reader、Remotion input props、`TimelineVideo` active cue 样式渲染、`renderStill` 静帧像素可见性 smoke 与正式文档同步。
 - 本轮仍不实现前端预览 UI、word-level forced alignment、karaoke captions、字幕人工编辑流或发布流。
+
+## 2026-05-20 Remotion 本地成片质量设计
+
+- 新增 [Remotion Local Render Quality Implementation Plan](./2026-05-20-remotion-local-render-quality-design-and-implementation-plan.md)。
+- 本轮计划面向 backlog P1「Remotion 本地成片质量」，目标是让本地 Remotion renderer 从最小 MP4 proof 演进到可审查的多轨竖屏成片路径。
+- 计划明确由 backend adapter 先把 `ComposeTimeline` + `AssetManifest` 规范化为 Remotion props，renderer 只消费规范化后的 visual/audio/subtitle clips，不在 React 侧猜测上游语义。
+- Implementation plan 拆为输入 props 规范化、多段视觉轨、镜头动效、口播音频轨、可选 BGM/SFX 轨、fake TTS WAV 化、本地画面质量 smoke、runtime smoke 增强和正式文档同步 9 个 TDD 任务。
+- 本轮仍不实现 DashScope 图生视频真实调用、BGM/SFX provider、前端预览 UI、发布流、人工审稿流或质量评分。
