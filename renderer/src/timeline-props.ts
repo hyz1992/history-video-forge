@@ -27,6 +27,41 @@ export interface SubtitleStyleProp {
   text_align: "left" | "center" | "right";
 }
 
+export type RenderVisualMediaType = "image" | "video";
+export type RenderAudioRole = "narration" | "bgm" | "sfx";
+
+export interface RenderMotionProp {
+  recipeType: string;
+  parameters: Record<string, unknown>;
+}
+
+export interface RenderVisualTransitionProp {
+  type: "crossfade";
+  durationSec: number;
+}
+
+export interface RenderVisualClipProp {
+  clipId: string;
+  artifactId: string;
+  mediaType: RenderVisualMediaType;
+  src: string;
+  startSec: number;
+  durationSec: number;
+  motion?: RenderMotionProp;
+  /** Transition into this clip from the previous visual clip. */
+  transition?: RenderVisualTransitionProp;
+}
+
+export interface RenderAudioClipProp {
+  clipId: string;
+  artifactId: string;
+  role: RenderAudioRole;
+  src: string;
+  startSec: number;
+  durationSec: number;
+  volume: number;
+}
+
 export interface TimelineVideoProps {
   timeline: unknown;
   assetManifest: unknown;
@@ -38,4 +73,6 @@ export interface TimelineVideoProps {
   subtitleText?: string;
   subtitleCues?: SubtitleCueProp[];
   subtitleStyle?: SubtitleStyleProp;
+  visualClips?: RenderVisualClipProp[];
+  audioClips?: RenderAudioClipProp[];
 }

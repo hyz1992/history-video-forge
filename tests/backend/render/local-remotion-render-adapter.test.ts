@@ -4,10 +4,8 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import {
-  buildRemotionInputProps,
-  createLocalRemotionRenderAdapter,
-} from "../../../backend/src/modules/render/local-remotion-render-adapter.js";
+import { createLocalRemotionRenderAdapter } from "../../../backend/src/modules/render/local-remotion-render-adapter.js";
+import { buildRemotionInputProps } from "../../../backend/src/modules/render/remotion-input-builder.js";
 import type {
   AssetManifestRecord,
   ComposeRecord,
