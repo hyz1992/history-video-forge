@@ -831,7 +831,7 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 
 ## Assets v1 字段（2026-05-18 已同步后端执行基础）
 
-`AssetManifest` 是 assets 阶段的正式输出对象。它描述资产执行结果清单，包含任务执行状态、artifact 元数据、分镜 route 和音频摘要。当前 assets 后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础，以及显式 DashScope TTS/文生图/image-to-video 路径；仍不包含真实 BGM/SFX provider、上传/预览 UI 或发布级素材运营流。
+`AssetManifest` 是 assets 阶段的正式输出对象。它描述资产执行结果清单，包含任务执行状态、artifact 元数据、分镜 route 和音频摘要。当前 assets 后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础、执行期 TTS 分块规范化、音频时长探测与字幕 timing metadata，以及显式 DashScope TTS/文生图/image-to-video 路径；仍不包含真实 BGM/SFX provider、上传/预览 UI 或发布级素材运营流。
 
 ### `AssetManifest`
 
@@ -891,9 +891,9 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 
 | artifact_type | 元数据关键字段 |
 |---|---|
-| `tts_chunk_audio` | `duration_sec`、`voice_profile_id`、`provider_voice_id`、`voice_profile_match_score`、`voice_profile_match_reasons`、`timing_source`、`sample_rate`、`format`、`tts_chunk_id`、`segment_ids`、`script_excerpt` |
-| `tts_merged_audio` | `duration_sec`、`voice_profile_id`、`provider_voice_id`、`voice_profile_match_score`、`voice_profile_match_reasons`、`timing_source`、`sample_rate`、`format`、`chunk_artifact_ids` |
-| `subtitle_track` | `format`、`source_tts_artifact_id`、`caption_count` |
+| `tts_chunk_audio` | `duration_sec`、`estimated_duration_sec`、`duration_source`、`voice_profile_id`、`provider_voice_id`、`voice_profile_match_score`、`voice_profile_match_reasons`、`timing_source`、`duration_probe_error`、`sample_rate`、`format`、`tts_chunk_id`、`segment_ids`、`script_excerpt` |
+| `tts_merged_audio` | `duration_sec`、`estimated_duration_sec`、`duration_source`、`voice_profile_id`、`provider_voice_id`、`voice_profile_match_score`、`voice_profile_match_reasons`、`timing_source`、`duration_probe_error`、`sample_rate`、`format`、`chunk_artifact_ids` |
+| `subtitle_track` | `format`、`source_tts_artifact_id`、`source_tts_chunk_artifact_ids`、`caption_count`、`duration_sec`、`timing_source` |
 | `image` | `width`、`height` |
 | `video` | `duration_sec`、`width`、`height`、`fps`、`provider_name`、`provider_job_id`、`source_image_artifact_id`、`model`、`resolution` |
 | `motion_recipe` | `recipe_type`、`source_image_artifact_id`、`parameters` |
@@ -923,7 +923,8 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 - DashScope image-to-video 成功时，`video` artifact 作为该 segment 的 `primary_visual_artifact_id`，`visual_route_type` 为 `video_clip`。
 - 同 segment 的 source image 会保留为 `fallback_visual_artifact_id`；图生视频缺失或失败时，compose/renderer 仍可使用 image + `motion_recipe` fallback。
 - DashScope image-to-video provider job 只属于 assets 阶段字段和 provider job 记录，不进入 compose 或 renderer 字段语义。
-- 字幕 artifact 当前来自本地 subtitle provider，跟随 TTS artifact 路由；字幕时间仍是估算值，直到后续接入 provider timestamps 或 forced alignment。
+- TTS timing source 当前支持 `estimated / audio_probe / provider_timestamp / forced_alignment / mixed`，并兼容旧值 `provider / aligned`。DashScope TTS 在 mocked WAV 和真实 WAV/PCM 可探测时写入 `audio_probe`，不可探测格式保守回落为 `estimated`。
+- 字幕 artifact 当前来自本地 subtitle provider，跟随 TTS chunk artifact 生成 chunk-level cues，并记录来源 TTS chunk ids、总时长和 timing source；多个来源不一致时写入 `mixed`。word-level provider timestamps 或 forced alignment 仍属于后续工作。
 
 ### `AssetAudioSummary`
 
@@ -960,6 +961,11 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 | `artifact_id` | 对应 artifact，可为 `null` |
 | `segment_ids` | 关联的 segment ID 列表 |
 | `script_excerpt` | 对应的口播原文片段 |
+
+说明：
+
+- assets run 会在执行期对 `tts_plan.chunks` 做本地确定性规范化，按句号/感叹号/问号/分号优先切分，超长无标点文本按字符窗口切分；该过程不修改持久化的 `AssetPlanRecord.planJson`。
+- 子分块继承父 chunk 的 segment route；例如父 chunk 对应 `sb_001`，其 `chunk_1_part_1`、`chunk_1_part_2` 都继续路由到 `sb_001`。
 
 ### `AssetsValidationResult`
 
@@ -1043,6 +1049,7 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 边界：
 
 - `ComposeTimeline` 不包含最终 MP4、Remotion composition 或 provider job；若输入 `AssetManifest` 已有 `video` artifact，timeline 只保存对该 artifact 的引用。
+- segment 时长优先消费 TTS chunk artifact 的 `duration_sec`；当多个 TTS chunks 指向同一 segment 时按总和累加，缺失 chunk 覆盖时才按 merged narration 总时长 fallback。
 - compose local validator 不判断画面质量、声音质量、审美、爆款节奏或历史相似度。
 - 缺失可选 BGM 只产生 warning，不阻断 `ready_for_render`。
 

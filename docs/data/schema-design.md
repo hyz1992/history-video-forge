@@ -476,7 +476,8 @@ Assets v1 已有第一版持久化记录。它是 `AssetPlanRecord` 之后的派
 - `manifest_json` 保存 `AssetManifest`，可包含 DashScope image-to-video 产出的 `video` artifact 及其 image fallback route。
 - `validation_result_json` 保存 `AssetsValidationResult`。
 - `execution_state_json` 记录 `execution_mode`、`voice_profile_id`、`voice_match_result`、`activated` 等执行状态；显式 `provider_mode=dashscope` 的 TTS、image 和 image-to-video provider 调用由 assets provider job 记录和 manifest artifact metadata 表达。
-- DashScope TTS artifact metadata 会保存本地 `voice_profile_id`、供应商 `provider_voice_id`、`sample_rate`、`format`、`timing_source` 以及可用的音色匹配信息。
+- DashScope TTS artifact metadata 会保存本地 `voice_profile_id`、供应商 `provider_voice_id`、`sample_rate`、`format`、`timing_source`、`duration_source`、`estimated_duration_sec` 以及可用的音色匹配信息；WAV/PCM 可探测时 `duration_sec` 来自音频探测，不可探测格式保守回落为估算值并记录 `duration_probe_error`。
+- 本地字幕 artifact metadata 会保存 `source_tts_chunk_artifact_ids`、`duration_sec` 与 `timing_source`；多个来源 timing source 不一致时记录为 `mixed`。
 - `asset_manifest_records` 不保存 compose timeline 或最终视频导出；图生视频只作为 assets artifact，不等同于最终导出 MP4。
 
 ## VoiceProfile 全局音色库映射（2026-05-19 已实现）

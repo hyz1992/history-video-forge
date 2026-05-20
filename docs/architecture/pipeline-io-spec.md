@@ -308,11 +308,13 @@ Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `Scr
 
 生成边界：
 
-- `buildInitialAssetManifest` 从 `AssetPlan` 确定性构建：为每个 plan task 创建 `AssetTaskExecution`，为 `render_motion_cue` 创建 inline artifact，为 TTS chunk 创建占位 artifact，构建 `SegmentAssetRoute` 和 `AssetAudioSummary`。
+- `buildInitialAssetManifest` 从执行期 `AssetPlan` 确定性构建：为每个 plan task 创建 `AssetTaskExecution`，为 `render_motion_cue` 创建 inline artifact，为 TTS chunk 创建占位 artifact，构建 `SegmentAssetRoute` 和 `AssetAudioSummary`。
+- assets run 在 manifest build 前会对 TTS chunks 做本地确定性规范化：长 chunk 按句子标点和最大字符数拆分，子分块继承父 chunk 的 segment route；该执行期计划不会写回或修改持久化的 `AssetPlanRecord.planJson`。
 - 默认测试与自动化路径不调用真实 provider；显式 `provider_mode=dashscope` 可调用 DashScope TTS、文生图 provider，并在 `AssetPlan.tasks` 存在 `video_clip` 任务时调用 DashScope image-to-video provider。
 - 音色库属于 assets 阶段的全局共享能力，不随单个项目复制。`AssetPlan.global_audio_strategy.voice_intent` 可携带 `VoiceIntent`；assets 执行前会 seed 全局预设音色、用 deterministic matcher 产出 `VoiceMatchResult`，并在没有合适音色时只创建本地 `VoiceProfile` 档案，不立即调用供应商。
 - DashScope TTS 执行时才做供应商音色懒解析：若选中的本地 `VoiceProfile` 已有 `provider_voice_id` 或属于系统音色，则直接用于 TTS；若缺失且 provider 为 `dashscope`，才调用声音设计接口创建 provider voice，并回写本地音色状态。
-- DashScope TTS artifact metadata 同时保留本地 `voice_profile_id` 与供应商 `provider_voice_id`，并记录 `sample_rate`、`format`、`timing_source` 以及可用的匹配信息。字幕仍由本地 subtitle provider 基于 TTS 文本/估算时长生成，`timing_source` 保持 `estimated`，直到后续接入 provider timestamp 或 forced alignment。
+- DashScope TTS artifact metadata 同时保留本地 `voice_profile_id` 与供应商 `provider_voice_id`，并记录 `sample_rate`、`format`、`timing_source`、`duration_source`、`estimated_duration_sec` 以及可用的匹配信息。WAV/PCM 可探测时 `duration_sec` 来自音频探测并标记 `audio_probe`；不可探测格式保守回落为 `estimated`。
+- 字幕仍由本地 subtitle provider 基于 TTS chunk 生成，当前为 chunk-level cues；subtitle artifact 会记录来源 chunk artifact ids、总时长和 timing source，来源混合时标记 `mixed`。provider timestamp 与 forced alignment 仍是后续增强，不属于当前默认实现。
 - 全局音色库当前通过 `storage/voice-profiles/voice-profiles.json` 持久化，文档版本为 `voice_profiles_v1`。`runAssetsGeneration()` 会在项目存在 `storageRootDir` 且 db 尚未显式配置时自动接线该库；测试和脚本也可显式配置临时 root。
 - 音色库加载后只 seed 缺失预设，不覆盖已存在档案。成功选择/复用音色会回写 `usage_count` 与 `last_used_at`；供应商音色创建成功会回写 `provider_voice_id`、`provider_status`、`preview_audio_uri` 与 `updated_at`。
 - `storage/voice-profiles/voice-profiles.json` 属于需要备份的运营状态，不进入默认 git 提交；清理或迁移 storage 时必须保留该文件，避免丢失真实 provider voice id 后重复创建付费供应商音色。
@@ -380,7 +382,7 @@ Compose v1 消费 active `AssetManifestRecord`，输出可持久化的 `ComposeT
 
 - `buildComposeTimeline` 从 `AssetManifest` 确定性构建时间轴。
 - 总时长优先来自 merged TTS artifact 的 `metadata.duration_sec`。
-- segment 起止时间优先来自 TTS chunk duration；缺失时可用总时长按 segment route 做 fallback，并在 notes 中记录 `compose_chunk_timing_fallback_used`。
+- segment 起止时间优先来自 TTS chunk duration；同一 segment 对应多个 TTS chunks 时会累加这些 chunk 时长。缺失时可用总时长按 segment route 做 fallback，并在 notes 中记录 `compose_chunk_timing_fallback_used`。
 - visual track 来自 `segment_routes` 的主视觉 artifact、fallback 视觉 artifact 与 motion recipe。
 - narration track 来自 `audio_summary.tts_merged_artifact_id`。
 - subtitle track 来自 `audio_summary.subtitle_artifact_id`。

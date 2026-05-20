@@ -32,18 +32,18 @@
 ## P0: TTS 分句、真实时长与字幕 timing
 
 - [x] 完成 TTS chunking / 真实时长 / 字幕 timing 正式 design + implementation plan。
-- [ ] 实现 TTS chunking 策略：按句、按 segment、按最大字符数和停顿规则切分。
-- [ ] 记录每个 TTS chunk 的真实音频时长，替代纯 estimated duration。
-- [ ] 字幕 artifact 增加 timing source 分层：`estimated / provider_timestamp / forced_alignment`。
+- [x] 实现 TTS chunking 策略：按句、按 segment、按最大字符数和停顿规则切分；子分块继承父 chunk segment route。
+- [x] 记录每个 TTS chunk 的真实音频时长：DashScope WAV/PCM 可探测时写入 `audio_probe`，不可探测格式 fallback 到 estimated。
+- [x] 字幕 artifact 增加 timing source 分层：当前支持 `estimated / audio_probe / mixed`，schema 预留 `provider_timestamp / forced_alignment`。
 - [ ] 接入 provider timestamps 或本地 forced alignment 的设计方案。
-- [ ] 更新 `SegmentAssetRoute` 与 `AssetAudioSummary` 的字幕连续性测试。
-- [ ] 确保 compose 优先消费真实 TTS duration 和字幕 timing。
+- [x] 更新 `SegmentAssetRoute` 与 `AssetAudioSummary` 的字幕连续性测试。
+- [x] 确保 compose 优先消费真实 TTS duration；同一 segment 多个 TTS chunk 时按时长累加。
 
 验收建议：
 
-- [ ] TTS artifact metadata 有真实 duration。
-- [ ] subtitle cues 与 TTS chunk 对齐。
-- [ ] compose timeline 不再只依赖估算时长。
+- [x] TTS artifact metadata 有真实 duration。
+- [x] subtitle cues 与 TTS chunk 对齐。
+- [x] compose timeline 不再只依赖估算时长。
 
 ## P1: 字幕样式与 renderer 消费
 
@@ -105,7 +105,7 @@
 1. [ ] 写 `TTS / Subtitle / Audio Completion Design`。
 2. [ ] 写 `TTS / Subtitle / Audio Completion Implementation Plan`。
 3. [ ] 先做音色库持久化与 provider voice 跨任务复用。
-4. [ ] 再做 TTS 真实时长回写与字幕 timing/alignment。
+4. [x] 再做 TTS 真实时长回写与字幕 timing；provider timestamp / forced alignment 仍作为后续增强。
 5. [ ] 然后补 Remotion 本地成片 smoke。
 6. [ ] 最后再安排图生视频真实小样本验证。
 
