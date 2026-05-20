@@ -140,7 +140,7 @@ function makeFullAssetPlan(): AssetPlan {
         cost_tier: "low",
         initial_status: "planned",
       },
-      // bgm_cue (optional — no adapter registered, remains planned)
+      // bgm_cue (optional; provider skips artifact when no library item matches)
       {
         task_id: "task_bgm",
         order: 5,
@@ -304,7 +304,7 @@ describe("assets execution regression", () => {
       "assets_artifact_placeholder_unresolved",
     );
 
-    // bgm_cue has no adapter → stays planned, and execution doesn't produce a bgm artifact
+    // bgm_cue has no matching library item here, so it doesn't produce a bgm artifact
     const bgmExec = manifest.executions.find((e) => e.task_id === "task_bgm");
     expect(bgmExec).toBeDefined();
 
@@ -328,6 +328,175 @@ describe("assets execution regression", () => {
     expect(manifest.audio_summary.tts_merged_artifact_id).toBeDefined();
     expect(manifest.audio_summary.subtitle_artifact_id).toBeDefined();
     expect(body.local_validation.errors).not.toContain("assets_execution_incomplete");
+  });
+
+  it("auto_available runs local BGM/SFX providers and routes artifacts", async () => {
+    const { db, project } = await prepareFullProject();
+    tempDir = join(tmpdir(), `reg-audio-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+    project.storageRootDir = tempDir;
+
+    await saveMediaLibraryItem(db, {
+      library_item_id: "bgm_global_item",
+      type: "bgm",
+      file_uri: "library://bgm/global.wav",
+      mime_type: "audio/wav",
+      duration_sec: 8,
+      loopable: true,
+      tags: ["background"],
+      mood_tags: ["tense"],
+      license: {
+        license_type: "cc0",
+        commercial_use_allowed: true,
+        attribution_required: false,
+      },
+      file_hash: "sha256:bgm-global",
+      imported_at: "2026-05-20T00:00:00.000Z",
+      approved_for_use: true,
+    });
+    await saveMediaLibraryItem(db, {
+      library_item_id: "bgm_span_item",
+      type: "bgm",
+      file_uri: "library://bgm/span.wav",
+      mime_type: "audio/wav",
+      duration_sec: 6,
+      loopable: true,
+      tags: ["drum"],
+      mood_tags: ["steady"],
+      license: {
+        license_type: "cc0",
+        commercial_use_allowed: true,
+        attribution_required: false,
+      },
+      file_hash: "sha256:bgm-span",
+      imported_at: "2026-05-20T00:00:00.000Z",
+      approved_for_use: true,
+    });
+    await saveMediaLibraryItem(db, {
+      library_item_id: "sfx_hit_item",
+      type: "sfx",
+      file_uri: "library://sfx/hit.wav",
+      mime_type: "audio/wav",
+      duration_sec: 1.2,
+      loopable: false,
+      tags: ["hit"],
+      mood_tags: ["sharp"],
+      license: {
+        license_type: "cc0",
+        commercial_use_allowed: true,
+        attribution_required: false,
+      },
+      file_hash: "sha256:sfx-hit",
+      imported_at: "2026-05-20T00:00:00.000Z",
+      approved_for_use: true,
+    });
+
+    const plan = makeFullAssetPlan();
+    plan.tasks = [
+      ...plan.tasks.filter((task) => task.task_id !== "task_bgm"),
+      {
+        task_id: "sfx_hit",
+        order: 5,
+        task_type: "sfx_cue",
+        source_segment_id: "sb_001",
+        source_excerpt: "hit",
+        production_intent: "select hit sound effect",
+        recommended_mode: "auto",
+        provider_hint: "local_sfx",
+        prompt_draft: null,
+        parameters: {
+          sfx_tags: ["hit"],
+          mood_tags: ["sharp"],
+        },
+        manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] },
+        risk_notes: [],
+        cost_tier: "low",
+        initial_status: "planned",
+      },
+      {
+        task_id: "bgm_global",
+        order: 6,
+        task_type: "bgm_cue",
+        source_segment_id: null,
+        source_excerpt: "global bgm",
+        production_intent: "select global background music",
+        recommended_mode: "auto",
+        provider_hint: "local_bgm",
+        prompt_draft: null,
+        parameters: {
+          required_tags: ["background"],
+          mood_tags: ["tense"],
+          scope: "global",
+        },
+        manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] },
+        risk_notes: [],
+        cost_tier: "low",
+        initial_status: "planned",
+      },
+      {
+        task_id: "bgm_span",
+        order: 7,
+        task_type: "bgm_cue",
+        source_segment_id: "sb_001",
+        source_excerpt: "span bgm",
+        production_intent: "select span background music",
+        recommended_mode: "auto",
+        provider_hint: "local_bgm",
+        prompt_draft: null,
+        parameters: {
+          required_tags: ["drum"],
+          mood_tags: ["steady"],
+          scope: "segment_span",
+          segment_ids: ["sb_001", "sb_002"],
+        },
+        manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] },
+        risk_notes: [],
+        cost_tier: "low",
+        initial_status: "planned",
+      },
+    ];
+    plan.cost_summary = {
+      total_tasks: plan.tasks.length,
+      by_type: {
+        tts_audio: 1,
+        subtitle_track: 1,
+        image_still: 2,
+        render_motion_cue: 1,
+        sfx_cue: 1,
+        bgm_cue: 2,
+      },
+      by_cost_tier: { low: plan.tasks.length },
+      estimated_provider_calls: plan.tasks.length - 1,
+      notes: [],
+    };
+    db.assetPlanRecords.get(ASSET_PLAN_RECORD_ID)!.planJson = plan;
+
+    const response = await runAssetsGeneration({
+      db,
+      project,
+      voiceProfileId: "voice_plan",
+      executionMode: "auto_available",
+    });
+    const body = response.body as { manifest: AssetManifest };
+    const manifest = body.manifest;
+
+    const bgmArtifacts = manifest.artifacts.filter(
+      (artifact) => artifact.artifact_type === "bgm_audio",
+    );
+    const sfxArtifacts = manifest.artifacts.filter(
+      (artifact) => artifact.artifact_type === "sfx_audio",
+    );
+
+    expect(bgmArtifacts).toHaveLength(2);
+    expect(sfxArtifacts).toHaveLength(1);
+    expect(manifest.audio_summary.bgm_placements).toMatchObject([
+      { source_task_id: "bgm_global", artifact_id: "artifact_bgm_bgm_global" },
+      { source_task_id: "bgm_span", artifact_id: "artifact_bgm_bgm_span" },
+    ]);
+    expect(
+      manifest.segment_routes.find((route) => route.segment_id === "sb_001")
+        ?.sfx_artifact_ids,
+    ).toContain("artifact_sfx_sfx_hit");
   });
 
   it("dry_run blocks readiness when required tasks are not terminal", async () => {

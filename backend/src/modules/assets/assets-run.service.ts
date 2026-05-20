@@ -24,6 +24,8 @@ import { executeAssetManifest } from "./assets-execution-engine.js";
 import { createFakeTtsProvider } from "./providers/fake-tts-provider.js";
 import { createFakeImageProvider } from "./providers/fake-image-provider.js";
 import { createLocalSubtitleProvider } from "./providers/local-subtitle-provider.js";
+import { createLocalBgmProvider } from "./providers/local-bgm-provider.js";
+import { createLocalSfxProvider } from "./providers/local-sfx-provider.js";
 import { createDashscopeTtsProvider } from "./providers/dashscope/dashscope-tts-provider.js";
 import { createDashscopeImageProvider } from "./providers/dashscope/dashscope-image-provider.js";
 import { createDashscopeImageToVideoProvider } from "./providers/dashscope/dashscope-image-to-video-provider.js";
@@ -224,6 +226,8 @@ function buildProviderRegistry(input: {
         pollIntervalMs: dashscope.imageToVideoPollIntervalMs,
         maxPollAttempts: dashscope.imageToVideoMaxPollAttempts,
       }),
+      createLocalSfxProvider(input.db),
+      createLocalBgmProvider(input.db),
     ]);
   }
 
@@ -231,6 +235,8 @@ function buildProviderRegistry(input: {
     createFakeTtsProvider(),
     createLocalSubtitleProvider(),
     createFakeImageProvider(),
+    createLocalSfxProvider(input.db),
+    createLocalBgmProvider(input.db),
   ]);
 }
 
@@ -312,9 +318,14 @@ function applyArtifactToManifestRoutes(input: {
   }
 
   if (artifact.artifact_type === "bgm_audio" || artifact.artifact_type === "bgm_selection") {
-    const placement = manifest.audio_summary.bgm_placements.find(
-      (item) => item.artifact_id === null,
-    );
+    const expectedLegacyPlacementId = `bgm_place_${planTask.task_id}`;
+    const placement =
+      manifest.audio_summary.bgm_placements.find(
+        (item) => item.source_task_id === planTask.task_id,
+      ) ??
+      manifest.audio_summary.bgm_placements.find(
+        (item) => item.bgm_placement_id === expectedLegacyPlacementId,
+      );
     if (placement) {
       placement.artifact_id = artifact.artifact_id;
     }

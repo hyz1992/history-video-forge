@@ -389,6 +389,40 @@ function applyArtifactRoutes(
         break;
       }
 
+      case "sfx_audio":
+      case "sfx_selection": {
+        pushUnique(
+          manifest.audio_summary.sfx_artifact_ids,
+          artifact.artifact_id,
+        );
+
+        if (planTask.source_segment_id) {
+          const route = manifest.segment_routes.find(
+            (item) => item.segment_id === planTask.source_segment_id,
+          );
+          if (route) {
+            pushUnique(route.sfx_artifact_ids, artifact.artifact_id);
+          }
+        }
+        break;
+      }
+
+      case "bgm_audio":
+      case "bgm_selection": {
+        const expectedLegacyPlacementId = `bgm_place_${planTask.task_id}`;
+        const placement =
+          manifest.audio_summary.bgm_placements.find(
+            (item) => item.source_task_id === planTask.task_id,
+          ) ??
+          manifest.audio_summary.bgm_placements.find(
+            (item) => item.bgm_placement_id === expectedLegacyPlacementId,
+          );
+        if (placement) {
+          placement.artifact_id = artifact.artifact_id;
+        }
+        break;
+      }
+
       default:
         break;
     }
