@@ -4,7 +4,10 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createLocalRemotionRenderAdapter } from "../../../backend/src/modules/render/local-remotion-render-adapter.js";
+import {
+  buildRemotionInputProps,
+  createLocalRemotionRenderAdapter,
+} from "../../../backend/src/modules/render/local-remotion-render-adapter.js";
 import type {
   AssetManifestRecord,
   ComposeRecord,
@@ -250,6 +253,30 @@ describe("local Remotion render adapter", () => {
       await rm(tempDir, { force: true, recursive: true });
       tempDir = null;
     }
+  });
+
+  it("passes subtitle cues and style into Remotion input props", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "local-remotion-props-"));
+    const fixtureFiles = await writeFixtureFiles(tempDir);
+    const props = await buildRemotionInputProps({
+      timeline: makeReadyComposeTimeline(2),
+      manifest: makeReadyAssetManifestRecordWithFixtureFiles({
+        ...fixtureFiles,
+        durationSec: 2,
+      }).manifestJson as AssetManifest,
+      assetBaseDir: tempDir,
+      width: 540,
+      height: 960,
+      fps: 30,
+    });
+
+    expect(props.subtitleCues).toEqual([
+      { start_sec: 0, end_sec: 2, text: "Opening pressure." },
+    ]);
+    expect(props.subtitleStyle).toMatchObject({
+      position: "bottom",
+      text_align: "center",
+    });
   });
 
   it("renders a fixture timeline to a local MP4 artifact", async () => {

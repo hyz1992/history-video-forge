@@ -25,6 +25,10 @@ import type {
   RenderAdapterResult,
   RenderProbeResult,
 } from "./render-adapter";
+import {
+  normalizeSubtitleStyle,
+  parseSubtitleCues,
+} from "./subtitle-cue-reader.js";
 
 const DEFAULT_COMPOSITION_ID = "TimelineVideo";
 
@@ -176,43 +180,72 @@ function getSubtitleArtifact(input: {
   return indexArtifacts(input.manifest).get(subtitleClip.artifact_id) ?? null;
 }
 
-function stripSrtTiming(content: string): string {
-  const lines = content
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .filter((line) => !/^\d+$/.test(line))
-    .filter((line) => !line.includes("-->"));
-
-  return lines.join(" ");
-}
-
-async function readSubtitleText(input: {
-  timeline: ComposeTimeline;
-  manifest: AssetManifest;
+async function readSubtitleFileContent(input: {
+  artifact: AssetArtifact;
+  assetBaseDir: string;
 }): Promise<string | undefined> {
-  const subtitleArtifact = getSubtitleArtifact(input);
-  if (!subtitleArtifact) {
-    return undefined;
-  }
+  const { artifact, assetBaseDir } = input;
   if (
-    subtitleArtifact.file_uri.startsWith("memory://") ||
-    subtitleArtifact.file_uri.startsWith("inline://") ||
-    subtitleArtifact.file_uri.startsWith("http://") ||
-    subtitleArtifact.file_uri.startsWith("https://")
+    artifact.file_uri.startsWith("memory://") ||
+    artifact.file_uri.startsWith("inline://") ||
+    artifact.file_uri.startsWith("http://") ||
+    artifact.file_uri.startsWith("https://")
   ) {
     return undefined;
   }
 
-  const filePath = subtitleArtifact.file_uri.startsWith("file://")
-    ? fileURLToPath(subtitleArtifact.file_uri)
-    : subtitleArtifact.file_uri;
+  const filePath = artifact.file_uri.startsWith("file://")
+    ? fileURLToPath(artifact.file_uri)
+    : isAbsolute(artifact.file_uri)
+      ? artifact.file_uri
+      : join(assetBaseDir, artifact.file_uri);
 
   try {
-    return stripSrtTiming(await readFile(filePath, "utf8"));
+    return await readFile(filePath, "utf8");
   } catch {
     return undefined;
   }
+}
+
+export async function buildRemotionInputProps(input: {
+  timeline: ComposeTimeline;
+  manifest: AssetManifest;
+  assetBaseDir: string;
+  width: number;
+  height: number;
+  fps: number;
+}) {
+  const subtitleArtifact = getSubtitleArtifact({
+    timeline: input.timeline,
+    manifest: input.manifest,
+  });
+  const subtitleContent = subtitleArtifact
+    ? await readSubtitleFileContent({
+        artifact: subtitleArtifact,
+        assetBaseDir: input.assetBaseDir,
+      })
+    : undefined;
+
+  return {
+    timeline: input.timeline,
+    assetManifest: await toBrowserManifest({
+      manifest: input.manifest,
+      assetBaseDir: input.assetBaseDir,
+    }),
+    assetBaseDir: input.assetBaseDir,
+    width: input.width,
+    height: input.height,
+    fps: input.fps,
+    subtitleCues: subtitleContent
+      ? parseSubtitleCues({
+          format: String(subtitleArtifact?.metadata.format ?? "srt"),
+          content: subtitleContent,
+        })
+      : [],
+    subtitleStyle: normalizeSubtitleStyle(
+      subtitleArtifact?.metadata.subtitle_style,
+    ),
+  };
 }
 
 function makeProbe(input: {
@@ -251,15 +284,14 @@ export function createLocalRemotionRenderAdapter(
         Math.round(timeline.duration_sec * input.profile.fps),
       );
       const assetBaseDir = input.outputDir;
-      const inputProps = {
+      const inputProps = await buildRemotionInputProps({
         timeline,
-        assetManifest: await toBrowserManifest({ manifest, assetBaseDir }),
+        manifest,
         assetBaseDir,
         width: input.profile.width,
         height: input.profile.height,
         fps: input.profile.fps,
-        subtitleText: await readSubtitleText({ timeline, manifest }),
-      };
+      });
 
       const serveUrl = await bundle({
         entryPoint,
