@@ -168,3 +168,10 @@
 - 当前验证入口包括 `tests/backend/render/remotion-local-quality-smoke.test.ts`、`tests/backend/render/remotion-subtitle-still-smoke.test.ts`、`tests/harness/render-runtime-smoke.test.ts` 与 `npm run render:remotion:smoke`。静帧 smoke 需要 headless Chromium；本地音频当前以内联 data URI 供 Remotion 消费，长音频静态资源服务仍可作为后续优化。
 - 该计划已被正式架构、数据文档、backlog 与 smoke 测试吸收；后续不要从归档 plan 继续执行新任务，如需扩展 BGM/SFX provider、真实图生视频验证或前端预览，应新建当前日期的 design + implementation plan。
 - 本轮仍不实现 DashScope 图生视频真实调用、BGM/SFX provider、前端预览 UI、发布流、人工审稿流或质量评分。
+
+## 2026-05-20 BGM / SFX 设计
+
+- 新增 [BGM / SFX Design](./2026-05-20-bgm-sfx-design.md)。
+- 本轮设计面向 backlog P1「BGM / SFX」，先收束本地素材库字段、cue 到素材选择规则、fake/local provider 基线和 compose/renderer 消费边界。
+- 设计选择先走 approved media library + deterministic fake/local WAV artifact，不默认接真实付费 provider，不做上传/预览 UI、发布流、人工审稿或质量评分。
+- 下一步需要在该设计通过审查后，再写独立 implementation plan，并按 TDD 小步执行。
