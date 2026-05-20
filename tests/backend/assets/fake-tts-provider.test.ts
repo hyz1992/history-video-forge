@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -232,6 +232,25 @@ describe("fake TTS provider (via execution engine)", () => {
 
     // Merged duration = sum of chunks
     expect((mergedArtifacts[0].metadata as Record<string, unknown>).duration_sec).toBe(5.5);
+    expect(mergedArtifacts[0]!.file_uri.endsWith(".wav")).toBe(true);
+    expect(mergedArtifacts[0]!.metadata).toMatchObject({
+      format: "wav",
+      duration_source: "estimated",
+      timing_source: "estimated",
+    });
+
+    const mergedBytes = await readFile(mergedArtifacts[0]!.file_uri);
+    expect(mergedBytes.subarray(0, 4).toString("ascii")).toBe("RIFF");
+    expect(mergedBytes.subarray(8, 12).toString("ascii")).toBe("WAVE");
+
+    for (const chunk of chunkArtifacts) {
+      expect(chunk.file_uri.endsWith(".wav")).toBe(true);
+      expect(chunk.metadata).toMatchObject({
+        format: "wav",
+        duration_source: "estimated",
+        timing_source: "estimated",
+      });
+    }
 
     // tts_chunk_routes updated with artifact_ids
     const route1 = result.manifest.audio_summary.tts_chunk_routes.find(
