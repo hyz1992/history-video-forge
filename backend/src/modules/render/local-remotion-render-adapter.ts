@@ -151,7 +151,7 @@ export function createLocalRemotionRenderAdapter(
         codec: "h264",
         outputLocation,
         overwrite: true,
-        muted: true,
+        muted: false,
         logLevel: "error",
         browserExecutable,
         binariesDirectory: options.binariesDirectory ?? null,
@@ -192,6 +192,9 @@ export function createLocalRemotionRenderAdapter(
           renderer: "remotion",
           composition_id: compositionId,
           duration_in_frames: durationInFrames,
+          audio_clip_count: inputProps.audioClips?.length ?? 0,
+          visual_clip_count: inputProps.visualClips?.length ?? 0,
+          subtitle_cue_count: inputProps.subtitleCues?.length ?? 0,
         },
       };
     },

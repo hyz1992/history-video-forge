@@ -50,6 +50,33 @@ function getImageMimeType(filePath: string): string {
   return "image/png";
 }
 
+function getAudioMimeType(filePath: string): string {
+  const normalized = filePath.toLowerCase();
+  if (normalized.endsWith(".mp3")) {
+    return "audio/mpeg";
+  }
+  if (normalized.endsWith(".flac")) {
+    return "audio/flac";
+  }
+  if (normalized.endsWith(".aac")) {
+    return "audio/aac";
+  }
+  if (normalized.endsWith(".m4a")) {
+    return "audio/mp4";
+  }
+
+  return "audio/wav";
+}
+
+function isAudioArtifact(artifact: AssetArtifact): boolean {
+  return (
+    artifact.artifact_type === "tts_chunk_audio" ||
+    artifact.artifact_type === "tts_merged_audio" ||
+    artifact.artifact_type === "sfx_audio" ||
+    artifact.artifact_type === "bgm_audio"
+  );
+}
+
 async function toBrowserFileUri(input: {
   artifact: AssetArtifact;
   assetBaseDir: string;
@@ -60,6 +87,15 @@ async function toBrowserFileUri(input: {
     if (localFilePath) {
       const imageBytes = await readFile(localFilePath);
       return `data:${getImageMimeType(localFilePath)};base64,${imageBytes.toString(
+        "base64",
+      )}`;
+    }
+  }
+  if (isAudioArtifact(artifact)) {
+    const localFilePath = getLocalFilePath(artifact.file_uri, assetBaseDir);
+    if (localFilePath) {
+      const audioBytes = await readFile(localFilePath);
+      return `data:${getAudioMimeType(localFilePath)};base64,${audioBytes.toString(
         "base64",
       )}`;
     }

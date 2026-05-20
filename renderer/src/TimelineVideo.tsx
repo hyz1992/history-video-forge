@@ -1,14 +1,20 @@
 import React from "react";
 import {
   AbsoluteFill,
+  Audio,
   Img,
   OffthreadVideo,
+  Sequence,
   interpolate,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
 
 import type { RenderVisualClipProp, TimelineVideoProps } from "./timeline-props";
+import {
+  getAudioSequenceFrames,
+  normalizeAudioVolume,
+} from "./audio-rendering";
 import {
   DEFAULT_SUBTITLE_STYLE_PROP,
   getActiveSubtitleCue,
@@ -148,6 +154,23 @@ export function TimelineVideo(props: TimelineVideoProps) {
           }}
         />
       ) : null}
+      {(props.audioClips ?? []).map((clip) => {
+        const sequence = getAudioSequenceFrames({
+          startSec: clip.startSec,
+          durationSec: clip.durationSec,
+          fps: props.fps,
+        });
+
+        return (
+          <Sequence
+            key={clip.clipId}
+            from={sequence.from}
+            durationInFrames={sequence.durationInFrames}
+          >
+            <Audio src={clip.src} volume={normalizeAudioVolume(clip.volume)} />
+          </Sequence>
+        );
+      })}
       {activeSubtitle ? (
         <div
           data-testid="timeline-subtitle"

@@ -379,7 +379,9 @@ describe("buildRemotionInputProps", () => {
         volume: 0.8,
       },
     ]);
-    expect(props.audioClips[0]?.src).toMatch(/^file:\/\/\//);
+    expect(props.audioClips[0]?.src).toMatch(/^data:audio\/wav;base64,/);
+    expect(props.audioClips[1]?.src).toMatch(/^data:audio\/wav;base64,/);
+    expect(props.audioClips[2]?.src).toMatch(/^data:audio\/wav;base64,/);
     expect(props.subtitleCues).toEqual([
       { start_sec: 0, end_sec: 2, text: "Hello." },
     ]);
