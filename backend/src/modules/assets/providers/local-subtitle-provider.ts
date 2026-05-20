@@ -20,6 +20,7 @@ import {
   buildVttFromCaptions,
   type TtsSubtitleChunk,
 } from "../assets-subtitle-generator.js";
+import { DEFAULT_SUBTITLE_STYLE } from "../../../../../shared/src/index.js";
 
 type SubtitleTimingSource =
   | "estimated"
@@ -149,6 +150,7 @@ export function createLocalSubtitleProvider(): AssetProviderAdapter {
               ? {}
               : { duration_sec: subtitleDurationSec }),
             timing_source: subtitleTimingSource,
+            subtitle_style: DEFAULT_SUBTITLE_STYLE,
           },
         },
         {
@@ -166,6 +168,7 @@ export function createLocalSubtitleProvider(): AssetProviderAdapter {
               ? {}
               : { duration_sec: subtitleDurationSec }),
             timing_source: subtitleTimingSource,
+            subtitle_style: DEFAULT_SUBTITLE_STYLE,
           },
         },
       ];

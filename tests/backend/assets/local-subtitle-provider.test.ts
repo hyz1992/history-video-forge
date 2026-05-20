@@ -356,6 +356,11 @@ describe("local subtitle provider (via execution engine)", () => {
         artifact.artifact_type === "subtitle_track" &&
         artifact.metadata.format === "srt",
     );
+    const vttArtifact = result.manifest.artifacts.find(
+      (artifact) =>
+        artifact.artifact_type === "subtitle_track" &&
+        artifact.metadata.format === "vtt",
+    );
 
     expect(srtArtifact?.metadata).toMatchObject({
       format: "srt",
@@ -367,6 +372,20 @@ describe("local subtitle provider (via execution engine)", () => {
       caption_count: 2,
       duration_sec: 3,
       timing_source: "audio_probe",
+      subtitle_style: {
+        style_id: "subtitle_style_default_vertical",
+        position: "bottom",
+        text_align: "center",
+        max_lines: 2,
+      },
+    });
+    expect(vttArtifact?.metadata).toMatchObject({
+      subtitle_style: {
+        style_id: "subtitle_style_default_vertical",
+        position: "bottom",
+        text_align: "center",
+        max_lines: 2,
+      },
     });
   });
 
