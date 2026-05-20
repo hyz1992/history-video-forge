@@ -1,18 +1,18 @@
-# BGM / SFX Library And Rendering Follow-Up Implementation Plan
+# BGM/SFX 默认素材库与渲染补强实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **给执行 agent 的要求：** 必须使用 `superpowers:subagent-driven-development`（推荐）或 `superpowers:executing-plans` 逐任务执行。本计划使用 checkbox（`- [ ]`）跟踪进度。每个可验证任务完成后必须用中文提交。
 
-**Goal:** Add a small, reviewable default BGM/SFX library workflow and close the three known rendering/validation gaps: BGM fade, BGM loop, and clearer optional BGM warning.
+**目标：** 建立一套小而可审查的默认 BGM/SFX 素材库工作流，并补齐三个已知缺口：BGM 淡入淡出真正渲染、BGM 可循环播放、assets 阶段对可选 BGM artifact 缺失给出更清晰的告警。
 
-**Architecture:** Keep BGM/SFX assets-owned. Downloaded or user-provided audio is represented as explicit media-library seed metadata with license evidence; assets providers still resolve cues into concrete artifacts, compose still builds tracks, and renderer consumes render-ready audio props. Rendering behavior is improved by passing fade/loop information into Remotion rather than changing upstream planning semantics.
+**架构：** BGM/SFX 仍归 assets 阶段负责：素材库只提供明确授权和标签化的候选素材，assets provider 把 `bgm_cue` / `sfx_cue` 解析成具体 `bgm_audio` / `sfx_audio` artifact，compose 只组织时间轴，renderer 只消费已存在的音频 props。真实下载的音频文件必须带来源、授权、hash 与人工确认；本计划第一阶段优先做 元数据优先 seed，不默认把第三方二进制音频塞进仓库。
 
-**Tech Stack:** TypeScript, Zod shared schemas, Vitest, existing media-library repository, existing assets provider adapters, existing Remotion `Audio`/`Sequence` path.
+**技术栈：** TypeScript、Zod shared schema、Vitest、现有 media-library repository、现有 assets provider adapter、现有 Remotion `Audio` / `Sequence` 渲染路径。
 
 ---
 
-## Required Reading
+## 必读文件
 
-Before executing any task, read:
+执行任何任务前，先阅读：
 
 - `AGENTS.md`
 - `docs/plans/2026-05-20-bgm-sfx-design.md`
@@ -30,27 +30,27 @@ Before executing any task, read:
 - `backend/src/modules/render/remotion-input-builder.ts`
 - `harness/scripts/runtime/render-runtime-smoke.ts`
 
-## Non-Goals
+## 不做范围
 
-- Do not add real paid BGM/SFX provider integration.
-- Do not add upload UI, preview UI, publish flow, human review, or quality scoring.
-- Do not infer tags from script text with keyword matching.
-- Do not add ducking, loudness normalization, beat sync, waveform analysis, or automatic music editing.
-- Do not run real DashScope image-to-video.
-- Do not touch `storage/topic-candidate-library/`.
-- Do not commit downloaded third-party audio binaries unless the task explicitly says to vendor a tiny CC0 fixture and the user has approved the exact files.
+- 不接真实付费 BGM/SFX provider。
+- 不做上传 UI、预览 UI、发布流、人工审稿或质量评分。
+- 不用关键词黑名单或脚本文本关键词匹配来“猜”标签。
+- 不做 ducking、响度归一化、节拍同步、波形分析或自动剪音乐。
+- 不跑真实 DashScope 图生视频。
+- 不触碰 `storage/topic-candidate-library/`。
+- 不提交下载来的第三方音频二进制，除非用户先明确批准具体来源和具体文件。
 
-## Source And License Policy
+## 来源与授权策略
 
-Preferred first-batch sources:
+第一批素材优先来源：
 
-- OpenGameArt CC0 collections, especially pages that clearly show `License(s): CC0`.
-- Pixabay audio only when the download page and license evidence are retained; Pixabay allows commercial video use when the music is embedded in a larger creative work, but the project must retain proof of source URL and license.
+- OpenGameArt 的 CC0 集合，尤其是页面明确标注 `License(s): CC0` 的素材。
+- Pixabay 音频可以作为候选，但必须保留下载页面、license 证据和来源 URL；Pixabay 音频可用于嵌入较大创作作品的视频，但不应把素材独立再分发。
 
-For every imported item, store:
+每条入库素材必须保留：
 
 - `library_item_id`
-- `type`: `bgm` or `sfx`
+- `type`: `bgm` 或 `sfx`
 - `file_uri`
 - `mime_type`
 - `duration_sec`
@@ -60,15 +60,15 @@ For every imported item, store:
 - `license.license_type`
 - `license.commercial_use_allowed`
 - `license.attribution_required`
-- `license.attribution_text` when required
+- `license.attribution_text`（需要署名时必填）
 - `license.source_url`
 - `file_hash`
 - `imported_at`
 - `approved_for_use`
 
-First batch recommendation:
+第一批建议素材规模：
 
-| Kind | Count | Required tags | Mood tags |
+| 类型 | 数量 | 必需 tags | 情绪 tags |
 |---|---:|---|---|
 | BGM | 1 | `background`, `drone` | `tense`, `dark`, `slow` |
 | BGM | 1 | `background`, `orchestral` | `solemn`, `historical`, `slow` |
@@ -88,31 +88,29 @@ First batch recommendation:
 
 ---
 
-## File Map
+## 文件地图
 
-Create:
+新增：
 
 - `backend/src/modules/assets/default-audio-library.ts`  
-  Contains the default seed item definitions or a loader for an external JSON seed. No network calls.
+  默认音频素材库 seed 定义。只存元数据，不联网下载。
 - `tests/backend/assets/default-audio-library.test.ts`  
-  Validates seed entries, required tags, license evidence, commercial-use gating, and deterministic IDs.
+  验证 seed 条目、必需标签、授权证据、商用许可和稳定 ID。
 
-Modify:
+修改：
 
-- `shared/src/assets/media-library.schema.ts`  
-  Only if a stable field such as `source_url` is insufficient for evidence. Prefer no schema change unless tests prove one is needed.
 - `backend/src/modules/assets/media-library.repository.ts`  
-  Add a small idempotent `seedMediaLibraryItems()` helper if needed.
+  如有需要，新增幂等 `seedMediaLibraryItems()`。
 - `backend/src/modules/assets/assets-local-validator.ts`  
-  Add clearer warning when BGM placements exist but no placement has an artifact.
+  增加“有 BGM placement 但未附着 artifact”的明确告警。
 - `backend/src/modules/render/remotion-input-builder.ts`  
-  Add BGM fade/loop fields to `RenderAudioClipProp`.
+  将 BGM fade / loop 信息传给 renderer props。
 - `renderer/src/timeline-props.ts`  
-  Extend audio clip props with optional `fadeInSec`, `fadeOutSec`, and `loop`.
+  扩展 audio clip props：`fadeInSec`、`fadeOutSec`、`loop`，必要时增加 `sourceDurationSec`。
 - `renderer/src/audio-rendering.ts`  
-  Add pure helpers for fade volume and loop sequence splitting.
+  增加淡入淡出音量和循环切片纯函数。
 - `renderer/src/TimelineVideo.tsx`  
-  Apply per-frame fade volume and loop repeated audio sequences.
+  在 Remotion `<Audio>` 渲染中应用 fade 和 loop。
 - `tests/backend/render/remotion-input-builder.test.ts`
 - `tests/backend/assets/assets-local-validator.test.ts`
 - `renderer/src/audio-rendering.test.ts`
@@ -125,16 +123,16 @@ Modify:
 
 ---
 
-## Task 1: Default Audio Library Seed Contract
+## 任务 1：默认音频素材库 seed 合同
 
-**Files:**
+**文件：**
 
-- Create: `backend/src/modules/assets/default-audio-library.ts`
-- Create: `tests/backend/assets/default-audio-library.test.ts`
+- 新增：`backend/src/modules/assets/default-audio-library.ts`
+- 新增：`tests/backend/assets/default-audio-library.test.ts`
 
-- [ ] **Step 1: Write failing tests for seed quality**
+- [ ] **步骤 1：先写失败测试**
 
-Create `tests/backend/assets/default-audio-library.test.ts`:
+创建 `tests/backend/assets/default-audio-library.test.ts`：
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -176,160 +174,34 @@ describe("default audio library seed", () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
-
-Run:
+- [ ] **步骤 2：运行 RED**
 
 ```bash
 npx vitest run --configLoader runner tests/backend/assets/default-audio-library.test.ts
 ```
 
-Expected: FAIL because `default-audio-library.ts` does not exist.
+预期：失败，因为 `default-audio-library.ts` 还不存在。
 
-- [ ] **Step 3: Add minimal seed module**
+- [ ] **步骤 3：实现最小 seed 模块**
 
-Create `backend/src/modules/assets/default-audio-library.ts`:
+创建 `backend/src/modules/assets/default-audio-library.ts`。实现要求：
 
-```ts
-import type { MediaLibraryItem } from "../../../../shared/src/index.js";
+- 导出 `DEFAULT_AUDIO_LIBRARY_ITEMS: MediaLibraryItem[]`。
+- 至少 5 条 BGM、10 条 SFX。
+- 所有条目 `approved_for_use=true`。
+- 所有条目 `license.commercial_use_allowed=true`。
+- 所有条目有 `license.source_url` 和 `sha256:` 前缀的 `file_hash`。
+- 如果还没有真实文件，`file_hash` 可以暂用 `sha256:pending-*`，但必须在注释中说明：真实下载后必须替换为真实 SHA-256。
 
-const IMPORTED_AT = "2026-05-20T00:00:00.000Z";
-
-function cc0Item(input: {
-  library_item_id: string;
-  type: "bgm" | "sfx";
-  file_uri: string;
-  mime_type: string;
-  duration_sec: number;
-  loopable: boolean;
-  tags: string[];
-  mood_tags: string[];
-  source_url: string;
-  file_hash: string;
-}): MediaLibraryItem {
-  return {
-    library_item_id: input.library_item_id,
-    type: input.type,
-    file_uri: input.file_uri,
-    mime_type: input.mime_type,
-    duration_sec: input.duration_sec,
-    loopable: input.loopable,
-    tags: input.tags,
-    mood_tags: input.mood_tags,
-    license: {
-      license_type: "cc0",
-      commercial_use_allowed: true,
-      attribution_required: false,
-      source_url: input.source_url,
-    },
-    file_hash: input.file_hash,
-    imported_at: IMPORTED_AT,
-    approved_for_use: true,
-  };
-}
-
-export const DEFAULT_AUDIO_LIBRARY_ITEMS: MediaLibraryItem[] = [
-  cc0Item({
-    library_item_id: "bgm_tense_dark_drone_001",
-    type: "bgm",
-    file_uri: "library://audio/bgm/bgm_tense_dark_drone_001.wav",
-    mime_type: "audio/wav",
-    duration_sec: 45,
-    loopable: true,
-    tags: ["background", "drone"],
-    mood_tags: ["tense", "dark", "slow"],
-    source_url: "https://opengameart.org/content/cc0-music-0",
-    file_hash: "sha256:pending-bgm-tense-dark-drone-001",
-  }),
-  cc0Item({
-    library_item_id: "bgm_solemn_historical_001",
-    type: "bgm",
-    file_uri: "library://audio/bgm/bgm_solemn_historical_001.wav",
-    mime_type: "audio/wav",
-    duration_sec: 45,
-    loopable: true,
-    tags: ["background", "orchestral"],
-    mood_tags: ["solemn", "historical", "slow"],
-    source_url: "https://opengameart.org/content/cc0-music-0",
-    file_hash: "sha256:pending-bgm-solemn-historical-001",
-  }),
-  cc0Item({
-    library_item_id: "bgm_mysterious_night_001",
-    type: "bgm",
-    file_uri: "library://audio/bgm/bgm_mysterious_night_001.wav",
-    mime_type: "audio/wav",
-    duration_sec: 45,
-    loopable: true,
-    tags: ["background", "ambient"],
-    mood_tags: ["mysterious", "night", "slow"],
-    source_url: "https://opengameart.org/content/cc0-music-0",
-    file_hash: "sha256:pending-bgm-mysterious-night-001",
-  }),
-  cc0Item({
-    library_item_id: "bgm_urgent_battle_percussion_001",
-    type: "bgm",
-    file_uri: "library://audio/bgm/bgm_urgent_battle_percussion_001.wav",
-    mime_type: "audio/wav",
-    duration_sec: 30,
-    loopable: true,
-    tags: ["background", "percussion"],
-    mood_tags: ["urgent", "battle", "medium"],
-    source_url: "https://opengameart.org/content/cc0-music-0",
-    file_hash: "sha256:pending-bgm-urgent-battle-percussion-001",
-  }),
-  cc0Item({
-    library_item_id: "bgm_reflective_soft_001",
-    type: "bgm",
-    file_uri: "library://audio/bgm/bgm_reflective_soft_001.wav",
-    mime_type: "audio/wav",
-    duration_sec: 45,
-    loopable: true,
-    tags: ["background", "calm"],
-    mood_tags: ["reflective", "soft", "slow"],
-    source_url: "https://opengameart.org/content/cc0-music-0",
-    file_hash: "sha256:pending-bgm-reflective-soft-001",
-  }),
-  ...[
-    ["sfx_heartbeat_tense_001", "heartbeat", ["tense", "close"]],
-    ["sfx_footstep_indoor_001", "footstep", ["quiet", "indoor"]],
-    ["sfx_door_heavy_001", "door", ["heavy", "indoor"]],
-    ["sfx_hit_sharp_001", "hit", ["sharp", "impact"]],
-    ["sfx_whoosh_transition_001", "whoosh", ["transition", "fast"]],
-    ["sfx_crowd_court_low_001", "crowd", ["court", "low"]],
-    ["sfx_drum_solemn_001", "drum", ["solemn", "impact"]],
-    ["sfx_sword_metal_001", "sword", ["metal", "sharp"]],
-    ["sfx_paper_soft_001", "paper", ["soft", "indoor"]],
-    ["sfx_ambience_night_001", "ambience", ["night", "outdoor"]],
-  ].map(([id, tag, moods]) =>
-    cc0Item({
-      library_item_id: id as string,
-      type: "sfx",
-      file_uri: `library://audio/sfx/${id}.wav`,
-      mime_type: "audio/wav",
-      duration_sec: tag === "ambience" ? 8 : 1,
-      loopable: tag === "ambience",
-      tags: [tag as string],
-      mood_tags: moods as string[],
-      source_url: "https://opengameart.org/content/soundfx-library-cc0",
-      file_hash: `sha256:pending-${id}`,
-    }),
-  ),
-];
-```
-
-Note: the `pending-*` hashes are acceptable only for metadata-only seed planning. If real audio files are vendored later, replace each value with the real SHA-256 and add a test that hashes the file.
-
-- [ ] **Step 4: Run GREEN**
-
-Run:
+- [ ] **步骤 4：运行 GREEN**
 
 ```bash
 npx vitest run --configLoader runner tests/backend/assets/default-audio-library.test.ts
 ```
 
-Expected: PASS.
+预期：通过。
 
-- [ ] **Step 5: Commit**
+- [ ] **步骤 5：中文提交**
 
 ```bash
 git add backend/src/modules/assets/default-audio-library.ts tests/backend/assets/default-audio-library.test.ts
@@ -338,16 +210,16 @@ git commit -m "新增默认音频素材库种子合同"
 
 ---
 
-## Task 2: Idempotent Media Library Seeding
+## 任务 2：素材库幂等 seed 写入
 
-**Files:**
+**文件：**
 
-- Modify: `backend/src/modules/assets/media-library.repository.ts`
-- Test: `tests/backend/assets/media-library-repository.test.ts`
+- 修改：`backend/src/modules/assets/media-library.repository.ts`
+- 新增或修改：`tests/backend/assets/media-library-repository.test.ts`
 
-- [ ] **Step 1: Write failing tests**
+- [ ] **步骤 1：先写失败测试**
 
-Create or extend `tests/backend/assets/media-library-repository.test.ts`:
+测试目标：重复 seed 时不覆盖用户已有条目。
 
 ```ts
 import { describe, expect, it } from "vitest";
@@ -380,17 +252,17 @@ describe("media library repository", () => {
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [ ] **步骤 2：运行 RED**
 
 ```bash
 npx vitest run --configLoader runner tests/backend/assets/media-library-repository.test.ts
 ```
 
-Expected: FAIL because `seedMediaLibraryItems` is not exported.
+预期：失败，因为 `seedMediaLibraryItems` 尚未导出。
 
-- [ ] **Step 3: Implement idempotent helper**
+- [ ] **步骤 3：实现幂等 helper**
 
-Add to `backend/src/modules/assets/media-library.repository.ts`:
+在 `backend/src/modules/assets/media-library.repository.ts` 增加：
 
 ```ts
 export async function seedMediaLibraryItems(
@@ -413,15 +285,15 @@ export async function seedMediaLibraryItems(
 }
 ```
 
-- [ ] **Step 4: Run GREEN**
+- [ ] **步骤 4：运行 GREEN**
 
 ```bash
 npx vitest run --configLoader runner tests/backend/assets/media-library-repository.test.ts tests/backend/assets/default-audio-library.test.ts
 ```
 
-Expected: PASS.
+预期：通过。
 
-- [ ] **Step 5: Commit**
+- [ ] **步骤 5：中文提交**
 
 ```bash
 git add backend/src/modules/assets/media-library.repository.ts tests/backend/assets/media-library-repository.test.ts
@@ -430,54 +302,32 @@ git commit -m "增加音频素材库幂等种子写入"
 
 ---
 
-## Task 3: Clearer Optional BGM Warning
+## 任务 3：补充 BGM artifact 缺失告警
 
-**Files:**
+**文件：**
 
-- Modify: `backend/src/modules/assets/assets-local-validator.ts`
-- Test: `tests/backend/assets/assets-local-validator.test.ts`
+- 修改：`backend/src/modules/assets/assets-local-validator.ts`
+- 修改：`tests/backend/assets/assets-local-validator.test.ts`
 
-- [ ] **Step 1: Write failing test**
+- [ ] **步骤 1：先写失败测试**
 
-Add to `tests/backend/assets/assets-local-validator.test.ts`:
+新增用例：当存在 BGM placement，但所有 placement 的 `artifact_id` 都是 `null` 时，告警 包含 `assets_bgm_artifact_missing_optional`。
 
 ```ts
-it("warns when BGM placements exist but no BGM artifact is attached", async () => {
-  const manifest = makeReadyManifest();
-  manifest.audio_summary.bgm_placements = [
-    {
-      bgm_placement_id: "bgm_place_001",
-      source_task_id: "bgm_001",
-      scope: "global",
-      artifact_id: null,
-      start_policy: "timeline_start",
-      end_policy: "timeline_end",
-      segment_ids: [],
-      volume: 0.3,
-      fade_in_sec: 0,
-      fade_out_sec: 0,
-    },
-  ];
-
-  const result = await validateAssetsManifest({ manifest });
-
-  expect(result.warnings).toContain("assets_bgm_artifact_missing_optional");
-});
+expect(result.warnings).toContain("assets_bgm_artifact_missing_optional");
 ```
 
-If the local helper names differ, use the existing manifest factory in that test file and keep the assertion exactly on `assets_bgm_artifact_missing_optional`.
-
-- [ ] **Step 2: Run RED**
+- [ ] **步骤 2：运行 RED**
 
 ```bash
-npx vitest run --configLoader runner tests/backend/assets/assets-local-validator.test.ts -t "warns when BGM placements exist but no BGM artifact is attached"
+npx vitest run --configLoader runner tests/backend/assets/assets-local-validator.test.ts -t "BGM artifact"
 ```
 
-Expected: FAIL because warning is not emitted.
+预期：失败，因为告警尚未输出。
 
-- [ ] **Step 3: Implement warning**
+- [ ] **步骤 3：实现 告警**
 
-In `backend/src/modules/assets/assets-local-validator.ts`, after the existing BGM placement warning, add:
+在 `backend/src/modules/assets/assets-local-validator.ts` 现有 BGM 告警 附近增加：
 
 ```ts
 if (
@@ -488,15 +338,15 @@ if (
 }
 ```
 
-- [ ] **Step 4: Run GREEN**
+- [ ] **步骤 4：运行 GREEN**
 
 ```bash
 npx vitest run --configLoader runner tests/backend/assets/assets-local-validator.test.ts
 ```
 
-Expected: PASS.
+预期：通过。
 
-- [ ] **Step 5: Commit**
+- [ ] **步骤 5：中文提交**
 
 ```bash
 git add backend/src/modules/assets/assets-local-validator.ts tests/backend/assets/assets-local-validator.test.ts
@@ -505,17 +355,24 @@ git commit -m "补充配乐素材缺失告警"
 
 ---
 
-## Task 4: Pass BGM Fade And Loop To Renderer Props
+## 任务 4：把 BGM fade / loop 传给 renderer props
 
-**Files:**
+**文件：**
 
-- Modify: `renderer/src/timeline-props.ts`
-- Modify: `backend/src/modules/render/remotion-input-builder.ts`
-- Test: `tests/backend/render/remotion-input-builder.test.ts`
+- 修改：`renderer/src/timeline-props.ts`
+- 修改：`backend/src/modules/render/remotion-input-builder.ts`
+- 修改：`tests/backend/render/remotion-input-builder.test.ts`
 
-- [ ] **Step 1: Write failing test**
+- [ ] **步骤 1：先写失败测试**
 
-Extend `tests/backend/render/remotion-input-builder.test.ts` with a BGM placement that has `volume: 0.25`, `fade_in_sec: 1.5`, `fade_out_sec: 2`, and a `bgm_audio` artifact with `loopable: true`. Assert the resulting BGM audio clip contains:
+在 `tests/backend/render/remotion-input-builder.test.ts` 增加 BGM placement：
+
+- `volume: 0.25`
+- `fade_in_sec: 1.5`
+- `fade_out_sec: 2`
+- 对应 `bgm_audio.metadata.loopable: true`
+
+断言生成的 BGM audio clip：
 
 ```ts
 expect(bgmClip).toMatchObject({
@@ -527,17 +384,17 @@ expect(bgmClip).toMatchObject({
 });
 ```
 
-- [ ] **Step 2: Run RED**
+- [ ] **步骤 2：运行 RED**
 
 ```bash
 npx vitest run --configLoader runner tests/backend/render/remotion-input-builder.test.ts
 ```
 
-Expected: FAIL because `fadeInSec`, `fadeOutSec`, and `loop` are absent.
+预期：失败，因为这些字段尚未传递。
 
-- [ ] **Step 3: Extend renderer prop type**
+- [ ] **步骤 3：扩展 renderer prop 类型**
 
-In `renderer/src/timeline-props.ts`, update `RenderAudioClipProp`:
+在 `renderer/src/timeline-props.ts` 更新 `RenderAudioClipProp`：
 
 ```ts
 export interface RenderAudioClipProp {
@@ -551,52 +408,23 @@ export interface RenderAudioClipProp {
   fadeInSec?: number;
   fadeOutSec?: number;
   loop?: boolean;
+  sourceDurationSec?: number;
 }
 ```
 
-- [ ] **Step 4: Set BGM fields in input builder**
+- [ ] **步骤 4：在 input builder 写入 BGM 设置**
 
-In `backend/src/modules/render/remotion-input-builder.ts`, add a helper:
+在 `backend/src/modules/render/remotion-input-builder.ts` 中，BGM clip 需要从 `BgmPlacement` 读取 `fade_in_sec` / `fade_out_sec`，从 `bgm_audio.metadata.loopable` 读取 `loop`，并把 `artifact.metadata.duration_sec` 写为 `sourceDurationSec`。
 
-```ts
-function bgmRenderSettings(input: {
-  manifest: AssetManifest;
-  artifact: AssetArtifact;
-  artifactId: string;
-}): { fadeInSec?: number; fadeOutSec?: number; loop?: boolean } {
-  const placement = input.manifest.audio_summary.bgm_placements.find(
-    (item) => item.artifact_id === input.artifactId,
-  );
-  if (!placement || input.artifact.artifact_type !== "bgm_audio") return {};
-  return {
-    fadeInSec: placement.fade_in_sec,
-    fadeOutSec: placement.fade_out_sec,
-    loop: input.artifact.metadata.loopable,
-  };
-}
-```
-
-Then spread it into returned audio clip object only for BGM:
-
-```ts
-...(role === "bgm"
-  ? bgmRenderSettings({
-      manifest: input.manifest,
-      artifact,
-      artifactId: clip.artifact_id,
-    })
-  : {}),
-```
-
-- [ ] **Step 5: Run GREEN**
+- [ ] **步骤 5：运行 GREEN**
 
 ```bash
 npx vitest run --configLoader runner tests/backend/render/remotion-input-builder.test.ts
 ```
 
-Expected: PASS.
+预期：通过。
 
-- [ ] **Step 6: Commit**
+- [ ] **步骤 6：中文提交**
 
 ```bash
 git add renderer/src/timeline-props.ts backend/src/modules/render/remotion-input-builder.ts tests/backend/render/remotion-input-builder.test.ts
@@ -605,137 +433,60 @@ git commit -m "传递配乐淡入淡出与循环设置"
 
 ---
 
-## Task 5: Apply Fade And Loop In Remotion Audio Rendering
+## 任务 5：在 Remotion 音频渲染中应用 fade / loop
 
-**Files:**
+**文件：**
 
-- Modify: `renderer/src/audio-rendering.ts`
-- Modify: `renderer/src/TimelineVideo.tsx`
-- Test: `renderer/src/audio-rendering.test.ts`
+- 修改：`renderer/src/audio-rendering.ts`
+- 修改：`renderer/src/TimelineVideo.tsx`
+- 新增或修改：`renderer/src/audio-rendering.test.ts`
 
-- [ ] **Step 1: Write failing pure helper tests**
+- [ ] **步骤 1：先写纯函数失败测试**
 
-Create or extend `renderer/src/audio-rendering.test.ts`:
+在 `renderer/src/audio-rendering.test.ts` 覆盖：
 
-```ts
-import { describe, expect, it } from "vitest";
-import {
-  getAudioLoopSequences,
-  getFadedAudioVolume,
-} from "./audio-rendering";
+- `getFadedAudioVolume()`：淡入中点、淡出中点、无 fade、音量 clamp。
+- `getAudioLoopSequences()`：例如 12 秒 clip + 5 秒源文件，拆成 `5 + 5 + 2`。
 
-describe("audio rendering helpers", () => {
-  it("applies fade in and fade out to base volume", () => {
-    expect(
-      getFadedAudioVolume({
-        baseVolume: 0.5,
-        localSec: 0.5,
-        durationSec: 10,
-        fadeInSec: 1,
-        fadeOutSec: 2,
-      }),
-    ).toBeCloseTo(0.25);
-    expect(
-      getFadedAudioVolume({
-        baseVolume: 0.5,
-        localSec: 9,
-        durationSec: 10,
-        fadeInSec: 1,
-        fadeOutSec: 2,
-      }),
-    ).toBeCloseTo(0.25);
-  });
-
-  it("splits looped audio into repeated source sequences", () => {
-    expect(
-      getAudioLoopSequences({
-        clipDurationSec: 12,
-        sourceDurationSec: 5,
-      }),
-    ).toEqual([
-      { offsetSec: 0, durationSec: 5 },
-      { offsetSec: 5, durationSec: 5 },
-      { offsetSec: 10, durationSec: 2 },
-    ]);
-  });
-});
-```
-
-- [ ] **Step 2: Run RED**
+- [ ] **步骤 2：运行 RED**
 
 ```bash
 npx vitest run --configLoader runner renderer/src/audio-rendering.test.ts
 ```
 
-Expected: FAIL because helpers do not exist.
+预期：失败，因为 helper 尚未存在。
 
-- [ ] **Step 3: Implement pure helpers**
+- [ ] **步骤 3：实现纯函数**
 
-In `renderer/src/audio-rendering.ts`, add:
+在 `renderer/src/audio-rendering.ts` 增加：
 
-```ts
-export function getFadedAudioVolume(input: {
-  baseVolume: number;
-  localSec: number;
-  durationSec: number;
-  fadeInSec?: number;
-  fadeOutSec?: number;
-}) {
-  const base = normalizeAudioVolume(input.baseVolume);
-  const fadeIn = Math.max(0, input.fadeInSec ?? 0);
-  const fadeOut = Math.max(0, input.fadeOutSec ?? 0);
-  const inFactor = fadeIn > 0 ? Math.min(1, Math.max(0, input.localSec / fadeIn)) : 1;
-  const remainingSec = input.durationSec - input.localSec;
-  const outFactor =
-    fadeOut > 0 ? Math.min(1, Math.max(0, remainingSec / fadeOut)) : 1;
-  return base * Math.min(inFactor, outFactor);
-}
+- `getFadedAudioVolume(input)`
+- `getAudioLoopSequences(input)`
 
-export function getAudioLoopSequences(input: {
-  clipDurationSec: number;
-  sourceDurationSec?: number;
-}) {
-  const sourceDurationSec =
-    input.sourceDurationSec && input.sourceDurationSec > 0
-      ? input.sourceDurationSec
-      : input.clipDurationSec;
-  const sequences: Array<{ offsetSec: number; durationSec: number }> = [];
-  for (let offsetSec = 0; offsetSec < input.clipDurationSec; offsetSec += sourceDurationSec) {
-    sequences.push({
-      offsetSec,
-      durationSec: Math.min(sourceDurationSec, input.clipDurationSec - offsetSec),
-    });
-  }
-  return sequences;
-}
-```
+要求：
 
-- [ ] **Step 4: Apply helpers in `TimelineVideo`**
+- base volume 仍通过 `normalizeAudioVolume()` clamp 到 `0..1`。
+- `fadeInSec <= 0` 时不淡入。
+- `fadeOutSec <= 0` 时不淡出。
+- loop 切片不能产生 0 秒片段。
 
-In `renderer/src/TimelineVideo.tsx`, import the helpers and replace the single `<Audio>` per clip with repeated sequences when `clip.loop` is true. Use `clip.sourceDurationSec` if Task 4 adds it; otherwise use `clip.durationSec` as the source duration. A minimal implementation can use one sequence for non-loop clips:
+- [ ] **步骤 4：接入 `TimelineVideo`**
 
-```tsx
-const loopSequences = clip.loop
-  ? getAudioLoopSequences({
-      clipDurationSec: clip.durationSec,
-      sourceDurationSec: clip.sourceDurationSec ?? clip.durationSec,
-    })
-  : [{ offsetSec: 0, durationSec: clip.durationSec }];
-```
+在 `renderer/src/TimelineVideo.tsx` 中：
 
-Inside each loop sequence, compute local seconds from the current frame and call `getFadedAudioVolume()`.
+- 非 loop clip 仍渲染一个 `<Audio>`。
+- loop clip 按 `getAudioLoopSequences()` 渲染多个 `<Sequence>`。
+- 每个 `<Audio>` 的 `volume` 使用 `getFadedAudioVolume()`，fade 进度按整个 clip 的本地时间计算，而不是按单个 loop 片段重置。
 
-If `clip.sourceDurationSec` is needed, add it to `RenderAudioClipProp` and set it from `artifact.metadata.duration_sec` in `remotion-input-builder.ts`.
-
-- [ ] **Step 5: Run GREEN**
+- [ ] **步骤 5：运行 GREEN**
 
 ```bash
 npx vitest run --configLoader runner renderer/src/audio-rendering.test.ts tests/backend/render/remotion-input-builder.test.ts
 ```
 
-Expected: PASS.
+预期：通过。
 
-- [ ] **Step 6: Commit**
+- [ ] **步骤 6：中文提交**
 
 ```bash
 git add renderer/src/audio-rendering.ts renderer/src/TimelineVideo.tsx renderer/src/audio-rendering.test.ts renderer/src/timeline-props.ts backend/src/modules/render/remotion-input-builder.ts tests/backend/render/remotion-input-builder.test.ts
@@ -744,44 +495,38 @@ git commit -m "实现配乐淡入淡出与循环渲染"
 
 ---
 
-## Task 6: Smoke Harness Uses Default Library Seed
+## 任务 6：runtime 烟测 改用默认素材库 seed
 
-**Files:**
+**文件：**
 
-- Modify: `harness/scripts/runtime/render-runtime-smoke.ts`
-- Modify: `tests/harness/render-runtime-smoke.test.ts`
+- 修改：`harness/scripts/runtime/render-runtime-smoke.ts`
+- 修改：`tests/harness/render-runtime-smoke.test.ts`
 
-- [ ] **Step 1: Write failing smoke assertion**
+- [ ] **步骤 1：先写失败断言**
 
-In `tests/harness/render-runtime-smoke.test.ts`, keep the existing `audio_clip_count >= 3` assertion and add an assertion that the render smoke used at least one default seed item by checking the assets response artifact metadata:
+在 `tests/harness/render-runtime-smoke.test.ts` 中断言 assets response 里存在默认 seed 产出的 BGM/SFX artifact metadata，例如：
 
 ```ts
-expect(assetsResponse.manifest.artifacts.some(
-  (artifact) =>
-    artifact.artifact_type === "bgm_audio" &&
-    artifact.metadata.library_item_id === "bgm_tense_dark_drone_001",
-)).toBe(true);
+expect(
+  assetsResponse.manifest.artifacts.some(
+    (artifact) =>
+      artifact.artifact_type === "bgm_audio" &&
+      artifact.metadata.library_item_id === "bgm_tense_dark_drone_001",
+  ),
+).toBe(true);
 ```
 
-- [ ] **Step 2: Run RED**
+- [ ] **步骤 2：运行 RED**
 
 ```bash
 npx vitest run --configLoader runner tests/harness/render-runtime-smoke.test.ts
 ```
 
-Expected: FAIL while smoke still seeds ad hoc item IDs.
+预期：失败，因为 smoke 仍使用临时 ad hoc seed。
 
-- [ ] **Step 3: Seed from `DEFAULT_AUDIO_LIBRARY_ITEMS`**
+- [ ] **步骤 3：改用默认 seed**
 
-In `harness/scripts/runtime/render-runtime-smoke.ts`, replace ad hoc media-library seed objects with:
-
-```ts
-for (const item of DEFAULT_AUDIO_LIBRARY_ITEMS) {
-  await saveMediaLibraryItem(app.db, item);
-}
-```
-
-Adjust smoke `bgm_cue` / `sfx_cue` parameters to select known default tags:
+在 `harness/scripts/runtime/render-runtime-smoke.ts` 中用 `DEFAULT_AUDIO_LIBRARY_ITEMS` 写入 db，并调整 smoke 的 `bgm_cue` / `sfx_cue` 参数：
 
 ```ts
 parameters: {
@@ -793,7 +538,7 @@ parameters: {
 }
 ```
 
-For SFX:
+SFX：
 
 ```ts
 parameters: {
@@ -802,23 +547,23 @@ parameters: {
 }
 ```
 
-- [ ] **Step 4: Run GREEN**
+- [ ] **步骤 4：运行 GREEN**
 
 ```bash
 npx vitest run --configLoader runner tests/harness/render-runtime-smoke.test.ts
 ```
 
-Expected: PASS.
+预期：通过。
 
-- [ ] **Step 5: Run local Remotion smoke**
+- [ ] **步骤 5：运行本地 Remotion smoke**
 
 ```bash
 npm run render:remotion:smoke
 ```
 
-Expected: `status` is `sample-ready`, `audio_clip_count >= 3`.
+预期：`status` 为 `sample-ready`，且 `audio_clip_count >= 3`。
 
-- [ ] **Step 6: Commit**
+- [ ] **步骤 6：中文提交**
 
 ```bash
 git add harness/scripts/runtime/render-runtime-smoke.ts tests/harness/render-runtime-smoke.test.ts
@@ -827,33 +572,33 @@ git commit -m "改用默认音频素材库烟测"
 
 ---
 
-## Task 7: Documentation And Backlog Update
+## 任务 7：正式文档与 backlog 同步
 
-**Files:**
+**文件：**
 
-- Modify: `docs/architecture/pipeline-io-spec.md`
-- Modify: `docs/data/field-design.md`
-- Modify: `docs/plans/README.md`
-- Modify: `docs/records/2026-05-19-video-pipeline-follow-up-backlog.md`
+- 修改：`docs/architecture/pipeline-io-spec.md`
+- 修改：`docs/data/field-design.md`
+- 修改：`docs/plans/README.md`
+- 修改：`docs/records/2026-05-19-video-pipeline-follow-up-backlog.md`
 
-- [ ] **Step 1: Update formal docs**
+- [ ] **步骤 1：更新正式文档**
 
-Document:
+需要写清：
 
-- Default audio library seed is metadata-first and license-evidence-first.
-- Downloaded or user-provided real audio files require source URL, license type, commercial-use flag, hash, and approval.
-- BGM fade and loop are now renderer-consumed fields.
-- BGM/SFX still do not include real paid provider, upload UI, ducking, loudness normalization, or attribution packaging.
+- 默认音频素材库 seed 是 元数据优先、授权证据优先。
+- 真实下载或用户提供的音频必须有 source URL、license type、commercial-use flag、hash 和 approval。
+- BGM fade / loop 已进入 renderer 消费字段。
+- BGM/SFX 仍不包含真实付费 provider、上传 UI、ducking、响度归一化或署名包装。
 
-- [ ] **Step 2: Update backlog**
+- [ ] **步骤 2：更新 backlog**
 
-Add or check items:
+可勾选：
 
 - `[x] 默认 BGM/SFX 素材库 seed 合同`
 - `[x] BGM fade/loop renderer consumption`
-- `[x] clearer optional BGM artifact warning`
+- `[x] 更清晰的可选 BGM artifact 缺失告警`
 
-Leave unchecked:
+继续不勾选：
 
 - real provider
 - upload UI
@@ -861,23 +606,23 @@ Leave unchecked:
 - ducking
 - loudness normalization
 
-- [ ] **Step 3: Run focused verification**
+- [ ] **步骤 3：运行 focused 验证**
 
 ```bash
 npx vitest run --configLoader runner tests/backend/assets/default-audio-library.test.ts tests/backend/assets/media-library-repository.test.ts tests/backend/assets/assets-local-validator.test.ts tests/backend/render/remotion-input-builder.test.ts renderer/src/audio-rendering.test.ts tests/harness/render-runtime-smoke.test.ts
 ```
 
-Expected: PASS.
+预期：通过。
 
-- [ ] **Step 4: Run local Remotion smoke**
+- [ ] **步骤 4：运行本地 Remotion smoke**
 
 ```bash
 npm run render:remotion:smoke
 ```
 
-Expected: `sample-ready`.
+预期：`sample-ready`。
 
-- [ ] **Step 5: Commit**
+- [ ] **步骤 5：中文提交**
 
 ```bash
 git add docs/architecture/pipeline-io-spec.md docs/data/field-design.md docs/plans/README.md docs/records/2026-05-19-video-pipeline-follow-up-backlog.md
@@ -886,18 +631,18 @@ git commit -m "同步默认音频素材库与渲染补强文档"
 
 ---
 
-## Execution Notes
+## 执行注意事项
 
-- Each task must be committed with a Chinese commit message.
-- Do not stage unrelated `AGENTS.md` changes.
-- Do not download files during implementation unless the user explicitly approves the source list.
-- If real audio files are later downloaded, use a separate live/import-check style task that records source URL, license page, downloaded file path, SHA-256, duration, and approval status.
-- Treat all BGM/SFX material as optional: missing audio should produce warnings/notes, not block TTS/image/compose/render paths.
+- 每个任务必须中文提交。
+- 不要 stage 无关的 `AGENTS.md` 修改。
+- 未经用户确认，不要下载真实音频文件。
+- 如果后续下载真实音频，必须单独做 import-check：记录来源 URL、license 页面、下载路径、SHA-256、时长和 approval 状态。
+- BGM/SFX 都是可选素材；缺失音频只能产生告警 / notes，不能阻塞 TTS、image、compose、render 主路径。
 
-## Self-Review Checklist
+## 自审清单
 
-- The plan explicitly includes the three known issues: fade, loop, and clearer optional BGM warning.
-- The plan keeps real paid providers and upload UI out of scope.
-- The default library is metadata-first and does not silently vendor third-party binaries.
-- Every implementation task includes a RED command, a GREEN command, and a Chinese commit.
-- The plan does not touch topic/script/storyboard semantics.
+- 本计划明确包含三个已知问题：fade、loop、BGM artifact 缺失告警。
+- 本计划没有把真实付费 provider、上传 UI、ducking、响度归一化混进当前范围。
+- 默认素材库采用 元数据优先，不默认提交第三方音频二进制。
+- 每个实现任务都有 RED、GREEN 和中文提交步骤。
+- 本计划不修改 topic/script/storyboard 语义链路。
