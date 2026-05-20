@@ -2,17 +2,22 @@ import React from "react";
 import {
   AbsoluteFill,
   Img,
+  OffthreadVideo,
   interpolate,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
 
-import type { TimelineVideoProps } from "./timeline-props";
+import type { RenderVisualClipProp, TimelineVideoProps } from "./timeline-props";
 import {
   DEFAULT_SUBTITLE_STYLE_PROP,
   getActiveSubtitleCue,
   makeSubtitleContainerStyle,
 } from "./subtitle-rendering";
+import {
+  getVisibleVisualLayers,
+  makeVisualLayerStyle,
+} from "./visual-rendering";
 
 type ArtifactLike = {
   artifact_id?: unknown;
@@ -68,10 +73,34 @@ function findPrimaryVisualUri(props: TimelineVideoProps) {
   return findArtifactFileUri(props, firstVisualClip.artifact_id);
 }
 
+function renderVisualClip(clip: RenderVisualClipProp) {
+  if (clip.mediaType === "video") {
+    return <OffthreadVideo src={clip.src} muted />;
+  }
+
+  return (
+    <Img
+      src={clip.src}
+      style={{
+        width: "100%",
+        height: "100%",
+        objectFit: "cover",
+      }}
+    />
+  );
+}
+
 export function TimelineVideo(props: TimelineVideoProps) {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   const visualUri = findPrimaryVisualUri(props);
+  const visualLayers = props.visualClips
+    ? getVisibleVisualLayers({
+        clips: props.visualClips,
+        frame,
+        fps: props.fps,
+      })
+    : [];
   const activeSubtitle =
     getActiveSubtitleCue({
       cues: props.subtitleCues ?? [],
@@ -87,7 +116,17 @@ export function TimelineVideo(props: TimelineVideoProps) {
 
   return (
     <AbsoluteFill style={{ backgroundColor: "black", overflow: "hidden" }}>
-      {visualUri ? (
+      {props.visualClips
+        ? visualLayers.map((layer) => (
+            <div
+              key={layer.clip.clipId}
+              style={makeVisualLayerStyle({ opacity: layer.opacity })}
+            >
+              {renderVisualClip(layer.clip)}
+            </div>
+          ))
+        : null}
+      {!props.visualClips && visualUri ? (
         <Img
           src={visualUri}
           style={{
