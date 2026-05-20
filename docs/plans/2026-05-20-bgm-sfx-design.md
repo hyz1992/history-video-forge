@@ -34,8 +34,12 @@ The pipeline already has several BGM/SFX hooks:
 - `MediaLibraryItem` exists for `sfx` / `bgm` with license, duration, loopability, tags, mood tags, hash and approval fields.
 - `selectMediaLibraryItem()` can pick an approved item by required tags, mood tag score and deterministic ID tie-break.
 - `AssetManifest` already has `sfx_audio`, `sfx_selection`, `bgm_audio`, `bgm_selection`, `BgmPlacement`, `audio_summary.sfx_artifact_ids`, `audio_summary.bgm_placements`, and segment route audio references.
+- `buildBgmPlacements()` currently creates placements from `bgm_cue` tasks, but it hardcodes `scope="global"`, empty `segment_ids`, timeline start/end policies, `volume=0.3`, and zero fades. It does not yet consume task parameters. The implementation plan must reserve a manifest-builder task for parameter-driven BGM placement.
 - `assets-run.service` can attach returned `sfx_audio` / `bgm_audio` artifacts into audio summary and segment routes.
+- BGM attachment currently fills the first empty placement; that works only for simple single-BGM cases and must be tightened before multiple BGM cues are reliable.
+- SFX attachment currently uses `task.source_segment_id` to find the target `SegmentAssetRoute`.
 - `compose-timeline-builder` already emits `bgm` / `sfx` tracks when concrete audio artifacts exist.
+- `SegmentAssetRoute.bgm_placement_ids` exists in the schema but is not populated or consumed in the current code; compose reads `audio_summary.bgm_placements` directly.
 - `remotion-input-builder` and `TimelineVideo` already consume `bgm` / `sfx` audio clips when compose exposes them.
 
 The missing part is not renderer consumption. The gap is a reliable assets-stage way to turn BGM/SFX cue tasks into approved local/fake audio artifacts with clear licensing and matching rules.
@@ -135,6 +139,7 @@ The design favors a small extension because current tests already prove useful t
 - `parameters.segment_ids`: BGM span target when scope is not global;
 - `parameters.selection_label`: optional human-readable label for selection artifacts;
 - `parameters.library_item_id`: optional explicit library item override, still requiring approval and license checks.
+- SFX segment target: use `task.source_segment_id`, matching current `assets-run.service` behavior. `parameters.segment_id` must not introduce a second routing source in the first implementation.
 
 If cue parameters are missing, the provider uses conservative defaults:
 
@@ -172,6 +177,7 @@ The first implementation should add local/fake providers:
 - `local_sfx` resolves approved SFX library items and writes or copies a WAV artifact into project storage;
 - tests can use deterministic short WAV generation instead of checked-in binary fixtures;
 - provider output includes `library_item_id`, `selection_label`, `duration_sec`, `loopable`, license summary and match tags in artifact metadata.
+- provider execution order must not let optional BGM/SFX block required TTS, subtitle, image, video or motion work. The existing asset execution priority already schedules `sfx_cue` and `bgm_cue` after required media; the implementation plan should keep that ordering and preserve non-blocking warnings when optional sound cannot resolve.
 
 If a `library://...` URI cannot be resolved to an actual file in the first slice, the fake provider may synthesize a quiet WAV but must preserve library metadata. The implementation plan must make this explicit in artifact metadata, for example `source_materialized_from: "generated_fixture"`.
 
@@ -196,7 +202,9 @@ Do not require these fields for existing records. Existing tests and fixtures sh
 
 ### BGM Artifact Metadata
 
-`bgm_audio.metadata` currently requires `duration_sec` and `loopable`. The first BGM/SFX implementation should add passthrough metadata such as:
+`bgm_audio.metadata` currently requires `duration_sec` and `loopable`, and its Zod schema uses `.passthrough()`. The first implementation should intentionally use passthrough for audit metadata to avoid a broad shared-schema migration. A later hardening task may promote stable fields into the explicit schema once the provider contract settles.
+
+Suggested passthrough metadata:
 
 ```ts
 {
@@ -215,7 +223,9 @@ Do not require these fields for existing records. Existing tests and fixtures sh
 
 ### SFX Artifact Metadata
 
-`sfx_audio.metadata` currently requires `duration_sec`. The first implementation should add passthrough metadata such as:
+`sfx_audio.metadata` currently requires `duration_sec`, and its Zod schema uses `.passthrough()`. The first implementation should intentionally use passthrough for the same audit fields used by BGM; stable fields can be promoted into the explicit schema later.
+
+Suggested passthrough metadata:
 
 ```ts
 {
@@ -237,6 +247,7 @@ Do not require these fields for existing records. Existing tests and fixtures sh
 Existing `BgmPlacement` stays the placement contract:
 
 - add optional `source_task_id` so assets execution can attach a returned BGM artifact to the placement created from the same `bgm_cue` task instead of filling the first empty placement;
+- current IDs are generated as `bgm_place_${task_id}` through `generateId("bgm_place", task.task_id)`, so parsing the ID could work today. This design still prefers `source_task_id` because parsing generated IDs couples runtime behavior to an implementation detail and becomes fragile if ID generation changes.
 - global BGM uses `scope="global"`, empty `segment_ids`, timeline start/end policies;
 - segment BGM uses `scope="segment"` and one `segment_id`;
 - span BGM uses `scope="segment_span"` and two or more `segment_ids`;
@@ -244,11 +255,13 @@ Existing `BgmPlacement` stays the placement contract:
 
 The first implementation should not add ducking fields. Ducking requires a later audio mixing design.
 
+`SegmentAssetRoute.bgm_placement_ids` should remain known-unused in the first implementation unless a specific task needs it for diagnostics. Filling it is not required for compose or renderer because both consume `audio_summary.bgm_placements`.
+
 ## Execution Flow
 
 ### BGM
 
-1. `buildInitialAssetManifest()` creates `BgmPlacement` from `bgm_cue` tasks.
+1. `buildInitialAssetManifest()` creates `BgmPlacement` from `bgm_cue` tasks and must be updated to consume `scope`, `segment_ids`, `volume`, `fade_in_sec`, `fade_out_sec`, and `source_task_id` instead of hardcoded global defaults.
 2. The BGM provider reads the matching `bgm_cue` task.
 3. It resolves explicit `library_item_id` or selects an approved BGM item by required tags and mood tags.
 4. It writes a renderable local WAV artifact or copies a resolvable approved local file.
@@ -259,7 +272,7 @@ The first implementation should not add ducking fields. Ducking requires a later
 
 ### SFX
 
-1. `sfx_cue` tasks should generally be segment-scoped.
+1. `sfx_cue` tasks should use `task.source_segment_id` as the segment mapping source. If it is `null`, the first implementation should skip automatic route attachment and return a non-blocking note or warning rather than guessing a segment.
 2. The SFX provider resolves explicit `library_item_id` or selects an approved SFX item by required tags and mood tags.
 3. It writes a renderable local WAV artifact or copies a resolvable approved local file.
 4. It returns `sfx_audio` with source segment and library metadata.
@@ -274,9 +287,13 @@ The implementation plan should add tests that prove:
 - media library schema still accepts existing records;
 - unapproved or non-commercial items are never selected;
 - explicit `library_item_id` still requires approval and commercial use;
+- manifest builder reads BGM placement parameters instead of hardcoding global defaults;
+- `BgmPlacement.source_task_id` attaches each returned BGM artifact to the matching placement, including a regression with two BGM cues;
+- `SegmentAssetRoute.bgm_placement_ids` remains unused or is explicitly tested if an implementation chooses to fill it;
 - `bgm_cue` can produce `bgm_audio` and attach it to `BgmPlacement`;
-- `sfx_cue` can produce `sfx_audio` and attach it to the matching segment route;
+- `sfx_cue` can produce `sfx_audio` and attach it to the matching segment route via `task.source_segment_id`;
 - missing optional BGM/SFX remains non-blocking;
+- optional BGM/SFX providers run after required media and do not block required TTS/image/subtitle completion;
 - compose emits BGM/SFX tracks only for concrete audio artifacts;
 - Remotion input props include BGM/SFX audio clips with data URI audio sources;
 - runtime smoke can render fake/local BGM/SFX without real providers.
