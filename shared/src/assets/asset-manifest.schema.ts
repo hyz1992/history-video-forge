@@ -120,6 +120,54 @@ const TtsMergedAudioMetadata = z
   .strict()
   .passthrough();
 
+export const SubtitleStyle = z
+  .object({
+    style_id: z.string().min(1),
+    font_family: z.string().min(1),
+    font_size_px: z.number().int().min(18).max(96),
+    font_weight: z.number().int().min(100).max(900),
+    line_height: z.number().min(1).max(2),
+    max_lines: z.number().int().min(1).max(4),
+    text_color: z.string().min(1),
+    stroke_color: z.string().min(1),
+    stroke_width_px: z.number().min(0).max(12),
+    shadow: z.string().min(1),
+    background_color: z.string().min(1),
+    background_opacity: z.number().min(0).max(1),
+    position: z.enum(["bottom", "middle", "top"]),
+    horizontal_margin_px: z.number().int().min(0).max(240),
+    bottom_margin_px: z.number().int().min(0).max(360),
+    top_margin_px: z.number().int().min(0).max(360),
+    safe_area_top_px: z.number().int().min(0).max(360),
+    safe_area_bottom_px: z.number().int().min(0).max(360),
+    max_width_pct: z.number().min(0.4).max(1),
+    text_align: z.enum(["left", "center", "right"]),
+  })
+  .strict();
+
+export const DEFAULT_SUBTITLE_STYLE = {
+  style_id: "subtitle_style_default_vertical",
+  font_family: "Arial, sans-serif",
+  font_size_px: 48,
+  font_weight: 700,
+  line_height: 1.2,
+  max_lines: 2,
+  text_color: "#ffffff",
+  stroke_color: "#000000",
+  stroke_width_px: 3,
+  shadow: "0 3px 14px rgba(0,0,0,0.75)",
+  background_color: "#000000",
+  background_opacity: 0,
+  position: "bottom",
+  horizontal_margin_px: 48,
+  bottom_margin_px: 120,
+  top_margin_px: 120,
+  safe_area_top_px: 96,
+  safe_area_bottom_px: 96,
+  max_width_pct: 0.9,
+  text_align: "center",
+} satisfies z.infer<typeof SubtitleStyle>;
+
 const SubtitleTrackMetadata = z
   .object({
     format: z.string().min(1),
@@ -128,6 +176,7 @@ const SubtitleTrackMetadata = z
     caption_count: z.number().int().nonnegative(),
     duration_sec: z.number().positive().optional(),
     timing_source: TimingSource.optional(),
+    subtitle_style: SubtitleStyle.optional(),
   })
   .strict()
   .passthrough();
@@ -407,3 +456,4 @@ export type AssetAudioSummary = z.infer<typeof AssetAudioSummary>;
 export type BgmPlacement = z.infer<typeof BgmPlacement>;
 export type TtsChunkRoute = z.infer<typeof TtsChunkRoute>;
 export type AssetExecutionOptions = z.infer<typeof AssetExecutionOptions>;
+export type SubtitleStyle = z.infer<typeof SubtitleStyle>;

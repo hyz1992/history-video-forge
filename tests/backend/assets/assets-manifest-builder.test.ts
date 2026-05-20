@@ -5,7 +5,10 @@ import type {
   AssetPlan,
   AssetTask,
 } from "../../../shared/src/index.js";
-import { AssetArtifact } from "../../../shared/src/index.js";
+import {
+  AssetArtifact,
+  DEFAULT_SUBTITLE_STYLE,
+} from "../../../shared/src/index.js";
 import { validateAssetsManifest } from "../../../backend/src/modules/assets/assets-local-validator.js";
 import { buildInitialAssetManifest } from "../../../backend/src/modules/assets/assets-manifest-builder.js";
 
@@ -267,6 +270,55 @@ describe("AssetArtifact timing metadata schema", () => {
         },
       }),
     ).not.toThrow();
+  });
+
+  it("accepts subtitle style metadata on subtitle artifacts", () => {
+    expect(DEFAULT_SUBTITLE_STYLE).toMatchObject({
+      style_id: "subtitle_style_default_vertical",
+      position: "bottom",
+      text_align: "center",
+      max_lines: 2,
+    });
+
+    expect(() =>
+      AssetArtifact.parse({
+        artifact_id: "artifact_subtitle_srt_001",
+        artifact_type: "subtitle_track",
+        origin: "provider",
+        file_uri: "memory://subtitle.srt",
+        created_at: "2026-05-20T00:00:00.000Z",
+        metadata: {
+          format: "srt",
+          source_tts_artifact_id: "artifact_tts_merged",
+          source_tts_chunk_artifact_ids: ["artifact_tts_chunk_001"],
+          caption_count: 1,
+          duration_sec: 3.2,
+          timing_source: "audio_probe",
+          subtitle_style: DEFAULT_SUBTITLE_STYLE,
+        },
+      }),
+    ).not.toThrow();
+  });
+
+  it("rejects invalid subtitle style metadata", () => {
+    expect(() =>
+      AssetArtifact.parse({
+        artifact_id: "artifact_subtitle_srt_001",
+        artifact_type: "subtitle_track",
+        origin: "provider",
+        file_uri: "memory://subtitle.srt",
+        created_at: "2026-05-20T00:00:00.000Z",
+        metadata: {
+          format: "srt",
+          source_tts_artifact_id: "artifact_tts_merged",
+          caption_count: 1,
+          subtitle_style: {
+            ...DEFAULT_SUBTITLE_STYLE,
+            position: "below_frame",
+          },
+        },
+      }),
+    ).toThrow();
   });
 });
 

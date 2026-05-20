@@ -37,7 +37,9 @@ export {
   AssetExecutionOptions,
   AssetTaskExecution,
   BgmPlacement,
+  DEFAULT_SUBTITLE_STYLE,
   SegmentAssetRoute,
+  SubtitleStyle,
   TtsChunkRoute,
 } from "./assets/asset-manifest.schema";
 export { AssetsValidationResult } from "./assets/assets-validation.schema";
