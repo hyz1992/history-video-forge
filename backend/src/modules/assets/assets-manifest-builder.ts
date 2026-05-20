@@ -17,6 +17,7 @@ import type {
   SegmentAssetRoute,
   TtsChunkRoute,
 } from "../../../../shared/src/index.js";
+import { readBgmCueParams } from "./audio-cue-params.js";
 
 // ─── Input ────────────────────────────────────────────────────────────────────
 
@@ -306,16 +307,32 @@ function buildBgmPlacements(tasks: AssetPlan["tasks"]): BgmPlacement[] {
   for (const task of tasks) {
     if (task.task_type !== "bgm_cue") continue;
 
+    const params = readBgmCueParams(task.parameters);
+    const segmentIds =
+      params.scope === "global"
+        ? []
+        : params.segmentIds.length > 0
+          ? params.segmentIds
+          : task.source_segment_id
+            ? [task.source_segment_id]
+            : [];
+
     placements.push({
       bgm_placement_id: generateId("bgm_place", task.task_id),
-      scope: "global",
+      source_task_id: task.task_id,
+      scope: params.scope,
       artifact_id: null, // No BGM audio artifact yet
-      start_policy: "timeline_start",
-      end_policy: "timeline_end",
-      segment_ids: [],
-      volume: 0.3,
-      fade_in_sec: 0,
-      fade_out_sec: 0,
+      start_policy: params.scope === "global" ? "timeline_start" : "segment_start",
+      end_policy:
+        params.scope === "global"
+          ? "timeline_end"
+          : params.scope === "segment"
+            ? "segment_end"
+            : "fade_out_after_span",
+      segment_ids: segmentIds,
+      volume: params.volume,
+      fade_in_sec: params.fadeInSec,
+      fade_out_sec: params.fadeOutSec,
     });
   }
 

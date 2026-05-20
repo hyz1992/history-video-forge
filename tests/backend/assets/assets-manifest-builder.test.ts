@@ -536,6 +536,69 @@ describe("buildInitialAssetManifest", () => {
     expect(typeof bgmPlacement.volume).toBe("number");
   });
 
+  it("builds BGM placements from bgm_cue parameters with source task identity", () => {
+    const bgmGlobalTask: AssetTask = {
+      ...bgmTask(),
+      task_id: "bgm_global",
+      order: 0,
+      source_segment_id: null,
+      parameters: {
+        required_tags: ["background"],
+        mood_tags: ["tense"],
+        scope: "global",
+        volume: 0.24,
+        fade_in_sec: 1.5,
+        fade_out_sec: 2,
+      },
+    };
+    const bgmSpanTask: AssetTask = {
+      ...bgmTask(),
+      task_id: "bgm_span",
+      order: 1,
+      source_segment_id: "sb_001",
+      parameters: {
+        required_tags: ["drum"],
+        scope: "segment_span",
+        segment_ids: ["sb_001", "sb_002"],
+        volume: 0.42,
+        fade_in_sec: 0.5,
+        fade_out_sec: 0.75,
+      },
+    };
+
+    const manifest = buildInitialAssetManifest({
+      assetPlanRecordId: "asset_plan_bgm_params",
+      assetPlan: makeBaseAssetPlan([bgmGlobalTask, bgmSpanTask]),
+      segmentIds: ["sb_001", "sb_002"],
+    });
+
+    expect(manifest.audio_summary.bgm_placements).toMatchObject([
+      {
+        bgm_placement_id: "bgm_place_bgm_global",
+        source_task_id: "bgm_global",
+        scope: "global",
+        segment_ids: [],
+        start_policy: "timeline_start",
+        end_policy: "timeline_end",
+        volume: 0.24,
+        fade_in_sec: 1.5,
+        fade_out_sec: 2,
+      },
+      {
+        bgm_placement_id: "bgm_place_bgm_span",
+        source_task_id: "bgm_span",
+        scope: "segment_span",
+        segment_ids: ["sb_001", "sb_002"],
+        start_policy: "segment_start",
+        end_policy: "fade_out_after_span",
+        volume: 0.42,
+        fade_in_sec: 0.5,
+        fade_out_sec: 0.75,
+      },
+    ]);
+    expect(manifest.segment_routes[0]?.bgm_placement_ids).toEqual([]);
+  });
+
   // ── 9. Readiness blocked when artifacts incomplete ───────────────────────────
 
   it("sets readiness blocked when TTS/subtitle/image artifacts are not complete", () => {

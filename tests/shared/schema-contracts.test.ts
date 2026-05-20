@@ -847,6 +847,53 @@ describe("shared schema contracts", () => {
     expect(manifest.segment_routes[0].visual_route_type).toBe("missing");
   });
 
+  it("accepts BGM placements with source task identity", () => {
+    const manifest = AssetManifest.parse({
+      manifest_version: "asset_manifest_v1",
+      source_asset_plan_id: "plan_001",
+      source_storyboard_record_id: "storyboard_001",
+      source_script_record_id: "script_001",
+      execution_options: {
+        execution_mode: "auto_available",
+        voice_profile_id: "voice_1",
+        enabled_provider_types: ["bgm"],
+        allow_manual_placeholders: true,
+      },
+      executions: [],
+      artifacts: [],
+      audio_summary: {
+        voice_profile_id: "voice_1",
+        tts_total_duration_sec: null,
+        tts_chunk_artifact_ids: [],
+        tts_chunk_routes: [],
+        tts_merged_artifact_id: null,
+        subtitle_artifact_id: null,
+        bgm_placements: [
+          {
+            bgm_placement_id: "bgm_place_001",
+            source_task_id: "bgm_task_001",
+            scope: "global",
+            artifact_id: null,
+            start_policy: "timeline_start",
+            end_policy: "timeline_end",
+            segment_ids: [],
+            volume: 0.3,
+            fade_in_sec: 0,
+            fade_out_sec: 0,
+          },
+        ],
+        sfx_artifact_ids: [],
+      },
+      segment_routes: [],
+      readiness: "blocked",
+      notes: [],
+    });
+
+    expect(manifest.audio_summary.bgm_placements[0]?.source_task_id).toBe(
+      "bgm_task_001",
+    );
+  });
+
   it("parses AssetsValidationResult with stage assets_local_validation", () => {
     const result = AssetsValidationResult.parse({
       stage: "assets_local_validation",

@@ -369,6 +369,7 @@ export const AssetTaskExecution = z
 export const BgmPlacement = z
   .object({
     bgm_placement_id: z.string().min(1),
+    source_task_id: z.string().min(1).optional(),
     scope: z.enum(["global", "segment", "segment_span"]),
     artifact_id: z.string().min(1).nullable(),
     start_policy: z.enum(["timeline_start", "segment_start"]),
