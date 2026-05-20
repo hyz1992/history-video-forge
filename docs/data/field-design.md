@@ -831,7 +831,7 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 
 ## Assets v1 字段（2026-05-18 已同步后端执行基础）
 
-`AssetManifest` 是 assets 阶段的正式输出对象。它描述资产执行结果清单，包含任务执行状态、artifact 元数据、分镜 route 和音频摘要。当前 assets 后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础、执行期 TTS 分块规范化、音频时长探测与字幕 timing metadata、本地 BGM/SFX 素材选择与 deterministic WAV fixture 物化，以及显式 DashScope TTS/文生图/image-to-video 路径；仍不包含真实付费 BGM/SFX provider、上传/预览 UI、发布级素材运营流或署名包装。
+`AssetManifest` 是 assets 阶段的正式输出对象。它描述资产执行结果清单，包含任务执行状态、artifact 元数据、分镜 route 和音频摘要。当前 assets 后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础、默认音频素材库 seed 合同、执行期 TTS 分块规范化、音频时长探测与字幕 timing metadata、本地 BGM/SFX 素材选择与 deterministic WAV fixture 物化，以及显式 DashScope TTS/文生图/image-to-video 路径；仍不包含真实付费 BGM/SFX provider、上传/预览 UI、发布级素材运营流或署名包装。
 
 ### `AssetManifest`
 
@@ -924,6 +924,7 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 - 同 segment 的 source image 会保留为 `fallback_visual_artifact_id`；图生视频缺失或失败时，compose/renderer 仍可使用 image + `motion_recipe` fallback。
 - DashScope image-to-video provider job 只属于 assets 阶段字段和 provider job 记录，不进入 compose 或 renderer 字段语义。
 - 当前本地 SFX provider 使用 `AssetPlanTask.source_segment_id` 写入 `sfx_artifact_ids`。`bgm_placement_ids` 字段在当前 slice 保留但不写入；BGM 仍通过 `audio_summary.bgm_placements` 与 `BgmPlacement.source_task_id` 进入 compose。
+- 默认音频素材库 seed 只表达元数据和授权证据：`source_url`、license、`file_hash`、tags、mood tags、duration、loopable 和 approval。`sha256:pending-*` 只适用于尚未下载真实文件的 seed 合同；真实文件入库时必须替换为真实 SHA-256。
 - TTS timing source 当前支持 `estimated / audio_probe / provider_timestamp / forced_alignment / mixed`，并兼容旧值 `provider / aligned`。DashScope TTS 在 mocked WAV 和真实 WAV/PCM 可探测时写入 `audio_probe`，不可探测格式保守回落为 `estimated`。
 - 字幕 artifact 当前来自本地 subtitle provider，跟随 TTS chunk artifact 生成 chunk-level cues，并记录来源 TTS chunk ids、总时长、timing source 和默认竖屏 `subtitle_style`；多个来源不一致时写入 `mixed`。`subtitle_style` 第一版包含字体、字号、描边、阴影、位置、安全区、最大行数和最大宽度等 renderer-facing 字段。word-level provider timestamps 或 forced alignment 仍属于后续工作。
 
@@ -1052,7 +1053,7 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 
 - `ComposeTimeline` 不包含最终 MP4、Remotion composition 或 provider job；若输入 `AssetManifest` 已有 `video` artifact，timeline 只保存对该 artifact 的引用。
 - segment 时长优先消费 TTS chunk artifact 的 `duration_sec`；当多个 TTS chunks 指向同一 segment 时按总和累加，缺失 chunk 覆盖时才按 merged narration 总时长 fallback。
-- BGM/SFX tracks 只消费已存在的 `bgm_audio` / `sfx_audio` artifact。缺失可选素材不触发 compose 生成或 provider 调用，也不回改 asset plan。
+- BGM/SFX tracks 只消费已存在的 `bgm_audio` / `sfx_audio` artifact。缺失可选素材不触发 compose 生成或 provider 调用，也不回改 asset plan；assets validation 会区分“没有 BGM placement”和“已有 placement 但未附着 BGM artifact”两类可选告警。
 - compose local validator 不判断画面质量、声音质量、审美、爆款节奏或历史相似度。
 - 缺失可选 BGM 只产生 warning，不阻断 `ready_for_render`。
 
@@ -1110,4 +1111,4 @@ Renderer v1 字段只描述 `ComposeTimeline` 之后的渲染与导出结果，�
 - renderer 字段不替代 compose timeline；最终视频的时间轴 source 仍是 `ComposeTimeline`。
 - renderer 当前不实现前端预览 UI、word-level forced alignment、karaoke captions 或字幕人工编辑流。
 
-补充说明（2026-05-20）：本地 Remotion adapter 会在运行时把 `ComposeTimeline` + `AssetManifest` 派生为 `visualClips`、`audioClips`、`subtitleCues` 和 `subtitleStyle`。`visualClips` 支持 image、video、image + `motion_recipe` fallback、基础 pan/zoom/hold/push-in 与 crossfade；`audioClips` 支持 narration 以及已存在 artifact 的 BGM/SFX。fake TTS 产物已改为 render-ready WAV，以便离线 smoke 生成带音频的 MP4。当前像素级 smoke 依赖 headless Chromium，只证明画面非空和字幕可见，不承担审美或发布质量判断。
+补充说明（2026-05-20）：本地 Remotion adapter 会在运行时把 `ComposeTimeline` + `AssetManifest` 派生为 `visualClips`、`audioClips`、`subtitleCues` 和 `subtitleStyle`。`visualClips` 支持 image、video、image + `motion_recipe` fallback、基础 pan/zoom/hold/push-in 与 crossfade；`audioClips` 支持 narration 以及已存在 artifact 的 BGM/SFX。BGM audio clip 会携带 volume、fade in/out、loop 和 source duration，`TimelineVideo` 会应用淡入淡出并在源音频短于 clip 时重复播放。fake TTS 与本地 BGM/SFX 产物均可作为 render-ready WAV，用于离线 smoke 生成带音频的 MP4。当前像素级 smoke 依赖 headless Chromium，只证明画面非空和字幕可见，不承担审美、音频听感或发布质量判断。

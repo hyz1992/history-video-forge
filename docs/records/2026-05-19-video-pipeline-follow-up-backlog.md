@@ -69,6 +69,9 @@
 - [x] 设计 SFX cue 到素材选择的规则，避免滥用音效。
 - [x] 实现 fake/local provider 基线，不先接真实付费 provider。
 - [x] 更新 compose/renderer 消费 BGM/SFX tracks。
+- [x] 增加默认 BGM/SFX 素材库 seed 合同与幂等写入，不覆盖用户已有素材。
+- [x] 补充 BGM placement 已存在但 artifact 缺失的明确 optional warning。
+- [x] renderer 消费 BGM fade/loop 字段，并在 Remotion 音频渲染中应用淡入淡出与重复播放。
 - [ ] 真实付费 BGM/SFX provider、素材上传/预览、署名包装、ducking 与响度归一化仍需单独设计。
 
 ## P1: 图生视频真实验证

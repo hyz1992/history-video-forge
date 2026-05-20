@@ -282,7 +282,7 @@ Asset Planning v1 消费 active `StoryboardRecord` 及其来源 `ScriptRecord` /
 
 ## 6. Assets v1 阶段（2026-05-18 已同步后端执行基础）
 
-Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `ScriptRecord` / `TopicPackage`，输出可持久化的资产执行结果清单。当前后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础、全局音色库解析、本地 BGM/SFX 素材选择与 deterministic WAV fixture 物化，以及显式 DashScope TTS/文生图/image-to-video 路径。它不实现 compose timeline，也不负责最终视频导出。
+Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `ScriptRecord` / `TopicPackage`，输出可持久化的资产执行结果清单。当前后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础、默认音频素材库 seed 合同、全局音色库解析、本地 BGM/SFX 素材选择与 deterministic WAV fixture 物化，以及显式 DashScope TTS/文生图/image-to-video 路径。它不实现 compose timeline，也不负责最终视频导出。
 
 输入：
 
@@ -310,6 +310,7 @@ Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `Scr
 
 - `buildInitialAssetManifest` 从执行期 `AssetPlan` 确定性构建：为每个 plan task 创建 `AssetTaskExecution`，为 `render_motion_cue` 创建 inline artifact，为 TTS chunk 创建占位 artifact，构建 `SegmentAssetRoute` 和 `AssetAudioSummary`。
 - `bgm_cue` / `sfx_cue` 第一版只走离线本地媒体库：选择 `approved_for_use` 且 `commercial_use_allowed` 的素材，按显式 `library_item_id` 或 required/mood tags 选中条目，再物化为本地 render-ready WAV artifact。缺失可选 BGM/SFX 只记录 notes/warnings，不阻塞 assets。
+- 默认音频素材库 seed 当前是 metadata-first / license-evidence-first：它保存 `source_url`、license、hash、tags、mood tags、duration 与 approval 状态；真实音频下载或用户提供文件必须在后续单独 import-check 中替换真实 SHA-256，并保留具体素材来源页和授权证据。
 - `BgmPlacement.source_task_id` 是 `bgm_cue` task 到 placement 的稳定关联；compose/renderer 只消费已附着到 placement 的具体 `bgm_audio` artifact。`SegmentAssetRoute.bgm_placement_ids` 在当前 slice 仍保留但不写入，BGM 仍通过 `audio_summary.bgm_placements` 路由。
 - `sfx_cue` 使用 `AssetPlanTask.source_segment_id` 作为 segment route 归属，并只在有明确 tags 或显式素材 ID 时生成 `sfx_audio` artifact，避免无依据地滥用音效。
 - `bgm_audio` / `sfx_audio` artifact metadata 通过 shared schema passthrough 保留素材审计字段，例如 `library_item_id`、`selection_label`、`license_type`、`attribution_required`、`attribution_text`、`required_tags`、`matched_mood_tags` 与 `source_materialized_from`。
@@ -451,7 +452,7 @@ Compose v1 消费 active `AssetManifestRecord`，输出可持久化的 `ComposeT
 - `TimelineVideo` 按当前 frame/fps 选择 active cue，并用安全区、描边、阴影、最大行数和最大宽度约束渲染字幕。
 - local Remotion adapter 还会把 `ComposeTimeline` + `AssetManifest` 规范化为运行时 props：`visualClips`、`audioClips`、`subtitleCues` 与 `subtitleStyle`。这些 props 是 adapter 内部渲染输入合同，不回写到 `ComposeTimeline`。
 - `visualClips` 支持 `image`、`video` 与 image + `motion_recipe` fallback；当前本地 motion recipes 覆盖 `hold`、`slow_push_in`、`push_in`、`pan_left`、`pan_right`、`pan_up`、`pan_down`、`zoom_in`、`zoom_out`，相邻视觉 clip 可使用 crossfade。
-- narration 在存在可渲染音频时默认 mux；BGM/SFX 仅在 `AssetManifest` 已存在具体 `bgm_audio` / `sfx_audio` artifact 且 timeline 引用它们时渲染，不由 renderer 生成。
+- narration 在存在可渲染音频时默认 mux；BGM/SFX 仅在 `AssetManifest` 已存在具体 `bgm_audio` / `sfx_audio` artifact 且 timeline 引用它们时渲染，不由 renderer 生成。BGM 的 `fade_in_sec`、`fade_out_sec` 与 `loopable` 已进入 renderer audio props，并由 `TimelineVideo` 在 `<Audio>` 序列中应用淡入淡出与重复播放。
 - fake TTS 当前写入 render-ready WAV，用于离线 Remotion smoke；本地长音频当前以内联 data URI 交给 Remotion，后续如样片变长可改为静态资源服务路径。
 - 当前已有 Remotion `renderStill` 静帧 smoke，通过 Node 内置 PNG 像素扫描确认下方安全区存在可见字幕像素；本地成片质量 smoke 还会确认画面非黑像素。此类 smoke 需要可用的 headless Chromium。
 
