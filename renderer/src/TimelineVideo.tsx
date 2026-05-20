@@ -12,7 +12,9 @@ import {
 
 import type { RenderVisualClipProp, TimelineVideoProps } from "./timeline-props";
 import {
+  getAudioLoopSequences,
   getAudioSequenceFrames,
+  getFadedAudioVolume,
   normalizeAudioVolume,
 } from "./audio-rendering";
 import {
@@ -160,6 +162,20 @@ export function TimelineVideo(props: TimelineVideoProps) {
           durationSec: clip.durationSec,
           fps: props.fps,
         });
+        const localSec = frame / props.fps - clip.startSec;
+        const volume = getFadedAudioVolume({
+          baseVolume: normalizeAudioVolume(clip.volume),
+          localSec,
+          durationSec: clip.durationSec,
+          fadeInSec: clip.fadeInSec,
+          fadeOutSec: clip.fadeOutSec,
+        });
+        const loopSequences = clip.loop
+          ? getAudioLoopSequences({
+              clipDurationSec: clip.durationSec,
+              sourceDurationSec: clip.sourceDurationSec,
+            })
+          : [{ offsetSec: 0, durationSec: clip.durationSec }];
 
         return (
           <Sequence
@@ -167,7 +183,23 @@ export function TimelineVideo(props: TimelineVideoProps) {
             from={sequence.from}
             durationInFrames={sequence.durationInFrames}
           >
-            <Audio src={clip.src} volume={normalizeAudioVolume(clip.volume)} />
+            {loopSequences.map((loopSequence, index) => {
+              const loopFrames = getAudioSequenceFrames({
+                startSec: loopSequence.offsetSec,
+                durationSec: loopSequence.durationSec,
+                fps: props.fps,
+              });
+
+              return (
+                <Sequence
+                  key={`${clip.clipId}_loop_${index}`}
+                  from={loopFrames.from}
+                  durationInFrames={loopFrames.durationInFrames}
+                >
+                  <Audio src={clip.src} volume={volume} />
+                </Sequence>
+              );
+            })}
           </Sequence>
         );
       })}
