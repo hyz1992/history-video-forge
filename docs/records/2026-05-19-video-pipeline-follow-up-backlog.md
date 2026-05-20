@@ -48,11 +48,11 @@
 ## P1: 字幕样式与 renderer 消费
 
 - [x] 完成字幕样式与 renderer 消费正式 design + implementation plan。
-- [ ] 实现字幕样式 schema：字号、位置、安全区、描边、阴影、最大行数、断行策略。
-- [ ] 在 subtitle artifact metadata 或 compose timeline 中承载字幕样式。
-- [ ] renderer/Remotion 消费字幕样式并实际渲染。
-- [ ] 增加竖屏移动端安全区检查，避免字幕遮挡主体或溢出。
-- [ ] 增加截图或像素级 smoke，确认字幕可见、不重叠、不超出画面。
+- [x] 实现字幕样式 schema：字号、位置、安全区、描边、阴影、最大行数、断行策略。
+- [x] 在 subtitle artifact metadata 中承载字幕样式；`ComposeTimeline` 第一版保持不复制样式字段。
+- [x] renderer/Remotion 消费字幕样式并实际渲染。
+- [x] 增加竖屏移动端安全区检查，避免字幕溢出画面；主体遮挡仍需后续真实画面样本验证。
+- [x] 增加像素级 smoke，确认字幕可见且落在预期下方安全区。
 
 ## P1: Remotion 本地成片质量
 

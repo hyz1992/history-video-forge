@@ -893,7 +893,7 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 |---|---|
 | `tts_chunk_audio` | `duration_sec`、`estimated_duration_sec`、`duration_source`、`voice_profile_id`、`provider_voice_id`、`voice_profile_match_score`、`voice_profile_match_reasons`、`timing_source`、`duration_probe_error`、`sample_rate`、`format`、`tts_chunk_id`、`segment_ids`、`script_excerpt` |
 | `tts_merged_audio` | `duration_sec`、`estimated_duration_sec`、`duration_source`、`voice_profile_id`、`provider_voice_id`、`voice_profile_match_score`、`voice_profile_match_reasons`、`timing_source`、`duration_probe_error`、`sample_rate`、`format`、`chunk_artifact_ids` |
-| `subtitle_track` | `format`、`source_tts_artifact_id`、`source_tts_chunk_artifact_ids`、`caption_count`、`duration_sec`、`timing_source` |
+| `subtitle_track` | `format`、`source_tts_artifact_id`、`source_tts_chunk_artifact_ids`、`caption_count`、`duration_sec`、`timing_source`、`subtitle_style` |
 | `image` | `width`、`height` |
 | `video` | `duration_sec`、`width`、`height`、`fps`、`provider_name`、`provider_job_id`、`source_image_artifact_id`、`model`、`resolution` |
 | `motion_recipe` | `recipe_type`、`source_image_artifact_id`、`parameters` |
@@ -924,7 +924,7 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 - 同 segment 的 source image 会保留为 `fallback_visual_artifact_id`；图生视频缺失或失败时，compose/renderer 仍可使用 image + `motion_recipe` fallback。
 - DashScope image-to-video provider job 只属于 assets 阶段字段和 provider job 记录，不进入 compose 或 renderer 字段语义。
 - TTS timing source 当前支持 `estimated / audio_probe / provider_timestamp / forced_alignment / mixed`，并兼容旧值 `provider / aligned`。DashScope TTS 在 mocked WAV 和真实 WAV/PCM 可探测时写入 `audio_probe`，不可探测格式保守回落为 `estimated`。
-- 字幕 artifact 当前来自本地 subtitle provider，跟随 TTS chunk artifact 生成 chunk-level cues，并记录来源 TTS chunk ids、总时长和 timing source；多个来源不一致时写入 `mixed`。word-level provider timestamps 或 forced alignment 仍属于后续工作。
+- 字幕 artifact 当前来自本地 subtitle provider，跟随 TTS chunk artifact 生成 chunk-level cues，并记录来源 TTS chunk ids、总时长、timing source 和默认竖屏 `subtitle_style`；多个来源不一致时写入 `mixed`。`subtitle_style` 第一版包含字体、字号、描边、阴影、位置、安全区、最大行数和最大宽度等 renderer-facing 字段。word-level provider timestamps 或 forced alignment 仍属于后续工作。
 
 ### `AssetAudioSummary`
 
@@ -1057,6 +1057,8 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 
 Renderer v1 字段只描述 `ComposeTimeline` 之后的渲染与导出结果，不改变上游 topic/script/storyboard/asset planning/assets/compose 字段语义。
 
+补充说明（2026-05-20）：本地 Remotion adapter 会从 `AssetManifest` 的 subtitle artifact 读取 SRT/VTT，解析为 `subtitleCues`，并把 `subtitle_track.metadata.subtitle_style` 作为 `subtitleStyle` 传给 `TimelineVideo`。`TimelineVideo` 按当前帧选择 active cue，并使用安全区、描边、阴影、最大行数和最大宽度约束实际渲染字幕；已有静帧 smoke 使用 PNG 像素扫描确认字幕在下方安全区可见。
+
 ### `ExportArtifact`
 
 | 字段 | 含义 |
@@ -1103,3 +1105,4 @@ Renderer v1 字段只描述 `ComposeTimeline` 之后的渲染与导出结果，�
 - renderer 字段不表达素材审美、爆款评分、历史相似度或人工审稿结论。
 - renderer 字段不表达 DashScope 图生视频 provider job。
 - renderer 字段不替代 compose timeline；最终视频的时间轴 source 仍是 `ComposeTimeline`。
+- renderer 当前不实现前端预览 UI、word-level forced alignment、karaoke captions 或字幕人工编辑流。

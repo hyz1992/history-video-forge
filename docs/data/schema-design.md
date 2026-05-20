@@ -477,7 +477,7 @@ Assets v1 已有第一版持久化记录。它是 `AssetPlanRecord` 之后的派
 - `validation_result_json` 保存 `AssetsValidationResult`。
 - `execution_state_json` 记录 `execution_mode`、`voice_profile_id`、`voice_match_result`、`activated` 等执行状态；显式 `provider_mode=dashscope` 的 TTS、image 和 image-to-video provider 调用由 assets provider job 记录和 manifest artifact metadata 表达。
 - DashScope TTS artifact metadata 会保存本地 `voice_profile_id`、供应商 `provider_voice_id`、`sample_rate`、`format`、`timing_source`、`duration_source`、`estimated_duration_sec` 以及可用的音色匹配信息；WAV/PCM 可探测时 `duration_sec` 来自音频探测，不可探测格式保守回落为估算值并记录 `duration_probe_error`。
-- 本地字幕 artifact metadata 会保存 `source_tts_chunk_artifact_ids`、`duration_sec` 与 `timing_source`；多个来源 timing source 不一致时记录为 `mixed`。
+- 本地字幕 artifact metadata 会保存 `source_tts_chunk_artifact_ids`、`duration_sec`、`timing_source` 与 `subtitle_style`；多个来源 timing source 不一致时记录为 `mixed`。`subtitle_style` 使用 shared `SubtitleStyle` 合同，默认值为 `DEFAULT_SUBTITLE_STYLE`，第一版服务竖屏 Remotion 渲染，不复制到 `ComposeTimeline`。
 - `asset_manifest_records` 不保存 compose timeline 或最终视频导出；图生视频只作为 assets artifact，不等同于最终导出 MP4。
 
 ## VoiceProfile 全局音色库映射（2026-05-19 已实现）
@@ -621,4 +621,5 @@ Renderer / Export v1 已有第一版持久化记录。它是 `ComposeRecord` 之
 - `output_artifact_json` 保存 `ExportArtifact`。
 - `validation_result_json` 保存 `RenderValidationResult`。
 - `execution_state_json` 至少记录 `status`、`activated`、`adapter` 与 source compose 信息。
+- Renderer 运行时从 source `AssetManifestRecord.manifest_json` 读取 subtitle artifact，解析 SRT/VTT 为 `subtitleCues`，并把 `subtitle_track.metadata.subtitle_style` 作为 `subtitleStyle` 传入 Remotion；这些渲染输入是运行时派生 props，不单独持久化为 render job 字段。
 - `render_job_records` 不保存 DashScope 图生视频 job，不保存发布流状态，不保存人工审稿状态。

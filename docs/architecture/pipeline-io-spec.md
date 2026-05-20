@@ -314,7 +314,7 @@ Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `Scr
 - 音色库属于 assets 阶段的全局共享能力，不随单个项目复制。`AssetPlan.global_audio_strategy.voice_intent` 可携带 `VoiceIntent`；assets 执行前会 seed 全局预设音色、用 deterministic matcher 产出 `VoiceMatchResult`，并在没有合适音色时只创建本地 `VoiceProfile` 档案，不立即调用供应商。
 - DashScope TTS 执行时才做供应商音色懒解析：若选中的本地 `VoiceProfile` 已有 `provider_voice_id` 或属于系统音色，则直接用于 TTS；若缺失且 provider 为 `dashscope`，才调用声音设计接口创建 provider voice，并回写本地音色状态。
 - DashScope TTS artifact metadata 同时保留本地 `voice_profile_id` 与供应商 `provider_voice_id`，并记录 `sample_rate`、`format`、`timing_source`、`duration_source`、`estimated_duration_sec` 以及可用的匹配信息。WAV/PCM 可探测时 `duration_sec` 来自音频探测并标记 `audio_probe`；不可探测格式保守回落为 `estimated`。
-- 字幕仍由本地 subtitle provider 基于 TTS chunk 生成，当前为 chunk-level cues；subtitle artifact 会记录来源 chunk artifact ids、总时长和 timing source，来源混合时标记 `mixed`。provider timestamp 与 forced alignment 仍是后续增强，不属于当前默认实现。
+- 字幕仍由本地 subtitle provider 基于 TTS chunk 生成，当前为 chunk-level cues；subtitle artifact 会记录来源 chunk artifact ids、总时长、timing source 和 `subtitle_style`，来源混合时标记 `mixed`。`subtitle_style` 第一版写入默认竖屏样式，包含字体、字号、位置、安全区、描边、阴影、最大行数和最大宽度等 renderer-facing 字段。provider timestamp、forced alignment 与 word-level alignment 仍是后续增强，不属于当前默认实现。
 - 全局音色库当前通过 `storage/voice-profiles/voice-profiles.json` 持久化，文档版本为 `voice_profiles_v1`。`runAssetsGeneration()` 会在项目存在 `storageRootDir` 且 db 尚未显式配置时自动接线该库；测试和脚本也可显式配置临时 root。
 - 音色库加载后只 seed 缺失预设，不覆盖已存在档案。成功选择/复用音色会回写 `usage_count` 与 `last_used_at`；供应商音色创建成功会回写 `provider_voice_id`、`provider_status`、`preview_audio_uri` 与 `updated_at`。
 - `storage/voice-profiles/voice-profiles.json` 属于需要备份的运营状态，不进入默认 git 提交；清理或迁移 storage 时必须保留该文件，避免丢失真实 provider voice id 后重复创建付费供应商音色。
@@ -440,6 +440,13 @@ Compose v1 消费 active `AssetManifestRecord`，输出可持久化的 `ComposeT
 - 缺失可选 BGM/SFX 只产生 warning，不阻塞 render。
 - renderer validator 不判断审美、爆款、历史相似度、素材生成质量，也不修复上游语义。
 
+字幕消费：
+
+- local Remotion adapter 从 source `AssetManifest` 中找到 subtitle artifact，读取 SRT/VTT 文件并解析为 `subtitleCues`。
+- adapter 将 `subtitle_track.metadata.subtitle_style` 规范化为 `subtitleStyle`；缺失或非法样式回落到 shared `DEFAULT_SUBTITLE_STYLE`。
+- `TimelineVideo` 按当前 frame/fps 选择 active cue，并用安全区、描边、阴影、最大行数和最大宽度约束渲染字幕。
+- 当前已有 Remotion `renderStill` 静帧 smoke，通过 Node 内置 PNG 像素扫描确认下方安全区存在可见字幕像素。
+
 激活与失效：
 
 - `POST /api/projects/:projectId/render/generate` 在激活前必须复查 active compose 指针仍与 source compose 一致。
@@ -452,4 +459,5 @@ Compose v1 消费 active `AssetManifestRecord`，输出可持久化的 `ComposeT
 - 不在 renderer 阶段实现或调用 DashScope 图生视频 provider；renderer 只消费 assets 阶段已产出的 `video` artifact 或 image + motion fallback。
 - 不由 renderer 生成缺失素材。
 - 不实现前端预览 UI、发布流、人工审稿流或质量评分。
+- 不实现 word-level forced alignment、karaoke captions 或字幕人工编辑流。
 - 不把 compose v1 扩展成最终视频语义链路。

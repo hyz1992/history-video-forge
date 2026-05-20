@@ -155,3 +155,5 @@
 - 新增 [Subtitle Style and Renderer Consumption Implementation Plan](./2026-05-20-subtitle-style-renderer-consumption-implementation-plan.md)。
 - 本轮设计选择把首版字幕样式合同放在 `subtitle_track.metadata.subtitle_style`，由 renderer 通过 `AssetManifest` 消费；`ComposeTimeline` 第一版保持不变。
 - Implementation plan 拆为 shared schema、local subtitle 默认样式、subtitle cue reader、Remotion adapter props、TimelineVideo 样式渲染、静帧可见性 smoke、正式文档同步 7 个 TDD 任务。
+- 截至 2026-05-20，Implementation plan Task 1-7 已完成：shared `SubtitleStyle` / `DEFAULT_SUBTITLE_STYLE`、local subtitle metadata 写入、SRT/VTT cue reader、Remotion input props、`TimelineVideo` active cue 样式渲染、`renderStill` 静帧像素可见性 smoke 与正式文档同步。
+- 本轮仍不实现前端预览 UI、word-level forced alignment、karaoke captions、字幕人工编辑流或发布流。
