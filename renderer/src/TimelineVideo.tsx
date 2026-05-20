@@ -8,6 +8,11 @@ import {
 } from "remotion";
 
 import type { TimelineVideoProps } from "./timeline-props";
+import {
+  DEFAULT_SUBTITLE_STYLE_PROP,
+  getActiveSubtitleCue,
+  makeSubtitleContainerStyle,
+} from "./subtitle-rendering";
 
 type ArtifactLike = {
   artifact_id?: unknown;
@@ -67,6 +72,12 @@ export function TimelineVideo(props: TimelineVideoProps) {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   const visualUri = findPrimaryVisualUri(props);
+  const activeSubtitle =
+    getActiveSubtitleCue({
+      cues: props.subtitleCues ?? [],
+      frame,
+      fps: props.fps,
+    })?.text ?? props.subtitleText;
   const scale = interpolate(
     frame,
     [0, Math.max(1, durationInFrames - 1)],
@@ -87,23 +98,16 @@ export function TimelineVideo(props: TimelineVideoProps) {
           }}
         />
       ) : null}
-      {props.subtitleText ? (
+      {activeSubtitle ? (
         <div
-          style={{
-            position: "absolute",
-            left: 48,
-            right: 48,
-            bottom: 120,
-            color: "white",
-            fontFamily: "Arial, sans-serif",
-            fontSize: 48,
-            fontWeight: 700,
-            lineHeight: 1.2,
-            textAlign: "center",
-            textShadow: "0 3px 14px rgba(0,0,0,0.75)",
-          }}
+          data-testid="timeline-subtitle"
+          style={makeSubtitleContainerStyle({
+            frameWidth: props.width,
+            frameHeight: props.height,
+            style: props.subtitleStyle ?? DEFAULT_SUBTITLE_STYLE_PROP,
+          })}
         >
-          {props.subtitleText}
+          {activeSubtitle}
         </div>
       ) : null}
     </AbsoluteFill>
