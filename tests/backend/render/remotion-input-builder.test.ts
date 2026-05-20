@@ -382,6 +382,25 @@ describe("buildRemotionInputProps", () => {
     expect(props.audioClips[0]?.src).toMatch(/^data:audio\/wav;base64,/);
     expect(props.audioClips[1]?.src).toMatch(/^data:audio\/wav;base64,/);
     expect(props.audioClips[2]?.src).toMatch(/^data:audio\/wav;base64,/);
+    expect(props.audioClips).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          artifactId: "artifact_bgm_001",
+          role: "bgm",
+          volume: 0.22,
+        }),
+        expect.objectContaining({
+          artifactId: "artifact_sfx_001",
+          role: "sfx",
+          volume: 0.8,
+        }),
+      ]),
+    );
+    expect(
+      props.audioClips
+        .filter((clip) => clip.role === "bgm" || clip.role === "sfx")
+        .every((clip) => clip.src.startsWith("data:audio/")),
+    ).toBe(true);
     expect(props.subtitleCues).toEqual([
       { start_sec: 0, end_sec: 2, text: "Hello." },
     ]);
