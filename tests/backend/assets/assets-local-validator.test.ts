@@ -683,6 +683,45 @@ describe("validateAssetsManifest", () => {
     expect(result.decision).toBe("partial");
   });
 
+  it("warns when BGM placements exist but no BGM artifact is attached", async () => {
+    const result = await runValidation({
+      audio_summary: {
+        voice_profile_id: "voice_001",
+        tts_total_duration_sec: 50,
+        tts_chunk_artifact_ids: ["artifact_tts_1"],
+        tts_chunk_routes: [
+          {
+            tts_chunk_id: "chunk_1",
+            artifact_id: "artifact_tts_1",
+            segment_ids: ["sb_001"],
+            script_excerpt: "第一段",
+          },
+        ],
+        tts_merged_artifact_id: null,
+        subtitle_artifact_id: null,
+        bgm_placements: [
+          {
+            bgm_placement_id: "bgm_place_1",
+            source_task_id: "task_bgm_1",
+            scope: "global",
+            artifact_id: null,
+            start_policy: "timeline_start",
+            end_policy: "timeline_end",
+            segment_ids: [],
+            volume: 0.3,
+            fade_in_sec: 0,
+            fade_out_sec: 0,
+          },
+        ],
+        sfx_artifact_ids: [],
+      },
+    });
+
+    expect(result.warnings).not.toContain("assets_bgm_missing_optional");
+    expect(result.warnings).toContain("assets_bgm_artifact_missing_optional");
+    expect(result.decision).toBe("partial");
+  });
+
   it("does not warn about BGM when bgm_placements exist", async () => {
     const bgmArtifact = makeBgmArtifact("artifact_bgm_1");
     const result = await runValidation({

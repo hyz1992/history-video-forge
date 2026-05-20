@@ -194,6 +194,14 @@ export async function validateAssetsManifest(input: {
   if (manifest.audio_summary.bgm_placements.length === 0) {
     pushUnique(warnings, "assets_bgm_missing_optional");
   }
+  if (
+    manifest.audio_summary.bgm_placements.length > 0 &&
+    manifest.audio_summary.bgm_placements.every(
+      (placement) => !placement.artifact_id,
+    )
+  ) {
+    pushUnique(warnings, "assets_bgm_artifact_missing_optional");
+  }
 
   for (const artifactId of [
     ...manifest.audio_summary.tts_chunk_artifact_ids,
