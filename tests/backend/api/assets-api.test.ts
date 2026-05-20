@@ -671,6 +671,15 @@ describe("assets generate api", () => {
       assetPlanRecordId: prepared.assetPlanRecord.id,
       assetPlan: prepared.assetPlan,
       segmentIds: ["sb_001"],
+      ttsChunkRoutes: [
+        {
+          tts_chunk_id: "tts_001",
+          artifact_id: null,
+          segment_ids: ["sb_001"],
+          script_excerpt:
+            "Opening pressure. The envoy answers in public. The ending leaves a cost.",
+        },
+      ],
       executionOptions: {
         execution_mode: "auto_available",
         voice_profile_id: "voice_preset_cold_authority",

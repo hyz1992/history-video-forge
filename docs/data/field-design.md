@@ -831,7 +831,7 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 
 ## Assets v1 字段（2026-05-18 已同步后端执行基础）
 
-`AssetManifest` 是 assets 阶段的正式输出对象。它描述资产执行结果清单，包含任务执行状态、artifact 元数据、分镜 route 和音频摘要。当前 assets 后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础、执行期 TTS 分块规范化、音频时长探测与字幕 timing metadata，以及显式 DashScope TTS/文生图/image-to-video 路径；仍不包含真实 BGM/SFX provider、上传/预览 UI 或发布级素材运营流。
+`AssetManifest` 是 assets 阶段的正式输出对象。它描述资产执行结果清单，包含任务执行状态、artifact 元数据、分镜 route 和音频摘要。当前 assets 后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础、执行期 TTS 分块规范化、音频时长探测与字幕 timing metadata、本地 BGM/SFX 素材选择与 deterministic WAV fixture 物化，以及显式 DashScope TTS/文生图/image-to-video 路径；仍不包含真实付费 BGM/SFX provider、上传/预览 UI、发布级素材运营流或署名包装。
 
 ### `AssetManifest`
 
@@ -897,9 +897,9 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 | `image` | `width`、`height` |
 | `video` | `duration_sec`、`width`、`height`、`fps`、`provider_name`、`provider_job_id`、`source_image_artifact_id`、`model`、`resolution` |
 | `motion_recipe` | `recipe_type`、`source_image_artifact_id`、`parameters` |
-| `sfx_audio` | `duration_sec` |
+| `sfx_audio` | `duration_sec`；当前本地 provider 通过 metadata passthrough 额外保留 `library_item_id`、`selection_label`、`license_type`、`attribution_required`、`attribution_text`、`required_tags`、`matched_mood_tags`、`source_segment_id`、`source_materialized_from` |
 | `sfx_selection` | `library_item_id` 或 `selection_label`（至少一个） |
-| `bgm_audio` | `duration_sec`、`loopable` |
+| `bgm_audio` | `duration_sec`、`loopable`；当前本地 provider 通过 metadata passthrough 额外保留 `library_item_id`、`selection_label`、`license_type`、`attribution_required`、`attribution_text`、`required_tags`、`matched_mood_tags`、`source_materialized_from` |
 | `bgm_selection` | `library_item_id` 或 `selection_label`（至少一个） |
 
 ### `SegmentAssetRoute`
@@ -923,6 +923,7 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 - DashScope image-to-video 成功时，`video` artifact 作为该 segment 的 `primary_visual_artifact_id`，`visual_route_type` 为 `video_clip`。
 - 同 segment 的 source image 会保留为 `fallback_visual_artifact_id`；图生视频缺失或失败时，compose/renderer 仍可使用 image + `motion_recipe` fallback。
 - DashScope image-to-video provider job 只属于 assets 阶段字段和 provider job 记录，不进入 compose 或 renderer 字段语义。
+- 当前本地 SFX provider 使用 `AssetPlanTask.source_segment_id` 写入 `sfx_artifact_ids`。`bgm_placement_ids` 字段在当前 slice 保留但不写入；BGM 仍通过 `audio_summary.bgm_placements` 与 `BgmPlacement.source_task_id` 进入 compose。
 - TTS timing source 当前支持 `estimated / audio_probe / provider_timestamp / forced_alignment / mixed`，并兼容旧值 `provider / aligned`。DashScope TTS 在 mocked WAV 和真实 WAV/PCM 可探测时写入 `audio_probe`，不可探测格式保守回落为 `estimated`。
 - 字幕 artifact 当前来自本地 subtitle provider，跟随 TTS chunk artifact 生成 chunk-level cues，并记录来源 TTS chunk ids、总时长、timing source 和默认竖屏 `subtitle_style`；多个来源不一致时写入 `mixed`。`subtitle_style` 第一版包含字体、字号、描边、阴影、位置、安全区、最大行数和最大宽度等 renderer-facing 字段。word-level provider timestamps 或 forced alignment 仍属于后续工作。
 
@@ -944,6 +945,7 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 | 字段 | 含义 |
 |---|---|
 | `bgm_placement_id` | placement 唯一 ID |
+| `source_task_id` | 来源 `bgm_cue` task ID；用于将本地 BGM artifact 稳定附着回 placement |
 | `scope` | `global / segment / segment_span` |
 | `artifact_id` | BGM audio artifact，可为 `null` |
 | `start_policy` | `timeline_start / segment_start` |
@@ -1050,6 +1052,7 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 
 - `ComposeTimeline` 不包含最终 MP4、Remotion composition 或 provider job；若输入 `AssetManifest` 已有 `video` artifact，timeline 只保存对该 artifact 的引用。
 - segment 时长优先消费 TTS chunk artifact 的 `duration_sec`；当多个 TTS chunks 指向同一 segment 时按总和累加，缺失 chunk 覆盖时才按 merged narration 总时长 fallback。
+- BGM/SFX tracks 只消费已存在的 `bgm_audio` / `sfx_audio` artifact。缺失可选素材不触发 compose 生成或 provider 调用，也不回改 asset plan。
 - compose local validator 不判断画面质量、声音质量、审美、爆款节奏或历史相似度。
 - 缺失可选 BGM 只产生 warning，不阻断 `ready_for_render`。
 

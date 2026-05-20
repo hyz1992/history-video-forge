@@ -12,7 +12,7 @@
 
 ## 1. 当前状态
 
-> 2026-05-19 修订说明：本文档早期段落保留了从 `topic + script` 冻结后进入 downstream 设计前的历史基线。当前正式状态是：`storyboard`、`asset planning`、`assets`、`compose` 均已完成 v1 后端链路；`renderer/export` 已完成 v1 后端首批实现与回归；DashScope 图生视频已作为显式 opt-in 的 assets provider 后端路径接入。后续仍未进入范围的是真实 BGM/SFX 生产链路、上传/预览 UI、发布流、人工审稿流和质量评分系统。
+> 2026-05-20 修订说明：本文档早期段落保留了从 `topic + script` 冻结后进入 downstream 设计前的历史基线。当前正式状态是：`storyboard`、`asset planning`、`assets`、`compose` 均已完成 v1 后端链路；`renderer/export` 已完成 v1 后端首批实现与回归；DashScope 图生视频已作为显式 opt-in 的 assets provider 后端路径接入；BGM/SFX 已完成离线本地媒体库选择、deterministic WAV fixture 物化与 compose/renderer 消费回归。后续仍未进入范围的是真实付费 BGM/SFX provider、素材上传/预览 UI、发布流、人工审稿流和质量评分系统。
 
 当前项目已经比较完整地设计并收口了：
 
@@ -266,11 +266,12 @@ Assets v1 当前实现范围：
 - `registerManualArtifact`：向 execution 追加 `manual_upload` artifact。
 - `acceptArtifact`：将 artifact 标记为选中。
 - `AssetManifestRecord`：持久化记录。
+- 本地 BGM/SFX provider 基线：从 approved 且 commercial-use allowed 的 media library item 中选择素材，物化 render-ready WAV artifact；`BgmPlacement.source_task_id` 负责 task-to-placement 关联，`sfx_cue` 使用 `source_segment_id` 路由到 segment。
 
 仍然禁止：
 
 - 在 assets 阶段回写 topic/script/storyboard/asset plan。
-- 在 assets 阶段顺手接入未设计的真实 provider。当前显式 DashScope TTS/文生图/image-to-video 路径已存在；真实 BGM/SFX 仍必须先单独设计。
+- 在 assets 阶段顺手接入未设计的真实 provider。当前显式 DashScope TTS/文生图/image-to-video 路径和本地 BGM/SFX provider 基线已存在；真实付费 BGM/SFX provider、上传/授权/署名包装仍必须先单独设计。
 - 在 assets 阶段实现物理文件上传、存储、预览 UI。
 - 在 assets 阶段实现 compose timeline 或最终视频导出。
 - 让 semantic reviewer 参与 assets 主链路。

@@ -64,11 +64,12 @@
 
 ## P1: BGM / SFX
 
-- [ ] 设计本地 BGM/SFX 素材库字段：授权、来源、情绪、节奏、适用题材、时长、loopable。
-- [ ] 设计 BGM placement：全片/segment/span、淡入淡出、ducking、音量。
-- [ ] 设计 SFX cue 到素材选择的规则，避免滥用音效。
-- [ ] 实现 fake/local provider 基线，不先接真实付费 provider。
-- [ ] 更新 compose/renderer 消费 BGM/SFX tracks。
+- [x] 设计本地 BGM/SFX 素材库字段：授权、来源、情绪、节奏、适用题材、时长、loopable。
+- [x] 设计 BGM placement：全片/segment/span、淡入淡出、ducking、音量。
+- [x] 设计 SFX cue 到素材选择的规则，避免滥用音效。
+- [x] 实现 fake/local provider 基线，不先接真实付费 provider。
+- [x] 更新 compose/renderer 消费 BGM/SFX tracks。
+- [ ] 真实付费 BGM/SFX provider、素材上传/预览、署名包装、ducking 与响度归一化仍需单独设计。
 
 ## P1: 图生视频真实验证
 

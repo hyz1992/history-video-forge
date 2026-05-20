@@ -282,7 +282,7 @@ Asset Planning v1 消费 active `StoryboardRecord` 及其来源 `ScriptRecord` /
 
 ## 6. Assets v1 阶段（2026-05-18 已同步后端执行基础）
 
-Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `ScriptRecord` / `TopicPackage`，输出可持久化的资产执行结果清单。当前后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础、全局音色库解析，以及显式 DashScope TTS/文生图/image-to-video 路径。它不实现 compose timeline，也不负责最终视频导出。
+Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `ScriptRecord` / `TopicPackage`，输出可持久化的资产执行结果清单。当前后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础、全局音色库解析、本地 BGM/SFX 素材选择与 deterministic WAV fixture 物化，以及显式 DashScope TTS/文生图/image-to-video 路径。它不实现 compose timeline，也不负责最终视频导出。
 
 输入：
 
@@ -309,6 +309,10 @@ Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `Scr
 生成边界：
 
 - `buildInitialAssetManifest` 从执行期 `AssetPlan` 确定性构建：为每个 plan task 创建 `AssetTaskExecution`，为 `render_motion_cue` 创建 inline artifact，为 TTS chunk 创建占位 artifact，构建 `SegmentAssetRoute` 和 `AssetAudioSummary`。
+- `bgm_cue` / `sfx_cue` 第一版只走离线本地媒体库：选择 `approved_for_use` 且 `commercial_use_allowed` 的素材，按显式 `library_item_id` 或 required/mood tags 选中条目，再物化为本地 render-ready WAV artifact。缺失可选 BGM/SFX 只记录 notes/warnings，不阻塞 assets。
+- `BgmPlacement.source_task_id` 是 `bgm_cue` task 到 placement 的稳定关联；compose/renderer 只消费已附着到 placement 的具体 `bgm_audio` artifact。`SegmentAssetRoute.bgm_placement_ids` 在当前 slice 仍保留但不写入，BGM 仍通过 `audio_summary.bgm_placements` 路由。
+- `sfx_cue` 使用 `AssetPlanTask.source_segment_id` 作为 segment route 归属，并只在有明确 tags 或显式素材 ID 时生成 `sfx_audio` artifact，避免无依据地滥用音效。
+- `bgm_audio` / `sfx_audio` artifact metadata 通过 shared schema passthrough 保留素材审计字段，例如 `library_item_id`、`selection_label`、`license_type`、`attribution_required`、`attribution_text`、`required_tags`、`matched_mood_tags` 与 `source_materialized_from`。
 - assets run 在 manifest build 前会对 TTS chunks 做本地确定性规范化：长 chunk 按句子标点和最大字符数拆分，子分块继承父 chunk 的 segment route；该执行期计划不会写回或修改持久化的 `AssetPlanRecord.planJson`。
 - 默认测试与自动化路径不调用真实 provider；显式 `provider_mode=dashscope` 可调用 DashScope TTS、文生图 provider，并在 `AssetPlan.tasks` 存在 `video_clip` 任务时调用 DashScope image-to-video provider。
 - 音色库属于 assets 阶段的全局共享能力，不随单个项目复制。`AssetPlan.global_audio_strategy.voice_intent` 可携带 `VoiceIntent`；assets 执行前会 seed 全局预设音色、用 deterministic matcher 产出 `VoiceMatchResult`，并在没有合适音色时只创建本地 `VoiceProfile` 档案，不立即调用供应商。
@@ -349,7 +353,7 @@ Artifact 确认：
 仍未进入本阶段实现的内容：
 
 - renderer-side DashScope 调用或任何非 assets-stage 视频 provider 调用。
-- 真实 BGM/SFX provider、导入、授权和运营生命周期。
+- 真实付费 BGM/SFX provider、素材导入/上传、授权包装、署名输出和运营生命周期。
 - 物理文件上传 UI、对象存储发布链路、预览 UI。
 - 前端 assets 面板 UI。
 - compose timeline 或最终视频导出。
