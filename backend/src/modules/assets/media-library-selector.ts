@@ -6,14 +6,27 @@ export async function selectMediaLibraryItem(
   db: DbClient,
   input: {
     type: "sfx" | "bgm";
+    libraryItemId?: string | null;
     requiredTags: string[];
     moodTags: string[];
   },
 ): Promise<MediaLibraryItem | null> {
   const items = await listMediaLibraryItems(db);
 
+  if (input.libraryItemId) {
+    const explicit = items.find(
+      (item) =>
+        item.library_item_id === input.libraryItemId &&
+        item.type === input.type &&
+        item.approved_for_use &&
+        item.license.commercial_use_allowed,
+    );
+    return explicit ?? null;
+  }
+
   const candidates = items
     .filter((item) => item.approved_for_use)
+    .filter((item) => item.license.commercial_use_allowed)
     .filter((item) => item.type === input.type)
     .filter((item) =>
       input.requiredTags.every((tag) => item.tags.includes(tag)),

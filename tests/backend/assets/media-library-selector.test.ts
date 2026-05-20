@@ -43,6 +43,25 @@ const unapprovedBgmItem: MediaLibraryItem = {
   approved_for_use: false,
 };
 
+const nonCommercialBgmItem: MediaLibraryItem = {
+  library_item_id: "bgm_war_noncommercial",
+  type: "bgm",
+  file_uri: "library://bgm/war-noncommercial.wav",
+  mime_type: "audio/wav",
+  duration_sec: 42,
+  loopable: true,
+  tags: ["war", "drum"],
+  mood_tags: ["tense"],
+  license: {
+    license_type: "royalty_free",
+    commercial_use_allowed: false,
+    attribution_required: false,
+  },
+  file_hash: "sha256:bgm-noncommercial",
+  imported_at: "2026-05-16T00:00:00.000Z",
+  approved_for_use: true,
+};
+
 const approvedSfxItem: MediaLibraryItem = {
   library_item_id: "sfx_explosion_001",
   type: "sfx",
@@ -134,6 +153,61 @@ describe("media library selector", () => {
       type: "bgm",
       requiredTags: ["war"],
       moodTags: ["tense"],
+    });
+
+    expect(selected).toBeNull();
+  });
+
+  it("excludes non-commercial items from selection", async () => {
+    const db = createDbClient();
+    await saveMediaLibraryItem(db, nonCommercialBgmItem);
+
+    const selected = await selectMediaLibraryItem(db, {
+      type: "bgm",
+      requiredTags: ["war"],
+      moodTags: ["tense"],
+    });
+
+    expect(selected).toBeNull();
+  });
+
+  it("selects an explicit approved library item by id", async () => {
+    const db = createDbClient();
+    await saveMediaLibraryItem(db, approvedBgmItem);
+
+    const selected = await selectMediaLibraryItem(db, {
+      type: "bgm",
+      libraryItemId: approvedBgmItem.library_item_id,
+      requiredTags: ["missing-tag"],
+      moodTags: [],
+    });
+
+    expect(selected?.library_item_id).toBe(approvedBgmItem.library_item_id);
+  });
+
+  it("rejects explicit unapproved library items", async () => {
+    const db = createDbClient();
+    await saveMediaLibraryItem(db, unapprovedBgmItem);
+
+    const selected = await selectMediaLibraryItem(db, {
+      type: "bgm",
+      libraryItemId: unapprovedBgmItem.library_item_id,
+      requiredTags: [],
+      moodTags: [],
+    });
+
+    expect(selected).toBeNull();
+  });
+
+  it("rejects explicit non-commercial library items", async () => {
+    const db = createDbClient();
+    await saveMediaLibraryItem(db, nonCommercialBgmItem);
+
+    const selected = await selectMediaLibraryItem(db, {
+      type: "bgm",
+      libraryItemId: nonCommercialBgmItem.library_item_id,
+      requiredTags: [],
+      moodTags: [],
     });
 
     expect(selected).toBeNull();
