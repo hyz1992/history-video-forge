@@ -172,6 +172,7 @@
 ## 2026-05-20 BGM / SFX 设计
 
 - 新增 [BGM / SFX Design](./2026-05-20-bgm-sfx-design.md)。
+- 新增 [BGM / SFX Implementation Plan](./2026-05-20-bgm-sfx-implementation-plan.md)。
 - 本轮设计面向 backlog P1「BGM / SFX」，先收束本地素材库字段、cue 到素材选择规则、fake/local provider 基线和 compose/renderer 消费边界。
 - 设计选择先走 approved media library + deterministic fake/local WAV artifact，不默认接真实付费 provider，不做上传/预览 UI、发布流、人工审稿或质量评分。
-- 下一步需要在该设计通过审查后，再写独立 implementation plan，并按 TDD 小步执行。
+- Implementation plan 拆为 placement 合同、cue 参数读取、WAV 夹具、本地 BGM provider、本地 SFX provider、assets run 接入、compose/render 回归、runtime smoke 和正式文档同步 9 个 TDD 任务。
