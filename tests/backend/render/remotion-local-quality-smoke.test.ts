@@ -9,10 +9,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { DEFAULT_SUBTITLE_STYLE } from "../../../shared/src/index.js";
 import {
   countBrightPixelsInBand,
+  countNonBlackPixelsInBand,
   decodePngRgba,
 } from "../../_helpers/png-decoder";
 
-describe("Remotion subtitle still smoke", () => {
+describe("Remotion local quality smoke", () => {
   let tempDir: string | null = null;
 
   afterEach(async () => {
@@ -22,8 +23,8 @@ describe("Remotion subtitle still smoke", () => {
     }
   });
 
-  it("renders visible subtitle pixels inside the lower safe area", async () => {
-    tempDir = await mkdtemp(join(tmpdir(), "subtitle-still-"));
+  it("renders visible local visual content and subtitle pixels", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "remotion-quality-"));
     const serveUrl = await bundle({
       entryPoint: "renderer/src/Root.tsx",
       rootDir: process.cwd(),
@@ -39,6 +40,20 @@ describe("Remotion subtitle still smoke", () => {
       width: 540,
       height: 960,
       fps: 30,
+      visualClips: [
+        {
+          clipId: "clip_visual_001",
+          artifactId: "artifact_image_001",
+          mediaType: "image",
+          src: svgDataUri(),
+          startSec: 0,
+          durationSec: 2,
+          motion: {
+            recipeType: "slow_push_in",
+            parameters: { distance_pct: 3 },
+          },
+        },
+      ],
       subtitleCues: [
         { start_sec: 0, end_sec: 2, text: "Visible subtitle" },
       ],
@@ -50,7 +65,7 @@ describe("Remotion subtitle still smoke", () => {
       inputProps,
       logLevel: "error",
     });
-    const output = join(tempDir, "subtitle-frame.png");
+    const output = join(tempDir, "quality-frame.png");
     await renderStill({
       serveUrl,
       composition,
@@ -62,6 +77,12 @@ describe("Remotion subtitle still smoke", () => {
 
     const png = decodePngRgba(await readFile(output));
     expect(
+      countNonBlackPixelsInBand(png, {
+        yMin: 40,
+        yMax: Math.floor(png.height * 0.45),
+      }),
+    ).toBeGreaterThan(5_000);
+    expect(
       countBrightPixelsInBand(png, {
         yMin: Math.floor(png.height * 0.55),
         yMax: png.height - 96,
@@ -69,3 +90,13 @@ describe("Remotion subtitle still smoke", () => {
     ).toBeGreaterThan(200);
   }, 120_000);
 });
+
+function svgDataUri() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="540" height="960">
+    <rect width="540" height="960" fill="#0f172a"/>
+    <rect x="0" y="0" width="540" height="420" fill="#14b8a6"/>
+    <circle cx="270" cy="210" r="110" fill="#f97316"/>
+  </svg>`;
+
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+}
