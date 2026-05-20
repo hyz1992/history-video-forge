@@ -126,6 +126,7 @@ Create:
 - `tests/renderer/motion-rendering.test.ts`
 - `tests/renderer/audio-rendering.test.ts`
 - `tests/backend/render/remotion-local-quality-smoke.test.ts`
+- `tests/backend/render/png-smoke-helper.ts`
 
 Modify:
 
@@ -136,6 +137,7 @@ Modify:
 - `renderer/src/TimelineVideo.tsx`
 - `renderer/src/timeline-props.ts`
 - `tests/backend/render/local-remotion-render-adapter.test.ts`
+- `tests/backend/render/remotion-subtitle-still-smoke.test.ts`
 - `tests/backend/compose/compose-timeline-builder.test.ts`
 - `tests/backend/assets/fake-tts-provider.test.ts`
 - `tests/harness/render-runtime-smoke.test.ts`
@@ -272,6 +274,7 @@ export interface RenderVisualClipProp {
   startSec: number;
   durationSec: number;
   motion?: RenderMotionProp;
+  /** Transition into this clip from the previous visual clip. */
   transition?: RenderVisualTransitionProp;
 }
 
@@ -302,7 +305,7 @@ export interface TimelineVideoProps {
 
 - [ ] **Step 4: Move the builder into a focused module**
 
-Move the existing `buildRemotionInputProps()` implementation out of `local-remotion-render-adapter.ts` and into `backend/src/modules/render/remotion-input-builder.ts`.
+Refactor the existing `buildRemotionInputProps()` implementation out of `local-remotion-render-adapter.ts` and into `backend/src/modules/render/remotion-input-builder.ts`. This is a move-and-extend step, not a rewrite. Preserve the current subtitle parsing, subtitle style normalization, and image data-URI conversion behavior before adding visual/audio clip normalization.
 
 The new builder must:
 
@@ -442,22 +445,27 @@ export function getVisibleVisualLayers(input: {
   const currentSec = input.frame / input.fps;
   const layers: VisibleVisualLayer[] = [];
 
-  for (const clip of input.clips) {
+  for (let index = 0; index < input.clips.length; index += 1) {
+    const clip = input.clips[index]!;
+    const nextClip = input.clips[index + 1];
     const startSec = clip.startSec;
     const endSec = clip.startSec + clip.durationSec;
-    const transitionSec = clip.transition?.type === "crossfade"
+    const fadeInSec = clip.transition?.type === "crossfade"
       ? clip.transition.durationSec
       : 0;
-    const fadeStartSec = Math.max(startSec - transitionSec, 0);
+    const fadeOutSec = nextClip?.transition?.type === "crossfade"
+      ? nextClip.transition.durationSec
+      : 0;
+    const fadeStartSec = Math.max(startSec - fadeInSec, 0);
     const visible = currentSec >= fadeStartSec && currentSec < endSec;
     if (!visible) continue;
 
     let opacity = 1;
-    if (transitionSec > 0 && currentSec < startSec) {
-      opacity = (currentSec - fadeStartSec) / transitionSec;
+    if (fadeInSec > 0 && currentSec < startSec) {
+      opacity = (currentSec - fadeStartSec) / fadeInSec;
     }
-    if (transitionSec > 0 && currentSec >= endSec - transitionSec) {
-      opacity = Math.min(opacity, (endSec - currentSec) / transitionSec);
+    if (fadeOutSec > 0 && currentSec >= endSec - fadeOutSec) {
+      opacity = Math.min(opacity, (endSec - currentSec) / fadeOutSec);
     }
 
     layers.push({
@@ -658,45 +666,43 @@ git add renderer/src/motion-rendering.ts renderer/src/TimelineVideo.tsx tests/re
 git commit -m "应用本地镜头动效"
 ```
 
-## Task 4: Render Narration Audio
+## Task 4: Make Fake TTS Render-Ready
 
 **Files:**
 
-- Create: `renderer/src/audio-rendering.ts`
-- Modify: `renderer/src/TimelineVideo.tsx`
-- Modify: `backend/src/modules/render/local-remotion-render-adapter.ts`
-- Test: `tests/renderer/audio-rendering.test.ts`
-- Test: `tests/backend/render/local-remotion-render-adapter.test.ts`
+- Modify: `backend/src/modules/assets/providers/fake-tts-provider.ts`
+- Test: `tests/backend/assets/fake-tts-provider.test.ts`
+- Test: `tests/harness/render-runtime-smoke.test.ts`
 
-- [ ] **Step 1: Write failing audio helper tests**
+- [ ] **Step 1: Write failing fake TTS tests**
 
-Create `tests/renderer/audio-rendering.test.ts`:
+Add assertions to `tests/backend/assets/fake-tts-provider.test.ts`:
 
 ```ts
-import { describe, expect, it } from "vitest";
-import {
-  getAudioSequenceFrames,
-  normalizeAudioVolume,
-} from "../../renderer/src/audio-rendering";
+import { readFile } from "node:fs/promises";
 
-describe("audio rendering helpers", () => {
-  it("converts audio timing into Remotion frame offsets", () => {
-    expect(getAudioSequenceFrames({
-      startSec: 1.5,
-      durationSec: 2,
-      fps: 30,
-    })).toEqual({
-      from: 45,
-      durationInFrames: 60,
-    });
-  });
-
-  it("clamps audio volume", () => {
-    expect(normalizeAudioVolume(-1)).toBe(0);
-    expect(normalizeAudioVolume(0.35)).toBe(0.35);
-    expect(normalizeAudioVolume(2)).toBe(1);
-  });
+// Add these assertions inside the existing
+// "produces TTS chunk and merged audio artifacts and updates routes" test,
+// after `mergedArtifacts` has been computed.
+expect(mergedArtifacts[0]!.file_uri.endsWith(".wav")).toBe(true);
+expect(mergedArtifacts[0]!.metadata).toMatchObject({
+  format: "wav",
+  duration_source: "estimated",
+  timing_source: "estimated",
 });
+
+const mergedBytes = await readFile(mergedArtifacts[0]!.file_uri);
+expect(mergedBytes.subarray(0, 4).toString("ascii")).toBe("RIFF");
+expect(mergedBytes.subarray(8, 12).toString("ascii")).toBe("WAVE");
+
+for (const chunk of chunkArtifacts) {
+  expect(chunk.file_uri.endsWith(".wav")).toBe(true);
+  expect(chunk.metadata).toMatchObject({
+    format: "wav",
+    duration_source: "estimated",
+    timing_source: "estimated",
+  });
+}
 ```
 
 - [ ] **Step 2: Run failing tests**
@@ -704,87 +710,68 @@ describe("audio rendering helpers", () => {
 Run:
 
 ```bash
-npx vitest run --configLoader runner tests/renderer/audio-rendering.test.ts
+npx vitest run --configLoader runner tests/backend/assets/fake-tts-provider.test.ts
 ```
 
-Expected: fail because `renderer/src/audio-rendering.ts` does not exist.
+Expected: fail because fake TTS writes `.txt` files.
 
-- [ ] **Step 3: Implement audio helper**
+- [ ] **Step 3: Add local WAV helper inside fake provider**
 
-Create `renderer/src/audio-rendering.ts`:
+Modify `backend/src/modules/assets/providers/fake-tts-provider.ts`:
+
+- replace `.txt` filenames with `.wav`;
+- write deterministic PCM silence WAV buffers;
+- keep duration metadata derived from `estimated_duration_sec`;
+- set `format: "wav"`;
+- set `duration_source: "estimated"`;
+- set `timing_source: "estimated"`.
+
+The helper should be local to the fake provider:
 
 ```ts
-export function getAudioSequenceFrames(input: {
-  startSec: number;
+function createSilentWavBuffer(input: {
   durationSec: number;
-  fps: number;
+  sampleRate?: number;
 }) {
-  return {
-    from: Math.max(0, Math.round(input.startSec * input.fps)),
-    durationInFrames: Math.max(1, Math.round(input.durationSec * input.fps)),
-  };
+  const sampleRate = input.sampleRate ?? 16_000;
+  const channels = 1;
+  const bytesPerSample = 2;
+  const sampleCount = Math.max(1, Math.round(input.durationSec * sampleRate));
+  const dataSize = sampleCount * channels * bytesPerSample;
+  const buffer = Buffer.alloc(44 + dataSize);
+  buffer.write("RIFF", 0, "ascii");
+  buffer.writeUInt32LE(36 + dataSize, 4);
+  buffer.write("WAVE", 8, "ascii");
+  buffer.write("fmt ", 12, "ascii");
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(channels, 22);
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(sampleRate * channels * bytesPerSample, 28);
+  buffer.writeUInt16LE(channels * bytesPerSample, 32);
+  buffer.writeUInt16LE(bytesPerSample * 8, 34);
+  buffer.write("data", 36, "ascii");
+  buffer.writeUInt32LE(dataSize, 40);
+  return buffer;
 }
-
-export function normalizeAudioVolume(volume: number) {
-  return Math.min(1, Math.max(0, volume));
-}
 ```
 
-- [ ] **Step 4: Render audio clips in `TimelineVideo`**
-
-Modify `renderer/src/TimelineVideo.tsx`:
-
-- import `Audio` and `Sequence` from Remotion;
-- render each `props.audioClips` entry inside a `Sequence`;
-- use `getAudioSequenceFrames()` for timing;
-- pass `volume={normalizeAudioVolume(clip.volume)}`;
-- render narration even when no BGM/SFX exists.
-
-- [ ] **Step 5: Unmute local Remotion render**
-
-Modify `backend/src/modules/render/local-remotion-render-adapter.ts`:
-
-```ts
-await renderMedia({
-  serveUrl,
-  composition,
-  inputProps,
-  codec: "h264",
-  outputLocation,
-  overwrite: true,
-  muted: false,
-  logLevel: "error",
-  browserExecutable,
-  binariesDirectory: options.binariesDirectory ?? null,
-});
-```
-
-- [ ] **Step 6: Strengthen adapter diagnostics**
-
-Include these diagnostics from normalized props:
-
-```ts
-audio_clip_count: inputProps.audioClips.length,
-visual_clip_count: inputProps.visualClips.length,
-subtitle_cue_count: inputProps.subtitleCues.length,
-```
-
-- [ ] **Step 7: Verify**
+- [ ] **Step 4: Verify fake TTS without unmuting render yet**
 
 Run:
 
 ```bash
-npx vitest run --configLoader runner tests/renderer/audio-rendering.test.ts tests/backend/render/local-remotion-render-adapter.test.ts
+npx vitest run --configLoader runner tests/backend/assets/fake-tts-provider.test.ts tests/harness/render-runtime-smoke.test.ts
 git diff --check
 ```
 
-Expected: helper tests pass and local Remotion adapter test still produces MP4. If the existing adapter fixture WAV is too small for Remotion, replace it in the test with a generated valid silent WAV helper local to the test file.
+Expected: fake TTS emits WAV, deterministic render smoke still passes, and local Remotion rendering remains muted until Task 6.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add renderer/src/audio-rendering.ts renderer/src/TimelineVideo.tsx backend/src/modules/render/local-remotion-render-adapter.ts tests/renderer/audio-rendering.test.ts tests/backend/render/local-remotion-render-adapter.test.ts
-git commit -m "合成口播音频轨"
+git add backend/src/modules/assets/providers/fake-tts-provider.ts tests/backend/assets/fake-tts-provider.test.ts tests/harness/render-runtime-smoke.test.ts
+git commit -m "让假口播音频可被本地渲染消费"
 ```
 
 ## Task 5: Expose Optional BGM And SFX Tracks From Compose
@@ -795,6 +782,17 @@ git commit -m "合成口播音频轨"
 - Modify: `backend/src/modules/render/remotion-input-builder.ts`
 - Test: `tests/backend/compose/compose-timeline-builder.test.ts`
 - Test: `tests/backend/render/remotion-input-builder.test.ts`
+
+- [ ] **Step 0: Confirm schema compatibility**
+
+Before writing tests, verify `shared/src/compose/compose-timeline.schema.ts` still defines:
+
+```ts
+export const ComposeTrackType = z.enum(["visual", "narration", "subtitle", "bgm", "sfx"]);
+export const ComposeClipKind = z.enum(["video", "image_with_motion", "image_only", "audio", "subtitle"]);
+```
+
+This confirms BGM/SFX clips can use `clip_kind: "audio"` while `track_type` carries the role distinction.
 
 - [ ] **Step 1: Write failing compose tests**
 
@@ -896,43 +894,45 @@ git add backend/src/modules/compose/compose-timeline-builder.ts backend/src/modu
 git commit -m "暴露可选音效与背景音乐轨"
 ```
 
-## Task 6: Make Fake TTS Render-Ready
+## Task 6: Render Narration And Optional Audio
 
 **Files:**
 
-- Modify: `backend/src/modules/assets/providers/fake-tts-provider.ts`
-- Test: `tests/backend/assets/fake-tts-provider.test.ts`
-- Test: `tests/harness/render-runtime-smoke.test.ts`
+- Create: `renderer/src/audio-rendering.ts`
+- Modify: `renderer/src/TimelineVideo.tsx`
+- Modify: `backend/src/modules/render/local-remotion-render-adapter.ts`
+- Test: `tests/renderer/audio-rendering.test.ts`
+- Test: `tests/backend/render/local-remotion-render-adapter.test.ts`
 
-- [ ] **Step 1: Write failing fake TTS tests**
+- [ ] **Step 1: Write failing audio helper tests**
 
-Add assertions to `tests/backend/assets/fake-tts-provider.test.ts`:
+Create `tests/renderer/audio-rendering.test.ts`:
 
 ```ts
-import { readFile } from "node:fs/promises";
+import { describe, expect, it } from "vitest";
+import {
+  getAudioSequenceFrames,
+  normalizeAudioVolume,
+} from "../../renderer/src/audio-rendering";
 
-// Add these assertions inside the existing
-// "produces TTS chunk and merged audio artifacts and updates routes" test,
-// after `mergedArtifacts` has been computed.
-expect(mergedArtifacts[0]!.file_uri.endsWith(".wav")).toBe(true);
-expect(mergedArtifacts[0]!.metadata).toMatchObject({
-  format: "wav",
-  duration_source: "estimated",
-  timing_source: "estimated",
-});
-
-const mergedBytes = await readFile(mergedArtifacts[0]!.file_uri);
-expect(mergedBytes.subarray(0, 4).toString("ascii")).toBe("RIFF");
-expect(mergedBytes.subarray(8, 12).toString("ascii")).toBe("WAVE");
-
-for (const chunk of chunkArtifacts) {
-  expect(chunk.file_uri.endsWith(".wav")).toBe(true);
-  expect(chunk.metadata).toMatchObject({
-    format: "wav",
-    duration_source: "estimated",
-    timing_source: "estimated",
+describe("audio rendering helpers", () => {
+  it("converts audio timing into Remotion frame offsets", () => {
+    expect(getAudioSequenceFrames({
+      startSec: 1.5,
+      durationSec: 2,
+      fps: 30,
+    })).toEqual({
+      from: 45,
+      durationInFrames: 60,
+    });
   });
-}
+
+  it("clamps audio volume", () => {
+    expect(normalizeAudioVolume(-1)).toBe(0);
+    expect(normalizeAudioVolume(0.35)).toBe(0.35);
+    expect(normalizeAudioVolume(2)).toBe(1);
+  });
+});
 ```
 
 - [ ] **Step 2: Run failing tests**
@@ -940,69 +940,90 @@ for (const chunk of chunkArtifacts) {
 Run:
 
 ```bash
-npx vitest run --configLoader runner tests/backend/assets/fake-tts-provider.test.ts
+npx vitest run --configLoader runner tests/renderer/audio-rendering.test.ts
 ```
 
-Expected: fail because fake TTS writes `.txt` files.
+Expected: fail because `renderer/src/audio-rendering.ts` does not exist.
 
-- [ ] **Step 3: Add local WAV helper inside fake provider**
+- [ ] **Step 3: Implement audio helper**
 
-Modify `backend/src/modules/assets/providers/fake-tts-provider.ts`:
-
-- replace `.txt` filenames with `.wav`;
-- write deterministic PCM silence WAV buffers;
-- keep duration metadata derived from `estimated_duration_sec`;
-- set `format: "wav"`;
-- set `duration_source: "estimated"`;
-- set `timing_source: "estimated"`.
-
-The helper should be local to the fake provider:
+Create `renderer/src/audio-rendering.ts`:
 
 ```ts
-function createSilentWavBuffer(input: {
+export function getAudioSequenceFrames(input: {
+  startSec: number;
   durationSec: number;
-  sampleRate?: number;
+  fps: number;
 }) {
-  const sampleRate = input.sampleRate ?? 16_000;
-  const channels = 1;
-  const bytesPerSample = 2;
-  const sampleCount = Math.max(1, Math.round(input.durationSec * sampleRate));
-  const dataSize = sampleCount * channels * bytesPerSample;
-  const buffer = Buffer.alloc(44 + dataSize);
-  buffer.write("RIFF", 0, "ascii");
-  buffer.writeUInt32LE(36 + dataSize, 4);
-  buffer.write("WAVE", 8, "ascii");
-  buffer.write("fmt ", 12, "ascii");
-  buffer.writeUInt32LE(16, 16);
-  buffer.writeUInt16LE(1, 20);
-  buffer.writeUInt16LE(channels, 22);
-  buffer.writeUInt32LE(sampleRate, 24);
-  buffer.writeUInt32LE(sampleRate * channels * bytesPerSample, 28);
-  buffer.writeUInt16LE(channels * bytesPerSample, 32);
-  buffer.writeUInt16LE(bytesPerSample * 8, 34);
-  buffer.write("data", 36, "ascii");
-  buffer.writeUInt32LE(dataSize, 40);
-  return buffer;
+  return {
+    from: Math.max(0, Math.round(input.startSec * input.fps)),
+    durationInFrames: Math.max(1, Math.round(input.durationSec * input.fps)),
+  };
+}
+
+export function normalizeAudioVolume(volume: number) {
+  return Math.min(1, Math.max(0, volume));
 }
 ```
 
-- [ ] **Step 4: Verify fake TTS and render smoke**
+- [ ] **Step 4: Render audio clips in `TimelineVideo`**
+
+Modify `renderer/src/TimelineVideo.tsx`:
+
+- import `Audio` and `Sequence` from Remotion;
+- render each `props.audioClips` entry inside a `Sequence`;
+- use `getAudioSequenceFrames()` for timing;
+- pass `volume={normalizeAudioVolume(clip.volume)}`;
+- render narration even when no BGM/SFX exists.
+
+- [ ] **Step 5: Unmute local Remotion render**
+
+Only do this after Task 4 has made fake TTS emit renderable WAV files.
+
+Modify `backend/src/modules/render/local-remotion-render-adapter.ts`:
+
+```ts
+await renderMedia({
+  serveUrl,
+  composition,
+  inputProps,
+  codec: "h264",
+  outputLocation,
+  overwrite: true,
+  muted: false,
+  logLevel: "error",
+  browserExecutable,
+  binariesDirectory: options.binariesDirectory ?? null,
+});
+```
+
+- [ ] **Step 6: Strengthen adapter diagnostics**
+
+Include these diagnostics from normalized props:
+
+```ts
+audio_clip_count: inputProps.audioClips.length,
+visual_clip_count: inputProps.visualClips.length,
+subtitle_cue_count: inputProps.subtitleCues.length,
+```
+
+- [ ] **Step 7: Verify**
 
 Run:
 
 ```bash
-npx vitest run --configLoader runner tests/backend/assets/fake-tts-provider.test.ts tests/harness/render-runtime-smoke.test.ts
+npx vitest run --configLoader runner tests/renderer/audio-rendering.test.ts tests/backend/render/local-remotion-render-adapter.test.ts
 npm run render:remotion:smoke
 git diff --check
 ```
 
-Expected: fake TTS emits WAV, deterministic render smoke still passes, and the Remotion adapter smoke can run with unmuted audio.
+Expected: helper tests pass, local Remotion adapter test still produces MP4 with unmuted audio, and the Remotion smoke can consume fake WAV narration. If the existing adapter fixture WAV is too small for Remotion, replace it in the test with a generated valid silent WAV helper local to the test file.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add backend/src/modules/assets/providers/fake-tts-provider.ts tests/backend/assets/fake-tts-provider.test.ts tests/harness/render-runtime-smoke.test.ts
-git commit -m "让假口播音频可被本地渲染消费"
+git add renderer/src/audio-rendering.ts renderer/src/TimelineVideo.tsx backend/src/modules/render/local-remotion-render-adapter.ts tests/renderer/audio-rendering.test.ts tests/backend/render/local-remotion-render-adapter.test.ts
+git commit -m "合成口播音频轨"
 ```
 
 ## Task 7: Add Local Render Quality Smoke
@@ -1010,6 +1031,7 @@ git commit -m "让假口播音频可被本地渲染消费"
 **Files:**
 
 - Create: `tests/backend/render/remotion-local-quality-smoke.test.ts`
+- Create: `tests/backend/render/png-smoke-helper.ts`
 - Modify: `tests/backend/render/remotion-subtitle-still-smoke.test.ts`
 - Test: `tests/backend/render/remotion-local-quality-smoke.test.ts`
 
@@ -1023,7 +1045,7 @@ The test should:
 - render still frame near the first clip and near the second clip;
 - assert both frames are nonblank;
 - assert subtitle pixels are visible in the lower safe area;
-- use the same local PNG decoder approach already present in `remotion-subtitle-still-smoke.test.ts`;
+- use a shared local PNG decoder helper extracted from the existing `remotion-subtitle-still-smoke.test.ts`;
 - avoid real providers.
 
 Core assertions:
@@ -1045,11 +1067,28 @@ Run:
 npx vitest run --configLoader runner tests/backend/render/remotion-local-quality-smoke.test.ts
 ```
 
-Expected: fail before Tasks 1-4 are fully wired, because multi-clip visual scheduling is not active.
+Expected: fail until the shared PNG helper is extracted and the smoke fixture is wired. If the visual/audio behavior from Tasks 1-6 already makes the smoke pass, record it as a regression test and continue.
 
 - [ ] **Step 3: Share PNG test helpers without adding dependencies**
 
-Move PNG helper functions from `tests/backend/render/remotion-subtitle-still-smoke.test.ts` into local helper functions inside `remotion-local-quality-smoke.test.ts` by copying the minimal decoder code. Do not add an image parsing dependency.
+Create `tests/backend/render/png-smoke-helper.ts` and move the PNG helper functions from `tests/backend/render/remotion-subtitle-still-smoke.test.ts` into that file:
+
+```ts
+export interface DecodedPng {
+  width: number;
+  height: number;
+  data: Uint8Array;
+}
+
+export function decodePngRgba(bytes: Uint8Array): DecodedPng;
+export function countBrightPixelsInBand(
+  png: DecodedPng,
+  band: { yMin: number; yMax: number },
+): number;
+export function countNonBlackPixels(png: DecodedPng): number;
+```
+
+Both `remotion-subtitle-still-smoke.test.ts` and `remotion-local-quality-smoke.test.ts` must import from this helper. Do not add an image parsing dependency.
 
 - [ ] **Step 4: Verify smoke**
 
@@ -1066,6 +1105,7 @@ Expected: both Remotion static smoke tests pass. These tests require headless Ch
 
 ```bash
 git add tests/backend/render/remotion-local-quality-smoke.test.ts tests/backend/render/remotion-subtitle-still-smoke.test.ts
+git add tests/backend/render/png-smoke-helper.ts
 git commit -m "增加本地成片画面质量冒烟测试"
 ```
 
