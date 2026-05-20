@@ -90,7 +90,7 @@ This improves renderer consumption without changing local subtitle provider outp
 
 Renderer must normalize style before rendering:
 
-- If `subtitle_style` is missing, use the shared default style.
+- If `subtitle_style` is missing, use the shared `DEFAULT_SUBTITLE_STYLE` exported by `shared/src/assets/asset-manifest.schema.ts`.
 - Clamp font size, margins, opacity, max width, and line count to schema-safe values.
 - Prevent text from escaping the vertical frame by applying safe top/bottom constraints.
 - Render with deterministic CSS so tests can inspect generated props and still frames.
@@ -103,10 +103,10 @@ Implementation must include:
 
 - shared schema tests for `subtitle_style`;
 - local subtitle provider tests proving default style is written;
-- cue parser tests for SRT and VTT;
+- cue parser tests for SRT and VTT, including a `WEBVTT - ...` header and VTT timestamps without hours;
 - render adapter tests proving subtitle cues and style are passed to Remotion props;
 - renderer component tests for active cue selection and CSS normalization;
-- a local Remotion still-frame smoke that renders a subtitle frame and uses a no-dependency PNG pixel scan to confirm non-background subtitle pixels exist in the expected lower safe-area band.
+- a local Remotion still-frame smoke that renders a subtitle frame and uses a no-dependency PNG pixel scan to confirm non-background subtitle pixels exist in the expected lower safe-area band. This smoke is an opt-in/local renderer verification and requires headless Chromium availability.
 
 Default verification must not call real DashScope.
 
@@ -141,14 +141,14 @@ subtitleCues?: Array<{
 subtitleStyle?: SubtitleStyle;
 ```
 
-`subtitleText` may remain temporarily accepted for compatibility during migration but should no longer be the primary path.
+`subtitleText` may remain temporarily accepted for compatibility during migration but should no longer be the primary path. Remove it after all production callers send `subtitleCues` and one release cycle has passed without fallback usage.
 
 ## 5. Error Handling
 
 - Missing subtitle artifact: renderer keeps existing source validation behavior.
 - Missing subtitle file or unsupported URI: adapter passes no cues; source validator already catches missing local files when checkable.
 - Malformed SRT/VTT: parser returns valid cues it can parse and records a diagnostic note in adapter diagnostics.
-- Missing `subtitle_style`: renderer uses default style.
+- Missing `subtitle_style`: renderer uses shared `DEFAULT_SUBTITLE_STYLE`.
 - Invalid `subtitle_style`: shared schema rejects the artifact; renderer helper falls back defensively when reading unknown legacy manifests.
 
 ## 6. Non-Goals
