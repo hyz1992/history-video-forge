@@ -60,6 +60,10 @@ export interface RenderAudioClipProp {
   startSec: number;
   durationSec: number;
   volume: number;
+  fadeInSec?: number;
+  fadeOutSec?: number;
+  loop?: boolean;
+  sourceDurationSec?: number;
 }
 
 export interface TimelineVideoProps {

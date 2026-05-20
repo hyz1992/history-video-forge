@@ -223,6 +223,29 @@ function volumeForAudioClip(input: {
   return 1;
 }
 
+function bgmRenderSettings(input: {
+  manifest: AssetManifest;
+  artifact: AssetArtifact;
+  artifactId: string;
+}): Pick<
+  RenderAudioClipProp,
+  "fadeInSec" | "fadeOutSec" | "loop" | "sourceDurationSec"
+> {
+  const placement = input.manifest.audio_summary.bgm_placements.find(
+    (item) => item.artifact_id === input.artifactId,
+  );
+  if (!placement || input.artifact.artifact_type !== "bgm_audio") {
+    return {};
+  }
+
+  return {
+    fadeInSec: placement.fade_in_sec,
+    fadeOutSec: placement.fade_out_sec,
+    loop: input.artifact.metadata.loopable,
+    sourceDurationSec: input.artifact.metadata.duration_sec,
+  };
+}
+
 async function buildVisualClips(input: {
   timeline: ComposeTimeline;
   artifactsById: Map<string, AssetArtifact>;
@@ -317,6 +340,13 @@ async function buildAudioClips(input: {
               role,
               artifactId: clip.artifact_id,
             }),
+            ...(role === "bgm"
+              ? bgmRenderSettings({
+                  manifest: input.manifest,
+                  artifact,
+                  artifactId: clip.artifact_id,
+                })
+              : {}),
           };
         },
       );
