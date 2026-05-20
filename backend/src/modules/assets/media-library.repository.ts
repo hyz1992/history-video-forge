@@ -21,3 +21,22 @@ export async function listMediaLibraryItems(
 ): Promise<MediaLibraryItem[]> {
   return [...db.mediaLibraryItems.values()];
 }
+
+export async function seedMediaLibraryItems(
+  db: DbClient,
+  items: MediaLibraryItem[],
+): Promise<{ inserted: number; skipped_existing: number }> {
+  let inserted = 0;
+  let skippedExisting = 0;
+
+  for (const item of items) {
+    if (db.mediaLibraryItems.has(item.library_item_id)) {
+      skippedExisting += 1;
+      continue;
+    }
+    db.mediaLibraryItems.set(item.library_item_id, item);
+    inserted += 1;
+  }
+
+  return { inserted, skipped_existing: skippedExisting };
+}
