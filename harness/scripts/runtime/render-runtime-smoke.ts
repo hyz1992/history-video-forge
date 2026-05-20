@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 
 import { buildApp } from "../../../backend/src/app";
 import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning/asset-plan-record.repository";
+import { saveMediaLibraryItem } from "../../../backend/src/modules/assets/media-library.repository";
 import { createFakeRenderAdapter } from "../../../backend/src/modules/render/fake-render-adapter";
 import { createLocalRemotionRenderAdapter } from "../../../backend/src/modules/render/local-remotion-render-adapter";
 import type { RenderAdapter } from "../../../backend/src/modules/render/render-adapter";
@@ -134,23 +135,115 @@ function makeAssetPlan(): AssetPlan {
         cost_tier: "low",
         initial_status: "planned",
       },
+      {
+        task_id: "sfx_001",
+        order: 3,
+        task_type: "sfx_cue",
+        source_segment_id: "sb_001",
+        source_excerpt: "A sharp hit lands in the court.",
+        production_intent: "Add a short impact sound effect.",
+        recommended_mode: "auto",
+        provider_hint: "local_sfx",
+        prompt_draft: null,
+        parameters: {
+          sfx_tags: ["hit"],
+          mood_tags: ["sharp"],
+        },
+        manual_upload_policy: {
+          allowed: false,
+          required: false,
+          accepted_file_types: [],
+          acceptance_notes: [],
+        },
+        risk_notes: [],
+        cost_tier: "low",
+        initial_status: "planned",
+      },
+      {
+        task_id: "bgm_001",
+        order: 4,
+        task_type: "bgm_cue",
+        source_segment_id: null,
+        source_excerpt: "Tense background bed.",
+        production_intent: "Add restrained background music.",
+        recommended_mode: "auto",
+        provider_hint: "local_bgm",
+        prompt_draft: null,
+        parameters: {
+          required_tags: ["background"],
+          mood_tags: ["tense"],
+          scope: "global",
+          volume: 0.22,
+        },
+        manual_upload_policy: {
+          allowed: false,
+          required: false,
+          accepted_file_types: [],
+          acceptance_notes: [],
+        },
+        risk_notes: [],
+        cost_tier: "low",
+        initial_status: "planned",
+      },
     ],
     dependencies: [],
     cost_summary: {
-      total_tasks: 3,
+      total_tasks: 5,
       by_type: {
         tts_audio: 1,
         subtitle_track: 1,
         image_still: 1,
+        sfx_cue: 1,
+        bgm_cue: 1,
       },
       by_cost_tier: {
-        low: 3,
+        low: 5,
       },
-      estimated_provider_calls: 3,
+      estimated_provider_calls: 5,
       notes: [],
     },
     global_production_notes: [],
   };
+}
+
+async function seedSmokeMediaLibrary(app: ReturnType<typeof buildApp>) {
+  await saveMediaLibraryItem(app.db, {
+    library_item_id: "bgm_smoke_background",
+    type: "bgm",
+    file_uri: "library://bgm/smoke-background.wav",
+    mime_type: "audio/wav",
+    duration_sec: 12,
+    loopable: true,
+    tags: ["background"],
+    mood_tags: ["tense"],
+    license: {
+      license_type: "cc0",
+      commercial_use_allowed: true,
+      attribution_required: false,
+    },
+    file_hash: "sha256:bgm-smoke",
+    imported_at: "2026-05-20T00:00:00.000Z",
+    approved_for_use: true,
+  });
+
+  await saveMediaLibraryItem(app.db, {
+    library_item_id: "sfx_smoke_hit",
+    type: "sfx",
+    file_uri: "library://sfx/smoke-hit.wav",
+    mime_type: "audio/wav",
+    duration_sec: 1,
+    loopable: false,
+    tags: ["hit"],
+    mood_tags: ["sharp"],
+    license: {
+      license_type: "cc0",
+      commercial_use_allowed: true,
+      attribution_required: false,
+    },
+    file_hash: "sha256:sfx-smoke",
+    imported_at: "2026-05-20T00:00:00.000Z",
+    approved_for_use: true,
+  });
 }
 
 async function seedActiveAssetPlan(input: {
@@ -314,6 +407,7 @@ export async function runRenderRuntimeSmoke(
   }
   project.storageRootDir = resolve(finalOutputDir, "project-storage");
 
+  await seedSmokeMediaLibrary(app);
   await seedActiveAssetPlan({ app, projectId });
 
   const assetsBody = await injectOrThrow({

@@ -88,9 +88,9 @@ describe("render runtime smoke harness", () => {
     };
     expect(renderResponse.output_artifact.mime_type).toBe("video/mp4");
     expect(renderResponse.runtime_diagnostics.renderer).toBe("remotion");
-    expect(renderResponse.runtime_diagnostics.audio_clip_count).toBeGreaterThan(
-      0,
-    );
+    expect(
+      renderResponse.runtime_diagnostics.audio_clip_count,
+    ).toBeGreaterThanOrEqual(3);
     expect(
       renderResponse.runtime_diagnostics.visual_clip_count,
     ).toBeGreaterThan(0);
@@ -98,5 +98,19 @@ describe("render runtime smoke harness", () => {
       renderResponse.runtime_diagnostics.subtitle_cue_count,
     ).toBeGreaterThan(0);
     expect(existsSync(renderResponse.output_artifact.file_uri)).toBe(true);
+
+    const assetsResponse = JSON.parse(
+      readFileSync(join(outputDir, "assets-response.json"), "utf8"),
+    ) as {
+      manifest?: {
+        artifacts?: Array<{ artifact_type: string }>;
+      };
+    };
+    const artifactTypes =
+      assetsResponse.manifest?.artifacts?.map(
+        (artifact) => artifact.artifact_type,
+      ) ?? [];
+    expect(artifactTypes).toContain("bgm_audio");
+    expect(artifactTypes).toContain("sfx_audio");
   }, 180_000);
 });
