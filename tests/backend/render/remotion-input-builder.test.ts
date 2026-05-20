@@ -17,18 +17,22 @@ async function writeFixtureFiles(rootDir: string) {
   const imagePath = join(mediaDir, "still.png");
   const videoPath = join(mediaDir, "clip.mp4");
   const narrationPath = join(mediaDir, "narration.wav");
+  const bgmPath = join(mediaDir, "bgm.wav");
+  const sfxPath = join(mediaDir, "sfx.wav");
   const subtitlePath = join(mediaDir, "subtitle.srt");
 
   await writeFile(imagePath, Buffer.from(ONE_BY_ONE_PNG_BASE64, "base64"));
   await writeFile(videoPath, "fake video bytes", "utf8");
   await writeFile(narrationPath, "fake audio bytes", "utf8");
+  await writeFile(bgmPath, "fake bgm bytes", "utf8");
+  await writeFile(sfxPath, "fake sfx bytes", "utf8");
   await writeFile(
     subtitlePath,
     "1\n00:00:00,000 --> 00:00:02,000\nHello.\n",
     "utf8",
   );
 
-  return { imagePath, videoPath, narrationPath, subtitlePath };
+  return { imagePath, videoPath, narrationPath, bgmPath, sfxPath, subtitlePath };
 }
 
 function makeTimelineWithTwoVisualsAndNarration(): ComposeTimeline {
@@ -104,6 +108,38 @@ function makeTimelineWithTwoVisualsAndNarration(): ComposeTimeline {
           },
         ],
       },
+      {
+        track_id: "track_bgm",
+        track_type: "bgm",
+        clips: [
+          {
+            clip_id: "clip_bgm_001",
+            segment_id: null,
+            artifact_id: "artifact_bgm_001",
+            start_sec: 0,
+            duration_sec: 4,
+            clip_kind: "audio",
+            motion_artifact_id: null,
+            notes: [],
+          },
+        ],
+      },
+      {
+        track_id: "track_sfx",
+        track_type: "sfx",
+        clips: [
+          {
+            clip_id: "clip_sfx_001",
+            segment_id: "sb_002",
+            artifact_id: "artifact_sfx_001",
+            start_sec: 2,
+            duration_sec: 1,
+            clip_kind: "audio",
+            motion_artifact_id: null,
+            notes: [],
+          },
+        ],
+      },
     ],
     segments: [
       {
@@ -134,6 +170,8 @@ function makeManifestWithImageMotionNarrationSubtitle(input: {
   imagePath: string;
   videoPath: string;
   narrationPath: string;
+  bgmPath: string;
+  sfxPath: string;
   subtitlePath: string;
 }): AssetManifest {
   return {
@@ -201,6 +239,27 @@ function makeManifestWithImageMotionNarrationSubtitle(input: {
           caption_count: 1,
         },
       },
+      {
+        artifact_id: "artifact_bgm_001",
+        artifact_type: "bgm_audio",
+        origin: "library",
+        file_uri: input.bgmPath,
+        created_at: "2026-05-20T00:00:00.000Z",
+        metadata: {
+          duration_sec: 4,
+          loopable: true,
+        },
+      },
+      {
+        artifact_id: "artifact_sfx_001",
+        artifact_type: "sfx_audio",
+        origin: "library",
+        file_uri: input.sfxPath,
+        created_at: "2026-05-20T00:00:00.000Z",
+        metadata: {
+          duration_sec: 1,
+        },
+      },
     ],
     audio_summary: {
       voice_profile_id: "voice_1",
@@ -209,8 +268,20 @@ function makeManifestWithImageMotionNarrationSubtitle(input: {
       tts_chunk_routes: [],
       tts_merged_artifact_id: "artifact_tts_merged",
       subtitle_artifact_id: "artifact_subtitle",
-      bgm_placements: [],
-      sfx_artifact_ids: [],
+      bgm_placements: [
+        {
+          bgm_placement_id: "bgm_place_001",
+          scope: "global",
+          artifact_id: "artifact_bgm_001",
+          start_policy: "timeline_start",
+          end_policy: "timeline_end",
+          segment_ids: [],
+          volume: 0.22,
+          fade_in_sec: 0,
+          fade_out_sec: 1,
+        },
+      ],
+      sfx_artifact_ids: ["artifact_sfx_001"],
     },
     segment_routes: [
       {
@@ -234,7 +305,7 @@ function makeManifestWithImageMotionNarrationSubtitle(input: {
         visual_route_type: "video_clip",
         motion_artifact_id: null,
         fallback_visual_artifact_id: null,
-        sfx_artifact_ids: [],
+        sfx_artifact_ids: ["artifact_sfx_001"],
         bgm_placement_ids: [],
         readiness: "ready",
         notes: [],
@@ -290,6 +361,22 @@ describe("buildRemotionInputProps", () => {
         startSec: 0,
         durationSec: 4,
         volume: 1,
+      },
+      {
+        clipId: "clip_bgm_001",
+        artifactId: "artifact_bgm_001",
+        role: "bgm",
+        startSec: 0,
+        durationSec: 4,
+        volume: 0.22,
+      },
+      {
+        clipId: "clip_sfx_001",
+        artifactId: "artifact_sfx_001",
+        role: "sfx",
+        startSec: 2,
+        durationSec: 1,
+        volume: 0.8,
       },
     ]);
     expect(props.audioClips[0]?.src).toMatch(/^file:\/\/\//);

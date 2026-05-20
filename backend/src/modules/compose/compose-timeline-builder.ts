@@ -209,6 +209,127 @@ function createSubtitleTrack(input: {
   };
 }
 
+function createBgmTrack(input: {
+  manifest: AssetManifest;
+  artifactsById: Map<string, AssetArtifact>;
+  timings: SegmentTiming[];
+  totalDurationSec: number;
+}): ComposeTrack | null {
+  const clips: ComposeClip[] = [];
+  const timingBySegment = new Map(
+    input.timings.map((timing) => [timing.segmentId, timing]),
+  );
+
+  for (const placement of input.manifest.audio_summary.bgm_placements) {
+    if (!placement.artifact_id) {
+      continue;
+    }
+    const artifact = input.artifactsById.get(placement.artifact_id);
+    if (artifact?.artifact_type !== "bgm_audio") {
+      continue;
+    }
+
+    if (placement.scope === "global" || placement.segment_ids.length === 0) {
+      clips.push({
+        clip_id: `clip_bgm_${placement.bgm_placement_id}`,
+        segment_id: null,
+        artifact_id: placement.artifact_id,
+        start_sec: 0,
+        duration_sec: input.totalDurationSec,
+        clip_kind: "audio",
+        motion_artifact_id: null,
+        notes: [],
+      });
+      continue;
+    }
+
+    const selectedTimings = placement.segment_ids
+      .map((segmentId) => timingBySegment.get(segmentId))
+      .filter((timing): timing is SegmentTiming => timing !== undefined);
+    if (selectedTimings.length === 0) {
+      continue;
+    }
+    const startSec = Math.min(...selectedTimings.map((timing) => timing.startSec));
+    const endSec = Math.max(
+      ...selectedTimings.map((timing) => timing.startSec + timing.durationSec),
+    );
+
+    clips.push({
+      clip_id: `clip_bgm_${placement.bgm_placement_id}`,
+      segment_id:
+        selectedTimings.length === 1 ? selectedTimings[0]!.segmentId : null,
+      artifact_id: placement.artifact_id,
+      start_sec: startSec,
+      duration_sec: Math.max(0.01, endSec - startSec),
+      clip_kind: "audio",
+      motion_artifact_id: null,
+      notes: [],
+    });
+  }
+
+  if (clips.length === 0) {
+    return null;
+  }
+
+  return {
+    track_id: "track_bgm",
+    track_type: "bgm",
+    clips,
+  };
+}
+
+function createSfxTrack(input: {
+  manifest: AssetManifest;
+  artifactsById: Map<string, AssetArtifact>;
+  timings: SegmentTiming[];
+}): ComposeTrack | null {
+  const clips: ComposeClip[] = [];
+  const timingBySegment = new Map(
+    input.timings.map((timing) => [timing.segmentId, timing]),
+  );
+  const emittedClipIds = new Set<string>();
+
+  for (const route of input.manifest.segment_routes) {
+    const timing = timingBySegment.get(route.segment_id);
+    if (!timing) {
+      continue;
+    }
+
+    for (const artifactId of route.sfx_artifact_ids) {
+      const artifact = input.artifactsById.get(artifactId);
+      if (artifact?.artifact_type !== "sfx_audio") {
+        continue;
+      }
+      const clipId = `clip_sfx_${route.segment_id}_${artifactId}`;
+      if (emittedClipIds.has(clipId)) {
+        continue;
+      }
+      emittedClipIds.add(clipId);
+
+      clips.push({
+        clip_id: clipId,
+        segment_id: route.segment_id,
+        artifact_id: artifactId,
+        start_sec: timing.startSec,
+        duration_sec: Math.min(artifact.metadata.duration_sec, timing.durationSec),
+        clip_kind: "audio",
+        motion_artifact_id: null,
+        notes: [],
+      });
+    }
+  }
+
+  if (clips.length === 0) {
+    return null;
+  }
+
+  return {
+    track_id: "track_sfx",
+    track_type: "sfx",
+    clips,
+  };
+}
+
 function createSegments(input: {
   timings: SegmentTiming[];
   visualTrack: ComposeTrack;
@@ -268,7 +389,24 @@ export function buildComposeTimeline(
     manifest: input.manifest,
     totalDurationSec,
   });
-  const tracks = [visualTrack, narrationTrack, subtitleTrack].filter(
+  const bgmTrack = createBgmTrack({
+    manifest: input.manifest,
+    artifactsById,
+    timings,
+    totalDurationSec,
+  });
+  const sfxTrack = createSfxTrack({
+    manifest: input.manifest,
+    artifactsById,
+    timings,
+  });
+  const tracks = [
+    visualTrack,
+    narrationTrack,
+    subtitleTrack,
+    bgmTrack,
+    sfxTrack,
+  ].filter(
     (track): track is ComposeTrack => track !== null,
   );
 

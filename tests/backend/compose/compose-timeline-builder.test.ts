@@ -298,4 +298,85 @@ describe("buildComposeTimeline", () => {
     ]);
     expect(timeline.notes).not.toContain("compose_chunk_timing_fallback_used");
   });
+
+  it("adds optional BGM track when a concrete bgm_audio artifact is placed", () => {
+    const manifest = makeArtifactManifest();
+    manifest.artifacts.push({
+      artifact_id: "artifact_bgm_001",
+      artifact_type: "bgm_audio",
+      origin: "library",
+      file_uri: "memory://bgm.wav",
+      created_at: "2026-05-20T00:00:00.000Z",
+      metadata: {
+        duration_sec: 30,
+        loopable: true,
+      },
+    });
+    manifest.audio_summary.bgm_placements = [
+      {
+        bgm_placement_id: "bgm_place_001",
+        scope: "global",
+        artifact_id: "artifact_bgm_001",
+        start_policy: "timeline_start",
+        end_policy: "timeline_end",
+        segment_ids: [],
+        volume: 0.22,
+        fade_in_sec: 0,
+        fade_out_sec: 1,
+      },
+    ];
+
+    const timeline = buildComposeTimeline({
+      assetManifestRecordId: "asset_manifest_record_001",
+      assetPlanRecordId: "asset_plan_record_001",
+      storyboardRecordId: "storyboard_record_001",
+      scriptRecordId: "script_record_001",
+      manifest,
+    });
+
+    const bgmTrack = timeline.tracks.find((track) => track.track_type === "bgm");
+    expect(bgmTrack?.clips).toMatchObject([
+      {
+        clip_kind: "audio",
+        artifact_id: "artifact_bgm_001",
+        start_sec: 0,
+        duration_sec: timeline.duration_sec,
+      },
+    ]);
+  });
+
+  it("adds SFX track from concrete segment route sfx artifacts", () => {
+    const manifest = makeArtifactManifest();
+    manifest.artifacts.push({
+      artifact_id: "artifact_sfx_001",
+      artifact_type: "sfx_audio",
+      origin: "library",
+      file_uri: "memory://sfx.wav",
+      created_at: "2026-05-20T00:00:00.000Z",
+      metadata: {
+        duration_sec: 2,
+      },
+    });
+    manifest.audio_summary.sfx_artifact_ids = ["artifact_sfx_001"];
+    manifest.segment_routes[0]!.sfx_artifact_ids = ["artifact_sfx_001"];
+
+    const timeline = buildComposeTimeline({
+      assetManifestRecordId: "asset_manifest_record_001",
+      assetPlanRecordId: "asset_plan_record_001",
+      storyboardRecordId: "storyboard_record_001",
+      scriptRecordId: "script_record_001",
+      manifest,
+    });
+
+    const sfxTrack = timeline.tracks.find((track) => track.track_type === "sfx");
+    expect(sfxTrack?.clips).toMatchObject([
+      {
+        clip_kind: "audio",
+        artifact_id: "artifact_sfx_001",
+        segment_id: "sb_001",
+        start_sec: 0,
+        duration_sec: 2,
+      },
+    ]);
+  });
 });

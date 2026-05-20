@@ -169,11 +169,18 @@ function audioRoleForTrack(trackType: string): RenderAudioRole | null {
   return null;
 }
 
-function volumeForAudioRole(role: RenderAudioRole): number {
-  if (role === "bgm") {
-    return 0.3;
+function volumeForAudioClip(input: {
+  manifest: AssetManifest;
+  role: RenderAudioRole;
+  artifactId: string;
+}): number {
+  if (input.role === "bgm") {
+    const placement = input.manifest.audio_summary.bgm_placements.find(
+      (item) => item.artifact_id === input.artifactId,
+    );
+    return placement?.volume ?? 0.3;
   }
-  if (role === "sfx") {
+  if (input.role === "sfx") {
     return 0.8;
   }
 
@@ -237,6 +244,7 @@ async function buildVisualClips(input: {
 }
 
 async function buildAudioClips(input: {
+  manifest: AssetManifest;
   timeline: ComposeTimeline;
   artifactsById: Map<string, AssetArtifact>;
   assetBaseDir: string;
@@ -268,7 +276,11 @@ async function buildAudioClips(input: {
             }),
             startSec: clip.start_sec,
             durationSec: clip.duration_sec,
-            volume: volumeForAudioRole(role),
+            volume: volumeForAudioClip({
+              manifest: input.manifest,
+              role,
+              artifactId: clip.artifact_id,
+            }),
           };
         },
       );
@@ -325,6 +337,7 @@ export async function buildRemotionInputProps(input: {
       assetBaseDir: input.assetBaseDir,
     }),
     audioClips: await buildAudioClips({
+      manifest: input.manifest,
       timeline: input.timeline,
       artifactsById,
       assetBaseDir: input.assetBaseDir,
