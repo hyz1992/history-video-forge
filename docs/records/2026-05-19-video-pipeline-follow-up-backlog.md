@@ -47,7 +47,8 @@
 
 ## P1: 字幕样式与 renderer 消费
 
-- [ ] 设计字幕样式 schema：字号、位置、安全区、描边、阴影、最大行数、断行策略。
+- [x] 完成字幕样式与 renderer 消费正式 design + implementation plan。
+- [ ] 实现字幕样式 schema：字号、位置、安全区、描边、阴影、最大行数、断行策略。
 - [ ] 在 subtitle artifact metadata 或 compose timeline 中承载字幕样式。
 - [ ] renderer/Remotion 消费字幕样式并实际渲染。
 - [ ] 增加竖屏移动端安全区检查，避免字幕遮挡主体或溢出。

@@ -148,3 +148,10 @@
 
 - 新增 [Video Pipeline Follow-up Backlog](../records/2026-05-19-video-pipeline-follow-up-backlog.md)。
 - 该文档是可勾选的后续缺口清单，不是正式 implementation plan；进入音色库持久化、字幕 timing、BGM/SFX、Remotion 成片质量或图生视频真实验证前，仍需先写独立 design / implementation plan。
+
+## 2026-05-20 字幕样式与 Renderer 消费设计
+
+- 新增 [Subtitle Style and Renderer Consumption Design](./2026-05-20-subtitle-style-renderer-consumption-design.md)。
+- 新增 [Subtitle Style and Renderer Consumption Implementation Plan](./2026-05-20-subtitle-style-renderer-consumption-implementation-plan.md)。
+- 本轮设计选择把首版字幕样式合同放在 `subtitle_track.metadata.subtitle_style`，由 renderer 通过 `AssetManifest` 消费；`ComposeTimeline` 第一版保持不变。
+- Implementation plan 拆为 shared schema、local subtitle 默认样式、subtitle cue reader、Remotion adapter props、TimelineVideo 样式渲染、静帧可见性 smoke、正式文档同步 7 个 TDD 任务。
