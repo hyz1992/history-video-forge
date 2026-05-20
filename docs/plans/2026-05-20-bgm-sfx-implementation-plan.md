@@ -77,234 +77,7 @@ Modify:
 - `docs/plans/README.md`
 - `docs/records/2026-05-19-video-pipeline-follow-up-backlog.md`
 
-## Task 1: BGM Placement Contract And Manifest Builder Parameters
-
-**Files:**
-
-- Modify: `shared/src/assets/asset-manifest.schema.ts`
-- Modify: `backend/src/modules/assets/assets-manifest-builder.ts`
-- Test: `tests/backend/assets/assets-manifest-builder.test.ts`
-- Test: `tests/shared/schema-contracts.test.ts`
-
-- [ ] **Step 1: Write failing manifest-builder test**
-
-Add a test in `tests/backend/assets/assets-manifest-builder.test.ts` that creates two `bgm_cue` tasks and asserts placement parameters are read instead of hardcoded.
-
-```ts
-it("builds BGM placements from bgm_cue parameters with source task identity", () => {
-  const manifest = buildInitialAssetManifest({
-    assetPlanRecordId: "asset_plan_bgm_params",
-    assetPlan: makeAssetPlan({
-      tasks: [
-        makeTask({
-          task_id: "bgm_global",
-          task_type: "bgm_cue",
-          source_segment_id: null,
-          parameters: {
-            required_tags: ["background"],
-            mood_tags: ["tense"],
-            scope: "global",
-            volume: 0.24,
-            fade_in_sec: 1.5,
-            fade_out_sec: 2,
-          },
-        }),
-        makeTask({
-          task_id: "bgm_span",
-          task_type: "bgm_cue",
-          source_segment_id: "seg_1",
-          parameters: {
-            required_tags: ["drum"],
-            scope: "segment_span",
-            segment_ids: ["seg_1", "seg_2"],
-            volume: 0.42,
-            fade_in_sec: 0.5,
-            fade_out_sec: 0.75,
-          },
-        }),
-      ],
-    }),
-    segmentIds: ["seg_1", "seg_2"],
-  });
-
-  expect(manifest.audio_summary.bgm_placements).toMatchObject([
-    {
-      bgm_placement_id: "bgm_place_bgm_global",
-      source_task_id: "bgm_global",
-      scope: "global",
-      segment_ids: [],
-      start_policy: "timeline_start",
-      end_policy: "timeline_end",
-      volume: 0.24,
-      fade_in_sec: 1.5,
-      fade_out_sec: 2,
-    },
-    {
-      bgm_placement_id: "bgm_place_bgm_span",
-      source_task_id: "bgm_span",
-      scope: "segment_span",
-      segment_ids: ["seg_1", "seg_2"],
-      start_policy: "segment_start",
-      end_policy: "fade_out_after_span",
-      volume: 0.42,
-      fade_in_sec: 0.5,
-      fade_out_sec: 0.75,
-    },
-  ]);
-  expect(manifest.segment_routes[0]?.bgm_placement_ids).toEqual([]);
-});
-```
-
-If local helpers such as `makeAssetPlan()` / `makeTask()` do not exist in that test file, add small local helpers in the test file using the existing fixture style in the same file. Keep the test focused on BGM placement behavior.
-
-- [ ] **Step 2: Run the failing test**
-
-Run:
-
-```bash
-npx vitest run --configLoader runner tests/backend/assets/assets-manifest-builder.test.ts
-```
-
-Expected: fail because placements do not have `source_task_id` and still use hardcoded defaults.
-
-- [ ] **Step 3: Extend `BgmPlacement` schema**
-
-In `shared/src/assets/asset-manifest.schema.ts`, add optional `source_task_id`:
-
-```ts
-export const BgmPlacement = z
-  .object({
-    bgm_placement_id: z.string().min(1),
-    source_task_id: z.string().min(1).optional(),
-    scope: z.enum(["global", "segment", "segment_span"]),
-    artifact_id: z.string().min(1).nullable(),
-    start_policy: z.enum(["timeline_start", "segment_start"]),
-    end_policy: z.enum([
-      "timeline_end",
-      "segment_end",
-      "fade_out_after_span",
-    ]),
-    segment_ids: z.array(z.string().min(1)),
-    volume: z.number().min(0).max(1).default(0.3),
-    fade_in_sec: z.number().nonnegative().default(0),
-    fade_out_sec: z.number().nonnegative().default(0),
-  })
-  .strict();
-```
-
-Do not add ducking fields.
-
-- [ ] **Step 4: Implement parameter readers in manifest builder**
-
-In `backend/src/modules/assets/assets-manifest-builder.ts`, add small local helpers near `buildBgmPlacements()`:
-
-```ts
-function readStringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string" && item.length > 0)
-    : [];
-}
-
-function readNumberInRange(value: unknown, fallback: number, min: number, max: number): number {
-  return typeof value === "number" && Number.isFinite(value)
-    ? Math.min(max, Math.max(min, value))
-    : fallback;
-}
-
-function readNonNegativeNumber(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value)
-    ? Math.max(0, value)
-    : fallback;
-}
-
-function readBgmScope(value: unknown): "global" | "segment" | "segment_span" {
-  return value === "segment" || value === "segment_span" ? value : "global";
-}
-```
-
-Then replace the hardcoded placement body with:
-
-```ts
-const scope = readBgmScope(task.parameters["scope"]);
-const segmentIds =
-  scope === "global"
-    ? []
-    : readStringArray(task.parameters["segment_ids"]).length > 0
-      ? readStringArray(task.parameters["segment_ids"])
-      : task.source_segment_id
-        ? [task.source_segment_id]
-        : [];
-
-placements.push({
-  bgm_placement_id: generateId("bgm_place", task.task_id),
-  source_task_id: task.task_id,
-  scope,
-  artifact_id: null,
-  start_policy: scope === "global" ? "timeline_start" : "segment_start",
-  end_policy:
-    scope === "global"
-      ? "timeline_end"
-      : scope === "segment"
-        ? "segment_end"
-        : "fade_out_after_span",
-  segment_ids: segmentIds,
-  volume: readNumberInRange(task.parameters["volume"], 0.3, 0, 1),
-  fade_in_sec: readNonNegativeNumber(task.parameters["fade_in_sec"], 0),
-  fade_out_sec: readNonNegativeNumber(task.parameters["fade_out_sec"], 0),
-});
-```
-
-Keep `SegmentAssetRoute.bgm_placement_ids` unchanged and empty.
-
-- [ ] **Step 5: Add schema contract coverage**
-
-Add a minimal parse assertion to `tests/shared/schema-contracts.test.ts` where `AssetManifest` is already exercised:
-
-```ts
-expect(() =>
-  AssetManifest.parse({
-    ...validManifest,
-    audio_summary: {
-      ...validManifest.audio_summary,
-      bgm_placements: [
-        {
-          bgm_placement_id: "bgm_place_001",
-          source_task_id: "bgm_task_001",
-          scope: "global",
-          artifact_id: null,
-          start_policy: "timeline_start",
-          end_policy: "timeline_end",
-          segment_ids: [],
-          volume: 0.3,
-          fade_in_sec: 0,
-          fade_out_sec: 0,
-        },
-      ],
-    },
-  }),
-).not.toThrow();
-```
-
-Use the actual local fixture name in that test file; do not create a broad new fixture if one already exists.
-
-- [ ] **Step 6: Verify**
-
-Run:
-
-```bash
-npx vitest run --configLoader runner tests/backend/assets/assets-manifest-builder.test.ts tests/shared/schema-contracts.test.ts
-```
-
-Expected: pass.
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add shared/src/assets/asset-manifest.schema.ts backend/src/modules/assets/assets-manifest-builder.ts tests/backend/assets/assets-manifest-builder.test.ts tests/shared/schema-contracts.test.ts
-git commit -m "参数化配乐放置合同"
-```
-
-## Task 2: Cue Parameter Reader And Media Library Selection Hardening
+## Task 1: Cue Parameter Reader And Media Library Selection Hardening
 
 **Files:**
 
@@ -527,6 +300,8 @@ export async function selectMediaLibraryItem(
 
 Keep the existing mood-score and ID tie-break sort.
 
+The `commercial_use_allowed` filter is an intentional behavior tightening: approved library items are still ineligible for generated BGM/SFX artifacts unless their license allows commercial use.
+
 - [ ] **Step 6: Verify**
 
 Run:
@@ -541,7 +316,214 @@ Expected: pass.
 
 ```bash
 git add backend/src/modules/assets/audio-cue-params.ts backend/src/modules/assets/media-library-selector.ts tests/backend/assets/audio-cue-params.test.ts tests/backend/assets/media-library-selector.test.ts
-git commit -m "强化音频素材选择参数"
+git commit -m "强化音频素材选择参数与商业授权校验"
+```
+
+## Task 2: BGM Placement Contract And Manifest Builder Parameters
+
+**Files:**
+
+- Modify: `shared/src/assets/asset-manifest.schema.ts`
+- Modify: `backend/src/modules/assets/assets-manifest-builder.ts`
+- Test: `tests/backend/assets/assets-manifest-builder.test.ts`
+- Test: `tests/shared/schema-contracts.test.ts`
+
+- [ ] **Step 1: Write failing manifest-builder test**
+
+Add a test in `tests/backend/assets/assets-manifest-builder.test.ts` that creates two `bgm_cue` tasks and asserts placement parameters are read instead of hardcoded.
+
+```ts
+it("builds BGM placements from bgm_cue parameters with source task identity", () => {
+  const manifest = buildInitialAssetManifest({
+    assetPlanRecordId: "asset_plan_bgm_params",
+    assetPlan: makeAssetPlan({
+      tasks: [
+        makeTask({
+          task_id: "bgm_global",
+          task_type: "bgm_cue",
+          source_segment_id: null,
+          parameters: {
+            required_tags: ["background"],
+            mood_tags: ["tense"],
+            scope: "global",
+            volume: 0.24,
+            fade_in_sec: 1.5,
+            fade_out_sec: 2,
+          },
+        }),
+        makeTask({
+          task_id: "bgm_span",
+          task_type: "bgm_cue",
+          source_segment_id: "seg_1",
+          parameters: {
+            required_tags: ["drum"],
+            scope: "segment_span",
+            segment_ids: ["seg_1", "seg_2"],
+            volume: 0.42,
+            fade_in_sec: 0.5,
+            fade_out_sec: 0.75,
+          },
+        }),
+      ],
+    }),
+    segmentIds: ["seg_1", "seg_2"],
+  });
+
+  expect(manifest.audio_summary.bgm_placements).toMatchObject([
+    {
+      bgm_placement_id: "bgm_place_bgm_global",
+      source_task_id: "bgm_global",
+      scope: "global",
+      segment_ids: [],
+      start_policy: "timeline_start",
+      end_policy: "timeline_end",
+      volume: 0.24,
+      fade_in_sec: 1.5,
+      fade_out_sec: 2,
+    },
+    {
+      bgm_placement_id: "bgm_place_bgm_span",
+      source_task_id: "bgm_span",
+      scope: "segment_span",
+      segment_ids: ["seg_1", "seg_2"],
+      start_policy: "segment_start",
+      end_policy: "fade_out_after_span",
+      volume: 0.42,
+      fade_in_sec: 0.5,
+      fade_out_sec: 0.75,
+    },
+  ]);
+  expect(manifest.segment_routes[0]?.bgm_placement_ids).toEqual([]);
+});
+```
+
+If local helpers such as `makeAssetPlan()` / `makeTask()` do not exist in that test file, add small local helpers in the test file using the existing fixture style in the same file. Keep the test focused on BGM placement behavior.
+
+- [ ] **Step 2: Run the failing test**
+
+Run:
+
+```bash
+npx vitest run --configLoader runner tests/backend/assets/assets-manifest-builder.test.ts
+```
+
+Expected: fail because placements do not have `source_task_id` and still use hardcoded defaults.
+
+- [ ] **Step 3: Extend `BgmPlacement` schema**
+
+In `shared/src/assets/asset-manifest.schema.ts`, add optional `source_task_id`:
+
+```ts
+export const BgmPlacement = z
+  .object({
+    bgm_placement_id: z.string().min(1),
+    source_task_id: z.string().min(1).optional(),
+    scope: z.enum(["global", "segment", "segment_span"]),
+    artifact_id: z.string().min(1).nullable(),
+    start_policy: z.enum(["timeline_start", "segment_start"]),
+    end_policy: z.enum([
+      "timeline_end",
+      "segment_end",
+      "fade_out_after_span",
+    ]),
+    segment_ids: z.array(z.string().min(1)),
+    volume: z.number().min(0).max(1).default(0.3),
+    fade_in_sec: z.number().nonnegative().default(0),
+    fade_out_sec: z.number().nonnegative().default(0),
+  })
+  .strict();
+```
+
+Do not add ducking fields.
+
+- [ ] **Step 4: Reuse cue parameter reader in manifest builder**
+
+In `backend/src/modules/assets/assets-manifest-builder.ts`, import the Task 1 reader:
+
+```ts
+import { readBgmCueParams } from "./audio-cue-params.js";
+```
+
+Then replace the hardcoded placement body with a single reader call:
+
+```ts
+const params = readBgmCueParams(task.parameters);
+const segmentIds =
+  params.scope === "global"
+    ? []
+    : params.segmentIds.length > 0
+      ? params.segmentIds
+      : task.source_segment_id
+        ? [task.source_segment_id]
+        : [];
+
+placements.push({
+  bgm_placement_id: generateId("bgm_place", task.task_id),
+  source_task_id: task.task_id,
+  scope: params.scope,
+  artifact_id: null,
+  start_policy: params.scope === "global" ? "timeline_start" : "segment_start",
+  end_policy:
+    params.scope === "global"
+      ? "timeline_end"
+      : params.scope === "segment"
+        ? "segment_end"
+        : "fade_out_after_span",
+  segment_ids: segmentIds,
+  volume: params.volume,
+  fade_in_sec: params.fadeInSec,
+  fade_out_sec: params.fadeOutSec,
+});
+```
+
+Keep `SegmentAssetRoute.bgm_placement_ids` unchanged and empty.
+
+- [ ] **Step 5: Add schema contract coverage**
+
+Add a minimal parse assertion to `tests/shared/schema-contracts.test.ts` where `AssetManifest` is already exercised:
+
+```ts
+expect(() =>
+  AssetManifest.parse({
+    ...validManifest,
+    audio_summary: {
+      ...validManifest.audio_summary,
+      bgm_placements: [
+        {
+          bgm_placement_id: "bgm_place_001",
+          source_task_id: "bgm_task_001",
+          scope: "global",
+          artifact_id: null,
+          start_policy: "timeline_start",
+          end_policy: "timeline_end",
+          segment_ids: [],
+          volume: 0.3,
+          fade_in_sec: 0,
+          fade_out_sec: 0,
+        },
+      ],
+    },
+  }),
+).not.toThrow();
+```
+
+Use the actual local fixture name in that test file; do not create a broad new fixture if one already exists.
+
+- [ ] **Step 6: Verify**
+
+Run:
+
+```bash
+npx vitest run --configLoader runner tests/backend/assets/assets-manifest-builder.test.ts tests/shared/schema-contracts.test.ts
+```
+
+Expected: pass.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add shared/src/assets/asset-manifest.schema.ts backend/src/modules/assets/assets-manifest-builder.ts tests/backend/assets/assets-manifest-builder.test.ts tests/shared/schema-contracts.test.ts
+git commit -m "参数化配乐放置合同"
 ```
 
 ## Task 3: Shared Deterministic WAV Fixture Helper
