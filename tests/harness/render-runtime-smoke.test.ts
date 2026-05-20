@@ -81,10 +81,22 @@ describe("render runtime smoke harness", () => {
       };
       runtime_diagnostics: {
         renderer?: string;
+        audio_clip_count?: number;
+        visual_clip_count?: number;
+        subtitle_cue_count?: number;
       };
     };
     expect(renderResponse.output_artifact.mime_type).toBe("video/mp4");
     expect(renderResponse.runtime_diagnostics.renderer).toBe("remotion");
+    expect(renderResponse.runtime_diagnostics.audio_clip_count).toBeGreaterThan(
+      0,
+    );
+    expect(
+      renderResponse.runtime_diagnostics.visual_clip_count,
+    ).toBeGreaterThan(0);
+    expect(
+      renderResponse.runtime_diagnostics.subtitle_cue_count,
+    ).toBeGreaterThan(0);
     expect(existsSync(renderResponse.output_artifact.file_uri)).toBe(true);
   }, 180_000);
 });
