@@ -174,6 +174,8 @@
 - 新增 [BGM / SFX Design](./2026-05-20-bgm-sfx-design.md)。
 - 新增 [BGM / SFX Implementation Plan](./2026-05-20-bgm-sfx-implementation-plan.md)。
 - 新增 [BGM/SFX 默认素材库与渲染补强实施计划](./2026-05-20-bgm-sfx-library-and-rendering-follow-up-plan.md)。
+- 新增 [真实音频素材导入校验设计](./2026-05-20-audio-library-import-check-design.md)。
+- 新增 [真实音频素材导入校验实施计划](./2026-05-20-audio-library-import-check-implementation-plan.md)。
 - 本轮设计面向 backlog P1「BGM / SFX」，先收束本地素材库字段、cue 到素材选择规则、fake/local provider 基线和 compose/renderer 消费边界。
 - 设计选择先走 approved media library + deterministic fake/local WAV artifact，不默认接真实付费 provider，不做上传/预览 UI、发布流、人工审稿或质量评分。
 - Implementation plan 拆为 cue 参数读取、placement 合同、WAV 夹具、本地 BGM provider、本地 SFX provider、assets run 接入、compose/render 回归、runtime smoke 和正式文档同步 9 个 TDD 任务。
@@ -181,3 +183,4 @@
 - 当前完成线是离线本地媒体库选择 + deterministic WAV fixture 物化 + compose/renderer 消费；真实付费 BGM/SFX provider、素材上传/预览、署名包装、ducking、响度归一化和发布流仍需后续单独设计。
 - 截至 2026-05-20，默认素材库与渲染补强计划 Task 1-7 已完成：默认 BGM/SFX seed 合同、幂等 seed 写入、BGM artifact 缺失告警、BGM fade/loop props、`TimelineVideo` fade/loop 渲染、runtime smoke 改用默认 seed 与正式文档同步。
 - 默认素材库当前仍是 metadata-first / license-evidence-first，不代表真实第三方音频文件已下载入库；真实文件导入必须另走来源 URL、授权页面、SHA-256、时长与 approval 记录。
+- 真实音频素材导入校验计划是下一步建议入口：第一版只处理用户已下载的本地 WAV 文件，导入时复制到项目 `storage/media-library/audio/<type>/`，计算真实 SHA-256，探测真实时长，并保留 source URL、license、attribution 与 approval；不默认联网下载，不新增 MP3/OGG 解析依赖。
