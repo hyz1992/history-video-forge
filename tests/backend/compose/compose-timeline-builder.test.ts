@@ -198,4 +198,104 @@ describe("buildComposeTimeline", () => {
       { segment_id: "sb_002", start_sec: 6, duration_sec: 6 },
     ]);
   });
+
+  it("accumulates multiple TTS chunk durations routed to the same segment", () => {
+    const manifest = makeArtifactManifest();
+    manifest.artifacts = [
+      {
+        ...manifest.artifacts[0],
+        artifact_id: "artifact_tts_chunk_001",
+        metadata: {
+          ...manifest.artifacts[0]!.metadata,
+          duration_sec: 1.5,
+          tts_chunk_id: "tts_chunk_001",
+          segment_ids: ["sb_001"],
+        },
+      },
+      {
+        ...manifest.artifacts[0],
+        artifact_id: "artifact_tts_chunk_002",
+        metadata: {
+          ...manifest.artifacts[0]!.metadata,
+          duration_sec: 2.5,
+          tts_chunk_id: "tts_chunk_002",
+          segment_ids: ["sb_001"],
+        },
+      },
+      {
+        ...manifest.artifacts[0],
+        artifact_id: "artifact_tts_chunk_003",
+        metadata: {
+          ...manifest.artifacts[0]!.metadata,
+          duration_sec: 3,
+          tts_chunk_id: "tts_chunk_003",
+          segment_ids: ["sb_002"],
+        },
+      },
+      {
+        ...manifest.artifacts[1],
+        metadata: {
+          ...manifest.artifacts[1]!.metadata,
+          duration_sec: 7,
+          chunk_artifact_ids: [
+            "artifact_tts_chunk_001",
+            "artifact_tts_chunk_002",
+            "artifact_tts_chunk_003",
+          ],
+        },
+      },
+      manifest.artifacts[2]!,
+      manifest.artifacts[3]!,
+      manifest.artifacts[4]!,
+    ];
+    manifest.audio_summary.tts_total_duration_sec = 7;
+    manifest.audio_summary.tts_chunk_artifact_ids = [
+      "artifact_tts_chunk_001",
+      "artifact_tts_chunk_002",
+      "artifact_tts_chunk_003",
+    ];
+    manifest.audio_summary.tts_chunk_routes = [
+      {
+        tts_chunk_id: "tts_chunk_001",
+        artifact_id: "artifact_tts_chunk_001",
+        segment_ids: ["sb_001"],
+        script_excerpt: "first part",
+      },
+      {
+        tts_chunk_id: "tts_chunk_002",
+        artifact_id: "artifact_tts_chunk_002",
+        segment_ids: ["sb_001"],
+        script_excerpt: "second part",
+      },
+      {
+        tts_chunk_id: "tts_chunk_003",
+        artifact_id: "artifact_tts_chunk_003",
+        segment_ids: ["sb_002"],
+        script_excerpt: "third part",
+      },
+    ];
+    manifest.segment_routes = [
+      manifest.segment_routes[0]!,
+      {
+        ...manifest.segment_routes[0]!,
+        segment_id: "sb_002",
+        tts_artifact_id: "artifact_tts_chunk_003",
+      },
+    ];
+
+    const timeline = buildComposeTimeline({
+      assetManifestRecordId: "asset_manifest_record_001",
+      assetPlanRecordId: "asset_plan_record_001",
+      storyboardRecordId: "storyboard_record_001",
+      scriptRecordId: "script_record_001",
+      manifest,
+    });
+
+    expect(timeline.duration_sec).toBe(7);
+    expect(timeline.segments.map((segment) => segment.duration_sec)).toEqual([
+      4,
+      3,
+    ]);
+    expect(timeline.notes).not.toContain("compose_chunk_timing_fallback_used");
+  });
 });

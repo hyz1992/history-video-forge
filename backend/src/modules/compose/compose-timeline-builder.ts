@@ -63,7 +63,10 @@ function deriveSegmentTimings(input: {
 
     const perSegmentDuration = chunkDurationSec / route.segment_ids.length;
     for (const segmentId of route.segment_ids) {
-      chunkDurationBySegment.set(segmentId, perSegmentDuration);
+      chunkDurationBySegment.set(
+        segmentId,
+        (chunkDurationBySegment.get(segmentId) ?? 0) + perSegmentDuration,
+      );
     }
   }
 
