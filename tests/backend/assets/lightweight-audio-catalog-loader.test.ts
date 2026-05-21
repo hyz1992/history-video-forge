@@ -33,15 +33,18 @@ describe("loadLightweightBgmCatalogItems", () => {
               tags: ["background", "historical"],
               mood_tags: ["solemn", "low_intrusion"],
               title: "Test BGM",
+              volume_hint: 0.18,
             },
           ],
         }),
       );
 
-      const items = await loadLightweightBgmCatalogItems(catalogPath);
+      const loadedItems = await loadLightweightBgmCatalogItems(catalogPath);
+      const items = loadedItems.map((entry) => entry.item);
 
       expect(items).toHaveLength(1);
       expect(() => MediaLibraryItem.parse(items[0])).not.toThrow();
+      expect(loadedItems[0]?.volumeHint).toBe(0.18);
       expect(items[0]).toMatchObject({
         library_item_id: "bgm_hist_test_001",
         type: "bgm",

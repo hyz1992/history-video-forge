@@ -104,9 +104,16 @@ describe("render runtime smoke harness", () => {
     ) as {
       manifest?: {
         artifacts?: Array<{
+          artifact_id: string;
           artifact_type: string;
           metadata?: { library_item_id?: string };
         }>;
+        audio_summary?: {
+          bgm_placements?: Array<{
+            artifact_id: string | null;
+            volume?: number;
+          }>;
+        };
       };
     };
     const artifactTypes =
@@ -115,14 +122,19 @@ describe("render runtime smoke harness", () => {
       ) ?? [];
     expect(artifactTypes).toContain("bgm_audio");
     expect(artifactTypes).toContain("sfx_audio");
-    expect(
-      assetsResponse.manifest?.artifacts?.some(
-        (artifact) =>
-          artifact.artifact_type === "bgm_audio" &&
-          artifact.metadata?.library_item_id ===
-            "bgm_hist_ancient_china_solemn_001",
-      ),
-    ).toBe(true);
+    const smokeBgmArtifact = assetsResponse.manifest?.artifacts?.find(
+      (artifact) =>
+        artifact.artifact_type === "bgm_audio" &&
+        artifact.metadata?.library_item_id ===
+          "bgm_hist_ancient_china_solemn_001",
+    );
+    expect(smokeBgmArtifact).toBeTruthy();
+    const smokeBgmPlacement =
+      assetsResponse.manifest?.audio_summary?.bgm_placements?.find(
+        (placement) =>
+          placement.artifact_id === smokeBgmArtifact?.artifact_id,
+      );
+    expect(smokeBgmPlacement?.volume).toBeCloseTo(0.16, 3);
     expect(
       assetsResponse.manifest?.artifacts?.some(
         (artifact) =>

@@ -15,6 +15,7 @@ import type { AssetPlan } from "../../../shared/src/index.js";
 const TOPIC_PACKAGE_ID = "topic_render_smoke_001";
 const SCRIPT_RECORD_ID = "script_render_smoke_001";
 const STORYBOARD_RECORD_ID = "storyboard_render_smoke_001";
+const SMOKE_BGM_LIBRARY_ITEM_ID = "bgm_hist_ancient_china_solemn_001";
 
 export interface RunRenderRuntimeSmokeInput {
   adapter?: "fake" | "remotion";
@@ -37,11 +38,24 @@ export interface RunRenderRuntimeSmokeResult {
   };
 }
 
+interface SmokeBgmCueInput {
+  libraryItemId?: string;
+  requiredTags: string[];
+  moodTags: string[];
+  volume: number;
+}
+
 function writeJson(outputDir: string, filename: string, value: unknown) {
   writeFileSync(resolve(outputDir, filename), JSON.stringify(value, null, 2), "utf8");
 }
 
-function makeAssetPlan(): AssetPlan {
+function makeAssetPlan(input: { bgmCue?: SmokeBgmCueInput } = {}): AssetPlan {
+  const bgmCue = input.bgmCue ?? {
+    requiredTags: ["background", "drone"],
+    moodTags: ["tense", "dark"],
+    volume: 0.25,
+  };
+
   return {
     plan_version: "asset_plan_v1",
     source_storyboard_record_id: STORYBOARD_RECORD_ID,
@@ -172,10 +186,13 @@ function makeAssetPlan(): AssetPlan {
         provider_hint: "local_bgm",
         prompt_draft: null,
         parameters: {
-          required_tags: ["background", "historical"],
-          mood_tags: ["solemn", "low_intrusion"],
+          required_tags: bgmCue.requiredTags,
+          mood_tags: bgmCue.moodTags,
           scope: "global",
-          volume: 0.25,
+          ...(bgmCue.libraryItemId
+            ? { library_item_id: bgmCue.libraryItemId }
+            : {}),
+          volume: bgmCue.volume,
           fade_in_sec: 1,
           fade_out_sec: 1,
         },
@@ -210,32 +227,56 @@ function makeAssetPlan(): AssetPlan {
   };
 }
 
-async function seedSmokeMediaLibrary(app: ReturnType<typeof buildApp>) {
+async function seedSmokeMediaLibrary(
+  app: ReturnType<typeof buildApp>,
+): Promise<{ bgmCue: SmokeBgmCueInput }> {
   const lightweightBgmCatalogPath = resolve(
     process.cwd(),
     "storage/media-library/ai-bgm-prompt-candidates.json",
   );
+  let bgmCue: SmokeBgmCueInput = {
+    requiredTags: ["background", "drone"],
+    moodTags: ["tense", "dark"],
+    volume: 0.25,
+  };
+
   if (existsSync(lightweightBgmCatalogPath)) {
-    const bgmItems = await loadLightweightBgmCatalogItems(
+    const loadedBgmItems = await loadLightweightBgmCatalogItems(
       lightweightBgmCatalogPath,
     );
-    for (const item of bgmItems) {
-      await saveMediaLibraryItem(app.db, item);
+    for (const entry of loadedBgmItems) {
+      await saveMediaLibraryItem(app.db, entry.item);
+    }
+
+    const smokeBgm =
+      loadedBgmItems.find(
+        (entry) => entry.item.library_item_id === SMOKE_BGM_LIBRARY_ITEM_ID,
+      ) ?? loadedBgmItems[0];
+    if (smokeBgm) {
+      bgmCue = {
+        libraryItemId: smokeBgm.item.library_item_id,
+        requiredTags: ["background", "historical"],
+        moodTags: ["solemn", "low_intrusion"],
+        volume: smokeBgm.volumeHint ?? 0.25,
+      };
     }
   }
 
   for (const item of DEFAULT_AUDIO_LIBRARY_ITEMS) {
     await saveMediaLibraryItem(app.db, item);
   }
+
+  return { bgmCue };
 }
 
 async function seedActiveAssetPlan(input: {
   app: ReturnType<typeof buildApp>;
   projectId: string;
+  bgmCue?: SmokeBgmCueInput;
 }) {
-  const { app, projectId } = input;
+  const { app, projectId, bgmCue } = input;
   const assetPlanRecordId = `asset_plan_render_smoke_${app.db.generateId()}`;
-  const assetPlan = makeAssetPlan();
+  const assetPlan = makeAssetPlan({ bgmCue });
 
   app.db.storyboardRecords.set(STORYBOARD_RECORD_ID, {
     id: STORYBOARD_RECORD_ID,
@@ -390,8 +431,12 @@ export async function runRenderRuntimeSmoke(
   }
   project.storageRootDir = resolve(finalOutputDir, "project-storage");
 
-  await seedSmokeMediaLibrary(app);
-  await seedActiveAssetPlan({ app, projectId });
+  const mediaLibrarySeed = await seedSmokeMediaLibrary(app);
+  await seedActiveAssetPlan({
+    app,
+    projectId,
+    bgmCue: mediaLibrarySeed.bgmCue,
+  });
 
   const assetsBody = await injectOrThrow({
     app,

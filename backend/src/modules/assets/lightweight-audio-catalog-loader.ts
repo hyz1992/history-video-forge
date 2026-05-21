@@ -2,6 +2,11 @@ import { readFile } from "node:fs/promises";
 
 import type { MediaLibraryItem } from "../../../../shared/src/index.js";
 
+export interface LoadedLightweightBgmCatalogItem {
+  item: MediaLibraryItem;
+  volumeHint: number | null;
+}
+
 interface LightweightBgmCatalog {
   generated_at?: string;
   items?: LightweightBgmCatalogItem[];
@@ -18,11 +23,12 @@ interface LightweightBgmCatalogItem {
   loopable?: boolean;
   tags?: string[];
   mood_tags?: string[];
+  volume_hint?: number;
 }
 
 export async function loadLightweightBgmCatalogItems(
   catalogPath: string,
-): Promise<MediaLibraryItem[]> {
+): Promise<LoadedLightweightBgmCatalogItem[]> {
   const catalog = JSON.parse(
     await readFile(catalogPath, "utf8"),
   ) as LightweightBgmCatalog;
@@ -31,23 +37,29 @@ export async function loadLightweightBgmCatalogItems(
   return (catalog.items ?? [])
     .filter(isGeneratedBgmItem)
     .map((item) => ({
-      library_item_id: item.library_item_id!,
-      type: "bgm",
-      file_uri: item.file_uri!,
-      mime_type: item.mime_type!,
-      duration_sec: item.duration_sec!,
-      loopable: item.loopable ?? true,
-      tags: item.tags!,
-      mood_tags: item.mood_tags ?? [],
-      license: {
-        license_type: "provider_generated",
-        commercial_use_allowed: true,
-        attribution_required: false,
-        source_url: "https://elevenlabs.io/",
+      item: {
+        library_item_id: item.library_item_id!,
+        type: "bgm",
+        file_uri: item.file_uri!,
+        mime_type: item.mime_type!,
+        duration_sec: item.duration_sec!,
+        loopable: item.loopable ?? true,
+        tags: item.tags!,
+        mood_tags: item.mood_tags ?? [],
+        license: {
+          license_type: "provider_generated",
+          commercial_use_allowed: true,
+          attribution_required: false,
+          source_url: "https://elevenlabs.io/",
+        },
+        file_hash: item.file_hash!,
+        imported_at: importedAt,
+        approved_for_use: true,
       },
-      file_hash: item.file_hash!,
-      imported_at: importedAt,
-      approved_for_use: true,
+      volumeHint:
+        typeof item.volume_hint === "number"
+          ? Math.min(1, Math.max(0, item.volume_hint))
+          : null,
     }));
 }
 
