@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -8,6 +8,7 @@ import {
   buildProductAcceptanceLiveCheckPlan,
   loadProductAcceptanceSource,
   parseProductAcceptanceLiveCheckCliArgs,
+  runAcceptanceAssetPlanning,
   sanitizeAssetPlanForProductAcceptance,
   seedProductAcceptanceProject,
 } from "../../harness/scripts/runtime/product-acceptance-live-check";
@@ -149,6 +150,89 @@ describe("product acceptance live-check harness", () => {
     expect(() => sanitizeAssetPlanForProductAcceptance(plan)).toThrow(
       "acceptance_visual_anchor_missing: sb_001",
     );
+  });
+
+  it("writes original and execution asset plans and activates the sanitized record", async () => {
+    const seeded = await seedProductAcceptanceProject({
+      source: {
+        sourceDir: "fixture-source",
+        topicPackage: makeTopicPackageFixture(),
+        scriptDraft: makeScriptDraftFixture(),
+        storyboardPlan: makeStoryboardPlanFixture(),
+      },
+      outputDir: mkdtempSync(join(tmpdir(), "svf2-acceptance-seeded-")),
+    });
+    const originalPlan = makeAssetPlanFixture({
+      tasks: [
+        makeAssetTask("tts_001", "tts_audio", "sb_001"),
+        makeAssetTask("subtitle_001", "subtitle_track", "sb_001"),
+        makeAssetTask("image_001", "image_still", "sb_001"),
+        makeAssetTask("video_001", "video_clip", "sb_001"),
+        makeAssetTask("sfx_001", "sfx_cue", "sb_001"),
+      ],
+    });
+    const originalRecordId = "asset_plan_original_fixture";
+    seeded.app.db.assetPlanRecords.set(originalRecordId, {
+      id: originalRecordId,
+      projectId: seeded.project.id,
+      topicPackageId: seeded.project.activeTopicPackageId!,
+      scriptRecordId: seeded.project.activeScriptRecordId!,
+      storyboardRecordId: seeded.project.activeStoryboardRecordId!,
+      planJson: originalPlan,
+      validationResultJson: {
+        stage: "asset_planning_local_validation",
+        decision: "pass",
+        errors: [],
+        warnings: [],
+        metrics: {},
+      },
+      executionStateJson: null,
+      graphTraceSummaryJson: null,
+      runtimeDiagnosticsJson: null,
+      createdAt: new Date(),
+    });
+    seeded.project.activeAssetPlanRecordId = originalRecordId;
+    const outputDir = mkdtempSync(join(tmpdir(), "svf2-acceptance-planning-"));
+
+    const result = await runAcceptanceAssetPlanning({
+      app: seeded.app,
+      project: seeded.project,
+      outputDir,
+      generateAssetPlan: async () => ({
+        asset_plan: originalPlan,
+        local_validation: {
+          stage: "asset_planning_local_validation",
+          decision: "pass",
+          errors: [],
+          warnings: [],
+          metrics: {},
+        },
+      }),
+    });
+
+    const executionPlan = JSON.parse(
+      readFileSync(join(outputDir, "execution-asset-plan.json"), "utf8"),
+    ) as AssetPlan;
+    expect(JSON.parse(readFileSync(join(outputDir, "asset-plan.json"), "utf8")))
+      .toMatchObject({ plan_version: "asset_plan_v1" });
+    expect(executionPlan.tasks.map((task) => task.task_type)).not.toContain(
+      "video_clip",
+    );
+    expect(executionPlan.tasks.map((task) => task.task_type)).not.toContain(
+      "sfx_cue",
+    );
+    expect(result.originalAssetPlanRecordId).toBe(originalRecordId);
+    expect(seeded.project.activeAssetPlanRecordId).toBe(
+      result.executionAssetPlanRecordId,
+    );
+    expect(
+      seeded.app.db.assetPlanRecords.get(result.executionAssetPlanRecordId)
+        ?.executionStateJson,
+    ).toMatchObject({
+      source_asset_plan_record_id: originalRecordId,
+      sanitized_for_product_acceptance: true,
+      disabled_task_types: ["video_clip", "sfx_cue"],
+    });
   });
 });
 

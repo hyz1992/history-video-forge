@@ -1,8 +1,9 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { buildApp, type AppInstance } from "../../../backend/src/app";
 import type { ProjectRecord } from "../../../backend/src/db/client";
+import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning/asset-plan-record.repository";
 import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository";
 import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/storyboard-record.repository";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository";
@@ -54,6 +55,13 @@ export interface ProductAcceptanceSource {
 export interface SeededProductAcceptanceProject {
   app: AppInstance;
   project: ProjectRecord;
+}
+
+export interface AcceptanceAssetPlanningResult {
+  originalPlan: AssetPlanType;
+  executionPlan: AssetPlanType;
+  originalAssetPlanRecordId: string;
+  executionAssetPlanRecordId: string;
 }
 
 const DEFAULT_OUTPUT_DIR = resolve(
@@ -163,6 +171,15 @@ function readJson(filePath: string): unknown {
   return JSON.parse(readFileSync(filePath, "utf8"));
 }
 
+function writeJson(outputDir: string, filename: string, value: unknown): void {
+  mkdirSync(outputDir, { recursive: true });
+  writeFileSync(
+    resolve(outputDir, filename),
+    JSON.stringify(value, null, 2),
+    "utf8",
+  );
+}
+
 export function loadProductAcceptanceSource(
   sourceDir: string,
 ): ProductAcceptanceSource {
@@ -236,6 +253,78 @@ export function sanitizeAssetPlanForProductAcceptance(
       ],
     },
   });
+}
+
+export async function runAcceptanceAssetPlanning(input: {
+  app: AppInstance;
+  project: ProjectRecord;
+  outputDir: string;
+  generateAssetPlan?: () => Promise<Record<string, unknown>>;
+}): Promise<AcceptanceAssetPlanningResult> {
+  const rawBody = input.generateAssetPlan
+    ? await input.generateAssetPlan()
+    : await injectOrThrow({
+        app: input.app,
+        method: "POST",
+        url: `/api/projects/${input.project.id}/asset-plan/generate`,
+        payload: {},
+      });
+  const originalPlan = AssetPlan.parse(
+    rawBody.asset_plan ?? rawBody.plan ?? rawBody.assetPlan,
+  );
+  const validation =
+    rawBody.local_validation ??
+    rawBody.validation ??
+    {
+      stage: "asset_planning_local_validation",
+      decision: "pass",
+      errors: [],
+      warnings: [],
+      metrics: {},
+    };
+
+  writeJson(input.outputDir, "asset-plan.json", originalPlan);
+  writeJson(input.outputDir, "asset-planning-validation-result.json", validation);
+
+  const executionPlan = sanitizeAssetPlanForProductAcceptance(originalPlan);
+  writeJson(input.outputDir, "execution-asset-plan.json", executionPlan);
+
+  const activeAssetPlanRecordId = input.project.activeAssetPlanRecordId;
+  const activeAssetPlanRecord = activeAssetPlanRecordId
+    ? input.app.db.assetPlanRecords.get(activeAssetPlanRecordId)
+    : null;
+  if (!activeAssetPlanRecord) {
+    throw new Error(
+      "product_acceptance_asset_plan_record_missing_after_generation",
+    );
+  }
+
+  const executionRecord = await saveAssetPlanRecord(input.app.db, {
+    id: `asset_plan_product_acceptance_execution_${input.app.db.generateId()}`,
+    projectId: input.project.id,
+    topicPackageId: activeAssetPlanRecord.topicPackageId,
+    scriptRecordId: activeAssetPlanRecord.scriptRecordId,
+    storyboardRecordId: activeAssetPlanRecord.storyboardRecordId,
+    planJson: executionPlan,
+    validationResultJson: activeAssetPlanRecord.validationResultJson,
+    executionStateJson: {
+      source_asset_plan_record_id: activeAssetPlanRecord.id,
+      sanitized_for_product_acceptance: true,
+      disabled_task_types: ["video_clip", "sfx_cue"],
+    },
+    graphTraceSummaryJson: activeAssetPlanRecord.graphTraceSummaryJson,
+    runtimeDiagnosticsJson: activeAssetPlanRecord.runtimeDiagnosticsJson,
+  });
+
+  input.project.activeAssetPlanRecordId = executionRecord.id;
+  input.project.status = "asset_plan_ready";
+
+  return {
+    originalPlan,
+    executionPlan,
+    originalAssetPlanRecordId: activeAssetPlanRecord.id,
+    executionAssetPlanRecordId: executionRecord.id,
+  };
 }
 
 export async function seedProductAcceptanceProject(input: {
