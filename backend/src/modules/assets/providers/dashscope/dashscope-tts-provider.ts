@@ -17,6 +17,7 @@ import {
 } from "../../assets-file-storage.js";
 import { readAudioDurationSec } from "../../audio-duration-probe.js";
 import { resolveProviderVoice } from "../../voice/provider-voice-resolution.service.js";
+import { mergeWavBuffers } from "../../wav-merge.js";
 
 export interface DashScopeTtsInput {
   model: string;
@@ -278,11 +279,16 @@ export function createDashscopeTtsProvider(
         });
       }
 
+      const format = options.format ?? "wav";
+      const mergedData =
+        format === "wav" && chunkBuffers.length > 1
+          ? mergeWavBuffers(chunkBuffers)
+          : Buffer.concat(chunkBuffers);
       const merged = await writeAssetFile({
         storage,
         category: "audio/tts",
-        fileName: `dashscope_merged_${ctx.execution.task_id}.${options.format ?? "wav"}`,
-        data: Buffer.concat(chunkBuffers),
+        fileName: `dashscope_merged_${ctx.execution.task_id}.${format}`,
+        data: mergedData,
       });
       artifacts.push({
         artifact_id: `artifact_tts_merged_${ctx.execution.task_id}`,
