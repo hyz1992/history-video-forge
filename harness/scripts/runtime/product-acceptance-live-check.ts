@@ -410,6 +410,46 @@ export async function seedAcceptanceMediaLibrary(
   }
 }
 
+export function assertProductAcceptanceRenderReadiness(input: {
+  assetsBody: Record<string, unknown>;
+  renderBody: Record<string, unknown>;
+}): void {
+  const manifest = input.assetsBody.manifest as
+    | {
+        artifacts?: Array<{
+          artifact_type?: string;
+          metadata?: Record<string, unknown>;
+        }>;
+      }
+    | undefined;
+  const artifacts = manifest?.artifacts ?? [];
+  const subtitleArtifact = artifacts.find(
+    (artifact) => artifact.artifact_type === "subtitle_track",
+  );
+  if (!subtitleArtifact) {
+    throw new Error("product_acceptance_subtitle_artifact_missing");
+  }
+  if (Number(subtitleArtifact.metadata?.caption_count ?? 0) <= 0) {
+    throw new Error("product_acceptance_subtitle_caption_count_empty");
+  }
+  if (!subtitleArtifact.metadata?.subtitle_style) {
+    throw new Error("product_acceptance_subtitle_style_missing");
+  }
+
+  const diagnostics = input.renderBody.runtime_diagnostics as
+    | Record<string, unknown>
+    | undefined;
+  if (Number(diagnostics?.subtitle_cue_count ?? 0) <= 0) {
+    throw new Error("product_acceptance_subtitles_not_rendered");
+  }
+  if (Number(diagnostics?.audio_clip_count ?? 0) <= 0) {
+    throw new Error("product_acceptance_audio_not_rendered");
+  }
+  if (Number(diagnostics?.visual_clip_count ?? 0) <= 0) {
+    throw new Error("product_acceptance_visual_not_rendered");
+  }
+}
+
 export async function seedProductAcceptanceProject(input: {
   source: ProductAcceptanceSource;
   outputDir: string;

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  assertProductAcceptanceRenderReadiness,
   buildProductAcceptanceLiveCheckPlan,
   buildProductAcceptanceAssetsPayload,
   loadProductAcceptanceSource,
@@ -314,6 +315,70 @@ describe("product acceptance live-check harness", () => {
         bgmLibraryItemId: "missing_bgm",
       }),
     ).rejects.toThrow("product_acceptance_bgm_not_found: missing_bgm");
+  });
+
+  it("accepts readiness when subtitle artifacts and render diagnostics are present", () => {
+    expect(() =>
+      assertProductAcceptanceRenderReadiness({
+        assetsBody: {
+          manifest: {
+            artifacts: [
+              {
+                artifact_type: "subtitle_track",
+                metadata: {
+                  caption_count: 3,
+                  source_tts_chunk_artifact_ids: ["artifact_tts_chunk_1"],
+                  subtitle_style: { font_size_px: 48 },
+                },
+              },
+            ],
+          },
+        },
+        renderBody: {
+          runtime_diagnostics: {
+            subtitle_cue_count: 3,
+            audio_clip_count: 2,
+            visual_clip_count: 1,
+          },
+          output_artifact: {
+            file_uri: "out.mp4",
+            mime_type: "video/mp4",
+          },
+        },
+      }),
+    ).not.toThrow();
+  });
+
+  it("fails when subtitles are missing from render diagnostics", () => {
+    expect(() =>
+      assertProductAcceptanceRenderReadiness({
+        assetsBody: {
+          manifest: {
+            artifacts: [
+              {
+                artifact_type: "subtitle_track",
+                metadata: {
+                  caption_count: 3,
+                  source_tts_chunk_artifact_ids: ["artifact_tts_chunk_1"],
+                  subtitle_style: { font_size_px: 48 },
+                },
+              },
+            ],
+          },
+        },
+        renderBody: {
+          runtime_diagnostics: {
+            subtitle_cue_count: 0,
+            audio_clip_count: 2,
+            visual_clip_count: 1,
+          },
+          output_artifact: {
+            file_uri: "out.mp4",
+            mime_type: "video/mp4",
+          },
+        },
+      }),
+    ).toThrow("product_acceptance_subtitles_not_rendered");
   });
 });
 
