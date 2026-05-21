@@ -250,13 +250,17 @@ async function seedSmokeMediaLibrary(
       await saveMediaLibraryItem(app.db, entry.item);
     }
 
+    const explicitBgmLibraryItemId = input.bgmLibraryItemId;
     const preferredBgmLibraryItemId =
-      input.bgmLibraryItemId ?? SMOKE_BGM_LIBRARY_ITEM_ID;
-    const smokeBgm =
-      loadedBgmItems.find(
-        (entry) =>
-          entry.item.library_item_id === preferredBgmLibraryItemId,
-      ) ?? loadedBgmItems[0];
+      explicitBgmLibraryItemId ?? SMOKE_BGM_LIBRARY_ITEM_ID;
+    const matchedBgm = loadedBgmItems.find(
+      (entry) => entry.item.library_item_id === preferredBgmLibraryItemId,
+    );
+    if (explicitBgmLibraryItemId && !matchedBgm) {
+      throw new Error(`smoke_bgm_not_found: ${explicitBgmLibraryItemId}`);
+    }
+
+    const smokeBgm = matchedBgm ?? loadedBgmItems[0];
     if (smokeBgm) {
       bgmCue = {
         libraryItemId: smokeBgm.item.library_item_id,

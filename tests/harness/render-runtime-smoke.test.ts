@@ -105,6 +105,17 @@ describe("render runtime smoke harness", () => {
     ).toBe(true);
   });
 
+  it("fails when an explicitly requested BGM id is unavailable", async () => {
+    const outputDir = mkdtempSync(join(tmpdir(), "svf2-render-bgm-missing-"));
+
+    await expect(
+      runRenderRuntimeSmoke({
+        outputDir,
+        bgmLibraryItemId: "bgm_missing_or_not_passed",
+      }),
+    ).rejects.toThrow("smoke_bgm_not_found: bgm_missing_or_not_passed");
+  });
+
   it("runs the Remotion adapter smoke path and writes an MP4 output", async () => {
     const outputDir = mkdtempSync(join(tmpdir(), "svf2-render-remotion-smoke-"));
 
