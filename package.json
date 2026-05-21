@@ -33,6 +33,7 @@
     "harness:bgm-review": "tsx harness/scripts/media-library/update-bgm-review.ts",
     "harness:bgm-smoke-batch": "tsx harness/scripts/media-library/render-bgm-smoke-batch.ts",
     "harness:compose-runtime-smoke": "tsx harness/scripts/runtime/compose-runtime-smoke.ts",
+    "harness:product-acceptance-live-check": "tsx harness/scripts/runtime/product-acceptance-live-check.ts",
     "harness:render-runtime-smoke": "tsx harness/scripts/runtime/render-runtime-smoke.ts",
     "render:remotion:smoke": "tsx harness/scripts/runtime/render-runtime-smoke.ts --adapter=remotion",
     "harness:ui-acceptance:smoke": "tsx harness/scripts/ui-acceptance/ui-acceptance-smoke.ts",
