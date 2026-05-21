@@ -4,6 +4,9 @@ import { resolve } from "node:path";
 import { buildApp, type AppInstance } from "../../../backend/src/app";
 import type { ProjectRecord } from "../../../backend/src/db/client";
 import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning/asset-plan-record.repository";
+import { DEFAULT_AUDIO_LIBRARY_ITEMS } from "../../../backend/src/modules/assets/default-audio-library";
+import { loadLightweightBgmCatalogItems } from "../../../backend/src/modules/assets/lightweight-audio-catalog-loader";
+import { saveMediaLibraryItem } from "../../../backend/src/modules/assets/media-library.repository";
 import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository";
 import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/storyboard-record.repository";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository";
@@ -62,6 +65,13 @@ export interface AcceptanceAssetPlanningResult {
   executionPlan: AssetPlanType;
   originalAssetPlanRecordId: string;
   executionAssetPlanRecordId: string;
+}
+
+export interface ProductAcceptanceEnv {
+  ALIYUN_DASHSCOPE_API_KEY?: string;
+  ALIYUN_DASHSCOPE_BASE_URL?: string;
+  ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL?: string;
+  ALIYUN_DASHSCOPE_TTS_MODEL?: string;
 }
 
 const DEFAULT_OUTPUT_DIR = resolve(
@@ -165,6 +175,50 @@ export function parseProductAcceptanceLiveCheckCliArgs(
   }
 
   return result;
+}
+
+export function resolveProductAcceptanceEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): ProductAcceptanceEnv {
+  return {
+    ALIYUN_DASHSCOPE_API_KEY: env.ALIYUN_DASHSCOPE_API_KEY,
+    ALIYUN_DASHSCOPE_BASE_URL: env.ALIYUN_DASHSCOPE_BASE_URL,
+    ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL:
+      env.ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL,
+    ALIYUN_DASHSCOPE_TTS_MODEL: env.ALIYUN_DASHSCOPE_TTS_MODEL,
+  };
+}
+
+export function buildProductAcceptanceAssetsPayload(input: {
+  env: ProductAcceptanceEnv;
+  dashscope?: ProductAcceptanceLiveCheckInput["dashscope"];
+}) {
+  const apiKey = input.dashscope?.apiKey ?? input.env.ALIYUN_DASHSCOPE_API_KEY;
+  if (!apiKey) {
+    throw new Error("product_acceptance_dashscope_api_key_missing");
+  }
+
+  return {
+    voice_profile_id: "voice_system_ethan",
+    execution_mode: "auto_available",
+    provider_mode: "dashscope",
+    dashscope: {
+      api_key: apiKey,
+      base_url:
+        input.dashscope?.baseUrl ??
+        input.env.ALIYUN_DASHSCOPE_BASE_URL ??
+        "https://dashscope.aliyuncs.com",
+      image_model:
+        input.dashscope?.imageModel ??
+        input.env.ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL ??
+        "wan2.6-t2i",
+      tts_model:
+        input.dashscope?.ttsModel ??
+        input.env.ALIYUN_DASHSCOPE_TTS_MODEL ??
+        "qwen3-tts-instruct-flash",
+      tts_format: "wav",
+    },
+  };
 }
 
 function readJson(filePath: string): unknown {
@@ -325,6 +379,35 @@ export async function runAcceptanceAssetPlanning(input: {
     originalAssetPlanRecordId: activeAssetPlanRecord.id,
     executionAssetPlanRecordId: executionRecord.id,
   };
+}
+
+export async function seedAcceptanceMediaLibrary(
+  app: AppInstance,
+  input: { bgmLibraryItemId?: string } = {},
+): Promise<void> {
+  const catalogPath = resolve(
+    process.cwd(),
+    "storage/media-library/ai-bgm-prompt-candidates.json",
+  );
+  const loadedItems = existsSync(catalogPath)
+    ? await loadLightweightBgmCatalogItems(catalogPath)
+    : [];
+
+  for (const entry of loadedItems) {
+    await saveMediaLibraryItem(app.db, entry.item);
+  }
+  for (const item of DEFAULT_AUDIO_LIBRARY_ITEMS) {
+    await saveMediaLibraryItem(app.db, item);
+  }
+
+  if (
+    input.bgmLibraryItemId &&
+    !app.db.mediaLibraryItems.has(input.bgmLibraryItemId)
+  ) {
+    throw new Error(
+      `product_acceptance_bgm_not_found: ${input.bgmLibraryItemId}`,
+    );
+  }
 }
 
 export async function seedProductAcceptanceProject(input: {

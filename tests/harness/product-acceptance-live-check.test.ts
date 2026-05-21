@@ -6,10 +6,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildProductAcceptanceLiveCheckPlan,
+  buildProductAcceptanceAssetsPayload,
   loadProductAcceptanceSource,
   parseProductAcceptanceLiveCheckCliArgs,
+  resolveProductAcceptanceEnv,
   runAcceptanceAssetPlanning,
   sanitizeAssetPlanForProductAcceptance,
+  seedAcceptanceMediaLibrary,
   seedProductAcceptanceProject,
 } from "../../harness/scripts/runtime/product-acceptance-live-check";
 import type { AssetPlan, AssetTask } from "../../shared/src/index";
@@ -233,6 +236,84 @@ describe("product acceptance live-check harness", () => {
       sanitized_for_product_acceptance: true,
       disabled_task_types: ["video_clip", "sfx_cue"],
     });
+  });
+
+  it("builds DashScope assets payload with real TTS, real image and WAV TTS format", () => {
+    const payload = buildProductAcceptanceAssetsPayload({
+      env: {
+        ALIYUN_DASHSCOPE_API_KEY: "key",
+        ALIYUN_DASHSCOPE_BASE_URL: "https://dashscope.test",
+        ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL: "wan2.6-t2i",
+        ALIYUN_DASHSCOPE_TTS_MODEL: "qwen3-tts-instruct-flash",
+      },
+    });
+
+    expect(payload).toMatchObject({
+      voice_profile_id: "voice_system_ethan",
+      execution_mode: "auto_available",
+      provider_mode: "dashscope",
+      dashscope: {
+        api_key: "key",
+        base_url: "https://dashscope.test",
+        image_model: "wan2.6-t2i",
+        tts_model: "qwen3-tts-instruct-flash",
+        tts_format: "wav",
+      },
+    });
+  });
+
+  it("resolves product acceptance env and allows CLI DashScope overrides", () => {
+    const env = resolveProductAcceptanceEnv({
+      ALIYUN_DASHSCOPE_API_KEY: "env-key",
+      ALIYUN_DASHSCOPE_BASE_URL: "https://env-dashscope.test",
+      ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL: "env-image",
+      ALIYUN_DASHSCOPE_TTS_MODEL: "env-tts",
+    });
+
+    expect(
+      buildProductAcceptanceAssetsPayload({
+        env,
+        dashscope: {
+          apiKey: "cli-key",
+          baseUrl: "https://cli-dashscope.test",
+          imageModel: "cli-image",
+          ttsModel: "cli-tts",
+        },
+      }),
+    ).toMatchObject({
+      dashscope: {
+        api_key: "cli-key",
+        base_url: "https://cli-dashscope.test",
+        image_model: "cli-image",
+        tts_model: "cli-tts",
+        tts_format: "wav",
+      },
+    });
+  });
+
+  it("seeds acceptance media library and validates requested BGM id", async () => {
+    const seeded = await seedProductAcceptanceProject({
+      source: {
+        sourceDir: "fixture-source",
+        topicPackage: makeTopicPackageFixture(),
+        scriptDraft: makeScriptDraftFixture(),
+        storyboardPlan: makeStoryboardPlanFixture(),
+      },
+      outputDir: mkdtempSync(join(tmpdir(), "svf2-acceptance-media-")),
+    });
+
+    await seedAcceptanceMediaLibrary(seeded.app, {
+      bgmLibraryItemId: "bgm_solemn_historical_001",
+    });
+
+    expect(
+      seeded.app.db.mediaLibraryItems.get("bgm_solemn_historical_001")?.type,
+    ).toBe("bgm");
+    await expect(
+      seedAcceptanceMediaLibrary(seeded.app, {
+        bgmLibraryItemId: "missing_bgm",
+      }),
+    ).rejects.toThrow("product_acceptance_bgm_not_found: missing_bgm");
   });
 });
 
