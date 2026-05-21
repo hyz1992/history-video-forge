@@ -245,12 +245,17 @@ export function parseProductAcceptanceLiveCheckCliArgs(
 export function resolveProductAcceptanceEnv(
   env: NodeJS.ProcessEnv = process.env,
 ): ProductAcceptanceEnv {
+  const dotEnv = loadProductAcceptanceDotEnv();
   return {
-    ALIYUN_DASHSCOPE_API_KEY: env.ALIYUN_DASHSCOPE_API_KEY,
-    ALIYUN_DASHSCOPE_BASE_URL: env.ALIYUN_DASHSCOPE_BASE_URL,
+    ALIYUN_DASHSCOPE_API_KEY:
+      env.ALIYUN_DASHSCOPE_API_KEY ?? dotEnv.ALIYUN_DASHSCOPE_API_KEY,
+    ALIYUN_DASHSCOPE_BASE_URL:
+      env.ALIYUN_DASHSCOPE_BASE_URL ?? dotEnv.ALIYUN_DASHSCOPE_BASE_URL,
     ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL:
-      env.ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL,
-    ALIYUN_DASHSCOPE_TTS_MODEL: env.ALIYUN_DASHSCOPE_TTS_MODEL,
+      env.ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL ??
+      dotEnv.ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL,
+    ALIYUN_DASHSCOPE_TTS_MODEL:
+      env.ALIYUN_DASHSCOPE_TTS_MODEL ?? dotEnv.ALIYUN_DASHSCOPE_TTS_MODEL,
   };
 }
 
@@ -302,6 +307,43 @@ function writeJson(outputDir: string, filename: string, value: unknown): void {
 function writeText(outputDir: string, filename: string, value: string): void {
   mkdirSync(outputDir, { recursive: true });
   writeFileSync(resolve(outputDir, filename), value, "utf8");
+}
+
+function loadProductAcceptanceDotEnv(): Record<string, string> {
+  const candidates = [resolve(process.cwd(), ".env"), resolve(process.cwd(), "backend/.env")];
+  for (const filePath of candidates) {
+    if (existsSync(filePath)) {
+      return parseDotEnv(readFileSync(filePath, "utf8"));
+    }
+  }
+  return {};
+}
+
+function parseDotEnv(source: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const rawLine of source.split(/\r?\n/u)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
+    const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/u);
+    if (!match) {
+      continue;
+    }
+    const [, key, rawValue] = match;
+    result[key] = stripDotEnvQuotes(rawValue.trim());
+  }
+  return result;
+}
+
+function stripDotEnvQuotes(value: string): string {
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+  return value;
 }
 
 export async function resolveProductAcceptanceSourceDir(
