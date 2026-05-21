@@ -243,7 +243,8 @@ export async function validateAssetsManifest(input: {
     for (const artifact of manifest.artifacts) {
       if (
         !referencedArtifactIds.has(artifact.artifact_id) ||
-        artifact.file_uri.startsWith("planned://")
+        artifact.file_uri.startsWith("planned://") ||
+        artifact.file_uri.startsWith("inline://")
       ) {
         continue;
       }

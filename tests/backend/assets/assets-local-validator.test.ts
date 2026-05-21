@@ -972,6 +972,53 @@ describe("validateAssetsManifest", () => {
       expect(result.errors).toContain("assets_artifact_placeholder_unresolved");
       expect(result.errors).not.toContain("assets_artifact_file_missing");
     });
+
+    it("skips file existence check for inline:// motion recipe artifacts", async () => {
+      tempDir = join(tmpdir(), `validator-test-${Date.now()}`);
+      await mkdir(tempDir, { recursive: true });
+
+      const audioPath = join(tempDir, "chunk1.wav");
+      await writeFile(audioPath, "fake audio data");
+
+      const imgDir = join(tempDir, "images");
+      await mkdir(imgDir, { recursive: true });
+      const imgPath = join(imgDir, "artifact_img_1.png");
+      await writeFile(imgPath, "fake image");
+
+      const videoDir = join(tempDir, "videos");
+      await mkdir(videoDir, { recursive: true });
+      const videoPath = join(videoDir, "artifact_video_1.mp4");
+      await writeFile(videoPath, "fake video");
+
+      const result = await runValidation(
+        {
+          artifacts: [
+            makeBaseArtifact({ file_uri: audioPath }),
+            { ...makeImageArtifact("artifact_img_1"), file_uri: imgPath },
+            { ...makeVideoArtifact("artifact_video_1"), file_uri: videoPath },
+            {
+              ...makeMotionArtifact("artifact_motion_1", "artifact_img_1"),
+              file_uri: "inline://motion-recipe/motion_1",
+            },
+          ],
+          segment_routes: [
+            makeBaseSegmentRoute({
+              visual_route_type: "image_with_motion",
+              motion_artifact_id: "artifact_motion_1",
+            }),
+            makeBaseSegmentRoute({
+              segment_id: "sb_002",
+              primary_visual_artifact_id: "artifact_video_1",
+              visual_route_type: "video_clip",
+            }),
+          ],
+        },
+        {},
+        { projectStorageRootDir: tempDir },
+      );
+
+      expect(result.errors).not.toContain("assets_artifact_file_missing");
+    });
   });
 
   // ── Media library checks ──────────────────────────────────────────────────
