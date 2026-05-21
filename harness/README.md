@@ -392,6 +392,33 @@ npx vitest run --configLoader runner tests/backend/render/local-remotion-render-
 - `npm run harness:ui-acceptance:report`
   - 读取最近一次 UI acceptance 的 `summary.json`，输出可读摘要，不重跑浏览器。
 
+## 成品验收 Live Check
+
+该入口会显式调用真实 DashScope TTS 与文生图，并用 Remotion 导出 MP4。它不是默认自动化 gate，只能作为人工触发的成品验收巡检使用。
+
+```powershell
+npm run harness:product-acceptance-live-check -- --source-dir harness/scripts/runtime/output/2026-05-10-storyboard-five-theme-review/round-1
+```
+
+默认行为：
+
+- 重新执行 asset planning。
+- 执行真实 TTS、真实文生图、本地字幕、本地 BGM。
+- 删除 execution plan 中的 `video_clip` 和 `sfx_cue`，避免图生视频成本和占位 SFX。
+- 验收字幕 artifact、`caption_count`、`subtitle_style` 和 Remotion `subtitle_cue_count`。
+- 输出 `acceptance-summary.json`、`manual-review-checklist.md`、`trace.md` 与 render response。
+
+必需环境变量：
+
+```text
+ALIYUN_DASHSCOPE_API_KEY=...
+ALIYUN_DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com
+ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL=wan2.6-t2i
+ALIYUN_DASHSCOPE_TTS_MODEL=qwen3-tts-instruct-flash
+```
+
+如果没有可用 source，可显式加 `--allow-upstream-generation` 先生成一组 topic/script/storyboard 上游样本；该选项会调用真实 LLM，不能作为默认自动化路径。
+
 ### UI Acceptance Output
 
 - 输出目录：`harness/scripts/runtime/output/ui-acceptance/<run-id>/`

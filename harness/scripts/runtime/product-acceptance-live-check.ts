@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { buildApp, type AppInstance } from "../../../backend/src/app";
 import type { ProjectRecord } from "../../../backend/src/db/client";
@@ -7,9 +8,13 @@ import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning
 import { DEFAULT_AUDIO_LIBRARY_ITEMS } from "../../../backend/src/modules/assets/default-audio-library";
 import { loadLightweightBgmCatalogItems } from "../../../backend/src/modules/assets/lightweight-audio-catalog-loader";
 import { saveMediaLibraryItem } from "../../../backend/src/modules/assets/media-library.repository";
+import { createLocalRemotionRenderAdapter } from "../../../backend/src/modules/render/local-remotion-render-adapter";
+import type { RenderAdapter } from "../../../backend/src/modules/render/render-adapter";
 import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository";
 import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/storyboard-record.repository";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository";
+import { runStoryboardFiveRoundQualityCheck } from "./storyboard-five-round-quality-check";
+import { runTopicScriptSmoke } from "./topic-script-smoke";
 import {
   AssetPlan,
   ScriptDraftPackage,
@@ -74,10 +79,70 @@ export interface ProductAcceptanceEnv {
   ALIYUN_DASHSCOPE_TTS_MODEL?: string;
 }
 
+export interface ProductAcceptanceLiveCheckResult {
+  outputDir: string;
+  summary: ProductAcceptanceSummary;
+}
+
+export interface ProductAcceptanceSummary {
+  status: "sample-ready";
+  source_title: string;
+  output_dir: string;
+  output_mp4_path: string | null;
+  provider_names: string[];
+  artifact_type_counts: Record<string, number>;
+  disabled_sfx_confirmed: boolean;
+  image_to_video_not_called_confirmed: boolean;
+  subtitle_diagnostics: {
+    caption_count: number;
+    cue_count: number;
+    has_style: boolean;
+  };
+  audio_diagnostics: {
+    tts: WavRmsDiagnostics;
+    bgm: WavRmsDiagnostics;
+  };
+  render_diagnostics: Record<string, unknown>;
+}
+
+type WavRmsDiagnostics =
+  | {
+      file_uri: string;
+      bytes: number;
+      rms: number;
+      max: number;
+    }
+  | {
+      file_uri: null;
+      bytes: 0;
+      rms: null;
+      max: null;
+    };
+
+export interface ProductAcceptanceLiveCheckDependencies {
+  env?: ProductAcceptanceEnv;
+  renderAdapter?: RenderAdapter;
+  generateAssetPlan?: (input: {
+    app: AppInstance;
+    project: ProjectRecord;
+  }) => Promise<Record<string, unknown>>;
+  inject?: (input: {
+    app: AppInstance;
+    method: string;
+    url: string;
+    payload?: unknown;
+  }) => Promise<Record<string, unknown>>;
+}
+
 const DEFAULT_OUTPUT_DIR = resolve(
   process.cwd(),
   "harness/scripts/runtime/output/product-acceptance-live-check",
 );
+const DEFAULT_ACCEPTANCE_SOURCE_DIRS = [
+  "harness/scripts/runtime/output/2026-05-10-storyboard-five-theme-review/round-1",
+  "harness/scripts/runtime/output/2026-05-10-storyboard-five-theme-review/round-2",
+  "harness/scripts/runtime/output/2026-05-10-storyboard-five-theme-review/round-3",
+].map((item) => resolve(process.cwd(), item));
 const DISABLED_ACCEPTANCE_TASK_TYPES: ReadonlySet<AssetTask["task_type"]> =
   new Set(["video_clip", "sfx_cue"]);
 const PROVIDER_CALL_TASK_TYPES: ReadonlySet<AssetTask["task_type"]> = new Set([
@@ -234,6 +299,47 @@ function writeJson(outputDir: string, filename: string, value: unknown): void {
   );
 }
 
+function writeText(outputDir: string, filename: string, value: string): void {
+  mkdirSync(outputDir, { recursive: true });
+  writeFileSync(resolve(outputDir, filename), value, "utf8");
+}
+
+export async function resolveProductAcceptanceSourceDir(
+  input: ProductAcceptanceLiveCheckInput,
+  dependencies: {
+    defaultSourceDirs?: string[];
+    exists?: (path: string) => boolean;
+    generateSource?: () => Promise<string>;
+  } = {},
+): Promise<string> {
+  const exists = dependencies.exists ?? existsSync;
+  if (input.sourceDir) {
+    const resolved = resolve(process.cwd(), input.sourceDir);
+    if (!exists(resolved)) {
+      throw new Error(`product_acceptance_source_dir_missing: ${resolved}`);
+    }
+    return resolved;
+  }
+
+  for (const candidate of
+    dependencies.defaultSourceDirs ?? DEFAULT_ACCEPTANCE_SOURCE_DIRS) {
+    if (exists(candidate)) {
+      return candidate;
+    }
+  }
+
+  if (input.allowUpstreamGeneration) {
+    const generateSource =
+      dependencies.generateSource ??
+      (() => generateProductAcceptanceUpstreamSource(input));
+    return generateSource();
+  }
+
+  throw new Error(
+    "product_acceptance_source_missing_use_allow_upstream_generation",
+  );
+}
+
 export function loadProductAcceptanceSource(
   sourceDir: string,
 ): ProductAcceptanceSource {
@@ -313,10 +419,16 @@ export async function runAcceptanceAssetPlanning(input: {
   app: AppInstance;
   project: ProjectRecord;
   outputDir: string;
-  generateAssetPlan?: () => Promise<Record<string, unknown>>;
+  generateAssetPlan?: (input: {
+    app: AppInstance;
+    project: ProjectRecord;
+  }) => Promise<Record<string, unknown>>;
 }): Promise<AcceptanceAssetPlanningResult> {
   const rawBody = input.generateAssetPlan
-    ? await input.generateAssetPlan()
+    ? await input.generateAssetPlan({
+        app: input.app,
+        project: input.project,
+      })
     : await injectOrThrow({
         app: input.app,
         method: "POST",
@@ -450,11 +562,172 @@ export function assertProductAcceptanceRenderReadiness(input: {
   }
 }
 
+export async function runProductAcceptanceLiveCheck(
+  input: ProductAcceptanceLiveCheckInput = {},
+  dependencies: ProductAcceptanceLiveCheckDependencies = {},
+): Promise<ProductAcceptanceLiveCheckResult> {
+  const plan = buildProductAcceptanceLiveCheckPlan(input);
+  mkdirSync(plan.output_dir, { recursive: true });
+  writeJson(plan.output_dir, "live-check-plan.json", plan);
+
+  const sourceDir = await resolveProductAcceptanceSourceDir(input);
+  const source = loadProductAcceptanceSource(sourceDir);
+  writeJson(plan.output_dir, "source-topic-package.json", source.topicPackage);
+  writeJson(plan.output_dir, "source-script-draft.json", source.scriptDraft);
+  writeJson(
+    plan.output_dir,
+    "source-storyboard-plan.json",
+    source.storyboardPlan,
+  );
+
+  const seeded = await seedProductAcceptanceProject({
+    source,
+    outputDir: plan.output_dir,
+    renderAdapter:
+      dependencies.renderAdapter ?? createLocalRemotionRenderAdapter(),
+  });
+  await seedAcceptanceMediaLibrary(seeded.app, {
+    bgmLibraryItemId: input.bgmLibraryItemId,
+  });
+
+  const planning = await runAcceptanceAssetPlanning({
+    app: seeded.app,
+    project: seeded.project,
+    outputDir: plan.output_dir,
+    generateAssetPlan: dependencies.generateAssetPlan,
+  });
+  const inject = dependencies.inject ?? injectOrThrow;
+  const assetsBody = await inject({
+    app: seeded.app,
+    method: "POST",
+    url: `/api/projects/${seeded.project.id}/assets/generate`,
+    payload: buildProductAcceptanceAssetsPayload({
+      env: dependencies.env ?? resolveProductAcceptanceEnv(),
+      dashscope: input.dashscope,
+    }),
+  });
+  writeJson(plan.output_dir, "assets-response.json", assetsBody);
+
+  const assetsSnapshot = await inject({
+    app: seeded.app,
+    method: "GET",
+    url: `/api/projects/${seeded.project.id}`,
+  });
+  writeJson(plan.output_dir, "assets-snapshot.json", assetsSnapshot);
+
+  const composeBody = await inject({
+    app: seeded.app,
+    method: "POST",
+    url: `/api/projects/${seeded.project.id}/compose/generate`,
+    payload: {},
+  });
+  writeJson(plan.output_dir, "compose-response.json", composeBody);
+
+  const renderBody = await inject({
+    app: seeded.app,
+    method: "POST",
+    url: `/api/projects/${seeded.project.id}/render/generate`,
+    payload: {},
+  });
+  writeJson(plan.output_dir, "render-response.json", renderBody);
+
+  assertProductAcceptanceRenderReadiness({ assetsBody, renderBody });
+  const summary = await buildProductAcceptanceSummary({
+    sourceTitle: source.topicPackage.title,
+    outputDir: plan.output_dir,
+    assetsBody,
+    composeBody,
+    renderBody,
+    projectStorageRootDir: seeded.project.storageRootDir,
+  });
+  writeJson(plan.output_dir, "acceptance-summary.json", summary);
+  writeManualReviewChecklist(plan.output_dir);
+  writeTrace(plan.output_dir, {
+    sourceDir,
+    projectId: seeded.project.id,
+    originalAssetPlanRecordId: planning.originalAssetPlanRecordId,
+    executionAssetPlanRecordId: planning.executionAssetPlanRecordId,
+    outputMp4Path: summary.output_mp4_path,
+  });
+
+  return { outputDir: plan.output_dir, summary };
+}
+
+export async function buildProductAcceptanceSummary(input: {
+  sourceTitle: string;
+  outputDir: string;
+  assetsBody: Record<string, unknown>;
+  composeBody: Record<string, unknown>;
+  renderBody: Record<string, unknown>;
+  projectStorageRootDir?: string;
+}): Promise<ProductAcceptanceSummary> {
+  const manifest = input.assetsBody.manifest as
+    | {
+        artifacts?: Array<{
+          artifact_type?: string;
+          file_uri?: string;
+          metadata?: Record<string, unknown>;
+        }>;
+        executions?: Array<{ provider_id?: string | null }>;
+        audio_summary?: { sfx_artifact_ids?: string[] };
+      }
+    | undefined;
+  const artifacts = manifest?.artifacts ?? [];
+  const providerNames = readProviderNames({ manifest });
+  const subtitleArtifact = artifacts.find(
+    (artifact) => artifact.artifact_type === "subtitle_track",
+  );
+  const ttsArtifact = artifacts.find(
+    (artifact) => artifact.artifact_type === "tts_merged_audio",
+  );
+  const bgmArtifact = artifacts.find(
+    (artifact) => artifact.artifact_type === "bgm_audio",
+  );
+  const renderDiagnostics =
+    (input.renderBody.runtime_diagnostics as
+      | Record<string, unknown>
+      | undefined) ?? {};
+
+  return {
+    status: "sample-ready",
+    source_title: input.sourceTitle,
+    output_dir: input.outputDir,
+    output_mp4_path:
+      (input.renderBody.output_artifact as { file_uri?: string } | undefined)
+        ?.file_uri ?? null,
+    provider_names: providerNames,
+    artifact_type_counts: countBy(
+      artifacts
+        .map((artifact) => artifact.artifact_type)
+        .filter((value): value is string => Boolean(value)),
+    ),
+    disabled_sfx_confirmed:
+      !artifacts.some((artifact) => artifact.artifact_type === "sfx_audio") &&
+      (manifest?.audio_summary?.sfx_artifact_ids ?? []).length === 0,
+    image_to_video_not_called_confirmed:
+      !providerNames.includes("dashscope_image_to_video") &&
+      !artifacts.some((artifact) => artifact.artifact_type === "video"),
+    subtitle_diagnostics: {
+      caption_count: Number(subtitleArtifact?.metadata?.caption_count ?? 0),
+      cue_count: Number(renderDiagnostics.subtitle_cue_count ?? 0),
+      has_style: Boolean(subtitleArtifact?.metadata?.subtitle_style),
+    },
+    audio_diagnostics: {
+      tts: readWavRmsDiagnostics(ttsArtifact?.file_uri),
+      bgm: readWavRmsDiagnostics(bgmArtifact?.file_uri),
+    },
+    render_diagnostics: renderDiagnostics,
+  };
+}
+
 export async function seedProductAcceptanceProject(input: {
   source: ProductAcceptanceSource;
   outputDir: string;
+  renderAdapter?: RenderAdapter;
 }): Promise<SeededProductAcceptanceProject> {
-  const app = buildApp();
+  const app = buildApp(
+    input.renderAdapter ? { renderAdapter: input.renderAdapter } : undefined,
+  );
   const projectBody = await injectOrThrow({
     app,
     method: "POST",
@@ -526,6 +799,29 @@ export async function seedProductAcceptanceProject(input: {
   return { app, project };
 }
 
+async function generateProductAcceptanceUpstreamSource(
+  input: ProductAcceptanceLiveCheckInput,
+): Promise<string> {
+  const outputRoot = input.outputDir ?? DEFAULT_OUTPUT_DIR;
+  const topicScriptDir = resolve(outputRoot, "generated-source/topic-script");
+  const storyboardDir = resolve(outputRoot, "generated-source/storyboard");
+
+  await runTopicScriptSmoke({
+    samplePath: "harness/samples/topic-script/yanzi-shichu.sample.json",
+    outputDir: topicScriptDir,
+  });
+  await runStoryboardFiveRoundQualityCheck(
+    {
+      sourceDir: topicScriptDir,
+      outputDir: storyboardDir,
+      rounds: 1,
+    },
+    { requireRealEnv: true },
+  );
+
+  return resolve(storyboardDir, "round-1");
+}
+
 function countTasksBy(
   tasks: AssetTask[],
   pickKey: (task: AssetTask) => string,
@@ -535,6 +831,109 @@ function countTasksBy(
     acc[key] = (acc[key] ?? 0) + 1;
     return acc;
   }, {});
+}
+
+function countBy(items: string[]): Record<string, number> {
+  return items.reduce<Record<string, number>>((acc, item) => {
+    acc[item] = (acc[item] ?? 0) + 1;
+    return acc;
+  }, {});
+}
+
+function readProviderNames(input: {
+  manifest:
+    | {
+        artifacts?: Array<{ metadata?: Record<string, unknown> }>;
+        executions?: Array<{ provider_id?: string | null }>;
+      }
+    | undefined;
+}): string[] {
+  return Array.from(
+    new Set([
+      ...((input.manifest?.artifacts ?? [])
+        .map((artifact) => artifact.metadata?.provider_name)
+        .filter((value): value is string => typeof value === "string")),
+      ...((input.manifest?.executions ?? [])
+        .map((execution) => execution.provider_id)
+        .filter(
+          (value): value is string =>
+            typeof value === "string" && value.length > 0,
+        )),
+    ]),
+  );
+}
+
+function readWavRmsDiagnostics(fileUri: string | undefined): WavRmsDiagnostics {
+  if (!fileUri || !existsSync(fileUri)) {
+    return { file_uri: null, bytes: 0, rms: null, max: null };
+  }
+
+  const buffer = readFileSync(fileUri);
+  if (buffer.length <= 44) {
+    return { file_uri: fileUri, bytes: buffer.length, rms: 0, max: 0 };
+  }
+
+  let sumSquares = 0;
+  let max = 0;
+  let samples = 0;
+  for (let offset = 44; offset + 1 < buffer.length; offset += 2) {
+    const sample = buffer.readInt16LE(offset);
+    const abs = Math.abs(sample);
+    max = Math.max(max, abs);
+    sumSquares += sample * sample;
+    samples += 1;
+  }
+
+  return {
+    file_uri: fileUri,
+    bytes: buffer.length,
+    rms: samples > 0 ? Math.sqrt(sumSquares / samples) : 0,
+    max,
+  };
+}
+
+function writeManualReviewChecklist(outputDir: string): void {
+  writeText(
+    outputDir,
+    "manual-review-checklist.md",
+    [
+      "# 成品验收人工检查",
+      "",
+      "- [ ] 口播能听清，BGM 没有压过口播。",
+      "- [ ] 字幕出现，位置不遮挡主体，节奏大致跟随口播。",
+      "- [ ] 生图符合中国古代历史题材，没有明显现代物、文字水印或严重脸部崩坏。",
+      "- [ ] 画面运动没有明显黑屏、闪烁或卡死。",
+      "- [ ] BGM 情绪适配题材，不像现代电子舞曲或无关氛围音。",
+      "- [ ] 全片时长、结尾和口播收束没有明显截断。",
+      "",
+    ].join("\n"),
+  );
+}
+
+function writeTrace(
+  outputDir: string,
+  input: {
+    sourceDir: string;
+    projectId: string;
+    originalAssetPlanRecordId: string;
+    executionAssetPlanRecordId: string;
+    outputMp4Path: string | null;
+  },
+): void {
+  writeText(
+    outputDir,
+    "trace.md",
+    [
+      "# Product Acceptance Trace",
+      "",
+      `sourceDir: ${input.sourceDir}`,
+      `projectId: ${input.projectId}`,
+      `originalAssetPlanRecordId: ${input.originalAssetPlanRecordId}`,
+      `executionAssetPlanRecordId: ${input.executionAssetPlanRecordId}`,
+      `outputMp4Path: ${input.outputMp4Path ?? ""}`,
+      "",
+    ].join("\n"),
+  );
 }
 
 async function injectOrThrow(input: {
@@ -556,4 +955,19 @@ async function injectOrThrow(input: {
   }
 
   return body;
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
+  runProductAcceptanceLiveCheck(
+    parseProductAcceptanceLiveCheckCliArgs(process.argv.slice(2)),
+  )
+    .then((result) => {
+      console.log(
+        `成品验收样片已生成：${result.summary.output_mp4_path ?? result.outputDir}`,
+      );
+    })
+    .catch((error: unknown) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
 }

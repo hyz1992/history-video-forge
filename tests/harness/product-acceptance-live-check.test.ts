@@ -8,10 +8,13 @@ import {
   assertProductAcceptanceRenderReadiness,
   buildProductAcceptanceLiveCheckPlan,
   buildProductAcceptanceAssetsPayload,
+  buildProductAcceptanceSummary,
   loadProductAcceptanceSource,
   parseProductAcceptanceLiveCheckCliArgs,
   resolveProductAcceptanceEnv,
+  resolveProductAcceptanceSourceDir,
   runAcceptanceAssetPlanning,
+  runProductAcceptanceLiveCheck,
   sanitizeAssetPlanForProductAcceptance,
   seedAcceptanceMediaLibrary,
   seedProductAcceptanceProject,
@@ -380,7 +383,208 @@ describe("product acceptance live-check harness", () => {
       }),
     ).toThrow("product_acceptance_subtitles_not_rendered");
   });
+
+  it("orchestrates assets, compose and render and writes product acceptance outputs", async () => {
+    const outputDir = mkdtempSync(join(tmpdir(), "svf2-acceptance-run-"));
+    const sourceDir = mkdtempSync(join(tmpdir(), "svf2-acceptance-run-source-"));
+    writeFileSync(
+      join(sourceDir, "source-topic-package.json"),
+      JSON.stringify(makeTopicPackageFixture()),
+      "utf8",
+    );
+    writeFileSync(
+      join(sourceDir, "source-script-draft.json"),
+      JSON.stringify(makeScriptDraftFixture()),
+      "utf8",
+    );
+    writeFileSync(
+      join(sourceDir, "source-storyboard-plan.json"),
+      JSON.stringify(makeStoryboardPlanFixture()),
+      "utf8",
+    );
+    const originalPlan = makeAssetPlanFixture({
+      tasks: [
+        makeAssetTask("tts_001", "tts_audio", "sb_001"),
+        makeAssetTask("subtitle_001", "subtitle_track", "sb_001"),
+        makeAssetTask("image_001", "image_still", "sb_001"),
+      ],
+    });
+    const calls: string[] = [];
+
+    const result = await runProductAcceptanceLiveCheck(
+      {
+        sourceDir,
+        outputDir,
+      },
+      {
+        generateAssetPlan: async ({ app, project }) => {
+          calls.push("asset-plan");
+          const originalRecordId = "asset_plan_generated_fixture";
+          app.db.assetPlanRecords.set(originalRecordId, {
+            id: originalRecordId,
+            projectId: project.id,
+            topicPackageId: project.activeTopicPackageId!,
+            scriptRecordId: project.activeScriptRecordId!,
+            storyboardRecordId: project.activeStoryboardRecordId!,
+            planJson: originalPlan,
+            validationResultJson: {
+              stage: "asset_planning_local_validation",
+              decision: "pass",
+              errors: [],
+              warnings: [],
+              metrics: {},
+            },
+            executionStateJson: null,
+            graphTraceSummaryJson: null,
+            runtimeDiagnosticsJson: null,
+            createdAt: new Date(),
+          });
+          project.activeAssetPlanRecordId = originalRecordId;
+          return { asset_plan: originalPlan };
+        },
+        inject: async ({ method, url }) => {
+          calls.push(`${method} ${url.split("/").at(-2) ?? ""}/${url.split("/").at(-1)}`);
+          if (url.endsWith("/assets/generate")) return makeAssetsResponseFixture();
+          if (url.endsWith("/compose/generate")) return makeComposeResponseFixture();
+          if (url.endsWith("/render/generate")) return makeRenderResponseFixture();
+          if (method === "GET") return { project_id: "snapshot" };
+          throw new Error(`unexpected_request: ${method} ${url}`);
+        },
+        env: {
+          ALIYUN_DASHSCOPE_API_KEY: "key",
+        },
+      },
+    );
+
+    expect(calls).toContain("asset-plan");
+    expect(calls).toContain("POST assets/generate");
+    expect(result.summary.status).toBe("sample-ready");
+    expect(
+      JSON.parse(readFileSync(join(outputDir, "render-response.json"), "utf8")),
+    ).toMatchObject({
+      runtime_diagnostics: { subtitle_cue_count: 3 },
+    });
+    expect(readFileSync(join(outputDir, "manual-review-checklist.md"), "utf8"))
+      .toContain("成品验收人工检查");
+    expect(readFileSync(join(outputDir, "trace.md"), "utf8")).toContain(
+      "executionAssetPlanRecordId",
+    );
+  });
+
+  it("summarizes providers, subtitles, disabled SFX and image-to-video absence", async () => {
+    const summary = await buildProductAcceptanceSummary({
+      sourceTitle: "晏子使楚",
+      outputDir: "out",
+      assetsBody: makeAssetsResponseFixture(),
+      composeBody: makeComposeResponseFixture(),
+      renderBody: makeRenderResponseFixture(),
+    });
+
+    expect(summary.status).toBe("sample-ready");
+    expect(summary.disabled_sfx_confirmed).toBe(true);
+    expect(summary.image_to_video_not_called_confirmed).toBe(true);
+    expect(summary.subtitle_diagnostics.cue_count).toBe(3);
+    expect(summary.audio_diagnostics.tts?.rms).toBeNull();
+    expect(summary.audio_diagnostics.bgm?.rms).toBeNull();
+    expect(summary.provider_names).toEqual([
+      "dashscope_tts",
+      "dashscope_image",
+      "local_subtitle",
+      "local_bgm",
+    ]);
+  });
+
+  it("parses explicit upstream generation fallback", () => {
+    expect(
+      parseProductAcceptanceLiveCheckCliArgs(["--allow-upstream-generation"]),
+    ).toMatchObject({
+      allowUpstreamGeneration: true,
+    });
+  });
+
+  it("generates a source directory only when fallback is explicit", async () => {
+    const generated = await resolveProductAcceptanceSourceDir(
+      {
+        outputDir: "out",
+        allowUpstreamGeneration: true,
+      },
+      {
+        defaultSourceDirs: ["missing-source"],
+        exists: () => false,
+        generateSource: async () => "out/generated-source/storyboard/round-1",
+      },
+    );
+
+    expect(generated).toBe("out/generated-source/storyboard/round-1");
+    await expect(
+      resolveProductAcceptanceSourceDir(
+        {},
+        {
+          defaultSourceDirs: ["missing-source"],
+          exists: () => false,
+        },
+      ),
+    ).rejects.toThrow(
+      "product_acceptance_source_missing_use_allow_upstream_generation",
+    );
+  });
 });
+
+function makeAssetsResponseFixture() {
+  return {
+    manifest: {
+      executions: [
+        { provider_id: "dashscope_tts" },
+        { provider_id: "dashscope_image" },
+        { provider_id: "local_subtitle" },
+        { provider_id: "local_bgm" },
+      ],
+      artifacts: [
+        {
+          artifact_type: "tts_merged_audio",
+          file_uri: "missing-tts.wav",
+          metadata: { provider_name: "dashscope_tts" },
+        },
+        {
+          artifact_type: "image",
+          metadata: { provider_name: "dashscope_image" },
+        },
+        {
+          artifact_type: "subtitle_track",
+          metadata: {
+            caption_count: 4,
+            subtitle_style: { font_size_px: 48 },
+          },
+        },
+        {
+          artifact_type: "bgm_audio",
+          file_uri: "missing-bgm.wav",
+          metadata: { library_item_id: "bgm_1" },
+        },
+      ],
+      audio_summary: { sfx_artifact_ids: [] },
+    },
+  };
+}
+
+function makeComposeResponseFixture() {
+  return {
+    timeline: {
+      tracks: [{ track_type: "sfx", clips: [] }],
+    },
+  };
+}
+
+function makeRenderResponseFixture() {
+  return {
+    output_artifact: { file_uri: "out/output.mp4" },
+    runtime_diagnostics: {
+      subtitle_cue_count: 3,
+      audio_clip_count: 2,
+      visual_clip_count: 1,
+    },
+  };
+}
 
 function makeAssetTask(
   taskId: string,
