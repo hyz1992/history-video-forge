@@ -8,8 +8,10 @@ import {
   buildProductAcceptanceLiveCheckPlan,
   loadProductAcceptanceSource,
   parseProductAcceptanceLiveCheckCliArgs,
+  sanitizeAssetPlanForProductAcceptance,
   seedProductAcceptanceProject,
 } from "../../harness/scripts/runtime/product-acceptance-live-check";
+import type { AssetPlan, AssetTask } from "../../shared/src/index";
 
 describe("product acceptance live-check harness", () => {
   it("parses source, BGM and explicit real provider options", () => {
@@ -84,7 +86,163 @@ describe("product acceptance live-check harness", () => {
     expect(seeded.project.activeStoryboardRecordId).toBeTruthy();
     expect(seeded.app.db.storyboardRecords.size).toBe(1);
   });
+
+  it("removes video and SFX tasks while preserving subtitles for acceptance asset execution", () => {
+    const plan = makeAssetPlanFixture({
+      tasks: [
+        makeAssetTask("tts_001", "tts_audio", "sb_001"),
+        makeAssetTask("subtitle_001", "subtitle_track", "sb_001"),
+        makeAssetTask("image_001", "image_still", "sb_001"),
+        makeAssetTask("motion_001", "render_motion_cue", "sb_001"),
+        makeAssetTask("video_001", "video_clip", "sb_001"),
+        makeAssetTask("sfx_001", "sfx_cue", "sb_001"),
+        makeAssetTask("bgm_001", "bgm_cue", null),
+      ],
+      dependencies: [
+        {
+          dependency_id: "dep_video_image",
+          task_id: "video_001",
+          depends_on_task_id: "image_001",
+          dependency_type: "requires_output",
+        },
+        {
+          dependency_id: "dep_sfx_video",
+          task_id: "sfx_001",
+          depends_on_task_id: "video_001",
+          dependency_type: "requires_timing",
+        },
+      ],
+    });
+
+    const sanitized = sanitizeAssetPlanForProductAcceptance(plan);
+
+    expect(sanitized.tasks.map((task) => task.task_type)).toEqual([
+      "tts_audio",
+      "subtitle_track",
+      "image_still",
+      "render_motion_cue",
+      "bgm_cue",
+    ]);
+    expect(sanitized.dependencies).toEqual([]);
+    expect(sanitized.cost_summary.total_tasks).toBe(5);
+    expect(sanitized.cost_summary.by_type).toMatchObject({
+      tts_audio: 1,
+      subtitle_track: 1,
+      image_still: 1,
+      render_motion_cue: 1,
+      bgm_cue: 1,
+    });
+    expect(sanitized.cost_summary.notes).toContain(
+      "product_acceptance_execution_plan_removed_video_clip_and_sfx",
+    );
+  });
+
+  it("rejects acceptance asset execution when a segment has no static image anchor", () => {
+    const plan = makeAssetPlanFixture({
+      tasks: [
+        makeAssetTask("tts_001", "tts_audio", "sb_001"),
+        makeAssetTask("subtitle_001", "subtitle_track", "sb_001"),
+        makeAssetTask("video_001", "video_clip", "sb_001"),
+      ],
+    });
+
+    expect(() => sanitizeAssetPlanForProductAcceptance(plan)).toThrow(
+      "acceptance_visual_anchor_missing: sb_001",
+    );
+  });
 });
+
+function makeAssetTask(
+  taskId: string,
+  taskType: AssetTask["task_type"],
+  segmentId: string | null,
+): AssetTask {
+  const isVisualProviderTask =
+    taskType === "image_still" || taskType === "video_clip";
+
+  return {
+    task_id: taskId,
+    order: 0,
+    task_type: taskType,
+    source_segment_id: segmentId,
+    source_excerpt: "晏子在楚国宫殿内回应楚王羞辱。",
+    production_intent: "用于成品验收 live-check 的资产计划夹具。",
+    recommended_mode: "auto",
+    provider_hint: null,
+    prompt_draft:
+      isVisualProviderTask ? "中国古代宫殿内，人物对峙，电影感构图" : null,
+    parameters: {},
+    manual_upload_policy: {
+      allowed: false,
+      required: false,
+      accepted_file_types: [],
+      acceptance_notes: [],
+    },
+    risk_notes: ["fixture risk note"],
+    cost_tier: isVisualProviderTask ? "medium" : "free",
+    initial_status: "planned",
+  };
+}
+
+function makeAssetPlanFixture(input: {
+  tasks: AssetTask[];
+  dependencies?: AssetPlan["dependencies"];
+}): AssetPlan {
+  return {
+    plan_version: "asset_plan_v1",
+    source_storyboard_record_id: "storyboard_acceptance_fixture",
+    source_script_record_id: "script_acceptance_fixture",
+    source_topic_package_id: "topic_acceptance_fixture",
+    art_bible: {
+      era_style: "春秋战国",
+      visual_tone: "中国古代历史正剧，克制电影感",
+      characters: [],
+      locations: [],
+      props: [],
+      global_prompt_prefix: "中国古代宫殿，历史正剧质感",
+      global_negative_prompts: ["现代服饰", "现代建筑"],
+      consistency_notes: ["fixture consistency note"],
+    },
+    visual_budget: {},
+    downgrade_policy: {},
+    global_audio_strategy: {},
+    tts_plan: {
+      voice_profile_id: "voice_acceptance_fixture",
+      estimated_total_duration_sec: 12,
+      chunking_strategy: "segment_boundary",
+      chunks: [
+        {
+          chunk_id: "chunk_001",
+          order: 0,
+          script_excerpt: "晏子回应楚王羞辱。",
+          estimated_duration_sec: 12,
+        },
+      ],
+    },
+    tasks: input.tasks,
+    dependencies: input.dependencies ?? [],
+    global_production_notes: [],
+    cost_summary: {
+      total_tasks: input.tasks.length,
+      by_type: Object.fromEntries(
+        input.tasks.map((task) => [
+          task.task_type,
+          input.tasks.filter((candidate) => candidate.task_type === task.task_type)
+            .length,
+        ]),
+      ),
+      by_cost_tier: Object.fromEntries(
+        input.tasks.map((task) => [
+          task.cost_tier,
+          input.tasks.filter((candidate) => candidate.cost_tier === task.cost_tier)
+            .length,
+        ]),
+      ),
+      estimated_provider_calls: input.tasks.length,
+      notes: ["fixture"],
+    },
+  };
+}
 
 function makeTopicPackageFixture() {
   return {

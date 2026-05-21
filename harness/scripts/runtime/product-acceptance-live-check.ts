@@ -7,9 +7,12 @@ import { saveScriptRecord } from "../../../backend/src/modules/script/script-rec
 import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/storyboard-record.repository";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository";
 import {
+  AssetPlan,
   ScriptDraftPackage,
   StoryboardPlan,
   TopicPackage,
+  type AssetPlan as AssetPlanType,
+  type AssetTask,
   type ScriptDraftPackage as ScriptDraftPackageType,
   type StoryboardPlan as StoryboardPlanType,
   type TopicPackage as TopicPackageType,
@@ -57,6 +60,14 @@ const DEFAULT_OUTPUT_DIR = resolve(
   process.cwd(),
   "harness/scripts/runtime/output/product-acceptance-live-check",
 );
+const DISABLED_ACCEPTANCE_TASK_TYPES: ReadonlySet<AssetTask["task_type"]> =
+  new Set(["video_clip", "sfx_cue"]);
+const PROVIDER_CALL_TASK_TYPES: ReadonlySet<AssetTask["task_type"]> = new Set([
+  "tts_audio",
+  "image_still",
+  "subtitle_track",
+  "bgm_cue",
+]);
 
 export function buildProductAcceptanceLiveCheckPlan(
   input: ProductAcceptanceLiveCheckInput = {},
@@ -176,6 +187,57 @@ export function loadProductAcceptanceSource(
   };
 }
 
+export function sanitizeAssetPlanForProductAcceptance(
+  plan: AssetPlanType,
+): AssetPlanType {
+  const removedTaskIds = new Set(
+    plan.tasks
+      .filter((task) => DISABLED_ACCEPTANCE_TASK_TYPES.has(task.task_type))
+      .map((task) => task.task_id),
+  );
+  const tasks = plan.tasks.filter((task) => !removedTaskIds.has(task.task_id));
+  const dependencies = plan.dependencies.filter(
+    (dependency) =>
+      !removedTaskIds.has(dependency.task_id) &&
+      !removedTaskIds.has(dependency.depends_on_task_id),
+  );
+  const segmentIds = Array.from(
+    new Set(
+      plan.tasks
+        .map((task) => task.source_segment_id)
+        .filter((segmentId): segmentId is string => Boolean(segmentId)),
+    ),
+  );
+
+  for (const segmentId of segmentIds) {
+    const hasImageAnchor = tasks.some(
+      (task) =>
+        task.source_segment_id === segmentId && task.task_type === "image_still",
+    );
+    if (!hasImageAnchor) {
+      throw new Error(`acceptance_visual_anchor_missing: ${segmentId}`);
+    }
+  }
+
+  return AssetPlan.parse({
+    ...plan,
+    tasks,
+    dependencies,
+    cost_summary: {
+      total_tasks: tasks.length,
+      by_type: countTasksBy(tasks, (task) => task.task_type),
+      by_cost_tier: countTasksBy(tasks, (task) => task.cost_tier),
+      estimated_provider_calls: tasks.filter((task) =>
+        PROVIDER_CALL_TASK_TYPES.has(task.task_type),
+      ).length,
+      notes: [
+        ...plan.cost_summary.notes,
+        "product_acceptance_execution_plan_removed_video_clip_and_sfx",
+      ],
+    },
+  });
+}
+
 export async function seedProductAcceptanceProject(input: {
   source: ProductAcceptanceSource;
   outputDir: string;
@@ -250,6 +312,17 @@ export async function seedProductAcceptanceProject(input: {
   project.status = "storyboard_ready";
 
   return { app, project };
+}
+
+function countTasksBy(
+  tasks: AssetTask[],
+  pickKey: (task: AssetTask) => string,
+): Record<string, number> {
+  return tasks.reduce<Record<string, number>>((acc, task) => {
+    const key = pickKey(task);
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
 }
 
 async function injectOrThrow(input: {
