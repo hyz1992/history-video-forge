@@ -1,10 +1,11 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { buildApp } from "../../../backend/src/app";
 import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning/asset-plan-record.repository";
 import { DEFAULT_AUDIO_LIBRARY_ITEMS } from "../../../backend/src/modules/assets/default-audio-library";
+import { loadLightweightBgmCatalogItems } from "../../../backend/src/modules/assets/lightweight-audio-catalog-loader";
 import { saveMediaLibraryItem } from "../../../backend/src/modules/assets/media-library.repository";
 import { createFakeRenderAdapter } from "../../../backend/src/modules/render/fake-render-adapter";
 import { createLocalRemotionRenderAdapter } from "../../../backend/src/modules/render/local-remotion-render-adapter";
@@ -171,8 +172,8 @@ function makeAssetPlan(): AssetPlan {
         provider_hint: "local_bgm",
         prompt_draft: null,
         parameters: {
-          required_tags: ["background", "drone"],
-          mood_tags: ["tense", "dark"],
+          required_tags: ["background", "historical"],
+          mood_tags: ["solemn", "low_intrusion"],
           scope: "global",
           volume: 0.25,
           fade_in_sec: 1,
@@ -210,6 +211,19 @@ function makeAssetPlan(): AssetPlan {
 }
 
 async function seedSmokeMediaLibrary(app: ReturnType<typeof buildApp>) {
+  const lightweightBgmCatalogPath = resolve(
+    process.cwd(),
+    "storage/media-library/ai-bgm-prompt-candidates.json",
+  );
+  if (existsSync(lightweightBgmCatalogPath)) {
+    const bgmItems = await loadLightweightBgmCatalogItems(
+      lightweightBgmCatalogPath,
+    );
+    for (const item of bgmItems) {
+      await saveMediaLibraryItem(app.db, item);
+    }
+  }
+
   for (const item of DEFAULT_AUDIO_LIBRARY_ITEMS) {
     await saveMediaLibraryItem(app.db, item);
   }

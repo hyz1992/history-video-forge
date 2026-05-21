@@ -119,7 +119,8 @@ describe("render runtime smoke harness", () => {
       assetsResponse.manifest?.artifacts?.some(
         (artifact) =>
           artifact.artifact_type === "bgm_audio" &&
-          artifact.metadata?.library_item_id === "bgm_tense_dark_drone_001",
+          artifact.metadata?.library_item_id ===
+            "bgm_hist_ancient_china_solemn_001",
       ),
     ).toBe(true);
     expect(
