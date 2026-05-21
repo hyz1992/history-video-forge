@@ -371,6 +371,12 @@ npx vitest run --configLoader runner <tests>
 npx vitest run --configLoader runner <tests> --no-file-parallelism
 ```
 
+- 涉及 Remotion / Chromium 渲染的 smoke 测试也建议串行运行，避免多个浏览器实例并行关闭时偶发 `Target closed` stderr：
+
+```powershell
+npx vitest run --configLoader runner tests/backend/render/local-remotion-render-adapter.test.ts tests/harness/render-runtime-smoke.test.ts --no-file-parallelism
+```
+
 ## UI Acceptance Entry
 
 - `npm run harness:ui-acceptance:smoke`

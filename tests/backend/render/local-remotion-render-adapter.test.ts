@@ -4,7 +4,10 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createLocalRemotionRenderAdapter } from "../../../backend/src/modules/render/local-remotion-render-adapter.js";
+import {
+  createLocalRemotionRenderAdapter,
+  resolveLocalRemotionRenderConcurrency,
+} from "../../../backend/src/modules/render/local-remotion-render-adapter.js";
 import { buildRemotionInputProps } from "../../../backend/src/modules/render/remotion-input-builder.js";
 import type {
   AssetManifestRecord,
@@ -253,6 +256,11 @@ describe("local Remotion render adapter", () => {
     }
   });
 
+  it("uses single-frame render concurrency by default to avoid browser tab cycling", () => {
+    expect(resolveLocalRemotionRenderConcurrency()).toBe(1);
+    expect(resolveLocalRemotionRenderConcurrency(3)).toBe(3);
+  });
+
   it("passes subtitle cues and style into Remotion input props", async () => {
     tempDir = await mkdtemp(join(tmpdir(), "local-remotion-props-"));
     const fixtureFiles = await writeFixtureFiles(tempDir);
@@ -306,6 +314,7 @@ describe("local Remotion render adapter", () => {
     expect(result.diagnostics).toMatchObject({
       renderer: "remotion",
       composition_id: "TimelineVideo",
+      render_concurrency: 1,
     });
     await expect(stat(result.outputArtifact.file_uri)).resolves.toBeTruthy();
   }, 120_000);

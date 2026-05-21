@@ -270,6 +270,7 @@ describe("render runtime smoke harness", () => {
       };
       runtime_diagnostics: {
         renderer?: string;
+        render_concurrency?: number;
         audio_clip_count?: number;
         visual_clip_count?: number;
         subtitle_cue_count?: number;
@@ -277,6 +278,7 @@ describe("render runtime smoke harness", () => {
     };
     expect(renderResponse.output_artifact.mime_type).toBe("video/mp4");
     expect(renderResponse.runtime_diagnostics.renderer).toBe("remotion");
+    expect(renderResponse.runtime_diagnostics.render_concurrency).toBe(1);
     expect(
       renderResponse.runtime_diagnostics.audio_clip_count,
     ).toBeGreaterThanOrEqual(3);

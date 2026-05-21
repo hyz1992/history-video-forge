@@ -29,6 +29,7 @@ export interface CreateLocalRemotionRenderAdapterOptions {
   compositionId?: string;
   browserExecutable?: string;
   binariesDirectory?: string | null;
+  concurrency?: number;
 }
 
 function getRepoRootDir() {
@@ -90,6 +91,12 @@ function makeProbe(input: {
   };
 }
 
+export function resolveLocalRemotionRenderConcurrency(
+  input?: number,
+): number {
+  return input ?? 1;
+}
+
 export function createLocalRemotionRenderAdapter(
   options: CreateLocalRemotionRenderAdapterOptions = {},
 ): RenderAdapter {
@@ -98,6 +105,7 @@ export function createLocalRemotionRenderAdapter(
   const compositionId = options.compositionId ?? DEFAULT_COMPOSITION_ID;
   const browserExecutable =
     options.browserExecutable ?? findLocalBrowserExecutable();
+  const concurrency = resolveLocalRemotionRenderConcurrency(options.concurrency);
 
   return {
     async render(input): Promise<RenderAdapterResult> {
@@ -135,6 +143,7 @@ export function createLocalRemotionRenderAdapter(
         logLevel: "error",
         browserExecutable,
         binariesDirectory: options.binariesDirectory ?? null,
+        concurrency,
       });
       const composition = {
         ...selectedComposition,
@@ -192,6 +201,7 @@ export function createLocalRemotionRenderAdapter(
           renderer: "remotion",
           composition_id: compositionId,
           duration_in_frames: durationInFrames,
+          render_concurrency: concurrency,
           audio_clip_count: inputProps.audioClips?.length ?? 0,
           visual_clip_count: inputProps.visualClips?.length ?? 0,
           subtitle_cue_count: inputProps.subtitleCues?.length ?? 0,
