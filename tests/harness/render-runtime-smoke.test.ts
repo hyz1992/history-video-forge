@@ -4,7 +4,10 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { runRenderRuntimeSmoke } from "../../harness/scripts/runtime/render-runtime-smoke";
+import {
+  parseRenderRuntimeSmokeCliArgs,
+  runRenderRuntimeSmoke,
+} from "../../harness/scripts/runtime/render-runtime-smoke";
 
 describe("render runtime smoke harness", () => {
   it("runs assets to compose to render and clears stale render after compose refresh", async () => {
@@ -59,6 +62,47 @@ describe("render runtime smoke harness", () => {
     expect(packageJson.scripts["harness:render-runtime-smoke"]).toBe(
       "tsx harness/scripts/runtime/render-runtime-smoke.ts",
     );
+  });
+
+  it("parses positional BGM id when npm strips option flags", () => {
+    expect(
+      parseRenderRuntimeSmokeCliArgs([
+        "--adapter=remotion",
+        "bgm_hist_reflective_ending_001",
+      ]),
+    ).toMatchObject({
+      adapter: "remotion",
+      bgmLibraryItemId: "bgm_hist_reflective_ending_001",
+    });
+  });
+
+  it("uses the requested BGM id when provided", async () => {
+    const outputDir = mkdtempSync(join(tmpdir(), "svf2-render-bgm-id-smoke-"));
+
+    await runRenderRuntimeSmoke({
+      outputDir,
+      bgmLibraryItemId: "bgm_hist_reflective_ending_001",
+    });
+
+    const assetsResponse = JSON.parse(
+      readFileSync(join(outputDir, "assets-response.json"), "utf8"),
+    ) as {
+      manifest?: {
+        artifacts?: Array<{
+          artifact_type: string;
+          metadata?: { library_item_id?: string };
+        }>;
+      };
+    };
+
+    expect(
+      assetsResponse.manifest?.artifacts?.some(
+        (artifact) =>
+          artifact.artifact_type === "bgm_audio" &&
+          artifact.metadata?.library_item_id ===
+            "bgm_hist_reflective_ending_001",
+      ),
+    ).toBe(true);
   });
 
   it("runs the Remotion adapter smoke path and writes an MP4 output", async () => {

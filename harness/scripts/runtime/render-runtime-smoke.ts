@@ -20,6 +20,7 @@ const SMOKE_BGM_LIBRARY_ITEM_ID = "bgm_hist_ancient_china_solemn_001";
 export interface RunRenderRuntimeSmokeInput {
   adapter?: "fake" | "remotion";
   outputDir?: string;
+  bgmLibraryItemId?: string;
 }
 
 export interface RunRenderRuntimeSmokeResult {
@@ -229,6 +230,7 @@ function makeAssetPlan(input: { bgmCue?: SmokeBgmCueInput } = {}): AssetPlan {
 
 async function seedSmokeMediaLibrary(
   app: ReturnType<typeof buildApp>,
+  input: { bgmLibraryItemId?: string } = {},
 ): Promise<{ bgmCue: SmokeBgmCueInput }> {
   const lightweightBgmCatalogPath = resolve(
     process.cwd(),
@@ -248,9 +250,12 @@ async function seedSmokeMediaLibrary(
       await saveMediaLibraryItem(app.db, entry.item);
     }
 
+    const preferredBgmLibraryItemId =
+      input.bgmLibraryItemId ?? SMOKE_BGM_LIBRARY_ITEM_ID;
     const smokeBgm =
       loadedBgmItems.find(
-        (entry) => entry.item.library_item_id === SMOKE_BGM_LIBRARY_ITEM_ID,
+        (entry) =>
+          entry.item.library_item_id === preferredBgmLibraryItemId,
       ) ?? loadedBgmItems[0];
     if (smokeBgm) {
       bgmCue = {
@@ -431,7 +436,9 @@ export async function runRenderRuntimeSmoke(
   }
   project.storageRootDir = resolve(finalOutputDir, "project-storage");
 
-  const mediaLibrarySeed = await seedSmokeMediaLibrary(app);
+  const mediaLibrarySeed = await seedSmokeMediaLibrary(app, {
+    bgmLibraryItemId: input.bgmLibraryItemId,
+  });
   await seedActiveAssetPlan({
     app,
     projectId,
@@ -551,8 +558,13 @@ export async function runRenderRuntimeSmoke(
   };
 }
 
-function parseCliArgs(argv: string[]): RunRenderRuntimeSmokeInput {
-  const result: RunRenderRuntimeSmokeInput = {};
+export function parseRenderRuntimeSmokeCliArgs(
+  argv: string[],
+): RunRenderRuntimeSmokeInput {
+  const result: RunRenderRuntimeSmokeInput = {
+    bgmLibraryItemId: process.env.SVF_SMOKE_BGM_ID,
+  };
+  const positional: string[] = [];
 
   for (let index = 0; index < argv.length; index += 1) {
     const current = argv[index];
@@ -576,13 +588,27 @@ function parseCliArgs(argv: string[]): RunRenderRuntimeSmokeInput {
       index += 1;
       continue;
     }
+
+    if (current === "--bgm-id" && next) {
+      result.bgmLibraryItemId = next;
+      index += 1;
+      continue;
+    }
+
+    if (!current.startsWith("--")) {
+      positional.push(current);
+    }
+  }
+
+  if (positional[0] && !result.bgmLibraryItemId) {
+    result.bgmLibraryItemId = positional[0];
   }
 
   return result;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  runRenderRuntimeSmoke(parseCliArgs(process.argv.slice(2)))
+  runRenderRuntimeSmoke(parseRenderRuntimeSmokeCliArgs(process.argv.slice(2)))
     .then((result) => {
       console.log(JSON.stringify(result.status, null, 2));
     })
