@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -7,6 +7,7 @@ import { createDbClient } from "../../../backend/src/db/client.js";
 import type { AssetProviderContext } from "../../../backend/src/modules/assets/assets-provider-adapter.js";
 import { saveMediaLibraryItem } from "../../../backend/src/modules/assets/media-library.repository.js";
 import { readAudioDurationSec } from "../../../backend/src/modules/assets/audio-duration-probe.js";
+import { createToneWavBuffer } from "../../../backend/src/modules/assets/providers/audio-fixture.js";
 import { createLocalBgmProvider } from "../../../backend/src/modules/assets/providers/local-bgm-provider.js";
 import type {
   AssetManifest,
@@ -27,10 +28,17 @@ describe("local BGM provider", () => {
   it("selects an approved library item and returns a renderable bgm_audio artifact", async () => {
     const db = createDbClient();
     root = await mkdtemp(join(tmpdir(), "svf2-local-bgm-"));
+    const sourcePath = join(root, "source-bgm.wav");
+    const sourceBytes = createToneWavBuffer({
+      durationSec: 8,
+      sampleRate: 16_000,
+      frequencyHz: 220,
+    });
+    await writeFile(sourcePath, sourceBytes);
     const item: MediaLibraryItem = {
       library_item_id: "bgm_background_001",
       type: "bgm",
-      file_uri: "library://bgm/background.wav",
+      file_uri: sourcePath,
       mime_type: "audio/wav",
       duration_sec: 8,
       loopable: true,
@@ -76,7 +84,7 @@ describe("local BGM provider", () => {
         attribution_required: false,
         required_tags: ["background"],
         matched_mood_tags: ["tense"],
-        source_materialized_from: "generated_fixture",
+        source_materialized_from: "library_file",
       },
     });
     expect(result.artifacts[0]?.file_uri).toContain(root);
@@ -84,6 +92,8 @@ describe("local BGM provider", () => {
     const bytes = await readFile(result.artifacts[0]!.file_uri);
     expect(bytes.subarray(0, 4).toString("ascii")).toBe("RIFF");
     expect(readAudioDurationSec({ data: bytes })).toBeCloseTo(8, 2);
+    expect(maxPcm16(bytes)).toBeGreaterThan(0);
+    expect(bytes.equals(sourceBytes)).toBe(true);
   });
 
   it("returns no artifacts when no approved BGM item matches", async () => {
@@ -131,6 +141,14 @@ function makeBgmContext(input: {
     assetRunId: "assets_run_bgm",
     projectStorageRootDir: input.projectStorageRootDir,
   };
+}
+
+function maxPcm16(wav: Buffer): number {
+  let max = 0;
+  for (let offset = 44; offset + 1 < wav.length; offset += 2) {
+    max = Math.max(max, Math.abs(wav.readInt16LE(offset)));
+  }
+  return max;
 }
 
 function makeMinimalManifestWithBgmPlacement(): AssetManifest {

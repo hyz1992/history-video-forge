@@ -12,7 +12,7 @@ import {
   resolveAssetsRunStorage,
   writeAssetFile,
 } from "../assets-file-storage.js";
-import { createSilentWavBuffer } from "./audio-fixture.js";
+import { createToneWavBuffer } from "./audio-fixture.js";
 
 export function createFakeTtsProvider(): AssetProviderAdapter {
   return {
@@ -90,8 +90,10 @@ export function createFakeTtsProvider(): AssetProviderAdapter {
           storage,
           category: "audio/tts",
           fileName,
-          data: createSilentWavBuffer({
+          data: createToneWavBuffer({
             durationSec: chunk.estimated_duration_sec,
+            frequencyHz: 330,
+            amplitude: 0.18,
           }),
         });
 
@@ -129,8 +131,10 @@ export function createFakeTtsProvider(): AssetProviderAdapter {
         storage,
         category: "audio/tts",
         fileName: `tts_merged_${ctx.execution.task_id}.wav`,
-        data: createSilentWavBuffer({
+        data: createToneWavBuffer({
           durationSec: totalDuration,
+          frequencyHz: 330,
+          amplitude: 0.18,
         }),
       });
 

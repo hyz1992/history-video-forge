@@ -242,9 +242,12 @@ describe("fake TTS provider (via execution engine)", () => {
     const mergedBytes = await readFile(mergedArtifacts[0]!.file_uri);
     expect(mergedBytes.subarray(0, 4).toString("ascii")).toBe("RIFF");
     expect(mergedBytes.subarray(8, 12).toString("ascii")).toBe("WAVE");
+    expect(maxPcm16(mergedBytes)).toBeGreaterThan(0);
 
     for (const chunk of chunkArtifacts) {
       expect(chunk.file_uri.endsWith(".wav")).toBe(true);
+      const chunkBytes = await readFile(chunk.file_uri);
+      expect(maxPcm16(chunkBytes)).toBeGreaterThan(0);
       expect(chunk.metadata).toMatchObject({
         format: "wav",
         duration_source: "estimated",
@@ -282,3 +285,11 @@ describe("fake TTS provider (via execution engine)", () => {
     expect(await stat(mergedArtifacts[0].file_uri)).toBeTruthy();
   });
 });
+
+function maxPcm16(wav: Buffer): number {
+  let max = 0;
+  for (let offset = 44; offset + 1 < wav.length; offset += 2) {
+    max = Math.max(max, Math.abs(wav.readInt16LE(offset)));
+  }
+  return max;
+}

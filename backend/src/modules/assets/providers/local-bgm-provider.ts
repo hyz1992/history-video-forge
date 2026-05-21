@@ -2,11 +2,10 @@ import type { DbClient } from "../../../db/client.js";
 import type { AssetProviderAdapter } from "../assets-provider-adapter.js";
 import {
   resolveAssetsRunStorage,
-  writeAssetFile,
 } from "../assets-file-storage.js";
 import { readBgmCueParams } from "../audio-cue-params.js";
 import { selectMediaLibraryItem } from "../media-library-selector.js";
-import { createSilentWavBuffer } from "./audio-fixture.js";
+import { materializeLibraryAudio } from "./audio-materialization.js";
 
 export function createLocalBgmProvider(db: DbClient): AssetProviderAdapter {
   return {
@@ -51,11 +50,13 @@ export function createLocalBgmProvider(db: DbClient): AssetProviderAdapter {
         projectStorageRootDir: ctx.projectStorageRootDir,
         runId: ctx.assetRunId,
       });
-      const written = await writeAssetFile({
+      const materialized = await materializeLibraryAudio({
         storage,
         category: "audio/bgm",
         fileName: `bgm_${ctx.execution.task_id}.wav`,
-        data: createSilentWavBuffer({ durationSec: selected.duration_sec }),
+        fileUri: selected.file_uri,
+        durationSec: selected.duration_sec,
+        fallbackFrequencyHz: 196,
       });
 
       return {
@@ -64,7 +65,7 @@ export function createLocalBgmProvider(db: DbClient): AssetProviderAdapter {
             artifact_id: `artifact_bgm_${ctx.execution.task_id}`,
             artifact_type: "bgm_audio",
             origin: "library",
-            file_uri: written.fileUri,
+            file_uri: materialized.written.fileUri,
             created_at: new Date().toISOString(),
             metadata: {
               duration_sec: selected.duration_sec,
@@ -78,7 +79,7 @@ export function createLocalBgmProvider(db: DbClient): AssetProviderAdapter {
               matched_mood_tags: params.moodTags.filter((tag) =>
                 selected.mood_tags.includes(tag),
               ),
-              source_materialized_from: "generated_fixture",
+              source_materialized_from: materialized.sourceMaterializedFrom,
             },
           },
         ],
