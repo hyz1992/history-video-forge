@@ -24,6 +24,9 @@ interface LightweightBgmCatalogItem {
   tags?: string[];
   mood_tags?: string[];
   volume_hint?: number;
+  review?: {
+    manual_decision?: string;
+  };
 }
 
 export async function loadLightweightBgmCatalogItems(
@@ -80,6 +83,7 @@ function isGeneratedBgmItem(
   return (
     item.type === "bgm" &&
     item.status === "generated_pending_review" &&
+    item.review?.manual_decision === "pass" &&
     typeof item.library_item_id === "string" &&
     item.library_item_id.length > 0 &&
     typeof item.file_uri === "string" &&

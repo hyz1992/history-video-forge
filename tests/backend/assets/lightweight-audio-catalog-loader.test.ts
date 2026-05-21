@@ -34,6 +34,10 @@ describe("loadLightweightBgmCatalogItems", () => {
               mood_tags: ["solemn", "low_intrusion"],
               title: "Test BGM",
               volume_hint: 0.18,
+              review: {
+                manual_decision: "pass",
+                notes: "accepted",
+              },
             },
           ],
         }),
@@ -113,6 +117,61 @@ describe("loadLightweightBgmCatalogItems", () => {
       await expect(loadLightweightBgmCatalogItems(catalogPath)).resolves.toEqual(
         [],
       );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("only loads generated BGM entries that passed manual review", async () => {
+    const root = await mkdtemp(join(tmpdir(), "lightweight-bgm-catalog-"));
+    try {
+      const catalogPath = join(root, "ai-bgm-prompt-candidates.json");
+      const baseItem = {
+        type: "bgm",
+        status: "generated_pending_review",
+        file_uri: "storage/media-library/audio/bgm/bgm.wav",
+        mime_type: "audio/wav",
+        duration_sec: 90,
+        file_hash:
+          "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        loopable: true,
+        tags: ["background", "historical"],
+        mood_tags: ["solemn"],
+      };
+      await writeFile(
+        catalogPath,
+        JSON.stringify({
+          schema_version: "ai_bgm_prompt_candidates_light_v1",
+          generated_at: "2026-05-21T00:00:00.000Z",
+          items: [
+            {
+              ...baseItem,
+              library_item_id: "bgm_pass",
+              review: { manual_decision: "pass", notes: "" },
+            },
+            {
+              ...baseItem,
+              library_item_id: "bgm_pending",
+              review: { manual_decision: "", notes: "" },
+            },
+            {
+              ...baseItem,
+              library_item_id: "bgm_reject",
+              review: { manual_decision: "reject", notes: "" },
+            },
+            {
+              ...baseItem,
+              library_item_id: "bgm_missing_review",
+            },
+          ],
+        }),
+      );
+
+      const loadedItems = await loadLightweightBgmCatalogItems(catalogPath);
+
+      expect(loadedItems.map((entry) => entry.item.library_item_id)).toEqual([
+        "bgm_pass",
+      ]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
