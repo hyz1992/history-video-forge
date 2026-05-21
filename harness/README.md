@@ -211,6 +211,29 @@ runtime harness 在当前阶段属于 **P0**：
 - live check 输出应至少覆盖 graph trace、runtime diagnostics 与 script artifact。
 - live check 只作为人工巡检入口，不替代自动化稳定回归。
 
+### Render Runtime Smoke With Real TTS
+
+本入口用于生成“真实 DashScope TTS 口播 + 本地/fake 视觉资产 + 本地 BGM/SFX”的 Remotion 样片，便于快速确认最终 MP4 是否真正带有人声口播。
+
+常用命令：
+
+```powershell
+npx tsx harness/scripts/runtime/render-runtime-smoke.ts --adapter remotion --tts-provider dashscope_tts --tts-text "你的中文口播文本" --output-dir harness/scripts/runtime/output/remotion-real-tts-smoke-zh
+```
+
+环境配置：
+
+- 脚本会自动读取根目录 `.env` 和 `backend/.env` 中的 `ALIYUN_DASHSCOPE_API_KEY`、`ALIYUN_DASHSCOPE_BASE_URL`、`ALIYUN_DASHSCOPE_TTS_MODEL`。
+- 显式传入参数或当前进程环境变量优先于 `.env` 文件。
+- 默认使用系统音色 `voice_system_ethan`，不会创建供应商新音色。
+
+边界：
+
+- 只启用 DashScope TTS，不启用 DashScope 文生图或图生视频。
+- 视觉仍使用 fake image；字幕、本地 BGM/SFX 仍走本地 provider。
+- 这是显式 live-check / smoke 入口，不作为默认自动化 gate。
+- 输出目录位于 `harness/scripts/runtime/output/`，默认被 git 忽略。
+
 ### Five-round Script Quality Check
 
 新 agent 做 script 首稿质量抽检时，优先使用固定命令：
