@@ -115,24 +115,6 @@ async function toBrowserFileUri(input: {
   return pathToFileURL(filePath).href;
 }
 
-async function toBrowserManifest(input: {
-  manifest: AssetManifest;
-  assetBaseDir: string;
-}): Promise<AssetManifest> {
-  return {
-    ...input.manifest,
-    artifacts: (await Promise.all(
-      input.manifest.artifacts.map(async (artifact) => ({
-        ...artifact,
-        file_uri: await toBrowserFileUri({
-          artifact,
-          assetBaseDir: input.assetBaseDir,
-        }),
-      })),
-    )) as AssetArtifact[],
-  };
-}
-
 function indexArtifacts(manifest: AssetManifest): Map<string, AssetArtifact> {
   return new Map(
     manifest.artifacts.map((artifact) => [artifact.artifact_id, artifact]),
@@ -380,10 +362,7 @@ export async function buildRemotionInputProps(input: {
 
   return {
     timeline: input.timeline,
-    assetManifest: await toBrowserManifest({
-      manifest: input.manifest,
-      assetBaseDir: input.assetBaseDir,
-    }),
+    assetManifest: input.manifest,
     assetBaseDir: input.assetBaseDir,
     width: input.width,
     height: input.height,

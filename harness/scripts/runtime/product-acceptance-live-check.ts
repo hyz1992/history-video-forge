@@ -409,9 +409,17 @@ export function loadProductAcceptanceSource(
 export function sanitizeAssetPlanForProductAcceptance(
   plan: AssetPlanType,
 ): AssetPlanType {
+  const bgmTaskIds = plan.tasks
+    .filter((task) => task.task_type === "bgm_cue")
+    .map((task) => task.task_id);
+  const extraBgmTaskIds = new Set(bgmTaskIds.slice(1));
   const removedTaskIds = new Set(
     plan.tasks
-      .filter((task) => DISABLED_ACCEPTANCE_TASK_TYPES.has(task.task_type))
+      .filter(
+        (task) =>
+          DISABLED_ACCEPTANCE_TASK_TYPES.has(task.task_type) ||
+          extraBgmTaskIds.has(task.task_id),
+      )
       .map((task) => task.task_id),
   );
   const tasks = plan.tasks.filter((task) => !removedTaskIds.has(task.task_id));
@@ -452,6 +460,9 @@ export function sanitizeAssetPlanForProductAcceptance(
       notes: [
         ...plan.cost_summary.notes,
         "product_acceptance_execution_plan_removed_video_clip_and_sfx",
+        ...(extraBgmTaskIds.size > 0
+          ? ["product_acceptance_execution_plan_limited_bgm_to_one"]
+          : []),
       ],
     },
   });

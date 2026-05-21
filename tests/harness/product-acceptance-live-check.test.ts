@@ -145,6 +145,42 @@ describe("product acceptance live-check harness", () => {
     );
   });
 
+  it("keeps a single BGM cue for acceptance render stability", () => {
+    const plan = makeAssetPlanFixture({
+      tasks: [
+        makeAssetTask("tts_001", "tts_audio", "sb_001"),
+        makeAssetTask("subtitle_001", "subtitle_track", "sb_001"),
+        makeAssetTask("image_001", "image_still", "sb_001"),
+        makeAssetTask("bgm_001", "bgm_cue", null),
+        makeAssetTask("bgm_002", "bgm_cue", null),
+        makeAssetTask("bgm_003", "bgm_cue", null),
+      ],
+      dependencies: [
+        {
+          dependency_id: "dep_bgm_002",
+          task_id: "bgm_002",
+          depends_on_task_id: "tts_001",
+          dependency_type: "requires_timing",
+        },
+      ],
+    });
+
+    const sanitized = sanitizeAssetPlanForProductAcceptance(plan);
+
+    expect(
+      sanitized.tasks
+        .filter((task) => task.task_type === "bgm_cue")
+        .map((task) => task.task_id),
+    ).toEqual(["bgm_001"]);
+    expect(sanitized.dependencies).toEqual([]);
+    expect(sanitized.cost_summary.by_type).toMatchObject({
+      bgm_cue: 1,
+    });
+    expect(sanitized.cost_summary.notes).toContain(
+      "product_acceptance_execution_plan_limited_bgm_to_one",
+    );
+  });
+
   it("rejects acceptance asset execution when a segment has no static image anchor", () => {
     const plan = makeAssetPlanFixture({
       tasks: [

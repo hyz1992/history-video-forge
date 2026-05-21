@@ -405,6 +405,11 @@ describe("buildRemotionInputProps", () => {
         .filter((clip) => clip.role === "bgm" || clip.role === "sfx")
         .every((clip) => clip.src.startsWith("data:audio/")),
     ).toBe(true);
+    expect(
+      (props.assetManifest as AssetManifest).artifacts.some((artifact) =>
+        artifact.file_uri.startsWith("data:"),
+      ),
+    ).toBe(false);
     expect(props.subtitleCues).toEqual([
       { start_sec: 0, end_sec: 2, text: "Hello." },
     ]);
