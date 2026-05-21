@@ -650,6 +650,7 @@ describe("assets generate api", () => {
       manifest: {
         manifest_version: "asset_manifest_v1",
         source_asset_plan_id: prepared.assetPlanRecord.id,
+        readiness: "ready_for_compose",
       },
       local_validation: {
         stage: "assets_local_validation",
@@ -708,6 +709,9 @@ describe("assets generate api", () => {
     expect(savedRecord).toBeDefined();
     expect(savedRecord!.projectId).toBe(prepared.project.id);
     expect(savedRecord!.assetPlanRecordId).toBe(prepared.assetPlanRecord.id);
+    expect(savedRecord!.manifestJson).toMatchObject({
+      readiness: "ready_for_compose",
+    });
     expect(savedRecord!.graphTraceSummaryJson).toMatchObject({
       phase: "assets",
     });

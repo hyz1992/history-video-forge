@@ -506,6 +506,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     manifest,
     projectStorageRootDir: project.storageRootDir,
   });
+  manifest.readiness = localValidation.decision;
 
   // Step 8: Stale check — verify activeAssetPlanRecordId hasn't changed
   let staleSourceDetected = false;
