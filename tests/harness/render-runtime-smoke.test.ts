@@ -83,10 +83,13 @@ describe("render runtime smoke harness", () => {
         "--adapter=remotion",
         "--tts-provider",
         "dashscope_tts",
+        "--tts-text",
+        "Custom narration text.",
       ]),
     ).toMatchObject({
       adapter: "remotion",
       ttsProvider: "dashscope_tts",
+      ttsText: "Custom narration text.",
     });
   });
 
@@ -127,6 +130,7 @@ describe("render runtime smoke harness", () => {
     await runRenderRuntimeSmoke({
       outputDir,
       ttsProvider: "dashscope_tts",
+      ttsText: "Custom narration text.",
       dashscope: {
         apiKey: "test-key",
         baseUrl: "https://dashscope.test",
@@ -139,7 +143,7 @@ describe("render runtime smoke harness", () => {
       manifest?: {
         artifacts?: Array<{
           artifact_type: string;
-          metadata?: { provider_name?: string };
+          metadata?: { provider_name?: string; script_excerpt?: string };
         }>;
       };
     };
@@ -147,6 +151,13 @@ describe("render runtime smoke harness", () => {
     expect(
       assetsResponse.manifest?.artifacts?.some(
         (artifact) => artifact.metadata?.provider_name === "dashscope_tts",
+      ),
+    ).toBe(true);
+    expect(
+      assetsResponse.manifest?.artifacts?.some(
+        (artifact) =>
+          artifact.metadata?.provider_name === "dashscope_tts" &&
+          artifact.metadata.script_excerpt === "Custom narration text.",
       ),
     ).toBe(true);
     expect(

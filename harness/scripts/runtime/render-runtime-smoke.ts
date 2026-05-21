@@ -16,12 +16,14 @@ const TOPIC_PACKAGE_ID = "topic_render_smoke_001";
 const SCRIPT_RECORD_ID = "script_render_smoke_001";
 const STORYBOARD_RECORD_ID = "storyboard_render_smoke_001";
 const SMOKE_BGM_LIBRARY_ITEM_ID = "bgm_hist_ancient_china_solemn_001";
+const DEFAULT_SMOKE_TTS_TEXT = "A tense public answer changes the room.";
 
 export interface RunRenderRuntimeSmokeInput {
   adapter?: "fake" | "remotion";
   outputDir?: string;
   bgmLibraryItemId?: string;
   ttsProvider?: "fake_tts" | "dashscope_tts";
+  ttsText?: string;
   dashscope?: {
     apiKey?: string;
     baseUrl?: string;
@@ -56,12 +58,16 @@ function writeJson(outputDir: string, filename: string, value: unknown) {
   writeFileSync(resolve(outputDir, filename), JSON.stringify(value, null, 2), "utf8");
 }
 
-function makeAssetPlan(input: { bgmCue?: SmokeBgmCueInput } = {}): AssetPlan {
+function makeAssetPlan(input: {
+  bgmCue?: SmokeBgmCueInput;
+  ttsText?: string;
+} = {}): AssetPlan {
   const bgmCue = input.bgmCue ?? {
     requiredTags: ["background", "drone"],
     moodTags: ["tense", "dark"],
     volume: 0.25,
   };
+  const ttsText = input.ttsText ?? DEFAULT_SMOKE_TTS_TEXT;
 
   return {
     plan_version: "asset_plan_v1",
@@ -89,7 +95,7 @@ function makeAssetPlan(input: { bgmCue?: SmokeBgmCueInput } = {}): AssetPlan {
         {
           chunk_id: "tts_001",
           order: 0,
-          script_excerpt: "A tense public answer changes the room.",
+          script_excerpt: ttsText,
           estimated_duration_sec: 12,
         },
       ],
@@ -100,7 +106,7 @@ function makeAssetPlan(input: { bgmCue?: SmokeBgmCueInput } = {}): AssetPlan {
         order: 0,
         task_type: "tts_audio",
         source_segment_id: null,
-        source_excerpt: "A tense public answer changes the room.",
+        source_excerpt: ttsText,
         production_intent: "Generate narration audio.",
         recommended_mode: "auto",
         provider_hint: "fake_tts",
@@ -121,7 +127,7 @@ function makeAssetPlan(input: { bgmCue?: SmokeBgmCueInput } = {}): AssetPlan {
         order: 1,
         task_type: "subtitle_track",
         source_segment_id: null,
-        source_excerpt: "A tense public answer changes the room.",
+        source_excerpt: ttsText,
         production_intent: "Generate subtitle track from TTS.",
         recommended_mode: "auto",
         provider_hint: "local_subtitle",
@@ -288,10 +294,11 @@ async function seedActiveAssetPlan(input: {
   app: ReturnType<typeof buildApp>;
   projectId: string;
   bgmCue?: SmokeBgmCueInput;
+  ttsText?: string;
 }) {
-  const { app, projectId, bgmCue } = input;
+  const { app, projectId, bgmCue, ttsText } = input;
   const assetPlanRecordId = `asset_plan_render_smoke_${app.db.generateId()}`;
-  const assetPlan = makeAssetPlan({ bgmCue });
+  const assetPlan = makeAssetPlan({ bgmCue, ttsText });
 
   app.db.storyboardRecords.set(STORYBOARD_RECORD_ID, {
     id: STORYBOARD_RECORD_ID,
@@ -453,6 +460,7 @@ export async function runRenderRuntimeSmoke(
     app,
     projectId,
     bgmCue: mediaLibrarySeed.bgmCue,
+    ttsText: input.ttsText,
   });
 
   const assetsBody = await injectOrThrow({
@@ -631,6 +639,12 @@ export function parseRenderRuntimeSmokeCliArgs(
     if (current.startsWith("--tts-provider=")) {
       const value = current.slice("--tts-provider=".length);
       result.ttsProvider = value === "dashscope_tts" ? "dashscope_tts" : undefined;
+      continue;
+    }
+
+    if (current === "--tts-text" && next) {
+      result.ttsText = next;
+      index += 1;
       continue;
     }
 
