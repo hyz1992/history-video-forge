@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -17,6 +17,12 @@ const SCRIPT_RECORD_ID = "script_render_smoke_001";
 const STORYBOARD_RECORD_ID = "storyboard_render_smoke_001";
 const SMOKE_BGM_LIBRARY_ITEM_ID = "bgm_hist_ancient_china_solemn_001";
 const DEFAULT_SMOKE_TTS_TEXT = "A tense public answer changes the room.";
+
+interface RenderRuntimeSmokeEnv {
+  ALIYUN_DASHSCOPE_API_KEY?: string;
+  ALIYUN_DASHSCOPE_BASE_URL?: string;
+  ALIYUN_DASHSCOPE_TTS_MODEL?: string;
+}
 
 export interface RunRenderRuntimeSmokeInput {
   adapter?: "fake" | "remotion";
@@ -56,6 +62,62 @@ interface SmokeBgmCueInput {
 
 function writeJson(outputDir: string, filename: string, value: unknown) {
   writeFileSync(resolve(outputDir, filename), JSON.stringify(value, null, 2), "utf8");
+}
+
+function readDotEnv(filePath: string): RenderRuntimeSmokeEnv {
+  if (!existsSync(filePath)) {
+    return {};
+  }
+
+  const values: RenderRuntimeSmokeEnv = {};
+  for (const rawLine of readFileSync(filePath, "utf8").split(/\r?\n/u)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
+
+    const equalsIndex = line.indexOf("=");
+    if (equalsIndex <= 0) {
+      continue;
+    }
+
+    const key = line.slice(0, equalsIndex).trim();
+    const value = line.slice(equalsIndex + 1).trim().replace(/^['"]|['"]$/gu, "");
+    if (
+      key === "ALIYUN_DASHSCOPE_API_KEY" ||
+      key === "ALIYUN_DASHSCOPE_BASE_URL" ||
+      key === "ALIYUN_DASHSCOPE_TTS_MODEL"
+    ) {
+      values[key] = value;
+    }
+  }
+
+  return values;
+}
+
+export function resolveRenderRuntimeSmokeEnv(
+  input: { cwd?: string } = {},
+): RenderRuntimeSmokeEnv {
+  const cwd = input.cwd ?? process.cwd();
+  const fileEnv = {
+    ...readDotEnv(resolve(cwd, ".env")),
+    ...readDotEnv(resolve(cwd, "backend/.env")),
+  };
+  const processEnv: RenderRuntimeSmokeEnv = {};
+  for (const key of [
+    "ALIYUN_DASHSCOPE_API_KEY",
+    "ALIYUN_DASHSCOPE_BASE_URL",
+    "ALIYUN_DASHSCOPE_TTS_MODEL",
+  ] as const) {
+    if (typeof process.env[key] === "string" && process.env[key] !== "") {
+      processEnv[key] = process.env[key];
+    }
+  }
+
+  return {
+    ...fileEnv,
+    ...processEnv,
+  };
 }
 
 function makeAssetPlan(input: {
@@ -463,6 +525,7 @@ export async function runRenderRuntimeSmoke(
     ttsText: input.ttsText,
   });
 
+  const env = resolveRenderRuntimeSmokeEnv();
   const assetsBody = await injectOrThrow({
     app,
     method: "POST",
@@ -477,9 +540,11 @@ export async function runRenderRuntimeSmoke(
         ? {
             provider_mode: "dashscope_tts",
             dashscope: {
-              api_key: input.dashscope?.apiKey,
-              base_url: input.dashscope?.baseUrl,
-              tts_model: input.dashscope?.ttsModel,
+              api_key: input.dashscope?.apiKey ?? env.ALIYUN_DASHSCOPE_API_KEY,
+              base_url:
+                input.dashscope?.baseUrl ?? env.ALIYUN_DASHSCOPE_BASE_URL,
+              tts_model:
+                input.dashscope?.ttsModel ?? env.ALIYUN_DASHSCOPE_TTS_MODEL,
             },
           }
         : {}),

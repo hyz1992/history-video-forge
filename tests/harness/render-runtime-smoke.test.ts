@@ -1,16 +1,33 @@
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   parseRenderRuntimeSmokeCliArgs,
+  resolveRenderRuntimeSmokeEnv,
   runRenderRuntimeSmoke,
 } from "../../harness/scripts/runtime/render-runtime-smoke";
 import { createToneWavBuffer } from "../../backend/src/modules/assets/providers/audio-fixture";
 
 describe("render runtime smoke harness", () => {
+  const tempDirs: string[] = [];
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    for (const tempDir of tempDirs.splice(0)) {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("runs assets to compose to render and clears stale render after compose refresh", async () => {
     const outputDir = mkdtempSync(join(tmpdir(), "svf2-render-runtime-smoke-"));
 
@@ -90,6 +107,31 @@ describe("render runtime smoke harness", () => {
       adapter: "remotion",
       ttsProvider: "dashscope_tts",
       ttsText: "Custom narration text.",
+    });
+  });
+
+  it("loads DashScope env from .env files while keeping process env precedence", () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "svf2-render-env-"));
+    tempDirs.push(tempDir);
+    mkdirSync(join(tempDir, "backend"));
+    writeFileSync(
+      join(tempDir, ".env"),
+      [
+        "ALIYUN_DASHSCOPE_API_KEY=from-root",
+        "ALIYUN_DASHSCOPE_BASE_URL=https://root.example",
+      ].join("\n"),
+      "utf8",
+    );
+    writeFileSync(
+      join(tempDir, "backend", ".env"),
+      "ALIYUN_DASHSCOPE_API_KEY=from-backend\n",
+      "utf8",
+    );
+    vi.stubEnv("ALIYUN_DASHSCOPE_API_KEY", "from-process");
+
+    expect(resolveRenderRuntimeSmokeEnv({ cwd: tempDir })).toMatchObject({
+      ALIYUN_DASHSCOPE_API_KEY: "from-process",
+      ALIYUN_DASHSCOPE_BASE_URL: "https://root.example",
     });
   });
 
