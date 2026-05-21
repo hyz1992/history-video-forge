@@ -21,6 +21,12 @@ export interface RunRenderRuntimeSmokeInput {
   adapter?: "fake" | "remotion";
   outputDir?: string;
   bgmLibraryItemId?: string;
+  ttsProvider?: "fake_tts" | "dashscope_tts";
+  dashscope?: {
+    apiKey?: string;
+    baseUrl?: string;
+    ttsModel?: string;
+  };
 }
 
 export interface RunRenderRuntimeSmokeResult {
@@ -454,8 +460,21 @@ export async function runRenderRuntimeSmoke(
     method: "POST",
     url: `/api/projects/${projectId}/assets/generate`,
     payload: {
-      voice_profile_id: "voice_render_smoke",
+      voice_profile_id:
+        input.ttsProvider === "dashscope_tts"
+          ? "voice_system_ethan"
+          : "voice_render_smoke",
       execution_mode: "auto_available",
+      ...(input.ttsProvider === "dashscope_tts"
+        ? {
+            provider_mode: "dashscope_tts",
+            dashscope: {
+              api_key: input.dashscope?.apiKey,
+              base_url: input.dashscope?.baseUrl,
+              tts_model: input.dashscope?.ttsModel,
+            },
+          }
+        : {}),
     },
   });
   writeJson(finalOutputDir, "assets-response.json", assetsBody);
@@ -550,7 +569,7 @@ export async function runRenderRuntimeSmoke(
       "",
       "## Notes",
       "",
-      `- This smoke uses fake/local asset providers and the ${adapter} render adapter.`,
+      `- This smoke uses ${input.ttsProvider === "dashscope_tts" ? "DashScope TTS plus local/fake" : "fake/local"} asset providers and the ${adapter} render adapter.`,
       "- It verifies that a refreshed active compose invalidates the stale active render pointer.",
     ].join("\n"),
     "utf8",
@@ -567,6 +586,10 @@ export function parseRenderRuntimeSmokeCliArgs(
 ): RunRenderRuntimeSmokeInput {
   const result: RunRenderRuntimeSmokeInput = {
     bgmLibraryItemId: process.env.SVF_SMOKE_BGM_ID,
+    ttsProvider:
+      process.env.SVF_SMOKE_TTS_PROVIDER === "dashscope_tts"
+        ? "dashscope_tts"
+        : undefined,
   };
   const positional: string[] = [];
 
@@ -595,6 +618,36 @@ export function parseRenderRuntimeSmokeCliArgs(
 
     if (current === "--bgm-id" && next) {
       result.bgmLibraryItemId = next;
+      index += 1;
+      continue;
+    }
+
+    if (current === "--tts-provider" && next) {
+      result.ttsProvider = next === "dashscope_tts" ? "dashscope_tts" : undefined;
+      index += 1;
+      continue;
+    }
+
+    if (current.startsWith("--tts-provider=")) {
+      const value = current.slice("--tts-provider=".length);
+      result.ttsProvider = value === "dashscope_tts" ? "dashscope_tts" : undefined;
+      continue;
+    }
+
+    if (current === "--dashscope-base-url" && next) {
+      result.dashscope = {
+        ...result.dashscope,
+        baseUrl: next,
+      };
+      index += 1;
+      continue;
+    }
+
+    if (current === "--dashscope-tts-model" && next) {
+      result.dashscope = {
+        ...result.dashscope,
+        ttsModel: next,
+      };
       index += 1;
       continue;
     }

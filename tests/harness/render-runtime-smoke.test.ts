@@ -2,12 +2,13 @@ import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   parseRenderRuntimeSmokeCliArgs,
   runRenderRuntimeSmoke,
 } from "../../harness/scripts/runtime/render-runtime-smoke";
+import { createToneWavBuffer } from "../../backend/src/modules/assets/providers/audio-fixture";
 
 describe("render runtime smoke harness", () => {
   it("runs assets to compose to render and clears stale render after compose refresh", async () => {
@@ -74,6 +75,86 @@ describe("render runtime smoke harness", () => {
       adapter: "remotion",
       bgmLibraryItemId: "bgm_hist_reflective_ending_001",
     });
+  });
+
+  it("parses the DashScope TTS provider option", () => {
+    expect(
+      parseRenderRuntimeSmokeCliArgs([
+        "--adapter=remotion",
+        "--tts-provider",
+        "dashscope_tts",
+      ]),
+    ).toMatchObject({
+      adapter: "remotion",
+      ttsProvider: "dashscope_tts",
+    });
+  });
+
+  it("can run runtime smoke with DashScope TTS and local fake visuals", async () => {
+    const outputDir = mkdtempSync(join(tmpdir(), "svf2-render-dashscope-tts-smoke-"));
+    const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const urlText = String(url);
+      const headers = new Headers(init?.headers);
+      if (urlText.startsWith("https://dashscope.test/")) {
+        expect(headers.get("authorization")).toBe("Bearer test-key");
+      }
+
+      if (urlText.endsWith("/api/v1/services/aigc/multimodal-generation/generation")) {
+        expect(headers.get("x-dashscope-async")).toBe("disable");
+        return new Response(
+          JSON.stringify({
+            output: {
+              audio: {
+                url: "https://example.test/audio.wav",
+              },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (urlText === "https://example.test/audio.wav") {
+        return new Response(createToneWavBuffer({ durationSec: 1 }), {
+          status: 200,
+          headers: { "content-type": "audio/wav" },
+        });
+      }
+
+      throw new Error(`unexpected fetch: ${urlText}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runRenderRuntimeSmoke({
+      outputDir,
+      ttsProvider: "dashscope_tts",
+      dashscope: {
+        apiKey: "test-key",
+        baseUrl: "https://dashscope.test",
+      },
+    });
+
+    const assetsResponse = JSON.parse(
+      readFileSync(join(outputDir, "assets-response.json"), "utf8"),
+    ) as {
+      manifest?: {
+        artifacts?: Array<{
+          artifact_type: string;
+          metadata?: { provider_name?: string };
+        }>;
+      };
+    };
+
+    expect(
+      assetsResponse.manifest?.artifacts?.some(
+        (artifact) => artifact.metadata?.provider_name === "dashscope_tts",
+      ),
+    ).toBe(true);
+    expect(
+      assetsResponse.manifest?.artifacts?.some(
+        (artifact) => artifact.artifact_type === "image",
+      ),
+    ).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("uses the requested BGM id when provided", async () => {
