@@ -30,6 +30,7 @@ export interface RunRenderRuntimeSmokeInput {
   bgmLibraryItemId?: string;
   ttsProvider?: "fake_tts" | "dashscope_tts";
   ttsText?: string;
+  includeSfx?: boolean;
   dashscope?: {
     apiKey?: string;
     baseUrl?: string;
@@ -123,6 +124,7 @@ export function resolveRenderRuntimeSmokeEnv(
 function makeAssetPlan(input: {
   bgmCue?: SmokeBgmCueInput;
   ttsText?: string;
+  includeSfx?: boolean;
 } = {}): AssetPlan {
   const bgmCue = input.bgmCue ?? {
     requiredTags: ["background", "drone"],
@@ -130,6 +132,35 @@ function makeAssetPlan(input: {
     volume: 0.25,
   };
   const ttsText = input.ttsText ?? DEFAULT_SMOKE_TTS_TEXT;
+  const includeSfx = input.includeSfx ?? true;
+  const sfxTasks: AssetPlan["tasks"] = includeSfx
+    ? [
+        {
+          task_id: "sfx_001",
+          order: 3,
+          task_type: "sfx_cue",
+          source_segment_id: "sb_001",
+          source_excerpt: "A sharp hit lands in the court.",
+          production_intent: "Add a short impact sound effect.",
+          recommended_mode: "auto",
+          provider_hint: "local_sfx",
+          prompt_draft: null,
+          parameters: {
+            sfx_tags: ["hit"],
+            mood_tags: ["sharp", "impact"],
+          },
+          manual_upload_policy: {
+            allowed: false,
+            required: false,
+            accepted_file_types: [],
+            acceptance_notes: [],
+          },
+          risk_notes: [],
+          cost_tier: "low",
+          initial_status: "planned",
+        },
+      ]
+    : [];
 
   return {
     plan_version: "asset_plan_v1",
@@ -226,30 +257,7 @@ function makeAssetPlan(input: {
         cost_tier: "low",
         initial_status: "planned",
       },
-      {
-        task_id: "sfx_001",
-        order: 3,
-        task_type: "sfx_cue",
-        source_segment_id: "sb_001",
-        source_excerpt: "A sharp hit lands in the court.",
-        production_intent: "Add a short impact sound effect.",
-        recommended_mode: "auto",
-        provider_hint: "local_sfx",
-        prompt_draft: null,
-        parameters: {
-          sfx_tags: ["hit"],
-          mood_tags: ["sharp", "impact"],
-        },
-        manual_upload_policy: {
-          allowed: false,
-          required: false,
-          accepted_file_types: [],
-          acceptance_notes: [],
-        },
-        risk_notes: [],
-        cost_tier: "low",
-        initial_status: "planned",
-      },
+      ...sfxTasks,
       {
         task_id: "bgm_001",
         order: 4,
@@ -284,18 +292,18 @@ function makeAssetPlan(input: {
     ],
     dependencies: [],
     cost_summary: {
-      total_tasks: 5,
+      total_tasks: includeSfx ? 5 : 4,
       by_type: {
         tts_audio: 1,
         subtitle_track: 1,
         image_still: 1,
-        sfx_cue: 1,
+        ...(includeSfx ? { sfx_cue: 1 } : {}),
         bgm_cue: 1,
       },
       by_cost_tier: {
-        low: 5,
+        low: includeSfx ? 5 : 4,
       },
-      estimated_provider_calls: 5,
+      estimated_provider_calls: includeSfx ? 5 : 4,
       notes: [],
     },
     global_production_notes: [],
@@ -357,10 +365,11 @@ async function seedActiveAssetPlan(input: {
   projectId: string;
   bgmCue?: SmokeBgmCueInput;
   ttsText?: string;
+  includeSfx?: boolean;
 }) {
-  const { app, projectId, bgmCue, ttsText } = input;
+  const { app, projectId, bgmCue, ttsText, includeSfx } = input;
   const assetPlanRecordId = `asset_plan_render_smoke_${app.db.generateId()}`;
-  const assetPlan = makeAssetPlan({ bgmCue, ttsText });
+  const assetPlan = makeAssetPlan({ bgmCue, ttsText, includeSfx });
 
   app.db.storyboardRecords.set(STORYBOARD_RECORD_ID, {
     id: STORYBOARD_RECORD_ID,
@@ -523,6 +532,7 @@ export async function runRenderRuntimeSmoke(
     projectId,
     bgmCue: mediaLibrarySeed.bgmCue,
     ttsText: input.ttsText,
+    includeSfx: input.includeSfx,
   });
 
   const env = resolveRenderRuntimeSmokeEnv();
@@ -710,6 +720,11 @@ export function parseRenderRuntimeSmokeCliArgs(
     if (current === "--tts-text" && next) {
       result.ttsText = next;
       index += 1;
+      continue;
+    }
+
+    if (current === "--no-sfx") {
+      result.includeSfx = false;
       continue;
     }
 

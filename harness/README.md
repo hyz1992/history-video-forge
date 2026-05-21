@@ -221,6 +221,12 @@ runtime harness 在当前阶段属于 **P0**：
 npx tsx harness/scripts/runtime/render-runtime-smoke.ts --adapter remotion --tts-provider dashscope_tts --tts-text "你的中文口播文本" --output-dir harness/scripts/runtime/output/remotion-real-tts-smoke-zh
 ```
 
+如果只想试听真实口播与 BGM 比例、暂时关闭本地占位音效，可追加 `--no-sfx`：
+
+```powershell
+npx tsx harness/scripts/runtime/render-runtime-smoke.ts --adapter remotion --tts-provider dashscope_tts --tts-text "你的中文口播文本" --no-sfx --output-dir harness/scripts/runtime/output/remotion-real-tts-smoke-zh-no-sfx
+```
+
 环境配置：
 
 - 脚本会自动读取根目录 `.env` 和 `backend/.env` 中的 `ALIYUN_DASHSCOPE_API_KEY`、`ALIYUN_DASHSCOPE_BASE_URL`、`ALIYUN_DASHSCOPE_TTS_MODEL`。

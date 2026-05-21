@@ -102,12 +102,51 @@ describe("render runtime smoke harness", () => {
         "dashscope_tts",
         "--tts-text",
         "Custom narration text.",
+        "--no-sfx",
       ]),
     ).toMatchObject({
       adapter: "remotion",
       ttsProvider: "dashscope_tts",
       ttsText: "Custom narration text.",
+      includeSfx: false,
     });
+  });
+
+  it("can run runtime smoke without SFX placeholder audio", async () => {
+    const outputDir = mkdtempSync(join(tmpdir(), "svf2-render-no-sfx-smoke-"));
+
+    await runRenderRuntimeSmoke({
+      adapter: "fake",
+      outputDir,
+      includeSfx: false,
+    });
+
+    const assetsResponse = JSON.parse(
+      readFileSync(join(outputDir, "assets-response.json"), "utf8"),
+    ) as {
+      manifest?: {
+        artifacts?: Array<{ artifact_type: string }>;
+        audio_summary?: { sfx_artifact_ids?: string[] };
+      };
+    };
+    const composeResponse = JSON.parse(
+      readFileSync(join(outputDir, "compose-response.json"), "utf8"),
+    ) as {
+      timeline?: {
+        tracks?: Array<{ track_type: string; clips: unknown[] }>;
+      };
+    };
+    expect(
+      assetsResponse.manifest?.artifacts?.some(
+        (artifact) => artifact.artifact_type === "sfx_audio",
+      ),
+    ).toBe(false);
+    expect(assetsResponse.manifest?.audio_summary?.sfx_artifact_ids).toEqual([]);
+    expect(
+      composeResponse.timeline?.tracks?.some(
+        (track) => track.track_type === "sfx" && track.clips.length > 0,
+      ),
+    ).toBe(false);
   });
 
   it("loads DashScope env from .env files while keeping process env precedence", () => {
