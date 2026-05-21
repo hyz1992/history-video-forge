@@ -469,6 +469,7 @@ import { saveScriptRecord } from "../../../backend/src/modules/script/script-rec
 import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/storyboard-record.repository";
 import type { AppInstance } from "../../../backend/src/app";
 import type { ProjectRecord } from "../../../backend/src/db/client";
+import type { RenderAdapter } from "../../../backend/src/modules/render/render-adapter";
 
 export interface SeededProductAcceptanceProject {
   app: AppInstance;
@@ -478,8 +479,11 @@ export interface SeededProductAcceptanceProject {
 export async function seedProductAcceptanceProject(input: {
   source: ProductAcceptanceSource;
   outputDir: string;
+  renderAdapter?: RenderAdapter;
 }): Promise<SeededProductAcceptanceProject> {
-  const app = buildApp();
+  const app = buildApp(
+    input.renderAdapter ? { renderAdapter: input.renderAdapter } : undefined,
+  );
   const projectBody = await injectOrThrow({
     app,
     method: "POST",
@@ -546,6 +550,28 @@ export async function seedProductAcceptanceProject(input: {
   project.status = "storyboard_ready";
 
   return { app, project };
+}
+
+async function injectOrThrow(input: {
+  app: AppInstance;
+  method: string;
+  url: string;
+  payload?: unknown;
+}): Promise<Record<string, unknown>> {
+  const response = await input.app.inject({
+    method: input.method,
+    url: input.url,
+    payload: input.payload,
+  });
+
+  const body = response.json() as Record<string, unknown>;
+  if (response.statusCode >= 400) {
+    throw new Error(
+      `request_failed ${input.method} ${input.url}: ${response.statusCode} ${JSON.stringify(body)}`,
+    );
+  }
+
+  return body;
 }
 ```
 
@@ -827,14 +853,84 @@ export function sanitizeAssetPlanForProductAcceptance(
 
 - [ ] **Step 4: 接入 asset planning 生成**
 
-新增 `runAcceptanceAssetPlanning()`，调用现有 `/asset-plan/generate` 或 `runAssetPlanningGeneration()` 后：
+新增 `runAcceptanceAssetPlanning()`。默认通过真实项目 API 调用 `POST /api/projects/:projectId/asset-plan/generate`；测试中允许注入 `generateAssetPlan`，避免真实 LLM。
 
-- 写 `asset-plan.json`。
-- 写 `asset-planning-validation-result.json`。
-- 派生 `execution-asset-plan.json`。
-- 将 project active asset plan record 替换为 execution plan 记录，供 assets 阶段消费。
+```ts
+import { mkdirSync, writeFileSync } from "node:fs";
+import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning/asset-plan-record.repository";
 
-测试中用 dependency injection 的 fake asset planner，避免真实 LLM。
+function writeJson(outputDir: string, filename: string, value: unknown) {
+  mkdirSync(outputDir, { recursive: true });
+  writeFileSync(resolve(outputDir, filename), JSON.stringify(value, null, 2), "utf8");
+}
+
+export async function runAcceptanceAssetPlanning(input: {
+  app: AppInstance;
+  project: ProjectRecord;
+  outputDir: string;
+  generateAssetPlan?: () => Promise<Record<string, unknown>>;
+}) {
+  const rawBody = input.generateAssetPlan
+    ? await input.generateAssetPlan()
+    : await injectOrThrow({
+        app: input.app,
+        method: "POST",
+        url: `/api/projects/${input.project.id}/asset-plan/generate`,
+        payload: {},
+      });
+
+  const originalPlan = AssetPlan.parse(
+    rawBody.asset_plan ?? rawBody.plan ?? rawBody.assetPlan,
+  );
+  const validation = rawBody.local_validation ?? rawBody.validation ?? {
+    stage: "asset_planning_local_validation",
+    decision: "pass",
+    errors: [],
+    warnings: [],
+    metrics: {},
+  };
+  writeJson(input.outputDir, "asset-plan.json", originalPlan);
+  writeJson(input.outputDir, "asset-planning-validation-result.json", validation);
+
+  const executionPlan = sanitizeAssetPlanForProductAcceptance(originalPlan);
+  writeJson(input.outputDir, "execution-asset-plan.json", executionPlan);
+
+  const activeAssetPlanRecordId = input.project.activeAssetPlanRecordId;
+  const activeAssetPlanRecord = activeAssetPlanRecordId
+    ? input.app.db.assetPlanRecords.get(activeAssetPlanRecordId)
+    : null;
+  if (!activeAssetPlanRecord) {
+    throw new Error("product_acceptance_asset_plan_record_missing_after_generation");
+  }
+
+  const executionRecord = await saveAssetPlanRecord(input.app.db, {
+    id: `asset_plan_product_acceptance_execution_${input.app.db.generateId()}`,
+    projectId: input.project.id,
+    topicPackageId: activeAssetPlanRecord.topicPackageId,
+    scriptRecordId: activeAssetPlanRecord.scriptRecordId,
+    storyboardRecordId: activeAssetPlanRecord.storyboardRecordId,
+    planJson: executionPlan,
+    validationResultJson: activeAssetPlanRecord.validationResultJson,
+    executionStateJson: {
+      source_asset_plan_record_id: activeAssetPlanRecord.id,
+      sanitized_for_product_acceptance: true,
+      disabled_task_types: ["video_clip", "sfx_cue"],
+    },
+    graphTraceSummaryJson: activeAssetPlanRecord.graphTraceSummaryJson,
+    runtimeDiagnosticsJson: activeAssetPlanRecord.runtimeDiagnosticsJson,
+  });
+
+  input.project.activeAssetPlanRecordId = executionRecord.id;
+  input.project.status = "asset_plan_ready";
+
+  return {
+    originalPlan,
+    executionPlan,
+    originalAssetPlanRecordId: activeAssetPlanRecord.id,
+    executionAssetPlanRecordId: executionRecord.id,
+  };
+}
+```
 
 - [ ] **Step 5: 运行测试确认通过**
 
@@ -951,13 +1047,40 @@ export function buildProductAcceptanceAssetsPayload(input: {
 }
 ```
 
-媒体库 seed 复用：
+媒体库 seed 与设计保持一致：优先读取 `storage/media-library/ai-bgm-prompt-candidates.json` 中已通过的 BGM；若该文件不存在或无可用条目，再写入 `DEFAULT_AUDIO_LIBRARY_ITEMS` 作为兜底。执行计划里已经没有 `sfx_cue`，所以默认 SFX seed 不会被消费。
 
-- `loadLightweightBgmCatalogItems()`
-- `saveMediaLibraryItem()`
-- `DEFAULT_AUDIO_LIBRARY_ITEMS`
+```ts
+import { existsSync } from "node:fs";
+import { loadLightweightBgmCatalogItems } from "../../../backend/src/modules/assets/lightweight-audio-catalog-loader";
+import { DEFAULT_AUDIO_LIBRARY_ITEMS } from "../../../backend/src/modules/assets/default-audio-library";
+import { saveMediaLibraryItem } from "../../../backend/src/modules/assets/media-library.repository";
 
-但执行计划里已经没有 `sfx_cue`，所以默认 SFX seed 不会被消费。
+export async function seedAcceptanceMediaLibrary(
+  app: AppInstance,
+  input: { bgmLibraryItemId?: string } = {},
+) {
+  const catalogPath = resolve(
+    process.cwd(),
+    "storage/media-library/ai-bgm-prompt-candidates.json",
+  );
+  const loadedItems = existsSync(catalogPath)
+    ? await loadLightweightBgmCatalogItems(catalogPath)
+    : [];
+  for (const entry of loadedItems) {
+    await saveMediaLibraryItem(app.db, entry.item);
+  }
+  for (const item of DEFAULT_AUDIO_LIBRARY_ITEMS) {
+    await saveMediaLibraryItem(app.db, item);
+  }
+
+  if (input.bgmLibraryItemId) {
+    const found = app.db.mediaLibraryItems.get(input.bgmLibraryItemId);
+    if (!found) {
+      throw new Error(`product_acceptance_bgm_not_found: ${input.bgmLibraryItemId}`);
+    }
+  }
+}
+```
 
 - [ ] **Step 4: 运行测试确认通过**
 
@@ -1111,20 +1234,102 @@ export function assertProductAcceptanceRenderReadiness(input: {
 
 - [ ] **Step 4: 实现 API 编排**
 
-`runProductAcceptanceLiveCheck()` 顺序：
+`runProductAcceptanceLiveCheck()` 使用完整项目 API 路径，不向 asset planning / compose / render 传自定义 payload：
 
-1. `loadProductAcceptanceSource()`
-2. `seedProductAcceptanceProject()`
-3. `seedAcceptanceMediaLibrary()`
-4. `POST /asset-plan/generate`
-5. 写 `asset-plan.json`
-6. 写 `execution-asset-plan.json`，并将 active asset plan 指向 execution plan record
-7. `POST /assets/generate`
-8. `POST /compose/generate`
-9. `POST /render/generate`
-10. `assertProductAcceptanceRenderReadiness()`
+```ts
+import { createLocalRemotionRenderAdapter } from "../../../backend/src/modules/render/local-remotion-render-adapter";
 
-每个响应写入对应 JSON 文件。
+export interface ProductAcceptanceLiveCheckResult {
+  outputDir: string;
+  summary: Awaited<ReturnType<typeof buildProductAcceptanceSummary>>;
+}
+
+export async function runProductAcceptanceLiveCheck(
+  input: ProductAcceptanceLiveCheckInput = {},
+): Promise<ProductAcceptanceLiveCheckResult> {
+  const plan = buildProductAcceptanceLiveCheckPlan(input);
+  mkdirSync(plan.output_dir, { recursive: true });
+  writeJson(plan.output_dir, "live-check-plan.json", plan);
+
+  const sourceDir = await resolveProductAcceptanceSourceDir(input);
+  const source = loadProductAcceptanceSource(sourceDir);
+  writeJson(plan.output_dir, "source-topic-package.json", source.topicPackage);
+  writeJson(plan.output_dir, "source-script-draft.json", source.scriptDraft);
+  writeJson(plan.output_dir, "source-storyboard-plan.json", source.storyboardPlan);
+
+  const seeded = await seedProductAcceptanceProject({
+    source,
+    outputDir: plan.output_dir,
+    renderAdapter: createLocalRemotionRenderAdapter(),
+  });
+  await seedAcceptanceMediaLibrary(seeded.app, {
+    bgmLibraryItemId: input.bgmLibraryItemId,
+  });
+
+  const planning = await runAcceptanceAssetPlanning({
+    app: seeded.app,
+    project: seeded.project,
+    outputDir: plan.output_dir,
+  });
+
+  const env = resolveProductAcceptanceEnv();
+  const assetsBody = await injectOrThrow({
+    app: seeded.app,
+    method: "POST",
+    url: `/api/projects/${seeded.project.id}/assets/generate`,
+    payload: buildProductAcceptanceAssetsPayload({
+      env,
+      dashscope: input.dashscope,
+    }),
+  });
+  writeJson(plan.output_dir, "assets-response.json", assetsBody);
+
+  const assetsSnapshot = await injectOrThrow({
+    app: seeded.app,
+    method: "GET",
+    url: `/api/projects/${seeded.project.id}`,
+  });
+  writeJson(plan.output_dir, "assets-snapshot.json", assetsSnapshot);
+
+  const composeBody = await injectOrThrow({
+    app: seeded.app,
+    method: "POST",
+    url: `/api/projects/${seeded.project.id}/compose/generate`,
+    payload: {},
+  });
+  writeJson(plan.output_dir, "compose-response.json", composeBody);
+
+  const renderBody = await injectOrThrow({
+    app: seeded.app,
+    method: "POST",
+    url: `/api/projects/${seeded.project.id}/render/generate`,
+    payload: {},
+  });
+  writeJson(plan.output_dir, "render-response.json", renderBody);
+
+  assertProductAcceptanceRenderReadiness({ assetsBody, renderBody });
+
+  const summary = await buildProductAcceptanceSummary({
+    sourceTitle: source.topicPackage.title,
+    outputDir: plan.output_dir,
+    assetsBody,
+    composeBody,
+    renderBody,
+    projectStorageRootDir: seeded.project.storageRootDir,
+  });
+  writeJson(plan.output_dir, "acceptance-summary.json", summary);
+  writeManualReviewChecklist(plan.output_dir);
+  writeTrace(plan.output_dir, {
+    sourceDir,
+    projectId: seeded.project.id,
+    originalAssetPlanRecordId: planning.originalAssetPlanRecordId,
+    executionAssetPlanRecordId: planning.executionAssetPlanRecordId,
+    outputMp4Path: summary.output_mp4_path,
+  });
+
+  return { outputDir: plan.output_dir, summary };
+}
+```
 
 - [ ] **Step 5: 运行 focused 测试**
 
@@ -1160,17 +1365,23 @@ import {
   buildProductAcceptanceSummary,
 } from "../../harness/scripts/runtime/product-acceptance-live-check";
 
-it("summarizes providers, subtitles, disabled SFX and image-to-video absence", () => {
-  const summary = buildProductAcceptanceSummary({
+it("summarizes providers, subtitles, disabled SFX and image-to-video absence", async () => {
+  const summary = await buildProductAcceptanceSummary({
     sourceTitle: "晏子使楚",
     outputDir: "out",
     assetsBody: {
       manifest: {
+        executions: [
+          { provider_id: "dashscope_tts" },
+          { provider_id: "dashscope_image" },
+          { provider_id: "local_subtitle" },
+          { provider_id: "local_bgm" },
+        ],
         artifacts: [
           { artifact_type: "tts_chunk_audio", metadata: { provider_name: "dashscope_tts" } },
           { artifact_type: "image", metadata: { provider_name: "dashscope_image" } },
-          { artifact_type: "subtitle_track", metadata: { provider_name: "local_subtitle", caption_count: 4 } },
-          { artifact_type: "bgm_audio", metadata: { provider_name: "local_bgm", library_item_id: "bgm_1" } },
+          { artifact_type: "subtitle_track", metadata: { caption_count: 4, subtitle_style: { font_size_px: 48 } } },
+          { artifact_type: "bgm_audio", metadata: { library_item_id: "bgm_1" } },
         ],
         audio_summary: { sfx_artifact_ids: [] },
       },
@@ -1190,6 +1401,8 @@ it("summarizes providers, subtitles, disabled SFX and image-to-video absence", (
   expect(summary.disabled_sfx_confirmed).toBe(true);
   expect(summary.image_to_video_not_called_confirmed).toBe(true);
   expect(summary.subtitle_diagnostics.cue_count).toBe(4);
+  expect(summary.audio_diagnostics.tts?.rms).toBeNull();
+  expect(summary.audio_diagnostics.bgm?.rms).toBeNull();
   expect(summary.provider_names).toEqual([
     "dashscope_tts",
     "dashscope_image",
@@ -1211,29 +1424,40 @@ Expected: FAIL。
 
 - [ ] **Step 3: 实现 summary builder**
 
-实现 provider/type 统计、SFX 禁用确认、图生视频未调用确认、字幕 cue 统计。文件音频 RMS 检测可先做可选字段：
+实现 provider/type 统计、SFX 禁用确认、图生视频未调用确认、字幕 cue 统计和 WAV RMS 诊断。provider 名称必须同时读取 artifact metadata 与 `manifest.executions[].provider_id`，因为本地 subtitle/BGM artifact 当前不写 `metadata.provider_name`：
 
 ```ts
-export function buildProductAcceptanceSummary(input: {
+import { existsSync, readFileSync } from "node:fs";
+
+export async function buildProductAcceptanceSummary(input: {
   sourceTitle: string;
   outputDir: string;
   assetsBody: Record<string, unknown>;
   composeBody: Record<string, unknown>;
   renderBody: Record<string, unknown>;
+  projectStorageRootDir?: string;
 }) {
   const manifest = input.assetsBody.manifest as
-    | { artifacts?: Array<{ artifact_type?: string; metadata?: Record<string, unknown> }>; audio_summary?: { sfx_artifact_ids?: string[] } }
+    | {
+        artifacts?: Array<{
+          artifact_type?: string;
+          file_uri?: string;
+          metadata?: Record<string, unknown>;
+        }>;
+        executions?: Array<{ provider_id?: string | null }>;
+        audio_summary?: { sfx_artifact_ids?: string[] };
+      }
     | undefined;
   const artifacts = manifest?.artifacts ?? [];
-  const providerNames = Array.from(
-    new Set(
-      artifacts
-        .map((artifact) => artifact.metadata?.provider_name)
-        .filter((value): value is string => typeof value === "string"),
-    ),
-  );
+  const providerNames = readProviderNames({ manifest });
   const subtitleArtifact = artifacts.find(
     (artifact) => artifact.artifact_type === "subtitle_track",
+  );
+  const ttsArtifact = artifacts.find(
+    (artifact) => artifact.artifact_type === "tts_merged_audio",
+  );
+  const bgmArtifact = artifacts.find(
+    (artifact) => artifact.artifact_type === "bgm_audio",
   );
   const renderDiagnostics =
     (input.renderBody.runtime_diagnostics as Record<string, unknown> | undefined) ?? {};
@@ -1260,7 +1484,72 @@ export function buildProductAcceptanceSummary(input: {
       cue_count: Number(renderDiagnostics.subtitle_cue_count ?? 0),
       has_style: Boolean(subtitleArtifact?.metadata?.subtitle_style),
     },
+    audio_diagnostics: {
+      tts: readWavRmsDiagnostics(ttsArtifact?.file_uri),
+      bgm: readWavRmsDiagnostics(bgmArtifact?.file_uri),
+    },
     render_diagnostics: renderDiagnostics,
+  };
+}
+
+function readProviderNames(input: {
+  manifest:
+    | {
+        artifacts?: Array<{ metadata?: Record<string, unknown> }>;
+        executions?: Array<{ provider_id?: string | null }>;
+      }
+    | undefined;
+}): string[] {
+  return Array.from(
+    new Set([
+      ...((input.manifest?.artifacts ?? [])
+        .map((artifact) => artifact.metadata?.provider_name)
+        .filter((value): value is string => typeof value === "string")),
+      ...((input.manifest?.executions ?? [])
+        .map((execution) => execution.provider_id)
+        .filter((value): value is string => typeof value === "string" && value.length > 0)),
+    ]),
+  );
+}
+
+function countBy(items: string[]): Record<string, number> {
+  return items.reduce<Record<string, number>>((acc, item) => {
+    acc[item] = (acc[item] ?? 0) + 1;
+    return acc;
+  }, {});
+}
+
+function readWavRmsDiagnostics(fileUri: string | undefined): {
+  file_uri: string;
+  bytes: number;
+  rms: number;
+  max: number;
+} | { file_uri: null; bytes: 0; rms: null; max: null } {
+  if (!fileUri || !existsSync(fileUri)) {
+    return { file_uri: null, bytes: 0, rms: null, max: null };
+  }
+
+  const buffer = readFileSync(fileUri);
+  if (buffer.length <= 44) {
+    return { file_uri: fileUri, bytes: buffer.length, rms: 0, max: 0 };
+  }
+
+  let sumSquares = 0;
+  let max = 0;
+  let samples = 0;
+  for (let offset = 44; offset + 1 < buffer.length; offset += 2) {
+    const sample = buffer.readInt16LE(offset);
+    const abs = Math.abs(sample);
+    max = Math.max(max, abs);
+    sumSquares += sample * sample;
+    samples += 1;
+  }
+
+  return {
+    file_uri: fileUri,
+    bytes: buffer.length,
+    rms: samples > 0 ? Math.sqrt(sumSquares / samples) : 0,
+    max,
   };
 }
 ```
@@ -1538,6 +1827,8 @@ Expected:
 - 命令结束时输出 MP4 路径。
 - `acceptance-summary.json.status` 为 `sample-ready`。
 - `subtitle_diagnostics.cue_count > 0`。
+- `audio_diagnostics.tts.rms > 0`。
+- `audio_diagnostics.bgm.rms > 0`。
 - `disabled_sfx_confirmed = true`。
 - `image_to_video_not_called_confirmed = true`。
 

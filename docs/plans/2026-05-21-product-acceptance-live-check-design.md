@@ -24,6 +24,7 @@
 - `harness/scripts/runtime/storyboard-five-round-quality-check.ts` 和 `asset-planning-five-round-quality-check.ts` 可以消费固定上游样本并执行真实规划，但它们停在各自阶段，不生成真实素材和 MP4。
 - `backend/src/modules/assets/assets-run.service.ts` 中 `provider_mode="dashscope"` 会注册 `dashscope_tts`、`dashscope_image` 和 `dashscope_image_to_video`。因此如果验收流程直接使用含 `video_clip` 的原始 asset plan，存在误触发图生视频 API 的风险。
 - 字幕链路已具备：`local_subtitle` 会基于 TTS chunk 生成 SRT/VTT，写入 `subtitle_track.metadata.subtitle_style` 和 timing metadata；`local-remotion-render-adapter` 会通过 `buildRemotionInputProps()` 传入 `subtitleCues`，并在 diagnostics 中输出 `subtitle_cue_count`。
+- provider 诊断不能只依赖 artifact metadata：`dashscope_tts` 和 `dashscope_image` 当前会写 `metadata.provider_name`，但 `local_subtitle` 与 `local_bgm` 当前不写该字段；验收摘要应合并读取 `manifest.executions[].provider_id`。
 
 ## 核心决策
 
@@ -143,8 +144,7 @@ harness/scripts/runtime/output/product-acceptance-live-check
 - `execution_task_counts`
 - `provider_names`
 - `artifact_type_counts`
-- `tts_audio_diagnostics`
-- `bgm_diagnostics`
+- `audio_diagnostics`
 - `subtitle_diagnostics`
 - `render_diagnostics`
 - `disabled_sfx_confirmed`
