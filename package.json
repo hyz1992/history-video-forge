@@ -30,6 +30,7 @@
     "harness:assets-dashscope-voice-live-check": "tsx harness/scripts/runtime/assets-dashscope-voice-live-check.ts",
     "harness:assets-dashscope-image-to-video-live-check": "tsx harness/scripts/runtime/assets-dashscope-image-to-video-live-check.ts",
     "harness:bgm-audit": "tsx harness/scripts/media-library/audit-bgm-catalog.ts",
+    "harness:bgm-review": "tsx harness/scripts/media-library/update-bgm-review.ts",
     "harness:compose-runtime-smoke": "tsx harness/scripts/runtime/compose-runtime-smoke.ts",
     "harness:render-runtime-smoke": "tsx harness/scripts/runtime/render-runtime-smoke.ts",
     "render:remotion:smoke": "tsx harness/scripts/runtime/render-runtime-smoke.ts --adapter=remotion",
