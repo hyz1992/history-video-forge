@@ -147,15 +147,16 @@ export const SubtitleStyle = z
 
 export const DEFAULT_SUBTITLE_STYLE = {
   style_id: "subtitle_style_default_vertical",
-  font_family: "Arial, sans-serif",
-  font_size_px: 48,
+  font_family:
+    "Microsoft YaHei, PingFang SC, Noto Sans CJK SC, Arial, sans-serif",
+  font_size_px: 40,
   font_weight: 700,
-  line_height: 1.2,
+  line_height: 1.5,
   max_lines: 2,
   text_color: "#ffffff",
   stroke_color: "#000000",
-  stroke_width_px: 3,
-  shadow: "0 3px 14px rgba(0,0,0,0.75)",
+  stroke_width_px: 2.5,
+  shadow: "0 2px 8px rgba(0,0,0,0.6)",
   background_color: "#000000",
   background_opacity: 0,
   position: "bottom",
