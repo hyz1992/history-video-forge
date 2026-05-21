@@ -15,6 +15,7 @@ import {
   seedGlobalVoiceProfiles,
   updateVoiceProfileProviderState,
 } from "../../../backend/src/modules/assets/voice/voice-profile.repository.js";
+import { createToneWavBuffer } from "../../../backend/src/modules/assets/providers/audio-fixture.js";
 import type { AssetManifest, AssetPlan } from "../../../shared/src/index.js";
 
 const TOPIC_PACKAGE_ID = "topic_001";
@@ -662,6 +663,76 @@ describe("assets run service integration", () => {
         (artifact.metadata as Record<string, unknown>).provider_name === "dashscope_image",
     )).toBe(true);
     expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it("can use DashScope TTS while keeping fake image generation local", async () => {
+    integrationTempDir = join(tmpdir(), `assets-dashscope-tts-only-${Date.now()}`);
+    await mkdir(integrationTempDir, { recursive: true });
+
+    const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
+      const urlText = String(url);
+      const headers = new Headers(init?.headers);
+      if (urlText.startsWith("https://dashscope.test/")) {
+        expect(headers.get("authorization")).toBe("Bearer test-key");
+      }
+
+      if (urlText.endsWith("/api/v1/services/aigc/multimodal-generation/generation")) {
+        expect(headers.get("x-dashscope-async")).toBe("disable");
+        return new Response(
+          JSON.stringify({
+            output: {
+              audio: {
+                url: "https://example.test/audio.wav",
+              },
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (urlText === "https://example.test/audio.wav") {
+        return new Response(createToneWavBuffer({ durationSec: 1 }), {
+          status: 200,
+          headers: { "content-type": "audio/wav" },
+        });
+      }
+
+      throw new Error(`unexpected fetch: ${urlText}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { db, project } = await prepareProjectWithAssetPlan();
+    project.storageRootDir = integrationTempDir;
+
+    const response = await runAssetsGeneration({
+      db,
+      project,
+      voiceProfileId: "voice_system_ethan",
+      executionMode: "auto_available",
+      providerMode: "dashscope_tts",
+      dashscope: {
+        apiKey: "test-key",
+        baseUrl: "https://dashscope.test",
+        ttsModel: "qwen3-tts-instruct-flash",
+      },
+    });
+    const body = response.body as { manifest: AssetManifest };
+    const providerNames = [...db.assetProviderJobRecords.values()].map(
+      (job) => job.providerName,
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(body.manifest.artifacts.some(
+      (artifact) =>
+        (artifact.metadata as Record<string, unknown>).provider_name === "dashscope_tts",
+    )).toBe(true);
+    expect(body.manifest.artifacts.some(
+      (artifact) => artifact.artifact_type === "image",
+    )).toBe(true);
+    expect(providerNames).toContain("dashscope_tts");
+    expect(providerNames).toContain("fake_image");
+    expect(providerNames).not.toContain("dashscope_image");
+    expect(providerNames).not.toContain("dashscope_image_to_video");
   });
 
   it("reuses a persisted provider voice id for DashScope TTS without voice design", async () => {

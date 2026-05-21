@@ -33,7 +33,7 @@ import { configureVoiceProfilePersistence } from "./voice/voice-profile.reposito
 import { resolveVoiceProfile } from "./voice/voice-resolution.service.js";
 import { normalizeAssetPlanTtsForExecution } from "./tts-chunking.service.js";
 
-type AssetsProviderMode = "fake" | "dashscope";
+type AssetsProviderMode = "fake" | "dashscope" | "dashscope_tts";
 type DashscopeTtsFormat = "mp3" | "wav" | "flac" | "pcm";
 
 interface DashscopeProviderConfig {
@@ -196,18 +196,29 @@ function buildProviderRegistry(input: {
   providerMode: AssetsProviderMode | undefined;
   dashscope: DashscopeProviderConfig | undefined;
 }) {
-  if (input.providerMode === "dashscope") {
+  if (input.providerMode === "dashscope" || input.providerMode === "dashscope_tts") {
     const dashscope = readDashscopeConfig(input.dashscope);
+    const ttsProvider = createDashscopeTtsProvider({
+      apiKey: dashscope.apiKey,
+      baseUrl: dashscope.baseUrl,
+      model: dashscope.ttsModel,
+      format: dashscope.ttsFormat,
+      sampleRate: dashscope.ttsSampleRate,
+      db: input.db,
+    });
+
+    if (input.providerMode === "dashscope_tts") {
+      return createAssetProviderRegistry([
+        ttsProvider,
+        createLocalSubtitleProvider(),
+        createFakeImageProvider(),
+        createLocalSfxProvider(input.db),
+        createLocalBgmProvider(input.db),
+      ]);
+    }
 
     return createAssetProviderRegistry([
-      createDashscopeTtsProvider({
-        apiKey: dashscope.apiKey,
-        baseUrl: dashscope.baseUrl,
-        model: dashscope.ttsModel,
-        format: dashscope.ttsFormat,
-        sampleRate: dashscope.ttsSampleRate,
-        db: input.db,
-      }),
+      ttsProvider,
       createLocalSubtitleProvider(),
       createDashscopeImageProvider({
         apiKey: dashscope.apiKey,

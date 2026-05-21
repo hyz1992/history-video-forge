@@ -33,7 +33,9 @@ async function generateAssetsController(
       ?? "auto_available";
   const payload = context.payload as Record<string, unknown>;
   const providerMode =
-    payload.provider_mode === "dashscope" ? "dashscope" : undefined;
+    payload.provider_mode === "dashscope" || payload.provider_mode === "dashscope_tts"
+      ? payload.provider_mode
+      : undefined;
   const dashscopePayload =
     typeof payload.dashscope === "object" && payload.dashscope !== null
       ? payload.dashscope as Record<string, unknown>
