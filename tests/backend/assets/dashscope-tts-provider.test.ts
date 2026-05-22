@@ -514,4 +514,91 @@ describe("dashscope TTS provider adapter", () => {
     expect(profile?.provider_status).toBe("ready");
     expect(profile?.provider_voice_id).toBe("voice-provider-001");
   });
+
+  it("falls back to split retry when long text exceeds API token limit", async () => {
+    tempDir = join(tmpdir(), `dashscope-tts-fallback-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+
+    const longText =
+      "公元前531年，楚王听说晏子要来，想当众羞辱他。楚王知道晏子身材矮小，特意在城门旁边开了个小洞，让晏子从狗门进入。" +
+      "晏子站在狗门前说，出使狗国的人才从狗门进。我现在出使的是楚国，不该走这个门。迎宾官员只好打开正门请晏子入城。" +
+      "晏子见到楚王，楚王故意问齐国难道没有人了吗。晏子回答，齐国都城临淄有七千多户人家，一起张开袖子就能遮天蔽日，一起挥洒汗水就如下雨一般，怎么会没有人呢。" +
+      "楚王又问，那为什么派你这样的人来。晏子说，齐国派使臣有规矩，贤能的人被派到贤能的国家，不肖的人被派到不肖的国家。晏婴最不肖，所以最适合出使楚国。";
+    const assetPlan = makeTtsAssetPlan();
+    assetPlan.tts_plan.chunks[0] = {
+      chunk_id: "chunk_long",
+      order: 0,
+      script_excerpt: longText,
+      estimated_duration_sec: 20,
+    };
+    assetPlan.tts_plan.estimated_total_duration_sec = 20;
+    const manifest = makeTtsManifest();
+    manifest.audio_summary.tts_chunk_routes = [
+      {
+        tts_chunk_id: "chunk_long",
+        artifact_id: null,
+        segment_ids: ["sb_001"],
+        script_excerpt: longText,
+      },
+    ];
+
+    let ttsCallCount = 0;
+    const wavBuffer = makeWavBuffer({ durationSec: 2, sampleRate: 24000 });
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      if (url.includes("/api/v1/services/aigc/multimodal-generation/generation")) {
+        ttsCallCount++;
+        const body = JSON.parse(String(init?.body ?? "{}"));
+        // First call with full text fails (simulating token limit)
+        if (body.input?.text === longText) {
+          return new Response(
+            JSON.stringify({
+              error: { message: "text exceeds maximum token length limit" },
+            }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        }
+        // Subsequent calls with shorter text succeed
+        return new Response(
+          JSON.stringify({
+            output: { audio: { url: `https://download.test/fb_${ttsCallCount}.wav` } },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(wavBuffer, { status: 200 });
+    });
+
+    const result = await executeAssetManifest({
+      db: createDbClient(),
+      assetManifestRecordId: "manifest_001",
+      assetRunId: "assets_run_001",
+      manifest,
+      assetPlan,
+      registry: createAssetProviderRegistry([
+        createDashscopeTtsProvider({
+          apiKey: "test-key",
+          baseUrl: "https://dashscope.test",
+          model: "qwen3-tts-instruct-flash",
+        }),
+      ]),
+      projectStorageRootDir: tempDir,
+    });
+
+    const chunkArtifacts = result.manifest.artifacts.filter(
+      (a) => a.artifact_type === "tts_chunk_audio",
+    );
+    // Should have more than 1 chunk (text was split on retry)
+    expect(chunkArtifacts.length).toBeGreaterThan(1);
+    // All chunk IDs should have _fb_ prefix (fallback)
+    for (const a of chunkArtifacts) {
+      expect(a.metadata.tts_chunk_id).toContain("_fb_");
+    }
+    // Merged artifact should exist
+    const merged = result.manifest.artifacts.find(
+      (a) => a.artifact_type === "tts_merged_audio",
+    );
+    expect(merged).toBeTruthy();
+    // TTS was called more than once (initial fail + retries)
+    expect(ttsCallCount).toBeGreaterThan(1);
+  });
 });

@@ -6,8 +6,8 @@ import type {
 type TtsPlan = AssetPlan["tts_plan"];
 type TtsPlanChunk = TtsPlan["chunks"][number];
 
-export const DEFAULT_MAX_CHARS_PER_CHUNK = 180;
-export const DEFAULT_TARGET_CHARS_PER_CHUNK = 120;
+export const DEFAULT_MAX_CHARS_PER_CHUNK = 500;
+export const DEFAULT_TARGET_CHARS_PER_CHUNK = 400;
 export const MIN_TTS_CHUNK_DURATION_SEC = 0.5;
 
 export function normalizeTtsPlanForExecution(input: {

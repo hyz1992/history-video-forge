@@ -112,6 +112,146 @@ async function downloadAudio(url: string): Promise<Buffer> {
   return Buffer.from(await response.arrayBuffer());
 }
 
+const FALLBACK_MAX_CHARS = 180;
+
+async function submitChunkWithFallback(input: {
+  apiKey: string;
+  endpoint: string;
+  model: string;
+  providerVoiceId: string;
+  format?: "mp3" | "wav" | "flac" | "pcm";
+  sampleRate?: number;
+  chunkId: string;
+  text: string;
+  estimatedDurationSec: number;
+}): Promise<
+  Array<{
+    chunk_id: string;
+    script_excerpt: string;
+    estimated_duration_sec: number;
+    audio_url: string | null;
+    raw_response: Record<string, unknown>;
+  }>
+> {
+  try {
+    const payload = buildDashscopeTtsPayload({
+      model: input.model,
+      text: input.text,
+      providerVoiceId: input.providerVoiceId,
+      format: input.format,
+      sampleRate: input.sampleRate,
+    });
+    const rawResponse = await submitTts({
+      apiKey: input.apiKey,
+      endpoint: input.endpoint,
+      payload,
+    });
+    return [
+      {
+        chunk_id: input.chunkId,
+        script_excerpt: input.text,
+        estimated_duration_sec: input.estimatedDurationSec,
+        audio_url: extractAudioUrl(rawResponse),
+        raw_response: rawResponse,
+      },
+    ];
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (
+      input.text.length <= FALLBACK_MAX_CHARS ||
+      !isRetryableLengthError(message)
+    ) {
+      throw err;
+    }
+
+    const pieces = splitForFallback(input.text);
+    const totalChars = pieces.reduce((sum, p) => sum + p.length, 0);
+    const results: Array<{
+      chunk_id: string;
+      script_excerpt: string;
+      estimated_duration_sec: number;
+      audio_url: string | null;
+      raw_response: Record<string, unknown>;
+    }> = [];
+
+    for (let i = 0; i < pieces.length; i++) {
+      const piece = pieces[i]!;
+      const charRatio = totalChars > 0 ? piece.length / totalChars : 1 / pieces.length;
+      const duration = i === pieces.length - 1
+        ? input.estimatedDurationSec - results.reduce((s, r) => s + r.estimated_duration_sec, 0)
+        : input.estimatedDurationSec * charRatio;
+
+      const payload = buildDashscopeTtsPayload({
+        model: input.model,
+        text: piece,
+        providerVoiceId: input.providerVoiceId,
+        format: input.format,
+        sampleRate: input.sampleRate,
+      });
+      const rawResponse = await submitTts({
+        apiKey: input.apiKey,
+        endpoint: input.endpoint,
+        payload,
+      });
+      results.push({
+        chunk_id: `${input.chunkId}_fb_${i + 1}`,
+        script_excerpt: piece,
+        estimated_duration_sec: Math.max(0.5, duration),
+        audio_url: extractAudioUrl(rawResponse),
+        raw_response: rawResponse,
+      });
+    }
+
+    return results;
+  }
+}
+
+function isRetryableLengthError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("token") ||
+    lower.includes("length") ||
+    lower.includes("too long") ||
+    lower.includes("text_too_long") ||
+    lower.includes("字数") ||
+    lower.includes("limit") ||
+    lower.includes("400") ||
+    lower.includes("invalid") ||
+    lower.includes("exceed")
+  );
+}
+
+function splitForFallback(text: string): string[] {
+  const parts = text.split(/([。！？!?；;])/u);
+  const sentences: string[] = [];
+  for (let i = 0; i < parts.length; i += 2) {
+    const body = parts[i] ?? "";
+    const punct = parts[i + 1] ?? "";
+    const s = `${body}${punct}`.trim();
+    if (s) sentences.push(s);
+  }
+  if (sentences.length <= 1) {
+    const fallback: string[] = [];
+    for (let i = 0; i < text.length; i += FALLBACK_MAX_CHARS) {
+      const piece = text.slice(i, i + FALLBACK_MAX_CHARS).trim();
+      if (piece) fallback.push(piece);
+    }
+    return fallback.length > 0 ? fallback : [text];
+  }
+  const pieces: string[] = [];
+  let current = "";
+  for (const s of sentences) {
+    if (current && current.length + s.length > FALLBACK_MAX_CHARS) {
+      pieces.push(current);
+      current = s;
+    } else {
+      current += s;
+    }
+  }
+  if (current) pieces.push(current);
+  return pieces;
+}
+
 export function createDashscopeTtsProvider(
   options: DashScopeTtsProviderOptions,
 ): AssetProviderAdapter {
@@ -154,29 +294,26 @@ export function createDashscopeTtsProvider(
       const chunks = [];
 
       for (const chunk of ctx.assetPlan.tts_plan.chunks) {
-        const payload = buildDashscopeTtsPayload({
+        const subPieces = await submitChunkWithFallback({
+          apiKey: options.apiKey,
+          endpoint,
           model: providerVoice.targetModel,
-          text: chunk.script_excerpt,
           providerVoiceId: providerVoice.providerVoiceId,
           format: options.format,
           sampleRate: options.sampleRate,
+          chunkId: chunk.chunk_id,
+          text: chunk.script_excerpt,
+          estimatedDurationSec: chunk.estimated_duration_sec,
         });
-        const rawResponse = await submitTts({
-          apiKey: options.apiKey,
-          endpoint,
-          payload,
-        });
-        chunks.push({
-          chunk_id: chunk.chunk_id,
-          script_excerpt: chunk.script_excerpt,
-          estimated_duration_sec: chunk.estimated_duration_sec,
-          audio_url: extractAudioUrl(rawResponse),
-          provider_voice_id: providerVoice.providerVoiceId,
-          voice_profile_match_score: providerVoice.matchScore,
-          voice_profile_match_reasons: providerVoice.matchReasons,
-          target_model: providerVoice.targetModel,
-          raw_response: rawResponse,
-        });
+        for (const piece of subPieces) {
+          chunks.push({
+            ...piece,
+            provider_voice_id: providerVoice.providerVoiceId,
+            voice_profile_match_score: providerVoice.matchScore,
+            voice_profile_match_reasons: providerVoice.matchReasons,
+            target_model: providerVoice.targetModel,
+          });
+        }
       }
 
       return {

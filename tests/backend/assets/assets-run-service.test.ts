@@ -459,7 +459,7 @@ describe("assets run service integration", () => {
   it("uses normalized TTS chunks for execution without mutating the stored asset plan", async () => {
     const { db, project } = await prepareProjectWithAssetPlan();
     const assetPlanRecord = db.assetPlanRecords.get(ASSET_PLAN_RECORD_ID)!;
-    const originalText = `${"甲".repeat(100)}。${"乙".repeat(100)}。`;
+    const originalText = `${"甲".repeat(250)}。${"乙".repeat(250)}。`;
     assetPlanRecord.planJson = {
       ...makeAssetPlan(),
       tts_plan: {
@@ -499,7 +499,7 @@ describe("assets run service integration", () => {
       body.manifest.audio_summary.tts_chunk_routes.map(
         (route) => route.script_excerpt,
       ),
-    ).toEqual([`${"甲".repeat(100)}。`, `${"乙".repeat(100)}。`]);
+    ).toEqual([`${"甲".repeat(250)}。`, `${"乙".repeat(250)}。`]);
     expect(JSON.stringify(assetPlanRecord.planJson)).toBe(storedPlanBeforeRun);
     expect(assetPlanRecord.planJson.tts_plan.chunks).toHaveLength(1);
   });
