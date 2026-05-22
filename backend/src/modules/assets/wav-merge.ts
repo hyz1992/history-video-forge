@@ -14,7 +14,12 @@ interface ParsedWav {
   dataSize: number;
 }
 
-export function mergeWavBuffers(buffers: Buffer[]): Buffer {
+export function mergeWavBuffers(
+  buffers: Buffer[],
+  options?: { crossfadeMs?: number },
+): Buffer {
+  const crossfadeMs = options?.crossfadeMs ?? 0;
+
   if (buffers.length === 0) {
     throw new Error("Cannot merge empty WAV buffer list");
   }
@@ -41,8 +46,75 @@ export function mergeWavBuffers(buffers: Buffer[]): Buffer {
     }
   }
 
-  const totalDataSize = parsed.reduce((sum, p) => sum + p.dataSize, 0);
-  const pcmData = Buffer.concat(parsed.map((p) => p.pcmData));
+  const bytesPerSample = first.bitsPerSample / 8;
+  const bytesPerFrame = first.channels * bytesPerSample;
+  const maxOverlapFrames = Math.floor(
+    Math.min(...parsed.map((p) => p.dataSize)) / bytesPerFrame / 2,
+  );
+  const overlapFrames =
+    crossfadeMs > 0 && parsed.length > 1 && maxOverlapFrames > 0
+      ? Math.min(
+          Math.round((crossfadeMs * first.sampleRate) / 1000),
+          maxOverlapFrames,
+        )
+      : 0;
+
+  if (overlapFrames === 0) {
+    const totalDataSize = parsed.reduce((sum, p) => sum + p.dataSize, 0);
+    const pcmData = Buffer.concat(parsed.map((p) => p.pcmData));
+    const header = buildWavHeader({
+      sampleRate: first.sampleRate,
+      channels: first.channels,
+      bitsPerSample: first.bitsPerSample,
+      dataSize: totalDataSize,
+    });
+    return Buffer.concat([header, pcmData]);
+  }
+
+  const overlapBytes = overlapFrames * bytesPerFrame;
+  const totalDataSize =
+    parsed.reduce((sum, p) => sum + p.dataSize, 0) -
+    (parsed.length - 1) * overlapBytes;
+  const output = Buffer.alloc(totalDataSize);
+  let writePos = 0;
+
+  // First chunk: copy up to overlap tail
+  const firstPcm = parsed[0]!.pcmData;
+  const firstKeep = firstPcm.length - overlapBytes;
+  firstPcm.copy(output, writePos, 0, firstKeep);
+  writePos += firstKeep;
+
+  for (let i = 0; i < parsed.length - 1; i++) {
+    const curPcm = parsed[i]!.pcmData;
+    const nextPcm = parsed[i + 1]!.pcmData;
+
+    // Write crossfade region: linear blend of cur tail + next head
+    crossfadeRegion16(
+      output,
+      writePos,
+      curPcm,
+      curPcm.length - overlapBytes,
+      nextPcm,
+      0,
+      overlapFrames,
+      bytesPerFrame,
+      bytesPerSample,
+    );
+    writePos += overlapBytes;
+
+    // Write non-overlap body of next chunk
+    if (i + 1 < parsed.length - 1) {
+      const bodyLen = nextPcm.length - 2 * overlapBytes;
+      if (bodyLen > 0) {
+        nextPcm.copy(output, writePos, overlapBytes, overlapBytes + bodyLen);
+        writePos += bodyLen;
+      }
+    } else {
+      // Last chunk: write everything after the overlap head
+      nextPcm.copy(output, writePos, overlapBytes);
+      writePos += nextPcm.length - overlapBytes;
+    }
+  }
 
   const header = buildWavHeader({
     sampleRate: first.sampleRate,
@@ -50,8 +122,37 @@ export function mergeWavBuffers(buffers: Buffer[]): Buffer {
     bitsPerSample: first.bitsPerSample,
     dataSize: totalDataSize,
   });
+  return Buffer.concat([header, output]);
+}
 
-  return Buffer.concat([header, pcmData]);
+function crossfadeRegion16(
+  output: Buffer,
+  outputOffset: number,
+  bufA: Buffer,
+  offsetA: number,
+  bufB: Buffer,
+  offsetB: number,
+  frames: number,
+  bytesPerFrame: number,
+  bytesPerSample: number,
+): void {
+  const samplesPerFrame = bytesPerFrame / bytesPerSample;
+  for (let f = 0; f < frames; f++) {
+    const gainOut = 1 - f / frames;
+    const gainIn = f / frames;
+    const readA = offsetA + f * bytesPerFrame;
+    const readB = offsetB + f * bytesPerFrame;
+    const writeOff = outputOffset + f * bytesPerFrame;
+    for (let s = 0; s < samplesPerFrame; s++) {
+      const a = bufA.readInt16LE(readA + s * bytesPerSample);
+      const b = bufB.readInt16LE(readB + s * bytesPerSample);
+      const mixed = Math.round(a * gainOut + b * gainIn);
+      output.writeInt16LE(
+        Math.max(-32768, Math.min(32767, mixed)),
+        writeOff + s * bytesPerSample,
+      );
+    }
+  }
 }
 
 function parseWavChunks(buffer: Buffer): ParsedWav {

@@ -205,4 +205,142 @@ describe("mergeWavBuffers", () => {
     expect(merged.readUInt32LE(24)).toBe(44100); // sample rate
     expect(merged.readUInt16LE(34)).toBe(16); // bits per sample
   });
+
+  // ─── Crossfade tests ──────────────────────────────────────────────────────
+
+  function makeWavBufferWithSamples(input: {
+    durationSec: number;
+    sampleRate: number;
+    sampleValue: number;
+    channels?: number;
+  }): Buffer {
+    const channels = input.channels ?? 1;
+    const bytesPerSample = 2;
+    const byteRate = input.sampleRate * channels * bytesPerSample;
+    const blockAlign = channels * bytesPerSample;
+    const dataSize = Math.round(input.durationSec * byteRate);
+    const buffer = Buffer.alloc(44 + dataSize);
+
+    buffer.write("RIFF", 0, "ascii");
+    buffer.writeUInt32LE(36 + dataSize, 4);
+    buffer.write("WAVE", 8, "ascii");
+    buffer.write("fmt ", 12, "ascii");
+    buffer.writeUInt32LE(16, 16);
+    buffer.writeUInt16LE(1, 20);
+    buffer.writeUInt16LE(channels, 22);
+    buffer.writeUInt32LE(input.sampleRate, 24);
+    buffer.writeUInt32LE(byteRate, 28);
+    buffer.writeUInt16LE(blockAlign, 32);
+    buffer.writeUInt16LE(16, 34);
+    buffer.write("data", 36, "ascii");
+    buffer.writeUInt32LE(dataSize, 40);
+
+    const clamped = Math.max(-32768, Math.min(32767, input.sampleValue));
+    for (let i = 0; i < dataSize; i += 2) {
+      buffer.writeInt16LE(clamped, 44 + i);
+    }
+    return buffer;
+  }
+
+  it("crossfade 30ms 时两段 WAV 输出总时长正确缩短", () => {
+    const wav1 = makeWavBufferWithSamples({
+      durationSec: 1.0,
+      sampleRate: 24000,
+      sampleValue: 10000,
+    });
+    const wav2 = makeWavBufferWithSamples({
+      durationSec: 1.0,
+      sampleRate: 24000,
+      sampleValue: 20000,
+    });
+
+    const merged = mergeWavBuffers([wav1, wav2], { crossfadeMs: 30 });
+    const duration = readAudioDurationSec({
+      data: merged,
+      format: "wav",
+      sampleRate: 24000,
+    });
+
+    // 2.0 - 0.03 = 1.97
+    expect(duration).toBeCloseTo(1.97, 1);
+    expect(countRiffHeaders(merged)).toBe(1);
+  });
+
+  it("crossfade 区域内样本值为两段线性混合", () => {
+    const wav1 = makeWavBufferWithSamples({
+      durationSec: 1.0,
+      sampleRate: 24000,
+      sampleValue: 10000,
+    });
+    const wav2 = makeWavBufferWithSamples({
+      durationSec: 1.0,
+      sampleRate: 24000,
+      sampleValue: 20000,
+    });
+
+    const merged = mergeWavBuffers([wav1, wav2], { crossfadeMs: 30 });
+    const sampleRate = 24000;
+    const overlapFrames = Math.round((30 * sampleRate) / 1000);
+    // Crossfade starts at: chunk1_frames - overlapFrames = 24000 - 720 = 23280
+    const crossfadeStartFrame = sampleRate - overlapFrames;
+    const midFrame = crossfadeStartFrame + Math.floor(overlapFrames / 2);
+    const midSample = merged.readInt16LE(44 + midFrame * 2);
+
+    // At midpoint gain is 0.5, so ~15000
+    expect(midSample).toBeGreaterThan(13000);
+    expect(midSample).toBeLessThan(17000);
+  });
+
+  it("crossfade 前区域保持 chunk1 原值，后区域保持 chunk2 原值", () => {
+    const wav1 = makeWavBufferWithSamples({
+      durationSec: 1.0,
+      sampleRate: 24000,
+      sampleValue: 10000,
+    });
+    const wav2 = makeWavBufferWithSamples({
+      durationSec: 1.0,
+      sampleRate: 24000,
+      sampleValue: 20000,
+    });
+
+    const merged = mergeWavBuffers([wav1, wav2], { crossfadeMs: 30 });
+
+    // Well before crossfade: should be chunk1 value
+    const beforeSample = merged.readInt16LE(44 + 100 * 2);
+    expect(beforeSample).toBe(10000);
+
+    // Well after crossfade: should be chunk2 value
+    const sampleRate = 24000;
+    const overlapFrames = Math.round((30 * sampleRate) / 1000);
+    const afterFrame = sampleRate + 100; // 100 frames into chunk2's non-overlap region
+    const afterSample = merged.readInt16LE(44 + afterFrame * 2);
+    expect(afterSample).toBe(20000);
+  });
+
+  it("crossfadeMs=0 行为与无 crossfade 完全一致", () => {
+    const wav1 = makeWavBuffer({ durationSec: 1.0, sampleRate: 24000 });
+    const wav2 = makeWavBuffer({ durationSec: 1.0, sampleRate: 24000 });
+
+    const mergedPlain = mergeWavBuffers([wav1, wav2]);
+    const mergedZero = mergeWavBuffers([wav1, wav2], { crossfadeMs: 0 });
+
+    expect(mergedPlain.equals(mergedZero)).toBe(true);
+  });
+
+  it("单段 WAV 带 crossfade 选项不缩短", () => {
+    const wav = makeWavBufferWithSamples({
+      durationSec: 2.0,
+      sampleRate: 24000,
+      sampleValue: 5000,
+    });
+
+    const merged = mergeWavBuffers([wav], { crossfadeMs: 30 });
+    const duration = readAudioDurationSec({
+      data: merged,
+      format: "wav",
+      sampleRate: 24000,
+    });
+
+    expect(duration).toBeCloseTo(2.0, 2);
+  });
 });

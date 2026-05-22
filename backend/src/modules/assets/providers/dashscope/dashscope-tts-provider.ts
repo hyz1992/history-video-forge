@@ -282,7 +282,7 @@ export function createDashscopeTtsProvider(
       const format = options.format ?? "wav";
       const mergedData =
         format === "wav" && chunkBuffers.length > 1
-          ? mergeWavBuffers(chunkBuffers)
+          ? mergeWavBuffers(chunkBuffers, { crossfadeMs: 30 })
           : Buffer.concat(chunkBuffers);
       const merged = await writeAssetFile({
         storage,

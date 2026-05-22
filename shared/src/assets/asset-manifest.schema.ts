@@ -149,7 +149,7 @@ export const DEFAULT_SUBTITLE_STYLE = {
   style_id: "subtitle_style_default_vertical",
   font_family:
     "Microsoft YaHei, PingFang SC, Noto Sans CJK SC, Arial, sans-serif",
-  font_size_px: 40,
+  font_size_px: 46,
   font_weight: 700,
   line_height: 1.5,
   max_lines: 2,
