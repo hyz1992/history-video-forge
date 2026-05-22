@@ -87,14 +87,15 @@ export const SHARED_VOICE_PROFILE_SEEDS: VoiceProfile[] = [
     preview_text:
       "事情看上去只是一次小失误，可真正有意思的，是后面那串连锁反应。等你把前因后果串起来，结局就完全不一样了。",
     provider_name: "dashscope",
-    provider_voice_id: null,
-    provider_status: "missing",
+    provider_voice_id: "qwen-tts-vd-crisp_storytelle-voice-20260522102511197-727b",
+    provider_status: "ready",
     target_model: DESIGNED_VOICE_TARGET_MODEL,
     recommended_content_families: [
       "explainer",
       "light_comedy",
       "creative_story",
       "general_knowledge",
+      "historical-story",
     ],
     voice_traits: ["crisp", "friendly", "bright", "clear"],
     avoid_traits: ["childlike", "showy", "overactive"],
@@ -111,7 +112,7 @@ export const SHARED_VOICE_PROFILE_SEEDS: VoiceProfile[] = [
     last_used_at: null,
     quality_score: null,
     created_at: SEED_CREATED_AT,
-    updated_at: SEED_CREATED_AT,
+    updated_at: "2026-05-22T00:00:00.000Z",
   },
   {
     voice_profile_id: "voice_preset_eerie_suspense",
