@@ -148,7 +148,7 @@ describe("validateComposeTimeline", () => {
         track_count: 3,
         clip_count: 3,
         segment_count: 1,
-        duration_sec: 12,
+        duration_sec: 15,
       },
     });
   });

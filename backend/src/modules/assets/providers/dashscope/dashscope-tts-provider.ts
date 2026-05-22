@@ -291,9 +291,48 @@ export function createDashscopeTtsProvider(
             matchScore: null,
             matchReasons: [] as string[],
           };
-      const chunks = [];
+      const allChunks = ctx.assetPlan.tts_plan.chunks;
+      const fullText = allChunks.map((c) => c.script_excerpt).join("");
+      const totalEstimatedDuration = allChunks.reduce(
+        (sum, c) => sum + c.estimated_duration_sec,
+        0,
+      );
 
-      for (const chunk of ctx.assetPlan.tts_plan.chunks) {
+      if (fullText.length <= 500 && allChunks.length > 1) {
+        const subPieces = await submitChunkWithFallback({
+          apiKey: options.apiKey,
+          endpoint,
+          model: providerVoice.targetModel,
+          providerVoiceId: providerVoice.providerVoiceId,
+          format: options.format,
+          sampleRate: options.sampleRate,
+          chunkId: "single",
+          text: fullText,
+          estimatedDurationSec: totalEstimatedDuration,
+        });
+        const chunks = subPieces.map((piece) => ({
+          ...piece,
+          provider_voice_id: providerVoice.providerVoiceId,
+          voice_profile_match_score: providerVoice.matchScore,
+          voice_profile_match_reasons: providerVoice.matchReasons,
+          target_model: providerVoice.targetModel,
+        }));
+        return {
+          providerJobId: null,
+          rawResponseJson: {
+            chunks,
+            single_synthesis: true,
+            original_chunks: allChunks.map((c) => ({
+              chunk_id: c.chunk_id,
+              script_excerpt: c.script_excerpt,
+              estimated_duration_sec: c.estimated_duration_sec,
+            })),
+          },
+        };
+      }
+
+      const chunks = [];
+      for (const chunk of allChunks) {
         const subPieces = await submitChunkWithFallback({
           apiKey: options.apiKey,
           endpoint,
@@ -318,7 +357,7 @@ export function createDashscopeTtsProvider(
 
       return {
         providerJobId: null,
-        rawResponseJson: { chunks },
+        rawResponseJson: { chunks, single_synthesis: false },
       };
     },
 
@@ -328,8 +367,10 @@ export function createDashscopeTtsProvider(
     }),
 
     download: async (ctx, pollResult) => {
+      const rawResponse = pollResult.rawResponseJson ?? {};
+      const isSingleSynthesis = rawResponse.single_synthesis === true;
       const rawChunks =
-        (pollResult.rawResponseJson?.chunks as
+        (rawResponse.chunks as
           | Array<{
               chunk_id: string;
               script_excerpt: string;
@@ -347,115 +388,245 @@ export function createDashscopeTtsProvider(
       });
       const voiceProfileId = ctx.manifest.audio_summary.voice_profile_id;
       const artifacts: AssetArtifact[] = [];
-      const chunkArtifactIds: string[] = [];
-      const chunkBuffers: Buffer[] = [];
-      let totalDuration = 0;
-      let totalEstimatedDuration = 0;
-      let allDurationsProbed = true;
+      const format = options.format ?? "wav";
 
-      for (const chunk of rawChunks) {
-        const buffer = await downloadAudio(chunk.audio_url);
-        chunkBuffers.push(buffer);
-        const probedDurationSec = readAudioDurationSec({
-          data: buffer,
-          format: options.format ?? "wav",
+      if (isSingleSynthesis) {
+        const chunkBuffers: Buffer[] = [];
+        for (const chunk of rawChunks) {
+          chunkBuffers.push(await downloadAudio(chunk.audio_url));
+        }
+        const mergedBuffer =
+          format === "wav" && chunkBuffers.length > 1
+            ? mergeWavBuffers(chunkBuffers, { crossfadeMs: 30 })
+            : chunkBuffers.length === 1
+              ? chunkBuffers[0]!
+              : Buffer.concat(chunkBuffers);
+
+        const totalEstimatedDuration = rawChunks.reduce(
+          (sum, c) => sum + c.estimated_duration_sec,
+          0,
+        );
+        const probedTotalSec = readAudioDurationSec({
+          data: mergedBuffer,
+          format,
           sampleRate: options.sampleRate ?? 24000,
           bytesPerSample: 2,
           channels: 1,
         });
-        const durationWasProbed = probedDurationSec !== null;
-        const durationSec = probedDurationSec ?? chunk.estimated_duration_sec;
-        if (!durationWasProbed) {
-          allDurationsProbed = false;
-        }
+        const totalDurationSec = probedTotalSec ?? totalEstimatedDuration;
+        const durationWasProbed = probedTotalSec !== null;
 
-        const written = await writeAssetFile({
+        const mergedWritten = await writeAssetFile({
           storage,
           category: "audio/tts",
-          fileName: `dashscope_${chunk.chunk_id}.${options.format ?? "wav"}`,
-          data: buffer,
+          fileName: `dashscope_merged_single.${format}`,
+          data: mergedBuffer,
         });
-        const route = ctx.manifest.audio_summary.tts_chunk_routes.find(
-          (item) => item.tts_chunk_id === chunk.chunk_id,
+
+        const originalChunks = (rawResponse.original_chunks as Array<{
+          chunk_id: string;
+          script_excerpt: string;
+          estimated_duration_sec: number;
+        }>) ?? [];
+        const totalChars = originalChunks.reduce(
+          (sum, c) => sum + c.script_excerpt.length,
+          0,
         );
-        const artifactId = `artifact_tts_chunk_${chunk.chunk_id}`;
-        chunkArtifactIds.push(artifactId);
-        totalDuration += durationSec;
-        totalEstimatedDuration += chunk.estimated_duration_sec;
+
+        const chunkArtifactIds: string[] = [];
+        let allocatedDuration = 0;
+
+        for (let i = 0; i < originalChunks.length; i++) {
+          const chunk = originalChunks[i]!;
+          const isLast = i === originalChunks.length - 1;
+          const charRatio =
+            totalChars > 0
+              ? chunk.script_excerpt.length / totalChars
+              : 1 / originalChunks.length;
+          const durationSec = isLast
+            ? totalDurationSec - allocatedDuration
+            : totalDurationSec * charRatio;
+          allocatedDuration += durationSec;
+
+          const route = ctx.manifest.audio_summary.tts_chunk_routes.find(
+            (item) => item.tts_chunk_id === chunk.chunk_id,
+          );
+          const artifactId = `artifact_tts_chunk_${chunk.chunk_id}`;
+          chunkArtifactIds.push(artifactId);
+
+          artifacts.push({
+            artifact_id: artifactId,
+            artifact_type: "tts_chunk_audio",
+            origin: "provider",
+            file_uri: mergedWritten.fileUri,
+            created_at: new Date().toISOString(),
+            metadata: {
+              duration_sec: durationSec,
+              estimated_duration_sec: chunk.estimated_duration_sec,
+              duration_source: durationWasProbed
+                ? "audio_probe_proportional"
+                : "estimated",
+              voice_profile_id: voiceProfileId,
+              provider_voice_id: rawChunks[0]?.provider_voice_id,
+              voice_profile_match_score:
+                rawChunks[0]?.voice_profile_match_score ?? null,
+              voice_profile_match_reasons:
+                rawChunks[0]?.voice_profile_match_reasons ?? [],
+              timing_source: durationWasProbed
+                ? "audio_probe_proportional"
+                : "estimated",
+              sample_rate: options.sampleRate ?? 24000,
+              format,
+              tts_chunk_id: chunk.chunk_id,
+              segment_ids: route?.segment_ids ?? [],
+              script_excerpt: chunk.script_excerpt,
+              model: rawChunks[0]?.target_model ?? options.model,
+              provider_name: "dashscope_tts",
+              file_hash: mergedWritten.fileHash,
+              relative_path: mergedWritten.relativePath,
+            },
+          });
+        }
 
         artifacts.push({
-          artifact_id: artifactId,
-          artifact_type: "tts_chunk_audio",
+          artifact_id: `artifact_tts_merged_${ctx.execution.task_id}`,
+          artifact_type: "tts_merged_audio",
           origin: "provider",
-          file_uri: written.fileUri,
+          file_uri: mergedWritten.fileUri,
           created_at: new Date().toISOString(),
           metadata: {
-            duration_sec: durationSec,
-            estimated_duration_sec: chunk.estimated_duration_sec,
+            duration_sec: totalDurationSec,
+            estimated_duration_sec: totalEstimatedDuration,
             duration_source: durationWasProbed ? "audio_probe" : "estimated",
             voice_profile_id: voiceProfileId,
-            provider_voice_id: chunk.provider_voice_id,
+            provider_voice_id: rawChunks[0]?.provider_voice_id,
             voice_profile_match_score:
-              chunk.voice_profile_match_score ?? null,
+              rawChunks[0]?.voice_profile_match_score ?? null,
             voice_profile_match_reasons:
-              chunk.voice_profile_match_reasons ?? [],
+              rawChunks[0]?.voice_profile_match_reasons ?? [],
             timing_source: durationWasProbed ? "audio_probe" : "estimated",
             ...(durationWasProbed
               ? {}
               : { duration_probe_error: "audio_duration_probe_unavailable" }),
             sample_rate: options.sampleRate ?? 24000,
-            format: options.format ?? "wav",
-            tts_chunk_id: chunk.chunk_id,
-            segment_ids: route?.segment_ids ?? [],
-            script_excerpt: chunk.script_excerpt,
-            model: chunk.target_model ?? options.model,
+            format,
+            chunk_artifact_ids: chunkArtifactIds,
+            model: rawChunks[0]?.target_model ?? options.model,
             provider_name: "dashscope_tts",
-            file_hash: written.fileHash,
-            relative_path: written.relativePath,
+            file_hash: mergedWritten.fileHash,
+            relative_path: mergedWritten.relativePath,
+          },
+        });
+      } else {
+        const chunkArtifactIds: string[] = [];
+        const chunkBuffers: Buffer[] = [];
+        let totalDuration = 0;
+        let totalEstimatedDuration = 0;
+        let allDurationsProbed = true;
+
+        for (const chunk of rawChunks) {
+          const buffer = await downloadAudio(chunk.audio_url);
+          chunkBuffers.push(buffer);
+          const probedDurationSec = readAudioDurationSec({
+            data: buffer,
+            format: options.format ?? "wav",
+            sampleRate: options.sampleRate ?? 24000,
+            bytesPerSample: 2,
+            channels: 1,
+          });
+          const durationWasProbed = probedDurationSec !== null;
+          const durationSec = probedDurationSec ?? chunk.estimated_duration_sec;
+          if (!durationWasProbed) {
+            allDurationsProbed = false;
+          }
+
+          const written = await writeAssetFile({
+            storage,
+            category: "audio/tts",
+            fileName: `dashscope_${chunk.chunk_id}.${options.format ?? "wav"}`,
+            data: buffer,
+          });
+          const route = ctx.manifest.audio_summary.tts_chunk_routes.find(
+            (item) => item.tts_chunk_id === chunk.chunk_id,
+          );
+          const artifactId = `artifact_tts_chunk_${chunk.chunk_id}`;
+          chunkArtifactIds.push(artifactId);
+          totalDuration += durationSec;
+          totalEstimatedDuration += chunk.estimated_duration_sec;
+
+          artifacts.push({
+            artifact_id: artifactId,
+            artifact_type: "tts_chunk_audio",
+            origin: "provider",
+            file_uri: written.fileUri,
+            created_at: new Date().toISOString(),
+            metadata: {
+              duration_sec: durationSec,
+              estimated_duration_sec: chunk.estimated_duration_sec,
+              duration_source: durationWasProbed ? "audio_probe" : "estimated",
+              voice_profile_id: voiceProfileId,
+              provider_voice_id: chunk.provider_voice_id,
+              voice_profile_match_score:
+                chunk.voice_profile_match_score ?? null,
+              voice_profile_match_reasons:
+                chunk.voice_profile_match_reasons ?? [],
+              timing_source: durationWasProbed ? "audio_probe" : "estimated",
+              ...(durationWasProbed
+                ? {}
+                : { duration_probe_error: "audio_duration_probe_unavailable" }),
+              sample_rate: options.sampleRate ?? 24000,
+              format: options.format ?? "wav",
+              tts_chunk_id: chunk.chunk_id,
+              segment_ids: route?.segment_ids ?? [],
+              script_excerpt: chunk.script_excerpt,
+              model: chunk.target_model ?? options.model,
+              provider_name: "dashscope_tts",
+              file_hash: written.fileHash,
+              relative_path: written.relativePath,
+            },
+          });
+        }
+
+        const mergedData =
+          format === "wav" && chunkBuffers.length > 1
+            ? mergeWavBuffers(chunkBuffers, { crossfadeMs: 30 })
+            : Buffer.concat(chunkBuffers);
+        const merged = await writeAssetFile({
+          storage,
+          category: "audio/tts",
+          fileName: `dashscope_merged_${ctx.execution.task_id}.${format}`,
+          data: mergedData,
+        });
+        artifacts.push({
+          artifact_id: `artifact_tts_merged_${ctx.execution.task_id}`,
+          artifact_type: "tts_merged_audio",
+          origin: "provider",
+          file_uri: merged.fileUri,
+          created_at: new Date().toISOString(),
+          metadata: {
+            duration_sec: totalDuration,
+            estimated_duration_sec: totalEstimatedDuration,
+            duration_source: allDurationsProbed ? "audio_probe" : "estimated",
+            voice_profile_id: voiceProfileId,
+            provider_voice_id: rawChunks[0]?.provider_voice_id,
+            voice_profile_match_score:
+              rawChunks[0]?.voice_profile_match_score ?? null,
+            voice_profile_match_reasons:
+              rawChunks[0]?.voice_profile_match_reasons ?? [],
+            timing_source: allDurationsProbed ? "audio_probe" : "estimated",
+            ...(allDurationsProbed
+              ? {}
+              : { duration_probe_error: "audio_duration_probe_unavailable" }),
+            sample_rate: options.sampleRate ?? 24000,
+            format,
+            chunk_artifact_ids: chunkArtifactIds,
+            model: rawChunks[0]?.target_model ?? options.model,
+            provider_name: "dashscope_tts",
+            file_hash: merged.fileHash,
+            relative_path: merged.relativePath,
           },
         });
       }
-
-      const format = options.format ?? "wav";
-      const mergedData =
-        format === "wav" && chunkBuffers.length > 1
-          ? mergeWavBuffers(chunkBuffers, { crossfadeMs: 30 })
-          : Buffer.concat(chunkBuffers);
-      const merged = await writeAssetFile({
-        storage,
-        category: "audio/tts",
-        fileName: `dashscope_merged_${ctx.execution.task_id}.${format}`,
-        data: mergedData,
-      });
-      artifacts.push({
-        artifact_id: `artifact_tts_merged_${ctx.execution.task_id}`,
-        artifact_type: "tts_merged_audio",
-        origin: "provider",
-        file_uri: merged.fileUri,
-        created_at: new Date().toISOString(),
-        metadata: {
-          duration_sec: totalDuration,
-          estimated_duration_sec: totalEstimatedDuration,
-          duration_source: allDurationsProbed ? "audio_probe" : "estimated",
-          voice_profile_id: voiceProfileId,
-          provider_voice_id: rawChunks[0]?.provider_voice_id,
-          voice_profile_match_score:
-            rawChunks[0]?.voice_profile_match_score ?? null,
-          voice_profile_match_reasons:
-            rawChunks[0]?.voice_profile_match_reasons ?? [],
-          timing_source: allDurationsProbed ? "audio_probe" : "estimated",
-          ...(allDurationsProbed
-            ? {}
-            : { duration_probe_error: "audio_duration_probe_unavailable" }),
-          sample_rate: options.sampleRate ?? 24000,
-          format: options.format ?? "wav",
-          chunk_artifact_ids: chunkArtifactIds,
-          model: rawChunks[0]?.target_model ?? options.model,
-          provider_name: "dashscope_tts",
-          file_hash: merged.fileHash,
-          relative_path: merged.relativePath,
-        },
-      });
 
       return artifacts;
     },

@@ -1,4 +1,7 @@
 import { ComposeTimeline as ComposeTimelineSchema } from "../../../../shared/src/index.js";
+
+const END_PADDING_SEC = 3;
+
 import type {
   AssetArtifact,
   AssetManifest,
@@ -365,7 +368,7 @@ export function buildComposeTimeline(
   const mergedTtsDurationSec = getDurationSec(
     mergedTtsArtifactId ? artifactsById.get(mergedTtsArtifactId) : undefined,
   );
-  const totalDurationSec =
+  const narrationDurationSec =
     mergedTtsDurationSec ??
     input.manifest.audio_summary.tts_total_duration_sec ??
     0;
@@ -373,9 +376,18 @@ export function buildComposeTimeline(
   const timings = deriveSegmentTimings({
     manifest: input.manifest,
     artifactsById,
-    totalDurationSec,
+    totalDurationSec: narrationDurationSec,
     notes,
   });
+
+  if (timings.length > 0) {
+    timings[timings.length - 1]!.durationSec += END_PADDING_SEC;
+  }
+
+  const totalDurationSec = timings.length > 0
+    ? timings.reduce((sum, t) => sum + t.durationSec, 0)
+    : narrationDurationSec + END_PADDING_SEC;
+  notes.push(`含 ${END_PADDING_SEC} 秒片尾缓冲`);
   const visualTrack = createVisualTrack({
     manifest: input.manifest,
     timings,
@@ -383,11 +395,11 @@ export function buildComposeTimeline(
   });
   const narrationTrack = createNarrationTrack({
     manifest: input.manifest,
-    totalDurationSec,
+    totalDurationSec: narrationDurationSec,
   });
   const subtitleTrack = createSubtitleTrack({
     manifest: input.manifest,
-    totalDurationSec,
+    totalDurationSec: narrationDurationSec,
   });
   const bgmTrack = createBgmTrack({
     manifest: input.manifest,

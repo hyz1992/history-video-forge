@@ -77,6 +77,7 @@ export const AssetExecutionOptions = z
 const TimingSource = z.enum([
   "estimated",
   "audio_probe",
+  "audio_probe_proportional",
   "provider_timestamp",
   "forced_alignment",
   "mixed",

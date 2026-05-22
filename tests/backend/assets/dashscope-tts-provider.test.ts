@@ -601,4 +601,121 @@ describe("dashscope TTS provider adapter", () => {
     // TTS was called more than once (initial fail + retries)
     expect(ttsCallCount).toBeGreaterThan(1);
   });
+
+  it("concatenates multiple chunks into single API call when total text ≤ 500 chars", async () => {
+    tempDir = join(tmpdir(), `dashscope-tts-single-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+
+    const texts = [
+      "晏子出使楚国。",
+      "楚王想羞辱晏子。",
+      "晏子从容应对。",
+    ];
+    const assetPlan = makeTtsAssetPlan();
+    assetPlan.tts_plan.chunks = texts.map((text, i) => ({
+      chunk_id: `chunk_00${i + 1}`,
+      order: i,
+      script_excerpt: text,
+      estimated_duration_sec: 2,
+    }));
+    assetPlan.tts_plan.estimated_total_duration_sec = 6;
+
+    const manifest = makeTtsManifest();
+    manifest.audio_summary.tts_chunk_routes = texts.map((text, i) => ({
+      tts_chunk_id: `chunk_00${i + 1}`,
+      artifact_id: null,
+      segment_ids: [`sb_00${i + 1}`],
+      script_excerpt: text,
+    }));
+    manifest.segment_routes = texts.map((_, i) => ({
+      segment_id: `sb_00${i + 1}`,
+      tts_artifact_id: null,
+      subtitle_artifact_id: null,
+      primary_visual_artifact_id: null,
+      visual_route_type: "missing" as const,
+      motion_artifact_id: null,
+      fallback_visual_artifact_id: null,
+      sfx_artifact_ids: [],
+      bgm_placement_ids: [],
+      readiness: "blocked" as const,
+      notes: [],
+    }));
+
+    let ttsCallCount = 0;
+    let submittedText = "";
+    const wavBuffer = makeWavBuffer({ durationSec: 3, sampleRate: 24000 });
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      if (url.includes("/api/v1/services/aigc/multimodal-generation/generation")) {
+        ttsCallCount++;
+        submittedText = JSON.parse(String(init?.body ?? "{}")).input?.text ?? "";
+        return new Response(
+          JSON.stringify({
+            output: { audio: { url: "https://download.test/single.wav" } },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+      return new Response(wavBuffer, { status: 200 });
+    });
+
+    const result = await executeAssetManifest({
+      db: createDbClient(),
+      assetManifestRecordId: "manifest_001",
+      assetRunId: "assets_run_001",
+      manifest,
+      assetPlan,
+      registry: createAssetProviderRegistry([
+        createDashscopeTtsProvider({
+          apiKey: "test-key",
+          baseUrl: "https://dashscope.test",
+          model: "qwen3-tts-instruct-flash",
+        }),
+      ]),
+      projectStorageRootDir: tempDir,
+    });
+
+    // Single API call with concatenated text
+    expect(ttsCallCount).toBe(1);
+    expect(submittedText).toBe(texts.join(""));
+
+    const chunkArtifacts = result.manifest.artifacts.filter(
+      (a) => a.artifact_type === "tts_chunk_audio",
+    );
+    const mergedArtifact = result.manifest.artifacts.find(
+      (a) => a.artifact_type === "tts_merged_audio",
+    );
+
+    // 3 per-chunk artifacts + 1 merged
+    expect(chunkArtifacts.length).toBe(3);
+    expect(mergedArtifact).toBeTruthy();
+
+    // All chunks share the same file as merged
+    for (const chunk of chunkArtifacts) {
+      expect(chunk.file_uri).toBe(mergedArtifact!.file_uri);
+    }
+
+    // Proportional duration: 3 sec total, each text is ~6 chars
+    // Each gets ~1 sec, last gets remainder
+    const totalChars = texts.reduce((sum, t) => sum + t.length, 0);
+    const expectedDurations = texts.map((text, i) => {
+      if (i === texts.length - 1) {
+        const allocated = texts.slice(0, -1).reduce((s, t) => s + 3 * (t.length / totalChars), 0);
+        return 3 - allocated;
+      }
+      return 3 * (text.length / totalChars);
+    });
+
+    for (let i = 0; i < chunkArtifacts.length; i++) {
+      expect(chunkArtifacts[i]!.metadata.duration_sec).toBeCloseTo(
+        expectedDurations[i]!,
+        4,
+      );
+      expect(chunkArtifacts[i]!.metadata.duration_source).toBe(
+        "audio_probe_proportional",
+      );
+      expect(chunkArtifacts[i]!.metadata.tts_chunk_id).toBe(`chunk_00${i + 1}`);
+    }
+
+    expect(mergedArtifact?.metadata.duration_sec).toBe(3);
+  });
 });

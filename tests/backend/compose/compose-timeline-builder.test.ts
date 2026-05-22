@@ -132,7 +132,7 @@ describe("buildComposeTimeline", () => {
       source_asset_plan_record_id: "asset_plan_record_001",
       source_storyboard_record_id: "storyboard_record_001",
       source_script_record_id: "script_record_001",
-      duration_sec: 12,
+      duration_sec: 15,
       readiness: "ready_for_render",
     });
     expect(timeline.output_profile).toEqual({
@@ -147,7 +147,7 @@ describe("buildComposeTimeline", () => {
       segment_id: "sb_001",
       artifact_id: "artifact_img_001",
       start_sec: 0,
-      duration_sec: 12,
+      duration_sec: 15,
       clip_kind: "image_with_motion",
       motion_artifact_id: "artifact_motion_001",
     });
@@ -195,7 +195,7 @@ describe("buildComposeTimeline", () => {
     expect(timeline.notes).toContain("compose_chunk_timing_fallback_used");
     expect(timeline.segments).toMatchObject([
       { segment_id: "sb_001", start_sec: 0, duration_sec: 6 },
-      { segment_id: "sb_002", start_sec: 6, duration_sec: 6 },
+      { segment_id: "sb_002", start_sec: 6, duration_sec: 9 },
     ]);
   });
 
@@ -291,10 +291,10 @@ describe("buildComposeTimeline", () => {
       manifest,
     });
 
-    expect(timeline.duration_sec).toBe(7);
+    expect(timeline.duration_sec).toBe(10);
     expect(timeline.segments.map((segment) => segment.duration_sec)).toEqual([
       4,
-      3,
+      6,
     ]);
     expect(timeline.notes).not.toContain("compose_chunk_timing_fallback_used");
   });

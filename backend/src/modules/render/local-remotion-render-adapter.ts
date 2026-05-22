@@ -114,10 +114,9 @@ export function createLocalRemotionRenderAdapter(
         input.assetManifestRecord.manifestJson,
       );
       const outputLocation = join(input.outputDir, "output.mp4");
-      const END_PADDING_SEC = 3;
       const durationInFrames = Math.max(
         1,
-        Math.round((timeline.duration_sec + END_PADDING_SEC) * input.profile.fps),
+        Math.round(timeline.duration_sec * input.profile.fps),
       );
       const assetBaseDir = input.outputDir;
       const inputProps = await buildRemotionInputProps({
