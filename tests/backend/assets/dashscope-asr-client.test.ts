@@ -12,7 +12,7 @@ describe("buildAsrPayload", () => {
     const payload = buildAsrPayload("oss://dashscope/audio.wav");
 
     expect(payload.model).toBe(ASR_MODEL);
-    expect(payload.input).toEqual({ file_urls: ["oss://dashscope/audio.wav"] });
+    expect(payload.input).toEqual({ file_url: "oss://dashscope/audio.wav" });
     expect(payload.parameters).toEqual({ enable_words: true });
   });
 });

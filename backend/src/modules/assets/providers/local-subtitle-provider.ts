@@ -269,7 +269,8 @@ async function tryAsrAlignment(
     if (!result.aligned) return null;
 
     return result.captions;
-  } catch {
+  } catch (err) {
+    console.warn("[local-subtitle-provider] ASR alignment failed, falling back to estimation:", err instanceof Error ? err.message : err);
     return null;
   }
 }

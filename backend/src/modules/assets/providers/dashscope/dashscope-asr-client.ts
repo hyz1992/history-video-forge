@@ -29,6 +29,7 @@ export async function transcribeAudioFile(options: {
     apiKey: options.apiKey,
     endpoint: ASR_ENDPOINT,
     payload: buildAsrPayload(fileUrl),
+    extraHeaders: { "X-DashScope-OssResourceResolve": "enable" },
   });
 
   const pollResult = await pollWithRetry({
@@ -52,7 +53,7 @@ export function buildAsrPayload(fileUrl: string): Record<string, unknown> {
   return {
     model: ASR_MODEL,
     input: {
-      file_urls: [fileUrl],
+      file_url: fileUrl,
     },
     parameters: {
       enable_words: true,
@@ -69,20 +70,14 @@ async function uploadLocalFile(options: {
   const fileBuffer = await fs.readFile(options.audioFilePath);
 
   const base = options.baseUrl ?? "https://dashscope.aliyuncs.com";
-  const uploadUrl = `${base}/compatible-mode/v1/uploads`;
 
-  const policyResponse = await fetch(uploadUrl, {
-    method: "POST",
+  // Step 1: Get upload policy
+  const policyUrl = `${base}/api/v1/uploads?action=getPolicy&model=${ASR_MODEL}`;
+  const policyResponse = await fetch(policyUrl, {
+    method: "GET",
     headers: {
       Authorization: `Bearer ${options.apiKey}`,
-      "Content-Type": "application/json",
-      "X-DashScope-OssResourceResolve": "enable",
     },
-    body: JSON.stringify({
-      model: ASR_MODEL,
-      file_name: fileName,
-      file_size: fileBuffer.length,
-    }),
   });
 
   if (!policyResponse.ok) {
@@ -90,28 +85,48 @@ async function uploadLocalFile(options: {
     throw new Error(`DashScope upload policy failed: ${policyResponse.status} ${text}`);
   }
 
-  const policy = (await policyResponse.json()) as {
-    data: { upload_url: string; oss_url: string; request_id: string };
+  const policyData = (await policyResponse.json()) as {
+    data: {
+      upload_dir: string;
+      upload_host: string;
+      oss_access_key_id: string;
+      policy: string;
+      signature: string;
+      x_oss_object_acl: string;
+      x_oss_forbid_overwrite: string;
+    };
   };
-  const uploadData = policy.data;
 
-  if (!uploadData?.upload_url || !uploadData?.oss_url) {
-    throw new Error(`Unexpected upload policy response: ${JSON.stringify(policy)}`);
+  const { upload_dir, upload_host, oss_access_key_id, signature, policy, x_oss_object_acl, x_oss_forbid_overwrite } = policyData.data;
+
+  if (!upload_dir || !upload_host || !oss_access_key_id || !policy || !signature) {
+    throw new Error(`Unexpected upload policy response: ${JSON.stringify(policyData)}`);
   }
 
-  const putResponse = await fetch(uploadData.upload_url, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/octet-stream",
-    },
-    body: fileBuffer,
+  // Step 2: Upload file to OSS via multipart/form-data
+  const key = `${upload_dir}/${fileName}`;
+  const formData = new FormData();
+  formData.append("OSSAccessKeyId", oss_access_key_id);
+  formData.append("Signature", signature);
+  formData.append("policy", policy);
+  formData.append("key", key);
+  formData.append("x-oss-object-acl", x_oss_object_acl);
+  formData.append("x-oss-forbid-overwrite", x_oss_forbid_overwrite);
+  formData.append("success_action_status", "200");
+  formData.append("file", new Blob([fileBuffer]), fileName);
+
+  const uploadResponse = await fetch(upload_host, {
+    method: "POST",
+    body: formData,
   });
 
-  if (!putResponse.ok) {
-    throw new Error(`DashScope file PUT failed: ${putResponse.status}`);
+  if (!uploadResponse.ok) {
+    const text = await uploadResponse.text();
+    throw new Error(`DashScope OSS upload failed: ${uploadResponse.status} ${text}`);
   }
 
-  return uploadData.oss_url;
+  // Step 3: Construct oss:// URL
+  return `oss://${key}`;
 }
 
 interface PollWithRetryResult {

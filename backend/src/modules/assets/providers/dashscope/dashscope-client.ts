@@ -9,6 +9,7 @@ export interface DashScopeSubmitOptions {
   apiKey: string;
   endpoint: string;
   payload: Record<string, unknown>;
+  extraHeaders?: Record<string, string>;
 }
 
 export interface DashScopeSubmitResult {
@@ -40,6 +41,7 @@ export async function submitDashscopeAsyncTask(
       "Content-Type": "application/json",
       Authorization: `Bearer ${options.apiKey}`,
       "X-DashScope-Async": "enable",
+      ...options.extraHeaders,
     },
     body: JSON.stringify(options.payload),
   });
