@@ -21,7 +21,7 @@ const PRIMARY_PUNCTUATION = "。！？；";
 const SECONDARY_PUNCTUATION = "，、：";
 const MAX_CAPTION_CHARS = 24;
 
-function splitChineseText(text: string): string[] {
+export function splitChineseText(text: string): string[] {
   const segments = splitByPunctuation(text, PRIMARY_PUNCTUATION);
   const result: string[] = [];
 

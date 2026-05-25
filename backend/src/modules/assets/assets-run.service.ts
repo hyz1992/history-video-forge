@@ -210,7 +210,10 @@ function buildProviderRegistry(input: {
     if (input.providerMode === "dashscope_tts") {
       return createAssetProviderRegistry([
         ttsProvider,
-        createLocalSubtitleProvider(),
+        createLocalSubtitleProvider({
+          dashscopeApiKey: dashscope.apiKey,
+          dashscopeBaseUrl: dashscope.baseUrl,
+        }),
         createFakeImageProvider(),
         createLocalSfxProvider(input.db),
         createLocalBgmProvider(input.db),
@@ -219,7 +222,10 @@ function buildProviderRegistry(input: {
 
     return createAssetProviderRegistry([
       ttsProvider,
-      createLocalSubtitleProvider(),
+      createLocalSubtitleProvider({
+        dashscopeApiKey: dashscope.apiKey,
+        dashscopeBaseUrl: dashscope.baseUrl,
+      }),
       createDashscopeImageProvider({
         apiKey: dashscope.apiKey,
         baseUrl: dashscope.baseUrl,

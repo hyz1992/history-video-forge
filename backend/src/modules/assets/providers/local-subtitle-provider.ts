@@ -19,7 +19,10 @@ import {
   buildSrtFromCaptions,
   buildVttFromCaptions,
   type TtsSubtitleChunk,
+  type SubtitleCaption,
 } from "../assets-subtitle-generator.js";
+import { alignCaptionsFromAsr } from "../asr-caption-aligner.js";
+import { transcribeAudioFile } from "./dashscope/dashscope-asr-client.js";
 import { DEFAULT_SUBTITLE_STYLE } from "../../../../../shared/src/index.js";
 
 type SubtitleTimingSource =
@@ -31,7 +34,14 @@ type SubtitleTimingSource =
   | "provider"
   | "aligned";
 
-export function createLocalSubtitleProvider(): AssetProviderAdapter {
+export interface LocalSubtitleProviderOptions {
+  dashscopeApiKey?: string;
+  dashscopeBaseUrl?: string;
+}
+
+export function createLocalSubtitleProvider(
+  options?: LocalSubtitleProviderOptions,
+): AssetProviderAdapter {
   return {
     providerName: "local_subtitle",
     providerType: "tts",
@@ -97,16 +107,25 @@ export function createLocalSubtitleProvider(): AssetProviderAdapter {
         a.tts_chunk_id.localeCompare(b.tts_chunk_id),
       );
 
-      const captions = estimateCaptionsFromTtsChunks(ttsChunks);
+      // Try ASR-based alignment when DashScope key is available
+      let captions = await tryAsrAlignment(options, ctx, ttsChunks);
+
+      let subtitleTimingSource: SubtitleTimingSource;
+      if (captions) {
+        subtitleTimingSource = "forced_alignment";
+      } else {
+        captions = estimateCaptionsFromTtsChunks(ttsChunks);
+        subtitleTimingSource = mergeTimingSources(
+          ttsChunks.map((chunk) => chunk.timing_source),
+        );
+      }
+
       const srtContent = buildSrtFromCaptions(captions);
       const vttContent = buildVttFromCaptions(captions);
       const subtitleDurationSec =
         captions.length > 0 ? captions[captions.length - 1]!.end_sec : undefined;
       const sourceTtsChunkArtifactIds = ttsChunks.map(
         (chunk) => chunk.source_artifact_id,
-      );
-      const subtitleTimingSource = mergeTimingSources(
-        ttsChunks.map((chunk) => chunk.timing_source),
       );
 
       // Use the merged TTS artifact as the source reference
@@ -200,4 +219,57 @@ function mergeTimingSources(
 ): SubtitleTimingSource {
   const unique = new Set(sources.length > 0 ? sources : ["estimated"]);
   return unique.size === 1 ? [...unique][0]! : "mixed";
+}
+
+async function tryAsrAlignment(
+  options: LocalSubtitleProviderOptions | undefined,
+  ctx: AssetProviderContext,
+  ttsChunks: Array<TtsSubtitleChunk & { source_artifact_id: string; timing_source: SubtitleTimingSource }>,
+): Promise<SubtitleCaption[] | null> {
+  if (!options?.dashscopeApiKey) return null;
+
+  const mergedArtifactId = ctx.manifest.audio_summary.tts_merged_artifact_id;
+  if (!mergedArtifactId) return null;
+
+  const mergedArtifact = ctx.manifest.artifacts.find(
+    (a) => a.artifact_id === mergedArtifactId,
+  );
+  if (!mergedArtifact) return null;
+
+  const audioFilePath = mergedArtifact.file_uri.replace(/^file:\/\//, "");
+  if (!audioFilePath) return null;
+
+  try {
+    const asrWords = await transcribeAudioFile({
+      apiKey: options.dashscopeApiKey,
+      audioFilePath,
+      baseUrl: options.dashscopeBaseUrl,
+    });
+
+    if (asrWords.length === 0) return null;
+
+    // Concatenate chunk texts and build alignment input
+    const scriptText = ttsChunks.map((c) => c.script_excerpt).join("");
+    let charOffset = 0;
+    const chunkBoundaries: number[] = [];
+    const segmentIds: string[][] = [];
+    for (const chunk of ttsChunks) {
+      chunkBoundaries.push(charOffset);
+      segmentIds.push(chunk.segment_ids);
+      charOffset += chunk.script_excerpt.length;
+    }
+
+    const result = alignCaptionsFromAsr({
+      asrWords,
+      scriptText,
+      chunkBoundaries,
+      segmentIds,
+    });
+
+    if (!result.aligned) return null;
+
+    return result.captions;
+  } catch {
+    return null;
+  }
 }
