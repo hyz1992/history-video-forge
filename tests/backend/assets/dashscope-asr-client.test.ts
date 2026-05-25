@@ -3,7 +3,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import {
   buildAsrPayload,
   parseAsrWords,
-  ASR_MODEL,
+  DEFAULT_ASR_MODEL,
 } from "../../../backend/src/modules/assets/providers/dashscope/dashscope-asr-client.js";
 import type { AsrWord } from "../../../backend/src/modules/assets/asr-caption-aligner.js";
 
@@ -11,9 +11,15 @@ describe("buildAsrPayload", () => {
   it("constructs correct ASR request with enable_words", () => {
     const payload = buildAsrPayload("oss://dashscope/audio.wav");
 
-    expect(payload.model).toBe(ASR_MODEL);
+    expect(payload.model).toBe(DEFAULT_ASR_MODEL);
     expect(payload.input).toEqual({ file_url: "oss://dashscope/audio.wav" });
     expect(payload.parameters).toEqual({ enable_words: true });
+  });
+
+  it("uses custom model when provided", () => {
+    const payload = buildAsrPayload("oss://dashscope/audio.wav", "custom-asr-model");
+
+    expect(payload.model).toBe("custom-asr-model");
   });
 });
 

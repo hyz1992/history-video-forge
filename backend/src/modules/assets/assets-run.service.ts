@@ -180,6 +180,10 @@ function readDashscopeConfig(input: DashscopeProviderConfig | undefined) {
       "qwen3-tts-instruct-flash",
     ttsFormat: input?.ttsFormat,
     ttsSampleRate: input?.ttsSampleRate,
+    asrModel:
+      input?.asrModel ??
+      process.env.ALIYUN_DASHSCOPE_ASR_MODEL ??
+      "qwen3-asr-flash-filetrans",
   };
 }
 
@@ -213,6 +217,7 @@ function buildProviderRegistry(input: {
         createLocalSubtitleProvider({
           dashscopeApiKey: dashscope.apiKey,
           dashscopeBaseUrl: dashscope.baseUrl,
+          dashscopeAsrModel: dashscope.asrModel,
         }),
         createFakeImageProvider(),
         createLocalSfxProvider(input.db),
@@ -225,6 +230,7 @@ function buildProviderRegistry(input: {
       createLocalSubtitleProvider({
         dashscopeApiKey: dashscope.apiKey,
         dashscopeBaseUrl: dashscope.baseUrl,
+        dashscopeAsrModel: dashscope.asrModel,
       }),
       createDashscopeImageProvider({
         apiKey: dashscope.apiKey,

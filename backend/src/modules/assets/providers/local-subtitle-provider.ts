@@ -37,6 +37,7 @@ type SubtitleTimingSource =
 export interface LocalSubtitleProviderOptions {
   dashscopeApiKey?: string;
   dashscopeBaseUrl?: string;
+  dashscopeAsrModel?: string;
 }
 
 export function createLocalSubtitleProvider(
@@ -244,6 +245,7 @@ async function tryAsrAlignment(
       apiKey: options.dashscopeApiKey,
       audioFilePath,
       baseUrl: options.dashscopeBaseUrl,
+      model: options.dashscopeAsrModel,
     });
 
     if (asrWords.length === 0) return null;

@@ -14,7 +14,7 @@ export interface DashScopeAsrOptions {
 
 const ASR_ENDPOINT =
   "https://dashscope.aliyuncs.com/api/v1/services/audio/asr/transcription";
-export const ASR_MODEL = "qwen3-asr-flash-filetrans";
+export const DEFAULT_ASR_MODEL = "qwen3-asr-flash-filetrans";
 const POLL_INTERVAL_MS = 3000;
 const MAX_POLL_ATTEMPTS = 60;
 
@@ -22,13 +22,15 @@ export async function transcribeAudioFile(options: {
   apiKey: string;
   audioFilePath: string;
   baseUrl?: string;
+  model?: string;
 }): Promise<AsrWord[]> {
-  const fileUrl = await uploadLocalFile(options);
+  const model = options.model ?? DEFAULT_ASR_MODEL;
+  const fileUrl = await uploadLocalFile({ ...options, model });
 
   const { taskId } = await submitDashscopeAsyncTask({
     apiKey: options.apiKey,
     endpoint: ASR_ENDPOINT,
-    payload: buildAsrPayload(fileUrl),
+    payload: buildAsrPayload(fileUrl, model),
     extraHeaders: { "X-DashScope-OssResourceResolve": "enable" },
   });
 
@@ -49,9 +51,9 @@ export async function transcribeAudioFile(options: {
   return parseAsrWords(transcription);
 }
 
-export function buildAsrPayload(fileUrl: string): Record<string, unknown> {
+export function buildAsrPayload(fileUrl: string, model?: string): Record<string, unknown> {
   return {
-    model: ASR_MODEL,
+    model: model ?? DEFAULT_ASR_MODEL,
     input: {
       file_url: fileUrl,
     },
@@ -65,14 +67,16 @@ async function uploadLocalFile(options: {
   apiKey: string;
   audioFilePath: string;
   baseUrl?: string;
+  model?: string;
 }): Promise<string> {
   const fileName = path.basename(options.audioFilePath);
   const fileBuffer = await fs.readFile(options.audioFilePath);
+  const model = options.model ?? DEFAULT_ASR_MODEL;
 
   const base = options.baseUrl ?? "https://dashscope.aliyuncs.com";
 
   // Step 1: Get upload policy
-  const policyUrl = `${base}/api/v1/uploads?action=getPolicy&model=${ASR_MODEL}`;
+  const policyUrl = `${base}/api/v1/uploads?action=getPolicy&model=${model}`;
   const policyResponse = await fetch(policyUrl, {
     method: "GET",
     headers: {
