@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildSrtFromCaptions,
   buildVttFromCaptions,
+  closeCaptionGaps,
   estimateCaptionsFromTtsChunks,
 } from "../../../backend/src/modules/assets/assets-subtitle-generator.js";
 
@@ -206,5 +207,81 @@ describe("assets subtitle generator", () => {
     ]);
     expect(vtt).toContain("WEBVTT");
     expect(vtt).toContain("00:00:00.500 --> 00:00:01.500");
+  });
+});
+
+describe("closeCaptionGaps", () => {
+  const caption = (
+    index: number,
+    startSec: number,
+    endSec: number,
+    text: string,
+  ) => ({
+    index,
+    start_sec: startSec,
+    end_sec: endSec,
+    text,
+    segment_ids: [`sb_${index}`],
+  });
+
+  it("closes small gaps between consecutive captions", () => {
+    const input = [
+      caption(1, 0, 1.5, "第一句"),
+      caption(2, 2.0, 3.5, "第二句"),
+      caption(3, 4.0, 5.5, "第三句"),
+    ];
+
+    const result = closeCaptionGaps(input);
+
+    expect(result[0]!.end_sec).toBe(2.0);
+    expect(result[1]!.end_sec).toBe(4.0);
+    expect(result[2]!.end_sec).toBe(5.5);
+  });
+
+  it("does not close gaps exceeding maxGapSec", () => {
+    const input = [
+      caption(1, 0, 1.0, "第一句"),
+      caption(2, 5.0, 6.0, "第二句"),
+    ];
+
+    const result = closeCaptionGaps(input, 2);
+
+    expect(result[0]!.end_sec).toBe(1.0);
+  });
+
+  it("handles already-continuous captions", () => {
+    const input = [
+      caption(1, 0, 2.0, "第一句"),
+      caption(2, 2.0, 4.0, "第二句"),
+    ];
+
+    const result = closeCaptionGaps(input);
+
+    expect(result[0]!.end_sec).toBe(2.0);
+    expect(result[1]!.end_sec).toBe(4.0);
+  });
+
+  it("handles single caption", () => {
+    const input = [caption(1, 0, 3.0, "唯一一句")];
+    const result = closeCaptionGaps(input);
+    expect(result).toEqual(input);
+  });
+
+  it("handles empty array", () => {
+    expect(closeCaptionGaps([])).toEqual([]);
+  });
+
+  it("does not modify start_sec or text", () => {
+    const input = [
+      caption(1, 1.0, 2.0, "A"),
+      caption(2, 2.5, 4.0, "B"),
+    ];
+
+    const result = closeCaptionGaps(input);
+
+    expect(result[0]!.start_sec).toBe(1.0);
+    expect(result[0]!.text).toBe("A");
+    expect(result[1]!.start_sec).toBe(2.5);
+    expect(result[1]!.text).toBe("B");
   });
 });

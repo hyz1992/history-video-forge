@@ -126,6 +126,31 @@ export function estimateCaptionsFromTtsChunks(
   return captions;
 }
 
+// ─── Caption Gap Closing ─────────────────────────────────────────────────────
+
+const MAX_CAPTION_GAP_SEC = 2;
+
+export function closeCaptionGaps(
+  captions: SubtitleCaption[],
+  maxGapSec: number = MAX_CAPTION_GAP_SEC,
+): SubtitleCaption[] {
+  if (captions.length <= 1) return captions;
+
+  const result = captions.map((c) => ({ ...c }));
+
+  for (let i = 0; i < result.length - 1; i++) {
+    const currentEnd = result[i]!.end_sec;
+    const nextStart = result[i + 1]!.start_sec;
+    const gap = nextStart - currentEnd;
+
+    if (gap > 0 && gap <= maxGapSec) {
+      result[i]!.end_sec = nextStart;
+    }
+  }
+
+  return result;
+}
+
 // ─── Time Formatting Helpers ─────────────────────────────────────────────────
 
 function formatTimestamp(totalSec: number, msSeparator: "," | "."): string {

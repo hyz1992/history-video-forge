@@ -18,6 +18,7 @@ import {
   estimateCaptionsFromTtsChunks,
   buildSrtFromCaptions,
   buildVttFromCaptions,
+  closeCaptionGaps,
   type TtsSubtitleChunk,
   type SubtitleCaption,
 } from "../assets-subtitle-generator.js";
@@ -120,6 +121,8 @@ export function createLocalSubtitleProvider(
           ttsChunks.map((chunk) => chunk.timing_source),
         );
       }
+
+      captions = closeCaptionGaps(captions);
 
       const srtContent = buildSrtFromCaptions(captions);
       const vttContent = buildVttFromCaptions(captions);
