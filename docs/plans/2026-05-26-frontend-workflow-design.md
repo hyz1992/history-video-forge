@@ -65,7 +65,7 @@ Date: 2026-05-26
 
 本次设计打通从资产管理到成品导出的前端全链路，核心用户场景为：
 
-1. 生成资产计划后，用户逐任务上传图片/视频（Super Grok 等外部工具生成），也可对任意任务选择自动生成。
+1. 生成资产计划后，用户可选择"全部自动生成"或"仅自动生成语音/配乐，图片/视频手动上传"。首版不支持单任务自动生成。
 2. TTS、字幕、BGM 默认走自动生成（失败或缺失时展示结构化 blocked/partial/warning，不承诺"始终成功"）。
 3. 资产就绪后一键合成、一键渲染、下载成品。
 
@@ -87,10 +87,9 @@ Date: 2026-05-26
 - 资产批量化操作（批量上传、批量分配到素材库）。
 - 音色库浏览/选择 UI。
 - 媒资库管理 UI（去重、生命周期、替换历史）。
-- 发布工作流、平台对接。
+- 发布工作流、平台对接（将由后续独立设计承接）。
 - 质量门禁自动化。
 - 对已冻结的 topic / script / storyboard 链路的任何改动。
-- 发布工作流与平台对接（将由后续独立设计承接）。
 
 ---
 
@@ -203,6 +202,18 @@ request 进入
 1. `assets-run.service.ts` 的 `buildExecutionOptions`：从请求参数读取 `enabled_provider_types`，而非硬编码全部类型。
 2. `assets-manifest-builder.ts` 的 `resolveInitialStatus`：当 task 的 provider type 未在 `enabled_provider_types` 中、且 task 的 `manual_upload_policy.allowed` 为 true 时，将 execution 初始状态设为 `waiting_manual_upload`，而非默认的 `planned`。需在 `buildInitialAssetManifest` 中将 `enabled_provider_types` 传入 manifest builder。
 
+**Task type 到 provider type 映射**（manifest builder 使用）：
+
+| Task type | Provider type | 受 filter 影响 |
+|-----------|--------------|--------------|
+| `image_still` | `image` | 是 |
+| `video_clip` | `video` | 是 |
+| `tts_audio` | `tts` | 是 |
+| `subtitle_track` | `tts`（字幕随 TTS 执行） | 是 |
+| `sfx_cue` | `sfx` | 是 |
+| `bgm_cue` | `bgm` | 是 |
+| `render_motion_cue` | 不适用（inline/local，不受 filter 影响） | 否 |
+
 #### 1. Multipart 文件上传端点
 
 新增路由：
@@ -217,12 +228,19 @@ Content-Type: multipart/form-data
 后端处理流程：
 
 1. HTTP 层已通过 busboy 解析 multipart，路由处理函数收到 `{ file: { buffer, originalName, mimeType } }`。
-2. **MIME 校验**：检查 `mimeType` 是否在允许列表（`image/jpeg`, `image/png`, `image/webp`, `video/mp4`, `video/quicktime`）中。同时检查 buffer 前几个字节的魔数（JPEG: `FF D8 FF`，PNG: `89 50 4E 47`，MP4: `ftyp` box），不匹配则拒绝。
-3. **文件名安全**：服务端生成文件名（`{taskId}-{timestamp}-{random6}.{ext}`），忽略客户端原始文件名。
-4. **写入文件**：将文件写入项目存储目录 `<projectStorageRootDir>/assets-runs/<activeManifestRecordId>/uploads/`，以 `asset_manifest_record_id`（即 `active_assets.asset_manifest_record_id`）作为目录名，无需额外 trace run id。
-5. **路径安全**：resolve 写入路径后确认仍在项目存储根目录内。
-6. 以写入后的绝对路径作为 `file_uri`，调用现有 `registerArtifact` 逻辑。
-7. 返回与 `registerArtifact` 相同格式的响应。
+2. **Task 级校验**：读取 active asset plan，找到对应 task，校验：
+   - `manual_upload_policy.allowed` 为 true，否则返回 422 `asset_manual_upload_not_allowed`。
+   - 客户端 MIME 在 task 的 `manual_upload_policy.accepted_file_types` 中，否则返回 422 `asset_manual_upload_type_not_allowed`。
+   - 根据 task type 确定 artifact type：`image_still` → `image`，`video_clip` → `video`。
+3. **MIME 魔数校验**：检查 buffer 前几个字节（JPEG: `FF D8 FF`，PNG: `89 50 4E 47`，MP4: `ftyp` box），与声明的 MIME 是否一致。不匹配则拒绝。
+4. **文件名安全**：服务端生成文件名（`{taskId}-{timestamp}-{random6}.{ext}`），忽略客户端原始文件名。
+5. **写入文件**：将文件写入项目存储目录 `<projectStorageRootDir>/assets-runs/<activeManifestRecordId>/uploads/`，以 `asset_manifest_record_id`（即 `active_assets.asset_manifest_record_id`）作为目录名，无需额外 trace run id。
+6. **路径安全**：resolve 写入路径后确认仍在项目存储根目录内。
+7. **元数据探测**（写入后、构造 artifact 前）：
+   - 图片：探测 `width` / `height`（使用 `image-size` 或同类库）。
+   - 视频：探测 `duration_sec` / `width` / `height` / `fps`（使用项目中已有的 `ffprobe` 工具函数 `probeAudioDuration` 同级路径下的视频 probe 函数；若 ffprobe 不可用，返回 422 提示"视频元数据探测失败"）。
+8. 以写入后的绝对路径作为 `file_uri`，以探测到的元数据构造 `metadata`，调用现有 `registerArtifact` 逻辑。`AssetArtifact` schema 对 image 要求 `width/height`，对 video 要求 `duration_sec/width/height/fps`，metadata 不全会被 schema safeParse 拒绝（422）。
+9. 返回与 `registerArtifact` 相同格式的响应。
 
 **覆盖/替换语义**：对已有产物的任务再次上传时，新 artifact 追加到 manifest 的 artifacts 列表，execution 的 `output_artifact_ids` 更新为 `[newArtifactId, ...oldArtifactIds]`（新 ID 在首位，成为当前选中产物）。旧 artifact 保留在列表中，可通过 `acceptArtifact` 回选。不删除旧文件。这与 `acceptArtifact` 的选中模型一致（将选中 ID 移到首位）。
 
@@ -461,7 +479,7 @@ API 适配器方法：
 
 #### 后端单元测试（必须通过）
 
-- multipart 上传：合法文件成功注册、超 100MB 拒绝、MIME 不在允许列表拒绝、魔数不匹配拒绝、原始文件名被忽略（服务端生成文件名）。
+- multipart 上传：合法文件成功注册并探测元数据、超 100MB 拒绝、MIME 不在允许列表拒绝、魔数不匹配拒绝、原始文件名被忽略（服务端生成文件名）、task 不允许手动上传时拒绝、视频上传后元数据不全时拒绝。
 - 文件服务：合法 artifact 返回正确 Content-Type、路径穿越返回 403、不存在的 artifact 返回 404、Range 请求正确响应 206。
 - render preview：返回 `Content-Disposition: inline` + `Content-Type: video/mp4`。
 - render download：返回 `Content-Disposition: attachment` + 正确文件名。
