@@ -13,8 +13,8 @@
 - 当前优先事项：
   - 保持 `topic -> script` 首稿链路稳定，不主动重开已冻结范围
   - 保持 `storyboard -> asset planning -> assets -> compose` 已完成 v1 链路的阶段边界
-  - 当前下一步是 `renderer / export`：已完成 design 与 implementation plan，可以按计划从 Task 1 小步实施
-  - 不得顺手实现未设计的 DashScope 图生视频、前端预览 UI、发布流或人工审稿流
+  - `renderer / export` 后端 v1 已完成首批实现；当前下一步允许围绕前端工作流、预览/导出、发布流与人工审稿流继续设计和小步实施
+  - 前端预览 UI、发布流、人工审稿流不再作为全局禁止项；进入实现前仍需使用正式 design + implementation plan 收口，并保持小步验证
 
 当前已完成的关键恢复：
 
@@ -33,15 +33,15 @@
 当前允许进入实现的范围：
 
 - 文档治理、阶段冻结说明、旧计划归档
-- `renderer / export` implementation plan 的小步实现，优先从 shared schema / source validator 等低风险任务开始
+- 前端工作流、素材上传/预览、render/export 预览与下载、发布流、人工审稿流的正式设计、implementation plan 与低耦合小步实现
+- `renderer / export` 后端 v1 的必要维护、回归修复与接口补强
 - `topic + script` 冻结后的必要维护、回归修复、观测记录
 - 明确获得执行指令后的低风险 harness 验证补强
 
 当前**不允许**顺手实现的范围：
 
 - 任何未正式设计并通过 implementation plan 收口的 downstream 结构
-- DashScope 图生视频 provider，除非先完成单独设计计划并获得明确执行指令
-- renderer plan 范围外的 Remotion 复杂能力、前端预览 UI、平台发布、人工审稿或质量评分系统
+- 当前正式设计边界外的 provider、Remotion 复杂能力、平台发布、人工审稿或质量评分扩展；若要进入实现，先补对应 design + implementation plan
 - patch integration 主路径，除非先完成单独设计计划并获得明确执行指令
 - 为了下一阶段方便而回改已冻结的 topic/script prompt、schema 或 API，除非问题被明确定位为阻塞或回归
 

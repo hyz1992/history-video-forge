@@ -185,7 +185,9 @@ The route should:
    - `render_blocked` for structural blockers;
    - `render_failed` for renderer execution failures.
 
-No frontend preview UI is part of renderer v1.
+Frontend preview UI can be designed as a separate workflow that consumes the
+render job output artifact; it is not part of the renderer generate operation
+itself.
 
 ## Stale Source Rules
 

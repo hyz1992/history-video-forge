@@ -32,6 +32,12 @@
 - 如果需要重启 archive 中的某个方向，应先重新写当前日期的 design + implementation plan，而不是直接续跑旧计划。
 - 新的视频流水线阶段计划应先放在 `docs/plans/` 根目录；完成并被正式文档吸收后再归档。
 
+## 2026-05-27 前端工作流方向更新
+
+- 前端预览 UI、素材上传/替换、render/export 预览与下载、发布流和人工审稿流不再作为全局禁止项。
+- 这些方向进入实现前仍需正式 design + implementation plan，并按低耦合小步验证推进。
+- 旧计划中“本轮不实现 / 不得顺手实现前端预览 UI”等表述只描述当时计划边界，不再作为当前阶段的全局限制。
+
 ## 2026-05-11 Asset Planning v1 状态
 
 - `asset planning` 第一版 design 与 implementation plan 已执行到后端最小实现完成，并已被正式架构、数据和 API 文档吸收。
@@ -50,28 +56,28 @@
 - 新增 [Assets Stage Design](./2026-05-15-assets-stage-design.md)。
 - 新增 [Assets Stage Implementation Plan](./2026-05-15-assets-stage-implementation-plan.md)。
 - 本轮计划只设计 `AssetPlan` 之后的资产执行结果合同：`AssetManifest`、任务执行状态、artifact metadata、分镜 route、BGM placement、手动素材登记和结构校验。
-- 历史说明：该条是 2026-05-15 初始 assets v1 边界；截至 2026-05-19，assets 已具备 fake/local 执行、本地文件存储、显式 DashScope TTS/文生图/image-to-video 路径和 provider job 记录，但仍不包含真实 BGM/SFX、上传/预览 UI 或发布级素材运营流。
+- 历史说明：该条是 2026-05-15 初始 assets v1 边界；截至 2026-05-19，assets 已具备 fake/local 执行、本地文件存储、显式 DashScope TTS/文生图/image-to-video 路径和 provider job 记录。当时真实 BGM/SFX、上传/预览 UI 或发布级素材运营流未包含在 assets v1 计划内；截至 2026-05-27，这些方向可进入独立正式设计与实施计划。
 
 ## 2026-05-15 Assets 阶段实施状态
 
 - assets v1 后端骨架已实现：manifest builder、local validator、manual artifact registration、artifact accept、persistence、API routes。
 - 架构文档、字段文档、schema 文档和 API 文档已同步更新。
 - 当前仍保留未归档的 assets 计划文件，直到完整验证完成。
-- 历史说明：该条是 assets 骨架完成时的状态；截至 2026-05-19，compose v1、renderer/export v1 和显式 DashScope image-to-video provider 后端路径均已有独立计划与实现；仍不得从 assets 计划顺手扩展的是上传/预览 UI、发布流和人工审稿流。
+- 历史说明：该条是 assets 骨架完成时的状态；截至 2026-05-19，compose v1、renderer/export v1 和显式 DashScope image-to-video provider 后端路径均已有独立计划与实现。当时上传/预览 UI、发布流和人工审稿流未包含在 assets 计划内；截至 2026-05-27，这些方向可进入独立正式设计与实施计划。
 
 ## 2026-05-16 真实 Assets 生成与媒体库设计
 
 - 新增 [真实 Assets 生成与媒体库设计](./2026-05-16-real-assets-generation-and-media-library-design.md)。
 - 新增 [真实 Assets 生成与媒体库实施计划](./2026-05-16-real-assets-generation-and-media-library-implementation-plan.md)。
 - 本设计只收束真实 provider、TTS、字幕文件、Remotion 局部分镜、SFX/BGM 本地素材库和授权治理的阶段边界。
-- 当前实施计划只覆盖 provider job、文件存储、fake provider、TTS/subtitle/image 最小执行、媒体库基础与 DashScope provider 外壳；不得顺手实现真实视频、Remotion compose、素材下载或上传/预览 UI。
+- 当前实施计划只覆盖 provider job、文件存储、fake provider、TTS/subtitle/image 最小执行、媒体库基础与 DashScope provider 外壳；真实视频、Remotion compose、素材下载或上传/预览 UI 需要独立计划承接。
 
 ## 2026-05-17 Compose 阶段设计
 
 - 新增 [Compose Stage Design](../architecture/compose-stage-design.md)。
 - 新增 [Compose Stage Implementation Plan](./2026-05-17-compose-stage-implementation-plan.md)。
 - 本轮只收束 assets 之后的 compose timeline 合同：`ComposeTimeline`、`ComposeValidationResult`、`ComposeRecord`、本地结构校验、生成 API、上游失效规则和文档更新。
-- 第一版 compose 实施计划只允许生成可持久化的 timeline contract；不得顺手实现 Remotion 渲染、DashScope 生视频、最终 MP4 导出或前端预览 UI。
+- 第一版 compose 实施计划只允许生成可持久化的 timeline contract；Remotion 渲染、DashScope 生视频、最终 MP4 导出或前端预览 UI 需要独立计划承接。
 
 ## 2026-05-17 Compose 阶段实施收口
 
@@ -86,21 +92,21 @@
 - 新增 [Renderer / Export Stage Implementation Plan](./2026-05-17-renderer-stage-implementation-plan.md)。
 - 本轮设计选择先做本地 renderer/export v1：消费 `ComposeTimeline`，用静态图片 motion recipe、口播、字幕和可选音轨导出 MP4，并持久化 render job。
 - DashScope 图生视频不进入 renderer v1；截至 2026-05-19，它已作为 assets provider 生成 `video` artifact 的后端路径接入，再由 compose/renderer 消费。
-- 该条为 2026-05-17 设计入口记录；截至 2026-05-19，renderer/export v1 已按 implementation plan 完成后端首批实现，DashScope 图生视频 provider 已按单独计划接入 assets；前端预览 UI、发布流和人工审稿流仍不得顺手实现。
+- 该条为 2026-05-17 设计入口记录；截至 2026-05-19，renderer/export v1 已按 implementation plan 完成后端首批实现，DashScope 图生视频 provider 已按单独计划接入 assets。当时前端预览 UI、发布流和人工审稿流未包含在 renderer 后端计划内；截至 2026-05-27，这些方向可进入独立正式设计与实施计划。
 
 ## 2026-05-18 Renderer / Export 实施进展
 
 - Renderer / Export implementation plan 已完成 Task 1-10：shared render schemas、source validator、persistence/snapshot、adapter boundary、local Remotion adapter、render generate API、upstream invalidation、fake runtime smoke、正式文档同步与回归收口。
 - Task 9 已由正式文档吸收当前实现事实：pipeline IO、API、schema、field、downstream high-level 与 plans 入口文档同步 renderer v1 后端边界。
 - Task 10 已完成 renderer-focused tests、`render:remotion:smoke`、affected downstream tests 与 diff/status 检查；renderer 计划文件是否归档仍待单独收口决定。
-- Renderer/export 当前实现不调用 DashScope 图生视频，不包含前端 preview UI、发布流、人工审稿流，也不改变 topic/script/storyboard/asset planning/assets/compose 语义链路。
+- Renderer/export 当前后端实现不调用 DashScope 图生视频，不改变 topic/script/storyboard/asset planning/assets/compose 语义链路；前端 preview UI、发布流、人工审稿流可由后续工作流计划承接。
 
 ## 2026-05-18 DashScope 图生视频 provider 设计
 
 - 新增 [DashScope Image-to-Video Provider Design](./2026-05-18-dashscope-image-to-video-provider-design.md)。
 - 新增 [DashScope Image-to-Video Provider Implementation Plan](./2026-05-18-dashscope-image-to-video-provider-implementation-plan.md)。
 - 本轮设计明确图生视频属于 assets provider：消费已规划的 `video_clip` task 和同 segment 的 image artifact，产出 `video` artifact，再由 compose/renderer 消费。
-- 第一版 implementation plan 只允许做显式 opt-in 的 DashScope image-to-video provider、mocked tests、service/API config、explicit live-check 和正式文档同步；不实现前端预览、上传 UI、发布流、人工审稿流、质量评分或 renderer-side provider 调用。
+- 第一版 implementation plan 只允许做显式 opt-in 的 DashScope image-to-video provider、mocked tests、service/API config、explicit live-check 和正式文档同步；前端预览、上传 UI、发布流、人工审稿流、质量评分或 renderer-side provider 调用需要独立计划承接。
 
 ## 2026-05-19 DashScope 图生视频 provider 实施进展
 
@@ -156,7 +162,7 @@
 - 本轮设计选择把首版字幕样式合同放在 `subtitle_track.metadata.subtitle_style`，由 renderer 通过 `AssetManifest` 消费；`ComposeTimeline` 第一版保持不变。
 - Implementation plan 拆为 shared schema、local subtitle 默认样式、subtitle cue reader、Remotion adapter props、TimelineVideo 样式渲染、静帧可见性 smoke、正式文档同步 7 个 TDD 任务。
 - 截至 2026-05-20，Implementation plan Task 1-7 已完成：shared `SubtitleStyle` / `DEFAULT_SUBTITLE_STYLE`、local subtitle metadata 写入、SRT/VTT cue reader、Remotion input props、`TimelineVideo` active cue 样式渲染、`renderStill` 静帧像素可见性 smoke 与正式文档同步。
-- 本轮仍不实现前端预览 UI、word-level forced alignment、karaoke captions、字幕人工编辑流或发布流。
+- 本轮历史计划未包含前端预览 UI、word-level forced alignment、karaoke captions、字幕人工编辑流或发布流；后续可按独立计划推进。
 
 ## 2026-05-20 Remotion 本地成片质量设计
 
@@ -167,7 +173,7 @@
 - 截至 2026-05-20，Implementation plan Task 1-9 已完成：Remotion input builder、timed visual clips、motion recipes、fake TTS WAV、可选 BGM/SFX timeline 暴露、audio clips 渲染与 unmuted MP4、本地静帧质量 smoke、runtime smoke 诊断增强和正式文档同步。
 - 当前验证入口包括 `tests/backend/render/remotion-local-quality-smoke.test.ts`、`tests/backend/render/remotion-subtitle-still-smoke.test.ts`、`tests/harness/render-runtime-smoke.test.ts` 与 `npm run render:remotion:smoke`。静帧 smoke 需要 headless Chromium；本地音频当前以内联 data URI 供 Remotion 消费，长音频静态资源服务仍可作为后续优化。
 - 该计划已被正式架构、数据文档、backlog 与 smoke 测试吸收；后续不要从归档 plan 继续执行新任务，如需扩展 BGM/SFX provider、真实图生视频验证或前端预览，应新建当前日期的 design + implementation plan。
-- 本轮仍不实现 DashScope 图生视频真实调用、BGM/SFX provider、前端预览 UI、发布流、人工审稿流或质量评分。
+- 本轮历史计划未包含 DashScope 图生视频真实调用、BGM/SFX provider、前端预览 UI、发布流、人工审稿流或质量评分；后续可按独立计划推进。
 
 ## 2026-05-20 BGM / SFX 设计
 
@@ -177,7 +183,7 @@
 - 新增 [真实音频素材导入校验设计](./2026-05-20-audio-library-import-check-design.md)。
 - 新增 [真实音频素材导入校验实施计划](./2026-05-20-audio-library-import-check-implementation-plan.md)。
 - 本轮设计面向 backlog P1「BGM / SFX」，先收束本地素材库字段、cue 到素材选择规则、fake/local provider 基线和 compose/renderer 消费边界。
-- 设计选择先走 approved media library + deterministic fake/local WAV artifact，不默认接真实付费 provider，不做上传/预览 UI、发布流、人工审稿或质量评分。
+- 设计选择先走 approved media library + deterministic fake/local WAV artifact，不默认接真实付费 provider；上传/预览 UI、发布流、人工审稿或质量评分由后续独立计划承接。
 - Implementation plan 拆为 cue 参数读取、placement 合同、WAV 夹具、本地 BGM provider、本地 SFX provider、assets run 接入、compose/render 回归、runtime smoke 和正式文档同步 9 个 TDD 任务。
 - 截至 2026-05-20，Implementation plan Task 1-9 已完成：cue 参数读取与商业授权过滤、`BgmPlacement.source_task_id`、共享 WAV 夹具、本地 BGM/SFX provider、assets run 接入、compose/render 消费回归、runtime smoke 扩展和正式文档同步。
 - 当前完成线是离线本地媒体库选择 + deterministic WAV fixture 物化 + compose/renderer 消费；真实付费 BGM/SFX provider、素材上传/预览、署名包装、ducking、响度归一化和发布流仍需后续单独设计。

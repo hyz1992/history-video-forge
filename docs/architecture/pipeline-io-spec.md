@@ -327,7 +327,7 @@ Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `Scr
 - 若 `video_clip` 任务缺失、图生视频未启用或 provider 失败，既有 image + `motion_recipe` fallback 仍保留给 compose/renderer 消费。
 - 图生视频真实调用只通过显式 live check 或显式 `provider_mode=dashscope` 请求触发，不属于默认自动化门。
 - `harness:assets-dashscope-tts-live-check` 是低成本 TTS-only 显式检查入口；`harness:assets-dashscope-voice-live-check` 会创建供应商音色并合成一句测试音频，仍然是 opt-in，不进入默认测试门。
-- fake/local provider 与显式 DashScope 路径会在项目 storage 下写入本地 artifact 文件；物理上传 UI 与对象存储发布链路仍不属于 assets v1。
+- fake/local provider 与显式 DashScope 路径会在项目 storage 下写入本地 artifact 文件；物理上传 UI 与对象存储发布链路可由前端工作流/API 计划承接。
 - 不实现 compose timeline 或最终视频导出。
 
 手动素材登记：
@@ -351,12 +351,11 @@ Artifact 确认：
 - 新 asset plan 激活后，清空 active asset manifest 指针。
 - assets run 在激活前必须复查 active asset plan 是否仍一致；若不一致，返回 `409 stale_assets_source`，不激活旧结果。
 
-仍未进入本阶段实现的内容：
+Assets v1 后端合同之外的内容：
 
 - renderer-side DashScope 调用或任何非 assets-stage 视频 provider 调用。
 - 真实付费 BGM/SFX provider、素材导入/上传、授权包装、署名输出和运营生命周期。
-- 物理文件上传 UI、对象存储发布链路、预览 UI。
-- 前端 assets 面板 UI。
+- 物理文件上传 UI、对象存储发布链路、预览 UI 与前端 assets 面板 UI：这些能力可由前端工作流/API 后续设计承接，不隐式改变 assets v1 manifest 合同。
 - compose timeline 或最终视频导出。
 - 质量判断（审美、爆款、历史相似度）。
 
@@ -409,12 +408,12 @@ Compose v1 消费 active `AssetManifestRecord`，输出可持久化的 `ComposeT
 - 新 asset manifest 激活后，必须清空 active compose 指针及 `latest_compose_run_trace_json`。
 - project snapshot 只根据信任的 active 指针暴露 `active_compose`，不会在指针清空后从历史记录回填。
 
-仍不属于 compose v1 的内容：
+Compose v1 后端合同不承担的内容：
 
 - Remotion 渲染。
 - DashScope 图生视频或任何视频 provider 调用。
 - 最终 MP4 导出。
-- 前端 compose preview UI。
+- 前端 compose preview UI：可在前端工作流中消费 `ComposeTimeline`，但不改变 compose 生成职责。
 - 对 topic/script/storyboard/asset planning/assets 语义内容做自动修补。
 
 ## 8. Renderer / Export v1 阶段（2026-05-18 后端首批实现）
@@ -467,6 +466,6 @@ Compose v1 消费 active `AssetManifestRecord`，输出可持久化的 `ComposeT
 
 - 不在 renderer 阶段实现或调用 DashScope 图生视频 provider；renderer 只消费 assets 阶段已产出的 `video` artifact 或 image + motion fallback。
 - 不由 renderer 生成缺失素材。
-- 不实现前端预览 UI、发布流、人工审稿流或质量评分。
+- render generate 后端合同不承载前端预览 UI、发布流、人工审稿流或质量评分的交互状态；这些方向可由后续正式设计围绕 render artifact 承接。
 - 不实现 word-level forced alignment、karaoke captions 或字幕人工编辑流。
 - 不把 compose v1 扩展成最终视频语义链路。

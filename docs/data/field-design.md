@@ -831,7 +831,7 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 
 ## Assets v1 字段（2026-05-18 已同步后端执行基础）
 
-`AssetManifest` 是 assets 阶段的正式输出对象。它描述资产执行结果清单，包含任务执行状态、artifact 元数据、分镜 route 和音频摘要。当前 assets 后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础、默认音频素材库 seed 合同、执行期 TTS 分块规范化、音频时长探测与字幕 timing metadata、本地 BGM/SFX 素材选择与 deterministic WAV fixture 物化，以及显式 DashScope TTS/文生图/image-to-video 路径；仍不包含真实付费 BGM/SFX provider、上传/预览 UI、发布级素材运营流或署名包装。
+`AssetManifest` 是 assets 阶段的正式输出对象。它描述资产执行结果清单，包含任务执行状态、artifact 元数据、分镜 route 和音频摘要。当前 assets 后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础、默认音频素材库 seed 合同、执行期 TTS 分块规范化、音频时长探测与字幕 timing metadata、本地 BGM/SFX 素材选择与 deterministic WAV fixture 物化，以及显式 DashScope TTS/文生图/image-to-video 路径；真实付费 BGM/SFX provider、上传/预览 UI、发布级素材运营流或署名包装可由后续独立字段/API 设计承接。
 
 ### `AssetManifest`
 
@@ -1109,6 +1109,6 @@ Renderer v1 字段只描述 `ComposeTimeline` 之后的渲染与导出结果，�
 - renderer 字段不表达素材审美、爆款评分、历史相似度或人工审稿结论。
 - renderer 字段不表达 DashScope 图生视频 provider job。
 - renderer 字段不替代 compose timeline；最终视频的时间轴 source 仍是 `ComposeTimeline`。
-- renderer 当前不实现前端预览 UI、word-level forced alignment、karaoke captions 或字幕人工编辑流。
+- renderer 字段可被前端预览 UI 消费，但不承载发布流、人工审稿流、质量评分或字幕人工编辑流的交互状态；这些能力需要单独字段设计。
 
 补充说明（2026-05-20）：本地 Remotion adapter 会在运行时把 `ComposeTimeline` + `AssetManifest` 派生为 `visualClips`、`audioClips`、`subtitleCues` 和 `subtitleStyle`。`visualClips` 支持 image、video、image + `motion_recipe` fallback、基础 pan/zoom/hold/push-in 与 crossfade；`audioClips` 支持 narration 以及已存在 artifact 的 BGM/SFX。BGM audio clip 会携带 volume、fade in/out、loop 和 source duration，`TimelineVideo` 会应用淡入淡出并在源音频短于 clip 时重复播放。fake TTS 与本地 BGM/SFX 产物均可作为 render-ready WAV，用于离线 smoke 生成带音频的 MP4。当前像素级 smoke 依赖 headless Chromium，只证明画面非空和字幕可见，不承担审美、音频听感或发布质量判断。

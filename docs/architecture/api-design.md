@@ -14,7 +14,7 @@
 2. 用户显式操作触发 API；内部 patch / regenerate 不单独暴露成用户 API。
 3. topic 与 script 的长时任务优先采用异步任务 + SSE 状态流。
 4. API 只暴露当前已确认阶段。
-5. storyboard / asset planning / assets / compose v1 已承诺并实现后端 endpoint；renderer/export v1 后端最小闭环已按 implementation plan 进入实现；运营后台、发布流、前端预览和人工审稿 API 仍不在本轮承诺范围。
+5. storyboard / asset planning / assets / compose v1 已承诺并实现后端 endpoint；renderer/export v1 后端最小闭环已按 implementation plan 完成首批实现；前端预览、发布流和人工审稿 API 可进入后续正式设计与小步实施，但必须在实现前完成对应 design + implementation plan。
 
 ## 2. 顶层资源
 
@@ -392,10 +392,10 @@ script 摘要第一版建议至少包含：
 - 前端通过 SSE 或状态轮询获取完成事件
 - 任何 `return_topic` 都应显式通知前端，而不是静默回退
 
-## 7. 当前不在本轮承诺的 API
+## 7. 尚未在本文正式定义的 API
 
 - 管理后台校正 Event Registry 的运营 API
-- renderer / export v1 后端 API 已由 2026-05-18 `POST /api/projects/:projectId/render/generate` 合同覆盖；完整前端预览、发布流和人工审稿 API 仍不在本轮承诺范围。
+- renderer / export v1 后端 API 已由 2026-05-18 `POST /api/projects/:projectId/render/generate` 合同覆盖；完整前端预览、发布流和人工审稿 API 需要由后续正式设计补充合同。
 - DashScope 图生视频专用 API；图生视频当前只通过 assets generate 的显式 `provider_mode=dashscope` 配置进入。
 
 ## Storyboard v1 API（2026-05-10 已实现）
@@ -496,7 +496,7 @@ script 摘要第一版建议至少包含：
 
 - 从当前 active asset plan 生成 assets manifest v1。
 - 成功后保存 `AssetManifestRecord`，并把项目推进到 `assets_ready` 或 `assets_blocked`。
-- 当前默认路径使用 fake/local provider 与本地文件存储；显式 `provider_mode=dashscope` 可调用 DashScope TTS、文生图 provider，并在 active `AssetPlan` 存在 `video_clip` 任务时调用 DashScope image-to-video provider。若 TTS 选中的本地全局音色缺少 `provider_voice_id`，DashScope TTS 执行会在 assets 阶段懒创建供应商音色。该 API 仍不包含真实 BGM/SFX、前端上传/预览 UI 或发布级素材运营流。
+- 当前默认路径使用 fake/local provider 与本地文件存储；显式 `provider_mode=dashscope` 可调用 DashScope TTS、文生图 provider，并在 active `AssetPlan` 存在 `video_clip` 任务时调用 DashScope image-to-video provider。若 TTS 选中的本地全局音色缺少 `provider_voice_id`，DashScope TTS 执行会在 assets 阶段懒创建供应商音色。真实 BGM/SFX、前端上传/预览 UI 或发布级素材运营流需要由后续 API/前端设计承接。
 
 输入：
 
@@ -594,7 +594,7 @@ script 摘要第一版建议至少包含：
 - assets API 默认不调用真实 provider；显式 `provider_mode=dashscope` 允许 TTS、文生图与图生视频 provider。TTS 的供应商音色创建只在 assets TTS 执行中按需发生，不在 asset planning 或默认测试中发生；图生视频只在 assets 阶段处理 `video_clip` 任务，真实 SFX/BGM 仍未接入。
 - assets API 不修改 `script_text`、`TopicPackage`、`StoryboardPlan` 或 `AssetPlan`。
 - assets API 不生成 compose timeline 或最终视频。
-- assets API 不实现前端 UI、物理文件上传或预览功能。
+- assets v1 API 原始合同不包含前端 UI、物理文件上传或预览功能；这些能力可由后续前端工作流/API 设计补充，不应隐式塞进既有 `register` 合同。
 
 ## Compose v1 API（2026-05-17 已实现后端 timeline 合同）
 
@@ -643,11 +643,11 @@ script 摘要第一版建议至少包含：
 - compose API 不导出 MP4。
 - compose API 不生成 DashScope 图生视频。
 - compose API 不修改 `script_text`、`TopicPackage`、`StoryboardPlan`、`AssetPlan` 或 `AssetManifest`。
-- compose API 不实现前端预览 UI。
+- compose API 本身只生成 timeline contract；前端预览 UI 可在前端工作流设计中消费该 contract。
 
 ## Renderer / Export v1 API（2026-05-18 后端首批实现）
 
-本节覆盖 `POST /api/projects/:projectId/render/generate` 当前后端合同，修正早期 “renderer / Remotion / MP4 export API 不在本轮承诺” 的表述。当前实现只进入 renderer implementation plan 的后端最小闭环，不代表 renderer API 会调用 DashScope 图生视频、前端预览、发布流或人工审稿流已进入范围。
+本节覆盖 `POST /api/projects/:projectId/render/generate` 当前后端合同，修正早期 “renderer / Remotion / MP4 export API 不在本轮承诺” 的表述。当前实现是 renderer implementation plan 的后端最小闭环；前端预览、发布流或人工审稿流应在各自正式设计中补充 API 合同，而不是改变该生成端点的职责。
 
 ### `POST /api/projects/:projectId/render/generate`
 
@@ -656,7 +656,7 @@ script 摘要第一版建议至少包含：
 - 从当前 active `ComposeRecord` 生成 render job。
 - 成功后保存 `RenderJobRecord`，并将 project 推进到 `render_ready`。
 - blocked source 保存可诊断 render job，并将 project 推进到 `render_blocked`。
-- adapter 通过后端边界注入；测试和 runtime smoke 默认使用 deterministic fake adapter。Local Remotion adapter 已有后端适配边界与最小测试，但不把 DashScope 或前端预览纳入该 API。
+- adapter 通过后端边界注入；测试和 runtime smoke 默认使用 deterministic fake adapter。Local Remotion adapter 已有后端适配边界与最小测试；DashScope provider 仍属于 assets 阶段，前端预览应消费 render artifact 或后续文件服务合同。
 
 输入：
 
@@ -695,4 +695,4 @@ script 摘要第一版建议至少包含：
 - render API 不调用 DashScope 图生视频。
 - render API 不生成缺失素材。
 - render API 不修改 `script_text`、`TopicPackage`、`StoryboardPlan`、`AssetPlan`、`AssetManifest` 或 `ComposeTimeline`。
-- render API 不实现前端 preview UI、发布流或人工审稿流。
+- render generate API 不承载前端 preview UI、发布流或人工审稿流的交互状态；这些能力可由后续 API/前端设计围绕 render artifact 补充。

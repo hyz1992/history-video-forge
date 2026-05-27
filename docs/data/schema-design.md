@@ -261,7 +261,7 @@
 
 - 不把 `Event Registry`、`Candidate Cache`、`Recent Memory` 混成一张表
 - 不把全部数组型字段都塞进单 JSON 大字段里不区分职责
-- 不为尚未拍板的发布、运营后台、人工审稿、质量评分等后续阶段提前设计大而全 schema
+- 发布、运营后台、人工审稿、质量评分等后续阶段进入实现前，先按独立设计补最小 schema，不提前设计大而全对象
 - 不直接复用旧项目的 pipeline state 表结构
 
 ## 6. Task 2 共享 Schema 与持久化映射
@@ -344,7 +344,7 @@
 - 索引策略与查询优化
 - `recommendation candidate exposure log` 是否独立成表
 - `Recent Memory` 第一版是否纯查询层，还是做物化表
-- 发布、运营后台、人工审稿、质量评分等后续阶段的持久化对象
+- 发布、运营后台、人工审稿、质量评分等后续阶段的持久化对象（待独立设计收口）
 
 ## StoryboardRecord 持久化映射（2026-05-10 已实现）
 
@@ -624,5 +624,5 @@ Renderer / Export v1 已有第一版持久化记录。它是 `ComposeRecord` 之
 - `validation_result_json` 保存 `RenderValidationResult`。
 - `execution_state_json` 至少记录 `status`、`activated`、`adapter` 与 source compose 信息。
 - Renderer 运行时从 source `AssetManifestRecord.manifest_json` 与 `ComposeTimeline` 派生 Remotion props：`visualClips`、`audioClips`、`subtitleCues` 与 `subtitleStyle`。其中 subtitle artifact 会被解析为 SRT/VTT cues，`subtitle_track.metadata.subtitle_style` 会作为 `subtitleStyle` 传入 Remotion；这些渲染输入是运行时派生 props，不单独持久化为 render job 字段。
-- 本地 Remotion renderer 当前支持 image/video 视觉 clip、image + `motion_recipe` fallback、基础 pan/zoom/hold/push-in/crossfade、narration 音频 mux，以及已存在 artifact 的 BGM/SFX clip。fake TTS 与本地 BGM/SFX provider 均写入 render-ready WAV 以支持离线 smoke；真实付费 BGM/SFX provider、ducking、响度归一化和署名包装仍不属于 render job 持久化字段。
-- `render_job_records` 不保存 DashScope 图生视频 job，不保存发布流状态，不保存人工审稿状态。
+- 本地 Remotion renderer 当前支持 image/video 视觉 clip、image + `motion_recipe` fallback、基础 pan/zoom/hold/push-in/crossfade、narration 音频 mux，以及已存在 artifact 的 BGM/SFX clip。fake TTS 与本地 BGM/SFX provider 均写入 render-ready WAV 以支持离线 smoke；真实付费 BGM/SFX provider、ducking、响度归一化和署名包装需要独立字段设计，不塞进当前 render job 基础字段。
+- `render_job_records` 不保存 DashScope 图生视频 job；发布流状态与人工审稿状态需要由后续独立 schema 设计承接。

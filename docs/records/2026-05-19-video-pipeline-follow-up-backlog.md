@@ -99,6 +99,8 @@
 
 ## P2: 前端与人工工作台
 
+2026-05-27 更新：前端预览 UI、人工上传/替换、render/export 预览与重新导出、发布流和人工审稿流已不再作为全局禁止项；进入实现前仍需正式 design + implementation plan。
+
 - [ ] assets 面板展示 task execution、artifact、provider job、错误与 fallback。
 - [ ] 支持人工上传/替换 artifact。
 - [ ] 支持音色库浏览、筛选、查看 provider status。

@@ -193,8 +193,10 @@ Compose v1 does not:
 - generate missing assets;
 - regenerate prompts;
 - judge aesthetics;
-- edit script/storyboard/asset plan;
-- implement frontend preview UI.
+- edit script/storyboard/asset plan.
+
+Frontend preview UI can be designed as a separate workflow that consumes the
+compose timeline; it is not part of the Compose v1 backend generation contract.
 
 ## Future Extension
 

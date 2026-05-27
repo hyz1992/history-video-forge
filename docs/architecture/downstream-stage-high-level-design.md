@@ -12,7 +12,7 @@
 
 ## 1. 当前状态
 
-> 2026-05-20 修订说明：本文档早期段落保留了从 `topic + script` 冻结后进入 downstream 设计前的历史基线。当前正式状态是：`storyboard`、`asset planning`、`assets`、`compose` 均已完成 v1 后端链路；`renderer/export` 已完成 v1 后端首批实现与回归；DashScope 图生视频已作为显式 opt-in 的 assets provider 后端路径接入；BGM/SFX 已完成离线本地媒体库选择、deterministic WAV fixture 物化与 compose/renderer 消费回归。后续仍未进入范围的是真实付费 BGM/SFX provider、素材上传/预览 UI、发布流、人工审稿流和质量评分系统。
+> 2026-05-27 修订说明：本文档早期段落保留了从 `topic + script` 冻结后进入 downstream 设计前的历史基线。当前正式状态是：`storyboard`、`asset planning`、`assets`、`compose` 均已完成 v1 后端链路；`renderer/export` 已完成 v1 后端首批实现与回归；DashScope 图生视频已作为显式 opt-in 的 assets provider 后端路径接入；BGM/SFX 已完成离线本地媒体库选择、deterministic WAV fixture 物化与 compose/renderer 消费回归。后续可以围绕真实付费 BGM/SFX provider、素材上传/预览 UI、发布流、人工审稿流和质量评分系统继续正式设计与小步实施，但不得绕过 design + implementation plan。
 
 当前项目已经比较完整地设计并收口了：
 
@@ -268,11 +268,11 @@ Assets v1 当前实现范围：
 - `AssetManifestRecord`：持久化记录。
 - 本地 BGM/SFX provider 基线：从 approved 且 commercial-use allowed 的 media library item 中选择素材，物化 render-ready WAV artifact；`BgmPlacement.source_task_id` 负责 task-to-placement 关联，`sfx_cue` 使用 `source_segment_id` 路由到 segment。
 
-仍然禁止：
+Assets 后端阶段边界：
 
 - 在 assets 阶段回写 topic/script/storyboard/asset plan。
-- 在 assets 阶段顺手接入未设计的真实 provider。当前显式 DashScope TTS/文生图/image-to-video 路径和本地 BGM/SFX provider 基线已存在；真实付费 BGM/SFX provider、上传/授权/署名包装仍必须先单独设计。
-- 在 assets 阶段实现物理文件上传、存储、预览 UI。
+- 在 assets 阶段顺手接入未设计的真实 provider。当前显式 DashScope TTS/文生图/image-to-video 路径和本地 BGM/SFX provider 基线已存在；真实付费 BGM/SFX provider、上传/授权/署名包装仍需先单独设计。
+- 物理文件上传、存储、预览 UI 可由前端工作流/API 计划承接，不隐式改变 assets v1 manifest 合同。
 - 在 assets 阶段实现 compose timeline 或最终视频导出。
 - 让 semantic reviewer 参与 assets 主链路。
 - 用本地 validator 判断审美、爆款、语义质量或 provider 生成质量。
@@ -280,7 +280,7 @@ Assets v1 当前实现范围：
 显边界面：
 
 - 历史说明：第一版初始骨架不接真实 provider；截至 2026-05-19，显式 DashScope TTS/文生图/image-to-video 路径已存在，默认自动化仍使用 fake/local。
-- 第一版不实现前端 assets 面板 UI。
+- 第一版历史骨架未实现前端 assets 面板 UI；当前可由前端工作流计划继续推进。
 - 第一版不实现 compose timeline 或最终视频导出。
 
 ## 2026-05-17 状态更新：Compose v1 已完成后端 timeline 合同
@@ -309,13 +309,13 @@ Compose v1 当前实现范围：
 - `ComposeRecord`：持久化记录。
 - `compose/generate` API：保存并激活 ready 或 blocked compose 记录。
 
-仍然禁止：
+Compose 后端阶段边界：
 
 - 在 compose 阶段回写 topic/script/storyboard/asset planning/assets。
 - 在 compose 阶段调用 Remotion。
 - 在 compose 阶段导出最终 MP4。
 - 在 compose 阶段调用 DashScope 图生视频或任何视频 provider。
-- 在 compose 阶段实现前端预览 UI。
+- 前端预览 UI 可消费 compose timeline，但不塞入 compose 生成职责。
 - 让 semantic reviewer 参与 compose 主链路。
 - 用本地 validator 判断审美、爆款、历史相似度或素材生成质量。
 
@@ -346,11 +346,11 @@ Renderer / Export v1 在 2026-05-17 计划中待实施的内容（2026-05-18 已
 - project snapshot 中的 `active_render` 与 `latest_render_run`。
 - render runtime smoke。
 
-仍然禁止：
+Renderer 后端阶段边界：
 
 - 在 renderer 阶段回写 topic/script/storyboard/asset planning/assets/compose。
 - 在 renderer 阶段调用 DashScope 图生视频或生成缺失素材。
-- 在 renderer 阶段实现前端预览 UI、发布流或人工审稿流。
+- 前端预览 UI、发布流或人工审稿流可作为 renderer/export 之后的工作流设计承接，不塞入 renderer 生成职责。
 - 用 renderer validator 判断审美、爆款、历史相似度或素材生成质量。
 
 ## 2026-05-18 状态更新：Renderer / Export v1 后端首批实现
@@ -368,11 +368,11 @@ Renderer / Export 已不再只是 design + implementation plan。当前已按 re
 - upstream invalidation：新 script/storyboard/asset plan/asset manifest/compose 激活后清空 active render 与 latest render trace。
 - fake runtime smoke：覆盖 assets -> compose -> render -> compose refresh 后 render 失效的最小闭环。
 
-仍未完成或仍不属于当前范围：
+仍未完成或需后续单独设计：
 
 - 阶段归档、提交或 PR 收口仍待单独决定。
 - DashScope 图生视频真实 live check 仍待显式批准后运行；mocked provider、service/API config 与 explicit harness 已完成。
-- 前端 preview UI、发布流、人工审稿流或质量评分系统。
+- 前端 preview UI、发布流、人工审稿流或质量评分系统需继续补正式 design + implementation plan 后小步实施。
 - renderer 阶段生成缺失素材或修改上游 topic/script/storyboard/asset planning/assets/compose 语义内容。
 
 ## 2026-05-19 状态更新：DashScope 图生视频 provider 后端路径已接入
