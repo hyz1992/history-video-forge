@@ -22,7 +22,7 @@
 | 新增 | `backend/src/http/file-response.ts` | 流式文件响应（Range 支持） |
 | 新增 | `backend/src/http/image-probe.ts` | 图片元数据探测（width/height） |
 | 新增 | `backend/src/http/video-probe.ts` | 视频元数据探测（duration/width/height/fps） |
-| 新增 | `backend/src/http/provider-type-map.ts` | Task type → provider type 映射 |
+| 新增 | `backend/src/modules/assets/provider-type-map.ts` | Task type → provider type 映射（资产领域层，非 HTTP 层） |
 | 新增 | `backend/src/http/file-routes.ts` | server.ts 级文件服务 URL 匹配 |
 | 修改 | `backend/src/server.ts` | 增加 multipart + 文件服务分发 |
 | 修改 | `backend/src/modules/assets/assets-run.service.ts` | `buildExecutionOptions` 支持 `enabled_provider_types` 参数 |
@@ -32,7 +32,7 @@
 | 新增 | `tests/backend/http/file-response.test.ts` | 文件响应测试 |
 | 新增 | `tests/backend/http/image-probe.test.ts` | 图片探测测试 |
 | 新增 | `tests/backend/http/video-probe.test.ts` | 视频探测测试 |
-| 新增 | `tests/backend/http/provider-type-map.test.ts` | 映射测试 |
+| 新增 | `tests/backend/assets/provider-type-map.test.ts` | 映射测试 |
 | 新增 | `tests/backend/http/file-routes.test.ts` | 文件路由集成测试 |
 | 修改 | `tests/backend/assets/assets-manifest-builder.test.ts` | 补 disabled provider type 测试 |
 | 修改 | `tests/backend/assets/assets-run-service.test.ts` | 补 `enabled_provider_types` 测试 |
@@ -47,13 +47,15 @@
 - [ ] **Step 1: 安装 busboy 和 image-size**
 
 ```bash
-cd backend && npm install busboy image-size && npm install -D @types/busboy
+npm install -w backend busboy image-size && npm install -w backend -D @types/busboy
 ```
+
+注意：项目使用 workspace 根 `package-lock.json`，无 `backend/package-lock.json`。
 
 - [ ] **Step 2: 验证安装**
 
 ```bash
-cd backend && node -e "require('busboy'); require('image-size'); console.log('ok')"
+node -e "require('busboy'); require('image-size'); console.log('ok')"
 ```
 
 Expected: `ok`
@@ -61,7 +63,7 @@ Expected: `ok`
 - [ ] **Step 3: 提交**
 
 ```bash
-git add backend/package.json backend/package-lock.json
+git add backend/package.json package-lock.json
 git commit -m "新增 busboy 和 image-size 依赖"
 ```
 
@@ -70,16 +72,16 @@ git commit -m "新增 busboy 和 image-size 依赖"
 ### Task 2: Task type → provider type 映射
 
 **Files:**
-- Create: `backend/src/http/provider-type-map.ts`
-- Create: `tests/backend/http/provider-type-map.test.ts`
+- Create: `backend/src/modules/assets/provider-type-map.ts`（放在资产领域层，非 HTTP 层）
+- Create: `tests/backend/assets/provider-type-map.test.ts`
 
 - [ ] **Step 1: 写测试**
 
-`tests/backend/http/provider-type-map.test.ts`:
+`tests/backend/assets/provider-type-map.test.ts`:
 
 ```typescript
 import { describe, expect, it } from "vitest";
-import { taskTypeToProviderType, isProviderTypeEnabled } from "../../../backend/src/http/provider-type-map.js";
+import { taskTypeToProviderType, isProviderTypeEnabled } from "../../../backend/src/modules/assets/provider-type-map.js";
 
 describe("taskTypeToProviderType", () => {
   it("maps image_still to image", () => {
@@ -124,14 +126,14 @@ describe("isProviderTypeEnabled", () => {
 - [ ] **Step 2: 运行测试确认失败**
 
 ```bash
-npx vitest run --configLoader runner tests/backend/http/provider-type-map.test.ts
+npx vitest run --configLoader runner tests/backend/assets/provider-type-map.test.ts
 ```
 
 Expected: FAIL（模块不存在）
 
 - [ ] **Step 3: 实现**
 
-`backend/src/http/provider-type-map.ts`:
+`backend/src/modules/assets/provider-type-map.ts`:
 
 ```typescript
 import type { AssetPlan } from "../../../../shared/src/index.js";
@@ -166,7 +168,7 @@ export function isProviderTypeEnabled(
 - [ ] **Step 4: 运行测试确认通过**
 
 ```bash
-npx vitest run --configLoader runner tests/backend/http/provider-type-map.test.ts
+npx vitest run --configLoader runner tests/backend/assets/provider-type-map.test.ts
 ```
 
 Expected: PASS
@@ -174,7 +176,7 @@ Expected: PASS
 - [ ] **Step 5: 提交**
 
 ```bash
-git add backend/src/http/provider-type-map.ts tests/backend/http/provider-type-map.test.ts
+git add backend/src/modules/assets/provider-type-map.ts tests/backend/assets/provider-type-map.test.ts
 git commit -m "新增 task type 到 provider type 映射"
 ```
 
@@ -264,7 +266,7 @@ Expected: FAIL（image_still 任务状态为 `planned` 而非 `waiting_manual_up
 
 1. 导入映射函数：
 ```typescript
-import { isProviderTypeEnabled } from "../../http/provider-type-map.js";
+import { isProviderTypeEnabled } from "./provider-type-map.js";
 ```
 
 2. 修改 `buildExecutions` 签名，接受 `enabledProviderTypes`：
@@ -292,12 +294,32 @@ function resolveInitialStatus(
 }
 ```
 
-4. 在 `buildExecutions` 内部将 `enabledProviderTypes` 传给 `resolveInitialStatus`：
+4. 修改 `resolveOrigin` 签名和逻辑——当 provider 被禁用且任务转为 `waiting_manual_upload` 时，`origin` 也应改为 `manual_upload`：
 ```typescript
-status: resolveInitialStatus(task, enabledProviderTypes),
+function resolveOrigin(
+  task: AssetPlan["tasks"][number],
+  enabledProviderTypes: string[] | undefined,
+): AssetTaskExecution["origin"] {
+  if (task.manual_upload_policy.required) {
+    return "manual_upload";
+  }
+  if (!isProviderTypeEnabled(task.task_type, enabledProviderTypes) && task.manual_upload_policy.allowed) {
+    return "manual_upload";
+  }
+  if (task.task_type === "render_motion_cue") {
+    return "local";
+  }
+  return "provider";
+}
 ```
 
-5. 在 `buildInitialAssetManifest` 中，将 `executionOptions.enabled_provider_types` 传给 `buildExecutions`：
+5. 在 `buildExecutions` 内部将 `enabledProviderTypes` 传给 `resolveInitialStatus` 和 `resolveOrigin`：
+```typescript
+status: resolveInitialStatus(task, enabledProviderTypes),
+origin: resolveOrigin(task, enabledProviderTypes),
+```
+
+6. 在 `buildInitialAssetManifest` 中，将 `executionOptions.enabled_provider_types` 传给 `buildExecutions`：
 ```typescript
 const executions = buildExecutions(assetPlan.tasks, executionOptions.enabled_provider_types);
 ```
@@ -313,7 +335,7 @@ Expected: PASS
 - [ ] **Step 5: 提交**
 
 ```bash
-git add backend/src/modules/assets/assets-manifest-builder.ts tests/backend/assets/assets-manifest-builder.test.ts backend/src/http/provider-type-map.ts
+git add backend/src/modules/assets/assets-manifest-builder.ts tests/backend/assets/assets-manifest-builder.test.ts backend/src/modules/assets/provider-type-map.ts
 git commit -m "manifest builder 支持 enabled_provider_types 过滤"
 ```
 
@@ -447,17 +469,20 @@ export interface MultipartFile {
   buffer: Buffer;
   originalName: string;
   mimeType: string;
+  truncated: boolean;
 }
 
 export interface MultipartResult {
   file?: MultipartFile;
 }
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB（首版仅支持图片和小视频）
+
 export function parseMultipart(request: IncomingMessage): Promise<MultipartResult> {
   return new Promise((resolve, reject) => {
     const busboy = Busboy({
       headers: request.headers,
-      limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB
+      limits: { fileSize: MAX_FILE_SIZE },
     });
 
     const result: MultipartResult = {};
@@ -468,12 +493,15 @@ export function parseMultipart(request: IncomingMessage): Promise<MultipartResul
         return;
       }
       const chunks: Buffer[] = [];
+      let truncated = false;
       stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+      stream.on("limit", () => { truncated = true; });
       stream.on("end", () => {
         result.file = {
           buffer: Buffer.concat(chunks),
           originalName: info.filename ?? "unknown",
           mimeType: info.mimeType ?? "application/octet-stream",
+          truncated,
         };
       });
     });
@@ -519,7 +547,7 @@ git commit -m "新增 multipart 解析工具"
 
 ```typescript
 import { createReadStream, statSync } from "node:fs";
-import { extname, resolve } from "node:path";
+import { extname, resolve, relative } from "node:path";
 import type { ServerResponse } from "node:http";
 
 const MIME_MAP: Record<string, string> = {
@@ -540,24 +568,36 @@ export interface FileResponseOptions {
   filename?: string;
 }
 
+function isPathInside(filePath: string, root: string): boolean {
+  const resolved = resolve(filePath);
+  const rel = relative(resolve(root), resolved);
+  return rel.length > 0 && !rel.startsWith("..") && !resolve(rel).startsWith(resolve(root));
+}
+
 export function writeFileStream(
   response: ServerResponse,
   filePath: string,
   storageRoot: string,
   options: FileResponseOptions = {},
 ): void {
-  // 路径安全检查
-  const resolved = resolve(filePath);
-  if (!resolved.startsWith(resolve(storageRoot))) {
+  // 路径安全检查：使用 relative() 防止 sibling prefix 绕过
+  if (!isPathInside(filePath, storageRoot)) {
     response.statusCode = 403;
     response.setHeader("content-type", "application/json");
     response.end(JSON.stringify({ error: "path_traversal_denied" }));
     return;
   }
 
+  const resolved = resolve(filePath);
   let fileStat;
   try {
     fileStat = statSync(resolved);
+    if (!fileStat.isFile()) {
+      response.statusCode = 403;
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ error: "not_a_file" }));
+      return;
+    }
   } catch {
     response.statusCode = 404;
     response.setHeader("content-type", "application/json");
@@ -586,6 +626,12 @@ export function writeFileStream(
     if (match) {
       const start = parseInt(match[1]!, 10);
       const end = match[2] ? parseInt(match[2], 10) : total - 1;
+      if (start >= total || end >= total || start > end) {
+        response.statusCode = 416;
+        response.setHeader("content-range", `bytes */${total}`);
+        response.end();
+        return;
+      }
       const chunkSize = end - start + 1;
       response.statusCode = 206;
       response.setHeader("content-range", `bytes ${start}-${end}/${total}`);
@@ -664,9 +710,9 @@ git commit -m "新增图片元数据探测（image-size）"
 
 - [ ] **Step 1: 写测试**
 
-测试策略：项目中已有 ffprobe 相关代码（`audio-duration-probe.ts` 使用 ffprobe）。参考其测试模式，构造调用。若 ffprobe 不可用，测试应 skip（使用 `it.skipIf`）。
+测试策略：若 ffprobe 不可用，测试应 skip（使用 `it.skipIf`）。需要新增独立的 ffprobe 可用性检测函数（`isFfprobeAvailable()`），检测方式为 `execFile("ffprobe", ["-version"])` 是否成功。
 
-注意：项目中已有 `probeAudioDuration` 在 `backend/src/modules/assets/audio-duration-probe.ts`，使用 `ffprobe` 命令行。视频探测应复用相同的 ffprobe 可用性检测逻辑。
+注意：项目中虽有 `probeAudioDuration`（`backend/src/modules/assets/audio-duration-probe.ts`），但它使用的是 **WAV/PCM buffer 解析**，**不依赖 ffprobe**。视频元数据探测是本项目首次使用 ffprobe 命令行工具，需要独立的可用性检测和 skip 逻辑，不能复用 audio-duration-probe 的代码。
 
 - [ ] **Step 2: 运行测试确认失败**
 
@@ -680,6 +726,19 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 
+let ffprobeAvailableCache: boolean | null = null;
+
+export async function isFfprobeAvailable(): Promise<boolean> {
+  if (ffprobeAvailableCache !== null) return ffprobeAvailableCache;
+  try {
+    await execFileAsync("ffprobe", ["-version"]);
+    ffprobeAvailableCache = true;
+  } catch {
+    ffprobeAvailableCache = false;
+  }
+  return ffprobeAvailableCache;
+}
+
 export interface VideoMetadata {
   duration_sec: number;
   width: number;
@@ -688,6 +747,9 @@ export interface VideoMetadata {
 }
 
 export async function probeVideoMetadata(filePath: string): Promise<VideoMetadata> {
+  if (!(await isFfprobeAvailable())) {
+    throw new Error("ffprobe_not_available");
+  }
   const { stdout } = await execFileAsync("ffprobe", [
     "-v", "quiet",
     "-print_format", "json",
@@ -709,6 +771,12 @@ export async function probeVideoMetadata(filePath: string): Promise<VideoMetadat
     fps: fps || 30,
   };
 }
+```
+
+测试中使用 `it.skipIf` 跳过无 ffprobe 的环境：
+
+```typescript
+const skipIfNoFfprobe = it.skipIf(!(await isFfprobeAvailable()));
 ```
 
 - [ ] **Step 4: 运行测试确认通过**
@@ -744,6 +812,27 @@ git commit -m "新增视频元数据探测（ffprobe）"
    - image: 调用 `probeImageMetadata`
    - video: 调用 `probeVideoMetadata`
 10. 调用 `registerManualArtifact`（现有函数），传入 `file_uri`、`artifact_type`、`mimeType`、`metadata`
+
+**`artifact_type` 推导规则**（首版仅支持这两种 task type 的上传）：
+
+| task_type | artifact_type |
+|-----------|---------------|
+| `image_still` | `image` |
+| `video_clip` | `video` |
+
+其他 task type（如 `tts_audio`、`subtitle_track`、`sfx_cue`、`bgm_cue`）首版不支持手动上传，遇到时返回 422 `asset_manual_upload_not_allowed`。
+
+**产物排序**：上传后，新 artifact ID 必须在 `output_artifact_ids` 的**首位**（表示当前选中），旧 artifact 保留在后面。当前 `registerManualArtifact` 使用 `push()` 将新 ID 放到末尾，需修改为 `unshift()` 放到首位，使其与 `acceptArtifact` 的选中模型一致：
+
+```typescript
+// assets-run.service.ts 中 registerManualArtifact 的 Step 8
+// 修改前：execution.output_artifact_ids.push(artifactId);
+// 修改后：
+execution.output_artifact_ids = [
+  artifactId,
+  ...execution.output_artifact_ids,
+];
+```
 
 - [ ] **Step 2: 注册路由**
 
@@ -824,9 +913,11 @@ export async function handleFileRoute(
     return;
   }
 
-  const storageRoot = project.projectStorageRootDir;
+  // DB 字段名：storageRootDir（非 projectStorageRootDir）
+  const storageRoot = project.storageRootDir;
 
   if (match.type === "artifact_file" && match.artifactId) {
+    // DB 字段名：manifestJson（非 manifest）
     const artifact = project.activeAssetManifestRecordId
       ? app.db.assetManifestRecords.get(project.activeAssetManifestRecordId)?.manifestJson?.artifacts
           ?.find((a: any) => a.artifact_id === match.artifactId)
@@ -839,8 +930,12 @@ export async function handleFileRoute(
     }
     writeFileStream(response, artifact.file_uri, storageRoot, { disposition: "inline" });
   } else if (match.type === "render_preview" || match.type === "render_download") {
-    const renderArtifact = project.activeRenderJobRecordId
-      ? app.db.renderJobRecords.get(project.activeRenderJobRecordId)?.outputArtifact
+    // DB 字段名：outputArtifactJson（非 outputArtifact），需要 JSON.parse
+    const renderRecord = project.activeRenderJobRecordId
+      ? app.db.renderJobRecords.get(project.activeRenderJobRecordId)
+      : undefined;
+    const renderArtifact = renderRecord?.outputArtifactJson
+      ? JSON.parse(renderRecord.outputArtifactJson)
       : undefined;
     if (!renderArtifact) {
       response.statusCode = 404;
@@ -850,17 +945,16 @@ export async function handleFileRoute(
     }
     writeFileStream(response, renderArtifact.file_uri, storageRoot, {
       disposition: match.type === "render_preview" ? "inline" : "attachment",
+      // DB 字段名：name（非 projectName）
       filename: match.type === "render_download" ? `${project.name}-output.mp4` : undefined,
     });
   }
 }
 ```
 
-注意：`file-routes.ts` 中对 `db` 的字段访问需要确认 `DbClient` 的实际接口。查看 `backend/src/db/client.ts` 中 `ProjectRecord`、`AssetManifestRecord`、`RenderJobRecord` 的字段名。
-
 - [ ] **Step 2: 修改 server.ts**
 
-在 `createHttpServer` 函数中，在现有 JSON 处理逻辑之前插入：
+在 `createHttpServer` 函数中，在现有 JSON 处理逻辑之前插入。**关键**：`requestUrl` 必须在文件路由匹配之前创建（不能放到 `readPayload` 之后），multipart 路径也需要用到它：
 
 ```typescript
 import { matchFileRoute, handleFileRoute } from "./http/file-routes.js";
@@ -868,7 +962,10 @@ import { parseMultipart } from "./http/multipart.js";
 
 // 在 createServer 回调内，healthz 检查之后、readPayload 之前：
 
-// 1. 文件服务路由（不经 app.inject）
+// 提前创建 requestUrl（文件路由和 multipart 都需要，必须在 readPayload 之前）
+const requestUrl = new URL(request.url, "http://127.0.0.1");
+
+// 1. 文件服务路由（不经 app.inject，不消耗 request body）
 const fileMatch = matchFileRoute(request.method, request.url);
 if (fileMatch) {
   try {
@@ -881,7 +978,7 @@ if (fileMatch) {
   return;
 }
 
-// 2. Multipart 上传（解析后传给 app.inject）
+// 2. Multipart 上传（解析后传给 app.inject，不走 readPayload）
 const contentType = request.headers["content-type"] ?? "";
 if (request.method === "POST" && contentType.includes("multipart/form-data")) {
   try {
@@ -889,7 +986,7 @@ if (request.method === "POST" && contentType.includes("multipart/form-data")) {
     const appResponse = await app.inject({
       method: request.method,
       url: requestUrl.pathname,
-      payload: { ...requestUrl.searchParams, file: multipartResult.file },
+      payload: { file: multipartResult.file },
     });
     writeJson(response, appResponse.statusCode, appResponse.json());
   } catch (error) {
@@ -899,6 +996,20 @@ if (request.method === "POST" && contentType.includes("multipart/form-data")) {
   }
   return;
 }
+
+// 3. 其余走现有 readPayload + app.inject 流程（不变）
+// 注意：原有代码中的 const requestUrl = new URL(...) 需要删除（已在此处提前创建）
+```
+
+修改后的 `server.ts` 完整请求分发逻辑变为：
+
+```
+request 进入
+  ├── GET /healthz → healthcheck（不变）
+  ├── 提前创建 requestUrl
+  ├── GET + 匹配文件服务 URL → handleFileRoute（不经 app.inject）
+  ├── POST + Content-Type: multipart/form-data → parseMultipart → app.inject
+  └── 其余 → 现有 readPayload + app.inject 流程（不变，但复用已创建的 requestUrl）
 ```
 
 - [ ] **Step 3: 写 file-routes 测试**
@@ -1005,6 +1116,11 @@ git commit -m "同步 API 文档：新增文件上传/服务端点"
 ### Placeholder 扫描
 
 无 TBD / TODO / "fill in later"。Task 9 的测试描述了断言条件但未写完整测试代码（因需确认 helper 函数和 fixture 构造方式），标注了"需要构造"。
+
+**已知修正**：
+- Task 8：`audio-duration-probe.ts` 不使用 ffprobe（WAV/PCM buffer 解析），视频探测是首次使用 ffprobe，需独立可用性检测。
+- Task 9：`artifact_type` 仅支持 `image_still→image` 和 `video_clip→video` 两种映射。`registerManualArtifact` 的 `output_artifact_ids` 改为 unshift（新 ID 在首位），与 `acceptArtifact` 选中模型一致。
+- Task 10：DB 字段名为 `storageRootDir`（非 `projectStorageRootDir`）、`outputArtifactJson`（非 `outputArtifact`，需 `JSON.parse`）、`manifestJson`（非 `manifest`）。`requestUrl` 提前到文件路由匹配之前创建。
 
 ### 类型一致性
 
