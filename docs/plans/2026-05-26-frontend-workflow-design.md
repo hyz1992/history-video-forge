@@ -25,7 +25,7 @@ Date: 2026-05-26
 - `shared/src/compose/compose-timeline.schema.ts`
 - `shared/src/render/render-job.schema.ts`
 
-本文是设计文档，不是实施计划。实施前须拆出独立的实施计划。
+本文是设计文档，不是实施计划。实施前须拆出独立的实施计划（建议拆为 4 份，见"实施计划拆分建议"章节）。
 
 ---
 
@@ -66,7 +66,7 @@ Date: 2026-05-26
 本次设计打通从资产管理到成品导出的前端全链路，核心用户场景为：
 
 1. 生成资产计划后，用户逐任务上传图片/视频（Super Grok 等外部工具生成），也可对任意任务选择自动生成。
-2. TTS、字幕、BGM 始终走自动生成。
+2. TTS、字幕、BGM 默认走自动生成（失败或缺失时展示结构化 blocked/partial/warning，不承诺"始终成功"）。
 3. 资产就绪后一键合成、一键渲染、下载成品。
 
 具体目标：
@@ -127,31 +127,80 @@ Date: 2026-05-26
 
 ## Architecture
 
+### HTTP 层改造
+
+当前 `server.ts` 的架构：
+
+- `readPayload()` 将所有请求体读为 UTF-8 字符串，仅 JSON 做 `JSON.parse`，其余原样返回。
+- 路由通过 `app.inject()` 转发，响应统一经 `writeJson()` 返回 JSON。
+- 无 multipart 解析能力，无流式响应能力，无 `Content-Type` 非 JSON 的响应路径。
+
+为支持文件上传和文件服务，需要在 `server.ts` 的请求分发层增加三条新路径：
+
+#### 判断逻辑
+
+```
+request 进入
+  ├── GET + 匹配 artifact file 路由 → 流式文件响应（不经 app.inject）
+  ├── GET + 匹配 render preview/download 路由 → 流式文件响应（不经 app.inject）
+  ├── POST + Content-Type: multipart/form-data → multipart 解析 → app.inject(file 字段信息)
+  └── 其余 → 现有 readPayload + app.inject 流程（不变）
+```
+
+**关键原则**：现有 JSON API 路径完全不变。文件服务绕过 `app.inject`，直接操作 `ServerResponse`。multipart 请求解析后，将文件 buffer 和元数据通过 `app.inject` 传给路由处理函数。
+
+#### Multipart 解析
+
+引入 `busboy` 库解析 multipart 请求。在 `server.ts` 中检测 `Content-Type: multipart/form-data`，用 busboy 提取 `file` 字段的 buffer、原始文件名、MIME 类型，构造结构化 payload 传给 `app.inject`。
+
+文件大小通过 busboy 的 `limits.fileSize` 限制为 100 MB。
+
+#### 流式文件响应
+
+新增 `writeFileStream(response, filePath, options)` 函数：
+
+- 设置 `Content-Type`（从文件扩展名推断）。
+- 设置 `Content-Length`（从文件 stat）。
+- 支持 `Range` 请求头（视频预览必需）。
+- 支持 `Content-Disposition: inline`（预览）或 `attachment; filename=xxx`（下载）。
+- 使用 `fs.createReadStream` 流式传输。
+
+#### 测试兼容
+
+`app.inject()` 模型不变：multipart 路由的 inject payload 为结构化对象 `{ file: { buffer, originalName, mimeType } }`，而非原始 buffer。现有 JSON API 测试不受影响。文件服务端点不经过 inject，测试直接用 `createHttpServer` + HTTP 请求验证。
+
 ### 后端改造
 
 #### 0. 资产生成端点增强
 
-当前 `POST /assets/generate` 每次调用都从 asset plan 重建全新 manifest，丢弃所有已有产物。为支持"先上传部分素材，再自动生成其余"的工作流，需要增强：
+**现状问题**：`POST /assets/generate` 每次调用从 asset plan 重建全新 manifest，丢弃所有已有产物。若用户已手动上传图片再调用 generate，上传成果会丢失。
 
-**新增请求参数 `skip_provider_types`**：
+**设计决策**：采用严格顺序工作流，generate 仅调用一次。
+
+用户操作顺序：
+1. 调用 `POST /assets/generate`（可带 `enabled_provider_types` 参数）—— 创建 manifest 并自动生成指定类型的资产。
+2. 在已有 manifest 上逐任务上传图片/视频 —— 不触发 generate。
+3. 不可逆向：generate 后不可再次调用 generate（除非接受全量重建）。
+
+**新增请求参数 `enabled_provider_types`**（复用现有 schema 字段名）：
 
 ```typescript
 {
-  // 现有参数
+  // 现有参数不变
   voice_profile_id?: string,
   execution_mode?: string,
   provider_mode?: string,
   dashscope?: { ... },
   // 新增
-  skip_provider_types?: ("image" | "video")[]  // 跳过这些类型的自动生成
+  enabled_provider_types?: ("tts" | "subtitle" | "image" | "video" | "sfx" | "bgm")[]
 }
 ```
 
-当 `skip_provider_types` 包含 `"image"` 时，image 类任务的执行状态设为 `waiting_manual_upload` 而非 `ready`，执行引擎跳过它们。`"video"` 同理。
+当传 `enabled_provider_types: ["tts", "subtitle", "bgm"]` 时，只有 TTS/字幕/BGM 类任务设为 `ready` 并执行，图片/视频任务设为 `waiting_manual_upload`。不传时所有类型都执行（默认行为不变）。
 
-这样用户可以：先调用 generate 跳过图片/视频 → 自动生成 TTS/字幕/BGM → 再逐任务上传图片/视频。
+**实现改动**：修改 `assets-run.service.ts` 的 `buildExecutionOptions`，从请求参数读取 `enabled_provider_types`，而非硬编码全部类型。
 
-**增执行为**：修改 `assets-run.service.ts` 中的 `buildExecutionOptions` 和执行引擎，根据 `skip_provider_types` 过滤 `enabled_provider_types` 并将跳过类型任务的状态设为 `waiting_manual_upload`。
+**首版不支持的**：单任务自动生成。若用户上传后想补生成某个图片任务，需要重新调用 `POST /assets/generate`（会全量重建）。如需增量执行，作为后续迭代。
 
 #### 1. Multipart 文件上传端点
 
@@ -166,15 +215,17 @@ Content-Type: multipart/form-data
 
 后端处理流程：
 
-1. 解析 multipart 数据，提取文件 buffer。
-2. 校验文件类型与 MIME 是否匹配资产计划的 `accepted_file_types`。
-3. 将文件写入项目存储目录 `<projectStorageRootDir>/assets-runs/<runId>/uploads/`。
-4. 以写入后的绝对路径作为 `file_uri`，调用现有 `registerArtifact` 逻辑。
-5. 返回与 `registerArtifact` 相同格式的响应。
+1. HTTP 层已通过 busboy 解析 multipart，路由处理函数收到 `{ file: { buffer, originalName, mimeType } }`。
+2. **MIME 校验**：检查 `mimeType` 是否在允许列表（`image/jpeg`, `image/png`, `image/webp`, `video/mp4`, `video/quicktime`）中。同时检查 buffer 前几个字节的魔数（JPEG: `FF D8 FF`，PNG: `89 50 4E 47`，MP4: `ftyp` box），不匹配则拒绝。
+3. **文件名安全**：服务端生成文件名（`{taskId}-{timestamp}-{random}.{ext}`），忽略客户端原始文件名。
+4. **写入文件**：将文件写入项目存储目录 `<projectStorageRootDir>/assets-runs/<activeRunId>/uploads/`。
+5. **路径安全**：resolve 写入路径后确认仍在项目存储根目录内。
+6. 以写入后的绝对路径作为 `file_uri`，调用现有 `registerArtifact` 逻辑。
+7. 返回与 `registerArtifact` 相同格式的响应。
 
-文件大小限制：100 MB（单文件）。支持的 MIME 类型：`image/jpeg`, `image/png`, `image/webp`, `video/mp4`, `video/quicktime`。
+**覆盖/替换语义**：对已有产物的任务再次上传时，新 artifact 追加到 manifest 的 artifacts 列表，execution 的 `output_artifact_ids` 更新为新 artifact ID，旧 artifact 保留在列表中但不再被引用。不删除旧文件。
 
-#### 2. 静态文件服务端点
+#### 2. Asset 文件服务端点
 
 新增路由：
 
@@ -184,22 +235,35 @@ GET /api/projects/:projectId/artifacts/:artifactId/file
 
 处理流程：
 
-1. 从项目快照中查找 `artifactId` 对应的 `AssetArtifact`。
-2. 校验请求路径在项目存储根目录内（防止路径穿越）。
-3. 读取文件，设置正确的 `Content-Type` 和 `Content-Disposition`。
-4. 流式返回文件内容。
+1. 从项目快照的 `active_assets.manifest.artifacts` 中查找 `artifactId` 对应的 `AssetArtifact`。
+2. 从 `AssetArtifact.file_uri` 获取文件路径。
+3. **路径安全**：resolve `file_uri` 后确认仍在项目存储根目录内。若不在，返回 403。
+4. 校验文件存在且可读。
+5. 使用 `writeFileStream` 返回文件，`Content-Disposition: inline`，支持 `Range` 请求。
 
-仅服务已注册的 artifact，不暴露任意文件系统路径。
+此端点仅服务 `AssetArtifact`（资产阶段的产物），不服务 render 输出。
 
-#### 3. 渲染成品下载端点
+#### 3. Render 成品端点
 
-新增路由：
+新增两个路由：
+
+**预览**：
 
 ```
-GET /api/projects/:projectId/render/output
+GET /api/projects/:projectId/render/preview
 ```
 
-返回渲染成品的文件流，设置 `Content-Disposition: attachment` 以触发浏览器下载。
+返回渲染成品视频流，`Content-Disposition: inline`，`Content-Type: video/mp4`，支持 `Range` 请求（用于 `<video>` 标签的拖动播放）。从 `active_render.output_artifact`（类型为 `ExportArtifact`，非 `AssetArtifact`）获取 `file_uri`。
+
+**下载**：
+
+```
+GET /api/projects/:projectId/render/download
+```
+
+返回渲染成品文件流，`Content-Disposition: attachment; filename="<project-name>-output.mp4"`。同样从 `active_render.output_artifact` 获取路径。
+
+两者共享同一个文件读取逻辑，区别仅在 `Content-Disposition`。
 
 ### 前端改造
 
@@ -265,34 +329,32 @@ API 适配器方法：
 
 - `loadProject(projectId)` — 加载项目快照，提取 render 数据。
 - `generateRender(projectId)` — 调用 `POST /render/generate`。
-- `getDownloadUrl(projectId)` — 返回 `/api/projects/:projectId/render/output`。
+- `getPreviewUrl(projectId)` — 返回 `/api/projects/:projectId/render/preview`。
+- `getDownloadUrl(projectId)` — 返回 `/api/projects/:projectId/render/download`。
 
 #### 面板改造
 
 ##### AssetPanel（重写）
 
-四阶段工作流：
+四阶段工作流（严格顺序）：
 
 | 阶段 | 触发条件 | UI 表现 |
 |------|----------|---------|
 | 计划 | 进入面板时自动加载 | 展示计划或"生成计划"空状态 |
-| 执行自动资产 | 用户点击"开始生成资产" | 调用 `POST /assets/generate` 并传 `skip_provider_types: ["image", "video"]`，自动执行 TTS/字幕/BGM，图片/视频任务标记为 `waiting_manual_upload` |
-| 手动上传 | 自动资产生成完成 | 展示任务列表，图片/视频任务可逐个上传，也可点单个任务的"自动生成" |
+| 执行自动资产 | 用户点击"生成资产"按钮 | 调用 `POST /assets/generate`，默认传 `enabled_provider_types: ["tts", "subtitle", "bgm"]`，图片/视频任务标记为 `waiting_manual_upload`。用户也可选"全部自动生成"不传此参数 |
+| 手动上传 | 自动资产生成完成（manifest 存在） | 展示任务列表，图片/视频任务可逐个上传。**此阶段不可再次调用 generate**，否则会全量重建丢失上传成果 |
 | 完成 | 所有资产就绪 | 展示产物预览，"进入合成"按钮 |
 
-用户也可以点击"🚀 全部自动生成"跳过手动上传，此时不传 `skip_provider_types`，所有任务（含图片/视频）全部自动生成。
+全局操作栏提供两个选项：
+
+- **▶ 生成资产（手动上传图片/视频）**：只自动生成 TTS/字幕/BGM，图片/视频留给用户上传。传 `enabled_provider_types: ["tts", "subtitle", "bgm"]`。
+- **🚀 全部自动生成**：所有任务全部自动生成（含图片/视频）。不传 `enabled_provider_types`。
 
 每个任务卡片（SegmentAssetCard）的操作按钮：
 
-- **📤 手动上传**：打开文件选择器（accept 按任务类型的 MIME 过滤），选择文件后调用 `uploadArtifact`，展示上传进度。仅在自动资产已生成（manifest 存在）后可用。
-- **🤖 自动生成**：仅在"全部自动生成"模式下可用，或在单个视觉任务需要补生成时，调用 `POST /assets/generate` 全量执行（已有产物的任务会被保留，因为 manifest 已存在）。注意：当前后端每次 generate 都重建 manifest，这意味着单个任务的自动生成会重新执行所有任务。如有需要可在后续迭代中优化为增量执行。
-- **🔄 替换**：对已上传的任务重新上传，覆盖旧文件。
+- **📤 手动上传**：打开文件选择器（accept 按任务类型的 MIME 过滤），选择文件后调用 `uploadArtifact`。仅在 manifest 存在时可用。
+- **🔄 替换**：对已上传的任务重新上传，新 artifact 替换旧引用。
 - **▶ 播放预览**：对已完成任务展示图片缩略图、视频播放器或音频播放器。
-
-全局操作栏：
-
-- **🚀 全部自动生成**：不跳过任何类型，对所有任务执行自动生成。
-- **▶ 生成资产（跳过图片/视频）**：只自动生成 TTS/字幕/BGM，图片/视频留给手动上传。
 
 产物预览：
 
@@ -317,9 +379,9 @@ API 适配器方法：
 
 布局：
 
-1. **视频预览区**：竖屏（9:16）视频播放器，使用 `<video>` 标签加载 `/api/projects/:projectId/render/output`（或通过 artifact 端点）。
+1. **视频预览区**：竖屏（9:16）视频播放器，使用 `<video>` 标签加载 `/api/projects/:projectId/render/preview`（inline，支持 Range）。
 2. **渲染信息**：文件名、大小、时长、分辨率、fps、验证结果。
-3. **操作按钮**：触发渲染、重新渲染、下载视频。
+3. **操作按钮**：触发渲染、重新渲染、下载视频（`/api/projects/:projectId/render/download`，attachment）。
 
 空状态：展示"开始渲染"按钮。
 
@@ -344,13 +406,14 @@ API 适配器方法：
 ─────────────────────────────────────────────────────────
 加载面板            loadProject()          →    GET /projects/:id
 生成计划            generateAssetPlan()    →    POST /asset-plan/generate
+生成自动资产        generateAssets()       →    POST /assets/generate (+ enabled_provider_types)
 上传文件            uploadArtifact()       →    POST multipart /artifacts/upload
-自动生成任务        generateAssets()       →    POST /assets/generate
 确认产物            acceptArtifact()       →    POST /tasks/:id/accept
 合成                generateCompose()      →    POST /compose/generate
 渲染                generateRender()       →    POST /render/generate
-下载                getDownloadUrl()       →    GET /render/output
-预览图片/视频       artifactFileUrl        →    GET /artifacts/:id/file
+预览图片/视频       artifactFileUrl        →    GET /artifacts/:id/file (inline)
+预览成品            getPreviewUrl()        →    GET /render/preview (inline + Range)
+下载成品            getDownloadUrl()       →    GET /render/download (attachment)
 ```
 
 每个面板 `onMounted` 时调用 `loadProject()` 获取最新快照，触发操作后重新加载以刷新状态。
@@ -361,9 +424,11 @@ API 适配器方法：
 
 | 文件 | 说明 |
 |------|------|
+| `backend/src/http/multipart.ts` | Busboy multipart 解析工具 |
+| `backend/src/http/file-response.ts` | 流式文件响应工具（Range 支持） |
 | `backend/src/modules/assets/assets-upload.controller.ts` | Multipart 上传控制器 |
-| `backend/src/modules/assets/artifact-file.controller.ts` | 静态文件服务控制器 |
-| `backend/src/modules/render/render-output.controller.ts` | 渲染成品下载控制器 |
+| `backend/src/modules/assets/artifact-file.controller.ts` | Asset artifact 文件服务控制器 |
+| `backend/src/modules/render/render-output.controller.ts` | Render 成品预览/下载控制器 |
 | `frontend/src/stores/assets.ts` | 资产执行 store |
 | `frontend/src/stores/compose.ts` | 合成 store |
 | `frontend/src/stores/render.ts` | 渲染 store |
@@ -373,26 +438,77 @@ API 适配器方法：
 
 | 文件 | 改动 |
 |------|------|
-| `backend/src/server.ts` | 注册 multipart 中间件 |
-| `backend/src/modules/assets/assets.routes.ts` | 新增上传和文件服务路由 |
-| `backend/src/modules/render/render.routes.ts` | 新增成品下载路由 |
+| `backend/src/server.ts` | 增加 multipart 和文件服务请求分发 |
+| `backend/src/modules/assets/assets.routes.ts` | 新增上传和文件服务路由，generate 路由支持 `enabled_provider_types` |
+| `backend/src/modules/assets/assets-run.service.ts` | `buildExecutionOptions` 从请求参数读取 `enabled_provider_types` |
+| `backend/src/modules/render/render.routes.ts` | 新增预览和下载路由 |
 | `frontend/src/stores/workspace.ts` | PIPELINE_STEPS 增加 render |
 | `frontend/src/views/ProjectWorkspace.vue` | panelMap 增加 RenderPanel |
 | `frontend/src/components/asset/AssetPanel.vue` | 重写为四阶段工作流，接入 assets store |
-| `frontend/src/components/asset/SegmentAssetCard.vue` | 接入上传/生成/预览功能 |
+| `frontend/src/components/asset/SegmentAssetCard.vue` | 接入上传/预览功能 |
 | `frontend/src/components/compose/ComposePanel.vue` | 从 stub 重写为完整面板 |
 | `frontend/src/views/HomePage.vue` | 管线卡片增加渲染步骤 |
 
 ### Error Handling
 
-- **上传失败**：展示错误提示（文件过大、类型不符），保持当前状态允许重试。
+- **上传失败**：展示错误提示（文件过大、MIME 不符、魔数校验失败），保持当前状态允许重试。
 - **生成失败**：展示后端返回的错误信息，提供"重试"按钮。
 - **验证阻塞**：展示阻塞原因（如"资产未就绪"），禁止进入下一步。
 - **网络错误**：全局 fetch 错误处理，展示"网络错误，请重试"。
+- **路径穿越**：后端对 `file_uri` 做 resolve 后校验仍在项目存储根目录内，否则返回 403。
+- **重复 generate**：前端在 manifest 已存在时禁用"生成资产"按钮，防止误操作丢失上传成果。重新生成需显式确认。
 
 ### Testing Strategy
 
-- 后端新增端点的单元测试：multipart 解析、文件校验、路径安全、artifact 注册。
-- 前端 store 单元测试：API 调用、状态变更、错误处理。
-- 前端面板组件测试：用户交互、数据渲染、状态切换。
-- 端到端冒烟：完整管线从前端触发到成品下载。
+#### 后端单元测试（必须通过）
+
+- multipart 上传：合法文件成功注册、超 100MB 拒绝、MIME 不在允许列表拒绝、魔数不匹配拒绝、原始文件名被忽略（服务端生成文件名）。
+- 文件服务：合法 artifact 返回正确 Content-Type、路径穿越返回 403、不存在的 artifact 返回 404、Range 请求正确响应 206。
+- render preview：返回 `Content-Disposition: inline` + `Content-Type: video/mp4`。
+- render download：返回 `Content-Disposition: attachment` + 正确文件名。
+- `enabled_provider_types`：传 `["tts", "subtitle", "bgm"]` 时 image/video 任务状态为 `waiting_manual_upload`。
+- artifact 覆盖：重复上传同一任务，新 artifact 替换引用，旧 artifact 仍在列表。
+
+#### 前端 store 单元测试
+
+- API 调用参数正确（URL、method、body）。
+- 状态变更：loading → success / error。
+- uploadArtifact 构造 FormData。
+- artifactFileUrl 拼接正确的 preview URL。
+
+#### 端到端冒烟（验收标准）
+
+1. 前端从空项目走通全链路：生成计划 → 生成资产（跳过图片/视频） → 上传图片 → compose → render → 下载成品。
+2. 上传图片后 `segment_routes.primary_visual_artifact_id` 指向新 artifact。
+3. render preview 返回 `video/mp4` + inline，download 返回 attachment。
+4. 重复 generate 前端弹出确认提示。
+
+---
+
+## 实施计划拆分建议
+
+本设计涵盖后端和前端两部分改造，建议拆为 4 份独立实施计划，按顺序执行：
+
+### 计划 1：HTTP 层与文件服务后端
+
+范围：multipart 解析工具、流式文件响应工具、server.ts 分发逻辑、`enabled_provider_types` 参数支持。
+
+产出：后端支持 multipart 上传、文件流服务、selective provider type 过滤。前端不涉及。
+
+### 计划 2：Asset 面板接线
+
+范围：新增 assets store、重写 AssetPanel 四阶段工作流、SegmentAssetCard 接入上传/预览、`enabled_provider_types` 前端传参。
+
+产出：用户可在前端生成资产计划、触发自动生成（跳过或包含图片/视频）、手动上传图片/视频、预览产物。
+
+### 计划 3：Compose + Render 面板
+
+范围：新增 compose store 和 render store、重写 ComposePanel、新建 RenderPanel、管线步骤扩展为 6 步。
+
+产出：用户可触发合成、查看时间线摘要、触发渲染、预览和下载成品视频。
+
+### 计划 4：端到端冒烟与验收
+
+范围：按 Testing Strategy 中的验收标准逐一验证，修复发现的问题。
+
+产出：全链路从前端空项目到成品下载可完整走通。
