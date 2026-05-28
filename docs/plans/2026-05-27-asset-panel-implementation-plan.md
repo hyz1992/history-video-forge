@@ -624,21 +624,21 @@ git commit -m "新增 assets store（加载/生成/上传/确认）"
 2. 在 `setupStores()` 中创建 assets store 实例
 3. 用 `provide(assetsStoreKey, assetsStore)` 注册
 
-具体改动取决于 `ProjectWorkspace.vue` 的现有 provide 结构。找到其他 store 的 provide 位置（如 `storyboardStore`、`assetPlanningStore`），在相同位置添加：
+具体改动取决于 `ProjectWorkspace.vue` 的现有 provide 结构。找到其他 store 的 provide 位置（如 `workspaceStore`），在相同位置添加。注意使用 Vue 的 `provide` 函数（非 `app.provide`，因为这是 `<script setup>` 上下文）：
 
 ```typescript
 import { createAssetsStore, assetsStoreKey, createFetchAssetsApi } from "../stores/assets";
 
-// 在 setupStores 中：
+// 在 <script setup> 中，与 workspaceStore 同一位置：
 const assetsApi = createFetchAssetsApi();
-const assetsStore = createAssetsStore({ projectStore, api: assetsApi });
-app.provide(assetsStoreKey, assetsStore);
+const assetsStore = createAssetsStore({ projectStore: projectStore, api: assetsApi });
+provide(assetsStoreKey, assetsStore);
 ```
 
 - [ ] **Step 2: 验证无编译错误**
 
 ```bash
-cd frontend && npx vue-tsc --noEmit
+cd frontend && npx vite build --mode development 2>&1 | head -20
 ```
 
 - [ ] **Step 3: 提交**
@@ -660,10 +660,12 @@ git commit -m "ProjectWorkspace 注册 assets store"
 修改要点：
 
 1. **新增 props**：
-   - `execution`: 当前任务的执行状态对象（来自 manifest.executions），可为 null
-   - `primaryArtifact`: 当前任务的选中 artifact（来自 manifest.artifacts），可为 null
-   - `isUploading`: boolean，是否正在上传此任务
+   - `executionsByTaskId`: `Map<string, { task_id: string; status: string; output_artifact_ids: string[] }>` — 全部任务执行状态的按 taskId 查找表
+   - `artifactsById`: `Map<string, { artifact_id: string; artifact_type: string; file_uri: string; metadata: Record<string, unknown> }>` — 全部 artifact 的按 artifactId 查找表
+   - `uploadingTaskId`: `string | null` — 当前正在上传的 taskId（由 assetsStore.state.isUploading 提供）
    - `projectId`: string
+
+   这样卡片内部可以根据当前 tab 和 activeMediaIndex 正确查找对应的 execution 和 artifact，不会因为只传"第一个视觉任务"而导致切 tab 后显示错误。
 
 2. **新增 emits**：
    - `upload-file`: [taskId: string, file: File]
@@ -696,10 +698,10 @@ const props = defineProps<{
   segmentIndex: number;
   imageTasks: AssetTask[];
   videoTasks: AssetTask[];
-  // 新增
-  execution: { task_id: string; status: string; output_artifact_ids: string[] } | null;
-  primaryArtifact: { artifact_id: string; artifact_type: string; file_uri: string; metadata: Record<string, unknown> } | null;
-  isUploading: boolean;
+  // 新增：完整查找表，卡片内部按当前 tab/activeMediaIndex 查找
+  executionsByTaskId: Map<string, { task_id: string; status: string; output_artifact_ids: string[] }>;
+  artifactsById: Map<string, { artifact_id: string; artifact_type: string; file_uri: string; metadata: Record<string, unknown> }>;
+  uploadingTaskId: string | null;
   projectId: string;
 }>();
 
@@ -707,8 +709,28 @@ const emit = defineEmits<{
   "upload-file": [taskId: string, file: File];
 }>();
 
+// 当前任务的执行状态（按 tab 和 carousel index 动态查找）
+const currentExecution = computed(() => {
+  const task = activeTasks.value[activeMediaIndex.value];
+  if (!task) return null;
+  return props.executionsByTaskId.get(task.task_id) ?? null;
+});
+
+// 当前任务的选中 artifact
+const currentArtifact = computed(() => {
+  if (!currentExecution.value || currentExecution.value.output_artifact_ids.length === 0) return null;
+  const primaryId = currentExecution.value.output_artifact_ids[0]!;
+  return props.artifactsById.get(primaryId) ?? null;
+});
+
 // 替换 hasGeneratedMedia
-const hasGeneratedMedia = computed(() => !!props.primaryArtifact);
+const hasGeneratedMedia = computed(() => !!currentArtifact.value);
+
+// 当前任务是否正在上传
+const isCurrentUploading = computed(() => {
+  const task = activeTasks.value[activeMediaIndex.value];
+  return task ? props.uploadingTaskId === task.task_id : false;
+});
 
 // 文件选择
 const fileInput = ref<HTMLInputElement | null>(null);
@@ -763,25 +785,25 @@ const statusLabel = computed(() => {
 <!-- 替换原有的 placeholder 和 preview -->
 <template v-if="!hasGeneratedMedia">
   <div class="segment-media-placeholder">
-    <ElTag v-if="statusLabel" :type="execution?.status === 'waiting_manual_upload' ? 'warning' : 'info'" size="small">
+    <ElTag v-if="statusLabel" :type="currentExecution?.status === 'waiting_manual_upload' ? 'warning' : 'info'" size="small">
       {{ statusLabel }}
     </ElTag>
     <span class="segment-media-placeholder-text">
-      {{ execution?.status === 'waiting_manual_upload' ? '点击上传' : '暂无' }}
+      {{ currentExecution?.status === 'waiting_manual_upload' ? '点击上传' : '暂无' }}
     </span>
   </div>
 </template>
 <template v-else>
   <div class="segment-media-preview">
     <img
-      v-if="primaryArtifact?.artifact_type === 'image'"
-      :src="artifactUrl(primaryArtifact.artifact_id)"
+      v-if="currentArtifact?.artifact_type === 'image'"
+      :src="artifactUrl(currentArtifact.artifact_id)"
       class="segment-media-image"
       alt="上传的图片"
     />
     <video
-      v-else-if="primaryArtifact?.artifact_type === 'video'"
-      :src="artifactUrl(primaryArtifact.artifact_id)"
+      v-else-if="currentArtifact?.artifact_type === 'video'"
+      :src="artifactUrl(currentArtifact.artifact_id)"
       class="segment-media-video"
       controls
     />
@@ -794,10 +816,10 @@ const statusLabel = computed(() => {
     v-if="canUpload"
     size="small"
     :icon="Upload"
-    :loading="isUploading"
+    :loading="isCurrentUploading"
     @click="triggerFileUpload"
   >
-    {{ hasExistingAsset ? '替换' : '上传' }}
+    {{ hasGeneratedMedia ? '替换' : '上传' }}
   </ElButton>
   <input
     ref="fileInput"
@@ -814,11 +836,10 @@ const statusLabel = computed(() => {
 ```typescript
 const canUpload = computed(() => {
   // 只有 manifest 存在且任务允许手动上传时才能上传
-  // 图片和视频任务始终允许上传（首版限制）
-  return !!props.execution && (
-    props.execution.status === "waiting_manual_upload" ||
-    props.execution.status === "completed" ||
-    props.execution.status === "accepted"
+  return !!currentExecution.value && (
+    currentExecution.value.status === "waiting_manual_upload" ||
+    currentExecution.value.status === "completed" ||
+    currentExecution.value.status === "accepted"
   ) && (activeTab.value === "image" || activeTab.value === "video");
 });
 ```
@@ -843,7 +864,7 @@ const canUpload = computed(() => {
 - [ ] **Step 2: 验证无编译错误**
 
 ```bash
-cd frontend && npx vue-tsc --noEmit
+cd frontend && npx vite build --mode development 2>&1 | head -20
 ```
 
 - [ ] **Step 3: 提交**
@@ -1087,9 +1108,9 @@ function handleConfirm() {
           :segment-index="index"
           :image-tasks="imageTasksBySegment.get(segment.segment_id) ?? []"
           :video-tasks="videoTasksBySegment.get(segment.segment_id) ?? []"
-          :execution="findExecutionForSegment(segment.segment_id)"
-          :primary-artifact="findPrimaryVisualArtifact(segment.segment_id)"
-          :is-uploading="isUploadingForSegment(segment.segment_id)"
+          :executions-by-task-id="executionsByTaskId"
+          :artifacts-by-id="artifactsById"
+          :uploading-task-id="assetsStore.state.isUploading"
           :project-id="projectId"
           @upload-file="handleUploadFile"
         />
@@ -1110,35 +1131,27 @@ function handleConfirm() {
 </template>
 ```
 
-辅助查找函数（每个分段可能关联多个任务，取视觉任务的第一个）：
+辅助查找映射（传完整 Map 给 SegmentAssetCard，卡片内部按 task 查找）：
 
 ```typescript
-function findExecutionForSegment(segmentId: string) {
-  // 查找该分段的 image_still 或 video_clip 任务的执行
-  const tasks = [
-    ...(imageTasksBySegment.value.get(segmentId) ?? []),
-    ...(videoTasksBySegment.value.get(segmentId) ?? []),
-  ];
-  if (tasks.length === 0) return null;
-  return findExecution(tasks[0]!.task_id);
-}
+// 执行状态按 taskId 查找表
+const executionsByTaskId = computed(() => {
+  const map = new Map<string, { task_id: string; status: string; output_artifact_ids: string[] }>();
+  for (const exec of executions.value) {
+    map.set(exec.task_id, exec);
+  }
+  return map;
+});
 
-function findPrimaryVisualArtifact(segmentId: string) {
-  const tasks = [
-    ...(imageTasksBySegment.value.get(segmentId) ?? []),
-    ...(videoTasksBySegment.value.get(segmentId) ?? []),
-  ];
-  if (tasks.length === 0) return null;
-  return findPrimaryArtifact(tasks[0]!.task_id);
-}
-
-function isUploadingForSegment(segmentId: string): boolean {
-  const tasks = [
-    ...(imageTasksBySegment.value.get(segmentId) ?? []),
-    ...(videoTasksBySegment.value.get(segmentId) ?? []),
-  ];
-  return tasks.some((t) => assetsStore.state.isUploading === t.task_id);
-}
+// Artifact 按 artifactId 查找表
+const artifactsById = computed(() => {
+  const map = new Map<string, { artifact_id: string; artifact_type: string; file_uri: string; metadata: Record<string, unknown> }>();
+  for (const art of artifacts.value) {
+    map.set(art.artifact_id, art);
+  }
+  return map;
+});
+```
 ```
 
 新增 CSS：
@@ -1172,7 +1185,7 @@ function isUploadingForSegment(segmentId: string): boolean {
 - [ ] **Step 2: 验证无编译错误**
 
 ```bash
-cd frontend && npx vue-tsc --noEmit
+cd frontend && npx vite build --mode development 2>&1 | head -20
 ```
 
 - [ ] **Step 3: 提交**

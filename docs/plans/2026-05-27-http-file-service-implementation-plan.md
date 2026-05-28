@@ -547,7 +547,7 @@ git commit -m "新增 multipart 解析工具"
 
 ```typescript
 import { createReadStream, statSync } from "node:fs";
-import { extname, resolve, relative } from "node:path";
+import { extname, resolve, relative, isAbsolute, sep } from "node:path";
 import type { ServerResponse } from "node:http";
 
 const MIME_MAP: Record<string, string> = {
@@ -569,9 +569,10 @@ export interface FileResponseOptions {
 }
 
 function isPathInside(filePath: string, root: string): boolean {
-  const resolved = resolve(filePath);
-  const rel = relative(resolve(root), resolved);
-  return rel.length > 0 && !rel.startsWith("..") && !resolve(rel).startsWith(resolve(root));
+  const fileAbs = resolve(filePath);
+  const rootAbs = resolve(root);
+  const rel = relative(rootAbs, fileAbs);
+  return rel !== "" && rel !== ".." && !rel.startsWith(".." + sep) && !isAbsolute(rel);
 }
 
 export function writeFileStream(
@@ -917,11 +918,12 @@ export async function handleFileRoute(
   const storageRoot = project.storageRootDir;
 
   if (match.type === "artifact_file" && match.artifactId) {
-    // DB 字段名：manifestJson（非 manifest）
-    const artifact = project.activeAssetManifestRecordId
-      ? app.db.assetManifestRecords.get(project.activeAssetManifestRecordId)?.manifestJson?.artifacts
-          ?.find((a: any) => a.artifact_id === match.artifactId)
+    // DB 字段名：manifestJson 类型为 Record<string, unknown>，需要类型收窄
+    const manifestData = project.activeAssetManifestRecordId
+      ? app.db.assetManifestRecords.get(project.activeAssetManifestRecordId)?.manifestJson
       : undefined;
+    const artifacts = (manifestData as { artifacts?: Array<{ artifact_id: string; file_uri: string }> } | undefined)?.artifacts;
+    const artifact = artifacts?.find((a) => a.artifact_id === match.artifactId);
     if (!artifact) {
       response.statusCode = 404;
       response.setHeader("content-type", "application/json");
@@ -930,13 +932,11 @@ export async function handleFileRoute(
     }
     writeFileStream(response, artifact.file_uri, storageRoot, { disposition: "inline" });
   } else if (match.type === "render_preview" || match.type === "render_download") {
-    // DB 字段名：outputArtifactJson（非 outputArtifact），需要 JSON.parse
+    // DB 字段名：outputArtifactJson 类型为 ExportArtifact | null（已解析，不需要 JSON.parse）
     const renderRecord = project.activeRenderJobRecordId
       ? app.db.renderJobRecords.get(project.activeRenderJobRecordId)
       : undefined;
-    const renderArtifact = renderRecord?.outputArtifactJson
-      ? JSON.parse(renderRecord.outputArtifactJson)
-      : undefined;
+    const renderArtifact = renderRecord?.outputArtifactJson;
     if (!renderArtifact) {
       response.statusCode = 404;
       response.setHeader("content-type", "application/json");

@@ -69,7 +69,16 @@
   source_compose_record_id: string;
   status: string;
   profile: { width: number; height: number; fps: number; ... } | null;
-  output_artifact: { artifact_type: string; file_uri: string; metadata: { duration_sec: number; ... } } | null;
+  output_artifact: {
+    artifact_type: string;
+    file_uri: string;
+    // ExportArtifact 的 duration/width/height/fps 在顶层（非 metadata 内）
+    duration_sec: number;
+    width: number;
+    height: number;
+    fps: number;
+    metadata: Record<string, unknown>;
+  } | null;
   validation_result: { decision: string; ... } | null;
   execution_state: Record<string, unknown>;
 }
@@ -82,6 +91,7 @@
 **Files:**
 - Modify: `frontend/src/stores/workspace.ts`
 - Modify: `frontend/src/views/ProjectWorkspace.vue`
+- Modify: `frontend/src/components/workspace/WorkspaceSidebar.vue`
 
 - [ ] **Step 1: 修改 workspace.ts**
 
@@ -139,16 +149,51 @@ const panelMap: Record<PipelineStep, Component> = {
 };
 ```
 
-- [ ] **Step 3: 验证无编译错误**
+- [ ] **Step 3: 修改 WorkspaceSidebar.vue**
 
-```bash
-cd frontend && npx vue-tsc --noEmit
+在 `frontend/src/components/workspace/WorkspaceSidebar.vue` 中：
+
+1. 在 `stepIcons` 中新增 `render` 的图标（使用 Element Plus 的 `Download` 或 `Film` 图标）：
+
+```typescript
+import { Download } from "@element-plus/icons-vue";
+
+const stepIcons: Record<string, any> = {
+  topic: Edit,
+  script: Document,
+  storyboard: Film,
+  asset: Box,
+  compose: VideoCameraFilled,
+  render: Download,
+};
 ```
 
-- [ ] **Step 4: 提交**
+2. 在 `getReachedStepIndex` 函数中新增 `render` 状态映射（在 compose 之后）：
+
+```typescript
+function getReachedStepIndex(): number {
+  const status = projectStore.state.currentStatus;
+  if (!status) return 0;
+  if (status.startsWith("topic")) return 0;
+  if (status.startsWith("script")) return 1;
+  if (status.startsWith("storyboard")) return 2;
+  if (status.startsWith("asset_plan") || status.startsWith("asset")) return 3;
+  if (status.startsWith("compose")) return 4;
+  if (status.startsWith("render")) return 5;
+  return 0;
+}
+```
+
+- [ ] **Step 4: 验证无编译错误**
 
 ```bash
-git add frontend/src/stores/workspace.ts frontend/src/views/ProjectWorkspace.vue
+cd frontend && npx vite build --mode development 2>&1 | head -20
+```
+
+- [ ] **Step 5: 提交**
+
+```bash
+git add frontend/src/stores/workspace.ts frontend/src/views/ProjectWorkspace.vue frontend/src/components/workspace/WorkspaceSidebar.vue
 git commit -m "管线步骤扩展为 6 步，新增渲染导出"
 ```
 
@@ -605,13 +650,12 @@ export interface RenderSnapshot {
     output_artifact: {
       artifact_type: string;
       file_uri: string;
-      metadata: {
-        duration_sec?: number;
-        width?: number;
-        height?: number;
-        fps?: number;
-        file_size_bytes?: number;
-      };
+      // ExportArtifact 字段在顶层（非 metadata 内）
+      duration_sec?: number;
+      width?: number;
+      height?: number;
+      fps?: number;
+      metadata: Record<string, unknown>;
     } | null;
     validation_result: {
       decision: string;
@@ -800,26 +844,26 @@ git commit -m "新增 render store"
 
 - [ ] **Step 1: 导入并提供 stores**
 
-在 `ProjectWorkspace.vue` 中，与 assets store 同一位置添加：
+在 `ProjectWorkspace.vue` 中，与 assets store 同一位置添加。注意使用 Vue 的 `provide` 函数（非 `app.provide`，因为这是 `<script setup>` 上下文）：
 
 ```typescript
 import { createComposeStore, composeStoreKey, createFetchComposeApi } from "../stores/compose";
 import { createRenderStore, renderStoreKey, createFetchRenderApi } from "../stores/render";
 
-// 在 setupStores 中：
+// 在 <script setup> 中，与其他 provide 同一位置：
 const composeApi = createFetchComposeApi();
 const composeStore = createComposeStore({ projectStore, api: composeApi });
-app.provide(composeStoreKey, composeStore);
+provide(composeStoreKey, composeStore);
 
 const renderApi = createFetchRenderApi();
 const renderStore = createRenderStore({ projectStore, api: renderApi });
-app.provide(renderStoreKey, renderStore);
+provide(renderStoreKey, renderStore);
 ```
 
 - [ ] **Step 2: 验证无编译错误**
 
 ```bash
-cd frontend && npx vue-tsc --noEmit
+cd frontend && npx vite build --mode development 2>&1 | head -20
 ```
 
 - [ ] **Step 3: 提交**
@@ -1182,7 +1226,7 @@ function handleGoToRender() {
 - [ ] **Step 2: 验证无编译错误**
 
 ```bash
-cd frontend && npx vue-tsc --noEmit
+cd frontend && npx vite build --mode development 2>&1 | head -20
 ```
 
 - [ ] **Step 3: 提交**
@@ -1220,7 +1264,8 @@ const activeRender = computed(() => snapshot.value?.active_render ?? null);
 const hasRender = computed(() => !!activeRender.value);
 
 const outputArtifact = computed(() => activeRender.value?.output_artifact ?? null);
-const profile = computed(() => activeRender.value?.profile ?? outputArtifact.value?.metadata ?? null);
+// ExportArtifact 的 duration/width/height/fps 在顶层（非 metadata 内）
+const profile = computed(() => activeRender.value?.profile ?? null);
 const validationResult = computed(() => activeRender.value?.validation_result ?? null);
 
 const status = computed(() => activeRender.value?.status ?? null);
@@ -1231,12 +1276,14 @@ const isBlocked = computed(() => status.value === "blocked");
 // 渲染信息
 const renderInfo = computed(() => {
   if (!outputArtifact.value) return null;
-  const meta = outputArtifact.value.metadata;
+  const art = outputArtifact.value;
+  // ExportArtifact 字段在顶层，fallback 到 profile
+  const prof = profile.value;
   return {
-    duration: meta.duration_sec ? `${meta.duration_sec.toFixed(1)} 秒` : "—",
-    resolution: meta.width && meta.height ? `${meta.width}x${meta.height}` : "—",
-    fps: meta.fps ? `${meta.fps}fps` : "—",
-    fileSize: meta.file_size_bytes ? formatFileSize(meta.file_size_bytes) : "—",
+    duration: art.duration_sec ? `${art.duration_sec.toFixed(1)} 秒` : "—",
+    resolution: (art.width && art.height) ? `${art.width}x${art.height}` : prof ? `${prof.width}x${prof.height}` : "—",
+    fps: art.fps ? `${art.fps}fps` : prof?.fps ? `${prof.fps}fps` : "—",
+    fileSize: (art.metadata?.file_size_bytes as number) ? formatFileSize(art.metadata.file_size_bytes as number) : "—",
   };
 });
 
@@ -1455,7 +1502,7 @@ async function handleGenerate() {
 - [ ] **Step 2: 验证无编译错误**
 
 ```bash
-cd frontend && npx vue-tsc --noEmit
+cd frontend && npx vite build --mode development 2>&1 | head -20
 ```
 
 - [ ] **Step 3: 提交**
@@ -1521,6 +1568,6 @@ npm run dev:frontend
 ### 类型一致性
 
 - `ComposeSnapshot.active_compose.timeline` 结构与 `ComposeTimeline` schema 匹配
-- `RenderSnapshot.active_render.output_artifact.metadata` 字段与后端 render snapshot 返回匹配
+- `RenderSnapshot.active_render.output_artifact` 的 `duration_sec`/`width`/`height`/`fps` 在顶层（与 `ExportArtifact` schema 一致），`file_size_bytes` 在 `metadata` 中
 - `PIPELINE_STEPS` 增加 `render` 后，`PipelineStep` 类型联合、`panelMap`、`RENDER_STEP_INDEX` 查找一致
 - `getPreviewUrl()` / `getDownloadUrl()` 生成的 URL 与后端文件服务端点路径一致
