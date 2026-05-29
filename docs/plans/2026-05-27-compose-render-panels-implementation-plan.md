@@ -1306,6 +1306,10 @@ async function handleGenerate() {
     ElMessage.success("渲染完成");
   }
 }
+
+function handleDownload() {
+  globalThis.open(downloadUrl.value, "_blank");
+}
 </script>
 
 <template>
@@ -1400,7 +1404,7 @@ async function handleGenerate() {
         <el-button
           v-if="isCompleted"
           type="success"
-          @click="window.open(downloadUrl)"
+          @click="handleDownload"
         >
           下载视频
         </el-button>

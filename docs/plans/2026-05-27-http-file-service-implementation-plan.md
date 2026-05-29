@@ -547,7 +547,7 @@ git commit -m "新增 multipart 解析工具"
 
 ```typescript
 import { createReadStream, statSync } from "node:fs";
-import { extname, resolve, relative, isAbsolute, sep } from "node:path";
+import { extname, resolve, relative, isAbsolute, sep, basename } from "node:path";
 import type { ServerResponse } from "node:http";
 
 const MIME_MAP: Record<string, string> = {
@@ -613,7 +613,7 @@ export function writeFileStream(
   response.setHeader("accept-ranges", "bytes");
 
   const disposition = options.disposition ?? "inline";
-  const downloadName = options.filename ?? resolved.split("/").pop() ?? "file";
+  const downloadName = options.filename ?? basename(resolved);
   response.setHeader(
     "content-disposition",
     `${disposition}; filename="${downloadName}"`,
@@ -799,8 +799,9 @@ git commit -m "新增视频元数据探测（ffprobe）"
 
 - [ ] **Step 1: 写 upload controller**
 
-在 `backend/src/modules/assets/assets.routes.ts` 中新增 `uploadArtifactController`。该函数通过 `app.inject` 接收已解析的 multipart payload（`context.payload.file` 包含 `{ buffer, originalName, mimeType }`），执行以下流程：
+在 `backend/src/modules/assets/assets.routes.ts` 中新增 `uploadArtifactController`。该函数通过 `app.inject` 接收已解析的 multipart payload（`context.payload.file` 包含 `{ buffer, originalName, mimeType, truncated }`），执行以下流程：
 
+0. **文件大小检查**：检查 `file.truncated`，若为 true 则立即返回 413 `{ error: "asset_upload_file_too_large" }`，不进入后续流程
 1. 从项目快照查找 active asset plan 和 active manifest
 2. 从 asset plan 的 tasks 中找到 `taskId` 对应的 task
 3. 校验 `task.manual_upload_policy.allowed`，不允许则 422
@@ -1120,7 +1121,7 @@ git commit -m "同步 API 文档：新增文件上传/服务端点"
 **已知修正**：
 - Task 8：`audio-duration-probe.ts` 不使用 ffprobe（WAV/PCM buffer 解析），视频探测是首次使用 ffprobe，需独立可用性检测。
 - Task 9：`artifact_type` 仅支持 `image_still→image` 和 `video_clip→video` 两种映射。`registerManualArtifact` 的 `output_artifact_ids` 改为 unshift（新 ID 在首位），与 `acceptArtifact` 选中模型一致。
-- Task 10：DB 字段名为 `storageRootDir`（非 `projectStorageRootDir`）、`outputArtifactJson`（非 `outputArtifact`，需 `JSON.parse`）、`manifestJson`（非 `manifest`）。`requestUrl` 提前到文件路由匹配之前创建。
+- Task 10：DB 字段名为 `storageRootDir`（非 `projectStorageRootDir`）、`outputArtifactJson`（类型为 `ExportArtifact | null`，已解析，不需要 `JSON.parse`）、`manifestJson`（类型为 `Record<string, unknown>`，需类型收窄）。`requestUrl` 提前到文件路由匹配之前创建。
 
 ### 类型一致性
 

@@ -743,9 +743,8 @@ function onFileSelected(event: Event) {
   const target = event.target as HTMLInputElement;
   const file = target.files?.[0];
   if (!file) return;
-  const task = activeTab.value === "image"
-    ? primaryImageTask.value
-    : primaryVideoTask.value;
+  // 使用当前 carousel 选中的任务（而非第一个任务）
+  const task = activeTasks.value[activeMediaIndex.value];
   if (task) {
     emit("upload-file", task.task_id, file);
   }
@@ -765,7 +764,7 @@ function artifactUrl(artifactId: string): string {
 
 // 状态标签
 const statusLabel = computed(() => {
-  if (!props.execution) return null;
+  if (!currentExecution.value) return null;
   const map: Record<string, string> = {
     waiting_manual_upload: "待上传",
     running: "生成中",
@@ -775,7 +774,7 @@ const statusLabel = computed(() => {
     planned: "待执行",
     ready: "就绪",
   };
-  return map[props.execution.status] ?? props.execution.status;
+  return map[currentExecution.value.status] ?? currentExecution.value.status;
 });
 ```
 
