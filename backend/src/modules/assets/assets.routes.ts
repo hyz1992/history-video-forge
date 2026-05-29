@@ -40,6 +40,9 @@ async function generateAssetsController(
     typeof payload.dashscope === "object" && payload.dashscope !== null
       ? payload.dashscope as Record<string, unknown>
       : {};
+  const enabledProviderTypes = Array.isArray(payload.enabled_provider_types)
+    ? payload.enabled_provider_types as string[]
+    : undefined;
 
   return runAssetsGeneration({
     db: context.app.db,
@@ -47,6 +50,7 @@ async function generateAssetsController(
     voiceProfileId,
     executionMode,
     providerMode,
+    enabledProviderTypes,
     dashscope: {
       apiKey: dashscopePayload.api_key as string | undefined,
       baseUrl: dashscopePayload.base_url as string | undefined,

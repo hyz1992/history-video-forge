@@ -60,6 +60,7 @@ export interface RunAssetsGenerationInput {
   executionMode: string;
   providerMode?: AssetsProviderMode;
   dashscope?: DashscopeProviderConfig;
+  enabledProviderTypes?: string[];
 }
 
 function buildTraceSummary(input: {
@@ -136,11 +137,12 @@ function buildTraceSummary(input: {
 function buildExecutionOptions(input: {
   executionMode: string;
   voiceProfileId: string;
+  enabledProviderTypes?: string[];
 }) {
   return AssetExecutionOptionsSchema.safeParse({
     execution_mode: input.executionMode,
     voice_profile_id: input.voiceProfileId,
-    enabled_provider_types: ["tts", "image", "video", "sfx", "bgm"],
+    enabled_provider_types: input.enabledProviderTypes ?? ["tts", "image", "video", "sfx", "bgm"],
     allow_manual_placeholders: false,
   });
 }
@@ -458,6 +460,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   const executionOptionsResult = buildExecutionOptions({
     executionMode: input.executionMode,
     voiceProfileId: voiceResolution.voiceProfileId,
+    enabledProviderTypes: input.enabledProviderTypes,
   });
   if (!executionOptionsResult.success) {
     return {
@@ -738,8 +741,11 @@ export async function registerManualArtifact(input: RegisterManualArtifactInput)
   // Step 7: Add artifact to manifest
   manifest.artifacts.push(newArtifact);
 
-  // Step 8: Add artifact_id to execution output_artifact_ids
-  execution.output_artifact_ids.push(artifactId);
+  // Step 8: Add artifact_id to execution output_artifact_ids (new ID at front = current selection)
+  execution.output_artifact_ids = [
+    artifactId,
+    ...execution.output_artifact_ids,
+  ];
 
   // Step 9: Update execution status to completed and origin to manual_upload
   execution.status = "completed";
