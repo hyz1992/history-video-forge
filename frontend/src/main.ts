@@ -36,6 +36,16 @@ import {
   createAssetsStore,
   assetsStoreKey,
 } from "./stores/assets";
+import {
+  createFetchComposeApi,
+  createComposeStore,
+  composeStoreKey,
+} from "./stores/compose";
+import {
+  createFetchRenderApi,
+  createRenderStore,
+  renderStoreKey,
+} from "./stores/render";
 
 const router = createAppRouter("web");
 const projectStore = createProjectStore(createFetchProjectApi());
@@ -59,6 +69,14 @@ const assetsStore = createAssetsStore({
   projectStore,
   api: createFetchAssetsApi(),
 });
+const composeStore = createComposeStore({
+  projectStore,
+  api: createFetchComposeApi(),
+});
+const renderStore = createRenderStore({
+  projectStore,
+  api: createFetchRenderApi(),
+});
 
 const app = createApp({
   render: () => h(RouterView),
@@ -72,6 +90,8 @@ app.provide(scriptStoreKey, scriptStore);
 app.provide(storyboardStoreKey, storyboardStore);
 app.provide(assetPlanningStoreKey, assetPlanningStore);
 app.provide(assetsStoreKey, assetsStore);
+app.provide(composeStoreKey, composeStore);
+app.provide(renderStoreKey, renderStore);
 
 if (typeof document !== "undefined") {
   app.mount("#app");
