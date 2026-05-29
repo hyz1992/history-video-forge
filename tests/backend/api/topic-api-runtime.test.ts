@@ -38,14 +38,17 @@ function createRuntimeCandidate(title: string, angle: string) {
 
 function mockTopicRuntimeResponses(builderOutputs: unknown[]) {
   let builderCallIndex = 0;
-  invokeStructuredPromptMock.mockImplementation(async ({ operationName }) => {
+  invokeStructuredPromptMock.mockImplementation(async ({ operationName, input }) => {
     if (operationName === "topic.selector") {
+      const pool = (input as { selector_pool?: Array<{ candidate_id: string }> }).selector_pool ?? [];
       return {
-        selected_candidate_ids: [
-          "selector_candidate_1",
-          "selector_candidate_2",
-          "selector_candidate_3",
-        ],
+        ranked_candidates: pool.map((c, i) => ({
+          candidate_id: c.candidate_id,
+          quality_rank: i + 1,
+          quality_score: Math.max(1, 100 - i * 10),
+          deductions: [],
+          risk_summary: "mock selector ranking",
+        })),
       };
     }
 
