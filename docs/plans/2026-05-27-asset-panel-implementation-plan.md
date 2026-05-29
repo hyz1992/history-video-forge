@@ -638,7 +638,7 @@ provide(assetsStoreKey, assetsStore);
 - [ ] **Step 2: 验证无编译错误**
 
 ```bash
-cd frontend && npx vite build --mode development 2>&1 | head -20
+cd frontend && npx vite build --mode development 2>&1 | tail -n 20
 ```
 
 - [ ] **Step 3: 提交**
@@ -863,7 +863,7 @@ const canUpload = computed(() => {
 - [ ] **Step 2: 验证无编译错误**
 
 ```bash
-cd frontend && npx vite build --mode development 2>&1 | head -20
+cd frontend && npx vite build --mode development 2>&1 | tail -n 20
 ```
 
 - [ ] **Step 3: 提交**
@@ -1151,7 +1151,6 @@ const artifactsById = computed(() => {
   return map;
 });
 ```
-```
 
 新增 CSS：
 
@@ -1184,7 +1183,7 @@ const artifactsById = computed(() => {
 - [ ] **Step 2: 验证无编译错误**
 
 ```bash
-cd frontend && npx vite build --mode development 2>&1 | head -20
+cd frontend && npx vite build --mode development 2>&1 | tail -n 20
 ```
 
 - [ ] **Step 3: 提交**

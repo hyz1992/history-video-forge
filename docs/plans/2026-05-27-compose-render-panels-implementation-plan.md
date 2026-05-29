@@ -187,7 +187,7 @@ function getReachedStepIndex(): number {
 - [ ] **Step 4: 验证无编译错误**
 
 ```bash
-cd frontend && npx vite build --mode development 2>&1 | head -20
+cd frontend && npx vite build --mode development 2>&1 | tail -n 20
 ```
 
 - [ ] **Step 5: 提交**
@@ -564,11 +564,11 @@ const MOCK_SNAPSHOT = {
     status: "completed",
     profile: { width: 1080, height: 1920, fps: 30, aspect_ratio: "9:16" },
     output_artifact: {
-      artifact_type: "export_video",
+      artifact_type: "rendered_video",
       file_uri: "/tmp/output.mp4",
       metadata: { duration_sec: 70.5, width: 1080, height: 1920, fps: 30, file_size_bytes: 13421772 },
     },
-    validation_result: { decision: "pass" },
+    validation_result: { decision: "rendered" },
     execution_state: {},
     graph_trace_summary: null,
     runtime_diagnostics: null,
@@ -863,7 +863,7 @@ provide(renderStoreKey, renderStore);
 - [ ] **Step 2: 验证无编译错误**
 
 ```bash
-cd frontend && npx vite build --mode development 2>&1 | head -20
+cd frontend && npx vite build --mode development 2>&1 | tail -n 20
 ```
 
 - [ ] **Step 3: 提交**
@@ -1226,7 +1226,7 @@ function handleGoToRender() {
 - [ ] **Step 2: 验证无编译错误**
 
 ```bash
-cd frontend && npx vite build --mode development 2>&1 | head -20
+cd frontend && npx vite build --mode development 2>&1 | tail -n 20
 ```
 
 - [ ] **Step 3: 提交**
@@ -1506,7 +1506,7 @@ function handleDownload() {
 - [ ] **Step 2: 验证无编译错误**
 
 ```bash
-cd frontend && npx vite build --mode development 2>&1 | head -20
+cd frontend && npx vite build --mode development 2>&1 | tail -n 20
 ```
 
 - [ ] **Step 3: 提交**
