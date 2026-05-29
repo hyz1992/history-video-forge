@@ -205,7 +205,7 @@ describe("topic confirm service", () => {
     const report = assessTopicPackageScriptSufficiency(topicPackage);
 
     expect(result.topic_package.narrative_tension_map.mid_reveal).toBe(
-      mustCoverPreview[1],
+      mustCoverPreview[0],
     );
     expect(result.topic_package.narrative_tension_map.ending_residue).toBe(
       mustCoverPreview[2],
