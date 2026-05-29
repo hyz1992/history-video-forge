@@ -506,6 +506,7 @@ script 摘要第一版建议至少包含：
   - `execution_mode`：`"auto_available"` 或 `"dry_run"`，默认 `"auto_available"`。
   - `provider_mode`：可选；仅显式传 `"dashscope"` 时启用 DashScope TTS/文生图/image-to-video provider，以及 TTS 所需的供应商音色懒创建；否则默认 fake/local。
   - `dashscope`：可选 DashScope 配置覆盖，包括 `api_key`、`base_url`、`tts_model`、`tts_format`、`tts_sample_rate`、`image_model`、`image_size`、`image_poll_interval_ms`、`image_max_poll_attempts`、`image_to_video_model`、`image_to_video_resolution`、`image_to_video_duration_sec`、`image_to_video_poll_interval_ms`、`image_to_video_max_poll_attempts`。
+  - `enabled_provider_types`：可选数组，指定自动生成的 provider 类型（值域：`"tts"`、`"image"`、`"video"`、`"sfx"`、`"bgm"`）。不传时所有类型都执行。传 `["tts", "sfx", "bgm"]` 时，图片/视频任务状态设为 `waiting_manual_upload`，留给用户手动上传。字幕任务（`subtitle_track`）不在枚举中，随 TTS 自动执行。
 
 前置条件与错误：
 
@@ -595,6 +596,96 @@ script 摘要第一版建议至少包含：
 - assets API 不修改 `script_text`、`TopicPackage`、`StoryboardPlan` 或 `AssetPlan`。
 - assets API 不生成 compose timeline 或最终视频。
 - assets v1 API 原始合同不包含前端 UI、物理文件上传或预览功能；这些能力可由后续前端工作流/API 设计补充，不应隐式塞进既有 `register` 合同。
+
+### `POST /api/projects/:projectId/assets/tasks/:taskId/artifacts/upload`
+
+用途：
+
+- 通过 multipart/form-data 上传文件，为指定 task 注册 artifact。
+- 支持 `image_still`（→ artifact type `image`）和 `video_clip`（→ artifact type `video`）两种 task type 的上传。
+- 校验文件大小（10MB 限制）、MIME 类型、魔数。
+- 写入项目存储目录，探测元数据（图片 width/height，视频 duration/width/height/fps）。
+- 新 artifact ID 插入 execution `output_artifact_ids` 首位（当前选中），旧 artifact 保留在列表中。
+
+输入：
+
+- URL 中的 `projectId` 和 `taskId`。
+- `Content-Type: multipart/form-data`。
+- 表单字段 `file`：上传的文件。
+
+前置条件与错误：
+
+- project 必须存在，否则返回 `404 project_not_found`。
+- project 必须有 active manifest record，否则返回 `409 active_assets_missing`。
+- 文件大小超过 10MB 时返回 `413 asset_upload_file_too_large`。
+- task 不允许手动上传时返回 `422 asset_manual_upload_not_allowed`。
+- MIME 类型不在 `accepted_file_types` 中返回 `422 asset_manual_upload_type_not_allowed`。
+- 魔数校验失败返回 `422 asset_upload_magic_number_mismatch`。
+- 元数据探测失败返回 `422 asset_upload_metadata_probe_failed`。
+
+成功响应字段：
+
+- `project_id`
+- `asset_manifest_record_id`
+- `manifest`
+- `local_validation`
+
+### `GET /api/projects/:projectId/artifacts/:artifactId/file`
+
+用途：
+
+- 返回指定 artifact 的文件内容（inline）。
+- 支持 Range 请求（视频预览）。
+- 路径穿越防护：`file_uri` 必须在项目存储根目录内。
+
+前置条件与错误：
+
+- project 必须存在，否则返回 `404 project_not_found`。
+- artifact 必须存在于 active manifest，否则返回 `404 artifact_not_found`。
+- 路径穿越返回 `403 path_traversal_denied`。
+- 文件不存在返回 `404 file_not_found`。
+
+成功响应头：
+
+- `Content-Type`：根据文件扩展名推断。
+- `Content-Disposition: inline`。
+- `Accept-Ranges: bytes`。
+- 支持 `Range` 请求返回 `206 Partial Content`。
+
+### `GET /api/projects/:projectId/render/preview`
+
+用途：
+
+- 返回渲染成品视频流（inline），用于浏览器 `<video>` 标签预览。
+- 从 `active_render.output_artifact`（`ExportArtifact`）获取 `file_uri`。
+- 支持 Range 请求（拖动播放）。
+
+前置条件与错误：
+
+- project 必须存在，否则返回 `404 project_not_found`。
+- active render 必须有 `output_artifact`，否则返回 `404 render_output_not_found`。
+
+成功响应头：
+
+- `Content-Type: video/mp4`。
+- `Content-Disposition: inline`。
+- `Accept-Ranges: bytes`。
+
+### `GET /api/projects/:projectId/render/download`
+
+用途：
+
+- 返回渲染成品文件流（attachment），触发浏览器下载。
+- 文件名为 `{project.name}-output.mp4`。
+
+前置条件与错误：
+
+- 同 render preview。
+
+成功响应头：
+
+- `Content-Type: video/mp4`。
+- `Content-Disposition: attachment; filename="<project-name>-output.mp4"`。
 
 ## Compose v1 API（2026-05-17 已实现后端 timeline 合同）
 
