@@ -13,6 +13,7 @@ import {
   Film,
   Box,
   VideoCameraFilled,
+  Download,
   Fold,
   Expand,
 } from "@element-plus/icons-vue";
@@ -48,6 +49,7 @@ const stepIcons: Record<string, any> = {
   storyboard: Film,
   asset: Box,
   compose: VideoCameraFilled,
+  render: Download,
 };
 
 /**
@@ -62,6 +64,7 @@ function getReachedStepIndex(): number {
   if (status.startsWith("storyboard")) return 2;
   if (status.startsWith("asset_plan") || status.startsWith("asset")) return 3;
   if (status.startsWith("compose")) return 4;
+  if (status.startsWith("render")) return 5;
   return 0;
 }
 
