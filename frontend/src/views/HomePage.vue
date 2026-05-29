@@ -15,7 +15,7 @@
         </p>
 
         <p class="hero-desc">
-          从项目创建开始，先完成选题生成与确认，再进入文案生成和审阅，把当前阶段的主链路集中在一个入口里。
+          从选题到成片，六大阶段一键贯通。选题、文案、分镜、资产规划、资产、合成、渲染导出，全流程集中在一个工作台里。
         </p>
 
         <div class="hero-actions">
@@ -67,7 +67,7 @@
 
     <!-- Footer hint -->
     <p data-testid="home-flow-strip" class="flow-strip">
-      当前阶段聚焦 Topic 与 Script，不引入 storyboard、assets、compose。
+      从选题生成到视频渲染导出，全流程一站式完成。
     </p>
   </section>
 </template>
@@ -86,7 +86,8 @@ const pipelineSteps = [
   { key: "storyboard", icon: "🎬", label: "分镜" },
   { key: "asset-planning", icon: "📋", label: "资产规划" },
   { key: "asset", icon: "🖼️", label: "资产" },
-  { key: "compose", icon: "🎥", label: "合成视频" },
+  { key: "compose", icon: "🎥", label: "合成" },
+  { key: "render", icon: "📥", label: "渲染导出" },
 ];
 
 async function handleCreateProject() {
