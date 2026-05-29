@@ -5,6 +5,7 @@ import { runTopicRecommendationGraph } from "../../../backend/src/runtime/orches
 import { TopicCandidateCard } from "../../../shared/src/index.js";
 
 const runtimeCandidate = {
+  event_identity: "晏子使楚",
   title: "晏子使楚",
   one_line_angle: "真正抓人的不是出使本身，而是当场连续顶回压场。",
   family_label: "外交压场型",
@@ -41,6 +42,11 @@ describe("topic recommendation graph", () => {
       createRuntimeCandidate("晏子使楚", "第一槽位"),
       createRuntimeCandidate("张巡守城", "第二槽位"),
       createRuntimeCandidate("于谦守京", "第三槽位"),
+      createRuntimeCandidate("荆轲刺秦", "第四槽位"),
+      createRuntimeCandidate("烛之武退秦", "第五槽位"),
+      createRuntimeCandidate("完璧归赵", "第六槽位"),
+      createRuntimeCandidate("苏秦合纵", "第七槽位"),
+      createRuntimeCandidate("毛遂自荐", "第八槽位"),
     ]);
 
     const result = await runTopicRecommendationGraph(
@@ -66,7 +72,7 @@ describe("topic recommendation graph", () => {
     expect(result.trace.nodes[0]).toMatchObject({
       node_name: "topic-candidate-generate",
       input_ref: "topic-event:晏子使楚",
-      output_ref: "topic-candidate-list:3",
+      output_ref: "topic-candidate-list:8",
       failure_reason: null,
     });
     expect(result.trace).toMatchObject({
@@ -79,16 +85,16 @@ describe("topic recommendation graph", () => {
         phase: "topic",
         status: "succeeded",
         input_ref: "topic-event:晏子使楚",
-        output_ref: "topic-candidate-list:3",
+        output_ref: "topic-candidate-list:8",
         started_at: expect.any(String),
         ended_at: expect.any(String),
         duration_ms: expect.any(Number),
       }),
     ]);
-    expect(result.candidates).toHaveLength(3);
+    expect(result.candidates).toHaveLength(8);
     expect(result.diagnostics.checks).toContainEqual(
       expect.objectContaining({
-        code: "topic_candidate_slot_guard_passed",
+        code: "topic_candidate_generate_passed",
       }),
     );
     expect(() => TopicCandidateCard.parse(result.candidates[0])).not.toThrow();
