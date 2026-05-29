@@ -3,6 +3,8 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
 import { buildApp, type AppInstance } from "./app";
+import { matchFileRoute, handleFileRoute } from "./http/file-routes.js";
+import { parseMultipart } from "./http/multipart.js";
 
 async function readPayload(request: IncomingMessage) {
   const chunks: Buffer[] = [];
@@ -48,6 +50,41 @@ export function createHttpServer(app: AppInstance = buildApp()): Server {
       return;
     }
 
+    const requestUrl = new URL(request.url, "http://127.0.0.1");
+
+    // 1. File service routes (bypass app.inject, don't consume request body)
+    const fileMatch = matchFileRoute(request.method, requestUrl.pathname);
+    if (fileMatch) {
+      try {
+        await handleFileRoute(fileMatch, response, app);
+      } catch (error) {
+        response.statusCode = 500;
+        response.setHeader("content-type", "application/json");
+        response.end(JSON.stringify({ error: "file_serve_error" }));
+      }
+      return;
+    }
+
+    // 2. Multipart upload (parse then pass to app.inject, skip readPayload)
+    const contentType = request.headers["content-type"] ?? "";
+    if (request.method === "POST" && contentType.includes("multipart/form-data")) {
+      try {
+        const multipartResult = await parseMultipart(request);
+        const appResponse = await app.inject({
+          method: request.method,
+          url: requestUrl.pathname,
+          payload: { file: multipartResult.file },
+        });
+        writeJson(response, appResponse.statusCode, appResponse.json());
+      } catch (error) {
+        response.statusCode = 400;
+        response.setHeader("content-type", "application/json");
+        response.end(JSON.stringify({ error: "multipart_parse_error" }));
+      }
+      return;
+    }
+
+    // 3. All other routes: existing readPayload + app.inject flow
     let payload: unknown;
     try {
       payload = await readPayload(request);
@@ -61,7 +98,6 @@ export function createHttpServer(app: AppInstance = buildApp()): Server {
     }
 
     try {
-      const requestUrl = new URL(request.url, "http://127.0.0.1");
       const appResponse = await app.inject({
         method: request.method,
         url: requestUrl.pathname,
