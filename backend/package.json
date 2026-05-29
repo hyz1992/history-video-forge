@@ -6,6 +6,11 @@
   "main": "src/index.ts",
   "dependencies": {
     "@remotion/bundler": "^4.0.462",
-    "@remotion/renderer": "^4.0.462"
+    "@remotion/renderer": "^4.0.462",
+    "busboy": "^1.6.0",
+    "image-size": "^2.0.2"
+  },
+  "devDependencies": {
+    "@types/busboy": "^1.5.4"
   }
 }
