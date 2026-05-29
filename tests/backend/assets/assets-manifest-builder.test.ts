@@ -686,6 +686,73 @@ describe("buildInitialAssetManifest", () => {
 
   // ── 12. Audio summary structure ─────────────────────────────────────────────
 
+  describe("enabled_provider_types 过滤", () => {
+    it("当 enabled_provider_types 排除 image 时，image_still 任务状态为 waiting_manual_upload", () => {
+      const imageWithUploadAllowed: AssetTask = {
+        ...imageTask("sb_001"),
+        manual_upload_policy: makeManualUploadPolicy({ allowed: true, required: false }),
+      };
+      const plan = makeBaseAssetPlan([imageWithUploadAllowed]);
+      const manifest = buildInitialAssetManifest({
+        assetPlanRecordId: ASSET_PLAN_ID,
+        assetPlan: plan,
+        segmentIds: SEGMENT_IDS,
+        executionOptions: {
+          execution_mode: "auto_available",
+          voice_profile_id: plan.tts_plan.voice_profile_id,
+          enabled_provider_types: ["tts", "sfx", "bgm"],
+          allow_manual_placeholders: false,
+        },
+      });
+      const imageExec = manifest.executions.find((e) => e.task_type === "image_still");
+      expect(imageExec).toBeDefined();
+      expect(imageExec!.status).toBe("waiting_manual_upload");
+      expect(imageExec!.origin).toBe("manual_upload");
+    });
+
+    it("当 enabled_provider_types 包含 image 时，image_still 任务状态为 planned", () => {
+      const imageWithUploadAllowed: AssetTask = {
+        ...imageTask("sb_001"),
+        manual_upload_policy: makeManualUploadPolicy({ allowed: true, required: false }),
+      };
+      const plan = makeBaseAssetPlan([imageWithUploadAllowed]);
+      const manifest = buildInitialAssetManifest({
+        assetPlanRecordId: ASSET_PLAN_ID,
+        assetPlan: plan,
+        segmentIds: SEGMENT_IDS,
+        executionOptions: {
+          execution_mode: "auto_available",
+          voice_profile_id: plan.tts_plan.voice_profile_id,
+          enabled_provider_types: ["tts", "image", "video", "sfx", "bgm"],
+          allow_manual_placeholders: false,
+        },
+      });
+      const imageExec = manifest.executions.find((e) => e.task_type === "image_still");
+      expect(imageExec).toBeDefined();
+      expect(imageExec!.status).toBe("planned");
+      expect(imageExec!.origin).toBe("provider");
+    });
+
+    it("render_motion_cue 不受 enabled_provider_types 影响", () => {
+      const plan = makeBaseAssetPlan([motionTask("sb_001")]);
+      const manifest = buildInitialAssetManifest({
+        assetPlanRecordId: ASSET_PLAN_ID,
+        assetPlan: plan,
+        segmentIds: ["sb_001"],
+        executionOptions: {
+          execution_mode: "auto_available",
+          voice_profile_id: plan.tts_plan.voice_profile_id,
+          enabled_provider_types: ["tts"],
+          allow_manual_placeholders: false,
+        },
+      });
+      const motionExec = manifest.executions.find((e) => e.task_type === "render_motion_cue");
+      expect(motionExec).toBeDefined();
+      expect(motionExec!.status).toBe("completed");
+      expect(motionExec!.origin).toBe("local");
+    });
+  });
+
   it("builds audio_summary from tts_plan, sfx_cue, bgm_cue, and global_audio_strategy", () => {
     const plan = makeFullPlan();
     const manifest = buildInitialAssetManifest({

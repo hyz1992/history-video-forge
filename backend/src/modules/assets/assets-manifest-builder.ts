@@ -18,6 +18,7 @@ import type {
   TtsChunkRoute,
 } from "../../../../shared/src/index.js";
 import { readBgmCueParams } from "./audio-cue-params.js";
+import { isProviderTypeEnabled } from "./provider-type-map.js";
 
 // ─── Input ────────────────────────────────────────────────────────────────────
 
@@ -44,14 +45,15 @@ function nowISO(): string {
 /** Determine the execution status for a task based on its properties. */
 function resolveInitialStatus(
   task: AssetPlan["tasks"][number],
+  enabledProviderTypes: string[] | undefined,
 ): AssetTaskExecution["status"] {
   // Manual-upload-required tasks start as waiting_manual_upload
   if (task.manual_upload_policy.required) {
     return "waiting_manual_upload";
   }
-  // Otherwise respect the plan's initial_status
-  if (task.initial_status === "planned") {
-    return "planned";
+  // When provider type is disabled and task allows manual upload, set waiting_manual_upload
+  if (!isProviderTypeEnabled(task.task_type, enabledProviderTypes) && task.manual_upload_policy.allowed) {
+    return "waiting_manual_upload";
   }
   return "planned";
 }
@@ -59,8 +61,13 @@ function resolveInitialStatus(
 /** Determine the execution origin for a task. */
 function resolveOrigin(
   task: AssetPlan["tasks"][number],
+  enabledProviderTypes: string[] | undefined,
 ): AssetTaskExecution["origin"] {
   if (task.manual_upload_policy.required) {
+    return "manual_upload";
+  }
+  // When provider type is disabled and task allows manual upload, origin is manual_upload
+  if (!isProviderTypeEnabled(task.task_type, enabledProviderTypes) && task.manual_upload_policy.allowed) {
     return "manual_upload";
   }
   // Motion recipes are inline (local)
@@ -74,13 +81,14 @@ function resolveOrigin(
 
 function buildExecutions(
   tasks: AssetPlan["tasks"],
+  enabledProviderTypes: string[] | undefined,
 ): AssetTaskExecution[] {
   return tasks.map((task) => ({
     execution_id: generateId("exec", task.task_id),
     task_id: task.task_id,
     task_type: task.task_type,
-    status: resolveInitialStatus(task),
-    origin: resolveOrigin(task),
+    status: resolveInitialStatus(task, enabledProviderTypes),
+    origin: resolveOrigin(task, enabledProviderTypes),
     started_at: null,
     completed_at: null,
     provider_id: task.provider_hint,
@@ -403,7 +411,7 @@ export function buildInitialAssetManifest(input: BuildManifestInput): AssetManif
     executionOptions.voice_profile_id ?? assetPlan.tts_plan.voice_profile_id;
 
   // ── Executions ───────────────────────────────────────────────────────────
-  const executions = buildExecutions(assetPlan.tasks);
+  const executions = buildExecutions(assetPlan.tasks, executionOptions.enabled_provider_types);
 
   // ── Inline artifacts: motion recipes ─────────────────────────────────────
   const { artifacts: motionArtifacts, executionUpdates: motionUpdates } =
