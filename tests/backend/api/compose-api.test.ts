@@ -188,7 +188,7 @@ describe("compose API", () => {
       source_asset_manifest_record_id: manifestRecord.id,
       timeline: {
         timeline_version: "compose_timeline_v1",
-        duration_sec: 12,
+        duration_sec: 15,
         readiness: "ready_for_render",
       },
       local_validation: {

@@ -76,7 +76,7 @@ describe("project snapshot api", () => {
         script_record_id: expect.any(String),
         script_text: expect.any(String),
         review_decision: expect.any(String),
-        patch_intent: expect.anything(),
+        patch_intent: null,
         execution_state: {
           patch_used: expect.any(Boolean),
           regenerate_used: expect.any(Boolean),
