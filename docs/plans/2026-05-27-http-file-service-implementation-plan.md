@@ -967,7 +967,8 @@ import { parseMultipart } from "./http/multipart.js";
 const requestUrl = new URL(request.url, "http://127.0.0.1");
 
 // 1. 文件服务路由（不经 app.inject，不消耗 request body）
-const fileMatch = matchFileRoute(request.method, request.url);
+// 使用 requestUrl.pathname 而非 request.url，避免 query string 导致匹配失败
+const fileMatch = matchFileRoute(request.method, requestUrl.pathname);
 if (fileMatch) {
   try {
     await handleFileRoute(fileMatch, response, app);

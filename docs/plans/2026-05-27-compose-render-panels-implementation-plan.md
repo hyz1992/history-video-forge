@@ -1388,7 +1388,7 @@ function handleDownload() {
         <div>时长：<strong>{{ renderInfo.duration }}</strong> · 分辨率 {{ renderInfo.resolution }} · {{ renderInfo.fps }}</div>
         <div v-if="validationResult">
           验证：
-          <span v-if="validationResult.decision === 'pass'" style="color: #67c23a; font-weight: 600">全部通过</span>
+          <span v-if="validationResult.decision === 'rendered' || validationResult.decision === 'ready_to_render'" style="color: #67c23a; font-weight: 600">全部通过</span>
           <span v-else style="color: #e6a23c">{{ validationResult.decision }}</span>
         </div>
       </div>
