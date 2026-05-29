@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { ElTooltip, ElTag, ElButton, ElIcon } from "element-plus";
-import { Upload, Refresh, CopyDocument } from "@element-plus/icons-vue";
+import { Upload, CopyDocument } from "@element-plus/icons-vue";
 
 import type { StoryboardSegment } from "../../stores/storyboard";
 import type { AssetTask } from "../../stores/asset-planning";
@@ -10,17 +10,32 @@ import type { AssetTask } from "../../stores/asset-planning";
 /*  Props & Emits                                                             */
 /* -------------------------------------------------------------------------- */
 
+interface ExecutionInfo {
+  task_id: string;
+  status: string;
+  output_artifact_ids: string[];
+}
+
+interface ArtifactInfo {
+  artifact_id: string;
+  artifact_type: string;
+  file_uri: string;
+  metadata: Record<string, unknown>;
+}
+
 const props = defineProps<{
   segment: StoryboardSegment;
   segmentIndex: number;
   imageTasks: AssetTask[];
   videoTasks: AssetTask[];
+  executionsByTaskId: Map<string, ExecutionInfo>;
+  artifactsById: Map<string, ArtifactInfo>;
+  uploadingTaskId: string | null;
+  projectId: string;
 }>();
 
 const emit = defineEmits<{
-  "generate-task": [taskId: string];
-  "regenerate-task": [taskId: string];
-  "upload-asset": [taskId: string];
+  "upload-file": [taskId: string, file: File];
 }>();
 
 /* -------------------------------------------------------------------------- */
@@ -39,7 +54,6 @@ const currentTask = computed(
   () => activeTasks.value[activeMediaIndex.value] ?? null,
 );
 
-// Reset index when switching tabs
 watch(activeTab, () => {
   activeMediaIndex.value = 0;
 });
@@ -47,8 +61,80 @@ watch(activeTab, () => {
 const hasImageTasks = computed(() => props.imageTasks.length > 0);
 const hasVideoTasks = computed(() => props.videoTasks.length > 0);
 
-// TODO: replace with actual asset URL check when asset generation is wired up
-const hasGeneratedMedia = computed(() => false);
+/* -------------------------------------------------------------------------- */
+/*  Execution & artifact lookups                                              */
+/* -------------------------------------------------------------------------- */
+
+const currentExecution = computed(() => {
+  const task = activeTasks.value[activeMediaIndex.value];
+  if (!task) return null;
+  return props.executionsByTaskId.get(task.task_id) ?? null;
+});
+
+const currentArtifact = computed(() => {
+  if (!currentExecution.value || currentExecution.value.output_artifact_ids.length === 0) return null;
+  const primaryId = currentExecution.value.output_artifact_ids[0]!;
+  return props.artifactsById.get(primaryId) ?? null;
+});
+
+const hasGeneratedMedia = computed(() => !!currentArtifact.value);
+
+const isCurrentUploading = computed(() => {
+  const task = activeTasks.value[activeMediaIndex.value];
+  return task ? props.uploadingTaskId === task.task_id : false;
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Status & actions                                                          */
+/* -------------------------------------------------------------------------- */
+
+const statusLabel = computed(() => {
+  if (!currentExecution.value) return null;
+  const map: Record<string, string> = {
+    waiting_manual_upload: "待上传",
+    running: "生成中",
+    completed: "已完成",
+    failed: "失败",
+    accepted: "已确认",
+    planned: "待执行",
+    ready: "就绪",
+  };
+  return map[currentExecution.value.status] ?? currentExecution.value.status;
+});
+
+const canUpload = computed(() => {
+  return !!currentExecution.value && (
+    currentExecution.value.status === "waiting_manual_upload" ||
+    currentExecution.value.status === "completed" ||
+    currentExecution.value.status === "accepted"
+  ) && (activeTab.value === "image" || activeTab.value === "video");
+});
+
+const acceptFileTypes = computed(() => {
+  if (activeTab.value === "image") return "image/png,image/jpeg,image/webp";
+  return "video/mp4,video/quicktime";
+});
+
+const fileInput = ref<HTMLInputElement | null>(null);
+
+function triggerFileUpload() {
+  fileInput.value?.click();
+}
+
+function onFileSelected(event: Event) {
+  const target = event.target as HTMLInputElement;
+  const file = target.files?.[0];
+  if (!file) return;
+  const task = activeTasks.value[activeMediaIndex.value];
+  if (task) {
+    emit("upload-file", task.task_id, file);
+  }
+  target.value = "";
+}
+
+function artifactUrl(artifactId: string): string {
+  return `/api/projects/${props.projectId}/artifacts/${artifactId}/file`;
+}
 
 /* -------------------------------------------------------------------------- */
 /*  Helpers                                                                   */
@@ -71,11 +157,6 @@ const activePromptText = computed(() => {
   return task?.prompt_draft ?? props.segment.visual_intent ?? '—';
 });
 
-const canGenerate = computed(() => {
-  if (activeTab.value === "image") return !!primaryImageTask.value;
-  return !!primaryVideoTask.value;
-});
-
 const activeRiskNotes = computed(() => {
   const task = activeTasks.value[activeMediaIndex.value];
   return task?.risk_notes ?? [];
@@ -90,57 +171,32 @@ const riskTooltipText = computed(() =>
   activeRiskNotes.value.join("\n"),
 );
 
-const hasExistingAsset = computed(() => hasGeneratedMedia.value);
-
-function handleGenerate() {
-  const task =
-    activeTab.value === "image"
-      ? primaryImageTask.value
-      : primaryVideoTask.value;
-  if (task) {
-    emit("generate-task", task.task_id);
-  }
-}
-
-function handleRegenerate() {
-  const task =
-    activeTab.value === "image"
-      ? primaryImageTask.value
-      : primaryVideoTask.value;
-  if (task) {
-    emit("regenerate-task", task.task_id);
-  }
-}
-
-function handleUpload() {
-  const task =
-    activeTab.value === "image"
-      ? primaryImageTask.value
-      : primaryVideoTask.value;
-  if (task) {
-    emit("upload-asset", task.task_id);
-  }
-}
-
-function prevMedia() {
-  if (activeMediaIndex.value > 0) {
-    activeMediaIndex.value--;
-  }
-}
-
-function nextMedia() {
-  if (activeMediaIndex.value < activeTasks.value.length - 1) {
-    activeMediaIndex.value++;
-  }
-}
-
 /* -------------------------------------------------------------------------- */
 /*  Audio playback                                                            */
 /* -------------------------------------------------------------------------- */
 
-// TODO: wire to actual TTS audio URL from asset store
 const audioUrl = ref<string | null>(null);
 const hasAudio = computed(() => !!audioUrl.value);
+
+// Resolve audio URL from manifest artifacts for this segment
+const segmentAudioUrl = computed(() => {
+  const ttsExec = Array.from(props.executionsByTaskId.values())
+    .find((e) => e.task_type === "tts_audio" || e.task_type === "tts_merged_audio");
+  if (ttsExec && ttsExec.output_artifact_ids.length > 0) {
+    const artId = ttsExec.output_artifact_ids[0]!;
+    const art = props.artifactsById.get(artId);
+    if (art) return artifactUrl(art.artifact_id);
+  }
+  return null;
+});
+
+watch(segmentAudioUrl, (url) => {
+  audioUrl.value = url;
+}, { immediate: true });
+
+/* -------------------------------------------------------------------------- */
+/*  Copy                                                                      */
+/* -------------------------------------------------------------------------- */
 
 const copyFeedback = ref(false);
 
@@ -170,6 +226,18 @@ function fallbackCopy(text: string) {
 function showCopyFeedback() {
   copyFeedback.value = true;
   setTimeout(() => { copyFeedback.value = false; }, 1500);
+}
+
+function prevMedia() {
+  if (activeMediaIndex.value > 0) {
+    activeMediaIndex.value--;
+  }
+}
+
+function nextMedia() {
+  if (activeMediaIndex.value < activeTasks.value.length - 1) {
+    activeMediaIndex.value++;
+  }
 }
 </script>
 
@@ -216,42 +284,70 @@ function showCopyFeedback() {
         </button>
       </div>
 
-      <!-- Preview area -->
-      <ElTooltip
-        v-if="!hasGeneratedMedia"
-        content="资产暂未生成"
-        placement="bottom"
-      >
+      <!-- Preview area: no artifact yet -->
+      <template v-if="!hasGeneratedMedia">
         <div class="segment-media-placeholder">
-          <span class="segment-media-placeholder-text">暂无</span>
-        </div>
-      </ElTooltip>
-
-      <div v-else class="segment-media-preview">
-        <div class="segment-media-frame">
-          <span v-if="activeTasks.length > 1" class="segment-media-frame-index">
-            {{ activeMediaIndex + 1 }}/{{ activeTasks.length }}
+          <ElTag
+            v-if="statusLabel && currentExecution?.status === 'waiting_manual_upload'"
+            type="warning"
+            size="small"
+          >
+            {{ statusLabel }}
+          </ElTag>
+          <ElTag
+            v-else-if="statusLabel"
+            size="small"
+            type="info"
+          >
+            {{ statusLabel }}
+          </ElTag>
+          <span class="segment-media-placeholder-text">
+            {{ currentExecution?.status === 'waiting_manual_upload' ? '点击上传' : '暂无' }}
           </span>
         </div>
+      </template>
 
-        <div v-if="activeTasks.length > 1" class="segment-media-nav">
-          <button class="segment-media-arrow" :disabled="activeMediaIndex === 0" @click="prevMedia">
-            ‹
-          </button>
-          <div class="segment-media-dots">
-            <span
-              v-for="(_, i) in activeTasks"
-              :key="i"
-              class="segment-media-dot"
-              :class="{ active: i === activeMediaIndex }"
-              @click="activeMediaIndex = i"
-            />
+      <!-- Preview area: artifact exists -->
+      <template v-else>
+        <div class="segment-media-preview">
+          <img
+            v-if="currentArtifact?.artifact_type === 'image'"
+            :src="artifactUrl(currentArtifact.artifact_id)"
+            class="segment-media-image"
+            alt="上传的图片"
+          />
+          <video
+            v-else-if="currentArtifact?.artifact_type === 'video'"
+            :src="artifactUrl(currentArtifact.artifact_id)"
+            class="segment-media-video"
+            controls
+          />
+          <!-- Fallback for non-visual artifact types -->
+          <div v-else class="segment-media-frame">
+            <span class="segment-media-placeholder-text">
+              {{ currentArtifact?.artifact_type ?? '未知类型' }}
+            </span>
           </div>
-          <button class="segment-media-arrow" :disabled="activeMediaIndex === activeTasks.length - 1" @click="nextMedia">
-            ›
-          </button>
+
+          <div v-if="activeTasks.length > 1" class="segment-media-nav">
+            <button class="segment-media-arrow" :disabled="activeMediaIndex === 0" @click="prevMedia">
+              ‹
+            </button>
+            <div class="segment-media-dots">
+              <span
+                v-for="(_, i) in activeTasks"
+                :key="i"
+                class="segment-media-dot"
+                :class="{ active: i === activeMediaIndex }"
+                @click="activeMediaIndex = i"
+              />
+            </div>
+            <button class="segment-media-arrow" :disabled="activeMediaIndex === activeTasks.length - 1" @click="nextMedia">
+              ›
+            </button>
+          </div>
         </div>
-      </div>
+      </template>
     </div>
 
     <!-- Right: prompt & actions -->
@@ -291,29 +387,21 @@ function showCopyFeedback() {
       <!-- Action buttons -->
       <div class="segment-info-actions">
         <ElButton
-          v-if="!hasExistingAsset && canGenerate"
-          type="primary"
-          size="small"
-          @click="handleGenerate"
-        >
-          生成
-        </ElButton>
-        <ElButton
-          v-if="hasExistingAsset"
-          size="small"
-          :icon="Refresh"
-          @click="handleRegenerate"
-        >
-          重新生成
-        </ElButton>
-        <ElButton
-          v-if="canGenerate"
+          v-if="canUpload"
           size="small"
           :icon="Upload"
-          @click="handleUpload"
+          :loading="isCurrentUploading"
+          @click="triggerFileUpload"
         >
-          上传
+          {{ hasGeneratedMedia ? '替换' : '上传' }}
         </ElButton>
+        <input
+          ref="fileInput"
+          type="file"
+          :accept="acceptFileTypes"
+          style="display:none"
+          @change="onFileSelected"
+        />
       </div>
     </div>
 
@@ -455,6 +543,7 @@ function showCopyFeedback() {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: var(--space-xs);
   border-radius: var(--radius-sm);
   background: var(--bg-panel);
   border: 1px dashed var(--border-default);
@@ -469,6 +558,19 @@ function showCopyFeedback() {
   display: flex;
   flex-direction: column;
   gap: var(--space-xs);
+}
+
+.segment-media-image {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+.segment-media-video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-sm);
 }
 
 .segment-media-frame {
