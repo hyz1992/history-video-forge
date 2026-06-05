@@ -4,6 +4,7 @@ import { mount } from "@vue/test-utils";
 import { h, reactive } from "vue";
 import { RouterView } from "vue-router";
 import { describe, expect, it } from "vitest";
+import ElementPlus from "element-plus";
 
 import { createAppRouter } from "../../frontend/src/router/index.js";
 import { projectStoreKey } from "../../frontend/src/stores/project";
@@ -53,6 +54,7 @@ function createProjectStoreStub() {
       async loadProjects() {
         return state.projects;
       },
+      async loadProject() {},
       async createProject() {
         calls.createProject += 1;
         state.projectId = "project-new";
@@ -95,6 +97,7 @@ function createTopicStoreStub() {
       state.selectedRoundId = null;
     },
     async confirmSelectedCandidate() {},
+    async loadExistingTopic() {},
   };
 }
 
@@ -130,7 +133,7 @@ async function mountAt(path: string) {
     },
     {
       global: {
-        plugins: [router],
+        plugins: [router, ElementPlus],
         provide: {
           [projectStoreKey as symbol]: projectStore.store as never,
           [topicStoreKey as symbol]: createTopicStoreStub() as never,
@@ -223,6 +226,7 @@ describe("phase 4 project routing", () => {
       state: topicState,
       selectTab() {},
       async generateSystemRecommendations() {},
+      async loadExistingTopic() {},
       openCandidate(candidate: typeof topicState.currentRound.candidates[number], roundId?: string | null) {
         topicState.selectedCandidate = candidate;
         topicState.selectedRoundId = roundId ?? topicState.currentRound?.round_id ?? null;
@@ -254,7 +258,7 @@ describe("phase 4 project routing", () => {
         calls.loadSnapshot += 1;
         scriptState.snapshot = {
           project_id: "project-1",
-          current_status: "script_ready",
+          current_status: "script_pending",
           active_script: null,
         };
       },
@@ -273,7 +277,7 @@ describe("phase 4 project routing", () => {
       },
       {
         global: {
-          plugins: [router],
+          plugins: [router, ElementPlus],
           provide: {
             [projectStoreKey as symbol]: projectStore.store as never,
             [topicStoreKey as symbol]: topicStore as never,
@@ -362,6 +366,7 @@ describe("phase 4 project routing", () => {
       state: topicState,
       selectTab() {},
       async generateSystemRecommendations() {},
+      async loadExistingTopic() {},
       openCandidate(candidate: typeof topicState.currentRound.candidates[number], roundId?: string | null) {
         topicState.selectedCandidate = candidate;
         topicState.selectedRoundId = roundId ?? topicState.currentRound?.round_id ?? null;
@@ -397,7 +402,7 @@ describe("phase 4 project routing", () => {
         calls.loadSnapshot += 1;
         scriptState.snapshot = {
           project_id: "project-2",
-          current_status: "script_ready",
+          current_status: "script_pending",
           active_script: null,
         };
       },
@@ -416,7 +421,7 @@ describe("phase 4 project routing", () => {
       },
       {
         global: {
-          plugins: [router],
+          plugins: [router, ElementPlus],
           provide: {
             [projectStoreKey as symbol]: projectStore.store as never,
             [topicStoreKey as symbol]: topicStore as never,

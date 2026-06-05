@@ -17,6 +17,10 @@ export function createAppRouter(mode: "memory" | "web" = "memory") {
         component: ProjectsPage,
       },
       {
+        path: "/projects/:projectId/:step",
+        component: ProjectWorkspace,
+      },
+      {
         path: "/projects/:projectId",
         component: ProjectWorkspace,
       },

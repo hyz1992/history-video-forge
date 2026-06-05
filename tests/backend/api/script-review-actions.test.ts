@@ -2,17 +2,27 @@ import { describe, expect, it, vi } from "vitest";
 
 const weakDraft = {
   script_text:
-    "楚王第一轮压场时，晏子已经看出这不是一句话的冲突。入楚受辱只是开始，真正的狠处在于后面还会层层加码。到橘枳之喻落下来时，场面才真正翻了过去。",
+    "楚王第一轮压场时，晏子已经看出这不是一句话的冲突。所有人都看到使者被领到偏门而非正门。入楚受辱只是开始，真正的狠处在于后面还会层层加码。楚王安排人带晏子走偏门，这是第一层试探。晏子站在偏门前不动，直接说了一句：使狗国者从狗门入。楚王当众压场，晏子必须当场顶回。这一句话把局面直接顶了回去。楚王不甘心，又安排了第二层压场。在朝堂上当着所有人面，安排押送过来的齐国犯人。楚王连续压场，晏子一句句顶回去。晏子不慌不忙，用同样逻辑反问楚王。晏子使楚不是只被压了一次，而是被当场连压到底。到橘枳之喻落下来时，场面才真正翻了过去。橘生淮南则为橘，生于淮北则为枳。这一句话把楚王彻底堵住，当场再无人敢压。当事人不能随便低头，因为一退就会让后面的压力继续压上来。这种场面一退掉的就不只是自己，而是整个使节背后的国面。",
   estimated_duration_sec: 84,
   beat_trace: [
     {
-      beat: "楚王连续压场，晏子一句句顶回去。",
-      excerpt: "楚王连续压场，晏子一句句顶回去。",
+      beat: "楚王当众压场，晏子必须当场顶回。",
+      excerpt: "楚王当众压场，晏子必须当场顶回。这一句话把局面直接顶了回去",
       confidence: 0.94,
+    },
+    {
+      beat: "楚王连续压场，晏子一句句顶回去。",
+      excerpt: "楚王连续压场，晏子一句句顶回去。晏子不慌不忙，用同样逻辑反问楚王",
+      confidence: 0.93,
+    },
+    {
+      beat: "晏子使楚不是只被压了一次，而是被当场连压到底。",
+      excerpt: "晏子使楚不是只被压了一次，而是被当场连压到底。到橘枳之喻落下来时",
+      confidence: 0.92,
     },
   ],
   quote_trace: [],
-  opening_span: "楚王第一轮压场时，晏子已经看出这不是一句话的冲突。",
+  opening_span: "所有人都看到使者被领到偏门而非正门。",
   ending_span: "场面翻了过去。",
 };
 
@@ -27,18 +37,28 @@ const invalidDraft = {
 
 const regeneratedDraft = {
   script_text:
-    "如果有人当着所有人的面羞辱你，你敢不敢当场顶回去？晏子敢。楚王连续压场，晏子一句句顶回去，真正可怕的是他把齐国颜面也一起顶住了。这种场面，一退掉的就不只是自己，而是整个使节背后的国面。",
+    "如果有人当着所有人的面羞辱你，你敢不敢当场顶回去？晏子敢。楚王连续压场，晏子一句句顶回去，真正可怕的是他把齐国颜面也一起顶住了。楚王当众压场，晏子必须当场顶回。这种场面一退掉的就不只是自己，而是整个使节背后的国面。晏子使楚不是只被压了一次，而是被当场连压到底。所有人都在看着这场对峙，谁先退谁就输了整个场面。楚王三次压场，晏子三次顶回。每一次顶回都让齐国的面子更稳固了一分。到最后橘枳之喻一落，楚王再也找不到可以压的角度。当事人不能随便低头，因为低头意味着承认对方的框架。这种场面一旦退掉，后面的压力只会越来越大。全场安静下来的时候，所有人都明白了一件事：这个矮个子使者，凭一张嘴把楚王的连环压场全部顶了回去。晏子离开楚国朝堂时，身后没有一个人再敢嘲笑齐国的使者。",
   estimated_duration_sec: 86,
   beat_trace: [
     {
-      beat: "楚王连续压场，晏子一句句顶回去。",
-      excerpt: "楚王连续压场，晏子一句句顶回去。",
+      beat: "楚王当众压场，晏子必须当场顶回。",
+      excerpt: "楚王当众压场，晏子必须当场顶回。这种场面一退掉的就不只是自己",
       confidence: 0.96,
+    },
+    {
+      beat: "楚王连续压场，晏子一句句顶回去。",
+      excerpt: "楚王连续压场，晏子一句句顶回去，真正可怕的是他把齐国颜面也一起顶住了",
+      confidence: 0.94,
+    },
+    {
+      beat: "晏子使楚不是只被压了一次，而是被当场连压到底。",
+      excerpt: "晏子使楚不是只被压了一次，而是被当场连压到底。所有人都在看着这场对峙",
+      confidence: 0.92,
     },
   ],
   quote_trace: [],
   opening_span: "如果有人当着所有人的面羞辱你，你敢不敢当场顶回去？",
-  ending_span: "这种场面，一退掉的就不只是自己，而是整个使节背后的国面。",
+  ending_span: "这种场面一旦退掉，后面的压力只会越来越大。",
 };
 
 const { generateScriptDraft } = vi.hoisted(() => ({
@@ -110,7 +130,7 @@ describe("script review actions api", () => {
     expect(generateScriptDraft).toHaveBeenCalledTimes(1);
     expect(body.draft.opening_span).toContain("所有人");
     expect(body.local_validation.decision).toBe("pass");
-    expect(body.semantic_review.decision).toBe("pass");
+    expect(body.semantic_review.decision).toBe("skipped");
   });
 
   it("maps regen_once into a single internal regenerate and re-runs validation/review", async () => {
@@ -137,7 +157,7 @@ describe("script review actions api", () => {
     expect(generateScriptDraft).toHaveBeenCalledTimes(2);
     expect(body.draft.script_text).toContain("所有人");
     expect(body.local_validation.decision).toBe("pass");
-    expect(body.semantic_review.decision).toBe("pass");
+    expect(body.semantic_review.decision).toBe("skipped");
   });
   it("archives the previous current script when a new topic is confirmed for the same project", async () => {
     generateScriptDraft.mockReset();

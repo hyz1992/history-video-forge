@@ -10,7 +10,7 @@ import { reviewScriptSemantics } from "./script-semantic-review.service";
 import { planTopicDelivery } from "./topic-delivery-planner";
 import { runScriptRunGraph } from "../../runtime/orchestration/script-run-graph.js";
 import {
-  createProjectRunInteractionLogWriter,
+  createCompositeInteractionLogWriter,
   persistProjectRunArtifacts,
 } from "../../runtime/trace/project-storage.js";
 
@@ -114,7 +114,7 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
     familyBiasPack,
   });
   const runId = `script_run_${input.db.generateId()}`;
-  const interactionLogWriter = createProjectRunInteractionLogWriter({
+  const interactionLogWriter = createCompositeInteractionLogWriter({
     project: input.project,
     phase: "script",
     runId,

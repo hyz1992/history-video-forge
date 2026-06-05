@@ -1,10 +1,17 @@
-import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { ProjectRecord } from "../../db/client.js";
 import {
   renderLlmInteractionMarkdown,
+  renderTraceSectionMarkdown,
   type LlmInteractionLogWriter,
 } from "../llm/interaction-log.js";
 
@@ -262,4 +269,62 @@ export function createProjectRunInteractionLogWriter(input: {
 
 function sanitizeSlug(value: string) {
   return value.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/-+/g, "-");
+}
+
+/**
+ * Create an appender that writes to a project-level `trace.md` in the old
+ * single-file format. The file is created on first write and appended to
+ * on subsequent writes, giving a unified chronological view of all LLM
+ * interactions across every pipeline phase.
+ */
+export function createProjectTraceAppender(
+  project: ProjectRecord,
+): LlmInteractionLogWriter {
+  const profile = ensureProjectStorageStructure(project);
+  const traceFilePath = resolveStoragePath(`${profile.trace_dir}/trace.md`);
+  const projectId = profile.display_name
+    ? `${profile.display_name} [${profile.short_id}]`
+    : project.id;
+
+  let headerWritten = existsSync(traceFilePath);
+
+  return {
+    write(entry) {
+      if (!headerWritten) {
+        const header = [
+          "# StoryForge LLM Trace Log",
+          "",
+          `- **Project ID**: \`${projectId}\``,
+          "",
+          "---",
+          "",
+        ].join("\n");
+        writeFileSync(traceFilePath, header, "utf8");
+        headerWritten = true;
+      }
+
+      appendFileSync(traceFilePath, renderTraceSectionMarkdown(entry), "utf8");
+    },
+  };
+}
+
+/**
+ * Create a composite writer that writes to both:
+ * 1. Per-run individual `.md` files (existing behaviour)
+ * 2. Project-level unified `trace.md` (new behaviour)
+ */
+export function createCompositeInteractionLogWriter(input: {
+  project: ProjectRecord;
+  phase: ProjectRunPhase;
+  runId: string;
+}): LlmInteractionLogWriter {
+  const fileWriter = createProjectRunInteractionLogWriter(input);
+  const traceAppender = createProjectTraceAppender(input.project);
+
+  return {
+    write(entry) {
+      fileWriter.write(entry);
+      traceAppender.write(entry);
+    },
+  };
 }

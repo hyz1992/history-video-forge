@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, provide, type Component } from "vue";
+import { computed, onMounted, provide, watch, type Component } from "vue";
 import { useRoute } from "vue-router";
 
 import {
@@ -38,6 +38,16 @@ const panelMap: Record<PipelineStep, Component> = {
 
 const currentPanel = computed(
   () => panelMap[workspaceStore.currentStepKey()],
+);
+
+watch(
+  () => route.params.step as string | undefined,
+  (step) => {
+    if (step && PIPELINE_STEPS.some((s) => s.key === step)) {
+      workspaceStore.setCurrentStepByKey(step as PipelineStep);
+    }
+  },
+  { immediate: true },
 );
 
 onMounted(async () => {

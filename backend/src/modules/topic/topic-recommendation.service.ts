@@ -33,7 +33,7 @@ import {
   TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT,
 } from "../../runtime/orchestration/topic-recommendation-nodes.js";
 import {
-  createProjectRunInteractionLogWriter,
+  createCompositeInteractionLogWriter,
   getProjectStorageProfile,
   persistProjectRunArtifacts,
 } from "../../runtime/trace/project-storage.js";
@@ -173,7 +173,7 @@ export async function recommendTopicCandidatesWithTrace(
     recent_event_memory: recentEventMemory,
   };
   const interactionLogWriter = project
-    ? createProjectRunInteractionLogWriter({
+    ? createCompositeInteractionLogWriter({
         project,
         phase: "topic",
         runId,

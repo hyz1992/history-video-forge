@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { ElMessage } from "element-plus";
+import { useRoute, useRouter } from "vue-router";
 
 import { useTopicStore, type TopicRecommendationFilters } from "../../stores/topic";
 import { useProjectStore } from "../../stores/project";
@@ -9,6 +10,8 @@ import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 const topicStore = useTopicStore();
 const projectStore = useProjectStore();
 const workspaceStore = useWorkspaceStore();
+const route = useRoute();
+const router = useRouter();
 
 const SCRIPT_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "script");
 
@@ -83,6 +86,10 @@ async function confirmCandidate() {
   if (topicStore.state.confirmedTopicPackageId) {
     ElMessage.success("选题已确认，自动进入文案阶段");
     workspaceStore.setCurrentStep(SCRIPT_STEP_INDEX);
+    const projectId = route.params.projectId;
+    if (projectId) {
+      await router.push(`/projects/${projectId}/script`);
+    }
   }
 }
 
@@ -190,6 +197,7 @@ function handleRetry() {
               <div
                 v-for="candidate in currentCandidates"
                 :key="candidate.candidate_id"
+                :data-testid="`candidate-item-${candidate.candidate_id}`"
                 class="topic-candidate-card"
                 :class="{
                   'topic-candidate-card--active':
@@ -227,6 +235,7 @@ function handleRetry() {
                   <div
                     v-for="candidate in round.candidates"
                     :key="candidate.candidate_id"
+                    :data-testid="`candidate-item-${candidate.candidate_id}`"
                     class="topic-candidate-card"
                     :class="{
                       'topic-candidate-card--active':
@@ -288,6 +297,7 @@ function handleRetry() {
 
               <el-button
                 type="primary"
+                data-testid="confirm-candidate"
                 class="topic-detail-confirm-btn"
                 :loading="topicStore.state.isConfirming"
                 :disabled="topicStore.state.isConfirming"
@@ -324,6 +334,7 @@ function handleRetry() {
 
           <el-button
             type="primary"
+            data-testid="confirm-candidate"
             :disabled="!selectedCandidate || topicStore.state.isConfirming"
             :loading="topicStore.state.isConfirming"
             @click="confirmCandidate"

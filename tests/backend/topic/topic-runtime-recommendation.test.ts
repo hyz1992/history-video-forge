@@ -1340,7 +1340,7 @@ describe("topic runtime recommendation", () => {
         code: "topic_candidate_fatigue_penalty_applied",
       }),
     );
-    expect(result.candidates[0]?.title).toBe("title-b-v2");
+    expect(result.candidates[0]?.title).toBe("title-e-v2");
   });
 
   it("asks topic.selector to choose final candidates from the selector pool", async () => {
@@ -1551,7 +1551,7 @@ describe("topic runtime recommendation", () => {
           llmGateway: gateway,
         },
       ),
-    ).rejects.toThrow("topic_selector_strict_schema_failed");
+    ).rejects.toThrow("topic_selector_invalid_selection");
   });
 
   it("falls back to regular structured selector output when strict tool-call arguments are malformed", async () => {

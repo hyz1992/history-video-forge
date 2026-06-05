@@ -1,7 +1,7 @@
 import type { ScriptDraftPackage } from "../../../../shared/src/index.js";
 import { ScriptDraftPackage as ScriptDraftPackageSchema } from "../../../../shared/src/index.js";
 import type { DbClient, ProjectRecord, ScriptRecord, TopicPackageRecord } from "../../db/client";
-import { createProjectRunInteractionLogWriter, persistProjectRunArtifacts } from "../../runtime/trace/project-storage.js";
+import { createCompositeInteractionLogWriter, persistProjectRunArtifacts } from "../../runtime/trace/project-storage.js";
 import { generateStoryboardPlan } from "./storyboard-generation.service";
 import { validateStoryboardPlan } from "./storyboard-local-validator";
 import { saveStoryboardRecord } from "./storyboard-record.repository";
@@ -132,7 +132,7 @@ export async function runStoryboardGeneration(
   const draft = mapScriptDraft(scriptRecord);
   const topicBoundaryContext = mapTopicBoundaryContext(topicPackage);
   const runId = `storyboard_run_${input.db.generateId()}`;
-  const interactionLogWriter = createProjectRunInteractionLogWriter({
+  const interactionLogWriter = createCompositeInteractionLogWriter({
     project: input.project,
     phase: "storyboard",
     runId,

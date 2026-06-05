@@ -139,6 +139,8 @@ function handleConfirm() {
 
 <template>
   <div class="script-panel">
+    <header class="script-page-header" data-testid="script-page-header">文案工作区</header>
+    <div class="script-run-trace" data-testid="script-trace-entry">查看运行详情</div>
     <!-- Error state -->
     <div v-if="scriptStore.state.loadError" class="script-error-card">
       <el-alert

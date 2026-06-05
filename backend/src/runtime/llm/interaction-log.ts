@@ -162,6 +162,89 @@ export function normalizeMarkdownAnnotation(annotation: string) {
     .trim();
 }
 
+/**
+ * Render a single trace section in the old-project unified trace.md format.
+ * Uses table-based metadata, blockquote prompts, JSON output blocks,
+ * and a timing footer — matching the `story-video-forge` convention.
+ */
+export function renderTraceSectionMarkdown(
+  entry: LlmInteractionLogEntry,
+): string {
+  const traceId = `trace-${Date.parse(entry.generatedAt) || 0}-${Math.floor(Math.random() * 1000)}`;
+  const status = entry.errorMessage ? "error" : "success";
+  const requestedAt = formatTraceDate(entry.generatedAt);
+
+  const lines: string[] = [
+    `## [Trace] ${entry.operationName} - ${entry.promptStage}`,
+    "",
+    "| Field | Value |",
+    "|---|---|",
+    `| Trace ID | \`${traceId}\` |`,
+    `| Model | \`${entry.model}\` |`,
+    `| Requested At | \`${requestedAt}\` |`,
+    `| Status | \`${status}\` |`,
+    "",
+    "",
+    "### Prompt",
+    "",
+    "**User:**",
+    "",
+    indentBlockquote(stableStringify(entry.input)),
+  ];
+
+  if (entry.systemPrompt) {
+    lines.push(
+      "",
+      "**System:**",
+      "",
+      indentBlockquote(entry.systemPrompt.trim()),
+    );
+  }
+
+  lines.push("", "### Output", "");
+
+  if (entry.errorMessage) {
+    lines.push("```text", entry.errorMessage, "```");
+  } else if (entry.parsedOutput !== undefined) {
+    lines.push("```json", stableStringify(entry.parsedOutput), "```");
+  } else {
+    lines.push("```text", entry.rawOutput.trim(), "```");
+  }
+
+  lines.push("");
+
+  if (entry.timing) {
+    const finishedAt = formatTraceDate(entry.timing.finishedAt);
+    const durationSec = (entry.timing.durationMs / 1000).toFixed(2);
+    lines.push(
+      "| Field | Value |",
+      "|---|---|",
+      `| Responded At | \`${finishedAt}\` |`,
+      `| Duration | \`${durationSec}s\` |`,
+      "",
+    );
+  }
+
+  lines.push("---", "");
+  return lines.join("\n");
+}
+
+function formatTraceDate(isoString: string): string {
+  try {
+    const d = new Date(isoString);
+    return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+  } catch {
+    return isoString;
+  }
+}
+
+function indentBlockquote(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n");
+}
+
 function stableStringify(value: unknown) {
   return JSON.stringify(
     value,

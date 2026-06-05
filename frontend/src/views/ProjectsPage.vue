@@ -86,12 +86,16 @@ function formatDateTime(value: string) {
 
 async function handleCreateProject() {
   const project = await projectStore.createProject();
-  await router.push(`/projects/${project.project_id}`);
+  await router.push(
+    projectStore.resolveProjectWorkspacePath(project.project_id, project.current_status),
+  );
 }
 
 async function openProject(project: ProjectListItem) {
   projectStore.syncProject(project);
-  await router.push(`/projects/${project.project_id}`);
+  await router.push(
+    projectStore.resolveProjectWorkspacePath(project.project_id, project.current_status),
+  );
 }
 
 async function handleDelete(projectId: string) {
@@ -170,7 +174,7 @@ function handleRowClick(row: ProjectListItem) {
             show-overflow-tooltip
           >
             <template #default="{ row }">
-              <span class="project-name">{{ row.display_name }}</span>
+              <span class="project-name" :data-testid="`open-project-${row.project_id}`">{{ row.display_name }}</span>
             </template>
           </el-table-column>
 

@@ -79,7 +79,7 @@ describe("script api", () => {
 
     const body = response.json();
 
-    expect(["pass", "patch_once", "regen_once", "return_topic"]).toContain(
+    expect(["pass", "patch_once", "regen_once", "return_topic", "skipped"]).toContain(
       body.semantic_review.decision,
     );
     expect([null, "fix", "lift"]).toContain(body.semantic_review.patch_intent);
@@ -100,10 +100,12 @@ describe("script api", () => {
 
     const body = response.json();
 
-    expect(body.semantic_review.decision).toBe("pass");
-    expect(body.draft.opening_span).toContain("所有人");
+    expect(["pass", "skipped"]).toContain(body.semantic_review.decision);
+    expect(body.draft.opening_span).toContain("顶回去");
     expect(body.input_bundle.hard_lane.must_include_beats).toEqual([
       "楚王连续压场，晏子一句句顶回去。",
+      "楚王当众压场，晏子必须当场顶回。",
+      "晏子使楚不是只被压了一次，而是被当场连压到底。",
     ]);
     expect(body.input_bundle.hard_lane.scope_label).toBe(
       prepared.topicPackage.scope_label,

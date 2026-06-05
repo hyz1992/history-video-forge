@@ -11,7 +11,7 @@ import type {
   TopicPackageRecord,
 } from "../../db/client";
 import {
-  createProjectRunInteractionLogWriter,
+  createCompositeInteractionLogWriter,
   persistProjectRunArtifacts,
 } from "../../runtime/trace/project-storage.js";
 import { generateAssetPlan } from "./asset-planning-generation.service";
@@ -269,7 +269,7 @@ export async function runAssetPlanningGeneration(
   const draft = mapScriptDraft(scriptRecord);
   const topicBoundaryContext = mapTopicBoundaryContext(topicPackage);
   const runId = `asset_plan_run_${input.db.generateId()}`;
-  const interactionLogWriter = createProjectRunInteractionLogWriter({
+  const interactionLogWriter = createCompositeInteractionLogWriter({
     project: input.project,
     phase: "asset_planning",
     runId,

@@ -175,8 +175,9 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
     }
   }
 
-  function resolveProjectWorkspacePath(projectId: string, _currentStatus: string) {
-    return `/projects/${projectId}`;
+  function resolveProjectWorkspacePath(projectId: string, currentStatus: string) {
+    const step = currentStatus === "script_ready" ? "script" : "topic";
+    return `/projects/${projectId}/${step}`;
   }
 
   async function ensureProject() {
