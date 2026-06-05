@@ -119,7 +119,9 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
     phase: "script",
     runId,
   });
-  const {
+
+  try {
+    const {
     draft,
     localValidation,
     semanticReview,
@@ -207,4 +209,16 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
       runtime_diagnostics: runtimeDiagnostics,
     },
   };
+  } catch (error) {
+    const message =
+      error instanceof Error ? (error.stack ?? error.message) : String(error);
+    interactionLogWriter.writeError(message);
+    return {
+      statusCode: 500,
+      body: {
+        error: "internal_server_error",
+        message: error instanceof Error ? error.message : String(error),
+      },
+    };
+  }
 }

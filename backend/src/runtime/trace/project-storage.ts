@@ -277,9 +277,13 @@ function sanitizeSlug(value: string) {
  * on subsequent writes, giving a unified chronological view of all LLM
  * interactions across every pipeline phase.
  */
+export interface TraceLogWriter extends LlmInteractionLogWriter {
+  writeError(message: string): void;
+}
+
 export function createProjectTraceAppender(
   project: ProjectRecord,
-): LlmInteractionLogWriter {
+): TraceLogWriter {
   const profile = ensureProjectStorageStructure(project);
   const traceFilePath = resolveStoragePath(`${profile.trace_dir}/trace.md`);
   const projectId = profile.display_name
@@ -314,6 +318,42 @@ export function createProjectTraceAppender(
         "utf8",
       );
     },
+
+    writeError(message: string) {
+      if (!headerWritten) {
+        const header = [
+          "# StoryForge LLM Trace Log",
+          "",
+          `- **Project ID**: \`${projectId}\``,
+          "",
+          "---",
+          "",
+        ].join("\n");
+        writeFileSync(traceFilePath, header, "utf8");
+        headerWritten = true;
+      }
+
+      const now = new Date().toISOString();
+      const lines = [
+        "## [Error] 服务层异常",
+        "",
+        "| Field | Value |",
+        "|---|---|",
+        `| Time | \`${now}\` |`,
+        `| Status | \`error\` |`,
+        "",
+        "",
+        "### 错误信息",
+        "",
+        "```text",
+        message,
+        "```",
+        "",
+        "---",
+        "",
+      ].join("\n");
+      appendFileSync(traceFilePath, lines, "utf8");
+    },
   };
 }
 
@@ -326,7 +366,7 @@ export function createCompositeInteractionLogWriter(input: {
   project: ProjectRecord;
   phase: ProjectRunPhase;
   runId: string;
-}): LlmInteractionLogWriter {
+}): TraceLogWriter {
   const fileWriter = createProjectRunInteractionLogWriter(input);
   const traceAppender = createProjectTraceAppender(input.project);
 
@@ -334,6 +374,9 @@ export function createCompositeInteractionLogWriter(input: {
     write(entry) {
       fileWriter.write(entry);
       traceAppender.write(entry);
+    },
+    writeError(message: string) {
+      traceAppender.writeError(message);
     },
   };
 }

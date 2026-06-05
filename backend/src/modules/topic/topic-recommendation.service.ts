@@ -179,7 +179,9 @@ export async function recommendTopicCandidatesWithTrace(
         runId,
       })
     : undefined;
-  const result = await runTopicRecommendationGraph(
+
+  try {
+    const result = await runTopicRecommendationGraph(
     {
       db,
       input: graphInput,
@@ -339,6 +341,12 @@ export async function recommendTopicCandidatesWithTrace(
       previous_round_count: previousRoundCount,
     },
   };
+  } catch (error) {
+    const message =
+      error instanceof Error ? (error.stack ?? error.message) : String(error);
+    interactionLogWriter?.writeError(message);
+    throw error;
+  }
 }
 
 export async function recommendTopicCandidates(

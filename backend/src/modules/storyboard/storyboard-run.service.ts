@@ -138,7 +138,8 @@ export async function runStoryboardGeneration(
     runId,
   });
 
-  let plan = await generateStoryboardPlan({
+  try {
+    let plan = await generateStoryboardPlan({
     sourceScriptRecordId: scriptRecord.id,
     sourceTopicPackageId: topicPackage.id,
     draft,
@@ -255,4 +256,16 @@ export async function runStoryboardGeneration(
       runtime_diagnostics: runtimeDiagnostics,
     },
   };
+  } catch (error) {
+    const message =
+      error instanceof Error ? (error.stack ?? error.message) : String(error);
+    interactionLogWriter.writeError(message);
+    return {
+      statusCode: 500,
+      body: {
+        error: "internal_server_error",
+        message: error instanceof Error ? error.message : String(error),
+      },
+    };
+  }
 }

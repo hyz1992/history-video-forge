@@ -13,6 +13,7 @@ import type {
 import {
   createCompositeInteractionLogWriter,
   persistProjectRunArtifacts,
+  type TraceLogWriter,
 } from "../../runtime/trace/project-storage.js";
 import { generateAssetPlan } from "./asset-planning-generation.service";
 import { validateAssetPlan } from "./asset-planning-local-validator";
@@ -275,7 +276,8 @@ export async function runAssetPlanningGeneration(
     runId,
   });
 
-  let plan = await generateAssetPlan({
+  try {
+    let plan = await generateAssetPlan({
     sourceStoryboardRecordId: storyboardRecord.id,
     sourceScriptRecordId: scriptRecord.id,
     sourceTopicPackageId: topicPackage.id,
@@ -471,4 +473,16 @@ export async function runAssetPlanningGeneration(
       runtime_diagnostics: runtimeDiagnostics,
     },
   };
+  } catch (error) {
+    const message =
+      error instanceof Error ? (error.stack ?? error.message) : String(error);
+    interactionLogWriter.writeError(message);
+    return {
+      statusCode: 500,
+      body: {
+        error: "internal_server_error",
+        message: error instanceof Error ? error.message : String(error),
+      },
+    };
+  }
 }
