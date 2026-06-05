@@ -287,6 +287,7 @@ export function createProjectTraceAppender(
     : project.id;
 
   let headerWritten = existsSync(traceFilePath);
+  const phaseCounter = new Map<string, number>();
 
   return {
     write(entry) {
@@ -303,7 +304,15 @@ export function createProjectTraceAppender(
         headerWritten = true;
       }
 
-      appendFileSync(traceFilePath, renderTraceSectionMarkdown(entry), "utf8");
+      const phase = entry.promptStage;
+      const count = (phaseCounter.get(phase) ?? 0) + 1;
+      phaseCounter.set(phase, count);
+
+      appendFileSync(
+        traceFilePath,
+        renderTraceSectionMarkdown(entry, count),
+        "utf8",
+      );
     },
   };
 }

@@ -162,6 +162,17 @@ export function normalizeMarkdownAnnotation(annotation: string) {
     .trim();
 }
 
+/** Pipeline phase → Chinese stage label for unified trace.md rendering. */
+const STAGE_LABELS: Record<string, string> = {
+  topic: "选题",
+  script: "口播文案",
+  storyboard: "分镜规划",
+  asset_planning: "资产规划",
+  assets: "素材生成",
+  compose: "合成",
+  render: "渲染导出",
+};
+
 /**
  * Render a single trace section in the old-project unified trace.md format.
  * Uses table-based metadata, blockquote prompts, JSON output blocks,
@@ -169,13 +180,17 @@ export function normalizeMarkdownAnnotation(annotation: string) {
  */
 export function renderTraceSectionMarkdown(
   entry: LlmInteractionLogEntry,
+  phaseIndex?: number,
 ): string {
   const traceId = `trace-${Date.parse(entry.generatedAt) || 0}-${Math.floor(Math.random() * 1000)}`;
   const status = entry.errorMessage ? "error" : "success";
   const requestedAt = formatTraceDate(entry.generatedAt);
+  const stageLabel = STAGE_LABELS[entry.promptStage] ?? entry.promptStage;
+  const progressSuffix = phaseIndex !== undefined ? ` #${phaseIndex}` : "";
+  const stageFull = `${stageLabel}${progressSuffix}`;
 
   const lines: string[] = [
-    `## [Trace] ${entry.operationName} - ${entry.promptStage}`,
+    `## [Trace] ${entry.operationName} - ${entry.promptStage}（阶段：${stageFull}）`,
     "",
     "| Field | Value |",
     "|---|---|",
@@ -185,7 +200,7 @@ export function renderTraceSectionMarkdown(
     `| Status | \`${status}\` |`,
     "",
     "",
-    "### Prompt",
+    `### Prompt——输入提示词（阶段：${stageFull}）`,
     "",
     "**User:**",
     "",
@@ -201,7 +216,7 @@ export function renderTraceSectionMarkdown(
     );
   }
 
-  lines.push("", "### Output", "");
+  lines.push("", `### Output——大模型返回（阶段：${stageFull}）`, "");
 
   if (entry.errorMessage) {
     lines.push("```text", entry.errorMessage, "```");
@@ -220,7 +235,7 @@ export function renderTraceSectionMarkdown(
       "| Field | Value |",
       "|---|---|",
       `| Responded At | \`${finishedAt}\` |`,
-      `| Duration | \`${durationSec}s\` |`,
+      `| Duration | \`${durationSec}s\`（阶段：${stageFull}） |`,
       "",
     );
   }
