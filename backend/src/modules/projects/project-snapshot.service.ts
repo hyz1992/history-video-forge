@@ -20,6 +20,16 @@ function summarizeTraceRun(trace: Record<string, unknown> | null | undefined) {
   };
 }
 
+function statusToStep(status: string): string {
+  if (status.startsWith("topic")) return "topic";
+  if (status.startsWith("script")) return "script";
+  if (status.startsWith("storyboard")) return "storyboard";
+  if (status.startsWith("asset_plan") || status.startsWith("assets")) return "asset";
+  if (status.startsWith("compos")) return "compose";
+  if (status.startsWith("render")) return "render";
+  return "topic";
+}
+
 export async function getProjectSnapshot(db: DbClient, projectId: string) {
   const project = db.projects.get(projectId);
   if (!project) {
@@ -81,9 +91,7 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
     name: project.name,
     current_status: project.status,
     is_draft: project.status.startsWith("topic"),
-    restore_route: project.status.startsWith("topic")
-      ? `/projects/${project.id}/topic`
-      : `/projects/${project.id}/script`,
+    restore_route: `/projects/${project.id}/${statusToStep(project.status)}`,
     trace_summary: {
       project_storage: {
         root_dir: storageProfile.root_dir,
