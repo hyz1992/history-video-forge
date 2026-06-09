@@ -979,6 +979,11 @@ function normalizeSelectorDecision(rawOutput: unknown): TopicSelectorDecision {
     (Array.isArray(record.answer) ? record.answer : undefined) ??
     answerRecord?.ranked_candidates ??
     answerRecord?.rankedCandidates ??
+    (record.rank_topic_candidates &&
+     typeof record.rank_topic_candidates === "object" &&
+     !Array.isArray(record.rank_topic_candidates)
+      ? (record.rank_topic_candidates as Record<string, unknown>).ranked_candidates
+      : undefined) ??
     record.ranked_candidates ??
     record.rankedCandidates;
 

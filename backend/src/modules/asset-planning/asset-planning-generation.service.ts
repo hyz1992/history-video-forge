@@ -803,6 +803,49 @@ function validateChunkDraft(
   }
 }
 
+/**
+ * For image_still tasks, look up the source storyboard segment and
+ * append ArtBible character visual descriptions when the segment
+ * references those characters.  This gives every image prompt a
+ * stable character anchor without changing the LLM prompt.
+ */
+function enrichPromptWithCharacterAnchor(
+  taskDraft: ChunkTaskDraft,
+  storyboardSegments: StoryboardPlan["segments"],
+  artBible: GlobalPlanningDraft["art_bible"],
+): string | null {
+  if (taskDraft.task_type !== "image_still" || !taskDraft.prompt_draft) {
+    return taskDraft.prompt_draft;
+  }
+
+  const segment = storyboardSegments.find(
+    (seg) => seg.segment_id === taskDraft.source_segment_id,
+  );
+  if (!segment) {
+    return taskDraft.prompt_draft;
+  }
+
+  const segmentText = [
+    segment.script_excerpt ?? "",
+    segment.scene_description ?? "",
+    ...(segment.visual_elements ?? []),
+  ].join(" ");
+
+  const matchedChars = artBible.characters.filter((c) =>
+    segmentText.includes(c.label),
+  );
+
+  if (matchedChars.length === 0) {
+    return taskDraft.prompt_draft;
+  }
+
+  const anchors = matchedChars
+    .map((c) => `${c.label}：${c.visual_description}`)
+    .join("；");
+
+  return `${taskDraft.prompt_draft}\n[角色锚点] ${anchors}`;
+}
+
 function mergeAssetPlan(
   input: GenerateAssetPlanInput,
   audioSkeleton: ReturnType<typeof buildLocalAudioSkeleton>,
@@ -838,7 +881,11 @@ function mergeAssetPlan(
         production_intent: taskDraft.production_intent,
         recommended_mode: taskDraft.recommended_mode,
         provider_hint: taskDraft.provider_hint,
-        prompt_draft: taskDraft.prompt_draft,
+        prompt_draft: enrichPromptWithCharacterAnchor(
+          taskDraft,
+          input.storyboard.segments,
+          globalDraft.art_bible,
+        ),
         parameters: rewriteTaskParameterLocalIds(taskDraft.parameters, localToGlobal),
         manual_upload_policy: taskDraft.manual_upload_policy,
         risk_notes: rewriteLocalTaskIdsInTextList(taskDraft.risk_notes, localToGlobal),
