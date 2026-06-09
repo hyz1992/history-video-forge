@@ -40,6 +40,26 @@ const currentPanel = computed(
   () => panelMap[workspaceStore.currentStepKey()],
 );
 
+// Sync projectId from route BEFORE child panels mount, so deep-link
+// recovery (e.g. /projects/:id/asset) works on the first render pass.
+watch(
+  () => route.params.projectId as string | undefined,
+  (projectId) => {
+    if (!projectId) return;
+    if (
+      projectStore.state.projectId &&
+      projectStore.state.projectId === projectId
+    ) {
+      return;
+    }
+    projectStore.syncProject({
+      project_id: projectId,
+      current_status: projectStore.state.currentStatus || "",
+    });
+  },
+  { immediate: true },
+);
+
 watch(
   () => route.params.step as string | undefined,
   (step) => {
@@ -53,17 +73,6 @@ watch(
 onMounted(async () => {
   const projectId = route.params.projectId as string;
   if (projectId) {
-    // Set projectId synchronously so stage panels can find it immediately
-    // on deep-link refresh (e.g. /projects/:id/asset).
-    if (
-      !projectStore.state.projectId ||
-      projectStore.state.projectId !== projectId
-    ) {
-      projectStore.syncProject({
-        project_id: projectId,
-        current_status: projectStore.state.currentStatus || "",
-      });
-    }
     // Prefer local data for instant UI, then refresh from backend
     const project = projectStore.state.projects.find(
       (p) => p.project_id === projectId,

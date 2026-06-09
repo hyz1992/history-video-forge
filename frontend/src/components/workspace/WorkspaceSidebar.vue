@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { useRouter, useRoute } from "vue-router";
 import {
   ElMenu,
   ElMenuItem,
@@ -23,6 +24,8 @@ import { useProjectStore } from "../../stores/project";
 
 const workspaceStore = useWorkspaceStore();
 const projectStore = useProjectStore();
+const router = useRouter();
+const route = useRoute();
 
 const collapsed = computed(() => workspaceStore.state.value.sidebarCollapsed);
 const currentStepIndex = computed(

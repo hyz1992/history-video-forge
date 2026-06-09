@@ -189,8 +189,18 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
   }
 
   function resolveProjectWorkspacePath(projectId: string, currentStatus: string) {
-    const step = currentStatus === "script_ready" ? "script" : "topic";
+    const step = resolveStatusStep(currentStatus);
     return `/projects/${projectId}/${step}`;
+  }
+
+  function resolveStatusStep(status: string): string {
+    if (status.startsWith("topic")) return "topic";
+    if (status.startsWith("script")) return "script";
+    if (status.startsWith("storyboard")) return "storyboard";
+    if (status.startsWith("asset_plan") || status.startsWith("assets")) return "asset";
+    if (status.startsWith("compos")) return "compose";
+    if (status.startsWith("render")) return "render";
+    return "topic";
   }
 
   async function ensureProject() {
