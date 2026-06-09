@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted } from "vue";
+import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 
 import { useStoryboardStore } from "../../stores/storyboard";
@@ -50,6 +51,7 @@ const projectId = computed(() => projectStore.state.projectId ?? "");
 const COMPOSE_STEP_INDEX = PIPELINE_STEPS.findIndex(
   (s) => s.key === "compose",
 );
+const router = useRouter();
 
 /* -------------------------------------------------------------------------- */
 /*  Global info                                                               */
@@ -203,6 +205,7 @@ function handleConfirm() {
   }
   ElMessage.success("资产确认完成，进入合成阶段");
   workspaceStore.setCurrentStep(COMPOSE_STEP_INDEX);
+  const pid = projectStore.state.projectId; if (pid) router.push(`/projects/${pid}/compose`);
 }
 </script>
 

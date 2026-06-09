@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted } from "vue";
+import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 
 import { useComposeStore } from "../../stores/compose";
+import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 
 const composeStore = useComposeStore();
@@ -25,6 +27,8 @@ const validation = computed(
 const hasCompose = computed(() => !!activeCompose.value);
 
 const RENDER_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "render");
+const router = useRouter();
+const projectStore = useProjectStore();
 
 /* -------------------------------------------------------------------------- */
 /*  Track summary                                                             */
@@ -87,6 +91,7 @@ async function handleGenerate() {
 
 function handleGoToRender() {
   workspaceStore.setCurrentStep(RENDER_STEP_INDEX);
+  const pid = projectStore.state.projectId; if (pid) router.push(`/projects/${pid}/render`);
 }
 
 function handleRetry() {

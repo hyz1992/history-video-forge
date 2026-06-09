@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 
 import { useStoryboardStore } from "../../stores/storyboard";
@@ -99,6 +100,7 @@ const STORYBOARD_STEP_INDEX = PIPELINE_STEPS.findIndex(
 const ASSET_STEP_INDEX = PIPELINE_STEPS.findIndex(
   (s) => s.key === "asset",
 );
+const router = useRouter();
 
 /* -------------------------------------------------------------------------- */
 /*  Lifecycle                                                                 */
@@ -126,6 +128,7 @@ function handleRetry() {
 function handleConfirm() {
   ElMessage.success("分镜已确认，进入资产阶段");
   workspaceStore.setCurrentStep(ASSET_STEP_INDEX);
+  const pid = projectStore.state.projectId; if (pid) router.push(`/projects/${pid}/asset`);
 }
 </script>
 

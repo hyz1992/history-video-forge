@@ -102,10 +102,23 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
   }
 
   function toProjectListItem(snapshot: ProjectSnapshot): ProjectListItem {
+    // Preserve an existing non-default display_name when the incoming
+    // snapshot does not carry one (e.g. status-only sync from downstream
+    // stores like script / storyboard / assets / compose / render).
+    const existingProject = state.projects.find(
+      (p) => p.project_id === snapshot.project_id,
+    );
+    const displayName =
+      snapshot.display_name ??
+      (existingProject && existingProject.display_name !== "未命名项目"
+        ? existingProject.display_name
+        : undefined) ??
+      "未命名项目";
+
     return {
       project_id: snapshot.project_id,
       current_status: snapshot.current_status,
-      display_name: snapshot.display_name ?? "未命名项目",
+      display_name: displayName,
       is_draft: snapshot.is_draft ?? isDraftStatus(snapshot.current_status),
       updated_at: snapshot.updated_at ?? new Date().toISOString(),
     };

@@ -53,6 +53,17 @@ watch(
 onMounted(async () => {
   const projectId = route.params.projectId as string;
   if (projectId) {
+    // Set projectId synchronously so stage panels can find it immediately
+    // on deep-link refresh (e.g. /projects/:id/asset).
+    if (
+      !projectStore.state.projectId ||
+      projectStore.state.projectId !== projectId
+    ) {
+      projectStore.syncProject({
+        project_id: projectId,
+        current_status: projectStore.state.currentStatus || "",
+      });
+    }
     // Prefer local data for instant UI, then refresh from backend
     const project = projectStore.state.projects.find(
       (p) => p.project_id === projectId,

@@ -1,20 +1,25 @@
 <script setup lang="ts">
 import { computed, onMounted } from "vue";
+import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 
 import { useScriptStore } from "../../stores/script";
+import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 
 const scriptStore = useScriptStore();
 const workspaceStore = useWorkspaceStore();
 
 const STORYBOARD_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "storyboard");
+const router = useRouter();
+const projectStore = useProjectStore();
+
 
 onMounted(async () => {
   await scriptStore.loadActiveScriptSnapshot();
   // Auto-start generation when arriving from topic confirmation
   const s = scriptStore.state.snapshot;
-  if (s && !s.active_script && s.current_status === "script_pending") {
+  if (s && !s.active_script && (s.current_status === "script_pending" || s.current_status === "script_ready")) {
     await scriptStore.generateInitialScript();
     if (!scriptStore.state.loadError) {
       ElMessage.success("文案已生成");
@@ -134,6 +139,7 @@ function handleSelectHistory(entryId: string) {
 function handleConfirm() {
   ElMessage.success("文案已确认，进入分镜规划");
   workspaceStore.setCurrentStep(STORYBOARD_STEP_INDEX);
+  const pid = projectStore.state.projectId; if (pid) router.push(`/projects/${pid}/storyboard`);
 }
 </script>
 
