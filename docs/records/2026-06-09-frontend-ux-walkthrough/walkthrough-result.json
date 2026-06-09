@@ -1,0 +1,222 @@
+{
+  "status": "failed",
+  "error": "Error: Cannot continue: asset confirm disabled\n    at file:///D:/myproject/story-video-forge2/[eval1]:63:30",
+  "finalUrl": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script",
+  "screenshots": {
+    "01-home": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\01-home.png",
+    "02-projects": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\02-projects.png",
+    "03-topic-empty": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\03-topic-empty.png",
+    "04-topic-generating": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\04-topic-generating.png",
+    "05-topic-candidates": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\05-topic-candidates.png",
+    "06-script-arrived": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\06-script-arrived.png",
+    "07-script-result": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\07-script-result.png",
+    "07b-script-manual-start": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\07b-script-manual-start.png",
+    "07c-script-generating": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\07c-script-generating.png",
+    "07d-script-manual-result": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\07d-script-manual-result.png",
+    "08-storyboard-empty": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\08-storyboard-empty.png",
+    "09-storyboard-generating": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\09-storyboard-generating.png",
+    "10-storyboard-result": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\10-storyboard-result.png",
+    "11-asset-entry": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\11-asset-entry.png",
+    "12-asset-plan-generating": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\12-asset-plan-generating.png",
+    "13-asset-plan-result": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\13-asset-plan-result.png",
+    "14-assets-generating": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\14-assets-generating.png",
+    "15-assets-result": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\15-assets-result.png"
+  },
+  "observations": [
+    {
+      "type": "screenshot",
+      "name": "01-home",
+      "note": "home",
+      "url": "http://127.0.0.1:5173/",
+      "file": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\01-home.png"
+    },
+    {
+      "type": "screenshot",
+      "name": "02-projects",
+      "note": "projects",
+      "url": "http://127.0.0.1:5173/projects",
+      "file": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\02-projects.png"
+    },
+    {
+      "type": "screenshot",
+      "name": "03-topic-empty",
+      "note": "topic-empty",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/topic",
+      "file": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\03-topic-empty.png"
+    },
+    {
+      "type": "screenshot",
+      "name": "04-topic-generating",
+      "note": "topic-generating",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/topic",
+      "file": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\04-topic-generating.png"
+    },
+    {
+      "type": "screenshot",
+      "name": "05-topic-candidates",
+      "note": "topic-candidates",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/topic",
+      "file": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\05-topic-candidates.png"
+    },
+    {
+      "type": "screenshot",
+      "name": "06-script-arrived",
+      "note": "script-arrived",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script",
+      "file": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\06-script-arrived.png"
+    },
+    {
+      "type": "state",
+      "name": "script-outcome",
+      "outcome": "script-empty",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script"
+    },
+    {
+      "type": "screenshot",
+      "name": "07-script-result",
+      "note": "script-result",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script",
+      "file": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\07-script-result.png"
+    },
+    {
+      "type": "screenshot",
+      "name": "07b-script-manual-start",
+      "note": "script-manual-start",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script",
+      "file": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\07b-script-manual-start.png"
+    },
+    {
+      "type": "screenshot",
+      "name": "07c-script-generating",
+      "note": "script-generating",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script",
+      "file": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\07c-script-generating.png"
+    },
+    {
+      "type": "state",
+      "name": "script-manual-outcome",
+      "outcome": "script-ready",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script"
+    },
+    {
+      "type": "screenshot",
+      "name": "07d-script-manual-result",
+      "note": "script-manual-result",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script",
+      "file": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\07d-script-manual-result.png"
+    },
+    {
+      "type": "screenshot",
+      "name": "08-storyboard-empty",
+      "note": "storyboard-entry",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script",
+      "file": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\08-storyboard-empty.png"
+    },
+    {
+      "type": "screenshot",
+      "name": "09-storyboard-generating",
+      "note": "storyboard-generating",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script",
+      "file": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\09-storyboard-generating.png"
+    },
+    {
+      "type": "state",
+      "name": "storyboard-outcome",
+      "outcome": "storyboard-ready",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script"
+    },
+    {
+      "type": "screenshot",
+      "name": "10-storyboard-result",
+      "note": "storyboard-result",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script",
+      "file": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\10-storyboard-result.png"
+    },
+    {
+      "type": "screenshot",
+      "name": "11-asset-entry",
+      "note": "asset-entry",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script",
+      "file": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\11-asset-entry.png"
+    },
+    {
+      "type": "screenshot",
+      "name": "12-asset-plan-generating",
+      "note": "asset-plan-generating",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script",
+      "file": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\12-asset-plan-generating.png"
+    },
+    {
+      "type": "state",
+      "name": "asset-plan-outcome",
+      "outcome": "asset-plan-ready",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script"
+    },
+    {
+      "type": "screenshot",
+      "name": "13-asset-plan-result",
+      "note": "asset-plan-result",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script",
+      "file": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\13-asset-plan-result.png"
+    },
+    {
+      "type": "state",
+      "name": "asset-generate-button-count",
+      "buttons": 2,
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script"
+    },
+    {
+      "type": "screenshot",
+      "name": "14-assets-generating",
+      "note": "assets-generating",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script",
+      "file": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\14-assets-generating.png"
+    },
+    {
+      "type": "state",
+      "name": "assets-outcome",
+      "outcome": "assets-ready-or-waiting",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script"
+    },
+    {
+      "type": "screenshot",
+      "name": "15-assets-result",
+      "note": "assets-result",
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script",
+      "file": "D:\\myproject\\story-video-forge2\\docs\\records\\2026-06-09-frontend-ux-walkthrough\\15-assets-result.png"
+    },
+    {
+      "type": "state",
+      "name": "asset-confirm",
+      "enabled": false,
+      "url": "http://127.0.0.1:5173/projects/e90b72d3-14ec-45ab-b4f4-18740c2888e9/script"
+    }
+  ],
+  "consoleMessages": [
+    {
+      "type": "debug",
+      "text": "[vite] connecting..."
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connected."
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connecting..."
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connected."
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    }
+  ],
+  "networkErrors": []
+}
