@@ -825,8 +825,13 @@ function enrichPromptWithCharacterAnchor(
     return taskDraft.prompt_draft;
   }
 
+  /**
+   * Match characters using visual fields only, not script_excerpt.
+   * script_excerpt may name characters that the narration references but
+   * the shot does not actually show — injecting them would pollute the
+   * image prompt with off-screen figures.
+   */
   const segmentText = [
-    segment.script_excerpt ?? "",
     segment.scene_description ?? "",
     ...(segment.visual_elements ?? []),
   ].join(" ");
