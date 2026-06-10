@@ -46,6 +46,11 @@ export const projectStoreKey: InjectionKey<ProjectStore> = Symbol("project-store
 
 export function createFetchProjectApi(baseUrl = ""): ProjectApi {
   return {
+    async listProjects() {
+      const response = await fetch(`${baseUrl}/api/projects`);
+      if (!response.ok) return [];
+      return response.json();
+    },
     async getProject(projectId) {
       const response = await fetch(`${baseUrl}/api/projects/${projectId}`);
       if (!response.ok) throw new Error(`project_load_failed:${response.status}`);

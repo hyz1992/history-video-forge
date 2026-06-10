@@ -1,6 +1,14 @@
 import type { AppResponse, RouteContext } from "../../app";
 import { getProjectSnapshot } from "./project-snapshot.service";
 import { deleteProject } from "./project.repository";
+import { listProjectSummaries } from "./project-summary.service";
+
+export async function listProjectsController(
+  _context: RouteContext,
+): Promise<AppResponse> {
+  const projects = listProjectSummaries(_context.app.db);
+  return { statusCode: 200, body: projects };
+}
 
 export async function getProjectSnapshotController(
   context: RouteContext,
