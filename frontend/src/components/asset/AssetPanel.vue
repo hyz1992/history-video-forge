@@ -331,17 +331,12 @@ function scrollToFirstBlocked() {
   const idx = segments.value.findIndex(s => s.segment_id === segId);
   if (idx < 0) return;
 
-  // The scroll container is .workspace-content (set in ProjectWorkspace.vue).
-  const container = document.querySelector(".workspace-content");
-  const cards = container?.querySelectorAll(".segment-asset-card");
-  if (!cards || !cards[idx]) return;
-
+  // scrollIntoView traverses scrollable ancestors automatically.
+  const cards = document.querySelectorAll(".segment-asset-card");
+  if (!cards[idx]) return;
   const card = cards[idx] as HTMLElement;
-  const containerRect = container!.getBoundingClientRect();
-  const cardRect = card.getBoundingClientRect();
-  const offset = cardRect.top - containerRect.top + container!.scrollTop - 16;
 
-  container!.scrollTo({ top: offset, behavior: "smooth" });
+  card.scrollIntoView({ behavior: "smooth", block: "start" });
 
   // Brief highlight
   card.style.transition = "box-shadow 0.3s";
@@ -609,20 +604,32 @@ function scrollToFirstBlocked() {
             跳到下一项
           </el-button>
           <el-tooltip
-            :disabled="readiness === 'ready_for_compose'"
+            v-if="readiness !== 'ready_for_compose'"
             :content="blockedReasonText"
             placement="top"
           >
-            <el-button
-              type="primary"
-              size="small"
-              :disabled="readiness !== 'ready_for_compose'"
-              @click="handleConfirm"
-            >
-              确认并进入合成
-            </el-button>
+            <span>
+              <el-button
+                type="primary"
+                size="small"
+                disabled
+              >
+                确认并进入合成
+              </el-button>
+            </span>
           </el-tooltip>
+          <el-button
+            v-else
+            type="primary"
+            size="small"
+            @click="handleConfirm"
+          >
+            确认并进入合成
+          </el-button>
         </div>
+        <p v-if="readiness !== 'ready_for_compose'" class="asset-bottom-reason">
+          {{ blockedReasonText }}
+        </p>
       </div>
     </template>
   </div>
@@ -730,6 +737,13 @@ function scrollToFirstBlocked() {
   display: flex;
   gap: var(--space-sm);
   align-items: center;
+}
+
+.asset-bottom-reason {
+  margin: 4px 0 0;
+  font-size: 0.82rem;
+  color: var(--color-warning);
+  line-height: 1.5;
 }
 
 /* ---- Global settings (collapsible) ---- */

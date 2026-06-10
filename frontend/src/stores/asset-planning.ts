@@ -228,7 +228,9 @@ export function createAssetPlanningStore(
     try {
       // Fire-and-forget the generation; poll for completion so the UI
       // never hangs on extremely long LLM calls.
-      const generatePromise = input.api.generateAssetPlan(projectId);
+      input.api.generateAssetPlan(projectId).catch(() => {
+        // Swallow — the polling loop below is the source of truth.
+      });
 
       // Poll snapshot until the plan appears or generation fails.
       const maxPolls = 120; // ~10 minutes at 5s intervals
@@ -245,14 +247,6 @@ export function createAssetPlanningStore(
           state.loadError = "资产规划生成失败";
           break;
         }
-      }
-
-      // Ensure the generate promise settled; if it threw we still have
-      // the poll result as the source of truth.
-      try {
-        await generatePromise;
-      } catch {
-        // Already handled by polling — ignore late rejection.
       }
 
       // Final snapshot load to catch any edge case.
