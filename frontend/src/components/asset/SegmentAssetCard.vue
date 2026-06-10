@@ -48,6 +48,7 @@ const FRAMING_LABELS: Record<string, string> = {
   medium: "中景",
   symbolic: "意象构图",
   extreme_close: "特写",
+  detail: "细节特写",
 };
 
 const MOTION_LABELS: Record<string, string> = {

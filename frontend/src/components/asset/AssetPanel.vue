@@ -379,12 +379,11 @@ function scrollToFirstBlocked() {
     >
       <p class="asset-generating-title">正在生成资产规划</p>
       <p class="asset-generating-hint">正在调用大模型分析分镜并规划素材，可能需要 1-5 分钟。</p>
-      <p class="asset-generating-hint">可稍后刷新页面继续，或返回项目列表。</p>
+      <p class="asset-generating-hint">系统每 5 秒自动检查生成状态，也可手动刷新：</p>
       <el-button
-        :loading="assetPlanningStore.state.isGenerating"
         @click="assetPlanningStore.retryLoad()"
       >
-        刷新状态
+        立即刷新状态
       </el-button>
     </div>
 
