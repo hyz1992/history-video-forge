@@ -39,6 +39,29 @@ const emit = defineEmits<{
 }>();
 
 /* -------------------------------------------------------------------------- */
+/*  Label mappings (en → zh)                                                  */
+/* -------------------------------------------------------------------------- */
+
+const FRAMING_LABELS: Record<string, string> = {
+  wide: "远景",
+  close: "近景",
+  medium: "中景",
+  symbolic: "意象构图",
+  extreme_close: "特写",
+};
+
+const MOTION_LABELS: Record<string, string> = {
+  push_in: "推进",
+  pull_back: "拉远",
+  pan: "平移",
+  static: "静止",
+};
+
+const CONTENT_LABELS: Record<string, string> = {
+  live_action: "实拍风格",
+};
+
+/* -------------------------------------------------------------------------- */
 /*  Tab & carousel state                                                      */
 /* -------------------------------------------------------------------------- */
 
@@ -391,7 +414,7 @@ function nextMedia() {
             </ElTooltip>
           </div>
           <ElTooltip :content="copyFeedback ? '已复制' : '复制提示词'" placement="top">
-            <button class="prompt-copy-btn" @click="copyPrompt">
+            <button class="prompt-copy-btn" aria-label="复制提示词" @click="copyPrompt">
               <ElIcon :size="12"><CopyDocument /></ElIcon>
             </button>
           </ElTooltip>
@@ -450,13 +473,13 @@ function nextMedia() {
       </div>
       <div class="segment-footer-right">
         <ElTag v-if="segment.framing_hint" size="small">
-          构图: {{ segment.framing_hint }}
+          构图: {{ FRAMING_LABELS[segment.framing_hint] ?? segment.framing_hint }}
         </ElTag>
         <ElTag v-if="segment.motion_hint" size="small" type="warning">
-          运动: {{ segment.motion_hint }}
+          运动: {{ MOTION_LABELS[segment.motion_hint] ?? segment.motion_hint }}
         </ElTag>
         <ElTag v-if="segment.content_type" size="small" type="info">
-          {{ segment.content_type }}
+          {{ CONTENT_LABELS[segment.content_type] ?? segment.content_type }}
         </ElTag>
       </div>
     </div>

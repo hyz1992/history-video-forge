@@ -77,9 +77,15 @@ const hasGlobalInfo = computed(
   () => !!(voiceProfile.value || artBible.value?.era_style || bgmPolicy.value || globalNotes.value.length),
 );
 
-/* -------------------------------------------------------------------------- */
-/*  Group tasks by segment                                                    */
-/* -------------------------------------------------------------------------- */
+/** Task-type breakdown from the plan (available before manifest). */
+const planSummary = computed(() => {
+  const map = new Map<string, number>();
+  for (const task of assetTasks.value) {
+    const label = TASK_TYPE_LABELS[task.task_type] ?? task.task_type;
+    map.set(label, (map.get(label) ?? 0) + 1);
+  }
+  return [...map.entries()].map(([label, count]) => ({ label, count }));
+});
 
 const imageTasksBySegment = computed(() => {
   const map = new Map<string, typeof assetTasks.value>();
@@ -376,7 +382,15 @@ function scrollToFirstBlocked() {
       v-else-if="assetPlanningStore.state.isGenerating && !activeAssetPlan"
       class="asset-generating"
     >
-      <p>正在生成资产规划，请稍候...</p>
+      <p class="asset-generating-title">正在生成资产规划</p>
+      <p class="asset-generating-hint">正在调用大模型分析分镜并规划素材，可能需要 1-5 分钟。</p>
+      <p class="asset-generating-hint">可稍后刷新页面继续，或返回项目列表。</p>
+      <el-button
+        :loading="assetPlanningStore.state.isGenerating"
+        @click="assetPlanningStore.retryLoad()"
+      >
+        刷新状态
+      </el-button>
     </div>
 
     <!-- Stage 1: no plan → generate plan -->
@@ -392,6 +406,20 @@ function scrollToFirstBlocked() {
       >
         {{ assetPlanningStore.state.isGenerating ? "生成中..." : "开始生成资产规划" }}
       </el-button>
+    </div>
+
+    <!-- Plan exists but no manifest yet: show plan overview before generating -->
+    <div v-else-if="!hasManifest && planSummary.length > 0" class="asset-plan-overview">
+      <h3 class="asset-overview-title">资产规划概览</h3>
+      <div class="asset-overview-types">
+        <div v-for="item in planSummary" :key="item.label" class="asset-overview-type-row">
+          <span class="asset-overview-type-label">{{ item.label }}</span>
+          <el-tag size="small" type="info">{{ item.count }} 项</el-tag>
+        </div>
+      </div>
+      <p class="asset-plan-overview-hint">
+        口播、字幕、音效、配乐将自动生成；分镜图和视频需在上方点击生成按钮后通过 AI 生成或手动上传。
+      </p>
     </div>
 
     <!-- Stage 2/3: has plan → generate buttons + task list -->
@@ -562,24 +590,39 @@ function scrollToFirstBlocked() {
         />
       </div>
 
-      <!-- Confirm next step -->
-      <div class="asset-actions-card">
-        <el-tooltip
-          :disabled="readiness === 'ready_for_compose'"
-          :content="blockedReasonText"
-          placement="top"
-        >
+      <!-- Sticky bottom bar -->
+      <div v-if="hasManifest" class="asset-bottom-bar">
+        <div class="asset-bottom-progress">
+          <span class="asset-bottom-count">
+            {{ executionStats.completed }} / {{ assetTasks.length }} 已完成
+          </span>
+          <span v-if="blockedItems.length > 0" class="asset-bottom-next">
+            下一项：{{ blockedItems[0].segmentId }} {{ blockedItems[0].type }}
+          </span>
+        </div>
+        <div class="asset-bottom-actions">
           <el-button
-            type="primary"
-            :disabled="readiness !== 'ready_for_compose'"
-            @click="handleConfirm"
+            v-if="blockedItems.length > 0"
+            size="small"
+            @click="scrollToFirstBlocked"
           >
-            确认并进入合成
+            跳到下一项
           </el-button>
-        </el-tooltip>
-        <p v-if="readiness !== 'ready_for_compose'" class="asset-blocked-reason">
-          {{ blockedReasonText }}
-        </p>
+          <el-tooltip
+            :disabled="readiness === 'ready_for_compose'"
+            :content="blockedReasonText"
+            placement="top"
+          >
+            <el-button
+              type="primary"
+              size="small"
+              :disabled="readiness !== 'ready_for_compose'"
+              @click="handleConfirm"
+            >
+              确认并进入合成
+            </el-button>
+          </el-tooltip>
+        </div>
       </div>
     </template>
   </div>
@@ -618,6 +661,75 @@ function scrollToFirstBlocked() {
   padding: var(--space-xl) var(--space-md);
   color: var(--text-secondary);
   text-align: center;
+}
+
+.asset-generating-title {
+  font-size: 1.1rem;
+  font-weight: var(--font-subheading);
+  color: var(--text-heading);
+  margin: 0;
+}
+
+.asset-generating-hint {
+  font-size: 0.88rem;
+  max-width: 400px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ---- Plan overview (before manifest) ---- */
+.asset-plan-overview {
+  display: grid;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-panel);
+  background: var(--bg-card);
+}
+
+.asset-plan-overview-hint {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ---- Sticky bottom bar ---- */
+.asset-bottom-bar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--bg-panel);
+  border-top: 2px solid var(--border-default);
+  z-index: 10;
+  margin-top: auto;
+}
+
+.asset-bottom-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.asset-bottom-count {
+  font-weight: var(--font-subheading);
+  font-size: 0.92rem;
+  color: var(--text-heading);
+}
+
+.asset-bottom-next {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.asset-bottom-actions {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
 }
 
 /* ---- Global settings (collapsible) ---- */
