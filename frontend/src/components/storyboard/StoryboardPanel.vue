@@ -46,7 +46,10 @@ const currentStatus = computed(
 
 const isStoryboardReady = computed(
   () => currentStatus.value === "storyboard_ready" ||
-    currentStatus.value?.startsWith("asset_plan"),
+    currentStatus.value?.startsWith("asset_plan") ||
+    currentStatus.value?.startsWith("assets") ||
+    currentStatus.value?.startsWith("compos") ||
+    currentStatus.value?.startsWith("render"),
 );
 
 /* -------------------------------------------------------------------------- */
@@ -108,6 +111,19 @@ const router = useRouter();
 
 onMounted(async () => {
   await storyboardStore.loadActiveStoryboardSnapshot();
+  // Auto-generate when arriving from script confirmation
+  const s = storyboardStore.state.snapshot;
+  if (
+    s &&
+    !s.active_storyboard &&
+    (s.current_status === "storyboard_ready" ||
+      s.current_status === "script_ready")
+  ) {
+    await storyboardStore.generateStoryboard();
+    if (!storyboardStore.state.loadError) {
+      ElMessage.success("分镜规划生成完成");
+    }
+  }
 });
 
 /* -------------------------------------------------------------------------- */

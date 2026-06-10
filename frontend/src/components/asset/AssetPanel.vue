@@ -150,6 +150,19 @@ const executionStats = computed(() => {
 onMounted(async () => {
   await storyboardStore.loadActiveStoryboardSnapshot();
   await assetPlanningStore.loadActiveAssetPlanSnapshot();
+  // Auto-generate asset plan when arriving from storyboard confirmation
+  const s = assetPlanningStore.state.snapshot;
+  if (
+    s &&
+    !s.active_asset_plan &&
+    (s.current_status === "storyboard_ready" ||
+      s.current_status === "asset_plan_ready")
+  ) {
+    await assetPlanningStore.generateAssetPlan();
+    if (!assetPlanningStore.state.loadError) {
+      ElMessage.success("资产规划生成完成");
+    }
+  }
   await assetsStore.loadProject();
 });
 
