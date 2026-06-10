@@ -277,15 +277,24 @@ function nextMedia() {
         </button>
         <button
           class="segment-media-tab"
-          :class="{ active: activeTab === 'video' }"
+          :class="{ active: activeTab === 'video', disabled: !hasVideoTasks }"
+          :disabled="!hasVideoTasks"
           @click="activeTab = 'video'"
         >
           视频
         </button>
       </div>
 
+      <!-- No tasks of this type -->
+      <div v-if="activeTasks.length === 0" class="segment-media-placeholder">
+        <ElTag size="small" type="info">无需生成</ElTag>
+        <span class="segment-media-placeholder-text">
+          {{ activeTab === 'video' ? '本镜头采用图片+运镜' : '无画面任务' }}
+        </span>
+      </div>
+
       <!-- Preview area: no artifact yet -->
-      <template v-if="!hasGeneratedMedia">
+      <template v-else-if="!hasGeneratedMedia">
         <div class="segment-media-placeholder">
           <ElTag
             v-if="statusLabel && currentExecution?.status === 'waiting_manual_upload'"
@@ -386,22 +395,43 @@ function nextMedia() {
 
       <!-- Action buttons -->
       <div class="segment-info-actions">
-        <ElButton
-          v-if="canUpload"
-          size="small"
-          :icon="Upload"
-          :loading="isCurrentUploading"
-          @click="triggerFileUpload"
-        >
-          {{ hasGeneratedMedia ? '替换' : '上传' }}
-        </ElButton>
-        <input
-          ref="fileInput"
-          type="file"
-          :accept="acceptFileTypes"
-          style="display:none"
-          @change="onFileSelected"
-        />
+        <template v-if="activeTasks.length === 0">
+          <span class="segment-info-action-hint">无需操作</span>
+        </template>
+        <template v-else-if="!currentTask">
+          <span class="segment-info-action-hint">任务加载中...</span>
+        </template>
+        <template v-else-if="canUpload">
+          <ElButton
+            size="small"
+            :icon="Upload"
+            :loading="isCurrentUploading"
+            @click="triggerFileUpload"
+          >
+            {{ hasGeneratedMedia ? '替换' : '上传' }}
+          </ElButton>
+          <input
+            ref="fileInput"
+            type="file"
+            :accept="acceptFileTypes"
+            style="display:none"
+            @change="onFileSelected"
+          />
+        </template>
+        <template v-else>
+          <ElTooltip
+            :content="
+              currentExecution
+                ? '当前状态不支持手动操作（' + (statusLabel ?? currentExecution.status) + '）'
+                : '该资产尚未生成，请在顶部点击生成剩余资产'
+            "
+            placement="top"
+          >
+            <ElTag size="small" type="info">
+              {{ currentExecution ? (statusLabel ?? currentExecution.status) : '待生成' }}
+            </ElTag>
+          </ElTooltip>
+        </template>
       </div>
     </div>
 
@@ -536,6 +566,16 @@ function nextMedia() {
 
 .segment-media-tab:hover:not(.active) {
   color: var(--text-secondary);
+}
+
+.segment-media-tab.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.segment-info-action-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
 }
 
 .segment-media-placeholder {
