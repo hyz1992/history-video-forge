@@ -201,17 +201,32 @@ const TASK_TYPE_LABELS: Record<string, string> = {
 /** Blocked tasks preventing compose — anything not completed/accepted. */
 const blockedItems = computed(() => {
   const execByTaskId = executionsByTaskId.value;
-  const items: Array<{ taskId: string; type: string; segmentId: string; reason: string }> = [];
+  const items: Array<{ taskId: string; type: string; segmentId: string; reason: string; taskIndex: number }> = [];
+
+  // Count same-segment same-type tasks for suffix numbering
+  const segmentTypeCounts = new Map<string, number>();
+  for (const task of assetTasks.value) {
+    const key = `${task.source_segment_id}:${task.task_type}`;
+    segmentTypeCounts.set(key, (segmentTypeCounts.get(key) ?? 0) + 1);
+  }
+  const segmentTypeIndex = new Map<string, number>();
 
   for (const task of assetTasks.value) {
     const exec = execByTaskId.get(task.task_id);
     const done = exec && (exec.status === "completed" || exec.status === "accepted");
     if (done) continue;
 
-    const label = TASK_TYPE_LABELS[task.task_type] ?? task.task_type;
+    const typeLabel = TASK_TYPE_LABELS[task.task_type] ?? task.task_type;
     const sid = task.source_segment_id;
     const segIndex = sid ? segments.value.findIndex(s => s.segment_id === sid) : -1;
-    const segRef = segIndex >= 0 ? `#${segIndex + 1}` : (sid ?? task.task_id);
+    const key = `${sid}:${task.task_type}`;
+    const totalForType = segmentTypeCounts.get(key) ?? 1;
+    const idxForType = (segmentTypeIndex.get(key) ?? 0) + 1;
+    segmentTypeIndex.set(key, idxForType);
+
+    const segRef = segIndex >= 0
+      ? (totalForType > 1 ? `#${segIndex + 1}-${idxForType}` : `#${segIndex + 1}`)
+      : (sid ?? task.task_id);
     const reason = !exec
       ? "暂未生成"
       : exec.status === "waiting_manual_upload"
@@ -222,13 +237,14 @@ const blockedItems = computed(() => {
             ? "生成中"
             : "待处理";
 
-    items.push({ taskId: task.task_id, type: label, segmentId: segRef, reason });
+    items.push({ taskId: task.task_id, type: typeLabel, segmentId: segRef, reason, taskIndex: idxForType - 1 });
   }
 
   return items;
 });
 
 const showAllBlocked = ref(false);
+const focusTaskId = ref<string | null>(null);
 
 const visibleBlockedItems = computed(() =>
   showAllBlocked.value ? blockedItems.value : blockedItems.value.slice(0, 10),
@@ -268,6 +284,9 @@ function scrollToTask(taskId: string) {
   card.style.transition = "box-shadow 0.3s";
   card.style.boxShadow = "0 0 0 3px var(--accent-primary)";
   setTimeout(() => { card.style.boxShadow = ""; }, 2000);
+  // Trigger the child component to switch to the correct task
+  focusTaskId.value = null; // reset to force re-trigger
+  requestAnimationFrame(() => { focusTaskId.value = taskId; });
 }
 const blockedReasonText = computed(() => {
   if (readiness.value === "ready_for_compose") return "";
@@ -490,7 +509,9 @@ function handleConfirm() {
             }"
           >
             <span class="asset-type-pill-label">{{ item.label }}</span>
-            <span class="asset-type-pill-count">{{ item.completed }}/{{ item.total }}</span>
+            <span class="asset-type-pill-count">
+              {{ item.total === 0 ? '无需' : item.completed + '/' + item.total }}
+            </span>
           </div>
         </div>
 
@@ -537,7 +558,7 @@ function handleConfirm() {
                   type="primary"
                   :loading="assetsStore.state.isGenerating"
                 >
-                  {{ assetsStore.state.isGenerating ? "生成中..." : "生成缺失资产" }}
+                  {{ assetsStore.state.isGenerating ? "生成中..." : "重新生成全部资产" }}
                 </el-button>
               </template>
             </el-popconfirm>
@@ -547,7 +568,7 @@ function handleConfirm() {
               :loading="assetsStore.state.isGenerating"
               @click="handleGenerateFull"
             >
-              {{ assetsStore.state.isGenerating ? "生成中..." : "生成缺失资产" }}
+              {{ assetsStore.state.isGenerating ? "生成中..." : "重新生成全部资产" }}
             </el-button>
             <span class="asset-overview-hint">
               也可在下方的分镜卡片中逐项上传或替换
@@ -605,6 +626,7 @@ function handleConfirm() {
           :artifacts-by-id="artifactsById"
           :uploading-task-id="assetsStore.state.isUploading"
           :project-id="projectId"
+          :focus-task-id="focusTaskId"
           @upload-file="handleUploadFile"
         />
       </div>

@@ -32,6 +32,7 @@ const props = defineProps<{
   artifactsById: Map<string, ArtifactInfo>;
   uploadingTaskId: string | null;
   projectId: string;
+  focusTaskId: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -81,6 +82,28 @@ const currentTask = computed(
 watch(activeTab, () => {
   activeMediaIndex.value = 0;
 });
+
+// When a blocked-item chip is clicked in the overview, switch to the
+// correct tab and task index within this card.
+watch(
+  () => props.focusTaskId,
+  (taskId) => {
+    if (!taskId) return;
+    // Check image tasks
+    const imgIdx = props.imageTasks.findIndex(t => t.task_id === taskId);
+    if (imgIdx >= 0) {
+      activeTab.value = "image";
+      activeMediaIndex.value = imgIdx;
+      return;
+    }
+    // Check video tasks
+    const vidIdx = props.videoTasks.findIndex(t => t.task_id === taskId);
+    if (vidIdx >= 0) {
+      activeTab.value = "video";
+      activeMediaIndex.value = vidIdx;
+    }
+  },
+);
 
 const hasImageTasks = computed(() => props.imageTasks.length > 0);
 const hasVideoTasks = computed(() => props.videoTasks.length > 0);
@@ -347,7 +370,7 @@ function nextMedia() {
             {{ statusLabel }}
           </ElTag>
           <span class="segment-media-placeholder-text">
-            {{ canUpload ? '点击上传或拖拽文件' : (statusLabel ? '' : '暂无') }}
+            {{ canUpload ? '点击此处上传文件' : (statusLabel ? '' : '暂无') }}
           </span>
         </div>
       </template>
@@ -462,19 +485,14 @@ function nextMedia() {
           >
             {{ hasGeneratedMedia ? '替换' : '上传' }}
           </ElButton>
-          <ElTooltip
-            v-else
-            :content="
-              currentExecution
-                ? '当前状态不支持手动操作（' + (statusLabel ?? currentExecution.status) + '）'
-                : '该资产尚未生成，请使用顶部按钮生成全部资产'
-            "
-            placement="top"
+          <ElTag
+            v-else-if="currentExecution"
+            size="small"
+            :type="currentExecution.status === 'failed' ? 'danger' : 'info'"
           >
-            <ElTag size="small" type="info">
-              {{ currentExecution ? (statusLabel ?? currentExecution.status) : '待生成' }}
-            </ElTag>
-          </ElTooltip>
+            {{ statusLabel ?? currentExecution.status }}
+          </ElTag>
+          <ElTag v-else size="small" type="info">待生成</ElTag>
         </template>
         <input
           ref="fileInput"
