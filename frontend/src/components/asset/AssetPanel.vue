@@ -192,23 +192,31 @@ const TASK_TYPE_LABELS: Record<string, string> = {
   render_motion_cue: "运镜",
 };
 
-/** Blocked tasks preventing compose. */
+/** Blocked tasks preventing compose — anything not completed/accepted. */
 const blockedItems = computed(() => {
   const execByTaskId = executionsByTaskId.value;
-  const items: Array<{ taskId: string; type: string; segmentId: string | null; reason: string }> = [];
+  const items: Array<{ taskId: string; type: string; segmentId: string; reason: string }> = [];
 
   for (const task of assetTasks.value) {
     const exec = execByTaskId.get(task.task_id);
-    if (!exec || exec.status === "planned" || exec.status === "failed") {
-      const label = TASK_TYPE_LABELS[task.task_type] ?? task.task_type;
-      const id = task.source_segment_id ?? task.task_id;
-      const reason = !exec
-        ? "暂未生成"
+    const done = exec && (exec.status === "completed" || exec.status === "accepted");
+    if (done) continue;
+
+    const label = TASK_TYPE_LABELS[task.task_type] ?? task.task_type;
+    const sid = task.source_segment_id;
+    const segIndex = sid ? segments.value.findIndex(s => s.segment_id === sid) : -1;
+    const segRef = segIndex >= 0 ? `#${segIndex + 1}` : (sid ?? task.task_id);
+    const reason = !exec
+      ? "暂未生成"
+      : exec.status === "waiting_manual_upload"
+        ? "待上传"
         : exec.status === "failed"
           ? "生成失败"
-          : "待处理";
-      items.push({ taskId: task.task_id, type: label, segmentId: id, reason });
-    }
+          : exec.status === "running"
+            ? "生成中"
+            : "待处理";
+
+    items.push({ taskId: task.task_id, type: label, segmentId: segRef, reason });
   }
 
   return items;
@@ -219,12 +227,11 @@ const blockedReasonText = computed(() => {
   if (readiness.value === "ready_for_compose") return "";
   const items = blockedItems.value;
   if (items.length === 0) return "资产尚未就绪";
-  const byType = new Map<string, number>();
-  for (const item of items) {
-    byType.set(item.type, (byType.get(item.type) ?? 0) + 1);
-  }
-  const parts = [...byType.entries()].map(([type, count]) => `${count} 个${type}`);
-  return `无法进入合成：${parts.join("、")}${items.length <= 3 ? "（" + items.map(i => i.segmentId).join("、") + "）" : ""}`;
+  // Show first 5 specific items, then summary
+  const head = items.slice(0, 5);
+  const lines = head.map(i => `${i.segmentId} ${i.type}${i.reason}`);
+  if (items.length > 5) lines.push(`...等 ${items.length} 项`);
+  return `无法进入合成：${lines.join("；")}`;
 });
 
 /* -------------------------------------------------------------------------- */
@@ -441,9 +448,13 @@ function handleConfirm() {
             :loading="assetsStore.state.isGenerating"
             @click="handleGenerateFull"
           >
-            {{ assetsStore.state.isGenerating ? "生成中..." : "生成剩余资产" }}
+            {{ assetsStore.state.isGenerating ? "生成中..." : "重新生成全部资产" }}
           </el-button>
+          <span v-if="blockedItems.length > 0" class="asset-overview-hint">
+            也可在下方的分镜卡片中逐项上传或替换
+          </span>
           <el-popconfirm
+            v-if="blockedItems.length === 0"
             title="重新生成将覆盖所有已有产物（包括已上传的文件），确定继续？"
             confirm-button-text="确定重建"
             cancel-button-text="取消"
@@ -731,8 +742,14 @@ details[open] > .asset-global-toggle::before {
   display: flex;
   gap: var(--space-sm);
   flex-wrap: wrap;
+  align-items: center;
   padding-top: var(--space-sm);
   border-top: 1px solid var(--border-default);
+}
+
+.asset-overview-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
 }
 
 /* ---- Blocked reason ---- */

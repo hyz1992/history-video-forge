@@ -62,13 +62,26 @@ function getStatusLabel(status: string): string {
     script_generating: "文案生成中",
     script_reviewing: "文案审阅中",
     script_failed: "文案异常",
+    storyboard_ready: "分镜已就绪",
+    storyboard_generating: "分镜生成中",
+    asset_plan_ready: "资产规划已就绪",
+    asset_plan_generating: "资产规划生成中",
+    asset_plan_failed: "资产规划失败",
+    assets_ready: "资产已就绪",
+    assets_blocked: "资产待补全",
+    assets_generating: "资产生成中",
+    composition_ready: "合成已就绪",
+    render_ready: "渲染已就绪",
+    render_completed: "渲染完成",
+    render_failed: "渲染失败",
   };
   return labels[status] ?? status;
 }
 
 function getStatusTagType(status: string): "" | "success" | "warning" | "danger" | "info" {
-  if (status === "script_ready") return "success";
-  if (status === "script_generating" || status === "script_reviewing") return "warning";
+  if (status === "script_ready" || status === "storyboard_ready" || status === "asset_plan_ready" || status === "assets_ready" || status === "composition_ready" || status === "render_completed") return "success";
+  if (status === "script_generating" || status === "script_reviewing" || status === "storyboard_generating" || status === "asset_plan_generating" || status === "assets_generating" || status === "render_ready") return "warning";
+  if (status === "script_failed" || status === "asset_plan_failed" || status === "render_failed" || status === "assets_blocked") return "danger";
   if (status === "script_failed") return "danger";
   if (status === "topic_candidates_ready") return "";
   return "info";

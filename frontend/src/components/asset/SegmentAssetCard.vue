@@ -281,7 +281,14 @@ function nextMedia() {
           :disabled="!hasVideoTasks"
           @click="activeTab = 'video'"
         >
-          视频
+          <ElTooltip
+            v-if="!hasVideoTasks"
+            content="本镜头采用图片+运镜，无需视频"
+            placement="top"
+          >
+            <span>视频</span>
+          </ElTooltip>
+          <span v-else>视频</span>
         </button>
       </div>
 
