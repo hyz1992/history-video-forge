@@ -132,7 +132,10 @@ const artifactsById = computed(() => {
 /* -------------------------------------------------------------------------- */
 
 const executionStats = computed(() => {
-  const stats = { completed: 0, waiting: 0, running: 0, failed: 0, total: 0 };
+  const stats = { completed: 0, waiting: 0, running: 0, failed: 0, planned: 0, total: 0 };
+  const executedIds = new Set(executions.value.map(e => e.task_id));
+
+  // Count executions
   for (const exec of executions.value) {
     stats.total++;
     if (exec.status === "completed" || exec.status === "accepted") stats.completed++;
@@ -140,7 +143,88 @@ const executionStats = computed(() => {
     else if (exec.status === "running") stats.running++;
     else if (exec.status === "failed") stats.failed++;
   }
+
+  // Count planned but not yet executed tasks (blocked)
+  for (const task of assetTasks.value) {
+    if (!executedIds.has(task.task_id)) {
+      stats.planned++;
+    }
+  }
+
   return stats;
+});
+
+/** Per-type breakdown for the overview card. */
+const taskTypeBreakdown = computed(() => {
+  const map = new Map<string, { total: number; completed: number; planned: number; failed: number }>();
+  const execByTaskId = executionsByTaskId.value;
+
+  for (const task of assetTasks.value) {
+    const label = TASK_TYPE_LABELS[task.task_type] ?? task.task_type;
+    let entry = map.get(label);
+    if (!entry) {
+      entry = { total: 0, completed: 0, planned: 0, failed: 0 };
+      map.set(label, entry);
+    }
+    entry.total++;
+    const exec = execByTaskId.get(task.task_id);
+    if (!exec) {
+      entry.planned++;
+    } else if (exec.status === "completed" || exec.status === "accepted") {
+      entry.completed++;
+    } else if (exec.status === "failed") {
+      entry.failed++;
+    } else {
+      entry.planned++;
+    }
+  }
+
+  return [...map.entries()].map(([label, counts]) => ({ label, ...counts }));
+});
+
+const TASK_TYPE_LABELS: Record<string, string> = {
+  image_still: "分镜图",
+  video_clip: "分镜视频",
+  tts_audio: "口播音频",
+  subtitle_track: "字幕",
+  sfx_cue: "音效",
+  bgm_cue: "配乐",
+  render_motion_cue: "运镜",
+};
+
+/** Blocked tasks preventing compose. */
+const blockedItems = computed(() => {
+  const execByTaskId = executionsByTaskId.value;
+  const items: Array<{ taskId: string; type: string; segmentId: string | null; reason: string }> = [];
+
+  for (const task of assetTasks.value) {
+    const exec = execByTaskId.get(task.task_id);
+    if (!exec || exec.status === "planned" || exec.status === "failed") {
+      const label = TASK_TYPE_LABELS[task.task_type] ?? task.task_type;
+      const id = task.source_segment_id ?? task.task_id;
+      const reason = !exec
+        ? "暂未生成"
+        : exec.status === "failed"
+          ? "生成失败"
+          : "待处理";
+      items.push({ taskId: task.task_id, type: label, segmentId: id, reason });
+    }
+  }
+
+  return items;
+});
+
+/** Human-readable reason why compose is blocked. */
+const blockedReasonText = computed(() => {
+  if (readiness.value === "ready_for_compose") return "";
+  const items = blockedItems.value;
+  if (items.length === 0) return "资产尚未就绪";
+  const byType = new Map<string, number>();
+  for (const item of items) {
+    byType.set(item.type, (byType.get(item.type) ?? 0) + 1);
+  }
+  const parts = [...byType.entries()].map(([type, count]) => `${count} 个${type}`);
+  return `无法进入合成：${parts.join("、")}${items.length <= 3 ? "（" + items.map(i => i.segmentId).join("、") + "）" : ""}`;
 });
 
 /* -------------------------------------------------------------------------- */
@@ -303,43 +387,93 @@ function handleConfirm() {
         </div>
       </details>
 
-      <!-- Generate action bar -->
-      <div class="asset-generate-bar">
-        <div class="asset-generate-actions">
+      <!-- Asset generation overview -->
+      <div v-if="hasManifest" class="asset-overview-card">
+        <h3 class="asset-overview-title">资产生成概览</h3>
+
+        <!-- Progress bar -->
+        <div class="asset-overview-progress">
+          <span class="asset-overview-count">
+            已完成 {{ executionStats.completed }} / {{ assetTasks.length }}
+          </span>
+          <el-progress
+            :percentage="assetTasks.length > 0 ? Math.round(executionStats.completed / assetTasks.length * 100) : 0"
+            :status="readiness === 'ready_for_compose' ? 'success' : undefined"
+            :stroke-width="10"
+          />
+        </div>
+
+        <!-- Per-type breakdown -->
+        <div class="asset-overview-types">
+          <div v-for="item in taskTypeBreakdown" :key="item.label" class="asset-overview-type-row">
+            <span class="asset-overview-type-label">{{ item.label }}</span>
+            <span class="asset-overview-type-count">
+              <el-tag
+                :type="item.completed === item.total ? 'success' : item.failed > 0 ? 'danger' : 'warning'"
+                size="small"
+              >
+                {{ item.completed }}/{{ item.total }}
+              </el-tag>
+            </span>
+          </div>
+        </div>
+
+        <!-- Blocked items -->
+        <div v-if="blockedItems.length > 0" class="asset-overview-blocked">
+          <h4 class="asset-overview-blocked-title">
+            待处理项（{{ blockedItems.length }}）
+          </h4>
+          <ul class="asset-overview-blocked-list">
+            <li v-for="item in blockedItems" :key="item.taskId">
+              <el-tag :type="item.reason === '生成失败' ? 'danger' : 'warning'" size="small">
+                {{ item.reason }}
+              </el-tag>
+              <span>{{ item.segmentId }} · {{ item.type }}</span>
+            </li>
+          </ul>
+        </div>
+
+        <!-- Actions -->
+        <div class="asset-overview-actions">
           <el-button
-            v-if="!hasManifest"
+            v-if="blockedItems.length > 0"
             type="primary"
             :loading="assetsStore.state.isGenerating"
-            @click="handleGenerateSemiAuto"
+            @click="handleGenerateFull"
           >
-            {{ assetsStore.state.isGenerating ? "生成中..." : "生成资产（手动上传图片/视频）" }}
+            {{ assetsStore.state.isGenerating ? "生成中..." : "生成剩余资产" }}
           </el-button>
+          <el-popconfirm
+            title="重新生成将覆盖所有已有产物（包括已上传的文件），确定继续？"
+            confirm-button-text="确定重建"
+            cancel-button-text="取消"
+            @confirm="handleGenerateFull"
+          >
+            <template #reference>
+              <el-button :loading="assetsStore.state.isGenerating" type="warning" plain>
+                重新生成全部资产
+              </el-button>
+            </template>
+          </el-popconfirm>
+        </div>
+      </div>
+
+      <!-- Generate action bar (no manifest yet) -->
+      <div v-if="!hasManifest" class="asset-generate-bar">
+        <div class="asset-generate-actions">
           <el-button
-            v-if="!hasManifest"
+            type="primary"
             :loading="assetsStore.state.isGenerating"
             @click="handleGenerateFull"
           >
             {{ assetsStore.state.isGenerating ? "生成中..." : "全部自动生成" }}
           </el-button>
-          <el-popconfirm
-            v-if="hasManifest"
-            title="重新生成将覆盖所有已有产物，确定继续？"
-            @confirm="handleGenerateFull"
+          <el-button
+            :loading="assetsStore.state.isGenerating"
+            @click="handleGenerateSemiAuto"
           >
-            <template #reference>
-              <el-button :loading="assetsStore.state.isGenerating">
-                {{ assetsStore.state.isGenerating ? "生成中..." : "重新生成" }}
-              </el-button>
-            </template>
-          </el-popconfirm>
-        </div>
-
-        <!-- Execution stats -->
-        <div v-if="hasManifest" class="asset-stats">
-          <el-tag type="success" size="small">完成 {{ executionStats.completed }}</el-tag>
-          <el-tag v-if="executionStats.waiting > 0" type="warning" size="small">待上传 {{ executionStats.waiting }}</el-tag>
-          <el-tag v-if="executionStats.running > 0" type="info" size="small">生成中 {{ executionStats.running }}</el-tag>
-          <el-tag v-if="executionStats.failed > 0" type="danger" size="small">失败 {{ executionStats.failed }}</el-tag>
+            {{ assetsStore.state.isGenerating ? "生成中..." : "生成资产（手动上传图片/视频）" }}
+          </el-button>
         </div>
       </div>
 
@@ -367,13 +501,22 @@ function handleConfirm() {
 
       <!-- Confirm next step -->
       <div class="asset-actions-card">
-        <el-button
-          type="primary"
-          :disabled="readiness !== 'ready_for_compose'"
-          @click="handleConfirm"
+        <el-tooltip
+          :disabled="readiness === 'ready_for_compose'"
+          :content="blockedReasonText"
+          placement="top"
         >
-          确认并进入合成
-        </el-button>
+          <el-button
+            type="primary"
+            :disabled="readiness !== 'ready_for_compose'"
+            @click="handleConfirm"
+          >
+            确认并进入合成
+          </el-button>
+        </el-tooltip>
+        <p v-if="readiness !== 'ready_for_compose'" class="asset-blocked-reason">
+          {{ blockedReasonText }}
+        </p>
       </div>
     </template>
   </div>
@@ -508,6 +651,96 @@ details[open] > .asset-global-toggle::before {
   display: flex;
   gap: var(--space-xs);
   align-items: center;
+}
+
+/* ---- Overview card ---- */
+.asset-overview-card {
+  display: grid;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-panel);
+  background: var(--bg-card);
+}
+
+.asset-overview-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: var(--font-subheading);
+  color: var(--text-heading);
+}
+
+.asset-overview-progress {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.asset-overview-count {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.asset-overview-types {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-sm);
+}
+
+.asset-overview-type-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.asset-overview-type-label {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+
+.asset-overview-blocked {
+  display: grid;
+  gap: var(--space-xs);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-default);
+}
+
+.asset-overview-blocked-title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: var(--font-subheading);
+  color: var(--color-warning);
+}
+
+.asset-overview-blocked-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: var(--space-xs);
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+
+.asset-overview-blocked-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.asset-overview-actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-default);
+}
+
+/* ---- Blocked reason ---- */
+.asset-blocked-reason {
+  margin: var(--space-sm) 0 0;
+  font-size: 0.88rem;
+  color: var(--color-warning);
+  line-height: 1.6;
 }
 
 /* ---- Segments header ---- */
