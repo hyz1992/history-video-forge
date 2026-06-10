@@ -222,7 +222,11 @@ const blockedItems = computed(() => {
   return items;
 });
 
-/** Human-readable reason why compose is blocked. */
+/** Whether blocked items are all manual-upload type (no regeneration needed). */
+const blockedItemsAreUploadOnly = computed(() =>
+  blockedItems.value.length > 0 &&
+  blockedItems.value.every(i => i.reason === "待上传"),
+);
 const blockedReasonText = computed(() => {
   if (readiness.value === "ready_for_compose") return "";
   const items = blockedItems.value;
@@ -310,6 +314,11 @@ function handleConfirm() {
   ElMessage.success("资产确认完成，进入合成阶段");
   workspaceStore.setCurrentStep(COMPOSE_STEP_INDEX);
   const pid = projectStore.state.projectId; if (pid) router.push(`/projects/${pid}/compose`);
+}
+
+function scrollToFirstBlocked() {
+  const card = document.querySelector(".asset-segments .segment-asset-card");
+  if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 </script>
 
@@ -442,19 +451,40 @@ function handleConfirm() {
 
         <!-- Actions -->
         <div class="asset-overview-actions">
-          <el-button
-            v-if="blockedItems.length > 0"
-            type="primary"
-            :loading="assetsStore.state.isGenerating"
-            @click="handleGenerateFull"
-          >
-            {{ assetsStore.state.isGenerating ? "生成中..." : "重新生成全部资产" }}
-          </el-button>
-          <span v-if="blockedItems.length > 0" class="asset-overview-hint">
-            也可在下方的分镜卡片中逐项上传或替换
-          </span>
+          <template v-if="blockedItems.length > 0">
+            <el-button
+              v-if="blockedItemsAreUploadOnly"
+              type="primary"
+              @click="scrollToFirstBlocked"
+            >
+              查看待上传项（{{ blockedItems.length }}）
+            </el-button>
+            <el-button
+              v-else
+              type="primary"
+              :loading="assetsStore.state.isGenerating"
+              @click="handleGenerateFull"
+            >
+              {{ assetsStore.state.isGenerating ? "生成中..." : "重新生成全部资产" }}
+            </el-button>
+            <span class="asset-overview-hint">
+              也可在下方的分镜卡片中逐项上传或替换
+            </span>
+            <el-popconfirm
+              title="重新生成将覆盖所有已有产物（包括已上传的文件），确定继续？"
+              confirm-button-text="确定重建"
+              cancel-button-text="取消"
+              @confirm="handleGenerateFull"
+            >
+              <template #reference>
+                <el-button :loading="assetsStore.state.isGenerating" type="warning" plain size="small">
+                  重新生成全部资产
+                </el-button>
+              </template>
+            </el-popconfirm>
+          </template>
           <el-popconfirm
-            v-if="blockedItems.length === 0"
+            v-else
             title="重新生成将覆盖所有已有产物（包括已上传的文件），确定继续？"
             confirm-button-text="确定重建"
             cancel-button-text="取消"

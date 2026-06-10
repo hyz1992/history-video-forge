@@ -51,7 +51,7 @@ const filteredProjects = computed(() => {
 const hasProjects = computed(() => projectStore.state.projects.length > 0);
 
 function isCompletedStatus(status: string): boolean {
-  return status === "script_ready";
+  return status === "render_completed" || status === "render_ready";
 }
 
 function getStatusLabel(status: string): string {

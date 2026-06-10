@@ -275,20 +275,25 @@ function nextMedia() {
         >
           画面
         </button>
+        <ElTooltip
+          v-if="!hasVideoTasks"
+          content="本镜头采用图片+运镜，无需视频"
+          placement="top"
+        >
+          <button
+            class="segment-media-tab disabled"
+            disabled
+          >
+            视频
+          </button>
+        </ElTooltip>
         <button
+          v-else
           class="segment-media-tab"
-          :class="{ active: activeTab === 'video', disabled: !hasVideoTasks }"
-          :disabled="!hasVideoTasks"
+          :class="{ active: activeTab === 'video' }"
           @click="activeTab = 'video'"
         >
-          <ElTooltip
-            v-if="!hasVideoTasks"
-            content="本镜头采用图片+运镜，无需视频"
-            placement="top"
-          >
-            <span>视频</span>
-          </ElTooltip>
-          <span v-else>视频</span>
+          视频
         </button>
       </div>
 
@@ -430,7 +435,7 @@ function nextMedia() {
             :content="
               currentExecution
                 ? '当前状态不支持手动操作（' + (statusLabel ?? currentExecution.status) + '）'
-                : '该资产尚未生成，请在顶部点击生成剩余资产'
+                : '该资产尚未生成，请使用顶部按钮重新生成全部资产'
             "
             placement="top"
           >
