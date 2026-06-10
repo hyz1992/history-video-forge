@@ -319,14 +319,28 @@ function handleConfirm() {
 function scrollToFirstBlocked() {
   const first = blockedItems.value[0];
   if (!first) return;
-  // Find the segment index by matching source_segment_id from the blocked task
   const task = assetTasks.value.find(t => t.task_id === first.taskId);
   const segId = task?.source_segment_id;
   if (!segId) return;
   const idx = segments.value.findIndex(s => s.segment_id === segId);
   if (idx < 0) return;
-  const cards = document.querySelectorAll(".asset-segments .segment-asset-card");
-  if (cards[idx]) cards[idx].scrollIntoView({ behavior: "smooth", block: "start" });
+
+  // The scroll container is .workspace-content (set in ProjectWorkspace.vue).
+  const container = document.querySelector(".workspace-content");
+  const cards = container?.querySelectorAll(".segment-asset-card");
+  if (!cards || !cards[idx]) return;
+
+  const card = cards[idx] as HTMLElement;
+  const containerRect = container!.getBoundingClientRect();
+  const cardRect = card.getBoundingClientRect();
+  const offset = cardRect.top - containerRect.top + container!.scrollTop - 16;
+
+  container!.scrollTo({ top: offset, behavior: "smooth" });
+
+  // Brief highlight
+  card.style.transition = "box-shadow 0.3s";
+  card.style.boxShadow = "0 0 0 3px var(--accent-primary)";
+  setTimeout(() => { card.style.boxShadow = ""; }, 2000);
 }
 </script>
 
