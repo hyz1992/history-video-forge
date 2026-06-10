@@ -547,7 +547,6 @@ function handleConfirm() {
         <div class="asset-overview-actions">
           <template v-if="blockedItems.length > 0">
             <el-popconfirm
-              v-if="blockedItemsAreUploadOnly"
               title="将重新生成全部资产（包括图片/视频），可能覆盖已上传的文件。确定继续？"
               confirm-button-text="确定生成"
               cancel-button-text="取消"
@@ -562,30 +561,23 @@ function handleConfirm() {
                 </el-button>
               </template>
             </el-popconfirm>
-            <el-button
-              v-else
-              type="primary"
-              :loading="assetsStore.state.isGenerating"
-              @click="handleGenerateFull"
-            >
-              {{ assetsStore.state.isGenerating ? "生成中..." : "重新生成全部资产" }}
-            </el-button>
             <span class="asset-overview-hint">
               也可在下方的分镜卡片中逐项上传或替换
             </span>
-            <el-popconfirm
-              title="重新生成将覆盖所有已有产物（包括已上传的文件），确定继续？"
-              confirm-button-text="确定重建"
-              cancel-button-text="取消"
-              @confirm="handleGenerateFull"
-            >
-              <template #reference>
-                <el-button type="danger" plain size="small">
-                  重新生成全部资产
-                </el-button>
-              </template>
-            </el-popconfirm>
           </template>
+          <el-popconfirm
+            v-else
+            title="重新生成将覆盖所有已有产物（包括已上传的文件），确定继续？"
+            confirm-button-text="确定重建"
+            cancel-button-text="取消"
+            @confirm="handleGenerateFull"
+          >
+            <template #reference>
+              <el-button type="danger" plain size="small">
+                重新生成全部资产
+              </el-button>
+            </template>
+          </el-popconfirm>
         </div>
       </div>
 
@@ -628,6 +620,7 @@ function handleConfirm() {
           :project-id="projectId"
           :focus-task-id="focusTaskId"
           @upload-file="handleUploadFile"
+          @regenerate-all="handleGenerateFull"
         />
       </div>
 

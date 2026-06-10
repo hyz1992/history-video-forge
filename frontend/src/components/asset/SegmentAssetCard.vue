@@ -37,6 +37,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "upload-file": [taskId: string, file: File];
+  "regenerate-all": [];
 }>();
 
 /* -------------------------------------------------------------------------- */
@@ -493,6 +494,18 @@ function nextMedia() {
             {{ statusLabel ?? currentExecution.status }}
           </ElTag>
           <ElTag v-else size="small" type="info">待生成</ElTag>
+          <ElTooltip
+            content="全量重新生成所有资产（非单项生成）"
+            placement="top"
+          >
+            <el-button
+              size="small"
+              text
+              @click="emit('regenerate-all')"
+            >
+              重新生成全部
+            </el-button>
+          </ElTooltip>
         </template>
         <input
           ref="fileInput"
