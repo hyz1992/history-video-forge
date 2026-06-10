@@ -339,7 +339,7 @@ describe("project snapshot service", () => {
     expect(snapshot).toMatchObject({
       project_id: project.id,
       current_status: "storyboard_ready",
-      restore_route: `/projects/${project.id}/script`,
+      restore_route: `/projects/${project.id}/storyboard`,
       active_storyboard: {
         storyboard_record_id: storyboardRecord.id,
         source_script_record_id: scriptRecord.id,
