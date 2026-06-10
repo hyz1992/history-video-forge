@@ -327,7 +327,11 @@ function nextMedia() {
 
       <!-- Preview area: no artifact yet -->
       <template v-else-if="!hasGeneratedMedia">
-        <div class="segment-media-placeholder">
+        <div
+          class="segment-media-placeholder"
+          :class="{ clickable: canUpload }"
+          @click="canUpload && triggerFileUpload()"
+        >
           <ElTag
             v-if="statusLabel && currentExecution?.status === 'waiting_manual_upload'"
             type="warning"
@@ -343,7 +347,7 @@ function nextMedia() {
             {{ statusLabel }}
           </ElTag>
           <span class="segment-media-placeholder-text">
-            {{ currentExecution?.status === 'waiting_manual_upload' ? '点击上传' : '暂无' }}
+            {{ canUpload ? '点击上传或拖拽文件' : (statusLabel ? '' : '暂无') }}
           </span>
         </div>
       </template>
@@ -425,16 +429,32 @@ function nextMedia() {
         </p>
       </div>
 
-      <!-- Action buttons -->
+      <!-- Task indicator & switcher (multi-task) + action buttons -->
       <div class="segment-info-actions">
+        <!-- Multi-task switcher -->
+        <div v-if="activeTasks.length > 1" class="segment-task-switcher">
+          <button
+            v-for="(t, i) in activeTasks"
+            :key="t.task_id"
+            class="segment-task-dot"
+            :class="{ active: i === activeMediaIndex }"
+            :aria-label="'切换到任务 ' + (i + 1)"
+            @click="activeMediaIndex = i"
+          >
+            {{ i + 1 }}
+          </button>
+          <span class="segment-task-hint">共 {{ activeTasks.length }} 个任务</span>
+        </div>
+
         <template v-if="activeTasks.length === 0">
           <span class="segment-info-action-hint">无需操作</span>
         </template>
         <template v-else-if="!currentTask">
           <span class="segment-info-action-hint">任务加载中...</span>
         </template>
-        <template v-else-if="canUpload">
+        <template v-else>
           <ElButton
+            v-if="canUpload"
             size="small"
             :icon="Upload"
             :loading="isCurrentUploading"
@@ -442,20 +462,12 @@ function nextMedia() {
           >
             {{ hasGeneratedMedia ? '替换' : '上传' }}
           </ElButton>
-          <input
-            ref="fileInput"
-            type="file"
-            :accept="acceptFileTypes"
-            style="display:none"
-            @change="onFileSelected"
-          />
-        </template>
-        <template v-else>
           <ElTooltip
+            v-else
             :content="
               currentExecution
                 ? '当前状态不支持手动操作（' + (statusLabel ?? currentExecution.status) + '）'
-                : '该资产尚未生成，请使用顶部按钮重新生成全部资产'
+                : '该资产尚未生成，请使用顶部按钮生成全部资产'
             "
             placement="top"
           >
@@ -464,6 +476,13 @@ function nextMedia() {
             </ElTag>
           </ElTooltip>
         </template>
+        <input
+          ref="fileInput"
+          type="file"
+          :accept="acceptFileTypes"
+          style="display:none"
+          @change="onFileSelected"
+        />
       </div>
     </div>
 
@@ -631,6 +650,55 @@ function nextMedia() {
 .segment-media-placeholder-text {
   color: var(--text-muted);
   font-size: 0.85rem;
+}
+
+.segment-media-placeholder.clickable {
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.segment-media-placeholder.clickable:hover {
+  border-color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 5%, var(--bg-panel));
+}
+
+/* ---- Task switcher (multi-task) ---- */
+.segment-task-switcher {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.segment-task-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border-default);
+  border-radius: 50%;
+  background: var(--bg-panel);
+  cursor: pointer;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.segment-task-dot.active {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary);
+  color: #fff;
+}
+
+.segment-task-dot:hover:not(.active) {
+  border-color: var(--accent-primary);
+}
+
+.segment-task-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-left: 4px;
 }
 
 .segment-media-preview {

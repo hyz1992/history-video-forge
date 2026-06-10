@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 
@@ -228,11 +228,47 @@ const blockedItems = computed(() => {
   return items;
 });
 
+const showAllBlocked = ref(false);
+
+const visibleBlockedItems = computed(() =>
+  showAllBlocked.value ? blockedItems.value : blockedItems.value.slice(0, 10),
+);
+
+/** Full breakdown including types with 0 tasks (so nothing is hidden). */
+const ALL_TASK_TYPES = [
+  "口播音频", "字幕", "分镜图", "分镜视频", "运镜", "音效", "配乐",
+];
+
+const allTypeBreakdown = computed(() => {
+  const byLabel = new Map(taskTypeBreakdown.value.map(t => [t.label, t]));
+  return ALL_TASK_TYPES.map(label => {
+    const entry = byLabel.get(label);
+    return entry ?? { label, total: 0, completed: 0, planned: 0, failed: 0 };
+  });
+});
+
 /** Whether blocked items are all manual-upload type (no regeneration needed). */
 const blockedItemsAreUploadOnly = computed(() =>
   blockedItems.value.length > 0 &&
   blockedItems.value.every(i => i.reason === "待上传"),
 );
+
+/** Scroll to a specific task's segment card, then focus its task tab. */
+function scrollToTask(taskId: string) {
+  const task = assetTasks.value.find(t => t.task_id === taskId);
+  if (!task) return;
+  const segId = task.source_segment_id;
+  if (!segId) return;
+  const idx = segments.value.findIndex(s => s.segment_id === segId);
+  if (idx < 0) return;
+  const cards = document.querySelectorAll(".segment-asset-card");
+  const card = cards[idx] as HTMLElement | undefined;
+  if (!card) return;
+  card.scrollIntoView({ behavior: "smooth", block: "start" });
+  card.style.transition = "box-shadow 0.3s";
+  card.style.boxShadow = "0 0 0 3px var(--accent-primary)";
+  setTimeout(() => { card.style.boxShadow = ""; }, 2000);
+}
 const blockedReasonText = computed(() => {
   if (readiness.value === "ready_for_compose") return "";
   const items = blockedItems.value;
@@ -320,28 +356,6 @@ function handleConfirm() {
   ElMessage.success("资产确认完成，进入合成阶段");
   workspaceStore.setCurrentStep(COMPOSE_STEP_INDEX);
   const pid = projectStore.state.projectId; if (pid) router.push(`/projects/${pid}/compose`);
-}
-
-function scrollToFirstBlocked() {
-  const first = blockedItems.value[0];
-  if (!first) return;
-  const task = assetTasks.value.find(t => t.task_id === first.taskId);
-  const segId = task?.source_segment_id;
-  if (!segId) return;
-  const idx = segments.value.findIndex(s => s.segment_id === segId);
-  if (idx < 0) return;
-
-  // scrollIntoView traverses scrollable ancestors automatically.
-  const cards = document.querySelectorAll(".segment-asset-card");
-  if (!cards[idx]) return;
-  const card = cards[idx] as HTMLElement;
-
-  card.scrollIntoView({ behavior: "smooth", block: "start" });
-
-  // Brief highlight
-  card.style.transition = "box-shadow 0.3s";
-  card.style.boxShadow = "0 0 0 3px var(--accent-primary)";
-  setTimeout(() => { card.style.boxShadow = ""; }, 2000);
 }
 </script>
 
@@ -463,53 +477,77 @@ function scrollToFirstBlocked() {
           />
         </div>
 
-        <!-- Per-type breakdown -->
-        <div class="asset-overview-types">
-          <div v-for="item in taskTypeBreakdown" :key="item.label" class="asset-overview-type-row">
-            <span class="asset-overview-type-label">{{ item.label }}</span>
-            <span class="asset-overview-type-count">
-              <el-tag
-                :type="item.completed === item.total ? 'success' : item.failed > 0 ? 'danger' : 'warning'"
-                size="small"
-              >
-                {{ item.completed }}/{{ item.total }}
-              </el-tag>
-            </span>
+        <!-- Per-type breakdown: compact 2-col grid pills -->
+        <div class="asset-overview-types-v2">
+          <div
+            v-for="item in allTypeBreakdown"
+            :key="item.label"
+            class="asset-type-pill"
+            :class="{
+              'asset-type-pill--done': item.completed === item.total && item.total > 0,
+              'asset-type-pill--blocked': item.total > 0 && item.completed < item.total,
+              'asset-type-pill--none': item.total === 0,
+            }"
+          >
+            <span class="asset-type-pill-label">{{ item.label }}</span>
+            <span class="asset-type-pill-count">{{ item.completed }}/{{ item.total }}</span>
           </div>
         </div>
 
-        <!-- Blocked items -->
+        <!-- Blocked items: compact chip grid -->
         <div v-if="blockedItems.length > 0" class="asset-overview-blocked">
           <h4 class="asset-overview-blocked-title">
             待处理项（{{ blockedItems.length }}）
           </h4>
-          <ul class="asset-overview-blocked-list">
-            <li v-for="item in blockedItems" :key="item.taskId">
+          <div class="asset-blocked-chips">
+            <button
+              v-for="item in visibleBlockedItems"
+              :key="item.taskId"
+              class="asset-blocked-chip"
+              @click="scrollToTask(item.taskId)"
+            >
+              <span class="asset-blocked-chip-seg">{{ item.segmentId }}</span>
+              <span class="asset-blocked-chip-type">{{ item.type }}</span>
               <el-tag :type="item.reason === '生成失败' ? 'danger' : 'warning'" size="small">
                 {{ item.reason }}
               </el-tag>
-              <span>{{ item.segmentId }} · {{ item.type }}</span>
-            </li>
-          </ul>
+            </button>
+          </div>
+          <button
+            v-if="blockedItems.length > 10"
+            class="asset-blocked-expand"
+            @click="showAllBlocked = !showAllBlocked"
+          >
+            {{ showAllBlocked ? '收起' : '展开全部（' + blockedItems.length + '）' }}
+          </button>
         </div>
 
         <!-- Actions -->
         <div class="asset-overview-actions">
           <template v-if="blockedItems.length > 0">
-            <el-button
+            <el-popconfirm
               v-if="blockedItemsAreUploadOnly"
-              type="primary"
-              @click="scrollToFirstBlocked"
+              title="将重新生成全部资产（包括图片/视频），可能覆盖已上传的文件。确定继续？"
+              confirm-button-text="确定生成"
+              cancel-button-text="取消"
+              @confirm="handleGenerateFull"
             >
-              查看待上传项（{{ blockedItems.length }}）
-            </el-button>
+              <template #reference>
+                <el-button
+                  type="primary"
+                  :loading="assetsStore.state.isGenerating"
+                >
+                  {{ assetsStore.state.isGenerating ? "生成中..." : "生成缺失资产" }}
+                </el-button>
+              </template>
+            </el-popconfirm>
             <el-button
               v-else
               type="primary"
               :loading="assetsStore.state.isGenerating"
               @click="handleGenerateFull"
             >
-              {{ assetsStore.state.isGenerating ? "生成中..." : "重新生成全部资产" }}
+              {{ assetsStore.state.isGenerating ? "生成中..." : "生成缺失资产" }}
             </el-button>
             <span class="asset-overview-hint">
               也可在下方的分镜卡片中逐项上传或替换
@@ -521,25 +559,12 @@ function scrollToFirstBlocked() {
               @confirm="handleGenerateFull"
             >
               <template #reference>
-                <el-button :loading="assetsStore.state.isGenerating" type="warning" plain size="small">
+                <el-button type="danger" plain size="small">
                   重新生成全部资产
                 </el-button>
               </template>
             </el-popconfirm>
           </template>
-          <el-popconfirm
-            v-else
-            title="重新生成将覆盖所有已有产物（包括已上传的文件），确定继续？"
-            confirm-button-text="确定重建"
-            cancel-button-text="取消"
-            @confirm="handleGenerateFull"
-          >
-            <template #reference>
-              <el-button :loading="assetsStore.state.isGenerating" type="warning" plain>
-                重新生成全部资产
-              </el-button>
-            </template>
-          </el-popconfirm>
         </div>
       </div>
 
@@ -598,7 +623,7 @@ function scrollToFirstBlocked() {
           <el-button
             v-if="blockedItems.length > 0"
             size="small"
-            @click="scrollToFirstBlocked"
+            @click="scrollToTask(blockedItems[0].taskId)"
           >
             跳到下一项
           </el-button>
@@ -868,22 +893,46 @@ details[open] > .asset-global-toggle::before {
   color: var(--text-secondary);
 }
 
-.asset-overview-types {
+/* ---- Per-type pill grid ---- */
+.asset-overview-types-v2 {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: var(--space-sm);
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
 }
 
-.asset-overview-type-row {
+.asset-type-pill {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-sm);
+  padding: 6px 10px;
+  border-radius: var(--radius-card);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-default);
+  font-size: 0.85rem;
 }
 
-.asset-overview-type-label {
-  font-size: 0.88rem;
+.asset-type-pill--done {
+  border-color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 8%, var(--bg-panel));
+}
+
+.asset-type-pill--blocked {
+  border-color: var(--color-warning);
+  background: color-mix(in srgb, var(--color-warning) 8%, var(--bg-panel));
+}
+
+.asset-type-pill--none {
+  opacity: 0.5;
+}
+
+.asset-type-pill-label {
   color: var(--text-secondary);
+}
+
+.asset-type-pill-count {
+  font-weight: var(--font-subheading);
+  color: var(--text-heading);
+  font-variant-numeric: tabular-nums;
 }
 
 .asset-overview-blocked {
@@ -900,19 +949,49 @@ details[open] > .asset-global-toggle::before {
   color: var(--color-warning);
 }
 
-.asset-overview-blocked-list {
-  margin: 0;
-  padding-left: 1.2rem;
-  display: grid;
-  gap: var(--space-xs);
-  font-size: 0.88rem;
+.asset-blocked-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.asset-blocked-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  background: var(--bg-panel);
+  cursor: pointer;
+  font-size: 0.82rem;
+  transition: border-color 0.15s;
+}
+
+.asset-blocked-chip:hover {
+  border-color: var(--accent-primary);
+}
+
+.asset-blocked-chip-seg {
+  font-weight: var(--font-subheading);
+  color: var(--text-heading);
+}
+
+.asset-blocked-chip-type {
   color: var(--text-secondary);
 }
 
-.asset-overview-blocked-list li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
+.asset-blocked-expand {
+  background: none;
+  border: none;
+  color: var(--accent-primary);
+  cursor: pointer;
+  font-size: 0.82rem;
+  padding: 2px 0;
+}
+
+.asset-blocked-expand:hover {
+  text-decoration: underline;
 }
 
 .asset-overview-actions {
