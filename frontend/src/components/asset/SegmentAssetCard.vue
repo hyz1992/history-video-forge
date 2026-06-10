@@ -280,12 +280,7 @@ function nextMedia() {
           content="本镜头采用图片+运镜，无需视频"
           placement="top"
         >
-          <button
-            class="segment-media-tab disabled"
-            disabled
-          >
-            视频
-          </button>
+          <span class="segment-media-tab disabled">视频</span>
         </ElTooltip>
         <button
           v-else
@@ -295,6 +290,7 @@ function nextMedia() {
         >
           视频
         </button>
+        <span v-if="!hasVideoTasks" class="segment-media-tab-hint">图片+运镜</span>
       </div>
 
       <!-- No tasks of this type -->
@@ -583,6 +579,13 @@ function nextMedia() {
 .segment-media-tab.disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.segment-media-tab-hint {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  align-self: center;
+  margin-left: 2px;
 }
 
 .segment-info-action-hint {

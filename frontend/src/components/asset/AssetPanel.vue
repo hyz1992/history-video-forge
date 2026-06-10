@@ -317,8 +317,16 @@ function handleConfirm() {
 }
 
 function scrollToFirstBlocked() {
-  const card = document.querySelector(".asset-segments .segment-asset-card");
-  if (card) card.scrollIntoView({ behavior: "smooth", block: "start" });
+  const first = blockedItems.value[0];
+  if (!first) return;
+  // Find the segment index by matching source_segment_id from the blocked task
+  const task = assetTasks.value.find(t => t.task_id === first.taskId);
+  const segId = task?.source_segment_id;
+  if (!segId) return;
+  const idx = segments.value.findIndex(s => s.segment_id === segId);
+  if (idx < 0) return;
+  const cards = document.querySelectorAll(".asset-segments .segment-asset-card");
+  if (cards[idx]) cards[idx].scrollIntoView({ behavior: "smooth", block: "start" });
 }
 </script>
 
