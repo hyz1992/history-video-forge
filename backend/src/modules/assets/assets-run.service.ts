@@ -67,6 +67,11 @@ export interface RunAssetsGenerationInput {
   taskIds?: string[];
 }
 
+function isRealArtifact(art: Record<string, unknown>): boolean {
+  const uri = typeof art.file_uri === "string" ? art.file_uri : "";
+  return uri.length > 0 && !uri.startsWith("planned://");
+}
+
 function buildTraceSummary(input: {
   runId: string;
   validationDecision: string;
@@ -550,10 +555,10 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     manifest = engineResult.manifest;
   }
 
-  // Step 6d: If we started from an existing manifest, merge new
-  // results back into it at the task / route level.  This preserves
-  // completed assets and references for tasks that were NOT touched
-  // by this run.
+  // Step 6d: Merge new results into the existing manifest at the
+  // field and task level.  Visual fields update for touched segments;
+  // audio / subtitle / SFX / BGM references are preserved from the
+  // old manifest unless their provider tasks were actually re-executed.
   if (existingManifest) {
     const oldExecs = (Array.isArray(existingManifest.executions) ? existingManifest.executions : []) as Record<string, unknown>[];
     const oldArtifacts = (Array.isArray(existingManifest.artifacts) ? existingManifest.artifacts : []) as Record<string, unknown>[];
@@ -562,67 +567,102 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     const newExecTaskIds = new Set(manifest.executions.map(e => e.task_id));
     const newArtifactIds = new Set(manifest.artifacts.map(a => a.artifact_id));
 
-    // Collect which segment_ids were touched by the new executions.
-    const touchedSegmentIds = new Set<string>();
-    for (const exec of manifest.executions) {
-      touchedSegmentIds.add(exec.task_id);
+    // Map: task_id → source_segment_id and task_type
+    const planTasks = (normalizedTts.assetPlan.tasks ?? []) as Array<{
+      task_id: string; source_segment_id: string | null; task_type: string;
+    }>;
+    const taskMeta = new Map<string, { segId: string; type: string }>();
+    for (const t of planTasks) {
+      if (t.source_segment_id) taskMeta.set(t.task_id, { segId: t.source_segment_id, type: t.task_type });
     }
 
-    // Build a map: segment_id → new route (from the fresh manifest).
+    // Which segments and task types were touched by this run?
+    const touchedSegments = new Set<string>();
+    const touchedTaskTypes = new Set<string>();
+    for (const tid of newExecTaskIds) {
+      const meta = taskMeta.get(tid);
+      if (meta) {
+        touchedSegments.add(meta.segId);
+        touchedTaskTypes.add(meta.type);
+      }
+    }
+
+    // ---- segment_routes: field-level merge for touched segments ----
+    const VISUAL_ROUTE_FIELDS = new Set([
+      "primary_visual_artifact_id", "visual_route_type",
+      "image_route", "video_route",
+    ]);
+    const oldRouteBySegment = new Map<string, Record<string, unknown>>();
+    for (const r of oldRoutes) {
+      const sid = r.segment_id as string | undefined;
+      if (sid) oldRouteBySegment.set(sid, r);
+    }
+
     const newRoutes = (Array.isArray((manifest as Record<string, unknown>).segment_routes)
       ? (manifest as Record<string, unknown>).segment_routes as Record<string, unknown>[]
       : []) as Record<string, unknown>[];
-    const newRouteBySegment = new Map<string, Record<string, unknown>>();
-    for (const r of newRoutes) {
-      const sid = r.segment_id as string | undefined;
-      if (sid) newRouteBySegment.set(sid, r);
-    }
+    const mergedRoutes: Record<string, unknown>[] = [];
 
-    // For each task touched by this run, find its source_segment_id
-    // via the asset plan, and mark that segment as touched.
-    const planTasks = (normalizedTts.assetPlan.tasks ?? []) as Array<{ task_id: string; source_segment_id: string | null }>;
-    const taskToSegment = new Map<string, string>();
-    for (const t of planTasks) {
-      if (t.source_segment_id) taskToSegment.set(t.task_id, t.source_segment_id);
-    }
-    const touchedSegments = new Set<string>();
-    for (const tid of newExecTaskIds) {
-      const sid = taskToSegment.get(tid);
-      if (sid) touchedSegments.add(sid);
-    }
+    for (const newRoute of newRoutes) {
+      const sid = newRoute.segment_id as string | undefined;
+      const oldRoute = sid ? oldRouteBySegment.get(sid) : undefined;
 
-    // Merge segment_routes: use new route for touched segments, old for the rest.
-    const mergedRoutes = oldRoutes.filter(
-      r => !touchedSegments.has(r.segment_id as string),
-    );
-    for (const r of newRoutes) {
-      if (touchedSegments.has(r.segment_id as string)) {
-        mergedRoutes.push(r);
-      }
-    }
-    // Also keep any new routes for segments not in the old list.
-    for (const r of newRoutes) {
-      if (!mergedRoutes.some(mr => mr.segment_id === r.segment_id)) {
-        mergedRoutes.push(r);
+      if (!oldRoute || !touchedSegments.has(sid!)) {
+        // Untouched segment: keep old route, or use new if no old exists.
+        mergedRoutes.push(oldRoute ?? newRoute);
+      } else {
+        // Touched segment: visual fields from new, everything else from old.
+        const merged: Record<string, unknown> = { ...oldRoute };
+        for (const [key, value] of Object.entries(newRoute)) {
+          if (VISUAL_ROUTE_FIELDS.has(key) || !(key in merged)) {
+            merged[key] = value;
+          }
+        }
+        mergedRoutes.push(merged);
       }
     }
 
-    // Merge executions: keep old for untouched tasks, use new for touched.
+    // ---- executions: old untouched + new touched ----
     const mergedExecs = [
       ...oldExecs.filter(e => !newExecTaskIds.has(e.task_id as string)),
       ...manifest.executions,
     ];
 
-    // Merge artifacts: keep old that weren't replaced.
+    // ---- artifacts: prefer old when it has a real file_uri ----
+    const oldArtById = new Map<string, Record<string, unknown>>();
+    for (const a of oldArtifacts) {
+      oldArtById.set(a.artifact_id as string, a);
+    }
     const mergedArtifacts = [
       ...oldArtifacts.filter(a => !newArtifactIds.has(a.artifact_id as string)),
-      ...manifest.artifacts,
     ];
+    for (const newArt of manifest.artifacts) {
+      const oldArt = oldArtById.get(newArt.artifact_id as string);
+      if (oldArt && isRealArtifact(oldArt) && !isRealArtifact(newArt as Record<string, unknown>)) {
+        // Old artifact has a real file; new one is a planned placeholder — keep old.
+        mergedArtifacts.push(oldArt);
+      } else {
+        mergedArtifacts.push(newArt as unknown as Record<string, unknown>);
+      }
+    }
 
-    // Merge audio_summary: old values take priority for fields the new
-    // run didn't explicitly change (e.g. tts_merged_artifact_id).
+    // ---- audio_summary: field-level merge based on touched task types ----
     const newAudio = ((manifest as Record<string, unknown>).audio_summary ?? {}) as Record<string, unknown>;
-    const mergedAudio = { ...newAudio, ...oldAudio };
+    const AUDIO_FIELDS_BY_TASK_TYPE: Record<string, string[]> = {
+      tts_audio: ["tts_merged_artifact_id", "tts_total_duration_sec", "tts_chunk_artifact_ids", "tts_chunk_routes"],
+      subtitle_track: ["subtitle_artifact_id"],
+      bgm_cue: ["bgm_placements"],
+      sfx_cue: ["sfx_artifact_ids"],
+    };
+    const mergedAudio: Record<string, unknown> = { ...oldAudio };
+    for (const [taskType, fields] of Object.entries(AUDIO_FIELDS_BY_TASK_TYPE)) {
+      if (touchedTaskTypes.has(taskType)) {
+        for (const f of fields) {
+          if (f in newAudio) mergedAudio[f] = newAudio[f];
+        }
+      }
+    }
+    // For untouched audio fields, keep old values (already in mergedAudio from spread).
 
     manifest.executions = mergedExecs as typeof manifest.executions;
     manifest.artifacts = mergedArtifacts as typeof manifest.artifacts;

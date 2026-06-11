@@ -1112,5 +1112,36 @@ describe("execution engine integration", () => {
     const secondReadiness = (secondBody.manifest as Record<string, unknown>).readiness as string;
     // If first was blocked, second shouldn't become a worse state
     expect(secondReadiness).toBeDefined();
+
+    // Touched segment keeps its subtitle / sfx references
+    const oldTouchedRoute = firstRoutes.find(r => r.segment_id === touchedSegId);
+    const newTouchedRoute = secondRoutes.find(r => r.segment_id === touchedSegId);
+    if (oldTouchedRoute && newTouchedRoute) {
+      if (oldTouchedRoute.subtitle_artifact_id) {
+        expect(newTouchedRoute.subtitle_artifact_id).toBe(oldTouchedRoute.subtitle_artifact_id);
+      }
+      const oldSfx = (Array.isArray((oldTouchedRoute as Record<string, unknown>).sfx_artifact_ids)
+        ? (oldTouchedRoute as Record<string, unknown>).sfx_artifact_ids as string[]
+        : []);
+      const newSfx = (Array.isArray((newTouchedRoute as Record<string, unknown>).sfx_artifact_ids)
+        ? (newTouchedRoute as Record<string, unknown>).sfx_artifact_ids as string[]
+        : []);
+      for (const sfxId of oldSfx) {
+        expect(newSfx).toContain(sfxId);
+      }
+    }
+
+    // Real TTS artifact file_uri must not be replaced with planned://
+    const oldTtsArtifact = firstBody.manifest.artifacts.find(
+      a => a.artifact_type === "audio" && (a.file_uri ?? "").length > 0 && !(a.file_uri ?? "").startsWith("planned://"),
+    );
+    if (oldTtsArtifact) {
+      const newTtsArtifact = secondBody.manifest.artifacts.find(
+        a => a.artifact_id === oldTtsArtifact.artifact_id,
+      );
+      if (newTtsArtifact) {
+        expect(newTtsArtifact.file_uri).toBe(oldTtsArtifact.file_uri);
+      }
+    }
   });
 });
