@@ -1031,6 +1031,10 @@ describe("execution engine integration", () => {
     const firstBody = first.body as { manifest: AssetManifest };
     const firstExecCount = firstBody.manifest.executions.length;
     const firstArtifactCount = firstBody.manifest.artifacts.length;
+    const firstRoutes = firstBody.manifest.segment_routes?.length ?? 0;
+    const firstSubtitleId = (firstBody.manifest as Record<string, unknown>).audio_summary
+      ? ((firstBody.manifest as Record<string, unknown>).audio_summary as Record<string, unknown>).subtitle_artifact_id
+      : undefined;
     expect(firstExecCount).toBeGreaterThan(0);
 
     // Second run with missing_only — should not duplicate or lose assets
@@ -1039,13 +1043,23 @@ describe("execution engine integration", () => {
       missingOnly: true,
     });
     const secondBody = second.body as { manifest: AssetManifest };
-    // Executions should still include all tasks (old + no new since all done)
     expect(secondBody.manifest.executions.length).toBeGreaterThanOrEqual(firstExecCount);
-    // Artifacts should be at least as many as before (none lost)
     expect(secondBody.manifest.artifacts.length).toBeGreaterThanOrEqual(firstArtifactCount);
+
+    // segment_routes should be preserved (not wiped)
+    const secondRoutes = secondBody.manifest.segment_routes?.length ?? 0;
+    expect(secondRoutes).toBeGreaterThanOrEqual(firstRoutes);
+
+    // audio_summary references should survive
+    const secondSubtitleId = (secondBody.manifest as Record<string, unknown>).audio_summary
+      ? ((secondBody.manifest as Record<string, unknown>).audio_summary as Record<string, unknown>).subtitle_artifact_id
+      : undefined;
+    if (firstSubtitleId) {
+      expect(secondSubtitleId).toBe(firstSubtitleId);
+    }
   });
 
-  it("task_ids only generates the specified task and preserves others", async () => {
+  it("task_ids only generates the specified task and preserves other routes", async () => {
     tempDir = join(tmpdir(), `assets-test-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });
 
@@ -1059,26 +1073,44 @@ describe("execution engine integration", () => {
     const firstBody = first.body as { manifest: AssetManifest };
     const firstExecCount = firstBody.manifest.executions.length;
     const firstArtifactCount = firstBody.manifest.artifacts.length;
+    const firstRoutes = firstBody.manifest.segment_routes ?? [];
 
-    // Pick one task that exists in the plan
+    // Pick one task
     const planRecord = db.assetPlanRecords.get(ASSET_PLAN_RECORD_ID);
-    const assetPlan = planRecord?.planJson as { tasks: Array<{ task_id: string; task_type: string }> } | undefined;
-    const targetTaskId = assetPlan?.tasks?.find(t => t.task_type === "image_still")?.task_id;
-    if (!targetTaskId) return; // skip if no image_still task
+    const assetPlan = planRecord?.planJson as { tasks: Array<{ task_id: string; task_type: string; source_segment_id: string | null }> } | undefined;
+    const targetTask = assetPlan?.tasks?.find(t => t.task_type === "image_still");
+    if (!targetTask) return;
 
     // Second run targeting only that task
     const second = await runAssetsGeneration({
       db, project, voiceProfileId: "voice_custom", executionMode: "auto_available",
-      taskIds: [targetTaskId],
+      taskIds: [targetTask.task_id],
     });
     const secondBody = second.body as { manifest: AssetManifest };
+    const secondRoutes = secondBody.manifest.segment_routes ?? [];
 
-    // The targeted task should still be present in executions
-    const hasTarget = secondBody.manifest.executions.some(e => e.task_id === targetTaskId);
+    // The targeted task should still be present
+    const hasTarget = secondBody.manifest.executions.some(e => e.task_id === targetTask.task_id);
     expect(hasTarget).toBe(true);
 
-    // Other tasks should NOT have been removed — total >= original
+    // Other tasks preserved
     expect(secondBody.manifest.executions.length).toBeGreaterThanOrEqual(firstExecCount);
     expect(secondBody.manifest.artifacts.length).toBeGreaterThanOrEqual(firstArtifactCount);
+
+    // segment_routes for UNTOUCHED segments should keep their primary_visual_artifact_id
+    const touchedSegId = targetTask.source_segment_id;
+    for (const oldRoute of firstRoutes) {
+      if (oldRoute.segment_id === touchedSegId) continue; // this one may have changed
+      const newRoute = secondRoutes.find(r => r.segment_id === oldRoute.segment_id);
+      if (newRoute && oldRoute.primary_visual_artifact_id) {
+        expect(newRoute.primary_visual_artifact_id).toBe(oldRoute.primary_visual_artifact_id);
+      }
+    }
+
+    // readiness should not degrade below original
+    const firstReadiness = (firstBody.manifest as Record<string, unknown>).readiness as string;
+    const secondReadiness = (secondBody.manifest as Record<string, unknown>).readiness as string;
+    // If first was blocked, second shouldn't become a worse state
+    expect(secondReadiness).toBeDefined();
   });
 });

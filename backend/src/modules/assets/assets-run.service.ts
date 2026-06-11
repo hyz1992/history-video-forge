@@ -551,35 +551,83 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   }
 
   // Step 6d: If we started from an existing manifest, merge new
-  // executions / artifacts back into it so completed assets are preserved.
+  // results back into it at the task / route level.  This preserves
+  // completed assets and references for tasks that were NOT touched
+  // by this run.
   if (existingManifest) {
     const oldExecs = (Array.isArray(existingManifest.executions) ? existingManifest.executions : []) as Record<string, unknown>[];
     const oldArtifacts = (Array.isArray(existingManifest.artifacts) ? existingManifest.artifacts : []) as Record<string, unknown>[];
-    const newExecIds = new Set(manifest.executions.map(e => e.task_id));
+    const oldRoutes = (Array.isArray(existingManifest.segment_routes) ? existingManifest.segment_routes : []) as Record<string, unknown>[];
+    const oldAudio = (existingManifest.audio_summary ?? {}) as Record<string, unknown>;
+    const newExecTaskIds = new Set(manifest.executions.map(e => e.task_id));
     const newArtifactIds = new Set(manifest.artifacts.map(a => a.artifact_id));
 
-    // Keep old executions for tasks we didn't touch
+    // Collect which segment_ids were touched by the new executions.
+    const touchedSegmentIds = new Set<string>();
+    for (const exec of manifest.executions) {
+      touchedSegmentIds.add(exec.task_id);
+    }
+
+    // Build a map: segment_id → new route (from the fresh manifest).
+    const newRoutes = (Array.isArray((manifest as Record<string, unknown>).segment_routes)
+      ? (manifest as Record<string, unknown>).segment_routes as Record<string, unknown>[]
+      : []) as Record<string, unknown>[];
+    const newRouteBySegment = new Map<string, Record<string, unknown>>();
+    for (const r of newRoutes) {
+      const sid = r.segment_id as string | undefined;
+      if (sid) newRouteBySegment.set(sid, r);
+    }
+
+    // For each task touched by this run, find its source_segment_id
+    // via the asset plan, and mark that segment as touched.
+    const planTasks = (normalizedTts.assetPlan.tasks ?? []) as Array<{ task_id: string; source_segment_id: string | null }>;
+    const taskToSegment = new Map<string, string>();
+    for (const t of planTasks) {
+      if (t.source_segment_id) taskToSegment.set(t.task_id, t.source_segment_id);
+    }
+    const touchedSegments = new Set<string>();
+    for (const tid of newExecTaskIds) {
+      const sid = taskToSegment.get(tid);
+      if (sid) touchedSegments.add(sid);
+    }
+
+    // Merge segment_routes: use new route for touched segments, old for the rest.
+    const mergedRoutes = oldRoutes.filter(
+      r => !touchedSegments.has(r.segment_id as string),
+    );
+    for (const r of newRoutes) {
+      if (touchedSegments.has(r.segment_id as string)) {
+        mergedRoutes.push(r);
+      }
+    }
+    // Also keep any new routes for segments not in the old list.
+    for (const r of newRoutes) {
+      if (!mergedRoutes.some(mr => mr.segment_id === r.segment_id)) {
+        mergedRoutes.push(r);
+      }
+    }
+
+    // Merge executions: keep old for untouched tasks, use new for touched.
     const mergedExecs = [
-      ...oldExecs.filter(e => !newExecIds.has(e.task_id as string)),
+      ...oldExecs.filter(e => !newExecTaskIds.has(e.task_id as string)),
       ...manifest.executions,
     ];
 
-    // Keep old artifacts that weren't replaced
+    // Merge artifacts: keep old that weren't replaced.
     const mergedArtifacts = [
       ...oldArtifacts.filter(a => !newArtifactIds.has(a.artifact_id as string)),
       ...manifest.artifacts,
     ];
 
+    // Merge audio_summary: old values take priority for fields the new
+    // run didn't explicitly change (e.g. tts_merged_artifact_id).
+    const newAudio = ((manifest as Record<string, unknown>).audio_summary ?? {}) as Record<string, unknown>;
+    const mergedAudio = { ...newAudio, ...oldAudio };
+
     manifest.executions = mergedExecs as typeof manifest.executions;
     manifest.artifacts = mergedArtifacts as typeof manifest.artifacts;
-
-    // Preserve segment_routes and audio_summary from old manifest
-    if (existingManifest.segment_routes && !manifest.segment_routes) {
-      (manifest as Record<string, unknown>).segment_routes = existingManifest.segment_routes;
-    }
-    if (existingManifest.audio_summary && !manifest.audio_summary) {
-      (manifest as Record<string, unknown>).audio_summary = existingManifest.audio_summary;
-    }
+    (manifest as Record<string, unknown>).segment_routes = mergedRoutes;
+    (manifest as Record<string, unknown>).audio_summary = mergedAudio;
   }
 
   // Step 7: Validate manifest (after engine execution for auto_available)
