@@ -573,8 +573,11 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
         // Same segment exists in old manifest — inject dependency fields.
         const merged = { ...newRoute };
         for (const field of DEPENDENCY_ROUTE_FIELDS) {
-          if (field in oldRoute && !(field in merged)) {
-            merged[field] = oldRoute[field];
+          const oldVal = (oldRoute as Record<string, unknown>)[field];
+          const newVal = (merged as Record<string, unknown>)[field];
+          // Fill null / empty / undefined values from the old route.
+          if (oldVal != null && oldVal !== "" && (newVal == null || newVal === "")) {
+            (merged as Record<string, unknown>)[field] = oldVal;
           }
         }
         mergedPreRoutes.push(merged);

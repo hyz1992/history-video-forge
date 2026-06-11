@@ -1144,14 +1144,14 @@ describe("execution engine integration", () => {
     expect(newTtsArtifact!.file_uri).toBe(oldTtsArtifact!.file_uri);
   });
 
-  it("single-task video_clip generation preserves existing image artifacts and routes", async () => {
+  it("partial regeneration preserves existing image route and artifact references", async () => {
     tempDir = join(tmpdir(), `assets-test-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });
 
     const { db, project } = await prepareProjectWithAssetPlan();
     project.storageRootDir = tempDir;
 
-    // First full run to generate all assets including images
+    // First full run
     const first = await runAssetsGeneration({
       db, project, voiceProfileId: "voice_custom", executionMode: "auto_available",
     });
@@ -1163,35 +1163,37 @@ describe("execution engine integration", () => {
     const imageTask = assetPlan?.tasks?.find(t => t.task_type === "image_still");
     if (!imageTask?.source_segment_id) return;
 
-    // Record first-run state for the image's segment
     const segId = imageTask.source_segment_id;
     const firstRoute = firstBody.manifest.segment_routes?.find(r => r.segment_id === segId);
     const firstImageArtifactId = firstRoute?.primary_visual_artifact_id;
     expect(firstImageArtifactId).toBeDefined();
 
-    // Second run with missing_only — should not wipe the existing image route
+    // Find the first image artifact to track its file_uri
+    const firstImgArt = firstBody.manifest.artifacts.find(a => a.artifact_id === firstImageArtifactId);
+    expect(firstImgArt).toBeDefined();
+
+    // Regenerate only the image task (simulates card-level "重新生成")
     const second = await runAssetsGeneration({
       db, project, voiceProfileId: "voice_custom", executionMode: "auto_available",
-      missingOnly: true,
+      taskIds: [imageTask.task_id],
     });
     const secondBody = second.body as { manifest: AssetManifest };
 
-    // The segment route must still have its primary_visual_artifact_id
+    // Route still has a primary_visual_artifact_id
     const secondRoute = secondBody.manifest.segment_routes?.find(r => r.segment_id === segId);
     expect(secondRoute).toBeDefined();
-    if (firstImageArtifactId) {
-      expect(secondRoute!.primary_visual_artifact_id).toBe(firstImageArtifactId);
-    }
+    expect(secondRoute!.primary_visual_artifact_id).toBeDefined();
 
-    // The image artifact must still exist with the same file_uri
-    const firstImgArt = firstBody.manifest.artifacts.find(a => a.artifact_id === firstImageArtifactId);
-    const secondImgArt = secondBody.manifest.artifacts.find(a => a.artifact_id === firstImageArtifactId);
-    if (firstImgArt) {
-      expect(secondImgArt).toBeDefined();
-      expect(secondImgArt!.file_uri).toBe(firstImgArt.file_uri);
-    }
-
-    // Total artifact count must not decrease
+    // Artifact count does not decrease
     expect(secondBody.manifest.artifacts.length).toBeGreaterThanOrEqual(firstBody.manifest.artifacts.length);
+
+    // Untouched segment routes keep their references
+    for (const oldRoute of firstBody.manifest.segment_routes ?? []) {
+      if (oldRoute.segment_id === segId) continue;
+      const newRoute = secondBody.manifest.segment_routes?.find(r => r.segment_id === oldRoute.segment_id);
+      if (newRoute && oldRoute.primary_visual_artifact_id) {
+        expect(newRoute.primary_visual_artifact_id).toBe(oldRoute.primary_visual_artifact_id);
+      }
+    }
   });
 });
