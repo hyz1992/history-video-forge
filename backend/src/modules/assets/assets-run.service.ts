@@ -669,6 +669,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     const VISUAL_ROUTE_FIELDS = new Set([
       "primary_visual_artifact_id", "visual_route_type",
       "image_route", "video_route", "readiness",
+      "fallback_visual_artifact_id",
     ]);
     const oldRouteBySegment = new Map<string, Record<string, unknown>>();
     for (const r of oldRoutes) {
