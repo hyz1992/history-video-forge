@@ -485,23 +485,30 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     executionOptions,
   });
 
-  // Step 6a: Filter tasks for missing-only / task-ids modes
+  // Step 6a: For missing_only / task_ids modes, load the existing manifest
+  // so we can merge new results into it rather than replacing everything.
+  let existingManifest: Record<string, unknown> | null = null;
   if (input.missingOnly || (input.taskIds && input.taskIds.length > 0)) {
-    const taskIdSet = input.taskIds ? new Set(input.taskIds) : null;
+    if (project.activeAssetManifestRecordId) {
+      const existingRecord = db.assetManifestRecords.get(project.activeAssetManifestRecordId);
+      if (existingRecord) {
+        existingManifest = existingRecord.manifestJson as Record<string, unknown>;
+      }
+    }
+  }
 
-    // Check existing manifest for already-completed tasks
-    let existingCompletedIds = new Set<string>();
-    if (input.missingOnly && project.activeAssetManifestRecordId) {
-      const existingManifest = db.assetManifestRecords.get(project.activeAssetManifestRecordId);
-      if (existingManifest) {
-        const existingExecs = (existingManifest.manifestJson as Record<string, unknown>).executions;
-        if (Array.isArray(existingExecs)) {
-          for (const exec of existingExecs) {
-            if (exec && typeof exec === "object") {
-              const status = (exec as Record<string, unknown>).status;
-              if (status === "completed" || status === "accepted") {
-                existingCompletedIds.add((exec as Record<string, unknown>).task_id as string);
-              }
+  // Step 6b: Determine which tasks to actually execute in this run.
+  const taskIdSet = input.taskIds ? new Set(input.taskIds) : null;
+  if (input.missingOnly || taskIdSet) {
+    const existingCompletedIds = new Set<string>();
+    if (existingManifest) {
+      const existingExecs = existingManifest.executions;
+      if (Array.isArray(existingExecs)) {
+        for (const exec of existingExecs) {
+          if (exec && typeof exec === "object") {
+            const s = (exec as Record<string, unknown>).status;
+            if (s === "completed" || s === "accepted") {
+              existingCompletedIds.add((exec as Record<string, unknown>).task_id as string);
             }
           }
         }
@@ -509,21 +516,19 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     }
 
     manifest.executions = manifest.executions.filter((exec) => {
-      if (existingCompletedIds.has(exec.task_id)) return false; // already done
-      if (taskIdSet && !taskIdSet.has(exec.task_id)) return false; // not in requested set
+      if (existingCompletedIds.has(exec.task_id)) return false;
+      if (taskIdSet && !taskIdSet.has(exec.task_id)) return false;
       return true;
     });
   }
 
-  // Step 6b: Execution engine integration
+  // Step 6c: Execution engine integration
   const runId = `assets_run_${db.generateId()}`;
   let executionManifestRecordId: string | null = null;
 
   if (executionOptions.execution_mode === "dry_run") {
-    // dry_run: manifest-only, strip all placeholder artifacts
     manifest.artifacts = [];
   } else if (executionOptions.execution_mode === "auto_available") {
-    // auto_available: execute with fake providers unless a real provider mode is explicit.
     const registry = buildProviderRegistry({
       db,
       providerMode: input.providerMode,
@@ -543,6 +548,38 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     });
 
     manifest = engineResult.manifest;
+  }
+
+  // Step 6d: If we started from an existing manifest, merge new
+  // executions / artifacts back into it so completed assets are preserved.
+  if (existingManifest) {
+    const oldExecs = (Array.isArray(existingManifest.executions) ? existingManifest.executions : []) as Record<string, unknown>[];
+    const oldArtifacts = (Array.isArray(existingManifest.artifacts) ? existingManifest.artifacts : []) as Record<string, unknown>[];
+    const newExecIds = new Set(manifest.executions.map(e => e.task_id));
+    const newArtifactIds = new Set(manifest.artifacts.map(a => a.artifact_id));
+
+    // Keep old executions for tasks we didn't touch
+    const mergedExecs = [
+      ...oldExecs.filter(e => !newExecIds.has(e.task_id as string)),
+      ...manifest.executions,
+    ];
+
+    // Keep old artifacts that weren't replaced
+    const mergedArtifacts = [
+      ...oldArtifacts.filter(a => !newArtifactIds.has(a.artifact_id as string)),
+      ...manifest.artifacts,
+    ];
+
+    manifest.executions = mergedExecs as typeof manifest.executions;
+    manifest.artifacts = mergedArtifacts as typeof manifest.artifacts;
+
+    // Preserve segment_routes and audio_summary from old manifest
+    if (existingManifest.segment_routes && !manifest.segment_routes) {
+      (manifest as Record<string, unknown>).segment_routes = existingManifest.segment_routes;
+    }
+    if (existingManifest.audio_summary && !manifest.audio_summary) {
+      (manifest as Record<string, unknown>).audio_summary = existingManifest.audio_summary;
+    }
   }
 
   // Step 7: Validate manifest (after engine execution for auto_available)

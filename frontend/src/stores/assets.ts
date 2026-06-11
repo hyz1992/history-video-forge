@@ -256,13 +256,13 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
     if (!projectId) return;
 
     state.isGenerating = true;
-    state.loadError = null;
 
     try {
       await input.api.generateSingleTask(projectId, taskId);
       await loadProject();
     } catch (error) {
-      state.loadError = toErrorMessage(error);
+      // Local error only — do NOT set global loadError
+      throw error;
     } finally {
       state.isGenerating = false;
     }

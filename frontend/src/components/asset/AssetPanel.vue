@@ -370,9 +370,12 @@ function handleUploadFile(taskId: string, file: File) {
 }
 
 async function handleGenerateTask(taskId: string) {
-  await assetsStore.generateSingleTask(taskId);
-  if (!assetsStore.state.loadError) {
-    ElMessage.success("单任务生成完成");
+  try {
+    await assetsStore.generateSingleTask(taskId);
+    ElMessage.success("生成完成");
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "生成失败";
+    ElMessage.error("单任务生成失败：" + msg);
   }
 }
 

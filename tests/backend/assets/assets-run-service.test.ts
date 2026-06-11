@@ -1016,4 +1016,69 @@ describe("execution engine integration", () => {
     expect(body.manifest.artifacts.length).toBeGreaterThan(0);
     expect(db.assetProviderJobRecords.size).toBeGreaterThan(0);
   });
+
+  it("missing_only preserves existing completions and only fills gaps", async () => {
+    tempDir = join(tmpdir(), `assets-test-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+
+    const { db, project } = await prepareProjectWithAssetPlan();
+    project.storageRootDir = tempDir;
+
+    // First full run
+    const first = await runAssetsGeneration({
+      db, project, voiceProfileId: "voice_custom", executionMode: "auto_available",
+    });
+    const firstBody = first.body as { manifest: AssetManifest };
+    const firstExecCount = firstBody.manifest.executions.length;
+    const firstArtifactCount = firstBody.manifest.artifacts.length;
+    expect(firstExecCount).toBeGreaterThan(0);
+
+    // Second run with missing_only — should not duplicate or lose assets
+    const second = await runAssetsGeneration({
+      db, project, voiceProfileId: "voice_custom", executionMode: "auto_available",
+      missingOnly: true,
+    });
+    const secondBody = second.body as { manifest: AssetManifest };
+    // Executions should still include all tasks (old + no new since all done)
+    expect(secondBody.manifest.executions.length).toBeGreaterThanOrEqual(firstExecCount);
+    // Artifacts should be at least as many as before (none lost)
+    expect(secondBody.manifest.artifacts.length).toBeGreaterThanOrEqual(firstArtifactCount);
+  });
+
+  it("task_ids only generates the specified task and preserves others", async () => {
+    tempDir = join(tmpdir(), `assets-test-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+
+    const { db, project } = await prepareProjectWithAssetPlan();
+    project.storageRootDir = tempDir;
+
+    // First full run
+    const first = await runAssetsGeneration({
+      db, project, voiceProfileId: "voice_custom", executionMode: "auto_available",
+    });
+    const firstBody = first.body as { manifest: AssetManifest };
+    const firstExecCount = firstBody.manifest.executions.length;
+    const firstArtifactCount = firstBody.manifest.artifacts.length;
+
+    // Pick one task that exists in the plan
+    const planRecord = db.assetPlanRecords.get(ASSET_PLAN_RECORD_ID);
+    const assetPlan = planRecord?.planJson as { tasks: Array<{ task_id: string; task_type: string }> } | undefined;
+    const targetTaskId = assetPlan?.tasks?.find(t => t.task_type === "image_still")?.task_id;
+    if (!targetTaskId) return; // skip if no image_still task
+
+    // Second run targeting only that task
+    const second = await runAssetsGeneration({
+      db, project, voiceProfileId: "voice_custom", executionMode: "auto_available",
+      taskIds: [targetTaskId],
+    });
+    const secondBody = second.body as { manifest: AssetManifest };
+
+    // The targeted task should still be present in executions
+    const hasTarget = secondBody.manifest.executions.some(e => e.task_id === targetTaskId);
+    expect(hasTarget).toBe(true);
+
+    // Other tasks should NOT have been removed — total >= original
+    expect(secondBody.manifest.executions.length).toBeGreaterThanOrEqual(firstExecCount);
+    expect(secondBody.manifest.artifacts.length).toBeGreaterThanOrEqual(firstArtifactCount);
+  });
 });
