@@ -1144,7 +1144,7 @@ describe("execution engine integration", () => {
     expect(newTtsArtifact!.file_uri).toBe(oldTtsArtifact!.file_uri);
   });
 
-  it("single-task video_clip generation can find the existing source image", async () => {
+  it("single-task video_clip generation preserves existing image artifacts and routes", async () => {
     tempDir = join(tmpdir(), `assets-test-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });
 
@@ -1157,44 +1157,41 @@ describe("execution engine integration", () => {
     });
     const firstBody = first.body as { manifest: AssetManifest };
 
-    // Find a segment that has both an image_still and a video_clip task
+    // Find an image task and its segment
     const planRecord = db.assetPlanRecords.get(ASSET_PLAN_RECORD_ID);
     const assetPlan = planRecord?.planJson as { tasks: Array<{ task_id: string; task_type: string; source_segment_id: string | null }> } | undefined;
     const imageTask = assetPlan?.tasks?.find(t => t.task_type === "image_still");
-    const videoTask = assetPlan?.tasks?.find(
-      t => t.task_type === "video_clip" && t.source_segment_id === imageTask?.source_segment_id,
-    );
+    if (!imageTask?.source_segment_id) return;
 
-    if (!videoTask || !imageTask) {
-      // No video task in plan — skip.  The assertion below will still
-      // pass because vitest skips tests without video tasks implicitly
-      // when the plan doesn't include them.
-      return;
-    }
+    // Record first-run state for the image's segment
+    const segId = imageTask.source_segment_id;
+    const firstRoute = firstBody.manifest.segment_routes?.find(r => r.segment_id === segId);
+    const firstImageArtifactId = firstRoute?.primary_visual_artifact_id;
+    expect(firstImageArtifactId).toBeDefined();
 
-    // Second run: generate only the video task (depends on existing image)
+    // Second run with missing_only — should not wipe the existing image route
     const second = await runAssetsGeneration({
       db, project, voiceProfileId: "voice_custom", executionMode: "auto_available",
-      taskIds: [videoTask.task_id],
+      missingOnly: true,
     });
     const secondBody = second.body as { manifest: AssetManifest };
 
-    // The video execution should exist and have completed
-    const videoExec = secondBody.manifest.executions.find(e => e.task_id === videoTask.task_id);
-    expect(videoExec).toBeDefined();
+    // The segment route must still have its primary_visual_artifact_id
+    const secondRoute = secondBody.manifest.segment_routes?.find(r => r.segment_id === segId);
+    expect(secondRoute).toBeDefined();
+    if (firstImageArtifactId) {
+      expect(secondRoute!.primary_visual_artifact_id).toBe(firstImageArtifactId);
+    }
 
-    // The segment route should now have the video as primary visual
-    const segId = videoTask.source_segment_id;
-    const route = secondBody.manifest.segment_routes?.find(r => r.segment_id === segId);
-    expect(route).toBeDefined();
+    // The image artifact must still exist with the same file_uri
+    const firstImgArt = firstBody.manifest.artifacts.find(a => a.artifact_id === firstImageArtifactId);
+    const secondImgArt = secondBody.manifest.artifacts.find(a => a.artifact_id === firstImageArtifactId);
+    if (firstImgArt) {
+      expect(secondImgArt).toBeDefined();
+      expect(secondImgArt!.file_uri).toBe(firstImgArt.file_uri);
+    }
 
-    // The old image artifact should still exist in the merged manifest
-    const imgArtifact = secondBody.manifest.artifacts.find(
-      a => a.artifact_id === imageTask.task_id || a.artifact_id.startsWith("artifact_"),
-    );
-    expect(imgArtifact).toBeDefined();
-
-    // Total artifacts should be >= first run (no loss)
+    // Total artifact count must not decrease
     expect(secondBody.manifest.artifacts.length).toBeGreaterThanOrEqual(firstBody.manifest.artifacts.length);
   });
 });

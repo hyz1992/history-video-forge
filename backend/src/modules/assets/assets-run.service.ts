@@ -544,21 +544,54 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
       }
     }
 
-    // Inject old segment routes that aren't in the new manifest
-    const newRouteSegIds = new Set(
-      (Array.isArray((manifest as Record<string, unknown>).segment_routes)
-        ? (manifest as Record<string, unknown>).segment_routes as Record<string, unknown>[]
-        : []).map(r => r.segment_id),
-    );
+    // Merge old routes into the working manifest so dependency lookups
+    // (e.g. video_clip finding source image by segment) work.
+    // For segments NOT in the new manifest, add the whole old route.
+    // For segments in BOTH, inject old visual-dependency fields so the
+    // fresh (empty) route has source image/video references.
+    const DEPENDENCY_ROUTE_FIELDS = new Set([
+      "primary_visual_artifact_id", "fallback_visual_artifact_id",
+      "motion_artifact_id", "image_artifact_id", "video_artifact_id",
+    ]);
+
     const existingNewRoutes = (Array.isArray((manifest as Record<string, unknown>).segment_routes)
       ? (manifest as Record<string, unknown>).segment_routes as Record<string, unknown>[]
       : []) as Record<string, unknown>[];
+    const newRouteBySeg = new Map<string, Record<string, unknown>>();
+    for (const r of existingNewRoutes) {
+      const sid = r.segment_id as string | undefined;
+      if (sid) newRouteBySeg.set(sid, r);
+    }
+
+    const mergedPreRoutes: Record<string, unknown>[] = [];
+    const seenSegs = new Set<string>();
+
+    for (const newRoute of existingNewRoutes) {
+      const sid = newRoute.segment_id as string;
+      const oldRoute = oldRoutes.find(r => r.segment_id === sid);
+      if (oldRoute) {
+        // Same segment exists in old manifest — inject dependency fields.
+        const merged = { ...newRoute };
+        for (const field of DEPENDENCY_ROUTE_FIELDS) {
+          if (field in oldRoute && !(field in merged)) {
+            merged[field] = oldRoute[field];
+          }
+        }
+        mergedPreRoutes.push(merged);
+      } else {
+        mergedPreRoutes.push(newRoute);
+      }
+      seenSegs.add(sid);
+    }
+
+    // Add old routes for segments not in the new manifest at all.
     for (const r of oldRoutes) {
-      if (!newRouteSegIds.has(r.segment_id as string)) {
-        existingNewRoutes.push(r);
+      if (!seenSegs.has(r.segment_id as string)) {
+        mergedPreRoutes.push(r);
       }
     }
-    (manifest as Record<string, unknown>).segment_routes = existingNewRoutes;
+
+    (manifest as Record<string, unknown>).segment_routes = mergedPreRoutes;
 
     // Inject old audio summary as fallback context
     if (!(manifest as Record<string, unknown>).audio_summary) {
