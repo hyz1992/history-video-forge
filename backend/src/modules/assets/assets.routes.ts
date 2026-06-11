@@ -48,6 +48,10 @@ async function generateAssetsController(
   const enabledProviderTypes = Array.isArray(payload.enabled_provider_types)
     ? payload.enabled_provider_types as string[]
     : undefined;
+  const missingOnly = payload.mode === "missing_only";
+  const taskIds = Array.isArray(payload.task_ids) && payload.task_ids.every((id: unknown) => typeof id === "string")
+    ? payload.task_ids as string[]
+    : undefined;
 
   return runAssetsGeneration({
     db: context.app.db,
@@ -56,6 +60,8 @@ async function generateAssetsController(
     executionMode,
     providerMode,
     enabledProviderTypes,
+    missingOnly,
+    taskIds,
     dashscope: {
       apiKey: dashscopePayload.api_key as string | undefined,
       baseUrl: dashscopePayload.base_url as string | undefined,
@@ -258,11 +264,42 @@ async function uploadArtifactController(
   });
 }
 
+async function generateTaskController(
+  context: RouteContext,
+): Promise<AppResponse> {
+  const project = await getProjectById(context.app.db, context.params.projectId);
+  if (!project) {
+    return { statusCode: 404, body: { error: "project_not_found" } };
+  }
+
+  const taskId = context.params.taskId;
+  const payload = context.payload as Record<string, unknown>;
+  const voiceProfileId =
+    (payload.voice_profile_id as string | undefined) ?? "voice_default_male_storyteller";
+  const providerMode =
+    payload.provider_mode === "dashscope" || payload.provider_mode === "dashscope_tts"
+      ? payload.provider_mode : undefined;
+
+  return runAssetsGeneration({
+    db: context.app.db,
+    project,
+    voiceProfileId,
+    executionMode: "auto_available",
+    providerMode,
+    taskIds: [taskId],
+  });
+}
+
 export function registerAssetsRoutes(app: AppInstance) {
   app.addRoute(
     "POST",
     "/api/projects/:projectId/assets/generate",
     generateAssetsController,
+  );
+  app.addRoute(
+    "POST",
+    "/api/projects/:projectId/assets/tasks/:taskId/generate",
+    generateTaskController,
   );
   app.addRoute(
     "POST",

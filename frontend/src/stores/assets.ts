@@ -80,7 +80,8 @@ export interface AssetsStoreState {
 export interface AssetsStore {
   state: Readonly<AssetsStoreState>;
   loadProject: () => Promise<void>;
-  generateAssets: (options: { enabledProviderTypes?: string[] }) => Promise<void>;
+  generateAssets: (options: { enabledProviderTypes?: string[]; mode?: string; taskIds?: string[] }) => Promise<void>;
+  generateSingleTask: (taskId: string) => Promise<void>;
   uploadArtifact: (taskId: string, file: File) => Promise<void>;
   acceptArtifact: (taskId: string, artifactId: string) => Promise<void>;
   artifactFileUrl: (artifactId: string) => string;
@@ -94,7 +95,8 @@ export const assetsStoreKey: InjectionKey<AssetsStore> = Symbol("assets-store");
 
 export interface AssetsApi {
   loadProject(projectId: string): Promise<AssetsSnapshot>;
-  generateAssets(projectId: string, options: { enabledProviderTypes?: string[] }): Promise<void>;
+  generateAssets(projectId: string, options: { enabledProviderTypes?: string[]; mode?: string; taskIds?: string[] }): Promise<void>;
+  generateSingleTask(projectId: string, taskId: string): Promise<void>;
   uploadArtifact(projectId: string, taskId: string, file: File): Promise<void>;
   acceptArtifact(projectId: string, taskId: string, artifactId: string): Promise<void>;
 }
@@ -116,6 +118,8 @@ export function createFetchAssetsApi(baseUrl = ""): AssetsApi {
       if (options.enabledProviderTypes) {
         body.enabled_provider_types = options.enabledProviderTypes;
       }
+      if (options.mode) body.mode = options.mode;
+      if (options.taskIds) body.task_ids = options.taskIds;
       const response = await fetch(
         `${baseUrl}/api/projects/${projectId}/assets/generate`,
         {
@@ -127,6 +131,17 @@ export function createFetchAssetsApi(baseUrl = ""): AssetsApi {
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         throw new Error((err as Record<string, unknown>).error as string ?? `assets_generate_failed:${response.status}`);
+      }
+    },
+
+    async generateSingleTask(projectId, taskId) {
+      const response = await fetch(
+        `${baseUrl}/api/projects/${projectId}/assets/tasks/${taskId}/generate`,
+        { method: "POST", headers: { "content-type": "application/json" }, body: "{}" },
+      );
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error((err as Record<string, unknown>).error as string ?? `task_generate_failed:${response.status}`);
       }
     },
 
@@ -219,7 +234,7 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
     }
   }
 
-  async function generateAssets(options: { enabledProviderTypes?: string[] }) {
+  async function generateAssets(options: { enabledProviderTypes?: string[]; mode?: string; taskIds?: string[] }) {
     const projectId = input.projectStore.state.projectId;
     if (!projectId) return;
 
@@ -228,6 +243,23 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
 
     try {
       await input.api.generateAssets(projectId, options);
+      await loadProject();
+    } catch (error) {
+      state.loadError = toErrorMessage(error);
+    } finally {
+      state.isGenerating = false;
+    }
+  }
+
+  async function generateSingleTask(taskId: string) {
+    const projectId = input.projectStore.state.projectId;
+    if (!projectId) return;
+
+    state.isGenerating = true;
+    state.loadError = null;
+
+    try {
+      await input.api.generateSingleTask(projectId, taskId);
       await loadProject();
     } catch (error) {
       state.loadError = toErrorMessage(error);
@@ -274,6 +306,7 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
     state: readonly(state),
     loadProject,
     generateAssets,
+    generateSingleTask,
     uploadArtifact,
     acceptArtifact,
     artifactFileUrl,

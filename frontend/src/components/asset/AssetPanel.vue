@@ -340,6 +340,13 @@ async function handleGenerateSemiAuto() {
   }
 }
 
+async function handleGenerateMissing() {
+  await assetsStore.generateAssets({ mode: "missing_only" });
+  if (!assetsStore.state.loadError) {
+    ElMessage.success("剩余资产生成完成");
+  }
+}
+
 async function handleGenerateFull() {
   if (hasManifest.value) {
     try {
@@ -360,6 +367,13 @@ async function handleGenerateFull() {
 
 function handleUploadFile(taskId: string, file: File) {
   assetsStore.uploadArtifact(taskId, file);
+}
+
+async function handleGenerateTask(taskId: string) {
+  await assetsStore.generateSingleTask(taskId);
+  if (!assetsStore.state.loadError) {
+    ElMessage.success("单任务生成完成");
+  }
 }
 
 function handleRetry() {
@@ -545,6 +559,14 @@ function handleConfirm() {
 
         <!-- Actions -->
         <div class="asset-overview-actions">
+          <el-button
+            v-if="blockedItems.length > 0"
+            type="primary"
+            :loading="assetsStore.state.isGenerating"
+            @click="handleGenerateMissing"
+          >
+            {{ assetsStore.state.isGenerating ? "生成中..." : "批量生成剩余资产" }}
+          </el-button>
           <el-popconfirm
             title="将重新生成全部资产（包括图片/视频），可能覆盖已上传的文件。确定继续？"
             confirm-button-text="确定重建"
@@ -555,9 +577,10 @@ function handleConfirm() {
               <el-button
                 type="danger"
                 plain
+                size="small"
                 :loading="assetsStore.state.isGenerating"
               >
-                {{ assetsStore.state.isGenerating ? "生成中..." : "重新生成全部资产" }}
+                重新生成全部资产
               </el-button>
             </template>
           </el-popconfirm>
@@ -606,6 +629,7 @@ function handleConfirm() {
           :project-id="projectId"
           :focus-task-id="focusTaskId"
           @upload-file="handleUploadFile"
+          @generate-task="handleGenerateTask"
         />
       </div>
 

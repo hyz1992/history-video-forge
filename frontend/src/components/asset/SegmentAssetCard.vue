@@ -37,6 +37,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "upload-file": [taskId: string, file: File];
+  "generate-task": [taskId: string];
 }>();
 
 /* -------------------------------------------------------------------------- */
@@ -155,6 +156,15 @@ const canUpload = computed(() => {
     currentExecution.value.status === "completed" ||
     currentExecution.value.status === "accepted"
   ) && (activeTab.value === "image" || activeTab.value === "video");
+});
+
+/** Task types that support automatic (non-manual) generation. */
+const AUTO_GENERATABLE_TYPES = new Set(["image_still", "video_clip", "tts_audio"]);
+
+const canAutoGenerate = computed(() => {
+  const task = currentTask.value;
+  if (!task) return false;
+  return AUTO_GENERATABLE_TYPES.has(task.task_type);
 });
 
 const acceptFileTypes = computed(() => {
@@ -476,6 +486,24 @@ function nextMedia() {
           <span class="segment-info-action-hint">任务加载中...</span>
         </template>
         <template v-else>
+          <!-- Generate / Regenerate (auto-generatable tasks) -->
+          <ElButton
+            v-if="canAutoGenerate && !hasGeneratedMedia"
+            size="small"
+            :loading="isCurrentUploading"
+            @click="emit('generate-task', currentTask!.task_id)"
+          >
+            生成
+          </ElButton>
+          <ElButton
+            v-if="canAutoGenerate && hasGeneratedMedia"
+            size="small"
+            :loading="isCurrentUploading"
+            @click="emit('generate-task', currentTask!.task_id)"
+          >
+            重新生成
+          </ElButton>
+          <!-- Upload / Replace (manual-uploadable tasks) -->
           <ElButton
             v-if="canUpload"
             size="small"
@@ -485,20 +513,19 @@ function nextMedia() {
           >
             {{ hasGeneratedMedia ? '替换' : '上传' }}
           </ElButton>
-          <ElTooltip
-            v-else-if="!currentExecution"
-            content="该资产尚未生成，请在顶部点击「重新生成全部资产」"
-            placement="top"
-          >
-            <ElTag size="small" type="info">待生成</ElTag>
-          </ElTooltip>
+          <!-- Status tag when no action available -->
           <ElTag
-            v-else
+            v-if="!canAutoGenerate && !canUpload && currentExecution"
             size="small"
             :type="currentExecution.status === 'failed' ? 'danger' : 'info'"
           >
             {{ statusLabel ?? currentExecution.status }}
           </ElTag>
+          <ElTag
+            v-if="!canAutoGenerate && !canUpload && !currentExecution"
+            size="small"
+            type="info"
+          >待生成</ElTag>
         </template>
         <input
           ref="fileInput"

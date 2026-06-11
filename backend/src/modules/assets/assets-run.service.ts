@@ -61,6 +61,10 @@ export interface RunAssetsGenerationInput {
   providerMode?: AssetsProviderMode;
   dashscope?: DashscopeProviderConfig;
   enabledProviderTypes?: string[];
+  /** Only process tasks that are not yet completed/accepted. */
+  missingOnly?: boolean;
+  /** Only process these specific task IDs. */
+  taskIds?: string[];
 }
 
 function buildTraceSummary(input: {
@@ -481,7 +485,37 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     executionOptions,
   });
 
-  // Step 6a: Execution engine integration
+  // Step 6a: Filter tasks for missing-only / task-ids modes
+  if (input.missingOnly || (input.taskIds && input.taskIds.length > 0)) {
+    const taskIdSet = input.taskIds ? new Set(input.taskIds) : null;
+
+    // Check existing manifest for already-completed tasks
+    let existingCompletedIds = new Set<string>();
+    if (input.missingOnly && project.activeAssetManifestRecordId) {
+      const existingManifest = db.assetManifestRecords.get(project.activeAssetManifestRecordId);
+      if (existingManifest) {
+        const existingExecs = (existingManifest.manifestJson as Record<string, unknown>).executions;
+        if (Array.isArray(existingExecs)) {
+          for (const exec of existingExecs) {
+            if (exec && typeof exec === "object") {
+              const status = (exec as Record<string, unknown>).status;
+              if (status === "completed" || status === "accepted") {
+                existingCompletedIds.add((exec as Record<string, unknown>).task_id as string);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    manifest.executions = manifest.executions.filter((exec) => {
+      if (existingCompletedIds.has(exec.task_id)) return false; // already done
+      if (taskIdSet && !taskIdSet.has(exec.task_id)) return false; // not in requested set
+      return true;
+    });
+  }
+
+  // Step 6b: Execution engine integration
   const runId = `assets_run_${db.generateId()}`;
   let executionManifestRecordId: string | null = null;
 
