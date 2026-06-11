@@ -527,6 +527,45 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     });
   }
 
+  // Step 6b-ii: Before executing the filtered manifest, inject the old
+  // manifest's artifacts, segment routes, and audio summary so that
+  // dependency lookups (e.g. video_clip finding source image by segment)
+  // work during provider execution.
+  if (existingManifest) {
+    const oldArtifacts = (Array.isArray(existingManifest.artifacts) ? existingManifest.artifacts : []) as Record<string, unknown>[];
+    const oldRoutes = (Array.isArray(existingManifest.segment_routes) ? existingManifest.segment_routes : []) as Record<string, unknown>[];
+    const oldAudio = (existingManifest.audio_summary ?? {}) as Record<string, unknown>;
+
+    // Inject old artifacts that aren't already in the new manifest
+    const newArtifactIds = new Set(manifest.artifacts.map(a => a.artifact_id));
+    for (const a of oldArtifacts) {
+      if (!newArtifactIds.has(a.artifact_id as string)) {
+        manifest.artifacts.push(a as unknown as typeof manifest.artifacts[number]);
+      }
+    }
+
+    // Inject old segment routes that aren't in the new manifest
+    const newRouteSegIds = new Set(
+      (Array.isArray((manifest as Record<string, unknown>).segment_routes)
+        ? (manifest as Record<string, unknown>).segment_routes as Record<string, unknown>[]
+        : []).map(r => r.segment_id),
+    );
+    const existingNewRoutes = (Array.isArray((manifest as Record<string, unknown>).segment_routes)
+      ? (manifest as Record<string, unknown>).segment_routes as Record<string, unknown>[]
+      : []) as Record<string, unknown>[];
+    for (const r of oldRoutes) {
+      if (!newRouteSegIds.has(r.segment_id as string)) {
+        existingNewRoutes.push(r);
+      }
+    }
+    (manifest as Record<string, unknown>).segment_routes = existingNewRoutes;
+
+    // Inject old audio summary as fallback context
+    if (!(manifest as Record<string, unknown>).audio_summary) {
+      (manifest as Record<string, unknown>).audio_summary = oldAudio;
+    }
+  }
+
   // Step 6c: Execution engine integration
   const runId = `assets_run_${db.generateId()}`;
   let executionManifestRecordId: string | null = null;
