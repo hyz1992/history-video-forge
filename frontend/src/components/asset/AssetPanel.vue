@@ -545,39 +545,25 @@ function handleConfirm() {
 
         <!-- Actions -->
         <div class="asset-overview-actions">
-          <template v-if="blockedItems.length > 0">
-            <el-popconfirm
-              title="将重新生成全部资产（包括图片/视频），可能覆盖已上传的文件。确定继续？"
-              confirm-button-text="确定生成"
-              cancel-button-text="取消"
-              @confirm="handleGenerateFull"
-            >
-              <template #reference>
-                <el-button
-                  type="primary"
-                  :loading="assetsStore.state.isGenerating"
-                >
-                  {{ assetsStore.state.isGenerating ? "生成中..." : "重新生成全部资产" }}
-                </el-button>
-              </template>
-            </el-popconfirm>
-            <span class="asset-overview-hint">
-              也可在下方的分镜卡片中逐项上传或替换
-            </span>
-          </template>
           <el-popconfirm
-            v-else
-            title="重新生成将覆盖所有已有产物（包括已上传的文件），确定继续？"
+            title="将重新生成全部资产（包括图片/视频），可能覆盖已上传的文件。确定继续？"
             confirm-button-text="确定重建"
             cancel-button-text="取消"
             @confirm="handleGenerateFull"
           >
             <template #reference>
-              <el-button type="danger" plain size="small">
-                重新生成全部资产
+              <el-button
+                type="danger"
+                plain
+                :loading="assetsStore.state.isGenerating"
+              >
+                {{ assetsStore.state.isGenerating ? "生成中..." : "重新生成全部资产" }}
               </el-button>
             </template>
           </el-popconfirm>
+          <span v-if="blockedItems.length > 0" class="asset-overview-hint">
+            也可在下方的分镜卡片中逐项上传或替换
+          </span>
         </div>
       </div>
 
@@ -620,7 +606,6 @@ function handleConfirm() {
           :project-id="projectId"
           :focus-task-id="focusTaskId"
           @upload-file="handleUploadFile"
-          @regenerate-all="handleGenerateFull"
         />
       </div>
 
@@ -908,36 +893,34 @@ details[open] > .asset-global-toggle::before {
   color: var(--text-secondary);
 }
 
-/* ---- Per-type pill grid ---- */
+/* ---- Compact type chip row ---- */
 .asset-overview-types-v2 {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
 }
 
 .asset-type-pill {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 6px 10px;
+  gap: 5px;
+  padding: 3px 8px;
   border-radius: var(--radius-card);
   background: var(--bg-panel);
   border: 1px solid var(--border-default);
-  font-size: 0.85rem;
+  font-size: 0.82rem;
 }
 
 .asset-type-pill--done {
   border-color: var(--color-success);
-  background: color-mix(in srgb, var(--color-success) 8%, var(--bg-panel));
 }
 
 .asset-type-pill--blocked {
   border-color: var(--color-warning);
-  background: color-mix(in srgb, var(--color-warning) 8%, var(--bg-panel));
 }
 
 .asset-type-pill--none {
-  opacity: 0.5;
+  opacity: 0.45;
 }
 
 .asset-type-pill-label {
@@ -948,6 +931,10 @@ details[open] > .asset-global-toggle::before {
   font-weight: var(--font-subheading);
   color: var(--text-heading);
   font-variant-numeric: tabular-nums;
+}
+
+.asset-type-pill--done .asset-type-pill-label {
+  color: var(--color-success);
 }
 
 .asset-overview-blocked {
