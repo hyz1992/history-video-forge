@@ -567,12 +567,15 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     const newExecTaskIds = new Set(manifest.executions.map(e => e.task_id));
     const newArtifactIds = new Set(manifest.artifacts.map(a => a.artifact_id));
 
-    // Map: task_id → source_segment_id and task_type
+    // Map: task_id → source_segment_id and task_type (segment tasks only)
+    // Separate: task_id → task_type for ALL tasks (including global tts/subtitle)
     const planTasks = (normalizedTts.assetPlan.tasks ?? []) as Array<{
       task_id: string; source_segment_id: string | null; task_type: string;
     }>;
     const taskMeta = new Map<string, { segId: string; type: string }>();
+    const taskTypeById = new Map<string, string>();
     for (const t of planTasks) {
+      taskTypeById.set(t.task_id, t.task_type);
       if (t.source_segment_id) taskMeta.set(t.task_id, { segId: t.source_segment_id, type: t.task_type });
     }
 
@@ -581,16 +584,16 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     const touchedTaskTypes = new Set<string>();
     for (const tid of newExecTaskIds) {
       const meta = taskMeta.get(tid);
-      if (meta) {
-        touchedSegments.add(meta.segId);
-        touchedTaskTypes.add(meta.type);
-      }
+      if (meta) touchedSegments.add(meta.segId);
+      // Always record the touched task type, even for global tasks (tts/subtitle)
+      const ttype = taskTypeById.get(tid);
+      if (ttype) touchedTaskTypes.add(ttype);
     }
 
     // ---- segment_routes: field-level merge for touched segments ----
     const VISUAL_ROUTE_FIELDS = new Set([
       "primary_visual_artifact_id", "visual_route_type",
-      "image_route", "video_route",
+      "image_route", "video_route", "readiness",
     ]);
     const oldRouteBySegment = new Map<string, Record<string, unknown>>();
     for (const r of oldRoutes) {

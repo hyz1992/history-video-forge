@@ -1133,15 +1133,14 @@ describe("execution engine integration", () => {
 
     // Real TTS artifact file_uri must not be replaced with planned://
     const oldTtsArtifact = firstBody.manifest.artifacts.find(
-      a => a.artifact_type === "audio" && (a.file_uri ?? "").length > 0 && !(a.file_uri ?? "").startsWith("planned://"),
+      a => a.artifact_id.startsWith("artifact_tts") && (a.file_uri ?? "").length > 0 && !(a.file_uri ?? "").startsWith("planned://"),
     );
-    if (oldTtsArtifact) {
-      const newTtsArtifact = secondBody.manifest.artifacts.find(
-        a => a.artifact_id === oldTtsArtifact.artifact_id,
-      );
-      if (newTtsArtifact) {
-        expect(newTtsArtifact.file_uri).toBe(oldTtsArtifact.file_uri);
-      }
-    }
+    // Must find at least one real TTS artifact or the test is vacuous
+    expect(oldTtsArtifact).toBeDefined();
+    const newTtsArtifact = secondBody.manifest.artifacts.find(
+      a => a.artifact_id === oldTtsArtifact!.artifact_id,
+    );
+    expect(newTtsArtifact).toBeDefined();
+    expect(newTtsArtifact!.file_uri).toBe(oldTtsArtifact!.file_uri);
   });
 });
