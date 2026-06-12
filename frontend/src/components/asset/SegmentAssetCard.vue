@@ -406,7 +406,7 @@ function nextMedia() {
             v-if="currentArtifact?.artifact_type === 'image'"
             :src="artifactUrl(currentArtifact.artifact_id)"
             class="segment-media-image"
-            :alt="currentArtifact?.origin === 'provider' ? '#{{ segmentIndex + 1 }} 分镜图：' + (segment.scene_description || segment.script_excerpt).slice(0, 40) : currentArtifact?.origin === 'manual' ? '#{{ segmentIndex + 1 }} 手动上传图' : '#{{ segmentIndex + 1 }} 图片'"
+            :alt="'#' + (segmentIndex + 1) + ' 分镜图：' + (segment.scene_description || segment.script_excerpt || '').slice(0, 40)"
             @click="togglePreview"
           />
           <video
@@ -414,6 +414,7 @@ function nextMedia() {
             :src="artifactUrl(currentArtifact.artifact_id)"
             class="segment-media-video"
             controls
+            @click="togglePreview"
           />
           <!-- Fallback for non-visual artifact types -->
           <div v-else class="segment-media-frame">
@@ -730,7 +731,7 @@ function nextMedia() {
 }
 
 .segment-media-placeholder {
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 9 / 16;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -815,12 +816,12 @@ function nextMedia() {
 
 .segment-media-video {
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 9 / 16;
   border-radius: var(--radius-sm);
 }
 
 .segment-media-frame {
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 9 / 16;
   position: relative;
   display: flex;
   align-items: center;

@@ -102,8 +102,12 @@ export async function validateComposeTimeline(
   const clips = listTimelineClips(timeline);
   const referencedArtifactIds = new Set<string>();
 
-  if (manifest.readiness !== "ready_for_compose") {
+  // Only "blocked" prevents compose.  "partial" means warnings-only
+  // (e.g. optional BGM missing) and should still allow composing.
+  if (manifest.readiness === "blocked") {
     pushUnique(errors, "compose_asset_manifest_not_ready");
+  } else if (manifest.readiness === "partial") {
+    pushUnique(warnings, "compose_asset_manifest_partial");
   }
 
   const narrationTrack = timeline.tracks.find(
