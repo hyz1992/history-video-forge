@@ -108,6 +108,9 @@ watch(
 
 const hasImageTasks = computed(() => props.imageTasks.length > 0);
 const hasVideoTasks = computed(() => props.videoTasks.length > 0);
+/** Always allow the video tab so users can preview motion effects
+ *  or upgrade an image_with_motion segment to API video. */
+const showVideoTab = true;
 
 /* -------------------------------------------------------------------------- */
 /*  Execution & artifact lookups                                              */
@@ -173,6 +176,11 @@ const acceptFileTypes = computed(() => {
 });
 
 const fileInput = ref<HTMLInputElement | null>(null);
+const showPreview = ref(false);
+
+function togglePreview() {
+  if (hasGeneratedMedia.value) showPreview.value = !showPreview.value;
+}
 
 function triggerFileUpload() {
   fileInput.value?.click();
@@ -334,10 +342,16 @@ function nextMedia() {
         </button>
         <ElTooltip
           v-if="!hasVideoTasks"
-          content="本镜头采用图片+运镜，无需视频"
+          content="当前为图片+运镜路线。可点击查看，或升级为 API 视频"
           placement="top"
         >
-          <span class="segment-media-tab disabled">视频</span>
+          <button
+            class="segment-media-tab"
+            :class="{ active: activeTab === 'video' }"
+            @click="activeTab = 'video'"
+          >
+            视频
+          </button>
         </ElTooltip>
         <button
           v-else
@@ -392,7 +406,8 @@ function nextMedia() {
             v-if="currentArtifact?.artifact_type === 'image'"
             :src="artifactUrl(currentArtifact.artifact_id)"
             class="segment-media-image"
-            :alt="currentArtifact?.origin === 'provider' ? 'AI 生成图片' : currentArtifact?.origin === 'manual' ? '手动上传图片' : '图片'"
+            :alt="currentArtifact?.origin === 'provider' ? '#{{ segmentIndex + 1 }} 分镜图：' + (segment.scene_description || segment.script_excerpt).slice(0, 40) : currentArtifact?.origin === 'manual' ? '#{{ segmentIndex + 1 }} 手动上传图' : '#{{ segmentIndex + 1 }} 图片'"
+            @click="togglePreview"
           />
           <video
             v-else-if="currentArtifact?.artifact_type === 'video'"
@@ -556,6 +571,31 @@ function nextMedia() {
         </ElTag>
       </div>
     </div>
+    <!-- Full-size preview overlay -->
+    <Teleport to="body">
+      <div v-if="showPreview && hasGeneratedMedia" class="preview-overlay" @click="showPreview = false">
+        <div class="preview-container" @click.stop>
+          <button class="preview-close" @click="showPreview = false" aria-label="关闭预览">✕</button>
+          <img
+            v-if="currentArtifact?.artifact_type === 'image'"
+            :src="artifactUrl(currentArtifact!.artifact_id)"
+            class="preview-image"
+          />
+          <video
+            v-else-if="currentArtifact?.artifact_type === 'video'"
+            :src="artifactUrl(currentArtifact!.artifact_id)"
+            class="preview-video"
+            controls
+            autoplay
+          />
+          <div class="preview-info">
+            <span>#{{ segmentIndex + 1 }} · {{ currentArtifact?.artifact_type === 'image' ? '分镜图' : '视频' }}</span>
+            <span v-if="currentArtifact?.metadata?.model">模型: {{ currentArtifact.metadata.model }}</span>
+            <span v-if="currentArtifact?.metadata?.width">尺寸: {{ currentArtifact.metadata.width }}×{{ currentArtifact.metadata.height }}</span>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </article>
 </template>
 
@@ -762,9 +802,15 @@ function nextMedia() {
 
 .segment-media-image {
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 9 / 16;
   object-fit: cover;
   border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.segment-media-image:hover {
+  opacity: 0.9;
 }
 
 .segment-media-video {
@@ -985,5 +1031,64 @@ function nextMedia() {
 <style>
 .risk-tooltip {
   max-width: 360px;
+}
+
+.preview-overlay {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(4px);
+}
+
+.preview-container {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.preview-close {
+  position: absolute;
+  top: -40px;
+  right: 0;
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 24px;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.15s;
+}
+
+.preview-close:hover { opacity: 1; }
+
+.preview-image {
+  max-width: 90vw;
+  max-height: 85vh;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.preview-video {
+  max-width: 90vw;
+  max-height: 85vh;
+  border-radius: 4px;
+}
+
+.preview-info {
+  display: flex;
+  gap: 16px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.85rem;
 }
 </style>
