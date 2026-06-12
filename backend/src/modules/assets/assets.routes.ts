@@ -279,7 +279,8 @@ async function generateTaskController(
     (payload.voice_profile_id as string | undefined) ?? "voice_default_male_storyteller";
   const providerMode =
     payload.provider_mode === "dashscope" || payload.provider_mode === "dashscope_tts"
-      ? payload.provider_mode : undefined;
+      ? payload.provider_mode
+      : env.llm.provider === "openai" ? "dashscope" : undefined;
 
   return runAssetsGeneration({
     db: context.app.db,
