@@ -11,6 +11,7 @@ import { useWorkspaceStore } from "../../stores/workspace";
 import { PIPELINE_STEPS } from "../../stores/workspace";
 
 import SegmentAssetCard from "./SegmentAssetCard.vue";
+import { computeCostBreakdown } from "../../utils/pricing";
 
 const storyboardStore = useStoryboardStore();
 const assetPlanningStore = useAssetPlanningStore();
@@ -46,6 +47,19 @@ const readiness = computed(() => manifest.value?.readiness ?? null);
 const canCompose = computed(() => {
   const r = readiness.value;
   return r === "ready_for_compose" || r === "partial";
+});
+
+/** Cost breakdown from generated artifacts. */
+const costBreakdown = computed(() => {
+  const arts = artifacts.value;
+  // Estimate TTS char count from script draft
+  const script = assetPlanningStore.state.snapshot?.active_asset_plan?.plan;
+  const ttsPlan = script as unknown as { tts_plan?: { chunks?: Array<{ script_excerpt?: string }> } } | null;
+  const ttsChars = ttsPlan?.tts_plan?.chunks?.reduce((sum, c) => sum + (c.script_excerpt?.length ?? 0), 0) ?? 0;
+  return computeCostBreakdown(
+    arts.map(a => ({ artifact_type: a.artifact_type, metadata: a.metadata })),
+    ttsChars,
+  );
 });
 
 const executions = computed(() => manifest.value?.executions ?? []);
@@ -592,6 +606,26 @@ function handleConfirm() {
           </button>
         </div>
 
+        <!-- Cost summary -->
+        <div v-if="costBreakdown.total > 0" class="asset-overview-cost">
+          <h4 class="asset-overview-cost-title">预估成本</h4>
+          <div class="asset-overview-cost-items">
+            <span v-if="costBreakdown.image.count > 0">
+              🖼 图片 {{ costBreakdown.image.count }} 张 · ¥{{ costBreakdown.image.total.toFixed(2) }}
+            </span>
+            <span v-if="costBreakdown.video.durationSec > 0">
+              🎬 视频 {{ costBreakdown.video.durationSec.toFixed(1) }}s · ¥{{ costBreakdown.video.total.toFixed(2) }}
+            </span>
+            <span v-if="costBreakdown.tts.charCount > 0">
+              🔊 口播 {{ costBreakdown.tts.charCount }} 字 · ¥{{ costBreakdown.tts.total.toFixed(2) }}
+            </span>
+          </div>
+          <div class="asset-overview-cost-total">
+            合计 <strong>¥{{ costBreakdown.total.toFixed(2) }}</strong>
+            <span class="asset-overview-cost-note">（按当前配置估算）</span>
+          </div>
+        </div>
+
         <!-- Actions -->
         <div class="asset-overview-actions">
           <el-button
@@ -1070,6 +1104,39 @@ details[open] > .asset-global-toggle::before {
   align-items: center;
   padding-top: var(--space-sm);
   border-top: 1px solid var(--border-default);
+}
+
+/* ---- Cost summary ---- */
+.asset-overview-cost {
+  display: grid;
+  gap: var(--space-xs);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-default);
+}
+
+.asset-overview-cost-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: var(--font-subheading);
+  color: var(--text-heading);
+}
+
+.asset-overview-cost-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.asset-overview-cost-total {
+  font-size: 0.88rem;
+  color: var(--text-heading);
+}
+
+.asset-overview-cost-note {
+  font-size: 0.78rem;
+  color: var(--text-muted);
 }
 
 .asset-overview-hint {

@@ -3,6 +3,8 @@ import { computed, ref, watch } from "vue";
 import { ElTooltip, ElTag, ElButton, ElIcon } from "element-plus";
 import { Upload, CopyDocument } from "@element-plus/icons-vue";
 
+import { checkPromptQuality } from "../../utils/prompt-quality";
+
 import type { StoryboardSegment } from "../../stores/storyboard";
 import type { AssetTask } from "../../stores/asset-planning";
 
@@ -225,6 +227,13 @@ const activePromptText = computed(() => {
 const activeRiskNotes = computed(() => {
   const task = activeTasks.value[activeMediaIndex.value];
   return task?.risk_notes ?? [];
+});
+
+const promptQuality = computed(() => {
+  const task = activeTasks.value[activeMediaIndex.value];
+  if (!task?.prompt_draft) return null;
+  const taskType = task.task_type === "image_still" ? "image_still" : "video_clip";
+  return checkPromptQuality(task.prompt_draft, taskType);
 });
 
 const riskLevel = computed<"high" | "low" | null>(() => {
@@ -470,6 +479,13 @@ function nextMedia() {
               >
                 {{ riskLevel === 'high' ? '高风险' : '注意' }}
               </ElTag>
+            </ElTooltip>
+            <ElTooltip
+              v-if="promptQuality && promptQuality.score === 'weak'"
+              :content="'提示词偏弱，建议补充：' + promptQuality.checks.filter(c => !c.passed).map(c => c.label).join('、')"
+              placement="top"
+            >
+              <ElTag size="small" type="warning">提示词偏弱</ElTag>
             </ElTooltip>
           </div>
           <ElTooltip :content="copyFeedback ? '已复制' : '复制提示词'" placement="top">
