@@ -1018,6 +1018,8 @@ export async function registerManualArtifact(input: RegisterManualArtifactInput)
   // Step 13: Update project status based on validation decision
   if (localValidation.decision === "ready_for_compose") {
     project.status = "assets_ready";
+  } else if (localValidation.decision === "partial") {
+    project.status = "assets_partial";
   } else {
     project.status = "assets_blocked";
   }
@@ -1112,6 +1114,8 @@ export async function acceptArtifact(input: AcceptArtifactInput) {
 
     if (localValidation.decision === "ready_for_compose") {
       project.status = "assets_ready";
+    } else if (localValidation.decision === "partial") {
+      project.status = "assets_partial";
     } else {
       project.status = "assets_blocked";
     }

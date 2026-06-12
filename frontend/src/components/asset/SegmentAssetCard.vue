@@ -342,7 +342,7 @@ function nextMedia() {
         </button>
         <ElTooltip
           v-if="!hasVideoTasks"
-          content="当前为图片+运镜路线。可点击查看，或升级为 API 视频"
+          content="当前为图片+运镜路线，视频由 Remotion 合成渲染"
           placement="top"
         >
           <button
