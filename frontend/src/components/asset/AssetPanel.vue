@@ -11,7 +11,7 @@ import { useWorkspaceStore } from "../../stores/workspace";
 import { PIPELINE_STEPS } from "../../stores/workspace";
 
 import SegmentAssetCard from "./SegmentAssetCard.vue";
-import { computeCostBreakdown } from "../../utils/pricing";
+import { computeCostBreakdown, normalizeVideoDurationForPricing } from "../../utils/pricing";
 
 const storyboardStore = useStoryboardStore();
 const assetPlanningStore = useAssetPlanningStore();
@@ -59,8 +59,10 @@ const estimatedCost = computed(() => {
     if (task.task_type === "image_still") images++;
     if (task.task_type === "video_clip") {
       const params = (task.parameters as Record<string, unknown> | undefined);
-      const dur = (typeof params?.duration_sec === "number" && params.duration_sec > 0)
-        ? params.duration_sec : 5;
+      const dur = normalizeVideoDurationForPricing(
+        (typeof params?.duration_sec === "number" && params.duration_sec > 0)
+          ? params.duration_sec : 5,
+      );
       const res = (typeof params?.resolution === "string" ? params.resolution : "") || "720P";
       const height = res.includes("1080") ? 1080 : 720;
       videoSpecs.push({ dur, height });
@@ -665,7 +667,9 @@ function handleConfirm() {
 
         <!-- Cost summary -->
         <div v-if="hasManifest" class="asset-overview-cost">
-          <h4 class="asset-overview-cost-title">预估成本</h4>
+          <h4 class="asset-overview-cost-title">
+            {{ hasManifest ? '已生成成本估算' : '预估成本' }}
+          </h4>
           <div class="asset-overview-cost-items">
             <span v-if="costBreakdown.image.count > 0">
               🖼 图片 {{ costBreakdown.image.count }} 张 · ¥{{ costBreakdown.image.total.toFixed(2) }}

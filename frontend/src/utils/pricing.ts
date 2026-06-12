@@ -28,6 +28,17 @@ const PRICING: PricingConfig = {
   tts: { unitPricePer10kChars: 0.80, label: "qwen3-tts-vd" },
 };
 
+/**
+ * Normalize a video duration for pricing estimation, matching the
+ * backend provider's rounding + clamping behaviour (Math.round, 2-15s).
+ */
+export function normalizeVideoDurationForPricing(raw: number): number {
+  const rounded = Math.round(raw);
+  if (rounded < 2) return 2;
+  if (rounded > 15) return 15;
+  return rounded;
+}
+
 export interface ArtifactMeta {
   artifact_type: string;
   metadata?: Record<string, unknown>;
