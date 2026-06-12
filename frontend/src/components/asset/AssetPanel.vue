@@ -40,6 +40,14 @@ const assetTasks = computed(() => plan.value?.tasks ?? []);
 
 const manifest = computed(() => assetsStore.state.snapshot?.active_assets?.manifest ?? null);
 const readiness = computed(() => manifest.value?.readiness ?? null);
+
+/* Partial readiness (warnings only, e.g. optional BGM missing)
+ *  should still allow composing.  Only blocked (errors) prevents it. */
+const canCompose = computed(() => {
+  const r = readiness.value;
+  return r === "ready_for_compose" || r === "partial";
+});
+
 const executions = computed(() => manifest.value?.executions ?? []);
 const artifacts = computed(() => manifest.value?.artifacts ?? []);
 const segmentRoutes = computed(() => manifest.value?.segment_routes ?? []);
@@ -289,7 +297,7 @@ function scrollToTask(taskId: string) {
   requestAnimationFrame(() => { focusTaskId.value = taskId; });
 }
 const blockedReasonText = computed(() => {
-  if (readiness.value === "ready_for_compose") return "";
+  if (canCompose.value) return "";
   const items = blockedItems.value;
   if (items.length === 0) return "资产尚未就绪";
   // Show first 5 specific items, then summary
@@ -394,8 +402,8 @@ function handleRetry() {
 }
 
 function handleConfirm() {
-  if (readiness.value !== "ready_for_compose") {
-    ElMessage.warning("资产尚未全部就绪");
+  if (!canCompose.value) {
+    ElMessage.warning(blockedReasonText.value || "资产尚未全部就绪");
     return;
   }
   ElMessage.success("资产确认完成，进入合成阶段");
@@ -532,7 +540,7 @@ function handleConfirm() {
           </span>
           <el-progress
             :percentage="assetTasks.length > 0 ? Math.round(executionStats.completed / assetTasks.length * 100) : 0"
-            :status="readiness === 'ready_for_compose' ? 'success' : undefined"
+            :status="canCompose ? 'success' : undefined"
             :stroke-width="10"
           />
         </div>
@@ -679,7 +687,7 @@ function handleConfirm() {
             跳到下一项
           </el-button>
           <el-tooltip
-            v-if="readiness !== 'ready_for_compose'"
+            v-if="!canCompose"
             :content="blockedReasonText"
             placement="top"
           >
@@ -702,7 +710,7 @@ function handleConfirm() {
             确认并进入合成
           </el-button>
         </div>
-        <p v-if="readiness !== 'ready_for_compose'" class="asset-bottom-reason">
+        <p v-if="!canCompose" class="asset-bottom-reason">
           {{ blockedReasonText }}
         </p>
       </div>
