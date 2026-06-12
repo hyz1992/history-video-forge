@@ -365,10 +365,15 @@ function nextMedia() {
       </div>
 
       <!-- No tasks of this type -->
-      <div v-if="activeTasks.length === 0" class="segment-media-placeholder">
+      <div v-if="activeTasks.length === 0 && activeTab !== 'video'" class="segment-media-placeholder">
         <ElTag size="small" type="info">无需生成</ElTag>
+        <span class="segment-media-placeholder-text">无画面任务</span>
+      </div>
+      <div v-else-if="activeTasks.length === 0 && activeTab === 'video'" class="segment-media-placeholder">
+        <ElTag size="small" type="info">图片+运镜</ElTag>
         <span class="segment-media-placeholder-text">
-          {{ activeTab === 'video' ? '本镜头采用图片+运镜' : '无画面任务' }}
+          当前路线：图片 + {{ segment.motion_hint ? MOTION_LABELS[segment.motion_hint] ?? segment.motion_hint : '运镜' }}<br/>
+          视频由 Remotion 合成渲染，无需 API 视频生成。
         </span>
       </div>
 
@@ -498,7 +503,9 @@ function nextMedia() {
         </div>
 
         <template v-if="activeTasks.length === 0">
-          <span class="segment-info-action-hint">无需操作</span>
+          <span class="segment-info-action-hint">
+            {{ activeTab === 'video' ? '图片+运镜路线，视频由 Remotion 合成' : '无需操作' }}
+          </span>
         </template>
         <template v-else-if="!currentTask">
           <span class="segment-info-action-hint">任务加载中...</span>

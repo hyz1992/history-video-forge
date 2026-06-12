@@ -838,8 +838,9 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   // Step 10: Update project status based on validation decision
   if (localValidation.decision === "ready_for_compose") {
     project.status = "assets_ready";
+  } else if (localValidation.decision === "partial") {
+    project.status = "assets_partial";
   } else {
-    // "partial" or "blocked"
     project.status = "assets_blocked";
   }
 

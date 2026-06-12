@@ -68,7 +68,8 @@ function getStatusLabel(status: string): string {
     asset_plan_generating: "资产规划生成中",
     asset_plan_failed: "资产规划失败",
     assets_ready: "资产已就绪",
-    assets_blocked: "资产待补全",
+    assets_blocked: "资产阻断",
+    assets_partial: "可合成（有提醒）",
     assets_generating: "资产生成中",
     composition_ready: "合成已就绪",
     render_ready: "渲染已就绪",
@@ -82,6 +83,7 @@ function getStatusTagType(status: string): "" | "success" | "warning" | "danger"
   if (status === "script_ready" || status === "storyboard_ready" || status === "asset_plan_ready" || status === "assets_ready" || status === "composition_ready" || status === "render_completed") return "success";
   if (status === "script_generating" || status === "script_reviewing" || status === "storyboard_generating" || status === "asset_plan_generating" || status === "assets_generating" || status === "render_ready") return "warning";
   if (status === "script_failed" || status === "asset_plan_failed" || status === "render_failed" || status === "assets_blocked") return "danger";
+  if (status === "assets_partial") return "warning";
   if (status === "script_failed") return "danger";
   if (status === "topic_candidates_ready") return "";
   return "info";
