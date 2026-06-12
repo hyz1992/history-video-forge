@@ -372,7 +372,16 @@ function handleUploadFile(taskId: string, file: File) {
 async function handleGenerateTask(taskId: string) {
   try {
     await assetsStore.generateSingleTask(taskId);
-    ElMessage.success("生成完成");
+    // Reload to check actual execution status
+    await assetsStore.loadProject();
+    const exec = executions.value.find(e => e.task_id === taskId);
+    if (exec?.status === "completed" || exec?.status === "accepted") {
+      ElMessage.success("生成完成");
+    } else if (exec?.status === "failed") {
+      ElMessage.error("生成失败：" + (exec.notes?.join("; ") || "未知错误"));
+    } else {
+      ElMessage.warning("任务已提交，状态：" + (exec?.status ?? "未知"));
+    }
   } catch (error) {
     const msg = error instanceof Error ? error.message : "生成失败";
     ElMessage.error("单任务生成失败：" + msg);
@@ -462,8 +471,23 @@ function handleConfirm() {
         </div>
       </div>
       <p class="asset-plan-overview-hint">
-        口播、字幕、音效、配乐将自动生成；分镜图和视频需在上方点击生成按钮后通过 AI 生成或手动上传。
+        口播、字幕、音效、配乐将自动生成；分镜图和视频需通过 AI 生成或手动上传。
       </p>
+      <div class="asset-plan-overview-actions">
+        <el-button
+          type="primary"
+          :loading="assetsStore.state.isGenerating"
+          @click="handleGenerateFull"
+        >
+          {{ assetsStore.state.isGenerating ? "生成中..." : "全部自动生成" }}
+        </el-button>
+        <el-button
+          :loading="assetsStore.state.isGenerating"
+          @click="handleGenerateSemiAuto"
+        >
+          {{ assetsStore.state.isGenerating ? "生成中..." : "生成资产（手动上传图片/视频）" }}
+        </el-button>
+      </div>
     </div>
 
     <!-- Stage 2/3: has plan → generate buttons + task list -->
@@ -750,6 +774,14 @@ function handleConfirm() {
   color: var(--text-muted);
   line-height: 1.6;
   margin: 0;
+}
+
+.asset-plan-overview-actions {
+  display: flex;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-default);
 }
 
 /* ---- Sticky bottom bar ---- */

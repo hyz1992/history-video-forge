@@ -1,6 +1,7 @@
 import type { AppInstance, AppResponse, RouteContext } from "../../app";
 import { getProjectById } from "../projects/project.repository";
 import { runAssetsGeneration, registerManualArtifact, acceptArtifact } from "./assets-run.service";
+import { env } from "../../config/env.js";
 import { probeImageMetadata } from "../../http/image-probe.js";
 import { probeVideoMetadata } from "../../http/video-probe.js";
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -40,7 +41,7 @@ async function generateAssetsController(
   const providerMode =
     payload.provider_mode === "dashscope" || payload.provider_mode === "dashscope_tts"
       ? payload.provider_mode
-      : undefined;
+      : env.llm.provider === "openai" ? "dashscope" : undefined;
   const dashscopePayload =
     typeof payload.dashscope === "object" && payload.dashscope !== null
       ? payload.dashscope as Record<string, unknown>
