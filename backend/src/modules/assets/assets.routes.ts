@@ -322,7 +322,13 @@ async function upgradeSegmentToVideoController(
     return { statusCode: 404, body: { error: "asset_plan_record_not_found" } };
   }
 
-  const assetPlan = planRecord.planJson as { tasks: Array<{ task_id: string; task_type: string; source_segment_id: string | null }> };
+  const assetPlan = planRecord.planJson as {
+    tasks: Array<{
+      task_id: string; task_type: string; source_segment_id: string | null;
+      prompt_draft?: string | null; parameters?: Record<string, unknown>;
+      manual_upload_policy?: { allowed: boolean; required: boolean; accepted_file_types: string[]; acceptance_notes?: string[] };
+    }>;
+  };
 
   // Check if a video_clip task already exists for this segment
   const existingVideo = assetPlan.tasks.find(
@@ -351,20 +357,19 @@ async function upgradeSegmentToVideoController(
   const resolution = (payload.resolution as string) ?? "720P";
   const promptDraft = (payload.prompt_draft as string) ?? imageTask.prompt_draft ?? null;
 
-  const adHocTask = {
-    ...imageTask,
+  const adHocTask: Record<string, unknown> = {
+    ...(imageTask as Record<string, unknown>),
     task_id: newTaskId,
-    task_type: "video_clip" as const,
+    task_type: "video_clip",
     prompt_draft: promptDraft
       ? `${promptDraft}\n[视频升级] 主体动作、镜头运动、环境变化、历史风格约束`
       : null,
     parameters: {
-      ...(imageTask as Record<string, unknown>).parameters,
+      ...((imageTask as Record<string, unknown>).parameters as Record<string, unknown> ?? {}),
       duration_sec: durationSec,
       resolution,
       source_image_task_id: imageTask.task_id,
     },
-    // Override image upload policy for video
     manual_upload_policy: {
       allowed: true,
       required: false,
@@ -376,7 +381,6 @@ async function upgradeSegmentToVideoController(
   // Persist the new task in the asset plan so the frontend can find
   // it on refresh and subsequent regens work correctly.
   assetPlan.tasks.push(adHocTask as typeof assetPlan.tasks[number]);
-  planRecord.planJson = assetPlan as unknown as Record<string, unknown>;
 
   return runAssetsGeneration({
     db: context.app.db, project, voiceProfileId,

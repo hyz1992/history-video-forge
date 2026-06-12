@@ -14,6 +14,8 @@ function createMockApi() {
   return {
     loadProject: vi.fn(),
     generateAssets: vi.fn(),
+    generateSingleTask: vi.fn(),
+    upgradeSegmentToVideo: vi.fn(),
     uploadArtifact: vi.fn(),
     acceptArtifact: vi.fn(),
   };

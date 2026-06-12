@@ -33,12 +33,17 @@ function isOptionalIncompleteExecution(
   }
 
   // bgm/sfx are always optional when not required.
-  // video_clip from upgrade is also optional — it's an add-on,
-  // not a compose requirement (the image+motion route still works).
+  // video_clip is only optional when it's an ad-hoc upgrade
+  // (marked by source_image_task_id in parameters), not a
+  // planned video task from the original asset plan.
+  if (task.task_type === "video_clip") {
+    const params = task.parameters as Record<string, unknown> | undefined;
+    return typeof params?.source_image_task_id === "string";
+  }
+
   return (
     task.task_type === "bgm_cue" ||
-    task.task_type === "sfx_cue" ||
-    task.task_type === "video_clip"
+    task.task_type === "sfx_cue"
   );
 }
 
