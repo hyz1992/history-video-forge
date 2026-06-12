@@ -1228,6 +1228,46 @@ describe("execution engine integration", () => {
     expect(newTtsArtifact!.file_uri).toBe(oldTtsArtifact!.file_uri);
   });
 
+  it("keeps image_with_motion route when video upgrade produces no video artifact", async () => {
+    tempDir = join(tmpdir(), `assets-test-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+
+    const { db, project } = await prepareProjectWithAssetPlan();
+    project.storageRootDir = tempDir;
+
+    // First full run using fake providers (no video adapter)
+    const first = await runAssetsGeneration({
+      db, project, voiceProfileId: "voice_custom", executionMode: "auto_available",
+    });
+    const firstBody = first.body as { manifest: AssetManifest };
+
+    const planRecord = db.assetPlanRecords.get(ASSET_PLAN_RECORD_ID);
+    const assetPlan = planRecord?.planJson as { tasks: Array<{ task_id: string; task_type: string; source_segment_id: string | null }> } | undefined;
+    const imageTask = assetPlan?.tasks?.find(t => t.task_type === "image_still" && t.source_segment_id);
+    if (!imageTask?.source_segment_id) return;
+
+    const segId = imageTask.source_segment_id;
+    const firstRoute = firstBody.manifest.segment_routes?.find(r => r.segment_id === segId);
+    expect(firstRoute).toBeDefined();
+    const firstRouteType = firstRoute!.visual_route_type;
+
+    // Regenerate with a task id (simulating upgrade). Since no video provider
+    // exists in the fake registry, no video artifact will be produced.
+    const second = await runAssetsGeneration({
+      db, project, voiceProfileId: "voice_custom", executionMode: "auto_available",
+      taskIds: [imageTask.task_id],
+    });
+    const secondBody = second.body as { manifest: AssetManifest };
+
+    const secondRoute = secondBody.manifest.segment_routes?.find(r => r.segment_id === segId);
+    expect(secondRoute).toBeDefined();
+
+    const hasVideoArtifact = secondBody.manifest.artifacts.some(a => a.artifact_type === "video");
+    if (!hasVideoArtifact) {
+      expect(secondRoute!.visual_route_type).toBe(firstRouteType);
+    }
+  });
+
   it("partial regeneration preserves existing image route and artifact references", async () => {
     tempDir = join(tmpdir(), `assets-test-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });
