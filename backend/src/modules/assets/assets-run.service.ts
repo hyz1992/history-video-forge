@@ -692,8 +692,29 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
       } else {
         // Touched segment: visual fields from new, everything else from old.
         const merged: Record<string, unknown> = { ...oldRoute };
+
+        // Only switch to video_clip if a video artifact was actually produced
+        // by this run.  Otherwise keep the old visual_route_type (image_with_motion).
+        const newRouteType = newRoute.visual_route_type as string | undefined;
+        if (newRouteType === "video_clip") {
+          const hasNewVideoArtifact = manifest.artifacts.some(
+            a => a.artifact_type === "video" && newExecTaskIds.has(
+              // Find which execution produced this artifact
+              manifest.executions.find(e => e.output_artifact_ids.includes(a.artifact_id))?.task_id ?? "",
+            ),
+          );
+          if (hasNewVideoArtifact) {
+            merged.visual_route_type = "video_clip";
+          }
+          // else: keep old visual_route_type (image_with_motion)
+        } else {
+          merged.visual_route_type = newRouteType ?? merged.visual_route_type;
+        }
+
         for (const [key, value] of Object.entries(newRoute)) {
           if (VISUAL_ROUTE_FIELDS.has(key) || !(key in merged)) {
+            // Skip visual_route_type — already handled above
+            if (key === "visual_route_type") continue;
             merged[key] = value;
           }
         }
