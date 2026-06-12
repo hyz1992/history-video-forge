@@ -202,7 +202,17 @@ function loadLocalDotEnv(): Record<string, string> {
       continue;
     }
 
-    return parseDotEnv(readFileSync(filePath, "utf8"));
+    const parsed = parseDotEnv(readFileSync(filePath, "utf8"));
+
+    // Write parsed values into process.env so code that reads
+    // process.env directly (e.g. DashScope provider) sees them.
+    for (const [key, value] of Object.entries(parsed)) {
+      if (process.env[key] === undefined) {
+        process.env[key] = value;
+      }
+    }
+
+    return parsed;
   }
 
   return {};
