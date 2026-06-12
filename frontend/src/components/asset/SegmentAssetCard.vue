@@ -538,6 +538,7 @@ function nextMedia() {
             <li v-for="hint in artRisks" :key="hint.code" class="segment-art-risk-item">
               <span class="segment-art-risk-label">{{ hint.label }}</span>
               <span class="segment-art-risk-desc">{{ hint.risk }}</span>
+              <span class="segment-art-risk-suggestion">{{ hint.suggestion }}</span>
             </li>
           </ul>
         </details>
@@ -894,6 +895,13 @@ function nextMedia() {
 
 .segment-art-risk-desc {
   color: var(--text-muted);
+}
+
+.segment-art-risk-suggestion {
+  color: var(--text-secondary);
+  font-style: italic;
+  display: block;
+  margin-top: 1px;
 }
 
 .segment-media-preview {

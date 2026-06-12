@@ -366,22 +366,16 @@ async function upgradeSegmentToVideoController(
     },
   };
 
-  // Temporarily add the task to the plan for this generation run
+  // Persist the new task in the asset plan so the frontend can find
+  // it on refresh and subsequent regens work correctly.
   assetPlan.tasks.push(adHocTask as typeof assetPlan.tasks[number]);
   planRecord.planJson = assetPlan as unknown as Record<string, unknown>;
 
-  try {
-    return runAssetsGeneration({
-      db: context.app.db, project, voiceProfileId,
-      executionMode: "auto_available", providerMode,
-      taskIds: [newTaskId],
-    });
-  } finally {
-    // Remove the ad-hoc task from the plan
-    const idx = assetPlan.tasks.findIndex(t => t.task_id === newTaskId);
-    if (idx >= 0) assetPlan.tasks.splice(idx, 1);
-    planRecord.planJson = assetPlan as unknown as Record<string, unknown>;
-  }
+  return runAssetsGeneration({
+    db: context.app.db, project, voiceProfileId,
+    executionMode: "auto_available", providerMode,
+    taskIds: [newTaskId],
+  });
 }
 
 export function registerAssetsRoutes(app: AppInstance) {

@@ -71,14 +71,15 @@ export function checkArtRisks(
 
   // ── Consistency risk (multiple characters) ────────────────────────
   const namedChars = text.match(/晏子|楚王|项羽|刘邦|士兵|将领|使臣|侍卫|群臣/g);
+  const charCount = namedChars ? new Set(namedChars).size : 0;
   hints.push({
     code: "character_consistency",
     label: "角色一致性",
-    risk: namedChars && namedChars.length >= 2
-      ? `涉及 ${namedChars.length} 个角色，跨镜头外观一致性依赖独立提示词`
+    risk: charCount >= 2
+      ? `涉及 ${charCount} 个角色，跨镜头外观一致性依赖独立提示词`
       : "缺少明确角色名，跨镜头可能生成不一致的人物外观",
     suggestion: "确保每个角色的 visual_description 在各镜头中保持一致，引用 ArtBible 角色锚点",
-    triggered: text.length > 40,
+    triggered: charCount >= 2 || (text.length > 30 && charCount === 0),
   });
 
   // ── Composition / lighting ────────────────────────────────────────

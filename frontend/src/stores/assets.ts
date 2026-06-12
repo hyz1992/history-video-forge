@@ -153,10 +153,11 @@ export function createFetchAssetsApi(baseUrl = ""): AssetsApi {
         `${baseUrl}/api/projects/${projectId}/assets/segments/${segmentId}/upgrade-video`,
         { method: "POST", headers: { "content-type": "application/json" }, body: "{}" },
       );
+      const data = await response.json();
       if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error((err as Record<string, unknown>).error as string ?? `upgrade_video_failed:${response.status}`);
+        throw new Error((data as Record<string, unknown>).error as string ?? `upgrade_video_failed:${response.status}`);
       }
+      return data as { statusCode: number; body: { local_validation?: { decision: string } } };
     },
 
     async uploadArtifact(projectId, taskId, file) {
