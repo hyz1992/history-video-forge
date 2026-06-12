@@ -73,6 +73,7 @@ export interface AssetsStoreState {
   isLoading: boolean;
   isGenerating: boolean;
   isUploading: string | null;
+  generatingTaskId: string | null;
   loadError: string | null;
   snapshot: AssetsSnapshot | null;
 }
@@ -203,6 +204,7 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
     isLoading: false,
     isGenerating: false,
     isUploading: null,
+    generatingTaskId: null,
     loadError: null,
     snapshot: null,
   });
@@ -242,8 +244,22 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
     state.loadError = null;
 
     try {
-      await input.api.generateAssets(projectId, options);
-      await loadProject();
+      const generatePromise = input.api.generateAssets(projectId, options);
+
+      // Poll for progress updates while generation runs
+      let pollCount = 0;
+      const maxPolls = 120; // ~10 minutes
+      const poll = async () => {
+        while (pollCount < maxPolls && state.isGenerating) {
+          await new Promise(r => setTimeout(r, 3000));
+          pollCount++;
+          try { await loadProject(); } catch { /* keep polling */ }
+        }
+      };
+      poll(); // fire-and-forget polling
+
+      await generatePromise;
+      await loadProject(); // final refresh
     } catch (error) {
       state.loadError = toErrorMessage(error);
     } finally {
@@ -256,15 +272,29 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
     if (!projectId) return;
 
     state.isGenerating = true;
+    state.generatingTaskId = taskId;
 
     try {
-      await input.api.generateSingleTask(projectId, taskId);
+      const generatePromise = input.api.generateSingleTask(projectId, taskId);
+
+      // Poll for progress
+      let pollCount = 0;
+      const poll = async () => {
+        while (pollCount < 60 && state.isGenerating) {
+          await new Promise(r => setTimeout(r, 2000));
+          pollCount++;
+          try { await loadProject(); } catch { /* keep polling */ }
+        }
+      };
+      poll();
+
+      await generatePromise;
       await loadProject();
     } catch (error) {
-      // Local error only — do NOT set global loadError
       throw error;
     } finally {
       state.isGenerating = false;
+      state.generatingTaskId = null;
     }
   }
 

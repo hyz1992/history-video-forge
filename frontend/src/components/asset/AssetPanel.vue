@@ -49,13 +49,31 @@ const canCompose = computed(() => {
   return r === "ready_for_compose" || r === "partial";
 });
 
-/** Cost breakdown from generated artifacts. */
+/** Pre-generation cost estimate from the asset plan. */
+const estimatedCost = computed(() => {
+  let images = 0, videoSec = 0, ttsChars = 0;
+  for (const task of assetTasks.value) {
+    if (task.task_type === "image_still") images++;
+    if (task.task_type === "video_clip") videoSec += 4; // rough estimate
+    if (task.task_type === "tts_audio") {
+      // Estimate from script text
+      const plan = activeAssetPlan.value?.plan;
+      const ttsPlan = plan as unknown as { tts_plan?: { chunks?: Array<{ script_excerpt?: string }> } } | null;
+      ttsChars = ttsPlan?.tts_plan?.chunks?.reduce((s, c) => s + (c.script_excerpt?.length ?? 0), 0) ?? 0;
+    }
+  }
+  if (images === 0 && videoSec === 0 && ttsChars === 0) return null;
+  const imgCost = images * 0.20;
+  const vidCost = videoSec * 0.60;
+  const ttsCost = (ttsChars / 10000) * 0.80;
+  return { images, videoSec, ttsChars, total: imgCost + vidCost + ttsCost, imgCost, vidCost, ttsCost };
+});
+
+/** Post-generation cost from actual artifacts. */
 const costBreakdown = computed(() => {
   const arts = artifacts.value;
-  // Estimate TTS char count from script draft
-  const script = assetPlanningStore.state.snapshot?.active_asset_plan?.plan;
-  const ttsPlan = script as unknown as { tts_plan?: { chunks?: Array<{ script_excerpt?: string }> } } | null;
-  const ttsChars = ttsPlan?.tts_plan?.chunks?.reduce((sum, c) => sum + (c.script_excerpt?.length ?? 0), 0) ?? 0;
+  const ttsPlan = activeAssetPlan.value?.plan as unknown as { tts_plan?: { chunks?: Array<{ script_excerpt?: string }> } } | null;
+  const ttsChars = ttsPlan?.tts_plan?.chunks?.reduce((s, c) => s + (c.script_excerpt?.length ?? 0), 0) ?? 0;
   return computeCostBreakdown(
     arts.map(a => ({ artifact_type: a.artifact_type, metadata: a.metadata })),
     ttsChars,
@@ -510,6 +528,10 @@ function handleConfirm() {
       </div>
       <p class="asset-plan-overview-hint">
         口播、字幕、音效、配乐将自动生成；分镜图和视频需通过 AI 生成或手动上传。
+        <span v-if="estimatedCost" class="asset-plan-cost-estimate">
+          预估成本约 ¥{{ estimatedCost.total.toFixed(2) }}
+          （{{ estimatedCost.images }} 张图 + {{ estimatedCost.videoSec.toFixed(0) }}s 视频 + {{ estimatedCost.ttsChars }} 字口播）
+        </span>
       </p>
       <div class="asset-plan-overview-actions">
         <el-button
@@ -623,7 +645,7 @@ function handleConfirm() {
         </div>
 
         <!-- Cost summary -->
-        <div v-if="costBreakdown.total > 0" class="asset-overview-cost">
+        <div v-if="hasManifest" class="asset-overview-cost">
           <h4 class="asset-overview-cost-title">预估成本</h4>
           <div class="asset-overview-cost-items">
             <span v-if="costBreakdown.image.count > 0">

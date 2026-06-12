@@ -7,6 +7,7 @@ import { checkPromptQuality } from "../../utils/prompt-quality";
 
 import type { StoryboardSegment } from "../../stores/storyboard";
 import type { AssetTask } from "../../stores/asset-planning";
+import { useAssetsStore } from "../../stores/assets";
 
 /* -------------------------------------------------------------------------- */
 /*  Props & Emits                                                             */
@@ -65,6 +66,8 @@ const MOTION_LABELS: Record<string, string> = {
 const CONTENT_LABELS: Record<string, string> = {
   live_action: "实拍风格",
 };
+
+const assetsStore = useAssetsStore();
 
 /* -------------------------------------------------------------------------- */
 /*  Tab & carousel state                                                      */
@@ -135,6 +138,12 @@ const hasGeneratedMedia = computed(() => !!currentArtifact.value);
 const isCurrentUploading = computed(() => {
   const task = activeTasks.value[activeMediaIndex.value];
   return task ? props.uploadingTaskId === task.task_id : false;
+});
+
+/** True when the current task is being generated (single-task API call). */
+const isCurrentGenerating = computed(() => {
+  const task = activeTasks.value[activeMediaIndex.value];
+  return task ? assetsStore.state.generatingTaskId === task.task_id : false;
 });
 
 /* -------------------------------------------------------------------------- */
@@ -481,11 +490,16 @@ function nextMedia() {
               </ElTag>
             </ElTooltip>
             <ElTooltip
-              v-if="promptQuality && promptQuality.score === 'weak'"
-              :content="'提示词偏弱，建议补充：' + promptQuality.checks.filter(c => !c.passed).map(c => c.label).join('、')"
+              v-if="promptQuality && promptQuality.score !== 'strong'"
+              :content="'提示词可优化：' + promptQuality.checks.filter(c => !c.passed).map(c => c.label).join('、')"
               placement="top"
             >
-              <ElTag size="small" type="warning">提示词偏弱</ElTag>
+              <ElTag
+                size="small"
+                :type="promptQuality.score === 'weak' ? 'warning' : 'info'"
+              >
+                {{ promptQuality.score === 'weak' ? '提示词偏弱' : '可优化' }}
+              </ElTag>
             </ElTooltip>
           </div>
           <ElTooltip :content="copyFeedback ? '已复制' : '复制提示词'" placement="top">
@@ -531,7 +545,7 @@ function nextMedia() {
           <ElButton
             v-if="canAutoGenerate && !hasGeneratedMedia"
             size="small"
-            :loading="isCurrentUploading"
+            :loading="isCurrentGenerating"
             @click="emit('generate-task', currentTask!.task_id)"
           >
             生成
@@ -539,7 +553,7 @@ function nextMedia() {
           <ElButton
             v-if="canAutoGenerate && hasGeneratedMedia"
             size="small"
-            :loading="isCurrentUploading"
+            :loading="isCurrentGenerating"
             @click="emit('generate-task', currentTask!.task_id)"
           >
             重新生成
