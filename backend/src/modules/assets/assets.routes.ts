@@ -292,6 +292,98 @@ async function generateTaskController(
   });
 }
 
+async function upgradeSegmentToVideoController(
+  context: RouteContext,
+): Promise<AppResponse> {
+  const project = await getProjectById(context.app.db, context.params.projectId);
+  if (!project) {
+    return { statusCode: 404, body: { error: "project_not_found" } };
+  }
+
+  const segmentId = context.params.segmentId;
+  const payload = context.payload as Record<string, unknown>;
+  const voiceProfileId =
+    (payload.voice_profile_id as string | undefined) ?? "voice_default_male_storyteller";
+  const providerMode =
+    payload.provider_mode === "dashscope" || payload.provider_mode === "dashscope_tts"
+      ? payload.provider_mode
+      : env.llm.provider === "openai" ? "dashscope" : undefined;
+
+  // Validate the project has an active asset plan and manifest
+  if (!project.activeAssetManifestRecordId) {
+    return { statusCode: 409, body: { error: "active_assets_missing" } };
+  }
+  if (!project.activeAssetPlanRecordId) {
+    return { statusCode: 409, body: { error: "active_asset_plan_missing" } };
+  }
+
+  const planRecord = context.app.db.assetPlanRecords.get(project.activeAssetPlanRecordId);
+  if (!planRecord) {
+    return { statusCode: 404, body: { error: "asset_plan_record_not_found" } };
+  }
+
+  const assetPlan = planRecord.planJson as { tasks: Array<{ task_id: string; task_type: string; source_segment_id: string | null }> };
+
+  // Check if a video_clip task already exists for this segment
+  const existingVideo = assetPlan.tasks.find(
+    t => t.task_type === "video_clip" && t.source_segment_id === segmentId,
+  );
+  if (existingVideo) {
+    // Already has a video task — just regenerate it
+    return runAssetsGeneration({
+      db: context.app.db, project, voiceProfileId,
+      executionMode: "auto_available", providerMode,
+      taskIds: [existingVideo.task_id],
+    });
+  }
+
+  // Find an existing image task on this segment to clone parameters from
+  const imageTask = assetPlan.tasks.find(
+    t => t.task_type === "image_still" && t.source_segment_id === segmentId,
+  );
+  if (!imageTask) {
+    return { statusCode: 422, body: { error: "segment_has_no_image_task" } };
+  }
+
+  // Create an ad-hoc video_clip task based on the image task
+  const newTaskId = `video_upgrade_${context.app.db.generateId().slice(0, 8)}`;
+  const durationSec = (payload.duration_sec as number) ?? 5;
+  const resolution = (payload.resolution as string) ?? "720P";
+  const promptDraft = (payload.prompt_draft as string) ?? imageTask.prompt_draft ?? null;
+
+  const adHocTask = {
+    ...imageTask,
+    task_id: newTaskId,
+    task_type: "video_clip" as const,
+    prompt_draft: promptDraft
+      ? `${promptDraft}\n[视频升级] 主体动作、镜头运动、环境变化、历史风格约束`
+      : null,
+    parameters: {
+      ...(imageTask as Record<string, unknown>).parameters,
+      duration_sec: durationSec,
+      resolution,
+      source_image_task_id: imageTask.task_id,
+    },
+  };
+
+  // Temporarily add the task to the plan for this generation run
+  assetPlan.tasks.push(adHocTask as typeof assetPlan.tasks[number]);
+  planRecord.planJson = assetPlan as unknown as Record<string, unknown>;
+
+  try {
+    return runAssetsGeneration({
+      db: context.app.db, project, voiceProfileId,
+      executionMode: "auto_available", providerMode,
+      taskIds: [newTaskId],
+    });
+  } finally {
+    // Remove the ad-hoc task from the plan
+    const idx = assetPlan.tasks.findIndex(t => t.task_id === newTaskId);
+    if (idx >= 0) assetPlan.tasks.splice(idx, 1);
+    planRecord.planJson = assetPlan as unknown as Record<string, unknown>;
+  }
+}
+
 export function registerAssetsRoutes(app: AppInstance) {
   app.addRoute(
     "POST",
@@ -302,6 +394,11 @@ export function registerAssetsRoutes(app: AppInstance) {
     "POST",
     "/api/projects/:projectId/assets/tasks/:taskId/generate",
     generateTaskController,
+  );
+  app.addRoute(
+    "POST",
+    "/api/projects/:projectId/assets/segments/:segmentId/upgrade-video",
+    upgradeSegmentToVideoController,
   );
   app.addRoute(
     "POST",

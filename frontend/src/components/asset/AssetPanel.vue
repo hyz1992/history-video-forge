@@ -461,6 +461,23 @@ async function handleGenerateTask(taskId: string) {
   }
 }
 
+async function handleUpgradeVideo(segmentId: string) {
+  try {
+    await ElMessageBox.confirm(
+      "将为该分镜生成 API 视频（可选升级，不影响图片+运镜路线）。视频生成按秒计费，确定继续？",
+      "升级为 API 视频",
+      { confirmButtonText: "确定升级", cancelButtonText: "取消", type: "info" },
+    );
+  } catch { return; }
+  try {
+    await assetsStore.upgradeSegmentToVideo(segmentId);
+    ElMessage.success("API 视频生成完成");
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "升级失败";
+    ElMessage.error("视频升级失败：" + msg);
+  }
+}
+
 function handleRetry() {
   assetPlanningStore.retryLoad();
   assetsStore.loadProject();
@@ -763,6 +780,7 @@ function handleConfirm() {
           :focus-task-id="focusTaskId"
           @upload-file="handleUploadFile"
           @generate-task="handleGenerateTask"
+          @upgrade-video="handleUpgradeVideo"
         />
       </div>
 

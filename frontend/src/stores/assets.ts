@@ -83,6 +83,7 @@ export interface AssetsStore {
   loadProject: () => Promise<void>;
   generateAssets: (options: { enabledProviderTypes?: string[]; mode?: string; taskIds?: string[] }) => Promise<void>;
   generateSingleTask: (taskId: string) => Promise<void>;
+  upgradeSegmentToVideo: (segmentId: string) => Promise<void>;
   uploadArtifact: (taskId: string, file: File) => Promise<void>;
   acceptArtifact: (taskId: string, artifactId: string) => Promise<void>;
   artifactFileUrl: (artifactId: string) => string;
@@ -98,6 +99,7 @@ export interface AssetsApi {
   loadProject(projectId: string): Promise<AssetsSnapshot>;
   generateAssets(projectId: string, options: { enabledProviderTypes?: string[]; mode?: string; taskIds?: string[] }): Promise<void>;
   generateSingleTask(projectId: string, taskId: string): Promise<void>;
+  upgradeSegmentToVideo(projectId: string, segmentId: string): Promise<void>;
   uploadArtifact(projectId: string, taskId: string, file: File): Promise<void>;
   acceptArtifact(projectId: string, taskId: string, artifactId: string): Promise<void>;
 }
@@ -143,6 +145,17 @@ export function createFetchAssetsApi(baseUrl = ""): AssetsApi {
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         throw new Error((err as Record<string, unknown>).error as string ?? `task_generate_failed:${response.status}`);
+      }
+    },
+
+    async upgradeSegmentToVideo(projectId, segmentId) {
+      const response = await fetch(
+        `${baseUrl}/api/projects/${projectId}/assets/segments/${segmentId}/upgrade-video`,
+        { method: "POST", headers: { "content-type": "application/json" }, body: "{}" },
+      );
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error((err as Record<string, unknown>).error as string ?? `upgrade_video_failed:${response.status}`);
       }
     },
 
@@ -271,6 +284,21 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
     }
   }
 
+  async function upgradeSegmentToVideo(segmentId: string) {
+    const projectId = input.projectStore.state.projectId;
+    if (!projectId) return;
+
+    state.isGenerating = true;
+    try {
+      await input.api.upgradeSegmentToVideo(projectId, segmentId);
+      await loadProject();
+    } catch (error) {
+      throw error;
+    } finally {
+      state.isGenerating = false;
+    }
+  }
+
   async function uploadArtifact(taskId: string, file: File) {
     const projectId = input.projectStore.state.projectId;
     if (!projectId) return;
@@ -310,6 +338,7 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
     loadProject,
     generateAssets,
     generateSingleTask,
+    upgradeSegmentToVideo,
     uploadArtifact,
     acceptArtifact,
     artifactFileUrl,

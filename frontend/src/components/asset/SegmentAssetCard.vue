@@ -5,6 +5,8 @@ import { Upload, CopyDocument } from "@element-plus/icons-vue";
 
 import { checkPromptQuality } from "../../utils/prompt-quality";
 
+import { checkArtRisks } from "../../utils/asset-art-quality";
+
 import type { StoryboardSegment } from "../../stores/storyboard";
 import type { AssetTask } from "../../stores/asset-planning";
 import { useAssetsStore } from "../../stores/assets";
@@ -41,6 +43,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   "upload-file": [taskId: string, file: File];
   "generate-task": [taskId: string];
+  "upgrade-video": [segmentId: string];
 }>();
 
 /* -------------------------------------------------------------------------- */
@@ -245,6 +248,13 @@ const promptQuality = computed(() => {
   return checkPromptQuality(task.prompt_draft, taskType);
 });
 
+const artRisks = computed(() => {
+  const task = activeTasks.value[activeMediaIndex.value];
+  if (!task?.prompt_draft) return [];
+  const taskType = task.task_type === "image_still" ? "image_still" : "video_clip";
+  return checkArtRisks(task.prompt_draft, taskType).filter(h => h.triggered);
+});
+
 const riskLevel = computed<"high" | "low" | null>(() => {
   if (!activeRiskNotes.value.length) return null;
   return activeRiskNotes.value.length >= 2 ? "high" : "low";
@@ -391,8 +401,17 @@ function nextMedia() {
         <ElTag size="small" type="info">图片+运镜</ElTag>
         <span class="segment-media-placeholder-text">
           当前路线：图片 + {{ segment.motion_hint ? MOTION_LABELS[segment.motion_hint] ?? segment.motion_hint : '运镜' }}<br/>
-          视频由 Remotion 合成渲染，无需 API 视频生成。
+          视频由 Remotion 合成渲染。
         </span>
+        <el-button
+          size="small"
+          type="primary"
+          plain
+          :loading="assetsStore.state.isGenerating"
+          @click="emit('upgrade-video', segment.segment_id)"
+        >
+          {{ assetsStore.state.isGenerating ? '处理中...' : '升级为 API 视频' }}
+        </el-button>
       </div>
 
       <!-- Preview area: no artifact yet -->
@@ -511,6 +530,17 @@ function nextMedia() {
         <p class="segment-info-prompt-text">
           {{ activePromptText }}
         </p>
+        <details v-if="artRisks.length > 0" class="segment-art-risks">
+          <summary class="segment-art-risks-summary">
+            美术提示（{{ artRisks.length }} 项）
+          </summary>
+          <ul class="segment-art-risks-list">
+            <li v-for="hint in artRisks" :key="hint.code" class="segment-art-risk-item">
+              <span class="segment-art-risk-label">{{ hint.label }}</span>
+              <span class="segment-art-risk-desc">{{ hint.risk }}</span>
+            </li>
+          </ul>
+        </details>
       </div>
 
       <!-- Task indicator & switcher (multi-task) + action buttons -->
@@ -830,6 +860,40 @@ function nextMedia() {
   font-size: 0.75rem;
   color: var(--text-muted);
   margin-left: 4px;
+}
+
+/* ---- Art risk hints ---- */
+.segment-art-risks {
+  margin-top: 8px;
+  font-size: 0.8rem;
+}
+
+.segment-art-risks-summary {
+  cursor: pointer;
+  color: var(--color-warning);
+  font-size: 0.82rem;
+}
+
+.segment-art-risks-list {
+  margin: 4px 0 0;
+  padding-left: 1rem;
+  display: grid;
+  gap: 3px;
+}
+
+.segment-art-risk-item {
+  display: flex;
+  gap: 6px;
+}
+
+.segment-art-risk-label {
+  color: var(--color-warning);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.segment-art-risk-desc {
+  color: var(--text-muted);
 }
 
 .segment-media-preview {
