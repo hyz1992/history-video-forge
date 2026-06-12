@@ -364,6 +364,13 @@ async function upgradeSegmentToVideoController(
       resolution,
       source_image_task_id: imageTask.task_id,
     },
+    // Override image upload policy for video
+    manual_upload_policy: {
+      allowed: true,
+      required: false,
+      accepted_file_types: ["video/mp4", "video/quicktime"],
+      acceptance_notes: ["支持 MP4/MOV 格式"],
+    },
   };
 
   // Persist the new task in the asset plan so the frontend can find

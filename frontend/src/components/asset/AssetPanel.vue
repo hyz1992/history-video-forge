@@ -462,13 +462,13 @@ async function handleGenerateTask(taskId: string) {
 }
 
 async function handleUpgradeVideo(segmentId: string) {
-  // Find the segment to show cost estimate
   const seg = segments.value.find(s => s.segment_id === segmentId);
   const segLabel = seg ? `#${segments.value.indexOf(seg) + 1}` : segmentId;
-  const videoEstimate = estimatedCost.value?.has1080p ? "约 ¥1.00/秒 (1080P)" : "约 ¥0.60/秒 (720P)";
+  // Default upgrade creates 720P at 5s — use those values, not global estimate
+  const rate = "约 ¥0.60/秒 (720P)";
   try {
     await ElMessageBox.confirm(
-      `将为分镜 ${segLabel} 新增 API 视频任务（可选升级，不影响图片+运镜路线）。\n费用：${videoEstimate}，默认 5 秒。\n确定继续？`,
+      `将为分镜 ${segLabel} 新增可选 API 视频任务（默认 720P / 5 秒，不影响图片+运镜路线）。\n费用：${rate}，预估 ¥${(5 * 0.60).toFixed(2)}。\n确定继续？`,
       "升级为 API 视频",
       { confirmButtonText: "确定升级", cancelButtonText: "取消", type: "info" },
     );
