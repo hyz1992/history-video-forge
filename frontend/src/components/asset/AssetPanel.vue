@@ -54,19 +54,31 @@ const estimatedCost = computed(() => {
   let images = 0, videoSec = 0, ttsChars = 0;
   for (const task of assetTasks.value) {
     if (task.task_type === "image_still") images++;
-    if (task.task_type === "video_clip") videoSec += 4; // rough estimate
+    if (task.task_type === "video_clip") {
+      // Read duration from task parameters, fall back to provider default (5s)
+      const dur = (task.parameters as Record<string, unknown> | undefined)?.duration_sec as number | undefined;
+      videoSec += typeof dur === "number" && dur > 0 ? dur : 5;
+    }
     if (task.task_type === "tts_audio") {
-      // Estimate from script text
       const plan = activeAssetPlan.value?.plan;
       const ttsPlan = plan as unknown as { tts_plan?: { chunks?: Array<{ script_excerpt?: string }> } } | null;
       ttsChars = ttsPlan?.tts_plan?.chunks?.reduce((s, c) => s + (c.script_excerpt?.length ?? 0), 0) ?? 0;
     }
   }
   if (images === 0 && videoSec === 0 && ttsChars === 0) return null;
-  const imgCost = images * 0.20;
-  const vidCost = videoSec * 0.60;
-  const ttsCost = (ttsChars / 10000) * 0.80;
-  return { images, videoSec, ttsChars, total: imgCost + vidCost + ttsCost, imgCost, vidCost, ttsCost };
+  // Use shared pricing config
+  const pricing = computeCostBreakdown(
+    // Build synthetic artifacts for pricing calculation
+    [
+      ...Array.from({ length: images }, () => ({ artifact_type: "image", metadata: {} })),
+      ...Array.from({ length: Math.ceil(videoSec) }, () => ({ artifact_type: "video", metadata: { duration_sec: 1 } })),
+    ],
+    ttsChars,
+  );
+  return {
+    images, videoSec, ttsChars,
+    total: pricing.total, imgCost: pricing.image.total, vidCost: pricing.video.total, ttsCost: pricing.tts.total,
+  };
 });
 
 /** Post-generation cost from actual artifacts. */
@@ -303,22 +315,11 @@ const allTypeBreakdown = computed(() => {
   });
 });
 
-/** Live progress text during generation. */
+/** Clear status message during generation (backend doesn't stream progress). */
 const generationProgress = computed(() => {
   if (!assetsStore.state.isGenerating) return "";
-  const execs = executions.value;
-  if (execs.length === 0) return "正在初始化...";
-  const running = execs.filter(e => e.status === "running");
-  const completed = execs.filter(e => e.status === "completed" || e.status === "accepted").length;
-  const total = assetTasks.value.length || execs.length;
-  if (running.length > 0) {
-    const taskLabels = running.slice(0, 3).map(e => {
-      const t = assetTasks.value.find(at => at.task_id === e.task_id);
-      return t ? (TASK_TYPE_LABELS[t.task_type] ?? t.task_type) : e.task_id;
-    }).join("、");
-    return `正在生成：${taskLabels}（${completed}/${total}）`;
-  }
-  return `生成中... ${completed}/${total} 已完成`;
+  if (!hasManifest.value) return "正在初始化资产生成，可能需要 1-5 分钟...";
+  return `生成请求已提交，处理中... 当前 ${executionStats.value.completed}/${assetTasks.value.length} 已完成`;
 });
 const blockedItemsAreUploadOnly = computed(() =>
   blockedItems.value.length > 0 &&
@@ -548,6 +549,9 @@ function handleConfirm() {
           {{ assetsStore.state.isGenerating ? "生成中..." : "生成资产（手动上传图片/视频）" }}
         </el-button>
       </div>
+      <p v-if="assetsStore.state.isGenerating" class="asset-generating-progress">
+        {{ generationProgress }}
+      </p>
     </div>
 
     <!-- Stage 2/3: has plan → generate buttons + task list -->

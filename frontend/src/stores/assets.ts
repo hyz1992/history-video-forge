@@ -244,22 +244,8 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
     state.loadError = null;
 
     try {
-      const generatePromise = input.api.generateAssets(projectId, options);
-
-      // Poll for progress updates while generation runs
-      let pollCount = 0;
-      const maxPolls = 120; // ~10 minutes
-      const poll = async () => {
-        while (pollCount < maxPolls && state.isGenerating) {
-          await new Promise(r => setTimeout(r, 3000));
-          pollCount++;
-          try { await loadProject(); } catch { /* keep polling */ }
-        }
-      };
-      poll(); // fire-and-forget polling
-
-      await generatePromise;
-      await loadProject(); // final refresh
+      await input.api.generateAssets(projectId, options);
+      await loadProject();
     } catch (error) {
       state.loadError = toErrorMessage(error);
     } finally {
@@ -275,20 +261,7 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
     state.generatingTaskId = taskId;
 
     try {
-      const generatePromise = input.api.generateSingleTask(projectId, taskId);
-
-      // Poll for progress
-      let pollCount = 0;
-      const poll = async () => {
-        while (pollCount < 60 && state.isGenerating) {
-          await new Promise(r => setTimeout(r, 2000));
-          pollCount++;
-          try { await loadProject(); } catch { /* keep polling */ }
-        }
-      };
-      poll();
-
-      await generatePromise;
+      await input.api.generateSingleTask(projectId, taskId);
       await loadProject();
     } catch (error) {
       throw error;
