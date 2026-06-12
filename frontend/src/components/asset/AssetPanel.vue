@@ -285,7 +285,23 @@ const allTypeBreakdown = computed(() => {
   });
 });
 
-/** Whether blocked items are all manual-upload type (no regeneration needed). */
+/** Live progress text during generation. */
+const generationProgress = computed(() => {
+  if (!assetsStore.state.isGenerating) return "";
+  const execs = executions.value;
+  if (execs.length === 0) return "正在初始化...";
+  const running = execs.filter(e => e.status === "running");
+  const completed = execs.filter(e => e.status === "completed" || e.status === "accepted").length;
+  const total = assetTasks.value.length || execs.length;
+  if (running.length > 0) {
+    const taskLabels = running.slice(0, 3).map(e => {
+      const t = assetTasks.value.find(at => at.task_id === e.task_id);
+      return t ? (TASK_TYPE_LABELS[t.task_type] ?? t.task_type) : e.task_id;
+    }).join("、");
+    return `正在生成：${taskLabels}（${completed}/${total}）`;
+  }
+  return `生成中... ${completed}/${total} 已完成`;
+});
 const blockedItemsAreUploadOnly = computed(() =>
   blockedItems.value.length > 0 &&
   blockedItems.value.every(i => i.reason === "待上传"),
@@ -656,6 +672,9 @@ function handleConfirm() {
           <span v-if="blockedItems.length > 0" class="asset-overview-hint">
             也可在下方的分镜卡片中逐项上传或替换
           </span>
+          <p v-if="assetsStore.state.isGenerating && generationProgress" class="asset-generating-progress">
+            {{ generationProgress }}
+          </p>
         </div>
       </div>
 
@@ -1142,6 +1161,13 @@ details[open] > .asset-global-toggle::before {
 .asset-overview-hint {
   font-size: 0.82rem;
   color: var(--text-muted);
+}
+
+.asset-generating-progress {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  color: var(--accent-primary);
+  width: 100%;
 }
 
 /* ---- Blocked reason ---- */
