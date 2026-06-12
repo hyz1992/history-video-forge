@@ -51,13 +51,19 @@ const canCompose = computed(() => {
 
 /** Pre-generation cost estimate from the asset plan. */
 const estimatedCost = computed(() => {
-  let images = 0, videoSec = 0, ttsChars = 0;
+  let images = 0;
+  const videoSpecs: Array<{ dur: number; height: number }> = [];
+  let ttsChars = 0;
+
   for (const task of assetTasks.value) {
     if (task.task_type === "image_still") images++;
     if (task.task_type === "video_clip") {
-      // Read duration from task parameters, fall back to provider default (5s)
-      const dur = (task.parameters as Record<string, unknown> | undefined)?.duration_sec as number | undefined;
-      videoSec += typeof dur === "number" && dur > 0 ? dur : 5;
+      const params = (task.parameters as Record<string, unknown> | undefined);
+      const dur = (typeof params?.duration_sec === "number" && params.duration_sec > 0)
+        ? params.duration_sec : 5;
+      const res = (typeof params?.resolution === "string" ? params.resolution : "") || "720P";
+      const height = res.includes("1080") ? 1080 : 720;
+      videoSpecs.push({ dur, height });
     }
     if (task.task_type === "tts_audio") {
       const plan = activeAssetPlan.value?.plan;
@@ -65,18 +71,26 @@ const estimatedCost = computed(() => {
       ttsChars = ttsPlan?.tts_plan?.chunks?.reduce((s, c) => s + (c.script_excerpt?.length ?? 0), 0) ?? 0;
     }
   }
-  if (images === 0 && videoSec === 0 && ttsChars === 0) return null;
-  // Use shared pricing config
-  const pricing = computeCostBreakdown(
-    // Build synthetic artifacts for pricing calculation
-    [
-      ...Array.from({ length: images }, () => ({ artifact_type: "image", metadata: {} })),
-      ...Array.from({ length: Math.ceil(videoSec) }, () => ({ artifact_type: "video", metadata: { duration_sec: 1 } })),
-    ],
-    ttsChars,
-  );
+
+  if (images === 0 && videoSpecs.length === 0 && ttsChars === 0) return null;
+
+  // Build synthetic artifacts for pricing — one per second for video to match per-second pricing
+  const syntheticArtifacts: Array<{ artifact_type: string; metadata: Record<string, unknown> }> = [
+    ...Array.from({ length: images }, () => ({ artifact_type: "image", metadata: {} })),
+  ];
+  for (const vs of videoSpecs) {
+    for (let s = 0; s < Math.ceil(vs.dur); s++) {
+      syntheticArtifacts.push({ artifact_type: "video", metadata: { duration_sec: 1, height: vs.height } });
+    }
+  }
+
+  const videoTotalSec = videoSpecs.reduce((sum, vs) => sum + vs.dur, 0);
+  const has1080p = videoSpecs.some(vs => vs.height >= 1080);
+
+  const pricing = computeCostBreakdown(syntheticArtifacts, ttsChars);
+
   return {
-    images, videoSec, ttsChars,
+    images, videoTotalSec, ttsChars, has1080p,
     total: pricing.total, imgCost: pricing.image.total, vidCost: pricing.video.total, ttsCost: pricing.tts.total,
   };
 });
@@ -530,8 +544,9 @@ function handleConfirm() {
       <p class="asset-plan-overview-hint">
         口播、字幕、音效、配乐将自动生成；分镜图和视频需通过 AI 生成或手动上传。
         <span v-if="estimatedCost" class="asset-plan-cost-estimate">
-          预估成本约 ¥{{ estimatedCost.total.toFixed(2) }}
-          （{{ estimatedCost.images }} 张图 + {{ estimatedCost.videoSec.toFixed(0) }}s 视频 + {{ estimatedCost.ttsChars }} 字口播）
+          <br/>「全部自动生成」预估 ¥{{ estimatedCost.total.toFixed(2) }}
+          （{{ estimatedCost.images }} 图 · {{ estimatedCost.videoTotalSec.toFixed(0) }}s{{ estimatedCost.has1080p ? ' 1080P' : '' }} 视频 · {{ estimatedCost.ttsChars }} 字口播）
+          <br/>「手动上传」仅生成口播/字幕/音效/配乐，预估 ¥{{ (estimatedCost.ttsCost).toFixed(2) }}
         </span>
       </p>
       <div class="asset-plan-overview-actions">
