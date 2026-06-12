@@ -392,7 +392,7 @@ function nextMedia() {
             v-if="currentArtifact?.artifact_type === 'image'"
             :src="artifactUrl(currentArtifact.artifact_id)"
             class="segment-media-image"
-            alt="上传的图片"
+            :alt="currentArtifact?.origin === 'provider' ? 'AI 生成图片' : currentArtifact?.origin === 'manual' ? '手动上传图片' : '图片'"
           />
           <video
             v-else-if="currentArtifact?.artifact_type === 'video'"
@@ -476,7 +476,9 @@ function nextMedia() {
           >
             {{ i + 1 }}
           </button>
-          <span class="segment-task-hint">共 {{ activeTasks.length }} 个任务</span>
+          <span class="segment-task-hint">
+            共 {{ activeTasks.length }} 个任务 · 当前操作作用于任务 {{ activeMediaIndex + 1 }}
+          </span>
         </div>
 
         <template v-if="activeTasks.length === 0">
