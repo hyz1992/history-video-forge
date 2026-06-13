@@ -76,13 +76,13 @@ const validationDecision = computed(() => {
 
 onMounted(async () => {
   await composeStore.loadProject();
-  // Auto-generate compose timeline when arriving from asset confirmation
+  // Auto-generate compose timeline when arriving from asset confirmation.
+  // Only trigger for ready/partial — NOT for blocked.
   const s = composeStore.state.snapshot;
   if (
     s &&
     !s.active_compose &&
     (s.current_status === "assets_ready" ||
-      s.current_status === "assets_blocked" ||
       s.current_status === "assets_partial")
   ) {
     await composeStore.generateCompose();

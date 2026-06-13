@@ -182,6 +182,18 @@ export function createStoryboardStore(
     try {
       await input.api.generateStoryboard(projectId);
       await loadActiveStoryboardSnapshot();
+      if (!state.snapshot?.active_storyboard) {
+        state.loadError = "分镜生成未完成，请重试";
+        state.snapshot = {
+          current_status: "storyboard_failed",
+          active_storyboard: null,
+          active_storyboard_record_id: null,
+        };
+        input.projectStore.syncProject({
+          project_id: projectId,
+          current_status: "storyboard_failed",
+        });
+      }
     } catch (error) {
       state.loadError = toErrorMessage(error);
       state.snapshot = {

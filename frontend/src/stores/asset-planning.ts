@@ -124,6 +124,7 @@ export function createFetchAssetPlanningApi(baseUrl = ""): AssetPlanningApi {
   return {
     async loadProject(projectId) {
       const response = await fetch(`${baseUrl}/api/projects/${projectId}`);
+      if (!response.ok) throw new Error(`asset_plan_load_failed:${response.status}`);
       const data = await response.json();
       return {
         current_status: data.current_status ?? null,
@@ -133,13 +134,14 @@ export function createFetchAssetPlanningApi(baseUrl = ""): AssetPlanningApi {
       };
     },
     async generateAssetPlan(projectId) {
-      await fetch(
+      const response = await fetch(
         `${baseUrl}/api/projects/${projectId}/asset-plan/generate`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
         },
       );
+      if (!response.ok) throw new Error(`asset_plan_generate_failed:${response.status}`);
     },
   };
 }
@@ -226,10 +228,10 @@ export function createAssetPlanningStore(
     });
 
     try {
-      // Fire-and-forget the generation; poll for completion so the UI
-      // never hangs on extremely long LLM calls.
-      input.api.generateAssetPlan(projectId).catch(() => {
-        // Swallow — the polling loop below is the source of truth.
+      // Fire the POST and capture any immediate error
+      let postError: string | null = null;
+      input.api.generateAssetPlan(projectId).catch((err) => {
+        postError = err instanceof Error ? err.message : String(err);
       });
 
       // Poll snapshot until the plan appears or generation fails.
@@ -247,11 +249,20 @@ export function createAssetPlanningStore(
           state.loadError = "资产规划生成失败";
           break;
         }
+        // If POST errored early and no plan appeared after a few polls, give up
+        if (postError && i >= 3) {
+          state.loadError = postError;
+          if (state.snapshot) state.snapshot.current_status = "asset_plan_failed";
+          break;
+        }
       }
 
-      // Final snapshot load to catch any edge case.
-      if (!state.snapshot?.active_asset_plan) {
+      // Final snapshot load
+      if (!state.snapshot?.active_asset_plan && !state.loadError) {
         await loadActiveAssetPlanSnapshot();
+        if (!state.snapshot?.active_asset_plan && !state.loadError) {
+          state.loadError = "资产规划生成超时，请重试";
+        }
       }
     } catch (error) {
       state.loadError = toErrorMessage(error);

@@ -95,10 +95,11 @@ export function createFetchScriptApi(baseUrl = ""): ScriptApi {
   return {
     async loadSnapshot(projectId) {
       const response = await fetch(`${baseUrl}/api/projects/${projectId}`);
+      if (!response.ok) throw new Error(`script_load_failed:${response.status}`);
       return response.json();
     },
     async generateInitialScript(projectId) {
-      await fetch(`${baseUrl}/api/projects/${projectId}/script/generate`, {
+      const response = await fetch(`${baseUrl}/api/projects/${projectId}/script/generate`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -108,9 +109,10 @@ export function createFetchScriptApi(baseUrl = ""): ScriptApi {
           allow_regen: false,
         }),
       });
+      if (!response.ok) throw new Error(`script_generate_failed:${response.status}`);
     },
     async runPatchOnce(projectId) {
-      await fetch(`${baseUrl}/api/projects/${projectId}/script/generate`, {
+      const response = await fetch(`${baseUrl}/api/projects/${projectId}/script/generate`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -120,9 +122,10 @@ export function createFetchScriptApi(baseUrl = ""): ScriptApi {
           allow_regen: false,
         }),
       });
+      if (!response.ok) throw new Error(`script_patch_failed:${response.status}`);
     },
     async runRegenOnce(projectId) {
-      await fetch(`${baseUrl}/api/projects/${projectId}/script/generate`, {
+      const response = await fetch(`${baseUrl}/api/projects/${projectId}/script/generate`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -133,6 +136,7 @@ export function createFetchScriptApi(baseUrl = ""): ScriptApi {
           force_regen: true,
         }),
       });
+      if (!response.ok) throw new Error(`script_regen_failed:${response.status}`);
     },
   };
 }
@@ -291,6 +295,20 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
     try {
       await input.api.generateInitialScript(projectId);
       await loadActiveScriptSnapshot();
+      // Verify the backend actually produced a script
+      if (!state.snapshot?.active_script) {
+        state.loadError = "文案生成未完成，请重试";
+        state.snapshot = {
+          project_id: projectId,
+          current_status: "script_failed",
+          active_topic_package: state.snapshot?.active_topic_package ?? null,
+          active_script: null,
+        };
+        input.projectStore.syncProject({
+          project_id: projectId,
+          current_status: "script_failed",
+        });
+      }
     } catch (error) {
       state.loadError = toErrorMessage(error);
       state.snapshot = {
