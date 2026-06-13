@@ -421,9 +421,14 @@ async function handleGenerateSemiAuto() {
 }
 
 async function handleGenerateMissing() {
+  const count = blockedItems.value.length;
+  const types = [...new Set(blockedItems.value.map(i => i.type))].join("、");
+  const costText = estimatedCost.value
+    ? `\n预估费用约 ¥${estimatedCost.value.total.toFixed(2)}（含图片/视频/口播）`
+    : "";
   try {
     await ElMessageBox.confirm(
-      "将生成所有未完成/失败的资产任务（已完成的不会被覆盖）。\n如需覆盖全部已有资产，请使用「重新生成全部资产」。\n确定继续？",
+      `将生成 ${count} 个未完成任务（${types}），已完成的不会被覆盖。${costText}\n确定继续？`,
       "确认批量生成剩余",
       { confirmButtonText: "确定生成", cancelButtonText: "取消", type: "info" },
     );
@@ -757,7 +762,6 @@ function handleConfirm() {
             {{ assetsStore.state.isGenerating ? "生成中..." : "批量生成剩余资产" }}
           </el-button>
           <el-button
-            v-if="blockedItems.length > 0"
             type="danger"
             plain
             size="small"
