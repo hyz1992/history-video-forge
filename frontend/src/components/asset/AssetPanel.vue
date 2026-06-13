@@ -421,16 +421,25 @@ async function handleGenerateMissing() {
 }
 
 async function handleGenerateFull() {
+  const costText = estimatedCost.value
+    ? `\n预估费用约 ¥${estimatedCost.value.total.toFixed(2)}（${estimatedCost.value.images} 张图 + ${estimatedCost.value.videoTotalSec.toFixed(0)}s 视频 + ${estimatedCost.value.ttsChars} 字口播）`
+    : "";
   if (hasManifest.value) {
     try {
       await ElMessageBox.confirm(
-        "重新生成将覆盖所有已有产物（包括已上传的文件），确定继续？",
+        `重新生成将覆盖所有已有产物（包括已上传的文件），确定继续？${costText}`,
         "确认重新生成",
         { confirmButtonText: "确定重建", cancelButtonText: "取消", type: "warning" },
       );
-    } catch {
-      return;
-    }
+    } catch { return; }
+  } else {
+    try {
+      await ElMessageBox.confirm(
+        `将调用 AI 服务生成全部资产（图片/视频/口播/音效/配乐）。${costText}\n\n确定继续？`,
+        "确认全部自动生成",
+        { confirmButtonText: "确定生成", cancelButtonText: "取消", type: "info" },
+      );
+    } catch { return; }
   }
   await assetsStore.generateAssets({});
   if (!assetsStore.state.loadError) {

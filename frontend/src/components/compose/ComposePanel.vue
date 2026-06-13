@@ -74,8 +74,22 @@ const validationDecision = computed(() => {
 /*  Lifecycle                                                                 */
 /* -------------------------------------------------------------------------- */
 
-onMounted(() => {
-  composeStore.loadProject();
+onMounted(async () => {
+  await composeStore.loadProject();
+  // Auto-generate compose timeline when arriving from asset confirmation
+  const s = composeStore.state.snapshot;
+  if (
+    s &&
+    !s.active_compose &&
+    (s.current_status === "assets_ready" ||
+      s.current_status === "assets_blocked" ||
+      s.current_status === "assets_partial")
+  ) {
+    await composeStore.generateCompose();
+    if (!composeStore.state.loadError) {
+      ElMessage.success("合成时间线生成完成");
+    }
+  }
 });
 
 /* -------------------------------------------------------------------------- */

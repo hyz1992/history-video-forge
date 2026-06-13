@@ -92,7 +92,9 @@ function goBack() {
   <aside class="workspace-sidebar" :class="{ collapsed }">
     <!-- Header -->
     <div class="sidebar-header">
-      <span v-if="!collapsed" class="sidebar-title">{{ projectName }}</span>
+      <ElTooltip v-if="!collapsed" :content="projectName" placement="right" :show-after="500">
+        <span class="sidebar-title">{{ projectName }}</span>
+      </ElTooltip>
       <ElButton
         class="collapse-btn"
         :icon="collapsed ? Expand : Fold"

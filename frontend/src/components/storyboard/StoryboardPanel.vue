@@ -180,7 +180,10 @@ function handleConfirm() {
       v-else-if="storyboardStore.state.isGenerating && !activeStoryboard"
       class="storyboard-generating"
     >
-      <p>正在生成分镜规划，请稍候...</p>
+      <p class="storyboard-generating-title">正在生成分镜规划</p>
+      <p class="storyboard-generating-hint">正在调用大模型分析文案并规划分镜，可能需要 1-2 分钟。</p>
+      <p class="storyboard-generating-hint">页面会自动刷新，也可手动刷新状态。</p>
+      <el-button @click="storyboardStore.retryLoad()">刷新状态</el-button>
     </div>
 
     <!-- Empty state - no storyboard generated yet -->
@@ -192,7 +195,8 @@ function handleConfirm() {
       "
       class="storyboard-empty"
     >
-      <p>暂无分镜规划数据</p>
+      <p>分镜尚未生成</p>
+      <p class="storyboard-empty-hint">确认文案后将自动生成分镜。如果已确认文案但未自动生成，请手动点击下方按钮。</p>
       <el-button
         type="primary"
         :loading="storyboardStore.state.isGenerating"

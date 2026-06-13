@@ -19,11 +19,19 @@ onMounted(async () => {
   await scriptStore.loadActiveScriptSnapshot();
   // Auto-start generation when arriving from topic confirmation
   const s = scriptStore.state.snapshot;
-  if (s && !s.active_script && (s.current_status === "script_pending" || s.current_status === "script_ready")) {
+  if (
+    s &&
+    !s.active_script &&
+    (s.current_status === "script_pending" || s.current_status === "script_ready")
+  ) {
     await scriptStore.generateInitialScript();
     if (!scriptStore.state.loadError) {
       ElMessage.success("文案已生成");
     }
+  }
+  // If script is still missing and no error, show the CTA
+  if (!scriptStore.state.snapshot?.active_script && !scriptStore.state.loadError && !scriptStore.state.isLoading) {
+    // Leave empty state visible with the "start generate" button
   }
 });
 
@@ -174,7 +182,10 @@ function handleConfirm() {
 
     <!-- Generating state -->
     <div v-else-if="isGenerating" class="script-generating">
-      <p>正在生成文案，请稍候...</p>
+      <p class="script-generating-title">正在生成文案</p>
+      <p class="script-generating-hint">正在调用大模型撰写口播文案，可能需要 1-3 分钟。</p>
+      <p class="script-generating-hint">页面会自动刷新，也可手动刷新状态。</p>
+      <el-button @click="scriptStore.retryLoadActiveScriptSnapshot()">刷新状态</el-button>
     </div>
 
     <!-- Generation failed state -->
@@ -192,7 +203,8 @@ function handleConfirm() {
       "
       class="script-empty"
     >
-      <p>暂无文案快照</p>
+      <p>文案尚未生成</p>
+      <p class="script-empty-hint">确认选题后将自动生成文案。如果已确认选题但未自动生成，请手动点击下方按钮。</p>
       <el-button
         type="primary"
         :loading="scriptStore.state.isLoading"
