@@ -407,6 +407,13 @@ async function handleGeneratePlan() {
 }
 
 async function handleGenerateSemiAuto() {
+  try {
+    await ElMessageBox.confirm(
+      "将生成口播音频、音效和配乐（不含图片/视频）。\n口播约 ¥0.80/万字。\n确定继续？",
+      "确认半自动生成",
+      { confirmButtonText: "确定生成", cancelButtonText: "取消", type: "info" },
+    );
+  } catch { return; }
   await assetsStore.generateAssets({ enabledProviderTypes: ["tts", "sfx", "bgm"] });
   if (!assetsStore.state.loadError) {
     ElMessage.success("资产生成完成（图片/视频需手动上传）");
