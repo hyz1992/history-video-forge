@@ -423,9 +423,16 @@ async function handleGenerateSemiAuto() {
 async function handleGenerateMissing() {
   const count = blockedItems.value.length;
   const types = [...new Set(blockedItems.value.map(i => i.type))].join("、");
-  const costText = estimatedCost.value
-    ? `\n预估费用约 ¥${estimatedCost.value.total.toFixed(2)}（含图片/视频/口播）`
-    : "";
+  // Estimate cost only for the blocked/missing tasks
+  let imgCount = 0, vidSec = 0;
+  for (const item of blockedItems.value) {
+    if (item.type === "分镜图") imgCount++;
+    if (item.type === "分镜视频") vidSec += 5;
+  }
+  const estCost = imgCount * 0.20 + vidSec * 0.60;
+  const costText = imgCount + vidSec > 0
+    ? `\n预估费用约 ¥${estCost.toFixed(2)}（${imgCount} 张图 + ${vidSec}s 视频）`
+    : "\n口播/字幕/音效费用较低，约 ¥1 以内";
   try {
     await ElMessageBox.confirm(
       `将生成 ${count} 个未完成任务（${types}），已完成的不会被覆盖。${costText}\n确定继续？`,
@@ -471,6 +478,19 @@ function handleUploadFile(taskId: string, file: File) {
 }
 
 async function handleGenerateTask(taskId: string) {
+  // Show cost hint for paid task types
+  const task = assetTasks.value.find(t => t.task_id === taskId);
+  const taskLabel = task ? (TASK_TYPE_LABELS[task.task_type] ?? task.task_type) : taskId;
+  const costHint = task?.task_type === "video_clip" ? "约 ¥0.60/秒" : task?.task_type === "image_still" ? "约 ¥0.20/张" : "";
+  try {
+    if (costHint) {
+      await ElMessageBox.confirm(
+        `将为「${taskLabel}」触发生成（${costHint}），仅影响当前任务。确定继续？`,
+        "确认单任务生成",
+        { confirmButtonText: "确定生成", cancelButtonText: "取消", type: "info" },
+      );
+    }
+  } catch { return; }
   try {
     await assetsStore.generateSingleTask(taskId);
     // Reload to check actual execution status
