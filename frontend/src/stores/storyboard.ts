@@ -59,24 +59,21 @@ export function createFetchStoryboardApi(baseUrl = ""): StoryboardApi {
   return {
     async loadSnapshot(projectId) {
       const response = await fetch(`${baseUrl}/api/projects/${projectId}`);
+      if (!response.ok) throw new Error(`storyboard_load_failed:${response.status}`);
       const data = await response.json();
-
       const snapshot: StoryboardSnapshot = {
         current_status: data.current_status ?? null,
         active_storyboard: data.active_storyboard ?? null,
         active_storyboard_record_id: data.active_storyboard_record_id ?? null,
       };
-
       return snapshot;
     },
     async generateStoryboard(projectId) {
-      await fetch(
+      const response = await fetch(
         `${baseUrl}/api/projects/${projectId}/storyboard/generate`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-        },
+        { method: "POST", headers: { "content-type": "application/json" } },
       );
+      if (!response.ok) throw new Error(`storyboard_generate_failed:${response.status}`);
     },
   };
 }

@@ -253,6 +253,10 @@ export function createAssetPlanningStore(
         if (postError && i >= 3) {
           state.loadError = postError;
           if (state.snapshot) state.snapshot.current_status = "asset_plan_failed";
+          input.projectStore.syncProject({
+            project_id: projectId,
+            current_status: "asset_plan_failed",
+          });
           break;
         }
       }

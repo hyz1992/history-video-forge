@@ -421,6 +421,13 @@ async function handleGenerateSemiAuto() {
 }
 
 async function handleGenerateMissing() {
+  try {
+    await ElMessageBox.confirm(
+      "将生成所有未完成/失败的资产任务（已完成的不会被覆盖）。\n如需覆盖全部已有资产，请使用「重新生成全部资产」。\n确定继续？",
+      "确认批量生成剩余",
+      { confirmButtonText: "确定生成", cancelButtonText: "取消", type: "info" },
+    );
+  } catch { return; }
   await assetsStore.generateAssets({ mode: "missing_only" });
   if (!assetsStore.state.loadError) {
     ElMessage.success("剩余资产生成完成");
@@ -749,23 +756,16 @@ function handleConfirm() {
           >
             {{ assetsStore.state.isGenerating ? "生成中..." : "批量生成剩余资产" }}
           </el-button>
-          <el-popconfirm
-            title="将重新生成全部资产（包括图片/视频），可能覆盖已上传的文件。确定继续？"
-            confirm-button-text="确定重建"
-            cancel-button-text="取消"
-            @confirm="handleGenerateFull"
+          <el-button
+            v-if="blockedItems.length > 0"
+            type="danger"
+            plain
+            size="small"
+            :loading="assetsStore.state.isGenerating"
+            @click="handleGenerateFull"
           >
-            <template #reference>
-              <el-button
-                type="danger"
-                plain
-                size="small"
-                :loading="assetsStore.state.isGenerating"
-              >
-                重新生成全部资产
-              </el-button>
-            </template>
-          </el-popconfirm>
+            重新生成全部资产
+          </el-button>
           <span v-if="blockedItems.length > 0" class="asset-overview-hint">
             也可在下方的分镜卡片中逐项上传或替换
           </span>
