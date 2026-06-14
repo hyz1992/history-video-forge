@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-export type PromptStage = "topic" | "script" | "storyboard" | "asset_planning";
+export type PromptStage = "topic" | "script" | "storyboard" | "asset_planning" | "assets";
 export type PromptStatus = "active" | "draft" | "deprecated";
 
 export interface PromptMetadata {
@@ -135,7 +135,8 @@ function asPromptStage(value: string): PromptStage {
     value === "topic" ||
     value === "script" ||
     value === "storyboard" ||
-    value === "asset_planning"
+    value === "asset_planning" ||
+    value === "assets"
   ) {
     return value;
   }

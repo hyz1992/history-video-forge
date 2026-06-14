@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onUnmounted, nextTick } from "vue";
+import { computed, ref, watch, onMounted, onUnmounted } from "vue";
 import { ElTooltip, ElTag, ElButton, ElIcon, ElMessage, ElMessageBox, ElDialog, ElInput } from "element-plus";
 import { Upload, CopyDocument } from "@element-plus/icons-vue";
 
-import { checkPromptQuality, optimizePromptFromRisks } from "../../utils/prompt-quality";
+import { checkPromptQuality } from "../../utils/prompt-quality";
 
 import { checkArtRisks } from "../../utils/asset-art-quality";
 
