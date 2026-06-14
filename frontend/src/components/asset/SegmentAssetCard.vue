@@ -303,29 +303,6 @@ const riskTooltipText = computed(() =>
 );
 
 /* -------------------------------------------------------------------------- */
-/*  Audio playback                                                            */
-/* -------------------------------------------------------------------------- */
-
-const audioUrl = ref<string | null>(null);
-const hasAudio = computed(() => !!audioUrl.value);
-
-// Resolve audio URL from manifest artifacts for this segment
-const segmentAudioUrl = computed(() => {
-  const ttsExec = Array.from(props.executionsByTaskId.values())
-    .find((e) => e.task_type === "tts_audio" || e.task_type === "tts_merged_audio");
-  if (ttsExec && ttsExec.output_artifact_ids.length > 0) {
-    const artId = ttsExec.output_artifact_ids[0]!;
-    const art = props.artifactsById.get(artId);
-    if (art) return artifactUrl(art.artifact_id);
-  }
-  return null;
-});
-
-watch(segmentAudioUrl, (url) => {
-  audioUrl.value = url;
-}, { immediate: true });
-
-/* -------------------------------------------------------------------------- */
 /*  Copy                                                                      */
 /* -------------------------------------------------------------------------- */
 
@@ -384,15 +361,6 @@ function nextMedia() {
         <ElTag size="small" type="info">{{ segment.narrative_role }}</ElTag>
       </div>
       <p class="segment-header-excerpt">{{ segment.script_excerpt }}</p>
-      <!-- Audio player for narration -->
-      <div v-if="hasAudio" class="segment-header-audio">
-        <audio controls :src="audioUrl!" class="audio-native" />
-      </div>
-      <ElTooltip v-else content="音频还未生成" placement="top">
-        <div class="segment-header-audio disabled">
-          <audio controls disabled class="audio-native" />
-        </div>
-      </ElTooltip>
     </div>
 
     <!-- Left: media area -->
@@ -776,21 +744,6 @@ function nextMedia() {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-/* ---- Audio control ---- */
-.segment-header-audio {
-  margin-top: var(--space-xs);
-}
-
-.segment-header-audio.disabled {
-  opacity: 0.4;
-}
-
-.audio-native {
-  width: 300px;
-  height: 32px;
-  border-radius: var(--radius-sm);
 }
 
 /* ---- Media area (left) ---- */

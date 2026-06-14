@@ -75,6 +75,27 @@ const hasManifest = computed(() => !!manifest.value);
 
 const projectId = computed(() => projectStore.state.projectId ?? "");
 
+/** Global narration (TTS) artifact — displayed once above all segment cards. */
+const narrationArtifactId = computed(() => {
+  const summary = manifest.value?.audio_summary as Record<string, unknown> | undefined;
+  return (summary?.tts_merged_artifact_id as string) ?? null;
+});
+const narrationArtifact = computed(() => {
+  const id = narrationArtifactId.value;
+  if (!id) return null;
+  return artifactsById.value.get(id) ?? null;
+});
+const narrationAudioUrl = computed(() => {
+  const art = narrationArtifact.value;
+  if (!art) return null;
+  return `/api/projects/${projectId.value}/artifacts/${art.artifact_id}/file`;
+});
+const narrationDuration = computed(() => {
+  const meta = narrationArtifact.value?.metadata;
+  const dur = meta?.duration_sec as number | undefined;
+  return typeof dur === "number" ? dur : null;
+});
+
 const COMPOSE_STEP_INDEX = PIPELINE_STEPS.findIndex(
   (s) => s.key === "compose",
 );
@@ -774,6 +795,19 @@ function handleConfirm() {
         </div>
       </div>
 
+      <!-- Global narration audio block -->
+      <div v-if="narrationArtifact && narrationAudioUrl" class="asset-narration-card">
+        <h4 class="asset-narration-title">口播音频</h4>
+        <div class="asset-narration-player">
+          <audio controls :src="narrationAudioUrl" class="asset-narration-audio" />
+          <div class="asset-narration-meta">
+            <span v-if="narrationDuration !== null">{{ narrationDuration.toFixed(1) }}s</span>
+            <span v-if="costBreakdown.tts.charCount > 0">{{ costBreakdown.tts.charCount }} 字</span>
+            <span>¥{{ costBreakdown.tts.total.toFixed(2) }}</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Segment count -->
       <div class="asset-segments-header">
         <span class="asset-segments-count">共 {{ segmentCount }} 个镜头</span>
@@ -1258,6 +1292,43 @@ details[open] > .asset-global-toggle::before {
   font-size: 0.88rem;
   color: var(--color-warning);
   line-height: 1.6;
+}
+
+/* ---- Global narration block ---- */
+.asset-narration-card {
+  padding: var(--space-md);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.asset-narration-title {
+  font-size: 0.88rem;
+  font-weight: var(--font-subheading);
+  color: var(--text-heading);
+  margin: 0;
+}
+
+.asset-narration-player {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.asset-narration-audio {
+  height: 32px;
+  min-width: 280px;
+  border-radius: var(--radius-sm);
+}
+
+.asset-narration-meta {
+  display: flex;
+  gap: var(--space-md);
+  font-size: 0.82rem;
+  color: var(--text-muted);
 }
 
 /* ---- Segments header ---- */
