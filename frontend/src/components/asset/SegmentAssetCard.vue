@@ -1166,16 +1166,6 @@ function nextMedia() {
   color: var(--accent-text);
 }
 
-.segment-info-prompt-text {
-  margin: 0;
-  font-size: 0.84rem;
-  line-height: 1.6;
-  color: var(--text-secondary);
-  max-height: 6.4em;
-  overflow-y: auto;
-  word-break: break-word;
-}
-
 .risk-tooltip-content p {
   margin: 0 0 var(--space-xs);
   font-size: 0.82rem;
