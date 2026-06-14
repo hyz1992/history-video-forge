@@ -82,6 +82,46 @@ async function generateAssetsController(
   });
 }
 
+async function updateTaskPromptController(
+  context: RouteContext,
+): Promise<AppResponse> {
+  const project = await getProjectById(context.app.db, context.params.projectId);
+  if (!project) {
+    return { statusCode: 404, body: { error: "project_not_found" } };
+  }
+
+  const assetPlanRecordId = project.activeAssetPlanRecordId;
+  if (!assetPlanRecordId) {
+    return { statusCode: 409, body: { error: "no_active_asset_plan" } };
+  }
+
+  const assetPlanRecord = context.app.db.assetPlanRecords.get(assetPlanRecordId);
+  if (!assetPlanRecord) {
+    return { statusCode: 409, body: { error: "asset_plan_not_found" } };
+  }
+
+  const taskId = context.params.taskId;
+  const payload = context.payload as { prompt_draft?: string } | undefined;
+  if (!payload || typeof payload.prompt_draft !== "string") {
+    return { statusCode: 400, body: { error: "missing_prompt_draft" } };
+  }
+
+  const plan = assetPlanRecord.planJson as { tasks?: Array<{ task_id: string; prompt_draft?: string | null }> };
+  const tasks = plan.tasks ?? [];
+  const task = tasks.find((t) => t.task_id === taskId);
+  if (!task) {
+    return { statusCode: 404, body: { error: "task_not_found" } };
+  }
+
+  task.prompt_draft = payload.prompt_draft;
+  assetPlanRecord.planJson = plan;
+
+  return {
+    statusCode: 200,
+    body: { task_id: taskId, prompt_draft: task.prompt_draft },
+  };
+}
+
 async function registerArtifactController(
   context: RouteContext,
 ): Promise<AppResponse> {
@@ -399,6 +439,11 @@ export function registerAssetsRoutes(app: AppInstance) {
     "POST",
     "/api/projects/:projectId/assets/tasks/:taskId/generate",
     generateTaskController,
+  );
+  app.addRoute(
+    "PATCH",
+    "/api/projects/:projectId/assets/tasks/:taskId/prompt",
+    updateTaskPromptController,
   );
   app.addRoute(
     "POST",

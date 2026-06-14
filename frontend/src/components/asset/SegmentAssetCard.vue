@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, onUnmounted } from "vue";
-import { ElTooltip, ElTag, ElButton, ElIcon } from "element-plus";
+import { ElTooltip, ElTag, ElButton, ElIcon, ElMessage, ElMessageBox, ElDialog, ElInput } from "element-plus";
 import { Upload, CopyDocument } from "@element-plus/icons-vue";
 
-import { checkPromptQuality } from "../../utils/prompt-quality";
+import { checkPromptQuality, optimizePromptFromRisks } from "../../utils/prompt-quality";
 
 import { checkArtRisks } from "../../utils/asset-art-quality";
 
@@ -336,6 +336,77 @@ function showCopyFeedback() {
   setTimeout(() => { copyFeedback.value = false; }, 1500);
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Prompt optimize / edit                                                    */
+/* -------------------------------------------------------------------------- */
+
+const optimizing = ref(false);
+const showEditDialog = ref(false);
+const editDraft = ref("");
+
+async function handleOptimizePrompt() {
+  const task = currentTask.value;
+  if (!task?.prompt_draft) return;
+  const risks = checkArtRisks(task.prompt_draft, activeTab.value === "video" ? "video_clip" : "image_still");
+  const triggered = risks.filter(r => r.triggered);
+  if (triggered.length === 0) {
+    ElMessage.info("当前提示词未检测到可优化项");
+    return;
+  }
+  try {
+    await ElMessageBox.confirm(
+      `将根据 ${triggered.length} 项画面建议自动补充提示词（不会立即生成图片/视频）。\n优化后提示词将被覆盖，建议先复制原文备份。\n确定继续？`,
+      "确认优化提示词",
+      { confirmButtonText: "确定优化", cancelButtonText: "取消", type: "info" },
+    );
+  } catch { return; }
+
+  optimizing.value = true;
+  try {
+    const optimized = optimizePromptFromRisks(task.prompt_draft, risks);
+    await savePromptDraft(task.task_id, optimized);
+    ElMessage.success("提示词已优化，可点击生成查看效果");
+  } catch (e) {
+    ElMessage.error("优化失败：" + (e instanceof Error ? e.message : "未知错误"));
+  } finally {
+    optimizing.value = false;
+  }
+}
+
+function handleOpenEdit() {
+  editDraft.value = currentTask.value?.prompt_draft ?? "";
+  showEditDialog.value = true;
+}
+
+async function handleSaveEdit() {
+  const task = currentTask.value;
+  if (!task) return;
+  try {
+    await savePromptDraft(task.task_id, editDraft.value);
+    showEditDialog.value = false;
+    ElMessage.success("提示词已保存");
+  } catch (e) {
+    ElMessage.error("保存失败：" + (e instanceof Error ? e.message : "未知错误"));
+  }
+}
+
+async function savePromptDraft(taskId: string, promptDraft: string) {
+  const res = await fetch(`/api/projects/${props.projectId}/assets/tasks/${taskId}/prompt`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ prompt_draft: promptDraft }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as Record<string, unknown>).error as string ?? `status ${res.status}`);
+  }
+  // Update local task reference so UI reflects the change immediately
+  const task = activeTasks.value[activeMediaIndex.value];
+  if (task) {
+    (task as { prompt_draft?: string | null }).prompt_draft = promptDraft;
+  }
+}
+
 function prevMedia() {
   if (activeMediaIndex.value > 0) {
     activeMediaIndex.value--;
@@ -501,19 +572,6 @@ function nextMedia() {
             <span class="segment-info-prompt-label">
               {{ activeTab === 'image' ? '图片提示词' : '视频提示词' }}
             </span>
-            <ElTooltip v-if="riskLevel" popper-class="risk-tooltip" placement="top">
-              <template #content>
-                <div class="risk-tooltip-content">
-                  <p v-for="(note, i) in activeRiskNotes" :key="i">{{ note }}</p>
-                </div>
-              </template>
-              <ElTag
-                size="small"
-                :type="riskLevel === 'high' ? 'danger' : 'warning'"
-              >
-                {{ riskLevel === 'high' ? '高风险' : '注意' }}
-              </ElTag>
-            </ElTooltip>
             <ElTooltip
               v-if="promptQuality && promptQuality.score !== 'strong'"
               :content="'提示词可优化：' + promptQuality.checks.filter(c => !c.passed).map(c => c.label).join('、')"
@@ -526,28 +584,54 @@ function nextMedia() {
                 {{ promptQuality.score === 'weak' ? '提示词偏弱' : '可优化' }}
               </ElTag>
             </ElTooltip>
+            <ElTooltip
+              v-if="artRisks.length > 0"
+              placement="top"
+            >
+              <template #content>
+                <div class="risk-tooltip-content">
+                  <p v-for="hint in artRisks" :key="hint.code" style="margin:0 0 4px">
+                    <strong>{{ hint.label }}</strong>：{{ hint.risk }}
+                    <br/>建议：{{ hint.suggestion }}
+                  </p>
+                </div>
+              </template>
+              <ElTag size="small" type="warning">
+                画面建议 {{ artRisks.length }}
+              </ElTag>
+            </ElTooltip>
           </div>
-          <ElTooltip :content="copyFeedback ? '已复制' : '复制提示词'" placement="top">
-            <button class="prompt-copy-btn" aria-label="复制提示词" @click="copyPrompt">
-              <ElIcon :size="12"><CopyDocument /></ElIcon>
-            </button>
-          </ElTooltip>
+          <div class="segment-info-prompt-actions">
+            <ElTooltip :content="copyFeedback ? '已复制' : '复制提示词'" placement="top">
+              <button class="prompt-copy-btn" aria-label="复制提示词" @click="copyPrompt">
+                <ElIcon :size="12"><CopyDocument /></ElIcon>
+              </button>
+            </ElTooltip>
+          </div>
         </div>
         <p class="segment-info-prompt-text">
           {{ activePromptText }}
         </p>
-        <details v-if="artRisks.length > 0" class="segment-art-risks">
-          <summary class="segment-art-risks-summary">
-            美术提示（{{ artRisks.length }} 项）
-          </summary>
-          <ul class="segment-art-risks-list">
-            <li v-for="hint in artRisks" :key="hint.code" class="segment-art-risk-item">
-              <span class="segment-art-risk-label">{{ hint.label }}</span>
-              <span class="segment-art-risk-desc">{{ hint.risk }}</span>
-              <span class="segment-art-risk-suggestion">{{ hint.suggestion }}</span>
-            </li>
-          </ul>
-        </details>
+        <!-- Prompt action buttons -->
+        <div v-if="currentTask?.prompt_draft" class="segment-prompt-actions">
+          <ElButton
+            v-if="artRisks.length > 0"
+            size="small"
+            text
+            type="primary"
+            :loading="optimizing"
+            @click="handleOptimizePrompt"
+          >
+            优化提示词
+          </ElButton>
+          <ElButton
+            size="small"
+            text
+            @click="handleOpenEdit"
+          >
+            编辑
+          </ElButton>
+        </div>
       </div>
 
       <!-- Task indicator & switcher (multi-task) + action buttons -->
@@ -684,6 +768,34 @@ function nextMedia() {
         </div>
       </div>
     </Teleport>
+    <!-- Edit prompt dialog -->
+    <ElDialog
+      v-model="showEditDialog"
+      title="编辑提示词"
+      width="560px"
+      :close-on-click-modal="false"
+    >
+      <div class="edit-prompt-body">
+        <div v-if="artRisks.length > 0" class="edit-prompt-risks">
+          <p class="edit-prompt-risks-title">画面质量建议</p>
+          <ul class="edit-prompt-risks-list">
+            <li v-for="hint in artRisks" :key="hint.code">
+              <strong>{{ hint.label }}</strong>：{{ hint.suggestion }}
+            </li>
+          </ul>
+        </div>
+        <ElInput
+          v-model="editDraft"
+          type="textarea"
+          :rows="8"
+          placeholder="输入提示词..."
+        />
+      </div>
+      <template #footer>
+        <ElButton @click="showEditDialog = false">取消</ElButton>
+        <ElButton type="primary" @click="handleSaveEdit">保存</ElButton>
+      </template>
+    </ElDialog>
   </article>
 </template>
 
@@ -867,45 +979,39 @@ function nextMedia() {
   margin-left: 4px;
 }
 
-/* ---- Art risk hints ---- */
-.segment-art-risks {
-  margin-top: 8px;
-  font-size: 0.8rem;
-}
-
-.segment-art-risks-summary {
-  cursor: pointer;
-  color: var(--color-warning);
-  font-size: 0.82rem;
-}
-
-.segment-art-risks-list {
-  margin: 4px 0 0;
-  padding-left: 1rem;
-  display: grid;
-  gap: 3px;
-}
-
-.segment-art-risk-item {
+.segment-info-prompt-actions {
   display: flex;
-  gap: 6px;
+  align-items: center;
+  gap: 2px;
 }
 
-.segment-art-risk-label {
-  color: var(--color-warning);
+/* ---- Prompt action buttons (optimize / edit) ---- */
+.segment-prompt-actions {
+  display: flex;
+  gap: var(--space-xs);
+  margin-top: 4px;
+}
+
+/* ---- Edit dialog ---- */
+.edit-prompt-body {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.edit-prompt-risks-title {
+  margin: 0 0 var(--space-xs);
+  font-size: 0.84rem;
   font-weight: 500;
-  white-space: nowrap;
+  color: var(--text-heading);
 }
 
-.segment-art-risk-desc {
-  color: var(--text-muted);
-}
-
-.segment-art-risk-suggestion {
+.edit-prompt-risks-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.8rem;
   color: var(--text-secondary);
-  font-style: italic;
-  display: block;
-  margin-top: 1px;
+  display: grid;
+  gap: 2px;
 }
 
 .segment-media-preview {
