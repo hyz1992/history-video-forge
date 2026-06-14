@@ -1401,3 +1401,135 @@ describe("manual artifact registration", () => {
     expect(storedExec!.status).toBe("accepted");
   });
 });
+
+describe("PATCH prompt update", () => {
+  let app: ReturnType<typeof buildApp>;
+
+  beforeEach(() => {
+    app = buildApp();
+  });
+
+  async function prepareProjectWithAssetPlan(): Promise<{
+    projectId: string;
+    taskId: string;
+  }> {
+    const projectRes = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { name: "Prompt Test" },
+    });
+    const projectId = (projectRes.json() as Record<string, unknown>).project_id as string;
+
+    // Create a minimal asset plan with one task
+    const assetPlanRecord = await import(
+      "../../../backend/src/modules/asset-planning/asset-planning-generation.service.js"
+    ).then(async (mod) => {
+      // Directly insert an asset plan record for the test
+      const planId = app.db.generateId();
+      const plan = {
+        plan_version: "asset_plan_v1",
+        art_bible: {},
+        visual_budget: {},
+        downgrade_policy: {},
+        global_audio_strategy: {},
+        tts_plan: {},
+        tasks: [{
+          task_id: "task_test_001",
+          task_type: "image_still",
+          source_segment_id: "seg_001",
+          prompt_draft: "原始提示词，缺少时代质感",
+          parameters: {},
+        }],
+        dependencies: [],
+        cost_summary: {},
+        global_production_notes: [],
+      };
+
+      app.db.assetPlanRecords.set(planId, {
+        id: planId,
+        projectId,
+        topicPackageId: "tp_001",
+        scriptRecordId: "scr_001",
+        storyboardRecordId: "sb_001",
+        planJson: plan as never,
+        validationResultJson: { stage: "asset_planning_local_validation", decision: "ready", errors: [], warnings: [], metrics: {} },
+        executionStateJson: {},
+        graphTraceSummaryJson: null,
+        runtimeDiagnosticsJson: null,
+        createdAt: new Date(),
+      });
+
+      const project = app.db.projects.get(projectId)!;
+      project.activeAssetPlanRecordId = planId;
+
+      return { projectId, taskId: "task_test_001" };
+    });
+
+    return { projectId, taskId: "task_test_001" };
+  }
+
+  it("returns 200 and updates prompt_draft for a valid task", async () => {
+    const { projectId, taskId } = await prepareProjectWithAssetPlan();
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/projects/${projectId}/assets/tasks/${taskId}/prompt`,
+      payload: { prompt_draft: "优化后的提示词，补充了时代质感和角色描述" },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as Record<string, unknown>;
+    expect(body.task_id).toBe(taskId);
+    expect(body.prompt_draft).toBe("优化后的提示词，补充了时代质感和角色描述");
+
+    // Verify the plan was actually updated
+    const planId = app.db.projects.get(projectId)!.activeAssetPlanRecordId!;
+    const record = app.db.assetPlanRecords.get(planId)!;
+    const tasks = (record.planJson as { tasks: Array<{ task_id: string; prompt_draft: string | null }> }).tasks;
+    expect(tasks.find(t => t.task_id === taskId)?.prompt_draft).toBe("优化后的提示词，补充了时代质感和角色描述");
+  });
+
+  it("returns 404 for unknown task_id", async () => {
+    const { projectId } = await prepareProjectWithAssetPlan();
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/projects/${projectId}/assets/tasks/nonexistent_task/prompt`,
+      payload: { prompt_draft: "test" },
+    });
+
+    expect(res.statusCode).toBe(404);
+    expect((res.json() as Record<string, unknown>).error).toBe("task_not_found");
+  });
+
+  it("returns 400 when prompt_draft is missing", async () => {
+    const { projectId, taskId } = await prepareProjectWithAssetPlan();
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/projects/${projectId}/assets/tasks/${taskId}/prompt`,
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as Record<string, unknown>).error).toBe("missing_prompt_draft");
+  });
+
+  it("returns 409 when no active asset plan", async () => {
+    const projectRes = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { name: "No Plan Project" },
+    });
+    const projectId = (projectRes.json() as Record<string, unknown>).project_id as string;
+
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/api/projects/${projectId}/assets/tasks/any/prompt`,
+      payload: { prompt_draft: "test" },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect((res.json() as Record<string, unknown>).error).toBe("no_active_asset_plan");
+  });
+});

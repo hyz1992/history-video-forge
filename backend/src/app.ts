@@ -162,7 +162,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
         });
 
         // Persist after state-changing requests
-        if (method === "POST" || method === "PUT" || method === "DELETE") {
+        if (method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE") {
           schedulePersist();
         }
 
