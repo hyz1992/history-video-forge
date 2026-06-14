@@ -2,6 +2,9 @@ import type { AppInstance, AppResponse, RouteContext } from "../../app";
 import { getProjectById } from "../projects/project.repository";
 import { runAssetsGeneration, registerManualArtifact, acceptArtifact } from "./assets-run.service";
 import { env } from "../../config/env.js";
+import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
+import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider.js";
+import { createLlmGateway } from "../../runtime/llm/llm-gateway.js";
 import { probeImageMetadata } from "../../http/image-probe.js";
 import { probeVideoMetadata } from "../../http/video-probe.js";
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -120,6 +123,124 @@ async function updateTaskPromptController(
     statusCode: 200,
     body: { task_id: taskId, prompt_draft: task.prompt_draft },
   };
+}
+
+async function optimizeTaskPromptController(
+  context: RouteContext,
+): Promise<AppResponse> {
+  const project = await getProjectById(context.app.db, context.params.projectId);
+  if (!project) {
+    return { statusCode: 404, body: { error: "project_not_found" } };
+  }
+
+  const assetPlanRecordId = project.activeAssetPlanRecordId;
+  if (!assetPlanRecordId) {
+    return { statusCode: 409, body: { error: "no_active_asset_plan" } };
+  }
+
+  const assetPlanRecord = context.app.db.assetPlanRecords.get(assetPlanRecordId);
+  if (!assetPlanRecord) {
+    return { statusCode: 409, body: { error: "asset_plan_not_found" } };
+  }
+
+  const payload = context.payload as {
+    user_feedback?: string;
+    current_prompt?: string;
+    task_type?: string;
+    segment_id?: string;
+  } | undefined;
+  if (!payload || typeof payload.current_prompt !== "string") {
+    return { statusCode: 400, body: { error: "missing_current_prompt" } };
+  }
+
+  const plan = assetPlanRecord.planJson as Record<string, unknown>;
+  const artBible = (plan.art_bible ?? {}) as Record<string, unknown>;
+  const tasks = (plan.tasks ?? []) as Array<{ task_id: string; prompt_draft?: string | null; risk_notes?: string[]; source_segment_id?: string | null }>;
+
+  // Gather segment context
+  const storyboardRecordId = assetPlanRecord.storyboardRecordId;
+  const storyboardRecord = storyboardRecordId
+    ? context.app.db.storyboardRecords.get(storyboardRecordId) ?? null
+    : null;
+  const storyboardPlan = (storyboardRecord?.planJson ?? {}) as Record<string, unknown>;
+  const segments = (storyboardPlan.segments ?? []) as Array<Record<string, unknown>>;
+  const segment = payload.segment_id
+    ? segments.find((s) => s.segment_id === payload.segment_id) ?? null
+    : null;
+
+  // Build risks from the current prompt
+  const risks: Array<{ code: string; label: string; risk: string; suggestion: string }> = [];
+  // Simple local risk check for context — the LLM will do the heavy lifting
+  const hasEra = /春秋|战国|秦汉|先秦|楚国|齐国|秦朝|汉代|唐代|宋代|明代|清代|服饰|深衣|甲胄|长袍/.test(payload.current_prompt);
+  if (!hasEra) risks.push({ code: "era_detail", label: "时代质感", risk: "缺乏时代/服饰约束", suggestion: "补充朝代、服饰、器物等具体元素" });
+  const hasNegative = /无现代|不包含现代|避免现代|无动漫|不包含动漫/.test(payload.current_prompt);
+  if (!hasNegative) risks.push({ code: "anachronism", label: "时代穿帮风险", risk: "未明确排除现代元素或动漫风格", suggestion: "补充排除现代物品、动漫风、奇幻特效" });
+
+  // Only call LLM if not in stub mode
+  if (env.llm.provider === "stub") {
+    // Stub: return a simple optimization
+    const optimized = payload.current_prompt +
+      (payload.user_feedback
+        ? `\n\n【优化调整】根据反馈：${payload.user_feedback}。增强画面表现力，写实历史质感。`
+        : "\n\n【优化调整】增强时代质感、构图光线和画面叙事，写实历史质感。");
+    return {
+      statusCode: 200,
+      body: {
+        optimized_prompt: optimized,
+        change_summary: payload.user_feedback
+          ? ["根据用户反馈调整视觉表达", "增强写实历史质感"]
+          : ["增强时代质感和画面叙事", "补充构图光线描述"],
+        remaining_risks: risks.length > 0 ? risks.map((r) => r.risk) : [],
+      },
+    };
+  }
+
+  try {
+    const registry = createPromptRegistry();
+    const provider = createOpenAiCompatibleProvider();
+    const gateway = createLlmGateway({ registry, provider });
+
+    const result = await gateway.invokeStructuredPrompt<{
+      optimized_prompt: string;
+      change_summary: string[];
+      remaining_risks?: string[];
+    }>({
+      promptId: "asset.prompt-optimizer",
+      input: {
+        current_prompt: payload.current_prompt,
+        user_feedback: payload.user_feedback ?? "",
+        task_type: payload.task_type ?? "image_still",
+        segment: segment
+          ? {
+              script_excerpt: segment.script_excerpt ?? "",
+              scene_description: segment.scene_description ?? "",
+              visual_intent: segment.visual_intent ?? "",
+              narrative_role: segment.narrative_role ?? "",
+            }
+          : null,
+        art_bible: {
+          era_style: artBible.era_style ?? "",
+          visual_tone: artBible.visual_tone ?? "",
+          characters: artBible.characters ?? [],
+          locations: artBible.locations ?? [],
+          props: artBible.props ?? [],
+        },
+        risks,
+      },
+    });
+
+    return {
+      statusCode: 200,
+      body: {
+        optimized_prompt: result.optimized_prompt,
+        change_summary: result.change_summary,
+        remaining_risks: result.remaining_risks ?? [],
+      },
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "optimize_failed";
+    return { statusCode: 500, body: { error: message } };
+  }
 }
 
 async function registerArtifactController(
@@ -444,6 +565,11 @@ export function registerAssetsRoutes(app: AppInstance) {
     "PATCH",
     "/api/projects/:projectId/assets/tasks/:taskId/prompt",
     updateTaskPromptController,
+  );
+  app.addRoute(
+    "POST",
+    "/api/projects/:projectId/assets/tasks/:taskId/prompt/optimize",
+    optimizeTaskPromptController,
   );
   app.addRoute(
     "POST",

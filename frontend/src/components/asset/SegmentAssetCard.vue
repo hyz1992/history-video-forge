@@ -340,60 +340,75 @@ function showCopyFeedback() {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Prompt optimize / edit                                                    */
+/*  Prompt optimize (LLM) / edit                                              */
 /* -------------------------------------------------------------------------- */
 
 const optimizing = ref(false);
+const showOptimizeDialog = ref(false);
 const showEditDialog = ref(false);
 const editDraft = ref("");
+const userFeedback = ref("");
+const optimizedPreview = ref<string | null>(null);
+const changeSummary = ref<string[]>([]);
+const remainingRisks = ref<string[]>([]);
 
-async function handleOptimizePrompt() {
+async function handleOpenOptimize() {
   const task = currentTask.value;
   if (!task?.prompt_draft) return;
-  const risks = checkArtRisks(task.prompt_draft, activeTab.value === "video" ? "video_clip" : "image_still");
-  const triggered = risks.filter(r => r.triggered);
-  if (triggered.length === 0) {
-    ElMessage.info("当前提示词未检测到可优化项");
-    return;
-  }
-  try {
-    await ElMessageBox.confirm(
-      `将根据 ${triggered.length} 项画面建议自动补充提示词（不会立即生成图片/视频）。\n优化后提示词将被覆盖，建议先复制原文备份。\n确定继续？`,
-      "确认优化提示词",
-      { confirmButtonText: "确定优化", cancelButtonText: "取消", type: "info" },
-    );
-  } catch { return; }
+  userFeedback.value = "";
+  optimizedPreview.value = null;
+  changeSummary.value = [];
+  remainingRisks.value = [];
+  showOptimizeDialog.value = true;
+}
 
+async function handleGenerateOptimized() {
+  const task = currentTask.value;
+  if (!task) return;
   optimizing.value = true;
   try {
-    const optimized = optimizePromptFromRisks(task.prompt_draft, risks);
-    await savePromptDraft(task.task_id, optimized);
-
-    // Reload asset plan so UI picks up persisted prompt_draft
-    await assetPlanningStore.loadActiveAssetPlanSnapshot();
-
-    // Recalculate risks on the optimized prompt
-    const newRisks = checkArtRisks(optimized, activeTab.value === "video" ? "video_clip" : "image_still");
-    const newTriggered = newRisks.filter(r => r.triggered);
-    const reduced = triggered.length - newTriggered.length;
-
-    if (reduced > 0) {
-      ElMessage.success(`提示词已优化，${reduced} 项建议已解决${newTriggered.length > 0 ? `，仍有 ${newTriggered.length} 项需手动处理` : ""}`);
-    } else if (newTriggered.length > 0) {
-      ElMessage.warning(`已追加优化约束，但仍有 ${newTriggered.length} 项建议需手动编辑处理`);
-    } else {
-      ElMessage.success("提示词已优化，所有建议已解决");
-    }
-
-    // Auto-scroll prompt text area to show the appended content
-    nextTick(() => {
-      const el = promptTextRef.value;
-      if (el) el.scrollTop = el.scrollHeight;
+    const res = await fetch(`/api/projects/${props.projectId}/assets/tasks/${task.task_id}/prompt/optimize`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        current_prompt: task.prompt_draft,
+        user_feedback: userFeedback.value.trim(),
+        task_type: activeTab.value === "video" ? "video_clip" : "image_still",
+        segment_id: props.segment.segment_id,
+      }),
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as Record<string, unknown>).error as string ?? `status ${res.status}`);
+    }
+    const data = await res.json() as { optimized_prompt: string; change_summary: string[]; remaining_risks?: string[] };
+    optimizedPreview.value = data.optimized_prompt;
+    changeSummary.value = data.change_summary;
+    remainingRisks.value = data.remaining_risks ?? [];
   } catch (e) {
-    ElMessage.error("优化失败：" + (e instanceof Error ? e.message : "未知错误"));
+    ElMessage.error("生成优化失败：" + (e instanceof Error ? e.message : "未知错误"));
   } finally {
     optimizing.value = false;
+  }
+}
+
+async function handleApplyOptimized() {
+  const task = currentTask.value;
+  if (!task || !optimizedPreview.value) return;
+  try {
+    await savePromptDraft(task.task_id, optimizedPreview.value);
+    await assetPlanningStore.loadActiveAssetPlanSnapshot();
+    showOptimizeDialog.value = false;
+    // Recalculate risks for the toast
+    const newRisks = checkArtRisks(optimizedPreview.value, activeTab.value === "video" ? "video_clip" : "image_still");
+    const newTriggered = newRisks.filter(r => r.triggered);
+    if (newTriggered.length > 0) {
+      ElMessage.success(`提示词已应用，仍有 ${newTriggered.length} 项建议可进一步优化`);
+    } else {
+      ElMessage.success("提示词已应用，当前画面建议已全部解决");
+    }
+  } catch (e) {
+    ElMessage.error("保存失败：" + (e instanceof Error ? e.message : "未知错误"));
   }
 }
 
@@ -627,14 +642,13 @@ function nextMedia() {
           </div>
           <div class="segment-info-prompt-actions">
             <ElButton
-              v-if="currentTask?.prompt_draft && artRisks.length > 0"
+              v-if="currentTask?.prompt_draft"
               size="small"
               text
               type="primary"
-              :loading="optimizing"
-              @click="handleOptimizePrompt"
+              @click="handleOpenOptimize"
             >
-              自动优化
+              智能优化
             </ElButton>
             <ElButton
               v-if="currentTask?.prompt_draft"
@@ -790,6 +804,81 @@ function nextMedia() {
         </div>
       </div>
     </Teleport>
+    <!-- Optimize prompt dialog (LLM) -->
+    <ElDialog
+      v-model="showOptimizeDialog"
+      title="智能优化提示词"
+      width="620px"
+      :close-on-click-modal="false"
+    >
+      <div class="optimize-dialog-body">
+        <!-- Current prompt preview -->
+        <details class="optimize-current">
+          <summary>当前提示词</summary>
+          <p class="optimize-current-text">{{ currentTask?.prompt_draft }}</p>
+        </details>
+
+        <!-- Art risks summary -->
+        <div v-if="artRisks.length > 0" class="optimize-risks">
+          <span class="optimize-risks-label">画面建议（{{ artRisks.length }} 项）：</span>
+          <span>{{ artRisks.map(h => h.label).join('、') }}</span>
+        </div>
+
+        <!-- User feedback input -->
+        <div v-if="!optimizedPreview" class="optimize-feedback">
+          <p class="optimize-feedback-label">描述你对画面的期待或反馈（可选）</p>
+          <ElInput
+            v-model="userFeedback"
+            type="textarea"
+            :rows="3"
+            placeholder="例如：更像电影剧照、人物更苍老、降低血腥感、突出江南书房氛围、增加压迫感"
+          />
+          <p class="optimize-feedback-hint">
+            {{ userFeedback.trim() ? '将根据你的反馈优化提示词' : '将根据画面建议自动优化，不改变历史事实和角色身份' }}
+          </p>
+        </div>
+
+        <!-- Optimized preview -->
+        <div v-if="optimizedPreview" class="optimize-preview">
+          <h4 class="optimize-preview-title">优化结果</h4>
+          <div v-if="changeSummary.length > 0" class="optimize-changes">
+            <p class="optimize-changes-label">改动摘要：</p>
+            <ul>
+              <li v-for="(item, i) in changeSummary" :key="i">{{ item }}</li>
+            </ul>
+          </div>
+          <div class="optimize-compare">
+            <div class="optimize-compare-col">
+              <span class="optimize-compare-label">优化前</span>
+              <p class="optimize-compare-text optimize-compare-text--old">{{ currentTask?.prompt_draft }}</p>
+            </div>
+            <div class="optimize-compare-col">
+              <span class="optimize-compare-label">优化后</span>
+              <p class="optimize-compare-text">{{ optimizedPreview }}</p>
+            </div>
+          </div>
+          <p v-if="remainingRisks.length > 0" class="optimize-remaining">
+            注意：优化后仍存在 {{ remainingRisks.length }} 项建议，可再次优化或手动编辑。
+          </p>
+        </div>
+      </div>
+      <template #footer>
+        <ElButton @click="showOptimizeDialog = false">取消</ElButton>
+        <ElButton
+          v-if="!optimizedPreview"
+          type="primary"
+          :loading="optimizing"
+          @click="handleGenerateOptimized"
+        >
+          生成优化版
+        </ElButton>
+        <template v-else>
+          <ElButton :loading="optimizing" @click="handleGenerateOptimized">重新生成</ElButton>
+          <ElButton type="primary" @click="handleApplyOptimized">应用优化</ElButton>
+        </template>
+      </template>
+    </ElDialog>
+
     <!-- Edit prompt dialog -->
     <ElDialog
       v-model="showEditDialog"
@@ -1362,5 +1451,100 @@ function nextMedia() {
   gap: 16px;
   color: rgba(255, 255, 255, 0.7);
   font-size: 0.85rem;
+}
+
+/* ---- Optimize dialog ---- */
+.optimize-dialog-body {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.optimize-current {
+  font-size: 0.82rem;
+}
+
+.optimize-current-text {
+  margin: var(--space-xs) 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  max-height: 8em;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.optimize-risks {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.optimize-risks-label {
+  font-weight: 500;
+  color: var(--color-warning);
+}
+
+.optimize-feedback-label {
+  margin: 0 0 var(--space-xs);
+  font-size: 0.84rem;
+  color: var(--text-body);
+}
+
+.optimize-feedback-hint {
+  margin: var(--space-xs) 0 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.optimize-preview-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.optimize-changes {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.optimize-changes-label {
+  font-weight: 500;
+}
+
+.optimize-changes ul {
+  margin: 2px 0 0;
+  padding-left: 1.2rem;
+}
+
+.optimize-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-md);
+}
+
+.optimize-compare-label {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 2px;
+}
+
+.optimize-compare-text {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-body);
+  max-height: 12em;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
+.optimize-compare-text--old {
+  color: var(--text-muted);
+}
+
+.optimize-remaining {
+  font-size: 0.8rem;
+  color: var(--color-warning);
+  margin: 0;
 }
 </style>
