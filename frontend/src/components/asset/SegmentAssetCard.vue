@@ -602,6 +602,24 @@ function nextMedia() {
             </ElTooltip>
           </div>
           <div class="segment-info-prompt-actions">
+            <ElButton
+              v-if="currentTask?.prompt_draft && artRisks.length > 0"
+              size="small"
+              text
+              type="primary"
+              :loading="optimizing"
+              @click="handleOptimizePrompt"
+            >
+              自动优化
+            </ElButton>
+            <ElButton
+              v-if="currentTask?.prompt_draft"
+              size="small"
+              text
+              @click="handleOpenEdit"
+            >
+              手动编辑
+            </ElButton>
             <ElTooltip :content="copyFeedback ? '已复制' : '复制提示词'" placement="top">
               <button class="prompt-copy-btn" aria-label="复制提示词" @click="copyPrompt">
                 <ElIcon :size="12"><CopyDocument /></ElIcon>
@@ -612,26 +630,6 @@ function nextMedia() {
         <p class="segment-info-prompt-text">
           {{ activePromptText }}
         </p>
-        <!-- Prompt action buttons -->
-        <div v-if="currentTask?.prompt_draft" class="segment-prompt-actions">
-          <ElButton
-            v-if="artRisks.length > 0"
-            size="small"
-            text
-            type="primary"
-            :loading="optimizing"
-            @click="handleOptimizePrompt"
-          >
-            优化提示词
-          </ElButton>
-          <ElButton
-            size="small"
-            text
-            @click="handleOpenEdit"
-          >
-            编辑
-          </ElButton>
-        </div>
       </div>
 
       <!-- Task indicator & switcher (multi-task) + action buttons -->
@@ -983,16 +981,20 @@ function nextMedia() {
   display: flex;
   align-items: center;
   gap: 2px;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
-/* ---- Prompt action buttons (optimize / edit) ---- */
-.segment-prompt-actions {
-  display: flex;
-  gap: var(--space-xs);
-  margin-top: 4px;
+/* ---- Prompt text ---- */
+.segment-info-prompt-text {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-height: 16em;
+  overflow-y: auto;
+  word-break: break-word;
 }
-
-/* ---- Edit dialog ---- */
 .edit-prompt-body {
   display: grid;
   gap: var(--space-md);
