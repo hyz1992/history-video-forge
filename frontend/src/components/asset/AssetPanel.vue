@@ -6,6 +6,7 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import { useStoryboardStore } from "../../stores/storyboard";
 import { useAssetPlanningStore } from "../../stores/asset-planning";
 import { useAssetsStore } from "../../stores/assets";
+import { useScriptStore } from "../../stores/script";
 import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { PIPELINE_STEPS } from "../../stores/workspace";
@@ -16,6 +17,7 @@ import { computeCostBreakdown, estimatePlanCost, getTaskCostHint, getVideoUpgrad
 const storyboardStore = useStoryboardStore();
 const assetPlanningStore = useAssetPlanningStore();
 const assetsStore = useAssetsStore();
+const scriptStore = useScriptStore();
 const projectStore = useProjectStore();
 const workspaceStore = useWorkspaceStore();
 
@@ -94,6 +96,19 @@ const narrationDuration = computed(() => {
   const meta = narrationArtifact.value?.metadata;
   const dur = meta?.duration_sec as number | undefined;
   return typeof dur === "number" ? dur : null;
+});
+
+/** Full script text from the active script record. */
+const fullScriptText = computed(() => {
+  return scriptStore.state.snapshot?.active_script?.script_text ?? null;
+});
+
+const narrationScriptExpanded = ref(false);
+const SCRIPT_PREVIEW_LINES = 6;
+const narrationScriptLong = computed(() => {
+  const text = fullScriptText.value;
+  if (!text) return false;
+  return text.split("\n").length > SCRIPT_PREVIEW_LINES || text.length > 400;
 });
 
 const COMPOSE_STEP_INDEX = PIPELINE_STEPS.findIndex(
@@ -359,6 +374,7 @@ const blockedReasonText = computed(() => {
 onMounted(async () => {
   await storyboardStore.loadActiveStoryboardSnapshot();
   await assetPlanningStore.loadActiveAssetPlanSnapshot();
+  scriptStore.loadActiveScriptSnapshot(); // fire-and-forget, needed for narration text
   // Auto-generate asset plan when arriving from storyboard confirmation
   const s = assetPlanningStore.state.snapshot;
   if (
@@ -805,6 +821,23 @@ function handleConfirm() {
             <span v-if="costBreakdown.tts.charCount > 0">{{ costBreakdown.tts.charCount }} 字</span>
             <span>¥{{ costBreakdown.tts.total.toFixed(2) }}</span>
           </div>
+        </div>
+        <!-- Full script text -->
+        <div v-if="fullScriptText" class="asset-narration-script">
+          <div class="asset-narration-script-header">
+            <span class="asset-narration-script-label">口播文案</span>
+            <button
+              v-if="narrationScriptLong"
+              class="asset-narration-script-toggle"
+              @click="narrationScriptExpanded = !narrationScriptExpanded"
+            >
+              {{ narrationScriptExpanded ? '收起' : '展开全文' }}
+            </button>
+          </div>
+          <p
+            class="asset-narration-script-text"
+            :class="{ 'asset-narration-script-text--collapsed': !narrationScriptExpanded && narrationScriptLong }"
+          >{{ fullScriptText }}</p>
         </div>
       </div>
 
@@ -1329,6 +1362,53 @@ details[open] > .asset-global-toggle::before {
   gap: var(--space-md);
   font-size: 0.82rem;
   color: var(--text-muted);
+}
+
+.asset-narration-script {
+  margin-top: var(--space-sm);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-default);
+}
+
+.asset-narration-script-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-xs);
+}
+
+.asset-narration-script-label {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.asset-narration-script-toggle {
+  border: none;
+  background: none;
+  color: var(--accent-primary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.asset-narration-script-toggle:hover {
+  text-decoration: underline;
+}
+
+.asset-narration-script-text {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.85;
+  color: var(--text-body);
+  white-space: pre-wrap;
+}
+
+.asset-narration-script-text--collapsed {
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 /* ---- Segments header ---- */
