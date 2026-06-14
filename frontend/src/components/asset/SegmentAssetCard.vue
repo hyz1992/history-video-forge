@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onUnmounted } from "vue";
+import { computed, ref, watch, onMounted, onUnmounted, nextTick } from "vue";
 import { ElTooltip, ElTag, ElButton, ElIcon, ElMessage, ElMessageBox, ElDialog, ElInput } from "element-plus";
 import { Upload, CopyDocument } from "@element-plus/icons-vue";
 
@@ -10,6 +10,7 @@ import { checkArtRisks } from "../../utils/asset-art-quality";
 import type { StoryboardSegment } from "../../stores/storyboard";
 import type { AssetTask } from "../../stores/asset-planning";
 import { useAssetsStore } from "../../stores/assets";
+import { useAssetPlanningStore } from "../../stores/asset-planning";
 
 /* -------------------------------------------------------------------------- */
 /*  Props & Emits                                                             */
@@ -71,6 +72,7 @@ const CONTENT_LABELS: Record<string, string> = {
 };
 
 const assetsStore = useAssetsStore();
+const assetPlanningStore = useAssetPlanningStore();
 
 /* -------------------------------------------------------------------------- */
 /*  Tab & carousel state                                                      */
@@ -191,6 +193,7 @@ const acceptFileTypes = computed(() => {
 
 const fileInput = ref<HTMLInputElement | null>(null);
 const showPreview = ref(false);
+const promptTextRef = ref<HTMLElement | null>(null);
 
 function togglePreview() {
   if (hasGeneratedMedia.value) showPreview.value = !showPreview.value;
@@ -365,7 +368,28 @@ async function handleOptimizePrompt() {
   try {
     const optimized = optimizePromptFromRisks(task.prompt_draft, risks);
     await savePromptDraft(task.task_id, optimized);
-    ElMessage.success("提示词已优化，可点击生成查看效果");
+
+    // Reload asset plan so UI picks up persisted prompt_draft
+    await assetPlanningStore.loadActiveAssetPlanSnapshot();
+
+    // Recalculate risks on the optimized prompt
+    const newRisks = checkArtRisks(optimized, activeTab.value === "video" ? "video_clip" : "image_still");
+    const newTriggered = newRisks.filter(r => r.triggered);
+    const reduced = triggered.length - newTriggered.length;
+
+    if (reduced > 0) {
+      ElMessage.success(`提示词已优化，${reduced} 项建议已解决${newTriggered.length > 0 ? `，仍有 ${newTriggered.length} 项需手动处理` : ""}`);
+    } else if (newTriggered.length > 0) {
+      ElMessage.warning(`已追加优化约束，但仍有 ${newTriggered.length} 项建议需手动编辑处理`);
+    } else {
+      ElMessage.success("提示词已优化，所有建议已解决");
+    }
+
+    // Auto-scroll prompt text area to show the appended content
+    nextTick(() => {
+      const el = promptTextRef.value;
+      if (el) el.scrollTop = el.scrollHeight;
+    });
   } catch (e) {
     ElMessage.error("优化失败：" + (e instanceof Error ? e.message : "未知错误"));
   } finally {
@@ -627,7 +651,7 @@ function nextMedia() {
             </ElTooltip>
           </div>
         </div>
-        <p class="segment-info-prompt-text">
+        <p ref="promptTextRef" class="segment-info-prompt-text">
           {{ activePromptText }}
         </p>
       </div>

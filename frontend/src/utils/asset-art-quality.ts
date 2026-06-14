@@ -54,9 +54,13 @@ export function checkArtRisks(
   });
 
   // ── Anachronism risk ─────────────────────────────────────────────
-  const hasModernRisk = /现代|当代|西装|手机|汽车|电线|路灯|霓虹|沥青|玻璃幕墙|广告牌/.test(text);
-  const hasFantasyRisk = /动漫|奇幻|魔法|游戏|CG|3D渲染|科幻|机甲|赛博/.test(text);
-  const hasNegativeGuard = /无现代|不包含现代|避免现代|严禁现代|禁止现代|无动漫|不包含动漫/.test(text);
+  // Only flag modern/fantasy terms used in POSITIVE description, not in
+  // negative constraints like "无现代 / 不包含现代 / 无动漫".
+  const negativeContext = /无现代|不包含现代|避免现代|严禁现代|禁止现代|不得出现现代|排除现代|无动漫|不包含动漫|无奇幻|不包含奇幻|排除动漫|排除奇幻|排除现代/g;
+  const textWithoutNegatives = text.replace(negativeContext, "");
+  const hasModernRisk = /现代|当代|西装|手机|汽车|电线|路灯|霓虹|沥青|玻璃幕墙|广告牌/.test(textWithoutNegatives);
+  const hasFantasyRisk = /动漫|奇幻|魔法|游戏|CG|3D渲染|科幻|机甲|赛博/.test(textWithoutNegatives);
+  const hasNegativeGuard = /无现代|不包含现代|避免现代|严禁现代|禁止现代|不得出现现代|排除现代|无动漫|不包含动漫|无奇幻|不包含奇幻/.test(text);
   hints.push({
     code: "anachronism",
     label: "时代穿帮风险",
@@ -70,16 +74,28 @@ export function checkArtRisks(
   });
 
   // ── Consistency risk (multiple characters) ────────────────────────
-  const namedChars = text.match(/晏子|楚王|项羽|刘邦|士兵|将领|使臣|侍卫|群臣/g);
-  const charCount = namedChars ? new Set(namedChars).size : 0;
+  // Count named characters from hardcoded list AND [角色锚点] references
+  const roleAnchorMatch = text.match(/\[角色锚点\]\s*(\S+?)[：:\s]/g);
+  const roleAnchorNames = roleAnchorMatch
+    ? roleAnchorMatch.map((m) => m.replace(/\[角色锚点\]\s*/, "").replace(/[：:\s]/g, "").trim()).filter(Boolean)
+    : [];
+  const hardcodedNames = text.match(/晏子|楚王|项羽|刘邦|士兵|将领|使臣|侍卫|群臣|庄廷鑨|朱棣|建文|海瑞|嘉靖|于谦|明英宗/g);
+  const allNames = [...(roleAnchorNames), ...(hardcodedNames ?? [])];
+  const charCount = new Set(allNames).size;
+  // Also check for ArtBible character descriptions in the prompt
+  const hasCharDescription = /身形|脊背|挺直|面容|目光|眼神|神态|姿态|服饰|深衣|长袍|甲胄|高冠|气质|年龄|发型/.test(text);
   hints.push({
     code: "character_consistency",
     label: "角色一致性",
     risk: charCount >= 2
       ? `涉及 ${charCount} 个角色，跨镜头外观一致性依赖独立提示词`
-      : "缺少明确角色名，跨镜头可能生成不一致的人物外观",
-    suggestion: "确保每个角色的 visual_description 在各镜头中保持一致，引用 ArtBible 角色锚点",
-    triggered: charCount >= 2 || (text.length > 30 && charCount === 0),
+      : charCount === 0 && !hasCharDescription
+        ? "缺少明确角色名，跨镜头可能生成不一致的人物外观"
+        : "当前角色描述较充分，跨镜头一致性风险较低",
+    suggestion: charCount >= 2 || (charCount === 0 && !hasCharDescription)
+      ? "确保每个角色的 visual_description 在各镜头中保持一致，引用 ArtBible 角色锚点"
+      : "在各分镜中保持该角色的服饰、年龄、气质描述一致",
+    triggered: charCount >= 2 || (charCount === 0 && !hasCharDescription),
   });
 
   // ── Composition / lighting ────────────────────────────────────────
