@@ -19,8 +19,18 @@ onMounted(() => {
   topicStore.loadExistingTopic();
 });
 
-const eraFilter = ref<TopicRecommendationFilters["era"]>("ancient");
-const tensionFilter = ref<TopicRecommendationFilters["tension"]>("high");
+const eraFilter = ref<TopicRecommendationFilters["era"]>(
+  (sessionStorage.getItem("topic-era-filter") as TopicRecommendationFilters["era"]) ?? "ancient"
+);
+const tensionFilter = ref<TopicRecommendationFilters["tension"]>(
+  (sessionStorage.getItem("topic-tension-filter") as TopicRecommendationFilters["tension"]) ?? "high"
+);
+
+// Persist filter selections
+function saveFilters() {
+  sessionStorage.setItem("topic-era-filter", eraFilter.value);
+  sessionStorage.setItem("topic-tension-filter", tensionFilter.value);
+}
 
 const currentCandidates = computed(
   () => topicStore.state.currentRound?.candidates ?? topicStore.state.candidates,
@@ -62,6 +72,7 @@ function selectHistoryCandidate(
 }
 
 async function generateRecommendations() {
+  saveFilters();
   await topicStore.generateSystemRecommendations({
     era: eraFilter.value,
     tension: tensionFilter.value,
@@ -136,13 +147,12 @@ function handleRetry() {
         <el-button type="primary" @click="handleRetry">重试</el-button>
       </div>
 
-      <!-- Loading skeleton -->
-      <el-skeleton
-        v-else-if="topicStore.state.isGenerating"
-        :rows="5"
-        animated
-        class="topic-skeleton"
-      />
+      <!-- Loading state -->
+      <div v-else-if="topicStore.state.isGenerating" class="topic-generating">
+        <el-skeleton :rows="3" animated />
+        <p class="topic-generating-text">正在调用大模型生成选题推荐，可能需要 1-3 分钟...</p>
+        <p class="topic-generating-hint">生成完成后结果会自动出现，无需手动刷新。</p>
+      </div>
 
       <!-- Empty state -->
       <div v-else-if="!hasCandidates" class="topic-empty-state">
@@ -429,9 +439,24 @@ function handleRetry() {
   background: var(--bg-card);
 }
 
-/* Skeleton */
-.topic-skeleton {
-  padding: var(--space-md);
+.topic-generating {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-xl) var(--space-md);
+}
+
+.topic-generating-text {
+  color: var(--text-body);
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.topic-generating-hint {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  text-align: center;
 }
 
 /* Two-column layout */

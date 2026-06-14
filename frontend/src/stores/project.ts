@@ -61,6 +61,7 @@ export function createFetchProjectApi(baseUrl = ""): ProjectApi {
         display_name:
           data.display_name ??
           data.active_topic_package?.canonical_title ??
+          data.name ??
           undefined,
       };
     },

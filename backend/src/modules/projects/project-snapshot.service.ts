@@ -30,6 +30,30 @@ function statusToStep(status: string): string {
   return "topic";
 }
 
+/**
+ * Downgrade the project status based on which active records actually exist.
+ * A project recovered from disk may have lost its in-memory active records;
+ * we must not claim it is at a stage whose data is missing.
+ */
+export function resolveEffectiveStatus(project: {
+  status: string;
+  activeTopicPackageId: string | null;
+  activeScriptRecordId: string | null;
+  activeStoryboardRecordId: string | null;
+  activeAssetManifestRecordId: string | null;
+  activeComposeRecordId: string | null;
+  activeRenderJobRecordId: string | null;
+}): string {
+  const s = project.status;
+  // Walk down from the claimed stage to the highest stage that has data
+  if (s.startsWith("render") && !project.activeComposeRecordId) return resolveEffectiveStatus({ ...project, status: "compose_ready" });
+  if (s.startsWith("compos") && !project.activeAssetManifestRecordId) return resolveEffectiveStatus({ ...project, status: "assets_ready" });
+  if ((s.startsWith("assets") || s.startsWith("asset_plan")) && !project.activeStoryboardRecordId) return resolveEffectiveStatus({ ...project, status: "storyboard_ready" });
+  if (s.startsWith("storyboard") && !project.activeScriptRecordId) return resolveEffectiveStatus({ ...project, status: "script_ready" });
+  if (s.startsWith("script") && !project.activeTopicPackageId) return "topic_pending";
+  return s;
+}
+
 export async function getProjectSnapshot(db: DbClient, projectId: string) {
   const project = db.projects.get(projectId);
   if (!project) {
@@ -86,12 +110,14 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
   const latestRenderTrace =
     (project.latestRenderRunTraceJson as Record<string, unknown> | null | undefined) ?? null;
 
+  const effectiveStatus = resolveEffectiveStatus(project);
+
   return {
     project_id: project.id,
     name: project.name,
-    current_status: project.status,
-    is_draft: project.status.startsWith("topic"),
-    restore_route: `/projects/${project.id}/${statusToStep(project.status)}`,
+    current_status: effectiveStatus,
+    is_draft: effectiveStatus.startsWith("topic"),
+    restore_route: `/projects/${project.id}/${statusToStep(effectiveStatus)}`,
     trace_summary: {
       project_storage: {
         root_dir: storageProfile.root_dir,

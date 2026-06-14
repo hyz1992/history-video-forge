@@ -48,7 +48,7 @@ status: active
       "excerpt": "从 script_text 截取的完整短句"
     }
   ],
-  "opening_span": "script_text 的开头片段",
+  "opening_span": "独立开场钩子，不直接等于 script_text 开头",
   "ending_span": "script_text 的结尾片段"
 }
 ```
@@ -73,7 +73,7 @@ status: active
 
 - `script_text` 的口播体量必须服务于 `hard_lane.duration_band`；先按档位控制正文体量，再按约 3.6-4.6 个汉字等价长度/秒回填 `estimated_duration_sec`；`short=45-70秒`，`medium=75-95秒`，`long=90-140秒`；`estimated_duration_sec` 必须落在对应时长区间内，且不得与正文体量明显失真
 - `medium` 首稿正文优先写到约 330-450 个汉字等价长度；如果正文只有 320-360 字，估时应更保守，不能硬标 85-90 秒；只能用场景、动作、对话或转述、压力升级、即时后果补足体量，不得为了凑字数重复解释、空泛评价或喊口号
-- 先单独确定一个可独立成立的 `opening_span`，再让 `script_text` 以 `opening_span` 原文起手顺势展开；`opening_span` 采用破壁开头：第一分句必须包含本事件的具体人物或势力，并绑定压力源、选择或代价，优先从 `core_conflict`、`stakes` 或 `narrative_tension_map` 提炼；第二分句立刻落到具体历史场面、动作或危险局面；不要用泛称惊叹替代具体压力；不得为了开头铺垫而空泛解释背景；`hook_claim` 只是包装 promise 弱参考，如需借用，必须还原成具体场面，不能机械复述或照搬，不使用固定统一开头模板；`ending_span` 必须回收到 `ending_residue` 或 `stakes`，不要空泛拔高或喊口号收尾
+- 先单独确定一个可独立成立的 `opening_span` 作为开场钩子；`script_text` 从 `opening_span` 之后的下一拍进入正文推进，不得在正文开头逐字重复 `opening_span`；`opening_span` 采用破壁开头：第一分句必须包含本事件的具体人物或势力，并绑定压力源、选择或代价，优先从 `core_conflict`、`stakes` 或 `narrative_tension_map` 提炼；第二分句立刻落到具体历史场面、动作或危险局面；不要用泛称惊叹替代具体压力；不得为了开头铺垫而空泛解释背景；`hook_claim` 只是包装 promise 弱参考，如需借用，必须还原成具体场面，不能机械复述或照搬，不使用固定统一开头模板；`ending_span` 必须回收到 `ending_residue` 或 `stakes`，不要空泛拔高或喊口号收尾
 - `ending_span` 必须落在代价、反讽、未平后果或场景内判断上；不要默认写成改变历史、成为典范、留名史册式空泛收尾
 - 首稿是可口播的历史故事草稿，不能写成摘要稿；每个 `must_include_beats` 要写成局面推进，而不是只点名；至少一个核心场面包含人物、动作、压力源、即时后果；如用问句开头，问句后必须进入具体场面；结尾要留下代价、反讽或判断，不要只做空泛拔高
 - 每 2-3 句必须出现新的动作、对方反应、场面压力变化或即时后果；不要连续写三句以上背景解释、抽象评价或历史意义

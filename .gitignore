@@ -3,6 +3,7 @@ harness/scripts/runtime/output/*
 !harness/scripts/runtime/output/.gitkeep
 .env
 storage/projects/
+storage/db-snapshot.json
 storage/media-library/
 .playwright-mcp/
 .superpowers/

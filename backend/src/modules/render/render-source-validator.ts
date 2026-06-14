@@ -206,8 +206,10 @@ export async function validateRenderSources(
   const timeline = timelineResult.data;
   const clips = listTimelineClips(timeline);
 
-  if (timeline.readiness !== "ready_for_render") {
+  if (timeline.readiness === "blocked") {
     pushUnique(errors, "render_timeline_not_ready");
+  } else if (timeline.readiness === "partial") {
+    pushUnique(warnings, "render_timeline_partial");
   }
 
   if (!input.assetManifestRecord) {

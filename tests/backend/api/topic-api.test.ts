@@ -100,7 +100,8 @@ describe("topic api", () => {
     expect(body.topic_package).toMatchObject({
       topic_package_id: expect.any(String),
       canonical_title: "晏子使楚",
-      strong_scene: "楚王连续压场，晏子一句句顶回去。",
+      // Builder now generates strong_scene from summary (not seed instruction)
+      strong_scene: "楚王在公开场合连续压场，晏子当场顶回去。",
       duration_band: expect.anything(),
       narrative_tension_map: {
         hook_claim: expect.any(String),

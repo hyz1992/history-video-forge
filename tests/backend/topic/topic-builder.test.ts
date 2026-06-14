@@ -19,9 +19,10 @@ describe("topic candidate builder", () => {
 
     for (const candidate of candidates) {
       expect(() => TopicCandidateCard.parse(candidate)).not.toThrow();
+      // Non-instruction summary is used as both core_conflict and strong_scene,
+      // deduped to a single entry (no quotes in this test input).
       expect(candidate.must_cover_preview).toEqual([
-        "the protagonist pushes back in front of everyone",
-        "the protagonist must answer direct public pressure",
+        "public pressure around a diplomatic showdown",
       ]);
     }
 

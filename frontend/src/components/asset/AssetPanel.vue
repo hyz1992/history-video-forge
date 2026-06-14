@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 
@@ -11,7 +11,7 @@ import { useWorkspaceStore } from "../../stores/workspace";
 import { PIPELINE_STEPS } from "../../stores/workspace";
 
 import SegmentAssetCard from "./SegmentAssetCard.vue";
-import { computeCostBreakdown, normalizeVideoDurationForPricing } from "../../utils/pricing";
+import { computeCostBreakdown, estimatePlanCost, getTaskCostHint, getVideoUpgradeCostHint, estimateBlockedItemsCost, PRICING, type PlanTaskLike } from "../../utils/pricing";
 
 const storyboardStore = useStoryboardStore();
 const assetPlanningStore = useAssetPlanningStore();
@@ -51,50 +51,9 @@ const canCompose = computed(() => {
 
 /** Pre-generation cost estimate from the asset plan. */
 const estimatedCost = computed(() => {
-  let images = 0;
-  const videoSpecs: Array<{ dur: number; height: number }> = [];
-  let ttsChars = 0;
-
-  for (const task of assetTasks.value) {
-    if (task.task_type === "image_still") images++;
-    if (task.task_type === "video_clip") {
-      const params = (task.parameters as Record<string, unknown> | undefined);
-      const dur = normalizeVideoDurationForPricing(
-        (typeof params?.duration_sec === "number" && params.duration_sec > 0)
-          ? params.duration_sec : 5,
-      );
-      const res = (typeof params?.resolution === "string" ? params.resolution : "") || "720P";
-      const height = res.includes("1080") ? 1080 : 720;
-      videoSpecs.push({ dur, height });
-    }
-    if (task.task_type === "tts_audio") {
-      const plan = activeAssetPlan.value?.plan;
-      const ttsPlan = plan as unknown as { tts_plan?: { chunks?: Array<{ script_excerpt?: string }> } } | null;
-      ttsChars = ttsPlan?.tts_plan?.chunks?.reduce((s, c) => s + (c.script_excerpt?.length ?? 0), 0) ?? 0;
-    }
-  }
-
-  if (images === 0 && videoSpecs.length === 0 && ttsChars === 0) return null;
-
-  // Build synthetic artifacts for pricing — one per second for video to match per-second pricing
-  const syntheticArtifacts: Array<{ artifact_type: string; metadata: Record<string, unknown> }> = [
-    ...Array.from({ length: images }, () => ({ artifact_type: "image", metadata: {} })),
-  ];
-  for (const vs of videoSpecs) {
-    for (let s = 0; s < Math.ceil(vs.dur); s++) {
-      syntheticArtifacts.push({ artifact_type: "video", metadata: { duration_sec: 1, height: vs.height } });
-    }
-  }
-
-  const videoTotalSec = videoSpecs.reduce((sum, vs) => sum + vs.dur, 0);
-  const has1080p = videoSpecs.some(vs => vs.height >= 1080);
-
-  const pricing = computeCostBreakdown(syntheticArtifacts, ttsChars);
-
-  return {
-    images, videoTotalSec, ttsChars, has1080p,
-    total: pricing.total, imgCost: pricing.image.total, vidCost: pricing.video.total, ttsCost: pricing.tts.total,
-  };
+  const ttsPlan = activeAssetPlan.value?.plan as unknown as { tts_plan?: { chunks?: Array<{ script_excerpt?: string }> } } | null;
+  const ttsChars = ttsPlan?.tts_plan?.chunks?.reduce((s, c) => s + (c.script_excerpt?.length ?? 0), 0) ?? 0;
+  return estimatePlanCost(assetTasks.value as PlanTaskLike[], ttsChars);
 });
 
 /** Post-generation cost from actual artifacts. */
@@ -393,6 +352,31 @@ onMounted(async () => {
     }
   }
   await assetsStore.loadProject();
+  await autoStartBasicAssets();
+});
+
+let basicAssetsAutoStarted = false;
+
+/** Auto-start basic asset generation when entering the page with a plan
+ *  but no manifest yet.  Guards against duplicate triggers on refresh. */
+async function autoStartBasicAssets() {
+  if (basicAssetsAutoStarted) return;
+  if (assetsStore.state.isGenerating) return;
+  if (!activeAssetPlan.value) return;
+  if (hasManifest.value) return; // already generated
+
+  basicAssetsAutoStarted = true;
+  await assetsStore.generateAssets({ enabledProviderTypes: ["tts", "sfx", "bgm"] });
+  if (!assetsStore.state.loadError) {
+    ElMessage.success("基础资产生成完成（口播、字幕、运镜、音效、配乐）");
+  }
+}
+
+// Also trigger on snapshot change (handles timing where project data loads async)
+watch(() => assetsStore.state.snapshot, async () => {
+  if (!basicAssetsAutoStarted) {
+    await autoStartBasicAssets();
+  }
 });
 
 /* -------------------------------------------------------------------------- */
@@ -406,30 +390,18 @@ async function handleGeneratePlan() {
   }
 }
 
-async function handleGenerateSemiAuto() {
-  try {
-    await ElMessageBox.confirm(
-      "将生成口播音频、音效和配乐（不含图片/视频）。\n口播约 ¥0.80/万字。\n确定继续？",
-      "确认半自动生成",
-      { confirmButtonText: "确定生成", cancelButtonText: "取消", type: "info" },
-    );
-  } catch { return; }
+async function handleGenerateBasic() {
+  // Basic assets: TTS/subtitle/motion/SFX/BGM — low cost, no confirmation needed
   await assetsStore.generateAssets({ enabledProviderTypes: ["tts", "sfx", "bgm"] });
   if (!assetsStore.state.loadError) {
-    ElMessage.success("资产生成完成（图片/视频需手动上传）");
+    ElMessage.success("基础资产生成完成（口播、字幕、运镜、音效、配乐）");
   }
 }
 
 async function handleGenerateMissing() {
   const count = blockedItems.value.length;
   const types = [...new Set(blockedItems.value.map(i => i.type))].join("、");
-  // Estimate cost only for the blocked/missing tasks
-  let imgCount = 0, vidSec = 0;
-  for (const item of blockedItems.value) {
-    if (item.type === "分镜图") imgCount++;
-    if (item.type === "分镜视频") vidSec += 5;
-  }
-  const estCost = imgCount * 0.20 + vidSec * 0.60;
+  const { imgCount, vidSec, estCost } = estimateBlockedItemsCost(blockedItems.value);
   const costText = imgCount + vidSec > 0
     ? `\n预估费用约 ¥${estCost.toFixed(2)}（${imgCount} 张图 + ${vidSec}s 视频）`
     : "\n口播/字幕/音效费用较低，约 ¥1 以内";
@@ -481,7 +453,7 @@ async function handleGenerateTask(taskId: string) {
   // Show cost hint for paid task types
   const task = assetTasks.value.find(t => t.task_id === taskId);
   const taskLabel = task ? (TASK_TYPE_LABELS[task.task_type] ?? task.task_type) : taskId;
-  const costHint = task?.task_type === "video_clip" ? "约 ¥0.60/秒" : task?.task_type === "image_still" ? "约 ¥0.20/张" : "";
+  const costHint = task ? getTaskCostHint(task.task_type) : "";
   try {
     if (costHint) {
       await ElMessageBox.confirm(
@@ -512,11 +484,10 @@ async function handleGenerateTask(taskId: string) {
 async function handleUpgradeVideo(segmentId: string) {
   const seg = segments.value.find(s => s.segment_id === segmentId);
   const segLabel = seg ? `#${segments.value.indexOf(seg) + 1}` : segmentId;
-  // Default upgrade creates 720P at 5s — use those values, not global estimate
-  const rate = "约 ¥0.60/秒 (720P)";
+  const { rate, estimatedTotal } = getVideoUpgradeCostHint();
   try {
     await ElMessageBox.confirm(
-      `将为分镜 ${segLabel} 新增可选 API 视频任务（默认 720P / 5 秒，不影响图片+运镜路线）。\n费用：${rate}，预估 ¥${(5 * 0.60).toFixed(2)}。\n确定继续？`,
+      `将为分镜 ${segLabel} 新增可选 API 视频任务（默认 720P / 5 秒，不影响图片+运镜路线）。\n费用：${rate}，预估 ¥${estimatedTotal.toFixed(2)}。\n确定继续？`,
       "升级为 API 视频",
       { confirmButtonText: "确定升级", cancelButtonText: "取消", type: "info" },
     );
@@ -628,27 +599,24 @@ function handleConfirm() {
         </div>
       </div>
       <p class="asset-plan-overview-hint">
-        口播、字幕、音效、配乐将自动生成；分镜图和视频需通过 AI 生成或手动上传。
+        基础资产（口播音频、字幕、运镜、音效、配乐）将自动生成；分镜图和视频后续可在卡片中逐项生成、上传，或通过概览区批量生成。
         <span v-if="estimatedCost" class="asset-plan-cost-estimate">
-          <br/>「全部自动生成」预估 ¥{{ estimatedCost.total.toFixed(2) }}
-          （{{ estimatedCost.images }} 图 · {{ estimatedCost.videoTotalSec.toFixed(0) }}s{{ estimatedCost.has1080p ? ' 1080P' : '' }} 视频 · {{ estimatedCost.ttsChars }} 字口播）
-          <br/>「手动上传」仅生成口播/字幕/音效/配乐，预估 ¥{{ (estimatedCost.ttsCost).toFixed(2) }}
+          <br/>基础资产生成费用约 ¥{{ (estimatedCost.ttsCost).toFixed(2) }}（口播 {{ estimatedCost.ttsChars }} 字）。
+          <br/>剩余视觉资产（{{ estimatedCost.images }} 张图{{ estimatedCost.videoTotalSec > 0 ? ' + ' + estimatedCost.videoTotalSec.toFixed(0) + 's 视频' : '' }}）可后续按需生成，预估 ¥{{ (estimatedCost.total - estimatedCost.ttsCost).toFixed(2) }}。
         </span>
       </p>
-      <div class="asset-plan-overview-actions">
-        <el-button
-          type="primary"
-          :loading="assetsStore.state.isGenerating"
-          @click="handleGenerateFull"
-        >
-          {{ assetsStore.state.isGenerating ? "生成中..." : "全部自动生成" }}
-        </el-button>
-        <el-button
-          :loading="assetsStore.state.isGenerating"
-          @click="handleGenerateSemiAuto"
-        >
-          {{ assetsStore.state.isGenerating ? "生成中..." : "生成资产（手动上传图片/视频）" }}
-        </el-button>
+      <!-- Auto-generating state -->
+      <div v-if="assetsStore.state.isGenerating" class="asset-plan-auto-generating">
+        <el-alert
+          title="正在生成基础资产"
+          type="info"
+          :closable="false"
+          description="口播音频、字幕、运镜、音效、配乐 — 系统自动生成中，请稍候..."
+        />
+      </div>
+      <!-- Failed: show retry -->
+      <div v-else-if="assetsStore.state.loadError" class="asset-plan-overview-actions">
+        <el-button type="primary" @click="handleGenerateBasic">重试生成基础资产</el-button>
       </div>
       <p v-if="assetsStore.state.isGenerating" class="asset-generating-progress">
         {{ generationProgress }}
@@ -791,7 +759,7 @@ function handleConfirm() {
             重新生成全部资产
           </el-button>
           <span v-if="blockedItems.length > 0" class="asset-overview-hint">
-            也可在下方的分镜卡片中逐项上传或替换
+            也可在下方的分镜卡片中逐项生成、上传或替换
           </span>
           <p v-if="assetsStore.state.isGenerating && generationProgress" class="asset-generating-progress">
             {{ generationProgress }}
@@ -799,22 +767,10 @@ function handleConfirm() {
         </div>
       </div>
 
-      <!-- Generate action bar (no manifest yet) -->
-      <div v-if="!hasManifest" class="asset-generate-bar">
+      <!-- Generate action bar (no manifest yet) — only show retry on error -->
+      <div v-if="!hasManifest && assetsStore.state.loadError" class="asset-generate-bar">
         <div class="asset-generate-actions">
-          <el-button
-            type="primary"
-            :loading="assetsStore.state.isGenerating"
-            @click="handleGenerateFull"
-          >
-            {{ assetsStore.state.isGenerating ? "生成中..." : "全部自动生成" }}
-          </el-button>
-          <el-button
-            :loading="assetsStore.state.isGenerating"
-            @click="handleGenerateSemiAuto"
-          >
-            {{ assetsStore.state.isGenerating ? "生成中..." : "生成资产（手动上传图片/视频）" }}
-          </el-button>
+          <el-button type="primary" @click="handleGenerateBasic">重试生成基础资产</el-button>
         </div>
       </div>
 
@@ -957,6 +913,10 @@ function handleConfirm() {
   color: var(--text-muted);
   line-height: 1.6;
   margin: 0;
+}
+
+.asset-plan-auto-generating {
+  margin-top: var(--space-sm);
 }
 
 .asset-plan-overview-actions {

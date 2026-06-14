@@ -1,5 +1,6 @@
 import { env } from "./config/env";
 import { createDbClient, type DbClient } from "./db/client";
+import { loadDbSnapshot, recoverProjectsFromDisk, saveDbSnapshot, saveProjectMetadata } from "./db/persistence";
 import { registerProjectRoutes } from "./modules/projects/project.routes";
 import { registerTopicRoutes } from "./modules/topic/topic.routes";
 import { registerScriptRoutes } from "./modules/script/script.routes";
@@ -100,12 +101,40 @@ export interface BuildAppOptions {
 
 export function buildApp(options: BuildAppOptions = {}): AppInstance {
   const routes: RouteRecord[] = [];
+  const db = createDbClient();
+  const topicCandidateStore = new Map<string, ProjectTopicCandidateState>();
+
+  // Restore persisted state from disk (never under Vitest — avoids cross-test pollution)
+  const isTest = !!process.env.VITEST;
+  if (!isTest) {
+    loadDbSnapshot(db, topicCandidateStore);
+    // Also recover any projects that have on-disk metadata but aren't in the snapshot
+    recoverProjectsFromDisk(db);
+  }
+
+  // Persist on shutdown (skip in test)
+  function persist() {
+    saveDbSnapshot(db, topicCandidateStore);
+  }
+  if (!isTest) {
+    process.on("SIGINT", () => { persist(); process.exit(0); });
+    process.on("SIGTERM", () => { persist(); process.exit(0); });
+  }
+  // Persist after each state-changing request (debounced via setImmediate)
+  let persistPending = false;
+  function schedulePersist() {
+    if (isTest) return;
+    if (!persistPending) {
+      persistPending = true;
+      setImmediate(() => { persist(); persistPending = false; });
+    }
+  }
 
   const app: AppInstance = {
     env,
-    db: createDbClient(),
+    db,
     renderAdapter: options.renderAdapter,
-    topicCandidateStore: new Map<string, ProjectTopicCandidateState>(),
+    topicCandidateStore,
     addRoute(method, pattern, handler) {
       routes.push({
         method: method.toUpperCase(),
@@ -131,6 +160,11 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
           params,
           payload: request.payload ?? {},
         });
+
+        // Persist after state-changing requests
+        if (method === "POST" || method === "PUT" || method === "DELETE") {
+          schedulePersist();
+        }
 
         return {
           statusCode: response.statusCode,

@@ -1,5 +1,6 @@
 import type { DbClient, ProjectRecord } from "../../db/client";
 import { initializeProjectStorage } from "../../runtime/trace/project-storage.js";
+import { saveProjectMetadata } from "../../db/persistence.js";
 
 export interface CreateProjectInput {
   name: string;
@@ -37,6 +38,10 @@ export async function createProject(
   };
 
   initializeProjectStorage(project);
+  // Never persist to disk under test — avoids polluting storage/projects/
+  if (!process.env.VITEST) {
+    saveProjectMetadata(project);
+  }
 
   db.projects.set(project.id, project);
 

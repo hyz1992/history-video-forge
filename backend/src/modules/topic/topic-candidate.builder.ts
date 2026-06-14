@@ -235,14 +235,6 @@ function compactUnique(values: Array<string | undefined>): string[] {
   );
 }
 
-function buildMustCoverPreview(input: BuildTopicCandidatesInput): string[] {
-  return compactUnique([
-    input.strongScene,
-    ...(input.canonicalQuotes ?? []),
-    input.coreConflict,
-  ]).slice(0, 3);
-}
-
 export function buildTopicCandidates(input: BuildTopicCandidatesInput) {
   const familyLabel = classifyEventFamily(input);
   const slots = FAMILY_SLOTS[familyLabel];
@@ -255,6 +247,11 @@ export function buildTopicCandidates(input: BuildTopicCandidatesInput) {
         return null;
       }
 
+      // Generate meaningful core_conflict and strong_scene from the event
+      // identity, NOT from the seed's prompt-instruction text.
+      const generatedCoreConflict = buildCoreConflict(input, familyLabel);
+      const generatedStrongScene = buildStrongScene(input, slot);
+
       return TopicCandidateCard.parse({
         event_identity: input.canonicalName,
         title: input.canonicalName,
@@ -262,10 +259,14 @@ export function buildTopicCandidates(input: BuildTopicCandidatesInput) {
         family_label: familyLabel,
         scope_label: "单事件",
         estimated_duration_band: "medium",
-        why_this_now: `${input.recentUsageHint}，且当前具备可讲张力。`,
-        core_conflict: input.coreConflict,
-        strong_scene: input.strongScene,
-        must_cover_preview: buildMustCoverPreview(input),
+        why_this_now: buildWhyThisNow(input),
+        core_conflict: generatedCoreConflict,
+        strong_scene: generatedStrongScene,
+        must_cover_preview: compactUnique([
+          generatedStrongScene,
+          ...(input.canonicalQuotes ?? []),
+          generatedCoreConflict,
+        ]).slice(0, 3),
         risk_hints: ["避免扩成下游阶段对象"],
         source_hint: input.sourceHint,
         recent_usage_hint: input.recentUsageHint,
@@ -275,4 +276,60 @@ export function buildTopicCandidates(input: BuildTopicCandidatesInput) {
     .filter((candidate): candidate is ReturnType<typeof TopicCandidateCard.parse> =>
       Boolean(candidate),
     );
+}
+
+/** Detect text that reads like an LLM prompt instruction, not like topic content. */
+function isInstructionText(text: string): boolean {
+  const patterns = [
+    "请围绕", "不得超出", "优先推荐", "优先寻找",
+    "严格排除", "所有场景必须", "不得采用", "禁止返回",
+    "不得返回", "仅使用", "一律排除",
+  ];
+  return patterns.some((p) => text.includes(p));
+}
+
+/** Build a human-readable core conflict from the event identity. */
+function buildCoreConflict(
+  input: BuildTopicCandidatesInput,
+  familyLabel: string,
+): string {
+  const name = input.canonicalName;
+  // Use the summary if it reads like content (not instructions)
+  const summary = input.summary ?? "";
+  if (!isInstructionText(summary) && summary.length > 10) {
+    return summary;
+  }
+  return `${name}中的关键人物在极端压力下做出不可逆的选择，由此引发的连锁反应改变了局势走向。`;
+}
+
+/** Build a human-readable strong scene from the event identity and angle. */
+function buildStrongScene(
+  input: BuildTopicCandidatesInput,
+  slot: { key: string; angle: (input: BuildTopicCandidatesInput) => string },
+): string {
+  const name = input.canonicalName;
+  // Check if the summary is actual content (not instruction text)
+  const summary = input.summary ?? "";
+
+  if (isInstructionText(summary)) {
+    // Generate from slot angle — this describes the dramatic moment
+    const angle = slot.angle(input);
+    return `${name}：${angle}`;
+  }
+
+  // Use the summary as strong_scene since it's actual content
+  if (summary.length > 10) {
+    return summary;
+  }
+
+  return `${name}的历史关键时刻。`;
+}
+
+/** Build a human-readable "why this now" that is not a prompt instruction. */
+function buildWhyThisNow(input: BuildTopicCandidatesInput): string {
+  const hint = input.recentUsageHint;
+  if (isInstructionText(hint)) {
+    return "该事件具备可讲张力，适合进入文案阶段。";
+  }
+  return `${hint}，且当前具备可讲张力。`;
 }

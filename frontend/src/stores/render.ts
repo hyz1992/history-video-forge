@@ -36,6 +36,12 @@ export interface RenderSnapshot {
     graph_trace_summary: Record<string, unknown> | null;
     runtime_diagnostics: Record<string, unknown> | null;
   } | null;
+  active_compose?: {
+    compose_record_id: string;
+    timeline?: Record<string, unknown>;
+    local_validation?: { decision: string; errors?: string[]; warnings?: string[] } | null;
+  } | null;
+  active_assets?: Record<string, unknown> | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -77,6 +83,8 @@ export function createFetchRenderApi(baseUrl = ""): RenderApi {
       return {
         current_status: data.current_status ?? null,
         active_render: data.active_render ?? null,
+        active_compose: data.active_compose ?? null,
+        active_assets: data.active_assets ?? null,
       };
     },
 

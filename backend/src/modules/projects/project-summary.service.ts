@@ -1,4 +1,5 @@
 import type { DbClient } from "../../db/client";
+import { resolveEffectiveStatus } from "./project-snapshot.service.js";
 
 function statusToStep(status: string): string {
   if (status.startsWith("topic")) return "topic";
@@ -27,14 +28,15 @@ export function listProjectSummaries(db: DbClient): ProjectSummary[] {
       project.activeTopicPackageId
         ? db.topicPackages.get(project.activeTopicPackageId)?.title ?? null
         : null;
+    const effectiveStatus = resolveEffectiveStatus(project);
 
     summaries.push({
       project_id: project.id,
       display_name: topicTitle ?? project.name,
-      current_status: project.status,
-      is_draft: project.status.startsWith("topic"),
+      current_status: effectiveStatus,
+      is_draft: effectiveStatus.startsWith("topic"),
       updated_at: project.updatedAt.toISOString(),
-      restore_route: `/projects/${project.id}/${statusToStep(project.status)}`,
+      restore_route: `/projects/${project.id}/${statusToStep(effectiveStatus)}`,
     });
   }
 

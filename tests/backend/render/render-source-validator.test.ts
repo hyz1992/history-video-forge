@@ -281,6 +281,20 @@ describe("validateRenderSources", () => {
     expect(result.errors).toContain("render_timeline_not_ready");
   });
 
+  it("allows render with warnings when timeline readiness is partial", async () => {
+    const timeline = makeReadyComposeTimeline();
+    timeline.readiness = "partial";
+
+    const result = await validateRenderSources({
+      composeRecord: makeReadyComposeRecord({ timelineJson: timeline }),
+      assetManifestRecord: makeReadyAssetManifestRecord(),
+    });
+
+    expect(result.decision).toBe("ready_to_render");
+    expect(result.warnings).toContain("render_timeline_partial");
+    expect(result.errors).not.toContain("render_timeline_not_ready");
+  });
+
   it("blocks when the asset manifest is missing", async () => {
     const result = await validateRenderSources({
       composeRecord: makeReadyComposeRecord(),

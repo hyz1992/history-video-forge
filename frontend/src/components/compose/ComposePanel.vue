@@ -15,6 +15,7 @@ const workspaceStore = useWorkspaceStore();
 /* -------------------------------------------------------------------------- */
 
 const snapshot = computed(() => composeStore.state.snapshot);
+const currentStatus = computed(() => snapshot.value?.current_status ?? "");
 
 const activeCompose = computed(() => snapshot.value?.active_compose ?? null);
 
@@ -68,6 +69,46 @@ const trackSummary = computed(() => {
 const validationDecision = computed(() => {
   if (!validation.value) return "unknown";
   return validation.value.decision;
+});
+
+/** Map internal error/warning codes to human-readable Chinese messages. */
+const VALIDATION_CODE_ZH: Record<string, string> = {
+  compose_asset_manifest_not_ready: "资产未就绪",
+  compose_asset_manifest_partial: "部分可选素材未完成（不阻塞渲染）",
+  compose_narration_missing: "缺少口播音频",
+  compose_narration_duration_missing: "口播音频时长无效",
+  compose_subtitle_missing: "缺少字幕",
+  compose_timeline_duration_invalid: "时间线时长无效",
+  compose_segment_visual_missing: "某分镜缺少视觉素材",
+  compose_artifact_missing: "合成引用素材缺失",
+  compose_artifact_file_missing: "素材文件丢失",
+  compose_bgm_missing_optional: "可选配乐未生成（不阻塞渲染）",
+};
+
+function toZhMessage(code: string): string {
+  return VALIDATION_CODE_ZH[code] ?? code;
+}
+
+const canEnterRender = computed(() => {
+  const d = validationDecision.value;
+  return d === "ready_for_render" || d === "partial";
+});
+
+/** True when project status is too early for compose (requires assets stage). */
+const isTooEarlyForCompose = computed(() => {
+  if (!currentStatus.value || hasCompose.value) return false;
+  const s = currentStatus.value;
+  return !s.startsWith("compos") && !s.startsWith("assets") && !s.startsWith("render");
+});
+
+const blockReason = computed(() => {
+  if (canEnterRender.value) return "";
+  const msgs: string[] = [];
+  if (validation.value?.errors?.length) {
+    msgs.push(...validation.value.errors.map(toZhMessage));
+  }
+  if (!msgs.length) msgs.push("校验未通过");
+  return msgs.join("；");
 });
 
 /* -------------------------------------------------------------------------- */
@@ -148,6 +189,21 @@ function handleRetry() {
       <p>正在生成合成时间线，请稍候...</p>
     </div>
 
+    <!-- Too early for compose: project status is below assets -->
+    <div v-else-if="isTooEarlyForCompose" class="compose-error-card">
+      <el-alert
+        title="当前项目未到达合成阶段"
+        type="info"
+        show-icon
+        :closable="false"
+        description="项目尚未完成前置阶段，无法进入合成。请从项目列表进入当前可用阶段继续。"
+      />
+      <div class="compose-error-card-actions">
+        <el-button @click="router.push('/projects')">返回项目列表</el-button>
+        <el-button @click="handleRetry">刷新状态</el-button>
+      </div>
+    </div>
+
     <!-- Empty state -->
     <div v-else-if="!hasCompose" class="compose-empty">
       <p>暂无合成数据</p>
@@ -179,21 +235,22 @@ function handleRetry() {
           </span>
           <span class="compose-validation-label">
             <template v-if="validationDecision === 'ready_for_render'">校验通过，可进入渲染</template>
-            <template v-else-if="validationDecision === 'blocked'">校验未通过，存在阻断问题</template>
-            <template v-else>部分校验通过，存在警告</template>
+            <template v-else-if="validationDecision === 'blocked'">校验未通过：{{ blockReason }}</template>
+            <template v-else-if="validationDecision === 'partial'">部分校验通过（仅警告），可进入渲染</template>
+            <template v-else>校验状态未知</template>
           </span>
         </div>
         <ul
           v-if="validation?.errors?.length"
           class="compose-validation-list compose-validation-list--error"
         >
-          <li v-for="(err, i) in validation.errors" :key="'e' + i">{{ err }}</li>
+          <li v-for="(err, i) in validation.errors" :key="'e' + i">{{ toZhMessage(err) }}</li>
         </ul>
         <ul
           v-if="validation?.warnings?.length"
           class="compose-validation-list compose-validation-list--warn"
         >
-          <li v-for="(warn, i) in validation.warnings" :key="'w' + i">{{ warn }}</li>
+          <li v-for="(warn, i) in validation.warnings" :key="'w' + i">{{ toZhMessage(warn) }}</li>
         </ul>
       </div>
 
@@ -227,9 +284,23 @@ function handleRetry() {
         <el-button @click="handleGenerate" :loading="composeStore.state.isGenerating">
           {{ composeStore.state.isGenerating ? "生成中..." : "重新合成" }}
         </el-button>
+        <el-tooltip
+          v-if="!canEnterRender"
+          :content="blockReason"
+          placement="top"
+        >
+          <span>
+            <el-button
+              type="primary"
+              disabled
+            >
+              进入渲染 &rarr;
+            </el-button>
+          </span>
+        </el-tooltip>
         <el-button
+          v-else
           type="primary"
-          :disabled="validationDecision !== 'ready_for_render'"
           @click="handleGoToRender"
         >
           进入渲染 &rarr;
@@ -256,6 +327,11 @@ function handleRetry() {
   padding: var(--space-md);
   border-radius: var(--radius-card);
   background: var(--bg-card);
+}
+
+.compose-error-card-actions {
+  display: flex;
+  gap: var(--space-sm);
 }
 
 .compose-skeleton {

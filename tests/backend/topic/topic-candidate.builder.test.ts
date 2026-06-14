@@ -22,15 +22,22 @@ describe("topic candidate builder", () => {
       tags: ["diplomacy", "court", "humiliation", "showdown"],
     });
 
+    // With non-instruction summary, strong_scene = summary,
+    // core_conflict = summary (same), deduped, then quotes follow
     expect(candidates[0]?.must_cover_preview).toEqual([
+      summary,
+      "使狗国者，从狗门入",
+      "橘生淮南则为橘，生于淮北则为枳",
+    ]);
+    // Old seed values (instruction-like) are NOT leaked verbatim
+    expect(candidates[0]?.must_cover_preview).not.toEqual([
       strongScene,
       "使狗国者，从狗门入",
       "橘生淮南则为橘，生于淮北则为枳",
     ]);
-    expect(candidates[0]?.must_cover_preview).not.toEqual([
-      summary,
-      strongScene,
-      coreConflict,
-    ]);
+    // Generated core_conflict and strong_scene should NOT be the raw
+    // prompt-instruction text from the seed
+    expect(candidates[0]?.core_conflict).toBe(summary);
+    expect(candidates[0]?.strong_scene).toBe(summary);
   });
 });

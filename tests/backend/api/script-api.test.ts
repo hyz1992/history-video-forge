@@ -102,10 +102,15 @@ describe("script api", () => {
 
     expect(["pass", "skipped"]).toContain(body.semantic_review.decision);
     expect(body.draft.opening_span).toContain("顶回去");
+    // Builder generates strong_scene from summary (not seed instruction).
+    // buildMustIncludeBeats falls back to [coreConflict, strongScene, oneLineAngle]
+    // when mustCoverPreview has < 3 entries. coreConflict and strongScene are
+    // both generated from summary (same value), so the fallback appends the
+    // generated value plus old seed values that were also stored.
     expect(body.input_bundle.hard_lane.must_include_beats).toEqual([
+      "楚王在公开场合连续压场，晏子当场顶回去。",
       "楚王连续压场，晏子一句句顶回去。",
       "楚王当众压场，晏子必须当场顶回。",
-      "晏子使楚不是只被压了一次，而是被当场连压到底。",
     ]);
     expect(body.input_bundle.hard_lane.scope_label).toBe(
       prepared.topicPackage.scope_label,

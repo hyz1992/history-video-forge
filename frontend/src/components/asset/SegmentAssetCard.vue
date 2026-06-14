@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, ref, watch, onMounted, onUnmounted } from "vue";
 import { ElTooltip, ElTag, ElButton, ElIcon } from "element-plus";
 import { Upload, CopyDocument } from "@element-plus/icons-vue";
 
@@ -195,6 +195,44 @@ const showPreview = ref(false);
 function togglePreview() {
   if (hasGeneratedMedia.value) showPreview.value = !showPreview.value;
 }
+
+function closePreview() {
+  showPreview.value = false;
+}
+
+function previewPrev() {
+  const all = activeTasks.value;
+  if (all.length <= 1) return;
+  let idx = activeMediaIndex.value - 1;
+  if (idx < 0) idx = all.length - 1;
+  activeMediaIndex.value = idx;
+}
+
+function previewNext() {
+  const all = activeTasks.value;
+  if (all.length <= 1) return;
+  let idx = activeMediaIndex.value + 1;
+  if (idx >= all.length) idx = 0;
+  activeMediaIndex.value = idx;
+}
+
+function onKeyDown(e: KeyboardEvent) {
+  if (e.key === "Escape" && showPreview.value) {
+    closePreview();
+  } else if (e.key === "ArrowLeft" && showPreview.value) {
+    previewPrev();
+  } else if (e.key === "ArrowRight" && showPreview.value) {
+    previewNext();
+  }
+}
+
+onMounted(() => {
+  window.addEventListener("keydown", onKeyDown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", onKeyDown);
+});
 
 function triggerFileUpload() {
   fileInput.value?.click();
@@ -642,9 +680,15 @@ function nextMedia() {
     </div>
     <!-- Full-size preview overlay -->
     <Teleport to="body">
-      <div v-if="showPreview && hasGeneratedMedia" class="preview-overlay" @click="showPreview = false">
+      <div v-if="showPreview && hasGeneratedMedia" class="preview-overlay" @click="closePreview">
         <div class="preview-container" @click.stop>
-          <button class="preview-close" @click="showPreview = false" aria-label="关闭预览">✕</button>
+          <button class="preview-close" @click="closePreview" aria-label="关闭预览">✕</button>
+          <button
+            v-if="activeTasks.length > 1"
+            class="preview-nav preview-nav--prev"
+            @click="previewPrev"
+            aria-label="上一张"
+          >‹</button>
           <img
             v-if="currentArtifact?.artifact_type === 'image'"
             :src="artifactUrl(currentArtifact!.artifact_id)"
@@ -657,8 +701,15 @@ function nextMedia() {
             controls
             autoplay
           />
+          <button
+            v-if="activeTasks.length > 1"
+            class="preview-nav preview-nav--next"
+            @click="previewNext"
+            aria-label="下一张"
+          >›</button>
           <div class="preview-info">
             <span>#{{ segmentIndex + 1 }} · {{ currentArtifact?.artifact_type === 'image' ? '分镜图' : '视频' }}</span>
+            <span v-if="activeTasks.length > 1">（{{ activeMediaIndex + 1 }}/{{ activeTasks.length }}）</span>
             <span v-if="currentArtifact?.metadata?.model">模型: {{ currentArtifact.metadata.model }}</span>
             <span v-if="currentArtifact?.metadata?.width">尺寸: {{ currentArtifact.metadata.width }}×{{ currentArtifact.metadata.height }}</span>
           </div>
@@ -916,11 +967,12 @@ function nextMedia() {
   object-fit: cover;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity 0.15s, filter 0.15s;
 }
 
 .segment-media-image:hover {
-  opacity: 0.9;
+  opacity: 0.85;
+  filter: brightness(1.1);
 }
 
 .segment-media-video {
@@ -1181,6 +1233,41 @@ function nextMedia() {
 }
 
 .preview-close:hover { opacity: 1; }
+
+.preview-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  color: #fff;
+  font-size: 36px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s, background 0.15s;
+  z-index: 1;
+}
+
+.preview-nav:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.preview-nav--prev {
+  left: -60px;
+}
+
+.preview-nav--next {
+  right: -60px;
+}
+
+@media (max-width: 768px) {
+  .preview-nav--prev { left: 8px; }
+  .preview-nav--next { right: 8px; }
+}
 
 .preview-image {
   max-width: 90vw;
