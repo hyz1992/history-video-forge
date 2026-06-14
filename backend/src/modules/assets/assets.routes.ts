@@ -197,7 +197,7 @@ async function optimizeTaskPromptController(
 
   try {
     const registry = createPromptRegistry();
-    const provider = createOpenAiCompatibleProvider();
+    const provider = createOpenAiCompatibleProvider({});
     const gateway = createLlmGateway({ registry, provider });
 
     const result = await gateway.invokeStructuredPrompt<{

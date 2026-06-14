@@ -1533,3 +1533,117 @@ describe("PATCH prompt update", () => {
     expect((res.json() as Record<string, unknown>).error).toBe("no_active_asset_plan");
   });
 });
+
+describe("POST prompt optimize", () => {
+  let app: ReturnType<typeof buildApp>;
+
+  beforeEach(() => {
+    app = buildApp();
+  });
+
+  async function prepareProjectWithAssetPlan(): Promise<{
+    projectId: string;
+    taskId: string;
+  }> {
+    const projectRes = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { name: "Opt Test" },
+    });
+    const projectId = (projectRes.json() as Record<string, unknown>).project_id as string;
+
+    const planId = app.db.generateId();
+    const plan = {
+      plan_version: "asset_plan_v1",
+      art_bible: { era_style: "明代", visual_tone: "肃杀" },
+      visual_budget: {},
+      downgrade_policy: {},
+      global_audio_strategy: {},
+      tts_plan: {},
+      tasks: [{
+        task_id: "task_img_001",
+        task_type: "image_still",
+        source_segment_id: "seg_001",
+        prompt_draft: "明代宫廷场景",
+        parameters: {},
+      }],
+      dependencies: [],
+      cost_summary: {},
+      global_production_notes: [],
+    };
+
+    app.db.assetPlanRecords.set(planId, {
+      id: planId,
+      projectId,
+      topicPackageId: "tp_001",
+      scriptRecordId: "scr_001",
+      storyboardRecordId: "sb_001",
+      planJson: plan as never,
+      validationResultJson: { stage: "asset_planning_local_validation", decision: "ready", errors: [], warnings: [], metrics: {} },
+      executionStateJson: {},
+      graphTraceSummaryJson: null,
+      runtimeDiagnosticsJson: null,
+      createdAt: new Date(),
+    });
+
+    const project = app.db.projects.get(projectId)!;
+    project.activeAssetPlanRecordId = planId;
+
+    return { projectId, taskId: "task_img_001" };
+  }
+
+  it("returns 200 with optimized_prompt and change_summary in stub mode", async () => {
+    const { projectId, taskId } = await prepareProjectWithAssetPlan();
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectId}/assets/tasks/${taskId}/prompt/optimize`,
+      payload: {
+        current_prompt: "明代宫廷场景",
+        user_feedback: "增强光影质感",
+        task_type: "image_still",
+        segment_id: "seg_001",
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as Record<string, unknown>;
+    expect(body.optimized_prompt).toBeDefined();
+    expect(typeof body.optimized_prompt).toBe("string");
+    expect((body.optimized_prompt as string).length).toBeGreaterThan(10);
+    expect(body.change_summary).toBeDefined();
+    expect(Array.isArray(body.change_summary)).toBe(true);
+    expect((body.change_summary as string[]).length).toBeGreaterThan(0);
+  });
+
+  it("returns 400 when current_prompt is missing", async () => {
+    const { projectId, taskId } = await prepareProjectWithAssetPlan();
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectId}/assets/tasks/${taskId}/prompt/optimize`,
+      payload: { user_feedback: "test" },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as Record<string, unknown>).error).toBe("missing_current_prompt");
+  });
+
+  it("returns 409 when no active asset plan", async () => {
+    const projectRes = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { name: "No Plan" },
+    });
+    const projectId = (projectRes.json() as Record<string, unknown>).project_id as string;
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectId}/assets/tasks/any/prompt/optimize`,
+      payload: { current_prompt: "test" },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect((res.json() as Record<string, unknown>).error).toBe("no_active_asset_plan");
+  });
+});
