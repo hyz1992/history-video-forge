@@ -2,6 +2,7 @@ import { env, type AppEnv } from "../../config/env.js";
 import type { LoadedPrompt } from "../prompts/prompt-loader.js";
 import { withRetry } from "./external-errors.js";
 import { createRequestBudget, type RequestBudget } from "./request-budget.js";
+import type { LlmInteractionLogWriter } from "./interaction-log.js";
 import type {
   StrictStructuredInvocation,
   StrictStructuredStrategy,
@@ -61,6 +62,19 @@ export interface OpenAiCompatibleProviderOptions {
 export function createOpenAiCompatibleProvider(
   options: OpenAiCompatibleProviderOptions,
 ): StructuredPromptProvider {
+  // Best-effort trace write — never let log failures break the main flow.
+  async function safeWrite(
+    writer: LlmInteractionLogWriter | undefined | null,
+    entry: Parameters<LlmInteractionLogWriter["write"]>[0],
+  ) {
+    if (!writer) return;
+    try {
+      await writer.write(entry);
+    } catch {
+      console.warn("openai_compatible_provider: failed to write interaction log entry");
+    }
+  }
+
   const providerConfig = resolveOpenAiCompatibleProviderConfig({
     envConfig: env.llm,
     options,
@@ -133,7 +147,7 @@ export function createOpenAiCompatibleProvider(
           deterministicRecovery: recoverJsonCandidate,
         });
 
-        await request.interactionLogWriter?.write({
+        await safeWrite(request.interactionLogWriter, {
           generatedAt: new Date().toISOString(),
           provider: "openai-compatible",
           model,
@@ -151,7 +165,7 @@ export function createOpenAiCompatibleProvider(
 
         return parsedOutput;
       } catch (error) {
-        await request.interactionLogWriter?.write({
+        await safeWrite(request.interactionLogWriter, {
           generatedAt: new Date().toISOString(),
           provider: "openai-compatible",
           model,
@@ -222,7 +236,7 @@ export function createOpenAiCompatibleProvider(
         rawOutput = strictResult.rawOutput;
         parsedOutput = request.parse(JSON.parse(strictResult.argumentsJson));
 
-        await request.interactionLogWriter?.write({
+        await safeWrite(request.interactionLogWriter, {
           generatedAt: new Date().toISOString(),
           provider: "openai-compatible",
           model,
@@ -240,7 +254,7 @@ export function createOpenAiCompatibleProvider(
 
         return parsedOutput;
       } catch (error) {
-        await request.interactionLogWriter?.write({
+        await safeWrite(request.interactionLogWriter, {
           generatedAt: new Date().toISOString(),
           provider: "openai-compatible",
           model,
