@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { normalizeAssetManifestDates } from "../assets/manifest-date-normalizer.js";
 import { bundle } from "@remotion/bundler";
 import {
   getVideoMetadata,
@@ -111,7 +112,9 @@ export function createLocalRemotionRenderAdapter(
     async render(input): Promise<RenderAdapterResult> {
       const timeline = ComposeTimelineSchema.parse(input.composeRecord.timelineJson);
       const manifest = AssetManifestSchema.parse(
-        input.assetManifestRecord.manifestJson,
+        normalizeAssetManifestDates(
+          input.assetManifestRecord.manifestJson as Record<string, unknown>,
+        ),
       );
       const outputLocation = join(input.outputDir, "output.mp4");
       const durationInFrames = Math.max(
