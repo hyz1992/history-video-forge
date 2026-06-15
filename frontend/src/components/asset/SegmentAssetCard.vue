@@ -505,7 +505,10 @@ function nextMedia() {
         >
           视频
         </button>
-        <span v-if="!hasVideoTasks" class="segment-media-tab-hint">图片+运镜</span>
+        <!-- Route badge: non-clickable status indicator -->
+        <span v-if="!hasVideoTasks" class="segment-route-badge">
+          图片+{{ segment.motion_hint ? (MOTION_LABELS[segment.motion_hint] ?? segment.motion_hint) : '运镜' }} · Remotion
+        </span>
       </div>
 
       <!-- No tasks of this type -->
@@ -513,12 +516,12 @@ function nextMedia() {
         <ElTag size="small" type="info">无需生成</ElTag>
         <span class="segment-media-placeholder-text">无画面任务</span>
       </div>
-      <div v-else-if="activeTasks.length === 0 && activeTab === 'video'" class="segment-media-placeholder">
-        <ElTag size="small" type="info">图片+运镜</ElTag>
-        <span class="segment-media-placeholder-text">
-          当前路线：图片 + {{ segment.motion_hint ? MOTION_LABELS[segment.motion_hint] ?? segment.motion_hint : '运镜' }}<br/>
-          视频由 Remotion 合成渲染。
-        </span>
+      <div v-else-if="activeTasks.length === 0 && activeTab === 'video'" class="segment-video-empty">
+        <p class="segment-video-empty-title">暂无 API 视频</p>
+        <p class="segment-video-empty-desc">
+          当前使用「图片 + {{ segment.motion_hint ? (MOTION_LABELS[segment.motion_hint] ?? segment.motion_hint) : '运镜' }}」
+          在合成阶段由 Remotion 生成视频片段
+        </p>
         <el-button
           size="small"
           type="primary"
@@ -1018,6 +1021,48 @@ function nextMedia() {
   color: var(--text-muted);
   align-self: center;
   margin-left: 2px;
+}
+
+/* Route status badge — non-clickable, visually distinct from buttons */
+.segment-route-badge {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  background: var(--bg-panel);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  margin-left: auto;
+  white-space: nowrap;
+  align-self: center;
+}
+
+/* Video tab empty state */
+.segment-video-empty {
+  aspect-ratio: 9 / 16;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  text-align: center;
+  padding: var(--space-md);
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-default);
+}
+
+.segment-video-empty-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-body);
+}
+
+.segment-video-empty-desc {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  max-width: 180px;
 }
 
 .segment-info-action-hint {
