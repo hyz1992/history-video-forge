@@ -5,6 +5,7 @@ import { env } from "../../config/env.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider.js";
 import { createLlmGateway } from "../../runtime/llm/llm-gateway.js";
+import { createCompositeInteractionLogWriter } from "../../runtime/trace/project-storage.js";
 import { probeImageMetadata } from "../../http/image-probe.js";
 import { probeVideoMetadata } from "../../http/video-probe.js";
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -200,6 +201,12 @@ async function optimizeTaskPromptController(
     const provider = createOpenAiCompatibleProvider({});
     const gateway = createLlmGateway({ registry, provider });
 
+    const interactionLogWriter = createCompositeInteractionLogWriter({
+      project,
+      phase: "assets",
+      runId: context.app.db.generateId(),
+    });
+
     const result = await gateway.invokeStructuredPrompt<{
       optimized_prompt: string;
       change_summary: string[];
@@ -227,6 +234,7 @@ async function optimizeTaskPromptController(
         },
         risks,
       },
+      interactionLogWriter,
     });
 
     return {
