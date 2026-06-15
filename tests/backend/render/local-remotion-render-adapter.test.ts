@@ -318,4 +318,41 @@ describe("local Remotion render adapter", () => {
     });
     await expect(stat(result.outputArtifact.file_uri)).resolves.toBeTruthy();
   }, 120_000);
+
+  it("renders successfully even when manifest contains Date objects in artifacts/executions", async () => {
+    tempDir = await mkdtemp(join(tmpdir(), "local-remotion-date-"));
+    const fixtureFiles = await writeFixtureFiles(tempDir);
+    const adapter = createLocalRemotionRenderAdapter();
+
+    const record = makeReadyAssetManifestRecordWithFixtureFiles({
+      ...fixtureFiles,
+      durationSec: 2,
+    });
+    // Simulate db persistence reviving ISO strings back to Date objects
+    const manifestWithDates = JSON.parse(
+      JSON.stringify(record.manifestJson),
+      (_key, value) => {
+        if (
+          typeof value === "string" &&
+          /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value)
+        ) {
+          return new Date(value);
+        }
+        return value;
+      },
+    );
+    record.manifestJson = manifestWithDates;
+
+    const result = await adapter.render({
+      projectId: "project_date_001",
+      composeRecord: makeReadyComposeRecord(2),
+      assetManifestRecord: record,
+      outputDir: tempDir,
+      profile: { width: 540, height: 960, fps: 30 },
+    });
+
+    // Should NOT fail with Zod schema error — dates are normalized before parse
+    expect(result.outputArtifact.mime_type).toBe("video/mp4");
+    expect(result.probe.duration_sec).toBeGreaterThan(1.8);
+  }, 120_000);
 });
