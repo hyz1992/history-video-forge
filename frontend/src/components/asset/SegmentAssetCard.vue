@@ -505,10 +505,12 @@ function nextMedia() {
         >
           视频
         </button>
-        <!-- Route badge: non-clickable status indicator -->
-        <span v-if="!hasVideoTasks" class="segment-route-badge">
-          图片+{{ segment.motion_hint ? (MOTION_LABELS[segment.motion_hint] ?? segment.motion_hint) : '运镜' }} · Remotion
-        </span>
+      </div>
+
+      <!-- Route status: clearly separate from the tab group -->
+      <div v-if="!hasVideoTasks" class="segment-route-status">
+        <span class="segment-route-status-icon">↳</span>
+        路线：图片 + {{ segment.motion_hint ? (MOTION_LABELS[segment.motion_hint] ?? segment.motion_hint) : '运镜' }} · Remotion
       </div>
 
       <!-- No tasks of this type -->
@@ -1023,16 +1025,20 @@ function nextMedia() {
   margin-left: 2px;
 }
 
-/* Route status badge — non-clickable, visually distinct from buttons */
-.segment-route-badge {
+/* Route status line — clearly separated from tabs, non-interactive */
+.segment-route-status {
   font-size: 0.72rem;
   color: var(--text-muted);
-  background: var(--bg-panel);
-  border-radius: var(--radius-sm);
-  padding: 2px 6px;
-  margin-left: auto;
-  white-space: nowrap;
-  align-self: center;
+  padding: 2px 0;
+  line-height: 1.4;
+  cursor: default;
+  user-select: none;
+}
+
+.segment-route-status-icon {
+  color: var(--text-muted);
+  opacity: 0.6;
+  margin-right: 2px;
 }
 
 /* Video tab empty state */
