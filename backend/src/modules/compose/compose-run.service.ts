@@ -3,6 +3,7 @@ import type { DbClient, ProjectRecord } from "../../db/client";
 import { buildComposeTimeline } from "./compose-timeline-builder";
 import { validateComposeTimeline } from "./compose-local-validator";
 import { saveComposeRecord } from "./compose-record.repository";
+import { normalizeAssetManifestDates } from "../assets/manifest-date-normalizer.js";
 
 export interface RunComposeGenerationInput {
   db: DbClient;
@@ -61,7 +62,9 @@ export async function runComposeGeneration(input: RunComposeGenerationInput) {
     };
   }
 
-  const manifest = AssetManifestSchema.parse(assetManifestRecord.manifestJson);
+  const manifest = AssetManifestSchema.parse(
+    normalizeAssetManifestDates(assetManifestRecord.manifestJson as Record<string, unknown>),
+  );
   const timeline = buildComposeTimeline({
     assetManifestRecordId: assetManifestRecord.id,
     assetPlanRecordId: assetManifestRecord.assetPlanRecordId,

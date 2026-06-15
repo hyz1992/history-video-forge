@@ -307,4 +307,51 @@ describe("compose API", () => {
     expect(project.activeComposeRecordId).toBeNull();
     expect(app.db.composeRecords.size).toBe(0);
   });
+
+  it("generates compose timeline when manifest contains Date objects (normalized)", async () => {
+    const app = buildApp();
+    const project = await createProject(app.db, { name: "Date Normalize" });
+
+    // Build manifest with ISO-date strings in executions/artifacts
+    const manifest = makeReadyManifest();
+    // Simulate the db persistence layer reviving dates: replace ISO strings
+    // with actual Date objects to test the normalizer
+    for (const exec of manifest.executions) {
+      if (exec.started_at) (exec as Record<string, unknown>).started_at = new Date(exec.started_at);
+      if (exec.completed_at) (exec as Record<string, unknown>).completed_at = new Date(exec.completed_at);
+    }
+    for (const art of manifest.artifacts) {
+      (art as Record<string, unknown>).created_at = new Date(art.created_at);
+    }
+
+    const record = await saveAssetManifestRecord(app.db, {
+      projectId: project.id,
+      topicPackageId: "tp_001",
+      scriptRecordId: "scr_001",
+      storyboardRecordId: "sb_001",
+      assetPlanRecordId: "ap_001",
+      manifestJson: manifest as unknown as Record<string, unknown>,
+      validationResultJson: { stage: "assets_local_validation", decision: "ready_for_compose", errors: [], warnings: [], metrics: {} },
+      executionStateJson: {},
+    });
+
+    project.activeAssetManifestRecordId = record.id;
+    project.status = "assets_ready";
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/compose/generate`,
+      payload: {},
+    });
+
+    // Should NOT 500 — dates should be normalized by the record repository
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as Record<string, unknown>;
+    // Optional BGM only → should be partial or ready_for_render, not blocked
+    const validation = body.local_validation as Record<string, unknown> | undefined;
+    expect(validation).toBeDefined();
+    expect(
+      validation?.decision === "ready_for_render" || validation?.decision === "partial",
+    ).toBe(true);
+  });
 });

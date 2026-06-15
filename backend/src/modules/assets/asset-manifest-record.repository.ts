@@ -1,4 +1,5 @@
 import type { AssetManifestRecord, DbClient } from "../../db/client";
+import { normalizeAssetManifestDates } from "./manifest-date-normalizer.js";
 
 export type SaveAssetManifestRecordInput = Omit<
   AssetManifestRecord,
@@ -19,7 +20,9 @@ export async function saveAssetManifestRecord(
     scriptRecordId: input.scriptRecordId,
     storyboardRecordId: input.storyboardRecordId,
     assetPlanRecordId: input.assetPlanRecordId,
-    manifestJson: input.manifestJson,
+    manifestJson: normalizeAssetManifestDates(
+      input.manifestJson as Record<string, unknown>,
+    ) as unknown as Record<string, unknown>,
     validationResultJson: input.validationResultJson,
     executionStateJson: input.executionStateJson ?? null,
     graphTraceSummaryJson: input.graphTraceSummaryJson ?? null,
@@ -36,5 +39,11 @@ export async function getAssetManifestRecordById(
   db: DbClient,
   id: string,
 ): Promise<AssetManifestRecord | null> {
-  return db.assetManifestRecords.get(id) ?? null;
+  const record = db.assetManifestRecords.get(id) ?? null;
+  if (record) {
+    record.manifestJson = normalizeAssetManifestDates(
+      record.manifestJson as Record<string, unknown>,
+    ) as unknown as Record<string, unknown>;
+  }
+  return record;
 }
