@@ -180,6 +180,9 @@ const canUpload = computed(() => {
   ) && (activeTab.value === "image" || activeTab.value === "video");
 });
 
+/** canUpload but gated on the global generation lock. */
+const canUploadNow = computed(() => canUpload.value && !isGloballyLocked.value);
+
 /** Task types that support automatic (non-manual) generation. */
 const AUTO_GENERATABLE_TYPES = new Set(["image_still", "video_clip", "tts_audio"]);
 
@@ -554,8 +557,8 @@ function nextMedia() {
       <template v-else-if="!hasGeneratedMedia">
         <div
           class="segment-media-placeholder"
-          :class="{ clickable: canUpload }"
-          @click="canUpload && triggerFileUpload()"
+          :class="{ clickable: canUploadNow }"
+          @click="canUploadNow && triggerFileUpload()"
         >
           <ElTag
             v-if="statusLabel && currentExecution?.status === 'waiting_manual_upload'"
@@ -572,7 +575,7 @@ function nextMedia() {
             {{ statusLabel }}
           </ElTag>
           <span class="segment-media-placeholder-text">
-            {{ canUpload ? '点击此处上传文件' : (statusLabel ? '' : '暂无') }}
+            {{ canUploadNow ? '点击此处上传文件' : (statusLabel ? '' : '暂无') }}
           </span>
         </div>
       </template>
@@ -762,7 +765,7 @@ function nextMedia() {
             </span>
           </ElTooltip>
           <ElButton
-            v-else-if="canUpload"
+            v-else-if="canUploadNow"
             size="small"
             :icon="Upload"
             :loading="isCurrentUploading"

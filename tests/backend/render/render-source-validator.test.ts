@@ -464,4 +464,25 @@ describe("validateRenderSources", () => {
     expect(result.errors).toEqual([]);
     expect(result.warnings).toContain("render_bgm_missing_optional");
   });
+
+  it("accepts manifest with Date objects in executions/artifacts (normalized)", async () => {
+    const manifest = makeReadyAssetManifest();
+    // Simulate db persistence reviving ISO strings back to Date objects
+    for (const exec of manifest.executions) {
+      if (exec.started_at) (exec as Record<string, unknown>).started_at = new Date(exec.started_at);
+      if (exec.completed_at) (exec as Record<string, unknown>).completed_at = new Date(exec.completed_at);
+    }
+    for (const art of manifest.artifacts) {
+      (art as Record<string, unknown>).created_at = new Date(art.created_at);
+    }
+
+    const result = await validateRenderSources({
+      composeRecord: makeReadyComposeRecord({ timelineJson: makeReadyComposeTimeline() }),
+      assetManifestRecord: makeReadyAssetManifestRecord({ manifestJson: manifest as unknown as Record<string, unknown> }),
+    });
+
+    // Should NOT be blocked — dates are normalized before Zod parse
+    expect(result.decision).toBe("ready_to_render");
+    expect(result.errors).toEqual([]);
+  });
 });

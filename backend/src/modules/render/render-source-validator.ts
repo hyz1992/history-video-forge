@@ -2,6 +2,7 @@ import { stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { isAbsolute, join } from "node:path";
 
+import { normalizeAssetManifestDates } from "../assets/manifest-date-normalizer.js";
 import {
   AssetManifest as AssetManifestSchema,
   ComposeTimeline as ComposeTimelineSchema,
@@ -224,7 +225,9 @@ export async function validateRenderSources(
   }
 
   const manifestResult = AssetManifestSchema.safeParse(
-    input.assetManifestRecord.manifestJson,
+    normalizeAssetManifestDates(
+      input.assetManifestRecord.manifestJson as Record<string, unknown>,
+    ),
   );
   if (!manifestResult.success) {
     pushUnique(errors, "render_asset_manifest_missing");
