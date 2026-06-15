@@ -145,6 +145,9 @@ const isCurrentUploading = computed(() => {
   return task ? props.uploadingTaskId === task.task_id : false;
 });
 
+/** True when ANY asset generation is running — all mutate buttons should lock. */
+const isGloballyLocked = computed(() => assetsStore.state.isGenerating);
+
 /** True when the current task is being generated (single-task API call). */
 const isCurrentGenerating = computed(() => {
   const task = activeTasks.value[activeMediaIndex.value];
@@ -524,14 +527,26 @@ function nextMedia() {
           当前使用「图片 + {{ segment.motion_hint ? (MOTION_LABELS[segment.motion_hint] ?? segment.motion_hint) : '运镜' }}」
           在合成阶段由 Remotion 生成视频片段
         </p>
+        <ElTooltip
+          v-if="isGloballyLocked"
+          content="资产生成进行中，请等待完成后再操作"
+          placement="top"
+        >
+          <span>
+            <el-button size="small" type="primary" plain disabled>
+              升级为 API 视频
+            </el-button>
+          </span>
+        </ElTooltip>
         <el-button
+          v-else
           size="small"
           type="primary"
           plain
           :loading="assetsStore.state.isGenerating"
           @click="emit('upgrade-video', segment.segment_id)"
         >
-          {{ assetsStore.state.isGenerating ? '处理中...' : '升级为 API 视频' }}
+          升级为 API 视频
         </el-button>
       </div>
 
@@ -704,16 +719,30 @@ function nextMedia() {
         </template>
         <template v-else>
           <!-- Generate / Regenerate (auto-generatable tasks) -->
+          <ElTooltip
+            v-if="canAutoGenerate && !hasGeneratedMedia && isGloballyLocked"
+            content="资产生成进行中，请等待完成后再操作"
+            placement="top"
+          >
+            <span><ElButton size="small" disabled>生成</ElButton></span>
+          </ElTooltip>
           <ElButton
-            v-if="canAutoGenerate && !hasGeneratedMedia"
+            v-else-if="canAutoGenerate && !hasGeneratedMedia"
             size="small"
             :loading="isCurrentGenerating"
             @click="emit('generate-task', currentTask!.task_id)"
           >
             生成
           </ElButton>
+          <ElTooltip
+            v-if="canAutoGenerate && hasGeneratedMedia && isGloballyLocked"
+            content="资产生成进行中，请等待完成后再操作"
+            placement="top"
+          >
+            <span><ElButton size="small" disabled>重新生成</ElButton></span>
+          </ElTooltip>
           <ElButton
-            v-if="canAutoGenerate && hasGeneratedMedia"
+            v-else-if="canAutoGenerate && hasGeneratedMedia"
             size="small"
             :loading="isCurrentGenerating"
             @click="emit('generate-task', currentTask!.task_id)"
@@ -721,8 +750,19 @@ function nextMedia() {
             重新生成
           </ElButton>
           <!-- Upload / Replace (manual-uploadable tasks) -->
+          <ElTooltip
+            v-if="canUpload && isGloballyLocked"
+            content="资产生成进行中，请等待完成后再操作"
+            placement="top"
+          >
+            <span>
+              <ElButton size="small" :icon="Upload" disabled>
+                {{ hasGeneratedMedia ? '替换' : '上传' }}
+              </ElButton>
+            </span>
+          </ElTooltip>
           <ElButton
-            v-if="canUpload"
+            v-else-if="canUpload"
             size="small"
             :icon="Upload"
             :loading="isCurrentUploading"
