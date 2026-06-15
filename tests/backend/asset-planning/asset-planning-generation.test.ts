@@ -1090,4 +1090,79 @@ describe("generateAssetPlan", () => {
       /asset_planning_support_image_reason_missing/u,
     );
   });
+
+  it("appends visual negative constraints to image_still prompt_draft", async () => {
+    const { gateway } = makeGateway();
+    const plan = await generateAssetPlan(makeInput(gateway));
+
+    const imageTasks = plan.tasks.filter((t) => t.task_type === "image_still");
+    expect(imageTasks.length).toBeGreaterThan(0);
+    for (const task of imageTasks) {
+      expect(task.prompt_draft).toContain("【视觉约束】");
+      expect(task.prompt_draft).toContain("写实历史质感");
+      expect(task.prompt_draft).toContain("无现代物品");
+      expect(task.prompt_draft).toContain("无动漫风");
+      expect(task.prompt_draft).toContain("无奇幻特效");
+    }
+  });
+
+  it("appends visual negative constraints to video_clip prompt_draft", async () => {
+    const { gateway } = makeGateway(async (options) => {
+      const input = options.input as { planning_mode: string; chunk?: { segment_ids: string[] } };
+      if (input.planning_mode === "global") return validGlobalPlanningDraft;
+      const draft = validChunkPlanningDraftFor(input.chunk?.segment_ids ?? []);
+      // Convert one image_still task to video_clip
+      draft.tasks = draft.tasks.map((t, i) =>
+        i === 0
+          ? { ...t, task_type: "video_clip", prompt_draft: `测试视频提示词，${t.source_segment_id}` }
+          : t,
+      );
+      return draft;
+    });
+    const plan = await generateAssetPlan(makeInput(gateway));
+
+    const videoTasks = plan.tasks.filter((t) => t.task_type === "video_clip");
+    expect(videoTasks.length).toBeGreaterThan(0);
+    for (const task of videoTasks) {
+      expect(task.prompt_draft).toContain("【视觉约束】");
+      expect(task.prompt_draft).toContain("写实历史质感");
+    }
+  });
+
+  it("does not append visual constraints to non-visual tasks", async () => {
+    const { gateway } = makeGateway();
+    const plan = await generateAssetPlan(makeInput(gateway));
+
+    const nonVisual = plan.tasks.filter(
+      (t) => t.task_type !== "image_still" && t.task_type !== "video_clip",
+    );
+    for (const task of nonVisual) {
+      if (task.prompt_draft) {
+        expect(task.prompt_draft).not.toContain("【视觉约束】");
+        expect(task.prompt_draft).not.toContain("无现代物品");
+      }
+    }
+  });
+
+  it("does not duplicate visual constraints if already present in prompt_draft", async () => {
+    const constraint = "写实历史质感，无现代物品、无现代建筑、无动漫风、无奇幻特效、无游戏质感";
+    const { gateway } = makeGateway(async (options) => {
+      const input = options.input as { planning_mode: string; chunk?: { segment_ids: string[] } };
+      if (input.planning_mode === "global") return validGlobalPlanningDraft;
+      const draft = validChunkPlanningDraftFor(input.chunk?.segment_ids ?? []);
+      draft.tasks = draft.tasks.map((t) => ({
+        ...t,
+        prompt_draft: `已有约束的提示词\n【视觉约束】${constraint}。`,
+      }));
+      return draft;
+    });
+    const plan = await generateAssetPlan(makeInput(gateway));
+
+    const imageTasks = plan.tasks.filter((t) => t.task_type === "image_still");
+    expect(imageTasks.length).toBeGreaterThan(0);
+    for (const task of imageTasks) {
+      const matches = (task.prompt_draft?.match(/【视觉约束】/g) ?? []).length;
+      expect(matches).toBe(1);
+    }
+  });
 });
