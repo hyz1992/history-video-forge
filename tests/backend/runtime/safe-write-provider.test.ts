@@ -1,22 +1,17 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { LlmInteractionLogWriter } from "../../../backend/src/runtime/llm/interaction-log.js";
 
-// ---------------------------------------------------------------------------
-// Best-effort trace writing: unit test on the provider layer.
-// Verifies that log write failures never propagate to the caller.
-// ---------------------------------------------------------------------------
-
 describe("openai-compatible provider safeWrite", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("returns parsed result even when interactionLogWriter.write throws", async () => {
-    // We import dynamically so vi.mock hoisting works correctly
     const { createOpenAiCompatibleProvider } = await import(
       "../../../backend/src/runtime/llm/openai-compatible-provider.js"
     );
 
-    // Mock fetch to return a valid chat completion
-    const mockFetch = vi.fn();
-    globalThis.fetch = mockFetch as unknown as typeof globalThis.fetch;
-    mockFetch.mockResolvedValueOnce({
+    const mockFetch = vi.fn().mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({
@@ -29,6 +24,7 @@ describe("openai-compatible provider safeWrite", () => {
         ],
       }),
     } as unknown as Response);
+    vi.stubGlobal("fetch", mockFetch);
 
     const writer: LlmInteractionLogWriter = {
       write: vi.fn().mockRejectedValue(new Error("disk full")),
@@ -63,9 +59,6 @@ describe("openai-compatible provider safeWrite", () => {
     expect(result).toEqual({ optimized_prompt: "测试优化", change_summary: ["改动1"] });
     // Writer should have been called
     expect(writer.write).toHaveBeenCalled();
-
-    // Cleanup
-    globalThis.fetch = undefined as unknown as typeof globalThis.fetch;
   });
 
   it("propagates the original LLM error, not the trace write error", async () => {
@@ -73,9 +66,8 @@ describe("openai-compatible provider safeWrite", () => {
       "../../../backend/src/runtime/llm/openai-compatible-provider.js"
     );
 
-    // Mock fetch to throw a network error
     const mockFetch = vi.fn().mockRejectedValue(new Error("connect ECONNREFUSED"));
-    globalThis.fetch = mockFetch as unknown as typeof globalThis.fetch;
+    vi.stubGlobal("fetch", mockFetch);
 
     const writer: LlmInteractionLogWriter = {
       write: vi.fn().mockRejectedValue(new Error("disk full")),
@@ -104,8 +96,6 @@ describe("openai-compatible provider safeWrite", () => {
       }),
       // Should throw the original network error, not "disk full"
     ).rejects.toThrow(/connect ECONNREFUSED/);
-
-    globalThis.fetch = undefined as unknown as typeof globalThis.fetch;
   });
 
   it("does not log sensitive fields (api_key, Authorization, Bearer)", async () => {
@@ -113,15 +103,14 @@ describe("openai-compatible provider safeWrite", () => {
       "../../../backend/src/runtime/llm/openai-compatible-provider.js"
     );
 
-    const mockFetch = vi.fn();
-    globalThis.fetch = mockFetch as unknown as typeof globalThis.fetch;
-    mockFetch.mockResolvedValueOnce({
+    const mockFetch = vi.fn().mockResolvedValueOnce({
       ok: true,
       status: 200,
       json: async () => ({
         choices: [{ message: { content: JSON.stringify({ result: "ok" }) } }],
       }),
     } as unknown as Response);
+    vi.stubGlobal("fetch", mockFetch);
 
     let capturedEntry: Record<string, unknown> | null = null;
     const writer: LlmInteractionLogWriter = {
@@ -161,7 +150,5 @@ describe("openai-compatible provider safeWrite", () => {
     expect(serialized).toContain("current_prompt");
     expect(serialized).toContain("user_feedback");
     expect(serialized).toContain("test.prompt");
-
-    globalThis.fetch = undefined as unknown as typeof globalThis.fetch;
   });
 });

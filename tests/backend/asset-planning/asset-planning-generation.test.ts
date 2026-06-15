@@ -1099,10 +1099,9 @@ describe("generateAssetPlan", () => {
     expect(imageTasks.length).toBeGreaterThan(0);
     for (const task of imageTasks) {
       expect(task.prompt_draft).toContain("【视觉约束】");
-      expect(task.prompt_draft).toContain("写实历史质感");
-      expect(task.prompt_draft).toContain("无现代物品");
-      expect(task.prompt_draft).toContain("无动漫风");
-      expect(task.prompt_draft).toContain("无奇幻特效");
+      expect(task.prompt_draft).toContain(
+        "写实历史质感，无现代物品、无现代建筑、无动漫风、无奇幻特效、无游戏质感",
+      );
     }
   });
 
@@ -1125,7 +1124,9 @@ describe("generateAssetPlan", () => {
     expect(videoTasks.length).toBeGreaterThan(0);
     for (const task of videoTasks) {
       expect(task.prompt_draft).toContain("【视觉约束】");
-      expect(task.prompt_draft).toContain("写实历史质感");
+      expect(task.prompt_draft).toContain(
+        "写实历史质感，无现代物品、无现代建筑、无动漫风、无奇幻特效、无游戏质感",
+      );
     }
   });
 
