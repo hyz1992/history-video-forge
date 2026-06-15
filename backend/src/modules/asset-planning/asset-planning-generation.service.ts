@@ -851,6 +851,32 @@ function enrichPromptWithCharacterAnchor(
   return `${taskDraft.prompt_draft}\n[角色锚点] ${anchors}`;
 }
 
+/**
+ * Append generic visual negative constraints to image/video prompts
+ * so every visual prompt starts with stable era/anachronism guards.
+ * These are fixed production contracts, not LLM-generated suggestions.
+ */
+const VISUAL_NEGATIVE_CONSTRAINTS =
+  "写实历史质感，无现代物品、无现代建筑、无动漫风、无奇幻特效、无游戏质感";
+
+function enrichPromptWithVisualConstraints(
+  taskDraft: ChunkTaskDraft,
+): string | null {
+  if (
+    (taskDraft.task_type !== "image_still" && taskDraft.task_type !== "video_clip") ||
+    !taskDraft.prompt_draft
+  ) {
+    return taskDraft.prompt_draft;
+  }
+
+  const prompt = taskDraft.prompt_draft;
+  if (prompt.includes(VISUAL_NEGATIVE_CONSTRAINTS)) {
+    return prompt;
+  }
+
+  return `${prompt}\n【视觉约束】${VISUAL_NEGATIVE_CONSTRAINTS}。`;
+}
+
 function mergeAssetPlan(
   input: GenerateAssetPlanInput,
   audioSkeleton: ReturnType<typeof buildLocalAudioSkeleton>,
@@ -886,11 +912,14 @@ function mergeAssetPlan(
         production_intent: taskDraft.production_intent,
         recommended_mode: taskDraft.recommended_mode,
         provider_hint: taskDraft.provider_hint,
-        prompt_draft: enrichPromptWithCharacterAnchor(
-          taskDraft,
-          input.storyboard.segments,
-          globalDraft.art_bible,
-        ),
+        prompt_draft: enrichPromptWithVisualConstraints({
+          ...taskDraft,
+          prompt_draft: enrichPromptWithCharacterAnchor(
+            taskDraft,
+            input.storyboard.segments,
+            globalDraft.art_bible,
+          ),
+        }),
         parameters: rewriteTaskParameterLocalIds(taskDraft.parameters, localToGlobal),
         manual_upload_policy: taskDraft.manual_upload_policy,
         risk_notes: rewriteLocalTaskIdsInTextList(taskDraft.risk_notes, localToGlobal),
