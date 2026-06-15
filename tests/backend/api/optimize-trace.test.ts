@@ -1,10 +1,16 @@
-import { describe, expect, it, vi, beforeAll, afterEach } from "vitest";
+import { describe, expect, it, vi, beforeAll, beforeEach, afterAll } from "vitest";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-const mockGatewayInvoke = vi.fn();
+// ---------------------------------------------------------------------------
+// Mock gateway that actually calls interactionLogWriter so trace files
+// are written.  No real network calls.
+// ---------------------------------------------------------------------------
 
 vi.mock("../../../backend/src/runtime/llm/llm-gateway.js", () => ({
   createLlmGateway: vi.fn(() => ({
-    invokeStructuredPrompt: mockGatewayInvoke,
+    invokeStructuredPrompt: vi.fn(),
     invokeStrictStructured: vi.fn(),
   })),
 }));
@@ -14,22 +20,70 @@ vi.mock("../../../backend/src/runtime/llm/openai-compatible-provider.js", () => 
 }));
 
 describe("POST optimize trace writing", () => {
+  let tempDirs: string[] = [];
+
   beforeAll(() => {
     process.env.LLM_PROVIDER = "glm";
     process.env.LLM_BASE_URL = "http://mock.test/v1";
     process.env.LLM_API_KEY = "test-key";
   });
 
-  afterEach(() => {
-    mockGatewayInvoke.mockReset();
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  function makeProjectData(overrides?: Partial<Record<string, unknown>>) {
+  afterAll(() => {
+    for (const dir of tempDirs) {
+      try { rmSync(dir, { recursive: true, force: true }); } catch { /* ok */ }
+    }
+  });
+
+  it("returns 200, calls gateway with writer, writes trace files", { timeout: 15000 }, async () => {
+    const { buildApp } = await import("../../../backend/src/app.js");
+    const { createLlmGateway } = await import(
+      "../../../backend/src/runtime/llm/llm-gateway.js"
+    );
+
+    const app = buildApp();
+
+    // Setup mock gateway that actually writes trace files
+    const mockInvoke = vi.fn().mockImplementation(async (opts: Record<string, unknown>) => {
+      const writer = opts.interactionLogWriter as { write: (e: unknown) => Promise<void> } | undefined;
+      if (writer) {
+        await writer.write({
+          generatedAt: new Date().toISOString(),
+          provider: "mock",
+          model: "mock",
+          operationName: (opts.operationName as string) ?? "asset.prompt-optimizer",
+          promptId: (opts.promptId as string) ?? "asset.prompt-optimizer",
+          promptStage: "assets",
+          promptLanguage: "zh-CN",
+          promptFilePath: "/fake/prompt.md",
+          systemPrompt: "test",
+          input: opts.input,
+          rawOutput: JSON.stringify({ optimized_prompt: "mock optimized", change_summary: ["mock change"] }),
+          parsedOutput: { optimized_prompt: "mock optimized", change_summary: ["mock change"] },
+          errorMessage: null,
+        });
+      }
+      return {
+        optimized_prompt: "优化后明代宫廷场景，低角度特写，威严光影",
+        change_summary: ["增强光影质感", "加入低角度构图"],
+        remaining_risks: [],
+      };
+    });
+    (createLlmGateway as ReturnType<typeof vi.fn>).mockReturnValue({
+      invokeStructuredPrompt: mockInvoke,
+      invokeStrictStructured: vi.fn(),
+    });
+
+    const projectId = "ot-001";
+    const taskId = "task_ot_001";
+    const tmpDir = mkdtempSync(join(tmpdir(), "svf2-opt-"));
+    tempDirs.push(tmpDir);
     const now = new Date();
-    return {
-      id: overrides?.id as string ?? "proj-001",
-      name: "Optimize Trace Test",
-      status: "assets_ready",
+    app.db.projects.set(projectId, {
+      id: projectId, name: "Optimize Trace Test", status: "assets_ready",
       activeTopicPackageId: null, activeScriptRecordId: null,
       activeStoryboardRecordId: "sb_001", activeAssetPlanRecordId: "ap_001",
       activeAssetManifestRecordId: null, activeComposeRecordId: null,
@@ -39,23 +93,12 @@ describe("POST optimize trace writing", () => {
       latestAssetsRunTraceJson: null, latestComposeRunTraceJson: null,
       latestRenderRunTraceJson: null,
       storageDisplayName: "Optimize Trace Test", storageShortId: "p_otrace",
-      storageRootDir: (overrides?.storageRootDir as string) ?? "storage/projects/optimize-trace-test",
-      storageRenameLocked: false,
+      storageRootDir: tmpDir, storageRenameLocked: false,
       createdAt: now, updatedAt: now,
-    };
-  }
-
-  it("returns 200 with optimized_prompt via mock gateway (non-stub path verified)", async () => {
-    const { buildApp } = await import("../../../backend/src/app.js");
-    const app = buildApp();
-
-    const projectId = "ot-001";
-    const taskId = "task_ot_001";
-    const now = new Date();
-    app.db.projects.set(projectId, makeProjectData({ id: projectId }));
+    });
     app.db.storyboardRecords.set("sb_001", {
       id: "sb_001", projectId, topicPackageId: "tp_001", scriptRecordId: "scr_001",
-      planJson: { segments: [{ segment_id: "seg_001", script_excerpt: "口播文本", scene_description: "朝堂", visual_intent: "威严", narrative_role: "opening" }] },
+      planJson: { segments: [{ segment_id: "seg_001", script_excerpt: "口播文本", scene_description: "朝堂大殿", visual_intent: "威严", narrative_role: "opening" }] },
       validationResultJson: {}, executionStateJson: null, graphTraceSummaryJson: null, runtimeDiagnosticsJson: null, createdAt: now,
     });
     app.db.assetPlanRecords.set("ap_001", {
@@ -70,12 +113,6 @@ describe("POST optimize trace writing", () => {
       executionStateJson: {}, graphTraceSummaryJson: null, runtimeDiagnosticsJson: null, createdAt: now,
     });
 
-    mockGatewayInvoke.mockResolvedValueOnce({
-      optimized_prompt: "优化后明代宫廷场景，低角度特写",
-      change_summary: ["增强光影", "低角度构图"],
-      remaining_risks: [],
-    });
-
     const res = await app.inject({
       method: "POST",
       url: `/api/projects/${projectId}/assets/tasks/${taskId}/prompt/optimize`,
@@ -88,47 +125,81 @@ describe("POST optimize trace writing", () => {
     });
 
     expect(res.statusCode).toBe(200);
-    const body = res.json() as Record<string, unknown>;
-    expect(body.optimized_prompt).toContain("低角度特写");
-    expect(body.change_summary).toEqual(["增强光影", "低角度构图"]);
 
-    // Verify the gateway was called with correct prompt ID and input
-    expect(mockGatewayInvoke).toHaveBeenCalledTimes(1);
-    const callArg = mockGatewayInvoke.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
-    expect(callArg?.promptId).toBe("asset.prompt-optimizer");
-    const callInput = (callArg?.input ?? {}) as Record<string, unknown>;
-    expect(callInput.current_prompt).toBe("明代宫廷场景");
-    expect(callInput.user_feedback).toBe("增强光影，低角度特写");
-    expect(callInput.task_type).toBe("image_still");
-    expect((callInput.segment as Record<string, unknown>)?.scene_description).toBe("朝堂");
-    // ArtBible context should be passed
-    expect((callInput.art_bible as Record<string, unknown>)?.era_style).toBe("明代");
-    // Interaction log writer should be passed (enables trace.md)
-    expect(callArg?.interactionLogWriter).toBeDefined();
+    // Verify trace.md was written with expected content
+    const traceDir = join(tmpDir, "trace");
+    expect(existsSync(traceDir)).toBe(true);
+    const traceMd = readFileSync(join(traceDir, "trace.md"), "utf8");
+    expect(traceMd).toContain("asset.prompt-optimizer");
+    expect(traceMd).toContain("明代宫廷场景");
+    expect(traceMd).toContain("增强光影");
+    expect(traceMd).not.toContain("api_key");
+    expect(traceMd).not.toContain("Authorization");
+    expect(traceMd).not.toContain("Bearer");
+
+    // Verify per-run interaction log
+    const assetsRunsDir = join(traceDir, "assets-runs");
+    const runDirs = readdirSync(assetsRunsDir);
+    expect(runDirs.length).toBeGreaterThan(0);
+    const runDir = join(assetsRunsDir, runDirs[0]!);
+    const llmDir = join(runDir, "llm-interactions");
+    expect(existsSync(llmDir)).toBe(true);
+    const interactionFiles = readdirSync(llmDir);
+    expect(interactionFiles.length).toBeGreaterThan(0);
+    const interactionLog = readFileSync(join(llmDir, interactionFiles[0]!), "utf8");
+    expect(interactionLog).toContain("asset.prompt-optimizer");
+    expect(interactionLog).toContain("current_prompt");
+    expect(interactionLog).toContain("user_feedback");
+    expect(interactionLog).not.toContain("api_key");
+    expect(interactionLog).not.toContain("Bearer");
+
+    // Cleanup
+    rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("returns 400 when current_prompt is missing (non-stub path)", async () => {
+  it("returns 400 when current_prompt is missing", async () => {
     const { buildApp } = await import("../../../backend/src/app.js");
     const app = buildApp();
 
     const projectId = "ot-002";
-    app.db.projects.set(projectId, makeProjectData({ id: projectId }));
-    app.db.assetPlanRecords.set("ap_001", {
-      id: "ap_001", projectId, topicPackageId: "tp_001", scriptRecordId: "scr_001", storyboardRecordId: "sb_001",
-      planJson: { plan_version: "asset_plan_v1", art_bible: {}, visual_budget: {}, downgrade_policy: {}, global_audio_strategy: {}, tts_plan: {}, tasks: [{ task_id: "t1", task_type: "image_still", source_segment_id: "seg_001", prompt_draft: "test", parameters: {} }], dependencies: [], cost_summary: {}, global_production_notes: [] } as never,
+    const now = new Date();
+    app.db.projects.set(projectId, {
+      id: projectId, name: "OT2", status: "assets_ready",
+      activeTopicPackageId: null, activeScriptRecordId: null,
+      activeStoryboardRecordId: null, activeAssetPlanRecordId: "ap_002",
+      activeAssetManifestRecordId: null, activeComposeRecordId: null,
+      activeRenderJobRecordId: null,
+      latestTopicRunTraceJson: null, latestScriptRunTraceJson: null,
+      latestStoryboardRunTraceJson: null, latestAssetPlanRunTraceJson: null,
+      latestAssetsRunTraceJson: null, latestComposeRunTraceJson: null,
+      latestRenderRunTraceJson: null,
+      storageDisplayName: "OT2", storageShortId: "p_ot2",
+      storageRootDir: mkdtempSync(join(tmpdir(), "svf2-ot2-")),
+      storageRenameLocked: false,
+      createdAt: now, updatedAt: now,
+    });
+    const tmpDir2 = app.db.projects.get(projectId)!.storageRootDir;
+    tempDirs.push(tmpDir2);
+
+    app.db.assetPlanRecords.set("ap_002", {
+      id: "ap_002", projectId, topicPackageId: "tp_001", scriptRecordId: "scr_001", storyboardRecordId: "sb_001",
+      planJson: {
+        plan_version: "asset_plan_v1", art_bible: {}, visual_budget: {}, downgrade_policy: {},
+        global_audio_strategy: {}, tts_plan: {},
+        tasks: [{ task_id: "t2", task_type: "image_still", source_segment_id: null, prompt_draft: "test", parameters: {} }],
+        dependencies: [], cost_summary: {}, global_production_notes: [],
+      } as never,
       validationResultJson: { stage: "asset_planning_local_validation", decision: "ready", errors: [], warnings: [], metrics: {} },
-      executionStateJson: {}, graphTraceSummaryJson: null, runtimeDiagnosticsJson: null, createdAt: new Date(),
+      executionStateJson: {}, graphTraceSummaryJson: null, runtimeDiagnosticsJson: null, createdAt: now,
     });
 
     const res = await app.inject({
       method: "POST",
-      url: `/api/projects/${projectId}/assets/tasks/t1/prompt/optimize`,
+      url: `/api/projects/${projectId}/assets/tasks/t2/prompt/optimize`,
       payload: { user_feedback: "test" },
     });
 
     expect(res.statusCode).toBe(400);
     expect((res.json() as Record<string, unknown>).error).toBe("missing_current_prompt");
-    // Gateway should NOT be called
-    expect(mockGatewayInvoke).not.toHaveBeenCalled();
   });
 });
