@@ -126,6 +126,7 @@ export function createLocalRemotionRenderAdapter(
         timeline,
         manifest,
         assetBaseDir,
+        projectStorageRootDir: input.projectStorageRootDir,
         width: input.profile.width,
         height: input.profile.height,
         fps: input.profile.fps,

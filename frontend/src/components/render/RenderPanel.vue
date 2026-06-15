@@ -72,6 +72,31 @@ function formatFileSize(bytes: number): string {
 const previewUrl = computed(() => renderStore.getPreviewUrl());
 const downloadUrl = computed(() => renderStore.getDownloadUrl());
 
+/** Map internal render error codes to human-readable Chinese. */
+function toZhRenderError(msg: string): string {
+  if (msg.startsWith("render_artifact_file_missing:")) {
+    const parts = msg.split(":");
+    const artId = parts[1] ?? "?";
+    const artType = parts[2] ?? "?";
+    return `素材文件缺失（${artId}/${artType}），请返回资产页重新生成或替换`;
+  }
+  const map: Record<string, string> = {
+    active_compose_missing: "合成记录缺失，请返回合成页重新生成合成时间线",
+    render_active_compose_missing: "合成记录缺失",
+    render_compose_record_missing: "合成记录数据缺失",
+    render_timeline_not_ready: "合成时间线未就绪",
+    render_asset_manifest_missing: "资产清单数据缺失",
+    render_asset_manifest_invalid: "资产清单数据格式异常，请重新生成资产",
+    render_artifact_missing: "合成引用素材缺失",
+    render_narration_missing: "缺少口播音频轨",
+    render_subtitle_missing: "缺少字幕轨",
+    render_timeline_partial: "合成时间线有可选警告（不阻塞渲染）",
+    render_bgm_missing_optional: "可选 BGM 未生成（不阻塞渲染）",
+    render_sfx_missing_optional: "可选 SFX 未生成（不阻塞渲染）",
+  };
+  return map[msg] ?? msg;
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Lifecycle                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -107,7 +132,7 @@ function goToCompose() {
     <!-- Error state -->
     <div v-if="renderStore.state.loadError" class="render-error-card">
       <el-alert
-        :title="'加载失败：' + renderStore.state.loadError"
+        :title="'加载失败：' + toZhRenderError(renderStore.state.loadError)"
         type="error"
         show-icon
         :closable="false"

@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
-import { isAbsolute, join } from "node:path";
+import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { resolveArtifactFileUri } from "../assets/artifact-file-resolver.js";
 import type {
   AssetArtifact,
   AssetManifest,
@@ -22,20 +23,13 @@ import {
 
 const DEFAULT_CROSSFADE_SEC = 0.25;
 
-function getLocalFilePath(fileUri: string, assetBaseDir: string): string | null {
-  if (fileUri.startsWith("file://")) {
-    return fileURLToPath(fileUri);
-  }
-  if (
-    fileUri.startsWith("http://") ||
-    fileUri.startsWith("https://") ||
-    fileUri.startsWith("data:") ||
-    fileUri.includes("://")
-  ) {
-    return null;
-  }
-
-  return isAbsolute(fileUri) ? fileUri : join(assetBaseDir, fileUri);
+/** Resolve an artifact file_uri to a local filesystem path using the shared resolver. */
+function getLocalFilePath(
+  fileUri: string,
+  projectStorageRootDir?: string,
+): string | null {
+  const resolved = resolveArtifactFileUri({ fileUri, projectStorageRootDir });
+  return resolved ?? null;
 }
 
 function getImageMimeType(filePath: string): string {
@@ -80,24 +74,34 @@ function isAudioArtifact(artifact: AssetArtifact): boolean {
 async function toBrowserFileUri(input: {
   artifact: AssetArtifact;
   assetBaseDir: string;
+  projectStorageRootDir?: string;
 }): Promise<string> {
-  const { artifact, assetBaseDir } = input;
+  const { artifact, assetBaseDir, projectStorageRootDir } = input;
   if (artifact.artifact_type === "image") {
-    const localFilePath = getLocalFilePath(artifact.file_uri, assetBaseDir);
-    if (localFilePath) {
+    const localFilePath = getLocalFilePath(artifact.file_uri, projectStorageRootDir);
+    if (!localFilePath) {
+      // fallback to assetBaseDir resolution for backward compat
+      const fallback = resolveArtifactFileUri({ fileUri: artifact.file_uri, projectStorageRootDir: assetBaseDir });
+      if (fallback) {
+        const imageBytes = await readFile(fallback);
+        return `data:${getImageMimeType(fallback)};base64,${imageBytes.toString("base64")}`;
+      }
+    } else {
       const imageBytes = await readFile(localFilePath);
-      return `data:${getImageMimeType(localFilePath)};base64,${imageBytes.toString(
-        "base64",
-      )}`;
+      return `data:${getImageMimeType(localFilePath)};base64,${imageBytes.toString("base64")}`;
     }
   }
   if (isAudioArtifact(artifact)) {
-    const localFilePath = getLocalFilePath(artifact.file_uri, assetBaseDir);
-    if (localFilePath) {
+    const localFilePath = getLocalFilePath(artifact.file_uri, projectStorageRootDir);
+    if (!localFilePath) {
+      const fallback = resolveArtifactFileUri({ fileUri: artifact.file_uri, projectStorageRootDir: assetBaseDir });
+      if (fallback) {
+        const audioBytes = await readFile(fallback);
+        return `data:${getAudioMimeType(fallback)};base64,${audioBytes.toString("base64")}`;
+      }
+    } else {
       const audioBytes = await readFile(localFilePath);
-      return `data:${getAudioMimeType(localFilePath)};base64,${audioBytes.toString(
-        "base64",
-      )}`;
+      return `data:${getAudioMimeType(localFilePath)};base64,${audioBytes.toString("base64")}`;
     }
   }
 
@@ -111,8 +115,10 @@ async function toBrowserFileUri(input: {
     return fileUri;
   }
 
-  const filePath = isAbsolute(fileUri) ? fileUri : join(assetBaseDir, fileUri);
-  return pathToFileURL(filePath).href;
+  // Use shared resolver; fallback to assetBaseDir for backward compat
+  const resolved = resolveArtifactFileUri({ fileUri, projectStorageRootDir });
+  if (resolved) return pathToFileURL(resolved).href;
+  return pathToFileURL(join(assetBaseDir, fileUri)).href;
 }
 
 function indexArtifacts(manifest: AssetManifest): Map<string, AssetArtifact> {
@@ -138,9 +144,9 @@ function getSubtitleArtifact(input: {
 
 async function readSubtitleFileContent(input: {
   artifact: AssetArtifact;
-  assetBaseDir: string;
+  projectStorageRootDir?: string;
 }): Promise<string | undefined> {
-  const { artifact, assetBaseDir } = input;
+  const { artifact, projectStorageRootDir } = input;
   if (
     artifact.file_uri.startsWith("memory://") ||
     artifact.file_uri.startsWith("inline://") ||
@@ -150,11 +156,11 @@ async function readSubtitleFileContent(input: {
     return undefined;
   }
 
-  const filePath = artifact.file_uri.startsWith("file://")
-    ? fileURLToPath(artifact.file_uri)
-    : isAbsolute(artifact.file_uri)
-      ? artifact.file_uri
-      : join(assetBaseDir, artifact.file_uri);
+  const filePath = resolveArtifactFileUri({
+    fileUri: artifact.file_uri,
+    projectStorageRootDir,
+  });
+  if (!filePath) return undefined;
 
   try {
     return await readFile(filePath, "utf8");
@@ -344,6 +350,7 @@ export async function buildRemotionInputProps(input: {
   timeline: ComposeTimeline;
   manifest: AssetManifest;
   assetBaseDir: string;
+  projectStorageRootDir?: string;
   width: number;
   height: number;
   fps: number;

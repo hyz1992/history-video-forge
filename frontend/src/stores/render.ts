@@ -98,7 +98,16 @@ export function createFetchRenderApi(baseUrl = ""): RenderApi {
       );
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        throw new Error((err as Record<string, unknown>).error as string ?? `render_generate_failed:${response.status}`);
+        const validation = (err as Record<string, unknown>).local_validation as
+          | { errors?: string[]; warnings?: string[]; decision?: string }
+          | undefined;
+        const details = validation?.errors?.length
+          ? `：${validation.errors.slice(0, 3).join("；")}`
+          : "";
+        throw new Error(
+          ((err as Record<string, unknown>).error as string ?? `render_generate_failed:${response.status}`) +
+            details,
+        );
       }
     },
   };

@@ -253,6 +253,7 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
       assetManifestRecord: assetManifestRecord!,
       outputDir,
       profile,
+      projectStorageRootDir: project.storageRootDir,
     });
 
     if (project.activeComposeRecordId !== activeComposeRecordId) {

@@ -1,8 +1,7 @@
 import { stat } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
-import { isAbsolute, join } from "node:path";
 
 import { normalizeAssetManifestDates } from "../assets/manifest-date-normalizer.js";
+import { resolveArtifactFileUri } from "../assets/artifact-file-resolver.js";
 import {
   AssetManifest as AssetManifestSchema,
   ComposeTimeline as ComposeTimelineSchema,
@@ -71,36 +70,6 @@ function isRequiredTrackMissing(
   );
 }
 
-function isFileUriCheckable(fileUri: string): boolean {
-  if (fileUri.startsWith("local://") || fileUri.startsWith("file://")) {
-    return true;
-  }
-  if (fileUri.includes("://")) {
-    return false;
-  }
-
-  return fileUri.length > 0;
-}
-
-function resolveCheckableFileUri(input: {
-  fileUri: string;
-  projectStorageRootDir: string;
-}): string {
-  const { fileUri, projectStorageRootDir } = input;
-
-  if (fileUri.startsWith("local://")) {
-    return join(projectStorageRootDir, fileUri.slice("local://".length));
-  }
-  if (fileUri.startsWith("file://")) {
-    return fileURLToPath(fileUri);
-  }
-  if (isAbsolute(fileUri)) {
-    return fileUri;
-  }
-
-  return join(projectStorageRootDir, fileUri);
-}
-
 async function checkReferencedFiles(input: {
   artifactsById: Map<string, AssetArtifact>;
   referencedArtifactIds: Set<string>;
@@ -111,26 +80,27 @@ async function checkReferencedFiles(input: {
     return;
   }
 
-  const checkedFileUris = new Set<string>();
+  const checkedResolvedPaths = new Set<string>();
   for (const artifactId of input.referencedArtifactIds) {
     const artifact = input.artifactsById.get(artifactId);
-    if (!artifact || !isFileUriCheckable(artifact.file_uri)) {
-      continue;
-    }
+    if (!artifact) continue;
 
-    const filePath = resolveCheckableFileUri({
+    const resolvedPath = resolveArtifactFileUri({
       fileUri: artifact.file_uri,
       projectStorageRootDir: input.projectStorageRootDir,
     });
-    if (checkedFileUris.has(filePath)) {
-      continue;
-    }
-    checkedFileUris.add(filePath);
+    if (!resolvedPath) continue;
+
+    if (checkedResolvedPaths.has(resolvedPath)) continue;
+    checkedResolvedPaths.add(resolvedPath);
 
     try {
-      await stat(filePath);
+      await stat(resolvedPath);
     } catch {
-      pushUnique(input.errors, "render_artifact_file_missing");
+      pushUnique(
+        input.errors,
+        `render_artifact_file_missing:${artifact.artifact_id}:${artifact.artifact_type}:${artifact.file_uri}`,
+      );
     }
   }
 }
@@ -230,7 +200,7 @@ export async function validateRenderSources(
     ),
   );
   if (!manifestResult.success) {
-    pushUnique(errors, "render_asset_manifest_missing");
+    pushUnique(errors, "render_asset_manifest_invalid");
     return buildResult({
       decision: "blocked",
       errors,

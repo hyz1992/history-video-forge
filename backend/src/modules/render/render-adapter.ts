@@ -27,5 +27,6 @@ export interface RenderAdapter {
     assetManifestRecord: AssetManifestRecord;
     outputDir: string;
     profile: RenderProfile;
+    projectStorageRootDir?: string;
   }): Promise<RenderAdapterResult>;
 }
