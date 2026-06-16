@@ -857,7 +857,7 @@ function enrichPromptWithCharacterAnchor(
  * These are fixed production contracts, not LLM-generated suggestions.
  */
 const VISUAL_NEGATIVE_CONSTRAINTS =
-  "写实历史质感，无现代物品、无现代建筑、无动漫风、无奇幻特效、无游戏质感";
+  "写实历史质感，建筑、发型、服饰、器物、文字形制必须符合当前项目朝代背景，无现代物品、无现代建筑、无民国/近代造型、无动漫风、无奇幻特效、无游戏质感";
 
 function enrichPromptWithVisualConstraints(
   taskDraft: ChunkTaskDraft,
