@@ -65,10 +65,23 @@ export function writeFileStream(
 
   const disposition = options.disposition ?? "inline";
   const downloadName = options.filename ?? basename(resolved);
-  response.setHeader(
-    "content-disposition",
-    `${disposition}; filename="${downloadName}"`,
-  );
+
+  // RFC 5987: encode non-ASCII characters for Content-Disposition
+  const hasNonAscii = /[^\x00-\x7F]/.test(downloadName);
+  if (hasNonAscii) {
+    const encoded = encodeURIComponent(downloadName);
+    // ASCII-safe fallback for legacy clients
+    const asciiFallback = downloadName.replace(/[^\x00-\x7F]/g, "_");
+    response.setHeader(
+      "content-disposition",
+      `${disposition}; filename="${asciiFallback}"; filename*=UTF-8''${encoded}`,
+    );
+  } else {
+    response.setHeader(
+      "content-disposition",
+      `${disposition}; filename="${downloadName}"`,
+    );
+  }
 
   const range = response.req?.headers.range;
   if (range) {

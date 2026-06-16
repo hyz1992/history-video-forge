@@ -323,6 +323,7 @@ async function buildAudioClips(input: {
             src: await toBrowserFileUri({
               artifact,
               assetBaseDir: input.assetBaseDir,
+              projectStorageRootDir: input.projectStorageRootDir,
             }),
             startSec: clip.start_sec,
             durationSec: clip.duration_sec,
@@ -390,12 +391,14 @@ export async function buildRemotionInputProps(input: {
       timeline: input.timeline,
       artifactsById,
       assetBaseDir: input.assetBaseDir,
+      projectStorageRootDir: input.projectStorageRootDir,
     }),
     audioClips: await buildAudioClips({
       manifest: input.manifest,
       timeline: input.timeline,
       artifactsById,
       assetBaseDir: input.assetBaseDir,
+      projectStorageRootDir: input.projectStorageRootDir,
     }),
   };
 }
