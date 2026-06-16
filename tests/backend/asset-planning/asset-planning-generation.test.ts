@@ -1100,7 +1100,7 @@ describe("generateAssetPlan", () => {
     for (const task of imageTasks) {
       expect(task.prompt_draft).toContain("【视觉约束】");
       expect(task.prompt_draft).toContain(
-        "写实历史质感，建筑、发型、服饰、器物、文字形制必须符合当前项目朝代背景，无现代物品、无现代建筑、无民国/近代造型、无动漫风、无奇幻特效、无游戏质感",
+        "写实历史质感，建筑、发型、服饰、器物、文字形制必须符合战国宫廷与军帐背景，无现代物品、无现代建筑、无民国/近代造型、无动漫风、无奇幻特效、无游戏质感",
       );
     }
   });
@@ -1125,7 +1125,7 @@ describe("generateAssetPlan", () => {
     for (const task of videoTasks) {
       expect(task.prompt_draft).toContain("【视觉约束】");
       expect(task.prompt_draft).toContain(
-        "写实历史质感，建筑、发型、服饰、器物、文字形制必须符合当前项目朝代背景，无现代物品、无现代建筑、无民国/近代造型、无动漫风、无奇幻特效、无游戏质感",
+        "写实历史质感，建筑、发型、服饰、器物、文字形制必须符合战国宫廷与军帐背景，无现代物品、无现代建筑、无民国/近代造型、无动漫风、无奇幻特效、无游戏质感",
       );
     }
   });
@@ -1146,7 +1146,7 @@ describe("generateAssetPlan", () => {
   });
 
   it("does not duplicate visual constraints if already present in prompt_draft", async () => {
-    const constraint = "写实历史质感，建筑、发型、服饰、器物、文字形制必须符合当前项目朝代背景，无现代物品、无现代建筑、无民国/近代造型、无动漫风、无奇幻特效、无游戏质感";
+    const constraint = "写实历史质感，建筑、发型、服饰、器物、文字形制必须符合战国宫廷与军帐背景，无现代物品、无现代建筑、无民国/近代造型、无动漫风、无奇幻特效、无游戏质感";
     const { gateway } = makeGateway(async (options) => {
       const input = options.input as { planning_mode: string; chunk?: { segment_ids: string[] } };
       if (input.planning_mode === "global") return validGlobalPlanningDraft;

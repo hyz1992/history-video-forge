@@ -856,11 +856,12 @@ function enrichPromptWithCharacterAnchor(
  * so every visual prompt starts with stable era/anachronism guards.
  * These are fixed production contracts, not LLM-generated suggestions.
  */
-const VISUAL_NEGATIVE_CONSTRAINTS =
-  "写实历史质感，建筑、发型、服饰、器物、文字形制必须符合当前项目朝代背景，无现代物品、无现代建筑、无民国/近代造型、无动漫风、无奇幻特效、无游戏质感";
+const VISUAL_CONSTRAINT_BASE =
+  "写实历史质感，建筑、发型、服饰、器物、文字形制必须符合%s背景，无现代物品、无现代建筑、无民国/近代造型、无动漫风、无奇幻特效、无游戏质感";
 
 function enrichPromptWithVisualConstraints(
   taskDraft: ChunkTaskDraft,
+  eraStyle?: string | null,
 ): string | null {
   if (
     (taskDraft.task_type !== "image_still" && taskDraft.task_type !== "video_clip") ||
@@ -869,12 +870,15 @@ function enrichPromptWithVisualConstraints(
     return taskDraft.prompt_draft;
   }
 
+  const era = (eraStyle ?? "").trim() || "当前项目朝代";
+  const constraint = VISUAL_CONSTRAINT_BASE.replace("%s", era);
   const prompt = taskDraft.prompt_draft;
-  if (prompt.includes(VISUAL_NEGATIVE_CONSTRAINTS)) {
+  // Check against the base pattern to avoid duplication
+  if (/写实历史质感，建筑、发型、服饰、器物、文字形制必须符合/.test(prompt)) {
     return prompt;
   }
 
-  return `${prompt}\n【视觉约束】${VISUAL_NEGATIVE_CONSTRAINTS}。`;
+  return `${prompt}\n【视觉约束】${constraint}。`;
 }
 
 function mergeAssetPlan(
@@ -919,7 +923,7 @@ function mergeAssetPlan(
             input.storyboard.segments,
             globalDraft.art_bible,
           ),
-        }),
+        }, globalDraft.art_bible.era_style),
         parameters: rewriteTaskParameterLocalIds(taskDraft.parameters, localToGlobal),
         manual_upload_policy: taskDraft.manual_upload_policy,
         risk_notes: rewriteLocalTaskIdsInTextList(taskDraft.risk_notes, localToGlobal),
