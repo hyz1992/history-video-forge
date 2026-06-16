@@ -488,28 +488,62 @@ describe("validateRenderSources", () => {
 
   it("resolves workspace-relative storage/projects paths without duplicating the project root", async () => {
     const tempDir = await mkdtemp(join(tmpdir(), "svf2-render-wsrel-"));
-    const now = new Date().toISOString();
-    // Create a real file under the temp dir to simulate storage/projects/.../img.png
-    const assetsDir = join(tempDir, "assets-runs", "run_001");
+    // Build a workspace-like directory: storage/projects/date/name [id]/
+    const storageProjectsDir = join(tempDir, "storage", "projects", "2026-06-test", "Test [p_testwsr]");
+    const assetsDir = join(storageProjectsDir, "assets-runs", "run_001");
     await mkdir(assetsDir, { recursive: true });
     const imgPath = join(assetsDir, "test.png");
     await writeFile(imgPath, "fake-png-data");
 
-    // Use a workspace-relative path (storage/projects/...)
-    const wsRelativePath = imgPath.replace(tempDir, "").replace(/^[/\\]/, "");
-    // Actually, let's just use the temp dir as a mock workspace root
     const manifest = makeReadyAssetManifest();
-    manifest.artifacts[0]!.file_uri = imgPath; // absolute path to the temp file
+    // Use an absolute path to the temp file — this tests that absolute paths
+    // (which is what the old provider generates) are resolved correctly.
+    manifest.artifacts[0]!.file_uri = imgPath;
 
     const timeline = makeReadyComposeTimeline();
     const result = await validateRenderSources({
       activeComposeRecordId: "compose_001",
       composeRecord: makeReadyComposeRecord({ timelineJson: timeline }),
       assetManifestRecord: makeReadyAssetManifestRecord({ manifestJson: manifest as unknown as Record<string, unknown> }),
-      projectStorageRootDir: tempDir,
+      projectStorageRootDir: storageProjectsDir,
     });
 
-    // Should NOT report file missing — the absolute path exists
+    // Absolute path exists → no file_missing error
+    expect(result.errors.filter((e) => e.startsWith("render_artifact_file_missing"))).toEqual([]);
+  });
+
+  it("resolves workspace-relative storage/projects path (not absolute) correctly", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "svf2-render-wsrel2-"));
+    const storageProjectsDir = join(tempDir, "storage", "projects", "2026-06-test", "Test [p_testwsr2]");
+    const assetsDir = join(storageProjectsDir, "assets-runs", "run_001");
+    await mkdir(assetsDir, { recursive: true });
+    const imgAbsPath = join(assetsDir, "test.png");
+    await writeFile(imgAbsPath, "fake-png-data");
+
+    // Compute workspace-relative path from tempDir (which stands in for the repo root)
+    const wsRelative = "storage/projects/2026-06-test/Test [p_testwsr2]/assets-runs/run_001/test.png";
+
+    const manifest = makeReadyAssetManifest();
+    // Use a WORKSPACE-RELATIVE path (not absolute)
+    manifest.artifacts[0]!.file_uri = wsRelative;
+
+    // Create a mock file at the expected workspace-root-relative location
+    // Since we can't change the hardcoded workspace root, we create a file
+    // at the actual repo root's storage/projects/...
+    const repoRelativeDir = join(process.cwd(), "storage", "projects", "2026-06-test", "Test [p_testwsr2]", "assets-runs", "run_001");
+    await mkdir(repoRelativeDir, { recursive: true });
+    const repoImgPath = join(repoRelativeDir, "test.png");
+    await writeFile(repoImgPath, "fake-png-data");
+
+    const timeline = makeReadyComposeTimeline();
+    const result = await validateRenderSources({
+      activeComposeRecordId: "compose_001",
+      composeRecord: makeReadyComposeRecord({ timelineJson: timeline }),
+      assetManifestRecord: makeReadyAssetManifestRecord({ manifestJson: manifest as unknown as Record<string, unknown> }),
+      projectStorageRootDir: storageProjectsDir,
+    });
+
+    // Workspace-relative path should resolve to repo root + path, file exists
     expect(result.errors.filter((e) => e.startsWith("render_artifact_file_missing"))).toEqual([]);
   });
 });

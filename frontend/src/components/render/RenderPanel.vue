@@ -183,8 +183,17 @@ function goToCompose() {
         type="warning"
         show-icon
         :closable="false"
-        description="合成时间线存在阻断问题，无法进入渲染。请返回合成页检查并重新合成。"
-      />
+      >
+        <template #description>
+          <p>合成时间线存在阻断问题，无法进入渲染。</p>
+          <ul v-if="snapshot?.active_render?.validation_result?.errors?.length" class="render-blocked-errors">
+            <li v-for="(err, i) in snapshot.active_render.validation_result.errors" :key="'e' + i">
+              {{ toZhRenderError(err) }}
+            </li>
+          </ul>
+          <p v-else>请返回合成页检查并重新合成。</p>
+        </template>
+      </el-alert>
       <div class="render-blocked-actions">
         <el-button type="primary" @click="goToCompose">返回合成页检查</el-button>
         <el-button :loading="renderStore.state.isGenerating" @click="handleGenerate">重试渲染</el-button>
@@ -345,6 +354,14 @@ function goToCompose() {
   display: flex;
   gap: var(--space-sm);
   justify-content: center;
+}
+
+.render-blocked-errors {
+  margin: var(--space-xs) 0 0;
+  padding-left: 1.2rem;
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: var(--text-body);
 }
 
 /* ---- Status bar ---- */

@@ -238,6 +238,7 @@ async function buildVisualClips(input: {
   timeline: ComposeTimeline;
   artifactsById: Map<string, AssetArtifact>;
   assetBaseDir: string;
+  projectStorageRootDir?: string;
 }): Promise<RenderVisualClipProp[]> {
   const visualTrack = input.timeline.tracks.find(
     (track) => track.track_type === "visual",
@@ -269,6 +270,7 @@ async function buildVisualClips(input: {
         src: await toBrowserFileUri({
           artifact,
           assetBaseDir: input.assetBaseDir,
+          projectStorageRootDir: input.projectStorageRootDir,
         }),
         startSec: clip.start_sec,
         durationSec: clip.duration_sec,
@@ -295,6 +297,7 @@ async function buildAudioClips(input: {
   timeline: ComposeTimeline;
   artifactsById: Map<string, AssetArtifact>;
   assetBaseDir: string;
+  projectStorageRootDir?: string;
 }): Promise<RenderAudioClipProp[]> {
   const audioTracks = input.timeline.tracks.filter((track) =>
     ["narration", "bgm", "sfx"].includes(track.track_type),
@@ -363,7 +366,7 @@ export async function buildRemotionInputProps(input: {
   const subtitleContent = subtitleArtifact
     ? await readSubtitleFileContent({
         artifact: subtitleArtifact,
-        assetBaseDir: input.assetBaseDir,
+        projectStorageRootDir: input.projectStorageRootDir,
       })
     : undefined;
 

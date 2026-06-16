@@ -8,8 +8,10 @@ import { fileURLToPath } from "node:url";
 let _workspaceRoot: string | null = null;
 function getWorkspaceRoot(): string {
   if (!_workspaceRoot) {
+    // This file is at backend/src/modules/assets/artifact-file-resolver.ts
+    // Go up 4 levels to reach the repo root
     _workspaceRoot = resolve(
-      fileURLToPath(new URL("../../../", import.meta.url)),
+      fileURLToPath(new URL("../../../../", import.meta.url)),
     );
   }
   return _workspaceRoot;
