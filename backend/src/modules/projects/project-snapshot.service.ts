@@ -1,3 +1,4 @@
+import { statSync } from "node:fs";
 import type { DbClient } from "../../db/client";
 import { getProjectStorageProfile } from "../../runtime/trace/project-storage.js";
 
@@ -219,18 +220,28 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
         }
       : null,
     active_render: renderJobRecord
-      ? {
-          render_job_record_id: renderJobRecord.id,
-          source_compose_record_id: renderJobRecord.composeRecordId,
-          source_asset_manifest_record_id: renderJobRecord.assetManifestRecordId,
-          status: renderJobRecord.status,
-          profile: renderJobRecord.profileJson,
-          output_artifact: renderJobRecord.outputArtifactJson,
-          validation_result: renderJobRecord.validationResultJson,
-          execution_state: renderJobRecord.executionStateJson,
-          graph_trace_summary: renderJobRecord.graphTraceSummaryJson,
-          runtime_diagnostics: renderJobRecord.runtimeDiagnosticsJson,
-        }
+      ? (() => {
+          const artifact = renderJobRecord.outputArtifactJson;
+          // Fallback: stat the file to fill file_size_bytes if missing (old artifacts)
+          if (artifact?.file_uri && !artifact.metadata?.file_size_bytes) {
+            try {
+              const s = statSync(artifact.file_uri);
+              (artifact.metadata as Record<string, unknown> ?? (artifact.metadata = {} as never)).file_size_bytes = s.size;
+            } catch { /* keep as-is */ }
+          }
+          return {
+            render_job_record_id: renderJobRecord.id,
+            source_compose_record_id: renderJobRecord.composeRecordId,
+            source_asset_manifest_record_id: renderJobRecord.assetManifestRecordId,
+            status: renderJobRecord.status,
+            profile: renderJobRecord.profileJson,
+            output_artifact: artifact,
+            validation_result: renderJobRecord.validationResultJson,
+            execution_state: renderJobRecord.executionStateJson,
+            graph_trace_summary: renderJobRecord.graphTraceSummaryJson,
+            runtime_diagnostics: renderJobRecord.runtimeDiagnosticsJson,
+          };
+        })()
       : null,
   };
 }

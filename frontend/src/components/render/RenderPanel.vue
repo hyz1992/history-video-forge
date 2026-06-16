@@ -124,6 +124,7 @@ function toZhRenderError(msg: string): string {
   if (msg.startsWith("render_artifact_file_missing:")) {
     const parts = msg.split(":");
     const artId = parts[1] ?? "?";
+    const artType = parts[2] ?? "?";
     return `素材文件缺失（${artId}/${artType}），请返回资产页重新生成或替换`;
   }
   const map: Record<string, string> = {

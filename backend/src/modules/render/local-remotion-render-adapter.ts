@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -195,7 +195,7 @@ export function createLocalRemotionRenderAdapter(
         metadata: {
           renderer: "remotion",
           composition_id: compositionId,
-          file_size_bytes: metadata.fileSizeInBytes ?? 0,
+          file_size_bytes: (() => { try { return statSync(outputLocation).size; } catch { return 0; } })(),
         },
       };
 

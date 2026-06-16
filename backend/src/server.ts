@@ -3,6 +3,16 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
 import { buildApp, type AppInstance } from "./app";
+import { createLocalRemotionRenderAdapter } from "./modules/render/local-remotion-render-adapter.js";
+import type { RenderAdapter } from "./modules/render/render-adapter.js";
+
+function resolveRenderAdapter(): RenderAdapter | undefined {
+  const mode = (process.env.RENDER_ADAPTER ?? "fake").toLowerCase();
+  if (mode === "remotion") return createLocalRemotionRenderAdapter();
+  if (mode === "fake") return undefined; // undefined → render-run falls back to fake
+  console.warn(`Unknown RENDER_ADAPTER "${mode}", falling back to fake`);
+  return undefined;
+}
 import { matchFileRoute, handleFileRoute } from "./http/file-routes.js";
 import { parseMultipart } from "./http/multipart.js";
 
@@ -36,7 +46,7 @@ function writeJson(response: ServerResponse, statusCode: number, body: unknown) 
   response.end(JSON.stringify(body));
 }
 
-export function createHttpServer(app: AppInstance = buildApp()): Server {
+export function createHttpServer(app: AppInstance = buildApp({ renderAdapter: resolveRenderAdapter() })): Server {
   return createServer(async (request, response) => {
     if (!request.method || !request.url) {
       writeJson(response, 400, {
