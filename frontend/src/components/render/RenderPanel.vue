@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { ElMessage } from "element-plus";
 
 import { useRenderStore } from "../../stores/render";
@@ -69,6 +69,53 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const rendererType = computed<string>(() => {
+  const meta = outputArtifact.value?.metadata as Record<string, unknown> | undefined;
+  return (meta?.renderer as string) ?? "";
+});
+
+const isRealVideo = computed(() => {
+  // Only show real video preview for Remotion renderer
+  return isCompleted.value && rendererType.value === "remotion";
+});
+
+const isFakePlaceholder = computed(() => {
+  return isCompleted.value && rendererType.value === "fake";
+});
+
+const displayFilename = computed(() => {
+  const projectName = (snapshot.value as Record<string, unknown> | undefined)?.project_name as string
+    ?? projectStore.state.projects.find(p => p.project_id === projectStore.state.projectId)?.display_name
+    ?? "未命名项目";
+  return `${projectName}.mp4`;
+});
+
+const isDownloading = ref(false);
+
+async function handleDownload() {
+  isDownloading.value = true;
+  try {
+    const res = await fetch(downloadUrl.value);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error((err as Record<string, unknown>).error as string ?? `下载失败 (${res.status})`);
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = displayFilename.value;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    ElMessage.error("下载失败：" + (e instanceof Error ? e.message : "未知错误"));
+  } finally {
+    isDownloading.value = false;
+  }
+}
+
 const previewUrl = computed(() => renderStore.getPreviewUrl());
 const downloadUrl = computed(() => renderStore.getDownloadUrl());
 
@@ -77,7 +124,6 @@ function toZhRenderError(msg: string): string {
   if (msg.startsWith("render_artifact_file_missing:")) {
     const parts = msg.split(":");
     const artId = parts[1] ?? "?";
-    const artType = parts[2] ?? "?";
     return `素材文件缺失（${artId}/${artType}），请返回资产页重新生成或替换`;
   }
   const map: Record<string, string> = {
@@ -114,10 +160,6 @@ async function handleGenerate() {
   if (!renderStore.state.loadError) {
     ElMessage.success("渲染任务已提交");
   }
-}
-
-function handleDownload() {
-  globalThis.open(downloadUrl.value, "_blank");
 }
 
 function goToCompose() {
@@ -230,7 +272,9 @@ function goToCompose() {
     <template v-else>
       <!-- Status bar -->
       <div class="render-status-bar">
-        <el-tag v-if="isCompleted" type="success" size="large">渲染完成</el-tag>
+        <el-tag v-if="isFakePlaceholder" type="info" size="large">占位渲染完成（非真实视频）</el-tag>
+        <el-tag v-else-if="isRealVideo" type="success" size="large">渲染完成</el-tag>
+        <el-tag v-else-if="isCompleted" type="success" size="large">渲染完成</el-tag>
         <el-tag v-else-if="isFailed" type="danger" size="large">渲染失败</el-tag>
         <el-tag v-else-if="isBlocked" type="warning" size="large">渲染阻塞</el-tag>
         <el-tag v-else type="info" size="large">{{ status }}</el-tag>
@@ -240,11 +284,15 @@ function goToCompose() {
       <div class="render-preview-wrapper">
         <div class="render-preview-container">
           <video
-            v-if="isCompleted"
+            v-if="isRealVideo"
             :src="previewUrl"
             controls
             class="render-preview-video"
           />
+          <div v-else-if="isFakePlaceholder" class="render-preview-placeholder">
+            <span class="render-preview-icon">&#128250;</span>
+            <p class="render-preview-placeholder-text">当前为开发占位渲染<br/>未生成真实可预览视频</p>
+          </div>
           <div v-else class="render-preview-placeholder">
             <span class="render-preview-icon">&#9654;</span>
           </div>
@@ -255,7 +303,7 @@ function goToCompose() {
       <div class="render-info-card">
         <div class="render-info-row">
           <span class="render-info-label">文件名</span>
-          <span class="render-info-value">{{ outputArtifact?.file_uri ?? '—' }}</span>
+          <span class="render-info-value">{{ displayFilename }}</span>
         </div>
         <div class="render-info-row">
           <span class="render-info-label">文件大小</span>
@@ -297,6 +345,7 @@ function goToCompose() {
         <el-button
           v-if="isCompleted"
           type="success"
+          :loading="isDownloading"
           @click="handleDownload"
         >
           下载视频
@@ -408,6 +457,14 @@ function goToCompose() {
   font-size: 2.5rem;
   color: #444;
   user-select: none;
+}
+
+.render-preview-placeholder-text {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin: var(--space-xs) 0 0;
+  line-height: 1.5;
 }
 
 /* ---- Info card ---- */

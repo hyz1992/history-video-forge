@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { ComposeTimeline as ComposeTimelineSchema } from "../../../../shared/src/index.js";
@@ -31,19 +31,6 @@ export function createFakeRenderAdapter(): RenderAdapter {
         height: input.profile.height,
         fps: input.profile.fps,
       };
-      const outputArtifact: ExportArtifact = {
-        artifact_id: `render_export_${input.composeRecord.id}`,
-        artifact_type: "rendered_video",
-        file_uri: outputPath,
-        mime_type: "video/mp4",
-        duration_sec: probe.duration_sec,
-        width: probe.width,
-        height: probe.height,
-        fps: probe.fps,
-        source_compose_record_id: input.composeRecord.id,
-        source_asset_manifest_record_id: input.assetManifestRecord.id,
-        metadata: { renderer: "fake" },
-      };
 
       await writeFile(
         outputPath,
@@ -59,6 +46,23 @@ export function createFakeRenderAdapter(): RenderAdapter {
         ].join("\n"),
         "utf8",
       );
+
+      let fileSizeBytes = 0;
+      try { fileSizeBytes = (await stat(outputPath)).size; } catch { /* keep 0 */ }
+
+      const outputArtifact: ExportArtifact = {
+        artifact_id: `render_export_${input.composeRecord.id}`,
+        artifact_type: "rendered_video",
+        file_uri: outputPath,
+        mime_type: "video/mp4",
+        duration_sec: probe.duration_sec,
+        width: probe.width,
+        height: probe.height,
+        fps: probe.fps,
+        source_compose_record_id: input.composeRecord.id,
+        source_asset_manifest_record_id: input.assetManifestRecord.id,
+        metadata: { renderer: "fake", file_size_bytes: fileSizeBytes },
+      };
 
       return {
         outputArtifact,

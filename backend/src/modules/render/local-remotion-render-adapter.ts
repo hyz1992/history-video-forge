@@ -195,6 +195,7 @@ export function createLocalRemotionRenderAdapter(
         metadata: {
           renderer: "remotion",
           composition_id: compositionId,
+          file_size_bytes: metadata.fileSizeInBytes ?? 0,
         },
       };
 
