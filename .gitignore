@@ -9,3 +9,4 @@ storage/media-library/
 .superpowers/
 storage/topic-candidate-library/
 storage/voice-profiles/
+.codex-run-logs/
