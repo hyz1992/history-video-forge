@@ -1,11 +1,14 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   AbsoluteFill,
   Audio,
+  continueRender,
+  delayRender,
   Img,
   OffthreadVideo,
   Sequence,
   interpolate,
+  staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
@@ -24,9 +27,11 @@ import {
 } from "./subtitle-rendering";
 import { makeMotionTransform } from "./motion-rendering";
 import {
-  getVisibleVisualLayers,
+  getMountedVisualLayers,
   makeVisualLayerStyle,
 } from "./visual-rendering";
+
+const REMOTION_STATIC_URI_PREFIX = "remotion-static://";
 
 type ArtifactLike = {
   artifact_id?: unknown;
@@ -83,28 +88,103 @@ function findPrimaryVisualUri(props: TimelineVideoProps) {
 }
 
 function renderVisualClip(clip: RenderVisualClipProp) {
+  const src = resolveMediaSrc(clip.src);
   if (clip.mediaType === "video") {
-    return <OffthreadVideo src={clip.src} muted />;
+    return <OffthreadVideo src={src} muted />;
   }
 
   return (
-    <Img
-      src={clip.src}
+    <div
       style={{
         width: "100%",
         height: "100%",
-        objectFit: "cover",
+        backgroundImage: `url(${JSON.stringify(src)})`,
+        backgroundPosition: "center",
+        backgroundSize: "cover",
       }}
-    />
+    >
+      <img
+        src={src}
+        decoding="sync"
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+        }}
+      />
+    </div>
   );
+}
+
+function resolveMediaSrc(src: string): string {
+  if (src.startsWith(REMOTION_STATIC_URI_PREFIX)) {
+    return staticFile(src.slice(REMOTION_STATIC_URI_PREFIX.length));
+  }
+
+  return src;
+}
+
+function preloadImage(src: string): Promise<void> {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.decoding = "sync";
+    image.onload = () => resolve();
+    image.onerror = () => resolve();
+    image.src = src;
+
+    if (image.complete && image.naturalWidth > 0) {
+      resolve();
+    }
+  });
+}
+
+function usePreloadVisualImages(visualClips?: RenderVisualClipProp[]) {
+  const [delayHandle] = useState(() =>
+    delayRender("preload visual still images"),
+  );
+  const imageSources = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          (visualClips ?? [])
+            .filter((clip) => clip.mediaType === "image")
+            .map((clip) => resolveMediaSrc(clip.src)),
+        ),
+      ),
+    [visualClips],
+  );
+  const imageSourcesKey = imageSources.join("\n");
+
+  useEffect(() => {
+    let continued = false;
+    const continueOnce = () => {
+      if (!continued) {
+        continued = true;
+        continueRender(delayHandle);
+      }
+    };
+
+    if (imageSources.length === 0) {
+      continueOnce();
+      return;
+    }
+
+    Promise.all(imageSources.map((src) => preloadImage(src))).then(
+      continueOnce,
+      continueOnce,
+    );
+
+    return continueOnce;
+  }, [delayHandle, imageSourcesKey]);
 }
 
 export function TimelineVideo(props: TimelineVideoProps) {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
+  usePreloadVisualImages(props.visualClips);
   const visualUri = findPrimaryVisualUri(props);
   const visualLayers = props.visualClips
-    ? getVisibleVisualLayers({
+    ? getMountedVisualLayers({
         clips: props.visualClips,
         frame,
         fps: props.fps,

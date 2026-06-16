@@ -351,7 +351,7 @@ describe("buildRemotionInputProps", () => {
         transition: { type: "crossfade", durationSec: 0.25 },
       },
     ]);
-    expect(props.visualClips[0]?.src).toMatch(/^data:image\/png;base64,/);
+    expect(props.visualClips[0]?.src).toBe("remotion-static://media/still.png");
     expect(props.visualClips[1]?.src).toMatch(/^file:\/\/\//);
     expect(props.audioClips).toMatchObject([
       {

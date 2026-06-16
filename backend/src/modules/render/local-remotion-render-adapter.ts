@@ -1,4 +1,6 @@
 import { existsSync, statSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -140,45 +142,53 @@ export function createLocalRemotionRenderAdapter(
         fps: input.profile.fps,
       });
 
-      const serveUrl = await bundle({
-        entryPoint,
-        rootDir: repoRootDir,
-        outDir: join(input.outputDir, "remotion-bundle"),
-        publicDir: null,
-        enableCaching: false,
-        webpackOverride: (config) => config,
-      });
-      const selectedComposition = await selectComposition({
-        serveUrl,
-        id: compositionId,
-        inputProps,
-        logLevel: "error",
-        browserExecutable,
-        binariesDirectory: options.binariesDirectory ?? null,
-        concurrency,
-        timeoutInMilliseconds,
-      });
-      const composition = {
-        ...selectedComposition,
-        durationInFrames,
-        fps: input.profile.fps,
-        width: input.profile.width,
-        height: input.profile.height,
-      };
+      const bundleOutDir = await mkdtemp(
+        join(tmpdir(), "story-video-forge-remotion-bundle-"),
+      );
+      try {
+        const serveUrl = await bundle({
+          entryPoint,
+          rootDir: repoRootDir,
+          outDir: bundleOutDir,
+          publicDir: input.projectStorageRootDir ?? input.outputDir,
+          enableCaching: false,
+          webpackOverride: (config) => config,
+        });
+        const selectedComposition = await selectComposition({
+          serveUrl,
+          id: compositionId,
+          inputProps,
+          logLevel: "error",
+          browserExecutable,
+          binariesDirectory: options.binariesDirectory ?? null,
+          concurrency,
+          timeoutInMilliseconds,
+        });
+        const composition = {
+          ...selectedComposition,
+          durationInFrames,
+          fps: input.profile.fps,
+          width: input.profile.width,
+          height: input.profile.height,
+        };
 
-      await renderMedia({
-        serveUrl,
-        composition,
-        inputProps,
-        codec: "h264",
-        outputLocation,
-        overwrite: true,
-        muted: false,
-        logLevel: "error",
-        browserExecutable,
-        binariesDirectory: options.binariesDirectory ?? null,
-        timeoutInMilliseconds,
-      });
+        await renderMedia({
+          serveUrl,
+          composition,
+          inputProps,
+          codec: "h264",
+          outputLocation,
+          overwrite: true,
+          muted: false,
+          logLevel: "error",
+          browserExecutable,
+          binariesDirectory: options.binariesDirectory ?? null,
+          concurrency,
+          timeoutInMilliseconds,
+        });
+      } finally {
+        await rm(bundleOutDir, { recursive: true, force: true });
+      }
 
       const metadata = await getVideoMetadata(outputLocation, {
         logLevel: "error",

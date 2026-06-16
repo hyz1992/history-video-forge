@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getMountedVisualLayers,
   getVisibleVisualLayers,
   makeVisualLayerStyle,
 } from "../../renderer/src/visual-rendering";
@@ -55,6 +56,23 @@ describe("visual rendering helpers", () => {
       height: "100%",
       objectFit: "cover",
       opacity: 0.5,
+    });
+  });
+
+  it("keeps image layers mounted outside their visible window", () => {
+    const layers = getMountedVisualLayers({ clips, frame: 75, fps: 30 });
+
+    expect(layers.map((layer) => layer.clip.clipId)).toEqual([
+      "clip_a",
+      "clip_b",
+    ]);
+    expect(layers[0]).toMatchObject({
+      clip: { clipId: "clip_a" },
+      opacity: 0,
+    });
+    expect(layers[1]).toMatchObject({
+      clip: { clipId: "clip_b" },
+      opacity: 1,
     });
   });
 });

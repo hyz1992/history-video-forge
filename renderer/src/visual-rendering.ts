@@ -14,6 +14,23 @@ export function getVisibleVisualLayers(input: {
   frame: number;
   fps: number;
 }): VisibleVisualLayer[] {
+  return getVisualLayers({ ...input, keepImageLayersMounted: false });
+}
+
+export function getMountedVisualLayers(input: {
+  clips: RenderVisualClipProp[];
+  frame: number;
+  fps: number;
+}): VisibleVisualLayer[] {
+  return getVisualLayers({ ...input, keepImageLayersMounted: true });
+}
+
+function getVisualLayers(input: {
+  clips: RenderVisualClipProp[];
+  frame: number;
+  fps: number;
+  keepImageLayersMounted: boolean;
+}): VisibleVisualLayer[] {
   const currentSec = input.frame / input.fps;
   const layers: VisibleVisualLayer[] = [];
 
@@ -30,15 +47,19 @@ export function getVisibleVisualLayers(input: {
         : 0;
     const fadeStartSec = Math.max(startSec - fadeInSec, 0);
     const visible = currentSec >= fadeStartSec && currentSec < endSec;
-    if (!visible) {
+    const shouldKeepMounted =
+      input.keepImageLayersMounted && clip.mediaType === "image";
+    if (!visible && !shouldKeepMounted) {
       continue;
     }
 
     let opacity = 1;
-    if (fadeInSec > 0 && currentSec < startSec) {
+    if (!visible) {
+      opacity = 0;
+    } else if (fadeInSec > 0 && currentSec < startSec) {
       opacity = (currentSec - fadeStartSec) / fadeInSec;
     }
-    if (fadeOutSec > 0 && currentSec >= endSec - fadeOutSec) {
+    if (visible && fadeOutSec > 0 && currentSec >= endSec - fadeOutSec) {
       opacity = Math.min(opacity, (endSec - currentSec) / fadeOutSec);
     }
 

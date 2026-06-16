@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { resolveArtifactFileUri } from "../assets/artifact-file-resolver.js";
@@ -22,6 +22,7 @@ import {
 } from "./subtitle-cue-reader.js";
 
 const DEFAULT_CROSSFADE_SEC = 0.25;
+const REMOTION_STATIC_URI_PREFIX = "remotion-static://";
 
 /** Resolve an artifact file_uri to a local filesystem path using the shared resolver. */
 function getLocalFilePath(
@@ -71,6 +72,22 @@ function isAudioArtifact(artifact: AssetArtifact): boolean {
   );
 }
 
+function toRemotionStaticUri(input: {
+  filePath: string;
+  staticRootDir: string;
+}): string | null {
+  const relativePath = relative(input.staticRootDir, input.filePath);
+  if (
+    !relativePath ||
+    relativePath.startsWith("..") ||
+    isAbsolute(relativePath)
+  ) {
+    return null;
+  }
+
+  return `${REMOTION_STATIC_URI_PREFIX}${relativePath.replace(/\\/g, "/")}`;
+}
+
 async function toBrowserFileUri(input: {
   artifact: AssetArtifact;
   assetBaseDir: string;
@@ -83,10 +100,20 @@ async function toBrowserFileUri(input: {
       // fallback to assetBaseDir resolution for backward compat
       const fallback = resolveArtifactFileUri({ fileUri: artifact.file_uri, projectStorageRootDir: assetBaseDir });
       if (fallback) {
+        const staticUri = toRemotionStaticUri({
+          filePath: fallback,
+          staticRootDir: assetBaseDir,
+        });
+        if (staticUri) return staticUri;
         const imageBytes = await readFile(fallback);
         return `data:${getImageMimeType(fallback)};base64,${imageBytes.toString("base64")}`;
       }
     } else {
+      const staticUri = toRemotionStaticUri({
+        filePath: localFilePath,
+        staticRootDir: projectStorageRootDir ?? assetBaseDir,
+      });
+      if (staticUri) return staticUri;
       const imageBytes = await readFile(localFilePath);
       return `data:${getImageMimeType(localFilePath)};base64,${imageBytes.toString("base64")}`;
     }
@@ -275,7 +302,7 @@ async function buildVisualClips(input: {
         startSec: clip.start_sec,
         durationSec: clip.duration_sec,
         ...(motion ? { motion } : {}),
-        ...(index > 0
+        ...(index > 0 && mediaType === "video"
           ? {
               transition: {
                 type: "crossfade" as const,
