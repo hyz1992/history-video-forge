@@ -46,16 +46,20 @@ export const PublishPackage = z.object({
   source_storyboard_record_id: z.string(),
   source_asset_manifest_record_id: z.string(),
 
-  // 视频
-  video_artifact_id: z.string(),
+  // 视频 — 引用 render 产出的 ExportArtifact (render-job.schema.ts)
+  source_render_job_record_id: z.string(),
+  video_export_artifact_id: z.string(),   // = ExportArtifact.artifact_id
 
   // 封面
-  cover_artifact_id: z.string().nullable(),
+  selected_cover_candidate_id: z.string().nullable(),
   cover_candidates: z.array(z.object({
     candidate_id: z.string(),
-    source_type: z.enum(["render_keyframe", "storyboard_image", "generated_cover"]),
-    source_artifact_id: z.string(),
-    label: z.string(),
+    source_type: z.enum(["render_keyframe", "storyboard_image"]),
+    source_artifact_id: z.string().nullable(),
+    file_uri: z.string(),        // absolute or workspace-relative path
+    mime_type: z.string(),       // "image/png" / "image/jpeg"
+    label: z.string(),           // e.g. "0:00 关键帧" / "#1 分镜图"
+    position_sec: z.number().nullable(),  // for keyframes: timestamp
   })),
 
   // 标题
@@ -111,16 +115,19 @@ export interface PublishPackageRecord {
 **输入**：
 - 最终视频文件（已由 render 阶段产出）
 - Storyboard 中已完成的分镜图 artifact（从 AssetManifest 获取）
-- ArtBible（如果需要单独生成封面图）
 
 **功能**：
-1. 从最终视频抽取关键帧作为候选（如 0:00, 25%, 50%, 75% 位置）
+1. 从最终视频用 ffmpeg 抽取关键帧作为候选（0s、25%、50%、75% 位置）
 2. 从分镜图中选择主视觉图（#1 分镜图优先）
-3. 可选：使用 LLM 生成封面图（成本较高，首版不做）
-4. 用户从候选中选择，或上传自定义封面
-5. 选定后生成 `cover_artifact`（可独立保存）
+3. 用户从候选中选择，或上传自定义封面
+4. 选定后在 PublishPackage 中记录 `selected_cover_candidate_id`
 
-**第一版范围**：仅支持从分镜图和视频关键帧中候选，不自动生成封面图。
+**ffmpeg 依赖与兜底**：
+- ffmpeg 从 `PATH` 或 `process.env.FFMPEG_PATH` 查找；首次使用前做一次 `ffmpeg -version` 探测。
+- 探测失败时封面候选**仅来自分镜图**，不报错、不阻塞，在 runtime diagnostics 中记录 `ffmpeg_unavailable_keyframes_skipped`。
+- CI/测试环境：`cover_candidates` 测试默认只测分镜图分支；ffmpeg 分支用 `FFMPEG_PATH` 指向已知可执行文件。
+
+**第一版范围**：仅支持从分镜图和视频关键帧中候选，不单独生成封面图。ffmpeg 缺失时自动降级到分镜图候选。
 
 ### 4.2 标题（Title）
 
@@ -191,12 +198,49 @@ export interface PublishPackageRecord {
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
+| GET | `/api/projects/:projectId` | **现有端点** — project snapshot 新增 `active_publish_package` 字段 |
 | POST | `/api/projects/:projectId/publish/generate` | 生成/重新生成 PublishPackage |
 | PATCH | `/api/projects/:projectId/publish` | 更新 PublishPackage 字段（标题/描述/标签/封面选择） |
 | POST | `/api/projects/:projectId/publish/title/candidates` | 仅重新生成标题候选 |
 | POST | `/api/projects/:projectId/publish/cover/candidates` | 重新生成封面候选（提取关键帧等） |
 
-### 5.2 PublishPackage 生命周期
+前端通过 project snapshot 的 `active_publish_package` 恢复状态，
+不新增独立的 GET endpoint。PATCH 只修改当前 active package 的可编辑字段。
+
+### 5.2 Active pointer & stale 策略
+
+`ProjectRecord` 新增字段：
+
+```typescript
+activePublishPackageRecordId: string | null;
+```
+
+- render 成功完成后，旧 `activePublishPackageRecordId` 标记 stale。
+- 用户进入 `/publish` 页时，如果 `activePublishPackageRecordId` 为 null 或 stale，前端提示"需要重新生成发布包"。
+- Stale 检测：比较 `PublishPackageRecord.source_render_job_record_id` 与当前 `ProjectRecord.activeRenderJobRecordId`。
+- 不打自动重新生成；用户点击"重新生成发布信息"触发。
+
+### 5.3 读取路径
+
+前端 store `loadProject()` → `GET /api/projects/:projectId` → project snapshot 的 `active_publish_package` 字段，结构与 `active_render` 对齐：
+
+```typescript
+active_publish_package: {
+  publish_package_record_id: string;
+  source_render_job_record_id: string;
+  readiness: "draft" | "ready" | "blocked";
+  video_export_artifact: ExportArtifact | null;  // 摘要，来自 render output
+  cover_candidates: CoverCandidate[];
+  selected_cover_candidate_id: string | null;
+  title_candidates: TitleCandidate[];
+  selected_title: string;
+  description: string;
+  hashtags: string[];
+  platform_profile: string;
+} | null;
+```
+
+### 5.4 PublishPackage 生命周期
 
 1. `draft`：初始生成后，用户尚未编辑完成。
 2. `ready`：所有必填字段已确认，可导出。
