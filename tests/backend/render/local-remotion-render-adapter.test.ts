@@ -311,6 +311,8 @@ describe("local Remotion render adapter", () => {
     expect(result.probe.width).toBe(540);
     expect(result.probe.height).toBe(960);
     expect(result.probe.fps).toBe(30);
+    // file_size_bytes must be present and > 0 for real rendered videos
+    expect((result.outputArtifact.metadata as Record<string,unknown>).file_size_bytes).toBeGreaterThan(0);
     expect(result.diagnostics).toMatchObject({
       renderer: "remotion",
       composition_id: "TimelineVideo",
