@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { resolve } from "node:path";
 
 import {
   ComposeTimeline as ComposeTimelineSchema,
@@ -244,7 +244,8 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
     runtimeDiagnosticsJson: null,
   });
   const adapter = input.adapter ?? createFakeRenderAdapter();
-  const outputDir = join(project.storageRootDir, "renders", renderJob.id);
+  const projectStorageRootDir = resolve(project.storageRootDir);
+  const outputDir = resolve(projectStorageRootDir, "renders", renderJob.id);
 
   try {
     const adapterResult = await adapter.render({
@@ -253,7 +254,7 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
       assetManifestRecord: assetManifestRecord!,
       outputDir,
       profile,
-      projectStorageRootDir: project.storageRootDir,
+      projectStorageRootDir,
     });
 
     if (project.activeComposeRecordId !== activeComposeRecordId) {

@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   createLocalRemotionRenderAdapter,
   resolveLocalRemotionRenderConcurrency,
+  resolveLocalRemotionRenderTimeoutMs,
 } from "../../../backend/src/modules/render/local-remotion-render-adapter.js";
 import { buildRemotionInputProps } from "../../../backend/src/modules/render/remotion-input-builder.js";
 import type {
@@ -259,6 +260,11 @@ describe("local Remotion render adapter", () => {
   it("uses single-frame render concurrency by default to avoid browser tab cycling", () => {
     expect(resolveLocalRemotionRenderConcurrency()).toBe(1);
     expect(resolveLocalRemotionRenderConcurrency(3)).toBe(3);
+  });
+
+  it("uses a longer Remotion timeout by default for full project renders", () => {
+    expect(resolveLocalRemotionRenderTimeoutMs()).toBe(180_000);
+    expect(resolveLocalRemotionRenderTimeoutMs(60_000)).toBe(60_000);
   });
 
   it("passes subtitle cues and style into Remotion input props", async () => {

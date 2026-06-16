@@ -1,3 +1,5 @@
+import { isAbsolute } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
@@ -327,6 +329,34 @@ describe("render API", () => {
       status: "completed",
       composeRecordId: composeRecord.id,
     });
+  });
+
+  it("passes an absolute output directory to the render adapter for legacy relative storage roots", async () => {
+    let adapterOutputDir: string | null = null;
+    const fakeAdapter = createFakeRenderAdapter();
+    const app = buildApp({
+      renderAdapter: {
+        async render(input) {
+          adapterOutputDir = input.outputDir;
+          return fakeAdapter.render(input);
+        },
+      },
+    });
+    const { project } = await seedActiveCompose({
+      app,
+      name: "Render Legacy Relative Storage",
+    });
+    project.storageRootDir = "storage/projects/legacy-relative";
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/render/generate`,
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(adapterOutputDir).not.toBeNull();
+    expect(isAbsolute(adapterOutputDir!)).toBe(true);
   });
 
   it("returns 409 for stale active compose and does not activate the render", async () => {

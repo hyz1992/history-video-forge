@@ -31,6 +31,7 @@ export interface CreateLocalRemotionRenderAdapterOptions {
   browserExecutable?: string;
   binariesDirectory?: string | null;
   concurrency?: number;
+  timeoutMs?: number;
 }
 
 function getRepoRootDir() {
@@ -98,6 +99,10 @@ export function resolveLocalRemotionRenderConcurrency(
   return input ?? 1;
 }
 
+export function resolveLocalRemotionRenderTimeoutMs(input?: number): number {
+  return input ?? 180_000;
+}
+
 export function createLocalRemotionRenderAdapter(
   options: CreateLocalRemotionRenderAdapterOptions = {},
 ): RenderAdapter {
@@ -107,6 +112,9 @@ export function createLocalRemotionRenderAdapter(
   const browserExecutable =
     options.browserExecutable ?? findLocalBrowserExecutable();
   const concurrency = resolveLocalRemotionRenderConcurrency(options.concurrency);
+  const timeoutInMilliseconds = resolveLocalRemotionRenderTimeoutMs(
+    options.timeoutMs,
+  );
 
   return {
     async render(input): Promise<RenderAdapterResult> {
@@ -148,6 +156,7 @@ export function createLocalRemotionRenderAdapter(
         browserExecutable,
         binariesDirectory: options.binariesDirectory ?? null,
         concurrency,
+        timeoutInMilliseconds,
       });
       const composition = {
         ...selectedComposition,
@@ -168,6 +177,7 @@ export function createLocalRemotionRenderAdapter(
         logLevel: "error",
         browserExecutable,
         binariesDirectory: options.binariesDirectory ?? null,
+        timeoutInMilliseconds,
       });
 
       const metadata = await getVideoMetadata(outputLocation, {
@@ -207,6 +217,7 @@ export function createLocalRemotionRenderAdapter(
           composition_id: compositionId,
           duration_in_frames: durationInFrames,
           render_concurrency: concurrency,
+          timeout_in_milliseconds: timeoutInMilliseconds,
           audio_clip_count: inputProps.audioClips?.length ?? 0,
           visual_clip_count: inputProps.visualClips?.length ?? 0,
           subtitle_cue_count: inputProps.subtitleCues?.length ?? 0,
