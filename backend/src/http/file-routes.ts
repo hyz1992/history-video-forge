@@ -63,7 +63,7 @@ export async function handleFileRoute(
     }
     writeFileStream(response, renderArtifact.file_uri, storageRoot, {
       disposition: match.type === "render_preview" ? "inline" : "attachment",
-      filename: match.type === "render_download" ? `${project.name}-output.mp4` : undefined,
+      filename: match.type === "render_download" ? `${project.name}.mp4` : undefined,
     });
   }
 }

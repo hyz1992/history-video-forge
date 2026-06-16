@@ -110,9 +110,10 @@ describe("fake render adapter", () => {
       fps: 30,
       source_compose_record_id: "compose_001",
       source_asset_manifest_record_id: "asset_manifest_001",
-      metadata: { renderer: "fake" },
+      metadata: { renderer: "fake", file_size_bytes: expect.any(Number) },
     });
     expect(result.outputArtifact.file_uri).toContain("output.mp4");
+    expect((result.outputArtifact.metadata as Record<string,unknown>).file_size_bytes).toBeGreaterThan(0);
     expect(result.probe).toEqual({
       duration_sec: 12,
       width: 1080,

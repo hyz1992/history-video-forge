@@ -7,7 +7,7 @@ import { createLocalRemotionRenderAdapter } from "./modules/render/local-remotio
 import type { RenderAdapter } from "./modules/render/render-adapter.js";
 
 function resolveRenderAdapter(): RenderAdapter | undefined {
-  const mode = (process.env.RENDER_ADAPTER ?? "fake").toLowerCase();
+  const mode = (process.env.RENDER_ADAPTER ?? "remotion").toLowerCase();
   if (mode === "remotion") return createLocalRemotionRenderAdapter();
   if (mode === "fake") return undefined; // undefined → render-run falls back to fake
   console.warn(`Unknown RENDER_ADAPTER "${mode}", falling back to fake`);
