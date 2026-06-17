@@ -2,7 +2,7 @@
 
 日期：2026-06-17
 前置设计：[2026-06-17-publish-package-stage-design.md](./2026-06-17-publish-package-stage-design.md)
-状态：draft（修订版：补齐 active pointer、读取路径、ffmpeg 兜底）
+状态：draft
 
 ---
 
@@ -16,7 +16,7 @@
 
 **Task 1.1**：新增 shared schema `PublishPackage`
 - 文件：`shared/src/publish/publish-package.schema.ts`
-- 字段按设计 doc 的 3.1 节（含 `video_export_artifact_id`、`cover_candidates.file_uri/mime_type/position_sec`）
+- 字段按设计 doc 的 3.1 节（含 `video_export_artifact_id`、`cover_artifact_id`、`cover_prompt_draft`、`cover_origin`）
 - 验证：Zod schema 单元测试
 
 **Task 1.2**：`ProjectRecord` 新增 `activePublishPackageRecordId`
@@ -42,22 +42,24 @@
 - generate 逻辑：设置 `project.activePublishPackageRecordId`；旧 publish record 不修改，stale 由 snapshot 运行时派生
 - 验证：API 测试（200 / 404 / 409 / stale）
 
-### Phase 2：封面（不依赖 LLM 图片生成）
+### Phase 2：封面
 
 **Task 2.1**：封面初始化服务
 - 文件：`backend/src/modules/publish/cover.service.ts`
-- 功能：从 AssetManifest 取 #1 分镜图作为默认封面图；生成初始 `cover_prompt_draft`
+- 功能：从 AssetManifest 取 #1 分镜图，复制其文件并注册为独立 `cover_artifact`；生成初始 `cover_prompt_draft`
+- `cover_origin` 初始为 `"storyboard_image"`
 - 验证：单元测试
 
-**Task 2.2**：封面提示词优化（LLM）
+**Task 2.2**：封面提示词优化 API
 - 文件：`harness/prompts/publish/cover-prompt-optimizer.prompt.md`
 - 语言：zh-CN；输入 ArtBible + 发布标题 + 现有封面提示词；输出优化后的封面提示词
-- 复用现有 `POST /api/projects/:projectId/assets/tasks/:taskId/prompt/optimize` 的交互模式
-- 验证：prompt-runtime 测试
+- 端点：`POST /api/projects/:projectId/publish/cover/prompt/optimize`（新增，不复用 assets task endpoint）
+- 验证：prompt-runtime 测试 + API 测试
 
-**Task 2.3**：封面上传 + PATCH API
+**Task 2.3**：封面上传 + 生成 API
 - 端点：`POST /api/projects/:projectId/publish/cover/upload`（手动上传封面图）
-- `PATCH /api/projects/:projectId/publish` 扩展 `cover_prompt_draft` 更新
+- 端点：`POST /api/projects/:projectId/publish/cover/generate`（根据封面提示词调用 DashScope image provider）
+- `PATCH /api/projects/:projectId/publish` 扩展支持 `cover_prompt_draft` 更新
 - 验证：API 测试
 
 ### Phase 3：标题候选（LLM）
@@ -86,7 +88,7 @@
 - 在 `POST /api/projects/:projectId/publish/generate` 中调用（Phase 1 的 generate 升级为完整版）
 - 验证：API 测试
 
-### Phase 5：标签派生（非 LLM，需在 Phase 6 前端前完成）
+### Phase 5：标签派生（非 LLM）
 
 **Task 5.1**：标签本地派生服务
 - 文件：`backend/src/modules/publish/hashtag-derivation.service.ts`
@@ -110,9 +112,15 @@
 
 **Task 6.3**：新增 PublishPanel 组件
 - 文件：`frontend/src/components/publish/PublishPanel.vue`
-- 功能：左侧视频预览 + 封面选择 + 标题候选编辑 + 描述编辑 + 标签编辑 + 生成/导出按钮
+- 功能：
+  - 左侧视频预览
+  - 封面图预览（9:16）+ 封面提示词编辑（预览/优化/编辑）+ 上传替换 + 根据提示词生成
+  - 标题候选列表 + 选择 + 编辑
+  - 描述编辑框
+  - 话题标签编辑（新增/删除）
+  - "生成发布信息"按钮
+  - "导出发布包"按钮
 - 状态：stale（提示重新生成）、draft（提示未完成）、ready（可导出）
-- 导出按钮：下载 JSON 包（cover + title + description + hashtags）
 
 ### Phase 7：集成 & 回归
 

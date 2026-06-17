@@ -25,7 +25,7 @@
 
 在 render 之后新增一个独立流水线阶段：**发布交付包（publish package）**。该阶段：
 - 消费上游的 TopicPackage、ScriptRecord、StoryboardRecord、AssetManifest、RenderJobRecord。
-- 生成封面候选、标题候选、描述和话题标签。
+- 生成封面图和提示词、标题候选、描述和话题标签。
 - 不阻塞、不改变上游输出。
 - 失败不影响视频生成和重渲染。
 
@@ -52,7 +52,7 @@ export const PublishPackage = z.object({
   // 封面 — 单张，编辑方式对齐分镜图 prompt_draft
   cover_artifact_id: z.string().nullable(),    // 当前封面 artifact（上传或生成后填入）
   cover_prompt_draft: z.string().nullable(),   // 封面提示词，可优化/编辑
-  cover_origin: z.enum(["storyboard_image", "manual_upload"]).default("storyboard_image"),
+  cover_origin: z.enum(["storyboard_image", "manual_upload", "generated"]).default("storyboard_image"),
 
   // 标题
   title_candidates: z.array(z.object({
@@ -104,30 +104,21 @@ export interface PublishPackageRecord {
 
 ### 4.1 封面（Cover）
 
-**设计原则**：封面作为单张图像资产，与分镜图享有相同的编辑能力：可预览提示词、优化提示词、编辑提示词、手动上传替换。
+**设计原则**：封面作为单张图像资产，与分镜图享有相同的编辑能力：可预览提示词、优化提示词、编辑提示词、手动上传替换、根据提示词生成。
 
-**输入**：
-- Storyboard 中已完成的分镜图 artifact（从 AssetManifest 获取 #1 分镜图优先）
-- ArtBible（era_style、visual_tone）
+**默认封面**：首次生成发布包时，默认使用 #1 分镜图作为封面（复制其文件并注册为独立的 `cover_artifact`，不直接引用 storyboard image artifact id）。
 
-**功能**：
-1. 首次生成发布包时，从分镜图中选一张作为默认封面（#1 分镜图优先）
-2. 生成一条封面提示词（类似分镜图 prompt_draft），描述封面应有的视觉内容
-3. 封面提示词支持：
-   - 预览（展示当前提示词文本）
-   - 优化（调用 LLM 根据 ArtBible + 发布标题生成更合理的封面 prompt）
-   - 编辑（手动修改封面提示词）
-4. 封面图支持：
-   - 手动上传替换（接受 png/jpeg）
-   - 后续可扩展：根据封面提示词调用图片生成接口
-5. 封面图作为独立 artifact（`cover_artifact`），不直接等于分镜图或视频首帧
+**封面提示词**：初始化为描述封面应有视觉内容的提示词。支持：
+- 预览（展示当前提示词文本）
+- 优化（调用 LLM 根据 ArtBible + 发布标题生成更合理的封面 prompt）
+- 编辑（手动修改封面提示词）
 
-**第一版范围**：
-- 从 #1 分镜图初始化封面
-- LLM 生成封面提示词
-- 支持提示词预览/优化/编辑
-- 支持手动上传封面图
-- 不自动调用图片生成接口；不抽取视频关键帧
+**封面图**：支持三种来源：
+- 分镜图默认（`cover_origin: "storyboard_image"`）— 复制 #1 分镜图
+- 手动上传替换（`cover_origin: "manual_upload"`）— 接受 png/jpeg
+- 根据提示词生成（`cover_origin: "generated"`）— 调用现有 DashScope image provider 按封面提示词生成
+
+**第一版范围**：分镜图默认 + 手动上传 + 提示词优化/编辑。根据提示词生成封面图作为可选项（依赖现有 DashScope 接入）。
 
 ### 4.2 标题（Title）
 
@@ -184,11 +175,10 @@ export interface PublishPackageRecord {
 
 **功能**：
 1. 从上游字段派生基础标签（朝代、人物、事件、内容类型）
-2. 调用 LLM 或本地规则生成补充标签
-3. 输出结构化标签数组
-4. 用户可新增、删除、排序
+2. 输出结构化标签数组
+3. 用户可新增、删除、排序
 
-**第一版范围**：上游字段派生 + 用户手动编辑。不调用 LLM 生成标签（成本/价值比不高）。
+**第一版范围**：上游字段派生 + 用户手动编辑。不调用 LLM 生成标签。
 
 ---
 
@@ -200,9 +190,11 @@ export interface PublishPackageRecord {
 |------|------|------|
 | GET | `/api/projects/:projectId` | **现有端点** — project snapshot 新增 `active_publish_package` 字段 |
 | POST | `/api/projects/:projectId/publish/generate` | 生成/重新生成 PublishPackage |
-| PATCH | `/api/projects/:projectId/publish` | 更新 PublishPackage 字段（标题/描述/标签/封面选择） |
+| PATCH | `/api/projects/:projectId/publish` | 更新 PublishPackage 字段（标题/描述/标签/封面提示词/封面选择） |
 | POST | `/api/projects/:projectId/publish/title/candidates` | 仅重新生成标题候选 |
+| POST | `/api/projects/:projectId/publish/cover/prompt/optimize` | LLM 优化封面提示词 |
 | POST | `/api/projects/:projectId/publish/cover/upload` | 上传封面图 |
+| POST | `/api/projects/:projectId/publish/cover/generate` | 根据封面提示词调用图片生成接口 |
 
 前端通过 project snapshot 的 `active_publish_package` 恢复状态，
 不新增独立的 GET endpoint。PATCH 只修改当前 active package 的可编辑字段。
@@ -270,7 +262,7 @@ async function loadProject() {
 - 视频基本信息（时长、分辨率、文件大小）
 
 右侧（编辑区）：
-- 封面区：封面图预览（9:16）+ 封面提示词（可预览/优化/编辑）+ 上传替换按钮
+- 封面区：封面图预览（9:16）+ 封面提示词（可预览/优化/编辑）+ 上传替换 + 根据提示词生成
 - 标题编辑区：标题候选列表 + 选择/编辑 + 文本框
 - 描述编辑区：文本编辑框
 - 话题标签区：标签列表 + 新增/删除
@@ -306,7 +298,6 @@ async function loadProject() {
 - 多平台配置（抖音/B站/YouTube 独立配置）
 - 发布历史/版本管理
 - A/B 标题测试
-- 自动封面图生成（LLM image generation for cover）
 
 ---
 
