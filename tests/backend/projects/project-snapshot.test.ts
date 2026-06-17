@@ -1221,4 +1221,198 @@ describe("project snapshot service", () => {
     expect(snapshot?.active_render).toBeNull();
     expect(snapshot?.trace_summary.latest_render_run).toBeNull();
   });
+
+  it("restores active publish package when project has active publish pointer", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, { name: "Publish Snapshot" });
+
+    // Create upstream records needed for the manifest lookup
+    const manifestRecord = await saveAssetManifestRecord(db, {
+      projectId: project.id,
+      topicPackageId: "topic_001",
+      scriptRecordId: "script_001",
+      storyboardRecordId: "storyboard_001",
+      assetPlanRecordId: "asset_plan_001",
+      manifestJson: {
+        manifest_version: "asset_manifest_v1",
+        artifacts: [
+          {
+            artifact_id: "cover_art_001",
+            artifact_type: "image",
+            origin: "provider",
+            file_uri: "file://storage/cover.png",
+            created_at: "2026-06-17T00:00:00.000Z",
+            metadata: {
+              mime_type: "image/png",
+              width: 1080,
+              height: 1920,
+            },
+          },
+        ],
+      },
+      validationResultJson: { stage: "assets_local_validation", decision: "pass", errors: [], warnings: [], metrics: {} },
+      executionStateJson: { activated: true },
+      graphTraceSummaryJson: null,
+      runtimeDiagnosticsJson: null,
+    });
+
+    project.activeAssetManifestRecordId = manifestRecord.id;
+    project.activeRenderJobRecordId = "render_001";
+
+    // Create a publish package record
+    const { savePublishPackageRecord } = await import(
+      "../../../backend/src/modules/publish/publish-record.repository.js"
+    );
+    const publishRecord = await savePublishPackageRecord(db, {
+      projectId: project.id,
+      renderJobRecordId: "render_001",
+      topicPackageId: "topic_001",
+      scriptRecordId: "script_001",
+      storyboardRecordId: "storyboard_001",
+      assetManifestRecordId: manifestRecord.id,
+      packageJson: {
+        package_version: "publish_package_v1",
+        source_render_job_record_id: "render_001",
+        source_topic_package_id: "topic_001",
+        source_script_record_id: "script_001",
+        source_storyboard_record_id: "storyboard_001",
+        source_asset_manifest_record_id: manifestRecord.id,
+        video_export_artifact_id: "export_001",
+        cover_artifact_id: "cover_art_001",
+        cover_prompt_draft: "古代战国宫廷场景",
+        cover_origin: "storyboard_image",
+        title_candidates: [
+          { candidate_id: "c1", text: "测试标题", style: "standard" },
+        ],
+        selected_title: "测试标题",
+        description: "测试描述",
+        hashtags: ["历史"],
+        platform_profile: "generic",
+        readiness: "ready",
+        notes: [],
+      },
+    });
+
+    project.activePublishPackageRecordId = publishRecord.id;
+
+    const snapshot = await getProjectSnapshot(db, project.id);
+
+    expect(snapshot?.active_publish_package).toMatchObject({
+      publish_package_record_id: publishRecord.id,
+      source_render_job_record_id: "render_001",
+      is_stale: false,
+      stale_reason: null,
+      cover_artifact: {
+        artifact_id: "cover_art_001",
+        file_uri: "file://storage/cover.png",
+        mime_type: "image/png",
+        width: 1080,
+        height: 1920,
+      },
+    });
+    expect(snapshot?.active_publish_package?.package).toMatchObject({
+      cover_origin: "storyboard_image",
+      readiness: "ready",
+    });
+  });
+
+  it("marks publish package as stale when render output changed", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, { name: "Stale Publish" });
+
+    project.activeRenderJobRecordId = "render_v2";
+
+    const { savePublishPackageRecord } = await import(
+      "../../../backend/src/modules/publish/publish-record.repository.js"
+    );
+    const publishRecord = await savePublishPackageRecord(db, {
+      projectId: project.id,
+      renderJobRecordId: "render_v1",
+      topicPackageId: "topic_001",
+      scriptRecordId: "script_001",
+      storyboardRecordId: "storyboard_001",
+      assetManifestRecordId: "asset_manifest_001",
+      packageJson: {
+        package_version: "publish_package_v1",
+        source_render_job_record_id: "render_v1",
+        source_topic_package_id: "topic_001",
+        source_script_record_id: "script_001",
+        source_storyboard_record_id: "storyboard_001",
+        source_asset_manifest_record_id: "asset_manifest_001",
+        video_export_artifact_id: "export_001",
+        cover_artifact_id: null,
+        cover_prompt_draft: null,
+        cover_origin: "storyboard_image",
+        title_candidates: [],
+        selected_title: "",
+        description: "",
+        hashtags: [],
+        platform_profile: "generic",
+        readiness: "draft",
+        notes: [],
+      },
+    });
+
+    project.activePublishPackageRecordId = publishRecord.id;
+
+    const snapshot = await getProjectSnapshot(db, project.id);
+
+    expect(snapshot?.active_publish_package).toMatchObject({
+      is_stale: true,
+      stale_reason: "render_output_changed",
+    });
+  });
+
+  it("does not expose publish package when active pointer is null", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, { name: "No Publish" });
+
+    expect(project.activePublishPackageRecordId).toBeNull();
+
+    const snapshot = await getProjectSnapshot(db, project.id);
+
+    expect(snapshot?.active_publish_package).toBeNull();
+  });
+
+  it("returns null cover_artifact when cover_artifact_id is null", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, { name: "Null Cover" });
+
+    const { savePublishPackageRecord } = await import(
+      "../../../backend/src/modules/publish/publish-record.repository.js"
+    );
+    const publishRecord = await savePublishPackageRecord(db, {
+      projectId: project.id,
+      renderJobRecordId: "render_001",
+      topicPackageId: "topic_001",
+      scriptRecordId: "script_001",
+      storyboardRecordId: "storyboard_001",
+      assetManifestRecordId: "asset_manifest_001",
+      packageJson: {
+        package_version: "publish_package_v1",
+        source_render_job_record_id: "render_001",
+        source_topic_package_id: "topic_001",
+        source_script_record_id: "script_001",
+        source_storyboard_record_id: "storyboard_001",
+        source_asset_manifest_record_id: "asset_manifest_001",
+        video_export_artifact_id: "export_001",
+        cover_artifact_id: null,
+        cover_prompt_draft: null,
+        cover_origin: "storyboard_image",
+        title_candidates: [],
+        selected_title: "",
+        description: "",
+        hashtags: [],
+        platform_profile: "generic",
+        readiness: "draft",
+        notes: [],
+      },
+    });
+
+    project.activePublishPackageRecordId = publishRecord.id;
+
+    const snapshot = await getProjectSnapshot(db, project.id);
+
+    expect(snapshot?.active_publish_package?.cover_artifact).toBeNull();
+  });
 });

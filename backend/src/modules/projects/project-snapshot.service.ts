@@ -83,6 +83,9 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
   const renderJobRecord = project.activeRenderJobRecordId
     ? db.renderJobRecords.get(project.activeRenderJobRecordId) ?? null
     : null;
+  const publishPackageRecord = project.activePublishPackageRecordId
+    ? db.publishPackageRecords.get(project.activePublishPackageRecordId) ?? null
+    : null;
   const latestProjectScriptRecord = [...db.scriptRecords.values()]
     .filter((record) => record.projectId === project.id)
     .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
@@ -240,6 +243,51 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
             execution_state: renderJobRecord.executionStateJson,
             graph_trace_summary: renderJobRecord.graphTraceSummaryJson,
             runtime_diagnostics: renderJobRecord.runtimeDiagnosticsJson,
+          };
+        })()
+      : null,
+    active_publish_package: publishPackageRecord
+      ? (() => {
+          const pkg = publishPackageRecord.packageJson as Record<string, unknown>;
+          const isStale =
+            publishPackageRecord.renderJobRecordId !==
+            project.activeRenderJobRecordId;
+
+          // Resolve cover_artifact summary from asset manifest
+          let coverArtifact: Record<string, unknown> | null = null;
+          const coverArtifactId = pkg.cover_artifact_id as string | null | undefined;
+          if (coverArtifactId) {
+            const manifestRecord = db.assetManifestRecords.get(
+              publishPackageRecord.assetManifestRecordId,
+            );
+            if (manifestRecord) {
+              const artifacts = (manifestRecord.manifestJson as Record<string, unknown>).artifacts as Array<Record<string, unknown>> | undefined;
+              const found = artifacts?.find(
+                (a) => a.artifact_id === coverArtifactId,
+              );
+              if (found) {
+                const meta = (found.metadata ?? {}) as Record<string, unknown>;
+                coverArtifact = {
+                  artifact_id: found.artifact_id,
+                  file_uri: found.file_uri,
+                  mime_type: meta.mime_type ?? (found as Record<string, unknown>).mime_type ?? "image/png",
+                  width: (meta.width ?? null) as number | null,
+                  height: (meta.height ?? null) as number | null,
+                  metadata: meta,
+                };
+              }
+            }
+          }
+
+          return {
+            publish_package_record_id: publishPackageRecord.id,
+            source_render_job_record_id: publishPackageRecord.renderJobRecordId,
+            package: pkg,
+            is_stale: isStale,
+            stale_reason: isStale ? "render_output_changed" : null,
+            cover_artifact: coverArtifact,
+            validation_result: publishPackageRecord.validationResultJson,
+            execution_state: publishPackageRecord.executionStateJson,
           };
         })()
       : null,
