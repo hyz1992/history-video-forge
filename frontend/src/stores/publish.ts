@@ -8,13 +8,10 @@ import type { ProjectStore } from "./project";
 
 export interface CoverArtifactSummary {
   artifact_id: string;
-  artifact_type: string;
-  origin: string;
   file_uri: string;
   mime_type: string;
   width: number | null;
   height: number | null;
-  created_at: string;
   metadata: Record<string, unknown>;
 }
 

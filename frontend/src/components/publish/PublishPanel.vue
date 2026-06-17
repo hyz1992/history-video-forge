@@ -51,7 +51,7 @@ const coverOriginLabel = computed(() => {
   const map: Record<string, string> = {
     storyboard_image: "默认（分镜图）",
     manual_upload: "手动上传",
-    ai_generated: "AI 生成",
+    generated: "AI 生成",
   };
   return map[coverOrigin.value] ?? coverOrigin.value;
 });
