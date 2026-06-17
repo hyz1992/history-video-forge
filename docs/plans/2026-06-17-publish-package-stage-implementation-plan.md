@@ -39,7 +39,7 @@
 - 端点：
   - `POST /api/projects/:projectId/publish/generate` — 首版仅从上游字段拼基础数据（无 LLM）
   - `PATCH /api/projects/:projectId/publish` — 更新可编辑字段
-- generate 逻辑：设置 `project.activePublishPackageRecordId`，标记旧 publish record 为 stale
+- generate 逻辑：设置 `project.activePublishPackageRecordId`；旧 publish record 不修改，stale 由 snapshot 运行时派生
 - 验证：API 测试（200 / 404 / 409 / stale）
 
 ### Phase 2：封面候选
