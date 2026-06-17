@@ -253,12 +253,11 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
             publishPackageRecord.renderJobRecordId !==
             project.activeRenderJobRecordId;
 
-          // Evaluate readiness: blocked when upstream source records are missing
+          // Evaluate readiness: blocked when upstream source records are missing.
+          // Note: isStale is NOT a blocked reason — it's a warning that the
+          // render output has changed, but the package is still functional.
           let effectiveReadiness = (pkg.readiness as string) ?? "draft";
           const blockedReasons: string[] = [];
-          if (isStale) {
-            blockedReasons.push("render_output_changed");
-          }
           if (!db.topicPackages.has(publishPackageRecord.topicPackageId)) {
             blockedReasons.push("source_topic_package_missing");
           }
