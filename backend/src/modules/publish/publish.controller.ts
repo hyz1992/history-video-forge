@@ -7,6 +7,7 @@ import { saveAssetManifestRecord } from "../assets/asset-manifest-record.reposit
 import { getProjectSnapshot } from "../projects/project-snapshot.service";
 import { initializeCoverFromStoryboard } from "./cover.service";
 import { savePublishPackageRecord } from "./publish-record.repository";
+import { generateTitleCandidates } from "./title-generator.service";
 
 function buildDefaultPublishPackage(input: {
   renderJobRecordId: string;
@@ -512,6 +513,72 @@ export async function coverGenerateController(
     body: {
       error: "not_implemented",
       details: "封面图生成功能将在后续迭代中接入 DashScope image provider。当前请使用手动上传。",
+    },
+  };
+}
+
+export async function titleCandidatesController(
+  context: RouteContext,
+): Promise<AppResponse> {
+  const { app, params } = context;
+  const db = app.db;
+  const projectId = params.projectId;
+
+  const project = db.projects.get(projectId);
+  if (!project) {
+    return { statusCode: 404, body: { error: "project_not_found" } };
+  }
+
+  // Collect upstream context
+  const topicPackage = project.activeTopicPackageId
+    ? db.topicPackages.get(project.activeTopicPackageId)
+    : null;
+  const scriptRecord = project.activeScriptRecordId
+    ? db.scriptRecords.get(project.activeScriptRecordId)
+    : null;
+
+  if (!topicPackage || !scriptRecord) {
+    return {
+      statusCode: 409,
+      body: { error: "incomplete_upstream_pipeline" },
+    };
+  }
+
+  const renderJob = project.activeRenderJobRecordId
+    ? db.renderJobRecords.get(project.activeRenderJobRecordId)
+    : null;
+  const durationSec =
+    renderJob?.outputArtifactJson?.duration_sec ??
+    scriptRecord.estimatedDurationSec ??
+    60;
+
+  // Get current selected title if publish package exists
+  let currentTitle = "";
+  if (project.activePublishPackageRecordId) {
+    const record = db.publishPackageRecords.get(
+      project.activePublishPackageRecordId,
+    );
+    if (record) {
+      const pkg = record.packageJson as Record<string, unknown>;
+      currentTitle = (pkg.selected_title as string) ?? "";
+    }
+  }
+
+  const result = await generateTitleCandidates({
+    topicTitle: topicPackage.title,
+    selectedAngle: topicPackage.selectedAngle,
+    scriptSummary: scriptRecord.scriptText.slice(0, 300),
+    durationSec: Math.round(durationSec),
+    currentTitle: currentTitle || undefined,
+  });
+
+  return {
+    statusCode: 200,
+    body: {
+      candidates: result.candidates,
+      _fallback: !result.candidates.length || result.candidates.every(
+        (c) => c.style === "standard",
+      ),
     },
   };
 }

@@ -496,4 +496,75 @@ describe("publish API", () => {
     expect(res.statusCode).toBe(400);
     expect((res.json() as Record<string, unknown>).error).toBe("no_cover_prompt_draft");
   });
+
+  it("POST title/candidates returns candidates (fallback when no LLM)", async () => {
+    const { app, project } = await setupProjectWithRender();
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/publish/title/candidates`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as Record<string, unknown>;
+    expect(body.candidates).toBeTruthy();
+    expect(Array.isArray(body.candidates)).toBe(true);
+    const candidates = body.candidates as Array<Record<string, unknown>>;
+    expect(candidates.length).toBeGreaterThanOrEqual(1);
+    // Each candidate should have candidate_id, text, style
+    for (const c of candidates) {
+      expect(c.candidate_id).toBeTruthy();
+      expect(typeof c.text).toBe("string");
+      expect(["standard", "suspense", "knowledge", "emotional"]).toContain(c.style);
+    }
+  });
+
+  it("POST title/candidates includes current title context when publish package exists", async () => {
+    const { app, project } = await setupProjectWithRender();
+
+    // Generate a publish package with a selected title
+    await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/publish/generate`,
+    });
+    await app.inject({
+      method: "PATCH",
+      url: `/api/projects/${project.id}/publish`,
+      payload: { selected_title: "已选标题" },
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/publish/title/candidates`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as Record<string, unknown>;
+    expect(body.candidates).toBeTruthy();
+  });
+
+  it("POST title/candidates returns 409 when upstream pipeline incomplete", async () => {
+    const app = buildApp();
+    const db = app.db;
+    const project = await createProject(db, { name: "No Upstream" });
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/publish/title/candidates`,
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect((res.json() as Record<string, unknown>).error).toBe("incomplete_upstream_pipeline");
+  });
+
+  it("POST title/candidates returns 404 for non-existent project", async () => {
+    const app = buildApp();
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/projects/nonexistent/publish/title/candidates",
+    });
+
+    expect(res.statusCode).toBe(404);
+  });
 });
