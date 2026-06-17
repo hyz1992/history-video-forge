@@ -246,6 +246,38 @@ function goToRender() {
   if (pid) router.push(`/projects/${pid}/render`);
 }
 
+function handleExport() {
+  const data = pkg.value;
+  if (!data) return;
+  const exportJson = {
+    exported_at: new Date().toISOString(),
+    project_id: projectStore.state.projectId,
+    cover: coverArtifact.value
+      ? {
+          artifact_id: coverArtifact.value.artifact_id,
+          mime_type: coverArtifact.value.mime_type,
+          width: coverArtifact.value.width,
+          height: coverArtifact.value.height,
+        }
+      : null,
+    cover_prompt_draft: data.package.cover_prompt_draft,
+    cover_origin: data.package.cover_origin,
+    selected_title: data.package.selected_title,
+    title_candidates: data.package.title_candidates,
+    description: data.package.description,
+    hashtags: data.package.hashtags,
+    platform_profile: data.package.platform_profile,
+  };
+  const blob = new Blob([JSON.stringify(exportJson, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `publish-package-${projectStore.state.projectId}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  ElMessage.success("发布包已导出");
+}
+
 /* -------------------------------------------------------------------------- */
 /*  Lifecycle                                                                 */
 /* -------------------------------------------------------------------------- */
@@ -536,9 +568,10 @@ onMounted(() => {
         </el-button>
         <el-button
           type="success"
-          disabled
+          :disabled="!hasPkg"
+          @click="handleExport"
         >
-          导出发布包（待实现）
+          导出发布包
         </el-button>
       </div>
     </template>
