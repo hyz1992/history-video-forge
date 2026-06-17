@@ -142,6 +142,11 @@ describe("publish API", () => {
     expect(inner.description).toBeTruthy();
     expect(typeof inner.description).toBe("string");
 
+    // Hashtags are derived from upstream fields
+    expect(inner.hashtags).toBeTruthy();
+    expect(Array.isArray(inner.hashtags)).toBe(true);
+    expect((inner.hashtags as Array<string>).length).toBeGreaterThanOrEqual(2);
+
     // Verify the active pointer was set
     expect(project.activePublishPackageRecordId).toBeTruthy();
     const record = await getPublishPackageRecordById(

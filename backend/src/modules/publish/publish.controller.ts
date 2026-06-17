@@ -7,6 +7,7 @@ import { saveAssetManifestRecord } from "../assets/asset-manifest-record.reposit
 import { getProjectSnapshot } from "../projects/project-snapshot.service";
 import { initializeCoverFromStoryboard } from "./cover.service";
 import { generateDescription } from "./description-generator.service";
+import { deriveHashtags } from "./hashtag-derivation.service";
 import { savePublishPackageRecord } from "./publish-record.repository";
 import { generateTitleCandidates } from "./title-generator.service";
 
@@ -129,12 +130,15 @@ export async function publishGenerateController(
     );
   }
 
+  // Resolve upstream records for description and hashtag derivation
+  const topicPackage = db.topicPackages.get(topicPackageId);
+  const scriptRecord = db.scriptRecords.get(scriptRecordId);
+  const storyboardRecord = db.storyboardRecords.get(storyboardRecordId);
+
   // Generate description via LLM (fallback on failure)
   let description = "";
   let llmUsed = false;
   try {
-    const topicPackage = db.topicPackages.get(topicPackageId);
-    const scriptRecord = db.scriptRecords.get(scriptRecordId);
     if (topicPackage && scriptRecord) {
       const descResult = await generateDescription({
         topicTitle: topicPackage.title,
@@ -149,6 +153,26 @@ export async function publishGenerateController(
     notes.push(
       `description_gen_failed: ${err instanceof Error ? err.message : String(err)}`,
     );
+  }
+
+  // Derive hashtags from structured upstream fields (non-LLM)
+  let hashtags: string[] = [];
+  if (topicPackage) {
+    const manifestRecord = db.assetManifestRecords.get(assetManifestRecordId);
+    const manifestJson = (manifestRecord?.manifestJson ?? {}) as Record<string, unknown>;
+    const artBible = (manifestJson.art_bible ?? {}) as Record<string, unknown>;
+
+    const storyboardPlan = (storyboardRecord?.planJson ?? {}) as Record<string, unknown>;
+    const segments = (storyboardPlan.segments ?? []) as Array<Record<string, unknown>>;
+    const narrativeRoles = segments.map((s) => s.narrative_role as string).filter(Boolean);
+
+    hashtags = deriveHashtags({
+      familyLabel: topicPackage.familyLabel,
+      scopeLabel: topicPackage.scopeLabel,
+      topicTitle: topicPackage.title,
+      eraStyle: artBible.era_style as string | undefined,
+      narrativeRoles,
+    });
   }
 
   // Build and save the publish package
@@ -170,6 +194,11 @@ export async function publishGenerateController(
   // Set description from LLM generation
   if (description) {
     (packageJson as Record<string, unknown>).description = description;
+  }
+
+  // Set hashtags from derivation
+  if (hashtags.length > 0) {
+    (packageJson as Record<string, unknown>).hashtags = hashtags;
   }
 
   const record = await savePublishPackageRecord(db, {
