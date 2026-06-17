@@ -56,6 +56,13 @@ const coverOriginLabel = computed(() => {
   return map[coverOrigin.value] ?? coverOrigin.value;
 });
 
+const coverPreviewUrl = computed(() => {
+  const pid = projectStore.state.projectId;
+  const art = coverArtifact.value;
+  if (!pid || !art?.artifact_id) return null;
+  return `/api/projects/${pid}/artifacts/${art.artifact_id}/file`;
+});
+
 // Video preview data from active_render
 const activeRender = computed(() => snapshot.value?.active_render ?? null);
 const videoArtifact = computed(() => activeRender.value?.output_artifact ?? null);
@@ -371,8 +378,8 @@ onMounted(() => {
           <el-card class="cover-card" header="封面图">
             <div class="cover-preview">
               <el-image
-                v-if="coverArtifact?.file_uri"
-                :src="coverArtifact.file_uri"
+                v-if="coverPreviewUrl"
+                :src="coverPreviewUrl"
                 fit="contain"
                 class="cover-image"
               >
