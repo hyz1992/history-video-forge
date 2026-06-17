@@ -66,13 +66,21 @@ const videoPreviewUrl = computed(() => {
   return `/api/projects/${pid}/render/preview`;
 });
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 const videoInfo = computed(() => {
   const art = videoArtifact.value;
   if (!art) return null;
+  const rawSize = (art.metadata?.file_size_bytes as number | undefined);
   return {
     duration: art.duration_sec ? `${art.duration_sec.toFixed(1)}s` : "—",
     resolution: art.width && art.height ? `${art.width}x${art.height}` : "—",
     fps: art.fps ? `${art.fps} fps` : "—",
+    fileSize: typeof rawSize === "number" ? formatFileSize(rawSize) : "—",
   };
 });
 
@@ -355,6 +363,7 @@ onMounted(() => {
               <span class="meta-item">时长：{{ videoInfo.duration }}</span>
               <span class="meta-item">分辨率：{{ videoInfo.resolution }}</span>
               <span class="meta-item">帧率：{{ videoInfo.fps }}</span>
+              <span class="meta-item">大小：{{ videoInfo.fileSize }}</span>
             </div>
           </el-card>
 
