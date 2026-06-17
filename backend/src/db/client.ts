@@ -21,6 +21,7 @@ export interface ProjectRecord {
   activeAssetManifestRecordId: string | null;
   activeComposeRecordId: string | null;
   activeRenderJobRecordId: string | null;
+  activePublishPackageRecordId: string | null;
   latestTopicRunTraceJson: Record<string, unknown> | null;
   latestScriptRunTraceJson: Record<string, unknown> | null;
   latestStoryboardRunTraceJson: Record<string, unknown> | null;

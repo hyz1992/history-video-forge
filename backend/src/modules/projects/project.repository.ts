@@ -22,6 +22,7 @@ export async function createProject(
     activeAssetManifestRecordId: null,
     activeComposeRecordId: null,
     activeRenderJobRecordId: null,
+    activePublishPackageRecordId: null,
     latestTopicRunTraceJson: null,
     latestScriptRunTraceJson: null,
     latestStoryboardRunTraceJson: null,
