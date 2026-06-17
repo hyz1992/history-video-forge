@@ -1,5 +1,6 @@
 import type { AppResponse, RouteContext } from "../../app";
 import { getProjectSnapshot } from "../projects/project-snapshot.service";
+import { initializeCoverFromStoryboard } from "./cover.service";
 import { savePublishPackageRecord } from "./publish-record.repository";
 
 function buildDefaultPublishPackage(input: {
@@ -9,6 +10,9 @@ function buildDefaultPublishPackage(input: {
   storyboardRecordId: string;
   assetManifestRecordId: string;
   videoExportArtifactId: string;
+  coverArtifactId?: string | null;
+  coverPromptDraft?: string | null;
+  coverOrigin?: string;
 }): Record<string, unknown> {
   return {
     package_version: "publish_package_v1",
@@ -18,9 +22,9 @@ function buildDefaultPublishPackage(input: {
     source_storyboard_record_id: input.storyboardRecordId,
     source_asset_manifest_record_id: input.assetManifestRecordId,
     video_export_artifact_id: input.videoExportArtifactId,
-    cover_artifact_id: null,
-    cover_prompt_draft: null,
-    cover_origin: "storyboard_image",
+    cover_artifact_id: input.coverArtifactId ?? null,
+    cover_prompt_draft: input.coverPromptDraft ?? null,
+    cover_origin: input.coverOrigin ?? "storyboard_image",
     title_candidates: [],
     selected_title: "",
     description: "",
@@ -100,6 +104,24 @@ export async function publishGenerateController(
     };
   }
 
+  // Initialize cover from #1 storyboard image
+  let coverArtifactId: string | null = null;
+  let coverPromptDraft: string | null = null;
+  const notes: string[] = [];
+  try {
+    const coverResult = await initializeCoverFromStoryboard(
+      db,
+      projectId,
+      assetManifestRecordId,
+    );
+    coverArtifactId = coverResult.coverArtifactId;
+    coverPromptDraft = coverResult.coverPromptDraft;
+  } catch (err) {
+    notes.push(
+      `cover_init_skipped: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
   // Build and save the publish package
   const packageJson = buildDefaultPublishPackage({
     renderJobRecordId: renderJob.id,
@@ -108,7 +130,13 @@ export async function publishGenerateController(
     storyboardRecordId,
     assetManifestRecordId,
     videoExportArtifactId: exportArtifact.artifact_id,
+    coverArtifactId,
+    coverPromptDraft,
   });
+
+  if (notes.length > 0) {
+    (packageJson as Record<string, unknown>).notes = notes;
+  }
 
   const record = await savePublishPackageRecord(db, {
     projectId,
