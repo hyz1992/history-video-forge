@@ -49,17 +49,10 @@ export const PublishPackage = z.object({
   // 视频 — 引用 render 产出的 ExportArtifact (render-job.schema.ts)
   video_export_artifact_id: z.string(),   // = ExportArtifact.artifact_id
 
-  // 封面
-  selected_cover_candidate_id: z.string().nullable(),
-  cover_candidates: z.array(z.object({
-    candidate_id: z.string(),
-    source_type: z.enum(["render_keyframe", "storyboard_image"]),
-    source_artifact_id: z.string().nullable(),
-    file_uri: z.string(),        // absolute or workspace-relative path
-    mime_type: z.string(),       // "image/png" / "image/jpeg"
-    label: z.string(),           // e.g. "0:00 关键帧" / "#1 分镜图"
-    position_sec: z.number().nullable(),  // for keyframes: timestamp
-  })),
+  // 封面 — 单张，编辑方式对齐分镜图 prompt_draft
+  cover_artifact_id: z.string().nullable(),    // 当前封面 artifact（上传或生成后填入）
+  cover_prompt_draft: z.string().nullable(),   // 封面提示词，可优化/编辑
+  cover_origin: z.enum(["storyboard_image", "manual_upload"]).default("storyboard_image"),
 
   // 标题
   title_candidates: z.array(z.object({
@@ -111,22 +104,30 @@ export interface PublishPackageRecord {
 
 ### 4.1 封面（Cover）
 
+**设计原则**：封面作为单张图像资产，与分镜图享有相同的编辑能力：可预览提示词、优化提示词、编辑提示词、手动上传替换。
+
 **输入**：
-- 最终视频文件（已由 render 阶段产出）
-- Storyboard 中已完成的分镜图 artifact（从 AssetManifest 获取）
+- Storyboard 中已完成的分镜图 artifact（从 AssetManifest 获取 #1 分镜图优先）
+- ArtBible（era_style、visual_tone）
 
 **功能**：
-1. 从最终视频用 ffmpeg 抽取关键帧作为候选（0s、25%、50%、75% 位置）
-2. 从分镜图中选择主视觉图（#1 分镜图优先）
-3. 用户从候选中选择，或上传自定义封面
-4. 选定后在 PublishPackage 中记录 `selected_cover_candidate_id`
+1. 首次生成发布包时，从分镜图中选一张作为默认封面（#1 分镜图优先）
+2. 生成一条封面提示词（类似分镜图 prompt_draft），描述封面应有的视觉内容
+3. 封面提示词支持：
+   - 预览（展示当前提示词文本）
+   - 优化（调用 LLM 根据 ArtBible + 发布标题生成更合理的封面 prompt）
+   - 编辑（手动修改封面提示词）
+4. 封面图支持：
+   - 手动上传替换（接受 png/jpeg）
+   - 后续可扩展：根据封面提示词调用图片生成接口
+5. 封面图作为独立 artifact（`cover_artifact`），不直接等于分镜图或视频首帧
 
-**ffmpeg 依赖与兜底**：
-- ffmpeg 从 `PATH` 或 `process.env.FFMPEG_PATH` 查找；首次使用前做一次 `ffmpeg -version` 探测。
-- 探测失败时封面候选**仅来自分镜图**，不报错、不阻塞，在 runtime diagnostics 中记录 `ffmpeg_unavailable_keyframes_skipped`。
-- CI/测试环境：`cover_candidates` 测试默认只测分镜图分支；ffmpeg 分支用 `FFMPEG_PATH` 指向已知可执行文件。
-
-**第一版范围**：仅支持从分镜图和视频关键帧中候选，不单独生成封面图。ffmpeg 缺失时自动降级到分镜图候选。
+**第一版范围**：
+- 从 #1 分镜图初始化封面
+- LLM 生成封面提示词
+- 支持提示词预览/优化/编辑
+- 支持手动上传封面图
+- 不自动调用图片生成接口；不抽取视频关键帧
 
 ### 4.2 标题（Title）
 
@@ -201,7 +202,7 @@ export interface PublishPackageRecord {
 | POST | `/api/projects/:projectId/publish/generate` | 生成/重新生成 PublishPackage |
 | PATCH | `/api/projects/:projectId/publish` | 更新 PublishPackage 字段（标题/描述/标签/封面选择） |
 | POST | `/api/projects/:projectId/publish/title/candidates` | 仅重新生成标题候选 |
-| POST | `/api/projects/:projectId/publish/cover/candidates` | 重新生成封面候选（提取关键帧等） |
+| POST | `/api/projects/:projectId/publish/cover/upload` | 上传封面图 |
 
 前端通过 project snapshot 的 `active_publish_package` 恢复状态，
 不新增独立的 GET endpoint。PATCH 只修改当前 active package 的可编辑字段。
@@ -269,7 +270,7 @@ async function loadProject() {
 - 视频基本信息（时长、分辨率、文件大小）
 
 右侧（编辑区）：
-- 封面候选区：3-5 个候选缩略图 + 选择按钮 + 上传按钮
+- 封面区：封面图预览（9:16）+ 封面提示词（可预览/优化/编辑）+ 上传替换按钮
 - 标题编辑区：标题候选列表 + 选择/编辑 + 文本框
 - 描述编辑区：文本编辑框
 - 话题标签区：标签列表 + 新增/删除

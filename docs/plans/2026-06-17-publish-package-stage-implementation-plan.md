@@ -42,22 +42,23 @@
 - generate 逻辑：设置 `project.activePublishPackageRecordId`；旧 publish record 不修改，stale 由 snapshot 运行时派生
 - 验证：API 测试（200 / 404 / 409 / stale）
 
-### Phase 2：封面候选
+### Phase 2：封面（不依赖 LLM 图片生成）
 
-**Task 2.1**：ffmpeg 探测 + 关键帧提取
-- 文件：`backend/src/modules/publish/cover-candidates.service.ts`
-- ffmpeg 从 `PATH` 或 `FFMPEG_PATH` 查找；探测失败 → 仅分镜图候选 + `ffmpeg_unavailable` diagnostics
-- 成功时：从视频 0s、25%、50%、75% 位置截图
-- 验证：smoke 测试（fake mp4 走分镜图分支；ffmpeg 可用时测截图）
+**Task 2.1**：封面初始化服务
+- 文件：`backend/src/modules/publish/cover.service.ts`
+- 功能：从 AssetManifest 取 #1 分镜图作为默认封面图；生成初始 `cover_prompt_draft`
+- 验证：单元测试
 
-**Task 2.2**：分镜图候选收集
-- 读取 `AssetManifest.artifacts`，过滤类型为 `image` 且有真实 file_uri 的 artifact
-- 优先 #1 分镜图在前
+**Task 2.2**：封面提示词优化（LLM）
+- 文件：`harness/prompts/publish/cover-prompt-optimizer.prompt.md`
+- 语言：zh-CN；输入 ArtBible + 发布标题 + 现有封面提示词；输出优化后的封面提示词
+- 复用现有 `POST /api/projects/:projectId/assets/tasks/:taskId/prompt/optimize` 的交互模式
+- 验证：prompt-runtime 测试
 
-**Task 2.3**：封面候选 API
-- 端点：`POST /api/projects/:projectId/publish/cover/candidates`
-- 返回：合并的候选列表，每条带 `file_uri/mime_type/label/position_sec`
-- 验证：API 测试（ffmpeg 可用/不可用两条路径）
+**Task 2.3**：封面上传 + PATCH API
+- 端点：`POST /api/projects/:projectId/publish/cover/upload`（手动上传封面图）
+- `PATCH /api/projects/:projectId/publish` 扩展 `cover_prompt_draft` 更新
+- 验证：API 测试
 
 ### Phase 3：标题候选（LLM）
 
