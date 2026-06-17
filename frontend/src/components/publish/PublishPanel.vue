@@ -76,27 +76,24 @@ const videoInfo = computed(() => {
   };
 });
 
-const coverPrompt = computed({
-  get: () => pkg.value?.package.cover_prompt_draft ?? "",
-  set: (val: string) => {
-    publishStore.updatePackage({ cover_prompt_draft: val });
-  },
-});
+const coverPrompt = computed(() => pkg.value?.package.cover_prompt_draft ?? "");
+
+function onCoverPromptChange(val: string) {
+  publishStore.updatePackage({ cover_prompt_draft: val });
+}
 
 const titleCandidates = computed(() => pkg.value?.package.title_candidates ?? []);
-const selectedTitle = computed({
-  get: () => pkg.value?.package.selected_title ?? "",
-  set: (val: string) => {
-    publishStore.updatePackage({ selected_title: val });
-  },
-});
+const selectedTitle = computed(() => pkg.value?.package.selected_title ?? "");
 
-const description = computed({
-  get: () => pkg.value?.package.description ?? "",
-  set: (val: string) => {
-    publishStore.updatePackage({ description: val });
-  },
-});
+function onSelectedTitleChange(val: string) {
+  publishStore.updatePackage({ selected_title: val });
+}
+
+const description = computed(() => pkg.value?.package.description ?? "");
+
+function onDescriptionChange(val: string) {
+  publishStore.updatePackage({ description: val });
+}
 
 const hashtags = computed(() => pkg.value?.package.hashtags ?? []);
 
@@ -387,10 +384,11 @@ onMounted(() => {
             <div class="cover-prompt-section">
               <label class="field-label">封面提示词</label>
               <el-input
-                v-model="coverPrompt"
+                :model-value="coverPrompt"
                 type="textarea"
                 :rows="3"
                 placeholder="输入封面图提示词..."
+                @change="onCoverPromptChange"
               />
               <div class="cover-prompt-actions">
                 <el-button
@@ -431,10 +429,11 @@ onMounted(() => {
           <el-card class="title-card" header="标题">
             <div class="selected-title">
               <el-input
-                v-model="selectedTitle"
+                :model-value="selectedTitle"
                 placeholder="选择或输入标题..."
                 maxlength="30"
                 show-word-limit
+                @change="onSelectedTitleChange"
               />
             </div>
 
@@ -479,12 +478,13 @@ onMounted(() => {
           <!-- Description section -->
           <el-card class="description-card" header="描述">
             <el-input
-              v-model="description"
+              :model-value="description"
               type="textarea"
               :rows="5"
               maxlength="500"
               show-word-limit
               placeholder="输入视频描述..."
+              @change="onDescriptionChange"
             />
           </el-card>
 
