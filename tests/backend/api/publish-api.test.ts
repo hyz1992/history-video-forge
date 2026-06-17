@@ -382,4 +382,118 @@ describe("publish API", () => {
     expect(res.statusCode).toBe(409);
     expect((res.json() as Record<string, unknown>).error).toBe("no_active_publish_package");
   });
+
+  it("POST cover/upload registers uploaded image as cover artifact", async () => {
+    const { app, project } = await setupProjectWithRender();
+
+    await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/publish/generate`,
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/publish/cover/upload`,
+      payload: {
+        file_uri: "file://storage/uploads/cover.png",
+        mime_type: "image/png",
+        width: 1080,
+        height: 1920,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as Record<string, unknown>;
+    const pkg = (body.active_publish_package as Record<string, unknown>);
+    const inner = pkg.package as Record<string, unknown>;
+    expect(inner.cover_origin).toBe("manual_upload");
+    expect(inner.cover_artifact_id).toBeTruthy();
+
+    // Verify the cover artifact appears in the snapshot
+    expect(pkg.cover_artifact).toBeTruthy();
+    const coverArt = pkg.cover_artifact as Record<string, unknown>;
+    expect(coverArt.mime_type).toBe("image/png");
+  });
+
+  it("POST cover/upload returns 400 for unsupported mime type", async () => {
+    const { app, project } = await setupProjectWithRender();
+
+    await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/publish/generate`,
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/publish/cover/upload`,
+      payload: {
+        file_uri: "file://storage/uploads/cover.gif",
+        mime_type: "image/gif",
+      },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as Record<string, unknown>).error).toBe("unsupported_mime_type");
+  });
+
+  it("POST cover/upload returns 400 when no file_uri", async () => {
+    const { app, project } = await setupProjectWithRender();
+
+    await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/publish/generate`,
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/publish/cover/upload`,
+      payload: {},
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as Record<string, unknown>).error).toBe("missing_file_uri");
+  });
+
+  it("POST cover/generate returns 501 when DashScope not configured", async () => {
+    const { app, project } = await setupProjectWithRender();
+
+    await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/publish/generate`,
+    });
+
+    // Set a cover prompt draft
+    await app.inject({
+      method: "PATCH",
+      url: `/api/projects/${project.id}/publish`,
+      payload: {
+        cover_prompt_draft: "战国宫廷场景，竖屏封面",
+      },
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/publish/cover/generate`,
+    });
+
+    // In test env, DASHSCOPE_API_KEY is typically not set
+    expect([501, 500]).toContain(res.statusCode);
+  });
+
+  it("POST cover/generate returns 400 when no cover prompt", async () => {
+    const { app, project } = await setupProjectWithRender();
+
+    await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/publish/generate`,
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/publish/cover/generate`,
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect((res.json() as Record<string, unknown>).error).toBe("no_cover_prompt_draft");
+  });
 });

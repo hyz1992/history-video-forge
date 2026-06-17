@@ -1,7 +1,9 @@
 import type { AppResponse, RouteContext } from "../../app";
+import { env } from "../../config/env";
 import { createLlmGateway } from "../../runtime/llm/llm-gateway";
 import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry";
+import { saveAssetManifestRecord } from "../assets/asset-manifest-record.repository";
 import { getProjectSnapshot } from "../projects/project-snapshot.service";
 import { initializeCoverFromStoryboard } from "./cover.service";
 import { savePublishPackageRecord } from "./publish-record.repository";
@@ -334,4 +336,182 @@ export async function coverPromptOptimizeController(
       },
     };
   }
+}
+
+export async function coverUploadController(
+  context: RouteContext,
+): Promise<AppResponse> {
+  const { app, params, payload } = context;
+  const db = app.db;
+  const projectId = params.projectId;
+
+  const project = db.projects.get(projectId);
+  if (!project) {
+    return { statusCode: 404, body: { error: "project_not_found" } };
+  }
+
+  if (!project.activePublishPackageRecordId) {
+    return {
+      statusCode: 409,
+      body: { error: "no_active_publish_package" },
+    };
+  }
+
+  const record = db.publishPackageRecords.get(
+    project.activePublishPackageRecordId,
+  );
+  if (!record) {
+    return {
+      statusCode: 409,
+      body: { error: "publish_package_not_found" },
+    };
+  }
+
+  const body = payload as Record<string, unknown> | undefined;
+  const fileUri = body?.file_uri as string | undefined;
+  if (!fileUri) {
+    return { statusCode: 400, body: { error: "missing_file_uri" } };
+  }
+
+  const mimeType = (body?.mime_type as string) ?? "image/png";
+  if (!["image/png", "image/jpeg"].includes(mimeType)) {
+    return {
+      statusCode: 400,
+      body: { error: "unsupported_mime_type", details: "only image/png and image/jpeg are accepted" },
+    };
+  }
+
+  // Register the uploaded cover as an artifact in the manifest
+  const manifestRecord = db.assetManifestRecords.get(
+    record.assetManifestRecordId,
+  );
+
+  const newArtifactId = db.generateId();
+  const newArtifact = {
+    artifact_id: newArtifactId,
+    artifact_type: "image",
+    origin: "manual_upload",
+    file_uri: fileUri,
+    created_at: new Date().toISOString(),
+    metadata: {
+      mime_type: mimeType,
+      width: (body?.width as number) ?? null,
+      height: (body?.height as number) ?? null,
+      uploaded_for_cover: true,
+    },
+  };
+
+  if (manifestRecord) {
+    const manifestJson = manifestRecord.manifestJson as Record<string, unknown>;
+    const artifacts = (manifestJson.artifacts ?? []) as Array<Record<string, unknown>>;
+    artifacts.push(newArtifact);
+    manifestJson.artifacts = artifacts;
+
+    await saveAssetManifestRecord(db, {
+      id: manifestRecord.id,
+      projectId: manifestRecord.projectId,
+      topicPackageId: manifestRecord.topicPackageId,
+      scriptRecordId: manifestRecord.scriptRecordId,
+      storyboardRecordId: manifestRecord.storyboardRecordId,
+      assetPlanRecordId: manifestRecord.assetPlanRecordId,
+      manifestJson,
+      validationResultJson: manifestRecord.validationResultJson,
+      executionStateJson: manifestRecord.executionStateJson,
+      graphTraceSummaryJson: manifestRecord.graphTraceSummaryJson,
+      runtimeDiagnosticsJson: manifestRecord.runtimeDiagnosticsJson,
+      createdAt: manifestRecord.createdAt,
+    });
+  }
+
+  // Update the publish package
+  const updatedPackage = {
+    ...(record.packageJson as Record<string, unknown>),
+    cover_artifact_id: newArtifactId,
+    cover_origin: "manual_upload",
+  };
+
+  await savePublishPackageRecord(db, {
+    id: record.id,
+    projectId: record.projectId,
+    renderJobRecordId: record.renderJobRecordId,
+    topicPackageId: record.topicPackageId,
+    scriptRecordId: record.scriptRecordId,
+    storyboardRecordId: record.storyboardRecordId,
+    assetManifestRecordId: record.assetManifestRecordId,
+    packageJson: updatedPackage,
+    validationResultJson: record.validationResultJson,
+    executionStateJson: {
+      ...(record.executionStateJson as Record<string, unknown> ?? {}),
+      cover_uploaded_at: new Date().toISOString(),
+    },
+    createdAt: record.createdAt,
+    updatedAt: new Date(),
+  });
+
+  const snapshot = await getProjectSnapshot(db, projectId);
+
+  return {
+    statusCode: 200,
+    body: snapshot,
+  };
+}
+
+export async function coverGenerateController(
+  context: RouteContext,
+): Promise<AppResponse> {
+  const { app, params } = context;
+  const db = app.db;
+  const projectId = params.projectId;
+
+  const project = db.projects.get(projectId);
+  if (!project) {
+    return { statusCode: 404, body: { error: "project_not_found" } };
+  }
+
+  if (!project.activePublishPackageRecordId) {
+    return {
+      statusCode: 409,
+      body: { error: "no_active_publish_package" },
+    };
+  }
+
+  const record = db.publishPackageRecords.get(
+    project.activePublishPackageRecordId,
+  );
+  if (!record) {
+    return {
+      statusCode: 409,
+      body: { error: "publish_package_not_found" },
+    };
+  }
+
+  const pkg = record.packageJson as Record<string, unknown>;
+  const coverPrompt = pkg.cover_prompt_draft as string | null | undefined;
+  if (!coverPrompt) {
+    return {
+      statusCode: 400,
+      body: { error: "no_cover_prompt_draft", details: "请先填写封面提示词" },
+    };
+  }
+
+  const dashscopeApiKey = env.dashscopeApiKey;
+  if (!dashscopeApiKey) {
+    return {
+      statusCode: 501,
+      body: {
+        error: "dashscope_not_configured",
+        details: "DashScope API key 未配置，无法生成封面图。请手动上传封面图。",
+      },
+    };
+  }
+
+  // For now, return not implemented since full image gen pipeline requires
+  // the provider adapter framework. The endpoint contract is established.
+  return {
+    statusCode: 501,
+    body: {
+      error: "not_implemented",
+      details: "封面图生成功能将在后续迭代中接入 DashScope image provider。当前请使用手动上传。",
+    },
+  };
 }
