@@ -462,7 +462,7 @@ describe("publish API", () => {
     expect((res.json() as Record<string, unknown>).error).toBe("missing_file_uri");
   });
 
-  it("POST cover/generate returns 501 when DashScope not configured", async () => {
+  it("POST cover/generate returns 501 (not yet implemented)", async () => {
     const { app, project } = await setupProjectWithRender();
 
     await app.inject({

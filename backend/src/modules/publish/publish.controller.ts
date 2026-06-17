@@ -1,5 +1,4 @@
 import type { AppResponse, RouteContext } from "../../app";
-import { env } from "../../config/env";
 import { saveAssetManifestRecord } from "../assets/asset-manifest-record.repository";
 import { getProjectSnapshot } from "../projects/project-snapshot.service";
 import { initializeCoverFromStoryboard } from "./cover.service";
@@ -428,6 +427,12 @@ export async function coverUploadController(
   const manifestRecord = db.assetManifestRecords.get(
     record.assetManifestRecordId,
   );
+  if (!manifestRecord) {
+    return {
+      statusCode: 409,
+      body: { error: "asset_manifest_not_found", details: "发布包关联的资产清单不存在，无法注册封面图" },
+    };
+  }
 
   const newArtifactId = db.generateId();
   const newArtifact = {
@@ -444,27 +449,25 @@ export async function coverUploadController(
     },
   };
 
-  if (manifestRecord) {
-    const manifestJson = manifestRecord.manifestJson as Record<string, unknown>;
-    const artifacts = (manifestJson.artifacts ?? []) as Array<Record<string, unknown>>;
-    artifacts.push(newArtifact);
-    manifestJson.artifacts = artifacts;
+  const manifestJson = manifestRecord.manifestJson as Record<string, unknown>;
+  const artifacts = (manifestJson.artifacts ?? []) as Array<Record<string, unknown>>;
+  artifacts.push(newArtifact);
+  manifestJson.artifacts = artifacts;
 
-    await saveAssetManifestRecord(db, {
-      id: manifestRecord.id,
-      projectId: manifestRecord.projectId,
-      topicPackageId: manifestRecord.topicPackageId,
-      scriptRecordId: manifestRecord.scriptRecordId,
-      storyboardRecordId: manifestRecord.storyboardRecordId,
-      assetPlanRecordId: manifestRecord.assetPlanRecordId,
-      manifestJson,
-      validationResultJson: manifestRecord.validationResultJson,
-      executionStateJson: manifestRecord.executionStateJson,
-      graphTraceSummaryJson: manifestRecord.graphTraceSummaryJson,
-      runtimeDiagnosticsJson: manifestRecord.runtimeDiagnosticsJson,
-      createdAt: manifestRecord.createdAt,
-    });
-  }
+  await saveAssetManifestRecord(db, {
+    id: manifestRecord.id,
+    projectId: manifestRecord.projectId,
+    topicPackageId: manifestRecord.topicPackageId,
+    scriptRecordId: manifestRecord.scriptRecordId,
+    storyboardRecordId: manifestRecord.storyboardRecordId,
+    assetPlanRecordId: manifestRecord.assetPlanRecordId,
+    manifestJson,
+    validationResultJson: manifestRecord.validationResultJson,
+    executionStateJson: manifestRecord.executionStateJson,
+    graphTraceSummaryJson: manifestRecord.graphTraceSummaryJson,
+    runtimeDiagnosticsJson: manifestRecord.runtimeDiagnosticsJson,
+    createdAt: manifestRecord.createdAt,
+  });
 
   // Update the publish package
   const updatedPackage = {
@@ -537,19 +540,8 @@ export async function coverGenerateController(
     };
   }
 
-  const dashscopeApiKey = env.dashscopeApiKey;
-  if (!dashscopeApiKey) {
-    return {
-      statusCode: 501,
-      body: {
-        error: "dashscope_not_configured",
-        details: "DashScope API key 未配置，无法生成封面图。请手动上传封面图。",
-      },
-    };
-  }
-
-  // For now, return not implemented since full image gen pipeline requires
-  // the provider adapter framework. The endpoint contract is established.
+  // Not yet implemented — full image gen pipeline requires the provider adapter
+  // framework. The endpoint contract is established here.
   return {
     statusCode: 501,
     body: {
