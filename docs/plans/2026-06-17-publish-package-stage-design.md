@@ -47,7 +47,6 @@ export const PublishPackage = z.object({
   source_asset_manifest_record_id: z.string(),
 
   // 视频 — 引用 render 产出的 ExportArtifact (render-job.schema.ts)
-  source_render_job_record_id: z.string(),
   video_export_artifact_id: z.string(),   // = ExportArtifact.artifact_id
 
   // 封面
@@ -215,30 +214,30 @@ export interface PublishPackageRecord {
 activePublishPackageRecordId: string | null;
 ```
 
-- render 成功完成后，旧 `activePublishPackageRecordId` 标记 stale。
-- 用户进入 `/publish` 页时，如果 `activePublishPackageRecordId` 为 null 或 stale，前端提示"需要重新生成发布包"。
-- Stale 检测：比较 `PublishPackageRecord.source_render_job_record_id` 与当前 `ProjectRecord.activeRenderJobRecordId`。
-- 不打自动重新生成；用户点击"重新生成发布信息"触发。
+- render 成功完成后，旧 `activePublishPackageRecordId` 保持不动；publish generate 时设置它。
+- **Stale 是 snapshot 运行时派生字段，不落库**。在 `getProjectSnapshot` 中：
+  - 如果 `activePublishPackageRecordId` 非空，比较 `PublishPackageRecord.source_render_job_record_id` 与当前 `ProjectRecord.activeRenderJobRecordId`。
+  - 不匹配时 snapshot 返回 `active_publish_package.is_stale: true, stale_reason: "render_output_changed"`。
+  - 用户进入 `/publish` 页时，前端检测 `is_stale` 并提示"视频已重新渲染，发布包需更新"。
+  - 不自动重新生成；用户点击"重新生成发布信息"触发。
 
 ### 5.3 读取路径
 
-前端 store `loadProject()` → `GET /api/projects/:projectId` → project snapshot 的 `active_publish_package` 字段，结构与 `active_render` 对齐：
+前端 publish store 通过 fetch `GET /api/projects/:projectId` 的 **原始 response body** 直接读取 `active_publish_package` 字段，不经过 `frontend/src/stores/project.ts` 的 `syncProject/getProject` 映射（后者当前只保留极简字段）。
 
 ```typescript
-active_publish_package: {
-  publish_package_record_id: string;
-  source_render_job_record_id: string;
-  readiness: "draft" | "ready" | "blocked";
-  video_export_artifact: ExportArtifact | null;  // 摘要，来自 render output
-  cover_candidates: CoverCandidate[];
-  selected_cover_candidate_id: string | null;
-  title_candidates: TitleCandidate[];
-  selected_title: string;
-  description: string;
-  hashtags: string[];
-  platform_profile: string;
-} | null;
+// frontend/src/stores/publish.ts
+async function loadProject() {
+  const res = await fetch(`/api/projects/${projectId}`);
+  const data = await res.json();
+  state.snapshot = {
+    active_publish_package: data.active_publish_package ?? null,
+    active_render: data.active_render ?? null,
+  };
+}
 ```
+
+**不修改** `frontend/src/stores/project.ts` 的类型映射。publish store 独立 fetch，避免为新增字段扩展 `ProjectSnapshot` 导致连锁改动。
 
 ### 5.4 PublishPackage 生命周期
 
@@ -254,6 +253,14 @@ active_publish_package: {
 
 - 路由：`/projects/:projectId/publish`
 - 位置：render 之后，作为最后一个侧边栏步骤
+
+**状态策略**：
+- publish **不新增** `publish_draft/publish_ready` 等 `current_status` 值。
+- 侧边栏完成态由 `active_publish_package.readiness` 驱动：
+  - `null` 或 `is_stale` → 显示"发布准备"（无✓），可点击进入
+  - `draft` → 显示"发布准备"（无✓）
+  - `ready` → 显示"发布准备 ✓"
+- 深链 `/publish` 始终可访问（只要项目存在），不因 `current_status` 阻断。
 
 ### 6.2 布局
 

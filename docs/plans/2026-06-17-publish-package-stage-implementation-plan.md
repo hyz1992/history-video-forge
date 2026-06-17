@@ -21,7 +21,7 @@
 
 **Task 1.2**：`ProjectRecord` 新增 `activePublishPackageRecordId`
 - 文件：`backend/src/db/client.ts`
-- 验证：TypeScript 编译通过
+- 验证：相关后端测试通过
 
 **Task 1.3**：新增 `PublishPackageRecord` + repository
 - 文件：`backend/src/db/client.ts`（类型）、`backend/src/modules/publish/publish-record.repository.ts`
@@ -31,8 +31,8 @@
 **Task 1.4**：project snapshot 挂载 `active_publish_package`
 - 文件：`backend/src/modules/projects/project-snapshot.service.ts`
 - 当 `project.activePublishPackageRecordId` 存在时，在 snapshot 中返回 `active_publish_package`
-- 包含 stale 检测：比较 `PublishPackageRecord.source_render_job_record_id` 与 `project.activeRenderJobRecordId`
-- 验证：project-snapshot 测试
+- 包含**运行时 stale 检测**（不落库）：比较 `PublishPackageRecord.source_render_job_record_id` 与 `project.activeRenderJobRecordId`，不匹配时设置 `is_stale: true` + `stale_reason: "render_output_changed"`
+- 验证：project-snapshot 测试（含 stale 场景）
 
 **Task 1.5**：后端 publish API 骨架
 - 文件：`backend/src/modules/publish/publish.routes.ts`
