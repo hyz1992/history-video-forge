@@ -32,7 +32,7 @@
 - 文件：`backend/src/modules/projects/project-snapshot.service.ts`
 - 当 `project.activePublishPackageRecordId` 存在时，在 snapshot 中返回 `active_publish_package`
 - 包含**运行时 stale 检测**（不落库）：比较 `PublishPackageRecord.source_render_job_record_id` 与 `project.activeRenderJobRecordId`，不匹配时设置 `is_stale: true` + `stale_reason: "render_output_changed"`
-- 验证：project-snapshot 测试（含 stale 场景）
+- 验证：project-snapshot 测试（含 stale 场景，含 `cover_artifact.file_uri/mime_type` 摘要字段）
 
 **Task 1.5**：后端 publish API 骨架
 - 文件：`backend/src/modules/publish/publish.routes.ts`
@@ -108,13 +108,13 @@
 - 文件：`frontend/src/stores/publish.ts`
 - 功能：从 project snapshot 读取 `active_publish_package`（不新增独立 GET endpoint）
 - 方法：`loadProject()`（读 snapshot）、`generatePackage()`（POST）、`updatePackage()`（PATCH）
-- 验证：store 测试
+- 验证：store 测试（含 `cover_artifact.file_uri/mime_type` 预览数据可用）
 
 **Task 6.3**：新增 PublishPanel 组件
 - 文件：`frontend/src/components/publish/PublishPanel.vue`
 - 功能：
   - 左侧视频预览
-  - 封面图预览（9:16）+ 封面提示词编辑（预览/优化/编辑）+ 上传替换 + 根据提示词生成
+  - 封面图预览（9:16）+ 封面提示词编辑（预览/优化/编辑）+ 上传替换 + 根据提示词生成（**须二次确认 + 费用提示**）
   - 标题候选列表 + 选择 + 编辑
   - 描述编辑框
   - 话题标签编辑（新增/删除）
@@ -130,7 +130,7 @@
 
 **Task 7.2**：前端构建 & 手动验收
 - `vite build` 通过
-- 浏览器验收：render → publish → 生成 → 编辑 → stale → 重新生成
+- 浏览器验收：render → publish → 生成 → 编辑封面提示词并点击"根据提示词生成"（验证二次确认弹窗 + 费用提示） → stale → 重新生成
 
 ---
 
