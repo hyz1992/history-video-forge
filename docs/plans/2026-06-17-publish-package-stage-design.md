@@ -190,7 +190,7 @@ export interface PublishPackageRecord {
 |------|------|------|
 | GET | `/api/projects/:projectId` | **现有端点** — project snapshot 新增 `active_publish_package` 字段 |
 | POST | `/api/projects/:projectId/publish/generate` | 生成/重新生成 PublishPackage |
-| PATCH | `/api/projects/:projectId/publish` | 更新 PublishPackage 字段（标题/描述/标签/封面提示词/封面选择） |
+| PATCH | `/api/projects/:projectId/publish` | 更新 PublishPackage 字段（标题/描述/标签/封面提示词/封面图元信息） |
 | POST | `/api/projects/:projectId/publish/title/candidates` | 仅重新生成标题候选 |
 | POST | `/api/projects/:projectId/publish/cover/prompt/optimize` | LLM 优化封面提示词 |
 | POST | `/api/projects/:projectId/publish/cover/upload` | 上传封面图 |
@@ -232,7 +232,29 @@ async function loadProject() {
 
 **不修改** `frontend/src/stores/project.ts` 的类型映射。publish store 独立 fetch，避免为新增字段扩展 `ProjectSnapshot` 导致连锁改动。
 
-### 5.4 PublishPackage 生命周期
+**Snapshot 中 `cover_artifact` 的摘要字段**（供前端预览/导出）：
+
+```typescript
+cover_artifact: {
+  artifact_id: string;
+  file_uri: string;
+  mime_type: string;
+  width: number | null;
+  height: number | null;
+  metadata: Record<string, unknown>;
+} | null;
+```
+
+后端在生成 snapshot 时，通过 `cover_artifact_id` 查找 artifact 并返回上述摘要。
+
+### 5.4 `cover/generate` 成本确认
+
+`POST /api/projects/:projectId/publish/cover/generate` **不在 `publish/generate` 中自动触发**。
+- 前端点击"根据提示词生成"按钮时，必须弹出二次确认，说明可能产生图片生成费用（约 ¥0.20/张）。
+- 按钮旁标注"可能产生图片生成成本"。
+- 后端接口不自动扣费，仅按请求生成一次。
+
+### 5.5 PublishPackage 生命周期
 
 1. `draft`：初始生成后，用户尚未编辑完成。
 2. `ready`：所有必填字段已确认，可导出。
