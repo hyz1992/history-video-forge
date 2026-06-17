@@ -46,6 +46,11 @@ import {
   createRenderStore,
   renderStoreKey,
 } from "./stores/render";
+import {
+  createFetchPublishApi,
+  createPublishStore,
+  publishStoreKey,
+} from "./stores/publish";
 
 const router = createAppRouter("web");
 const projectStore = createProjectStore(createFetchProjectApi());
@@ -77,6 +82,10 @@ const renderStore = createRenderStore({
   projectStore,
   api: createFetchRenderApi(),
 });
+const publishStore = createPublishStore({
+  projectStore,
+  api: createFetchPublishApi(),
+});
 
 const app = createApp({
   render: () => h(RouterView),
@@ -92,6 +101,7 @@ app.provide(assetPlanningStoreKey, assetPlanningStore);
 app.provide(assetsStoreKey, assetsStore);
 app.provide(composeStoreKey, composeStore);
 app.provide(renderStoreKey, renderStore);
+app.provide(publishStoreKey, publishStore);
 
 if (typeof document !== "undefined") {
   app.mount("#app");

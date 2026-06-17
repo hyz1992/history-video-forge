@@ -19,6 +19,7 @@ import StoryboardPanel from "../components/storyboard/StoryboardPanel.vue";
 import AssetPanel from "../components/asset/AssetPanel.vue";
 import ComposePanel from "../components/compose/ComposePanel.vue";
 import RenderPanel from "../components/render/RenderPanel.vue";
+import PublishPanel from "../components/publish/PublishPanel.vue";
 
 const route = useRoute();
 const projectStore = useProjectStore();
@@ -34,6 +35,7 @@ const panelMap: Record<PipelineStep, Component> = {
   asset: AssetPanel,
   compose: ComposePanel,
   render: RenderPanel,
+  publish: PublishPanel,
 };
 
 const currentPanel = computed(
