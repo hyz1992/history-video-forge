@@ -156,20 +156,10 @@ export async function publishGenerateController(
   // Derive hashtags from structured upstream fields (non-LLM)
   let hashtags: string[] = [];
   if (topicPackage) {
-    const manifestRecord = db.assetManifestRecords.get(assetManifestRecordId);
-    const manifestJson = (manifestRecord?.manifestJson ?? {}) as Record<string, unknown>;
-    const artBible = (manifestJson.art_bible ?? {}) as Record<string, unknown>;
-
-    const storyboardPlan = (storyboardRecord?.planJson ?? {}) as Record<string, unknown>;
-    const segments = (storyboardPlan.segments ?? []) as Array<Record<string, unknown>>;
-    const narrativeRoles = segments.map((s) => s.narrative_role as string).filter(Boolean);
-
     hashtags = deriveHashtags({
       familyLabel: topicPackage.familyLabel,
       scopeLabel: topicPackage.scopeLabel,
       topicTitle: topicPackage.title,
-      eraStyle: artBible.era_style as string | undefined,
-      narrativeRoles,
     });
   }
 
