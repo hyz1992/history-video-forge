@@ -179,6 +179,21 @@ export interface RenderJobRecord {
   updatedAt: Date;
 }
 
+export interface PublishPackageRecord {
+  id: string;
+  projectId: string;
+  renderJobRecordId: string;
+  topicPackageId: string;
+  scriptRecordId: string;
+  storyboardRecordId: string;
+  assetManifestRecordId: string;
+  packageJson: Record<string, unknown>;
+  validationResultJson: Record<string, unknown> | null;
+  executionStateJson: Record<string, unknown> | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export type AssetProviderJobStatus =
   | "prepared"
   | "submitted"
@@ -222,6 +237,7 @@ export interface DbClient {
   assetManifestRecords: Map<string, AssetManifestRecord>;
   composeRecords: Map<string, ComposeRecord>;
   renderJobRecords: Map<string, RenderJobRecord>;
+  publishPackageRecords: Map<string, PublishPackageRecord>;
   assetProviderJobRecords: Map<string, AssetProviderJobRecord>;
   mediaLibraryItems: Map<string, MediaLibraryItem>;
   voiceProfiles: Map<string, VoiceProfile>;
@@ -246,6 +262,7 @@ export function createDbClient(): DbClient {
     assetManifestRecords: new Map<string, AssetManifestRecord>(),
     composeRecords: new Map<string, ComposeRecord>(),
     renderJobRecords: new Map<string, RenderJobRecord>(),
+    publishPackageRecords: new Map<string, PublishPackageRecord>(),
     assetProviderJobRecords: new Map<string, AssetProviderJobRecord>(),
     mediaLibraryItems: new Map<string, MediaLibraryItem>(),
     voiceProfiles: new Map<string, VoiceProfile>(),

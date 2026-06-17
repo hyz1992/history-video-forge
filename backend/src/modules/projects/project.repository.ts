@@ -85,6 +85,9 @@ export async function deleteProject(
   for (const [id, record] of db.renderJobRecords) {
     if (record.projectId === projectId) db.renderJobRecords.delete(id);
   }
+  for (const [id, record] of db.publishPackageRecords) {
+    if (record.projectId === projectId) db.publishPackageRecords.delete(id);
+  }
   db.topicCandidateStore.delete(projectId);
 
   return true;
