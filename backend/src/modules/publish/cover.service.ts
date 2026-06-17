@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { DbClient } from "../../db/client";
+import { saveAssetManifestRecord } from "../assets/asset-manifest-record.repository";
 import { getProjectStorageProfile } from "../../runtime/trace/project-storage";
 
 export interface CoverInitializationResult {
@@ -110,6 +111,22 @@ export async function initializeCoverFromStoryboard(
 
   artifacts.push(newArtifact);
   manifestJson.artifacts = artifacts;
+
+  // Persist the manifest mutation so the cover artifact survives restarts
+  await saveAssetManifestRecord(db, {
+    id: manifestRecord.id,
+    projectId: manifestRecord.projectId,
+    topicPackageId: manifestRecord.topicPackageId,
+    scriptRecordId: manifestRecord.scriptRecordId,
+    storyboardRecordId: manifestRecord.storyboardRecordId,
+    assetPlanRecordId: manifestRecord.assetPlanRecordId,
+    manifestJson,
+    validationResultJson: manifestRecord.validationResultJson,
+    executionStateJson: manifestRecord.executionStateJson,
+    graphTraceSummaryJson: manifestRecord.graphTraceSummaryJson,
+    runtimeDiagnosticsJson: manifestRecord.runtimeDiagnosticsJson,
+    createdAt: manifestRecord.createdAt,
+  });
 
   // Generate initial cover prompt draft from ArtBible context
   const topicPackage = project.activeTopicPackageId
