@@ -1,6 +1,4 @@
-import { createLlmGateway } from "../../runtime/llm/llm-gateway";
-import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider";
-import { createPromptRegistry } from "../../runtime/prompts/prompt-registry";
+import { getPublishLlmGateway } from "./llm-helper";
 
 export interface TitleCandidateResult {
   candidate_id: string;
@@ -28,9 +26,7 @@ export async function generateTitleCandidates(
   input: TitleGenerationInput,
 ): Promise<TitleGenerationResult> {
   try {
-    const registry = createPromptRegistry();
-    const provider = createOpenAiCompatibleProvider({});
-    const gateway = createLlmGateway({ registry, provider });
+    const gateway = getPublishLlmGateway();
 
     const result = await gateway.invokeStructuredPrompt<{
       candidates: TitleCandidateResult[];

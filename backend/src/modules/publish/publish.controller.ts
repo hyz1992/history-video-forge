@@ -1,13 +1,11 @@
 import type { AppResponse, RouteContext } from "../../app";
 import { env } from "../../config/env";
-import { createLlmGateway } from "../../runtime/llm/llm-gateway";
-import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider";
-import { createPromptRegistry } from "../../runtime/prompts/prompt-registry";
 import { saveAssetManifestRecord } from "../assets/asset-manifest-record.repository";
 import { getProjectSnapshot } from "../projects/project-snapshot.service";
 import { initializeCoverFromStoryboard } from "./cover.service";
 import { generateDescription } from "./description-generator.service";
 import { deriveHashtags } from "./hashtag-derivation.service";
+import { getPublishLlmGateway } from "./llm-helper";
 import { savePublishPackageRecord } from "./publish-record.repository";
 import { generateTitleCandidates } from "./title-generator.service";
 
@@ -350,9 +348,7 @@ export async function coverPromptOptimizeController(
   const artBible = (manifestJson.art_bible ?? {}) as Record<string, unknown>;
 
   try {
-    const registry = createPromptRegistry();
-    const provider = createOpenAiCompatibleProvider({});
-    const gateway = createLlmGateway({ registry, provider });
+    const gateway = getPublishLlmGateway();
 
     const result = await gateway.invokeStructuredPrompt<{
       optimized_prompt: string;
