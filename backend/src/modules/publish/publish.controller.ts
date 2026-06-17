@@ -609,14 +609,15 @@ export async function titleCandidatesController(
     scriptRecord.estimatedDurationSec ??
     60;
 
-  // Get current selected title if publish package exists
+  // Get current publish package record if exists
   let currentTitle = "";
+  let publishRecord: ReturnType<typeof db.publishPackageRecords.get> = null;
   if (project.activePublishPackageRecordId) {
-    const record = db.publishPackageRecords.get(
+    publishRecord = db.publishPackageRecords.get(
       project.activePublishPackageRecordId,
     );
-    if (record) {
-      const pkg = record.packageJson as Record<string, unknown>;
+    if (publishRecord) {
+      const pkg = publishRecord.packageJson as Record<string, unknown>;
       currentTitle = (pkg.selected_title as string) ?? "";
     }
   }
@@ -628,6 +629,31 @@ export async function titleCandidatesController(
     durationSec: Math.round(durationSec),
     currentTitle: currentTitle || undefined,
   });
+
+  // Persist candidates to the publish package if one exists
+  if (publishRecord) {
+    const updatedPackage = {
+      ...(publishRecord.packageJson as Record<string, unknown>),
+      title_candidates: result.candidates,
+    };
+    await savePublishPackageRecord(db, {
+      id: publishRecord.id,
+      projectId: publishRecord.projectId,
+      renderJobRecordId: publishRecord.renderJobRecordId,
+      topicPackageId: publishRecord.topicPackageId,
+      scriptRecordId: publishRecord.scriptRecordId,
+      storyboardRecordId: publishRecord.storyboardRecordId,
+      assetManifestRecordId: publishRecord.assetManifestRecordId,
+      packageJson: updatedPackage,
+      validationResultJson: publishRecord.validationResultJson,
+      executionStateJson: {
+        ...(publishRecord.executionStateJson as Record<string, unknown> ?? {}),
+        title_candidates_generated_at: new Date().toISOString(),
+      },
+      createdAt: publishRecord.createdAt,
+      updatedAt: new Date(),
+    });
+  }
 
   return {
     statusCode: 200,

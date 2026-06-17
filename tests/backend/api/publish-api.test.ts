@@ -549,6 +549,17 @@ describe("publish API", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json() as Record<string, unknown>;
     expect(body.candidates).toBeTruthy();
+
+    // Verify candidates were persisted to the publish package
+    const snapshotRes = await app.inject({
+      method: "GET",
+      url: `/api/projects/${project.id}`,
+    });
+    const snapshot = snapshotRes.json() as Record<string, unknown>;
+    const pkg = (snapshot.active_publish_package as Record<string, unknown>);
+    const inner = pkg.package as Record<string, unknown>;
+    expect(inner.title_candidates).toBeTruthy();
+    expect((inner.title_candidates as Array<unknown>).length).toBeGreaterThanOrEqual(1);
   });
 
   it("POST title/candidates returns 409 when upstream pipeline incomplete", async () => {
