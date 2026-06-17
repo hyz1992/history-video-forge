@@ -743,6 +743,36 @@ describe("project snapshot service", () => {
         ending_residue: "Retreat would cost more than silence.",
       },
     });
+    project.activeTopicPackageId = topicPackage.id;
+
+    // Create script and storyboard records so resolveEffectiveStatus
+    // does not downgrade the stage.
+    const scriptRec = await saveScriptRecord(db, {
+      projectId: project.id,
+      topicPackageId: topicPackage.id,
+      scriptText: "测试脚本",
+      openingSpan: "开场",
+      endingSpan: "结尾",
+      estimatedDurationSec: 60,
+      beatTraceJson: [],
+      quoteTraceJson: [],
+      reviewStatus: "pass",
+      validationResultJson: { stage: "script_local_validation", decision: "pass" },
+      semanticReviewResultJson: { stage: "script_semantic_review", decision: "pass", patch_intent: null },
+      executionStateJson: { patch_used: false, regenerate_used: false },
+    });
+    project.activeScriptRecordId = scriptRec.id;
+
+    const storyRec = await saveStoryboardRecord(db, {
+      projectId: project.id,
+      topicPackageId: topicPackage.id,
+      scriptRecordId: scriptRec.id,
+      planJson: { plan_version: "storyboard_v1", segments: [] },
+      validationResultJson: { stage: "storyboard_local_validation", decision: "pass", errors: [], warnings: [], metrics: {} },
+      executionStateJson: { regenerate_used: false },
+    });
+    project.activeStoryboardRecordId = storyRec.id;
+
     const assetsTrace = {
       phase: "assets",
       run_id: "assets_run_snapshot_1",
@@ -762,8 +792,8 @@ describe("project snapshot service", () => {
     const manifestRecord = await saveAssetManifestRecord(db, {
       projectId: project.id,
       topicPackageId: topicPackage.id,
-      scriptRecordId: "script_record_1",
-      storyboardRecordId: "storyboard_record_1",
+      scriptRecordId: scriptRec.id,
+      storyboardRecordId: storyRec.id,
       assetPlanRecordId: "asset_plan_record_1",
       manifestJson: {
         manifest_version: "asset_manifest_v1",
@@ -809,8 +839,8 @@ describe("project snapshot service", () => {
       active_assets: {
         asset_manifest_record_id: manifestRecord.id,
         source_topic_package_id: topicPackage.id,
-        source_script_record_id: "script_record_1",
-        source_storyboard_record_id: "storyboard_record_1",
+        source_script_record_id: scriptRec.id,
+        source_storyboard_record_id: storyRec.id,
         source_asset_plan_record_id: "asset_plan_record_1",
         manifest: {
           manifest_version: "asset_manifest_v1",
@@ -1063,6 +1093,73 @@ describe("project snapshot service", () => {
     const project = await createProject(db, {
       name: "Render Snapshot",
     });
+
+    // Create upstream records so resolveEffectiveStatus does not downgrade
+    const rTopic = await saveTopicPackage(db, {
+      projectId: project.id,
+      title: "Render Topic",
+      selectedAngle: "Test angle",
+      familyLabel: "test",
+      scopeLabel: "single_event",
+      coreConflict: "conflict",
+      strongScene: "scene",
+      packagingSeed: "seed",
+      durationBandJson: { label: "medium" },
+      narrativeTensionMapJson: { hook_claim: "hook" },
+    });
+    project.activeTopicPackageId = rTopic.id;
+
+    const rScript = await saveScriptRecord(db, {
+      projectId: project.id,
+      topicPackageId: rTopic.id,
+      scriptText: "测试脚本",
+      openingSpan: "开场",
+      endingSpan: "结尾",
+      estimatedDurationSec: 60,
+      beatTraceJson: [],
+      quoteTraceJson: [],
+      reviewStatus: "pass",
+      validationResultJson: { stage: "script_local_validation", decision: "pass" },
+      semanticReviewResultJson: { stage: "script_semantic_review", decision: "pass", patch_intent: null },
+      executionStateJson: { patch_used: false, regenerate_used: false },
+    });
+    project.activeScriptRecordId = rScript.id;
+
+    const rStory = await saveStoryboardRecord(db, {
+      projectId: project.id,
+      topicPackageId: rTopic.id,
+      scriptRecordId: rScript.id,
+      planJson: { plan_version: "storyboard_v1", segments: [] },
+      validationResultJson: { stage: "storyboard_local_validation", decision: "pass", errors: [], warnings: [], metrics: {} },
+      executionStateJson: { regenerate_used: false },
+    });
+    project.activeStoryboardRecordId = rStory.id;
+
+    const rManifest = await saveAssetManifestRecord(db, {
+      projectId: project.id,
+      topicPackageId: rTopic.id,
+      scriptRecordId: rScript.id,
+      storyboardRecordId: rStory.id,
+      assetPlanRecordId: "asset_plan_001",
+      manifestJson: { manifest_version: "asset_manifest_v1", artifacts: [], executions: [], audio_summary: {}, segment_routes: [], readiness: "ready", notes: [] },
+      validationResultJson: { stage: "assets_local_validation", decision: "pass", errors: [], warnings: [], metrics: {} },
+      executionStateJson: { activated: true },
+      graphTraceSummaryJson: null,
+      runtimeDiagnosticsJson: null,
+    });
+    project.activeAssetManifestRecordId = rManifest.id;
+
+    const rCompose = await saveComposeRecord(db, {
+      projectId: project.id,
+      assetManifestRecordId: rManifest.id,
+      timelineJson: { timeline_version: "compose_timeline_v1", duration_sec: 60, tracks: [], segments: [] },
+      validationResultJson: { stage: "compose_local_validation", decision: "ready_for_render", errors: [], warnings: [], metrics: {} },
+      executionStateJson: { activated: true },
+      graphTraceSummaryJson: null,
+      runtimeDiagnosticsJson: null,
+    });
+    project.activeComposeRecordId = rCompose.id;
+
     const renderTrace = {
       phase: "render",
       run_id: "render_run_snapshot_1",
@@ -1103,8 +1200,8 @@ describe("project snapshot service", () => {
     };
     const renderJobRecord = await saveRenderJobRecord(db, {
       projectId: project.id,
-      composeRecordId: "compose_001",
-      assetManifestRecordId: "asset_manifest_001",
+      composeRecordId: rCompose.id,
+      assetManifestRecordId: rManifest.id,
       status: "completed",
       profileJson: {
         width: 1080,
@@ -1138,8 +1235,8 @@ describe("project snapshot service", () => {
       current_status: "render_ready",
       active_render: {
         render_job_record_id: renderJobRecord.id,
-        source_compose_record_id: "compose_001",
-        source_asset_manifest_record_id: "asset_manifest_001",
+        source_compose_record_id: rCompose.id,
+        source_asset_manifest_record_id: rManifest.id,
         status: "completed",
         profile: {
           width: 1080,
