@@ -18,6 +18,17 @@ export interface CoverArtifactSummary {
   metadata: Record<string, unknown>;
 }
 
+export interface VideoOutputSummary {
+  artifact_type: string;
+  file_uri: string;
+  duration_sec: number;
+  width: number;
+  height: number;
+  fps: number;
+  mime_type?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface TitleCandidate {
   candidate_id: string;
   text: string;
@@ -42,6 +53,12 @@ export interface PublishPackageData {
 
 export interface PublishSnapshot {
   current_status: string | null;
+  active_render: {
+    render_job_record_id: string;
+    status: string;
+    profile: Record<string, unknown>;
+    output_artifact: VideoOutputSummary | null;
+  } | null;
   active_publish_package: {
     publish_package_record_id: string;
     source_render_job_record_id: string;
@@ -115,6 +132,7 @@ export function createFetchPublishApi(baseUrl = ""): PublishApi {
       return {
         current_status: data.current_status ?? null,
         active_publish_package: data.active_publish_package ?? null,
+        active_render: data.active_render ?? null,
       };
     },
 
@@ -133,6 +151,7 @@ export function createFetchPublishApi(baseUrl = ""): PublishApi {
       return {
         current_status: data.current_status ?? null,
         active_publish_package: data.active_publish_package ?? null,
+        active_render: data.active_render ?? null,
       };
     },
 
@@ -152,6 +171,7 @@ export function createFetchPublishApi(baseUrl = ""): PublishApi {
       return {
         current_status: data.current_status ?? null,
         active_publish_package: data.active_publish_package ?? null,
+        active_render: data.active_render ?? null,
       };
     },
 
@@ -185,6 +205,7 @@ export function createFetchPublishApi(baseUrl = ""): PublishApi {
       return {
         current_status: data.current_status ?? null,
         active_publish_package: data.active_publish_package ?? null,
+        active_render: data.active_render ?? null,
       };
     },
 
@@ -203,6 +224,7 @@ export function createFetchPublishApi(baseUrl = ""): PublishApi {
       return {
         current_status: data.current_status ?? null,
         active_publish_package: data.active_publish_package ?? null,
+        active_render: data.active_render ?? null,
       };
     },
 

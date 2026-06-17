@@ -57,6 +57,26 @@ const coverOriginLabel = computed(() => {
   return map[coverOrigin.value] ?? coverOrigin.value;
 });
 
+// Video preview data from active_render
+const activeRender = computed(() => snapshot.value?.active_render ?? null);
+const videoArtifact = computed(() => activeRender.value?.output_artifact ?? null);
+
+const videoPreviewUrl = computed(() => {
+  const pid = projectStore.state.projectId;
+  if (!pid || !videoArtifact.value) return null;
+  return `/api/projects/${pid}/render/preview`;
+});
+
+const videoInfo = computed(() => {
+  const art = videoArtifact.value;
+  if (!art) return null;
+  return {
+    duration: art.duration_sec ? `${art.duration_sec.toFixed(1)}s` : "—",
+    resolution: art.width && art.height ? `${art.width}x${art.height}` : "—",
+    fps: art.fps ? `${art.fps} fps` : "—",
+  };
+});
+
 const coverPrompt = computed({
   get: () => pkg.value?.package.cover_prompt_draft ?? "",
   set: (val: string) => {
@@ -319,6 +339,29 @@ onMounted(() => {
       <div class="publish-grid">
         <!-- Left: Video + Cover -->
         <div class="publish-left">
+          <!-- Video preview -->
+          <el-card v-if="videoArtifact" class="video-card" header="成品视频">
+            <div class="video-preview">
+              <video
+                v-if="videoPreviewUrl"
+                :src="videoPreviewUrl"
+                controls
+                preload="metadata"
+                class="video-player"
+              >
+                您的浏览器不支持视频播放
+              </video>
+              <div v-else class="video-placeholder">
+                <span>视频预览不可用</span>
+              </div>
+            </div>
+            <div v-if="videoInfo" class="video-meta">
+              <span class="meta-item">时长：{{ videoInfo.duration }}</span>
+              <span class="meta-item">分辨率：{{ videoInfo.resolution }}</span>
+              <span class="meta-item">帧率：{{ videoInfo.fps }}</span>
+            </div>
+          </el-card>
+
           <!-- Cover section -->
           <el-card class="cover-card" header="封面图">
             <div class="cover-preview">
@@ -608,6 +651,50 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--space-md);
+}
+
+/* Video */
+.video-card :deep(.el-card__body) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.video-preview {
+  aspect-ratio: 9 / 16;
+  max-height: 360px;
+  background: #000;
+  border-radius: var(--radius-md, 8px);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-player {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.video-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--text-secondary);
+}
+
+.video-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.meta-item {
+  white-space: nowrap;
 }
 
 /* Cover */
