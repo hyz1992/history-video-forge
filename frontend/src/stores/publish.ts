@@ -293,6 +293,10 @@ export function createPublishStore(input: CreatePublishStoreInput): PublishStore
           current_status: snapshot.current_status,
         });
       }
+
+      // Notify sidebar of publish readiness
+      const readiness = snapshot.active_publish_package?.package?.readiness;
+      input.projectStore.setPublishReady(readiness === "ready");
     } catch (error) {
       state.loadError = toErrorMessage(error);
     } finally {

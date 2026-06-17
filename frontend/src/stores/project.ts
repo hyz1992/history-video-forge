@@ -28,6 +28,7 @@ export interface ProjectApi {
 export interface ProjectStoreState {
   projectId: string | null;
   currentStatus: string;
+  publishIsReady: boolean;
   projects: ProjectListItem[];
 }
 
@@ -40,6 +41,7 @@ export interface ProjectStore {
   loadProjects: () => Promise<ProjectListItem[]>;
   resolveProjectWorkspacePath: (projectId: string, currentStatus: string) => string;
   syncProject: (snapshot: ProjectSnapshot) => void;
+  setPublishReady: (ready: boolean) => void;
 }
 
 export const projectStoreKey: InjectionKey<ProjectStore> = Symbol("project-store");
@@ -100,6 +102,7 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
   const state = reactive<ProjectStoreState>({
     projectId: null,
     currentStatus: "topic_pending",
+    publishIsReady: false,
     projects: [],
   });
 
@@ -194,6 +197,10 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
     }
   }
 
+  function setPublishReady(ready: boolean) {
+    state.publishIsReady = ready;
+  }
+
   function resolveProjectWorkspacePath(projectId: string, currentStatus: string) {
     const step = resolveStatusStep(currentStatus);
     return `/projects/${projectId}/${step}`;
@@ -227,6 +234,7 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
     loadProjects,
     resolveProjectWorkspacePath,
     syncProject,
+    setPublishReady,
   };
 }
 

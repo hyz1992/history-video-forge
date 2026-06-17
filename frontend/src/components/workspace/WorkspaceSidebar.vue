@@ -75,6 +75,11 @@ function getReachedStepIndex(): number {
 }
 
 function isStepCompleted(stepIndex: number): boolean {
+  // Publish step completion is driven by active_publish_package.readiness,
+  // not by pipeline currentStatus (design: publish adds no new status value).
+  if (PIPELINE_STEPS[stepIndex]?.key === "publish") {
+    return projectStore.state.publishIsReady;
+  }
   return stepIndex < getReachedStepIndex();
 }
 
