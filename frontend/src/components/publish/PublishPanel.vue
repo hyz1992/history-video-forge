@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref } from "vue";
 import {
   ElAlert,
   ElButton,
@@ -12,7 +12,6 @@ import {
   ElMessage,
   ElSkeleton,
   ElTag,
-  ElTooltip,
 } from "element-plus";
 import {
   Check,
@@ -402,10 +401,7 @@ onMounted(() => {
                 >
                   LLM 优化
                 </el-button>
-                <el-tooltip
-                  content="AI 生成封面图将消耗 DashScope 资源，产生费用"
-                  placement="top"
-                >
+                <div class="cover-generate-action">
                   <el-button
                     size="small"
                     type="primary"
@@ -415,7 +411,8 @@ onMounted(() => {
                   >
                     AI 生成封面
                   </el-button>
-                </el-tooltip>
+                  <span class="cost-label">可能产生图片生成成本</span>
+                </div>
                 <el-button
                   size="small"
                   :icon="Upload"
@@ -745,6 +742,19 @@ onMounted(() => {
   display: flex;
   gap: var(--space-sm);
   flex-wrap: wrap;
+  align-items: center;
+}
+
+.cover-generate-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cost-label {
+  font-size: 11px;
+  color: var(--color-warning, #e6a23c);
+  white-space: nowrap;
 }
 
 /* Title */
