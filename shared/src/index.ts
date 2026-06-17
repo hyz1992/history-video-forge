@@ -69,3 +69,11 @@ export {
   RenderJobStatus,
 } from "./render/render-job.schema";
 export { RenderValidationResult } from "./render/render-validation.schema";
+export {
+  CoverOrigin,
+  PlatformProfile,
+  PublishPackage,
+  PublishReadiness,
+  TitleCandidate,
+  TitleStyle,
+} from "./publish/publish-package.schema";
