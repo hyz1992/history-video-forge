@@ -87,13 +87,14 @@ const readinessLabel = computed(() => {
   const map: Record<string, string> = {
     draft: "草稿",
     ready: "就绪",
-    exported: "已导出",
+    blocked: "阻塞",
   };
   return map[readiness.value] ?? readiness.value;
 });
 
 const readinessType = computed(() => {
-  if (readiness.value === "ready" || readiness.value === "exported") return "success";
+  if (readiness.value === "ready") return "success";
+  if (readiness.value === "blocked") return "danger";
   return "info";
 });
 
