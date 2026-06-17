@@ -9,6 +9,7 @@ import { registerAssetPlanningRoutes } from "./modules/asset-planning/asset-plan
 import { registerAssetsRoutes } from "./modules/assets/assets.routes";
 import { registerComposeRoutes } from "./modules/compose/compose.routes";
 import { registerRenderRoutes } from "./modules/render/render.routes";
+import { registerPublishRoutes } from "./modules/publish/publish.routes";
 import type { RenderAdapter } from "./modules/render/render-adapter";
 import type { StoredTopicCandidate } from "./modules/topic/topic-confirm.service";
 
@@ -195,6 +196,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
   registerAssetsRoutes(app);
   registerComposeRoutes(app);
   registerRenderRoutes(app);
+  registerPublishRoutes(app);
 
   return app;
 }
