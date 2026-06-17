@@ -131,7 +131,6 @@ export async function publishGenerateController(
   // Resolve upstream records for description and hashtag derivation
   const topicPackage = db.topicPackages.get(topicPackageId);
   const scriptRecord = db.scriptRecords.get(scriptRecordId);
-  const storyboardRecord = db.storyboardRecords.get(storyboardRecordId);
 
   // Generate description via LLM (fallback on failure)
   let description = "";
@@ -270,7 +269,7 @@ export async function publishUpdateController(
   };
 
   // Save the updated record
-  const updatedRecord = await savePublishPackageRecord(db, {
+  await savePublishPackageRecord(db, {
     id: record.id,
     projectId: record.projectId,
     renderJobRecordId: record.renderJobRecordId,
