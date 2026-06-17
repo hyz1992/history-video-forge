@@ -6,6 +6,7 @@ import { createPromptRegistry } from "../../runtime/prompts/prompt-registry";
 import { saveAssetManifestRecord } from "../assets/asset-manifest-record.repository";
 import { getProjectSnapshot } from "../projects/project-snapshot.service";
 import { initializeCoverFromStoryboard } from "./cover.service";
+import { generateDescription } from "./description-generator.service";
 import { savePublishPackageRecord } from "./publish-record.repository";
 import { generateTitleCandidates } from "./title-generator.service";
 
@@ -128,6 +129,28 @@ export async function publishGenerateController(
     );
   }
 
+  // Generate description via LLM (fallback on failure)
+  let description = "";
+  let llmUsed = false;
+  try {
+    const topicPackage = db.topicPackages.get(topicPackageId);
+    const scriptRecord = db.scriptRecords.get(scriptRecordId);
+    if (topicPackage && scriptRecord) {
+      const descResult = await generateDescription({
+        topicTitle: topicPackage.title,
+        selectedAngle: topicPackage.selectedAngle,
+        scriptSummary: scriptRecord.scriptText.slice(0, 500),
+        durationSec: exportArtifact.duration_sec ?? scriptRecord.estimatedDurationSec ?? 60,
+      });
+      description = descResult.description;
+      llmUsed = true;
+    }
+  } catch (err) {
+    notes.push(
+      `description_gen_failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
   // Build and save the publish package
   const packageJson = buildDefaultPublishPackage({
     renderJobRecordId: renderJob.id,
@@ -144,6 +167,11 @@ export async function publishGenerateController(
     (packageJson as Record<string, unknown>).notes = notes;
   }
 
+  // Set description from LLM generation
+  if (description) {
+    (packageJson as Record<string, unknown>).description = description;
+  }
+
   const record = await savePublishPackageRecord(db, {
     projectId,
     renderJobRecordId: renderJob.id,
@@ -154,7 +182,7 @@ export async function publishGenerateController(
     packageJson,
     executionStateJson: {
       generated_at: new Date().toISOString(),
-      llm_used: false,
+      llm_used: llmUsed,
     },
   });
 

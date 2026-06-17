@@ -138,6 +138,9 @@ describe("publish API", () => {
     expect(inner.package_version).toBe("publish_package_v1");
     expect(inner.readiness).toBe("draft");
     expect(inner.video_export_artifact_id).toBe("export_001");
+    // Description is generated (fallback when no LLM)
+    expect(inner.description).toBeTruthy();
+    expect(typeof inner.description).toBe("string");
 
     // Verify the active pointer was set
     expect(project.activePublishPackageRecordId).toBeTruthy();
