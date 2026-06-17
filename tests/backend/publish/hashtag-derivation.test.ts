@@ -47,6 +47,28 @@ describe("hashtag derivation service", () => {
     expect(result).toContain("长平之战");
   });
 
+  it("extracts dynasty keywords from era_style covering all major periods", () => {
+    const cases = [
+      { era: "西周青铜器时期", expected: "西周" },
+      { era: "春秋争霸历史正剧", expected: "春秋" },
+      { era: "战国末年秦赵对峙", expected: "战国" },
+      { era: "三国赤壁之战", expected: "三国" },
+      { era: "南北朝对峙时期", expected: "南北朝" },
+      { era: "唐初玄武门之变", expected: "唐" },
+      { era: "南宋偏安江南", expected: "南宋" },
+    ];
+
+    for (const { era, expected } of cases) {
+      const result = deriveHashtags({
+        familyLabel: "军事冲突",
+        scopeLabel: "古代",
+        topicTitle: "测试",
+        eraStyle: era,
+      });
+      expect(result).toContain(expected);
+    }
+  });
+
   it("limits to max 10 tags", () => {
     const result = deriveHashtags({
       familyLabel: "文化镇压",

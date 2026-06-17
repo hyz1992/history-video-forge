@@ -46,8 +46,8 @@ function extractEraStyleKeywords(eraStyle: string): string[] {
   if (parts.length === 1) {
     const text = parts[0];
     const keywords: string[] = [];
-    // Extract common dynasty/period patterns
-    const dynastyPattern = /[明清唐宋元汉秦汉魏晋隋五代]+(?:初|末|中|朝|代)?/g;
+    // Extract known dynasty/period names
+    const dynastyPattern = /西周|东周|南北朝|十六国|五代|十国|三国|春秋|战国|北宋|南宋|[夏商周秦汉魏晋隋唐宋元明清]|辽|金|西夏|大理|匈奴|突厥|吐蕃/g;
     const matches = text.match(dynastyPattern);
     if (matches) keywords.push(...matches);
     return [...new Set(keywords)];
@@ -99,7 +99,7 @@ export function deriveHashtags(input: HashtagDerivationInput): string[] {
   // 5. Era style keywords
   if (input.eraStyle) {
     for (const kw of extractEraStyleKeywords(input.eraStyle)) {
-      if (kw.length >= 2) tags.add(kw);
+      if (kw.length >= 1) tags.add(kw);
     }
   }
 
