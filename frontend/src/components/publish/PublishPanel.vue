@@ -12,6 +12,7 @@ import {
   ElMessage,
   ElSkeleton,
   ElTag,
+  ElTooltip,
 } from "element-plus";
 import {
   Check,
@@ -133,7 +134,6 @@ const readinessType = computed(() => {
 /*  Dialog state                                                              */
 /* -------------------------------------------------------------------------- */
 
-const showCoverGenerateConfirm = ref(false);
 const showCoverUploadDialog = ref(false);
 const coverUploadUri = ref("");
 const coverUploadMime = ref("image/png");
@@ -216,18 +216,6 @@ async function handleUploadCover() {
   coverUploadUri.value = "";
   if (!publishStore.state.loadError) {
     ElMessage.success("封面图已上传");
-  }
-}
-
-function confirmGenerateCover() {
-  showCoverGenerateConfirm.value = true;
-}
-
-async function handleGenerateCover() {
-  showCoverGenerateConfirm.value = false;
-  await publishStore.generateCover();
-  if (!publishStore.state.loadError) {
-    ElMessage.success("封面图生成已提交");
   }
 }
 
@@ -416,16 +404,17 @@ onMounted(() => {
                   LLM 优化
                 </el-button>
                 <div class="cover-generate-action">
-                  <el-button
-                    size="small"
-                    type="primary"
-                    :icon="MagicStick"
-                    :loading="publishStore.state.isGeneratingCover"
-                    @click="confirmGenerateCover"
-                  >
-                    AI 生成封面
-                  </el-button>
-                  <span class="cost-label">可能产生图片生成成本</span>
+                  <el-tooltip content="封面图生成功能将在后续迭代中接入 DashScope image provider" placement="top">
+                    <el-button
+                      size="small"
+                      type="primary"
+                      :icon="MagicStick"
+                      disabled
+                    >
+                      AI 生成封面
+                    </el-button>
+                  </el-tooltip>
+                  <span class="cost-label">暂未接入</span>
                 </div>
                 <el-button
                   size="small"
@@ -553,23 +542,6 @@ onMounted(() => {
         </el-button>
       </div>
     </template>
-
-    <!-- Cover Generate Confirmation Dialog -->
-    <el-dialog
-      v-model="showCoverGenerateConfirm"
-      title="确认生成封面图"
-      width="420px"
-    >
-      <p>AI 生成封面图将调用 DashScope 图片生成接口，</p>
-      <p><strong>每次生成会产生费用</strong>，是否继续？</p>
-      <p class="cost-hint">建议先使用"LLM 优化"调整提示词，确认满意后再生成。</p>
-      <template #footer>
-        <el-button @click="showCoverGenerateConfirm = false">取消</el-button>
-        <el-button type="primary" @click="handleGenerateCover">
-          确认生成
-        </el-button>
-      </template>
-    </el-dialog>
 
     <!-- Cover Upload Dialog -->
     <el-dialog
