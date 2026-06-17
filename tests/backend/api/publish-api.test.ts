@@ -335,4 +335,51 @@ describe("publish API", () => {
     expect(secondRecord).not.toBeNull();
     expect(project.activePublishPackageRecordId).toBe(secondRecordId);
   });
+
+  it("POST cover/prompt/optimize returns optimized prompt (fallback when no LLM)", async () => {
+    const { app, project } = await setupProjectWithRender();
+
+    // Generate a package first
+    await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/publish/generate`,
+    });
+
+    // Set a cover prompt draft via PATCH
+    await app.inject({
+      method: "PATCH",
+      url: `/api/projects/${project.id}/publish`,
+      payload: {
+        cover_prompt_draft: "战国宫廷场景，竖屏封面",
+        selected_title: "晏子使楚",
+      },
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/publish/cover/prompt/optimize`,
+    });
+
+    // Should succeed even without LLM (fallback)
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as Record<string, unknown>;
+    expect(body.optimized_prompt).toBeTruthy();
+    expect(typeof body.optimized_prompt).toBe("string");
+    expect(body.change_summary).toBeTruthy();
+    expect(Array.isArray(body.change_summary)).toBe(true);
+  });
+
+  it("POST cover/prompt/optimize returns 409 when no active publish package", async () => {
+    const app = buildApp();
+    const db = app.db;
+    const project = await createProject(db, { name: "No Publish" });
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/publish/cover/prompt/optimize`,
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect((res.json() as Record<string, unknown>).error).toBe("no_active_publish_package");
+  });
 });

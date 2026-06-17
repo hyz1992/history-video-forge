@@ -1,4 +1,7 @@
 import type { AppResponse, RouteContext } from "../../app";
+import { createLlmGateway } from "../../runtime/llm/llm-gateway";
+import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider";
+import { createPromptRegistry } from "../../runtime/prompts/prompt-registry";
 import { getProjectSnapshot } from "../projects/project-snapshot.service";
 import { initializeCoverFromStoryboard } from "./cover.service";
 import { savePublishPackageRecord } from "./publish-record.repository";
@@ -244,4 +247,91 @@ export async function publishUpdateController(
     statusCode: 200,
     body: snapshot,
   };
+}
+
+export async function coverPromptOptimizeController(
+  context: RouteContext,
+): Promise<AppResponse> {
+  const { app, params } = context;
+  const db = app.db;
+  const projectId = params.projectId;
+
+  const project = db.projects.get(projectId);
+  if (!project) {
+    return { statusCode: 404, body: { error: "project_not_found" } };
+  }
+
+  if (!project.activePublishPackageRecordId) {
+    return {
+      statusCode: 409,
+      body: { error: "no_active_publish_package" },
+    };
+  }
+
+  const record = db.publishPackageRecords.get(
+    project.activePublishPackageRecordId,
+  );
+  if (!record) {
+    return {
+      statusCode: 409,
+      body: { error: "publish_package_not_found" },
+    };
+  }
+
+  const pkg = record.packageJson as Record<string, unknown>;
+  const currentPrompt = (pkg.cover_prompt_draft as string) ?? "";
+  const selectedTitle = (pkg.selected_title as string) ?? "";
+
+  // Get ArtBible from asset manifest
+  const manifestRecord = db.assetManifestRecords.get(
+    record.assetManifestRecordId,
+  );
+  const manifestJson = (manifestRecord?.manifestJson ?? {}) as Record<string, unknown>;
+  const artBible = (manifestJson.art_bible ?? {}) as Record<string, unknown>;
+
+  try {
+    const registry = createPromptRegistry();
+    const provider = createOpenAiCompatibleProvider({});
+    const gateway = createLlmGateway({ registry, provider });
+
+    const result = await gateway.invokeStructuredPrompt<{
+      optimized_prompt: string;
+      change_summary: string[];
+    }>({
+      promptId: "publish.cover-prompt-optimizer",
+      input: {
+        current_prompt: currentPrompt,
+        publish_title: selectedTitle,
+        art_bible: {
+          era_style: artBible.era_style ?? "",
+          visual_tone: artBible.visual_tone ?? "",
+        },
+      },
+      interactionLogWriter: null,
+    });
+
+    return {
+      statusCode: 200,
+      body: {
+        optimized_prompt: result.optimized_prompt,
+        change_summary: result.change_summary,
+      },
+    };
+  } catch (error) {
+    // Fallback: return current prompt with basic enhancement note
+    const message = error instanceof Error ? error.message : "optimize_failed";
+    const fallbackPrompt = currentPrompt
+      ? `${currentPrompt}，增强视觉冲击力，主体居中，9:16竖屏构图，电影级光影`
+      : "";
+
+    return {
+      statusCode: 200,
+      body: {
+        optimized_prompt: fallbackPrompt,
+        change_summary: ["LLM 不可用，返回基础优化版本"],
+        _fallback: true,
+        _fallback_reason: message,
+      },
+    };
+  }
 }
