@@ -1259,22 +1259,71 @@ describe("project snapshot service", () => {
     project.activeAssetManifestRecordId = manifestRecord.id;
     project.activeRenderJobRecordId = "render_001";
 
+    // Create source records so blocked detection passes
+    const topicPkg = await saveTopicPackage(db, {
+      projectId: project.id,
+      title: "测试主题",
+      selectedAngle: "测试角度",
+      familyLabel: "测试标签",
+      scopeLabel: "测试范围",
+      coreConflict: "核心冲突",
+      strongScene: "强场面",
+      packagingSeed: "种子",
+      canonicalQuotesJson: [],
+      durationBandJson: { label: "medium" },
+      narrativeTensionMapJson: { hook_claim: "hook" },
+    });
+    const scriptRec = await saveScriptRecord(db, {
+      projectId: project.id,
+      topicPackageId: topicPkg.id,
+      scriptText: "测试脚本",
+      openingSpan: "开头",
+      endingSpan: "结尾",
+      estimatedDurationSec: 60,
+      beatTraceJson: [],
+      quoteTraceJson: [],
+      reviewStatus: "pass",
+      validationResultJson: { stage: "script_local_validation", decision: "pass" },
+      semanticReviewResultJson: { stage: "script_semantic_review", decision: "pass", patch_intent: null },
+      executionStateJson: { patch_used: false, regenerate_used: false },
+    });
+    const renderRec = await saveRenderJobRecord(db, {
+      projectId: project.id,
+      composeRecordId: "compose_001",
+      assetManifestRecordId: manifestRecord.id,
+      status: "completed",
+      profileJson: { width: 1080, height: 1920, fps: 30 },
+      outputArtifactJson: {
+        artifact_id: "export_001",
+        artifact_type: "rendered_video",
+        file_uri: "file://storage/output.mp4",
+        duration_sec: 60,
+        width: 1080,
+        height: 1920,
+        fps: 30,
+        metadata: {},
+      },
+      validationResultJson: { stage: "render_local_validation", decision: "rendered", errors: [], warnings: [], metrics: {} },
+    });
+
+    project.activeRenderJobRecordId = renderRec.id;
+
     // Create a publish package record
     const { savePublishPackageRecord } = await import(
       "../../../backend/src/modules/publish/publish-record.repository.js"
     );
     const publishRecord = await savePublishPackageRecord(db, {
       projectId: project.id,
-      renderJobRecordId: "render_001",
-      topicPackageId: "topic_001",
-      scriptRecordId: "script_001",
+      renderJobRecordId: renderRec.id,
+      topicPackageId: topicPkg.id,
+      scriptRecordId: scriptRec.id,
       storyboardRecordId: "storyboard_001",
       assetManifestRecordId: manifestRecord.id,
       packageJson: {
         package_version: "publish_package_v1",
-        source_render_job_record_id: "render_001",
-        source_topic_package_id: "topic_001",
-        source_script_record_id: "script_001",
+        source_render_job_record_id: renderRec.id,
+        source_topic_package_id: topicPkg.id,
+        source_script_record_id: scriptRec.id,
         source_storyboard_record_id: "storyboard_001",
         source_asset_manifest_record_id: manifestRecord.id,
         video_export_artifact_id: "export_001",
@@ -1299,7 +1348,7 @@ describe("project snapshot service", () => {
 
     expect(snapshot?.active_publish_package).toMatchObject({
       publish_package_record_id: publishRecord.id,
-      source_render_job_record_id: "render_001",
+      source_render_job_record_id: renderRec.id,
       is_stale: false,
       stale_reason: null,
       cover_artifact: {
@@ -1414,5 +1463,51 @@ describe("project snapshot service", () => {
     const snapshot = await getProjectSnapshot(db, project.id);
 
     expect(snapshot?.active_publish_package?.cover_artifact).toBeNull();
+  });
+
+  it("marks publish package readiness as blocked when source records are missing", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, { name: "Blocked Publish" });
+
+    // Create a publish package referencing non-existent topic/script/render records
+    const { savePublishPackageRecord } = await import(
+      "../../../backend/src/modules/publish/publish-record.repository.js"
+    );
+    const publishRecord = await savePublishPackageRecord(db, {
+      projectId: project.id,
+      renderJobRecordId: "missing_render",
+      topicPackageId: "missing_topic",
+      scriptRecordId: "missing_script",
+      storyboardRecordId: "storyboard_001",
+      assetManifestRecordId: "asset_manifest_001",
+      packageJson: {
+        package_version: "publish_package_v1",
+        source_render_job_record_id: "missing_render",
+        source_topic_package_id: "missing_topic",
+        source_script_record_id: "missing_script",
+        source_storyboard_record_id: "storyboard_001",
+        source_asset_manifest_record_id: "asset_manifest_001",
+        video_export_artifact_id: "export_001",
+        cover_artifact_id: null,
+        cover_prompt_draft: null,
+        cover_origin: "storyboard_image",
+        title_candidates: [],
+        selected_title: "测试",
+        description: "描述",
+        hashtags: [],
+        platform_profile: "generic",
+        readiness: "ready",
+        notes: [],
+      },
+    });
+
+    project.activePublishPackageRecordId = publishRecord.id;
+
+    const snapshot = await getProjectSnapshot(db, project.id);
+
+    // Readiness should be downgraded to blocked because source records don't exist
+    expect(snapshot?.active_publish_package?.package).toMatchObject({
+      readiness: "blocked",
+    });
   });
 });

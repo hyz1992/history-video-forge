@@ -253,6 +253,31 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
             publishPackageRecord.renderJobRecordId !==
             project.activeRenderJobRecordId;
 
+          // Evaluate readiness: blocked when upstream source records are missing
+          let effectiveReadiness = (pkg.readiness as string) ?? "draft";
+          const blockedReasons: string[] = [];
+          if (isStale) {
+            blockedReasons.push("render_output_changed");
+          }
+          if (!db.topicPackages.has(publishPackageRecord.topicPackageId)) {
+            blockedReasons.push("source_topic_package_missing");
+          }
+          if (!db.scriptRecords.has(publishPackageRecord.scriptRecordId)) {
+            blockedReasons.push("source_script_record_missing");
+          }
+          if (!db.renderJobRecords.has(publishPackageRecord.renderJobRecordId)) {
+            blockedReasons.push("source_render_job_record_missing");
+          }
+          if (blockedReasons.length > 0 && effectiveReadiness !== "blocked") {
+            effectiveReadiness = "blocked";
+          }
+
+          // Update the package object in the snapshot with the effective readiness
+          const effectivePkg = { ...pkg, readiness: effectiveReadiness };
+          if (blockedReasons.length > 0) {
+            (effectivePkg as Record<string, unknown>).blocked_reasons = blockedReasons;
+          }
+
           // Resolve cover_artifact summary from asset manifest
           let coverArtifact: Record<string, unknown> | null = null;
           const coverArtifactId = pkg.cover_artifact_id as string | null | undefined;
@@ -282,7 +307,7 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
           return {
             publish_package_record_id: publishPackageRecord.id,
             source_render_job_record_id: publishPackageRecord.renderJobRecordId,
-            package: pkg,
+            package: effectivePkg,
             is_stale: isStale,
             stale_reason: isStale ? "render_output_changed" : null,
             cover_artifact: coverArtifact,
