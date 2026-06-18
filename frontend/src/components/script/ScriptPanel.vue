@@ -71,13 +71,12 @@ const visibleScript = computed(() => {
 
 const isGenerating = computed(
   () =>
-    !visibleScript.value &&
-    scriptStore.state.snapshot?.current_status === "script_generating",
+    scriptStore.state.snapshot?.current_status === "script_generating" ||
+    scriptStore.state.snapshot?.active_script?.execution_state?.generating === true,
 );
 
 const isGenerationFailed = computed(
   () =>
-    !visibleScript.value &&
     scriptStore.state.snapshot?.current_status === "script_failed",
 );
 

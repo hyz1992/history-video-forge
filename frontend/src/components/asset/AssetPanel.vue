@@ -44,6 +44,20 @@ const assetTasks = computed(() => plan.value?.tasks ?? []);
 const manifest = computed(() => assetsStore.state.snapshot?.active_assets?.manifest ?? null);
 const readiness = computed(() => manifest.value?.readiness ?? null);
 
+const currentStatus = computed(() => assetsStore.state.snapshot?.current_status ?? "");
+
+// Snapshot-based generating checks (survive page refresh)
+const isPlanGenerating = computed(
+  () =>
+    currentStatus.value === "asset_plan_generating" ||
+    activeAssetPlan.value?.execution_state?.generating === true,
+);
+const isAssetsGenerating = computed(
+  () =>
+    currentStatus.value === "assets_generating" ||
+    assetsStore.state.snapshot?.active_assets?.execution_state?.generating === true,
+);
+
 /* Partial readiness (warnings only, e.g. optional BGM missing)
  *  should still allow composing.  Only blocked (errors) prevents it. */
 const canCompose = computed(() => {
@@ -596,9 +610,9 @@ function handleConfirm() {
       class="asset-skeleton"
     />
 
-    <!-- Generating state -->
+    <!-- Generating state (snapshot-based, survives refresh) -->
     <div
-      v-else-if="assetPlanningStore.state.isGenerating && !activeAssetPlan"
+      v-else-if="isPlanGenerating || isAssetsGenerating"
       class="asset-generating"
     >
       <p class="asset-generating-title">正在生成资产规划</p>
@@ -643,7 +657,7 @@ function handleConfirm() {
         </span>
       </p>
       <!-- Auto-generating state -->
-      <div v-if="assetsStore.state.isGenerating" class="asset-plan-auto-generating">
+      <div v-if="isAssetsGenerating || assetsStore.state.isGenerating" class="asset-plan-auto-generating">
         <el-alert
           title="正在生成基础资产"
           type="info"
@@ -655,7 +669,7 @@ function handleConfirm() {
       <div v-else-if="assetsStore.state.loadError" class="asset-plan-overview-actions">
         <el-button type="primary" @click="handleGenerateBasic">重试生成基础资产</el-button>
       </div>
-      <p v-if="assetsStore.state.isGenerating" class="asset-generating-progress">
+      <p v-if="isAssetsGenerating || assetsStore.state.isGenerating" class="asset-generating-progress">
         {{ generationProgress }}
       </p>
     </div>

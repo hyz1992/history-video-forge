@@ -52,6 +52,12 @@ const isStoryboardReady = computed(
     currentStatus.value?.startsWith("render"),
 );
 
+const isGenerating = computed(
+  () =>
+    currentStatus.value === "storyboard_generating" ||
+    activeStoryboard.value?.execution_state?.generating === true,
+);
+
 /* -------------------------------------------------------------------------- */
 /*  Collapse / expand                                                         */
 /* -------------------------------------------------------------------------- */
@@ -167,17 +173,9 @@ function handleConfirm() {
       </el-button>
     </div>
 
-    <!-- Loading skeleton -->
-    <el-skeleton
-      v-else-if="storyboardStore.state.isLoading && !activeStoryboard"
-      :rows="6"
-      animated
-      class="storyboard-skeleton"
-    />
-
-    <!-- Generating state -->
+    <!-- Generating state (must be before loading skeleton — survives refresh) -->
     <div
-      v-else-if="storyboardStore.state.isGenerating && !activeStoryboard"
+      v-else-if="isGenerating"
       class="storyboard-generating"
     >
       <p class="storyboard-generating-title">正在生成分镜规划</p>
@@ -185,6 +183,14 @@ function handleConfirm() {
       <p class="storyboard-generating-hint">页面会自动刷新，也可手动刷新状态。</p>
       <el-button @click="storyboardStore.retryLoad()">刷新状态</el-button>
     </div>
+
+    <!-- Loading skeleton (only when loading without active generation) -->
+    <el-skeleton
+      v-else-if="storyboardStore.state.isLoading && !activeStoryboard"
+      :rows="6"
+      animated
+      class="storyboard-skeleton"
+    />
 
     <!-- Empty state - no storyboard generated yet -->
     <div
