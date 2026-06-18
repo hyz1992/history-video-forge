@@ -97,7 +97,7 @@ export async function generateCoverImage(
   const newArtifact = {
     artifact_id: artifactId,
     artifact_type: "image",
-    origin: "generated",
+    origin: "provider",
     file_uri: absolutePath,
     created_at: new Date().toISOString(),
     metadata: {

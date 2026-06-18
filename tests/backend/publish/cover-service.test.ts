@@ -1,12 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { rmSync } from "node:fs";
 
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { saveAssetManifestRecord } from "../../../backend/src/modules/assets/asset-manifest-record.repository.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { generateCoverImage } from "../../../backend/src/modules/publish/cover-generate.service.js";
 import { initializeCoverFromStoryboard, buildCoverPromptContext, generateCoverPromptDraft } from "../../../backend/src/modules/publish/cover.service.js";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
+import { AssetManifest } from "../../../shared/src/index.js";
 
 describe("cover service", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("initializes cover from #1 storyboard image artifact", async () => {
     const db = createDbClient();
     const project = await createProject(db, { name: "Cover Test" });
@@ -227,5 +234,101 @@ describe("cover service", () => {
     expect(ctx).toBeTruthy();
     expect(ctx.topicTitle).toBe("");
     expect(ctx.eraStyle).toBe("");
+  });
+
+  it("registers AI generated cover images with a valid asset artifact origin", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, { name: "Generated Cover Test" });
+    const manifestRecord = await saveAssetManifestRecord(db, {
+      projectId: project.id,
+      topicPackageId: "topic_001",
+      scriptRecordId: "script_001",
+      storyboardRecordId: "storyboard_001",
+      assetPlanRecordId: "asset_plan_001",
+      manifestJson: {
+        manifest_version: "asset_manifest_v1",
+        source_asset_plan_id: "asset_plan_001",
+        source_storyboard_record_id: "storyboard_001",
+        source_script_record_id: "script_001",
+        execution_options: {
+          execution_mode: "auto_available",
+          voice_profile_id: "voice_001",
+          enabled_provider_types: ["image"],
+          allow_manual_placeholders: false,
+        },
+        executions: [],
+        artifacts: [],
+        audio_summary: {
+          voice_profile_id: "voice_001",
+          tts_total_duration_sec: null,
+          tts_chunk_artifact_ids: [],
+          tts_chunk_routes: [],
+          tts_merged_artifact_id: null,
+          subtitle_artifact_id: null,
+          bgm_placements: [],
+          sfx_artifact_ids: [],
+        },
+        segment_routes: [],
+        readiness: "partial",
+        notes: [],
+      },
+      validationResultJson: { stage: "assets_local_validation", decision: "pass", errors: [], warnings: [], metrics: {} },
+      executionStateJson: { activated: true },
+      graphTraceSummaryJson: null,
+      runtimeDiagnosticsJson: null,
+    });
+
+    const fetchMock = vi.fn(async (url: string | URL | Request) => {
+      const href = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+      if (href.includes("dashscope.aliyuncs.com")) {
+        return new Response(
+          JSON.stringify({
+            output: {
+              choices: [
+                {
+                  message: {
+                    content: [{ image: "https://example.test/cover.png" }],
+                  },
+                },
+              ],
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+
+      return new Response(new Uint8Array([137, 80, 78, 71]), {
+        status: 200,
+        headers: { "content-type": "image/png" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const result = await generateCoverImage(
+        db,
+        project.id,
+        manifestRecord.id,
+        {
+          apiKey: "test-key",
+          prompt: "cover prompt",
+        },
+      );
+      const updatedManifest = db.assetManifestRecords.get(manifestRecord.id)
+        ?.manifestJson;
+      const parsed = AssetManifest.parse(updatedManifest);
+      const generatedCover = parsed.artifacts.find(
+        (artifact) => artifact.artifact_id === result.artifactId,
+      );
+
+      expect(generatedCover?.artifact_type).toBe("image");
+      expect(generatedCover?.origin).toBe("provider");
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      rmSync(project.storageRootDir, { recursive: true, force: true });
+    }
   });
 });

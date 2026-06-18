@@ -12,7 +12,7 @@ export interface RunComposeGenerationInput {
 
 function createComposeTrace(input: {
   runId: string;
-  status: "succeeded" | "blocked";
+  status: "succeeded" | "partial" | "blocked";
 }) {
   const now = new Date().toISOString();
   return {
@@ -85,7 +85,11 @@ export async function runComposeGeneration(input: RunComposeGenerationInput) {
   const trace = createComposeTrace({
     runId: db.generateId(),
     status:
-      localValidation.decision === "ready_for_render" ? "succeeded" : "blocked",
+      localValidation.decision === "blocked"
+        ? "blocked"
+        : localValidation.decision === "partial"
+          ? "partial"
+          : "succeeded",
   });
 
   if (project.activeAssetManifestRecordId !== activeAssetManifestRecordId) {
@@ -114,9 +118,7 @@ export async function runComposeGeneration(input: RunComposeGenerationInput) {
   project.latestComposeRunTraceJson = trace;
   project.latestRenderRunTraceJson = null;
   project.status =
-    localValidation.decision === "ready_for_render"
-      ? "compose_ready"
-      : "compose_blocked";
+    localValidation.decision === "blocked" ? "compose_blocked" : "compose_ready";
   project.updatedAt = new Date();
 
   return {

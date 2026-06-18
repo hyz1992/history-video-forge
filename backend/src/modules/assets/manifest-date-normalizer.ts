@@ -5,8 +5,9 @@
  * persistence layer may revive ISO date strings back into Date objects.
  *
  * This helper walks the manifest and converts any Date it finds
- * back to .toISOString().  It is a safe no-op if all fields are
- * already strings.
+ * back to .toISOString().  It also normalizes legacy artifact origin
+ * values that were persisted before the shared AssetArtifact contract
+ * was enforced.
  *
  * Must be called every time a manifest is read from a record before
  * it is passed to Zod validation or downstream consumers (compose,
@@ -15,9 +16,12 @@
 export function normalizeAssetManifestDates(
   manifest: Record<string, unknown>,
 ): Record<string, unknown> {
-  return JSON.parse(JSON.stringify(manifest, (_key, value) => {
+  return JSON.parse(JSON.stringify(manifest, (key, value) => {
     if (value instanceof Date) {
       return value.toISOString();
+    }
+    if (key === "origin" && value === "generated") {
+      return "provider";
     }
     return value;
   }));

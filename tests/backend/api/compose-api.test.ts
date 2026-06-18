@@ -333,6 +333,8 @@ describe("compose API", () => {
       manifestJson: manifest as unknown as Record<string, unknown>,
       validationResultJson: { stage: "assets_local_validation", decision: "ready_for_compose", errors: [], warnings: [], metrics: {} },
       executionStateJson: {},
+      graphTraceSummaryJson: null,
+      runtimeDiagnosticsJson: null,
     });
 
     project.activeAssetManifestRecordId = record.id;
@@ -353,5 +355,6 @@ describe("compose API", () => {
     expect(
       validation?.decision === "ready_for_render" || validation?.decision === "partial",
     ).toBe(true);
+    expect(project.status).toBe("compose_ready");
   });
 });
