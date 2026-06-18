@@ -136,6 +136,33 @@ export async function publishGenerateController(
   const topicPackage = db.topicPackages.get(topicPackageId);
   const scriptRecord = db.scriptRecords.get(scriptRecordId);
 
+  // Save preliminary package and set active pointer BEFORE LLM calls
+  // so refresh during generation shows the publishing state, not empty
+  const prePackageJson = buildDefaultPublishPackage({
+    renderJobRecordId: renderJob.id,
+    topicPackageId,
+    scriptRecordId,
+    storyboardRecordId,
+    assetManifestRecordId,
+    videoExportArtifactId: exportArtifact.artifact_id,
+    coverArtifactId,
+    coverPromptDraft: null,
+  });
+  (prePackageJson as Record<string, unknown>).readiness = "generating";
+  (prePackageJson as Record<string, unknown>).notes = notes;
+
+  const generatingRecord = await savePublishPackageRecord(db, {
+    projectId,
+    renderJobRecordId: renderJob.id,
+    topicPackageId,
+    scriptRecordId,
+    storyboardRecordId,
+    assetManifestRecordId,
+    packageJson: prePackageJson,
+    executionStateJson: { generated_at: new Date().toISOString(), generating: true },
+  });
+  project.activePublishPackageRecordId = generatingRecord.id;
+
   // Generate cover prompt via LLM
   let coverPromptDraft: string | null = null;
   let llmUsed = false;
@@ -234,6 +261,7 @@ export async function publishGenerateController(
   }
 
   const record = await savePublishPackageRecord(db, {
+    id: generatingRecord.id,
     projectId,
     renderJobRecordId: renderJob.id,
     topicPackageId,

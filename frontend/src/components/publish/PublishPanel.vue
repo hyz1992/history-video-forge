@@ -119,6 +119,7 @@ const readiness = computed(() => pkg.value?.package.readiness ?? "draft");
 
 const readinessLabel = computed(() => {
   const map: Record<string, string> = {
+    generating: "生成中",
     draft: "草稿",
     ready: "就绪",
     blocked: "阻塞",
@@ -129,6 +130,7 @@ const readinessLabel = computed(() => {
 const readinessType = computed(() => {
   if (readiness.value === "ready") return "success";
   if (readiness.value === "blocked") return "danger";
+  if (readiness.value === "generating") return "warning";
   return "info";
 });
 
