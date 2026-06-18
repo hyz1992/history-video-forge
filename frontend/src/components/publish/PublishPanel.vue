@@ -163,7 +163,7 @@ const styleLabel = (style: string) => {
 
 const styleType = (style: string) => {
   const map: Record<string, string> = {
-    standard: "",
+    standard: "info",
     suspense: "warning",
     knowledge: "primary",
     emotional: "danger",

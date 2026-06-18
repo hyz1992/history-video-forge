@@ -273,6 +273,11 @@ export function createPublishStore(input: CreatePublishStoreInput): PublishStore
     snapshot: null,
   });
 
+  function syncPublishReadiness(snapshot: PublishSnapshot) {
+    const readiness = snapshot.active_publish_package?.package?.readiness;
+    input.projectStore.setPublishReady(readiness === "ready");
+  }
+
   async function loadProject() {
     const projectId = input.projectStore.state.projectId;
     if (!projectId) {
@@ -294,9 +299,7 @@ export function createPublishStore(input: CreatePublishStoreInput): PublishStore
         });
       }
 
-      // Notify sidebar of publish readiness
-      const readiness = snapshot.active_publish_package?.package?.readiness;
-      input.projectStore.setPublishReady(readiness === "ready");
+      syncPublishReadiness(snapshot);
     } catch (error) {
       state.loadError = toErrorMessage(error);
     } finally {
@@ -312,6 +315,7 @@ export function createPublishStore(input: CreatePublishStoreInput): PublishStore
     state.loadError = null;
     try {
       state.snapshot = await input.api.generatePackage(projectId);
+      syncPublishReadiness(state.snapshot);
     } catch (error) {
       state.loadError = toErrorMessage(error);
     } finally {
@@ -326,6 +330,7 @@ export function createPublishStore(input: CreatePublishStoreInput): PublishStore
     state.loadError = null;
     try {
       state.snapshot = await input.api.updatePackage(projectId, updates);
+      syncPublishReadiness(state.snapshot);
     } catch (error) {
       state.loadError = toErrorMessage(error);
     }
