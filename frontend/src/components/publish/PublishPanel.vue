@@ -10,7 +10,10 @@ import {
   ElImage,
   ElInput,
   ElMessage,
+  ElMessageBox,
   ElSkeleton,
+  ElTable,
+  ElTableColumn,
   ElTag,
 } from "element-plus";
 import {
@@ -95,6 +98,7 @@ const coverPrompt = computed(() => pkg.value?.package.cover_prompt_draft ?? "");
 
 function onCoverPromptChange(val: string) {
   publishStore.updatePackage({ cover_prompt_draft: val });
+  onFieldEdited();
 }
 
 const titleCandidates = computed(() => pkg.value?.package.title_candidates ?? []);
@@ -102,12 +106,14 @@ const selectedTitle = computed(() => pkg.value?.package.selected_title ?? "");
 
 function onSelectedTitleChange(val: string) {
   publishStore.updatePackage({ selected_title: val });
+  onFieldEdited();
 }
 
 const description = computed(() => pkg.value?.package.description ?? "");
 
 function onDescriptionChange(val: string) {
   publishStore.updatePackage({ description: val });
+  onFieldEdited();
 }
 
 const hashtags = computed(() => pkg.value?.package.hashtags ?? []);
@@ -135,8 +141,33 @@ const readinessType = computed(() => {
 
 const showCoverGenerateConfirm = ref(false);
 const showCoverUploadDialog = ref(false);
+const showConfirmReadyDialog = ref(false);
+const showExportResultDialog = ref(false);
 const coverUploadUri = ref("");
 const coverUploadMime = ref("image/png");
+
+// Track whether user has edited fields since last "ready" confirmation
+const userHasEditedSinceReady = ref(false);
+
+// Missing fields for readiness check
+const missingFields = computed(() => {
+  const m: string[] = [];
+  if (!selectedTitle.value) m.push("标题");
+  if (!description.value) m.push("描述");
+  if (!hashtags.value.length) m.push("话题标签");
+  if (!coverArtifact.value && !coverPrompt.value) m.push("封面图或封面提示词");
+  return m;
+});
+
+const isBlocked = computed(() => missingFields.value.length > 0);
+
+function onFieldEdited() {
+  if (readiness.value === "ready" && !userHasEditedSinceReady.value) {
+    // Auto-revert to draft when user edits after confirming ready
+    publishStore.updatePackage({ readiness: "draft" });
+  }
+  userHasEditedSinceReady.value = true;
+}
 
 /* -------------------------------------------------------------------------- */
 /*  Title candidates                                                          */
@@ -247,47 +278,62 @@ function selectTitle(candidate: TitleCandidate) {
   publishStore.updatePackage({ selected_title: candidate.text });
 }
 
-async function handleMarkReady() {
+function confirmReady() {
+  showConfirmReadyDialog.value = true;
+}
+
+async function handleConfirmReady() {
+  showConfirmReadyDialog.value = false;
   await publishStore.updatePackage({ readiness: "ready" });
-  ElMessage.success("发布包已标记为就绪");
+  userHasEditedSinceReady.value = false;
+  ElMessage.success("发布资料已确认，可导出发布包");
+}
+
+async function handleExport() {
+  // Pre-flight readiness check
+  if (readiness.value !== "ready") {
+    try {
+      await ElMessageBox.confirm(
+        "当前发布资料尚未确认，是否导出草稿？",
+        "导出确认",
+        { confirmButtonText: "导出草稿", cancelButtonText: "取消", type: "warning" }
+      );
+    } catch {
+      return;
+    }
+  }
+
+  // Block if essential fields missing
+  if (!selectedTitle.value && !description.value) {
+    ElMessage.warning("标题和描述均为空，请至少填写一项后再导出");
+    return;
+  }
+
+  // Warn about missing cover
+  if (!coverArtifact.value) {
+    try {
+      await ElMessageBox.confirm(
+        "封面图缺失，导出包中将仅包含封面提示词。是否继续？",
+        "封面缺失",
+        { confirmButtonText: "继续导出", cancelButtonText: "取消", type: "warning" }
+      );
+    } catch {
+      return;
+    }
+  }
+
+  try {
+    const manifest = await publishStore.exportPackage();
+    showExportResultDialog.value = true;
+  } catch {
+    ElMessage.error("导出失败");
+  }
 }
 
 function goToRender() {
   workspaceStore.setCurrentStep(RENDER_STEP_INDEX);
   const pid = projectStore.state.projectId;
   if (pid) router.push(`/projects/${pid}/render`);
-}
-
-function handleExport() {
-  const data = pkg.value;
-  if (!data) return;
-  const exportJson = {
-    exported_at: new Date().toISOString(),
-    project_id: projectStore.state.projectId,
-    cover: coverArtifact.value
-      ? {
-          artifact_id: coverArtifact.value.artifact_id,
-          mime_type: coverArtifact.value.mime_type,
-          width: coverArtifact.value.width,
-          height: coverArtifact.value.height,
-        }
-      : null,
-    cover_prompt_draft: data.package.cover_prompt_draft,
-    cover_origin: data.package.cover_origin,
-    selected_title: data.package.selected_title,
-    title_candidates: data.package.title_candidates,
-    description: data.package.description,
-    hashtags: data.package.hashtags,
-    platform_profile: data.package.platform_profile,
-  };
-  const blob = new Blob([JSON.stringify(exportJson, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `publish-package-${projectStore.state.projectId}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  ElMessage.success("发布包已导出");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -368,14 +414,18 @@ onMounted(() => {
           {{ readinessLabel }}
         </el-tag>
         <span v-if="isStale" class="stale-badge">过期</span>
+        <span v-if="readiness === 'ready' && !isStale" class="ready-hint">已就绪，可导出</span>
+        <span v-if="isBlocked && readiness !== 'blocked'" class="blocked-hint">
+          缺失：{{ missingFields.join("、") }}
+        </span>
         <span class="cover-origin">封面来源：{{ coverOriginLabel }}</span>
         <el-button
-          v-if="readiness !== 'ready'"
+          v-if="readiness !== 'ready' && readiness !== 'blocked'"
           type="success"
           size="small"
-          @click="handleMarkReady"
+          @click="confirmReady"
         >
-          标记为就绪
+          确认发布资料
         </el-button>
       </div>
 
@@ -604,6 +654,31 @@ onMounted(() => {
       </template>
     </el-dialog>
 
+    <!-- Confirm Ready Dialog -->
+    <el-dialog
+      v-model="showConfirmReadyDialog"
+      title="确认发布资料"
+      width="440px"
+    >
+      <p>确认发布资料后表示以下内容已经审核：</p>
+      <ul style="padding-left: 20px; line-height: 2;">
+        <li>标题已选定</li>
+        <li>描述已检查</li>
+        <li>话题标签已设置</li>
+        <li>封面图或封面提示词已就绪</li>
+      </ul>
+      <p>确认后侧边栏"发布交付"将显示完成标记，可以导出发布包。</p>
+      <p v-if="missingFields.length > 0" style="color: var(--color-warning);">
+        ⚠ 当前缺失：{{ missingFields.join("、") }}
+      </p>
+      <template #footer>
+        <el-button @click="showConfirmReadyDialog = false">取消</el-button>
+        <el-button type="primary" @click="handleConfirmReady">
+          确认资料无误
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- Cover Upload Dialog -->
     <el-dialog
       v-model="showCoverUploadDialog"
@@ -626,6 +701,50 @@ onMounted(() => {
         >
           上传
         </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Export Result Dialog -->
+    <el-dialog
+      v-model="showExportResultDialog"
+      title="导出成功"
+      width="480px"
+    >
+      <template v-if="publishStore.state.exportManifest">
+        <p><strong>导出文件：</strong>{{ publishStore.state.exportManifest.project_title }}-发布包.zip</p>
+        <p style="color: var(--text-secondary); font-size: 13px;">文件已通过浏览器下载，包含以下内容：</p>
+        <el-table
+          :data="(publishStore.state.exportManifest.files || []).map(f => ({ name: f }))"
+          size="small"
+          style="margin: 12px 0;"
+        >
+          <el-table-column prop="name" label="文件清单" />
+        </el-table>
+        <p style="margin-top: 12px;">
+          <strong>标题：</strong>{{ publishStore.state.exportManifest.title || "（无）" }}
+        </p>
+        <p>
+          <strong>描述：</strong>{{ publishStore.state.exportManifest.description || "（无）" }}
+        </p>
+        <p>
+          <strong>话题标签：</strong>{{ publishStore.state.exportManifest.hashtags.join("、") || "（无）" }}
+        </p>
+        <p>
+          <strong>封面：</strong>
+          {{ publishStore.state.exportManifest.has_cover_image ? "已包含" : "仅提示词" }}
+        </p>
+        <p>
+          <strong>导出时间：</strong>{{ publishStore.state.exportManifest.exported_at }}
+        </p>
+        <div
+          v-if="publishStore.state.exportManifest.missing_fields.length > 0"
+          style="margin-top: 8px; color: var(--color-warning); font-size: 13px;"
+        >
+          ⚠ 缺失项：{{ publishStore.state.exportManifest.missing_fields.join("、") }}
+        </div>
+      </template>
+      <template #footer>
+        <el-button type="primary" @click="showExportResultDialog = false">确定</el-button>
       </template>
     </el-dialog>
   </div>
@@ -672,6 +791,16 @@ onMounted(() => {
   color: var(--color-warning, #e6a23c);
   font-size: 12px;
   font-weight: 600;
+}
+
+.ready-hint {
+  color: var(--color-success, #67c23a);
+  font-size: 12px;
+}
+
+.blocked-hint {
+  color: var(--color-warning, #e6a23c);
+  font-size: 12px;
 }
 
 .cover-origin {

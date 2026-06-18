@@ -82,6 +82,21 @@ export interface TitleCandidatesResult {
 // Store state & interface
 // ---------------------------------------------------------------------------
 
+export interface ExportManifest {
+  project_id: string;
+  project_title: string;
+  files: string[];
+  title: string;
+  description: string;
+  hashtags: string[];
+  cover_origin: string;
+  has_cover_image: boolean;
+  has_video: boolean;
+  exported_at: string;
+  readiness: string;
+  missing_fields: string[];
+}
+
 export interface PublishStoreState {
   isLoading: boolean;
   isGenerating: boolean;
@@ -89,6 +104,8 @@ export interface PublishStoreState {
   isUploadingCover: boolean;
   isGeneratingCover: boolean;
   isLoadingTitleCandidates: boolean;
+  isExporting: boolean;
+  exportManifest: ExportManifest | null;
   loadError: string | null;
   snapshot: PublishSnapshot | null;
 }
@@ -102,6 +119,7 @@ export interface PublishStore {
   uploadCover: (fileUri: string, mimeType?: string, width?: number, height?: number) => Promise<void>;
   generateCover: () => Promise<void>;
   loadTitleCandidates: () => Promise<TitleCandidatesResult>;
+  exportPackage: () => Promise<ExportManifest>;
 }
 
 export const publishStoreKey: InjectionKey<PublishStore> = Symbol("publish-store");
@@ -118,6 +136,7 @@ export interface PublishApi {
   uploadCover(projectId: string, fileUri: string, mimeType: string, width?: number, height?: number): Promise<PublishSnapshot>;
   generateCover(projectId: string): Promise<PublishSnapshot>;
   loadTitleCandidates(projectId: string): Promise<TitleCandidatesResult>;
+  exportPackage(projectId: string): Promise<ExportManifest>;
 }
 
 export function createFetchPublishApi(baseUrl = ""): PublishApi {
@@ -238,6 +257,34 @@ export function createFetchPublishApi(baseUrl = ""): PublishApi {
       }
       return response.json();
     },
+
+    async exportPackage(projectId) {
+      const response = await fetch(`${baseUrl}/api/projects/${projectId}/publish/export`);
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(
+          (err as Record<string, unknown>).error as string ?? `export_failed:${response.status}`,
+        );
+      }
+      // Read manifest from header
+      const manifestHeader = response.headers.get("x-export-manifest");
+      const manifest: ExportManifest = manifestHeader
+        ? JSON.parse(decodeURIComponent(manifestHeader))
+        : { project_id: projectId, project_title: "", files: [], title: "", description: "", hashtags: [], cover_origin: "", has_cover_image: false, has_video: false, exported_at: "", readiness: "draft", missing_fields: [] };
+
+      // Trigger file download
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const disposition = response.headers.get("content-disposition") || "";
+      const filenameMatch = disposition.match(/filename="?([^";\n]+)"?/);
+      a.download = filenameMatch?.[1] || `publish-package-${projectId}.zip`;
+      a.href = url;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      return manifest;
+    },
   };
 }
 
@@ -269,6 +316,8 @@ export function createPublishStore(input: CreatePublishStoreInput): PublishStore
     isUploadingCover: false,
     isGeneratingCover: false,
     isLoadingTitleCandidates: false,
+    isExporting: false,
+    exportManifest: null,
     loadError: null,
     snapshot: null,
   });
@@ -399,6 +448,24 @@ export function createPublishStore(input: CreatePublishStoreInput): PublishStore
     }
   }
 
+  async function exportPackage(): Promise<ExportManifest> {
+    const projectId = input.projectStore.state.projectId;
+    if (!projectId) throw new Error("no_project");
+
+    state.isExporting = true;
+    state.loadError = null;
+    try {
+      const manifest = await input.api.exportPackage(projectId);
+      state.exportManifest = manifest;
+      return manifest;
+    } catch (error) {
+      state.loadError = toErrorMessage(error);
+      throw error;
+    } finally {
+      state.isExporting = false;
+    }
+  }
+
   return {
     state: readonly(state),
     loadProject,
@@ -408,6 +475,7 @@ export function createPublishStore(input: CreatePublishStoreInput): PublishStore
     uploadCover,
     generateCover,
     loadTitleCandidates,
+    exportPackage,
   };
 }
 

@@ -13,6 +13,7 @@ import { deriveHashtags } from "./hashtag-derivation.service";
 import { getPublishLlmGateway } from "./llm-helper";
 import { savePublishPackageRecord } from "./publish-record.repository";
 import { generateTitleCandidates } from "./title-generator.service";
+import { exportPublishPackage } from "./publish-export.service";
 
 function buildDefaultPublishPackage(input: {
   renderJobRecordId: string;
@@ -734,4 +735,37 @@ export async function titleCandidatesController(
       ),
     },
   };
+}
+
+export async function publishExportController(
+  context: RouteContext,
+): Promise<AppResponse> {
+  const { app, params } = context;
+  const db = app.db;
+  const projectId = params.projectId;
+
+  try {
+    const result = await exportPublishPackage(db, projectId);
+
+    return {
+      statusCode: 200,
+      headers: {
+        "content-type": "application/zip",
+        "content-disposition": `attachment; filename="${encodeURIComponent(result.filename)}"`,
+        "x-export-manifest": JSON.stringify(result.manifest),
+      },
+      body: result.zipBuffer,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "export_failed";
+
+    if (message === "project_not_found") {
+      return { statusCode: 404, body: { error: message } };
+    }
+    if (message === "no_active_publish_package" || message === "publish_package_not_found") {
+      return { statusCode: 409, body: { error: message } };
+    }
+
+    return { statusCode: 500, body: { error: "export_failed", details: message } };
+  }
 }

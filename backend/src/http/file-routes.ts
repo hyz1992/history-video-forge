@@ -1,9 +1,10 @@
 import type { AppInstance } from "../app.js";
 import type { ServerResponse } from "node:http";
 import { writeFileStream } from "./file-response.js";
+import { exportPublishPackage } from "../modules/publish/publish-export.service.js";
 
 interface FileRouteMatch {
-  type: "artifact_file" | "render_preview" | "render_download";
+  type: "artifact_file" | "render_preview" | "render_download" | "publish_export";
   projectId: string;
   artifactId?: string;
 }
@@ -19,6 +20,9 @@ export function matchFileRoute(method: string, pathname: string): FileRouteMatch
   // GET /api/projects/:projectId/render/download
   match = pathname.match(/^\/api\/projects\/([^/]+)\/render\/download$/);
   if (match) return { type: "render_download", projectId: match[1]! };
+  // GET /api/projects/:projectId/publish/export
+  match = pathname.match(/^\/api\/projects\/([^/]+)\/publish\/export$/);
+  if (match) return { type: "publish_export", projectId: match[1]! };
   return null;
 }
 
@@ -65,5 +69,29 @@ export async function handleFileRoute(
       disposition: match.type === "render_preview" ? "inline" : "attachment",
       filename: match.type === "render_download" ? `${project.name}.mp4` : undefined,
     });
+  } else if (match.type === "publish_export") {
+    try {
+      const result = await exportPublishPackage(app.db, match.projectId);
+      response.statusCode = 200;
+      response.setHeader("content-type", "application/zip");
+      response.setHeader(
+        "content-disposition",
+        `attachment; filename="${encodeURIComponent(result.filename)}"`,
+      );
+      response.setHeader("x-export-manifest", encodeURIComponent(JSON.stringify(result.manifest)));
+      response.setHeader("content-length", result.zipBuffer.length);
+      response.end(result.zipBuffer);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "export_failed";
+      if (message === "project_not_found") {
+        response.statusCode = 404;
+      } else if (message === "no_active_publish_package" || message === "publish_package_not_found") {
+        response.statusCode = 409;
+      } else {
+        response.statusCode = 500;
+      }
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ error: message }));
+    }
   }
 }
