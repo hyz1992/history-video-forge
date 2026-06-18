@@ -606,6 +606,22 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   const runId = `assets_run_${db.generateId()}`;
   let executionManifestRecordId: string | null = null;
 
+  // Set active pointer BEFORE execution so refresh during generation shows status
+  const generatingManifestRecord = await saveAssetManifestRecord(db, {
+    projectId: project.id,
+    topicPackageId: assetPlanRecord.topicPackageId,
+    scriptRecordId: assetPlanRecord.scriptRecordId,
+    storyboardRecordId: assetPlanRecord.storyboardRecordId,
+    assetPlanRecordId: assetPlanRecord.id,
+    manifestJson: manifest,
+    validationResultJson: { stage: "assets_local_validation", decision: "generating", errors: [], warnings: [], metrics: {} },
+    executionStateJson: { generating: true, run_id: runId, activated: false },
+    graphTraceSummaryJson: null,
+    runtimeDiagnosticsJson: null,
+  });
+  project.activeAssetManifestRecordId = generatingManifestRecord.id;
+  project.status = "assets_generating";
+
   if (executionOptions.execution_mode === "dry_run") {
     manifest.artifacts = [];
   } else if (executionOptions.execution_mode === "auto_available") {
@@ -827,6 +843,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   });
 
   const assetManifestRecord = await saveAssetManifestRecord(db, {
+    id: generatingManifestRecord.id,
     projectId: project.id,
     topicPackageId: assetPlanRecord.topicPackageId,
     scriptRecordId: assetPlanRecord.scriptRecordId,
