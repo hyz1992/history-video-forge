@@ -192,9 +192,8 @@ export async function createTopicRecommendationsController(
   project.status = "topic_generating";
   project.updatedAt = new Date();
 
-  let recommendation;
   try {
-    recommendation = await recommendTopicCandidatesWithTrace(
+    const recommendation = await recommendTopicCandidatesWithTrace(
     context.app.db,
     {
       canonicalName: validatedPayload.value.canonical_name,
@@ -306,6 +305,7 @@ export async function createTopicRecommendationsController(
       body: { error: "topic_generate_failed", message },
     };
   }
+}
 
 export async function confirmTopicCandidateController(
   context: RouteContext,

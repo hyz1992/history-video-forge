@@ -28,6 +28,7 @@ const validation = computed(
 const hasCompose = computed(() => !!activeCompose.value);
 
 const RENDER_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "render");
+const ASSET_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "asset");
 const router = useRouter();
 const projectStore = useProjectStore();
 
@@ -101,6 +102,14 @@ const isTooEarlyForCompose = computed(() => {
   return !s.startsWith("compos") && !s.startsWith("assets") && !s.startsWith("render");
 });
 
+const isGenerating = computed(
+  () =>
+    composeStore.state.isGenerating ||
+    composeStore.state.snapshot?.active_compose?.execution_state?.generating === true,
+);
+
+const isAssetsBlocked = computed(() => currentStatus.value === "assets_blocked");
+
 const blockReason = computed(() => {
   if (canEnterRender.value) return "";
   const msgs: string[] = [];
@@ -149,6 +158,11 @@ function handleGoToRender() {
   const pid = projectStore.state.projectId; if (pid) router.push(`/projects/${pid}/render`);
 }
 
+function goToAssets() {
+  workspaceStore.setCurrentStep(ASSET_STEP_INDEX);
+  const pid = projectStore.state.projectId; if (pid) router.push(`/projects/${pid}/asset`);
+}
+
 function handleRetry() {
   composeStore.loadProject();
 }
@@ -181,12 +195,29 @@ function handleRetry() {
       class="compose-skeleton"
     />
 
-    <!-- Generating state -->
+    <!-- Generating state (snapshot-based, survives refresh) -->
     <div
-      v-else-if="composeStore.state.isGenerating && !hasCompose"
+      v-else-if="isGenerating"
       class="compose-generating"
     >
       <p>正在生成合成时间线，请稍候...</p>
+    </div>
+
+    <!-- Assets blocked: cannot compose yet -->
+    <div v-else-if="isAssetsBlocked && !hasCompose" class="compose-error-card">
+      <el-alert
+        title="资产尚未完整，暂不能生成合成时间线"
+        type="warning"
+        show-icon
+        :closable="false"
+      >
+        <template #default>
+          <p>当前资产阶段存在未完成的素材任务，请先返回资产页完成素材生成或上传后再合成。</p>
+        </template>
+      </el-alert>
+      <div class="compose-error-actions">
+        <el-button type="primary" @click="goToAssets">返回资产页处理</el-button>
+      </div>
     </div>
 
     <!-- Too early for compose: project status is below assets -->
