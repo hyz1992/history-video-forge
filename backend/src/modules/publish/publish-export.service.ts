@@ -1,14 +1,13 @@
-import { readFile } from "node:fs/promises";
-import { basename } from "node:path";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { basename, join } from "node:path";
+import { execSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { randomUUID } from "node:crypto";
 import type { DbClient } from "../../db/client";
-import { createZipBuffer } from "./zip-builder";
 
 export interface ExportResult {
-  /** ZIP file buffer */
   zipBuffer: Buffer;
-  /** Suggested download filename */
   filename: string;
-  /** Content manifest for UI preview */
   manifest: ExportManifest;
 }
 
@@ -52,7 +51,6 @@ export async function exportPublishPackage(
   const coverArtifactId = pkg.cover_artifact_id as string | null | undefined;
   const exportTime = new Date().toISOString();
 
-  // Sanitize project name for filename
   const safeName = title.replace(/[/\\:*?"<>|]/g, "_").slice(0, 40);
 
   // Resolve cover image
@@ -71,7 +69,6 @@ export async function exportPublishPackage(
     videoArtifact = renderJob.outputArtifactJson as Record<string, unknown>;
   }
 
-  // Missing fields check
   const missingFields: string[] = [];
   if (!pkg.selected_title) missingFields.push("标题");
   if (!pkg.description) missingFields.push("描述");
@@ -100,48 +97,99 @@ export async function exportPublishPackage(
     exported_at: exportTime,
   };
 
-  // Build README
   const readme = buildReadme(publishJson, missingFields);
 
-  // Build ZIP entries
-  const zipEntries = [
-    { filename: "publish.json", data: Buffer.from(JSON.stringify(publishJson, null, 2), "utf8") },
-    { filename: "README.txt", data: Buffer.from(readme, "utf8") },
-  ];
+  // Collect file paths for ZIP
+  const exportedFiles: string[] = ["publish.json", "README.txt"];
 
-  // Add cover image if exists
+  // Create temp directory for packaging
+  const tmpDir = join(tmpdir(), `svf-export-${randomUUID()}`);
+  await mkdir(tmpDir, { recursive: true });
+
+  // Build the publish folder inside temp
+  const publishDir = join(tmpDir, safeName);
+  await mkdir(publishDir, { recursive: true });
+
+  // Write JSON and README
+  await writeFile(join(publishDir, "publish.json"), JSON.stringify(publishJson, null, 2), "utf8");
+  await writeFile(join(publishDir, "README.txt"), readme, "utf8");
+
+  // Copy cover image
   if (coverArtifact?.file_uri) {
     try {
       const coverPath = String(coverArtifact.file_uri);
       const coverData = await readFile(coverPath);
       const ext = coverPath.split(".").pop() || "png";
-      zipEntries.push({ filename: `cover.${ext}`, data: coverData });
+      const coverFilename = `cover.${ext}`;
+      await writeFile(join(publishDir, coverFilename), coverData);
+      exportedFiles.push(coverFilename);
     } catch {
-      // File not accessible — skip
-      zipEntries.push({
-        filename: "cover.url.txt",
-        data: Buffer.from(`封面图文件路径：${coverArtifact.file_uri}\n（文件未在服务器可访问路径）`, "utf8"),
-      });
+      exportedFiles.push("cover.url.txt");
+      await writeFile(
+        join(publishDir, "cover.url.txt"),
+        `封面图文件路径：${coverArtifact.file_uri}\n（文件未在服务器可访问路径）`,
+        "utf8",
+      );
     }
   }
 
-  // Add video URL reference
+  // Write video reference
   if (videoArtifact?.file_uri) {
-    zipEntries.push({
-      filename: "video.url.txt",
-      data: Buffer.from(
-        `视频文件路径：${videoArtifact.file_uri}\n` +
-        `时长：${videoArtifact.duration_sec ?? "未知"}秒\n` +
-        `分辨率：${videoArtifact.width ?? "?"}x${videoArtifact.height ?? "?"}\n`,
-        "utf8",
-      ),
-    });
+    exportedFiles.push("video.url.txt");
+    await writeFile(
+      join(publishDir, "video.url.txt"),
+      `视频文件路径：${videoArtifact.file_uri}\n` +
+      `时长：${videoArtifact.duration_sec ?? "未知"}秒\n` +
+      `分辨率：${videoArtifact.width ?? "?"}x${videoArtifact.height ?? "?"}\n`,
+      "utf8",
+    );
   }
+
+  // Create ZIP using PowerShell
+  const zipPath = join(tmpDir, `${safeName}-发布包.zip`);
+  try {
+    execSync(
+      `powershell -Command "Compress-Archive -Path '${publishDir}' -DestinationPath '${zipPath}' -Force"`,
+      { encoding: "utf8", stdio: "pipe", timeout: 30000 },
+    );
+  } catch (psError: any) {
+    // PowerShell failed — fall back to JSON-only download
+    const jsonBuf = Buffer.from(JSON.stringify(publishJson, null, 2), "utf8");
+    // Cleanup
+    try { execSync(`powershell -Command "if (Test-Path '${tmpDir}') { Remove-Item '${tmpDir}' -Recurse -Force }"`, { stdio: "pipe" }); } catch {}
+
+    return {
+      zipBuffer: jsonBuf,
+      filename: `${safeName}-publish.json`,
+      manifest: {
+        project_id: projectId,
+        project_title: title,
+        files: ["publish.json"],
+        title,
+        description,
+        hashtags,
+        cover_origin: coverOrigin,
+        has_cover_image: false,
+        has_video: false,
+        exported_at: exportTime,
+        readiness,
+        missing_fields: missingFields,
+      },
+    };
+  }
+
+  // Read the ZIP back
+  const zipBuffer = await readFile(zipPath);
+
+  // Cleanup temp files
+  try {
+    execSync(`powershell -Command "if (Test-Path '${tmpDir}') { Remove-Item '${tmpDir}' -Recurse -Force }"`, { stdio: "pipe" });
+  } catch {}
 
   const manifest: ExportManifest = {
     project_id: projectId,
     project_title: title,
-    files: zipEntries.map((e) => e.filename),
+    files: exportedFiles,
     title,
     description,
     hashtags,
@@ -154,7 +202,7 @@ export async function exportPublishPackage(
   };
 
   return {
-    zipBuffer: createZipBuffer(zipEntries),
+    zipBuffer,
     filename: `${safeName}-发布包.zip`,
     manifest,
   };
