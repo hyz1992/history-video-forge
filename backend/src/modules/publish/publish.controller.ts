@@ -42,7 +42,7 @@ function buildDefaultPublishPackage(input: {
     description: "",
     hashtags: [],
     platform_profile: "generic",
-    readiness: "draft",
+    readiness: "ready",
     notes: [],
   };
 }

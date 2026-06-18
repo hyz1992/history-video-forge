@@ -98,7 +98,6 @@ const coverPrompt = computed(() => pkg.value?.package.cover_prompt_draft ?? "");
 
 function onCoverPromptChange(val: string) {
   publishStore.updatePackage({ cover_prompt_draft: val });
-  onFieldEdited();
 }
 
 const titleCandidates = computed(() => pkg.value?.package.title_candidates ?? []);
@@ -106,14 +105,12 @@ const selectedTitle = computed(() => pkg.value?.package.selected_title ?? "");
 
 function onSelectedTitleChange(val: string) {
   publishStore.updatePackage({ selected_title: val });
-  onFieldEdited();
 }
 
 const description = computed(() => pkg.value?.package.description ?? "");
 
 function onDescriptionChange(val: string) {
   publishStore.updatePackage({ description: val });
-  onFieldEdited();
 }
 
 const hashtags = computed(() => pkg.value?.package.hashtags ?? []);
@@ -141,15 +138,11 @@ const readinessType = computed(() => {
 
 const showCoverGenerateConfirm = ref(false);
 const showCoverUploadDialog = ref(false);
-const showConfirmReadyDialog = ref(false);
 const showExportResultDialog = ref(false);
 const coverUploadUri = ref("");
 const coverUploadMime = ref("image/png");
 
-// Track whether user has edited fields since last "ready" confirmation
-const userHasEditedSinceReady = ref(false);
-
-// Missing fields for readiness check
+// Missing fields for informational purposes
 const missingFields = computed(() => {
   const m: string[] = [];
   if (!selectedTitle.value) m.push("标题");
@@ -158,16 +151,6 @@ const missingFields = computed(() => {
   if (!coverArtifact.value && !coverPrompt.value) m.push("封面图或封面提示词");
   return m;
 });
-
-const isBlocked = computed(() => missingFields.value.length > 0);
-
-function onFieldEdited() {
-  if (readiness.value === "ready" && !userHasEditedSinceReady.value) {
-    // Auto-revert to draft when user edits after confirming ready
-    publishStore.updatePackage({ readiness: "draft" });
-  }
-  userHasEditedSinceReady.value = true;
-}
 
 /* -------------------------------------------------------------------------- */
 /*  Title candidates                                                          */
@@ -278,37 +261,7 @@ function selectTitle(candidate: TitleCandidate) {
   publishStore.updatePackage({ selected_title: candidate.text });
 }
 
-function confirmReady() {
-  showConfirmReadyDialog.value = true;
-}
-
-async function handleConfirmReady() {
-  showConfirmReadyDialog.value = false;
-  await publishStore.updatePackage({ readiness: "ready" });
-  userHasEditedSinceReady.value = false;
-  ElMessage.success("发布资料已确认，可导出发布包");
-}
-
 async function handleExport() {
-  // Pre-flight readiness check
-  if (readiness.value !== "ready") {
-    try {
-      await ElMessageBox.confirm(
-        "当前发布资料尚未确认，是否导出草稿？",
-        "导出确认",
-        { confirmButtonText: "导出草稿", cancelButtonText: "取消", type: "warning" }
-      );
-    } catch {
-      return;
-    }
-  }
-
-  // Block if essential fields missing
-  if (!selectedTitle.value && !description.value) {
-    ElMessage.warning("标题和描述均为空，请至少填写一项后再导出");
-    return;
-  }
-
   // Warn about missing cover
   if (!coverArtifact.value) {
     try {
@@ -414,19 +367,7 @@ onMounted(() => {
           {{ readinessLabel }}
         </el-tag>
         <span v-if="isStale" class="stale-badge">过期</span>
-        <span v-if="readiness === 'ready' && !isStale" class="ready-hint">已就绪，可导出</span>
-        <span v-if="isBlocked && readiness !== 'blocked'" class="blocked-hint">
-          缺失：{{ missingFields.join("、") }}
-        </span>
         <span class="cover-origin">封面来源：{{ coverOriginLabel }}</span>
-        <el-button
-          v-if="readiness !== 'ready' && readiness !== 'blocked'"
-          type="success"
-          size="small"
-          @click="confirmReady"
-        >
-          确认发布资料
-        </el-button>
       </div>
 
       <div class="publish-grid">
@@ -650,31 +591,6 @@ onMounted(() => {
         <el-button @click="showCoverGenerateConfirm = false">取消</el-button>
         <el-button type="primary" @click="handleGenerateCover">
           确认生成
-        </el-button>
-      </template>
-    </el-dialog>
-
-    <!-- Confirm Ready Dialog -->
-    <el-dialog
-      v-model="showConfirmReadyDialog"
-      title="确认发布资料"
-      width="440px"
-    >
-      <p>确认发布资料后表示以下内容已经审核：</p>
-      <ul style="padding-left: 20px; line-height: 2;">
-        <li>标题已选定</li>
-        <li>描述已检查</li>
-        <li>话题标签已设置</li>
-        <li>封面图或封面提示词已就绪</li>
-      </ul>
-      <p>确认后侧边栏"发布交付"将显示完成标记，可以导出发布包。</p>
-      <p v-if="missingFields.length > 0" style="color: var(--color-warning);">
-        ⚠ 当前缺失：{{ missingFields.join("、") }}
-      </p>
-      <template #footer>
-        <el-button @click="showConfirmReadyDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleConfirmReady">
-          确认资料无误
         </el-button>
       </template>
     </el-dialog>

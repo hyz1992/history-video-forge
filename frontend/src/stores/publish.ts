@@ -272,13 +272,13 @@ export function createFetchPublishApi(baseUrl = ""): PublishApi {
         ? JSON.parse(decodeURIComponent(manifestHeader))
         : { project_id: projectId, project_title: "", files: [], title: "", description: "", hashtags: [], cover_origin: "", has_cover_image: false, has_video: false, exported_at: "", readiness: "draft", missing_fields: [] };
 
-      // Trigger file download
+      // Trigger file download with readable filename
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      const disposition = response.headers.get("content-disposition") || "";
-      const filenameMatch = disposition.match(/filename="?([^";\n]+)"?/);
-      a.download = filenameMatch?.[1] || `publish-package-${projectId}.zip`;
+      // Use manifest title for filename, with ASCII-safe fallback
+      const safeBase = (manifest.project_title || "publish-package").replace(/[/\\:*?"<>|]/g, "_").slice(0, 40);
+      a.download = `${safeBase}-发布包.zip`;
       a.href = url;
       a.click();
       URL.revokeObjectURL(url);

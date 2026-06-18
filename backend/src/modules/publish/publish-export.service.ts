@@ -3,6 +3,8 @@ import { basename } from "node:path";
 import AdmZip from "adm-zip";
 import type { DbClient } from "../../db/client";
 
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "http://localhost:3000";
+
 export interface ExportResult {
   zipBuffer: Buffer;
   filename: string;
@@ -82,8 +84,17 @@ export async function exportPublishPackage(
     project_title: title,
     video_export_artifact_id: pkg.video_export_artifact_id ?? null,
     video_filename: videoArtifact?.file_uri ? basename(String(videoArtifact.file_uri)) : null,
+    video_preview_url: renderJob?.outputArtifactJson
+      ? `${PUBLIC_BASE_URL}/api/projects/${projectId}/render/preview`
+      : null,
+    video_download_url: renderJob?.outputArtifactJson
+      ? `${PUBLIC_BASE_URL}/api/projects/${projectId}/render/download`
+      : null,
     cover_artifact_id: coverArtifactId ?? null,
     cover_filename: coverArtifact?.file_uri ? basename(String(coverArtifact.file_uri)) : null,
+    cover_url: coverArtifactId
+      ? `${PUBLIC_BASE_URL}/api/projects/${projectId}/artifacts/${coverArtifactId}/file`
+      : null,
     cover_prompt: pkg.cover_prompt_draft ?? null,
     cover_origin: coverOrigin,
     selected_title: pkg.selected_title ?? "",
@@ -119,20 +130,26 @@ export async function exportPublishPackage(
       zip.addFile(`${folderPrefix}${coverFilename}`, coverData);
       exportedFiles.push(coverFilename);
     } catch {
+      const coverUrl = coverArtifactId
+        ? `${PUBLIC_BASE_URL}/api/projects/${projectId}/artifacts/${coverArtifactId}/file`
+        : "无";
       zip.addFile(`${folderPrefix}cover.url.txt`, Buffer.from(
-        `封面图文件路径：${coverArtifact.file_uri}\n（文件未在服务器可访问路径）`,
+        `封面图访问地址：${coverUrl}\n（封面图文件未在服务器可访问路径，请使用上述地址获取）`,
         "utf8",
       ));
       exportedFiles.push("cover.url.txt");
     }
   }
 
-  // Video reference
+  // Video reference with proper URL
   if (videoArtifact?.file_uri) {
+    const videoUrl = renderJob
+      ? `${PUBLIC_BASE_URL}/api/projects/${projectId}/render/preview`
+      : null;
     zip.addFile(`${folderPrefix}video.url.txt`, Buffer.from(
-      `视频文件路径：${videoArtifact.file_uri}\n` +
-      `时长：${videoArtifact.duration_sec ?? "未知"}秒\n` +
-      `分辨率：${videoArtifact.width ?? "?"}x${videoArtifact.height ?? "?"}\n`,
+      videoUrl
+        ? `视频预览地址：${videoUrl}\n下载地址：${PUBLIC_BASE_URL}/api/projects/${projectId}/render/download\n时长：${videoArtifact.duration_sec ?? "未知"}秒\n分辨率：${videoArtifact.width ?? "?"}x${videoArtifact.height ?? "?"}\n`
+        : `视频文件路径：${videoArtifact.file_uri}\n时长：${videoArtifact.duration_sec ?? "未知"}秒\n分辨率：${videoArtifact.width ?? "?"}x${videoArtifact.height ?? "?"}\n`,
       "utf8",
     ));
     exportedFiles.push("video.url.txt");

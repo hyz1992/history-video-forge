@@ -136,7 +136,7 @@ describe("publish API", () => {
 
     const inner = pkg.package as Record<string, unknown>;
     expect(inner.package_version).toBe("publish_package_v1");
-    expect(inner.readiness).toBe("draft");
+    expect(inner.readiness).toBe("ready");
     expect(inner.video_export_artifact_id).toBe("export_001");
     // Description is generated (fallback when no LLM)
     expect(inner.description).toBeTruthy();
