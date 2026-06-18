@@ -4,11 +4,7 @@ import { join, resolve } from "node:path";
 import type { DbClient } from "../../db/client";
 import { saveAssetManifestRecord } from "../assets/asset-manifest-record.repository";
 import { getProjectStorageProfile } from "../../runtime/trace/project-storage";
-import {
-  submitDashscopeAsyncTask,
-  pollDashscopeTask,
-  downloadDashscopeOutput,
-} from "../assets/providers/dashscope/dashscope-client";
+import { downloadDashscopeOutput } from "../assets/providers/dashscope/dashscope-client";
 
 export interface CoverGenerateInput {
   apiKey: string;
@@ -52,35 +48,37 @@ export async function generateCoverImage(
   const model = input.model || DEFAULT_MODEL;
   const baseUrl = input.baseUrl || DEFAULT_BASE_URL;
 
-  // Build payload for Wan2.6 multimodal generation
+  // Build payload for Wan2.6 multimodal generation (synchronous endpoint)
   const payload = buildImagePayload(model, input.prompt, input.size || DEFAULT_SIZE);
 
-  // 1. Submit async task
-  const { taskId } = await submitDashscopeAsyncTask({
-    apiKey: input.apiKey,
-    endpoint: WAN_ENDPOINT,
-    payload,
-    extraHeaders: model.match(/^wan/i) ? { "X-DashScope-OssResourceResolve": "enable" } : undefined,
+  // 1. Call DashScope synchronously (Wan2.6 multimodal endpoint is sync)
+  const submitResp = await fetch(WAN_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${input.apiKey}`,
+    },
+    body: JSON.stringify(payload),
   });
 
-  // 2. Poll until completed
-  const pollInterval = input.pollIntervalMs || 3000;
-  const maxAttempts = input.maxPollAttempts || 60;
-  let result = await pollDashscopeTask({ apiKey: input.apiKey, taskId });
+  const submitJson = (await submitResp.json()) as Record<string, unknown>;
 
-  for (let i = 0; i < maxAttempts && (result.status === "PENDING" || result.status === "RUNNING"); i++) {
-    await sleep(pollInterval);
-    result = await pollDashscopeTask({ apiKey: input.apiKey, taskId });
+  if (!submitResp.ok) {
+    throw new Error(
+      `DashScope generation failed: ${submitResp.status} ${JSON.stringify(submitJson)}`
+    );
   }
 
-  if (result.status !== "SUCCEEDED" || !result.outputUrl) {
+  // 2. Extract image URL from response
+  const outputUrl = extractImageUrl(submitJson);
+  if (!outputUrl) {
     throw new Error(
-      `Cover image generation failed: ${result.status} ${result.errorMessage || ""}`
+      `No image URL in DashScope response: ${JSON.stringify(submitJson)}`
     );
   }
 
   // 3. Download the generated image
-  const imageBuffer = await downloadDashscopeOutput(result.outputUrl);
+  const imageBuffer = await downloadDashscopeOutput(outputUrl);
 
   // 4. Save to project storage
   const storageProfile = getProjectStorageProfile(project);
@@ -179,6 +177,49 @@ function buildImagePayload(
   };
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function extractImageUrl(response: Record<string, unknown>): string | undefined {
+  // Wan2.6 multimodal generation response format:
+  // { output: { choices: [{ message: { content: [{ image: "url" }] } }] } }
+  const output = response.output as Record<string, unknown> | undefined;
+  const choices = output?.choices as Array<Record<string, unknown>> | undefined;
+  if (choices) {
+    for (const choice of choices) {
+      const message = choice.message as Record<string, unknown> | undefined;
+      const content = message?.content as Array<Record<string, unknown>> | undefined;
+      if (content) {
+        for (const item of content) {
+          const image = item.image as string | undefined;
+          if (image) return image;
+        }
+      }
+    }
+  }
+
+  // Fallback: check for results array (legacy format)
+  const results = output?.results as Array<Record<string, unknown>> | undefined;
+  if (results) {
+    for (const item of results) {
+      const url = item.url as string | undefined;
+      if (url) return url;
+    }
+  }
+
+  // Deep search
+  return deepFindUrl(response);
+}
+
+function deepFindUrl(root: unknown): string | undefined {
+  const queue: unknown[] = [root];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) continue;
+    if (Array.isArray(current)) { queue.push(...current); continue; }
+    if (typeof current !== "object") continue;
+    const obj = current as Record<string, unknown>;
+    for (const [, val] of Object.entries(obj)) {
+      if (typeof val === "string" && val.startsWith("http")) return val;
+      if (val && typeof val === "object") queue.push(val);
+    }
+  }
+  return undefined;
 }
