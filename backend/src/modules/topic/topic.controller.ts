@@ -188,7 +188,13 @@ export async function createTopicRecommendationsController(
     };
   }
 
-  const recommendation = await recommendTopicCandidatesWithTrace(
+  // Set generating state BEFORE LLM call so refresh shows progress
+  project.status = "topic_generating";
+  project.updatedAt = new Date();
+
+  let recommendation;
+  try {
+    recommendation = await recommendTopicCandidatesWithTrace(
     context.app.db,
     {
       canonicalName: validatedPayload.value.canonical_name,
@@ -291,7 +297,15 @@ export async function createTopicRecommendationsController(
       runtime_diagnostics: recommendation.diagnostics,
     },
   };
-}
+  } catch (error) {
+    project.status = "topic_pending";
+    project.updatedAt = new Date();
+    const message = error instanceof Error ? error.message : "topic_generate_failed";
+    return {
+      statusCode: 500,
+      body: { error: "topic_generate_failed", message },
+    };
+  }
 
 export async function confirmTopicCandidateController(
   context: RouteContext,

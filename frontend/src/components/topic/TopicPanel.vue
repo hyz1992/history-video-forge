@@ -147,8 +147,8 @@ function handleRetry() {
         <el-button type="primary" @click="handleRetry">重试</el-button>
       </div>
 
-      <!-- Loading state -->
-      <div v-else-if="topicStore.state.isGenerating" class="topic-generating">
+      <!-- Loading / Generating state (snapshot-based survives refresh) -->
+      <div v-else-if="topicStore.state.isGenerating || topicStore.state.snapshot?.current_status === 'topic_generating'" class="topic-generating">
         <el-skeleton :rows="3" animated />
         <p class="topic-generating-text">正在调用大模型生成选题推荐，可能需要 1-3 分钟...</p>
         <p class="topic-generating-hint">生成完成后结果会自动出现，无需手动刷新。</p>

@@ -57,6 +57,7 @@ function isCompletedStatus(status: string): boolean {
 function getStatusLabel(status: string): string {
   const labels: Record<string, string> = {
     topic_pending: "待生成选题",
+    topic_generating: "选题生成中",
     topic_candidates_ready: "待确认主题",
     script_ready: "文案已就绪",
     script_generating: "文案生成中",
