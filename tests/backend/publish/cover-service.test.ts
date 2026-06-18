@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { saveAssetManifestRecord } from "../../../backend/src/modules/assets/asset-manifest-record.repository.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
-import { initializeCoverFromStoryboard } from "../../../backend/src/modules/publish/cover.service.js";
+import { initializeCoverFromStoryboard, buildCoverPromptContext, generateCoverPromptDraft } from "../../../backend/src/modules/publish/cover.service.js";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
 
 describe("cover service", () => {
@@ -99,8 +99,6 @@ describe("cover service", () => {
 
     expect(result.coverArtifactId).toBeTruthy();
     expect(result.coverArtifactId).not.toBe(sourceArtifactId);
-    expect(result.coverPromptDraft).toContain("战国宫廷");
-    expect(result.coverPromptDraft).toContain("晏子使楚");
 
     // Verify the new artifact was added to the manifest
     const updatedManifest = manifestRecord.manifestJson as Record<string, unknown>;
@@ -208,5 +206,26 @@ describe("cover service", () => {
     );
     const sourceId = (newArtifact?.metadata as Record<string, unknown>)?.source_artifact_id;
     expect(sourceId).toBe("img_first");
+  });
+
+  it("generates cover prompt draft via LLM (fallback when no LLM)", async () => {
+    const result = await generateCoverPromptDraft({
+      topicTitle: "晏子使楚",
+      selectedAngle: "外交智慧",
+      eraStyle: "战国宫廷",
+      visualTone: "庄重",
+    });
+
+    expect(result).toBeTruthy();
+    expect(typeof result).toBe("string");
+    expect(result.length).toBeGreaterThan(20);
+  });
+
+  it("builds cover prompt context from upstream records", () => {
+    const db = createDbClient();
+    const ctx = buildCoverPromptContext(db, "nonexistent", "nonexistent");
+    expect(ctx).toBeTruthy();
+    expect(ctx.topicTitle).toBe("");
+    expect(ctx.eraStyle).toBe("");
   });
 });

@@ -147,6 +147,16 @@ describe("publish API", () => {
     expect(Array.isArray(inner.hashtags)).toBe(true);
     expect((inner.hashtags as Array<string>).length).toBeGreaterThanOrEqual(2);
 
+    // Cover prompt is generated (LLM fallback)
+    expect(inner.cover_prompt_draft).toBeTruthy();
+    expect(typeof inner.cover_prompt_draft).toBe("string");
+
+    // Title candidates are auto-generated and first is selected
+    expect(inner.title_candidates).toBeTruthy();
+    expect((inner.title_candidates as Array<unknown>).length).toBeGreaterThanOrEqual(1);
+    expect(inner.selected_title).toBeTruthy();
+    expect(typeof inner.selected_title).toBe("string");
+
     // Verify the active pointer was set
     expect(project.activePublishPackageRecordId).toBeTruthy();
     const record = await getPublishPackageRecordById(
@@ -462,7 +472,7 @@ describe("publish API", () => {
     expect((res.json() as Record<string, unknown>).error).toBe("missing_file_uri");
   });
 
-  it("POST cover/generate returns 501 (not yet implemented)", async () => {
+  it("POST cover/generate returns 501 when DashScope not configured", async () => {
     const { app, project } = await setupProjectWithRender();
 
     await app.inject({
@@ -494,6 +504,13 @@ describe("publish API", () => {
     await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/publish/generate`,
+    });
+
+    // Clear cover prompt to trigger the no-cover-prompt error
+    await app.inject({
+      method: "PATCH",
+      url: `/api/projects/${project.id}/publish`,
+      payload: { cover_prompt_draft: "" },
     });
 
     const res = await app.inject({

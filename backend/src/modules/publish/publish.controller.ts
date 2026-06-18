@@ -1,7 +1,13 @@
 import type { AppResponse, RouteContext } from "../../app";
+import { env } from "../../config/env";
 import { saveAssetManifestRecord } from "../assets/asset-manifest-record.repository";
 import { getProjectSnapshot } from "../projects/project-snapshot.service";
-import { initializeCoverFromStoryboard } from "./cover.service";
+import {
+  buildCoverPromptContext,
+  generateCoverPromptDraft,
+  initializeCoverFromStoryboard,
+} from "./cover.service";
+import { generateCoverImage } from "./cover-generate.service";
 import { generateDescription } from "./description-generator.service";
 import { deriveHashtags } from "./hashtag-derivation.service";
 import { getPublishLlmGateway } from "./llm-helper";
@@ -109,9 +115,8 @@ export async function publishGenerateController(
     };
   }
 
-  // Initialize cover from #1 storyboard image
+  // Initialize cover from #1 storyboard image (copy file + register artifact)
   let coverArtifactId: string | null = null;
-  let coverPromptDraft: string | null = null;
   const notes: string[] = [];
   try {
     const coverResult = await initializeCoverFromStoryboard(
@@ -120,20 +125,31 @@ export async function publishGenerateController(
       assetManifestRecordId,
     );
     coverArtifactId = coverResult.coverArtifactId;
-    coverPromptDraft = coverResult.coverPromptDraft;
   } catch (err) {
     notes.push(
       `cover_init_skipped: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 
-  // Resolve upstream records for description and hashtag derivation
+  // Resolve upstream records
   const topicPackage = db.topicPackages.get(topicPackageId);
   const scriptRecord = db.scriptRecords.get(scriptRecordId);
 
-  // Generate description via LLM (fallback on failure)
-  let description = "";
+  // Generate cover prompt via LLM
+  let coverPromptDraft: string | null = null;
   let llmUsed = false;
+  try {
+    const ctx = buildCoverPromptContext(db, projectId, assetManifestRecordId);
+    coverPromptDraft = await generateCoverPromptDraft(ctx);
+    llmUsed = true;
+  } catch (err) {
+    notes.push(
+      `cover_prompt_gen_failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  // Generate description via LLM
+  let description = "";
   try {
     if (topicPackage && scriptRecord) {
       const descResult = await generateDescription({
@@ -148,6 +164,29 @@ export async function publishGenerateController(
   } catch (err) {
     notes.push(
       `description_gen_failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  // Generate title candidates via LLM and auto-select first
+  let titleCandidates: Array<{ candidate_id: string; text: string; style: string }> = [];
+  let selectedTitle = "";
+  try {
+    if (topicPackage && scriptRecord) {
+      const titleResult = await generateTitleCandidates({
+        topicTitle: topicPackage.title,
+        selectedAngle: topicPackage.selectedAngle,
+        scriptSummary: scriptRecord.scriptText.slice(0, 300),
+        durationSec: Math.round(exportArtifact.duration_sec ?? scriptRecord.estimatedDurationSec ?? 60),
+      });
+      titleCandidates = titleResult.candidates;
+      if (titleCandidates.length > 0) {
+        selectedTitle = titleCandidates[0].text;
+      }
+      llmUsed = true;
+    }
+  } catch (err) {
+    notes.push(
+      `title_gen_failed: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 
@@ -185,6 +224,12 @@ export async function publishGenerateController(
   // Set hashtags from derivation
   if (hashtags.length > 0) {
     (packageJson as Record<string, unknown>).hashtags = hashtags;
+  }
+
+  // Set title candidates and auto-selected title
+  if (titleCandidates.length > 0) {
+    (packageJson as Record<string, unknown>).title_candidates = titleCandidates;
+    (packageJson as Record<string, unknown>).selected_title = selectedTitle;
   }
 
   const record = await savePublishPackageRecord(db, {
@@ -540,15 +585,63 @@ export async function coverGenerateController(
     };
   }
 
-  // Not yet implemented — full image gen pipeline requires the provider adapter
-  // framework. The endpoint contract is established here.
-  return {
-    statusCode: 501,
-    body: {
-      error: "not_implemented",
-      details: "封面图生成功能将在后续迭代中接入 DashScope image provider。当前请使用手动上传。",
-    },
-  };
+  const dashscopeApiKey = process.env.ALIYUN_DASHSCOPE_API_KEY || env.dashscopeApiKey;
+  if (!dashscopeApiKey) {
+    return {
+      statusCode: 501,
+      body: {
+        error: "dashscope_not_configured",
+        details: "DashScope API key 未配置，无法生成封面图。请手动上传封面图。",
+      },
+    };
+  }
+
+  try {
+    const result = await generateCoverImage(
+      db,
+      projectId,
+      record.assetManifestRecordId,
+      {
+        apiKey: dashscopeApiKey,
+        prompt: coverPrompt,
+        size: "1080*1920",
+      },
+    );
+
+    // Update publish package with the generated cover
+    const updatedPackage = {
+      ...(record.packageJson as Record<string, unknown>),
+      cover_artifact_id: result.artifactId,
+      cover_origin: "generated",
+    };
+
+    await savePublishPackageRecord(db, {
+      id: record.id,
+      projectId: record.projectId,
+      renderJobRecordId: record.renderJobRecordId,
+      topicPackageId: record.topicPackageId,
+      scriptRecordId: record.scriptRecordId,
+      storyboardRecordId: record.storyboardRecordId,
+      assetManifestRecordId: record.assetManifestRecordId,
+      packageJson: updatedPackage,
+      validationResultJson: record.validationResultJson,
+      executionStateJson: {
+        ...(record.executionStateJson as Record<string, unknown> ?? {}),
+        cover_generated_at: new Date().toISOString(),
+      },
+      createdAt: record.createdAt,
+      updatedAt: new Date(),
+    });
+
+    const snapshot = await getProjectSnapshot(db, projectId);
+    return { statusCode: 200, body: snapshot };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "cover_generate_failed";
+    return {
+      statusCode: 500,
+      body: { error: "cover_generate_failed", details: message },
+    };
+  }
 }
 
 export async function titleCandidatesController(

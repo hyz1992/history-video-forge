@@ -5,15 +5,22 @@ import { fileURLToPath } from "node:url";
 import type { DbClient } from "../../db/client";
 import { saveAssetManifestRecord } from "../assets/asset-manifest-record.repository";
 import { getProjectStorageProfile } from "../../runtime/trace/project-storage";
+import { getPublishLlmGateway } from "./llm-helper";
 
 export interface CoverInitializationResult {
   coverArtifactId: string;
-  coverPromptDraft: string;
+}
+
+export interface CoverPromptContext {
+  topicTitle: string;
+  selectedAngle: string;
+  eraStyle: string;
+  visualTone: string;
 }
 
 /**
- * Find the #1 storyboard segment's primary visual artifact and copy it
- * as a standalone cover artifact. Generates an initial cover_prompt_draft.
+ * Find the #1 storyboard segment's primary visual asset and copy it
+ * as a standalone cover artifact.
  */
 export async function initializeCoverFromStoryboard(
   db: DbClient,
@@ -40,7 +47,6 @@ export async function initializeCoverFromStoryboard(
     throw new Error("no_segment_routes_or_artifacts");
   }
 
-  // Find the first segment (by segment_id order) that has a primary visual artifact
   const sortedRoutes = [...segmentRoutes].sort((a, b) =>
     String(a.segment_id ?? "").localeCompare(String(b.segment_id ?? "")),
   );
@@ -61,7 +67,6 @@ export async function initializeCoverFromStoryboard(
     throw new Error("no_storyboard_image_found");
   }
 
-  // Copy the source image file to publish directory
   const newArtifactId = db.generateId();
   const sourceUri = String(sourceArtifact.file_uri ?? "");
   const sourceMeta = (sourceArtifact.metadata ?? {}) as Record<string, unknown>;
@@ -69,10 +74,8 @@ export async function initializeCoverFromStoryboard(
   let newFileUri: string;
 
   if (sourceUri.startsWith("memory://") || sourceUri.startsWith("inline://")) {
-    // Test / virtual URIs: assign a new memory URI
     newFileUri = `memory://cover_${newArtifactId}.png`;
   } else {
-    // Physical file: copy to publish directory
     const storageProfile = getProjectStorageProfile(project);
     const publishDir = join(storageProfile.root_dir, "publish");
     await mkdir(publishDir, { recursive: true });
@@ -83,19 +86,15 @@ export async function initializeCoverFromStoryboard(
 
     const ext = sourcePath.split(".").pop() ?? "png";
     const destPath = join(publishDir, `cover.${ext}`);
-    // Use absolute path (matching render artifact format) so file-routes
-    // path-traversal check passes. file:// URIs are not resolved by path.resolve().
     newFileUri = resolve(destPath);
 
     try {
       await copyFile(sourcePath, destPath);
     } catch {
-      // If copy fails (e.g. in test with fake paths), fall back to source URI
       newFileUri = sourceUri;
     }
   }
 
-  // Register the new cover artifact in the manifest
   const newArtifact = {
     artifact_id: newArtifactId,
     artifact_type: "image",
@@ -114,7 +113,6 @@ export async function initializeCoverFromStoryboard(
   artifacts.push(newArtifact);
   manifestJson.artifacts = artifacts;
 
-  // Persist the manifest mutation so the cover artifact survives restarts
   await saveAssetManifestRecord(db, {
     id: manifestRecord.id,
     projectId: manifestRecord.projectId,
@@ -130,21 +128,65 @@ export async function initializeCoverFromStoryboard(
     createdAt: manifestRecord.createdAt,
   });
 
-  // Generate initial cover prompt draft from ArtBible context
-  const topicPackage = project.activeTopicPackageId
+  return { coverArtifactId: newArtifactId };
+}
+
+/**
+ * Build the context needed for cover prompt generation.
+ */
+export function buildCoverPromptContext(
+  db: DbClient,
+  projectId: string,
+  assetManifestRecordId: string,
+): CoverPromptContext {
+  const project = db.projects.get(projectId);
+  const topicPackage = project?.activeTopicPackageId
     ? db.topicPackages.get(project.activeTopicPackageId)
     : null;
-  const topicTitle = topicPackage?.title ?? "";
-  const eraStyle = manifestJson.art_bible
-    ? (manifestJson.art_bible as Record<string, unknown>).era_style as string | undefined
-    : undefined;
-
-  const coverPromptDraft = eraStyle
-    ? `${eraStyle}，短视频竖屏封面，${topicTitle}，高画质电影感构图`
-    : `短视频竖屏封面，${topicTitle}，高画质电影感构图`;
+  const manifestRecord = db.assetManifestRecords.get(assetManifestRecordId);
+  const manifestJson = (manifestRecord?.manifestJson ?? {}) as Record<string, unknown>;
+  const artBible = (manifestJson.art_bible ?? {}) as Record<string, unknown>;
 
   return {
-    coverArtifactId: newArtifactId,
-    coverPromptDraft,
+    topicTitle: topicPackage?.title ?? "",
+    selectedAngle: topicPackage?.selectedAngle ?? "",
+    eraStyle: (artBible.era_style as string) ?? "",
+    visualTone: (artBible.visual_tone as string) ?? "",
   };
+}
+
+/**
+ * Generate a cover prompt via LLM using the dedicated prompt.
+ * Falls back to a structured template when the LLM is unavailable.
+ */
+export async function generateCoverPromptDraft(ctx: CoverPromptContext): Promise<string> {
+  try {
+    const gateway = getPublishLlmGateway();
+    const result = await gateway.invokeStructuredPrompt<{ cover_prompt: string }>({
+      promptId: "publish.cover-prompt-generator",
+      input: {
+        topic_title: ctx.topicTitle,
+        selected_angle: ctx.selectedAngle,
+        era_style: ctx.eraStyle,
+        visual_tone: ctx.visualTone,
+        selected_title: "",
+      },
+      interactionLogWriter: null,
+    });
+    return result.cover_prompt?.trim() || buildFallbackCoverPrompt(ctx);
+  } catch {
+    return buildFallbackCoverPrompt(ctx);
+  }
+}
+
+function buildFallbackCoverPrompt(ctx: CoverPromptContext): string {
+  const era = ctx.eraStyle ? `${ctx.eraStyle}` : "历史场景";
+  const title = ctx.topicTitle ? `"${ctx.topicTitle}"` : "历史故事";
+  return [
+    `${era}，9:16竖屏封面构图`,
+    `主体居中偏上，下方留标题文字空间`,
+    `突出${title}的核心冲突与情绪张力`,
+    `电影级光影，历史正剧质感`,
+    `避免现代元素、水印、文字叠加`,
+  ].join("，");
 }

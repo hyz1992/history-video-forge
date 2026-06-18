@@ -37,14 +37,14 @@ export async function generateDescription(
       interactionLogWriter: null,
     });
 
-    return { description: (result.description ?? "").slice(0, 500) };
+    return { description: (result.description ?? "").slice(0, 200) };
   } catch {
     // Fallback: derive a basic description from the inputs
     const title = input.topicTitle || input.selectedAngle || "";
     const fallback =
       title.length > 0
-        ? `${title}。一段关于${input.selectedAngle || title}的历史故事，带你回到那个风云变幻的年代。`
+        ? `${title}。一段关于${input.selectedAngle || title}的历史故事，带你回到那个风云变幻的年代。`.slice(0, 200)
         : "";
-    return { description: fallback.slice(0, 500) };
+    return { description: fallback };
   }
 }
