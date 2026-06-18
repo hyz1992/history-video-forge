@@ -106,10 +106,18 @@ export async function runComposeGeneration(input: RunComposeGenerationInput) {
   });
 
   if (project.activeAssetManifestRecordId !== activeAssetManifestRecordId) {
-    // Clean up generating state — delete placeholder record, stale source
+    // Clean up generating state — delete placeholder record, stale source.
+    // Restore status based on the current active asset manifest's actual readiness,
+    // not a hardcoded "assets_ready".
+    const currentManifest = db.assetManifestRecords.get(project.activeAssetManifestRecordId ?? "");
+    const manifestReadiness = (currentManifest?.manifestJson as Record<string, unknown>)?.readiness as string | undefined;
+    const assetStatus =
+      manifestReadiness === "ready_for_compose" ? "assets_ready" :
+      manifestReadiness === "partial" ? "assets_partial" :
+      "assets_blocked";
     db.composeRecords.delete(generatingRecord.id);
     project.activeComposeRecordId = null;
-    project.status = "assets_ready";
+    project.status = assetStatus;
     project.updatedAt = new Date();
     return {
       statusCode: 409,

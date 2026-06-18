@@ -110,18 +110,66 @@ const isGenerating = computed(
 
 const isAssetsBlocked = computed(() => currentStatus.value === "assets_blocked");
 
-/** Asset manifest validation errors mapped to human-readable descriptions. */
-const assetErrorLabels: Record<string, string> = {
-  segment_visual_missing: "分镜图未生成或未上传",
-  segment_audio_missing: "口播音频（TTS）缺失",
-  segment_subtitle_missing: "字幕文件缺失",
-  segment_video_missing: "分镜视频（图生视频）缺失",
-  segment_bgm_missing_optional: "可选配乐未生成",
-};
-const assetErrors = computed(() => {
-  const errors = composeStore.state.snapshot?.active_assets?.local_validation?.errors;
-  if (!errors || errors.length === 0) return [];
-  return errors.map((e) => assetErrorLabels[e] ?? e);
+/** Derive specific missing asset items from manifest segment_routes and executions. */
+const missingAssetItems = computed(() => {
+  const assets = composeStore.state.snapshot?.active_assets;
+  if (!assets || !assets.manifest) return [];
+  const manifest = assets.manifest as Record<string, unknown>;
+  const routes = (manifest.segment_routes ?? []) as Array<Record<string, unknown>>;
+  const artifacts = (manifest.artifacts ?? []) as Array<Record<string, unknown>>;
+  const execs = (manifest.executions ?? []) as Array<Record<string, unknown>>;
+
+  // Map artifact_type to user-friendly label
+  const typeLabel: Record<string, string> = {
+    image: "分镜图",
+    video: "视频",
+    audio: "口播音频",
+    subtitle: "字幕",
+  };
+
+  const items: string[] = [];
+
+  for (const route of routes) {
+    const segId = String(route.segment_id ?? "");
+    const readiness = String(route.readiness ?? "ready");
+
+    if (readiness === "blocked" || readiness === "partial") {
+      const visualId = route.primary_visual_artifact_id as string | undefined;
+      const audioId = route.primary_audio_artifact_id as string | undefined;
+      const subtitleId = route.primary_subtitle_artifact_id as string | undefined;
+      const videoId = route.primary_video_artifact_id as string | undefined;
+
+      if (visualId && !artifacts.some((a) => a.artifact_id === visualId)) {
+        items.push(`${segId} 分镜图未生成`);
+      }
+      if (videoId && !artifacts.some((a) => a.artifact_id === videoId)) {
+        items.push(`${segId} 视频未生成`);
+      }
+      if (audioId && !artifacts.some((a) => a.artifact_id === audioId)) {
+        items.push(`${segId} 口播音频未生成`);
+      }
+      if (subtitleId && !artifacts.some((a) => a.artifact_id === subtitleId)) {
+        items.push(`${segId} 字幕未生成`);
+      }
+
+      // If no specific artifact IDs, check route readiness directly
+      if (!visualId && !audioId && !subtitleId && !videoId) {
+        items.push(`${segId} 素材尚未配置`);
+      }
+    }
+  }
+
+  // Fallback: check for failed executions
+  if (items.length === 0) {
+    const failedExecs = execs.filter((e) => e.status === "failed" || e.status === "blocked");
+    for (const e of failedExecs) {
+      const taskType = String(e.task_type ?? "unknown");
+      const segRef = e.source_segment_id ? `${e.source_segment_id} ` : "";
+      items.push(`${segRef}${typeLabel[taskType] ?? taskType} 生成失败`);
+    }
+  }
+
+  return items.slice(0, 10); // limit display
 });
 
 const blockReason = computed(() => {
@@ -226,9 +274,9 @@ function handleRetry() {
         :closable="false"
       >
         <template #default>
-          <p v-if="assetErrors.length > 0">缺失项：</p>
-          <ul v-if="assetErrors.length > 0" style="padding-left: 20px; line-height: 1.8;">
-            <li v-for="(err, i) in assetErrors" :key="i">{{ err }}</li>
+          <p v-if="missingAssetItems.length > 0">缺失项：</p>
+          <ul v-if="missingAssetItems.length > 0" style="padding-left: 20px; line-height: 1.8;">
+            <li v-for="(item, i) in missingAssetItems" :key="i">{{ item }}</li>
           </ul>
           <p v-else>请返回资产页检查各分镜的素材状态。</p>
         </template>
