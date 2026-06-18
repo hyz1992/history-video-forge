@@ -73,8 +73,7 @@ export async function handleFileRoute(
     try {
       const result = await exportPublishPackage(app.db, match.projectId);
       response.statusCode = 200;
-      const isZip = result.filename.endsWith(".zip");
-      response.setHeader("content-type", isZip ? "application/zip" : "application/json; charset=utf-8");
+      response.setHeader("content-type", "application/zip");
       const safeFilename = result.filename.replace(/[/\\:*?"<>|]/g, "_");
       const asciiFallback = safeFilename.replace(/[^\x00-\x7F]/g, "_").replace(/_+/g, "_");
       response.setHeader(
