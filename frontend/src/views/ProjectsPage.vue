@@ -73,6 +73,7 @@ function getStatusLabel(status: string): string {
     assets_generating: "资产生成中",
     composition_ready: "合成已就绪",
     render_ready: "渲染已就绪",
+    render_rendering: "渲染中",
     render_completed: "渲染完成",
     render_failed: "渲染失败",
   };
