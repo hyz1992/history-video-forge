@@ -43,6 +43,7 @@
   },
   "devDependencies": {
     "@playwright/test": "1.58.2",
+    "@types/adm-zip": "^0.5.8",
     "@types/node": "^24.3.0",
     "@vitejs/plugin-vue": "^6.0.1",
     "@vue/compiler-sfc": "^3.5.17",
