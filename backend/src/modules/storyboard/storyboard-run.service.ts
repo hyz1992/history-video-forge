@@ -139,6 +139,20 @@ export async function runStoryboardGeneration(
   });
 
   try {
+    // Save preliminary record BEFORE plan generation so refresh shows generating state
+    const generatingRecord = await saveStoryboardRecord(input.db, {
+      projectId: input.project.id,
+      topicPackageId: topicPackage.id,
+      scriptRecordId: scriptRecord.id,
+      planJson: { plan_version: "storyboard_v1", segments: [] },
+      validationResultJson: { stage: "storyboard_local_validation", decision: "generating", errors: [], warnings: [], metrics: {} },
+      executionStateJson: { generating: true, run_id: runId, regenerate_used: false },
+      graphTraceSummaryJson: null,
+      runtimeDiagnosticsJson: null,
+    });
+    input.project.activeStoryboardRecordId = generatingRecord.id;
+    input.project.status = "storyboard_generating";
+
     let plan = await generateStoryboardPlan({
     sourceScriptRecordId: scriptRecord.id,
     sourceTopicPackageId: topicPackage.id,
@@ -211,6 +225,7 @@ export async function runStoryboardGeneration(
   }
 
   const storyboardRecord = await saveStoryboardRecord(input.db, {
+    id: generatingRecord.id,
     projectId: input.project.id,
     topicPackageId: topicPackage.id,
     scriptRecordId: scriptRecord.id,

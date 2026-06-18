@@ -121,6 +121,26 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
   });
 
   try {
+    // Save preliminary record BEFORE graph execution so refresh shows generating state
+    const generatingRecord = await saveScriptRecord(input.db, {
+      projectId: input.project.id,
+      topicPackageId: record.id,
+      scriptText: "",
+      openingSpan: "",
+      endingSpan: "",
+      estimatedDurationSec: 0,
+      beatTraceJson: [],
+      quoteTraceJson: [],
+      reviewStatus: "generating",
+      validationResultJson: { stage: "script_local_validation", decision: "generating", errors: [], warnings: [], metrics: {} },
+      semanticReviewResultJson: { stage: "script_semantic_review", decision: "generating", patch_intent: null },
+      executionStateJson: { generating: true, run_id: runId },
+      graphTraceSummaryJson: null,
+      runtimeDiagnosticsJson: null,
+    });
+    input.project.activeScriptRecordId = generatingRecord.id;
+    input.project.status = "script_generating";
+
     const {
     draft,
     localValidation,
@@ -155,6 +175,7 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
   );
 
   const scriptRecord = await saveScriptRecord(input.db, {
+    id: generatingRecord.id,
     projectId: input.project.id,
     topicPackageId: record.id,
     scriptText: draft.script_text,

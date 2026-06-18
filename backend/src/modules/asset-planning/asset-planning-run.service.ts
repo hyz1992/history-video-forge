@@ -277,6 +277,21 @@ export async function runAssetPlanningGeneration(
   });
 
   try {
+    // Save preliminary record BEFORE plan generation so refresh shows generating state
+    const generatingRecord = await saveAssetPlanRecord(input.db, {
+      projectId: input.project.id,
+      topicPackageId: topicPackage.id,
+      scriptRecordId: scriptRecord.id,
+      storyboardRecordId: storyboardRecord.id,
+      planJson: { plan_version: "asset_plan_v1", characters: [], locations: [], tasks: [], visual_rules: {}, audio_rules: {} },
+      validationResultJson: { stage: "asset_planning_local_validation", decision: "generating", errors: [], warnings: [], metrics: {} },
+      executionStateJson: { generating: true, run_id: runId, repair_used: false, regenerate_used: false },
+      graphTraceSummaryJson: null,
+      runtimeDiagnosticsJson: null,
+    });
+    input.project.activeAssetPlanRecordId = generatingRecord.id;
+    input.project.status = "asset_plan_generating";
+
     let plan = await generateAssetPlan({
     sourceStoryboardRecordId: storyboardRecord.id,
     sourceScriptRecordId: scriptRecord.id,
@@ -427,6 +442,7 @@ export async function runAssetPlanningGeneration(
   }
 
   const assetPlanRecord = await saveAssetPlanRecord(input.db, {
+    id: generatingRecord.id,
     projectId: input.project.id,
     topicPackageId: topicPackage.id,
     scriptRecordId: scriptRecord.id,

@@ -62,6 +62,19 @@ export async function runComposeGeneration(input: RunComposeGenerationInput) {
     };
   }
 
+  // Save preliminary record BEFORE timeline build so refresh shows generating state
+  const generatingRecord = await saveComposeRecord(db, {
+    projectId: project.id,
+    assetManifestRecordId: assetManifestRecord.id,
+    timelineJson: { timeline_version: "compose_timeline_v1", duration_sec: 0, tracks: [], segments: [] },
+    validationResultJson: { stage: "compose_local_validation", decision: "generating", errors: [], warnings: [], metrics: {} },
+    executionStateJson: { generating: true, activated: false },
+    graphTraceSummaryJson: null,
+    runtimeDiagnosticsJson: null,
+  });
+  project.activeComposeRecordId = generatingRecord.id;
+  project.status = "compose_generating";
+
   const manifest = AssetManifestSchema.parse(
     normalizeAssetManifestDates(assetManifestRecord.manifestJson as Record<string, unknown>),
   );
@@ -102,6 +115,7 @@ export async function runComposeGeneration(input: RunComposeGenerationInput) {
   }
 
   const composeRecord = await saveComposeRecord(db, {
+    id: generatingRecord.id,
     projectId: project.id,
     assetManifestRecordId: assetManifestRecord.id,
     timelineJson: finalizedTimeline,
