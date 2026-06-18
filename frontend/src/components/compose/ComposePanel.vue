@@ -212,7 +212,14 @@ function handleRetry() {
         :closable="false"
       >
         <template #default>
-          <p>当前资产阶段存在未完成的素材任务，请先返回资产页完成素材生成或上传后再合成。</p>
+          <p>以下可能原因：</p>
+          <ul style="padding-left: 20px; line-height: 1.8;">
+            <li>分镜图未生成或未上传</li>
+            <li>分镜视频（图生视频）缺失</li>
+            <li>口播音频（TTS）未生成</li>
+            <li>字幕文件缺失</li>
+          </ul>
+          <p>请返回资产页，在分镜卡片中逐一检查并补全缺失的素材。</p>
         </template>
       </el-alert>
       <div class="compose-error-actions">
