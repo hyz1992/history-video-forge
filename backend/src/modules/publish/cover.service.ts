@@ -1,5 +1,5 @@
 import { copyFile, mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { DbClient } from "../../db/client";
@@ -83,7 +83,9 @@ export async function initializeCoverFromStoryboard(
 
     const ext = sourcePath.split(".").pop() ?? "png";
     const destPath = join(publishDir, `cover.${ext}`);
-    newFileUri = `file://${destPath}`;
+    // Use absolute path (matching render artifact format) so file-routes
+    // path-traversal check passes. file:// URIs are not resolved by path.resolve().
+    newFileUri = resolve(destPath);
 
     try {
       await copyFile(sourcePath, destPath);
