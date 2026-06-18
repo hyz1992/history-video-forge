@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 
@@ -13,6 +13,7 @@ import { PIPELINE_STEPS } from "../../stores/workspace";
 
 import SegmentAssetCard from "./SegmentAssetCard.vue";
 import { computeCostBreakdown, estimatePlanCost, getTaskCostHint, getVideoUpgradeCostHint, estimateBlockedItemsCost, PRICING, type PlanTaskLike } from "../../utils/pricing";
+import { getAssetGeneratingView } from "../../utils/asset-generating-view";
 
 const storyboardStore = useStoryboardStore();
 const assetPlanningStore = useAssetPlanningStore();
@@ -56,6 +57,17 @@ const isAssetsGenerating = computed(
   () =>
     currentStatus.value === "assets_generating" ||
     assetsStore.state.snapshot?.active_assets?.execution_state?.generating === true,
+);
+
+const isAssetsBusy = computed(() => assetsStore.state.isGenerating || isAssetsGenerating.value);
+
+const generatingView = computed(() =>
+  getAssetGeneratingView({
+    hasAssetPlan: !!activeAssetPlan.value,
+    hasManifest: hasManifest.value,
+    isPlanGenerating: isPlanGenerating.value,
+    isAssetsGenerating: isAssetsGenerating.value || assetsStore.state.isGenerating,
+  }),
 );
 
 /* Partial readiness (warnings only, e.g. optional BGM missing)
@@ -342,7 +354,7 @@ const allTypeBreakdown = computed(() => {
 
 /** Clear status message during generation (backend doesn't stream progress). */
 const generationProgress = computed(() => {
-  if (!assetsStore.state.isGenerating) return "";
+  if (!isAssetsBusy.value) return "";
   if (!hasManifest.value) return "正在初始化资产生成，可能需要 1-5 分钟...";
   return `生成请求已提交，处理中... 当前 ${executionStats.value.completed}/${assetTasks.value.length} 已完成`;
 });
@@ -403,16 +415,41 @@ onMounted(async () => {
     }
   }
   await assetsStore.loadProject();
+  startGeneratingPoller();
   await autoStartBasicAssets();
 });
 
 let basicAssetsAutoStarted = false;
+let refreshTimer: ReturnType<typeof setInterval> | null = null;
+
+async function refreshAssetState() {
+  await Promise.all([
+    assetPlanningStore.retryLoad(),
+    assetsStore.loadProject(),
+  ]);
+}
+
+function startGeneratingPoller() {
+  if (refreshTimer) return;
+  refreshTimer = setInterval(() => {
+    if (isPlanGenerating.value || isAssetsGenerating.value || assetsStore.state.isGenerating) {
+      void refreshAssetState();
+    }
+  }, 5000);
+}
+
+onUnmounted(() => {
+  if (refreshTimer) {
+    clearInterval(refreshTimer);
+    refreshTimer = null;
+  }
+});
 
 /** Auto-start basic asset generation when entering the page with a plan
  *  but no manifest yet.  Guards against duplicate triggers on refresh. */
 async function autoStartBasicAssets() {
   if (basicAssetsAutoStarted) return;
-  if (assetsStore.state.isGenerating) return;
+  if (isAssetsBusy.value) return;
   if (!activeAssetPlan.value) return;
   if (hasManifest.value) return; // already generated
 
@@ -442,6 +479,7 @@ async function handleGeneratePlan() {
 }
 
 async function handleGenerateBasic() {
+  if (isAssetsBusy.value) return;
   // Basic assets: TTS/subtitle/motion/SFX/BGM — low cost, no confirmation needed
   await assetsStore.generateAssets({ enabledProviderTypes: ["tts", "sfx", "bgm"] });
   if (!assetsStore.state.loadError) {
@@ -450,6 +488,7 @@ async function handleGenerateBasic() {
 }
 
 async function handleGenerateMissing() {
+  if (isAssetsBusy.value) return;
   const count = blockedItems.value.length;
   const types = [...new Set(blockedItems.value.map(i => i.type))].join("、");
   const { imgCount, vidSec, estCost } = estimateBlockedItemsCost(blockedItems.value);
@@ -470,6 +509,7 @@ async function handleGenerateMissing() {
 }
 
 async function handleGenerateFull() {
+  if (isAssetsBusy.value) return;
   const costText = estimatedCost.value
     ? `\n预估费用约 ¥${estimatedCost.value.total.toFixed(2)}（${estimatedCost.value.images} 张图 + ${estimatedCost.value.videoTotalSec.toFixed(0)}s 视频 + ${estimatedCost.value.ttsChars} 字口播）`
     : "";
@@ -612,14 +652,14 @@ function handleConfirm() {
 
     <!-- Generating state (snapshot-based, survives refresh) -->
     <div
-      v-else-if="isPlanGenerating || isAssetsGenerating"
+      v-else-if="generatingView?.blockPage"
       class="asset-generating"
     >
-      <p class="asset-generating-title">正在生成资产规划</p>
-      <p class="asset-generating-hint">正在调用大模型分析分镜并规划素材，可能需要 1-5 分钟。</p>
+      <p class="asset-generating-title">{{ generatingView.title }}</p>
+      <p class="asset-generating-hint">{{ generatingView.hint }}</p>
       <p class="asset-generating-hint">系统每 5 秒自动检查生成状态，也可手动刷新：</p>
       <el-button
-        @click="assetPlanningStore.retryLoad()"
+        @click="refreshAssetState"
       >
         立即刷新状态
       </el-button>
@@ -657,19 +697,19 @@ function handleConfirm() {
         </span>
       </p>
       <!-- Auto-generating state -->
-      <div v-if="isAssetsGenerating || assetsStore.state.isGenerating" class="asset-plan-auto-generating">
+      <div v-if="isAssetsBusy" class="asset-plan-auto-generating">
         <el-alert
-          title="正在生成基础资产"
+          :title="generatingView?.title ?? '正在生成资产'"
           type="info"
           :closable="false"
-          description="口播音频、字幕、运镜、音效、配乐 — 系统自动生成中，请稍候..."
+          :description="generatingView?.hint ?? '正在生成或补齐素材，请稍候...'"
         />
       </div>
       <!-- Failed: show retry -->
       <div v-else-if="assetsStore.state.loadError" class="asset-plan-overview-actions">
         <el-button type="primary" @click="handleGenerateBasic">重试生成基础资产</el-button>
       </div>
-      <p v-if="isAssetsGenerating || assetsStore.state.isGenerating" class="asset-generating-progress">
+      <p v-if="isAssetsBusy" class="asset-generating-progress">
         {{ generationProgress }}
       </p>
     </div>
@@ -795,16 +835,18 @@ function handleConfirm() {
           <el-button
             v-if="blockedItems.length > 0"
             type="primary"
-            :loading="assetsStore.state.isGenerating"
+            :loading="isAssetsBusy"
+            :disabled="isAssetsBusy"
             @click="handleGenerateMissing"
           >
-            {{ assetsStore.state.isGenerating ? "生成中..." : "批量生成剩余资产" }}
+            {{ isAssetsBusy ? "生成中..." : "批量生成剩余资产" }}
           </el-button>
           <el-button
             type="danger"
             plain
             size="small"
-            :loading="assetsStore.state.isGenerating"
+            :loading="isAssetsBusy"
+            :disabled="isAssetsBusy"
             @click="handleGenerateFull"
           >
             重新生成全部资产
@@ -812,7 +854,7 @@ function handleConfirm() {
           <span v-if="blockedItems.length > 0" class="asset-overview-hint">
             也可在下方的分镜卡片中逐项生成、上传或替换
           </span>
-          <p v-if="assetsStore.state.isGenerating && generationProgress" class="asset-generating-progress">
+          <p v-if="isAssetsBusy && generationProgress" class="asset-generating-progress">
             {{ generationProgress }}
           </p>
         </div>

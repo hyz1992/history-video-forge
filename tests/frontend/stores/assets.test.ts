@@ -133,6 +133,22 @@ describe("createAssetsStore", () => {
     expect(store.state.loadError).toBeNull();
   });
 
+  it("loadProject 在 snapshot 仍为 assets_generating 时保持生成中状态", async () => {
+    mockApi.loadProject.mockResolvedValue({
+      ...MOCK_SNAPSHOT,
+      current_status: "assets_generating",
+      active_assets: {
+        ...MOCK_SNAPSHOT.active_assets,
+        execution_state: { generating: true },
+      },
+    });
+    const store = createAssetsStore({ projectStore: mockProjectStore, api: mockApi });
+
+    await store.loadProject();
+
+    expect(store.state.isGenerating).toBe(true);
+  });
+
   it("loadProject 失败时设置 loadError", async () => {
     mockApi.loadProject.mockRejectedValue(new Error("network_error"));
     const store = createAssetsStore({ projectStore: mockProjectStore, api: mockApi });

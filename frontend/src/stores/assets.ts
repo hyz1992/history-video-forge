@@ -235,6 +235,9 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
       const snapshot = await input.api.loadProject(projectId);
       state.snapshot = snapshot;
       state.loadError = null;
+      state.isGenerating =
+        snapshot.current_status === "assets_generating" ||
+        snapshot.active_assets?.execution_state?.generating === true;
 
       if (snapshot.current_status) {
         input.projectStore.syncProject({
