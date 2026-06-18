@@ -145,6 +145,26 @@ LLM reviewer 会波动。一次 `patch_once`、`regen_once` 或 `return_topic` �
 - 下游发现问题时，先定位是上游交付物不合格、接口合同缺失，还是本阶段实现错误。
 - 宁可晚一点进入下一层，也不要在不稳定地基上扩张功能面。
 
+### 2.9 没有 harness 就开始编码
+
+本项目早期的一个重要正确决策，是在正式业务编码前先建立轻量 harness v1：根目录入口、harness 目录、prompt registry、runtime harness、输出目录、检查脚本与完成/评审规则。这不是“还没写业务先写杂活”，而是先给 agent 协作铺轨道。
+
+如果没有这层 harness，后续很容易出现：
+
+- 新 agent 进入项目后各自挑文档读，理解不一致。
+- prompt 散落在代码、notes 或临时文档里。
+- 中文 prompt、中文提交、阶段闸门等硬要求停留在聊天记录里。
+- runtime 链路只有口头说法，没有可复跑样例和输出目录。
+- 检查入口、样本、trace、diagnostics、验收报告各写各的。
+- 项目越做越大后，才发现无法稳定复验最早的核心链路。
+
+修正原则：
+
+- 重要流水线项目应在业务编码前先建立最小 harness。
+- harness 不重新定义产品对象，只定义 agent 如何执行、检查、记录和复验。
+- runtime harness 应尽早成为 P0，而不是后期补测试。
+- prompt registry、样本集、输出目录、显式 live check 和验收报告应从第一阶段就有稳定位置。
+
 ---
 
 ## 3. 通用开发方法
@@ -386,6 +406,63 @@ agent 特别容易顺手扩范围。每次开始前应输出：
 
 如果某条历史经验仍然有效，应吸收到正式架构或 process 文档；不要要求每个新 agent 反复读旧 records 才能避坑。
 
+### 3.16 编码前先建立最小 harness
+
+对 agent 驱动的创意流水线项目，最小 harness 应该先于大规模业务编码出现。它的作用不是替代产品设计，而是把“怎么做才算受控”提前固化。
+
+建议最小组成：
+
+- 根入口：`AGENTS.md`，说明当前阶段、阅读顺序、硬约束和禁止事项。
+- harness 入口：`harness/README.md`，说明检查入口、runtime 命令、输出位置和边界。
+- 执行规则：definition of done、review checklist、regression checklist。
+- Prompt Registry：正式 prompt 的物理目录、元数据、语言和去重规则。
+- 样本集：固定 smoke 样本、扩展巡检样本、reviewer fixture。
+- runtime harness：能跑通当前最小链路，并输出 trace、diagnostics 和 artifact。
+- 轻量检查脚本：prompt 语言、重复 prompt、schema-doc drift、快速检查。
+- 输出目录：统一存放运行产物，默认 gitignored。
+
+这套 harness 不需要一开始很大，但必须让后续 agent 能回答：从哪里开始读、跑什么命令、看哪些产物、什么不能做、失败时怎么定位。
+
+### 3.17 harness 要分清默认门和显式巡检
+
+harness 不能把所有真实调用都塞进默认自动化门。真实 LLM、真实 provider、成片导出、UI walkthrough 往往成本高、耗时长、波动大，更适合显式触发和记录。
+
+推荐分层：
+
+- 默认自动化门：快、稳定、低成本，验证 schema、纯函数、fake/local 链路和固定 smoke。
+- 显式真实巡检：真实模型、真实 TTS、真实图像/视频 provider、五轮质量检查。
+- 人工/二次 agent 验收：审美、语义、发布判断、复杂 UI 体验。
+- 报告读取入口：不重跑昂贵任务，只读取最近一次 summary/report 进行复核。
+
+这种分层能避免两个极端：一是完全不验真实链路，二是把昂贵不稳定的 live check 变成日常阻塞。
+
+### 3.18 harness 输出要可审计、可复盘、可复跑
+
+runtime harness 的价值不只是“跑了一次 pass”，而是留下足够证据，让未来的自己或另一个 agent 能复盘。
+
+推荐输出：
+
+- `summary.json`：总览、通过/失败、关键路径。
+- `runtime-diagnostics.json`：阶段、provider、fallback、warnings、耗时。
+- `graph-trace-summary.json` 或等价 trace：节点执行和状态流转。
+- `llm-interactions/*.md`：prompt、输入、响应、repair context。
+- 阶段主产物 JSON：如 script、storyboard、asset plan、manifest、timeline。
+- `review.md` 或 `manual-review-checklist.md`：人工和二次 agent 的审查入口。
+- screenshots / trace.zip / console-summary / network-summary：前端验收证据。
+
+输出目录应稳定、可指定、可 resume；运行产物默认不进 git，但关键结论应沉淀到 records、plans 或正式文档。
+
+### 3.19 harness 不应反客为主
+
+harness 是执行治理层，不是产品真相源。它应约束 agent 如何工作，而不是重新定义系统是什么。
+
+边界：
+
+- 产品对象、schema、API、阶段职责仍归 `docs/architecture/`、`docs/data/`、正式 plans 管。
+- harness 只管理 prompt 资产、运行样本、检查脚本、验收入口和执行规则。
+- 如果 harness 和正式架构冲突，先判断是哪一层越权，而不是让检查脚本强行覆盖产品设计。
+- 不要把旧项目 harness 直接复制到新项目；只吸收结构和工作流，业务语义必须重新贴合当前项目。
+
 ---
 
 ## 4. Agent 反糊弄清单
@@ -411,6 +488,10 @@ agent 特别容易顺手扩范围。每次开始前应输出：
 - 是否让下游用兜底逻辑长期消化上游合同缺陷。
 - 是否只修当前暴露的单个样本，没有回跑冻结样本池或代表性样本。
 - 是否上游变更后没有处理 downstream active record 失效。
+- 是否没有 harness 入口、固定样本、运行输出和检查命令，就开始大规模业务编码。
+- 是否把真实 live check 混进默认自动化门，导致日常验证昂贵且不稳定。
+- 是否 runtime harness 跑完后没有留下 summary、trace、diagnostics 或 review artifact。
+- 是否让 harness 重新定义产品对象，越过正式架构文档。
 
 ---
 
@@ -451,6 +532,7 @@ skill 的优势是跨项目复用，但它不适合承载太多项目特定事�
 - 如何设计 harness 分层。
 - 如何设计自测-自修复闭环与可验收交付物。
 - 如何设计流水线级联闸门、冻结样本池和状态失效规则。
+- 如何在业务编码前建立最小 harness、Prompt Registry、runtime 输出和显式巡检体系。
 - 如何写反糊弄验收清单。
 - 如何从 records 中吸收经验而不续跑旧计划。
 
@@ -512,6 +594,23 @@ LLM/人工才可判断：
 未解决问题：
 是否允许进入下游详细设计：
 若不允许，回到哪一层修复：
+```
+
+每个新项目开始编码前，先写：
+
+```text
+harness 根入口：
+harness README：
+正式 prompt 目录：
+Prompt Registry 规范：
+固定样本集：
+runtime harness 命令：
+默认自动化门：
+显式 live check：
+输出目录：
+运行产物 git 策略：
+完成定义：
+评审清单：
 ```
 
 每次验收时，先写：
@@ -604,6 +703,9 @@ UI 应回到的状态：
 `story-video-forge2` 当前已具备较强的阶段治理基础。后续推进前端预览、发布流和人工审稿流时，建议继续沿用本方法：
 
 - 不回改已冻结的 `topic + script`，除非定位到阻塞或回归。
+- 继续把 `harness/README.md` 和 runtime harness 作为新 agent 的 P0 入口，不要只依赖口头交接。
+- 新增前端、发布、人工审稿能力时，应同步补对应 smoke/live-check/report 入口，而不是功能完成后再补。
+- 扩展真实 provider 或成片验收时，应明确默认测试、显式 live check 和人工验收三层边界。
 - 任一 downstream 新能力启动前，先确认上一层 active 交付物已经合格、可复跑、可冻结。
 - 如果 render/export 或发布流暴露质量问题，先回看 `ComposeTimeline`、`AssetManifest`、`AssetPlan`、`StoryboardPlan` 和 `ScriptDraftPackage`，不要默认在最后一层补锅。
 - 前端体验问题必须回到真实页面或等价浏览器验证。
