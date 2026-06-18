@@ -45,7 +45,8 @@ const validationResult = computed(() => activeRender.value?.validation_result ??
 const status = computed(() => activeRender.value?.status ?? "");
 
 const isCompleted = computed(() => status.value === "completed" || status.value === "ready");
-const isFailed = computed(() => status.value === "failed");
+const isRendering = computed(() => status.value === "rendering" || status.value === "queued");
+const isFailed = computed(() => status.value === "failed" || status.value === "stale_source");
 const isBlocked = computed(() => status.value === "blocked");
 
 const renderInfo = computed(() => {
@@ -197,12 +198,33 @@ function goToCompose() {
       class="render-skeleton"
     />
 
-    <!-- Generating state -->
+    <!-- Generating state (from snapshot status, survives refresh) -->
     <div
-      v-else-if="renderStore.state.isGenerating"
+      v-else-if="isRendering || renderStore.state.isGenerating"
       class="render-generating"
     >
       <p>正在渲染视频，可能需要几分钟...</p>
+      <p v-if="status" class="render-status-detail">状态：{{ status }}</p>
+    </div>
+
+    <!-- Failed state (survives refresh) -->
+    <div v-else-if="isFailed && !isCompleted" class="render-blocked-card">
+      <el-alert
+        title="渲染失败"
+        type="error"
+        show-icon
+        :closable="false"
+      >
+        <template #default>
+          <p>渲染过程中发生错误，请检查上游数据后重试。</p>
+          <p v-if="validationResult?.errors?.length" class="render-error-detail">
+            错误详情：{{ (validationResult.errors as string[]).join("；") }}
+          </p>
+        </template>
+      </el-alert>
+      <div class="render-blocked-actions">
+        <el-button type="primary" :loading="renderStore.state.isGenerating" @click="handleGenerate">重试渲染</el-button>
+      </div>
     </div>
 
     <!-- Compose record missing: project is past compose but compose data lost -->

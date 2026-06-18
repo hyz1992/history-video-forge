@@ -243,6 +243,13 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
     graphTraceSummaryJson: trace,
     runtimeDiagnosticsJson: null,
   });
+
+  // Set active pointer BEFORE rendering so refresh during render shows "rendering" state
+  project.activeRenderJobRecordId = renderJob.id;
+  project.status = "render_rendering";
+  project.latestRenderRunTraceJson = trace;
+  project.updatedAt = new Date();
+
   const adapter = input.adapter ?? createFakeRenderAdapter();
   const projectStorageRootDir = resolve(project.storageRootDir);
   const outputDir = resolve(projectStorageRootDir, "renders", renderJob.id);

@@ -177,12 +177,15 @@ export function createRenderStore(input: CreateRenderStoreInput): RenderStore {
 
     try {
       await input.api.generateRender(projectId);
-      await loadProject();
     } catch (error) {
       state.loadError = toErrorMessage(error);
     } finally {
       state.isGenerating = false;
     }
+
+    // Always reload snapshot so the frontend sees the latest render job status
+    // (completed / failed / rendering — survives page refresh)
+    await loadProject();
   }
 
   function getPreviewUrl(): string {
