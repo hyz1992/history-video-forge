@@ -412,6 +412,11 @@ export async function runAssetPlanningGeneration(
     capturedScriptRecordId: scriptRecord.id,
   });
   if (staleSourceDetected) {
+    // Clean up generating state — stale source, delete the placeholder record
+    input.db.assetPlanRecords.delete(generatingRecord.id);
+    input.project.activeAssetPlanRecordId = null;
+    input.project.status = "storyboard_ready";
+    input.project.updatedAt = new Date();
     graphTraceSummary = buildTraceSummary({
       runId,
       validationDecision: localValidation.decision,

@@ -805,7 +805,8 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   }
 
   if (staleSourceDetected) {
-    // Clean up generating state — stale source, don't leave dirty active pointer
+    // Clean up generating state — delete placeholder record, don't leave dirty state
+    db.assetManifestRecords.delete(generatingManifestRecord.id);
     project.activeAssetManifestRecordId = null;
     project.status = "asset_plan_ready";
     project.updatedAt = new Date();

@@ -44,6 +44,15 @@ export interface ComposeSnapshot {
     graph_trace_summary: Record<string, unknown> | null;
     runtime_diagnostics: Record<string, unknown> | null;
   } | null;
+  active_assets: {
+    asset_manifest_record_id: string;
+    manifest: Record<string, unknown>;
+    local_validation: {
+      decision: string;
+      errors?: string[];
+      warnings?: string[];
+    } | null;
+  } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -83,6 +92,7 @@ export function createFetchComposeApi(baseUrl = ""): ComposeApi {
       return {
         current_status: data.current_status ?? null,
         active_compose: data.active_compose ?? null,
+        active_assets: data.active_assets ?? null,
       };
     },
 

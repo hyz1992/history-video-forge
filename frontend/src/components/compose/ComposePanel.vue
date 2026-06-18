@@ -110,6 +110,20 @@ const isGenerating = computed(
 
 const isAssetsBlocked = computed(() => currentStatus.value === "assets_blocked");
 
+/** Asset manifest validation errors mapped to human-readable descriptions. */
+const assetErrorLabels: Record<string, string> = {
+  segment_visual_missing: "分镜图未生成或未上传",
+  segment_audio_missing: "口播音频（TTS）缺失",
+  segment_subtitle_missing: "字幕文件缺失",
+  segment_video_missing: "分镜视频（图生视频）缺失",
+  segment_bgm_missing_optional: "可选配乐未生成",
+};
+const assetErrors = computed(() => {
+  const errors = composeStore.state.snapshot?.active_assets?.local_validation?.errors;
+  if (!errors || errors.length === 0) return [];
+  return errors.map((e) => assetErrorLabels[e] ?? e);
+});
+
 const blockReason = computed(() => {
   if (canEnterRender.value) return "";
   const msgs: string[] = [];
@@ -212,14 +226,11 @@ function handleRetry() {
         :closable="false"
       >
         <template #default>
-          <p>以下可能原因：</p>
-          <ul style="padding-left: 20px; line-height: 1.8;">
-            <li>分镜图未生成或未上传</li>
-            <li>分镜视频（图生视频）缺失</li>
-            <li>口播音频（TTS）未生成</li>
-            <li>字幕文件缺失</li>
+          <p v-if="assetErrors.length > 0">缺失项：</p>
+          <ul v-if="assetErrors.length > 0" style="padding-left: 20px; line-height: 1.8;">
+            <li v-for="(err, i) in assetErrors" :key="i">{{ err }}</li>
           </ul>
-          <p>请返回资产页，在分镜卡片中逐一检查并补全缺失的素材。</p>
+          <p v-else>请返回资产页检查各分镜的素材状态。</p>
         </template>
       </el-alert>
       <div class="compose-error-actions">

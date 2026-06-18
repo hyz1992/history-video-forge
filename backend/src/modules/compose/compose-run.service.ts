@@ -106,7 +106,8 @@ export async function runComposeGeneration(input: RunComposeGenerationInput) {
   });
 
   if (project.activeAssetManifestRecordId !== activeAssetManifestRecordId) {
-    // Clean up generating state — stale source
+    // Clean up generating state — delete placeholder record, stale source
+    db.composeRecords.delete(generatingRecord.id);
     project.activeComposeRecordId = null;
     project.status = "assets_ready";
     project.updatedAt = new Date();
