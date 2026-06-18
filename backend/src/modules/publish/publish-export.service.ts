@@ -106,19 +106,16 @@ export async function exportPublishPackage(
     exported_at: exportTime,
   };
 
-  const readme = buildReadme(publishJson, missingFields);
+  const readme = buildReadme(publishJson, missingFields, videoArtifact);
 
-  // Build ZIP via adm-zip
+  // Build ZIP via adm-zip — files at root level, no wrapper folder
   const zip = new AdmZip();
   const exportedFiles: string[] = [];
 
-  // Use a folder prefix so files are grouped inside the ZIP
-  const folderPrefix = `${safeName}/`;
-
   // JSON and README
-  zip.addFile(`${folderPrefix}publish.json`, Buffer.from(JSON.stringify(publishJson, null, 2), "utf8"));
+  zip.addFile("publish.json", Buffer.from(JSON.stringify(publishJson, null, 2), "utf8"));
   exportedFiles.push("publish.json");
-  zip.addFile(`${folderPrefix}README.txt`, Buffer.from(readme, "utf8"));
+  zip.addFile("README.txt", Buffer.from(readme, "utf8"));
   exportedFiles.push("README.txt");
 
   // Cover image
@@ -127,13 +124,13 @@ export async function exportPublishPackage(
       const coverData = await readFile(String(coverArtifact.file_uri));
       const ext = String(coverArtifact.file_uri).split(".").pop() || "png";
       const coverFilename = `cover.${ext}`;
-      zip.addFile(`${folderPrefix}${coverFilename}`, coverData);
+      zip.addFile(coverFilename, coverData);
       exportedFiles.push(coverFilename);
     } catch {
       const coverUrl = coverArtifactId
         ? `${PUBLIC_BASE_URL}/api/projects/${projectId}/artifacts/${coverArtifactId}/file`
         : "无";
-      zip.addFile(`${folderPrefix}cover.url.txt`, Buffer.from(
+      zip.addFile("cover.url.txt", Buffer.from(
         `封面图访问地址：${coverUrl}\n（封面图文件未在服务器可访问路径，请使用上述地址获取）`,
         "utf8",
       ));
@@ -146,7 +143,7 @@ export async function exportPublishPackage(
     const videoUrl = renderJob
       ? `${PUBLIC_BASE_URL}/api/projects/${projectId}/render/preview`
       : null;
-    zip.addFile(`${folderPrefix}video.url.txt`, Buffer.from(
+    zip.addFile("video.url.txt", Buffer.from(
       videoUrl
         ? `视频预览地址：${videoUrl}\n下载地址：${PUBLIC_BASE_URL}/api/projects/${projectId}/render/download\n时长：${videoArtifact.duration_sec ?? "未知"}秒\n分辨率：${videoArtifact.width ?? "?"}x${videoArtifact.height ?? "?"}\n`
         : `视频文件路径：${videoArtifact.file_uri}\n时长：${videoArtifact.duration_sec ?? "未知"}秒\n分辨率：${videoArtifact.width ?? "?"}x${videoArtifact.height ?? "?"}\n`,
@@ -179,7 +176,25 @@ export async function exportPublishPackage(
   };
 }
 
-function buildReadme(json: Record<string, unknown>, missing: string[]): string {
+function buildReadme(
+  json: Record<string, unknown>,
+  missing: string[],
+  videoInfo?: Record<string, unknown>,
+): string {
+  const videoPreviewUrl = json.video_preview_url as string | null;
+  const videoDownloadUrl = json.video_download_url as string | null;
+  const coverUrl = json.cover_url as string | null;
+  const durationSec = (videoInfo?.duration_sec as number) ?? null;
+  const videoWidth = (videoInfo?.width as number) ?? null;
+  const videoHeight = (videoInfo?.height as number) ?? null;
+  const videoSizeBytes = (videoInfo?.metadata as Record<string, unknown>)?.file_size_bytes as number | undefined;
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   return [
     `发布交付包 — ${json.project_title || "未命名"}`,
     `导出时间：${json.exported_at}`,
@@ -188,7 +203,7 @@ function buildReadme(json: Record<string, unknown>, missing: string[]): string {
     "=== 文件清单 ===",
     "  publish.json      — 发布数据（标题、描述、话题、封面提示词）",
     "  cover.png         — 封面图（如有）",
-    "  video.url.txt     — 视频文件路径引用",
+    "  video.url.txt     — 视频信息与访问地址",
     "  README.txt        — 本说明文件",
     "",
     "=== 发布内容 ===",
@@ -196,18 +211,24 @@ function buildReadme(json: Record<string, unknown>, missing: string[]): string {
     `  描述：${json.description || "（未设置）"}`,
     `  话题：${(json.hashtags as string[])?.join("、") || "（未设置）"}`,
     `  封面来源：${json.cover_origin || "未知"}`,
-    `  就绪状态：${json.readiness || "draft"}`,
-    "",
     missing.length > 0
-      ? `⚠ 缺失项：${missing.join("、")}`
-      : "✓ 发布资料完整",
+      ? `  缺失项：${missing.join("、")}`
+      : "  发布资料完整",
+    "",
+    "=== 视频信息 ===",
+    durationSec ? `  时长：${Number(durationSec).toFixed(1)} 秒` : "  时长：未知",
+    videoWidth && videoHeight ? `  分辨率：${videoWidth}x${videoHeight}` : "  分辨率：未知",
+    videoSizeBytes ? `  文件大小：${formatSize(videoSizeBytes)}` : "  文件大小：未知",
+    videoDownloadUrl ? `  下载地址：${videoDownloadUrl}` : "  下载地址：无",
+    videoPreviewUrl ? `  预览地址：${videoPreviewUrl}` : "",
+    "",
+    "=== 封面图 ===",
+    coverUrl ? `  封面图地址：${coverUrl}` : "  封面图：无",
+    `  封面提示词：${json.cover_prompt || "（未设置）"}`,
     "",
     "=== 各平台使用建议 ===",
     "  抖音：使用 publish.json 中的 selected_title + description + hashtags",
     "  B站：将 description 粘贴到视频简介，hashtags 粘贴到标签区",
     "  YouTube：使用 selected_title 作为视频标题，description 作为描述",
-    "",
-    "=== 封面提示词 ===",
-    `  ${json.cover_prompt || "（未设置）"}`,
   ].join("\n");
 }
