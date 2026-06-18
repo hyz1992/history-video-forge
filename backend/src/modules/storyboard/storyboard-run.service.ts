@@ -207,6 +207,10 @@ export async function runStoryboardGeneration(
   };
 
   if (localValidation.decision !== "pass") {
+    // Clean up generating state — validation failed
+    input.project.activeStoryboardRecordId = null;
+    input.project.status = "script_ready";
+    input.project.updatedAt = new Date();
     return {
       statusCode: 422,
       body: {
@@ -272,6 +276,10 @@ export async function runStoryboardGeneration(
     },
   };
   } catch (error) {
+    // Clean up generating state — unexpected error
+    input.project.activeStoryboardRecordId = null;
+    input.project.status = "script_ready";
+    input.project.updatedAt = new Date();
     const message =
       error instanceof Error ? (error.stack ?? error.message) : String(error);
     interactionLogWriter.writeError(message);

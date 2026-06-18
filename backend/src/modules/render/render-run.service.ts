@@ -285,6 +285,7 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
         runtimeDiagnosticsJson: adapterResult.diagnostics,
       });
       project.latestRenderRunTraceJson = staleTrace;
+      project.status = "render_failed";
       project.updatedAt = new Date();
 
       return {

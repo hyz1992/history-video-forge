@@ -383,6 +383,10 @@ export async function runAssetPlanningGeneration(
   };
 
   if (localValidation.decision !== "pass") {
+    // Clean up generating state — validation failed
+    input.project.activeAssetPlanRecordId = null;
+    input.project.status = "storyboard_ready";
+    input.project.updatedAt = new Date();
     return {
       statusCode: 422,
       body: {
@@ -490,6 +494,10 @@ export async function runAssetPlanningGeneration(
     },
   };
   } catch (error) {
+    // Clean up generating state — unexpected error
+    input.project.activeAssetPlanRecordId = null;
+    input.project.status = "storyboard_ready";
+    input.project.updatedAt = new Date();
     const message =
       error instanceof Error ? (error.stack ?? error.message) : String(error);
     interactionLogWriter.writeError(message);

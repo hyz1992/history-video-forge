@@ -805,6 +805,10 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   }
 
   if (staleSourceDetected) {
+    // Clean up generating state — stale source, don't leave dirty active pointer
+    project.activeAssetManifestRecordId = null;
+    project.status = "asset_plan_ready";
+    project.updatedAt = new Date();
     const traceSummary = buildTraceSummary({
       runId,
       validationDecision: localValidation.decision,

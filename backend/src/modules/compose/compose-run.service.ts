@@ -106,6 +106,10 @@ export async function runComposeGeneration(input: RunComposeGenerationInput) {
   });
 
   if (project.activeAssetManifestRecordId !== activeAssetManifestRecordId) {
+    // Clean up generating state — stale source
+    project.activeComposeRecordId = null;
+    project.status = "assets_ready";
+    project.updatedAt = new Date();
     return {
       statusCode: 409,
       body: {

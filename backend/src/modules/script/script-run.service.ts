@@ -231,6 +231,10 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
     },
   };
   } catch (error) {
+    // Clean up generating state — unexpected error
+    input.project.activeScriptRecordId = null;
+    input.project.status = "script_failed";
+    input.project.updatedAt = new Date();
     const message =
       error instanceof Error ? (error.stack ?? error.message) : String(error);
     interactionLogWriter.writeError(message);
