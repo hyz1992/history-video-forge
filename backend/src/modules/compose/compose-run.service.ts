@@ -71,6 +71,7 @@ export async function runComposeGeneration(input: RunComposeGenerationInput) {
     storyboardRecordId: assetManifestRecord.storyboardRecordId,
     scriptRecordId: assetManifestRecord.scriptRecordId,
     manifest,
+    projectStorageRootDir: project.storageRootDir,
   });
   const localValidation = await validateComposeTimeline({
     manifest,

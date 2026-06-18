@@ -46,17 +46,18 @@ function readWavDurationSec(data: Buffer): number | null {
     const chunkDataOffset = offset + 8;
     const nextOffset = chunkDataOffset + chunkSize + (chunkSize % 2);
 
-    if (chunkDataOffset + chunkSize > data.length) {
-      return null;
-    }
-
     if (chunkId === "fmt ") {
+      if (chunkDataOffset + chunkSize > data.length) {
+        return null;
+      }
       if (chunkSize < 16) {
         return null;
       }
       byteRate = data.readUInt32LE(chunkDataOffset + 8);
     } else if (chunkId === "data") {
-      dataSize = chunkSize;
+      dataSize = Math.min(chunkSize, data.length - chunkDataOffset);
+    } else if (chunkDataOffset + chunkSize > data.length) {
+      return null;
     }
 
     if (byteRate !== null && dataSize !== null) {

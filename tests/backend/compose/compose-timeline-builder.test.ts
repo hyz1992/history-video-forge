@@ -1,7 +1,19 @@
 import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { buildComposeTimeline } from "../../../backend/src/modules/compose/compose-timeline-builder.js";
-import type { AssetManifest } from "../../../shared/src/index.js";
+import type { AssetArtifact, AssetManifest } from "../../../shared/src/index.js";
+
+type TtsChunkArtifact = Extract<
+  AssetArtifact,
+  { artifact_type: "tts_chunk_audio" }
+>;
+type TtsMergedArtifact = Extract<
+  AssetArtifact,
+  { artifact_type: "tts_merged_audio" }
+>;
 
 function makeArtifactManifest(): AssetManifest {
   return {
@@ -116,6 +128,35 @@ function makeArtifactManifest(): AssetManifest {
   };
 }
 
+function makeWavBuffer(input: {
+  durationSec: number;
+  sampleRate?: number;
+}): Buffer {
+  const sampleRate = input.sampleRate ?? 24000;
+  const channels = 1;
+  const bytesPerSample = 2;
+  const byteRate = sampleRate * channels * bytesPerSample;
+  const blockAlign = channels * bytesPerSample;
+  const dataSize = Math.round(input.durationSec * byteRate);
+  const buffer = Buffer.alloc(44 + dataSize);
+
+  buffer.write("RIFF", 0, "ascii");
+  buffer.writeUInt32LE(0x7fffffbf, 4);
+  buffer.write("WAVE", 8, "ascii");
+  buffer.write("fmt ", 12, "ascii");
+  buffer.writeUInt32LE(16, 16);
+  buffer.writeUInt16LE(1, 20);
+  buffer.writeUInt16LE(channels, 22);
+  buffer.writeUInt32LE(sampleRate, 24);
+  buffer.writeUInt32LE(byteRate, 28);
+  buffer.writeUInt16LE(blockAlign, 32);
+  buffer.writeUInt16LE(bytesPerSample * 8, 34);
+  buffer.write("data", 36, "ascii");
+  buffer.writeUInt32LE(0x7fffff9b, 40);
+
+  return buffer;
+}
+
 describe("buildComposeTimeline", () => {
   it("builds a ready timeline from image motion, narration, and subtitle artifacts", () => {
     const timeline = buildComposeTimeline({
@@ -201,41 +242,43 @@ describe("buildComposeTimeline", () => {
 
   it("accumulates multiple TTS chunk durations routed to the same segment", () => {
     const manifest = makeArtifactManifest();
+    const chunkTemplate = manifest.artifacts[0]! as TtsChunkArtifact;
+    const mergedTemplate = manifest.artifacts[1]! as TtsMergedArtifact;
     manifest.artifacts = [
       {
-        ...manifest.artifacts[0],
+        ...chunkTemplate,
         artifact_id: "artifact_tts_chunk_001",
         metadata: {
-          ...manifest.artifacts[0]!.metadata,
+          ...chunkTemplate.metadata,
           duration_sec: 1.5,
           tts_chunk_id: "tts_chunk_001",
           segment_ids: ["sb_001"],
         },
       },
       {
-        ...manifest.artifacts[0],
+        ...chunkTemplate,
         artifact_id: "artifact_tts_chunk_002",
         metadata: {
-          ...manifest.artifacts[0]!.metadata,
+          ...chunkTemplate.metadata,
           duration_sec: 2.5,
           tts_chunk_id: "tts_chunk_002",
           segment_ids: ["sb_001"],
         },
       },
       {
-        ...manifest.artifacts[0],
+        ...chunkTemplate,
         artifact_id: "artifact_tts_chunk_003",
         metadata: {
-          ...manifest.artifacts[0]!.metadata,
+          ...chunkTemplate.metadata,
           duration_sec: 3,
           tts_chunk_id: "tts_chunk_003",
           segment_ids: ["sb_002"],
         },
       },
       {
-        ...manifest.artifacts[1],
+        ...mergedTemplate,
         metadata: {
-          ...manifest.artifacts[1]!.metadata,
+          ...mergedTemplate.metadata,
           duration_sec: 7,
           chunk_artifact_ids: [
             "artifact_tts_chunk_001",
@@ -297,6 +340,117 @@ describe("buildComposeTimeline", () => {
       6,
     ]);
     expect(timeline.notes).not.toContain("compose_chunk_timing_fallback_used");
+  });
+
+  it("re-probes estimated merged narration and scales segment timing to real audio duration", () => {
+    const tempDir = mkdtempSync(join(tmpdir(), "compose-audio-duration-"));
+    try {
+      const audioPath = join(tempDir, "narration.wav");
+      writeFileSync(audioPath, makeWavBuffer({ durationSec: 61.92 }));
+      const manifest = makeArtifactManifest();
+      const firstChunk = manifest.artifacts[0]! as TtsChunkArtifact;
+      const merged = manifest.artifacts[1]! as TtsMergedArtifact;
+      manifest.artifacts = [
+        {
+          ...firstChunk,
+          metadata: {
+            ...firstChunk.metadata,
+            duration_sec: 30,
+            duration_source: "estimated",
+            timing_source: "estimated",
+          },
+        },
+        {
+          ...firstChunk,
+          artifact_id: "artifact_tts_chunk_002",
+          metadata: {
+            ...firstChunk.metadata,
+            duration_sec: 56,
+            tts_chunk_id: "tts_chunk_002",
+            segment_ids: ["sb_002"],
+            duration_source: "estimated",
+            timing_source: "estimated",
+          },
+        },
+        {
+          ...merged,
+          file_uri: audioPath,
+          metadata: {
+            ...merged.metadata,
+            duration_sec: 86,
+            estimated_duration_sec: 86,
+            duration_source: "estimated",
+            timing_source: "estimated",
+            format: "wav",
+            sample_rate: 24000,
+            chunk_artifact_ids: [
+              "artifact_tts_chunk_001",
+              "artifact_tts_chunk_002",
+            ],
+          },
+        },
+        manifest.artifacts[2]!,
+        manifest.artifacts[3]!,
+        manifest.artifacts[4]!,
+      ];
+      manifest.audio_summary.tts_total_duration_sec = 86;
+      manifest.audio_summary.tts_chunk_artifact_ids = [
+        "artifact_tts_chunk_001",
+        "artifact_tts_chunk_002",
+      ];
+      manifest.audio_summary.tts_chunk_routes = [
+        {
+          tts_chunk_id: "tts_chunk_001",
+          artifact_id: "artifact_tts_chunk_001",
+          segment_ids: ["sb_001"],
+          script_excerpt: "first part",
+        },
+        {
+          tts_chunk_id: "tts_chunk_002",
+          artifact_id: "artifact_tts_chunk_002",
+          segment_ids: ["sb_002"],
+          script_excerpt: "second part",
+        },
+      ];
+      manifest.audio_summary.tts_merged_artifact_id = "artifact_tts_merged";
+      manifest.segment_routes = [
+        manifest.segment_routes[0]!,
+        {
+          ...manifest.segment_routes[0]!,
+          segment_id: "sb_002",
+          tts_artifact_id: "artifact_tts_chunk_002",
+        },
+      ];
+
+      const timeline = buildComposeTimeline({
+        assetManifestRecordId: "asset_manifest_record_001",
+        assetPlanRecordId: "asset_plan_record_001",
+        storyboardRecordId: "storyboard_record_001",
+        scriptRecordId: "script_record_001",
+        manifest,
+        projectStorageRootDir: tempDir,
+      });
+
+      expect(timeline.notes).toContain(
+        "compose_audio_duration_probe:artifact_tts_merged",
+      );
+      expect(timeline.notes).toContain("compose_chunk_timing_scaled_to_narration");
+      expect(
+        timeline.tracks.find((track) => track.track_type === "narration")
+          ?.clips[0]?.duration_sec,
+      ).toBeCloseTo(61.92, 2);
+      expect(timeline.duration_sec).toBeCloseTo(64.92, 2);
+      expect(timeline.segments[0]!.duration_sec).toBeCloseTo(
+        (30 / 86) * 61.92,
+        2,
+      );
+      expect(timeline.segments[1]!.duration_sec).toBeCloseTo(
+        (56 / 86) * 61.92 + 3,
+        2,
+      );
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   it("adds optional BGM track when a concrete bgm_audio artifact is placed", () => {

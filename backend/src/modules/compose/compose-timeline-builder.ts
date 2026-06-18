@@ -1,4 +1,8 @@
+import { readFileSync } from "node:fs";
+
 import { ComposeTimeline as ComposeTimelineSchema } from "../../../../shared/src/index.js";
+import { readAudioDurationSec } from "../assets/audio-duration-probe.js";
+import { resolveArtifactFileUri } from "../assets/artifact-file-resolver.js";
 
 const END_PADDING_SEC = 3;
 
@@ -17,6 +21,7 @@ export interface BuildComposeTimelineInput {
   storyboardRecordId: string;
   scriptRecordId: string;
   manifest: AssetManifest;
+  projectStorageRootDir?: string;
 }
 
 interface SegmentTiming {
@@ -40,6 +45,75 @@ function getDurationSec(artifact: AssetArtifact | undefined): number | null {
     artifact?.artifact_type === "bgm_audio"
   ) {
     return artifact.metadata.duration_sec;
+  }
+
+  return null;
+}
+
+function metadataRecord(
+  artifact: AssetArtifact | undefined,
+): Record<string, unknown> {
+  return (artifact?.metadata ?? {}) as Record<string, unknown>;
+}
+
+function readMetadataString(
+  artifact: AssetArtifact | undefined,
+  key: string,
+): string | null {
+  const value = metadataRecord(artifact)[key];
+  return typeof value === "string" ? value : null;
+}
+
+function shouldProbeAudioDuration(artifact: AssetArtifact | undefined): boolean {
+  if (
+    artifact?.artifact_type !== "tts_merged_audio" &&
+    artifact?.artifact_type !== "tts_chunk_audio"
+  ) {
+    return false;
+  }
+
+  return (
+    readMetadataString(artifact, "duration_source") !== "audio_probe" &&
+    readMetadataString(artifact, "timing_source") !== "audio_probe"
+  );
+}
+
+function probeLocalAudioDurationSec(input: {
+  artifact: AssetArtifact | undefined;
+  projectStorageRootDir?: string;
+  notes: string[];
+}): number | null {
+  const { artifact, projectStorageRootDir, notes } = input;
+  if (!artifact || !shouldProbeAudioDuration(artifact)) {
+    return null;
+  }
+
+  const filePath = resolveArtifactFileUri({
+    fileUri: artifact.file_uri,
+    projectStorageRootDir,
+  });
+  if (!filePath) {
+    return null;
+  }
+
+  try {
+    const metadata = metadataRecord(artifact);
+    const durationSec = readAudioDurationSec({
+      data: readFileSync(filePath),
+      format: readMetadataString(artifact, "format") ?? undefined,
+      sampleRate:
+        typeof metadata.sample_rate === "number"
+          ? metadata.sample_rate
+          : undefined,
+      bytesPerSample: 2,
+      channels: 1,
+    });
+    if (durationSec && Number.isFinite(durationSec)) {
+      notes.push(`compose_audio_duration_probe:${artifact.artifact_id}`);
+      return durationSec;
+    }
+  } catch {
+    notes.push(`compose_audio_duration_probe_failed:${artifact.artifact_id}`);
   }
 
   return null;
@@ -86,10 +160,29 @@ function deriveSegmentTimings(input: {
       ? totalDurationSec / manifest.segment_routes.length
       : totalDurationSec;
 
-  let cursorSec = 0;
-  return manifest.segment_routes.map((route) => {
-    const durationSec = canUseChunkDurations
+  const segmentDurations = manifest.segment_routes.map((route) =>
+    canUseChunkDurations
       ? chunkDurationBySegment.get(route.segment_id) ?? fallbackDurationSec
+      : fallbackDurationSec,
+  );
+  const segmentDurationTotal = segmentDurations.reduce(
+    (sum, durationSec) => sum + durationSec,
+    0,
+  );
+  const scale =
+    canUseChunkDurations &&
+    segmentDurationTotal > 0 &&
+    Math.abs(segmentDurationTotal - totalDurationSec) > 0.05
+      ? totalDurationSec / segmentDurationTotal
+      : 1;
+  if (scale !== 1) {
+    notes.push("compose_chunk_timing_scaled_to_narration");
+  }
+
+  let cursorSec = 0;
+  return manifest.segment_routes.map((route, index) => {
+    const durationSec = canUseChunkDurations
+      ? segmentDurations[index]! * scale
       : fallbackDurationSec;
     const timing = {
       segmentId: route.segment_id,
@@ -364,15 +457,24 @@ export function buildComposeTimeline(
   input: BuildComposeTimelineInput,
 ): ComposeTimeline {
   const artifactsById = indexArtifacts(input.manifest);
+  const notes: string[] = [];
   const mergedTtsArtifactId = input.manifest.audio_summary.tts_merged_artifact_id;
+  const mergedTtsArtifact = mergedTtsArtifactId
+    ? artifactsById.get(mergedTtsArtifactId)
+    : undefined;
   const mergedTtsDurationSec = getDurationSec(
-    mergedTtsArtifactId ? artifactsById.get(mergedTtsArtifactId) : undefined,
+    mergedTtsArtifact,
   );
+  const probedMergedTtsDurationSec = probeLocalAudioDurationSec({
+    artifact: mergedTtsArtifact,
+    projectStorageRootDir: input.projectStorageRootDir,
+    notes,
+  });
   const narrationDurationSec =
+    probedMergedTtsDurationSec ??
     mergedTtsDurationSec ??
     input.manifest.audio_summary.tts_total_duration_sec ??
     0;
-  const notes: string[] = [];
   const timings = deriveSegmentTimings({
     manifest: input.manifest,
     artifactsById,

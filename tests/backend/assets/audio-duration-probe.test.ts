@@ -49,6 +49,23 @@ describe("readAudioDurationSec", () => {
     ).toBeCloseTo(1.5, 3);
   });
 
+  it("reads WAV duration when provider writes oversized streaming chunk sizes", () => {
+    const wavBuffer = makeWavBuffer({
+      durationSec: 1.25,
+      sampleRate: 24000,
+    });
+    wavBuffer.writeUInt32LE(0x7fffffbf, 4);
+    wavBuffer.writeUInt32LE(0x7fffff9b, 40);
+
+    expect(
+      readAudioDurationSec({
+        data: wavBuffer,
+        format: "wav",
+        sampleRate: 24000,
+      }),
+    ).toBeCloseTo(1.25, 3);
+  });
+
   it("reads PCM duration when sample rate, bytes per sample, and channels are explicit", () => {
     const pcmBuffer = Buffer.alloc(48000 * 2 * 2);
 
