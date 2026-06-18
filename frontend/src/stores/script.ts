@@ -33,6 +33,8 @@ export interface ActiveScriptSnapshot {
   execution_state: {
     patch_used: boolean;
     regenerate_used: boolean;
+    generating?: boolean;
+    run_id?: string;
   };
   graph_trace_summary?: {
     nodes: ScriptTraceNode[];
