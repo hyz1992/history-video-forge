@@ -7,6 +7,7 @@ import { useTopicStore, type TopicRecommendationFilters } from "../../stores/top
 import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 import { useStagePolling } from "../../composables/useStagePolling";
+import StageGenerating from "../workspace/StageGenerating.vue";
 
 const topicStore = useTopicStore();
 const projectStore = useProjectStore();
@@ -98,20 +99,24 @@ function selectHistoryCandidate(
 
 async function generateRecommendations() {
   saveFilters();
-  await topicStore.generateSystemRecommendations({
+  const generation = topicStore.generateSystemRecommendations({
     era: eraFilter.value,
     tension: tensionFilter.value,
   });
+  startPolling();
+  await generation;
   if (!topicStore.state.loadError) {
     ElMessage.success("选题推荐已生成");
   }
 }
 
 async function handleRegenerate() {
-  await topicStore.generateSystemRecommendations({
+  const generation = topicStore.generateSystemRecommendations({
     era: eraFilter.value,
     tension: tensionFilter.value,
   });
+  startPolling();
+  await generation;
   if (!topicStore.state.loadError) {
     ElMessage.success("已重新生成选题");
   }
@@ -173,11 +178,12 @@ function handleRetry() {
       </div>
 
       <!-- Loading / Generating state (snapshot-based survives refresh) -->
-      <div v-else-if="!hasCandidates && (topicStore.state.isGenerating || isSnapshotGenerating || isPolling)" class="topic-generating">
-        <el-skeleton :rows="3" animated />
-        <p class="topic-generating-text">正在调用大模型生成选题推荐，可能需要 1-3 分钟...</p>
-        <p class="topic-generating-hint">生成完成后结果会自动出现，无需手动刷新。</p>
-      </div>
+      <StageGenerating
+        v-else-if="!hasCandidates && (topicStore.state.isGenerating || isSnapshotGenerating || isPolling)"
+        title="正在生成选题"
+        hint="正在调用大模型生成选题推荐，可能需要 1-3 分钟。"
+        secondary-hint="生成完成后结果会自动出现，无需手动刷新。"
+      />
 
       <!-- Empty state -->
       <div v-else-if="!hasCandidates" class="topic-empty-state">

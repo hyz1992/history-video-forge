@@ -8,6 +8,7 @@ import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { PIPELINE_STEPS } from "../../stores/workspace";
 import { useStagePolling } from "../../composables/useStagePolling";
+import StageGenerating from "../workspace/StageGenerating.vue";
 
 const storyboardStore = useStoryboardStore();
 const projectStore = useProjectStore();
@@ -148,6 +149,7 @@ onMounted(async () => {
     (s.current_status === "storyboard_ready" ||
       s.current_status === "script_ready")
   ) {
+    startPolling();
     await storyboardStore.generateStoryboard();
     if (!storyboardStore.state.loadError) {
       ElMessage.success("分镜规划生成完成");
@@ -198,15 +200,16 @@ function handleConfirm() {
     </div>
 
     <!-- Generating state (must be before loading skeleton — survives refresh) -->
-    <div
+    <StageGenerating
       v-else-if="isGenerating"
-      class="storyboard-generating"
+      title="正在生成分镜"
+      hint="正在调用大模型分析文案并规划分镜，可能需要 1-2 分钟。"
+      secondary-hint="页面会自动刷新，也可手动刷新状态。"
     >
-      <p class="storyboard-generating-title">正在生成分镜规划</p>
-      <p class="storyboard-generating-hint">正在调用大模型分析文案并规划分镜，可能需要 1-2 分钟。</p>
-      <p class="storyboard-generating-hint">页面会自动刷新，也可手动刷新状态。</p>
-      <el-button @click="storyboardStore.retryLoad()">刷新状态</el-button>
-    </div>
+      <template #action>
+        <el-button @click="storyboardStore.retryLoad()">刷新状态</el-button>
+      </template>
+    </StageGenerating>
 
     <!-- Loading skeleton (only when loading without active generation) -->
     <el-skeleton

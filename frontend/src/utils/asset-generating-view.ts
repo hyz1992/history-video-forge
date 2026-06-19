@@ -39,7 +39,7 @@ export function getAssetGeneratingView(
   if (input.isPolling && !input.hasAssetPlan && !input.hasManifest) {
     return {
       kind: "asset_plan",
-      title: "正在生成资产规划",
+      title: "正在进行资产规划",
       hint: "正在调用大模型分析分镜并规划素材，可能需要 1-5 分钟。",
       blockPage: true,
     };
@@ -57,7 +57,7 @@ export function getAssetGeneratingView(
   if (input.isPlanGenerating && !input.hasAssetPlan && !input.hasManifest) {
     return {
       kind: "asset_plan",
-      title: "正在生成资产规划",
+      title: "正在进行资产规划",
       hint: "正在调用大模型分析分镜并规划素材，可能需要 1-5 分钟。",
       blockPage: true,
     };

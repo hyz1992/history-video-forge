@@ -13,7 +13,7 @@ describe("getAssetGeneratingView", () => {
       }),
     ).toMatchObject({
       kind: "asset_plan",
-      title: "正在生成资产规划",
+      title: "正在进行资产规划",
     });
   });
 

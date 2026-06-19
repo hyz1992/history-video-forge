@@ -7,6 +7,7 @@ import { useScriptStore } from "../../stores/script";
 import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 import { useStagePolling } from "../../composables/useStagePolling";
+import StageGenerating from "../workspace/StageGenerating.vue";
 
 const scriptStore = useScriptStore();
 const workspaceStore = useWorkspaceStore();
@@ -221,17 +222,21 @@ function handleConfirm() {
     </div>
 
     <!-- Generating state (before skeleton to show explanation during generation) -->
-    <div v-else-if="isGenerating" class="script-generating">
-      <p class="script-generating-title">正在生成文案</p>
-      <p class="script-generating-hint">正在调用大模型撰写口播文案，可能需要 1-3 分钟。</p>
-      <p class="script-generating-hint">页面会自动刷新，也可手动刷新状态。</p>
-      <el-button
-        :loading="scriptStore.state.isLoading"
-        @click="scriptStore.retryLoadActiveScriptSnapshot()"
-      >
-        手动刷新
-      </el-button>
-    </div>
+    <StageGenerating
+      v-else-if="isGenerating"
+      title="正在生成文案"
+      hint="正在调用大模型撰写口播文案，可能需要 1-3 分钟。"
+      secondary-hint="页面会自动刷新，也可手动刷新状态。"
+    >
+      <template #action>
+        <el-button
+          :loading="scriptStore.state.isLoading"
+          @click="scriptStore.retryLoadActiveScriptSnapshot()"
+        >
+          手动刷新
+        </el-button>
+      </template>
+    </StageGenerating>
 
     <!-- Loading skeleton (only when loading without active generation) -->
     <el-skeleton

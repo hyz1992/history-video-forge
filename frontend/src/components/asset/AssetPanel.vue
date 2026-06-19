@@ -11,6 +11,7 @@ import { useProjectStore } from "../../stores/project";
 import { useStagePolling } from "../../composables/useStagePolling";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { PIPELINE_STEPS } from "../../stores/workspace";
+import StageGenerating from "../workspace/StageGenerating.vue";
 
 import SegmentAssetCard from "./SegmentAssetCard.vue";
 import { computeCostBreakdown, estimatePlanCost, getTaskCostHint, getVideoUpgradeCostHint, estimateBlockedItemsCost, PRICING, type PlanTaskLike } from "../../utils/pricing";
@@ -70,11 +71,19 @@ const assetTasks = computed(() => plan.value?.tasks ?? []);
 const manifest = computed(() => assetsStore.state.snapshot?.active_assets?.manifest ?? null);
 const readiness = computed(() => manifest.value?.readiness ?? null);
 
-const currentStatus = computed(() => assetsStore.state.snapshot?.current_status ?? "");
+const currentStatus = computed(
+  () =>
+    assetPlanningStore.state.snapshot?.current_status ??
+    assetsStore.state.snapshot?.current_status ??
+    "",
+);
+const basicAssetsAutoStarted = ref(false);
+const canAutoStartBasicAssets = ref(false);
 
 // Snapshot-based generating checks (survive page refresh)
 const isPlanGenerating = computed(
   () =>
+    assetPlanningStore.state.isGenerating ||
     currentStatus.value === "asset_plan_generating" ||
     activeAssetPlan.value?.execution_state?.generating === true,
 );
@@ -94,6 +103,17 @@ const generatingView = computed(() =>
     isAssetsGenerating: isAssetsGenerating.value || assetsStore.state.isGenerating,
     isPolling: isAssetPolling.value,
   }),
+);
+
+const shouldShowGeneratingView = computed(() => {
+  if (!generatingView.value?.blockPage) return false;
+  if (assetPlanningStore.state.loadError) return false;
+  if (basicAssetsAutoStarted.value && assetsStore.state.loadError) return false;
+  return true;
+});
+
+const assetLoadError = computed(
+  () => assetPlanningStore.state.loadError ?? assetsStore.state.loadError,
 );
 
 /* Partial readiness (warnings only, e.g. optional BGM missing)
@@ -428,19 +448,12 @@ onMounted(async () => {
   await assetPlanningStore.loadActiveAssetPlanSnapshot();
   scriptStore.loadActiveScriptSnapshot(); // fire-and-forget, needed for narration text
 
-  // 必须先加载 assets 快照，否则无法判断 assets_generating
-  await assetsStore.loadProject();
-
-  // F5 恢复：如果正在生成中，启动轮询
+  // 资产规划尚未完成时，不先请求 assets，避免无 manifest 阶段出现瞬时错误。
   const planSnap = assetPlanningStore.state.snapshot;
-  const assetsSnap = assetsStore.state.snapshot;
   const isPlanGen =
     planSnap?.current_status === "asset_plan_generating" ||
     planSnap?.active_asset_plan?.execution_state?.generating;
-  const isAssetsGen =
-    assetsSnap?.current_status === "assets_generating" ||
-    assetsSnap?.active_assets?.execution_state?.generating;
-  if (isPlanGen || isAssetsGen) {
+  if (isPlanGen) {
     startAssetPolling();
     return;
   }
@@ -457,20 +470,35 @@ onMounted(async () => {
     if (!assetPlanningStore.state.loadError) {
       ElMessage.success("资产规划生成完成");
     }
+    canAutoStartBasicAssets.value = true;
+    await autoStartBasicAssets();
+    return;
   }
+
+  await assetsStore.loadProject();
+  canAutoStartBasicAssets.value = true;
+
+  const assetsSnap = assetsStore.state.snapshot;
+  const isAssetsGen =
+    assetsSnap?.current_status === "assets_generating" ||
+    assetsSnap?.active_assets?.execution_state?.generating;
+  if (isAssetsGen) {
+    startAssetPolling();
+    return;
+  }
+
   await autoStartBasicAssets();
 });
 
-let basicAssetsAutoStarted = false;
-
 /** Auto-start basic asset generation when entering with a plan but no manifest. */
 async function autoStartBasicAssets() {
-  if (basicAssetsAutoStarted) return;
+  if (!canAutoStartBasicAssets.value) return;
+  if (basicAssetsAutoStarted.value) return;
   if (isAssetsBusy.value) return;
   if (!activeAssetPlan.value) return;
   if (hasManifest.value) return;
 
-  basicAssetsAutoStarted = true;
+  basicAssetsAutoStarted.value = true;
   startAssetPolling();
   await assetsStore.generateAssets({ enabledProviderTypes: ["tts", "sfx", "bgm"] });
   if (!assetsStore.state.loadError) {
@@ -480,9 +508,23 @@ async function autoStartBasicAssets() {
 
 // Watch for snapshot changes and auto-start if conditions become ready
 watch(
-  () => [activeAssetPlan.value, hasManifest.value, isAssetsBusy.value],
+  () => [
+    activeAssetPlan.value,
+    hasManifest.value,
+    isAssetsBusy.value,
+    isPlanGenerating.value,
+    isAssetPolling.value,
+  ],
   async () => {
-    if (!basicAssetsAutoStarted) {
+    if (
+      isAssetPolling.value &&
+      activeAssetPlan.value &&
+      !isPlanGenerating.value &&
+      !hasManifest.value
+    ) {
+      canAutoStartBasicAssets.value = true;
+    }
+    if (!basicAssetsAutoStarted.value) {
       await autoStartBasicAssets();
     }
   },
@@ -498,11 +540,14 @@ async function handleGeneratePlan() {
   await assetPlanningStore.generateAssetPlan();
   if (!assetPlanningStore.state.loadError) {
     ElMessage.success("资产规划生成完成");
+    canAutoStartBasicAssets.value = true;
+    await autoStartBasicAssets();
   }
 }
 
 async function handleGenerateBasic() {
   if (isAssetsBusy.value) return;
+  basicAssetsAutoStarted.value = true;
   startAssetPolling();
   await assetsStore.generateAssets({ enabledProviderTypes: ["tts", "sfx", "bgm"] });
   if (!assetsStore.state.loadError) {
@@ -649,19 +694,17 @@ function handleConfirm() {
 <template>
   <div class="asset-panel">
     <!-- Generating state takes priority over transient errors -->
-    <div
-      v-if="generatingView?.blockPage && !assetsStore.state.loadError"
-      class="asset-generating"
-    >
-      <h2>{{ generatingView.title }}</h2>
-      <p>{{ generatingView.hint }}</p>
-      <p class="asset-generating-hint">系统每 5 秒自动检查生成状态，无需手动刷新。</p>
-    </div>
+    <StageGenerating
+      v-if="shouldShowGeneratingView && generatingView"
+      :title="generatingView.title"
+      :hint="generatingView.hint"
+      secondary-hint="系统每 5 秒自动检查生成状态，无需手动刷新。"
+    />
 
     <!-- Error — only when NOT generating (transient errors suppressed during generation) -->
-    <div v-else-if="assetsStore.state.loadError" class="asset-error-card">
+    <div v-else-if="assetLoadError" class="asset-error-card">
       <el-alert
-        :title="'加载失败：' + assetsStore.state.loadError"
+        :title="'加载失败：' + assetLoadError"
         type="error"
         show-icon
         :closable="false"

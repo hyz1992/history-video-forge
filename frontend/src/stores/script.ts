@@ -176,6 +176,13 @@ function createHistoryLabel(activeScript: ActiveScriptSnapshot) {
   return `${activeScript.script_text.slice(0, 32)} (${activeScript.review_decision})`;
 }
 
+function canAppendHistoryEntry(activeScript: ActiveScriptSnapshot) {
+  return (
+    activeScript.execution_state?.generating !== true &&
+    activeScript.script_text.trim().length > 0
+  );
+}
+
 function isSameHistoryEntry(a: ActiveScriptSnapshot, b: ActiveScriptSnapshot) {
   return (
     a.script_text === b.script_text &&
@@ -190,6 +197,10 @@ function appendHistoryEntry(
   history: ScriptHistoryEntry[],
   activeScript: ActiveScriptSnapshot,
 ): ScriptHistoryEntry[] {
+  if (!canAppendHistoryEntry(activeScript)) {
+    return history;
+  }
+
   const nextScript = cloneActiveScriptSnapshot(activeScript);
   const latest = history[0];
 
