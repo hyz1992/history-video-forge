@@ -44,6 +44,14 @@ export interface TopicPackageSnapshot {
 export interface TopicSnapshotResponse {
   active_topic_package: TopicPackageSnapshot | null;
   current_status: string;
+  topic_candidates?: {
+    candidate_rounds: Array<{
+      round_id: string;
+      round_index: number;
+      created_at: string;
+      candidates: TopicCandidate[];
+    }>;
+  } | null;
 }
 
 export interface TopicApi {
@@ -122,6 +130,7 @@ export function createFetchTopicApi(baseUrl = ""): TopicApi {
       return {
         active_topic_package: data.active_topic_package ?? null,
         current_status: data.current_status ?? "",
+        topic_candidates: data.topic_candidates ?? null,
       };
     },
     async generateSystemRecommendations(projectId, filters) {
@@ -274,6 +283,48 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
           round_id: "confirmed",
           candidates: [candidate],
         };
+      }
+
+      // 从快照恢复候选 rounds（F5 恢复）
+      const tc = snapshot.topic_candidates;
+      if (tc?.candidate_rounds?.length) {
+        const lastRound = tc.candidate_rounds[tc.candidate_rounds.length - 1]!;
+        const restoredCandidates = lastRound.candidates.map((c) => ({
+          candidate_id: c.candidate_id,
+          title: c.title,
+          one_line_angle: c.one_line_angle,
+          family_label: c.family_label,
+          scope_label: c.scope_label,
+          why_this_now: c.why_this_now ?? "",
+          strong_scene: c.strong_scene,
+          risk_hints: c.risk_hints ?? [],
+        }));
+        state.candidates = restoredCandidates;
+        state.currentRound = {
+          round_id: lastRound.round_id,
+          round_index: lastRound.round_index,
+          created_at: lastRound.created_at,
+          candidates: restoredCandidates,
+        };
+        state.historyRounds = tc.candidate_rounds.slice(0, -1).map((r) => ({
+          round_id: r.round_id,
+          round_index: r.round_index,
+          created_at: r.created_at,
+          candidates: r.candidates.map((c) => ({
+            candidate_id: c.candidate_id,
+            title: c.title,
+            one_line_angle: c.one_line_angle,
+            family_label: c.family_label,
+            scope_label: c.scope_label,
+            why_this_now: c.why_this_now ?? "",
+            strong_scene: c.strong_scene,
+            risk_hints: c.risk_hints ?? [],
+          })),
+        }));
+        if (!pkg && restoredCandidates[0]) {
+          state.selectedCandidate = restoredCandidates[0];
+          state.selectedRoundId = lastRound.round_id;
+        }
       }
     } catch {
       // Silently fail — the empty state will prompt the user to generate

@@ -16,6 +16,7 @@ export async function getProjectSnapshotController(
   const snapshot = await getProjectSnapshot(
     context.app.db,
     context.params.projectId,
+    (context.app as any).topicCandidateStore,
   );
   if (!snapshot) {
     return {

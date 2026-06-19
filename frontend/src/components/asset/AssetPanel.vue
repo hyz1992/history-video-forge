@@ -427,6 +427,9 @@ onMounted(async () => {
   await assetPlanningStore.loadActiveAssetPlanSnapshot();
   scriptStore.loadActiveScriptSnapshot(); // fire-and-forget, needed for narration text
 
+  // 必须先加载 assets 快照，否则无法判断 assets_generating
+  await assetsStore.loadProject();
+
   // F5 恢复：如果正在生成中，启动轮询
   const planSnap = assetPlanningStore.state.snapshot;
   const assetsSnap = assetsStore.state.snapshot;
@@ -437,7 +440,6 @@ onMounted(async () => {
     assetsSnap?.current_status === "assets_generating" ||
     assetsSnap?.active_assets?.execution_state?.generating;
   if (isPlanGen || isAssetsGen) {
-    await assetsStore.loadProject();
     startAssetPolling();
     return;
   }
@@ -455,7 +457,6 @@ onMounted(async () => {
       ElMessage.success("资产规划生成完成");
     }
   }
-  await assetsStore.loadProject();
   await autoStartBasicAssets();
 });
 
@@ -645,8 +646,17 @@ function handleConfirm() {
 
 <template>
   <div class="asset-panel">
-    <!-- Error -->
-    <div v-if="assetsStore.state.loadError" class="asset-error-card">
+    <!-- Generating state takes priority over transient errors -->
+    <template v-if="isPlanGenerating || isAssetsGenerating || isAssetPolling">
+      <div v-if="generatingView" class="asset-generating-view">
+        <h2>{{ generatingView.title }}</h2>
+        <p>{{ generatingView.description }}</p>
+        <p class="asset-generating-hint">系统每 5 秒自动检查生成状态，无需手动刷新。</p>
+      </div>
+    </template>
+
+    <!-- Error — only when NOT generating (transient errors suppressed during generation) -->
+    <div v-else-if="assetsStore.state.loadError" class="asset-error-card">
       <el-alert
         :title="'加载失败：' + assetsStore.state.loadError"
         type="error"

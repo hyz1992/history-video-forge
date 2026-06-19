@@ -18,10 +18,13 @@ const { startPolling } = useStagePolling({
   isGenerating: (snapshot) =>
     snapshot.current_status === "storyboard_generating" ||
     snapshot.active_storyboard?.execution_state?.generating === true,
-  isTerminal: (snapshot) =>
-    !!snapshot.active_storyboard ||
-    snapshot.current_status === "storyboard_ready" ||
-    snapshot.current_status?.startsWith("asset_plan"),
+  isTerminal: (snapshot) => {
+    if (!snapshot.active_storyboard) return false;
+    // generating 占位记录不算终态
+    if (snapshot.active_storyboard.execution_state?.generating) return false;
+    // 有真实分镜数据
+    return (snapshot.active_storyboard.plan?.segments?.length ?? 0) > 0;
+  },
 });
 
 /* -------------------------------------------------------------------------- */

@@ -37,10 +37,14 @@ export function useStagePolling<T>(options: StagePollingOptions<T>): StagePollin
       lastSnapshot.value = snapshot;
       consecutiveErrors.value = 0;
 
+      // 生成中绝不能停轮询，即使 isTerminal 误判
+      if (options.isGenerating(snapshot)) {
+        return; // keep polling
+      }
       if (options.isTerminal(snapshot)) {
         stopPolling();
         options.onComplete?.(snapshot);
-      } else if (!options.isGenerating(snapshot)) {
+      } else {
         stopPolling();
       }
     } catch {

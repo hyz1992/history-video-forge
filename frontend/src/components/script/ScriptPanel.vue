@@ -20,9 +20,14 @@ const { startPolling } = useStagePolling({
   isGenerating: (snapshot) =>
     snapshot.current_status === "script_generating" ||
     snapshot.active_script?.execution_state?.generating === true,
-  isTerminal: (snapshot) =>
-    !!snapshot.active_script ||
-    snapshot.current_status === "script_failed",
+  isTerminal: (snapshot) => {
+    if (snapshot.current_status === "script_failed") return true;
+    if (!snapshot.active_script) return false;
+    // generating 占位记录不算终态
+    if (snapshot.active_script.execution_state?.generating) return false;
+    // 有真实 script_text 且状态不是 generating
+    return !!snapshot.active_script.script_text;
+  },
 });
 
 onMounted(async () => {

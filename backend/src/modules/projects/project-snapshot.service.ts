@@ -60,7 +60,11 @@ export function resolveEffectiveStatus(project: {
   return s;
 }
 
-export async function getProjectSnapshot(db: DbClient, projectId: string) {
+export async function getProjectSnapshot(
+  db: DbClient,
+  projectId: string,
+  topicCandidateStore?: Map<string, any>,
+) {
   const project = db.projects.get(projectId);
   if (!project) {
     return null;
@@ -121,6 +125,48 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
 
   const effectiveStatus = resolveEffectiveStatus(project);
 
+  // 读取 topic 候选数据（仅存在于内存，不在 DB）
+  let topicCandidates: {
+    candidate_rounds: Array<{
+      round_id: string;
+      round_index: number;
+      created_at: string;
+      candidates: Array<{
+        candidate_id: string;
+        title: string;
+        one_line_angle: string;
+        family_label: string;
+        scope_label: string;
+        why_this_now: string;
+        strong_scene: string;
+        risk_hints: string[];
+      }>;
+    }>;
+  } | null = null;
+
+  if (topicCandidateStore?.has(project.id)) {
+    const state = topicCandidateStore.get(project.id);
+    if (state?.rounds?.length) {
+      topicCandidates = {
+        candidate_rounds: state.rounds.map((round: any) => ({
+          round_id: round.roundId,
+          round_index: round.roundIndex,
+          created_at: round.createdAt?.toISOString?.() ?? round.createdAt,
+          candidates: (round.candidates ?? []).map((c: any) => ({
+            candidate_id: c.candidateId ?? c.id ?? "",
+            title: c.title ?? "",
+            one_line_angle: c.oneLineAngle ?? c.angle ?? "",
+            family_label: c.familyLabel ?? c.event?.familyLabel ?? "",
+            scope_label: c.scopeLabel ?? c.event?.scopeLabel ?? "",
+            why_this_now: c.whyThisNow ?? c.why_now ?? "",
+            strong_scene: c.strongScene ?? c.event?.strongScene ?? "",
+            risk_hints: c.riskHints ?? [],
+          })),
+        })),
+      };
+    }
+  }
+
   return {
     project_id: project.id,
     name: project.name,
@@ -151,6 +197,7 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
           narrative_tension_map: topicRecord.narrativeTensionMapJson,
         }
       : null,
+    topic_candidates: topicCandidates,
     active_script: scriptRecord
       ? {
           script_record_id: scriptRecord.id,

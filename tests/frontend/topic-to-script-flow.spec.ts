@@ -292,7 +292,8 @@ describe("phase 4 project routing", () => {
     await flushPromises();
 
     expect(router.currentRoute.value.path).toBe("/projects/project-1/script");
-    expect(calls.loadSnapshot).toBe(1);
+    // onMounted loadActiveScriptSnapshot + startPolling pollOnce in triggerAutoGenerate
+    expect(calls.loadSnapshot).toBe(2);
     expect(calls.generateInitialScript).toBe(1);
     expect(wrapper.get("[data-testid='script-page-header']").text()).toContain("文案工作区");
     expect(wrapper.get("[data-testid='script-trace-entry']").text()).toContain("查看运行详情");
@@ -446,7 +447,8 @@ describe("phase 4 project routing", () => {
     await flushPromises();
 
     expect(router.currentRoute.value.path).toBe("/projects/project-2/script");
-    expect(calls.loadSnapshot).toBe(2);
+    // onMounted loadActiveScriptSnapshot + startPolling pollOnce in triggerAutoGenerate + prior calls
+    expect(calls.loadSnapshot).toBe(4);
     expect(calls.generateInitialScript).toBe(2);
   });
 });
