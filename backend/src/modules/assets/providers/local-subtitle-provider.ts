@@ -6,6 +6,8 @@
  * on `tts_chunk_artifact_ids` being populated in `audio_summary`.
  */
 
+import { readFileSync } from "node:fs";
+
 import type {
   AssetProviderAdapter,
   AssetProviderContext,
@@ -24,6 +26,8 @@ import {
 } from "../assets-subtitle-generator.js";
 import { alignCaptionsFromAsr } from "../asr-caption-aligner.js";
 import { transcribeAudioFile } from "./dashscope/dashscope-asr-client.js";
+import { resolveArtifactFileUri } from "../artifact-file-resolver.js";
+import { readAudioDurationSec } from "../audio-duration-probe.js";
 import { DEFAULT_SUBTITLE_STYLE } from "../../../../../shared/src/index.js";
 
 type SubtitleTimingSource =
@@ -124,6 +128,15 @@ export function createLocalSubtitleProvider(
 
       captions = closeCaptionGaps(captions);
 
+      // 非 ASR 对齐的字幕：按真实 TTS 合并音频时长缩放
+      if (subtitleTimingSource !== "forced_alignment") {
+        const scaleResult = scaleCaptionsToRealAudioDuration({ captions, ctx });
+        if (scaleResult.timingSource) {
+          captions = scaleResult.captions;
+          subtitleTimingSource = scaleResult.timingSource;
+        }
+      }
+
       const srtContent = buildSrtFromCaptions(captions);
       const vttContent = buildVttFromCaptions(captions);
       const subtitleDurationSec =
@@ -223,6 +236,75 @@ function mergeTimingSources(
 ): SubtitleTimingSource {
   const unique = new Set(sources.length > 0 ? sources : ["estimated"]);
   return unique.size === 1 ? [...unique][0]! : "mixed";
+}
+
+const SUBTITLE_AUDIO_DRIFT_THRESHOLD_SEC = 0.1;
+
+/** 将字幕 caption 按真实 TTS 合并音频的 probe 时长缩放 */
+function scaleCaptionsToRealAudioDuration(input: {
+  captions: SubtitleCaption[];
+  ctx: AssetProviderContext;
+}): { captions: SubtitleCaption[]; timingSource: SubtitleTimingSource | null } {
+  const { captions, ctx } = input;
+  if (captions.length === 0) return { captions, timingSource: null };
+
+  const mergedArtifactId = ctx.manifest.audio_summary.tts_merged_artifact_id;
+  if (!mergedArtifactId) return { captions, timingSource: null };
+
+  const mergedArtifact = ctx.manifest.artifacts.find(
+    (a) => a.artifact_id === mergedArtifactId,
+  );
+  if (
+    !mergedArtifact ||
+    mergedArtifact.artifact_type !== "tts_merged_audio"
+  ) {
+    return { captions, timingSource: null };
+  }
+
+  const filePath = resolveArtifactFileUri({
+    fileUri: mergedArtifact.file_uri,
+    projectStorageRootDir: ctx.projectStorageRootDir,
+  });
+  if (!filePath) return { captions, timingSource: null };
+
+  let realDurationSec: number | null = null;
+  try {
+    const meta = mergedArtifact.metadata as {
+      format?: string;
+      sample_rate?: number;
+    };
+    realDurationSec = readAudioDurationSec({
+      data: readFileSync(filePath),
+      format: meta.format,
+      sampleRate: meta.sample_rate,
+      bytesPerSample: 2,
+      channels: 1,
+    });
+  } catch {
+    return { captions, timingSource: null };
+  }
+
+  if (!realDurationSec || realDurationSec <= 0) {
+    return { captions, timingSource: null };
+  }
+
+  const estimatedTotalSec = captions[captions.length - 1]!.end_sec;
+  if (estimatedTotalSec <= 0) return { captions, timingSource: null };
+
+  const driftSec = Math.abs(estimatedTotalSec - realDurationSec);
+  if (driftSec <= SUBTITLE_AUDIO_DRIFT_THRESHOLD_SEC) {
+    return { captions, timingSource: null };
+  }
+
+  const scale = realDurationSec / estimatedTotalSec;
+  return {
+    captions: captions.map((c) => ({
+      ...c,
+      start_sec: c.start_sec * scale,
+      end_sec: c.end_sec * scale,
+    })),
+    timingSource: "audio_probe_proportional",
+  };
 }
 
 async function tryAsrAlignment(
