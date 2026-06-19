@@ -25,24 +25,17 @@ const projectStore = useProjectStore();
 const workspaceStore = useWorkspaceStore();
 
 // 通用轮询：asset plan + assets 两个阶段的 generating 状态
-const { startPolling: startAssetPolling, isPolling: isAssetPolling } = useStagePolling({
-  loadSnapshot: () => loadAssetSnapshot(),
-  isGenerating: (snapshot) =>
-    snapshot.current_status === "asset_plan_generating" ||
-    snapshot.current_status === "assets_generating" ||
-    snapshot.active_asset_plan?.execution_state?.generating === true ||
-    snapshot.active_assets?.execution_state?.generating === true,
-  isTerminal: (snapshot) =>
-    (!!snapshot.active_asset_plan && snapshot.current_status !== "asset_plan_generating" && !!snapshot.active_assets) ||
-    snapshot.current_status?.startsWith("compos"),
-});
-
 /** 先 load asset plan，再 load assets，顺序保证依赖关系 */
 async function loadAssetSnapshot() {
   await assetPlanningStore.retryLoad();
   await assetsStore.loadProject();
+  const assetStatus = assetsStore.state.snapshot?.current_status ?? "";
+  const planStatus = assetPlanningStore.state.snapshot?.current_status ?? "";
   return {
-    current_status: assetPlanningStore.state.snapshot?.current_status ?? assetsStore.state.snapshot?.current_status ?? "",
+    current_status:
+      assetsStore.state.snapshot?.active_assets || assetStatus.startsWith("assets")
+        ? assetStatus
+        : planStatus,
     active_asset_plan: assetPlanningStore.state.snapshot?.active_asset_plan ?? null,
     active_assets: assetsStore.state.snapshot?.active_assets ?? null,
   };
@@ -72,14 +65,34 @@ const manifest = computed(() => assetsStore.state.snapshot?.active_assets?.manif
 const readiness = computed(() => manifest.value?.readiness ?? null);
 
 const currentStatus = computed(
-  () =>
-    assetPlanningStore.state.snapshot?.current_status ??
-    assetsStore.state.snapshot?.current_status ??
-    "",
+  () => {
+    const assetStatus = assetsStore.state.snapshot?.current_status ?? "";
+    if (assetsStore.state.snapshot?.active_assets || assetStatus.startsWith("assets")) {
+      return assetStatus;
+    }
+    return assetPlanningStore.state.snapshot?.current_status ?? assetStatus;
+  },
 );
 const basicAssetsAutoStarted = ref(false);
 const canAutoStartBasicAssets = ref(false);
 const basicAssetsGenerationFailed = ref(false);
+
+// 通用轮询：asset plan 阶段整页等待；plan 已有但 manifest 尚未出现时继续轮询，
+// 避免基础资产 POST 刚启动前的空窗让轮询提前停止。
+const { startPolling: startAssetPolling, isPolling: isAssetPolling } = useStagePolling({
+  loadSnapshot: () => loadAssetSnapshot(),
+  isGenerating: (snapshot) =>
+    snapshot.current_status === "asset_plan_generating" ||
+    snapshot.current_status === "assets_generating" ||
+    snapshot.active_asset_plan?.execution_state?.generating === true ||
+    snapshot.active_assets?.execution_state?.generating === true ||
+    (!!snapshot.active_asset_plan &&
+      !snapshot.active_assets &&
+      !basicAssetsGenerationFailed.value),
+  isTerminal: (snapshot) =>
+    (!!snapshot.active_asset_plan && snapshot.current_status !== "asset_plan_generating" && !!snapshot.active_assets) ||
+    snapshot.current_status?.startsWith("compos"),
+});
 
 // Snapshot-based generating checks (survive page refresh)
 const isPlanGenerating = computed(
@@ -511,6 +524,8 @@ async function autoStartBasicAssets() {
     ElMessage.success("基础资产生成完成（口播、字幕、运镜、音效、配乐）");
   } else {
     basicAssetsGenerationFailed.value = true;
+    basicAssetsAutoStarted.value = false;
+    canAutoStartBasicAssets.value = false;
   }
 }
 
@@ -563,6 +578,8 @@ async function handleGenerateBasic() {
     ElMessage.success("基础资产生成完成（口播、字幕、运镜、音效、配乐）");
   } else {
     basicAssetsGenerationFailed.value = true;
+    basicAssetsAutoStarted.value = false;
+    canAutoStartBasicAssets.value = false;
   }
 }
 
@@ -694,6 +711,8 @@ function handleRetry() {
 async function handleRefreshGeneratingStatus() {
   await loadAssetSnapshot();
   if (activeAssetPlan.value && !hasManifest.value && !isPlanGenerating.value) {
+    basicAssetsAutoStarted.value = false;
+    basicAssetsGenerationFailed.value = false;
     canAutoStartBasicAssets.value = true;
     await autoStartBasicAssets();
   }

@@ -46,7 +46,7 @@ describe("getAssetGeneratingView", () => {
     ).toBe(false);
   });
 
-  it("shows a visible basic-assets loading state while polling after the plan is ready", () => {
+  it("does not block the asset page while basic assets are starting after the plan is ready", () => {
     expect(
       getAssetGeneratingView({
         hasAssetPlan: true,
@@ -55,14 +55,10 @@ describe("getAssetGeneratingView", () => {
         isAssetsGenerating: false,
         isPolling: true,
       }),
-    ).toMatchObject({
-      kind: "assets",
-      title: "正在生成基础资源",
-      blockPage: true,
-    });
+    ).toBeNull();
   });
 
-  it("treats a ready plan without a manifest as pending basic asset generation", () => {
+  it("keeps the asset page visible for a ready plan without a manifest", () => {
     expect(
       getAssetGeneratingView({
         hasAssetPlan: true,
@@ -71,11 +67,7 @@ describe("getAssetGeneratingView", () => {
         isAssetsGenerating: false,
         isPolling: false,
       }),
-    ).toMatchObject({
-      kind: "assets",
-      title: "正在生成基础资源",
-      blockPage: true,
-    });
+    ).toBeNull();
   });
 
   it("keeps basic-assets loading visible during transient asset snapshot errors", () => {

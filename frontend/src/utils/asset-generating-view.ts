@@ -45,24 +45,6 @@ export function shouldShowAssetGeneratingView(
 export function getAssetGeneratingView(
   input: AssetGeneratingViewInput,
 ): AssetGeneratingView | null {
-  if (input.isPolling && input.hasAssetPlan && !input.hasManifest) {
-    return {
-      kind: "assets",
-      title: "正在生成基础资源",
-      hint: "正在生成口播音频、字幕、运镜、音效和配乐，完成后会自动进入资产预览。",
-      blockPage: true,
-    };
-  }
-
-  if (input.hasAssetPlan && !input.hasManifest && !input.isPlanGenerating) {
-    return {
-      kind: "assets",
-      title: "正在生成基础资源",
-      hint: "正在启动口播音频、字幕、运镜、音效和配乐生成，完成后会自动进入资产预览。",
-      blockPage: true,
-    };
-  }
-
   if (input.isPolling && !input.hasAssetPlan && !input.hasManifest) {
     return {
       kind: "asset_plan",
