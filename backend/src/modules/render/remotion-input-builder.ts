@@ -94,7 +94,7 @@ async function toBrowserFileUri(input: {
   projectStorageRootDir?: string;
 }): Promise<string> {
   const { artifact, assetBaseDir, projectStorageRootDir } = input;
-  if (artifact.artifact_type === "image") {
+  if (artifact.artifact_type === "image" || artifact.artifact_type === "video") {
     const localFilePath = getLocalFilePath(artifact.file_uri, projectStorageRootDir);
     if (!localFilePath) {
       // fallback to assetBaseDir resolution for backward compat
@@ -105,6 +105,9 @@ async function toBrowserFileUri(input: {
           staticRootDir: assetBaseDir,
         });
         if (staticUri) return staticUri;
+        if (artifact.artifact_type === "video") {
+          return pathToFileURL(fallback).href;
+        }
         const imageBytes = await readFile(fallback);
         return `data:${getImageMimeType(fallback)};base64,${imageBytes.toString("base64")}`;
       }
@@ -114,6 +117,9 @@ async function toBrowserFileUri(input: {
         staticRootDir: projectStorageRootDir ?? assetBaseDir,
       });
       if (staticUri) return staticUri;
+      if (artifact.artifact_type === "video") {
+        return pathToFileURL(localFilePath).href;
+      }
       const imageBytes = await readFile(localFilePath);
       return `data:${getImageMimeType(localFilePath)};base64,${imageBytes.toString("base64")}`;
     }

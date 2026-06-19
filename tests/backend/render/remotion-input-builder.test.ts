@@ -352,7 +352,7 @@ describe("buildRemotionInputProps", () => {
       },
     ]);
     expect(props.visualClips[0]?.src).toBe("remotion-static://media/still.png");
-    expect(props.visualClips[1]?.src).toMatch(/^file:\/\/\//);
+    expect(props.visualClips[1]?.src).toBe("remotion-static://media/clip.mp4");
     expect(props.audioClips).toMatchObject([
       {
         clipId: "clip_narration",

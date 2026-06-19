@@ -346,7 +346,7 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
     });
     const failedValidation = buildFailedValidation({
       readyValidation,
-      errorCode: "render_output_probe_failed",
+      errorCode: "render_export_failed",
     });
     updateRenderJobRecord(renderJob, {
       status: "failed",

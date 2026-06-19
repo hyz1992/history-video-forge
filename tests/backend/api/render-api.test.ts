@@ -385,7 +385,8 @@ describe("render API", () => {
     expect(response.json()).toMatchObject({
       error: "stale_render_source",
     });
-    expect(project.activeRenderJobRecordId).toBeNull();
+    const body = response.json();
+    expect(project.activeRenderJobRecordId).toBe(body.render_job_record_id);
     expect([...app.db.renderJobRecords.values()][0]).toMatchObject({
       status: "stale_source",
     });
@@ -416,12 +417,15 @@ describe("render API", () => {
       render_job: {
         status: "failed",
       },
+      local_validation: {
+        errors: ["render_export_failed"],
+      },
       runtime_diagnostics: {
         error_message: "adapter exploded",
       },
     });
     expect(project.status).toBe("render_failed");
-    expect(project.activeRenderJobRecordId).toBeNull();
+    expect(project.activeRenderJobRecordId).toBe(body.render_job_record_id);
     expect(app.db.renderJobRecords.get(body.render_job_record_id)).toMatchObject({
       status: "failed",
       runtimeDiagnosticsJson: {
