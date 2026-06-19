@@ -58,4 +58,20 @@ describe("getAssetGeneratingView", () => {
       blockPage: true,
     });
   });
+
+  it("treats a ready plan without a manifest as pending basic asset generation", () => {
+    expect(
+      getAssetGeneratingView({
+        hasAssetPlan: true,
+        hasManifest: false,
+        isPlanGenerating: false,
+        isAssetsGenerating: false,
+        isPolling: false,
+      }),
+    ).toMatchObject({
+      kind: "assets",
+      title: "正在生成基础资源",
+      blockPage: true,
+    });
+  });
 });

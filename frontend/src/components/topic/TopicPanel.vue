@@ -98,7 +98,6 @@ function selectHistoryCandidate(
 
 async function generateRecommendations() {
   saveFilters();
-  startPolling();
   await topicStore.generateSystemRecommendations({
     era: eraFilter.value,
     tension: tensionFilter.value,
@@ -109,7 +108,6 @@ async function generateRecommendations() {
 }
 
 async function handleRegenerate() {
-  startPolling();
   await topicStore.generateSystemRecommendations({
     era: eraFilter.value,
     tension: tensionFilter.value,
@@ -175,7 +173,7 @@ function handleRetry() {
       </div>
 
       <!-- Loading / Generating state (snapshot-based survives refresh) -->
-      <div v-else-if="!hasCandidates && (isSnapshotGenerating || isPolling)" class="topic-generating">
+      <div v-else-if="!hasCandidates && (topicStore.state.isGenerating || isSnapshotGenerating || isPolling)" class="topic-generating">
         <el-skeleton :rows="3" animated />
         <p class="topic-generating-text">正在调用大模型生成选题推荐，可能需要 1-3 分钟...</p>
         <p class="topic-generating-hint">生成完成后结果会自动出现，无需手动刷新。</p>

@@ -171,4 +171,71 @@ describe("topic store recommendation input", () => {
 
     await expect(store.loadSnapshot()).resolves.toBe(snapshot);
   });
+
+  it("does not let a stale topic_pending snapshot hide local generation progress", async () => {
+    let resolveGeneration!: (value: {
+      project_id: string;
+      candidates: never[];
+      current_round: null;
+      history_rounds: never[];
+    }) => void;
+    const api = {
+      generateSystemRecommendations: vi.fn(
+        () =>
+          new Promise<{
+            project_id: string;
+            candidates: never[];
+            current_round: null;
+            history_rounds: never[];
+          }>((resolve) => {
+            resolveGeneration = resolve;
+          }),
+      ),
+      confirmCandidate: vi.fn(),
+      loadSnapshot: vi.fn(async () => ({
+        active_topic_package: null,
+        current_status: "topic_pending",
+        topic_candidates: null,
+      })),
+    };
+    const projectStore = {
+      state: {
+        projectId: "project-1",
+        currentStatus: "topic_pending",
+        projects: [],
+      },
+      async ensureProject() {
+        return "project-1";
+      },
+      async createProject() {
+        throw new Error("not used");
+      },
+      async loadProjects() {
+        return [];
+      },
+      resolveProjectWorkspacePath() {
+        return "/projects/project-1/topic";
+      },
+      syncProject: vi.fn(),
+    };
+    const store = createTopicStore({
+      projectStore,
+      api,
+    });
+
+    const generating = store.generateSystemRecommendations();
+    await Promise.resolve();
+
+    const snapshot = await store.loadSnapshot();
+    expect(snapshot?.current_status).toBe("topic_generating");
+    expect(store.state.snapshot?.current_status).toBe("topic_generating");
+
+    resolveGeneration({
+      project_id: "project-1",
+      candidates: [],
+      current_round: null,
+      history_rounds: [],
+    });
+    await generating;
+  });
 });

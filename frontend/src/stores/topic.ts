@@ -340,6 +340,14 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
     if (!projectId) return null;
     try {
       const snapshot = await input.api.loadSnapshot(projectId);
+      if (state.isGenerating && snapshot.current_status === "topic_pending") {
+        const generatingSnapshot: TopicSnapshotResponse = {
+          ...snapshot,
+          current_status: "topic_generating",
+        };
+        state.snapshot = generatingSnapshot;
+        return generatingSnapshot;
+      }
       state.snapshot = snapshot;
       input.projectStore.syncProject({
         project_id: projectId,

@@ -480,12 +480,13 @@ async function autoStartBasicAssets() {
 
 // Watch for snapshot changes and auto-start if conditions become ready
 watch(
-  () => [assetsStore.state.snapshot, assetPlanningStore.state.snapshot?.active_asset_plan],
+  () => [activeAssetPlan.value, hasManifest.value, isAssetsBusy.value],
   async () => {
     if (!basicAssetsAutoStarted) {
       await autoStartBasicAssets();
     }
   },
+  { immediate: true },
 );
 
 /* -------------------------------------------------------------------------- */
@@ -649,7 +650,7 @@ function handleConfirm() {
   <div class="asset-panel">
     <!-- Generating state takes priority over transient errors -->
     <div
-      v-if="generatingView?.blockPage"
+      v-if="generatingView?.blockPage && !assetsStore.state.loadError"
       class="asset-generating"
     >
       <h2>{{ generatingView.title }}</h2>
