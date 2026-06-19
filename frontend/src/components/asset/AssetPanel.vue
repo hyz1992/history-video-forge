@@ -650,7 +650,7 @@ function handleConfirm() {
     <template v-if="isPlanGenerating || isAssetsGenerating || isAssetPolling">
       <div v-if="generatingView" class="asset-generating-view">
         <h2>{{ generatingView.title }}</h2>
-        <p>{{ generatingView.description }}</p>
+        <p>{{ generatingView.hint }}</p>
         <p class="asset-generating-hint">系统每 5 秒自动检查生成状态，无需手动刷新。</p>
       </div>
     </template>

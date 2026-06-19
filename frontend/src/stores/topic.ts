@@ -212,6 +212,10 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
         error instanceof Error ? error.message : "topic_generation_failed";
     } finally {
       state.isGenerating = false;
+      // 成功后清除 generating 状态，防止刷新或轮询竞态卡在 loading
+      if (!state.loadError) {
+        state.snapshot = { current_status: "topic_candidates_ready" };
+      }
     }
   }
 
