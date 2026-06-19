@@ -10,7 +10,28 @@ import type { AssetManifest, ComposeTimeline } from "../../../shared/src/index.j
 const ONE_BY_ONE_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
 
-async function writeFixtureFiles(rootDir: string) {
+const DEFAULT_SUBTITLE_CONTENT =
+  "1\n00:00:00,000 --> 00:00:02,000\nHello.\n";
+
+type SubtitleTimingSource =
+  | "estimated"
+  | "audio_probe"
+  | "audio_probe_proportional"
+  | "provider_timestamp"
+  | "forced_alignment"
+  | "mixed"
+  | "provider"
+  | "aligned";
+
+interface SubtitleFixtureOptions {
+  subtitleContent?: string;
+  subtitleTimingSource?: SubtitleTimingSource;
+}
+
+async function writeFixtureFiles(
+  rootDir: string,
+  options?: SubtitleFixtureOptions,
+) {
   const mediaDir = join(rootDir, "media");
   await mkdir(mediaDir, { recursive: true });
 
@@ -28,7 +49,7 @@ async function writeFixtureFiles(rootDir: string) {
   await writeFile(sfxPath, "fake sfx bytes", "utf8");
   await writeFile(
     subtitlePath,
-    "1\n00:00:00,000 --> 00:00:02,000\nHello.\n",
+    options?.subtitleContent ?? DEFAULT_SUBTITLE_CONTENT,
     "utf8",
   );
 
@@ -166,14 +187,17 @@ function makeTimelineWithTwoVisualsAndNarration(): ComposeTimeline {
   };
 }
 
-function makeManifestWithImageMotionNarrationSubtitle(input: {
-  imagePath: string;
-  videoPath: string;
-  narrationPath: string;
-  bgmPath: string;
-  sfxPath: string;
-  subtitlePath: string;
-}): AssetManifest {
+function makeManifestWithImageMotionNarrationSubtitle(
+  input: {
+    imagePath: string;
+    videoPath: string;
+    narrationPath: string;
+    bgmPath: string;
+    sfxPath: string;
+    subtitlePath: string;
+  },
+  options?: SubtitleFixtureOptions,
+): AssetManifest {
   return {
     manifest_version: "asset_manifest_v1",
     source_asset_plan_id: "asset_plan_001",
@@ -237,6 +261,9 @@ function makeManifestWithImageMotionNarrationSubtitle(input: {
           format: "srt",
           source_tts_artifact_id: "artifact_tts_merged",
           caption_count: 1,
+          ...(options?.subtitleTimingSource
+            ? { timing_source: options.subtitleTimingSource }
+            : {}),
         },
       },
       {
@@ -319,11 +346,16 @@ function makeManifestWithImageMotionNarrationSubtitle(input: {
 describe("buildRemotionInputProps", () => {
   it("normalizes visual, narration, subtitle, and motion props", async () => {
     const tempDir = await mkdtemp(join(tmpdir(), "remotion-input-builder-"));
-    const files = await writeFixtureFiles(tempDir);
+    const files = await writeFixtureFiles(tempDir, {
+      // 显式声明为 forced_alignment 以避免触发字幕缩放，让本用例聚焦 visual/audio 提取
+      subtitleTimingSource: "forced_alignment",
+    });
 
     const props = await buildRemotionInputProps({
       timeline: makeTimelineWithTwoVisualsAndNarration(),
-      manifest: makeManifestWithImageMotionNarrationSubtitle(files),
+      manifest: makeManifestWithImageMotionNarrationSubtitle(files, {
+        subtitleTimingSource: "forced_alignment",
+      }),
       assetBaseDir: tempDir,
       width: 540,
       height: 960,
@@ -417,5 +449,88 @@ describe("buildRemotionInputProps", () => {
       position: "bottom",
       text_align: "center",
     });
+  });
+
+  it("按比例缩放字幕 cue 到 narration 真实时长（estimated timing_source，drift 超过阈值）", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "remotion-input-builder-scale-"));
+    const subtitleContent =
+      "1\n00:00:00,000 --> 00:00:02,500\n第一句。\n\n2\n00:00:02,500 --> 00:00:05,000\n第二句。\n";
+    const files = await writeFixtureFiles(tempDir, {
+      subtitleContent,
+      subtitleTimingSource: "estimated",
+    });
+
+    const props = await buildRemotionInputProps({
+      timeline: makeTimelineWithTwoVisualsAndNarration(),
+      manifest: makeManifestWithImageMotionNarrationSubtitle(files, {
+        subtitleTimingSource: "estimated",
+      }),
+      assetBaseDir: tempDir,
+      width: 540,
+      height: 960,
+      fps: 30,
+    });
+
+    // narration clip duration = 4s，cue 总时长 = 5s，缩放系数 = 4/5 = 0.8
+    expect(props.subtitleCues).toEqual([
+      { start_sec: 0, end_sec: 2, text: "第一句。" },
+      { start_sec: 2, end_sec: 4, text: "第二句。" },
+    ]);
+  });
+
+  it("drift 小于阈值时不缩放字幕 cue", async () => {
+    const tempDir = await mkdtemp(
+      join(tmpdir(), "remotion-input-builder-no-scale-drift-"),
+    );
+    // narration duration = 4s，cue 总时长 = 4.05s，drift = 0.05s < 0.1s
+    const subtitleContent =
+      "1\n00:00:00,000 --> 00:00:04,050\n整段。\n";
+    const files = await writeFixtureFiles(tempDir, {
+      subtitleContent,
+      subtitleTimingSource: "estimated",
+    });
+
+    const props = await buildRemotionInputProps({
+      timeline: makeTimelineWithTwoVisualsAndNarration(),
+      manifest: makeManifestWithImageMotionNarrationSubtitle(files, {
+        subtitleTimingSource: "estimated",
+      }),
+      assetBaseDir: tempDir,
+      width: 540,
+      height: 960,
+      fps: 30,
+    });
+
+    expect(props.subtitleCues).toEqual([
+      { start_sec: 0, end_sec: 4.05, text: "整段。" },
+    ]);
+  });
+
+  it("timing_source 为 forced_alignment 时即使 drift 超过阈值也不缩放", async () => {
+    const tempDir = await mkdtemp(
+      join(tmpdir(), "remotion-input-builder-forced-align-"),
+    );
+    // narration duration = 4s，cue 总时长 = 5s，drift = 1s，但 timing_source 是 forced_alignment
+    const subtitleContent =
+      "1\n00:00:00,000 --> 00:00:05,000\n已对齐。\n";
+    const files = await writeFixtureFiles(tempDir, {
+      subtitleContent,
+      subtitleTimingSource: "forced_alignment",
+    });
+
+    const props = await buildRemotionInputProps({
+      timeline: makeTimelineWithTwoVisualsAndNarration(),
+      manifest: makeManifestWithImageMotionNarrationSubtitle(files, {
+        subtitleTimingSource: "forced_alignment",
+      }),
+      assetBaseDir: tempDir,
+      width: 540,
+      height: 960,
+      fps: 30,
+    });
+
+    expect(props.subtitleCues).toEqual([
+      { start_sec: 0, end_sec: 5, text: "已对齐。" },
+    ]);
   });
 });

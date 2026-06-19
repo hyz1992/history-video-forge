@@ -19,10 +19,15 @@ import type {
 import {
   normalizeSubtitleStyle,
   parseSubtitleCues,
+  type SubtitleCue,
 } from "./subtitle-cue-reader.js";
 
 const DEFAULT_CROSSFADE_SEC = 0.25;
 const REMOTION_STATIC_URI_PREFIX = "remotion-static://";
+// 字幕 cue 与 narration 真实时长差异超过该阈值时按比例缩放
+const SUBTITLE_NARRATION_DRIFT_THRESHOLD_SEC = 0.1;
+// 仅当字幕 timing_source 为 estimated / mixed / 缺失时缩放；forced_alignment / provider_timestamp 等视为真实对齐
+const SCALABLE_SUBTITLE_TIMING_SOURCES = new Set(["estimated", "mixed"]);
 
 /** Resolve an artifact file_uri to a local filesystem path using the shared resolver. */
 function getLocalFilePath(
@@ -383,6 +388,61 @@ async function buildAudioClips(input: {
     .sort((left, right) => left.startSec - right.startSec);
 }
 
+function getNarrationDurationSec(timeline: ComposeTimeline): number | null {
+  const narrationTrack = timeline.tracks.find(
+    (track) => track.track_type === "narration",
+  );
+  const firstClip = narrationTrack?.clips[0];
+  if (!firstClip) return null;
+  return firstClip.duration_sec;
+}
+
+function readSubtitleTimingSource(
+  artifact: AssetArtifact | null,
+): string | undefined {
+  if (!artifact || artifact.artifact_type !== "subtitle_track") {
+    return undefined;
+  }
+  const metadata = artifact.metadata as { timing_source?: unknown };
+  return typeof metadata.timing_source === "string"
+    ? metadata.timing_source
+    : undefined;
+}
+
+function shouldScaleSubtitleCues(
+  timingSource: string | undefined,
+): boolean {
+  // 缺失或显式声明为 estimated / mixed 时才缩放
+  if (timingSource === undefined) return true;
+  return SCALABLE_SUBTITLE_TIMING_SOURCES.has(timingSource);
+}
+
+function normalizeSubtitleCuesToNarration(input: {
+  cues: SubtitleCue[];
+  narrationDurationSec: number | null;
+  timingSource: string | undefined;
+}): SubtitleCue[] {
+  const { cues, narrationDurationSec, timingSource } = input;
+  if (cues.length === 0) return cues;
+  if (narrationDurationSec === null || narrationDurationSec <= 0) return cues;
+  if (!shouldScaleSubtitleCues(timingSource)) return cues;
+
+  const lastEndSec = cues[cues.length - 1]!.end_sec;
+  if (lastEndSec <= 0) return cues;
+
+  const driftSec = Math.abs(lastEndSec - narrationDurationSec);
+  if (driftSec <= SUBTITLE_NARRATION_DRIFT_THRESHOLD_SEC) {
+    return cues;
+  }
+
+  const scale = narrationDurationSec / lastEndSec;
+  return cues.map((cue) => ({
+    start_sec: cue.start_sec * scale,
+    end_sec: cue.end_sec * scale,
+    text: cue.text,
+  }));
+}
+
 export async function buildRemotionInputProps(input: {
   timeline: ComposeTimeline;
   manifest: AssetManifest;
@@ -403,6 +463,17 @@ export async function buildRemotionInputProps(input: {
         projectStorageRootDir: input.projectStorageRootDir,
       })
     : undefined;
+  const rawSubtitleCues = subtitleContent
+    ? parseSubtitleCues({
+        format: String(subtitleArtifact?.metadata.format ?? "srt"),
+        content: subtitleContent,
+      })
+    : [];
+  const subtitleCues = normalizeSubtitleCuesToNarration({
+    cues: rawSubtitleCues,
+    narrationDurationSec: getNarrationDurationSec(input.timeline),
+    timingSource: readSubtitleTimingSource(subtitleArtifact),
+  });
 
   return {
     timeline: input.timeline,
@@ -411,12 +482,7 @@ export async function buildRemotionInputProps(input: {
     width: input.width,
     height: input.height,
     fps: input.fps,
-    subtitleCues: subtitleContent
-      ? parseSubtitleCues({
-          format: String(subtitleArtifact?.metadata.format ?? "srt"),
-          content: subtitleContent,
-        })
-      : [],
+    subtitleCues,
     subtitleStyle: normalizeSubtitleStyle(
       subtitleArtifact?.metadata.subtitle_style,
     ),
