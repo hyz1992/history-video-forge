@@ -8,6 +8,7 @@ import { useAssetPlanningStore } from "../../stores/asset-planning";
 import { useAssetsStore } from "../../stores/assets";
 import { useScriptStore } from "../../stores/script";
 import { useProjectStore } from "../../stores/project";
+import { useStagePolling } from "../../composables/useStagePolling";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { PIPELINE_STEPS } from "../../stores/workspace";
 
@@ -21,6 +22,30 @@ const assetsStore = useAssetsStore();
 const scriptStore = useScriptStore();
 const projectStore = useProjectStore();
 const workspaceStore = useWorkspaceStore();
+
+// 通用轮询：asset plan + assets 两个阶段的 generating 状态
+const { startPolling: startAssetPolling, isPolling: isAssetPolling } = useStagePolling({
+  loadSnapshot: () => loadAssetSnapshot(),
+  isGenerating: (snapshot) =>
+    snapshot.current_status === "asset_plan_generating" ||
+    snapshot.current_status === "assets_generating" ||
+    snapshot.active_asset_plan?.execution_state?.generating === true ||
+    snapshot.active_assets?.execution_state?.generating === true,
+  isTerminal: (snapshot) =>
+    (!!snapshot.active_asset_plan && snapshot.current_status !== "asset_plan_generating" && !!snapshot.active_assets) ||
+    snapshot.current_status?.startsWith("compos"),
+});
+
+/** 先 load asset plan，再 load assets，顺序保证依赖关系 */
+async function loadAssetSnapshot() {
+  await assetPlanningStore.retryLoad();
+  await assetsStore.loadProject();
+  return {
+    current_status: assetPlanningStore.state.snapshot?.current_status ?? assetsStore.state.snapshot?.current_status ?? "",
+    active_asset_plan: assetPlanningStore.state.snapshot?.active_asset_plan ?? null,
+    active_assets: assetsStore.state.snapshot?.active_assets ?? null,
+  };
+}
 
 /* -------------------------------------------------------------------------- */
 /*  Computed data from stores                                                 */
@@ -401,77 +426,72 @@ onMounted(async () => {
   await storyboardStore.loadActiveStoryboardSnapshot();
   await assetPlanningStore.loadActiveAssetPlanSnapshot();
   scriptStore.loadActiveScriptSnapshot(); // fire-and-forget, needed for narration text
+
+  // F5 恢复：如果正在生成中，启动轮询
+  const planSnap = assetPlanningStore.state.snapshot;
+  const assetsSnap = assetsStore.state.snapshot;
+  const isPlanGen =
+    planSnap?.current_status === "asset_plan_generating" ||
+    planSnap?.active_asset_plan?.execution_state?.generating;
+  const isAssetsGen =
+    assetsSnap?.current_status === "assets_generating" ||
+    assetsSnap?.active_assets?.execution_state?.generating;
+  if (isPlanGen || isAssetsGen) {
+    await assetsStore.loadProject();
+    startAssetPolling();
+    return;
+  }
+
   // Auto-generate asset plan when arriving from storyboard confirmation
-  const s = assetPlanningStore.state.snapshot;
   if (
-    s &&
-    !s.active_asset_plan &&
-    (s.current_status === "storyboard_ready" ||
-      s.current_status === "asset_plan_ready")
+    planSnap &&
+    !planSnap.active_asset_plan &&
+    (planSnap.current_status === "storyboard_ready" ||
+      planSnap.current_status === "asset_plan_ready")
   ) {
+    startAssetPolling();
     await assetPlanningStore.generateAssetPlan();
     if (!assetPlanningStore.state.loadError) {
       ElMessage.success("资产规划生成完成");
     }
   }
   await assetsStore.loadProject();
-  startGeneratingPoller();
   await autoStartBasicAssets();
 });
 
 let basicAssetsAutoStarted = false;
-let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
-async function refreshAssetState() {
-  await Promise.all([
-    assetPlanningStore.retryLoad(),
-    assetsStore.loadProject(),
-  ]);
-}
-
-function startGeneratingPoller() {
-  if (refreshTimer) return;
-  refreshTimer = setInterval(() => {
-    if (isPlanGenerating.value || isAssetsGenerating.value || assetsStore.state.isGenerating) {
-      void refreshAssetState();
-    }
-  }, 5000);
-}
-
-onUnmounted(() => {
-  if (refreshTimer) {
-    clearInterval(refreshTimer);
-    refreshTimer = null;
-  }
-});
-
-/** Auto-start basic asset generation when entering the page with a plan
- *  but no manifest yet.  Guards against duplicate triggers on refresh. */
+/** Auto-start basic asset generation when entering with a plan but no manifest. */
 async function autoStartBasicAssets() {
   if (basicAssetsAutoStarted) return;
   if (isAssetsBusy.value) return;
   if (!activeAssetPlan.value) return;
-  if (hasManifest.value) return; // already generated
+  if (hasManifest.value) return;
 
   basicAssetsAutoStarted = true;
+  startAssetPolling();
   await assetsStore.generateAssets({ enabledProviderTypes: ["tts", "sfx", "bgm"] });
   if (!assetsStore.state.loadError) {
     ElMessage.success("基础资产生成完成（口播、字幕、运镜、音效、配乐）");
   }
 }
 
-// Also trigger on snapshot change (handles timing where project data loads async)
-watch(() => assetsStore.state.snapshot, async () => {
-  if (!basicAssetsAutoStarted) {
-    await autoStartBasicAssets();
-  }
-});
+// Watch for snapshot changes and auto-start if conditions become ready
+watch(
+  () => [assetsStore.state.snapshot, assetPlanningStore.state.snapshot?.active_asset_plan],
+  async () => {
+    if (!basicAssetsAutoStarted) {
+      await autoStartBasicAssets();
+    }
+  },
+);
 
 /* -------------------------------------------------------------------------- */
 /*  Actions                                                                   */
 /* -------------------------------------------------------------------------- */
 
 async function handleGeneratePlan() {
+  startAssetPolling();
   await assetPlanningStore.generateAssetPlan();
   if (!assetPlanningStore.state.loadError) {
     ElMessage.success("资产规划生成完成");
@@ -480,7 +500,7 @@ async function handleGeneratePlan() {
 
 async function handleGenerateBasic() {
   if (isAssetsBusy.value) return;
-  // Basic assets: TTS/subtitle/motion/SFX/BGM — low cost, no confirmation needed
+  startAssetPolling();
   await assetsStore.generateAssets({ enabledProviderTypes: ["tts", "sfx", "bgm"] });
   if (!assetsStore.state.loadError) {
     ElMessage.success("基础资产生成完成（口播、字幕、运镜、音效、配乐）");

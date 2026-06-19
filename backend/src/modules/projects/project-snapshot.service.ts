@@ -22,6 +22,7 @@ function summarizeTraceRun(trace: Record<string, unknown> | null | undefined) {
 }
 
 function statusToStep(status: string): string {
+  if (status === "topic_candidates_ready") return "topic";
   if (status.startsWith("topic")) return "topic";
   if (status.startsWith("script")) return "script";
   if (status.startsWith("storyboard")) return "storyboard";
@@ -29,6 +30,10 @@ function statusToStep(status: string): string {
   if (status.startsWith("compos")) return "compose";
   if (status.startsWith("render")) return "render";
   return "topic";
+}
+
+function isDraft(status: string): boolean {
+  return status.startsWith("topic") || status === "topic_candidates_ready" || status === "topic_pending";
 }
 
 /**
@@ -120,7 +125,7 @@ export async function getProjectSnapshot(db: DbClient, projectId: string) {
     project_id: project.id,
     name: project.name,
     current_status: effectiveStatus,
-    is_draft: effectiveStatus.startsWith("topic"),
+    is_draft: isDraft(effectiveStatus),
     restore_route: `/projects/${project.id}/${statusToStep(effectiveStatus)}`,
     trace_summary: {
       project_storage: {

@@ -7,10 +7,22 @@ import { useStoryboardStore } from "../../stores/storyboard";
 import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { PIPELINE_STEPS } from "../../stores/workspace";
+import { useStagePolling } from "../../composables/useStagePolling";
 
 const storyboardStore = useStoryboardStore();
 const projectStore = useProjectStore();
 const workspaceStore = useWorkspaceStore();
+
+const { startPolling } = useStagePolling({
+  loadSnapshot: () => storyboardStore.loadActiveStoryboardSnapshot(),
+  isGenerating: (snapshot) =>
+    snapshot.current_status === "storyboard_generating" ||
+    snapshot.active_storyboard?.execution_state?.generating === true,
+  isTerminal: (snapshot) =>
+    !!snapshot.active_storyboard ||
+    snapshot.current_status === "storyboard_ready" ||
+    snapshot.current_status?.startsWith("asset_plan"),
+});
 
 /* -------------------------------------------------------------------------- */
 /*  Computed data from store                                                  */
@@ -117,8 +129,16 @@ const router = useRouter();
 
 onMounted(async () => {
   await storyboardStore.loadActiveStoryboardSnapshot();
-  // Auto-generate when arriving from script confirmation
+  // F5 恢复：如果 snapshot 显示 generating，启动轮询
   const s = storyboardStore.state.snapshot;
+  if (
+    s?.current_status === "storyboard_generating" ||
+    s?.active_storyboard?.execution_state?.generating
+  ) {
+    startPolling();
+    return;
+  }
+  // Auto-generate when arriving from script confirmation
   if (
     s &&
     !s.active_storyboard &&
@@ -137,6 +157,7 @@ onMounted(async () => {
 /* -------------------------------------------------------------------------- */
 
 async function handleGenerate() {
+  startPolling();
   await storyboardStore.generateStoryboard();
   if (!storyboardStore.state.loadError) {
     ElMessage.success("分镜规划生成完成");
@@ -205,11 +226,11 @@ function handleConfirm() {
       <p class="storyboard-empty-hint">确认文案后将自动生成分镜。如果已确认文案但未自动生成，请手动点击下方按钮。</p>
       <el-button
         type="primary"
-        :loading="storyboardStore.state.isGenerating"
-        :disabled="storyboardStore.state.isGenerating"
+        :loading="isGenerating || storyboardStore.state.isGenerating"
+        :disabled="isGenerating"
         @click="handleGenerate"
       >
-        {{ storyboardStore.state.isGenerating ? "生成中..." : "开始生成分镜" }}
+        {{ isGenerating || storyboardStore.state.isGenerating ? "生成中..." : "开始生成分镜" }}
       </el-button>
     </div>
 

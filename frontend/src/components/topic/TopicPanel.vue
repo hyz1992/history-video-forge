@@ -6,6 +6,7 @@ import { useRoute, useRouter } from "vue-router";
 import { useTopicStore, type TopicRecommendationFilters } from "../../stores/topic";
 import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
+import { useStagePolling } from "../../composables/useStagePolling";
 
 const topicStore = useTopicStore();
 const projectStore = useProjectStore();
@@ -15,8 +16,27 @@ const router = useRouter();
 
 const SCRIPT_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "script");
 
-onMounted(() => {
-  topicStore.loadExistingTopic();
+const { startPolling, isPolling } = useStagePolling({
+  loadSnapshot: () => topicStore.loadSnapshot(),
+  isGenerating: (snapshot) => snapshot.current_status === "topic_generating",
+  isTerminal: (snapshot) =>
+    snapshot.current_status !== "topic_generating" && snapshot.current_status !== "topic_pending",
+  onComplete: () => {
+    // 生成完成后刷新候选列表
+    topicStore.loadExistingTopic();
+  },
+});
+
+const isSnapshotGenerating = computed(
+  () => topicStore.state.snapshot?.current_status === "topic_generating",
+);
+
+onMounted(async () => {
+  await topicStore.loadExistingTopic();
+  // F5 刷新后恢复轮询
+  if (isSnapshotGenerating.value) {
+    startPolling();
+  }
 });
 
 const eraFilter = ref<TopicRecommendationFilters["era"]>(
@@ -73,6 +93,7 @@ function selectHistoryCandidate(
 
 async function generateRecommendations() {
   saveFilters();
+  startPolling();
   await topicStore.generateSystemRecommendations({
     era: eraFilter.value,
     tension: tensionFilter.value,
@@ -83,6 +104,7 @@ async function generateRecommendations() {
 }
 
 async function handleRegenerate() {
+  startPolling();
   await topicStore.generateSystemRecommendations({
     era: eraFilter.value,
     tension: tensionFilter.value,
@@ -148,7 +170,7 @@ function handleRetry() {
       </div>
 
       <!-- Loading / Generating state (snapshot-based survives refresh) -->
-      <div v-else-if="topicStore.state.isGenerating || topicStore.state.snapshot?.current_status === 'topic_generating'" class="topic-generating">
+      <div v-else-if="isSnapshotGenerating || isPolling" class="topic-generating">
         <el-skeleton :rows="3" animated />
         <p class="topic-generating-text">正在调用大模型生成选题推荐，可能需要 1-3 分钟...</p>
         <p class="topic-generating-hint">生成完成后结果会自动出现，无需手动刷新。</p>
@@ -172,7 +194,12 @@ function handleRetry() {
               <el-option label="传播切口优先" value="hook-first" />
             </el-select>
 
-            <el-button type="primary" @click="generateRecommendations">
+            <el-button
+              type="primary"
+              :disabled="isSnapshotGenerating || isPolling"
+              :loading="isSnapshotGenerating || isPolling"
+              @click="generateRecommendations"
+            >
               开始生成选题
             </el-button>
           </div>

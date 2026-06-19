@@ -77,6 +77,8 @@ export interface TopicStoreState {
   isConfirming: boolean;
   confirmedTopicPackageId: string | null;
   loadError: string | null;
+  /** 项目快照，用于刷新后恢复 generating 状态 */
+  snapshot: { current_status: string } | null;
 }
 
 export interface TopicStore {
@@ -87,6 +89,7 @@ export interface TopicStore {
   closeCandidate: () => void;
   confirmSelectedCandidate: () => Promise<void>;
   loadExistingTopic: () => Promise<void>;
+  loadSnapshot: () => Promise<void>;
 }
 
 export interface CreateTopicStoreInput {
@@ -166,6 +169,7 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
     isConfirming: false,
     confirmedTopicPackageId: null,
     loadError: null,
+    snapshot: null,
   });
 
   function selectTab(tab: TopicTab) {
@@ -180,6 +184,7 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
   ) {
     state.isGenerating = true;
     state.loadError = null;
+    state.snapshot = { current_status: "topic_generating" };
 
     try {
       const projectId = await input.projectStore.ensureProject();
@@ -244,6 +249,7 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
 
     try {
       const snapshot = await input.api.loadSnapshot(projectId);
+      state.snapshot = snapshot;
       input.projectStore.syncProject({
         project_id: projectId,
         current_status: snapshot.current_status,
@@ -274,6 +280,22 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
     }
   }
 
+  async function loadSnapshot() {
+    const projectId = input.projectStore.state.projectId;
+    if (!projectId) return;
+    try {
+      const snapshot = await input.api.loadSnapshot(projectId);
+      state.snapshot = snapshot;
+      input.projectStore.syncProject({
+        project_id: projectId,
+        current_status: snapshot.current_status,
+        display_name: snapshot.active_topic_package?.canonical_title,
+      });
+    } catch {
+      // 保留上次有效 snapshot
+    }
+  }
+
   return {
     state: readonly(state),
     selectTab,
@@ -282,6 +304,7 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
     closeCandidate,
     confirmSelectedCandidate,
     loadExistingTopic,
+    loadSnapshot,
   };
 }
 

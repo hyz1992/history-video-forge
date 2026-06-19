@@ -269,6 +269,10 @@ export async function createTopicRecommendationsController(
   });
   context.app.topicCandidateStore.set(project.id, projectTopicState);
 
+  // 生成成功，状态转换为 candidates_ready
+  project.status = "topic_candidates_ready";
+  project.updatedAt = new Date();
+
   const currentRound = projectTopicState.rounds.at(-1);
   const historyRounds = projectTopicState.rounds.slice(0, -1);
 
