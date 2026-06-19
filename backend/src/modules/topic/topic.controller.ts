@@ -3,7 +3,10 @@ import { randomUUID } from "node:crypto";
 import type { AppResponse, RouteContext } from "../../app";
 import { createProject, getProjectById } from "../projects/project.repository";
 import { normalizeEventInput } from "./event-normalizer";
-import { recommendTopicCandidatesWithTrace } from "./topic-recommendation.service";
+import {
+  isProviderContentFilterError,
+  recommendTopicCandidatesWithTrace,
+} from "./topic-recommendation.service";
 import {
   confirmTopicCandidate,
   type StoredTopicCandidate,
@@ -37,6 +40,10 @@ function toResponseCandidate(candidate: StoredTopicCandidate) {
 
 function normalizeTopicGenerationErrorMessage(error: unknown) {
   const fallback = "topic_generate_failed";
+  if (isProviderContentFilterError(error)) {
+    return "上游模型安全策略拦截了本次选题推荐，系统已自动重试但仍未成功。请点击重试，或换一个更中性的事件范围再生成。";
+  }
+
   if (!(error instanceof Error) || error.message.trim().length === 0) {
     return fallback;
   }

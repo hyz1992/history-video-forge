@@ -10,7 +10,11 @@ import {
   recordProjectRecommendationRound,
   saveCachedCandidate,
 } from "../cache/candidate-cache.repository.js";
-import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
+import {
+  createLlmGateway,
+  type InvokeStrictStructuredOptions,
+  type LlmGateway,
+} from "../../runtime/llm/llm-gateway.js";
 import {
   renderRecommendationDiagnosticsMarkdown,
   type LlmInteractionLogWriter,
@@ -193,10 +197,12 @@ export async function recommendTopicCandidatesWithTrace(
         promptId: string;
         input: unknown;
       }) =>
-        gateway.invokeStructuredPrompt<T>({
-          ...runnerInput,
+        invokeTopicStructuredPromptWithSafetyRetry<T>({
+          gateway,
+          promptId: runnerInput.promptId,
+          promptInput: runnerInput.input,
           interactionLogWriter,
-      }),
+        }),
     },
   );
   const postProcessed = await postProcessTopicCandidates({
@@ -404,6 +410,136 @@ function createStubTopicRecommendationProvider(): StructuredPromptProvider {
       return candidates;
     },
   };
+}
+
+async function invokeTopicStructuredPromptWithSafetyRetry<T>(input: {
+  gateway: LlmGateway;
+  promptId: string;
+  promptInput: unknown;
+  interactionLogWriter?: LlmInteractionLogWriter;
+}): Promise<T> {
+  try {
+    return await input.gateway.invokeStructuredPrompt<T>({
+      promptId: input.promptId,
+      input: input.promptInput,
+      interactionLogWriter: input.interactionLogWriter,
+    });
+  } catch (error) {
+    if (!isProviderContentFilterError(error)) {
+      throw error;
+    }
+
+    try {
+      return await input.gateway.invokeStructuredPrompt<T>({
+        promptId: input.promptId,
+        input: withTopicSafetyRetryContext(input.promptInput),
+        interactionLogWriter: input.interactionLogWriter,
+      });
+    } catch {
+      throw error;
+    }
+  }
+}
+
+async function invokeTopicStrictStructuredWithSafetyRetry<T>(input: {
+  gateway: LlmGateway;
+  options: InvokeStrictStructuredOptions<T>;
+}): Promise<T> {
+  try {
+    return await input.gateway.invokeStrictStructured<T>(input.options);
+  } catch (error) {
+    if (!isProviderContentFilterError(error)) {
+      throw error;
+    }
+
+    try {
+      return await input.gateway.invokeStrictStructured<T>({
+        ...input.options,
+        input: withTopicSafetyRetryContext(input.options.input),
+      });
+    } catch {
+      throw error;
+    }
+  }
+}
+
+function withTopicSafetyRetryContext(promptInput: unknown): unknown {
+  const safetyRetryContext = {
+    reason: "provider_content_filter",
+    instruction:
+      "Use neutral historical-video planning language. Avoid graphic violence, explicit gore, corpses, torture details, or sensational wording; keep conflict described through decisions, pressure, setting, and consequences.",
+  };
+
+  if (
+    promptInput &&
+    typeof promptInput === "object" &&
+    !Array.isArray(promptInput)
+  ) {
+    return {
+      ...(promptInput as Record<string, unknown>),
+      safety_retry_context: safetyRetryContext,
+    };
+  }
+
+  return {
+    original_input: promptInput,
+    safety_retry_context: safetyRetryContext,
+  };
+}
+
+export function isProviderContentFilterError(error: unknown): boolean {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const record = error as Record<string, unknown>;
+  const code = record.code;
+  const status = record.status ?? record.statusCode;
+  const message = error instanceof Error ? error.message : "";
+  const providerError = extractProviderErrorPayload(message);
+  const codeText = String(code ?? providerError.code ?? "");
+  const providerMessage = String(providerError.message ?? "");
+  const combinedText = `${message}\n${providerMessage}`;
+  const statusMatches =
+    status === undefined || status === 400 || status === "400";
+
+  return (
+    statusMatches &&
+    (code === 1301 ||
+      code === "1301" ||
+      codeText === "1301" ||
+      /content[_ -]?filter/i.test(codeText) ||
+      /content[_ -]?filter/i.test(combinedText) ||
+      /不安全|敏感内容|安全策略/.test(combinedText))
+  );
+}
+
+function extractProviderErrorPayload(message: string): {
+  code?: unknown;
+  message?: unknown;
+} {
+  const jsonStart = message.indexOf("{");
+  if (jsonStart < 0) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(message.slice(jsonStart)) as {
+      error?: {
+        code?: unknown;
+        message?: unknown;
+      };
+      code?: unknown;
+      message?: unknown;
+    };
+
+    return {
+      code: parsed.error?.code ?? parsed.code,
+      message: parsed.error?.message ?? parsed.message,
+    };
+  } catch {
+    return {};
+  }
 }
 
 function createDefaultSelectorDecision(
@@ -886,23 +1022,27 @@ async function invokeTopicSelector(input: {
 }): Promise<TopicSelectorDecision> {
   if (input.llmGateway.invokeStrictStructured) {
     try {
-      return await input.llmGateway.invokeStrictStructured<TopicSelectorDecision>({
-        promptId: "topic.selector",
-        input: input.selectorInput,
-        schema: TOPIC_SELECTOR_STRICT_SCHEMA,
-        parse: parseStrictSelectorDecision,
+      return await invokeTopicStrictStructuredWithSafetyRetry<TopicSelectorDecision>({
+        gateway: input.llmGateway,
         options: {
-          strategy: "tool_call",
-          thinking: "disabled",
+          promptId: "topic.selector",
+          input: input.selectorInput,
+          schema: TOPIC_SELECTOR_STRICT_SCHEMA,
+          parse: parseStrictSelectorDecision,
+          options: {
+            strategy: "tool_call",
+            thinking: "disabled",
+          },
+          interactionLogWriter: input.interactionLogWriter,
         },
-        interactionLogWriter: input.interactionLogWriter,
       });
     } catch (error) {
       if (shouldFallbackToStructuredSelector(error)) {
         return normalizeSelectorDecision(
-          await input.llmGateway.invokeStructuredPrompt<unknown>({
+          await invokeTopicStructuredPromptWithSafetyRetry<unknown>({
+            gateway: input.llmGateway,
             promptId: "topic.selector",
-            input: input.selectorInput,
+            promptInput: input.selectorInput,
             interactionLogWriter: input.interactionLogWriter,
           }),
         );
@@ -913,9 +1053,10 @@ async function invokeTopicSelector(input: {
   }
 
   return normalizeSelectorDecision(
-    await input.llmGateway.invokeStructuredPrompt<unknown>({
+    await invokeTopicStructuredPromptWithSafetyRetry<unknown>({
+      gateway: input.llmGateway,
       promptId: "topic.selector",
-      input: input.selectorInput,
+      promptInput: input.selectorInput,
       interactionLogWriter: input.interactionLogWriter,
     }),
   );

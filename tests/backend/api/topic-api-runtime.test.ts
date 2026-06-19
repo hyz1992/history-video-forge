@@ -141,6 +141,80 @@ describe("topic api runtime", () => {
     });
   });
 
+  it("retries provider content filter rejection once before failing the topic flow", async () => {
+    invokeStructuredPromptMock.mockReset();
+    let builderCallIndex = 0;
+    invokeStructuredPromptMock.mockImplementation(async ({ operationName, input }) => {
+      if (operationName === "topic.selector") {
+        const pool = (input as { selector_pool?: Array<{ candidate_id: string }> }).selector_pool ?? [];
+        return {
+          ranked_candidates: pool.map((c, i) => ({
+            candidate_id: c.candidate_id,
+            quality_rank: i + 1,
+            quality_score: Math.max(1, 100 - i * 10),
+            deductions: [],
+            risk_summary: "mock selector ranking",
+          })),
+        };
+      }
+
+      builderCallIndex += 1;
+      if (builderCallIndex === 1) {
+        throw Object.assign(
+          new Error(
+            '400 Bad Request: {"error":{"code":"1301","message":"系统检测到输入或生成内容可能包含不安全或敏感内容"}}',
+          ),
+          {
+            code: "1301",
+            status: 400,
+          },
+        );
+      }
+
+      return [
+        createRuntimeCandidate("event-a", "angle-a"),
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+      ];
+    });
+
+    const app = buildApp();
+    const projectResponse = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: {
+        name: "Runtime Content Filter Retry",
+      },
+    });
+    const projectId = projectResponse.json().project_id as string;
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectId}/topic/recommendations`,
+      payload: {
+        canonical_name: "Yanzi Envoy",
+        summary: "A historical court exchange creates public pressure.",
+        core_conflict: "The envoy must answer the ruler in front of the court.",
+        strong_scene: "The court falls silent after the answer turns pressure back.",
+        source_hint: "Yanzi Chunqiu",
+        recent_usage_hint: "No recent repeat event id.",
+        tags: ["diplomacy", "court", "humiliation", "showdown"],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().candidates).toHaveLength(3);
+
+    const builderCalls = invokeStructuredPromptMock.mock.calls.filter(
+      ([request]) => request.operationName !== "topic.selector",
+    );
+    expect(builderCalls[1]?.[0].input).toMatchObject({
+      safety_retry_context: {
+        reason: "provider_content_filter",
+      },
+    });
+  });
+
   it("returns a readable provider failure message when topic generation is rejected", async () => {
     invokeStructuredPromptMock.mockReset();
     invokeStructuredPromptMock.mockRejectedValueOnce(
@@ -178,6 +252,53 @@ describe("topic api runtime", () => {
       error: "topic_generate_failed",
       message: "余额不足或无可用资源包,请充值。",
     });
+  });
+
+  it("does not expose raw provider content safety wording when retry still fails", async () => {
+    invokeStructuredPromptMock.mockReset();
+    invokeStructuredPromptMock.mockRejectedValue(
+      Object.assign(
+        new Error(
+          '400 Bad Request: {"error":{"code":"1301","message":"系统检测到输入或生成内容可能包含不安全或敏感内容，请您避免输入易产生敏感内容的提示语，感谢您的配合。"}}',
+        ),
+        {
+          code: "1301",
+          status: 400,
+        },
+      ),
+    );
+
+    const app = buildApp();
+    const projectResponse = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: {
+        name: "Runtime Content Filter Failure",
+      },
+    });
+    const projectId = projectResponse.json().project_id as string;
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectId}/topic/recommendations`,
+      payload: {
+        canonical_name: "Yanzi Envoy",
+        summary: "A historical court exchange creates public pressure.",
+        core_conflict: "The envoy must answer the ruler in front of the court.",
+        strong_scene: "The court falls silent after the answer turns pressure back.",
+        source_hint: "Yanzi Chunqiu",
+        recent_usage_hint: "No recent repeat event id.",
+        tags: ["diplomacy", "court", "humiliation", "showdown"],
+      },
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toMatchObject({
+      error: "topic_generate_failed",
+      message:
+        "上游模型安全策略拦截了本次选题推荐，系统已自动重试但仍未成功。请点击重试，或换一个更中性的事件范围再生成。",
+    });
+    expect(invokeStructuredPromptMock).toHaveBeenCalledTimes(2);
   });
 
   it("carries must_cover_preview from recommendation into confirmed topic package", async () => {
