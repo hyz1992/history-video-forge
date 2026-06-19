@@ -132,4 +132,43 @@ describe("topic store recommendation input", () => {
       tension: "balanced",
     });
   });
+
+  it("returns the loaded snapshot so polling can inspect topic generation status", async () => {
+    const snapshot = {
+      active_topic_package: null,
+      current_status: "topic_generating",
+      topic_candidates: null,
+    };
+    const api = {
+      generateSystemRecommendations: vi.fn(),
+      confirmCandidate: vi.fn(),
+      loadSnapshot: vi.fn(async () => snapshot),
+    };
+    const projectStore = {
+      state: {
+        projectId: "project-1",
+        currentStatus: "topic_generating",
+        projects: [],
+      },
+      async ensureProject() {
+        return "project-1";
+      },
+      async createProject() {
+        throw new Error("not used");
+      },
+      async loadProjects() {
+        return [];
+      },
+      resolveProjectWorkspacePath() {
+        return "/projects/project-1/topic";
+      },
+      syncProject: vi.fn(),
+    };
+    const store = createTopicStore({
+      projectStore,
+      api,
+    });
+
+    await expect(store.loadSnapshot()).resolves.toBe(snapshot);
+  });
 });

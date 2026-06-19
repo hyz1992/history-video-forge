@@ -38,7 +38,24 @@ describe("getAssetGeneratingView", () => {
         hasManifest: true,
         isPlanGenerating: false,
         isAssetsGenerating: true,
+        isPolling: false,
       })?.blockPage,
     ).toBe(false);
+  });
+
+  it("shows a visible basic-assets loading state while polling after the plan is ready", () => {
+    expect(
+      getAssetGeneratingView({
+        hasAssetPlan: true,
+        hasManifest: false,
+        isPlanGenerating: false,
+        isAssetsGenerating: false,
+        isPolling: true,
+      }),
+    ).toMatchObject({
+      kind: "assets",
+      title: "正在生成基础资源",
+      blockPage: true,
+    });
   });
 });

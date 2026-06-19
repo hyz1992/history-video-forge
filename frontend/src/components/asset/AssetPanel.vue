@@ -92,6 +92,7 @@ const generatingView = computed(() =>
     hasManifest: hasManifest.value,
     isPlanGenerating: isPlanGenerating.value,
     isAssetsGenerating: isAssetsGenerating.value || assetsStore.state.isGenerating,
+    isPolling: isAssetPolling.value,
   }),
 );
 
@@ -647,13 +648,14 @@ function handleConfirm() {
 <template>
   <div class="asset-panel">
     <!-- Generating state takes priority over transient errors -->
-    <template v-if="isPlanGenerating || isAssetsGenerating || isAssetPolling">
-      <div v-if="generatingView" class="asset-generating-view">
-        <h2>{{ generatingView.title }}</h2>
-        <p>{{ generatingView.hint }}</p>
-        <p class="asset-generating-hint">系统每 5 秒自动检查生成状态，无需手动刷新。</p>
-      </div>
-    </template>
+    <div
+      v-if="generatingView?.blockPage"
+      class="asset-generating"
+    >
+      <h2>{{ generatingView.title }}</h2>
+      <p>{{ generatingView.hint }}</p>
+      <p class="asset-generating-hint">系统每 5 秒自动检查生成状态，无需手动刷新。</p>
+    </div>
 
     <!-- Error — only when NOT generating (transient errors suppressed during generation) -->
     <div v-else-if="assetsStore.state.loadError" class="asset-error-card">
@@ -679,21 +681,6 @@ function handleConfirm() {
       animated
       class="asset-skeleton"
     />
-
-    <!-- Generating state (snapshot-based, survives refresh) -->
-    <div
-      v-else-if="generatingView?.blockPage"
-      class="asset-generating"
-    >
-      <p class="asset-generating-title">{{ generatingView.title }}</p>
-      <p class="asset-generating-hint">{{ generatingView.hint }}</p>
-      <p class="asset-generating-hint">系统每 5 秒自动检查生成状态，也可手动刷新：</p>
-      <el-button
-        @click="refreshAssetState"
-      >
-        立即刷新状态
-      </el-button>
-    </div>
 
     <!-- Stage 1: no plan → generate plan -->
     <div

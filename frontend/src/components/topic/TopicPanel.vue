@@ -17,7 +17,12 @@ const router = useRouter();
 const SCRIPT_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "script");
 
 const { startPolling, isPolling } = useStagePolling({
-  loadSnapshot: () => topicStore.loadSnapshot(),
+  loadSnapshot: async () =>
+    (await topicStore.loadSnapshot()) ?? {
+      active_topic_package: null,
+      current_status: "topic_pending",
+      topic_candidates: null,
+    },
   isGenerating: (snapshot) => snapshot.current_status === "topic_generating",
   isTerminal: (snapshot) =>
     snapshot.current_status !== "topic_generating" && snapshot.current_status !== "topic_pending",
@@ -170,7 +175,7 @@ function handleRetry() {
       </div>
 
       <!-- Loading / Generating state (snapshot-based survives refresh) -->
-      <div v-else-if="isSnapshotGenerating || isPolling" class="topic-generating">
+      <div v-else-if="!hasCandidates && (isSnapshotGenerating || isPolling)" class="topic-generating">
         <el-skeleton :rows="3" animated />
         <p class="topic-generating-text">正在调用大模型生成选题推荐，可能需要 1-3 分钟...</p>
         <p class="topic-generating-hint">生成完成后结果会自动出现，无需手动刷新。</p>

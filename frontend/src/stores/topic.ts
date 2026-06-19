@@ -97,7 +97,7 @@ export interface TopicStore {
   closeCandidate: () => void;
   confirmSelectedCandidate: () => Promise<void>;
   loadExistingTopic: () => Promise<void>;
-  loadSnapshot: () => Promise<void>;
+  loadSnapshot: () => Promise<TopicSnapshotResponse | null>;
 }
 
 export interface CreateTopicStoreInput {
@@ -335,9 +335,9 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
     }
   }
 
-  async function loadSnapshot() {
+  async function loadSnapshot(): Promise<TopicSnapshotResponse | null> {
     const projectId = input.projectStore.state.projectId;
-    if (!projectId) return;
+    if (!projectId) return null;
     try {
       const snapshot = await input.api.loadSnapshot(projectId);
       state.snapshot = snapshot;
@@ -346,8 +346,10 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
         current_status: snapshot.current_status,
         display_name: snapshot.active_topic_package?.canonical_title,
       });
+      return snapshot;
     } catch {
       // 保留上次有效 snapshot
+      return state.snapshot;
     }
   }
 
