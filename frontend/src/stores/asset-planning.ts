@@ -79,6 +79,7 @@ export interface ValidationResult {
 export interface ActiveAssetPlanSnapshot {
   plan: AssetPlan | null;
   validation_result: ValidationResult | null;
+  local_validation?: ValidationResult | null;
   execution_state: Record<string, unknown> | null;
   graph_trace_summary: Record<string, unknown> | null;
   runtime_diagnostics: Record<string, unknown> | null;
@@ -155,6 +156,31 @@ function toErrorMessage(error: unknown): string {
     return error.message;
   }
   return "asset_plan_load_failed";
+}
+
+export function isAssetPlanSnapshotGenerating(
+  snapshot: AssetPlanSnapshot | null,
+): boolean {
+  const activePlan = snapshot?.active_asset_plan ?? null;
+  const validationDecision =
+    activePlan?.validation_result?.decision ??
+    activePlan?.local_validation?.decision ??
+    null;
+
+  return (
+    snapshot?.current_status === "asset_plan_generating" ||
+    activePlan?.execution_state?.generating === true ||
+    validationDecision === "generating"
+  );
+}
+
+export function hasReadyAssetPlanSnapshot(
+  snapshot: AssetPlanSnapshot | null,
+): boolean {
+  return (
+    Boolean(snapshot?.active_asset_plan) &&
+    !isAssetPlanSnapshotGenerating(snapshot)
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -244,7 +270,7 @@ export function createAssetPlanningStore(
           // snapshot load failed; keep polling
         }
         const s = state.snapshot;
-        if (s?.active_asset_plan) break; // plan is ready
+        if (hasReadyAssetPlanSnapshot(s)) break; // plan is ready
         if (s?.current_status === "asset_plan_failed") {
           state.loadError = "资产规划生成失败";
           break;
@@ -262,9 +288,9 @@ export function createAssetPlanningStore(
       }
 
       // Final snapshot load
-      if (!state.snapshot?.active_asset_plan && !state.loadError) {
+      if (!hasReadyAssetPlanSnapshot(state.snapshot) && !state.loadError) {
         await loadActiveAssetPlanSnapshot();
-        if (!state.snapshot?.active_asset_plan && !state.loadError) {
+        if (!hasReadyAssetPlanSnapshot(state.snapshot) && !state.loadError) {
           state.loadError = "资产规划生成超时，请重试";
         }
       }

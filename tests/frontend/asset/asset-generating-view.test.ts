@@ -6,7 +6,7 @@ import {
 } from "../../../frontend/src/utils/asset-generating-view.js";
 
 describe("getAssetGeneratingView", () => {
-  it("shows asset plan generation only before a plan or manifest exists", () => {
+  it("shows asset plan generation before a plan or manifest exists", () => {
     expect(
       getAssetGeneratingView({
         hasAssetPlan: false,
@@ -16,7 +16,24 @@ describe("getAssetGeneratingView", () => {
       }),
     ).toMatchObject({
       kind: "asset_plan",
-      title: "正在进行资产规划",
+      title: "正在生成资产规划",
+      blockPage: true,
+    });
+  });
+
+  it("keeps showing asset plan generation for placeholder asset plan records", () => {
+    expect(
+      getAssetGeneratingView({
+        hasAssetPlan: true,
+        hasManifest: false,
+        isPlanGenerating: true,
+        isAssetsGenerating: false,
+        isPolling: true,
+      }),
+    ).toMatchObject({
+      kind: "asset_plan",
+      title: "正在生成资产规划",
+      blockPage: true,
     });
   });
 
