@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   getMountedVisualLayers,
+  getVisualSequenceFrames,
   getVisibleVisualLayers,
   makeVisualLayerStyle,
 } from "../../renderer/src/visual-rendering";
@@ -73,6 +74,19 @@ describe("visual rendering helpers", () => {
     expect(layers[1]).toMatchObject({
       clip: { clipId: "clip_b" },
       opacity: 1,
+    });
+  });
+
+  it("maps a visual clip to a local Remotion sequence window", () => {
+    expect(
+      getVisualSequenceFrames({
+        startSec: 17.481967213114753,
+        durationSec: 4.323497267759563,
+        fps: 30,
+      }),
+    ).toEqual({
+      from: 524,
+      durationInFrames: 130,
     });
   });
 });

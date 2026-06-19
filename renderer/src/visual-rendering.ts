@@ -92,6 +92,17 @@ export function makeVisualLayerStyle(input: {
   };
 }
 
+export function getVisualSequenceFrames(input: {
+  startSec: number;
+  durationSec: number;
+  fps: number;
+}): { from: number; durationInFrames: number } {
+  return {
+    from: Math.round(input.startSec * input.fps),
+    durationInFrames: Math.max(1, Math.round(input.durationSec * input.fps)),
+  };
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }

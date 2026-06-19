@@ -28,6 +28,7 @@ import {
 import { makeMotionTransform } from "./motion-rendering";
 import {
   getMountedVisualLayers,
+  getVisualSequenceFrames,
   makeVisualLayerStyle,
 } from "./visual-rendering";
 
@@ -87,20 +88,29 @@ function findPrimaryVisualUri(props: TimelineVideoProps) {
   return findArtifactFileUri(props, firstVisualClip.artifact_id);
 }
 
-function renderVisualClip(clip: RenderVisualClipProp) {
+function renderVisualClip(clip: RenderVisualClipProp, fps: number) {
   const src = resolveMediaSrc(clip.src);
   if (clip.mediaType === "video") {
+    const sequence = getVisualSequenceFrames({
+      startSec: clip.startSec,
+      durationSec: clip.durationSec,
+      fps,
+    });
+
     return (
-      <OffthreadVideo
-        src={src}
-        muted
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          objectPosition: "center",
-        }}
-      />
+      <Sequence from={sequence.from} durationInFrames={sequence.durationInFrames}>
+        <OffthreadVideo
+          src={src}
+          muted
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            objectPosition: "center",
+            display: "block",
+          }}
+        />
+      </Sequence>
     );
   }
 
@@ -232,7 +242,7 @@ export function TimelineVideo(props: TimelineVideoProps) {
                 }),
               })}
             >
-              {renderVisualClip(layer.clip)}
+              {renderVisualClip(layer.clip, props.fps)}
             </div>
           ))
         : null}
