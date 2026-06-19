@@ -141,6 +141,45 @@ describe("topic api runtime", () => {
     });
   });
 
+  it("returns a readable provider failure message when topic generation is rejected", async () => {
+    invokeStructuredPromptMock.mockReset();
+    invokeStructuredPromptMock.mockRejectedValueOnce(
+      new Error(
+        '429 Too Many Requests: {"error":{"code":"1113","message":"余额不足或无可用资源包,请充值。"}}',
+      ),
+    );
+
+    const app = buildApp();
+    const projectResponse = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: {
+        name: "Runtime Provider Failure",
+      },
+    });
+    const projectId = projectResponse.json().project_id as string;
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectId}/topic/recommendations`,
+      payload: {
+        canonical_name: "晏子使楚",
+        summary: "楚王在公开场合连续压场，晏子当场顶回去。",
+        core_conflict: "楚王当众压场，晏子必须当场顶回。",
+        strong_scene: "楚王连续压场，晏子一句句顶回去。",
+        source_hint: "《晏子春秋》",
+        recent_usage_hint: "近期未出现同 event_id",
+        tags: ["diplomacy", "court", "humiliation", "showdown"],
+      },
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toMatchObject({
+      error: "topic_generate_failed",
+      message: "余额不足或无可用资源包,请充值。",
+    });
+  });
+
   it("carries must_cover_preview from recommendation into confirmed topic package", async () => {
     const mustCoverPreview = [
       "The envoy steps into a court arranged to shame him.",

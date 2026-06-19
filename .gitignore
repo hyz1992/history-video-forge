@@ -7,6 +7,7 @@ storage/db-snapshot.json
 storage/media-library/
 .playwright-mcp/
 .superpowers/
+.codex/
 storage/topic-candidate-library/
 storage/voice-profiles/
 .codex-run-logs/

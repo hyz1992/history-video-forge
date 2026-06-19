@@ -449,9 +449,11 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
 
   if (response.ok === false) {
     const errorMessage =
-      typeof body?.error === "string"
-        ? body.error
-        : `topic_api_request_failed:${response.status}`;
+      typeof body?.message === "string" && body.message.trim().length > 0
+        ? body.message
+        : typeof body?.error === "string" && body.error.trim().length > 0
+          ? body.error
+          : `topic_api_request_failed:${response.status}`;
     throw new Error(errorMessage);
   }
 

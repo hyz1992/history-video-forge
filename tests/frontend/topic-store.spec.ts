@@ -87,6 +87,26 @@ describe("topic store recommendation input", () => {
     });
   });
 
+  it("prefers backend error message over generic error code when topic generation fails", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: false,
+      status: 500,
+      json: async () => ({
+        error: "topic_generate_failed",
+        message: "LLM provider timeout after 120 seconds",
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const api = createFetchTopicApi();
+
+    await expect(
+      api.generateSystemRecommendations("project-1", {
+        era: "ancient",
+        tension: "high",
+      }),
+    ).rejects.toThrow("LLM provider timeout after 120 seconds");
+  });
+
   it("forwards system filters through the topic store when generating recommendations", async () => {
     const api = {
       generateSystemRecommendations: vi.fn(async () => ({

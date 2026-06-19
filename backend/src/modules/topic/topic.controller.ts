@@ -35,6 +35,39 @@ function toResponseCandidate(candidate: StoredTopicCandidate) {
   };
 }
 
+function normalizeTopicGenerationErrorMessage(error: unknown) {
+  const fallback = "topic_generate_failed";
+  if (!(error instanceof Error) || error.message.trim().length === 0) {
+    return fallback;
+  }
+
+  const message = error.message.trim();
+  const jsonStart = message.indexOf("{");
+  if (jsonStart >= 0) {
+    try {
+      const parsed = JSON.parse(message.slice(jsonStart)) as {
+        error?: {
+          message?: unknown;
+        };
+        message?: unknown;
+      };
+      const providerMessage =
+        typeof parsed.error?.message === "string"
+          ? parsed.error.message
+          : typeof parsed.message === "string"
+            ? parsed.message
+            : "";
+      if (providerMessage.trim().length > 0) {
+        return providerMessage.trim();
+      }
+    } catch {
+      // Keep the original message when the provider body is not valid JSON.
+    }
+  }
+
+  return message;
+}
+
 function readNonEmptyStringField(
   payload: Record<string, unknown>,
   field: keyof TopicRecommendationSeedPayload,
@@ -303,7 +336,7 @@ export async function createTopicRecommendationsController(
   } catch (error) {
     project.status = "topic_pending";
     project.updatedAt = new Date();
-    const message = error instanceof Error ? error.message : "topic_generate_failed";
+    const message = normalizeTopicGenerationErrorMessage(error);
     return {
       statusCode: 500,
       body: { error: "topic_generate_failed", message },
