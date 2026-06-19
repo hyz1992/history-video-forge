@@ -521,8 +521,10 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     }
 
     manifest.executions = manifest.executions.filter((exec) => {
+      // 显式请求的任务总是执行，不因之前已完成而跳过
+      if (taskIdSet?.has(exec.task_id)) return true;
       if (existingCompletedIds.has(exec.task_id)) return false;
-      if (taskIdSet && !taskIdSet.has(exec.task_id)) return false;
+      if (taskIdSet) return false;
       return true;
     });
   }
@@ -596,9 +598,22 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
 
     (manifest as Record<string, unknown>).segment_routes = mergedPreRoutes;
 
-    // Inject old audio summary as fallback context
-    if (!(manifest as Record<string, unknown>).audio_summary) {
+    // Inject old audio summary as fallback context.
+    // The initial manifest may have audio_summary present but with many
+    // null fields. Merge the old values when new ones are missing.
+    const currentAudio = (manifest as Record<string, unknown>).audio_summary as Record<string, unknown> | null | undefined;
+    if (!currentAudio) {
       (manifest as Record<string, unknown>).audio_summary = oldAudio;
+    } else {
+      for (const [key, value] of Object.entries(oldAudio)) {
+        if (
+          (currentAudio[key] === null || currentAudio[key] === undefined) &&
+          value !== null &&
+          value !== undefined
+        ) {
+          currentAudio[key] = value;
+        }
+      }
     }
   }
 

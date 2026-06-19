@@ -33,6 +33,7 @@ import { DEFAULT_SUBTITLE_STYLE } from "../../../../../shared/src/index.js";
 type SubtitleTimingSource =
   | "estimated"
   | "audio_probe"
+  | "audio_probe_proportional"
   | "provider_timestamp"
   | "forced_alignment"
   | "mixed"
@@ -219,6 +220,7 @@ export function createLocalSubtitleProvider(
 function readTimingSource(value: string | undefined): SubtitleTimingSource {
   switch (value) {
     case "audio_probe":
+    case "audio_probe_proportional":
     case "provider_timestamp":
     case "forced_alignment":
     case "mixed":
