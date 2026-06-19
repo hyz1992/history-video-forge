@@ -90,7 +90,18 @@ function findPrimaryVisualUri(props: TimelineVideoProps) {
 function renderVisualClip(clip: RenderVisualClipProp) {
   const src = resolveMediaSrc(clip.src);
   if (clip.mediaType === "video") {
-    return <OffthreadVideo src={src} muted />;
+    return (
+      <OffthreadVideo
+        src={src}
+        muted
+        style={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          objectPosition: "center",
+        }}
+      />
+    );
   }
 
   return (
