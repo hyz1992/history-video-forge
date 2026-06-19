@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { DbClient, ProjectRecord } from "./client.js";
@@ -166,6 +166,20 @@ export function saveProjectMetadata(project: ProjectRecord): void {
     mkdirSync(dir, { recursive: true });
     const meta = serializeDateFields(project);
     writeFileSync(join(dir, "project.json"), JSON.stringify(meta, null, 2), "utf8");
+  } catch {
+    // best-effort
+  }
+}
+
+/** Remove the project's storage directory so deleted projects are not recovered
+ *  from disk on the next server start. */
+export function deleteProjectStorage(project: ProjectRecord): void {
+  try {
+    if (!project.storageRootDir) return;
+    const dir = resolve(workspaceRoot, project.storageRootDir);
+    const relativeDir = relative(PROJECTS_ROOT, dir);
+    if (!relativeDir || relativeDir.startsWith("..") || isAbsolute(relativeDir)) return;
+    rmSync(dir, { recursive: true, force: true });
   } catch {
     // best-effort
   }

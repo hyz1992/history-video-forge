@@ -121,14 +121,11 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
     process.on("SIGINT", () => { persist(); process.exit(0); });
     process.on("SIGTERM", () => { persist(); process.exit(0); });
   }
-  // Persist after each state-changing request (debounced via setImmediate)
-  let persistPending = false;
-  function schedulePersist() {
+  // Persist after each state-changing request before the response completes,
+  // so deletes cannot be resurrected by a stale db snapshot on restart.
+  function persistMutation() {
     if (isTest) return;
-    if (!persistPending) {
-      persistPending = true;
-      setImmediate(() => { persist(); persistPending = false; });
-    }
+    persist();
   }
 
   const app: AppInstance = {
@@ -164,7 +161,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
 
         // Persist after state-changing requests
         if (method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE") {
-          schedulePersist();
+          persistMutation();
         }
 
         return {

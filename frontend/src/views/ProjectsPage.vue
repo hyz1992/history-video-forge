@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
+import { ElMessage } from "element-plus";
 
 import {
   useProjectStore,
@@ -13,6 +14,9 @@ const router = useRouter();
 const isLoading = ref(true);
 const searchQuery = ref("");
 const statusFilter = ref("all");
+const tableRenderVersion = ref(0);
+const confirmingDeleteProjectId = ref<string | null>(null);
+const isDeleting = ref(false);
 
 const statusOptions = [
   { value: "all", label: "全部" },
@@ -115,8 +119,32 @@ async function openProject(project: ProjectListItem) {
   );
 }
 
-async function handleDelete(projectId: string) {
-  await projectStore.deleteProject(projectId);
+function requestDeleteProject(projectId: string) {
+  if (isDeleting.value) return;
+  confirmingDeleteProjectId.value = projectId;
+}
+
+function cancelDeleteProject() {
+  if (isDeleting.value) return;
+  confirmingDeleteProjectId.value = null;
+}
+
+async function confirmDeleteProject() {
+  const projectId = confirmingDeleteProjectId.value;
+  if (!projectId || isDeleting.value) return;
+
+  isDeleting.value = true;
+  try {
+    await projectStore.deleteProject(projectId);
+    tableRenderVersion.value += 1;
+    ElMessage.success("项目已删除");
+    confirmingDeleteProjectId.value = null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "project_delete_failed";
+    ElMessage.error(`删除失败：${message}`);
+  } finally {
+    isDeleting.value = false;
+  }
 }
 
 function handleRowClick(row: ProjectListItem) {
@@ -177,7 +205,9 @@ function handleRowClick(row: ProjectListItem) {
       <!-- Table -->
       <div v-if="hasProjects" class="projects-table-wrapper">
         <el-table
+          :key="tableRenderVersion"
           :data="filteredProjects"
+          row-key="project_id"
           v-loading="isLoading"
           class="projects-table"
           @row-click="handleRowClick"
@@ -226,29 +256,44 @@ function handleRowClick(row: ProjectListItem) {
 
           <el-table-column
             label="操作"
-            width="100"
+            width="140"
             align="center"
           >
             <template #default="{ row }">
-              <el-popconfirm
-                title="确定删除该项目吗？"
-                confirm-button-text="删除"
-                cancel-button-text="取消"
-                width="220"
-                @confirm="handleDelete(row.project_id)"
+              <div
+                v-if="confirmingDeleteProjectId === row.project_id"
+                class="delete-confirm-actions"
               >
-                <template #reference>
-                  <el-button
-                    :data-testid="`delete-project-${row.project_id}`"
-                    type="danger"
-                    link
-                    size="small"
-                    @click.stop
-                  >
-                    删除
-                  </el-button>
-                </template>
-              </el-popconfirm>
+                <el-button
+                  :data-testid="`confirm-delete-project-${row.project_id}`"
+                  type="danger"
+                  link
+                  size="small"
+                  :loading="isDeleting"
+                  @click.stop="confirmDeleteProject"
+                >
+                  确认
+                </el-button>
+                <el-button
+                  type="info"
+                  link
+                  size="small"
+                  :disabled="isDeleting"
+                  @click.stop="cancelDeleteProject"
+                >
+                  取消
+                </el-button>
+              </div>
+              <el-button
+                v-else
+                :data-testid="`delete-project-${row.project_id}`"
+                type="danger"
+                link
+                size="small"
+                @click.stop="requestDeleteProject(row.project_id)"
+              >
+                删除
+              </el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -367,6 +412,12 @@ function handleRowClick(row: ProjectListItem) {
 }
 
 /* ── Empty State ── */
+.delete-confirm-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
 .projects-empty {
   display: flex;
   justify-content: center;

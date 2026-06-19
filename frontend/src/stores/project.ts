@@ -182,20 +182,26 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
   }
 
   async function deleteProject(projectId: string) {
-    if (api.deleteProject) {
-      await api.deleteProject(projectId);
-    }
-
-    if (api.listProjects) {
-      await loadProjects();
-    }
-
     const index = state.projects.findIndex(
       (p) => p.project_id === projectId,
     );
+    const removedProject = index >= 0 ? state.projects[index] : null;
+
     if (index >= 0) {
       state.projects.splice(index, 1);
     }
+
+    try {
+      if (api.deleteProject) {
+        await api.deleteProject(projectId);
+      }
+    } catch (error) {
+      if (removedProject && !state.projects.some((p) => p.project_id === projectId)) {
+        state.projects.splice(index >= 0 ? index : 0, 0, removedProject);
+      }
+      throw error;
+    }
+
     if (state.projectId === projectId) {
       state.projectId = null;
       state.currentStatus = "topic_pending";

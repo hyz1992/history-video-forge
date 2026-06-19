@@ -47,6 +47,8 @@ export async function deleteProjectController(
     };
   }
 
+  context.app.topicCandidateStore.delete(context.params.projectId);
+
   return {
     statusCode: 200,
     body: { deleted: true },

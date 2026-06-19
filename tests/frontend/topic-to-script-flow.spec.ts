@@ -41,6 +41,7 @@ function createProjectStoreStub() {
 
   const calls = {
     createProject: 0,
+    deleteProject: 0,
   };
 
   return {
@@ -64,6 +65,15 @@ function createProjectStoreStub() {
           current_status: "topic_pending",
           is_draft: true,
         };
+      },
+      async deleteProject(projectId: string) {
+        calls.deleteProject += 1;
+        const index = state.projects.findIndex(
+          (project) => project.project_id === projectId,
+        );
+        if (index >= 0) {
+          state.projects.splice(index, 1);
+        }
       },
       resolveProjectWorkspacePath(projectId: string, currentStatus: string) {
         return currentStatus === "script_ready"
@@ -171,6 +181,23 @@ describe("phase 4 project routing", () => {
     await wrapper.get("[data-testid='open-project-project-formal']").trigger("click");
     await flushPromises();
     expect(router.currentRoute.value.path).toBe("/projects/project-formal/script");
+  });
+
+  it("removes a project row immediately after deletion is confirmed", async () => {
+    const { wrapper, calls } = await mountAt("/projects");
+
+    expect(wrapper.find("[data-testid='delete-project-project-draft']").exists()).toBe(true);
+
+    await wrapper.get("[data-testid='delete-project-project-draft']").trigger("click");
+    await flushPromises();
+
+    await wrapper
+      .get("[data-testid='confirm-delete-project-project-draft']")
+      .trigger("click");
+    await flushPromises();
+
+    expect(calls.deleteProject).toBe(1);
+    expect(wrapper.find("[data-testid='delete-project-project-draft']").exists()).toBe(false);
   });
 
   it("navigates to the project script workspace and auto-starts script generation after topic confirmation", async () => {

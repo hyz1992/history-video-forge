@@ -1,6 +1,6 @@
 import type { DbClient, ProjectRecord } from "../../db/client";
 import { initializeProjectStorage } from "../../runtime/trace/project-storage.js";
-import { saveProjectMetadata } from "../../db/persistence.js";
+import { deleteProjectStorage, saveProjectMetadata } from "../../db/persistence.js";
 
 export interface CreateProjectInput {
   name: string;
@@ -60,6 +60,7 @@ export async function deleteProject(
   db: DbClient,
   projectId: string,
 ): Promise<boolean> {
+  const project = db.projects.get(projectId);
   const existed = db.projects.delete(projectId);
   if (!existed) return false;
 
@@ -88,7 +89,9 @@ export async function deleteProject(
   for (const [id, record] of db.publishPackageRecords) {
     if (record.projectId === projectId) db.publishPackageRecords.delete(id);
   }
-  db.topicCandidateStore.delete(projectId);
+  if (project && !process.env.VITEST) {
+    deleteProjectStorage(project);
+  }
 
   return true;
 }
