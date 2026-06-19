@@ -185,6 +185,11 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
     if (api.deleteProject) {
       await api.deleteProject(projectId);
     }
+
+    if (api.listProjects) {
+      await loadProjects();
+    }
+
     const index = state.projects.findIndex(
       (p) => p.project_id === projectId,
     );

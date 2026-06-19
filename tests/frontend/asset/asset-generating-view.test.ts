@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { getAssetGeneratingView } from "../../../frontend/src/utils/asset-generating-view.js";
+import {
+  getAssetGeneratingView,
+  shouldShowAssetGeneratingView,
+} from "../../../frontend/src/utils/asset-generating-view.js";
 
 describe("getAssetGeneratingView", () => {
   it("shows asset plan generation only before a plan or manifest exists", () => {
@@ -73,5 +76,31 @@ describe("getAssetGeneratingView", () => {
       title: "正在生成基础资源",
       blockPage: true,
     });
+  });
+
+  it("keeps basic-assets loading visible during transient asset snapshot errors", () => {
+    expect(
+      shouldShowAssetGeneratingView({
+        hasGeneratingView: true,
+        hasAssetPlan: true,
+        hasManifest: false,
+        hasAssetPlanError: false,
+        hasAssetsError: true,
+        hasBasicAssetsGenerationFailed: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("shows the error after basic asset generation itself fails", () => {
+    expect(
+      shouldShowAssetGeneratingView({
+        hasGeneratingView: true,
+        hasAssetPlan: true,
+        hasManifest: false,
+        hasAssetPlanError: false,
+        hasAssetsError: true,
+        hasBasicAssetsGenerationFailed: true,
+      }),
+    ).toBe(false);
   });
 });

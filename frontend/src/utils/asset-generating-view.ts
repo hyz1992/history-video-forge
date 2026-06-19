@@ -15,6 +15,33 @@ export interface AssetGeneratingView {
   blockPage: boolean;
 }
 
+export interface AssetGeneratingVisibilityInput {
+  hasGeneratingView: boolean;
+  hasAssetPlan: boolean;
+  hasManifest: boolean;
+  hasAssetPlanError: boolean;
+  hasAssetsError: boolean;
+  hasBasicAssetsGenerationFailed: boolean;
+}
+
+export function shouldShowAssetGeneratingView(
+  input: AssetGeneratingVisibilityInput,
+): boolean {
+  if (!input.hasGeneratingView) return false;
+  if (input.hasAssetPlanError) return false;
+  if (!input.hasAssetsError) return true;
+
+  if (
+    input.hasAssetPlan &&
+    !input.hasManifest &&
+    !input.hasBasicAssetsGenerationFailed
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 export function getAssetGeneratingView(
   input: AssetGeneratingViewInput,
 ): AssetGeneratingView | null {

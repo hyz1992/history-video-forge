@@ -15,7 +15,7 @@ import StageGenerating from "../workspace/StageGenerating.vue";
 
 import SegmentAssetCard from "./SegmentAssetCard.vue";
 import { computeCostBreakdown, estimatePlanCost, getTaskCostHint, getVideoUpgradeCostHint, estimateBlockedItemsCost, PRICING, type PlanTaskLike } from "../../utils/pricing";
-import { getAssetGeneratingView } from "../../utils/asset-generating-view";
+import { getAssetGeneratingView, shouldShowAssetGeneratingView } from "../../utils/asset-generating-view";
 
 const storyboardStore = useStoryboardStore();
 const assetPlanningStore = useAssetPlanningStore();
@@ -79,6 +79,7 @@ const currentStatus = computed(
 );
 const basicAssetsAutoStarted = ref(false);
 const canAutoStartBasicAssets = ref(false);
+const basicAssetsGenerationFailed = ref(false);
 
 // Snapshot-based generating checks (survive page refresh)
 const isPlanGenerating = computed(
@@ -106,10 +107,14 @@ const generatingView = computed(() =>
 );
 
 const shouldShowGeneratingView = computed(() => {
-  if (!generatingView.value?.blockPage) return false;
-  if (assetPlanningStore.state.loadError) return false;
-  if (basicAssetsAutoStarted.value && assetsStore.state.loadError) return false;
-  return true;
+  return shouldShowAssetGeneratingView({
+    hasGeneratingView: generatingView.value?.blockPage === true,
+    hasAssetPlan: !!activeAssetPlan.value,
+    hasManifest: hasManifest.value,
+    hasAssetPlanError: !!assetPlanningStore.state.loadError,
+    hasAssetsError: !!assetsStore.state.loadError,
+    hasBasicAssetsGenerationFailed: basicAssetsGenerationFailed.value,
+  });
 });
 
 const assetLoadError = computed(
@@ -499,10 +504,13 @@ async function autoStartBasicAssets() {
   if (hasManifest.value) return;
 
   basicAssetsAutoStarted.value = true;
+  basicAssetsGenerationFailed.value = false;
   startAssetPolling();
   await assetsStore.generateAssets({ enabledProviderTypes: ["tts", "sfx", "bgm"] });
   if (!assetsStore.state.loadError) {
     ElMessage.success("基础资产生成完成（口播、字幕、运镜、音效、配乐）");
+  } else {
+    basicAssetsGenerationFailed.value = true;
   }
 }
 
@@ -548,10 +556,13 @@ async function handleGeneratePlan() {
 async function handleGenerateBasic() {
   if (isAssetsBusy.value) return;
   basicAssetsAutoStarted.value = true;
+  basicAssetsGenerationFailed.value = false;
   startAssetPolling();
   await assetsStore.generateAssets({ enabledProviderTypes: ["tts", "sfx", "bgm"] });
   if (!assetsStore.state.loadError) {
     ElMessage.success("基础资产生成完成（口播、字幕、运镜、音效、配乐）");
+  } else {
+    basicAssetsGenerationFailed.value = true;
   }
 }
 
@@ -680,6 +691,14 @@ function handleRetry() {
   assetsStore.loadProject();
 }
 
+async function handleRefreshGeneratingStatus() {
+  await loadAssetSnapshot();
+  if (activeAssetPlan.value && !hasManifest.value && !isPlanGenerating.value) {
+    canAutoStartBasicAssets.value = true;
+    await autoStartBasicAssets();
+  }
+}
+
 function handleConfirm() {
   if (!canCompose.value) {
     ElMessage.warning(blockedReasonText.value || "资产尚未全部就绪");
@@ -699,7 +718,16 @@ function handleConfirm() {
       :title="generatingView.title"
       :hint="generatingView.hint"
       secondary-hint="系统每 5 秒自动检查生成状态，无需手动刷新。"
-    />
+    >
+      <template #action>
+        <el-button
+          :loading="assetPlanningStore.state.isLoading || assetsStore.state.isLoading"
+          @click="handleRefreshGeneratingStatus"
+        >
+          刷新状态
+        </el-button>
+      </template>
+    </StageGenerating>
 
     <!-- Error — only when NOT generating (transient errors suppressed during generation) -->
     <div v-else-if="assetLoadError" class="asset-error-card">
