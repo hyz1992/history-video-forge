@@ -105,6 +105,14 @@ const isGenerationFailed = computed(
     scriptStore.state.snapshot?.current_status === "script_failed",
 );
 
+const isInitialScriptLoading = computed(
+  () => scriptStore.state.isLoading && !visibleScript.value,
+);
+
+const shouldShowScriptChrome = computed(
+  () => !isGenerating.value && !isInitialScriptLoading.value,
+);
+
 /** Build a structured list of review checks for display. */
 const reviewChecks = computed(() => {
   const s = visibleScript.value;
@@ -202,8 +210,10 @@ function handleConfirm() {
 
 <template>
   <div class="script-panel">
-    <header class="script-page-header" data-testid="script-page-header">文案工作区</header>
-    <div class="script-run-trace" data-testid="script-trace-entry">查看运行详情</div>
+    <template v-if="shouldShowScriptChrome">
+      <header class="script-page-header" data-testid="script-page-header">文案工作区</header>
+      <div class="script-run-trace" data-testid="script-trace-entry">查看运行详情</div>
+    </template>
     <!-- Error state -->
     <div v-if="scriptStore.state.loadError" class="script-error-card">
       <el-alert
@@ -240,7 +250,7 @@ function handleConfirm() {
 
     <!-- Loading skeleton (only when loading without active generation) -->
     <el-skeleton
-      v-else-if="scriptStore.state.isLoading && !visibleScript"
+      v-else-if="isInitialScriptLoading"
       :rows="6"
       animated
       class="script-skeleton"

@@ -122,6 +122,13 @@ async function handleRegenerate() {
   }
 }
 
+async function handleRefreshGeneratingStatus() {
+  const snapshot = await topicStore.loadSnapshot();
+  if (snapshot?.current_status !== "topic_generating") {
+    await topicStore.loadExistingTopic();
+  }
+}
+
 async function confirmCandidate() {
   await topicStore.confirmSelectedCandidate();
   if (topicStore.state.confirmedTopicPackageId) {
@@ -183,7 +190,16 @@ function handleRetry() {
         title="正在生成选题"
         hint="正在调用大模型生成选题推荐，可能需要 1-3 分钟。"
         secondary-hint="生成完成后结果会自动出现，无需手动刷新。"
-      />
+      >
+        <template #action>
+          <el-button
+            :loading="topicStore.state.isGenerating"
+            @click="handleRefreshGeneratingStatus"
+          >
+            刷新状态
+          </el-button>
+        </template>
+      </StageGenerating>
 
       <!-- Empty state -->
       <div v-else-if="!hasCandidates" class="topic-empty-state">
