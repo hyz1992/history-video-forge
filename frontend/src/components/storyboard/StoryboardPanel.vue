@@ -74,6 +74,13 @@ const isGenerating = computed(
     activeStoryboard.value?.execution_state?.generating === true,
 );
 
+const isInitialStoryboardSnapshotLoading = ref(true);
+const shouldShowStoryboardSkeleton = computed(
+  () =>
+    isInitialStoryboardSnapshotLoading.value ||
+    (storyboardStore.state.isLoading && !activeStoryboard.value),
+);
+
 /* -------------------------------------------------------------------------- */
 /*  Collapse / expand                                                         */
 /* -------------------------------------------------------------------------- */
@@ -132,6 +139,7 @@ const router = useRouter();
 /* -------------------------------------------------------------------------- */
 
 onMounted(async () => {
+  isInitialStoryboardSnapshotLoading.value = true;
   await storyboardStore.loadActiveStoryboardSnapshot();
   // F5 恢复：如果 snapshot 显示 generating，启动轮询
   const s = storyboardStore.state.snapshot;
@@ -140,6 +148,7 @@ onMounted(async () => {
     s?.active_storyboard?.execution_state?.generating
   ) {
     startPolling();
+    isInitialStoryboardSnapshotLoading.value = false;
     return;
   }
   // Auto-generate when arriving from script confirmation
@@ -150,11 +159,15 @@ onMounted(async () => {
       s.current_status === "script_ready")
   ) {
     startPolling();
-    await storyboardStore.generateStoryboard();
+    const generation = storyboardStore.generateStoryboard();
+    isInitialStoryboardSnapshotLoading.value = false;
+    await generation;
     if (!storyboardStore.state.loadError) {
       ElMessage.success("分镜规划生成完成");
     }
+    return;
   }
+  isInitialStoryboardSnapshotLoading.value = false;
 });
 
 /* -------------------------------------------------------------------------- */
@@ -182,8 +195,28 @@ function handleConfirm() {
 
 <template>
   <div class="storyboard-panel">
+    <!-- Generating state (must be before loading skeleton — survives refresh) -->
+    <StageGenerating
+      v-if="isGenerating"
+      title="正在生成分镜"
+      hint="正在调用大模型分析文案并规划分镜，可能需要 1-2 分钟。"
+      secondary-hint="页面会自动刷新，也可手动刷新状态。"
+    >
+      <template #action>
+        <el-button @click="storyboardStore.retryLoad()">刷新状态</el-button>
+      </template>
+    </StageGenerating>
+
+    <!-- Loading skeleton (only when loading without active generation) -->
+    <el-skeleton
+      v-else-if="shouldShowStoryboardSkeleton"
+      :rows="6"
+      animated
+      class="storyboard-skeleton"
+    />
+
     <!-- Error state -->
-    <div v-if="storyboardStore.state.loadError" class="storyboard-error-card">
+    <div v-else-if="storyboardStore.state.loadError" class="storyboard-error-card">
       <el-alert
         :title="'加载失败：' + storyboardStore.state.loadError"
         type="error"
@@ -198,26 +231,6 @@ function handleConfirm() {
         重试
       </el-button>
     </div>
-
-    <!-- Generating state (must be before loading skeleton — survives refresh) -->
-    <StageGenerating
-      v-else-if="isGenerating"
-      title="正在生成分镜"
-      hint="正在调用大模型分析文案并规划分镜，可能需要 1-2 分钟。"
-      secondary-hint="页面会自动刷新，也可手动刷新状态。"
-    >
-      <template #action>
-        <el-button @click="storyboardStore.retryLoad()">刷新状态</el-button>
-      </template>
-    </StageGenerating>
-
-    <!-- Loading skeleton (only when loading without active generation) -->
-    <el-skeleton
-      v-else-if="storyboardStore.state.isLoading && !activeStoryboard"
-      :rows="6"
-      animated
-      class="storyboard-skeleton"
-    />
 
     <!-- Empty state - no storyboard generated yet -->
     <div

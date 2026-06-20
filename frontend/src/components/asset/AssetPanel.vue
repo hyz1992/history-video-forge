@@ -76,6 +76,7 @@ const currentStatus = computed(
 const basicAssetsAutoStarted = ref(false);
 const canAutoStartBasicAssets = ref(false);
 const basicAssetsGenerationFailed = ref(false);
+const isInitialAssetSnapshotLoading = ref(true);
 
 // 通用轮询：asset plan 阶段整页等待；plan 已有但 manifest 尚未出现时继续轮询，
 // 避免基础资产 POST 刚启动前的空窗让轮询提前停止。
@@ -164,6 +165,13 @@ const artifacts = computed(() => manifest.value?.artifacts ?? []);
 const segmentRoutes = computed(() => manifest.value?.segment_routes ?? []);
 
 const hasManifest = computed(() => !!manifest.value);
+
+const shouldShowAssetSkeleton = computed(
+  () =>
+    isInitialAssetSnapshotLoading.value ||
+    ((assetPlanningStore.state.isLoading || assetsStore.state.isLoading) &&
+      !hasManifest.value),
+);
 
 const projectId = computed(() => projectStore.state.projectId ?? "");
 
@@ -462,50 +470,57 @@ const blockedReasonText = computed(() => {
 /* -------------------------------------------------------------------------- */
 
 onMounted(async () => {
-  await storyboardStore.loadActiveStoryboardSnapshot();
-  await assetPlanningStore.loadActiveAssetPlanSnapshot();
-  scriptStore.loadActiveScriptSnapshot(); // fire-and-forget, needed for narration text
+  isInitialAssetSnapshotLoading.value = true;
+  try {
+    await storyboardStore.loadActiveStoryboardSnapshot();
+    await assetPlanningStore.loadActiveAssetPlanSnapshot();
+    scriptStore.loadActiveScriptSnapshot(); // fire-and-forget, needed for narration text
 
-  // 资产规划尚未完成时，不先请求 assets，避免无 manifest 阶段出现瞬时错误。
-  const planSnap = assetPlanningStore.state.snapshot;
-  const isPlanGen =
-    planSnap?.current_status === "asset_plan_generating" ||
-    planSnap?.active_asset_plan?.execution_state?.generating;
-  if (isPlanGen) {
-    startAssetPolling();
-    return;
-  }
-
-  // Auto-generate asset plan when arriving from storyboard confirmation
-  if (
-    planSnap &&
-    !planSnap.active_asset_plan &&
-    (planSnap.current_status === "storyboard_ready" ||
-      planSnap.current_status === "asset_plan_ready")
-  ) {
-    startAssetPolling();
-    await assetPlanningStore.generateAssetPlan();
-    if (!assetPlanningStore.state.loadError) {
-      ElMessage.success("资产规划生成完成");
+    // 资产规划尚未完成时，不先请求 assets，避免无 manifest 阶段出现瞬时错误。
+    const planSnap = assetPlanningStore.state.snapshot;
+    const isPlanGen =
+      planSnap?.current_status === "asset_plan_generating" ||
+      planSnap?.active_asset_plan?.execution_state?.generating;
+    if (isPlanGen) {
+      startAssetPolling();
+      return;
     }
+
+    // Auto-generate asset plan when arriving from storyboard confirmation
+    if (
+      planSnap &&
+      !planSnap.active_asset_plan &&
+      (planSnap.current_status === "storyboard_ready" ||
+        planSnap.current_status === "asset_plan_ready")
+    ) {
+      startAssetPolling();
+      const generation = assetPlanningStore.generateAssetPlan();
+      isInitialAssetSnapshotLoading.value = false;
+      await generation;
+      if (!assetPlanningStore.state.loadError) {
+        ElMessage.success("资产规划生成完成");
+      }
+      canAutoStartBasicAssets.value = true;
+      await autoStartBasicAssets();
+      return;
+    }
+
+    await assetsStore.loadProject();
     canAutoStartBasicAssets.value = true;
+
+    const assetsSnap = assetsStore.state.snapshot;
+    const isAssetsGen =
+      assetsSnap?.current_status === "assets_generating" ||
+      assetsSnap?.active_assets?.execution_state?.generating;
+    if (isAssetsGen) {
+      startAssetPolling();
+      return;
+    }
+
     await autoStartBasicAssets();
-    return;
+  } finally {
+    isInitialAssetSnapshotLoading.value = false;
   }
-
-  await assetsStore.loadProject();
-  canAutoStartBasicAssets.value = true;
-
-  const assetsSnap = assetsStore.state.snapshot;
-  const isAssetsGen =
-    assetsSnap?.current_status === "assets_generating" ||
-    assetsSnap?.active_assets?.execution_state?.generating;
-  if (isAssetsGen) {
-    startAssetPolling();
-    return;
-  }
-
-  await autoStartBasicAssets();
 });
 
 /** Auto-start basic asset generation when entering with a plan but no manifest. */
@@ -748,6 +763,14 @@ function handleConfirm() {
       </template>
     </StageGenerating>
 
+    <!-- Loading skeleton while the first route snapshot is being confirmed -->
+    <el-skeleton
+      v-else-if="shouldShowAssetSkeleton"
+      :rows="6"
+      animated
+      class="asset-skeleton"
+    />
+
     <!-- Error — only when NOT generating (transient errors suppressed during generation) -->
     <div v-else-if="assetLoadError" class="asset-error-card">
       <el-alert
@@ -764,14 +787,6 @@ function handleConfirm() {
         重试
       </el-button>
     </div>
-
-    <!-- Loading skeleton -->
-    <el-skeleton
-      v-else-if="assetsStore.state.isLoading && !hasManifest"
-      :rows="6"
-      animated
-      class="asset-skeleton"
-    />
 
     <!-- Stage 1: no plan → generate plan -->
     <div
