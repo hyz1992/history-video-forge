@@ -181,6 +181,22 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
     snapshot: null,
   });
 
+  let loadedProjectId: string | null = null;
+
+  function resetForProject(projectId: string) {
+    if (loadedProjectId === projectId) return;
+
+    loadedProjectId = projectId;
+    state.candidates = [];
+    state.currentRound = null;
+    state.historyRounds = [];
+    state.selectedCandidate = null;
+    state.selectedRoundId = null;
+    state.confirmedTopicPackageId = null;
+    state.loadError = null;
+    state.snapshot = null;
+  }
+
   function selectTab(tab: TopicTab) {
     state.activeTab = tab;
   }
@@ -197,7 +213,11 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
 
     try {
       const projectId = await input.projectStore.ensureProject();
+      resetForProject(projectId);
+      state.isGenerating = true;
+      state.snapshot = { current_status: "topic_generating" };
       const response = await input.api.generateSystemRecommendations(projectId, filters);
+      loadedProjectId = response.project_id ?? projectId;
       state.candidates = response.candidates;
       state.currentRound =
         response.current_round ?? {
@@ -255,10 +275,10 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
   }
 
   async function loadExistingTopic() {
-    if (state.currentRound || state.candidates.length > 0) return;
-
     const projectId = input.projectStore.state.projectId;
     if (!projectId) return;
+    resetForProject(projectId);
+    if (state.currentRound || state.candidates.length > 0) return;
 
     try {
       const snapshot = await input.api.loadSnapshot(projectId);
@@ -338,6 +358,7 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
   async function loadSnapshot(): Promise<TopicSnapshotResponse | null> {
     const projectId = input.projectStore.state.projectId;
     if (!projectId) return null;
+    resetForProject(projectId);
     try {
       const snapshot = await input.api.loadSnapshot(projectId);
       if (state.isGenerating && snapshot.current_status === "topic_pending") {

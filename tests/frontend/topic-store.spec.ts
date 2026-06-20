@@ -258,4 +258,81 @@ describe("topic store recommendation input", () => {
     });
     await generating;
   });
+
+  it("clears cached recommendation rounds before loading a different project", async () => {
+    const api = {
+      generateSystemRecommendations: vi.fn(async () => ({
+        project_id: "project-1",
+        candidates: [
+          {
+            candidate_id: "old-candidate",
+            title: "OLD_PROJECT_TOPIC",
+            one_line_angle: "old angle",
+            family_label: "old family",
+            scope_label: "old scope",
+            strong_scene: "old scene",
+            risk_hints: [],
+          },
+        ],
+        current_round: {
+          round_id: "old-round",
+          candidates: [
+            {
+              candidate_id: "old-candidate",
+              title: "OLD_PROJECT_TOPIC",
+              one_line_angle: "old angle",
+              family_label: "old family",
+              scope_label: "old scope",
+              strong_scene: "old scene",
+              risk_hints: [],
+            },
+          ],
+        },
+        history_rounds: [],
+      })),
+      confirmCandidate: vi.fn(),
+      loadSnapshot: vi.fn(async () => ({
+        active_topic_package: null,
+        current_status: "topic_pending",
+        topic_candidates: null,
+      })),
+    };
+    const projectStore = {
+      state: {
+        projectId: "project-1",
+        currentStatus: "topic_candidates_ready",
+        projects: [],
+      },
+      async ensureProject() {
+        return projectStore.state.projectId;
+      },
+      async createProject() {
+        throw new Error("not used");
+      },
+      async loadProjects() {
+        return [];
+      },
+      resolveProjectWorkspacePath() {
+        return `/projects/${projectStore.state.projectId}/topic`;
+      },
+      syncProject: vi.fn(),
+    };
+    const store = createTopicStore({
+      projectStore,
+      api,
+    });
+
+    await store.generateSystemRecommendations();
+    expect(store.state.candidates[0]?.title).toBe("OLD_PROJECT_TOPIC");
+
+    projectStore.state.projectId = "project-2";
+    projectStore.state.currentStatus = "topic_pending";
+
+    await store.loadExistingTopic();
+
+    expect(api.loadSnapshot).toHaveBeenCalledWith("project-2");
+    expect(store.state.candidates).toEqual([]);
+    expect(store.state.currentRound).toBeNull();
+    expect(store.state.selectedCandidate).toBeNull();
+  });
 });
