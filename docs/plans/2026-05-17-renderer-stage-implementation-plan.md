@@ -533,7 +533,7 @@ Create `renderer/package.json` as a dedicated workspace package for Remotion com
 
 ```json
 {
-  "name": "@story-video-forge2/renderer",
+  "name": "@history-video-forge/renderer",
   "private": true,
   "version": "0.1.0",
   "type": "module"
@@ -556,13 +556,13 @@ Add `renderer` to the root `package.json` workspaces:
 Install the runtime dependency used by the backend adapter in the backend workspace:
 
 ```bash
-npm install --workspace @story-video-forge2/backend @remotion/renderer
+npm install --workspace @history-video-forge/backend @remotion/renderer
 ```
 
 Install the composition dependencies in the renderer workspace:
 
 ```bash
-npm install --workspace @story-video-forge2/renderer remotion react react-dom
+npm install --workspace @history-video-forge/renderer remotion react react-dom
 ```
 
 Then add this script to `package.json`:

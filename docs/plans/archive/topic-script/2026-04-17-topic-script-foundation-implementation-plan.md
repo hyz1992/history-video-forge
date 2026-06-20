@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** 在 `story-video-forge2` 中先实现 `topic -> script` 的最小可运行闭环，包括三入口到 `Topic Package`、再到 `Script Draft Package`、本地硬校验与单一语义审校的基础壳。
+**Goal:** 在 `history-video-forge` 中先实现 `topic -> script` 的最小可运行闭环，包括三入口到 `Topic Package`、再到 `Script Draft Package`、本地硬校验与单一语义审校的基础壳。
 
 **Architecture:** 先搭建 monorepo 最小骨架与共享 schema，再优先实现后端 topic/script 基础链路和最小持久化对象，随后接一个轻量主题页 UI 骨架，最后用 harness 跑通最小样例。整个实现坚持“topic 先冻结、script 默认单稿、有限 patch/regenerate”的边界，不提前进入 storyboard/assets。
 

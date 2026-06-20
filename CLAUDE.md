@@ -1,6 +1,6 @@
-# CLAUDE.md - Story Video Forge 2
+# CLAUDE.md - History Video Forge
 
-适用项目：`D:\myproject\story-video-forge2`
+适用项目：`history-video-forge`
 
 本文是 Claude Code 的稳定入口说明，定位是“整体规则 + 文档索引 + 常用命令”。具体时间点状态、样片路径、验收结论和临时问题清单应写入 `docs/records/`，不要长期堆在本文里。
 

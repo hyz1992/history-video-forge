@@ -1,6 +1,6 @@
 # 2026-05-21 Claude Code 项目交接文档
 
-适用项目：`D:\myproject\story-video-forge2`
+适用项目：`history-video-forge`
 
 本文用于把当前主战场逐步交接给 Claude Code。请新 agent 先读 `AGENTS.md`，再读本文。若本文与 `AGENTS.md` 冲突，以 `AGENTS.md` 为准。
 

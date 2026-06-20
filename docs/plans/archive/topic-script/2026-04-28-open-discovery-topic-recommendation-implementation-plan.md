@@ -13,11 +13,11 @@
 ### Task 1: 冻结开放发现推荐 seed 合同
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/frontend/src/stores/topic.ts`
-- Modify: `D:/myproject/story-video-forge2/frontend/src/views/TopicPage.vue`
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic.controller.ts`
-- Test: `D:/myproject/story-video-forge2/tests/frontend/topic-store.spec.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-runtime-recommendation.test.ts`
+- Modify: `frontend/src/stores/topic.ts`
+- Modify: `frontend/src/views/TopicPage.vue`
+- Modify: `backend/src/modules/topic/topic.controller.ts`
+- Test: `tests/frontend/topic-store.spec.ts`
+- Test: `tests/backend/topic/topic-runtime-recommendation.test.ts`
 
 **Step 1: Write the failing tests**
 
@@ -88,11 +88,11 @@ git commit -m "冻结开放发现推荐seed合同"
 ### Task 2: 为系统推荐补上本地重复与疲劳惩罚
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-recommendation.service.ts`
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-candidate.builder.ts`
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/event-normalizer.ts`
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/cache/candidate-cache.repository.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-runtime-recommendation.test.ts`
+- Modify: `backend/src/modules/topic/topic-recommendation.service.ts`
+- Modify: `backend/src/modules/topic/topic-candidate.builder.ts`
+- Modify: `backend/src/modules/topic/event-normalizer.ts`
+- Modify: `backend/src/modules/cache/candidate-cache.repository.ts`
+- Test: `tests/backend/topic/topic-runtime-recommendation.test.ts`
 
 **Step 1: Write the failing tests**
 
@@ -153,11 +153,11 @@ git commit -m "补充系统推荐去重与疲劳惩罚"
 ### Task 3: 提升开放发现候选的差异化与诊断可读性
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/harness/prompts/topic/candidate-builder.prompt.md`
-- Modify: `D:/myproject/story-video-forge2/backend/src/runtime/llm/interaction-log.ts`
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-recommendation.service.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/runtime/prompt-runtime.test.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-runtime-recommendation.test.ts`
+- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Modify: `backend/src/runtime/llm/interaction-log.ts`
+- Modify: `backend/src/modules/topic/topic-recommendation.service.ts`
+- Test: `tests/backend/runtime/prompt-runtime.test.ts`
+- Test: `tests/backend/topic/topic-runtime-recommendation.test.ts`
 
 **Step 1: Write the failing tests**
 
@@ -219,9 +219,9 @@ git commit -m "增强开放发现推荐差异化约束"
 ### Task 4: 把开放发现推荐的可观测性补进 harness 手册
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/harness/README.md`
-- Modify: `D:/myproject/story-video-forge2/docs/process/ui-design-to-code-playbook.md`
-- Create: `D:/myproject/story-video-forge2/docs/records/2026-04-28-open-discovery-topic-recommendation-notes.md`
+- Modify: `harness/README.md`
+- Modify: `docs/process/ui-design-to-code-playbook.md`
+- Create: `docs/records/2026-04-28-open-discovery-topic-recommendation-notes.md`
 - Test: manual verification notes only
 
 **Step 1: Write the failing verification checklist**
@@ -272,10 +272,10 @@ git commit -m "补充开放发现推荐日志定位说明"
 ### Task 5: 追加一轮开放发现推荐的真实端到端回归
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/tests/harness/ui-acceptance-page-rules.test.ts`
-- Modify: `D:/myproject/story-video-forge2/harness/scripts/ui-acceptance/page-rules.ts`
-- Modify: `D:/myproject/story-video-forge2/harness/scripts/ui-acceptance/page-auditor.ts`
-- Test: `D:/myproject/story-video-forge2/harness/scripts/ui-acceptance/ui-acceptance-smoke.ts`
+- Modify: `tests/harness/ui-acceptance-page-rules.test.ts`
+- Modify: `harness/scripts/ui-acceptance/page-rules.ts`
+- Modify: `harness/scripts/ui-acceptance/page-auditor.ts`
+- Test: `harness/scripts/ui-acceptance/ui-acceptance-smoke.ts`
 
 **Step 1: Write the failing test**
 

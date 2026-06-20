@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** 把 `story-video-forge2` 的 `topic + script` 从最小可运行壳升级为项目驱动、自动闭环、可追溯、可手动联调的正式产品化工作区。
+**Goal:** 把 `history-video-forge` 的 `topic + script` 从最小可运行壳升级为项目驱动、自动闭环、可追溯、可手动联调的正式产品化工作区。
 
 **Architecture:** 第四阶段采用“首页 -> 我的项目 -> 项目工作区”的项目驱动信息架构。backend 继续以现有 LangGraph orchestration 为执行内核，但要补齐项目级 topic/script run、step trace、可读目录与候选守卫；frontend 重做为围绕 `project_id` 的 topic/script 工作区，确认主题后自动触发脚本生成，并支持历史归档与重选题。
 
@@ -41,11 +41,11 @@
 5. `docs/architecture/runtime-orchestration-design.md`
 6. `docs/requirements/product-requirements.md`
 7. `docs/records/2026-04-19-topic-script-phase-3-conclusions.md`
-8. `D:/myproject/story-video-forge/frontend/src/views/Landing.vue`
-9. `D:/myproject/story-video-forge/frontend/src/views/Dashboard.vue`
-10. `D:/myproject/story-video-forge/frontend/src/views/ProjectWizard.vue`
-11. `D:/myproject/story-video-forge/frontend/src/views/ProjectWizard/TopicStep.vue`
-12. `D:/myproject/story-video-forge/frontend/src/views/ProjectWizard/ScriptStep.vue`
+8. `frontend/src/views/Landing.vue`
+9. `frontend/src/views/Dashboard.vue`
+10. `frontend/src/views/ProjectWizard.vue`
+11. `frontend/src/views/ProjectWizard/TopicStep.vue`
+12. `frontend/src/views/ProjectWizard/ScriptStep.vue`
 
 ## 完成标准
 

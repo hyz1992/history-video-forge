@@ -2,7 +2,7 @@
 
 ## 目标
 
-本清单用于冻结 `story-video-forge2` 第二阶段对旧项目 `story-video-forge` 的基础设施借鉴边界。
+本清单用于冻结 `history-video-forge` 第二阶段对旧项目的基础设施借鉴边界。
 
 本清单只服务两类任务：
 
@@ -13,13 +13,13 @@
 
 ## 输入来源
 
-- `D:/myproject/story-video-forge/docs/migration/reusable-assets-for-external-projects.md`
-- `D:/myproject/story-video-forge/backend/src/services/llm.ts`
-- `D:/myproject/story-video-forge/backend/src/lib/external-errors.ts`
-- `D:/myproject/story-video-forge/backend/src/lib/llm-auto-fix.ts`
-- `D:/myproject/story-video-forge/backend/src/lib/pipeline-diagnostics.ts`
-- `D:/myproject/story-video-forge/backend/src/lib/trace-logger-safe.ts`
-- `D:/myproject/story-video-forge/backend/scripts/runtime/run-historical-topic-to-script.ts`
+- `docs/migration/reusable-assets-for-external-projects.md`
+- `backend/src/services/llm.ts`
+- `backend/src/lib/external-errors.ts`
+- `backend/src/lib/llm-auto-fix.ts`
+- `backend/src/lib/pipeline-diagnostics.ts`
+- `backend/src/lib/trace-logger-safe.ts`
+- `backend/scripts/runtime/run-historical-topic-to-script.ts`
 
 ## 可直接迁移
 

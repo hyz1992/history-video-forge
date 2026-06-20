@@ -10,7 +10,7 @@
 
 这一版设计回答下一步问题：如何从 `AssetManifest` 继续接入真实资源生成，包括生图、生视频、TTS 口播、字幕文件、本地 Remotion 片段、音效与背景音乐素材库。
 
-本设计可以参考旧项目 `D:/myproject/story-video-forge` 的 API 调用方式，尤其是：
+本设计可以参考旧项目的 API 调用方式，尤其是：
 
 - `backend/src/services/image.ts`
 - `backend/src/services/video_generator.ts`

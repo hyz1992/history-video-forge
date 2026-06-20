@@ -12,7 +12,7 @@
 
 ## Scope And Constraints
 
-Work directly in `D:/myproject/story-video-forge2` on `dev`. Do not create a worktree.
+Work directly in `history-video-forge` on `dev`. Do not create a worktree.
 
 Before every task:
 
@@ -51,7 +51,7 @@ Do not add:
 ## Task 1: Add Opening And Ending Prompt Contract Red Test
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/tests/backend/runtime/prompt-runtime.test.ts`
+- Modify: `tests/backend/runtime/prompt-runtime.test.ts`
 
 - [ ] **Step 1: Write the failing prompt contract test**
 
@@ -90,8 +90,8 @@ Do not commit after Task 1. Leave the failing test for Task 2.
 ## Task 2: Tighten Candidate Builder Opening/Ending Contract
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/harness/prompts/topic/candidate-builder.prompt.md`
-- Test: `D:/myproject/story-video-forge2/tests/backend/runtime/prompt-runtime.test.ts`
+- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Test: `tests/backend/runtime/prompt-runtime.test.ts`
 
 - [ ] **Step 1: Replace the current `must_cover_preview` wording**
 
@@ -156,7 +156,7 @@ Before committing, confirm `git status --short` does not stage `storage/topic-ca
 ## Task 3: Add Topic Confirm Opening/Pressure Mapping Red Test
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/tests/backend/topic/topic-confirm-material-shape.test.ts`
+- Modify: `tests/backend/topic/topic-confirm-material-shape.test.ts`
 
 - [ ] **Step 1: Add the failing topic confirm test**
 
@@ -246,13 +246,13 @@ Do not commit after Task 3. Leave the failing test for Task 4.
 ## Task 4: Map Opening Pressure Into Existing TopicPackage Fields
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-confirm.service.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-confirm-material-shape.test.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/api/topic-api-runtime.test.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/api/topic-api.test.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/script/script-runtime-generate.test.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/runtime/prompt-runtime.test.ts`
-- Test: `D:/myproject/story-video-forge2/tests/harness/script-brief-shadow-stopped.test.ts`
+- Modify: `backend/src/modules/topic/topic-confirm.service.ts`
+- Test: `tests/backend/topic/topic-confirm-material-shape.test.ts`
+- Test: `tests/backend/api/topic-api-runtime.test.ts`
+- Test: `tests/backend/api/topic-api.test.ts`
+- Test: `tests/backend/script/script-runtime-generate.test.ts`
+- Test: `tests/backend/runtime/prompt-runtime.test.ts`
+- Test: `tests/harness/script-brief-shadow-stopped.test.ts`
 
 - [ ] **Step 1: Add small local helpers**
 
@@ -350,7 +350,7 @@ Before committing, confirm unrelated untracked files and `storage/topic-candidat
 ## Task 5: Record Five-Round GLM-5.1 Opening/Ending Observation
 
 **Files:**
-- Create: `D:/myproject/story-video-forge2/docs/records/2026-05-08-topic-package-opening-pressure-ending-quality-check.md`
+- Create: `docs/records/2026-05-08-topic-package-opening-pressure-ending-quality-check.md`
 
 This task records evidence only. Do not add gates, validators, runtime code, or automatic patching.
 

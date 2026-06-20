@@ -10,7 +10,7 @@
 ### Step 1 时的剩余缺口
 
 1. `tests/backend/script/script-local-validator.test.ts` 已与当前第二阶段 runtime 形态脱节
-   - 现状：测试仍按同步调用方式使用 `generateScriptDraft()`，但当前 [script-generation.service.ts](/D:/myproject/story-video-forge2/backend/src/modules/script/script-generation.service.ts) 已改为异步 runtime gateway 调用。
+   - 现状：测试仍按同步调用方式使用 `generateScriptDraft()`，但当前 [script-generation.service.ts](/backend/src/modules/script/script-generation.service.ts) 已改为异步 runtime gateway 调用。
    - 现状：第三个失败用例在测试内部直接 `ScriptDraftPackage.parse({...draft})` 时触发 schema 报错，本质原因同样是 `draft` 实际上还是未 await 的 Promise。
 
 ### 当前判断
@@ -21,7 +21,7 @@
 
 ## Task 9 / Step 2：最小修补结果
 
-- 已修复 [script-local-validator.test.ts](/D:/myproject/story-video-forge2/tests/backend/script/script-local-validator.test.ts)：
+- 已修复 [script-local-validator.test.ts](/tests/backend/script/script-local-validator.test.ts)：
   - 三个用例全部改为 `async`
   - 对 `generateScriptDraft()` 的调用全部补为 `await`
 - 局部验证结果：

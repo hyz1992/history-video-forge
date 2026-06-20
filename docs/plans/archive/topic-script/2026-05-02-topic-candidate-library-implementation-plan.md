@@ -13,8 +13,8 @@
 ### Task 1: 冻结候选库目录与条目格式合同
 
 **Files:**
-- Create: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-candidate-library.types.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-candidate-library.types.test.ts`
+- Create: `backend/src/modules/topic/topic-candidate-library.types.ts`
+- Test: `tests/backend/topic/topic-candidate-library.types.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -65,8 +65,8 @@ git commit -m "定义选题候选库文本条目合同"
 ### Task 2: 实现 seed family/profile 到文本目录的稳定映射
 
 **Files:**
-- Create: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-candidate-library.path.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-candidate-library.path.test.ts`
+- Create: `backend/src/modules/topic/topic-candidate-library.path.ts`
+- Test: `tests/backend/topic/topic-candidate-library.path.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -110,8 +110,8 @@ git commit -m "实现选题候选库路径映射规则"
 ### Task 3: 实现文本条目的序列化与解析
 
 **Files:**
-- Create: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-candidate-library.codec.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-candidate-library.codec.test.ts`
+- Create: `backend/src/modules/topic/topic-candidate-library.codec.ts`
+- Test: `tests/backend/topic/topic-candidate-library.codec.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -155,8 +155,8 @@ git commit -m "实现选题候选库文本编解码"
 ### Task 4: 落地文本候选库仓储读写
 
 **Files:**
-- Create: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-candidate-library.repository.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-candidate-library.repository.test.ts`
+- Create: `backend/src/modules/topic/topic-candidate-library.repository.ts`
+- Test: `tests/backend/topic/topic-candidate-library.repository.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -206,8 +206,8 @@ git commit -m "落地选题候选库文本仓储"
 ### Task 5: 把 raw / selector_pool / final 候选沉淀到候选库
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-recommendation.service.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-runtime-recommendation.test.ts`
+- Modify: `backend/src/modules/topic/topic-recommendation.service.ts`
+- Test: `tests/backend/topic/topic-runtime-recommendation.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -251,8 +251,8 @@ git commit -m "沉淀选题候选到跨项目文本候选库"
 ### Task 6: 接入受控 fallback 候选读取
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-recommendation.service.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-runtime-recommendation.test.ts`
+- Modify: `backend/src/modules/topic/topic-recommendation.service.ts`
+- Test: `tests/backend/topic/topic-runtime-recommendation.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -299,8 +299,8 @@ git commit -m "接入选题候选库受控fallback复用"
 ### Task 7: 为候选库补最小人工可观测性说明
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/harness/README.md`
-- Modify: `D:/myproject/story-video-forge2/docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
+- Modify: `harness/README.md`
+- Modify: `docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
 
 **Step 1: Write the failing test**
 
@@ -332,7 +332,7 @@ git commit -m "补充选题候选库人工巡检说明"
 ### Task 8: 做最小自动验证与真实回归
 
 **Files:**
-- Optional notes update only: `D:/myproject/story-video-forge2/docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
+- Optional notes update only: `docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
 
 **Step 1: Run automated verification**
 

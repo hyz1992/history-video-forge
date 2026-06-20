@@ -12,7 +12,7 @@
 
 ## Scope And Constraints
 
-Work directly in `D:/myproject/story-video-forge2` on `dev`. Do not create a worktree unless the user explicitly changes that instruction.
+Work directly in `history-video-forge` on `dev`. Do not create a worktree unless the user explicitly changes that instruction.
 
 Before every task:
 
@@ -49,7 +49,7 @@ Do not add:
 ## Task 1: Add Ordered Preview Prompt Contract Test
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/tests/backend/runtime/prompt-runtime.test.ts`
+- Modify: `tests/backend/runtime/prompt-runtime.test.ts`
 
 - [ ] **Step 1: Write the failing prompt contract test**
 
@@ -88,8 +88,8 @@ Do not commit after Task 1. Leave the failing test for Task 2.
 ## Task 2: Tighten Candidate Builder Preview Contract
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/harness/prompts/topic/candidate-builder.prompt.md`
-- Test: `D:/myproject/story-video-forge2/tests/backend/runtime/prompt-runtime.test.ts`
+- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Test: `tests/backend/runtime/prompt-runtime.test.ts`
 
 - [ ] **Step 1: Replace the current loose `must_cover_preview` wording**
 
@@ -150,7 +150,7 @@ Before committing, confirm `git status --short` does not stage `storage/topic-ca
 ## Task 3: Add Topic Confirm Material Shape Tests
 
 **Files:**
-- Create: `D:/myproject/story-video-forge2/tests/backend/topic/topic-confirm-material-shape.test.ts`
+- Create: `tests/backend/topic/topic-confirm-material-shape.test.ts`
 
 - [ ] **Step 1: Create the failing topic confirm test file**
 
@@ -316,10 +316,10 @@ Do not commit after Task 3. Leave the failing test for Task 4.
 ## Task 4: Map Ordered Preview Nodes Into TopicPackage
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-confirm.service.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-confirm-material-shape.test.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/api/topic-api-runtime.test.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/api/topic-api.test.ts`
+- Modify: `backend/src/modules/topic/topic-confirm.service.ts`
+- Test: `tests/backend/topic/topic-confirm-material-shape.test.ts`
+- Test: `tests/backend/api/topic-api-runtime.test.ts`
+- Test: `tests/backend/api/topic-api.test.ts`
 
 - [ ] **Step 1: Update `buildNarrativeTensionMap` and `buildStakes`**
 
@@ -408,7 +408,7 @@ Before committing, confirm the already committed prompt files are not accidental
 ## Task 5: Record Five-Round GLM-5.1 Material Shape Observation
 
 **Files:**
-- Create: `D:/myproject/story-video-forge2/docs/records/2026-05-08-topic-package-material-shape-quality-check.md`
+- Create: `docs/records/2026-05-08-topic-package-material-shape-quality-check.md`
 
 This task records evidence only. Do not add gates, validators, or runtime code.
 

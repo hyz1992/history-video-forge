@@ -12,7 +12,7 @@
 
 ## Scope And Constraints
 
-Work directly in `D:/myproject/story-video-forge2` on `dev`. Do not create a worktree.
+Work directly in `history-video-forge` on `dev`. Do not create a worktree.
 
 Before every task:
 
@@ -46,8 +46,8 @@ If a task makes the prompt longer without deleting or merging overlapping old wo
 ## Task 1: Add Prompt Contract And No-Brief Guard Tests
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/tests/backend/runtime/prompt-runtime.test.ts`
-- Modify: `D:/myproject/story-video-forge2/tests/harness/script-brief-shadow-stopped.test.ts`
+- Modify: `tests/backend/runtime/prompt-runtime.test.ts`
+- Modify: `tests/harness/script-brief-shadow-stopped.test.ts`
 
 - [ ] **Step 1: Write the failing prompt contract test**
 
@@ -122,9 +122,9 @@ Do not commit after Task 1. Leave the failing tests in the working tree for Task
 ## Task 2: Consolidate Writer Prompt Anti-Label Contract
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/harness/prompts/script/script-writer.prompt.md`
-- Test: `D:/myproject/story-video-forge2/tests/backend/runtime/prompt-runtime.test.ts`
-- Test: `D:/myproject/story-video-forge2/tests/harness/script-brief-shadow-stopped.test.ts`
+- Modify: `harness/prompts/script/script-writer.prompt.md`
+- Test: `tests/backend/runtime/prompt-runtime.test.ts`
+- Test: `tests/harness/script-brief-shadow-stopped.test.ts`
 
 - [ ] **Step 1: Replace overlapping beat/trace bullets with one concise section**
 
@@ -202,7 +202,7 @@ Before committing, confirm `git status --short` does not stage `storage/topic-ca
 ## Task 3: Record Five-Round GLM-5.1 Quality Observation
 
 **Files:**
-- Create: `D:/myproject/story-video-forge2/docs/records/2026-05-08-script-writer-anti-label-assimilation-quality-check.md`
+- Create: `docs/records/2026-05-08-script-writer-anti-label-assimilation-quality-check.md`
 
 This task records evidence only. Do not add gates, validators, or runtime code.
 

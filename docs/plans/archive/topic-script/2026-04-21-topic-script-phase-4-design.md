@@ -518,4 +518,4 @@ storage/projects/
 
 它的核心目标可以概括为一句话：
 
-> 把 `story-video-forge2` 的 `topic + script` 从“工程上可验证”升级为“真实可用、可追溯、可演示”。
+> 把 `history-video-forge` 的 `topic + script` 从“工程上可验证”升级为“真实可用、可追溯、可演示”。

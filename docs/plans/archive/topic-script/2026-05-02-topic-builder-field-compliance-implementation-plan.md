@@ -13,9 +13,9 @@
 ### Task 1: 冻结 builder repair prompt 合同
 
 **Files:**
-- Create: `D:/myproject/story-video-forge2/harness/prompts/topic/candidate-builder-repair.prompt.md`
-- Test: `D:/myproject/story-video-forge2/tests/backend/runtime/topic-prompt-contract.test.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/runtime/prompt-runtime.test.ts`
+- Create: `harness/prompts/topic/candidate-builder-repair.prompt.md`
+- Test: `tests/backend/runtime/topic-prompt-contract.test.ts`
+- Test: `tests/backend/runtime/prompt-runtime.test.ts`
 
 **Step 1: Write the failing tests**
 
@@ -60,8 +60,8 @@ git commit -m "新增选题builder字段补全提示词合同"
 ### Task 2: 补 builder 字段完整性检查与 repair 触发测试
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/tests/backend/topic/topic-runtime-recommendation.test.ts`
-- Read: `D:/myproject/story-video-forge2/shared/src/topic/topic-candidate-card.schema.ts`
+- Modify: `tests/backend/topic/topic-runtime-recommendation.test.ts`
+- Read: `shared/src/topic/topic-candidate-card.schema.ts`
 
 **Step 1: Write the failing tests**
 
@@ -105,9 +105,9 @@ git commit -m "补充选题builder字段补全回归测试"
 ### Task 3: 接入一次受控 builder repair
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/backend/src/runtime/orchestration/topic-recommendation-nodes.ts`
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-recommendation.service.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-runtime-recommendation.test.ts`
+- Modify: `backend/src/runtime/orchestration/topic-recommendation-nodes.ts`
+- Modify: `backend/src/modules/topic/topic-recommendation.service.ts`
+- Test: `tests/backend/topic/topic-runtime-recommendation.test.ts`
 
 **Step 1: Write the minimal implementation**
 
@@ -161,9 +161,9 @@ git commit -m "接入选题builder字段补全repair"
 ### Task 4: 补降级 diagnostics 与日志可观测性
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/backend/src/runtime/llm/interaction-log.ts`
-- Modify: `D:/myproject/story-video-forge2/tests/backend/topic/topic-runtime-recommendation.test.ts`
-- Modify: `D:/myproject/story-video-forge2/docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
+- Modify: `backend/src/runtime/llm/interaction-log.ts`
+- Modify: `tests/backend/topic/topic-runtime-recommendation.test.ts`
+- Modify: `docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
 
 **Step 1: Write the failing tests**
 
@@ -242,7 +242,7 @@ Expected: PASS
 ### Task 6: 做真实中国 seed 5 轮回归
 
 **Files:**
-- Optional notes update only: `D:/myproject/story-video-forge2/docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
+- Optional notes update only: `docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
 
 **Step 1: Define regression check**
 

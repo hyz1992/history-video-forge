@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** 在不进入业务实现的前提下，为 `story-video-forge2` 落地一套最小可用的 harness v1 骨架。
+**Goal:** 在不进入业务实现的前提下，为 `history-video-forge` 落地一套最小可用的 harness v1 骨架。
 
 **Architecture:** 以根目录 `AGENTS.md` 作为统一入口，以 `harness/` 作为执行约束、prompt 资产、检查脚本与 runtime harness 的集中目录。产品与架构真相源继续保留在 `docs/`，仅把治理与执行相关内容收编到 harness。
 
@@ -13,8 +13,8 @@
 ### Task 1: 提交已确认的 harness 设计文档
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/docs/records/2026-04-17-harness-architecture-assessment.md`
-- Modify: `D:/myproject/story-video-forge2/docs/plans/2026-04-17-harness-v1-directory-design.md`
+- Modify: `docs/records/2026-04-17-harness-architecture-assessment.md`
+- Modify: `docs/plans/2026-04-17-harness-v1-directory-design.md`
 
 **Step 1: 核对 3 条已采纳微调建议是否都已写回**
 
@@ -32,27 +32,27 @@
 ### Task 2: 建立 harness v1 目录骨架
 
 **Files:**
-- Create: `D:/myproject/story-video-forge2/AGENTS.md`
-- Create: `D:/myproject/story-video-forge2/.gitignore`
-- Create: `D:/myproject/story-video-forge2/harness/README.md`
-- Create: `D:/myproject/story-video-forge2/harness/docs/definition-of-done.md`
-- Create: `D:/myproject/story-video-forge2/harness/docs/review-checklist.md`
-- Create: `D:/myproject/story-video-forge2/harness/docs/regression-checklist.md`
-- Create: `D:/myproject/story-video-forge2/harness/docs/prompt-management.md`
-- Create: `D:/myproject/story-video-forge2/harness/docs/prompt-registry-spec.md`
-- Create: `D:/myproject/story-video-forge2/harness/docs/harness-engineering-rules.md`
-- Create: `D:/myproject/story-video-forge2/harness/docs/todo-list-template.md`
-- Create: `D:/myproject/story-video-forge2/harness/prompts/topic/candidate-builder.prompt.md`
-- Create: `D:/myproject/story-video-forge2/harness/prompts/topic/light-review.prompt.md`
-- Create: `D:/myproject/story-video-forge2/harness/prompts/script/script-writer.prompt.md`
-- Create: `D:/myproject/story-video-forge2/harness/prompts/script/semantic-reviewer.prompt.md`
-- Create: `D:/myproject/story-video-forge2/harness/prompts/script/patch-lift.prompt.md`
-- Create: `D:/myproject/story-video-forge2/harness/scripts/run-fast-checks.ts`
-- Create: `D:/myproject/story-video-forge2/harness/scripts/check-prompt-language.ts`
-- Create: `D:/myproject/story-video-forge2/harness/scripts/check-schema-doc-drift.ts`
-- Create: `D:/myproject/story-video-forge2/harness/scripts/detect-duplicate-prompts.ts`
-- Create: `D:/myproject/story-video-forge2/harness/scripts/runtime/run-topic-to-script-sample.ts`
-- Create: `D:/myproject/story-video-forge2/harness/scripts/runtime/output/.gitkeep`
+- Create: `AGENTS.md`
+- Create: `.gitignore`
+- Create: `harness/README.md`
+- Create: `harness/docs/definition-of-done.md`
+- Create: `harness/docs/review-checklist.md`
+- Create: `harness/docs/regression-checklist.md`
+- Create: `harness/docs/prompt-management.md`
+- Create: `harness/docs/prompt-registry-spec.md`
+- Create: `harness/docs/harness-engineering-rules.md`
+- Create: `harness/docs/todo-list-template.md`
+- Create: `harness/prompts/topic/candidate-builder.prompt.md`
+- Create: `harness/prompts/topic/light-review.prompt.md`
+- Create: `harness/prompts/script/script-writer.prompt.md`
+- Create: `harness/prompts/script/semantic-reviewer.prompt.md`
+- Create: `harness/prompts/script/patch-lift.prompt.md`
+- Create: `harness/scripts/run-fast-checks.ts`
+- Create: `harness/scripts/check-prompt-language.ts`
+- Create: `harness/scripts/check-schema-doc-drift.ts`
+- Create: `harness/scripts/detect-duplicate-prompts.ts`
+- Create: `harness/scripts/runtime/run-topic-to-script-sample.ts`
+- Create: `harness/scripts/runtime/output/.gitkeep`
 
 **Step 1: 建立目录与文件骨架**
 
@@ -77,8 +77,8 @@
 ### Task 3: 对旧位置文档做轻量重定向
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/docs/standards/harness-engineering-rules.md`
-- Modify: `D:/myproject/story-video-forge2/docs/standards/prompt-management.md`
+- Modify: `docs/standards/harness-engineering-rules.md`
+- Modify: `docs/standards/prompt-management.md`
 
 **Step 1: 把旧位置文档改成轻量指引**
 

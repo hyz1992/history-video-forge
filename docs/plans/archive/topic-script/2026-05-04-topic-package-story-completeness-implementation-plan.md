@@ -13,8 +13,8 @@
 ### Task 1: 补齐 TopicPackage shared schema
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/shared/src/topic/topic-package.schema.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/script/script-input-bundle.test.ts`
+- Modify: `shared/src/topic/topic-package.schema.ts`
+- Test: `tests/backend/script/script-input-bundle.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -69,9 +69,9 @@ git commit -m "补齐TopicPackage共享合同字段"
 ### Task 2: 对齐 TopicPackage 持久化合同
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/backend/src/db/client.ts`
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-package.repository.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-package.repository.test.ts`
+- Modify: `backend/src/db/client.ts`
+- Modify: `backend/src/modules/topic/topic-package.repository.ts`
+- Test: `tests/backend/topic/topic-package.repository.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -122,8 +122,8 @@ git commit -m "补齐TopicPackage持久化字段合同"
 ### Task 3: 做实 confirm 产物的最小故事合同
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-confirm.service.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-confirm.service.test.ts`
+- Modify: `backend/src/modules/topic/topic-confirm.service.ts`
+- Test: `tests/backend/topic/topic-confirm.service.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -181,9 +181,9 @@ git commit -m "做实TopicPackage确认产物"
 ### Task 4: 扩 ScriptInputBundle hard lane 合同
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/shared/src/script/script-input-bundle.schema.ts`
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/script/script-input-bundle.builder.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/script/script-input-bundle.test.ts`
+- Modify: `shared/src/script/script-input-bundle.schema.ts`
+- Modify: `backend/src/modules/script/script-input-bundle.builder.ts`
+- Test: `tests/backend/script/script-input-bundle.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -241,9 +241,9 @@ git commit -m "扩展Script输入硬合同"
 ### Task 5: 收口 script 运行时消费合同
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/script/script-run.service.ts`
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/script/script-generation.service.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/script/script-runtime-generate.test.ts`
+- Modify: `backend/src/modules/script/script-run.service.ts`
+- Modify: `backend/src/modules/script/script-generation.service.ts`
+- Test: `tests/backend/script/script-runtime-generate.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -291,11 +291,11 @@ git commit -m "收口Script运行时故事合同消费"
 ### Task 6: 补文档与最小回归
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/docs/data/field-design.md`
-- Modify: `D:/myproject/story-video-forge2/docs/architecture/topic-stage-design.md`
-- Modify: `D:/myproject/story-video-forge2/docs/architecture/script-stage-design.md`
-- Optional modify: `D:/myproject/story-video-forge2/harness/README.md`
-- Test: `D:/myproject/story-video-forge2/harness/scripts/check-schema-doc-drift.test.ts`
+- Modify: `docs/data/field-design.md`
+- Modify: `docs/architecture/topic-stage-design.md`
+- Modify: `docs/architecture/script-stage-design.md`
+- Optional modify: `harness/README.md`
+- Test: `harness/scripts/check-schema-doc-drift.test.ts`
 
 **Step 1: Write the failing test**
 

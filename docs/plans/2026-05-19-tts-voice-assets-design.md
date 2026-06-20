@@ -30,10 +30,10 @@ Current project references:
 
 Legacy project references, used as implementation experience only:
 
-- `D:/myproject/story-video-forge/backend/src/services/voice-profiles.ts`
-- `D:/myproject/story-video-forge/backend/src/services/voice-design.ts`
-- `D:/myproject/story-video-forge/backend/src/services/tts.ts`
-- `D:/myproject/story-video-forge/backend/prisma/schema.prisma`
+- `backend/src/services/voice-profiles.ts`
+- `backend/src/services/voice-design.ts`
+- `backend/src/services/tts.ts`
+- `backend/prisma/schema.prisma`
 
 The legacy project should not be copied wholesale. The new project should reuse the concepts, not the old stage objects, UI flow, or workflow state machine.
 
@@ -238,7 +238,7 @@ Official references checked on 2026-05-19:
 
 Legacy cross-check:
 
-- `D:/myproject/story-video-forge/backend/src/services/voice-design.ts`
+- `backend/src/services/voice-design.ts`
 
 First implementation should target Qwen Voice Design unless a separate implementation plan explicitly adds CosyVoice:
 

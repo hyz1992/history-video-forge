@@ -1,6 +1,6 @@
 # Harness README
 
-适用项目：`D:\myproject\story-video-forge2`
+适用项目：`history-video-forge`
 
 本目录承载：
 

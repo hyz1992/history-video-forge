@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** 在 `story-video-forge2` 中把 `topic + script` 从“可验证骨架”推进到“真实可用闭环”。第二阶段只以 `系统自动推荐 -> confirm -> script generate -> semantic review -> patch/regenerate -> script view` 作为正式主链路，接入正式 runtime LLM 调用层、正式 prompt 资产、最小可恢复持久化和真实样例 harness。
+**Goal:** 在 `history-video-forge` 中把 `topic + script` 从“可验证骨架”推进到“真实可用闭环”。第二阶段只以 `系统自动推荐 -> confirm -> script generate -> semantic review -> patch/regenerate -> script view` 作为正式主链路，接入正式 runtime LLM 调用层、正式 prompt 资产、最小可恢复持久化和真实样例 harness。
 
 **Architecture:** 先建立“业务 runtime 唯一正式 LLM 调用层”，并让 topic candidate 生成、script writer、semantic reviewer、patch-lift 全部通过这套正式链路工作；随后让 backend 的 topic/script API、最小持久化与项目快照围绕同一条主链路收口；最后补齐 script 页面最小闭环和 runtime harness 回归。整个第二阶段继续坚持“Topic Package 先冻结、script 默认单稿、最多一次 patch_once / regen_once、不进入 storyboard/assets/compose”。
 
@@ -86,12 +86,12 @@
 
 **Files:**
 - Create: `docs/migration/2026-04-18-runtime-infra-reuse-cut-list.md`
-- Reference: `D:/myproject/story-video-forge/docs/migration/reusable-assets-for-external-projects.md`
-- Reference: `D:/myproject/story-video-forge/backend/src/services/llm.ts`
-- Reference: `D:/myproject/story-video-forge/backend/src/lib/external-errors.ts`
-- Reference: `D:/myproject/story-video-forge/backend/src/lib/llm-auto-fix.ts`
-- Reference: `D:/myproject/story-video-forge/backend/src/lib/pipeline-diagnostics.ts`
-- Reference: `D:/myproject/story-video-forge/backend/src/lib/trace-logger-safe.ts`
+- Reference: `docs/migration/reusable-assets-for-external-projects.md`
+- Reference: `backend/src/services/llm.ts`
+- Reference: `backend/src/lib/external-errors.ts`
+- Reference: `backend/src/lib/llm-auto-fix.ts`
+- Reference: `backend/src/lib/pipeline-diagnostics.ts`
+- Reference: `backend/src/lib/trace-logger-safe.ts`
 
 **Step 1: Draft the migration cut-list**
 

@@ -1,6 +1,6 @@
 # UI Design-to-Code Playbook
 
-> 适用项目：`story-video-forge2`
+> 适用项目：`history-video-forge`
 >
 > 当前推荐方法：先用 `GPT-image-2` 生成 UI 设计图并完成人工审图，再生成带详细标注的参数图，最后按参数图进行页面编码与验收。
 
@@ -258,7 +258,7 @@ repo 文档的作用是定义项目共识；skill 的作用是让 agent 更稳�
 
 ## 7. 当前项目建议
 
-对 `story-video-forge2`，推荐按以下顺序沉淀：
+对 `history-video-forge`，推荐按以下顺序沉淀：
 
 1. 先有本 playbook，作为项目级正式方法说明
 2. 后续为 `Home / Projects / Topic / Script` 分别建立页面级设计实施包

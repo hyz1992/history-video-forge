@@ -176,7 +176,7 @@ const STAGE_LABELS: Record<string, string> = {
 /**
  * Render a single trace section in the old-project unified trace.md format.
  * Uses table-based metadata, blockquote prompts, JSON output blocks,
- * and a timing footer — matching the `story-video-forge` convention.
+ * and a timing footer — matching the project convention.
  */
 export function renderTraceSectionMarkdown(
   entry: LlmInteractionLogEntry,

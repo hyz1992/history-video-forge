@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** 为 `story-video-forge2` 建立统一、克制、具备产品质感的深色历史叙事工作台，完成 `Home / Projects / Topic / Script` 四个页面的视觉与交互重构。
+**Goal:** 为 `history-video-forge` 建立统一、克制、具备产品质感的深色历史叙事工作台，完成 `Home / Projects / Topic / Script` 四个页面的视觉与交互重构。
 
 **Architecture:** 先在 `frontend` 内建立一层共享视觉基础，包括 design tokens、workspace shell 与 card/button/badge 基础样式；随后按 `Home -> Projects -> Topic -> Script` 的顺序逐页重构，必要时调整共享组件的展示结构，但不改变 store、API 与路由语义。整个过程保持 `data-testid` 稳定，并在每个阶段回跑前端测试与 UI acceptance。
 
@@ -41,9 +41,9 @@
 8. `frontend/src/components/topic/TopicCandidateDrawer.vue`
 9. `frontend/src/components/script/ScriptDraftPanel.vue`
 10. `frontend/src/components/script/ScriptReviewPanel.vue`
-11. `D:/myproject/story-video-forge/frontend/src/styles/main.css`
-12. `D:/myproject/story-video-forge/frontend/src/views/Landing.vue`
-13. `D:/myproject/story-video-forge/frontend/src/views/Dashboard.vue`
+11. `frontend/src/styles/main.css`
+12. `frontend/src/views/Landing.vue`
+13. `frontend/src/views/Dashboard.vue`
 
 ## 完成标准
 

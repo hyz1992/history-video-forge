@@ -2,7 +2,7 @@
 
 本文件面向 Claude Code、Codex、GLM-5、Opus 等通用 coding agent。
 
-适用项目：`D:\myproject\story-video-forge2`
+适用项目：`history-video-forge`
 
 ---
 
@@ -49,20 +49,20 @@
 
 ## 推荐阅读顺序
 
-1. `D:/myproject/story-video-forge2/docs/requirements/product-requirements.md`
-2. `D:/myproject/story-video-forge2/docs/README.md`
-3. `D:/myproject/story-video-forge2/docs/architecture/pipeline-io-spec.md`
-4. `D:/myproject/story-video-forge2/docs/architecture/downstream-stage-high-level-design.md`
-5. `D:/myproject/story-video-forge2/docs/architecture/topic-stage-design.md`
-6. `D:/myproject/story-video-forge2/docs/architecture/script-stage-design.md`
-7. `D:/myproject/story-video-forge2/docs/architecture/script-validation-spec.md`
-8. `D:/myproject/story-video-forge2/docs/data/field-design.md`
-9. `D:/myproject/story-video-forge2/docs/data/schema-design.md`
-10. `D:/myproject/story-video-forge2/docs/architecture/api-design.md`
-11. `D:/myproject/story-video-forge2/harness/README.md`
-12. `D:/myproject/story-video-forge2/docs/records/2026-05-01-follow-up-backlog.md`
-13. `D:/myproject/story-video-forge2/docs/records/2026-05-09-video-pipeline-engineering-notes.md`（asset planning / assets / compose 阶段设计前必读；记录口播音频、字幕、分镜图/视频的工程约束与已知问题清单）
-14. `D:/myproject/story-video-forge2/docs/plans/README.md`
+1. `docs/requirements/product-requirements.md`
+2. `docs/README.md`
+3. `docs/architecture/pipeline-io-spec.md`
+4. `docs/architecture/downstream-stage-high-level-design.md`
+5. `docs/architecture/topic-stage-design.md`
+6. `docs/architecture/script-stage-design.md`
+7. `docs/architecture/script-validation-spec.md`
+8. `docs/data/field-design.md`
+9. `docs/data/schema-design.md`
+10. `docs/architecture/api-design.md`
+11. `harness/README.md`
+12. `docs/records/2026-05-01-follow-up-backlog.md`
+13. `docs/records/2026-05-09-video-pipeline-engineering-notes.md`（asset planning / assets / compose 阶段设计前必读；记录口播音频、字幕、分镜图/视频的工程约束与已知问题清单）
+14. `docs/plans/README.md`
 
 说明：
 
@@ -135,13 +135,13 @@
 ## Prompt 规则
 
 - 所有正式 LLM prompt **必须使用中文**。
-- 所有正式 prompt **必须存放在** `D:/myproject/story-video-forge2/harness/prompts/`。
+- 所有正式 prompt **必须存放在** `harness/prompts/`。
 - prompt 的元数据必须显式声明 `language: zh-CN`。
 - 不允许把正式 prompt 散落在业务代码、临时 notes 或多个重复文档中。
 - 设计或调整 prompt 约束时，必须优先避免 prompt 冗余；新增约束前要先确认不会与现有约束打架、重复表达或相互抵消。
 - script writer prompt 的目标不是写结构摘要，而是生成可口播的历史故事首稿；必须关注开头留存、场景密度、叙事推进、动作/对话、口播节奏与结尾余震。
 - prompt 质量约束要短而明确，不允许靠堆叠重复口号制造“爆款感”。
-- Prompt Registry 的正式规范位于 `D:/myproject/story-video-forge2/harness/docs/prompt-registry-spec.md`。
+- Prompt Registry 的正式规范位于 `harness/docs/prompt-registry-spec.md`。
 
 ---
 

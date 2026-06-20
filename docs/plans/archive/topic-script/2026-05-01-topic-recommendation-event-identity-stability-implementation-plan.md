@@ -13,8 +13,8 @@
 ### Task 1: 收紧 builder prompt 的 `event_identity` 命名合同
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/harness/prompts/topic/candidate-builder.prompt.md`
-- Test: `D:/myproject/story-video-forge2/tests/backend/runtime/topic-prompt-contract.test.ts`
+- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Test: `tests/backend/runtime/topic-prompt-contract.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -66,9 +66,9 @@ git commit -m "收紧选题事件标识命名合同"
 ### Task 2: 给 builder 接入 `recent_event_memory` 输入合同
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/harness/prompts/topic/candidate-builder.prompt.md`
-- Test: `D:/myproject/story-video-forge2/tests/backend/runtime/topic-prompt-contract.test.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/runtime/prompt-runtime.test.ts`
+- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Test: `tests/backend/runtime/topic-prompt-contract.test.ts`
+- Test: `tests/backend/runtime/prompt-runtime.test.ts`
 
 **Step 1: Write the failing tests**
 
@@ -123,8 +123,8 @@ git commit -m "为选题builder补充近期事件记忆合同"
 ### Task 3: 把 `recent_event_memory` 接到 builder runtime 输入
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-recommendation.service.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-runtime-recommendation.test.ts`
+- Modify: `backend/src/modules/topic/topic-recommendation.service.ts`
+- Test: `tests/backend/topic/topic-runtime-recommendation.test.ts`
 
 **Step 1: Write the failing tests**
 
@@ -179,9 +179,9 @@ git commit -m "为选题builder接入近期事件记忆"
 ### Task 4: 让 diagnostics 和 trace 明确显示 builder identity 复用语境
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/backend/src/runtime/llm/interaction-log.ts`
-- Modify: `D:/myproject/story-video-forge2/docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-runtime-recommendation.test.ts`
+- Modify: `backend/src/runtime/llm/interaction-log.ts`
+- Modify: `docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
+- Test: `tests/backend/topic/topic-runtime-recommendation.test.ts`
 
 **Step 1: Write the failing tests**
 
@@ -233,8 +233,8 @@ git commit -m "补充选题builder事件记忆日志可观测性"
 ### Task 5: 新增真实回归样本，锁定高频事件 identity 漂移
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/tests/backend/topic/topic-runtime-recommendation.test.ts`
-- Optional notes: `D:/myproject/story-video-forge2/docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
+- Modify: `tests/backend/topic/topic-runtime-recommendation.test.ts`
+- Optional notes: `docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
 
 **Step 1: Write the failing tests**
 
@@ -290,7 +290,7 @@ git commit -m "补充选题事件标识稳定性回归样本"
 
 **Files:**
 - No required code changes
-- Optional notes: `D:/myproject/story-video-forge2/docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
+- Optional notes: `docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
 
 **Step 1: Write the failing regression check**
 

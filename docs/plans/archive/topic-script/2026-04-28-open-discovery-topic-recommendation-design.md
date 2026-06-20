@@ -48,7 +48,7 @@
 
 优点：
 
-- 与现有 [topic-stage-design.md](D:/myproject/story-video-forge2/docs/architecture/topic-stage-design.md) 完全一致
+- 与现有 [topic-stage-design.md](docs/architecture/topic-stage-design.md) 完全一致
 - 不需要先建设本地事件库或外部检索
 - 实现路径最短，最适合当前阶段
 

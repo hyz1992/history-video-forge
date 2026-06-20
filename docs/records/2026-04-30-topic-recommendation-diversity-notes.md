@@ -88,7 +88,7 @@ npm run harness:ui-acceptance:smoke
 - 真实回归项目：
   - `project_id = 7dd8e809-421d-40ac-a8ca-f1b51134e4fd`
   - trace 根目录：
-    - `D:/myproject/story-video-forge2/storage/projects/2026-05-02/China Topic 5-Round Recheck 2026-05-02T01 54 47 833Z [p_7dd8e809]/trace/topic-runs`
+    - `storage/projects/2026-05-02/China Topic 5-Round Recheck 2026-05-02T01 54 47 833Z [p_7dd8e809]/trace/topic-runs`
 
 ### 本轮确认
 
@@ -149,7 +149,7 @@ npm run harness:ui-acceptance:smoke
 - 真实回归项目：
   - `project_id = 1f749f92-363d-4189-8027-a7dcc8a79051`
   - trace 根目录：
-    - `D:/myproject/story-video-forge2/storage/projects/2026-05-02/Task6 China Topic 5-Round Recheck [p_1f749f92]/trace/topic-runs`
+    - `storage/projects/2026-05-02/Task6 China Topic 5-Round Recheck [p_1f749f92]/trace/topic-runs`
 
 ### 本轮确认
 
@@ -195,7 +195,7 @@ npm run harness:ui-acceptance:smoke
 - 真实回归项目：
   - `project_id = 6a2a965b-1b25-4bd4-a73b-f1e9b574f64c`
   - trace 根目录：
-    - `D:/myproject/story-video-forge2/storage/projects/2026-05-02/Task5 China Topic 5-Round Recheck [p_6a2a965b]/trace/topic-runs`
+    - `storage/projects/2026-05-02/Task5 China Topic 5-Round Recheck [p_6a2a965b]/trace/topic-runs`
 
 ### 本轮确认
 
@@ -247,9 +247,9 @@ npm run harness:ui-acceptance:smoke
 - 真实 5 轮回归项目：
   - `project_id = 18b2617e-c00b-48b2-bcbb-0849d87e1d64`
   - 摘要文件：
-    - `D:/myproject/story-video-forge2/harness/scripts/runtime/output/topic-candidate-library-real-check/summary.json`
+    - `harness/scripts/runtime/output/topic-candidate-library-real-check/summary.json`
   - 当前 seed-profile 目录：
-    - `D:/myproject/story-video-forge2/storage/topic-candidate-library/u8-e4b8ade59bbde58fa4e4bba3e9878de5a4a7e58e86e58fb2e4ba8be4bbb6/u8-e4b8ade59bbde58fa4e4bba3e9878de5a4a7e58e86e58fb2e4ba8be4bbb6`
+    - `storage/topic-candidate-library/u8-e4b8ade59bbde58fa4e4bba3e9878de5a4a7e58e86e58fb2e4ba8be4bbb6/u8-e4b8ade59bbde58fa4e4bba3e9878de5a4a7e58e86e58fb2e4ba8be4bbb6`
 
 ### 本轮确认
 

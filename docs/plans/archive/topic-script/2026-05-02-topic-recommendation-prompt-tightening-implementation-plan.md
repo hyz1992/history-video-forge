@@ -13,8 +13,8 @@
 ### Task 1: 收紧 builder 的结构输出合同
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/harness/prompts/topic/candidate-builder.prompt.md`
-- Test: `D:/myproject/story-video-forge2/tests/backend/runtime/topic-prompt-contract.test.ts`
+- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Test: `tests/backend/runtime/topic-prompt-contract.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -58,9 +58,9 @@ git commit -m "收紧选题builder结构输出合同"
 ### Task 2: 轻量强化 builder 的源头扩池职责
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/harness/prompts/topic/candidate-builder.prompt.md`
-- Test: `D:/myproject/story-video-forge2/tests/backend/runtime/topic-prompt-contract.test.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/runtime/prompt-runtime.test.ts`
+- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Test: `tests/backend/runtime/topic-prompt-contract.test.ts`
+- Test: `tests/backend/runtime/prompt-runtime.test.ts`
 
 **Step 1: Write the failing tests**
 
@@ -104,8 +104,8 @@ git commit -m "强化选题builder的源头扩池约束"
 ### Task 3: 收紧 selector 的“严格 3 id”合同
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/harness/prompts/topic/selector.prompt.md`
-- Test: `D:/myproject/story-video-forge2/tests/backend/runtime/topic-prompt-contract.test.ts`
+- Modify: `harness/prompts/topic/selector.prompt.md`
+- Test: `tests/backend/runtime/topic-prompt-contract.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -149,7 +149,7 @@ git commit -m "收紧选题selector返回数量合同"
 
 **Files:**
 - No required code changes
-- Optional notes: `D:/myproject/story-video-forge2/docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
+- Optional notes: `docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
 
 **Step 1: Define regression check**
 

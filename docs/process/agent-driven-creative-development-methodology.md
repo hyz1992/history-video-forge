@@ -1,6 +1,6 @@
 # Code Agent 驱动创意项目开发方法论
 
-本文总结 `story-video-forge2` 在接近完整视频流水线过程中形成的开发经验，用于指导后续 agent 协作、harness 设计、阶段验收与新项目复用。
+本文总结 `history-video-forge` 在接近完整视频流水线过程中形成的开发经验，用于指导后续 agent 协作、harness 设计、阶段验收与新项目复用。
 
 本文不是新的 implementation plan，也不授权任何 agent 绕过 `AGENTS.md` 的当前阶段边界。若本文与 `AGENTS.md`、正式架构文档或 harness 规范冲突，以后者为准。
 
@@ -561,7 +561,7 @@ skill 的优势是跨项目复用，但它不适合承载太多项目特定事�
 长期：
 
 - 如果至少两个以上项目验证了这套方法，再创建个人 skill。
-- skill 只描述通用流程，不内置 `story-video-forge2` 的具体对象与状态。
+- skill 只描述通用流程，不内置 `history-video-forge` 的具体对象与状态。
 - skill 触发后要求 agent 先读项目本地 `AGENTS.md` 和 harness 文档，再应用通用方法。
 
 ---
@@ -700,7 +700,7 @@ UI 应回到的状态：
 
 ## 7. 当前项目适用建议
 
-`story-video-forge2` 当前已具备较强的阶段治理基础。后续推进前端预览、发布流和人工审稿流时，建议继续沿用本方法：
+`history-video-forge` 当前已具备较强的阶段治理基础。后续推进前端预览、发布流和人工审稿流时，建议继续沿用本方法：
 
 - 不回改已冻结的 `topic + script`，除非定位到阻塞或回归。
 - 继续把 `harness/README.md` 和 runtime harness 作为新 agent 的 P0 入口，不要只依赖口头交接。

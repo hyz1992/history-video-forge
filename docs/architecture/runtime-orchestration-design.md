@@ -1,6 +1,6 @@
 # Runtime Orchestration Design
 
-适用范围：`story-video-forge2` 当前 `topic + script` 正式主链路。
+适用范围：`history-video-forge` 当前 `topic + script` 正式主链路。
 
 ## 目标
 

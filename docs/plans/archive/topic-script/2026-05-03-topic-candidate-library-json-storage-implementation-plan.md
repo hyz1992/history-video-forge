@@ -13,8 +13,8 @@
 ### Task 1: 冻结聚合 JSON 文件 schema 合同
 
 **Files:**
-- Create: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-candidate-library-json.types.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-candidate-library-json.types.test.ts`
+- Create: `backend/src/modules/topic/topic-candidate-library-json.types.ts`
+- Test: `tests/backend/topic/topic-candidate-library-json.types.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -66,8 +66,8 @@ git commit -m "定义选题候选库聚合JSON合同"
 ### Task 2: 实现聚合 JSON codec
 
 **Files:**
-- Create: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-candidate-library-json.codec.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-candidate-library-json.codec.test.ts`
+- Create: `backend/src/modules/topic/topic-candidate-library-json.codec.ts`
+- Test: `tests/backend/topic/topic-candidate-library-json.codec.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -116,8 +116,8 @@ git commit -m "实现选题候选库聚合JSON编解码"
 ### Task 3: 把 repository 从单候选文件改为单文件聚合读写
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-candidate-library.repository.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-candidate-library.repository.test.ts`
+- Modify: `backend/src/modules/topic/topic-candidate-library.repository.ts`
+- Test: `tests/backend/topic/topic-candidate-library.repository.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -169,9 +169,9 @@ git commit -m "改用聚合JSON存储选题候选库"
 ### Task 4: 清理旧 Markdown codec 依赖，收口 repository 接口
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-candidate-library.repository.ts`
-- Optional modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-candidate-library.codec.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-candidate-library.repository.test.ts`
+- Modify: `backend/src/modules/topic/topic-candidate-library.repository.ts`
+- Optional modify: `backend/src/modules/topic/topic-candidate-library.codec.ts`
+- Test: `tests/backend/topic/topic-candidate-library.repository.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -217,8 +217,8 @@ git commit -m "收口选题候选库JSON仓储接口"
 ### Task 5: 切换 runtime 沉淀输出到聚合 JSON
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-recommendation.service.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-runtime-recommendation.test.ts`
+- Modify: `backend/src/modules/topic/topic-recommendation.service.ts`
+- Test: `tests/backend/topic/topic-runtime-recommendation.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -268,8 +268,8 @@ git commit -m "切换选题候选库沉淀到聚合JSON"
 ### Task 6: 保持受控 fallback 从聚合 JSON 读取
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-recommendation.service.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-runtime-recommendation.test.ts`
+- Modify: `backend/src/modules/topic/topic-recommendation.service.ts`
+- Test: `tests/backend/topic/topic-runtime-recommendation.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -317,9 +317,9 @@ git commit -m "保持聚合JSON候选库受控fallback读取"
 ### Task 7: 更新 harness 文档与人工巡检说明
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/harness/README.md`
-- Modify: `D:/myproject/story-video-forge2/docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
-- Optional test: `D:/myproject/story-video-forge2/tests/harness/topic-script-live-check.test.ts`
+- Modify: `harness/README.md`
+- Modify: `docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
+- Optional test: `tests/harness/topic-script-live-check.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -367,8 +367,8 @@ git commit -m "更新选题候选库JSON巡检说明"
 ### Task 8: 做最小自动验证与真实回归
 
 **Files:**
-- Optional modify: `D:/myproject/story-video-forge2/harness/scripts/runtime/topic-candidate-library-real-check.ts`
-- Optional notes update: `D:/myproject/story-video-forge2/docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
+- Optional modify: `harness/scripts/runtime/topic-candidate-library-real-check.ts`
+- Optional notes update: `docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
 
 **Step 1: Run automated verification**
 

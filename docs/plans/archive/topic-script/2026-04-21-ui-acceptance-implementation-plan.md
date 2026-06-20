@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** 为 `story-video-forge2` 建立一套仓库内正式维护的 UI 自动验收机制，自动启动前后端、用真实浏览器走完整 `topic + script` 主链路，并输出页面审查报告。
+**Goal:** 为 `history-video-forge` 建立一套仓库内正式维护的 UI 自动验收机制，自动启动前后端、用真实浏览器走完整 `topic + script` 主链路，并输出页面审查报告。
 
 **Architecture:** 保留现有 `harness/scripts/runtime/` 作为 backend/runtime 验证层；新增基于 Playwright 的 `harness/scripts/ui-acceptance/` 作为浏览器验收层。第一版只覆盖 Chromium + 桌面端 + 单主链路，并用规则化方式判定页面是否达到最小可交付标准。
 

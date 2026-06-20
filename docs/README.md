@@ -1,12 +1,12 @@
-# story-video-forge2 文档索引
+# history-video-forge 文档索引
 
-本文档用于帮助新 agent 或协作者快速建立 `story-video-forge2` 的上下文。
+本文档用于帮助新 agent 或协作者快速建立 `history-video-forge` 的上下文。
 
 原则：
 
 - 只记录当前已经确认的结论
 - 未确认项明确标注为 `TBD`
-- 旧项目 `story-video-forge` 仅作迁移参考，不作为新项目正式规范来源
+- 旧项目仅作迁移参考，不作为新项目正式规范来源
 - prompt 规则、runtime harness、执行治理优先查看 [harness/README.md](../harness/README.md)
 - `docs/plans/archive/` 只保存历史设计与实施证据，不作为当前任务入口
 - `docs/records/` 只保存历史运行、质量检查与恢复记录，不作为当前设计真相源

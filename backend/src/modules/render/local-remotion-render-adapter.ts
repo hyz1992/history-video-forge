@@ -143,7 +143,7 @@ export function createLocalRemotionRenderAdapter(
       });
 
       const bundleOutDir = await mkdtemp(
-        join(tmpdir(), "story-video-forge-remotion-bundle-"),
+        join(tmpdir(), "history-video-forge-remotion-bundle-"),
       );
       try {
         const serveUrl = await bundle({

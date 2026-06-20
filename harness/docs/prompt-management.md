@@ -1,6 +1,6 @@
 # Prompt 管理规范
 
-适用范围：`story-video-forge2` 当前 `harness`、`topic`、`script` 第一阶段的正式 prompt。
+适用范围：`history-video-forge` 当前 `harness`、`topic`、`script` 第一阶段的正式 prompt。
 
 ## 总原则
 
@@ -13,7 +13,7 @@
 
 所有正式 prompt 必须存放在：
 
-- `D:/myproject/story-video-forge2/harness/prompts/`
+- `harness/prompts/`
 
 当前有效目录：
 

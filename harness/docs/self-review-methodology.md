@@ -1,6 +1,6 @@
 # 自审方法论（Self-Review Methodology）
 
-适用项目：`story-video-forge2`
+适用项目：`history-video-forge`
 
 本文是对 `definition-of-done.md` 第 6 条"自审完成"的具体操作规范。
 源于 publish 阶段实现中多轮自审仍漏掉 7 个问题的复盘。

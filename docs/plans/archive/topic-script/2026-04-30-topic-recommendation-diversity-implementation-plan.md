@@ -13,11 +13,11 @@
 ### Task 1: 将 builder 目标从 3 个候选扩成 8 个候选池
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/harness/prompts/topic/candidate-builder.prompt.md`
-- Modify: `D:/myproject/story-video-forge2/backend/src/runtime/orchestration/topic-recommendation-nodes.ts`
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-recommendation.service.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/runtime/topic-prompt-contract.test.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-runtime-recommendation.test.ts`
+- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Modify: `backend/src/runtime/orchestration/topic-recommendation-nodes.ts`
+- Modify: `backend/src/modules/topic/topic-recommendation.service.ts`
+- Test: `tests/backend/runtime/topic-prompt-contract.test.ts`
+- Test: `tests/backend/topic/topic-runtime-recommendation.test.ts`
 
 **Step 1: Write the failing tests**
 
@@ -71,9 +71,9 @@ git commit -m "扩展选题builder原始候选池"
 ### Task 2: 在本地层整理 selector 候选池
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-recommendation.service.ts`
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/cache/candidate-cache.repository.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-runtime-recommendation.test.ts`
+- Modify: `backend/src/modules/topic/topic-recommendation.service.ts`
+- Modify: `backend/src/modules/cache/candidate-cache.repository.ts`
+- Test: `tests/backend/topic/topic-runtime-recommendation.test.ts`
 
 **Step 1: Write the failing tests**
 
@@ -135,9 +135,9 @@ git commit -m "整理选题selector候选池"
 ### Task 3: 新增 topic.selector prompt 合同
 
 **Files:**
-- Create: `D:/myproject/story-video-forge2/harness/prompts/topic/selector.prompt.md`
-- Modify: `D:/myproject/story-video-forge2/backend/src/runtime/prompts/prompt-registry.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/runtime/topic-prompt-contract.test.ts`
+- Create: `harness/prompts/topic/selector.prompt.md`
+- Modify: `backend/src/runtime/prompts/prompt-registry.ts`
+- Test: `tests/backend/runtime/topic-prompt-contract.test.ts`
 
 **Step 1: Write the failing tests**
 
@@ -197,11 +197,11 @@ git commit -m "新增选题selector提示词合同"
 ### Task 4: 接入 selector 运行时并生成最终 3 个候选
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/backend/src/runtime/orchestration/topic-recommendation-nodes.ts`
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-recommendation.service.ts`
-- Modify: `D:/myproject/story-video-forge2/backend/src/runtime/llm/interaction-log.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-runtime-recommendation.test.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/runtime/prompt-runtime.test.ts`
+- Modify: `backend/src/runtime/orchestration/topic-recommendation-nodes.ts`
+- Modify: `backend/src/modules/topic/topic-recommendation.service.ts`
+- Modify: `backend/src/runtime/llm/interaction-log.ts`
+- Test: `tests/backend/topic/topic-runtime-recommendation.test.ts`
+- Test: `tests/backend/runtime/prompt-runtime.test.ts`
 
 **Step 1: Write the failing tests**
 
@@ -259,9 +259,9 @@ git commit -m "接入选题selector最终选择步骤"
 ### Task 5: 增加一次受控 repair 补位
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/harness/prompts/topic/selector.prompt.md`
-- Modify: `D:/myproject/story-video-forge2/backend/src/modules/topic/topic-recommendation.service.ts`
-- Test: `D:/myproject/story-video-forge2/tests/backend/topic/topic-runtime-recommendation.test.ts`
+- Modify: `harness/prompts/topic/selector.prompt.md`
+- Modify: `backend/src/modules/topic/topic-recommendation.service.ts`
+- Test: `tests/backend/topic/topic-runtime-recommendation.test.ts`
 
 **Step 1: Write the failing tests**
 
@@ -322,11 +322,11 @@ git commit -m "补充选题selector单次repair补位"
 ### Task 6: 补可观测性与真实回归
 
 **Files:**
-- Modify: `D:/myproject/story-video-forge2/harness/README.md`
-- Modify: `D:/myproject/story-video-forge2/harness/scripts/ui-acceptance/page-auditor.ts`
-- Modify: `D:/myproject/story-video-forge2/harness/scripts/ui-acceptance/page-rules.ts`
-- Modify: `D:/myproject/story-video-forge2/tests/harness/ui-acceptance-page-rules.test.ts`
-- Create: `D:/myproject/story-video-forge2/docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
+- Modify: `harness/README.md`
+- Modify: `harness/scripts/ui-acceptance/page-auditor.ts`
+- Modify: `harness/scripts/ui-acceptance/page-rules.ts`
+- Modify: `tests/harness/ui-acceptance-page-rules.test.ts`
+- Create: `docs/records/2026-04-30-topic-recommendation-diversity-notes.md`
 
 **Step 1: Write the failing tests**
 

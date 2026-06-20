@@ -12,14 +12,14 @@ import { waitForReady } from "../../harness/scripts/ui-acceptance/wait-for-ready
 
 describe("ui acceptance service manager", () => {
   it("fixes backend and frontend commands with readiness targets", () => {
-    const services = buildUiAcceptanceServiceDefinitions("D:/myproject/story-video-forge2");
+    const services = buildUiAcceptanceServiceDefinitions(process.cwd());
 
     expect(services).toEqual([
       {
         name: "backend",
         command: "npm",
         args: ["run", "dev:backend"],
-        cwd: "D:/myproject/story-video-forge2",
+        cwd: process.cwd(),
         readyUrl: "http://127.0.0.1:3000/healthz",
         intervalMs: 500,
         timeoutMs: 30000,
@@ -28,7 +28,7 @@ describe("ui acceptance service manager", () => {
         name: "frontend",
         command: "npm",
         args: ["run", "dev:frontend"],
-        cwd: "D:/myproject/story-video-forge2",
+        cwd: process.cwd(),
         readyUrl: "http://127.0.0.1:5173/",
         intervalMs: 500,
         timeoutMs: 30000,
@@ -42,13 +42,13 @@ describe("ui acceptance service manager", () => {
         name: "backend",
         command: "npm",
         args: ["run", "dev:backend"],
-        cwd: "D:/myproject/story-video-forge2",
+        cwd: process.cwd(),
         readyUrl: "http://127.0.0.1:3000/healthz",
         intervalMs: 500,
         timeoutMs: 30000,
       }),
     ).toEqual({
-      cwd: "D:/myproject/story-video-forge2",
+      cwd: process.cwd(),
       stdio: "pipe",
       shell: process.platform === "win32",
     });
@@ -74,7 +74,7 @@ describe("ui acceptance service manager", () => {
         name: "backend",
         command: "npm",
         args: ["run", "dev:backend"],
-        cwd: "D:/myproject/story-video-forge2",
+        cwd: process.cwd(),
         readyUrl: "http://127.0.0.1:3000/healthz",
         intervalMs: 500,
         timeoutMs: 30000,
@@ -99,7 +99,7 @@ describe("ui acceptance service manager", () => {
         return "ok";
       },
       {
-        cwd: "D:/myproject/story-video-forge2",
+        cwd: process.cwd(),
         prepareService: async (service) => {
           lifecycle.push(`prepare:${service.name}`);
         },
@@ -170,7 +170,7 @@ describe("ui acceptance service manager", () => {
         return "ok";
       },
       {
-        cwd: "D:/myproject/story-video-forge2",
+        cwd: process.cwd(),
         spawnService: async (service) => {
           lifecycle.push(`spawn:${service.name}`);
           return createHandle(service.name, lifecycle);
@@ -206,7 +206,7 @@ describe("ui acceptance service manager", () => {
           throw new Error("browser_failed");
         },
         {
-          cwd: "D:/myproject/story-video-forge2",
+          cwd: process.cwd(),
           spawnService: async (service) => {
             lifecycle.push(`spawn:${service.name}`);
             return createHandle(service.name, lifecycle);
@@ -239,7 +239,7 @@ describe("ui acceptance service manager", () => {
       runWithUiAcceptanceServices(
         async () => "unreachable",
         {
-          cwd: "D:/myproject/story-video-forge2",
+          cwd: process.cwd(),
           spawnService: async (service) => {
             lifecycle.push(`spawn:${service.name}`);
             return createHandle(service.name, lifecycle);

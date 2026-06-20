@@ -23,7 +23,7 @@
 - 再次执行 `npm run harness:ui-acceptance:smoke`。
 - 结果：PASS
 - run_id：`2026-04-29T10-17-53-560Z-smoke`
-- output_dir：`D:/myproject/story-video-forge2/harness/scripts/runtime/output/ui-acceptance/2026-04-29T10-17-53-560Z-smoke`
+- output_dir：`harness/scripts/runtime/output/ui-acceptance/2026-04-29T10-17-53-560Z-smoke`
 - project_id：`edadd327-0a7a-4ab0-8cb0-4c5772e5f368`
 - short_id 推导结果：`p_edadd327`
 
@@ -40,13 +40,13 @@ Get-ChildItem 'storage/projects' -Directory -Recurse |
 ### 本次成功路径样例
 
 - 搜索命中项目目录：
-  `D:/myproject/story-video-forge2/storage/projects/2026-04-29/商鞅变法与秦国崛起 [p_edadd327]`
+  `storage/projects/2026-04-29/商鞅变法与秦国崛起 [p_edadd327]`
 - 项目级 trace 根目录：
-  `D:/myproject/story-video-forge2/storage/projects/2026-04-29/商鞅变法与秦国崛起 [p_edadd327]/trace`
+  `storage/projects/2026-04-29/商鞅变法与秦国崛起 [p_edadd327]/trace`
 - topic run 目录：
-  `D:/myproject/story-video-forge2/storage/projects/2026-04-29/商鞅变法与秦国崛起 [p_edadd327]/trace/topic-runs/topic_run_b5c832c2-2926-4619-94b0-189795ec9d09`
+  `storage/projects/2026-04-29/商鞅变法与秦国崛起 [p_edadd327]/trace/topic-runs/topic_run_b5c832c2-2926-4619-94b0-189795ec9d09`
 - script run 目录：
-  `D:/myproject/story-video-forge2/storage/projects/2026-04-29/商鞅变法与秦国崛起 [p_edadd327]/trace/script-runs/script_run_f1fa6407`
+  `storage/projects/2026-04-29/商鞅变法与秦国崛起 [p_edadd327]/trace/script-runs/script_run_f1fa6407`
 - topic run 已确认文件：
   - `graph-trace-summary.json`
   - `runtime-diagnostics.json`

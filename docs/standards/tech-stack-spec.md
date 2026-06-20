@@ -1,4 +1,4 @@
-# story-video-forge2 技术栈规范
+# history-video-forge 技术栈规范
 
 ## 1. 目标
 

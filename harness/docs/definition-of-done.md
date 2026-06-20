@@ -1,6 +1,6 @@
 # 完成定义（Definition of Done）
 
-适用范围：`story-video-forge2` 当前的 `harness`、`topic`、`script` 第一阶段工作。
+适用范围：`history-video-forge` 当前的 `harness`、`topic`、`script` 第一阶段工作。
 
 ## 一次任务被视为完成，至少必须满足
 

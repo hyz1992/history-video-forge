@@ -2,9 +2,9 @@
 >
 > 当前正式执行规则 **不以本文为准**，而以以下位置为准：
 >
-> - [AGENTS.md](</D:/myproject/story-video-forge2/AGENTS.md>)
-> - [harness/README.md](</D:/myproject/story-video-forge2/harness/README.md>)
-> - `D:/myproject/story-video-forge2/harness/docs/*`
+> - [AGENTS.md](</AGENTS.md>)
+> - [harness/README.md](</harness/README.md>)
+> - `harness/docs/*`
 >
 > 若本文与上述正式规则源存在表述差异，应以正式规则源为准。本文保留的主要价值是：记录当时为什么决定为新项目建立专用 harness，以及为何将 `runtime harness` 提升为当前阶段的 `P0`。
 
@@ -15,7 +15,7 @@
 状态：阶段性评估结论，供审计、复核与后续落地使用
 
 适用范围：
-- `D:\myproject\story-video-forge2`
+- `history-video-forge`
 - 当前只针对新项目的 `topic + script` 第一阶段是否需要专用 harness 架构进行评估
 
 本文定位：
@@ -28,7 +28,7 @@
 
 ## 1. 评估问题
 
-当前 `story-video-forge2` 已经完成了：
+当前 `history-video-forge` 已经完成了：
 
 - 原始需求文档
 - 主题阶段设计
@@ -77,7 +77,7 @@
 
 ### 3.1 文档已经很多，单靠默认阅读顺序不够
 
-`story-video-forge2` 当前已经有较完整的正式文档体系，包括：
+`history-video-forge` 当前已经有较完整的正式文档体系，包括：
 
 - requirements
 - topic 阶段设计
@@ -551,7 +551,7 @@ harness/
 
 - 当前评估已经形成明确结论
 - 但尚未正式开始编写：
-  - `story-video-forge2/AGENTS.md`
+  - `history-video-forge/AGENTS.md`
   - `harness/README.md`
   - `harness/docs/*`
   - `harness/prompts/*`

@@ -12,7 +12,7 @@
 
 ## Guardrails
 
-- Work directly in `D:\myproject\story-video-forge2` on `dev`; do not create a worktree.
+- Work directly in `history-video-forge` on `dev`; do not create a worktree.
 - Do one Task at a time. Do not start the next Task until the current Task has green verification and a Chinese commit.
 - Use TDD for every implementation Task: write failing test, run red, make minimal implementation, run green.
 - Do not stage or commit `storage/topic-candidate-library/`.
@@ -24,17 +24,17 @@
 
 ## File Map
 
-- Modify: `D:\myproject\story-video-forge2\backend\src\modules\script\script-regenerate.service.ts`
+- Modify: `backend\src\modules\script\script-regenerate.service.ts`
   - Owns the `regenerationContext` object sent back into `generateScriptDraft`.
   - Add optional `thin_body_repair` only when `localValidation.errors` contains `script_body_too_thin`.
-- Modify: `D:\myproject\story-video-forge2\backend\src\runtime\orchestration\script-run-nodes.ts`
+- Modify: `backend\src\runtime\orchestration\script-run-nodes.ts`
   - Owns runtime diagnostics after regen.
   - Add a diagnostic when thin regen still fails after changed output.
-- Modify: `D:\myproject\story-video-forge2\tests\backend\script\script-patch-regen.test.ts`
+- Modify: `tests\backend\script\script-patch-regen.test.ts`
   - Add TDD coverage for thin repair context and non-thin protection.
-- Modify: `D:\myproject\story-video-forge2\tests\backend\script\script-graph-run.test.ts`
+- Modify: `tests\backend\script\script-graph-run.test.ts`
   - Add TDD coverage for the new runtime diagnostic.
-- Create: `D:\myproject\story-video-forge2\docs\records\2026-05-07-script-thin-regen-repair-context-observation.md`
+- Create: `docs\records\2026-05-07-script-thin-regen-repair-context-observation.md`
   - Record real 5-round results and paste each generated script for user inspection.
 
 ---
@@ -42,8 +42,8 @@
 ### Task 1: Add Thin Repair Context For Thin Regen
 
 **Files:**
-- Modify: `D:\myproject\story-video-forge2\tests\backend\script\script-patch-regen.test.ts`
-- Modify: `D:\myproject\story-video-forge2\backend\src\modules\script\script-regenerate.service.ts`
+- Modify: `tests\backend\script\script-patch-regen.test.ts`
+- Modify: `backend\src\modules\script\script-regenerate.service.ts`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -316,8 +316,8 @@ Before committing, confirm `git status --short` does not show `storage/topic-can
 ### Task 2: Protect Non-Thin Regen From Thin Context Pollution
 
 **Files:**
-- Modify: `D:\myproject\story-video-forge2\tests\backend\script\script-patch-regen.test.ts`
-- Modify: `D:\myproject\story-video-forge2\backend\src\modules\script\script-regenerate.service.ts` only if Task 1 implementation needs adjustment
+- Modify: `tests\backend\script\script-patch-regen.test.ts`
+- Modify: `backend\src\modules\script\script-regenerate.service.ts` only if Task 1 implementation needs adjustment
 
 - [ ] **Step 1: Write the failing/protection test**
 
@@ -410,8 +410,8 @@ If only the test file changed, stage only the test file.
 ### Task 3: Record Diagnostic When Thin Regen Still Fails After Changed Output
 
 **Files:**
-- Modify: `D:\myproject\story-video-forge2\tests\backend\script\script-graph-run.test.ts`
-- Modify: `D:\myproject\story-video-forge2\backend\src\runtime\orchestration\script-run-nodes.ts`
+- Modify: `tests\backend\script\script-graph-run.test.ts`
+- Modify: `backend\src\runtime\orchestration\script-run-nodes.ts`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -595,8 +595,8 @@ git commit -m "记录薄稿再生成单元验证"
 ### Task 5: Real 5-Round Quality Check And Observation Record
 
 **Files:**
-- Create: `D:\myproject\story-video-forge2\docs\records\2026-05-07-script-thin-regen-repair-context-observation.md`
-- Runtime output only: `D:\myproject\story-video-forge2\harness\scripts\runtime\output\2026-05-07-thin-regen-repair-context-five-round\...`
+- Create: `docs\records\2026-05-07-script-thin-regen-repair-context-observation.md`
+- Runtime output only: `harness\scripts\runtime\output\2026-05-07-thin-regen-repair-context-five-round\...`
 
 - [ ] **Step 1: Run the fixed real 5-round command**
 

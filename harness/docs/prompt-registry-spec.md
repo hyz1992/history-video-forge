@@ -1,6 +1,6 @@
 # Prompt Registry 规范（最小版）
 
-适用范围：`story-video-forge2` 当前 `topic + script` 第一阶段的正式 prompt 资产。
+适用范围：`history-video-forge` 当前 `topic + script` 第一阶段的正式 prompt 资产。
 
 ## 目标
 
