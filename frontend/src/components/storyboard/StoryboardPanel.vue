@@ -75,6 +75,7 @@ const isGenerating = computed(
 );
 
 const isInitialStoryboardSnapshotLoading = ref(true);
+const isRefreshingStoryboardStatus = ref(false);
 const shouldShowStoryboardSkeleton = computed(
   () =>
     isInitialStoryboardSnapshotLoading.value ||
@@ -186,6 +187,17 @@ function handleRetry() {
   storyboardStore.retryLoad();
 }
 
+async function handleRefreshGeneratingStatus() {
+  if (isRefreshingStoryboardStatus.value) return;
+
+  isRefreshingStoryboardStatus.value = true;
+  try {
+    await storyboardStore.retryLoad();
+  } finally {
+    isRefreshingStoryboardStatus.value = false;
+  }
+}
+
 function handleConfirm() {
   ElMessage.success("分镜已确认，进入资产阶段");
   workspaceStore.setCurrentStep(ASSET_STEP_INDEX);
@@ -203,7 +215,12 @@ function handleConfirm() {
       secondary-hint="页面会自动刷新，也可手动刷新状态。"
     >
       <template #action>
-        <el-button @click="storyboardStore.retryLoad()">刷新状态</el-button>
+        <el-button
+          :loading="isRefreshingStoryboardStatus"
+          @click="handleRefreshGeneratingStatus"
+        >
+          刷新状态
+        </el-button>
       </template>
     </StageGenerating>
 

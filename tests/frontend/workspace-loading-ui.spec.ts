@@ -6,10 +6,12 @@ import { reactive } from "vue";
 import { describe, expect, it } from "vitest";
 
 import ScriptPanel from "../../frontend/src/components/script/ScriptPanel.vue";
+import StoryboardPanel from "../../frontend/src/components/storyboard/StoryboardPanel.vue";
 import TopicPanel from "../../frontend/src/components/topic/TopicPanel.vue";
 import { createAppRouter } from "../../frontend/src/router/index.js";
 import { projectStoreKey } from "../../frontend/src/stores/project";
 import { scriptStoreKey } from "../../frontend/src/stores/script";
+import { storyboardStoreKey } from "../../frontend/src/stores/storyboard";
 import { topicStoreKey } from "../../frontend/src/stores/topic";
 import { workspaceStoreKey } from "../../frontend/src/stores/workspace";
 
@@ -157,6 +159,47 @@ describe("workspace loading UI", () => {
     expect(wrapper.find(".stage-generating").exists()).toBe(true);
     expect(wrapper.find("[data-testid='script-page-header']").exists()).toBe(false);
     expect(wrapper.find("[data-testid='script-trace-entry']").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("shows loading feedback when refreshing storyboard generation status", async () => {
+    const router = await createRouterAt("/projects/project-loading-ui/storyboard");
+    let resolveRefresh!: () => void;
+    const storyboardState = reactive({
+      snapshot: {
+        current_status: "storyboard_generating",
+        active_storyboard: null,
+      },
+      isLoading: false,
+      isGenerating: false,
+      loadError: null,
+    });
+
+    const wrapper = mount(StoryboardPanel, {
+      global: {
+        plugins: [router, ElementPlus],
+        provide: {
+          [projectStoreKey as symbol]: createProjectStoreStub("storyboard_generating") as never,
+          [workspaceStoreKey as symbol]: createWorkspaceStoreStub() as never,
+          [storyboardStoreKey as symbol]: {
+            state: storyboardState,
+            loadActiveStoryboardSnapshot: pendingPromise,
+            retryLoad: () =>
+              new Promise<void>((resolve) => {
+                resolveRefresh = resolve;
+              }),
+            generateStoryboard: pendingPromise,
+          } as never,
+        },
+      },
+    });
+
+    const refreshButton = wrapper.get(".stage-generating .el-button");
+    await refreshButton.trigger("click");
+    await wrapper.vm.$nextTick();
+
+    expect(refreshButton.attributes("disabled")).toBe("");
+    resolveRefresh();
     wrapper.unmount();
   });
 });
