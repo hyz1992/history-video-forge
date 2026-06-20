@@ -15,10 +15,11 @@
 
 ## 当前阶段状态
 
-截至 2026-05-09：
+截至 2026-06-20：
 
+- 全链路 7 阶段（topic → script → storyboard → asset planning → assets → compose → render → publish）已全部完成第一版设计与后端实现。
 - `topic + script` 第一阶段已达到当前及格标准，可以暂时冻结。
-- 下一步工作应先围绕视频流水线后续阶段补设计文档与 implementation plan。
+- `storyboard`、`asset planning`、`assets`、`compose`、`renderer/export` 已完成 v1 后端链路；当前下一步允许围绕前端工作流、预览/导出、发布流与人工审稿流继续设计和小步实施。
 - 旧的 topic/script 计划已归档到 [plans/archive/topic-script](./plans/archive/topic-script/)。
 - 进入新任务时，优先阅读正式架构文档、当前阶段说明与最新计划；不要把 archive 或 records 中的历史内容直接当作当前约束。
 
@@ -28,25 +29,21 @@
 
 对于没有上下文的新 agent，建议按以下顺序建立认知：
 
-1. [产品需求文档](./requirements/product-requirements.md)
-2. [技术栈规范](./standards/tech-stack-spec.md)
-3. [项目现状与后续流水线作战地图](./project-current-state-and-next-pipeline.md)
+1. [AGENTS.md](../AGENTS.md)
+2. [产品需求文档](./requirements/product-requirements.md)
+3. [技术栈规范](./standards/tech-stack-spec.md)
 4. [项目生命周期设计](./architecture/project-lifecycle.md)
 5. [Pipeline IO 规范](./architecture/pipeline-io-spec.md)
 6. [Downstream 高层设计留档](./architecture/downstream-stage-high-level-design.md)
-7. [Storyboard 阶段设计计划](./plans/2026-05-09-storyboard-stage-design.md)
-8. [Storyboard 阶段实施计划](./plans/2026-05-09-storyboard-stage-implementation-plan.md)
-9. [Topic 阶段设计](./architecture/topic-stage-design.md)
-10. [Script 阶段设计](./architecture/script-stage-design.md)
-11. [Script 校验规范](./architecture/script-validation-spec.md)
-12. [字段设计](./data/field-design.md)
-13. [Schema 设计](./data/schema-design.md)
-14. [API 设计](./architecture/api-design.md)
-15. [Follow-up Backlog 整理](./records/2026-05-01-follow-up-backlog.md)
-16. [视频流水线工程经验笔记](./records/2026-05-09-video-pipeline-engineering-notes.md)
-17. [Plans 状态说明](./plans/README.md)
-18. [Records 状态说明](./records/README.md)
-19. [当前 Todo](./todos/roadmap-todo.md)
+7. [Topic 阶段设计](./architecture/topic-stage-design.md)
+8. [Script 阶段设计](./architecture/script-stage-design.md)
+9. [Script 校验规范](./architecture/script-validation-spec.md)
+10. [字段设计](./data/field-design.md)
+11. [Schema 设计](./data/schema-design.md)
+12. [API 设计](./architecture/api-design.md)
+13. [视频流水线工程经验笔记](./records/2026-05-09-video-pipeline-engineering-notes.md)
+14. [Plans 状态说明](./plans/README.md)
+15. [Records 状态说明](./records/README.md)
 
 ---
 
@@ -58,7 +55,6 @@
 
 ### 架构与阶段设计
 
-- [项目现状与后续流水线作战地图](./project-current-state-and-next-pipeline.md)
 - [项目生命周期设计](./architecture/project-lifecycle.md)
 - [Topic 阶段设计](./architecture/topic-stage-design.md)
 - [Recent Memory 设计](./architecture/recent-memory-design.md)
@@ -67,6 +63,7 @@
 - [Pipeline IO 规范](./architecture/pipeline-io-spec.md)
 - [Downstream 高层设计留档](./architecture/downstream-stage-high-level-design.md)
 - [API 设计](./architecture/api-design.md)
+- [Runtime Orchestration 设计](./architecture/runtime-orchestration-design.md)
 
 ### 数据与字段
 
@@ -109,9 +106,7 @@
 
 ### 计划与执行
 
-- [Plans 状态说明](./plans/README.md)
-- [Storyboard 阶段设计计划](./plans/2026-05-09-storyboard-stage-design.md)
-- [Storyboard 阶段实施计划](./plans/2026-05-09-storyboard-stage-implementation-plan.md)
+- [Plans 状态说明](./plans/README.md)（含当前未归档计划列表与历史归档索引）
 - [Topic + Script 历史计划归档](./plans/archive/topic-script/)
 - [当前 Todo](./todos/roadmap-todo.md)
 
@@ -134,9 +129,9 @@
 
 ---
 
-## 当前仍为 TBD 的区域
+## 当前仍为 TBD / 待正式设计的区域
 
-- asset planning / assets / compose 的细化输入输出
+- 前端预览 UI、素材上传/预览、发布流、人工审稿流（可进入正式设计）
 - 更完整的 UI 组件级规范
 - 推荐轻评审阈值
 - `event_family` 命中算法与 `family_confidence` 计算方式
@@ -151,37 +146,21 @@
 - 重大收口：同步更新路线图与 todo
 - 已执行完毕的 design / implementation plan：移动到 `docs/plans/archive/`，不要继续留在 `docs/plans/` 根目录误导新任务
 
-## 2026-05-10 Storyboard v1 文档状态
+## 2026-05-20 全链路 v1 阶段文档收口状态
 
-`storyboard` 已完成第一版设计、实施计划和最小后端实现。新 agent 阅读时应按以下状态理解：
+截至 2026-05-20，所有 7 个流水线阶段均已完成第一版设计、实施与后端实现：
 
-- `topic + script`：仍作为当前稳定上游，不主动回改。
-- `storyboard`：已有 shared schema、prompt registry 支持、prompt、local validator、generation service、record persistence、生成 API、snapshot `active_storyboard`。
-- `asset planning / assets / compose`：仍未进入可实施设计与实现，不得顺手补对象或 API。
+| 阶段 | 设计日期 | 实施状态 |
+|---|---|---|
+| topic | 2026-04 | v1 完成，已冻结 |
+| script | 2026-04 | v1 完成，已冻结 |
+| storyboard | 2026-05-09 | v1 后端完成 |
+| asset planning | 2026-05-10 | v1 后端完成 |
+| assets | 2026-05-15 | v1 后端完成（fake/local + DashScope TTS/文生图/图生视频） |
+| compose | 2026-05-17 | v1 后端完成（timeline contract） |
+| render/export | 2026-05-18 | v1 后端完成（Remotion MP4） |
+| publish | 2026-06-17 | v1 后端完成（封面/标题/描述/标签/导出） |
 
-当前 storyboard 相关入口：
+详细历史记录见 [Plans 状态说明](./plans/README.md)。
 
-- [Storyboard 阶段设计计划](./plans/2026-05-09-storyboard-stage-design.md)
-- [Storyboard 阶段实施计划](./plans/2026-05-09-storyboard-stage-implementation-plan.md)
-- [Pipeline IO 规范](./architecture/pipeline-io-spec.md)
-- [字段设计](./data/field-design.md)
-- [Schema 设计](./data/schema-design.md)
-- [API 设计](./architecture/api-design.md)
-
-## 2026-05-11 Asset Planning v1 文档状态
-
-`asset planning` 已完成第一版设计、实施计划和最小后端实现。新 agent 阅读时应按以下状态理解：
-
-- `topic + script`：仍作为当前稳定上游，不主动回改。
-- `storyboard`：作为 asset planning 的已冻结上游输入。
-- `asset planning`：已有 shared schema、prompt registry 支持、正式 prompt、本地结构 validator、generation service、record persistence、生成 API、snapshot `active_asset_plan`。
-- `assets / compose`：仍未设计、未实现，不得顺手补对象、provider、UI 或 timeline。
-
-当前 asset planning 相关入口：
-
-- [Asset Planning Stage Design](./plans/2026-05-10-asset-planning-stage-design.md)
-- [Asset Planning Stage Implementation Plan](./plans/2026-05-10-asset-planning-stage-implementation-plan.md)
-- [Pipeline IO 规范](./architecture/pipeline-io-spec.md)
-- [字段设计](./data/field-design.md)
-- [Schema 设计](./data/schema-design.md)
-- [API 设计](./architecture/api-design.md)
+当前下一步允许方向：前端预览 UI、素材上传/预览、发布流、人工审稿流（均需正式 design + implementation plan）。

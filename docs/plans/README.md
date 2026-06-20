@@ -6,21 +6,12 @@
 
 ## 当前状态
 
-截至 2026-05-10：
+截至 2026-06-20：
 
-- `topic + script` 第一阶段已暂时冻结。
-- `storyboard` 第一版已达到当前可用线，可作为 asset planning 的上游暂时冻结。
-- 当前未归档计划：
-  - [Storyboard Stage Design](./2026-05-09-storyboard-stage-design.md)
-  - [Storyboard Stage Implementation Plan](./2026-05-09-storyboard-stage-implementation-plan.md)
-  - [Asset Planning Stage Design](./2026-05-10-asset-planning-stage-design.md)
-  - [Asset Planning Stage Implementation Plan](./2026-05-10-asset-planning-stage-implementation-plan.md)
-  - [Asset Planning Design Guidelines](./2026-05-10-asset-planning-design-guidelines.md)（参考资料，不是 implementation plan）
-  - [Asset Planning 质量护栏实施计划](./2026-05-11-asset-planning-quality-guardrails-plan.md)
-  - [Asset Planning Chunk Concurrency Design](./2026-05-11-asset-planning-chunk-concurrency-design.md)
-  - [Asset Planning Chunk Concurrency Implementation Plan](./2026-05-11-asset-planning-chunk-concurrency-implementation-plan.md)
-  - [Asset Planning Chunk Input Slimming Design](./2026-05-11-asset-planning-chunk-input-slimming-design.md)
-  - [Asset Planning Chunk Input Slimming Implementation Plan](./2026-05-11-asset-planning-chunk-input-slimming-implementation-plan.md)
+- 全链路 7 阶段（topic → script → storyboard → asset planning → assets → compose → render → publish）已全部完成后端 v1 实现。
+- 当前下一步允许围绕前端工作流、预览/导出、发布流与人工审稿流继续设计和小步实施。
+- topic + script 第一阶段已达到当前及格标准，可以暂时冻结。
+- storyboard / asset planning / assets / compose / renderer/export 均已完成 v1 后端链路。
 - 既有 topic/script/harness/UI acceptance 计划已归档到 [archive/topic-script](./archive/topic-script/)。
 - archive 中的计划只作为历史证据和追溯材料，不是当前任务入口。
 - 新 agent 不应从 archive 中挑选旧 implementation plan 继续执行。

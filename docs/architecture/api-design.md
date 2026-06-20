@@ -395,8 +395,9 @@ script 摘要第一版建议至少包含：
 ## 7. 尚未在本文正式定义的 API
 
 - 管理后台校正 Event Registry 的运营 API
-- renderer / export v1 后端 API 已由 2026-05-18 `POST /api/projects/:projectId/render/generate` 合同覆盖；完整前端预览、发布流和人工审稿 API 需要由后续正式设计补充合同。
-- DashScope 图生视频专用 API；图生视频当前只通过 assets generate 的显式 `provider_mode=dashscope` 配置进入。
+- 前端预览 UI、素材上传/预览的 API（可进入正式设计）
+- 人工审稿流 API（可进入正式设计）
+- DashScope 图生视频专用 API：图生视频当前只通过 assets generate 的显式 `provider_mode=dashscope` 配置进入
 
 ## Storyboard v1 API（2026-05-10 已实现）
 
@@ -787,3 +788,48 @@ script 摘要第一版建议至少包含：
 - render API 不生成缺失素材。
 - render API 不修改 `script_text`、`TopicPackage`、`StoryboardPlan`、`AssetPlan`、`AssetManifest` 或 `ComposeTimeline`。
 - render generate API 不承载前端 preview UI、发布流或人工审稿流的交互状态；这些能力可由后续 API/前端设计围绕 render artifact 补充。
+
+## Publish v1 API（2026-06-17 已完成后端实现）
+
+本节覆盖 publish 阶段当前已实现的后端 API 合同。
+
+### `POST /api/projects/:projectId/publish/generate`
+
+用途：
+- 生成发布包：标题候选、封面 prompt 草稿、描述文案、标签。
+
+### `PATCH /api/projects/:projectId/publish`
+
+用途：
+- 更新发布包字段（selected_title、selected_cover_uri、description、tags 等）。
+
+### `POST /api/projects/:projectId/publish/cover/prompt/optimize`
+
+用途：
+- 对已有封面提示词草稿进行优化。
+
+### `POST /api/projects/:projectId/publish/cover/generate`
+
+用途：
+- 生成 AI 封面图片（调用 DashScope 文生图）。
+
+### `POST /api/projects/:projectId/publish/cover/upload`
+
+用途：
+- 上传自定义封面图片。
+
+### `POST /api/projects/:projectId/publish/title/candidates`
+
+用途：
+- 请求新的标题候选列表。
+
+### `GET /api/projects/:projectId/publish/export`
+
+用途：
+- 导出发布包 zip（含视频、封面、标题、描述、标签和 manifest）。
+- 返回二进制 zip blob，通过响应头 `x-export-manifest` 传递 manifest JSON。
+
+边界：
+
+- publish API 不修改 `script_text`、`TopicPackage`、`StoryboardPlan`、`AssetPlan`、`AssetManifest`、`ComposeTimeline` 或 `RenderJobRecord`。
+- publish API 不执行事实核查或人工审稿。

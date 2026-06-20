@@ -82,10 +82,61 @@ failed -> script_ready
 
 来表达，而不是都塞进 `projects.current_status`。
 
-## 6. 当前不提前承诺的生命周期
+## 6. 已实现的完整生命周期
 
-以下阶段状态等后续架构确认后再补：
-- storyboard
-- asset planning
-- assets
-- compose
+以下阶段状态均已在 Prisma schema、前端 stores 和后端 routes 中实现。
+
+### 6.1 完整状态转移
+
+```text
+# topic / script 主路径（第一阶段）
+created -> topic_selecting
+topic_selecting -> script_ready
+script_ready -> script_generating
+script_generating -> script_completed
+script_generating -> topic_returned
+script_generating -> failed
+topic_returned -> topic_selecting
+failed -> topic_selecting
+failed -> script_ready
+
+# downstream 主路径（第二阶段）
+script_completed -> storyboard_ready
+storyboard_ready -> storyboard_generating
+storyboard_generating -> storyboard_completed
+storyboard_generating -> failed
+storyboard_completed -> asset_plan_ready
+asset_plan_ready -> asset_plan_generating
+asset_plan_generating -> asset_plan_completed
+asset_plan_completed -> assets_ready
+assets_ready -> assets_generating
+assets_generating -> assets_ready        # 循环直到完成
+assets_generating -> assets_blocked     # 上游变更
+assets_blocked -> assets_ready          # 重新就绪
+assets_ready -> compose_ready
+compose_ready -> compose_blocked       # 上游变更
+compose_blocked -> compose_ready       # 重新就绪
+compose_ready -> render_ready
+render_ready -> render_blocked / render_failed  # 渲染阻塞/失败
+render_blocked -> render_ready
+render_ready -> published
+```
+
+### 6.2 阶段状态
+
+| 状态 | 含义 |
+|---|---|
+| `storyboard_ready` | 已冻结 script，允许进入分镜规划 |
+| `storyboard_generating` | 分镜规划正在运行 |
+| `storyboard_completed` | 分镜规划已确认完成 |
+| `asset_plan_ready` | 已冻结 storyboard，允许进入素材计划 |
+| `asset_plan_generating` | 素材计划正在运行 |
+| `asset_plan_completed` | 素材计划已确认完成 |
+| `assets_ready` | 已冻结 asset plan，允许进入素材生成 |
+| `assets_generating` | 素材生成正在运行 |
+| `assets_blocked` | 素材生成被阻塞（如上游变更） |
+| `compose_ready` | 已冻结 assets，允许进入时间轴合成 |
+| `compose_blocked` | 时间轴合成被阻塞 |
+| `render_ready` | 已冻结 compose，允许进入渲染导出 |
+| `render_blocked` / `render_failed` | 渲染被阻塞或失败 |
+| `published` | 发布包已生成 |

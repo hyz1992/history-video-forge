@@ -2,13 +2,15 @@
 
 适用范围：`history-video-forge` 当前 `topic + script` 正式主链路。
 
+> **归档说明**：本文档定格于 topic+script 第一阶段设计期。当前后端 `runtime/orchestration/` 中已有 `topic-recommendation-graph.ts`、`script-run-graph.ts`、`topic-script-graph.ts` 等实现；downstream 阶段（storyboard/assets/compose/render）各自有独立 service，不共用同一 LangGraph graph。storyboard→publish 阶段不共用本文档定义的 graph 节点体系。
+
 ## 目标
 
 本设计文档用于冻结 backend runtime orchestration 的节点边界、状态边界，以及 LangGraph 的接入闸门。
 
 它服务于三个目的：
 
-- 为 `Task 3`、`Task 4` 以及后续阶段提供统一的 orchestration 命名与拆分边界
+- 为 `topic + script` 主链路的 orchestration 命名与拆分边界提供历史参考
 - 防止 prompt registry、provider adapter、frontend 各自发明新的 orchestration 层
 - 为第三阶段正式接入 LangGraph 提供唯一设计基线
 
@@ -72,6 +74,8 @@ graph state 只保留轻量状态穿透：
 
 ## 历史消费时机
 
+> 以下为本文档创建时的历史背景记录，不代表当前任务入口。
+
 ### 在 `Task 2A`
 
 本文件最初在第二阶段 `Task 2A / Step 4` 创建，用来冻结 runtime orchestration 设计边界。
@@ -84,27 +88,11 @@ graph state 只保留轻量状态穿透：
 
 第二阶段 `Task 4` 开始前，`semantic review / patch_once / regen_once` 的执行流也必须按这里的节点边界收口，但当时仍不恢复旧项目重 `workflow-state`。
 
-## 第三阶段正式接入决议
-
-从第三阶段开始，LangGraph 不再只是规划候选，而是正式实现任务。
-
-第三阶段执行时必须满足：
-
-- LangGraph 只接入 backend orchestration
-- graph node 只允许消费既有 service 能力
-- 现有 prompt registry / loader、LLM gateway、provider adapter、structured-output-fix 的职责边界保持不变
-- 不引入旧项目重 `workflow-state`
-- semantic reviewer 仍然只作为 shadow-only 量尺，不驱动主链路动作
-- `patch_once / regen_once` 进入主路径前，必须先有独立 patch integration 设计
-
-第三阶段实现优先顺序：
-
-1. 先建立 LangGraph orchestration scaffold
-2. 再把 `script-generate -> local-validate -> semantic-review` 迁入 graph
-3. 再让 topic recommendation 与 graph trace / diagnostics 共享统一编排语义
-4. patch integration 另行设计，不随手并入第三阶段默认主链路
+> **当前状态**：以上历史阶段均已完成。本文档已归档，不作为当前实施入口。
 
 ## 当前结论
+
+> **当前状态**：第三阶段及后续阶段均已完成。topic+script、storyboard、asset planning、assets、compose、render、publish 各阶段均已完成后端实现，各自使用独立 service，不共用单一 LangGraph graph。
 
 - 第二阶段已经完成 orchestration 规划与主链路收口
 - 第三阶段开始正式实现 LangGraph

@@ -168,20 +168,7 @@
 
 - [Script 校验与决策规范](./script-validation-spec.md)
 
-## 3. Compose 阶段
-
-`TBD`
-
-- compose 阶段输入输出
-
-补充说明：
-
-- 当前并非完全没有后续阶段高层约束
-- 只是尚未进入可实施设计状态
-- 高层边界与推进顺序留档见：
-  - [downstream-stage-high-level-design.md](./downstream-stage-high-level-design.md)
-
-## 4. Storyboard v1 阶段（2026-05-10 已进入第一版实现）
+## 3. Storyboard v1 阶段
 
 Storyboard v1 已从纯 TBD 收口为第一版可运行阶段。它只消费已经激活的 `ScriptRecord` 及其来源 `TopicPackage` 边界信息，不反向修改 topic/script。
 
@@ -221,7 +208,7 @@ Storyboard v1 已从纯 TBD 收口为第一版可运行阶段。它只消费已�
 - storyboard 不生成资产。
 - storyboard 不决定 asset planning/assets/compose 的详细任务对象。
 
-## 5. Asset Planning v1 阶段（2026-05-11 已完成第一版后端实现）
+## 4. Asset Planning v1 阶段（2026-05-11 已完成第一版后端实现）
 
 Asset Planning v1 消费 active `StoryboardRecord` 及其来源 `ScriptRecord` / `TopicPackage`，输出可持久化的素材任务计划。它只生成计划合同，不生成图片、视频、音频文件，不执行上传、预览或 compose。
 
@@ -280,7 +267,7 @@ Asset Planning v1 消费 active `StoryboardRecord` 及其来源 `ScriptRecord` /
 - 手动上传、预览、accept/reject UI。
 - compose timeline 或最终视频导出。
 
-## 6. Assets v1 阶段（2026-05-18 已同步后端执行基础）
+## 5. Assets v1 阶段（2026-05-18 已同步后端执行基础）
 
 Assets v1 消费 active `AssetPlanRecord` 及其来源 `StoryboardRecord` / `ScriptRecord` / `TopicPackage`，输出可持久化的资产执行结果清单。当前后端已覆盖 manifest builder、本地 validator、fake/local provider 执行、本地文件存储、provider job 记录、manual artifact metadata registration / accept、media library 基础、默认音频素材库 seed 合同、全局音色库解析、本地 BGM/SFX 素材选择与 deterministic WAV fixture 物化，以及显式 DashScope TTS/文生图/image-to-video 路径。它不实现 compose timeline，也不负责最终视频导出。
 
@@ -359,7 +346,7 @@ Assets v1 后端合同之外的内容：
 - compose timeline 或最终视频导出。
 - 质量判断（审美、爆款、历史相似度）。
 
-## 7. Compose v1 阶段（2026-05-17 已完成后端 timeline 合同）
+## 6. Compose v1 阶段（2026-05-17 已完成后端 timeline 合同）
 
 > 修订说明：本文档早期 `Compose 阶段` 小节曾标记为 `TBD`。截至 2026-05-17，compose v1 已收束为“timeline-first”的后端合同；本节覆盖早期 TBD 表述。
 
@@ -416,7 +403,7 @@ Compose v1 后端合同不承担的内容：
 - 前端 compose preview UI：可在前端工作流中消费 `ComposeTimeline`，但不改变 compose 生成职责。
 - 对 topic/script/storyboard/asset planning/assets 语义内容做自动修补。
 
-## 8. Renderer / Export v1 阶段（2026-05-18 后端首批实现）
+## 7. Renderer / Export v1 阶段（2026-05-18 后端首批实现）
 
 本节覆盖 renderer implementation plan 已完成的 Task 1-8，修正早期 “renderer 尚未实现” 的表述。Renderer v1 消费 active `ComposeRecord` 及其 `ComposeTimeline`，只负责把已经形成的 timeline contract 渲染为本地导出 artifact，不回写或修正 topic/script/storyboard/asset planning/assets/compose 的语义内容。
 

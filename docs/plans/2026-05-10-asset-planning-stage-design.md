@@ -476,7 +476,7 @@ Compose 的时间轴 source-of-truth 是 TTS 完成后的真实音频，而不�
 
 ## 参考来源
 
-- `docs/project-current-state-and-next-pipeline.md`
+- `docs/records/2026-05-09-project-status-and-next-pipeline.md`（归档版）
 - `docs/architecture/downstream-stage-high-level-design.md`
 - `docs/architecture/pipeline-io-spec.md`
 - `docs/records/2026-05-09-video-pipeline-engineering-notes.md`

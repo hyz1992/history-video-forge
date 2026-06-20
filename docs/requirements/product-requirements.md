@@ -97,7 +97,7 @@
 - `Topic Delivery Pack` 是单题交付微调包
 - `Script Input Bundle` 是 script 阶段真正消费的统一输入对象
 
-后续阶段如 storyboard / assets / compose 仍需继续设计，目前为 `TBD`。
+storyboard / asset planning / assets / compose / render / publish 阶段均已完成后端 v1 实现，当前下一步可进入前端工作流、预览/导出、发布流与人工审稿流的正式设计与实施。
 
 ## 5.1 明确复用范围
 
