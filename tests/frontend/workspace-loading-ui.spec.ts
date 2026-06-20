@@ -80,7 +80,7 @@ describe("workspace loading UI", () => {
       historyRounds: [],
       selectedCandidate: null,
       selectedRoundId: null,
-      isGenerating: false,
+      isGenerating: true,
       isConfirming: false,
       confirmedTopicPackageId: null,
       loadError: null,
@@ -113,8 +113,10 @@ describe("workspace loading UI", () => {
       },
     });
 
+    const refreshButton = wrapper.get(".stage-generating .el-button");
     expect(wrapper.find(".stage-generating").exists()).toBe(true);
-    expect(wrapper.text()).toContain("刷新状态");
+    expect(refreshButton.text()).toContain("刷新状态");
+    expect(refreshButton.attributes("disabled")).toBeUndefined();
     wrapper.unmount();
   });
 

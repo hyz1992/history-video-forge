@@ -51,6 +51,7 @@ const eraFilter = ref<TopicRecommendationFilters["era"]>(
 const tensionFilter = ref<TopicRecommendationFilters["tension"]>(
   (sessionStorage.getItem("topic-tension-filter") as TopicRecommendationFilters["tension"]) ?? "high"
 );
+const isRefreshingTopicStatus = ref(false);
 
 // Persist filter selections
 function saveFilters() {
@@ -123,9 +124,16 @@ async function handleRegenerate() {
 }
 
 async function handleRefreshGeneratingStatus() {
-  const snapshot = await topicStore.loadSnapshot();
-  if (snapshot?.current_status !== "topic_generating") {
-    await topicStore.loadExistingTopic();
+  if (isRefreshingTopicStatus.value) return;
+
+  isRefreshingTopicStatus.value = true;
+  try {
+    const snapshot = await topicStore.loadSnapshot();
+    if (snapshot?.current_status !== "topic_generating") {
+      await topicStore.loadExistingTopic();
+    }
+  } finally {
+    isRefreshingTopicStatus.value = false;
   }
 }
 
@@ -193,7 +201,7 @@ function handleRetry() {
       >
         <template #action>
           <el-button
-            :loading="topicStore.state.isGenerating"
+            :loading="isRefreshingTopicStatus"
             @click="handleRefreshGeneratingStatus"
           >
             刷新状态
