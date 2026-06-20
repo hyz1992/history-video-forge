@@ -760,7 +760,7 @@ async function postProcessTopicCandidates(input: {
 
         if (seenFingerprints.has(fingerprint)) {
           duplicateReasons.push(
-            `${candidate.title}锝?{candidate.one_line_angle} 涓庡凡淇濈暀鍊欓€夊垏鍙ｅ畬鍏ㄩ噸澶?`,
+            `${candidate.title}｜${candidate.one_line_angle} 与已保留候选切口完全重复`,
           );
           continue;
         }

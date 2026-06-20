@@ -13,7 +13,7 @@ interface StagePollingOptions<T> {
   onComplete?: (snapshot: T) => void;
 }
 
-export interface StagePolling {
+export interface StagePolling<T> {
   isPolling: Ref<boolean>;
   lastSnapshot: Ref<T | null>;
   pollError: Ref<string | null>;
@@ -23,7 +23,7 @@ export interface StagePolling {
   pollNow: () => Promise<void>;
 }
 
-export function useStagePolling<T>(options: StagePollingOptions<T>): StagePolling {
+export function useStagePolling<T>(options: StagePollingOptions<T>): StagePolling<T> {
   const isPolling = ref(false);
   const lastSnapshot = ref<T | null>(null) as Ref<T | null>;
   const pollError = ref<string | null>(null);

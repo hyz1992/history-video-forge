@@ -1193,6 +1193,49 @@ describe("topic runtime recommendation", () => {
     );
   });
 
+  it("keeps same-event duplicate angle diagnostics readable", async () => {
+    const db = createDbClient();
+    const { gateway } = createGatewayWithSelectorResponses(
+      [[
+        { ...createRuntimeCandidate("event-a-title-1", "angle-a-1"), event_identity: "event-a" },
+        { ...createRuntimeCandidate("event-a-title-2", "angle-a-1"), event_identity: "event-a" },
+        { ...createRuntimeCandidate("event-a-title-3", "angle-a-3"), event_identity: "event-a" },
+        { ...createRuntimeCandidate("event-a-title-4", "angle-a-4"), event_identity: "event-a" },
+        { ...createRuntimeCandidate("event-a-title-5", "angle-a-5"), event_identity: "event-a" },
+        { ...createRuntimeCandidate("event-a-title-6", "angle-a-6"), event_identity: "event-a" },
+        { ...createRuntimeCandidate("event-a-title-7", "angle-a-7"), event_identity: "event-a" },
+        { ...createRuntimeCandidate("event-a-title-8", "angle-a-8"), event_identity: "event-a" },
+      ]],
+      [["selector_candidate_1", "selector_candidate_2", "selector_candidate_3"]],
+    );
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "event-a",
+        summary: "single-event seeds may still duplicate one angle",
+        coreConflict: "duplicate angle diagnostics should stay readable",
+        strongScene: "same event with one repeated angle",
+        sourceHint: "test",
+        recentUsageHint: "single-event focus mode",
+      },
+      {
+        llmGateway: gateway,
+        projectId: "project-1",
+      },
+    );
+
+    const duplicateDiagnostic = result.diagnostics.checks.find(
+      (check) => check.code === "topic_candidate_duplicate_removed",
+    );
+
+    expect(duplicateDiagnostic?.reason).toContain(
+      "event-a-title-2｜angle-a-1 与已保留候选切口完全重复",
+    );
+    expect(duplicateDiagnostic?.reason).not.toContain("锝");
+    expect(duplicateDiagnostic?.reason).not.toContain("candidate.one_line_angle");
+  });
+
   it("keeps explicit event_identity visible in selector outputs", async () => {
     const db = createDbClient();
     const { gateway } = createGatewayWithSelectorResponses([
