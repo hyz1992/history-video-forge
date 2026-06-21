@@ -75,6 +75,9 @@ interface ReferenceMigrationContract {
   styleIsolation: {
     forbiddenGlobalSelectors: string[];
     sentinelRoutes: string[];
+    forbiddenBodyClasses?: string[];
+    forbiddenVisibleSelectors?: string[];
+    reviewedGlobalSelectors?: string[];
   };
   manualReviewItems: string[];
 }
@@ -151,6 +154,14 @@ network-summary.json
 
 如果设计稿结构中没有完全对应的 DOM，也应在迁移时把这些 `data-testid` 挂到语义最接近的元素上。这样现有 `ui-acceptance` 不需要因为视觉重构而失去主锚点。
 
+首页迁移还应新增迁移专用锚点：
+
+```text
+[data-testid='home-topbar']
+```
+
+该锚点用于样式污染哨兵检查，避免用 `.topbar` 这类通用类名判断其他页面是否被首页样式污染。若实现选择使用类名，也应使用 `.landing-topbar` 这类页面专属类名，而不是裸 `.topbar`。
+
 ### 5.3 自动检查
 
 首页试点自动检查包括：
@@ -175,7 +186,7 @@ network-summary.json
 
 ## 六、样式隔离策略
 
-单文档 HTML 最大风险是把 `body`、`:root`、`.container`、`.btn`、`.panel`、`.tag`、`footer` 等选择器直接搬入 Vue 项目。harness 第一版不解析完整 CSS AST，但应做确定性文本检查。
+单文档 HTML 最大风险是把 `body`、`:root`、`.container`、`.btn`、`.panel`、`.tag`、`footer` 等选择器直接搬入 Vue 项目。harness 第一版不解析完整 CSS AST，但应做确定性文本检查和浏览器哨兵检查。
 
 建议规则：
 
@@ -183,6 +194,11 @@ network-summary.json
 2. 新增页面专属 CSS 文件时，禁止裸 `body::before`、裸 `footer`、裸 `.container` 这类高污染选择器。
 3. 如果必须使用 `body` 类背景，必须通过 route 生命周期添加和移除，例如 `document.body.classList.add("landing-page-bg")` 与 `remove` 成对出现。
 4. 目标页面卸载后，哨兵 route 截图中不得仍显示首页专属背景、固定 topbar 或首屏装饰。
+
+第一版样式隔离检查分两层：
+
+1. 静态文本检查：只扫描 `frontend/src/**/*.css` 与 `frontend/src/**/*.vue`，不扫描 `frontend/public/*.html` 参考文件；发现合同里的 `forbiddenGlobalSelectors` 时直接 FAIL，除非该 selector 被显式列入 `reviewedGlobalSelectors` 并在报告中作为人工审查项展示。
+2. 浏览器哨兵检查：打开合同声明的 `sentinelRoutes`，检查 `forbiddenBodyClasses` 没有残留，且 `forbiddenVisibleSelectors` 不可见；首页试点必须使用 `[data-testid='home-topbar']` 或 `.landing-topbar` 这类页面专属 selector，不能使用裸 `.topbar`。
 
 第一版允许 `body`、`html` 的少量全局基础属性调整，但必须在合同报告中列出，供审查者确认。
 

@@ -6,7 +6,7 @@
 
 **Architecture:** 在现有 `harness/scripts/ui-acceptance/` 下新增 reference migration 子能力，复用 Playwright 与现有 UI acceptance 思路，但不改写 `smoke/full/report` 主链路。第一版以内置首页合同作为试点，输出报告到 `harness/scripts/runtime/output/ui-reference-migration/<run-id>/`。
 
-**Tech Stack:** TypeScript、Playwright、Vite frontend、现有 harness runtime output 目录、Vitest。
+**Tech Stack:** TypeScript、Playwright、Vite frontend、现有 harness runtime output 目录、Vitest。Playwright 使用仓库已有的 `@playwright/test` devDependency；实施前确认根 `package.json` 中已有该依赖，不新增浏览器测试库。
 
 ---
 
@@ -24,6 +24,8 @@
 - `frontend/public/preview-landing.html`
 - `frontend/src/views/HomePage.vue`
 - `package.json`
+
+说明：`browser-runner.ts` 是现有 UI acceptance 主链路执行器，第一版 reference migration runner 只复用它的 Playwright 使用惯例、错误摘要和输出目录风格，不直接调用它的主流程函数，避免把首页迁移对照逻辑耦合进 topic/script smoke。
 
 本计划只实现 harness，不迁移首页。
 
@@ -125,13 +127,14 @@ describe("reference migration contracts", () => {
     );
   });
 
-  it("requires the existing home ui-acceptance hooks", () => {
+  it("requires the home ui-acceptance hooks and migration sentinel hook", () => {
     const contract = getReferenceMigrationContract("home-preview-landing");
     const selectors = contract.requiredSelectors.map((item) => item.selector);
 
     expect(selectors).toEqual(
       expect.arrayContaining([
         "[data-testid='home-hero']",
+        "[data-testid='home-topbar']",
         "[data-testid='home-heading']",
         "[data-testid='home-tagline']",
         "[data-testid='home-primary-cta']",
@@ -184,6 +187,7 @@ export interface ReferenceMigrationStyleIsolation {
   sentinelRoutes: string[];
   forbiddenBodyClasses?: string[];
   forbiddenVisibleSelectors?: string[];
+  reviewedGlobalSelectors?: string[];
 }
 
 export interface ReferenceMigrationContract {
@@ -212,6 +216,7 @@ const contracts: ReferenceMigrationContract[] = [
     ],
     requiredSelectors: [
       { key: "homeHero", selector: "[data-testid='home-hero']" },
+      { key: "homeTopbar", selector: "[data-testid='home-topbar']" },
       { key: "homeHeading", selector: "[data-testid='home-heading']", mustBeInViewport: true },
       { key: "homeTagline", selector: "[data-testid='home-tagline']" },
       { key: "homePrimaryCta", selector: "[data-testid='home-primary-cta']", mustBeInViewport: true },
@@ -230,7 +235,8 @@ const contracts: ReferenceMigrationContract[] = [
       forbiddenGlobalSelectors: ["body::before", "footer", ".container"],
       sentinelRoutes: ["/projects"],
       forbiddenBodyClasses: ["landing-page-bg"],
-      forbiddenVisibleSelectors: [".topbar"],
+      forbiddenVisibleSelectors: ["[data-testid='home-topbar']", ".landing-topbar"],
+      reviewedGlobalSelectors: [],
     },
     manualReviewItems: [
       "桌面截图是否接近参考 HTML",
@@ -383,15 +389,22 @@ git commit -m "新增前端参照迁移报告模型"
 1. 读取合同列表。
 2. 自动生成 `runId`。
 3. 创建输出目录。
-4. 启动 Chromium。
-5. 对每个合同和每个 viewport：
+4. 启动 Chromium。使用 `@playwright/test` 的 `chromium.launch()`，参考 `browser-runner.ts` 的浏览器使用方式，但不复用 `runSmokeMainline` / `runFullMainline` 等主链路函数。
+5. 对每个合同先校验参考 HTML 是否存在：
+   - 使用 `existsSync(resolve(repoRoot, contract.referencePath))`。
+   - 如果缺失，写入 `reference-file-exists` 的 FAIL check，消息包含缺失路径，继续写报告并以非 0 退出；不要抛出未捕获异常。
+6. 对每个合同和每个 viewport：
    - 打开参考页：`file://<repo-root>/<referencePath>`。
    - 打开目标页：`http://127.0.0.1:<frontend-port><targetRoute>`。
    - 截图到 `screenshots/<contract-id>/reference-<viewport>.png` 与 `target-<viewport>.png`。
-6. 执行 selector 与 viewport 检查。
-7. 执行交互检查。
-8. 执行哨兵 route 检查。
-9. 写 `summary.json` 与 `summary.md`。
+7. 执行 selector 与 viewport 检查。
+8. 执行交互检查。
+9. 执行样式隔离检查：
+   - 静态文本检查只扫描 `frontend/src/**/*.css` 与 `frontend/src/**/*.vue`，不扫描 `frontend/public/*.html` 参考文件。
+   - 命中 `forbiddenGlobalSelectors` 时记 FAIL；命中 `reviewedGlobalSelectors` 时记 WARN，并写入人工审查项。
+   - 浏览器哨兵检查打开 `sentinelRoutes`，确认 `forbiddenBodyClasses` 未残留，且 `forbiddenVisibleSelectors` 不可见。
+   - 首页试点使用 `[data-testid='home-topbar']` 或 `.landing-topbar`，不使用裸 `.topbar` 作为哨兵 selector。
+10. 写 `summary.json` 与 `summary.md`。
 
 第一版端口策略：
 
@@ -423,6 +436,15 @@ Expected:
 - 命令退出非 0。
 - 生成 `harness/scripts/runtime/output/ui-reference-migration/<run-id>/summary.json`。
 - summary 中记录目标 route 无法打开。
+
+再临时把合同中的 `referencePath` 改为一个不存在的路径，或通过临时测试合同注入不存在路径，运行同一命令。
+
+Expected:
+
+- 命令退出非 0。
+- summary 中存在 `reference-file-exists` 的 FAIL。
+- 错误消息包含缺失的参考 HTML 路径。
+- 恢复合同路径后再继续后续步骤。
 
 - [ ] **Step 4: 启动前端后验证成功产物**
 
@@ -598,13 +620,16 @@ git commit -m "完善前端参照迁移 harness 验证"
 
 - [ ] 是否只实现了 reference migration harness，没有迁移首页。
 - [ ] 是否保留现有 `ui-acceptance` 主链路，不改写 smoke/full。
+- [ ] 是否复用 `@playwright/test` 现有依赖，没有新增浏览器测试库。
 - [ ] 首页合同是否指向 `frontend/public/preview-landing.html` 和 `/`。
 - [ ] 首页合同是否保留现有 `home-*` 测试锚点。
+- [ ] 首页合同是否使用 `[data-testid='home-topbar']` 或 `.landing-topbar`，没有用裸 `.topbar` 做哨兵 selector。
 - [ ] 输出目录是否在 `harness/scripts/runtime/output/ui-reference-migration/`。
 - [ ] 截图是否同时包含 reference 与 target、desktop 与 mobile。
 - [ ] `summary.md` 是否明确列出人工审图项。
 - [ ] `WARN` 是否不会误称整体通过。
-- [ ] 样式隔离检查是否覆盖 `/projects` 哨兵 route。
+- [ ] 参考 HTML 缺失时是否写入明确 FAIL，而不是抛出未捕获异常。
+- [ ] 样式隔离检查是否覆盖 `/projects` 哨兵 route，并区分静态文本扫描与浏览器哨兵检查。
 - [ ] 文档是否明确该 harness 不替代 UI acceptance smoke/full。
 
 ## 后续扩展规则
