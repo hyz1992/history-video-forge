@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>历史短视频工坊</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <style>
   :root {
     --bg-primary: #0d0d0d;
@@ -81,23 +82,96 @@
   }
 
   .brand-mark {
-    width: 30px;
-    height: 30px;
-    border: 1.5px solid var(--accent-gold);
-    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
     color: var(--accent-gold);
-    transition: all 0.35s ease;
     flex-shrink: 0;
   }
 
-  .brand:hover .brand-mark {
-    background: var(--accent-gold);
-    color: var(--bg-primary);
-    transform: rotate(180deg);
+  .brand-mark svg {
+    width: 22px;
+    height: 22px;
+  }
+
+  .brand-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    line-height: 1.2;
+  }
+
+  .brand-text strong {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .brand-text span {
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .topbar-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--border-color);
+  }
+
+  .account-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .account-btn {
+    height: 36px;
+    padding: 0 15px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    cursor: pointer;
+    transition: color 0.22s ease, border-color 0.22s ease, background 0.22s ease, transform 0.22s ease;
+    border: 1px solid rgba(201, 162, 39, 0.14);
+    background: rgba(255, 255, 255, 0.018);
+    color: var(--text-secondary);
+  }
+
+  .account-btn:hover {
+    color: var(--text-primary);
+    border-color: rgba(201, 162, 39, 0.30);
+    background: rgba(201, 162, 39, 0.07);
+    transform: translateY(-1px);
+  }
+
+  .login-btn {
+    padding: 0 15px;
+  }
+
+  .settings-btn {
+    width: 36px;
+    padding: 0;
+    display: inline-grid;
+    place-items: center;
+  }
+
+  .settings-btn svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+  }
+
+  .settings-btn:hover svg {
+    stroke: var(--accent-gold);
   }
 
   .topbar-actions {
@@ -378,9 +452,429 @@
     font-family: "Noto Sans SC", sans-serif;
   }
 
+  /* ============ WHY IT WORKS SECTION ============ */
+  .why-section {
+    padding-top: 4rem;
+    padding-bottom: 4rem;
+  }
+
+  .why-section .section-header {
+    margin-bottom: 2.5rem;
+  }
+
+  .why-section .section-tag {
+    color: var(--accent-gold);
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .why-section .section-title {
+    font-size: clamp(1.8rem, 4vw, 2.4rem);
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    margin-bottom: 14px;
+  }
+
+  .why-section .section-desc {
+    font-size: 15px;
+    line-height: 1.9;
+    max-width: 640px;
+  }
+
+  .capability-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+  }
+
+  .cap-card {
+    min-height: 200px;
+    padding: 20px;
+    border-radius: 18px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01)),
+      rgba(28, 23, 20, 0.72);
+    border: 1px solid rgba(201, 162, 39, 0.14);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+    transition: transform 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+  }
+
+  .cap-card:hover {
+    transform: translateY(-6px);
+    border-color: rgba(201, 162, 39, 0.32);
+    background:
+      linear-gradient(180deg, rgba(201, 162, 39, 0.08), rgba(255,255,255,0.01)),
+      rgba(36, 30, 25, 0.82);
+  }
+
+  .cap-number {
+    font-family: Georgia, serif;
+    color: rgba(201, 162, 39, 0.35);
+    font-size: 34px;
+    line-height: 1;
+    margin-bottom: 16px;
+  }
+
+  .cap-card h3 {
+    font-size: 18px;
+    margin-bottom: 10px;
+  }
+
+  .cap-card p {
+    color: var(--text-secondary);
+    font-family: "Noto Sans SC", sans-serif;
+    font-size: 13px;
+    line-height: 1.75;
+  }
+
+  /* ============ WORKFLOW SECTION ============ */
+  .preview-section {
+    background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    padding-bottom: 4rem;
+  }
+
+  .preview-section .section-header {
+    margin-bottom: 2rem;
+  }
+
+  .console-shell {
+    position: relative;
+    max-width: 800px;
+    margin: 80px auto 0;
+    border: 1px solid rgba(201, 162, 39, 0.18);
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(255, 242, 207, 0.03), rgba(255,255,255,0.01)), var(--bg-secondary);
+    box-shadow: 0 16px 48px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+
+  .console-top {
+    height: 36px;
+    border-bottom: 1px solid rgba(201, 162, 39, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    position: relative;
+  }
+
+  .traffic {
+    display: flex;
+    gap: 5px;
+  }
+
+  .traffic span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(201, 162, 39, 0.25);
+  }
+
+  .console-title {
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    color: var(--text-muted);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .console-body {
+    position: relative;
+    padding: 14px;
+    display: grid;
+    grid-template-columns: 1.4fr 0.6fr;
+    gap: 12px;
+  }
+
+  .panel {
+    border: 1px solid rgba(201, 162, 39, 0.10);
+    border-radius: 12px;
+    background: rgba(28, 23, 20, 0.5);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+  }
+
+  .project-card {
+    padding: 14px;
+  }
+
+  .project-card h3 {
+    font-size: 16px;
+    line-height: 1.4;
+    margin-bottom: 10px;
+    color: var(--text-primary);
+  }
+
+  .project-meta {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+
+  .tag {
+    padding: 3px 8px;
+    border-radius: 5px;
+    background: rgba(201, 162, 39, 0.06);
+    border: 1px solid rgba(201, 162, 39, 0.14);
+    color: var(--accent-warm);
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    font-size: 11px;
+  }
+
+  .script-box {
+    padding: 10px;
+    border-radius: 9px;
+    background: linear-gradient(180deg, rgba(201, 162, 39, 0.06), rgba(255,255,255,0.01));
+    border: 1px solid rgba(201, 162, 39, 0.10);
+    margin-bottom: 10px;
+  }
+
+  .script-box p {
+    font-family: "Noto Sans SC", sans-serif;
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  .script-box strong {
+    color: var(--accent-gold);
+    font-weight: 600;
+  }
+
+  .timeline {
+    display: grid;
+    gap: 8px;
+  }
+
+  .timeline-item {
+    display: grid;
+    grid-template-columns: 26px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    font-size: 12px;
+  }
+
+  .timeline-item b {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  .timeline-item span {
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+
+  .status-dot {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: rgba(201, 162, 39, 0.08);
+    border: 1px solid rgba(201, 162, 39, 0.18);
+    color: var(--accent-gold);
+    font-size: 12px;
+  }
+
+  .progress {
+    width: 56px;
+    height: 5px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.05);
+    overflow: hidden;
+  }
+
+  .progress i {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--accent-gold), var(--accent-copper));
+  }
+
+  .video-card {
+    padding: 12px;
+    position: relative;
+  }
+
+  .phone {
+    border: 1px solid rgba(201, 162, 39, 0.18);
+    border-radius: 16px;
+    background: linear-gradient(180deg, rgba(201, 162, 39, 0.06), rgba(0,0,0,0.08)), #0a0908;
+    padding: 8px;
+    box-shadow: 0 14px 40px rgba(0,0,0,0.28);
+  }
+
+  .phone-screen {
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    background: radial-gradient(circle at 52% 28%, rgba(244, 201, 112, 0.22), transparent 20%), linear-gradient(180deg, rgba(94, 46, 23, 0.4), rgba(10, 8, 7, 0.7)), linear-gradient(135deg, #21150f, #0b0908);
+    aspect-ratio: 9 / 16;
+  }
+
+  .phone-screen::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.4) 78%), repeating-linear-gradient(0deg, rgba(255,255,255,0.03) 0, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 6px);
+    opacity: 0.6;
+  }
+
+  .video-title {
+    position: absolute;
+    left: 10px;
+    top: 10px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(255,255,255,0.10);
+    color: var(--accent-warm);
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    font-size: 10px;
+    z-index: 1;
+  }
+
+  .phone-screen .moon {
+    position: absolute;
+    top: 28px;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    transform: translateX(-50%);
+    background: radial-gradient(circle, #f5d98e, #a86b2f 68%, transparent 70%);
+    box-shadow: 0 0 30px rgba(201, 162, 39, 0.25);
+  }
+
+  .phone-screen .silhouette {
+    position: absolute;
+    left: 50%;
+    bottom: 60px;
+    width: 52px;
+    height: 78px;
+    transform: translateX(-50%);
+  }
+
+  .phone-screen .silhouette::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 26px;
+    height: 26px;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: #070605;
+  }
+
+  .phone-screen .silhouette::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 24px;
+    width: 60px;
+    height: 58px;
+    transform: translateX(-50%);
+    clip-path: polygon(50% 0, 83% 15%, 70% 100%, 30% 100%, 17% 15%);
+    background: linear-gradient(180deg, #080706, #020202);
+  }
+
+  .phone-screen .caption {
+    position: absolute;
+    left: 10px;
+    right: 10px;
+    bottom: 36px;
+    padding: 8px 10px;
+    border-radius: 9px;
+    background: rgba(0,0,0,0.42);
+    color: #fff2d2;
+    font-family: "Noto Sans SC", sans-serif;
+    font-size: 11px;
+    line-height: 1.5;
+    text-align: center;
+    z-index: 1;
+  }
+
+  .render-badge {
+    margin-top: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .render-badge b {
+    color: var(--accent-gold);
+    font-weight: 600;
+  }
+
+  .pulse-line {
+    height: 1px;
+    margin: 10px 0;
+    background: linear-gradient(90deg, transparent, rgba(201, 162, 39, 0.25), transparent);
+    animation: pulse-anim 2.6s ease-in-out infinite;
+  }
+
+  @keyframes pulse-anim {
+    0%, 100% { opacity: 0.3; transform: scaleX(0.9); }
+    50% { opacity: 1; transform: scaleX(1); }
+  }
+
+  /* Floating score card */
+  .floating-card {
+    position: absolute;
+    z-index: 3;
+    border: 1px solid rgba(201, 162, 39, 0.18);
+    background: rgba(22, 18, 15, 0.88);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 16px 44px rgba(0,0,0,0.35);
+    border-radius: 12px;
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+  }
+
+  .score-card {
+    left: -22px;
+    bottom: 48px;
+    width: 160px;
+    padding: 12px;
+  }
+
+  .score-card small {
+    display: block;
+    color: var(--text-muted);
+    font-size: 10px;
+    margin-bottom: 6px;
+  }
+
+  .score-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .score-row strong {
+    color: var(--accent-gold);
+    font-size: 28px;
+    line-height: 1;
+  }
+
+  .score-row span {
+    color: var(--text-secondary);
+    font-size: 11px;
+  }
+
   /* ============ WORKFLOW SECTION ============ */
   .workflow-section {
     background: linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+    padding-top: 0;
+  }
+
+  .workflow-section .section-header {
+    padding-top: 40px;
   }
 
   /* Pipeline flow */
@@ -627,12 +1121,37 @@
 <!-- TOP BAR -->
 <div class="topbar">
   <a class="brand" href="#">
-    <span class="brand-mark">H</span>
-    History Video Forge
+    <span class="brand-mark">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+        <rect x="5" y="7" width="22" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/>
+        <line x1="5" y1="13" x2="27" y2="13" stroke="currentColor" stroke-width="1.5"/>
+        <line x1="5" y1="17" x2="27" y2="17" stroke="currentColor" stroke-width="1.5"/>
+        <line x1="5" y1="21" x2="27" y2="21" stroke="currentColor" stroke-width="1.5"/>
+        <rect x="20" y="5" width="4" height="6" rx="1" fill="currentColor"/>
+        <polygon points="22,11 20,13 24,13" fill="currentColor"/>
+        <polygon points="12,10 12,18 18,14" fill="currentColor"/>
+      </svg>
+    </span>
+    <span class="brand-text">
+      <strong>历史短视频工坊</strong>
+      <span>History Video Forge</span>
+    </span>
   </a>
-  <div class="topbar-actions">
-    <button class="btn btn-ghost">我的项目</button>
-    <button class="btn btn-primary">新建项目</button>
+  <div class="topbar-right">
+    <div class="topbar-actions">
+        <button class="btn btn-ghost">我的项目</button>
+        <button class="btn btn-primary">新建项目</button>
+      </div>
+    <div class="topbar-divider" aria-hidden="true"></div>
+    <div class="account-actions">
+      <button class="account-btn login-btn">登录</button>
+      <button class="account-btn settings-btn" aria-label="设置" title="设置">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.86l.04.04a2 2 0 1 1-2.83 2.83l-.04-.04a1.7 1.7 0 0 0-1.86-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.86.34l-.04.04a2 2 0 1 1-2.83-2.83l.04-.04a1.7 1.7 0 0 0-.34-1.86 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.04A1.7 1.7 0 0 0 4.6 8a1.7 1.7 0 0 0-.34-1.86l-.04-.04a2 2 0 1 1 2.83-2.83l.04.04A1.7 1.7 0 0 0 8.95 3a1.7 1.7 0 0 0 1.03-1.56V1a2 2 0 1 1 4 0v.44A1.7 1.7 0 0 0 15.01 3a1.7 1.7 0 0 0 1.86-.34l.04-.04a2 2 0 1 1 2.83 2.83l-.04.04A1.7 1.7 0 0 0 19.4 8a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.04A1.7 1.7 0 0 0 19.4 15z"></path>
+        </svg>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -754,6 +1273,120 @@
         <div class="stage-name">发布</div>
         <div class="stage-role">发行 / 制片</div>
         <div class="stage-desc">元数据整理、平台交付</div>
+      </div>
+    </div>
+
+    <!-- Why It Works -->
+    <div class="section-header fade-in">
+      <div class="section-tag">Why It Works</div>
+      <h2 class="section-title">不再靠抽卡，<em>而是一条可审校的生产线</em></h2>
+      <p class="section-desc">
+        工坊把历史短视频拆成可控的中间产物：主题、故事简报、口播文案、分镜、素材需求、时间线与成片。
+        每一步都能检查、修改，回退，而不是把结果完全交给黑盒。
+      </p>
+    </div>
+
+    <div class="capability-grid fade-in">
+      <div class="cap-card">
+        <div class="cap-number">01</div>
+        <h3>选题有判断</h3>
+        <p>不是随机找历史故事，而是评估冲突、反转、人物关系、传播钩子与成片可视化空间。</p>
+      </div>
+      <div class="cap-card">
+        <div class="cap-number">02</div>
+        <h3>文案可审校</h3>
+        <p>生成适合短视频口播的故事结构，并保留事实边界、叙事目标和可人工修订的中间稿。</p>
+      </div>
+      <div class="cap-card">
+        <div class="cap-number">03</div>
+        <h3>分镜结构化</h3>
+        <p>把文案拆成镜头，明确每个镜头的画面功能、素材需求、字幕位置和节奏作用。</p>
+      </div>
+      <div class="cap-card">
+        <div class="cap-number">04</div>
+        <h3>成片自动化</h3>
+        <p>自动整理素材，配音、字幕和时间线，最终输出可预览、可复用、可继续优化的视频项目。</p>
+      </div>
+    </div>
+
+    <!-- 项目控制台预览 -->
+    <div class="console-shell fade-in">
+      <div class="console-top">
+        <div class="traffic"><span></span><span></span><span></span></div>
+        <div class="console-title">Forge Console · Project #082</div>
+        <div></div>
+      </div>
+
+      <div class="console-body">
+        <div class="panel project-card">
+          <h3>《晏子使楚》：一句话，如何让楚王当场下不来台？</h3>
+          <div class="project-meta">
+            <span class="tag">春秋</span>
+            <span class="tag">外交博弈</span>
+            <span class="tag">强反转</span>
+          </div>
+
+          <div class="script-box">
+            <p>
+              <strong>口播片段：</strong>
+              楚王以为，羞辱一个矮小的使臣很容易。可他没想到，晏子只用一句话，就把羞辱变成了反击。
+            </p>
+          </div>
+
+          <div class="pulse-line"></div>
+
+          <div class="timeline">
+            <div class="timeline-item">
+              <div class="status-dot">✓</div>
+              <div><b>选题评估</b><br><span>冲突清晰，适合短视频开场</span></div>
+              <div class="progress"><i style="width:100%"></i></div>
+            </div>
+            <div class="timeline-item">
+              <div class="status-dot">✓</div>
+              <div><b>文案生成</b><br><span>已完成口播结构与情绪推进</span></div>
+              <div class="progress"><i style="width:100%"></i></div>
+            </div>
+            <div class="timeline-item">
+              <div class="status-dot">✓</div>
+              <div><b>分镜规划</b><br><span>12 个镜头，已标注画面功能</span></div>
+              <div class="progress"><i style="width:100%"></i></div>
+            </div>
+            <div class="timeline-item">
+              <div class="status-dot">4</div>
+              <div><b>素材匹配</b><br><span>人物、宫殿、竹简、战国地图</span></div>
+              <div class="progress"><i style="width:78%"></i></div>
+            </div>
+            <div class="timeline-item">
+              <div class="status-dot">5</div>
+              <div><b>合成渲染</b><br><span>等待配音与时间线锁定</span></div>
+              <div class="progress"><i style="width:36%"></i></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel video-card">
+          <div class="phone">
+            <div class="phone-screen">
+              <div class="video-title">9:16 预览 · 00:18</div>
+              <div class="moon"></div>
+              <div class="silhouette"></div>
+              <div class="caption">"楚国无人了吗？怎么派你这样的人来？"</div>
+            </div>
+          </div>
+          <div class="render-badge">
+            <span>当前状态</span>
+            <b>素材匹配中</b>
+          </div>
+        </div>
+      </div>
+
+      <!-- 传播潜力评分卡片 -->
+      <div class="floating-card score-card">
+        <small>传播潜力评分</small>
+        <div class="score-row">
+          <strong>91</strong>
+          <span>强冲突 / 高反转</span>
+        </div>
       </div>
     </div>
   </div>
