@@ -66,13 +66,37 @@ async function checkSelectorInViewport(page: Page, selector: string): Promise<bo
   if (!visible) return false;
   return page.locator(selector).first().evaluate((el) => {
     const rect = el.getBoundingClientRect();
-    return rect.top >= 0 && rect.bottom <= window.innerHeight;
+    return (
+      rect.top >= 0 &&
+      rect.bottom <= window.innerHeight &&
+      rect.left >= 0 &&
+      rect.right <= window.innerWidth
+    );
   });
 }
 
 async function checkRoute(page: Page, expectedRoute: string): Promise<boolean> {
   const url = new URL(page.url());
   return url.pathname === expectedRoute;
+}
+
+function extractStyleBlocks(content: string): string {
+  // Extract <style>...</style> blocks from Vue SFC
+  const blocks: string[] = [];
+  const regex = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(content)) !== null) {
+    blocks.push(match[1]);
+  }
+  return blocks.join("\n");
+}
+
+function matchesCssSelector(selector: string, cssContent: string): boolean {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Match selector at CSS rule boundary:
+  // Preceded by start-of-content, }, ,, or newline; followed by {, ,, newline, or end
+  const pattern = `(?:^|}|,|\\n)\\s*${escaped}\\s*(?:[{,\\n]|$)`;
+  return new RegExp(pattern, "gm").test(cssContent);
 }
 
 function scanGlobalSelectors(
@@ -89,10 +113,10 @@ function scanGlobalSelectors(
       const fullPath = join(dir, entry.name);
       if (entry.isDirectory()) {
         scanDir(fullPath);
-      } else if (entry.name.endsWith(".css") || entry.name.endsWith(".vue")) {
-        const content = readFileSync(fullPath, "utf8");
+      } else if (entry.name.endsWith(".css")) {
+        const cssContent = readFileSync(fullPath, "utf8");
         for (const selector of forbiddenGlobalSelectors) {
-          if (content.includes(selector)) {
+          if (matchesCssSelector(selector, cssContent)) {
             const reviewed = reviewedGlobalSelectors?.includes(selector);
             checks.push({
               code: `global-selector-${selector.replace(/[^a-zA-Z0-9]/g, "-")}`,
@@ -100,6 +124,22 @@ function scanGlobalSelectors(
               message: reviewed
                 ? `选中 ${selector} 在 ${relative(repoRoot, fullPath)} 中出现（已审查通过，列入人工审查项）`
                 : `禁止的全局选择器 ${selector} 在 ${relative(repoRoot, fullPath)} 中出现`,
+            });
+          }
+        }
+      } else if (entry.name.endsWith(".vue")) {
+        // Only scan <style> blocks, ignore template/script
+        const content = readFileSync(fullPath, "utf8");
+        const cssContent = extractStyleBlocks(content);
+        for (const selector of forbiddenGlobalSelectors) {
+          if (matchesCssSelector(selector, cssContent)) {
+            const reviewed = reviewedGlobalSelectors?.includes(selector);
+            checks.push({
+              code: `global-selector-${selector.replace(/[^a-zA-Z0-9]/g, "-")}`,
+              status: reviewed ? "WARN" : "FAIL",
+              message: reviewed
+                ? `选中 ${selector} 在 ${relative(repoRoot, fullPath)} 的 <style> 中出现（已审查通过，列入人工审查项）`
+                : `禁止的全局选择器 ${selector} 在 ${relative(repoRoot, fullPath)} 的 <style> 中出现`,
             });
           }
         }
@@ -170,8 +210,8 @@ async function runSentinelChecks(
     } catch {
       checks.push({
         code: "sentinel-unreachable",
-        status: "SKIPPED",
-        message: `无法访问哨兵 route: ${route}`,
+        status: "WARN",
+        message: `无法访问哨兵 route: ${route}，样式隔离检查缺失`,
       });
     }
   }
