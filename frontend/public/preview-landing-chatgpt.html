@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>历史短视频工坊 · History Video Forge</title>
+<style>
+  :root {
+    --bg-0: #0b0a09;
+    --bg-1: #12100e;
+    --bg-2: #1a1512;
+    --bg-3: #241e19;
+    --card: rgba(33, 27, 23, 0.78);
+    --card-solid: #211b17;
+    --card-hover: #2d251f;
+    --line: rgba(219, 174, 83, 0.18);
+    --line-strong: rgba(219, 174, 83, 0.35);
+    --gold: #d8b45a;
+    --gold-2: #f0d28a;
+    --copper: #b87333;
+    --bronze: #c68245;
+    --warm: #d9aa73;
+    --ink: #f6efe6;
+    --muted: #b5a89a;
+    --dim: #766b60;
+    --danger: #b15d3f;
+    --success: #c8a652;
+    --shadow: rgba(0, 0, 0, 0.55);
+    --glow: rgba(216, 180, 90, 0.22);
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    min-width: 1180px;
+    background:
+      radial-gradient(circle at 12% 18%, rgba(184, 115, 51, 0.16), transparent 30%),
+      radial-gradient(circle at 88% 10%, rgba(216, 180, 90, 0.10), transparent 28%),
+      linear-gradient(180deg, var(--bg-0) 0%, #100d0b 42%, #15110f 100%);
+    color: var(--ink);
+    font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", "SimSun", Georgia, serif;
+    line-height: 1.75;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.16;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 46px 46px;
+    mask-image: radial-gradient(circle at center, black 0%, transparent 78%);
+    z-index: 0;
+  }
+
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.07;
+    background:
+      repeating-linear-gradient(
+        90deg,
+        rgba(255, 230, 180, 0.08) 0,
+        rgba(255, 230, 180, 0.08) 1px,
+        transparent 1px,
+        transparent 11px
+      );
+    mix-blend-mode: screen;
+    z-index: 0;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  button {
+    font: inherit;
+  }
+
+  .container {
+    width: 1120px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+
+  .topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 50;
+    height: 72px;
+    border-bottom: 1px solid rgba(216, 180, 90, 0.16);
+    background: rgba(11, 10, 9, 0.78);
+    backdrop-filter: blur(18px);
+  }
+
+  .topbar-inner {
+    width: 1120px;
+    height: 72px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .brand-mark {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid var(--gold);
+    color: var(--gold-2);
+    display: grid;
+    place-items: center;
+    font-family: Georgia, serif;
+    font-size: 14px;
+    letter-spacing: -0.04em;
+    background:
+      radial-gradient(circle at 35% 30%, rgba(255, 230, 170, 0.18), transparent 42%),
+      rgba(216, 180, 90, 0.06);
+    box-shadow: 0 0 28px rgba(216, 180, 90, 0.13);
+  }
+
+  .brand-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+  }
+
+  .brand-text strong {
+    font-size: 15px;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+  }
+
+  .brand-text span {
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .topbar-actions,
+  .account-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .topbar-divider {
+    width: 1px;
+    height: 24px;
+    background: rgba(216, 180, 90, 0.18);
+  }
+
+  .account-btn {
+    height: 36px;
+    border: 1px solid rgba(216, 180, 90, 0.14);
+    background: rgba(255, 255, 255, 0.018);
+    color: var(--dim);
+    border-radius: 999px;
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    transition: color 0.22s ease, border-color 0.22s ease, background 0.22s ease, transform 0.22s ease;
+  }
+
+  .account-btn:hover {
+    color: var(--ink);
+    border-color: rgba(216, 180, 90, 0.30);
+    background: rgba(216, 180, 90, 0.07);
+    transform: translateY(-1px);
+  }
+
+  .login-btn {
+    padding: 0 15px;
+  }
+
+  .settings-btn {
+    width: 36px;
+    display: inline-grid;
+    place-items: center;
+    padding: 0;
+  }
+
+  .settings-btn svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+  }
+
+  .btn {
+    border: 0;
+    border-radius: 8px;
+    padding: 10px 18px;
+    cursor: pointer;
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    font-size: 14px;
+    line-height: 1;
+    transition: transform 0.22s ease, background 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease, color 0.22s ease;
+  }
+
+  .btn:hover {
+    transform: translateY(-1px);
+  }
+
+  .btn-ghost {
+    color: var(--muted);
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(216, 180, 90, 0.17);
+  }
+
+  .btn-ghost:hover {
+    color: var(--ink);
+    border-color: rgba(216, 180, 90, 0.34);
+    background: rgba(216, 180, 90, 0.08);
+  }
+
+  .btn-primary {
+    color: #15100b;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--gold-2), var(--copper));
+    box-shadow: 0 10px 28px rgba(184, 115, 51, 0.26);
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 14px 36px rgba(216, 180, 90, 0.24);
+  }
+
+  .btn-large {
+    padding: 15px 26px;
+    border-radius: 10px;
+    font-size: 15px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .arrow {
+    transition: transform 0.22s ease;
+  }
+
+  .btn:hover .arrow {
+    transform: translateX(4px);
+  }
+
+  .hero {
+    min-height: 760px;
+    padding: 138px 0 82px;
+    position: relative;
+  }
+
+  .hero::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 105px;
+    width: 760px;
+    height: 760px;
+    border-radius: 50%;
+    transform: translateX(-12%);
+    background:
+      radial-gradient(circle at center, rgba(216, 180, 90, 0.16), transparent 34%),
+      conic-gradient(from 90deg, transparent 0deg, rgba(216,180,90,0.22) 42deg, transparent 86deg, transparent 180deg, rgba(184,115,51,0.2) 232deg, transparent 280deg);
+    opacity: 0.42;
+    filter: blur(4px);
+    mask-image: radial-gradient(circle, black 0 48%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-grid {
+    display: grid;
+    grid-template-columns: 0.95fr 1.05fr;
+    gap: 58px;
+    align-items: center;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 22px;
+    padding: 7px 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(216, 180, 90, 0.22);
+    background: rgba(216, 180, 90, 0.06);
+    color: var(--gold-2);
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .eyebrow i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 18px var(--glow);
+  }
+
+  .hero h1 {
+    font-size: 68px;
+    line-height: 1.06;
+    letter-spacing: -0.045em;
+    font-weight: 900;
+    margin-bottom: 24px;
+  }
+
+  .hero h1 .grad {
+    display: block;
+    background: linear-gradient(135deg, #fff1c8 0%, var(--gold) 42%, var(--copper) 76%, #e8b27d 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .hero-lead {
+    width: 500px;
+    color: var(--muted);
+    font-family: "Noto Sans SC", sans-serif;
+    font-size: 17px;
+    line-height: 1.95;
+    margin-bottom: 28px;
+  }
+
+  .hero-lead strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  .hero-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+
+  .trust-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .trust-pill {
+    padding: 7px 12px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(255,255,255,0.07);
+    color: var(--dim);
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    font-size: 12px;
+  }
+
+  .hero-visual {
+    position: relative;
+    height: 560px;
+  }
+
+  .console-shell {
+    position: absolute;
+    inset: 0;
+    border: 1px solid rgba(216,180,90,0.20);
+    border-radius: 28px;
+    background:
+      linear-gradient(180deg, rgba(255, 242, 207, 0.05), rgba(255,255,255,0.01)),
+      rgba(18, 14, 12, 0.86);
+    box-shadow:
+      0 30px 90px rgba(0,0,0,0.52),
+      inset 0 1px 0 rgba(255,255,255,0.05);
+    overflow: hidden;
+  }
+
+  .console-shell::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    background:
+      radial-gradient(circle at 22% 12%, rgba(216,180,90,0.18), transparent 28%),
+      radial-gradient(circle at 88% 78%, rgba(184,115,51,0.17), transparent 26%);
+    pointer-events: none;
+  }
+
+  .console-top {
+    height: 52px;
+    border-bottom: 1px solid rgba(216, 180, 90, 0.14);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 22px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .traffic {
+    display: flex;
+    gap: 8px;
+  }
+
+  .traffic span {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: rgba(216,180,90,0.38);
+  }
+
+  .console-title {
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    color: var(--dim);
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+
+  .console-body {
+    position: relative;
+    z-index: 1;
+    padding: 22px;
+    display: grid;
+    grid-template-columns: 1fr 210px;
+    gap: 18px;
+  }
+
+  .panel {
+    border: 1px solid rgba(216,180,90,0.14);
+    border-radius: 18px;
+    background: rgba(11,10,9,0.42);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
+  }
+
+  .project-card {
+    padding: 18px;
+  }
+
+  .project-card h3 {
+    font-size: 21px;
+    line-height: 1.35;
+    margin-bottom: 14px;
+  }
+
+  .project-meta {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+
+  .tag {
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: rgba(216,180,90,0.08);
+    border: 1px solid rgba(216,180,90,0.16);
+    color: var(--warm);
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    font-size: 11px;
+  }
+
+  .script-box {
+    padding: 14px;
+    border-radius: 13px;
+    background: linear-gradient(180deg, rgba(216,180,90,0.08), rgba(255,255,255,0.02));
+    border: 1px solid rgba(216,180,90,0.12);
+    margin-bottom: 14px;
+  }
+
+  .script-box p {
+    font-family: "Noto Sans SC", sans-serif;
+    color: #d7cab9;
+    font-size: 13px;
+    line-height: 1.8;
+  }
+
+  .script-box strong {
+    color: var(--gold-2);
+    font-weight: 600;
+  }
+
+  .timeline {
+    display: grid;
+    gap: 10px;
+  }
+
+  .timeline-item {
+    display: grid;
+    grid-template-columns: 28px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    font-size: 12px;
+  }
+
+  .status-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: rgba(216,180,90,0.09);
+    border: 1px solid rgba(216,180,90,0.24);
+    color: var(--gold);
+    font-size: 12px;
+  }
+
+  .timeline-item b {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  .timeline-item span {
+    color: var(--dim);
+  }
+
+  .progress {
+    width: 64px;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.07);
+    overflow: hidden;
+  }
+
+  .progress i {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--gold), var(--copper));
+  }
+
+  .video-card {
+    padding: 12px;
+    position: relative;
+  }
+
+  .phone {
+    height: 392px;
+    border-radius: 24px;
+    background:
+      linear-gradient(180deg, rgba(216, 180, 90, 0.10), rgba(0,0,0,0.12)),
+      #080807;
+    border: 1px solid rgba(216,180,90,0.26);
+    padding: 10px;
+    box-shadow: 0 28px 58px rgba(0,0,0,0.40);
+  }
+
+  .phone-screen {
+    position: relative;
+    height: 100%;
+    border-radius: 18px;
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 52% 28%, rgba(244,201,112,0.32), transparent 22%),
+      linear-gradient(180deg, rgba(94,46,23,0.55), rgba(10,8,7,0.86)),
+      linear-gradient(135deg, #21150f, #0b0908);
+  }
+
+  .phone-screen::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.52) 78%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.035) 0, rgba(255,255,255,0.035) 1px, transparent 1px, transparent 7px);
+    opacity: 0.7;
+  }
+
+  .moon {
+    position: absolute;
+    top: 42px;
+    left: 50%;
+    width: 62px;
+    height: 62px;
+    border-radius: 50%;
+    transform: translateX(-50%);
+    background: radial-gradient(circle, #f5d98e, #a86b2f 68%, transparent 70%);
+    box-shadow: 0 0 50px rgba(216,180,90,0.32);
+  }
+
+  .silhouette {
+    position: absolute;
+    left: 50%;
+    bottom: 104px;
+    width: 72px;
+    height: 112px;
+    transform: translateX(-50%);
+  }
+
+  .silhouette::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 38px;
+    height: 38px;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: #070605;
+  }
+
+  .silhouette::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 34px;
+    width: 92px;
+    height: 88px;
+    transform: translateX(-50%);
+    clip-path: polygon(50% 0, 83% 15%, 70% 100%, 30% 100%, 17% 15%);
+    background: linear-gradient(180deg, #080706, #020202);
+  }
+
+  .caption {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 68px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(0,0,0,0.48);
+    color: #fff2d2;
+    font-family: "Noto Sans SC", sans-serif;
+    font-size: 13px;
+    line-height: 1.55;
+    text-align: center;
+    text-shadow: 0 2px 8px #000;
+  }
+
+  .video-title {
+    position: absolute;
+    left: 14px;
+    top: 14px;
+    padding: 5px 9px;
+    border-radius: 999px;
+    background: rgba(0,0,0,0.38);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #f4d994;
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    font-size: 11px;
+  }
+
+  .render-badge {
+    margin-top: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    font-size: 12px;
+    color: var(--dim);
+  }
+
+  .render-badge b {
+    color: var(--gold-2);
+    font-weight: 600;
+  }
+
+  .floating-card {
+    position: absolute;
+    z-index: 3;
+    border: 1px solid rgba(216,180,90,0.22);
+    background: rgba(22, 18, 15, 0.86);
+    backdrop-filter: blur(18px);
+    box-shadow: 0 22px 55px rgba(0,0,0,0.40);
+    border-radius: 16px;
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+  }
+
+  .score-card {
+    left: -26px;
+    bottom: 48px;
+    width: 196px;
+    padding: 14px;
+  }
+
+  .score-card small,
+  .asset-card small {
+    display: block;
+    color: var(--dim);
+    font-size: 11px;
+    margin-bottom: 8px;
+  }
+
+  .score-row {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+  }
+
+  .score-row strong {
+    color: var(--gold-2);
+    font-size: 30px;
+    line-height: 1;
+  }
+
+  .score-row span {
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .asset-card {
+    right: -20px;
+    top: 96px;
+    width: 180px;
+    padding: 13px;
+  }
+
+  .asset-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+
+  .asset-thumb {
+    height: 38px;
+    border-radius: 8px;
+    background:
+      linear-gradient(135deg, rgba(216,180,90,0.38), rgba(184,115,51,0.15)),
+      rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .section {
+    position: relative;
+    z-index: 1;
+    padding: 82px 0;
+  }
+
+  .section-header {
+    text-align: center;
+    margin-bottom: 42px;
+  }
+
+  .section-kicker {
+    color: var(--gold);
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .section-title {
+    font-size: 38px;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    margin-bottom: 14px;
+  }
+
+  .section-title em {
+    color: var(--gold-2);
+    font-style: normal;
+  }
+
+  .section-desc {
+    width: 640px;
+    margin: 0 auto;
+    color: var(--muted);
+    font-family: "Noto Sans SC", sans-serif;
+    font-size: 15px;
+    line-height: 1.9;
+  }
+
+  .capability-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+  }
+
+  .cap-card {
+    min-height: 220px;
+    padding: 22px;
+    border-radius: 22px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.012)),
+      rgba(28, 23, 20, 0.72);
+    border: 1px solid rgba(216,180,90,0.14);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    transition: transform 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+  }
+
+  .cap-card:hover {
+    transform: translateY(-6px);
+    border-color: rgba(216,180,90,0.32);
+    background:
+      linear-gradient(180deg, rgba(216,180,90,0.08), rgba(255,255,255,0.014)),
+      rgba(36, 30, 25, 0.82);
+  }
+
+  .cap-number {
+    font-family: Georgia, serif;
+    color: rgba(216,180,90,0.35);
+    font-size: 38px;
+    line-height: 1;
+    margin-bottom: 18px;
+  }
+
+  .cap-card h3 {
+    font-size: 20px;
+    margin-bottom: 10px;
+  }
+
+  .cap-card p {
+    color: var(--muted);
+    font-family: "Noto Sans SC", sans-serif;
+    font-size: 14px;
+    line-height: 1.75;
+  }
+
+  .workflow-band {
+    padding: 34px;
+    border-radius: 28px;
+    background:
+      radial-gradient(circle at 50% 0%, rgba(216,180,90,0.09), transparent 42%),
+      rgba(18, 15, 13, 0.74);
+    border: 1px solid rgba(216,180,90,0.16);
+    box-shadow: 0 30px 90px rgba(0,0,0,0.28);
+  }
+
+  .flow-row {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 12px;
+    position: relative;
+  }
+
+  .flow-row::before {
+    content: "";
+    position: absolute;
+    left: 5%;
+    right: 5%;
+    top: 38px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(216,180,90,0.30), transparent);
+  }
+
+  .flow-step {
+    position: relative;
+    text-align: center;
+    padding-top: 2px;
+  }
+
+  .flow-step::after {
+    content: "›";
+    position: absolute;
+    right: -11px;
+    top: 23px;
+    color: rgba(216,180,90,0.55);
+    font-size: 34px;
+    line-height: 1;
+  }
+
+  .flow-step:last-child::after {
+    display: none;
+  }
+
+  .flow-icon {
+    position: relative;
+    z-index: 1;
+    width: 76px;
+    height: 76px;
+    margin: 0 auto 14px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background:
+      radial-gradient(circle at 35% 25%, rgba(255,255,255,0.08), transparent 40%),
+      #181310;
+    border: 1px solid rgba(216,180,90,0.25);
+    box-shadow: 0 0 0 8px rgba(11,10,9,0.65), 0 14px 28px rgba(0,0,0,0.36);
+    color: var(--gold-2);
+    font-family: Georgia, serif;
+    font-size: 23px;
+  }
+
+  .flow-step h3 {
+    font-size: 17px;
+    margin-bottom: 4px;
+  }
+
+  .flow-step b {
+    display: block;
+    color: var(--warm);
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .flow-step p {
+    color: var(--dim);
+    font-family: "Noto Sans SC", sans-serif;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .demo-strip {
+    margin-top: 48px;
+    display: grid;
+    grid-template-columns: 0.85fr 1.15fr;
+    gap: 24px;
+    align-items: stretch;
+  }
+
+  .quote-panel,
+  .audit-panel {
+    border-radius: 24px;
+    border: 1px solid rgba(216,180,90,0.15);
+    background: rgba(24, 20, 17, 0.72);
+    padding: 26px;
+  }
+
+  .quote-panel h3,
+  .audit-panel h3 {
+    font-size: 23px;
+    margin-bottom: 16px;
+  }
+
+  .quote-panel p {
+    color: var(--muted);
+    font-family: "Noto Sans SC", sans-serif;
+    font-size: 15px;
+    line-height: 1.9;
+  }
+
+  .quote-panel .sample {
+    margin-top: 20px;
+    padding: 18px;
+    border-left: 2px solid var(--gold);
+    background: rgba(216,180,90,0.06);
+    color: #e5d6c2;
+  }
+
+  .audit-list {
+    display: grid;
+    gap: 12px;
+  }
+
+  .audit-item {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(255,255,255,0.055);
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    font-size: 13px;
+  }
+
+  .audit-item .check {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    color: #15100b;
+    background: linear-gradient(135deg, var(--gold-2), var(--copper));
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  .audit-item strong {
+    color: var(--ink);
+    font-weight: 600;
+  }
+
+  .audit-item span {
+    color: var(--dim);
+  }
+
+  .cta {
+    padding: 76px 0 84px;
+  }
+
+  .cta-box {
+    position: relative;
+    overflow: hidden;
+    border-radius: 34px;
+    padding: 54px 60px;
+    background:
+      radial-gradient(circle at 18% 20%, rgba(216,180,90,0.16), transparent 34%),
+      radial-gradient(circle at 86% 70%, rgba(184,115,51,0.18), transparent 34%),
+      linear-gradient(135deg, rgba(36, 30, 25, 0.98), rgba(15, 12, 10, 0.98));
+    border: 1px solid rgba(216,180,90,0.22);
+    box-shadow: 0 32px 90px rgba(0,0,0,0.34);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .cta-box::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.04) 48%, transparent 49%),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.025) 0 1px, transparent 1px 16px);
+    pointer-events: none;
+  }
+
+  .cta-copy {
+    position: relative;
+    z-index: 1;
+  }
+
+  .cta-copy h2 {
+    font-size: 42px;
+    line-height: 1.22;
+    letter-spacing: -0.03em;
+    margin-bottom: 14px;
+  }
+
+  .cta-copy h2 em {
+    color: var(--gold-2);
+    font-style: normal;
+  }
+
+  .cta-copy p {
+    color: var(--muted);
+    font-family: "Noto Sans SC", sans-serif;
+    font-size: 15px;
+  }
+
+  .cta-actions {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    gap: 12px;
+  }
+
+  footer {
+    position: relative;
+    z-index: 1;
+    border-top: 1px solid rgba(216,180,90,0.12);
+    padding: 28px 0 34px;
+    color: var(--dim);
+    font-family: "Inter", "Noto Sans SC", sans-serif;
+    font-size: 12px;
+  }
+
+  .footer-inner {
+    width: 1120px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .fade-in {
+    opacity: 0;
+    transform: translateY(26px);
+    transition: opacity 0.72s ease, transform 0.72s ease;
+  }
+
+  .fade-in.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.45; transform: scaleX(0.96); }
+    50% { opacity: 1; transform: scaleX(1); }
+  }
+
+  .pulse-line {
+    height: 1px;
+    margin: 16px 0;
+    background: linear-gradient(90deg, transparent, var(--line-strong), transparent);
+    animation: pulse 2.6s ease-in-out infinite;
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="#">
+      <span class="brand-mark">HV</span>
+      <span class="brand-text">
+        <strong>历史短视频工坊</strong>
+        <span>History Video Forge</span>
+      </span>
+    </a>
+    <div class="topbar-right">
+      <div class="topbar-actions">
+        <button class="btn btn-ghost">观看示例</button>
+        <button class="btn btn-primary">新建项目</button>
+      </div>
+      <div class="topbar-divider" aria-hidden="true"></div>
+      <div class="account-actions">
+        <button class="account-btn login-btn">登录</button>
+        <button class="account-btn settings-btn" aria-label="设置" title="设置">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.86l.04.04a2 2 0 1 1-2.83 2.83l-.04-.04a1.7 1.7 0 0 0-1.86-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.86.34l-.04.04a2 2 0 1 1-2.83-2.83l.04-.04A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.04A1.7 1.7 0 0 0 4.6 8a1.7 1.7 0 0 0-.34-1.86l-.04-.04A2 2 0 1 1 7.05 3.27l.04.04A1.7 1.7 0 0 0 8.95 3a1.7 1.7 0 0 0 1.03-1.56V1a2 2 0 1 1 4 0v.44A1.7 1.7 0 0 0 15.01 3a1.7 1.7 0 0 0 1.86-.34l.04-.04a2 2 0 1 1 2.83 2.83l-.04.04A1.7 1.7 0 0 0 19.4 8a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.04A1.7 1.7 0 0 0 19.4 15z"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="container hero-grid">
+      <div class="hero-copy fade-in">
+        <div class="eyebrow"><i></i> AI Historical Video Pipeline</div>
+        <h1>
+          把历史选题
+          <span class="grad">锻造成短视频</span>
+        </h1>
+        <p class="hero-lead">
+          从系统自动推荐的历史选题开始，AI 帮你完成
+          <strong>候选评估、口播文案、分镜规划、素材匹配、配音合成与视频渲染</strong>。
+          创作者负责选择与审校，繁琐生产流程交给工坊。
+        </p>
+        <div class="hero-actions">
+          <button class="btn btn-primary btn-large">
+            新建第一个项目
+            <span class="arrow">→</span>
+          </button>
+          <button class="btn btn-ghost btn-large">查看生成示例</button>
+        </div>
+        <div class="trust-row">
+          <span class="trust-pill">完整用户路径</span>
+          <span class="trust-pill">可审校流程</span>
+          <span class="trust-pill">结构化分镜</span>
+          <span class="trust-pill">一键导出成片</span>
+        </div>
+      </div>
+
+      <div class="hero-visual fade-in">
+        <div class="console-shell">
+          <div class="console-top">
+            <div class="traffic"><span></span><span></span><span></span></div>
+            <div class="console-title">Forge Console · Project #082</div>
+          </div>
+
+          <div class="console-body">
+            <div class="panel project-card">
+              <h3>《晏子使楚》：一句话，如何让楚王当场下不来台？</h3>
+              <div class="project-meta">
+                <span class="tag">春秋</span>
+                <span class="tag">外交博弈</span>
+                <span class="tag">强反转</span>
+              </div>
+
+              <div class="script-box">
+                <p>
+                  <strong>口播片段：</strong>
+                  楚王以为，羞辱一个矮小的使臣很容易。可他没想到，晏子只用一句话，就把羞辱变成了反击。
+                </p>
+              </div>
+
+              <div class="pulse-line"></div>
+
+              <div class="timeline">
+                <div class="timeline-item">
+                  <div class="status-dot">✓</div>
+                  <div><b>选题评估</b><br><span>冲突清晰，适合短视频开场</span></div>
+                  <div class="progress"><i style="width:100%"></i></div>
+                </div>
+                <div class="timeline-item">
+                  <div class="status-dot">✓</div>
+                  <div><b>文案生成</b><br><span>已完成口播结构与情绪推进</span></div>
+                  <div class="progress"><i style="width:100%"></i></div>
+                </div>
+                <div class="timeline-item">
+                  <div class="status-dot">✓</div>
+                  <div><b>分镜规划</b><br><span>12 个镜头，已标注画面功能</span></div>
+                  <div class="progress"><i style="width:100%"></i></div>
+                </div>
+                <div class="timeline-item">
+                  <div class="status-dot">4</div>
+                  <div><b>素材匹配</b><br><span>人物、宫殿、竹简、战国地图</span></div>
+                  <div class="progress"><i style="width:78%"></i></div>
+                </div>
+                <div class="timeline-item">
+                  <div class="status-dot">5</div>
+                  <div><b>合成渲染</b><br><span>等待配音与时间线锁定</span></div>
+                  <div class="progress"><i style="width:36%"></i></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel video-card">
+              <div class="phone">
+                <div class="phone-screen">
+                  <div class="video-title">9:16 预览 · 00:18</div>
+                  <div class="moon"></div>
+                  <div class="silhouette"></div>
+                  <div class="caption">“楚国无人了吗？怎么派你这样的人来？”</div>
+                </div>
+              </div>
+              <div class="render-badge">
+                <span>当前状态</span>
+                <b>素材匹配中</b>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="floating-card score-card">
+          <small>传播潜力评分</small>
+          <div class="score-row">
+            <strong>91</strong>
+            <span>强冲突 / 高反转</span>
+          </div>
+        </div>
+
+        <div class="floating-card asset-card">
+          <small>匹配素材</small>
+          <div class="asset-grid">
+            <div class="asset-thumb"></div>
+            <div class="asset-thumb"></div>
+            <div class="asset-thumb"></div>
+            <div class="asset-thumb"></div>
+            <div class="asset-thumb"></div>
+            <div class="asset-thumb"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="section-header fade-in">
+        <div class="section-kicker">Why It Works</div>
+        <h2 class="section-title">不是一次性生成，<em>而是一条可审校的生产线</em></h2>
+        <p class="section-desc">
+          工坊把历史短视频拆成可控的中间产物：主题、故事简报、口播文案、分镜、素材需求、时间线与成片。
+          每一步都能检查、修改、回退，而不是把结果完全交给黑盒。
+        </p>
+      </div>
+
+      <div class="capability-grid">
+        <div class="cap-card fade-in">
+          <div class="cap-number">01</div>
+          <h3>选题有判断</h3>
+          <p>不是随机找历史故事，而是评估冲突、反转、人物关系、传播钩子与成片可视化空间。</p>
+        </div>
+        <div class="cap-card fade-in">
+          <div class="cap-number">02</div>
+          <h3>文案可审校</h3>
+          <p>生成适合短视频口播的故事结构，并保留事实边界、叙事目标和可人工修订的中间稿。</p>
+        </div>
+        <div class="cap-card fade-in">
+          <div class="cap-number">03</div>
+          <h3>分镜结构化</h3>
+          <p>把文案拆成镜头，明确每个镜头的画面功能、素材需求、字幕位置和节奏作用。</p>
+        </div>
+        <div class="cap-card fade-in">
+          <div class="cap-number">04</div>
+          <h3>成片自动化</h3>
+          <p>自动整理素材、配音、字幕和时间线，最终输出可预览、可复用、可继续优化的视频项目。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="section-header fade-in">
+        <div class="section-kicker">Complete Workflow</div>
+        <h2 class="section-title">一个人，完成一支历史短视频的<em>全部工序</em></h2>
+        <p class="section-desc">
+          从自动推荐选题到最终交付，流程被拆成七个稳定节点。你不需要同时扮演编剧、分镜师、剪辑师和制片，工坊会把每一步串起来。
+        </p>
+      </div>
+
+      <div class="workflow-band fade-in">
+        <div class="flow-row">
+          <div class="flow-step">
+            <div class="flow-icon">1</div>
+            <h3>选题</h3>
+            <b>创意总监</b>
+            <p>候选评估<br>确定主题</p>
+          </div>
+          <div class="flow-step">
+            <div class="flow-icon">2</div>
+            <h3>文案</h3>
+            <b>编剧</b>
+            <p>口播生成<br>叙事审校</p>
+          </div>
+          <div class="flow-step">
+            <div class="flow-icon">3</div>
+            <h3>分镜</h3>
+            <b>分镜师</b>
+            <p>镜头拆分<br>画面定义</p>
+          </div>
+          <div class="flow-step">
+            <div class="flow-icon">4</div>
+            <h3>素材</h3>
+            <b>摄影指导</b>
+            <p>素材检索<br>风格匹配</p>
+          </div>
+          <div class="flow-step">
+            <div class="flow-icon">5</div>
+            <h3>合成</h3>
+            <b>录音 / 剪辑</b>
+            <p>字幕配音<br>时间线编排</p>
+          </div>
+          <div class="flow-step">
+            <div class="flow-icon">6</div>
+            <h3>渲染</h3>
+            <b>后期</b>
+            <p>导出视频<br>预览成片</p>
+          </div>
+          <div class="flow-step">
+            <div class="flow-icon">7</div>
+            <h3>发布</h3>
+            <b>制片</b>
+            <p>元数据整理<br>平台交付</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="demo-strip">
+        <div class="quote-panel fade-in">
+          <h3>更像创作台，而不是生成按钮</h3>
+          <p>
+            好的历史短视频，不只是“讲完一个故事”。它需要开场钩子、冲突升级、信息回收、情绪余震，
+            还需要能被画面表达。工坊把这些判断拆进流程，而不是只在最后输出一段文本。
+          </p>
+          <div class="sample">
+            例：从“晏子使楚”不是直接写成百科讲解，而是先提炼成“弱者被羞辱后的反击现场”，再进入文案和分镜。
+          </div>
+        </div>
+
+        <div class="audit-panel fade-in">
+          <h3>每一步都有可检查产物</h3>
+          <div class="audit-list">
+            <div class="audit-item">
+              <span class="check">✓</span>
+              <strong>Story Brief</strong>
+              <span>人物、冲突、事实边界</span>
+            </div>
+            <div class="audit-item">
+              <span class="check">✓</span>
+              <strong>Script Draft</strong>
+              <span>口播文案、段落目标</span>
+            </div>
+            <div class="audit-item">
+              <span class="check">✓</span>
+              <strong>Storyboard</strong>
+              <span>镜头功能、画面需求</span>
+            </div>
+            <div class="audit-item">
+              <span class="check">✓</span>
+              <strong>Asset Plan</strong>
+              <span>素材类型、风格约束</span>
+            </div>
+            <div class="audit-item">
+              <span class="check">✓</span>
+              <strong>Render Output</strong>
+              <span>字幕、配音、时间线</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta">
+    <div class="container">
+      <div class="cta-box fade-in">
+        <div class="cta-copy">
+          <h2>你的第一个<em>历史视频项目</em><br />从一个推荐选题开始</h2>
+          <p>从系统推荐主题中选择一个方向，检查文案，确认分镜，然后把剩下的生产流程交给工坊。</p>
+        </div>
+        <div class="cta-actions">
+          <button class="btn btn-ghost btn-large">观看示例</button>
+          <button class="btn btn-primary btn-large">
+            新建项目
+            <span class="arrow">→</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <span>History Video Forge · v1.0.0</span>
+    <span>联系邮箱：1451784145@qq.com</span>
+  </div>
+</footer>
+
+<script>
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add("visible");
+      }
+    });
+  }, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" });
+
+  document.querySelectorAll(".fade-in").forEach((el, index) => {
+    el.style.transitionDelay = `${Math.min(index * 0.05, 0.35)}s`;
+    observer.observe(el);
+  });
+</script>
+
+</body>
+</html>
