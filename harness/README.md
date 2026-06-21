@@ -392,6 +392,21 @@ npx vitest run --configLoader runner tests/backend/render/local-remotion-render-
 - `npm run harness:ui-acceptance:report`
   - 读取最近一次 UI acceptance 的 `summary.json`，输出可读摘要，不重跑浏览器。
 
+## UI Reference Migration Entry
+
+- `npm run harness:ui-reference-migration`
+  - 对单文档 HTML 参考页与 Vue 目标 route 做迁移对照检查。
+  - 第一版内置首页试点：`frontend/public/preview-landing.html` -> `/`。
+  - 输出截图、合同结果和人工审查清单到 `harness/scripts/runtime/output/ui-reference-migration/<run-id>/`。
+- `npm run harness:ui-reference-migration:report`
+  - 读取最近一次 reference migration summary，并打印可读报告。
+
+边界：
+- 该入口不自动把 HTML 转 Vue。
+- 该入口不替代 `harness:ui-acceptance:smoke/full`。
+- 视觉 1:1 第一版是人工审图项，不是 pixel diff 硬门禁。
+- 如果要新增页面合同，先补对应 design / implementation plan 或在当前计划范围内明确试点页面。
+
 ## 成品验收 Live Check
 
 该入口会显式调用真实 DashScope TTS 与文生图，并用 Remotion 导出 MP4。它不是默认自动化 gate，只能作为人工触发的成品验收巡检使用。
