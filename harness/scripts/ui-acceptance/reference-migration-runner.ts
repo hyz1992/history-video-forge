@@ -1,11 +1,10 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, relative, resolve } from "node:path";
 import { cwd } from "node:process";
 
 import { chromium, type Page } from "@playwright/test";
 
 import {
-  getReferenceMigrationContract,
   listReferenceMigrationContracts,
   type ReferenceMigrationContract,
 } from "./reference-migration-contracts";
@@ -82,19 +81,16 @@ function scanGlobalSelectors(
 ): ReferenceMigrationCheck[] {
   const checks: ReferenceMigrationCheck[] = [];
   const { forbiddenGlobalSelectors, reviewedGlobalSelectors } = contract.styleIsolation;
-
-  const fs = require("node:fs");
-  const path = require("node:path");
-  const srcDir = path.join(repoRoot, "frontend", "src");
+  const srcDir = join(repoRoot, "frontend", "src");
 
   function scanDir(dir: string) {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    const entries = readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
+      const fullPath = join(dir, entry.name);
       if (entry.isDirectory()) {
         scanDir(fullPath);
       } else if (entry.name.endsWith(".css") || entry.name.endsWith(".vue")) {
-        const content = fs.readFileSync(fullPath, "utf8");
+        const content = readFileSync(fullPath, "utf8");
         for (const selector of forbiddenGlobalSelectors) {
           if (content.includes(selector)) {
             const reviewed = reviewedGlobalSelectors?.includes(selector);
@@ -102,8 +98,8 @@ function scanGlobalSelectors(
               code: `global-selector-${selector.replace(/[^a-zA-Z0-9]/g, "-")}`,
               status: reviewed ? "WARN" : "FAIL",
               message: reviewed
-                ? `选中 ${selector} 在 ${path.relative(repoRoot, fullPath)} 中出现（已审查通过，列入人工审查项）`
-                : `禁止的全局选择器 ${selector} 在 ${path.relative(repoRoot, fullPath)} 中出现`,
+                ? `选中 ${selector} 在 ${relative(repoRoot, fullPath)} 中出现（已审查通过，列入人工审查项）`
+                : `禁止的全局选择器 ${selector} 在 ${relative(repoRoot, fullPath)} 中出现`,
             });
           }
         }
@@ -121,14 +117,16 @@ function scanGlobalSelectors(
 async function runSentinelChecks(
   page: Page,
   contract: ReferenceMigrationContract,
+  baseUrl: string,
 ): Promise<ReferenceMigrationCheck[]> {
   const checks: ReferenceMigrationCheck[] = [];
   const { sentinelRoutes, forbiddenBodyClasses, forbiddenVisibleSelectors } =
     contract.styleIsolation;
 
   for (const route of sentinelRoutes) {
+    const sentinelUrl = `${baseUrl}${route}`;
     try {
-      await page.goto(route, { timeout: 10000 });
+      await page.goto(sentinelUrl, { timeout: 10000 });
 
       if (forbiddenBodyClasses) {
         for (const cls of forbiddenBodyClasses) {
@@ -181,17 +179,12 @@ async function runSentinelChecks(
   return checks;
 }
 
-async function runContractCheck(
-  page: Page,
+function checkReferenceAndTarget(
   contract: ReferenceMigrationContract,
-  ctx: RunnerContext,
-): Promise<ReferenceMigrationContractResult> {
+  referenceAbsPath: string,
+): ReferenceMigrationContractResult | null {
   const checks: ReferenceMigrationCheck[] = [];
-  const screenshots: ReferenceMigrationScreenshot[] = [];
 
-  const referenceAbsPath = resolve(ctx.repoRoot, contract.referencePath);
-
-  // Check reference HTML exists
   if (!existsSync(referenceAbsPath)) {
     checks.push({
       code: "reference-file-exists",
@@ -203,46 +196,51 @@ async function runContractCheck(
       title: contract.title,
       status: "FAIL",
       checks,
-      screenshots,
+      screenshots: [],
       manual_review_items: contract.manualReviewItems,
     };
   }
 
-  // Check target is reachable
-  const targetUrl = `${ctx.baseUrl}${contract.targetRoute}`;
-  const targetReachable = await checkPageReachable(page, targetUrl);
-  if (!targetReachable) {
-    checks.push({
+  return null;
+}
+
+async function ensureTargetReachable(
+  page: Page,
+  contract: ReferenceMigrationContract,
+  targetUrl: string,
+): Promise<ReferenceMigrationCheck | null> {
+  const reachable = await checkPageReachable(page, targetUrl);
+  if (!reachable) {
+    return {
       code: "target-reachable",
       status: "FAIL",
       message: `目标 route 无法访问: ${contract.targetRoute}`,
-    });
-    const resultStatus = summarizeReferenceMigrationChecks(checks);
-    return {
-      contract_id: contract.id,
-      title: contract.title,
-      status: resultStatus.status,
-      checks,
-      screenshots,
-      manual_review_items: contract.manualReviewItems,
     };
   }
+  return null;
+}
 
-  // Screenshots for each viewport
+async function captureContractScreenshots(
+  page: Page,
+  contract: ReferenceMigrationContract,
+  ctx: RunnerContext,
+  targetUrl: string,
+  referenceAbsPath: string,
+  checks: ReferenceMigrationCheck[],
+  screenshots: ReferenceMigrationScreenshot[],
+) {
   const contractScreenshotDir = join(ctx.screenshotsDir, contract.outputName);
   mkdirSync(contractScreenshotDir, { recursive: true });
 
   for (const viewport of contract.viewports) {
     const refScreenshotRel = `screenshots/${contract.outputName}/reference-${viewport.name}.png`;
     const targetScreenshotRel = `screenshots/${contract.outputName}/target-${viewport.name}.png`;
-    const refScreenshotPath = join(ctx.screenshotsDir, contract.outputName, `reference-${viewport.name}.png`);
-    const targetScreenshotPath = join(ctx.screenshotsDir, contract.outputName, `target-${viewport.name}.png`);
+    const refPath = join(ctx.screenshotsDir, contract.outputName, `reference-${viewport.name}.png`);
+    const targetPath = join(ctx.screenshotsDir, contract.outputName, `target-${viewport.name}.png`);
 
-    // Reference page screenshot
     try {
-      const refUrl = `file://${referenceAbsPath}`;
-      await page.goto(refUrl, { timeout: 10000 });
-      await takeScreenshot(page, refScreenshotPath, viewport);
+      await page.goto(`file://${referenceAbsPath}`, { timeout: 10000 });
+      await takeScreenshot(page, refPath, viewport);
     } catch {
       checks.push({
         code: "reference-screenshot",
@@ -251,10 +249,9 @@ async function runContractCheck(
       });
     }
 
-    // Target page screenshot
     try {
       await page.goto(targetUrl, { timeout: 10000 });
-      await takeScreenshot(page, targetScreenshotPath, viewport);
+      await takeScreenshot(page, targetPath, viewport);
     } catch {
       checks.push({
         code: "target-screenshot",
@@ -269,11 +266,16 @@ async function runContractCheck(
       target: targetScreenshotRel,
     });
   }
+}
 
-  // Require target page is open for selector checks
+async function runSelectorChecks(
+  page: Page,
+  contract: ReferenceMigrationContract,
+  targetUrl: string,
+  checks: ReferenceMigrationCheck[],
+) {
   await page.goto(targetUrl, { timeout: 10000 });
 
-  // Selector checks
   for (const item of contract.requiredSelectors) {
     const visible = await checkSelectorVisible(page, item.selector);
     if (!visible) {
@@ -299,8 +301,14 @@ async function runContractCheck(
       });
     }
   }
+}
 
-  // Interaction checks
+async function runInteractionChecks(
+  page: Page,
+  contract: ReferenceMigrationContract,
+  targetUrl: string,
+  checks: ReferenceMigrationCheck[],
+) {
   for (const interaction of contract.interactionChecks) {
     try {
       await page.goto(targetUrl, { timeout: 10000 });
@@ -325,14 +333,48 @@ async function runContractCheck(
       });
     }
   }
+}
 
-  // Style isolation: static text scan
-  const staticChecks = scanGlobalSelectors(contract, ctx.repoRoot);
-  checks.push(...staticChecks);
+async function runContractCheck(
+  page: Page,
+  contract: ReferenceMigrationContract,
+  ctx: RunnerContext,
+): Promise<ReferenceMigrationContractResult> {
+  const checks: ReferenceMigrationCheck[] = [];
+  const screenshots: ReferenceMigrationScreenshot[] = [];
 
-  // Style isolation: sentinel route browser checks
-  const sentinelChecks = await runSentinelChecks(page, contract);
-  checks.push(...sentinelChecks);
+  const referenceAbsPath = resolve(ctx.repoRoot, contract.referencePath);
+  const targetUrl = `${ctx.baseUrl}${contract.targetRoute}`;
+
+  // Check reference HTML exists and target is reachable
+  const earlyResult = checkReferenceAndTarget(contract, referenceAbsPath);
+  if (earlyResult) return earlyResult;
+
+  const targetUnreachable = await ensureTargetReachable(page, contract, targetUrl);
+  if (targetUnreachable) {
+    checks.push(targetUnreachable);
+    return {
+      contract_id: contract.id,
+      title: contract.title,
+      status: "FAIL",
+      checks,
+      screenshots,
+      manual_review_items: contract.manualReviewItems,
+    };
+  }
+
+  // Screenshots
+  await captureContractScreenshots(page, contract, ctx, targetUrl, referenceAbsPath, checks, screenshots);
+
+  // Selector checks
+  await runSelectorChecks(page, contract, targetUrl, checks);
+
+  // Interaction checks
+  await runInteractionChecks(page, contract, targetUrl, checks);
+
+  // Style isolation: static text scan + sentinel route browser checks
+  checks.push(...scanGlobalSelectors(contract, ctx.repoRoot));
+  checks.push(...(await runSentinelChecks(page, contract, ctx.baseUrl)));
 
   const resultStatus = summarizeReferenceMigrationChecks(checks);
 
