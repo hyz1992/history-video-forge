@@ -1,21 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <defs>
-    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#d4a574"/>
-      <stop offset="50%" stop-color="#c9a227"/>
-      <stop offset="100%" stop-color="#b87333"/>
-    </linearGradient>
-  </defs>
-  <rect width="32" height="32" rx="6" fill="#1a1614"/>
-  <!-- 场记板 -->
-  <rect x="5" y="7" width="22" height="16" rx="2" fill="none" stroke="url(#gold)" stroke-width="1.5"/>
-  <!-- 场记板条纹 -->
-  <line x1="5" y1="13" x2="27" y2="13" stroke="url(#gold)" stroke-width="1.5"/>
-  <line x1="5" y1="17" x2="27" y2="17" stroke="url(#gold)" stroke-width="1.5"/>
-  <line x1="5" y1="21" x2="27" y2="21" stroke="url(#gold)" stroke-width="1.5"/>
-  <!-- 拍板指针 -->
-  <rect x="20" y="5" width="4" height="6" rx="1" fill="url(#gold)"/>
-  <polygon points="22,11 20,13 24,13" fill="url(#gold)"/>
-  <!-- 播放三角 -->
-  <polygon points="12,10 12,18 18,14" fill="url(#gold)"/>
+  <rect x="5" y="7" width="22" height="16" rx="2" fill="none" stroke="#c9a227" stroke-width="1.5"/>
+  <line x1="5" y1="13" x2="27" y2="13" stroke="#c9a227" stroke-width="1.5"/>
+  <line x1="5" y1="17" x2="27" y2="17" stroke="#c9a227" stroke-width="1.5"/>
+  <line x1="5" y1="21" x2="27" y2="21" stroke="#c9a227" stroke-width="1.5"/>
+  <rect x="20" y="5" width="4" height="6" rx="1" fill="#c9a227"/>
+  <polygon points="22,11 20,13 24,13" fill="#c9a227"/>
+  <polygon points="12,10 12,18 18,14" fill="#c9a227"/>
 </svg>
