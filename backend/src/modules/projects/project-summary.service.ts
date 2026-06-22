@@ -38,6 +38,33 @@ function readAspectRatio(db: DbClient, project: { id: string; activeComposeRecor
   return timeline?.output_profile?.aspect_ratio ?? null;
 }
 
+function readThumbnailUrl(db: DbClient, project: { id: string; activePublishPackageRecordId: string | null; activeAssetManifestRecordId: string | null }): string | null {
+  const pkgRecord = project.activePublishPackageRecordId
+    ? db.publishPackageRecords.get(project.activePublishPackageRecordId) ?? null
+    : null;
+  if (pkgRecord) {
+    const pkg = pkgRecord.packageJson as { cover_artifact_id?: string } | undefined;
+    if (pkg?.cover_artifact_id) {
+      return `/api/projects/${project.id}/artifacts/${pkg.cover_artifact_id}/file`;
+    }
+  }
+
+  const manifestRecordId =
+    pkgRecord?.assetManifestRecordId ?? project.activeAssetManifestRecordId;
+  if (manifestRecordId) {
+    const manifestRecord = db.assetManifestRecords.get(manifestRecordId) ?? null;
+    const manifest = manifestRecord?.manifestJson as {
+      segment_routes?: Array<{ primary_visual_artifact_id?: string | null }>;
+    } | undefined;
+    const firstArtifactId = manifest?.segment_routes?.[0]?.primary_visual_artifact_id;
+    if (firstArtifactId) {
+      return `/api/projects/${project.id}/artifacts/${firstArtifactId}/file`;
+    }
+  }
+
+  return null;
+}
+
 export interface ProjectSummary {
   project_id: string;
   display_name: string;
@@ -62,17 +89,6 @@ export function listProjectSummaries(db: DbClient): ProjectSummary[] {
     const topicTitle = topicRecord?.title ?? null;
     const effectiveStatus = resolveEffectiveStatus(project);
 
-    let thumbnailUrl: string | null = null;
-    const pkgRecord = project.activePublishPackageRecordId
-      ? db.publishPackageRecords.get(project.activePublishPackageRecordId) ?? null
-      : null;
-    if (pkgRecord) {
-      const pkg = pkgRecord.packageJson as { cover_artifact_id?: string } | undefined;
-      if (pkg?.cover_artifact_id) {
-        thumbnailUrl = `/api/projects/${project.id}/artifacts/${pkg.cover_artifact_id}/file`;
-      }
-    }
-
     summaries.push({
       project_id: project.id,
       display_name: topicTitle ?? project.name,
@@ -84,7 +100,7 @@ export function listProjectSummaries(db: DbClient): ProjectSummary[] {
       family_label: topicRecord?.familyLabel ?? null,
       duration_sec: readDurationSec(db, project),
       aspect_ratio: readAspectRatio(db, project),
-      thumbnail_url: thumbnailUrl,
+      thumbnail_url: readThumbnailUrl(db, project),
     });
   }
 
