@@ -323,7 +323,9 @@ function cleanDynasty(raw: string | undefined): string {
               <tr v-for="row in filteredProjects" :key="row.project_id" @click="openProject(row)">
                 <td>
                   <div class="project-cell">
-                    <div class="thumb" aria-hidden="true"></div>
+                    <div class="thumb" aria-hidden="true">
+                      <img v-if="row.thumbnail_url" :src="row.thumbnail_url" alt="" class="thumb-img" />
+                    </div>
                     <div class="project-main">
                       <div class="project-title" :data-testid="`open-project-${row.project_id}`">{{ row.display_name }}</div>
                       <div class="project-sub">

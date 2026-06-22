@@ -10,6 +10,7 @@ export interface ProjectSnapshot {
   family_label?: string | null;
   duration_sec?: number | null;
   aspect_ratio?: string | null;
+  thumbnail_url?: string | null;
 }
 
 export interface CreateProjectInput {
@@ -24,6 +25,7 @@ export interface ProjectListItem extends ProjectSnapshot {
   topic_type?: string;
   duration?: string;
   aspect_ratio?: string;
+  thumbnail_url?: string;
 }
 
 export interface ProjectApi {
@@ -142,6 +144,7 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
       topic_type: snapshot.family_label ?? undefined,
       duration: formatDurationSec(snapshot.duration_sec ?? undefined),
       aspect_ratio: snapshot.aspect_ratio ?? undefined,
+      thumbnail_url: snapshot.thumbnail_url ?? undefined,
     };
   }
 

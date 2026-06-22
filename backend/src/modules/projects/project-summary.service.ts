@@ -49,6 +49,7 @@ export interface ProjectSummary {
   family_label: string | null;
   duration_sec: number | null;
   aspect_ratio: string | null;
+  thumbnail_url: string | null;
 }
 
 export function listProjectSummaries(db: DbClient): ProjectSummary[] {
@@ -61,6 +62,17 @@ export function listProjectSummaries(db: DbClient): ProjectSummary[] {
     const topicTitle = topicRecord?.title ?? null;
     const effectiveStatus = resolveEffectiveStatus(project);
 
+    let thumbnailUrl: string | null = null;
+    const pkgRecord = project.activePublishPackageRecordId
+      ? db.publishPackageRecords.get(project.activePublishPackageRecordId) ?? null
+      : null;
+    if (pkgRecord) {
+      const pkg = pkgRecord.packageJson as { cover_artifact_id?: string } | undefined;
+      if (pkg?.cover_artifact_id) {
+        thumbnailUrl = `/api/projects/${project.id}/artifacts/${pkg.cover_artifact_id}/file`;
+      }
+    }
+
     summaries.push({
       project_id: project.id,
       display_name: topicTitle ?? project.name,
@@ -72,6 +84,7 @@ export function listProjectSummaries(db: DbClient): ProjectSummary[] {
       family_label: topicRecord?.familyLabel ?? null,
       duration_sec: readDurationSec(db, project),
       aspect_ratio: readAspectRatio(db, project),
+      thumbnail_url: thumbnailUrl,
     });
   }
 

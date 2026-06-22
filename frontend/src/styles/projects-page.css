@@ -501,6 +501,15 @@ body.projects-page-bg::before {
   box-shadow: 0 10px 20px rgba(0,0,0,0.24);
 }
 
+.projects-page-wrapper .thumb-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
 .projects-page-wrapper .thumb::before {
   content: "";
   position: absolute;
