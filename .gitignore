@@ -11,3 +11,4 @@ storage/media-library/
 storage/topic-candidate-library/
 storage/voice-profiles/
 .codex-run-logs/
+temp/

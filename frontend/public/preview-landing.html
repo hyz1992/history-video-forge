@@ -25,6 +25,8 @@
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
+  button { font-family: inherit; font-size: inherit; }
+
   html { scroll-behavior: smooth; }
 
   body {
@@ -60,7 +62,8 @@
     position: fixed;
     top: 0; left: 0; right: 0;
     z-index: 100;
-    padding: 18px 2rem;
+    height: 72px;
+    padding: 0 2rem;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -1139,7 +1142,7 @@
   </a>
   <div class="topbar-right">
     <div class="topbar-actions">
-        <button class="btn btn-ghost">我的项目</button>
+        <button class="btn btn-ghost" onclick="goToProjects()">我的项目</button>
         <button class="btn btn-primary">新建项目</button>
       </div>
     <div class="topbar-divider" aria-hidden="true"></div>
@@ -1413,6 +1416,10 @@
 </footer>
 
 <script>
+  function goToProjects() {
+    window.location.href = '../preview-my-projects.html';
+  }
+
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
