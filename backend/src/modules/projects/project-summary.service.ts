@@ -18,16 +18,18 @@ export interface ProjectSummary {
   is_draft: boolean;
   updated_at: string;
   restore_route: string;
+  scope_label: string | null;
+  family_label: string | null;
 }
 
 export function listProjectSummaries(db: DbClient): ProjectSummary[] {
   const summaries: ProjectSummary[] = [];
 
   for (const project of db.projects.values()) {
-    const topicTitle =
-      project.activeTopicPackageId
-        ? db.topicPackages.get(project.activeTopicPackageId)?.title ?? null
-        : null;
+    const topicRecord = project.activeTopicPackageId
+      ? db.topicPackages.get(project.activeTopicPackageId) ?? null
+      : null;
+    const topicTitle = topicRecord?.title ?? null;
     const effectiveStatus = resolveEffectiveStatus(project);
 
     summaries.push({
@@ -37,6 +39,8 @@ export function listProjectSummaries(db: DbClient): ProjectSummary[] {
       is_draft: effectiveStatus.startsWith("topic"),
       updated_at: project.updatedAt.toISOString(),
       restore_route: `/projects/${project.id}/${statusToStep(effectiveStatus)}`,
+      scope_label: topicRecord?.scopeLabel ?? null,
+      family_label: topicRecord?.familyLabel ?? null,
     });
   }
 

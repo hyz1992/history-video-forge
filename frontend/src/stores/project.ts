@@ -6,6 +6,8 @@ export interface ProjectSnapshot {
   display_name?: string;
   is_draft?: boolean;
   updated_at?: string;
+  scope_label?: string | null;
+  family_label?: string | null;
 }
 
 export interface CreateProjectInput {
@@ -134,6 +136,8 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
       display_name: displayName,
       is_draft: snapshot.is_draft ?? isDraftStatus(snapshot.current_status),
       updated_at: snapshot.updated_at ?? new Date().toISOString(),
+      dynasty: snapshot.scope_label ?? undefined,
+      topic_type: snapshot.family_label ?? undefined,
     };
   }
 
