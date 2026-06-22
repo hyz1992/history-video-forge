@@ -244,7 +244,6 @@ export interface ProjectListItem extends ProjectSnapshot {
   - `onUnmounted` 中 `document.body.classList.remove("projects-page-bg")`
 - **重写**：`filteredProjects` computed——加入 dynasty/topicType 搜索、5 项过滤、多字段排序
 - **移除**：
-  - `import { ElMessage } from "element-plus"`——保留！
   - `tableRenderVersion` ref（表不再用 `:key` 强制重渲染，因为原生 HTML table，DOM 直接响应式更新）
   - Element Plus 相关的类型引用（`getStatusTagType` 改成返回 CSS class 字符串）
 - **不改什么**：不修改 store 方法、不修改路由行为。
