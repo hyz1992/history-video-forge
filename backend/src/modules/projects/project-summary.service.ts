@@ -13,7 +13,7 @@ function statusToStep(status: string): string {
 
 function readDurationSec(db: DbClient, project: { id: string; activeRenderJobRecordId: string | null; activeComposeRecordId: string | null }): number | null {
   const renderRecord = project.activeRenderJobRecordId
-    ? db.renderJobs.get(project.activeRenderJobRecordId) ?? null
+    ? db.renderJobRecords.get(project.activeRenderJobRecordId) ?? null
     : null;
   if (renderRecord?.outputArtifactJson?.duration_sec != null) {
     return renderRecord.outputArtifactJson.duration_sec;
