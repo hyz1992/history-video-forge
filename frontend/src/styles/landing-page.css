@@ -52,57 +52,60 @@ body.landing-page-bg::before {
   position: fixed;
   top: 0; left: 0; right: 0;
   z-index: 100;
-  padding: 18px 2rem;
+  height: 72px;
+  padding: 0 2rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  backdrop-filter: blur(16px);
-  background: rgba(13, 13, 13, 0.85);
-  border-bottom: 1px solid var(--border-color);
+  backdrop-filter: blur(18px);
+  background: rgba(13, 13, 13, 0.84);
+  border-bottom: 1px solid rgba(201, 162, 39, 0.14);
 }
 
 .landing-page .brand {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 12px;
-  font-family: Georgia, serif;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  color: var(--text-primary);
+  cursor: pointer;
   text-decoration: none;
 }
 
 .landing-page .brand-mark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
   color: var(--accent-gold);
   flex-shrink: 0;
+  filter: drop-shadow(0 0 12px rgba(201, 162, 39, 0.18));
 }
 
 .landing-page .brand-mark svg {
-  width: 22px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
 }
 
 .landing-page .brand-text {
   display: flex;
   flex-direction: column;
-  gap: 0;
-  line-height: 1.2;
+  gap: 1px;
+  line-height: 1.15;
 }
 
 .landing-page .brand-text strong {
-  font-size: 14px;
-  font-weight: 600;
+  font-family: "Noto Serif SC", "Songti SC", Georgia, serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   color: var(--text-primary);
 }
 
 .landing-page .brand-text span {
+  font-family: "Inter", sans-serif;
   font-size: 10px;
   color: var(--text-muted);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
 .landing-page .topbar-right {
@@ -183,22 +186,22 @@ body.landing-page-bg::before {
 }
 
 .landing-page .btn-ghost {
-  background: transparent;
+  background: rgba(255,255,255,0.018);
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
 }
 
 .landing-page .btn-ghost:hover {
   color: var(--text-primary);
-  border-color: var(--accent-copper);
-  background: var(--bg-card);
+  border-color: rgba(184, 115, 51, 0.72);
+  background: var(--bg-panel);
 }
 
 .landing-page .btn-primary {
   background: linear-gradient(135deg, var(--accent-copper), var(--accent-bronze));
-  color: var(--bg-primary);
+  color: #100c08;
   font-weight: 600;
-  box-shadow: 0 4px 16px rgba(184, 115, 51, 0.3);
+  box-shadow: 0 8px 24px rgba(184, 115, 51, 0.25);
 }
 
 .landing-page .btn-primary:hover {
