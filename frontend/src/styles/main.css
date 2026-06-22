@@ -3,6 +3,7 @@
 @import "./theme-light-modern.css";
 @import "./element-overrides.css";
 @import "./landing-page.css";
+@import "./projects-page.css";
 
 *,
 *::before,
