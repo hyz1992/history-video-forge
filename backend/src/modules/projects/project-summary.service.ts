@@ -11,6 +11,33 @@ function statusToStep(status: string): string {
   return "topic";
 }
 
+function readDurationSec(db: DbClient, project: { id: string; activeRenderJobRecordId: string | null; activeComposeRecordId: string | null }): number | null {
+  const renderRecord = project.activeRenderJobRecordId
+    ? db.renderJobs.get(project.activeRenderJobRecordId) ?? null
+    : null;
+  if (renderRecord?.outputArtifactJson?.duration_sec != null) {
+    return renderRecord.outputArtifactJson.duration_sec;
+  }
+
+  const composeRecord = project.activeComposeRecordId
+    ? db.composeRecords.get(project.activeComposeRecordId) ?? null
+    : null;
+  const timeline = composeRecord?.timelineJson as { duration_sec?: number } | undefined;
+  if (timeline?.duration_sec != null) {
+    return timeline.duration_sec;
+  }
+
+  return null;
+}
+
+function readAspectRatio(db: DbClient, project: { id: string; activeComposeRecordId: string | null }): string | null {
+  const composeRecord = project.activeComposeRecordId
+    ? db.composeRecords.get(project.activeComposeRecordId) ?? null
+    : null;
+  const timeline = composeRecord?.timelineJson as { output_profile?: { aspect_ratio?: string } } | undefined;
+  return timeline?.output_profile?.aspect_ratio ?? null;
+}
+
 export interface ProjectSummary {
   project_id: string;
   display_name: string;
@@ -20,6 +47,8 @@ export interface ProjectSummary {
   restore_route: string;
   scope_label: string | null;
   family_label: string | null;
+  duration_sec: number | null;
+  aspect_ratio: string | null;
 }
 
 export function listProjectSummaries(db: DbClient): ProjectSummary[] {
@@ -41,6 +70,8 @@ export function listProjectSummaries(db: DbClient): ProjectSummary[] {
       restore_route: `/projects/${project.id}/${statusToStep(effectiveStatus)}`,
       scope_label: topicRecord?.scopeLabel ?? null,
       family_label: topicRecord?.familyLabel ?? null,
+      duration_sec: readDurationSec(db, project),
+      aspect_ratio: readAspectRatio(db, project),
     });
   }
 

@@ -8,6 +8,8 @@ export interface ProjectSnapshot {
   updated_at?: string;
   scope_label?: string | null;
   family_label?: string | null;
+  duration_sec?: number | null;
+  aspect_ratio?: string | null;
 }
 
 export interface CreateProjectInput {
@@ -138,7 +140,16 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
       updated_at: snapshot.updated_at ?? new Date().toISOString(),
       dynasty: snapshot.scope_label ?? undefined,
       topic_type: snapshot.family_label ?? undefined,
+      duration: formatDurationSec(snapshot.duration_sec ?? undefined),
+      aspect_ratio: snapshot.aspect_ratio ?? undefined,
     };
+  }
+
+  function formatDurationSec(sec: number | undefined): string | undefined {
+    if (sec == null) return undefined;
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   }
 
   function upsertProject(snapshot: ProjectSnapshot) {
