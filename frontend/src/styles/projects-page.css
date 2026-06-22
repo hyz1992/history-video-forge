@@ -148,6 +148,7 @@ body.projects-page-bg::before {
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
+  border: none;
   transition: transform 0.22s ease, background 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease, color 0.22s ease;
   display: inline-flex;
   align-items: center;
