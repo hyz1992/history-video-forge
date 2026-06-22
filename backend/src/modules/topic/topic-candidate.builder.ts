@@ -257,7 +257,7 @@ export function buildTopicCandidates(input: BuildTopicCandidatesInput) {
         title: input.canonicalName,
         one_line_angle: slot.angle(input),
         family_label: familyLabel,
-        scope_label: "单事件",
+        scope_label: "—",
         estimated_duration_band: "medium",
         why_this_now: buildWhyThisNow(input),
         core_conflict: generatedCoreConflict,

@@ -232,12 +232,12 @@ function normalizeTopicCandidateCard(
           ? rubricMetadata.family_label
         : "通用安全槽位",
     scope_label:
-      typeof candidate.scope_label === "string" && candidate.scope_label
+      typeof candidate.scope_label === "string" && candidate.scope_label && candidate.scope_label !== "—"
         ? candidate.scope_label
         : typeof rubricMetadata?.scope_label === "string" &&
             rubricMetadata.scope_label
           ? rubricMetadata.scope_label
-        : "单事件",
+        : "—",
     estimated_duration_band: "medium",
     why_this_now: `${runtime.input.recentUsageHint}，且当前具备可讲张力。`,
     core_conflict: runtime.input.coreConflict,

@@ -214,6 +214,13 @@ function sortTable(column: string) {
 function handleGoHome() {
   router.push("/");
 }
+
+const BAD_DYNASTY_VALUES = new Set(["单事件", "—", "", "未知"]);
+
+function cleanDynasty(raw: string | undefined): string {
+  if (!raw || BAD_DYNASTY_VALUES.has(raw.trim())) return "—";
+  return raw.trim();
+}
 </script>
 
 <template>
@@ -329,7 +336,7 @@ function handleGoHome() {
                     </div>
                   </div>
                 </td>
-                <td><span class="dynasty-tag">{{ row.dynasty ?? '—' }}</span></td>
+                <td><span class="dynasty-tag">{{ cleanDynasty(row.dynasty) }}</span></td>
                 <td>
                   <span
                     class="status-badge"

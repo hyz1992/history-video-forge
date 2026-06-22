@@ -38,8 +38,8 @@ status: active
     "event_identity": "事件标识",
     "title": "候选标题",
     "one_line_angle": "一句话切口",
-    "family_label": "题材家族标签",
-    "scope_label": "事件范围标签",
+    "family_label": "题材家族标签（如宫变夺权、战争博弈、文人政治）",
+    "scope_label": "时代/朝代（如唐朝、宋朝、三国、汉朝）",
     "why_this_now": "当下值得讲的原因",
     "must_cover_preview": [
       "进入局面的叙事节点",
@@ -104,6 +104,7 @@ status: active
 
 - 只输出结构化候选，不写长篇文案
 - 必须服从当前 `family_label`、`scope_label`、风险边界与近期记忆约束
+- `scope_label` 必须是时代/朝代名（如唐朝、宋朝、汉朝、明朝），不是事件类型或主题范畴标签
 - 不能偷渡 `TopicPackage` 才拥有的硬合同字段
 - 不能擅自发明新的阶段对象或评分体系
 
