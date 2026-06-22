@@ -16,6 +16,10 @@ export interface ProjectListItem extends ProjectSnapshot {
   display_name: string;
   is_draft: boolean;
   updated_at: string;
+  dynasty?: string;
+  topic_type?: string;
+  duration?: string;
+  aspect_ratio?: string;
 }
 
 export interface ProjectApi {
