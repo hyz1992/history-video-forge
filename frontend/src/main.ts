@@ -51,6 +51,9 @@ import {
   createPublishStore,
   publishStoreKey,
 } from "./stores/publish";
+import { initTheme } from "./composables/useTheme";
+
+initTheme();
 
 const router = createAppRouter("web");
 const projectStore = createProjectStore(createFetchProjectApi());
