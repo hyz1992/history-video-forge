@@ -175,7 +175,8 @@ function goBack() {
   --el-menu-hover-bg-color: rgba(201, 162, 39, 0.06);
   --el-menu-active-color: #e4c26f;
   --el-menu-text-color: #a89f94;
-  --el-menu-item-height: 44px;
+  --el-menu-item-height: 50px;
+  padding: 12px 10px;
 }
 
 .sidebar-menu:not(.el-menu--collapse) {
@@ -184,18 +185,55 @@ function goBack() {
 
 .step-menu-item {
   position: relative;
+  min-height: 50px;
+  padding: 11px 12px !important;
+  border-radius: 12px;
+  gap: 12px;
+  color: #a89f94;
+  transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
+}
+
+.step-menu-item:hover:not(.is-disabled) {
+  background: rgba(201, 162, 39, 0.075) !important;
+  color: #f5f0e8 !important;
+  border-radius: 12px;
+}
+
+.step-menu-item.is-active {
+  color: #e4c26f !important;
+  background: rgba(201, 162, 39, 0.10) !important;
+  box-shadow: inset 0 0 0 1px rgba(201, 162, 39, 0.18);
+  border-radius: 12px;
 }
 
 .step-emoji {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 28px;
   font-size: 17px;
+  background: rgba(201, 162, 39, 0.055);
+  border: 1px solid rgba(201, 162, 39, 0.12);
+  filter: grayscale(.15);
   line-height: 1;
 }
 
+.step-menu-item.is-active .step-emoji {
+  background: rgba(201, 162, 39, 0.13);
+  border-color: rgba(201, 162, 39, 0.24);
+  filter: none;
+}
+
 .step-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 700;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
 }
 
 .step-check {
@@ -206,7 +244,7 @@ function goBack() {
 
 /* Disabled menu items - greyed out, no pointer */
 .step-menu-item.is-disabled {
-  opacity: 0.45;
+  opacity: 0.43;
   cursor: not-allowed;
 }
 
