@@ -105,11 +105,31 @@ onMounted(async () => {
   flex-direction: column;
   width: 100%;
   height: 100vh;
-  background: var(--bg-base);
-  color: var(--text-body);
+  background:
+    radial-gradient(ellipse at 18% 16%, rgba(184, 115, 51, 0.16) 0%, transparent 44%),
+    radial-gradient(ellipse at 84% 20%, rgba(201, 162, 39, 0.11) 0%, transparent 42%),
+    linear-gradient(180deg, #0b0b0a 0%, #0d0d0d 38%, #130f0d 100%);
+  color: #d8cec0;
+  position: relative;
+}
+
+.project-workspace::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: .12;
+  background-image:
+    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(circle at 50% 0%, black 0%, transparent 82%);
+  z-index: 0;
 }
 
 .workspace-body {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex: 1;
   min-height: 0;
@@ -119,6 +139,5 @@ onMounted(async () => {
   flex: 1;
   overflow-y: auto;
   min-width: 0;
-  background: var(--bg-base);
 }
 </style>

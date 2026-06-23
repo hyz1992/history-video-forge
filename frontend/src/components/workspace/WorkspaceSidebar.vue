@@ -154,8 +154,10 @@ function goBack() {
   flex-direction: column;
   width: var(--sidebar-expanded-width);
   height: 100%;
-  background: var(--bg-sidebar);
-  border-right: 1px solid var(--border-default);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.006)),
+    rgba(18, 15, 13, .88);
+  border-right: 1px solid rgba(201, 162, 39, 0.13);
   transition: width 0.2s ease;
   overflow: hidden;
   flex-shrink: 0;
@@ -170,9 +172,9 @@ function goBack() {
   border-right: none;
   background: transparent;
   --el-menu-bg-color: transparent;
-  --el-menu-hover-bg-color: var(--bg-hover);
-  --el-menu-active-color: var(--accent-text);
-  --el-menu-text-color: var(--text-body);
+  --el-menu-hover-bg-color: rgba(201, 162, 39, 0.06);
+  --el-menu-active-color: #e4c26f;
+  --el-menu-text-color: #a89f94;
   --el-menu-item-height: 44px;
 }
 
