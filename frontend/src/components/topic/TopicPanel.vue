@@ -205,7 +205,7 @@ function roundLabel(round: { label?: string; round_index?: number }) {
             </div>
           </div>
 
-          <div v-if="topicStore.state.historyRounds.length > 0" class="history-block">
+          <div class="history-block">
             <div class="history-top">
               <button class="history-toggle" @click="toggleHistory">
                 <span class="toggle-arrow" :class="{ open: historyOpen }">▶</span>
@@ -213,7 +213,7 @@ function roundLabel(round: { label?: string; round_index?: number }) {
               </button>
               <button class="action-btn" @click="handleRefreshBatch">↺ 换一批</button>
             </div>
-            <div v-if="historyOpen" class="history-rounds">
+            <div v-if="historyOpen && topicStore.state.historyRounds.length > 0" class="history-rounds">
               <template v-for="round in topicStore.state.historyRounds" :key="round.round_id">
                 <div class="history-label">{{ roundLabel(round) }}</div>
                 <div class="history-round">
