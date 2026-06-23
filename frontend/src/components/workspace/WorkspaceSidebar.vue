@@ -115,6 +115,7 @@ function goBack() {
             :index="String(step.index)"
             :disabled="step.index > getReachedStepIndex()"
             class="step-menu-item"
+            :class="{ done: isStepCompleted(step.index) }"
           >
             <span class="step-emoji">{{ stepEmoji[step.key] }}</span>
             <template #title>
@@ -132,6 +133,7 @@ function goBack() {
           :index="String(step.index)"
           :disabled="step.index > getReachedStepIndex()"
           class="step-menu-item"
+          :class="{ done: isStepCompleted(step.index) }"
         >
           <span class="step-emoji">{{ stepEmoji[step.key] }}</span>
           <template #title>
@@ -189,7 +191,8 @@ function goBack() {
   padding: 11px 12px !important;
   border-radius: 12px;
   gap: 12px;
-  color: #a89f94;
+  color: #a89f94 !important;
+  background-color: transparent !important;
   transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
 }
 
@@ -206,6 +209,13 @@ function goBack() {
   border-radius: 12px;
 }
 
+.step-menu-item.is-disabled {
+  opacity: 0.43;
+  cursor: not-allowed;
+  color: #a89f94 !important;
+  background-color: transparent !important;
+}
+
 .step-emoji {
   width: 28px;
   height: 28px;
@@ -218,6 +228,12 @@ function goBack() {
   border: 1px solid rgba(201, 162, 39, 0.12);
   filter: grayscale(.15);
   line-height: 1;
+}
+
+.step-menu-item.done .step-emoji {
+  background: rgba(101, 167, 122, 0.13);
+  border-color: rgba(101, 167, 122, 0.22);
+  filter: none;
 }
 
 .step-menu-item.is-active .step-emoji {
@@ -237,15 +253,9 @@ function goBack() {
 }
 
 .step-check {
-  color: var(--color-success);
+  color: #65a77a;
   font-size: 12px;
   font-weight: 700;
-}
-
-/* Disabled menu items - greyed out, no pointer */
-.step-menu-item.is-disabled {
-  opacity: 0.43;
-  cursor: not-allowed;
 }
 
 .project-mini {
