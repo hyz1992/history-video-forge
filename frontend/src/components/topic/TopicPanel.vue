@@ -237,6 +237,7 @@ function roundLabel(round: { label?: string; round_index?: number }) {
                 </div>
               </template>
             </div>
+            <div v-else-if="historyOpen" class="history-empty">暂无候选历史</div>
           </div>
         </section>
 
@@ -581,6 +582,13 @@ function roundLabel(round: { label?: string; round_index?: number }) {
 .history-round .candidate-angle {
   font-size: 12px;
   margin-bottom: 7px;
+}
+
+.history-empty {
+  padding: 20px 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
 }
 
 /* Detail card */
