@@ -295,6 +295,9 @@ function roundLabel(round: { label?: string; round_index?: number }) {
       </div>
     </template>
 
+    <template v-else-if="!hasCandidates && !hasLoadError && projectStore.state.projectId">
+    </template>
+
     <template v-else-if="topicStore.state.activeTab === 'library'">
       <div class="topic-alt-panel">
         <h2>事件库</h2>
