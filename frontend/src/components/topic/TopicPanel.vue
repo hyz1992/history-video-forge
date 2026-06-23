@@ -776,7 +776,7 @@ function roundLabel(round: { label?: string; round_index?: number }) {
 .center-state-inner {
   width: min(560px, 100%);
   text-align: center;
-  transform: translateY(-80px);
+  transform: translateY(20px);
 }
 
 .center-error-icon {
