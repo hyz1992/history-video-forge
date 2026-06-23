@@ -181,6 +181,14 @@ function goBack() {
   padding: 12px 10px;
 }
 
+:deep(.el-menu) {
+  background-color: transparent !important;
+}
+
+:deep(.el-menu-item) {
+  background-color: transparent !important;
+}
+
 .sidebar-menu:not(.el-menu--collapse) {
   width: var(--sidebar-expanded-width);
 }
