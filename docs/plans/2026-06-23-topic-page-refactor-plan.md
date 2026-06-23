@@ -134,6 +134,19 @@ Date: 2026-06-23
 
 ## 五、逐文件改动详情
 
+### 组件分类
+
+本方案涉及的 4 个文件分为两类：
+
+| 类型 | 文件 | 影响范围 |
+|------|------|----------|
+| **共享布局** | `WorkspaceHeader.vue` | 选题 / 文案 / 分镜 / 资产 / 合成 / 渲染 / 发布 全部 7 阶段 |
+| **共享布局** | `WorkspaceSidebar.vue` | 同上，全部 7 阶段 |
+| **阶段面板** | `TopicPanel.vue` | 仅选题阶段 |
+| **阶段面板** | `StageGenerating.vue` | 所有使用它的阶段（目前仅选题） |
+
+> `ProjectWorkspace.vue` 的布局结构已天然分离 —— `<WorkspaceSidebar />` + `<WorkspaceHeader />` 为共享壳层，`<component :is="currentPanel" />` 动态渲染阶段面板。共享组件的改动在选题重构中一并完成，其他 6 个阶段将自动受益。
+
 ### 5.1 TopicPanel.vue — 核心重构
 
 #### 5.1.1 模板改动
