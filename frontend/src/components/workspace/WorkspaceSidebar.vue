@@ -4,13 +4,8 @@ import { useRouter, useRoute } from "vue-router";
 import {
   ElMenu,
   ElMenuItem,
-  ElButton,
   ElTooltip,
 } from "element-plus";
-import {
-  Fold,
-  Expand,
-} from "@element-plus/icons-vue";
 
 import { PIPELINE_STEPS, useWorkspaceStore } from "../../stores/workspace";
 import { useProjectStore } from "../../stores/project";
@@ -92,19 +87,6 @@ function goBack() {
 
 <template>
   <aside class="workspace-sidebar" :class="{ collapsed }">
-    <!-- Header -->
-    <div class="sidebar-header">
-      <ElTooltip v-if="!collapsed" :content="projectName" placement="right" :show-after="500">
-        <span class="sidebar-title">{{ projectName }}</span>
-      </ElTooltip>
-      <ElButton
-        class="collapse-btn"
-        :icon="collapsed ? Expand : Fold"
-        text
-        @click="workspaceStore.toggleSidebar()"
-      />
-    </div>
-
     <!-- Project info card -->
     <div v-if="!collapsed" class="project-mini">
       <div class="project-mini-label">当前项目</div>
@@ -181,35 +163,6 @@ function goBack() {
 
 .workspace-sidebar.collapsed {
   width: var(--sidebar-collapsed-width);
-}
-
-.sidebar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 12px 8px;
-  border-bottom: 1px solid var(--border-default);
-  min-height: 48px;
-}
-
-.sidebar-title {
-  font-size: 14px;
-  font-weight: var(--font-subheading);
-  color: var(--text-heading);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-  margin-right: 4px;
-}
-
-.collapse-btn {
-  color: var(--text-secondary);
-  flex-shrink: 0;
-}
-
-.collapse-btn:hover {
-  color: var(--accent-text);
 }
 
 .sidebar-menu {

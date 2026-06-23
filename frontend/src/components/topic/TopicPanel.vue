@@ -758,7 +758,7 @@ function roundLabel(round: { label?: string; round_index?: number }) {
 
 /* Centered page states (error / generating) */
 .center-state {
-  min-height: calc(100vh - 72px);
+  min-height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;

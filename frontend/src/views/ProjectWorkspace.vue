@@ -89,11 +89,11 @@ onMounted(async () => {
 
 <template>
   <div class="project-workspace">
-    <WorkspaceSidebar />
-    <div class="workspace-main">
-      <WorkspaceHeader />
+    <WorkspaceHeader />
+    <div class="workspace-body">
+      <WorkspaceSidebar />
       <div class="workspace-content">
-          <component :is="currentPanel" :key="workspaceStore.currentStepKey()" />
+        <component :is="currentPanel" :key="workspaceStore.currentStepKey()" />
       </div>
     </div>
   </div>
@@ -102,23 +102,23 @@ onMounted(async () => {
 <style scoped>
 .project-workspace {
   display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100vh;
   background: var(--bg-base);
   color: var(--text-body);
 }
 
-.workspace-main {
+.workspace-body {
   display: flex;
-  flex-direction: column;
   flex: 1;
-  min-width: 0;
-  overflow: hidden;
+  min-height: 0;
 }
 
 .workspace-content {
   flex: 1;
   overflow-y: auto;
+  min-width: 0;
   background: var(--bg-base);
 }
 </style>

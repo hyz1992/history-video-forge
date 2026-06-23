@@ -47,7 +47,7 @@ onUnmounted(() => {
 
 <style scoped>
 .stage-generating {
-  min-height: calc(100vh - 72px);
+  min-height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
