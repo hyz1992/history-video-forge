@@ -1,0 +1,1547 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="forge-dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>工作台 · 选题列表优化版 v12</title>
+<style>
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  :root {
+    --bg-primary: #0d0d0d;
+    --bg-secondary: #1a1614;
+    --bg-card: #1f1b18;
+    --bg-card-hover: #2a2522;
+    --bg-panel: rgba(31, 27, 24, 0.86);
+    --bg-panel-soft: rgba(26, 22, 20, 0.72);
+    --bg-hover: rgba(201, 162, 39, 0.075);
+
+    --accent-gold: #c9a227;
+    --accent-gold-light: #e4c26f;
+    --accent-copper: #b87333;
+    --accent-bronze: #cd7f32;
+    --accent-warm: #d4a574;
+
+    --text-primary: #f5f0e8;
+    --text-body: #d8cec0;
+    --text-secondary: #a89f94;
+    --text-muted: #6b635a;
+    --text-dim: #4f4841;
+    --text-inverse: #100c08;
+
+    --border-color: #3d3632;
+    --border-soft: rgba(201, 162, 39, 0.13);
+    --border-active: rgba(201, 162, 39, 0.34);
+
+    --success: #65a77a;
+    --success-bg: rgba(101, 167, 122, 0.13);
+    --danger: #c06454;
+    --danger-bg: rgba(192, 100, 84, 0.13);
+    --warning: #c9a227;
+    --warning-bg: rgba(201, 162, 39, 0.13);
+
+    --shadow-card: 0 18px 48px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.035);
+    --shadow-heavy: 0 28px 76px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.04);
+
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 18px;
+    --radius-xl: 24px;
+
+    --font-sans: "Noto Sans SC", "Inter", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+    --font-serif: "Noto Serif SC", "Songti SC", Georgia, serif;
+    --ease: 180ms ease;
+    --ease-smooth: 260ms cubic-bezier(.2,.7,.2,1);
+  }
+
+  html, body {
+    width: 100%;
+    min-height: 100%;
+  }
+
+  body {
+    min-width: 1180px;
+    background:
+      radial-gradient(ellipse at 18% 16%, rgba(184, 115, 51, 0.16) 0%, transparent 44%),
+      radial-gradient(ellipse at 84% 20%, rgba(201, 162, 39, 0.11) 0%, transparent 42%),
+      linear-gradient(180deg, #0b0b0a 0%, var(--bg-primary) 38%, #130f0d 100%);
+    color: var(--text-body);
+    font-family: var(--font-sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: .12;
+    background-image:
+      linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(circle at 50% 0%, black 0%, transparent 82%);
+    z-index: 0;
+  }
+
+  button {
+    font-family: inherit;
+    border: none;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* ===== Global Topbar: same direction as landing / my-projects ===== */
+
+  .topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    height: 72px;
+    padding: 0 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    backdrop-filter: blur(18px);
+    background: rgba(13, 13, 13, 0.84);
+    border-bottom: 1px solid rgba(201, 162, 39, 0.14);
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+  }
+
+  .brand-mark {
+    width: 30px;
+    height: 30px;
+    color: var(--accent-gold);
+    display: grid;
+    place-items: center;
+    filter: drop-shadow(0 0 12px rgba(201, 162, 39, 0.18));
+    flex-shrink: 0;
+  }
+
+  .brand-mark svg {
+    width: 30px;
+    height: 30px;
+  }
+
+  .brand-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    line-height: 1.15;
+  }
+
+  .brand-text strong {
+    font-family: var(--font-serif);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--text-primary);
+  }
+
+  .brand-text span {
+    font-family: "Inter", sans-serif;
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .topbar-center {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    margin-left: 34px;
+    min-width: 0;
+  }
+
+  .topbar-right,
+  .account-actions,
+  .topbar-nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .topbar-divider {
+    width: 1px;
+    height: 22px;
+    background: var(--border-color);
+    opacity: .85;
+  }
+
+  .btn {
+    height: 38px;
+    padding: 0 16px;
+    border-radius: 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 650;
+    cursor: pointer;
+    transition: transform var(--ease), background var(--ease), border-color var(--ease), box-shadow var(--ease), color var(--ease);
+    white-space: nowrap;
+  }
+
+  .btn:hover {
+    transform: translateY(-1px);
+  }
+
+  .btn-ghost {
+    background: rgba(255,255,255,.018);
+    border: 1px solid var(--border-soft);
+    color: var(--text-secondary);
+  }
+
+  .btn-ghost:hover {
+    color: var(--text-primary);
+    border-color: rgba(201,162,39,.30);
+    background: rgba(201,162,39,.065);
+  }
+
+  .btn-primary {
+    color: var(--text-inverse);
+    background: linear-gradient(135deg, var(--accent-gold-light), var(--accent-copper));
+    box-shadow: 0 10px 26px rgba(184,115,51,.24);
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 14px 36px rgba(201,162,39,.28);
+  }
+
+  .btn-subtle {
+    height: 36px;
+    padding: 0 15px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 500;
+    border: 1px solid rgba(201, 162, 39, 0.14);
+    background: rgba(255,255,255,0.018);
+    color: var(--text-secondary);
+  }
+
+  .btn-subtle:hover {
+    color: var(--text-primary);
+    border-color: rgba(201, 162, 39, 0.30);
+    background: rgba(201, 162, 39, 0.07);
+  }
+
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 12px;
+    display: inline-grid;
+    place-items: center;
+  }
+
+  .btn svg,
+  .icon-btn svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+  }
+
+  /* ===== App Layout ===== */
+
+  .app-shell {
+    position: relative;
+    z-index: 1;
+    height: 100vh;
+    padding-top: 72px;
+    display: grid;
+    grid-template-columns: 236px minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .sidebar {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.006)),
+      rgba(18, 15, 13, .88);
+    border-right: 1px solid var(--border-soft);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .project-mini {
+    padding: 18px 16px 16px;
+    border-bottom: 1px solid rgba(201,162,39,.10);
+  }
+
+  .project-mini-label {
+    font-size: 11px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .project-mini-title {
+    padding: 12px;
+    border: 1px solid rgba(201,162,39,.12);
+    border-radius: var(--radius-md);
+    background: rgba(255,255,255,.018);
+  }
+
+  .project-mini-title strong {
+    display: block;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .project-mini-title span {
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  .steps {
+    flex: 1;
+    padding: 12px 10px;
+    overflow-y: auto;
+  }
+
+  .step {
+    position: relative;
+    min-height: 50px;
+    padding: 11px 12px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background var(--ease), color var(--ease), border-color var(--ease);
+  }
+
+  .step:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .step.active {
+    color: var(--accent-gold-light);
+    background: rgba(201,162,39,.10);
+    box-shadow: inset 0 0 0 1px rgba(201,162,39,.18);
+  }
+
+  .step.done {
+    color: var(--text-body);
+  }
+
+  .step.disabled {
+    opacity: .43;
+    pointer-events: none;
+  }
+
+  .step-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 28px;
+    font-size: 17px;
+    background: rgba(201,162,39,.055);
+    border: 1px solid rgba(201,162,39,.12);
+    filter: grayscale(.15);
+  }
+
+  .step.active .step-icon {
+    background: rgba(201,162,39,.13);
+    border-color: rgba(201,162,39,.24);
+    filter: none;
+  }
+
+  .step.done .step-icon {
+    background: var(--success-bg);
+    border-color: rgba(101,167,122,.22);
+    filter: none;
+  }
+
+  .step-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .step-status {
+    color: var(--success);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .main-area {
+    min-width: 0;
+    height: calc(100vh - 72px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: var(--text-muted);
+    font-size: 15px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .breadcrumb a {
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color var(--ease);
+  }
+
+  .breadcrumb a:hover {
+    color: var(--accent-gold);
+  }
+
+  .breadcrumb-current {
+    color: var(--text-primary);
+    font-weight: 750;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .breadcrumb-icon {
+    font-size: 17px;
+    line-height: 1;
+  }
+
+  .content-area {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .content-area::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .content-area::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+  }
+
+  .content-area::-webkit-scrollbar-thumb {
+    background: var(--accent-copper);
+    border-radius: 999px;
+  }
+
+  .topic-panel {
+    width: 100%;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 28px 28px 36px;
+  }
+
+  .page-title-row {
+    margin-bottom: 20px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: 24px;
+  }
+
+  .page-kicker {
+    margin-bottom: 10px;
+    color: var(--accent-gold);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+  }
+
+  .page-title {
+    font-family: var(--font-serif);
+    color: var(--text-primary);
+    font-size: 34px;
+    line-height: 1.18;
+    letter-spacing: -.03em;
+    margin-bottom: 9px;
+  }
+
+  .page-title em {
+    color: var(--accent-gold-light);
+    font-style: normal;
+  }
+
+  .page-desc {
+    max-width: 720px;
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+
+  .topic-actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  .info-strip {
+    min-height: 54px;
+    padding: 13px 16px;
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(201,162,39,.13);
+    background:
+      linear-gradient(90deg, rgba(201,162,39,.075), rgba(255,255,255,.014)),
+      var(--bg-panel-soft);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-card);
+  }
+
+  .info-strip-main {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+  }
+
+  .info-dot {
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    color: var(--accent-gold-light);
+    background: rgba(201,162,39,.10);
+    border: 1px solid rgba(201,162,39,.18);
+  }
+
+  .info-strip strong {
+    color: var(--text-primary);
+    font-size: 14px;
+  }
+
+  .info-strip span {
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .info-metrics {
+    display: flex;
+    gap: 18px;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  .info-metrics b {
+    color: var(--accent-warm);
+    font-weight: 700;
+  }
+
+
+  .simple-topic-title {
+    margin-bottom: 18px;
+    color: var(--text-primary);
+    font-family: var(--font-serif);
+    font-size: 28px;
+    line-height: 1.25;
+    letter-spacing: -.02em;
+  }
+
+  .simple-topic-title em {
+    color: var(--accent-gold-light);
+    font-style: normal;
+  }
+
+  .simple-topic-sub {
+    margin-top: -8px;
+    margin-bottom: 18px;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .topic-columns {
+    display: grid;
+    grid-template-columns: 455px minmax(0, 1fr);
+    gap: 22px;
+    align-items: start;
+  }
+
+  .topic-left-col,
+  .topic-right-col {
+    min-width: 0;
+  }
+
+  .topic-right-col {
+    position: sticky;
+    top: 18px;
+  }
+
+  .panel-card {
+    border-radius: var(--radius-xl);
+    border: 1px solid rgba(201,162,39,.15);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.008)),
+      var(--bg-panel);
+    box-shadow: var(--shadow-heavy);
+    overflow: hidden;
+  }
+
+
+  .candidate-list {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+
+  .candidate-card {
+    position: relative;
+    display: block;
+    padding: 15px 16px;
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(201,162,39,.12);
+    background: rgba(255,255,255,.018);
+    cursor: pointer;
+    transition: transform var(--ease-smooth), background var(--ease), border-color var(--ease), box-shadow var(--ease);
+  }
+
+  .candidate-card:hover {
+    transform: translateX(3px);
+    border-color: rgba(201,162,39,.25);
+    background: rgba(201,162,39,.048);
+  }
+
+  .candidate-card.active {
+    border-color: rgba(201,162,39,.46);
+    background:
+      linear-gradient(135deg, rgba(201,162,39,.12), rgba(184,115,51,.045)),
+      rgba(255,255,255,.018);
+    box-shadow: inset 0 0 0 1px rgba(201,162,39,.16), 0 14px 30px rgba(0,0,0,.18);
+  }
+
+  .candidate-body {
+    min-width: 0;
+  }
+
+  .candidate-title {
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 750;
+    line-height: 1.42;
+    margin-bottom: 6px;
+  }
+
+  .candidate-card.active .candidate-title {
+    color: var(--accent-gold-light);
+  }
+
+  .candidate-angle {
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    line-height: 1.55;
+    margin-bottom: 9px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .candidate-tags {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .candidate-tag {
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid rgba(201,162,39,.12);
+    background: rgba(201,162,39,.045);
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 650;
+  }
+
+  .candidate-card.active .candidate-tag {
+    border-color: rgba(201,162,39,.22);
+    color: var(--accent-warm);
+    background: rgba(201,162,39,.08);
+  }
+
+
+  .action-btn {
+    height: 34px;
+    padding: 0 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(201,162,39,.14);
+    background: rgba(255,255,255,.018);
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 650;
+    cursor: pointer;
+    transition: all var(--ease);
+  }
+
+  .action-btn:hover {
+    color: var(--text-primary);
+    border-color: rgba(201,162,39,.30);
+    background: rgba(201,162,39,.07);
+    transform: translateY(-1px);
+  }
+
+  .history-block {
+    border-top: 1px solid rgba(201,162,39,.11);
+    padding: 12px;
+  }
+
+  .history-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .history-toggle {
+    height: 34px;
+    padding: 0 4px;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .history-toggle:hover {
+    color: var(--text-primary);
+  }
+
+  .toggle-arrow {
+    font-size: 11px;
+    transition: transform var(--ease-smooth);
+  }
+
+  .toggle-arrow.open {
+    transform: rotate(90deg);
+  }
+
+  .history-rounds {
+    margin-top: 10px;
+    display: grid;
+    gap: 8px;
+  }
+
+  .history-label {
+    padding: 6px 0 2px;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+  }
+
+  .history-round .candidate-card {
+    padding: 12px 14px;
+  }
+
+  .history-round .candidate-title {
+    font-size: 13px;
+  }
+
+  .history-round .candidate-angle {
+    font-size: 12px;
+    margin-bottom: 7px;
+  }
+
+  .detail-card {
+    border-radius: var(--radius-xl);
+    border: 1px solid rgba(201,162,39,.16);
+    background:
+      radial-gradient(circle at 78% 0%, rgba(201,162,39,.08), transparent 34%),
+      linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.008)),
+      var(--bg-panel);
+    box-shadow: var(--shadow-heavy);
+    overflow: hidden;
+  }
+
+  .detail-header {
+    padding: 24px 26px 22px;
+    border-bottom: 1px solid rgba(201,162,39,.12);
+  }
+
+  .detail-kicker {
+    margin-bottom: 12px;
+    color: var(--accent-gold);
+    font-size: 12px;
+    font-weight: 850;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+  }
+
+  .detail-title {
+    color: var(--text-primary);
+    font-family: var(--font-serif);
+    font-size: 25px;
+    line-height: 1.34;
+    letter-spacing: -.02em;
+    margin-bottom: 10px;
+  }
+
+  .detail-angle {
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.8;
+  }
+
+  .detail-tags {
+    padding: 14px 26px;
+    border-bottom: 1px solid rgba(201,162,39,.11);
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .detail-tag {
+    padding: 5px 12px;
+    border-radius: 999px;
+    color: var(--accent-warm);
+    background: rgba(201,162,39,.075);
+    border: 1px solid rgba(201,162,39,.16);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .detail-sections {
+    padding: 6px 0;
+  }
+
+  .detail-section {
+    padding: 18px 26px;
+    border-bottom: 1px solid rgba(201,162,39,.10);
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .detail-section:last-child {
+    border-bottom: none;
+  }
+
+  .detail-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 13px;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgba(201,162,39,.14);
+    background: rgba(201,162,39,.065);
+    color: var(--accent-gold-light);
+    font-size: 18px;
+  }
+
+  .detail-section-label {
+    margin-bottom: 6px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 850;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+  }
+
+  .detail-section-text {
+    color: var(--text-body);
+    font-size: 13.5px;
+    line-height: 1.82;
+  }
+
+  .risk-list {
+    list-style: none;
+    display: grid;
+    gap: 6px;
+  }
+
+  .risk-item {
+    position: relative;
+    padding-left: 16px;
+    color: var(--text-body);
+    font-size: 13px;
+    line-height: 1.72;
+  }
+
+  .risk-item::before {
+    content: "";
+    position: absolute;
+    left: 1px;
+    top: .78em;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--text-muted);
+  }
+
+  .detail-footer {
+    padding: 18px 26px 22px;
+    border-top: 1px solid rgba(201,162,39,.12);
+    background: rgba(0,0,0,.15);
+  }
+
+  .confirm-btn {
+    width: 100%;
+    height: 46px;
+    border-radius: 13px;
+    color: var(--text-inverse);
+    background: linear-gradient(135deg, var(--accent-gold-light), var(--accent-copper));
+    box-shadow: 0 12px 30px rgba(184,115,51,.25);
+    font-size: 15px;
+    font-weight: 850;
+    cursor: pointer;
+    transition: transform var(--ease), box-shadow var(--ease), filter var(--ease);
+  }
+
+  .confirm-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 16px 40px rgba(201,162,39,.28);
+    filter: brightness(1.04);
+  }
+
+  .detail-hint {
+    margin-top: 10px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+
+  /* ===== Centered page states ===== */
+
+  .center-state {
+    min-height: calc(100vh - 72px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 44px 28px 64px;
+  }
+
+  .center-state-inner {
+    width: min(560px, 100%);
+    text-align: center;
+    transform: translateY(-80px);
+  }
+
+  .center-pulse {
+    width: 88px;
+    height: 88px;
+    margin: 0 auto 28px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    position: relative;
+    color: var(--accent-gold-light);
+    background:
+      radial-gradient(circle at 50% 40%, rgba(201,162,39,.20), rgba(201,162,39,.065) 62%, rgba(201,162,39,.025) 100%);
+    border: 1px solid rgba(201,162,39,.22);
+    font-size: 34px;
+    box-shadow:
+      0 0 42px rgba(201,162,39,.08),
+      inset 0 1px 0 rgba(255,255,255,.05);
+  }
+
+  .center-pulse::before,
+  .center-pulse::after {
+    content: "";
+    position: absolute;
+    border-radius: 50%;
+    border: 2px solid rgba(201,162,39,.25);
+    inset: -8px;
+    animation: pulse-ring 2s cubic-bezier(.4,0,.6,1) infinite;
+  }
+
+  .center-pulse::after {
+    inset: -18px;
+    opacity: .34;
+    animation-delay: .55s;
+  }
+
+  @keyframes pulse-ring {
+    0%, 100% { opacity: .42; transform: scale(.96); }
+    50% { opacity: .08; transform: scale(1.14); }
+  }
+
+  .center-error-icon {
+    width: 82px;
+    height: 82px;
+    margin: 0 auto 28px;
+    border-radius: 26px;
+    display: grid;
+    place-items: center;
+    color: var(--danger);
+    background:
+      radial-gradient(circle at 50% 40%, rgba(192,100,84,.16), rgba(192,100,84,.06) 68%, rgba(192,100,84,.025) 100%);
+    border: 1px solid rgba(192,100,84,.26);
+    font-size: 34px;
+    font-weight: 900;
+    box-shadow:
+      0 0 42px rgba(192,100,84,.07),
+      inset 0 1px 0 rgba(255,255,255,.04);
+  }
+
+  .center-state-title {
+    color: var(--text-primary);
+    font-family: var(--font-serif);
+    font-size: 26px;
+    line-height: 1.25;
+    letter-spacing: -.02em;
+    margin-bottom: 10px;
+  }
+
+  .center-state-desc {
+    max-width: 520px;
+    margin: 0 auto;
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.85;
+  }
+
+  .center-state-sub {
+    margin-top: 6px;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .center-state-sub b {
+    color: var(--accent-warm);
+    font-weight: 750;
+  }
+
+  .btn-spinner {
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    display: none;
+    animation: btn-spin .72s linear infinite;
+  }
+
+  .btn.loading {
+    pointer-events: none;
+    opacity: .78;
+  }
+
+  .btn.loading .btn-spinner {
+    display: inline-block;
+  }
+
+  @keyframes btn-spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .center-state-actions {
+    margin-top: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .center-state-line {
+    width: 150px;
+    height: 1px;
+    margin: 24px auto 0;
+    background: linear-gradient(90deg, transparent, rgba(201,162,39,.24), transparent);
+  }
+
+  .dots::after {
+    content: "";
+    animation: dots 1.4s steps(4, end) infinite;
+  }
+
+  @keyframes dots {
+    0% { content: ""; }
+    25% { content: "."; }
+    50% { content: ".."; }
+    75% { content: "..."; }
+    100% { content: ""; }
+  }
+
+  /* ===== Preview state switcher ===== */
+
+  .state-switcher {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 1000;
+    display: flex;
+    gap: 6px;
+    padding: 6px;
+    border-radius: 13px;
+    background: rgba(18, 15, 13, .92);
+    border: 1px solid var(--border-soft);
+    box-shadow: var(--shadow-heavy);
+    backdrop-filter: blur(16px);
+  }
+
+  .state-switcher-btn {
+    height: 30px;
+    padding: 0 12px;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background var(--ease), color var(--ease);
+  }
+
+  .state-switcher-btn:hover {
+    color: var(--text-primary);
+    background: rgba(201,162,39,.06);
+  }
+
+  .state-switcher-btn.active {
+    color: var(--accent-gold-light);
+    background: rgba(201,162,39,.11);
+  }
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" onclick="handleHome()">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32">
+          <path d="M8 12.5C8 10.6 9.6 9 11.5 9h9c1.9 0 3.5 1.6 3.5 3.5v7.2c0 2.2-1.8 4-4 4h-8c-2.2 0-4-1.8-4-4v-7.2Z" fill="none" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M10 9.2C10.7 6.9 12.9 5.5 16 5.5s5.3 1.4 6 3.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M15 13.1c0-.8.9-1.3 1.6-.9l4.1 2.4c.7.4.7 1.4 0 1.8l-4.1 2.4c-.7.4-1.6-.1-1.6-.9v-4.8Z" fill="currentColor"/>
+          <path d="M11.2 14h1.7M11.2 17.5h1.7M19.1 14h1.7M19.1 17.5h1.7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          <path d="M16 4v-2M12.2 6.2 10.6 4.5M19.8 6.2l1.6-1.7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span class="brand-text">
+        <strong>历史短视频工坊</strong>
+        <span>History Video Forge</span>
+      </span>
+    </a>
+
+    <div class="topbar-center">
+      <div class="breadcrumb">
+        <span>未命名项目</span>
+        <span>›</span>
+        <span class="breadcrumb-current"><span class="breadcrumb-icon">🎯</span> 选题</span>
+      </div>
+    </div>
+
+    <div class="topbar-right">
+      <div class="topbar-nav-actions">
+        <button class="btn btn-ghost" onclick="handleBack()">
+          <svg viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+          返回项目列表
+        </button>
+      </div>
+      <div class="topbar-divider" aria-hidden="true"></div>
+      <div class="account-actions">
+        <button class="btn btn-subtle">我的</button>
+        <button class="btn btn-subtle icon-btn" aria-label="设置" title="设置">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.86l.04.04a2 2 0 1 1-2.83 2.83l-.04-.04a1.7 1.7 0 0 0-1.86-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.86.34l-.04.04a2 2 0 1 1-2.83-2.83l.04-.04A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.04A1.7 1.7 0 0 0 4.6 8a1.7 1.7 0 0 0-.34-1.86l-.04-.04A2 2 0 1 1 7.05 3.27l.04.04A1.7 1.7 0 0 0 8.95 3a1.7 1.7 0 0 0 1.03-1.56V1a2 2 0 1 1 4 0v.44A1.7 1.7 0 0 0 15.01 3a1.7 1.7 0 0 0 1.86-.34l.04-.04a2 2 0 1 1 2.83 2.83l-.04.04A1.7 1.7 0 0 0 19.4 8a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.04A1.7 1.7 0 0 0 19.4 15Z"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="project-mini">
+        <div class="project-mini-label">Current Project</div>
+        <div class="project-mini-title">
+          <strong>未命名项目</strong>
+          <span>选题阶段 · 自动推荐</span>
+        </div>
+      </div>
+
+      <nav class="steps">
+        <div class="step active done">
+          <span class="step-icon">🎯</span>
+          <span class="step-name">选题</span>
+          <span class="step-status">✓</span>
+        </div>
+        <div class="step disabled">
+          <span class="step-icon">📝</span>
+          <span class="step-name">文案</span>
+        </div>
+        <div class="step disabled">
+          <span class="step-icon">🎬</span>
+          <span class="step-name">分镜</span>
+        </div>
+        <div class="step disabled">
+          <span class="step-icon">🖼️</span>
+          <span class="step-name">素材</span>
+        </div>
+        <div class="step disabled">
+          <span class="step-icon">🎞️</span>
+          <span class="step-name">合成</span>
+        </div>
+        <div class="step disabled">
+          <span class="step-icon">🎥</span>
+          <span class="step-name">渲染</span>
+        </div>
+        <div class="step disabled">
+          <span class="step-icon">🚀</span>
+          <span class="step-name">发布</span>
+        </div>
+      </nav>
+    </aside>
+
+    <main class="main-area">
+      <div class="content-area" id="contentRoot"></div>
+    </main>
+  </div>
+
+  <div class="state-switcher" aria-label="预览状态切换">
+    <button class="state-switcher-btn active" data-state="candidates">候选列表</button>
+    <button class="state-switcher-btn" data-state="generating">生成中</button>
+    <button class="state-switcher-btn" data-state="error">错误态</button>
+  </div>
+
+<script>
+const contentRoot = document.getElementById('contentRoot');
+const stateBtns = document.querySelectorAll('.state-switcher-btn');
+
+const mockCandidates = [
+  {
+    id: 'c1', rank: 1,
+    title: '玄武门之变：一场改变大唐命运的兄弟对决',
+    angle: '李世民在生死一线的宫廷伏击中，以不到百人逆转局势，开启贞观之治的序章。',
+    family: '宫廷/权谋',
+    scope: '单事件·高冲突',
+    strong_scene: '公元626年七月二日清晨，长安玄武门前，李世民伏兵于树丛之中。李建成、李元吉策马入宫时察觉异常，拨马欲逃——李世民弯弓一箭，正中建成咽喉。尉迟恭率七十骑从侧翼杀出，一场兄弟相残的政变在宫门前五分钟内定局。',
+    why_now: '职场内卷时代，人们对「有能力却被压制」的处境高度共鸣；玄武门是极致版的「不赌就死」——这种背水一战的选择在短视频的情绪逻辑中天然具备破圈潜力。',
+    risk_hints: ['需要避免美化暴力政变', '兄弟相残主题需注意传播语境', '史实争议（如「高祖泛舟海池」的真伪）需标出']
+  },
+  {
+    id: 'c2', rank: 2,
+    title: '澶渊之盟：一场用岁币换来的百年和平',
+    angle: '当寇准挟持皇帝亲征、萧太后孤注南下时，宋辽两国的命运系于黄河冰面之上。',
+    family: '战争/外交',
+    scope: '单事件·战略博弈',
+    strong_scene: '1004年冬，辽军二十万铁骑直逼澶州。宋真宗在寇准近乎胁迫下渡过黄河，登上澶州北城。宋军望见黄龙旗，士气大振，山呼万岁之声传至辽营。而萧太后在萧挞凛中箭身亡后，面对孤军深入、后路被断的险境，不得不坐回谈判桌。',
+    why_now: '「打工人被迫上战场」的叙事天然共情；用岁币换和平的算账逻辑极易转化为现代人熟悉的「花钱买时间/买确定性」的认知框架，传播友好。',
+    risk_hints: ['避免简化为「宋朝软弱」的刻板叙事', '岁币换算成现代购买力时需审慎', '需要强调澶渊体系的正面历史意义']
+  },
+  {
+    id: 'c3', rank: 3,
+    title: '张居正改革：万历朝的最后一次自救',
+    angle: '一位权倾朝野的首辅，用考成法给整个帝国装上KPI，却在死后被清算抄家。',
+    family: '改革/吏治',
+    scope: '单事件·制度变革',
+    strong_scene: '万历元年，张居正上《请稽查章奏随事考成以修实政疏》。考成法施行后，六部、都察院—六科—内阁的督办链如同一张巨网笼罩大明官场。仅万历三年，全国就裁汰冗官三千余人。但在万历十年张居正病逝后，被这位老师压制多年的万历皇帝终于等到反攻倒算的机会。',
+    why_now: '「KPI考核」「绩效考核」是现代打工人的日常痛点，考成法就是明朝版的KPI革命。改革者被清算的戏剧性结局，天然具备情绪引爆力。',
+    risk_hints: ['张居正专权争议需对等呈现', '避免将古代改革与现代制度做过度类比', '考成法的负面效应（如刷数据）需提及']
+  },
+  {
+    id: 'c4', rank: 4,
+    title: '雍熙北伐：宋朝最接近收复燕云的一次',
+    angle: '曹彬十万大军在岐沟关的溃败，让「收复中原」成了宋朝永远无法兑现的承诺。',
+    family: '战争/战略',
+    scope: '单事件·军事转折',
+    strong_scene: '986年正月，宋太宗分三路大军北伐，曹彬主力一路势如破竹，直逼涿州。但粮道被断后，曹彬率军在暴雨泥泞中溃退至岐沟关。辽军耶律休哥精骑追击，宋军争渡拒马河时溺毙者不计其数。太宗在汴京接到败报时「推床而叹」，从此北宋对外战略由攻转守。',
+    why_now: '「就差一步」的遗憾叙事极富传播力；粮道被断的战术细节可以做成可视化地图，视觉传播优势明显。',
+    risk_hints: ['需要控制民族情绪，避免煽动对立', '三路大军的协同失调需专业军事解读', '不宜过度贬抑宋太宗个人能力']
+  },
+  {
+    id: 'c5', rank: 5,
+    title: '靖难之役：从北平打到南京的叔侄夺位战',
+    angle: '朱棣以八百亲兵起事，用四年时间从北京一路打到南京，成为中国唯一造反成功的藩王。',
+    family: '内乱/夺权',
+    scope: '单事件·王朝崩塌',
+    strong_scene: '1399年七月，燕王朱棣以「清君侧」为名，在北平誓师起兵，麾下仅八百亲兵。四年来，他从北平一路南下，在夹河之战中以少胜多击溃盛庸主力，最终于1402年六月渡过长江。南京城破时，宫中火起，建文帝朱允炆不知所终——成为中国历史上最大的失踪悬案之一。',
+    why_now: '「草根逆袭」「以弱胜强」的叙事框架天然适合短视频传播，四年征战可拆成系列连载，建文帝失踪更是永不过时的悬疑钩子。',
+    risk_hints: ['建文帝下落属于历史悬案，不同说法需标出来源', '朱棣篡位的负面评价需客观呈现', '南京城破时的伤亡描写需克制']
+  }
+];
+
+const mockHistoryRounds = [
+  {
+    round_id: 'r1',
+    label: '第 1 轮 · 2024-05-20',
+    candidates: [
+      { id: 'h1', rank: 1, title: '安史之乱：盛世崩塌的第十天', angle: '当安禄山的铁骑踏破潼关，长安的繁华在一夜之间化为灰烬。', family: '叛乱/战争', scope: '单事件', strong_scene: '旧候选，仅用于历史记录。', why_now: '旧候选，仅用于历史记录。', risk_hints: ['旧候选内容需重新评估'] },
+      { id: 'h2', rank: 2, title: '赤壁之战：一把火烧出来的三国', angle: '孙刘联军以五万对二十万，用一场大火改写了中国历史的走向。', family: '战争/联盟', scope: '单事件', strong_scene: '旧候选，仅用于历史记录。', why_now: '旧候选，仅用于历史记录。', risk_hints: ['旧候选内容需重新评估'] },
+      { id: 'h3', rank: 3, title: '王安石变法：大宋的理想主义实验', angle: '一个不修边幅的宰相，试图用国家之手重塑整个帝国的经济命脉。', family: '改革/经济', scope: '单事件', strong_scene: '旧候选，仅用于历史记录。', why_now: '旧候选，仅用于历史记录。', risk_hints: ['旧候选内容需重新评估'] }
+    ]
+  }
+];
+
+let currentState = 'candidates';
+let activeCandidateId = 'c1';
+let historyOpen = false;
+let generatingStartedAt = Date.now();
+let generatingTimer = null;
+
+function allCandidates() {
+  return mockCandidates.concat(mockHistoryRounds.flatMap(r => r.candidates));
+}
+
+function setState(state) {
+  const enteringGenerating = state === 'generating' && currentState !== 'generating';
+  currentState = state;
+  if (enteringGenerating) {
+    generatingStartedAt = Date.now();
+  }
+  stateBtns.forEach(b => b.classList.toggle('active', b.dataset.state === state));
+  render();
+}
+
+function selectCandidate(id) {
+  activeCandidateId = id;
+  render();
+}
+
+function toggleHistory() {
+  historyOpen = !historyOpen;
+  render();
+}
+
+function handleHome() {
+  window.location.href = 'preview-landing.html';
+}
+
+function handleBack() {
+  window.location.href = 'preview-my-projects-simplified-v2.html';
+}
+
+function renderGenerating() {
+  return `
+    <div class="center-state">
+      <div class="center-state-inner">
+        <div class="center-pulse">✦</div>
+        <h2 class="center-state-title">正在生成选题<span class="dots"></span></h2>
+        <p class="center-state-desc">正在调用大模型生成选题推荐，可能需要 1–3 分钟。</p>
+        <p class="center-state-sub">生成完成后结果会自动出现，无需手动刷新。已等待 <b id="elapsedSeconds">0</b> 秒。</p>
+        <div class="center-state-line"></div>
+        <div class="center-state-actions">
+          <button id="refreshStatusBtn" class="btn btn-ghost" onclick="refreshGeneratingStatus(this)">
+            <span class="btn-spinner" aria-hidden="true"></span>
+            <span class="btn-label">刷新状态</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderError() {
+  return `
+    <div class="center-state">
+      <div class="center-state-inner">
+        <div class="center-error-icon">!</div>
+        <h2 class="center-state-title">选题生成失败</h2>
+        <p class="center-state-desc">大模型服务暂时不可用，或本轮结果没有通过基础校验。已有项目数据不会受影响。</p>
+        <div class="center-state-line"></div>
+        <div class="center-state-actions">
+          <button class="btn btn-ghost" onclick="handleBack()">返回项目列表</button>
+          <button class="btn btn-primary" onclick="setState('generating')">重新生成</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderCandidateCard(c, isHistory = false) {
+  const active = c.id === activeCandidateId;
+  return `
+    <div class="candidate-card ${active ? 'active' : ''}" onclick="selectCandidate('${c.id}')">
+      <div class="candidate-body">
+        <div class="candidate-title">${c.title}</div>
+        <div class="candidate-angle">${c.angle}</div>
+        <div class="candidate-tags">
+          <span class="candidate-tag">${c.family}</span>
+          <span class="candidate-tag">${c.scope}</span>
+          ${isHistory ? '<span class="candidate-tag">历史候选</span>' : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderCandidates() {
+  const active = allCandidates().find(c => c.id === activeCandidateId) || mockCandidates[0];
+
+  const historySection = mockHistoryRounds.map(r => `
+    <div class="history-label">${r.label}</div>
+    <div class="history-round">
+      ${r.candidates.map(c => renderCandidateCard(c, true)).join('')}
+    </div>
+  `).join('');
+
+  return `
+    <div class="topic-panel">
+      <h1 class="simple-topic-title">请选择您喜欢的<em>选题</em></h1>
+
+      <div class="topic-columns">
+        <section class="topic-left-col panel-card">
+          <div class="candidate-list">
+            ${mockCandidates.map(c => renderCandidateCard(c)).join('')}
+          </div>
+
+          <div class="history-block">
+            <div class="history-top">
+              <button class="history-toggle" onclick="toggleHistory()">
+                <span class="toggle-arrow ${historyOpen ? 'open' : ''}">▶</span>
+                候选历史
+              </button>
+              <button class="action-btn" onclick="setState('generating')">↺ 换一批</button>
+            </div>
+            ${historyOpen ? `<div class="history-rounds">${historySection}</div>` : ''}
+          </div>
+        </section>
+
+        <aside class="topic-right-col">
+          ${active ? renderDetail(active) : '<div class="detail-empty">请选择左侧候选主题</div>'}
+        </aside>
+      </div>
+    </div>
+  `;
+}
+
+function renderDetail(active) {
+  return `
+    <div class="detail-card">
+      <div class="detail-header">
+        <div class="detail-kicker">Selected Topic</div>
+        <h2 class="detail-title">${active.title}</h2>
+        <p class="detail-angle">${active.angle}</p>
+      </div>
+
+      <div class="detail-tags">
+        <span class="detail-tag">${active.family}</span>
+        <span class="detail-tag">${active.scope}</span>
+        ${active.rank ? `<span class="detail-tag">第 ${active.rank} 推荐</span>` : '<span class="detail-tag">历史候选</span>'}
+      </div>
+
+      <div class="detail-sections">
+        <section class="detail-section">
+          <div class="detail-icon">⚔️</div>
+          <div>
+            <div class="detail-section-label">核心冲突</div>
+            <div class="detail-section-text">${active.strong_scene}</div>
+          </div>
+        </section>
+
+        <section class="detail-section">
+          <div class="detail-icon">📡</div>
+          <div>
+            <div class="detail-section-label">传播切口</div>
+            <div class="detail-section-text">${active.why_now}</div>
+          </div>
+        </section>
+
+        <section class="detail-section">
+          <div class="detail-icon">🎭</div>
+          <div>
+            <div class="detail-section-label">叙事张力</div>
+            <div class="detail-section-text">${active.angle}</div>
+          </div>
+        </section>
+
+        <section class="detail-section">
+          <div class="detail-icon">⚠️</div>
+          <div>
+            <div class="detail-section-label">风险提示</div>
+            <ul class="risk-list">
+              ${active.risk_hints.map(r => `<li class="risk-item">${r}</li>`).join('')}
+            </ul>
+          </div>
+        </section>
+      </div>
+
+      <div class="detail-footer">
+        <button class="confirm-btn" onclick="confirmTopic()">确认此选题，进入文案阶段</button>
+        <div class="detail-hint">确认后将锁定主题，并开始生成 Story Brief / 口播文案。</div>
+      </div>
+    </div>
+  `;
+}
+
+function confirmTopic() {
+  const active = allCandidates().find(c => c.id === activeCandidateId) || mockCandidates[0];
+  alert('已确认选题：' + active.title);
+}
+
+function updateGeneratingElapsed() {
+  const elapsedEl = document.getElementById('elapsedSeconds');
+  if (!elapsedEl) return;
+  const seconds = Math.max(0, Math.floor((Date.now() - generatingStartedAt) / 1000));
+  elapsedEl.textContent = String(seconds);
+}
+
+function syncGeneratingTimer() {
+  if (generatingTimer) {
+    clearInterval(generatingTimer);
+    generatingTimer = null;
+  }
+  if (currentState === 'generating') {
+    updateGeneratingElapsed();
+    generatingTimer = setInterval(updateGeneratingElapsed, 1000);
+  }
+}
+
+function refreshGeneratingStatus(button) {
+  updateGeneratingElapsed();
+
+  const btn = button || document.getElementById('refreshStatusBtn');
+  if (!btn || btn.classList.contains('loading')) return;
+
+  const label = btn.querySelector('.btn-label');
+  btn.classList.add('loading');
+  if (label) label.textContent = '刷新中';
+
+  // 预览模拟：实际项目中这里应触发一次服务器状态查询。
+  window.setTimeout(() => {
+    btn.classList.remove('loading');
+    if (label) label.textContent = '刷新状态';
+  }, 1000);
+}
+
+function render() {
+  if (currentState === 'generating') contentRoot.innerHTML = renderGenerating();
+  else if (currentState === 'error') contentRoot.innerHTML = renderError();
+  else contentRoot.innerHTML = renderCandidates();
+
+  syncGeneratingTimer();
+}
+
+stateBtns.forEach(btn => {
+  btn.addEventListener('click', () => setState(btn.dataset.state));
+});
+
+render();
+</script>
+</body>
+</html>
