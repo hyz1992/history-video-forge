@@ -20,19 +20,6 @@ const currentStepIndex = computed(
   () => workspaceStore.state.value.currentStepIndex,
 );
 
-const projectName = computed(() => {
-  const id = projectStore.state.projectId;
-  const project = projectStore.state.projects.find(
-    (p) => p.project_id === id,
-  );
-  return project?.display_name ?? "未命名项目";
-});
-
-const projectStageDesc = computed(() => {
-  const step = PIPELINE_STEPS[currentStepIndex.value];
-  return `${step.label}阶段 · 系统推荐`;
-});
-
 const stepEmoji: Record<string, string> = {
   topic: "🎯",
   script: "📝",
@@ -87,15 +74,6 @@ function goBack() {
 
 <template>
   <aside class="workspace-sidebar" :class="{ collapsed }">
-    <!-- Project info card -->
-    <div v-if="!collapsed" class="project-mini">
-      <div class="project-mini-label">当前项目</div>
-      <div class="project-mini-title">
-        <strong>{{ projectName }}</strong>
-        <span>{{ projectStageDesc }}</span>
-      </div>
-    </div>
-
     <!-- Step Menu -->
     <ElMenu
       :default-active="String(currentStepIndex)"
@@ -264,38 +242,5 @@ function goBack() {
   color: #65a77a;
   font-size: 12px;
   font-weight: 700;
-}
-
-.project-mini {
-  padding: 14px 12px 12px;
-  border-bottom: 1px solid rgba(201, 162, 39, 0.10);
-}
-
-.project-mini-label {
-  font-size: 11px;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 8px;
-}
-
-.project-mini-title {
-  padding: 10px 12px;
-  border: 1px solid rgba(201, 162, 39, 0.12);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.018);
-}
-
-.project-mini-title strong {
-  display: block;
-  color: var(--text-heading);
-  font-size: 13px;
-  font-weight: 700;
-  margin-bottom: 4px;
-}
-
-.project-mini-title span {
-  color: var(--text-muted);
-  font-size: 12px;
 }
 </style>
