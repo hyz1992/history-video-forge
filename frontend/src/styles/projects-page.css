@@ -224,14 +224,14 @@ body.projects-page-bg::before {
   z-index: 1;
   width: 1120px;
   margin: 0 auto;
-  padding: 106px 0 56px;
+  padding: 98px 0 56px;
 }
 
 .projects-page-wrapper .page-header {
   margin-bottom: 24px;
   display: grid;
   grid-template-columns: 1fr auto;
-  align-items: end;
+  align-items: start;
   gap: 28px;
 }
 
@@ -262,17 +262,17 @@ body.projects-page-bg::before {
   color: var(--accent-gold);
 }
 
-.projects-page-wrapper .page-desc {
-  color: var(--text-secondary);
-  font-size: 15px;
-  max-width: 660px;
+.projects-page-wrapper .tabs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 4px;
 }
 
 .projects-page-wrapper .header-actions {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding-bottom: 4px;
 }
 
 .projects-page-wrapper .workspace-card {

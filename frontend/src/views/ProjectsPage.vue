@@ -266,13 +266,7 @@ function cleanDynasty(raw: string | undefined): string {
       <!-- Page Header -->
       <section class="page-header">
         <div>
-          <div class="breadcrumb">
-            <span>工坊控制台</span>
-            <span>›</span>
-            <b>我的项目</b>
-          </div>
           <h1 class="page-title" data-testid="projects-heading">我的<em>项目</em></h1>
-          <p class="page-desc">管理你创建的历史短视频项目，查看当前状态，按名称、朝代或更新时间快速找到项目。需要创建内容时，使用页面右侧的新建项目入口。</p>
         </div>
         <div class="header-actions">
           <button class="btn btn-primary" data-testid="create-project" @click="handleCreateProject">
