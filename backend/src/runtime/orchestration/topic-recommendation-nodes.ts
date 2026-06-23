@@ -4,7 +4,7 @@ import { saveCachedCandidate } from "../../modules/cache/candidate-cache.reposit
 import type { BuildTopicCandidatesInput } from "../../modules/topic/topic-candidate.builder.js";
 import type { GraphTraceNodeSummary } from "./graph-trace.js";
 
-export const TOPIC_CANDIDATE_TARGET_COUNT = 3;
+export const TOPIC_CANDIDATE_TARGET_COUNT = 4;
 export const TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT = 8;
 
 export interface TopicRecommendationGraphDependencies {
