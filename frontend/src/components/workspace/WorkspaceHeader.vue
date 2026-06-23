@@ -62,7 +62,7 @@ function goBack() {
 
     <div class="topbar-center">
       <div class="breadcrumb">
-        <span>{{ projectName }}</span>
+        <span class="breadcrumb-project">{{ projectName }}</span>
         <span class="breadcrumb-sep">›</span>
         <span class="breadcrumb-current">
           <span class="breadcrumb-icon">{{ stepEmojiMap[PIPELINE_STEPS[workspaceStore.state.value.currentStepIndex].key] }}</span>
@@ -265,6 +265,11 @@ function goBack() {
 
 .breadcrumb-sep {
   color: #6b635a;
+}
+
+.breadcrumb-project {
+  color: #f5f0e8;
+  font-weight: 750;
 }
 
 .breadcrumb-current {
