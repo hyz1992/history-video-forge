@@ -11,9 +11,21 @@ const workspaceStore = useWorkspaceStore();
 const projectStore = useProjectStore();
 const router = useRouter();
 
-const currentStepLabel = computed(
-  () => PIPELINE_STEPS[workspaceStore.state.value.currentStepIndex].label,
-);
+const stepEmojiMap: Record<string, string> = {
+  topic: "🎯",
+  script: "📝",
+  storyboard: "🎬",
+  asset: "🖼️",
+  compose: "🎞️",
+  render: "🎥",
+  publish: "🚀",
+};
+
+const currentStepLabel = computed(() => {
+  const step = PIPELINE_STEPS[workspaceStore.state.value.currentStepIndex];
+  const emoji = stepEmojiMap[step.key] ?? "";
+  return `${emoji} ${step.label}`;
+});
 
 const projectName = computed(() => {
   const id = projectStore.state.projectId;

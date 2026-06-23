@@ -5,17 +5,9 @@ import {
   ElMenu,
   ElMenuItem,
   ElButton,
-  ElIcon,
   ElTooltip,
 } from "element-plus";
 import {
-  Edit,
-  Document,
-  Film,
-  Box,
-  VideoCameraFilled,
-  Download,
-  Share,
   Fold,
   Expand,
 } from "@element-plus/icons-vue";
@@ -41,20 +33,19 @@ const projectName = computed(() => {
   return project?.display_name ?? "未命名项目";
 });
 
-const sidebarWidth = computed(() =>
-  collapsed.value
-    ? "var(--sidebar-collapsed-width)"
-    : "var(--sidebar-expanded-width)",
-);
+const projectStageDesc = computed(() => {
+  const step = PIPELINE_STEPS[currentStepIndex.value];
+  return `${step.label}阶段 · 系统推荐`;
+});
 
-const stepIcons: Record<string, any> = {
-  topic: Edit,
-  script: Document,
-  storyboard: Film,
-  asset: Box,
-  compose: VideoCameraFilled,
-  render: Download,
-  publish: Share,
+const stepEmoji: Record<string, string> = {
+  topic: "🎯",
+  script: "📝",
+  storyboard: "🎬",
+  asset: "🖼️",
+  compose: "🎞️",
+  render: "🎥",
+  publish: "🚀",
 };
 
 /**
@@ -111,6 +102,15 @@ function goBack() {
       />
     </div>
 
+    <!-- Project info card -->
+    <div v-if="!collapsed" class="project-mini">
+      <div class="project-mini-label">当前项目</div>
+      <div class="project-mini-title">
+        <strong>{{ projectName }}</strong>
+        <span>{{ projectStageDesc }}</span>
+      </div>
+    </div>
+
     <!-- Step Menu -->
     <ElMenu
       :default-active="String(currentStepIndex)"
@@ -131,9 +131,7 @@ function goBack() {
             :disabled="step.index > getReachedStepIndex()"
             class="step-menu-item"
           >
-            <ElIcon class="step-icon">
-              <component :is="stepIcons[step.key]" />
-            </ElIcon>
+            <span class="step-emoji">{{ stepEmoji[step.key] }}</span>
             <template #title>
               <span class="step-label">
                 {{ step.label }}
@@ -150,9 +148,7 @@ function goBack() {
           :disabled="step.index > getReachedStepIndex()"
           class="step-menu-item"
         >
-          <ElIcon class="step-icon">
-            <component :is="stepIcons[step.key]" />
-          </ElIcon>
+          <span class="step-emoji">{{ stepEmoji[step.key] }}</span>
           <template #title>
             <span class="step-label">
               {{ step.label }}
@@ -232,8 +228,9 @@ function goBack() {
   position: relative;
 }
 
-.step-icon {
-  font-size: 18px;
+.step-emoji {
+  font-size: 17px;
+  line-height: 1;
 }
 
 .step-label {
@@ -253,5 +250,38 @@ function goBack() {
 .step-menu-item.is-disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.project-mini {
+  padding: 14px 12px 12px;
+  border-bottom: 1px solid rgba(201, 162, 39, 0.10);
+}
+
+.project-mini-label {
+  font-size: 11px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.project-mini-title {
+  padding: 10px 12px;
+  border: 1px solid rgba(201, 162, 39, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.project-mini-title strong {
+  display: block;
+  color: var(--text-heading);
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.project-mini-title span {
+  color: var(--text-muted);
+  font-size: 12px;
 }
 </style>

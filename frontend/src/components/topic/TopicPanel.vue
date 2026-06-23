@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { useRoute, useRouter } from "vue-router";
 
-import { useTopicStore, type TopicRecommendationFilters } from "../../stores/topic";
+import { useTopicStore } from "../../stores/topic";
 import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 import { useStagePolling } from "../../composables/useStagePolling";
@@ -28,7 +28,6 @@ const { startPolling, isPolling } = useStagePolling({
   isTerminal: (snapshot) =>
     snapshot.current_status !== "topic_generating" && snapshot.current_status !== "topic_pending",
   onComplete: () => {
-    // 生成完成后刷新候选列表
     topicStore.loadExistingTopic();
   },
 });
@@ -43,32 +42,23 @@ onMounted(async () => {
     return;
   }
   await topicStore.loadExistingTopic();
-  // F5 刷新后恢复轮询
   if (isSnapshotGenerating.value) {
     startPolling();
   }
 });
 
-const eraFilter = ref<TopicRecommendationFilters["era"]>(
-  (sessionStorage.getItem("topic-era-filter") as TopicRecommendationFilters["era"]) ?? "ancient"
-);
-const tensionFilter = ref<TopicRecommendationFilters["tension"]>(
-  (sessionStorage.getItem("topic-tension-filter") as TopicRecommendationFilters["tension"]) ?? "high"
-);
 const isRefreshingTopicStatus = ref(false);
+const historyOpen = ref(false);
 
-// Persist filter selections
-function saveFilters() {
-  sessionStorage.setItem("topic-era-filter", eraFilter.value);
-  sessionStorage.setItem("topic-tension-filter", tensionFilter.value);
+function readFilters() {
+  return {
+    era: (sessionStorage.getItem("topic-era-filter") ?? "ancient") as "ancient" | "medieval" | "late-imperial",
+    tension: (sessionStorage.getItem("topic-tension-filter") ?? "high") as "high" | "balanced" | "hook-first",
+  };
 }
 
 const currentCandidates = computed(
   () => topicStore.state.currentRound?.candidates ?? topicStore.state.candidates,
-);
-
-const currentRoundLabel = computed(
-  () => topicStore.state.currentRound?.label ?? "当前推荐",
 );
 
 const selectedCandidate = computed(() => topicStore.state.selectedCandidate);
@@ -78,6 +68,12 @@ const selectedCandidateId = computed(
 );
 
 const hasCandidates = computed(() => currentCandidates.value.length > 0);
+
+const hasLoadError = computed(() => !!topicStore.state.loadError);
+
+const isGeneratingState = computed(
+  () => !hasCandidates.value && (topicStore.state.isGenerating || isSnapshotGenerating.value || isPolling.value),
+);
 
 const whyThisNow = computed(() => {
   const c = selectedCandidate.value;
@@ -102,24 +98,20 @@ function selectHistoryCandidate(
   topicStore.openCandidate(candidate, roundId);
 }
 
-async function generateRecommendations() {
-  saveFilters();
-  const generation = topicStore.generateSystemRecommendations({
-    era: eraFilter.value,
-    tension: tensionFilter.value,
-  });
+function toggleHistory() {
+  historyOpen.value = !historyOpen.value;
+}
+
+async function handleRefreshBatch() {
+  const filters = readFilters();
+  const generation = topicStore.generateSystemRecommendations(filters);
   startPolling();
   await generation;
-  if (!topicStore.state.loadError) {
-    ElMessage.success("选题推荐已生成");
-  }
 }
 
 async function handleRegenerate() {
-  const generation = topicStore.generateSystemRecommendations({
-    era: eraFilter.value,
-    tension: tensionFilter.value,
-  });
+  const filters = readFilters();
+  const generation = topicStore.generateSystemRecommendations(filters);
   startPolling();
   await generation;
   if (!topicStore.state.loadError) {
@@ -129,7 +121,6 @@ async function handleRegenerate() {
 
 async function handleRefreshGeneratingStatus() {
   if (isRefreshingTopicStatus.value) return;
-
   isRefreshingTopicStatus.value = true;
   try {
     const snapshot = await topicStore.loadSnapshot();
@@ -153,614 +144,750 @@ async function confirmCandidate() {
   }
 }
 
-function handleRetry() {
-  topicStore.generateSystemRecommendations({
-    era: eraFilter.value,
-    tension: tensionFilter.value,
-  });
+function roundLabel(round: { label?: string; round_index?: number }) {
+  return round.label ?? `第 ${round.round_index ?? "-"} 轮`;
 }
 </script>
 
 <template>
   <div class="topic-panel">
-    <!-- Top action bar: source tabs + round badge -->
-    <div class="topic-action-bar">
-      <el-tabs
-        :model-value="topicStore.state.activeTab"
-        class="topic-source-tabs"
-        @tab-change="topicStore.selectTab"
-      >
-        <el-tab-pane label="系统推荐" name="system" />
-        <el-tab-pane label="事件库" name="library" />
-        <el-tab-pane label="自定义选题" name="custom" />
-      </el-tabs>
-
-      <el-badge
-        v-if="topicStore.state.currentRound"
-        :value="currentRoundLabel"
-        class="topic-round-badge"
-        type="info"
-      />
-    </div>
-
-    <!-- System recommendations panel -->
-    <template v-if="topicStore.state.activeTab === 'system'">
-      <!-- Error state -->
-      <div v-if="topicStore.state.loadError" class="topic-error-card">
-        <el-alert
-          :title="'生成失败：' + topicStore.state.loadError"
-          type="error"
-          show-icon
-          :closable="false"
-        />
-        <el-button type="primary" @click="handleRetry">重试</el-button>
-      </div>
-
-      <!-- Loading / Generating state (snapshot-based survives refresh) -->
+    <template v-if="!hasCandidates && (topicStore.state.isGenerating || isSnapshotGenerating || isPolling)">
       <StageGenerating
-        v-else-if="!hasCandidates && (topicStore.state.isGenerating || isSnapshotGenerating || isPolling)"
         title="正在生成选题"
         hint="正在调用大模型生成选题推荐，可能需要 1-3 分钟。"
         secondary-hint="生成完成后结果会自动出现，无需手动刷新。"
       >
         <template #action>
-          <el-button
-            :loading="isRefreshingTopicStatus"
-            @click="handleRefreshGeneratingStatus"
-          >
-            刷新状态
-          </el-button>
+          <button class="btn btn-ghost" :disabled="isRefreshingTopicStatus" @click="handleRefreshGeneratingStatus">
+            {{ isRefreshingTopicStatus ? '刷新中…' : '刷新状态' }}
+          </button>
         </template>
       </StageGenerating>
+    </template>
 
-      <!-- Empty state -->
-      <div v-else-if="!hasCandidates" class="topic-empty-state">
-        <div class="topic-empty-inner">
-          <p class="topic-empty-text">还没有选题建议，选择筛选条件后开始生成。</p>
-
-          <div class="topic-filters">
-            <el-select v-model="eraFilter" placeholder="历史时期" style="width: 160px">
-              <el-option label="先秦至两汉" value="ancient" />
-              <el-option label="魏晋至唐宋" value="medieval" />
-              <el-option label="元明清" value="late-imperial" />
-            </el-select>
-
-            <el-select v-model="tensionFilter" placeholder="叙事张力" style="width: 160px">
-              <el-option label="高张力" value="high" />
-              <el-option label="均衡叙事" value="balanced" />
-              <el-option label="传播切口优先" value="hook-first" />
-            </el-select>
-
-            <el-button
-              type="primary"
-              :disabled="isSnapshotGenerating || isPolling"
-              :loading="isSnapshotGenerating || isPolling"
-              @click="generateRecommendations"
-            >
-              开始生成选题
-            </el-button>
+    <template v-else-if="hasLoadError">
+      <div class="center-state">
+        <div class="center-state-inner">
+          <div class="center-error-icon">!</div>
+          <h2 class="center-state-title">选题生成失败</h2>
+          <p class="center-state-desc">{{ topicStore.state.loadError }}</p>
+          <div class="center-state-line"></div>
+          <div class="center-state-actions">
+            <button class="btn btn-ghost" @click="router.push('/projects')">返回项目列表</button>
+            <button class="btn btn-primary" @click="handleRegenerate">重新生成</button>
           </div>
-        </div>
-      </div>
-
-      <!-- Two-column layout: candidates + details -->
-      <div v-else class="topic-content">
-        <!-- Filters -->
-        <div class="topic-filters-bar">
-          <el-select v-model="eraFilter" placeholder="历史时期" size="default" style="width: 150px">
-            <el-option label="先秦至两汉" value="ancient" />
-            <el-option label="魏晋至唐宋" value="medieval" />
-            <el-option label="元明清" value="late-imperial" />
-          </el-select>
-
-          <el-select v-model="tensionFilter" placeholder="叙事张力" size="default" style="width: 150px">
-            <el-option label="高张力" value="high" />
-            <el-option label="均衡叙事" value="balanced" />
-            <el-option label="传播切口优先" value="hook-first" />
-          </el-select>
-        </div>
-
-        <!-- Two columns -->
-        <div class="topic-columns">
-          <!-- Left column: candidate list -->
-          <div class="topic-left-col">
-            <h3 class="topic-col-heading">{{ currentRoundLabel }}</h3>
-            <p class="topic-col-subtitle">系统会优先呈现可直接进入文案阶段的候选主题。</p>
-
-            <div class="topic-candidate-list">
-              <div
-                v-for="candidate in currentCandidates"
-                :key="candidate.candidate_id"
-                :data-testid="`candidate-item-${candidate.candidate_id}`"
-                class="topic-candidate-card"
-                :class="{
-                  'topic-candidate-card--active':
-                    selectedCandidateId === candidate.candidate_id,
-                }"
-                @click="selectCandidate(candidate)"
-              >
-                <div class="topic-candidate-card-body">
-                  <div class="topic-candidate-card-copy">
-                    <strong class="topic-candidate-title">{{ candidate.title }}</strong>
-                    <p class="topic-candidate-angle">{{ candidate.one_line_angle }}</p>
-                  </div>
-                  <div class="topic-candidate-tags">
-                    <el-tag size="small" type="info">{{ candidate.family_label }}</el-tag>
-                    <el-tag size="small" type="info">{{ candidate.scope_label }}</el-tag>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- History rounds -->
-            <div v-if="topicStore.state.historyRounds.length > 0" class="topic-history">
-              <h4 class="topic-history-heading">候选历史</h4>
-              <p class="topic-history-subtitle">之前轮次会保留在这里，方便回看或直接确认。</p>
-
-              <div
-                v-for="round in topicStore.state.historyRounds"
-                :key="round.round_id"
-                class="topic-history-round"
-              >
-                <h5 class="topic-history-round-title">
-                  {{ round.label ?? `第 ${round.round_index ?? '-'} 轮` }}
-                </h5>
-                <div class="topic-candidate-list topic-candidate-list--compact">
-                  <div
-                    v-for="candidate in round.candidates"
-                    :key="candidate.candidate_id"
-                    :data-testid="`candidate-item-${candidate.candidate_id}`"
-                    class="topic-candidate-card"
-                    :class="{
-                      'topic-candidate-card--active':
-                        selectedCandidateId === candidate.candidate_id,
-                    }"
-                    @click="selectHistoryCandidate(candidate, round.round_id)"
-                  >
-                    <div class="topic-candidate-card-body">
-                      <div class="topic-candidate-card-copy">
-                        <strong class="topic-candidate-title">{{ candidate.title }}</strong>
-                        <p class="topic-candidate-angle">{{ candidate.one_line_angle }}</p>
-                      </div>
-                      <div class="topic-candidate-tags">
-                        <el-tag size="small" type="info">{{ candidate.family_label }}</el-tag>
-                        <el-tag size="small" type="info">{{ candidate.scope_label }}</el-tag>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Right column: selected candidate details -->
-          <div class="topic-right-col">
-            <div v-if="selectedCandidate" class="topic-detail-card">
-              <div class="topic-detail-header">
-                <span class="topic-detail-kicker">选题详情</span>
-                <h2 class="topic-detail-title">{{ selectedCandidate.title }}</h2>
-                <p class="topic-detail-angle">{{ selectedCandidate.one_line_angle }}</p>
-              </div>
-
-              <div class="topic-detail-tags">
-                <el-tag size="small" type="info">{{ selectedCandidate.family_label }}</el-tag>
-                <el-tag size="small" type="info">{{ selectedCandidate.scope_label }}</el-tag>
-              </div>
-
-              <div class="topic-detail-section">
-                <h3 class="topic-detail-section-title">核心冲突</h3>
-                <p class="topic-detail-section-text">{{ selectedCandidate.strong_scene }}</p>
-              </div>
-
-              <div class="topic-detail-section">
-                <h3 class="topic-detail-section-title">传播切口</h3>
-                <p class="topic-detail-section-text">{{ whyThisNow }}</p>
-              </div>
-
-              <div class="topic-detail-section">
-                <h3 class="topic-detail-section-title">叙事张力</h3>
-                <p class="topic-detail-section-text">{{ selectedCandidate.one_line_angle }}</p>
-              </div>
-
-              <div class="topic-detail-section">
-                <h3 class="topic-detail-section-title">风险提示</h3>
-                <ul class="topic-detail-risks">
-                  <li v-for="risk in riskHints" :key="risk">{{ risk }}</li>
-                </ul>
-              </div>
-
-              <el-button
-                type="primary"
-                data-testid="confirm-candidate"
-                class="topic-detail-confirm-btn"
-                :loading="topicStore.state.isConfirming"
-                :disabled="topicStore.state.isConfirming"
-                @click="confirmCandidate"
-              >
-                确认此选题
-              </el-button>
-            </div>
-
-            <div v-else class="topic-detail-empty">
-              <p>点击左侧候选卡片查看选题详情</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Bottom actions -->
-        <div class="topic-bottom-actions">
-          <el-popconfirm
-            title="确定要重新生成吗？当前候选将保留在历史中。"
-            confirm-button-text="确定"
-            cancel-button-text="取消"
-            @confirm="handleRegenerate"
-          >
-            <template #reference>
-              <el-button :disabled="topicStore.state.isGenerating">
-                重新生成
-              </el-button>
-            </template>
-          </el-popconfirm>
-
-          <el-button :disabled="topicStore.state.isGenerating" @click="handleRegenerate">
-            换一批
-          </el-button>
-
-          <el-button
-            type="primary"
-            data-testid="confirm-candidate"
-            :disabled="!selectedCandidate || topicStore.state.isConfirming"
-            :loading="topicStore.state.isConfirming"
-            @click="confirmCandidate"
-          >
-            确认选题
-          </el-button>
         </div>
       </div>
     </template>
 
-    <!-- Library placeholder -->
-    <div v-else-if="topicStore.state.activeTab === 'library'" class="topic-alt-panel">
-      <h2>事件库</h2>
-      <p>事件库入口将在下一轮接入，当前先保持统一视觉外壳。</p>
-    </div>
+    <template v-else-if="hasCandidates">
+      <h1 class="topic-page-title">请选择您喜欢的<em>选题</em></h1>
 
-    <!-- Custom placeholder -->
-    <div v-else class="topic-alt-panel">
-      <h2>自定义主题</h2>
-      <p>自定义主题入口将在后续接入，当前先保留同层级占位。</p>
-    </div>
+      <div class="topic-columns">
+        <section class="topic-left-col panel-card">
+          <div class="candidate-list">
+            <div
+              v-for="candidate in currentCandidates"
+              :key="candidate.candidate_id"
+              :data-testid="`candidate-item-${candidate.candidate_id}`"
+              class="candidate-card"
+              :class="{ active: selectedCandidateId === candidate.candidate_id }"
+              @click="selectCandidate(candidate)"
+            >
+              <div class="candidate-body">
+                <div class="candidate-title">{{ candidate.title }}</div>
+                <div class="candidate-angle">{{ candidate.one_line_angle }}</div>
+                <div class="candidate-tags">
+                  <span class="candidate-tag">{{ candidate.family_label }}</span>
+                  <span class="candidate-tag">{{ candidate.scope_label }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="topicStore.state.historyRounds.length > 0" class="history-block">
+            <div class="history-top">
+              <button class="history-toggle" @click="toggleHistory">
+                <span class="toggle-arrow" :class="{ open: historyOpen }">▶</span>
+                候选历史
+              </button>
+              <button class="action-btn" @click="handleRefreshBatch">↺ 换一批</button>
+            </div>
+            <div v-if="historyOpen" class="history-rounds">
+              <template v-for="round in topicStore.state.historyRounds" :key="round.round_id">
+                <div class="history-label">{{ roundLabel(round) }}</div>
+                <div class="history-round">
+                  <div
+                    v-for="candidate in round.candidates"
+                    :key="candidate.candidate_id"
+                    :data-testid="`candidate-item-${candidate.candidate_id}`"
+                    class="candidate-card"
+                    :class="{ active: selectedCandidateId === candidate.candidate_id }"
+                    @click="selectHistoryCandidate(candidate, round.round_id)"
+                  >
+                    <div class="candidate-body">
+                      <div class="candidate-title">{{ candidate.title }}</div>
+                      <div class="candidate-angle">{{ candidate.one_line_angle }}</div>
+                      <div class="candidate-tags">
+                        <span class="candidate-tag">{{ candidate.family_label }}</span>
+                        <span class="candidate-tag">{{ candidate.scope_label }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </section>
+
+        <aside class="topic-right-col">
+          <div v-if="selectedCandidate" class="detail-card">
+            <div class="detail-header">
+              <div class="detail-kicker">选题详情</div>
+              <h2 class="detail-title">{{ selectedCandidate.title }}</h2>
+              <p class="detail-angle">{{ selectedCandidate.one_line_angle }}</p>
+            </div>
+            <div class="detail-tags">
+              <span class="detail-tag">{{ selectedCandidate.family_label }}</span>
+              <span class="detail-tag">{{ selectedCandidate.scope_label }}</span>
+            </div>
+            <div class="detail-sections">
+              <section class="detail-section">
+                <div class="detail-icon">⚔️</div>
+                <div>
+                  <div class="detail-section-label">核心冲突</div>
+                  <div class="detail-section-text">{{ selectedCandidate.strong_scene }}</div>
+                </div>
+              </section>
+              <section class="detail-section">
+                <div class="detail-icon">📡</div>
+                <div>
+                  <div class="detail-section-label">传播切口</div>
+                  <div class="detail-section-text">{{ whyThisNow }}</div>
+                </div>
+              </section>
+              <section class="detail-section">
+                <div class="detail-icon">⚠️</div>
+                <div>
+                  <div class="detail-section-label">风险提示</div>
+                  <ul class="risk-list">
+                    <li class="risk-item" v-for="(risk, i) in riskHints" :key="i">{{ risk }}</li>
+                  </ul>
+                </div>
+              </section>
+            </div>
+            <div class="detail-footer">
+              <button
+                class="confirm-btn"
+                data-testid="confirm-candidate"
+                :disabled="topicStore.state.isConfirming"
+                @click="confirmCandidate"
+              >
+                确认此选题，进入文案阶段
+              </button>
+            </div>
+          </div>
+          <div v-else class="panel-card detail-empty">
+            点击左侧候选卡片查看选题详情
+          </div>
+        </aside>
+      </div>
+    </template>
+
+    <template v-else-if="topicStore.state.activeTab === 'library'">
+      <div class="topic-alt-panel">
+        <h2>事件库</h2>
+        <p>事件库入口将在下一轮接入，当前先保持统一视觉外壳。</p>
+      </div>
+    </template>
+
+    <template v-else>
+      <div class="topic-alt-panel">
+        <h2>自定义主题</h2>
+        <p>自定义主题入口将在后续接入，当前先保留同层级占位。</p>
+      </div>
+    </template>
   </div>
 </template>
 
 <style scoped>
 .topic-panel {
-  display: grid;
-  gap: var(--space-md);
-  padding: var(--space-lg);
-  max-width: 1200px;
-  margin: 0 auto;
+  --bg-card: #1f1b18;
+  --bg-card-hover: #2a2522;
+  --bg-panel: rgba(31, 27, 24, 0.86);
+  --bg-panel-soft: rgba(26, 22, 20, 0.72);
+  --bg-hover: rgba(201, 162, 39, 0.075);
+
+  --accent-gold: #c9a227;
+  --accent-gold-light: #e4c26f;
+  --accent-copper: #b87333;
+  --accent-bronze: #cd7f32;
+  --accent-warm: #d4a574;
+
+  --text-primary: #f5f0e8;
+  --text-body: #d8cec0;
+  --text-secondary: #a89f94;
+  --text-muted: #6b635a;
+  --text-dim: #4f4841;
+  --text-inverse: #100c08;
+
+  --border-color: #3d3632;
+  --border-soft: rgba(201, 162, 39, 0.13);
+  --border-active: rgba(201, 162, 39, 0.34);
+
+  --success: #65a77a;
+  --success-bg: rgba(101, 167, 122, 0.13);
+  --danger: #c06454;
+  --danger-bg: rgba(192, 100, 84, 0.13);
+  --warning: #c9a227;
+  --warning-bg: rgba(201, 162, 39, 0.13);
+
+  --shadow-card: 0 18px 48px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.035);
+  --shadow-heavy: 0 28px 76px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.04);
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  --font-serif: "Noto Serif SC", "Songti SC", Georgia, serif;
+  --ease: 180ms ease;
+  --ease-smooth: 260ms cubic-bezier(.2,.7,.2,1);
+
   width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 28px 28px 36px;
 }
 
-/* Action bar */
-.topic-action-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  flex-wrap: wrap;
+/* Page title */
+.topic-page-title {
+  margin: 0 0 18px;
+  color: var(--text-primary);
+  font-family: var(--font-serif);
+  font-size: 28px;
+  line-height: 1.25;
+  letter-spacing: -.02em;
+  font-weight: 700;
 }
 
-.topic-source-tabs {
-  flex: 1;
-  min-width: 0;
-}
-
-.topic-round-badge {
-  flex-shrink: 0;
-}
-
-/* Filters bar */
-.topic-filters-bar {
-  display: flex;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
-}
-
-/* Empty state */
-.topic-empty-state {
-  display: flex;
-  justify-content: center;
-  padding: var(--space-xl) var(--space-md);
-}
-
-.topic-empty-inner {
-  display: grid;
-  gap: var(--space-md);
-  justify-items: center;
-  max-width: 480px;
-}
-
-.topic-empty-text {
-  color: var(--text-secondary);
-  text-align: center;
-  line-height: 1.75;
-}
-
-.topic-filters {
-  display: flex;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-/* Error card */
-.topic-error-card {
-  display: grid;
-  gap: var(--space-md);
-  padding: var(--space-md);
-  border-radius: var(--radius-card);
-  background: var(--bg-card);
-}
-
-.topic-generating {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-md);
-  padding: var(--space-xl) var(--space-md);
-}
-
-.topic-generating-text {
-  color: var(--text-body);
-  font-size: 0.95rem;
-  text-align: center;
-}
-
-.topic-generating-hint {
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  text-align: center;
+.topic-page-title em {
+  color: var(--accent-gold-light);
+  font-style: normal;
 }
 
 /* Two-column layout */
-.topic-content {
-  display: grid;
-  gap: var(--space-md);
-}
-
 .topic-columns {
   display: grid;
-  grid-template-columns: 1fr 1.2fr;
-  gap: var(--space-lg);
+  grid-template-columns: 455px minmax(0, 1fr);
+  gap: 22px;
   align-items: start;
 }
 
-/* Left column */
-.topic-left-col {
-  display: grid;
-  gap: var(--space-sm);
-}
-
-.topic-col-heading,
-.topic-history-heading {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: var(--font-subheading);
-  color: var(--text-heading);
-}
-
-.topic-col-subtitle,
-.topic-history-subtitle {
-  margin: 0;
-  color: var(--text-secondary);
-  line-height: 1.6;
-  font-size: 0.92rem;
-}
-
-/* Candidate list */
-.topic-candidate-list {
-  display: grid;
-  gap: var(--space-sm);
-}
-
-.topic-candidate-list--compact {
-  gap: 6px;
-}
-
-.topic-candidate-card {
-  padding: var(--space-md);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-card);
-  background: var(--bg-card);
-  cursor: pointer;
-  transition:
-    border-color 160ms ease,
-    background-color 160ms ease,
-    transform 160ms ease;
-}
-
-.topic-candidate-card:hover {
-  border-color: var(--border-hover);
-  background: var(--bg-hover);
-  transform: translateY(-1px);
-}
-
-.topic-candidate-card--active {
-  border-color: var(--accent-primary);
-  background: var(--bg-hover);
-  box-shadow: 0 0 0 1px var(--accent-primary);
-}
-
-.topic-candidate-card-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-md);
-}
-
-.topic-candidate-card-copy {
-  display: grid;
-  gap: 4px;
+.topic-left-col,
+.topic-right-col {
   min-width: 0;
 }
 
-.topic-candidate-title {
-  font-size: 0.98rem;
-  line-height: 1.5;
-  color: var(--text-heading);
-}
-
-.topic-candidate-angle {
-  margin: 0;
-  color: var(--text-secondary);
-  line-height: 1.6;
-  font-size: 0.9rem;
-}
-
-.topic-candidate-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-xs);
-  justify-content: flex-end;
-}
-
-/* History */
-.topic-history {
-  display: grid;
-  gap: var(--space-sm);
-  padding-top: var(--space-md);
-  border-top: 1px solid var(--border-default);
-  margin-top: var(--space-sm);
-}
-
-.topic-history-round {
-  display: grid;
-  gap: 6px;
-  padding-top: var(--space-sm);
-  border-top: 1px solid var(--border-default);
-}
-
-.topic-history-round-title {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: var(--font-subheading);
-  color: var(--text-heading);
-}
-
-/* Right column */
 .topic-right-col {
   position: sticky;
-  top: var(--space-md);
+  top: 18px;
 }
 
-.topic-detail-card {
+/* Panel card */
+.panel-card {
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(201,162,39,.15);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.008)),
+    var(--bg-panel);
+  box-shadow: var(--shadow-heavy);
+  overflow: hidden;
+}
+
+/* Candidate list */
+.candidate-list {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.candidate-card {
+  position: relative;
+  display: block;
+  padding: 15px 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(201,162,39,.12);
+  background: rgba(255,255,255,.018);
+  cursor: pointer;
+  transition: transform var(--ease-smooth), background var(--ease), border-color var(--ease), box-shadow var(--ease);
+}
+
+.candidate-card:hover {
+  transform: translateX(3px);
+  border-color: rgba(201,162,39,.25);
+  background: rgba(201,162,39,.048);
+}
+
+.candidate-card.active {
+  border-color: rgba(201,162,39,.46);
+  background:
+    linear-gradient(135deg, rgba(201,162,39,.12), rgba(184,115,51,.045)),
+    rgba(255,255,255,.018);
+  box-shadow: inset 0 0 0 1px rgba(201,162,39,.16), 0 14px 30px rgba(0,0,0,.18);
+}
+
+.candidate-body {
+  min-width: 0;
+}
+
+.candidate-title {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.42;
+  margin-bottom: 6px;
+}
+
+.candidate-card.active .candidate-title {
+  color: var(--accent-gold-light);
+}
+
+.candidate-angle {
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  line-height: 1.55;
+  margin-bottom: 9px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.candidate-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.candidate-tag {
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(201,162,39,.12);
+  background: rgba(201,162,39,.045);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.candidate-card.active .candidate-tag {
+  border-color: rgba(201,162,39,.22);
+  color: var(--accent-warm);
+  background: rgba(201,162,39,.08);
+}
+
+/* Action button */
+.action-btn {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(201,162,39,.14);
+  background: rgba(255,255,255,.018);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: all var(--ease);
+  font-family: inherit;
+}
+
+.action-btn:hover {
+  color: var(--text-primary);
+  border-color: rgba(201,162,39,.30);
+  background: rgba(201,162,39,.07);
+  transform: translateY(-1px);
+}
+
+/* History block */
+.history-block {
+  border-top: 1px solid rgba(201,162,39,.11);
+  padding: 12px;
+}
+
+.history-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.history-toggle {
+  height: 34px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  font-family: inherit;
+  transition: color var(--ease);
+}
+
+.history-toggle:hover {
+  color: var(--text-primary);
+}
+
+.toggle-arrow {
+  font-size: 11px;
+  transition: transform var(--ease-smooth);
+}
+
+.toggle-arrow.open {
+  transform: rotate(90deg);
+}
+
+.history-rounds {
+  margin-top: 10px;
   display: grid;
-  gap: var(--space-md);
-  padding: var(--space-lg);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-panel);
-  background: var(--bg-card);
+  gap: 8px;
 }
 
-.topic-detail-header {
-  display: grid;
-  gap: var(--space-xs);
-}
-
-.topic-detail-kicker {
-  color: var(--accent-primary);
-  font-size: 0.85rem;
-  letter-spacing: 0.12em;
+.history-label {
+  padding: 6px 0 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .09em;
   text-transform: uppercase;
 }
 
-.topic-detail-title {
-  margin: 0;
-  font-size: 1.3rem;
-  line-height: 1.5;
-  color: var(--text-heading);
+.history-round .candidate-card {
+  padding: 12px 14px;
 }
 
-.topic-detail-angle {
-  margin: 0;
-  color: var(--text-secondary);
-  line-height: 1.6;
+.history-round .candidate-title {
+  font-size: 13px;
 }
 
-.topic-detail-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-xs);
+.history-round .candidate-angle {
+  font-size: 12px;
+  margin-bottom: 7px;
 }
 
-.topic-detail-section {
-  display: grid;
-  gap: var(--space-xs);
-  padding-top: var(--space-md);
-  border-top: 1px solid var(--border-default);
+/* Detail card */
+.detail-card {
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(201,162,39,.16);
+  background:
+    radial-gradient(circle at 78% 0%, rgba(201,162,39,.08), transparent 34%),
+    linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.008)),
+    var(--bg-panel);
+  box-shadow: var(--shadow-heavy);
+  overflow: hidden;
 }
 
-.topic-detail-section-title {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: var(--font-subheading);
-  color: var(--text-heading);
-}
-
-.topic-detail-section-text {
-  margin: 0;
-  color: var(--text-secondary);
-  line-height: 1.75;
-  font-size: 0.94rem;
-}
-
-.topic-detail-risks {
-  margin: 0;
-  padding-left: 1.1rem;
-  color: var(--text-secondary);
-  line-height: 1.75;
-  font-size: 0.94rem;
-}
-
-.topic-detail-confirm-btn {
-  width: 100%;
-  margin-top: auto;
-}
-
-.topic-detail-empty {
+.detail-empty {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 200px;
-  border: 1px dashed var(--border-default);
-  border-radius: var(--radius-panel);
   color: var(--text-muted);
+  font-size: 14px;
 }
 
-/* Bottom actions */
-.topic-bottom-actions {
+.detail-header {
+  padding: 24px 26px 22px;
+  border-bottom: 1px solid rgba(201,162,39,.12);
+}
+
+.detail-kicker {
+  margin: 0 0 12px;
+  color: var(--accent-gold);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.detail-title {
+  margin: 0 0 10px;
+  color: var(--text-primary);
+  font-family: var(--font-serif);
+  font-size: 25px;
+  line-height: 1.34;
+  letter-spacing: -.02em;
+  font-weight: 700;
+}
+
+.detail-angle {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.detail-tags {
+  padding: 14px 26px;
+  border-bottom: 1px solid rgba(201,162,39,.11);
   display: flex;
-  gap: var(--space-sm);
-  padding-top: var(--space-md);
-  border-top: 1px solid var(--border-default);
+  gap: 8px;
   flex-wrap: wrap;
 }
 
-/* Alternate panels */
+.detail-tag {
+  padding: 5px 12px;
+  border-radius: 999px;
+  color: var(--accent-warm);
+  background: rgba(201,162,39,.075);
+  border: 1px solid rgba(201,162,39,.16);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.detail-sections {
+  padding: 6px 0;
+}
+
+.detail-section {
+  padding: 18px 26px;
+  border-bottom: 1px solid rgba(201,162,39,.10);
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 14px;
+}
+
+.detail-section:last-child {
+  border-bottom: none;
+}
+
+.detail-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(201,162,39,.14);
+  background: rgba(201,162,39,.065);
+  color: var(--accent-gold-light);
+  font-size: 18px;
+}
+
+.detail-section-label {
+  margin: 0 0 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+
+.detail-section-text {
+  margin: 0;
+  color: var(--text-body);
+  font-size: 13.5px;
+  line-height: 1.82;
+}
+
+.risk-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.risk-item {
+  position: relative;
+  padding-left: 16px;
+  color: var(--text-body);
+  font-size: 13px;
+  line-height: 1.72;
+}
+
+.risk-item::before {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: .78em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.detail-footer {
+  padding: 18px 26px 22px;
+  border-top: 1px solid rgba(201,162,39,.12);
+  background: rgba(0,0,0,.15);
+}
+
+.confirm-btn {
+  width: 100%;
+  height: 46px;
+  border-radius: 13px;
+  color: var(--text-inverse);
+  background: linear-gradient(135deg, var(--accent-gold-light), var(--accent-copper));
+  box-shadow: 0 12px 30px rgba(184,115,51,.25);
+  font-size: 15px;
+  font-weight: 850;
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+  transition: transform var(--ease), box-shadow var(--ease), filter var(--ease);
+}
+
+.confirm-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 40px rgba(201,162,39,.28);
+  filter: brightness(1.04);
+}
+
+.confirm-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Centered page states (error / generating) */
+.center-state {
+  min-height: calc(100vh - 72px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 44px 28px 64px;
+}
+
+.center-state-inner {
+  width: min(560px, 100%);
+  text-align: center;
+  transform: translateY(-80px);
+}
+
+.center-error-icon {
+  width: 82px;
+  height: 82px;
+  margin: 0 auto 28px;
+  border-radius: 26px;
+  display: grid;
+  place-items: center;
+  color: var(--danger);
+  background:
+    radial-gradient(circle at 50% 40%, rgba(192,100,84,.16), rgba(192,100,84,.06) 68%, rgba(192,100,84,.025) 100%);
+  border: 1px solid rgba(192,100,84,.26);
+  font-size: 34px;
+  font-weight: 900;
+  box-shadow:
+    0 0 42px rgba(192,100,84,.07),
+    inset 0 1px 0 rgba(255,255,255,.04);
+}
+
+.center-state-title {
+  color: var(--text-primary);
+  font-family: var(--font-serif);
+  font-size: 26px;
+  line-height: 1.25;
+  letter-spacing: -.02em;
+  margin: 0 0 10px;
+}
+
+.center-state-desc {
+  max-width: 520px;
+  margin: 0 auto;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.85;
+}
+
+.center-state-line {
+  width: 150px;
+  height: 1px;
+  margin: 24px auto 0;
+  background: linear-gradient(90deg, transparent, rgba(201,162,39,.24), transparent);
+}
+
+.center-state-actions {
+  margin-top: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* Generic buttons in centered states */
+.btn {
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  border: none;
+  font-family: inherit;
+  transition: transform var(--ease), background var(--ease), border-color var(--ease), box-shadow var(--ease), color var(--ease);
+  white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  background: rgba(255,255,255,.018);
+  border: 1px solid var(--border-soft);
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: rgba(201,162,39,.30);
+  background: rgba(201,162,39,.065);
+}
+
+.btn-primary {
+  color: var(--text-inverse);
+  background: linear-gradient(135deg, var(--accent-gold-light), var(--accent-copper));
+  box-shadow: 0 10px 26px rgba(184,115,51,.24);
+}
+
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 0 14px 36px rgba(201,162,39,.28);
+}
+
+/* Alt panels */
 .topic-alt-panel {
   display: grid;
-  gap: var(--space-sm);
-  padding: var(--space-lg);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-panel);
-  background: var(--bg-card);
+  gap: 8px;
+  padding: 40px;
+  border: 1px solid rgba(201,162,39,.12);
+  border-radius: var(--radius-xl);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.005)),
+    var(--bg-panel);
+  color: var(--text-muted);
 }
 
 .topic-alt-panel h2 {
   margin: 0;
   font-size: 1.15rem;
-  color: var(--text-heading);
+  color: var(--text-primary);
+  font-family: var(--font-serif);
 }
 
 .topic-alt-panel p {
@@ -777,15 +904,6 @@ function handleRetry() {
 
   .topic-right-col {
     position: static;
-  }
-
-  .topic-candidate-card-body {
-    grid-template-columns: 1fr;
-    align-items: start;
-  }
-
-  .topic-candidate-tags {
-    justify-content: flex-start;
   }
 }
 </style>
