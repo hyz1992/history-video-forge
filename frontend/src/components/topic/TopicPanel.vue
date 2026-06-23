@@ -38,6 +38,10 @@ const isSnapshotGenerating = computed(
 );
 
 onMounted(async () => {
+  if (topicStore.state.isGenerating) {
+    startPolling();
+    return;
+  }
   await topicStore.loadExistingTopic();
   // F5 刷新后恢复轮询
   if (isSnapshotGenerating.value) {

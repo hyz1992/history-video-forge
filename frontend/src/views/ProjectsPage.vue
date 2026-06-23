@@ -7,9 +7,12 @@ import {
   useProjectStore,
   type ProjectListItem,
 } from "../stores/project";
+import CreateTopicModal from "../components/topic/CreateTopicModal.vue";
 
 const projectStore = useProjectStore();
 const router = useRouter();
+
+const showCreateTopicModal = ref(false);
 
 const isLoading = ref(true);
 const searchQuery = ref("");
@@ -157,11 +160,17 @@ function formatDateTime(value: string) {
   });
 }
 
-async function handleCreateProject() {
-  const project = await projectStore.createProject();
-  await router.push(
-    projectStore.resolveProjectWorkspacePath(project.project_id, project.current_status),
+function handleCreateProject() {
+  showCreateTopicModal.value = true;
+}
+
+async function handleCreateTopicConfirmed() {
+  showCreateTopicModal.value = false;
+  const path = projectStore.resolveProjectWorkspacePath(
+    projectStore.state.projectId!,
+    projectStore.state.currentStatus,
   );
+  await router.push(path);
 }
 
 async function openProject(project: ProjectListItem) {
@@ -422,6 +431,11 @@ function cleanDynasty(raw: string | undefined): string {
         </div>
       </section>
     </main>
+
+    <CreateTopicModal
+      v-model:visible="showCreateTopicModal"
+      @confirmed="handleCreateTopicConfirmed"
+    />
   </div>
 </template>
 

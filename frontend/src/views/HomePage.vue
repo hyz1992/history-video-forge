@@ -285,26 +285,37 @@
       <span class="footer-meta">版本号：v1.0.0</span>
       <span class="footer-meta">联系邮箱：<a href="mailto:1451784145@qq.com" style="color: var(--text-muted); text-decoration: none;">1451784145@qq.com</a></span>
     </footer>
+
+    <CreateTopicModal
+      v-model:visible="showCreateTopicModal"
+      @confirmed="handleCreateTopicConfirmed"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
 import { useProjectStore } from "../stores/project";
+import CreateTopicModal from "../components/topic/CreateTopicModal.vue";
 
 const projectStore = useProjectStore();
 const router = useRouter();
 
-async function handleCreateProject() {
-  const project = await projectStore.createProject();
-  await router.push(
-    projectStore.resolveProjectWorkspacePath(
-      project.project_id,
-      project.current_status,
-    ),
+const showCreateTopicModal = ref(false);
+
+function handleCreateProject() {
+  showCreateTopicModal.value = true;
+}
+
+async function handleCreateTopicConfirmed() {
+  showCreateTopicModal.value = false;
+  const path = projectStore.resolveProjectWorkspacePath(
+    projectStore.state.projectId!,
+    projectStore.state.currentStatus,
   );
+  await router.push(path);
 }
 
 let observer: IntersectionObserver | undefined;
