@@ -135,8 +135,8 @@ function goBack() {
   width: var(--sidebar-expanded-width);
   height: 100%;
   background:
-    linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.006)),
-    rgba(18, 15, 13, .88);
+    linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01)),
+    #14110e;
   border-right: 1px solid rgba(201, 162, 39, 0.13);
   transition: width 0.2s ease;
   overflow: hidden;
