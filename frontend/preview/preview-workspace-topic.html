@@ -423,6 +423,10 @@
     color: var(--accent-gold);
   }
 
+  .breadcrumb-sep {
+    color: var(--text-muted);
+  }
+
   .breadcrumb-current {
     color: var(--text-primary);
     font-weight: 750;
@@ -463,104 +467,6 @@
     padding: 28px 28px 36px;
   }
 
-  .page-title-row {
-    margin-bottom: 20px;
-    display: grid;
-    grid-template-columns: 1fr auto;
-    align-items: end;
-    gap: 24px;
-  }
-
-  .page-kicker {
-    margin-bottom: 10px;
-    color: var(--accent-gold);
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: .16em;
-    text-transform: uppercase;
-  }
-
-  .page-title {
-    font-family: var(--font-serif);
-    color: var(--text-primary);
-    font-size: 34px;
-    line-height: 1.18;
-    letter-spacing: -.03em;
-    margin-bottom: 9px;
-  }
-
-  .page-title em {
-    color: var(--accent-gold-light);
-    font-style: normal;
-  }
-
-  .page-desc {
-    max-width: 720px;
-    color: var(--text-secondary);
-    font-size: 14px;
-  }
-
-  .topic-actions {
-    display: flex;
-    gap: 10px;
-  }
-
-  .info-strip {
-    min-height: 54px;
-    padding: 13px 16px;
-    border-radius: var(--radius-lg);
-    border: 1px solid rgba(201,162,39,.13);
-    background:
-      linear-gradient(90deg, rgba(201,162,39,.075), rgba(255,255,255,.014)),
-      var(--bg-panel-soft);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 18px;
-    margin-bottom: 20px;
-    box-shadow: var(--shadow-card);
-  }
-
-  .info-strip-main {
-    display: flex;
-    align-items: center;
-    gap: 11px;
-  }
-
-  .info-dot {
-    width: 30px;
-    height: 30px;
-    border-radius: 10px;
-    display: grid;
-    place-items: center;
-    color: var(--accent-gold-light);
-    background: rgba(201,162,39,.10);
-    border: 1px solid rgba(201,162,39,.18);
-  }
-
-  .info-strip strong {
-    color: var(--text-primary);
-    font-size: 14px;
-  }
-
-  .info-strip span {
-    color: var(--text-muted);
-    font-size: 13px;
-  }
-
-  .info-metrics {
-    display: flex;
-    gap: 18px;
-    color: var(--text-muted);
-    font-size: 12px;
-  }
-
-  .info-metrics b {
-    color: var(--accent-warm);
-    font-weight: 700;
-  }
-
-
   .simple-topic-title {
     margin-bottom: 18px;
     color: var(--text-primary);
@@ -573,13 +479,6 @@
   .simple-topic-title em {
     color: var(--accent-gold-light);
     font-style: normal;
-  }
-
-  .simple-topic-sub {
-    margin-top: -8px;
-    margin-bottom: 18px;
-    color: var(--text-muted);
-    font-size: 13px;
   }
 
   .topic-columns {
@@ -933,13 +832,6 @@
     filter: brightness(1.04);
   }
 
-  .detail-hint {
-    margin-top: 10px;
-    text-align: center;
-    color: var(--text-muted);
-    font-size: 12px;
-  }
-
   /* ===== Centered page states ===== */
 
   .center-state {
@@ -1153,7 +1045,7 @@
     <div class="topbar-center">
       <div class="breadcrumb">
         <span>未命名项目</span>
-        <span>›</span>
+        <span class="breadcrumb-sep">›</span>
         <span class="breadcrumb-current"><span class="breadcrumb-icon">🎯</span> 选题</span>
       </div>
     </div>
@@ -1178,7 +1070,7 @@
   <div class="app-shell">
     <aside class="sidebar">
       <div class="project-mini">
-        <div class="project-mini-label">Current Project</div>
+        <div class="project-mini-label">当前项目</div>
         <div class="project-mini-title">
           <strong>未命名项目</strong>
           <span>选题阶段 · 自动推荐</span>
@@ -1333,7 +1225,7 @@ function handleHome() {
 }
 
 function handleBack() {
-  window.location.href = 'preview-my-projects-simplified-v2.html';
+  window.location.href = 'preview-my-projects.html';
 }
 
 function renderGenerating() {
@@ -1434,7 +1326,7 @@ function renderDetail(active) {
   return `
     <div class="detail-card">
       <div class="detail-header">
-        <div class="detail-kicker">Selected Topic</div>
+        <div class="detail-kicker">选题详情</div>
         <h2 class="detail-title">${active.title}</h2>
         <p class="detail-angle">${active.angle}</p>
       </div>
@@ -1463,14 +1355,6 @@ function renderDetail(active) {
         </section>
 
         <section class="detail-section">
-          <div class="detail-icon">🎭</div>
-          <div>
-            <div class="detail-section-label">叙事张力</div>
-            <div class="detail-section-text">${active.angle}</div>
-          </div>
-        </section>
-
-        <section class="detail-section">
           <div class="detail-icon">⚠️</div>
           <div>
             <div class="detail-section-label">风险提示</div>
@@ -1483,7 +1367,6 @@ function renderDetail(active) {
 
       <div class="detail-footer">
         <button class="confirm-btn" onclick="confirmTopic()">确认此选题，进入文案阶段</button>
-        <div class="detail-hint">确认后将锁定主题，并开始生成 Story Brief / 口播文案。</div>
       </div>
     </div>
   `;
