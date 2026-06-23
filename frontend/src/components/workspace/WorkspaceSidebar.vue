@@ -79,7 +79,10 @@ function handleStepClick(index: number) {
   const maxReachable = getReachedStepIndex();
   if (index > maxReachable) return;
   workspaceStore.setCurrentStep(index);
-    const step = PIPELINE_STEPS[index]; if (step) router.push(`/projects/${route.params.projectId}/${step.key}`);
+  const step = PIPELINE_STEPS[index];
+  if (step) {
+    router.push(`/projects/${route.params.projectId}/${step.key}`);
+  }
 }
 
 function goBack() {

@@ -36,7 +36,7 @@ onUnmounted(() => {
       <div class="center-pulse">✦</div>
       <h2 class="center-state-title">{{ titleText }}</h2>
       <p class="center-state-desc">{{ hint }}</p>
-      <p v-if="secondaryHint" class="center-state-sub">生成完成后结果会自动出现，无需手动刷新。已等待 <b>{{ elapsedSeconds }}</b> 秒。</p>
+      <p v-if="secondaryHint" class="center-state-sub">{{ secondaryHint }} 已等待 <b>{{ elapsedSeconds }}</b> 秒。</p>
       <div class="center-state-line"></div>
       <div v-if="$slots.action" class="center-state-actions">
         <slot name="action" />
