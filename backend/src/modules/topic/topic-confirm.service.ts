@@ -20,6 +20,8 @@ export interface StoredTopicCandidate {
   mustCoverPreview?: string[];
   sourceHint: string;
   recentUsageHint: string;
+  whyThisNow: string;
+  riskHints: string[];
 }
 
 export interface ConfirmTopicCandidateInput {
