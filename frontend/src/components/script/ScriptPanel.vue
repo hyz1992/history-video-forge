@@ -552,7 +552,7 @@ function handleConfirm() {
 
 /* Page title */
 .script-page-title {
-  margin: 0 0 18px;
+  margin: 0 0 2px;
   color: var(--text-primary);
   font-family: var(--font-serif);
   font-size: 28px;
