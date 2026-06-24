@@ -174,6 +174,15 @@ function completeMustCoverPreview(
   ].filter((item) => item.length > 0)).slice(0, 3);
 }
 
+function isInstructionText(text: string): boolean {
+  const patterns = [
+    "请围绕", "不得超出", "优先推荐", "优先寻找",
+    "严格排除", "所有场景必须", "不得采用", "禁止返回",
+    "不得返回", "仅使用", "一律排除",
+  ];
+  return patterns.some((p) => text.includes(p));
+}
+
 function normalizeTopicCandidateCard(
   candidate: Record<string, unknown>,
   runtime: TopicRecommendationGraphRuntime,
@@ -239,17 +248,32 @@ function normalizeTopicCandidateCard(
           ? rubricMetadata.scope_label
         : "—",
     estimated_duration_band: "medium",
-    why_this_now: `${runtime.input.recentUsageHint}，且当前具备可讲张力。`,
-    core_conflict: runtime.input.coreConflict,
-    strong_scene: runtime.input.strongScene,
+    why_this_now: (() => {
+      const hint = runtime.input.recentUsageHint;
+      if (isInstructionText(hint)) return "该事件具备可讲张力，适合进入文案阶段。";
+      return `${hint}，且当前具备可讲张力。`;
+    })(),
+    core_conflict: (() => {
+      const c = runtime.input.coreConflict;
+      if (isInstructionText(c)) return `${runtime.input.canonicalName}中的关键人物在极端压力下做出不可逆的选择，由此引发的连锁反应改变了局势走向。`;
+      return c;
+    })(),
+    strong_scene: (() => {
+      const s = runtime.input.strongScene;
+      if (isInstructionText(s)) {
+        const name = runtime.input.canonicalName;
+        return `${name}的核心场面：关键人物在决定性时刻面对压倒性的对抗力量，在生死、荣辱或命运转折点上做出了不可挽回的选择。`;
+      }
+      return s;
+    })(),
     must_cover_preview: completeMustCoverPreview(
       keyElements,
       runtime,
       description,
     ),
     risk_hints: ["真实模型候选已做最小合同归一化"],
-    source_hint: runtime.input.sourceHint,
-    recent_usage_hint: runtime.input.recentUsageHint,
+    source_hint: isInstructionText(runtime.input.sourceHint) ? "基于历史共识推定" : runtime.input.sourceHint,
+    recent_usage_hint: isInstructionText(runtime.input.recentUsageHint) ? "近期未使用" : runtime.input.recentUsageHint,
     viral_rubric: viralRubric,
   });
 }

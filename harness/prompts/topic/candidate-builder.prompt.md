@@ -40,18 +40,26 @@ status: active
     "one_line_angle": "一句话切口",
     "family_label": "题材家族标签（如宫变夺权、战争博弈、文人政治）",
     "scope_label": "时代/朝代（如唐朝、宋朝、三国、汉朝）",
+    "estimated_duration_band": "短/中/长篇估算（如 short、medium、long）",
     "why_this_now": "当下值得讲的原因",
+    "core_conflict": "核心戏剧冲突（一句话概括人物+对抗力量+赌注）",
+    "strong_scene": "最具视觉冲击力的核心场景描写（具体画面，不是抽象概括）",
     "must_cover_preview": [
       "进入局面的叙事节点",
       "关键动作的叙事节点",
       "压力或代价的叙事节点"
     ],
+    "risk_hints": [
+      "历史争议点或传播风险提醒"
+    ],
+    "source_hint": "信源提示（如史记、资治通鉴等）",
+    "recent_usage_hint": "近期使用情况提示（如该事件在过去生成中是否被高频使用）",
     "viral_rubric": {
-      "novelty": 4,
-      "conflict": 5,
-      "emotion": 4,
-      "discussion": 4,
-      "visual": 4
+      "hook_power": "medium",
+      "novelty_gap": "medium",
+      "emotion_gap": "medium",
+      "share_impulse": "medium",
+      "visual_promise": "medium"
     }
   }
 ]
@@ -65,6 +73,12 @@ status: active
 - 不得把包装文案、角度句式或脚本化表达写进 `event_identity`
 - 若候选与 `recent_event_memory` 中为同一事件，应复用已有 `event_identity`，不得重新发明新 key
 - 每个候选都必须完整给出最小字段
+- `core_conflict` 必须写具体人物+对抗力量+明确赌注，不能写成朝代级历史意义或抽象主题概括
+- `strong_scene` 必须是一个可视觉化的具体画面（谁在哪里做什么、面临什么压迫），不能写成"某事件体现了某趋势"这类抽象评价
+- `estimated_duration_band` 必须是 `short`、`medium`、`long` 之一，根据事件天然可讲述的体量估算
+- `risk_hints` 必须给出至少 1 条具体风险，优先写历史争议点、现代敏感性或传播注意事项；若无显式风险，填 `["暂无显式风险提醒"]`
+- `source_hint` 优先写具体信源（如史记·项羽本纪），事件来源不明时填 `"基于历史共识推定"`
+- `recent_usage_hint` 描述该事件在近期推荐中的使用密度；若 `recent_event_memory` 中有该事件，如实反映；若无记录，填 `"近期未使用"`
 - `must_cover_preview` 必须给出 3 条可交给脚本审计的叙事节点，分别覆盖进入局面、关键动作、压力/代价。
 - `one_line_angle` 必须被三条 `must_cover_preview` 共同支撑；不得为了锋利感新增 preview 无法兑现的压力点。
 - 三条 preview 不得只是同一句角度摘要的改写，不得把同一句角度摘要改写三遍，必须形成从开场压力、关键动作/翻盘到代价/余震的闭环。
@@ -74,8 +88,10 @@ status: active
 - 第三条必须从故事内部产生余震，可写命运反讽、权力代价、人物性格裂缝、后续历史后果或名场面回扣；不得写成脱离故事的现代金句。
 - `must_cover_preview` 是叙事节点，不是正文句；优先写成场景、动作或转折短语，不写解释性评价或完整总结句；名句可以作为节点锚点，但不要附带完整解释。
 - 每个候选都必须带 `viral_rubric`
-- `viral_rubric` 只能使用正式字段：`hook_power`、`novelty_gap`、`emotion_gap`、`share_impulse`、`visual_promise`
+- `viral_rubric` 只有五个正式字段：`hook_power`、`novelty_gap`、`emotion_gap`、`share_impulse`、`visual_promise`，值必须为 `low`、`medium`、`high` 之一
 - `viral_rubric` 不得自定义额外评分键，不得改名，不得混入其他元数据
+- `viral_rubric` 不得使用 `novelty`、`conflict`、`emotion`、`discussion`、`visual` 等废弃字段名
+- `viral_rubric` 不得使用数字（如 4、5）代替 `low`/`medium`/`high`
 
 ## 开放发现差异化要求
 
@@ -118,3 +134,11 @@ status: active
 ## 输出前自检
 
 - `title`、`one_line_angle`、`family_label`、`scope_label` 是否都已完整给出
+- `core_conflict` 是否已给出具体人物+对抗+赌注，而非抽象概括
+- `strong_scene` 是否已给出可视觉化的具体画面
+- `estimated_duration_band` 是否已给出
+- `why_this_now` 是否已给出
+- `risk_hints` 是否已给出至少一条
+- `source_hint` 是否已给出
+- `recent_usage_hint` 是否已给出
+- `viral_rubric` 五个子字段是否完整，字段名是否正确（hook_power/novelty_gap/emotion_gap/share_impulse/visual_promise），值是否为 low/medium/high
