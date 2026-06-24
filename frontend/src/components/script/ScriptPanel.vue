@@ -394,10 +394,7 @@ function handleConfirm() {
     />
 
     <Teleport to="body">
-      <div v-if="isRegenerating" class="regen-loading-bar">
-        <span class="regen-loading-dot">✦</span>
-        <span>正在重新生成文案，请稍候…</span>
-      </div>
+      <div v-if="isRegenerating" class="regen-loading-bar" />
     </Teleport>
   </div>
 </template>
@@ -671,27 +668,22 @@ function handleConfirm() {
   left: 0;
   right: 0;
   z-index: 1100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 10px 20px;
-  background: rgba(20, 28, 43, 0.92);
-  border-bottom: 1px solid rgba(212, 163, 95, 0.18);
-  color: #c9b078;
-  font-size: 13.5px;
-  backdrop-filter: blur(6px);
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(212, 163, 95, 0.7) 25%,
+    #e4c26f 50%,
+    rgba(212, 163, 95, 0.7) 75%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: regen-shimmer 1.6s ease-in-out infinite;
 }
 
-.regen-loading-dot {
-  display: inline-block;
-  color: #e4c26f;
-  font-size: 16px;
-  animation: regen-spin 1.4s linear infinite;
-}
-
-@keyframes regen-spin {
-  to { transform: rotate(360deg); }
+@keyframes regen-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
 }
 
 /* Responsive */

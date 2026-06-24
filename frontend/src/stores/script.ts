@@ -246,6 +246,8 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
     loadError: null,
   });
 
+  let lastLoadedProjectId: string | null = null;
+
   async function loadActiveScriptSnapshot() {
     const projectId = input.projectStore.state.projectId;
     if (!projectId) {
@@ -253,6 +255,7 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
       state.history = [];
       state.selectedHistoryEntryId = null;
       state.loadError = null;
+      lastLoadedProjectId = null;
       return;
     }
 
@@ -261,15 +264,18 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
       const snapshot = await input.api.loadSnapshot(projectId);
       state.snapshot = snapshot;
       state.loadError = null;
-      state.history = [];
-      state.selectedHistoryEntryId = null;
       input.projectStore.syncProject({
         project_id: snapshot.project_id,
         current_status: snapshot.current_status,
       });
 
       if (snapshot.active_script) {
-        state.history = appendHistoryEntry([], snapshot.active_script);
+        if (lastLoadedProjectId !== projectId) {
+          state.history = [];
+          state.selectedHistoryEntryId = null;
+          lastLoadedProjectId = projectId;
+        }
+        state.history = appendHistoryEntry(state.history, snapshot.active_script);
         state.selectedHistoryEntryId = state.history[0]?.entry_id ?? null;
       }
     } catch (error) {
