@@ -111,6 +111,11 @@ const isInitialScriptLoading = computed(
   () => scriptStore.state.isLoading && !visibleScript.value,
 );
 
+const displayScriptText = computed(() => {
+  const text = visibleScript.value?.script_text ?? "";
+  return text.replace(/\n{3,}/g, "\n\n").replace(/\n(?!\n)/g, "\n\n").replace(/\n{3,}/g, "\n\n");
+});
+
 /** Build review soft issues list from semantic_review for display. */
 const reviewIssues = computed(() => {
   const s = visibleScript.value;
@@ -159,10 +164,19 @@ const scriptDurationLabel = computed(() => {
   return m > 0 ? `约 ${m} 分 ${s} 秒` : `约 ${s} 秒`;
 });
 
-const isViewingHistory = computed(() => {
+const isViewingHistoryEntry = computed(() => {
   const entries = scriptStore.state.history;
   if (entries.length === 0) return false;
   return scriptStore.state.selectedHistoryEntryId !== entries[0]?.entry_id;
+});
+
+const viewingHistoryLabel = computed(() => {
+  if (!isViewingHistoryEntry.value) return null;
+  const entry = historyEntries.value.find(
+    (e) => e.entry_id === scriptStore.state.selectedHistoryEntryId,
+  );
+  if (!entry) return null;
+  return `${entry.label} · ${historyGenType(entry)}`;
 });
 
 const scriptGenType = computed(() => {
@@ -325,8 +339,11 @@ function handleConfirm() {
         <!-- Left column: Script text -->
         <div class="script-left-col">
           <div class="script-text-card">
+            <div v-if="viewingHistoryLabel" class="script-history-banner">
+              📋 查看历史版本 · {{ viewingHistoryLabel }}
+            </div>
             <div class="script-text-body" data-testid="script-text-body">
-              {{ visibleScript!.script_text }}
+              {{ displayScriptText }}
             </div>
           </div>
 
@@ -355,6 +372,13 @@ function handleConfirm() {
                   </el-tag>
                   <span>{{ historyGenType(entry) }}</span>
                   <span v-if="entry.created_at">{{ formatHistoryTime(entry.created_at) }}</span>
+                  <el-tag
+                    v-if="entry.entry_id === historyEntries[0]?.entry_id"
+                    size="small"
+                    type="warning"
+                  >
+                    当前
+                  </el-tag>
                 </div>
               </div>
             </div>
@@ -408,7 +432,7 @@ function handleConfirm() {
               <span
                 v-if="issue.code === 'review_summary'"
                 class="script-review-summary"
-              >{{ issue.message }}</span>
+              ><span class="script-review-issue-code">摘要</span>{{ issue.message }}</span>
               <template v-else>
                 <span
                   v-if="issue.code"
@@ -422,7 +446,7 @@ function handleConfirm() {
           <!-- Action buttons -->
           <div class="script-actions-card">
             <el-button
-              v-if="visibleScript && !isViewingHistory"
+              v-if="visibleScript && !isViewingHistoryEntry"
               type="primary"
               :disabled="scriptStore.state.isRunningAction"
               @click="handleConfirm"
@@ -433,7 +457,7 @@ function handleConfirm() {
             <el-button
               :loading="scriptStore.state.isRunningAction"
               :disabled="
-                scriptStore.state.isRunningAction || isViewingHistory
+                scriptStore.state.isRunningAction || isViewingHistoryEntry
               "
               @click="showRegenModal = true"
             >
@@ -518,6 +542,16 @@ function handleConfirm() {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-panel);
   background: var(--bg-card);
+}
+
+.script-history-banner {
+  margin: calc(-1 * (var(--space-lg) + var(--space-sm))) calc(-1 * var(--space-lg)) var(--space-lg);
+  padding: 8px var(--space-lg);
+  background: rgba(201, 162, 39, 0.08);
+  border-bottom: 1px solid rgba(201, 162, 39, 0.15);
+  font-size: 0.82rem;
+  color: var(--accent-primary);
+  font-weight: var(--font-subheading);
 }
 
 .script-text-body {
