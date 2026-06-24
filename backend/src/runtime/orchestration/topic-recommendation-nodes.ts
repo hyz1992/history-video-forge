@@ -174,15 +174,6 @@ function completeMustCoverPreview(
   ].filter((item) => item.length > 0)).slice(0, 3);
 }
 
-function isInstructionText(text: string): boolean {
-  const patterns = [
-    "请围绕", "不得超出", "优先推荐", "优先寻找",
-    "严格排除", "所有场景必须", "不得采用", "禁止返回",
-    "不得返回", "仅使用", "一律排除",
-  ];
-  return patterns.some((p) => text.includes(p));
-}
-
 function normalizeTopicCandidateCard(
   candidate: Record<string, unknown>,
   runtime: TopicRecommendationGraphRuntime,
@@ -248,32 +239,27 @@ function normalizeTopicCandidateCard(
           ? rubricMetadata.scope_label
         : "—",
     estimated_duration_band: "medium",
-    why_this_now: (() => {
-      const hint = runtime.input.recentUsageHint;
-      if (isInstructionText(hint)) return "该事件具备可讲张力，适合进入文案阶段。";
-      return `${hint}，且当前具备可讲张力。`;
-    })(),
-    core_conflict: (() => {
-      const c = runtime.input.coreConflict;
-      if (isInstructionText(c)) return `${runtime.input.canonicalName}中的关键人物在极端压力下做出不可逆的选择，由此引发的连锁反应改变了局势走向。`;
-      return c;
-    })(),
-    strong_scene: (() => {
-      const s = runtime.input.strongScene;
-      if (isInstructionText(s)) {
-        const name = runtime.input.canonicalName;
-        return `${name}的核心场面：关键人物在决定性时刻面对压倒性的对抗力量，在生死、荣辱或命运转折点上做出了不可挽回的选择。`;
-      }
-      return s;
-    })(),
+    why_this_now: typeof candidate.why_this_now === "string" && candidate.why_this_now
+      ? candidate.why_this_now
+      : "该事件具备可讲张力，适合进入文案阶段。",
+    core_conflict: typeof candidate.core_conflict === "string" && candidate.core_conflict
+      ? candidate.core_conflict
+      : `${runtime.input.canonicalName}中的关键人物在极端压力下做出不可逆的选择，由此引发的连锁反应改变了局势走向。`,
+    strong_scene: typeof candidate.strong_scene === "string" && candidate.strong_scene
+      ? candidate.strong_scene
+      : `${runtime.input.canonicalName}的核心场面涉及决定性时刻的关键选择。`,
     must_cover_preview: completeMustCoverPreview(
       keyElements,
       runtime,
       description,
     ),
     risk_hints: ["真实模型候选已做最小合同归一化"],
-    source_hint: isInstructionText(runtime.input.sourceHint) ? "基于历史共识推定" : runtime.input.sourceHint,
-    recent_usage_hint: isInstructionText(runtime.input.recentUsageHint) ? "近期未使用" : runtime.input.recentUsageHint,
+    source_hint: typeof candidate.source_hint === "string" && candidate.source_hint
+      ? candidate.source_hint
+      : "基于历史共识推定",
+    recent_usage_hint: typeof candidate.recent_usage_hint === "string" && candidate.recent_usage_hint
+      ? candidate.recent_usage_hint
+      : "近期未使用",
     viral_rubric: viralRubric,
   });
 }
