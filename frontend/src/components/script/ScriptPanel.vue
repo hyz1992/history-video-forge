@@ -681,6 +681,19 @@ function handleConfirm() {
 
 .script-confirm-btn {
   flex: 1;
+  background: linear-gradient(135deg, #c9a227, #b87333) !important;
+  border-color: transparent !important;
+  color: #100c08 !important;
+}
+
+.script-confirm-btn:hover {
+  background: linear-gradient(135deg, #e4c26f, #cd7f32) !important;
+  border-color: transparent !important;
+  filter: brightness(1.05);
+}
+
+.script-confirm-btn:active {
+  background: linear-gradient(135deg, #b8931f, #a46328) !important;
 }
 
 /* Responsive */
