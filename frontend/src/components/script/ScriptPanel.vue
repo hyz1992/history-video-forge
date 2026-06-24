@@ -211,6 +211,23 @@ function historyPreview(text: string) {
   return text.replace(/\s/g, "").slice(0, 40);
 }
 
+const ISSUE_CODE_MAP: Record<string, string> = {
+  scene_enhancement: "场景细节",
+  dialogue_enhancement: "对话细节",
+  opening_hook_weak: "开篇冲击力",
+  pace_too_slow: "节奏偏慢",
+  pace_too_fast: "节奏偏快",
+  emotional_depth: "情感厚度",
+  character_depth: "人物刻画",
+  ending_weak: "结尾力度",
+  script_body_too_thin: "篇幅偏薄",
+  conflict_pressure: "冲突压力",
+};
+
+function humanizeIssueCode(code: string) {
+  return ISSUE_CODE_MAP[code] ?? code;
+}
+
 const historyEntries = computed(() =>
   scriptStore.state.history.map((entry) => ({
     entry_id: entry.entry_id,
@@ -396,7 +413,7 @@ function handleConfirm() {
                 <span
                   v-if="issue.code"
                   class="script-review-issue-code"
-                >{{ issue.code }}</span>
+                >{{ humanizeIssueCode(issue.code) }}</span>
                 <span class="script-review-issue-msg">{{ issue.message }}</span>
               </template>
             </div>
