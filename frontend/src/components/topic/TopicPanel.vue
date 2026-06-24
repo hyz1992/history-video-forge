@@ -135,10 +135,14 @@ function toggleHistory() {
 async function handleRefreshBatch() {
   if (topicStore.state.isGenerating || isRefreshing.value) return;
   isRefreshing.value = true;
-  const filters = readFilters();
-  const generation = topicStore.generateSystemRecommendations(filters);
-  startPolling();
-  await generation;
+  try {
+    const filters = readFilters();
+    const generation = topicStore.generateSystemRecommendations(filters);
+    startPolling();
+    await generation;
+  } catch {
+    isRefreshing.value = false;
+  }
 }
 
 async function handleRegenerate() {
@@ -183,7 +187,7 @@ function roundLabel(round: { label?: string; round_index?: number }) {
 
 <template>
   <div class="topic-panel">
-    <template v-if="!hasCandidates && (topicStore.state.isGenerating || isSnapshotGenerating || isPolling)">
+    <template v-if="!hasCandidates && !isRefreshing && (topicStore.state.isGenerating || isSnapshotGenerating || isPolling)">
       <StageGenerating
         title="正在生成选题"
         hint="正在调用大模型生成选题推荐，可能需要 1-3 分钟。"
@@ -330,6 +334,9 @@ function roundLabel(round: { label?: string; round_index?: number }) {
           </div>
         </aside>
       </div>
+    </template>
+
+    <template v-else-if="isRefreshing">
     </template>
 
     <template v-else-if="!hasCandidates && !hasLoadError && projectStore.state.projectId">
