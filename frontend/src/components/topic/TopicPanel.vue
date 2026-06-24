@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, nextTick, onMounted, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { useRoute, useRouter } from "vue-router";
 
@@ -32,7 +32,9 @@ const { startPolling, isPolling } = useStagePolling({
     snapshot.current_status !== "topic_generating" && snapshot.current_status !== "topic_pending",
   onComplete: () => {
     topicStore.loadExistingTopic();
-    isRefreshing.value = false;
+    setTimeout(() => {
+      isRefreshing.value = false;
+    }, 600);
   },
 });
 
@@ -135,6 +137,7 @@ function toggleHistory() {
 async function handleRefreshBatch() {
   if (topicStore.state.isGenerating || isRefreshing.value) return;
   isRefreshing.value = true;
+  await nextTick();
   try {
     const filters = readFilters();
     const generation = topicStore.generateSystemRecommendations(filters);
