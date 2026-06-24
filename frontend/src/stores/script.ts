@@ -261,25 +261,16 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
       const snapshot = await input.api.loadSnapshot(projectId);
       state.snapshot = snapshot;
       state.loadError = null;
+      state.history = [];
+      state.selectedHistoryEntryId = null;
       input.projectStore.syncProject({
         project_id: snapshot.project_id,
         current_status: snapshot.current_status,
       });
 
       if (snapshot.active_script) {
-        state.history = appendHistoryEntry(state.history, snapshot.active_script);
+        state.history = appendHistoryEntry([], snapshot.active_script);
         state.selectedHistoryEntryId = state.history[0]?.entry_id ?? null;
-      } else {
-        const latestHistoryEntry = getLatestHistoryEntry(state.history);
-        if (
-          latestHistoryEntry &&
-          (snapshot.current_status === "script_reviewing" ||
-            snapshot.current_status === "script_failed")
-        ) {
-          state.selectedHistoryEntryId = latestHistoryEntry.entry_id;
-        } else {
-          state.selectedHistoryEntryId = null;
-        }
       }
     } catch (error) {
       state.loadError = toErrorMessage(error);

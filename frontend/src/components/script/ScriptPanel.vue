@@ -394,14 +394,9 @@ function handleConfirm() {
     />
 
     <Teleport to="body">
-      <div v-if="isRegenerating" class="regen-loading-overlay">
-        <div class="regen-loading-card">
-          <div class="regen-loading-spinner">✦</div>
-          <h2 class="regen-loading-title">正在重新生成文案</h2>
-          <p class="regen-loading-desc">大模型正在根据你的反馈重新撰写口播文案，可能需要 1-3 分钟。</p>
-          <div class="regen-loading-line"></div>
-          <p class="regen-loading-sub">请耐心等待，页面会自动刷新。</p>
-        </div>
+      <div v-if="isRegenerating" class="regen-loading-bar">
+        <span class="regen-loading-dot">✦</span>
+        <span>正在重新生成文案，请稍候…</span>
       </div>
     </Teleport>
   </div>
@@ -669,73 +664,34 @@ function handleConfirm() {
   flex-wrap: wrap;
 }
 
-/* Regen loading overlay */
-.regen-loading-overlay {
+/* Regen loading bar */
+.regen-loading-bar {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
   z-index: 1100;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(4, 6, 12, 0.78);
-  backdrop-filter: blur(8px);
+  gap: 10px;
+  padding: 10px 20px;
+  background: rgba(20, 28, 43, 0.92);
+  border-bottom: 1px solid rgba(212, 163, 95, 0.18);
+  color: #c9b078;
+  font-size: 13.5px;
+  backdrop-filter: blur(6px);
 }
 
-.regen-loading-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 14px;
-  text-align: center;
-  max-width: 480px;
-}
-
-.regen-loading-spinner {
-  width: 88px;
-  height: 88px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
+.regen-loading-dot {
+  display: inline-block;
   color: #e4c26f;
-  background: radial-gradient(circle at 50% 40%, rgba(201, 162, 39, 0.20), rgba(201, 162, 39, 0.065) 62%, rgba(201, 162, 39, 0.025) 100%);
-  border: 1px solid rgba(201, 162, 39, 0.22);
-  font-size: 34px;
-  box-shadow: 0 0 42px rgba(201, 162, 39, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  position: relative;
-  animation: regen-pulse 1.8s ease-in-out infinite;
+  font-size: 16px;
+  animation: regen-spin 1.4s linear infinite;
 }
 
-@keyframes regen-pulse {
-  0%, 100% { transform: scale(1); opacity: 0.85; }
-  50% { transform: scale(1.08); opacity: 1; }
-}
-
-.regen-loading-title {
-  color: #f5f0e8;
-  font-family: "Noto Serif SC", "Songti SC", Georgia, serif;
-  font-size: 24px;
-  font-weight: 700;
-  margin: 0;
-}
-
-.regen-loading-desc {
-  margin: 0;
-  color: #a89f94;
-  font-size: 14px;
-  line-height: 1.8;
-  max-width: 400px;
-}
-
-.regen-loading-line {
-  width: 120px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(201, 162, 39, 0.24), transparent);
-}
-
-.regen-loading-sub {
-  margin: 0;
-  color: #6b635a;
-  font-size: 13px;
+@keyframes regen-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Responsive */
