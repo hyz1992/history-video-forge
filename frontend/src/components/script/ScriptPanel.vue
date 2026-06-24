@@ -165,10 +165,61 @@ const isViewingHistory = computed(() => {
   return scriptStore.state.selectedHistoryEntryId !== entries[0]?.entry_id;
 });
 
+const scriptGenType = computed(() => {
+  const s = visibleScript.value;
+  if (!s) return null;
+  if (s.execution_state?.regenerate_used) return "定向重生成";
+  if (s.execution_state?.patch_used) return "修补";
+  return "首稿";
+});
+
+const scriptCreatedAtLabel = computed(() => {
+  const iso = visibleScript.value?.created_at;
+  if (!iso) return null;
+  const d = new Date(iso);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const time = d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+  if (isToday) return `今天 ${time}`;
+  return `${d.getMonth() + 1}/${d.getDate()} ${time}`;
+});
+
+function formatHistoryTime(iso?: string) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  const time = d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+  if (isToday) return `今天 ${time}`;
+  return `${d.getMonth() + 1}/${d.getDate()} ${time}`;
+}
+
+function historyGenType(entry: { execution_state?: { patch_used?: boolean; regenerate_used?: boolean } }) {
+  if (entry.execution_state?.regenerate_used) return "定向重生成";
+  if (entry.execution_state?.patch_used) return "修补";
+  return "首稿";
+}
+
+function historyReviewBadge(decision?: string) {
+  if (decision === "pass") return { text: "通过", type: "success" as const };
+  if (decision === "regen_once") return { text: "建议重生成", type: "warning" as const };
+  if (decision === "hard_fail") return { text: "未通过", type: "danger" as const };
+  return { text: "审校中", type: "info" as const };
+}
+
+function historyPreview(text: string) {
+  return text.replace(/\s/g, "").slice(0, 40);
+}
+
 const historyEntries = computed(() =>
   scriptStore.state.history.map((entry) => ({
     entry_id: entry.entry_id,
     label: entry.label,
+    script_text: entry.script.script_text,
+    word_count: entry.script.script_text.replace(/\s/g, "").length,
+    review_decision: entry.script.review_decision,
+    created_at: entry.script.created_at,
+    execution_state: entry.script.execution_state,
   })),
 );
 
@@ -276,16 +327,18 @@ function handleConfirm() {
                 }"
                 @click="handleSelectHistory(entry.entry_id)"
               >
-                <span class="script-history-label">{{ entry.label }}</span>
-                <el-tag
-                  v-if="
-                    scriptStore.state.selectedHistoryEntryId === entry.entry_id
-                  "
-                  size="small"
-                  type="warning"
-                >
-                  当前
-                </el-tag>
+                <div class="script-history-preview">{{ historyPreview(entry.script_text) }}</div>
+                <div class="script-history-meta">
+                  <span>{{ entry.word_count }} 字</span>
+                  <el-tag
+                    :type="historyReviewBadge(entry.review_decision).type"
+                    size="small"
+                  >
+                    {{ historyReviewBadge(entry.review_decision).text }}
+                  </el-tag>
+                  <span>{{ historyGenType(entry) }}</span>
+                  <span v-if="entry.created_at">{{ formatHistoryTime(entry.created_at) }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -298,6 +351,10 @@ function handleConfirm() {
             <span class="script-info-stat">{{ scriptWordCount }} 字</span>
             <span class="script-info-divider"></span>
             <span class="script-info-stat">{{ scriptDurationLabel }}</span>
+            <span class="script-info-divider"></span>
+            <span class="script-info-stat script-info-dim">{{ scriptGenType }}</span>
+            <span v-if="scriptCreatedAtLabel" class="script-info-divider"></span>
+            <span v-if="scriptCreatedAtLabel" class="script-info-stat script-info-dim">{{ scriptCreatedAtLabel }}</span>
           </div>
 
           <!-- Review results -->
@@ -362,8 +419,6 @@ function handleConfirm() {
                 scriptStore.state.isRunningAction || isViewingHistory
               "
               @click="showRegenModal = true"
-              size="small"
-              class="script-regen-btn"
             >
               {{
                 scriptStore.state.isRunningAction
@@ -475,6 +530,11 @@ function handleConfirm() {
   font-weight: var(--font-subheading);
 }
 
+.script-info-dim {
+  color: var(--text-muted);
+  font-weight: var(--font-body);
+}
+
 .script-info-divider {
   width: 1px;
   height: 14px;
@@ -506,9 +566,8 @@ function handleConfirm() {
 
 .script-history-item {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-sm);
+  flex-direction: column;
+  gap: 6px;
   padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-card);
@@ -530,13 +589,22 @@ function handleConfirm() {
   box-shadow: 0 0 0 1px var(--accent-primary);
 }
 
-.script-history-label {
-  font-size: 0.88rem;
-  color: var(--text-secondary);
+.script-history-preview {
+  font-size: 0.84rem;
+  color: var(--text-body);
+  line-height: 1.5;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+
+.script-history-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  font-size: 0.75rem;
+  color: var(--text-muted);
 }
 
 /* Right column */
@@ -613,10 +681,6 @@ function handleConfirm() {
 
 .script-confirm-btn {
   flex: 1;
-}
-
-.script-regen-btn {
-  flex-shrink: 0;
 }
 
 /* Responsive */
