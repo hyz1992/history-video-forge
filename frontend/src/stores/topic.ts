@@ -213,6 +213,8 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
     state.isGenerating = true;
     state.loadError = null;
     state.snapshot = { current_status: "topic_generating" };
+    state.candidates = [];
+    state.currentRound = null;
 
     try {
       const projectId = await input.projectStore.ensureProject();
