@@ -15,11 +15,29 @@ const emit = defineEmits<{
 
 const userFeedback = ref("");
 
+const ISSUE_CODE_MAP: Record<string, string> = {
+  scene_enhancement: "场景细节",
+  dialogue_enhancement: "对话细节",
+  opening_hook_weak: "开篇冲击力",
+  pace_too_slow: "节奏偏慢",
+  pace_too_fast: "节奏偏快",
+  emotional_depth: "情感厚度",
+  character_depth: "人物刻画",
+  ending_weak: "结尾力度",
+  script_body_too_thin: "篇幅偏薄",
+  conflict_pressure: "冲突压力",
+};
+
+function humanizeIssueCode(code: string) {
+  return ISSUE_CODE_MAP[code] ?? code;
+}
+
 const softIssues = computed(() => {
   const issues = props.script?.semantic_review?.soft_issues ?? [];
   return issues.map((item) => {
     if (typeof item === "string") return { code: "", message: item };
-    return { code: item.code ?? "", message: item.message ?? "" };
+    const rawCode = (item.code ?? "") as string;
+    return { code: humanizeIssueCode(rawCode), message: item.message ?? "" };
   });
 });
 
