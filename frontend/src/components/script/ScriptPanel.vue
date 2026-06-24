@@ -8,6 +8,7 @@ import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 import { useStagePolling } from "../../composables/useStagePolling";
 import StageGenerating from "../workspace/StageGenerating.vue";
+import StageLoadingBar from "../workspace/StageLoadingBar.vue";
 import RegenFeedbackModal from "./RegenFeedbackModal.vue";
 
 const scriptStore = useScriptStore();
@@ -393,12 +394,10 @@ function handleConfirm() {
       @submit="handleRegenSubmit"
     />
 
-    <Teleport to="body">
-      <div v-if="isRegenerating" class="regen-loading-bar">
-        <span class="regen-loading-dot" />
-        <span class="regen-loading-text">重新生成中…</span>
-      </div>
-    </Teleport>
+    <StageLoadingBar
+      :visible="isRegenerating"
+      text="重新生成中…"
+    />
   </div>
 </template>
 
@@ -662,41 +661,6 @@ function handleConfirm() {
   display: flex;
   gap: var(--space-sm);
   flex-wrap: wrap;
-}
-
-/* Regen loading bar */
-.regen-loading-bar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 1100;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: rgba(20, 24, 36, 0.85);
-  backdrop-filter: blur(4px);
-}
-
-.regen-loading-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #d4a35f;
-  animation: regen-blink 1s ease-in-out infinite;
-}
-
-@keyframes regen-blink {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 1; }
-}
-
-.regen-loading-text {
-  font-size: 12px;
-  color: #a89f94;
-  letter-spacing: 0.04em;
 }
 
 /* Responsive */

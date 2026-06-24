@@ -191,6 +191,7 @@ function canAppendHistoryEntry(activeScript: ActiveScriptSnapshot) {
 
 function isSameHistoryEntry(a: ActiveScriptSnapshot, b: ActiveScriptSnapshot) {
   return (
+    a.script_record_id === b.script_record_id &&
     a.script_text === b.script_text &&
     a.review_decision === b.review_decision &&
     a.patch_intent === b.patch_intent &&
