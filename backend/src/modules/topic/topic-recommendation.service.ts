@@ -998,7 +998,7 @@ async function selectFinalCandidatesWithTrace(input: {
     rankings: input.rankings,
   });
 
-  if (selection.selected.length !== TOPIC_CANDIDATE_TARGET_COUNT) {
+  if (selection.selected.length === 0) {
     throw new Error("topic_selector_invalid_selection");
   }
 

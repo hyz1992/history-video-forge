@@ -4,7 +4,6 @@ import { z } from "zod";
 import type { DbClient } from "../../db/client.js";
 import type { BuildTopicCandidatesInput } from "../../modules/topic/topic-candidate.builder.js";
 import {
-  TOPIC_CANDIDATE_TARGET_COUNT,
   createTopicRecommendationNodes,
   type TopicRecommendationGraphDependencies,
   type TopicRecommendationGraphRuntime,
@@ -109,7 +108,7 @@ export async function runTopicRecommendationGraph(
     });
   }
 
-  if (runtime.candidates.length === TOPIC_CANDIDATE_TARGET_COUNT) {
+  if (runtime.candidates.length > 0) {
     diagnostics.push({
       code: "topic_candidate_slot_guard_passed",
       level: "info" as const,
