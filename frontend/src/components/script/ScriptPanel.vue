@@ -163,13 +163,6 @@ const historyEntries = computed(() =>
   })),
 );
 
-async function handleGenerate() {
-  await scriptStore.generateInitialScript();
-  if (!scriptStore.state.loadError) {
-    ElMessage.success("文案已生成");
-  }
-}
-
 const showRegenModal = ref(false);
 const isRegenerating = ref(false);
 
@@ -254,29 +247,8 @@ function handleConfirm() {
       <el-button type="primary" @click="handleRetry">重试</el-button>
     </div>
 
-    <!-- Empty state -->
-    <div
-      v-else-if="
-        !visibleScript &&
-        !scriptStore.state.isLoading &&
-        !scriptStore.state.loadError
-      "
-      class="script-empty"
-    >
-      <p>文案尚未生成</p>
-      <p class="script-empty-hint">确认选题后将自动生成文案。如果已确认选题但未自动生成，请手动点击下方按钮。</p>
-      <el-button
-        type="primary"
-        :disabled="isGenerating"
-        :loading="isGenerating"
-        @click="handleGenerate"
-      >
-        开始生成文案
-      </el-button>
-    </div>
-
     <!-- Main two-column layout -->
-    <template v-else>
+    <template v-else-if="visibleScript">
       <div class="script-columns">
         <!-- Left column: Script text display -->
         <div class="script-left-col">
@@ -459,10 +431,8 @@ function handleConfirm() {
   padding: var(--space-md);
 }
 
-/* Generating / failed / empty */
-.script-generating,
-.script-failed,
-.script-empty {
+/* Generating / failed */
+.script-failed {
   display: flex;
   flex-direction: column;
   align-items: center;
