@@ -428,8 +428,7 @@ function handleConfirm() {
             <span class="script-info-stat">{{ scriptWordCount }}字</span>
             <span class="script-info-divider"></span>
             <span class="script-info-stat">{{ scriptDurationLabel }}</span>
-            <span v-if="scriptCreatedAtLabel" class="script-info-divider"></span>
-            <span v-if="scriptCreatedAtLabel" class="script-info-stat script-info-dim">{{ scriptCreatedAtLabel }}</span>
+            <span v-if="scriptCreatedAtLabel" class="script-info-stat script-info-time">{{ scriptCreatedAtLabel }}</span>
           </div>
 
           <!-- Review results -->
@@ -604,6 +603,10 @@ function handleConfirm() {
 .script-info-dim {
   color: var(--text-muted);
   font-weight: var(--font-body);
+}
+
+.script-info-time {
+  margin-left: auto;
 }
 
 .script-info-divider {
