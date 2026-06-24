@@ -115,40 +115,63 @@ const shouldShowScriptChrome = computed(
   () => !isGenerating.value && !isInitialScriptLoading.value,
 );
 
-/** Build a structured list of review checks for display. */
-const reviewChecks = computed(() => {
+/** Build review soft issues list from semantic_review for display. */
+const reviewIssues = computed(() => {
   const s = visibleScript.value;
-  if (!s) return [];
+  if (!s?.semantic_review) return [];
 
-  const checks: Array<{ name: string; status: "pass" | "suggest" }> = [];
+  const issues: Array<{ code: string; message: string }> = [];
 
-  if (s.local_validation) {
-    checks.push({
-      name: "本地校验",
-      status: s.local_validation.decision === "pass" ? "pass" : "suggest",
-    });
+  if (s.semantic_review.summary) {
+    issues.push({ code: "review_summary", message: s.semantic_review.summary });
   }
 
-  if (s.semantic_review) {
-    checks.push({
-      name: "语义审校",
-      status: s.semantic_review.decision === "pass" ? "pass" : "suggest",
-    });
+  const softIssues = s.semantic_review.soft_issues ?? [];
+  for (const item of softIssues) {
+    if (typeof item === "string") {
+      issues.push({ code: "", message: item });
+    } else {
+      issues.push({ code: item.code ?? "", message: item.message ?? "" });
+    }
   }
 
-  return checks;
+  return issues;
 });
 
-/** True when script_text literally starts with opening_span, to avoid
- *  showing the same text twice in "开头" and the beginning of "正文". */
-const openingPrefixedBody = computed(() => {
-  if (!visibleScript.value) return null;
-  const text = visibleScript.value.script_text;
-  const opening = visibleScript.value.opening_span;
-  if (opening && text.startsWith(opening)) {
-    return text.slice(opening.length).replace(/^\s+/, "");
-  }
-  return null; // null means use full script_text
+const reviewDecision = computed(() => {
+  const s = visibleScript.value;
+  if (!s) return null;
+  if (s.semantic_review?.decision) return s.semantic_review.decision;
+  if (s.local_validation?.decision) return s.local_validation.decision;
+  return null;
+});
+
+const scriptWordCount = computed(() => {
+  const text = visibleScript.value?.script_text ?? "";
+  return text.replace(/\s/g, "").length;
+});
+
+const scriptDurationSec = computed(() => {
+  return visibleScript.value?.estimated_duration_sec ?? 0;
+});
+
+const scriptDurationLabel = computed(() => {
+  const sec = scriptDurationSec.value;
+  if (!sec) return "—";
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return m > 0 ? `约 ${m} 分 ${s} 秒` : `约 ${s} 秒`;
+});
+
+const scriptParagraphCount = computed(() => {
+  const text = visibleScript.value?.script_text ?? "";
+  const paras = text.split(/\n\n+/).filter((p) => p.trim().length > 0);
+  return paras.length;
+});
+
+const topicCanonicalTitle = computed(() => {
+  const pkg = scriptStore.state.snapshot?.active_topic_package;
+  return pkg?.canonical_title ?? null;
 });
 
 const isViewingHistory = computed(() => {
@@ -197,8 +220,10 @@ function handleConfirm() {
 <template>
   <div class="script-panel">
     <template v-if="shouldShowScriptChrome">
-      <header class="script-page-header" data-testid="script-page-header">文案工作区</header>
-      <div class="script-run-trace" data-testid="script-trace-entry">查看运行详情</div>
+      <header class="script-page-header" data-testid="script-page-header">
+        <span class="script-header-title">文案工作区</span>
+        <span v-if="topicCanonicalTitle" class="script-header-topic">选题：{{ topicCanonicalTitle }}</span>
+      </header>
     </template>
     <!-- Error state -->
     <div v-if="scriptStore.state.loadError" class="script-error-card">
@@ -250,52 +275,36 @@ function handleConfirm() {
 
     <!-- Main two-column layout -->
     <template v-else-if="visibleScript">
+      <!-- Metadata bar -->
+      <div class="script-meta-bar">
+        <div class="script-meta-item">
+          <span class="script-meta-value">{{ scriptWordCount }}</span>
+          <span class="script-meta-label">全文字数</span>
+        </div>
+        <div class="script-meta-divider"></div>
+        <div class="script-meta-item">
+          <span class="script-meta-value">{{ scriptDurationLabel }}</span>
+          <span class="script-meta-label">预估口播时长</span>
+        </div>
+        <div class="script-meta-divider"></div>
+        <div class="script-meta-item">
+          <span class="script-meta-value">{{ scriptParagraphCount }}</span>
+          <span class="script-meta-label">段落</span>
+        </div>
+      </div>
+
       <div class="script-columns">
-        <!-- Left column: Script text display -->
+        <!-- Left column: Script text -->
         <div class="script-left-col">
           <div class="script-text-card">
-            <div class="script-text-header">
-              <h2 class="script-col-heading">文案内容</h2>
-              <el-tag
-                v-if="isViewingHistory"
-                size="small"
-                type="warning"
-              >
-                查看历史版本
-              </el-tag>
-            </div>
-
-            <!-- Opening section -->
-            <div class="script-section">
-              <span class="script-section-label">开头</span>
-              <p class="script-section-text">{{ visibleScript!.opening_span }}</p>
-            </div>
-
-            <!-- Body section: if script_text starts with opening_span, trim it -->
-            <div class="script-section script-section--body">
-              <span class="script-section-label">正文</span>
-              <p
-                v-if="openingPrefixedBody !== null"
-                class="script-section-text script-body-text"
-              >
-                <em class="script-body-continue">（接开头，顺势展开）</em>
-                {{ openingPrefixedBody }}
-              </p>
-              <article v-else class="script-section-text script-body-text">
-                {{ visibleScript!.script_text }}
-              </article>
-            </div>
-
-            <!-- Ending section -->
-            <div class="script-section">
-              <span class="script-section-label">结尾</span>
-              <p class="script-section-text">{{ visibleScript!.ending_span }}</p>
+            <div class="script-text-body" data-testid="script-text-body">
+              {{ visibleScript!.script_text }}
             </div>
           </div>
 
           <!-- History versions -->
           <div v-if="historyEntries.length > 0" class="script-history">
-            <h3 class="script-history-heading">历史版本</h3>
+            <h3 class="script-history-heading">历史版本（{{ historyEntries.length }}）</h3>
             <div class="script-history-list">
               <div
                 v-for="entry in historyEntries"
@@ -313,7 +322,7 @@ function handleConfirm() {
                     scriptStore.state.selectedHistoryEntryId === entry.entry_id
                   "
                   size="small"
-                  type="info"
+                  type="warning"
                 >
                   当前
                 </el-tag>
@@ -325,53 +334,65 @@ function handleConfirm() {
         <!-- Right column: Review & Actions -->
         <div class="script-right-col">
           <!-- Review results -->
-          <div class="script-review-card">
-            <h3 class="script-review-heading">审校结果</h3>
-            <div v-if="reviewChecks.length === 0" class="script-review-empty">
-              暂无审校数据
-            </div>
-            <ul v-else class="script-review-list">
-              <li
-                v-for="check in reviewChecks"
-                :key="check.name"
-                class="script-review-item"
+          <div v-if="reviewIssues.length > 0" class="script-review-card">
+            <h3 class="script-review-heading">
+              审校建议
+              <el-tag
+                v-if="reviewDecision === 'pass'"
+                size="small"
+                type="success"
               >
+                通过
+              </el-tag>
+              <el-tag
+                v-else-if="reviewDecision === 'regen_once'"
+                size="small"
+                type="warning"
+              >
+                建议重生成
+              </el-tag>
+              <el-tag
+                v-else-if="reviewDecision"
+                size="small"
+                type="danger"
+              >
+                需修改
+              </el-tag>
+            </h3>
+            <div
+              v-for="(issue, idx) in reviewIssues"
+              :key="idx"
+              class="script-review-issue"
+            >
+              <span
+                v-if="issue.code === 'review_summary'"
+                class="script-review-summary"
+              >{{ issue.message }}</span>
+              <template v-else>
                 <span
-                  class="script-review-dot"
-                  :class="{
-                    'script-review-dot--pass': check.status === 'pass',
-                    'script-review-dot--suggest': check.status === 'suggest',
-                  }"
-                />
-                <span class="script-review-name">{{ check.name }}</span>
-                <el-tag
-                  :type="check.status === 'pass' ? 'success' : 'warning'"
-                  size="small"
-                >
-                  {{ check.status === "pass" ? "通过" : "建议修改" }}
-                </el-tag>
-              </li>
-            </ul>
+                  v-if="issue.code"
+                  class="script-review-issue-code"
+                >{{ issue.code }}</span>
+                <span class="script-review-issue-msg">{{ issue.message }}</span>
+              </template>
+            </div>
           </div>
 
           <!-- Action buttons -->
           <div class="script-actions-card">
-            <h3 class="script-actions-heading">操作</h3>
-            <div class="script-actions-buttons">
-              <el-button
-                :loading="scriptStore.state.isRunningAction"
-                :disabled="
-                  scriptStore.state.isRunningAction || isViewingHistory
-                "
-                @click="showRegenModal = true"
-              >
-                {{
-                  scriptStore.state.isRunningAction
-                    ? "处理中..."
-                    : "重新生成"
-                }}
-              </el-button>
-            </div>
+            <el-button
+              :loading="scriptStore.state.isRunningAction"
+              :disabled="
+                scriptStore.state.isRunningAction || isViewingHistory
+              "
+              @click="showRegenModal = true"
+            >
+              {{
+                scriptStore.state.isRunningAction
+                  ? "处理中..."
+                  : "重新生成"
+              }}
+            </el-button>
 
             <!-- Confirm button -->
             <el-button
@@ -409,6 +430,32 @@ function handleConfirm() {
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;
+}
+
+/* Page header */
+.script-page-header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.script-header-title {
+  font-size: 1.2rem;
+  font-weight: var(--font-heading);
+  color: var(--text-heading);
+}
+
+.script-header-topic {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+}
+
+.script-header-topic::before {
+  content: "·";
+  margin-right: var(--space-md);
+  color: var(--border-default);
 }
 
 /* Error card */
@@ -451,71 +498,61 @@ function handleConfirm() {
   gap: var(--space-md);
 }
 
-/* Script text card */
+/* Script text card — single clean block */
 .script-text-card {
-  display: grid;
-  gap: var(--space-md);
-  padding: var(--space-lg);
+  padding: calc(var(--space-lg) + var(--space-sm)) var(--space-lg);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-panel);
   background: var(--bg-card);
 }
 
-.script-text-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
+.script-text-body {
+  margin: 0;
+  color: var(--text-body);
+  font-size: 1.02rem;
+  line-height: 2.0;
+  white-space: pre-wrap;
+  letter-spacing: 0.01em;
 }
 
-.script-col-heading {
-  margin: 0;
-  font-size: 1.1rem;
+/* Meta bar */
+.script-meta-bar {
+  display: flex;
+  gap: 0;
+  margin-bottom: var(--space-md);
+  padding: 12px var(--space-lg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-panel);
+  background: var(--bg-card);
+}
+
+.script-meta-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+}
+
+.script-meta-value {
+  font-size: 1.15rem;
   font-weight: var(--font-subheading);
   color: var(--text-heading);
 }
 
-/* Sections */
-.script-section {
-  display: grid;
-  gap: var(--space-xs);
-  padding-top: var(--space-md);
-  border-top: 1px solid var(--border-default);
-}
-
-.script-section:first-of-type {
-  padding-top: 0;
-  border-top: none;
-}
-
-.script-section-label {
-  font-size: 0.85rem;
-  font-weight: var(--font-subheading);
-  color: var(--accent-primary);
+.script-meta-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
   letter-spacing: 0.06em;
 }
 
-.script-section-text {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 0.94rem;
-  line-height: 1.75;
-}
-
-.script-body-text {
-  white-space: pre-wrap;
-  color: var(--text-body);
-  font-size: 0.96rem;
-  line-height: 1.85;
-}
-
-.script-body-continue {
-  display: block;
-  font-style: normal;
-  font-size: 0.82rem;
-  color: var(--text-muted);
-  margin-bottom: var(--space-sm);
-  padding-bottom: var(--space-sm);
-  border-bottom: 1px dashed var(--border-default);
+.script-meta-divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border-default);
+  margin: 4px 0;
+  flex-shrink: 0;
 }
 
 /* History */
@@ -595,72 +632,56 @@ function handleConfirm() {
 
 .script-review-heading {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   font-weight: var(--font-subheading);
   color: var(--text-heading);
-}
-
-.script-review-empty {
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-
-.script-review-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: var(--space-sm);
-}
-
-.script-review-item {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
 }
 
-.script-review-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
+.script-review-issue {
+  padding: var(--space-sm) 0;
+  border-bottom: 1px solid var(--border-default);
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
 }
 
-.script-review-dot--pass {
-  background: var(--color-success);
+.script-review-issue:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
-.script-review-dot--suggest {
-  background: var(--color-warning);
+.script-review-issue-code {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: var(--font-subheading);
+  color: var(--accent-primary);
+  background: rgba(201, 162, 39, 0.12);
+  padding: 1px 6px;
+  border-radius: 4px;
+  margin-right: 6px;
+  vertical-align: middle;
 }
 
-.script-review-name {
-  flex: 1;
-  font-size: 0.92rem;
+.script-review-summary {
   color: var(--text-body);
+}
+
+.script-review-issue-msg {
+  color: var(--text-secondary);
 }
 
 /* Actions card */
 .script-actions-card {
-  display: grid;
-  gap: var(--space-md);
-  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-panel);
   background: var(--bg-card);
-}
-
-.script-actions-heading {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: var(--font-subheading);
-  color: var(--text-heading);
-}
-
-.script-actions-buttons {
-  display: flex;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
 }
 
 /* Responsive */

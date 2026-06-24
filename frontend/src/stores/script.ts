@@ -19,6 +19,7 @@ export interface ActiveScriptSnapshot {
   script_text: string;
   opening_span: string;
   ending_span: string;
+  estimated_duration_sec: number;
   review_decision: "pass" | "patch_once" | "regen_once" | "return_topic";
   patch_intent: "fix" | "lift" | null;
   local_validation: {
