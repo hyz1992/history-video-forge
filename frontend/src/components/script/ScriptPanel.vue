@@ -199,7 +199,7 @@ const viewingHistoryLabel = computed(() => {
     (e) => e.entry_id === scriptStore.state.selectedHistoryEntryId,
   );
   if (!entry) return null;
-  return `${entry.versionLabel} · ${historyGenType(entry)}`;
+  return entry.versionLabel;
 });
 
 const scriptCreatedAtLabel = computed(() => {
@@ -221,12 +221,6 @@ function formatHistoryTime(iso?: string) {
   const time = d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
   if (isToday) return `今天 ${time}`;
   return `${d.getMonth() + 1}/${d.getDate()} ${time}`;
-}
-
-function historyGenType(entry: { execution_state?: { patch_used?: boolean; regenerate_used?: boolean } }) {
-  if (entry.execution_state?.regenerate_used) return "定向重生成";
-  if (entry.execution_state?.patch_used) return "修补";
-  return "首稿";
 }
 
 function historyReviewBadge(decision?: string) {
@@ -411,7 +405,6 @@ function handleConfirm() {
                   >
                     {{ historyReviewBadge(entry.review_decision).text }}
                   </el-tag>
-                  <span>{{ historyGenType(entry) }}</span>
                   <span v-if="entry.created_at">{{ formatHistoryTime(entry.created_at) }}</span>
                   <el-tag
                     v-if="entry.entry_id === historyEntries[0]?.entry_id"
@@ -430,11 +423,11 @@ function handleConfirm() {
         <div class="script-right-col">
           <!-- Script info -->
           <div class="script-info-card">
+            <span class="script-info-stat">{{ visibleScriptVersionLabel }}</span>
+            <span class="script-info-divider"></span>
             <span class="script-info-stat">{{ scriptWordCount }}字</span>
             <span class="script-info-divider"></span>
             <span class="script-info-stat">{{ scriptDurationLabel }}</span>
-            <span class="script-info-divider"></span>
-            <span class="script-info-stat script-info-dim">{{ visibleScriptVersionLabel }}</span>
             <span v-if="scriptCreatedAtLabel" class="script-info-divider"></span>
             <span v-if="scriptCreatedAtLabel" class="script-info-stat script-info-dim">{{ scriptCreatedAtLabel }}</span>
           </div>
