@@ -1266,7 +1266,7 @@ function selectRankedCandidates(input: {
 
   for (const candidateId of knownIds) {
     if (!coveredKnownIds.has(candidateId)) {
-      throw new Error("topic_selector_invalid_selection");
+      skippedCandidateIds.push(candidateId);
     }
   }
 

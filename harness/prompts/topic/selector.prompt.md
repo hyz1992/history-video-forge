@@ -27,7 +27,7 @@ status: active
 
 - 必须通过 `rank_topic_candidates` 返回排序结果。
 - 唯一正式字段是 `ranked_candidates`。
-- `ranked_candidates` 必须覆盖 `selector_pool` 中全部候选 id，不得遗漏，不得发明候选池外 id。
+- `ranked_candidates` 应尽量覆盖 `selector_pool` 中全部候选 id，不得发明候选池外 id。
 - 每个候选必须包含 `candidate_id`、`quality_rank`、`quality_score`、`deductions`、`risk_summary`。
 - `quality_rank` 必须从 1 开始且不得重复；1 表示最推荐。
 - `quality_score` 必须是 0 到 100 的整数。
