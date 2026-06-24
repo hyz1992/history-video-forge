@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from "vue";
+import { computed, onMounted, watch, ref } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 
@@ -8,6 +8,7 @@ import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 import { useStagePolling } from "../../composables/useStagePolling";
 import StageGenerating from "../workspace/StageGenerating.vue";
+import RegenFeedbackModal from "./RegenFeedbackModal.vue";
 
 const scriptStore = useScriptStore();
 const workspaceStore = useWorkspaceStore();
@@ -137,16 +138,6 @@ const reviewChecks = computed(() => {
   return checks;
 });
 
-const patchRemaining = computed(() => {
-  if (!visibleScript.value) return 0;
-  return visibleScript.value.execution_state.patch_used ? 0 : 1;
-});
-
-const regenRemaining = computed(() => {
-  if (!visibleScript.value) return 0;
-  return visibleScript.value.execution_state.regenerate_used ? 0 : 1;
-});
-
 /** True when script_text literally starts with opening_span, to avoid
  *  showing the same text twice in "开头" and the beginning of "正文". */
 const openingPrefixedBody = computed(() => {
@@ -172,13 +163,6 @@ const historyEntries = computed(() =>
   })),
 );
 
-async function handlePatch() {
-  await scriptStore.runPatchOnce();
-  if (!scriptStore.state.loadError) {
-    ElMessage.success("文案修订完成");
-  }
-}
-
 async function handleGenerate() {
   await scriptStore.generateInitialScript();
   if (!scriptStore.state.loadError) {
@@ -186,10 +170,18 @@ async function handleGenerate() {
   }
 }
 
-async function handleRegen() {
-  await scriptStore.runRegenOnce();
-  if (!scriptStore.state.loadError) {
-    ElMessage.success("文案重新生成完成");
+const showRegenModal = ref(false);
+const isRegenerating = ref(false);
+
+async function handleRegenSubmit(userFeedback: string) {
+  isRegenerating.value = true;
+  try {
+    await scriptStore.runRegenOnce(userFeedback || undefined);
+    if (!scriptStore.state.loadError) {
+      ElMessage.success("文案重新生成完成");
+    }
+  } finally {
+    isRegenerating.value = false;
   }
 }
 
@@ -394,38 +386,18 @@ function handleConfirm() {
             <h3 class="script-actions-heading">操作</h3>
             <div class="script-actions-buttons">
               <el-button
-                type="primary"
                 :loading="scriptStore.state.isRunningAction"
                 :disabled="
                   scriptStore.state.isRunningAction || isViewingHistory
                 "
-                @click="handlePatch"
+                @click="showRegenModal = true"
               >
-                {{ scriptStore.state.isRunningAction ? "处理中..." : "修补一次" }}
+                {{
+                  scriptStore.state.isRunningAction
+                    ? "处理中..."
+                    : "重新生成"
+                }}
               </el-button>
-
-              <el-popconfirm
-                title="确定要重新生成文案吗？当前文案将保留在历史版本中。"
-                confirm-button-text="确定"
-                cancel-button-text="取消"
-                :disabled="scriptStore.state.isRunningAction || isViewingHistory"
-                @confirm="handleRegen"
-              >
-                <template #reference>
-                  <el-button
-                    :loading="scriptStore.state.isRunningAction"
-                    :disabled="
-                      scriptStore.state.isRunningAction || isViewingHistory
-                    "
-                  >
-                    {{
-                      scriptStore.state.isRunningAction
-                        ? "处理中..."
-                        : "重新生成"
-                    }}
-                  </el-button>
-                </template>
-              </el-popconfirm>
             </div>
 
             <!-- Confirm button -->
@@ -437,20 +409,29 @@ function handleConfirm() {
             >
               确认文案，进入分镜规划
             </el-button>
-
-            <!-- Remaining counts -->
-            <div class="script-remaining">
-              <el-tag size="small" :type="patchRemaining > 0 ? 'info' : 'danger'">
-                剩余修补次数：{{ patchRemaining }}
-              </el-tag>
-              <el-tag size="small" :type="regenRemaining > 0 ? 'info' : 'danger'">
-                剩余重写次数：{{ regenRemaining }}
-              </el-tag>
-            </div>
           </div>
         </div>
       </div>
     </template>
+
+    <RegenFeedbackModal
+      :visible="showRegenModal"
+      :script="visibleScript"
+      @update:visible="showRegenModal = $event"
+      @submit="handleRegenSubmit"
+    />
+
+    <Teleport to="body">
+      <div v-if="isRegenerating" class="regen-loading-overlay">
+        <div class="regen-loading-card">
+          <div class="regen-loading-spinner">✦</div>
+          <h2 class="regen-loading-title">正在重新生成文案</h2>
+          <p class="regen-loading-desc">大模型正在根据你的反馈重新撰写口播文案，可能需要 1-3 分钟。</p>
+          <div class="regen-loading-line"></div>
+          <p class="regen-loading-sub">请耐心等待，页面会自动刷新。</p>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -718,12 +699,73 @@ function handleConfirm() {
   flex-wrap: wrap;
 }
 
-.script-remaining {
+/* Regen loading overlay */
+.regen-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
   display: flex;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
-  padding-top: var(--space-sm);
-  border-top: 1px solid var(--border-default);
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 6, 12, 0.78);
+  backdrop-filter: blur(8px);
+}
+
+.regen-loading-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+  max-width: 480px;
+}
+
+.regen-loading-spinner {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #e4c26f;
+  background: radial-gradient(circle at 50% 40%, rgba(201, 162, 39, 0.20), rgba(201, 162, 39, 0.065) 62%, rgba(201, 162, 39, 0.025) 100%);
+  border: 1px solid rgba(201, 162, 39, 0.22);
+  font-size: 34px;
+  box-shadow: 0 0 42px rgba(201, 162, 39, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  position: relative;
+  animation: regen-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes regen-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+
+.regen-loading-title {
+  color: #f5f0e8;
+  font-family: "Noto Serif SC", "Songti SC", Georgia, serif;
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.regen-loading-desc {
+  margin: 0;
+  color: #a89f94;
+  font-size: 14px;
+  line-height: 1.8;
+  max-width: 400px;
+}
+
+.regen-loading-line {
+  width: 120px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(201, 162, 39, 0.24), transparent);
+}
+
+.regen-loading-sub {
+  margin: 0;
+  color: #6b635a;
+  font-size: 13px;
 }
 
 /* Responsive */

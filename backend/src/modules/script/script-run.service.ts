@@ -75,6 +75,7 @@ export interface RunScriptGenerationInput {
   allowPatch?: boolean;
   allowRegen?: boolean;
   forceRegen?: boolean;
+  userFeedback?: string;
   semanticReviewGateway?: LlmGateway;
 }
 
@@ -170,7 +171,11 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
           interactionLogWriter,
         }),
       patchDraft: patchScriptDraft,
-      regenerateDraft: regenerateScriptDraft,
+      regenerateDraft: (regenerateInput) =>
+        regenerateScriptDraft({
+          ...regenerateInput,
+          userFeedback: input.userFeedback,
+        }),
     },
   );
 

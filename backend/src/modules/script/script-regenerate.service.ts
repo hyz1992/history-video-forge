@@ -48,12 +48,14 @@ interface RegenerationContext {
   metrics: Record<string, unknown>;
   previous_draft?: PreviousDraftSummary;
   thin_body_repair?: ThinBodyRepairContext;
+  user_feedback?: string;
 }
 
 export interface RegenerateScriptDraftInput {
   bundle: ScriptInputBundleInput;
   draft?: ScriptDraftInput;
   regenerateUsed: boolean;
+  userFeedback?: string;
   localValidation?: {
     decision?: unknown;
     errors?: unknown[];
@@ -92,6 +94,10 @@ export async function regenerateScriptDraft(
   });
   if (thinBodyRepair) {
     regenerationContext.thin_body_repair = thinBodyRepair;
+  }
+
+  if (input.userFeedback) {
+    regenerationContext.user_feedback = input.userFeedback;
   }
 
   const regenerated = await input.generateDraft({

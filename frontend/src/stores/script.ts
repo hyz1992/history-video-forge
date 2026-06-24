@@ -29,6 +29,11 @@ export interface ActiveScriptSnapshot {
     stage: string;
     decision: string;
     patch_intent: "fix" | "lift" | null;
+    summary?: string;
+    hard_issues?: ReadonlyArray<string | { code?: string; message?: string }>;
+    soft_issues?: ReadonlyArray<string | { code?: string; message?: string }>;
+    patch_targets?: ReadonlyArray<string>;
+    confidence?: number;
   };
   execution_state: {
     patch_used: boolean;
@@ -37,10 +42,10 @@ export interface ActiveScriptSnapshot {
     run_id?: string;
   };
   graph_trace_summary?: {
-    nodes: ScriptTraceNode[];
+    nodes: ReadonlyArray<ScriptTraceNode>;
   } | null;
   runtime_diagnostics?: {
-    checks: RuntimeDiagnosticCheck[];
+    checks: ReadonlyArray<RuntimeDiagnosticCheck>;
   } | null;
 }
 
@@ -64,7 +69,7 @@ export interface ScriptApi {
   loadSnapshot(projectId: string): Promise<ScriptSnapshot>;
   generateInitialScript(projectId: string): Promise<void>;
   runPatchOnce(projectId: string): Promise<void>;
-  runRegenOnce(projectId: string): Promise<void>;
+  runRegenOnce(projectId: string, userFeedback?: string): Promise<void>;
 }
 
 export interface ScriptStoreState {
@@ -83,7 +88,7 @@ export interface ScriptStore {
   retryLoadActiveScriptSnapshot: () => Promise<void>;
   selectHistoryEntry: (entryId: string) => void;
   runPatchOnce: () => Promise<void>;
-  runRegenOnce: () => Promise<void>;
+  runRegenOnce: (userFeedback?: string) => Promise<void>;
 }
 
 export interface CreateScriptStoreInput {
@@ -126,7 +131,7 @@ export function createFetchScriptApi(baseUrl = ""): ScriptApi {
       });
       if (!response.ok) throw new Error(`script_patch_failed:${response.status}`);
     },
-    async runRegenOnce(projectId) {
+    async runRegenOnce(projectId, userFeedback) {
       const response = await fetch(`${baseUrl}/api/projects/${projectId}/script/generate`, {
         method: "POST",
         headers: {
@@ -136,6 +141,7 @@ export function createFetchScriptApi(baseUrl = ""): ScriptApi {
           allow_patch: false,
           allow_regen: true,
           force_regen: true,
+          user_feedback: userFeedback || null,
         }),
       });
       if (!response.ok) throw new Error(`script_regen_failed:${response.status}`);
@@ -375,7 +381,7 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
     }
   }
 
-  async function runRegenOnce() {
+  async function runRegenOnce(userFeedback?: string) {
     const projectId = input.projectStore.state.projectId;
     if (!projectId) {
       return;
@@ -393,15 +399,15 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
       current_status: "script_reviewing",
     });
     try {
-      await input.api.runRegenOnce(projectId);
+      await input.api.runRegenOnce(projectId, userFeedback);
       await loadActiveScriptSnapshot();
     } finally {
       state.isRunningAction = false;
     }
   }
 
-  return {
-    state: readonly(state),
+  const frozen: ScriptStore = {
+    state: readonly(state) as unknown as Readonly<ScriptStoreState>,
     generateInitialScript,
     loadActiveScriptSnapshot,
     retryLoadActiveScriptSnapshot,
@@ -409,6 +415,8 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
     runPatchOnce,
     runRegenOnce,
   };
+
+  return frozen;
 }
 
 export function useScriptStore() {

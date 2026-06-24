@@ -21,6 +21,7 @@ async function generateScriptController(
     allowPatch: context.payload?.allow_patch,
     allowRegen: context.payload?.allow_regen,
     forceRegen: context.payload?.force_regen,
+    userFeedback: context.payload?.user_feedback ?? undefined,
   });
 }
 

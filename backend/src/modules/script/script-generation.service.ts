@@ -58,6 +58,7 @@ export interface GenerateScriptDraftInput {
         excerpt: string;
       }>;
     };
+    user_feedback?: string;
   };
 }
 
