@@ -1,5 +1,5 @@
 import { statSync } from "node:fs";
-import type { DbClient } from "../../db/client";
+import type { DbClient, ScriptRecord } from "../../db/client";
 import { getProjectStorageProfile } from "../../runtime/trace/project-storage.js";
 
 function summarizeTraceRun(trace: Record<string, unknown> | null | undefined) {
@@ -34,6 +34,33 @@ function statusToStep(status: string): string {
 
 function isDraft(status: string): boolean {
   return status.startsWith("topic") || status === "topic_candidates_ready" || status === "topic_pending";
+}
+
+function mapScriptRecordToSnapshot(record: ScriptRecord) {
+  return {
+    script_record_id: record.id,
+    script_text: record.scriptText,
+    opening_span: record.openingSpan,
+    ending_span: record.endingSpan,
+    estimated_duration_sec: record.estimatedDurationSec,
+    review_decision:
+      (record.semanticReviewResultJson?.decision as string | undefined) ??
+      record.reviewStatus,
+    patch_intent:
+      (record.semanticReviewResultJson?.patch_intent as
+        | string
+        | null
+        | undefined) ?? null,
+    local_validation: record.validationResultJson,
+    semantic_review: record.semanticReviewResultJson,
+    execution_state: record.executionStateJson ?? {
+      patch_used: false,
+      regenerate_used: false,
+    },
+    graph_trace_summary: record.graphTraceSummaryJson,
+    runtime_diagnostics: record.runtimeDiagnosticsJson,
+    created_at: record.createdAt.toISOString(),
+  };
 }
 
 /**
@@ -95,10 +122,11 @@ export async function getProjectSnapshot(
   const publishPackageRecord = project.activePublishPackageRecordId
     ? db.publishPackageRecords.get(project.activePublishPackageRecordId) ?? null
     : null;
-  const latestProjectScriptRecord = [...db.scriptRecords.values()]
+  const projectScriptRecords = [...db.scriptRecords.values()]
     .filter((record) => record.projectId === project.id)
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    .at(0) ?? null;
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  const latestProjectScriptRecord = projectScriptRecords.at(0) ?? null;
+  const scriptHistory = projectScriptRecords.map(mapScriptRecordToSnapshot);
   const latestScriptTrace =
     (project.latestScriptRunTraceJson as Record<string, unknown> | null | undefined) ??
     (latestProjectScriptRecord?.graphTraceSummaryJson as Record<string, unknown> | null | undefined) ??
@@ -207,30 +235,9 @@ export async function getProjectSnapshot(
       : null,
     topic_candidates: topicCandidates,
     active_script: scriptRecord
-      ? {
-          script_record_id: scriptRecord.id,
-          script_text: scriptRecord.scriptText,
-          opening_span: scriptRecord.openingSpan,
-          ending_span: scriptRecord.endingSpan,
-          estimated_duration_sec: scriptRecord.estimatedDurationSec,
-          review_decision:
-            (scriptRecord.semanticReviewResultJson?.decision as string | undefined) ??
-            scriptRecord.reviewStatus,
-          patch_intent:
-            (scriptRecord.semanticReviewResultJson?.patch_intent as
-              | string
-              | null
-              | undefined) ?? null,
-          local_validation: scriptRecord.validationResultJson,
-          semantic_review: scriptRecord.semanticReviewResultJson,
-          execution_state: scriptRecord.executionStateJson ?? {
-            patch_used: false,
-            regenerate_used: false,
-          },
-          graph_trace_summary: scriptRecord.graphTraceSummaryJson,
-          runtime_diagnostics: scriptRecord.runtimeDiagnosticsJson,
-        }
+      ? mapScriptRecordToSnapshot(scriptRecord)
       : null,
+    script_history: scriptHistory,
     active_storyboard: storyboardRecord
       ? {
           storyboard_record_id: storyboardRecord.id,

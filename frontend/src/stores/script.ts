@@ -47,6 +47,7 @@ export interface ActiveScriptSnapshot {
   runtime_diagnostics?: {
     checks: ReadonlyArray<RuntimeDiagnosticCheck>;
   } | null;
+  created_at?: string;
 }
 
 export interface ScriptSnapshot {
@@ -57,6 +58,7 @@ export interface ScriptSnapshot {
     canonical_title?: string;
   } | null;
   active_script: ActiveScriptSnapshot | null;
+  script_history?: ActiveScriptSnapshot[];
 }
 
 export interface ScriptHistoryEntry {
@@ -225,6 +227,25 @@ function appendHistoryEntry(
   ];
 }
 
+function populateHistoryFromSnapshot(scriptHistory: ActiveScriptSnapshot[]): ScriptHistoryEntry[] {
+  const entries: ScriptHistoryEntry[] = [];
+  const seenIds = new Set<string>();
+
+  for (const entry of scriptHistory) {
+    if (!canAppendHistoryEntry(entry)) continue;
+    if (seenIds.has(entry.script_record_id)) continue;
+    seenIds.add(entry.script_record_id);
+
+    entries.push({
+      entry_id: `${entry.script_record_id}:${entries.length + 1}`,
+      label: createHistoryLabel(entry),
+      script: cloneActiveScriptSnapshot(entry),
+    });
+  }
+
+  return entries;
+}
+
 function toErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) {
     return error.message;
@@ -277,6 +298,10 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
         project_id: snapshot.project_id,
         current_status: snapshot.current_status,
       });
+
+      if (state.history.length === 0 && snapshot.script_history?.length) {
+        state.history = populateHistoryFromSnapshot(snapshot.script_history);
+      }
 
       if (snapshot.active_script) {
         state.history = appendHistoryEntry(state.history, snapshot.active_script);
