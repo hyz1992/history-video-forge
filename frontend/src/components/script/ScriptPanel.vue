@@ -219,7 +219,7 @@ function handleConfirm() {
 
     <!-- Generating state (before skeleton to show explanation during generation) -->
     <StageGenerating
-      v-else-if="isGenerating"
+      v-else-if="isGenerating && !isRegenerating"
       title="正在生成文案"
       hint="正在调用大模型撰写口播文案，可能需要 1-3 分钟。"
       secondary-hint="页面会自动刷新，也可手动刷新状态。"
