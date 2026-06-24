@@ -15,6 +15,9 @@ export interface TopicCandidate {
   strong_scene: string;
   must_cover_preview?: string[];
   risk_hints: string[];
+  core_conflict?: string;
+  source_hint?: string;
+  viral_rubric?: Record<string, string>;
 }
 
 export interface TopicRecommendationsResponse {
@@ -322,6 +325,10 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
           why_this_now: c.why_this_now ?? "",
           strong_scene: c.strong_scene,
           risk_hints: c.risk_hints ?? [],
+          core_conflict: c.core_conflict ?? "",
+          source_hint: c.source_hint ?? "",
+          viral_rubric: c.viral_rubric ?? {},
+          must_cover_preview: c.must_cover_preview ?? [],
         }));
         state.candidates = restoredCandidates;
         state.currentRound = {
@@ -343,6 +350,10 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
             why_this_now: c.why_this_now ?? "",
             strong_scene: c.strong_scene,
             risk_hints: c.risk_hints ?? [],
+            core_conflict: c.core_conflict ?? "",
+            source_hint: c.source_hint ?? "",
+            viral_rubric: c.viral_rubric ?? {},
+            must_cover_preview: c.must_cover_preview ?? [],
           })),
         }));
         if (!pkg && restoredCandidates[0]) {

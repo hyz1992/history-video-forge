@@ -75,17 +75,43 @@ const isGeneratingState = computed(
   () => !hasCandidates.value && (topicStore.state.isGenerating || isSnapshotGenerating.value || isPolling.value),
 );
 
-const whyThisNow = computed(() => {
-  const c = selectedCandidate.value;
-  if (!c) return "";
-  return c.why_this_now ?? c.why_now ?? "当前版本未补充额外推荐理由。";
-});
-
-const riskHints = computed(() => {
+const mustCoverPreview = computed(() => {
   const c = selectedCandidate.value;
   if (!c) return [];
-  return c.risk_hints.length > 0 ? c.risk_hints : ["暂无显式风险提醒。"];
+  return c.must_cover_preview ?? [];
 });
+
+const coreConflict = computed(() => {
+  const c = selectedCandidate.value;
+  if (!c) return "";
+  return c.core_conflict ?? "";
+});
+
+const viralRubric = computed(() => {
+  const c = selectedCandidate.value;
+  if (!c) return {};
+  return c.viral_rubric ?? {};
+});
+
+const sourceHint = computed(() => {
+  const c = selectedCandidate.value;
+  if (!c) return "";
+  return c.source_hint ?? "";
+});
+
+const rubricLabels: Record<string, string> = {
+  hook_power: "开篇吸力",
+  novelty_gap: "新颖程度",
+  emotion_gap: "情绪张力",
+  share_impulse: "分享冲动",
+  visual_promise: "视觉潜力",
+};
+
+const rubricLevelLabel: Record<string, string> = {
+  low: "低",
+  medium: "中",
+  high: "高",
+};
 
 function selectCandidate(candidate: (typeof currentCandidates.value)[number]) {
   topicStore.openCandidate(candidate, topicStore.state.currentRound?.round_id);
@@ -251,29 +277,44 @@ function roundLabel(round: { label?: string; round_index?: number }) {
             <div class="detail-tags">
               <span class="detail-tag">{{ selectedCandidate.family_label }}</span>
               <span class="detail-tag">{{ selectedCandidate.scope_label }}</span>
+              <span v-if="sourceHint" class="detail-tag detail-tag-source">{{ sourceHint }}</span>
             </div>
             <div class="detail-sections">
+              <section class="detail-section">
+                <div class="detail-icon">📋</div>
+                <div>
+                  <div class="detail-section-label">叙事节拍</div>
+                  <ol class="beat-list">
+                    <li class="beat-item" v-for="(beat, i) in mustCoverPreview" :key="i">{{ beat }}</li>
+                  </ol>
+                </div>
+              </section>
               <section class="detail-section">
                 <div class="detail-icon">⚔️</div>
                 <div>
                   <div class="detail-section-label">核心冲突</div>
-                  <div class="detail-section-text">{{ selectedCandidate.strong_scene }}</div>
+                  <div class="detail-section-text">{{ coreConflict || '暂无冲突分析。' }}</div>
                 </div>
               </section>
               <section class="detail-section">
-                <div class="detail-icon">📡</div>
+                <div class="detail-icon">📊</div>
                 <div>
-                  <div class="detail-section-label">传播切口</div>
-                  <div class="detail-section-text">{{ whyThisNow }}</div>
-                </div>
-              </section>
-              <section class="detail-section">
-                <div class="detail-icon">⚠️</div>
-                <div>
-                  <div class="detail-section-label">风险提示</div>
-                  <ul class="risk-list">
-                    <li class="risk-item" v-for="(risk, i) in riskHints" :key="i">{{ risk }}</li>
-                  </ul>
+                  <div class="detail-section-label">传播潜力</div>
+                  <div class="rubric-grid" v-if="Object.keys(viralRubric).length">
+                    <div
+                      class="rubric-item"
+                      v-for="(level, key) in viralRubric"
+                      :key="key"
+                      :class="'rubric-' + level"
+                    >
+                      <span class="rubric-label">{{ rubricLabels[key] ?? key }}</span>
+                      <span class="rubric-bar">
+                        <span class="rubric-fill" :class="'rubric-fill-' + level"></span>
+                      </span>
+                      <span class="rubric-level">{{ rubricLevelLabel[level] ?? level }}</span>
+                    </div>
+                  </div>
+                  <div v-else class="detail-section-text">暂无传播潜力评分。</div>
                 </div>
               </section>
             </div>
@@ -664,6 +705,13 @@ function roundLabel(round: { label?: string; round_index?: number }) {
   font-weight: 700;
 }
 
+.detail-tag-source {
+  color: #7d90a0;
+  background: rgba(125, 144, 160, .08);
+  border-color: rgba(125, 144, 160, .16);
+  font-style: italic;
+}
+
 .detail-sections {
   padding: 6px 0;
 }
@@ -708,31 +756,93 @@ function roundLabel(round: { label?: string; round_index?: number }) {
   line-height: 1.82;
 }
 
-.risk-list {
+.beat-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 6px;
+  gap: 8px;
+  counter-reset: beat-counter;
 }
 
-.risk-item {
+.beat-item {
   position: relative;
-  padding-left: 16px;
+  padding-left: 22px;
   color: var(--text-body);
-  font-size: 13px;
+  font-size: 13.5px;
   line-height: 1.72;
+  counter-increment: beat-counter;
 }
 
-.risk-item::before {
-  content: "";
+.beat-item::before {
+  content: counter(beat-counter);
   position: absolute;
-  left: 1px;
-  top: .78em;
-  width: 5px;
-  height: 5px;
+  left: 0;
+  top: .08em;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: var(--text-muted);
+  background: rgba(201,162,39,.12);
+  color: var(--accent-gold-light);
+  font-size: 10px;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+
+.rubric-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.rubric-item {
+  display: grid;
+  grid-template-columns: 72px 1fr 32px;
+  align-items: center;
+  gap: 10px;
+}
+
+.rubric-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.rubric-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(201,162,39,.08);
+  overflow: hidden;
+}
+
+.rubric-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  transition: width 360ms ease;
+}
+
+.rubric-fill-low {
+  width: 28%;
+  background: #5a5040;
+}
+
+.rubric-fill-medium {
+  width: 60%;
+  background: linear-gradient(90deg, #b87333, #c9973e);
+}
+
+.rubric-fill-high {
+  width: 92%;
+  background: linear-gradient(90deg, #c9973e, #e6c36f);
+}
+
+.rubric-level {
+  font-size: 11px;
+  font-weight: 800;
+  text-align: right;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .detail-footer {

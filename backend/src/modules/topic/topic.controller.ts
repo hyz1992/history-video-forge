@@ -36,6 +36,9 @@ function toResponseCandidate(candidate: StoredTopicCandidate) {
     must_cover_preview: candidate.mustCoverPreview ?? [],
     why_this_now: candidate.whyThisNow ?? "",
     risk_hints: candidate.riskHints ?? [],
+    core_conflict: candidate.coreConflict,
+    source_hint: candidate.sourceHint,
+    viral_rubric: candidate.viralRubric ?? {},
   };
 }
 
@@ -279,6 +282,9 @@ export async function createTopicRecommendationsController(
       recentUsageHint: candidate.recent_usage_hint,
       whyThisNow: candidate.why_this_now,
       riskHints: [...candidate.risk_hints],
+      viralRubric: candidate.viral_rubric
+        ? { ...(candidate.viral_rubric as Record<string, string>) }
+        : {},
     });
 
     responseCandidates.push({

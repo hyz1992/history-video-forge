@@ -140,6 +140,10 @@ export async function getProjectSnapshot(
         why_this_now: string;
         strong_scene: string;
         risk_hints: string[];
+        core_conflict: string;
+        source_hint: string;
+        viral_rubric: Record<string, string>;
+        must_cover_preview: string[];
       }>;
     }>;
   } | null = null;
@@ -161,6 +165,10 @@ export async function getProjectSnapshot(
             why_this_now: c.whyThisNow ?? c.why_now ?? "",
             strong_scene: c.strongScene ?? c.event?.strongScene ?? "",
             risk_hints: c.riskHints ?? [],
+            core_conflict: c.coreConflict ?? "",
+            source_hint: c.sourceHint ?? "基于历史共识推定",
+            viral_rubric: c.viralRubric ?? {},
+            must_cover_preview: c.mustCoverPreview ?? [],
           })),
         })),
       };
