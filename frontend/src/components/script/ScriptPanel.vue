@@ -177,6 +177,16 @@ const scriptDurationLabel = computed(() => {
   return m > 0 ? `约${m}分${s}秒` : `约${s}秒`;
 });
 
+const visibleScriptVersionLabel = computed(() => {
+  const total = scriptStore.state.history.length;
+  if (total === 0) return "首稿";
+  const selected = historyEntries.value.find(
+    (e) => e.entry_id === scriptStore.state.selectedHistoryEntryId,
+  );
+  if (selected) return selected.versionLabel;
+  return total === 1 ? "首稿" : `V${total}`;
+});
+
 const isViewingHistoryEntry = computed(() => {
   const entries = scriptStore.state.history;
   if (entries.length === 0) return false;
@@ -189,15 +199,7 @@ const viewingHistoryLabel = computed(() => {
     (e) => e.entry_id === scriptStore.state.selectedHistoryEntryId,
   );
   if (!entry) return null;
-  return `${entry.version} · ${historyGenType(entry)}`;
-});
-
-const scriptGenType = computed(() => {
-  const s = visibleScript.value;
-  if (!s) return null;
-  if (s.execution_state?.regenerate_used) return "定向重生成";
-  if (s.execution_state?.patch_used) return "修补";
-  return "首稿";
+  return `${entry.versionLabel} · ${historyGenType(entry)}`;
 });
 
 const scriptCreatedAtLabel = computed(() => {
@@ -255,18 +257,23 @@ function humanizeIssueCode(code: string) {
   return ISSUE_CODE_MAP[code] ?? code;
 }
 
-const historyEntries = computed(() =>
-  scriptStore.state.history.map((entry, idx) => ({
-    entry_id: entry.entry_id,
-    label: entry.label,
-    version: `V${idx + 1}`,
-    script_text: entry.script.script_text,
-    word_count: entry.script.script_text.replace(/\s/g, "").length,
-    review_decision: entry.script.review_decision,
-    created_at: entry.script.created_at,
-    execution_state: entry.script.execution_state,
-  })),
-);
+const historyEntries = computed(() => {
+  const total = scriptStore.state.history.length;
+  return scriptStore.state.history.map((entry, idx) => {
+    const versionNum = total - idx;
+    return {
+      entry_id: entry.entry_id,
+      label: entry.label,
+      version: versionNum,
+      versionLabel: versionNum === 1 ? "首稿" : `V${versionNum}`,
+      script_text: entry.script.script_text,
+      word_count: entry.script.script_text.replace(/\s/g, "").length,
+      review_decision: entry.script.review_decision,
+      created_at: entry.script.created_at,
+      execution_state: entry.script.execution_state,
+    };
+  });
+});
 
 const showRegenModal = ref(false);
 const isRegenerating = ref(false);
@@ -393,10 +400,10 @@ function handleConfirm() {
                 @click="handleSelectHistory(entry.entry_id)"
               >
                 <div class="script-history-preview">
-                  <span class="script-history-version">{{ entry.version }}</span>
                   {{ historyPreview(entry.script_text) }}
                 </div>
                 <div class="script-history-meta">
+                  <span class="script-history-version">{{ entry.versionLabel }}</span>
                   <span>{{ entry.word_count }}字</span>
                   <el-tag
                     :type="historyReviewBadge(entry.review_decision).type"
@@ -427,7 +434,7 @@ function handleConfirm() {
             <span class="script-info-divider"></span>
             <span class="script-info-stat">{{ scriptDurationLabel }}</span>
             <span class="script-info-divider"></span>
-            <span class="script-info-stat script-info-dim">{{ scriptGenType }}</span>
+            <span class="script-info-stat script-info-dim">{{ visibleScriptVersionLabel }}</span>
             <span v-if="scriptCreatedAtLabel" class="script-info-divider"></span>
             <span v-if="scriptCreatedAtLabel" class="script-info-stat script-info-dim">{{ scriptCreatedAtLabel }}</span>
           </div>
