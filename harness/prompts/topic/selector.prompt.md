@@ -29,7 +29,7 @@ status: active
 - 唯一正式字段是 `ranked_candidates`。
 - `ranked_candidates` 应尽量覆盖 `selector_pool` 中全部候选 id，不得发明候选池外 id。
 - 每个候选必须包含 `candidate_id`、`quality_rank`、`quality_score`、`deductions`、`risk_summary`。
-- `quality_rank` 必须从 1 开始且不得重复；1 表示最推荐。
+- `quality_rank` 必须从 1 开始且尽量不重复；1 表示最推荐。
 - `quality_score` 必须是 0 到 100 的整数。
 - `deductions` 只写扣分项，最多 4 条；没有明显扣分时返回空数组。
 - `risk_summary` 必须是一句话风险摘要，直接说明最主要风险。

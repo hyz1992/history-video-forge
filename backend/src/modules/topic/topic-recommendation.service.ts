@@ -1145,8 +1145,9 @@ function parseSelectorScorecards(
   errorCode: "topic_selector_invalid_selection" | "topic_selector_strict_schema_failed",
 ): TopicSelectorRankedCandidate[] {
   const seenRanks = new Set<number>();
+  const result: TopicSelectorRankedCandidate[] = [];
 
-  return rawScorecards.map((rawScorecard) => {
+  for (const rawScorecard of rawScorecards) {
     if (
       !rawScorecard ||
       typeof rawScorecard !== "object" ||
@@ -1179,18 +1180,20 @@ function parseSelectorScorecards(
     }
 
     if (seenRanks.has(qualityRank)) {
-      throw new Error(errorCode);
+      continue;
     }
     seenRanks.add(qualityRank);
 
-    return {
+    result.push({
       candidate_id: candidateId,
       quality_rank: qualityRank,
       quality_score: qualityScore,
       deductions: parseSelectorDeductions(deductions, errorCode),
       risk_summary: riskSummary,
-    };
-  });
+    });
+  }
+
+  return result;
 }
 
 function parseSelectorDeductions(
