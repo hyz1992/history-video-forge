@@ -1259,6 +1259,7 @@ function selectRankedCandidates(input: {
   );
   const knownIds = new Set(input.selectorPool.map((candidate) => candidate.candidate_id));
   const coveredKnownIds = new Set<string>();
+  const skippedCandidateIds: string[] = [];
 
   for (const scorecard of input.decision.ranked_candidates) {
     if (!knownIds.has(scorecard.candidate_id)) {
@@ -1279,7 +1280,6 @@ function selectRankedCandidates(input: {
   const selectedIds: string[] = [];
   const selectedEventIdentities = new Set<string>();
   const seenCandidateIds = new Set<string>();
-  const skippedCandidateIds: string[] = [];
   const rankedCandidates = [...input.decision.ranked_candidates].sort(
     (left, right) =>
       left.quality_rank - right.quality_rank ||
