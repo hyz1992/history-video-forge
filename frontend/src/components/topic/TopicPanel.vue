@@ -8,6 +8,7 @@ import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 import { useStagePolling } from "../../composables/useStagePolling";
 import StageGenerating from "../workspace/StageGenerating.vue";
+import StageLoadingBar from "../workspace/StageLoadingBar.vue";
 
 const topicStore = useTopicStore();
 const projectStore = useProjectStore();
@@ -16,6 +17,8 @@ const route = useRoute();
 const router = useRouter();
 
 const SCRIPT_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "script");
+
+const isRefreshing = ref(false);
 
 const { startPolling, isPolling } = useStagePolling({
   loadSnapshot: async () =>
@@ -29,6 +32,7 @@ const { startPolling, isPolling } = useStagePolling({
     snapshot.current_status !== "topic_generating" && snapshot.current_status !== "topic_pending",
   onComplete: () => {
     topicStore.loadExistingTopic();
+    isRefreshing.value = false;
   },
 });
 
@@ -129,6 +133,8 @@ function toggleHistory() {
 }
 
 async function handleRefreshBatch() {
+  if (topicStore.state.isGenerating || isRefreshing.value) return;
+  isRefreshing.value = true;
   const filters = readFilters();
   const generation = topicStore.generateSystemRecommendations(filters);
   startPolling();
@@ -237,7 +243,7 @@ function roundLabel(round: { label?: string; round_index?: number }) {
                 <span class="toggle-arrow" :class="{ open: historyOpen }">▶</span>
                 候选历史
               </button>
-              <button class="action-btn" @click="handleRefreshBatch">↺ 换一批</button>
+              <button class="action-btn" :disabled="isRefreshing" @click="handleRefreshBatch">↺ 换一批</button>
             </div>
             <div v-if="historyOpen && topicStore.state.historyRounds.length > 0" class="history-rounds">
               <template v-for="round in topicStore.state.historyRounds" :key="round.round_id">
@@ -312,7 +318,7 @@ function roundLabel(round: { label?: string; round_index?: number }) {
               <button
                 class="confirm-btn"
                 data-testid="confirm-candidate"
-                :disabled="topicStore.state.isConfirming"
+                :disabled="topicStore.state.isConfirming || isRefreshing"
                 @click="confirmCandidate"
               >
                 确认此选题，进入文案阶段
@@ -342,6 +348,11 @@ function roundLabel(round: { label?: string; round_index?: number }) {
         <p>自定义主题入口将在后续接入，当前先保留同层级占位。</p>
       </div>
     </template>
+
+    <StageLoadingBar
+      :visible="isRefreshing"
+      text="正在刷新选题…"
+    />
   </div>
 </template>
 
@@ -546,6 +557,12 @@ function roundLabel(round: { label?: string; round_index?: number }) {
   border-color: rgba(201,162,39,.30);
   background: rgba(201,162,39,.07);
   transform: translateY(-1px);
+}
+
+.action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* History block */
