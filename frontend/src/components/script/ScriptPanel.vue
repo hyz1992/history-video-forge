@@ -269,6 +269,11 @@ const historyEntries = computed(() =>
 
 const showRegenModal = ref(false);
 const isRegenerating = ref(false);
+const historyOpen = ref(false);
+
+function toggleHistory() {
+  historyOpen.value = !historyOpen.value;
+}
 
 async function handleRegenSubmit(userFeedback: string) {
   isRegenerating.value = true;
@@ -362,8 +367,20 @@ function handleConfirm() {
 
           <!-- History versions -->
           <div v-if="historyEntries.length > 0" class="script-history">
-            <h3 class="script-history-heading">历史版本（{{ historyEntries.length }}）</h3>
-            <div class="script-history-list">
+            <div class="script-history-top">
+              <button class="history-toggle-btn" @click="toggleHistory">
+                <span class="toggle-arrow" :class="{ open: historyOpen }">▶</span>
+                历史版本（{{ historyEntries.length }}）
+              </button>
+              <button
+                class="history-regen-btn"
+                :disabled="scriptStore.state.isRunningAction || isViewingHistoryEntry"
+                @click="showRegenModal = true"
+              >
+                {{ scriptStore.state.isRunningAction ? "处理中..." : "↺ 重新生成" }}
+              </button>
+            </div>
+            <div v-if="historyOpen" class="script-history-list">
               <div
                 v-for="entry in historyEntries"
                 :key="entry.entry_id"
@@ -457,28 +474,14 @@ function handleConfirm() {
           </div>
 
           <!-- Action buttons -->
-          <div class="script-actions-card">
+          <div v-if="visibleScript && !isViewingHistoryEntry" class="script-actions-card">
             <el-button
-              v-if="visibleScript && !isViewingHistoryEntry"
               type="primary"
               :disabled="scriptStore.state.isRunningAction"
               @click="handleConfirm"
               class="script-confirm-btn"
             >
               确认文案，进入分镜规划
-            </el-button>
-            <el-button
-              :loading="scriptStore.state.isRunningAction"
-              :disabled="
-                scriptStore.state.isRunningAction || isViewingHistoryEntry
-              "
-              @click="showRegenModal = true"
-            >
-              {{
-                scriptStore.state.isRunningAction
-                  ? "处理中..."
-                  : "重新生成"
-              }}
             </el-button>
           </div>
         </div>
@@ -551,14 +554,14 @@ function handleConfirm() {
 
 /* Script text card — single clean block */
 .script-text-card {
-  padding: calc(var(--space-lg) + var(--space-sm)) var(--space-lg);
+  padding: var(--space-lg);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-panel);
   background: var(--bg-card);
 }
 
 .script-history-banner {
-  margin: calc(-1 * (var(--space-lg) + var(--space-sm))) calc(-1 * var(--space-lg)) var(--space-lg);
+  margin: calc(-1 * var(--space-lg)) calc(-1 * var(--space-lg)) var(--space-lg);
   padding: 8px var(--space-lg);
   background: rgba(201, 162, 39, 0.08);
   border-bottom: 1px solid rgba(201, 162, 39, 0.15);
@@ -571,7 +574,7 @@ function handleConfirm() {
   margin: 0;
   color: var(--text-body);
   font-size: 1.02rem;
-  line-height: 2.0;
+  line-height: 1.75;
   white-space: pre-wrap;
   letter-spacing: 0.01em;
 }
@@ -616,11 +619,62 @@ function handleConfirm() {
   background: var(--bg-card);
 }
 
-.script-history-heading {
-  margin: 0;
-  font-size: 0.95rem;
+.script-history-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.history-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
   font-weight: var(--font-subheading);
+  font-family: var(--font-family);
+  cursor: pointer;
+  transition: color 160ms ease;
+}
+
+.history-toggle-btn:hover {
   color: var(--text-heading);
+}
+
+.toggle-arrow {
+  display: inline-block;
+  font-size: 10px;
+  transition: transform 200ms ease;
+}
+
+.toggle-arrow.open {
+  transform: rotate(90deg);
+}
+
+.history-regen-btn {
+  padding: 4px 12px;
+  background: none;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-family: var(--font-family);
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+
+.history-regen-btn:hover {
+  border-color: var(--border-hover);
+  color: var(--text-body);
+  background: var(--bg-hover);
+}
+
+.history-regen-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .script-history-list {
