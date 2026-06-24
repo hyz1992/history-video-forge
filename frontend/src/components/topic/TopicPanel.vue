@@ -32,9 +32,6 @@ const { startPolling, isPolling } = useStagePolling({
     snapshot.current_status !== "topic_generating" && snapshot.current_status !== "topic_pending",
   onComplete: () => {
     topicStore.loadExistingTopic();
-    setTimeout(() => {
-      isRefreshing.value = false;
-    }, 600);
   },
 });
 
@@ -146,6 +143,10 @@ async function handleRefreshBatch() {
     if (topicStore.state.loadError) {
       isRefreshing.value = false;
       ElMessage.warning("刷新失败：" + topicStore.state.loadError);
+    } else {
+      setTimeout(() => {
+        isRefreshing.value = false;
+      }, 400);
     }
   } catch {
     isRefreshing.value = false;
