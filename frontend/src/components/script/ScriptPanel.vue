@@ -113,7 +113,20 @@ const isInitialScriptLoading = computed(
 
 const displayScriptText = computed(() => {
   const text = visibleScript.value?.script_text ?? "";
-  return text.replace(/\n{3,}/g, "\n\n").replace(/\n(?!\n)/g, "\n\n").replace(/\n{3,}/g, "\n\n");
+
+  if (text.includes("\n")) {
+    return text.replace(/\n{3,}/g, "\n\n").replace(/\n(?!\n)/g, "\n\n").replace(/\n{3,}/g, "\n\n");
+  }
+
+  const sentences = text.split(/(?<=[。！？])(?=[^。！？])/);
+  if (sentences.length <= 2) return text;
+
+  const paragraphs: string[] = [];
+  for (let i = 0; i < sentences.length; i += 2) {
+    const chunk = sentences.slice(i, i + 2).join("");
+    if (chunk.trim()) paragraphs.push(chunk);
+  }
+  return paragraphs.join("\n\n");
 });
 
 /** Build review soft issues list from semantic_review for display. */
