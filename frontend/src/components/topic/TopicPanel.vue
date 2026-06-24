@@ -281,41 +281,32 @@ function roundLabel(round: { label?: string; round_index?: number }) {
             </div>
             <div class="detail-sections">
               <section class="detail-section">
-                <div class="detail-icon">📋</div>
-                <div>
-                  <div class="detail-section-label">叙事节拍</div>
-                  <ol class="beat-list">
-                    <li class="beat-item" v-for="(beat, i) in mustCoverPreview" :key="i">{{ beat }}</li>
-                  </ol>
-                </div>
+                <div class="detail-section-label">叙事节拍</div>
+                <ol class="beat-list">
+                  <li class="beat-item" v-for="(beat, i) in mustCoverPreview" :key="i">{{ beat }}</li>
+                </ol>
               </section>
               <section class="detail-section">
-                <div class="detail-icon">⚔️</div>
-                <div>
-                  <div class="detail-section-label">核心冲突</div>
-                  <div class="detail-section-text">{{ coreConflict || '暂无冲突分析。' }}</div>
-                </div>
+                <div class="detail-section-label">核心冲突</div>
+                <div class="detail-section-text">{{ coreConflict || '暂无冲突分析。' }}</div>
               </section>
               <section class="detail-section">
-                <div class="detail-icon">📊</div>
-                <div>
-                  <div class="detail-section-label">传播潜力</div>
-                  <div class="rubric-grid" v-if="Object.keys(viralRubric).length">
-                    <div
-                      class="rubric-item"
-                      v-for="(level, key) in viralRubric"
-                      :key="key"
-                      :class="'rubric-' + level"
-                    >
-                      <span class="rubric-label">{{ rubricLabels[key] ?? key }}</span>
-                      <span class="rubric-bar">
-                        <span class="rubric-fill" :class="'rubric-fill-' + level"></span>
-                      </span>
-                      <span class="rubric-level">{{ rubricLevelLabel[level] ?? level }}</span>
-                    </div>
+                <div class="detail-section-label">传播潜力</div>
+                <div class="rubric-grid" v-if="Object.keys(viralRubric).length">
+                  <div
+                    class="rubric-item"
+                    v-for="(level, key) in viralRubric"
+                    :key="key"
+                    :class="'rubric-' + level"
+                  >
+                    <span class="rubric-label">{{ rubricLabels[key] ?? key }}</span>
+                    <span class="rubric-bar">
+                      <span class="rubric-fill" :class="'rubric-fill-' + level"></span>
+                    </span>
+                    <span class="rubric-level">{{ rubricLevelLabel[level] ?? level }}</span>
                   </div>
-                  <div v-else class="detail-section-text">暂无传播潜力评分。</div>
                 </div>
+                <div v-else class="detail-section-text">暂无传播潜力评分。</div>
               </section>
             </div>
             <div class="detail-footer">
@@ -719,25 +710,10 @@ function roundLabel(round: { label?: string; round_index?: number }) {
 .detail-section {
   padding: 18px 26px;
   border-bottom: 1px solid rgba(201,162,39,.10);
-  display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
-  gap: 14px;
 }
 
 .detail-section:last-child {
   border-bottom: none;
-}
-
-.detail-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 13px;
-  display: grid;
-  place-items: center;
-  border: 1px solid rgba(201,162,39,.14);
-  background: rgba(201,162,39,.065);
-  color: var(--accent-gold-light);
-  font-size: 18px;
 }
 
 .detail-section-label {
