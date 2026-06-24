@@ -507,7 +507,7 @@ function handleConfirm() {
   display: grid;
   gap: var(--space-md);
   padding: var(--space-lg);
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
   width: 100%;
 }
@@ -541,7 +541,7 @@ function handleConfirm() {
 /* Two-column layout */
 .script-columns {
   display: grid;
-  grid-template-columns: 1.5fr 1fr;
+  grid-template-columns: 1.8fr 1fr;
   gap: var(--space-lg);
   align-items: start;
 }
@@ -812,6 +812,13 @@ function handleConfirm() {
 
 .script-confirm-btn:active {
   background: linear-gradient(135deg, #b8931f, #a46328) !important;
+}
+
+.script-confirm-btn.is-disabled {
+  background: rgba(201, 162, 39, 0.3) !important;
+  border-color: transparent !important;
+  color: rgba(16, 12, 8, 0.5) !important;
+  cursor: not-allowed;
 }
 
 /* Responsive */
