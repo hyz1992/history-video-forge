@@ -62,15 +62,7 @@ export interface TopicRecommendationOptions {
   topicCandidateLibraryRepository?: TopicCandidateLibraryRepository;
 }
 
-type SelectorDeductionAxis =
-  | "opening_hook"
-  | "conflict_pressure"
-  | "scene_visibility"
-  | "angle_freshness"
-  | "script_expandability"
-  | "ending_aftershock"
-  | "fatigue_or_repetition"
-  | "source_or_scope_risk";
+type SelectorDeductionAxis = string;
 
 interface TopicSelectorRankedCandidate extends CandidateQualityScorecard {
   candidate_id: string;
@@ -1234,12 +1226,11 @@ function parseSelectorDeductions(
 
     if (
       typeof axis !== "string" ||
-      !isSelectorDeductionAxis(axis) ||
       typeof pointsLost !== "number" ||
       !Number.isInteger(pointsLost) ||
       typeof reason !== "string"
     ) {
-      throw new Error(`${dLabel}: invalid fields (axis=${typeof axis} points_lost=${typeof pointsLost} reason=${typeof reason})`);
+      throw new Error(`${dLabel}: invalid fields (axis=${JSON.stringify(axis)} points_lost=${JSON.stringify(pointsLost)} reason=${JSON.stringify(reason)})`);
     }
 
     if (pointsLost < 1 || pointsLost > 30) {
@@ -1252,19 +1243,6 @@ function parseSelectorDeductions(
       reason,
     };
   });
-}
-
-function isSelectorDeductionAxis(axis: string): axis is SelectorDeductionAxis {
-  return [
-    "opening_hook",
-    "conflict_pressure",
-    "scene_visibility",
-    "angle_freshness",
-    "script_expandability",
-    "ending_aftershock",
-    "fatigue_or_repetition",
-    "source_or_scope_risk",
-  ].includes(axis);
 }
 
 function selectRankedCandidates(input: {
