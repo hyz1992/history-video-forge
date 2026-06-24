@@ -394,7 +394,10 @@ function handleConfirm() {
     />
 
     <Teleport to="body">
-      <div v-if="isRegenerating" class="regen-loading-bar" />
+      <div v-if="isRegenerating" class="regen-loading-bar">
+        <span class="regen-loading-dot" />
+        <span class="regen-loading-text">重新生成中…</span>
+      </div>
     </Teleport>
   </div>
 </template>
@@ -668,22 +671,32 @@ function handleConfirm() {
   left: 0;
   right: 0;
   z-index: 1100;
-  height: 3px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(212, 163, 95, 0.7) 25%,
-    #e4c26f 50%,
-    rgba(212, 163, 95, 0.7) 75%,
-    transparent 100%
-  );
-  background-size: 200% 100%;
-  animation: regen-shimmer 1.6s ease-in-out infinite;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(20, 24, 36, 0.85);
+  backdrop-filter: blur(4px);
 }
 
-@keyframes regen-shimmer {
-  0% { background-position: 100% 0; }
-  100% { background-position: -100% 0; }
+.regen-loading-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d4a35f;
+  animation: regen-blink 1s ease-in-out infinite;
+}
+
+@keyframes regen-blink {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+
+.regen-loading-text {
+  font-size: 12px;
+  color: #a89f94;
+  letter-spacing: 0.04em;
 }
 
 /* Responsive */
