@@ -174,7 +174,7 @@ const scriptDurationLabel = computed(() => {
   if (!sec) return "—";
   const m = Math.floor(sec / 60);
   const s = sec % 60;
-  return m > 0 ? `约 ${m} 分 ${s} 秒` : `约 ${s} 秒`;
+  return m > 0 ? `约${m}分${s}秒` : `约${s}秒`;
 });
 
 const isViewingHistoryEntry = computed(() => {
@@ -189,7 +189,7 @@ const viewingHistoryLabel = computed(() => {
     (e) => e.entry_id === scriptStore.state.selectedHistoryEntryId,
   );
   if (!entry) return null;
-  return `${entry.label} · ${historyGenType(entry)}`;
+  return `${entry.version} · ${historyGenType(entry)}`;
 });
 
 const scriptGenType = computed(() => {
@@ -256,9 +256,10 @@ function humanizeIssueCode(code: string) {
 }
 
 const historyEntries = computed(() =>
-  scriptStore.state.history.map((entry) => ({
+  scriptStore.state.history.map((entry, idx) => ({
     entry_id: entry.entry_id,
     label: entry.label,
+    version: `V${idx + 1}`,
     script_text: entry.script.script_text,
     word_count: entry.script.script_text.replace(/\s/g, "").length,
     review_decision: entry.script.review_decision,
@@ -391,9 +392,12 @@ function handleConfirm() {
                 }"
                 @click="handleSelectHistory(entry.entry_id)"
               >
-                <div class="script-history-preview">{{ historyPreview(entry.script_text) }}</div>
+                <div class="script-history-preview">
+                  <span class="script-history-version">{{ entry.version }}</span>
+                  {{ historyPreview(entry.script_text) }}
+                </div>
                 <div class="script-history-meta">
-                  <span>{{ entry.word_count }} 字</span>
+                  <span>{{ entry.word_count }}字</span>
                   <el-tag
                     :type="historyReviewBadge(entry.review_decision).type"
                     size="small"
@@ -419,7 +423,7 @@ function handleConfirm() {
         <div class="script-right-col">
           <!-- Script info -->
           <div class="script-info-card">
-            <span class="script-info-stat">{{ scriptWordCount }} 字</span>
+            <span class="script-info-stat">{{ scriptWordCount }}字</span>
             <span class="script-info-divider"></span>
             <span class="script-info-stat">{{ scriptDurationLabel }}</span>
             <span class="script-info-divider"></span>
@@ -715,6 +719,18 @@ function handleConfirm() {
   display: -webkit-box;
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
+}
+
+.script-history-version {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: var(--font-subheading);
+  color: var(--accent-primary);
+  background: rgba(201, 162, 39, 0.12);
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-right: 6px;
+  vertical-align: middle;
 }
 
 .script-history-meta {
