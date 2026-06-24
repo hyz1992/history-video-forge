@@ -213,6 +213,10 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
     state.isGenerating = true;
     state.loadError = null;
     state.snapshot = { current_status: "topic_generating" };
+    const previousCandidates = state.candidates;
+    const previousCurrentRound = state.currentRound;
+    const previousSelectedCandidate = state.selectedCandidate;
+    const previousSelectedRoundId = state.selectedRoundId;
     state.candidates = [];
     state.currentRound = null;
 
@@ -235,9 +239,12 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
     } catch (error) {
       state.loadError =
         error instanceof Error ? error.message : "topic_generation_failed";
+      state.candidates = previousCandidates;
+      state.currentRound = previousCurrentRound;
+      state.selectedCandidate = previousSelectedCandidate;
+      state.selectedRoundId = previousSelectedRoundId;
     } finally {
       state.isGenerating = false;
-      // 成功后清除 generating 状态，防止刷新或轮询竞态卡在 loading
       if (!state.loadError) {
         state.snapshot = { current_status: "topic_candidates_ready" };
       }

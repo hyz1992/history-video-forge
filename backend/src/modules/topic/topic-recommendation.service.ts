@@ -1146,37 +1146,54 @@ function parseSelectorScorecards(
 ): TopicSelectorRankedCandidate[] {
   const seenRanks = new Set<number>();
   const result: TopicSelectorRankedCandidate[] = [];
+  const isStrict = errorCode === "topic_selector_strict_schema_failed";
+  const prefix = isStrict ? "strict_selector_bad_scorecard" : "selector_bad_scorecard";
 
-  for (const rawScorecard of rawScorecards) {
+  for (let i = 0; i < rawScorecards.length; i++) {
+    const rawScorecard = rawScorecards[i];
+    const idx = `index ${i}`;
+
     if (
       !rawScorecard ||
       typeof rawScorecard !== "object" ||
       Array.isArray(rawScorecard)
     ) {
-      throw new Error(errorCode);
+      throw new Error(`${prefix}: ${idx} is not a valid scorecard object`);
     }
 
     const record = rawScorecard as Record<string, unknown>;
     const candidateId = record.candidate_id;
-    const qualityRank = record.quality_rank;
-    const qualityScore = record.quality_score;
-    const deductions = record.deductions;
-    const riskSummary = record.risk_summary;
 
-    if (
-      typeof candidateId !== "string" ||
-      typeof qualityRank !== "number" ||
-      !Number.isInteger(qualityRank) ||
-      typeof qualityScore !== "number" ||
-      !Number.isInteger(qualityScore) ||
-      !Array.isArray(deductions) ||
-      typeof riskSummary !== "string"
-    ) {
-      throw new Error(errorCode);
+    if (typeof candidateId !== "string") {
+      throw new Error(`${prefix}: ${idx} missing string candidate_id, got ${typeof candidateId}`);
     }
 
-    if (qualityRank < 1 || qualityScore < 0 || qualityScore > 100) {
-      throw new Error(errorCode);
+    const idxLabel = `candidate ${candidateId}`;
+
+    const qualityRank = record.quality_rank;
+    if (typeof qualityRank !== "number" || !Number.isInteger(qualityRank)) {
+      throw new Error(`${prefix}: ${idxLabel} quality_rank must be integer, got ${typeof qualityRank} (${JSON.stringify(qualityRank)})`);
+    }
+    if (qualityRank < 1) {
+      throw new Error(`${prefix}: ${idxLabel} quality_rank ${qualityRank} < 1`);
+    }
+
+    const qualityScore = record.quality_score;
+    if (typeof qualityScore !== "number" || !Number.isInteger(qualityScore)) {
+      throw new Error(`${prefix}: ${idxLabel} quality_score must be integer, got ${typeof qualityScore} (${JSON.stringify(qualityScore)})`);
+    }
+    if (qualityScore < 0 || qualityScore > 100) {
+      throw new Error(`${prefix}: ${idxLabel} quality_score ${qualityScore} out of [0,100]`);
+    }
+
+    const deductions = record.deductions;
+    if (!Array.isArray(deductions)) {
+      throw new Error(`${prefix}: ${idxLabel} deductions must be array, got ${typeof deductions}`);
+    }
+
+    const riskSummary = record.risk_summary;
+    if (typeof riskSummary !== "string") {
+      throw new Error(`${prefix}: ${idxLabel} risk_summary must be string, got ${typeof riskSummary}`);
     }
 
     if (seenRanks.has(qualityRank)) {
@@ -1188,7 +1205,7 @@ function parseSelectorScorecards(
       candidate_id: candidateId,
       quality_rank: qualityRank,
       quality_score: qualityScore,
-      deductions: parseSelectorDeductions(deductions, errorCode),
+      deductions: parseSelectorDeductions(deductions, `${prefix}: ${idxLabel}`),
       risk_summary: riskSummary,
     });
   }
@@ -1198,15 +1215,16 @@ function parseSelectorScorecards(
 
 function parseSelectorDeductions(
   rawDeductions: unknown[],
-  errorCode: "topic_selector_bad_scorecard" | "topic_selector_strict_schema_failed",
+  errorLabel: string,
 ): TopicSelectorRankedCandidate["deductions"] {
-  return rawDeductions.map((rawDeduction) => {
+  return rawDeductions.map((rawDeduction, j) => {
+    const dLabel = `${errorLabel} deduction[${j}]`;
     if (
       !rawDeduction ||
       typeof rawDeduction !== "object" ||
       Array.isArray(rawDeduction)
     ) {
-      throw new Error(errorCode);
+      throw new Error(`${dLabel}: not a valid deduction object`);
     }
 
     const record = rawDeduction as Record<string, unknown>;
@@ -1221,11 +1239,11 @@ function parseSelectorDeductions(
       !Number.isInteger(pointsLost) ||
       typeof reason !== "string"
     ) {
-      throw new Error(errorCode);
+      throw new Error(`${dLabel}: invalid fields (axis=${typeof axis} points_lost=${typeof pointsLost} reason=${typeof reason})`);
     }
 
     if (pointsLost < 1 || pointsLost > 30) {
-      throw new Error(errorCode);
+      throw new Error(`${dLabel}: points_lost ${pointsLost} out of [1,30]`);
     }
 
     return {

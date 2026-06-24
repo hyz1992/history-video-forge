@@ -143,6 +143,10 @@ async function handleRefreshBatch() {
     const generation = topicStore.generateSystemRecommendations(filters);
     startPolling();
     await generation;
+    if (topicStore.state.loadError) {
+      isRefreshing.value = false;
+      ElMessage.warning("刷新失败：" + topicStore.state.loadError);
+    }
   } catch {
     isRefreshing.value = false;
   }
