@@ -999,7 +999,7 @@ async function selectFinalCandidatesWithTrace(input: {
   });
 
   if (selection.selected.length === 0) {
-    throw new Error("topic_selector_invalid_selection");
+    throw new Error("topic_selector_empty_after_dedup");
   }
 
   return {
@@ -1108,7 +1108,7 @@ function parseStrictSelectorDecision(rawOutput: unknown): TopicSelectorDecision 
 
 function normalizeSelectorDecision(rawOutput: unknown): TopicSelectorDecision {
   if (!rawOutput || typeof rawOutput !== "object") {
-    throw new Error("topic_selector_invalid_selection");
+    throw new Error("topic_selector_not_object");
   }
 
   const record = rawOutput as Record<string, unknown>;
@@ -1129,7 +1129,7 @@ function normalizeSelectorDecision(rawOutput: unknown): TopicSelectorDecision {
     record.rankedCandidates;
 
   if (!Array.isArray(rankedCandidates)) {
-    throw new Error("topic_selector_invalid_selection");
+    throw new Error("topic_selector_no_ranked_array");
   }
 
   return {
@@ -1263,7 +1263,7 @@ function selectRankedCandidates(input: {
 
   for (const scorecard of input.decision.ranked_candidates) {
     if (!knownIds.has(scorecard.candidate_id)) {
-      throw new Error("topic_selector_invalid_selection");
+      throw new Error(`topic_selector_unknown_candidate: ${scorecard.candidate_id}`);
     }
     coveredKnownIds.add(scorecard.candidate_id);
   }
@@ -1295,7 +1295,7 @@ function selectRankedCandidates(input: {
 
     const match = rankingsById.get(scorecard.candidate_id);
     if (!match) {
-      throw new Error("topic_selector_invalid_selection");
+      throw new Error(`topic_selector_no_ranking_match: ${scorecard.candidate_id}`);
     }
 
     if (!allowRepeatedEventIdentities && selectedEventIdentities.has(match.eventIdentity)) {
