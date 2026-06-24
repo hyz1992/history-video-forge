@@ -1135,14 +1135,14 @@ function normalizeSelectorDecision(rawOutput: unknown): TopicSelectorDecision {
   return {
     ranked_candidates: parseSelectorScorecards(
       rankedCandidates,
-      "topic_selector_invalid_selection",
+      "topic_selector_bad_scorecard",
     ),
   };
 }
 
 function parseSelectorScorecards(
   rawScorecards: unknown[],
-  errorCode: "topic_selector_invalid_selection" | "topic_selector_strict_schema_failed",
+  errorCode: "topic_selector_bad_scorecard" | "topic_selector_strict_schema_failed",
 ): TopicSelectorRankedCandidate[] {
   const seenRanks = new Set<number>();
   const result: TopicSelectorRankedCandidate[] = [];
@@ -1198,7 +1198,7 @@ function parseSelectorScorecards(
 
 function parseSelectorDeductions(
   rawDeductions: unknown[],
-  errorCode: "topic_selector_invalid_selection" | "topic_selector_strict_schema_failed",
+  errorCode: "topic_selector_bad_scorecard" | "topic_selector_strict_schema_failed",
 ): TopicSelectorRankedCandidate["deductions"] {
   return rawDeductions.map((rawDeduction) => {
     if (
