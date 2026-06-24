@@ -111,10 +111,6 @@ const isInitialScriptLoading = computed(
   () => scriptStore.state.isLoading && !visibleScript.value,
 );
 
-const shouldShowScriptChrome = computed(
-  () => !isGenerating.value && !isInitialScriptLoading.value,
-);
-
 /** Build review soft issues list from semantic_review for display. */
 const reviewIssues = computed(() => {
   const s = visibleScript.value;
@@ -163,17 +159,6 @@ const scriptDurationLabel = computed(() => {
   return m > 0 ? `约 ${m} 分 ${s} 秒` : `约 ${s} 秒`;
 });
 
-const scriptParagraphCount = computed(() => {
-  const text = visibleScript.value?.script_text ?? "";
-  const paras = text.split(/\n\n+/).filter((p) => p.trim().length > 0);
-  return paras.length;
-});
-
-const topicCanonicalTitle = computed(() => {
-  const pkg = scriptStore.state.snapshot?.active_topic_package;
-  return pkg?.canonical_title ?? null;
-});
-
 const isViewingHistory = computed(() => {
   const entries = scriptStore.state.history;
   if (entries.length === 0) return false;
@@ -219,13 +204,6 @@ function handleConfirm() {
 
 <template>
   <div class="script-panel">
-    <template v-if="shouldShowScriptChrome">
-      <header class="script-page-header" data-testid="script-page-header">
-        <span class="script-header-title">文案工作区</span>
-        <span v-if="topicCanonicalTitle" class="script-header-topic">选题：{{ topicCanonicalTitle }}</span>
-      </header>
-    </template>
-    <!-- Error state -->
     <div v-if="scriptStore.state.loadError" class="script-error-card">
       <el-alert
         :title="'加载失败：' + scriptStore.state.loadError"
@@ -275,24 +253,6 @@ function handleConfirm() {
 
     <!-- Main two-column layout -->
     <template v-else-if="visibleScript">
-      <!-- Metadata bar -->
-      <div class="script-meta-bar">
-        <div class="script-meta-item">
-          <span class="script-meta-value">{{ scriptWordCount }}</span>
-          <span class="script-meta-label">全文字数</span>
-        </div>
-        <div class="script-meta-divider"></div>
-        <div class="script-meta-item">
-          <span class="script-meta-value">{{ scriptDurationLabel }}</span>
-          <span class="script-meta-label">预估口播时长</span>
-        </div>
-        <div class="script-meta-divider"></div>
-        <div class="script-meta-item">
-          <span class="script-meta-value">{{ scriptParagraphCount }}</span>
-          <span class="script-meta-label">段落</span>
-        </div>
-      </div>
-
       <div class="script-columns">
         <!-- Left column: Script text -->
         <div class="script-left-col">
@@ -333,6 +293,13 @@ function handleConfirm() {
 
         <!-- Right column: Review & Actions -->
         <div class="script-right-col">
+          <!-- Script info -->
+          <div class="script-info-card">
+            <span class="script-info-stat">{{ scriptWordCount }} 字</span>
+            <span class="script-info-divider"></span>
+            <span class="script-info-stat">{{ scriptDurationLabel }}</span>
+          </div>
+
           <!-- Review results -->
           <div v-if="reviewIssues.length > 0" class="script-review-card">
             <h3 class="script-review-heading">
@@ -381,27 +348,28 @@ function handleConfirm() {
           <!-- Action buttons -->
           <div class="script-actions-card">
             <el-button
+              v-if="visibleScript && !isViewingHistory"
+              type="primary"
+              :disabled="scriptStore.state.isRunningAction"
+              @click="handleConfirm"
+              class="script-confirm-btn"
+            >
+              确认文案，进入分镜规划
+            </el-button>
+            <el-button
               :loading="scriptStore.state.isRunningAction"
               :disabled="
                 scriptStore.state.isRunningAction || isViewingHistory
               "
               @click="showRegenModal = true"
+              size="small"
+              class="script-regen-btn"
             >
               {{
                 scriptStore.state.isRunningAction
                   ? "处理中..."
                   : "重新生成"
               }}
-            </el-button>
-
-            <!-- Confirm button -->
-            <el-button
-              v-if="visibleScript && !isViewingHistory"
-              type="primary"
-              :disabled="scriptStore.state.isRunningAction"
-              @click="handleConfirm"
-            >
-              确认文案，进入分镜规划
             </el-button>
           </div>
         </div>
@@ -430,32 +398,6 @@ function handleConfirm() {
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;
-}
-
-/* Page header */
-.script-page-header {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-md);
-  padding-bottom: var(--space-md);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.script-header-title {
-  font-size: 1.2rem;
-  font-weight: var(--font-heading);
-  color: var(--text-heading);
-}
-
-.script-header-topic {
-  font-size: 0.88rem;
-  color: var(--text-muted);
-}
-
-.script-header-topic::before {
-  content: "·";
-  margin-right: var(--space-md);
-  color: var(--border-default);
 }
 
 /* Error card */
@@ -515,43 +457,28 @@ function handleConfirm() {
   letter-spacing: 0.01em;
 }
 
-/* Meta bar */
-.script-meta-bar {
+/* Script info card — compact stats in right column */
+.script-info-card {
   display: flex;
-  gap: 0;
-  margin-bottom: var(--space-md);
-  padding: 12px var(--space-lg);
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 8px var(--space-md);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-panel);
   background: var(--bg-card);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
 }
 
-.script-meta-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  flex: 1;
-}
-
-.script-meta-value {
-  font-size: 1.15rem;
+.script-info-stat {
+  color: var(--text-body);
   font-weight: var(--font-subheading);
-  color: var(--text-heading);
 }
 
-.script-meta-label {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.script-meta-divider {
+.script-info-divider {
   width: 1px;
-  align-self: stretch;
+  height: 14px;
   background: var(--border-default);
-  margin: 4px 0;
   flex-shrink: 0;
 }
 
@@ -676,12 +603,20 @@ function handleConfirm() {
 /* Actions card */
 .script-actions-card {
   display: flex;
-  flex-direction: column;
   gap: var(--space-sm);
+  align-items: center;
   padding: var(--space-md);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-panel);
   background: var(--bg-card);
+}
+
+.script-confirm-btn {
+  flex: 1;
+}
+
+.script-regen-btn {
+  flex-shrink: 0;
 }
 
 /* Responsive */
