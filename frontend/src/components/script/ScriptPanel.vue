@@ -355,6 +355,7 @@ function handleConfirm() {
 
     <!-- Main two-column layout -->
     <template v-else-if="visibleScript">
+      <h1 class="script-page-title">请审校您的<em>文案</em></h1>
       <div class="script-columns">
         <!-- Left column: Script text -->
         <div class="script-left-col">
@@ -547,6 +548,22 @@ function handleConfirm() {
   grid-template-columns: 1.8fr 1fr;
   gap: var(--space-lg);
   align-items: start;
+}
+
+/* Page title */
+.script-page-title {
+  margin: 0 0 18px;
+  color: var(--text-primary);
+  font-family: var(--font-serif);
+  font-size: 28px;
+  line-height: 1.25;
+  letter-spacing: -.02em;
+  font-weight: 700;
+}
+
+.script-page-title em {
+  color: var(--accent-gold-light);
+  font-style: normal;
 }
 
 /* Left column */
