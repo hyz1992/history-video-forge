@@ -270,7 +270,6 @@ function roundLabel(round: { label?: string; round_index?: number }) {
         <aside class="topic-right-col">
           <div v-if="selectedCandidate" class="detail-card">
             <div class="detail-header">
-              <div class="detail-kicker">选题详情</div>
               <h2 class="detail-title">{{ selectedCandidate.title }}</h2>
               <p class="detail-angle">{{ selectedCandidate.one_line_angle }}</p>
             </div>
@@ -650,15 +649,6 @@ function roundLabel(round: { label?: string; round_index?: number }) {
 .detail-header {
   padding: 24px 26px 22px;
   border-bottom: 1px solid rgba(201,162,39,.12);
-}
-
-.detail-kicker {
-  margin: 0 0 12px;
-  color: var(--accent-gold);
-  font-size: 12px;
-  font-weight: 850;
-  letter-spacing: .16em;
-  text-transform: uppercase;
 }
 
 .detail-title {
