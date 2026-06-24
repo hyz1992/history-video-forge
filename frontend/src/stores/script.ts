@@ -260,6 +260,14 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
     }
 
     state.isLoading = true;
+
+    if (lastLoadedProjectId !== projectId) {
+      state.snapshot = null;
+      state.history = [];
+      state.selectedHistoryEntryId = null;
+      lastLoadedProjectId = projectId;
+    }
+
     try {
       const snapshot = await input.api.loadSnapshot(projectId);
       state.snapshot = snapshot;
@@ -270,11 +278,6 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
       });
 
       if (snapshot.active_script) {
-        if (lastLoadedProjectId !== projectId) {
-          state.history = [];
-          state.selectedHistoryEntryId = null;
-          lastLoadedProjectId = projectId;
-        }
         state.history = appendHistoryEntry(state.history, snapshot.active_script);
         state.selectedHistoryEntryId = state.history[0]?.entry_id ?? null;
       }
