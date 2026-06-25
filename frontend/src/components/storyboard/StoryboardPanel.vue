@@ -202,12 +202,6 @@ function formatSeconds(seconds: number): string {
   return `${rounded}s`;
 }
 
-function roleBorderStyle(role: string): Record<string, string> {
-  const style = roleStyleMap[role];
-  if (style) return { borderLeftColor: style.borderColor, borderLeftWidth: "3px" };
-  return {};
-}
-
 function roleTagType(role: string): "primary" | "success" | "warning" | "danger" | "info" | "" {
   return roleStyleMap[role]?.tagType ?? "";
 }
@@ -575,7 +569,6 @@ function scrollToTop() {
             :key="segment.segment_id"
             class="storyboard-segment-card"
             :class="{ 'is-expanded': isSegmentExpanded(segment.segment_id) }"
-            :style="roleBorderStyle(segment.narrative_role)"
           >
             <!-- Summary row (always visible) -->
             <div
@@ -1080,8 +1073,6 @@ details[open] > .storyboard-metrics-toggle::before {
 /* ---- Segment card (vertical foldable layout) ---- */
 .storyboard-segment-card {
   border: 1px solid rgba(201, 162, 39, 0.13);
-  border-left-width: 3px;
-  border-left-color: rgba(201, 162, 39, 0.18);
   border-radius: var(--radius-panel);
   background:
     linear-gradient(180deg, rgba(255,255,255,.028), rgba(255,255,255,.006)),
@@ -1089,7 +1080,6 @@ details[open] > .storyboard-metrics-toggle::before {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
   transition:
     border-color 160ms ease,
-    border-left-color 160ms ease,
     box-shadow 200ms ease,
     transform 200ms ease;
   overflow: hidden;
