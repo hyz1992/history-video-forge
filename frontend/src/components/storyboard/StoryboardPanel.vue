@@ -44,19 +44,14 @@ const framingHintLabels: Record<string, string> = {
   symbolic: "象征",
 };
 
-interface RoleStyle {
-  borderColor: string;
-  tagType: "primary" | "success" | "warning" | "danger" | "info" | "";
-}
-
-const roleStyleMap: Record<string, RoleStyle> = {
-  opening: { borderColor: "#c9a227", tagType: "" },
-  setup: { borderColor: "#7a8ea0", tagType: "info" },
-  pressure: { borderColor: "#d4a574", tagType: "warning" },
-  turn: { borderColor: "#828cd2", tagType: "" },
-  peak: { borderColor: "#d4713a", tagType: "danger" },
-  ending: { borderColor: "#8a7530", tagType: "" },
-  bridge: { borderColor: "#6e9678", tagType: "info" },
+const roleTagTypeMap: Record<string, "primary" | "success" | "warning" | "danger" | "info" | ""> = {
+  opening: "",
+  setup: "info",
+  pressure: "warning",
+  turn: "",
+  peak: "danger",
+  ending: "",
+  bridge: "info",
 };
 
 const storyboardStore = useStoryboardStore();
@@ -203,7 +198,7 @@ function formatSeconds(seconds: number): string {
 }
 
 function roleTagType(role: string): "primary" | "success" | "warning" | "danger" | "info" | "" {
-  return roleStyleMap[role]?.tagType ?? "";
+  return roleTagTypeMap[role] ?? "";
 }
 
 const decisionLabels: Record<string, string> = {
@@ -340,26 +335,18 @@ const strategyLabels: Record<string, { label: string; icon: string; class: strin
   api_video: { label: "AI 视频生成", icon: "🤖", class: "strategy-api-video" },
 };
 
-function strategyKey(segment: StoryboardSegment): string {
-  return segment.visual_strategy_preference ?? "remotion_motion";
-}
-
-function strategyBadgeClass(segment: StoryboardSegment) {
-  return strategyLabels[strategyKey(segment)]?.class ?? "strategy-remotion";
-}
-
-function strategyBadgeTitle(segment: StoryboardSegment) {
-  const v = segment.visual_strategy_preference;
-  if (v === "api_video") return "点击切换为 Remotion 运镜";
-  return "点击升级为 AI 视频生成";
-}
-
-function strategyBadgeIcon(segment: StoryboardSegment) {
-  return strategyLabels[strategyKey(segment)]?.icon ?? "🎬";
-}
-
-function strategyBadgeLabel(segment: StoryboardSegment) {
-  return strategyLabels[strategyKey(segment)]?.label ?? "Remotion 运镜";
+function strategyInfo(segment: StoryboardSegment) {
+  const key = segment.visual_strategy_preference ?? "remotion_motion";
+  const entry = strategyLabels[key] ?? strategyLabels.remotion_motion;
+  return {
+    class: entry.class,
+    icon: entry.icon,
+    label: entry.label,
+    title:
+      segment.visual_strategy_preference === "api_video"
+        ? "点击切换为 Remotion 运镜"
+        : "点击升级为 AI 视频生成",
+  };
 }
 
 const isSwitchingStrategy = ref(false);
@@ -513,9 +500,9 @@ function scrollToTop() {
       <!-- Page title -->
       <h1 class="storyboard-page-title">请审阅您的<em>分镜规划</em></h1>
 
-      <!-- Top row: notes + action buttons -->
-      <div v-if="globalVisualNotes.length > 0 && segments.length > 0" class="storyboard-top-row">
-        <div class="storyboard-notes-card">
+      <!-- Global notes + action -->
+      <div v-if="segments.length > 0" class="storyboard-top-row">
+        <div v-if="globalVisualNotes.length > 0" class="storyboard-notes-card">
           <h4 class="storyboard-notes-heading">全局视觉风格</h4>
           <ul class="storyboard-notes-list">
             <li v-for="(note, index) in globalVisualNotes" :key="index">
@@ -590,8 +577,8 @@ function scrollToTop() {
                 </span>
                 <button
                   class="storyboard-strategy-badge"
-                  :class="strategyBadgeClass(segment)"
-                  :title="strategyBadgeTitle(segment)"
+                  :class="strategyInfo(segment).class"
+                  :title="strategyInfo(segment).title"
                   :disabled="isSwitchingStrategy || isRegeneratingSegment"
                   @click.stop.prevent="handleToggleStrategy(segment)"
                 >
@@ -599,8 +586,8 @@ function scrollToTop() {
                     切换中...
                   </template>
                   <template v-else>
-                    {{ strategyBadgeIcon(segment) }}
-                    {{ strategyBadgeLabel(segment) }}
+                    {{ strategyInfo(segment).icon }}
+                    {{ strategyInfo(segment).label }}
                   </template>
                 </button>
                 <button
@@ -793,6 +780,7 @@ function scrollToTop() {
 
 <style scoped>
 .storyboard-panel {
+  position: relative;
   display: grid;
   gap: var(--space-md);
   padding: var(--space-lg);
@@ -835,8 +823,7 @@ function scrollToTop() {
   padding: var(--space-lg);
 }
 
-/* ---- Generating / Empty ---- */
-.storyboard-generating,
+/* ---- Empty ---- */
 .storyboard-empty {
   display: flex;
   flex-direction: column;
@@ -1376,9 +1363,9 @@ details[open] > .storyboard-metrics-toggle::before {
 
 /* ---- Back to top ---- */
 .storyboard-back-to-top {
-  position: fixed;
-  right: 28px;
-  bottom: 32px;
+  position: absolute;
+  right: 0;
+  bottom: 8px;
   width: 40px;
   height: 40px;
   border-radius: 50%;
