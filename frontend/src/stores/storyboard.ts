@@ -149,7 +149,7 @@ export interface StoryboardStore {
   regenerateSegment: (
     segmentId: string,
     userFeedback: string,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   retryLoad: () => Promise<void>;
 }
 
@@ -318,14 +318,16 @@ export function createStoryboardStore(
     const projectId = input.projectStore.state.projectId;
     if (!projectId) {
       console.warn("[storyboard] regenerateSegment aborted — no active projectId");
-      return;
+      return false;
     }
 
     try {
       await input.api.regenerateSegment(projectId, segmentId, userFeedback);
       await loadActiveStoryboardSnapshot();
+      return true;
     } catch (error) {
       state.loadError = toErrorMessage(error);
+      return false;
     }
   }
 

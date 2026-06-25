@@ -340,11 +340,11 @@ async function handleSegmentRegenSubmit(userFeedback: string) {
   if (!segmentRegenTarget.value) return;
   isRegeneratingSegment.value = true;
   try {
-    await storyboardStore.regenerateSegment(
+    const ok = await storyboardStore.regenerateSegment(
       segmentRegenTarget.value.segment_id,
       userFeedback,
     );
-    if (storyboardStore.state.loadError) {
+    if (!ok) {
       ElMessage.error("分镜片段重新生成失败");
       return;
     }
