@@ -54,7 +54,7 @@ export function shouldShowAssetGeneratingView(
 export function getAssetGeneratingView(
   input: AssetGeneratingViewInput,
 ): AssetGeneratingView | null {
-  if (input.isPlanGenerating && !input.hasManifest) {
+  if (input.hasAssetPlan && !input.hasManifest && !input.isAssetsGenerating) {
     return {
       kind: "asset_plan",
       title: "正在生成资产规划",
