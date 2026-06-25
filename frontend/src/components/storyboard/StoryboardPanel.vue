@@ -328,15 +328,39 @@ const strategyLabels: Record<string, { label: string; icon: string; class: strin
   api_video: { label: "AI 视频生成", icon: "🤖", class: "strategy-api-video" },
 };
 
+function strategyKey(segment: StoryboardSegment): string {
+  return segment.visual_strategy_preference ?? "remotion_motion";
+}
+
+function strategyBadgeClass(segment: StoryboardSegment) {
+  return strategyLabels[strategyKey(segment)]?.class ?? "strategy-remotion";
+}
+
+function strategyBadgeTitle(segment: StoryboardSegment) {
+  const v = segment.visual_strategy_preference;
+  if (v === "api_video") return "点击切回 Remotion 运镜";
+  if (v === "remotion_motion") return "点击升级为 AI 视频生成";
+  return "点击设定生成策略";
+}
+
+function strategyBadgeIcon(segment: StoryboardSegment) {
+  return strategyLabels[strategyKey(segment)]?.icon ?? "🎬";
+}
+
+function strategyBadgeLabel(segment: StoryboardSegment) {
+  return strategyLabels[strategyKey(segment)]?.label ?? "Remotion 运镜";
+}
+
 function handleToggleStrategy(segment: StoryboardSegment) {
   const current = segment.visual_strategy_preference;
-  const next =
-    current === "api_video" ? null : current === "remotion_motion" ? "api_video" : "remotion_motion";
+  const next: "remotion_motion" | "api_video" | null =
+    current === "api_video"
+      ? null
+      : current === "remotion_motion"
+        ? "api_video"
+        : "remotion_motion";
 
-  storyboardStore.updateSegmentStrategyPreference(
-    segment.segment_id,
-    next,
-  );
+  storyboardStore.updateSegmentStrategyPreference(segment.segment_id, next);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -523,18 +547,18 @@ function scrollToTop() {
                 >
                   {{ narrativeRoleLabels[segment.narrative_role] ?? segment.narrative_role }}
                 </el-tag>
-                <button
-                  class="storyboard-strategy-badge"
-                  :class="strategyLabels[segment.visual_strategy_preference ?? 'remotion_motion']?.class ?? 'strategy-remotion'"
-                  :title="segment.visual_strategy_preference === 'api_video' ? '点击切回 Remotion 运镜' : segment.visual_strategy_preference === 'remotion_motion' ? '点击升级为 AI 视频生成' : '点击设定生成策略'"
-                  @click.stop="handleToggleStrategy(segment)"
-                >
-                  {{ strategyLabels[segment.visual_strategy_preference ?? 'remotion_motion']?.icon ?? '🎬' }}
-                  {{ strategyLabels[segment.visual_strategy_preference ?? 'remotion_motion']?.label ?? 'Remotion 运镜' }}
-                </button>
                 <span class="storyboard-segment-time">
                   {{ formatSeconds(segment.start_hint_sec) }}s ~ {{ formatSeconds(segment.end_hint_sec) }}s
                 </span>
+                <button
+                  class="storyboard-strategy-badge"
+                  :class="strategyBadgeClass(segment)"
+                  :title="strategyBadgeTitle(segment)"
+                  @click.stop.prevent="handleToggleStrategy(segment)"
+                >
+                  {{ strategyBadgeIcon(segment) }}
+                  {{ strategyBadgeLabel(segment) }}
+                </button>
               </div>
               <p class="storyboard-segment-summary-excerpt">
                 {{ excerptFirstLine(segment.script_excerpt) }}
@@ -1069,6 +1093,8 @@ details[open] > .storyboard-metrics-toggle::before {
   cursor: pointer;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
   white-space: nowrap;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .strategy-remotion {
