@@ -266,7 +266,11 @@ export function createStoryboardStore(
     const projectId = input.projectStore.state.projectId;
     if (!projectId) return;
 
-    await input.api.updateSegmentStrategy(projectId, segmentId, strategy);
+    try {
+      await input.api.updateSegmentStrategy(projectId, segmentId, strategy);
+    } catch {
+      // Stub mode / offline — proceed with local-only update
+    }
 
     const snapshot = state.snapshot;
     if (!snapshot?.active_storyboard?.plan) return;

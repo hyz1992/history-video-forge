@@ -528,7 +528,6 @@ function scrollToTop() {
         </div>
         <el-button
           text
-          :disabled="isSwitchingStrategy"
           @click="toggleAll"
         >
           {{ isAllExpanded ? "收起全部" : "展开全部" }}
