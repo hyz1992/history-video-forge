@@ -5,6 +5,12 @@ const props = defineProps<{
   title: string;
   hint: string;
   secondaryHint?: string;
+  progress?: {
+    phase: string;
+    completed_chunks: number;
+    total_chunks: number;
+    total_segments: number;
+  };
 }>();
 
 const elapsedSeconds = ref(0);
@@ -36,6 +42,17 @@ onUnmounted(() => {
       <div class="center-pulse">✦</div>
       <h2 class="center-state-title">{{ titleText }}</h2>
       <p class="center-state-desc">{{ hint }}</p>
+      <div v-if="progress" class="center-state-progress">
+        <div class="center-state-progress-bar">
+          <div
+            class="center-state-progress-fill"
+            :style="{ width: `${(progress.completed_chunks / Math.max(progress.total_chunks, 1)) * 100}%` }"
+          ></div>
+        </div>
+        <p class="center-state-progress-text">
+          已处理 {{ Math.min(progress.completed_chunks * 2, progress.total_segments) }} / {{ progress.total_segments }} 个段落
+        </p>
+      </div>
       <p v-if="secondaryHint" class="center-state-sub">{{ secondaryHint }} 已等待 <b>{{ elapsedSeconds }}</b> 秒。</p>
       <div class="center-state-line"></div>
       <div v-if="$slots.action" class="center-state-actions">
@@ -115,6 +132,32 @@ onUnmounted(() => {
   color: #a89f94;
   font-size: 14px;
   line-height: 1.85;
+}
+
+.center-state-progress {
+  margin: 18px auto 0;
+  max-width: 380px;
+}
+
+.center-state-progress-bar {
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(201, 162, 39, 0.12);
+  overflow: hidden;
+}
+
+.center-state-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #c9a227, #e4c26f);
+  transition: width 400ms ease;
+}
+
+.center-state-progress-text {
+  margin: 8px 0 0;
+  color: #8a8066;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 .center-state-sub {

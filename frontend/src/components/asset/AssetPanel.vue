@@ -15,7 +15,7 @@ import StageGenerating from "../workspace/StageGenerating.vue";
 
 import SegmentAssetCard from "./SegmentAssetCard.vue";
 import { computeCostBreakdown, estimatePlanCost, getTaskCostHint, getVideoUpgradeCostHint, estimateBlockedItemsCost, PRICING, type PlanTaskLike } from "../../utils/pricing";
-import { getAssetGeneratingView, shouldShowAssetGeneratingView } from "../../utils/asset-generating-view";
+import { getAssetGeneratingView, shouldShowAssetGeneratingView, type AssetGenerationProgress } from "../../utils/asset-generating-view";
 
 const storyboardStore = useStoryboardStore();
 const assetPlanningStore = useAssetPlanningStore();
@@ -110,6 +110,18 @@ const isAssetsGenerating = computed(
 
 const isAssetsBusy = computed(() => assetsStore.state.isGenerating || isAssetsGenerating.value);
 
+const planProgress = computed<AssetGenerationProgress | null>(() => {
+  const es = activeAssetPlan.value?.execution_state;
+  if (!es) return null;
+  if (typeof es.progress_phase !== "string") return null;
+  return {
+    phase: es.progress_phase as string,
+    completed_chunks: Number(es.progress_completed_chunks) || 0,
+    total_chunks: Number(es.progress_total_chunks) || 0,
+    total_segments: Number(es.progress_total_segments) || 0,
+  };
+});
+
 const generatingView = computed(() =>
   getAssetGeneratingView({
     hasAssetPlan: !!activeAssetPlan.value,
@@ -117,6 +129,7 @@ const generatingView = computed(() =>
     isPlanGenerating: isPlanGenerating.value,
     isAssetsGenerating: isAssetsGenerating.value || assetsStore.state.isGenerating,
     isPolling: isAssetPolling.value,
+    planProgress: planProgress.value,
   }),
 );
 
@@ -751,6 +764,7 @@ function handleConfirm() {
       v-if="shouldShowGeneratingView && generatingView"
       :title="generatingView.title"
       :hint="generatingView.hint"
+      :progress="generatingView.progress"
       secondary-hint="系统每 5 秒自动检查生成状态，无需手动刷新。"
     >
       <template #action>

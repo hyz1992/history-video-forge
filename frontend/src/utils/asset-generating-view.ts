@@ -6,6 +6,14 @@ export interface AssetGeneratingViewInput {
   isPlanGenerating: boolean;
   isAssetsGenerating: boolean;
   isPolling?: boolean;
+  planProgress?: AssetGenerationProgress | null;
+}
+
+export interface AssetGenerationProgress {
+  phase: string;
+  completed_chunks: number;
+  total_chunks: number;
+  total_segments: number;
 }
 
 export interface AssetGeneratingView {
@@ -13,6 +21,7 @@ export interface AssetGeneratingView {
   title: string;
   hint: string;
   blockPage: boolean;
+  progress?: AssetGenerationProgress;
 }
 
 export interface AssetGeneratingVisibilityInput {
@@ -51,6 +60,7 @@ export function getAssetGeneratingView(
       title: "正在生成资产规划",
       hint: "正在调用大模型分析分镜并规划素材，可能需要 1-5 分钟。",
       blockPage: true,
+      progress: input.planProgress ?? undefined,
     };
   }
 

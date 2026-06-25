@@ -34,6 +34,13 @@ export interface AssetPlanningTopicBoundaryContext {
   narrative_tension_map: Record<string, unknown>;
 }
 
+export interface AssetPlanGenerationProgress {
+  phase: "global_plan" | "chunks";
+  completed_chunks: number;
+  total_chunks: number;
+  total_segments: number;
+}
+
 export interface GenerateAssetPlanInput {
   sourceStoryboardRecordId: string;
   sourceScriptRecordId: string;
@@ -45,6 +52,7 @@ export interface GenerateAssetPlanInput {
   interactionLogWriter?: LlmInteractionLogWriter;
   chunkSize?: number;
   chunkConcurrency?: number;
+  onProgress?: (progress: AssetPlanGenerationProgress) => void | Promise<void>;
   regenerationContext?: {
     reason: "asset_planning_local_validation_regen_once";
     errors: string[];
@@ -175,6 +183,7 @@ export async function generateAssetPlan(
 ): Promise<AssetPlan> {
   const gateway = input.llmGateway ?? createAssetPlannerGateway();
   const audioSkeleton = buildLocalAudioSkeleton(input);
+  const totalSegments = input.storyboard.segments.length;
 
   const rawGlobalDraft = await invokePlanningPromptWithSafetyRetry({
     gateway,
@@ -188,6 +197,9 @@ export async function generateAssetPlan(
   const globalDraft = GlobalPlanningDraft.parse(rawGlobalDraft);
 
   const chunks = chunkStoryboardSegments(input.storyboard, input.chunkSize);
+  const totalChunks = chunks.length;
+
+  let completedChunks = 0;
   const chunkDrafts = await mapWithConcurrency(
     chunks,
     normalizeChunkConcurrency(input.chunkConcurrency),
@@ -204,13 +216,21 @@ export async function generateAssetPlan(
         promptInput: chunkPromptInput,
         interactionLogWriter: input.interactionLogWriter,
       });
-      return parseOrRepairChunkDraft({
+      const result = parseOrRepairChunkDraft({
         gateway,
         interactionLogWriter: input.interactionLogWriter,
         rawChunkDraft,
         chunkPromptInput,
         segments,
       });
+      completedChunks += 1;
+      await input.onProgress?.({
+        phase: "chunks",
+        completed_chunks: completedChunks,
+        total_chunks: totalChunks,
+        total_segments: totalSegments,
+      });
+      return result;
     },
   );
 

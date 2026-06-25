@@ -292,6 +292,31 @@ export async function runAssetPlanningGeneration(
     input.project.activeAssetPlanRecordId = generatingRecord.id;
     input.project.status = "asset_plan_generating";
 
+    const onProgress = async (progress: import("./asset-planning-generation.service.js").AssetPlanGenerationProgress) => {
+      await saveAssetPlanRecord(input.db, {
+        id: generatingRecord.id,
+        projectId: generatingRecord.projectId,
+        topicPackageId: generatingRecord.topicPackageId,
+        scriptRecordId: generatingRecord.scriptRecordId,
+        storyboardRecordId: generatingRecord.storyboardRecordId,
+        planJson: generatingRecord.planJson,
+        validationResultJson: generatingRecord.validationResultJson,
+        executionStateJson: {
+          generating: true,
+          run_id: runId,
+          repair_used: false,
+          regenerate_used: false,
+          progress_phase: progress.phase,
+          progress_completed_chunks: progress.completed_chunks,
+          progress_total_chunks: progress.total_chunks,
+          progress_total_segments: progress.total_segments,
+        },
+        graphTraceSummaryJson: generatingRecord.graphTraceSummaryJson,
+        runtimeDiagnosticsJson: generatingRecord.runtimeDiagnosticsJson,
+        createdAt: generatingRecord.createdAt,
+      });
+    };
+
     let plan = await generateAssetPlan({
     sourceStoryboardRecordId: storyboardRecord.id,
     sourceScriptRecordId: scriptRecord.id,
@@ -300,6 +325,7 @@ export async function runAssetPlanningGeneration(
     draft,
     topicBoundaryContext,
     interactionLogWriter,
+    onProgress,
   });
   let localValidation = validateAssetPlan(
     buildValidationInput({
