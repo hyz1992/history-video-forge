@@ -12,11 +12,11 @@
 
 ## 一句话结论
 
-`StoryboardSegment` schema 定义了 18 个字段，当前 UI 仅渲染 8 个。分三阶段依次补齐缺失字段、重构卡片布局为折叠式摘要+详情、增加叙事弧线进度条与角色差异化样式。
+`StoryboardSegment` schema 定义了 17 个字段，当前 UI 仅渲染 8 个。分三阶段依次补齐缺失字段、重构卡片布局为折叠式摘要+详情、增加叙事弧线进度条与角色差异化样式。
 
 ## 背景
 
-当前 `topic -> script -> storyboard -> asset planning -> assets -> compose -> renderer` 后端链路均已 v1 完成。分镜规划后端已能稳定产出 `StoryboardPlan`，包含 18 个字段的丰富数据。但前端 `StoryboardPanel.vue` 的展示层面仍有较大优化空间：
+当前 `topic -> script -> storyboard -> asset planning -> assets -> compose -> renderer` 后端链路均已 v1 完成。分镜规划后端已能稳定产出 `StoryboardPlan`，包含 17 个字段的丰富数据。但前端 `StoryboardPanel.vue` 的展示层面仍有较大优化空间：
 
 - `scene_description` 是 schema 必填字段但完全不显示
 - `visual_elements`、`content_type`、`editing_hint`、`risk_notes` 等关键字段缺失
@@ -27,7 +27,7 @@
 
 ### Schema 字段 vs UI 渲染对照
 
-[StoryboardSegment schema](file:///d:/ai_learn/history-video-forge/shared/src/storyboard/storyboard-plan.schema.ts) 共 18 个字段。
+[StoryboardSegment schema](file:///d:/ai_learn/history-video-forge/shared/src/storyboard/storyboard-plan.schema.ts) 共 17 个字段。
 
 #### 已展示（8 个）
 
@@ -71,13 +71,24 @@
 
 ### 目标
 
-让已存在于 schema 但未渲染的字段都可见，用户不再需要通过 devtools 才能看到完整分镜数据。
+建立数据管线准备层——中文映射常量 + computed 属性——为 P1 的折叠详情布局提供所需的数据结构，同时尽可能在当前三列布局中补充高频字段。考虑到 P1 会立即重构布局，本阶段不追求完美渲染，重点是确保所有字段都有对应的 computed 能取到，避免 P1 实施时再回过头补数据层。
+
+### 设计决策：数据管线 vs 渲染
+
+| 操作 | 本阶段执行 | 推迟到 P1 | 说明 |
+|---|---|---|---|
+| 中文映射常量 | ✅ 在本阶段完成 | — | `narrativeRoleLabels`、`contentTypeLabels`、`editingHintLabels`、`framingHintLabels` |
+| computed 属性 | ✅ 在本阶段完成 | — | 为所有缺失字段建立数据访问路径 |
+| 当前布局中追加字段 | ✅ 在最轻量改动下补齐 | — | `scene_description`、`visual_elements`、`content_type`、`editing_hint`、`risk_notes`、`on_screen_text` 在现有三列布局中渲染 |
+| segments header 加总时长 | ✅ 在本阶段完成 | — | `estimated_total_duration_sec` |
+| `global_visual_notes` 卡片 | ✅ 在本阶段完成 | — | segments section 上方 |
+| 折叠详情布局重构 | — | ✅ P1 | 重写 template 为摘要行 + 折叠详情区 |
 
 ### 涉及的缺失字段及展示策略
 
-| 字段 | 展示策略 |
+| 字段 | 本阶段展示策略（三列布局内） |
 |---|---|
-| `scene_description` | 在 segment card 中增加一行场面描述，紧接 visual_intent 下方 |
+| `scene_description` | 在 segment card 右侧 visual_intent 下方增加一行场面描述 |
 | `visual_elements` | 以小巧标签列表展示，放在现有 framing_hint / motion_hint 标签同行 |
 | `content_type` | 新增标签，中文映射：live_action→实拍、text_card→文字卡、map→地图、illustration→插画 |
 | `editing_hint` | 新增标签，中文映射：single→单镜、cutaway→切出、montage→蒙太奇 |
@@ -96,17 +107,22 @@
 
 ### 改动范围
 
-1. 新增中文映射常量：`narrativeRoleLabels`、`contentTypeLabels`、`editingHintLabels`
-2. 在 template 的 segment card 中增加：
+1. 新增中文映射常量：
+   - `narrativeRoleLabels`：opening→开篇 等 7 个
+   - `contentTypeLabels`：live_action→实拍 等 4 个
+   - `editingHintLabels`：single→单镜 等 3 个
+   - `framingHintLabels`：wide→广角 等 5 个
+2. 新增 computed 属性，为所有缺失字段建立数据访问路径
+3. 在 template 的 segment card 中增加：
    - `scene_description` 段落
    - `visual_elements` 标签组
    - `content_type` 标签
    - `editing_hint` 标签
    - `on_screen_text` 条件展示
    - `risk_notes` 条件展示
-3. 在 segments header 增加总时长展示
-4. 在 segments section 上方增加 `global_visual_notes` 卡片
-5. 补充相应的 scoped style
+4. 在 segments header 增加总时长展示
+5. 在 segments section 上方增加 `global_visual_notes` 卡片
+6. 补充相应的 scoped style
 
 ### 验证方式
 
@@ -160,6 +176,16 @@
 ### 改动范围
 
 1. 新增 `expandedSegments` 响应式 Set，管理每个 segment 的展开状态
+   - **Vue 3 响应性注意**：`ref(new Set())` 的 `.add()`/`.delete()` 不会触发响应式更新
+   - **正确做法**：每次变异后触发替换——
+     ```ts
+     const expandedSegments = ref(new Set<string>());
+     function toggle(id: string) {
+       const next = new Set(expandedSegments.value);
+       next.has(id) ? next.delete(id) : next.add(id);
+       expandedSegments.value = next;
+     }
+     ```
 2. 新增 `isAllExpanded` / `toggleAll` 计算属性和方法
 3. 调整折叠/展开机制：
    - **删除**旧的 `COLLAPSE_THRESHOLD` + `visibleSegments` + `hasMoreSegments` + `hiddenCount` + `isExpanded` 方案
@@ -251,8 +277,8 @@
 ## 阶段间边界
 
 | 边界 | 说明 |
-|---|---|
-| P0 → P1 | P0 新增的字段展示在 P1 中会被重组到折叠详情区，但字段本身不丢失。P0 是P1 的数据基础 |
+|---|---|---|
+| P0 → P1 | P0 完成中文映射常量 + computed + 在三列布局中补齐缺失字段；P1 重写 template 为折叠布局，P0 的所有字段会迁移到详情区，但中文映射和 computed 无需重写 |
 | P1 → P2 | P2 在 P1 的卡片布局上增加左边框颜色和顶部进度条，不改变折叠逻辑。P1 的摘要行/详情区结构保持不变 |
 | P0/P1/P2 与 P3 | 三个阶段都不拆分组件，所有改动在同一文件内完成，为后续 P4（组件拆分，对应前文方向 4）打下干净基础 |
 
@@ -272,8 +298,8 @@
 
 | 文件 | 阶段 | 改动量预估 |
 |---|---|---|
-| `frontend/src/components/storyboard/StoryboardPanel.vue` | P0 | +80 行（新增字段渲染 + 中文映射） |
-| `frontend/src/components/storyboard/StoryboardPanel.vue` | P1 | ~重写 template 和 style（折叠布局重构） |
+| `frontend/src/components/storyboard/StoryboardPanel.vue` | P0 | +80 行（中文映射 + computed + 字段渲染 + style） |
+| `frontend/src/components/storyboard/StoryboardPanel.vue` | P1 | ~重写 template 和 style（折叠布局重构），复用 P0 中文映射和 computed |
 | `frontend/src/components/storyboard/StoryboardPanel.vue` | P2 | +60 行（角色样式 + 进度条） |
 
 ## 验收清单（综合）

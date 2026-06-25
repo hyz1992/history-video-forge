@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 
@@ -9,6 +9,52 @@ import { useWorkspaceStore } from "../../stores/workspace";
 import { PIPELINE_STEPS } from "../../stores/workspace";
 import { useStagePolling } from "../../composables/useStagePolling";
 import StageGenerating from "../workspace/StageGenerating.vue";
+
+const narrativeRoleLabels: Record<string, string> = {
+  opening: "开篇",
+  setup: "铺垫",
+  pressure: "加压",
+  turn: "转折",
+  peak: "高潮",
+  ending: "结尾",
+  bridge: "过渡",
+};
+
+const contentTypeLabels: Record<string, string> = {
+  live_action: "实拍",
+  text_card: "文字卡",
+  map: "地图",
+  illustration: "插画",
+};
+
+const editingHintLabels: Record<string, string> = {
+  single: "单镜",
+  cutaway: "切出",
+  montage: "蒙太奇",
+};
+
+const framingHintLabels: Record<string, string> = {
+  wide: "广角",
+  medium: "中景",
+  close: "特写",
+  detail: "细节",
+  symbolic: "象征",
+};
+
+interface RoleStyle {
+  borderColor: string;
+  tagType: "primary" | "success" | "warning" | "danger" | "info" | "";
+}
+
+const roleStyleMap: Record<string, RoleStyle> = {
+  opening: { borderColor: "#c9a227", tagType: "" },
+  setup: { borderColor: "#7a8ea0", tagType: "info" },
+  pressure: { borderColor: "#d4a574", tagType: "warning" },
+  turn: { borderColor: "#828cd2", tagType: "" },
+  peak: { borderColor: "#d4713a", tagType: "danger" },
+  ending: { borderColor: "#8a7530", tagType: "" },
+  bridge: { borderColor: "#6e9678", tagType: "info" },
+};
 
 const storyboardStore = useStoryboardStore();
 const projectStore = useProjectStore();
@@ -74,6 +120,14 @@ const isGenerating = computed(
     activeStoryboard.value?.execution_state?.generating === true,
 );
 
+const estimatedTotalDuration = computed(
+  () => activeStoryboard.value?.plan?.estimated_total_duration_sec ?? null,
+);
+
+const globalVisualNotes = computed(
+  () => activeStoryboard.value?.plan?.global_visual_notes ?? [],
+);
+
 const isInitialStoryboardSnapshotLoading = ref(true);
 const isRefreshingStoryboardStatus = ref(false);
 const shouldShowStoryboardSkeleton = computed(
@@ -86,23 +140,55 @@ const shouldShowStoryboardSkeleton = computed(
 /*  Collapse / expand                                                         */
 /* -------------------------------------------------------------------------- */
 
-const COLLAPSE_THRESHOLD = 8;
-const isExpanded = ref(false);
+const expandedSegments = ref(new Set<string>());
 
-const visibleSegments = computed(() => {
-  if (isExpanded.value || segments.value.length <= COLLAPSE_THRESHOLD) {
-    return segments.value;
+function initDefaultExpanded() {
+  const list = segments.value;
+  if (list.length === 0) return;
+  const ids = new Set<string>();
+  for (let i = 0; i < list.length; i++) {
+    if (i < 3 || i >= list.length - 1 || list[i].narrative_role === "peak") {
+      ids.add(list[i].segment_id);
+    }
   }
-  return segments.value.slice(0, COLLAPSE_THRESHOLD);
+  expandedSegments.value = ids;
+}
+
+function toggleSegment(segmentId: string) {
+  const next = new Set(expandedSegments.value);
+  if (next.has(segmentId)) {
+    next.delete(segmentId);
+  } else {
+    next.add(segmentId);
+  }
+  expandedSegments.value = next;
+}
+
+function isSegmentExpanded(segmentId: string): boolean {
+  return expandedSegments.value.has(segmentId);
+}
+
+const isAllExpanded = computed(
+  () => expandedSegments.value.size >= segments.value.length,
+);
+
+function toggleAll() {
+  if (isAllExpanded.value) {
+    expandedSegments.value = new Set();
+  } else {
+    expandedSegments.value = new Set(segments.value.map((s) => s.segment_id));
+  }
+}
+
+function excerptFirstLine(text: string): string {
+  const idx = text.search(/[。！？!?；;]/u);
+  if (idx === -1) return text.slice(0, 40) + (text.length > 40 ? "…" : "");
+  return text.slice(0, idx + 1);
+}
+
+watch(segments, () => {
+  initDefaultExpanded();
 });
-
-const hasMoreSegments = computed(
-  () => segments.value.length > COLLAPSE_THRESHOLD,
-);
-
-const hiddenCount = computed(
-  () => segments.value.length - COLLAPSE_THRESHOLD,
-);
 
 /* -------------------------------------------------------------------------- */
 /*  Helpers                                                                   */
@@ -111,6 +197,16 @@ const hiddenCount = computed(
 function formatSeconds(seconds: number): string {
   const rounded = Math.round(seconds * 10) / 10;
   return `${rounded}s`;
+}
+
+function roleBorderStyle(role: string): Record<string, string> {
+  const style = roleStyleMap[role];
+  if (style) return { borderLeftColor: style.borderColor, borderLeftWidth: "3px" };
+  return {};
+}
+
+function roleTagType(role: string): "primary" | "success" | "warning" | "danger" | "info" | "" {
+  return roleStyleMap[role]?.tagType ?? "";
 }
 
 const decisionLabels: Record<string, string> = {
@@ -203,6 +299,67 @@ function handleConfirm() {
   workspaceStore.setCurrentStep(ASSET_STEP_INDEX);
   const pid = projectStore.state.projectId; if (pid) router.push(`/projects/${pid}/asset`);
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Back to top                                                               */
+/* -------------------------------------------------------------------------- */
+
+const headerCardRef = ref<HTMLElement | null>(null);
+const showBackToTop = ref(false);
+let observer: IntersectionObserver | null = null;
+
+function setUpBackToTopObserver() {
+  if (observer) {
+    observer.disconnect();
+  }
+  observer = new IntersectionObserver(
+    ([entry]) => {
+      showBackToTop.value = !entry.isIntersecting;
+    },
+    { threshold: 0 },
+  );
+  if (headerCardRef.value) {
+    observer.observe(headerCardRef.value);
+  }
+}
+
+watch(
+  () => headerCardRef.value,
+  (el) => {
+    if (el) setUpBackToTopObserver();
+  },
+);
+
+onUnmounted(() => {
+  if (observer) {
+    observer.disconnect();
+    observer = null;
+  }
+});
+
+function scrollToTop() {
+  const container = document.querySelector(".workspace-content");
+  if (!container) return;
+
+  const startTop = container.scrollTop;
+  if (startTop === 0) return;
+
+  const duration = 400;
+  const startTime = performance.now();
+
+  function tick(now: number) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    container!.scrollTop = startTop * (1 - eased);
+
+    if (progress < 1) {
+      requestAnimationFrame(tick);
+    }
+  }
+
+  requestAnimationFrame(tick);
+}
 </script>
 
 <template>
@@ -272,6 +429,194 @@ function handleConfirm() {
 
     <!-- Main content -->
     <template v-else>
+      <!-- Page title -->
+      <h1 class="storyboard-page-title">请审阅您的<em>分镜规划</em></h1>
+
+      <!-- Global visual notes -->
+      <div v-if="globalVisualNotes.length > 0" class="storyboard-notes-card">
+        <h4 class="storyboard-notes-heading">全局视觉风格</h4>
+        <ul class="storyboard-notes-list">
+          <li v-for="(note, index) in globalVisualNotes" :key="index">
+            {{ note }}
+          </li>
+        </ul>
+      </div>
+
+      <!-- Stats bar -->
+      <div v-if="segments.length > 0" ref="headerCardRef" class="storyboard-stats-bar">
+        <div class="storyboard-stats-info">
+          <span class="storyboard-stats-count">
+            共 {{ segments.length }} 个段落
+            <template v-if="estimatedTotalDuration">
+              · 预计总时长约 {{ Math.round(estimatedTotalDuration) }} 秒
+            </template>
+          </span>
+        </div>
+        <el-button
+          text
+          @click="toggleAll"
+        >
+          {{ isAllExpanded ? "收起全部" : "展开全部" }}
+        </el-button>
+      </div>
+
+      <!-- Segment cards -->
+      <div v-if="segments.length > 0" class="storyboard-segments-section">
+          <article
+            v-for="(segment, index) in segments"
+            :key="segment.segment_id"
+            class="storyboard-segment-card"
+            :class="{ 'is-expanded': isSegmentExpanded(segment.segment_id) }"
+            :style="roleBorderStyle(segment.narrative_role)"
+          >
+            <!-- Summary row (always visible) -->
+            <div
+              class="storyboard-segment-summary"
+              @click="toggleSegment(segment.segment_id)"
+            >
+              <div class="storyboard-segment-summary-row">
+                <span class="storyboard-segment-number">#{{ index + 1 }}</span>
+                <el-tag
+                  size="small"
+                  :type="roleTagType(segment.narrative_role)"
+                  class="storyboard-segment-role"
+                  :class="`storyboard-role--${segment.narrative_role}`"
+                >
+                  {{ narrativeRoleLabels[segment.narrative_role] ?? segment.narrative_role }}
+                </el-tag>
+                <span class="storyboard-segment-time">
+                  {{ formatSeconds(segment.start_hint_sec) }}s ~ {{ formatSeconds(segment.end_hint_sec) }}s
+                </span>
+              </div>
+              <p class="storyboard-segment-summary-excerpt">
+                {{ excerptFirstLine(segment.script_excerpt) }}
+              </p>
+              <div class="storyboard-segment-summary-toggle">
+                <span v-if="isSegmentExpanded(segment.segment_id)" class="storyboard-toggle-icon">收起 ▴</span>
+                <span v-else class="storyboard-toggle-icon">展开详情 ▾</span>
+              </div>
+            </div>
+
+            <!-- Detail area (collapsible) -->
+            <div
+              class="storyboard-segment-details"
+              :class="{ 'is-visible': isSegmentExpanded(segment.segment_id) }"
+            >
+              <div class="storyboard-segment-detail-block">
+                <h4 class="storyboard-segment-detail-heading">口播原文</h4>
+                <p class="storyboard-segment-detail-text">{{ segment.script_excerpt }}</p>
+              </div>
+
+              <div class="storyboard-segment-detail-block">
+                <h4 class="storyboard-segment-detail-heading">视觉意图</h4>
+                <p class="storyboard-segment-detail-text">{{ segment.visual_intent }}</p>
+              </div>
+
+              <div class="storyboard-segment-detail-block">
+                <h4 class="storyboard-segment-detail-heading">场面描述</h4>
+                <p class="storyboard-segment-detail-text">{{ segment.scene_description }}</p>
+              </div>
+
+              <div v-if="segment.visual_elements?.length" class="storyboard-segment-detail-tags">
+                <span class="storyboard-segment-detail-label">视觉元素</span>
+                <div class="storyboard-segment-tags">
+                  <el-tag
+                    v-for="el in segment.visual_elements"
+                    :key="el"
+                    size="small"
+                    type="info"
+                    class="storyboard-segment-tag"
+                  >
+                    {{ el }}
+                  </el-tag>
+                </div>
+              </div>
+
+              <div class="storyboard-segment-detail-tags">
+                <span class="storyboard-segment-detail-label">技术</span>
+                <div class="storyboard-segment-tags">
+                  <el-tag
+                    v-if="segment.framing_hint"
+                    size="small"
+                    class="storyboard-segment-tag"
+                  >
+                    {{ framingHintLabels[segment.framing_hint] ?? segment.framing_hint }}
+                  </el-tag>
+                  <el-tag
+                    v-if="segment.motion_hint"
+                    size="small"
+                    type="warning"
+                    class="storyboard-segment-tag"
+                  >
+                    {{ segment.motion_hint }}
+                  </el-tag>
+                  <el-tag
+                    v-if="segment.content_type"
+                    size="small"
+                    class="storyboard-segment-tag"
+                  >
+                    {{ contentTypeLabels[segment.content_type] ?? segment.content_type }}
+                  </el-tag>
+                  <el-tag
+                    v-if="segment.editing_hint"
+                    size="small"
+                    type="info"
+                    class="storyboard-segment-tag"
+                  >
+                    {{ editingHintLabels[segment.editing_hint] ?? segment.editing_hint }}
+                  </el-tag>
+                  <el-tag
+                    v-if="segment.on_screen_text?.length"
+                    size="small"
+                    type="success"
+                    class="storyboard-segment-tag"
+                  >
+                    文字: {{ segment.on_screen_text.join(" · ") }}
+                  </el-tag>
+                </div>
+              </div>
+
+              <div
+                v-if="segment.risk_notes?.length"
+                class="storyboard-segment-risk"
+              >
+                <span class="storyboard-segment-risk-icon">⚠</span>
+                <span class="storyboard-segment-risk-text">
+                  {{ segment.risk_notes.join("；") }}
+                </span>
+              </div>
+            </div>
+          </article>
+      </div>
+
+      <!-- Action bar -->
+      <div v-if="segments.length > 0" class="storyboard-action-bar">
+        <button
+          class="storyboard-confirm-btn"
+          :disabled="storyboardStore.state.isGenerating || !isStoryboardReady"
+          @click="handleConfirm"
+        >
+          确认分镜，进入资产规划
+        </button>
+
+        <el-popconfirm
+          title="确定要重新生成分镜规划吗？"
+          confirm-button-text="确定"
+          cancel-button-text="取消"
+          :disabled="storyboardStore.state.isGenerating"
+          @confirm="handleGenerate"
+        >
+          <template #reference>
+            <el-button
+              :loading="storyboardStore.state.isGenerating"
+              :disabled="storyboardStore.state.isGenerating"
+            >
+              {{ storyboardStore.state.isGenerating ? "生成中..." : "重新生成" }}
+            </el-button>
+          </template>
+        </el-popconfirm>
+      </div>
+
       <!-- Validation results card -->
       <div v-if="validationResult" class="storyboard-validation-card">
         <h3 class="storyboard-card-heading">验证结果</h3>
@@ -294,7 +639,6 @@ function handleConfirm() {
           </div>
         </div>
 
-        <!-- Errors -->
         <div v-if="hasErrors" class="storyboard-validation-block">
           <h4 class="storyboard-validation-block-heading">错误</h4>
           <ul class="storyboard-validation-list storyboard-validation-list--errors">
@@ -307,7 +651,6 @@ function handleConfirm() {
           </ul>
         </div>
 
-        <!-- Warnings -->
         <div v-if="hasWarnings" class="storyboard-validation-block">
           <h4 class="storyboard-validation-block-heading">警告</h4>
           <ul class="storyboard-validation-list storyboard-validation-list--warnings">
@@ -320,115 +663,22 @@ function handleConfirm() {
           </ul>
         </div>
 
-        <!-- Metrics (collapsible) -->
         <details v-if="validationResult.metrics && Object.keys(validationResult.metrics).length > 0">
           <summary class="storyboard-metrics-toggle">查看指标</summary>
           <pre class="storyboard-pre">{{ JSON.stringify(validationResult.metrics, null, 2) }}</pre>
         </details>
       </div>
-
-      <!-- Segment cards -->
-      <div v-if="segments.length > 0" class="storyboard-segments-section">
-        <div class="storyboard-segments-header">
-          <h3 class="storyboard-card-heading">分镜段落</h3>
-          <span class="storyboard-segments-count">
-            共 {{ segments.length }} 个段落
-          </span>
-        </div>
-
-        <div class="storyboard-segment-list">
-          <article
-            v-for="(segment, index) in visibleSegments"
-            :key="segment.segment_id"
-            class="storyboard-segment-card"
-          >
-            <!-- Left column: number + time range -->
-            <div class="storyboard-segment-left">
-              <span class="storyboard-segment-number">#{{ index + 1 }}</span>
-              <span class="storyboard-segment-time">
-                {{ formatSeconds(segment.start_hint_sec) }}
-                ~
-                {{ formatSeconds(segment.end_hint_sec) }}
-              </span>
-              <el-tag
-                size="small"
-                type="info"
-                class="storyboard-segment-role"
-              >
-                {{ segment.narrative_role }}
-              </el-tag>
-            </div>
-
-            <!-- Middle column: script excerpt -->
-            <div class="storyboard-segment-middle">
-              <p class="storyboard-segment-excerpt">{{ segment.script_excerpt }}</p>
-            </div>
-
-            <!-- Right column: visual intent + tags -->
-            <div class="storyboard-segment-right">
-              <p class="storyboard-segment-visual">{{ segment.visual_intent }}</p>
-              <div class="storyboard-segment-tags">
-                <el-tag
-                  v-if="segment.framing_hint"
-                  size="small"
-                  class="storyboard-segment-tag"
-                >
-                  构图: {{ segment.framing_hint }}
-                </el-tag>
-                <el-tag
-                  v-if="segment.motion_hint"
-                  size="small"
-                  type="warning"
-                  class="storyboard-segment-tag"
-                >
-                  运动: {{ segment.motion_hint }}
-                </el-tag>
-              </div>
-            </div>
-          </article>
-        </div>
-
-        <!-- Collapse / expand toggle -->
-        <div v-if="hasMoreSegments" class="storyboard-collapse-toggle">
-          <el-button
-            text
-            @click="isExpanded = !isExpanded"
-          >
-            {{ isExpanded ? "收起" : `展开全部（还有 ${hiddenCount} 个段落）` }}
-          </el-button>
-        </div>
-      </div>
-
-      <!-- Action buttons -->
-      <div class="storyboard-actions-card">
-        <div class="storyboard-actions-left">
-          <el-button
-            type="primary"
-            :disabled="storyboardStore.state.isGenerating || !isStoryboardReady"
-            @click="handleConfirm"
-          >
-            确认分镜
-          </el-button>
-
-          <el-popconfirm
-            title="确定要重新生成分镜规划吗？"
-            confirm-button-text="确定"
-            cancel-button-text="取消"
-            :disabled="storyboardStore.state.isGenerating"
-            @confirm="handleGenerate"
-          >
-            <template #reference>
-              <el-button
-                :loading="storyboardStore.state.isGenerating"
-                :disabled="storyboardStore.state.isGenerating"
-              >
-                {{ storyboardStore.state.isGenerating ? "生成中..." : "重新生成" }}
-              </el-button>
-            </template>
-          </el-popconfirm>
-        </div>
-      </div>
     </template>
+
+    <!-- Back to top -->
+    <button
+      v-if="showBackToTop"
+      class="storyboard-back-to-top"
+      @click="scrollToTop"
+      title="回到顶部"
+    >
+      <svg viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></svg>
+    </button>
   </div>
 </template>
 
@@ -442,18 +692,38 @@ function handleConfirm() {
   width: 100%;
 }
 
+/* ---- Page title ---- */
+.storyboard-page-title {
+  margin: 0 0 2px;
+  color: #f5f0e8;
+  font-family: "Noto Serif SC", "Songti SC", Georgia, serif;
+  font-size: 28px;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.storyboard-page-title em {
+  color: #e4c26f;
+  font-style: normal;
+}
+
 /* ---- Error card ---- */
 .storyboard-error-card {
   display: grid;
   gap: var(--space-md);
-  padding: var(--space-md);
-  border-radius: var(--radius-card);
-  background: var(--bg-card);
+  padding: var(--space-lg);
+  border-radius: var(--radius-panel);
+  border: 1px solid rgba(192, 100, 84, 0.22);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.008)),
+    var(--bg-card);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
 }
 
 /* ---- Skeleton ---- */
 .storyboard-skeleton {
-  padding: var(--space-md);
+  padding: var(--space-lg);
 }
 
 /* ---- Generating / Empty ---- */
@@ -474,16 +744,20 @@ function handleConfirm() {
   display: grid;
   gap: var(--space-md);
   padding: var(--space-lg);
-  border: 1px solid var(--border-default);
+  border: 1px solid rgba(201, 162, 39, 0.16);
   border-radius: var(--radius-panel);
-  background: var(--bg-card);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.032), rgba(255,255,255,.008)),
+    var(--bg-card);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.22);
 }
 
 .storyboard-card-heading {
   margin: 0;
-  font-size: 1.1rem;
-  font-weight: var(--font-subheading);
+  font-size: 1.2rem;
+  font-weight: var(--font-heading);
   color: var(--text-heading);
+  letter-spacing: -0.01em;
 }
 
 .storyboard-validation-row {
@@ -569,56 +843,189 @@ details[open] > .storyboard-metrics-toggle::before {
   word-break: break-word;
 }
 
-/* ---- Segments section ---- */
-.storyboard-segments-section {
-  display: grid;
-  gap: var(--space-md);
-}
-
-.storyboard-segments-header {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-sm);
-}
-
-.storyboard-segments-count {
-  font-size: 0.88rem;
-  color: var(--text-muted);
-}
-
-.storyboard-segment-list {
+/* ---- Global notes card ---- */
+.storyboard-notes-card {
   display: grid;
   gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border: 1px solid rgba(201, 162, 39, 0.16);
+  border-radius: var(--radius-panel);
+  background:
+    radial-gradient(circle at 86% 0%, rgba(201, 162, 39, 0.06), transparent 48%),
+    linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.004)),
+    var(--bg-card);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.14);
 }
 
-/* ---- Segment card (three-column grid) ---- */
-.storyboard-segment-card {
+.storyboard-notes-heading {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: var(--font-subheading);
+  color: #e4c26f;
+}
+
+.storyboard-notes-list {
+  margin: 0;
+  padding-left: 1.25rem;
   display: grid;
-  grid-template-columns: 140px 1fr 1fr;
-  gap: var(--space-md);
-  padding: var(--space-md);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-card);
-  background: var(--bg-card);
-  align-items: start;
-  transition: border-color 160ms ease;
-}
-
-.storyboard-segment-card:hover {
-  border-color: var(--border-hover);
-}
-
-/* Left column */
-.storyboard-segment-left {
-  display: flex;
-  flex-direction: column;
   gap: var(--space-xs);
 }
 
+.storyboard-notes-list li {
+  font-size: 0.85rem;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+
+/* ---- Stats bar ---- */
+.storyboard-stats-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid rgba(201, 162, 39, 0.13);
+  border-radius: var(--radius-panel);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.005)),
+    var(--bg-card);
+}
+
+.storyboard-stats-info {
+  display: flex;
+  align-items: center;
+}
+
+.storyboard-stats-count {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+
+/* ---- Action bar ---- */
+.storyboard-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border: 1px solid rgba(201, 162, 39, 0.16);
+  border-radius: var(--radius-panel);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.005)),
+    var(--bg-card);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.22);
+}
+
+.storyboard-confirm-btn {
+  height: 46px;
+  padding: 0 28px;
+  border-radius: 13px;
+  border: none;
+  color: #100c08;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  background: linear-gradient(135deg, #e4c26f, #b87333);
+  box-shadow: 0 8px 22px rgba(184, 115, 51, 0.28);
+  transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+}
+
+.storyboard-confirm-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 30px rgba(201, 162, 39, 0.32);
+  filter: brightness(1.05);
+}
+
+.storyboard-confirm-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.storyboard-confirm-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---- Segments section ---- */
+.storyboard-segments-section {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+/* ---- Segment card (vertical foldable layout) ---- */
+.storyboard-segment-card {
+  border: 1px solid rgba(201, 162, 39, 0.13);
+  border-left-width: 3px;
+  border-left-color: rgba(201, 162, 39, 0.18);
+  border-radius: var(--radius-panel);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.028), rgba(255,255,255,.006)),
+    var(--bg-card);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  transition:
+    border-color 160ms ease,
+    border-left-color 160ms ease,
+    box-shadow 200ms ease,
+    transform 200ms ease;
+  overflow: hidden;
+}
+
+.storyboard-segment-card:hover {
+  border-color: rgba(201, 162, 39, 0.25);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.26);
+  transform: translateY(-1px);
+}
+
+/* ---- Summary row ---- */
+.storyboard-segment-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md);
+  cursor: pointer;
+  user-select: none;
+  transition: background 120ms ease;
+}
+
+.storyboard-segment-summary:hover {
+  background: rgba(201, 162, 39, 0.04);
+}
+
+.storyboard-segment-summary-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
 .storyboard-segment-number {
-  font-weight: var(--font-subheading);
+  font-weight: var(--font-heading);
   font-size: 1rem;
   color: var(--accent-primary);
+  background: rgba(201, 162, 39, 0.08);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.storyboard-segment-role {
+  width: fit-content;
+}
+
+.storyboard-role--opening {
+  --el-tag-bg-color: rgba(201, 162, 39, 0.13);
+  --el-tag-border-color: rgba(201, 162, 39, 0.28);
+  --el-tag-text-color: #e4c26f;
+}
+
+.storyboard-role--turn {
+  --el-tag-bg-color: rgba(130, 140, 210, 0.12);
+  --el-tag-border-color: rgba(130, 140, 210, 0.28);
+  --el-tag-text-color: #a4aee6;
+}
+
+.storyboard-role--ending {
+  --el-tag-bg-color: rgba(138, 117, 48, 0.12);
+  --el-tag-border-color: rgba(138, 117, 48, 0.28);
+  --el-tag-text-color: #b8a560;
 }
 
 .storyboard-segment-time {
@@ -627,36 +1034,87 @@ details[open] > .storyboard-metrics-toggle::before {
   color: var(--accent-text);
 }
 
-.storyboard-segment-role {
-  width: fit-content;
-  margin-top: var(--space-xs);
-}
-
-/* Middle column */
-.storyboard-segment-middle {
-  min-width: 0;
-}
-
-.storyboard-segment-excerpt {
+.storyboard-segment-summary-excerpt {
   margin: 0;
   font-size: 0.94rem;
   line-height: 1.7;
   color: var(--text-body);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
-/* Right column */
-.storyboard-segment-right {
+.storyboard-segment-summary-toggle {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  min-width: 0;
+  justify-content: flex-end;
 }
 
-.storyboard-segment-visual {
+.storyboard-toggle-icon {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  transition: color 140ms ease;
+}
+
+.storyboard-segment-summary:hover .storyboard-toggle-icon {
+  color: #c9a227;
+}
+
+/* ---- Detail area ---- */
+.storyboard-segment-details {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    max-height 320ms ease,
+    opacity 260ms ease,
+    padding 260ms ease;
+  border-top: 1px solid transparent;
+  display: grid;
+  gap: var(--space-md);
+  padding: 0 var(--space-md);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.storyboard-segment-details.is-visible {
+  max-height: 2000px;
+  opacity: 1;
+  padding: var(--space-md);
+  border-top-color: rgba(201, 162, 39, 0.14);
+}
+
+.storyboard-segment-detail-block {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.storyboard-segment-detail-heading {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: var(--font-subheading);
+  color: #c9a227;
+  letter-spacing: 0.05em;
+}
+
+.storyboard-segment-detail-text {
   margin: 0;
   font-size: 0.9rem;
-  line-height: 1.65;
-  color: var(--text-secondary);
+  line-height: 1.8;
+  color: var(--text-body);
+}
+
+.storyboard-segment-detail-tags {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+}
+
+.storyboard-segment-detail-label {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  font-weight: var(--font-subheading);
+  color: var(--text-muted);
+  padding-top: 1px;
+  min-width: 56px;
 }
 
 .storyboard-segment-tags {
@@ -669,56 +1127,101 @@ details[open] > .storyboard-metrics-toggle::before {
   font-size: 0.8rem;
 }
 
-/* ---- Collapse toggle ---- */
-.storyboard-collapse-toggle {
+.storyboard-segment-risk {
   display: flex;
-  justify-content: center;
-  padding-top: var(--space-xs);
+  align-items: flex-start;
+  gap: var(--space-xs);
+  padding: var(--space-sm);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 167, 38, 0.06);
+  border: 1px solid rgba(255, 167, 38, 0.16);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: #d4a574;
 }
 
-/* ---- Action buttons ---- */
-.storyboard-actions-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-md);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-card);
-  background: var(--bg-card);
+.storyboard-segment-risk-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
-.storyboard-actions-left {
-  display: flex;
-  gap: var(--space-sm);
-  flex-wrap: wrap;
+.storyboard-segment-risk-text {
+  min-width: 0;
 }
 
 /* ---- Responsive ---- */
 @media (max-width: 819px) {
-  .storyboard-segment-card {
-    grid-template-columns: 1fr;
-    gap: var(--space-sm);
-  }
-
-  .storyboard-segment-left {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-sm);
-  }
-
-  .storyboard-segment-role {
-    margin-top: 0;
-  }
-
-  .storyboard-actions-card {
+  .storyboard-stats-bar {
     flex-direction: column;
-    gap: var(--space-sm);
     align-items: stretch;
+    gap: var(--space-sm);
   }
 
-  .storyboard-actions-left {
+  .storyboard-action-bar {
     flex-direction: column;
+    gap: var(--space-sm);
+    padding: var(--space-md);
+  }
+
+  .storyboard-segment-summary {
+    padding: var(--space-sm);
+  }
+
+  .storyboard-segment-details.is-visible {
+    padding: var(--space-sm);
+  }
+
+  .storyboard-segment-detail-tags {
+    flex-direction: column;
+    gap: var(--space-xs);
+  }
+}
+
+/* ---- Back to top ---- */
+.storyboard-back-to-top {
+  position: fixed;
+  right: 28px;
+  bottom: 32px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(201, 162, 39, 0.22);
+  background:
+    radial-gradient(circle at 50% 40%, rgba(201, 162, 39, 0.14), rgba(201, 162, 39, 0.04) 70%),
+    var(--bg-card);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  z-index: 20;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+  animation: backToTopIn 220ms ease;
+}
+
+.storyboard-back-to-top:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
+  border-color: rgba(201, 162, 39, 0.35);
+}
+
+.storyboard-back-to-top svg {
+  width: 18px;
+  height: 18px;
+  stroke: #e4c26f;
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@keyframes backToTopIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 </style>
