@@ -586,7 +586,7 @@ function scrollToTop() {
                   {{ narrativeRoleLabels[segment.narrative_role] ?? segment.narrative_role }}
                 </el-tag>
                 <span class="storyboard-segment-time">
-                  {{ formatSeconds(segment.start_hint_sec) }}s ~ {{ formatSeconds(segment.end_hint_sec) }}s
+                  {{ formatSeconds(segment.start_hint_sec) }} – {{ formatSeconds(segment.end_hint_sec) }}
                 </span>
                 <button
                   class="storyboard-strategy-badge"
