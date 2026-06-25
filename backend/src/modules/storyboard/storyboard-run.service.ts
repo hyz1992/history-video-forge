@@ -383,6 +383,7 @@ export async function runStoryboardSegmentRegeneration(
       },
     };
   } catch (error) {
+    console.error("[storyboard] segment regen failed:", error);
     const message =
       error instanceof Error ? (error.stack ?? error.message) : String(error);
     return {

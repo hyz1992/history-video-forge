@@ -121,7 +121,14 @@ export function createFetchStoryboardApi(baseUrl = ""): StoryboardApi {
           body: JSON.stringify({ user_feedback: userFeedback }),
         },
       );
-      if (!response.ok) throw new Error(`storyboard_segment_regen_failed:${response.status}`);
+      if (!response.ok) {
+        let detail = "";
+        try {
+          const body = await response.json() as Record<string, unknown>;
+          detail = typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "";
+        } catch { /* ignore */ }
+        throw new Error(`storyboard_segment_regen_failed:${response.status}${detail ? ` — ${detail}` : ""}`);
+      }
     },
   };
 }
@@ -320,6 +327,8 @@ export function createStoryboardStore(
       console.warn("[storyboard] regenerateSegment aborted — no active projectId");
       return false;
     }
+
+    state.loadError = null;
 
     try {
       await input.api.regenerateSegment(projectId, segmentId, userFeedback);
