@@ -316,7 +316,10 @@ export function createStoryboardStore(
     userFeedback: string,
   ) {
     const projectId = input.projectStore.state.projectId;
-    if (!projectId) return;
+    if (!projectId) {
+      console.warn("[storyboard] regenerateSegment aborted — no active projectId");
+      return;
+    }
 
     await input.api.regenerateSegment(projectId, segmentId, userFeedback);
     await loadActiveStoryboardSnapshot();

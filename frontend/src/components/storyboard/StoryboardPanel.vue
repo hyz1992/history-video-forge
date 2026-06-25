@@ -328,6 +328,7 @@ async function handleRegenSubmit(userFeedback: string) {
 const showSegmentRegenModal = ref(false);
 const segmentRegenTarget = ref<StoryboardSegment | null>(null);
 const segmentRegenIndex = ref(0);
+const isRegeneratingSegment = ref(false);
 
 function openSegmentRegenModal(segment: StoryboardSegment, index: number) {
   segmentRegenTarget.value = segment;
@@ -337,13 +338,18 @@ function openSegmentRegenModal(segment: StoryboardSegment, index: number) {
 
 async function handleSegmentRegenSubmit(userFeedback: string) {
   if (!segmentRegenTarget.value) return;
-  startPolling();
-  await storyboardStore.regenerateSegment(
-    segmentRegenTarget.value.segment_id,
-    userFeedback,
-  );
-  if (!storyboardStore.state.loadError) {
-    ElMessage.success("分镜片段重新生成完成");
+  isRegeneratingSegment.value = true;
+  try {
+    await storyboardStore.regenerateSegment(
+      segmentRegenTarget.value.segment_id,
+      userFeedback,
+    );
+    showSegmentRegenModal.value = false;
+    if (!storyboardStore.state.loadError) {
+      ElMessage.success("分镜片段重新生成完成");
+    }
+  } finally {
+    isRegeneratingSegment.value = false;
   }
 }
 
@@ -542,14 +548,14 @@ function scrollToTop() {
         <div class="storyboard-action-card">
           <button
             class="storyboard-confirm-btn"
-            :disabled="storyboardStore.state.isGenerating || !isStoryboardReady || isSwitchingStrategy"
+            :disabled="storyboardStore.state.isGenerating || !isStoryboardReady || isSwitchingStrategy || isRegeneratingSegment"
             @click="handleConfirm"
           >
             确认分镜，进入资产规划
           </button>
           <el-button
             :loading="storyboardStore.state.isGenerating"
-            :disabled="storyboardStore.state.isGenerating || isSwitchingStrategy"
+            :disabled="storyboardStore.state.isGenerating || isSwitchingStrategy || isRegeneratingSegment"
             @click="showRegenModal = true"
           >
             {{ storyboardStore.state.isGenerating ? "生成中..." : "重新生成" }}
@@ -616,7 +622,7 @@ function scrollToTop() {
                   class="storyboard-strategy-badge"
                   :class="strategyBadgeClass(segment)"
                   :title="strategyBadgeTitle(segment)"
-                  :disabled="isSwitchingStrategy"
+                  :disabled="isSwitchingStrategy || isRegeneratingSegment"
                   @click.stop.prevent="handleToggleStrategy(segment)"
                 >
                   <template v-if="isSwitchingStrategy && switchingSegmentId === segment.segment_id">
@@ -630,7 +636,7 @@ function scrollToTop() {
                 <button
                   class="storyboard-segment-regen-btn"
                   title="重新生成此分镜"
-                  :disabled="isSwitchingStrategy"
+                  :disabled="isSwitchingStrategy || isRegeneratingSegment"
                   @click.stop.prevent="openSegmentRegenModal(segment, index + 1)"
                 >
                   ↻
@@ -801,8 +807,8 @@ function scrollToTop() {
     </button>
 
     <StageLoadingBar
-      :visible="isSwitchingStrategy"
-      text="正在更新视觉策略..."
+      :visible="isSwitchingStrategy || isRegeneratingSegment"
+      :text="isRegeneratingSegment ? '正在重新生成分镜片段...' : '正在更新视觉策略...'"
     />
 
     <StoryboardRegenFeedbackModal
@@ -815,6 +821,7 @@ function scrollToTop() {
       v-model:visible="showSegmentRegenModal"
       :segment="segmentRegenTarget"
       :segment-index="segmentRegenIndex"
+      :submitting="isRegeneratingSegment"
       @submit="handleSegmentRegenSubmit"
     />
   </div>

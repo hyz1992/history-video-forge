@@ -7,6 +7,7 @@ const props = defineProps<{
   visible: boolean;
   segment: StoryboardSegment | null;
   segmentIndex: number;
+  submitting?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -37,6 +38,7 @@ function close() {
 }
 
 function handleSubmit() {
+  if (props.submitting) return;
   const feedback = userFeedback.value.trim();
   if (!feedback) {
     submitError.value = "请填写你的优化意见后再提交。";
@@ -44,8 +46,6 @@ function handleSubmit() {
   }
   submitError.value = null;
   emit("submit", feedback);
-  userFeedback.value = "";
-  emit("update:visible", false);
 }
 
 watch(() => props.visible, (val) => {
@@ -105,14 +105,14 @@ watch(() => props.visible, (val) => {
         </div>
 
         <div class="modal-actions">
-          <button class="modal-btn modal-btn--secondary" @click="close">取消</button>
+          <button class="modal-btn modal-btn--secondary" :disabled="submitting" @click="close">取消</button>
           <button
             class="modal-btn modal-btn--primary"
-            :class="{ 'modal-btn--disabled': !userFeedback.trim() }"
-            :disabled="!userFeedback.trim()"
+            :class="{ 'modal-btn--disabled': !userFeedback.trim() || submitting }"
+            :disabled="!userFeedback.trim() || submitting"
             @click="handleSubmit"
           >
-            提交重新生成
+            {{ submitting ? "生成中..." : "提交重新生成" }}
           </button>
         </div>
       </div>
