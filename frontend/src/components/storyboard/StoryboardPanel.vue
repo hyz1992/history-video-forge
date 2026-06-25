@@ -327,10 +327,11 @@ async function handleRegenSubmit(userFeedback: string) {
 const strategyLabels: Record<string, { label: string; icon: string; class: string }> = {
   remotion_motion: { label: "Remotion 运镜", icon: "🎬", class: "strategy-remotion" },
   api_video: { label: "AI 视频生成", icon: "🤖", class: "strategy-api-video" },
+  unset: { label: "默认", icon: "◇", class: "strategy-unset" },
 };
 
 function strategyKey(segment: StoryboardSegment): string {
-  return segment.visual_strategy_preference ?? "remotion_motion";
+  return segment.visual_strategy_preference ?? "unset";
 }
 
 function strategyBadgeClass(segment: StoryboardSegment) {
@@ -340,8 +341,8 @@ function strategyBadgeClass(segment: StoryboardSegment) {
 function strategyBadgeTitle(segment: StoryboardSegment) {
   const v = segment.visual_strategy_preference;
   if (v === "api_video") return "点击切回 Remotion 运镜";
-  if (v === "remotion_motion") return "点击升级为 AI 视频生成";
-  return "点击设定生成策略";
+  if (v === "remotion_motion") return "点击清除偏好（恢复默认）";
+  return "点击升级为 AI 视频生成";
 }
 
 function strategyBadgeIcon(segment: StoryboardSegment) {
@@ -359,10 +360,10 @@ async function handleToggleStrategy(segment: StoryboardSegment) {
   const current = segment.visual_strategy_preference;
   const next: "remotion_motion" | "api_video" | null =
     current === "api_video"
-      ? null
+      ? "remotion_motion"
       : current === "remotion_motion"
-        ? "api_video"
-        : "remotion_motion";
+        ? null
+        : "api_video";
 
   isSwitchingStrategy.value = true;
   switchingSegmentId.value = segment.segment_id;
@@ -1163,6 +1164,18 @@ details[open] > .storyboard-metrics-toggle::before {
 .strategy-api-video:hover {
   background: rgba(121, 158, 203, 0.16);
   border-color: rgba(121, 158, 203, 0.32);
+}
+
+.strategy-unset {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.strategy-unset:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(201, 162, 39, 0.2);
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .storyboard-role--opening {
