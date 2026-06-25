@@ -500,29 +500,8 @@ function scrollToTop() {
       <!-- Page title -->
       <h1 class="storyboard-page-title">请审阅您的<em>分镜规划</em></h1>
 
-      <!-- Global notes + action -->
-      <div v-if="segments.length > 0" class="storyboard-top-row">
-        <div v-if="globalVisualNotes.length > 0" class="storyboard-notes-card">
-          <h4 class="storyboard-notes-heading">全局视觉风格</h4>
-          <ul class="storyboard-notes-list">
-            <li v-for="(note, index) in globalVisualNotes" :key="index">
-              {{ note }}
-            </li>
-          </ul>
-        </div>
-        <div class="storyboard-action-card">
-          <button
-            class="storyboard-confirm-btn"
-            :disabled="storyboardStore.state.isGenerating || !isStoryboardReady || isSwitchingStrategy || isRegeneratingSegment"
-            @click="handleConfirm"
-          >
-            确认分镜，进入资产规划
-          </button>
-        </div>
-      </div>
-
-      <!-- Notes only (no segments yet) -->
-      <div v-else-if="globalVisualNotes.length > 0" class="storyboard-notes-card">
+      <!-- Global notes -->
+      <div v-if="globalVisualNotes.length > 0" class="storyboard-notes-card">
         <h4 class="storyboard-notes-heading">全局视觉风格</h4>
         <ul class="storyboard-notes-list">
           <li v-for="(note, index) in globalVisualNotes" :key="index">
@@ -541,12 +520,18 @@ function scrollToTop() {
             </template>
           </span>
         </div>
-        <el-button
-          text
-          @click="toggleAll"
-        >
-          {{ isAllExpanded ? "收起全部" : "展开全部" }}
-        </el-button>
+        <div class="storyboard-stats-actions">
+          <el-button text @click="toggleAll">
+            {{ isAllExpanded ? "收起全部" : "展开全部" }}
+          </el-button>
+          <button
+            class="storyboard-confirm-btn"
+            :disabled="storyboardStore.state.isGenerating || !isStoryboardReady || isSwitchingStrategy || isRegeneratingSegment"
+            @click="handleConfirm"
+          >
+            确认分镜，进入资产规划
+          </button>
+        </div>
       </div>
 
       <!-- Segment cards -->
@@ -939,31 +924,6 @@ details[open] > .storyboard-metrics-toggle::before {
   word-break: break-word;
 }
 
-/* ---- Top row: notes + action buttons ---- */
-.storyboard-top-row {
-  display: flex;
-  gap: var(--space-md);
-  align-items: stretch;
-}
-
-.storyboard-top-row > .storyboard-notes-card {
-  flex: 1;
-  min-width: 0;
-}
-
-.storyboard-action-card {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: var(--space-sm);
-  min-width: 180px;
-}
-
-.storyboard-action-card .storyboard-confirm-btn {
-  white-space: nowrap;
-}
-
 /* ---- Global notes card ---- */
 .storyboard-notes-card {
   display: grid;
@@ -1016,23 +976,30 @@ details[open] > .storyboard-metrics-toggle::before {
   align-items: center;
 }
 
+.storyboard-stats-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
 .storyboard-stats-count {
   font-size: 0.88rem;
   color: var(--text-secondary);
 }
 
 .storyboard-confirm-btn {
-  height: 46px;
-  padding: 0 28px;
-  border-radius: 13px;
+  height: 38px;
+  padding: 0 22px;
+  border-radius: 10px;
   border: none;
   color: #100c08;
   font-family: inherit;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
   background: linear-gradient(135deg, #e4c26f, #b87333);
-  box-shadow: 0 8px 22px rgba(184, 115, 51, 0.28);
+  box-shadow: 0 4px 14px rgba(184, 115, 51, 0.22);
   transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
 }
 
@@ -1335,16 +1302,12 @@ details[open] > .storyboard-metrics-toggle::before {
     gap: var(--space-sm);
   }
 
-  .storyboard-top-row {
-    flex-direction: column;
+  .storyboard-stats-actions {
+    justify-content: flex-end;
   }
 
   .storyboard-notes-card {
     flex-direction: column;
-  }
-
-  .storyboard-action-card {
-    min-width: 0;
   }
 
   .storyboard-segment-summary {
