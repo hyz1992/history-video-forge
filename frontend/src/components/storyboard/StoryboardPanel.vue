@@ -12,6 +12,7 @@ import { useStagePolling } from "../../composables/useStagePolling";
 import StageGenerating from "../workspace/StageGenerating.vue";
 import StageLoadingBar from "../workspace/StageLoadingBar.vue";
 import StoryboardRegenFeedbackModal from "./StoryboardRegenFeedbackModal.vue";
+import StoryboardSegmentRegenModal from "./StoryboardSegmentRegenModal.vue";
 
 const narrativeRoleLabels: Record<string, string> = {
   opening: "开篇",
@@ -321,6 +322,32 @@ async function handleRegenSubmit(userFeedback: string) {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Segment regen modal                                                       */
+/* -------------------------------------------------------------------------- */
+
+const showSegmentRegenModal = ref(false);
+const segmentRegenTarget = ref<StoryboardSegment | null>(null);
+const segmentRegenIndex = ref(0);
+
+function openSegmentRegenModal(segment: StoryboardSegment, index: number) {
+  segmentRegenTarget.value = segment;
+  segmentRegenIndex.value = index;
+  showSegmentRegenModal.value = true;
+}
+
+async function handleSegmentRegenSubmit(userFeedback: string) {
+  if (!segmentRegenTarget.value) return;
+  startPolling();
+  await storyboardStore.regenerateSegment(
+    segmentRegenTarget.value.segment_id,
+    userFeedback,
+  );
+  if (!storyboardStore.state.loadError) {
+    ElMessage.success("分镜片段重新生成完成");
+  }
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Visual strategy toggle                                                    */
 /* -------------------------------------------------------------------------- */
 
@@ -600,6 +627,14 @@ function scrollToTop() {
                     {{ strategyBadgeLabel(segment) }}
                   </template>
                 </button>
+                <button
+                  class="storyboard-segment-regen-btn"
+                  title="重新生成此分镜"
+                  :disabled="isSwitchingStrategy"
+                  @click.stop.prevent="openSegmentRegenModal(segment, index + 1)"
+                >
+                  ↻
+                </button>
               </div>
               <p class="storyboard-segment-summary-excerpt">
                 {{ excerptFirstLine(segment.script_excerpt) }}
@@ -774,6 +809,13 @@ function scrollToTop() {
       v-model:visible="showRegenModal"
       :plan="currentPlan"
       @submit="handleRegenSubmit"
+    />
+
+    <StoryboardSegmentRegenModal
+      v-model:visible="showSegmentRegenModal"
+      :segment="segmentRegenTarget"
+      :segment-index="segmentRegenIndex"
+      @submit="handleSegmentRegenSubmit"
     />
   </div>
 </template>
@@ -1159,6 +1201,36 @@ details[open] > .storyboard-metrics-toggle::before {
 .strategy-api-video:hover {
   background: rgba(121, 158, 203, 0.16);
   border-color: rgba(121, 158, 203, 0.32);
+}
+
+.storyboard-segment-regen-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  font-size: 0.9rem;
+  font-family: inherit;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  transition: all 160ms ease;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.storyboard-segment-regen-btn:hover:not(:disabled) {
+  background: rgba(201, 162, 39, 0.1);
+  border-color: rgba(201, 162, 39, 0.28);
+  color: #c9a227;
+}
+
+.storyboard-segment-regen-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 .storyboard-role--opening {

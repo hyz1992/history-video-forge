@@ -1,6 +1,6 @@
 import type { AppInstance, AppResponse, RouteContext } from "../../app";
 import { getProjectById } from "../projects/project.repository";
-import { runStoryboardGeneration } from "./storyboard-run.service";
+import { runStoryboardGeneration, runStoryboardSegmentRegeneration } from "./storyboard-run.service";
 import { getStoryboardRecordById, saveStoryboardRecord } from "./storyboard-record.repository";
 
 interface StoryboardGeneratePayload {
@@ -10,6 +10,27 @@ interface StoryboardGeneratePayload {
 interface StoryboardUpdateStrategyPayload {
   segment_id: string;
   visual_strategy_preference: "remotion_motion" | "api_video" | null;
+}
+
+interface StoryboardSegmentRegenPayload {
+  user_feedback: string;
+}
+
+async function regenerateSegmentController(
+  context: RouteContext,
+): Promise<AppResponse> {
+  const project = await getProjectById(context.app.db, context.params.projectId);
+  if (!project) {
+    return { statusCode: 404, body: { error: "project_not_found" } };
+  }
+
+  const payload = context.payload as StoryboardSegmentRegenPayload;
+  return runStoryboardSegmentRegeneration({
+    db: context.app.db,
+    project,
+    segmentId: context.params.segmentId,
+    userFeedback: payload.user_feedback,
+  });
 }
 
 async function generateStoryboardController(
@@ -98,5 +119,10 @@ export function registerStoryboardRoutes(app: AppInstance) {
     "PATCH",
     "/api/projects/:projectId/storyboard/strategy",
     updateSegmentStrategyController,
+  );
+  app.addRoute(
+    "POST",
+    "/api/projects/:projectId/storyboard/segments/:segmentId/regen",
+    regenerateSegmentController,
   );
 }

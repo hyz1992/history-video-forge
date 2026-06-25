@@ -125,6 +125,78 @@ function normalizeStoryboardSegment(rawSegment: unknown) {
   };
 }
 
+export interface RegenerateSingleSegmentInput {
+  plan: StoryboardPlan;
+  targetSegmentId: string;
+  userFeedback: string;
+  llmGateway?: LlmGateway;
+  interactionLogWriter?: LlmInteractionLogWriter;
+}
+
+const SEGMENT_REGEN_LOCKED_FIELDS = [
+  "segment_id",
+  "order",
+  "script_excerpt",
+  "start_hint_sec",
+  "end_hint_sec",
+  "narrative_role",
+  "linked_beats",
+  "linked_quotes",
+] as const;
+
+export async function regenerateSingleSegment(
+  input: RegenerateSingleSegmentInput,
+) {
+  const gateway = input.llmGateway ?? createStoryboardPlannerGateway();
+
+  const targetSegment = input.plan.segments.find(
+    (s) => s.segment_id === input.targetSegmentId,
+  );
+  if (!targetSegment) {
+    throw new Error(`segment_not_found: ${input.targetSegmentId}`);
+  }
+
+  const promptInput = {
+    plan: input.plan,
+    target_segment_id: input.targetSegmentId,
+    current_segment: targetSegment,
+    user_feedback: input.userFeedback,
+  };
+
+  const rawSegment = await gateway.invokeStructuredPrompt<unknown>({
+    promptId: "storyboard.segment-regen",
+    input: promptInput,
+    interactionLogWriter: input.interactionLogWriter,
+  });
+
+  const merged = mergeSegmentWithLocks(targetSegment, rawSegment);
+  return StoryboardSegment.parse(merged);
+}
+
+function mergeSegmentWithLocks(
+  original: Record<string, unknown>,
+  raw: unknown,
+): Record<string, unknown> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return original;
+  }
+
+  const incoming = raw as Record<string, unknown>;
+  const merged: Record<string, unknown> = {};
+
+  for (const key of Object.keys(original)) {
+    if ((SEGMENT_REGEN_LOCKED_FIELDS as readonly string[]).includes(key)) {
+      merged[key] = original[key];
+    } else if (key in incoming && incoming[key] !== undefined && incoming[key] !== null) {
+      merged[key] = incoming[key];
+    } else {
+      merged[key] = original[key];
+    }
+  }
+
+  return merged;
+}
+
 function createStoryboardPlannerGateway(): LlmGateway {
   const provider =
     env.llm.provider === "stub"
@@ -150,6 +222,31 @@ function createStubStoryboardPlannerProvider(): StructuredPromptProvider {
     async invokeStructuredPrompt<T>(
       request: StructuredPromptInvocation,
     ): Promise<T> {
+      const promptId = request.prompt.metadata.id;
+
+      if (promptId === "storyboard.segment-regen") {
+        const input = request.input as Record<string, unknown>;
+        const segment = (input.current_segment ?? {}) as T;
+
+        await request.interactionLogWriter?.write({
+          generatedAt: new Date().toISOString(),
+          provider: "stub",
+          model: "stub",
+          operationName: request.operationName,
+          promptId,
+          promptStage: request.prompt.metadata.stage,
+          promptLanguage: request.prompt.metadata.language,
+          promptFilePath: request.prompt.filePath,
+          systemPrompt: request.prompt.body,
+          input: request.input,
+          rawOutput: JSON.stringify(segment, null, 2),
+          parsedOutput: segment,
+          errorMessage: null,
+        });
+
+        return segment;
+      }
+
       const promptInput = request.input as ReturnType<
         typeof buildStoryboardPlannerPromptInput
       >;

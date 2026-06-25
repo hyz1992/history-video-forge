@@ -1,8 +1,8 @@
 import type { ScriptDraftPackage } from "../../../../shared/src/index.js";
-import { ScriptDraftPackage as ScriptDraftPackageSchema } from "../../../../shared/src/index.js";
+import { ScriptDraftPackage as ScriptDraftPackageSchema, StoryboardPlan } from "../../../../shared/src/index.js";
 import type { DbClient, ProjectRecord, ScriptRecord, TopicPackageRecord } from "../../db/client";
 import { createCompositeInteractionLogWriter, persistProjectRunArtifacts } from "../../runtime/trace/project-storage.js";
-import { generateStoryboardPlan } from "./storyboard-generation.service";
+import { generateStoryboardPlan, regenerateSingleSegment } from "./storyboard-generation.service";
 import { validateStoryboardPlan } from "./storyboard-local-validator";
 import { saveStoryboardRecord } from "./storyboard-record.repository";
 
@@ -299,6 +299,95 @@ export async function runStoryboardGeneration(
         error: "internal_server_error",
         message: error instanceof Error ? error.message : String(error),
       },
+    };
+  }
+}
+
+export interface RunStoryboardSegmentRegenInput {
+  db: DbClient;
+  project: ProjectRecord;
+  segmentId: string;
+  userFeedback: string;
+}
+
+export async function runStoryboardSegmentRegeneration(
+  input: RunStoryboardSegmentRegenInput,
+) {
+  if (!input.project.activeScriptRecordId) {
+    return { statusCode: 409, body: { error: "active_script_record_missing" } };
+  }
+
+  if (!input.project.activeStoryboardRecordId) {
+    return { statusCode: 400, body: { error: "no_active_storyboard" } };
+  }
+
+  const scriptRecord = input.db.scriptRecords.get(input.project.activeScriptRecordId);
+  if (!scriptRecord) {
+    return { statusCode: 404, body: { error: "script_record_not_found" } };
+  }
+
+  const storyboardRecord = input.db.storyboardRecords.get(input.project.activeStoryboardRecordId);
+  if (!storyboardRecord) {
+    return { statusCode: 404, body: { error: "storyboard_record_not_found" } };
+  }
+
+  const existingPlan = StoryboardPlan.parse(storyboardRecord.planJson);
+  const targetSegment = existingPlan.segments.find(
+    (s) => s.segment_id === input.segmentId,
+  );
+  if (!targetSegment) {
+    return { statusCode: 404, body: { error: "segment_not_found" } };
+  }
+
+  const draft = mapScriptDraft(scriptRecord);
+
+  try {
+    const newSegment = await regenerateSingleSegment({
+      plan: existingPlan,
+      targetSegmentId: input.segmentId,
+      userFeedback: input.userFeedback,
+    });
+
+    const newPlan = {
+      ...existingPlan,
+      segments: existingPlan.segments.map((s) =>
+        s.segment_id === input.segmentId ? newSegment : s,
+      ),
+    };
+
+    const localValidation = validateStoryboardPlan({ draft, plan: newPlan });
+
+    const validatedPlan = localValidation.decision === "pass"
+      ? StoryboardPlan.parse(newPlan)
+      : existingPlan;
+
+    await saveStoryboardRecord(input.db, {
+      id: storyboardRecord.id,
+      projectId: storyboardRecord.projectId,
+      topicPackageId: storyboardRecord.topicPackageId,
+      scriptRecordId: storyboardRecord.scriptRecordId,
+      planJson: validatedPlan,
+      validationResultJson: localValidation,
+      executionStateJson: storyboardRecord.executionStateJson as Record<string, unknown> | null,
+      graphTraceSummaryJson: storyboardRecord.graphTraceSummaryJson as Record<string, unknown> | null,
+      runtimeDiagnosticsJson: storyboardRecord.runtimeDiagnosticsJson as Record<string, unknown> | null,
+    });
+
+    return {
+      statusCode: localValidation.decision === "pass" ? 200 : 422,
+      body: {
+        segment_id: input.segmentId,
+        plan: validatedPlan,
+        local_validation: localValidation,
+        regenerated: localValidation.decision === "pass",
+      },
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? (error.stack ?? error.message) : String(error);
+    return {
+      statusCode: 500,
+      body: { error: "segment_regen_failed", message },
     };
   }
 }

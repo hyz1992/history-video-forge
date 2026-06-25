@@ -60,6 +60,11 @@ export interface StoryboardApi {
     segmentId: string,
     strategy: "remotion_motion" | "api_video" | null,
   ): Promise<void>;
+  regenerateSegment(
+    projectId: string,
+    segmentId: string,
+    userFeedback: string,
+  ): Promise<void>;
 }
 
 export function createFetchStoryboardApi(baseUrl = ""): StoryboardApi {
@@ -107,6 +112,17 @@ export function createFetchStoryboardApi(baseUrl = ""): StoryboardApi {
       );
       if (!response.ok) throw new Error(`storyboard_strategy_update_failed:${response.status}`);
     },
+    async regenerateSegment(projectId, segmentId, userFeedback) {
+      const response = await fetch(
+        `${baseUrl}/api/projects/${projectId}/storyboard/segments/${segmentId}/regen`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ user_feedback: userFeedback }),
+        },
+      );
+      if (!response.ok) throw new Error(`storyboard_segment_regen_failed:${response.status}`);
+    },
   };
 }
 
@@ -129,6 +145,10 @@ export interface StoryboardStore {
   updateSegmentStrategyPreference: (
     segmentId: string,
     strategy: "remotion_motion" | "api_video" | null,
+  ) => Promise<void>;
+  regenerateSegment: (
+    segmentId: string,
+    userFeedback: string,
   ) => Promise<void>;
   retryLoad: () => Promise<void>;
 }
@@ -291,12 +311,24 @@ export function createStoryboardStore(
     };
   }
 
+  async function regenerateSegment(
+    segmentId: string,
+    userFeedback: string,
+  ) {
+    const projectId = input.projectStore.state.projectId;
+    if (!projectId) return;
+
+    await input.api.regenerateSegment(projectId, segmentId, userFeedback);
+    await loadActiveStoryboardSnapshot();
+  }
+
   return {
     state: readonly(state),
     loadActiveStoryboardSnapshot,
     generateStoryboard,
     regenerateWithFeedback,
     updateSegmentStrategyPreference,
+    regenerateSegment,
     retryLoad,
   };
 }
