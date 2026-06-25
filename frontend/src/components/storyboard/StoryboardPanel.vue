@@ -10,6 +10,7 @@ import { useWorkspaceStore } from "../../stores/workspace";
 import { PIPELINE_STEPS } from "../../stores/workspace";
 import { useStagePolling } from "../../composables/useStagePolling";
 import StageGenerating from "../workspace/StageGenerating.vue";
+import StageLoadingBar from "../workspace/StageLoadingBar.vue";
 import StoryboardRegenFeedbackModal from "./StoryboardRegenFeedbackModal.vue";
 
 const narrativeRoleLabels: Record<string, string> = {
@@ -351,7 +352,10 @@ function strategyBadgeLabel(segment: StoryboardSegment) {
   return strategyLabels[strategyKey(segment)]?.label ?? "Remotion 运镜";
 }
 
-function handleToggleStrategy(segment: StoryboardSegment) {
+const isSwitchingStrategy = ref(false);
+const switchingSegmentId = ref<string | null>(null);
+
+async function handleToggleStrategy(segment: StoryboardSegment) {
   const current = segment.visual_strategy_preference;
   const next: "remotion_motion" | "api_video" | null =
     current === "api_video"
@@ -360,7 +364,14 @@ function handleToggleStrategy(segment: StoryboardSegment) {
         ? "api_video"
         : "remotion_motion";
 
-  storyboardStore.updateSegmentStrategyPreference(segment.segment_id, next);
+  isSwitchingStrategy.value = true;
+  switchingSegmentId.value = segment.segment_id;
+  try {
+    await storyboardStore.updateSegmentStrategyPreference(segment.segment_id, next);
+  } finally {
+    isSwitchingStrategy.value = false;
+    switchingSegmentId.value = null;
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -517,6 +528,7 @@ function scrollToTop() {
         </div>
         <el-button
           text
+          :disabled="isSwitchingStrategy"
           @click="toggleAll"
         >
           {{ isAllExpanded ? "收起全部" : "展开全部" }}
@@ -554,10 +566,16 @@ function scrollToTop() {
                   class="storyboard-strategy-badge"
                   :class="strategyBadgeClass(segment)"
                   :title="strategyBadgeTitle(segment)"
+                  :disabled="isSwitchingStrategy"
                   @click.stop.prevent="handleToggleStrategy(segment)"
                 >
-                  {{ strategyBadgeIcon(segment) }}
-                  {{ strategyBadgeLabel(segment) }}
+                  <template v-if="isSwitchingStrategy && switchingSegmentId === segment.segment_id">
+                    切换中...
+                  </template>
+                  <template v-else>
+                    {{ strategyBadgeIcon(segment) }}
+                    {{ strategyBadgeLabel(segment) }}
+                  </template>
                 </button>
               </div>
               <p class="storyboard-segment-summary-excerpt">
@@ -665,7 +683,7 @@ function scrollToTop() {
       <div v-if="segments.length > 0" class="storyboard-action-bar">
         <button
           class="storyboard-confirm-btn"
-          :disabled="storyboardStore.state.isGenerating || !isStoryboardReady"
+          :disabled="storyboardStore.state.isGenerating || !isStoryboardReady || isSwitchingStrategy"
           @click="handleConfirm"
         >
           确认分镜，进入资产规划
@@ -673,7 +691,7 @@ function scrollToTop() {
 
         <el-button
           :loading="storyboardStore.state.isGenerating"
-          :disabled="storyboardStore.state.isGenerating"
+          :disabled="storyboardStore.state.isGenerating || isSwitchingStrategy"
           @click="showRegenModal = true"
         >
           {{ storyboardStore.state.isGenerating ? "生成中..." : "重新生成" }}
@@ -742,6 +760,11 @@ function scrollToTop() {
     >
       <svg viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></svg>
     </button>
+
+    <StageLoadingBar
+      :visible="isSwitchingStrategy"
+      text="正在更新视觉策略..."
+    />
 
     <StoryboardRegenFeedbackModal
       v-model:visible="showRegenModal"
@@ -1095,6 +1118,11 @@ details[open] > .storyboard-metrics-toggle::before {
   white-space: nowrap;
   margin-left: auto;
   flex-shrink: 0;
+}
+
+.storyboard-strategy-badge:disabled {
+  opacity: 0.55;
+  cursor: wait;
 }
 
 .strategy-remotion {

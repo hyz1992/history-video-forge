@@ -266,17 +266,18 @@ export function createStoryboardStore(
     const projectId = input.projectStore.state.projectId;
     if (!projectId) return;
 
+    await input.api.updateSegmentStrategy(projectId, segmentId, strategy);
+
     const snapshot = state.snapshot;
     if (!snapshot?.active_storyboard?.plan) return;
 
     const plan = snapshot.active_storyboard.plan;
     const segments = plan.segments;
     const segment = segments.find((s) => s.segment_id === segmentId);
-    if (!segment) return;
+    if (segment) {
+      segment.visual_strategy_preference = strategy;
+    }
 
-    const previous = segment.visual_strategy_preference;
-
-    segment.visual_strategy_preference = strategy;
     state.snapshot = {
       ...snapshot,
       active_storyboard: {
@@ -284,19 +285,6 @@ export function createStoryboardStore(
         plan: { ...plan, segments: [...segments] },
       },
     };
-
-    try {
-      await input.api.updateSegmentStrategy(projectId, segmentId, strategy);
-    } catch {
-      segment.visual_strategy_preference = previous;
-      state.snapshot = {
-        ...snapshot,
-        active_storyboard: {
-          ...snapshot.active_storyboard,
-          plan: { ...plan, segments: [...segments] },
-        },
-      };
-    }
   }
 
   return {
