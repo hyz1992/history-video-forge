@@ -340,12 +340,18 @@ export async function runStoryboardSegmentRegeneration(
   }
 
   const draft = mapScriptDraft(scriptRecord);
+  const interactionLogWriter = createCompositeInteractionLogWriter({
+    db: input.db,
+    projectId: input.project.id,
+    stage: "storyboard",
+  });
 
   try {
     const newSegment = await regenerateSingleSegment({
       plan: existingPlan,
       targetSegmentId: input.segmentId,
       userFeedback: input.userFeedback,
+      interactionLogWriter,
     });
 
     const newPlan = {
@@ -384,6 +390,9 @@ export async function runStoryboardSegmentRegeneration(
     };
   } catch (error) {
     console.error("[storyboard] segment regen failed:", error);
+    interactionLogWriter.writeError(
+      error instanceof Error ? (error.stack ?? error.message) : String(error),
+    );
     const message =
       error instanceof Error ? (error.stack ?? error.message) : String(error);
     return {
