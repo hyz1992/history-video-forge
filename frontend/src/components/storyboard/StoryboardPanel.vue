@@ -9,6 +9,7 @@ import { useWorkspaceStore } from "../../stores/workspace";
 import { PIPELINE_STEPS } from "../../stores/workspace";
 import { useStagePolling } from "../../composables/useStagePolling";
 import StageGenerating from "../workspace/StageGenerating.vue";
+import StoryboardRegenFeedbackModal from "./StoryboardRegenFeedbackModal.vue";
 
 const narrativeRoleLabels: Record<string, string> = {
   opening: "开篇",
@@ -298,6 +299,23 @@ function handleConfirm() {
   ElMessage.success("分镜已确认，进入资产阶段");
   workspaceStore.setCurrentStep(ASSET_STEP_INDEX);
   const pid = projectStore.state.projectId; if (pid) router.push(`/projects/${pid}/asset`);
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Regen modal                                                               */
+/* -------------------------------------------------------------------------- */
+
+const showRegenModal = ref(false);
+const currentPlan = computed(
+  () => activeStoryboard.value?.plan ?? null,
+);
+
+async function handleRegenSubmit(userFeedback: string) {
+  startPolling();
+  await storyboardStore.regenerateWithFeedback(userFeedback);
+  if (!storyboardStore.state.loadError) {
+    ElMessage.success("分镜规划重新生成完成");
+  }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -599,22 +617,13 @@ function scrollToTop() {
           确认分镜，进入资产规划
         </button>
 
-        <el-popconfirm
-          title="确定要重新生成分镜规划吗？"
-          confirm-button-text="确定"
-          cancel-button-text="取消"
+        <el-button
+          :loading="storyboardStore.state.isGenerating"
           :disabled="storyboardStore.state.isGenerating"
-          @confirm="handleGenerate"
+          @click="showRegenModal = true"
         >
-          <template #reference>
-            <el-button
-              :loading="storyboardStore.state.isGenerating"
-              :disabled="storyboardStore.state.isGenerating"
-            >
-              {{ storyboardStore.state.isGenerating ? "生成中..." : "重新生成" }}
-            </el-button>
-          </template>
-        </el-popconfirm>
+          {{ storyboardStore.state.isGenerating ? "生成中..." : "重新生成" }}
+        </el-button>
       </div>
 
       <!-- Validation results card -->
@@ -679,6 +688,12 @@ function scrollToTop() {
     >
       <svg viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></svg>
     </button>
+
+    <StoryboardRegenFeedbackModal
+      v-model:visible="showRegenModal"
+      :plan="currentPlan"
+      @submit="handleRegenSubmit"
+    />
   </div>
 </template>
 

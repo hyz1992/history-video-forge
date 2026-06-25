@@ -35,6 +35,7 @@ export interface GenerateStoryboardPlanInput {
     reason: "storyboard_local_validation_regen_once";
     errors: string[];
     metrics: Record<string, unknown>;
+    user_feedback?: string;
   };
 }
 

@@ -95,6 +95,7 @@ function buildTraceSummary(input: {
 export interface RunStoryboardGenerationInput {
   db: DbClient;
   project: ProjectRecord;
+  userFeedback?: string;
 }
 
 export async function runStoryboardGeneration(
@@ -168,17 +169,26 @@ export async function runStoryboardGeneration(
 
   if (localValidation.decision === "regen_once") {
     regenerated = true;
+    const regenContext: {
+      reason: "storyboard_local_validation_regen_once";
+      errors: string[];
+      metrics: Record<string, unknown>;
+      user_feedback?: string;
+    } = {
+      reason: "storyboard_local_validation_regen_once",
+      errors: localValidation.errors,
+      metrics: localValidation.metrics,
+    };
+    if (input.userFeedback) {
+      regenContext.user_feedback = input.userFeedback;
+    }
     plan = await generateStoryboardPlan({
       sourceScriptRecordId: scriptRecord.id,
       sourceTopicPackageId: topicPackage.id,
       draft,
       topicBoundaryContext,
       interactionLogWriter,
-      regenerationContext: {
-        reason: "storyboard_local_validation_regen_once",
-        errors: localValidation.errors,
-        metrics: localValidation.metrics,
-      },
+      regenerationContext: regenContext,
     });
     localValidation = validateStoryboardPlan({
       draft,

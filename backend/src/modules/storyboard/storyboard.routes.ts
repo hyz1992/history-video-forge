@@ -2,6 +2,10 @@ import type { AppInstance, AppResponse, RouteContext } from "../../app";
 import { getProjectById } from "../projects/project.repository";
 import { runStoryboardGeneration } from "./storyboard-run.service";
 
+interface StoryboardGeneratePayload {
+  user_feedback?: string;
+}
+
 async function generateStoryboardController(
   context: RouteContext,
 ): Promise<AppResponse> {
@@ -15,9 +19,12 @@ async function generateStoryboardController(
     };
   }
 
+  const payload = context.payload as StoryboardGeneratePayload | undefined;
+
   return runStoryboardGeneration({
     db: context.app.db,
     project,
+    userFeedback: payload?.user_feedback,
   });
 }
 

@@ -53,6 +53,7 @@ export interface StoryboardSnapshot {
 export interface StoryboardApi {
   loadSnapshot(projectId: string): Promise<StoryboardSnapshot>;
   generateStoryboard(projectId: string): Promise<void>;
+  regenerateStoryboard(projectId: string, userFeedback: string): Promise<void>;
 }
 
 export function createFetchStoryboardApi(baseUrl = ""): StoryboardApi {
@@ -75,6 +76,17 @@ export function createFetchStoryboardApi(baseUrl = ""): StoryboardApi {
       );
       if (!response.ok) throw new Error(`storyboard_generate_failed:${response.status}`);
     },
+    async regenerateStoryboard(projectId, userFeedback) {
+      const response = await fetch(
+        `${baseUrl}/api/projects/${projectId}/storyboard/generate`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ user_feedback: userFeedback }),
+        },
+      );
+      if (!response.ok) throw new Error(`storyboard_regen_failed:${response.status}`);
+    },
   };
 }
 
@@ -93,6 +105,7 @@ export interface StoryboardStore {
   state: Readonly<StoryboardStoreState>;
   loadActiveStoryboardSnapshot: () => Promise<void>;
   generateStoryboard: () => Promise<void>;
+  regenerateWithFeedback: (userFeedback: string) => Promise<void>;
   retryLoad: () => Promise<void>;
 }
 
@@ -153,6 +166,16 @@ export function createStoryboardStore(
   }
 
   async function generateStoryboard() {
+    return startGeneration(() => input.api.generateStoryboard(projectId));
+  }
+
+  async function regenerateWithFeedback(userFeedback: string) {
+    return startGeneration(() =>
+      input.api.regenerateStoryboard(projectId, userFeedback),
+    );
+  }
+
+  async function startGeneration(run: () => Promise<void>) {
     const projectId = input.projectStore.state.projectId;
     if (!projectId) {
       return;
@@ -177,7 +200,7 @@ export function createStoryboardStore(
     });
 
     try {
-      await input.api.generateStoryboard(projectId);
+      await run();
       await loadActiveStoryboardSnapshot();
       if (!state.snapshot?.active_storyboard) {
         state.loadError = "分镜生成未完成，请重试";
@@ -216,6 +239,7 @@ export function createStoryboardStore(
     state: readonly(state),
     loadActiveStoryboardSnapshot,
     generateStoryboard,
+    regenerateWithFeedback,
     retryLoad,
   };
 }
