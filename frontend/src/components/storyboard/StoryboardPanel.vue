@@ -506,8 +506,36 @@ function scrollToTop() {
       <!-- Page title -->
       <h1 class="storyboard-page-title">请审阅您的<em>分镜规划</em></h1>
 
-      <!-- Global visual notes -->
-      <div v-if="globalVisualNotes.length > 0" class="storyboard-notes-card">
+      <!-- Top row: notes + action buttons -->
+      <div v-if="globalVisualNotes.length > 0 && segments.length > 0" class="storyboard-top-row">
+        <div class="storyboard-notes-card">
+          <h4 class="storyboard-notes-heading">全局视觉风格</h4>
+          <ul class="storyboard-notes-list">
+            <li v-for="(note, index) in globalVisualNotes" :key="index">
+              {{ note }}
+            </li>
+          </ul>
+        </div>
+        <div class="storyboard-action-card">
+          <button
+            class="storyboard-confirm-btn"
+            :disabled="storyboardStore.state.isGenerating || !isStoryboardReady || isSwitchingStrategy"
+            @click="handleConfirm"
+          >
+            确认分镜，进入资产规划
+          </button>
+          <el-button
+            :loading="storyboardStore.state.isGenerating"
+            :disabled="storyboardStore.state.isGenerating || isSwitchingStrategy"
+            @click="showRegenModal = true"
+          >
+            {{ storyboardStore.state.isGenerating ? "生成中..." : "重新生成" }}
+          </el-button>
+        </div>
+      </div>
+
+      <!-- Notes only (no segments yet) -->
+      <div v-else-if="globalVisualNotes.length > 0" class="storyboard-notes-card">
         <h4 class="storyboard-notes-heading">全局视觉风格</h4>
         <ul class="storyboard-notes-list">
           <li v-for="(note, index) in globalVisualNotes" :key="index">
@@ -676,25 +704,6 @@ function scrollToTop() {
               </div>
             </div>
           </article>
-      </div>
-
-      <!-- Action bar -->
-      <div v-if="segments.length > 0" class="storyboard-action-bar">
-        <button
-          class="storyboard-confirm-btn"
-          :disabled="storyboardStore.state.isGenerating || !isStoryboardReady || isSwitchingStrategy"
-          @click="handleConfirm"
-        >
-          确认分镜，进入资产规划
-        </button>
-
-        <el-button
-          :loading="storyboardStore.state.isGenerating"
-          :disabled="storyboardStore.state.isGenerating || isSwitchingStrategy"
-          @click="showRegenModal = true"
-        >
-          {{ storyboardStore.state.isGenerating ? "生成中..." : "重新生成" }}
-        </el-button>
       </div>
 
       <!-- Validation results card -->
@@ -934,6 +943,31 @@ details[open] > .storyboard-metrics-toggle::before {
   word-break: break-word;
 }
 
+/* ---- Top row: notes + action buttons ---- */
+.storyboard-top-row {
+  display: flex;
+  gap: var(--space-md);
+  align-items: stretch;
+}
+
+.storyboard-top-row > .storyboard-notes-card {
+  flex: 1;
+  min-width: 0;
+}
+
+.storyboard-action-card {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-sm);
+  min-width: 180px;
+}
+
+.storyboard-action-card .storyboard-confirm-btn {
+  white-space: nowrap;
+}
+
 /* ---- Global notes card ---- */
 .storyboard-notes-card {
   display: grid;
@@ -989,21 +1023,6 @@ details[open] > .storyboard-metrics-toggle::before {
 .storyboard-stats-count {
   font-size: 0.88rem;
   color: var(--text-secondary);
-}
-
-/* ---- Action bar ---- */
-.storyboard-action-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-md);
-  padding: var(--space-lg);
-  border: 1px solid rgba(201, 162, 39, 0.16);
-  border-radius: var(--radius-panel);
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.005)),
-    var(--bg-card);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.22);
 }
 
 .storyboard-confirm-btn {
@@ -1293,10 +1312,16 @@ details[open] > .storyboard-metrics-toggle::before {
     gap: var(--space-sm);
   }
 
-  .storyboard-action-bar {
+  .storyboard-top-row {
     flex-direction: column;
-    gap: var(--space-sm);
-    padding: var(--space-md);
+  }
+
+  .storyboard-notes-card {
+    flex-direction: column;
+  }
+
+  .storyboard-action-card {
+    min-width: 0;
   }
 
   .storyboard-segment-summary {
