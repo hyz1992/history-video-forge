@@ -11,7 +11,6 @@ import { PIPELINE_STEPS } from "../../stores/workspace";
 import { useStagePolling } from "../../composables/useStagePolling";
 import StageGenerating from "../workspace/StageGenerating.vue";
 import StageLoadingBar from "../workspace/StageLoadingBar.vue";
-import StoryboardRegenFeedbackModal from "./StoryboardRegenFeedbackModal.vue";
 import StoryboardSegmentRegenModal from "./StoryboardSegmentRegenModal.vue";
 
 const narrativeRoleLabels: Record<string, string> = {
@@ -305,23 +304,6 @@ function handleConfirm() {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Regen modal                                                               */
-/* -------------------------------------------------------------------------- */
-
-const showRegenModal = ref(false);
-const currentPlan = computed(
-  () => activeStoryboard.value?.plan ?? null,
-);
-
-async function handleRegenSubmit(userFeedback: string) {
-  startPolling();
-  await storyboardStore.regenerateWithFeedback(userFeedback);
-  if (!storyboardStore.state.loadError) {
-    ElMessage.success("分镜规划重新生成完成");
-  }
-}
-
-/* -------------------------------------------------------------------------- */
 /*  Segment regen modal                                                       */
 /* -------------------------------------------------------------------------- */
 
@@ -555,13 +537,6 @@ function scrollToTop() {
           >
             确认分镜，进入资产规划
           </button>
-          <el-button
-            :loading="storyboardStore.state.isGenerating"
-            :disabled="storyboardStore.state.isGenerating || isSwitchingStrategy || isRegeneratingSegment"
-            @click="showRegenModal = true"
-          >
-            {{ storyboardStore.state.isGenerating ? "生成中..." : "重新生成" }}
-          </el-button>
         </div>
       </div>
 
@@ -811,12 +786,6 @@ function scrollToTop() {
     <StageLoadingBar
       :visible="isSwitchingStrategy || isRegeneratingSegment"
       :text="isRegeneratingSegment ? '正在重新生成分镜片段...' : '正在更新视觉策略...'"
-    />
-
-    <StoryboardRegenFeedbackModal
-      v-model:visible="showRegenModal"
-      :plan="currentPlan"
-      @submit="handleRegenSubmit"
     />
 
     <StoryboardSegmentRegenModal
