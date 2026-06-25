@@ -321,8 +321,12 @@ export function createStoryboardStore(
       return;
     }
 
-    await input.api.regenerateSegment(projectId, segmentId, userFeedback);
-    await loadActiveStoryboardSnapshot();
+    try {
+      await input.api.regenerateSegment(projectId, segmentId, userFeedback);
+      await loadActiveStoryboardSnapshot();
+    } catch (error) {
+      state.loadError = toErrorMessage(error);
+    }
   }
 
   return {

@@ -344,10 +344,12 @@ async function handleSegmentRegenSubmit(userFeedback: string) {
       segmentRegenTarget.value.segment_id,
       userFeedback,
     );
-    showSegmentRegenModal.value = false;
-    if (!storyboardStore.state.loadError) {
-      ElMessage.success("分镜片段重新生成完成");
+    if (storyboardStore.state.loadError) {
+      ElMessage.error("分镜片段重新生成失败");
+      return;
     }
+    showSegmentRegenModal.value = false;
+    ElMessage.success("分镜片段重新生成完成");
   } finally {
     isRegeneratingSegment.value = false;
   }
