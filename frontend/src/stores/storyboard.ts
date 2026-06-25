@@ -16,6 +16,7 @@ export interface StoryboardSegment {
   framing_hint: string;
   start_hint_sec: number;
   end_hint_sec: number;
+  visual_strategy_preference?: "remotion_motion" | "api_video" | null;
 }
 
 export interface StoryboardPlan {
@@ -54,6 +55,11 @@ export interface StoryboardApi {
   loadSnapshot(projectId: string): Promise<StoryboardSnapshot>;
   generateStoryboard(projectId: string): Promise<void>;
   regenerateStoryboard(projectId: string, userFeedback: string): Promise<void>;
+  updateSegmentStrategy(
+    projectId: string,
+    segmentId: string,
+    strategy: "remotion_motion" | "api_video" | null,
+  ): Promise<void>;
 }
 
 export function createFetchStoryboardApi(baseUrl = ""): StoryboardApi {
@@ -87,6 +93,20 @@ export function createFetchStoryboardApi(baseUrl = ""): StoryboardApi {
       );
       if (!response.ok) throw new Error(`storyboard_regen_failed:${response.status}`);
     },
+    async updateSegmentStrategy(projectId, segmentId, strategy) {
+      const response = await fetch(
+        `${baseUrl}/api/projects/${projectId}/storyboard/strategy`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            segment_id: segmentId,
+            visual_strategy_preference: strategy,
+          }),
+        },
+      );
+      if (!response.ok) throw new Error(`storyboard_strategy_update_failed:${response.status}`);
+    },
   };
 }
 
@@ -106,6 +126,10 @@ export interface StoryboardStore {
   loadActiveStoryboardSnapshot: () => Promise<void>;
   generateStoryboard: () => Promise<void>;
   regenerateWithFeedback: (userFeedback: string) => Promise<void>;
+  updateSegmentStrategyPreference: (
+    segmentId: string,
+    strategy: "remotion_motion" | "api_video" | null,
+  ) => Promise<void>;
   retryLoad: () => Promise<void>;
 }
 
@@ -235,11 +259,40 @@ export function createStoryboardStore(
     await loadActiveStoryboardSnapshot();
   }
 
+  async function updateSegmentStrategyPreference(
+    segmentId: string,
+    strategy: "remotion_motion" | "api_video" | null,
+  ) {
+    const projectId = input.projectStore.state.projectId;
+    if (!projectId) return;
+
+    await input.api.updateSegmentStrategy(projectId, segmentId, strategy);
+
+    const snapshot = state.snapshot;
+    if (!snapshot?.active_storyboard?.plan) return;
+
+    const plan = snapshot.active_storyboard.plan;
+    const segments = plan.segments;
+    const segment = segments.find((s) => s.segment_id === segmentId);
+    if (segment) {
+      segment.visual_strategy_preference = strategy;
+    }
+
+    state.snapshot = {
+      ...snapshot,
+      active_storyboard: {
+        ...snapshot.active_storyboard,
+        plan: { ...plan, segments: [...segments] },
+      },
+    };
+  }
+
   return {
     state: readonly(state),
     loadActiveStoryboardSnapshot,
     generateStoryboard,
     regenerateWithFeedback,
+    updateSegmentStrategyPreference,
     retryLoad,
   };
 }

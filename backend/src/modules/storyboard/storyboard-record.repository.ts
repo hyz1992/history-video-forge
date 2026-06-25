@@ -1,6 +1,7 @@
 import type { DbClient, StoryboardRecord } from "../../db/client";
 
 export interface SaveStoryboardRecordInput {
+  id?: string;
   projectId: string;
   topicPackageId: string;
   scriptRecordId: string;
@@ -16,7 +17,7 @@ export async function saveStoryboardRecord(
   input: SaveStoryboardRecordInput,
 ): Promise<StoryboardRecord> {
   const record: StoryboardRecord = {
-    id: db.generateId(),
+    id: input.id ?? db.generateId(),
     projectId: input.projectId,
     topicPackageId: input.topicPackageId,
     scriptRecordId: input.scriptRecordId,

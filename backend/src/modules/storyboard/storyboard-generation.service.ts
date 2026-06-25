@@ -223,6 +223,7 @@ function buildDeterministicStoryboardPlan(
         .filter((trace) => excerpt.includes(trace.quote) || excerpt.includes(trace.excerpt))
         .map((trace) => trace.quote),
       risk_notes: [],
+      visual_strategy_preference: null,
     };
   });
 

@@ -50,7 +50,8 @@ status: active
       "on_screen_text": [],
       "linked_beats": [],
       "linked_quotes": [],
-      "risk_notes": []
+      "risk_notes": [],
+      "visual_strategy_preference": "remotion_motion"
     }
   ],
   "global_visual_notes": []
@@ -64,6 +65,10 @@ status: active
 - `content_type`: `live_action`, `text_card`, `map`, `illustration`
 - `motion_hint`: `static`, `push_in`, `pull_back`, `pan`
 - `editing_hint`: `single`, `cutaway`, `montage`
+
+`visual_strategy_preference` 为每个段落建议后续的视觉生成策略：
+- `remotion_motion`：默认值，画面由静态图 + Remotion 运镜合成，成本低。适合大部分镜头。
+- `api_video`：画面由 AI 图生视频 API 生成，成本高但动态真实。仅建议给连续动作是叙事核心的镜头，例如刺杀爆发、冲锋崩阵、战车伏击等只有动态画面才能表达动作因果的场面。
 
 # 质量边界
 

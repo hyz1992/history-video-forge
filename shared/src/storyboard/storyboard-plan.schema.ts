@@ -27,6 +27,10 @@ export const StoryboardSegment = z
     linked_beats: z.array(z.string().min(1)),
     linked_quotes: z.array(z.string().min(1)),
     risk_notes: z.array(z.string().min(1)),
+    visual_strategy_preference: z
+      .enum(["remotion_motion", "api_video"])
+      .nullable()
+      .optional(),
   })
   .strict()
   .refine((segment) => segment.end_hint_sec > segment.start_hint_sec, {

@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 
 import { useStoryboardStore } from "../../stores/storyboard";
+import { type StoryboardSegment } from "../../stores/storyboard";
 import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { PIPELINE_STEPS } from "../../stores/workspace";
@@ -319,6 +320,26 @@ async function handleRegenSubmit(userFeedback: string) {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Visual strategy toggle                                                    */
+/* -------------------------------------------------------------------------- */
+
+const strategyLabels: Record<string, { label: string; icon: string; class: string }> = {
+  remotion_motion: { label: "Remotion 运镜", icon: "🎬", class: "strategy-remotion" },
+  api_video: { label: "AI 视频生成", icon: "🤖", class: "strategy-api-video" },
+};
+
+function handleToggleStrategy(segment: StoryboardSegment) {
+  const current = segment.visual_strategy_preference;
+  const next =
+    current === "api_video" ? null : current === "remotion_motion" ? "api_video" : "remotion_motion";
+
+  storyboardStore.updateSegmentStrategyPreference(
+    segment.segment_id,
+    next,
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Back to top                                                               */
 /* -------------------------------------------------------------------------- */
 
@@ -502,6 +523,15 @@ function scrollToTop() {
                 >
                   {{ narrativeRoleLabels[segment.narrative_role] ?? segment.narrative_role }}
                 </el-tag>
+                <button
+                  class="storyboard-strategy-badge"
+                  :class="strategyLabels[segment.visual_strategy_preference ?? 'remotion_motion']?.class ?? 'strategy-remotion'"
+                  :title="segment.visual_strategy_preference === 'api_video' ? '点击切回 Remotion 运镜' : segment.visual_strategy_preference === 'remotion_motion' ? '点击升级为 AI 视频生成' : '点击设定生成策略'"
+                  @click.stop="handleToggleStrategy(segment)"
+                >
+                  {{ strategyLabels[segment.visual_strategy_preference ?? 'remotion_motion']?.icon ?? '🎬' }}
+                  {{ strategyLabels[segment.visual_strategy_preference ?? 'remotion_motion']?.label ?? 'Remotion 运镜' }}
+                </button>
                 <span class="storyboard-segment-time">
                   {{ formatSeconds(segment.start_hint_sec) }}s ~ {{ formatSeconds(segment.end_hint_sec) }}s
                 </span>
@@ -1023,6 +1053,44 @@ details[open] > .storyboard-metrics-toggle::before {
 
 .storyboard-segment-role {
   width: fit-content;
+}
+
+.storyboard-strategy-badge {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: inherit;
+  border-radius: 100px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+  white-space: nowrap;
+}
+
+.strategy-remotion {
+  background: rgba(201, 162, 39, 0.08);
+  border-color: rgba(201, 162, 39, 0.16);
+  color: #d4a35f;
+}
+
+.strategy-remotion:hover {
+  background: rgba(201, 162, 39, 0.14);
+  border-color: rgba(201, 162, 39, 0.28);
+}
+
+.strategy-api-video {
+  background: rgba(121, 158, 203, 0.09);
+  border-color: rgba(121, 158, 203, 0.18);
+  color: #8bb4e6;
+}
+
+.strategy-api-video:hover {
+  background: rgba(121, 158, 203, 0.16);
+  border-color: rgba(121, 158, 203, 0.32);
 }
 
 .storyboard-role--opening {
