@@ -1,5 +1,6 @@
 import {
   StoryboardPlan,
+  StoryboardSegment,
   type ScriptDraftPackage,
 } from "../../../../shared/src/index.js";
 import { env, getValidatedRuntimeEnv } from "../../config/env.js";
