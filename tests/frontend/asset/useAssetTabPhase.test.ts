@@ -14,7 +14,7 @@ function mockPlanningStore(overrides: Record<string, unknown> = {}) {
     loadActiveAssetPlanSnapshot: async () => {},
     generateAssetPlan: async () => {},
     retryLoad: async () => {},
-  };
+  } as any;
 }
 
 function mockAssetsStore(overrides: Record<string, unknown> = {}) {
@@ -22,6 +22,7 @@ function mockAssetsStore(overrides: Record<string, unknown> = {}) {
     state: {
       isLoading: false,
       isGenerating: overrides.isGenerating ?? false,
+      generatingTaskIds: new Set(),
       isUploading: null,
       generatingTaskId: null,
       loadError: (overrides.loadError as string) ?? null,
@@ -34,7 +35,7 @@ function mockAssetsStore(overrides: Record<string, unknown> = {}) {
     uploadArtifact: async () => {},
     acceptArtifact: async () => {},
     artifactFileUrl: () => "",
-  };
+  } as any;
 }
 
 function planSnapshot(status: string, overrides?: Record<string, unknown>) {

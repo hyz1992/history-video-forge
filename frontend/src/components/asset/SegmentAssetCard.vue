@@ -201,7 +201,6 @@ const showPreview = ref(false);
 const promptTextRef = ref<HTMLElement | null>(null);
 const promptEditRef = ref<HTMLTextAreaElement | null>(null);
 const isEditingPrompt = ref(false);
-const editDraft = ref("");
 const highlightPrompt = ref(false);
 const previousPrompt = ref<string | null>(null);
 const showUndo = ref(false);
