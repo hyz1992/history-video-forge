@@ -212,6 +212,17 @@ const voiceProfile = computed(
   () => plan.value?.tts_plan?.voice_profile_id ?? null,
 );
 
+const VOICE_LABELS: Record<string, string> = {
+  voice_preset_cold_authority: "冷峻权谋型",
+  voice_preset_steady_documentary: "纪实沉稳型",
+  voice_preset_crisp_storyteller: "清朗讲述型",
+  voice_preset_eerie_suspense: "幽冷悬疑型",
+  voice_system_ethan: "Ethan",
+};
+const voiceLabel = computed(() =>
+  voiceProfile.value ? (VOICE_LABELS[voiceProfile.value] ?? voiceProfile.value) : null,
+);
+
 const artBible = computed(() => plan.value?.art_bible ?? null);
 
 const bgmPolicy = computed(() => {
@@ -966,9 +977,9 @@ function handleConfirm() {
       <details v-if="hasGlobalInfo" class="asset-global-settings">
         <summary class="asset-global-toggle">全局设置</summary>
         <div class="asset-global-grid">
-          <div v-if="voiceProfile" class="asset-global-field">
+          <div v-if="voiceLabel" class="asset-global-field">
             <span class="asset-global-label">口播音色</span>
-            <span class="asset-global-value">{{ voiceProfile }}</span>
+            <span class="asset-global-value">{{ voiceLabel }}</span>
           </div>
           <div v-if="artBible?.era_style" class="asset-global-field">
             <span class="asset-global-label">时代风格</span>
