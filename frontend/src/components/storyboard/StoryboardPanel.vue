@@ -516,16 +516,20 @@ function scrollToTop() {
       "
       class="storyboard-empty"
     >
-      <p>分镜尚未生成</p>
-      <p class="storyboard-empty-hint">确认文案后将自动生成分镜。如果已确认文案但未自动生成，请手动点击下方按钮。</p>
-      <el-button
-        type="primary"
-        :loading="isGenerating || storyboardStore.state.isGenerating"
-        :disabled="isGenerating"
-        @click="handleGenerate"
-      >
-        {{ isGenerating || storyboardStore.state.isGenerating ? "生成中..." : "开始生成分镜" }}
-      </el-button>
+      <div class="storyboard-empty-card">
+        <div class="storyboard-empty-icon">🎬</div>
+        <h2 class="storyboard-empty-title">分镜尚未生成</h2>
+        <p class="storyboard-empty-hint">确认文案后将自动生成分镜。如果已确认文案但未自动生成，请手动点击下方按钮。</p>
+        <div class="storyboard-empty-line"></div>
+        <el-button
+          type="primary"
+          :loading="isGenerating || storyboardStore.state.isGenerating"
+          :disabled="isGenerating"
+          @click="handleGenerate"
+        >
+          {{ isGenerating || storyboardStore.state.isGenerating ? "生成中..." : "开始生成分镜" }}
+        </el-button>
+      </div>
     </div>
 
     <!-- Main content -->
@@ -843,14 +847,69 @@ function scrollToTop() {
 
 /* ---- Empty ---- */
 .storyboard-empty {
+  min-height: 100%;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--space-md);
-  padding: var(--space-xl) var(--space-md);
-  color: var(--text-secondary);
+  padding: 44px 28px 64px;
+}
+
+.storyboard-empty-card {
+  width: min(480px, 100%);
   text-align: center;
+  padding: var(--space-xl) var(--space-lg);
+  border: 1px solid rgba(201, 162, 39, 0.13);
+  border-radius: var(--radius-panel);
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(201, 162, 39, 0.06), transparent 55%),
+    linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.005)),
+    var(--bg-card);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.22);
+}
+
+.storyboard-empty-icon {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(201,162,39,.16), rgba(201,162,39,.05) 62%, rgba(201,162,39,.02) 100%);
+  border: 1px solid rgba(201,162,39,.18);
+  box-shadow:
+    0 0 28px rgba(201,162,39,.06),
+    inset 0 1px 0 rgba(255,255,255,.04);
+}
+
+.storyboard-empty-title {
+  margin: 0 0 8px;
+  color: #f5f0e8;
+  font-family: "Noto Serif SC", "Songti SC", Georgia, serif;
+  font-size: 22px;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.storyboard-empty-hint {
+  max-width: 400px;
+  margin: 0 auto;
+  color: #a89f94;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.storyboard-empty-line {
+  width: 120px;
+  height: 1px;
+  margin: 22px auto 0;
+  background: linear-gradient(90deg, transparent, rgba(201,162,39,.18), transparent);
+}
+
+.storyboard-empty-card .el-button {
+  margin-top: 26px;
 }
 
 /* ---- Validation card ---- */
