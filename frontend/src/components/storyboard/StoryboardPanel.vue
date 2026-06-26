@@ -1400,9 +1400,9 @@ details[open] > .storyboard-metrics-toggle::before {
 
 /* ---- Back to top ---- */
 .storyboard-back-to-top {
-  position: absolute;
-  right: 0;
-  bottom: 8px;
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
   width: 40px;
   height: 40px;
   border-radius: 50%;

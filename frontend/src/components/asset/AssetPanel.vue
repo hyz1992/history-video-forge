@@ -2084,15 +2084,17 @@ details[open] > .asset-global-toggle::before {
 
 /* ---- Back to top ---- */
 .asset-back-to-top {
-  position: absolute;
-  right: 0;
-  bottom: 8px;
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  border: 1px solid var(--border-default);
-  background: var(--bg-card);
-  box-shadow: var(--shadow-card);
+  border: 1px solid rgba(201, 162, 39, 0.22);
+  background:
+    radial-gradient(circle at 50% 40%, rgba(201, 162, 39, 0.14), rgba(201, 162, 39, 0.04) 70%),
+    var(--bg-card);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
   cursor: pointer;
   display: grid;
   place-items: center;
@@ -2103,14 +2105,14 @@ details[open] > .asset-global-toggle::before {
 
 .asset-back-to-top:hover {
   transform: translateY(-2px);
-  box-shadow: var(--shadow-elevated);
-  border-color: var(--accent-primary);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
+  border-color: rgba(201, 162, 39, 0.35);
 }
 
 .asset-back-to-top svg {
   width: 18px;
   height: 18px;
-  stroke: var(--accent-primary);
+  stroke: #e4c26f;
   fill: none;
   stroke-width: 2.5;
   stroke-linecap: round;
