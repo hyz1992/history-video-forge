@@ -72,6 +72,7 @@ export interface AssetsSnapshot {
 export interface AssetsStoreState {
   isLoading: boolean;
   isGenerating: boolean;
+  generatingTaskIds: Set<string>;
   isUploading: string | null;
   generatingTaskId: string | null;
   loadError: string | null;
@@ -216,6 +217,7 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
   const state = reactive<AssetsStoreState>({
     isLoading: false,
     isGenerating: false,
+    generatingTaskIds: new Set(),
     isUploading: null,
     generatingTaskId: null,
     loadError: null,
@@ -258,6 +260,9 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
 
     state.isGenerating = true;
     state.loadError = null;
+    if (options.taskIds?.length) {
+      for (const tid of options.taskIds) state.generatingTaskIds.add(tid);
+    }
 
     try {
       await input.api.generateAssets(projectId, options);
@@ -266,6 +271,9 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
       state.loadError = toErrorMessage(error);
     } finally {
       state.isGenerating = false;
+      if (options.taskIds?.length) {
+        for (const tid of options.taskIds) state.generatingTaskIds.delete(tid);
+      }
     }
   }
 
@@ -275,6 +283,7 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
 
     state.isGenerating = true;
     state.generatingTaskId = taskId;
+    state.generatingTaskIds.add(taskId);
 
     try {
       await input.api.generateSingleTask(projectId, taskId);
@@ -284,6 +293,7 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
     } finally {
       state.isGenerating = false;
       state.generatingTaskId = null;
+      state.generatingTaskIds.delete(taskId);
     }
   }
 

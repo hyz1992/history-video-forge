@@ -36,10 +36,10 @@ export function useStagePolling<T>(options: StagePollingOptions<T>): StagePollin
       const snapshot = await options.loadSnapshot();
       lastSnapshot.value = snapshot;
       consecutiveErrors.value = 0;
+      pollError.value = null;
 
-      // 生成中绝不能停轮询，即使 isTerminal 误判
       if (options.isGenerating(snapshot)) {
-        return; // keep polling
+        return;
       }
       if (options.isTerminal(snapshot)) {
         stopPolling();
@@ -49,8 +49,8 @@ export function useStagePolling<T>(options: StagePollingOptions<T>): StagePollin
       }
     } catch {
       consecutiveErrors.value++;
-      if (consecutiveErrors.value >= 3) {
-        pollError.value = "生成状态轮询失败，请手动刷新页面";
+      pollError.value = `无法获取最新状态，正在重试...（${consecutiveErrors.value} 次）`;
+      if (consecutiveErrors.value > 20) {
         stopPolling();
       }
     }

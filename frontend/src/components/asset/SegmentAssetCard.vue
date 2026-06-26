@@ -37,6 +37,7 @@ const props = defineProps<{
   executionsByTaskId: Map<string, ExecutionInfo>;
   artifactsById: Map<string, ArtifactInfo>;
   uploadingTaskId: string | null;
+  generatingTaskIds: Set<string>;
   projectId: string;
   focusTaskId: string | null;
 }>();
@@ -145,13 +146,11 @@ const isCurrentUploading = computed(() => {
   return task ? props.uploadingTaskId === task.task_id : false;
 });
 
-/** True when ANY asset generation is running — all mutate buttons should lock. */
-const isGloballyLocked = computed(() => assetsStore.state.isGenerating);
-
-/** True when the current task is being generated (single-task API call). */
-const isCurrentGenerating = computed(() => {
-  const task = activeTasks.value[activeMediaIndex.value];
-  return task ? assetsStore.state.generatingTaskId === task.task_id : false;
+/** True when the current task is being generated (single-task or batch). */
+const isTaskLocked = computed(() => {
+  const task = currentTask.value;
+  if (!task) return false;
+  return props.generatingTaskIds.has(task.task_id);
 });
 
 /* -------------------------------------------------------------------------- */
@@ -181,7 +180,7 @@ const canUpload = computed(() => {
 });
 
 /** canUpload but gated on the global generation lock. */
-const canUploadNow = computed(() => canUpload.value && !isGloballyLocked.value);
+const canUploadNow = computed(() => canUpload.value && !isTaskLocked.value);
 
 /** Task types that support automatic (non-manual) generation. */
 const AUTO_GENERATABLE_TYPES = new Set(["image_still", "video_clip", "tts_audio"]);
@@ -531,7 +530,7 @@ function nextMedia() {
           在合成阶段由 Remotion 生成视频片段
         </p>
         <ElTooltip
-          v-if="isGloballyLocked"
+          v-if="isTaskLocked"
           content="资产生成进行中，请等待完成后再操作"
           placement="top"
         >
@@ -546,7 +545,7 @@ function nextMedia() {
           size="small"
           type="primary"
           plain
-          :loading="assetsStore.state.isGenerating"
+          :loading="false"
           @click="emit('upgrade-video', segment.segment_id)"
         >
           升级为 API 视频
@@ -723,7 +722,7 @@ function nextMedia() {
         <template v-else>
           <!-- Generate / Regenerate (auto-generatable tasks) -->
           <ElTooltip
-            v-if="canAutoGenerate && !hasGeneratedMedia && isGloballyLocked"
+            v-if="canAutoGenerate && !hasGeneratedMedia && isTaskLocked"
             content="资产生成进行中，请等待完成后再操作"
             placement="top"
           >
@@ -732,13 +731,13 @@ function nextMedia() {
           <ElButton
             v-else-if="canAutoGenerate && !hasGeneratedMedia"
             size="small"
-            :loading="isCurrentGenerating"
+            :loading="isTaskLocked"
             @click="emit('generate-task', currentTask!.task_id)"
           >
             生成
           </ElButton>
           <ElTooltip
-            v-if="canAutoGenerate && hasGeneratedMedia && isGloballyLocked"
+            v-if="canAutoGenerate && hasGeneratedMedia && isTaskLocked"
             content="资产生成进行中，请等待完成后再操作"
             placement="top"
           >
@@ -747,14 +746,14 @@ function nextMedia() {
           <ElButton
             v-else-if="canAutoGenerate && hasGeneratedMedia"
             size="small"
-            :loading="isCurrentGenerating"
+            :loading="isTaskLocked"
             @click="emit('generate-task', currentTask!.task_id)"
           >
             重新生成
           </ElButton>
           <!-- Upload / Replace (manual-uploadable tasks) -->
           <ElTooltip
-            v-if="canUpload && isGloballyLocked"
+            v-if="canUpload && isTaskLocked"
             content="资产生成进行中，请等待完成后再操作"
             placement="top"
           >

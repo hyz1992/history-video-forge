@@ -396,7 +396,15 @@ const blockedItems = computed(() => {
 
 const showAllBlocked = ref(false);
 const showDetail = ref(false);
+const selectedBlockedIds = ref<string[]>([]);
 const focusTaskId = ref<string | null>(null);
+
+const missingImageCount = computed(() =>
+  blockedItems.value.filter(i => i.type === "分镜图").length,
+);
+const missingVideoCount = computed(() =>
+  blockedItems.value.filter(i => i.type === "分镜视频").length,
+);
 
 const visibleBlockedItems = computed(() =>
   showAllBlocked.value ? blockedItems.value : blockedItems.value.slice(0, 10),
@@ -546,6 +554,51 @@ async function handleGenerateMissing() {
   await assetsStore.generateAssets({ mode: "missing_only" });
   if (!assetsStore.state.loadError) {
     ElMessage.success("剩余资产生成完成");
+  }
+}
+
+async function handleGenerateByType(taskType: string, typeLabel: string) {
+  if (isAssetsBusy.value) return;
+  const taskIds = blockedItems.value
+    .filter(i => (taskType === "image_still" && i.type === "分镜图") || (taskType === "video_clip" && i.type === "分镜视频"))
+    .map(i => i.taskId);
+  if (taskIds.length === 0) return;
+  const { imgCount, vidSec, estCost } = estimateBlockedItemsCost(
+    blockedItems.value.filter(i => taskIds.includes(i.taskId)),
+  );
+  try {
+    await ElMessageBox.confirm(
+      `将生成 ${taskIds.length} 个${typeLabel}，预估 ¥${estCost.toFixed(2)}。\n确定继续？`,
+      `生成全部${typeLabel}`,
+      { confirmButtonText: "确定生成", cancelButtonText: "取消", type: "info" },
+    );
+  } catch { return; }
+  await assetsStore.generateAssets({ mode: "selected", taskIds });
+}
+
+async function handleGenerateSelected() {
+  if (isAssetsBusy.value) return;
+  const ids = selectedBlockedIds.value;
+  if (ids.length === 0) return;
+  const items = blockedItems.value.filter(i => ids.includes(i.taskId));
+  const { estCost } = estimateBlockedItemsCost(items);
+  try {
+    await ElMessageBox.confirm(
+      `将生成选中的 ${ids.length} 项，预估 ¥${estCost.toFixed(2)}。\n确定继续？`,
+      "生成选中项",
+      { confirmButtonText: "确定生成", cancelButtonText: "取消", type: "info" },
+    );
+  } catch { return; }
+  await assetsStore.generateAssets({ mode: "selected", taskIds: ids });
+  selectedBlockedIds.value = [];
+}
+
+function toggleBlockedItem(taskId: string) {
+  const idx = selectedBlockedIds.value.indexOf(taskId);
+  if (idx >= 0) {
+    selectedBlockedIds.value = selectedBlockedIds.value.filter(id => id !== taskId);
+  } else {
+    selectedBlockedIds.value = [...selectedBlockedIds.value, taskId];
   }
 }
 
@@ -947,6 +1000,9 @@ function handleConfirm() {
               class="asset-blocked-chip"
               @click="scrollToTask(item.taskId)"
             >
+              <span class="asset-blocked-chip-check" @click.stop="toggleBlockedItem(item.taskId)">
+                {{ selectedBlockedIds.includes(item.taskId) ? '☑' : '☐' }}
+              </span>
               <span class="asset-blocked-chip-seg">{{ item.segmentId }}</span>
               <span class="asset-blocked-chip-type">{{ item.type }}</span>
               <el-tag :type="item.reason === '生成失败' ? 'danger' : 'warning'" size="small">
@@ -983,8 +1039,46 @@ function handleConfirm() {
           </div>
         </div>
 
-        <!-- 重新生成 -->
+        <!-- 批量操作 -->
         <div class="asset-detail-actions">
+          <el-button
+            v-if="selectedBlockedIds.length > 0"
+            size="small"
+            type="primary"
+            :loading="isAssetsBusy"
+            :disabled="isAssetsBusy"
+            @click="handleGenerateSelected"
+          >
+            生成选中项（{{ selectedBlockedIds.length }}）
+          </el-button>
+          <el-button
+            v-if="missingImageCount > 0"
+            size="small"
+            :loading="isAssetsBusy"
+            :disabled="isAssetsBusy"
+            @click="handleGenerateByType('image_still', '分镜图')"
+          >
+            生成全部图片（{{ missingImageCount }}）
+          </el-button>
+          <el-button
+            v-if="missingVideoCount > 0"
+            size="small"
+            :loading="isAssetsBusy"
+            :disabled="isAssetsBusy"
+            @click="handleGenerateByType('video_clip', '分镜视频')"
+          >
+            生成全部视频（{{ missingVideoCount }}）
+          </el-button>
+          <el-button
+            v-if="blockedItems.length > 0 && selectedBlockedIds.length === 0"
+            size="small"
+            type="primary"
+            :loading="isAssetsBusy"
+            :disabled="isAssetsBusy"
+            @click="handleGenerateMissing"
+          >
+            {{ isAssetsBusy ? "生成中..." : "生成全部剩余（" + blockedItems.length + "）" }}
+          </el-button>
           <el-button
             type="danger"
             plain
@@ -1042,6 +1136,7 @@ function handleConfirm() {
           :executions-by-task-id="executionsByTaskId"
           :artifacts-by-id="artifactsById"
           :uploading-task-id="assetsStore.state.isUploading"
+          :generating-task-ids="assetsStore.state.generatingTaskIds"
           :project-id="projectId"
           :focus-task-id="focusTaskId"
           @upload-file="handleUploadFile"
@@ -1587,6 +1682,23 @@ details[open] > .asset-global-toggle::before {
 
 .asset-blocked-chip:hover {
   border-color: var(--accent-primary);
+}
+
+.asset-blocked-chip--selected {
+  border-color: var(--accent-primary);
+  background: color-mix(in srgb, var(--accent-primary) 8%, var(--bg-panel));
+}
+
+.asset-blocked-chip-check {
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  padding: 0 2px;
+}
+
+.asset-blocked-chip-check:hover {
+  color: var(--accent-primary);
 }
 
 .asset-blocked-chip-seg {
