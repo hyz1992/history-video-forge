@@ -208,9 +208,12 @@ const router = useRouter();
 /*  Global info                                                               */
 /* -------------------------------------------------------------------------- */
 
-const voiceProfile = computed(
-  () => plan.value?.tts_plan?.voice_profile_id ?? null,
-);
+const voiceProfile = computed(() => {
+  const fromPlan = plan.value?.tts_plan?.voice_profile_id ?? null;
+  if (fromPlan && fromPlan !== "voice_default_male_storyteller") return fromPlan;
+  const fromManifest = (manifest.value?.audio_summary as Record<string, unknown> | undefined)?.voice_profile_id as string | undefined;
+  return fromManifest ?? fromPlan;
+});
 
 const VOICE_LABELS: Record<string, string> = {
   voice_preset_cold_authority: "冷峻权谋型",
