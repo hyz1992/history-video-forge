@@ -1262,8 +1262,8 @@ function handleConfirm() {
         </div>
         <div class="asset-bottom-actions">
           <el-tooltip
-            v-if="!canCompose"
-            :content="blockedReasonText"
+            v-if="!canCompose || isAssetsBusy"
+            :content="isAssetsBusy ? '资产生成进行中，请等待完成后再操作' : blockedReasonText"
             placement="top"
           >
             <span>
