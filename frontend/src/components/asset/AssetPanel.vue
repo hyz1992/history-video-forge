@@ -293,49 +293,6 @@ const upgradableSegments = computed(() =>
   }),
 );
 
-const activeSegmentIndex = ref(0);
-
-function scrollToSegment(segId: string) {
-  const idx = segments.value.findIndex(s => s.segment_id === segId);
-  if (idx < 0) return;
-  activeSegmentIndex.value = idx;
-  const cards = document.querySelectorAll(".segment-asset-card");
-  const card = cards[idx] as HTMLElement | undefined;
-  if (!card) return;
-  card.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-function navDotClass(segId: string) {
-  const items = blockedItems.value.filter(i => {
-    const t = assetTasks.value.find(at => at.task_id === i.taskId);
-    return t?.source_segment_id === segId;
-  });
-  if (items.some(i => i.reason === "生成失败")) return "dot--failed";
-  if (items.length > 0) return "dot--pending";
-  const segTasks = assetTasks.value.filter(t => t.source_segment_id === segId);
-  if (segTasks.length === 0) return "dot--empty";
-  return "dot--done";
-}
-
-// 键盘导航
-function onKeyNav(e: KeyboardEvent) {
-  if (phase.value.kind !== "ready") return;
-  const tag = (e.target as HTMLElement)?.tagName;
-  if (tag === "INPUT" || tag === "TEXTAREA") return;
-  if (e.key === "j" || e.key === "ArrowDown") {
-    e.preventDefault();
-    if (segments.value.length === 0) return;
-    activeSegmentIndex.value = Math.min(activeSegmentIndex.value + 1, segments.value.length - 1);
-    scrollToSegment(segments.value[activeSegmentIndex.value].segment_id);
-  } else if (e.key === "k" || e.key === "ArrowUp") {
-    e.preventDefault();
-    activeSegmentIndex.value = Math.max(activeSegmentIndex.value - 1, 0);
-    scrollToSegment(segments.value[activeSegmentIndex.value].segment_id);
-  }
-}
-onMounted(() => window.addEventListener("keydown", onKeyNav));
-onUnmounted(() => window.removeEventListener("keydown", onKeyNav));
-
 /* -------------------------------------------------------------------------- */
 /*  Manifest lookups for SegmentAssetCard                                     */
 /* -------------------------------------------------------------------------- */
@@ -470,6 +427,48 @@ const showAllBlocked = ref(false);
 const selectedBlockedIds = ref<string[]>([]);
 const focusTaskId = ref<string | null>(null);
 
+const showBackToTop = ref(false);
+let backToTopObserver: IntersectionObserver | null = null;
+
+function scrollToTop() {
+  const container = document.querySelector(".workspace-content");
+  if (!container) return;
+
+  const startTop = container.scrollTop;
+  if (startTop === 0) return;
+
+  const duration = 400;
+  const startTime = performance.now();
+
+  function tick(now: number) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    container!.scrollTop = startTop * (1 - eased);
+
+    if (progress < 1) {
+      requestAnimationFrame(tick);
+    }
+  }
+
+  requestAnimationFrame(tick);
+}
+
+function setUpBackToTopObserver() {
+  if (backToTopObserver) {
+    backToTopObserver.disconnect();
+  }
+  const sentinel = document.querySelector(".asset-overview-details");
+  if (!sentinel) return;
+  backToTopObserver = new IntersectionObserver(
+    ([entry]) => {
+      showBackToTop.value = !entry.isIntersecting;
+    },
+    { threshold: 0 },
+  );
+  backToTopObserver.observe(sentinel);
+}
+
 const missingImageCount = computed(() =>
   blockedItems.value.filter(i => i.type === "分镜图").length,
 );
@@ -586,8 +585,16 @@ onMounted(async () => {
     }
   } finally {
     initialLoadDone.value = true;
+    setupBackToTopObserver();
   }
 });
+
+function setupBackToTopObserver() {
+  // defer until DOM settled
+  setTimeout(() => {
+    setUpBackToTopObserver();
+  }, 600);
+}
 
 /* -------------------------------------------------------------------------- */
 /*  Actions                                                                   */
@@ -784,20 +791,6 @@ function handleConfirm() {
 
 <template>
   <div class="asset-panel">
-    <!-- 侧边分镜导航 -->
-    <nav v-if="(phase.kind === 'plan_ready_no_manifest' || phase.kind === 'basic_assets_generating' || phase.kind === 'ready') && segments.length > 0" class="asset-segment-nav" aria-label="分镜导航">
-      <button
-        v-for="(seg, i) in segments"
-        :key="seg.segment_id"
-        class="asset-segment-nav-dot"
-        :class="phase.kind === 'ready' ? navDotClass(seg.segment_id) : 'dot--skeleton'"
-        :title="'#' + (i + 1)"
-        @click="scrollToSegment(seg.segment_id)"
-      >
-        {{ i + 1 }}
-      </button>
-    </nav>
-
     <!-- 规划生成中：全屏阻塞 -->
     <StageGenerating
       v-if="phase.kind === 'plan_generating' && generatingView"
@@ -1257,6 +1250,16 @@ function handleConfirm() {
           {{ blockedReasonText }}
         </p>
       </div>
+
+      <!-- Back to top -->
+      <button
+        v-if="showBackToTop"
+        class="asset-back-to-top"
+        @click="scrollToTop"
+        title="回到顶部"
+      >
+        <svg viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></svg>
+      </button>
     </template>
   </div>
 </template>
@@ -2020,41 +2023,51 @@ details[open] > .asset-global-toggle::before {
   }
 }
 
-/* ---- Segment side nav ---- */
-.asset-segment-nav {
-  position: fixed;
-  left: calc((100vw - 1200px) / 2 - 48px);
-  top: 120px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  z-index: 5;
-}
-
-.asset-segment-nav-dot {
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--border-default);
+/* ---- Back to top ---- */
+.asset-back-to-top {
+  position: absolute;
+  right: 0;
+  bottom: 8px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
+  border: 1px solid var(--border-default);
   background: var(--bg-card);
-  color: var(--text-secondary);
-  font-size: 0.7rem;
+  box-shadow: var(--shadow-card);
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: border-color 0.15s, background 0.15s;
+  display: grid;
+  place-items: center;
+  z-index: 20;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+  animation: assetBackToTopIn 220ms ease;
 }
 
-.asset-segment-nav-dot:hover {
+.asset-back-to-top:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-elevated);
   border-color: var(--accent-primary);
 }
 
-.dot--pending { border-color: var(--color-warning); color: var(--color-warning); }
-.dot--done { border-color: var(--color-success); color: var(--color-success); }
-.dot--failed { border-color: var(--color-danger); color: var(--color-danger); }
-.dot--empty { opacity: 0.4; }
-.dot--skeleton { opacity: 0.4; }
+.asset-back-to-top svg {
+  width: 18px;
+  height: 18px;
+  stroke: var(--accent-primary);
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@keyframes assetBackToTopIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
 /* ---- Narration bar ---- */
 .asset-narration-bar {
@@ -2108,10 +2121,6 @@ details[open] > .asset-narration-bar-header::before {
 }
 
 /* ---- Responsive ---- */
-@media (max-width: 960px) {
-  .asset-segment-nav { display: none; }
-}
-
 @media (max-width: 640px) {
   .asset-overview-toggle {
     flex-direction: column;
