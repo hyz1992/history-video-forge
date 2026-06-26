@@ -217,10 +217,14 @@ export function createStoryboardStore(
   }
 
   async function generateStoryboard() {
+    const projectId = input.projectStore.state.projectId;
+    if (!projectId) return;
     return startGeneration(() => input.api.generateStoryboard(projectId));
   }
 
   async function regenerateWithFeedback(userFeedback: string) {
+    const projectId = input.projectStore.state.projectId;
+    if (!projectId) return;
     return startGeneration(() =>
       input.api.regenerateStoryboard(projectId, userFeedback),
     );
