@@ -191,11 +191,19 @@ const statusLabel = computed(() => {
 });
 
 const canUpload = computed(() => {
-  return !!currentExecution.value && (
+  if (activeTab.value !== "image" && activeTab.value !== "video") return false;
+  if (!!currentExecution.value && (
     currentExecution.value.status === "waiting_manual_upload" ||
     currentExecution.value.status === "completed" ||
     currentExecution.value.status === "accepted"
-  ) && (activeTab.value === "image" || activeTab.value === "video");
+  )) return true;
+  const task = currentTask.value;
+  if (task && !currentExecution.value) {
+    return task.manual_upload_policy?.allowed === true
+      || task.task_type === "image_still"
+      || task.task_type === "video_clip";
+  }
+  return false;
 });
 
 /** canUpload but gated on the global generation lock. */

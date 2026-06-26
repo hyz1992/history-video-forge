@@ -38,6 +38,7 @@ export interface AssetTask {
   cost_tier?: string;
   recommended_mode?: string;
   static_fallback_task_id?: string;
+  manual_upload_policy?: { allowed: boolean; required: boolean; accepted_file_types: string[]; acceptance_notes?: string[] };
 }
 
 export interface AssetDependency {

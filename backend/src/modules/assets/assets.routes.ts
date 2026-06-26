@@ -516,15 +516,74 @@ async function upgradeSegmentToVideoController(
   const newTaskId = `video_upgrade_${context.app.db.generateId().slice(0, 8)}`;
   const durationSec = (payload.duration_sec as number) ?? 5;
   const resolution = (payload.resolution as string) ?? "720P";
-  const promptDraft = (payload.prompt_draft as string) ?? imageTask.prompt_draft ?? null;
+
+  // Generate a proper video prompt: use LLM to transform image prompt into video prompt,
+  // incorporating storyboard segment context (scene_description, visual_intent).
+  let videoPromptDraft: string | null = null;
+  try {
+    const storyboardRecord = planRecord.storyboardRecordId
+      ? context.app.db.storyboardRecords.get(planRecord.storyboardRecordId) ?? null
+      : null;
+    const storyboardPlan = (storyboardRecord?.planJson ?? {}) as Record<string, unknown>;
+    const segments = (storyboardPlan.segments ?? []) as Array<Record<string, unknown>>;
+    const segment = segments.find((s) => s.segment_id === segmentId) ?? null;
+
+    const artBible = planRecord.planJson && typeof planRecord.planJson === "object"
+      ? (planRecord.planJson as Record<string, unknown>).art_bible as Record<string, unknown> ?? {}
+      : {};
+
+    const imagePrompt = (payload.prompt_draft as string) ?? imageTask.prompt_draft ?? "";
+    const sceneDesc = (segment?.scene_description as string) ?? "";
+    const visualIntent = (segment?.visual_intent as string) ?? "";
+    const eraStyle = (artBible.era_style as string) ?? "";
+
+    if (env.llm.provider === "stub") {
+      videoPromptDraft = imagePrompt
+        ? `${imagePrompt}\n\n视频要求：主体动作路径、镜头运动方向、场景内光线与环境变化、时长约${durationSec}秒。`
+        : null;
+    } else {
+      const registry = createPromptRegistry();
+      const provider = createOpenAiCompatibleProvider({});
+      const gateway = createLlmGateway({ registry, provider });
+      const interactionLogWriter = createCompositeInteractionLogWriter({
+        project,
+        phase: "assets",
+        runId: context.app.db.generateId(),
+      });
+      const result = await gateway.invokeStructuredPrompt<{
+        video_prompt: string;
+      }>({
+        promptId: "asset.prompt-optimizer",
+        input: {
+          current_prompt: imagePrompt || `${sceneDesc}\n${visualIntent}`,
+          user_feedback: `请将从图片提示词扩展为视频提示词。需要补充：主体动作路径、镜头运动方向（推拉摇移等）、场景内光线和环境随时间的变化、持续约${durationSec}秒的叙事弧线。${eraStyle ? `时代风格：${eraStyle}。` : ""}`,
+          task_type: "video_clip",
+          segment: segment ? {
+            segment_id: segment.segment_id,
+            narrative_role: segment.narrative_role,
+            script_excerpt: segment.script_excerpt,
+            scene_description: segment.scene_description,
+            visual_intent: segment.visual_intent,
+          } : null,
+          art_bible: artBible,
+        },
+        interactionLogWriter,
+      });
+      videoPromptDraft = result.video_prompt || result.optimized_prompt as string || null;
+    }
+  } catch {
+    // Fallback: simple concatenation
+    const imagePrompt = imageTask.prompt_draft ?? null;
+    videoPromptDraft = imagePrompt
+      ? `${imagePrompt}\n\n视频要求：主体动作路径、镜头运动方向、场景内光线与环境变化、时长约${durationSec}秒。`
+      : null;
+  }
 
   const adHocTask: Record<string, unknown> = {
     ...(imageTask as Record<string, unknown>),
     task_id: newTaskId,
     task_type: "video_clip",
-    prompt_draft: promptDraft
-      ? `${promptDraft}\n[视频升级] 主体动作、镜头运动、环境变化、历史风格约束`
-      : null,
+    prompt_draft: videoPromptDraft,
     parameters: {
       ...((imageTask as Record<string, unknown>).parameters as Record<string, unknown> ?? {}),
       duration_sec: durationSec,
