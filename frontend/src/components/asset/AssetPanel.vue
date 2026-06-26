@@ -1125,7 +1125,7 @@ function handleConfirm() {
               生成全部视频（{{ missingVideoCount }}）
             </el-button>
             <el-button
-              v-if="blockedItems.length > 0 && selectedBlockedIds.length === 0"
+              v-if="blockedItems.length > 0 && selectedBlockedIds.length === 0 && missingImageCount === 0 && missingVideoCount === 0"
               size="small"
               type="primary"
               :loading="isAssetsBusy"
