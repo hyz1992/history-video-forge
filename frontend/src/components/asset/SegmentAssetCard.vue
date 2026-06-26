@@ -1276,7 +1276,7 @@ function nextMedia() {
 .segment-task-dot.active {
   border-color: var(--accent-primary);
   background: var(--accent-primary);
-  color: #fff;
+  color: var(--text-inverse);
 }
 
 .segment-task-dot:hover:not(.active) {
@@ -1381,7 +1381,7 @@ function nextMedia() {
   padding: 3px 8px;
   border-radius: var(--radius-sm);
   background: rgba(0, 0, 0, 0.6);
-  color: #e4c26f;
+  color: var(--accent-primary-light);
   font-size: 0.75rem;
   cursor: pointer;
   backdrop-filter: blur(2px);
