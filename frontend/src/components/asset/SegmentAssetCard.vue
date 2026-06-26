@@ -119,6 +119,25 @@ watch(
 
 const hasImageTasks = computed(() => props.imageTasks.length > 0);
 const hasVideoTasks = computed(() => props.videoTasks.length > 0);
+
+const NARRATIVE_ROLE_LABELS: Record<string, string> = {
+  setup: "铺垫",
+  turn: "转折",
+  peak: "高潮",
+  resolution: "收尾",
+  intro: "开场",
+  outro: "结尾",
+  background: "背景",
+  conclusion: "总结",
+  hook: "钩子",
+  transition: "过渡",
+  climax: "高潮",
+  epilogue: "尾声",
+  prologue: "序言",
+};
+const narrativeRoleLabel = computed(
+  () => NARRATIVE_ROLE_LABELS[props.segment.narrative_role] ?? props.segment.narrative_role,
+);
 /** Always allow the video tab so users can preview motion effects
  *  or upgrade an image_with_motion segment to API video. */
 const showVideoTab = true;
@@ -546,7 +565,7 @@ function nextMedia() {
         <span class="segment-header-time">
           {{ formatSeconds(segment.start_hint_sec) }} → {{ formatSeconds(segment.end_hint_sec) }}
         </span>
-        <ElTag size="small" type="info">{{ segment.narrative_role }}</ElTag>
+        <ElTag size="small" type="info">{{ narrativeRoleLabel }}</ElTag>
       </div>
       <p class="segment-header-excerpt">{{ segment.script_excerpt }}</p>
     </div>
@@ -572,9 +591,8 @@ function nextMedia() {
             :class="{ active: activeTab === 'video' }"
             @click="activeTab = 'video'"
           >
-            视频
+            视频（Remotion）
           </button>
-          <span class="segment-media-tab-tag">运镜</span>
         </ElTooltip>
         <button
           v-else
@@ -582,15 +600,8 @@ function nextMedia() {
           :class="{ active: activeTab === 'video' }"
           @click="activeTab = 'video'"
         >
-          视频
+          视频（API）
         </button>
-        <span class="segment-media-tab-tag">API</span>
-      </div>
-
-      <!-- Route status: clearly separate from the tab group -->
-      <div v-if="!hasVideoTasks" class="segment-route-status">
-        <span class="segment-route-status-icon">↳</span>
-        路线：图片 + {{ segment.motion_hint ? (MOTION_LABELS[segment.motion_hint] ?? segment.motion_hint) : '运镜' }} · Remotion
       </div>
 
       <!-- No tasks of this type -->
@@ -1178,22 +1189,6 @@ function nextMedia() {
   margin-left: 2px;
 }
 
-/* Route status line — clearly separated from tabs, non-interactive */
-.segment-route-status {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  padding: 2px 0;
-  line-height: 1.4;
-  cursor: default;
-  user-select: none;
-}
-
-.segment-route-status-icon {
-  color: var(--text-muted);
-  opacity: 0.6;
-  margin-right: 2px;
-}
-
 /* Video tab empty state */
 .segment-video-empty {
   aspect-ratio: 9 / 16;
@@ -1394,15 +1389,6 @@ function nextMedia() {
 }
 .segment-media-upgrade-badge:hover {
   background: rgba(0, 0, 0, 0.8);
-}
-
-.segment-media-tab-tag {
-  font-size: 0.65rem;
-  padding: 1px 4px;
-  border-radius: 2px;
-  background: var(--bg-panel);
-  color: var(--text-muted);
-  align-self: center;
 }
 
 .segment-media-video {
