@@ -127,13 +127,7 @@ const globalVisualNotes = computed(
   () => activeStoryboard.value?.plan?.global_visual_notes ?? [],
 );
 
-const isInitialStoryboardSnapshotLoading = ref(true);
 const isRefreshingStoryboardStatus = ref(false);
-const shouldShowStoryboardSkeleton = computed(
-  () =>
-    isInitialStoryboardSnapshotLoading.value ||
-    (storyboardStore.state.isLoading && !activeStoryboard.value),
-);
 
 /* -------------------------------------------------------------------------- */
 /*  Auto-generate                                                             */
@@ -271,10 +265,8 @@ const router = useRouter();
 /* -------------------------------------------------------------------------- */
 
 onMounted(async () => {
-  isInitialStoryboardSnapshotLoading.value = true;
   pendingAutoGenerate.value = true;
   await storyboardStore.loadActiveStoryboardSnapshot();
-  isInitialStoryboardSnapshotLoading.value = false;
   // F5 恢复：如果 snapshot 显示 generating，启动轮询
   const s = storyboardStore.state.snapshot;
   if (
@@ -484,14 +476,6 @@ function scrollToTop() {
         </el-button>
       </template>
     </StageGenerating>
-
-    <!-- Loading skeleton (only when loading without active generation) -->
-    <el-skeleton
-      v-else-if="shouldShowStoryboardSkeleton"
-      :rows="6"
-      animated
-      class="storyboard-skeleton"
-    />
 
     <!-- Error state -->
     <div v-else-if="storyboardStore.state.loadError" class="storyboard-error-card">
@@ -841,11 +825,6 @@ function scrollToTop() {
     linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.008)),
     var(--bg-card);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
-}
-
-/* ---- Skeleton ---- */
-.storyboard-skeleton {
-  padding: var(--space-lg);
 }
 
 /* ---- Empty ---- */

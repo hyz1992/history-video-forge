@@ -229,14 +229,6 @@ function handleRetry() {
       </el-button>
     </div>
 
-    <!-- Loading skeleton -->
-    <el-skeleton
-      v-else-if="composeStore.state.isLoading && !hasCompose"
-      :rows="6"
-      animated
-      class="compose-skeleton"
-    />
-
     <!-- Generating state (snapshot-based, survives refresh) -->
     <div
       v-else-if="isGenerating"
@@ -409,10 +401,6 @@ function handleRetry() {
 .compose-error-card-actions {
   display: flex;
   gap: var(--space-sm);
-}
-
-.compose-skeleton {
-  padding: var(--space-md);
 }
 
 .compose-generating,

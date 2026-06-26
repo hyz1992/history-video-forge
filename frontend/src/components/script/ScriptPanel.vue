@@ -121,10 +121,6 @@ const isGenerationFailed = computed(
     scriptStore.state.snapshot?.current_status === "script_failed",
 );
 
-const isInitialScriptLoading = computed(
-  () => scriptStore.state.isLoading && !visibleScript.value,
-);
-
 const displayScriptText = computed(() => {
   const text = visibleScript.value?.script_text ?? "";
 
@@ -353,14 +349,6 @@ function handleConfirm() {
       </template>
     </StageGenerating>
 
-    <!-- Loading skeleton (only when loading without active generation) -->
-    <el-skeleton
-      v-else-if="isInitialScriptLoading"
-      :rows="6"
-      animated
-      class="script-skeleton"
-    />
-
     <!-- Generation failed state -->
     <div v-else-if="isGenerationFailed" class="script-failed">
       <p>文案生成失败，请重试或返回选题重新确认。</p>
@@ -537,11 +525,6 @@ function handleConfirm() {
   padding: var(--space-md);
   border-radius: var(--radius-card);
   background: var(--bg-card);
-}
-
-/* Skeleton */
-.script-skeleton {
-  padding: var(--space-md);
 }
 
 /* Generating / failed */

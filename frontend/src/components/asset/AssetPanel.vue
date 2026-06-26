@@ -827,9 +827,26 @@ function handleConfirm() {
 
 <template>
   <div class="asset-panel">
+    <!-- 自动生成中（组件级桥接，覆盖 initialLoadDone=false 期间的空白） -->
+    <StageGenerating
+      v-if="pendingAutoGenerate"
+      title="正在生成资产规划"
+      hint="正在调用大模型分析分镜并规划资产，可能需要 1-2 分钟。"
+      secondary-hint="系统每 5 秒自动检查生成状态，无需手动刷新。"
+    >
+      <template #action>
+        <el-button
+          :loading="assetPlanningStore.state.isLoading || assetsStore.state.isLoading"
+          @click="handleRefreshGeneratingStatus"
+        >
+          刷新状态
+        </el-button>
+      </template>
+    </StageGenerating>
+
     <!-- 规划生成中：全屏阻塞 -->
     <StageGenerating
-      v-if="phase.kind === 'plan_generating' && generatingView"
+      v-else-if="phase.kind === 'plan_generating' && generatingView"
       :title="generatingView.title"
       :hint="generatingView.hint"
       :progress="generatingView.progress"
@@ -844,14 +861,6 @@ function handleConfirm() {
         </el-button>
       </template>
     </StageGenerating>
-
-    <!-- 骨架屏 -->
-    <el-skeleton
-      v-else-if="phase.kind === 'loading'"
-      :rows="6"
-      animated
-      class="asset-skeleton"
-    />
 
     <!-- 错误 -->
     <div v-else-if="phase.kind === 'error'" class="asset-error-card">
@@ -1301,10 +1310,6 @@ function handleConfirm() {
   padding: var(--space-md);
   border-radius: var(--radius-card);
   background: var(--bg-card);
-}
-
-.asset-skeleton {
-  padding: var(--space-md);
 }
 
 .asset-generating,
