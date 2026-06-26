@@ -24,6 +24,9 @@ export interface AssetGeneratingView {
   progress?: AssetGenerationProgress;
 }
 
+/**
+ * @deprecated 在新 phase 模型下不再需要（phase 已包含所有信息）。保留以待后续清理。
+ */
 export interface AssetGeneratingVisibilityInput {
   hasGeneratingView: boolean;
   hasAssetPlan: boolean;
@@ -33,6 +36,9 @@ export interface AssetGeneratingVisibilityInput {
   hasBasicAssetsGenerationFailed: boolean;
 }
 
+/**
+ * @deprecated 在新 phase 模型下不再需要。保留以待后续清理。
+ */
 export function shouldShowAssetGeneratingView(
   input: AssetGeneratingVisibilityInput,
 ): boolean {
@@ -54,16 +60,6 @@ export function shouldShowAssetGeneratingView(
 export function getAssetGeneratingView(
   input: AssetGeneratingViewInput,
 ): AssetGeneratingView | null {
-  if (input.hasAssetPlan && !input.hasManifest && !input.isAssetsGenerating) {
-    return {
-      kind: "asset_plan",
-      title: "正在生成资产规划",
-      hint: "正在调用大模型分析分镜并规划素材，可能需要 1-5 分钟。",
-      blockPage: true,
-      progress: input.planProgress ?? undefined,
-    };
-  }
-
   if (input.isAssetsGenerating) {
     return {
       kind: "assets",
@@ -71,7 +67,17 @@ export function getAssetGeneratingView(
         ? "正在生成基础资源"
         : "正在生成资产",
       hint: "正在生成或补齐素材，已有内容会保留在页面中，完成后状态会自动更新。",
-      blockPage: !input.hasManifest,
+      blockPage: false,
+    };
+  }
+
+  if (input.isPlanGenerating) {
+    return {
+      kind: "asset_plan",
+      title: "正在生成资产规划",
+      hint: "正在调用大模型分析分镜并规划素材，可能需要 1-5 分钟。",
+      blockPage: true,
+      progress: input.planProgress ?? undefined,
     };
   }
 
