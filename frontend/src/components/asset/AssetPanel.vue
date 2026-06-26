@@ -778,7 +778,7 @@ async function handleUpgradeVideo(segmentId: string) {
   const { rate, estimatedTotal } = getVideoUpgradeCostHint();
   try {
     await ElMessageBox.confirm(
-      `将为分镜 ${segLabel} 新增可选 API 视频任务（默认 720P / 5 秒，不影响图片+运镜路线）。\n费用：${rate}，预估 ¥${estimatedTotal.toFixed(2)}。\n确定继续？`,
+      `将为分镜 ${segLabel} 新增 API 视频任务（默认 720P / 5 秒，不影响图片+运镜路线）。\n费用：${rate}，预估 ¥${estimatedTotal.toFixed(2)}。\n切换后可在分镜卡片中手动生成或上传视频。`,
       "升级为 API 视频",
       { confirmButtonText: "确定升级", cancelButtonText: "取消", type: "info" },
     );
@@ -786,21 +786,7 @@ async function handleUpgradeVideo(segmentId: string) {
   try {
     await assetsStore.upgradeSegmentToVideo(segmentId);
     await assetsStore.loadProject();
-    // Check if the video task actually completed
-    const videoTasks = assetTasks.value.filter(t => t.task_type === "video_clip" && t.source_segment_id === segmentId);
-    const lastVideo = videoTasks[videoTasks.length - 1];
-    if (lastVideo) {
-      const exec = executions.value.find(e => e.task_id === lastVideo.task_id);
-      if (exec?.status === "completed" || exec?.status === "accepted") {
-        ElMessage.success("API 视频生成完成");
-      } else if (exec?.status === "failed") {
-        ElMessage.error("视频生成失败：" + (exec.notes?.join("; ") || "未知错误"));
-      } else {
-        ElMessage.warning("视频任务已提交，状态：" + (exec?.status ?? "处理中"));
-      }
-    } else {
-      ElMessage.warning("视频任务已创建，请稍后查看生成结果");
-    }
+    ElMessage.success("已切换为 API 视频模式，可手动生成或上传视频");
   } catch (error) {
     const msg = error instanceof Error ? error.message : "升级失败";
     ElMessage.error("视频升级失败：" + msg);

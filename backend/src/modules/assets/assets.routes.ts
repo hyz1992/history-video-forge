@@ -471,12 +471,6 @@ async function upgradeSegmentToVideoController(
 
   const segmentId = context.params.segmentId;
   const payload = context.payload as Record<string, unknown>;
-  const voiceProfileId =
-    (payload.voice_profile_id as string | undefined) ?? "voice_default_male_storyteller";
-  const providerMode =
-    payload.provider_mode === "dashscope" || payload.provider_mode === "dashscope_tts"
-      ? payload.provider_mode
-      : env.llm.provider === "openai" ? "dashscope" : undefined;
 
   // Validate the project has an active asset plan and manifest
   if (!project.activeAssetManifestRecordId) {
@@ -504,12 +498,10 @@ async function upgradeSegmentToVideoController(
     t => t.task_type === "video_clip" && t.source_segment_id === segmentId,
   );
   if (existingVideo) {
-    // Already has a video task — just regenerate it
-    return runAssetsGeneration({
-      db: context.app.db, project, voiceProfileId,
-      executionMode: "auto_available", providerMode,
-      taskIds: [existingVideo.task_id],
-    });
+    return {
+      statusCode: 200,
+      body: { created: false, task_id: existingVideo.task_id, message: "video_task_already_exists" },
+    };
   }
 
   // Find an existing image task on this segment to clone parameters from
@@ -551,11 +543,10 @@ async function upgradeSegmentToVideoController(
   // it on refresh and subsequent regens work correctly.
   assetPlan.tasks.push(adHocTask as typeof assetPlan.tasks[number]);
 
-  return runAssetsGeneration({
-    db: context.app.db, project, voiceProfileId,
-    executionMode: "auto_available", providerMode,
-    taskIds: [newTaskId],
-  });
+  return {
+    statusCode: 200,
+    body: { created: true, task_id: newTaskId },
+  };
 }
 
 export function registerAssetsRoutes(app: AppInstance) {
