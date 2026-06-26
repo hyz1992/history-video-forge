@@ -264,21 +264,6 @@ const videoTasksBySegment = computed(() => {
 
 const segmentCount = computed(() => segments.value.length);
 
-const acceptedSegments = computed(() =>
-  segments.value.filter(s => {
-    const segTasks = assetTasks.value.filter(t => t.source_segment_id === s.segment_id);
-    if (segTasks.length === 0) return true;
-    return segTasks.every(t => {
-      const exec = executionsByTaskId.value.get(t.task_id);
-      return exec?.status === "accepted" || exec?.status === "completed";
-    });
-  }),
-);
-const acceptedCount = computed(() => acceptedSegments.value.length);
-const unacceptedSegments = computed(() =>
-  segments.value.filter(s => !acceptedSegments.value.includes(s)),
-);
-
 const upgradableSegments = computed(() =>
   segments.value.filter(seg => {
     const imgTasks = imageTasksBySegment.value.get(seg.segment_id) ?? [];
@@ -806,17 +791,6 @@ function handleConfirm() {
     ElMessage.warning(blockedReasonText.value || "资产尚未全部就绪");
     return;
   }
-  if (unacceptedSegments.value.length > 0) {
-    ElMessageBox.confirm(
-      `还有 ${unacceptedSegments.value.length} 个分镜未确认，确定进入合成？`,
-      "确认进入合成",
-      { confirmButtonText: "确定进入", cancelButtonText: "返回确认", type: "warning" },
-    ).then(() => doConfirm()).catch(() => {});
-  } else {
-    doConfirm();
-  }
-}
-function doConfirm() {
   ElMessage.success("资产确认完成，进入合成阶段");
   workspaceStore.setCurrentStep(COMPOSE_STEP_INDEX);
   const pid = projectStore.state.projectId; if (pid) router.push(`/projects/${pid}/compose`);
@@ -1062,9 +1036,6 @@ function doConfirm() {
           <span v-if="blockedItems.length > 0" class="asset-status-summary">
             {{ blockedItems.slice(0, 3).map(i => i.type).join('、') }}待生成，共 {{ blockedItems.length }} 项
           </span>
-          <span v-if="acceptedCount > 0" class="asset-status-confirmed">
-            已确认 {{ acceptedCount }}/{{ segmentCount }} 分镜
-          </span>
         </div>
         <div class="asset-status-actions">
           <el-button
@@ -1228,6 +1199,7 @@ function doConfirm() {
             <span v-if="narrationDuration !== null">{{ narrationDuration.toFixed(1) }}s</span>
             <span v-if="costBreakdown.tts.charCount > 0">{{ costBreakdown.tts.charCount }} 字</span>
             <span>¥{{ costBreakdown.tts.total.toFixed(2) }}</span>
+            <span class="asset-narration-bar-expand">展开详情 ▼</span>
           </span>
         </summary>
         <div class="asset-narration-bar-body">
@@ -2110,6 +2082,13 @@ details[open] > .asset-global-toggle::before {
   font-size: 0.82rem;
   color: var(--text-muted);
   font-weight: 400;
+  align-items: center;
+}
+
+.asset-narration-bar-expand {
+  font-size: 0.72rem;
+  color: var(--accent-primary);
+  margin-left: var(--space-sm);
 }
 
 .asset-narration-bar-body {

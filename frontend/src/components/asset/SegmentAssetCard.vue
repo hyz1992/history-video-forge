@@ -267,25 +267,6 @@ async function handleQuickOptimize() {
   }
 }
 
-const isSegmentAccepted = computed(() => {
-  const segTasks = [...props.imageTasks, ...props.videoTasks];
-  if (segTasks.length === 0) return true;
-  return segTasks.every(t => {
-    const exec = props.executionsByTaskId.get(t.task_id);
-    return exec?.status === "accepted" || exec?.status === "completed";
-  });
-});
-
-async function toggleAcceptSegment() {
-  for (const task of [...props.imageTasks, ...props.videoTasks]) {
-    const exec = props.executionsByTaskId.get(task.task_id);
-    if (exec?.output_artifact_ids?.[0]) {
-      await assetsStore.acceptArtifact(task.task_id, exec.output_artifact_ids[0]);
-    }
-  }
-  await assetsStore.loadProject();
-}
-
 function getArtifactForTask(taskId: string) {
   const exec = props.executionsByTaskId.get(taskId);
   if (!exec || exec.output_artifact_ids.length === 0) return null;
@@ -563,19 +544,9 @@ function nextMedia() {
       <div class="segment-header-row">
         <span class="segment-header-number">#{{ segmentIndex + 1 }}</span>
         <span class="segment-header-time">
-          {{ formatSeconds(segment.start_hint_sec) }} ~ {{ formatSeconds(segment.end_hint_sec) }}
+          {{ formatSeconds(segment.start_hint_sec) }} → {{ formatSeconds(segment.end_hint_sec) }}
         </span>
         <ElTag size="small" type="info">{{ segment.narrative_role }}</ElTag>
-        <el-button
-          v-if="imageTasks.length + videoTasks.length > 0"
-          size="small"
-          :type="isSegmentAccepted ? 'success' : 'default'"
-          circle
-          @click="toggleAcceptSegment"
-          :title="isSegmentAccepted ? '已确认' : '确认分镜'"
-        >
-          ✓
-        </el-button>
       </div>
       <p class="segment-header-excerpt">{{ segment.script_excerpt }}</p>
     </div>
@@ -820,7 +791,7 @@ function nextMedia() {
           ref="promptEditRef"
           v-model="editDraft"
           class="segment-prompt-textarea"
-          rows="4"
+          rows="10"
           @keydown.ctrl.enter="handleSaveInlineEdit"
           @blur="handleSaveInlineEdit"
         />
