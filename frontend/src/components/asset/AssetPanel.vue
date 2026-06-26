@@ -571,6 +571,8 @@ async function triggerAutoGenerate() {
       ElMessage.success("资产规划生成完成");
     }
     startAssetPolling();
+  } else {
+    pendingAutoGenerate.value = false;
   }
 }
 
@@ -582,6 +584,7 @@ watch(() => assetPlanningStore.state.snapshot, async (snapshot) => {
 
 onMounted(async () => {
   initialLoadDone.value = false;
+  pendingAutoGenerate.value = true;
   try {
     await storyboardStore.loadActiveStoryboardSnapshot();
     await assetPlanningStore.loadActiveAssetPlanSnapshot();
@@ -594,6 +597,7 @@ onMounted(async () => {
       planSnap?.current_status === "asset_plan_generating" ||
       planSnap?.active_asset_plan?.execution_state?.generating
     ) {
+      pendingAutoGenerate.value = false;
       startAssetPolling();
       return;
     }

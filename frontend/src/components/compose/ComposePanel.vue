@@ -159,6 +159,8 @@ async function triggerAutoGenerate() {
     if (!composeStore.state.loadError) {
       ElMessage.success("合成时间线生成完成");
     }
+  } else {
+    pendingAutoGenerate.value = false;
   }
 }
 
@@ -169,6 +171,7 @@ watch(() => composeStore.state.snapshot, async (snapshot) => {
 });
 
 onMounted(async () => {
+  pendingAutoGenerate.value = true;
   await composeStore.loadProject();
   // Auto-generate compose timeline when arriving from asset confirmation.
   // Only trigger for ready/partial — NOT for blocked.

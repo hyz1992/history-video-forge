@@ -34,6 +34,7 @@ const { startPolling } = useStagePolling({
 });
 
 onMounted(async () => {
+  pendingAutoGenerate.value = true;
   await scriptStore.loadActiveScriptSnapshot();
   // F5 恢复：如果 snapshot 显示 generating，启动轮询
   const s = scriptStore.state.snapshot;
@@ -41,7 +42,9 @@ onMounted(async () => {
     s?.current_status === "script_generating" ||
     s?.active_script?.execution_state?.generating
   ) {
+    pendingAutoGenerate.value = false;
     startPolling();
+    return;
   }
   await triggerAutoGenerate();
 });
@@ -73,6 +76,8 @@ async function triggerAutoGenerate() {
     if (!scriptStore.state.loadError) {
       ElMessage.success("文案已生成");
     }
+  } else {
+    pendingAutoGenerate.value = false;
   }
 }
 

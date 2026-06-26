@@ -168,6 +168,7 @@ async function triggerAutoGenerate() {
     }
     return;
   }
+  pendingAutoGenerate.value = false;
 }
 
 watch(() => storyboardStore.state.snapshot, async (snapshot) => {
@@ -271,6 +272,7 @@ const router = useRouter();
 
 onMounted(async () => {
   isInitialStoryboardSnapshotLoading.value = true;
+  pendingAutoGenerate.value = true;
   await storyboardStore.loadActiveStoryboardSnapshot();
   isInitialStoryboardSnapshotLoading.value = false;
   // F5 恢复：如果 snapshot 显示 generating，启动轮询
@@ -279,6 +281,7 @@ onMounted(async () => {
     s?.current_status === "storyboard_generating" ||
     s?.active_storyboard?.execution_state?.generating
   ) {
+    pendingAutoGenerate.value = false;
     startPolling();
     return;
   }
