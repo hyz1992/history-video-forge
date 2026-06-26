@@ -356,8 +356,10 @@ template v-else  (phase.kind === 'ready')
 │ 系统每 5 秒自动刷新状态                          │
 │                                                  │
 │ [生成基础资产 (处理中...)] ← 禁用态              │
-│ 分镜卡片将在基础资产完成后可用                   │
 └──────────────────────────────────────────────────┘
+
+> 注：`plan_ready_no_manifest` 和 `basic_assets_generating` 阶段均展示分镜卡片骨架（见 4.6），
+> 基础资产完成后自动切换为真实分镜卡片。
 ```
 
 ### 4.5 概览卡精简（2.2）
@@ -390,9 +392,9 @@ template v-else  (phase.kind === 'ready')
 4. **成本信息**：从主视区移到详情区，仅生成完成后通过 toast 提示单次费用
 5. **「重新生成全部资产」**：移到详情区内，降低误触风险
 
-### 4.6 分镜卡片骨架态（plan_ready_no_manifest 阶段）
+### 4.6 分镜卡片骨架态（plan_ready_no_manifest 与 basic_assets_generating 阶段）
 
-当 `phase === 'plan_ready_no_manifest'` 时，规划概览卡下方显示分镜卡片骨架：
+当 `phase === 'plan_ready_no_manifest'` 或 `phase === 'basic_assets_generating'` 时，规划概览卡下方显示分镜卡片骨架：
 
 ```html
 <div v-if="segments.length > 0" class="asset-segments">
@@ -603,7 +605,19 @@ export interface AssetsStoreState {
 
 **AssetPanel 改动**：
 - `isAssetsBusy` 继续用于概览卡状态条和批量操作按钮的全局 loading
-- 向 `SegmentAssetCard` 新增 prop `generatingTaskIds: Set<string>`，替代全局 lock 判断
+- 向 `SegmentAssetCard` 新增 prop `generatingTaskIds: Set<string>`，替代全局 lock 判断。当前 `SegmentAssetCard` 的 `isGloballyLocked` 由父组件通过 `isAssetsBusy` 隐式传递（见 [SegmentAssetCard.vue:L149](file://d:/ai_learn/history-video-forge/frontend/src/components/asset/SegmentAssetCard.vue#L149)），需改为显式 prop：
+  ```ts
+  // SegmentAssetCard.vue — 新增 prop，删除 isGloballyLocked computed
+  const props = defineProps<{
+    // ... 现有 props 不变
+    generatingTaskIds: Set<string>;
+  }>();
+
+  // 替代旧逻辑
+  const isTaskLocked = computed(() =>
+    props.generatingTaskIds.has(currentTask.value?.task_id ?? ""),
+  );
+  ```
 
 ### 5.3 概览卡进度条分段
 
@@ -674,7 +688,7 @@ CSS：分段色条，`done` 为绿色，`running` 为蓝色脉冲动画，`pendi
 </div>
 ```
 
-**待处理项复选框**：待处理项 chip 前面加 `<el-checkbox>`，选中项存入 `selectedBlockedIds: Set<string>`。操作区增加「生成选中项（N）」按钮。
+**待处理项复选框**：待处理项 chip 前面加 `<el-checkbox>`，选中项存入 `selectedBlockedIds: ref<string[]>([])`。操作区增加「生成选中项（N）」按钮。
 
 ### 6.2 新增 computed
 
@@ -685,7 +699,8 @@ const missingImageCount = computed(() =>
 const missingVideoCount = computed(() =>
   blockedItems.value.filter(i => i.type === "分镜视频").length
 );
-const selectedBlockedIds = ref<Set<string>>(new Set());
+const selectedBlockedIds = ref<string[]>([]);
+// 操作时必须通过赋值触发响应式：selectedBlockedIds.value = [...selectedBlockedIds.value, id];
 ```
 
 ### 6.3 handleGenerateByType

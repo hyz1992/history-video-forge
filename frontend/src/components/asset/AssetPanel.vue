@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 
@@ -9,13 +9,14 @@ import { useAssetsStore } from "../../stores/assets";
 import { useScriptStore } from "../../stores/script";
 import { useProjectStore } from "../../stores/project";
 import { useStagePolling } from "../../composables/useStagePolling";
+import { useAssetTabPhase } from "../../composables/useAssetTabPhase";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { PIPELINE_STEPS } from "../../stores/workspace";
 import StageGenerating from "../workspace/StageGenerating.vue";
 
 import SegmentAssetCard from "./SegmentAssetCard.vue";
 import { computeCostBreakdown, estimatePlanCost, getTaskCostHint, getVideoUpgradeCostHint, estimateBlockedItemsCost, PRICING, type PlanTaskLike } from "../../utils/pricing";
-import { getAssetGeneratingView, shouldShowAssetGeneratingView, type AssetGenerationProgress } from "../../utils/asset-generating-view";
+import { getAssetGeneratingView, type AssetGenerationProgress } from "../../utils/asset-generating-view";
 
 const storyboardStore = useStoryboardStore();
 const assetPlanningStore = useAssetPlanningStore();
@@ -73,23 +74,21 @@ const currentStatus = computed(
     return assetPlanningStore.state.snapshot?.current_status ?? assetStatus;
   },
 );
-const basicAssetsAutoStarted = ref(false);
-const canAutoStartBasicAssets = ref(false);
-const basicAssetsGenerationFailed = ref(false);
-const isInitialAssetSnapshotLoading = ref(true);
+const initialLoadDone = ref(false);
+const { phase } = useAssetTabPhase({
+  assetPlanningStore,
+  assetsStore,
+  initialLoadDone: computed(() => initialLoadDone.value),
+});
 
-// 通用轮询：asset plan 阶段整页等待；plan 已有但 manifest 尚未出现时继续轮询，
-// 避免基础资产 POST 刚启动前的空窗让轮询提前停止。
+// 通用轮询：规划生成或资产生成中持续刷新快照
 const { startPolling: startAssetPolling, isPolling: isAssetPolling } = useStagePolling({
   loadSnapshot: () => loadAssetSnapshot(),
   isGenerating: (snapshot) =>
     snapshot.current_status === "asset_plan_generating" ||
     snapshot.current_status === "assets_generating" ||
     snapshot.active_asset_plan?.execution_state?.generating === true ||
-    snapshot.active_assets?.execution_state?.generating === true ||
-    (!!snapshot.active_asset_plan &&
-      !snapshot.active_assets &&
-      !basicAssetsGenerationFailed.value),
+    snapshot.active_assets?.execution_state?.generating === true,
   isTerminal: (snapshot) =>
     (!!snapshot.active_asset_plan && snapshot.current_status !== "asset_plan_generating" && !!snapshot.active_assets) ||
     snapshot.current_status?.startsWith("compos"),
@@ -133,21 +132,6 @@ const generatingView = computed(() =>
   }),
 );
 
-const shouldShowGeneratingView = computed(() => {
-  return shouldShowAssetGeneratingView({
-    hasGeneratingView: generatingView.value?.blockPage === true,
-    hasAssetPlan: !!activeAssetPlan.value,
-    hasManifest: hasManifest.value,
-    hasAssetPlanError: !!assetPlanningStore.state.loadError,
-    hasAssetsError: !!assetsStore.state.loadError,
-    hasBasicAssetsGenerationFailed: basicAssetsGenerationFailed.value,
-  });
-});
-
-const assetLoadError = computed(
-  () => assetPlanningStore.state.loadError ?? assetsStore.state.loadError,
-);
-
 /* Partial readiness (warnings only, e.g. optional BGM missing)
  *  should still allow composing.  Only blocked (errors) prevents it. */
 const canCompose = computed(() => {
@@ -178,13 +162,6 @@ const artifacts = computed(() => manifest.value?.artifacts ?? []);
 const segmentRoutes = computed(() => manifest.value?.segment_routes ?? []);
 
 const hasManifest = computed(() => !!manifest.value);
-
-const shouldShowAssetSkeleton = computed(
-  () =>
-    isInitialAssetSnapshotLoading.value ||
-    ((assetPlanningStore.state.isLoading || assetsStore.state.isLoading) &&
-      !hasManifest.value),
-);
 
 const projectId = computed(() => projectStore.state.projectId ?? "");
 
@@ -418,6 +395,7 @@ const blockedItems = computed(() => {
 });
 
 const showAllBlocked = ref(false);
+const showDetail = ref(false);
 const focusTaskId = ref<string | null>(null);
 
 const visibleBlockedItems = computed(() =>
@@ -436,6 +414,10 @@ const allTypeBreakdown = computed(() => {
     return entry ?? { label, total: 0, completed: 0, planned: 0, failed: 0 };
   });
 });
+
+const visibleTypeBreakdown = computed(() =>
+  allTypeBreakdown.value.filter(item => item.total > 0),
+);
 
 /** Clear status message during generation (backend doesn't stream progress). */
 const generationProgress = computed(() => {
@@ -483,23 +465,24 @@ const blockedReasonText = computed(() => {
 /* -------------------------------------------------------------------------- */
 
 onMounted(async () => {
-  isInitialAssetSnapshotLoading.value = true;
+  initialLoadDone.value = false;
   try {
     await storyboardStore.loadActiveStoryboardSnapshot();
     await assetPlanningStore.loadActiveAssetPlanSnapshot();
-    scriptStore.loadActiveScriptSnapshot(); // fire-and-forget, needed for narration text
+    scriptStore.loadActiveScriptSnapshot();
 
-    // 资产规划尚未完成时，不先请求 assets，避免无 manifest 阶段出现瞬时错误。
     const planSnap = assetPlanningStore.state.snapshot;
-    const isPlanGen =
+
+    // 规划生成中 → 启动轮询，等待完成
+    if (
       planSnap?.current_status === "asset_plan_generating" ||
-      planSnap?.active_asset_plan?.execution_state?.generating;
-    if (isPlanGen) {
+      planSnap?.active_asset_plan?.execution_state?.generating
+    ) {
       startAssetPolling();
       return;
     }
 
-    // Auto-generate asset plan when arriving from storyboard confirmation
+    // 从 storyboard 确认后进入 → 自动开始规划生成
     if (
       planSnap &&
       !planSnap.active_asset_plan &&
@@ -507,80 +490,25 @@ onMounted(async () => {
         planSnap.current_status === "asset_plan_ready")
     ) {
       startAssetPolling();
-      const generation = assetPlanningStore.generateAssetPlan();
-      isInitialAssetSnapshotLoading.value = false;
-      await generation;
+      await assetPlanningStore.generateAssetPlan();
       if (!assetPlanningStore.state.loadError) {
         ElMessage.success("资产规划生成完成");
       }
-      canAutoStartBasicAssets.value = true;
-      await autoStartBasicAssets();
-      return;
-    }
-
-    await assetsStore.loadProject();
-    canAutoStartBasicAssets.value = true;
-
-    const assetsSnap = assetsStore.state.snapshot;
-    const isAssetsGen =
-      assetsSnap?.current_status === "assets_generating" ||
-      assetsSnap?.active_assets?.execution_state?.generating;
-    if (isAssetsGen) {
       startAssetPolling();
       return;
     }
 
-    await autoStartBasicAssets();
+    // 规划就绪 → 加载 assets 快照
+    await assetsStore.loadProject();
+    const assetsGen =
+      assetsStore.state.snapshot?.active_assets?.execution_state?.generating;
+    if (assetsGen) {
+      startAssetPolling();
+    }
   } finally {
-    isInitialAssetSnapshotLoading.value = false;
+    initialLoadDone.value = true;
   }
 });
-
-/** Auto-start basic asset generation when entering with a plan but no manifest. */
-async function autoStartBasicAssets() {
-  if (!canAutoStartBasicAssets.value) return;
-  if (basicAssetsAutoStarted.value) return;
-  if (isAssetsBusy.value) return;
-  if (!activeAssetPlan.value) return;
-  if (hasManifest.value) return;
-
-  basicAssetsAutoStarted.value = true;
-  basicAssetsGenerationFailed.value = false;
-  startAssetPolling();
-  await assetsStore.generateAssets({ enabledProviderTypes: ["tts", "sfx", "bgm"] });
-  if (!assetsStore.state.loadError) {
-    ElMessage.success("基础资产生成完成（口播、字幕、运镜、音效、配乐）");
-  } else {
-    basicAssetsGenerationFailed.value = true;
-    basicAssetsAutoStarted.value = false;
-    canAutoStartBasicAssets.value = false;
-  }
-}
-
-// Watch for snapshot changes and auto-start if conditions become ready
-watch(
-  () => [
-    activeAssetPlan.value,
-    hasManifest.value,
-    isAssetsBusy.value,
-    isPlanGenerating.value,
-    isAssetPolling.value,
-  ],
-  async () => {
-    if (
-      isAssetPolling.value &&
-      activeAssetPlan.value &&
-      !isPlanGenerating.value &&
-      !hasManifest.value
-    ) {
-      canAutoStartBasicAssets.value = true;
-    }
-    if (!basicAssetsAutoStarted.value) {
-      await autoStartBasicAssets();
-    }
-  },
-  { immediate: true },
-);
 
 /* -------------------------------------------------------------------------- */
 /*  Actions                                                                   */
@@ -591,24 +519,13 @@ async function handleGeneratePlan() {
   await assetPlanningStore.generateAssetPlan();
   if (!assetPlanningStore.state.loadError) {
     ElMessage.success("资产规划生成完成");
-    canAutoStartBasicAssets.value = true;
-    await autoStartBasicAssets();
   }
 }
 
 async function handleGenerateBasic() {
   if (isAssetsBusy.value) return;
-  basicAssetsAutoStarted.value = true;
-  basicAssetsGenerationFailed.value = false;
   startAssetPolling();
   await assetsStore.generateAssets({ enabledProviderTypes: ["tts", "sfx", "bgm"] });
-  if (!assetsStore.state.loadError) {
-    ElMessage.success("基础资产生成完成（口播、字幕、运镜、音效、配乐）");
-  } else {
-    basicAssetsGenerationFailed.value = true;
-    basicAssetsAutoStarted.value = false;
-    canAutoStartBasicAssets.value = false;
-  }
 }
 
 async function handleGenerateMissing() {
@@ -738,12 +655,6 @@ function handleRetry() {
 
 async function handleRefreshGeneratingStatus() {
   await loadAssetSnapshot();
-  if (activeAssetPlan.value && !hasManifest.value && !isPlanGenerating.value) {
-    basicAssetsAutoStarted.value = false;
-    basicAssetsGenerationFailed.value = false;
-    canAutoStartBasicAssets.value = true;
-    await autoStartBasicAssets();
-  }
 }
 
 function handleConfirm() {
@@ -759,9 +670,9 @@ function handleConfirm() {
 
 <template>
   <div class="asset-panel">
-    <!-- Generating state takes priority over transient errors -->
+    <!-- 规划生成中：全屏阻塞 -->
     <StageGenerating
-      v-if="shouldShowGeneratingView && generatingView"
+      v-if="phase.kind === 'plan_generating' && generatingView"
       :title="generatingView.title"
       :hint="generatingView.hint"
       :progress="generatingView.progress"
@@ -777,18 +688,18 @@ function handleConfirm() {
       </template>
     </StageGenerating>
 
-    <!-- Loading skeleton while the first route snapshot is being confirmed -->
+    <!-- 骨架屏 -->
     <el-skeleton
-      v-else-if="shouldShowAssetSkeleton"
+      v-else-if="phase.kind === 'loading'"
       :rows="6"
       animated
       class="asset-skeleton"
     />
 
-    <!-- Error — only when NOT generating (transient errors suppressed during generation) -->
-    <div v-else-if="assetLoadError" class="asset-error-card">
+    <!-- 错误 -->
+    <div v-else-if="phase.kind === 'error'" class="asset-error-card">
       <el-alert
-        :title="'加载失败：' + assetLoadError"
+        :title="'加载失败：' + phase.message"
         type="error"
         show-icon
         :closable="false"
@@ -802,9 +713,9 @@ function handleConfirm() {
       </el-button>
     </div>
 
-    <!-- Stage 1: no plan → generate plan -->
+    <!-- 无规划 -->
     <div
-      v-else-if="!activeAssetPlan && !hasManifest"
+      v-else-if="phase.kind === 'no_plan'"
       class="asset-empty"
     >
       <p>暂无资产规划数据</p>
@@ -817,43 +728,127 @@ function handleConfirm() {
       </el-button>
     </div>
 
-    <!-- Plan exists but no manifest yet: show plan overview before generating -->
-    <div v-else-if="!hasManifest && planSummary.length > 0" class="asset-plan-overview">
-      <h3 class="asset-overview-title">资产规划概览</h3>
-      <div class="asset-overview-types">
-        <div v-for="item in planSummary" :key="item.label" class="asset-overview-type-row">
-          <span class="asset-overview-type-label">{{ item.label }}</span>
-          <el-tag size="small" type="info">{{ item.count }} 项</el-tag>
+    <!-- 规划就绪但无 manifest：规划概览卡片 -->
+    <div v-else-if="phase.kind === 'plan_ready_no_manifest'" class="asset-plan-overview-wrapper">
+      <div class="asset-plan-overview">
+        <h3 class="asset-overview-title">资产规划概览</h3>
+        <div class="asset-overview-types">
+          <div v-for="item in planSummary" :key="item.label" class="asset-overview-type-row">
+            <span class="asset-overview-type-label">{{ item.label }}</span>
+            <el-tag size="small" type="info">{{ item.count }} 项</el-tag>
+          </div>
+        </div>
+        <p class="asset-plan-overview-hint">
+          基础资产（口播音频、字幕、运镜、音效、配乐）需手动触发生成；分镜图和视频后续可在卡片中逐项生成、上传，或通过概览区批量生成。
+          <span v-if="estimatedCost" class="asset-plan-cost-estimate">
+            <br/>基础资产生成费用约 ¥{{ (estimatedCost.ttsCost).toFixed(2) }}（口播 {{ estimatedCost.ttsChars }} 字）。
+            <br/>剩余视觉资产（{{ estimatedCost.images }} 张图{{ estimatedCost.videoTotalSec > 0 ? ' + ' + estimatedCost.videoTotalSec.toFixed(0) + 's 视频' : '' }}）可后续按需生成，预估 ¥{{ (estimatedCost.total - estimatedCost.ttsCost).toFixed(2) }}。
+          </span>
+        </p>
+        <div class="asset-plan-overview-actions">
+          <el-button
+            type="primary"
+            :loading="false"
+            @click="handleGenerateBasic"
+          >
+            生成基础资产
+          </el-button>
         </div>
       </div>
-      <p class="asset-plan-overview-hint">
-        基础资产（口播音频、字幕、运镜、音效、配乐）将自动生成；分镜图和视频后续可在卡片中逐项生成、上传，或通过概览区批量生成。
-        <span v-if="estimatedCost" class="asset-plan-cost-estimate">
-          <br/>基础资产生成费用约 ¥{{ (estimatedCost.ttsCost).toFixed(2) }}（口播 {{ estimatedCost.ttsChars }} 字）。
-          <br/>剩余视觉资产（{{ estimatedCost.images }} 张图{{ estimatedCost.videoTotalSec > 0 ? ' + ' + estimatedCost.videoTotalSec.toFixed(0) + 's 视频' : '' }}）可后续按需生成，预估 ¥{{ (estimatedCost.total - estimatedCost.ttsCost).toFixed(2) }}。
-        </span>
-      </p>
-      <!-- Auto-generating state -->
-      <div v-if="isAssetsBusy" class="asset-plan-auto-generating">
-        <el-alert
-          :title="generatingView?.title ?? '正在生成资产'"
-          type="info"
-          :closable="false"
-          :description="generatingView?.hint ?? '正在生成或补齐素材，请稍候...'"
-        />
+
+      <!-- 分镜卡片骨架 -->
+      <div v-if="segments.length > 0" class="asset-segments-count">
+        <span class="asset-segments-count-text">共 {{ segmentCount }} 个镜头</span>
       </div>
-      <!-- Failed: show retry -->
-      <div v-else-if="assetsStore.state.loadError" class="asset-plan-overview-actions">
-        <el-button type="primary" @click="handleGenerateBasic">重试生成基础资产</el-button>
+      <div v-if="segments.length > 0" class="asset-segments">
+        <div v-for="(segment, index) in segments" :key="segment.segment_id" class="segment-card-skeleton">
+          <div class="skeleton-header">
+            <span class="skeleton-badge">#{{ index + 1 }}</span>
+            <span class="skeleton-text-short"></span>
+          </div>
+          <div class="skeleton-body">
+            <div class="skeleton-media"></div>
+            <div class="skeleton-info">
+              <div class="skeleton-line"></div>
+              <div class="skeleton-line skeleton-line--short"></div>
+            </div>
+          </div>
+        </div>
       </div>
-      <p v-if="isAssetsBusy" class="asset-generating-progress">
-        {{ generationProgress }}
-      </p>
     </div>
 
-    <!-- Stage 2/3: has plan → generate buttons + task list -->
+    <!-- 基础资产生成中：规划概览 + 内联进度 -->
+    <div v-else-if="phase.kind === 'basic_assets_generating'" class="asset-plan-overview-wrapper">
+      <div class="asset-plan-overview">
+        <h3 class="asset-overview-title">资产规划概览</h3>
+        <div class="asset-overview-types">
+          <div v-for="item in planSummary" :key="item.label" class="asset-overview-type-row">
+            <span class="asset-overview-type-label">{{ item.label }}</span>
+            <el-tag size="small" type="info">{{ item.count }} 项</el-tag>
+          </div>
+        </div>
+        <div class="asset-inline-progress">
+          <el-alert
+            title="正在生成基础资产（口播、字幕、音效、配乐）"
+            type="info"
+            :closable="false"
+          />
+          <p class="asset-generating-progress">{{ generationProgress }}</p>
+        </div>
+        <div class="asset-plan-overview-actions">
+          <el-button type="primary" loading disabled>
+            生成基础资产（处理中...）
+          </el-button>
+        </div>
+      </div>
+
+      <!-- 分镜卡片骨架 -->
+      <div v-if="segments.length > 0" class="asset-segments-count">
+        <span class="asset-segments-count-text">共 {{ segmentCount }} 个镜头</span>
+      </div>
+      <div v-if="segments.length > 0" class="asset-segments">
+        <div v-for="(segment, index) in segments" :key="segment.segment_id" class="segment-card-skeleton">
+          <div class="skeleton-header">
+            <span class="skeleton-badge">#{{ index + 1 }}</span>
+            <span class="skeleton-text-short"></span>
+          </div>
+          <div class="skeleton-body">
+            <div class="skeleton-media"></div>
+            <div class="skeleton-info">
+              <div class="skeleton-line"></div>
+              <div class="skeleton-line skeleton-line--short"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 基础资产失败 -->
+    <div v-else-if="phase.kind === 'basic_assets_failed'" class="asset-plan-overview-wrapper">
+      <div class="asset-plan-overview">
+        <h3 class="asset-overview-title">资产规划概览</h3>
+        <div class="asset-overview-types">
+          <div v-for="item in planSummary" :key="item.label" class="asset-overview-type-row">
+            <span class="asset-overview-type-label">{{ item.label }}</span>
+            <el-tag size="small" type="info">{{ item.count }} 项</el-tag>
+          </div>
+        </div>
+        <el-alert
+          :title="'基础资产生成失败：' + phase.error"
+          type="error"
+          :closable="false"
+        />
+        <div class="asset-plan-overview-actions">
+          <el-button type="primary" @click="handleGenerateBasic">
+            重试生成基础资产
+          </el-button>
+        </div>
+      </div>
+    </div>
+
+    <!-- manifest 就绪：完整正文区 -->
     <template v-else>
-      <!-- Global settings (collapsible) -->
+      <!-- 全局设置 -->
       <details v-if="hasGlobalInfo" class="asset-global-settings">
         <summary class="asset-global-toggle">全局设置</summary>
         <div class="asset-global-grid">
@@ -882,46 +877,69 @@ function handleConfirm() {
         </div>
       </details>
 
-      <!-- Asset generation overview -->
-      <div v-if="hasManifest" class="asset-overview-card">
-        <h3 class="asset-overview-title">资产生成概览</h3>
-
-        <!-- Progress bar -->
-        <div class="asset-overview-progress">
-          <span class="asset-overview-count">
-            已完成 {{ executionStats.completed }} / {{ assetTasks.length }}
+      <!-- 紧凑状态栏 -->
+      <div class="asset-status-bar">
+        <div class="asset-status-bar-left">
+          <div class="asset-status-progress">
+            <span class="asset-status-count">
+              已完成 {{ executionStats.completed }} / {{ assetTasks.length }}
+            </span>
+            <el-progress
+              :percentage="assetTasks.length > 0 ? Math.round(executionStats.completed / assetTasks.length * 100) : 0"
+              :status="canCompose ? 'success' : undefined"
+              :stroke-width="8"
+            />
+          </div>
+          <span v-if="blockedItems.length > 0" class="asset-status-summary">
+            {{ blockedItems.slice(0, 3).map(i => i.type).join('、') }}待生成，共 {{ blockedItems.length }} 项
           </span>
-          <el-progress
-            :percentage="assetTasks.length > 0 ? Math.round(executionStats.completed / assetTasks.length * 100) : 0"
-            :status="canCompose ? 'success' : undefined"
-            :stroke-width="10"
-          />
         </div>
+        <div class="asset-status-actions">
+          <el-button
+            v-if="blockedItems.length > 0"
+            type="primary"
+            size="small"
+            :loading="isAssetsBusy"
+            :disabled="isAssetsBusy"
+            @click="handleGenerateMissing"
+          >
+            {{ isAssetsBusy ? "生成中..." : "批量生成剩余" }}
+          </el-button>
+          <el-button
+            size="small"
+            @click="showDetail = !showDetail"
+          >
+            {{ showDetail ? '收起详情 ▲' : '展开详情 ▼' }}
+          </el-button>
+        </div>
+        <p v-if="isAssetsBusy && generationProgress" class="asset-generating-progress">
+          {{ generationProgress }}
+        </p>
+      </div>
 
-        <!-- Per-type breakdown: compact 2-col grid pills -->
+      <!-- 可折叠详情区 -->
+      <div v-if="showDetail" class="asset-detail-area">
+        <!-- 资产完成度 -->
         <div class="asset-overview-types-v2">
           <div
-            v-for="item in allTypeBreakdown"
+            v-for="item in visibleTypeBreakdown"
             :key="item.label"
             class="asset-type-pill"
             :class="{
               'asset-type-pill--done': item.completed === item.total && item.total > 0,
               'asset-type-pill--blocked': item.total > 0 && item.completed < item.total,
-              'asset-type-pill--none': item.total === 0,
             }"
           >
             <span class="asset-type-pill-label">{{ item.label }}</span>
             <span class="asset-type-pill-count">
-              {{ item.total === 0 ? '无需' : item.completed + '/' + item.total }}
+              {{ item.completed + '/' + item.total }}
             </span>
           </div>
         </div>
 
-        <!-- Blocked items: compact chip grid -->
-        <div v-if="blockedItems.length > 0" class="asset-overview-blocked">
-          <h4 class="asset-overview-blocked-title">
-            待处理项（{{ blockedItems.length }}）
-          </h4>
+        <!-- 待处理项 -->
+        <div v-if="blockedItems.length > 0" class="asset-detail-blocked">
+          <h4 class="asset-detail-blocked-title">待处理项（{{ blockedItems.length }}）</h4>
           <div class="asset-blocked-chips">
             <button
               v-for="item in visibleBlockedItems"
@@ -945,11 +963,9 @@ function handleConfirm() {
           </button>
         </div>
 
-        <!-- Cost summary -->
-        <div v-if="hasManifest" class="asset-overview-cost">
-          <h4 class="asset-overview-cost-title">
-            {{ hasManifest ? '已生成成本估算' : '预估成本' }}
-          </h4>
+        <!-- 成本 -->
+        <div class="asset-detail-cost">
+          <h4 class="asset-detail-cost-title">已生成成本估算</h4>
           <div class="asset-overview-cost-items">
             <span v-if="costBreakdown.image.count > 0">
               🖼 图片 {{ costBreakdown.image.count }} 张 · ¥{{ costBreakdown.image.total.toFixed(2) }}
@@ -967,17 +983,8 @@ function handleConfirm() {
           </div>
         </div>
 
-        <!-- Actions -->
-        <div class="asset-overview-actions">
-          <el-button
-            v-if="blockedItems.length > 0"
-            type="primary"
-            :loading="isAssetsBusy"
-            :disabled="isAssetsBusy"
-            @click="handleGenerateMissing"
-          >
-            {{ isAssetsBusy ? "生成中..." : "批量生成剩余资产" }}
-          </el-button>
+        <!-- 重新生成 -->
+        <div class="asset-detail-actions">
           <el-button
             type="danger"
             plain
@@ -988,23 +995,10 @@ function handleConfirm() {
           >
             重新生成全部资产
           </el-button>
-          <span v-if="blockedItems.length > 0" class="asset-overview-hint">
-            也可在下方的分镜卡片中逐项生成、上传或替换
-          </span>
-          <p v-if="isAssetsBusy && generationProgress" class="asset-generating-progress">
-            {{ generationProgress }}
-          </p>
         </div>
       </div>
 
-      <!-- Generate action bar (no manifest yet) — only show retry on error -->
-      <div v-if="!hasManifest && assetsStore.state.loadError" class="asset-generate-bar">
-        <div class="asset-generate-actions">
-          <el-button type="primary" @click="handleGenerateBasic">重试生成基础资产</el-button>
-        </div>
-      </div>
-
-      <!-- Global narration audio block -->
+      <!-- 口播音频 -->
       <div v-if="narrationArtifact && narrationAudioUrl" class="asset-narration-card">
         <h4 class="asset-narration-title">口播音频</h4>
         <div class="asset-narration-player">
@@ -1015,7 +1009,6 @@ function handleConfirm() {
             <span>¥{{ costBreakdown.tts.total.toFixed(2) }}</span>
           </div>
         </div>
-        <!-- Full script text -->
         <div v-if="fullScriptText" class="asset-narration-script">
           <div class="asset-narration-script-header">
             <span class="asset-narration-script-label">口播文案</span>
@@ -1034,12 +1027,10 @@ function handleConfirm() {
         </div>
       </div>
 
-      <!-- Segment count -->
+      <!-- 分镜列表 -->
       <div class="asset-segments-header">
         <span class="asset-segments-count">共 {{ segmentCount }} 个镜头</span>
       </div>
-
-      <!-- Segment cards -->
       <div v-if="segments.length > 0" class="asset-segments">
         <SegmentAssetCard
           v-for="(segment, index) in segments"
@@ -1059,8 +1050,8 @@ function handleConfirm() {
         />
       </div>
 
-      <!-- Sticky bottom bar -->
-      <div v-if="hasManifest" class="asset-bottom-bar">
+      <!-- 粘性底栏 -->
+      <div class="asset-bottom-bar">
         <div class="asset-bottom-progress">
           <span class="asset-bottom-count">
             {{ executionStats.completed }} / {{ assetTasks.length }} 已完成
@@ -1186,6 +1177,168 @@ function handleConfirm() {
   padding-top: var(--space-sm);
   border-top: 1px solid var(--border-default);
 }
+
+.asset-plan-overview-wrapper {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.asset-inline-progress {
+  display: grid;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+/* ---- Asset status bar ---- */
+.asset-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
+  flex-wrap: wrap;
+}
+
+.asset-status-bar-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.asset-status-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 240px;
+}
+
+.asset-status-count {
+  font-weight: var(--font-subheading);
+  font-size: 0.9rem;
+  color: var(--text-heading);
+  white-space: nowrap;
+}
+
+.asset-status-summary {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.asset-status-actions {
+  display: flex;
+  gap: var(--space-xs);
+  align-items: center;
+}
+
+/* ---- Detail area ---- */
+.asset-detail-area {
+  display: grid;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
+}
+
+.asset-detail-blocked {
+  display: grid;
+  gap: var(--space-xs);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-default);
+}
+
+.asset-detail-blocked-title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: var(--font-subheading);
+  color: var(--color-warning);
+}
+
+.asset-detail-cost {
+  display: grid;
+  gap: var(--space-xs);
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-default);
+}
+
+.asset-detail-cost-title {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: var(--font-subheading);
+  color: var(--text-heading);
+}
+
+.asset-detail-actions {
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--border-default);
+}
+
+/* ---- Segment card skeleton ---- */
+.segment-card-skeleton {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
+}
+
+.skeleton-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--border-default);
+  margin-bottom: var(--space-md);
+}
+
+.skeleton-badge {
+  width: 28px;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--bg-panel);
+}
+
+.skeleton-text-short {
+  width: 120px;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--bg-panel);
+}
+
+.skeleton-body {
+  display: contents;
+}
+
+.skeleton-media {
+  aspect-ratio: 9 / 16;
+  border-radius: var(--radius-sm);
+  background: var(--bg-panel);
+}
+
+.skeleton-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.skeleton-line {
+  width: 100%;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--bg-panel);
+}
+
+.skeleton-line--short {
+  width: 60%;
+}
+
+/* ---- Deprecated: kept for clean removal later ---- */
 
 /* ---- Sticky bottom bar ---- */
 .asset-bottom-bar {
