@@ -199,6 +199,99 @@ const acceptFileTypes = computed(() => {
 const fileInput = ref<HTMLInputElement | null>(null);
 const showPreview = ref(false);
 const promptTextRef = ref<HTMLElement | null>(null);
+const promptEditRef = ref<HTMLTextAreaElement | null>(null);
+const isEditingPrompt = ref(false);
+const editDraft = ref("");
+const highlightPrompt = ref(false);
+const previousPrompt = ref<string | null>(null);
+const showUndo = ref(false);
+let undoTimer: ReturnType<typeof setTimeout> | null = null;
+
+function handleStartInlineEdit() {
+  editDraft.value = activePromptText.value;
+  isEditingPrompt.value = true;
+  setTimeout(() => promptEditRef.value?.focus(), 0);
+}
+
+async function handleSaveInlineEdit() {
+  isEditingPrompt.value = false;
+  const task = currentTask.value;
+  if (!task || editDraft.value === activePromptText.value) return;
+  const old = task.prompt_draft ?? "";
+  await savePromptDraft(task.task_id, editDraft.value);
+  previousPrompt.value = old;
+  showUndo.value = true;
+  if (undoTimer) clearTimeout(undoTimer);
+  undoTimer = setTimeout(() => { showUndo.value = false; }, 30000);
+  ElMessage.success("提示词已保存");
+}
+
+function handleUndoEdit() {
+  const task = currentTask.value;
+  if (!task || !previousPrompt.value) return;
+  savePromptDraft(task.task_id, previousPrompt.value);
+  previousPrompt.value = null;
+  showUndo.value = false;
+  if (undoTimer) clearTimeout(undoTimer);
+  ElMessage.success("已撤销");
+}
+
+async function handleQuickOptimize() {
+  const task = currentTask.value;
+  if (!task?.prompt_draft) return;
+  optimizing.value = true;
+  try {
+    const res = await fetch(`/api/projects/${props.projectId}/assets/tasks/${task.task_id}/prompt/optimize`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        current_prompt: task.prompt_draft,
+        task_type: activeTab.value === "video" ? "video_clip" : "image_still",
+        segment_id: props.segment.segment_id,
+      }),
+    });
+    const data = await res.json() as { optimized_prompt: string };
+    const old = task.prompt_draft ?? "";
+    await savePromptDraft(task.task_id, data.optimized_prompt);
+    await assetPlanningStore.loadActiveAssetPlanSnapshot();
+    previousPrompt.value = old;
+    showUndo.value = true;
+    if (undoTimer) clearTimeout(undoTimer);
+    undoTimer = setTimeout(() => { showUndo.value = false; }, 30000);
+    highlightPrompt.value = true;
+    setTimeout(() => { highlightPrompt.value = false; }, 2000);
+    ElMessage.success("提示词已优化");
+  } catch (e) {
+    ElMessage.error("快速优化失败：" + (e instanceof Error ? e.message : "未知错误"));
+  } finally {
+    optimizing.value = false;
+  }
+}
+
+const isSegmentAccepted = computed(() => {
+  const segTasks = [...props.imageTasks, ...props.videoTasks];
+  if (segTasks.length === 0) return true;
+  return segTasks.every(t => {
+    const exec = props.executionsByTaskId.get(t.task_id);
+    return exec?.status === "accepted" || exec?.status === "completed";
+  });
+});
+
+async function toggleAcceptSegment() {
+  for (const task of [...props.imageTasks, ...props.videoTasks]) {
+    const exec = props.executionsByTaskId.get(task.task_id);
+    if (exec?.output_artifact_ids?.[0]) {
+      await assetsStore.acceptArtifact(task.task_id, exec.output_artifact_ids[0]);
+    }
+  }
+  await assetsStore.loadProject();
+}
+
+function getArtifactForTask(taskId: string) {
+  const exec = props.executionsByTaskId.get(taskId);
+  if (!exec || exec.output_artifact_ids.length === 0) return null;
+  return props.artifactsById.get(exec.output_artifact_ids[0]) ?? null;
+}
 
 function togglePreview() {
   if (hasGeneratedMedia.value) showPreview.value = !showPreview.value;
@@ -474,6 +567,16 @@ function nextMedia() {
           {{ formatSeconds(segment.start_hint_sec) }} ~ {{ formatSeconds(segment.end_hint_sec) }}
         </span>
         <ElTag size="small" type="info">{{ segment.narrative_role }}</ElTag>
+        <el-button
+          v-if="imageTasks.length + videoTasks.length > 0"
+          size="small"
+          :type="isSegmentAccepted ? 'success' : 'default'"
+          circle
+          @click="toggleAcceptSegment"
+          :title="isSegmentAccepted ? '已确认' : '确认分镜'"
+        >
+          ✓
+        </el-button>
       </div>
       <p class="segment-header-excerpt">{{ segment.script_excerpt }}</p>
     </div>
@@ -501,6 +604,7 @@ function nextMedia() {
           >
             视频
           </button>
+          <span class="segment-media-tab-tag">运镜</span>
         </ElTooltip>
         <button
           v-else
@@ -510,6 +614,7 @@ function nextMedia() {
         >
           视频
         </button>
+        <span class="segment-media-tab-tag">API</span>
       </div>
 
       <!-- Route status: clearly separate from the tab group -->
@@ -582,6 +687,11 @@ function nextMedia() {
       <!-- Preview area: artifact exists -->
       <template v-else>
         <div class="segment-media-preview">
+          <div v-if="hasGeneratedMedia && currentArtifact?.artifact_type === 'image' && videoTasks.length === 0"
+               class="segment-media-upgrade-badge"
+               @click="emit('upgrade-video', segment.segment_id)">
+            🎬 升级视频
+          </div>
           <img
             v-if="currentArtifact?.artifact_type === 'image'"
             :src="artifactUrl(currentArtifact.artifact_id)"
@@ -667,18 +777,37 @@ function nextMedia() {
               v-if="currentTask?.prompt_draft"
               size="small"
               text
-              type="primary"
-              @click="handleOpenOptimize"
+              type="warning"
+              :loading="optimizing"
+              @click="handleQuickOptimize"
             >
-              智能优化
+              ⚡ 快速优化
             </ElButton>
             <ElButton
               v-if="currentTask?.prompt_draft"
               size="small"
               text
-              @click="handleOpenEdit"
+              type="primary"
+              @click="handleOpenOptimize"
             >
-              手动编辑
+              精细优化
+            </ElButton>
+            <ElButton
+              v-if="currentTask?.prompt_draft"
+              size="small"
+              text
+              @click="handleStartInlineEdit"
+            >
+              编辑
+            </ElButton>
+            <ElButton
+              v-if="showUndo && currentTask?.prompt_draft"
+              size="small"
+              text
+              type="danger"
+              @click="handleUndoEdit"
+            >
+              撤销
             </ElButton>
             <ElTooltip :content="copyFeedback ? '已复制' : '复制提示词'" placement="top">
               <button class="prompt-copy-btn" aria-label="复制提示词" @click="copyPrompt">
@@ -687,7 +816,19 @@ function nextMedia() {
             </ElTooltip>
           </div>
         </div>
-        <p ref="promptTextRef" class="segment-info-prompt-text">
+        <textarea
+          v-if="isEditingPrompt"
+          ref="promptEditRef"
+          v-model="editDraft"
+          class="segment-prompt-textarea"
+          rows="4"
+          @keydown.ctrl.enter="handleSaveInlineEdit"
+          @blur="handleSaveInlineEdit"
+        />
+        <p v-else ref="promptTextRef" class="segment-info-prompt-text"
+           :class="{ 'segment-info-prompt-text--highlight': highlightPrompt }"
+           @dblclick="handleStartInlineEdit"
+           title="双击编辑提示词">
           {{ activePromptText }}
         </p>
       </div>
@@ -960,7 +1101,7 @@ function nextMedia() {
 <style scoped>
 .segment-asset-card {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: 260px 1fr;
   grid-template-rows: auto 1fr auto;
   gap: 0 var(--space-md);
   padding: var(--space-md);
@@ -1200,7 +1341,32 @@ function nextMedia() {
   max-height: 16em;
   overflow-y: auto;
   word-break: break-word;
+  cursor: text;
 }
+
+.segment-info-prompt-text--highlight {
+  animation: prompt-flash 0.4s ease 3;
+}
+
+@keyframes prompt-flash {
+  0%, 100% { background: transparent; }
+  50% { background: color-mix(in srgb, var(--accent-primary) 15%, transparent); }
+}
+
+.segment-prompt-textarea {
+  width: 100%;
+  margin: 0;
+  padding: var(--space-xs);
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: var(--text-body);
+  background: var(--bg-panel);
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-sm);
+  resize: vertical;
+  font-family: inherit;
+}
+
 .edit-prompt-body {
   display: grid;
   gap: var(--space-md);
@@ -1240,6 +1406,33 @@ function nextMedia() {
 .segment-media-image:hover {
   opacity: 0.85;
   filter: brightness(1.1);
+}
+
+.segment-media-upgrade-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.6);
+  color: #e4c26f;
+  font-size: 0.75rem;
+  cursor: pointer;
+  backdrop-filter: blur(2px);
+  transition: background 0.15s;
+}
+.segment-media-upgrade-badge:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.segment-media-tab-tag {
+  font-size: 0.65rem;
+  padding: 1px 4px;
+  border-radius: 2px;
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  align-self: center;
 }
 
 .segment-media-video {
@@ -1307,8 +1500,8 @@ function nextMedia() {
 }
 
 .segment-media-dot {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   background: var(--border-default);
   cursor: pointer;

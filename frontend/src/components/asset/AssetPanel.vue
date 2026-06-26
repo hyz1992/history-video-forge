@@ -264,6 +264,79 @@ const videoTasksBySegment = computed(() => {
 
 const segmentCount = computed(() => segments.value.length);
 
+const acceptedSegments = computed(() =>
+  segments.value.filter(s => {
+    const segTasks = assetTasks.value.filter(t => t.source_segment_id === s.segment_id);
+    if (segTasks.length === 0) return true;
+    return segTasks.every(t => {
+      const exec = executionsByTaskId.value.get(t.task_id);
+      return exec?.status === "accepted" || exec?.status === "completed";
+    });
+  }),
+);
+const acceptedCount = computed(() => acceptedSegments.value.length);
+const unacceptedSegments = computed(() =>
+  segments.value.filter(s => !acceptedSegments.value.includes(s)),
+);
+
+const upgradableSegments = computed(() =>
+  segments.value.filter(seg => {
+    const imgTasks = imageTasksBySegment.value.get(seg.segment_id) ?? [];
+    const vidTasks = videoTasksBySegment.value.get(seg.segment_id) ?? [];
+    if (vidTasks.length > 0) return false;
+    if (imgTasks.length === 0) return false;
+    const allImgDone = imgTasks.every(t => {
+      const exec = executionsByTaskId.value.get(t.task_id);
+      return exec?.status === "completed" || exec?.status === "accepted";
+    });
+    if (!allImgDone) return false;
+    return seg.narrative_role === "turn" || seg.narrative_role === "peak";
+  }),
+);
+
+const activeSegmentIndex = ref(0);
+
+function scrollToSegment(segId: string) {
+  const idx = segments.value.findIndex(s => s.segment_id === segId);
+  if (idx < 0) return;
+  activeSegmentIndex.value = idx;
+  const cards = document.querySelectorAll(".segment-asset-card");
+  const card = cards[idx] as HTMLElement | undefined;
+  if (!card) return;
+  card.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function navDotClass(segId: string) {
+  const items = blockedItems.value.filter(i => {
+    const t = assetTasks.value.find(at => at.task_id === i.taskId);
+    return t?.source_segment_id === segId;
+  });
+  if (items.some(i => i.reason === "生成失败")) return "dot--failed";
+  if (items.length > 0) return "dot--pending";
+  const segTasks = assetTasks.value.filter(t => t.source_segment_id === segId);
+  if (segTasks.length === 0) return "dot--empty";
+  return "dot--done";
+}
+
+// 键盘导航
+function onKeyNav(e: KeyboardEvent) {
+  if (phase.value.kind !== "ready") return;
+  const tag = (e.target as HTMLElement)?.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA") return;
+  if (e.key === "j" || e.key === "ArrowDown") {
+    e.preventDefault();
+    if (segments.value.length === 0) return;
+    activeSegmentIndex.value = Math.min(activeSegmentIndex.value + 1, segments.value.length - 1);
+    scrollToSegment(segments.value[activeSegmentIndex.value].segment_id);
+  } else if (e.key === "k" || e.key === "ArrowUp") {
+    e.preventDefault();
+    activeSegmentIndex.value = Math.max(activeSegmentIndex.value - 1, 0);
+    scrollToSegment(segments.value[activeSegmentIndex.value].segment_id);
+  }
+}
+onMounted(() => window.addEventListener("keydown", onKeyNav));
+onUnmounted(() => window.removeEventListener("keydown", onKeyNav));
+
 /* -------------------------------------------------------------------------- */
 /*  Manifest lookups for SegmentAssetCard                                     */
 /* -------------------------------------------------------------------------- */
@@ -602,6 +675,24 @@ function toggleBlockedItem(taskId: string) {
   }
 }
 
+async function handleBatchUpgrade() {
+  if (isAssetsBusy.value) return;
+  const count = upgradableSegments.value.length;
+  const { rate, estimatedTotal } = getVideoUpgradeCostHint();
+  try {
+    await ElMessageBox.confirm(
+      `将为 ${count} 个关键分镜(turn/peak)升级为 API 视频。\n费用：${rate}，预估 ¥${estimatedTotal.toFixed(2)} × ${count}。\n确定继续？`,
+      "批量升级为 API 视频",
+      { confirmButtonText: "确定升级", cancelButtonText: "取消", type: "info" },
+    );
+  } catch { return; }
+  for (const seg of upgradableSegments.value) {
+    try { await assetsStore.upgradeSegmentToVideo(seg.segment_id); } catch { /* continue */ }
+  }
+  await assetsStore.loadProject();
+  ElMessage.success("API 视频任务已创建");
+}
+
 async function handleGenerateFull() {
   if (isAssetsBusy.value) return;
   const costText = estimatedCost.value
@@ -715,6 +806,17 @@ function handleConfirm() {
     ElMessage.warning(blockedReasonText.value || "资产尚未全部就绪");
     return;
   }
+  if (unacceptedSegments.value.length > 0) {
+    ElMessageBox.confirm(
+      `还有 ${unacceptedSegments.value.length} 个分镜未确认，确定进入合成？`,
+      "确认进入合成",
+      { confirmButtonText: "确定进入", cancelButtonText: "返回确认", type: "warning" },
+    ).then(() => doConfirm()).catch(() => {});
+  } else {
+    doConfirm();
+  }
+}
+function doConfirm() {
   ElMessage.success("资产确认完成，进入合成阶段");
   workspaceStore.setCurrentStep(COMPOSE_STEP_INDEX);
   const pid = projectStore.state.projectId; if (pid) router.push(`/projects/${pid}/compose`);
@@ -723,6 +825,20 @@ function handleConfirm() {
 
 <template>
   <div class="asset-panel">
+    <!-- 侧边分镜导航 -->
+    <nav v-if="(phase.kind === 'plan_ready_no_manifest' || phase.kind === 'basic_assets_generating' || phase.kind === 'ready') && segments.length > 0" class="asset-segment-nav" aria-label="分镜导航">
+      <button
+        v-for="(seg, i) in segments"
+        :key="seg.segment_id"
+        class="asset-segment-nav-dot"
+        :class="phase.kind === 'ready' ? navDotClass(seg.segment_id) : 'dot--skeleton'"
+        :title="'#' + (i + 1)"
+        @click="scrollToSegment(seg.segment_id)"
+      >
+        {{ i + 1 }}
+      </button>
+    </nav>
+
     <!-- 规划生成中：全屏阻塞 -->
     <StageGenerating
       v-if="phase.kind === 'plan_generating' && generatingView"
@@ -946,6 +1062,9 @@ function handleConfirm() {
           <span v-if="blockedItems.length > 0" class="asset-status-summary">
             {{ blockedItems.slice(0, 3).map(i => i.type).join('、') }}待生成，共 {{ blockedItems.length }} 项
           </span>
+          <span v-if="acceptedCount > 0" class="asset-status-confirmed">
+            已确认 {{ acceptedCount }}/{{ segmentCount }} 分镜
+          </span>
         </div>
         <div class="asset-status-actions">
           <el-button
@@ -1080,6 +1199,15 @@ function handleConfirm() {
             {{ isAssetsBusy ? "生成中..." : "生成全部剩余（" + blockedItems.length + "）" }}
           </el-button>
           <el-button
+            v-if="upgradableSegments.length > 0"
+            size="small"
+            plain
+            type="primary"
+            @click="handleBatchUpgrade"
+          >
+            升级 {{ upgradableSegments.length }} 个分镜为 API 视频
+          </el-button>
+          <el-button
             type="danger"
             plain
             size="small"
@@ -1093,33 +1221,27 @@ function handleConfirm() {
       </div>
 
       <!-- 口播音频 -->
-      <div v-if="narrationArtifact && narrationAudioUrl" class="asset-narration-card">
-        <h4 class="asset-narration-title">口播音频</h4>
-        <div class="asset-narration-player">
-          <audio controls :src="narrationAudioUrl" class="asset-narration-audio" />
-          <div class="asset-narration-meta">
+      <details v-if="narrationArtifact && narrationAudioUrl" class="asset-narration-bar" :open="false">
+        <summary class="asset-narration-bar-header">
+          <span>🔊 口播音频</span>
+          <span class="asset-narration-bar-meta">
             <span v-if="narrationDuration !== null">{{ narrationDuration.toFixed(1) }}s</span>
             <span v-if="costBreakdown.tts.charCount > 0">{{ costBreakdown.tts.charCount }} 字</span>
             <span>¥{{ costBreakdown.tts.total.toFixed(2) }}</span>
-          </div>
+          </span>
+        </summary>
+        <div class="asset-narration-bar-body">
+          <audio controls :src="narrationAudioUrl" class="asset-narration-audio" />
+          <p v-if="fullScriptText"
+             class="asset-narration-script-text"
+             :class="{ 'asset-narration-script-text--collapsed': !narrationScriptExpanded }">
+            {{ fullScriptText }}
+          </p>
+          <button v-if="narrationScriptLong" class="asset-narration-script-toggle" @click="narrationScriptExpanded = !narrationScriptExpanded">
+            {{ narrationScriptExpanded ? '收起' : '展开全文' }}
+          </button>
         </div>
-        <div v-if="fullScriptText" class="asset-narration-script">
-          <div class="asset-narration-script-header">
-            <span class="asset-narration-script-label">口播文案</span>
-            <button
-              v-if="narrationScriptLong"
-              class="asset-narration-script-toggle"
-              @click="narrationScriptExpanded = !narrationScriptExpanded"
-            >
-              {{ narrationScriptExpanded ? '收起' : '展开全文' }}
-            </button>
-          </div>
-          <p
-            class="asset-narration-script-text"
-            :class="{ 'asset-narration-script-text--collapsed': !narrationScriptExpanded && narrationScriptLong }"
-          >{{ fullScriptText }}</p>
-        </div>
-      </div>
+      </details>
 
       <!-- 分镜列表 -->
       <div class="asset-segments-header">
@@ -1917,5 +2039,105 @@ details[open] > .asset-global-toggle::before {
   .asset-generate-actions {
     flex-direction: column;
   }
+}
+.asset-status-confirmed {
+  font-size: 0.82rem;
+  color: var(--color-success);
+}
+
+/* ---- Segment side nav ---- */
+.asset-segment-nav {
+  position: fixed;
+  left: calc((100vw - 1200px) / 2 - 48px);
+  top: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 5;
+}
+
+.asset-segment-nav-dot {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border-default);
+  border-radius: 50%;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.asset-segment-nav-dot:hover {
+  border-color: var(--accent-primary);
+}
+
+.dot--pending { border-color: var(--color-warning); color: var(--color-warning); }
+.dot--done { border-color: var(--color-success); color: var(--color-success); }
+.dot--failed { border-color: var(--color-danger); color: var(--color-danger); }
+.dot--empty { opacity: 0.4; }
+.dot--skeleton { opacity: 0.4; }
+
+/* ---- Narration bar ---- */
+.asset-narration-bar {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
+  overflow: hidden;
+}
+
+.asset-narration-bar-header {
+  cursor: pointer;
+  padding: var(--space-sm) var(--space-md);
+  font-size: 0.88rem;
+  font-weight: var(--font-subheading);
+  color: var(--text-heading);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  list-style: none;
+  user-select: none;
+}
+
+.asset-narration-bar-header::-webkit-details-marker { display: none; }
+
+.asset-narration-bar-meta {
+  display: flex;
+  gap: var(--space-md);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.asset-narration-bar-body {
+  padding: var(--space-sm) var(--space-md) var(--space-md);
+  display: grid;
+  gap: var(--space-sm);
+  border-top: 1px solid var(--border-default);
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 960px) {
+  .asset-segment-nav { display: none; }
+}
+
+@media (max-width: 640px) {
+  .asset-status-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .asset-status-actions {
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 480px) {
+  .segment-card-skeleton {
+    grid-template-columns: 1fr;
+  }
+  .skeleton-media { display: none; }
 }
 </style>
