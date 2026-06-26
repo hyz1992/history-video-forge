@@ -1206,50 +1206,30 @@ function handleConfirm() {
 
       <!-- 粘性底栏 -->
       <div class="asset-bottom-bar">
-        <div class="asset-bottom-left">
-          <div class="asset-bottom-progress">
-            <span class="asset-bottom-count">
-              {{ executionStats.completed }} / {{ assetTasks.length }} 已完成
-            </span>
-            <span v-if="blockedItems.length > 0" class="asset-bottom-next">
-              下一项：{{ blockedItems[0].segmentId }} {{ blockedItems[0].type }}
-            </span>
-          </div>
-          <p v-if="!canCompose" class="asset-bottom-reason">
-            {{ blockedReasonText }}
-          </p>
+        <div class="asset-bottom-progress">
+          <span class="asset-bottom-count">
+            {{ executionStats.completed }} / {{ assetTasks.length }} 已完成
+          </span>
         </div>
         <div class="asset-bottom-actions">
-          <el-button
-            v-if="blockedItems.length > 0"
-            size="small"
-            @click="scrollToTask(blockedItems[0].taskId)"
-          >
-            跳到下一项
-          </el-button>
           <el-tooltip
             v-if="!canCompose"
             :content="blockedReasonText"
             placement="top"
           >
             <span>
-              <el-button
-                class="asset-bottom-confirm-btn"
-                size="small"
-                disabled
-              >
+              <button class="asset-bottom-confirm-btn" disabled>
                 确认并进入合成
-              </el-button>
+              </button>
             </span>
           </el-tooltip>
-          <el-button
+          <button
             v-else
             class="asset-bottom-confirm-btn"
-            size="small"
             @click="handleConfirm"
           >
             确认并进入合成
-          </el-button>
+          </button>
         </div>
       </div>
 
@@ -1542,12 +1522,6 @@ details[open] > .asset-overview-toggle {
   margin-top: auto;
 }
 
-.asset-bottom-left {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
 .asset-bottom-progress {
   display: flex;
   flex-direction: column;
@@ -1560,40 +1534,41 @@ details[open] > .asset-overview-toggle {
   color: var(--text-heading);
 }
 
-.asset-bottom-next {
-  font-size: 0.82rem;
-  color: var(--text-muted);
-}
-
 .asset-bottom-actions {
   display: flex;
   gap: var(--space-sm);
   align-items: center;
 }
 
-.asset-bottom-reason {
-  font-size: 0.82rem;
-  color: var(--color-warning);
-  line-height: 1.5;
-}
-
-.asset-bottom-confirm-btn.el-button--small {
-  background: var(--accent-gradient);
-  border-color: var(--accent-primary);
+.asset-bottom-confirm-btn {
+  height: 38px;
+  padding: 0 22px;
+  border-radius: 10px;
+  border: none;
   color: var(--text-inverse);
-  font-weight: var(--font-subheading);
-}
-
-.asset-bottom-confirm-btn.el-button--small:hover {
-  background: var(--accent-primary-light);
-  border-color: var(--accent-primary-light);
-}
-
-.asset-bottom-confirm-btn.el-button--small.is-disabled {
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
   background: var(--accent-gradient);
-  border-color: var(--accent-primary);
-  color: var(--text-inverse);
-  opacity: 0.5;
+  box-shadow: 0 4px 14px rgba(184, 115, 51, 0.22);
+  transition: transform 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+}
+
+.asset-bottom-confirm-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 30px rgba(201, 162, 39, 0.32);
+  filter: brightness(1.05);
+}
+
+.asset-bottom-confirm-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.asset-bottom-confirm-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* ---- Global settings (collapsible) ---- */
