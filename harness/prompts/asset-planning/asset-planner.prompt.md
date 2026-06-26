@@ -198,7 +198,7 @@ recommended_mode 只能使用 auto、manual_allowed、manual_preferred、placeho
    明代江南富户书房，低饱和度电影级光影。某明代书生身穿方巾道袍端坐紫檀书案前。室内光线幽暗，可见线装古籍、毛笔、砚台。无现代物品、无民国造型、无动漫风。
    ```
 
-5. **video_clip 视频专属要求**（仅在 `task_type` 为 `video_clip` 时必须遵守，`image_still` 不得输出视频专属内容）：
+5. **video_clip 视频专属要求**（在 `task_type` 为 `video_clip` 时必须遵守）：
 
    对于 `video_clip` 任务，在上述静态视觉描述之外，`prompt_draft` 还必须包含以下视频动态维度：
 
@@ -217,6 +217,22 @@ recommended_mode 只能使用 auto、manual_allowed、manual_preferred、placeho
    ```
 
    若同一 segment 同时规划了 `image_still` 和 `video_clip`，两者的 `prompt_draft` 必须不同：`image_still` 只写静态画面；`video_clip` 在静态画面的基础上补充动态维度。
+
+6. **image_still 预存视频提示词**（所有 `image_still` 任务都必须遵守）：
+
+   无论当前 segment 使用何种视觉策略（Remotion 运镜或 API 视频），每个 `image_still` 任务的 `parameters` 中必须包含 `video_prompt_reserve` 字段，其值为一个提前准备的视频生成提示词。后续用户可能一键将 Remotion 运镜升级为 API 视频，此提示词将被直接复用，无需再次调用 LLM 生成。
+
+   `video_prompt_reserve` 必须遵守与 `video_clip.prompt_draft` 相同的第 5 条动态维度要求（主体动作路径、镜头运动方向、场景时间变化、时长感知），但它是作为 `image_still` 的参数字段存在，不影响 `image_still.prompt_draft` 的纯静态属性。
+
+   格式：
+   ```
+   "parameters": {
+     "image_role": "anchor",
+     "video_prompt_reserve": "战国军营帐内，低饱和度电影级光影。吴王僚身穿青铜甲胄端坐案前...\n\n镜头从帐门缓慢推进至吴王僚正面近景，约3秒。吴王僚右手缓缓抬起接酒杯..."
+   }
+   ```
+
+   如果 segment 的静态画面本身没有明显动态可写（如纯静态肖像、静物画面），也必须写入合理的微小动作（如"面部微表情变化"、"烛光摇曳"、"旗帜轻微飘动"）和镜头运动（如"手持微晃"、"缓慢推进"），不得留空。
 
 视觉类任务包括 `image_still`、`render_motion_cue`、`video_clip`，视觉类任务 risk_notes 必须非空，不得照抄空数组。遇到战争、刺杀、伏击、尸骨、血战、处刑、穿刺、逃亡等题材时，必须写明平台安全、历史准确性和生成稳定性风险：优先远景、剪影、旗帜倒伏、局部道具、尘土、火光、人物背影，不要写血液喷溅、断肢、穿刺特写或尸体堆叠。涉及孙膑行动不便时，使用"古代木制乘舆""军榻""低矮木车"等历史质感描述，并在 negative prompts 或 risk_notes 中避免现代轮椅、金属轮椅、橡胶轮胎、现代医疗器械。象征镜头必须保持历史正剧质感，不得把奇幻毒果、怪诞植物等象征物固化为核心资产；应优先用破碎铁锅、残旗、阴影、背影、裂纹、远景等历史质感元素表达余震。
 
