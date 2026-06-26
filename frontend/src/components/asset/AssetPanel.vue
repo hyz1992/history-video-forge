@@ -453,7 +453,6 @@ const blockedItems = computed(() => {
 });
 
 const showAllBlocked = ref(false);
-const showDetail = ref(false);
 const selectedBlockedIds = ref<string[]>([]);
 const focusTaskId = ref<string | null>(null);
 
@@ -1020,186 +1019,180 @@ function handleConfirm() {
         </div>
       </details>
 
-      <!-- 紧凑状态栏 -->
-      <div class="asset-status-bar">
-        <div class="asset-status-bar-left">
-          <div class="asset-status-progress">
-            <span class="asset-status-count">
-              已完成 {{ executionStats.completed }} / {{ assetTasks.length }}
+      <!-- 资产概览（合并状态栏+详情） -->
+      <details class="asset-overview-details">
+        <summary class="asset-overview-toggle">
+          <span class="asset-overview-toggle-title">
+            资产概览
+            <span class="asset-overview-progress-inline">
+              {{ executionStats.completed }}/{{ assetTasks.length }}
             </span>
             <el-progress
               :percentage="assetTasks.length > 0 ? Math.round(executionStats.completed / assetTasks.length * 100) : 0"
               :status="canCompose ? 'success' : undefined"
               :stroke-width="8"
+              class="asset-overview-progress-bar"
             />
-          </div>
-          <span v-if="blockedItems.length > 0" class="asset-status-summary">
+          </span>
+          <span v-if="blockedItems.length > 0" class="asset-overview-summary">
             {{ blockedItems.slice(0, 3).map(i => i.type).join('、') }}待生成，共 {{ blockedItems.length }} 项
           </span>
-        </div>
-        <div class="asset-status-actions">
-          <el-button
-            v-if="blockedItems.length > 0"
-            type="primary"
-            size="small"
-            :loading="isAssetsBusy"
-            :disabled="isAssetsBusy"
-            @click="handleGenerateMissing"
-          >
-            {{ isAssetsBusy ? "生成中..." : "批量生成剩余" }}
-          </el-button>
-          <el-button
-            size="small"
-            @click="showDetail = !showDetail"
-          >
-            {{ showDetail ? '收起详情 ▲' : '展开详情 ▼' }}
-          </el-button>
-        </div>
-        <p v-if="isAssetsBusy && generationProgress" class="asset-generating-progress">
-          {{ generationProgress }}
-        </p>
-      </div>
-
-      <!-- 可折叠详情区 -->
-      <div v-if="showDetail" class="asset-detail-area">
-        <!-- 资产完成度 -->
-        <div class="asset-overview-types-v2">
-          <div
-            v-for="item in visibleTypeBreakdown"
-            :key="item.label"
-            class="asset-type-pill"
-            :class="{
-              'asset-type-pill--done': item.completed === item.total && item.total > 0,
-              'asset-type-pill--blocked': item.total > 0 && item.completed < item.total,
-            }"
-          >
-            <span class="asset-type-pill-label">{{ item.label }}</span>
-            <span class="asset-type-pill-count">
-              {{ item.completed + '/' + item.total }}
-            </span>
-          </div>
-        </div>
-
-        <!-- 待处理项 -->
-        <div v-if="blockedItems.length > 0" class="asset-detail-blocked">
-          <h4 class="asset-detail-blocked-title">待处理项（{{ blockedItems.length }}）</h4>
-          <div class="asset-blocked-chips">
-            <button
-              v-for="item in visibleBlockedItems"
-              :key="item.taskId"
-              class="asset-blocked-chip"
-              @click="scrollToTask(item.taskId)"
+          <span class="asset-overview-toggle-actions" @click.stop>
+            <el-button
+              v-if="blockedItems.length > 0"
+              type="primary"
+              size="small"
+              :loading="isAssetsBusy"
+              :disabled="isAssetsBusy"
+              @click="handleGenerateMissing"
             >
-              <span class="asset-blocked-chip-check" @click.stop="toggleBlockedItem(item.taskId)">
-                {{ selectedBlockedIds.includes(item.taskId) ? '☑' : '☐' }}
+              {{ isAssetsBusy ? "生成中..." : "批量生成剩余" }}
+            </el-button>
+          </span>
+          <p v-if="isAssetsBusy && generationProgress" class="asset-generating-progress">
+            {{ generationProgress }}
+          </p>
+        </summary>
+
+        <div class="asset-overview-body">
+          <!-- 资产完成度 -->
+          <div class="asset-overview-types-v2">
+            <div
+              v-for="item in visibleTypeBreakdown"
+              :key="item.label"
+              class="asset-type-pill"
+              :class="{
+                'asset-type-pill--done': item.completed === item.total && item.total > 0,
+                'asset-type-pill--blocked': item.total > 0 && item.completed < item.total,
+              }"
+            >
+              <span class="asset-type-pill-label">{{ item.label }}</span>
+              <span class="asset-type-pill-count">
+                {{ item.completed + '/' + item.total }}
               </span>
-              <span class="asset-blocked-chip-seg">{{ item.segmentId }}</span>
-              <span class="asset-blocked-chip-type">{{ item.type }}</span>
-              <el-tag :type="item.reason === '生成失败' ? 'danger' : 'warning'" size="small">
-                {{ item.reason }}
-              </el-tag>
+            </div>
+          </div>
+
+          <!-- 待处理项 -->
+          <div v-if="blockedItems.length > 0" class="asset-detail-blocked">
+            <h4 class="asset-detail-blocked-title">待处理项（{{ blockedItems.length }}）</h4>
+            <div class="asset-blocked-chips">
+              <button
+                v-for="item in visibleBlockedItems"
+                :key="item.taskId"
+                class="asset-blocked-chip"
+                @click="scrollToTask(item.taskId)"
+              >
+                <span class="asset-blocked-chip-check" @click.stop="toggleBlockedItem(item.taskId)">
+                  {{ selectedBlockedIds.includes(item.taskId) ? '☑' : '☐' }}
+                </span>
+                <span class="asset-blocked-chip-seg">{{ item.segmentId }}</span>
+                <span class="asset-blocked-chip-type">{{ item.type }}</span>
+                <el-tag :type="item.reason === '生成失败' ? 'danger' : 'warning'" size="small">
+                  {{ item.reason }}
+                </el-tag>
+              </button>
+            </div>
+            <button
+              v-if="blockedItems.length > 10"
+              class="asset-blocked-expand"
+              @click="showAllBlocked = !showAllBlocked"
+            >
+              {{ showAllBlocked ? '收起' : '展开全部（' + blockedItems.length + '）' }}
             </button>
           </div>
-          <button
-            v-if="blockedItems.length > 10"
-            class="asset-blocked-expand"
-            @click="showAllBlocked = !showAllBlocked"
-          >
-            {{ showAllBlocked ? '收起' : '展开全部（' + blockedItems.length + '）' }}
-          </button>
-        </div>
 
-        <!-- 成本 -->
-        <div class="asset-detail-cost">
-          <h4 class="asset-detail-cost-title">已生成成本估算</h4>
-          <div class="asset-overview-cost-items">
-            <span v-if="costBreakdown.image.count > 0">
-              🖼 图片 {{ costBreakdown.image.count }} 张 · ¥{{ costBreakdown.image.total.toFixed(2) }}
-            </span>
-            <span v-if="costBreakdown.video.durationSec > 0">
-              🎬 视频 {{ costBreakdown.video.durationSec.toFixed(1) }}s · ¥{{ costBreakdown.video.total.toFixed(2) }}
-            </span>
-            <span v-if="costBreakdown.tts.charCount > 0">
-              🔊 口播 {{ costBreakdown.tts.charCount }} 字 · ¥{{ costBreakdown.tts.total.toFixed(2) }}
-            </span>
+          <!-- 成本 -->
+          <div class="asset-detail-cost">
+            <h4 class="asset-detail-cost-title">已生成成本估算</h4>
+            <div class="asset-overview-cost-items">
+              <span v-if="costBreakdown.image.count > 0">
+                🖼 图片 {{ costBreakdown.image.count }} 张 · ¥{{ costBreakdown.image.total.toFixed(2) }}
+              </span>
+              <span v-if="costBreakdown.video.durationSec > 0">
+                🎬 视频 {{ costBreakdown.video.durationSec.toFixed(1) }}s · ¥{{ costBreakdown.video.total.toFixed(2) }}
+              </span>
+              <span v-if="costBreakdown.tts.charCount > 0">
+                🔊 口播 {{ costBreakdown.tts.charCount }} 字 · ¥{{ costBreakdown.tts.total.toFixed(2) }}
+              </span>
+            </div>
+            <div class="asset-overview-cost-total">
+              合计 <strong>¥{{ costBreakdown.total.toFixed(2) }}</strong>
+              <span class="asset-overview-cost-note">（按当前配置估算）</span>
+            </div>
           </div>
-          <div class="asset-overview-cost-total">
-            合计 <strong>¥{{ costBreakdown.total.toFixed(2) }}</strong>
-            <span class="asset-overview-cost-note">（按当前配置估算）</span>
-          </div>
-        </div>
 
-        <!-- 批量操作 -->
-        <div class="asset-detail-actions">
-          <el-button
-            v-if="selectedBlockedIds.length > 0"
-            size="small"
-            type="primary"
-            :loading="isAssetsBusy"
-            :disabled="isAssetsBusy"
-            @click="handleGenerateSelected"
-          >
-            生成选中项（{{ selectedBlockedIds.length }}）
-          </el-button>
-          <el-button
-            v-if="missingImageCount > 0"
-            size="small"
-            :loading="isAssetsBusy"
-            :disabled="isAssetsBusy"
-            @click="handleGenerateByType('image_still', '分镜图')"
-          >
-            生成全部图片（{{ missingImageCount }}）
-          </el-button>
-          <el-button
-            v-if="missingVideoCount > 0"
-            size="small"
-            :loading="isAssetsBusy"
-            :disabled="isAssetsBusy"
-            @click="handleGenerateByType('video_clip', '分镜视频')"
-          >
-            生成全部视频（{{ missingVideoCount }}）
-          </el-button>
-          <el-button
-            v-if="blockedItems.length > 0 && selectedBlockedIds.length === 0"
-            size="small"
-            type="primary"
-            :loading="isAssetsBusy"
-            :disabled="isAssetsBusy"
-            @click="handleGenerateMissing"
-          >
-            {{ isAssetsBusy ? "生成中..." : "生成全部剩余（" + blockedItems.length + "）" }}
-          </el-button>
-          <el-button
-            v-if="upgradableSegments.length > 0"
-            size="small"
-            plain
-            type="primary"
-            @click="handleBatchUpgrade"
-          >
-            升级 {{ upgradableSegments.length }} 个分镜为 API 视频
-          </el-button>
-          <el-button
-            type="danger"
-            plain
-            size="small"
-            :loading="isAssetsBusy"
-            :disabled="isAssetsBusy"
-            @click="handleGenerateFull"
-          >
-            重新生成全部资产
-          </el-button>
+          <!-- 批量操作 -->
+          <div class="asset-detail-actions">
+            <el-button
+              v-if="selectedBlockedIds.length > 0"
+              size="small"
+              type="primary"
+              :loading="isAssetsBusy"
+              :disabled="isAssetsBusy"
+              @click="handleGenerateSelected"
+            >
+              生成选中项（{{ selectedBlockedIds.length }}）
+            </el-button>
+            <el-button
+              v-if="missingImageCount > 0"
+              size="small"
+              :loading="isAssetsBusy"
+              :disabled="isAssetsBusy"
+              @click="handleGenerateByType('image_still', '分镜图')"
+            >
+              生成全部图片（{{ missingImageCount }}）
+            </el-button>
+            <el-button
+              v-if="missingVideoCount > 0"
+              size="small"
+              :loading="isAssetsBusy"
+              :disabled="isAssetsBusy"
+              @click="handleGenerateByType('video_clip', '分镜视频')"
+            >
+              生成全部视频（{{ missingVideoCount }}）
+            </el-button>
+            <el-button
+              v-if="blockedItems.length > 0 && selectedBlockedIds.length === 0"
+              size="small"
+              type="primary"
+              :loading="isAssetsBusy"
+              :disabled="isAssetsBusy"
+              @click="handleGenerateMissing"
+            >
+              {{ isAssetsBusy ? "生成中..." : "生成全部剩余（" + blockedItems.length + "）" }}
+            </el-button>
+            <el-button
+              v-if="upgradableSegments.length > 0"
+              size="small"
+              plain
+              type="primary"
+              @click="handleBatchUpgrade"
+            >
+              升级 {{ upgradableSegments.length }} 个分镜为 API 视频
+            </el-button>
+            <el-button
+              type="danger"
+              plain
+              size="small"
+              :loading="isAssetsBusy"
+              :disabled="isAssetsBusy"
+              @click="handleGenerateFull"
+            >
+              重新生成全部资产
+            </el-button>
+          </div>
         </div>
-      </div>
+      </details>
 
       <!-- 口播音频 -->
       <details v-if="narrationArtifact && narrationAudioUrl" class="asset-narration-bar" :open="false">
         <summary class="asset-narration-bar-header">
-          <span>🔊 口播音频</span>
+          <span>口播音频 🔊</span>
           <span class="asset-narration-bar-meta">
             <span v-if="narrationDuration !== null">{{ narrationDuration.toFixed(1) }}s</span>
             <span v-if="costBreakdown.tts.charCount > 0">{{ costBreakdown.tts.charCount }} 字</span>
             <span>¥{{ costBreakdown.tts.total.toFixed(2) }}</span>
-            <span class="asset-narration-bar-expand">展开详情 ▼</span>
           </span>
         </summary>
         <div class="asset-narration-bar-body">
@@ -1378,58 +1371,79 @@ function handleConfirm() {
   margin-top: var(--space-sm);
 }
 
-/* ---- Asset status bar ---- */
-.asset-status-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
-  padding: var(--space-md);
+/* ---- Asset overview details ---- */
+.asset-overview-details {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-card);
   background: var(--bg-card);
+  overflow: hidden;
+}
+
+.asset-overview-toggle {
+  cursor: pointer;
+  padding: var(--space-md);
+  font-size: 0.92rem;
+  font-weight: var(--font-subheading);
+  color: var(--text-heading);
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  user-select: none;
+  list-style: none;
   flex-wrap: wrap;
 }
 
-.asset-status-bar-left {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.asset-overview-toggle::-webkit-details-marker { display: none; }
+
+.asset-overview-toggle::before {
+  content: "▸";
+  font-size: 0.8rem;
+  transition: transform 150ms ease;
 }
 
-.asset-status-progress {
+details[open] > .asset-overview-toggle::before {
+  transform: rotate(90deg);
+}
+
+details[open] > .asset-overview-toggle {
+  border-bottom: 1px solid var(--border-default);
+}
+
+.asset-overview-toggle-title {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  min-width: 240px;
 }
 
-.asset-status-count {
-  font-weight: var(--font-subheading);
-  font-size: 0.9rem;
-  color: var(--text-heading);
+.asset-overview-progress-inline {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-weight: 400;
   white-space: nowrap;
 }
 
-.asset-status-summary {
-  font-size: 0.82rem;
-  color: var(--text-muted);
+.asset-overview-progress-bar {
+  width: 160px;
 }
 
-.asset-status-actions {
+.asset-overview-summary {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: auto;
+  margin-right: var(--space-md);
+}
+
+.asset-overview-toggle-actions {
   display: flex;
   gap: var(--space-xs);
   align-items: center;
 }
 
-/* ---- Detail area ---- */
-.asset-detail-area {
+.asset-overview-body {
   display: grid;
   gap: var(--space-md);
   padding: var(--space-md);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-card);
-  background: var(--bg-card);
 }
 
 .asset-detail-blocked {
@@ -2012,10 +2026,6 @@ details[open] > .asset-global-toggle::before {
     flex-direction: column;
   }
 }
-.asset-status-confirmed {
-  font-size: 0.82rem;
-  color: var(--color-success);
-}
 
 /* ---- Segment side nav ---- */
 .asset-segment-nav {
@@ -2069,12 +2079,22 @@ details[open] > .asset-global-toggle::before {
   color: var(--text-heading);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: var(--space-xs);
   list-style: none;
   user-select: none;
 }
 
 .asset-narration-bar-header::-webkit-details-marker { display: none; }
+
+.asset-narration-bar-header::before {
+  content: "▸";
+  font-size: 0.8rem;
+  transition: transform 150ms ease;
+}
+
+details[open] > .asset-narration-bar-header::before {
+  transform: rotate(90deg);
+}
 
 .asset-narration-bar-meta {
   display: flex;
@@ -2083,12 +2103,8 @@ details[open] > .asset-global-toggle::before {
   color: var(--text-muted);
   font-weight: 400;
   align-items: center;
-}
-
-.asset-narration-bar-expand {
-  font-size: 0.72rem;
-  color: var(--accent-primary);
-  margin-left: var(--space-sm);
+  flex: 1;
+  justify-content: flex-end;
 }
 
 .asset-narration-bar-body {
@@ -2104,11 +2120,11 @@ details[open] > .asset-global-toggle::before {
 }
 
 @media (max-width: 640px) {
-  .asset-status-bar {
+  .asset-overview-toggle {
     flex-direction: column;
     align-items: stretch;
   }
-  .asset-status-actions {
+  .asset-overview-toggle-actions {
     justify-content: flex-end;
   }
 }
