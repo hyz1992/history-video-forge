@@ -564,11 +564,12 @@ async function triggerAutoGenerate() {
     startAssetPolling();
     try {
       await assetPlanningStore.generateAssetPlan();
+      if (!assetPlanningStore.state.loadError) {
+        ElMessage.success("资产规划生成完成");
+        await handleGenerateBasic();
+      }
     } finally {
       pendingAutoGenerate.value = false;
-    }
-    if (!assetPlanningStore.state.loadError) {
-      ElMessage.success("资产规划生成完成");
     }
     startAssetPolling();
   }
