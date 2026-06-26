@@ -1183,6 +1183,7 @@ function handleConfirm() {
       <!-- 分镜列表 -->
       <div class="asset-segments-header">
         <span class="asset-segments-count">共 {{ segmentCount }} 个镜头</span>
+        <span class="asset-segments-progress">{{ executionStats.completed }} / {{ assetTasks.length }} 已完成</span>
       </div>
       <div v-if="segments.length > 0" class="asset-segments">
         <SegmentAssetCard
@@ -1206,11 +1207,7 @@ function handleConfirm() {
 
       <!-- 粘性底栏 -->
       <div class="asset-bottom-bar">
-        <div class="asset-bottom-progress">
-          <span class="asset-bottom-count">
-            {{ executionStats.completed }} / {{ assetTasks.length }} 已完成
-          </span>
-        </div>
+        <p v-if="!canCompose" class="asset-bottom-reason">{{ blockedReasonText }}</p>
         <div class="asset-bottom-actions">
           <el-tooltip
             v-if="!canCompose"
@@ -1522,16 +1519,11 @@ details[open] > .asset-overview-toggle {
   margin-top: auto;
 }
 
-.asset-bottom-progress {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.asset-bottom-count {
-  font-weight: var(--font-subheading);
-  font-size: 0.92rem;
-  color: var(--text-heading);
+.asset-bottom-reason {
+  font-size: 0.82rem;
+  color: var(--color-warning);
+  line-height: 1.5;
+  max-width: 600px;
 }
 
 .asset-bottom-actions {
@@ -1978,11 +1970,18 @@ details[open] > .asset-global-toggle::before {
 .asset-segments-header {
   display: flex;
   align-items: baseline;
+  justify-content: space-between;
 }
 
 .asset-segments-count {
   font-size: 0.88rem;
   color: var(--text-muted);
+}
+
+.asset-segments-progress {
+  font-weight: var(--font-subheading);
+  font-size: 0.88rem;
+  color: var(--text-heading);
 }
 
 /* ---- Segment cards ---- */
