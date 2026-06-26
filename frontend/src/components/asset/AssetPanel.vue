@@ -1207,7 +1207,12 @@ function handleConfirm() {
 
       <!-- 粘性底栏 -->
       <div class="asset-bottom-bar">
-        <p v-if="!canCompose" class="asset-bottom-reason">{{ blockedReasonText }}</p>
+        <div class="asset-bottom-left">
+          <span class="asset-bottom-count">
+            {{ executionStats.completed }} / {{ assetTasks.length }} 已完成
+          </span>
+          <p v-if="!canCompose" class="asset-bottom-reason">{{ blockedReasonText }}</p>
+        </div>
         <div class="asset-bottom-actions">
           <el-tooltip
             v-if="!canCompose"
@@ -1517,6 +1522,19 @@ details[open] > .asset-overview-toggle {
   border-top: 2px solid var(--border-default);
   z-index: 10;
   margin-top: auto;
+}
+
+.asset-bottom-left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.asset-bottom-count {
+  font-weight: var(--font-subheading);
+  font-size: 0.92rem;
+  color: var(--text-heading);
 }
 
 .asset-bottom-reason {
