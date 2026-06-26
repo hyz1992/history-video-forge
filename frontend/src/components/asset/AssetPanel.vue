@@ -1172,7 +1172,10 @@ function handleConfirm() {
           </span>
         </summary>
         <div class="asset-narration-bar-body">
-          <audio controls :src="narrationAudioUrl" class="asset-narration-audio" />
+          <div class="asset-narration-audio-row">
+            <audio controls :src="narrationAudioUrl" class="asset-narration-audio" />
+            <span v-if="voiceLabel" class="asset-narration-voice-label">🎤 {{ voiceLabel }}</span>
+          </div>
           <p v-if="fullScriptText"
              class="asset-narration-script-text"
              :class="{ 'asset-narration-script-text--collapsed': !narrationScriptExpanded }">
@@ -1897,6 +1900,20 @@ details[open] > .asset-global-toggle::before {
   height: 32px;
   min-width: 280px;
   border-radius: var(--radius-sm);
+}
+
+.asset-narration-audio-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.asset-narration-voice-label {
+  font-size: 0.82rem;
+  font-weight: var(--font-subheading);
+  color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .asset-narration-meta {
