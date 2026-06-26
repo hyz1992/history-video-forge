@@ -563,7 +563,7 @@ function nextMedia() {
       <div class="segment-header-row">
         <span class="segment-header-number">#{{ segmentIndex + 1 }}</span>
         <span class="segment-header-time">
-          {{ formatSeconds(segment.start_hint_sec) }} → {{ formatSeconds(segment.end_hint_sec) }}
+          {{ formatSeconds(segment.start_hint_sec) }} - {{ formatSeconds(segment.end_hint_sec) }}
         </span>
         <ElTag size="small" type="info">{{ narrativeRoleLabel }}</ElTag>
       </div>
