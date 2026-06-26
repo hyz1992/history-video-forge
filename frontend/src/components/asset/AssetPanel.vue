@@ -677,34 +677,6 @@ async function handleBatchUpgrade() {
   ElMessage.success("API 视频任务已创建");
 }
 
-async function handleGenerateFull() {
-  if (isAssetsBusy.value) return;
-  const costText = estimatedCost.value
-    ? `\n预估费用约 ¥${estimatedCost.value.total.toFixed(2)}（${estimatedCost.value.images} 张图 + ${estimatedCost.value.videoTotalSec.toFixed(0)}s 视频 + ${estimatedCost.value.ttsChars} 字口播）`
-    : "";
-  if (hasManifest.value) {
-    try {
-      await ElMessageBox.confirm(
-        `重新生成将覆盖所有已有产物（包括已上传的文件），确定继续？${costText}`,
-        "确认重新生成",
-        { confirmButtonText: "确定重建", cancelButtonText: "取消", type: "warning" },
-      );
-    } catch { return; }
-  } else {
-    try {
-      await ElMessageBox.confirm(
-        `将调用 AI 服务生成全部资产（图片/视频/口播/音效/配乐）。${costText}\n\n确定继续？`,
-        "确认全部自动生成",
-        { confirmButtonText: "确定生成", cancelButtonText: "取消", type: "info" },
-      );
-    } catch { return; }
-  }
-  await assetsStore.generateAssets({});
-  if (!assetsStore.state.loadError) {
-    ElMessage.success("全部资产生成完成");
-  }
-}
-
 function handleUploadFile(taskId: string, file: File) {
   assetsStore.uploadArtifact(taskId, file);
 }
@@ -1170,16 +1142,6 @@ function handleConfirm() {
               @click="handleBatchUpgrade"
             >
               升级 {{ upgradableSegments.length }} 个分镜为 API 视频
-            </el-button>
-            <el-button
-              type="danger"
-              plain
-              size="small"
-              :loading="isAssetsBusy"
-              :disabled="isAssetsBusy"
-              @click="handleGenerateFull"
-            >
-              重新生成全部资产
             </el-button>
           </div>
         </div>
