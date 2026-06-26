@@ -110,8 +110,8 @@
 
 | 文件 | 行数 | 职责 |
 |------|------|------|
-| `frontend/src/components/asset/AssetPanel.vue` | ~1110 | 主面板：状态编排、轮询、批量操作、粘性底栏 |
-| `frontend/src/components/asset/SegmentAssetCard.vue` | ~960 | 单分镜卡片：预览、提示词、单任务操作、全屏预览 |
+| `frontend/src/components/asset/AssetPanel.vue` | ~1656 | 主面板：状态编排、轮询、批量操作、粘性底栏 |
+| `frontend/src/components/asset/SegmentAssetCard.vue` | ~1644 | 单分镜卡片：预览、提示词、单任务操作、全屏预览 |
 | `frontend/src/stores/asset-planning.ts` | ~333 | 资产规划 store：加载、生成、轮询 |
 | `frontend/src/stores/assets.ts` | ~361 | 资产 store：加载、生成、单任务、上传、升级视频 |
 | `frontend/src/composables/useStagePolling.ts` | ~84 | 通用轮询 hook |
@@ -289,7 +289,7 @@
 >
 > 1. **概览卡进度条细化**：使用分段进度条，每段代表一个任务类型，已完成段为绿色，进行中段为蓝色脉冲，待处理段为灰色
 > 2. **分镜卡片内联进度**：当某个 segment 的任务正在生成时，卡片内显示 `⏳ 生成中...` mini 状态，而非全局锁死所有卡片
-> 3. **全局锁改为任务级锁**：当前 `isGloballyLocked` 阻止所有卡片的操作按钮；应改为只在对应任务上显示 loading，允许用户在其他卡片上进行非冲突操作（如查看提示词、上传已完成分镜的文件）
+> 3. **全局锁改为任务级锁**：当前 `isGloballyLocked`（即 `isAssetsBusy`，见 [AssetPanel.vue:L111](file://d:/ai_learn/history-video-forge/frontend/src/components/asset/AssetPanel.vue#L111)）通过 props 传入 `SegmentAssetCard` 并阻止所有卡片的操作按钮；应改为只在对应任务上显示 loading，允许用户在其他卡片上进行非冲突操作（如查看提示词、上传已完成分镜的文件）
 > 4. **后端暴露 execution_state 的 `progress_phase`**：目前 `AssetPanel` 已读取 `execution_state.progress_phase` 等字段（[AssetPanel.vue:L113-L123](file://d:/ai_learn/history-video-forge/frontend/src/components/asset/AssetPanel.vue#L113-L123)），但仅用于规划阶段；应扩展到资产生成阶段
 
 **改动范围**：
@@ -419,12 +419,15 @@
 >    type AssetTabPhase =
 >      | { kind: "loading" }
 >      | { kind: "no_plan" }
+>      | { kind: "error"; message: string }
 >      | { kind: "plan_generating" }
 >      | { kind: "plan_ready"; needsBasicAssets: boolean }
 >      | { kind: "basic_assets_generating" }
 >      | { kind: "basic_assets_failed"; error: string }
 >      | { kind: "ready"; manifest: AssetManifest }
 >    ```
+>    - `error` 覆盖加载快照失败、权限不足等致命错误，对应当前代码中 `assetLoadError` 全局状态（[AssetPanel.vue:L147-L149](file://d:/ai_learn/history-video-forge/frontend/src/components/asset/AssetPanel.vue#L147-L149)）
+>    - `basic_assets_failed` 仅覆盖基础资产生成失败的局部可恢复错误
 > 2. **状态转换由单一 reducer 函数管理**，而非分散在各处的 `ref` 赋值
 > 3. **自动生成改为显式触发**：规划完成后不自动开始基础资产，而是展示规划概览 +「生成基础资产」按钮（含费用预估）
 > 4. **轮询停止条件简化**：统一使用 `execution_state.generating === false && current_status !== '*_generating'` 单一判定
