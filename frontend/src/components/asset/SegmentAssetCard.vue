@@ -154,13 +154,56 @@ const currentExecution = computed(() => {
   return props.executionsByTaskId.get(task.task_id) ?? null;
 });
 
+const allArtifactIds = computed(() =>
+  currentExecution.value?.output_artifact_ids ?? [],
+);
+
+const selectedVersionIndex = ref<number>(-1);
+
+watch([allArtifactIds, activeMediaIndex, activeTab], () => {
+  selectedVersionIndex.value = allArtifactIds.value.length - 1;
+});
+
+const currentArtifactId = computed(() => {
+  const ids = allArtifactIds.value;
+  if (ids.length === 0) return null;
+  const idx = selectedVersionIndex.value;
+  if (idx < 0 || idx >= ids.length) return ids[ids.length - 1]!;
+  return ids[idx]!;
+});
+
 const currentArtifact = computed(() => {
-  if (!currentExecution.value || currentExecution.value.output_artifact_ids.length === 0) return null;
-  const primaryId = currentExecution.value.output_artifact_ids[0]!;
-  return props.artifactsById.get(primaryId) ?? null;
+  if (!currentArtifactId.value) return null;
+  return props.artifactsById.get(currentArtifactId.value) ?? null;
 });
 
 const hasGeneratedMedia = computed(() => !!currentArtifact.value);
+
+const isAcceptedVersion = computed(() => {
+  const ids = allArtifactIds.value;
+  if (ids.length === 0) return false;
+  return currentArtifactId.value === ids[0];
+});
+
+const versionCount = computed(() => allArtifactIds.value.length);
+
+function selectVersion(index: number) {
+  const ids = allArtifactIds.value;
+  if (index >= 0 && index < ids.length) {
+    selectedVersionIndex.value = index;
+  }
+}
+
+async function handleAcceptVersion() {
+  if (!currentTask.value || !currentArtifactId.value) return;
+  if (isAcceptedVersion.value) return;
+  try {
+    await assetsStore.acceptArtifact(currentTask.value.task_id, currentArtifactId.value);
+    ElMessage.success("已确认使用此版本");
+  } catch (e) {
+    ElMessage.error("确认版本失败：" + (e instanceof Error ? e.message : "未知错误"));
+  }
+}
 
 const isCurrentUploading = computed(() => {
   const task = activeTasks.value[activeMediaIndex.value];
@@ -688,11 +731,6 @@ function nextMedia() {
       <template v-else>
         <div class="segment-media-preview-wrapper">
           <div class="segment-media-preview">
-            <div v-if="hasGeneratedMedia && currentArtifact?.artifact_type === 'image' && videoTasks.length === 0"
-                 class="segment-media-upgrade-badge"
-                 @click="emit('upgrade-video', segment.segment_id)">
-              🎬 升级视频
-            </div>
             <img
               v-if="currentArtifact?.artifact_type === 'image'"
               :src="artifactUrl(currentArtifact.artifact_id)"
@@ -738,6 +776,34 @@ function nextMedia() {
           </div>
         </div>
       </template>
+
+      <!-- Version controls -->
+      <div v-if="versionCount > 1" class="segment-media-versions">
+        <div class="segment-media-versions-list">
+          <button
+            v-for="(id, i) in allArtifactIds"
+            :key="id"
+            class="segment-media-version-dot"
+            :class="{
+              active: i === selectedVersionIndex,
+              accepted: i === 0,
+            }"
+            :title="'版本 ' + (i + 1) + (i === 0 ? '（当前使用中）' : '')"
+            @click="selectVersion(i)"
+          >
+            {{ i + 1 }}
+          </button>
+        </div>
+        <button
+          v-if="!isAcceptedVersion"
+          class="segment-media-accept-btn"
+          :disabled="isTaskLocked"
+          @click="handleAcceptVersion"
+        >
+          使用此版本
+        </button>
+        <span v-else class="segment-media-accepted-label">当前使用版本</span>
+      </div>
     </div>
 
     <!-- Right: prompt & actions -->
@@ -1432,22 +1498,76 @@ function nextMedia() {
   filter: brightness(1.1);
 }
 
-.segment-media-upgrade-badge {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  z-index: 1;
-  padding: 3px 8px;
+/* ---- Version controls ---- */
+.segment-media-versions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+  padding-top: var(--space-xs);
+}
+
+.segment-media-versions-list {
+  display: flex;
+  gap: 4px;
+}
+
+.segment-media-version-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border-default);
+  border-radius: 50%;
+  background: var(--bg-panel);
+  cursor: pointer;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.segment-media-version-dot.active {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary);
+  color: var(--text-inverse);
+}
+
+.segment-media-version-dot.accepted:not(.active) {
+  border-color: rgba(201, 162, 39, 0.4);
+  color: #c9a227;
+}
+
+.segment-media-version-dot:hover:not(.active):not(.accepted) {
+  border-color: var(--accent-primary);
+}
+
+.segment-media-accept-btn {
+  padding: 2px 10px;
+  border: 1px solid var(--accent-primary);
   border-radius: var(--radius-sm);
-  background: rgba(0, 0, 0, 0.6);
-  color: var(--accent-primary-light);
+  background: transparent;
+  color: var(--accent-primary);
   font-size: 0.75rem;
   cursor: pointer;
-  backdrop-filter: blur(2px);
-  transition: background 0.15s;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
 }
-.segment-media-upgrade-badge:hover {
-  background: rgba(0, 0, 0, 0.8);
+
+.segment-media-accept-btn:hover:not(:disabled) {
+  background: var(--accent-primary);
+  color: var(--text-inverse);
+}
+
+.segment-media-accept-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.segment-media-accepted-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .segment-media-video {
