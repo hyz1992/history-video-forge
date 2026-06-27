@@ -123,7 +123,7 @@ TTS 是最终时间轴的根，但 TTS 和字幕任务由本地服务确定性�
       "prompt_draft": "",
       "parameters": {
         "image_role": "anchor",
-        "video_prompt_reserve": "明代江南富户书房，低饱和度电影级光影。某明代书生身穿方巾道袍端坐紫檀书案前...\n\n手持微晃，镜头缓慢推进至书生面前，约2秒。书生微微抬眉，目光从手中书卷移向窗外天光。窗外光线从午后暖黄渐渐过渡到薄暮灰蓝。总长约5秒。"
+        "video_prompt_reserve": "<与prompt_draft首段相同的静态画面描述>\n\n<镜头运动方向>，<主体动作路径>，约<秒数>秒。<场景时间变化>。总长约<秒数>秒。"
       },
       "manual_upload_policy": {
         "allowed": true,
@@ -225,11 +225,11 @@ recommended_mode 只能使用 auto、manual_allowed、manual_preferred、placeho
 
    `video_prompt_reserve` 必须遵守与 `video_clip.prompt_draft` 相同的第 5 条动态维度要求（主体动作路径、镜头运动方向、场景时间变化、时长感知），但它是作为 `image_still` 的参数字段存在，不影响 `image_still.prompt_draft` 的纯静态属性。
 
-   格式：
+   格式（仅说明结构，实际内容基于当前 segment 推导，不得照抄）：
    ```
    "parameters": {
      "image_role": "anchor",
-     "video_prompt_reserve": "战国军营帐内，低饱和度电影级光影。吴王僚身穿青铜甲胄端坐案前...\n\n镜头从帐门缓慢推进至吴王僚正面近景，约3秒。吴王僚右手缓缓抬起接酒杯..."
+     "video_prompt_reserve": "<与prompt_draft首段相同的静态画面描述>\n\n<镜头运动方向>，<主体动作路径>，约<秒数>秒。<场景时间变化>。总长约<秒数>秒。"
    }
    ```
 
