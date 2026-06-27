@@ -159,9 +159,25 @@ const allArtifactIds = computed(() =>
 );
 
 const selectedVersionIndex = ref<number>(-1);
+const trackedArtifactId = ref<string | null>(null);
 
-watch([allArtifactIds, activeMediaIndex, activeTab], () => {
-  selectedVersionIndex.value = allArtifactIds.value.length - 1;
+function resolveIndexFromTrackedId(ids: readonly string[]): number {
+  if (ids.length === 0) return -1;
+  if (trackedArtifactId.value && ids.includes(trackedArtifactId.value)) {
+    return ids.indexOf(trackedArtifactId.value);
+  }
+  return ids.length - 1;
+}
+
+watch([allArtifactIds, activeMediaIndex, activeTab], ([ids]) => {
+  selectedVersionIndex.value = resolveIndexFromTrackedId(ids);
+});
+
+watch(selectedVersionIndex, (idx) => {
+  const ids = allArtifactIds.value;
+  if (idx >= 0 && idx < ids.length) {
+    trackedArtifactId.value = ids[idx]!;
+  }
 });
 
 const currentArtifactId = computed(() => {
@@ -191,14 +207,17 @@ function selectVersion(index: number) {
   const ids = allArtifactIds.value;
   if (index >= 0 && index < ids.length) {
     selectedVersionIndex.value = index;
+    trackedArtifactId.value = ids[index]!;
   }
 }
 
 async function handleAcceptVersion() {
   if (!currentTask.value || !currentArtifactId.value) return;
   if (isAcceptedVersion.value) return;
+  const acceptedId = currentArtifactId.value;
   try {
-    await assetsStore.acceptArtifact(currentTask.value.task_id, currentArtifactId.value);
+    await assetsStore.acceptArtifact(currentTask.value.task_id, acceptedId);
+    trackedArtifactId.value = acceptedId;
     ElMessage.success("已确认使用此版本");
   } catch (e) {
     ElMessage.error("确认版本失败：" + (e instanceof Error ? e.message : "未知错误"));
