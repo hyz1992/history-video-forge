@@ -1035,7 +1035,7 @@ export async function registerManualArtifact(input: RegisterManualArtifactInput)
 
   // Step 6: Create new artifact
   const now = new Date().toISOString();
-  const artifactId = `artifact_manual_${db.generateId()}`;
+  const artifactId = `artifact_manual_${db.generateId()}_${Date.now().toString(36)}`;
 
   const newArtifactCandidate = {
     artifact_id: artifactId,
