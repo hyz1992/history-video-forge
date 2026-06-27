@@ -7,6 +7,8 @@ import { checkPromptQuality } from "../../utils/prompt-quality";
 
 import { checkArtRisks } from "../../utils/asset-art-quality";
 
+import StageLoadingBar from "../workspace/StageLoadingBar.vue";
+
 import type { StoryboardSegment } from "../../stores/storyboard";
 import type { AssetTask } from "../../stores/asset-planning";
 import { useAssetsStore } from "../../stores/assets";
@@ -565,6 +567,10 @@ function nextMedia() {
 </script>
 
 <template>
+  <StageLoadingBar
+    :visible="isTaskLocked"
+    text="资产生成中…"
+  />
   <article class="segment-asset-card">
     <!-- Full-width header -->
     <div class="segment-header">
@@ -648,76 +654,87 @@ function nextMedia() {
 
       <!-- Preview area: no artifact yet -->
       <template v-else-if="!hasGeneratedMedia">
-        <div
-          class="segment-media-placeholder"
-          :class="{ clickable: canUploadNow }"
-          @click="canUploadNow && triggerFileUpload()"
-        >
-          <ElTag
-            v-if="statusLabel && currentExecution?.status === 'waiting_manual_upload'"
-            type="warning"
-            size="small"
+        <div class="segment-media-placeholder-wrapper">
+          <div
+            class="segment-media-placeholder"
+            :class="{ clickable: canUploadNow && !isTaskLocked }"
+            @click="canUploadNow && !isTaskLocked && triggerFileUpload()"
           >
-            {{ statusLabel }}
-          </ElTag>
-          <ElTag
-            v-else-if="statusLabel"
-            size="small"
-            type="info"
-          >
-            {{ statusLabel }}
-          </ElTag>
-          <span class="segment-media-placeholder-text">
-            {{ canUploadNow ? '点击此处上传文件' : (statusLabel ? '' : '暂无') }}
-          </span>
+            <ElTag
+              v-if="statusLabel && currentExecution?.status === 'waiting_manual_upload'"
+              type="warning"
+              size="small"
+            >
+              {{ statusLabel }}
+            </ElTag>
+            <ElTag
+              v-else-if="statusLabel"
+              size="small"
+              type="info"
+            >
+              {{ statusLabel }}
+            </ElTag>
+            <span class="segment-media-placeholder-text">
+              {{ canUploadNow ? '点击此处上传文件' : (statusLabel ? '' : '暂无') }}
+            </span>
+          </div>
+          <div v-if="isTaskLocked" class="segment-media-loading-overlay">
+            <span class="segment-media-loading-spinner" />
+          </div>
         </div>
       </template>
 
       <!-- Preview area: artifact exists -->
       <template v-else>
-        <div class="segment-media-preview">
-          <div v-if="hasGeneratedMedia && currentArtifact?.artifact_type === 'image' && videoTasks.length === 0"
-               class="segment-media-upgrade-badge"
-               @click="emit('upgrade-video', segment.segment_id)">
-            🎬 升级视频
-          </div>
-          <img
-            v-if="currentArtifact?.artifact_type === 'image'"
-            :src="artifactUrl(currentArtifact.artifact_id)"
-            class="segment-media-image"
-            :alt="'#' + (segmentIndex + 1) + ' 分镜图：' + (segment.scene_description || segment.script_excerpt || '').slice(0, 40)"
-            @click="togglePreview"
-          />
-          <video
-            v-else-if="currentArtifact?.artifact_type === 'video'"
-            :src="artifactUrl(currentArtifact.artifact_id)"
-            class="segment-media-video"
-            controls
-            @click="togglePreview"
-          />
-          <!-- Fallback for non-visual artifact types -->
-          <div v-else class="segment-media-frame">
-            <span class="segment-media-placeholder-text">
-              {{ currentArtifact?.artifact_type ?? '未知类型' }}
-            </span>
-          </div>
-
-          <div v-if="activeTasks.length > 1" class="segment-media-nav">
-            <button class="segment-media-arrow" :disabled="activeMediaIndex === 0" @click="prevMedia">
-              ‹
-            </button>
-            <div class="segment-media-dots">
-              <span
-                v-for="(_, i) in activeTasks"
-                :key="i"
-                class="segment-media-dot"
-                :class="{ active: i === activeMediaIndex }"
-                @click="activeMediaIndex = i"
-              />
+        <div class="segment-media-preview-wrapper">
+          <div class="segment-media-preview">
+            <div v-if="hasGeneratedMedia && currentArtifact?.artifact_type === 'image' && videoTasks.length === 0"
+                 class="segment-media-upgrade-badge"
+                 @click="emit('upgrade-video', segment.segment_id)">
+              🎬 升级视频
             </div>
-            <button class="segment-media-arrow" :disabled="activeMediaIndex === activeTasks.length - 1" @click="nextMedia">
-              ›
-            </button>
+            <img
+              v-if="currentArtifact?.artifact_type === 'image'"
+              :src="artifactUrl(currentArtifact.artifact_id)"
+              class="segment-media-image"
+              :class="{ loading: isTaskLocked }"
+              :alt="'#' + (segmentIndex + 1) + ' 分镜图：' + (segment.scene_description || segment.script_excerpt || '').slice(0, 40)"
+              @click="togglePreview"
+            />
+            <video
+              v-else-if="currentArtifact?.artifact_type === 'video'"
+              :src="artifactUrl(currentArtifact.artifact_id)"
+              class="segment-media-video"
+              controls
+              @click="togglePreview"
+            />
+            <!-- Fallback for non-visual artifact types -->
+            <div v-else class="segment-media-frame">
+              <span class="segment-media-placeholder-text">
+                {{ currentArtifact?.artifact_type ?? '未知类型' }}
+              </span>
+            </div>
+
+            <div v-if="activeTasks.length > 1" class="segment-media-nav">
+              <button class="segment-media-arrow" :disabled="activeMediaIndex === 0 || isTaskLocked" @click="prevMedia">
+                ‹
+              </button>
+              <div class="segment-media-dots">
+                <span
+                  v-for="(_, i) in activeTasks"
+                  :key="i"
+                  class="segment-media-dot"
+                  :class="{ active: i === activeMediaIndex }"
+                  @click="!isTaskLocked && (activeMediaIndex = i)"
+                />
+              </div>
+              <button class="segment-media-arrow" :disabled="activeMediaIndex === activeTasks.length - 1 || isTaskLocked" @click="nextMedia">
+                ›
+              </button>
+            </div>
+          </div>
+          <div v-if="isTaskLocked" class="segment-media-loading-overlay">
+            <span class="segment-media-loading-spinner" />
           </div>
         </div>
       </template>
@@ -1230,6 +1247,40 @@ function nextMedia() {
 .segment-info-action-hint {
   font-size: 0.82rem;
   color: var(--text-muted);
+}
+
+.segment-media-placeholder-wrapper,
+.segment-media-preview-wrapper {
+  position: relative;
+}
+
+.segment-media-loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(12, 10, 8, 0.55);
+  backdrop-filter: blur(2px);
+  border-radius: var(--radius-sm);
+  z-index: 5;
+}
+
+.segment-media-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(201, 162, 39, 0.18);
+  border-top-color: #c9a227;
+  border-radius: 50%;
+  animation: segment-media-spin 0.7s linear infinite;
+}
+
+@keyframes segment-media-spin {
+  to { transform: rotate(360deg); }
+}
+
+.segment-media-image.loading {
+  filter: brightness(0.5) blur(1px);
 }
 
 .segment-media-placeholder {
