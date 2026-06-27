@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onUnmounted } from "vue";
+import { computed, ref, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { ElTooltip, ElTag, ElButton, ElIcon, ElMessage, ElMessageBox, ElDialog, ElInput } from "element-plus";
 import { Upload, CopyDocument } from "@element-plus/icons-vue";
 
@@ -185,6 +185,15 @@ watch([displayArtifactIds, activeMediaIndex, activeTab], ([ids], [oldIds]) => {
   selectedVersionIndex.value = hasNewId
     ? ids.length - 1
     : resolveIndexFromTrackedId(ids);
+
+  if (hasNewId) {
+    nextTick(() => {
+      const execution = currentExecution.value;
+      if (execution && execution.status === "completed" && currentTask.value) {
+        handleAcceptVersion();
+      }
+    });
+  }
 });
 
 watch(selectedVersionIndex, (idx) => {
