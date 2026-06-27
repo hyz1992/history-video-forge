@@ -158,6 +158,17 @@ const allArtifactIds = computed(() =>
   currentExecution.value?.output_artifact_ids ?? [],
 );
 
+function parseVersionNumber(id: string): number {
+  const m = id.match(/_v(\d+)$/);
+  return m ? parseInt(m[1]!, 10) : 0;
+}
+
+const displayArtifactIds = computed(() => {
+  const ids = [...allArtifactIds.value];
+  ids.sort((a, b) => parseVersionNumber(a) - parseVersionNumber(b));
+  return ids;
+});
+
 const selectedVersionIndex = ref<number>(-1);
 const trackedArtifactId = ref<string | null>(null);
 
@@ -169,19 +180,19 @@ function resolveIndexFromTrackedId(ids: readonly string[]): number {
   return ids.length - 1;
 }
 
-watch([allArtifactIds, activeMediaIndex, activeTab], ([ids]) => {
+watch([displayArtifactIds, activeMediaIndex, activeTab], ([ids]) => {
   selectedVersionIndex.value = resolveIndexFromTrackedId(ids);
 });
 
 watch(selectedVersionIndex, (idx) => {
-  const ids = allArtifactIds.value;
+  const ids = displayArtifactIds.value;
   if (idx >= 0 && idx < ids.length) {
     trackedArtifactId.value = ids[idx]!;
   }
 });
 
 const currentArtifactId = computed(() => {
-  const ids = allArtifactIds.value;
+  const ids = displayArtifactIds.value;
   if (ids.length === 0) return null;
   const idx = selectedVersionIndex.value;
   if (idx < 0 || idx >= ids.length) return ids[ids.length - 1]!;
@@ -196,15 +207,15 @@ const currentArtifact = computed(() => {
 const hasGeneratedMedia = computed(() => !!currentArtifact.value);
 
 const isAcceptedVersion = computed(() => {
-  const ids = allArtifactIds.value;
-  if (ids.length === 0) return false;
-  return currentArtifactId.value === ids[0];
+  const rawIds = allArtifactIds.value;
+  if (rawIds.length === 0) return false;
+  return currentArtifactId.value === rawIds[0];
 });
 
-const versionCount = computed(() => allArtifactIds.value.length);
+const versionCount = computed(() => displayArtifactIds.value.length);
 
 function selectVersion(index: number) {
-  const ids = allArtifactIds.value;
+  const ids = displayArtifactIds.value;
   if (index >= 0 && index < ids.length) {
     selectedVersionIndex.value = index;
     trackedArtifactId.value = ids[index]!;
@@ -800,14 +811,14 @@ function nextMedia() {
       <div v-if="versionCount > 1" class="segment-media-versions">
         <div class="segment-media-versions-list">
           <button
-            v-for="(id, i) in allArtifactIds"
+            v-for="(id, i) in displayArtifactIds"
             :key="id"
             class="segment-media-version-dot"
             :class="{
               active: i === selectedVersionIndex,
-              accepted: i === 0,
+              accepted: id === allArtifactIds[0],
             }"
-            :title="'版本 ' + (i + 1) + (i === 0 ? '（当前使用中）' : '')"
+            :title="'版本 ' + (i + 1) + (id === allArtifactIds[0] ? '（当前使用中）' : '')"
             @click="selectVersion(i)"
           >
             {{ i + 1 }}
