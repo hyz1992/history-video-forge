@@ -760,10 +760,24 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     }
 
     // ---- executions: old untouched + new touched ----
-    const mergedExecs = [
+    const oldExecByTaskId = new Map<string, Record<string, unknown>>();
+    for (const e of oldExecs) {
+      const tid = e.task_id as string | undefined;
+      if (tid) oldExecByTaskId.set(tid, e);
+    }
+    const mergedExecs: Record<string, unknown>[] = [
       ...oldExecs.filter(e => !newExecTaskIds.has(e.task_id as string)),
-      ...manifest.executions,
     ];
+    for (const newExec of manifest.executions) {
+      const oldExec = oldExecByTaskId.get(newExec.task_id);
+      if (oldExec) {
+        const oldIds = (Array.isArray(oldExec.output_artifact_ids) ? oldExec.output_artifact_ids : []) as string[];
+        const newIds = (Array.isArray(newExec.output_artifact_ids) ? newExec.output_artifact_ids : []) as string[];
+        const mergedIds = [...new Set([...oldIds, ...newIds])];
+        (newExec as Record<string, unknown>).output_artifact_ids = mergedIds;
+      }
+      mergedExecs.push(newExec as unknown as Record<string, unknown>);
+    }
 
     // ---- artifacts: prefer old when it has a real file_uri ----
     const oldArtById = new Map<string, Record<string, unknown>>();
