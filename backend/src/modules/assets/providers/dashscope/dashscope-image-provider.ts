@@ -293,7 +293,7 @@ export function createDashscopeImageProvider(
       const size = parseSize(String(pollResult.rawResponseJson?.size ?? options.size ?? "1080*1920"));
 
       const artifact: AssetArtifact = {
-        artifact_id: `artifact_img_${ctx.execution.task_id}`,
+        artifact_id: `artifact_img_${ctx.execution.task_id}_v${ctx.execution.attempts}`,
         artifact_type: "image",
         origin: "provider",
         file_uri: written.fileUri,

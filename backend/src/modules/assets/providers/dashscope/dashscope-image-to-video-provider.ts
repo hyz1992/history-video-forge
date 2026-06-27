@@ -365,7 +365,7 @@ export function createDashscopeImageToVideoProvider(
           : clampDashscopeImageToVideoDuration(options.durationSec);
 
       const artifact: AssetArtifact = {
-        artifact_id: `artifact_video_${ctx.execution.task_id}`,
+        artifact_id: `artifact_video_${ctx.execution.task_id}_v${ctx.execution.attempts}`,
         artifact_type: "video",
         origin: "provider",
         file_uri: written.fileUri,
