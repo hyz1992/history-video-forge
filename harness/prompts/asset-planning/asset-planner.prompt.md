@@ -122,7 +122,8 @@ TTS 是最终时间轴的根，但 TTS 和字幕任务由本地服务确定性�
       "provider_hint": null,
       "prompt_draft": "",
       "parameters": {
-        "image_role": "anchor"
+        "image_role": "anchor",
+        "video_prompt_reserve": "明代江南富户书房，低饱和度电影级光影。某明代书生身穿方巾道袍端坐紫檀书案前...\n\n手持微晃，镜头缓慢推进至书生面前，约2秒。书生微微抬眉，目光从手中书卷移向窗外天光。窗外光线从午后暖黄渐渐过渡到薄暮灰蓝。总长约5秒。"
       },
       "manual_upload_policy": {
         "allowed": true,
