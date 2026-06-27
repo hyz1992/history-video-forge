@@ -158,17 +158,6 @@ const allArtifactIds = computed(() =>
   currentExecution.value?.output_artifact_ids ?? [],
 );
 
-function parseVersionNumber(id: string): number {
-  const m = id.match(/_v(\d+)$/);
-  return m ? parseInt(m[1]!, 10) : 0;
-}
-
-const displayArtifactIds = computed(() => {
-  const ids = [...allArtifactIds.value];
-  ids.sort((a, b) => parseVersionNumber(a) - parseVersionNumber(b));
-  return ids;
-});
-
 const selectedVersionIndex = ref<number>(-1);
 const trackedArtifactId = ref<string | null>(null);
 
@@ -180,19 +169,19 @@ function resolveIndexFromTrackedId(ids: readonly string[]): number {
   return ids.length - 1;
 }
 
-watch([displayArtifactIds, activeMediaIndex, activeTab], ([ids]) => {
+watch([allArtifactIds, activeMediaIndex, activeTab], ([ids]) => {
   selectedVersionIndex.value = resolveIndexFromTrackedId(ids);
 });
 
 watch(selectedVersionIndex, (idx) => {
-  const ids = displayArtifactIds.value;
+  const ids = allArtifactIds.value;
   if (idx >= 0 && idx < ids.length) {
     trackedArtifactId.value = ids[idx]!;
   }
 });
 
 const currentArtifactId = computed(() => {
-  const ids = displayArtifactIds.value;
+  const ids = allArtifactIds.value;
   if (ids.length === 0) return null;
   const idx = selectedVersionIndex.value;
   if (idx < 0 || idx >= ids.length) return ids[ids.length - 1]!;
@@ -212,10 +201,10 @@ const isAcceptedVersion = computed(() => {
   return currentArtifactId.value === rawIds[0];
 });
 
-const versionCount = computed(() => displayArtifactIds.value.length);
+const versionCount = computed(() => allArtifactIds.value.length);
 
 function selectVersion(index: number) {
-  const ids = displayArtifactIds.value;
+  const ids = allArtifactIds.value;
   if (index >= 0 && index < ids.length) {
     selectedVersionIndex.value = index;
     trackedArtifactId.value = ids[index]!;
@@ -811,7 +800,7 @@ function nextMedia() {
       <div v-if="versionCount > 1" class="segment-media-versions">
         <div class="segment-media-versions-list">
           <button
-            v-for="(id, i) in displayArtifactIds"
+            v-for="(id, i) in allArtifactIds"
             :key="id"
             class="segment-media-version-dot"
             :class="{
