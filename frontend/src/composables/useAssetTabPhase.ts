@@ -25,10 +25,6 @@ export interface UseAssetTabPhaseReturn {
 
 export function useAssetTabPhase(input: UseAssetTabPhaseInput): UseAssetTabPhaseReturn {
   const phase = computed<AssetTabPhase>(() => {
-    if (!input.initialLoadDone.value) {
-      return { kind: "loading" };
-    }
-
     const planSnap = input.assetPlanningStore.state.snapshot;
     const assetsSnap = input.assetsStore.state.snapshot;
     const planError = input.assetPlanningStore.state.loadError;
@@ -42,9 +38,13 @@ export function useAssetTabPhase(input: UseAssetTabPhaseInput): UseAssetTabPhase
       input.assetsStore.state.isGenerating ||
       assetsSnap?.active_assets?.execution_state?.generating === true;
 
-    // 规划生成中
+    // 规划生成中：优先于初始查询 loading，避免已知生成态被误显示成普通查询
     if (isPlanGen) {
       return { kind: "plan_generating" };
+    }
+
+    if (!input.initialLoadDone.value) {
+      return { kind: "loading" };
     }
 
     // 致命错误（不在生成态且 loadError 非空）

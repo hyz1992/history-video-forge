@@ -115,10 +115,53 @@ describe("workspace loading UI", () => {
       },
     });
 
-    const refreshButton = wrapper.get(".stage-generating .el-button");
+    const refreshButton = wrapper.get(".stage-generating button");
     expect(wrapper.find(".stage-generating").exists()).toBe(true);
     expect(refreshButton.text()).toContain("刷新状态");
     expect(refreshButton.attributes("disabled")).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it("shows a non-generating loading state while querying an old topic tab", async () => {
+    const router = await createRouterAt("/projects/project-loading-ui/topic");
+    const topicState = reactive({
+      activeTab: "system",
+      candidates: [],
+      currentRound: null,
+      historyRounds: [],
+      selectedCandidate: null,
+      selectedRoundId: null,
+      isGenerating: false,
+      isConfirming: false,
+      confirmedTopicPackageId: null,
+      loadError: null,
+      snapshot: null,
+    });
+
+    const wrapper = mount(TopicPanel, {
+      global: {
+        plugins: [router, ElementPlus],
+        provide: {
+          [projectStoreKey as symbol]: createProjectStoreStub("topic_candidates_ready") as never,
+          [workspaceStoreKey as symbol]: createWorkspaceStoreStub() as never,
+          [topicStoreKey as symbol]: {
+            state: topicState,
+            selectTab() {},
+            async generateSystemRecommendations() {},
+            openCandidate() {},
+            closeCandidate() {},
+            async confirmSelectedCandidate() {},
+            loadExistingTopic: pendingPromise,
+            async loadSnapshot() {
+              return null;
+            },
+          } as never,
+        },
+      },
+    });
+
+    expect(wrapper.find(".topic-loading").exists()).toBe(true);
+    expect(wrapper.find(".stage-generating").exists()).toBe(false);
     wrapper.unmount();
   });
 
@@ -200,6 +243,37 @@ describe("workspace loading UI", () => {
 
     expect(refreshButton.attributes("disabled")).toBe("");
     resolveRefresh();
+    wrapper.unmount();
+  });
+
+  it("shows a non-generating loading state while querying an old storyboard tab", async () => {
+    const router = await createRouterAt("/projects/project-loading-ui/storyboard");
+    const storyboardState = reactive({
+      snapshot: null,
+      isLoading: true,
+      isGenerating: false,
+      loadError: null,
+    });
+
+    const wrapper = mount(StoryboardPanel, {
+      global: {
+        plugins: [router, ElementPlus],
+        provide: {
+          [projectStoreKey as symbol]: createProjectStoreStub("storyboard_completed") as never,
+          [workspaceStoreKey as symbol]: createWorkspaceStoreStub() as never,
+          [storyboardStoreKey as symbol]: {
+            state: storyboardState,
+            loadActiveStoryboardSnapshot: pendingPromise,
+            retryLoad: pendingPromise,
+            generateStoryboard: pendingPromise,
+          } as never,
+        },
+      },
+    });
+
+    expect(wrapper.find(".storyboard-loading").exists()).toBe(true);
+    expect(wrapper.find(".stage-generating").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("确认文案后将自动生成分镜");
     wrapper.unmount();
   });
 });

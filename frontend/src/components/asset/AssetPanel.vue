@@ -583,7 +583,6 @@ watch(() => assetPlanningStore.state.snapshot, async (snapshot) => {
 
 onMounted(async () => {
   initialLoadDone.value = false;
-  pendingAutoGenerate.value = true;
   try {
     await storyboardStore.loadActiveStoryboardSnapshot();
     await assetPlanningStore.loadActiveAssetPlanSnapshot();
@@ -831,6 +830,18 @@ function handleConfirm() {
         </el-button>
       </template>
     </StageGenerating>
+
+    <!-- 查询服务器已有快照时的加载态，不代表正在生成新资产规划 -->
+    <div
+      v-else-if="phase.kind === 'loading'"
+      class="asset-loading asset-skeleton"
+      aria-live="polite"
+    >
+      <div class="asset-loading-card">
+        <h2>正在加载资产状态</h2>
+        <p>正在查询服务器已有结果，请稍候。</p>
+      </div>
+    </div>
 
     <!-- 规划生成中：全屏阻塞 -->
     <StageGenerating
@@ -1475,6 +1486,31 @@ details[open] > .asset-overview-toggle {
 }
 
 /* ---- Segment card skeleton ---- */
+.asset-loading {
+  min-height: 360px;
+  display: grid;
+  place-items: center;
+  padding: var(--space-xl);
+}
+
+.asset-loading-card {
+  display: grid;
+  gap: var(--space-xs);
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.asset-loading-card h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 20px;
+}
+
+.asset-loading-card p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
 .segment-card-skeleton {
   display: grid;
   grid-template-columns: 220px 1fr;

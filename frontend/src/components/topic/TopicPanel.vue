@@ -7,6 +7,7 @@ import { useTopicStore } from "../../stores/topic";
 import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 import { useStagePolling } from "../../composables/useStagePolling";
+import { resolvePipelineStagePhase } from "../../composables/usePipelineStagePhase";
 import StageGenerating from "../workspace/StageGenerating.vue";
 import StageLoadingBar from "../workspace/StageLoadingBar.vue";
 
@@ -19,6 +20,7 @@ const router = useRouter();
 const SCRIPT_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "script");
 
 const isRefreshing = ref(false);
+const initialLoadDone = ref(false);
 
 const { startPolling, isPolling } = useStagePolling({
   loadSnapshot: async () =>
@@ -41,10 +43,13 @@ const isSnapshotGenerating = computed(
 
 onMounted(async () => {
   if (topicStore.state.isGenerating) {
+    initialLoadDone.value = true;
     startPolling();
     return;
   }
+  initialLoadDone.value = false;
   await topicStore.loadExistingTopic();
+  initialLoadDone.value = true;
   if (isSnapshotGenerating.value) {
     startPolling();
   }
@@ -76,6 +81,19 @@ const hasLoadError = computed(() => !!topicStore.state.loadError);
 
 const isGeneratingState = computed(
   () => !hasCandidates.value && (topicStore.state.isGenerating || isSnapshotGenerating.value || isPolling.value),
+);
+
+const topicPhase = computed(() =>
+  resolvePipelineStagePhase({
+    isGenerating: isGeneratingState.value,
+    isLoading:
+      !hasCandidates.value &&
+      !hasLoadError.value &&
+      (!initialLoadDone.value ||
+        (!topicStore.state.snapshot && !!projectStore.state.projectId)),
+    hasContent: hasCandidates.value,
+    loadError: topicStore.state.loadError,
+  }),
 );
 
 const mustCoverPreview = computed(() => {
@@ -195,7 +213,7 @@ function roundLabel(round: { label?: string; round_index?: number }) {
 
 <template>
   <div class="topic-panel">
-    <template v-if="!hasCandidates && !isRefreshing && (topicStore.state.isGenerating || isSnapshotGenerating || isPolling)">
+    <template v-if="topicPhase.kind === 'generating'">
       <StageGenerating
         title="正在生成选题"
         hint="正在调用大模型生成选题推荐，可能需要 1-3 分钟。"
@@ -209,12 +227,23 @@ function roundLabel(round: { label?: string; round_index?: number }) {
       </StageGenerating>
     </template>
 
-    <template v-else-if="hasLoadError">
+    <template v-else-if="topicPhase.kind === 'loading'">
+      <div class="topic-loading center-state" aria-live="polite">
+        <div class="center-state-inner">
+          <div class="center-pulse">✦</div>
+          <h2 class="center-state-title">正在加载选题状态</h2>
+          <p class="center-state-desc">正在查询服务器已有结果，请稍候。</p>
+          <div class="center-state-line"></div>
+        </div>
+      </div>
+    </template>
+
+    <template v-else-if="topicPhase.kind === 'error'">
       <div class="center-state">
         <div class="center-state-inner">
           <div class="center-error-icon">!</div>
           <h2 class="center-state-title">选题生成失败</h2>
-          <p class="center-state-desc">{{ topicStore.state.loadError }}</p>
+          <p class="center-state-desc">{{ topicPhase.message }}</p>
           <div class="center-state-line"></div>
           <div class="center-state-actions">
             <button class="btn btn-ghost" @click="router.push('/projects')">返回项目列表</button>
@@ -224,7 +253,7 @@ function roundLabel(round: { label?: string; round_index?: number }) {
       </div>
     </template>
 
-    <template v-else-if="hasCandidates">
+    <template v-else-if="topicPhase.kind === 'ready'">
       <h1 class="topic-page-title">请选择您喜欢的<em>选题</em></h1>
 
       <div class="topic-columns">
@@ -342,12 +371,6 @@ function roundLabel(round: { label?: string; round_index?: number }) {
           </div>
         </aside>
       </div>
-    </template>
-
-    <template v-else-if="isRefreshing">
-    </template>
-
-    <template v-else-if="!hasCandidates && !hasLoadError && projectStore.state.projectId">
     </template>
 
     <template v-else-if="topicStore.state.activeTab === 'library'">

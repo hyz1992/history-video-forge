@@ -163,6 +163,12 @@ describe("phase 4 project routing", () => {
 
     await wrapper.get("[data-testid='create-project']").trigger("click");
     await flushPromises();
+    const createButton = document.body.querySelector(
+      ".modal-btn--primary",
+    ) as HTMLButtonElement | null;
+    expect(createButton).not.toBeNull();
+    createButton?.click();
+    await flushPromises();
 
     expect(calls.createProject).toBe(1);
     expect(router.currentRoute.value.path).toBe("/projects/project-new/topic");
@@ -295,6 +301,7 @@ describe("phase 4 project routing", () => {
       async runRegenOnce() {},
       async generateInitialScript() {
         calls.generateInitialScript += 1;
+        return new Promise<void>(() => {});
       },
     };
 
@@ -322,8 +329,8 @@ describe("phase 4 project routing", () => {
     // onMounted loadActiveScriptSnapshot + startPolling pollOnce in triggerAutoGenerate
     expect(calls.loadSnapshot).toBe(2);
     expect(calls.generateInitialScript).toBe(1);
-    expect(wrapper.get("[data-testid='script-page-header']").text()).toContain("文案工作区");
-    expect(wrapper.get("[data-testid='script-trace-entry']").text()).toContain("查看运行详情");
+    expect(wrapper.find(".stage-generating").exists()).toBe(true);
+    expect(wrapper.text()).toContain("正在生成文案");
   });
 
   it("returns to the script workspace and restarts initial generation after confirming a new topic from topic again", async () => {
@@ -440,6 +447,7 @@ describe("phase 4 project routing", () => {
       async runRegenOnce() {},
       async generateInitialScript() {
         calls.generateInitialScript += 1;
+        return new Promise<void>(() => {});
       },
     };
 
@@ -459,6 +467,8 @@ describe("phase 4 project routing", () => {
       },
     );
 
+    await wrapper.get(".history-toggle").trigger("click");
+    await flushPromises();
     await wrapper.get("[data-testid='candidate-item-candidate-history']").trigger("click");
     await wrapper.get("[data-testid='confirm-candidate']").trigger("click");
     await flushPromises();

@@ -7,6 +7,7 @@ import { useScriptStore } from "../../stores/script";
 import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 import { useStagePolling } from "../../composables/useStagePolling";
+import { resolvePipelineStagePhase } from "../../composables/usePipelineStagePhase";
 import StageGenerating from "../workspace/StageGenerating.vue";
 import StageLoadingBar from "../workspace/StageLoadingBar.vue";
 import RegenFeedbackModal from "./RegenFeedbackModal.vue";
@@ -17,6 +18,7 @@ const workspaceStore = useWorkspaceStore();
 const STORYBOARD_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "storyboard");
 const router = useRouter();
 const projectStore = useProjectStore();
+const initialLoadDone = ref(false);
 
 const { startPolling } = useStagePolling({
   loadSnapshot: () => scriptStore.loadActiveScriptSnapshot(),
@@ -34,15 +36,15 @@ const { startPolling } = useStagePolling({
 });
 
 onMounted(async () => {
-  pendingAutoGenerate.value = true;
+  initialLoadDone.value = false;
   await scriptStore.loadActiveScriptSnapshot();
+  initialLoadDone.value = true;
   // F5 恢复：如果 snapshot 显示 generating，启动轮询
   const s = scriptStore.state.snapshot;
   if (
     s?.current_status === "script_generating" ||
     s?.active_script?.execution_state?.generating
   ) {
-    pendingAutoGenerate.value = false;
     startPolling();
     return;
   }
@@ -114,6 +116,15 @@ const isGenerating = computed(
     pendingAutoGenerate.value ||
     scriptStore.state.snapshot?.current_status === "script_generating" ||
     scriptStore.state.snapshot?.active_script?.execution_state?.generating === true,
+);
+
+const scriptPhase = computed(() =>
+  resolvePipelineStagePhase({
+    isGenerating: isGenerating.value && !isRegenerating.value,
+    isLoading: !initialLoadDone.value && !visibleScript.value,
+    hasContent: !!visibleScript.value,
+    loadError: scriptStore.state.loadError,
+  }),
 );
 
 const isGenerationFailed = computed(
@@ -316,25 +327,9 @@ function handleConfirm() {
 
 <template>
   <div class="script-panel">
-    <div v-if="scriptStore.state.loadError" class="script-error-card">
-      <el-alert
-        :title="'加载失败：' + scriptStore.state.loadError"
-        type="error"
-        show-icon
-        :closable="false"
-      />
-      <el-button
-        type="primary"
-        :loading="scriptStore.state.isLoading"
-        @click="handleRetry"
-      >
-        重试
-      </el-button>
-    </div>
-
-    <!-- Generating state (before skeleton to show explanation during generation) -->
+    <!-- Generating state (before loading/error to survive transient snapshot states) -->
     <StageGenerating
-      v-else-if="isGenerating && !isRegenerating"
+      v-if="scriptPhase.kind === 'generating'"
       title="正在生成文案"
       hint="正在调用大模型撰写口播文案，可能需要 1-3 分钟。"
       secondary-hint="页面会自动刷新，也可手动刷新状态。"
@@ -349,14 +344,44 @@ function handleConfirm() {
       </template>
     </StageGenerating>
 
+    <div v-else-if="scriptPhase.kind === 'loading'" class="script-loading" aria-live="polite">
+      <div class="script-loading-inner">
+        <h2>正在加载文案状态</h2>
+        <p>正在查询服务器已有结果，请稍候。</p>
+      </div>
+    </div>
+
+    <div v-else-if="scriptPhase.kind === 'error'" class="script-error-card">
+      <el-alert
+        :title="'加载失败：' + scriptPhase.message"
+        type="error"
+        show-icon
+        :closable="false"
+      />
+      <el-button
+        type="primary"
+        :loading="scriptStore.state.isLoading"
+        @click="handleRetry"
+      >
+        重试
+      </el-button>
+    </div>
+
     <!-- Generation failed state -->
     <div v-else-if="isGenerationFailed" class="script-failed">
       <p>文案生成失败，请重试或返回选题重新确认。</p>
       <el-button type="primary" @click="handleRetry">重试</el-button>
     </div>
 
+    <div v-else-if="scriptPhase.kind === 'empty'" class="script-empty">
+      <p>文案尚未生成。</p>
+      <el-button type="primary" @click="triggerAutoGenerate">
+        开始生成文案
+      </el-button>
+    </div>
+
     <!-- Main two-column layout -->
-    <template v-else-if="visibleScript">
+    <template v-else-if="scriptPhase.kind === 'ready' && visibleScript">
       <h1 class="script-page-title">请审校您的<em>文案</em></h1>
       <div class="script-columns">
         <!-- Left column: Script text -->
@@ -528,6 +553,30 @@ function handleConfirm() {
 }
 
 /* Generating / failed */
+.script-loading {
+  min-height: 360px;
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.script-loading-inner {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.script-loading h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 20px;
+}
+
+.script-loading p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
 .script-failed {
   display: flex;
   flex-direction: column;
@@ -535,6 +584,17 @@ function handleConfirm() {
   justify-content: center;
   gap: var(--space-md);
   padding: var(--space-xl) var(--space-md);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.script-empty {
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md);
   color: var(--text-secondary);
   text-align: center;
 }

@@ -9,6 +9,7 @@ import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { PIPELINE_STEPS } from "../../stores/workspace";
 import { useStagePolling } from "../../composables/useStagePolling";
+import { resolvePipelineStagePhase } from "../../composables/usePipelineStagePhase";
 import StageGenerating from "../workspace/StageGenerating.vue";
 import StageLoadingBar from "../workspace/StageLoadingBar.vue";
 import StoryboardSegmentRegenModal from "./StoryboardSegmentRegenModal.vue";
@@ -57,6 +58,7 @@ const roleTagTypeMap: Record<string, "primary" | "success" | "warning" | "danger
 const storyboardStore = useStoryboardStore();
 const projectStore = useProjectStore();
 const workspaceStore = useWorkspaceStore();
+const initialLoadDone = ref(false);
 
 const { startPolling } = useStagePolling({
   loadSnapshot: () => storyboardStore.loadActiveStoryboardSnapshot(),
@@ -117,6 +119,15 @@ const isGenerating = computed(
     pendingAutoGenerate.value ||
     currentStatus.value === "storyboard_generating" ||
     activeStoryboard.value?.execution_state?.generating === true,
+);
+
+const storyboardPhase = computed(() =>
+  resolvePipelineStagePhase({
+    isGenerating: isGenerating.value,
+    isLoading: !initialLoadDone.value && !isGenerating.value,
+    hasContent: segments.value.length > 0,
+    loadError: storyboardStore.state.loadError,
+  }),
 );
 
 const estimatedTotalDuration = computed(
@@ -265,15 +276,15 @@ const router = useRouter();
 /* -------------------------------------------------------------------------- */
 
 onMounted(async () => {
-  pendingAutoGenerate.value = true;
+  initialLoadDone.value = false;
   await storyboardStore.loadActiveStoryboardSnapshot();
+  initialLoadDone.value = true;
   // F5 恢复：如果 snapshot 显示 generating，启动轮询
   const s = storyboardStore.state.snapshot;
   if (
     s?.current_status === "storyboard_generating" ||
     s?.active_storyboard?.execution_state?.generating
   ) {
-    pendingAutoGenerate.value = false;
     startPolling();
     return;
   }
@@ -405,6 +416,9 @@ const showBackToTop = ref(false);
 let observer: IntersectionObserver | null = null;
 
 function setUpBackToTopObserver() {
+  if (typeof IntersectionObserver === "undefined") {
+    return;
+  }
   if (observer) {
     observer.disconnect();
   }
@@ -462,7 +476,7 @@ function scrollToTop() {
   <div class="storyboard-panel">
     <!-- Generating state (must be before loading skeleton — survives refresh) -->
     <StageGenerating
-      v-if="isGenerating"
+      v-if="storyboardPhase.kind === 'generating'"
       title="正在生成分镜"
       hint="正在调用大模型分析文案并规划分镜，可能需要 1-2 分钟。"
       secondary-hint="页面会自动刷新，也可手动刷新状态。"
@@ -477,10 +491,22 @@ function scrollToTop() {
       </template>
     </StageGenerating>
 
+    <!-- Loading state: server snapshot query only, not generation -->
+    <div
+      v-else-if="storyboardPhase.kind === 'loading'"
+      class="storyboard-loading storyboard-skeleton"
+      aria-live="polite"
+    >
+      <div class="storyboard-loading-card">
+        <h2>正在加载分镜状态</h2>
+        <p>正在查询服务器已有结果，请稍候。</p>
+      </div>
+    </div>
+
     <!-- Error state -->
-    <div v-else-if="storyboardStore.state.loadError" class="storyboard-error-card">
+    <div v-else-if="storyboardPhase.kind === 'error'" class="storyboard-error-card">
       <el-alert
-        :title="'加载失败：' + storyboardStore.state.loadError"
+        :title="'加载失败：' + storyboardPhase.message"
         type="error"
         show-icon
         :closable="false"
@@ -496,11 +522,7 @@ function scrollToTop() {
 
     <!-- Empty state - no storyboard generated yet -->
     <div
-      v-else-if="
-        !activeStoryboard &&
-        !storyboardStore.state.isLoading &&
-        !storyboardStore.state.loadError
-      "
+      v-else-if="storyboardPhase.kind === 'empty'"
       class="storyboard-empty"
     >
       <div class="storyboard-empty-card">
@@ -815,6 +837,31 @@ function scrollToTop() {
 }
 
 /* ---- Error card ---- */
+.storyboard-loading {
+  min-height: 360px;
+  display: grid;
+  place-items: center;
+  padding: var(--space-xl);
+}
+
+.storyboard-loading-card {
+  display: grid;
+  gap: var(--space-xs);
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.storyboard-loading-card h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 20px;
+}
+
+.storyboard-loading-card p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
 .storyboard-error-card {
   display: grid;
   gap: var(--space-md);

@@ -100,6 +100,17 @@ describe("useAssetTabPhase", () => {
     expect(phase.value).toMatchObject({ kind: "plan_generating" });
   });
 
+  it("prefers plan_generating over initial loading when the snapshot already says generating", () => {
+    const { phase } = useAssetTabPhase({
+      assetPlanningStore: mockPlanningStore({
+        snapshot: planSnapshot("asset_plan_generating"),
+      }),
+      assetsStore: mockAssetsStore(),
+      initialLoadDone: computed(() => false),
+    });
+    expect(phase.value).toMatchObject({ kind: "plan_generating" });
+  });
+
   it("returns plan_generating when execution_state.generating is true", () => {
     const { phase } = useAssetTabPhase({
       assetPlanningStore: mockPlanningStore({
