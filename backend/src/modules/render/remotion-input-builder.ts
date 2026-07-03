@@ -283,9 +283,6 @@ async function buildVisualClips(input: {
     (track) => track.track_type === "visual",
   );
   const clips = visualTrack?.clips ?? [];
-  const routeBySegment = new Map(
-    input.manifest.segment_routes.map((route) => [route.segment_id, route]),
-  );
   const visualClips = await Promise.all(
     clips.map(async (clip, index): Promise<RenderVisualClipProp[]> => {
       const artifact = input.artifactsById.get(clip.artifact_id);
@@ -335,39 +332,38 @@ async function buildVisualClips(input: {
         artifact.metadata.duration_sec,
         clip.duration_sec,
       );
-      const remainingDurationSec = clip.duration_sec - sourceDurationSec;
-      const route =
-        typeof clip.segment_id === "string"
-          ? routeBySegment.get(clip.segment_id)
-          : undefined;
-      const fallbackArtifactId = route?.fallback_visual_artifact_id;
-      const fallbackArtifact = fallbackArtifactId
-        ? input.artifactsById.get(fallbackArtifactId)
-        : undefined;
       if (
-        remainingDurationSec <= 0.001 ||
-        !fallbackArtifactId ||
-        fallbackArtifact?.artifact_type !== "image"
+        sourceDurationSec <= 0 ||
+        clip.duration_sec <= sourceDurationSec + 0.001
       ) {
         return [renderClip];
       }
 
-      renderClip.durationSec = sourceDurationSec;
-      return [
-        renderClip,
-        {
-          clipId: `${clip.clip_id}_fallback_still`,
-          artifactId: fallbackArtifactId,
-          mediaType: "image",
-          src: await toBrowserFileUri({
-            artifact: fallbackArtifact,
-            assetBaseDir: input.assetBaseDir,
-            projectStorageRootDir: input.projectStorageRootDir,
-          }),
-          startSec: clip.start_sec + sourceDurationSec,
-          durationSec: remainingDurationSec,
-        },
-      ];
+      const loopedClips: RenderVisualClipProp[] = [];
+      let remainingDurationSec = clip.duration_sec;
+      let startSec = clip.start_sec;
+      let loopIndex = 0;
+      while (remainingDurationSec > 0.001) {
+        const durationSec = Math.min(sourceDurationSec, remainingDurationSec);
+        const loopClip: RenderVisualClipProp = {
+          ...renderClip,
+          clipId:
+            loopIndex === 0
+              ? renderClip.clipId
+              : `${renderClip.clipId}_loop_${loopIndex}`,
+          startSec,
+          durationSec,
+        };
+        if (loopIndex > 0) {
+          delete loopClip.transition;
+        }
+        loopedClips.push(loopClip);
+        startSec += durationSec;
+        remainingDurationSec -= durationSec;
+        loopIndex += 1;
+      }
+
+      return loopedClips;
     }),
   );
 

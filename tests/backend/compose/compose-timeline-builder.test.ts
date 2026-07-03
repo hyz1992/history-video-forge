@@ -620,7 +620,7 @@ describe("buildComposeTimeline", () => {
     ).toBe(false);
   });
 
-  it("fills the remainder of an overlong video segment with its fallback still without changing audio timing", () => {
+  it("loops an overlong video segment without changing audio timing", () => {
     const manifest = makeArtifactManifest();
     manifest.artifacts.push({
       artifact_id: "artifact_video_001",
@@ -678,10 +678,17 @@ describe("buildComposeTimeline", () => {
       },
       {
         segment_id: "sb_001",
-        artifact_id: "artifact_img_001",
+        artifact_id: "artifact_video_001",
         start_sec: 5,
-        duration_sec: 10,
-        clip_kind: "image_only",
+        duration_sec: 5,
+        clip_kind: "video",
+      },
+      {
+        segment_id: "sb_001",
+        artifact_id: "artifact_video_001",
+        start_sec: 10,
+        duration_sec: 5,
+        clip_kind: "video",
       },
     ]);
     expect(timeline.segments[0]).toMatchObject({
@@ -690,7 +697,8 @@ describe("buildComposeTimeline", () => {
       duration_sec: 15,
       visual_clip_ids: [
         "clip_visual_sb_001",
-        "clip_visual_sb_001_fallback_still",
+        "clip_visual_sb_001_loop_1",
+        "clip_visual_sb_001_loop_2",
       ],
       narration_clip_ids: ["clip_narration"],
       subtitle_clip_ids: ["clip_subtitle"],

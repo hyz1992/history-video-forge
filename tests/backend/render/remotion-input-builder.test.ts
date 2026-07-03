@@ -451,7 +451,7 @@ describe("buildRemotionInputProps", () => {
     });
   });
 
-  it("splits an overlong persisted video clip into source video and fallback still props without changing audio timing", async () => {
+  it("loops an overlong persisted video clip without changing audio timing", async () => {
     const tempDir = await mkdtemp(
       join(tmpdir(), "remotion-input-builder-video-tail-"),
     );
@@ -497,9 +497,9 @@ describe("buildRemotionInputProps", () => {
         durationSec: 1,
       },
       {
-        clipId: "clip_visual_002_fallback_still",
-        artifactId: "artifact_img_001",
-        mediaType: "image",
+        clipId: "clip_visual_002_loop_1",
+        artifactId: "artifact_video_001",
+        mediaType: "video",
         startSec: 3,
         durationSec: 1,
       },

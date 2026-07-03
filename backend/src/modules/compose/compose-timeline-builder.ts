@@ -251,41 +251,35 @@ function createVisualTrack(input: {
       continue;
     }
 
-    const fallbackArtifactId = route.fallback_visual_artifact_id;
-    const fallbackArtifact = fallbackArtifactId
-      ? artifactsById.get(fallbackArtifactId)
-      : undefined;
     const videoDurationSec = Math.min(
       artifact.metadata.duration_sec,
       timing.durationSec,
     );
-    const remainingDurationSec = timing.durationSec - videoDurationSec;
-
-    if (
-      remainingDurationSec > 0.001 &&
-      fallbackArtifactId &&
-      fallbackArtifact?.artifact_type === "image"
-    ) {
-      clip.duration_sec = videoDurationSec;
+    if (videoDurationSec <= 0 || timing.durationSec <= videoDurationSec + 0.001) {
       clips.push(clip);
-      clips.push({
-        clip_id: `clip_visual_${route.segment_id}_fallback_still`,
-        segment_id: route.segment_id,
-        artifact_id: fallbackArtifactId,
-        start_sec: timing.startSec + videoDurationSec,
-        duration_sec: remainingDurationSec,
-        clip_kind: "image_only",
-        motion_artifact_id: null,
-        notes: ["compose_video_fallback_still_tail"],
-      });
-      notes.push(`compose_video_fallback_still_tail:${route.segment_id}`);
       continue;
     }
 
-    if (remainingDurationSec > 0.001) {
-      notes.push(`compose_video_tail_fallback_missing:${route.segment_id}`);
+    let remainingDurationSec = timing.durationSec;
+    let startSec = timing.startSec;
+    let loopIndex = 0;
+    while (remainingDurationSec > 0.001) {
+      const durationSec = Math.min(videoDurationSec, remainingDurationSec);
+      clips.push({
+        ...clip,
+        clip_id:
+          loopIndex === 0
+            ? clip.clip_id
+            : `${clip.clip_id}_loop_${loopIndex}`,
+        start_sec: startSec,
+        duration_sec: durationSec,
+        notes: loopIndex === 0 ? [] : ["compose_video_loop_tail"],
+      });
+      startSec += durationSec;
+      remainingDurationSec -= durationSec;
+      loopIndex += 1;
     }
-    clips.push(clip);
+    notes.push(`compose_video_loop_tail:${route.segment_id}`);
   }
 
   return {
