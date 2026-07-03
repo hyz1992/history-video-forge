@@ -619,4 +619,81 @@ describe("buildComposeTimeline", () => {
         .some((clip) => clip.artifact_id === "artifact_bgm_selection_001"),
     ).toBe(false);
   });
+
+  it("fills the remainder of an overlong video segment with its fallback still without changing audio timing", () => {
+    const manifest = makeArtifactManifest();
+    manifest.artifacts.push({
+      artifact_id: "artifact_video_001",
+      artifact_type: "video",
+      origin: "provider",
+      file_uri: "memory://video-001.mp4",
+      created_at: "2026-07-03T00:00:00.000Z",
+      metadata: {
+        duration_sec: 5,
+        width: 1080,
+        height: 1920,
+        fps: 30,
+      },
+    });
+    manifest.segment_routes[0] = {
+      ...manifest.segment_routes[0]!,
+      primary_visual_artifact_id: "artifact_video_001",
+      fallback_visual_artifact_id: "artifact_img_001",
+      visual_route_type: "video_clip",
+      motion_artifact_id: null,
+    };
+
+    const timeline = buildComposeTimeline({
+      assetManifestRecordId: "asset_manifest_record_001",
+      assetPlanRecordId: "asset_plan_record_001",
+      storyboardRecordId: "storyboard_record_001",
+      scriptRecordId: "script_record_001",
+      manifest,
+    });
+
+    expect(timeline.duration_sec).toBe(15);
+    expect(
+      timeline.tracks.find((track) => track.track_type === "narration")
+        ?.clips[0],
+    ).toMatchObject({
+      start_sec: 0,
+      duration_sec: 12,
+    });
+    expect(
+      timeline.tracks.find((track) => track.track_type === "subtitle")
+        ?.clips[0],
+    ).toMatchObject({
+      start_sec: 0,
+      duration_sec: 12,
+    });
+    expect(
+      timeline.tracks.find((track) => track.track_type === "visual")?.clips,
+    ).toMatchObject([
+      {
+        segment_id: "sb_001",
+        artifact_id: "artifact_video_001",
+        start_sec: 0,
+        duration_sec: 5,
+        clip_kind: "video",
+      },
+      {
+        segment_id: "sb_001",
+        artifact_id: "artifact_img_001",
+        start_sec: 5,
+        duration_sec: 10,
+        clip_kind: "image_only",
+      },
+    ]);
+    expect(timeline.segments[0]).toMatchObject({
+      segment_id: "sb_001",
+      start_sec: 0,
+      duration_sec: 15,
+      visual_clip_ids: [
+        "clip_visual_sb_001",
+        "clip_visual_sb_001_fallback_still",
+      ],
+      narration_clip_ids: ["clip_narration"],
+      subtitle_clip_ids: ["clip_subtitle"],
+    });
+  });
 });

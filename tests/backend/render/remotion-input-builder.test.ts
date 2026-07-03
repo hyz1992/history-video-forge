@@ -451,6 +451,70 @@ describe("buildRemotionInputProps", () => {
     });
   });
 
+  it("splits an overlong persisted video clip into source video and fallback still props without changing audio timing", async () => {
+    const tempDir = await mkdtemp(
+      join(tmpdir(), "remotion-input-builder-video-tail-"),
+    );
+    const files = await writeFixtureFiles(tempDir, {
+      subtitleTimingSource: "forced_alignment",
+    });
+    const manifest = makeManifestWithImageMotionNarrationSubtitle(files, {
+      subtitleTimingSource: "forced_alignment",
+    });
+    const videoArtifact = manifest.artifacts.find(
+      (artifact) => artifact.artifact_id === "artifact_video_001",
+    );
+    if (videoArtifact?.artifact_type === "video") {
+      videoArtifact.metadata.duration_sec = 1;
+    }
+    manifest.segment_routes[1] = {
+      ...manifest.segment_routes[1]!,
+      fallback_visual_artifact_id: "artifact_img_001",
+    };
+
+    const props = await buildRemotionInputProps({
+      timeline: makeTimelineWithTwoVisualsAndNarration(),
+      manifest,
+      assetBaseDir: tempDir,
+      width: 540,
+      height: 960,
+      fps: 30,
+    });
+
+    expect(props.visualClips).toMatchObject([
+      {
+        clipId: "clip_visual_001",
+        artifactId: "artifact_img_001",
+        mediaType: "image",
+        startSec: 0,
+        durationSec: 2,
+      },
+      {
+        clipId: "clip_visual_002",
+        artifactId: "artifact_video_001",
+        mediaType: "video",
+        startSec: 2,
+        durationSec: 1,
+      },
+      {
+        clipId: "clip_visual_002_fallback_still",
+        artifactId: "artifact_img_001",
+        mediaType: "image",
+        startSec: 3,
+        durationSec: 1,
+      },
+    ]);
+    expect(
+      props.audioClips?.find((clip) => clip.role === "narration"),
+    ).toMatchObject({
+      startSec: 0,
+      durationSec: 4,
+    });
+    expect(props.subtitleCues).toEqual([
+      { start_sec: 0, end_sec: 2, text: "Hello." },
+    ]);
+  });
+
   it("按比例缩放字幕 cue 到 narration 真实时长（estimated timing_source，drift 超过阈值）", async () => {
     const tempDir = await mkdtemp(join(tmpdir(), "remotion-input-builder-scale-"));
     const subtitleContent =

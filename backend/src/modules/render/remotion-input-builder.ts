@@ -273,6 +273,7 @@ function bgmRenderSettings(input: {
 }
 
 async function buildVisualClips(input: {
+  manifest: AssetManifest;
   timeline: ComposeTimeline;
   artifactsById: Map<string, AssetArtifact>;
   assetBaseDir: string;
@@ -282,12 +283,15 @@ async function buildVisualClips(input: {
     (track) => track.track_type === "visual",
   );
   const clips = visualTrack?.clips ?? [];
+  const routeBySegment = new Map(
+    input.manifest.segment_routes.map((route) => [route.segment_id, route]),
+  );
   const visualClips = await Promise.all(
-    clips.map(async (clip, index): Promise<RenderVisualClipProp | null> => {
+    clips.map(async (clip, index): Promise<RenderVisualClipProp[]> => {
       const artifact = input.artifactsById.get(clip.artifact_id);
       const mediaType = visualMediaTypeForClip(clip);
       if (!artifact || !mediaType) {
-        return null;
+        return [];
       }
 
       const motionArtifact = clip.motion_artifact_id
@@ -301,7 +305,7 @@ async function buildVisualClips(input: {
             }
           : undefined;
 
-      return {
+      const renderClip: RenderVisualClipProp = {
         clipId: clip.clip_id,
         artifactId: clip.artifact_id,
         mediaType,
@@ -322,11 +326,53 @@ async function buildVisualClips(input: {
             }
           : {}),
       };
+
+      if (mediaType !== "video" || artifact.artifact_type !== "video") {
+        return [renderClip];
+      }
+
+      const sourceDurationSec = Math.min(
+        artifact.metadata.duration_sec,
+        clip.duration_sec,
+      );
+      const remainingDurationSec = clip.duration_sec - sourceDurationSec;
+      const route =
+        typeof clip.segment_id === "string"
+          ? routeBySegment.get(clip.segment_id)
+          : undefined;
+      const fallbackArtifactId = route?.fallback_visual_artifact_id;
+      const fallbackArtifact = fallbackArtifactId
+        ? input.artifactsById.get(fallbackArtifactId)
+        : undefined;
+      if (
+        remainingDurationSec <= 0.001 ||
+        !fallbackArtifactId ||
+        fallbackArtifact?.artifact_type !== "image"
+      ) {
+        return [renderClip];
+      }
+
+      renderClip.durationSec = sourceDurationSec;
+      return [
+        renderClip,
+        {
+          clipId: `${clip.clip_id}_fallback_still`,
+          artifactId: fallbackArtifactId,
+          mediaType: "image",
+          src: await toBrowserFileUri({
+            artifact: fallbackArtifact,
+            assetBaseDir: input.assetBaseDir,
+            projectStorageRootDir: input.projectStorageRootDir,
+          }),
+          startSec: clip.start_sec + sourceDurationSec,
+          durationSec: remainingDurationSec,
+        },
+      ];
     }),
   );
 
   return visualClips
-    .filter((clip): clip is RenderVisualClipProp => clip !== null)
+    .flat()
     .sort((left, right) => left.startSec - right.startSec);
 }
 
@@ -487,6 +533,7 @@ export async function buildRemotionInputProps(input: {
       subtitleArtifact?.metadata.subtitle_style,
     ),
     visualClips: await buildVisualClips({
+      manifest: input.manifest,
       timeline: input.timeline,
       artifactsById,
       assetBaseDir: input.assetBaseDir,

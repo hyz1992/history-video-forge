@@ -211,9 +211,10 @@ function clipKindForRoute(
 function createVisualTrack(input: {
   manifest: AssetManifest;
   timings: SegmentTiming[];
+  artifactsById: Map<string, AssetArtifact>;
   notes: string[];
 }): ComposeTrack {
-  const { manifest, timings, notes } = input;
+  const { manifest, timings, artifactsById, notes } = input;
   const timingBySegment = new Map(
     timings.map((timing) => [timing.segmentId, timing]),
   );
@@ -229,19 +230,62 @@ function createVisualTrack(input: {
       continue;
     }
 
-    clips.push({
+    const artifact = artifactsById.get(artifactId);
+    const clipKind = clipKindForRoute(route);
+    const clip: ComposeClip = {
       clip_id: `clip_visual_${route.segment_id}`,
       segment_id: route.segment_id,
       artifact_id: artifactId,
       start_sec: timing.startSec,
       duration_sec: timing.durationSec,
-      clip_kind: clipKindForRoute(route),
+      clip_kind: clipKind,
       motion_artifact_id:
         route.visual_route_type === "image_with_motion"
           ? route.motion_artifact_id
           : null,
       notes: [],
-    });
+    };
+
+    if (clipKind !== "video" || artifact?.artifact_type !== "video") {
+      clips.push(clip);
+      continue;
+    }
+
+    const fallbackArtifactId = route.fallback_visual_artifact_id;
+    const fallbackArtifact = fallbackArtifactId
+      ? artifactsById.get(fallbackArtifactId)
+      : undefined;
+    const videoDurationSec = Math.min(
+      artifact.metadata.duration_sec,
+      timing.durationSec,
+    );
+    const remainingDurationSec = timing.durationSec - videoDurationSec;
+
+    if (
+      remainingDurationSec > 0.001 &&
+      fallbackArtifactId &&
+      fallbackArtifact?.artifact_type === "image"
+    ) {
+      clip.duration_sec = videoDurationSec;
+      clips.push(clip);
+      clips.push({
+        clip_id: `clip_visual_${route.segment_id}_fallback_still`,
+        segment_id: route.segment_id,
+        artifact_id: fallbackArtifactId,
+        start_sec: timing.startSec + videoDurationSec,
+        duration_sec: remainingDurationSec,
+        clip_kind: "image_only",
+        motion_artifact_id: null,
+        notes: ["compose_video_fallback_still_tail"],
+      });
+      notes.push(`compose_video_fallback_still_tail:${route.segment_id}`);
+      continue;
+    }
+
+    if (remainingDurationSec > 0.001) {
+      notes.push(`compose_video_tail_fallback_missing:${route.segment_id}`);
+    }
+    clips.push(clip);
   }
 
   return {
@@ -493,6 +537,7 @@ export function buildComposeTimeline(
   const visualTrack = createVisualTrack({
     manifest: input.manifest,
     timings,
+    artifactsById,
     notes,
   });
   const narrationTrack = createNarrationTrack({
