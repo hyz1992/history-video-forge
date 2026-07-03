@@ -100,6 +100,18 @@ describe("useAssetTabPhase", () => {
     expect(phase.value).toMatchObject({ kind: "plan_generating" });
   });
 
+  it("returns plan_generating when local asset plan generation is running before snapshot refreshes", () => {
+    const { phase } = useAssetTabPhase({
+      assetPlanningStore: mockPlanningStore({
+        isGenerating: true,
+        snapshot: planSnapshot("storyboard_ready"),
+      }),
+      assetsStore: mockAssetsStore(),
+      initialLoadDone: computed(() => true),
+    });
+    expect(phase.value).toMatchObject({ kind: "plan_generating" });
+  });
+
   it("prefers plan_generating over initial loading when the snapshot already says generating", () => {
     const { phase } = useAssetTabPhase({
       assetPlanningStore: mockPlanningStore({

@@ -33,7 +33,8 @@ export function useAssetTabPhase(input: UseAssetTabPhaseInput): UseAssetTabPhase
     const activePlan = planSnap?.active_asset_plan ?? null;
     const manifest = assetsSnap?.active_assets?.manifest ?? null;
 
-    const isPlanGen = isAssetPlanSnapshotGenerating(planSnap);
+    const isPlanGen =
+      input.assetPlanningStore.state.isGenerating || isAssetPlanSnapshotGenerating(planSnap);
     const isAssetsGen =
       input.assetsStore.state.isGenerating ||
       assetsSnap?.active_assets?.execution_state?.generating === true;
