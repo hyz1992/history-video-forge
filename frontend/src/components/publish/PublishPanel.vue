@@ -30,6 +30,7 @@ import { usePublishStore, type TitleCandidate } from "../../stores/publish";
 import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 import { useRouter } from "vue-router";
+import StageGenerating from "../workspace/StageGenerating.vue";
 
 const publishStore = usePublishStore();
 const projectStore = useProjectStore();
@@ -318,6 +319,14 @@ onMounted(() => {
         重试
       </el-button>
     </div>
+
+    <!-- Generating package: hide empty state while the server is producing metadata -->
+    <StageGenerating
+      v-else-if="publishStore.state.isGenerating && !hasPkg"
+      title="正在生成发布包"
+      hint="正在生成标题、简介、标签和发布元数据，生成完成后会自动显示编辑内容。"
+      secondary-hint="请稍候，无需重复点击生成。"
+    />
 
     <!-- Loading -->
     <el-skeleton
