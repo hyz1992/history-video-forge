@@ -14,8 +14,7 @@ const stepEmojiMap: Record<string, string> = {
   script: "📝",
   storyboard: "🎬",
   asset: "🖼️",
-  compose: "🎞️",
-  render: "🎥",
+  "compose-render": "🎞️",
   publish: "🚀",
 };
 

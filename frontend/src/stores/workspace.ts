@@ -5,8 +5,7 @@ export type PipelineStep =
   | "script"
   | "storyboard"
   | "asset"
-  | "compose"
-  | "render"
+  | "compose-render"
   | "publish";
 
 export const PIPELINE_STEPS: {
@@ -18,9 +17,8 @@ export const PIPELINE_STEPS: {
   { key: "script", label: "文案", index: 1 },
   { key: "storyboard", label: "分镜", index: 2 },
   { key: "asset", label: "资产", index: 3 },
-  { key: "compose", label: "合成", index: 4 },
-  { key: "render", label: "渲染导出", index: 5 },
-  { key: "publish", label: "发布交付", index: 6 },
+  { key: "compose-render", label: "合成渲染", index: 4 },
+  { key: "publish", label: "发布交付", index: 5 },
 ];
 
 export interface WorkspaceStoreState {

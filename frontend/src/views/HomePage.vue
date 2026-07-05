@@ -81,7 +81,7 @@
         <div class="section-header fade-in">
           <div class="section-tag">One Creator · Complete Workflow</div>
           <h2 class="section-title"><span class="line-1">不需要专业团队</span><em>你，单人搞定一切</em></h2>
-          <p class="section-desc">七个步骤，环环相扣；六个角色，一手承担。从一个模糊的历史念头，到一段完整可发布的视频。</p>
+          <p class="section-desc">六个步骤，环环相扣；六个角色，一手承担。从一个模糊的历史念头，到一段完整可发布的视频。</p>
         </div>
 
         <!-- Pipeline Flow (4+3) -->
@@ -122,25 +122,16 @@
             <div class="stage-role">摄影指导</div>
             <div class="stage-desc">挑选图片视频</div>
           </div>
-          <!-- 阶段 5：合成 -->
+          <!-- 阶段 5：合成渲染 -->
           <div class="pipeline-stage fade-in">
             <div class="stage-icon">
               <svg viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
             </div>
-            <div class="stage-name">合成</div>
-            <div class="stage-role">录音 / 剪辑</div>
-            <div class="stage-desc">时间线编排、音轨合成</div>
+            <div class="stage-name">合成渲染</div>
+            <div class="stage-role">录音 / 剪辑 / 输出</div>
+            <div class="stage-desc">时间线编排、音轨合成、视频导出</div>
           </div>
-          <!-- 阶段 6：渲染 -->
-          <div class="pipeline-stage fade-in">
-            <div class="stage-icon">
-              <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            </div>
-            <div class="stage-name">渲染</div>
-            <div class="stage-role">—</div>
-            <div class="stage-desc">导出视频、预览成片</div>
-          </div>
-          <!-- 阶段 7：发布 -->
+          <!-- 阶段 6：发布 -->
           <div class="pipeline-stage fade-in">
             <div class="stage-icon">
               <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>

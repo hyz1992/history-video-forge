@@ -244,8 +244,7 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
     if (status.startsWith("script")) return "script";
     if (status.startsWith("storyboard")) return "storyboard";
     if (status.startsWith("asset_plan") || status.startsWith("assets")) return "asset";
-    if (status.startsWith("compos")) return "compose";
-    if (status.startsWith("render")) return "render";
+    if (status.startsWith("compos") || status.startsWith("render")) return "compose-render";
     return "topic";
   }
 

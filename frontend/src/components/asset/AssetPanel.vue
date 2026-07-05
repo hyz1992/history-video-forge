@@ -210,7 +210,7 @@ const narrationScriptLong = computed(() => {
 });
 
 const COMPOSE_STEP_INDEX = PIPELINE_STEPS.findIndex(
-  (s) => s.key === "compose",
+  (s) => s.key === "compose-render",
 );
 const router = useRouter();
 
@@ -545,7 +545,7 @@ const blockedReasonText = computed(() => {
   const head = items.slice(0, 5);
   const lines = head.map(i => `${i.segmentId} ${i.type}${i.reason}`);
   if (items.length > 5) lines.push(`...等 ${items.length} 项`);
-  return `无法进入合成：${lines.join("；")}`;
+  return `无法进入合成渲染：${lines.join("；")}`;
 });
 
 /* -------------------------------------------------------------------------- */
@@ -849,9 +849,9 @@ function handleConfirm() {
     ElMessage.warning(blockedReasonText.value || "资产尚未全部就绪");
     return;
   }
-  ElMessage.success("资产确认完成，进入合成阶段");
+  ElMessage.success("资产确认完成，进入合成渲染阶段");
   workspaceStore.setCurrentStep(COMPOSE_STEP_INDEX);
-  const pid = projectStore.state.projectId; if (pid) router.push(`/projects/${pid}/compose`);
+  const pid = projectStore.state.projectId; if (pid) router.push(`/projects/${pid}/compose-render`);
 }
 </script>
 
@@ -1308,7 +1308,7 @@ function handleConfirm() {
           >
             <span>
               <button class="asset-bottom-confirm-btn" disabled>
-                确认并进入合成
+                确认并进入合成渲染
               </button>
             </span>
           </el-tooltip>
@@ -1317,7 +1317,7 @@ function handleConfirm() {
             class="asset-bottom-confirm-btn"
             @click="handleConfirm"
           >
-            确认并进入合成
+            确认并进入合成渲染
           </button>
         </div>
       </div>

@@ -37,7 +37,7 @@ const projectStore = useProjectStore();
 const workspaceStore = useWorkspaceStore();
 const router = useRouter();
 
-const RENDER_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "render");
+const COMPOSE_RENDER_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "compose-render");
 
 /* -------------------------------------------------------------------------- */
 /*  Computed                                                                  */
@@ -286,10 +286,10 @@ async function handleExport() {
   }
 }
 
-function goToRender() {
-  workspaceStore.setCurrentStep(RENDER_STEP_INDEX);
+function goToComposeRender() {
+  workspaceStore.setCurrentStep(COMPOSE_RENDER_STEP_INDEX);
   const pid = projectStore.state.projectId;
-  if (pid) router.push(`/projects/${pid}/render`);
+  if (pid) router.push(`/projects/${pid}/compose-render`);
 }
 
 /* -------------------------------------------------------------------------- */

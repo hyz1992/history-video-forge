@@ -17,8 +17,7 @@ import TopicPanel from "../components/topic/TopicPanel.vue";
 import ScriptPanel from "../components/script/ScriptPanel.vue";
 import StoryboardPanel from "../components/storyboard/StoryboardPanel.vue";
 import AssetPanel from "../components/asset/AssetPanel.vue";
-import ComposePanel from "../components/compose/ComposePanel.vue";
-import RenderPanel from "../components/render/RenderPanel.vue";
+import ComposeRenderPanel from "../components/compose/ComposeRenderPanel.vue";
 import PublishPanel from "../components/publish/PublishPanel.vue";
 
 const route = useRoute();
@@ -33,8 +32,7 @@ const panelMap: Record<PipelineStep, Component> = {
   script: ScriptPanel,
   storyboard: StoryboardPanel,
   asset: AssetPanel,
-  compose: ComposePanel,
-  render: RenderPanel,
+  "compose-render": ComposeRenderPanel,
   publish: PublishPanel,
 };
 
