@@ -223,15 +223,24 @@ function stopRenderPolling() {
 
 function startRenderPolling() {
   stopRenderPolling();
+
+  const ar = renderStore.state.snapshot?.active_render;
+  if (ar && (ar.status === "completed" || ar.status === "ready" ||
+             ar.status === "failed" || ar.status === "stale_source" ||
+             ar.status === "blocked")) {
+    renderPollingActive.value = false;
+    return;
+  }
+
   renderPollingActive.value = true;
   renderPollTimer = setInterval(async () => {
     try {
       await renderStore.loadProject();
       const snap = renderStore.state.snapshot;
       if (!snap) return;
-      const ar = snap.active_render;
-      if (!ar || ar.execution_state?.generating === true) return;
-      if (ar.status === "completed" || ar.status === "ready" || ar.status === "failed" || ar.status === "stale_source" || ar.status === "blocked") {
+      const ar2 = snap.active_render;
+      if (!ar2 || ar2.execution_state?.generating === true) return;
+      if (ar2.status === "completed" || ar2.status === "ready" || ar2.status === "failed" || ar2.status === "stale_source" || ar2.status === "blocked") {
         stopRenderPolling();
       }
     } catch {
@@ -256,9 +265,6 @@ async function triggerAutoRender() {
       autoPhaseTitle.value = "正在渲染视频，可能需要几分钟...";
       autoPhaseHint.value = "正在调用渲染引擎逐帧输出视频，请耐心等待。";
       startRenderPolling();
-    } else if (s === "completed" || s === "ready" || s === "failed" || s === "stale_source" || s === "blocked") {
-      autoPhaseTitle.value = "正在渲染视频，可能需要几分钟...";
-      autoPhaseHint.value = "正在调用渲染引擎逐帧输出视频，请耐心等待。";
     }
     return;
   }
@@ -351,18 +357,6 @@ async function handleGenerateCompose() {
 }
 
 async function handleStartRender() {
-  await renderStore.loadProject();
-  if (renderStore.state.loadError) return;
-  autoPhaseTitle.value = "正在渲染视频，可能需要几分钟...";
-  autoPhaseHint.value = "正在调用渲染引擎逐帧输出视频，请耐心等待。";
-  await renderStore.generateRender();
-  if (!renderStore.state.loadError) startRenderPolling();
-}
-
-async function handleRetryRender() {
-  renderAutoTriggered.value = true;
-  autoPhaseTitle.value = "正在渲染视频，可能需要几分钟...";
-  autoPhaseHint.value = "正在调用渲染引擎逐帧输出视频，请耐心等待。";
   await renderStore.loadProject();
   if (renderStore.state.loadError) return;
   await renderStore.generateRender();
@@ -631,9 +625,6 @@ const isPipelineInProgress = computed(() => {
       </div>
 
       <div class="card-actions">
-        <el-button @click="handleRetryRender" :loading="renderStore.state.isGenerating">
-          重新渲染
-        </el-button>
         <el-button
           type="success"
           :loading="isDownloading"
