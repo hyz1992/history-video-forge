@@ -20,6 +20,7 @@
     "build": "npm run build:frontend && npm run build:backend",
     "build:frontend": "vite build --config frontend/vite.config.ts",
     "build:backend": "node scripts/build-backend.mjs",
+    "start": "node scripts/start-prod.mjs",
     "dev:backend": "node --import tsx backend/src/server.ts",
     "dev:frontend": "vite --config frontend/vite.config.ts",
     "test": "vitest run",
