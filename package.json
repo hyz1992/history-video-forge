@@ -17,6 +17,9 @@
     "renderer"
   ],
   "scripts": {
+    "build": "npm run build:frontend && npm run build:backend",
+    "build:frontend": "vite build --config frontend/vite.config.ts",
+    "build:backend": "tsc -p backend/tsconfig.json",
     "dev:backend": "node --import tsx backend/src/server.ts",
     "dev:frontend": "vite --config frontend/vite.config.ts",
     "test": "vitest run",

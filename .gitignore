@@ -12,3 +12,5 @@ storage/topic-candidate-library/
 storage/voice-profiles/
 .codex-run-logs/
 temp/
+backend/dist/
+frontend/dist/

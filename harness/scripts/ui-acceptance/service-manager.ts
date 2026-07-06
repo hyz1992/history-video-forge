@@ -34,16 +34,21 @@ export interface RunWithUiAcceptanceServicesDependencies {
   killProcessTree?: (pid: number) => Promise<void> | void;
 }
 
+function readBackendPort(): number {
+  return Number(process.env.SERVER_PORT) || 3000;
+}
+
 export function buildUiAcceptanceServiceDefinitions(
   cwd: string = process.cwd(),
 ): UiAcceptanceServiceDefinition[] {
+  const backendPort = readBackendPort();
   return [
     {
       name: "backend",
       command: "npm",
       args: ["run", "dev:backend"],
       cwd,
-      readyUrl: "http://127.0.0.1:3000/healthz",
+      readyUrl: `http://127.0.0.1:${backendPort}/healthz`,
       intervalMs: 500,
       timeoutMs: 30000,
     },

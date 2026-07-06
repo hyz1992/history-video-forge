@@ -1,4 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
@@ -9,12 +10,13 @@ import type { RenderAdapter } from "./modules/render/render-adapter.js";
 function resolveRenderAdapter(): RenderAdapter | undefined {
   const mode = (process.env.RENDER_ADAPTER ?? "remotion").toLowerCase();
   if (mode === "remotion") return createLocalRemotionRenderAdapter();
-  if (mode === "fake") return undefined; // undefined → render-run falls back to fake
+  if (mode === "fake") return undefined;
   console.warn(`Unknown RENDER_ADAPTER "${mode}", falling back to fake`);
   return undefined;
 }
 import { matchFileRoute, handleFileRoute } from "./http/file-routes.js";
 import { parseMultipart } from "./http/multipart.js";
+import { tryServeStatic } from "./http/static-files.js";
 
 async function readPayload(request: IncomingMessage) {
   const chunks: Buffer[] = [];
@@ -46,7 +48,14 @@ function writeJson(response: ServerResponse, statusCode: number, body: unknown) 
   response.end(JSON.stringify(body));
 }
 
-export function createHttpServer(app: AppInstance = buildApp({ renderAdapter: resolveRenderAdapter() })): Server {
+export function createHttpServer(
+  app: AppInstance = buildApp({ renderAdapter: resolveRenderAdapter() }),
+  options?: { publicDir?: string },
+): Server {
+  const isProduction = process.env.NODE_ENV === "production";
+  const publicDir = options?.publicDir ?? resolve(process.cwd(), "frontend", "dist");
+  const canServeStatic = isProduction && !!publicDir && existsSync(publicDir);
+
   return createServer(async (request, response) => {
     if (!request.method || !request.url) {
       writeJson(response, 400, {
@@ -61,6 +70,15 @@ export function createHttpServer(app: AppInstance = buildApp({ renderAdapter: re
     }
 
     const requestUrl = new URL(request.url, "http://127.0.0.1");
+
+    // 生产模式：托管前端静态资源（单端口部署）
+    if (canServeStatic && request.method === "GET" && !requestUrl.pathname.startsWith("/api")) {
+      if (tryServeStatic(response, requestUrl.pathname, publicDir)) {
+        return;
+      }
+      writeJson(response, 404, { error: "Not Found" });
+      return;
+    }
 
     // 1. File service routes (bypass app.inject, don't consume request body)
     const fileMatch = matchFileRoute(request.method, requestUrl.pathname);
@@ -129,10 +147,12 @@ export async function startServer(options?: {
   app?: AppInstance;
   host?: string;
   port?: number;
+  publicDir?: string;
 }) {
-  const host = options?.host ?? "127.0.0.1";
-  const port = options?.port ?? 3000;
-  const server = createHttpServer(options?.app);
+  const host = options?.host ?? process.env.SERVER_HOST ?? "127.0.0.1";
+  const port = options?.port ?? (Number(process.env.SERVER_PORT) || 3000);
+  const publicDir = options?.publicDir ?? process.env.PUBLIC_DIR;
+  const server = createHttpServer(options?.app, { publicDir });
 
   await new Promise<void>((resolvePromise, rejectPromise) => {
     server.once("error", rejectPromise);

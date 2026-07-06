@@ -3,7 +3,8 @@ import { basename } from "node:path";
 import AdmZip from "adm-zip";
 import type { DbClient } from "../../db/client";
 
-const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "http://localhost:3000";
+const DEFAULT_PORT = process.env.SERVER_PORT ?? "3000";
+const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || `http://localhost:${DEFAULT_PORT}`;
 
 export interface ExportResult {
   zipBuffer: Buffer;
