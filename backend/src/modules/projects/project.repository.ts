@@ -89,6 +89,7 @@ export async function deleteProject(
   for (const [id, record] of db.publishPackageRecords) {
     if (record.projectId === projectId) db.publishPackageRecords.delete(id);
   }
+  db.topicRunCounts.delete(projectId);
   if (project && !process.env.VITEST) {
     deleteProjectStorage(project);
   }
