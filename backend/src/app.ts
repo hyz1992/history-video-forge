@@ -181,6 +181,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
       return {
         status: "ok",
         nodeEnv: env.nodeEnv,
+        demoMode: env.demoMode,
       };
     },
   };

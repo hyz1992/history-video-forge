@@ -12,6 +12,7 @@ import { useStagePolling } from "../../composables/useStagePolling";
 import { useAssetTabPhase } from "../../composables/useAssetTabPhase";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { PIPELINE_STEPS } from "../../stores/workspace";
+import { useDemoMode } from "../../composables/useDemoMode";
 import StageGenerating from "../workspace/StageGenerating.vue";
 import StageLoadingBar from "../workspace/StageLoadingBar.vue";
 
@@ -26,6 +27,32 @@ const scriptStore = useScriptStore();
 const projectStore = useProjectStore();
 const workspaceStore = useWorkspaceStore();
 const assetSnapshotLoaded = ref(false);
+const demoMode = useDemoMode();
+
+/* -------------------------------------------------------------------------- */
+/*  Demo mode: block image/video generation                                    */
+/* -------------------------------------------------------------------------- */
+
+const DEMO_MODE_MESSAGE = "比赛演示期间，图片和视频生成功能已关闭，以防 API 成本消耗。\n\n请前往项目列表，查看已有示例项目体验完整生成效果。";
+
+function showDemoModeBlock() {
+  ElMessageBox.alert(
+    DEMO_MODE_MESSAGE,
+    "演示模式",
+    {
+      confirmButtonText: "我知道了",
+      type: "warning",
+    },
+  );
+}
+
+function checkDemoVisualBlock(): boolean {
+  if (demoMode.value) {
+    showDemoModeBlock();
+    return true;
+  }
+  return false;
+}
 
 // 通用轮询：asset plan + assets 两个阶段的 generating 状态
 /** 先 load asset plan，再 load assets，顺序保证依赖关系 */
@@ -696,6 +723,7 @@ async function handleGenerateBasic() {
 
 async function handleGenerateMissing() {
   if (isAssetsBusy.value) return;
+  if (checkDemoVisualBlock()) return;
   const count = blockedItems.value.length;
   const types = [...new Set(blockedItems.value.map(i => i.type))].join("、");
   const { imgCount, vidSec, estCost } = estimateBlockedItemsCost(blockedItems.value);
@@ -717,6 +745,7 @@ async function handleGenerateMissing() {
 
 async function handleGenerateByType(taskType: string, typeLabel: string) {
   if (isAssetsBusy.value) return;
+  if (checkDemoVisualBlock()) return;
   const taskIds = blockedItems.value
     .filter(i => (taskType === "image_still" && i.type === "分镜图") || (taskType === "video_clip" && i.type === "分镜视频"))
     .map(i => i.taskId);
@@ -736,6 +765,7 @@ async function handleGenerateByType(taskType: string, typeLabel: string) {
 
 async function handleGenerateSelected() {
   if (isAssetsBusy.value) return;
+  if (checkDemoVisualBlock()) return;
   const ids = selectedBlockedIds.value;
   if (ids.length === 0) return;
   const items = blockedItems.value.filter(i => ids.includes(i.taskId));
@@ -762,6 +792,7 @@ function toggleBlockedItem(taskId: string) {
 
 async function handleBatchUpgrade() {
   if (isAssetsBusy.value) return;
+  if (checkDemoVisualBlock()) return;
   const count = upgradableSegments.value.length;
   const { rate, estimatedTotal } = getVideoUpgradeCostHint();
   try {
@@ -783,8 +814,10 @@ function handleUploadFile(taskId: string, file: File) {
 }
 
 async function handleGenerateTask(taskId: string) {
-  // Show cost hint for paid task types
+  // Demo mode: block image/video task types
   const task = assetTasks.value.find(t => t.task_id === taskId);
+  if (task && (task.task_type === "image_still" || task.task_type === "video_clip") && checkDemoVisualBlock()) return;
+  // Show cost hint for paid task types
   const taskLabel = task ? (TASK_TYPE_LABELS[task.task_type] ?? task.task_type) : taskId;
   const costHint = task ? getTaskCostHint(task.task_type) : "";
   try {
@@ -815,6 +848,7 @@ async function handleGenerateTask(taskId: string) {
 }
 
 async function handleUpgradeVideo(segmentId: string) {
+  if (checkDemoVisualBlock()) return;
   const seg = segments.value.find(s => s.segment_id === segmentId);
   const segLabel = seg ? `#${segments.value.indexOf(seg) + 1}` : segmentId;
   const { rate, estimatedTotal } = getVideoUpgradeCostHint();
@@ -857,6 +891,17 @@ function handleConfirm() {
 
 <template>
   <div class="asset-panel">
+    <!-- Demo mode banner -->
+    <el-alert
+      v-if="demoMode"
+      title="演示模式"
+      description="比赛演示期间，图片和视频生成功能已关闭。您可以浏览已有的示例项目体验完整效果，口播音频、字幕、音效、配乐等非视觉资产生成不受影响。"
+      type="warning"
+      show-icon
+      :closable="false"
+      class="asset-demo-banner"
+    />
+
     <!-- 自动生成中（组件级桥接，覆盖 initialLoadDone=false 期间的空白） -->
     <StageGenerating
       v-if="pendingAutoGenerate"
@@ -1348,6 +1393,10 @@ function handleConfirm() {
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;
+}
+
+.asset-demo-banner {
+  border-radius: var(--radius-card);
 }
 
 /* ---- Error / Loading / Empty ---- */

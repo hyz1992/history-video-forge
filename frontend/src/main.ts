@@ -52,8 +52,10 @@ import {
   publishStoreKey,
 } from "./stores/publish";
 import { initTheme } from "./composables/useTheme";
+import { initDemoMode } from "./composables/useDemoMode";
 
 initTheme();
+initDemoMode();
 
 const router = createAppRouter("web");
 const projectStore = createProjectStore(createFetchProjectApi());

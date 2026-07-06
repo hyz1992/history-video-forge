@@ -7,6 +7,7 @@ type StrictStructuredThinking = "enabled" | "disabled";
 
 export interface AppEnv {
   nodeEnv: string;
+  demoMode: boolean;
   databaseUrl: string;
   promptAssetsDir: string;
   llm: {
@@ -69,8 +70,12 @@ function buildEnv(dotEnvValues: Record<string, string>): AppEnv {
   const structuredDefaults =
     readStrictStructuredModelDefaults(structuredModel);
 
+  const demoModeRaw = readEnvValue("DEMO_MODE", dotEnvValues);
+  const demoMode = demoModeRaw === "true" || demoModeRaw === "1";
+
   return {
     nodeEnv: readEnvValue("NODE_ENV", dotEnvValues) ?? "development",
+    demoMode,
     databaseUrl: readEnvValue("DATABASE_URL", dotEnvValues) ?? "file:./dev.db",
     promptAssetsDir:
       readEnvValue("PROMPT_ASSETS_DIR", dotEnvValues) ??

@@ -22,6 +22,20 @@ function readDashscopeTtsFormat(value: unknown) {
     : undefined;
 }
 
+/** DEMO_MODE: check whether visual (image/video) generation is blocked. */
+function checkDemoModeVisualBlock(context: RouteContext, taskTypes: string[]): AppResponse | null {
+  if (!env.demoMode) return null;
+  const hasVisual = taskTypes.some((t) => t === "image_still" || t === "video_clip");
+  if (!hasVisual) return null;
+  return {
+    statusCode: 403,
+    body: {
+      error: "demo_mode_visual_blocked",
+      message: "比赛演示模式下图片和视频生成已关闭，请浏览已有示例项目查看成品效果。",
+    },
+  };
+}
+
 async function generateAssetsController(
   context: RouteContext,
 ): Promise<AppResponse> {
@@ -35,13 +49,44 @@ async function generateAssetsController(
     };
   }
 
+  // DEMO_MODE: block if payload includes image/video generation
+  const payload = context.payload as Record<string, unknown>;
+  const enabledProviderTypes = Array.isArray(payload.enabled_provider_types)
+    ? payload.enabled_provider_types as string[]
+    : undefined;
+  const requestedMode = payload.mode as string | undefined;
+  const requestedTaskIds = Array.isArray(payload.task_ids) && payload.task_ids.every((id: unknown) => typeof id === "string")
+    ? payload.task_ids as string[]
+    : undefined;
+
+  // Determine which task types would be triggered
+  // If specific taskIds are given, look up their types from the asset plan
+  let targetTaskTypes: string[] = [];
+  if (requestedTaskIds && requestedTaskIds.length > 0 && project.activeAssetPlanRecordId) {
+    const planRecord = context.app.db.assetPlanRecords.get(project.activeAssetPlanRecordId);
+    if (planRecord) {
+      const plan = planRecord.planJson as { tasks?: Array<{ task_id: string; task_type: string }> };
+      targetTaskTypes = requestedTaskIds
+        .map((tid) => plan.tasks?.find((t) => t.task_id === tid)?.task_type)
+        .filter((t): t is string => !!t);
+    }
+  } else if (enabledProviderTypes && enabledProviderTypes.length > 0) {
+    // enabledProviderTypes like ["tts", "sfx", "bgm"] won't include image/video
+    // But if not specified, default auto_available may include everything
+    targetTaskTypes = enabledProviderTypes;
+  } else {
+    // No specific types — assume all types could be included
+    targetTaskTypes = ["image_still", "video_clip", "tts_audio"];
+  }
+  const demoBlock = checkDemoModeVisualBlock(context, targetTaskTypes);
+  if (demoBlock) return demoBlock;
+
   const voiceProfileId =
-    (context.payload as Record<string, unknown>).voice_profile_id as string | undefined
+    payload.voice_profile_id as string | undefined
       ?? "voice_default_male_storyteller";
   const executionMode =
-    (context.payload as Record<string, unknown>).execution_mode as string | undefined
+    payload.execution_mode as string | undefined
       ?? "auto_available";
-  const payload = context.payload as Record<string, unknown>;
   const providerMode =
     payload.provider_mode === "dashscope" || payload.provider_mode === "dashscope_tts"
       ? payload.provider_mode
@@ -50,13 +95,7 @@ async function generateAssetsController(
     typeof payload.dashscope === "object" && payload.dashscope !== null
       ? payload.dashscope as Record<string, unknown>
       : {};
-  const enabledProviderTypes = Array.isArray(payload.enabled_provider_types)
-    ? payload.enabled_provider_types as string[]
-    : undefined;
-  const missingOnly = payload.mode === "missing_only";
-  const taskIds = Array.isArray(payload.task_ids) && payload.task_ids.every((id: unknown) => typeof id === "string")
-    ? payload.task_ids as string[]
-    : undefined;
+  const missingOnly = requestedMode === "missing_only";
 
   return runAssetsGeneration({
     db: context.app.db,
@@ -66,7 +105,7 @@ async function generateAssetsController(
     providerMode,
     enabledProviderTypes,
     missingOnly,
-    taskIds,
+    taskIds: requestedTaskIds,
     dashscope: {
       apiKey: dashscopePayload.api_key as string | undefined,
       baseUrl: dashscopePayload.base_url as string | undefined,
@@ -442,7 +481,25 @@ async function generateTaskController(
     return { statusCode: 404, body: { error: "project_not_found" } };
   }
 
+  // DEMO_MODE: check task type
   const taskId = context.params.taskId;
+  if (env.demoMode && project.activeAssetPlanRecordId) {
+    const planRecord = context.app.db.assetPlanRecords.get(project.activeAssetPlanRecordId);
+    if (planRecord) {
+      const plan = planRecord.planJson as { tasks?: Array<{ task_id: string; task_type: string }> };
+      const task = plan.tasks?.find((t) => t.task_id === taskId);
+      if (task && (task.task_type === "image_still" || task.task_type === "video_clip")) {
+        return {
+          statusCode: 403,
+          body: {
+            error: "demo_mode_visual_blocked",
+            message: "比赛演示模式下图片和视频生成已关闭，请浏览已有示例项目查看成品效果。",
+          },
+        };
+      }
+    }
+  }
+
   const payload = context.payload as Record<string, unknown>;
   const voiceProfileId =
     (payload.voice_profile_id as string | undefined) ?? "voice_default_male_storyteller";
@@ -467,6 +524,17 @@ async function upgradeSegmentToVideoController(
   const project = await getProjectById(context.app.db, context.params.projectId);
   if (!project) {
     return { statusCode: 404, body: { error: "project_not_found" } };
+  }
+
+  // DEMO_MODE: video upgrade is always visual
+  if (env.demoMode) {
+    return {
+      statusCode: 403,
+      body: {
+        error: "demo_mode_visual_blocked",
+        message: "比赛演示模式下视频生成已关闭，请浏览已有示例项目查看成品效果。",
+      },
+    };
   }
 
   const segmentId = context.params.segmentId;
