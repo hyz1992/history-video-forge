@@ -76,7 +76,7 @@ function routeStubAfterSemanticReview(state: TopicScriptGraphState) {
   return END;
 }
 
-export function createTopicScriptGraph() {
+export function createTopicScriptGraph(): unknown {
   const builder = new StateGraph(TopicScriptGraphStateSchema)
     .addNode("script-generate", createStubNode("script-generate"))
     .addNode("local-validate", createStubNode("local-validate"))

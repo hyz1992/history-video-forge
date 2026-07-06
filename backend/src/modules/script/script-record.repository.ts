@@ -1,6 +1,7 @@
 import type { DbClient, ScriptRecord } from "../../db/client";
 
 export interface SaveScriptRecordInput {
+  id?: string;
   projectId: string;
   topicPackageId: string;
   scriptText: string;
@@ -22,7 +23,7 @@ export async function saveScriptRecord(
   input: SaveScriptRecordInput,
 ): Promise<ScriptRecord> {
   const record: ScriptRecord = {
-    id: db.generateId(),
+    id: input.id ?? db.generateId(),
     projectId: input.projectId,
     topicPackageId: input.topicPackageId,
     scriptText: input.scriptText,

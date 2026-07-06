@@ -234,7 +234,7 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
     composeRecordId: composeRecord.id,
     assetManifestRecordId: assetManifestRecord!.id,
     status: "rendering",
-    profileJson: profile,
+    profileJson: profile as unknown as Record<string, unknown>,
     outputArtifactJson: null,
     validationResultJson: readyValidation,
     executionStateJson: {

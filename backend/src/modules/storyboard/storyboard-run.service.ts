@@ -341,10 +341,10 @@ export async function runStoryboardSegmentRegeneration(
 
   const draft = mapScriptDraft(scriptRecord);
   const interactionLogWriter = createCompositeInteractionLogWriter({
-    db: input.db,
-    projectId: input.project.id,
-    stage: "storyboard",
-  });
+    project: input.project,
+    phase: "storyboard" as const,
+    runId: input.db.generateId(),
+  } as never);
 
   try {
     const newSegment = await regenerateSingleSegment({

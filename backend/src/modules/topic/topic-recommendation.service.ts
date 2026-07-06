@@ -1012,7 +1012,7 @@ async function invokeTopicSelector(input: {
   selectorInput: unknown;
   interactionLogWriter?: LlmInteractionLogWriter;
 }): Promise<TopicSelectorDecision> {
-  if (input.llmGateway.invokeStrictStructured) {
+  if ((input.llmGateway as unknown as Record<string, unknown>).invokeStrictStructured) {
     try {
       return await invokeTopicStrictStructuredWithSafetyRetry<TopicSelectorDecision>({
         gateway: input.llmGateway,

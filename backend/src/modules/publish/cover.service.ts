@@ -171,7 +171,7 @@ export async function generateCoverPromptDraft(ctx: CoverPromptContext): Promise
         visual_tone: ctx.visualTone,
         selected_title: "",
       },
-      interactionLogWriter: null,
+      interactionLogWriter: undefined,
     });
     return result.cover_prompt?.trim() || buildFallbackCoverPrompt(ctx);
   } catch {

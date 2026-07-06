@@ -293,8 +293,8 @@ export async function createTopicRecommendationsController(
     });
   }
 
-  const topicRun = recommendation.topic_run ?? {
-    project_id: project.id,
+  const topicRun = (recommendation as Record<string, unknown>).topic_run as Record<string, unknown> | undefined ?? {
+    project_id: project.id as string,
     round_id: `topic_run_${randomUUID()}`,
     round_index:
       (context.app.topicCandidateStore.get(project.id)?.rounds.length ?? 0) + 1,
@@ -311,11 +311,11 @@ export async function createTopicRecommendationsController(
   }
 
   projectTopicState.rounds.push({
-    roundId: topicRun.round_id,
-    roundIndex: topicRun.round_index,
+    roundId: String(topicRun.round_id),
+    roundIndex: Number(topicRun.round_index),
     createdAt: new Date().toISOString(),
     candidates: [...storedCandidates.values()],
-  });
+  } as never);
   context.app.topicCandidateStore.set(project.id, projectTopicState);
 
   // 生成成功，状态转换为 candidates_ready
@@ -330,6 +330,8 @@ export async function createTopicRecommendationsController(
     body: {
       project_id: project.id,
       event_id: projectTopicState.rounds.at(-1)?.candidates[0]?.event.id ?? null,
+      topic_run_id: (topicRun["round_id"] ?? topicRun["topic_run_id"]) as string,
+      topic_run_index: (topicRun["round_index"] ?? topicRun["topic_run_index"]) as number,
       candidates: responseCandidates,
       current_round: currentRound
         ? {

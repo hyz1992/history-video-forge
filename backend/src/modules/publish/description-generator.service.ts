@@ -34,7 +34,7 @@ export async function generateDescription(
         duration_sec: input.durationSec,
         platform_profile: input.platformProfile ?? "generic",
       },
-      interactionLogWriter: null,
+      interactionLogWriter: undefined,
     });
 
     return { description: (result.description ?? "").slice(0, 200) };

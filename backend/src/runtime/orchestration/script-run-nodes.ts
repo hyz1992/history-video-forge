@@ -1,4 +1,4 @@
-import type { ScriptInputBundle } from "../../../shared/src/index.js";
+import type { ScriptInputBundle } from "../../../../shared/src/index.js";
 import type { patchScriptDraft } from "../../modules/script/script-patch.service.js";
 import type { regenerateScriptDraft } from "../../modules/script/script-regenerate.service.js";
 import type { generateScriptDraft } from "../../modules/script/script-generation.service.js";
@@ -166,7 +166,7 @@ export function createScriptRunNodes(input: {
         output_ref: "script-local-validation:current",
         failure_reason:
           runtime.localValidation.decision === "hard_fail"
-            ? runtime.localValidation.summary
+            ? ((runtime.localValidation as Record<string, unknown>).summary as string)
             : null,
       });
       recordStepTrace("local-validate", startedAt, stateUpdate);
@@ -197,8 +197,8 @@ export function createScriptRunNodes(input: {
         input_ref: "script-local-validation:current",
         output_ref: "script-semantic-review:current",
         failure_reason:
-          runtime.semanticReview.decision === "hard_fail"
-            ? runtime.semanticReview.summary
+          (runtime.semanticReview.decision as string) === "hard_fail"
+            ? ((runtime.semanticReview as Record<string, unknown>).summary as string)
             : null,
       });
       recordStepTrace("semantic-review", startedAt, stateUpdate);

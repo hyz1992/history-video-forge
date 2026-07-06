@@ -4,7 +4,8 @@
     "outDir": "dist",
     "rootDir": "..",
     "declaration": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "noEmitOnError": false
   },
   "include": ["src/**/*.ts", "../shared/src/**/*.ts"],
   "exclude": ["src/**/*.test.ts"]

@@ -39,7 +39,7 @@ export async function generateTitleCandidates(
         duration_sec: input.durationSec,
         current_title: input.currentTitle ?? "",
       },
-      interactionLogWriter: null,
+      interactionLogWriter: undefined,
     });
 
     // Validate styles

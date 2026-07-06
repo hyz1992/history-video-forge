@@ -159,6 +159,7 @@ export async function publishGenerateController(
     storyboardRecordId,
     assetManifestRecordId,
     packageJson: prePackageJson,
+    validationResultJson: null,
     executionStateJson: { generated_at: new Date().toISOString(), generating: true },
   });
   project.activePublishPackageRecordId = generatingRecord.id;
@@ -269,6 +270,7 @@ export async function publishGenerateController(
     storyboardRecordId,
     assetManifestRecordId,
     packageJson,
+    validationResultJson: null,
     executionStateJson: {
       generated_at: new Date().toISOString(),
       llm_used: llmUsed,
@@ -425,7 +427,7 @@ export async function coverPromptOptimizeController(
           visual_tone: artBible.visual_tone ?? "",
         },
       },
-      interactionLogWriter: null,
+      interactionLogWriter: undefined,
     });
 
     return {
@@ -614,7 +616,7 @@ export async function coverGenerateController(
     };
   }
 
-  const dashscopeApiKey = process.env.ALIYUN_DASHSCOPE_API_KEY || env.dashscopeApiKey;
+  const dashscopeApiKey = process.env.ALIYUN_DASHSCOPE_API_KEY || "";
   if (!dashscopeApiKey) {
     return {
       statusCode: 501,
@@ -710,7 +712,7 @@ export async function titleCandidatesController(
 
   // Get current publish package record if exists
   let currentTitle = "";
-  let publishRecord: ReturnType<typeof db.publishPackageRecords.get> = null;
+  let publishRecord: ReturnType<typeof db.publishPackageRecords.get> = undefined;
   if (project.activePublishPackageRecordId) {
     publishRecord = db.publishPackageRecords.get(
       project.activePublishPackageRecordId,
@@ -783,7 +785,7 @@ export async function publishExportController(
         "x-export-manifest": JSON.stringify(result.manifest),
       },
       body: result.zipBuffer,
-    };
+    } as unknown as AppResponse;
   } catch (error) {
     const message = error instanceof Error ? error.message : "export_failed";
 

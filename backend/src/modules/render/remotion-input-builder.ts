@@ -507,7 +507,7 @@ export async function buildRemotionInputProps(input: {
     : undefined;
   const rawSubtitleCues = subtitleContent
     ? parseSubtitleCues({
-        format: String(subtitleArtifact?.metadata.format ?? "srt"),
+        format: String(((subtitleArtifact?.metadata) as Record<string, unknown> | undefined)?.format ?? "srt"),
         content: subtitleContent,
       })
     : [];
@@ -526,7 +526,7 @@ export async function buildRemotionInputProps(input: {
     fps: input.fps,
     subtitleCues,
     subtitleStyle: normalizeSubtitleStyle(
-      subtitleArtifact?.metadata.subtitle_style,
+      (subtitleArtifact?.metadata as Record<string, unknown> | undefined)?.subtitle_style,
     ),
     visualClips: await buildVisualClips({
       manifest: input.manifest,

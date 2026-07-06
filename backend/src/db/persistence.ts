@@ -34,10 +34,6 @@ function mapToArray<T>(map: Map<string, T>): Array<[string, T]> {
   return [...map.entries()];
 }
 
-function arrayToMap<T>(entries: Array<[string, T]>): Map<string, T> {
-  return new Map(entries);
-}
-
 const DATE_FIELD_NAMES = new Set([
   "createdAt", "updatedAt", "savedAt",
   "started_at", "ended_at",
@@ -83,24 +79,24 @@ export function saveDbSnapshot(
     const snapshot: DbSnapshot = {
       version: "db_snapshot_v1",
       savedAt: new Date().toISOString(),
-      projects: mapToArray(db.projects).map(([k, v]) => [k, v]),
-      events: mapToArray(db.events).map(([k, v]) => [k, v]),
-      topicPackages: mapToArray(db.topicPackages).map(([k, v]) => [k, v]),
-      candidateCache: mapToArray(db.candidateCache).map(([k, v]) => [k, v]),
+      projects: mapToArray(db.projects).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
+      events: mapToArray(db.events).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
+      topicPackages: mapToArray(db.topicPackages).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
+      candidateCache: mapToArray(db.candidateCache).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
       topicRunCounts: [...db.topicRunCounts.entries()],
-      scriptRecords: mapToArray(db.scriptRecords).map(([k, v]) => [k, v]),
-      storyboardRecords: mapToArray(db.storyboardRecords).map(([k, v]) => [k, v]),
-      assetPlanRecords: mapToArray(db.assetPlanRecords).map(([k, v]) => [k, v]),
-      assetManifestRecords: mapToArray(db.assetManifestRecords).map(([k, v]) => [k, v]),
-      composeRecords: mapToArray(db.composeRecords).map(([k, v]) => [k, v]),
-      renderJobRecords: mapToArray(db.renderJobRecords).map(([k, v]) => [k, v]),
+      scriptRecords: mapToArray(db.scriptRecords).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
+      storyboardRecords: mapToArray(db.storyboardRecords).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
+      assetPlanRecords: mapToArray(db.assetPlanRecords).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
+      assetManifestRecords: mapToArray(db.assetManifestRecords).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
+      composeRecords: mapToArray(db.composeRecords).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
+      renderJobRecords: mapToArray(db.renderJobRecords).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
       topicCandidateStore: {},
     };
 
     for (const [projectId, state] of topicCandidateStore.entries()) {
       snapshot.topicCandidateStore[projectId] = {
-        candidatesById: Object.fromEntries(state.candidatesById),
-        rounds: state.rounds,
+        candidatesById: Object.fromEntries(state.candidatesById) as unknown as Record<string, unknown>,
+        rounds: state.rounds as unknown as Array<Record<string, unknown>>,
       };
     }
 
@@ -128,21 +124,21 @@ export function loadDbSnapshot(
 
     if (snapshot.version !== "db_snapshot_v1") return false;
 
-    for (const [k, v] of snapshot.projects) db.projects.set(k, v as never);
-    for (const [k, v] of snapshot.events) db.events.set(k, v as never);
-    for (const [k, v] of snapshot.topicPackages) db.topicPackages.set(k, v as never);
-    for (const [k, v] of snapshot.candidateCache) db.candidateCache.set(k, v as never);
+    for (const [k, v] of snapshot.projects as unknown as Array<[string, unknown]>) db.projects.set(k, v as never);
+    for (const [k, v] of snapshot.events as unknown as Array<[string, unknown]>) db.events.set(k, v as never);
+    for (const [k, v] of snapshot.topicPackages as unknown as Array<[string, unknown]>) db.topicPackages.set(k, v as never);
+    for (const [k, v] of snapshot.candidateCache as unknown as Array<[string, unknown]>) db.candidateCache.set(k, v as never);
     for (const [k, v] of snapshot.topicRunCounts) db.topicRunCounts.set(k, v);
-    for (const [k, v] of snapshot.scriptRecords) db.scriptRecords.set(k, v as never);
-    for (const [k, v] of snapshot.storyboardRecords) db.storyboardRecords.set(k, v as never);
-    for (const [k, v] of snapshot.assetPlanRecords) db.assetPlanRecords.set(k, v as never);
-    for (const [k, v] of snapshot.assetManifestRecords) db.assetManifestRecords.set(k, v as never);
-    for (const [k, v] of snapshot.composeRecords) db.composeRecords.set(k, v as never);
-    for (const [k, v] of snapshot.renderJobRecords) db.renderJobRecords.set(k, v as never);
+    for (const [k, v] of snapshot.scriptRecords as unknown as Array<[string, unknown]>) db.scriptRecords.set(k, v as never);
+    for (const [k, v] of snapshot.storyboardRecords as unknown as Array<[string, unknown]>) db.storyboardRecords.set(k, v as never);
+    for (const [k, v] of snapshot.assetPlanRecords as unknown as Array<[string, unknown]>) db.assetPlanRecords.set(k, v as never);
+    for (const [k, v] of snapshot.assetManifestRecords as unknown as Array<[string, unknown]>) db.assetManifestRecords.set(k, v as never);
+    for (const [k, v] of snapshot.composeRecords as unknown as Array<[string, unknown]>) db.composeRecords.set(k, v as never);
+    for (const [k, v] of snapshot.renderJobRecords as unknown as Array<[string, unknown]>) db.renderJobRecords.set(k, v as never);
 
     for (const [projectId, state] of Object.entries(snapshot.topicCandidateStore)) {
       topicCandidateStore.set(projectId, {
-        candidatesById: new Map(Object.entries(state.candidatesById)),
+        candidatesById: new Map(Object.entries(state.candidatesById)) as never,
         rounds: state.rounds as never,
       });
     }

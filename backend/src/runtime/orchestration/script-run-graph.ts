@@ -91,7 +91,7 @@ export async function runScriptRunGraph(
         }
 
         const next = resolveNextNodeAfterSemanticReview({
-          decision: runtime.semanticReview.decision,
+          decision: runtime.semanticReview.decision as never,
           patch_used: state.patch_used,
           regenerate_used: state.regenerate_used,
         });
@@ -156,9 +156,9 @@ export async function runScriptRunGraph(
       input_ref: "script-local-validation:current",
       output_ref: "script-semantic-review:current",
       failure_reason:
-        finalSemanticReview.decision === "hard_fail" ||
+        (finalSemanticReview.decision as string) === "hard_fail" ||
         finalSemanticReview.decision === "skipped"
-          ? finalSemanticReview.summary
+          ? ((finalSemanticReview as Record<string, unknown>).summary as string)
           : null,
     },
   ];
@@ -189,7 +189,7 @@ export async function runScriptRunGraph(
               ? "semantic_review_skipped"
             : finalSemanticReview.decision,
         level:
-          finalSemanticReview.decision === "hard_fail"
+          (finalSemanticReview.decision as string) === "hard_fail"
             ? "error"
             : finalSemanticReview.decision === "skipped"
               ? "warning"

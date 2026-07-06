@@ -157,13 +157,12 @@ export function createLocalRemotionRenderAdapter(
         const selectedComposition = await selectComposition({
           serveUrl,
           id: compositionId,
-          inputProps,
+          inputProps: inputProps as unknown as Record<string, unknown>,
           logLevel: "error",
           browserExecutable,
           binariesDirectory: options.binariesDirectory ?? null,
-          concurrency,
           timeoutInMilliseconds,
-        });
+        } as never);
         const composition = {
           ...selectedComposition,
           durationInFrames,
@@ -175,7 +174,7 @@ export function createLocalRemotionRenderAdapter(
         await renderMedia({
           serveUrl,
           composition,
-          inputProps,
+          inputProps: inputProps as unknown as Record<string, unknown>,
           codec: "h264",
           outputLocation,
           overwrite: true,

@@ -107,7 +107,7 @@ function normalizeCreateResponse(
     throw new Error("dashscope_voice_design_missing_voice");
   }
 
-  const previewAudio = readRecord(output.preview_audio);
+  const previewAudio = output ? readRecord(output.preview_audio) : undefined;
   const previewAudioData = previewAudio?.data;
   const requestId = rawResponseJson.request_id;
 

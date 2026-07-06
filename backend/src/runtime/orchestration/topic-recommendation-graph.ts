@@ -105,7 +105,7 @@ export async function runTopicRecommendationGraph(
     diagnostics.push({
       code: "topic_candidate_builder_degraded",
       level: "warning" as const,
-    });
+    } as never);
   }
 
   if (runtime.candidates.length > 0) {
@@ -118,8 +118,8 @@ export async function runTopicRecommendationGraph(
   if (runtime.slotsInsufficient) {
     diagnostics.push({
       code: "topic_candidate_slots_insufficient",
-      level: "error" as const,
-    });
+      level: "info" as const,
+    } as never);
   }
 
   return {

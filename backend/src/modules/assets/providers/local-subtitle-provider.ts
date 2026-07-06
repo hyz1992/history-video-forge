@@ -237,7 +237,7 @@ function mergeTimingSources(
   sources: SubtitleTimingSource[],
 ): SubtitleTimingSource {
   const unique = new Set(sources.length > 0 ? sources : ["estimated"]);
-  return unique.size === 1 ? [...unique][0]! : "mixed";
+  return unique.size === 1 ? ([...unique][0]! as SubtitleTimingSource) : "mixed";
 }
 
 const SUBTITLE_AUDIO_DRIFT_THRESHOLD_SEC = 0.1;

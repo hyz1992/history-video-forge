@@ -110,7 +110,7 @@ async function updateTaskPromptController(
     return { statusCode: 400, body: { error: "missing_prompt_draft" } };
   }
 
-  const plan = assetPlanRecord.planJson as { tasks?: Array<{ task_id: string; prompt_draft?: string | null }> };
+  const plan = assetPlanRecord.planJson as Record<string, unknown> as { tasks?: Array<{ task_id: string; prompt_draft?: string | null }> };
   const tasks = plan.tasks ?? [];
   const task = tasks.find((t) => t.task_id === taskId);
   if (!task) {
@@ -118,7 +118,7 @@ async function updateTaskPromptController(
   }
 
   task.prompt_draft = payload.prompt_draft;
-  assetPlanRecord.planJson = plan;
+  assetPlanRecord.planJson = plan as unknown as typeof assetPlanRecord.planJson;
 
   return {
     statusCode: 200,

@@ -2,6 +2,7 @@ import {
   ScriptDraftPackage,
   StoryboardPlan,
   type AssetPlan,
+  type AssetPlanningValidationResult,
 } from "../../../../shared/src/index.js";
 import type {
   DbClient,
@@ -283,8 +284,8 @@ export async function runAssetPlanningGeneration(
       topicPackageId: topicPackage.id,
       scriptRecordId: scriptRecord.id,
       storyboardRecordId: storyboardRecord.id,
-      planJson: { plan_version: "asset_plan_v1", characters: [], locations: [], tasks: [], visual_rules: {}, audio_rules: {} },
-      validationResultJson: { stage: "asset_planning_local_validation", decision: "generating", errors: [], warnings: [], metrics: {} },
+      planJson: { plan_version: "asset_plan_v1" as const, characters: [], locations: [], tasks: [], visual_rules: {}, audio_rules: {} } as unknown as AssetPlan,
+      validationResultJson: { stage: "asset_planning_local_validation" as const, decision: "pass" as const, errors: [], warnings: [], metrics: {} } as AssetPlanningValidationResult,
       executionStateJson: { generating: true, run_id: runId, repair_used: false, regenerate_used: false },
       graphTraceSummaryJson: null,
       runtimeDiagnosticsJson: null,
