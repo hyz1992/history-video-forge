@@ -149,24 +149,28 @@ npm run start
 
 ### 快捷方式：一键脚本
 
-项目提供了根目录下的 `service-manager.bat`，把安装、启停、更新、备份等操作封装成了菜单，**右键以管理员身份运行**即可：
+项目提供了根目录下的 `service-manager.ps1`（PowerShell 脚本），把安装、启停、更新、备份等操作封装成了菜单，**右键以管理员身份运行**即可：
 
 ```
-service-manager.bat
+# 如果首次运行 PowerShell 脚本被阻止，先执行：
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+
+# 然后运行：
+.\service-manager.ps1
 ```
 
 菜单界面：
 
 ```
 [1] 安装服务（首次部署）
-[2] 启动服务
-[3] 停止服务
-[4] 重启服务
-[5] 查看状态
-[6] 查看日志
-[7] 编辑配置
-[8] 更新部署（git pull + 构建 + 重启）
-[9] 备份数据
+ [2] 启动服务
+ [3] 停止服务
+ [4] 重启服务
+ [5] 查看状态
+ [6] 查看日志
+ [7] 编辑配置
+ [8] 更新部署（git pull + 构建 + 重启）
+ [9] 备份数据
  [10] 卸载服务（删除 Windows 服务登记）
  [0] 退出
 ```
