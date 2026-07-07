@@ -29,13 +29,14 @@ import {
 import { usePublishStore, type TitleCandidate } from "../../stores/publish";
 import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
-import { useRouter } from "vue-router";
+import { useRouter, useRoute } from "vue-router";
 import StageGenerating from "../workspace/StageGenerating.vue";
 
 const publishStore = usePublishStore();
 const projectStore = useProjectStore();
 const workspaceStore = useWorkspaceStore();
 const router = useRouter();
+const route = useRoute();
 
 const COMPOSE_RENDER_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "compose-render");
 
@@ -296,8 +297,11 @@ function goToComposeRender() {
 /*  Lifecycle                                                                 */
 /* -------------------------------------------------------------------------- */
 
-onMounted(() => {
-  publishStore.loadProject();
+onMounted(async () => {
+  await publishStore.loadProject();
+  if (route.query.auto === "true" && !hasPkg.value) {
+    await publishStore.generatePackage();
+  }
 });
 </script>
 

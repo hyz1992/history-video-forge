@@ -375,7 +375,7 @@ function goToAssets() {
 
 function goToPublish() {
   workspaceStore.setCurrentStep(PUBLISH_STEP_INDEX);
-  const pid = projectStore.state.projectId; if (pid) router.push(`/projects/${pid}/publish`);
+  const pid = projectStore.state.projectId; if (pid) router.push(`/projects/${pid}/publish?auto=true`);
 }
 
 /* -------------------------------------------------------------------------- */
