@@ -40,8 +40,8 @@ function getReachedStepIndex(): number {
   if (status.startsWith("script")) return 1;
   if (status.startsWith("storyboard")) return 2;
   if (status.startsWith("asset_plan") || status.startsWith("asset")) return 3;
-  if (status.startsWith("compose") || status.startsWith("render")) return 4;
   if (status === "render_ready") return 5;
+  if (status.startsWith("compose") || status.startsWith("render")) return 4;
   return 0;
 }
 
