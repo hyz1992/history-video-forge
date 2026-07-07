@@ -3,9 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import {
   ElAlert,
   ElButton,
-  ElCard,
   ElDialog,
-  ElEmpty,
   ElIcon,
   ElImage,
   ElInput,
@@ -324,7 +322,7 @@ onMounted(async () => {
       </el-button>
     </div>
 
-    <!-- Generating package: hide empty state while the server is producing metadata -->
+    <!-- Generating package -->
     <StageGenerating
       v-else-if="publishStore.state.isGenerating && !hasPkg"
       title="正在生成发布包"
@@ -337,11 +335,16 @@ onMounted(async () => {
       v-else-if="publishStore.state.isLoading && !hasPkg"
       :rows="5"
       animated
+      class="publish-skeleton"
     />
 
-    <!-- No package: generate -->
+    <!-- No package -->
     <div v-else-if="!hasPkg" class="publish-empty">
-      <el-empty description="尚未生成发布包">
+      <div class="publish-empty-card">
+        <div class="publish-empty-icon">📦</div>
+        <h2 class="publish-empty-title">发布包尚未生成</h2>
+        <p class="publish-empty-hint">生成发布包后，将自动为您准备标题候选、描述、话题标签及封面图。</p>
+        <div class="publish-empty-line"></div>
         <el-button
           type="primary"
           :loading="publishStore.state.isGenerating"
@@ -349,11 +352,14 @@ onMounted(async () => {
         >
           生成发布包
         </el-button>
-      </el-empty>
+      </div>
     </div>
 
     <!-- Main content -->
     <template v-else>
+      <!-- Page title -->
+      <h1 class="publish-page-title">发布<em>交互编辑</em></h1>
+
       <!-- Stale warning -->
       <div v-if="isStale" class="publish-stale-card">
         <el-alert
@@ -381,210 +387,223 @@ onMounted(async () => {
         <el-tag :type="readinessType">
           {{ readinessLabel }}
         </el-tag>
-        <span v-if="isStale" class="stale-badge">过期</span>
-        <span class="cover-origin">封面来源：{{ coverOriginLabel }}</span>
+        <span v-if="isStale" class="publish-stale-badge">过期</span>
+        <span class="publish-cover-origin">封面来源：{{ coverOriginLabel }}</span>
       </div>
 
       <div class="publish-grid">
         <!-- Left: Video + Cover -->
         <div class="publish-left">
           <!-- Video preview -->
-          <el-card v-if="videoArtifact" class="video-card" header="成品视频">
-            <div class="video-preview">
-              <video
-                v-if="videoPreviewUrl"
-                :src="videoPreviewUrl"
-                controls
-                preload="metadata"
-                class="video-player"
-              >
-                您的浏览器不支持视频播放
-              </video>
-              <div v-else class="video-placeholder">
-                <span>视频预览不可用</span>
+          <div v-if="videoArtifact" class="publish-card">
+            <div class="publish-card-header">成品视频</div>
+            <div class="publish-card-body">
+              <div class="publish-video-preview">
+                <video
+                  v-if="videoPreviewUrl"
+                  :src="videoPreviewUrl"
+                  controls
+                  preload="metadata"
+                  class="publish-video-player"
+                >
+                  您的浏览器不支持视频播放
+                </video>
+                <div v-else class="publish-video-placeholder">
+                  <span>视频预览不可用</span>
+                </div>
+              </div>
+              <div v-if="videoInfo" class="publish-video-meta">
+                <span class="publish-meta-item">时长：{{ videoInfo.duration }}</span>
+                <span class="publish-meta-item">分辨率：{{ videoInfo.resolution }}</span>
+                <span class="publish-meta-item">帧率：{{ videoInfo.fps }}</span>
+                <span class="publish-meta-item">大小：{{ videoInfo.fileSize }}</span>
               </div>
             </div>
-            <div v-if="videoInfo" class="video-meta">
-              <span class="meta-item">时长：{{ videoInfo.duration }}</span>
-              <span class="meta-item">分辨率：{{ videoInfo.resolution }}</span>
-              <span class="meta-item">帧率：{{ videoInfo.fps }}</span>
-              <span class="meta-item">大小：{{ videoInfo.fileSize }}</span>
-            </div>
-          </el-card>
+          </div>
 
           <!-- Cover section -->
-          <el-card class="cover-card" header="封面图">
-            <div class="cover-preview">
-              <el-image
-                v-if="coverPreviewUrl"
-                :src="coverPreviewUrl"
-                fit="contain"
-                class="cover-image"
-              >
-                <template #error>
-                  <div class="cover-placeholder">
-                    <el-icon :size="48"><Picture /></el-icon>
-                    <span>封面预览不可用</span>
-                  </div>
-                </template>
-              </el-image>
-              <div v-else class="cover-placeholder">
-                <el-icon :size="48"><Picture /></el-icon>
-                <span>暂无封面图</span>
-              </div>
-            </div>
-
-            <!-- Cover prompt editor -->
-            <div class="cover-prompt-section">
-              <label class="field-label">封面提示词</label>
-              <el-input
-                :model-value="coverPrompt"
-                type="textarea"
-                :rows="3"
-                placeholder="输入封面图提示词..."
-                @change="onCoverPromptChange"
-              />
-              <div class="cover-prompt-actions">
-                <el-button
-                  size="small"
-                  :icon="MagicStick"
-                  :loading="publishStore.state.isOptimizingCover"
-                  @click="handleOptimizeCover"
+          <div class="publish-card">
+            <div class="publish-card-header">封面图</div>
+            <div class="publish-card-body">
+              <div class="publish-cover-preview">
+                <el-image
+                  v-if="coverPreviewUrl"
+                  :src="coverPreviewUrl"
+                  fit="contain"
+                  class="publish-cover-image"
                 >
-                  LLM 优化
-                </el-button>
-                <div class="cover-generate-action">
+                  <template #error>
+                    <div class="publish-cover-placeholder">
+                      <el-icon :size="48"><Picture /></el-icon>
+                      <span>封面预览不可用</span>
+                    </div>
+                  </template>
+                </el-image>
+                <div v-else class="publish-cover-placeholder">
+                  <el-icon :size="48"><Picture /></el-icon>
+                  <span>暂无封面图</span>
+                </div>
+              </div>
+
+              <div class="publish-cover-prompt-section">
+                <label class="publish-field-label">封面提示词</label>
+                <el-input
+                  :model-value="coverPrompt"
+                  type="textarea"
+                  :rows="3"
+                  placeholder="输入封面图提示词..."
+                  @change="onCoverPromptChange"
+                />
+                <div class="publish-cover-prompt-actions">
                   <el-button
                     size="small"
-                    type="primary"
                     :icon="MagicStick"
-                    :loading="publishStore.state.isGeneratingCover"
-                    @click="confirmGenerateCover"
+                    :loading="publishStore.state.isOptimizingCover"
+                    @click="handleOptimizeCover"
                   >
-                    AI 生成封面
+                    LLM 优化
                   </el-button>
-                  <span class="cost-label">约 ¥0.20/次</span>
+                  <div class="publish-cover-generate-action">
+                    <el-button
+                      size="small"
+                      type="primary"
+                      :icon="MagicStick"
+                      :loading="publishStore.state.isGeneratingCover"
+                      @click="confirmGenerateCover"
+                    >
+                      AI 生成封面
+                    </el-button>
+                    <span class="publish-cost-label">约 ¥0.20/次</span>
+                  </div>
+                  <el-button
+                    size="small"
+                    :icon="Upload"
+                    @click="showCoverUploadDialog = true"
+                  >
+                    上传封面
+                  </el-button>
                 </div>
-                <el-button
-                  size="small"
-                  :icon="Upload"
-                  @click="showCoverUploadDialog = true"
-                >
-                  上传封面
-                </el-button>
               </div>
             </div>
-          </el-card>
+          </div>
         </div>
 
         <!-- Right: Title + Description + Hashtags -->
         <div class="publish-right">
           <!-- Title section -->
-          <el-card class="title-card" header="标题">
-            <div class="selected-title">
-              <el-input
-                :model-value="selectedTitle"
-                placeholder="选择或输入标题..."
-                maxlength="30"
-                show-word-limit
-                @change="onSelectedTitleChange"
-              />
-            </div>
-
-            <div class="title-candidates-section">
-              <div class="section-header">
-                <span class="field-label">标题候选</span>
-                <el-button
-                  size="small"
-                  :icon="Refresh"
-                  :loading="isLoadingCandidates"
-                  @click="handleLoadTitleCandidates"
-                >
-                  生成候选
-                </el-button>
+          <div class="publish-card">
+            <div class="publish-card-header">标题</div>
+            <div class="publish-card-body">
+              <div class="publish-selected-title">
+                <el-input
+                  :model-value="selectedTitle"
+                  placeholder="选择或输入标题..."
+                  maxlength="30"
+                  show-word-limit
+                  @change="onSelectedTitleChange"
+                />
               </div>
 
-              <div v-if="allCandidates.length > 0" class="candidate-list">
-                <div
-                  v-for="c in allCandidates"
-                  :key="c.candidate_id"
-                  class="candidate-item"
-                  :class="{ selected: selectedTitle === c.text }"
-                  @click="selectTitle(c)"
-                >
-                  <div class="candidate-text">{{ c.text }}</div>
-                  <div class="candidate-meta">
-                    <el-tag :type="styleType(c.style)" size="small">
-                      {{ styleLabel(c.style) }}
-                    </el-tag>
-                    <el-icon v-if="selectedTitle === c.text" class="selected-icon">
-                      <Check />
-                    </el-icon>
+              <div class="publish-title-candidates-section">
+                <div class="publish-section-header">
+                  <span class="publish-field-label">标题候选</span>
+                  <el-button
+                    size="small"
+                    :icon="Refresh"
+                    :loading="isLoadingCandidates"
+                    @click="handleLoadTitleCandidates"
+                  >
+                    生成候选
+                  </el-button>
+                </div>
+
+                <div v-if="allCandidates.length > 0" class="publish-candidate-list">
+                  <div
+                    v-for="c in allCandidates"
+                    :key="c.candidate_id"
+                    class="publish-candidate-item"
+                    :class="{ selected: selectedTitle === c.text }"
+                    @click="selectTitle(c)"
+                  >
+                    <div class="publish-candidate-text">{{ c.text }}</div>
+                    <div class="publish-candidate-meta">
+                      <el-tag :type="styleType(c.style)" size="small">
+                        {{ styleLabel(c.style) }}
+                      </el-tag>
+                      <el-icon v-if="selectedTitle === c.text" class="publish-selected-icon">
+                        <Check />
+                      </el-icon>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div v-else class="no-candidates">
-                <span>点击"生成候选"获取 LLM 标题建议</span>
+                <div v-else class="publish-no-candidates">
+                  <span>点击"生成候选"获取 LLM 标题建议</span>
+                </div>
               </div>
             </div>
-          </el-card>
+          </div>
 
           <!-- Description section -->
-          <el-card class="description-card" header="描述">
-            <el-input
-              :model-value="description"
-              type="textarea"
-              :rows="5"
-              maxlength="500"
-              show-word-limit
-              placeholder="输入视频描述..."
-              @change="onDescriptionChange"
-            />
-          </el-card>
+          <div class="publish-card">
+            <div class="publish-card-header">描述</div>
+            <div class="publish-card-body">
+              <el-input
+                :model-value="description"
+                type="textarea"
+                :rows="5"
+                maxlength="500"
+                show-word-limit
+                placeholder="输入视频描述..."
+                @change="onDescriptionChange"
+              />
+            </div>
+          </div>
 
           <!-- Hashtags section -->
-          <el-card class="hashtag-card" header="话题标签">
-            <div class="hashtag-list">
-              <el-tag
-                v-for="tag in hashtags"
-                :key="tag"
-                closable
-                class="hashtag-chip"
-                @close="removeHashtag(tag)"
-              >
-                #{{ tag }}
-              </el-tag>
-              <span v-if="hashtags.length === 0" class="no-hashtags">
-                暂无标签
-              </span>
+          <div class="publish-card">
+            <div class="publish-card-header">话题标签</div>
+            <div class="publish-card-body">
+              <div class="publish-hashtag-list">
+                <el-tag
+                  v-for="tag in hashtags"
+                  :key="tag"
+                  closable
+                  class="publish-hashtag-chip"
+                  @close="removeHashtag(tag)"
+                >
+                  #{{ tag }}
+                </el-tag>
+                <span v-if="hashtags.length === 0" class="publish-no-hashtags">
+                  暂无标签
+                </span>
+              </div>
+              <div class="publish-hashtag-input">
+                <el-input
+                  v-model="newHashtag"
+                  size="small"
+                  placeholder="添加标签..."
+                  @keyup.enter="addHashtag"
+                >
+                  <template #append>
+                    <el-button :icon="Plus" @click="addHashtag" />
+                  </template>
+                </el-input>
+              </div>
             </div>
-            <div class="hashtag-input">
-              <el-input
-                v-model="newHashtag"
-                size="small"
-                placeholder="添加标签..."
-                @keyup.enter="addHashtag"
-              >
-                <template #append>
-                  <el-button :icon="Plus" @click="addHashtag" />
-                </template>
-              </el-input>
-            </div>
-          </el-card>
+          </div>
         </div>
       </div>
 
       <!-- Bottom actions -->
-      <div class="publish-bottom-actions">
+      <div class="publish-actions">
         <el-button
-          type="primary"
           :loading="publishStore.state.isGenerating"
           @click="handleGenerate"
         >
           重新生成发布信息
         </el-button>
         <el-button
-          type="success"
+          type="primary"
           :disabled="!hasPkg"
           @click="handleExport"
         >
@@ -617,9 +636,9 @@ onMounted(async () => {
       width="400px"
     >
       <div class="upload-form">
-        <label class="field-label">文件 URI</label>
+        <label class="publish-field-label">文件 URI</label>
         <el-input v-model="coverUploadUri" placeholder="file://storage/uploads/cover.png" />
-        <label class="field-label">MIME 类型</label>
+        <label class="publish-field-label">MIME 类型</label>
         <el-input v-model="coverUploadMime" placeholder="image/png" />
         <p class="upload-hint">支持 image/png 和 image/jpeg 格式</p>
       </div>
@@ -683,26 +702,111 @@ onMounted(async () => {
 
 <style scoped>
 .publish-panel {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: var(--space-md);
   padding: var(--space-lg);
   max-width: 960px;
   margin: 0 auto;
+  width: 100%;
 }
 
+/* ---- Page title ---- */
+.publish-page-title {
+  margin: 0 0 2px;
+  color: #f5f0e8;
+  font-family: "Noto Serif SC", "Songti SC", Georgia, serif;
+  font-size: 28px;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.publish-page-title em {
+  color: #e4c26f;
+  font-style: normal;
+}
+
+/* ---- Skeleton ---- */
+.publish-skeleton {
+  padding: var(--space-md);
+}
+
+/* ---- Error / Empty ---- */
 .publish-error-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  display: grid;
   gap: var(--space-md);
-  padding-top: var(--space-2xl);
+  padding: var(--space-md);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
 }
 
 .publish-empty {
-  padding-top: var(--space-2xl);
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 44px 28px 64px;
 }
 
+.publish-empty-card {
+  width: min(480px, 100%);
+  text-align: center;
+  padding: var(--space-xl) var(--space-lg);
+  border: 1px solid rgba(201, 162, 39, 0.13);
+  border-radius: var(--radius-panel);
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(201, 162, 39, 0.06), transparent 55%),
+    linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.005)),
+    var(--bg-card);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.22);
+}
+
+.publish-empty-icon {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(201,162,39,.16), rgba(201,162,39,.05) 62%, rgba(201,162,39,.02) 100%);
+  border: 1px solid rgba(201,162,39,.18);
+  box-shadow:
+    0 0 28px rgba(201,162,39,.06),
+    inset 0 1px 0 rgba(255,255,255,.04);
+}
+
+.publish-empty-title {
+  margin: 0 0 8px;
+  color: #f5f0e8;
+  font-family: "Noto Serif SC", "Songti SC", Georgia, serif;
+  font-size: 22px;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.publish-empty-hint {
+  max-width: 400px;
+  margin: 0 auto;
+  color: #a89f94;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.publish-empty-line {
+  width: 120px;
+  height: 1px;
+  margin: 22px auto 0;
+  background: linear-gradient(90deg, transparent, rgba(201,162,39,.18), transparent);
+}
+
+.publish-empty-card .el-button {
+  margin-top: 26px;
+}
+
+/* ---- Stale warning ---- */
 .publish-stale-card {
   margin-bottom: var(--space-sm);
 }
@@ -711,35 +815,33 @@ onMounted(async () => {
   margin: 0 0 var(--space-sm);
 }
 
+/* ---- Status bar ---- */
 .publish-status-bar {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
   flex-wrap: wrap;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid rgba(201, 162, 39, 0.13);
+  border-radius: var(--radius-panel);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.005)),
+    var(--bg-card);
 }
 
-.stale-badge {
-  color: var(--color-warning, #e6a23c);
+.publish-stale-badge {
+  color: var(--color-warning);
   font-size: 12px;
   font-weight: 600;
 }
 
-.ready-hint {
-  color: var(--color-success, #67c23a);
-  font-size: 12px;
-}
-
-.blocked-hint {
-  color: var(--color-warning, #e6a23c);
-  font-size: 12px;
-}
-
-.cover-origin {
+.publish-cover-origin {
   color: var(--text-secondary);
   font-size: 12px;
   margin-left: auto;
 }
 
+/* ---- Grid layout ---- */
 .publish-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -754,36 +856,56 @@ onMounted(async () => {
 
 .publish-left,
 .publish-right {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: var(--space-md);
+  align-content: start;
 }
 
-/* Video */
-.video-card :deep(.el-card__body) {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
+/* ---- Card ---- */
+.publish-card {
+  border: 1px solid rgba(201, 162, 39, 0.13);
+  border-radius: var(--radius-panel);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.028), rgba(255,255,255,.006)),
+    var(--bg-card);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
 }
 
-.video-preview {
+.publish-card-header {
+  padding: var(--space-sm) var(--space-md);
+  font-size: 0.9rem;
+  font-weight: var(--font-subheading);
+  color: #e4c26f;
+  border-bottom: 1px solid rgba(201, 162, 39, 0.12);
+  background: linear-gradient(180deg, rgba(201, 162, 39, 0.04), rgba(201, 162, 39, 0.01));
+}
+
+.publish-card-body {
+  display: grid;
+  gap: var(--space-md);
+  padding: var(--space-md);
+}
+
+/* ---- Video ---- */
+.publish-video-preview {
   aspect-ratio: 9 / 16;
   max-height: 360px;
   background: #000;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-card);
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.video-player {
+.publish-video-player {
   width: 100%;
   height: 100%;
   object-fit: contain;
 }
 
-.video-placeholder {
+.publish-video-placeholder {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -791,7 +913,7 @@ onMounted(async () => {
   color: var(--text-secondary);
 }
 
-.video-meta {
+.publish-video-meta {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-md);
@@ -799,34 +921,28 @@ onMounted(async () => {
   color: var(--text-secondary);
 }
 
-.meta-item {
+.publish-meta-item {
   white-space: nowrap;
 }
 
-/* Cover */
-.cover-card :deep(.el-card__body) {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-}
-
-.cover-preview {
+/* ---- Cover ---- */
+.publish-cover-preview {
   aspect-ratio: 9 / 16;
   max-height: 360px;
-  background: var(--bg-card, #1a1a2e);
-  border-radius: var(--radius-md, 8px);
+  background: #000;
+  border-radius: var(--radius-card);
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.cover-image {
+.publish-cover-image {
   width: 100%;
   height: 100%;
 }
 
-.cover-placeholder {
+.publish-cover-placeholder {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -834,142 +950,141 @@ onMounted(async () => {
   color: var(--text-secondary);
 }
 
-.cover-prompt-section {
-  display: flex;
-  flex-direction: column;
+.publish-cover-prompt-section {
+  display: grid;
   gap: var(--space-sm);
 }
 
-.field-label {
-  font-size: 13px;
-  font-weight: 600;
+.publish-field-label {
+  font-size: 0.84rem;
+  font-weight: var(--font-subheading);
   color: var(--text-heading);
-  margin-bottom: 4px;
 }
 
-.cover-prompt-actions {
+.publish-cover-prompt-actions {
   display: flex;
   gap: var(--space-sm);
   flex-wrap: wrap;
   align-items: center;
 }
 
-.cover-generate-action {
+.publish-cover-generate-action {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
-.cost-label {
+.publish-cost-label {
   font-size: 11px;
-  color: var(--color-warning, #e6a23c);
+  color: var(--color-warning);
   white-space: nowrap;
 }
 
-/* Title */
-.selected-title {
-  margin-bottom: var(--space-md);
+/* ---- Title candidates ---- */
+.publish-selected-title {
+  margin-bottom: var(--space-sm);
 }
 
-.title-candidates-section {
-  display: flex;
-  flex-direction: column;
+.publish-title-candidates-section {
+  display: grid;
   gap: var(--space-sm);
 }
 
-.section-header {
+.publish-section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.candidate-list {
-  display: flex;
-  flex-direction: column;
+.publish-candidate-list {
+  display: grid;
   gap: var(--space-xs);
 }
 
-.candidate-item {
+.publish-candidate-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: border-color 0.2s, background 0.2s;
+  transition: border-color 180ms ease, background 180ms ease;
 }
 
-.candidate-item:hover {
-  border-color: var(--accent-text);
+.publish-candidate-item:hover {
+  border-color: rgba(201, 162, 39, 0.28);
+  background: rgba(201, 162, 39, 0.04);
 }
 
-.candidate-item.selected {
-  border-color: var(--accent-text);
-  background: var(--bg-hover, rgba(64, 158, 255, 0.08));
+.publish-candidate-item.selected {
+  border-color: rgba(201, 162, 39, 0.35);
+  background: rgba(201, 162, 39, 0.06);
 }
 
-.candidate-text {
+.publish-candidate-text {
   font-size: 14px;
   font-weight: 500;
+  color: var(--text-body);
 }
 
-.candidate-meta {
+.publish-candidate-meta {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
 }
 
-.selected-icon {
-  color: var(--color-success, #67c23a);
+.publish-selected-icon {
+  color: var(--color-success);
 }
 
-.no-candidates {
+.publish-no-candidates {
   padding: var(--space-md);
   text-align: center;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   font-size: 13px;
 }
 
-/* Hashtags */
-.hashtag-list {
+/* ---- Hashtags ---- */
+.publish-hashtag-list {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-xs);
-  margin-bottom: var(--space-sm);
   min-height: 32px;
 }
 
-.hashtag-chip {
+.publish-hashtag-chip {
   cursor: default;
 }
 
-.no-hashtags {
-  color: var(--text-secondary);
+.publish-no-hashtags {
+  color: var(--text-muted);
   font-size: 13px;
 }
 
-.hashtag-input {
+.publish-hashtag-input {
   max-width: 280px;
 }
 
-/* Bottom actions */
-.publish-bottom-actions {
+/* ---- Actions ---- */
+.publish-actions {
   display: flex;
   justify-content: center;
-  gap: var(--space-md);
-  padding: var(--space-md) 0;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-card);
+  background: var(--bg-card);
 }
 
-/* Dialogs */
+/* ---- Dialogs ---- */
 .cost-hint {
   color: var(--text-secondary);
   font-size: 12px;
 }
 
 .upload-form {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: var(--space-sm);
 }
 
