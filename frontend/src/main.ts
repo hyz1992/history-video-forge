@@ -55,7 +55,7 @@ import { initTheme } from "./composables/useTheme";
 import { initDemoMode } from "./composables/useDemoMode";
 
 initTheme();
-initDemoMode();
+await initDemoMode();
 
 const router = createAppRouter("web");
 const projectStore = createProjectStore(createFetchProjectApi());

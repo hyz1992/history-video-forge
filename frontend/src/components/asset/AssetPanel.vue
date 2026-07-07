@@ -46,9 +46,26 @@ function showDemoModeBlock() {
   );
 }
 
+const DEMO_VISUAL_BLOCKED_ERROR = "demo_mode_visual_blocked";
+
+function isDemoVisualBlockedError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return error.message === DEMO_VISUAL_BLOCKED_ERROR || error.message.includes(DEMO_VISUAL_BLOCKED_ERROR);
+}
+
 function checkDemoVisualBlock(): boolean {
   if (demoMode.value) {
     showDemoModeBlock();
+    return true;
+  }
+  return false;
+}
+
+async function handleDemoGeneratingError(): Promise<boolean> {
+  const err = assetsStore.state.loadError;
+  if (err && (err === DEMO_VISUAL_BLOCKED_ERROR || err.includes(DEMO_VISUAL_BLOCKED_ERROR))) {
+    showDemoModeBlock();
+    await assetsStore.loadProject();
     return true;
   }
   return false;
@@ -738,6 +755,7 @@ async function handleGenerateMissing() {
     );
   } catch { return; }
   await assetsStore.generateAssets({ mode: "missing_only" });
+  if (await handleDemoGeneratingError()) return;
   if (!assetsStore.state.loadError) {
     ElMessage.success("剩余资产生成完成");
   }
@@ -761,6 +779,7 @@ async function handleGenerateByType(taskType: string, typeLabel: string) {
     );
   } catch { return; }
   await assetsStore.generateAssets({ mode: "selected", taskIds });
+  await handleDemoGeneratingError();
 }
 
 async function handleGenerateSelected() {
@@ -778,6 +797,7 @@ async function handleGenerateSelected() {
     );
   } catch { return; }
   await assetsStore.generateAssets({ mode: "selected", taskIds: ids });
+  if (await handleDemoGeneratingError()) { selectedBlockedIds.value = []; return; }
   selectedBlockedIds.value = [];
 }
 
@@ -842,6 +862,10 @@ async function handleGenerateTask(taskId: string) {
       ElMessage.warning("任务已提交，状态：" + (exec?.status ?? "未知"));
     }
   } catch (error) {
+    if (isDemoVisualBlockedError(error)) {
+      showDemoModeBlock();
+      return;
+    }
     const msg = error instanceof Error ? error.message : "生成失败";
     ElMessage.error("单任务生成失败：" + msg);
   }
@@ -864,6 +888,10 @@ async function handleUpgradeVideo(segmentId: string) {
     await assetsStore.loadProject();
     ElMessage.success("已切换为 API 视频模式，可手动生成或上传视频");
   } catch (error) {
+    if (isDemoVisualBlockedError(error)) {
+      showDemoModeBlock();
+      return;
+    }
     const msg = error instanceof Error ? error.message : "升级失败";
     ElMessage.error("视频升级失败：" + msg);
   }
