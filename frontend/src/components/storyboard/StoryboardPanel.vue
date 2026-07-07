@@ -187,6 +187,7 @@ watch(() => storyboardStore.state.snapshot, async (snapshot) => {
 /* -------------------------------------------------------------------------- */
 
 const expandedSegments = ref(new Set<string>());
+let manuallyToggled = false;
 
 function initDefaultExpanded() {
   const list = segments.value;
@@ -201,6 +202,7 @@ function initDefaultExpanded() {
 }
 
 function toggleSegment(segmentId: string) {
+  manuallyToggled = true;
   const next = new Set(expandedSegments.value);
   if (next.has(segmentId)) {
     next.delete(segmentId);
@@ -219,6 +221,7 @@ const isAllExpanded = computed(
 );
 
 function toggleAll() {
+  manuallyToggled = true;
   if (isAllExpanded.value) {
     expandedSegments.value = new Set();
   } else {
@@ -233,6 +236,7 @@ function excerptFirstLine(text: string): string {
 }
 
 watch(segments, () => {
+  if (manuallyToggled) return;
   initDefaultExpanded();
 });
 
