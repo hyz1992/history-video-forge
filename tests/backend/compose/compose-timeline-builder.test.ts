@@ -620,7 +620,7 @@ describe("buildComposeTimeline", () => {
     ).toBe(false);
   });
 
-  it("loops an overlong video segment without changing audio timing", () => {
+  it("marks overlong video segment with last frame hold instead of looping", () => {
     const manifest = makeArtifactManifest();
     manifest.artifacts.push({
       artifact_id: "artifact_video_001",
@@ -673,33 +673,16 @@ describe("buildComposeTimeline", () => {
         segment_id: "sb_001",
         artifact_id: "artifact_video_001",
         start_sec: 0,
-        duration_sec: 5,
+        duration_sec: 15,
         clip_kind: "video",
-      },
-      {
-        segment_id: "sb_001",
-        artifact_id: "artifact_video_001",
-        start_sec: 5,
-        duration_sec: 5,
-        clip_kind: "video",
-      },
-      {
-        segment_id: "sb_001",
-        artifact_id: "artifact_video_001",
-        start_sec: 10,
-        duration_sec: 5,
-        clip_kind: "video",
+        notes: ["compose_video_last_frame_hold: hold=10.0s"],
       },
     ]);
     expect(timeline.segments[0]).toMatchObject({
       segment_id: "sb_001",
       start_sec: 0,
       duration_sec: 15,
-      visual_clip_ids: [
-        "clip_visual_sb_001",
-        "clip_visual_sb_001_loop_1",
-        "clip_visual_sb_001_loop_2",
-      ],
+      visual_clip_ids: ["clip_visual_sb_001"],
       narration_clip_ids: ["clip_narration"],
       subtitle_clip_ids: ["clip_subtitle"],
     });
