@@ -55,7 +55,7 @@ export interface DashScopeImageToVideoProviderOptions {
 export function clampDashscopeImageToVideoDuration(
   value: number | undefined,
 ): number {
-  const normalized = Number.isFinite(value) ? Math.round(value as number) : 10;
+  const normalized = Number.isFinite(value) ? Math.round(value as number) : 5;
   return Math.min(15, Math.max(2, normalized));
 }
 
@@ -184,11 +184,21 @@ export function createDashscopeImageToVideoProvider(
 
       const sourceImageUrl = await readImageAsDataUri(sourceImage.file_uri);
       const prompt = ctx.planTask.prompt_draft ?? ctx.planTask.source_excerpt;
-      const durationSec = clampDashscopeImageToVideoDuration(
+
+      const ttsDurationSec = route?.tts_artifact_id
+        ? (ctx.manifest.artifacts.find(
+            (a) => a.artifact_id === route.tts_artifact_id,
+          )?.metadata as Record<string, unknown> | undefined)?.duration_sec
+        : undefined;
+
+      const durationInput =
         typeof ctx.planTask.parameters.duration_sec === "number"
           ? ctx.planTask.parameters.duration_sec
-          : options.durationSec,
-      );
+          : typeof ttsDurationSec === "number" && ttsDurationSec > 0
+            ? Math.ceil(ttsDurationSec)
+            : options.durationSec;
+
+      const durationSec = clampDashscopeImageToVideoDuration(durationInput);
       const resolution =
         typeof ctx.planTask.parameters.resolution === "string"
           ? ctx.planTask.parameters.resolution

@@ -256,6 +256,10 @@ function createVisualTrack(input: {
       const holdSec = timing.durationSec - videoDurationSec;
       notes.push(`compose_video_last_frame_hold:${route.segment_id} hold=${holdSec.toFixed(1)}s`);
       clip.notes.push(`compose_video_last_frame_hold: hold=${holdSec.toFixed(1)}s`);
+    } else if (videoDurationSec > 0 && videoDurationSec > timing.durationSec + 0.001) {
+      const excessSec = videoDurationSec - timing.durationSec;
+      notes.push(`compose_video_duration_exceeds_segment:${route.segment_id} excess=${excessSec.toFixed(1)}s`);
+      clip.notes.push(`compose_video_duration_exceeds_segment: excess=${excessSec.toFixed(1)}s`);
     }
 
     clips.push(clip);
