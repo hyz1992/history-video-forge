@@ -324,46 +324,7 @@ async function buildVisualClips(input: {
           : {}),
       };
 
-      if (mediaType !== "video" || artifact.artifact_type !== "video") {
-        return [renderClip];
-      }
-
-      const sourceDurationSec = Math.min(
-        artifact.metadata.duration_sec,
-        clip.duration_sec,
-      );
-      if (
-        sourceDurationSec <= 0 ||
-        clip.duration_sec <= sourceDurationSec + 0.001
-      ) {
-        return [renderClip];
-      }
-
-      const loopedClips: RenderVisualClipProp[] = [];
-      let remainingDurationSec = clip.duration_sec;
-      let startSec = clip.start_sec;
-      let loopIndex = 0;
-      while (remainingDurationSec > 0.001) {
-        const durationSec = Math.min(sourceDurationSec, remainingDurationSec);
-        const loopClip: RenderVisualClipProp = {
-          ...renderClip,
-          clipId:
-            loopIndex === 0
-              ? renderClip.clipId
-              : `${renderClip.clipId}_loop_${loopIndex}`,
-          startSec,
-          durationSec,
-        };
-        if (loopIndex > 0) {
-          delete loopClip.transition;
-        }
-        loopedClips.push(loopClip);
-        startSec += durationSec;
-        remainingDurationSec -= durationSec;
-        loopIndex += 1;
-      }
-
-      return loopedClips;
+      return [renderClip];
     }),
   );
 

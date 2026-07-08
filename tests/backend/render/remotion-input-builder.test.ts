@@ -451,7 +451,7 @@ describe("buildRemotionInputProps", () => {
     });
   });
 
-  it("loops an overlong persisted video clip without changing audio timing", async () => {
+  it("keeps overlong persisted video clip as a single clip and relies on Remotion last-frame freeze", async () => {
     const tempDir = await mkdtemp(
       join(tmpdir(), "remotion-input-builder-video-tail-"),
     );
@@ -494,14 +494,7 @@ describe("buildRemotionInputProps", () => {
         artifactId: "artifact_video_001",
         mediaType: "video",
         startSec: 2,
-        durationSec: 1,
-      },
-      {
-        clipId: "clip_visual_002_loop_1",
-        artifactId: "artifact_video_001",
-        mediaType: "video",
-        startSec: 3,
-        durationSec: 1,
+        durationSec: 2,
       },
     ]);
     expect(
