@@ -1,13 +1,10 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import type { DbClient, ProjectRecord } from "./client.js";
 import type { ProjectTopicCandidateState } from "../app.js";
 
-const workspaceRoot = resolve(
-  fileURLToPath(new URL("../../../", import.meta.url)),
-);
+const workspaceRoot = process.cwd();
 const SNAPSHOT_PATH = resolve(workspaceRoot, "storage/db-snapshot.json");
 
 interface DbSnapshot {
