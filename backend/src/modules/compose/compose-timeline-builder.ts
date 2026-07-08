@@ -251,35 +251,14 @@ function createVisualTrack(input: {
       continue;
     }
 
-    const videoDurationSec = Math.min(
-      artifact.metadata.duration_sec,
-      timing.durationSec,
-    );
-    if (videoDurationSec <= 0 || timing.durationSec <= videoDurationSec + 0.001) {
-      clips.push(clip);
-      continue;
+    const videoDurationSec = artifact.metadata.duration_sec ?? 0;
+    if (videoDurationSec > 0 && timing.durationSec > videoDurationSec + 0.001) {
+      const holdSec = timing.durationSec - videoDurationSec;
+      notes.push(`compose_video_last_frame_hold:${route.segment_id} hold=${holdSec.toFixed(1)}s`);
+      clip.notes.push(`compose_video_last_frame_hold: hold=${holdSec.toFixed(1)}s`);
     }
 
-    let remainingDurationSec = timing.durationSec;
-    let startSec = timing.startSec;
-    let loopIndex = 0;
-    while (remainingDurationSec > 0.001) {
-      const durationSec = Math.min(videoDurationSec, remainingDurationSec);
-      clips.push({
-        ...clip,
-        clip_id:
-          loopIndex === 0
-            ? clip.clip_id
-            : `${clip.clip_id}_loop_${loopIndex}`,
-        start_sec: startSec,
-        duration_sec: durationSec,
-        notes: loopIndex === 0 ? [] : ["compose_video_loop_tail"],
-      });
-      startSec += durationSec;
-      remainingDurationSec -= durationSec;
-      loopIndex += 1;
-    }
-    notes.push(`compose_video_loop_tail:${route.segment_id}`);
+    clips.push(clip);
   }
 
   return {

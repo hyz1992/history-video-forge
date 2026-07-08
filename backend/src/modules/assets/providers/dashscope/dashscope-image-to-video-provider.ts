@@ -55,7 +55,7 @@ export interface DashScopeImageToVideoProviderOptions {
 export function clampDashscopeImageToVideoDuration(
   value: number | undefined,
 ): number {
-  const normalized = Number.isFinite(value) ? Math.round(value as number) : 5;
+  const normalized = Number.isFinite(value) ? Math.round(value as number) : 10;
   return Math.min(15, Math.max(2, normalized));
 }
 
