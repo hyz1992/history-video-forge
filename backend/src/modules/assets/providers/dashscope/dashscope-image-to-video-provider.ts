@@ -10,7 +10,12 @@ import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 
 import type { AssetArtifact } from "../../../../../../shared/src/index.js";
-import type { AssetProviderAdapter } from "../../assets-provider-adapter.js";
+import type {
+  AssetProviderAdapter,
+  AssetProviderPreparedJob,
+  AssetProviderSubmittedJob,
+  AssetProviderPollResult,
+} from "../../assets-provider-adapter.js";
 import {
   resolveAssetsRunStorage,
   writeAssetFile,
@@ -160,9 +165,34 @@ function findSameSegmentImageArtifact(input: {
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Split helpers                                                             */
+/* -------------------------------------------------------------------------- */
+
+interface SplitPlan {
+  count: number;
+  durationPerSplit: number;
+}
+
+interface SplitJob {
+  prepared: AssetProviderPreparedJob;
+  submitted: AssetProviderSubmittedJob | null;
+  pollResult: AssetProviderPollResult | null;
+  artifact: AssetArtifact | null;
+}
+
+function computeSplitPlan(ttsDurationSec: number): SplitPlan | null {
+  if (ttsDurationSec <= 15) return null;
+  const count = Math.ceil(ttsDurationSec / 15);
+  const durationPerSplit = Math.ceil(ttsDurationSec / count);
+  return { count, durationPerSplit };
+}
+
 export function createDashscopeImageToVideoProvider(
   options: DashScopeImageToVideoProviderOptions,
 ): AssetProviderAdapter {
+  let splitJobs: SplitJob[] = [];
+
   return {
     providerName: "dashscope_image_to_video",
     providerType: "video",
@@ -211,6 +241,49 @@ export function createDashscopeImageToVideoProvider(
         typeof ctx.planTask.parameters.watermark === "boolean"
           ? ctx.planTask.parameters.watermark
           : options.watermark ?? false;
+
+      const splitPlan =
+        typeof ttsDurationSec === "number" && ttsDurationSec > 0
+          ? computeSplitPlan(ttsDurationSec)
+          : null;
+
+      if (splitPlan) {
+        splitJobs = [];
+        for (let i = 0; i < splitPlan.count; i++) {
+          const payload = buildDashscopeImageToVideoPayload({
+            model: options.model,
+            prompt,
+            sourceImageUrl,
+            resolution,
+            durationSec: splitPlan.durationPerSplit,
+            promptExtend,
+            watermark,
+          });
+          splitJobs.push({
+            prepared: {
+              providerJobId: null,
+              rawRequestJson: {
+                endpoint: endpointFor(options.baseUrl),
+                payload,
+                source_image_artifact_id: sourceImage.artifact_id,
+                duration_sec: payload.parameters.duration,
+                resolution: payload.parameters.resolution,
+                prompt_extend: payload.parameters.prompt_extend,
+                watermark: payload.parameters.watermark,
+                split_index: i,
+                split_total: splitPlan.count,
+              },
+            },
+            submitted: null,
+            pollResult: null,
+            artifact: null,
+          });
+        }
+        return splitJobs[0].prepared;
+      }
+
+      splitJobs = [];
+
       const payload = buildDashscopeImageToVideoPayload({
         model: options.model,
         prompt,
@@ -240,173 +313,252 @@ export function createDashscopeImageToVideoProvider(
         throw new Error("dashscope_api_key_missing");
       }
 
-      const response = await fetch(String(prepared.rawRequestJson.endpoint), {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${options.apiKey}`,
-          "Content-Type": "application/json",
-          "X-DashScope-Async": "enable",
-        },
-        body: JSON.stringify(prepared.rawRequestJson.payload),
-      });
-      const rawResponse = (await response.json()) as Record<string, unknown>;
-      if (!response.ok) {
-        throw new Error(
-          `DashScope image-to-video submit failed: ${response.status} ${JSON.stringify(rawResponse)}`,
-        );
-      }
-      const taskId = extractTaskId(rawResponse);
-      if (!taskId) {
-        throw new Error(
-          `DashScope image-to-video submit missing task_id: ${JSON.stringify(rawResponse)}`,
-        );
-      }
-
-      return {
-        providerJobId: taskId,
-        rawResponseJson: {
-          ...rawResponse,
-          task_id: taskId,
-          duration_sec: prepared.rawRequestJson.duration_sec,
-          resolution: prepared.rawRequestJson.resolution,
-          source_image_artifact_id:
-            prepared.rawRequestJson.source_image_artifact_id,
-          prompt_extend: prepared.rawRequestJson.prompt_extend,
-          watermark: prepared.rawRequestJson.watermark,
-        },
-      };
-    },
-
-    poll: async (_ctx, submitted) => {
-      const taskId = getString(submitted.providerJobId);
-      if (!taskId) {
-        return {
-          status: "failed",
-          rawResponseJson: submitted.rawResponseJson,
-          errorCode: "dashscope_task_id_missing",
-          errorMessage: "DashScope image-to-video task id missing",
-        };
-      }
-
-      const maxAttempts = options.maxPollAttempts ?? 60;
-      const pollIntervalMs = options.pollIntervalMs ?? 15000;
-      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-        const response = await fetch(taskEndpointFor(options.baseUrl, taskId), {
-          headers: { Authorization: `Bearer ${options.apiKey}` },
+      const submitOne = async (
+        prep: AssetProviderPreparedJob,
+      ): Promise<AssetProviderSubmittedJob> => {
+        const response = await fetch(String(prep.rawRequestJson.endpoint), {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${options.apiKey}`,
+            "Content-Type": "application/json",
+            "X-DashScope-Async": "enable",
+          },
+          body: JSON.stringify(prep.rawRequestJson.payload),
         });
         const rawResponse = (await response.json()) as Record<string, unknown>;
         if (!response.ok) {
           throw new Error(
-            `DashScope image-to-video poll failed: ${response.status} ${JSON.stringify(rawResponse)}`,
+            `DashScope image-to-video submit failed: ${response.status} ${JSON.stringify(rawResponse)}`,
           );
         }
+        const taskId = extractTaskId(rawResponse);
+        if (!taskId) {
+          throw new Error(
+            `DashScope image-to-video submit missing task_id: ${JSON.stringify(rawResponse)}`,
+          );
+        }
+        return {
+          providerJobId: taskId,
+          rawResponseJson: {
+            ...rawResponse,
+            task_id: taskId,
+            duration_sec: prep.rawRequestJson.duration_sec,
+            resolution: prep.rawRequestJson.resolution,
+            source_image_artifact_id: prep.rawRequestJson.source_image_artifact_id,
+            prompt_extend: prep.rawRequestJson.prompt_extend,
+            watermark: prep.rawRequestJson.watermark,
+            split_index: prep.rawRequestJson.split_index,
+            split_total: prep.rawRequestJson.split_total,
+          },
+        };
+      };
 
-        const status = extractTaskStatus(rawResponse);
-        if (status === "SUCCEEDED") {
-          return {
-            status: "completed" as const,
-            rawResponseJson: {
-              ...rawResponse,
-              task_id: taskId,
-              duration_sec: submitted.rawResponseJson?.duration_sec,
-              resolution: submitted.rawResponseJson?.resolution,
-              source_image_artifact_id:
-                submitted.rawResponseJson?.source_image_artifact_id,
-              prompt_extend: submitted.rawResponseJson?.prompt_extend,
-              watermark: submitted.rawResponseJson?.watermark,
-            },
-          };
+      if (splitJobs.length > 0) {
+        for (let i = 0; i < splitJobs.length; i++) {
+          splitJobs[i].submitted = await submitOne(splitJobs[i].prepared);
         }
-        if (status === "FAILED" || status === "CANCELED") {
-          const output = (rawResponse.output ?? rawResponse) as Record<
-            string,
-            unknown
-          >;
-          return {
-            status: "failed" as const,
-            rawResponseJson: rawResponse,
-            errorCode: getString(output.code) ?? status,
-            errorMessage: getString(output.message) ?? JSON.stringify(output),
-          };
-        }
-        await sleep(pollIntervalMs);
+        return splitJobs[0].submitted!;
       }
 
-      return {
-        status: "running" as const,
-        rawResponseJson: {
-          task_id: taskId,
-          message:
-            "DashScope image-to-video task still running after max poll attempts",
-        },
+      return submitOne(prepared);
+    },
+
+    poll: async (_ctx, submitted) => {
+      const pollOne = async (
+        sub: AssetProviderSubmittedJob,
+      ): Promise<AssetProviderPollResult> => {
+        const taskId = getString(sub.providerJobId);
+        if (!taskId) {
+          return {
+            status: "failed",
+            rawResponseJson: sub.rawResponseJson,
+            errorCode: "dashscope_task_id_missing",
+            errorMessage: "DashScope image-to-video task id missing",
+          };
+        }
+
+        const maxAttempts = options.maxPollAttempts ?? 60;
+        const pollIntervalMs = options.pollIntervalMs ?? 15000;
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+          const response = await fetch(
+            taskEndpointFor(options.baseUrl, taskId),
+            { headers: { Authorization: `Bearer ${options.apiKey}` } },
+          );
+          const rawResponse = (await response.json()) as Record<string, unknown>;
+          if (!response.ok) {
+            throw new Error(
+              `DashScope image-to-video poll failed: ${response.status} ${JSON.stringify(rawResponse)}`,
+            );
+          }
+          const status = extractTaskStatus(rawResponse);
+          if (status === "SUCCEEDED") {
+            return {
+              status: "completed" as const,
+              rawResponseJson: {
+                ...rawResponse,
+                task_id: taskId,
+                duration_sec: sub.rawResponseJson?.duration_sec,
+                resolution: sub.rawResponseJson?.resolution,
+                source_image_artifact_id:
+                  sub.rawResponseJson?.source_image_artifact_id,
+                prompt_extend: sub.rawResponseJson?.prompt_extend,
+                watermark: sub.rawResponseJson?.watermark,
+                split_index: sub.rawResponseJson?.split_index,
+                split_total: sub.rawResponseJson?.split_total,
+              },
+            };
+          }
+          if (status === "FAILED" || status === "CANCELED") {
+            const output = (rawResponse.output ?? rawResponse) as Record<
+              string,
+              unknown
+            >;
+            return {
+              status: "failed" as const,
+              rawResponseJson: rawResponse,
+              errorCode: getString(output.code) ?? status,
+              errorMessage:
+                getString(output.message) ?? JSON.stringify(output),
+            };
+          }
+          await sleep(pollIntervalMs);
+        }
+        return {
+          status: "running" as const,
+          rawResponseJson: {
+            task_id: taskId,
+            message:
+              "DashScope image-to-video task still running after max poll attempts",
+          },
+        };
       };
+
+      if (splitJobs.length > 0) {
+        let anyRunning = false;
+        for (let i = 0; i < splitJobs.length; i++) {
+          if (!splitJobs[i].pollResult) {
+            splitJobs[i].pollResult = await pollOne(
+              splitJobs[i].submitted!,
+            );
+          }
+          if (splitJobs[i].pollResult?.status === "running") {
+            anyRunning = true;
+          }
+        }
+        if (anyRunning) {
+          return { status: "running", rawResponseJson: {} };
+        }
+        const failed = splitJobs.find(
+          (j) => j.pollResult?.status === "failed",
+        );
+        if (failed) return failed.pollResult!;
+        return { status: "completed", rawResponseJson: {} };
+      }
+
+      return pollOne(submitted);
     },
 
     download: async (ctx, pollResult) => {
-      const videoUrl = extractVideoUrl(pollResult.rawResponseJson);
-      if (!videoUrl) {
-        throw new Error("dashscope_image_to_video_output_url_missing");
-      }
-      const response = await fetch(videoUrl);
-      if (!response.ok) {
-        throw new Error(
-          `DashScope image-to-video download failed: ${response.status}`,
+      const downloadOne = async (
+        pr: AssetProviderPollResult,
+      ): Promise<AssetArtifact> => {
+        const videoUrl = extractVideoUrl(pr.rawResponseJson);
+        if (!videoUrl) {
+          throw new Error("dashscope_image_to_video_output_url_missing");
+        }
+        const response = await fetch(videoUrl);
+        if (!response.ok) {
+          throw new Error(
+            `DashScope image-to-video download failed: ${response.status}`,
+          );
+        }
+        const buffer = Buffer.from(await response.arrayBuffer());
+        const storage = resolveAssetsRunStorage({
+          projectStorageRootDir: ctx.projectStorageRootDir,
+          runId: ctx.assetRunId,
+        });
+        const written = await writeAssetFile({
+          storage,
+          category: "videos",
+          fileName: `dashscope_${ctx.execution.task_id}.mp4`,
+          data: buffer,
+        });
+        const resolution = String(
+          pr.rawResponseJson?.resolution ?? options.resolution ?? "720P",
         );
+        const dimensions = deriveVideoDimensions(resolution);
+        const durationSec =
+          typeof pr.rawResponseJson?.duration_sec === "number"
+            ? pr.rawResponseJson.duration_sec
+            : clampDashscopeImageToVideoDuration(options.durationSec);
+
+        return {
+          artifact_id: `artifact_video_${ctx.execution.task_id}_${Date.now().toString(36)}`,
+          artifact_type: "video",
+          origin: "provider",
+          file_uri: written.fileUri,
+          created_at: new Date().toISOString(),
+          metadata: {
+            duration_sec: durationSec,
+            width: dimensions.width,
+            height: dimensions.height,
+            fps: 24,
+            model: options.model,
+            provider_name: "dashscope_image_to_video",
+            provider_job_id:
+              getString(pr.rawResponseJson?.task_id) ?? undefined,
+            source_image_artifact_id:
+              getString(pr.rawResponseJson?.source_image_artifact_id) ??
+              undefined,
+            source_url: videoUrl,
+            file_hash: written.fileHash,
+            relative_path: written.relativePath,
+            resolution,
+            prompt_extend: pr.rawResponseJson?.prompt_extend ?? true,
+            watermark: pr.rawResponseJson?.watermark ?? false,
+            video_split_of_task:
+              typeof pr.rawResponseJson?.split_total === "number" &&
+              (pr.rawResponseJson.split_total as number) > 1
+                ? ctx.planTask.task_id
+                : undefined,
+            video_split_index:
+              typeof pr.rawResponseJson?.split_index === "number"
+                ? (pr.rawResponseJson.split_index as number)
+                : undefined,
+            video_split_total:
+              typeof pr.rawResponseJson?.split_total === "number" &&
+              (pr.rawResponseJson.split_total as number) > 1
+                ? (pr.rawResponseJson.split_total as number)
+                : undefined,
+          },
+        };
+      };
+
+      if (splitJobs.length > 0) {
+        const artifacts: AssetArtifact[] = [];
+        for (let i = 0; i < splitJobs.length; i++) {
+          const art = await downloadOne(splitJobs[i].pollResult!);
+          splitJobs[i].artifact = art;
+          artifacts.push(art);
+        }
+        return artifacts;
       }
 
-      const buffer = Buffer.from(await response.arrayBuffer());
-      const storage = resolveAssetsRunStorage({
-        projectStorageRootDir: ctx.projectStorageRootDir,
-        runId: ctx.assetRunId,
-      });
-      const written = await writeAssetFile({
-        storage,
-        category: "videos",
-        fileName: `dashscope_${ctx.execution.task_id}.mp4`,
-        data: buffer,
-      });
-      const resolution = String(
-        pollResult.rawResponseJson?.resolution ?? options.resolution ?? "720P",
-      );
-      const dimensions = deriveVideoDimensions(resolution);
-      const durationSec =
-        typeof pollResult.rawResponseJson?.duration_sec === "number"
-          ? pollResult.rawResponseJson.duration_sec
-          : clampDashscopeImageToVideoDuration(options.durationSec);
-
-      const artifact: AssetArtifact = {
-        artifact_id: `artifact_video_${ctx.execution.task_id}_${Date.now().toString(36)}`,
-        artifact_type: "video",
-        origin: "provider",
-        file_uri: written.fileUri,
-        created_at: new Date().toISOString(),
-        metadata: {
-          duration_sec: durationSec,
-          width: dimensions.width,
-          height: dimensions.height,
-          fps: 24,
-          model: options.model,
-          provider_name: "dashscope_image_to_video",
-          provider_job_id:
-            getString(pollResult.rawResponseJson?.task_id) ?? undefined,
-          source_image_artifact_id:
-            getString(pollResult.rawResponseJson?.source_image_artifact_id) ??
-            undefined,
-          source_url: videoUrl,
-          file_hash: written.fileHash,
-          relative_path: written.relativePath,
-          resolution,
-          prompt_extend: pollResult.rawResponseJson?.prompt_extend ?? true,
-          watermark: pollResult.rawResponseJson?.watermark ?? false,
-        },
-      };
-      return [artifact];
+      return [await downloadOne(pollResult)];
     },
 
-    normalizeResult: async ({ downloadedArtifacts }) => ({
-      artifacts: downloadedArtifacts,
-      notes: ["dashscope image-to-video generated"],
-    }),
+    normalizeResult: async ({ downloadedArtifacts }) => {
+      const notes = ["dashscope image-to-video generated"];
+      if (downloadedArtifacts.length > 1) {
+        notes.push(
+          `dashscope image-to-video split into ${downloadedArtifacts.length} segments`,
+        );
+      }
+      return {
+        artifacts: downloadedArtifacts,
+        notes,
+      };
+    },
 
     cancel: async () => undefined,
   };

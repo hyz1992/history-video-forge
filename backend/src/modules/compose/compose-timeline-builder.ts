@@ -263,6 +263,51 @@ function createVisualTrack(input: {
     }
 
     clips.push(clip);
+
+    const splitMeta = artifact.metadata as Record<string, unknown> | undefined;
+    const taskId = splitMeta?.video_split_of_task as string | undefined;
+    const splitTotal = splitMeta?.video_split_total as number | undefined;
+    if (taskId && typeof splitTotal === "number" && splitTotal > 1) {
+      const splitArtifacts = manifest.artifacts
+        .filter((a) => {
+          const m = a.metadata as Record<string, unknown> | undefined;
+          return (
+            a.artifact_type === "video" &&
+            a.artifact_id !== artifactId &&
+            m?.video_split_of_task === taskId
+          );
+        })
+        .sort((a, b) => {
+          const ai = (a.metadata as Record<string, unknown>).video_split_index as number ?? 0;
+          const bi = (b.metadata as Record<string, unknown>).video_split_index as number ?? 0;
+          return ai - bi;
+        });
+
+      let offsetSec = clip.start_sec + videoDurationSec;
+      for (let i = 0; i < splitArtifacts.length; i++) {
+        const splitArtifact = splitArtifacts[i];
+        const splitDur =
+          (splitArtifact.metadata as Record<string, unknown> | undefined)
+            ?.duration_sec as number ?? 0;
+        const remainSec = timing.startSec + timing.durationSec - offsetSec;
+        const useDur = Math.min(splitDur, Math.max(0, remainSec));
+        clips.push({
+          ...clip,
+          clip_id: `clip_visual_${route.segment_id}_split_${i + 1}`,
+          artifact_id: splitArtifact.artifact_id,
+          start_sec: offsetSec,
+          duration_sec: useDur,
+          notes: [`compose_video_split: index=${i + 1}`],
+        });
+        offsetSec += useDur;
+        if (offsetSec >= timing.startSec + timing.durationSec - 0.001) break;
+      }
+
+      if (offsetSec < timing.startSec + timing.durationSec - 0.001) {
+        const tailHold = timing.startSec + timing.durationSec - offsetSec;
+        notes.push(`compose_video_last_frame_hold:${route.segment_id} hold=${tailHold.toFixed(1)}s (after splits)`);
+      }
+    }
   }
 
   return {
