@@ -290,9 +290,11 @@ import { useRouter } from "vue-router";
 
 import { useProjectStore } from "../stores/project";
 import CreateTopicModal from "../components/topic/CreateTopicModal.vue";
+import { useCompetitionGuard } from "../composables/useCompetitionGuard";
 
 const projectStore = useProjectStore();
 const router = useRouter();
+const { checkCreateProject } = useCompetitionGuard();
 
 const showCreateTopicModal = ref(false);
 
@@ -301,6 +303,7 @@ function goToProjects() {
 }
 
 function handleCreateProject() {
+  if (!checkCreateProject()) return;
   showCreateTopicModal.value = true;
 }
 

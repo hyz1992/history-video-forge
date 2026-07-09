@@ -8,9 +8,11 @@ import {
   type ProjectListItem,
 } from "../stores/project";
 import CreateTopicModal from "../components/topic/CreateTopicModal.vue";
+import { useCompetitionGuard } from "../composables/useCompetitionGuard";
 
 const projectStore = useProjectStore();
 const router = useRouter();
+const { checkCreateProject } = useCompetitionGuard();
 
 const showCreateTopicModal = ref(false);
 
@@ -161,6 +163,7 @@ function formatDateTime(value: string) {
 }
 
 function handleCreateProject() {
+  if (!checkCreateProject()) return;
   showCreateTopicModal.value = true;
 }
 

@@ -10,12 +10,14 @@ import { useRenderStore } from "../../stores/render";
 import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 import StageGenerating from "../workspace/StageGenerating.vue";
+import { useCompetitionGuard } from "../../composables/useCompetitionGuard";
 
 const composeStore = useComposeStore();
 const renderStore = useRenderStore();
 const workspaceStore = useWorkspaceStore();
 const router = useRouter();
 const projectStore = useProjectStore();
+const { checkRecompose } = useCompetitionGuard();
 
 const ASSET_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "asset");
 const PUBLISH_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "publish");
@@ -364,6 +366,7 @@ async function handleStartRender() {
 }
 
 async function handleRecompose() {
+  if (!checkRecompose()) return;
   try {
     await ElMessageBox.confirm(
       "重新合成将重新编排时间线并重新渲染视频，已有结果将被覆盖。确认继续？",

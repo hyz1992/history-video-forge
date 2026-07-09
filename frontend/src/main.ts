@@ -1,4 +1,4 @@
-import { createApp, h } from "vue";
+import { createApp, Fragment, h } from "vue";
 import { RouterView } from "vue-router";
 import ElementPlus from "element-plus";
 import "element-plus/dist/index.css";
@@ -53,6 +53,7 @@ import {
 } from "./stores/publish";
 import { initTheme } from "./composables/useTheme";
 import { initDemoMode } from "./composables/useDemoMode";
+import CompetitionNoticeDialog from "./components/common/CompetitionNoticeDialog.vue";
 
 initTheme();
 await initDemoMode();
@@ -93,7 +94,7 @@ const publishStore = createPublishStore({
 });
 
 const app = createApp({
-  render: () => h(RouterView),
+  render: () => h(Fragment, null, [h(RouterView), h(CompetitionNoticeDialog)]),
 });
 
 app.use(ElementPlus);
