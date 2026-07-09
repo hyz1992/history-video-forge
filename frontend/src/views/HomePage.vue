@@ -46,7 +46,7 @@
             新建项目
             <span class="arrow">→</span>
           </button>
-          <button class="btn-large btn-large-ghost">
+          <button class="btn-large btn-large-ghost" @click="goToProjects">
             观看示例
           </button>
         </div>
@@ -295,6 +295,10 @@ const projectStore = useProjectStore();
 const router = useRouter();
 
 const showCreateTopicModal = ref(false);
+
+function goToProjects() {
+  router.push("/projects");
+}
 
 function handleCreateProject() {
   showCreateTopicModal.value = true;
