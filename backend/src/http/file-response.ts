@@ -64,7 +64,7 @@ export function writeFileStream(
     return;
   }
 
-  const resolved = resolve(filePath);
+  const resolved = resolve(storageRoot, filePath);
   let fileStat;
   try {
     fileStat = statSync(resolved);
