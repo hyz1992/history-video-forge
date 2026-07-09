@@ -21,6 +21,7 @@ interface DbSnapshot {
   assetManifestRecords: Array<Record<string, unknown>>;
   composeRecords: Array<Record<string, unknown>>;
   renderJobRecords: Array<Record<string, unknown>>;
+  publishPackageRecords: Array<Record<string, unknown>>;
   topicCandidateStore: Record<string, {
     candidatesById: Record<string, unknown>;
     rounds: Array<Record<string, unknown>>;
@@ -87,6 +88,7 @@ export function saveDbSnapshot(
       assetManifestRecords: mapToArray(db.assetManifestRecords).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
       composeRecords: mapToArray(db.composeRecords).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
       renderJobRecords: mapToArray(db.renderJobRecords).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
+      publishPackageRecords: mapToArray(db.publishPackageRecords).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
       topicCandidateStore: {},
     };
 
@@ -132,6 +134,7 @@ export function loadDbSnapshot(
     for (const [k, v] of snapshot.assetManifestRecords as unknown as Array<[string, unknown]>) db.assetManifestRecords.set(k, v as never);
     for (const [k, v] of snapshot.composeRecords as unknown as Array<[string, unknown]>) db.composeRecords.set(k, v as never);
     for (const [k, v] of snapshot.renderJobRecords as unknown as Array<[string, unknown]>) db.renderJobRecords.set(k, v as never);
+    for (const [k, v] of snapshot.publishPackageRecords as unknown as Array<[string, unknown]>) db.publishPackageRecords.set(k, v as never);
 
     for (const [projectId, state] of Object.entries(snapshot.topicCandidateStore)) {
       topicCandidateStore.set(projectId, {
