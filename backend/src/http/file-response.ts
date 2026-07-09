@@ -20,35 +20,50 @@ export interface FileResponseOptions {
   filename?: string;
 }
 
-function isPathInside(filePath: string, root: string): boolean {
+/**
+ * Validate that filePath is inside root and return the resolved absolute path.
+ * Handles three file_uri formats:
+ *   1. Relative to storageRoot  (renders:    "renders/<jobId>/output.mp4")
+ *   2. Relative to cwd           (assets:     "storage/projects/<date>/<name>/assets-runs/...")
+ *   3. Absolute from old machine (migration:  "D:\\old-path\\storage\\projects\\<date>/<name>/renders/...")
+ */
+function resolveAndValidatePath(filePath: string, root: string): string | null {
   const rootAbs = resolve(root);
-  const fileAbs = resolve(filePath);
-  const rel = relative(rootAbs, fileAbs);
+
+  // --- Case 1: filePath is relative to storageRoot (e.g. "renders/xxx/output.mp4") ---
+  const resolvedFromRoot = resolve(rootAbs, filePath);
+  const rel = relative(rootAbs, resolvedFromRoot);
   if (rel !== "" && rel !== ".." && !rel.startsWith(".." + sep) && !isAbsolute(rel)) {
-    return true;
+    return resolvedFromRoot;
   }
-  // Handle migrated data where file_uri is an absolute path from another machine.
-  // Old path format: <any-prefix>/storage/projects/<date>/<name> [<id>]/renders/.../output.mp4
-  // New path: after resolve(storageRoot) it becomes <cwd>/storage/projects/<date>/<name> [<id>]
-  // We need to extract the part after the project root and reconstruct.
+
+  // --- Case 2: filePath is relative to cwd (e.g. "storage/projects/.../assets-runs/...") ---
+  const resolvedFromCwd = resolve(filePath);
+  const rel2 = relative(rootAbs, resolvedFromCwd);
+  if (rel2 !== "" && rel2 !== ".." && !rel2.startsWith(".." + sep) && !isAbsolute(rel2)) {
+    return resolvedFromCwd;
+  }
+
+  // --- Case 3: filePath is an absolute path from another machine (migrated data) ---
   if (isAbsolute(filePath)) {
     const normalized = filePath.replace(/\\/g, "/");
     const marker = "/storage/projects/";
     const idx = normalized.indexOf(marker);
     if (idx !== -1) {
-      // after marker: "<date>/<name> [<id>]/(renders|assets-runs)/..."
       const afterMarker = normalized.slice(idx + marker.length);
       const segments = afterMarker.split("/");
-      // Project root = 2 segments: date + displayName[shortId]
       if (segments.length > 2) {
         const relativeFromProject = segments.slice(2).join("/");
         const reconstructed = resolve(rootAbs, relativeFromProject);
-        const rel2 = relative(rootAbs, reconstructed);
-        return rel2 !== "" && rel2 !== ".." && !rel2.startsWith(".." + sep) && !isAbsolute(rel2);
+        const rel3 = relative(rootAbs, reconstructed);
+        if (rel3 !== "" && rel3 !== ".." && !rel3.startsWith(".." + sep) && !isAbsolute(rel3)) {
+          return reconstructed;
+        }
       }
     }
   }
-  return false;
+
+  return null;
 }
 
 export function writeFileStream(
@@ -57,14 +72,14 @@ export function writeFileStream(
   storageRoot: string,
   options: FileResponseOptions = {},
 ): void {
-  if (!isPathInside(filePath, storageRoot)) {
+  const resolved = resolveAndValidatePath(filePath, storageRoot);
+  if (resolved === null) {
     response.statusCode = 403;
     response.setHeader("content-type", "application/json");
     response.end(JSON.stringify({ error: "path_traversal_denied" }));
     return;
   }
 
-  const resolved = resolve(storageRoot, filePath);
   let fileStat;
   try {
     fileStat = statSync(resolved);
