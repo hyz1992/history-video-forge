@@ -1,4 +1,4 @@
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 import {
   ComposeTimeline as ComposeTimelineSchema,
@@ -273,6 +273,14 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
         readyValidation,
         errorCode: "render_stale_source",
       });
+      if (adapterResult.outputArtifact) {
+        adapterResult.outputArtifact.file_uri = join(
+          project.storageRootDir,
+          "renders",
+          renderJob.id,
+          "output.mp4",
+        );
+      }
       updateRenderJobRecord(renderJob, {
         status: "stale_source",
         outputArtifactJson: adapterResult.outputArtifact,
@@ -310,6 +318,14 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
       height: adapterResult.probe.height,
       fps: adapterResult.probe.fps,
     });
+    if (adapterResult.outputArtifact) {
+      adapterResult.outputArtifact.file_uri = join(
+        project.storageRootDir,
+        "renders",
+        renderJob.id,
+        "output.mp4",
+      );
+    }
     updateRenderJobRecord(renderJob, {
       status: "completed",
       outputArtifactJson: adapterResult.outputArtifact,

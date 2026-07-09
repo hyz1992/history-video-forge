@@ -21,10 +21,23 @@ export interface FileResponseOptions {
 }
 
 function isPathInside(filePath: string, root: string): boolean {
-  const fileAbs = resolve(filePath);
   const rootAbs = resolve(root);
+  const fileAbs = resolve(filePath);
   const rel = relative(rootAbs, fileAbs);
-  return rel !== "" && rel !== ".." && !rel.startsWith(".." + sep) && !isAbsolute(rel);
+  if (rel !== "" && rel !== ".." && !rel.startsWith(".." + sep) && !isAbsolute(rel)) {
+    return true;
+  }
+  if (isAbsolute(filePath)) {
+    const normalizedPath = filePath.replace(/\\/g, "/");
+    const idx = normalizedPath.indexOf("/storage/projects/");
+    if (idx !== -1) {
+      const relativePart = normalizedPath.slice(idx + 1);
+      const reconstructed = resolve(rootAbs, "..", relativePart);
+      const rel2 = relative(rootAbs, reconstructed);
+      return rel2 !== "" && rel2 !== ".." && !rel2.startsWith(".." + sep) && !isAbsolute(rel2);
+    }
+  }
+  return false;
 }
 
 export function writeFileStream(
