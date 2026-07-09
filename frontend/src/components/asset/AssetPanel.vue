@@ -13,6 +13,7 @@ import { useAssetTabPhase } from "../../composables/useAssetTabPhase";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { PIPELINE_STEPS } from "../../stores/workspace";
 import { useDemoMode } from "../../composables/useDemoMode";
+import { useCompetitionGuard } from "../../composables/useCompetitionGuard";
 import StageGenerating from "../workspace/StageGenerating.vue";
 import StageLoadingBar from "../workspace/StageLoadingBar.vue";
 
@@ -28,6 +29,7 @@ const projectStore = useProjectStore();
 const workspaceStore = useWorkspaceStore();
 const assetSnapshotLoaded = ref(false);
 const demoMode = useDemoMode();
+const { checkRecompose } = useCompetitionGuard();
 
 /* -------------------------------------------------------------------------- */
 /*  Demo mode: block image/video generation                                    */
@@ -907,6 +909,7 @@ async function handleRefreshGeneratingStatus() {
 }
 
 function handleConfirm() {
+  if (!checkRecompose()) return;
   if (!canCompose.value) {
     ElMessage.warning(blockedReasonText.value || "资产尚未全部就绪");
     return;
