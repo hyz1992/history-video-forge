@@ -11,6 +11,7 @@ import { resolvePipelineStagePhase } from "../../composables/usePipelineStagePha
 import StageGenerating from "../workspace/StageGenerating.vue";
 import StageLoadingBar from "../workspace/StageLoadingBar.vue";
 import RegenFeedbackModal from "./RegenFeedbackModal.vue";
+import { useCompetitionGuard } from "../../composables/useCompetitionGuard";
 
 const scriptStore = useScriptStore();
 const workspaceStore = useWorkspaceStore();
@@ -18,6 +19,7 @@ const workspaceStore = useWorkspaceStore();
 const STORYBOARD_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "storyboard");
 const router = useRouter();
 const projectStore = useProjectStore();
+const { checkStageRollback } = useCompetitionGuard();
 const initialLoadDone = ref(false);
 
 const { startPolling } = useStagePolling({
@@ -299,6 +301,7 @@ function toggleHistory() {
 }
 
 async function handleRegenSubmit(userFeedback: string) {
+  if (!checkStageRollback("script")) return;
   isRegenerating.value = true;
   try {
     await scriptStore.runRegenOnce(userFeedback || undefined);
@@ -319,6 +322,7 @@ function handleSelectHistory(entryId: string) {
 }
 
 function handleConfirm() {
+  if (!checkStageRollback("script")) return;
   ElMessage.success("文案已确认，进入分镜规划");
   workspaceStore.setCurrentStep(STORYBOARD_STEP_INDEX);
   const pid = projectStore.state.projectId; if (pid) router.push(`/projects/${pid}/storyboard`);
