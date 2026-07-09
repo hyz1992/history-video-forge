@@ -275,7 +275,6 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
       });
       if (adapterResult.outputArtifact) {
         adapterResult.outputArtifact.file_uri = join(
-          project.storageRootDir,
           "renders",
           renderJob.id,
           "output.mp4",
@@ -320,7 +319,6 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
     });
     if (adapterResult.outputArtifact) {
       adapterResult.outputArtifact.file_uri = join(
-        project.storageRootDir,
         "renders",
         renderJob.id,
         "output.mp4",

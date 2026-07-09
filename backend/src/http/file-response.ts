@@ -27,14 +27,25 @@ function isPathInside(filePath: string, root: string): boolean {
   if (rel !== "" && rel !== ".." && !rel.startsWith(".." + sep) && !isAbsolute(rel)) {
     return true;
   }
+  // Handle migrated data where file_uri is an absolute path from another machine.
+  // Old path format: <any-prefix>/storage/projects/<date>/<name> [<id>]/renders/.../output.mp4
+  // New path: after resolve(storageRoot) it becomes <cwd>/storage/projects/<date>/<name> [<id>]
+  // We need to extract the part after the project root and reconstruct.
   if (isAbsolute(filePath)) {
-    const normalizedPath = filePath.replace(/\\/g, "/");
-    const idx = normalizedPath.indexOf("/storage/projects/");
+    const normalized = filePath.replace(/\\/g, "/");
+    const marker = "/storage/projects/";
+    const idx = normalized.indexOf(marker);
     if (idx !== -1) {
-      const relativePart = normalizedPath.slice(idx + 1);
-      const reconstructed = resolve(rootAbs, "..", relativePart);
-      const rel2 = relative(rootAbs, reconstructed);
-      return rel2 !== "" && rel2 !== ".." && !rel2.startsWith(".." + sep) && !isAbsolute(rel2);
+      // after marker: "<date>/<name> [<id>]/(renders|assets-runs)/..."
+      const afterMarker = normalized.slice(idx + marker.length);
+      const segments = afterMarker.split("/");
+      // Project root = 2 segments: date + displayName[shortId]
+      if (segments.length > 2) {
+        const relativeFromProject = segments.slice(2).join("/");
+        const reconstructed = resolve(rootAbs, relativeFromProject);
+        const rel2 = relative(rootAbs, reconstructed);
+        return rel2 !== "" && rel2 !== ".." && !rel2.startsWith(".." + sep) && !isAbsolute(rel2);
+      }
     }
   }
   return false;
