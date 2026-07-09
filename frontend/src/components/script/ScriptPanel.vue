@@ -38,6 +38,10 @@ const { startPolling } = useStagePolling({
 });
 
 onMounted(async () => {
+  const pid = projectStore.state.projectId;
+  if (pid) {
+    await projectStore.loadProject(pid);
+  }
   initialLoadDone.value = false;
   await scriptStore.loadActiveScriptSnapshot();
   initialLoadDone.value = true;

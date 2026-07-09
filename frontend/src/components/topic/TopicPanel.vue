@@ -44,6 +44,10 @@ const isSnapshotGenerating = computed(
 );
 
 onMounted(async () => {
+  const pid = route.params.projectId as string;
+  if (pid) {
+    await projectStore.loadProject(pid);
+  }
   if (topicStore.state.isGenerating) {
     initialLoadDone.value = true;
     startPolling();

@@ -282,6 +282,10 @@ const { checkStageRollback } = useCompetitionGuard();
 /* -------------------------------------------------------------------------- */
 
 onMounted(async () => {
+  const pid = projectStore.state.projectId;
+  if (pid) {
+    await projectStore.loadProject(pid);
+  }
   initialLoadDone.value = false;
   await storyboardStore.loadActiveStoryboardSnapshot();
   initialLoadDone.value = true;
