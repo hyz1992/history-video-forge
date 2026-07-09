@@ -173,8 +173,10 @@ async function handleRefreshBatch() {
         isRefreshing.value = false;
       }, 400);
     }
-  } catch {
+  } catch (error) {
     isRefreshing.value = false;
+    const message = error instanceof Error ? error.message : "刷新失败";
+    ElMessage.warning(message);
   }
 }
 
@@ -184,7 +186,9 @@ async function handleRegenerate() {
   const generation = topicStore.generateSystemRecommendations(filters);
   startPolling();
   await generation;
-  if (!topicStore.state.loadError) {
+  if (topicStore.state.loadError) {
+    ElMessage.warning("重新生成失败：" + topicStore.state.loadError);
+  } else {
     ElMessage.success("已重新生成选题");
   }
 }
@@ -204,14 +208,19 @@ async function handleRefreshGeneratingStatus() {
 
 async function confirmCandidate() {
   if (!checkStageRollback("topic")) return;
-  await topicStore.confirmSelectedCandidate();
-  if (topicStore.state.confirmedTopicPackageId) {
-    ElMessage.success("选题已确认，自动进入文案阶段");
-    workspaceStore.setCurrentStep(SCRIPT_STEP_INDEX);
-    const projectId = route.params.projectId;
-    if (projectId) {
-      await router.push(`/projects/${projectId}/script`);
+  try {
+    await topicStore.confirmSelectedCandidate();
+    if (topicStore.state.confirmedTopicPackageId) {
+      ElMessage.success("选题已确认，自动进入文案阶段");
+      workspaceStore.setCurrentStep(SCRIPT_STEP_INDEX);
+      const projectId = route.params.projectId;
+      if (projectId) {
+        await router.push(`/projects/${projectId}/script`);
+      }
     }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "确认选题失败，请稍后重试";
+    ElMessage.warning(message);
   }
 }
 

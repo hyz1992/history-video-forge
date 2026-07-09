@@ -313,6 +313,9 @@ async function handleGenerate() {
   startPolling();
   try {
     await storyboardStore.generateStoryboard();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "分镜规划生成失败";
+    ElMessage.warning(message);
   } finally {
     pendingAutoGenerate.value = false;
   }
@@ -373,6 +376,9 @@ async function handleSegmentRegenSubmit(userFeedback: string) {
     }
     showSegmentRegenModal.value = false;
     ElMessage.success("分镜片段重新生成完成");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "分镜片段重新生成失败";
+    ElMessage.warning(message);
   } finally {
     isRegeneratingSegment.value = false;
   }

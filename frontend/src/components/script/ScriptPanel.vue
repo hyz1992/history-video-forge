@@ -309,9 +309,14 @@ async function handleRegenSubmit(userFeedback: string) {
   isRegenerating.value = true;
   try {
     await scriptStore.runRegenOnce(userFeedback || undefined);
-    if (!scriptStore.state.loadError) {
+    if (scriptStore.state.loadError) {
+      ElMessage.warning("文案重新生成失败：" + scriptStore.state.loadError);
+    } else {
       ElMessage.success("文案重新生成完成");
     }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "文案重新生成失败";
+    ElMessage.warning(message);
   } finally {
     isRegenerating.value = false;
   }
