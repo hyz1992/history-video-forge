@@ -3,7 +3,16 @@ import { join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REQUIRED_FIELDS = ["id", "stage", "language", "consumes", "produces", "status"] as const;
-const VALID_STAGES = new Set(["topic", "script", "storyboard", "asset_planning"]);
+const VALID_STAGES = new Set([
+  "topic",
+  "script",
+  "storyboard",
+  "asset_planning",
+  "assets",
+  "compose",
+  "render",
+  "publish",
+]);
 const VALID_STATUSES = new Set(["active", "draft", "deprecated"]);
 
 type PromptMetadata = Record<string, string | string[]>;
@@ -82,7 +91,10 @@ function containsChinese(text: string): boolean {
 
 function stageMatchesPath(filePath: string, stage: string): boolean {
   const normalizedPath = normalize(filePath).toLowerCase();
-  const stageDir = stage === "asset_planning" ? "asset-planning" : stage;
+  const stageDir =
+    stage === "asset_planning" ? "asset-planning" :
+    stage === "assets" ? "asset" :
+    stage;
   const expectedTail = normalize(join("harness", "prompts", stageDir.toLowerCase())).toLowerCase();
   return normalizedPath.includes(expectedTail);
 }
@@ -110,7 +122,7 @@ export function validatePromptContent(filePath: string, content: string): string
 
   const stage = metadata.stage;
   if (typeof stage !== "string" || !VALID_STAGES.has(stage)) {
-    issues.push("stage 必须是 topic、script、storyboard 或 asset_planning");
+    issues.push("stage 必须是 topic、script、storyboard、asset_planning、assets、compose、render 或 publish");
   } else if (!stageMatchesPath(filePath, stage)) {
     issues.push(`stage 与 prompt 所在目录不一致：${stage}`);
   }

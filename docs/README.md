@@ -15,13 +15,15 @@
 
 ## 当前阶段状态
 
-截至 2026-06-20：
+截至 2026-07-08：
 
-- 全链路 7 阶段（topic → script → storyboard → asset planning → assets → compose → render → publish）已全部完成第一版设计与后端实现。
+- 全链路 v1 已进入端到端交付闭环：`topic -> script -> storyboard -> asset planning -> assets -> compose/render -> publish`。
 - `topic + script` 第一阶段已达到当前及格标准，可以暂时冻结。
-- `storyboard`、`asset planning`、`assets`、`compose`、`renderer/export` 已完成 v1 后端链路；当前下一步允许围绕前端工作流、预览/导出、发布流与人工审稿流继续设计和小步实施。
+- `storyboard`、`asset planning`、`assets`、`compose/render`、`publish` 已具备 v1 后端链路和前端工作区入口。
+- 当前前端工作区为 6 步：`选题 -> 文案 -> 分镜 -> 资产 -> 合成渲染 -> 发布交付`。`compose` 与 `render/export` 在当前 UI 中合并为“合成渲染”阶段；旧的独立 ComposePanel / RenderPanel 文件若仍存在，只能视为历史或兼容代码，不能作为当前入口判断。
+- 合成渲染页已支持自动合成/渲染、完成态摘要、视频预览/下载和进入发布交付。发布页已支持自动生成发布包、成品视频与封面预览、封面提示词编辑、LLM 优化、AI 生成封面确认、上传封面、标题候选、描述、标签和导出发布包。
 - 旧的 topic/script 计划已归档到 [plans/archive/topic-script](./plans/archive/topic-script/)。
-- 进入新任务时，优先阅读正式架构文档、当前阶段说明与最新计划；不要把 archive 或 records 中的历史内容直接当作当前约束。
+- 进入新任务时，优先阅读正式入口文档、当前计划索引、源码现状和真实浏览器/API 状态；不要把 archive 或 records 中的历史内容直接当作当前约束。
 
 ---
 
@@ -126,12 +128,18 @@
 - 旧项目可复用与不可复用部分
 - 分阶段讨论留档
 - 第一阶段历史计划与任务清单归档
+- 后端 v1 到发布交付包的主链路边界
+- 前端工作区 6 步主流程和当前合成渲染/发布交付入口
 
 ---
 
 ## 当前仍为 TBD / 待正式设计的区域
 
-- 前端预览 UI、素材上传/预览、发布流、人工审稿流（可进入正式设计）
+- 更系统的人工审稿流、发布前验收流和真实平台发布流
+- 真实付费 BGM/SFX provider、素材授权包装、响度归一化、ducking 和真实音频素材运营
+- DashScope 图生视频真实小样本验证与成本/失败模式记录（默认仍不自动执行）
+- provider timestamps 或本地 forced alignment 的字幕精对齐方案
+- 更完整的生产化媒体库：hash 索引、去重、复用、生命周期、失败重试和人工替换记录
 - 更完整的 UI 组件级规范
 - 推荐轻评审阈值
 - `event_family` 命中算法与 `family_confidence` 计算方式
@@ -148,7 +156,7 @@
 
 ## 2026-05-20 全链路 v1 阶段文档收口状态
 
-截至 2026-05-20，所有 7 个流水线阶段均已完成第一版设计、实施与后端实现：
+截至 2026-05-20，所有 7 个流水线阶段均已完成第一版设计、实施与后端实现。该表是后端 v1 收口记录；截至 2026-07-08，前端主工作区已进一步收敛为 6 步，其中 `compose` 与 `render/export` 合并为“合成渲染”：
 
 | 阶段 | 设计日期 | 实施状态 |
 |---|---|---|
@@ -163,4 +171,4 @@
 
 详细历史记录见 [Plans 状态说明](./plans/README.md)。
 
-当前下一步允许方向：前端预览 UI、素材上传/预览、发布流、人工审稿流（均需正式 design + implementation plan）。
+当前下一步方向：围绕现有前端 v1 主流程做真实浏览器验收、生产化补强、失败恢复、质量门禁和文档治理；真实平台发布、人工审稿、质量评分、真实付费 provider 等高影响扩展仍需正式 design + implementation plan。

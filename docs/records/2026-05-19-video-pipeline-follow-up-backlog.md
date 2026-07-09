@@ -7,6 +7,9 @@
 - [x] `topic -> script` 当前可用上游已冻结。
 - [x] `storyboard -> asset planning -> assets -> compose` 已有 v1 后端链路。
 - [x] `renderer/export` 已有后端 v1 最小闭环。
+- [x] 前端主工作区已有 v1 闭环：选题、文案、分镜、资产、合成渲染、发布交付。
+- [x] 合成渲染页支持 Remotion MP4 完成态摘要、视频预览/下载和进入发布交付。
+- [x] 发布交付页支持发布包生成、视频/封面预览、封面提示词编辑、标题候选、描述、标签、封面上传/生成和导出发布包。
 - [x] DashScope TTS 系统音色真实小样本已跑通。
 - [x] DashScope 声音设计真实创建 provider voice 已跑通。
 - [x] 已创建 `provider_voice_id` 的 TTS-only 复用验证已跑通。
@@ -87,7 +90,7 @@
 - [ ] 增加 artifact hash 索引、去重、复用策略。
 - [ ] 增加 provider request / response 的安全归档规则，不保存 API key。
 - [ ] 增加素材生命周期：过期清理、失败重试、人工替换、选中记录。
-- [ ] 设计人工上传/替换 UI 之前的后端合同。
+- [ ] 补齐人工上传/替换 artifact 的后端合同与审计字段，支撑当前 UI 继续生产化。
 - [ ] 增加 media library 检索字段：题材、角色、地点、镜头类型、音频情绪。
 
 ## P2: 质量门禁
@@ -101,20 +104,27 @@
 
 2026-05-27 更新：前端预览 UI、人工上传/替换、render/export 预览与重新导出、发布流和人工审稿流已不再作为全局禁止项；进入实现前仍需正式 design + implementation plan。
 
-- [ ] assets 面板展示 task execution、artifact、provider job、错误与 fallback。
-- [ ] 支持人工上传/替换 artifact。
+2026-07-08 更新：前端 v1 主流程已基本完成，不再把“前端预览 UI / 发布流”整体列为待设计。后续只保留具体缺口与生产化验收项。
+
+- [x] assets 面板展示 asset plan、segment 资产卡、artifact、错误与 fallback 的主流程视图。
+- [x] 合成渲染页支持 render/export 完成态预览、下载和进入发布交付。
+- [x] 发布交付页支持发布包编辑、视频/封面预览、封面上传、封面生成确认、标题候选、描述、标签和导出发布包。
+- [ ] 对资产页、合成渲染页、发布交付页补齐真实浏览器验收矩阵：空态、加载中、成功、失败、刷新、深链、重复操作。
+- [ ] 支持更完整的人工上传/替换 artifact 生命周期记录：来源、授权、哈希、替换原因、选中记录。
 - [ ] 支持音色库浏览、筛选、查看 provider status。
 - [ ] 支持选择/锁定音色，避免自动匹配覆盖人工选择。
-- [ ] 支持 render/export 预览和重新导出。
+- [ ] 补齐发布前人工审稿/验收流：事实核查、画面匹配、字幕可读性、封面/标题/描述/标签确认、导出前阻断项。
 
 ## 建议后续顺序
 
-1. [ ] 写 `TTS / Subtitle / Audio Completion Design`。
-2. [ ] 写 `TTS / Subtitle / Audio Completion Implementation Plan`。
-3. [ ] 先做音色库持久化与 provider voice 跨任务复用。
+1. [x] 写 `TTS / Subtitle / Audio Completion Design` 的主体拆分计划并完成已落地部分。
+2. [x] 写 `TTS / Subtitle / Audio Completion Implementation Plan` 的主体拆分计划并完成已落地部分。
+3. [x] 先做音色库持久化与 provider voice 跨任务复用。
 4. [x] 再做 TTS 真实时长回写与字幕 timing；provider timestamp / forced alignment 仍作为后续增强。
 5. [x] 然后补 Remotion 本地成片 smoke。
-6. [ ] 最后再安排图生视频真实小样本验证。
+6. [x] 完成前端 v1 主工作区：资产、合成渲染、发布交付。
+7. [ ] 围绕现有前端 v1 补真实浏览器验收矩阵和失败恢复。
+8. [ ] 最后再安排图生视频真实小样本验证。
 
 ## 交接规则
 

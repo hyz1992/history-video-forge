@@ -9,10 +9,13 @@ const requiredPaths = [
   "harness/README.md",
   "harness/docs/definition-of-done.md",
   "harness/docs/review-checklist.md",
+  "harness/docs/regression-checklist.md",
   "harness/docs/prompt-management.md",
   "harness/docs/prompt-registry-spec.md",
+  "harness/docs/self-review-methodology.md",
   "harness/prompts/topic/candidate-builder.prompt.md",
   "harness/prompts/script/script-writer.prompt.md",
+  "harness/prompts/publish/title-generator.prompt.md",
   "harness/scripts/check-prompt-language.ts",
   "harness/scripts/runtime/run-topic-to-script-sample.ts",
 ];

@@ -6,12 +6,16 @@
 
 ## 当前状态
 
-截至 2026-06-20：
+截至 2026-07-08：
 
-- 全链路 7 阶段（topic → script → storyboard → asset planning → assets → compose → render → publish）已全部完成后端 v1 实现。
-- 当前下一步允许围绕前端工作流、预览/导出、发布流与人工审稿流继续设计和小步实施。
+- 全链路 v1 已进入端到端交付闭环：`topic -> script -> storyboard -> asset planning -> assets -> compose/render -> publish`。
+- 后端 v1 已覆盖 storyboard、asset planning、assets、compose、render/export、publish package。
+- 前端主工作区已基本完成 v1：当前 6 步为 `选题 -> 文案 -> 分镜 -> 资产 -> 合成渲染 -> 发布交付`。
+- `compose` 与 `render/export` 在现行 UI 中已合并为“合成渲染”；合成渲染页支持生成/轮询、完成态摘要、视频预览/下载和进入发布交付。
+- 发布交付页支持自动生成发布包、成品视频与封面预览、封面提示词编辑、LLM 优化、AI 生成封面确认、封面上传、标题候选、描述、标签和导出发布包。
+- 当前下一步重点不是“从零设计前端”，而是围绕现有前端 v1 做真实浏览器验收、生产化补强、失败恢复、质量门禁和文档治理。
 - topic + script 第一阶段已达到当前及格标准，可以暂时冻结。
-- storyboard / asset planning / assets / compose / renderer/export 均已完成 v1 后端链路。
+- storyboard / asset planning / assets / compose-render / publish 均已进入 v1 维护和验收补强阶段。
 - 既有 topic/script/harness/UI acceptance 计划已归档到 [archive/topic-script](./archive/topic-script/)。
 - archive 中的计划只作为历史证据和追溯材料，不是当前任务入口。
 - 新 agent 不应从 archive 中挑选旧 implementation plan 继续执行。
@@ -28,6 +32,14 @@
 - 前端预览 UI、素材上传/替换、render/export 预览与下载、发布流和人工审稿流不再作为全局禁止项。
 - 这些方向进入实现前仍需正式 design + implementation plan，并按低耦合小步验证推进。
 - 旧计划中“本轮不实现 / 不得顺手实现前端预览 UI”等表述只描述当时计划边界，不再作为当前阶段的全局限制。
+
+## 2026-07-08 前端 v1 现状校准
+
+- 当前源码入口：`frontend/src/stores/workspace.ts` 定义 6 个步骤，`frontend/src/views/ProjectWorkspace.vue` 注册 `TopicPanel`、`ScriptPanel`、`StoryboardPanel`、`AssetPanel`、`ComposeRenderPanel` 与 `PublishPanel`。
+- 当前浏览器实测项目 `79e37cd6-b612-422c-91b6-ce9b50f4c7bf` 的 `/compose-render` 页面显示选题、文案、分镜、资产、合成渲染完成，渲染输出为 1080x1920、约 74 秒、约 97.2 MB 的 MP4，并提供“下载视频”和“进入发布交付”入口。
+- 同一项目 API snapshot 显示 `active_render.status = completed`，`active_publish_package.package.readiness = ready`，发布包包含视频、封面、标题候选、描述和标签。
+- 近期提交已覆盖前端合成渲染合并、下载/发布入口、发布页自动生成发布包、发布页风格统一和合成渲染侧边栏完成态修复。
+- 因此，后续文档和计划不应再把“前端预览 UI / 发布流”整体描述为未设计或未实现；应改为按具体缺口描述，例如真实浏览器路径覆盖、异常/刷新/失败恢复、发布前人工验收、真实平台发布、真实 provider 成本验证等。
 
 ## 2026-05-11 Asset Planning v1 状态
 

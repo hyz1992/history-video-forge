@@ -19,9 +19,18 @@
 ## 二、设计一致性
 
 - 是否与当前正式设计一致：
-  - `Topic Package`
-  - `Topic Delivery Pack`
+  - `TopicCandidateCard`
+  - `TopicPackage`
+  - `TopicDeliveryPack`
+  - `ScriptDraftPackage`
   - `ScriptValidationResult`
+- 如果涉及下游，是否同步核对受影响阶段的正式对象：
+  - `StoryboardPlan`
+  - `AssetPlan`
+  - `AssetManifest`
+  - `ComposeTimeline`
+  - `RenderJob`
+  - `PublishPackage`
 - 是否与 `field-design / schema-design / api-design / implementation-plan` 保持一致？
 - 是否把未定内容误写成了正式规则？
 
@@ -41,6 +50,7 @@
 - 如果涉及 script writer，是否避免把结构摘要误判为爆款口播？
 - 如果涉及 semantic reviewer，是否保持 shadow-only，不驱动主链路？
 - 如果涉及 live check，是否明确它不是默认自动化门？
+- 如果涉及 UI、render/export、provider 或 publish，是否保留实际运行产物、截图、trace、下载/导出证据？
 
 ## 五、验证
 

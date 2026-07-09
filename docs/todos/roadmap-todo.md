@@ -49,14 +49,23 @@
 - [x] 完成第四阶段 `Task 6`：补齐脚本状态机与重选题归档
 - [x] 完成第四阶段 `Task 7`：重做第四阶段产品化工作区界面
 - [x] 完成第四阶段 `Task 8`：完成第四阶段收口检查
+- [x] 完成 downstream v1 后端链路：storyboard、asset planning、assets、compose、render/export、publish
+- [x] 完成前端 v1 主工作区：选题、文案、分镜、资产、合成渲染、发布交付
+- [x] 完成合成渲染页预览/下载/发布入口
+- [x] 完成发布交付页发布包生成、编辑、封面、标题候选、描述、标签与导出主流程
 
 ## 进行中
 - [ ] 细化 `family_confidence` 计算规则
+- [ ] 补齐前端 v1 真实浏览器验收矩阵：空态、加载中、成功、失败、刷新、深链、重复操作
+- [ ] 收口当前未归档计划，避免历史 implementation plan 误导新任务
+
 ## 待做
 - [ ] 细化 Event Registry 匹配阈值
 - [ ] 细化 Candidate Cache 生命周期
-- [ ] 细化 storyboard 阶段设计
-- [ ] 细化 assets / compose 阶段设计
+- [ ] 设计发布前人工审稿/验收流
+- [ ] 设计真实平台发布流
+- [ ] 设计真实付费 BGM/SFX provider、素材授权包装、响度归一化与 ducking
+- [ ] 设计 provider timestamps 或本地 forced alignment 的字幕精对齐方案
 
 ## 阶段 Todo
 - [第一阶段执行清单](./topic-script-phase-1-todo.md)
@@ -72,4 +81,4 @@
 - [第四阶段实施计划](../plans/archive/topic-script/2026-04-21-topic-script-phase-4-implementation-plan.md)
 
 ## 阻塞项
-- [ ] 继续讨论 storyboard / assets 阶段目标态
+- [ ] DashScope 图生视频真实小样本验证默认不执行；如要验证需明确批准成本并记录 request id、耗时、费用和失败模式

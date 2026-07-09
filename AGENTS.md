@@ -6,44 +6,17 @@
 
 ---
 
-## 当前阶段目标
+## 当前状态入口
 
-- 当前项目处于 `greenfield-first` 模式。
-- `topic + script` 第一阶段已达到当前及格标准，可以暂时冻结。
-- 当前优先事项：
-  - 保持 `topic -> script` 首稿链路稳定，不主动重开已冻结范围
-  - 保持 `storyboard -> asset planning -> assets -> compose` 已完成 v1 链路的阶段边界
-  - `renderer / export` 后端 v1 已完成首批实现；当前下一步允许围绕前端工作流、预览/导出、发布流与人工审稿流继续设计和小步实施
-  - 前端预览 UI、发布流、人工审稿流不再作为全局禁止项；进入实现前仍需使用正式 design + implementation plan 收口，并保持小步验证
+`AGENTS.md` 只保留稳定的 agent 工作契约、验证规则、提交规范、prompt 规则和高风险边界；不维护易过期的项目阶段事实。
 
-当前已完成的关键恢复：
+项目阶段、当前主流程、待补事项和已过时计划说明，以以下文档和当前代码/运行结果为准：
 
-- fake semantic review 已收掉；无真实 reviewer 时允许 `skipped`，不得冒充语义审校。
-- `TopicPackage` 模板污染已收掉，不再向 script 注入跨题材固定句。
-- script 首稿链路、local validation、semantic reviewer shadow、扩展 smoke 已恢复稳定。
-- 当前 `topic` 自动推荐与 `script` 首稿已达到“可用线”，可以作为视频流水线下一步的上游基础。
-- 第 3 项 follow-up backlog（项目内持久化候选池与受控 fallback 复用）主体已完成；剩余为后续运营生命周期尾项。
-- `storyboard`、`asset planning`、`assets`、`compose` 均已完成 v1 后端链路；当前不能再按旧文档把它们视为“未设计、禁止触碰”的阶段。
-- `compose` v1 的完成线是 timeline contract，不是最终视频导出。
+1. `docs/README.md`
+2. `docs/plans/README.md`
+3. `docs/todos/roadmap-todo.md`
 
----
-
-## 当前可实施边界
-
-当前允许进入实现的范围：
-
-- 文档治理、阶段冻结说明、旧计划归档
-- 前端工作流、素材上传/预览、render/export 预览与下载、发布流、人工审稿流的正式设计、implementation plan 与低耦合小步实现
-- `renderer / export` 后端 v1 的必要维护、回归修复与接口补强
-- `topic + script` 冻结后的必要维护、回归修复、观测记录
-- 明确获得执行指令后的低风险 harness 验证补强
-
-当前**不允许**顺手实现的范围：
-
-- 任何未正式设计并通过 implementation plan 收口的 downstream 结构
-- 当前正式设计边界外的 provider、Remotion 复杂能力、平台发布、人工审稿或质量评分扩展；若要进入实现，先补对应 design + implementation plan
-- patch integration 主路径，除非先完成单独设计计划并获得明确执行指令
-- 为了下一阶段方便而回改已冻结的 topic/script prompt、schema 或 API，除非问题被明确定位为阻塞或回归
+若本文件与上述状态文档或当前运行结果冲突，以状态文档、正式架构文档和实际代码/接口/浏览器验证结果为准。
 
 ---
 
@@ -126,7 +99,7 @@
 - `topic` 合同未冻结，不得进入 `script` 生成。
 - `script` 本地硬校验未通过，不得宣称首稿链路完成。
 - semantic reviewer 当前只作为 shadow-only 量尺；不得把 reviewer 输出升级成自动门禁或主链路动作。
-- runtime harness 是当前阶段的 P0 保障；在 `topic + script` 第一阶段，必须尽早建立并持续可运行。
+- runtime harness 是核心验证层；应按受影响阶段选择最小验证、显式 live check、浏览器验收或成品验收入口。
 - 真实 live check 不作为默认自动化门；需要显式运行并记录输出。
 - 涉及 `storage/topic-candidate-library/` 写入的测试要优先串行运行，避免并行写同一生成态 JSON。
 
@@ -189,7 +162,7 @@
 
 ---
 
-## 当前特别注意
+## 高风险边界与本地注意事项
 
 - `Topic Package` 是 script 阶段唯一正式上游。
 - `Topic Delivery Pack` 只能微调交付方式，不能改 narrative 合同。

@@ -19,28 +19,30 @@
 
 当前 harness 服务于：
 
-- `topic + script` 第一阶段的稳定回归
-- 真实 topic -> script live check
-- 真实 script -> storyboard planning live check
-- semantic reviewer shadow 量尺校准
-- script 首稿质量观测
+- 全链路 v1 的执行治理、最小验证和显式巡检。
+- 正式 prompt 资产的集中存放、元数据检查和重复检查。
+- `topic -> script -> storyboard -> asset planning -> assets -> compose/render -> publish` 的 runtime smoke、live check 与质量观测。
+- UI acceptance、product acceptance、render smoke、真实 provider 小样本巡检等人工触发入口。
+- 运行产物、trace、截图、LLM interaction 与人工复盘材料的固定落点。
 
 当前不扩展到：
 
-- downstream 详细设计
 - CI 平台化
 - hook 强制化
 - patch integration 主路径
+- 产品对象、字段语义或阶段合同的重新定义
+- 真实平台发布、质量评分、自动人工审稿替代等未设计能力
 
-runtime harness 在当前阶段属于 **P0**：  
-它用于验证 `topic -> script` 这条链路在固定样例和真实样例上是否能稳定跑通，并持续观察 script 首稿质量。
+runtime harness 是当前项目的核心验证层：
+它按受影响阶段提供最小检查、显式 live check、浏览器验收和成品验收入口。默认自动化 gate 仍应保持低成本；真实模型、真实 provider、浏览器和 Remotion 导出类检查必须显式运行并记录输出。
 
 当前特别注意：
 
 - fake semantic review 已移除；无真实 reviewer 时允许 `skipped`。
 - semantic reviewer 只作为 shadow-only 量尺，不驱动主链路。
 - patch 不进入当前主路径；任何 patch integration 都必须另写设计计划。
-- script 首稿当前处于“可用线”，后续目标是“爆款首稿线”。
+- script 首稿质量仍需区分“可用线”“爆款首稿线”“发布线”。
+- harness 不能替代 `docs/` 成为产品真相源；若发现冲突，优先回到正式架构文档、当前实现和真实运行证据核对。
 
 ---
 
@@ -53,6 +55,7 @@ runtime harness 在当前阶段属于 **P0**：
 5. `harness/docs/prompt-management.md`
 6. `harness/docs/prompt-registry-spec.md`
 7. `harness/docs/harness-engineering-rules.md`
+8. `harness/docs/self-review-methodology.md`
 
 ---
 
@@ -85,18 +88,24 @@ runtime harness 在当前阶段属于 **P0**：
 - `topic/`
 - `script/`
 - `storyboard/`
+- `asset-planning/`
+- `asset/`
+- `publish/`
+
+`compose` 与 `render` stage 已被 runtime prompt loader 支持，但当前没有正式 prompt 文件；新增前必须先确认是否真的需要 LLM prompt。详见 `harness/docs/prompt-registry-spec.md`。
 
 所有正式 prompt 必须：
 
 - 使用中文
 - 显式声明 `language: zh-CN`
 - 受 Prompt Registry 规范约束
+- 能被 `harness/scripts/check-prompt-language.ts` 扫描通过
 
 ### `harness/scripts/`
 
 放轻量检查脚本与 runtime harness。
 
-当前预留：
+当前主要入口：
 
 - `run-fast-checks.ts`
 - `check-prompt-language.ts`
@@ -108,19 +117,33 @@ runtime harness 在当前阶段属于 **P0**：
 - `runtime/topic-script-real-regression.ts`
 - `runtime/topic-script-live-check.ts`
 - `runtime/topic-script-five-round-quality-check.ts`
+- `runtime/topic-runtime-manual.ts`
 - `runtime/storyboard-five-round-quality-check.ts`
 - `runtime/asset-planning-five-round-quality-check.ts`
+- `runtime/assets-dashscope-live-check.ts`
+- `runtime/assets-dashscope-tts-live-check.ts`
+- `runtime/assets-dashscope-voice-live-check.ts`
+- `runtime/assets-dashscope-image-to-video-live-check.ts`
+- `runtime/assets-voice-preset-audition.ts`
+- `runtime/compose-runtime-smoke.ts`
+- `runtime/render-runtime-smoke.ts`
+- `runtime/product-acceptance-live-check.ts`
 - `runtime/script-semantic-reviewer-fixtures.ts`
 - `runtime/topic-candidate-library-real-check.ts`
+- `media-library/audit-bgm-catalog.ts`
+- `media-library/update-bgm-review.ts`
+- `media-library/render-bgm-smoke-batch.ts`
 - `ui-acceptance/ui-acceptance-smoke.ts`
 - `ui-acceptance/ui-acceptance-full.ts`
 - `ui-acceptance/ui-acceptance-report.ts`
+- `ui-acceptance/reference-migration-runner.ts`
+- `ui-acceptance/reference-migration-report.ts`
 
 ### `harness/samples/`
 
 放 runtime harness 的最小样例输入。
 
-当前阶段保留：
+当前保留的固定源样例：
 
 - `topic-script/family-set.md`
 - `topic-script/expanded-family-set.md`
@@ -135,7 +158,7 @@ runtime harness 在当前阶段属于 **P0**：
 - `family-set.md` 是默认稳定回归样本集
 - `expanded-family-set.md` 只用于显式真实巡检和质量观测
 - `script-semantic-reviewer/fixture-set.md` 用于 reviewer shadow 对照校准
-- 不承载 storyboard / assets / compose 的下游对象
+- 下游巡检多使用 `harness/scripts/runtime/output/<run-id>` 中的运行产物或脚本内显式 source；不要把历史 output 误当成长期 fixture 真相源
 - sample runner 应优先读取这里的固定样例，而不是把正式样例长期内联在脚本里
 
 ### `harness/scripts/runtime/output/`
@@ -150,11 +173,12 @@ runtime harness 在当前阶段属于 **P0**：
 
 ---
 
-## 当前阶段闸门
+## Harness 闸门与证据规则
 
 - 上一个任务未通过最小验证，不进入下一个任务。
-- 回改 topic/script/prompt/validator 时，必须回跑对应最小验证。
+- 回改 prompt、validator、shared schema、API、阶段合同或 UI workflow 时，必须回跑受影响范围的最小验证。
 - 真实 live check 不作为默认自动化门；必须显式运行并记录输出。
+- 浏览器、provider、Remotion、发布包等验收结论必须以实际运行产物或真实页面为证据；未运行的路径标记为 `未验证`。
 - semantic reviewer 只作为 shadow-only 量尺；不得把 `patch_once/lift` 直接接入主链路。
 - 涉及 `storage/topic-candidate-library/` 写入的测试应串行运行，避免并行写同一生成态 JSON。
 
@@ -173,24 +197,34 @@ runtime harness 在当前阶段属于 **P0**：
 
 ---
 
-## Topic -> Script Runtime Harness
+## Runtime Harness Entries
+
+以下入口均为人工触发的显式巡检，不并入默认自动化 gate；真实模型、真实 provider、浏览器和 Remotion 导出类检查必须显式运行并记录输出。
 
 - `harness/scripts/runtime/topic-script-smoke.ts`
   - 单样本官方 topic -> script smoke 链路。
 - `harness/scripts/runtime/topic-script-regression.ts`
   - 自动化稳定回归层，按固定 family set 批量调用 smoke runner。
 - `harness/scripts/runtime/topic-script-real-regression.ts`
-  - 真实模型巡检层的计划外壳，不作为默认自动化门。
+  - 真实模型巡检层的计划外壳。
 - `harness/scripts/runtime/topic-script-live-check.ts`
-  - 真实 `.env` 条件下的 live check 入口，默认执行真实 live check，不并入默认自动化 gate。
+  - 真实 `.env` 条件下的 live check 入口，默认执行真实 live check。
 - `harness/scripts/runtime/topic-script-five-round-quality-check.ts`
-  - 固定 5 轮真实 topic -> script 首稿质量巡检入口，不并入默认自动化 gate。
+  - 固定 5 轮真实 topic -> script 首稿质量巡检入口。
 - `harness/scripts/runtime/storyboard-five-round-quality-check.ts`
-  - 固定 5 个不同主题高质量 script 产物的真实 storyboard planning 巡检入口，不并入默认自动化 gate。
+  - 固定 5 个不同主题高质量 script 产物的真实 storyboard planning 巡检入口。
 - `harness/scripts/runtime/asset-planning-five-round-quality-check.ts`
-  - 固定 5 个 storyboard 产物的真实 asset planning 巡检入口，不并入默认自动化 gate。
+  - 固定 5 个 storyboard 产物的真实 asset planning 巡检入口。
+- `harness/scripts/runtime/assets-dashscope-*.ts`
+  - DashScope TTS、文生图、图生视频与音色相关的显式 provider live check。
+- `harness/scripts/runtime/compose-runtime-smoke.ts`
+  - 使用已有上游产物验证 compose timeline contract 的 smoke 入口。
+- `harness/scripts/runtime/render-runtime-smoke.ts`
+  - 使用 Remotion 或指定 adapter 验证 render/export 的 smoke 入口。
+- `harness/scripts/runtime/product-acceptance-live-check.ts`
+  - 面向成品验收的显式 live check，会调用真实 provider 与 Remotion 导出。
 - `harness/scripts/runtime/script-semantic-reviewer-fixtures.ts`
-  - semantic reviewer shadow 对照样本巡检入口，不并入默认自动化 gate。
+  - semantic reviewer shadow 对照样本巡检入口。
 - `harness/samples/topic-script/family-set.md`
   - 默认稳定回归样本集。
 - `harness/samples/topic-script/expanded-family-set.md`

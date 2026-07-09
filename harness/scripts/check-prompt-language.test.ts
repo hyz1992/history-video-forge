@@ -146,4 +146,52 @@ status: active
 
     expect(issues).toEqual([]);
   });
+
+  it("允许 assets prompt 使用 assets stage 并匹配 asset 目录", () => {
+    const content = `---
+id: asset.prompt-optimizer
+stage: assets
+language: zh-CN
+consumes:
+  - AssetTask
+produces:
+  - OptimizedAssetPrompt
+status: active
+---
+
+# 任务
+
+优化素材生成提示词。`;
+
+    const issues = validatePromptContent(
+      "harness/prompts/asset/prompt-optimizer.prompt.md",
+      content,
+    );
+
+    expect(issues).toEqual([]);
+  });
+
+  it("允许 publish prompt 使用 publish stage 并匹配目录", () => {
+    const content = `---
+id: publish.title-generator
+stage: publish
+language: zh-CN
+consumes:
+  - PublishPackage
+produces:
+  - PublishTitleCandidate[]
+status: active
+---
+
+# 任务
+
+生成发布标题候选。`;
+
+    const issues = validatePromptContent(
+      "harness/prompts/publish/title-generator.prompt.md",
+      content,
+    );
+
+    expect(issues).toEqual([]);
+  });
 });
