@@ -29,7 +29,7 @@ const projectStore = useProjectStore();
 const workspaceStore = useWorkspaceStore();
 const assetSnapshotLoaded = ref(false);
 const demoMode = useDemoMode();
-const { checkRecompose } = useCompetitionGuard();
+const { checkStageRollback } = useCompetitionGuard();
 
 /* -------------------------------------------------------------------------- */
 /*  Demo mode: block image/video generation                                    */
@@ -909,7 +909,7 @@ async function handleRefreshGeneratingStatus() {
 }
 
 function handleConfirm() {
-  if (!checkRecompose()) return;
+  if (!checkStageRollback("asset")) return;
   if (!canCompose.value) {
     ElMessage.warning(blockedReasonText.value || "资产尚未全部就绪");
     return;
