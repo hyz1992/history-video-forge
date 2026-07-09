@@ -81,7 +81,16 @@ export function createFetchProjectApi(baseUrl = ""): ProjectApi {
       const response = await fetch(`${baseUrl}/api/projects/${projectId}`, {
         method: "DELETE",
       });
-      if (!response.ok) throw new Error(`project_delete_failed:${response.status}`);
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(
+          typeof body?.message === "string"
+            ? body.message
+            : typeof body?.error === "string"
+              ? body.error
+              : `project_delete_failed:${response.status}`,
+        );
+      }
     },
     async createProject(input) {
       const response = await fetch(`${baseUrl}/api/projects`, {

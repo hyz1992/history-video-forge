@@ -8,6 +8,7 @@ type StrictStructuredThinking = "enabled" | "disabled";
 export interface AppEnv {
   nodeEnv: string;
   demoMode: boolean;
+  protectedProjectIds: Set<string>;
   databaseUrl: string;
   promptAssetsDir: string;
   llm: {
@@ -73,9 +74,14 @@ function buildEnv(dotEnvValues: Record<string, string>): AppEnv {
   const demoModeRaw = readEnvValue("DEMO_MODE", dotEnvValues);
   const demoMode = demoModeRaw === "true" || demoModeRaw === "1";
 
+  const protectedProjectIds = parseProtectedProjectIds(
+    readEnvValue("PROTECTED_PROJECT_IDS", dotEnvValues),
+  );
+
   return {
     nodeEnv: readEnvValue("NODE_ENV", dotEnvValues) ?? "development",
     demoMode,
+    protectedProjectIds,
     databaseUrl: readEnvValue("DATABASE_URL", dotEnvValues) ?? "file:./dev.db",
     promptAssetsDir:
       readEnvValue("PROMPT_ASSETS_DIR", dotEnvValues) ??
@@ -253,4 +259,14 @@ function stripQuotes(value: string): string {
   }
 
   return value;
+}
+
+function parseProtectedProjectIds(raw: string | undefined): Set<string> {
+  if (!raw) return new Set();
+  return new Set(
+    raw
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0),
+  );
 }

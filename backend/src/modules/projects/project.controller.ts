@@ -36,9 +36,18 @@ export async function getProjectSnapshotController(
 export async function deleteProjectController(
   context: RouteContext,
 ): Promise<AppResponse> {
+  const projectId = context.params.projectId;
+
+  if (context.app.env.demoMode && context.app.env.protectedProjectIds.has(projectId)) {
+    return {
+      statusCode: 403,
+      body: { error: "protected_project", message: "示例项目不允许删除" },
+    };
+  }
+
   const deleted = await deleteProject(
     context.app.db,
-    context.params.projectId,
+    projectId,
   );
   if (!deleted) {
     return {
