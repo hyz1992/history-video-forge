@@ -1,5 +1,6 @@
 import type { AppInstance, AppResponse, RouteContext } from "../../app";
 import { getProjectById } from "../projects/project.repository";
+import { demoStageGuard } from "../../shared/demo-stage-guard";
 import { runStoryboardGeneration, runStoryboardSegmentRegeneration } from "./storyboard-run.service";
 import { getStoryboardRecordById, saveStoryboardRecord } from "./storyboard-record.repository";
 
@@ -24,6 +25,9 @@ async function regenerateSegmentController(
     return { statusCode: 404, body: { error: "project_not_found" } };
   }
 
+  const demoBlock = demoStageGuard(project, context.app.env.demoMode, "分镜");
+  if (demoBlock) return demoBlock;
+
   const payload = context.payload as StoryboardSegmentRegenPayload;
   return runStoryboardSegmentRegeneration({
     db: context.app.db,
@@ -45,6 +49,9 @@ async function generateStoryboardController(
       },
     };
   }
+
+  const demoBlock = demoStageGuard(project, context.app.env.demoMode, "分镜");
+  if (demoBlock) return demoBlock;
 
   const payload = context.payload as StoryboardGeneratePayload | undefined;
 

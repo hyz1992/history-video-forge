@@ -1,5 +1,6 @@
 import type { AppInstance, AppResponse, RouteContext } from "../../app";
 import { getProjectById } from "../projects/project.repository";
+import { demoStageGuard } from "../../shared/demo-stage-guard";
 import { runScriptGeneration } from "./script-run.service";
 
 async function generateScriptController(
@@ -14,6 +15,9 @@ async function generateScriptController(
       },
     };
   }
+
+  const demoBlock = demoStageGuard(project, context.app.env.demoMode, "文案");
+  if (demoBlock) return demoBlock;
 
   return runScriptGeneration({
     db: context.app.db,

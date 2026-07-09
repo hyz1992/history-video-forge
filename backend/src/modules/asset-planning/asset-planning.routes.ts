@@ -1,5 +1,6 @@
 import type { AppInstance, AppResponse, RouteContext } from "../../app";
 import { getProjectById } from "../projects/project.repository";
+import { demoStageGuard } from "../../shared/demo-stage-guard";
 import { runAssetPlanningGeneration } from "./asset-planning-run.service";
 
 async function generateAssetPlanController(
@@ -14,6 +15,9 @@ async function generateAssetPlanController(
       },
     };
   }
+
+  const demoBlock = demoStageGuard(project, context.app.env.demoMode, "资产规划");
+  if (demoBlock) return demoBlock;
 
   return runAssetPlanningGeneration({
     db: context.app.db,

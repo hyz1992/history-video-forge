@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { AppResponse, RouteContext } from "../../app";
 import { createProject, getProjectById } from "../projects/project.repository";
+import { demoStageGuard } from "../../shared/demo-stage-guard";
 import { normalizeEventInput } from "./event-normalizer";
 import {
   isProviderContentFilterError,
@@ -232,6 +233,9 @@ export async function createTopicRecommendationsController(
     };
   }
 
+  const demoBlock = demoStageGuard(project, context.app.env.demoMode, "选题");
+  if (demoBlock) return demoBlock;
+
   // Set generating state BEFORE LLM call so refresh shows progress
   project.status = "topic_generating";
   project.updatedAt = new Date();
@@ -374,6 +378,9 @@ export async function confirmTopicCandidateController(
       },
     };
   }
+
+  const demoBlock = demoStageGuard(project, context.app.env.demoMode, "选题");
+  if (demoBlock) return demoBlock;
 
   const projectCandidates = context.app.topicCandidateStore.get(project.id)?.candidatesById;
   const candidate = projectCandidates?.get(context.params.candidateId);
