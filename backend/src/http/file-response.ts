@@ -23,25 +23,27 @@ export interface FileResponseOptions {
 /**
  * Validate that filePath is inside root and return the resolved absolute path.
  * Handles three file_uri formats:
- *   1. Relative to storageRoot  (renders:    "renders/<jobId>/output.mp4")
- *   2. Relative to cwd           (assets:     "storage/projects/<date>/<name>/assets-runs/...")
+ *   1. Relative to cwd           (assets:     "storage/projects/<date>/<name>/assets-runs/...")
+ *   2. Relative to storageRoot   (renders:    "renders/<jobId>/output.mp4")
  *   3. Absolute from old machine (migration:  "D:\\old-path\\storage\\projects\\<date>/<name>/renders/...")
  */
 function resolveAndValidatePath(filePath: string, root: string): string | null {
   const rootAbs = resolve(root);
 
-  // --- Case 1: filePath is relative to storageRoot (e.g. "renders/xxx/output.mp4") ---
-  const resolvedFromRoot = resolve(rootAbs, filePath);
-  const rel = relative(rootAbs, resolvedFromRoot);
+  // --- Case 1: filePath is relative to cwd (e.g. "storage/projects/.../assets-runs/...") ---
+  // Must come first: asset file_uri uses cwd-relative paths. If Case 2 ran first,
+  // resolve(rootAbs, filePath) would double the "storage/projects/..." prefix.
+  const resolvedFromCwd = resolve(filePath);
+  const rel = relative(rootAbs, resolvedFromCwd);
   if (rel !== "" && rel !== ".." && !rel.startsWith(".." + sep) && !isAbsolute(rel)) {
-    return resolvedFromRoot;
+    return resolvedFromCwd;
   }
 
-  // --- Case 2: filePath is relative to cwd (e.g. "storage/projects/.../assets-runs/...") ---
-  const resolvedFromCwd = resolve(filePath);
-  const rel2 = relative(rootAbs, resolvedFromCwd);
+  // --- Case 2: filePath is relative to storageRoot (e.g. "renders/xxx/output.mp4") ---
+  const resolvedFromRoot = resolve(rootAbs, filePath);
+  const rel2 = relative(rootAbs, resolvedFromRoot);
   if (rel2 !== "" && rel2 !== ".." && !rel2.startsWith(".." + sep) && !isAbsolute(rel2)) {
-    return resolvedFromCwd;
+    return resolvedFromRoot;
   }
 
   // --- Case 3: filePath is an absolute path from another machine (migrated data) ---
