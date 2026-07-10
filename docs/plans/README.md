@@ -6,7 +6,10 @@
 
 ## 当前状态
 
-截至 2026-07-08：
+截至 2026-07-10：
+
+- 当前最高优先级计划为 [V1 高风险稳定化实施计划](./2026-07-10-v1-high-risk-stabilization-implementation-plan.md)。该计划先处理旧快照兼容与原子写入、无鉴权远程绑定、构建失败传播、测试存储隔离、中断任务恢复、媒体/音色库接线、并发与超时取消、推荐记忆和删除/备份可靠性；完成最小闸门前不进入 V2 功能开发。
+- 本轮稳定化只做 V1 止血和恢复能力，不接入 Prisma、正式用户系统或新的内容领域，避免与 V2 基础设施重复建设。
 
 - 全链路 v1 已进入端到端交付闭环：`topic -> script -> storyboard -> asset planning -> assets -> compose/render -> publish`。
 - 后端 v1 已覆盖 storyboard、asset planning、assets、compose、render/export、publish package。
