@@ -7,230 +7,419 @@ datasource db {
   provider = "sqlite"
 }
 
-model Project {
-  id                      String   @id @default(cuid())
-  name                    String
-  status                  String   @default("topic_pending")
-  active_topic_package_id String?
-  active_script_record_id String?
-  active_storyboard_record_id String?
-  active_asset_plan_record_id String?
-  active_asset_manifest_record_id String?
-  active_compose_record_id String?
-  active_render_job_record_id String?
-  latest_asset_plan_run_trace_json Json?
-  latest_assets_run_trace_json Json?
-  latest_compose_run_trace_json Json?
-  latest_render_run_trace_json Json?
-  created_at              DateTime @default(now())
-  updated_at              DateTime @updatedAt
+model User {
+  id                 String     @id @default(uuid())
+  username           String     @unique
+  passwordHash       String
+  role               String     @default("user")
+  status             String     @default("active")
+  mustChangePassword Boolean    @default(true)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  sessions           Session[]
+  projects           Project[]
+  auditLogs          AuditLog[] @relation("AuditActor")
 
-  topic_packages TopicPackage[]
-  script_records ScriptRecord[]
-  storyboard_records StoryboardRecord[]
-  asset_plan_records AssetPlanRecord[]
-  asset_manifest_records AssetManifestRecord[]
-  compose_records ComposeRecord[]
-  render_job_records RenderJobRecord[]
+  @@index([role, status])
+}
+
+model Session {
+  id         String    @id @default(uuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  lastSeenAt DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model Project {
+  id                           String                         @id @default(uuid())
+  ownerId                      String
+  name                         String
+  status                       String                         @default("topic_pending")
+  storageKey                   String                         @unique
+  storageDisplayName           String
+  storageRenameLocked          Boolean                        @default(false)
+  archivedAt                   DateTime?
+  activeTopicPackageId         String?
+  activeScriptRecordId         String?
+  activeStoryboardRecordId     String?
+  activeAssetPlanRecordId      String?
+  activeAssetManifestRecordId  String?
+  activeComposeRecordId        String?
+  activeRenderJobRecordId      String?
+  activePublishPackageRecordId String?
+  latestTopicRunTraceJson      Json?
+  latestScriptRunTraceJson     Json?
+  latestStoryboardRunTraceJson Json?
+  latestAssetPlanRunTraceJson  Json?
+  latestAssetsRunTraceJson     Json?
+  latestComposeRunTraceJson    Json?
+  latestRenderRunTraceJson     Json?
+  createdAt                    DateTime                       @default(now())
+  updatedAt                    DateTime                       @updatedAt
+  owner                        User                           @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  activeTopicPackage           TopicPackage?                  @relation("ActiveTopicPackage", fields: [activeTopicPackageId], references: [id], onDelete: Restrict)
+  activeScriptRecord           ScriptRecord?                  @relation("ActiveScriptRecord", fields: [activeScriptRecordId], references: [id], onDelete: Restrict)
+  activeStoryboardRecord       StoryboardRecord?              @relation("ActiveStoryboardRecord", fields: [activeStoryboardRecordId], references: [id], onDelete: Restrict)
+  activeAssetPlanRecord        AssetPlanRecord?               @relation("ActiveAssetPlanRecord", fields: [activeAssetPlanRecordId], references: [id], onDelete: Restrict)
+  activeAssetManifestRecord    AssetManifestRecord?           @relation("ActiveAssetManifestRecord", fields: [activeAssetManifestRecordId], references: [id], onDelete: Restrict)
+  activeComposeRecord          ComposeRecord?                 @relation("ActiveComposeRecord", fields: [activeComposeRecordId], references: [id], onDelete: Restrict)
+  activeRenderJobRecord        RenderJobRecord?               @relation("ActiveRenderJobRecord", fields: [activeRenderJobRecordId], references: [id], onDelete: Restrict)
+  activePublishPackageRecord   PublishPackageRecord?          @relation("ActivePublishPackageRecord", fields: [activePublishPackageRecordId], references: [id], onDelete: Restrict)
+  topicPackages                TopicPackage[]                 @relation("ProjectTopicPackages")
+  candidateCache               RecommendationCandidateCache[]
+  scriptRecords                ScriptRecord[]                 @relation("ProjectScriptRecords")
+  storyboardRecords            StoryboardRecord[]             @relation("ProjectStoryboardRecords")
+  assetPlanRecords             AssetPlanRecord[]              @relation("ProjectAssetPlanRecords")
+  assetManifestRecords         AssetManifestRecord[]          @relation("ProjectAssetManifestRecords")
+  composeRecords               ComposeRecord[]                @relation("ProjectComposeRecords")
+  renderJobRecords             RenderJobRecord[]              @relation("ProjectRenderJobRecords")
+  publishPackageRecords        PublishPackageRecord[]         @relation("ProjectPublishPackageRecords")
+  recommendationRounds         RecommendationRound[]
+  auditLogs                    AuditLog[]
+
+  @@index([ownerId, updatedAt])
+  @@index([status, archivedAt])
 }
 
 model EventRegistryEntry {
-  id                 String   @id @default(cuid())
-  canonical_name     String   @unique
-  aliases_json       Json
-  source_type        String
-  is_provisional     Boolean  @default(false)
-  created_at         DateTime @default(now())
-  updated_at         DateTime @updatedAt
-
-  topic_packages                  TopicPackage[]
-  recommendation_candidate_cache  RecommendationCandidateCache[]
+  id                        String                         @id @default(uuid())
+  canonicalName             String                         @unique
+  aliasesJson               Json
+  canonicalQuotesJson       Json
+  canonicalQuoteIntentsJson Json
+  sourceType                String
+  isProvisional             Boolean                        @default(false)
+  createdAt                 DateTime                       @default(now())
+  updatedAt                 DateTime                       @updatedAt
+  topicPackages             TopicPackage[]
+  candidateCache            RecommendationCandidateCache[]
+  recommendationExposures   RecommendationExposure[]
 }
 
 model TopicPackage {
-  id                          String   @id @default(cuid())
-  project_id                  String
-  event_registry_entry_id     String?
-  title                       String
-  selected_angle              String
-  family_label                String
-  scope_label                 String
-  core_conflict               String
-  strong_scene                String
-  stakes                      String?
-  packaging_seed              String
-  canonical_quotes_json       Json
-  duration_band_json          Json
-  narrative_tension_map_json  Json
-  must_include_beats_json     Json
-  forbidden_expansions_json   Json
-  risk_hints_json             Json
-  source_anchor_refs_json     Json
-  created_at                  DateTime @default(now())
+  id                        String                 @id @default(uuid())
+  projectId                 String
+  eventRegistryEntryId      String?
+  title                     String
+  selectedAngle             String
+  familyLabel               String
+  scopeLabel                String
+  coreConflict              String
+  strongScene               String
+  stakes                    String?
+  packagingSeed             String
+  canonicalQuotesJson       Json
+  canonicalQuoteIntentsJson Json
+  durationBandJson          Json
+  narrativeTensionMapJson   Json
+  mustIncludeBeatsJson      Json
+  forbiddenExpansionsJson   Json
+  riskHintsJson             Json
+  sourceAnchorRefsJson      Json
+  ambiguityNotesJson        Json
+  createdAt                 DateTime               @default(now())
+  project                   Project                @relation("ProjectTopicPackages", fields: [projectId], references: [id], onDelete: Restrict)
+  eventRegistryEntry        EventRegistryEntry?    @relation(fields: [eventRegistryEntryId], references: [id], onDelete: Restrict)
+  activeForProjects         Project[]              @relation("ActiveTopicPackage")
+  scriptRecords             ScriptRecord[]
+  storyboardRecords         StoryboardRecord[]
+  assetPlanRecords          AssetPlanRecord[]
+  assetManifestRecords      AssetManifestRecord[]
+  publishPackageRecords     PublishPackageRecord[]
 
-  project              Project             @relation(fields: [project_id], references: [id])
-  event_registry_entry EventRegistryEntry? @relation(fields: [event_registry_entry_id], references: [id])
-  script_records       ScriptRecord[]
-  storyboard_records   StoryboardRecord[]
-  asset_plan_records   AssetPlanRecord[]
-  asset_manifest_records AssetManifestRecord[]
+  @@index([projectId, createdAt])
+  @@index([eventRegistryEntryId])
 }
 
 model RecommendationCandidateCache {
-  id                           String   @id @default(cuid())
-  project_id                   String?
-  event_registry_entry_id      String?
-  fingerprint                  String   @unique
-  one_line_angle               String
-  family_label                 String
-  scope_label                  String
-  viral_rubric_json            Json
-  estimated_duration_band_json Json
-  strong_scene                 String
-  core_conflict                String
-  must_cover_preview_json      Json
-  created_at                   DateTime @default(now())
+  id                        String              @id @default(uuid())
+  projectId                 String?
+  eventRegistryEntryId      String?
+  eventIdentity             String?
+  fingerprint               String
+  oneLineAngle              String
+  familyLabel               String
+  scopeLabel                String
+  viralRubricJson           Json
+  estimatedDurationBandJson Json
+  strongScene               String
+  coreConflict              String
+  mustCoverPreviewJson      Json
+  createdAt                 DateTime            @default(now())
+  project                   Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  eventRegistryEntry        EventRegistryEntry? @relation(fields: [eventRegistryEntryId], references: [id], onDelete: Restrict)
 
-  event_registry_entry EventRegistryEntry? @relation(fields: [event_registry_entry_id], references: [id])
+  @@unique([projectId, fingerprint])
+  @@index([projectId, eventIdentity, createdAt])
+  @@index([eventRegistryEntryId])
 }
 
 model ScriptRecord {
-  id                          String   @id @default(cuid())
-  project_id                  String
-  topic_package_id            String
-  script_text                 String
-  opening_span                String
-  ending_span                 String
-  estimated_duration_sec      Int
-  beat_trace_json             Json
-  quote_trace_json            Json
-  review_status               String
-  validation_result_json      Json?
-  semantic_review_result_json Json?
-  execution_state_json        Json?
-  created_at                  DateTime @default(now())
+  id                       String                 @id @default(uuid())
+  projectId                String
+  topicPackageId           String
+  scriptText               String
+  openingSpan              String
+  endingSpan               String
+  estimatedDurationSec     Int
+  beatTraceJson            Json
+  quoteTraceJson           Json
+  reviewStatus             String
+  validationResultJson     Json?
+  semanticReviewResultJson Json?
+  executionStateJson       Json?
+  graphTraceSummaryJson    Json?
+  runtimeDiagnosticsJson   Json?
+  createdAt                DateTime               @default(now())
+  project                  Project                @relation("ProjectScriptRecords", fields: [projectId], references: [id], onDelete: Restrict)
+  topicPackage             TopicPackage           @relation(fields: [topicPackageId], references: [id], onDelete: Restrict)
+  activeForProjects        Project[]              @relation("ActiveScriptRecord")
+  storyboardRecords        StoryboardRecord[]
+  assetPlanRecords         AssetPlanRecord[]
+  assetManifestRecords     AssetManifestRecord[]
+  publishPackageRecords    PublishPackageRecord[]
 
-  project       Project      @relation(fields: [project_id], references: [id])
-  topic_package TopicPackage @relation(fields: [topic_package_id], references: [id])
-  storyboard_records StoryboardRecord[]
-  asset_plan_records AssetPlanRecord[]
-  asset_manifest_records AssetManifestRecord[]
+  @@index([projectId, createdAt])
+  @@index([topicPackageId])
 }
 
 model StoryboardRecord {
-  id                       String   @id @default(cuid())
-  project_id               String
-  topic_package_id         String
-  script_record_id         String
-  plan_json                Json
-  validation_result_json   Json
-  execution_state_json     Json?
-  graph_trace_summary_json Json?
-  runtime_diagnostics_json Json?
-  created_at               DateTime @default(now())
+  id                     String                 @id @default(uuid())
+  projectId              String
+  topicPackageId         String
+  scriptRecordId         String
+  planJson               Json
+  validationResultJson   Json
+  executionStateJson     Json?
+  graphTraceSummaryJson  Json?
+  runtimeDiagnosticsJson Json?
+  createdAt              DateTime               @default(now())
+  project                Project                @relation("ProjectStoryboardRecords", fields: [projectId], references: [id], onDelete: Restrict)
+  topicPackage           TopicPackage           @relation(fields: [topicPackageId], references: [id], onDelete: Restrict)
+  scriptRecord           ScriptRecord           @relation(fields: [scriptRecordId], references: [id], onDelete: Restrict)
+  activeForProjects      Project[]              @relation("ActiveStoryboardRecord")
+  assetPlanRecords       AssetPlanRecord[]
+  assetManifestRecords   AssetManifestRecord[]
+  publishPackageRecords  PublishPackageRecord[]
 
-  project       Project      @relation(fields: [project_id], references: [id])
-  topic_package TopicPackage @relation(fields: [topic_package_id], references: [id])
-  script_record ScriptRecord @relation(fields: [script_record_id], references: [id])
-  asset_plan_records AssetPlanRecord[]
-  asset_manifest_records AssetManifestRecord[]
+  @@index([projectId, createdAt])
+  @@index([topicPackageId])
+  @@index([scriptRecordId])
 }
 
 model AssetPlanRecord {
-  id                       String   @id @default(cuid())
-  project_id               String
-  topic_package_id         String
-  script_record_id         String
-  storyboard_record_id     String
-  plan_json                Json
-  validation_result_json   Json
-  execution_state_json     Json
-  graph_trace_summary_json Json?
-  runtime_diagnostics_json Json?
-  created_at               DateTime @default(now())
+  id                     String                @id @default(uuid())
+  projectId              String
+  topicPackageId         String
+  scriptRecordId         String
+  storyboardRecordId     String
+  planJson               Json
+  validationResultJson   Json
+  executionStateJson     Json
+  graphTraceSummaryJson  Json?
+  runtimeDiagnosticsJson Json?
+  createdAt              DateTime              @default(now())
+  project                Project               @relation("ProjectAssetPlanRecords", fields: [projectId], references: [id], onDelete: Restrict)
+  topicPackage           TopicPackage          @relation(fields: [topicPackageId], references: [id], onDelete: Restrict)
+  scriptRecord           ScriptRecord          @relation(fields: [scriptRecordId], references: [id], onDelete: Restrict)
+  storyboardRecord       StoryboardRecord      @relation(fields: [storyboardRecordId], references: [id], onDelete: Restrict)
+  activeForProjects      Project[]             @relation("ActiveAssetPlanRecord")
+  assetManifestRecords   AssetManifestRecord[]
 
-  project           Project          @relation(fields: [project_id], references: [id])
-  topic_package     TopicPackage     @relation(fields: [topic_package_id], references: [id])
-  script_record     ScriptRecord     @relation(fields: [script_record_id], references: [id])
-  storyboard_record StoryboardRecord @relation(fields: [storyboard_record_id], references: [id])
+  @@index([projectId, createdAt])
+  @@index([topicPackageId])
+  @@index([scriptRecordId])
+  @@index([storyboardRecordId])
 }
 
 model AssetManifestRecord {
-  id                       String   @id @default(cuid())
-  project_id               String
-  topic_package_id         String
-  script_record_id         String
-  storyboard_record_id     String
-  asset_plan_record_id     String
-  manifest_json            Json
-  validation_result_json   Json
-  execution_state_json     Json?
-  graph_trace_summary_json Json?
-  runtime_diagnostics_json Json?
-  created_at               DateTime @default(now())
+  id                     String                   @id @default(uuid())
+  projectId              String
+  topicPackageId         String
+  scriptRecordId         String
+  storyboardRecordId     String
+  assetPlanRecordId      String
+  manifestJson           Json
+  validationResultJson   Json
+  executionStateJson     Json?
+  graphTraceSummaryJson  Json?
+  runtimeDiagnosticsJson Json?
+  createdAt              DateTime                 @default(now())
+  project                Project                  @relation("ProjectAssetManifestRecords", fields: [projectId], references: [id], onDelete: Restrict)
+  topicPackage           TopicPackage             @relation(fields: [topicPackageId], references: [id], onDelete: Restrict)
+  scriptRecord           ScriptRecord             @relation(fields: [scriptRecordId], references: [id], onDelete: Restrict)
+  storyboardRecord       StoryboardRecord         @relation(fields: [storyboardRecordId], references: [id], onDelete: Restrict)
+  assetPlanRecord        AssetPlanRecord          @relation(fields: [assetPlanRecordId], references: [id], onDelete: Restrict)
+  activeForProjects      Project[]                @relation("ActiveAssetManifestRecord")
+  composeRecords         ComposeRecord[]
+  renderJobRecords       RenderJobRecord[]
+  publishPackageRecords  PublishPackageRecord[]
+  providerJobs           AssetProviderJobRecord[]
 
-  project           Project          @relation(fields: [project_id], references: [id])
-  topic_package     TopicPackage     @relation(fields: [topic_package_id], references: [id])
-  script_record     ScriptRecord     @relation(fields: [script_record_id], references: [id])
-  storyboard_record StoryboardRecord @relation(fields: [storyboard_record_id], references: [id])
-  compose_records   ComposeRecord[]
-  render_job_records RenderJobRecord[]
+  @@index([projectId, createdAt])
+  @@index([topicPackageId])
+  @@index([scriptRecordId])
+  @@index([storyboardRecordId])
+  @@index([assetPlanRecordId])
 }
 
 model ComposeRecord {
-  id                       String   @id @default(cuid())
-  project_id               String
-  asset_manifest_record_id String
-  timeline_json            Json
-  validation_result_json   Json
-  execution_state_json     Json?
-  graph_trace_summary_json Json?
-  runtime_diagnostics_json Json?
-  created_at               DateTime @default(now())
+  id                     String              @id @default(uuid())
+  projectId              String
+  assetManifestRecordId  String
+  timelineJson           Json
+  validationResultJson   Json
+  executionStateJson     Json?
+  graphTraceSummaryJson  Json?
+  runtimeDiagnosticsJson Json?
+  createdAt              DateTime            @default(now())
+  project                Project             @relation("ProjectComposeRecords", fields: [projectId], references: [id], onDelete: Restrict)
+  assetManifestRecord    AssetManifestRecord @relation(fields: [assetManifestRecordId], references: [id], onDelete: Restrict)
+  activeForProjects      Project[]           @relation("ActiveComposeRecord")
+  renderJobRecords       RenderJobRecord[]
 
-  project               Project             @relation(fields: [project_id], references: [id])
-  asset_manifest_record AssetManifestRecord @relation(fields: [asset_manifest_record_id], references: [id])
-  render_job_records    RenderJobRecord[]
+  @@index([projectId, createdAt])
+  @@index([assetManifestRecordId])
 }
 
 model RenderJobRecord {
-  id                       String   @id @default(cuid())
-  project_id               String
-  compose_record_id        String
-  asset_manifest_record_id String
-  status                   String
-  profile_json             Json
-  output_artifact_json     Json?
-  validation_result_json   Json
-  execution_state_json     Json?
-  graph_trace_summary_json Json?
-  runtime_diagnostics_json Json?
-  created_at               DateTime @default(now())
-  updated_at               DateTime @updatedAt
+  id                     String                 @id @default(uuid())
+  projectId              String
+  composeRecordId        String
+  assetManifestRecordId  String
+  status                 String
+  profileJson            Json
+  outputArtifactJson     Json?
+  validationResultJson   Json
+  executionStateJson     Json?
+  graphTraceSummaryJson  Json?
+  runtimeDiagnosticsJson Json?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  project                Project                @relation("ProjectRenderJobRecords", fields: [projectId], references: [id], onDelete: Restrict)
+  composeRecord          ComposeRecord          @relation(fields: [composeRecordId], references: [id], onDelete: Restrict)
+  assetManifestRecord    AssetManifestRecord    @relation(fields: [assetManifestRecordId], references: [id], onDelete: Restrict)
+  activeForProjects      Project[]              @relation("ActiveRenderJobRecord")
+  publishPackageRecords  PublishPackageRecord[]
 
-  project               Project             @relation(fields: [project_id], references: [id])
-  compose_record        ComposeRecord       @relation(fields: [compose_record_id], references: [id])
-  asset_manifest_record AssetManifestRecord @relation(fields: [asset_manifest_record_id], references: [id])
+  @@index([projectId, createdAt])
+  @@index([composeRecordId])
+  @@index([assetManifestRecordId])
+}
+
+model PublishPackageRecord {
+  id                    String              @id @default(uuid())
+  projectId             String
+  renderJobRecordId     String
+  topicPackageId        String
+  scriptRecordId        String
+  storyboardRecordId    String
+  assetManifestRecordId String
+  packageJson           Json
+  validationResultJson  Json?
+  executionStateJson    Json?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  project               Project             @relation("ProjectPublishPackageRecords", fields: [projectId], references: [id], onDelete: Restrict)
+  renderJobRecord       RenderJobRecord     @relation(fields: [renderJobRecordId], references: [id], onDelete: Restrict)
+  topicPackage          TopicPackage        @relation(fields: [topicPackageId], references: [id], onDelete: Restrict)
+  scriptRecord          ScriptRecord        @relation(fields: [scriptRecordId], references: [id], onDelete: Restrict)
+  storyboardRecord      StoryboardRecord    @relation(fields: [storyboardRecordId], references: [id], onDelete: Restrict)
+  assetManifestRecord   AssetManifestRecord @relation(fields: [assetManifestRecordId], references: [id], onDelete: Restrict)
+  activeForProjects     Project[]           @relation("ActivePublishPackageRecord")
+
+  @@index([projectId, createdAt])
+  @@index([renderJobRecordId])
 }
 
 model AssetProviderJobRecord {
-  id                       String   @id @default(cuid())
-  asset_manifest_record_id String
-  asset_run_id             String
-  execution_id             String
-  task_id                  String
-  provider_type            String
-  provider_name            String
-  provider_job_id          String?
-  status                   String
-  attempt_count            Int
-  raw_request_json         Json?
-  raw_response_json        Json?
-  error_code               String?
-  error_message            String?
-  submitted_at             DateTime?
-  last_polled_at           DateTime?
-  completed_at             DateTime?
-  created_at               DateTime @default(now())
-  updated_at               DateTime @updatedAt
+  id                    String              @id @default(uuid())
+  assetManifestRecordId String
+  assetRunId            String
+  executionId           String
+  taskId                String
+  providerType          String
+  providerName          String
+  providerJobId         String?
+  status                String
+  attemptCount          Int                 @default(0)
+  rawRequestJson        Json?
+  rawResponseJson       Json?
+  errorCode             String?
+  errorMessage          String?
+  submittedAt           DateTime?
+  lastPolledAt          DateTime?
+  completedAt           DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  assetManifestRecord   AssetManifestRecord @relation(fields: [assetManifestRecordId], references: [id], onDelete: Restrict)
+
+  @@unique([assetRunId, executionId, taskId, attemptCount])
+  @@index([assetManifestRecordId, status])
+  @@index([providerName, providerJobId])
+}
+
+model RecommendationRound {
+  id         String                   @id @default(uuid())
+  projectId  String
+  roundIndex Int
+  createdAt  DateTime                 @default(now())
+  project    Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  exposures  RecommendationExposure[]
+
+  @@unique([projectId, roundIndex])
+  @@index([projectId, createdAt])
+}
+
+model RecommendationExposure {
+  id                   String              @id @default(uuid())
+  roundId              String
+  eventRegistryEntryId String?
+  eventIdentity        String?
+  fingerprint          String
+  title                String?
+  selectedAt           DateTime            @default(now())
+  round                RecommendationRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  eventRegistryEntry   EventRegistryEntry? @relation(fields: [eventRegistryEntryId], references: [id], onDelete: Restrict)
+
+  @@unique([roundId, fingerprint])
+  @@index([eventIdentity, selectedAt])
+  @@index([eventRegistryEntryId])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorUserId  String?
+  projectId    String?
+  action       String
+  targetType   String
+  targetId     String?
+  metadataJson Json?
+  createdAt    DateTime @default(now())
+  actor        User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  project      Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([targetType, targetId])
+}
+
+model DataMigrationRun {
+  id            String    @id @default(uuid())
+  sourceSha256  String    @unique
+  sourceVersion String
+  status        String
+  reportJson    Json
+  startedAt     DateTime  @default(now())
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([status, startedAt])
 }
