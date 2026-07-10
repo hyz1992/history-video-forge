@@ -858,11 +858,7 @@ async function postProcessTopicCandidates(input: {
       (left, right) =>
         left.fatigueScore - right.fatigueScore ||
         left.originalIndex - right.originalIndex,
-    )
-    .map((candidate, index) => ({
-      ...candidate,
-      candidateId: `selector_candidate_${index + 1}`,
-    }));
+    );
 
   const diagnostics: RecommendationDiagnostic[] = [];
   if (duplicateReasons.length > 0) {
@@ -1278,9 +1274,15 @@ function selectRankedCandidates(input: {
   const selectedEventIdentities = new Set<string>();
   const seenCandidateIds = new Set<string>();
   const rankedCandidates = [...input.decision.ranked_candidates].sort(
-    (left, right) =>
-      left.quality_rank - right.quality_rank ||
-      right.quality_score - left.quality_score,
+    (left, right) => {
+      const leftRanking = rankingsById.get(left.candidate_id);
+      const rightRanking = rankingsById.get(right.candidate_id);
+      return (
+        (leftRanking?.fatigueScore ?? 0) - (rightRanking?.fatigueScore ?? 0) ||
+        left.quality_rank - right.quality_rank ||
+        right.quality_score - left.quality_score
+      );
+    },
   );
 
   for (const scorecard of rankedCandidates) {
