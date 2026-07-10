@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const RUNTIME_ENV_KEYS = [
   "NODE_ENV",
+  "SERVER_HOST",
+  "ALLOW_UNAUTHENTICATED_REMOTE",
   "DATABASE_URL",
   "PROMPT_ASSETS_DIR",
   "LLM_PROVIDER",
@@ -170,5 +172,11 @@ describe("runtime env loading", () => {
     expect(env.llm.baseUrl).toBeUndefined();
     expect(env.llm.apiKey).toBeUndefined();
     expect(env.llm.model).toBe("stub-model");
+  });
+
+  it("defaults remote binding opt-in to false", async () => {
+    delete process.env.ALLOW_UNAUTHENTICATED_REMOTE;
+    const { env } = await import("../../../backend/src/config/env.js");
+    expect(env.allowUnauthenticatedRemote).toBe(false);
   });
 });

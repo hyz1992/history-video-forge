@@ -48,7 +48,7 @@ RENDER_ADAPTER=fake
 
 | 协议 | 端口 | 来源       | 说明                             |
 |------|------|------------|----------------------------------|
-| TCP  | 3000 | 0.0.0.0/0  | 应用端口（或自定义的 SERVER_PORT） |
+| TCP  | 3000 | 仅本机或受限来源 | 应用端口；无鉴权时不得直接暴露公网 |
 | TCP  | 3389 | 你的IP     | 远程桌面（通常已配好）            |
 
 ---
@@ -104,7 +104,8 @@ REMOTION_BROWSER_EXECUTABLE=C:\Program Files (x86)\Microsoft\Edge\Application\ms
 
 # ── 部署配置 ──
 SERVER_PORT=3000
-SERVER_HOST=0.0.0.0
+SERVER_HOST=127.0.0.1
+ALLOW_UNAUTHENTICATED_REMOTE=false
 PUBLIC_BASE_URL=http://你的服务器公网IP:3000
 ```
 
@@ -129,10 +130,10 @@ npm run start
 看到以下输出表示成功，然后按 `Ctrl + C` 停掉：
 
 ```
-{"status":"backend-server-ready","host":"0.0.0.0","port":3000}
+{"status":"backend-server-ready","host":"127.0.0.1","port":3000}
 ```
 
-浏览器访问 `http://<服务器公网IP>:3000/` 确认页面能打开、`/healthz` 返回 `{"status":"ok"}`。
+本机访问 `http://127.0.0.1:3000/` 确认页面能打开、`/healthz` 返回 `{"status":"ok"}`。如需公网访问，应在前置代理/VPN/IP allowlist 后提供，不要直接开放 Node 端口。
 
 ---
 
@@ -235,7 +236,7 @@ C:\nssm\nssm.exe start history-video-forge
 sc query history-video-forge
 
 # 浏览器验证
-# http://<服务器公网IP>:3000/healthz → {"status":"ok","nodeEnv":"production"}
+# http://127.0.0.1:3000/healthz → {"status":"ok","nodeEnv":"production"}
 ```
 
 ### 4.6 NSSM 常用命令速查

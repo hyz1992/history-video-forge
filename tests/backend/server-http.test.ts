@@ -6,6 +6,7 @@ import { join } from "node:path";
 
 import { buildApp } from "../../backend/src/app.js";
 import { createHttpServer } from "../../backend/src/server.js";
+import { resolveServerHost } from "../../backend/src/server.js";
 
 async function listen(server: Server) {
   await new Promise<void>((resolve, reject) => {
@@ -121,5 +122,12 @@ describe("backend http server", () => {
 
     expect(response.statusCode).toBe(503);
     expect(response.json()).toEqual({ error: "persistence_failed" });
+  });
+
+  it("rejects unauthenticated remote binding without explicit opt-in", () => {
+    expect(resolveServerHost({ host: "127.0.0.1", allowUnauthenticatedRemote: false })).toBe("127.0.0.1");
+    expect(() => resolveServerHost({ host: "0.0.0.0", allowUnauthenticatedRemote: false }))
+      .toThrow("unsafe_unauthenticated_remote_bind");
+    expect(resolveServerHost({ host: "0.0.0.0", allowUnauthenticatedRemote: true })).toBe("0.0.0.0");
   });
 });

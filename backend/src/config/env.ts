@@ -8,6 +8,7 @@ type StrictStructuredThinking = "enabled" | "disabled";
 export interface AppEnv {
   nodeEnv: string;
   demoMode: boolean;
+  allowUnauthenticatedRemote: boolean;
   protectedProjectIds: Set<string>;
   databaseUrl: string;
   promptAssetsDir: string;
@@ -73,6 +74,7 @@ function buildEnv(dotEnvValues: Record<string, string>): AppEnv {
 
   const demoModeRaw = readEnvValue("DEMO_MODE", dotEnvValues);
   const demoMode = demoModeRaw === "true" || demoModeRaw === "1";
+  const allowUnauthenticatedRemote = readEnvValue("ALLOW_UNAUTHENTICATED_REMOTE", dotEnvValues) === "true";
 
   const protectedProjectIds = parseProtectedProjectIds(
     readEnvValue("PROTECTED_PROJECT_IDS", dotEnvValues),
@@ -81,6 +83,7 @@ function buildEnv(dotEnvValues: Record<string, string>): AppEnv {
   return {
     nodeEnv: readEnvValue("NODE_ENV", dotEnvValues) ?? "development",
     demoMode,
+    allowUnauthenticatedRemote,
     protectedProjectIds,
     databaseUrl: readEnvValue("DATABASE_URL", dotEnvValues) ?? "file:./dev.db",
     promptAssetsDir:

@@ -32,7 +32,7 @@ function Show-HealthCheck {
         $r = Invoke-WebRequest -Uri "http://127.0.0.1:3000/healthz" -UseBasicParsing -TimeoutSec 3
         Write-Host "  [OK] $($r.Content)" -ForegroundColor Green
     } catch {
-        Write-Host "  [等待中] 服务可能还在启动，稍后访问 http://服务器IP:3000/healthz 验证" -ForegroundColor Yellow
+        Write-Host "  [等待中] 服务可能还在启动，稍后访问 http://127.0.0.1:3000/healthz 验证" -ForegroundColor Yellow
     }
 }
 

@@ -7,6 +7,20 @@ import { buildApp, type AppInstance } from "./app";
 import { createLocalRemotionRenderAdapter } from "./modules/render/local-remotion-render-adapter.js";
 import type { RenderAdapter } from "./modules/render/render-adapter.js";
 
+export interface ServerHostOptions {
+  host: string;
+  allowUnauthenticatedRemote: boolean;
+}
+
+export function resolveServerHost(options: ServerHostOptions): string {
+  const normalizedHost = options.host.trim();
+  const isLoopback = normalizedHost === "127.0.0.1" || normalizedHost === "localhost" || normalizedHost === "::1";
+  if (!isLoopback && !options.allowUnauthenticatedRemote) {
+    throw new Error("unsafe_unauthenticated_remote_bind");
+  }
+  return normalizedHost;
+}
+
 function resolveRenderAdapter(): RenderAdapter | undefined {
   const mode = (process.env.RENDER_ADAPTER ?? "remotion").toLowerCase();
   if (mode === "remotion") return createLocalRemotionRenderAdapter();
@@ -154,7 +168,11 @@ export async function startServer(options?: {
   port?: number;
   publicDir?: string;
 }) {
-  const host = options?.host ?? process.env.SERVER_HOST ?? "127.0.0.1";
+  const requestedHost = options?.host ?? process.env.SERVER_HOST ?? "127.0.0.1";
+  const host = resolveServerHost({
+    host: requestedHost,
+    allowUnauthenticatedRemote: process.env.ALLOW_UNAUTHENTICATED_REMOTE === "true",
+  });
   const port = options?.port ?? (Number(process.env.SERVER_PORT) || 3000);
   const publicDir = options?.publicDir ?? process.env.PUBLIC_DIR;
   const server = createHttpServer(options?.app, { publicDir });
