@@ -130,4 +130,21 @@ describe("backend http server", () => {
       .toThrow("unsafe_unauthenticated_remote_bind");
     expect(resolveServerHost({ host: "0.0.0.0", allowUnauthenticatedRemote: true })).toBe("0.0.0.0");
   });
+
+  it("rejects concurrent generation requests for the same project stage", async () => {
+    const app = buildApp({ skipSnapshotLoad: true });
+    let resolveFirst!: () => void;
+    const firstFinished = new Promise<void>((resolve) => { resolveFirst = resolve; });
+    app.addRoute("POST", "/api/projects/:projectId/script/generate-lock-test", async () => {
+      await firstFinished;
+      return { statusCode: 200, body: { ok: true } };
+    });
+
+    const first = app.inject({ method: "POST", url: "/api/projects/p1/script/generate-lock-test" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const second = await app.inject({ method: "POST", url: "/api/projects/p1/script/generate-lock-test" });
+    expect(second.statusCode).toBe(409);
+    resolveFirst();
+    expect((await first).statusCode).toBe(200);
+  });
 });

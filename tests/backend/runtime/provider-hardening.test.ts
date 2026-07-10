@@ -170,6 +170,32 @@ describe("provider hardening", () => {
     }
   });
 
+  it("aborts the underlying fetch before retrying a timeout", async () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+    const signals: AbortSignal[] = [];
+    const fetchImpl = vi.fn((_url: string, init: RequestInit = {}) => {
+      signals.push(init.signal as AbortSignal);
+      return new Promise<Response>((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })));
+      });
+    });
+    const provider = createOpenAiCompatibleProvider({
+      model: "test-model",
+      baseUrl: "https://llm.example.test/v1",
+      apiKey: "test-key",
+      timeoutMs: 5,
+      maxAttempts: 2,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+      fetchImpl,
+    });
+
+    await expect(provider.invokeStructuredPrompt({ prompt, input: {}, operationName: "script.writer" }))
+      .rejects.toMatchObject({ code: "timeout", attemptCount: 2 });
+    expect(signals).toHaveLength(2);
+    expect(signals.every((signal) => signal.aborted)).toBe(true);
+  });
+
   it("invokes strict structured requests through tool calls and parses function arguments", async () => {
     const prompt = createPromptRegistry().getPrompt("topic.selector");
     const argumentsJson = JSON.stringify({
@@ -254,6 +280,7 @@ describe("provider hardening", () => {
           thinking: "disabled",
         }),
       }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 

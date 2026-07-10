@@ -13,6 +13,7 @@ import { registerPublishRoutes } from "./modules/publish/publish.routes";
 import { loadMediaLibraryCatalog } from "./modules/assets/media-library-catalog.loader";
 import { configureVoiceProfilePersistence } from "./modules/assets/voice/voice-profile.repository";
 import { recoverInterruptedRuns } from "./runtime/recovery/interrupted-run-recovery";
+import { createProjectStageLockRegistry } from "./runtime/concurrency/project-stage-lock";
 import type { RenderAdapter } from "./modules/render/render-adapter";
 import type { StoredTopicCandidate } from "./modules/topic/topic-confirm.service";
 import { join } from "node:path";
@@ -77,6 +78,7 @@ export interface AppInstance {
     itemCount: number;
     error: string | null;
   };
+  stageLocks: ReturnType<typeof createProjectStageLockRegistry>;
 }
 
 function matchRoute(pattern: string, url: string): Record<string, string> | null {
@@ -120,6 +122,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
   const routes: RouteRecord[] = [];
   const db = createDbClient();
   const topicCandidateStore = new Map<string, ProjectTopicCandidateState>();
+  const stageLocks = createProjectStageLockRegistry();
   const runtimeStorageRoot = options.storageBaseDir ?? (process.env.VITEST ? process.env.STORAGE_ROOT_DIR : undefined) ?? process.cwd();
   const snapshotPath = options.storageBaseDir ? join(options.storageBaseDir, "storage", "db-snapshot.json") : undefined;
   const persistenceHealth: AppInstance["persistenceHealth"] = {
@@ -188,6 +191,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
     db,
     persistenceHealth,
     mediaLibraryHealth,
+    stageLocks,
     renderAdapter: options.renderAdapter,
     topicCandidateStore,
     addRoute(method, pattern, handler) {
@@ -210,11 +214,31 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
           continue;
         }
 
-        const response = await route.handler({
-          app,
-          params,
-          payload: request.payload ?? {},
-        });
+        const stage = method === "POST" ? getGenerationStage(request.url) : null;
+        let release: (() => void) | undefined;
+        if (stage && params.projectId) {
+          try {
+            release = stageLocks.acquire(params.projectId, stage);
+          } catch {
+            return {
+              statusCode: 409,
+              json: () => ({
+                error: "project_stage_run_in_progress",
+                message: "当前阶段已有生成任务，请等待完成后再试。",
+              }),
+            };
+          }
+        }
+        let response: AppResponse;
+        try {
+          response = await route.handler({
+            app,
+            params,
+            payload: request.payload ?? {},
+          });
+        } finally {
+          release?.();
+        }
 
         // Persist after state-changing requests
         if (method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE") {
@@ -260,4 +284,9 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
   registerPublishRoutes(app);
 
   return app;
+}
+
+function getGenerationStage(url: string): string | null {
+  const match = url.match(/^\/api\/projects\/[^/]+\/(topic|script|storyboard|asset-plan|assets|compose|render|publish)(?:\/|$)/u);
+  return match?.[1] ?? null;
 }

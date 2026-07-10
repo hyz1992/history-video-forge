@@ -52,10 +52,12 @@ export interface OpenAiCompatibleProviderOptions {
   baseDelayMs?: number;
   maxDelayMs?: number;
   requestBudget?: RequestBudget;
-  invokeApi?: (request: OpenAiCompatibleInvokeRequest) => Promise<string>;
+  invokeApi?: (request: OpenAiCompatibleInvokeRequest, options?: { signal?: AbortSignal }) => Promise<string>;
   invokeStrictApi?: (
     request: OpenAiCompatibleStrictInvokeRequest,
+    options?: { signal?: AbortSignal },
   ) => Promise<OpenAiCompatibleStrictInvokeResult>;
+  fetchImpl?: typeof fetch;
   structuredOutputFixer?: StructuredOutputFixer;
 }
 
@@ -86,6 +88,7 @@ export function createOpenAiCompatibleProvider(
       apiKey: providerConfig.apiKey,
       baseUrl: providerConfig.baseUrl,
       model,
+      fetchImpl: options.fetchImpl,
     });
   const invokeStrictApi =
     options.invokeStrictApi ??
@@ -93,6 +96,7 @@ export function createOpenAiCompatibleProvider(
       apiKey: providerConfig.apiKey,
       baseUrl: providerConfig.baseUrl,
       model,
+      fetchImpl: options.fetchImpl,
     });
   const fixer =
     options.structuredOutputFixer ??
@@ -120,13 +124,12 @@ export function createOpenAiCompatibleProvider(
           () => {
             requestBudget.consume(request.operationName);
 
-            return withTimeout(
-              invokeApi({
-                prompt: request.prompt,
-                input: request.input,
-                operationName: request.operationName,
-                model,
-              }),
+            return withTimeout((signal) => invokeApi({
+              prompt: request.prompt,
+              input: request.input,
+              operationName: request.operationName,
+              model,
+            }, { signal }),
               options.timeoutMs ?? env.llm.timeoutMs,
               request.operationName,
             );
@@ -194,8 +197,7 @@ export function createOpenAiCompatibleProvider(
           () => {
             requestBudget.consume(request.operationName);
 
-            return withTimeout(
-              invokeStrictApi({
+            return withTimeout((signal) => invokeStrictApi({
                 prompt: request.prompt,
                 input: request.input,
                 operationName: request.operationName,
@@ -219,7 +221,7 @@ export function createOpenAiCompatibleProvider(
                     request.options?.thinking ??
                     providerConfig.structuredThinking,
                 },
-              }),
+              }, { signal }),
               options.timeoutMs ?? env.llm.timeoutMs,
               request.operationName,
             );
@@ -330,13 +332,14 @@ function createDefaultInvokeApi(options: {
   apiKey?: string;
   baseUrl?: string;
   model: string;
-}): (request: OpenAiCompatibleInvokeRequest) => Promise<string> {
-  return async (request) => {
+  fetchImpl?: typeof fetch;
+}): (request: OpenAiCompatibleInvokeRequest, requestOptions?: { signal?: AbortSignal }) => Promise<string> {
+  return async (request, requestOptions) => {
     if (!options.apiKey || !options.baseUrl) {
       throw new Error("LLM API key or base URL is not configured.");
     }
 
-    const response = await fetch(`${trimTrailingSlash(options.baseUrl)}/chat/completions`, {
+    const response = await (options.fetchImpl ?? fetch)(`${trimTrailingSlash(options.baseUrl)}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -356,6 +359,7 @@ function createDefaultInvokeApi(options: {
           },
         ],
       }),
+      signal: requestOptions?.signal,
     });
 
     if (!response.ok) {
@@ -393,10 +397,12 @@ function createDefaultInvokeStrictApi(options: {
   apiKey?: string;
   baseUrl?: string;
   model: string;
+  fetchImpl?: typeof fetch;
 }): (
   request: OpenAiCompatibleStrictInvokeRequest,
+  requestOptions?: { signal?: AbortSignal },
 ) => Promise<OpenAiCompatibleStrictInvokeResult> {
-  return async (request) => {
+  return async (request, requestOptions) => {
     if (!options.apiKey || !options.baseUrl) {
       throw new Error("LLM API key or base URL is not configured.");
     }
@@ -441,13 +447,14 @@ function createDefaultInvokeStrictApi(options: {
       };
     }
 
-    const response = await fetch(`${trimTrailingSlash(options.baseUrl)}/chat/completions`, {
+    const response = await (options.fetchImpl ?? fetch)(`${trimTrailingSlash(options.baseUrl)}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${options.apiKey}`,
       },
       body: JSON.stringify(body),
+      signal: requestOptions?.signal,
     });
 
     if (!response.ok) {
@@ -512,18 +519,20 @@ async function buildHttpErrorMessage(response: Response): Promise<string> {
 }
 
 function withTimeout<T>(
-  promise: Promise<T>,
+  invoke: (signal: AbortSignal) => Promise<T>,
   timeoutMs: number,
   operationName: string,
 ): Promise<T> {
+  const controller = new AbortController();
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => {
       const error = new Error(`${operationName} timed out after ${timeoutMs}ms`);
       error.name = "AbortError";
+      controller.abort(error);
       reject(error);
     }, timeoutMs);
 
-    promise
+    invoke(controller.signal)
       .then((result) => {
         clearTimeout(timer);
         resolve(result);
