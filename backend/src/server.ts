@@ -69,6 +69,11 @@ export function createHttpServer(
       return;
     }
 
+    if (request.method === "GET" && request.url === "/api/healthcheck") {
+      writeJson(response, 200, app.healthcheck());
+      return;
+    }
+
     const requestUrl = new URL(request.url, "http://127.0.0.1");
 
     // 生产模式：托管前端静态资源（单端口部署）
