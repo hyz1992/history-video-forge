@@ -151,12 +151,25 @@ const filteredProjects = computed(() => {
 
   const demoModeActive = isDemoMode.value;
 
+  if (demoModeActive) {
+    const tagged = filtered.map((item) => ({
+      item,
+      success: isSuccessStatus(item),
+    }));
+
+    tagged.sort((a, b) => {
+      if (a.success !== b.success) return a.success ? -1 : 1;
+      let result = 0;
+      if (sortBy.value === "time") result = new Date(a.item.updated_at).getTime() - new Date(b.item.updated_at).getTime();
+      if (sortBy.value === "name") result = a.item.display_name.localeCompare(b.item.display_name);
+      if (sortBy.value === "dynasty") result = (a.item.dynasty ?? "").localeCompare(b.item.dynasty ?? "");
+      return sortOrder.value === "desc" ? -result : result;
+    });
+
+    return tagged.map((t) => t.item);
+  }
+
   filtered.sort((a, b) => {
-    if (demoModeActive) {
-      const aDone = isSuccessStatus(a) ? 0 : 1;
-      const bDone = isSuccessStatus(b) ? 0 : 1;
-      if (aDone !== bDone) return aDone - bDone;
-    }
     let result = 0;
     if (sortBy.value === "time") result = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
     if (sortBy.value === "name") result = a.display_name.localeCompare(b.display_name);
@@ -313,7 +326,7 @@ function cleanDynasty(raw: string | undefined): string {
                 v-for="f in FILTERS"
                 :key="f.key"
                 class="filter-pill"
-                :class="{ active: statusFilter === f.key }"
+                :class="{ active: statusFilter === f.key, 'filter-completed': f.key === 'completed' }"
                 @click="setFilter(f.key)"
               >
                 {{ f.label }}<span class="filter-count">{{ getCounts()[f.key as keyof ReturnType<typeof getCounts>] }}</span>

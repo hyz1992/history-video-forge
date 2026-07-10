@@ -2,7 +2,7 @@ import platform
 import subprocess
 import sys
 
-PORTS_TO_KILL = [3000, 5173, 5174, 5175, 5176]
+PORTS_TO_KILL = [3000,3008, 5173, 5174, 5175, 5176]
 
 
 def run(command: str) -> subprocess.CompletedProcess[str]:
