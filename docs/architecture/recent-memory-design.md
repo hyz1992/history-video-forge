@@ -85,6 +85,8 @@
 
 ## 7. 当前仍为 TBD 的点
 
+当前运行时已将推荐轮次写入 `DbClient.recommendationRounds`，并随 JSON snapshot v2 持久化；它是当前 restart memory 的实现来源。`WeakMap` 不再作为正式来源。fingerprint 统一使用规范化 `event_identity + one_line_angle`。
+
 - candidate exposure log 是否单独落库
 - `N` 的默认窗口大小
 - reject / ignore 的衰减规则

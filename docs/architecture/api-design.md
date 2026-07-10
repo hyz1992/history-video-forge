@@ -81,6 +81,13 @@
 
 ## 3. Topic 阶段 API
 
+## 3.0 运行时可靠性接口边界
+
+- `GET /healthz` 只表示进程存活，不代表快照、媒体库或存储已就绪。
+- `GET /readyz` 检查持久化加载状态和媒体 catalog 状态；依赖异常返回 `503`。
+- 同一项目同一生成阶段的重复 POST 请求返回 `409 project_stage_run_in_progress`。
+- 当前 API 仍无正式用户鉴权；非回环绑定必须显式 opt-in，仅适用于受控演示环境。
+
 ### A. 系统自动推荐
 
 `POST /api/projects/:projectId/topic/recommendations`
