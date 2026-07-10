@@ -13,4 +13,5 @@ storage/voice-profiles/
 .codex-run-logs/
 temp/
 backend/dist/
+backend/src/generated/prisma/
 frontend/dist/

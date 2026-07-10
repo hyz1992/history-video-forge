@@ -1,10 +1,10 @@
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
 }
 
 model Project {
@@ -73,6 +73,7 @@ model TopicPackage {
   script_records       ScriptRecord[]
   storyboard_records   StoryboardRecord[]
   asset_plan_records   AssetPlanRecord[]
+  asset_manifest_records AssetManifestRecord[]
 }
 
 model RecommendationCandidateCache {
@@ -113,6 +114,7 @@ model ScriptRecord {
   topic_package TopicPackage @relation(fields: [topic_package_id], references: [id])
   storyboard_records StoryboardRecord[]
   asset_plan_records AssetPlanRecord[]
+  asset_manifest_records AssetManifestRecord[]
 }
 
 model StoryboardRecord {
@@ -131,6 +133,7 @@ model StoryboardRecord {
   topic_package TopicPackage @relation(fields: [topic_package_id], references: [id])
   script_record ScriptRecord @relation(fields: [script_record_id], references: [id])
   asset_plan_records AssetPlanRecord[]
+  asset_manifest_records AssetManifestRecord[]
 }
 
 model AssetPlanRecord {
