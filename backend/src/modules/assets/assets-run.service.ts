@@ -408,11 +408,13 @@ function applyArtifactToManifestRoutes(input: {
 
 export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   const { db, project } = input;
-  if (
-    !db.voiceProfilePersistence.enabled &&
-    project.storageRootDir.trim()
-  ) {
-    configureVoiceProfilePersistence(db, { rootDir: project.storageRootDir });
+  if (!db.voiceProfilePersistence.enabled) {
+    const voiceRoot = process.env.VITEST
+      ? process.env.STORAGE_ROOT_DIR
+      : project.storageRootDir;
+    if (voiceRoot?.trim()) {
+      configureVoiceProfilePersistence(db, { rootDir: voiceRoot });
+    }
   }
 
   // Step 1: Check project has active asset plan

@@ -5,7 +5,7 @@ import {
   renameSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { ProjectRecord } from "../../db/client.js";
@@ -32,6 +32,10 @@ type ProjectRunPhase = "topic" | "script" | "storyboard" | "asset_planning" | "a
 
 const workspaceRoot = resolve(fileURLToPath(new URL("../../../../", import.meta.url)));
 
+export function resolveStorageBaseDir(): string {
+  return process.env.STORAGE_ROOT_DIR ? resolve(process.env.STORAGE_ROOT_DIR) : workspaceRoot;
+}
+
 function sanitizeProjectDisplayName(name: string): string {
   const sanitized = name
     .replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ")
@@ -55,11 +59,12 @@ function buildProjectRootDir(input: {
 }): string {
   const dateSegment = input.createdAt.toISOString().slice(0, 10);
 
-  return `storage/projects/${dateSegment}/${input.displayName} [${input.shortId}]`;
+  const relativeRoot = `storage/projects/${dateSegment}/${input.displayName} [${input.shortId}]`;
+  return process.env.STORAGE_ROOT_DIR ? resolve(resolveStorageBaseDir(), relativeRoot) : relativeRoot;
 }
 
 function resolveStoragePath(relativePath: string) {
-  return resolve(workspaceRoot, relativePath);
+  return isAbsolute(relativePath) ? relativePath : resolve(resolveStorageBaseDir(), relativePath);
 }
 
 function writeJsonFile(filePath: string, payload: unknown) {

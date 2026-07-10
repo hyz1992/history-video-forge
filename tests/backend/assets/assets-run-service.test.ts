@@ -407,6 +407,7 @@ describe("assets run service integration", () => {
 
     const { db, project } = await prepareProjectWithAssetPlan();
     project.storageRootDir = integrationTempDir;
+    configureVoiceProfilePersistence(db, { rootDir: integrationTempDir });
 
     const response = await runAssetsGeneration({
       db,
@@ -430,6 +431,7 @@ describe("assets run service integration", () => {
 
     const { db, project } = await prepareProjectWithAssetPlan();
     project.storageRootDir = integrationTempDir;
+    configureVoiceProfilePersistence(db, { rootDir: integrationTempDir });
 
     const response = await runAssetsGeneration({
       db,
