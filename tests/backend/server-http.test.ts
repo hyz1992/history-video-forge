@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { Server } from "node:http";
+import { mkdirSync, writeFileSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
+import { buildApp } from "../../backend/src/app.js";
 import { createHttpServer } from "../../backend/src/server.js";
 
 async function listen(server: Server) {
@@ -88,5 +92,34 @@ describe("backend http server", () => {
     expect(response.status).toBe(201);
     expect(body.project_id).toBeTypeOf("string");
     expect(body.current_status).toBe("topic_pending");
+  });
+
+  it("exposes isolated snapshot load failures through persistence health", () => {
+    const root = mkdtempSync(join(tmpdir(), "svf2-app-persistence-"));
+    mkdirSync(join(root, "storage"), { recursive: true });
+    writeFileSync(join(root, "storage", "db-snapshot.json"), "{broken", "utf8");
+
+    const app = buildApp({ storageBaseDir: root });
+
+    expect(app.persistenceHealth).toMatchObject({
+      loaded: false,
+      source: "none",
+      error: expect.any(String),
+    });
+  });
+
+  it("returns 503 when an isolated state-changing request cannot persist", async () => {
+    const root = mkdtempSync(join(tmpdir(), "svf2-app-persistence-failure-"));
+    mkdirSync(join(root, "storage", "db-snapshot.json"), { recursive: true });
+    const app = buildApp({ storageBaseDir: root });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/projects",
+      payload: { name: "persistence failure" },
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ error: "persistence_failed" });
   });
 });

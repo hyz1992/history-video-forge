@@ -1,31 +1,51 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, copyFileSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
-import type { DbClient, ProjectRecord } from "./client.js";
+import { createDbClient, type DbClient, type ProjectRecord } from "./client.js";
 import type { ProjectTopicCandidateState } from "../app.js";
 
 const workspaceRoot = process.cwd();
 const SNAPSHOT_PATH = resolve(workspaceRoot, "storage/db-snapshot.json");
 
+type SnapshotMapEntries<T = unknown> = Array<[string, T]>;
+
 interface DbSnapshot {
-  version: "db_snapshot_v1";
+  version: "db_snapshot_v1" | "db_snapshot_v2";
   savedAt: string;
-  projects: Array<Record<string, unknown>>;
-  events: Array<Record<string, unknown>>;
-  topicPackages: Array<Record<string, unknown>>;
-  candidateCache: Array<Record<string, unknown>>;
+  projects: SnapshotMapEntries;
+  events: SnapshotMapEntries;
+  topicPackages: SnapshotMapEntries;
+  candidateCache: SnapshotMapEntries;
   topicRunCounts: Array<[string, number]>;
-  scriptRecords: Array<Record<string, unknown>>;
-  storyboardRecords: Array<Record<string, unknown>>;
-  assetPlanRecords: Array<Record<string, unknown>>;
-  assetManifestRecords: Array<Record<string, unknown>>;
-  composeRecords: Array<Record<string, unknown>>;
-  renderJobRecords: Array<Record<string, unknown>>;
-  publishPackageRecords: Array<Record<string, unknown>>;
+  scriptRecords: SnapshotMapEntries;
+  storyboardRecords: SnapshotMapEntries;
+  assetPlanRecords: SnapshotMapEntries;
+  assetManifestRecords: SnapshotMapEntries;
+  composeRecords: SnapshotMapEntries;
+  renderJobRecords: SnapshotMapEntries;
+  publishPackageRecords: SnapshotMapEntries;
+  assetProviderJobRecords: SnapshotMapEntries;
   topicCandidateStore: Record<string, {
     candidatesById: Record<string, unknown>;
     rounds: Array<Record<string, unknown>>;
   }>;
+}
+
+export interface SnapshotPersistenceOptions {
+  snapshotPath?: string;
+  projectsRoot?: string;
+}
+
+export interface SnapshotLoadResult {
+  ok: boolean;
+  source: "primary" | "backup" | "none";
+  migratedFrom: "db_snapshot_v1" | null;
+  error: string | null;
+}
+
+export interface SnapshotSaveResult {
+  ok: boolean;
+  error: string | null;
 }
 
 function mapToArray<T>(map: Map<string, T>): Array<[string, T]> {
@@ -70,25 +90,28 @@ function deserializeDateFields(obj: unknown): unknown {
 export function saveDbSnapshot(
   db: DbClient,
   topicCandidateStore: Map<string, ProjectTopicCandidateState>,
-): void {
+  options: SnapshotPersistenceOptions = {},
+): SnapshotSaveResult {
+  const snapshotPath = options.snapshotPath ?? SNAPSHOT_PATH;
   try {
-    mkdirSync(dirname(SNAPSHOT_PATH), { recursive: true });
+    mkdirSync(dirname(snapshotPath), { recursive: true });
 
     const snapshot: DbSnapshot = {
-      version: "db_snapshot_v1",
+      version: "db_snapshot_v2",
       savedAt: new Date().toISOString(),
-      projects: mapToArray(db.projects).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
-      events: mapToArray(db.events).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
-      topicPackages: mapToArray(db.topicPackages).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
-      candidateCache: mapToArray(db.candidateCache).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
+      projects: mapToArray(db.projects),
+      events: mapToArray(db.events),
+      topicPackages: mapToArray(db.topicPackages),
+      candidateCache: mapToArray(db.candidateCache),
       topicRunCounts: [...db.topicRunCounts.entries()],
-      scriptRecords: mapToArray(db.scriptRecords).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
-      storyboardRecords: mapToArray(db.storyboardRecords).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
-      assetPlanRecords: mapToArray(db.assetPlanRecords).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
-      assetManifestRecords: mapToArray(db.assetManifestRecords).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
-      composeRecords: mapToArray(db.composeRecords).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
-      renderJobRecords: mapToArray(db.renderJobRecords).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
-      publishPackageRecords: mapToArray(db.publishPackageRecords).map(([k, v]) => [k, v]) as unknown as Array<Record<string, unknown>>,
+      scriptRecords: mapToArray(db.scriptRecords),
+      storyboardRecords: mapToArray(db.storyboardRecords),
+      assetPlanRecords: mapToArray(db.assetPlanRecords),
+      assetManifestRecords: mapToArray(db.assetManifestRecords),
+      composeRecords: mapToArray(db.composeRecords),
+      renderJobRecords: mapToArray(db.renderJobRecords),
+      publishPackageRecords: mapToArray(db.publishPackageRecords),
+      assetProviderJobRecords: mapToArray(db.assetProviderJobRecords),
       topicCandidateStore: {},
     };
 
@@ -100,53 +123,142 @@ export function saveDbSnapshot(
     }
 
     const serialized = serializeDateFields(snapshot);
-    writeFileSync(SNAPSHOT_PATH, JSON.stringify(serialized, null, 2), "utf8");
+    writeSnapshotAtomically(snapshotPath, JSON.stringify(serialized, null, 2));
 
     // Also persist each project's individual metadata file
     for (const [, project] of db.projects) {
       saveProjectMetadata(project as ProjectRecord);
     }
-  } catch {
-    // Silently fail — persistence is best-effort
+    return { ok: true, error: null };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "snapshot_save_failed" };
   }
+}
+
+function writeSnapshotAtomically(snapshotPath: string, body: string): void {
+  const tempPath = `${snapshotPath}.tmp`;
+  const backupPath = `${snapshotPath}.bak`;
+  mkdirSync(dirname(snapshotPath), { recursive: true });
+  if (existsSync(snapshotPath)) copyFileSync(snapshotPath, backupPath);
+  const fd = openSync(tempPath, "w");
+  try {
+    writeFileSync(fd, body, "utf8");
+    fsyncSync(fd);
+  } finally {
+    closeSync(fd);
+  }
+  try {
+    renameSync(tempPath, snapshotPath);
+  } catch (error) {
+    // Windows may reject replacing an existing file via rename; keep the
+    // durable .bak and complete the replacement without hiding the failure.
+    rmSync(snapshotPath, { force: true });
+    renameSync(tempPath, snapshotPath);
+  }
+}
+
+function normalizeSnapshotDocument(value: unknown): { snapshot: DbSnapshot; migratedFrom: "db_snapshot_v1" | null } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("db_snapshot_invalid_root");
+  const source = value as Record<string, unknown>;
+  if (source.version !== "db_snapshot_v1" && source.version !== "db_snapshot_v2") {
+    throw new Error("db_snapshot_unsupported_version");
+  }
+  const entries = (key: string): SnapshotMapEntries => {
+    const value = source[key];
+    if (value === undefined) return [];
+    if (!Array.isArray(value) || value.some((entry) => !Array.isArray(entry) || entry.length !== 2)) {
+      throw new Error(`db_snapshot_invalid_${key}`);
+    }
+    return value as SnapshotMapEntries;
+  };
+  const topicCandidateStore = source.topicCandidateStore;
+  if (topicCandidateStore !== undefined && (!topicCandidateStore || typeof topicCandidateStore !== "object" || Array.isArray(topicCandidateStore))) {
+    throw new Error("db_snapshot_invalid_topicCandidateStore");
+  }
+  return {
+    migratedFrom: source.version === "db_snapshot_v1" ? "db_snapshot_v1" : null,
+    snapshot: {
+      version: "db_snapshot_v2",
+      savedAt: typeof source.savedAt === "string" ? source.savedAt : new Date(0).toISOString(),
+      projects: entries("projects"),
+      events: entries("events"),
+      topicPackages: entries("topicPackages"),
+      candidateCache: entries("candidateCache"),
+      topicRunCounts: Array.isArray(source.topicRunCounts) ? source.topicRunCounts as Array<[string, number]> : [],
+      scriptRecords: entries("scriptRecords"),
+      storyboardRecords: entries("storyboardRecords"),
+      assetPlanRecords: entries("assetPlanRecords"),
+      assetManifestRecords: entries("assetManifestRecords"),
+      composeRecords: entries("composeRecords"),
+      renderJobRecords: entries("renderJobRecords"),
+      publishPackageRecords: entries("publishPackageRecords"),
+      assetProviderJobRecords: entries("assetProviderJobRecords"),
+      topicCandidateStore: (topicCandidateStore ?? {}) as DbSnapshot["topicCandidateStore"],
+    },
+  };
+}
+
+function applySnapshot(db: DbClient, topicCandidateStore: Map<string, ProjectTopicCandidateState>, snapshot: DbSnapshot): void {
+  const target = createDbClient();
+  const apply = (map: Map<string, unknown>, entries: SnapshotMapEntries) => {
+    for (const [key, value] of entries) map.set(key, deserializeDateFields(value));
+  };
+  apply(target.projects as Map<string, unknown>, snapshot.projects);
+  apply(target.events as Map<string, unknown>, snapshot.events);
+  apply(target.topicPackages as Map<string, unknown>, snapshot.topicPackages);
+  apply(target.candidateCache as Map<string, unknown>, snapshot.candidateCache);
+  for (const [key, value] of snapshot.topicRunCounts) target.topicRunCounts.set(key, value);
+  apply(target.scriptRecords as Map<string, unknown>, snapshot.scriptRecords);
+  apply(target.storyboardRecords as Map<string, unknown>, snapshot.storyboardRecords);
+  apply(target.assetPlanRecords as Map<string, unknown>, snapshot.assetPlanRecords);
+  apply(target.assetManifestRecords as Map<string, unknown>, snapshot.assetManifestRecords);
+  apply(target.composeRecords as Map<string, unknown>, snapshot.composeRecords);
+  apply(target.renderJobRecords as Map<string, unknown>, snapshot.renderJobRecords);
+  apply(target.publishPackageRecords as Map<string, unknown>, snapshot.publishPackageRecords);
+  apply(target.assetProviderJobRecords as Map<string, unknown>, snapshot.assetProviderJobRecords);
+
+  const nextTopicStore = new Map<string, ProjectTopicCandidateState>();
+  for (const [projectId, state] of Object.entries(snapshot.topicCandidateStore)) {
+    if (!state || typeof state !== "object") throw new Error("db_snapshot_invalid_topic_candidate_state");
+    nextTopicStore.set(projectId, {
+      candidatesById: new Map(Object.entries(state.candidatesById ?? {})) as never,
+      rounds: (state.rounds ?? []) as never,
+    });
+  }
+
+  for (const key of Object.keys(target) as Array<keyof DbClient>) {
+    const value = target[key];
+    if (value instanceof Map && db[key] instanceof Map) {
+      (db[key] as Map<string, unknown>).clear();
+      for (const [entryKey, entryValue] of value.entries()) (db[key] as Map<string, unknown>).set(entryKey, entryValue);
+    }
+  }
+  topicCandidateStore.clear();
+  for (const [key, value] of nextTopicStore) topicCandidateStore.set(key, value);
 }
 
 export function loadDbSnapshot(
   db: DbClient,
   topicCandidateStore: Map<string, ProjectTopicCandidateState>,
-): boolean {
-  try {
-    if (!existsSync(SNAPSHOT_PATH)) return false;
-
-    const raw = readFileSync(SNAPSHOT_PATH, "utf8");
-    const snapshot = deserializeDateFields(JSON.parse(raw)) as DbSnapshot;
-
-    if (snapshot.version !== "db_snapshot_v1") return false;
-
-    for (const [k, v] of snapshot.projects as unknown as Array<[string, unknown]>) db.projects.set(k, v as never);
-    for (const [k, v] of snapshot.events as unknown as Array<[string, unknown]>) db.events.set(k, v as never);
-    for (const [k, v] of snapshot.topicPackages as unknown as Array<[string, unknown]>) db.topicPackages.set(k, v as never);
-    for (const [k, v] of snapshot.candidateCache as unknown as Array<[string, unknown]>) db.candidateCache.set(k, v as never);
-    for (const [k, v] of snapshot.topicRunCounts) db.topicRunCounts.set(k, v);
-    for (const [k, v] of snapshot.scriptRecords as unknown as Array<[string, unknown]>) db.scriptRecords.set(k, v as never);
-    for (const [k, v] of snapshot.storyboardRecords as unknown as Array<[string, unknown]>) db.storyboardRecords.set(k, v as never);
-    for (const [k, v] of snapshot.assetPlanRecords as unknown as Array<[string, unknown]>) db.assetPlanRecords.set(k, v as never);
-    for (const [k, v] of snapshot.assetManifestRecords as unknown as Array<[string, unknown]>) db.assetManifestRecords.set(k, v as never);
-    for (const [k, v] of snapshot.composeRecords as unknown as Array<[string, unknown]>) db.composeRecords.set(k, v as never);
-    for (const [k, v] of snapshot.renderJobRecords as unknown as Array<[string, unknown]>) db.renderJobRecords.set(k, v as never);
-    for (const [k, v] of snapshot.publishPackageRecords as unknown as Array<[string, unknown]>) db.publishPackageRecords.set(k, v as never);
-
-    for (const [projectId, state] of Object.entries(snapshot.topicCandidateStore)) {
-      topicCandidateStore.set(projectId, {
-        candidatesById: new Map(Object.entries(state.candidatesById)) as never,
-        rounds: state.rounds as never,
-      });
+  options: SnapshotPersistenceOptions = {},
+): SnapshotLoadResult {
+  const snapshotPath = options.snapshotPath ?? SNAPSHOT_PATH;
+  const candidates = [
+    { path: snapshotPath, source: "primary" as const },
+    { path: `${snapshotPath}.bak`, source: "backup" as const },
+  ];
+  let lastError: string | null = null;
+  for (const candidate of candidates) {
+    if (!existsSync(candidate.path)) continue;
+    try {
+      const { snapshot, migratedFrom } = normalizeSnapshotDocument(deserializeDateFields(JSON.parse(readFileSync(candidate.path, "utf8"))));
+      applySnapshot(db, topicCandidateStore, snapshot);
+      return { ok: true, source: candidate.source, migratedFrom, error: null };
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "db_snapshot_load_failed";
     }
-
-    return true;
-  } catch {
-    return false;
   }
+  return { ok: false, source: "none", migratedFrom: null, error: lastError ?? "db_snapshot_missing" };
 }
 
 // ---------------------------------------------------------------------------

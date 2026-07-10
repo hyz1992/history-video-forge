@@ -12,6 +12,7 @@ import { registerRenderRoutes } from "./modules/render/render.routes";
 import { registerPublishRoutes } from "./modules/publish/publish.routes";
 import type { RenderAdapter } from "./modules/render/render-adapter";
 import type { StoredTopicCandidate } from "./modules/topic/topic-confirm.service";
+import { join } from "node:path";
 
 export interface StoredTopicCandidateRound {
   roundId: string;
@@ -63,6 +64,11 @@ export interface AppInstance {
   addRoute: (method: string, pattern: string, handler: RouteHandler) => void;
   inject: (request: InjectRequest) => Promise<InjectResponse>;
   healthcheck: () => { status: string; nodeEnv: string };
+  persistenceHealth: {
+    loaded: boolean;
+    source: "primary" | "backup" | "none";
+    error: string | null;
+  };
 }
 
 function matchRoute(pattern: string, url: string): Record<string, string> | null {
@@ -98,24 +104,44 @@ function matchRoute(pattern: string, url: string): Record<string, string> | null
 
 export interface BuildAppOptions {
   renderAdapter?: RenderAdapter;
+  storageBaseDir?: string;
+  skipSnapshotLoad?: boolean;
 }
 
 export function buildApp(options: BuildAppOptions = {}): AppInstance {
   const routes: RouteRecord[] = [];
   const db = createDbClient();
   const topicCandidateStore = new Map<string, ProjectTopicCandidateState>();
+  const snapshotPath = options.storageBaseDir ? join(options.storageBaseDir, "storage", "db-snapshot.json") : undefined;
+  const persistenceHealth: AppInstance["persistenceHealth"] = {
+    loaded: false,
+    source: "none",
+    error: null,
+  };
 
-  // Restore persisted state from disk (never under Vitest — avoids cross-test pollution)
+  // Restore persisted state from disk; Vitest only opts in when an isolated root is provided.
   const isTest = !!process.env.VITEST;
-  if (!isTest) {
-    loadDbSnapshot(db, topicCandidateStore);
+  const shouldLoadSnapshot = !options.skipSnapshotLoad && (!isTest || Boolean(options.storageBaseDir));
+  if (shouldLoadSnapshot) {
+    const loadResult = loadDbSnapshot(db, topicCandidateStore, { snapshotPath });
+    Object.assign(persistenceHealth, {
+      loaded: loadResult.ok,
+      source: loadResult.source,
+      error: loadResult.error,
+    });
     // Also recover any projects that have on-disk metadata but aren't in the snapshot
     recoverProjectsFromDisk(db);
   }
 
   // Persist on shutdown (skip in test)
   function persist() {
-    saveDbSnapshot(db, topicCandidateStore);
+    const result = saveDbSnapshot(db, topicCandidateStore, { snapshotPath });
+    if (!result.ok) {
+      Object.assign(persistenceHealth, {
+        error: result.error,
+      });
+    }
+    return result;
   }
   if (!isTest) {
     process.on("SIGINT", () => { persist(); process.exit(0); });
@@ -124,13 +150,14 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
   // Persist after each state-changing request before the response completes,
   // so deletes cannot be resurrected by a stale db snapshot on restart.
   function persistMutation() {
-    if (isTest) return;
-    persist();
+    if (isTest && !options.storageBaseDir) return;
+    return persist();
   }
 
   const app: AppInstance = {
     env,
     db,
+    persistenceHealth,
     renderAdapter: options.renderAdapter,
     topicCandidateStore,
     addRoute(method, pattern, handler) {
@@ -161,7 +188,13 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
 
         // Persist after state-changing requests
         if (method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE") {
-          persistMutation();
+          const persistenceResult = persistMutation();
+          if (persistenceResult && !persistenceResult.ok) {
+            return {
+              statusCode: 503,
+              json: () => ({ error: "persistence_failed" }),
+            };
+          }
         }
 
         return {
