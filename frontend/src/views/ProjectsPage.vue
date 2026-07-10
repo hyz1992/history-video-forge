@@ -7,11 +7,13 @@ import {
   useProjectStore,
   type ProjectListItem,
 } from "../stores/project";
+import { useDemoMode } from "../composables/useDemoMode";
 import CreateTopicModal from "../components/topic/CreateTopicModal.vue";
 import { useCompetitionGuard } from "../composables/useCompetitionGuard";
 
 const projectStore = useProjectStore();
 const router = useRouter();
+const isDemoMode = useDemoMode();
 const { checkCreateProject } = useCompetitionGuard();
 
 const showCreateTopicModal = ref(false);
@@ -46,7 +48,15 @@ onUnmounted(() => {
 });
 
 function isCompletedStatus(status: string): boolean {
-  return status === "render_completed";
+  return status === "render_completed" || status === "render_ready";
+}
+
+function isPublishReadyStatus(item: ProjectListItem): boolean {
+  return !!(item.publish_ready);
+}
+
+function isSuccessStatus(item: ProjectListItem): boolean {
+  return isCompletedStatus(item.current_status) || isPublishReadyStatus(item);
 }
 
 function isFailedStatus(status: string): boolean {
@@ -76,7 +86,7 @@ function matchesFilter(project: ProjectListItem, filter: string): boolean {
   if (filter === "all") return true;
   if (filter === "todo") return isTodoStatus(project.current_status);
   if (filter === "generating") return isGeneratingStatus(project.current_status);
-  if (filter === "completed") return isCompletedStatus(project.current_status);
+  if (filter === "completed") return isSuccessStatus(project);
   if (filter === "failed") return isFailedStatus(project.current_status);
   return true;
 }
@@ -108,11 +118,11 @@ function getStatusLabel(status: string): string {
   return labels[status] ?? status;
 }
 
-function getStatusClass(status: string): string {
-  if (isCompletedStatus(status)) return "status-success";
-  if (isFailedStatus(status)) return "status-danger";
-  if (isGeneratingStatus(status)) return "status-warning";
-  if (["render_ready", "assets_ready", "composition_ready", "script_ready", "storyboard_ready", "asset_plan_ready", "topic_candidates_ready", "script_reviewing"].includes(status)) return "status-warning";
+function getStatusClass(item: ProjectListItem): string {
+  if (isSuccessStatus(item)) return "status-success";
+  if (isFailedStatus(item.current_status)) return "status-danger";
+  if (isGeneratingStatus(item.current_status)) return "status-warning";
+  if (["assets_ready", "composition_ready", "script_ready", "storyboard_ready", "asset_plan_ready", "topic_candidates_ready", "script_reviewing"].includes(item.current_status)) return "status-warning";
   return "status-info";
 }
 
@@ -122,7 +132,7 @@ function getCounts() {
     all: all.length,
     todo: all.filter((p) => isTodoStatus(p.current_status)).length,
     generating: all.filter((p) => isGeneratingStatus(p.current_status)).length,
-    completed: all.filter((p) => isCompletedStatus(p.current_status)).length,
+    completed: all.filter((p) => isSuccessStatus(p)).length,
     failed: all.filter((p) => isFailedStatus(p.current_status)).length,
   };
 }
@@ -140,6 +150,11 @@ const filteredProjects = computed(() => {
   });
 
   filtered.sort((a, b) => {
+    if (isDemoMode.value) {
+      const aDone = isSuccessStatus(a) ? 0 : 1;
+      const bDone = isSuccessStatus(b) ? 0 : 1;
+      if (aDone !== bDone) return aDone - bDone;
+    }
     let result = 0;
     if (sortBy.value === "time") result = new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime();
     if (sortBy.value === "name") result = a.display_name.localeCompare(b.display_name);
@@ -348,7 +363,7 @@ function cleanDynasty(raw: string | undefined): string {
                 <td>
                   <span
                     class="status-badge"
-                    :class="[getStatusClass(row.current_status), isGeneratingStatus(row.current_status) ? 'status-generating' : '']"
+                    :class="[getStatusClass(row), isGeneratingStatus(row.current_status) ? 'status-generating' : '']"
                     :data-testid="`project-stage-${row.project_id}`"
                   >
                     <span class="status-dot"></span>{{ getStatusLabel(row.current_status) }}

@@ -26,6 +26,7 @@ export interface ProjectListItem extends ProjectSnapshot {
   duration?: string;
   aspect_ratio?: string;
   thumbnail_url?: string;
+  publish_ready?: boolean;
 }
 
 export interface ProjectApi {

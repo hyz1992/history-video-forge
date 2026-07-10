@@ -38,6 +38,14 @@ function readAspectRatio(db: DbClient, project: { id: string; activeComposeRecor
   return timeline?.output_profile?.aspect_ratio ?? null;
 }
 
+function isPublishReady(db: DbClient, project: { activePublishPackageRecordId: string | null }): boolean {
+  if (!project.activePublishPackageRecordId) return false;
+  const pkgRecord = db.publishPackageRecords.get(project.activePublishPackageRecordId);
+  if (!pkgRecord) return false;
+  const pkg = pkgRecord.packageJson as { readiness?: string } | undefined;
+  return pkg?.readiness === "ready";
+}
+
 function readThumbnailUrl(db: DbClient, project: { id: string; activePublishPackageRecordId: string | null; activeAssetManifestRecordId: string | null }): string | null {
   const pkgRecord = project.activePublishPackageRecordId
     ? db.publishPackageRecords.get(project.activePublishPackageRecordId) ?? null
@@ -77,6 +85,7 @@ export interface ProjectSummary {
   duration_sec: number | null;
   aspect_ratio: string | null;
   thumbnail_url: string | null;
+  publish_ready: boolean;
 }
 
 export function listProjectSummaries(db: DbClient): ProjectSummary[] {
@@ -88,6 +97,7 @@ export function listProjectSummaries(db: DbClient): ProjectSummary[] {
       : null;
     const topicTitle = topicRecord?.title ?? null;
     const effectiveStatus = resolveEffectiveStatus(project);
+    const publishReady = isPublishReady(db, project);
 
     summaries.push({
       project_id: project.id,
@@ -101,6 +111,7 @@ export function listProjectSummaries(db: DbClient): ProjectSummary[] {
       duration_sec: readDurationSec(db, project),
       aspect_ratio: readAspectRatio(db, project),
       thumbnail_url: readThumbnailUrl(db, project),
+      publish_ready: publishReady,
     });
   }
 
