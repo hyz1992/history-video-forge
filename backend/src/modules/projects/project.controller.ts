@@ -49,11 +49,14 @@ export async function deleteProjectController(
     context.app.db,
     projectId,
   );
-  if (!deleted) {
+  if (deleted === null) {
     return {
       statusCode: 404,
       body: { error: "project_not_found" },
     };
+  }
+  if (!deleted.deleted) {
+    return { statusCode: 409, body: { error: deleted.error } };
   }
 
   context.app.topicCandidateStore.delete(context.params.projectId);

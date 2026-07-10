@@ -95,6 +95,16 @@ describe("backend http server", () => {
     expect(body.current_status).toBe("topic_pending");
   });
 
+  it("returns readiness separately from process liveness", async () => {
+    const app = buildApp({ skipSnapshotLoad: true });
+    const server = createHttpServer(app);
+    servers.push(server);
+    const port = await listen(server);
+    const response = await fetch(`http://127.0.0.1:${port}/readyz`);
+    expect(response.status).toBe(503);
+    expect((await response.json()) as { status: string }).toMatchObject({ status: "not_ready" });
+  });
+
   it("exposes isolated snapshot load failures through persistence health", () => {
     const root = mkdtempSync(join(tmpdir(), "svf2-app-persistence-"));
     mkdirSync(join(root, "storage"), { recursive: true });

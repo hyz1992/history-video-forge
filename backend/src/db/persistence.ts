@@ -285,15 +285,20 @@ export function saveProjectMetadata(project: ProjectRecord): void {
 
 /** Remove the project's storage directory so deleted projects are not recovered
  *  from disk on the next server start. */
-export function deleteProjectStorage(project: ProjectRecord): void {
+export type DeleteProjectStorageResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+export function deleteProjectStorage(project: ProjectRecord): DeleteProjectStorageResult {
   try {
-    if (!project.storageRootDir) return;
+    if (!project.storageRootDir) return { ok: true };
     const dir = resolve(workspaceRoot, project.storageRootDir);
     const relativeDir = relative(PROJECTS_ROOT, dir);
-    if (!relativeDir || relativeDir.startsWith("..") || isAbsolute(relativeDir)) return;
+    if (!relativeDir || relativeDir.startsWith("..") || isAbsolute(relativeDir)) return { ok: false, error: "project_storage_path_invalid" };
     rmSync(dir, { recursive: true, force: true });
-  } catch {
-    // best-effort
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "project_storage_delete_failed" };
   }
 }
 

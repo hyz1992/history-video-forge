@@ -59,10 +59,14 @@ export async function getProjectById(
 export async function deleteProject(
   db: DbClient,
   projectId: string,
-): Promise<boolean> {
+): Promise<{ deleted: true } | { deleted: false; error: string } | null> {
   const project = db.projects.get(projectId);
-  const existed = db.projects.delete(projectId);
-  if (!existed) return false;
+  if (!project) return null;
+  if (!process.env.VITEST) {
+    const storageResult = deleteProjectStorage(project);
+    if (!storageResult.ok) return { deleted: false, error: "project_storage_delete_failed" };
+  }
+  db.projects.delete(projectId);
 
   // Clean up related records
   for (const [id, record] of db.topicPackages) {
@@ -90,9 +94,9 @@ export async function deleteProject(
     if (record.projectId === projectId) db.publishPackageRecords.delete(id);
   }
   db.topicRunCounts.delete(projectId);
-  if (project && !process.env.VITEST) {
-    deleteProjectStorage(project);
+  db.recommendationRounds.delete(projectId);
+  for (const [id, record] of db.assetProviderJobRecords) {
+    if (record.assetManifestRecordId === project.activeAssetManifestRecordId) db.assetProviderJobRecords.delete(id);
   }
-
-  return true;
+  return { deleted: true };
 }

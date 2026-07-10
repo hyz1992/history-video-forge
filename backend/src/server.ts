@@ -83,6 +83,16 @@ export function createHttpServer(
       return;
     }
 
+    if (request.method === "GET" && request.url === "/readyz") {
+      const ready = app.persistenceHealth.loaded && app.mediaLibraryHealth.loaded;
+      writeJson(response, ready ? 200 : 503, {
+        status: ready ? "ready" : "not_ready",
+        persistence: app.persistenceHealth,
+        media_library: app.mediaLibraryHealth,
+      });
+      return;
+    }
+
     if (request.method === "GET" && request.url === "/api/healthcheck") {
       writeJson(response, 200, app.healthcheck());
       return;
