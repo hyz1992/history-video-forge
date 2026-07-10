@@ -17,13 +17,18 @@
     "renderer"
   ],
   "scripts": {
+    "postinstall": "npm run prisma:generate",
+    "prisma:generate": "npm exec --workspace backend -- prisma generate --config prisma.config.ts",
     "build": "npm run build:frontend && npm run build:backend",
     "build:frontend": "vite build --config frontend/vite.config.ts",
+    "prebuild:backend": "npm run prisma:generate",
     "build:backend": "node scripts/build-backend.mjs",
+    "pretypecheck:backend": "npm run prisma:generate",
     "typecheck:backend": "tsc -p backend/tsconfig.json --noEmit",
     "start": "node scripts/start-prod.mjs",
     "dev:backend": "node --import tsx backend/src/server.ts",
     "dev:frontend": "vite --config frontend/vite.config.ts",
+    "pretest": "npm run prisma:generate",
     "test": "vitest run",
     "test:harness:topic-script-regression": "vitest run tests/harness/topic-script-regression.test.ts",
     "harness:script-semantic-fixtures": "tsx harness/scripts/runtime/script-semantic-reviewer-fixtures.ts",
