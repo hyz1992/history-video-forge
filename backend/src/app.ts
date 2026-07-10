@@ -10,6 +10,8 @@ import { registerAssetsRoutes } from "./modules/assets/assets.routes";
 import { registerComposeRoutes } from "./modules/compose/compose.routes";
 import { registerRenderRoutes } from "./modules/render/render.routes";
 import { registerPublishRoutes } from "./modules/publish/publish.routes";
+import { loadMediaLibraryCatalog } from "./modules/assets/media-library-catalog.loader";
+import { configureVoiceProfilePersistence } from "./modules/assets/voice/voice-profile.repository";
 import type { RenderAdapter } from "./modules/render/render-adapter";
 import type { StoredTopicCandidate } from "./modules/topic/topic-confirm.service";
 import { join } from "node:path";
@@ -69,6 +71,11 @@ export interface AppInstance {
     source: "primary" | "backup" | "none";
     error: string | null;
   };
+  mediaLibraryHealth: {
+    loaded: boolean;
+    itemCount: number;
+    error: string | null;
+  };
 }
 
 function matchRoute(pattern: string, url: string): Record<string, string> | null {
@@ -118,6 +125,14 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
     source: "none",
     error: null,
   };
+  const mediaLibraryHealth: AppInstance["mediaLibraryHealth"] = {
+    loaded: false,
+    itemCount: 0,
+    error: null,
+  };
+  configureVoiceProfilePersistence(db, {
+    rootDir: options.storageBaseDir ?? process.cwd(),
+  });
 
   // Restore persisted state from disk; Vitest only opts in when an isolated root is provided.
   const isTest = !!process.env.VITEST;
@@ -132,6 +147,9 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
     // Also recover any projects that have on-disk metadata but aren't in the snapshot
     recoverProjectsFromDisk(db);
   }
+  Object.assign(mediaLibraryHealth, loadMediaLibraryCatalog(db, {
+    storageBaseDir: options.storageBaseDir ?? process.cwd(),
+  }));
 
   // Persist on shutdown (skip in test)
   function persist() {
@@ -158,6 +176,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
     env,
     db,
     persistenceHealth,
+    mediaLibraryHealth,
     renderAdapter: options.renderAdapter,
     topicCandidateStore,
     addRoute(method, pattern, handler) {
