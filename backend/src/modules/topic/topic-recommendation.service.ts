@@ -1297,6 +1297,13 @@ function selectRankedCandidates(input: {
       throw new Error(`topic_selector_no_ranking_match: ${scorecard.candidate_id}`);
     }
 
+    // Recent events are a hard exclusion whenever fresh candidates are present
+    // in the selector pool; fatigue must not merely influence model ranking.
+    if (match.fatigueScore > 0 && input.rankings.some((candidate) => candidate.fatigueScore === 0)) {
+      skippedCandidateIds.push(scorecard.candidate_id);
+      continue;
+    }
+
     if (!allowRepeatedEventIdentities && selectedEventIdentities.has(match.eventIdentity)) {
       skippedCandidateIds.push(scorecard.candidate_id);
       continue;
