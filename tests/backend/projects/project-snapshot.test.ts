@@ -204,7 +204,7 @@ describe("project snapshot service", () => {
     expect(snapshot?.trace_summary).toMatchObject({
       project_storage: {
         root_dir: expect.stringMatching(
-          /storage\/projects\/\d{4}-\d{2}-\d{2}\/Snapshot Project \[p_[a-z0-9]{8}\]/i,
+          /storage[\\/]projects[\\/]\d{4}-\d{2}-\d{2}[\\/]Snapshot Project \[p_[a-z0-9]{8}\]/i,
         ),
       },
       latest_script_run: {

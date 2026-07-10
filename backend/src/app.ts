@@ -12,6 +12,7 @@ import { registerRenderRoutes } from "./modules/render/render.routes";
 import { registerPublishRoutes } from "./modules/publish/publish.routes";
 import { loadMediaLibraryCatalog } from "./modules/assets/media-library-catalog.loader";
 import { configureVoiceProfilePersistence } from "./modules/assets/voice/voice-profile.repository";
+import { recoverInterruptedRuns } from "./runtime/recovery/interrupted-run-recovery";
 import type { RenderAdapter } from "./modules/render/render-adapter";
 import type { StoredTopicCandidate } from "./modules/topic/topic-confirm.service";
 import { join } from "node:path";
@@ -119,6 +120,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
   const routes: RouteRecord[] = [];
   const db = createDbClient();
   const topicCandidateStore = new Map<string, ProjectTopicCandidateState>();
+  const runtimeStorageRoot = options.storageBaseDir ?? (process.env.VITEST ? process.env.STORAGE_ROOT_DIR : undefined) ?? process.cwd();
   const snapshotPath = options.storageBaseDir ? join(options.storageBaseDir, "storage", "db-snapshot.json") : undefined;
   const persistenceHealth: AppInstance["persistenceHealth"] = {
     loaded: false,
@@ -131,7 +133,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
     error: null,
   };
   configureVoiceProfilePersistence(db, {
-    rootDir: options.storageBaseDir ?? process.cwd(),
+    rootDir: runtimeStorageRoot,
   });
 
   // Restore persisted state from disk; Vitest only opts in when an isolated root is provided.
@@ -144,11 +146,20 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
       source: loadResult.source,
       error: loadResult.error,
     });
+    if (loadResult.ok) {
+      const recovery = recoverInterruptedRuns(db);
+      if (recovery.recoveredProjectIds.length > 0 || recovery.recoveredProviderJobIds.length > 0) {
+        const saveResult = saveDbSnapshot(db, topicCandidateStore, { snapshotPath });
+        if (!saveResult.ok) {
+          Object.assign(persistenceHealth, { error: saveResult.error });
+        }
+      }
+    }
     // Also recover any projects that have on-disk metadata but aren't in the snapshot
     recoverProjectsFromDisk(db);
   }
   Object.assign(mediaLibraryHealth, loadMediaLibraryCatalog(db, {
-    storageBaseDir: options.storageBaseDir ?? process.cwd(),
+    storageBaseDir: runtimeStorageRoot,
   }));
 
   // Persist on shutdown (skip in test)
