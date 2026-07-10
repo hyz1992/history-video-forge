@@ -25,6 +25,7 @@ interface DbSnapshot {
   renderJobRecords: SnapshotMapEntries;
   publishPackageRecords: SnapshotMapEntries;
   assetProviderJobRecords: SnapshotMapEntries;
+  recommendationRounds: SnapshotMapEntries;
   topicCandidateStore: Record<string, {
     candidatesById: Record<string, unknown>;
     rounds: Array<Record<string, unknown>>;
@@ -112,6 +113,7 @@ export function saveDbSnapshot(
       renderJobRecords: mapToArray(db.renderJobRecords),
       publishPackageRecords: mapToArray(db.publishPackageRecords),
       assetProviderJobRecords: mapToArray(db.assetProviderJobRecords),
+      recommendationRounds: mapToArray(db.recommendationRounds),
       topicCandidateStore: {},
     };
 
@@ -193,6 +195,7 @@ function normalizeSnapshotDocument(value: unknown): { snapshot: DbSnapshot; migr
       renderJobRecords: entries("renderJobRecords"),
       publishPackageRecords: entries("publishPackageRecords"),
       assetProviderJobRecords: entries("assetProviderJobRecords"),
+      recommendationRounds: entries("recommendationRounds"),
       topicCandidateStore: (topicCandidateStore ?? {}) as DbSnapshot["topicCandidateStore"],
     },
   };
@@ -216,6 +219,7 @@ function applySnapshot(db: DbClient, topicCandidateStore: Map<string, ProjectTop
   apply(target.renderJobRecords as Map<string, unknown>, snapshot.renderJobRecords);
   apply(target.publishPackageRecords as Map<string, unknown>, snapshot.publishPackageRecords);
   apply(target.assetProviderJobRecords as Map<string, unknown>, snapshot.assetProviderJobRecords);
+  apply(target.recommendationRounds as Map<string, unknown>, snapshot.recommendationRounds);
 
   const nextTopicStore = new Map<string, ProjectTopicCandidateState>();
   for (const [projectId, state] of Object.entries(snapshot.topicCandidateStore)) {

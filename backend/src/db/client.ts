@@ -224,6 +224,20 @@ export interface AssetProviderJobRecord {
   updatedAt: Date;
 }
 
+export interface ProjectRecommendationRoundCandidateRecord {
+  eventRegistryEntryId: string;
+  eventIdentity: string | null;
+  title: string | null;
+  fingerprint: string;
+  createdAt: Date;
+}
+
+export interface ProjectRecommendationRoundRecord {
+  projectId: string;
+  createdAt: Date;
+  candidates: ProjectRecommendationRoundCandidateRecord[];
+}
+
 export interface DbClient {
   generateId: () => string;
   projects: Map<string, ProjectRecord>;
@@ -239,6 +253,7 @@ export interface DbClient {
   renderJobRecords: Map<string, RenderJobRecord>;
   publishPackageRecords: Map<string, PublishPackageRecord>;
   assetProviderJobRecords: Map<string, AssetProviderJobRecord>;
+  recommendationRounds: Map<string, ProjectRecommendationRoundRecord[]>;
   mediaLibraryItems: Map<string, MediaLibraryItem>;
   voiceProfiles: Map<string, VoiceProfile>;
   voiceProfilePersistence: {
@@ -264,6 +279,7 @@ export function createDbClient(): DbClient {
     renderJobRecords: new Map<string, RenderJobRecord>(),
     publishPackageRecords: new Map<string, PublishPackageRecord>(),
     assetProviderJobRecords: new Map<string, AssetProviderJobRecord>(),
+    recommendationRounds: new Map<string, ProjectRecommendationRoundRecord[]>(),
     mediaLibraryItems: new Map<string, MediaLibraryItem>(),
     voiceProfiles: new Map<string, VoiceProfile>(),
     voiceProfilePersistence: {

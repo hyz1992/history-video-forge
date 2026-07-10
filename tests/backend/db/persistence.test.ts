@@ -110,4 +110,28 @@ describe("db snapshot compatibility", () => {
     expect(loadDbSnapshot(reloaded, new Map(), { snapshotPath })).toMatchObject({ ok: true, source: "backup" });
     expect(reloaded.projects.has("project_1")).toBe(true);
   });
+
+  it("persists recent recommendation rounds across snapshot reload", () => {
+    const root = mkdtempSync(join(tmpdir(), "svf2-rounds-"));
+    const snapshotPath = join(root, "db-snapshot.json");
+    const db = createDbClient();
+    db.recommendationRounds.set("project_1", [{
+      projectId: "project_1",
+      createdAt: new Date("2026-07-10T00:00:00.000Z"),
+      candidates: [{
+        eventRegistryEntryId: "event_1",
+        eventIdentity: "淝水之战",
+        title: "淝水之战",
+        fingerprint: "淝水之战::八万晋军击败前秦",
+        createdAt: new Date("2026-07-10T00:00:00.000Z"),
+      }],
+    }]);
+
+    saveDbSnapshot(db, new Map(), { snapshotPath });
+    const reloaded = createDbClient();
+    loadDbSnapshot(reloaded, new Map(), { snapshotPath });
+
+    expect(reloaded.recommendationRounds.get("project_1")?.[0]?.candidates[0]?.eventIdentity)
+      .toBe("淝水之战");
+  });
 });

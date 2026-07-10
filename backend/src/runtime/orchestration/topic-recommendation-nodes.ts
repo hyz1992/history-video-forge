@@ -3,6 +3,7 @@ import type { DbClient } from "../../db/client.js";
 import { saveCachedCandidate } from "../../modules/cache/candidate-cache.repository.js";
 import type { BuildTopicCandidatesInput } from "../../modules/topic/topic-candidate.builder.js";
 import type { GraphTraceNodeSummary } from "./graph-trace.js";
+import { buildEventIdentityFingerprint, normalizeEventIdentityValue } from "../../modules/topic/event-normalizer.js";
 
 export const TOPIC_CANDIDATE_TARGET_COUNT = 4;
 export const TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT = 8;
@@ -37,13 +38,6 @@ export interface TopicRecommendationGraphRuntime {
   pendingRawBuilderCandidates: Record<string, unknown>[];
 }
 
-function buildCandidateFingerprint(
-  canonicalName: string,
-  oneLineAngle: string,
-): string {
-  return `${canonicalName}::${oneLineAngle}`;
-}
-
 async function persistTopicCandidates(
   runtime: TopicRecommendationGraphRuntime,
   candidates: ReturnType<typeof TopicCandidateCard.parse>[],
@@ -52,10 +46,10 @@ async function persistTopicCandidates(
     await saveCachedCandidate(runtime.db, {
       projectId: runtime.projectId ?? null,
       eventIdentity: candidate.event_identity,
-      fingerprint: buildCandidateFingerprint(
-        runtime.input.canonicalName,
-        candidate.one_line_angle,
-      ),
+      fingerprint: buildEventIdentityFingerprint({
+        eventIdentity: normalizeEventIdentityValue(candidate.event_identity),
+        angle: candidate.one_line_angle,
+      }),
       oneLineAngle: candidate.one_line_angle,
       familyLabel: candidate.family_label,
       scopeLabel: candidate.scope_label,
@@ -377,17 +371,11 @@ async function applyRuntimeCandidates(input: {
 
   const existingFingerprints = new Set(
     runtime.candidates.map((candidate) =>
-      buildCandidateFingerprint(
-        runtime.input.canonicalName,
-        candidate.one_line_angle,
-      ),
+      buildEventIdentityFingerprint({ eventIdentity: candidate.event_identity, angle: candidate.one_line_angle }),
     ),
   );
   const repairCandidates = normalizedCandidates.filter((candidate) => {
-    const fingerprint = buildCandidateFingerprint(
-      runtime.input.canonicalName,
-      candidate.one_line_angle,
-    );
+    const fingerprint = buildEventIdentityFingerprint({ eventIdentity: candidate.event_identity, angle: candidate.one_line_angle });
     if (existingFingerprints.has(fingerprint)) {
       return false;
     }

@@ -1,4 +1,4 @@
-import type { CandidateCacheRecord, DbClient } from "../../db/client";
+import type { CandidateCacheRecord, DbClient, ProjectRecommendationRoundRecord } from "../../db/client";
 
 export interface SaveCachedCandidateInput {
   projectId?: string | null;
@@ -77,34 +77,7 @@ export async function listRecentCachedCandidates(
     .slice(0, input.limit ?? 20);
 }
 
-export interface ProjectRecommendationRoundCandidateRecord {
-  eventRegistryEntryId: string;
-  eventIdentity: string | null;
-  title: string | null;
-  fingerprint: string;
-  createdAt: Date;
-}
-
-export interface ProjectRecommendationRoundRecord {
-  projectId: string;
-  createdAt: Date;
-  candidates: ProjectRecommendationRoundCandidateRecord[];
-}
-
-const projectRecommendationRounds = new WeakMap<
-  DbClient,
-  Map<string, ProjectRecommendationRoundRecord[]>
->();
-
-function getProjectRecommendationRoundStore(db: DbClient) {
-  let store = projectRecommendationRounds.get(db);
-  if (!store) {
-    store = new Map<string, ProjectRecommendationRoundRecord[]>();
-    projectRecommendationRounds.set(db, store);
-  }
-
-  return store;
-}
+export type { ProjectRecommendationRoundRecord } from "../../db/client";
 
 export async function recordProjectRecommendationRound(
   db: DbClient,
@@ -119,7 +92,7 @@ export async function recordProjectRecommendationRound(
     }>;
   },
 ): Promise<ProjectRecommendationRoundRecord> {
-  const store = getProjectRecommendationRoundStore(db);
+  const store = db.recommendationRounds;
   const rounds = store.get(input.projectId) ?? [];
   const round: ProjectRecommendationRoundRecord = {
     projectId: input.projectId,
@@ -147,7 +120,7 @@ export async function listRecentProjectRecommendationRounds(
     limit?: number;
   },
 ): Promise<ProjectRecommendationRoundRecord[]> {
-  const store = getProjectRecommendationRoundStore(db);
+  const store = db.recommendationRounds;
   const rounds = store.get(input.projectId) ?? [];
 
   return rounds
