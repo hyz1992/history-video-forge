@@ -149,8 +149,10 @@ const filteredProjects = computed(() => {
     return content.includes(query);
   });
 
+  const demoModeActive = isDemoMode.value;
+
   filtered.sort((a, b) => {
-    if (isDemoMode.value) {
+    if (demoModeActive) {
       const aDone = isSuccessStatus(a) ? 0 : 1;
       const bDone = isSuccessStatus(b) ? 0 : 1;
       if (aDone !== bDone) return aDone - bDone;
