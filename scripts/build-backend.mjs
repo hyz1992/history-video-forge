@@ -1,16 +1,18 @@
 import { execSync } from "node:child_process";
-import { readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { extname, join } from "node:path";
+import { readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { extname, join, resolve } from "node:path";
 
 const DIST_DIR = "backend/dist";
 
-try {
-  execSync("npx tsc -p backend/tsconfig.json", { stdio: "inherit" });
-} catch {
-  process.exitCode = 0;
+export function runBackendBuild({
+  distDir = DIST_DIR,
+  exec = (command) => execSync(command, { stdio: "inherit" }),
+} = {}) {
+  rmSync(distDir, { recursive: true, force: true });
+  exec("npx tsc -p backend/tsconfig.json");
+  fixExtensionlessImports(distDir);
 }
-
-fixExtensionlessImports(DIST_DIR);
 
 function fixExtensionlessImports(dir) {
   const entries = readdirSync(dir);
@@ -39,4 +41,8 @@ function fixExtensionlessImports(dir) {
       }
     }
   }
+}
+
+if (resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
+  runBackendBuild();
 }
