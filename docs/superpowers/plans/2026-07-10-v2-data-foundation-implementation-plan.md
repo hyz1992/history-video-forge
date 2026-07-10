@@ -21,10 +21,61 @@
 - `backend/src/db/legacy-snapshot-reader.ts`：只读解析 V1 快照。
 - `tests/backend/db/prisma-*.test.ts`：schema、migration、CRUD 和导入测试。
 
+## 执行风险控制与停止条件
+
+### R1：新 schema 漏掉当前真实字段
+
+- 控制：Task 1 的模型对照表必须覆盖 `DbClient` 的每个 Map、每个 Project active/trace/storage 字段和快照顶层集合。
+- 自动检查：新增 `tests/backend/db/domain-model-mapping.test.ts`，从 `backend/src/db/client.ts` 提取集合名，断言对照表逐项出现。
+- 停止条件：对照表存在未归类集合或字段时，禁止执行 Task 2/3，不能提交新 schema。
+
+### R2：空库可用但 V1 导入丢数据
+
+- 控制：inspect、import、verify 分离；源快照 SHA-256、各集合计数、active 外键、项目目录存在性均写入迁移报告。
+- 自动检查：同一快照连续导入两次；第二次必须返回 `already_applied` 且数据库计数不变。
+- 停止条件：存在 error 级孤儿关系、active record 悬空、项目计数不一致时，禁止 `activate`。
+- 恢复：删除未激活的新 SQLite 文件，继续使用原 JSON 快照；禁止修改或覆盖原快照及 `.bak`。
+
+### R3：文件系统和数据库部分成功
+
+- 控制：本计划不移动真实项目文件。数据库只登记稳定 `storageKey`，文件重定位必须另立任务。
+- 停止条件：迁移代码出现 `Move-Item`、`rename` 或删除旧项目目录的行为，立即停止并移出本计划。
+
+### R4：SQLite 锁、并发和备份不可靠
+
+- 控制：单实例运行；连接初始化执行 `PRAGMA foreign_keys = ON`、`journal_mode = WAL`、`busy_timeout = 5000`。数据库写入继续受项目阶段锁保护。
+- 备份：使用 SQLite 一致性备份机制或停写窗口复制数据库、`-wal` 和 `-shm`；不在活动写入时只复制主 `.db`。
+- 部署边界：本期明确只支持单后端实例；如果部署目标变为多实例并发写，立即停止 SQLite 切换并重新评估 PostgreSQL。
+- 停止条件：并发 smoke 出现未处理的 `SQLITE_BUSY`、外键未开启或实际部署要求多实例时，不切换主存储。
+
+### R5：旧测试失败掩盖新回归
+
+- 控制：执行前记录现有失败基线；每个任务运行新增聚焦测试和受影响旧测试；最终再跑全量测试。
+- 判定：已知旧失败只能标记为“基线未改善”，新增失败必须修复；不能用“旧测试本来就失败”解释新失败。
+- 停止条件：受影响旧测试新增失败，或全量失败数高于基线时，不得宣称数据层验收完成。
+
+## 执行前闸门
+
+在 Task 1 前创建 `docs/records/2026-07-10-v2-test-baseline.md`，记录以下命令的退出码、通过/失败/超时数量和已知失败名称：
+
+```bash
+npm run typecheck:backend
+npm run build
+npx vitest run --configLoader runner --no-file-parallelism
+```
+
+若全量测试超时，按目录拆分运行并记录未完成分组。该基线只用于区分新旧失败，不把旧失败改写为通过。基线文档使用中文提交：
+
+```bash
+git add docs/records/2026-07-10-v2-test-baseline.md
+git commit -m "记录V2实施前测试基线"
+```
+
 ### Task 1：冻结领域模型对照表
 
 **Files:**
 - Create: `docs/data/v2-domain-model-mapping.md`
+- Create: `tests/backend/db/domain-model-mapping.test.ts`
 - Read: `backend/src/db/client.ts`
 - Read: `backend/src/db/persistence.ts`
 - Read: `backend/prisma/schema.prisma`
@@ -50,16 +101,23 @@
 
 明确：候选指纹使用项目作用域复合索引；流水线记录使用 `onDelete: Restrict`；Project 使用软归档；大文件不入库。
 
-- [ ] **Step 4: 自审映射覆盖率**
+- [ ] **Step 4: 自动检查映射覆盖率**
 
-Run: `rg -n "Map<string" backend/src/db/client.ts`
+测试读取 `backend/src/db/client.ts`，提取 `DbClient` 中的 Map 属性名，并断言每个名称出现在对照表第一列。
+
+Run:
+
+```bash
+rg -n "Map<string" backend/src/db/client.ts
+npx vitest run --configLoader runner tests/backend/db/domain-model-mapping.test.ts
+```
 
 Expected: 每个 Map 都能在对照表中找到一行。
 
 - [ ] **Step 5: 提交**
 
 ```bash
-git add docs/data/v2-domain-model-mapping.md
+git add docs/data/v2-domain-model-mapping.md tests/backend/db/domain-model-mapping.test.ts
 git commit -m "冻结V2领域模型映射"
 ```
 
@@ -214,6 +272,7 @@ git commit -m "重建V2数据库基线模型"
 - [ ] **Step 1: 写事务失败测试**
 
 测试创建 User、Project、TopicPackage，并在事务抛错时断言三者都未写入。
+增加并发测试：同一项目的两个状态更新在 `busy_timeout` 内完成或返回受控冲突，不允许泄漏原始 `SQLITE_BUSY`。
 
 - [ ] **Step 2: 确认测试失败**
 
@@ -234,6 +293,7 @@ export function createPrismaClient(databaseUrl: string) {
 ```
 
 生产代码不得直接 `new PrismaClient()`。
+初始化后执行并断言：`foreign_keys=1`、`journal_mode=wal`、`busy_timeout=5000`。
 
 - [ ] **Step 4: 通过事务测试和类型检查**
 
@@ -357,6 +417,7 @@ git commit -m "增加V1快照迁移审计"
 - [ ] **Step 1: 写双次导入失败测试**
 
 第一次导入完整快照；第二次导入同一 `sourceChecksum`，断言所有表计数不变，并返回 `already_applied`。
+增加失败样本：active record 指向不存在记录时，import 必须回滚整个事务且不创建 `completed` migration marker。
 
 - [ ] **Step 2: 确认测试失败**
 
@@ -399,6 +460,7 @@ git commit -m "实现V1数据幂等迁移"
 - [ ] **Step 1: 写 readiness 失败测试**
 
 覆盖数据库不可写、migration 未应用、Prisma Client 可查询三种状态；前两种 `/readyz` 返回 503。
+增加 `foreign_keys` 未开启、WAL/busy timeout 配置失败和迁移 verify 未通过场景，均返回 503。
 
 - [ ] **Step 2: 确认测试失败**
 
@@ -420,9 +482,10 @@ npm exec --workspace backend -- prisma generate --config prisma.config.ts
 npx vitest run --configLoader runner tests/backend/db/prisma-toolchain.test.ts tests/backend/db/prisma-schema.test.ts tests/backend/db/prisma-client.test.ts tests/backend/db/prisma-repositories.test.ts tests/backend/db/v1-migration-inspect.test.ts tests/backend/db/v1-migration-import.test.ts tests/backend/db/prisma-readiness.test.ts --no-file-parallelism
 npm run typecheck:backend
 npm run build:backend
+npx vitest run --configLoader runner --no-file-parallelism
 ```
 
-Expected: 全部通过。
+Expected: 聚焦测试全部通过；全量测试失败数不得高于实施前记录的基线，所有新增失败必须为 0。若旧失败仍存在，只能在验收记录中逐项标为未闭环。
 
 - [ ] **Step 5: 记录证据并提交**
 
@@ -439,3 +502,4 @@ git commit -m "完成V2数据基础验收"
 - 数据库异常能阻断 `/readyz`。
 - 未移动任何现有真实项目文件。
 - 尚未启用登录和项目访问拦截；这些属于下一份计划。
+- 全量测试相对实施前基线没有新增失败；仍存在的旧失败逐项保留状态。

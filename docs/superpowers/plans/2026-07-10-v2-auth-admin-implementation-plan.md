@@ -20,6 +20,47 @@
 - `frontend/src/views/AdminUsersPage.vue`：管理员用户管理。
 - `frontend/src/views/AdminProjectsPage.vue`：管理员项目查看与转移。
 
+## 执行风险控制与停止条件
+
+### R1：旧项目没有 owner，启用鉴权后全部不可见
+
+- 控制：认证计划启动前执行 SQL/Prisma 校验，`Project.ownerId IS NULL` 必须为 0；V1 项目必须已归属首个管理员。
+- readiness：存在无 owner 项目时返回 503，不注册受保护业务路由。
+- 停止条件：所有权校验不通过时，禁止执行 Task 5 的全路由鉴权切换。
+
+### R2：项目路由漏加授权
+
+- 控制：生成 project route inventory，覆盖所有包含 `:projectId` 的路由；测试逐条断言已挂载 `requireProjectAccess`。
+- 停止条件：inventory 中存在未分类路由时，不允许完成 Task 5。
+
+### R3：Cookie Session 遭受 CSRF、固定会话或暴力登录
+
+- 控制：登录成功必须生成全新 Session；改密、转角色、禁用用户后撤销旧 Session。状态变更请求校验 `Origin` 与允许的应用 origin；保留 `HttpOnly`、`SameSite=Lax`、生产 `Secure`。
+- 限速：登录按用户名规范化值和 IP 前缀做短窗口限速；返回统一 `invalid_credentials`，不泄漏账号存在性。
+- 停止条件：跨 origin POST 能成功、登录后 Session 未轮换或禁用用户旧 Session 仍有效时，不进入浏览器验收。
+
+### R4：管理员误锁死系统
+
+- 控制：最后管理员保护在数据库事务中执行；管理员不能禁用自己而不先确认存在另一启用管理员。
+- 恢复：保留本地显式 `admin:create`/`admin:recover` CLI，恢复动作写 AuditLog，不依赖 Web 登录。
+- 停止条件：并发降级两个管理员可导致管理员数为 0 时，管理员 API 不得上线。
+
+### R5：权限测试只覆盖 UI
+
+- 控制：安全验收以 HTTP API 为主，UI 测试只验证交互。所有跨用户攻击测试直接构造请求，不依赖按钮是否可见。
+- 停止条件：任何项目 API 仅靠前端隐藏保护时，整体权限验收失败。
+
+## 执行前闸门
+
+认证计划只能在数据计划完成后启动。执行以下检查：
+
+```sql
+SELECT COUNT(*) AS ownerless_projects FROM Project WHERE ownerId IS NULL;
+SELECT COUNT(*) AS active_admins FROM User WHERE role = 'ADMIN' AND status = 'ACTIVE';
+```
+
+要求 `ownerless_projects = 0`、`active_admins >= 1`，且 `/readyz` 为 200。随后运行数据计划的聚焦数据库测试；任何检查失败都停止，不注册登录强制中间件。
+
 ### Task 1：建立密码与 Session 服务
 
 **Files:**
@@ -75,13 +116,14 @@ git commit -m "建立密码与会话服务"
 
 **Files:**
 - Create: `backend/src/cli/create-admin.ts`
+- Create: `backend/src/cli/recover-admin.ts`
 - Create: `backend/src/modules/auth/admin-bootstrap.service.ts`
 - Test: `tests/backend/auth/admin-bootstrap.test.ts`
 - Modify: `backend/package.json`
 
 - [ ] **Step 1: 写幂等与最后管理员测试**
 
-相同 username 第二次创建返回 `username_conflict`；创建成功后密码不是明文；系统可识别至少一个启用管理员。
+相同 username 第二次创建返回 `username_conflict`；创建成功后密码不是明文；系统可识别至少一个启用管理员。恢复测试覆盖“没有启用管理员时创建/启用恢复管理员”，以及“已有启用管理员时拒绝恢复命令”。
 
 - [ ] **Step 2: 确认测试失败**
 
@@ -99,6 +141,14 @@ npm run admin:create --workspace backend -- --username admin --display-name 管�
 
 密码只允许从交互式隐藏输入或一次性 stdin 读取，不写入日志和 shell 参数。
 
+恢复命令：
+
+```bash
+npm run admin:recover --workspace backend -- --username recovery-admin --display-name 恢复管理员
+```
+
+`admin:recover` 只允许在启用管理员数量为 0 时运行，必须写入 `ADMIN_RECOVERY` AuditLog；已有启用管理员时返回非零退出码，不允许借此绕过正常管理员流程。
+
 - [ ] **Step 4: 通过测试并检查日志**
 
 Run: `npx vitest run --configLoader runner tests/backend/auth/admin-bootstrap.test.ts`
@@ -108,7 +158,7 @@ Expected: PASS，输出不包含测试密码。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add backend/src/cli/create-admin.ts backend/src/modules/auth/admin-bootstrap.service.ts backend/package.json tests/backend/auth/admin-bootstrap.test.ts
+git add backend/src/cli/create-admin.ts backend/src/cli/recover-admin.ts backend/src/modules/auth/admin-bootstrap.service.ts backend/package.json tests/backend/auth/admin-bootstrap.test.ts
 git commit -m "增加首个管理员初始化命令"
 ```
 
@@ -124,6 +174,7 @@ git commit -m "增加首个管理员初始化命令"
 - [ ] **Step 1: 写 API 失败测试**
 
 覆盖登录成功、统一 `invalid_credentials`、Cookie 属性、退出撤销、`/me`、临时密码强制改密。
+增加跨 origin 状态变更拒绝、登录限速、登录前后 Session token 不复用、禁用用户旧 Session 失效测试。
 
 - [ ] **Step 2: 确认测试失败**
 
@@ -134,6 +185,7 @@ Expected: FAIL，route 不存在。
 - [ ] **Step 3: 实现 API**
 
 Cookie 名固定为 `hvf_session`；`HttpOnly`、`SameSite=Lax`，生产环境 `Secure`。登录失败不透露用户名是否存在。
+所有 POST/PATCH/DELETE 校验 `Origin`；允许 origin 来自明确配置，不从请求 Host 动态信任。登录限速返回 `429 auth_rate_limited`。
 
 - [ ] **Step 4: 通过 API 测试**
 
@@ -202,10 +254,12 @@ git commit -m "建立项目授权边界"
 - Modify: `backend/src/modules/render/render.routes.ts`
 - Modify: `backend/src/modules/publish/publish.routes.ts`
 - Test: `tests/backend/api/project-ownership-api.test.ts`
+- Create: `tests/backend/authorization/project-route-inventory.test.ts`
 
 - [ ] **Step 1: 写跨用户攻击测试**
 
 用户 A 对用户 B 的每组 GET/POST/PATCH/DELETE 代表接口发请求，全部必须返回 `403 access_denied`，且数据无变化。
+route inventory 读取应用注册结果，列出全部 `:projectId` 路由并断言每条路由声明 `read`、`write` 或 `admin-only` 权限。
 
 - [ ] **Step 2: 确认测试失败**
 
@@ -222,7 +276,7 @@ Expected: FAIL，当前 API 无身份隔离。
 Run:
 
 ```bash
-npx vitest run --configLoader runner tests/backend/api/project-ownership-api.test.ts tests/backend/server-http.test.ts tests/backend/projects/project-delete.test.ts --no-file-parallelism
+npx vitest run --configLoader runner tests/backend/authorization/project-route-inventory.test.ts tests/backend/api/project-ownership-api.test.ts tests/backend/server-http.test.ts tests/backend/projects/project-delete.test.ts --no-file-parallelism
 ```
 
 Expected: PASS；旧测试通过测试身份 helper 注入管理员或 owner Session。
@@ -245,6 +299,7 @@ git commit -m "强制项目所有权隔离"
 - [ ] **Step 1: 写管理员 API 测试**
 
 覆盖创建 USER/ADMIN、禁用用户、撤销全部 Session、username 冲突、普通用户 403、最后管理员不能禁用或降级。
+增加并发测试：两个管理员同时尝试互相降级时，事务结果必须至少保留一个启用管理员。
 
 - [ ] **Step 2: 确认测试失败**
 
@@ -398,6 +453,7 @@ git commit -m "增加管理员用户与项目页面"
 - [ ] **Step 1: 编写端到端场景**
 
 场景固定为：管理员创建 user-a/user-b；两人首次改密；分别创建项目；互相访问返回 403；管理员转移项目；重启服务后 Session、owner 和推荐记忆仍存在。
+安全场景增加：跨 origin POST 被拒绝；连续错误登录触发 429；禁用 user-a 后其已打开页面下次请求返回 401。
 
 - [ ] **Step 2: 运行后端聚焦回归**
 
@@ -405,9 +461,10 @@ Run:
 
 ```bash
 npx vitest run --configLoader runner tests/backend/auth tests/backend/authorization tests/backend/api/auth-api.test.ts tests/backend/api/project-ownership-api.test.ts tests/backend/api/admin-users-api.test.ts tests/backend/api/admin-projects-api.test.ts --no-file-parallelism
+npx vitest run --configLoader runner --no-file-parallelism
 ```
 
-Expected: PASS。
+Expected: 聚焦权限测试全部通过；全量测试新增失败为 0。既有失败必须沿用数据计划建立的基线逐项记录，不能吞并为“整体通过”。
 
 - [ ] **Step 3: 运行真实浏览器验收**
 
@@ -441,4 +498,3 @@ git commit -m "完成用户隔离与管理员权限验收"
 - 最后一个启用管理员受到保护。
 - Session、项目归属和推荐记忆在重启后保持。
 - 真实浏览器完成双用户隔离与项目转移验收。
-
