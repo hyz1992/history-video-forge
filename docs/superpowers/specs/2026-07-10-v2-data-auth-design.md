@@ -29,11 +29,40 @@
 - Prisma 提供 schema、migration、类型化 client 和后续切换 PostgreSQL 的演进路径。
 - 视频、音频、图片和运行日志继续放文件系统，避免把大二进制写入 SQLite。
 
+版本基线采用当前已核对的 Prisma ORM `7.8.0`：
+
+- 项目当前实际 Node.js 为 `v22.15.0`，满足 Prisma 7 的 Node.js 要求。
+- 使用 `prisma-client` generator，并显式设置生成目录 `backend/src/generated/prisma`。
+- 使用 `prisma.config.ts` 配置 `DATABASE_URL`，不继续把连接 URL 写在 datasource block。
+- `prisma`、`@prisma/client` 与 `@prisma/adapter-better-sqlite3` 使用同一锁定版本 `7.8.0`，并安装 `@types/better-sqlite3`；不使用宽松的跨主版本范围。
+- Prisma Client 通过 `PrismaBetterSqlite3` adapter 初始化；连接字符串仍由现有环境配置读取，不在业务模块中散落默认路径。
+- 安装后将 `prisma validate`、`prisma generate` 和 migration smoke test 纳入构建/验证入口。
+
 ### 2.2 未采用方案
 
 - 继续扩展 JSON 快照：改动小，但无法可靠表达用户归属、唯一约束、事务和查询边界。
 - 直接使用 PostgreSQL：能力足够，但当前部署和维护成本高于收益。
 - 将全部文件写入数据库：备份体积、流式读取和媒体工具兼容性都更差。
+
+### 2.3 现有 Prisma schema 的审查结论
+
+仓库已有 `backend/prisma/schema.prisma`，但它不是可运行的数据层基线，不能直接增量扩展：
+
+- 根/后端 package 均未安装 `prisma` 或 `@prisma/client`。
+- 没有 migration 目录、生成 client 或 `PrismaClient` 业务调用。
+- 当前测试只检查 schema 中是否出现若干字符串，没有执行 `prisma validate`、migration 或真实 CRUD。
+- schema 使用已弃用的 `prisma-client-js` generator。
+- schema 缺少当前 V1 已存在的 PublishPackage、推荐轮次、媒体库、音色，以及 Project 的 active publish、topic/script/storyboard trace 和 storage 字段。
+- schema 缺少 V2 所需 User、Session、AuditLog、项目所有权与迁移标记。
+- 部分关系只有外键字符串，没有完整 relation 和删除策略；`fingerprint @unique` 也可能错误地把跨项目候选当成全局唯一。
+
+处理方式：
+
+1. 将旧 schema 视为历史字段清单，保留在 Git 历史中，不作为新 schema 真相源。
+2. 从 `backend/src/db/client.ts`、当前 JSON 快照格式、正式 pipeline schema 和 V2 所有权设计生成领域模型对照表。
+3. 重写完整 Prisma 7 schema，而不是逐字段修补旧 schema。
+4. 创建新的首个 migration；由于生产数据库尚不存在，不做虚构的旧 Prisma migration 升级链。
+5. 用真实 schema validation、空库 migration、repository CRUD 和 V1 导入测试替换字符串包含测试。
 
 ## 3. 总体架构
 
@@ -47,6 +76,8 @@
 业务规则不得直接依赖全局 `Map`。迁移期间允许保留旧 `DbClient` 作为只读源和测试夹具，但新写入必须经过 repository 接口。
 
 ## 4. 数据模型
+
+正式写 schema 前必须完成一份模型对照表。每个当前 `DbClient` Map 都要标记为以下一种：数据库主表、JSON 子结构、文件系统 catalog、可重建缓存或淘汰对象。未完成对照表时不得提交新的 `schema.prisma`。
 
 ### 4.1 User
 
@@ -113,6 +144,17 @@
 - 管理员代用户查看项目。
 
 字段至少包含 `actorUserId`、`action`、`targetType`、`targetId`、`metadataJson`、`createdAt`。日志不可由普通用户修改或删除。
+
+### 4.7 首版 schema 必须覆盖的 V1 对象
+
+数据库主表至少覆盖：
+
+- Project、EventRegistryEntry、TopicPackage、ScriptRecord、StoryboardRecord。
+- AssetPlanRecord、AssetManifestRecord、ComposeRecord、RenderJobRecord、PublishPackageRecord。
+- AssetProviderJobRecord、RecommendationRound、RecommendationExposure。
+- User、Session、AuditLog、DataMigrationRun。
+
+`MediaLibraryItem` 与 `VoiceProfile` 在模型对照表中单独判断：若继续由版本化 catalog/文件维护，则数据库只保存用户选择或引用；若需要运行时创建和统计，再设计对应主表。首版 schema 不允许在没有使用场景的情况下机械复制所有 Map。
 
 ## 5. 身份认证与权限模型
 
@@ -190,6 +232,7 @@
 - 以只读方式加载主快照或备份快照。
 - 扫描 `storage/projects/`，生成数据库记录与目录对应报告。
 - 将没有明确所有者的 V1 项目默认归属首个管理员。
+- 生成“当前 Map/快照字段 → Prisma model/JSON/文件资产/舍弃项”对照表并人工审阅。
 
 ### 7.2 迁移阶段
 
@@ -225,7 +268,9 @@
 
 数据层验收：
 
+- `prisma validate` 和 `prisma generate` 通过。
 - Prisma migration 可从空库执行。
+- 迁移后启动真实 Prisma Client，完成 User、Project 和一条流水线记录的事务 CRUD。
 - V1 快照迁移在副本上重复执行两次，第二次不产生重复记录。
 - active record、推荐轮次、provider job 和项目目录引用计数一致。
 - 数据库异常时 `/readyz` 返回 `503`。
@@ -249,14 +294,16 @@
 
 ## 11. 分阶段交付顺序
 
-1. 建立 Prisma/SQLite 基础和 repository 接口，不切换生产读写。
-2. 实现迁移 inspect/import/verify，完成本地数据演练。
-3. 切换项目与流水线数据到 repository。
-4. 实现 User、Session、管理员初始化和认证中间件。
-5. 为全部项目 API 加所有权授权。
-6. 实现管理员用户/项目接口及 AuditLog。
-7. 实现登录、修改密码和管理员管理页面。
-8. 真实浏览器完成双用户隔离、项目转移和重启恢复验收。
+1. 审计旧 schema，建立当前 Map/快照到新模型的对照表。
+2. 锁定 Prisma 7 版本，建立 `prisma.config.ts`、新 schema 和首个 migration。
+3. 建立 repository 接口和真实数据库 contract test，不切换生产读写。
+4. 实现迁移 inspect/import/verify，完成本地数据演练。
+5. 切换项目与流水线数据到 repository。
+6. 实现 User、Session、管理员初始化和认证中间件。
+7. 为全部项目 API 加所有权授权。
+8. 实现管理员用户/项目接口及 AuditLog。
+9. 实现登录、修改密码和管理员管理页面。
+10. 真实浏览器完成双用户隔离、项目转移和重启恢复验收。
 
 ## 12. 后续设计接口
 
@@ -265,3 +312,25 @@
 - 推荐增强可以复用 `RecommendationRound/Exposure`，但必须先明确项目级和用户级记忆范围。
 - 内容策略配置化应依赖稳定的数据所有权，不与本期数据库迁移混做。
 
+## 13. 设计自审结论
+
+已验证事实：
+
+- 当前运行环境为 Node.js `v22.15.0`。
+- npm registry 当前返回 `prisma`、`@prisma/client`、`@prisma/adapter-better-sqlite3` 最新版本均为 `7.8.0`。
+- 旧 schema 没有 migration、client 生成物、依赖或运行时代码接线。
+- 当前 `DbClient` 已比旧 schema 多出 PublishPackage、推荐轮次、媒体库、音色和多项 Project 状态字段。
+
+设计推断：
+
+- SQLite 足以支撑当前少量用户、单实例私有工具；若后续出现多实例并发写或远程托管需求，应单独评估 PostgreSQL，而不是把切换承诺写进首期验收。
+- MediaLibraryItem 与 VoiceProfile 是否入主库仍取决于后续偏好/运营需求，因此首期先通过模型对照表决策，避免制造无使用方的数据表。
+
+最可能的失败路径：
+
+- 直接沿用旧 schema，导致当前快照字段静默丢失。
+- 把文件移动和数据库导入绑在一个不可重试步骤中，失败后产生孤儿目录。
+- 在项目所有权迁移完成前启用鉴权，造成旧项目全部不可见。
+- 仅通过 schema 字符串检查，实际 migration、adapter 或 CRUD 到运行时才暴露问题。
+
+成本最低、信号最强的首个验证是：先完成模型对照表和一个临时空库 spike，执行 `validate → generate → migrate → transaction CRUD`；该 spike 通过后再编写全量迁移计划。
