@@ -108,11 +108,13 @@ Task 8.5-3 处理结果：导入前已强制检查全部目标业务集合为空
 
 Task 8.5-5 处理结果：推荐轮次按 projectId 使用进程内项目队列串行化，并在事务首个写操作验证 owner/获取 SQLite 写锁；唯一冲突、SQLite busy 和 Prisma 事务冲突只进行最多三次受控重试，对外映射为稳定仓储错误。两个独立 Prisma client 的并发测试稳定生成第 1、2 轮。本结论只适用于当前单后端实例边界。
 
-### P1-4：数据库备份、恢复和正式激活没有可执行入口
+### P1-4：数据库备份、恢复和正式激活没有可执行入口（已关闭）
 
 现有代码没有 SQLite 一致性备份、恢复、完整性检查、migration status、激活或回滚 CLI。直接复制 WAL 活跃数据库的主文件可能得到不一致备份。
 
 处理：增加显式 `inspect → migrate deploy → import/initialize → verify → activate → backup` 运维入口；恢复只能离线执行，恢复后必须运行 integrity、migration 和业务计数检查。
+
+Task 8.5-6 处理结果：新增统一 `database-operations` CLI，覆盖 status/init/import/verify/activate/backup/restore；在线备份使用 SQLite backup API，独立 client 完整验证后才命名落盘。restore 要求显式确认和服务停机声明，先验证临时副本、自动备份当前库，再通过同目录改名替换并保留失败回滚路径。临时目录演练已验证项目 active topic 链和 readiness 恢复。
 
 ### P1-5：数据库路径与 readiness 依赖存在 fail-open 组合方式（已关闭）
 

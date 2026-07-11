@@ -232,11 +232,13 @@ npx vitest run --configLoader runner tests/backend/db/prisma-schema.test.ts test
 
 **步骤：**
 
-- [ ] 提供显式 `status/init/import/verify/activate/backup/restore` 入口，所有破坏性动作默认 dry-run 或要求确认参数。
-- [ ] 使用 SQLite 一致性备份能力；备份文件名包含时间、schema 版本和 checksum，禁止静默覆盖。
-- [ ] 备份完成后在独立 client 运行 quick/foreign key/migration/activation 检查。
-- [ ] restore 仅允许服务停机时执行；恢复前自动保存当前数据库，恢复到临时路径验证后再原子替换。
-- [ ] 实际执行一次临时目录恢复演练，比较关键表计数和至少一个完整项目 active 链。
+- [x] 提供显式 `status/init/import/verify/activate/backup/restore` 入口，所有破坏性动作默认 dry-run 或要求确认参数。
+- [x] 使用 SQLite 一致性备份能力；备份文件名包含时间、schema 版本和 checksum，禁止静默覆盖。
+- [x] 备份完成后在独立 client 运行 quick/foreign key/migration/activation 检查。
+- [x] restore 仅允许服务停机时执行；恢复前自动保存当前数据库，恢复到临时路径验证后再原子替换。
+- [x] 实际执行一次临时目录恢复演练，比较关键表计数和至少一个完整项目 active 链。
+
+**完成记录：**`docs/operations/database-runbook.md`
 
 **提交：**`建立SQLite备份恢复工具`
 

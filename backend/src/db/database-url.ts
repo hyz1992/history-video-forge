@@ -14,5 +14,5 @@ export function resolveDatabasePath(databaseUrl: string, cwd = process.cwd()): s
 }
 
 export function normalizedDatabaseUrl(databaseUrl: string, cwd = process.cwd()): string {
-  return `file:${resolveDatabasePath(databaseUrl, cwd)}`;
+  return `file:${resolveDatabasePath(databaseUrl, cwd).replace(/\\/g, "/")}`;
 }

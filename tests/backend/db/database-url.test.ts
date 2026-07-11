@@ -10,6 +10,6 @@ describe("database URL normalization", () => {
     expect(resolveDatabasePath("storage/test.db", cwd)).toBe(absolute);
     expect(resolveDatabasePath(absolute, cwd)).toBe(absolute);
     expect(resolveDatabasePath("file:storage/test.db", cwd)).toBe(absolute);
-    expect(normalizedDatabaseUrl("storage/test.db", cwd)).toBe(`file:${absolute}`);
+    expect(normalizedDatabaseUrl("storage/test.db", cwd)).toBe(`file:${absolute.replace(/\\/g, "/")}`);
   });
 });
