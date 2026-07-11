@@ -195,6 +195,30 @@ function inspectForeignReferences(
   }
 }
 
+function inspectCandidateCacheUniqueness(
+  entries: LegacySnapshotEntry[],
+  issues: MigrationIssue[],
+): void {
+  const seen = new Map<string, string>();
+  for (const [recordId, value] of entries) {
+    const row = asRecord(value);
+    if (!row || typeof row.projectId !== "string" || typeof row.fingerprint !== "string") continue;
+    const key = `${row.projectId}\u0000${row.fingerprint}`;
+    const firstRecordId = seen.get(key);
+    if (firstRecordId) {
+      issues.push({
+        code: "duplicate_candidate_fingerprint",
+        severity: "error",
+        collection: "candidateCache",
+        recordId,
+        detail: `firstRecordId=${firstRecordId}, projectId=${row.projectId}, fingerprint=${row.fingerprint}`,
+      });
+    } else {
+      seen.set(key, recordId);
+    }
+  }
+}
+
 export function inspectV1Snapshot(sourcePath: string): V1MigrationInspection {
   let sourceSha256 = "";
   try {
@@ -207,6 +231,7 @@ export function inspectV1Snapshot(sourcePath: string): V1MigrationInspection {
     }
     inspectProjectReferences(collections, issues);
     inspectForeignReferences(collections, issues);
+    inspectCandidateCacheUniqueness(collections.candidateCache, issues);
     inspectProjects(collections, issues);
     return createInspectionReport({
       sourcePath: readResult.sourcePath,

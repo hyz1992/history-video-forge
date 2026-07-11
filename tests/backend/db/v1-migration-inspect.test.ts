@@ -52,7 +52,10 @@ describe("V1 snapshot migration inspection", () => {
         ["topic-2", { id: "topic-2", projectId: "project-1" }],
         ["orphan-topic", { id: "orphan-topic", projectId: "missing-project" }],
       ],
-      candidateCache: [],
+      candidateCache: [
+        ["cache-1", { id: "cache-1", projectId: "project-1", fingerprint: "same-fingerprint" }],
+        ["cache-2", { id: "cache-2", projectId: "project-1", fingerprint: "same-fingerprint" }],
+      ],
       topicRunCounts: [],
       scriptRecords: [
         ["script-bad", { id: "script-bad", projectId: "project-1", topicPackageId: "missing-topic" }],
@@ -81,6 +84,7 @@ describe("V1 snapshot migration inspection", () => {
       "project_storage_missing",
       "orphan_project_reference",
       "orphan_foreign_reference",
+      "duplicate_candidate_fingerprint",
       "active_record_missing",
       "active_record_project_mismatch",
     ]));
