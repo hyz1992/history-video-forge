@@ -431,3 +431,14 @@ model DataMigrationRun {
 
   @@index([status, startedAt])
 }
+
+model DatabaseActivation {
+  id                String   @id
+  mode              String
+  schemaVersion     String
+  migrationName     String
+  migrationChecksum String
+  sourceSha256      String?
+  activatedAt       DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}

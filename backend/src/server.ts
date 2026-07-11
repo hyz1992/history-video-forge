@@ -8,6 +8,8 @@ import { createLocalRemotionRenderAdapter } from "./modules/render/local-remotio
 import type { RenderAdapter } from "./modules/render/render-adapter.js";
 import { createPrismaClient } from "./db/prisma-client.js";
 import { checkPrismaReadiness } from "./db/prisma-readiness.js";
+import { emptyPrismaReadinessChecks } from "./db/prisma-readiness.js";
+import { resolveDatabasePath } from "./db/database-url.js";
 import type { AppPrismaClient } from "./db/prisma-client.types.js";
 
 export interface ServerHostOptions {
@@ -67,7 +69,7 @@ function writeJson(response: ServerResponse, statusCode: number, body: unknown) 
 
 export function createHttpServer(
   app: AppInstance = buildApp({ renderAdapter: resolveRenderAdapter() }),
-  options?: { publicDir?: string },
+  options?: { publicDir?: string; allowMissingDatabaseReadinessForTests?: boolean },
 ): Server {
   const isProduction = process.env.NODE_ENV === "production";
   const publicDir = options?.publicDir ?? resolve(process.cwd(), "frontend", "dist");
@@ -89,7 +91,9 @@ export function createHttpServer(
     if (request.method === "GET" && request.url === "/readyz") {
       const database = app.databaseReadiness
         ? await app.databaseReadiness().catch(() => ({ ready: false, error: "database_unavailable", checks: null }))
-        : { ready: true, error: null, checks: null };
+        : options?.allowMissingDatabaseReadinessForTests
+          ? { ready: true, error: null, checks: null }
+          : { ready: false, error: "database_readiness_not_configured", checks: emptyPrismaReadinessChecks() };
       const ready = app.persistenceHealth.loaded && app.mediaLibraryHealth.loaded && database.ready;
       writeJson(response, ready ? 200 : 503, {
         status: ready ? "ready" : "not_ready",
@@ -196,8 +200,8 @@ export async function startServer(options?: {
   const configuredDatabaseUrl = process.env.DATABASE_URL?.trim();
   const defaultDatabasePath = resolve(process.cwd(), "storage", "history-video-forge.db");
   const databaseUrl = configuredDatabaseUrl || defaultDatabasePath;
-  const databasePath = databaseUrl.startsWith("file:") ? databaseUrl.slice("file:".length) : databaseUrl;
-  const databaseExists = existsSync(resolve(process.cwd(), databasePath));
+  const databasePath = resolveDatabasePath(databaseUrl);
+  const databaseExists = existsSync(databasePath);
   const prismaClient = options?.prismaClient ?? (options?.app || !databaseExists
     ? null
     : await createPrismaClient(databaseUrl));
@@ -205,13 +209,7 @@ export async function startServer(options?: {
     renderAdapter: resolveRenderAdapter(),
     databaseReadiness: prismaClient
       ? () => checkPrismaReadiness(prismaClient)
-      : async () => ({ ready: false, error: "database_not_initialized", checks: {
-        queryable: false,
-        writable: false,
-        migrationApplied: false,
-        pragmasValid: false,
-        legacyImportVerified: false,
-      } }),
+      : async () => ({ ready: false, error: "database_not_initialized", checks: emptyPrismaReadinessChecks() }),
   });
   const server = createHttpServer(app, { publicDir });
   let disconnected = false;

@@ -68,7 +68,7 @@ Task 8.5-3 处理结果：迁移记录已冻结为 `importing/imported/verified/
 
 处理：普通访问必须使用必填 scope；管理员/系统访问使用名称显式、单独审计的接口。所有更新必须携带 scope 或在受控事务上下文执行。
 
-### P0-4：readiness 不能证明当前数据库真正可安全承载业务
+### P0-4：readiness 不能证明当前数据库真正可安全承载业务（已关闭）
 
 当前检查存在三处缺口：
 
@@ -77,6 +77,8 @@ Task 8.5-3 处理结果：迁移记录已冻结为 `importing/imported/verified/
 3. 强制要求最近一条 legacy import verification 成功，全新空库没有旧数据可迁移时将永久不 ready。
 
 处理：增加显式数据库激活状态；区分 `fresh` 与 `legacy_import`；校验准确 migration 集合、主库事务写回滚、`quick_check` 和 `foreign_key_check`。
+
+Task 8.5-4 处理结果：新增 `DatabaseActivation` 单例记录与 fresh/legacy_import 显式激活入口；readiness 按仓库 migration manifest 校验名称集合、失败状态和 SHA-256 checksum，执行主库事务写入后强制回滚，并检查 `quick_check`、`foreign_key_check`。fresh 不创建伪迁移记录，legacy 必须绑定已 verified 的 source checksum。聚焦验证见 `docs/records/2026-07-11-v2-database-activation-readiness-verification.md`。
 
 ### P1-1：正式 schema 与已批准设计仍有漂移（已关闭）
 
@@ -108,11 +110,13 @@ Task 8.5-3 处理结果：导入前已强制检查全部目标业务集合为空
 
 处理：增加显式 `inspect → migrate deploy → import/initialize → verify → activate → backup` 运维入口；恢复只能离线执行，恢复后必须运行 integrity、migration 和业务计数检查。
 
-### P1-5：数据库路径与 readiness 依赖存在 fail-open 组合方式
+### P1-5：数据库路径与 readiness 依赖存在 fail-open 组合方式（已关闭）
 
 `createHttpServer(app)` 在 app 未提供 `databaseReadiness` 时会把 database 当作 ready；`startServer({ app })` 也会绕过生产 Prisma client 创建。这对测试注入方便，但生产组合代码可能意外跳过数据库闸门。
 
 处理：生产默认 fail-closed；测试必须通过显式选项声明跳过数据库 readiness，禁止用“回调缺失”等价于通过。
+
+Task 8.5-4 处理结果：`createHttpServer()` 在 readiness 回调缺失时返回 `database_readiness_not_configured` 和 HTTP 503；仅保留名称明确的 `allowMissingDatabaseReadinessForTests` 测试选项。服务启动统一解析相对路径、绝对路径和 `file:` URL，缺失数据库仍不会被静默创建。
 
 ### P1-6：Prisma CLI 内嵌测试存在明显耗时抖动
 

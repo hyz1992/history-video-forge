@@ -184,13 +184,15 @@ npx vitest run --configLoader runner tests/backend/db/prisma-schema.test.ts test
 
 **步骤：**
 
-- [ ] 增加显式 activation 记录，区分 `fresh` 和 `legacy_import`，保存 schema/migration 版本与 source checksum。
-- [ ] readiness 校验预期 migration 集合、失败 migration 和 checksum 漂移，不能只检查 count 大于零。
-- [ ] 将 TEMP 写探针替换为主数据库事务写入后回滚；探针不得留下业务记录。
-- [ ] 增加 `PRAGMA quick_check` 和 `PRAGMA foreign_key_check`。
-- [ ] legacy 模式要求对应 migration run 已 verified；fresh 模式不伪造 legacy import 记录。
-- [ ] `databaseReadiness` 缺失时生产 fail-closed；测试跳过必须使用名称明确的显式选项。
-- [ ] 规范化 `DATABASE_URL`/默认路径解析，并覆盖相对路径、绝对路径和 `file:` URL。
+- [x] 增加显式 activation 记录，区分 `fresh` 和 `legacy_import`，保存 schema/migration 版本与 source checksum。
+- [x] readiness 校验预期 migration 集合、失败 migration 和 checksum 漂移，不能只检查 count 大于零。
+- [x] 将 TEMP 写探针替换为主数据库事务写入后回滚；探针不得留下业务记录。
+- [x] 增加 `PRAGMA quick_check` 和 `PRAGMA foreign_key_check`。
+- [x] legacy 模式要求对应 migration run 已 verified；fresh 模式不伪造 legacy import 记录。
+- [x] `databaseReadiness` 缺失时生产 fail-closed；测试跳过必须使用名称明确的显式选项。
+- [x] 规范化 `DATABASE_URL`/默认路径解析，并覆盖相对路径、绝对路径和 `file:` URL。
+
+**完成记录：**`docs/records/2026-07-11-v2-database-activation-readiness-verification.md`
 
 **验证：**数据库只读、migration 缺失/失败/漂移、外键损坏、未激活、fresh 激活、legacy 激活均有独立测试。
 

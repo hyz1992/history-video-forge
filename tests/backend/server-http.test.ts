@@ -114,9 +114,10 @@ describe("backend http server", () => {
         checks: {
           queryable: true,
           writable: true,
-          migrationApplied: true,
+          migrationsValid: true,
           pragmasValid: true,
-          legacyImportVerified: false,
+          integrityValid: true,
+          activated: false,
         },
       }),
     });

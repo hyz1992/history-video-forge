@@ -37,6 +37,7 @@ describe("V2 Prisma baseline schema", () => {
       "RecommendationExposure",
       "AuditLog",
       "DataMigrationRun",
+      "DatabaseActivation",
     ];
 
     for (const modelName of requiredModels) modelBody(schema, modelName);

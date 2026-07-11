@@ -337,6 +337,17 @@ CREATE TABLE "DataMigrationRun" (
     "updatedAt" DATETIME NOT NULL
 );
 
+CREATE TABLE "DatabaseActivation" (
+    "id" TEXT NOT NULL PRIMARY KEY CHECK ("id" = 'primary'),
+    "mode" TEXT NOT NULL CHECK ("mode" IN ('fresh', 'legacy_import')),
+    "schemaVersion" TEXT NOT NULL,
+    "migrationName" TEXT NOT NULL,
+    "migrationChecksum" TEXT NOT NULL,
+    "sourceSha256" TEXT,
+    "activatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_username_key" ON "User"("username");
 
