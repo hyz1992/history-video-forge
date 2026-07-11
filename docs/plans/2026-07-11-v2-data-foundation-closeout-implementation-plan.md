@@ -92,12 +92,12 @@
 
 **步骤：**
 
-- [ ] 按 backend 模块、frontend、shared、harness 建立互斥测试分组，确保没有测试遗漏或重复。
-- [ ] 为每组记录测试文件数、用例数、耗时、退出码、失败名称和是否存在未退出句柄。
-- [ ] 用单文件/二分法定位 124 秒超时来自“总耗时超过命令上限”还是资源未关闭。
-- [ ] 单独定位 `prisma-toolchain.test.ts`：对比 Vitest 内同步子进程约 31 秒与 shell 直接执行约 1.7 秒的差异，优先消除 Windows shell/npm workspace/worker 隔离抖动；若保留 CLI 集成测试，必须使用独立分组和有依据的超时。
-- [ ] 若是 server、timer、Prisma client 或 mock 未释放，只做最小测试清理修复并提交。
-- [ ] 保留既有 prompt/assets/script 失败原状，更新精确名称，不把它们包装为本轮回归。
+- [x] 按 backend 模块、frontend、shared、harness 建立互斥测试分组，确保没有测试遗漏或重复。
+- [x] 为每组记录测试文件数、用例数、耗时、退出码、失败名称和是否存在未退出句柄。
+- [x] 用单文件/二分法定位 124 秒超时来自“总耗时超过命令上限”还是资源未关闭。
+- [x] 单独定位 `prisma-toolchain.test.ts`：对比 Vitest 内同步子进程约 31 秒与 shell 直接执行约 1.7 秒的差异，优先消除 Windows shell/npm workspace/worker 隔离抖动；若保留 CLI 集成测试，必须使用独立分组和有依据的超时。
+- [x] 若是 server、timer、Prisma client 或 mock 未释放，只做最小测试清理修复并提交。
+- [x] 保留既有 prompt/assets/script 失败原状，更新精确名称，不把它们包装为本轮回归。
 
 **验证：**
 

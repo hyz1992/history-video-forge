@@ -8,16 +8,17 @@ const repositoryRoot = process.cwd();
 describe("Prisma 7 toolchain", () => {
   it("validates the backend schema through the committed Prisma config", () => {
     const result = spawnSync(
-      "npm",
-      ["exec", "--workspace", "backend", "--", "prisma", "validate", "--config", "prisma.config.ts"],
+      process.execPath,
+      [join(repositoryRoot, "node_modules/prisma/build/index.js"), "validate", "--config", "prisma.config.ts"],
       {
-        cwd: repositoryRoot,
+        cwd: join(repositoryRoot, "backend"),
         encoding: "utf8",
         env: {
           ...process.env,
           DATABASE_URL: "file:./storage/test-prisma-toolchain.db",
         },
-        shell: process.platform === "win32",
+        shell: false,
+        timeout: 20_000,
       },
     );
 
@@ -29,5 +30,5 @@ describe("Prisma 7 toolchain", () => {
     expect(schema).toContain('provider = "prisma-client"');
     expect(schema).toContain('output   = "../src/generated/prisma"');
     expect(schema).toMatch(/datasource db\s*\{\s*provider\s*=\s*"sqlite"\s*\}/m);
-  });
+  }, 25_000);
 });

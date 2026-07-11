@@ -8,7 +8,7 @@
 
 截至 2026-07-11：
 
-- V2 Prisma 工具链、基线 schema、旧快照迁移脚手架和数据库 readiness 的核心能力已经实现；最新聚焦复验为 30 项中 29 项通过、1 项 Prisma CLI 内嵌测试超时。近期提交审查同时确认业务仍以 Map/JSON 为实际主存储，迁移状态机、readiness、仓储权限默认值、SQLite 备份恢复和全量测试超时仍未收口。
+- V2 Prisma 工具链、基线 schema、旧快照迁移脚手架和数据库 readiness 的核心能力已经实现。Task 8.5-1 已修复 Prisma CLI 测试异常耗时，并取得完整串行基线：187 文件、1031 项、987 通过、44 个既有/此前未枚举失败；全量约 6 分 13 秒，旧的 124 秒属于外部运行上限不足。近期提交审查同时确认业务仍以 Map/JSON 为实际主存储，迁移状态机、readiness、仓储权限默认值和 SQLite 备份恢复仍未收口。
 - 当前 V2 下一执行入口为 [V2 数据基础 Task 8.5 收口实施计划](./2026-07-11-v2-data-foundation-closeout-implementation-plan.md)。Task 8.5 完成前不进入用户系统实现。
 
 - [V1 高风险稳定化实施计划](./2026-07-10-v1-high-risk-stabilization-implementation-plan.md) 的主要代码任务已完成；其全量回归超时和故障演练缺口已并入 Task 8.5 的测试与切换闸门，不再作为独立的下一执行入口。

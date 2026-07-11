@@ -21,14 +21,14 @@
 
 | 验收项 | 状态 | 证据 |
 | --- | --- | --- |
-| Prisma 7 工具链、生成 client、空库 migration | 部分完成 | 功能存在且单独执行 `prisma validate` 通过；最新 8 文件聚焦复验中工具链测试超时 |
+| Prisma 7 工具链、生成 client、空库 migration | 已完成 | Task 8.5-1 已消除 Vitest 中的 shell/npm 二次启动，工具链测试约 1.5 秒通过 |
 | SQLite client 统一初始化与基础 PRAGMA | 已完成 | `backend/src/db/prisma-client.ts` |
 | Project / Recommendation 最小 repository smoke | 已完成 | `backend/src/db/repositories/`、重启恢复测试 |
 | 旧快照 inspect/import/verify 基础能力 | 部分完成 | 可只读审计、事务导入和同 checksum 幂等；失败状态机仍有缺口 |
 | 数据库异常进入 `/readyz` | 部分完成 | 已接入，但 migration、主库写入和激活语义检查不充分 |
 | 业务主存储切换到 Prisma | 未完成 | `buildApp()` 仍创建 `DbClient` 并持续加载/保存 JSON；Prisma repository 尚未被业务模块使用 |
 | SQLite 备份与恢复 | 未完成 | 只有旧 JSON `.bak`，没有 SQLite 一致性备份、校验和恢复演练 |
-| 全量自动化回归 | 未验证 | 实施前后全量 Vitest 均约 124 秒超时，无可信总计 |
+| 全量自动化回归 | 已验证但失败 | Task 8.5-1 提高运行上限后取得 187 文件、1031 项、987 通过、44 失败的完整总计 |
 
 ### 2.1 本次新鲜聚焦复验
 
@@ -113,6 +113,8 @@ npx vitest run --configLoader runner tests/backend/db/prisma-toolchain.test.ts t
 同一 `prisma validate` 在 shell 中约 1.7 秒完成，但通过 Vitest 中的同步子进程执行时约 31 秒才返回并触发 5 秒超时。它可能与 Windows shell、npm workspace 启动、Vitest worker 隔离或资源竞争有关，尚未完成根因定位。
 
 处理：Task 8.5-1 将工具链 CLI 验证从普通单元测试中隔离为明确的集成验证入口，或修正子进程调用方式和合理超时；不能简单把默认超时无限调大后视为解决。
+
+Task 8.5-1 处理结果：测试改为通过当前 Node 直接执行本地 Prisma CLI，不再经过 Windows shell/npm workspace 二次启动；单文件复验约 1.5 秒通过。本风险已关闭。
 
 ## 4. 非阻断但必须留痕
 
