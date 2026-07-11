@@ -13,6 +13,10 @@ export interface SaveCachedCandidateInput {
   strongScene: string;
   coreConflict: string;
   mustCoverPreviewJson?: unknown[];
+  sourceHint?: string;
+  recentUsageHint?: string;
+  whyThisNow?: string;
+  riskHintsJson?: string[];
 }
 
 export async function saveCachedCandidate(
@@ -33,6 +37,10 @@ export async function saveCachedCandidate(
     strongScene: input.strongScene,
     coreConflict: input.coreConflict,
     mustCoverPreviewJson: input.mustCoverPreviewJson ?? [],
+    sourceHint: input.sourceHint ?? "",
+    recentUsageHint: input.recentUsageHint ?? "",
+    whyThisNow: input.whyThisNow ?? "",
+    riskHintsJson: input.riskHintsJson ?? [],
     createdAt: new Date(),
   };
 

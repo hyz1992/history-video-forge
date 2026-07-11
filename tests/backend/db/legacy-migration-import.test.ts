@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
@@ -7,8 +7,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { importLegacySnapshot } from "../../../backend/src/db/migration/import-legacy-snapshot.js";
 import { verifyLegacyImport } from "../../../backend/src/db/migration/verify-legacy-import.js";
+import { applyAllDatabaseMigrations } from "./migration-test-utils.js";
 
-const migrationSql = readFileSync(join(process.cwd(), "backend/prisma/migrations/0001_v2_baseline/migration.sql"), "utf8");
 const tempDirectories: string[] = [];
 
 function createDatabase(): string {
@@ -16,7 +16,7 @@ function createDatabase(): string {
   tempDirectories.push(root);
   const path = join(root, "test.db");
   const db = new Database(path);
-  db.exec(migrationSql);
+  applyAllDatabaseMigrations(db);
   db.close();
   return path;
 }

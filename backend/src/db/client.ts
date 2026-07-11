@@ -87,6 +87,10 @@ export interface CandidateCacheRecord {
   strongScene: string;
   coreConflict: string;
   mustCoverPreviewJson: unknown[];
+  sourceHint: string;
+  recentUsageHint: string;
+  whyThisNow: string;
+  riskHintsJson: string[];
   createdAt: Date;
 }
 

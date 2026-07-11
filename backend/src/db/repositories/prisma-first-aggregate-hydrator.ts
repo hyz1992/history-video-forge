@@ -1,5 +1,7 @@
 import { join } from "node:path";
 
+import type { ProjectTopicCandidateState } from "../../app.js";
+import type { StoredTopicCandidate } from "../../modules/topic/topic-confirm.service.js";
 import type { CandidateCacheRecord, DbClient, EventRegistryRecord, ProjectRecord, ProjectRecommendationRoundRecord, TopicPackageRecord } from "../client.js";
 import type { AppPrismaClient } from "../prisma-client.types.js";
 
@@ -8,6 +10,7 @@ const array = <T>(value: unknown): T[] => Array.isArray(value) ? value as T[] : 
 
 export async function hydrateFirstAggregates(
   db: DbClient,
+  topicCandidateStore: Map<string, ProjectTopicCandidateState>,
   client: AppPrismaClient,
   options: { storageRoot: string },
 ): Promise<void> {
@@ -17,7 +20,7 @@ export async function hydrateFirstAggregates(
     client.recommendationRound.findMany({ orderBy: [{ projectId: "asc" }, { roundIndex: "asc" }], include: { exposures: { orderBy: { selectedAt: "asc" } } } }),
   ]);
   db.projects.clear(); db.events.clear(); db.topicPackages.clear(); db.candidateCache.clear();
-  db.recommendationRounds.clear(); db.topicRunCounts.clear();
+  db.recommendationRounds.clear(); db.topicRunCounts.clear(); topicCandidateStore.clear();
 
   for (const row of projects) {
     const record: ProjectRecord = {
@@ -55,7 +58,8 @@ export async function hydrateFirstAggregates(
   }
   for (const row of caches) {
     const record: CandidateCacheRecord = { ...row, viralRubricJson: object(row.viralRubricJson),
-      estimatedDurationBandJson: row.estimatedDurationBandJson, mustCoverPreviewJson: array(row.mustCoverPreviewJson) };
+      estimatedDurationBandJson: row.estimatedDurationBandJson, mustCoverPreviewJson: array(row.mustCoverPreviewJson),
+      riskHintsJson: array<string>(row.riskHintsJson) };
     db.candidateCache.set(record.id, record);
   }
   for (const row of rounds) {
@@ -65,5 +69,24 @@ export async function hydrateFirstAggregates(
     const projectRounds = db.recommendationRounds.get(row.projectId) ?? [];
     projectRounds.push(record); db.recommendationRounds.set(row.projectId, projectRounds);
     db.topicRunCounts.set(row.projectId, Math.max(db.topicRunCounts.get(row.projectId) ?? 0, row.roundIndex));
+    const cacheByFingerprint = new Map(caches.filter((cache) => cache.projectId === row.projectId).map((cache) => [cache.fingerprint, cache]));
+    const candidates = row.exposures.flatMap((exposure): StoredTopicCandidate[] => {
+      const cache = cacheByFingerprint.get(exposure.fingerprint);
+      const event = exposure.eventRegistryEntryId ? db.events.get(exposure.eventRegistryEntryId) : undefined;
+      if (!cache || !event) return [];
+      return [{
+        candidateId: exposure.id, projectId: row.projectId, event,
+        title: exposure.title ?? cache.eventIdentity ?? event.canonicalName,
+        oneLineAngle: cache.oneLineAngle, familyLabel: cache.familyLabel, scopeLabel: cache.scopeLabel,
+        coreConflict: cache.coreConflict, strongScene: cache.strongScene,
+        mustCoverPreview: array<string>(cache.mustCoverPreviewJson), sourceHint: cache.sourceHint,
+        recentUsageHint: cache.recentUsageHint, whyThisNow: cache.whyThisNow,
+        riskHints: array<string>(cache.riskHintsJson), viralRubric: object(cache.viralRubricJson) as Record<string, string>,
+      }];
+    });
+    const state: ProjectTopicCandidateState = topicCandidateStore.get(row.projectId) ?? { candidatesById: new Map(), rounds: [] };
+    for (const candidate of candidates) state.candidatesById.set(candidate.candidateId, candidate);
+    state.rounds.push({ roundId: row.id, roundIndex: row.roundIndex, createdAt: row.createdAt.toISOString(), candidates });
+    topicCandidateStore.set(row.projectId, state);
   }
 }

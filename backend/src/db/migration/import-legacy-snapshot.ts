@@ -148,6 +148,8 @@ async function importCoreCollections(
       familyLabel: row.familyLabel, scopeLabel: row.scopeLabel, viralRubricJson: json(row.viralRubricJson),
       estimatedDurationBandJson: json(row.estimatedDurationBandJson), strongScene: row.strongScene,
       coreConflict: row.coreConflict, mustCoverPreviewJson: json(row.mustCoverPreviewJson ?? []),
+      sourceHint: row.sourceHint ?? "", recentUsageHint: row.recentUsageHint ?? "",
+      whyThisNow: row.whyThisNow ?? "", riskHintsJson: json(row.riskHintsJson ?? []),
       createdAt: date(row.createdAt),
     } });
   }

@@ -1455,6 +1455,10 @@ async function persistPostProcessedCandidates(
       strongScene: candidate.candidate.strong_scene,
       coreConflict: candidate.candidate.core_conflict,
       mustCoverPreviewJson: candidate.candidate.must_cover_preview,
+      sourceHint: candidate.candidate.source_hint,
+      recentUsageHint: candidate.candidate.recent_usage_hint,
+      whyThisNow: candidate.candidate.why_this_now,
+      riskHintsJson: candidate.candidate.risk_hints,
     });
   }
 }

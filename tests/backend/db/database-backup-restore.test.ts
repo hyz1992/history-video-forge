@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
@@ -10,18 +10,19 @@ import { backupDatabase } from "../../../backend/src/db/operations/backup-databa
 import { restoreDatabase } from "../../../backend/src/db/operations/restore-database.js";
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { checkPrismaReadiness } from "../../../backend/src/db/prisma-readiness.js";
+import { applyAllDatabaseMigrations } from "./migration-test-utils.js";
 
-const migrationSql = readFileSync(join(process.cwd(), "backend/prisma/migrations/0001_v2_baseline/migration.sql"), "utf8");
 const roots: string[] = [];
 
 function createOperationalDatabase(): { root: string; path: string } {
   const root = mkdtempSync(join(tmpdir(), "story-forge-backup-")); roots.push(root);
   const path = join(root, "primary.db");
   const db = new Database(path);
-  const migration = expectedMigrations()[0]!;
-  db.exec(migrationSql);
+  const migrations = expectedMigrations();
+  applyAllDatabaseMigrations(db);
   db.exec(`CREATE TABLE "_prisma_migrations" ("id" TEXT PRIMARY KEY NOT NULL,"checksum" TEXT NOT NULL,"finished_at" DATETIME,"migration_name" TEXT NOT NULL,"logs" TEXT,"rolled_back_at" DATETIME,"started_at" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,"applied_steps_count" INTEGER UNSIGNED NOT NULL DEFAULT 0)`);
-  db.prepare(`INSERT INTO "_prisma_migrations" ("id","checksum","finished_at","migration_name","applied_steps_count") VALUES (?,?,?,?,1)`).run("migration-1", migration.checksum, new Date().toISOString(), migration.name);
+  const insert = db.prepare(`INSERT INTO "_prisma_migrations" ("id","checksum","finished_at","migration_name","applied_steps_count") VALUES (?,?,?,?,1)`);
+  migrations.forEach((migration, index) => insert.run(`migration-${index + 1}`, migration.checksum, new Date().toISOString(), migration.name));
   db.close();
   return { root, path };
 }
@@ -50,7 +51,7 @@ describe("SQLite backup and restore operations", () => {
     const backup = await backupDatabase({ sourcePath: fixture.path, destinationDirectory: join(fixture.root, "backups"), timestamp: new Date("2026-07-11T12:00:00.000Z") });
     expect(existsSync(backup.path)).toBe(true);
     expect(backup.path).toContain(backup.checksum.slice(0, 16));
-    expect(backup.path).toContain(expectedMigrations()[0]!.name);
+    expect(backup.path).toContain(expectedMigrations().at(-1)!.name);
     expect(backup.validated).toBe(true);
 
     const mutated = await createPrismaClient(fixture.path);

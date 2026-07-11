@@ -159,6 +159,10 @@ model RecommendationCandidateCache {
   strongScene               String
   coreConflict              String
   mustCoverPreviewJson      Json
+  sourceHint                String
+  recentUsageHint           String
+  whyThisNow                String
+  riskHintsJson             Json
   createdAt                 DateTime            @default(now())
   project                   Project?            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   eventRegistryEntry        EventRegistryEntry? @relation(fields: [eventRegistryEntryId], references: [id], onDelete: Restrict)

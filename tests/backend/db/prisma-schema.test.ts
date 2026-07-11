@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
+import { applyAllDatabaseMigrations } from "./migration-test-utils.js";
 
 const schemaPath = join(process.cwd(), "backend/prisma/schema.prisma");
 const migrationPath = join(
@@ -106,11 +107,25 @@ describe("V2 Prisma baseline schema", () => {
     const schema = readFileSync(schemaPath, "utf8");
     const round = modelBody(schema, "RecommendationRound");
     const exposure = modelBody(schema, "RecommendationExposure");
+    const cache = modelBody(schema, "RecommendationCandidateCache");
 
     expect(round).toContain("@@unique([projectId, roundIndex])");
     expect(exposure).toContain("@@unique([roundId, fingerprint])");
     expect(exposure).toMatch(/round\s+RecommendationRound\s+@relation\([^\n]*onDelete:\s*Cascade/);
     expect(schema).not.toContain("storageRootDir String");
+    for (const field of ["sourceHint", "recentUsageHint", "whyThisNow", "riskHintsJson"]) {
+      expect(cache).toMatch(new RegExp(`^\\s*${field}\\s`, "m"));
+    }
+  });
+
+  it("applies the full ordered migration set including candidate recovery fields", () => {
+    const database = new Database(":memory:");
+    try {
+      applyAllDatabaseMigrations(database);
+      const columns = database.prepare(`PRAGMA table_info("RecommendationCandidateCache")`).all()
+        .map((row) => (row as { name: string }).name);
+      expect(columns).toEqual(expect.arrayContaining(["sourceHint", "recentUsageHint", "whyThisNow", "riskHintsJson"]));
+    } finally { database.close(); }
   });
 
   it("applies the committed baseline migration to an empty SQLite database", () => {

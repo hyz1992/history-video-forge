@@ -24,3 +24,9 @@
 2. hydration 必须通过 `(projectId, fingerprint)` 将 Exposure 与 Cache 关联，恢复 candidateId、轮次和完整候选字段。
 3. 认证系统尚未实现期间，只接受显式 `LOCAL_PROJECT_OWNER_ID`，且启动时验证该用户存在并启用；不得隐式选择管理员或创建默认账号。
 4. parity/hydration 闸门通过前，不接入真实 HTTP writer，不关闭 JSON writer。
+
+## 0002 处理结果
+
+已新增 `0002_candidate_card_recovery`，补齐 `sourceHint`、`recentUsageHint`、`whyThisNow` 和 `riskHintsJson`。Recommendation Exposure 通过 `(projectId, fingerprint)` 与 Candidate Cache 联合，现可恢复 candidateId、轮次与完整 `StoredTopicCandidate`，不再使用空值降级。
+
+测试建库工具同步改为按名称顺序应用全部 migration；数据库/服务矩阵 14 个文件、57 项通过，后端类型检查与构建通过。下一步允许进入显式 owner 作用域与真实 writer 切换。

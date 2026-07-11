@@ -249,7 +249,7 @@ npx vitest run --configLoader runner tests/backend/db/prisma-schema.test.ts test
 **执行进度：**
 
 - [x] 建立 Project、Event Registry、Topic Package、Candidate Cache、Recommendation Round/Exposure 的 Prisma 读模型 hydration 与字段 parity 基线。
-- [ ] 补齐刷新后候选卡无损恢复所缺的 Candidate Cache 字段；由于 baseline 已进入可激活状态，使用新增 `0002`，不得继续改写 `0001`。
+- [x] 补齐刷新后候选卡无损恢复所缺的 Candidate Cache 字段；由于 baseline 已进入可激活状态，使用新增 `0002`，不得继续改写 `0001`。
 - [ ] 接入显式 `LOCAL_PROJECT_OWNER_ID` 过渡作用域并切换真实 writer。
 - [ ] 完成三轮推荐、确认、重启和浏览器验收后关闭本任务。
 
