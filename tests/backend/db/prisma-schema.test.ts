@@ -86,6 +86,7 @@ describe("V2 Prisma baseline schema", () => {
     const migrationSql = readFileSync(migrationPath, "utf8");
     expect(migrationSql).toMatch(/CHECK\s*\(\s*"role"\s+IN\s*\(\s*'ADMIN'\s*,\s*'USER'\s*\)\s*\)/);
     expect(migrationSql).toMatch(/CHECK\s*\(\s*"status"\s+IN\s*\(\s*'ACTIVE'\s*,\s*'DISABLED'\s*\)\s*\)/);
+    expect(migrationSql).toContain("'importing', 'imported', 'verified', 'verification_failed', 'import_failed', 'activated'");
     for (const errorCode of [
       "project_active_topic_package_mismatch",
       "project_active_script_record_mismatch",

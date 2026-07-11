@@ -21,7 +21,11 @@ function createDatabase(): string {
   return path;
 }
 
-function createSnapshot(options: { missingActiveScript?: boolean; repairableGarbage?: boolean } = {}): string {
+function createSnapshot(options: {
+  duplicateCanonicalEvent?: boolean;
+  missingActiveScript?: boolean;
+  repairableGarbage?: boolean;
+} = {}): string {
   const root = mkdtempSync(join(tmpdir(), "story-forge-import-source-"));
   tempDirectories.push(root);
   const storageRootDir = join(root, "projects", "project-1");
@@ -48,7 +52,11 @@ function createSnapshot(options: { missingActiveScript?: boolean; repairableGarb
       id: "event-1", canonicalName: "测试事件", aliases: [], canonicalQuotesJson: [],
       canonicalQuoteIntentsJson: [], sourceType: "curated", isProvisional: false,
       createdAt: now, updatedAt: now,
-    }]],
+    }], ...(options.duplicateCanonicalEvent ? [["event-2", {
+      id: "event-2", canonicalName: "测试事件", aliases: [], canonicalQuotesJson: [],
+      canonicalQuoteIntentsJson: [], sourceType: "curated", isProvisional: false,
+      createdAt: now, updatedAt: now,
+    }]] : [])],
     topicPackages: [["topic-1", {
       id: "topic-1", projectId: "project-1", eventRegistryEntryId: "event-1",
       title: "测试选题", selectedAngle: "测试角度", familyLabel: "history", scopeLabel: "single_event",
@@ -117,17 +125,25 @@ describe("legacy snapshot idempotent import", () => {
       ]);
       const second = await importLegacySnapshot(client, { sourcePath, defaultOwnerId: owner.id });
 
-      expect(first.status).toBe("completed");
+      expect(first.status).toBe("verified");
       expect(second.status).toBe("already_applied");
       expect(await Promise.all([
         client.project.count(), client.topicPackage.count(), client.scriptRecord.count(),
         client.recommendationRound.count(), client.recommendationExposure.count(),
       ])).toEqual(countsAfterFirst);
       expect(await client.dataMigrationRun.count()).toBe(1);
+      expect(await client.dataMigrationRun.findUniqueOrThrow({ where: { sourceSha256: first.sourceSha256 } }))
+        .toMatchObject({ status: "verified" });
       await expect(verifyLegacyImport(client, sourcePath)).resolves.toMatchObject({
         ok: true,
         danglingActiveReferences: [],
+        activeReferenceIssues: [],
+        activeReferencesChecked: 2,
         countMismatches: [],
+        expectedProjectIds: ["project-1"],
+        importedProjectIds: ["project-1"],
+        projectIdMismatches: [],
+        storageChecks: [{ projectId: "project-1", storageKey: "p_project1", exists: true }],
       });
     } finally {
       await client.$disconnect();
@@ -169,6 +185,105 @@ describe("legacy snapshot idempotent import", () => {
       ]);
       expect(await client.recommendationCandidateCache.count()).toBe(1);
       expect((await client.project.findUniqueOrThrow({ where: { id: "project-1" } })).activePublishPackageRecordId).toBeNull();
+    } finally {
+      await client.$disconnect();
+    }
+  });
+
+  it("marks verification failure without reimporting and can verify again on rerun", async () => {
+    const client = await createPrismaClient(createDatabase());
+    try {
+      const owner = await client.user.create({
+        data: { username: "retry-admin", displayName: "Retry admin", passwordHash: "hash", role: "ADMIN" },
+      });
+      const sourcePath = createSnapshot();
+      const projectDelegate = client.project as typeof client.project & {
+        count: typeof client.project.count;
+      };
+      const originalCount = projectDelegate.count.bind(client.project);
+      let countCalls = 0;
+      projectDelegate.count = ((...args: Parameters<typeof originalCount>) => {
+        countCalls += 1;
+        return countCalls === 2 ? Promise.resolve(999) : originalCount(...args);
+      }) as typeof client.project.count;
+      await expect(importLegacySnapshot(client, { sourcePath, defaultOwnerId: owner.id }))
+        .rejects.toThrow("migration_verification_failed");
+      projectDelegate.count = originalCount as typeof client.project.count;
+
+      const failedRun = await client.dataMigrationRun.findFirstOrThrow();
+      expect(failedRun.status).toBe("verification_failed");
+      expect(failedRun.reportJson).toMatchObject({ verification: { ok: false } });
+      expect(await client.project.count()).toBe(1);
+
+      await expect(importLegacySnapshot(client, { sourcePath, defaultOwnerId: owner.id }))
+        .resolves.toMatchObject({ status: "verified" });
+      expect(await client.project.count()).toBe(1);
+      expect((await client.dataMigrationRun.findFirstOrThrow()).status).toBe("verified");
+    } finally {
+      await client.$disconnect();
+    }
+  });
+
+  it("rejects a non-empty target database before creating a migration run", async () => {
+    const client = await createPrismaClient(createDatabase());
+    try {
+      const owner = await client.user.create({
+        data: { username: "nonempty-admin", displayName: "Nonempty admin", passwordHash: "hash", role: "ADMIN" },
+      });
+      await client.project.create({ data: {
+        ownerId: owner.id,
+        createdById: owner.id,
+        name: "Existing project",
+        storageKey: "existing-project",
+        storageDisplayName: "Existing project",
+      } });
+
+      await expect(importLegacySnapshot(client, {
+        sourcePath: createSnapshot(),
+        defaultOwnerId: owner.id,
+      })).rejects.toThrow("migration_target_not_empty:projects=1");
+      expect(await client.dataMigrationRun.count()).toBe(0);
+    } finally {
+      await client.$disconnect();
+    }
+  });
+
+  it("rejects a missing or inactive/non-admin migration owner", async () => {
+    const client = await createPrismaClient(createDatabase());
+    try {
+      const disabled = await client.user.create({ data: {
+        username: "disabled-admin", displayName: "Disabled admin", passwordHash: "hash",
+        role: "ADMIN", status: "DISABLED",
+      } });
+      const regular = await client.user.create({ data: {
+        username: "regular-user", displayName: "Regular user", passwordHash: "hash", role: "USER",
+      } });
+      const sourcePath = createSnapshot();
+
+      for (const ownerId of ["missing-owner", disabled.id, regular.id]) {
+        await expect(importLegacySnapshot(client, { sourcePath, defaultOwnerId: ownerId }))
+          .rejects.toThrow("migration_owner_not_qualified");
+      }
+      expect(await client.dataMigrationRun.count()).toBe(0);
+    } finally {
+      await client.$disconnect();
+    }
+  });
+
+  it("records import_failed while rolling back all business rows", async () => {
+    const client = await createPrismaClient(createDatabase());
+    try {
+      const owner = await client.user.create({
+        data: { username: "failure-admin", displayName: "Failure admin", passwordHash: "hash", role: "ADMIN" },
+      });
+      await expect(importLegacySnapshot(client, {
+        sourcePath: createSnapshot({ duplicateCanonicalEvent: true }),
+        defaultOwnerId: owner.id,
+      })).rejects.toThrow();
+
+      expect(await client.project.count()).toBe(0);
+      expect(await client.eventRegistryEntry.count()).toBe(0);
+      await expect(client.dataMigrationRun.findFirstOrThrow()).resolves.toMatchObject({ status: "import_failed" });
     } finally {
       await client.$disconnect();
     }

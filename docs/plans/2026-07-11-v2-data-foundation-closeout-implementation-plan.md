@@ -152,12 +152,14 @@ npx vitest run --configLoader runner tests/backend/db/prisma-schema.test.ts test
 
 **步骤：**
 
-- [ ] 先写失败测试，复现“verify 失败但 marker 已 completed、重跑误报 already_applied”。
-- [ ] 建立迁移状态机；只有 verify 成功后可标 `verified`，只有显式 activate 后可标 `activated`。
-- [ ] 已导入但未 verified 的相同 checksum 重跑时只重做 verify；不得重复插入。
-- [ ] 导入前校验目标业务表为空、default owner 存在且状态符合迁移要求。
-- [ ] verify 保存逐集合计数、关键 ID/项目范围、active 同项目关系和项目 storageKey/目录检查结果。
-- [ ] 任何安全修复必须在报告中有稳定 code、数量和 record ID；未知错误仍阻断。
+- [x] 先写失败测试，复现“verify 失败但 marker 已 completed、重跑误报 already_applied”。
+- [x] 建立迁移状态机；只有 verify 成功后可标 `verified`，只有显式 activate 后可标 `activated`。
+- [x] 已导入但未 verified 的相同 checksum 重跑时只重做 verify；不得重复插入。
+- [x] 导入前校验目标业务表为空、default owner 存在且状态符合迁移要求。
+- [x] verify 保存逐集合计数、关键 ID/项目范围、active 同项目关系和项目 storageKey/目录检查结果。
+- [x] 任何安全修复必须在报告中有稳定 code、数量和 record ID；未知错误仍阻断。
+
+**完成记录：**`docs/records/2026-07-11-v2-migration-state-machine-verification.md`
 
 **必须覆盖的负向用例：**
 

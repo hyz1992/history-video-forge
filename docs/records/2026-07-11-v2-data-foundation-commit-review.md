@@ -42,13 +42,15 @@ npx vitest run --configLoader runner tests/backend/db/prisma-toolchain.test.ts t
 
 ## 3. 高风险发现
 
-### P0-1：迁移状态可能出现“导入完成但校验失败”的假完成
+### P0-1：迁移状态可能出现“导入完成但校验失败”的假完成（已关闭）
 
 `importLegacySnapshot()` 在事务内先创建 `status="completed"` 的 `DataMigrationRun`，事务提交后才执行 verify。若 verify 失败，数据和 completed marker 都已存在；再次运行时只看 `status === "completed"` 就返回 `already_applied`，不会重新判断已有报告中的 verification 是否成功。
 
 影响：迁移失败可能无法安全重试，CLI 输出和 readiness 对同一迁移状态产生不同解释。
 
 处理：Task 8.5 必须引入显式状态机，只有 verify 通过后才能进入 `verified/activated`；重复运行应能重做 verify，但不能重复导入。
+
+Task 8.5-3 处理结果：迁移记录已冻结为 `importing/imported/verified/verification_failed/import_failed/activated` 六态；业务导入和 `imported` 标记位于同一事务，事务失败后业务数据回滚并单独记录 `import_failed`。校验失败保存 `verification_failed` 与完整报告，相同 checksum 重跑只重新校验，不重复写业务记录；只有校验成功才进入 `verified`，本任务不执行 `activated`。聚焦回归 22 项通过，详见 `docs/records/2026-07-11-v2-migration-state-machine-verification.md`。
 
 ### P0-2：业务仍以 Map + JSON 为唯一实际读写链路
 
@@ -91,6 +93,8 @@ Task 8.5-2 处理结果：确认不存在已应用 `0001` 的需保留数据库�
 `verifyLegacyImport()` 对全表 `count()` 与单一快照计数直接比较。这只在目标业务表为空且只导入一份快照时成立；若目标库已有项目或曾导入另一来源，会产生误报或不可解释的失败。
 
 处理：第一版明确限制目标业务表必须为空，并在 inspect 阶段阻断非空目标；迁移报告保存逐 ID/逐项目清单。未来确需合并导入时再设计 source-scoped lineage，不在本轮偷偷放宽。
+
+Task 8.5-3 处理结果：导入前已强制检查全部目标业务集合为空，并在创建迁移记录前拒绝非空目标；verification 报告增加预期/实际项目 ID、active record 同项目关系和 storageKey/源目录存在性。当前“全库计数”仅在这个空目标前置条件下成立；合并导入仍明确不支持。
 
 ### P1-3：推荐轮次编号存在并发竞争
 

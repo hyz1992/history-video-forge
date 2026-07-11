@@ -116,4 +116,19 @@ describe("V2 project database integrity", () => {
       database.close();
     }
   });
+
+  it("rejects migration states outside the frozen state machine", () => {
+    const database = migratedDatabase();
+    try {
+      expect(() => database.prepare(`
+        INSERT INTO "DataMigrationRun" (
+          "id", "sourceSha256", "sourceVersion", "status", "reportJson",
+          "startedAt", "createdAt", "updatedAt"
+        ) VALUES ('run', 'sha', 'db_snapshot_v2', 'completed', '{}',
+          CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `).run()).toThrow(/CHECK constraint failed/);
+    } finally {
+      database.close();
+    }
+  });
 });

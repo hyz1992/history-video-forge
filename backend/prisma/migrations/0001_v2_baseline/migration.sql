@@ -327,7 +327,9 @@ CREATE TABLE "DataMigrationRun" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "sourceSha256" TEXT NOT NULL,
     "sourceVersion" TEXT NOT NULL,
-    "status" TEXT NOT NULL,
+    "status" TEXT NOT NULL CHECK ("status" IN (
+        'importing', 'imported', 'verified', 'verification_failed', 'import_failed', 'activated'
+    )),
     "reportJson" JSONB NOT NULL,
     "startedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "completedAt" DATETIME,

@@ -20,10 +20,18 @@ export interface ImportLegacySnapshotOptions {
 }
 
 export interface ImportLegacySnapshotResult {
-  status: "completed" | "already_applied";
+  status: "verified" | "already_applied";
   sourceSha256: string;
   repairs: LegacyImportRepair[];
 }
+
+export type LegacyMigrationStatus =
+  | "importing"
+  | "imported"
+  | "verified"
+  | "verification_failed"
+  | "import_failed"
+  | "activated";
 
 type UnknownRecord = Record<string, any>;
 
@@ -248,6 +256,113 @@ async function importCoreCollections(
   }
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function migrationReport(value: unknown): UnknownRecord {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as UnknownRecord
+    : {};
+}
+
+function reportVerificationOk(report: UnknownRecord): boolean {
+  const verification = migrationReport(report.verification);
+  return verification.ok === true;
+}
+
+async function assertQualifiedOwner(client: AppPrismaClient, ownerId: string): Promise<void> {
+  const owner = await client.user.findUnique({ where: { id: ownerId } });
+  if (!owner || owner.role !== "ADMIN" || owner.status !== "ACTIVE") {
+    throw new Error("migration_owner_not_qualified");
+  }
+}
+
+async function targetBusinessCounts(client: AppPrismaClient): Promise<Record<string, number>> {
+  const values = await Promise.all([
+    client.project.count(),
+    client.eventRegistryEntry.count(),
+    client.topicPackage.count(),
+    client.recommendationCandidateCache.count(),
+    client.scriptRecord.count(),
+    client.storyboardRecord.count(),
+    client.assetPlanRecord.count(),
+    client.assetManifestRecord.count(),
+    client.composeRecord.count(),
+    client.renderJobRecord.count(),
+    client.publishPackageRecord.count(),
+    client.assetProviderJobRecord.count(),
+    client.recommendationRound.count(),
+    client.recommendationExposure.count(),
+  ]);
+  const names = [
+    "projects",
+    "events",
+    "topicPackages",
+    "candidateCache",
+    "scriptRecords",
+    "storyboardRecords",
+    "assetPlanRecords",
+    "assetManifestRecords",
+    "composeRecords",
+    "renderJobRecords",
+    "publishPackageRecords",
+    "assetProviderJobRecords",
+    "recommendationRounds",
+    "recommendationExposures",
+  ];
+  return Object.fromEntries(names.map((name, index) => [name, values[index]]));
+}
+
+async function assertEmptyTarget(client: AppPrismaClient): Promise<void> {
+  const counts = await targetBusinessCounts(client);
+  const nonEmpty = Object.entries(counts).filter(([, count]) => count > 0);
+  if (nonEmpty.length > 0) {
+    throw new Error(`migration_target_not_empty:${nonEmpty.map(([name, count]) => `${name}=${count}`).join(",")}`);
+  }
+}
+
+async function finalizeVerification(
+  client: AppPrismaClient,
+  sourcePath: string,
+  sourceSha256: string,
+): Promise<ImportLegacySnapshotResult> {
+  const existing = await client.dataMigrationRun.findUniqueOrThrow({ where: { sourceSha256 } });
+  const report = migrationReport(existing.reportJson);
+  try {
+    const verification = await verifyLegacyImport(client, sourcePath);
+    const status: LegacyMigrationStatus = verification.ok ? "verified" : "verification_failed";
+    await client.dataMigrationRun.update({
+      where: { sourceSha256 },
+      data: {
+        status,
+        reportJson: json({ ...report, verification }),
+        completedAt: verification.ok ? new Date() : null,
+      },
+    });
+    if (!verification.ok) throw new Error("migration_verification_failed");
+    return {
+      status: "verified",
+      sourceSha256,
+      repairs: Array.isArray(report.repairs) ? report.repairs as LegacyImportRepair[] : [],
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message === "migration_verification_failed") throw error;
+    await client.dataMigrationRun.update({
+      where: { sourceSha256 },
+      data: {
+        status: "verification_failed",
+        reportJson: json({
+          ...report,
+          verificationError: { code: "verification_execution_failed", message: errorMessage(error) },
+        }),
+        completedAt: null,
+      },
+    });
+    throw new Error("migration_verification_execution_failed");
+  }
+}
+
 export async function importLegacySnapshot(
   client: AppPrismaClient,
   options: ImportLegacySnapshotOptions,
@@ -257,32 +372,86 @@ export async function importLegacySnapshot(
     throw new Error(`migration_inspection_failed:${inspection.issues.map((issue) => issue.code).join(",")}`);
   }
   const existing = await client.dataMigrationRun.findUnique({ where: { sourceSha256: inspection.sourceSha256 } });
-  if (existing?.status === "completed") {
-    const report = record(existing.reportJson);
-    return { status: "already_applied", sourceSha256: inspection.sourceSha256, repairs: (report.repairs ?? []) as LegacyImportRepair[] };
+  if (existing) {
+    const report = migrationReport(existing.reportJson);
+    if (report.defaultOwnerId && report.defaultOwnerId !== options.defaultOwnerId) {
+      throw new Error("migration_owner_mismatch");
+    }
+    if (existing.status === "activated") {
+      if (!reportVerificationOk(report)) throw new Error("migration_activated_without_verification");
+      return {
+        status: "already_applied",
+        sourceSha256: inspection.sourceSha256,
+        repairs: Array.isArray(report.repairs) ? report.repairs as LegacyImportRepair[] : [],
+      };
+    }
+    if (existing.status === "verified" && reportVerificationOk(report)) {
+      return {
+        status: "already_applied",
+        sourceSha256: inspection.sourceSha256,
+        repairs: Array.isArray(report.repairs) ? report.repairs as LegacyImportRepair[] : [],
+      };
+    }
+    if (["imported", "verification_failed", "verified"].includes(existing.status)) {
+      return finalizeVerification(client, options.sourcePath, inspection.sourceSha256);
+    }
+    if (!["importing", "import_failed"].includes(existing.status)) {
+      throw new Error(`migration_status_unsupported:${existing.status}`);
+    }
   }
+
+  await assertQualifiedOwner(client, options.defaultOwnerId);
+  await assertEmptyTarget(client);
   const source = readLegacySnapshot(options.sourcePath);
   const repairs: LegacyImportRepair[] = [];
-  await client.$transaction(async (transaction) => {
-    await importCoreCollections(transaction, source.document.collections, options, repairs);
-    await transaction.dataMigrationRun.create({ data: {
-      sourceSha256: source.sourceSha256, sourceVersion: source.document.version, status: "completed",
-      reportJson: json({ counts: inspection.counts, repairs, sourcePath: source.sourcePath }),
-      startedAt: new Date(), completedAt: new Date(),
+  const previousReport = existing ? migrationReport(existing.reportJson) : {};
+  const attempt = typeof previousReport.attempt === "number" ? previousReport.attempt + 1 : 1;
+  const baseReport = {
+    attempt,
+    counts: inspection.counts,
+    defaultOwnerId: options.defaultOwnerId,
+    repairs: [],
+    sourcePath: source.sourcePath,
+  };
+  if (existing) {
+    await client.dataMigrationRun.update({
+      where: { sourceSha256: source.sourceSha256 },
+      data: { status: "importing", reportJson: json(baseReport), startedAt: new Date(), completedAt: null },
+    });
+  } else {
+    await client.dataMigrationRun.create({ data: {
+      sourceSha256: source.sourceSha256,
+      sourceVersion: source.document.version,
+      status: "importing",
+      reportJson: json(baseReport),
+      startedAt: new Date(),
     } });
-  });
-  const verification = await verifyLegacyImport(client, options.sourcePath);
-  await client.dataMigrationRun.update({
-    where: { sourceSha256: source.sourceSha256 },
-    data: {
-      reportJson: json({
-        counts: inspection.counts,
-        repairs,
-        sourcePath: source.sourcePath,
-        verification,
-      }),
-    },
-  });
-  if (!verification.ok) throw new Error("migration_verification_failed");
-  return { status: "completed", sourceSha256: source.sourceSha256, repairs };
+  }
+  try {
+    await client.$transaction(async (transaction) => {
+      await importCoreCollections(transaction, source.document.collections, options, repairs);
+      await transaction.dataMigrationRun.update({
+        where: { sourceSha256: source.sourceSha256 },
+        data: {
+          status: "imported",
+          reportJson: json({ ...baseReport, repairs }),
+        },
+      });
+    });
+  } catch (error) {
+    await client.dataMigrationRun.update({
+      where: { sourceSha256: source.sourceSha256 },
+      data: {
+        status: "import_failed",
+        reportJson: json({
+          ...baseReport,
+          attemptedRepairs: repairs,
+          importError: { code: "import_transaction_failed", message: errorMessage(error) },
+        }),
+        completedAt: null,
+      },
+    });
+    throw error;
+  }
+  return finalizeVerification(client, options.sourcePath, source.sourceSha256);
 }

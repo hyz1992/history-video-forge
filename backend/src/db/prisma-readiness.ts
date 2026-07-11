@@ -54,7 +54,7 @@ export async function checkPrismaReadiness(client: AppPrismaClient): Promise<Pri
     }
 
     const migrationRun = await client.dataMigrationRun.findFirst({
-      where: { status: "completed" },
+      where: { status: { in: ["verified", "activated"] } },
       orderBy: { completedAt: "desc" },
     });
     const report = migrationRun?.reportJson;

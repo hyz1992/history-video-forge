@@ -40,7 +40,7 @@ async function markVerified(client: Awaited<ReturnType<typeof createPrismaClient
   await client.dataMigrationRun.create({ data: {
     sourceSha256: "verified-source",
     sourceVersion: "db_snapshot_v2",
-    status: "completed",
+    status: "verified",
     reportJson: { verification: { ok: true, countMismatches: [], danglingActiveReferences: [] } },
     completedAt: new Date(),
   } });
