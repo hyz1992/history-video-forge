@@ -6,6 +6,9 @@ import { resolve } from "node:path";
 import { buildApp, type AppInstance } from "./app";
 import { createLocalRemotionRenderAdapter } from "./modules/render/local-remotion-render-adapter.js";
 import type { RenderAdapter } from "./modules/render/render-adapter.js";
+import { createPrismaClient } from "./db/prisma-client.js";
+import { checkPrismaReadiness } from "./db/prisma-readiness.js";
+import type { AppPrismaClient } from "./db/prisma-client.types.js";
 
 export interface ServerHostOptions {
   host: string;
@@ -84,11 +87,15 @@ export function createHttpServer(
     }
 
     if (request.method === "GET" && request.url === "/readyz") {
-      const ready = app.persistenceHealth.loaded && app.mediaLibraryHealth.loaded;
+      const database = app.databaseReadiness
+        ? await app.databaseReadiness().catch(() => ({ ready: false, error: "database_unavailable", checks: null }))
+        : { ready: true, error: null, checks: null };
+      const ready = app.persistenceHealth.loaded && app.mediaLibraryHealth.loaded && database.ready;
       writeJson(response, ready ? 200 : 503, {
         status: ready ? "ready" : "not_ready",
         persistence: app.persistenceHealth,
         media_library: app.mediaLibraryHealth,
+        database,
       });
       return;
     }
@@ -174,6 +181,7 @@ export function createHttpServer(
 
 export async function startServer(options?: {
   app?: AppInstance;
+  prismaClient?: AppPrismaClient;
   host?: string;
   port?: number;
   publicDir?: string;
@@ -185,7 +193,34 @@ export async function startServer(options?: {
   });
   const port = options?.port ?? (Number(process.env.SERVER_PORT) || 3000);
   const publicDir = options?.publicDir ?? process.env.PUBLIC_DIR;
-  const server = createHttpServer(options?.app, { publicDir });
+  const configuredDatabaseUrl = process.env.DATABASE_URL?.trim();
+  const defaultDatabasePath = resolve(process.cwd(), "storage", "history-video-forge.db");
+  const databaseUrl = configuredDatabaseUrl || defaultDatabasePath;
+  const databasePath = databaseUrl.startsWith("file:") ? databaseUrl.slice("file:".length) : databaseUrl;
+  const databaseExists = existsSync(resolve(process.cwd(), databasePath));
+  const prismaClient = options?.prismaClient ?? (options?.app || !databaseExists
+    ? null
+    : await createPrismaClient(databaseUrl));
+  const app = options?.app ?? buildApp({
+    renderAdapter: resolveRenderAdapter(),
+    databaseReadiness: prismaClient
+      ? () => checkPrismaReadiness(prismaClient)
+      : async () => ({ ready: false, error: "database_not_initialized", checks: {
+        queryable: false,
+        writable: false,
+        migrationApplied: false,
+        pragmasValid: false,
+        legacyImportVerified: false,
+      } }),
+  });
+  const server = createHttpServer(app, { publicDir });
+  let disconnected = false;
+  const disconnect = async () => {
+    if (!prismaClient || disconnected) return;
+    disconnected = true;
+    await prismaClient.$disconnect();
+  };
+  server.once("close", () => { void disconnect(); });
 
   await new Promise<void>((resolvePromise, rejectPromise) => {
     server.once("error", rejectPromise);
@@ -193,6 +228,17 @@ export async function startServer(options?: {
       server.off("error", rejectPromise);
       resolvePromise();
     });
+  });
+
+  const shutdown = () => {
+    app.persist();
+    server.close(() => { void disconnect().finally(() => { process.exitCode = 0; }); });
+  };
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
+  server.once("close", () => {
+    process.off("SIGINT", shutdown);
+    process.off("SIGTERM", shutdown);
   });
 
   return {

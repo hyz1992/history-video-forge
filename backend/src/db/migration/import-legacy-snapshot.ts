@@ -3,6 +3,7 @@ import { Prisma } from "../../generated/prisma/client.js";
 import type { AppPrismaClient, AppPrismaTransactionClient } from "../prisma-client.types.js";
 import { readLegacySnapshot, type LegacySnapshotEntry } from "../legacy-snapshot-reader.js";
 import { inspectLegacySnapshot } from "./inspect-legacy-snapshot.js";
+import { verifyLegacyImport } from "./verify-legacy-import.js";
 
 export type LegacyImportRepairPolicy = "repair_known_safe_cache_and_active_publish";
 
@@ -270,5 +271,18 @@ export async function importLegacySnapshot(
       startedAt: new Date(), completedAt: new Date(),
     } });
   });
+  const verification = await verifyLegacyImport(client, options.sourcePath);
+  await client.dataMigrationRun.update({
+    where: { sourceSha256: source.sourceSha256 },
+    data: {
+      reportJson: json({
+        counts: inspection.counts,
+        repairs,
+        sourcePath: source.sourcePath,
+        verification,
+      }),
+    },
+  });
+  if (!verification.ok) throw new Error("migration_verification_failed");
   return { status: "completed", sourceSha256: source.sourceSha256, repairs };
 }

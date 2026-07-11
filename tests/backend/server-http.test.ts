@@ -1,11 +1,11 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Server } from "node:http";
-import { mkdirSync, writeFileSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { buildApp } from "../../backend/src/app.js";
-import { createHttpServer } from "../../backend/src/server.js";
+import { createHttpServer, startServer } from "../../backend/src/server.js";
 import { resolveServerHost } from "../../backend/src/server.js";
 
 async function listen(server: Server) {
@@ -103,6 +103,66 @@ describe("backend http server", () => {
     const response = await fetch(`http://127.0.0.1:${port}/readyz`);
     expect(response.status).toBe(503);
     expect((await response.json()) as { status: string }).toMatchObject({ status: "not_ready" });
+  });
+
+  it("includes database readiness and returns 503 when the database gate fails", async () => {
+    const app = buildApp({
+      skipSnapshotLoad: true,
+      databaseReadiness: async () => ({
+        ready: false,
+        error: "legacy_import_unverified",
+        checks: {
+          queryable: true,
+          writable: true,
+          migrationApplied: true,
+          pragmasValid: true,
+          legacyImportVerified: false,
+        },
+      }),
+    });
+    app.persistenceHealth.loaded = true;
+    app.mediaLibraryHealth.loaded = true;
+    const server = createHttpServer(app);
+    servers.push(server);
+    const port = await listen(server);
+
+    const response = await fetch(`http://127.0.0.1:${port}/readyz`);
+    const body = await response.json() as { database: { error: string } };
+    expect(response.status).toBe(503);
+    expect(body.database.error).toBe("legacy_import_unverified");
+  });
+
+  it("disconnects an owned Prisma client when the server closes", async () => {
+    const disconnect = vi.fn(async () => undefined);
+    const app = buildApp({ skipSnapshotLoad: true });
+    const started = await startServer({
+      app,
+      prismaClient: { $disconnect: disconnect } as never,
+      host: "127.0.0.1",
+      port: 0,
+    });
+    await close(started.server);
+    await vi.waitFor(() => expect(disconnect).toHaveBeenCalledTimes(1));
+  });
+
+  it("does not silently create a missing production database", async () => {
+    const root = mkdtempSync(join(tmpdir(), "svf2-missing-database-"));
+    const databasePath = join(root, "missing.db");
+    const previousDatabaseUrl = process.env.DATABASE_URL;
+    const previousRenderAdapter = process.env.RENDER_ADAPTER;
+    process.env.DATABASE_URL = databasePath;
+    process.env.RENDER_ADAPTER = "fake";
+    try {
+      const started = await startServer({ host: "127.0.0.1", port: 0 });
+      expect(existsSync(databasePath)).toBe(false);
+      await close(started.server);
+    } finally {
+      if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+      else process.env.DATABASE_URL = previousDatabaseUrl;
+      if (previousRenderAdapter === undefined) delete process.env.RENDER_ADAPTER;
+      else process.env.RENDER_ADAPTER = previousRenderAdapter;
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("exposes isolated snapshot load failures through persistence health", () => {

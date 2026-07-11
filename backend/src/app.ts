@@ -15,6 +15,7 @@ import { configureVoiceProfilePersistence } from "./modules/assets/voice/voice-p
 import { recoverInterruptedRuns } from "./runtime/recovery/interrupted-run-recovery";
 import { createProjectStageLockRegistry } from "./runtime/concurrency/project-stage-lock";
 import type { RenderAdapter } from "./modules/render/render-adapter";
+import type { PrismaReadinessResult } from "./db/prisma-readiness.js";
 import type { StoredTopicCandidate } from "./modules/topic/topic-confirm.service";
 import { join } from "node:path";
 
@@ -78,6 +79,8 @@ export interface AppInstance {
     itemCount: number;
     error: string | null;
   };
+  databaseReadiness?: () => Promise<PrismaReadinessResult>;
+  persist: () => { ok: boolean; error: string | null };
   stageLocks: ReturnType<typeof createProjectStageLockRegistry>;
 }
 
@@ -116,6 +119,7 @@ export interface BuildAppOptions {
   renderAdapter?: RenderAdapter;
   storageBaseDir?: string;
   skipSnapshotLoad?: boolean;
+  databaseReadiness?: () => Promise<PrismaReadinessResult>;
 }
 
 export function buildApp(options: BuildAppOptions = {}): AppInstance {
@@ -175,10 +179,6 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
     }
     return result;
   }
-  if (!isTest) {
-    process.on("SIGINT", () => { persist(); process.exit(0); });
-    process.on("SIGTERM", () => { persist(); process.exit(0); });
-  }
   // Persist after each state-changing request before the response completes,
   // so deletes cannot be resurrected by a stale db snapshot on restart.
   function persistMutation() {
@@ -191,6 +191,8 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
     db,
     persistenceHealth,
     mediaLibraryHealth,
+    databaseReadiness: options.databaseReadiness,
+    persist,
     stageLocks,
     renderAdapter: options.renderAdapter,
     topicCandidateStore,
