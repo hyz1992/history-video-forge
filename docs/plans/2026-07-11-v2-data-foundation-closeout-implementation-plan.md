@@ -210,11 +210,13 @@ npx vitest run --configLoader runner tests/backend/db/prisma-schema.test.ts test
 
 **步骤：**
 
-- [ ] 删除普通查询中的可选 owner；用户作用域查询必须显式提供 owner/scope。
-- [ ] 管理员和内部系统查询使用不同名称的接口，不允许通过省略参数获得全局权限。
-- [ ] update/archive/active-record 更新全部携带 scope，并验证目标 record 属于当前项目。
-- [ ] recommendation round 使用项目锁或受控唯一冲突重试；原始 Prisma/SQLite 错误不泄漏到 HTTP。
-- [ ] 增加两个 owner、两个项目的负向 contract test，以及两个 client 并发记录推荐轮次测试。
+- [x] 删除普通查询中的可选 owner；用户作用域查询必须显式提供 owner/scope。
+- [x] 管理员和内部系统查询使用不同名称的接口，不允许通过省略参数获得全局权限。
+- [x] update/archive/active-record 更新全部携带 scope，并验证目标 record 属于当前项目。
+- [x] recommendation round 使用项目锁或受控唯一冲突重试；原始 Prisma/SQLite 错误不泄漏到 HTTP。
+- [x] 增加两个 owner、两个项目的负向 contract test，以及两个 client 并发记录推荐轮次测试。
+
+**完成记录：**`docs/records/2026-07-11-v2-repository-scope-concurrency-verification.md`
 
 **提交：**`收紧项目仓储访问边界`
 

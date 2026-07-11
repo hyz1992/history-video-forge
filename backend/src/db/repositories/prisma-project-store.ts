@@ -47,13 +47,18 @@ export class PrismaProjectStore implements ProjectStore {
     }));
   }
 
-  async findAccessibleById(projectId: string, ownerId?: string): Promise<StoredProjectRecord | null> {
+  async findByIdForOwner(projectId: string, ownerId: string): Promise<StoredProjectRecord | null> {
     const row = await this.client.project.findFirst({
       where: {
         id: projectId,
-        ...(ownerId ? { ownerId } : {}),
+        ownerId,
       },
     });
+    return row ? mapProject(row) : null;
+  }
+
+  async findByIdForSystem(projectId: string): Promise<StoredProjectRecord | null> {
+    const row = await this.client.project.findUnique({ where: { id: projectId } });
     return row ? mapProject(row) : null;
   }
 
@@ -64,15 +69,28 @@ export class PrismaProjectStore implements ProjectStore {
     })).map(mapProject);
   }
 
-  async updateStatus(projectId: string, status: string): Promise<StoredProjectRecord> {
-    return mapProject(await this.client.project.update({
-      where: { id: projectId },
+  async updateStatusForOwner(projectId: string, ownerId: string, status: string): Promise<StoredProjectRecord> {
+    const result = await this.client.project.updateMany({
+      where: { id: projectId, ownerId },
       data: { status },
-    }));
+    });
+    if (result.count !== 1) throw new Error("project_scope_denied");
+    return mapProject(await this.client.project.findUniqueOrThrow({ where: { id: projectId } }));
   }
 
-  async updateActiveRecords(projectId: string, patch: ActiveProjectRecordPatch): Promise<StoredProjectRecord> {
+  async archiveForOwner(projectId: string, ownerId: string): Promise<StoredProjectRecord> {
+    const result = await this.client.project.updateMany({
+      where: { id: projectId, ownerId },
+      data: { archivedAt: new Date() },
+    });
+    if (result.count !== 1) throw new Error("project_scope_denied");
+    return mapProject(await this.client.project.findUniqueOrThrow({ where: { id: projectId } }));
+  }
+
+  async updateActiveRecordsForOwner(projectId: string, ownerId: string, patch: ActiveProjectRecordPatch): Promise<StoredProjectRecord> {
     return this.client.$transaction(async (transaction) => {
+      const project = await transaction.project.findFirst({ where: { id: projectId, ownerId }, select: { id: true } });
+      if (!project) throw new Error("project_scope_denied");
       const checks: Array<Promise<{ projectId: string } | null>> = [];
       const fields: string[] = [];
       if (patch.activeTopicPackageId) {

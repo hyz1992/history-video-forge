@@ -41,8 +41,10 @@ export interface ActiveProjectRecordPatch {
 
 export interface ProjectStore {
   create(input: CreateProjectRecordInput): Promise<StoredProjectRecord>;
-  findAccessibleById(projectId: string, ownerId?: string): Promise<StoredProjectRecord | null>;
+  findByIdForOwner(projectId: string, ownerId: string): Promise<StoredProjectRecord | null>;
+  findByIdForSystem(projectId: string): Promise<StoredProjectRecord | null>;
   listByOwner(ownerId: string): Promise<StoredProjectRecord[]>;
-  updateStatus(projectId: string, status: string): Promise<StoredProjectRecord>;
-  updateActiveRecords(projectId: string, patch: ActiveProjectRecordPatch): Promise<StoredProjectRecord>;
+  updateStatusForOwner(projectId: string, ownerId: string, status: string): Promise<StoredProjectRecord>;
+  archiveForOwner(projectId: string, ownerId: string): Promise<StoredProjectRecord>;
+  updateActiveRecordsForOwner(projectId: string, ownerId: string, patch: ActiveProjectRecordPatch): Promise<StoredProjectRecord>;
 }

@@ -60,13 +60,15 @@ Task 8.5-3 处理结果：迁移记录已冻结为 `importing/imported/verified/
 
 处理：Task 8.5 分聚合切换全部业务读写，完成后 JSON 仅允许作为迁移源/离线导出，不允许生产双写。
 
-### P0-3：现有 repository 合同为未来越权留下旁路
+### P0-3：现有 repository 合同为未来越权留下旁路（已关闭）
 
 `ProjectStore.findAccessibleById(projectId, ownerId?)` 的 `ownerId` 可省略；`updateStatus(projectId, status)` 只按项目 ID 更新。任何调用方漏传 owner 都会退化成全局访问。
 
 影响：接入认证后，即使路由大部分做了鉴权，内部调用或新增接口仍可能绕过所有权边界。
 
 处理：普通访问必须使用必填 scope；管理员/系统访问使用名称显式、单独审计的接口。所有更新必须携带 scope 或在受控事务上下文执行。
+
+Task 8.5-5 处理结果：删除可省略 owner 的查询入口，普通读写统一使用 `ForOwner` 方法并强制 ownerId；系统读取使用名称独立的 `findByIdForSystem`。状态更新、active record 更新和推荐读写均验证项目所有权，跨 owner 请求返回稳定的 `project_scope_denied`。双用户双项目负向测试已覆盖。
 
 ### P0-4：readiness 不能证明当前数据库真正可安全承载业务（已关闭）
 
@@ -98,11 +100,13 @@ Task 8.5-2 处理结果：确认不存在已应用 `0001` 的需保留数据库�
 
 Task 8.5-3 处理结果：导入前已强制检查全部目标业务集合为空，并在创建迁移记录前拒绝非空目标；verification 报告增加预期/实际项目 ID、active record 同项目关系和 storageKey/源目录存在性。当前“全库计数”仅在这个空目标前置条件下成立；合并导入仍明确不支持。
 
-### P1-3：推荐轮次编号存在并发竞争
+### P1-3：推荐轮次编号存在并发竞争（已关闭）
 
 `recordRound()` 先读取 `_max(roundIndex)` 再创建下一轮。两个并发请求可能计算出相同编号并触发唯一键冲突；当前没有重试或受控冲突映射。
 
 处理：复用项目级阶段锁并增加受控唯一冲突重试，覆盖两个 client 并发测试。
+
+Task 8.5-5 处理结果：推荐轮次按 projectId 使用进程内项目队列串行化，并在事务首个写操作验证 owner/获取 SQLite 写锁；唯一冲突、SQLite busy 和 Prisma 事务冲突只进行最多三次受控重试，对外映射为稳定仓储错误。两个独立 Prisma client 的并发测试稳定生成第 1、2 轮。本结论只适用于当前单后端实例边界。
 
 ### P1-4：数据库备份、恢复和正式激活没有可执行入口
 

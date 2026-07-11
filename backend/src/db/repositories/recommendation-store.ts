@@ -7,6 +7,7 @@ export interface RecommendationExposureInput {
 
 export interface RecordRecommendationRoundInput {
   projectId: string;
+  ownerId: string;
   candidates: RecommendationExposureInput[];
 }
 
@@ -20,5 +21,5 @@ export interface StoredRecommendationRound {
 
 export interface RecommendationStore {
   recordRound(input: RecordRecommendationRoundInput): Promise<StoredRecommendationRound>;
-  listRecentEventIdentities(projectId: string, limit: number): Promise<string[]>;
+  listRecentEventIdentities(projectId: string, ownerId: string, limit: number): Promise<string[]>;
 }
