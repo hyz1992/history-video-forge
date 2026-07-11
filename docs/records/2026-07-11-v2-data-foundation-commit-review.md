@@ -38,7 +38,7 @@
 npx vitest run --configLoader runner tests/backend/db/prisma-toolchain.test.ts tests/backend/db/prisma-schema.test.ts tests/backend/db/prisma-client.test.ts tests/backend/db/prisma-repositories.test.ts tests/backend/db/legacy-migration-inspect.test.ts tests/backend/db/legacy-migration-import.test.ts tests/backend/db/prisma-readiness.test.ts tests/backend/server-http.test.ts --no-file-parallelism
 ```
 
-结果：8 个文件中 7 个通过、1 个失败；30 项中 29 项通过、1 项失败。失败项为 `prisma-toolchain.test.ts` 内嵌 `spawnSync(npm exec ... prisma validate)` 超过 Vitest 默认 5 秒测试上限；该子进程在套件中约 31 秒后返回。相同 `prisma validate` 命令在套件外单独执行约 1.7 秒并通过，说明工具链功能本身可用，但测试内子进程耗时/隔离存在不稳定性。该项已纳入 Task 8.5-1，当前不能声称数据层聚焦测试全绿。
+当时结果：8 个文件中 7 个通过、1 个失败；30 项中 29 项通过、1 项失败。失败项为 `prisma-toolchain.test.ts` 内嵌 `spawnSync(npm exec ... prisma validate)` 超过 Vitest 默认 5 秒测试上限；该子进程在套件中约 31 秒后返回。相同 `prisma validate` 命令在套件外单独执行约 1.7 秒并通过。该项随后已由 Task 8.5-1 关闭，保留本段只作为审查时证据。
 
 ## 3. 高风险发现
 
@@ -76,13 +76,15 @@ npx vitest run --configLoader runner tests/backend/db/prisma-toolchain.test.ts t
 
 处理：增加显式数据库激活状态；区分 `fresh` 与 `legacy_import`；校验准确 migration 集合、主库事务写回滚、`quick_check` 和 `foreign_key_check`。
 
-### P1-1：正式 schema 与已批准设计仍有漂移
+### P1-1：正式 schema 与已批准设计仍有漂移（已关闭）
 
-当前 schema 尚未包含设计中已经明确的 `User.displayName`、`User.lastLoginAt`、`Project.createdById`、`Session.userAgentHash`、`Session.ipPrefix`。role/status 使用自由字符串，数据库层不能阻止非法状态。Project 的 active 外键只能保证目标存在，不能保证目标属于同一个 project。
+审查时 schema 尚未包含设计中已经明确的 `User.displayName`、`User.lastLoginAt`、`Project.createdById`、`Session.userAgentHash`、`Session.ipPrefix`。role/status 使用自由字符串，数据库层不能阻止非法状态。Project 的 active 外键只能保证目标存在，不能保证目标属于同一个 project。
 
 影响：在正式数据库启用后再修正会增加 migration 成本；跨项目 active pointer 会造成数据隔离和流水线读取错误。
 
 处理：正式数据库首次激活前完成 schema 冻结复核；为跨项目引用增加 repository 事务校验和负向测试。若任何持久环境已经应用 `0001`，不得改写历史 migration，必须新增 migration。
+
+Task 8.5-2 处理结果：确认不存在已应用 `0001` 的需保留数据库后修正 baseline；补齐上述字段、User role/status CHECK、Project createdBy 约束，以及 active record INSERT/UPDATE 的 repository + trigger 双层防线。11 文件、43 项聚焦回归通过。本风险已关闭。
 
 ### P1-2：迁移 verify 默认把整个数据库计数当作当前源快照计数
 

@@ -4,14 +4,14 @@
 
 本文冻结 V1 内存数据库到 V2 Prisma 数据模型的迁移去向，作为首版 schema、导入器和仓储适配的共同输入。
 
-本轮只确定模型归属、主键、外键、JSON 边界和文件边界，不创建 Prisma schema，不移动项目文件，也不引入用户系统实现。模型命名以 `docs/superpowers/specs/2026-07-10-v2-data-auth-design.md` 为设计真相源。
+本文确定模型归属、主键、外键、JSON 边界和文件边界，并与当前 Prisma baseline 保持一致；不移动项目文件，也不引入登录等用户系统实现。模型命名以 `docs/superpowers/specs/2026-07-10-v2-data-auth-design.md` 为设计真相源。
 
 ## 2. 全局映射原则
 
 - V1 字符串 ID 原样保留；V2 新记录使用 UUID 字符串。迁移器不得重写已有主键。
 - 所有流水线记录通过 `projectId` 归属项目；首期不重复保存 `ownerId`。
-- 项目所有权只保存于 `Project.ownerId`；迁入的 V1 项目归首个管理员用户。
-- active record 字段使用可空外键，删除策略为 `Restrict`；推荐轮次的曝光明细随轮次 `Cascade`。
+- 项目当前所有权只保存于 `Project.ownerId`，创建人另存 `Project.createdById` 作为不可猜测的来源记录；迁入的 V1 项目两者均指向显式 migration owner。
+- active record 字段使用可空外键，删除策略为 `Restrict`，并由 repository 事务预检与 SQLite trigger 双重保证目标记录属于同一项目；推荐轮次的曝光明细随轮次 `Cascade`。
 - 结构稳定、需要查询或约束的身份字段进入关系列；阶段完整产物、验证结果和 trace 保留为 JSON。
 - 数据库只保存稳定的 `storageKey` 或相对路径，不保存机器绝对路径。
 - 现有项目目录和媒体文件本轮不移动；数据库迁移只建立引用。
@@ -41,11 +41,13 @@
 
 ## 4. Project 字段逐项映射
 
-V2 `Project` 新增 `ownerId`、`storageKey`。`ownerId` 指向 `User`；`storageKey` 是与展示名称解耦的稳定目录键。
+V2 `Project` 新增 `ownerId`、`createdById`、`storageKey`。`ownerId` 指向当前所有者，`createdById` 记录最初创建人；`storageKey` 是与展示名称解耦的稳定目录键。
 
 | V1 `ProjectRecord` 字段 | V2 去向 | 决定 |
 | --- | --- | --- |
 | `id` | `Project.id` | 原样保留；新记录默认 UUID |
+| 无 | `Project.ownerId` | 迁移时指向显式 migration owner；后续可由管理员转移 |
+| 无 | `Project.createdById` | 迁移时与 owner 相同；后续所有权转移不得改写 |
 | `name` | `Project.name` | 直接迁移 |
 | `status` | `Project.status` | 首版保留字符串/枚举兼容值 |
 | `activeTopicPackageId` | `Project.activeTopicPackageId` | 可空外键，`Restrict` |
@@ -69,6 +71,12 @@ V2 `Project` 新增 `ownerId`、`storageKey`。`ownerId` 指向 `User`；`storag
 | `storageRenameLocked` | `Project.storageRenameLocked` | 兼容现有重命名语义；路径定位仍只依赖 `storageKey` |
 | `createdAt` | `Project.createdAt` | 原样保留 |
 | `updatedAt` | `Project.updatedAt` | 原样保留 |
+
+### 4.1 V2 身份字段冻结
+
+- `User` 必须保存 `username`、`displayName`、`passwordHash`、`role`、`status`、`mustChangePassword`、`lastLoginAt` 和时间字段。
+- SQLite baseline 使用 CHECK 限制 `User.role` 为 `ADMIN | USER`，`User.status` 为 `ACTIVE | DISABLED`；Project 的多阶段 status 继续保留兼容字符串，不复用用户状态约束。
+- `Session` 预留 `userAgentHash` 与 `ipPrefix` 可空字段，只用于后续受控审计；本任务不创建 Session 或认证接口。
 
 ## 5. 其他领域记录
 

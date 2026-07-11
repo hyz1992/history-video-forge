@@ -123,12 +123,12 @@ npx vitest run --configLoader runner --no-file-parallelism
 
 **步骤：**
 
-- [ ] 先执行 R1 migration 使用情况审计并记录选择“修正 0001”还是“新增 0002”。
-- [ ] 对照批准设计补齐或明确延后：`User.displayName`、`User.lastLoginAt`、`Project.createdById`、`Session.userAgentHash`、`Session.ipPrefix`。
-- [ ] 明确 role/status 合法值的数据库/应用双层约束；不得继续任意字符串静默入库。
-- [ ] 为 Project active record 增加同项目约束策略：repository 事务校验为必需，若 SQLite trigger/复合外键可维护再增加数据库防线。
-- [ ] 增加负向测试：跨项目 active pointer、非法 role/status、缺失 createdBy 均失败。
-- [ ] 执行空库 `migrate deploy`，禁止用 `migrate dev` 作为生产验收命令。
+- [x] 先执行 R1 migration 使用情况审计并记录选择“修正 0001”还是“新增 0002”。
+- [x] 对照批准设计补齐或明确延后：`User.displayName`、`User.lastLoginAt`、`Project.createdById`、`Session.userAgentHash`、`Session.ipPrefix`。
+- [x] 明确 role/status 合法值的数据库/应用双层约束；不得继续任意字符串静默入库。
+- [x] 为 Project active record 增加同项目约束策略：repository 事务校验为必需，若 SQLite trigger/复合外键可维护再增加数据库防线。
+- [x] 增加负向测试：跨项目 active pointer、非法 role/status、缺失 createdBy 均失败。
+- [x] 执行空库 `migrate deploy`，禁止用 `migrate dev` 作为生产验收命令。
 
 **验证：**
 

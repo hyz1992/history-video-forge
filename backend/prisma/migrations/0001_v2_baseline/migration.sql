@@ -2,10 +2,12 @@
 CREATE TABLE "User" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "username" TEXT NOT NULL,
+    "displayName" TEXT NOT NULL,
     "passwordHash" TEXT NOT NULL,
-    "role" TEXT NOT NULL DEFAULT 'user',
-    "status" TEXT NOT NULL DEFAULT 'active',
+    "role" TEXT NOT NULL DEFAULT 'USER' CHECK ("role" IN ('ADMIN', 'USER')),
+    "status" TEXT NOT NULL DEFAULT 'ACTIVE' CHECK ("status" IN ('ACTIVE', 'DISABLED')),
     "mustChangePassword" BOOLEAN NOT NULL DEFAULT true,
+    "lastLoginAt" DATETIME,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL
 );
@@ -18,6 +20,8 @@ CREATE TABLE "Session" (
     "expiresAt" DATETIME NOT NULL,
     "revokedAt" DATETIME,
     "lastSeenAt" DATETIME,
+    "userAgentHash" TEXT,
+    "ipPrefix" TEXT,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "Session_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
@@ -26,6 +30,7 @@ CREATE TABLE "Session" (
 CREATE TABLE "Project" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "ownerId" TEXT NOT NULL,
+    "createdById" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'topic_pending',
     "storageKey" TEXT NOT NULL,
@@ -50,6 +55,7 @@ CREATE TABLE "Project" (
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
     CONSTRAINT "Project_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "Project_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "Project_activeTopicPackageId_fkey" FOREIGN KEY ("activeTopicPackageId") REFERENCES "TopicPackage" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "Project_activeScriptRecordId_fkey" FOREIGN KEY ("activeScriptRecordId") REFERENCES "ScriptRecord" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "Project_activeStoryboardRecordId_fkey" FOREIGN KEY ("activeStoryboardRecordId") REFERENCES "StoryboardRecord" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
@@ -348,6 +354,9 @@ CREATE UNIQUE INDEX "Project_storageKey_key" ON "Project"("storageKey");
 CREATE INDEX "Project_ownerId_updatedAt_idx" ON "Project"("ownerId", "updatedAt");
 
 -- CreateIndex
+CREATE INDEX "Project_createdById_createdAt_idx" ON "Project"("createdById", "createdAt");
+
+-- CreateIndex
 CREATE INDEX "Project_status_archivedAt_idx" ON "Project"("status", "archivedAt");
 
 -- CreateIndex
@@ -469,3 +478,73 @@ CREATE UNIQUE INDEX "DataMigrationRun_sourceSha256_key" ON "DataMigrationRun"("s
 
 -- CreateIndex
 CREATE INDEX "DataMigrationRun_status_startedAt_idx" ON "DataMigrationRun"("status", "startedAt");
+
+-- Enforce that every active record belongs to the same project.
+CREATE TRIGGER "Project_active_records_same_project_on_insert"
+BEFORE INSERT ON "Project"
+FOR EACH ROW
+BEGIN
+    SELECT CASE WHEN NEW."activeTopicPackageId" IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM "TopicPackage" WHERE "id" = NEW."activeTopicPackageId" AND "projectId" = NEW."id")
+        THEN RAISE(ABORT, 'project_active_topic_package_mismatch') END;
+    SELECT CASE WHEN NEW."activeScriptRecordId" IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM "ScriptRecord" WHERE "id" = NEW."activeScriptRecordId" AND "projectId" = NEW."id")
+        THEN RAISE(ABORT, 'project_active_script_record_mismatch') END;
+    SELECT CASE WHEN NEW."activeStoryboardRecordId" IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM "StoryboardRecord" WHERE "id" = NEW."activeStoryboardRecordId" AND "projectId" = NEW."id")
+        THEN RAISE(ABORT, 'project_active_storyboard_record_mismatch') END;
+    SELECT CASE WHEN NEW."activeAssetPlanRecordId" IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM "AssetPlanRecord" WHERE "id" = NEW."activeAssetPlanRecordId" AND "projectId" = NEW."id")
+        THEN RAISE(ABORT, 'project_active_asset_plan_record_mismatch') END;
+    SELECT CASE WHEN NEW."activeAssetManifestRecordId" IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM "AssetManifestRecord" WHERE "id" = NEW."activeAssetManifestRecordId" AND "projectId" = NEW."id")
+        THEN RAISE(ABORT, 'project_active_asset_manifest_record_mismatch') END;
+    SELECT CASE WHEN NEW."activeComposeRecordId" IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM "ComposeRecord" WHERE "id" = NEW."activeComposeRecordId" AND "projectId" = NEW."id")
+        THEN RAISE(ABORT, 'project_active_compose_record_mismatch') END;
+    SELECT CASE WHEN NEW."activeRenderJobRecordId" IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM "RenderJobRecord" WHERE "id" = NEW."activeRenderJobRecordId" AND "projectId" = NEW."id")
+        THEN RAISE(ABORT, 'project_active_render_job_record_mismatch') END;
+    SELECT CASE WHEN NEW."activePublishPackageRecordId" IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM "PublishPackageRecord" WHERE "id" = NEW."activePublishPackageRecordId" AND "projectId" = NEW."id")
+        THEN RAISE(ABORT, 'project_active_publish_package_record_mismatch') END;
+END;
+
+CREATE TRIGGER "Project_active_records_same_project"
+BEFORE UPDATE OF
+    "activeTopicPackageId",
+    "activeScriptRecordId",
+    "activeStoryboardRecordId",
+    "activeAssetPlanRecordId",
+    "activeAssetManifestRecordId",
+    "activeComposeRecordId",
+    "activeRenderJobRecordId",
+    "activePublishPackageRecordId"
+ON "Project"
+FOR EACH ROW
+BEGIN
+    SELECT CASE WHEN NEW."activeTopicPackageId" IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM "TopicPackage" WHERE "id" = NEW."activeTopicPackageId" AND "projectId" = NEW."id")
+        THEN RAISE(ABORT, 'project_active_topic_package_mismatch') END;
+    SELECT CASE WHEN NEW."activeScriptRecordId" IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM "ScriptRecord" WHERE "id" = NEW."activeScriptRecordId" AND "projectId" = NEW."id")
+        THEN RAISE(ABORT, 'project_active_script_record_mismatch') END;
+    SELECT CASE WHEN NEW."activeStoryboardRecordId" IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM "StoryboardRecord" WHERE "id" = NEW."activeStoryboardRecordId" AND "projectId" = NEW."id")
+        THEN RAISE(ABORT, 'project_active_storyboard_record_mismatch') END;
+    SELECT CASE WHEN NEW."activeAssetPlanRecordId" IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM "AssetPlanRecord" WHERE "id" = NEW."activeAssetPlanRecordId" AND "projectId" = NEW."id")
+        THEN RAISE(ABORT, 'project_active_asset_plan_record_mismatch') END;
+    SELECT CASE WHEN NEW."activeAssetManifestRecordId" IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM "AssetManifestRecord" WHERE "id" = NEW."activeAssetManifestRecordId" AND "projectId" = NEW."id")
+        THEN RAISE(ABORT, 'project_active_asset_manifest_record_mismatch') END;
+    SELECT CASE WHEN NEW."activeComposeRecordId" IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM "ComposeRecord" WHERE "id" = NEW."activeComposeRecordId" AND "projectId" = NEW."id")
+        THEN RAISE(ABORT, 'project_active_compose_record_mismatch') END;
+    SELECT CASE WHEN NEW."activeRenderJobRecordId" IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM "RenderJobRecord" WHERE "id" = NEW."activeRenderJobRecordId" AND "projectId" = NEW."id")
+        THEN RAISE(ABORT, 'project_active_render_job_record_mismatch') END;
+    SELECT CASE WHEN NEW."activePublishPackageRecordId" IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM "PublishPackageRecord" WHERE "id" = NEW."activePublishPackageRecordId" AND "projectId" = NEW."id")
+        THEN RAISE(ABORT, 'project_active_publish_package_record_mismatch') END;
+END;

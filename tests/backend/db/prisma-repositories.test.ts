@@ -39,15 +39,16 @@ describe("Prisma repository boundaries", () => {
     let ownerId = "";
     try {
       const owner = await firstClient.user.create({
-        data: { username: "owner", passwordHash: "hash", role: "user" },
+        data: { username: "owner", displayName: "Owner", passwordHash: "hash", role: "USER" },
       });
       const other = await firstClient.user.create({
-        data: { username: "other", passwordHash: "hash", role: "user" },
+        data: { username: "other", displayName: "Other", passwordHash: "hash", role: "USER" },
       });
       ownerId = owner.id;
       const store = new PrismaProjectStore(firstClient);
       const project = await store.create({
         ownerId: owner.id,
+        createdById: owner.id,
         name: "Persistent project",
         storageKey: "persistent-project",
         storageDisplayName: "Persistent project",
@@ -79,10 +80,11 @@ describe("Prisma repository boundaries", () => {
     let projectId = "";
     try {
       const owner = await firstClient.user.create({
-        data: { username: "recommendation-owner", passwordHash: "hash", role: "user" },
+        data: { username: "recommendation-owner", displayName: "Recommendation owner", passwordHash: "hash", role: "USER" },
       });
       const project = await new PrismaProjectStore(firstClient).create({
         ownerId: owner.id,
+        createdById: owner.id,
         name: "Recommendation project",
         storageKey: "recommendation-project",
         storageDisplayName: "Recommendation project",
@@ -109,6 +111,59 @@ describe("Prisma repository boundaries", () => {
       ]);
     } finally {
       await restartedClient.$disconnect();
+    }
+  });
+
+  it("rejects cross-project active records before updating the project", async () => {
+    const databasePath = createMigratedDatabase();
+    const client = await createPrismaClient(databasePath);
+    try {
+      const owner = await client.user.create({
+        data: { username: "integrity-owner", displayName: "Integrity owner", passwordHash: "hash", role: "USER" },
+      });
+      const store = new PrismaProjectStore(client);
+      const first = await store.create({
+        ownerId: owner.id,
+        createdById: owner.id,
+        name: "First project",
+        storageKey: "integrity-first",
+        storageDisplayName: "First project",
+      });
+      const second = await store.create({
+        ownerId: owner.id,
+        createdById: owner.id,
+        name: "Second project",
+        storageKey: "integrity-second",
+        storageDisplayName: "Second project",
+      });
+      const topic = await client.topicPackage.create({
+        data: {
+          projectId: second.id,
+          title: "Second topic",
+          selectedAngle: "angle",
+          familyLabel: "family",
+          scopeLabel: "scope",
+          coreConflict: "conflict",
+          strongScene: "scene",
+          packagingSeed: "seed",
+          canonicalQuotesJson: [],
+          canonicalQuoteIntentsJson: [],
+          durationBandJson: {},
+          narrativeTensionMapJson: {},
+          mustIncludeBeatsJson: [],
+          forbiddenExpansionsJson: [],
+          riskHintsJson: [],
+          sourceAnchorRefsJson: [],
+          ambiguityNotesJson: [],
+        },
+      });
+
+      await expect(store.updateActiveRecords(first.id, { activeTopicPackageId: topic.id }))
+        .rejects.toThrow("project_active_record_mismatch:activeTopicPackageId");
+      await expect(store.findAccessibleById(first.id, owner.id))
+        .resolves.toMatchObject({ activeTopicPackageId: null });
+    } finally {
+      await client.$disconnect();
     }
   });
 });

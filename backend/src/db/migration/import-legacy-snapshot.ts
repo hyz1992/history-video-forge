@@ -82,7 +82,7 @@ async function importCoreCollections(
   } }));
 
   await createEach(collections.projects, (id, row) => transaction.project.create({ data: {
-    id, ownerId: options.defaultOwnerId, name: row.name, status: row.status,
+    id, ownerId: options.defaultOwnerId, createdById: options.defaultOwnerId, name: row.name, status: row.status,
     storageKey: storageKey(row, id), storageDisplayName: row.storageDisplayName || row.name,
     storageRenameLocked: Boolean(row.storageRenameLocked),
     latestTopicRunTraceJson: nullableJson(row.latestTopicRunTraceJson),

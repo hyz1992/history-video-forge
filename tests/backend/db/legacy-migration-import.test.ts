@@ -108,7 +108,7 @@ describe("legacy snapshot idempotent import", () => {
   it("imports once, verifies counts and active records, then returns already_applied", async () => {
     const client = await createPrismaClient(createDatabase());
     try {
-      const owner = await client.user.create({ data: { username: "import-admin", passwordHash: "hash", role: "admin" } });
+      const owner = await client.user.create({ data: { username: "import-admin", displayName: "Import admin", passwordHash: "hash", role: "ADMIN" } });
       const sourcePath = createSnapshot();
       const first = await importLegacySnapshot(client, { sourcePath, defaultOwnerId: owner.id });
       const countsAfterFirst = await Promise.all([
@@ -137,7 +137,7 @@ describe("legacy snapshot idempotent import", () => {
   it("rolls back everything and creates no completed marker for a missing active record", async () => {
     const client = await createPrismaClient(createDatabase());
     try {
-      const owner = await client.user.create({ data: { username: "rollback-admin", passwordHash: "hash", role: "admin" } });
+      const owner = await client.user.create({ data: { username: "rollback-admin", displayName: "Rollback admin", passwordHash: "hash", role: "ADMIN" } });
       await expect(importLegacySnapshot(client, {
         sourcePath: createSnapshot({ missingActiveScript: true }),
         defaultOwnerId: owner.id,
@@ -152,7 +152,7 @@ describe("legacy snapshot idempotent import", () => {
   it("applies only explicit safe repairs and records them without changing the source", async () => {
     const client = await createPrismaClient(createDatabase());
     try {
-      const owner = await client.user.create({ data: { username: "repair-admin", passwordHash: "hash", role: "admin" } });
+      const owner = await client.user.create({ data: { username: "repair-admin", displayName: "Repair admin", passwordHash: "hash", role: "ADMIN" } });
       const sourcePath = createSnapshot({ repairableGarbage: true });
       const before = readFileSync(sourcePath, "utf8");
       const result = await importLegacySnapshot(client, {

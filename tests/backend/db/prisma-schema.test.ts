@@ -43,9 +43,19 @@ describe("V2 Prisma baseline schema", () => {
   });
 
   it("defines project ownership, stable storage, active records, and traces", () => {
-    const project = modelBody(readFileSync(schemaPath, "utf8"), "Project");
+    const schema = readFileSync(schemaPath, "utf8");
+    const user = modelBody(schema, "User");
+    const session = modelBody(schema, "Session");
+    const project = modelBody(schema, "Project");
+    for (const fieldName of ["displayName", "lastLoginAt"]) {
+      expect(user, `User.${fieldName} 必须存在`).toMatch(new RegExp(`^\\s*${fieldName}\\s`, "m"));
+    }
+    for (const fieldName of ["userAgentHash", "ipPrefix"]) {
+      expect(session, `Session.${fieldName} 必须存在`).toMatch(new RegExp(`^\\s*${fieldName}\\s`, "m"));
+    }
     const requiredFields = [
       "ownerId",
+      "createdById",
       "storageKey",
       "activeTopicPackageId",
       "activeScriptRecordId",
@@ -69,6 +79,25 @@ describe("V2 Prisma baseline schema", () => {
     }
     expect(project).toMatch(/storageKey\s+String\s+@unique/);
     expect(project).toMatch(/owner\s+User\s+@relation\([^\n]*onDelete:\s*Restrict/);
+    expect(project).toMatch(/createdBy\s+User\s+@relation\([^\n]*onDelete:\s*Restrict/);
+  });
+
+  it("constrains user role and status in the committed SQLite migration", () => {
+    const migrationSql = readFileSync(migrationPath, "utf8");
+    expect(migrationSql).toMatch(/CHECK\s*\(\s*"role"\s+IN\s*\(\s*'ADMIN'\s*,\s*'USER'\s*\)\s*\)/);
+    expect(migrationSql).toMatch(/CHECK\s*\(\s*"status"\s+IN\s*\(\s*'ACTIVE'\s*,\s*'DISABLED'\s*\)\s*\)/);
+    for (const errorCode of [
+      "project_active_topic_package_mismatch",
+      "project_active_script_record_mismatch",
+      "project_active_storyboard_record_mismatch",
+      "project_active_asset_plan_record_mismatch",
+      "project_active_asset_manifest_record_mismatch",
+      "project_active_compose_record_mismatch",
+      "project_active_render_job_record_mismatch",
+      "project_active_publish_package_record_mismatch",
+    ]) {
+      expect(migrationSql).toContain(errorCode);
+    }
   });
 
   it("defines persistent recommendation memory and explicit deletion policies", () => {

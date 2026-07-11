@@ -10,28 +10,33 @@ datasource db {
 model User {
   id                 String     @id @default(uuid())
   username           String     @unique
+  displayName        String
   passwordHash       String
-  role               String     @default("user")
-  status             String     @default("active")
+  role               String     @default("USER")
+  status             String     @default("ACTIVE")
   mustChangePassword Boolean    @default(true)
+  lastLoginAt        DateTime?
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
   sessions           Session[]
-  projects           Project[]
+  projects           Project[]  @relation("ProjectOwner")
+  createdProjects    Project[]  @relation("ProjectCreatedBy")
   auditLogs          AuditLog[] @relation("AuditActor")
 
   @@index([role, status])
 }
 
 model Session {
-  id         String    @id @default(uuid())
-  userId     String
-  tokenHash  String    @unique
-  expiresAt  DateTime
-  revokedAt  DateTime?
-  lastSeenAt DateTime?
-  createdAt  DateTime  @default(now())
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String    @id @default(uuid())
+  userId        String
+  tokenHash     String    @unique
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  lastSeenAt    DateTime?
+  userAgentHash String?
+  ipPrefix      String?
+  createdAt     DateTime  @default(now())
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, expiresAt])
 }
@@ -39,6 +44,7 @@ model Session {
 model Project {
   id                           String                         @id @default(uuid())
   ownerId                      String
+  createdById                  String
   name                         String
   status                       String                         @default("topic_pending")
   storageKey                   String                         @unique
@@ -62,7 +68,8 @@ model Project {
   latestRenderRunTraceJson     Json?
   createdAt                    DateTime                       @default(now())
   updatedAt                    DateTime                       @updatedAt
-  owner                        User                           @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  owner                        User                           @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  createdBy                    User                           @relation("ProjectCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
   activeTopicPackage           TopicPackage?                  @relation("ActiveTopicPackage", fields: [activeTopicPackageId], references: [id], onDelete: Restrict)
   activeScriptRecord           ScriptRecord?                  @relation("ActiveScriptRecord", fields: [activeScriptRecordId], references: [id], onDelete: Restrict)
   activeStoryboardRecord       StoryboardRecord?              @relation("ActiveStoryboardRecord", fields: [activeStoryboardRecordId], references: [id], onDelete: Restrict)
@@ -84,6 +91,7 @@ model Project {
   auditLogs                    AuditLog[]
 
   @@index([ownerId, updatedAt])
+  @@index([createdById, createdAt])
   @@index([status, archivedAt])
 }
 

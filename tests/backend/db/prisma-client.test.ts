@@ -67,13 +67,15 @@ describe("Prisma client initialization", () => {
         const user = await transaction.user.create({
           data: {
             username: "rollback-admin",
+            displayName: "Rollback admin",
             passwordHash: "not-a-real-password-hash",
-            role: "admin",
+            role: "ADMIN",
           },
         });
         const project = await transaction.project.create({
           data: {
             ownerId: user.id,
+            createdById: user.id,
             name: "Rollback project",
             storageKey: "rollback-project",
             storageDisplayName: "Rollback project",
@@ -121,13 +123,15 @@ describe("Prisma client initialization", () => {
       const user = await firstClient.user.create({
         data: {
           username: "concurrency-admin",
+          displayName: "Concurrency admin",
           passwordHash: "not-a-real-password-hash",
-          role: "admin",
+          role: "ADMIN",
         },
       });
       const project = await firstClient.project.create({
         data: {
           ownerId: user.id,
+          createdById: user.id,
           name: "Concurrent project",
           storageKey: "concurrent-project",
           storageDisplayName: "Concurrent project",

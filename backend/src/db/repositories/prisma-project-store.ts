@@ -1,5 +1,6 @@
 import type { AppPrismaClient } from "../prisma-client.types.js";
 import type {
+  ActiveProjectRecordPatch,
   CreateProjectRecordInput,
   ProjectStore,
   StoredProjectRecord,
@@ -11,6 +12,7 @@ function mapProject(row: PrismaProjectRow): StoredProjectRecord {
   return {
     id: row.id,
     ownerId: row.ownerId,
+    createdById: row.createdById,
     name: row.name,
     status: row.status,
     storageKey: row.storageKey,
@@ -37,6 +39,7 @@ export class PrismaProjectStore implements ProjectStore {
     return mapProject(await this.client.project.create({
       data: {
         ownerId: input.ownerId,
+        createdById: input.createdById,
         name: input.name,
         storageKey: input.storageKey,
         storageDisplayName: input.storageDisplayName,
@@ -66,5 +69,54 @@ export class PrismaProjectStore implements ProjectStore {
       where: { id: projectId },
       data: { status },
     }));
+  }
+
+  async updateActiveRecords(projectId: string, patch: ActiveProjectRecordPatch): Promise<StoredProjectRecord> {
+    return this.client.$transaction(async (transaction) => {
+      const checks: Array<Promise<{ projectId: string } | null>> = [];
+      const fields: string[] = [];
+      if (patch.activeTopicPackageId) {
+        fields.push("activeTopicPackageId");
+        checks.push(transaction.topicPackage.findUnique({ where: { id: patch.activeTopicPackageId }, select: { projectId: true } }));
+      }
+      if (patch.activeScriptRecordId) {
+        fields.push("activeScriptRecordId");
+        checks.push(transaction.scriptRecord.findUnique({ where: { id: patch.activeScriptRecordId }, select: { projectId: true } }));
+      }
+      if (patch.activeStoryboardRecordId) {
+        fields.push("activeStoryboardRecordId");
+        checks.push(transaction.storyboardRecord.findUnique({ where: { id: patch.activeStoryboardRecordId }, select: { projectId: true } }));
+      }
+      if (patch.activeAssetPlanRecordId) {
+        fields.push("activeAssetPlanRecordId");
+        checks.push(transaction.assetPlanRecord.findUnique({ where: { id: patch.activeAssetPlanRecordId }, select: { projectId: true } }));
+      }
+      if (patch.activeAssetManifestRecordId) {
+        fields.push("activeAssetManifestRecordId");
+        checks.push(transaction.assetManifestRecord.findUnique({ where: { id: patch.activeAssetManifestRecordId }, select: { projectId: true } }));
+      }
+      if (patch.activeComposeRecordId) {
+        fields.push("activeComposeRecordId");
+        checks.push(transaction.composeRecord.findUnique({ where: { id: patch.activeComposeRecordId }, select: { projectId: true } }));
+      }
+      if (patch.activeRenderJobRecordId) {
+        fields.push("activeRenderJobRecordId");
+        checks.push(transaction.renderJobRecord.findUnique({ where: { id: patch.activeRenderJobRecordId }, select: { projectId: true } }));
+      }
+      if (patch.activePublishPackageRecordId) {
+        fields.push("activePublishPackageRecordId");
+        checks.push(transaction.publishPackageRecord.findUnique({ where: { id: patch.activePublishPackageRecordId }, select: { projectId: true } }));
+      }
+      const records = await Promise.all(checks);
+      for (let index = 0; index < records.length; index += 1) {
+        if (records[index]?.projectId !== projectId) {
+          throw new Error(`project_active_record_mismatch:${fields[index]}`);
+        }
+      }
+      return mapProject(await transaction.project.update({
+        where: { id: projectId },
+        data: patch,
+      }));
+    });
   }
 }
