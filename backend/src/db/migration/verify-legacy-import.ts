@@ -1,14 +1,14 @@
 import type { AppPrismaClient } from "../prisma-client.types.js";
 import { readLegacySnapshot } from "../legacy-snapshot-reader.js";
 
-export interface V1ImportVerification {
+export interface LegacyImportVerification {
   ok: boolean;
   sourceSha256: string;
   danglingActiveReferences: Array<{ projectId: string; field: string; recordId: string }>;
   countMismatches: Array<{ collection: string; expected: number; actual: number }>;
 }
 
-export async function verifyV1Import(client: AppPrismaClient, sourcePath: string): Promise<V1ImportVerification> {
+export async function verifyLegacyImport(client: AppPrismaClient, sourcePath: string): Promise<LegacyImportVerification> {
   const source = readLegacySnapshot(sourcePath);
   const migration = await client.dataMigrationRun.findUnique({ where: { sourceSha256: source.sourceSha256 } });
   if (!migration || migration.status !== "completed") {
@@ -69,7 +69,7 @@ export async function verifyV1Import(client: AppPrismaClient, sourcePath: string
     activeRenderJobRecordId: new Set((await client.renderJobRecord.findMany({ select: { id: true } })).map((row) => row.id)),
     activePublishPackageRecordId: new Set((await client.publishPackageRecord.findMany({ select: { id: true } })).map((row) => row.id)),
   };
-  const danglingActiveReferences: V1ImportVerification["danglingActiveReferences"] = [];
+  const danglingActiveReferences: LegacyImportVerification["danglingActiveReferences"] = [];
   for (const project of projects) {
     for (const [field, ids] of Object.entries(targetIds)) {
       const recordId = project[field as keyof typeof project];

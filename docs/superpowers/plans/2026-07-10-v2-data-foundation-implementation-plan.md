@@ -364,9 +364,9 @@ git commit -m "建立数据库仓储边界"
 
 **Files:**
 - Create: `backend/src/db/legacy-snapshot-reader.ts`
-- Create: `backend/src/db/migration/inspect-v1-snapshot.ts`
+- Create: `backend/src/db/migration/inspect-legacy-snapshot.ts`
 - Create: `backend/src/db/migration/migration-report.ts`
-- Test: `tests/backend/db/v1-migration-inspect.test.ts`
+- Test: `tests/backend/db/legacy-migration-inspect.test.ts`
 
 - [ ] **Step 1: 写损坏与孤儿样本测试**
 
@@ -374,7 +374,7 @@ git commit -m "建立数据库仓储边界"
 
 - [ ] **Step 2: 确认测试失败**
 
-Run: `npx vitest run --configLoader runner tests/backend/db/v1-migration-inspect.test.ts`
+Run: `npx vitest run --configLoader runner tests/backend/db/legacy-migration-inspect.test.ts`
 
 Expected: FAIL，inspect 函数不存在。
 
@@ -383,7 +383,7 @@ Expected: FAIL，inspect 函数不存在。
 返回稳定结构：
 
 ```ts
-interface V1MigrationInspection {
+interface LegacyMigrationInspection {
   sourcePath: string;
   counts: Record<string, number>;
   issues: Array<{ code: string; severity: "warning" | "error"; recordId?: string }>;
@@ -395,24 +395,24 @@ interface V1MigrationInspection {
 
 测试运行前后计算快照 SHA-256，必须相同。
 
-Run: `npx vitest run --configLoader runner tests/backend/db/v1-migration-inspect.test.ts`
+Run: `npx vitest run --configLoader runner tests/backend/db/legacy-migration-inspect.test.ts`
 
 Expected: PASS。
 
 - [ ] **Step 5: 提交**
 
 ```bash
-git add backend/src/db/legacy-snapshot-reader.ts backend/src/db/migration tests/backend/db/v1-migration-inspect.test.ts
+git add backend/src/db/legacy-snapshot-reader.ts backend/src/db/migration tests/backend/db/legacy-migration-inspect.test.ts
 git commit -m "增加V1快照迁移审计"
 ```
 
 ### Task 7：实现幂等 import 与 verify
 
 **Files:**
-- Create: `backend/src/db/migration/import-v1-snapshot.ts`
-- Create: `backend/src/db/migration/verify-v1-import.ts`
-- Create: `backend/src/cli/migrate-v1-data.ts`
-- Test: `tests/backend/db/v1-migration-import.test.ts`
+- Create: `backend/src/db/migration/import-legacy-snapshot.ts`
+- Create: `backend/src/db/migration/verify-legacy-import.ts`
+- Create: `backend/src/cli/migrate-legacy-data.ts`
+- Test: `tests/backend/db/legacy-migration-import.test.ts`
 
 - [ ] **Step 1: 写双次导入失败测试**
 
@@ -421,7 +421,7 @@ git commit -m "增加V1快照迁移审计"
 
 - [ ] **Step 2: 确认测试失败**
 
-Run: `npx vitest run --configLoader runner tests/backend/db/v1-migration-import.test.ts`
+Run: `npx vitest run --configLoader runner tests/backend/db/legacy-migration-import.test.ts`
 
 Expected: FAIL。
 
@@ -434,7 +434,7 @@ Expected: FAIL。
 Run:
 
 ```bash
-npx vitest run --configLoader runner tests/backend/db/v1-migration-import.test.ts
+npx vitest run --configLoader runner tests/backend/db/legacy-migration-import.test.ts
 npm run typecheck:backend
 ```
 
@@ -443,7 +443,7 @@ Expected: PASS；verify 报告没有 dangling active record。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add backend/src/db/migration backend/src/cli/migrate-v1-data.ts tests/backend/db/v1-migration-import.test.ts
+git add backend/src/db/migration backend/src/cli/migrate-legacy-data.ts tests/backend/db/legacy-migration-import.test.ts
 git commit -m "实现V1数据幂等迁移"
 ```
 
@@ -479,7 +479,7 @@ Run:
 ```bash
 npm exec --workspace backend -- prisma validate --config prisma.config.ts
 npm exec --workspace backend -- prisma generate --config prisma.config.ts
-npx vitest run --configLoader runner tests/backend/db/prisma-toolchain.test.ts tests/backend/db/prisma-schema.test.ts tests/backend/db/prisma-client.test.ts tests/backend/db/prisma-repositories.test.ts tests/backend/db/v1-migration-inspect.test.ts tests/backend/db/v1-migration-import.test.ts tests/backend/db/prisma-readiness.test.ts --no-file-parallelism
+npx vitest run --configLoader runner tests/backend/db/prisma-toolchain.test.ts tests/backend/db/prisma-schema.test.ts tests/backend/db/prisma-client.test.ts tests/backend/db/prisma-repositories.test.ts tests/backend/db/legacy-migration-inspect.test.ts tests/backend/db/legacy-migration-import.test.ts tests/backend/db/prisma-readiness.test.ts --no-file-parallelism
 npm run typecheck:backend
 npm run build:backend
 npx vitest run --configLoader runner --no-file-parallelism

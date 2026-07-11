@@ -5,8 +5,8 @@ import Database from "better-sqlite3";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
-import { importV1Snapshot } from "../../../backend/src/db/migration/import-v1-snapshot.js";
-import { verifyV1Import } from "../../../backend/src/db/migration/verify-v1-import.js";
+import { importLegacySnapshot } from "../../../backend/src/db/migration/import-legacy-snapshot.js";
+import { verifyLegacyImport } from "../../../backend/src/db/migration/verify-legacy-import.js";
 
 const migrationSql = readFileSync(join(process.cwd(), "backend/prisma/migrations/0001_v2_baseline/migration.sql"), "utf8");
 const tempDirectories: string[] = [];
@@ -104,18 +104,18 @@ afterEach(() => {
   for (const directory of tempDirectories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
 
-describe("V1 snapshot idempotent import", () => {
+describe("legacy snapshot idempotent import", () => {
   it("imports once, verifies counts and active records, then returns already_applied", async () => {
     const client = await createPrismaClient(createDatabase());
     try {
       const owner = await client.user.create({ data: { username: "import-admin", passwordHash: "hash", role: "admin" } });
       const sourcePath = createSnapshot();
-      const first = await importV1Snapshot(client, { sourcePath, defaultOwnerId: owner.id });
+      const first = await importLegacySnapshot(client, { sourcePath, defaultOwnerId: owner.id });
       const countsAfterFirst = await Promise.all([
         client.project.count(), client.topicPackage.count(), client.scriptRecord.count(),
         client.recommendationRound.count(), client.recommendationExposure.count(),
       ]);
-      const second = await importV1Snapshot(client, { sourcePath, defaultOwnerId: owner.id });
+      const second = await importLegacySnapshot(client, { sourcePath, defaultOwnerId: owner.id });
 
       expect(first.status).toBe("completed");
       expect(second.status).toBe("already_applied");
@@ -124,7 +124,7 @@ describe("V1 snapshot idempotent import", () => {
         client.recommendationRound.count(), client.recommendationExposure.count(),
       ])).toEqual(countsAfterFirst);
       expect(await client.dataMigrationRun.count()).toBe(1);
-      await expect(verifyV1Import(client, sourcePath)).resolves.toMatchObject({
+      await expect(verifyLegacyImport(client, sourcePath)).resolves.toMatchObject({
         ok: true,
         danglingActiveReferences: [],
         countMismatches: [],
@@ -138,7 +138,7 @@ describe("V1 snapshot idempotent import", () => {
     const client = await createPrismaClient(createDatabase());
     try {
       const owner = await client.user.create({ data: { username: "rollback-admin", passwordHash: "hash", role: "admin" } });
-      await expect(importV1Snapshot(client, {
+      await expect(importLegacySnapshot(client, {
         sourcePath: createSnapshot({ missingActiveScript: true }),
         defaultOwnerId: owner.id,
       })).rejects.toThrow("migration_inspection_failed");
@@ -155,7 +155,7 @@ describe("V1 snapshot idempotent import", () => {
       const owner = await client.user.create({ data: { username: "repair-admin", passwordHash: "hash", role: "admin" } });
       const sourcePath = createSnapshot({ repairableGarbage: true });
       const before = readFileSync(sourcePath, "utf8");
-      const result = await importV1Snapshot(client, {
+      const result = await importLegacySnapshot(client, {
         sourcePath,
         defaultOwnerId: owner.id,
         repairPolicy: "repair_known_safe_cache_and_active_publish",

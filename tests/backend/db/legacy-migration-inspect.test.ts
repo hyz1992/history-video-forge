@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { inspectV1Snapshot } from "../../../backend/src/db/migration/inspect-v1-snapshot.js";
+import { inspectLegacySnapshot } from "../../../backend/src/db/migration/inspect-legacy-snapshot.js";
 
 const tempDirectories: string[] = [];
 
@@ -16,7 +16,7 @@ afterEach(() => {
   for (const directory of tempDirectories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
 
-describe("V1 snapshot migration inspection", () => {
+describe("legacy snapshot migration inspection", () => {
   it("reports counts, duplicate ids, orphan records, active references, and missing storage without writes", () => {
     const root = mkdtempSync(join(tmpdir(), "story-forge-inspect-"));
     tempDirectories.push(root);
@@ -72,7 +72,7 @@ describe("V1 snapshot migration inspection", () => {
     }, null, 2), "utf8");
     const beforeHash = sha256(snapshotPath);
 
-    const inspection = inspectV1Snapshot(snapshotPath);
+    const inspection = inspectLegacySnapshot(snapshotPath);
 
     expect(sha256(snapshotPath)).toBe(beforeHash);
     expect(inspection.sourcePath).toBe(snapshotPath);
@@ -98,7 +98,7 @@ describe("V1 snapshot migration inspection", () => {
     writeFileSync(snapshotPath, "{not-json", "utf8");
     const beforeHash = sha256(snapshotPath);
 
-    const inspection = inspectV1Snapshot(snapshotPath);
+    const inspection = inspectLegacySnapshot(snapshotPath);
 
     expect(sha256(snapshotPath)).toBe(beforeHash);
     expect(inspection.sourceSha256).toBe(beforeHash);

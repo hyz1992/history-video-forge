@@ -2,26 +2,26 @@ import { Prisma } from "../../generated/prisma/client.js";
 
 import type { AppPrismaClient, AppPrismaTransactionClient } from "../prisma-client.types.js";
 import { readLegacySnapshot, type LegacySnapshotEntry } from "../legacy-snapshot-reader.js";
-import { inspectV1Snapshot } from "./inspect-v1-snapshot.js";
+import { inspectLegacySnapshot } from "./inspect-legacy-snapshot.js";
 
-export type V1ImportRepairPolicy = "repair_known_safe_cache_and_active_publish";
+export type LegacyImportRepairPolicy = "repair_known_safe_cache_and_active_publish";
 
-export interface V1ImportRepair {
+export interface LegacyImportRepair {
   code: "orphan_candidate_cache_skipped" | "duplicate_candidate_cache_skipped" | "missing_active_publish_cleared";
   recordId: string;
   detail: string;
 }
 
-export interface ImportV1SnapshotOptions {
+export interface ImportLegacySnapshotOptions {
   sourcePath: string;
   defaultOwnerId: string;
-  repairPolicy?: V1ImportRepairPolicy;
+  repairPolicy?: LegacyImportRepairPolicy;
 }
 
-export interface ImportV1SnapshotResult {
+export interface ImportLegacySnapshotResult {
   status: "completed" | "already_applied";
   sourceSha256: string;
-  repairs: V1ImportRepair[];
+  repairs: LegacyImportRepair[];
 }
 
 type UnknownRecord = Record<string, any>;
@@ -48,7 +48,7 @@ function nullableJson(value: unknown): Prisma.InputJsonValue | typeof Prisma.Jso
   return value === null || value === undefined ? Prisma.JsonNull : value as Prisma.InputJsonValue;
 }
 
-function canRepairInspection(options: ImportV1SnapshotOptions, issues: ReturnType<typeof inspectV1Snapshot>["issues"]): boolean {
+function canRepairInspection(options: ImportLegacySnapshotOptions, issues: ReturnType<typeof inspectLegacySnapshot>["issues"]): boolean {
   if (options.repairPolicy !== "repair_known_safe_cache_and_active_publish") return false;
   return issues.every((issue) => (
     (issue.code === "orphan_project_reference" && issue.collection === "candidateCache")
@@ -69,8 +69,8 @@ async function createEach(entries: LegacySnapshotEntry[], create: (id: string, r
 async function importCoreCollections(
   transaction: AppPrismaTransactionClient,
   collections: ReturnType<typeof readLegacySnapshot>["document"]["collections"],
-  options: ImportV1SnapshotOptions,
-  repairs: V1ImportRepair[],
+  options: ImportLegacySnapshotOptions,
+  repairs: LegacyImportRepair[],
 ): Promise<void> {
   await createEach(collections.events, (id, row) => transaction.eventRegistryEntry.create({ data: {
     id, canonicalName: row.canonicalName, aliasesJson: json(row.aliases),
@@ -247,21 +247,21 @@ async function importCoreCollections(
   }
 }
 
-export async function importV1Snapshot(
+export async function importLegacySnapshot(
   client: AppPrismaClient,
-  options: ImportV1SnapshotOptions,
-): Promise<ImportV1SnapshotResult> {
-  const inspection = inspectV1Snapshot(options.sourcePath);
+  options: ImportLegacySnapshotOptions,
+): Promise<ImportLegacySnapshotResult> {
+  const inspection = inspectLegacySnapshot(options.sourcePath);
   if (!inspection.canImport && !canRepairInspection(options, inspection.issues)) {
     throw new Error(`migration_inspection_failed:${inspection.issues.map((issue) => issue.code).join(",")}`);
   }
   const existing = await client.dataMigrationRun.findUnique({ where: { sourceSha256: inspection.sourceSha256 } });
   if (existing?.status === "completed") {
     const report = record(existing.reportJson);
-    return { status: "already_applied", sourceSha256: inspection.sourceSha256, repairs: (report.repairs ?? []) as V1ImportRepair[] };
+    return { status: "already_applied", sourceSha256: inspection.sourceSha256, repairs: (report.repairs ?? []) as LegacyImportRepair[] };
   }
   const source = readLegacySnapshot(options.sourcePath);
-  const repairs: V1ImportRepair[] = [];
+  const repairs: LegacyImportRepair[] = [];
   await client.$transaction(async (transaction) => {
     await importCoreCollections(transaction, source.document.collections, options, repairs);
     await transaction.dataMigrationRun.create({ data: {

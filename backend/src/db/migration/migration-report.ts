@@ -8,7 +8,7 @@ export interface MigrationIssue {
   detail?: string;
 }
 
-export interface V1MigrationInspection {
+export interface LegacyMigrationInspection {
   sourcePath: string;
   sourceSha256: string;
   sourceVersion: string | null;
@@ -17,7 +17,7 @@ export interface V1MigrationInspection {
   canImport: boolean;
 }
 
-export function createInspectionReport(input: Omit<V1MigrationInspection, "canImport">): V1MigrationInspection {
+export function createInspectionReport(input: Omit<LegacyMigrationInspection, "canImport">): LegacyMigrationInspection {
   return {
     ...input,
     canImport: !input.issues.some((issue) => issue.severity === "error"),

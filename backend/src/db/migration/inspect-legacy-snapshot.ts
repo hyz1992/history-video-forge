@@ -8,7 +8,7 @@ import {
   readLegacySnapshot,
   type LegacySnapshotEntry,
 } from "../legacy-snapshot-reader.js";
-import { createInspectionReport, type MigrationIssue, type V1MigrationInspection } from "./migration-report.js";
+import { createInspectionReport, type LegacyMigrationInspection, type MigrationIssue } from "./migration-report.js";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -219,7 +219,7 @@ function inspectCandidateCacheUniqueness(
   }
 }
 
-export function inspectV1Snapshot(sourcePath: string): V1MigrationInspection {
+export function inspectLegacySnapshot(sourcePath: string): LegacyMigrationInspection {
   let sourceSha256 = "";
   try {
     const readResult = readLegacySnapshot(sourcePath);
