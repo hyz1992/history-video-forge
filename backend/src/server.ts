@@ -209,6 +209,9 @@ export async function startServer(options?: {
   const databaseUrl = configuredDatabaseUrl || defaultDatabasePath;
   const databasePath = resolveDatabasePath(databaseUrl);
   const databaseExists = existsSync(databasePath);
+  if (!options?.app && !databaseExists) {
+    throw new Error("database_not_initialized");
+  }
   const prismaClient = options?.prismaClient ?? (options?.app || !databaseExists
     ? null
     : await createPrismaClient(databaseUrl));

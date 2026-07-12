@@ -154,9 +154,8 @@ describe("backend http server", () => {
     process.env.DATABASE_URL = databasePath;
     process.env.RENDER_ADAPTER = "fake";
     try {
-      const started = await startServer({ host: "127.0.0.1", port: 0 });
+      await expect(startServer({ host: "127.0.0.1", port: 0 })).rejects.toThrow("database_not_initialized");
       expect(existsSync(databasePath)).toBe(false);
-      await close(started.server);
     } finally {
       if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
       else process.env.DATABASE_URL = previousDatabaseUrl;
