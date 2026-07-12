@@ -4,6 +4,11 @@ harness/scripts/runtime/output/*
 .env
 storage/projects/
 storage/db-snapshot.json
+storage/*.db
+storage/*.db-shm
+storage/*.db-wal
+storage/backups/
+storage/migration/
 storage/media-library/
 .playwright-mcp/
 .superpowers/
