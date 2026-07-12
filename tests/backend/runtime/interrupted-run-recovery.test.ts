@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createDbClient } from "../../../backend/src/db/client.js";
-import { recoverInterruptedRuns } from "../../../backend/src/runtime/recovery/interrupted-run-recovery.js";
+import { recoverAndPersistInterruptedRuns, recoverInterruptedRuns } from "../../../backend/src/runtime/recovery/interrupted-run-recovery.js";
 
 describe("interrupted run recovery", () => {
   it.each([
@@ -30,5 +30,26 @@ describe("interrupted run recovery", () => {
 
     expect(result.recoveredProviderJobIds).toEqual(["job_1"]);
     expect(job).toMatchObject({ status: "failed", errorCode: "process_interrupted" });
+  });
+
+  it("persists recovered Prisma project and provider-job state", async () => {
+    const db = createDbClient();
+    const syncedProjects: string[] = [];
+    const savedJobs: string[] = [];
+    db.projects.set("p1", { id: "p1", status: "assets_generating" } as never);
+    db.assetProviderJobRecords.set("job_1", { id: "job_1", status: "submitted" } as never);
+    db.firstAggregateWriter = {
+      ownerId: "owner",
+      syncProject: async (project) => { syncedProjects.push(project.id); },
+    } as never;
+    db.thirdAggregateWriter = {
+      saveProviderJob: async (job) => { savedJobs.push(job.id); return job; },
+    } as never;
+
+    const result = await recoverAndPersistInterruptedRuns(db, { recoveredAt: "2026-07-12T00:00:00.000Z" });
+
+    expect(result).toEqual({ recoveredProjectIds: ["p1"], recoveredProviderJobIds: ["job_1"] });
+    expect(syncedProjects).toEqual(["p1"]);
+    expect(savedJobs).toEqual(["job_1"]);
   });
 });

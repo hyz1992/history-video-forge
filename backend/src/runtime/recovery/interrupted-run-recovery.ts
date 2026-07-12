@@ -31,6 +31,7 @@ function recoverProjectRecord(db: DbClient, project: ProjectRecord, recoveredAt:
   markExecutionInterrupted(project.activeAssetPlanRecordId ? db.assetPlanRecords.get(project.activeAssetPlanRecordId) : undefined, recoveredAt);
   markExecutionInterrupted(project.activeAssetManifestRecordId ? db.assetManifestRecords.get(project.activeAssetManifestRecordId) : undefined, recoveredAt);
   markExecutionInterrupted(project.activeComposeRecordId ? db.composeRecords.get(project.activeComposeRecordId) : undefined, recoveredAt);
+  markExecutionInterrupted(project.activeRenderJobRecordId ? db.renderJobRecords.get(project.activeRenderJobRecordId) : undefined, recoveredAt);
   markExecutionInterrupted(project.activePublishPackageRecordId ? db.publishPackageRecords.get(project.activePublishPackageRecordId) : undefined, recoveredAt);
 
   const nextStatus = STATUS_RECOVERY[project.status];
@@ -64,5 +65,54 @@ export function recoverInterruptedRuns(
   for (const job of db.assetProviderJobRecords.values()) {
     if (recoverProviderJob(job, recoveredAt)) result.recoveredProviderJobIds.push(job.id);
   }
+  return result;
+}
+
+export async function recoverAndPersistInterruptedRuns(
+  db: DbClient,
+  options: { recoveredAt?: string } = {},
+): Promise<InterruptedRunRecoveryResult> {
+  const result = recoverInterruptedRuns(db, options);
+
+  for (const projectId of result.recoveredProjectIds) {
+    const project = db.projects.get(projectId);
+    if (!project) continue;
+    await db.firstAggregateWriter?.syncProject(project);
+
+    if (project.activeScriptRecordId) {
+      const record = db.scriptRecords.get(project.activeScriptRecordId);
+      if (record) await db.secondAggregateWriter?.saveScript(record);
+    }
+    if (project.activeStoryboardRecordId) {
+      const record = db.storyboardRecords.get(project.activeStoryboardRecordId);
+      if (record) await db.secondAggregateWriter?.saveStoryboard(record);
+    }
+    if (project.activeAssetPlanRecordId) {
+      const record = db.assetPlanRecords.get(project.activeAssetPlanRecordId);
+      if (record) await db.secondAggregateWriter?.saveAssetPlan(record);
+    }
+    if (project.activeAssetManifestRecordId) {
+      const record = db.assetManifestRecords.get(project.activeAssetManifestRecordId);
+      if (record) await db.thirdAggregateWriter?.saveAssetManifest(record);
+    }
+    if (project.activeComposeRecordId) {
+      const record = db.composeRecords.get(project.activeComposeRecordId);
+      if (record) await db.thirdAggregateWriter?.saveCompose(record);
+    }
+    if (project.activeRenderJobRecordId) {
+      const record = db.renderJobRecords.get(project.activeRenderJobRecordId);
+      if (record) await db.thirdAggregateWriter?.saveRender(record);
+    }
+    if (project.activePublishPackageRecordId) {
+      const record = db.publishPackageRecords.get(project.activePublishPackageRecordId);
+      if (record) await db.thirdAggregateWriter?.savePublish(record);
+    }
+  }
+
+  for (const jobId of result.recoveredProviderJobIds) {
+    const job = db.assetProviderJobRecords.get(jobId);
+    if (job) await db.thirdAggregateWriter?.saveProviderJob(job);
+  }
+
   return result;
 }
