@@ -222,6 +222,7 @@ runtime harness 是当前项目的核心验证层：
 - `harness/scripts/runtime/render-runtime-smoke.ts`
   - 使用 Remotion 或指定 adapter 验证 render/export 的 smoke 入口。
 - `harness/scripts/runtime/product-acceptance-live-check.ts`
+- `harness/scripts/runtime/seed-second-aggregate-browser-fixture.ts`
   - 面向成品验收的显式 live check，会调用真实 provider 与 Remotion 导出。
 - `harness/scripts/runtime/script-semantic-reviewer-fixtures.ts`
   - semantic reviewer shadow 对照样本巡检入口。
@@ -418,6 +419,17 @@ npx vitest run --configLoader runner tests/backend/render/local-remotion-render-
 ```
 
 ## UI Acceptance Entry
+
+### 第二批聚合浏览器 fixture
+
+该入口只用于 Script、Storyboard、AssetPlan 的 Prisma 页面读取与重启恢复验收，不调用 LLM 或媒体 provider，也不代表生成质量：
+
+```powershell
+$env:DATABASE_URL='file:../storage/task85-8-fixture/acceptance.db'
+npm run harness:seed-second-aggregate-browser-fixture -- -- --owner=fixture-owner --confirm-fixture
+```
+
+安全边界：目标 owner 必须已存在且为 ACTIVE；必须显式传入 `--confirm-fixture`；目标数据库只要已有任意 Project 就会拒绝执行。仅应对隔离验收库使用。
 
 - `npm run harness:ui-acceptance:smoke`
   - 自动启动 backend / frontend，使用 Chromium 跑单主链路，并输出首页、项目页、topic、script 的截图、trace、summary。

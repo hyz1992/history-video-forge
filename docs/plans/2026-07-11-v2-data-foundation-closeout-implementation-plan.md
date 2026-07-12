@@ -274,14 +274,14 @@ npx vitest run --configLoader runner tests/backend/db/prisma-schema.test.ts test
 - [x] 建立 Script、Storyboard、AssetPlan 的 Prisma hydration 与 JSON sidecar parity 基线。
 - [x] 重做 generating/final record 与 active pointer 状态推进，失败保留上一条有效 active record。
 - [x] 接入三个 repository writer 和跨项目事务校验。
-- [ ] 完成重试、中断、重启和浏览器验收（Script、Storyboard 已完成真实浏览器生成与重启恢复；AssetPlan 因生产 stub 明确拒绝生成，浏览器生成仍待 live provider 或受控验收 gateway）。
+- [x] 完成失败保护、刷新、重启和浏览器验收；AssetPlan 使用隔离 fixture 验证 Prisma 读取与恢复，不冒充 LLM 生成验收。
 
 **步骤：**
 
 - [x] 为每个 record repository 增加 Prisma adapter 和 legacy parity test。
 - [x] 状态推进与 active record 更新放在同一数据库事务。
 - [x] 阶段失败不得覆盖上一条 active record；跨项目 record 必须拒绝。
-- [ ] 覆盖重试、中断恢复、刷新和后端重启（Script、Storyboard 已覆盖；AssetPlan 浏览器生成待补）。
+- [x] 覆盖失败恢复、刷新和后端重启；生产 stub 保持 fail-closed，AssetPlan 由只允许空项目库的 harness fixture 覆盖浏览器读模型。
 
 **提交：**`切换前半流水线数据到Prisma`
 

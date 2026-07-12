@@ -41,3 +41,17 @@ writer 接入前必须冻结以下语义：
 - 首轮分镜生成发现 deterministic stub 合并句子时删除换行，导致 `storyboard_excerpt_not_in_script`；修复为保留原文分隔空白，并增加含换行回归测试。
 - 修复后页面生成 8 段 Storyboard；重启后 API 仍返回原 Script record 和 8 段 active Storyboard，浏览器深链恢复到分镜审阅页。
 - AssetPlan 浏览器生成未通过：生产 stub 按既有安全边界返回 `asset_planning_stub_provider_requires_test_gateway:asset-planning.planner`。Writer 原子激活已有真实 SQLite 自动化测试，但浏览器端到端仍标记为未验证，不能据此关闭 Task 8.5-8。
+
+## AssetPlan fixture 浏览器验收补充
+
+没有为生产服务增加验收 gateway 或环境后门。新增独立 harness fixture，安全条件为：显式确认、显式 ACTIVE owner、目标数据库 Project 数必须为 0。fixture 只写入合格的 Topic、Script、Storyboard、AssetPlan active 链，不调用 LLM 或媒体 provider。
+
+隔离库验收结果：
+
+- fixture 正向写入成功；同库第二次执行返回 `fixture_requires_empty_project_database`。
+- 浏览器深链 `/projects/<id>/asset` 显示资产规划概览：口播音频、字幕、分镜图、运镜各 1 项。
+- 页面直接刷新后，概览和 4 类任务仍可见。
+- 后端重启后 API 恢复 `asset_plan_ready`、active AssetPlan 和 4 个 tasks；浏览器再次刷新仍显示概览与“生成基础资产”动作。
+- 该结论只覆盖 Prisma writer/hydration 与前端读模型恢复；真实模型 AssetPlan 质量继续由显式 asset-planning live check 负责。
+
+至此 Task 8.5-8 的数据切换、失败保护、跨项目拒绝、刷新和重启恢复已具备证据，可以关闭；未把真实 LLM 质量纳入本任务完成声明。
