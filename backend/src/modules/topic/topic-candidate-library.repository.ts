@@ -67,7 +67,11 @@ type WriteTextFile = (
 export function createTopicCandidateLibraryRepository(
   options: CreateTopicCandidateLibraryRepositoryOptions = {},
 ): TopicCandidateLibraryRepository {
-  const rootDir = options.rootDir ?? process.cwd();
+  const rootDir = options.rootDir ?? (
+    process.env.VITEST && process.env.STORAGE_ROOT_DIR
+      ? resolve(process.env.STORAGE_ROOT_DIR)
+      : process.cwd()
+  );
   const writeTextFile = options.writeTextFile ?? writeFileSync;
 
   return {

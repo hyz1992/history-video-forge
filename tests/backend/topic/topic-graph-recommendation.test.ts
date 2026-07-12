@@ -36,7 +36,7 @@ function createRuntimeCandidate(title: string, angle: string) {
 }
 
 describe("topic recommendation graph", () => {
-  it("keeps exactly three candidate slots when the provider returns a full candidate set", async () => {
+  it("keeps the full raw candidate set when the provider returns enough candidates", async () => {
     const db = createDbClient();
     const invokeStructuredPrompt = vi.fn(async () => [
       createRuntimeCandidate("晏子使楚", "第一槽位"),
@@ -144,7 +144,7 @@ describe("topic recommendation graph", () => {
     );
   });
 
-  it("returns explicit diagnostics when a single repair pass still cannot fill all three candidate slots", async () => {
+  it("returns explicit diagnostics when a single repair pass still cannot fill the preferred four candidate slots", async () => {
     const db = createDbClient();
     const invokeStructuredPrompt = vi
       .fn()
@@ -174,7 +174,7 @@ describe("topic recommendation graph", () => {
     expect(result.diagnostics.checks).toContainEqual(
       expect.objectContaining({
         code: "topic_candidate_slots_insufficient",
-        level: "error",
+        level: "info",
       }),
     );
   });

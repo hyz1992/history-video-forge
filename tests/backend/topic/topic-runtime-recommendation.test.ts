@@ -284,10 +284,10 @@ describe("topic runtime recommendation", () => {
       expect(existsSync(candidatesJsonPath)).toBe(true);
       expect(document.seed_family).toBe("History Diplomacy");
       expect(document.seed_profile).toBe("Han Court Showdown");
-      expect(document.candidates).toHaveLength(19);
+      expect(document.candidates).toHaveLength(20);
       expect(document.candidates.filter((record) => record.status === "raw_generated")).toHaveLength(8);
       expect(document.candidates.filter((record) => record.status === "selector_pool")).toHaveLength(8);
-      expect(document.candidates.filter((record) => record.status === "final_selected")).toHaveLength(3);
+      expect(document.candidates.filter((record) => record.status === "final_selected")).toHaveLength(4);
       expect(document.candidates.every((record) => record.source_project_id === project.id)).toBe(true);
     } finally {
       rmSync(tempRootDir, {
@@ -310,14 +310,14 @@ describe("topic runtime recommendation", () => {
       [[
         createRuntimeCandidate("event-a", "angle-a"),
         createRuntimeCandidate("event-b", "angle-b"),
-        createRuntimeCandidate("event-a", "angle-a-duplicate-1"),
+        createRuntimeCandidate("event-c", "angle-c"),
         createRuntimeCandidate("event-a", "angle-a-duplicate-2"),
         createRuntimeCandidate("event-a", "angle-a-duplicate-3"),
         createRuntimeCandidate("event-b", "angle-b-duplicate-1"),
         createRuntimeCandidate("event-b", "angle-b-duplicate-2"),
         createRuntimeCandidate("event-b", "angle-b-duplicate-3"),
       ]],
-      [["selector_candidate_1", "selector_candidate_2", "fallback_candidate_1"]],
+      [["selector_candidate_1", "selector_candidate_2", "selector_candidate_3", "fallback_candidate_1"]],
     );
 
     await repository.save({
@@ -413,11 +413,13 @@ describe("topic runtime recommendation", () => {
       expect(result.candidates.map((candidate) => candidate.title)).toEqual([
         "event-a",
         "event-b",
+        "event-c",
         "fallback-allowed-title",
       ]);
       expect(result.selector_trace?.selected_candidate_ids).toEqual([
         "selector_candidate_1",
         "selector_candidate_2",
+        "selector_candidate_3",
         "fallback_candidate_1",
       ]);
     } finally {
@@ -564,12 +566,13 @@ describe("topic runtime recommendation", () => {
           }),
         }),
       }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
-    expect(candidates).toHaveLength(3);
+    expect(candidates).toHaveLength(4);
     expect(() => TopicCandidateCard.parse(candidates[0])).not.toThrow();
 
     const cacheRecords = [...db.candidateCache.values()];
-    expect(cacheRecords).toHaveLength(3);
+    expect(cacheRecords).toHaveLength(4);
     expect(cacheRecords[0]).toMatchObject({
       oneLineAngle: "第一槽位",
       familyLabel: runtimeCandidate.family_label,
@@ -612,7 +615,7 @@ describe("topic runtime recommendation", () => {
     );
 
     expect(result.raw_candidates).toHaveLength(8);
-    expect(result.candidates).toHaveLength(3);
+    expect(result.candidates).toHaveLength(4);
   });
 
   it("keeps builder event_identity in raw_candidates", async () => {
@@ -691,7 +694,7 @@ describe("topic runtime recommendation", () => {
     const previewTrace = result.diagnostics.candidate_preview_trace;
     expect(previewTrace?.raw_candidates).toHaveLength(8);
     expect(previewTrace?.selector_pool).toHaveLength(8);
-    expect(previewTrace?.final_candidates).toHaveLength(3);
+    expect(previewTrace?.final_candidates).toHaveLength(4);
     expect(previewTrace?.raw_candidates[0]).toMatchObject({
       candidate_id: "raw_candidate_1",
       title: "event-a",
@@ -752,6 +755,11 @@ describe("topic runtime recommendation", () => {
           },
         ],
         risk_summary: "rank 3 risk",
+      },
+      {
+        candidate_id: "selector_candidate_4",
+        title: "event-d",
+        one_line_angle: "angle-d",
       },
     ]);
   });
@@ -834,11 +842,13 @@ describe("topic runtime recommendation", () => {
           ]),
         }),
       }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(result.candidates.map((candidate) => candidate.title)).toEqual([
       "event-a",
       "event-b",
       "event-c",
+      "event-d",
     ]);
     expect(result.diagnostics.checks).toContainEqual(
       expect.objectContaining({
@@ -903,7 +913,7 @@ describe("topic runtime recommendation", () => {
       },
     );
 
-    expect(result.candidates).toHaveLength(3);
+    expect(result.candidates).toHaveLength(4);
     expect(result.candidates[0]?.title).toBe("seed-a");
     expect(result.diagnostics.checks).toContainEqual(
       expect.objectContaining({
@@ -964,7 +974,7 @@ describe("topic runtime recommendation", () => {
           createRuntimeCandidate("于谦守京", "第三槽位"),
         ],
       ],
-      [["selector_candidate_1", "selector_candidate_2", "selector_candidate_3"]],
+      [["selector_candidate_1", "selector_candidate_2", "selector_candidate_3", "selector_candidate_4"]],
     );
 
     const result = await recommendTopicCandidatesWithTrace(
@@ -983,7 +993,7 @@ describe("topic runtime recommendation", () => {
       },
     );
 
-    expect(invokeApi).toHaveBeenCalledTimes(3);
+    expect(invokeApi).toHaveBeenCalledTimes(2);
     expect(result.candidates).toHaveLength(3);
     expect(result.diagnostics.checks).toContainEqual(
       expect.objectContaining({
@@ -1029,7 +1039,7 @@ describe("topic runtime recommendation", () => {
     expect(result.diagnostics.checks).toContainEqual(
       expect.objectContaining({
         code: "topic_candidate_slots_insufficient",
-        level: "error",
+        level: "info",
       }),
     );
   });
@@ -1112,9 +1122,15 @@ describe("topic runtime recommendation", () => {
     expect(uniqueEventIdentities(result.selector_pool)).toHaveLength(
       result.selector_pool.length,
     );
-    expect(result.selector_pool.map((candidate) => candidate.candidate_id)).toEqual(
-      result.selector_pool.map((_, index) => `selector_candidate_${index + 1}`),
-    );
+    expect(result.selector_pool.map((candidate) => candidate.candidate_id)).toEqual([
+      "selector_candidate_1",
+      "selector_candidate_3",
+      "selector_candidate_4",
+      "selector_candidate_5",
+      "selector_candidate_6",
+      "selector_candidate_7",
+      "selector_candidate_8",
+    ]);
   });
 
   it("deduplicates selector_pool by explicit event_identity instead of title-derived identity", async () => {
@@ -1164,7 +1180,7 @@ describe("topic runtime recommendation", () => {
         { ...createRuntimeCandidate("event-a-title-7", "angle-a-7"), event_identity: "event-a" },
         { ...createRuntimeCandidate("event-a-title-8", "angle-a-8"), event_identity: "event-a" },
       ]],
-      [["selector_candidate_1", "selector_candidate_2", "selector_candidate_3"]],
+      [["selector_candidate_1"]],
     );
 
     const result = await recommendTopicCandidatesWithTrace(
@@ -1184,7 +1200,7 @@ describe("topic runtime recommendation", () => {
     );
 
     expect(result.selector_pool).toHaveLength(8);
-    expect(result.candidates).toHaveLength(3);
+    expect(result.candidates).toHaveLength(4);
     expect(result.selector_pool.every((candidate) => candidate.normalized_event_identity === "event-a")).toBe(true);
     expect(result.diagnostics.checks).not.toContainEqual(
       expect.objectContaining({
@@ -1206,7 +1222,7 @@ describe("topic runtime recommendation", () => {
         { ...createRuntimeCandidate("event-a-title-7", "angle-a-7"), event_identity: "event-a" },
         { ...createRuntimeCandidate("event-a-title-8", "angle-a-8"), event_identity: "event-a" },
       ]],
-      [["selector_candidate_1", "selector_candidate_2", "selector_candidate_3"]],
+      [["selector_candidate_1"]],
     );
 
     const result = await recommendTopicCandidatesWithTrace(
@@ -1339,8 +1355,8 @@ describe("topic runtime recommendation", () => {
         ],
       ],
       [
-        ["selector_candidate_1", "selector_candidate_2", "selector_candidate_3"],
-        ["selector_candidate_2", "selector_candidate_3", "selector_candidate_4"],
+        ["selector_candidate_1", "selector_candidate_2", "selector_candidate_3", "selector_candidate_4"],
+        ["selector_candidate_2", "selector_candidate_3", "selector_candidate_4", "selector_candidate_5"],
       ],
     );
 
@@ -1441,11 +1457,12 @@ describe("topic runtime recommendation", () => {
     );
 
     expect(result.selector_trace).toBeDefined();
-    expect(result.candidates).toHaveLength(3);
+    expect(result.candidates).toHaveLength(4);
     expect(result.candidates.map((candidate) => candidate.title)).toEqual([
       "event-d",
       "event-b",
       "event-f",
+      "event-a",
     ]);
   });
 
@@ -1513,6 +1530,7 @@ describe("topic runtime recommendation", () => {
       "selector_candidate_1",
       "selector_candidate_2",
       "selector_candidate_3",
+      "selector_candidate_4",
     ]);
     expect(invokeStrictStructured).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1594,7 +1612,7 @@ describe("topic runtime recommendation", () => {
           llmGateway: gateway,
         },
       ),
-    ).rejects.toThrow("topic_selector_invalid_selection");
+    ).rejects.toThrow("topic_selector_no_ranked_array");
   });
 
   it("falls back to regular structured selector output when strict tool-call arguments are malformed", async () => {
@@ -1663,6 +1681,7 @@ describe("topic runtime recommendation", () => {
       "event-d",
       "event-b",
       "event-f",
+      "event-a",
     ]);
     expect(invokeStrictStructured).toHaveBeenCalledTimes(1);
     expect(
@@ -1734,6 +1753,7 @@ describe("topic runtime recommendation", () => {
       "event-a",
       "event-b",
       "event-d",
+      "event-f",
     ]);
   });
 
@@ -1795,6 +1815,7 @@ describe("topic runtime recommendation", () => {
       "event-a",
       "event-b",
       "event-e",
+      "event-f",
     ]);
   });
 
@@ -1853,7 +1874,7 @@ describe("topic runtime recommendation", () => {
           projectId: "project-1",
         },
       ),
-    ).rejects.toThrow("topic_selector_invalid_selection");
+    ).rejects.toThrow("topic_selector_unknown_candidate");
   });
 
   it("uses the complete selector ranking as a deterministic backfill queue when ranked ids repeat", async () => {
@@ -1901,6 +1922,7 @@ describe("topic runtime recommendation", () => {
       "event-d",
       "event-b",
       "event-f",
+      "event-a",
     ]);
     expect(result.selector_trace?.repair_attempts).toBe(0);
     expect(result.selector_trace?.skipped_candidate_ids).toContain("selector_candidate_4");
@@ -1994,7 +2016,7 @@ describe("topic runtime recommendation", () => {
   });
 
   it("applies fatigue even when the recent cache record and recommendation start share the same millisecond", async () => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-04-29T00:00:00.000Z"));
 
     const db = createDbClient();
@@ -2393,8 +2415,8 @@ describe("topic runtime recommendation", () => {
         ],
       ],
       [
-        ["selector_candidate_1", "selector_candidate_2", "selector_candidate_3"],
-        ["selector_candidate_2", "selector_candidate_3", "selector_candidate_4"],
+        ["selector_candidate_1", "selector_candidate_2", "selector_candidate_3", "selector_candidate_4"],
+        ["selector_candidate_2", "selector_candidate_3", "selector_candidate_4", "selector_candidate_5"],
       ],
     );
 
@@ -2472,8 +2494,8 @@ describe("topic runtime recommendation", () => {
         ],
       ],
       [
-        ["selector_candidate_1", "selector_candidate_2", "selector_candidate_3"],
-        ["selector_candidate_2", "selector_candidate_3", "selector_candidate_4"],
+        ["selector_candidate_1", "selector_candidate_2", "selector_candidate_3", "selector_candidate_4"],
+        ["selector_candidate_2", "selector_candidate_3", "selector_candidate_4", "selector_candidate_5"],
       ],
     );
 
@@ -2554,8 +2576,8 @@ describe("topic runtime recommendation", () => {
         ],
       ],
       [
-        ["selector_candidate_1", "selector_candidate_2", "selector_candidate_3"],
-        ["selector_candidate_2", "selector_candidate_3", "selector_candidate_4"],
+        ["selector_candidate_1", "selector_candidate_2", "selector_candidate_3", "selector_candidate_4"],
+        ["selector_candidate_2", "selector_candidate_3", "selector_candidate_4", "selector_candidate_5"],
       ],
     );
 
@@ -2637,8 +2659,8 @@ describe("topic runtime recommendation", () => {
         ],
       ],
       [
-        ["selector_candidate_1", "selector_candidate_2", "selector_candidate_3"],
-        ["selector_candidate_2", "selector_candidate_3", "selector_candidate_4"],
+        ["selector_candidate_1", "selector_candidate_2", "selector_candidate_3", "selector_candidate_4"],
+        ["selector_candidate_2", "selector_candidate_3", "selector_candidate_4", "selector_candidate_5"],
       ],
     );
 
@@ -2735,8 +2757,8 @@ describe("topic runtime recommendation", () => {
         ],
       ],
       [
-        ["selector_candidate_1", "selector_candidate_2", "selector_candidate_3"],
-        ["selector_candidate_2", "selector_candidate_3", "selector_candidate_4"],
+        ["selector_candidate_1", "selector_candidate_2", "selector_candidate_3", "selector_candidate_4"],
+        ["selector_candidate_2", "selector_candidate_3", "selector_candidate_4", "selector_candidate_5"],
       ],
     );
 
@@ -2866,12 +2888,14 @@ describe("topic runtime recommendation", () => {
       "event-a",
       "event-b",
       "event-c",
+      "event-d",
     ]);
     expect(result.selector_trace).toMatchObject({
       selected_candidate_ids: [
         "selector_candidate_1",
         "selector_candidate_2",
         "selector_candidate_3",
+        "selector_candidate_4",
       ],
       repair_attempts: 0,
     });
@@ -3028,6 +3052,6 @@ describe("topic runtime recommendation", () => {
       family_label: "瘟疫冲击型",
       scope_label: "单事件",
     });
-    expect(result.candidates).toHaveLength(3);
+    expect(result.candidates).toHaveLength(4);
   });
 });

@@ -10,6 +10,35 @@ import {
 } from "../../../backend/src/modules/topic/topic-candidate-library.repository.js";
 
 describe("topic candidate library repository", () => {
+  it("uses the isolated Vitest storage root by default", async () => {
+    const previousVitest = process.env.VITEST;
+    const previousStorageRoot = process.env.STORAGE_ROOT_DIR;
+    const rootDir = mkdtempSync(resolve(tmpdir(), "topic-candidate-default-root-"));
+    process.env.VITEST = "1";
+    process.env.STORAGE_ROOT_DIR = rootDir;
+    try {
+      const repository = createTopicCandidateLibraryRepository();
+      await repository.save({
+        candidateId: "isolated-default",
+        seedFamily: "test-family",
+        seedProfile: "test-profile",
+        status: "unused",
+        sourceProjectId: "project-1",
+        sourceTopicRunId: "run-1",
+        eventIdentity: "test-event",
+        title: "test-title",
+        oneLineAngle: "test-angle",
+      });
+      expect(existsSync(resolve(rootDir, "storage", "topic-candidate-library"))).toBe(true);
+      expect(existsSync(resolve(process.cwd(), "storage", "topic-candidate-library", "isolated-default"))).toBe(false);
+    } finally {
+      if (previousVitest === undefined) delete process.env.VITEST;
+      else process.env.VITEST = previousVitest;
+      if (previousStorageRoot === undefined) delete process.env.STORAGE_ROOT_DIR;
+      else process.env.STORAGE_ROOT_DIR = previousStorageRoot;
+      rmSync(rootDir, { recursive: true, force: true });
+    }
+  });
   const tempDirs: string[] = [];
 
   afterEach(() => {
