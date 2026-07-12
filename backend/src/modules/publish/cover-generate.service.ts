@@ -1,10 +1,10 @@
-import { writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import type { DbClient } from "../../db/client";
 import { saveAssetManifestRecord } from "../assets/asset-manifest-record.repository";
 import { getProjectStorageProfile } from "../../runtime/trace/project-storage";
 import { downloadDashscopeOutput } from "../assets/providers/dashscope/dashscope-client";
+import { preserveArtifactAfterRegistrationFailure, promoteStagedArtifactFile, resolveStagedArtifactFile, writeStagedArtifactFile } from "../../runtime/files/artifact-file-commit.js";
 
 export interface CoverGenerateInput {
   apiKey: string;
@@ -82,18 +82,15 @@ export async function generateCoverImage(
 
   // 4. Save to project storage
   const storageProfile = getProjectStorageProfile(project);
-  const publishDir = join(storageProfile.root_dir, "publish");
-  const { mkdir } = await import("node:fs/promises");
-  await mkdir(publishDir, { recursive: true });
-
   const artifactId = db.generateId();
-  const destPath = join(publishDir, `cover_generated_${artifactId}.png`);
-  const absolutePath = resolve(destPath);
-  await writeFile(absolutePath, imageBuffer);
+  const stagedFile = resolveStagedArtifactFile({ rootDir: storageProfile.root_dir, operationId: artifactId, relativeFinalPath: join("publish", `cover_generated_${artifactId}.png`) });
+  await writeStagedArtifactFile(stagedFile, imageBuffer);
+  await promoteStagedArtifactFile(stagedFile);
+  const absolutePath = resolve(stagedFile.finalPath);
 
   // 5. Register as artifact in manifest
-  const manifestJson = manifestRecord.manifestJson as Record<string, unknown>;
-  const artifacts = (manifestJson.artifacts ?? []) as Array<Record<string, unknown>>;
+  const manifestJson = { ...(manifestRecord.manifestJson as Record<string, unknown>) };
+  const artifacts = [...((manifestJson.artifacts ?? []) as Array<Record<string, unknown>>)]
   const newArtifact = {
     artifact_id: artifactId,
     artifact_type: "image",
@@ -112,7 +109,8 @@ export async function generateCoverImage(
   artifacts.push(newArtifact);
   manifestJson.artifacts = artifacts;
 
-  await saveAssetManifestRecord(db, {
+  try {
+    await saveAssetManifestRecord(db, {
     id: manifestRecord.id,
     projectId: manifestRecord.projectId,
     topicPackageId: manifestRecord.topicPackageId,
@@ -125,7 +123,12 @@ export async function generateCoverImage(
     graphTraceSummaryJson: manifestRecord.graphTraceSummaryJson,
     runtimeDiagnosticsJson: manifestRecord.runtimeDiagnosticsJson,
     createdAt: manifestRecord.createdAt,
-  });
+    });
+    manifestRecord.manifestJson = manifestJson;
+  } catch (error) {
+    await preserveArtifactAfterRegistrationFailure(stagedFile).catch(() => undefined);
+    throw error;
+  }
 
   return {
     artifactId,

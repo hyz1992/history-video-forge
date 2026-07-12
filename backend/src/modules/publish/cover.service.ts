@@ -1,4 +1,3 @@
-import { copyFile, mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -6,6 +5,7 @@ import type { DbClient } from "../../db/client";
 import { saveAssetManifestRecord } from "../assets/asset-manifest-record.repository";
 import { getProjectStorageProfile } from "../../runtime/trace/project-storage";
 import { getPublishLlmGateway } from "./llm-helper";
+import { copyStagedArtifactFile, preserveArtifactAfterRegistrationFailure, promoteStagedArtifactFile, resolveStagedArtifactFile, type StagedArtifactFile } from "../../runtime/files/artifact-file-commit.js";
 
 export interface CoverInitializationResult {
   coverArtifactId: string;
@@ -37,11 +37,11 @@ export async function initializeCoverFromStoryboard(
     throw new Error("asset_manifest_not_found");
   }
 
-  const manifestJson = manifestRecord.manifestJson as Record<string, unknown>;
+  const manifestJson = { ...(manifestRecord.manifestJson as Record<string, unknown>) };
   const segmentRoutes = (manifestJson.segment_routes ??
     []) as Array<Record<string, unknown>>;
-  const artifacts = (manifestJson.artifacts ??
-    []) as Array<Record<string, unknown>>;
+  const artifacts = [...((manifestJson.artifacts ??
+    []) as Array<Record<string, unknown>>)]
 
   if (segmentRoutes.length === 0 || artifacts.length === 0) {
     throw new Error("no_segment_routes_or_artifacts");
@@ -72,27 +72,21 @@ export async function initializeCoverFromStoryboard(
   const sourceMeta = (sourceArtifact.metadata ?? {}) as Record<string, unknown>;
 
   let newFileUri: string;
+  let stagedFile: StagedArtifactFile | null = null;
 
   if (sourceUri.startsWith("memory://") || sourceUri.startsWith("inline://")) {
     newFileUri = `memory://cover_${newArtifactId}.png`;
   } else {
     const storageProfile = getProjectStorageProfile(project);
-    const publishDir = join(storageProfile.root_dir, "publish");
-    await mkdir(publishDir, { recursive: true });
-
     const sourcePath = sourceUri.startsWith("file://")
       ? fileURLToPath(sourceUri)
       : sourceUri;
 
     const ext = sourcePath.split(".").pop() ?? "png";
-    const destPath = join(publishDir, `cover.${ext}`);
-    newFileUri = resolve(destPath);
-
-    try {
-      await copyFile(sourcePath, destPath);
-    } catch {
-      newFileUri = sourceUri;
-    }
+    stagedFile = resolveStagedArtifactFile({ rootDir: storageProfile.root_dir, operationId: newArtifactId, relativeFinalPath: join("publish", `cover_${newArtifactId}.${ext}`) });
+    await copyStagedArtifactFile(stagedFile, sourcePath);
+    await promoteStagedArtifactFile(stagedFile);
+    newFileUri = resolve(stagedFile.finalPath);
   }
 
   const newArtifact = {
@@ -113,7 +107,8 @@ export async function initializeCoverFromStoryboard(
   artifacts.push(newArtifact);
   manifestJson.artifacts = artifacts;
 
-  await saveAssetManifestRecord(db, {
+  try {
+    await saveAssetManifestRecord(db, {
     id: manifestRecord.id,
     projectId: manifestRecord.projectId,
     topicPackageId: manifestRecord.topicPackageId,
@@ -126,7 +121,12 @@ export async function initializeCoverFromStoryboard(
     graphTraceSummaryJson: manifestRecord.graphTraceSummaryJson,
     runtimeDiagnosticsJson: manifestRecord.runtimeDiagnosticsJson,
     createdAt: manifestRecord.createdAt,
-  });
+    });
+    manifestRecord.manifestJson = manifestJson;
+  } catch (error) {
+    if (stagedFile) await preserveArtifactAfterRegistrationFailure(stagedFile).catch(() => undefined);
+    throw error;
+  }
 
   return { coverArtifactId: newArtifactId };
 }
