@@ -29,6 +29,7 @@ export async function saveStoryboardRecord(
     createdAt: new Date(),
   };
 
+  await db.secondAggregateWriter?.saveStoryboard(record);
   db.storyboardRecords.set(record.id, record);
 
   return record;

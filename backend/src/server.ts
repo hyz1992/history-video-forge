@@ -12,6 +12,8 @@ import { emptyPrismaReadinessChecks } from "./db/prisma-readiness.js";
 import { resolveDatabasePath } from "./db/database-url.js";
 import { PrismaFirstAggregateWriter } from "./db/repositories/prisma-first-aggregate-writer.js";
 import { hydrateFirstAggregates } from "./db/repositories/prisma-first-aggregate-hydrator.js";
+import { PrismaSecondAggregateWriter } from "./db/repositories/prisma-second-aggregate-writer.js";
+import { hydrateSecondAggregates } from "./db/repositories/prisma-second-aggregate-hydrator.js";
 import type { AppPrismaClient } from "./db/prisma-client.types.js";
 
 export interface ServerHostOptions {
@@ -216,12 +218,16 @@ export async function startServer(options?: {
   const app = options?.app ?? buildApp({
     renderAdapter: resolveRenderAdapter(),
     firstAggregateWriter,
+    secondAggregateWriter: prismaClient && firstAggregateWriter
+      ? new PrismaSecondAggregateWriter(prismaClient, firstAggregateWriter.ownerId)
+      : undefined,
     databaseReadiness: prismaClient
       ? () => checkPrismaReadiness(prismaClient)
       : async () => ({ ready: false, error: "database_not_initialized", checks: emptyPrismaReadinessChecks() }),
   });
   if (prismaClient && firstAggregateWriter && !options?.app) {
     await hydrateFirstAggregates(app.db, app.topicCandidateStore, prismaClient, { storageRoot: process.cwd(), ownerId: firstAggregateWriter.ownerId });
+    await hydrateSecondAggregates(app.db, prismaClient);
   }
   const server = createHttpServer(app, { publicDir });
   let disconnected = false;

@@ -24,3 +24,13 @@ writer 接入前必须冻结以下语义：
 4. Topic、Script、Storyboard、AssetPlan 的 projectId 链必须完全一致，跨项目引用在事务提交前拒绝。
 
 下一步先写 repository 负向事务测试，再修改 run service；不得直接把现有 Map 更新顺序翻译成 Prisma 调用。
+
+## Writer 与状态推进处理结果
+
+- 三个 repository 的 save/upsert 只保存 record，不更新 active pointer。
+- 最终 Script/Storyboard/AssetPlan 分别通过独立 activation 事务校验 owner、project、Topic、Script、Storyboard 归属后更新 Project。
+- generating 阶段只更新项目状态，active pointer 保持生成前值。
+- 校验失败、stale source 或异常时，内存项目恢复生成前 active pointer；数据库从未被 generating record 覆盖，并同步恢复后的状态。
+- 新的 Script/Storyboard/AssetPlan 激活会按既有业务语义清空对应下游 active pointer 和 trace。
+
+负向测试确认：旧 Script 保持 active 直到新 Script 最终激活；跨项目 Storyboard activation 被拒绝且 Project active 链不变；合法 Storyboard 和 AssetPlan 可顺序原子激活。

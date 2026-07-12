@@ -276,6 +276,7 @@ export async function runAssetPlanningGeneration(
     phase: "asset_planning",
     runId,
   });
+  const previousActiveAssetPlanRecordId = input.project.activeAssetPlanRecordId;
 
   try {
     // Save preliminary record BEFORE plan generation so refresh shows generating state
@@ -290,8 +291,8 @@ export async function runAssetPlanningGeneration(
       graphTraceSummaryJson: null,
       runtimeDiagnosticsJson: null,
     });
-    input.project.activeAssetPlanRecordId = generatingRecord.id;
     input.project.status = "asset_plan_generating";
+    await input.db.firstAggregateWriter?.syncProject(input.project);
 
     const onProgress = async (progress: import("./asset-planning-generation.service.js").AssetPlanGenerationProgress) => {
       await saveAssetPlanRecord(input.db, {
@@ -411,9 +412,10 @@ export async function runAssetPlanningGeneration(
 
   if (localValidation.decision !== "pass") {
     // Clean up generating state — validation failed
-    input.project.activeAssetPlanRecordId = null;
-    input.project.status = "storyboard_ready";
+    input.project.activeAssetPlanRecordId = previousActiveAssetPlanRecordId;
+    input.project.status = previousActiveAssetPlanRecordId ? "asset_plan_ready" : "storyboard_ready";
     input.project.updatedAt = new Date();
+    await input.db.firstAggregateWriter?.syncProject(input.project);
     return {
       statusCode: 422,
       body: {
@@ -441,9 +443,10 @@ export async function runAssetPlanningGeneration(
   if (staleSourceDetected) {
     // Clean up generating state — stale source, delete the placeholder record
     input.db.assetPlanRecords.delete(generatingRecord.id);
-    input.project.activeAssetPlanRecordId = null;
-    input.project.status = "storyboard_ready";
+    input.project.activeAssetPlanRecordId = previousActiveAssetPlanRecordId;
+    input.project.status = previousActiveAssetPlanRecordId ? "asset_plan_ready" : "storyboard_ready";
     input.project.updatedAt = new Date();
+    await input.db.firstAggregateWriter?.syncProject(input.project);
     graphTraceSummary = buildTraceSummary({
       runId,
       validationDecision: localValidation.decision,
@@ -501,6 +504,7 @@ export async function runAssetPlanningGeneration(
   input.project.latestRenderRunTraceJson = null;
   input.project.status = "asset_plan_ready";
   input.project.updatedAt = new Date();
+  await input.db.secondAggregateWriter?.activateAssetPlan(input.project, assetPlanRecord);
   persistProjectRunArtifacts({
     project: input.project,
     phase: "asset_planning",
@@ -527,9 +531,10 @@ export async function runAssetPlanningGeneration(
   };
   } catch (error) {
     // Clean up generating state — unexpected error
-    input.project.activeAssetPlanRecordId = null;
-    input.project.status = "storyboard_ready";
+    input.project.activeAssetPlanRecordId = previousActiveAssetPlanRecordId;
+    input.project.status = previousActiveAssetPlanRecordId ? "asset_plan_ready" : "storyboard_ready";
     input.project.updatedAt = new Date();
+    await input.db.firstAggregateWriter?.syncProject(input.project).catch(() => undefined);
     const message =
       error instanceof Error ? (error.stack ?? error.message) : String(error);
     interactionLogWriter.writeError(message);

@@ -272,8 +272,8 @@ npx vitest run --configLoader runner tests/backend/db/prisma-schema.test.ts test
 **执行进度：**
 
 - [x] 建立 Script、Storyboard、AssetPlan 的 Prisma hydration 与 JSON sidecar parity 基线。
-- [ ] 重做 generating/final record 与 active pointer 状态推进，失败保留上一条有效 active record。
-- [ ] 接入三个 repository writer 和跨项目事务校验。
+- [x] 重做 generating/final record 与 active pointer 状态推进，失败保留上一条有效 active record。
+- [x] 接入三个 repository writer 和跨项目事务校验。
 - [ ] 完成重试、中断、重启和浏览器验收。
 
 **步骤：**

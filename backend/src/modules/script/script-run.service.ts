@@ -120,6 +120,7 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
     phase: "script",
     runId,
   });
+  const previousActiveScriptRecordId = input.project.activeScriptRecordId;
 
   try {
     // Save preliminary record BEFORE graph execution so refresh shows generating state
@@ -139,8 +140,8 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
       graphTraceSummaryJson: null,
       runtimeDiagnosticsJson: null,
     });
-    input.project.activeScriptRecordId = generatingRecord.id;
     input.project.status = "script_generating";
+    await input.db.firstAggregateWriter?.syncProject(input.project);
 
     const {
     draft,
@@ -212,6 +213,7 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
   input.project.latestRenderRunTraceJson = null;
   input.project.status = "script_ready";
   input.project.updatedAt = new Date();
+  await input.db.secondAggregateWriter?.activateScript(input.project, scriptRecord);
   persistProjectRunArtifacts({
     project: input.project,
     phase: "script",
@@ -237,9 +239,10 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
   };
   } catch (error) {
     // Clean up generating state — unexpected error
-    input.project.activeScriptRecordId = null;
-    input.project.status = "script_failed";
+    input.project.activeScriptRecordId = previousActiveScriptRecordId;
+    input.project.status = previousActiveScriptRecordId ? "script_ready" : "script_failed";
     input.project.updatedAt = new Date();
+    await input.db.firstAggregateWriter?.syncProject(input.project).catch(() => undefined);
     const message =
       error instanceof Error ? (error.stack ?? error.message) : String(error);
     interactionLogWriter.writeError(message);

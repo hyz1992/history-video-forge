@@ -275,6 +275,14 @@ export interface DbClient {
     recordRecommendationRound(record: ProjectRecommendationRoundRecord): Promise<void>;
     activateTopic(project: ProjectRecord, topic: TopicPackageRecord): Promise<void>;
   };
+  secondAggregateWriter?: {
+    saveScript(record: ScriptRecord): Promise<void>;
+    saveStoryboard(record: StoryboardRecord): Promise<void>;
+    saveAssetPlan(record: AssetPlanRecord): Promise<void>;
+    activateScript(project: ProjectRecord, record: ScriptRecord): Promise<void>;
+    activateStoryboard(project: ProjectRecord, record: StoryboardRecord): Promise<void>;
+    activateAssetPlan(project: ProjectRecord, record: AssetPlanRecord): Promise<void>;
+  };
 }
 
 export function createDbClient(): DbClient {

@@ -41,6 +41,7 @@ export async function saveScriptRecord(
     createdAt: new Date(),
   };
 
+  await db.secondAggregateWriter?.saveScript(record);
   db.scriptRecords.set(record.id, record);
 
   return record;

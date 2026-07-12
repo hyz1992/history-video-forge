@@ -138,6 +138,7 @@ export async function runStoryboardGeneration(
     phase: "storyboard",
     runId,
   });
+  const previousActiveStoryboardRecordId = input.project.activeStoryboardRecordId;
 
   try {
     // Save preliminary record BEFORE plan generation so refresh shows generating state
@@ -151,8 +152,8 @@ export async function runStoryboardGeneration(
       graphTraceSummaryJson: null,
       runtimeDiagnosticsJson: null,
     });
-    input.project.activeStoryboardRecordId = generatingRecord.id;
     input.project.status = "storyboard_generating";
+    await input.db.firstAggregateWriter?.syncProject(input.project);
 
     let plan = await generateStoryboardPlan({
     sourceScriptRecordId: scriptRecord.id,
@@ -218,9 +219,10 @@ export async function runStoryboardGeneration(
 
   if (localValidation.decision !== "pass") {
     // Clean up generating state — validation failed
-    input.project.activeStoryboardRecordId = null;
-    input.project.status = "script_ready";
+    input.project.activeStoryboardRecordId = previousActiveStoryboardRecordId;
+    input.project.status = previousActiveStoryboardRecordId ? "storyboard_ready" : "script_ready";
     input.project.updatedAt = new Date();
+    await input.db.firstAggregateWriter?.syncProject(input.project);
     return {
       statusCode: 422,
       body: {
@@ -262,6 +264,7 @@ export async function runStoryboardGeneration(
   input.project.latestRenderRunTraceJson = null;
   input.project.status = "storyboard_ready";
   input.project.updatedAt = new Date();
+  await input.db.secondAggregateWriter?.activateStoryboard(input.project, storyboardRecord);
   persistProjectRunArtifacts({
     project: input.project,
     phase: "storyboard",
@@ -287,9 +290,10 @@ export async function runStoryboardGeneration(
   };
   } catch (error) {
     // Clean up generating state — unexpected error
-    input.project.activeStoryboardRecordId = null;
-    input.project.status = "script_ready";
+    input.project.activeStoryboardRecordId = previousActiveStoryboardRecordId;
+    input.project.status = previousActiveStoryboardRecordId ? "storyboard_ready" : "script_ready";
     input.project.updatedAt = new Date();
+    await input.db.firstAggregateWriter?.syncProject(input.project).catch(() => undefined);
     const message =
       error instanceof Error ? (error.stack ?? error.message) : String(error);
     interactionLogWriter.writeError(message);

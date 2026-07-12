@@ -26,6 +26,7 @@ export async function saveAssetPlanRecord(
     createdAt: input.createdAt ?? new Date(),
   };
 
+  await db.secondAggregateWriter?.saveAssetPlan(record);
   db.assetPlanRecords.set(record.id, record);
 
   return record;
