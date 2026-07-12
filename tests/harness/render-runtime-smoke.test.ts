@@ -7,7 +7,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -246,7 +246,7 @@ describe("render runtime smoke harness", () => {
         (artifact) => artifact.artifact_type === "image",
       ),
     ).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("uses the requested BGM id when provided", async () => {
@@ -327,7 +327,9 @@ describe("render runtime smoke harness", () => {
     expect(
       renderResponse.runtime_diagnostics.subtitle_cue_count,
     ).toBeGreaterThan(0);
-    expect(existsSync(renderResponse.output_artifact.file_uri)).toBe(true);
+    expect(
+      existsSync(resolve(outputDir, "project-storage", renderResponse.output_artifact.file_uri)),
+    ).toBe(true);
 
     const assetsResponse = JSON.parse(
       readFileSync(join(outputDir, "assets-response.json"), "utf8"),

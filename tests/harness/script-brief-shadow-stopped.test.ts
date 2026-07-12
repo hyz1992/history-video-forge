@@ -35,11 +35,11 @@ describe("script brief shadow stopped state", () => {
 
   it("keeps the stop conclusion visible in planning and observation records", () => {
     const design = readFileSync(
-      "docs/plans/2026-05-07-script-prompt-debt-audit-and-brief-shadow-design.md",
+      "docs/plans/archive/topic-script/2026-05-07-script-prompt-debt-audit-and-brief-shadow-design.md",
       "utf8",
     );
     const implementationPlan = readFileSync(
-      "docs/plans/2026-05-07-script-prompt-debt-audit-and-brief-shadow-implementation-plan.md",
+      "docs/plans/archive/topic-script/2026-05-07-script-prompt-debt-audit-and-brief-shadow-implementation-plan.md",
       "utf8",
     );
     const observation = readFileSync(
