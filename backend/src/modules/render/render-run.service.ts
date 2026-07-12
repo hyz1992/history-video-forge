@@ -1,4 +1,4 @@
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import {
   ComposeTimeline as ComposeTimelineSchema,
@@ -16,6 +16,11 @@ import { createFakeRenderAdapter } from "./fake-render-adapter";
 import type { RenderAdapter, RenderProfile } from "./render-adapter";
 import { saveRenderJobRecord } from "./render-record.repository";
 import { validateRenderSources } from "./render-source-validator";
+import {
+  preserveArtifactAfterRegistrationFailure,
+  promoteStagedArtifactFile,
+  resolveStagedArtifactFile,
+} from "../../runtime/files/artifact-file-commit.js";
 
 export interface RunRenderGenerationInput {
   db: DbClient;
@@ -254,7 +259,13 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
 
   const adapter = input.adapter ?? createFakeRenderAdapter();
   const projectStorageRootDir = resolve(project.storageRootDir);
-  const outputDir = resolve(projectStorageRootDir, "renders", renderJob.id);
+  const stagedOutput = resolveStagedArtifactFile({
+    rootDir: projectStorageRootDir,
+    operationId: renderJob.id,
+    relativeFinalPath: join("renders", renderJob.id, "output.mp4"),
+  });
+  const outputDir = dirname(stagedOutput.stagingPath);
+  let outputPromoted = false;
 
   try {
     const adapterResult = await adapter.render({
@@ -265,6 +276,8 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
       profile,
       projectStorageRootDir,
     });
+    await promoteStagedArtifactFile(stagedOutput);
+    outputPromoted = true;
 
     if (project.activeComposeRecordId !== activeComposeRecordId) {
       const staleTrace = createRenderTrace({
@@ -363,6 +376,15 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
       }),
     };
   } catch (error) {
+    if (outputPromoted) {
+      try {
+        await preserveArtifactAfterRegistrationFailure(stagedOutput);
+        outputPromoted = false;
+      } catch {
+        // Keep the original failure as the user-facing cause. The final file
+        // remains an unregistered orphan and is never allowed to replace an active record.
+      }
+    }
     const diagnostics = {
       error_message:
         error instanceof Error ? error.message : "unknown render adapter error",
