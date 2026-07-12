@@ -32,6 +32,7 @@ import { createDashscopeImageToVideoProvider } from "./providers/dashscope/dashs
 import { configureVoiceProfilePersistence } from "./voice/voice-profile.repository.js";
 import { resolveVoiceProfile } from "./voice/voice-resolution.service.js";
 import { normalizeAssetPlanTtsForExecution } from "./tts-chunking.service.js";
+import { preserveAssetsRunStorage, resolveAssetsRunStorage } from "./assets-file-storage.js";
 
 type AssetsProviderMode = "fake" | "dashscope" | "dashscope_tts";
 type DashscopeTtsFormat = "mp3" | "wav" | "flac" | "pcm";
@@ -628,6 +629,10 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
 
   // Step 6c: Execution engine integration
   const runId = `assets_run_${db.generateId()}`;
+  const runStorage = resolveAssetsRunStorage({
+    projectStorageRootDir: project.storageRootDir,
+    runId,
+  });
   let executionManifestRecordId: string | null = null;
 
   // Set active pointer BEFORE execution so refresh during generation shows status
@@ -854,6 +859,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   }
 
   if (staleSourceDetected) {
+    await preserveAssetsRunStorage(runStorage).catch(() => undefined);
     // Clean up generating state — delete placeholder record, don't leave dirty state
     db.assetManifestRecords.delete(generatingManifestRecord.id);
     project.activeAssetManifestRecordId = previousActiveAssetManifestRecordId;
@@ -897,21 +903,27 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     staleSourceDetected: false,
   });
 
-  const assetManifestRecord = await saveAssetManifestRecord(db, {
-    id: generatingManifestRecord.id,
-    projectId: project.id,
-    topicPackageId: assetPlanRecord.topicPackageId,
-    scriptRecordId: assetPlanRecord.scriptRecordId,
-    storyboardRecordId: assetPlanRecord.storyboardRecordId,
-    assetPlanRecordId: assetPlanRecord.id,
-    manifestJson: manifest,
-    validationResultJson: localValidation,
-    executionStateJson: executionState,
-    graphTraceSummaryJson: traceSummary,
-    runtimeDiagnosticsJson: null,
-  });
+  let assetManifestRecord;
+  try {
+    assetManifestRecord = await saveAssetManifestRecord(db, {
+      id: generatingManifestRecord.id,
+      projectId: project.id,
+      topicPackageId: assetPlanRecord.topicPackageId,
+      scriptRecordId: assetPlanRecord.scriptRecordId,
+      storyboardRecordId: assetPlanRecord.storyboardRecordId,
+      assetPlanRecordId: assetPlanRecord.id,
+      manifestJson: manifest,
+      validationResultJson: localValidation,
+      executionStateJson: executionState,
+      graphTraceSummaryJson: traceSummary,
+      runtimeDiagnosticsJson: null,
+    });
+  } catch (error) {
+    await preserveAssetsRunStorage(runStorage).catch(() => undefined);
+    throw error;
+  }
 
-  if (executionManifestRecordId) {
+  if (executionManifestRecordId) try {
     for (const job of db.assetProviderJobRecords.values()) {
       if (job.assetManifestRecordId !== executionManifestRecordId || job.assetRunId !== runId) continue;
       job.assetManifestRecordId = assetManifestRecord.id;
@@ -920,6 +932,9 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
       if (persisted.id !== job.id) db.assetProviderJobRecords.delete(job.id);
       db.assetProviderJobRecords.set(persisted.id, persisted);
     }
+  } catch (error) {
+    await preserveAssetsRunStorage(runStorage).catch(() => undefined);
+    throw error;
   }
 
   // Step 10: Update project status based on validation decision
@@ -938,6 +953,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   try {
     await db.thirdAggregateWriter?.activateAssetManifest(project, assetManifestRecord);
   } catch (error) {
+    await preserveAssetsRunStorage(runStorage).catch(() => undefined);
     project.activeAssetManifestRecordId = previousActiveAssetManifestRecordId;
     project.status = previousActiveAssetManifestRecordId ? "assets_ready" : "asset_plan_ready";
     await db.firstAggregateWriter?.syncProject(project);

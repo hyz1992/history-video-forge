@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { join, normalize } from "node:path";
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
@@ -25,6 +25,14 @@ export interface WrittenAssetFile {
   fileUri: string;
   relativePath: string;
   fileHash: string;
+}
+
+export async function preserveAssetsRunStorage(storage: AssetsRunStorage): Promise<string> {
+  const stagingParent = join(storage.rootDir, ".staging", storage.runId);
+  const stagingDir = join(stagingParent, "assets-run");
+  await mkdir(stagingParent, { recursive: true });
+  await rename(storage.runDir, stagingDir);
+  return stagingDir;
 }
 
 // ─── Resolve run storage ─────────────────────────────────────────────────────────

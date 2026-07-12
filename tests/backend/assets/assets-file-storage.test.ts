@@ -7,6 +7,7 @@ import {
   assertLocalFileArtifact,
   copyAssetFile,
   hashFileSha256,
+  preserveAssetsRunStorage,
   resolveAssetsRunStorage,
   writeAssetFile,
 } from "../../../backend/src/modules/assets/assets-file-storage.js";
@@ -64,6 +65,21 @@ describe("assets file storage", () => {
       });
 
       expect(await readFile(copied.absolutePath, "utf8")).toBe("copied");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves a failed run under an identifiable staging directory", async () => {
+    const root = await mkdtemp(join(tmpdir(), "assets-storage-staging-"));
+    try {
+      const storage = resolveAssetsRunStorage({ projectStorageRootDir: root, runId: "assets_run_failed" });
+      await writeAssetFile({ storage, category: "images", fileName: "frame.png", data: "image" });
+
+      const stagingDir = await preserveAssetsRunStorage(storage);
+
+      expect(await readFile(join(stagingDir, "images", "frame.png"), "utf8")).toBe("image");
+      await expect(readFile(join(storage.runDir, "images", "frame.png"), "utf8")).rejects.toThrow();
     } finally {
       await rm(root, { recursive: true, force: true });
     }
