@@ -1,6 +1,6 @@
 import { env } from "./config/env";
 import { createDbClient, type DbClient } from "./db/client";
-import { loadDbSnapshot, recoverProjectsFromDisk, saveDbSnapshot, saveProjectMetadata } from "./db/persistence";
+import { loadLegacyFixtureState, saveLegacyFixtureState } from "./db/legacy-persistence-adapter.js";
 import { registerProjectRoutes } from "./modules/projects/project.routes";
 import { registerTopicRoutes } from "./modules/topic/topic.routes";
 import { registerScriptRoutes } from "./modules/script/script.routes";
@@ -157,7 +157,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
   const isTest = !!process.env.VITEST;
   const shouldLoadSnapshot = !options.firstAggregateWriter && !options.skipSnapshotLoad && (!isTest || Boolean(options.storageBaseDir));
   if (shouldLoadSnapshot) {
-    const loadResult = loadDbSnapshot(db, topicCandidateStore, { snapshotPath });
+    const loadResult = loadLegacyFixtureState(db, topicCandidateStore, snapshotPath);
     Object.assign(persistenceHealth, {
       loaded: loadResult.ok,
       source: loadResult.source,
@@ -166,14 +166,12 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
     if (loadResult.ok) {
       const recovery = recoverInterruptedRuns(db);
       if (recovery.recoveredProjectIds.length > 0 || recovery.recoveredProviderJobIds.length > 0) {
-        const saveResult = saveDbSnapshot(db, topicCandidateStore, { snapshotPath });
+        const saveResult = saveLegacyFixtureState(db, topicCandidateStore, snapshotPath);
         if (!saveResult.ok) {
           Object.assign(persistenceHealth, { error: saveResult.error });
         }
       }
     }
-    // Also recover any projects that have on-disk metadata but aren't in the snapshot
-    recoverProjectsFromDisk(db);
   }
   Object.assign(mediaLibraryHealth, loadMediaLibraryCatalog(db, {
     storageBaseDir: runtimeStorageRoot,
@@ -182,7 +180,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
   // Persist on shutdown (skip in test)
   function persist() {
     if (options.firstAggregateWriter) return { ok: true, error: null };
-    const result = saveDbSnapshot(db, topicCandidateStore, { snapshotPath });
+    const result = saveLegacyFixtureState(db, topicCandidateStore, snapshotPath);
     if (!result.ok) {
       Object.assign(persistenceHealth, {
         error: result.error,
