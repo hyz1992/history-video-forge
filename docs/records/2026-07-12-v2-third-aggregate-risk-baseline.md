@@ -55,3 +55,9 @@ ProviderJob schema 已有唯一键 `(assetRunId, executionId, taskId, attemptCou
 ## 当前闸门
 
 在 hydration parity 与文件提交协议测试建立前，不直接修改第三批 run service 的 active 指针顺序；否则容易同时引入数据丢失和孤儿文件问题。
+
+## Hydration parity 实施结果
+
+已新增第三批启动 hydration：按第一批已加载的 owner 项目 ID 恢复 AssetManifest、Compose、RenderJob、PublishPackage；ProviderJob 只按这些 AssetManifest ID 恢复，不会加载其他 owner 的供应商任务。
+
+专项真实 SQLite fixture 覆盖五类记录的 JSON sidecar、Render 状态与输出 artifact、ProviderJob request/response 和提交/轮询时间，并创建另一 owner 的完整下游链验证隔离。数据库/服务矩阵结果为 18 个测试文件、62 项测试通过；后端类型检查与构建通过。

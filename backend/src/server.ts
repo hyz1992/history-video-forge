@@ -14,6 +14,7 @@ import { PrismaFirstAggregateWriter } from "./db/repositories/prisma-first-aggre
 import { hydrateFirstAggregates } from "./db/repositories/prisma-first-aggregate-hydrator.js";
 import { PrismaSecondAggregateWriter } from "./db/repositories/prisma-second-aggregate-writer.js";
 import { hydrateSecondAggregates } from "./db/repositories/prisma-second-aggregate-hydrator.js";
+import { hydrateThirdAggregates } from "./db/repositories/prisma-third-aggregate-hydrator.js";
 import type { AppPrismaClient } from "./db/prisma-client.types.js";
 
 export interface ServerHostOptions {
@@ -228,6 +229,7 @@ export async function startServer(options?: {
   if (prismaClient && firstAggregateWriter && !options?.app) {
     await hydrateFirstAggregates(app.db, app.topicCandidateStore, prismaClient, { storageRoot: process.cwd(), ownerId: firstAggregateWriter.ownerId });
     await hydrateSecondAggregates(app.db, prismaClient);
+    await hydrateThirdAggregates(app.db, prismaClient);
   }
   const server = createHttpServer(app, { publicDir });
   let disconnected = false;
