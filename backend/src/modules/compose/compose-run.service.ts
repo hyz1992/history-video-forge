@@ -40,6 +40,7 @@ function createComposeTrace(input: {
 export async function runComposeGeneration(input: RunComposeGenerationInput) {
   const { db, project } = input;
   const activeAssetManifestRecordId = project.activeAssetManifestRecordId;
+  const previousActiveComposeRecordId = project.activeComposeRecordId;
 
   if (!activeAssetManifestRecordId) {
     return {
@@ -72,8 +73,8 @@ export async function runComposeGeneration(input: RunComposeGenerationInput) {
     graphTraceSummaryJson: null,
     runtimeDiagnosticsJson: null,
   });
-  project.activeComposeRecordId = generatingRecord.id;
   project.status = "compose_generating";
+  await db.firstAggregateWriter?.syncProject(project);
 
   const manifest = AssetManifestSchema.parse(
     normalizeAssetManifestDates(assetManifestRecord.manifestJson as Record<string, unknown>),
@@ -116,9 +117,10 @@ export async function runComposeGeneration(input: RunComposeGenerationInput) {
       manifestReadiness === "partial" ? "assets_partial" :
       "assets_blocked";
     db.composeRecords.delete(generatingRecord.id);
-    project.activeComposeRecordId = null;
+    project.activeComposeRecordId = previousActiveComposeRecordId;
     project.status = assetStatus;
     project.updatedAt = new Date();
+    await db.firstAggregateWriter?.syncProject(project);
     return {
       statusCode: 409,
       body: {
@@ -140,13 +142,22 @@ export async function runComposeGeneration(input: RunComposeGenerationInput) {
     runtimeDiagnosticsJson: null,
   });
 
-  project.activeComposeRecordId = composeRecord.id;
-  project.activeRenderJobRecordId = null;
   project.latestComposeRunTraceJson = trace;
   project.latestRenderRunTraceJson = null;
   project.status =
     localValidation.decision === "blocked" ? "compose_blocked" : "compose_ready";
   project.updatedAt = new Date();
+  try {
+    await db.thirdAggregateWriter?.activateCompose(project, composeRecord);
+  } catch (error) {
+    project.activeComposeRecordId = previousActiveComposeRecordId;
+    project.status = previousActiveComposeRecordId ? "compose_ready" : "assets_ready";
+    await db.firstAggregateWriter?.syncProject(project);
+    throw error;
+  }
+  project.activeComposeRecordId = composeRecord.id;
+  project.activeRenderJobRecordId = null;
+  project.activePublishPackageRecordId = null;
 
   return {
     statusCode: 200,

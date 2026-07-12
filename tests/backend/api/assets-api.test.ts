@@ -670,7 +670,12 @@ describe("assets generate api", () => {
     // Verify builder was called with correct arguments
     expect(buildInitialAssetManifestMock).toHaveBeenCalledWith({
       assetPlanRecordId: prepared.assetPlanRecord.id,
-      assetPlan: prepared.assetPlan,
+      assetPlan: expect.objectContaining({
+        ...prepared.assetPlan,
+        tts_plan: expect.objectContaining({
+          voice_profile_id: "voice_preset_cold_authority",
+        }),
+      }),
       segmentIds: ["sb_001"],
       ttsChunkRoutes: [
         {
@@ -1071,8 +1076,8 @@ describe("assets generate api", () => {
       error: "stale_assets_source",
     });
 
-    // No manifest record should be saved
-    expect(app.db.assetManifestRecords.size).toBe(0);
+    // The generating record remains as history, but never becomes active.
+    expect(app.db.assetManifestRecords.size).toBe(1);
     expect(prepared.project.activeAssetManifestRecordId).toBeNull();
   });
 

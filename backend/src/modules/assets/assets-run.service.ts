@@ -408,6 +408,7 @@ function applyArtifactToManifestRoutes(input: {
 
 export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   const { db, project } = input;
+  const previousActiveAssetManifestRecordId = project.activeAssetManifestRecordId;
   if (!db.voiceProfilePersistence.enabled) {
     const voiceRoot = process.env.VITEST
       ? process.env.STORAGE_ROOT_DIR
@@ -642,8 +643,8 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     graphTraceSummaryJson: null,
     runtimeDiagnosticsJson: null,
   });
-  project.activeAssetManifestRecordId = generatingManifestRecord.id;
   project.status = "assets_generating";
+  await db.firstAggregateWriter?.syncProject(project);
 
   if (executionOptions.execution_mode === "dry_run") {
     manifest.artifacts = [];
@@ -654,11 +655,22 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
       dashscope: input.dashscope,
     });
 
-    const tempManifestRecordId = `manifest_${db.generateId()}`;
-    executionManifestRecordId = tempManifestRecordId;
+    const tempManifestRecord = await saveAssetManifestRecord(db, {
+      projectId: project.id,
+      topicPackageId: assetPlanRecord.topicPackageId,
+      scriptRecordId: assetPlanRecord.scriptRecordId,
+      storyboardRecordId: assetPlanRecord.storyboardRecordId,
+      assetPlanRecordId: assetPlanRecord.id,
+      manifestJson: manifest,
+      validationResultJson: { stage: "assets_local_validation", decision: "generating", errors: [], warnings: [], metrics: {} },
+      executionStateJson: { generating: true, run_id: runId, execution_staging: true, activated: false },
+      graphTraceSummaryJson: null,
+      runtimeDiagnosticsJson: null,
+    });
+    executionManifestRecordId = tempManifestRecord.id;
     const engineResult = await executeAssetManifest({
       db,
-      assetManifestRecordId: tempManifestRecordId,
+      assetManifestRecordId: tempManifestRecord.id,
       assetRunId: runId,
       manifest,
       registry,
@@ -844,9 +856,10 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   if (staleSourceDetected) {
     // Clean up generating state — delete placeholder record, don't leave dirty state
     db.assetManifestRecords.delete(generatingManifestRecord.id);
-    project.activeAssetManifestRecordId = null;
+    project.activeAssetManifestRecordId = previousActiveAssetManifestRecordId;
     project.status = "asset_plan_ready";
     project.updatedAt = new Date();
+    await db.firstAggregateWriter?.syncProject(project);
     const traceSummary = buildTraceSummary({
       runId,
       validationDecision: localValidation.decision,
@@ -900,20 +913,14 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
 
   if (executionManifestRecordId) {
     for (const job of db.assetProviderJobRecords.values()) {
-      if (
-        job.assetManifestRecordId === executionManifestRecordId &&
-        job.assetRunId === runId
-      ) {
-        job.assetManifestRecordId = assetManifestRecord.id;
-        job.updatedAt = new Date();
-      }
+      if (job.assetManifestRecordId !== executionManifestRecordId || job.assetRunId !== runId) continue;
+      job.assetManifestRecordId = assetManifestRecord.id;
+      job.updatedAt = new Date();
+      const persisted = await db.thirdAggregateWriter?.saveProviderJob(job) ?? job;
+      if (persisted.id !== job.id) db.assetProviderJobRecords.delete(job.id);
+      db.assetProviderJobRecords.set(persisted.id, persisted);
     }
   }
-
-  // Step 9: Update project state
-  project.activeAssetManifestRecordId = assetManifestRecord.id;
-  project.activeComposeRecordId = null;
-  project.activeRenderJobRecordId = null;
 
   // Step 10: Update project status based on validation decision
   if (localValidation.decision === "ready_for_compose") {
@@ -928,6 +935,18 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   project.latestComposeRunTraceJson = null;
   project.latestRenderRunTraceJson = null;
   project.updatedAt = new Date();
+  try {
+    await db.thirdAggregateWriter?.activateAssetManifest(project, assetManifestRecord);
+  } catch (error) {
+    project.activeAssetManifestRecordId = previousActiveAssetManifestRecordId;
+    project.status = previousActiveAssetManifestRecordId ? "assets_ready" : "asset_plan_ready";
+    await db.firstAggregateWriter?.syncProject(project);
+    throw error;
+  }
+  project.activeAssetManifestRecordId = assetManifestRecord.id;
+  project.activeComposeRecordId = null;
+  project.activeRenderJobRecordId = null;
+  project.activePublishPackageRecordId = null;
 
   persistProjectRunArtifacts({
     project,

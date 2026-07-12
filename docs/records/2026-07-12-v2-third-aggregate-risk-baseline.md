@@ -81,3 +81,12 @@ ProviderJob schema 已有唯一键 `(assetRunId, executionId, taskId, attemptCou
 - Publish：要求数据库当前 active Render 未变化，并校验 Render/Topic/Script/Storyboard/Manifest/Publish 全链归属。
 
 每次合法激活会清空对应下游 active；stale source、跨项目或跨 owner 在事务提交前拒绝。专项测试确认 save-only 阶段 active 均为空、错误来源无法激活、合法完整链可顺序激活到 Publish。当前只完成事务层，run service 尚未改用这些 activation API。
+
+## Assets 与 Compose 状态推进切换
+
+- 两个 run service 均不再在生成开始时把 placeholder/generating record 设为 active；只更新 generating 状态并保留旧 active。
+- stale source 会保留生成前 active，并恢复可重试的上游状态；最终记录通过对应 activation transaction 后才更新内存 active。
+- execution engine 继续使用独立 execution Manifest 隔离 provider 运行态；该 Manifest 先作为非 active 历史记录入库，最终再把同 run 的 ProviderJob 重绑到正式 Manifest，满足 Prisma 外键和 owner 校验。
+- 聚焦验证：Assets 主服务 20 项、Compose/API 42 项、Assets 成功与 stale 两项 API 路径均通过；类型检查通过。
+
+已知独立基线：`assets-api` 中 DashScope image-to-video 配置用例当前稳定无法得到 video artifact。该失败在本次状态推进改动前已独立复现，不计为本步骤通过项；进入 ProviderJob 中断恢复/文件协议前必须单独诊断。
