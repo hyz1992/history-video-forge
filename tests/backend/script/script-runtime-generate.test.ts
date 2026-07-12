@@ -160,6 +160,7 @@ describe("script runtime generate", () => {
         }),
         input: scriptInputBundle,
       }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(() => ScriptDraftPackage.parse(draft)).not.toThrow();
     expect(draft.script_text).toContain("楚王");
@@ -199,6 +200,7 @@ describe("script runtime generate", () => {
           regeneration_context: regenerationContext,
         },
       }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(scriptInputBundle).not.toHaveProperty("regeneration_context");
   });
@@ -554,7 +556,7 @@ ${JSON.stringify(runtimeDraft)}
       "前两句必须直接复用 `hook_claim` 或 `strong_scene`",
     );
     expect(entries[0]?.systemPrompt).toContain(
-      "先单独确定一个可独立成立的 `opening_span`，再让 `script_text` 以 `opening_span` 原文起手顺势展开",
+      "先单独确定一个可独立成立的 `opening_span` 作为开场钩子；`script_text` 从 `opening_span` 之后的下一拍进入正文推进",
     );
     expect(entries[0]?.systemPrompt).not.toContain("不要只用泛问句空转起手");
     expect(entries[0]?.systemPrompt).toContain("`ending_span`");

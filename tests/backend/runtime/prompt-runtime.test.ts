@@ -565,6 +565,7 @@ describe("prompt runtime", () => {
           draft,
         },
       }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 
@@ -792,6 +793,7 @@ describe("prompt runtime", () => {
         operationName: "topic.candidate-builder",
         model: "glm-4.5",
       }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(result).toEqual({
       promptId: "topic.candidate-builder",

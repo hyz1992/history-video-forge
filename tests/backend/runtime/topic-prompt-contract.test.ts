@@ -43,8 +43,8 @@ describe("topic prompt contract", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 
     expect(prompt.body).toContain("不得包 `TopicCandidateCard` 外层对象");
-    expect(prompt.body).toContain("`viral_rubric` 只能使用正式字段");
-    expect(prompt.body).toContain("不得自定义额外评分键");
+    expect(prompt.body).toContain("`viral_rubric` 只有五个正式字段");
+    expect(prompt.body).toContain("`viral_rubric` 不得自定义额外评分键");
   });
 
   it("requires candidate-builder must_cover_preview to carry auditable narrative nodes", () => {
@@ -139,8 +139,8 @@ describe("topic prompt contract", () => {
   it("requires topic.selector to return a complete ranked candidate scorecard", () => {
     const prompt = createPromptRegistry().getPrompt("topic.selector");
 
-    expect(prompt.body).toContain("`ranked_candidates` 必须覆盖 `selector_pool` 中全部候选 id");
-    expect(prompt.body).toContain("`quality_rank` 必须从 1 开始且不得重复");
+    expect(prompt.body).toContain("`ranked_candidates` 应尽量覆盖 `selector_pool` 中全部候选 id");
+    expect(prompt.body).toContain("`quality_rank` 必须从 1 开始且尽量不重复");
     expect(prompt.body).toContain("`quality_score` 必须是 0 到 100 的整数");
     expect(prompt.body).toContain("`deductions` 只写扣分项");
     expect(prompt.body).toContain("`risk_summary` 必须是一句话风险摘要");
