@@ -2,6 +2,7 @@ import type {
   AssetManifestRecord,
   AssetProviderJobRecord,
   ComposeRecord,
+  ProjectRecord,
   PublishPackageRecord,
   RenderJobRecord,
 } from "../client.js";
@@ -51,5 +52,69 @@ export class PrismaThirdAggregateWriter {
       update: data,
     });
     return { ...row, status: row.status as AssetProviderJobRecord["status"], rawRequestJson: row.rawRequestJson as Record<string, unknown> | null, rawResponseJson: row.rawResponseJson as Record<string, unknown> | null };
+  }
+
+  async activateAssetManifest(project: ProjectRecord, record: AssetManifestRecord): Promise<void> {
+    await this.client.$transaction(async (tx) => {
+      const [scoped, topic, script, storyboard, plan, stored] = await Promise.all([
+        tx.project.findFirst({ where: { id: project.id, ownerId: this.ownerId }, select: { activeAssetPlanRecordId: true } }),
+        tx.topicPackage.findUnique({ where: { id: record.topicPackageId }, select: { projectId: true } }),
+        tx.scriptRecord.findUnique({ where: { id: record.scriptRecordId }, select: { projectId: true } }),
+        tx.storyboardRecord.findUnique({ where: { id: record.storyboardRecordId }, select: { projectId: true } }),
+        tx.assetPlanRecord.findUnique({ where: { id: record.assetPlanRecordId }, select: { projectId: true } }),
+        tx.assetManifestRecord.findUnique({ where: { id: record.id }, select: { projectId: true } }),
+      ]);
+      if (!scoped) throw new Error("project_scope_denied");
+      if (scoped.activeAssetPlanRecordId !== record.assetPlanRecordId) throw new Error("asset_manifest_activation_stale_source");
+      if ([topic, script, storyboard, plan, stored].some((item) => item?.projectId !== project.id)) throw new Error("asset_manifest_activation_project_mismatch");
+      await tx.project.update({ where: { id: project.id }, data: { status: project.status, activeAssetManifestRecordId: record.id, activeComposeRecordId: null, activeRenderJobRecordId: null, activePublishPackageRecordId: null, latestAssetsRunTraceJson: project.latestAssetsRunTraceJson as never, latestComposeRunTraceJson: null as never, latestRenderRunTraceJson: null as never } });
+    });
+  }
+
+  async activateCompose(project: ProjectRecord, record: ComposeRecord): Promise<void> {
+    await this.client.$transaction(async (tx) => {
+      const [scoped, manifest, stored] = await Promise.all([
+        tx.project.findFirst({ where: { id: project.id, ownerId: this.ownerId }, select: { activeAssetManifestRecordId: true } }),
+        tx.assetManifestRecord.findUnique({ where: { id: record.assetManifestRecordId }, select: { projectId: true } }),
+        tx.composeRecord.findUnique({ where: { id: record.id }, select: { projectId: true } }),
+      ]);
+      if (!scoped) throw new Error("project_scope_denied");
+      if (scoped.activeAssetManifestRecordId !== record.assetManifestRecordId) throw new Error("compose_activation_stale_source");
+      if ([manifest, stored].some((item) => item?.projectId !== project.id)) throw new Error("compose_activation_project_mismatch");
+      await tx.project.update({ where: { id: project.id }, data: { status: project.status, activeComposeRecordId: record.id, activeRenderJobRecordId: null, activePublishPackageRecordId: null, latestComposeRunTraceJson: project.latestComposeRunTraceJson as never, latestRenderRunTraceJson: null as never } });
+    });
+  }
+
+  async activateRender(project: ProjectRecord, record: RenderJobRecord): Promise<void> {
+    await this.client.$transaction(async (tx) => {
+      const [scoped, compose, manifest, stored] = await Promise.all([
+        tx.project.findFirst({ where: { id: project.id, ownerId: this.ownerId }, select: { activeComposeRecordId: true } }),
+        tx.composeRecord.findUnique({ where: { id: record.composeRecordId }, select: { projectId: true, assetManifestRecordId: true } }),
+        tx.assetManifestRecord.findUnique({ where: { id: record.assetManifestRecordId }, select: { projectId: true } }),
+        tx.renderJobRecord.findUnique({ where: { id: record.id }, select: { projectId: true } }),
+      ]);
+      if (!scoped) throw new Error("project_scope_denied");
+      if (scoped.activeComposeRecordId !== record.composeRecordId) throw new Error("render_activation_stale_source");
+      if (compose?.assetManifestRecordId !== record.assetManifestRecordId || [compose, manifest, stored].some((item) => item?.projectId !== project.id)) throw new Error("render_activation_project_mismatch");
+      await tx.project.update({ where: { id: project.id }, data: { status: project.status, activeRenderJobRecordId: record.id, activePublishPackageRecordId: null, latestRenderRunTraceJson: project.latestRenderRunTraceJson as never } });
+    });
+  }
+
+  async activatePublish(project: ProjectRecord, record: PublishPackageRecord): Promise<void> {
+    await this.client.$transaction(async (tx) => {
+      const [scoped, render, topic, script, storyboard, manifest, stored] = await Promise.all([
+        tx.project.findFirst({ where: { id: project.id, ownerId: this.ownerId }, select: { activeRenderJobRecordId: true } }),
+        tx.renderJobRecord.findUnique({ where: { id: record.renderJobRecordId }, select: { projectId: true, assetManifestRecordId: true } }),
+        tx.topicPackage.findUnique({ where: { id: record.topicPackageId }, select: { projectId: true } }),
+        tx.scriptRecord.findUnique({ where: { id: record.scriptRecordId }, select: { projectId: true } }),
+        tx.storyboardRecord.findUnique({ where: { id: record.storyboardRecordId }, select: { projectId: true } }),
+        tx.assetManifestRecord.findUnique({ where: { id: record.assetManifestRecordId }, select: { projectId: true } }),
+        tx.publishPackageRecord.findUnique({ where: { id: record.id }, select: { projectId: true } }),
+      ]);
+      if (!scoped) throw new Error("project_scope_denied");
+      if (scoped.activeRenderJobRecordId !== record.renderJobRecordId) throw new Error("publish_activation_stale_source");
+      if (render?.assetManifestRecordId !== record.assetManifestRecordId || [render, topic, script, storyboard, manifest, stored].some((item) => item?.projectId !== project.id)) throw new Error("publish_activation_project_mismatch");
+      await tx.project.update({ where: { id: project.id }, data: { status: project.status, activePublishPackageRecordId: record.id } });
+    });
   }
 }

@@ -289,6 +289,10 @@ export interface DbClient {
     saveRender(record: RenderJobRecord): Promise<void>;
     savePublish(record: PublishPackageRecord): Promise<void>;
     saveProviderJob(record: AssetProviderJobRecord): Promise<AssetProviderJobRecord>;
+    activateAssetManifest(project: ProjectRecord, record: AssetManifestRecord): Promise<void>;
+    activateCompose(project: ProjectRecord, record: ComposeRecord): Promise<void>;
+    activateRender(project: ProjectRecord, record: RenderJobRecord): Promise<void>;
+    activatePublish(project: ProjectRecord, record: PublishPackageRecord): Promise<void>;
   };
 }
 

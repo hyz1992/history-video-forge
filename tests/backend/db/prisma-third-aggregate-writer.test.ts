@@ -4,7 +4,7 @@ import { join } from "node:path";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 
-import type { AssetManifestRecord, AssetProviderJobRecord, ComposeRecord, PublishPackageRecord, RenderJobRecord } from "../../../backend/src/db/client.js";
+import type { AssetManifestRecord, AssetProviderJobRecord, ComposeRecord, ProjectRecord, PublishPackageRecord, RenderJobRecord } from "../../../backend/src/db/client.js";
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { PrismaThirdAggregateWriter } from "../../../backend/src/db/repositories/prisma-third-aggregate-writer.js";
 import { applyAllDatabaseMigrations } from "./migration-test-utils.js";
@@ -38,6 +38,14 @@ describe("Prisma third aggregate save-only writer", () => {
       await expect(client.renderJobRecord.findUnique({ where: { id: "r" } })).resolves.toMatchObject({ status: "completed" });
       await expect(client.publishPackageRecord.findUnique({ where: { id: "pub" } })).resolves.toMatchObject({ packageJson: { title: "v2" } });
       await expect(client.project.findUnique({ where: { id: "p" } })).resolves.toMatchObject({ activeAssetManifestRecordId: null, activeComposeRecordId: null, activeRenderJobRecordId: null, activePublishPackageRecordId: null });
+      const project = { id: "p", status: "asset_plan_ready", latestAssetsRunTraceJson: { run: "assets" }, latestComposeRunTraceJson: null, latestRenderRunTraceJson: null } as ProjectRecord;
+      await expect(writer.activateAssetManifest(project, manifest)).rejects.toThrow("asset_manifest_activation_stale_source");
+      await client.project.update({ where: { id: "p" }, data: { activeAssetPlanRecordId: "ap" } });
+      project.status = "assets_ready"; await writer.activateAssetManifest(project, manifest);
+      project.status = "compose_ready"; project.latestComposeRunTraceJson = { run: "compose" }; await writer.activateCompose(project, compose);
+      project.status = "render_ready"; project.latestRenderRunTraceJson = { run: "render" }; await writer.activateRender(project, render);
+      project.status = "publish_ready"; await writer.activatePublish(project, publish);
+      await expect(client.project.findUnique({ where: { id: "p" } })).resolves.toMatchObject({ activeAssetManifestRecordId: "m", activeComposeRecordId: "c", activeRenderJobRecordId: "r", activePublishPackageRecordId: "pub", status: "publish_ready" });
       const foreignWriter = new PrismaThirdAggregateWriter(client, "other-owner");
       await expect(foreignWriter.saveCompose({ ...compose, id: "foreign-compose" })).rejects.toThrow("project_scope_denied");
       await expect(foreignWriter.saveProviderJob({ ...job, id: "foreign-job", attemptCount: 2 })).rejects.toThrow("asset_manifest_scope_denied");

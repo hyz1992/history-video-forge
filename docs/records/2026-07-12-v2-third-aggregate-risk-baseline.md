@@ -70,3 +70,14 @@ ProviderJob schema 已有唯一键 `(assetRunId, executionId, taskId, attemptCou
 - 所有第三批 save 都校验 owner 项目作用域；ProviderJob 通过所属 AssetManifest 的 Project owner 校验，越权保存被拒绝。
 
 扩展回归同时暴露并修复两项既有测试阻塞：执行期 TTS 分块/音色解析不再回写持久化 AssetPlan；fake image artifact 的测试按当前唯一后缀合同验证，不再错误要求固定 ID。聚焦矩阵 10 个文件、54 项测试通过；类型检查与后端构建通过。
+
+## Activation transaction 基线
+
+已为四个阶段建立独立数据库激活事务：
+
+- AssetManifest：要求数据库当前 active AssetPlan 仍等于来源 plan，并校验 Topic/Script/Storyboard/AssetPlan/Manifest 全部属于同一项目。
+- Compose：要求数据库当前 active AssetManifest 未变化，并校验 Compose 与 Manifest 项目归属。
+- Render：要求数据库当前 active Compose 未变化，且 Compose 引用的 Manifest 与 Render 来源一致。
+- Publish：要求数据库当前 active Render 未变化，并校验 Render/Topic/Script/Storyboard/Manifest/Publish 全链归属。
+
+每次合法激活会清空对应下游 active；stale source、跨项目或跨 owner 在事务提交前拒绝。专项测试确认 save-only 阶段 active 均为空、错误来源无法激活、合法完整链可顺序激活到 Publish。当前只完成事务层，run service 尚未改用这些 activation API。
