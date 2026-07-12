@@ -136,8 +136,7 @@ export async function publishGenerateController(
   const topicPackage = db.topicPackages.get(topicPackageId);
   const scriptRecord = db.scriptRecords.get(scriptRecordId);
 
-  // Save preliminary package and set active pointer BEFORE LLM calls
-  // so refresh during generation shows the publishing state, not empty
+  // Save preliminary package as history; do not replace the last valid package.
   const prePackageJson = buildDefaultPublishPackage({
     renderJobRecordId: renderJob.id,
     topicPackageId,
@@ -162,7 +161,6 @@ export async function publishGenerateController(
     validationResultJson: null,
     executionStateJson: { generated_at: new Date().toISOString(), generating: true },
   });
-  project.activePublishPackageRecordId = generatingRecord.id;
 
   // Generate cover prompt via LLM
   let coverPromptDraft: string | null = null;
@@ -277,7 +275,7 @@ export async function publishGenerateController(
     },
   });
 
-  // Set the active pointer
+  await db.thirdAggregateWriter?.activatePublish(project, record);
   project.activePublishPackageRecordId = record.id;
 
   // Return the snapshot with the new active_publish_package

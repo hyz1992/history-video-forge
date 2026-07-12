@@ -90,3 +90,11 @@ ProviderJob schema 已有唯一键 `(assetRunId, executionId, taskId, attemptCou
 - 聚焦验证：Assets 主服务 20 项、Compose/API 42 项、Assets 成功与 stale 两项 API 路径均通过；类型检查通过。
 
 已知独立基线：`assets-api` 中 DashScope image-to-video 配置用例当前稳定无法得到 video artifact。该失败在本次状态推进改动前已独立复现，不计为本步骤通过项；进入 ProviderJob 中断恢复/文件协议前必须单独诊断。
+
+## Render 与 Publish 状态推进切换
+
+- Render 的 rendering job 不再提前成为 active。无旧 render 时失败保留 `render_failed + active=null`；已有旧 render 时替换失败或 stale source 保留旧 active 和 `render_ready`。只有 output/probe 校验完成后才事务激活新 render。
+- Publish preliminary package 只作为 generating history，不覆盖旧 active；标题、描述、hashtags、封面引用等组装完成并保存后才事务激活。
+- Render/Publish 聚焦矩阵 6 个文件、42 项测试通过；新增替换 render 失败保留旧 active 的回归场景后，Render API 为 8 项通过。类型检查与后端构建通过。
+
+至此四个第三批阶段都已改用最终 activation transaction；文件提交协议和 ProviderJob 中断恢复仍未完成，因此 Task 8.5-9 尚未关闭。

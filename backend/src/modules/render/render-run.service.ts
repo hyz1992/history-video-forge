@@ -179,6 +179,7 @@ function buildSuccessBody(input: {
 export async function runRenderGeneration(input: RunRenderGenerationInput) {
   const { db, project } = input;
   const activeComposeRecordId = project.activeComposeRecordId;
+  const previousActiveRenderJobRecordId = project.activeRenderJobRecordId;
 
   if (!activeComposeRecordId) {
     return {
@@ -246,11 +247,10 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
     runtimeDiagnosticsJson: null,
   });
 
-  // Set active pointer BEFORE rendering so refresh during render shows "rendering" state
-  project.activeRenderJobRecordId = renderJob.id;
   project.status = "render_rendering";
   project.latestRenderRunTraceJson = trace;
   project.updatedAt = new Date();
+  await db.firstAggregateWriter?.syncProject(project);
 
   const adapter = input.adapter ?? createFakeRenderAdapter();
   const projectStorageRootDir = resolve(project.storageRootDir);
@@ -294,8 +294,10 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
         runtimeDiagnosticsJson: adapterResult.diagnostics,
       });
       project.latestRenderRunTraceJson = staleTrace;
-      project.status = "render_failed";
+      project.activeRenderJobRecordId = previousActiveRenderJobRecordId;
+      project.status = previousActiveRenderJobRecordId ? "render_ready" : "render_failed";
       project.updatedAt = new Date();
+      await db.firstAggregateWriter?.syncProject(project);
 
       return {
         statusCode: 409,
@@ -336,10 +338,19 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
       graphTraceSummaryJson: trace,
       runtimeDiagnosticsJson: adapterResult.diagnostics,
     });
-    project.activeRenderJobRecordId = renderJob.id;
     project.status = "render_ready";
     project.latestRenderRunTraceJson = trace;
     project.updatedAt = new Date();
+    try {
+      await db.thirdAggregateWriter?.activateRender(project, renderJob);
+    } catch (error) {
+      project.activeRenderJobRecordId = previousActiveRenderJobRecordId;
+      project.status = previousActiveRenderJobRecordId ? "render_ready" : "render_failed";
+      await db.firstAggregateWriter?.syncProject(project);
+      throw error;
+    }
+    project.activeRenderJobRecordId = renderJob.id;
+    project.activePublishPackageRecordId = null;
 
     return {
       statusCode: 200,
@@ -373,9 +384,11 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
       graphTraceSummaryJson: failedTrace,
       runtimeDiagnosticsJson: diagnostics,
     });
-    project.status = "render_failed";
+    project.activeRenderJobRecordId = previousActiveRenderJobRecordId;
+    project.status = previousActiveRenderJobRecordId ? "render_ready" : "render_failed";
     project.latestRenderRunTraceJson = failedTrace;
     project.updatedAt = new Date();
+    await db.firstAggregateWriter?.syncProject(project);
 
     return {
       statusCode: 500,

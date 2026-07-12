@@ -8,6 +8,7 @@ import { saveComposeRecord } from "../../../backend/src/modules/compose/compose-
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import { createFakeRenderAdapter } from "../../../backend/src/modules/render/fake-render-adapter.js";
 import type { RenderAdapter } from "../../../backend/src/modules/render/render-adapter.js";
+import { saveRenderJobRecord } from "../../../backend/src/modules/render/render-record.repository.js";
 import type {
   AssetManifest,
   ComposeTimeline,
@@ -386,7 +387,7 @@ describe("render API", () => {
       error: "stale_render_source",
     });
     const body = response.json();
-    expect(project.activeRenderJobRecordId).toBe(body.render_job_record_id);
+    expect(project.activeRenderJobRecordId).toBeNull();
     expect([...app.db.renderJobRecords.values()][0]).toMatchObject({
       status: "stale_source",
     });
@@ -425,12 +426,32 @@ describe("render API", () => {
       },
     });
     expect(project.status).toBe("render_failed");
-    expect(project.activeRenderJobRecordId).toBe(body.render_job_record_id);
+    expect(project.activeRenderJobRecordId).toBeNull();
     expect(app.db.renderJobRecords.get(body.render_job_record_id)).toMatchObject({
       status: "failed",
       runtimeDiagnosticsJson: {
         error_message: "adapter exploded",
       },
     });
+  });
+
+  it("keeps the previous active render when a replacement export fails", async () => {
+    const app = buildApp({ renderAdapter: { async render() { throw new Error("replacement failed"); } } });
+    const { project, manifestRecord, composeRecord } = await seedActiveCompose({ app, name: "Render Replacement Failure" });
+    const previous = await saveRenderJobRecord(app.db, {
+      projectId: project.id, composeRecordId: composeRecord.id, assetManifestRecordId: manifestRecord.id,
+      status: "completed", profileJson: {}, outputArtifactJson: null,
+      validationResultJson: { stage: "render_local_validation", decision: "rendered", errors: [], warnings: [], metrics: {} },
+      executionStateJson: { activated: true }, graphTraceSummaryJson: null, runtimeDiagnosticsJson: null,
+    });
+    project.activeRenderJobRecordId = previous.id;
+    project.status = "render_ready";
+
+    const response = await app.inject({ method: "POST", url: `/api/projects/${project.id}/render/generate`, payload: {} });
+
+    expect(response.statusCode).toBe(500);
+    expect(project.activeRenderJobRecordId).toBe(previous.id);
+    expect(project.status).toBe("render_ready");
+    expect(app.db.renderJobRecords.get(response.json().render_job_record_id)).toMatchObject({ status: "failed" });
   });
 });
