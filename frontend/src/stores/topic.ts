@@ -365,7 +365,15 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
             must_cover_preview: c.must_cover_preview ?? [],
           })),
         }));
-        if (!pkg && restoredCandidates[0]) {
+        const confirmedCandidate = pkg
+          ? restoredCandidates.find((candidate) =>
+              candidate.title === pkg.canonical_title &&
+              candidate.one_line_angle === pkg.selected_angle)
+          : undefined;
+        if (confirmedCandidate) {
+          state.selectedCandidate = confirmedCandidate;
+          state.selectedRoundId = lastRound.round_id;
+        } else if (!pkg && restoredCandidates[0]) {
           state.selectedCandidate = restoredCandidates[0];
           state.selectedRoundId = lastRound.round_id;
         }

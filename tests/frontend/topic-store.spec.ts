@@ -335,4 +335,33 @@ describe("topic store recommendation input", () => {
     expect(store.state.currentRound).toBeNull();
     expect(store.state.selectedCandidate).toBeNull();
   });
+
+  it("restores the full confirmed candidate from persisted rounds instead of the skeletal topic package", async () => {
+    const restored = {
+      candidate_id: "candidate-1", title: "晏子使楚", one_line_angle: "外交反击",
+      family_label: "外交", scope_label: "单事件", why_this_now: "冲突鲜明",
+      strong_scene: "朝堂", risk_hints: ["勿夸张"], core_conflict: "羞辱与反击",
+      source_hint: "史记", viral_rubric: { hook_power: "high" }, must_cover_preview: ["入楚", "设局", "反击"],
+    };
+    const api = {
+      generateSystemRecommendations: vi.fn(), confirmCandidate: vi.fn(),
+      loadSnapshot: vi.fn(async () => ({
+        current_status: "script_ready",
+        active_topic_package: { topic_package_id: "topic-1", canonical_title: restored.title, selected_angle: restored.one_line_angle, family_label: restored.family_label, scope_label: restored.scope_label },
+        topic_candidates: { candidate_rounds: [{ round_id: "round-3", round_index: 3, candidates: [restored] }] },
+      })),
+    };
+    const projectStore = {
+      state: { projectId: "project-1", currentStatus: "script_ready", projects: [] },
+      ensureProject: async () => "project-1", createProject: async () => "project-1", loadProjects: async () => [],
+      resolveProjectWorkspacePath: () => "/projects/project-1/topic", syncProject: vi.fn(),
+    };
+    const store = createTopicStore({ projectStore, api });
+    await store.loadExistingTopic();
+    expect(store.state.selectedCandidate).toMatchObject({
+      candidate_id: "candidate-1", core_conflict: "羞辱与反击",
+      must_cover_preview: ["入楚", "设局", "反击"], viral_rubric: { hook_power: "high" },
+    });
+    expect(store.state.selectedRoundId).toBe("round-3");
+  });
 });

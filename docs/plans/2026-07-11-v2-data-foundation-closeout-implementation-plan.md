@@ -251,15 +251,17 @@ npx vitest run --configLoader runner tests/backend/db/prisma-schema.test.ts test
 - [x] 建立 Project、Event Registry、Topic Package、Candidate Cache、Recommendation Round/Exposure 的 Prisma 读模型 hydration 与字段 parity 基线。
 - [x] 补齐刷新后候选卡无损恢复所缺的 Candidate Cache 字段；由于 baseline 已进入可激活状态，使用新增 `0002`，不得继续改写 `0001`。
 - [x] 接入显式 `LOCAL_PROJECT_OWNER_ID` 过渡作用域并切换真实 writer。
-- [ ] 完成三轮推荐、确认、重启和浏览器验收后关闭本任务。
+- [x] 完成三轮推荐、确认、重启和浏览器验收后关闭本任务。
 
 **步骤：**
 
-- [ ] 先建立 legacy/Prisma repository parity fixtures，输出完全相同的领域对象。
-- [ ] 将项目列表、创建、读取、归档以及 topic 推荐/确认路径改为异步 repository。
-- [ ] 同一次运行只允许一个 writer；Prisma 模式不得调用 `saveDbSnapshot()`。
-- [ ] 覆盖创建项目、连续三轮推荐、确认选题、重启后恢复和跨项目隔离。
-- [ ] 真实浏览器至少完成“新建项目 → 三轮推荐 → 确认选题 → 重启 → 状态仍在”。
+- [x] 先建立 legacy/Prisma repository parity fixtures，输出完全相同的领域对象。
+- [x] 将项目列表、创建、读取、归档以及 topic 推荐/确认路径改为异步 repository。
+- [x] 同一次运行只允许一个 writer；Prisma 模式不得调用 `saveDbSnapshot()`。
+- [x] 覆盖创建项目、连续三轮推荐、确认选题、重启后恢复和跨项目隔离。
+- [x] 真实浏览器至少完成“新建项目 → 三轮推荐 → 确认选题 → 重启 → 状态仍在”。
+
+**完成记录：**`docs/records/2026-07-12-v2-first-aggregate-browser-acceptance.md`
 
 **提交：**`切换项目选题数据到Prisma`
 
