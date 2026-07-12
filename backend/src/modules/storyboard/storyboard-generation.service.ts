@@ -357,9 +357,8 @@ function buildDeterministicStoryboardPlan(
 
 function splitScriptIntoExcerpts(scriptText: string) {
   const sentences = scriptText
-    .split(/(?<=[。！？!?；;])/u)
-    .map((sentence) => sentence.trim())
-    .filter(Boolean);
+    .match(/[^。！？?!；;]+[。！？?!；;]?\s*/gu)
+    ?.filter((sentence) => sentence.trim().length > 0) ?? [];
 
   if (sentences.length <= 3) {
     return sentences.length > 0 ? sentences : [scriptText];

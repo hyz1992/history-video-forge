@@ -79,6 +79,26 @@ describe("generateStoryboardPlan", () => {
     }
   });
 
+  it("keeps deterministic excerpts contiguous when the script contains line breaks", async () => {
+    const input = makeInput();
+    input.draft = {
+      ...input.draft,
+      script_text: [
+        "第一句把观众带进现场。",
+        "第二句继续施加压力。第三句给出转折。",
+        "第四句收住结尾。",
+      ].join("\n"),
+      beat_trace: [],
+      quote_trace: [],
+    };
+
+    const plan = await generateStoryboardPlan(input);
+
+    for (const segment of plan.segments) {
+      expect(input.draft.script_text).toContain(segment.script_excerpt);
+    }
+  });
+
   it("invokes the LLM gateway with storyboard.planner", async () => {
     const invokeStructuredPromptSpy = vi.fn();
     const gateway: LlmGateway = {

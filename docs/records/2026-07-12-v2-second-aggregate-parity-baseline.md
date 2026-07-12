@@ -34,3 +34,10 @@ writer 接入前必须冻结以下语义：
 - 新的 Script/Storyboard/AssetPlan 激活会按既有业务语义清空对应下游 active pointer 和 trace。
 
 负向测试确认：旧 Script 保持 active 直到新 Script 最终激活；跨项目 Storyboard activation 被拒绝且 Project active 链不变；合法 Storyboard 和 AssetPlan 可顺序原子激活。
+
+## 真实浏览器与重启复验
+
+- 隔离 SQLite、production build、`LOCAL_PROJECT_OWNER_ID=acceptance-owner-2`、`LLM_PROVIDER=stub` 下，从新建项目真实走到 Script 和 Storyboard。
+- 首轮分镜生成发现 deterministic stub 合并句子时删除换行，导致 `storyboard_excerpt_not_in_script`；修复为保留原文分隔空白，并增加含换行回归测试。
+- 修复后页面生成 8 段 Storyboard；重启后 API 仍返回原 Script record 和 8 段 active Storyboard，浏览器深链恢复到分镜审阅页。
+- AssetPlan 浏览器生成未通过：生产 stub 按既有安全边界返回 `asset_planning_stub_provider_requires_test_gateway:asset-planning.planner`。Writer 原子激活已有真实 SQLite 自动化测试，但浏览器端到端仍标记为未验证，不能据此关闭 Task 8.5-8。
