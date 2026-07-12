@@ -193,6 +193,8 @@ export async function confirmTopicCandidate(input: ConfirmTopicCandidateInput) {
   input.project.activeTopicPackageId = saved.id;
   input.project.activeScriptRecordId = null;
   input.project.updatedAt = new Date();
+  await input.projectDb.firstAggregateWriter?.activateTopic(input.project, saved);
+  input.projectDb.topicPackages.set(saved.id, saved);
 
   return {
     project_id: input.project.id,

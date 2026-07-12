@@ -39,6 +39,7 @@ export async function createProject(
   };
 
   initializeProjectStorage(project);
+  await db.firstAggregateWriter?.createProject(project);
   // Never persist to disk under test — avoids polluting storage/projects/
   if (!process.env.VITEST) {
     saveProjectMetadata(project);
@@ -66,6 +67,7 @@ export async function deleteProject(
     const storageResult = deleteProjectStorage(project);
     if (!storageResult.ok) return { deleted: false, error: "project_storage_delete_failed" };
   }
+  await db.firstAggregateWriter?.archiveProject(projectId);
   db.projects.delete(projectId);
 
   // Clean up related records

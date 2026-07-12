@@ -41,6 +41,7 @@ export async function normalizeEventInput(
     if (existing) {
       mergeCanonicalQuotes(existing, input.canonicalQuotes);
       mergeCanonicalQuoteIntents(existing, input.canonicalQuoteIntents);
+      await db.firstAggregateWriter?.saveEvent(existing);
       return {
         event: existing,
         created: false,

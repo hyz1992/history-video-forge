@@ -10,6 +10,8 @@ import { createPrismaClient } from "./db/prisma-client.js";
 import { checkPrismaReadiness } from "./db/prisma-readiness.js";
 import { emptyPrismaReadinessChecks } from "./db/prisma-readiness.js";
 import { resolveDatabasePath } from "./db/database-url.js";
+import { PrismaFirstAggregateWriter } from "./db/repositories/prisma-first-aggregate-writer.js";
+import { hydrateFirstAggregates } from "./db/repositories/prisma-first-aggregate-hydrator.js";
 import type { AppPrismaClient } from "./db/prisma-client.types.js";
 
 export interface ServerHostOptions {
@@ -205,12 +207,22 @@ export async function startServer(options?: {
   const prismaClient = options?.prismaClient ?? (options?.app || !databaseExists
     ? null
     : await createPrismaClient(databaseUrl));
+  const ownerId = process.env.LOCAL_PROJECT_OWNER_ID?.trim();
+  const firstAggregateWriter = prismaClient && !options?.app
+    ? ownerId
+      ? await PrismaFirstAggregateWriter.create(prismaClient, ownerId)
+      : (() => { throw new Error("local_project_owner_id_required"); })()
+    : undefined;
   const app = options?.app ?? buildApp({
     renderAdapter: resolveRenderAdapter(),
+    firstAggregateWriter,
     databaseReadiness: prismaClient
       ? () => checkPrismaReadiness(prismaClient)
       : async () => ({ ready: false, error: "database_not_initialized", checks: emptyPrismaReadinessChecks() }),
   });
+  if (prismaClient && firstAggregateWriter && !options?.app) {
+    await hydrateFirstAggregates(app.db, app.topicCandidateStore, prismaClient, { storageRoot: process.cwd(), ownerId: firstAggregateWriter.ownerId });
+  }
   const server = createHttpServer(app, { publicDir });
   let disconnected = false;
   const disconnect = async () => {

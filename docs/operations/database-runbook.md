@@ -16,9 +16,18 @@ node --import tsx backend/src/cli/database-operations.ts <command> [options]
 $env:DATABASE_URL = "file:./storage/history-video-forge.db"
 node --import tsx backend/src/cli/database-operations.ts status
 node --import tsx backend/src/cli/database-operations.ts init --confirm
+node --import tsx backend/src/cli/database-operations.ts owner-init --id local-migration-owner --username local-owner --confirm
 ```
 
 `status` 只读。`init` 会创建数据库并执行仓库 migration，仅允许目标文件不存在时运行，必须提供 `--confirm`，不会覆盖已有数据库。
+
+`owner-init` 只允许数据库中还没有 ACTIVE 用户时执行，创建不可登录的迁移 owner，不设置默认密码。启动第一批 Prisma 业务 writer 前显式设置：
+
+```powershell
+$env:LOCAL_PROJECT_OWNER_ID = "local-migration-owner"
+```
+
+该 owner 只是认证系统上线前的过渡归属，不得作为永久隐式管理员；用户系统完成后必须通过正式管理员流程激活或转移项目。
 
 当前 Windows + Prisma 7.8 组合要求 migrate 子进程使用 `RUST_LOG=info`；统一 CLI 已固定该兼容条件。不要改回继承任意外部值，否则可能只得到无细节的 `Schema engine error`。
 

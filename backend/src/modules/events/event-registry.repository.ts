@@ -40,6 +40,7 @@ export async function createProvisionalEvent(
     updatedAt: now,
   };
 
+  await db.firstAggregateWriter?.saveEvent(event);
   db.events.set(event.id, event);
 
   return event;

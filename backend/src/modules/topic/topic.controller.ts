@@ -239,6 +239,7 @@ export async function createTopicRecommendationsController(
   // Set generating state BEFORE LLM call so refresh shows progress
   project.status = "topic_generating";
   project.updatedAt = new Date();
+  await context.app.db.firstAggregateWriter?.syncProject(project);
 
   try {
     const recommendation = await recommendTopicCandidatesWithTrace(
@@ -325,6 +326,7 @@ export async function createTopicRecommendationsController(
   // 生成成功，状态转换为 candidates_ready
   project.status = "topic_candidates_ready";
   project.updatedAt = new Date();
+  await context.app.db.firstAggregateWriter?.syncProject(project);
 
   const currentRound = projectTopicState.rounds.at(-1);
   const historyRounds = projectTopicState.rounds.slice(0, -1);
@@ -358,6 +360,7 @@ export async function createTopicRecommendationsController(
   } catch (error) {
     project.status = "topic_pending";
     project.updatedAt = new Date();
+    await context.app.db.firstAggregateWriter?.syncProject(project).catch(() => undefined);
     const message = normalizeTopicGenerationErrorMessage(error);
     return {
       statusCode: 500,

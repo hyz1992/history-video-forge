@@ -17,6 +17,7 @@ import { createProjectStageLockRegistry } from "./runtime/concurrency/project-st
 import type { RenderAdapter } from "./modules/render/render-adapter";
 import type { PrismaReadinessResult } from "./db/prisma-readiness.js";
 import type { StoredTopicCandidate } from "./modules/topic/topic-confirm.service";
+import type { PrismaFirstAggregateWriter } from "./db/repositories/prisma-first-aggregate-writer.js";
 import { join } from "node:path";
 
 export interface StoredTopicCandidateRound {
@@ -80,6 +81,7 @@ export interface AppInstance {
     error: string | null;
   };
   databaseReadiness?: () => Promise<PrismaReadinessResult>;
+  persistenceMode: "legacy" | "prisma";
   persist: () => { ok: boolean; error: string | null };
   stageLocks: ReturnType<typeof createProjectStageLockRegistry>;
 }
@@ -120,18 +122,20 @@ export interface BuildAppOptions {
   storageBaseDir?: string;
   skipSnapshotLoad?: boolean;
   databaseReadiness?: () => Promise<PrismaReadinessResult>;
+  firstAggregateWriter?: PrismaFirstAggregateWriter;
 }
 
 export function buildApp(options: BuildAppOptions = {}): AppInstance {
   const routes: RouteRecord[] = [];
   const db = createDbClient();
+  db.firstAggregateWriter = options.firstAggregateWriter;
   const topicCandidateStore = new Map<string, ProjectTopicCandidateState>();
   const stageLocks = createProjectStageLockRegistry();
   const runtimeStorageRoot = options.storageBaseDir ?? (process.env.VITEST ? process.env.STORAGE_ROOT_DIR : undefined) ?? process.cwd();
   const snapshotPath = options.storageBaseDir ? join(options.storageBaseDir, "storage", "db-snapshot.json") : undefined;
   const persistenceHealth: AppInstance["persistenceHealth"] = {
-    loaded: false,
-    source: "none",
+    loaded: Boolean(options.firstAggregateWriter),
+    source: options.firstAggregateWriter ? "primary" : "none",
     error: null,
   };
   const mediaLibraryHealth: AppInstance["mediaLibraryHealth"] = {
@@ -145,7 +149,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
 
   // Restore persisted state from disk; Vitest only opts in when an isolated root is provided.
   const isTest = !!process.env.VITEST;
-  const shouldLoadSnapshot = !options.skipSnapshotLoad && (!isTest || Boolean(options.storageBaseDir));
+  const shouldLoadSnapshot = !options.firstAggregateWriter && !options.skipSnapshotLoad && (!isTest || Boolean(options.storageBaseDir));
   if (shouldLoadSnapshot) {
     const loadResult = loadDbSnapshot(db, topicCandidateStore, { snapshotPath });
     Object.assign(persistenceHealth, {
@@ -171,6 +175,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
 
   // Persist on shutdown (skip in test)
   function persist() {
+    if (options.firstAggregateWriter) return { ok: true, error: null };
     const result = saveDbSnapshot(db, topicCandidateStore, { snapshotPath });
     if (!result.ok) {
       Object.assign(persistenceHealth, {
@@ -192,6 +197,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
     persistenceHealth,
     mediaLibraryHealth,
     databaseReadiness: options.databaseReadiness,
+    persistenceMode: options.firstAggregateWriter ? "prisma" : "legacy",
     persist,
     stageLocks,
     renderAdapter: options.renderAdapter,

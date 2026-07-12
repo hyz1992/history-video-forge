@@ -265,6 +265,16 @@ export interface DbClient {
     enabled: boolean;
     loaded: boolean;
   };
+  firstAggregateWriter?: {
+    ownerId: string;
+    createProject(record: ProjectRecord): Promise<void>;
+    syncProject(record: ProjectRecord): Promise<void>;
+    archiveProject(projectId: string): Promise<void>;
+    saveEvent(record: EventRegistryRecord): Promise<void>;
+    saveCandidate(record: CandidateCacheRecord): Promise<void>;
+    recordRecommendationRound(record: ProjectRecommendationRoundRecord): Promise<void>;
+    activateTopic(project: ProjectRecord, topic: TopicPackageRecord): Promise<void>;
+  };
 }
 
 export function createDbClient(): DbClient {

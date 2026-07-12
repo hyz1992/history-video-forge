@@ -50,7 +50,7 @@ export async function saveTopicPackage(
     createdAt: new Date(),
   };
 
-  db.topicPackages.set(record.id, record);
+  if (!db.firstAggregateWriter) db.topicPackages.set(record.id, record);
 
   return record;
 }

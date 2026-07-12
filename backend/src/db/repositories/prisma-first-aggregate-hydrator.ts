@@ -12,10 +12,10 @@ export async function hydrateFirstAggregates(
   db: DbClient,
   topicCandidateStore: Map<string, ProjectTopicCandidateState>,
   client: AppPrismaClient,
-  options: { storageRoot: string },
+  options: { storageRoot: string; ownerId?: string },
 ): Promise<void> {
   const [projects, events, packages, caches, rounds] = await Promise.all([
-    client.project.findMany(), client.eventRegistryEntry.findMany(), client.topicPackage.findMany(),
+    client.project.findMany({ where: { archivedAt: null, ...(options.ownerId ? { ownerId: options.ownerId } : {}) } }), client.eventRegistryEntry.findMany(), client.topicPackage.findMany(),
     client.recommendationCandidateCache.findMany(),
     client.recommendationRound.findMany({ orderBy: [{ projectId: "asc" }, { roundIndex: "asc" }], include: { exposures: { orderBy: { selectedAt: "asc" } } } }),
   ]);
@@ -49,6 +49,7 @@ export async function hydrateFirstAggregates(
     db.events.set(record.id, record);
   }
   for (const row of packages) {
+    if (!db.projects.has(row.projectId)) continue;
     const record: TopicPackageRecord = { ...row, canonicalQuotesJson: array<string>(row.canonicalQuotesJson),
       canonicalQuoteIntentsJson: array(row.canonicalQuoteIntentsJson), durationBandJson: object(row.durationBandJson),
       narrativeTensionMapJson: object(row.narrativeTensionMapJson), mustIncludeBeatsJson: array(row.mustIncludeBeatsJson),
@@ -57,12 +58,14 @@ export async function hydrateFirstAggregates(
     db.topicPackages.set(record.id, record);
   }
   for (const row of caches) {
+    if (row.projectId && !db.projects.has(row.projectId)) continue;
     const record: CandidateCacheRecord = { ...row, viralRubricJson: object(row.viralRubricJson),
       estimatedDurationBandJson: row.estimatedDurationBandJson, mustCoverPreviewJson: array(row.mustCoverPreviewJson),
       riskHintsJson: array<string>(row.riskHintsJson) };
     db.candidateCache.set(record.id, record);
   }
   for (const row of rounds) {
+    if (!db.projects.has(row.projectId)) continue;
     const record: ProjectRecommendationRoundRecord = { projectId: row.projectId, createdAt: row.createdAt,
       candidates: row.exposures.map((item) => ({ eventRegistryEntryId: item.eventRegistryEntryId ?? "", eventIdentity: item.eventIdentity,
         title: item.title, fingerprint: item.fingerprint, createdAt: item.selectedAt })) };

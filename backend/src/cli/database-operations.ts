@@ -43,6 +43,16 @@ async function main(): Promise<void> {
     return void console.log(JSON.stringify({ status: "initialized", databasePath }));
   }
   if (!existsSync(databasePath)) throw new Error("database_not_initialized");
+  if (command === "owner-init") {
+    const id = value("--id"); const username = value("--username");
+    if (!id || !username || !has("--confirm")) throw new Error("usage: owner-init --id <stable-id> --username <name> --confirm");
+    await withClient(databaseUrl, async (client) => {
+      const activeUsers = await client.user.count({ where: { status: "ACTIVE" } });
+      if (activeUsers > 0) throw new Error("migration_owner_already_exists");
+      await client.user.create({ data: { id, username, displayName: username, passwordHash: "!migration-owner-no-login", role: "ADMIN", status: "ACTIVE" } });
+    });
+    return void console.log(JSON.stringify({ status: "migration_owner_created", id, username }));
+  }
   if (command === "import") {
     const sourcePath = value("--source"); const ownerId = value("--owner");
     if (!sourcePath || !ownerId || !has("--confirm")) throw new Error("usage: import --source <path> --owner <id> --confirm");
@@ -69,7 +79,7 @@ async function main(): Promise<void> {
     const result = await restoreDatabase({ backupPath, targetPath: databasePath, confirm: has("--confirm"), serviceStopped: has("--service-stopped") });
     return void console.log(JSON.stringify(result, null, 2));
   }
-  throw new Error("usage: database-operations <status|init|import|verify|activate|backup|restore>");
+  throw new Error("usage: database-operations <status|init|owner-init|import|verify|activate|backup|restore>");
 }
 
 void main().catch((error) => {

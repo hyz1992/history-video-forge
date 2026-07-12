@@ -44,6 +44,7 @@ export async function saveCachedCandidate(
     createdAt: new Date(),
   };
 
+  await db.firstAggregateWriter?.saveCandidate(record);
   db.candidateCache.set(record.id, record);
 
   return record;
@@ -114,6 +115,7 @@ export async function recordProjectRecommendationRound(
     })),
   };
 
+  await db.firstAggregateWriter?.recordRecommendationRound(round);
   rounds.push(round);
   store.set(input.projectId, rounds);
 
