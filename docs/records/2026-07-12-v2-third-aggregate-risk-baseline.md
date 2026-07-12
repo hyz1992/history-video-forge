@@ -61,3 +61,12 @@ ProviderJob schema 已有唯一键 `(assetRunId, executionId, taskId, attemptCou
 已新增第三批启动 hydration：按第一批已加载的 owner 项目 ID 恢复 AssetManifest、Compose、RenderJob、PublishPackage；ProviderJob 只按这些 AssetManifest ID 恢复，不会加载其他 owner 的供应商任务。
 
 专项真实 SQLite fixture 覆盖五类记录的 JSON sidecar、Render 状态与输出 artifact、ProviderJob request/response 和提交/轮询时间，并创建另一 owner 的完整下游链验证隔离。数据库/服务矩阵结果为 18 个测试文件、62 项测试通过；后端类型检查与构建通过。
+
+## Save-only writer 实施结果
+
+- AssetManifest、Compose、RenderJob、PublishPackage repository 已在 Map 更新前执行 Prisma upsert；该步骤不更新 Project active pointer。
+- RenderJob 的 rendering -> completed/failed/stale 状态更新同步写入 Prisma，不只保存初始 rendering 记录。
+- ProviderJob 使用 `(assetRunId, executionId, taskId, attemptCount)` 复合唯一键 upsert；相同 attempt 重试会返回数据库中的 canonical record id，避免重复供应商任务记录。
+- 所有第三批 save 都校验 owner 项目作用域；ProviderJob 通过所属 AssetManifest 的 Project owner 校验，越权保存被拒绝。
+
+扩展回归同时暴露并修复两项既有测试阻塞：执行期 TTS 分块/音色解析不再回写持久化 AssetPlan；fake image artifact 的测试按当前唯一后缀合同验证，不再错误要求固定 ID。聚焦矩阵 10 个文件、54 项测试通过；类型检查与后端构建通过。

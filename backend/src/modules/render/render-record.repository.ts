@@ -30,6 +30,7 @@ export async function saveRenderJobRecord(
     updatedAt: input.updatedAt ?? now,
   };
 
+  await db.thirdAggregateWriter?.saveRender(record);
   db.renderJobRecords.set(record.id, record);
 
   return record;

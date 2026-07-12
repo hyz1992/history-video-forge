@@ -283,6 +283,13 @@ export interface DbClient {
     activateStoryboard(project: ProjectRecord, record: StoryboardRecord): Promise<void>;
     activateAssetPlan(project: ProjectRecord, record: AssetPlanRecord): Promise<void>;
   };
+  thirdAggregateWriter?: {
+    saveAssetManifest(record: AssetManifestRecord): Promise<void>;
+    saveCompose(record: ComposeRecord): Promise<void>;
+    saveRender(record: RenderJobRecord): Promise<void>;
+    savePublish(record: PublishPackageRecord): Promise<void>;
+    saveProviderJob(record: AssetProviderJobRecord): Promise<AssetProviderJobRecord>;
+  };
 }
 
 export function createDbClient(): DbClient {

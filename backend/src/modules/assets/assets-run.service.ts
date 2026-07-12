@@ -471,7 +471,6 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   // Write resolved voice profile ID back to the asset plan
   if (voiceResolution.voiceProfileId && voiceResolution.voiceProfileId !== (normalizedTts.assetPlan.tts_plan as Record<string, unknown>)?.voice_profile_id) {
     (normalizedTts.assetPlan.tts_plan as Record<string, unknown>).voice_profile_id = voiceResolution.voiceProfileId;
-    assetPlanRecord.planJson = normalizedTts.assetPlan as typeof assetPlanRecord.planJson;
   }
 
   // Step 5: Build execution options from resolved voice profile

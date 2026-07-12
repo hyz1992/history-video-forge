@@ -293,7 +293,7 @@ npx vitest run --configLoader runner tests/backend/db/prisma-schema.test.ts test
 
 - [x] 完成当前 repository、active pointer、ProviderJob 恢复和文件提交边界审计，记录于 `docs/records/2026-07-12-v2-third-aggregate-risk-baseline.md`。
 - [x] 建立第三批 hydration parity 与 owner 隔离基线。
-- [ ] 接入 save-only writer、ProviderJob 幂等 create/update 和逐阶段 activation transaction。
+- [ ] 接入 save-only writer、ProviderJob 幂等 create/update 和逐阶段 activation transaction（save-only 与 ProviderJob 已完成，activation 待处理）。
 - [ ] 收口 artifact/render/cover 文件提交协议并完成中断、重启、浏览器验收。
 
 **步骤：**

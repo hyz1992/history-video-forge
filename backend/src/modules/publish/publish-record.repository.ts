@@ -29,6 +29,7 @@ export async function savePublishPackageRecord(
     updatedAt: input.updatedAt ?? now,
   };
 
+  await db.thirdAggregateWriter?.savePublish(record);
   db.publishPackageRecords.set(record.id, record);
 
   return record;

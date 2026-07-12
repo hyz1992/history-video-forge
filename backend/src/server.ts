@@ -13,6 +13,7 @@ import { resolveDatabasePath } from "./db/database-url.js";
 import { PrismaFirstAggregateWriter } from "./db/repositories/prisma-first-aggregate-writer.js";
 import { hydrateFirstAggregates } from "./db/repositories/prisma-first-aggregate-hydrator.js";
 import { PrismaSecondAggregateWriter } from "./db/repositories/prisma-second-aggregate-writer.js";
+import { PrismaThirdAggregateWriter } from "./db/repositories/prisma-third-aggregate-writer.js";
 import { hydrateSecondAggregates } from "./db/repositories/prisma-second-aggregate-hydrator.js";
 import { hydrateThirdAggregates } from "./db/repositories/prisma-third-aggregate-hydrator.js";
 import type { AppPrismaClient } from "./db/prisma-client.types.js";
@@ -221,6 +222,9 @@ export async function startServer(options?: {
     firstAggregateWriter,
     secondAggregateWriter: prismaClient && firstAggregateWriter
       ? new PrismaSecondAggregateWriter(prismaClient, firstAggregateWriter.ownerId)
+      : undefined,
+    thirdAggregateWriter: prismaClient && firstAggregateWriter
+      ? new PrismaThirdAggregateWriter(prismaClient, firstAggregateWriter.ownerId)
       : undefined,
     databaseReadiness: prismaClient
       ? () => checkPrismaReadiness(prismaClient)

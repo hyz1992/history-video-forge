@@ -19,6 +19,7 @@ import type { PrismaReadinessResult } from "./db/prisma-readiness.js";
 import type { StoredTopicCandidate } from "./modules/topic/topic-confirm.service";
 import type { PrismaFirstAggregateWriter } from "./db/repositories/prisma-first-aggregate-writer.js";
 import type { PrismaSecondAggregateWriter } from "./db/repositories/prisma-second-aggregate-writer.js";
+import type { PrismaThirdAggregateWriter } from "./db/repositories/prisma-third-aggregate-writer.js";
 import { join } from "node:path";
 
 export interface StoredTopicCandidateRound {
@@ -125,6 +126,7 @@ export interface BuildAppOptions {
   databaseReadiness?: () => Promise<PrismaReadinessResult>;
   firstAggregateWriter?: PrismaFirstAggregateWriter;
   secondAggregateWriter?: PrismaSecondAggregateWriter;
+  thirdAggregateWriter?: PrismaThirdAggregateWriter;
 }
 
 export function buildApp(options: BuildAppOptions = {}): AppInstance {
@@ -132,6 +134,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
   const db = createDbClient();
   db.firstAggregateWriter = options.firstAggregateWriter;
   db.secondAggregateWriter = options.secondAggregateWriter;
+  db.thirdAggregateWriter = options.thirdAggregateWriter;
   const topicCandidateStore = new Map<string, ProjectTopicCandidateState>();
   const stageLocks = createProjectStageLockRegistry();
   const runtimeStorageRoot = options.storageBaseDir ?? (process.env.VITEST ? process.env.STORAGE_ROOT_DIR : undefined) ?? process.cwd();

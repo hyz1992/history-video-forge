@@ -125,7 +125,8 @@ function buildFailedValidation(input: {
   });
 }
 
-function updateRenderJobRecord(
+async function updateRenderJobRecord(
+  db: DbClient,
   record: RenderJobRecord,
   updates: Partial<
     Pick<
@@ -142,6 +143,7 @@ function updateRenderJobRecord(
   Object.assign(record, updates, {
     updatedAt: new Date(),
   });
+  await db.thirdAggregateWriter?.saveRender(record);
 }
 
 function getAssetManifestRecord(
@@ -280,7 +282,7 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
           "output.mp4",
         );
       }
-      updateRenderJobRecord(renderJob, {
+      await updateRenderJobRecord(db, renderJob, {
         status: "stale_source",
         outputArtifactJson: adapterResult.outputArtifact,
         validationResultJson: staleValidation,
@@ -324,7 +326,7 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
         "output.mp4",
       );
     }
-    updateRenderJobRecord(renderJob, {
+    await updateRenderJobRecord(db, renderJob, {
       status: "completed",
       outputArtifactJson: adapterResult.outputArtifact,
       validationResultJson: renderedValidation,
@@ -362,7 +364,7 @@ export async function runRenderGeneration(input: RunRenderGenerationInput) {
       readyValidation,
       errorCode: "render_export_failed",
     });
-    updateRenderJobRecord(renderJob, {
+    await updateRenderJobRecord(db, renderJob, {
       status: "failed",
       validationResultJson: failedValidation,
       executionStateJson: {

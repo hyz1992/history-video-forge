@@ -24,6 +24,7 @@ export async function saveComposeRecord(
     createdAt: input.createdAt ?? new Date(),
   };
 
+  await db.thirdAggregateWriter?.saveCompose(record);
   db.composeRecords.set(record.id, record);
 
   return record;

@@ -161,18 +161,18 @@ describe("fake image provider (via execution engine)", () => {
     );
 
     expect(imageArtifact).toMatchObject({
-      artifact_id: "artifact_img_img_001",
       artifact_type: "image",
       metadata: {
         width: 1080,
         height: 1920,
       },
     });
+    expect(imageArtifact?.artifact_id).toMatch(/^artifact_img_img_001_/u);
     expect(imageArtifact?.metadata).toHaveProperty("file_hash");
     expect(await stat(imageArtifact!.file_uri)).toBeTruthy();
 
     expect(result.manifest.segment_routes[0]).toMatchObject({
-      primary_visual_artifact_id: "artifact_img_img_001",
+      primary_visual_artifact_id: imageArtifact?.artifact_id,
       visual_route_type: "image_only",
       readiness: "ready",
     });

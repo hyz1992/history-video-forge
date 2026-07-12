@@ -30,6 +30,7 @@ export async function saveAssetManifestRecord(
     createdAt: input.createdAt ?? new Date(),
   };
 
+  await db.thirdAggregateWriter?.saveAssetManifest(record);
   db.assetManifestRecords.set(record.id, record);
 
   return record;
