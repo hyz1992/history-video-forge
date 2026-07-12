@@ -89,7 +89,7 @@ ProviderJob schema 已有唯一键 `(assetRunId, executionId, taskId, attemptCou
 - execution engine 继续使用独立 execution Manifest 隔离 provider 运行态；该 Manifest 先作为非 active 历史记录入库，最终再把同 run 的 ProviderJob 重绑到正式 Manifest，满足 Prisma 外键和 owner 校验。
 - 聚焦验证：Assets 主服务 20 项、Compose/API 42 项、Assets 成功与 stale 两项 API 路径均通过；类型检查通过。
 
-已知独立基线：`assets-api` 中 DashScope image-to-video 配置用例当前稳定无法得到 video artifact。该失败在本次状态推进改动前已独立复现，不计为本步骤通过项；进入 ProviderJob 中断恢复/文件协议前必须单独诊断。
+已知独立基线（已解决）：`assets-api` 中 DashScope image-to-video 配置用例曾稳定无法得到 video artifact。根因是显式配置 `duration_sec=7` 后仍按 82 秒 TTS 时长启动分片，实际 payload 变成 14 秒并被测试网关拒绝。现已冻结优先级为 task 参数 > 显式 provider 配置 > TTS 推导；只有未指定时长时才按 TTS 自动分片。Assets API、provider 和 run service 共 45 项测试通过。
 
 ## Render 与 Publish 状态推进切换
 

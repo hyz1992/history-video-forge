@@ -221,12 +221,14 @@ export function createDashscopeImageToVideoProvider(
           )?.metadata as Record<string, unknown> | undefined)?.duration_sec
         : undefined;
 
-      const durationInput =
+      const explicitDurationSec =
         typeof ctx.planTask.parameters.duration_sec === "number"
           ? ctx.planTask.parameters.duration_sec
-          : typeof ttsDurationSec === "number" && ttsDurationSec > 0
-            ? Math.ceil(ttsDurationSec)
-            : options.durationSec;
+          : options.durationSec;
+      const durationInput = explicitDurationSec ??
+        (typeof ttsDurationSec === "number" && ttsDurationSec > 0
+          ? Math.ceil(ttsDurationSec)
+          : undefined);
 
       const durationSec = clampDashscopeImageToVideoDuration(durationInput);
       const resolution =
@@ -243,7 +245,7 @@ export function createDashscopeImageToVideoProvider(
           : options.watermark ?? false;
 
       const splitPlan =
-        typeof ttsDurationSec === "number" && ttsDurationSec > 0
+        explicitDurationSec === undefined && typeof ttsDurationSec === "number" && ttsDurationSec > 0
           ? computeSplitPlan(ttsDurationSec)
           : null;
 
