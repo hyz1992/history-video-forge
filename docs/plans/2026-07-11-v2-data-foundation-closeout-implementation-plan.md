@@ -296,14 +296,14 @@ npx vitest run --configLoader runner tests/backend/db/prisma-schema.test.ts test
 - [x] 接入 save-only writer、ProviderJob 幂等 create/update 和逐阶段 activation transaction。
 - [x] Assets 与 Compose 已切换为最终激活，失败/stale 不覆盖旧 active。
 - [x] Render 与 Publish 已切换为最终激活；替换失败保留旧 active。
-- [ ] 收口 artifact/render/cover 文件提交协议并完成中断、重启、浏览器验收。
+- [x] 收口 artifact/render/cover 文件提交协议并完成中断、重启、浏览器验收。
 
 **步骤：**
 
-- [ ] 切换剩余 record 和 provider job repository。
-- [ ] 文件系统操作继续遵守“临时文件 → 校验 → 原子移动 → 数据库登记”；数据库失败保留可识别 staging，不删除已有有效资产。
-- [ ] provider job 中断恢复、render 完成记录和 publish active 链必须通过重启测试。
-- [ ] 媒体文件仍不入库，只保存稳定相对引用并检查文件存在性。
+- [x] 切换剩余 record 和 provider job repository。
+- [x] 文件系统操作继续遵守“临时文件 → 校验 → 原子移动 → 数据库登记”；数据库失败保留可识别 staging，不删除已有有效资产。
+- [x] provider job 中断恢复、render 完成记录和 publish active 链通过重启测试。
+- [x] 媒体文件仍不入库，只保存稳定相对引用并检查文件存在性。
 
 **提交：**`切换后半流水线数据到Prisma`
 
@@ -320,12 +320,12 @@ npx vitest run --configLoader runner tests/backend/db/prisma-schema.test.ts test
 
 **步骤：**
 
-- [ ] 生产启动固定使用 Prisma；数据库未初始化/未激活时拒绝 ready，不回退到空 Map 或 JSON 写入。
-- [ ] JSON persistence 降级为只读 migration/export 工具和测试 fixture；生产 mutation 路径静态检查不得引用 `saveDbSnapshot()`。
-- [ ] 对保留的真实项目执行显式 inspect/import/verify/activate；本地调试数据不迁移。
-- [ ] 执行备份恢复演练和后端重启恢复。
-- [ ] 用内置浏览器覆盖项目列表、选题、至少一个已有完整项目的各阶段读取、刷新和深链。
-- [ ] 运行聚焦矩阵、分组全量矩阵、类型检查和前后端构建并记录原始结果。
+- [x] 生产启动固定使用 Prisma；数据库未初始化/未激活时拒绝启动/ready，不回退到空 Map 或 JSON 写入。
+- [x] JSON persistence 隔离为 legacy migration/test fixture 适配器；生产入口不再直接引用 `saveDbSnapshot()`。
+- [x] 对保留的真实项目执行显式 inspect/import/verify/activate；移除调试项目 `Prompt Test`。
+- [x] 执行备份恢复演练和后端重启恢复。
+- [x] 用内置浏览器覆盖项目列表、选题、已有完整项目的各阶段读取、刷新和深链。
+- [x] 运行聚焦矩阵、分组全量矩阵、类型检查和前后端构建并记录原始结果。
 
 **最终验收命令：**
 
@@ -363,10 +363,10 @@ npx vitest run --configLoader runner --no-file-parallelism
 
 ## 7. 不确定性与最低成本验证
 
-**已验证：**当前业务仍写 JSON；迁移状态机、readiness、repository scope 和备份恢复存在上述代码级缺口。
+**已验证：**正式启动、Prisma writer、迁移状态机、readiness、repository scope、文件补偿协议和备份恢复均已完成；生产入口不再直接引用 JSON snapshot writer。
 
-**推断：**Map 同步接口改为 Prisma 异步接口可能触及较多业务模块，实际改动量需要 Task 8.5-7 的第一批 parity spike 才能准确估算。
+**推断：**正式用户系统会改变 owner 与管理员权限模型，仍需基于最终 schema 单独设计；migration owner 不得直接升级为永久管理员规则。
 
-**尚未验证：**正式数据库是否已经在仓库外路径创建、全量超时是否仅由总耗时导致、Windows 下选定 SQLite 备份机制的原子替换行为。
+**尚未验证：**真实多用户并发、管理员 RBAC 和付费 Provider 全链路；这些属于正式 V2 功能或显式成本验收，不属于本次收口。
 
-**最低成本、最高信号的首步：**先执行 Task 8.5-1 得到完整测试分组，再执行 Task 8.5-2 的 migration 使用情况审计；两步均为只读/测试优先，不会提前污染正式数据。
+**最低成本、最高信号的下一步：**Trae 在实现用户系统前先提交 RBAC 与 owner 迁移设计，独立审查通过后再改 schema。

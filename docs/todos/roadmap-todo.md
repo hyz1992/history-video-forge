@@ -55,15 +55,15 @@
 - [x] 完成发布交付页发布包生成、编辑、封面、标题候选、描述、标签与导出主流程
 
 ## 进行中
-- [ ] 执行 V2 数据基础 Task 8.5 收口：测试矩阵、schema 复核、迁移状态机、readiness、仓储访问边界、SQLite 备份恢复、Prisma 业务切换与 JSON 写入冻结
-- [ ] V1 高风险稳定化最终全量回归、故障演练和浏览器验收（聚焦回归已通过，全量 Vitest 尚未通过）
+- [x] 完成 V2 数据基础 Task 8.5 收口：测试矩阵、schema 复核、迁移状态机、readiness、仓储访问边界、SQLite 备份恢复、Prisma 业务切换与 JSON 写入冻结
+- [x] 完成 V1 高风险稳定化最终全量回归、故障演练和内置浏览器验收
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 补齐前端 v1 真实浏览器验收矩阵：空态、加载中、成功、失败、刷新、深链、重复操作
 - [ ] 收口当前未归档计划，避免历史 implementation plan 误导新任务
 
 ## 待做
 - [ ] 修正 topic runtime 旧测试对 fingerprint 旧语义的断言
-- [ ] 修正 assets API / assets-run-service 中已有的音色默认值、视频 artifact 和 TTS plan 不可变性失败
+- [x] 修正 assets API / assets-run-service 中已有的音色默认值、视频 artifact 和 TTS plan 不可变性失败
 - [ ] 细化 Event Registry 匹配阈值
 - [ ] 细化 Candidate Cache 生命周期
 - [ ] 设计发布前人工审稿/验收流
