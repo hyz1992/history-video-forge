@@ -5,17 +5,28 @@ import { listProjectSummaries } from "./project-summary.service";
 import {
   guardAdminRoute,
   guardUserRoute,
+  requireOwner,
 } from "../../auth/authorization.js";
+import { requireAdmin, requireUser } from "../../auth/authorization.js";
 
 export const listProjectsController = guardUserRoute(
   (context: RouteContext): AppResponse => {
-    const projects = listProjectSummaries(context.app.db);
+    const user = requireUser(context.auth);
+    const ownerId = user.role === "ADMIN" ? undefined : user.userId;
+    const projects = listProjectSummaries(context.app.db, ownerId);
     return { statusCode: 200, body: projects };
   },
 );
 
 export const getProjectSnapshotController = guardUserRoute(
   async (context: RouteContext): Promise<AppResponse> => {
+    const user = requireUser(context.auth);
+    const project = context.app.db.projects.get(context.params.projectId);
+    if (!project) {
+      return { statusCode: 404, body: { error: "project_not_found" } };
+    }
+    requireOwner(user, project.ownerId);
+
     const snapshot = await getProjectSnapshot(
       context.app.db,
       context.params.projectId,

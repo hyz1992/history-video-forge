@@ -88,10 +88,11 @@ export interface ProjectSummary {
   publish_ready: boolean;
 }
 
-export function listProjectSummaries(db: DbClient): ProjectSummary[] {
+export function listProjectSummaries(db: DbClient, ownerId?: string): ProjectSummary[] {
   const summaries: ProjectSummary[] = [];
 
   for (const project of db.projects.values()) {
+    if (ownerId !== undefined && project.ownerId !== ownerId) continue;
     const topicRecord = project.activeTopicPackageId
       ? db.topicPackages.get(project.activeTopicPackageId) ?? null
       : null;

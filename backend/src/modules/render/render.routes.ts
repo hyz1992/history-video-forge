@@ -1,7 +1,7 @@
 import type { AppInstance, AppResponse, RouteContext } from "../../app";
 import { getProjectById } from "../projects/project.repository";
 import { runRenderGeneration } from "./render-run.service";
-import { guardUserRoute } from "../../auth/authorization.js";
+import { guardOwnedRoute } from "../../auth/authorization.js";
 
 async function generateRenderController(
   context: RouteContext,
@@ -27,6 +27,6 @@ export function registerRenderRoutes(app: AppInstance) {
   app.addRoute(
     "POST",
     "/api/projects/:projectId/render/generate",
-    guardUserRoute(generateRenderController),
+    guardOwnedRoute(generateRenderController),
   );
 }

@@ -3,7 +3,7 @@ import { getProjectById } from "../projects/project.repository";
 import { runAssetsGeneration, registerManualArtifact, acceptArtifact } from "./assets-run.service";
 import { env } from "../../config/env.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
-import { guardUserRoute } from "../../auth/authorization.js";
+import { guardOwnedRoute } from "../../auth/authorization.js";
 import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider.js";
 import { createLlmGateway } from "../../runtime/llm/llm-gateway.js";
 import { createCompositeInteractionLogWriter } from "../../runtime/trace/project-storage.js";
@@ -691,41 +691,41 @@ export function registerAssetsRoutes(app: AppInstance) {
   app.addRoute(
     "POST",
     "/api/projects/:projectId/assets/generate",
-    guardUserRoute(generateAssetsController),
+    guardOwnedRoute(generateAssetsController),
   );
   app.addRoute(
     "POST",
     "/api/projects/:projectId/assets/tasks/:taskId/generate",
-    guardUserRoute(generateTaskController),
+    guardOwnedRoute(generateTaskController),
   );
   app.addRoute(
     "PATCH",
     "/api/projects/:projectId/assets/tasks/:taskId/prompt",
-    guardUserRoute(updateTaskPromptController),
+    guardOwnedRoute(updateTaskPromptController),
   );
   app.addRoute(
     "POST",
     "/api/projects/:projectId/assets/tasks/:taskId/prompt/optimize",
-    guardUserRoute(optimizeTaskPromptController),
+    guardOwnedRoute(optimizeTaskPromptController),
   );
   app.addRoute(
     "POST",
     "/api/projects/:projectId/assets/segments/:segmentId/upgrade-video",
-    guardUserRoute(upgradeSegmentToVideoController),
+    guardOwnedRoute(upgradeSegmentToVideoController),
   );
   app.addRoute(
     "POST",
     "/api/projects/:projectId/assets/tasks/:taskId/artifacts/register",
-    guardUserRoute(registerArtifactController),
+    guardOwnedRoute(registerArtifactController),
   );
   app.addRoute(
     "POST",
     "/api/projects/:projectId/assets/tasks/:taskId/artifacts/upload",
-    guardUserRoute(uploadArtifactController),
+    guardOwnedRoute(uploadArtifactController),
   );
   app.addRoute(
     "POST",
     "/api/projects/:projectId/assets/tasks/:taskId/accept",
-    guardUserRoute(acceptArtifactController),
+    guardOwnedRoute(acceptArtifactController),
   );
 }

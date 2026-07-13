@@ -44,17 +44,14 @@ export function requireAdmin(auth: AuthContext): AuthenticatedAuthContext {
   return user;
 }
 
-export interface OwnerCheckOptions {
-  notFoundCode?: string;
-}
-
 export function requireOwner(
-  auth: AuthContext,
-  _projectId: string,
-  _options: OwnerCheckOptions = {},
-): AuthenticatedAuthContext {
-  const user = requireUser(auth);
-  return user;
+  auth: AuthenticatedAuthContext,
+  projectOwnerId: string,
+): void {
+  if (auth.role === "ADMIN") return;
+  if (projectOwnerId !== auth.userId) {
+    throw new AuthorizationError(404, "project_not_found", "project_not_found");
+  }
 }
 
 export function handleControllerAuthError(error: unknown): AppResponse | null {
@@ -109,4 +106,15 @@ export function guardUserRoute(handler: RouteHandler): RouteHandler {
 
 export function guardAdminRoute(handler: RouteHandler): RouteHandler {
   return guardRoute((context) => { requireAdmin(context.auth); }, handler);
+}
+
+export function guardOwnedRoute(handler: RouteHandler): RouteHandler {
+  return guardRoute((context) => {
+    const user = requireUser(context.auth);
+    const projectId = context.params.projectId;
+    if (!projectId) throw new AuthorizationError(404, "project_not_found", "project_not_found");
+    const project = context.app.db.projects.get(projectId);
+    if (!project) throw new AuthorizationError(404, "project_not_found", "project_not_found");
+    requireOwner(user, project.ownerId);
+  }, handler);
 }

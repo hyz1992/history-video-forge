@@ -13,6 +13,8 @@ import type {
 export interface ProjectRecord {
   id: string;
   name: string;
+  ownerId: string;
+  createdById: string;
   status: string;
   activeTopicPackageId: string | null;
   activeScriptRecordId: string | null;

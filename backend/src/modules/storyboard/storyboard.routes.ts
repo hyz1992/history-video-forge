@@ -3,7 +3,7 @@ import { getProjectById } from "../projects/project.repository";
 import { demoStageGuard } from "../../shared/demo-stage-guard";
 import { runStoryboardGeneration, runStoryboardSegmentRegeneration } from "./storyboard-run.service";
 import { getStoryboardRecordById, saveStoryboardRecord } from "./storyboard-record.repository";
-import { guardUserRoute } from "../../auth/authorization.js";
+import { guardOwnedRoute } from "../../auth/authorization.js";
 
 interface StoryboardGeneratePayload {
   user_feedback?: string;
@@ -121,16 +121,16 @@ export function registerStoryboardRoutes(app: AppInstance) {
   app.addRoute(
     "POST",
     "/api/projects/:projectId/storyboard/generate",
-    guardUserRoute(generateStoryboardController),
+    guardOwnedRoute(generateStoryboardController),
   );
   app.addRoute(
     "PATCH",
     "/api/projects/:projectId/storyboard/strategy",
-    guardUserRoute(updateSegmentStrategyController),
+    guardOwnedRoute(updateSegmentStrategyController),
   );
   app.addRoute(
     "POST",
     "/api/projects/:projectId/storyboard/segments/:segmentId/regen",
-    guardUserRoute(regenerateSegmentController),
+    guardOwnedRoute(regenerateSegmentController),
   );
 }

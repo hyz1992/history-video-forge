@@ -185,3 +185,63 @@ describe("app.inject auth integration", () => {
     expect(response.statusCode).toBe(401);
   });
 });
+
+describe("cross-user owner isolation", () => {
+  it("user A creates a project, user B cannot access its snapshot", async () => {
+    const app = buildApp({ skipSnapshotLoad: true, storageBaseDir: process.cwd() });
+    const userA = createAuthenticatedAuthContext({ userId: "user-a", username: "a", displayName: "A", role: "USER", sessionId: "s-a" });
+    const userB = createAuthenticatedAuthContext({ userId: "user-b", username: "b", displayName: "B", role: "USER", sessionId: "s-b" });
+
+    const created = await app.inject({ method: "POST", url: "/api/projects", payload: { name: "A项目" }, auth: userA });
+    const projectId = created.json().project_id as string;
+
+    const bAccess = await app.inject({ method: "GET", url: `/api/projects/${projectId}`, auth: userB });
+    expect(bAccess.statusCode).toBe(404);
+    expect(bAccess.json()).toMatchObject({ error: "project_not_found" });
+
+    const aAccess = await app.inject({ method: "GET", url: `/api/projects/${projectId}`, auth: userA });
+    expect(aAccess.statusCode).toBe(200);
+  });
+
+  it("user A creates a project, user B's project list does not include it", async () => {
+    const app = buildApp({ skipSnapshotLoad: true, storageBaseDir: process.cwd() });
+    const userA = createAuthenticatedAuthContext({ userId: "user-a", username: "a", displayName: "A", role: "USER", sessionId: "s-a" });
+    const userB = createAuthenticatedAuthContext({ userId: "user-b", username: "b", displayName: "B", role: "USER", sessionId: "s-b" });
+
+    const created = await app.inject({ method: "POST", url: "/api/projects", payload: { name: "A项目" }, auth: userA });
+    const projectId = created.json().project_id as string;
+
+    const bList = await app.inject({ method: "GET", url: "/api/projects", auth: userB });
+    const bProjects = bList.json() as Array<{ project_id: string }>;
+    expect(bProjects.find((p) => p.project_id === projectId)).toBeUndefined();
+
+    const aList = await app.inject({ method: "GET", url: "/api/projects", auth: userA });
+    const aProjects = aList.json() as Array<{ project_id: string }>;
+    expect(aProjects.find((p) => p.project_id === projectId)).toBeDefined();
+  });
+
+  it("admin can access any user's project snapshot", async () => {
+    const app = buildApp({ skipSnapshotLoad: true, storageBaseDir: process.cwd() });
+    const userA = createAuthenticatedAuthContext({ userId: "user-a", username: "a", displayName: "A", role: "USER", sessionId: "s-a" });
+    const admin = createAuthenticatedAuthContext({ userId: "admin-x", username: "admin", displayName: "Admin", role: "ADMIN", sessionId: "s-admin" });
+
+    const created = await app.inject({ method: "POST", url: "/api/projects", payload: { name: "A项目" }, auth: userA });
+    const projectId = created.json().project_id as string;
+
+    const adminAccess = await app.inject({ method: "GET", url: `/api/projects/${projectId}`, auth: admin });
+    expect(adminAccess.statusCode).toBe(200);
+  });
+
+  it("requires authenticated user to access stage generation on a project", async () => {
+    const app = buildApp({ skipSnapshotLoad: true, storageBaseDir: process.cwd() });
+    const userA = createAuthenticatedAuthContext({ userId: "user-a", username: "a", displayName: "A", role: "USER", sessionId: "s-a" });
+    const userB = createAuthenticatedAuthContext({ userId: "user-b", username: "b", displayName: "B", role: "USER", sessionId: "s-b" });
+
+    const created = await app.inject({ method: "POST", url: "/api/projects", payload: { name: "A项目" }, auth: userA });
+    const projectId = created.json().project_id as string;
+
+    const bAttempt = await app.inject({ method: "POST", url: `/api/projects/${projectId}/script/generate`, payload: {}, auth: userB });
+    expect(bAttempt.statusCode).toBe(404);
+    expect(bAttempt.json()).toMatchObject({ error: "project_not_found" });
+  });
+});

@@ -13,7 +13,7 @@ export class PrismaFirstAggregateWriter {
 
   async createProject(record: ProjectRecord): Promise<void> {
     await this.client.project.create({ data: {
-      id: record.id, ownerId: this.ownerId, createdById: this.ownerId, name: record.name, status: record.status,
+      id: record.id, ownerId: record.ownerId, createdById: record.createdById, name: record.name, status: record.status,
       storageKey: record.id, storageDisplayName: record.storageDisplayName, storageRenameLocked: record.storageRenameLocked,
     } });
   }

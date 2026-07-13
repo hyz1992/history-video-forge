@@ -24,7 +24,8 @@ export async function hydrateFirstAggregates(
 
   for (const row of projects) {
     const record: ProjectRecord = {
-      id: row.id, name: row.name, status: row.status, activeTopicPackageId: row.activeTopicPackageId,
+      id: row.id, name: row.name, ownerId: row.ownerId, createdById: row.createdById,
+      status: row.status, activeTopicPackageId: row.activeTopicPackageId,
       activeScriptRecordId: row.activeScriptRecordId, activeStoryboardRecordId: row.activeStoryboardRecordId,
       activeAssetPlanRecordId: row.activeAssetPlanRecordId, activeAssetManifestRecordId: row.activeAssetManifestRecordId,
       activeComposeRecordId: row.activeComposeRecordId, activeRenderJobRecordId: row.activeRenderJobRecordId,

@@ -4,6 +4,7 @@ import type { AppResponse, RouteContext } from "../../app";
 import { createProject, getProjectById } from "../projects/project.repository";
 import { demoStageGuard } from "../../shared/demo-stage-guard";
 import { normalizeEventInput } from "./event-normalizer";
+import { requireUser } from "../../auth/authorization.js";
 import {
   isProviderContentFilterError,
   recommendTopicCandidatesWithTrace,
@@ -196,8 +197,11 @@ function validateTopicRecommendationSeed(
 export async function createProjectController(
   context: RouteContext,
 ): Promise<AppResponse> {
+  const user = requireUser(context.auth);
   const project = await createProject(context.app.db, {
     name: context.payload?.name ?? "Untitled Project",
+    ownerId: user.userId,
+    createdById: user.userId,
   });
 
   return {

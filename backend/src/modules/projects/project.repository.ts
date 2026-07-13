@@ -4,6 +4,8 @@ import { deleteProjectStorage, saveProjectMetadata } from "../../db/persistence.
 
 export interface CreateProjectInput {
   name: string;
+  ownerId?: string;
+  createdById?: string;
 }
 
 export async function createProject(
@@ -11,9 +13,12 @@ export async function createProject(
   input: CreateProjectInput,
 ): Promise<ProjectRecord> {
   const now = new Date();
+  const effectiveOwnerId = input.ownerId ?? db.firstAggregateWriter?.ownerId ?? "system";
   const project: ProjectRecord = {
     id: db.generateId(),
     name: input.name,
+    ownerId: effectiveOwnerId,
+    createdById: input.createdById ?? effectiveOwnerId,
     status: "topic_pending",
     activeTopicPackageId: null,
     activeScriptRecordId: null,
