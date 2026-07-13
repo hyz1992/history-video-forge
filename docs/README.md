@@ -21,6 +21,7 @@
 - V1 风险修复与 V2 数据基础收口已经完成；正式启动固定使用已初始化、已激活的 Prisma 数据库，旧 JSON persistence 仅保留为迁移/测试 fixture 适配器。
 - 2026-07-12 分组全量矩阵覆盖 197 个测试文件、1068 个用例并全部通过；前后端构建、SQLite 备份恢复、Prisma 重启恢复和内置浏览器深链验收通过。
 - 正式 V2 产品功能尚未开始；下一阶段由 Trae 主导功能开发，重大数据合同、权限模型和内容策略设计先做独立审查。
+- V2 总体设计、用户系统/管理员权限/项目隔离详细设计、验收矩阵、schema 适用性审查、待决策/风险和 Step 3-10 roadmap 已形成草案；当前入口见 [Plans 状态说明](./plans/README.md) 的“2026-07-13 V2 设计草案索引”。
 
 - 全链路 v1 已进入端到端交付闭环：`topic -> script -> storyboard -> asset planning -> assets -> compose/render -> publish`。
 - `topic + script` 第一阶段已达到当前及格标准，可以暂时冻结。
@@ -51,6 +52,7 @@
 13. [视频流水线工程经验笔记](./records/2026-05-09-video-pipeline-engineering-notes.md)
 14. [Plans 状态说明](./plans/README.md)
 15. [Records 状态说明](./records/README.md)
+16. 若进入 V2 产品功能设计或实现，再按 [Plans 状态说明](./plans/README.md) 中的 V2 草案索引阅读对应文档。
 
 ---
 
@@ -114,6 +116,7 @@
 ### 计划与执行
 
 - [Plans 状态说明](./plans/README.md)（含当前未归档计划列表与历史归档索引）
+- V2 当前设计草案见 [Plans 状态说明](./plans/README.md) 的“2026-07-13 V2 设计草案索引”；这些文档是进入用户系统、管理员权限、项目隔离及后续 V2 功能前的审查入口。
 - [Topic + Script 历史计划归档](./plans/archive/topic-script/)
 - [当前 Todo](./todos/roadmap-todo.md)
 

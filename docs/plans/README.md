@@ -6,14 +6,15 @@
 
 ## 当前状态
 
-截至 2026-07-11：
+截至 2026-07-13：
 
-- V2 Prisma 工具链、基线 schema、旧快照迁移脚手架和数据库 readiness 的核心能力已经实现。Task 8.5-1 已修复 Prisma CLI 测试异常耗时，并取得完整串行基线：187 文件、1031 项、987 通过、44 个既有/此前未枚举失败；全量约 6 分 13 秒，旧的 124 秒属于外部运行上限不足。近期提交审查同时确认业务仍以 Map/JSON 为实际主存储，迁移状态机、readiness、仓储权限默认值和 SQLite 备份恢复仍未收口。
-- 当前 V2 下一执行入口为 [V2 数据基础 Task 8.5 收口实施计划](./2026-07-11-v2-data-foundation-closeout-implementation-plan.md)。Task 8.5 完成前不进入用户系统实现。
+- V2 数据基础 Task 8.5 已完成收口：测试矩阵、schema 复核、迁移状态机、readiness、仓储访问边界、SQLite 备份恢复、Prisma 业务切换、JSON 写入冻结、重启恢复和内置浏览器深链验收均已有记录。
+- Task 8.5 收口证据见 [V2 数据基础 Task 8.5 收口实施计划](./2026-07-11-v2-data-foundation-closeout-implementation-plan.md) 和 [V2 数据基础收口验收记录](../records/2026-07-12-v2-data-foundation-closeout-verification.md)。
+- 正式 V2 产品功能尚未开始；下一阶段入口是 V2 用户系统、管理员权限与项目隔离。进入实现前，应先审查并确认 [V2 总体设计](./2026-07-13-v2-overall-design.md) 与 [V2 用户系统、管理员权限与项目隔离详细设计](./2026-07-13-v2-auth-project-isolation-design.md)，不得直接跳过设计审查改 schema 或接 auth。
 
 - [V1 高风险稳定化实施计划](./2026-07-10-v1-high-risk-stabilization-implementation-plan.md) 的主要代码任务已完成；其全量回归超时和故障演练缺口已并入 Task 8.5 的测试与切换闸门，不再作为独立的下一执行入口。
-- 该计划的主要代码任务已完成并分别提交；最终全量回归、故障演练和浏览器验收仍未完成，计划暂不归档。
-- 本轮稳定化只做 V1 止血和恢复能力，不接入 Prisma、正式用户系统或新的内容领域，避免与 V2 基础设施重复建设。
+- 该计划的主要代码任务、最终全量回归、故障演练和内置浏览器验收已完成；计划暂不归档，直到当前未归档计划收口策略明确。
+- 本轮稳定化只做 V1 止血和恢复能力，不接入正式用户系统或新的内容领域，避免与 V2 功能建设混在同一任务中。
 
 - 全链路 v1 已进入端到端交付闭环：`topic -> script -> storyboard -> asset planning -> assets -> compose/render -> publish`。
 - 后端 v1 已覆盖 storyboard、asset planning、assets、compose、render/export、publish package。
@@ -26,6 +27,19 @@
 - 既有 topic/script/harness/UI acceptance 计划已归档到 [archive/topic-script](./archive/topic-script/)。
 - archive 中的计划只作为历史证据和追溯材料，不是当前任务入口。
 - 新 agent 不应从 archive 中挑选旧 implementation plan 继续执行。
+
+## 2026-07-13 V2 设计草案索引
+
+以下文档是正式 V2 产品功能进入实施前的当前设计草案入口；尚未被正式架构文档吸收前，不应视为已冻结实现规范：
+
+- [V2 总体设计](./2026-07-13-v2-overall-design.md)：当前实现审计、V2 十项范围、模块边界、数据流、roadmap、风险和自审。
+- [V2 用户系统、管理员权限与项目隔离详细设计](./2026-07-13-v2-auth-project-isolation-design.md)：第一个子项目 P0.1/P0.2 的权限、会话、owner 隔离、API/middleware、迁移 owner 和验收设计。
+- [V2 验收矩阵与第一个子项目实施计划草案](./2026-07-13-v2-acceptance-and-implementation-plan.md)：V2 总体验收矩阵和用户系统实施任务拆分草案。
+- [V2 Prisma Schema 适用性审查](./2026-07-13-v2-prisma-schema-applicability-review.md)：当前 Prisma schema 对 V2 P0.1/P0.2 的适用性结论与后续新增实体范围。
+- [V2 待决策清单与风险登记](./2026-07-13-v2-decisions-and-risks.md)：人工决策项、风险登记和优先级。
+- [V2 后续 Step 3-10 Roadmap 留痕](./2026-07-13-v2-roadmap-step3-10.md)：多供应商、筛选、事件库、偏好、prompt 治理、LLM 性能、内容策略和神话扩展的后续路线。
+
+进入 V2 用户系统实现前，还应阅读 [Trae V2 开发交接说明](../records/2026-07-12-trae-v2-handoff.md)。其中明确 migration owner 只是过渡身份，重大 Prisma schema、管理员权限、ProviderJob 或文件提交协议变更必须先做独立审查。
 
 ## 使用规则
 
