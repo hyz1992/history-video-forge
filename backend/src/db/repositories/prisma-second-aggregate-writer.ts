@@ -41,7 +41,7 @@ export class PrismaSecondAggregateWriter {
   async activateScript(project: ProjectRecord, record: ScriptRecord): Promise<void> {
     await this.client.$transaction(async (tx) => {
       const [scoped, topic, stored] = await Promise.all([
-        tx.project.findFirst({ where: { id: project.id, ownerId: this.ownerId }, select: { id: true } }),
+        tx.project.findFirst({ where: { id: project.id, ownerId: project.ownerId }, select: { id: true } }),
         tx.topicPackage.findUnique({ where: { id: record.topicPackageId }, select: { projectId: true } }),
         tx.scriptRecord.findUnique({ where: { id: record.id }, select: { projectId: true } }),
       ]);
@@ -60,7 +60,7 @@ export class PrismaSecondAggregateWriter {
   async activateStoryboard(project: ProjectRecord, record: StoryboardRecord): Promise<void> {
     await this.client.$transaction(async (tx) => {
       const [scoped, topic, script, stored] = await Promise.all([
-        tx.project.findFirst({ where: { id: project.id, ownerId: this.ownerId }, select: { id: true } }),
+        tx.project.findFirst({ where: { id: project.id, ownerId: project.ownerId }, select: { id: true } }),
         tx.topicPackage.findUnique({ where: { id: record.topicPackageId }, select: { projectId: true } }),
         tx.scriptRecord.findUnique({ where: { id: record.scriptRecordId }, select: { projectId: true } }),
         tx.storyboardRecord.findUnique({ where: { id: record.id }, select: { projectId: true } }),
@@ -80,7 +80,7 @@ export class PrismaSecondAggregateWriter {
   async activateAssetPlan(project: ProjectRecord, record: AssetPlanRecord): Promise<void> {
     await this.client.$transaction(async (tx) => {
       const [scoped, topic, script, storyboard, stored] = await Promise.all([
-        tx.project.findFirst({ where: { id: project.id, ownerId: this.ownerId }, select: { id: true } }),
+        tx.project.findFirst({ where: { id: project.id, ownerId: project.ownerId }, select: { id: true } }),
         tx.topicPackage.findUnique({ where: { id: record.topicPackageId }, select: { projectId: true } }),
         tx.scriptRecord.findUnique({ where: { id: record.scriptRecordId }, select: { projectId: true } }),
         tx.storyboardRecord.findUnique({ where: { id: record.storyboardRecordId }, select: { projectId: true } }),

@@ -30,7 +30,8 @@ export async function saveAssetManifestRecord(
     createdAt: input.createdAt ?? new Date(),
   };
 
-  await db.thirdAggregateWriter?.saveAssetManifest(record);
+  const projectOwnerId = db.projects.get(record.projectId)?.ownerId ?? "system";
+  await db.thirdAggregateWriter?.saveAssetManifest(record, projectOwnerId);
   db.assetManifestRecords.set(record.id, record);
 
   return record;

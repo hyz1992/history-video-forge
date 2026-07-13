@@ -286,11 +286,11 @@ export interface DbClient {
     activateAssetPlan(project: ProjectRecord, record: AssetPlanRecord): Promise<void>;
   };
   thirdAggregateWriter?: {
-    saveAssetManifest(record: AssetManifestRecord): Promise<void>;
-    saveCompose(record: ComposeRecord): Promise<void>;
-    saveRender(record: RenderJobRecord): Promise<void>;
-    savePublish(record: PublishPackageRecord): Promise<void>;
-    saveProviderJob(record: AssetProviderJobRecord): Promise<AssetProviderJobRecord>;
+    saveAssetManifest(record: AssetManifestRecord, projectOwnerId: string): Promise<void>;
+    saveCompose(record: ComposeRecord, projectOwnerId: string): Promise<void>;
+    saveRender(record: RenderJobRecord, projectOwnerId: string): Promise<void>;
+    savePublish(record: PublishPackageRecord, projectOwnerId: string): Promise<void>;
+    saveProviderJob(record: AssetProviderJobRecord, projectOwnerId: string): Promise<AssetProviderJobRecord>;
     activateAssetManifest(project: ProjectRecord, record: AssetManifestRecord): Promise<void>;
     activateCompose(project: ProjectRecord, record: ComposeRecord): Promise<void>;
     activateRender(project: ProjectRecord, record: RenderJobRecord): Promise<void>;

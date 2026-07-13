@@ -24,7 +24,8 @@ export async function saveComposeRecord(
     createdAt: input.createdAt ?? new Date(),
   };
 
-  await db.thirdAggregateWriter?.saveCompose(record);
+  const projectOwnerId = db.projects.get(record.projectId)?.ownerId ?? "system";
+  await db.thirdAggregateWriter?.saveCompose(record, projectOwnerId);
   db.composeRecords.set(record.id, record);
 
   return record;

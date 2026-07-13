@@ -30,7 +30,8 @@ export async function saveRenderJobRecord(
     updatedAt: input.updatedAt ?? now,
   };
 
-  await db.thirdAggregateWriter?.saveRender(record);
+  const projectOwnerId = db.projects.get(record.projectId)?.ownerId ?? "system";
+  await db.thirdAggregateWriter?.saveRender(record, projectOwnerId);
   db.renderJobRecords.set(record.id, record);
 
   return record;

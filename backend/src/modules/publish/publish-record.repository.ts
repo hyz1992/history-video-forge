@@ -29,7 +29,8 @@ export async function savePublishPackageRecord(
     updatedAt: input.updatedAt ?? now,
   };
 
-  await db.thirdAggregateWriter?.savePublish(record);
+  const projectOwnerId = db.projects.get(record.projectId)?.ownerId ?? "system";
+  await db.thirdAggregateWriter?.savePublish(record, projectOwnerId);
   db.publishPackageRecords.set(record.id, record);
 
   return record;

@@ -242,7 +242,7 @@ export async function startServer(options?: {
       ? new PrismaSecondAggregateWriter(prismaClient, firstAggregateWriter.ownerId)
       : undefined,
     thirdAggregateWriter: prismaClient && firstAggregateWriter
-      ? new PrismaThirdAggregateWriter(prismaClient, firstAggregateWriter.ownerId)
+      ? new PrismaThirdAggregateWriter(prismaClient)
       : undefined,
     databaseReadiness: prismaClient
       ? () => checkPrismaReadiness(prismaClient)

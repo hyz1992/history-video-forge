@@ -148,7 +148,8 @@ async function updateRenderJobRecord(
   Object.assign(record, updates, {
     updatedAt: new Date(),
   });
-  await db.thirdAggregateWriter?.saveRender(record);
+  const projectOwnerId = db.projects.get(record.projectId)?.ownerId ?? "system";
+  await db.thirdAggregateWriter?.saveRender(record, projectOwnerId);
 }
 
 function getAssetManifestRecord(

@@ -928,7 +928,8 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
       if (job.assetManifestRecordId !== executionManifestRecordId || job.assetRunId !== runId) continue;
       job.assetManifestRecordId = assetManifestRecord.id;
       job.updatedAt = new Date();
-      const persisted = await db.thirdAggregateWriter?.saveProviderJob(job) ?? job;
+      const projectOwnerId = db.projects.get(assetManifestRecord.projectId)?.ownerId ?? "system";
+      const persisted = await db.thirdAggregateWriter?.saveProviderJob(job, projectOwnerId) ?? job;
       if (persisted.id !== job.id) db.assetProviderJobRecords.delete(job.id);
       db.assetProviderJobRecords.set(persisted.id, persisted);
     }

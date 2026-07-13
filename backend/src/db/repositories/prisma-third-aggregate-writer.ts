@@ -15,35 +15,35 @@ const publishData = (record: PublishPackageRecord) => ({ projectId: record.proje
 const providerJobData = (record: AssetProviderJobRecord) => ({ assetManifestRecordId: record.assetManifestRecordId, assetRunId: record.assetRunId, executionId: record.executionId, taskId: record.taskId, providerType: record.providerType, providerName: record.providerName, providerJobId: record.providerJobId, status: record.status, attemptCount: record.attemptCount, rawRequestJson: record.rawRequestJson as never, rawResponseJson: record.rawResponseJson as never, errorCode: record.errorCode, errorMessage: record.errorMessage, submittedAt: record.submittedAt, lastPolledAt: record.lastPolledAt, completedAt: record.completedAt });
 
 export class PrismaThirdAggregateWriter {
-  constructor(private readonly client: AppPrismaClient, private readonly ownerId: string) {}
+  constructor(private readonly client: AppPrismaClient) {}
 
-  private async assertProjectScope(projectId: string): Promise<void> {
-    const scoped = await this.client.project.findFirst({ where: { id: projectId, ownerId: this.ownerId }, select: { id: true } });
+  private async assertProjectScope(projectId: string, ownerId: string): Promise<void> {
+    const scoped = await this.client.project.findFirst({ where: { id: projectId, ownerId }, select: { id: true } });
     if (!scoped) throw new Error("project_scope_denied");
   }
 
-  async saveAssetManifest(record: AssetManifestRecord): Promise<void> {
-    await this.assertProjectScope(record.projectId);
+  async saveAssetManifest(record: AssetManifestRecord, projectOwnerId: string): Promise<void> {
+    await this.assertProjectScope(record.projectId, projectOwnerId);
     const data = manifestData(record);
     await this.client.assetManifestRecord.upsert({ where: { id: record.id }, create: { id: record.id, ...data, createdAt: record.createdAt }, update: data });
   }
-  async saveCompose(record: ComposeRecord): Promise<void> {
-    await this.assertProjectScope(record.projectId);
+  async saveCompose(record: ComposeRecord, projectOwnerId: string): Promise<void> {
+    await this.assertProjectScope(record.projectId, projectOwnerId);
     const data = composeData(record);
     await this.client.composeRecord.upsert({ where: { id: record.id }, create: { id: record.id, ...data, createdAt: record.createdAt }, update: data });
   }
-  async saveRender(record: RenderJobRecord): Promise<void> {
-    await this.assertProjectScope(record.projectId);
+  async saveRender(record: RenderJobRecord, projectOwnerId: string): Promise<void> {
+    await this.assertProjectScope(record.projectId, projectOwnerId);
     const data = renderData(record);
     await this.client.renderJobRecord.upsert({ where: { id: record.id }, create: { id: record.id, ...data, createdAt: record.createdAt, updatedAt: record.updatedAt }, update: data });
   }
-  async savePublish(record: PublishPackageRecord): Promise<void> {
-    await this.assertProjectScope(record.projectId);
+  async savePublish(record: PublishPackageRecord, projectOwnerId: string): Promise<void> {
+    await this.assertProjectScope(record.projectId, projectOwnerId);
     const data = publishData(record);
     await this.client.publishPackageRecord.upsert({ where: { id: record.id }, create: { id: record.id, ...data, createdAt: record.createdAt, updatedAt: record.updatedAt }, update: data });
   }
-  async saveProviderJob(record: AssetProviderJobRecord): Promise<AssetProviderJobRecord> {
-    const scopedManifest = await this.client.assetManifestRecord.findFirst({ where: { id: record.assetManifestRecordId, project: { ownerId: this.ownerId } }, select: { id: true } });
+  async saveProviderJob(record: AssetProviderJobRecord, projectOwnerId: string): Promise<AssetProviderJobRecord> {
+    const scopedManifest = await this.client.assetManifestRecord.findFirst({ where: { id: record.assetManifestRecordId, project: { ownerId: projectOwnerId } }, select: { id: true } });
     if (!scopedManifest) throw new Error("asset_manifest_scope_denied");
     const data = providerJobData(record);
     const row = await this.client.assetProviderJobRecord.upsert({
@@ -57,7 +57,7 @@ export class PrismaThirdAggregateWriter {
   async activateAssetManifest(project: ProjectRecord, record: AssetManifestRecord): Promise<void> {
     await this.client.$transaction(async (tx) => {
       const [scoped, topic, script, storyboard, plan, stored] = await Promise.all([
-        tx.project.findFirst({ where: { id: project.id, ownerId: this.ownerId }, select: { activeAssetPlanRecordId: true } }),
+        tx.project.findFirst({ where: { id: project.id, ownerId: project.ownerId }, select: { activeAssetPlanRecordId: true } }),
         tx.topicPackage.findUnique({ where: { id: record.topicPackageId }, select: { projectId: true } }),
         tx.scriptRecord.findUnique({ where: { id: record.scriptRecordId }, select: { projectId: true } }),
         tx.storyboardRecord.findUnique({ where: { id: record.storyboardRecordId }, select: { projectId: true } }),
@@ -74,7 +74,7 @@ export class PrismaThirdAggregateWriter {
   async activateCompose(project: ProjectRecord, record: ComposeRecord): Promise<void> {
     await this.client.$transaction(async (tx) => {
       const [scoped, manifest, stored] = await Promise.all([
-        tx.project.findFirst({ where: { id: project.id, ownerId: this.ownerId }, select: { activeAssetManifestRecordId: true } }),
+        tx.project.findFirst({ where: { id: project.id, ownerId: project.ownerId }, select: { activeAssetManifestRecordId: true } }),
         tx.assetManifestRecord.findUnique({ where: { id: record.assetManifestRecordId }, select: { projectId: true } }),
         tx.composeRecord.findUnique({ where: { id: record.id }, select: { projectId: true } }),
       ]);
@@ -88,7 +88,7 @@ export class PrismaThirdAggregateWriter {
   async activateRender(project: ProjectRecord, record: RenderJobRecord): Promise<void> {
     await this.client.$transaction(async (tx) => {
       const [scoped, compose, manifest, stored] = await Promise.all([
-        tx.project.findFirst({ where: { id: project.id, ownerId: this.ownerId }, select: { activeComposeRecordId: true } }),
+        tx.project.findFirst({ where: { id: project.id, ownerId: project.ownerId }, select: { activeComposeRecordId: true } }),
         tx.composeRecord.findUnique({ where: { id: record.composeRecordId }, select: { projectId: true, assetManifestRecordId: true } }),
         tx.assetManifestRecord.findUnique({ where: { id: record.assetManifestRecordId }, select: { projectId: true } }),
         tx.renderJobRecord.findUnique({ where: { id: record.id }, select: { projectId: true } }),
@@ -103,7 +103,7 @@ export class PrismaThirdAggregateWriter {
   async activatePublish(project: ProjectRecord, record: PublishPackageRecord): Promise<void> {
     await this.client.$transaction(async (tx) => {
       const [scoped, render, topic, script, storyboard, manifest, stored] = await Promise.all([
-        tx.project.findFirst({ where: { id: project.id, ownerId: this.ownerId }, select: { activeRenderJobRecordId: true } }),
+        tx.project.findFirst({ where: { id: project.id, ownerId: project.ownerId }, select: { activeRenderJobRecordId: true } }),
         tx.renderJobRecord.findUnique({ where: { id: record.renderJobRecordId }, select: { projectId: true, assetManifestRecordId: true } }),
         tx.topicPackage.findUnique({ where: { id: record.topicPackageId }, select: { projectId: true } }),
         tx.scriptRecord.findUnique({ where: { id: record.scriptRecordId }, select: { projectId: true } }),

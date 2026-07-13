@@ -55,7 +55,9 @@ export async function createAssetProviderJobRecord(
     updatedAt: now,
   };
 
-  const persisted = await db.thirdAggregateWriter?.saveProviderJob(record) ?? record;
+  const manifestProjectId = db.assetManifestRecords.get(record.assetManifestRecordId)?.projectId;
+  const projectOwnerId = manifestProjectId ? db.projects.get(manifestProjectId)?.ownerId ?? "system" : "system";
+  const persisted = await db.thirdAggregateWriter?.saveProviderJob(record, projectOwnerId) ?? record;
   db.assetProviderJobRecords.set(persisted.id, persisted);
 
   return persisted;
@@ -82,7 +84,9 @@ export async function updateAssetProviderJobRecord(
     updatedAt: now,
   };
 
-  const persisted = await db.thirdAggregateWriter?.saveProviderJob(updated) ?? updated;
+  const manifestProjectId = db.assetManifestRecords.get(updated.assetManifestRecordId)?.projectId;
+  const projectOwnerId = manifestProjectId ? db.projects.get(manifestProjectId)?.ownerId ?? "system" : "system";
+  const persisted = await db.thirdAggregateWriter?.saveProviderJob(updated, projectOwnerId) ?? updated;
   db.assetProviderJobRecords.set(persisted.id, persisted);
 
   return persisted;

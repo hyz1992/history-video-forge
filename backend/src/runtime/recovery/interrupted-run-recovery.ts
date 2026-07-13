@@ -93,25 +93,29 @@ export async function recoverAndPersistInterruptedRuns(
     }
     if (project.activeAssetManifestRecordId) {
       const record = db.assetManifestRecords.get(project.activeAssetManifestRecordId);
-      if (record) await db.thirdAggregateWriter?.saveAssetManifest(record);
+      if (record) await db.thirdAggregateWriter?.saveAssetManifest(record, project.ownerId);
     }
     if (project.activeComposeRecordId) {
       const record = db.composeRecords.get(project.activeComposeRecordId);
-      if (record) await db.thirdAggregateWriter?.saveCompose(record);
+      if (record) await db.thirdAggregateWriter?.saveCompose(record, project.ownerId);
     }
     if (project.activeRenderJobRecordId) {
       const record = db.renderJobRecords.get(project.activeRenderJobRecordId);
-      if (record) await db.thirdAggregateWriter?.saveRender(record);
+      if (record) await db.thirdAggregateWriter?.saveRender(record, project.ownerId);
     }
     if (project.activePublishPackageRecordId) {
       const record = db.publishPackageRecords.get(project.activePublishPackageRecordId);
-      if (record) await db.thirdAggregateWriter?.savePublish(record);
+      if (record) await db.thirdAggregateWriter?.savePublish(record, project.ownerId);
     }
   }
 
   for (const jobId of result.recoveredProviderJobIds) {
     const job = db.assetProviderJobRecords.get(jobId);
-    if (job) await db.thirdAggregateWriter?.saveProviderJob(job);
+    if (job) {
+      const manifestProjectId = db.assetManifestRecords.get(job.assetManifestRecordId)?.projectId;
+      const projectOwnerId = manifestProjectId ? db.projects.get(manifestProjectId)?.ownerId ?? "system" : "system";
+      await db.thirdAggregateWriter?.saveProviderJob(job, projectOwnerId);
+    }
   }
 
   return result;
