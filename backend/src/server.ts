@@ -128,7 +128,7 @@ export function createHttpServer(
       ? await applyAuthMiddleware({ sessionStore }, request).catch(() => ({
           auth: createAnonymousAuthContext(),
         }))
-      : undefined;
+      : { auth: createAnonymousAuthContext() };
 
     // 生产模式：托管前端静态资源（单端口部署）
     if (canServeStatic && request.method === "GET" && !requestUrl.pathname.startsWith("/api")) {
@@ -143,7 +143,7 @@ export function createHttpServer(
     const fileMatch = matchFileRoute(request.method, requestUrl.pathname);
     if (fileMatch) {
       try {
-        await handleFileRoute(fileMatch, response, app);
+        await handleFileRoute(fileMatch, response, app, authResult.auth);
       } catch (error) {
         response.statusCode = 500;
         response.setHeader("content-type", "application/json");
