@@ -8,7 +8,7 @@ const snapshotState = vi.hoisted(() => ({
 }));
 
 function isSnapshotPath(path: unknown): boolean {
-  return /storage[\\/]db-snapshot\.json$/.test(String(path));
+  return /storage[\\/]db-snapshot\.json(\.bak)?$/.test(String(path));
 }
 
 vi.mock("node:fs", async (importOriginal) => {

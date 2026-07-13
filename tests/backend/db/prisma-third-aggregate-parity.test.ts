@@ -30,7 +30,7 @@ async function seedChain(client: AppPrismaClient, prefix: string, ownerId: strin
 }
 
 describe("third aggregate Prisma hydration parity", () => {
-  it("restores downstream records and provider jobs only for the selected owner", async () => {
+  it("restores downstream records and provider jobs for all owners (multi-user hydration)", async () => {
     const root = mkdtempSync(join(tmpdir(), "svf2-third-aggregate-"));
     const path = join(root, "test.db");
     const sqlite = new Database(path); applyAllDatabaseMigrations(sqlite); sqlite.close();
@@ -43,7 +43,7 @@ describe("third aggregate Prisma hydration parity", () => {
       const owned = await seedChain(client, "owned", "owner");
       const foreign = await seedChain(client, "foreign", "other");
       const db = createDbClient();
-      await hydrateFirstAggregates(db, new Map(), client, { storageRoot: root, ownerId: "owner" });
+      await hydrateFirstAggregates(db, new Map(), client, { storageRoot: root });
       await hydrateSecondAggregates(db, client);
       await hydrateThirdAggregates(db, client);
 
@@ -52,8 +52,9 @@ describe("third aggregate Prisma hydration parity", () => {
       expect(db.renderJobRecords.get(owned.render)).toMatchObject({ status: "completed", outputArtifactJson: { file_uri: "renders/output.mp4" } });
       expect(db.publishPackageRecords.get(owned.publish)).toMatchObject({ packageJson: { title: "package" } });
       expect(db.assetProviderJobRecords.get(owned.job)).toMatchObject({ status: "running", rawRequestJson: { prompt: "x" }, submittedAt: new Date("2026-07-12T01:02:03.000Z") });
-      expect(db.assetManifestRecords.has(foreign.manifest)).toBe(false);
-      expect(db.assetProviderJobRecords.has(foreign.job)).toBe(false);
+      expect(db.assetManifestRecords.get(foreign.manifest)).toBeDefined();
+      expect(db.assetProviderJobRecords.get(foreign.job)).toBeDefined();
+      expect(db.projects.get(foreign.project)?.ownerId).toBe("other");
     } finally {
       await client.$disconnect();
       rmSync(root, { recursive: true, force: true });

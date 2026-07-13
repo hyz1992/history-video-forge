@@ -4,6 +4,8 @@ harness/scripts/runtime/output/*
 .env
 storage/projects/
 storage/db-snapshot.json
+storage/db-snapshot.json.bak
+storage/storage.zip
 storage/*.db
 storage/*.db-shm
 storage/*.db-wal

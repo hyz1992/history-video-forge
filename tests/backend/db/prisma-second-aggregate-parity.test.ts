@@ -23,7 +23,7 @@ describe("second aggregate Prisma hydration parity", () => {
       await client.storyboardRecord.create({ data: { id: "storyboard", projectId: "project", topicPackageId: "topic", scriptRecordId: "script", planJson: { segments: [{ id: "s1" }] }, validationResultJson: { decision: "pass" }, executionStateJson: { generating: false } } });
       await client.assetPlanRecord.create({ data: { id: "asset-plan", projectId: "project", topicPackageId: "topic", scriptRecordId: "script", storyboardRecordId: "storyboard", planJson: { asset_tasks: [] }, validationResultJson: { decision: "pass" }, executionStateJson: { generating: false } } });
       const db = createDbClient();
-      await hydrateFirstAggregates(db, new Map(), client, { storageRoot: root, ownerId: "owner" });
+      await hydrateFirstAggregates(db, new Map(), client, { storageRoot: root });
       await hydrateSecondAggregates(db, client);
       expect(db.scriptRecords.get("script")).toMatchObject({ scriptText: "script", beatTraceJson: [{ beat: 1 }], validationResultJson: { decision: "pass" } });
       expect(db.storyboardRecords.get("storyboard")).toMatchObject({ planJson: { segments: [{ id: "s1" }] }, executionStateJson: { generating: false } });

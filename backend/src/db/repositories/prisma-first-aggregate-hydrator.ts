@@ -12,10 +12,10 @@ export async function hydrateFirstAggregates(
   db: DbClient,
   topicCandidateStore: Map<string, ProjectTopicCandidateState>,
   client: AppPrismaClient,
-  options: { storageRoot: string; ownerId?: string },
+  options: { storageRoot: string },
 ): Promise<void> {
   const [projects, events, packages, caches, rounds] = await Promise.all([
-    client.project.findMany({ where: { archivedAt: null, ...(options.ownerId ? { ownerId: options.ownerId } : {}) } }), client.eventRegistryEntry.findMany(), client.topicPackage.findMany(),
+    client.project.findMany({ where: { archivedAt: null } }), client.eventRegistryEntry.findMany(), client.topicPackage.findMany(),
     client.recommendationCandidateCache.findMany(),
     client.recommendationRound.findMany({ orderBy: [{ projectId: "asc" }, { roundIndex: "asc" }], include: { exposures: { orderBy: { selectedAt: "asc" } } } }),
   ]);

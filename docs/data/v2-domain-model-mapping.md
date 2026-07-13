@@ -9,7 +9,7 @@
 ## 2. 全局映射原则
 
 - V1 字符串 ID 原样保留；V2 新记录使用 UUID 字符串。迁移器不得重写已有主键。
-- 所有流水线记录通过 `projectId` 归属项目；首期不重复保存 `ownerId`。
+- 所有流水线记录通过 `projectId` 归属项目；首期不重复保存 `ownerId`，所有者从 `Project.ownerId` 经 join 解析（由 S1-3 起 `ProjectRecord` 内存态直接持有 `ownerId/createdById`，便于 writer 与 hydrator 直接读取）。
 - 项目当前所有权只保存于 `Project.ownerId`，创建人另存 `Project.createdById` 作为不可猜测的来源记录；迁入的 V1 项目两者均指向显式 migration owner。
 - active record 字段使用可空外键，删除策略为 `Restrict`，并由 repository 事务预检与 SQLite trigger 双重保证目标记录属于同一项目；推荐轮次的曝光明细随轮次 `Cascade`。
 - 结构稳定、需要查询或约束的身份字段进入关系列；阶段完整产物、验证结果和 trace 保留为 JSON。
@@ -41,13 +41,13 @@
 
 ## 4. Project 字段逐项映射
 
-V2 `Project` 新增 `ownerId`、`createdById`、`storageKey`。`ownerId` 指向当前所有者，`createdById` 记录最初创建人；`storageKey` 是与展示名称解耦的稳定目录键。
+V2 `Project` 新增 `ownerId`、`createdById`、`storageKey`，且由 S1-3 起 V1 内存态 `ProjectRecord` 也直接持有 `ownerId` 与 `createdById`，保证内存→持久化的字段对齐。`ownerId` 指向当前所有者，`createdById` 记录最初创建人；`storageKey` 是与展示名称解耦的稳定目录键。
 
 | V1 `ProjectRecord` 字段 | V2 去向 | 决定 |
 | --- | --- | --- |
 | `id` | `Project.id` | 原样保留；新记录默认 UUID |
-| 无 | `Project.ownerId` | 迁移时指向显式 migration owner；后续可由管理员转移 |
-| 无 | `Project.createdById` | 迁移时与 owner 相同；后续所有权转移不得改写 |
+| `ownerId` | `Project.ownerId` | 必填；V1 内存态由 S1-3 起 ProjectRecord 直接持有，迁移时指向显式 migration owner；后续可由管理员转移 |
+| `createdById` | `Project.createdById` | 必填；V1 内存态由 S1-3 起 ProjectRecord 直接持有，迁移时与 owner 相同；后续所有权转移不得改写 |
 | `name` | `Project.name` | 直接迁移 |
 | `status` | `Project.status` | 首版保留字符串/枚举兼容值 |
 | `activeTopicPackageId` | `Project.activeTopicPackageId` | 可空外键，`Restrict` |

@@ -249,7 +249,7 @@ export async function startServer(options?: {
       : async () => ({ ready: false, error: "database_not_initialized", checks: emptyPrismaReadinessChecks() }),
   });
   if (prismaClient && firstAggregateWriter && !options?.app) {
-    await hydrateFirstAggregates(app.db, app.topicCandidateStore, prismaClient, { storageRoot: process.cwd(), ownerId: firstAggregateWriter.ownerId });
+    await hydrateFirstAggregates(app.db, app.topicCandidateStore, prismaClient, { storageRoot: process.cwd() });
     await hydrateSecondAggregates(app.db, prismaClient);
     await hydrateThirdAggregates(app.db, prismaClient);
     await recoverAndPersistInterruptedRuns(app.db);

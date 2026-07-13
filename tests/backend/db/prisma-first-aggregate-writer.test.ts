@@ -41,7 +41,7 @@ describe("Prisma first aggregate writer", () => {
       expect(existsSync(join(root, "storage", "db-snapshot.json"))).toBe(false);
 
       const restartedDb = createDbClient(); const candidateState = new Map();
-      await hydrateFirstAggregates(restartedDb, candidateState, client, { storageRoot: root, ownerId: owner.id });
+      await hydrateFirstAggregates(restartedDb, candidateState, client, { storageRoot: root });
       expect(restartedDb.projects.get(project.id)).toMatchObject({ status: "script_ready", activeTopicPackageId: expect.any(String) });
       expect(restartedDb.topicPackages.size).toBe(1);
       expect(restartedDb.candidateCache.get([...restartedDb.candidateCache.keys()][0]!)).toMatchObject({ sourceHint: "史记", whyThisNow: "冲突鲜明" });
