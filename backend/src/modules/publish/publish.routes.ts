@@ -7,12 +7,13 @@ import {
   publishUpdateController,
   titleCandidatesController,
 } from "./publish.controller";
+import { guardUserRoute } from "../../auth/authorization.js";
 
 export function registerPublishRoutes(app: AppInstance) {
-  app.addRoute("POST", "/api/projects/:projectId/publish/generate", publishGenerateController);
-  app.addRoute("PATCH", "/api/projects/:projectId/publish", publishUpdateController);
-  app.addRoute("POST", "/api/projects/:projectId/publish/cover/prompt/optimize", coverPromptOptimizeController);
-  app.addRoute("POST", "/api/projects/:projectId/publish/cover/upload", coverUploadController);
-  app.addRoute("POST", "/api/projects/:projectId/publish/cover/generate", coverGenerateController);
-  app.addRoute("POST", "/api/projects/:projectId/publish/title/candidates", titleCandidatesController);
+  app.addRoute("POST", "/api/projects/:projectId/publish/generate", guardUserRoute(publishGenerateController));
+  app.addRoute("PATCH", "/api/projects/:projectId/publish", guardUserRoute(publishUpdateController));
+  app.addRoute("POST", "/api/projects/:projectId/publish/cover/prompt/optimize", guardUserRoute(coverPromptOptimizeController));
+  app.addRoute("POST", "/api/projects/:projectId/publish/cover/upload", guardUserRoute(coverUploadController));
+  app.addRoute("POST", "/api/projects/:projectId/publish/cover/generate", guardUserRoute(coverGenerateController));
+  app.addRoute("POST", "/api/projects/:projectId/publish/title/candidates", guardUserRoute(titleCandidatesController));
 }

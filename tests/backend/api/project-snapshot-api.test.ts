@@ -4,17 +4,20 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
+import { buildTestAuth } from "../auth/test-utils.js";
+import type { AuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 
 const rootDir = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 
 describe("project snapshot api", () => {
-  async function prepareProjectWithScript(app: ReturnType<typeof buildApp>) {
+  async function prepareProjectWithScript(app: ReturnType<typeof buildApp>, auth: AuthenticatedAuthContext) {
     const projectResponse = await app.inject({
       method: "POST",
       url: "/api/projects",
       payload: {
         name: "Snapshot API Flow",
       },
+      auth,
     });
     const projectId = projectResponse.json().project_id as string;
 
@@ -30,6 +33,7 @@ describe("project snapshot api", () => {
         recent_usage_hint: "近期未出现同 event_id",
         tags: ["diplomacy", "court", "humiliation", "showdown"],
       },
+      auth,
     });
     const candidateId = recommendationResponse.json().candidates[0].candidate_id as string;
 
@@ -39,6 +43,7 @@ describe("project snapshot api", () => {
       payload: {
         confirm_reason: "user_selected",
       },
+      auth,
     });
 
     await app.inject({
@@ -48,6 +53,7 @@ describe("project snapshot api", () => {
         allow_patch: true,
         allow_regen: true,
       },
+      auth,
     });
 
     return projectId;
@@ -55,11 +61,13 @@ describe("project snapshot api", () => {
 
   it("GET /api/projects/:projectId returns topic/script snapshot for restoring the current state", async () => {
     const app = buildApp();
-    const projectId = await prepareProjectWithScript(app);
+    const auth = buildTestAuth();
+    const projectId = await prepareProjectWithScript(app, auth);
 
     const response = await app.inject({
       method: "GET",
       url: `/api/projects/${projectId}`,
+      auth,
     });
 
     expect(response.statusCode).toBe(200);
@@ -93,6 +101,7 @@ describe("project snapshot api", () => {
 
   it("returns restore metadata for draft and formal projects", async () => {
     const app = buildApp();
+    const auth = buildTestAuth();
 
     const projectResponse = await app.inject({
       method: "POST",
@@ -100,12 +109,14 @@ describe("project snapshot api", () => {
       payload: {
         name: "Restore Metadata Flow",
       },
+      auth,
     });
     const projectId = projectResponse.json().project_id as string;
 
     const draftSnapshot = await app.inject({
       method: "GET",
       url: `/api/projects/${projectId}`,
+      auth,
     });
 
     expect(draftSnapshot.statusCode).toBe(200);
@@ -130,6 +141,7 @@ describe("project snapshot api", () => {
         recent_usage_hint: "近期未出现同 event_id",
         tags: ["diplomacy", "court", "humiliation", "showdown"],
       },
+      auth,
     });
     const candidateId = recommendationResponse.json().candidates[0].candidate_id as string;
 
@@ -139,11 +151,13 @@ describe("project snapshot api", () => {
       payload: {
         confirm_reason: "user_selected",
       },
+      auth,
     });
 
     const formalSnapshot = await app.inject({
       method: "GET",
       url: `/api/projects/${projectId}`,
+      auth,
     });
 
     expect(formalSnapshot.statusCode).toBe(200);
@@ -161,6 +175,7 @@ describe("project snapshot api", () => {
 
   it("persists readable trace directories and keeps latest topic/script run summaries after re-confirming a topic", async () => {
     const app = buildApp();
+    const auth = buildTestAuth();
 
     const projectResponse = await app.inject({
       method: "POST",
@@ -168,6 +183,7 @@ describe("project snapshot api", () => {
       payload: {
         name: "Snapshot Trace Flow",
       },
+      auth,
     });
     const projectId = projectResponse.json().project_id as string;
 
@@ -183,6 +199,7 @@ describe("project snapshot api", () => {
         recent_usage_hint: "近期未出现同 event_id",
         tags: ["diplomacy", "court", "humiliation", "showdown"],
       },
+      auth,
     });
     const firstCandidateId = firstRecommendation.json().candidates[0].candidate_id as string;
 
@@ -192,6 +209,7 @@ describe("project snapshot api", () => {
       payload: {
         confirm_reason: "user_selected",
       },
+      auth,
     });
 
     await app.inject({
@@ -201,11 +219,13 @@ describe("project snapshot api", () => {
         allow_patch: false,
         allow_regen: false,
       },
+      auth,
     });
 
     const firstSnapshotResponse = await app.inject({
       method: "GET",
       url: `/api/projects/${projectId}`,
+      auth,
     });
     const firstSnapshot = firstSnapshotResponse.json();
     const storageRootPath = resolve(
@@ -240,6 +260,7 @@ describe("project snapshot api", () => {
           recent_usage_hint: "近期未出现同 event_id",
           tags: ["diplomacy", "court", "humiliation", "showdown"],
         },
+        auth,
       });
       const secondCandidateId = secondRecommendation.json().candidates[0].candidate_id as string;
 
@@ -249,11 +270,13 @@ describe("project snapshot api", () => {
         payload: {
           confirm_reason: "user_selected_again",
         },
+        auth,
       });
 
       const secondSnapshotResponse = await app.inject({
         method: "GET",
         url: `/api/projects/${projectId}`,
+        auth,
       });
 
       expect(secondSnapshotResponse.statusCode).toBe(200);

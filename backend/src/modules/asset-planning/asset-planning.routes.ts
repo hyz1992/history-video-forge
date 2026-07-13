@@ -2,6 +2,7 @@ import type { AppInstance, AppResponse, RouteContext } from "../../app";
 import { getProjectById } from "../projects/project.repository";
 import { demoStageGuard } from "../../shared/demo-stage-guard";
 import { runAssetPlanningGeneration } from "./asset-planning-run.service";
+import { guardUserRoute } from "../../auth/authorization.js";
 
 async function generateAssetPlanController(
   context: RouteContext,
@@ -29,6 +30,6 @@ export function registerAssetPlanningRoutes(app: AppInstance) {
   app.addRoute(
     "POST",
     "/api/projects/:projectId/asset-plan/generate",
-    generateAssetPlanController,
+    guardUserRoute(generateAssetPlanController),
   );
 }

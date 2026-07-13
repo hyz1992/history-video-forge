@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
+import { buildTestAuth } from "../auth/test-utils.js";
 
 describe("topic api", () => {
   it("creates a project", async () => {
@@ -12,6 +13,7 @@ describe("topic api", () => {
       payload: {
         name: "Topic API Contract",
       },
+      auth: buildTestAuth(),
     });
 
     expect(response.statusCode).toBe(201);
@@ -23,12 +25,14 @@ describe("topic api", () => {
 
   it("returns topic recommendations for a project", async () => {
     const app = buildApp();
+    const auth = buildTestAuth();
     const projectResponse = await app.inject({
       method: "POST",
       url: "/api/projects",
       payload: {
         name: "Recommendation Flow",
       },
+      auth,
     });
     const projectId = projectResponse.json().project_id as string;
 
@@ -44,6 +48,7 @@ describe("topic api", () => {
         recent_usage_hint: "近期未出现同 event_id",
         tags: ["diplomacy", "court", "humiliation", "showdown"],
       },
+      auth,
     });
 
     expect(response.statusCode).toBe(200);
@@ -60,12 +65,14 @@ describe("topic api", () => {
 
   it("confirms a candidate into TopicPackage and moves project to script_ready", async () => {
     const app = buildApp();
+    const auth = buildTestAuth();
     const projectResponse = await app.inject({
       method: "POST",
       url: "/api/projects",
       payload: {
         name: "Confirm Flow",
       },
+      auth,
     });
     const projectId = projectResponse.json().project_id as string;
 
@@ -81,6 +88,7 @@ describe("topic api", () => {
         recent_usage_hint: "近期未出现同 event_id",
         tags: ["diplomacy", "court", "humiliation", "showdown"],
       },
+      auth,
     });
     const candidateId = recommendationResponse.json().candidates[0].candidate_id as string;
 
@@ -90,6 +98,7 @@ describe("topic api", () => {
       payload: {
         confirm_reason: "user_selected",
       },
+      auth,
     });
 
     expect(confirmResponse.statusCode).toBe(200);
@@ -100,7 +109,6 @@ describe("topic api", () => {
     expect(body.topic_package).toMatchObject({
       topic_package_id: expect.any(String),
       canonical_title: "晏子使楚",
-      // Builder now generates strong_scene from summary (not seed instruction)
       strong_scene: "楚王在公开场合连续压场，晏子当场顶回去。",
       duration_band: expect.anything(),
       narrative_tension_map: {

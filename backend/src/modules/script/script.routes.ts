@@ -2,6 +2,7 @@ import type { AppInstance, AppResponse, RouteContext } from "../../app";
 import { getProjectById } from "../projects/project.repository";
 import { demoStageGuard } from "../../shared/demo-stage-guard";
 import { runScriptGeneration } from "./script-run.service";
+import { guardUserRoute } from "../../auth/authorization.js";
 
 async function generateScriptController(
   context: RouteContext,
@@ -33,6 +34,6 @@ export function registerScriptRoutes(app: AppInstance) {
   app.addRoute(
     "POST",
     "/api/projects/:projectId/script/generate",
-    generateScriptController,
+    guardUserRoute(generateScriptController),
   );
 }

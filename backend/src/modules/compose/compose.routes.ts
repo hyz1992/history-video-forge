@@ -1,6 +1,7 @@
 import type { AppInstance, AppResponse, RouteContext } from "../../app";
 import { getProjectById } from "../projects/project.repository";
 import { runComposeGeneration } from "./compose-run.service";
+import { guardUserRoute } from "../../auth/authorization.js";
 
 async function generateComposeController(
   context: RouteContext,
@@ -25,6 +26,6 @@ export function registerComposeRoutes(app: AppInstance) {
   app.addRoute(
     "POST",
     "/api/projects/:projectId/compose/generate",
-    generateComposeController,
+    guardUserRoute(generateComposeController),
   );
 }

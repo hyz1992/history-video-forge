@@ -3,6 +3,7 @@ import { getProjectById } from "../projects/project.repository";
 import { runAssetsGeneration, registerManualArtifact, acceptArtifact } from "./assets-run.service";
 import { env } from "../../config/env.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
+import { guardUserRoute } from "../../auth/authorization.js";
 import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider.js";
 import { createLlmGateway } from "../../runtime/llm/llm-gateway.js";
 import { createCompositeInteractionLogWriter } from "../../runtime/trace/project-storage.js";
@@ -690,41 +691,41 @@ export function registerAssetsRoutes(app: AppInstance) {
   app.addRoute(
     "POST",
     "/api/projects/:projectId/assets/generate",
-    generateAssetsController,
+    guardUserRoute(generateAssetsController),
   );
   app.addRoute(
     "POST",
     "/api/projects/:projectId/assets/tasks/:taskId/generate",
-    generateTaskController,
+    guardUserRoute(generateTaskController),
   );
   app.addRoute(
     "PATCH",
     "/api/projects/:projectId/assets/tasks/:taskId/prompt",
-    updateTaskPromptController,
+    guardUserRoute(updateTaskPromptController),
   );
   app.addRoute(
     "POST",
     "/api/projects/:projectId/assets/tasks/:taskId/prompt/optimize",
-    optimizeTaskPromptController,
+    guardUserRoute(optimizeTaskPromptController),
   );
   app.addRoute(
     "POST",
     "/api/projects/:projectId/assets/segments/:segmentId/upgrade-video",
-    upgradeSegmentToVideoController,
+    guardUserRoute(upgradeSegmentToVideoController),
   );
   app.addRoute(
     "POST",
     "/api/projects/:projectId/assets/tasks/:taskId/artifacts/register",
-    registerArtifactController,
+    guardUserRoute(registerArtifactController),
   );
   app.addRoute(
     "POST",
     "/api/projects/:projectId/assets/tasks/:taskId/artifacts/upload",
-    uploadArtifactController,
+    guardUserRoute(uploadArtifactController),
   );
   app.addRoute(
     "POST",
     "/api/projects/:projectId/assets/tasks/:taskId/accept",
-    acceptArtifactController,
+    guardUserRoute(acceptArtifactController),
   );
 }

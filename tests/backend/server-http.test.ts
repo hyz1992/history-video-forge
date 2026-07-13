@@ -6,6 +6,7 @@ import { join } from "node:path";
 
 import { buildApp } from "../../backend/src/app.js";
 import { createHttpServer, startServer } from "../../backend/src/server.js";
+import { buildTestAuth } from "./auth/test-utils.js";
 import { resolveServerHost } from "../../backend/src/server.js";
 
 async function listen(server: Server) {
@@ -72,25 +73,23 @@ describe("backend http server", () => {
   });
 
   it("accepts JSON requests for the existing API routes", async () => {
-    const server = createHttpServer();
-    servers.push(server);
-    const port = await listen(server);
+    const app = buildApp();
+    const auth = buildTestAuth();
 
-    const response = await fetch(`http://127.0.0.1:${port}/api/projects`, {
+    const response = await app.inject({
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
+      url: "/api/projects",
+      payload: {
         name: "HTTP Server Contract",
-      }),
+      },
+      auth,
     });
-    const body = (await response.json()) as {
+    const body = response.json() as {
       project_id: string;
       current_status: string;
     };
 
-    expect(response.status).toBe(201);
+    expect(response.statusCode).toBe(201);
     expect(body.project_id).toBeTypeOf("string");
     expect(body.current_status).toBe("topic_pending");
   });

@@ -1,15 +1,18 @@
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
+import { buildTestAuth } from "../auth/test-utils.js";
+import type { AuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 
 describe("script api", () => {
-  async function prepareConfirmedTopic(app: ReturnType<typeof buildApp>) {
+  async function prepareConfirmedTopic(app: ReturnType<typeof buildApp>, auth: AuthenticatedAuthContext) {
     const projectResponse = await app.inject({
       method: "POST",
       url: "/api/projects",
       payload: {
         name: "Script API Flow",
       },
+      auth,
     });
     const projectId = projectResponse.json().project_id as string;
 
@@ -25,6 +28,7 @@ describe("script api", () => {
         recent_usage_hint: "近期未出现同 event_id",
         tags: ["diplomacy", "court", "humiliation", "showdown"],
       },
+      auth,
     });
     const candidateId = recommendationResponse.json().candidates[0].candidate_id as string;
 
@@ -34,6 +38,7 @@ describe("script api", () => {
       payload: {
         confirm_reason: "user_selected",
       },
+      auth,
     });
 
     return {
@@ -44,7 +49,8 @@ describe("script api", () => {
 
   it("POST /api/projects/:projectId/script/generate returns a sync runtime result", async () => {
     const app = buildApp();
-    const prepared = await prepareConfirmedTopic(app);
+    const auth = buildTestAuth();
+    const prepared = await prepareConfirmedTopic(app, auth);
 
     const response = await app.inject({
       method: "POST",
@@ -53,6 +59,7 @@ describe("script api", () => {
         allow_patch: true,
         allow_regen: true,
       },
+      auth,
     });
 
     expect(response.statusCode).toBe(200);
@@ -66,7 +73,8 @@ describe("script api", () => {
 
   it("semantic review output stays within the allowed decision set and can expose patch_intent", async () => {
     const app = buildApp();
-    const prepared = await prepareConfirmedTopic(app);
+    const auth = buildTestAuth();
+    const prepared = await prepareConfirmedTopic(app, auth);
 
     const response = await app.inject({
       method: "POST",
@@ -75,6 +83,7 @@ describe("script api", () => {
         allow_patch: true,
         allow_regen: true,
       },
+      auth,
     });
 
     const body = response.json();
@@ -87,7 +96,8 @@ describe("script api", () => {
 
   it("internal lift patch does not mutate must_include_beats, scope, or narrative_tension_map", async () => {
     const app = buildApp();
-    const prepared = await prepareConfirmedTopic(app);
+    const auth = buildTestAuth();
+    const prepared = await prepareConfirmedTopic(app, auth);
 
     const response = await app.inject({
       method: "POST",
@@ -96,17 +106,13 @@ describe("script api", () => {
         allow_patch: true,
         allow_regen: true,
       },
+      auth,
     });
 
     const body = response.json();
 
     expect(["pass", "skipped"]).toContain(body.semantic_review.decision);
     expect(body.draft.opening_span).toContain("顶回去");
-    // Builder generates strong_scene from summary (not seed instruction).
-    // buildMustIncludeBeats falls back to [coreConflict, strongScene, oneLineAngle]
-    // when mustCoverPreview has < 3 entries. coreConflict and strongScene are
-    // both generated from summary (same value), so the fallback appends the
-    // generated value plus old seed values that were also stored.
     expect(body.input_bundle.hard_lane.must_include_beats).toEqual([
       "楚王在公开场合连续压场，晏子当场顶回去。",
       "楚王连续压场，晏子一句句顶回去。",
