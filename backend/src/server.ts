@@ -18,6 +18,7 @@ import { hydrateSecondAggregates } from "./db/repositories/prisma-second-aggrega
 import { hydrateThirdAggregates } from "./db/repositories/prisma-third-aggregate-hydrator.js";
 import type { AppPrismaClient } from "./db/prisma-client.types.js";
 import { recoverAndPersistInterruptedRuns } from "./runtime/recovery/interrupted-run-recovery.js";
+import { applyAuthMiddleware, PrismaSessionStore, createAnonymousAuthContext } from "./auth/index.js";
 
 export interface ServerHostOptions {
   host: string;
@@ -76,11 +77,16 @@ function writeJson(response: ServerResponse, statusCode: number, body: unknown) 
 
 export function createHttpServer(
   app: AppInstance = buildApp({ renderAdapter: resolveRenderAdapter() }),
-  options?: { publicDir?: string; allowMissingDatabaseReadinessForTests?: boolean },
+  options?: {
+    publicDir?: string;
+    allowMissingDatabaseReadinessForTests?: boolean;
+    sessionStore?: PrismaSessionStore;
+  },
 ): Server {
   const isProduction = process.env.NODE_ENV === "production";
   const publicDir = options?.publicDir ?? resolve(process.cwd(), "frontend", "dist");
   const canServeStatic = isProduction && !!publicDir && existsSync(publicDir);
+  const sessionStore = options?.sessionStore;
 
   return createServer(async (request, response) => {
     if (!request.method || !request.url) {
@@ -118,6 +124,12 @@ export function createHttpServer(
 
     const requestUrl = new URL(request.url, "http://127.0.0.1");
 
+    const authResult = sessionStore
+      ? await applyAuthMiddleware({ sessionStore }, request).catch(() => ({
+          auth: createAnonymousAuthContext(),
+        }))
+      : undefined;
+
     // 生产模式：托管前端静态资源（单端口部署）
     if (canServeStatic && request.method === "GET" && !requestUrl.pathname.startsWith("/api")) {
       if (tryServeStatic(response, requestUrl.pathname, publicDir)) {
@@ -149,6 +161,7 @@ export function createHttpServer(
           method: request.method,
           url: requestUrl.pathname,
           payload: { file: multipartResult.file },
+          auth: authResult?.auth,
         });
         writeJson(response, appResponse.statusCode, appResponse.json());
       } catch (error) {
@@ -177,6 +190,7 @@ export function createHttpServer(
         method: request.method,
         url: requestUrl.pathname,
         payload,
+        auth: authResult?.auth,
       });
 
       writeJson(response, appResponse.statusCode, appResponse.json());
@@ -240,7 +254,8 @@ export async function startServer(options?: {
     await hydrateThirdAggregates(app.db, prismaClient);
     await recoverAndPersistInterruptedRuns(app.db);
   }
-  const server = createHttpServer(app, { publicDir });
+  const sessionStore = prismaClient ? new PrismaSessionStore(prismaClient) : undefined;
+  const server = createHttpServer(app, { publicDir, sessionStore });
   let disconnected = false;
   const disconnect = async () => {
     if (!prismaClient || disconnected) return;

@@ -1,6 +1,8 @@
 import { env } from "./config/env";
 import { createDbClient, type DbClient } from "./db/client";
 import { loadLegacyFixtureState, saveLegacyFixtureState } from "./db/legacy-persistence-adapter.js";
+import type { AuthContext } from "./auth/auth-context.js";
+import { createAnonymousAuthContext } from "./auth/auth-context.js";
 import { registerProjectRoutes } from "./modules/projects/project.routes";
 import { registerTopicRoutes } from "./modules/topic/topic.routes";
 import { registerScriptRoutes } from "./modules/script/script.routes";
@@ -38,6 +40,7 @@ export interface InjectRequest {
   method: string;
   url: string;
   payload?: any;
+  auth?: AuthContext;
 }
 
 export interface AppResponse {
@@ -54,6 +57,7 @@ export interface RouteContext {
   app: AppInstance;
   params: Record<string, string>;
   payload: any;
+  auth: AuthContext;
 }
 
 type RouteHandler = (context: RouteContext) => Promise<AppResponse> | AppResponse;
@@ -247,6 +251,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
             app,
             params,
             payload: request.payload ?? {},
+            auth: request.auth ?? createAnonymousAuthContext(),
           });
         } finally {
           release?.();
