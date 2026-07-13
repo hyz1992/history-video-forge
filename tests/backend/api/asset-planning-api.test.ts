@@ -17,6 +17,7 @@ import { saveScriptRecord } from "../../../backend/src/modules/script/script-rec
 import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/storyboard-record.repository.js";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
 import type { AssetPlan, StoryboardPlan } from "../../../shared/src/index.js";
+import { buildTestAuth } from "../auth/test-utils.js";
 
 const scriptText =
   "Opening pressure. The envoy answers in public. The ending leaves a cost.";
@@ -221,6 +222,7 @@ function makeAssetPlan(input: {
 async function prepareActiveStoryboard(app: ReturnType<typeof buildApp>) {
   const project = await createProject(app.db, {
     name: "Asset Planning API Flow",
+    ownerId: "owner-1",
   });
   const topicPackage = await saveTopicPackage(app.db, {
     projectId: project.id,
@@ -307,6 +309,8 @@ async function prepareActiveStoryboard(app: ReturnType<typeof buildApp>) {
 }
 
 describe("asset planning api", () => {
+  const auth = buildTestAuth({ userId: "owner-1" });
+
   beforeEach(() => {
     generateAssetPlanMock.mockReset();
     repairAssetPlanStructureMock.mockReset();
@@ -322,6 +326,7 @@ describe("asset planning api", () => {
     const response = await app.inject({
       method: "POST",
       url: "/api/projects/missing/asset-plan/generate",
+      auth,
     });
 
     expect(response.statusCode).toBe(404);
@@ -334,11 +339,13 @@ describe("asset planning api", () => {
     const app = buildApp();
     const project = await createProject(app.db, {
       name: "Asset Plan Missing Storyboard",
+      ownerId: "owner-1",
     });
 
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/asset-plan/generate`,
+      auth,
     });
 
     expect(response.statusCode).toBe(409);
@@ -351,12 +358,14 @@ describe("asset planning api", () => {
     const app = buildApp();
     const project = await createProject(app.db, {
       name: "Asset Plan Deleted Storyboard",
+      ownerId: "owner-1",
     });
     project.activeStoryboardRecordId = "storyboard_missing";
 
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/asset-plan/generate`,
+      auth,
     });
 
     expect(response.statusCode).toBe(404);
@@ -373,6 +382,7 @@ describe("asset planning api", () => {
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${prepared.project.id}/asset-plan/generate`,
+      auth,
     });
 
     expect(response.statusCode).toBe(404);
@@ -389,6 +399,7 @@ describe("asset planning api", () => {
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${prepared.project.id}/asset-plan/generate`,
+      auth,
     });
 
     expect(response.statusCode).toBe(404);
@@ -429,6 +440,7 @@ describe("asset planning api", () => {
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${prepared.project.id}/asset-plan/generate`,
+      auth,
     });
 
     expect(response.statusCode).toBe(200);
@@ -499,6 +511,7 @@ describe("asset planning api", () => {
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${prepared.project.id}/asset-plan/generate`,
+      auth,
     });
 
     expect(response.statusCode).toBe(422);
@@ -545,6 +558,7 @@ describe("asset planning api", () => {
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${prepared.project.id}/asset-plan/generate`,
+      auth,
     });
 
     expect(response.statusCode).toBe(200);
@@ -589,6 +603,7 @@ describe("asset planning api", () => {
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${prepared.project.id}/asset-plan/generate`,
+      auth,
     });
 
     expect(response.statusCode).toBe(409);

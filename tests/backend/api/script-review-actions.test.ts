@@ -70,10 +70,13 @@ vi.mock("../../../backend/src/modules/script/script-generation.service.js", () =
 }));
 
 import { buildApp } from "../../../backend/src/app.js";
+import { buildTestAuth } from "../auth/test-utils.js";
 
 describe("script review actions api", () => {
+  const auth = buildTestAuth({ userId: "owner-1" });
+
   async function prepareConfirmedTopic(app: ReturnType<typeof buildApp>) {
-    const projectResponse = await app.inject({
+    const projectResponse = await app.inject({ auth,
       method: "POST",
       url: "/api/projects",
       payload: {
@@ -82,7 +85,7 @@ describe("script review actions api", () => {
     });
     const projectId = projectResponse.json().project_id as string;
 
-    const recommendationResponse = await app.inject({
+    const recommendationResponse = await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/topic/recommendations`,
       payload: {
@@ -97,7 +100,7 @@ describe("script review actions api", () => {
     });
     const candidateId = recommendationResponse.json().candidates[0].candidate_id as string;
 
-    await app.inject({
+    await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/topic/candidates/${candidateId}/confirm`,
       payload: {
@@ -115,7 +118,7 @@ describe("script review actions api", () => {
     const app = buildApp();
     const projectId = await prepareConfirmedTopic(app);
 
-    const response = await app.inject({
+    const response = await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/script/generate`,
       payload: {
@@ -142,7 +145,7 @@ describe("script review actions api", () => {
     const app = buildApp();
     const projectId = await prepareConfirmedTopic(app);
 
-    const response = await app.inject({
+    const response = await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/script/generate`,
       payload: {
@@ -166,7 +169,7 @@ describe("script review actions api", () => {
     const app = buildApp();
     const projectId = await prepareConfirmedTopic(app);
 
-    const firstScriptResponse = await app.inject({
+    const firstScriptResponse = await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/script/generate`,
       payload: {
@@ -177,7 +180,7 @@ describe("script review actions api", () => {
 
     expect(firstScriptResponse.statusCode).toBe(200);
 
-    const secondRecommendationResponse = await app.inject({
+    const secondRecommendationResponse = await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/topic/recommendations`,
       payload: {
@@ -192,7 +195,7 @@ describe("script review actions api", () => {
     });
     const nextCandidateId = secondRecommendationResponse.json().candidates[0].candidate_id as string;
 
-    const confirmResponse = await app.inject({
+    const confirmResponse = await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/topic/candidates/${nextCandidateId}/confirm`,
       payload: {
@@ -202,7 +205,7 @@ describe("script review actions api", () => {
 
     expect(confirmResponse.statusCode).toBe(200);
 
-    const snapshotResponse = await app.inject({
+    const snapshotResponse = await app.inject({ auth,
       method: "GET",
       url: `/api/projects/${projectId}`,
     });

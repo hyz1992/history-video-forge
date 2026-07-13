@@ -87,8 +87,11 @@ vi.mock("../../../backend/src/runtime/llm/openai-compatible-provider.js", () => 
 }));
 
 import { buildApp } from "../../../backend/src/app.js";
+import { buildTestAuth } from "../auth/test-utils.js";
 
 describe("topic api runtime", () => {
+  const auth = buildTestAuth({ userId: "owner-1" });
+
   it("uses the runtime path for topic recommendations while preserving the frozen api shape", async () => {
     invokeStructuredPromptMock.mockReset();
     mockTopicRuntimeResponses([
@@ -100,7 +103,7 @@ describe("topic api runtime", () => {
     ]);
 
     const app = buildApp();
-    const projectResponse = await app.inject({
+    const projectResponse = await app.inject({ auth,
       method: "POST",
       url: "/api/projects",
       payload: {
@@ -109,7 +112,7 @@ describe("topic api runtime", () => {
     });
     const projectId = projectResponse.json().project_id as string;
 
-    const response = await app.inject({
+    const response = await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/topic/recommendations`,
       payload: {
@@ -179,7 +182,7 @@ describe("topic api runtime", () => {
     });
 
     const app = buildApp();
-    const projectResponse = await app.inject({
+    const projectResponse = await app.inject({ auth,
       method: "POST",
       url: "/api/projects",
       payload: {
@@ -188,7 +191,7 @@ describe("topic api runtime", () => {
     });
     const projectId = projectResponse.json().project_id as string;
 
-    const response = await app.inject({
+    const response = await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/topic/recommendations`,
       payload: {
@@ -224,7 +227,7 @@ describe("topic api runtime", () => {
     );
 
     const app = buildApp();
-    const projectResponse = await app.inject({
+    const projectResponse = await app.inject({ auth,
       method: "POST",
       url: "/api/projects",
       payload: {
@@ -233,7 +236,7 @@ describe("topic api runtime", () => {
     });
     const projectId = projectResponse.json().project_id as string;
 
-    const response = await app.inject({
+    const response = await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/topic/recommendations`,
       payload: {
@@ -269,7 +272,7 @@ describe("topic api runtime", () => {
     );
 
     const app = buildApp();
-    const projectResponse = await app.inject({
+    const projectResponse = await app.inject({ auth,
       method: "POST",
       url: "/api/projects",
       payload: {
@@ -278,7 +281,7 @@ describe("topic api runtime", () => {
     });
     const projectId = projectResponse.json().project_id as string;
 
-    const response = await app.inject({
+    const response = await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/topic/recommendations`,
       payload: {
@@ -336,7 +339,7 @@ describe("topic api runtime", () => {
     ]);
 
     const app = buildApp();
-    const projectResponse = await app.inject({
+    const projectResponse = await app.inject({ auth,
       method: "POST",
       url: "/api/projects",
       payload: {
@@ -345,7 +348,7 @@ describe("topic api runtime", () => {
     });
     const projectId = projectResponse.json().project_id as string;
 
-    const recommendationResponse = await app.inject({
+    const recommendationResponse = await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/topic/recommendations`,
       payload: {
@@ -367,7 +370,7 @@ describe("topic api runtime", () => {
       recommendationBody.current_round.candidates[0].must_cover_preview,
     ).toEqual(mustCoverPreview);
 
-    const confirmResponse = await app.inject({
+    const confirmResponse = await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/topic/candidates/${candidateId}/confirm`,
     });
@@ -389,7 +392,7 @@ describe("topic api runtime", () => {
     ]);
 
     const app = buildApp();
-    const projectResponse = await app.inject({
+    const projectResponse = await app.inject({ auth,
       method: "POST",
       url: "/api/projects",
       payload: {
@@ -398,7 +401,7 @@ describe("topic api runtime", () => {
     });
     const projectId = projectResponse.json().project_id as string;
 
-    const response = await app.inject({
+    const response = await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/topic/recommendations`,
       payload: {
@@ -438,7 +441,7 @@ describe("topic api runtime", () => {
     ]);
 
     const app = buildApp();
-    const projectResponse = await app.inject({
+    const projectResponse = await app.inject({ auth,
       method: "POST",
       url: "/api/projects",
       payload: {
@@ -447,7 +450,7 @@ describe("topic api runtime", () => {
     });
     const projectId = projectResponse.json().project_id as string;
 
-    await app.inject({
+    await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/topic/recommendations`,
       payload: {
@@ -461,7 +464,7 @@ describe("topic api runtime", () => {
       },
     });
 
-    const secondResponse = await app.inject({
+    const secondResponse = await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/topic/recommendations`,
       payload: {

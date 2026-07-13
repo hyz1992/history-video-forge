@@ -21,10 +21,13 @@ vi.mock("../../../backend/src/modules/script/script-generation.service.js", () =
 }));
 
 import { buildApp } from "../../../backend/src/app.js";
+import { buildTestAuth } from "../auth/test-utils.js";
 
 describe("script generate api runtime", () => {
+  const auth = buildTestAuth({ userId: "owner-1" });
+
   async function prepareConfirmedTopic(app: ReturnType<typeof buildApp>) {
-    const projectResponse = await app.inject({
+    const projectResponse = await app.inject({ auth,
       method: "POST",
       url: "/api/projects",
       payload: {
@@ -33,7 +36,7 @@ describe("script generate api runtime", () => {
     });
     const projectId = projectResponse.json().project_id as string;
 
-    const recommendationResponse = await app.inject({
+    const recommendationResponse = await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/topic/recommendations`,
       payload: {
@@ -48,7 +51,7 @@ describe("script generate api runtime", () => {
     });
     const candidateId = recommendationResponse.json().candidates[0].candidate_id as string;
 
-    await app.inject({
+    await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/topic/candidates/${candidateId}/confirm`,
       payload: {
@@ -63,7 +66,7 @@ describe("script generate api runtime", () => {
     const app = buildApp();
     const projectId = await prepareConfirmedTopic(app);
 
-    const response = await app.inject({
+    const response = await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/script/generate`,
       payload: {

@@ -115,7 +115,10 @@ export async function recordProjectRecommendationRound(
     })),
   };
 
-  await db.firstAggregateWriter?.recordRecommendationRound(round);
+  const project = db.projects.get(input.projectId);
+  const projectOwnerId = project?.ownerId ?? db.firstAggregateWriter?.ownerId ?? "system";
+
+  await db.firstAggregateWriter?.recordRecommendationRound(round, projectOwnerId);
   rounds.push(round);
   store.set(input.projectId, rounds);
 

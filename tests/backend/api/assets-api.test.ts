@@ -21,6 +21,7 @@ import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/st
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
 import { saveAssetManifestRecord } from "../../../backend/src/modules/assets/asset-manifest-record.repository.js";
 import type { AssetManifest, AssetPlan, AssetsValidationResult, StoryboardPlan } from "../../../shared/src/index.js";
+import { buildTestAuth } from "../auth/test-utils.js";
 
 const scriptText =
   "Opening pressure. The envoy answers in public. The ending leaves a cost.";
@@ -410,6 +411,7 @@ interface PreparedManifestSetup extends PreparedSetup {
 async function prepareActiveAssetPlan(app: ReturnType<typeof buildApp>): Promise<PreparedSetup> {
   const project = await createProject(app.db, {
     name: "Assets API Flow",
+    ownerId: "owner-1",
   });
   const topicPackage = await saveTopicPackage(app.db, {
     projectId: project.id,
@@ -548,6 +550,8 @@ async function prepareActiveManifest(app: ReturnType<typeof buildApp>): Promise<
 }
 
 describe("assets generate api", () => {
+  const auth = buildTestAuth({ userId: "owner-1" });
+
   let tempDir = "";
 
   beforeEach(() => {
@@ -570,6 +574,7 @@ describe("assets generate api", () => {
       method: "POST",
       url: "/api/projects/missing/assets/generate",
       payload: {},
+      auth,
     });
 
     expect(response.statusCode).toBe(404);
@@ -582,12 +587,14 @@ describe("assets generate api", () => {
     const app = buildApp();
     const project = await createProject(app.db, {
       name: "Assets Missing Plan",
+      ownerId: "owner-1",
     });
 
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/assets/generate`,
       payload: {},
+      auth,
     });
 
     expect(response.statusCode).toBe(409);
@@ -640,6 +647,7 @@ describe("assets generate api", () => {
         voice_profile_id: "voice_preset_cold_authority",
         execution_mode: "auto_available",
       },
+      auth,
     });
 
     expect(response.statusCode).toBe(200);
@@ -821,6 +829,7 @@ describe("assets generate api", () => {
           image_max_poll_attempts: 1,
         },
       },
+      auth,
     });
 
     expect(response.statusCode).toBe(200);
@@ -980,6 +989,7 @@ describe("assets generate api", () => {
           image_to_video_max_poll_attempts: 1,
         },
       },
+      auth,
     });
 
     expect(response.statusCode).toBe(200);
@@ -1023,6 +1033,7 @@ describe("assets generate api", () => {
         voice_profile_id: "voice_default_male_storyteller",
         execution_mode: "dry_run",
       },
+      auth,
     });
 
     expect(response.statusCode).toBe(200);
@@ -1069,6 +1080,7 @@ describe("assets generate api", () => {
         voice_profile_id: "voice_default_male_storyteller",
         execution_mode: "auto_available",
       },
+      auth,
     });
 
     expect(response.statusCode).toBe(409);
@@ -1113,6 +1125,7 @@ describe("assets generate api", () => {
         voice_profile_id: "voice_default_male_storyteller",
         execution_mode: "auto_available",
       },
+      auth,
     });
 
     expect(response.statusCode).toBe(200);
@@ -1127,6 +1140,8 @@ describe("assets generate api", () => {
 });
 
 describe("manual artifact registration", () => {
+  const auth = buildTestAuth({ userId: "owner-1" });
+
   beforeEach(() => {
     buildInitialAssetManifestMock.mockReset();
     validateAssetsManifestMock.mockReset();
@@ -1144,6 +1159,7 @@ describe("manual artifact registration", () => {
         mime_type: "image/png",
         metadata: { width: 1080, height: 1920 },
       },
+      auth,
     });
 
     expect(response.statusCode).toBe(404);
@@ -1156,6 +1172,7 @@ describe("manual artifact registration", () => {
     const app = buildApp();
     const project = await createProject(app.db, {
       name: "No Manifest",
+      ownerId: "owner-1",
     });
 
     const response = await app.inject({
@@ -1167,6 +1184,7 @@ describe("manual artifact registration", () => {
         mime_type: "image/png",
         metadata: { width: 1080, height: 1920 },
       },
+      auth,
     });
 
     expect(response.statusCode).toBe(409);
@@ -1188,6 +1206,7 @@ describe("manual artifact registration", () => {
         mime_type: "image/png",
         metadata: { width: 1080, height: 1920 },
       },
+      auth,
     });
 
     expect(response.statusCode).toBe(404);
@@ -1209,6 +1228,7 @@ describe("manual artifact registration", () => {
         mime_type: "image/gif",
         metadata: { width: 1080, height: 1920 },
       },
+      auth,
     });
 
     expect(response.statusCode).toBe(422);
@@ -1247,6 +1267,7 @@ describe("manual artifact registration", () => {
         mime_type: "image/png",
         metadata: { width: 1080, height: 1920 },
       },
+      auth,
     });
 
     expect(response.statusCode).toBe(200);
@@ -1314,6 +1335,7 @@ describe("manual artifact registration", () => {
         mime_type: "image/png",
         metadata: { width: 1080, height: 1920 },
       },
+      auth,
     });
 
     expect(response.statusCode).toBe(200);
@@ -1354,6 +1376,7 @@ describe("manual artifact registration", () => {
         mime_type: "image/png",
         metadata: { width: 1080, height: 1920 },
       },
+      auth,
     });
 
     expect(registerResponse.statusCode).toBe(200);
@@ -1384,6 +1407,7 @@ describe("manual artifact registration", () => {
       payload: {
         artifact_id: artifactId,
       },
+      auth,
     });
 
     expect(acceptResponse.statusCode).toBe(200);
@@ -1409,6 +1433,7 @@ describe("manual artifact registration", () => {
 
 describe("PATCH prompt update", () => {
   let app: ReturnType<typeof buildApp>;
+  const auth = buildTestAuth({ userId: "owner-1" });
 
   beforeEach(() => {
     app = buildApp();
@@ -1422,6 +1447,7 @@ describe("PATCH prompt update", () => {
       method: "POST",
       url: "/api/projects",
       payload: { name: "Prompt Test" },
+      auth,
     });
     const projectId = (projectRes.json() as Record<string, unknown>).project_id as string;
 
@@ -1480,6 +1506,7 @@ describe("PATCH prompt update", () => {
       method: "PATCH",
       url: `/api/projects/${projectId}/assets/tasks/${taskId}/prompt`,
       payload: { prompt_draft: "优化后的提示词，补充了时代质感和角色描述" },
+      auth,
     });
 
     expect(res.statusCode).toBe(200);
@@ -1501,6 +1528,7 @@ describe("PATCH prompt update", () => {
       method: "PATCH",
       url: `/api/projects/${projectId}/assets/tasks/nonexistent_task/prompt`,
       payload: { prompt_draft: "test" },
+      auth,
     });
 
     expect(res.statusCode).toBe(404);
@@ -1514,6 +1542,7 @@ describe("PATCH prompt update", () => {
       method: "PATCH",
       url: `/api/projects/${projectId}/assets/tasks/${taskId}/prompt`,
       payload: {},
+      auth,
     });
 
     expect(res.statusCode).toBe(400);
@@ -1525,6 +1554,7 @@ describe("PATCH prompt update", () => {
       method: "POST",
       url: "/api/projects",
       payload: { name: "No Plan Project" },
+      auth,
     });
     const projectId = (projectRes.json() as Record<string, unknown>).project_id as string;
 
@@ -1532,6 +1562,7 @@ describe("PATCH prompt update", () => {
       method: "PATCH",
       url: `/api/projects/${projectId}/assets/tasks/any/prompt`,
       payload: { prompt_draft: "test" },
+      auth,
     });
 
     expect(res.statusCode).toBe(409);
@@ -1541,6 +1572,7 @@ describe("PATCH prompt update", () => {
 
 describe("POST prompt optimize", () => {
   let app: ReturnType<typeof buildApp>;
+  const auth = buildTestAuth({ userId: "owner-1" });
 
   beforeEach(() => {
     app = buildApp();
@@ -1554,6 +1586,7 @@ describe("POST prompt optimize", () => {
       method: "POST",
       url: "/api/projects",
       payload: { name: "Opt Test" },
+      auth,
     });
     const projectId = (projectRes.json() as Record<string, unknown>).project_id as string;
 
@@ -1609,6 +1642,7 @@ describe("POST prompt optimize", () => {
         task_type: "image_still",
         segment_id: "seg_001",
       },
+      auth,
     });
 
     expect(res.statusCode).toBe(200);
@@ -1628,6 +1662,7 @@ describe("POST prompt optimize", () => {
       method: "POST",
       url: `/api/projects/${projectId}/assets/tasks/${taskId}/prompt/optimize`,
       payload: { user_feedback: "test" },
+      auth,
     });
 
     expect(res.statusCode).toBe(400);
@@ -1639,6 +1674,7 @@ describe("POST prompt optimize", () => {
       method: "POST",
       url: "/api/projects",
       payload: { name: "No Plan" },
+      auth,
     });
     const projectId = (projectRes.json() as Record<string, unknown>).project_id as string;
 
@@ -1646,6 +1682,7 @@ describe("POST prompt optimize", () => {
       method: "POST",
       url: `/api/projects/${projectId}/assets/tasks/any/prompt/optimize`,
       payload: { current_prompt: "test" },
+      auth,
     });
 
     expect(res.statusCode).toBe(409);

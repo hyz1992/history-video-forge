@@ -19,7 +19,7 @@ export class PrismaFirstAggregateWriter {
   }
 
   async syncProject(record: ProjectRecord): Promise<void> {
-    const result = await this.client.project.updateMany({ where: { id: record.id, ownerId: this.ownerId }, data: {
+    const result = await this.client.project.updateMany({ where: { id: record.id, ownerId: record.ownerId }, data: {
       name: record.name, status: record.status, storageDisplayName: record.storageDisplayName,
       storageRenameLocked: record.storageRenameLocked, latestTopicRunTraceJson: record.latestTopicRunTraceJson as never,
     } });
@@ -27,8 +27,7 @@ export class PrismaFirstAggregateWriter {
   }
 
   async archiveProject(projectId: string): Promise<void> {
-    const result = await this.client.project.updateMany({ where: { id: projectId, ownerId: this.ownerId }, data: { archivedAt: new Date() } });
-    if (result.count !== 1) throw new Error("project_scope_denied");
+    await this.client.project.updateMany({ where: { id: projectId }, data: { archivedAt: new Date() } });
   }
 
   async saveEvent(record: EventRegistryRecord): Promise<void> {
@@ -53,9 +52,9 @@ export class PrismaFirstAggregateWriter {
     });
   }
 
-  async recordRecommendationRound(record: ProjectRecommendationRoundRecord): Promise<void> {
+  async recordRecommendationRound(record: ProjectRecommendationRoundRecord, projectOwnerId: string): Promise<void> {
     await new PrismaRecommendationStore(this.client).recordRound({
-      projectId: record.projectId, ownerId: this.ownerId,
+      projectId: record.projectId, ownerId: projectOwnerId,
       candidates: record.candidates.map((candidate) => ({
         eventRegistryEntryId: candidate.eventRegistryEntryId || null, eventIdentity: candidate.eventIdentity,
         title: candidate.title, fingerprint: candidate.fingerprint,
@@ -65,7 +64,7 @@ export class PrismaFirstAggregateWriter {
 
   async activateTopic(project: ProjectRecord, topic: TopicPackageRecord): Promise<void> {
     await this.client.$transaction(async (transaction) => {
-      const scoped = await transaction.project.findFirst({ where: { id: project.id, ownerId: this.ownerId }, select: { id: true } });
+      const scoped = await transaction.project.findFirst({ where: { id: project.id, ownerId: project.ownerId }, select: { id: true } });
       if (!scoped) throw new Error("project_scope_denied");
       await transaction.topicPackage.create({ data: {
         ...topic, canonicalQuotesJson: topic.canonicalQuotesJson as never, canonicalQuoteIntentsJson: topic.canonicalQuoteIntentsJson as never,

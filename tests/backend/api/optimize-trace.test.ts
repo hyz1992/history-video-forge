@@ -19,7 +19,10 @@ vi.mock("../../../backend/src/runtime/llm/openai-compatible-provider.js", () => 
   createOpenAiCompatibleProvider: vi.fn(() => ({})),
 }));
 
+import { buildTestAuth } from "../auth/test-utils.js";
+
 describe("POST optimize trace writing", () => {
+  const auth = buildTestAuth({ userId: "owner-1" });
   let tempDirs: string[] = [];
 
   beforeAll(() => {
@@ -84,6 +87,7 @@ describe("POST optimize trace writing", () => {
     const now = new Date();
     app.db.projects.set(projectId, {
       id: projectId, name: "Optimize Trace Test", status: "assets_ready",
+      ownerId: "owner-1",
       activeTopicPackageId: null, activeScriptRecordId: null,
       activeStoryboardRecordId: "sb_001", activeAssetPlanRecordId: "ap_001",
       activeAssetManifestRecordId: null, activeComposeRecordId: null,
@@ -113,7 +117,7 @@ describe("POST optimize trace writing", () => {
       executionStateJson: {}, graphTraceSummaryJson: null, runtimeDiagnosticsJson: null, createdAt: now,
     });
 
-    const res = await app.inject({
+    const res = await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/assets/tasks/${taskId}/prompt/optimize`,
       payload: {
@@ -165,6 +169,7 @@ describe("POST optimize trace writing", () => {
     const now = new Date();
     app.db.projects.set(projectId, {
       id: projectId, name: "OT2", status: "assets_ready",
+      ownerId: "owner-1",
       activeTopicPackageId: null, activeScriptRecordId: null,
       activeStoryboardRecordId: null, activeAssetPlanRecordId: "ap_002",
       activeAssetManifestRecordId: null, activeComposeRecordId: null,
@@ -193,7 +198,7 @@ describe("POST optimize trace writing", () => {
       executionStateJson: {}, graphTraceSummaryJson: null, runtimeDiagnosticsJson: null, createdAt: now,
     });
 
-    const res = await app.inject({
+    const res = await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/assets/tasks/t2/prompt/optimize`,
       payload: { user_feedback: "test" },

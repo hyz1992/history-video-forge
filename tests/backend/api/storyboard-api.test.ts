@@ -7,6 +7,7 @@ vi.mock("../../../backend/src/modules/storyboard/storyboard-generation.service.j
 }));
 
 import { buildApp } from "../../../backend/src/app.js";
+import { buildTestAuth } from "../auth/test-utils.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import { getProjectSnapshot } from "../../../backend/src/modules/projects/project-snapshot.service.js";
 import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository.js";
@@ -51,6 +52,7 @@ function makeValidPlan(input: {
 async function prepareActiveScript(app: ReturnType<typeof buildApp>) {
   const project = await createProject(app.db, {
     name: "Storyboard API Flow",
+    ownerId: "owner-1",
   });
   const topicPackage = await saveTopicPackage(app.db, {
     projectId: project.id,
@@ -123,6 +125,8 @@ async function prepareActiveScript(app: ReturnType<typeof buildApp>) {
 }
 
 describe("storyboard api", () => {
+  const auth = buildTestAuth({ userId: "owner-1" });
+
   beforeEach(() => {
     generateStoryboardPlanMock.mockReset();
   });
@@ -131,6 +135,7 @@ describe("storyboard api", () => {
     const app = buildApp();
 
     const response = await app.inject({
+      auth,
       method: "POST",
       url: "/api/projects/missing/storyboard/generate",
     });
@@ -145,9 +150,11 @@ describe("storyboard api", () => {
     const app = buildApp();
     const project = await createProject(app.db, {
       name: "Storyboard Missing Script",
+      ownerId: "owner-1",
     });
 
     const response = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/storyboard/generate`,
     });
@@ -162,10 +169,12 @@ describe("storyboard api", () => {
     const app = buildApp();
     const project = await createProject(app.db, {
       name: "Storyboard Deleted Script",
+      ownerId: "owner-1",
     });
     project.activeScriptRecordId = "script_missing";
 
     const response = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/storyboard/generate`,
     });
@@ -182,6 +191,7 @@ describe("storyboard api", () => {
     app.db.topicPackages.delete(prepared.topicPackage.id);
 
     const response = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${prepared.project.id}/storyboard/generate`,
     });
@@ -229,6 +239,7 @@ describe("storyboard api", () => {
     );
 
     const response = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${prepared.project.id}/storyboard/generate`,
     });
@@ -302,6 +313,7 @@ describe("storyboard api", () => {
     generateStoryboardPlanMock.mockResolvedValue(invalidPlan);
 
     const response = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${prepared.project.id}/storyboard/generate`,
     });

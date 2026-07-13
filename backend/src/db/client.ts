@@ -274,7 +274,7 @@ export interface DbClient {
     archiveProject(projectId: string): Promise<void>;
     saveEvent(record: EventRegistryRecord): Promise<void>;
     saveCandidate(record: CandidateCacheRecord): Promise<void>;
-    recordRecommendationRound(record: ProjectRecommendationRoundRecord): Promise<void>;
+    recordRecommendationRound(record: ProjectRecommendationRoundRecord, projectOwnerId: string): Promise<void>;
     activateTopic(project: ProjectRecord, topic: TopicPackageRecord): Promise<void>;
   };
   secondAggregateWriter?: {

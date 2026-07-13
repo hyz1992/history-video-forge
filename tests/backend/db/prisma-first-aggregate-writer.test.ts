@@ -5,6 +5,7 @@ import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
+import { createAuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { hydrateFirstAggregates } from "../../../backend/src/db/repositories/prisma-first-aggregate-hydrator.js";
@@ -25,7 +26,8 @@ describe("Prisma first aggregate writer", () => {
       const owner = await client.user.create({ data: { id: "owner", username: "owner", displayName: "Owner", passwordHash: "x", role: "ADMIN" } });
       const writer = await PrismaFirstAggregateWriter.create(client, owner.id);
       const app = buildApp({ storageBaseDir: root, skipSnapshotLoad: true, firstAggregateWriter: writer });
-      const httpCreated = await app.inject({ method: "POST", url: "/api/projects", payload: { name: "HTTP project" } });
+      const authUser = createAuthenticatedAuthContext({ userId: owner.id, username: "owner", displayName: "Owner", role: "ADMIN", sessionId: "s" });
+      const httpCreated = await app.inject({ method: "POST", url: "/api/projects", payload: { name: "HTTP project" }, auth: authUser });
       expect(httpCreated.statusCode).toBe(201);
       await expect(client.project.count({ where: { ownerId: owner.id } })).resolves.toBe(1);
       const project = await createProject(app.db, { name: "Draft" });

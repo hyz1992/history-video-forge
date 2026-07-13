@@ -3,6 +3,7 @@ import { isAbsolute } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
+import { buildTestAuth } from "../auth/test-utils.js";
 import { saveAssetManifestRecord } from "../../../backend/src/modules/assets/asset-manifest-record.repository.js";
 import { saveComposeRecord } from "../../../backend/src/modules/compose/compose-record.repository.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
@@ -194,7 +195,7 @@ async function seedActiveCompose(input: {
   name: string;
   timeline?: ComposeTimeline;
 }) {
-  const project = await createProject(input.app.db, { name: input.name });
+  const project = await createProject(input.app.db, { name: input.name, ownerId: "owner-1" });
   const manifestRecord = await saveAssetManifestRecord(input.app.db, {
     projectId: project.id,
     topicPackageId: "topic_001",
@@ -243,11 +244,13 @@ async function seedActiveCompose(input: {
 describe("render API", () => {
   it("returns 404 for a missing project", async () => {
     const app = buildApp({ renderAdapter: createFakeRenderAdapter() });
+    const auth = buildTestAuth({ userId: "owner-1" });
 
     const response = await app.inject({
       method: "POST",
       url: "/api/projects/missing-project/render/generate",
       payload: {},
+      auth,
     });
 
     expect(response.statusCode).toBe(404);
@@ -256,12 +259,14 @@ describe("render API", () => {
 
   it("returns 409 when active compose is missing", async () => {
     const app = buildApp({ renderAdapter: createFakeRenderAdapter() });
-    const project = await createProject(app.db, { name: "Render Missing Compose" });
+    const auth = buildTestAuth({ userId: "owner-1" });
+    const project = await createProject(app.db, { name: "Render Missing Compose", ownerId: "owner-1" });
 
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/render/generate`,
       payload: {},
+      auth,
     });
 
     expect(response.statusCode).toBe(409);
@@ -270,6 +275,7 @@ describe("render API", () => {
 
   it("returns 409 when compose timeline is not ready for render", async () => {
     const app = buildApp({ renderAdapter: createFakeRenderAdapter() });
+    const auth = buildTestAuth({ userId: "owner-1" });
     const { project } = await seedActiveCompose({
       app,
       name: "Render Blocked Compose",
@@ -280,6 +286,7 @@ describe("render API", () => {
       method: "POST",
       url: `/api/projects/${project.id}/render/generate`,
       payload: {},
+      auth,
     });
 
     expect(response.statusCode).toBe(409);
@@ -296,6 +303,7 @@ describe("render API", () => {
 
   it("validates, renders, persists, and activates a render record", async () => {
     const app = buildApp({ renderAdapter: createFakeRenderAdapter() });
+    const auth = buildTestAuth({ userId: "owner-1" });
     const { project, composeRecord } = await seedActiveCompose({
       app,
       name: "Render Happy Path",
@@ -305,6 +313,7 @@ describe("render API", () => {
       method: "POST",
       url: `/api/projects/${project.id}/render/generate`,
       payload: {},
+      auth,
     });
 
     expect(response.statusCode).toBe(200);
@@ -335,6 +344,7 @@ describe("render API", () => {
   it("passes an absolute output directory to the render adapter for legacy relative storage roots", async () => {
     let adapterOutputDir: string | null = null;
     const fakeAdapter = createFakeRenderAdapter();
+    const auth = buildTestAuth({ userId: "owner-1" });
     const app = buildApp({
       renderAdapter: {
         async render(input) {
@@ -353,6 +363,7 @@ describe("render API", () => {
       method: "POST",
       url: `/api/projects/${project.id}/render/generate`,
       payload: {},
+      auth,
     });
 
     expect(response.statusCode).toBe(200);
@@ -362,6 +373,7 @@ describe("render API", () => {
 
   it("returns 409 for stale active compose and does not activate the render", async () => {
     const fakeAdapter = createFakeRenderAdapter();
+    const auth = buildTestAuth({ userId: "owner-1" });
     const app = buildApp({
       renderAdapter: {
         async render(input) {
@@ -380,6 +392,7 @@ describe("render API", () => {
       method: "POST",
       url: `/api/projects/${project.id}/render/generate`,
       payload: {},
+      auth,
     });
 
     expect(response.statusCode).toBe(409);
@@ -399,6 +412,7 @@ describe("render API", () => {
         throw new Error("adapter exploded");
       },
     };
+    const auth = buildTestAuth({ userId: "owner-1" });
     const app = buildApp({ renderAdapter: failingAdapter });
     const { project } = await seedActiveCompose({
       app,
@@ -409,6 +423,7 @@ describe("render API", () => {
       method: "POST",
       url: `/api/projects/${project.id}/render/generate`,
       payload: {},
+      auth,
     });
 
     expect(response.statusCode).toBe(500);
@@ -436,6 +451,7 @@ describe("render API", () => {
   });
 
   it("keeps the previous active render when a replacement export fails", async () => {
+    const auth = buildTestAuth({ userId: "owner-1" });
     const app = buildApp({ renderAdapter: { async render() { throw new Error("replacement failed"); } } });
     const { project, manifestRecord, composeRecord } = await seedActiveCompose({ app, name: "Render Replacement Failure" });
     const previous = await saveRenderJobRecord(app.db, {
@@ -447,7 +463,7 @@ describe("render API", () => {
     project.activeRenderJobRecordId = previous.id;
     project.status = "render_ready";
 
-    const response = await app.inject({ method: "POST", url: `/api/projects/${project.id}/render/generate`, payload: {} });
+    const response = await app.inject({ method: "POST", url: `/api/projects/${project.id}/render/generate`, payload: {}, auth });
 
     expect(response.statusCode).toBe(500);
     expect(project.activeRenderJobRecordId).toBe(previous.id);

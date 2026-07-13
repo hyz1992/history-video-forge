@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
+import { buildTestAuth } from "../auth/test-utils.js";
 import { saveAssetManifestRecord } from "../../../backend/src/modules/assets/asset-manifest-record.repository.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import type { AssetManifest } from "../../../shared/src/index.js";
@@ -121,11 +122,13 @@ function makeReadyManifest(): AssetManifest {
 describe("compose API", () => {
   it("returns 404 for a missing project", async () => {
     const app = buildApp();
+    const auth = buildTestAuth({ userId: "owner-1" });
 
     const response = await app.inject({
       method: "POST",
       url: "/api/projects/missing-project/compose/generate",
       payload: {},
+      auth,
     });
 
     expect(response.statusCode).toBe(404);
@@ -134,12 +137,14 @@ describe("compose API", () => {
 
   it("returns 409 when active assets are missing", async () => {
     const app = buildApp();
-    const project = await createProject(app.db, { name: "Compose Missing Assets" });
+    const auth = buildTestAuth({ userId: "owner-1" });
+    const project = await createProject(app.db, { name: "Compose Missing Assets", ownerId: "owner-1" });
 
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/compose/generate`,
       payload: {},
+      auth,
     });
 
     expect(response.statusCode).toBe(409);
@@ -148,7 +153,8 @@ describe("compose API", () => {
 
   it("creates, validates, persists, and activates a compose timeline", async () => {
     const app = buildApp();
-    const project = await createProject(app.db, { name: "Compose Happy Path" });
+    const auth = buildTestAuth({ userId: "owner-1" });
+    const project = await createProject(app.db, { name: "Compose Happy Path", ownerId: "owner-1" });
     const manifestRecord = await saveAssetManifestRecord(app.db, {
       projectId: project.id,
       topicPackageId: "topic_001",
@@ -179,6 +185,7 @@ describe("compose API", () => {
       method: "POST",
       url: `/api/projects/${project.id}/compose/generate`,
       payload: {},
+      auth,
     });
 
     expect(response.statusCode).toBe(200);
@@ -210,7 +217,8 @@ describe("compose API", () => {
 
   it("persists blocked compose validation without activating it as ready", async () => {
     const app = buildApp();
-    const project = await createProject(app.db, { name: "Compose Blocked" });
+    const auth = buildTestAuth({ userId: "owner-1" });
+    const project = await createProject(app.db, { name: "Compose Blocked", ownerId: "owner-1" });
     const manifest = makeReadyManifest();
     manifest.segment_routes[0].primary_visual_artifact_id = null;
     manifest.segment_routes[0].visual_route_type = "missing";
@@ -240,6 +248,7 @@ describe("compose API", () => {
       method: "POST",
       url: `/api/projects/${project.id}/compose/generate`,
       payload: {},
+      auth,
     });
 
     expect(response.statusCode).toBe(200);
@@ -263,7 +272,8 @@ describe("compose API", () => {
 
   it("returns 409 when active assets change during compose generation", async () => {
     const app = buildApp();
-    const project = await createProject(app.db, { name: "Compose Stale Source" });
+    const auth = buildTestAuth({ userId: "owner-1" });
+    const project = await createProject(app.db, { name: "Compose Stale Source", ownerId: "owner-1" });
     const manifestRecord = await saveAssetManifestRecord(app.db, {
       projectId: project.id,
       topicPackageId: "topic_001",
@@ -300,6 +310,7 @@ describe("compose API", () => {
       method: "POST",
       url: `/api/projects/${project.id}/compose/generate`,
       payload: {},
+      auth,
     });
 
     expect(response.statusCode).toBe(409);
@@ -310,7 +321,8 @@ describe("compose API", () => {
 
   it("generates compose timeline when manifest contains Date objects (normalized)", async () => {
     const app = buildApp();
-    const project = await createProject(app.db, { name: "Date Normalize" });
+    const auth = buildTestAuth({ userId: "owner-1" });
+    const project = await createProject(app.db, { name: "Date Normalize", ownerId: "owner-1" });
 
     // Build manifest with ISO-date strings in executions/artifacts
     const manifest = makeReadyManifest();
@@ -344,6 +356,7 @@ describe("compose API", () => {
       method: "POST",
       url: `/api/projects/${project.id}/compose/generate`,
       payload: {},
+      auth,
     });
 
     // Should NOT 500 — dates should be normalized by the record repository

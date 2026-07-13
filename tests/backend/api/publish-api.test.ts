@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
+import { buildTestAuth } from "../auth/test-utils.js";
 import { saveAssetManifestRecord } from "../../../backend/src/modules/assets/asset-manifest-record.repository.js";
 import { saveComposeRecord } from "../../../backend/src/modules/compose/compose-record.repository.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
@@ -13,11 +14,13 @@ import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/st
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
 
 describe("publish API", () => {
+  const auth = buildTestAuth({ userId: "owner-1" });
+
   async function setupProjectWithRender() {
     const app = buildApp();
     const db = app.db;
 
-    const project = await createProject(db, { name: "Publish API Test" });
+    const project = await createProject(db, { name: "Publish API Test", ownerId: "owner-1" });
 
     const topicPackage = await saveTopicPackage(db, {
       projectId: project.id,
@@ -122,6 +125,7 @@ describe("publish API", () => {
     const { app, project } = await setupProjectWithRender();
 
     const res = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/generate`,
     });
@@ -170,6 +174,7 @@ describe("publish API", () => {
     const app = buildApp();
 
     const res = await app.inject({
+      auth,
       method: "POST",
       url: "/api/projects/nonexistent/publish/generate",
     });
@@ -180,9 +185,10 @@ describe("publish API", () => {
   it("POST generate returns 409 when no render job", async () => {
     const app = buildApp();
     const db = app.db;
-    const project = await createProject(db, { name: "No Render" });
+    const project = await createProject(db, { name: "No Render", ownerId: "owner-1" });
 
     const res = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/generate`,
     });
@@ -195,7 +201,7 @@ describe("publish API", () => {
   it("POST generate returns 409 when render job not completed", async () => {
     const app = buildApp();
     const db = app.db;
-    const project = await createProject(db, { name: "Failed Render" });
+    const project = await createProject(db, { name: "Failed Render", ownerId: "owner-1" });
 
     const renderJob = await saveRenderJobRecord(db, {
       projectId: project.id,
@@ -210,6 +216,7 @@ describe("publish API", () => {
     project.activeRenderJobRecordId = renderJob.id;
 
     const res = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/generate`,
     });
@@ -221,7 +228,7 @@ describe("publish API", () => {
   it("POST generate returns 409 when upstream pipeline incomplete", async () => {
     const app = buildApp();
     const db = app.db;
-    const project = await createProject(db, { name: "Incomplete Pipeline" });
+    const project = await createProject(db, { name: "Incomplete Pipeline", ownerId: "owner-1" });
 
     const exportArtifact = {
       artifact_id: "export_001",
@@ -251,6 +258,7 @@ describe("publish API", () => {
     // Missing topic/script/storyboard/asset manifest pointers
 
     const res = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/generate`,
     });
@@ -264,6 +272,7 @@ describe("publish API", () => {
 
     // First generate a package
     const genRes = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/generate`,
     });
@@ -271,6 +280,7 @@ describe("publish API", () => {
 
     // Patch the package
     const patchRes = await app.inject({
+      auth,
       method: "PATCH",
       url: `/api/projects/${project.id}/publish`,
       payload: {
@@ -294,11 +304,13 @@ describe("publish API", () => {
     const { app, project } = await setupProjectWithRender();
 
     await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/generate`,
     });
 
     const res = await app.inject({
+      auth,
       method: "PATCH",
       url: `/api/projects/${project.id}/publish`,
       payload: {
@@ -314,9 +326,10 @@ describe("publish API", () => {
   it("PATCH returns 409 when no active publish package", async () => {
     const app = buildApp();
     const db = app.db;
-    const project = await createProject(db, { name: "No Publish Pkg" });
+    const project = await createProject(db, { name: "No Publish Pkg", ownerId: "owner-1" });
 
     const res = await app.inject({
+      auth,
       method: "PATCH",
       url: `/api/projects/${project.id}/publish`,
       payload: { selected_title: "test" },
@@ -331,6 +344,7 @@ describe("publish API", () => {
 
     // First generate
     const res1 = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/generate`,
     });
@@ -339,6 +353,7 @@ describe("publish API", () => {
 
     // Generate again
     const res2 = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/generate`,
     });
@@ -359,12 +374,14 @@ describe("publish API", () => {
 
     // Generate a package first
     await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/generate`,
     });
 
     // Set a cover prompt draft via PATCH
     await app.inject({
+      auth,
       method: "PATCH",
       url: `/api/projects/${project.id}/publish`,
       payload: {
@@ -374,6 +391,7 @@ describe("publish API", () => {
     });
 
     const res = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/cover/prompt/optimize`,
     });
@@ -390,9 +408,10 @@ describe("publish API", () => {
   it("POST cover/prompt/optimize returns 409 when no active publish package", async () => {
     const app = buildApp();
     const db = app.db;
-    const project = await createProject(db, { name: "No Publish" });
+    const project = await createProject(db, { name: "No Publish", ownerId: "owner-1" });
 
     const res = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/cover/prompt/optimize`,
     });
@@ -405,11 +424,13 @@ describe("publish API", () => {
     const { app, project } = await setupProjectWithRender();
 
     await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/generate`,
     });
 
     const res = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/cover/upload`,
       payload: {
@@ -437,11 +458,13 @@ describe("publish API", () => {
     const { app, project } = await setupProjectWithRender();
 
     await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/generate`,
     });
 
     const res = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/cover/upload`,
       payload: {
@@ -458,11 +481,13 @@ describe("publish API", () => {
     const { app, project } = await setupProjectWithRender();
 
     await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/generate`,
     });
 
     const res = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/cover/upload`,
       payload: {},
@@ -476,12 +501,14 @@ describe("publish API", () => {
     const { app, project } = await setupProjectWithRender();
 
     await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/generate`,
     });
 
     // Set a cover prompt draft
     await app.inject({
+      auth,
       method: "PATCH",
       url: `/api/projects/${project.id}/publish`,
       payload: {
@@ -490,6 +517,7 @@ describe("publish API", () => {
     });
 
     const res = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/cover/generate`,
     });
@@ -502,18 +530,21 @@ describe("publish API", () => {
     const { app, project } = await setupProjectWithRender();
 
     await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/generate`,
     });
 
     // Clear cover prompt to trigger the no-cover-prompt error
     await app.inject({
+      auth,
       method: "PATCH",
       url: `/api/projects/${project.id}/publish`,
       payload: { cover_prompt_draft: "" },
     });
 
     const res = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/cover/generate`,
     });
@@ -526,6 +557,7 @@ describe("publish API", () => {
     const { app, project } = await setupProjectWithRender();
 
     const res = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/title/candidates`,
     });
@@ -549,16 +581,19 @@ describe("publish API", () => {
 
     // Generate a publish package with a selected title
     await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/generate`,
     });
     await app.inject({
+      auth,
       method: "PATCH",
       url: `/api/projects/${project.id}/publish`,
       payload: { selected_title: "已选标题" },
     });
 
     const res = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/title/candidates`,
     });
@@ -569,6 +604,7 @@ describe("publish API", () => {
 
     // Verify candidates were persisted to the publish package
     const snapshotRes = await app.inject({
+      auth,
       method: "GET",
       url: `/api/projects/${project.id}`,
     });
@@ -582,9 +618,10 @@ describe("publish API", () => {
   it("POST title/candidates returns 409 when upstream pipeline incomplete", async () => {
     const app = buildApp();
     const db = app.db;
-    const project = await createProject(db, { name: "No Upstream" });
+    const project = await createProject(db, { name: "No Upstream", ownerId: "owner-1" });
 
     const res = await app.inject({
+      auth,
       method: "POST",
       url: `/api/projects/${project.id}/publish/title/candidates`,
     });
@@ -597,6 +634,7 @@ describe("publish API", () => {
     const app = buildApp();
 
     const res = await app.inject({
+      auth,
       method: "POST",
       url: "/api/projects/nonexistent/publish/title/candidates",
     });
