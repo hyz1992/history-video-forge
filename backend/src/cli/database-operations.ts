@@ -10,6 +10,7 @@ import { backupDatabase } from "../db/operations/backup-database.js";
 import { restoreDatabase } from "../db/operations/restore-database.js";
 import { createPrismaClient } from "../db/prisma-client.js";
 import { checkPrismaReadiness } from "../db/prisma-readiness.js";
+import { bootstrapAdmin, AdminBootstrapError } from "../auth/admin-bootstrap.js";
 
 function has(flag: string): boolean { return process.argv.includes(flag); }
 function value(flag: string): string | undefined {
@@ -53,6 +54,20 @@ async function main(): Promise<void> {
     });
     return void console.log(JSON.stringify({ status: "migration_owner_created", id, username }));
   }
+  if (command === "admin-bootstrap") {
+    const username = value("--username"); const password = value("--password");
+    const displayName = value("--display-name");
+    if (!username || !password || !has("--confirm")) throw new Error("usage: admin-bootstrap --username <name> --password <password> [--display-name <name>] --confirm");
+    try {
+      const result = await withClient(databaseUrl, (client) => bootstrapAdmin(client, { username, password, displayName }));
+      return void console.log(JSON.stringify(result));
+    } catch (error) {
+      if (error instanceof AdminBootstrapError) {
+        throw new Error(`admin_bootstrap_failed:${error.code}`);
+      }
+      throw error;
+    }
+  }
   if (command === "import") {
     const sourcePath = value("--source"); const ownerId = value("--owner");
     if (!sourcePath || !ownerId || !has("--confirm")) throw new Error("usage: import --source <path> --owner <id> --confirm");
@@ -79,7 +94,7 @@ async function main(): Promise<void> {
     const result = await restoreDatabase({ backupPath, targetPath: databasePath, confirm: has("--confirm"), serviceStopped: has("--service-stopped") });
     return void console.log(JSON.stringify(result, null, 2));
   }
-  throw new Error("usage: database-operations <status|init|owner-init|import|verify|activate|backup|restore>");
+  throw new Error("usage: database-operations <status|init|owner-init|admin-bootstrap|import|verify|activate|backup|restore>");
 }
 
 void main().catch((error) => {
