@@ -1218,20 +1218,29 @@ function parseSelectorDeductions(
 
     const record = rawDeduction as Record<string, unknown>;
     const axis = record.axis;
-    const pointsLost = record.points_lost;
-    const reason = record.reason;
 
-    if (
-      typeof axis !== "string" ||
-      typeof pointsLost !== "number" ||
-      !Number.isInteger(pointsLost) ||
-      typeof reason !== "string"
-    ) {
-      throw new Error(`${dLabel}: invalid fields (axis=${JSON.stringify(axis)} points_lost=${JSON.stringify(pointsLost)} reason=${JSON.stringify(reason)})`);
+    if (typeof axis !== "string") {
+      throw new Error(`${dLabel}: invalid fields (axis=${JSON.stringify(axis)} points_lost=${JSON.stringify(record.points_lost)} reason=${JSON.stringify(record.reason)})`);
+    }
+
+    let pointsLost: number;
+    const rawPointsLost = record.points_lost;
+    if (typeof rawPointsLost === "number" && Number.isInteger(rawPointsLost)) {
+      pointsLost = rawPointsLost;
+    } else {
+      pointsLost = 1;
+    }
+
+    let reason: string;
+    const rawReason = record.reason;
+    if (typeof rawReason === "string") {
+      reason = rawReason;
+    } else {
+      reason = `扣分项：${axis}`;
     }
 
     if (pointsLost < 1 || pointsLost > 30) {
-      throw new Error(`${dLabel}: points_lost ${pointsLost} out of [1,30]`);
+      pointsLost = Math.max(1, Math.min(30, pointsLost));
     }
 
     return {

@@ -391,6 +391,21 @@ function roundLabel(round: { label?: string; round_index?: number }) {
       </div>
     </template>
 
+    <template v-else-if="topicPhase.kind === 'empty'">
+      <div class="center-state">
+        <div class="center-state-inner">
+          <div class="center-error-icon">!</div>
+          <h2 class="center-state-title">选题尚未生成</h2>
+          <p class="center-state-desc">当前项目尚未生成选题，可能是首次创建或上次生成未能完成。</p>
+          <div class="center-state-line"></div>
+          <div class="center-state-actions">
+            <button class="btn btn-ghost" @click="router.push('/projects')">返回项目列表</button>
+            <button class="btn btn-primary" @click="handleRegenerate">生成选题</button>
+          </div>
+        </div>
+      </div>
+    </template>
+
     <template v-else-if="topicStore.state.activeTab === 'library'">
       <div class="topic-alt-panel">
         <h2>事件库</h2>
