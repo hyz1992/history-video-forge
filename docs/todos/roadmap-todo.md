@@ -53,11 +53,12 @@
 - [x] 完成前端 v1 主工作区：选题、文案、分镜、资产、合成渲染、发布交付
 - [x] 完成合成渲染页预览/下载/发布入口
 - [x] 完成发布交付页发布包生成、编辑、封面、标题候选、描述、标签与导出主流程
+- [x] 完成 V2 第一个大子项目 S1：用户系统、管理员权限与项目隔离（S1-1 到 S1-8 全部完成并通过端到端验收）
 
 ## 进行中
 - [x] 完成 V2 数据基础 Task 8.5 收口：测试矩阵、schema 复核、迁移状态机、readiness、仓储访问边界、SQLite 备份恢复、Prisma 业务切换与 JSON 写入冻结
 - [x] 完成 V1 高风险稳定化最终全量回归、故障演练和内置浏览器验收
-- [ ] 审查并推进 V2 用户系统、管理员权限与项目隔离：以 `docs/plans/2026-07-13-v2-overall-design.md`、`docs/plans/2026-07-13-v2-auth-project-isolation-design.md` 和 `docs/plans/2026-07-13-v2-acceptance-and-implementation-plan.md` 为当前草案入口
+## 进行中
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 补齐前端 v1 真实浏览器验收矩阵：空态、加载中、成功、失败、刷新、深链、重复操作
 - [ ] 收口当前未归档计划，避免历史 implementation plan 误导新任务

@@ -6,11 +6,13 @@
 
 ## 当前状态
 
-截至 2026-07-13：
+截至 2026-07-14：
 
-- V2 数据基础 Task 8.5 已完成收口：测试矩阵、schema 复核、迁移状态机、readiness、仓储访问边界、SQLite 备份恢复、Prisma 业务切换、JSON 写入冻结、重启恢复和内置浏览器深链验收均已有记录。
-- Task 8.5 收口证据见 [V2 数据基础 Task 8.5 收口实施计划](./2026-07-11-v2-data-foundation-closeout-implementation-plan.md) 和 [V2 数据基础收口验收记录](../records/2026-07-12-v2-data-foundation-closeout-verification.md)。
-- 正式 V2 产品功能尚未开始；下一阶段入口是 V2 用户系统、管理员权限与项目隔离。进入实现前，应先审查并确认 [V2 总体设计](./2026-07-13-v2-overall-design.md) 与 [V2 用户系统、管理员权限与项目隔离详细设计](./2026-07-13-v2-auth-project-isolation-design.md)，不得直接跳过设计审查改 schema 或接 auth。
+- V2 第一个大子项目 S1（用户系统、管理员权限与项目隔离）已完成全部 S1-1 到 S1-8 并通过端到端验收。
+- S1 实施记录见 `AGENTS.md` 和提交历史；V2 S1 设计草案（见下方"2026-07-13 V2 设计草案索引"）已完成使命，相关代码实现已稳定。
+- V2 数据基础 Task 8.5 已完成收口。
+- 当前 V2 下一步入口为 V2 总体设计 Step 3-10（多供应商、筛选、事件库、用户偏好、prompt 治理、LLM 性能、内容策略、神话故事），具体顺序待用户确认。
+- 正式 V2 产品功能已进入实施阶段；migration owner 不可登录标记 `!migration-owner-no-login`，其项目通过 admin 管理页面转移给真实用户。
 
 - [V1 高风险稳定化实施计划](./2026-07-10-v1-high-risk-stabilization-implementation-plan.md) 的主要代码任务已完成；其全量回归超时和故障演练缺口已并入 Task 8.5 的测试与切换闸门，不再作为独立的下一执行入口。
 - 该计划的主要代码任务、最终全量回归、故障演练和内置浏览器验收已完成；计划暂不归档，直到当前未归档计划收口策略明确。

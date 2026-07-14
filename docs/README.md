@@ -15,14 +15,15 @@
 
 ## 当前阶段状态
 
-截至 2026-07-12：
+截至 2026-07-14：
 
-- V1 高风险稳定化已完成主要止血任务：快照兼容/原子写入、构建失败传播、远程绑定闸门、测试存储隔离、媒体库启动加载、中断恢复、阶段锁、推荐记忆持久化、删除保护和 `/readyz`。
-- V1 风险修复与 V2 数据基础收口已经完成；正式启动固定使用已初始化、已激活的 Prisma 数据库，旧 JSON persistence 仅保留为迁移/测试 fixture 适配器。
+- V2 第一个大子项目 S1（用户系统、管理员权限与项目隔离）已完成全部 8 个子任务并通过端到端验收。
+- V2 S1 覆盖：Auth 基础设施（S1-1）、Admin Bootstrap CLI（S1-2）、Controller 授权与 owner 隔离（S1-3）、File routes owner 隔离（S1-4）、Admin 只读 API（S1-5a）、Admin 写操作 API（S1-5b）、后端 login/logout/me 与前端 auth（S1-6）、管理前端（S1-7）、migration owner 转换与 S1 收口验收（S1-8）。
+- migration owner（不可登录标记 `!migration-owner-no-login`）的项目可通过 admin 管理页面转移给真实 USER；转移后 USER 可正常登录并使用项目，其他用户不可访问。
+- V2 S1 收口验收测试见 `tests/backend/s1-e2e-acceptance.test.ts`（19 个用例全部通过）。
+- V1 高风险稳定化已完成主要止血任务。
+- V2 数据基础 Task 8.5 已完成收口：测试矩阵、schema 复核、迁移状态机、readiness、仓储访问边界、SQLite 备份恢复、Prisma 业务切换与 JSON 写入冻结。
 - 2026-07-12 分组全量矩阵覆盖 197 个测试文件、1068 个用例并全部通过；前后端构建、SQLite 备份恢复、Prisma 重启恢复和内置浏览器深链验收通过。
-- 正式 V2 产品功能尚未开始；下一阶段由 Trae 主导功能开发，重大数据合同、权限模型和内容策略设计先做独立审查。
-- V2 总体设计、用户系统/管理员权限/项目隔离详细设计、验收矩阵、schema 适用性审查、待决策/风险和 Step 3-10 roadmap 已形成草案；当前入口见 [Plans 状态说明](./plans/README.md) 的“2026-07-13 V2 设计草案索引”。
-
 - 全链路 v1 已进入端到端交付闭环：`topic -> script -> storyboard -> asset planning -> assets -> compose/render -> publish`。
 - `topic + script` 第一阶段已达到当前及格标准，可以暂时冻结。
 - `storyboard`、`asset planning`、`assets`、`compose/render`、`publish` 已具备 v1 后端链路和前端工作区入口。
