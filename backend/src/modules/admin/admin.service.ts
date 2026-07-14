@@ -5,7 +5,6 @@ import {
   validatePasswordPolicy,
   PasswordPolicyError,
 } from "../../auth/password-hash.js";
-import { PrismaSessionStore } from "../../auth/session-store.js";
 
 export interface AdminUserSummary {
   id: string;
@@ -360,22 +359,32 @@ export async function adminRevokeUserSessions(
   actor: AdminActor,
   targetUserId: string,
 ): Promise<{ userId: string; revokedCount: number }> {
-  const target = await client.user.findUnique({ where: { id: targetUserId } });
-  if (!target) {
-    throw new AdminServiceError("user_not_found", "user_not_found", 404);
+  try {
+    const revokedCount = await client.$transaction(async (tx) => {
+      const target = await tx.user.findUnique({ where: { id: targetUserId } });
+      if (!target) {
+        throw new AdminServiceError("user_not_found", "user_not_found", 404);
+      }
+      const result = await tx.session.updateMany({
+        where: { userId: targetUserId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorUserId: actor.userId,
+          action: ADMIN_AUDIT_ACTIONS.sessionRevoke,
+          targetType: "Session",
+          targetId: targetUserId,
+          metadataJson: { revokedCount: result.count },
+        },
+      });
+      return result.count;
+    });
+    return { userId: targetUserId, revokedCount };
+  } catch (error) {
+    if (error instanceof AdminServiceError) throw error;
+    throw error;
   }
-  const sessionStore = new PrismaSessionStore(client);
-  const revokedCount = await sessionStore.revokeSessionsByUser(targetUserId);
-  await client.auditLog.create({
-    data: {
-      actorUserId: actor.userId,
-      action: ADMIN_AUDIT_ACTIONS.sessionRevoke,
-      targetType: "Session",
-      targetId: targetUserId,
-      metadataJson: { revokedCount },
-    },
-  });
-  return { userId: targetUserId, revokedCount };
 }
 
 export interface TransferOwnerInput {

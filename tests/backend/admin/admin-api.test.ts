@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { buildApp, type AppInstance } from "../../../backend/src/app.js";
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
+import type { ProjectRecord } from "../../../backend/src/db/client.js";
 import { activateDatabase } from "../../../backend/src/db/database-activation.js";
 import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
 import { hashPassword } from "../../../backend/src/auth/password-hash.js";
@@ -35,6 +36,39 @@ async function seedProject(client: Awaited<ReturnType<typeof createPrismaClient>
     },
   });
   return projectId;
+}
+
+function mirrorProjectToMemory(app: AppInstance, projectId: string, ownerId: string): void {
+  const now = new Date();
+  const record: ProjectRecord = {
+    id: projectId,
+    name: "Admin View Project",
+    ownerId,
+    createdById: ownerId,
+    status: "topic_pending",
+    activeTopicPackageId: null,
+    activeScriptRecordId: null,
+    activeStoryboardRecordId: null,
+    activeAssetPlanRecordId: null,
+    activeAssetManifestRecordId: null,
+    activeComposeRecordId: null,
+    activeRenderJobRecordId: null,
+    activePublishPackageRecordId: null,
+    latestTopicRunTraceJson: null,
+    latestScriptRunTraceJson: null,
+    latestStoryboardRunTraceJson: null,
+    latestAssetPlanRunTraceJson: null,
+    latestAssetsRunTraceJson: null,
+    latestComposeRunTraceJson: null,
+    latestRenderRunTraceJson: null,
+    storageDisplayName: "",
+    storageShortId: "",
+    storageRootDir: "",
+    storageRenameLocked: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+  app.db.projects.set(projectId, record);
 }
 
 async function setup(): Promise<Setup> {
@@ -548,9 +582,13 @@ describe("admin API (S1-5b write operations)", () => {
     expect(res.json()).toMatchObject({ error: "user_not_found" });
   });
 
-  it("transfer-owner updates only ownerId (not createdById), writes owner_transfer audit with from/to", async () => {
+  it("transfer-owner updates ownerId (not createdById), writes owner_transfer audit, and syncs memory state so the access matrix flips immediately", async () => {
     ctx = await setup();
+    mirrorProjectToMemory(ctx.app, ctx.projectId, ctx.userId);
+
     const before = await ctx.client.project.findUnique({ where: { id: ctx.projectId } });
+    expect(ctx.app.db.projects.get(ctx.projectId)?.ownerId).toBe(ctx.userId);
+
     const res = await ctx.app.inject({
       method: "POST",
       url: `/api/admin/projects/${ctx.projectId}/transfer-owner`,
@@ -566,6 +604,8 @@ describe("admin API (S1-5b write operations)", () => {
     expect(after?.ownerId).toBe(ctx.adminId);
     expect(after?.createdById).toBe(before!.createdById);
 
+    expect(ctx.app.db.projects.get(ctx.projectId)?.ownerId).toBe(ctx.adminId);
+
     const audit = await ctx.client.auditLog.findFirst({
       where: { action: "owner_transfer", targetId: ctx.projectId, actorUserId: ctx.adminId },
     });
@@ -575,6 +615,27 @@ describe("admin API (S1-5b write operations)", () => {
       toOwnerId: ctx.adminId,
       reason: "handoff",
     });
+
+    const oldOwnerAccess = await ctx.app.inject({
+      method: "GET",
+      url: `/api/projects/${ctx.projectId}`,
+      auth: userAuth(ctx.userId),
+    });
+    expect(oldOwnerAccess.statusCode).toBe(404);
+
+    const newOwnerAccess = await ctx.app.inject({
+      method: "GET",
+      url: `/api/projects/${ctx.projectId}`,
+      auth: adminAuth(ctx.adminId),
+    });
+    expect(newOwnerAccess.statusCode).toBe(200);
+
+    const adminAccess = await ctx.app.inject({
+      method: "GET",
+      url: `/api/projects/${ctx.projectId}`,
+      auth: adminAuth(ctx.adminId),
+    });
+    expect(adminAccess.statusCode).toBe(200);
   });
 
   it("transfer-owner to a DISABLED user is rejected with target_user_not_active", async () => {
@@ -633,5 +694,30 @@ describe("admin API (S1-5b write operations)", () => {
       expect(res.statusCode).toBe(404);
       expect(res.json()).toMatchObject({ error: "user_not_found" });
     }
+  });
+
+  it("revoke sessions is atomic: if audit write fails (FK violation on actor), sessions are NOT revoked and no half-state remains", async () => {
+    ctx = await setup();
+    await ctx.client.session.create({
+      data: {
+        userId: ctx.userId,
+        tokenHash: "hash-atomic-1",
+        expiresAt: new Date(Date.now() + 86400000),
+      },
+    });
+
+    const { adminRevokeUserSessions } = await import("../../../backend/src/modules/admin/admin.service.js");
+
+    await expect(
+      adminRevokeUserSessions(ctx.client, { userId: "non-existent-actor-for-fk-failure" }, ctx.userId),
+    ).rejects.toThrow();
+
+    const sessions = await ctx.client.session.findMany({ where: { userId: ctx.userId } });
+    expect(sessions.every((s) => s.revokedAt === null)).toBe(true);
+
+    const audit = await ctx.client.auditLog.findFirst({
+      where: { action: "session_revoke", targetId: ctx.userId },
+    });
+    expect(audit).toBeNull();
   });
 });

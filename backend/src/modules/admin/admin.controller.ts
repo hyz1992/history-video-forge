@@ -192,6 +192,11 @@ export const transferProjectOwnerController = guardAdminRoute(
           reason,
         },
       );
+      const memoryProject = context.app.db.projects.get(result.projectId);
+      if (memoryProject && memoryProject.ownerId !== result.ownerId) {
+        memoryProject.ownerId = result.ownerId;
+        memoryProject.updatedAt = new Date();
+      }
       return { statusCode: 200, body: result };
     } catch (error) {
       return handleAdminServiceError(error);
