@@ -6,6 +6,7 @@ import "element-plus/theme-chalk/dark/css-vars.css";
 
 import "./styles/main.css";
 import { createAppRouter } from "./router";
+import { createAuthStore, authStoreKey } from "./stores/auth";
 import {
   createFetchProjectApi,
   createProjectStore,
@@ -58,7 +59,10 @@ import CompetitionNoticeDialog from "./components/common/CompetitionNoticeDialog
 initTheme();
 await initDemoMode();
 
-const router = createAppRouter("web");
+const authStore = createAuthStore();
+await authStore.loadMe().catch(() => undefined);
+
+const router = createAppRouter("web", { authStore });
 const projectStore = createProjectStore(createFetchProjectApi());
 const topicStore = createTopicStore({
   projectStore,
@@ -99,6 +103,7 @@ const app = createApp({
 
 app.use(ElementPlus);
 app.use(router);
+app.provide(authStoreKey, authStore);
 app.provide(projectStoreKey, projectStore);
 app.provide(topicStoreKey, topicStore);
 app.provide(scriptStoreKey, scriptStore);
@@ -108,6 +113,18 @@ app.provide(assetsStoreKey, assetsStore);
 app.provide(composeStoreKey, composeStore);
 app.provide(renderStoreKey, renderStore);
 app.provide(publishStoreKey, publishStore);
+
+import { onUnauthorized } from "./utils/api";
+
+if (typeof window !== "undefined") {
+  onUnauthorized(() => {
+    authStore.clear();
+    const current = router.currentRoute.value;
+    if (current.path !== "/login") {
+      void router.push({ path: "/login", query: { redirect: current.fullPath } });
+    }
+  });
+}
 
 if (typeof document !== "undefined") {
   app.mount("#app");

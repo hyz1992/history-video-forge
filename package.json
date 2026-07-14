@@ -54,7 +54,8 @@
     "harness:ui-acceptance:full": "tsx harness/scripts/ui-acceptance/ui-acceptance-full.ts",
     "harness:ui-acceptance:report": "tsx harness/scripts/ui-acceptance/ui-acceptance-report.ts",
     "harness:ui-reference-migration": "tsx harness/scripts/ui-acceptance/reference-migration-runner.ts",
-    "harness:ui-reference-migration:report": "tsx harness/scripts/ui-acceptance/reference-migration-report.ts"
+    "harness:ui-reference-migration:report": "tsx harness/scripts/ui-acceptance/reference-migration-report.ts",
+    "harness:auth-flow-acceptance": "tsx harness/scripts/ui-acceptance/auth-flow-acceptance.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.58.2",

@@ -7,14 +7,21 @@ import {
   useProjectStore,
   type ProjectListItem,
 } from "../stores/project";
+import { useAuthStore } from "../stores/auth";
 import { useDemoMode } from "../composables/useDemoMode";
 import CreateTopicModal from "../components/topic/CreateTopicModal.vue";
 import { useCompetitionGuard } from "../composables/useCompetitionGuard";
 
 const projectStore = useProjectStore();
+const authStore = useAuthStore();
 const router = useRouter();
 const isDemoMode = useDemoMode();
 const { checkCreateProject } = useCompetitionGuard();
+
+async function handleLogout() {
+  await authStore.logout();
+  await router.push("/login");
+}
 
 const showCreateTopicModal = ref(false);
 
@@ -302,6 +309,8 @@ function cleanDynasty(raw: string | undefined): string {
           <h1 class="page-title" data-testid="projects-heading">我的<em>项目</em></h1>
         </div>
         <div class="header-actions">
+          <span v-if="authStore.isAuthenticated()" class="header-user">{{ authStore.state.user?.displayName }}</span>
+          <button v-if="authStore.isAuthenticated()" class="btn btn-ghost" data-testid="logout-btn" @click="handleLogout">退出</button>
           <button class="btn btn-primary" data-testid="create-project" @click="handleCreateProject">
             <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
             新建项目

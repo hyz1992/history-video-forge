@@ -10,11 +10,23 @@ import { createAppRouter } from "../../frontend/src/router/index.js";
 import { projectStoreKey } from "../../frontend/src/stores/project";
 import { scriptStoreKey } from "../../frontend/src/stores/script";
 import { topicStoreKey } from "../../frontend/src/stores/topic";
+import { authStoreKey } from "../../frontend/src/stores/auth";
 
 function flushPromises() {
   return new Promise((resolve) => {
     setTimeout(resolve, 0);
   });
+}
+
+function createAuthStoreStub() {
+  return {
+    state: { user: null, initialized: true, loading: false },
+    isAuthenticated: () => true,
+    async loadMe() { return null; },
+    async login() { throw new Error("not_implemented"); },
+    async logout() {},
+    clear() {},
+  };
 }
 
 function createProjectStoreStub() {
@@ -148,6 +160,7 @@ async function mountAt(path: string) {
           [projectStoreKey as symbol]: projectStore.store as never,
           [topicStoreKey as symbol]: createTopicStoreStub() as never,
           [scriptStoreKey as symbol]: createScriptStoreStub() as never,
+          [authStoreKey as symbol]: createAuthStoreStub() as never,
         },
       },
     },
@@ -316,6 +329,7 @@ describe("phase 4 project routing", () => {
             [projectStoreKey as symbol]: projectStore.store as never,
             [topicStoreKey as symbol]: topicStore as never,
             [scriptStoreKey as symbol]: scriptStore as never,
+            [authStoreKey as symbol]: createAuthStoreStub() as never,
           },
         },
       },
@@ -462,6 +476,7 @@ describe("phase 4 project routing", () => {
             [projectStoreKey as symbol]: projectStore.store as never,
             [topicStoreKey as symbol]: topicStore as never,
             [scriptStoreKey as symbol]: scriptStore as never,
+            [authStoreKey as symbol]: createAuthStoreStub() as never,
           },
         },
       },

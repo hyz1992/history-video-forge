@@ -24,7 +24,13 @@
         </div>
         <div class="topbar-divider" aria-hidden="true"></div>
         <div class="account-actions">
-          <button class="account-btn login-btn">登录</button>
+          <template v-if="authStore.isAuthenticated()">
+            <span class="account-user">{{ authStore.state.user?.displayName }}</span>
+            <button class="account-btn login-btn" @click="handleLogout">退出</button>
+          </template>
+          <template v-else>
+            <button class="account-btn login-btn" @click="router.push('/login')">登录</button>
+          </template>
           <button class="account-btn settings-btn" aria-label="设置" title="设置">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="12" cy="12" r="3"></circle>
@@ -289,12 +295,19 @@ import { onMounted, onUnmounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
 import { useProjectStore } from "../stores/project";
+import { useAuthStore } from "../stores/auth";
 import CreateTopicModal from "../components/topic/CreateTopicModal.vue";
 import { useCompetitionGuard } from "../composables/useCompetitionGuard";
 
 const projectStore = useProjectStore();
+const authStore = useAuthStore();
 const router = useRouter();
 const { checkCreateProject } = useCompetitionGuard();
+
+async function handleLogout() {
+  await authStore.logout();
+  await router.push("/login");
+}
 
 const showCreateTopicModal = ref(false);
 
