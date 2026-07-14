@@ -1,4 +1,5 @@
 import { inject, reactive, readonly, type InjectionKey } from "vue";
+import { apiFetch, notifyUnauthorized } from "../utils/api";
 
 import type { ProjectStore } from "./project";
 
@@ -142,9 +143,7 @@ export interface PublishApi {
 export function createFetchPublishApi(baseUrl = ""): PublishApi {
   return {
     async loadProject(projectId) {
-      const response = await fetch(`${baseUrl}/api/projects/${projectId}`);
-      if (!response.ok) throw new Error(`publish_load_failed:${response.status}`);
-      const data = await response.json();
+      const data = await apiFetch<Record<string, unknown>>(`${baseUrl}/api/projects/${projectId}`);
       return {
         current_status: data.current_status ?? null,
         active_publish_package: data.active_publish_package ?? null,
@@ -153,17 +152,7 @@ export function createFetchPublishApi(baseUrl = ""): PublishApi {
     },
 
     async generatePackage(projectId) {
-      const response = await fetch(`${baseUrl}/api/projects/${projectId}/publish/generate`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-      });
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(
-          (err as Record<string, unknown>).error as string ?? `publish_generate_failed:${response.status}`,
-        );
-      }
-      const data = await response.json();
+      const data = await apiFetch<Record<string, unknown>>(`${baseUrl}/api/projects/${projectId}/publish/generate`, { method: "POST" });
       return {
         current_status: data.current_status ?? null,
         active_publish_package: data.active_publish_package ?? null,
@@ -172,18 +161,10 @@ export function createFetchPublishApi(baseUrl = ""): PublishApi {
     },
 
     async updatePackage(projectId, updates) {
-      const response = await fetch(`${baseUrl}/api/projects/${projectId}/publish`, {
+      const data = await apiFetch<Record<string, unknown>>(`${baseUrl}/api/projects/${projectId}/publish`, {
         method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(updates),
+        body: updates,
       });
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(
-          (err as Record<string, unknown>).error as string ?? `publish_update_failed:${response.status}`,
-        );
-      }
-      const data = await response.json();
       return {
         current_status: data.current_status ?? null,
         active_publish_package: data.active_publish_package ?? null,
@@ -192,32 +173,14 @@ export function createFetchPublishApi(baseUrl = ""): PublishApi {
     },
 
     async optimizeCoverPrompt(projectId) {
-      const response = await fetch(`${baseUrl}/api/projects/${projectId}/publish/cover/prompt/optimize`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-      });
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(
-          (err as Record<string, unknown>).error as string ?? `cover_optimize_failed:${response.status}`,
-        );
-      }
-      return response.json();
+      return await apiFetch(`${baseUrl}/api/projects/${projectId}/publish/cover/prompt/optimize`, { method: "POST" });
     },
 
     async uploadCover(projectId, fileUri, mimeType, width, height) {
-      const response = await fetch(`${baseUrl}/api/projects/${projectId}/publish/cover/upload`, {
+      const data = await apiFetch<Record<string, unknown>>(`${baseUrl}/api/projects/${projectId}/publish/cover/upload`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ file_uri: fileUri, mime_type: mimeType, width, height }),
+        body: { file_uri: fileUri, mime_type: mimeType, width, height },
       });
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(
-          (err as Record<string, unknown>).error as string ?? `cover_upload_failed:${response.status}`,
-        );
-      }
-      const data = await response.json();
       return {
         current_status: data.current_status ?? null,
         active_publish_package: data.active_publish_package ?? null,
@@ -226,17 +189,7 @@ export function createFetchPublishApi(baseUrl = ""): PublishApi {
     },
 
     async generateCover(projectId) {
-      const response = await fetch(`${baseUrl}/api/projects/${projectId}/publish/cover/generate`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-      });
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(
-          (err as Record<string, unknown>).error as string ?? `cover_generate_failed:${response.status}`,
-        );
-      }
-      const data = await response.json();
+      const data = await apiFetch<Record<string, unknown>>(`${baseUrl}/api/projects/${projectId}/publish/cover/generate`, { method: "POST" });
       return {
         current_status: data.current_status ?? null,
         active_publish_package: data.active_publish_package ?? null,
@@ -245,38 +198,28 @@ export function createFetchPublishApi(baseUrl = ""): PublishApi {
     },
 
     async loadTitleCandidates(projectId) {
-      const response = await fetch(`${baseUrl}/api/projects/${projectId}/publish/title/candidates`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-      });
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error(
-          (err as Record<string, unknown>).error as string ?? `title_candidates_failed:${response.status}`,
-        );
-      }
-      return response.json();
+      return await apiFetch(`${baseUrl}/api/projects/${projectId}/publish/title/candidates`, { method: "POST" });
     },
 
     async exportPackage(projectId) {
       const response = await fetch(`${baseUrl}/api/projects/${projectId}/publish/export`);
+      if (response.status === 401) {
+        notifyUnauthorized();
+      }
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         throw new Error(
           (err as Record<string, unknown>).error as string ?? `export_failed:${response.status}`,
         );
       }
-      // Read manifest from header
       const manifestHeader = response.headers.get("x-export-manifest");
       const manifest: ExportManifest = manifestHeader
         ? JSON.parse(decodeURIComponent(manifestHeader))
         : { project_id: projectId, project_title: "", files: [], title: "", description: "", hashtags: [], cover_origin: "", has_cover_image: false, has_video: false, exported_at: "", readiness: "draft", missing_fields: [] };
 
-      // Trigger file download with readable filename
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      // Use manifest title for filename, with ASCII-safe fallback
       const safeBase = (manifest.project_title || "publish-package").replace(/[/\\:*?"<>|]/g, "_").slice(0, 40);
       a.download = `${safeBase}-发布包.zip`;
       a.href = url;

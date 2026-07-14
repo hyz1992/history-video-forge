@@ -1,4 +1,5 @@
 import { inject, reactive, readonly, type InjectionKey } from "vue";
+import { apiFetch, ApiError } from "../utils/api";
 
 export interface ProjectSnapshot {
   project_id: string;
@@ -60,60 +61,28 @@ export const projectStoreKey: InjectionKey<ProjectStore> = Symbol("project-store
 export function createFetchProjectApi(baseUrl = ""): ProjectApi {
   return {
     async listProjects() {
-      const response = await fetch(`${baseUrl}/api/projects`);
-      if (!response.ok) return [];
-      return response.json();
+      try {
+        return await apiFetch<ProjectListItem[]>(`${baseUrl}/api/projects`);
+      } catch {
+        return [];
+      }
     },
     async getProject(projectId) {
-      const response = await fetch(`${baseUrl}/api/projects/${projectId}`);
-      if (!response.ok) throw new Error(`project_load_failed:${response.status}`);
-      const data = await response.json();
+      const data = await apiFetch<Record<string, unknown>>(`${baseUrl}/api/projects/${projectId}`);
       return {
-        project_id: data.project_id ?? projectId,
-        current_status: data.current_status ?? "",
-        display_name:
-          data.display_name ??
-          data.active_topic_package?.canonical_title ??
-          data.name ??
-          undefined,
+        project_id: (data.project_id ?? projectId) as string,
+        current_status: (data.current_status ?? "") as string,
+        display_name: (data.display_name ?? (data as Record<string, unknown>).active_topic_package ? (data.active_topic_package as Record<string, unknown>)?.canonical_title : data.name) as string | undefined,
       };
     },
     async deleteProject(projectId) {
-      const response = await fetch(`${baseUrl}/api/projects/${projectId}`, {
-        method: "DELETE",
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(
-          typeof body?.message === "string"
-            ? body.message
-            : typeof body?.error === "string"
-              ? body.error
-              : `project_delete_failed:${response.status}`,
-        );
-      }
+      await apiFetch(`${baseUrl}/api/projects/${projectId}`, { method: "DELETE" });
     },
     async createProject(input) {
-      const response = await fetch(`${baseUrl}/api/projects`, {
+      return await apiFetch<ProjectSnapshot>(`${baseUrl}/api/projects`, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          name: input?.name ?? "未命名项目",
-        }),
+        body: { name: input?.name ?? "未命名项目" },
       });
-
-      if (!response.ok) {
-        const body = await response.json().catch(() => ({}));
-        throw new Error(
-          typeof body?.error === "string"
-            ? body.error
-            : `project_create_failed:${response.status}`,
-        );
-      }
-
-      return response.json();
     },
   };
 }

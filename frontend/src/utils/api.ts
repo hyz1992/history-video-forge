@@ -73,7 +73,13 @@ export async function apiFetch<T = unknown>(
   }
 
   if (!response.ok) {
-    const code = (data as { error?: string } | null)?.error ?? `http_${response.status}`;
+    const body = data as { error?: string; message?: string } | null;
+    const code =
+      (typeof body?.message === "string" && body.message.trim().length > 0
+        ? body.message
+        : typeof body?.error === "string" && body.error.trim().length > 0
+          ? body.error
+          : undefined) ?? `http_${response.status}`;
     throw new ApiError(response.status, code, code);
   }
 

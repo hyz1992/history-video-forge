@@ -1,4 +1,5 @@
 import { inject, reactive, readonly, type InjectionKey } from "vue";
+import { apiFetch, ApiError, notifyUnauthorized } from "../utils/api";
 
 import type { ProjectStore } from "./project";
 
@@ -77,9 +78,7 @@ export interface RenderApi {
 export function createFetchRenderApi(baseUrl = ""): RenderApi {
   return {
     async loadProject(projectId) {
-      const response = await fetch(`${baseUrl}/api/projects/${projectId}`);
-      if (!response.ok) throw new Error(`render_load_failed:${response.status}`);
-      const data = await response.json();
+      const data = await apiFetch<Record<string, unknown>>(`${baseUrl}/api/projects/${projectId}`);
       return {
         current_status: data.current_status ?? null,
         active_render: data.active_render ?? null,
@@ -91,11 +90,11 @@ export function createFetchRenderApi(baseUrl = ""): RenderApi {
     async generateRender(projectId) {
       const response = await fetch(
         `${baseUrl}/api/projects/${projectId}/render/generate`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-        },
+        { method: "POST", headers: { "content-type": "application/json" } },
       );
+      if (response.status === 401) {
+        notifyUnauthorized();
+      }
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         const validation = (err as Record<string, unknown>).local_validation as

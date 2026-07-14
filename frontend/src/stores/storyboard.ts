@@ -1,4 +1,5 @@
 import { inject, reactive, readonly, type InjectionKey } from "vue";
+import { apiFetch } from "../utils/api";
 
 import type { ProjectStore } from "./project";
 
@@ -70,65 +71,33 @@ export interface StoryboardApi {
 export function createFetchStoryboardApi(baseUrl = ""): StoryboardApi {
   return {
     async loadSnapshot(projectId) {
-      const response = await fetch(`${baseUrl}/api/projects/${projectId}`);
-      if (!response.ok) throw new Error(`storyboard_load_failed:${response.status}`);
-      const data = await response.json();
-      const snapshot: StoryboardSnapshot = {
+      const data = await apiFetch<Record<string, unknown>>(`${baseUrl}/api/projects/${projectId}`);
+      return {
         current_status: data.current_status ?? null,
         active_storyboard: data.active_storyboard ?? null,
         active_storyboard_record_id: data.active_storyboard_record_id ?? null,
       };
-      return snapshot;
     },
     async generateStoryboard(projectId) {
-      const response = await fetch(
-        `${baseUrl}/api/projects/${projectId}/storyboard/generate`,
-        { method: "POST", headers: { "content-type": "application/json" } },
-      );
-      if (!response.ok) throw new Error(`storyboard_generate_failed:${response.status}`);
+      await apiFetch(`${baseUrl}/api/projects/${projectId}/storyboard/generate`, { method: "POST" });
     },
     async regenerateStoryboard(projectId, userFeedback) {
-      const response = await fetch(
-        `${baseUrl}/api/projects/${projectId}/storyboard/generate`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ user_feedback: userFeedback }),
-        },
-      );
-      if (!response.ok) throw new Error(`storyboard_regen_failed:${response.status}`);
+      await apiFetch(`${baseUrl}/api/projects/${projectId}/storyboard/generate`, {
+        method: "POST",
+        body: { user_feedback: userFeedback },
+      });
     },
     async updateSegmentStrategy(projectId, segmentId, strategy) {
-      const response = await fetch(
-        `${baseUrl}/api/projects/${projectId}/storyboard/strategy`,
-        {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            segment_id: segmentId,
-            visual_strategy_preference: strategy,
-          }),
-        },
-      );
-      if (!response.ok) throw new Error(`storyboard_strategy_update_failed:${response.status}`);
+      await apiFetch(`${baseUrl}/api/projects/${projectId}/storyboard/strategy`, {
+        method: "PATCH",
+        body: { segment_id: segmentId, visual_strategy_preference: strategy },
+      });
     },
     async regenerateSegment(projectId, segmentId, userFeedback) {
-      const response = await fetch(
-        `${baseUrl}/api/projects/${projectId}/storyboard/segments/${segmentId}/regen`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ user_feedback: userFeedback }),
-        },
-      );
-      if (!response.ok) {
-        let detail = "";
-        try {
-          const body = await response.json() as Record<string, unknown>;
-          detail = typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : "";
-        } catch { /* ignore */ }
-        throw new Error(`storyboard_segment_regen_failed:${response.status}${detail ? ` — ${detail}` : ""}`);
-      }
+      await apiFetch(`${baseUrl}/api/projects/${projectId}/storyboard/segments/${segmentId}/regen`, {
+        method: "POST",
+        body: { user_feedback: userFeedback },
+      });
     },
   };
 }

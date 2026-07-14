@@ -1,4 +1,5 @@
 import { inject, reactive, readonly, type InjectionKey } from "vue";
+import { apiFetch, notifyUnauthorized } from "../utils/api";
 
 import type { ProjectStore } from "./project";
 
@@ -108,9 +109,7 @@ export interface AssetsApi {
 export function createFetchAssetsApi(baseUrl = ""): AssetsApi {
   return {
     async loadProject(projectId) {
-      const response = await fetch(`${baseUrl}/api/projects/${projectId}`);
-      if (!response.ok) throw new Error(`assets_load_failed:${response.status}`);
-      const data = await response.json();
+      const data = await apiFetch<Record<string, unknown>>(`${baseUrl}/api/projects/${projectId}`);
       return {
         current_status: data.current_status ?? null,
         active_assets: data.active_assets ?? null,
@@ -119,45 +118,18 @@ export function createFetchAssetsApi(baseUrl = ""): AssetsApi {
 
     async generateAssets(projectId, options) {
       const body: Record<string, unknown> = {};
-      if (options.enabledProviderTypes) {
-        body.enabled_provider_types = options.enabledProviderTypes;
-      }
+      if (options.enabledProviderTypes) body.enabled_provider_types = options.enabledProviderTypes;
       if (options.mode) body.mode = options.mode;
       if (options.taskIds) body.task_ids = options.taskIds;
-      const response = await fetch(
-        `${baseUrl}/api/projects/${projectId}/assets/generate`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(body),
-        },
-      );
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error((err as Record<string, unknown>).error as string ?? `assets_generate_failed:${response.status}`);
-      }
+      await apiFetch(`${baseUrl}/api/projects/${projectId}/assets/generate`, { method: "POST", body });
     },
 
     async generateSingleTask(projectId, taskId) {
-      const response = await fetch(
-        `${baseUrl}/api/projects/${projectId}/assets/tasks/${taskId}/generate`,
-        { method: "POST", headers: { "content-type": "application/json" }, body: "{}" },
-      );
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error((err as Record<string, unknown>).error as string ?? `task_generate_failed:${response.status}`);
-      }
+      await apiFetch(`${baseUrl}/api/projects/${projectId}/assets/tasks/${taskId}/generate`, { method: "POST", body: {} });
     },
 
     async upgradeSegmentToVideo(projectId, segmentId) {
-      const response = await fetch(
-        `${baseUrl}/api/projects/${projectId}/assets/segments/${segmentId}/upgrade-video`,
-        { method: "POST", headers: { "content-type": "application/json" }, body: "{}" },
-      );
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error((err as Record<string, unknown>).error as string ?? `upgrade_video_failed:${response.status}`);
-      }
+      await apiFetch(`${baseUrl}/api/projects/${projectId}/assets/segments/${segmentId}/upgrade-video`, { method: "POST", body: {} });
     },
 
     async uploadArtifact(projectId, taskId, file) {
@@ -165,11 +137,11 @@ export function createFetchAssetsApi(baseUrl = ""): AssetsApi {
       formData.append("file", file);
       const response = await fetch(
         `${baseUrl}/api/projects/${projectId}/assets/tasks/${taskId}/artifacts/upload`,
-        {
-          method: "POST",
-          body: formData,
-        },
+        { method: "POST", body: formData },
       );
+      if (response.status === 401) {
+        notifyUnauthorized();
+      }
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         throw new Error((err as Record<string, unknown>).error as string ?? `asset_upload_failed:${response.status}`);
@@ -177,18 +149,10 @@ export function createFetchAssetsApi(baseUrl = ""): AssetsApi {
     },
 
     async acceptArtifact(projectId, taskId, artifactId) {
-      const response = await fetch(
-        `${baseUrl}/api/projects/${projectId}/assets/tasks/${taskId}/accept`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ artifact_id: artifactId }),
-        },
-      );
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error((err as Record<string, unknown>).error as string ?? `artifact_accept_failed:${response.status}`);
-      }
+      await apiFetch(`${baseUrl}/api/projects/${projectId}/assets/tasks/${taskId}/accept`, {
+        method: "POST",
+        body: { artifact_id: artifactId },
+      });
     },
   };
 }

@@ -10,6 +10,7 @@ describe("topic store recommendation input", () => {
   it("sends canonical recommendation seed fields derived from system filters", async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
+      headers: new Headers({ "content-type": "application/json" }),
       json: async () => ({
         project_id: "project-1",
         candidates: [],
@@ -70,6 +71,7 @@ describe("topic store recommendation input", () => {
     const fetchMock = vi.fn(async () => ({
       ok: false,
       status: 400,
+      headers: new Headers({ "content-type": "application/json" }),
       json: async () => ({
         error: "invalid_topic_recommendation_seed",
       }),
@@ -91,6 +93,7 @@ describe("topic store recommendation input", () => {
     const fetchMock = vi.fn(async () => ({
       ok: false,
       status: 500,
+      headers: new Headers({ "content-type": "application/json" }),
       json: async () => ({
         error: "topic_generate_failed",
         message: "LLM provider timeout after 120 seconds",

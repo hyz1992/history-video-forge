@@ -1,4 +1,5 @@
 import { inject, reactive, readonly, type InjectionKey } from "vue";
+import { apiFetch } from "../utils/api";
 
 import type { ProjectStore } from "./project";
 
@@ -125,25 +126,15 @@ export const assetPlanningStoreKey: InjectionKey<AssetPlanningStore> =
 export function createFetchAssetPlanningApi(baseUrl = ""): AssetPlanningApi {
   return {
     async loadProject(projectId) {
-      const response = await fetch(`${baseUrl}/api/projects/${projectId}`);
-      if (!response.ok) throw new Error(`asset_plan_load_failed:${response.status}`);
-      const data = await response.json();
+      const data = await apiFetch<Record<string, unknown>>(`${baseUrl}/api/projects/${projectId}`);
       return {
         current_status: data.current_status ?? null,
         active_asset_plan: data.active_asset_plan ?? null,
-        active_asset_plan_record_id:
-          data.active_asset_plan_record_id ?? null,
+        active_asset_plan_record_id: data.active_asset_plan_record_id ?? null,
       };
     },
     async generateAssetPlan(projectId) {
-      const response = await fetch(
-        `${baseUrl}/api/projects/${projectId}/asset-plan/generate`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-        },
-      );
-      if (!response.ok) throw new Error(`asset_plan_generate_failed:${response.status}`);
+      await apiFetch(`${baseUrl}/api/projects/${projectId}/asset-plan/generate`, { method: "POST" });
     },
   };
 }

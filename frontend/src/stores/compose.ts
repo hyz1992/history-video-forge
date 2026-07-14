@@ -1,4 +1,5 @@
 import { inject, reactive, readonly, type InjectionKey } from "vue";
+import { apiFetch } from "../utils/api";
 
 import type { ProjectStore } from "./project";
 
@@ -86,9 +87,7 @@ export interface ComposeApi {
 export function createFetchComposeApi(baseUrl = ""): ComposeApi {
   return {
     async loadProject(projectId) {
-      const response = await fetch(`${baseUrl}/api/projects/${projectId}`);
-      if (!response.ok) throw new Error(`compose_load_failed:${response.status}`);
-      const data = await response.json();
+      const data = await apiFetch<Record<string, unknown>>(`${baseUrl}/api/projects/${projectId}`);
       return {
         current_status: data.current_status ?? null,
         active_compose: data.active_compose ?? null,
@@ -97,17 +96,7 @@ export function createFetchComposeApi(baseUrl = ""): ComposeApi {
     },
 
     async generateCompose(projectId) {
-      const response = await fetch(
-        `${baseUrl}/api/projects/${projectId}/compose/generate`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-        },
-      );
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}));
-        throw new Error((err as Record<string, unknown>).error as string ?? `compose_generate_failed:${response.status}`);
-      }
+      await apiFetch(`${baseUrl}/api/projects/${projectId}/compose/generate`, { method: "POST" });
     },
   };
 }

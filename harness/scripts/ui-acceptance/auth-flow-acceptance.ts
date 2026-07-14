@@ -9,6 +9,7 @@ import { applyAllDatabaseMigrations } from "../../../tests/backend/db/migration-
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { activateDatabase } from "../../../backend/src/db/database-activation.js";
 import { bootstrapAdmin } from "../../../backend/src/auth/admin-bootstrap.js";
+import { hashPassword } from "../../../backend/src/auth/password-hash.js";
 import { PrismaSessionStore } from "../../../backend/src/auth/session-store.js";
 import { buildApp } from "../../../backend/src/app.js";
 import { createLocalRemotionRenderAdapter } from "../../../backend/src/modules/render/local-remotion-render-adapter.js";
@@ -18,6 +19,8 @@ const BACKEND_PORT = 5123;
 const FRONTEND_PORT = 5174;
 const ADMIN_USERNAME = "acceptance-admin";
 const ADMIN_PASSWORD = "a-strong-acceptance-admin-pw";
+const USER_USERNAME = "acceptance-user";
+const USER_PASSWORD = "a-strong-acceptance-user-pw";
 
 interface AcceptanceResult {
   step: string;
@@ -44,6 +47,16 @@ async function main() {
     const client = await createPrismaClient(dbPath);
     await activateDatabase(client, { mode: "fresh" });
     await bootstrapAdmin(client, { username: ADMIN_USERNAME, password: ADMIN_PASSWORD }, { requireDatabaseActivation: false });
+    await client.user.create({
+      data: {
+        username: USER_USERNAME,
+        displayName: "验收用户",
+        passwordHash: await hashPassword(USER_PASSWORD),
+        role: "USER",
+        status: "ACTIVE",
+        mustChangePassword: false,
+      },
+    });
     await client.$disconnect();
 
     process.env.DATABASE_URL = dbPath;
@@ -124,6 +137,19 @@ async function main() {
         return r.status;
       });
       record("无 cookie 调 /api/auth/me 返回 401", meRespAnon === 401, `status=${meRespAnon}`);
+
+      // 8. USER 登录 → 进入 /projects（USER 角色验收）
+      await page.goto(`http://127.0.0.1:${FRONTEND_PORT}/login?redirect=/projects`);
+      await page.fill("[data-testid='login-username']", USER_USERNAME);
+      await page.fill("[data-testid='login-password']", USER_PASSWORD);
+      await page.click("[data-testid='login-submit']");
+      await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 8000 });
+      record("USER 角色登录后进入 /projects", page.url().endsWith("/projects"), page.url());
+
+      // 9. USER 退出后回到登录页
+      await page.locator("[data-testid='logout-btn']").click();
+      await page.waitForURL(/\/login/, { timeout: 8000 });
+      record("USER 角色退出后回到 /login", page.url().includes("/login"), page.url());
     } finally {
       await browser.close();
     }

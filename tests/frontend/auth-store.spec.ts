@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAuthStore } from "../../frontend/src/stores/auth";
+import { apiFetch, onUnauthorized, notifyUnauthorized } from "../../frontend/src/utils/api";
 
 function jsonResponse(status: number, body: unknown): Response {
   return {
@@ -143,5 +144,51 @@ describe("auth store", () => {
     expect(serialized).not.toContain("super-secret-pw");
     expect(serialized).not.toContain("token");
     expect(serialized).not.toContain("passwordHash");
+  });
+});
+
+describe("apiFetch 401 notification", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("notifies onUnauthorized listeners when any apiFetch call receives 401", async () => {
+    await new Promise((r) => setTimeout(r, 5));
+    let listenerCalled = false;
+    const unsub = onUnauthorized(() => { listenerCalled = true; });
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(401, { error: "unauthorized" }));
+
+    try {
+      await apiFetch("/api/projects/test-project");
+    } catch {
+      // expected
+    }
+
+    expect(listenerCalled).toBe(true);
+    unsub();
+  });
+
+  it("does NOT notify onUnauthorized when response is non-401 error", async () => {
+    let listenerCalled = false;
+    const unsub = onUnauthorized(() => { listenerCalled = true; });
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(500, { error: "internal" }));
+
+    try {
+      await apiFetch("/api/projects/test-project");
+    } catch {
+      // expected
+    }
+
+    expect(listenerCalled).toBe(false);
+    unsub();
   });
 });

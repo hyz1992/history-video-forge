@@ -1,4 +1,5 @@
 import { inject, reactive, readonly, type InjectionKey } from "vue";
+import { apiFetch } from "../utils/api";
 
 import type { ProjectStore } from "./project";
 
@@ -104,50 +105,25 @@ export const scriptStoreKey: InjectionKey<ScriptStore> = Symbol("script-store");
 export function createFetchScriptApi(baseUrl = ""): ScriptApi {
   return {
     async loadSnapshot(projectId) {
-      const response = await fetch(`${baseUrl}/api/projects/${projectId}`);
-      if (!response.ok) throw new Error(`script_load_failed:${response.status}`);
-      return response.json();
+      return await apiFetch<ScriptSnapshot>(`${baseUrl}/api/projects/${projectId}`);
     },
     async generateInitialScript(projectId) {
-      const response = await fetch(`${baseUrl}/api/projects/${projectId}/script/generate`, {
+      await apiFetch(`${baseUrl}/api/projects/${projectId}/script/generate`, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          allow_patch: false,
-          allow_regen: false,
-        }),
+        body: { allow_patch: false, allow_regen: false },
       });
-      if (!response.ok) throw new Error(`script_generate_failed:${response.status}`);
     },
     async runPatchOnce(projectId) {
-      const response = await fetch(`${baseUrl}/api/projects/${projectId}/script/generate`, {
+      await apiFetch(`${baseUrl}/api/projects/${projectId}/script/generate`, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          allow_patch: true,
-          allow_regen: false,
-        }),
+        body: { allow_patch: true, allow_regen: false },
       });
-      if (!response.ok) throw new Error(`script_patch_failed:${response.status}`);
     },
     async runRegenOnce(projectId, userFeedback) {
-      const response = await fetch(`${baseUrl}/api/projects/${projectId}/script/generate`, {
+      await apiFetch(`${baseUrl}/api/projects/${projectId}/script/generate`, {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          allow_patch: false,
-          allow_regen: true,
-          force_regen: true,
-          user_feedback: userFeedback || null,
-        }),
+        body: { allow_patch: false, allow_regen: true, force_regen: true, user_feedback: userFeedback || null },
       });
-      if (!response.ok) throw new Error(`script_regen_failed:${response.status}`);
     },
   };
 }

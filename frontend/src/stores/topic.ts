@@ -1,4 +1,5 @@
 import { inject, reactive, readonly, type InjectionKey } from "vue";
+import { apiFetch } from "../utils/api";
 
 import type { ProjectStore } from "./project";
 
@@ -128,43 +129,32 @@ export const topicStoreKey: InjectionKey<TopicStore> = Symbol("topic-store");
 export function createFetchTopicApi(baseUrl = ""): TopicApi {
   return {
     async loadSnapshot(projectId) {
-      const response = await fetch(`${baseUrl}/api/projects/${projectId}`);
-      const data = await response.json();
-      return {
-        active_topic_package: data.active_topic_package ?? null,
-        current_status: data.current_status ?? "",
-        topic_candidates: data.topic_candidates ?? null,
-      };
+      try {
+        const data = await apiFetch<Record<string, unknown>>(`${baseUrl}/api/projects/${projectId}`);
+        return {
+          active_topic_package: data.active_topic_package ?? null,
+          current_status: (data.current_status ?? "") as string,
+          topic_candidates: data.topic_candidates ?? null,
+        };
+      } catch {
+        return {
+          active_topic_package: null,
+          current_status: "",
+          topic_candidates: null,
+        };
+      }
     },
     async generateSystemRecommendations(projectId, filters) {
-      const response = await fetch(
+      return await apiFetch<TopicRecommendationsResponse>(
         `${baseUrl}/api/projects/${projectId}/topic/recommendations`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-          },
-          body: JSON.stringify(buildRecommendationSeed(filters)),
-        },
+        { method: "POST", body: buildRecommendationSeed(filters) },
       );
-
-      return readJsonResponse<TopicRecommendationsResponse>(response);
     },
     async confirmCandidate(projectId, candidateId) {
-      const response = await fetch(
+      return await apiFetch<TopicConfirmResponse>(
         `${baseUrl}/api/projects/${projectId}/topic/candidates/${candidateId}/confirm`,
-        {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({
-            confirm_reason: "topic_page_confirm",
-          }),
-        },
+        { method: "POST", body: { confirm_reason: "topic_page_confirm" } },
       );
-
-      return readJsonResponse<TopicConfirmResponse>(response);
     },
   };
 }
@@ -491,20 +481,4 @@ function mapEraOutOfRangeExamples(era: TopicRecommendationFilters["era"]) {
 
 function normalizeTag(value: string) {
   return value.replace(/-/g, "_");
-}
-
-async function readJsonResponse<T>(response: Response): Promise<T> {
-  const body = await response.json();
-
-  if (response.ok === false) {
-    const errorMessage =
-      typeof body?.message === "string" && body.message.trim().length > 0
-        ? body.message
-        : typeof body?.error === "string" && body.error.trim().length > 0
-          ? body.error
-          : `topic_api_request_failed:${response.status}`;
-    throw new Error(errorMessage);
-  }
-
-  return body as T;
 }
