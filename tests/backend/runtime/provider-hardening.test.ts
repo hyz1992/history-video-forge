@@ -11,6 +11,7 @@ import {
 } from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 import { createRequestBudget } from "../../../backend/src/runtime/llm/request-budget.js";
+import type { LlmInteractionLogEntry } from "../../../backend/src/runtime/llm/interaction-log.js";
 
 describe("provider hardening", () => {
   it("routes structured profile to structured endpoint while preserving main profile", () => {
@@ -369,5 +370,167 @@ describe("provider hardening", () => {
         provider: "llm",
       },
     });
+  });
+
+  it("logs effective request, attempt, and response metadata for ordinary JSON invocations", async () => {
+    const entries: LlmInteractionLogEntry[] = [];
+    const writer = { write: (entry: LlmInteractionLogEntry) => { entries.push(entry); } };
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+
+    const fetchPayload = {
+      choices: [{
+        finish_reason: "stop",
+        message: { content: '{"ok":true}' },
+      }],
+      usage: {
+        prompt_tokens: 120,
+        completion_tokens: 30,
+        completion_tokens_details: { reasoning_tokens: 9 },
+      },
+    };
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify(fetchPayload), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    ) as typeof fetch;
+
+    try {
+      const provider = createOpenAiCompatibleProvider({
+        model: "glm-5.1",
+        baseUrl: "https://llm.example.test/v1",
+        apiKey: "test-key",
+        maxAttempts: 1,
+      });
+
+      const result = await provider.invokeStructuredPrompt({
+        prompt,
+        input: { seed: "slot-1" },
+        operationName: "script.writer",
+        interactionLogWriter: writer,
+      });
+
+      expect(result).toEqual({ ok: true });
+      expect(entries).toHaveLength(1);
+
+      const entry = entries[0];
+      expect(entry.effectiveRequest).toBeDefined();
+      expect(entry.effectiveRequest?.profile).toBe("main");
+      expect(entry.effectiveRequest?.model).toBe("glm-5.1");
+      expect(entry.effectiveRequest?.strategy).toBe("json_object");
+      expect(entry.effectiveRequest?.thinking).toBe("provider_default");
+      expect(typeof entry.effectiveRequest?.timeoutMs).toBe("number");
+      expect(typeof entry.effectiveRequest?.maxAttempts).toBe("number");
+
+      expect(Array.isArray(entry.attempts)).toBe(true);
+      expect(entry.attempts?.length).toBeGreaterThanOrEqual(1);
+      const firstAttempt = entry.attempts![0];
+      expect(firstAttempt.attempt).toBe(1);
+      expect(typeof firstAttempt.startedAt).toBe("string");
+      expect(typeof firstAttempt.finishedAt).toBe("string");
+      expect(typeof firstAttempt.durationMs).toBe("number");
+      expect(firstAttempt.outcome).toBe("success");
+
+      expect(entry.responseMetadata).toBeDefined();
+      expect(entry.responseMetadata?.finishReason).toBe("stop");
+      expect(entry.responseMetadata?.promptTokens).toBe(120);
+      expect(entry.responseMetadata?.completionTokens).toBe(30);
+      expect(entry.responseMetadata?.reasoningTokens).toBe(9);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("logs effective request, attempt, and response metadata for strict tool-call invocations", async () => {
+    const entries: LlmInteractionLogEntry[] = [];
+    const writer = { write: (entry: LlmInteractionLogEntry) => { entries.push(entry); } };
+    const prompt = createPromptRegistry().getPrompt("topic.selector");
+    const argumentsJson = JSON.stringify({
+      selected_candidate_ids: ["c1", "c2", "c3"],
+    });
+
+    const fetchPayload = {
+      choices: [{
+        finish_reason: "tool_calls",
+        message: {
+          tool_calls: [{
+            type: "function",
+            function: { name: "select_topic_candidates", arguments: argumentsJson },
+          }],
+        },
+      }],
+      usage: {
+        prompt_tokens: 200,
+        completion_tokens: 50,
+      },
+    };
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () =>
+      new Response(JSON.stringify(fetchPayload), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    ) as typeof fetch;
+
+    try {
+      const provider = createOpenAiCompatibleProvider({
+        model: "glm-5.1",
+        baseUrl: "https://llm.example.test/v1",
+        apiKey: "test-key",
+        maxAttempts: 1,
+      });
+
+      const result = await provider.invokeStrictStructured?.({
+        prompt,
+        input: { selector_pool: [] },
+        operationName: "topic.selector",
+        schema: {
+          name: "select_topic_candidates",
+          description: "Select topic candidates.",
+          parameters: {
+            type: "object",
+            properties: {
+              selected_candidate_ids: { type: "array", items: { type: "string" } },
+            },
+            required: ["selected_candidate_ids"],
+            additionalProperties: false,
+          },
+        },
+        parse: (candidate) => candidate as { selected_candidate_ids: string[] },
+        options: {
+          strategy: "tool_call",
+          thinking: "disabled",
+          temperature: 0.5,
+          topP: 0.9,
+          maxTokens: 2048,
+        },
+        interactionLogWriter: writer,
+      });
+
+      expect(result).toEqual({ selected_candidate_ids: ["c1", "c2", "c3"] });
+      expect(entries).toHaveLength(1);
+
+      const entry = entries[0];
+      expect(entry.effectiveRequest).toBeDefined();
+      expect(entry.effectiveRequest?.profile).toBe("structured");
+      expect(entry.effectiveRequest?.model).toBe("glm-5.1");
+      expect(entry.effectiveRequest?.strategy).toBe("tool_call");
+      expect(entry.effectiveRequest?.thinking).toBe("disabled");
+
+      expect(Array.isArray(entry.attempts)).toBe(true);
+      const firstAttempt = entry.attempts![0];
+      expect(firstAttempt.outcome).toBe("success");
+
+      expect(entry.responseMetadata).toBeDefined();
+      expect(entry.responseMetadata?.finishReason).toBe("tool_calls");
+      expect(entry.responseMetadata?.promptTokens).toBe(200);
+      expect(entry.responseMetadata?.completionTokens).toBe(50);
+      expect(entry.responseMetadata?.reasoningTokens).toBeUndefined();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

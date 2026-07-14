@@ -5,6 +5,41 @@ export type StrictStructuredStrategy = "json_object" | "tool_call" | "auto";
 
 export type StrictStructuredThinking = "enabled" | "disabled";
 
+export type LlmThinkingStatus =
+  | "enabled"
+  | "disabled"
+  | "provider_default"
+  | "unsupported";
+
+export interface LlmEffectiveRequest {
+  profile: "main" | "structured";
+  model: string;
+  strategy: StrictStructuredStrategy;
+  thinking: LlmThinkingStatus;
+  timeoutMs: number;
+  maxAttempts: number;
+  maxTokens?: number;
+  temperature?: number;
+  topP?: number;
+}
+
+export interface LlmAttemptObservation {
+  attempt: number;
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  outcome: "success" | "error";
+  errorCode?: string;
+  retryDelayMs?: number;
+}
+
+export interface LlmResponseMetadata {
+  promptTokens?: number;
+  completionTokens?: number;
+  reasoningTokens?: number;
+  finishReason?: string;
+}
+
 export interface LlmProviderCapabilities {
   jsonObject: boolean;
   toolCall: boolean;

@@ -18,6 +18,32 @@ export interface LlmInteractionLogEntry {
   };
   annotations?: string[];
   errorMessage?: string | null;
+  effectiveRequest?: {
+    profile: string;
+    model: string;
+    strategy: string;
+    thinking: string;
+    timeoutMs: number;
+    maxAttempts: number;
+    maxTokens?: number;
+    temperature?: number;
+    topP?: number;
+  };
+  attempts?: Array<{
+    attempt: number;
+    startedAt: string;
+    finishedAt: string;
+    durationMs: number;
+    outcome: "success" | "error";
+    errorCode?: string;
+    retryDelayMs?: number;
+  }>;
+  responseMetadata?: {
+    promptTokens?: number;
+    completionTokens?: number;
+    reasoningTokens?: number;
+    finishReason?: string;
+  };
 }
 
 export interface LlmInteractionLogWriter {
@@ -55,6 +81,74 @@ export function renderLlmInteractionMarkdown(
     `- prompt_stage: ${entry.promptStage}`,
     `- prompt_language: ${entry.promptLanguage}`,
     `- prompt_file: ${entry.promptFilePath.replace(/\\/g, "/")}`,
+  ];
+
+  if (entry.effectiveRequest) {
+    lines.push(
+      "",
+      "## 请求配置",
+      "",
+      `- profile: ${entry.effectiveRequest.profile}`,
+      `- strategy: ${entry.effectiveRequest.strategy}`,
+      `- thinking: ${entry.effectiveRequest.thinking}`,
+      `- timeout: ${entry.effectiveRequest.timeoutMs}ms`,
+      `- max_attempts: ${entry.effectiveRequest.maxAttempts}`,
+    );
+    if (entry.effectiveRequest.maxTokens !== undefined) {
+      lines.push(`- max_tokens: ${entry.effectiveRequest.maxTokens}`);
+    }
+    if (entry.effectiveRequest.temperature !== undefined) {
+      lines.push(`- temperature: ${entry.effectiveRequest.temperature}`);
+    }
+    if (entry.effectiveRequest.topP !== undefined) {
+      lines.push(`- top_p: ${entry.effectiveRequest.topP}`);
+    }
+  }
+
+  if (entry.attempts?.length) {
+    lines.push(
+      "",
+      "## 调用明细",
+      "",
+      "| attempt | started_at | finished_at | duration_ms | outcome | error_code | retry_delay_ms |",
+      "|---|---|---|---|---|---|---|",
+    );
+    for (const a of entry.attempts) {
+      lines.push(
+        `| ${a.attempt} | ${a.startedAt} | ${a.finishedAt} | ${a.durationMs} | ${a.outcome} | ${a.errorCode ?? "-"} | ${a.retryDelayMs ?? "-"} |`,
+      );
+    }
+  }
+
+  if (entry.responseMetadata) {
+    lines.push(
+      "",
+      "## 用量与结束原因",
+      "",
+    );
+    const md = entry.responseMetadata;
+    lines.push(`- finish_reason: ${md.finishReason ?? "unavailable"}`);
+    if (md.promptTokens !== undefined) {
+      lines.push(`- prompt_tokens: ${md.promptTokens}`);
+    }
+    if (md.completionTokens !== undefined) {
+      lines.push(`- completion_tokens: ${md.completionTokens}`);
+    }
+    if (md.reasoningTokens !== undefined) {
+      lines.push(`- reasoning_tokens: ${md.reasoningTokens}`);
+    }
+  }
+
+  if (entry.timing) {
+    lines.push(
+      "",
+      `- invocation_started_at: ${entry.timing.startedAt}`,
+      `- invocation_finished_at: ${entry.timing.finishedAt}`,
+      `- invocation_duration_ms: ${entry.timing.durationMs}`,
+    );
+  }
+
+  lines.push(
     "",
     "## 输入对象",
     "",
@@ -73,7 +167,7 @@ export function renderLlmInteractionMarkdown(
     "```text",
     entry.rawOutput.trim(),
     "```",
-  ];
+  );
 
   if (entry.parsedOutput !== undefined) {
     lines.push(
@@ -198,6 +292,47 @@ export function renderTraceSectionMarkdown(
     `| Model | \`${entry.model}\` |`,
     `| Requested At | \`${requestedAt}\` |`,
     `| Status | \`${status}\` |`,
+  ];
+
+  if (entry.effectiveRequest) {
+    const er = entry.effectiveRequest;
+    lines.push(`| Profile | \`${er.profile}\` |`);
+    lines.push(`| Strategy | \`${er.strategy}\` |`);
+    lines.push(`| Thinking | \`${er.thinking}\` |`);
+    lines.push(`| Timeout | \`${er.timeoutMs}ms\` |`);
+    lines.push(`| Max Attempts | \`${er.maxAttempts}\` |`);
+  }
+
+  if (entry.responseMetadata) {
+    const rm = entry.responseMetadata;
+    if (rm.finishReason !== undefined) {
+      lines.push(`| Finish Reason | \`${rm.finishReason}\` |`);
+    }
+    if (rm.promptTokens !== undefined) {
+      lines.push(`| Prompt Tokens | \`${rm.promptTokens}\` |`);
+    }
+    if (rm.completionTokens !== undefined) {
+      lines.push(`| Completion Tokens | \`${rm.completionTokens}\` |`);
+    }
+    if (rm.reasoningTokens !== undefined) {
+      lines.push(`| Reasoning Tokens | \`${rm.reasoningTokens}\` |`);
+    }
+  }
+
+  if (entry.attempts?.length) {
+    lines.push("", "### Attempts", "");
+    lines.push(
+      "| attempt | started_at | finished_at | duration_ms | outcome | error_code |",
+      "|---|---|---|---|---|---|",
+    );
+    for (const a of entry.attempts) {
+      lines.push(
+        `| ${a.attempt} | ${a.startedAt} | ${a.finishedAt} | ${a.durationMs} | ${a.outcome} | ${a.errorCode ?? "-"} |`,
+      );
+    }
+  }
+
+  lines.push(
     "",
     "",
     `### Prompt——输入提示词（阶段：${stageFull}）`,
@@ -205,7 +340,7 @@ export function renderTraceSectionMarkdown(
     "**User:**",
     "",
     indentBlockquote(stableStringify(entry.input)),
-  ];
+  );
 
   if (entry.systemPrompt) {
     lines.push(
