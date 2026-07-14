@@ -55,6 +55,7 @@ import {
 import { initTheme } from "./composables/useTheme";
 import { initDemoMode } from "./composables/useDemoMode";
 import CompetitionNoticeDialog from "./components/common/CompetitionNoticeDialog.vue";
+import AuthModal from "./components/auth/AuthModal.vue";
 
 initTheme();
 await initDemoMode();
@@ -98,7 +99,7 @@ const publishStore = createPublishStore({
 });
 
 const app = createApp({
-  render: () => h(Fragment, null, [h(RouterView), h(CompetitionNoticeDialog)]),
+  render: () => h(Fragment, null, [h(RouterView), h(CompetitionNoticeDialog), h(AuthModal)]),
 });
 
 app.use(ElementPlus);
@@ -119,10 +120,6 @@ import { onUnauthorized } from "./utils/api";
 if (typeof window !== "undefined") {
   onUnauthorized(() => {
     authStore.clear();
-    const current = router.currentRoute.value;
-    if (current.path !== "/login") {
-      void router.push({ path: "/login", query: { redirect: current.fullPath } });
-    }
   });
 }
 

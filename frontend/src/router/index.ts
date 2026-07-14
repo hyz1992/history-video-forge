@@ -27,6 +27,7 @@ export function createAppRouter(mode: "memory" | "web" = "memory", options?: Cre
       {
         path: "/",
         component: HomePage,
+        meta: { public: true },
       },
       {
         path: "/projects",
@@ -81,10 +82,8 @@ export function createAppRouter(mode: "memory" | "web" = "memory", options?: Cre
       }
 
       if (!authStore.isAuthenticated()) {
-        return {
-          path: "/login",
-          query: { redirect: to.fullPath },
-        };
+        authStore.openAuthModal("login");
+        return { path: "/" };
       }
 
       if (to.meta.requiresAdmin) {

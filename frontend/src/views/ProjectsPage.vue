@@ -20,7 +20,7 @@ const { checkCreateProject } = useCompetitionGuard();
 
 async function handleLogout() {
   await authStore.logout();
-  await router.push("/login");
+  await router.push("/");
 }
 
 const showCreateTopicModal = ref(false);

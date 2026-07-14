@@ -3,6 +3,7 @@ import type { AuthContext, AuthenticatedAuthContext } from "../../auth/auth-cont
 import { isAuthenticated } from "../../auth/auth-context.js";
 import {
   attemptLogin,
+  attemptRegister,
   AuthApiError,
   revokeCurrentSession,
   type SafeUserPublic,
@@ -128,4 +129,28 @@ export async function meHandler(
     statusCode: 200,
     body: { user },
   };
+}
+
+export async function registerHandler(
+  app: AppInstance,
+  payload: unknown,
+): Promise<AuthApiResponse> {
+  const unavailable = requirePrisma(app);
+  if (unavailable) return unavailable;
+
+  const body = (payload ?? {}) as { username?: unknown; password?: unknown; displayName?: unknown };
+  try {
+    const result = await attemptRegister(app.prismaClient!, {
+      username: typeof body.username === "string" ? body.username : "",
+      password: typeof body.password === "string" ? body.password : "",
+      displayName: typeof body.displayName === "string" ? body.displayName : "",
+    });
+    return {
+      statusCode: 200,
+      body: { user: result.user },
+      cookieAction: { type: "set", token: result.sessionToken },
+    };
+  } catch (error) {
+    return handleError(error);
+  }
 }

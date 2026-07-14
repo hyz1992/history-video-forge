@@ -22,8 +22,13 @@ export interface AuthStore {
   loadMe: () => Promise<AuthUser | null>;
   login: (username: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
+  register: (username: string, password: string, displayName: string) => Promise<AuthUser>;
   clear: () => void;
   isAuthenticated: () => boolean;
+  authModal: { open: boolean; mode: "login" | "register"; pendingAction: (() => void) | null };
+  openAuthModal: (mode?: "login" | "register") => void;
+  openAuthModalForAction: (action: () => void) => void;
+  hideAuthModal: () => void;
 }
 
 export const authStoreKey: InjectionKey<AuthStore> = Symbol("auth-store");
@@ -80,6 +85,24 @@ export function createAuthStore(): AuthStore {
     }
   }
 
+  async function register(username: string, password: string, displayName: string): Promise<AuthUser> {
+    state.loading = true;
+    try {
+      const data = await apiFetch<{ user?: AuthUser }>("/api/auth/register", {
+        method: "POST",
+        body: { username, password, displayName },
+      });
+      if (!data?.user) {
+        throw new ApiError(400, "register_failed", "register_failed");
+      }
+      state.user = data.user;
+      return data.user;
+    } finally {
+      state.loading = false;
+      state.initialized = true;
+    }
+  }
+
   async function logout(): Promise<void> {
     try {
       await apiFetch("/api/auth/logout", { method: "POST" });
@@ -99,13 +122,44 @@ export function createAuthStore(): AuthStore {
     clear();
   });
 
+  const authModal = reactive<{
+    open: boolean;
+    mode: "login" | "register";
+    pendingAction: (() => void) | null;
+  }>({
+    open: false,
+    mode: "login",
+    pendingAction: null,
+  });
+
+  function openAuthModal(mode: "login" | "register" = "login") {
+    authModal.mode = mode;
+    authModal.open = true;
+  }
+
+  function openAuthModalForAction(action: () => void) {
+    authModal.pendingAction = action;
+    authModal.mode = "login";
+    authModal.open = true;
+  }
+
+  function hideAuthModal() {
+    authModal.open = false;
+    authModal.pendingAction = null;
+  }
+
   return {
     state: readonly(state),
     loadMe,
     login,
     logout,
+    register,
     clear,
     isAuthenticated,
+    authModal,
+    openAuthModal,
+    openAuthModalForAction,
+    hideAuthModal,
   };
 }
 

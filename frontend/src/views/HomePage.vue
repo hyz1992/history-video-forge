@@ -20,7 +20,7 @@
       <div class="topbar-right">
         <div class="topbar-actions">
           <button v-if="authStore.state.user?.role === 'ADMIN'" class="btn btn-admin" data-testid="home-admin-entry" @click="router.push('/admin')">管理后台</button>
-          <button class="btn btn-ghost" data-testid="home-primary-cta" @click="router.push('/projects')">我的项目</button>
+          <button class="btn btn-ghost" data-testid="home-primary-cta" @click="goToProjects">我的项目</button>
           <button class="btn btn-primary" @click="handleCreateProject">新建项目</button>
         </div>
         <div class="topbar-divider" aria-hidden="true"></div>
@@ -30,7 +30,7 @@
             <button class="account-btn login-btn" @click="handleLogout">退出</button>
           </template>
           <template v-else>
-            <button class="account-btn login-btn" @click="router.push('/login')">登录</button>
+            <button class="account-btn login-btn" @click="authStore.openAuthModal('login')">登录</button>
           </template>
           <button class="account-btn settings-btn" aria-label="设置" title="设置">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -307,18 +307,27 @@ const { checkCreateProject } = useCompetitionGuard();
 
 async function handleLogout() {
   await authStore.logout();
-  await router.push("/login");
 }
 
 const showCreateTopicModal = ref(false);
 
+function requireAuth(action: () => void) {
+  if (authStore.isAuthenticated()) {
+    action();
+  } else {
+    authStore.openAuthModalForAction(action);
+  }
+}
+
 function goToProjects() {
-  router.push("/projects");
+  requireAuth(() => router.push("/projects"));
 }
 
 function handleCreateProject() {
-  if (!checkCreateProject()) return;
-  showCreateTopicModal.value = true;
+  requireAuth(() => {
+    if (!checkCreateProject()) return;
+    showCreateTopicModal.value = true;
+  });
 }
 
 async function handleCreateTopicConfirmed() {

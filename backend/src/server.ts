@@ -29,6 +29,7 @@ import {
   loginHandler,
   logoutHandler,
   meHandler,
+  registerHandler,
 } from "./modules/auth/auth.controller.js";
 
 export interface ServerHostOptions {
@@ -169,10 +170,11 @@ export function createHttpServer(
       return;
     }
 
-    // 1. Auth API (login/logout/me) — handled here because they need raw Set-Cookie access
+    // 1. Auth API (login/logout/me/register) — handled here because they need raw Set-Cookie access
     const isAuthApi = requestUrl.pathname === "/api/auth/login"
       || requestUrl.pathname === "/api/auth/logout"
-      || requestUrl.pathname === "/api/auth/me";
+      || requestUrl.pathname === "/api/auth/me"
+      || requestUrl.pathname === "/api/auth/register";
     if (isAuthApi) {
       if (request.method === "POST" && requestUrl.pathname === "/api/auth/login") {
         let loginPayload: unknown;
@@ -183,6 +185,21 @@ export function createHttpServer(
           return;
         }
         const result = await loginHandler(app, loginPayload).catch((error) => ({
+          statusCode: 500,
+          body: { error: "internal_error", message: error instanceof Error ? error.message : "internal_error" },
+        }));
+        writeAuthJson(response, result);
+        return;
+      }
+      if (request.method === "POST" && requestUrl.pathname === "/api/auth/register") {
+        let registerPayload: unknown;
+        try {
+          registerPayload = await readPayload(request);
+        } catch {
+          writeJson(response, 400, { error: "invalid_request_payload" });
+          return;
+        }
+        const result = await registerHandler(app, registerPayload).catch((error) => ({
           statusCode: 500,
           body: { error: "internal_error", message: error instanceof Error ? error.message : "internal_error" },
         }));
