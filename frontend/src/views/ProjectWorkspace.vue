@@ -25,9 +25,14 @@ const route = useRoute();
 const projectStore = useProjectStore();
 const authStore = useAuthStore();
 
+const routeOwnerId = computed(() => {
+  const value = route.query.owner_id;
+  return typeof value === "string" && value.length > 0 ? value : null;
+});
+
 const isAdminDeputizing = computed(() => {
   if (authStore.state.user?.role !== "ADMIN") return false;
-  const ownerId = projectStore.state.projectOwnerId;
+  const ownerId = projectStore.state.projectOwnerId ?? routeOwnerId.value;
   if (!ownerId) return false;
   return ownerId !== authStore.state.user?.id;
 });

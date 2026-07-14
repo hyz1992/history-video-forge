@@ -1,5 +1,5 @@
 import { chromium } from "@playwright/test";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -154,7 +154,7 @@ async function main() {
       await browser.close();
     }
 
-    viteProc.kill();
+    await killProcessTree(viteProc);
     httpServer.close();
     await liveClient.$disconnect().catch(() => undefined);
   } finally {
@@ -171,6 +171,25 @@ async function main() {
     process.exit(1);
   }
   console.log(`\n全部 ${results.length} 个验收步骤通过`);
+}
+
+async function killProcessTree(processToKill: ChildProcess): Promise<void> {
+  if (!processToKill.pid) {
+    processToKill.kill();
+    return;
+  }
+  if (process.platform === "win32") {
+    await new Promise<void>((resolveKill) => {
+      const killer = spawn("taskkill", ["/pid", String(processToKill.pid), "/t", "/f"], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+      killer.on("exit", () => resolveKill());
+      killer.on("error", () => resolveKill());
+    });
+    return;
+  }
+  processToKill.kill("SIGTERM");
 }
 
 function waitFor(url: string, timeoutMs: number): Promise<void> {

@@ -11,7 +11,8 @@
 - V2 第一个大子项目 S1（用户系统、管理员权限与项目隔离）已完成全部 S1-1 到 S1-8 并通过端到端验收。
 - S1 实施记录见 `AGENTS.md` 和提交历史；V2 S1 设计草案（见下方"2026-07-13 V2 设计草案索引"）已完成使命，相关代码实现已稳定。
 - V2 数据基础 Task 8.5 已完成收口。
-- 当前 V2 下一步入口为 V2 总体设计 Step 3-10（多供应商、筛选、事件库、用户偏好、prompt 治理、LLM 性能、内容策略、神话故事），具体顺序待用户确认。
+- S1 后真实浏览器验收已补充：`npm run harness:s1-browser-acceptance` 覆盖 admin 后台、migration owner 转移、代管横幅、审计日志和用户隔离；`npm run harness:auth-flow-acceptance` 覆盖基础登录/退出/session 恢复。
+- 当前 V2 下一步顺序已校准：先做 `S2-0 LLM 回复速度、质量和结构化输出优化基线`，再做 `S2-1 多模型、多供应商切换`。原因是 LLM 速度与 structured output 的真实瓶颈会影响 provider/model 抽象边界、默认策略和验收指标。
 - 正式 V2 产品功能已进入实施阶段；migration owner 不可登录标记 `!migration-owner-no-login`，其项目通过 admin 管理页面转移给真实用户。
 
 - [V1 高风险稳定化实施计划](./2026-07-10-v1-high-risk-stabilization-implementation-plan.md) 的主要代码任务已完成；其全量回归超时和故障演练缺口已并入 Task 8.5 的测试与切换闸门，不再作为独立的下一执行入口。
@@ -40,6 +41,19 @@
 - [V2 Prisma Schema 适用性审查](./2026-07-13-v2-prisma-schema-applicability-review.md)：当前 Prisma schema 对 V2 P0.1/P0.2 的适用性结论与后续新增实体范围。
 - [V2 待决策清单与风险登记](./2026-07-13-v2-decisions-and-risks.md)：人工决策项、风险登记和优先级。
 - [V2 后续 Step 3-10 Roadmap 留痕](./2026-07-13-v2-roadmap-step3-10.md)：多供应商、筛选、事件库、偏好、prompt 治理、LLM 性能、内容策略和神话扩展的后续路线。
+
+## 2026-07-14 V2 S1 后实施顺序校准
+
+旧的 Step 3-10 文档保留为范围留痕；当前执行顺序以本节为准：
+
+1. `S2-0`：LLM 回复速度、质量和结构化输出优化基线。先量化 topic/script 等 LLM 调用的耗时、失败、结构化输出稳定性和可低风险优化点；不引入多供应商抽象，不迁移正式 prompt 位置。
+2. `S2-1`：多模型、多供应商切换。基于 S2-0 的真实基线设计 provider/model/routing/run snapshot/credential reference。
+3. `S2-2`：用户偏好、生成策略与成本控制。接入用户级策略、预算和成本记录，消费 S2-1 的 provider/model 能力。
+4. `S2-3`：Prompt 治理。版本、hash、fixtures、变更说明和运行快照对齐；仍遵守 `AGENTS.md` 的 `harness/prompts/` 正式 prompt 位置规则，除非另有设计审查批准。
+5. `S2-4`：选题筛选条件扩充。与事件库字段协调，但不先造无法映射到事件数据的词表。
+6. `S2-5`：事件库与自定义选题。形成系统推荐、事件库、自定义三入口进入同一 Topic Package 链路。
+7. `S2-6`：历史内容策略配置化。只做可配置策略，不降低历史故事质量。
+8. `S2-7`：神话故事等非历史模式扩展。放在历史故事质量和策略稳定之后。
 
 进入 V2 用户系统实现前，还应阅读 [Trae V2 开发交接说明](../records/2026-07-12-trae-v2-handoff.md)。其中明确 migration owner 只是过渡身份，重大 Prisma schema、管理员权限、ProviderJob 或文件提交协议变更必须先做独立审查。
 
