@@ -76,6 +76,7 @@ export function createFetchProjectApi(baseUrl = ""): ProjectApi {
       return {
         project_id: (data.project_id ?? projectId) as string,
         current_status: (data.current_status ?? "") as string,
+        owner_id: typeof data.owner_id === "string" ? data.owner_id : undefined,
         display_name: typeof rawName === "string" ? rawName : undefined,
       };
     },

@@ -7,7 +7,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 import { createAppRouter } from "../../frontend/src/router";
 import { authStoreKey } from "../../frontend/src/stores/auth";
-import { projectStoreKey } from "../../frontend/src/stores/project";
+import { createFetchProjectApi, createProjectStore, projectStoreKey } from "../../frontend/src/stores/project";
 import { topicStoreKey } from "../../frontend/src/stores/topic";
 import { workspaceStoreKey } from "../../frontend/src/stores/workspace";
 
@@ -315,5 +315,51 @@ describe("deputize banner in ProjectWorkspace", () => {
     await waitForRender(wrapper);
     const banner = wrapper.find('[data-testid="deputize-banner"]');
     expect(banner.exists()).toBe(false);
+  });
+});
+
+describe("deputize banner via real getProject API flow", () => {
+  beforeEach(() => {
+    stubIntersectionObserver();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("shows banner when ADMIN loads project that has different owner_id in API response", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        project_id: "proj-other",
+        name: "他人的历史项目",
+        owner_id: "user-other",
+        current_status: "script_ready",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const authStore = makeAuthStore("ADMIN");
+    const api = createFetchProjectApi();
+    const projectStore = createProjectStore(api);
+    const router = createAppRouter("memory", { authStore: authStore as any });
+    await router.push("/projects/proj-other/topic");
+
+    const wrapper = mount(ProjectWorkspace, {
+      global: {
+        plugins: [ElementPlus, router],
+        provide: {
+          [authStoreKey as any]: authStore,
+          [projectStoreKey as any]: projectStore,
+          [topicStoreKey as any]: makeTopicStoreStub(),
+          [workspaceStoreKey as any]: makeWorkspaceStoreStub(0),
+        },
+      },
+    });
+
+    await waitForRender(wrapper, 5);
+
+    const banner = wrapper.find('[data-testid="deputize-banner"]');
+    expect(banner.exists()).toBe(true);
+    expect(projectStore.state.projectOwnerId).toBe("user-other");
   });
 });

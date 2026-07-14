@@ -1,6 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createProjectStore } from "../../frontend/src/stores/project";
+import { createFetchProjectApi, createProjectStore } from "../../frontend/src/stores/project";
+
+function jsonResponse(status: number, body: unknown): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: new Headers({ "content-type": "application/json" }),
+    json: async () => body,
+  } as Response;
+}
 
 const initialProjects = [
   {
@@ -60,5 +69,54 @@ describe("project store", () => {
       "project-1",
       "project-2",
     ]);
+  });
+});
+
+describe("project store owner_id propagation", () => {
+  it("loadProject writes owner_id into store when backend returns it", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        project_id: "proj-2",
+        name: "他人项目",
+        owner_id: "user-other",
+        current_status: "script_ready",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const api = createFetchProjectApi();
+      const store = createProjectStore(api);
+
+      await store.loadProject("proj-2");
+
+      expect(store.state.projectId).toBe("proj-2");
+      expect(store.state.projectOwnerId).toBe("user-other");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("loadProject sets projectOwnerId to null when backend omits owner_id", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        project_id: "proj-3",
+        name: "无owner项目",
+        current_status: "topic_pending",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const api = createFetchProjectApi();
+      const store = createProjectStore(api);
+
+      await store.loadProject("proj-3");
+
+      expect(store.state.projectId).toBe("proj-3");
+      expect(store.state.projectOwnerId).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
