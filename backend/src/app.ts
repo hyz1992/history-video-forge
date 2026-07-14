@@ -12,12 +12,14 @@ import { registerAssetsRoutes } from "./modules/assets/assets.routes";
 import { registerComposeRoutes } from "./modules/compose/compose.routes";
 import { registerRenderRoutes } from "./modules/render/render.routes";
 import { registerPublishRoutes } from "./modules/publish/publish.routes";
+import { registerAdminRoutes } from "./modules/admin/admin.routes";
 import { loadMediaLibraryCatalog } from "./modules/assets/media-library-catalog.loader";
 import { configureVoiceProfilePersistence } from "./modules/assets/voice/voice-profile.repository";
 import { recoverInterruptedRuns } from "./runtime/recovery/interrupted-run-recovery";
 import { createProjectStageLockRegistry } from "./runtime/concurrency/project-stage-lock";
 import type { RenderAdapter } from "./modules/render/render-adapter";
 import type { PrismaReadinessResult } from "./db/prisma-readiness.js";
+import type { AppPrismaClient } from "./db/prisma-client.types.js";
 import type { StoredTopicCandidate } from "./modules/topic/topic-confirm.service";
 import type { PrismaFirstAggregateWriter } from "./db/repositories/prisma-first-aggregate-writer.js";
 import type { PrismaSecondAggregateWriter } from "./db/repositories/prisma-second-aggregate-writer.js";
@@ -72,6 +74,7 @@ export interface AppInstance {
   env: typeof env;
   db: DbClient;
   renderAdapter?: RenderAdapter;
+  prismaClient?: AppPrismaClient;
   topicCandidateStore: Map<string, ProjectTopicCandidateState>;
   addRoute: (method: string, pattern: string, handler: RouteHandler) => void;
   inject: (request: InjectRequest) => Promise<InjectResponse>;
@@ -131,6 +134,7 @@ export interface BuildAppOptions {
   firstAggregateWriter?: PrismaFirstAggregateWriter;
   secondAggregateWriter?: PrismaSecondAggregateWriter;
   thirdAggregateWriter?: PrismaThirdAggregateWriter;
+  prismaClient?: AppPrismaClient;
 }
 
 export function buildApp(options: BuildAppOptions = {}): AppInstance {
@@ -209,6 +213,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
     persist,
     stageLocks,
     renderAdapter: options.renderAdapter,
+    prismaClient: options.prismaClient,
     topicCandidateStore,
     addRoute(method, pattern, handler) {
       routes.push({
@@ -299,6 +304,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
   registerComposeRoutes(app);
   registerRenderRoutes(app);
   registerPublishRoutes(app);
+  registerAdminRoutes(app);
 
   return app;
 }

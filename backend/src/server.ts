@@ -244,6 +244,7 @@ export async function startServer(options?: {
     thirdAggregateWriter: prismaClient && firstAggregateWriter
       ? new PrismaThirdAggregateWriter(prismaClient)
       : undefined,
+    prismaClient: prismaClient ?? undefined,
     databaseReadiness: prismaClient
       ? () => checkPrismaReadiness(prismaClient)
       : async () => ({ ready: false, error: "database_not_initialized", checks: emptyPrismaReadinessChecks() }),
