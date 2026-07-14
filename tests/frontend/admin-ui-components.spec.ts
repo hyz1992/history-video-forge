@@ -300,7 +300,7 @@ describe("deputize banner in ProjectWorkspace", () => {
     await waitForRender(wrapper);
     const banner = wrapper.find('[data-testid="deputize-banner"]');
     expect(banner.exists()).toBe(true);
-    expect(banner.text()).toContain("代管");
+    expect(banner.text()).toContain("管理员身份查看");
   });
 
   it("does NOT show deputize banner when ADMIN views own project", async () => {

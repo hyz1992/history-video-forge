@@ -99,7 +99,7 @@ onMounted(async () => {
     <WorkspaceHeader />
     <div v-if="isAdminDeputizing" class="deputize-banner" data-testid="deputize-banner">
       <span class="deputize-icon">&#9888;</span>
-      <span>正在以管理员身份代管其他用户的项目。编辑类操作已被限制，所有操作将记录在审计日志。</span>
+      <span>正在以管理员身份查看其他用户的项目，请谨慎操作，操作将记录在审计日志。</span>
     </div>
     <div class="workspace-body">
       <WorkspaceSidebar />
