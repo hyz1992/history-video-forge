@@ -89,7 +89,7 @@ describe("provider hardening", () => {
       requestBudget: createRequestBudget({
         maxRequests: 1,
       }),
-      invokeApi: async () => '{"ok":true}',
+      invokeApi: async () => ({ rawOutput: '{"ok":true}', content: '{"ok":true}', metadata: {} }),
     });
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 
@@ -225,6 +225,7 @@ describe("provider hardening", () => {
         ],
       }),
       argumentsJson,
+      metadata: { finishReason: "tool_calls" },
     }));
     const provider = createOpenAiCompatibleProvider({
       model: "glm-5.1",
@@ -300,6 +301,7 @@ describe("provider hardening", () => {
             ],
           },
         }),
+        metadata: {},
       }),
     });
 

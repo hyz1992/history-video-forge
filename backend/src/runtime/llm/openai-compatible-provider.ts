@@ -4,6 +4,7 @@ import { withRetry } from "./external-errors.js";
 import { createRequestBudget, type RequestBudget } from "./request-budget.js";
 import type { LlmInteractionLogWriter } from "./interaction-log.js";
 import type {
+  LlmResponseMetadata,
   StrictStructuredInvocation,
   StrictStructuredStrategy,
   StrictStructuredToolSchema,
@@ -37,9 +38,11 @@ export interface OpenAiCompatibleStrictInvokeRequest {
   };
 }
 
-export interface OpenAiCompatibleStrictInvokeResult {
+export interface OpenAiCompatibleResponseEnvelope {
   rawOutput: string;
-  argumentsJson: string;
+  content?: string;
+  argumentsJson?: string;
+  metadata: LlmResponseMetadata;
 }
 
 export interface OpenAiCompatibleProviderOptions {
@@ -52,11 +55,11 @@ export interface OpenAiCompatibleProviderOptions {
   baseDelayMs?: number;
   maxDelayMs?: number;
   requestBudget?: RequestBudget;
-  invokeApi?: (request: OpenAiCompatibleInvokeRequest, options?: { signal?: AbortSignal }) => Promise<string>;
+  invokeApi?: (request: OpenAiCompatibleInvokeRequest, options?: { signal?: AbortSignal }) => Promise<OpenAiCompatibleResponseEnvelope>;
   invokeStrictApi?: (
     request: OpenAiCompatibleStrictInvokeRequest,
     options?: { signal?: AbortSignal },
-  ) => Promise<OpenAiCompatibleStrictInvokeResult>;
+  ) => Promise<OpenAiCompatibleResponseEnvelope>;
   fetchImpl?: typeof fetch;
   structuredOutputFixer?: StructuredOutputFixer;
 }
@@ -117,41 +120,73 @@ export function createOpenAiCompatibleProvider(
     async invokeStructuredPrompt<T>(
       request: StructuredPromptInvocation,
     ): Promise<T> {
+      const effectiveTimeoutMs = options.timeoutMs ?? env.llm.timeoutMs;
+      const effectiveMaxAttempts = options.maxAttempts ?? env.llm.maxAttempts;
+      const invocationStartedAt = new Date().toISOString();
       let rawOutput = "";
+      let responseMetadata: LlmResponseMetadata | undefined;
+      const attempts: Array<{
+        attempt: number;
+        startedAt: string;
+        finishedAt: string;
+        durationMs: number;
+        outcome: "success" | "error";
+        errorCode?: string;
+      }> = [];
 
       try {
-        rawOutput = await withRetry(
+        const envelope = await withRetry(
           () => {
             requestBudget.consume(request.operationName);
 
-            return withTimeout((signal) => invokeApi({
-              prompt: request.prompt,
-              input: request.input,
-              operationName: request.operationName,
-              model,
-            }, { signal }),
-              options.timeoutMs ?? env.llm.timeoutMs,
+            const attemptStartedAt = new Date().toISOString();
+            return withTimeout(
+              (signal) =>
+                invokeApi(
+                  {
+                    prompt: request.prompt,
+                    input: request.input,
+                    operationName: request.operationName,
+                    model,
+                  },
+                  { signal },
+                ).then((env) => {
+                  attempts.push({
+                    attempt: attempts.length + 1,
+                    startedAt: attemptStartedAt,
+                    finishedAt: new Date().toISOString(),
+                    durationMs: Date.now() - new Date(attemptStartedAt).getTime(),
+                    outcome: "success",
+                  });
+                  return env;
+                }),
+              effectiveTimeoutMs,
               request.operationName,
             );
           },
           {
             provider: "llm",
             operation: request.operationName,
-            maxAttempts: options.maxAttempts ?? env.llm.maxAttempts,
+            maxAttempts: effectiveMaxAttempts,
             baseDelayMs: options.baseDelayMs ?? 1500,
             maxDelayMs: options.maxDelayMs ?? 8000,
           },
         );
 
+        rawOutput = envelope.rawOutput;
+        responseMetadata = envelope.metadata;
+        const content = envelope.content ?? "";
+
         const parsedOutput = await fixer.fix<T>({
           operationName: request.operationName,
-          rawOutput,
+          rawOutput: content,
           parse: (candidate) => JSON.parse(candidate) as T,
           deterministicRecovery: recoverJsonCandidate,
         });
 
+        const invocationFinishedAt = new Date().toISOString();
         await safeWrite(request.interactionLogWriter, {
-          generatedAt: new Date().toISOString(),
+          generatedAt: invocationFinishedAt,
           provider: "openai-compatible",
           model,
           operationName: request.operationName,
@@ -161,15 +196,31 @@ export function createOpenAiCompatibleProvider(
           promptFilePath: request.prompt.filePath,
           systemPrompt: request.prompt.body,
           input: request.input,
-          rawOutput,
+          rawOutput: content,
           parsedOutput,
           errorMessage: null,
+          timing: {
+            startedAt: invocationStartedAt,
+            finishedAt: invocationFinishedAt,
+            durationMs: Date.now() - new Date(invocationStartedAt).getTime(),
+          },
+          effectiveRequest: {
+            profile: "main",
+            model,
+            strategy: "json_object",
+            thinking: "provider_default",
+            timeoutMs: effectiveTimeoutMs,
+            maxAttempts: effectiveMaxAttempts,
+          },
+          attempts,
+          responseMetadata,
         });
 
         return parsedOutput;
       } catch (error) {
+        const invocationFinishedAt = new Date().toISOString();
         await safeWrite(request.interactionLogWriter, {
-          generatedAt: new Date().toISOString(),
+          generatedAt: invocationFinishedAt,
           provider: "openai-compatible",
           model,
           operationName: request.operationName,
@@ -181,6 +232,21 @@ export function createOpenAiCompatibleProvider(
           input: request.input,
           rawOutput,
           errorMessage: error instanceof Error ? error.message : String(error),
+          timing: {
+            startedAt: invocationStartedAt,
+            finishedAt: invocationFinishedAt,
+            durationMs: Date.now() - new Date(invocationStartedAt).getTime(),
+          },
+          effectiveRequest: {
+            profile: "main",
+            model,
+            strategy: "json_object",
+            thinking: "provider_default",
+            timeoutMs: effectiveTimeoutMs,
+            maxAttempts: effectiveMaxAttempts,
+          },
+          attempts,
+          responseMetadata,
         });
 
         throw error;
@@ -189,57 +255,88 @@ export function createOpenAiCompatibleProvider(
     async invokeStrictStructured<T>(
       request: StrictStructuredInvocation<T>,
     ): Promise<T> {
+      const effectiveTimeoutMs = options.timeoutMs ?? env.llm.timeoutMs;
+      const effectiveMaxAttempts = options.maxAttempts ?? env.llm.maxAttempts;
+      const invocationStartedAt = new Date().toISOString();
       let rawOutput = "";
       let parsedOutput: T | undefined;
+      let responseMetadata: LlmResponseMetadata | undefined;
+      const attempts: Array<{
+        attempt: number;
+        startedAt: string;
+        finishedAt: string;
+        durationMs: number;
+        outcome: "success" | "error";
+        errorCode?: string;
+      }> = [];
+      const effectiveStrategy =
+        request.options?.strategy ??
+        providerConfig.structuredStrategy ??
+        "json_object";
+      const effectiveThinking =
+        request.options?.thinking ??
+        providerConfig.structuredThinking;
 
       try {
         const strictResult = await withRetry(
           () => {
             requestBudget.consume(request.operationName);
 
-            return withTimeout((signal) => invokeStrictApi({
-                prompt: request.prompt,
-                input: request.input,
-                operationName: request.operationName,
-                model,
-                schema: request.schema,
-                options: {
-                  strategy:
-                    request.options?.strategy ??
-                    providerConfig.structuredStrategy ??
-                    "json_object",
-                  temperature:
-                    request.options?.temperature ??
-                    providerConfig.structuredTemperature,
-                  topP:
-                    request.options?.topP ??
-                    providerConfig.structuredTopP,
-                  maxTokens:
-                    request.options?.maxTokens ??
-                    providerConfig.structuredMaxTokens,
-                  thinking:
-                    request.options?.thinking ??
-                    providerConfig.structuredThinking,
-                },
-              }, { signal }),
-              options.timeoutMs ?? env.llm.timeoutMs,
+            const attemptStartedAt = new Date().toISOString();
+            return withTimeout(
+              (signal) =>
+                invokeStrictApi(
+                  {
+                    prompt: request.prompt,
+                    input: request.input,
+                    operationName: request.operationName,
+                    model,
+                    schema: request.schema,
+                    options: {
+                      strategy: effectiveStrategy,
+                      temperature:
+                        request.options?.temperature ??
+                        providerConfig.structuredTemperature,
+                      topP:
+                        request.options?.topP ??
+                        providerConfig.structuredTopP,
+                      maxTokens:
+                        request.options?.maxTokens ??
+                        providerConfig.structuredMaxTokens,
+                      thinking: effectiveThinking,
+                    },
+                  },
+                  { signal },
+                ).then((env) => {
+                  attempts.push({
+                    attempt: attempts.length + 1,
+                    startedAt: attemptStartedAt,
+                    finishedAt: new Date().toISOString(),
+                    durationMs: Date.now() - new Date(attemptStartedAt).getTime(),
+                    outcome: "success",
+                  });
+                  return env;
+                }),
+              effectiveTimeoutMs,
               request.operationName,
             );
           },
           {
             provider: "llm",
             operation: request.operationName,
-            maxAttempts: options.maxAttempts ?? env.llm.maxAttempts,
+            maxAttempts: effectiveMaxAttempts,
             baseDelayMs: options.baseDelayMs ?? 1500,
             maxDelayMs: options.maxDelayMs ?? 8000,
           },
         );
 
         rawOutput = strictResult.rawOutput;
-        parsedOutput = request.parse(JSON.parse(strictResult.argumentsJson));
+        responseMetadata = strictResult.metadata;
+        parsedOutput = request.parse(JSON.parse(strictResult.argumentsJson ?? "{}"));
 
+        const invocationFinishedAt = new Date().toISOString();
         await safeWrite(request.interactionLogWriter, {
-          generatedAt: new Date().toISOString(),
+          generatedAt: invocationFinishedAt,
           provider: "openai-compatible",
           model,
           operationName: request.operationName,
@@ -252,12 +349,31 @@ export function createOpenAiCompatibleProvider(
           rawOutput,
           parsedOutput,
           errorMessage: null,
+          timing: {
+            startedAt: invocationStartedAt,
+            finishedAt: invocationFinishedAt,
+            durationMs: Date.now() - new Date(invocationStartedAt).getTime(),
+          },
+          effectiveRequest: {
+            profile: "structured",
+            model,
+            strategy: effectiveStrategy,
+            thinking: effectiveThinking ?? "provider_default",
+            timeoutMs: effectiveTimeoutMs,
+            maxAttempts: effectiveMaxAttempts,
+            temperature: request.options?.temperature ?? providerConfig.structuredTemperature,
+            topP: request.options?.topP ?? providerConfig.structuredTopP,
+            maxTokens: request.options?.maxTokens ?? providerConfig.structuredMaxTokens,
+          },
+          attempts,
+          responseMetadata,
         });
 
         return parsedOutput;
       } catch (error) {
+        const invocationFinishedAt = new Date().toISOString();
         await safeWrite(request.interactionLogWriter, {
-          generatedAt: new Date().toISOString(),
+          generatedAt: invocationFinishedAt,
           provider: "openai-compatible",
           model,
           operationName: request.operationName,
@@ -269,6 +385,24 @@ export function createOpenAiCompatibleProvider(
           input: request.input,
           rawOutput,
           errorMessage: error instanceof Error ? error.message : String(error),
+          timing: {
+            startedAt: invocationStartedAt,
+            finishedAt: invocationFinishedAt,
+            durationMs: Date.now() - new Date(invocationStartedAt).getTime(),
+          },
+          effectiveRequest: {
+            profile: "structured",
+            model,
+            strategy: effectiveStrategy,
+            thinking: effectiveThinking ?? "provider_default",
+            timeoutMs: effectiveTimeoutMs,
+            maxAttempts: effectiveMaxAttempts,
+            temperature: request.options?.temperature ?? providerConfig.structuredTemperature,
+            topP: request.options?.topP ?? providerConfig.structuredTopP,
+            maxTokens: request.options?.maxTokens ?? providerConfig.structuredMaxTokens,
+          },
+          attempts,
+          responseMetadata,
         });
 
         throw error;
@@ -333,7 +467,7 @@ function createDefaultInvokeApi(options: {
   baseUrl?: string;
   model: string;
   fetchImpl?: typeof fetch;
-}): (request: OpenAiCompatibleInvokeRequest, requestOptions?: { signal?: AbortSignal }) => Promise<string> {
+}): (request: OpenAiCompatibleInvokeRequest, requestOptions?: { signal?: AbortSignal }) => Promise<OpenAiCompatibleResponseEnvelope> {
   return async (request, requestOptions) => {
     if (!options.apiKey || !options.baseUrl) {
       throw new Error("LLM API key or base URL is not configured.");
@@ -366,26 +500,24 @@ function createDefaultInvokeApi(options: {
       throw new Error(await buildHttpErrorMessage(response));
     }
 
-    const payload = (await response.json()) as {
-      choices?: Array<{
-        message?: {
-          content?: string | Array<{ type?: string; text?: string }>;
-        };
-      }>;
-    };
-    const content = payload.choices?.[0]?.message?.content;
+    const payload = (await response.json()) as Record<string, unknown>;
+    const metadata = extractResponseMetadata(payload);
+    const choices = payload.choices as Array<Record<string, unknown>> | undefined;
+    const message = choices?.[0]?.message as Record<string, unknown> | undefined;
+    const content = message?.content;
+    const rawOutput = JSON.stringify(payload);
 
     if (typeof content === "string") {
-      return content;
+      return { rawOutput, content, metadata };
     }
 
     if (Array.isArray(content)) {
-      const text = content
+      const text = (content as Array<{ type?: string; text?: string }>)
         .map((item) => (typeof item.text === "string" ? item.text : ""))
         .join("")
         .trim();
       if (text) {
-        return text;
+        return { rawOutput, content: text, metadata };
       }
     }
 
@@ -401,7 +533,7 @@ function createDefaultInvokeStrictApi(options: {
 }): (
   request: OpenAiCompatibleStrictInvokeRequest,
   requestOptions?: { signal?: AbortSignal },
-) => Promise<OpenAiCompatibleStrictInvokeResult> {
+) => Promise<OpenAiCompatibleResponseEnvelope> {
   return async (request, requestOptions) => {
     if (!options.apiKey || !options.baseUrl) {
       throw new Error("LLM API key or base URL is not configured.");
@@ -461,20 +593,14 @@ function createDefaultInvokeStrictApi(options: {
       throw new Error(await buildHttpErrorMessage(response));
     }
 
-    const payload = (await response.json()) as {
-      choices?: Array<{
-        message?: {
-          tool_calls?: Array<{
-            function?: {
-              arguments?: string;
-            };
-          }>;
-        };
-      }>;
-    };
+    const payload = (await response.json()) as Record<string, unknown>;
+    const metadata = extractResponseMetadata(payload);
     const rawOutput = JSON.stringify(payload);
-    const argumentsJson =
-      payload.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments;
+    const choices = payload.choices as Array<Record<string, unknown>> | undefined;
+    const message = choices?.[0]?.message as Record<string, unknown> | undefined;
+    const toolCalls = message?.tool_calls as Array<Record<string, unknown>> | undefined;
+    const func = toolCalls?.[0]?.function as Record<string, unknown> | undefined;
+    const argumentsJson = func?.arguments as string | undefined;
 
     if (typeof argumentsJson !== "string" || !argumentsJson.trim()) {
       throw new Error("strict_structured_no_tool_call");
@@ -483,6 +609,7 @@ function createDefaultInvokeStrictApi(options: {
     return {
       rawOutput,
       argumentsJson,
+      metadata,
     };
   };
 }
@@ -499,6 +626,20 @@ function recoverJsonCandidate(rawOutput: string): string | null {
   }
 
   return trimmed;
+}
+
+function extractResponseMetadata(payload: Record<string, unknown>): LlmResponseMetadata {
+  const usage = payload.usage as Record<string, unknown> | undefined;
+  const details = usage?.completion_tokens_details as Record<string, unknown> | undefined;
+  const choices = payload.choices as Array<Record<string, unknown>> | undefined;
+  const choice = choices?.[0];
+
+  return {
+    promptTokens: typeof usage?.prompt_tokens === "number" ? usage.prompt_tokens : undefined,
+    completionTokens: typeof usage?.completion_tokens === "number" ? usage.completion_tokens : undefined,
+    reasoningTokens: typeof details?.reasoning_tokens === "number" ? details.reasoning_tokens : undefined,
+    finishReason: typeof choice?.finish_reason === "string" ? choice.finish_reason : undefined,
+  };
 }
 
 function trimTrailingSlash(value: string): string {
