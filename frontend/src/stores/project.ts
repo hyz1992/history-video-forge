@@ -69,10 +69,12 @@ export function createFetchProjectApi(baseUrl = ""): ProjectApi {
     },
     async getProject(projectId) {
       const data = await apiFetch<Record<string, unknown>>(`${baseUrl}/api/projects/${projectId}`);
+      const topicPkg = data.active_topic_package as Record<string, unknown> | null | undefined;
+      const rawName = data.display_name ?? topicPkg?.canonical_title ?? data.name ?? undefined;
       return {
         project_id: (data.project_id ?? projectId) as string,
         current_status: (data.current_status ?? "") as string,
-        display_name: (data.display_name ?? (data as Record<string, unknown>).active_topic_package ? (data.active_topic_package as Record<string, unknown>)?.canonical_title : data.name) as string | undefined,
+        display_name: typeof rawName === "string" ? rawName : undefined,
       };
     },
     async deleteProject(projectId) {

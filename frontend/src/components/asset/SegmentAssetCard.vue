@@ -3,6 +3,8 @@ import { computed, ref, watch, nextTick, onMounted, onUnmounted } from "vue";
 import { ElTooltip, ElTag, ElButton, ElIcon, ElMessage, ElMessageBox, ElDialog, ElInput } from "element-plus";
 import { Upload, CopyDocument } from "@element-plus/icons-vue";
 
+import { apiFetch } from "../../utils/api";
+
 import { checkPromptQuality } from "../../utils/prompt-quality";
 
 import { checkArtRisks } from "../../utils/asset-art-quality";
@@ -354,16 +356,17 @@ async function handleQuickOptimize() {
   if (!task?.prompt_draft) return;
   optimizing.value = true;
   try {
-    const res = await fetch(`/api/projects/${props.projectId}/assets/tasks/${task.task_id}/prompt/optimize`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        current_prompt: task.prompt_draft,
-        task_type: activeTab.value === "video" ? "video_clip" : "image_still",
-        segment_id: props.segment.segment_id,
-      }),
-    });
-    const data = await res.json() as { optimized_prompt: string };
+    const data = await apiFetch<{ optimized_prompt: string }>(
+      `/api/projects/${props.projectId}/assets/tasks/${task.task_id}/prompt/optimize`,
+      {
+        method: "POST",
+        body: {
+          current_prompt: task.prompt_draft,
+          task_type: activeTab.value === "video" ? "video_clip" : "image_still",
+          segment_id: props.segment.segment_id,
+        },
+      },
+    );
     const old = task.prompt_draft ?? "";
     await savePromptDraft(task.task_id, data.optimized_prompt);
     await assetPlanningStore.loadActiveAssetPlanSnapshot();
@@ -559,21 +562,18 @@ async function handleGenerateOptimized() {
   if (!task) return;
   optimizing.value = true;
   try {
-    const res = await fetch(`/api/projects/${props.projectId}/assets/tasks/${task.task_id}/prompt/optimize`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        current_prompt: task.prompt_draft,
-        user_feedback: userFeedback.value.trim(),
-        task_type: activeTab.value === "video" ? "video_clip" : "image_still",
-        segment_id: props.segment.segment_id,
-      }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error((err as Record<string, unknown>).error as string ?? `status ${res.status}`);
-    }
-    const data = await res.json() as { optimized_prompt: string; change_summary: string[]; remaining_risks?: string[] };
+    const data = await apiFetch<{ optimized_prompt: string; change_summary: string[]; remaining_risks?: string[] }>(
+      `/api/projects/${props.projectId}/assets/tasks/${task.task_id}/prompt/optimize`,
+      {
+        method: "POST",
+        body: {
+          current_prompt: task.prompt_draft,
+          user_feedback: userFeedback.value.trim(),
+          task_type: activeTab.value === "video" ? "video_clip" : "image_still",
+          segment_id: props.segment.segment_id,
+        },
+      },
+    );
     optimizedPreview.value = data.optimized_prompt;
     changeSummary.value = data.change_summary;
     remainingRisks.value = data.remaining_risks ?? [];
@@ -622,15 +622,10 @@ async function handleSaveEdit() {
 }
 
 async function savePromptDraft(taskId: string, promptDraft: string) {
-  const res = await fetch(`/api/projects/${props.projectId}/assets/tasks/${taskId}/prompt`, {
+  await apiFetch(`/api/projects/${props.projectId}/assets/tasks/${taskId}/prompt`, {
     method: "PATCH",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ prompt_draft: promptDraft }),
+    body: { prompt_draft: promptDraft },
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as Record<string, unknown>).error as string ?? `status ${res.status}`);
-  }
   // Update local task reference so UI reflects the change immediately
   const task = activeTasks.value[activeMediaIndex.value];
   if (task) {
