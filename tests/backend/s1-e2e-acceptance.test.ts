@@ -311,6 +311,9 @@ describe("S1-8 端到端验收：migration owner 转换", () => {
 
       const after = await ctx.client.project.findUnique({ where: { id: ctx.migrationProjectId } });
       expect(after?.ownerId).toBe(ctx.userId);
+
+      const memoryProject = ctx.app.db.projects.get(ctx.migrationProjectId);
+      expect(memoryProject?.ownerId).toBe(ctx.userId);
     });
   });
 
@@ -345,7 +348,6 @@ describe("S1-8 端到端验收：migration owner 转换", () => {
         payload: { targetUserId: ctx.userId, reason: "alice test" },
         auth: adminAuth(ctx.adminId),
       });
-      mirrorProjectToMemory(ctx.app, ctx.migrationProjectId, ctx.userId, "Migration Legacy Project");
 
       const cookie = await login(baseUrl(ctx), "alice", USER_PASSWORD);
       expect(cookie).not.toBeNull();
@@ -369,7 +371,6 @@ describe("S1-8 端到端验收：migration owner 转换", () => {
         payload: { targetUserId: ctx.userId, reason: "workspace test" },
         auth: adminAuth(ctx.adminId),
       });
-      mirrorProjectToMemory(ctx.app, ctx.migrationProjectId, ctx.userId, "Migration Legacy Project");
 
       const cookie = await login(baseUrl(ctx), "alice", USER_PASSWORD);
       expect(cookie).not.toBeNull();
@@ -393,7 +394,6 @@ describe("S1-8 端到端验收：migration owner 转换", () => {
         payload: { targetUserId: ctx.userId, reason: "isolation test" },
         auth: adminAuth(ctx.adminId),
       });
-      mirrorProjectToMemory(ctx.app, ctx.migrationProjectId, ctx.userId, "Migration Legacy Project");
 
       const cookie = await login(baseUrl(ctx), "bob", OTHER_PASSWORD);
       expect(cookie).not.toBeNull();
@@ -412,7 +412,6 @@ describe("S1-8 端到端验收：migration owner 转换", () => {
         payload: { targetUserId: ctx.userId, reason: "list isolation" },
         auth: adminAuth(ctx.adminId),
       });
-      mirrorProjectToMemory(ctx.app, ctx.migrationProjectId, ctx.userId, "Migration Legacy Project");
 
       const cookie = await login(baseUrl(ctx), "bob", OTHER_PASSWORD);
       expect(cookie).not.toBeNull();
@@ -436,7 +435,6 @@ describe("S1-8 端到端验收：migration owner 转换", () => {
         payload: { targetUserId: ctx.userId, reason: "file isolation" },
         auth: adminAuth(ctx.adminId),
       });
-      mirrorProjectToMemory(ctx.app, ctx.migrationProjectId, ctx.userId, "Migration Legacy Project");
 
       const cookie = await login(baseUrl(ctx), "bob", OTHER_PASSWORD);
       expect(cookie).not.toBeNull();
