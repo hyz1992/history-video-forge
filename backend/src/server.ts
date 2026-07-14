@@ -18,7 +18,18 @@ import { hydrateSecondAggregates } from "./db/repositories/prisma-second-aggrega
 import { hydrateThirdAggregates } from "./db/repositories/prisma-third-aggregate-hydrator.js";
 import type { AppPrismaClient } from "./db/prisma-client.types.js";
 import { recoverAndPersistInterruptedRuns } from "./runtime/recovery/interrupted-run-recovery.js";
-import { applyAuthMiddleware, PrismaSessionStore, createAnonymousAuthContext } from "./auth/index.js";
+import {
+  applyAuthMiddleware,
+  buildClearSessionCookieHeader,
+  buildSessionCookieHeader,
+  PrismaSessionStore,
+  createAnonymousAuthContext,
+} from "./auth/index.js";
+import {
+  loginHandler,
+  logoutHandler,
+  meHandler,
+} from "./modules/auth/auth.controller.js";
 
 export interface ServerHostOptions {
   host: string;
@@ -73,6 +84,25 @@ function writeJson(response: ServerResponse, statusCode: number, body: unknown) 
   response.statusCode = statusCode;
   response.setHeader("content-type", "application/json; charset=utf-8");
   response.end(JSON.stringify(body));
+}
+
+function writeAuthJson(
+  response: ServerResponse,
+  result: { statusCode: number; body: unknown; cookieAction?: { type: "set"; token: string } | { type: "clear" } },
+) {
+  const isProductionEnv = process.env.NODE_ENV === "production";
+  if (result.cookieAction?.type === "set") {
+    response.setHeader(
+      "set-cookie",
+      buildSessionCookieHeader(result.cookieAction.token, {
+        secure: isProductionEnv,
+        sameSite: "lax",
+      }),
+    );
+  } else if (result.cookieAction?.type === "clear") {
+    response.setHeader("set-cookie", buildClearSessionCookieHeader());
+  }
+  writeJson(response, result.statusCode, result.body);
 }
 
 export function createHttpServer(
@@ -139,7 +169,47 @@ export function createHttpServer(
       return;
     }
 
-    // 1. File service routes (bypass app.inject, don't consume request body)
+    // 1. Auth API (login/logout/me) — handled here because they need raw Set-Cookie access
+    const isAuthApi = requestUrl.pathname === "/api/auth/login"
+      || requestUrl.pathname === "/api/auth/logout"
+      || requestUrl.pathname === "/api/auth/me";
+    if (isAuthApi) {
+      if (request.method === "POST" && requestUrl.pathname === "/api/auth/login") {
+        let loginPayload: unknown;
+        try {
+          loginPayload = await readPayload(request);
+        } catch {
+          writeJson(response, 400, { error: "invalid_request_payload" });
+          return;
+        }
+        const result = await loginHandler(app, loginPayload).catch((error) => ({
+          statusCode: 500,
+          body: { error: "internal_error", message: error instanceof Error ? error.message : "internal_error" },
+        }));
+        writeAuthJson(response, result);
+        return;
+      }
+      if (request.method === "POST" && requestUrl.pathname === "/api/auth/logout") {
+        const result = await logoutHandler(app, authResult.auth).catch((error) => ({
+          statusCode: 500,
+          body: { error: "internal_error", message: error instanceof Error ? error.message : "internal_error" },
+        }));
+        writeAuthJson(response, result);
+        return;
+      }
+      if (request.method === "GET" && requestUrl.pathname === "/api/auth/me") {
+        const result = await meHandler(app, authResult.auth).catch((error) => ({
+          statusCode: 500,
+          body: { error: "internal_error", message: error instanceof Error ? error.message : "internal_error" },
+        }));
+        writeJson(response, result.statusCode, result.body);
+        return;
+      }
+      writeJson(response, 405, { error: "method_not_allowed" });
+      return;
+    }
+
+    // 2. File service routes (bypass app.inject, don't consume request body)
     const fileMatch = matchFileRoute(request.method, requestUrl.pathname);
     if (fileMatch) {
       try {
