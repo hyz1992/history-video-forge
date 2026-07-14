@@ -19,6 +19,7 @@
       </a>
       <div class="topbar-right">
         <div class="topbar-actions">
+          <button v-if="authStore.state.user?.role === 'ADMIN'" class="btn btn-admin" data-testid="home-admin-entry" @click="router.push('/admin')">管理后台</button>
           <button class="btn btn-ghost" data-testid="home-primary-cta" @click="router.push('/projects')">我的项目</button>
           <button class="btn btn-primary" @click="handleCreateProject">新建项目</button>
         </div>

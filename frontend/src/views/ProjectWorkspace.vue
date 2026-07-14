@@ -9,6 +9,7 @@ import {
   type PipelineStep,
 } from "../stores/workspace";
 import { useProjectStore } from "../stores/project";
+import { useAuthStore } from "../stores/auth";
 
 import WorkspaceSidebar from "../components/workspace/WorkspaceSidebar.vue";
 import WorkspaceHeader from "../components/workspace/WorkspaceHeader.vue";
@@ -22,6 +23,14 @@ import PublishPanel from "../components/publish/PublishPanel.vue";
 
 const route = useRoute();
 const projectStore = useProjectStore();
+const authStore = useAuthStore();
+
+const isAdminDeputizing = computed(() => {
+  if (authStore.state.user?.role !== "ADMIN") return false;
+  const ownerId = projectStore.state.projectOwnerId;
+  if (!ownerId) return false;
+  return ownerId !== authStore.state.user?.id;
+});
 
 // Create and provide workspace store locally
 const workspaceStore = createWorkspaceStore();
@@ -88,6 +97,10 @@ onMounted(async () => {
 <template>
   <div class="project-workspace">
     <WorkspaceHeader />
+    <div v-if="isAdminDeputizing" class="deputize-banner" data-testid="deputize-banner">
+      <span class="deputize-icon">&#9888;</span>
+      <span>正在以管理员身份代管其他用户的项目。编辑类操作已被限制，所有操作将记录在审计日志。</span>
+    </div>
     <div class="workspace-body">
       <WorkspaceSidebar />
       <div class="workspace-content">
@@ -131,6 +144,25 @@ onMounted(async () => {
   display: flex;
   flex: 1;
   min-height: 0;
+}
+
+.deputize-banner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 32px;
+  background: rgba(201, 162, 39, 0.12);
+  border-bottom: 1px solid rgba(201, 162, 39, 0.25);
+  color: #e8c84a;
+  font-size: 13px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.deputize-icon {
+  font-size: 16px;
 }
 
 .workspace-content {

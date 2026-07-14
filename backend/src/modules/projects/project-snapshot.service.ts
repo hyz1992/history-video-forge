@@ -206,6 +206,7 @@ export async function getProjectSnapshot(
   return {
     project_id: project.id,
     name: project.name,
+    owner_id: project.ownerId,
     current_status: effectiveStatus,
     is_draft: isDraft(effectiveStatus),
     restore_route: `/projects/${project.id}/${statusToStep(effectiveStatus)}`,

@@ -22,11 +22,16 @@
           {{ formatTime(row.updatedAt) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="120" fixed="right">
+      <el-table-column label="操作" width="210" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="openTransferDialog(row)">
-            转移 Owner
-          </el-button>
+          <div class="action-buttons">
+            <el-button size="small" type="primary" @click="viewProject(row)">
+              查看项目
+            </el-button>
+            <el-button size="small" @click="openTransferDialog(row)">
+              转移
+            </el-button>
+          </div>
         </template>
       </el-table-column>
       <template #empty>
@@ -57,6 +62,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 
 import { apiFetch, ApiError } from "../../utils/api";
@@ -72,8 +78,26 @@ interface AdminProject {
   updatedAt: string;
 }
 
+const router = useRouter();
 const loading = ref(false);
 const projects = ref<AdminProject[]>([]);
+
+function resolveProjectStep(status: string): string {
+  if (status.startsWith("topic")) return "topic";
+  if (status.startsWith("script")) return "script";
+  if (status.startsWith("storyboard")) return "storyboard";
+  if (status.startsWith("asset_plan") || status.startsWith("assets")) return "asset";
+  if (status.startsWith("compos") || status.startsWith("render")) return "compose-render";
+  if (status.startsWith("publish")) return "publish";
+  return "topic";
+}
+
+function viewProject(project: AdminProject) {
+  const step = resolveProjectStep(project.status);
+  router.push(
+    `/projects/${project.id}/${step}?admin_view=1&owner_id=${encodeURIComponent(project.ownerId)}`,
+  );
+}
 
 async function loadProjects() {
   loading.value = true;
@@ -174,5 +198,10 @@ async function handleTransfer() {
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 12px;
+}
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
 }
 </style>

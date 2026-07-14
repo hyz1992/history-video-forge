@@ -4,6 +4,7 @@ import { apiFetch, ApiError } from "../utils/api";
 export interface ProjectSnapshot {
   project_id: string;
   current_status: string;
+  owner_id?: string;
   display_name?: string;
   is_draft?: boolean;
   updated_at?: string;
@@ -39,6 +40,7 @@ export interface ProjectApi {
 
 export interface ProjectStoreState {
   projectId: string | null;
+  projectOwnerId: string | null;
   currentStatus: string;
   publishIsReady: boolean;
   projects: ProjectListItem[];
@@ -92,6 +94,7 @@ export function createFetchProjectApi(baseUrl = ""): ProjectApi {
 export function createProjectStore(api: ProjectApi): ProjectStore {
   const state = reactive<ProjectStoreState>({
     projectId: null,
+    projectOwnerId: null,
     currentStatus: "topic_pending",
     publishIsReady: false,
     projects: [],
@@ -153,6 +156,7 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
 
   function syncProject(snapshot: ProjectSnapshot) {
     state.projectId = snapshot.project_id;
+    state.projectOwnerId = snapshot.owner_id ?? null;
     state.currentStatus = snapshot.current_status;
     upsertProject(snapshot);
   }
@@ -207,6 +211,7 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
 
     if (state.projectId === projectId) {
       state.projectId = null;
+      state.projectOwnerId = null;
       state.currentStatus = "topic_pending";
     }
   }

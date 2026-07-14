@@ -210,6 +210,18 @@ body.landing-page-bg::before {
   box-shadow: 0 8px 24px var(--glow-gold);
 }
 
+.landing-page .btn-admin {
+  background: rgba(201, 162, 39, 0.1);
+  color: var(--accent-gold);
+  border: 1px solid rgba(201, 162, 39, 0.3);
+}
+
+.landing-page .btn-admin:hover {
+  background: rgba(201, 162, 39, 0.18);
+  border-color: var(--accent-gold);
+  transform: translateY(-1px);
+}
+
 /* ============ HERO ============ */
 .landing-page .hero {
   min-height: 100vh;

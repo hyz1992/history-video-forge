@@ -4,9 +4,11 @@ import { useRouter } from "vue-router";
 
 import { PIPELINE_STEPS, useWorkspaceStore } from "../../stores/workspace";
 import { useProjectStore } from "../../stores/project";
+import { useAuthStore } from "../../stores/auth";
 
 const workspaceStore = useWorkspaceStore();
 const projectStore = useProjectStore();
+const authStore = useAuthStore();
 const router = useRouter();
 
 const stepEmojiMap: Record<string, string> = {
@@ -75,6 +77,13 @@ function goBack() {
         <button class="btn btn-ghost" @click="goBack">
           <svg viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
           返回项目列表
+        </button>
+        <button
+          v-if="authStore.state.user?.role === 'ADMIN'"
+          class="btn btn-admin"
+          @click="router.push('/admin')"
+        >
+          管理后台
         </button>
       </div>
       <div class="topbar-divider" aria-hidden="true"></div>
@@ -207,6 +216,18 @@ function goBack() {
   color: #f5f0e8;
   border-color: rgba(201,162,39,.30);
   background: rgba(201,162,39,.065);
+}
+
+.btn-admin {
+  background: rgba(201,162,39,.10);
+  border: 1px solid rgba(201,162,39,.30);
+  color: #c9a227;
+}
+
+.btn-admin:hover {
+  background: rgba(201,162,39,.18);
+  border-color: #c9a227;
+  color: #f5f0e8;
 }
 
 .btn svg {
