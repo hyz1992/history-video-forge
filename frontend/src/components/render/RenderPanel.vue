@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { ElMessage } from "element-plus";
 
+import { notifyUnauthorized } from "../../utils/api";
 import { useRenderStore } from "../../stores/render";
 import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
@@ -97,6 +98,9 @@ async function handleDownload() {
   isDownloading.value = true;
   try {
     const res = await fetch(downloadUrl.value);
+    if (res.status === 401) {
+      notifyUnauthorized();
+    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error((err as Record<string, unknown>).error as string ?? `下载失败 (${res.status})`);

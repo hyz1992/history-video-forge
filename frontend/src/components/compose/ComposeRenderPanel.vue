@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 
+import { notifyUnauthorized } from "../../utils/api";
 import { deriveMissingAssetItems } from "../../utils/missing-asset-items";
 
 import { useComposeStore } from "../../stores/compose";
@@ -160,6 +161,9 @@ async function handleDownload() {
   isDownloading.value = true;
   try {
     const res = await fetch(downloadUrl.value);
+    if (res.status === 401) {
+      notifyUnauthorized();
+    }
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error((err as Record<string, unknown>).error as string ?? `下载失败 (${res.status})`);
