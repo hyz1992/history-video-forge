@@ -289,3 +289,349 @@ describe("admin API without prismaClient", () => {
     expect(res.json()).toMatchObject({ error: "admin_store_unavailable" });
   });
 });
+
+const STRONG_PASSWORD = "a-strong-create-password-99";
+
+describe("admin API (S1-5b write operations)", () => {
+  let ctx: Setup;
+  afterEach(async () => { if (ctx) await teardown(ctx); });
+
+  it("POST /api/admin/users as admin creates a user and writes user_create audit", async () => {
+    ctx = await setup();
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: "/api/admin/users",
+      payload: {
+        username: "bob",
+        displayName: "Bob",
+        password: STRONG_PASSWORD,
+        role: "USER",
+      },
+      auth: adminAuth(ctx.adminId),
+    });
+    expect(res.statusCode).toBe(201);
+    const body = res.json() as { user: { id: string; username: string; role: string } };
+    expect(body.user.username).toBe("bob");
+    expect(body.user.role).toBe("USER");
+
+    const audit = await ctx.client.auditLog.findFirst({
+      where: { action: "user_create", targetId: body.user.id },
+    });
+    expect(audit).not.toBeNull();
+    expect(audit?.actorUserId).toBe(ctx.adminId);
+    expect(audit?.targetType).toBe("User");
+  });
+
+  it("POST /api/admin/users response never leaks password or passwordHash", async () => {
+    ctx = await setup();
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: "/api/admin/users",
+      payload: { username: "carol", password: STRONG_PASSWORD },
+      auth: adminAuth(ctx.adminId),
+    });
+    expect(res.statusCode).toBe(201);
+    const bodyText = JSON.stringify(res.json());
+    expect(bodyText).not.toContain(STRONG_PASSWORD);
+    expect(bodyText).not.toContain("passwordHash");
+    expect(bodyText).not.toContain("$argon2");
+
+    const created = await ctx.client.user.findUnique({ where: { username: "carol" } });
+    expect(created?.passwordHash.startsWith("$argon2id$")).toBe(true);
+  });
+
+  it("POST /api/admin/users as USER returns 403", async () => {
+    ctx = await setup();
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: "/api/admin/users",
+      payload: { username: "bob", password: STRONG_PASSWORD },
+      auth: userAuth(ctx.userId),
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ error: "admin_required" });
+  });
+
+  it("POST /api/admin/users without auth returns 401", async () => {
+    ctx = await setup();
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: "/api/admin/users",
+      payload: { username: "bob", password: STRONG_PASSWORD },
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("POST /api/admin/users with duplicate username returns 409 username_taken (no 500)", async () => {
+    ctx = await setup();
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: "/api/admin/users",
+      payload: { username: "alice", password: STRONG_PASSWORD },
+      auth: adminAuth(ctx.adminId),
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ error: "username_taken" });
+  });
+
+  it("POST /api/admin/users with short password returns 400 password_too_short", async () => {
+    ctx = await setup();
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: "/api/admin/users",
+      payload: { username: "short", password: "short" },
+      auth: adminAuth(ctx.adminId),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: "password_too_short:12" });
+  });
+
+  it("disable a regular USER succeeds and revokes their sessions + writes user_disable audit", async () => {
+    ctx = await setup();
+    await ctx.client.session.create({
+      data: {
+        userId: ctx.userId,
+        tokenHash: "hash-user-active-1",
+        expiresAt: new Date(Date.now() + 86400000),
+      },
+    });
+
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: `/api/admin/users/${ctx.userId}/disable`,
+      auth: adminAuth(ctx.adminId),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ userId: ctx.userId, status: "DISABLED" });
+
+    const user = await ctx.client.user.findUnique({ where: { id: ctx.userId } });
+    expect(user?.status).toBe("DISABLED");
+
+    const sessions = await ctx.client.session.findMany({ where: { userId: ctx.userId } });
+    expect(sessions.every((s) => s.revokedAt !== null)).toBe(true);
+
+    const audit = await ctx.client.auditLog.findFirst({
+      where: { action: "user_disable", targetId: ctx.userId },
+    });
+    expect(audit).not.toBeNull();
+    expect(audit?.actorUserId).toBe(ctx.adminId);
+  });
+
+  it("disable the last ACTIVE ADMIN is rejected with cannot_disable_last_admin", async () => {
+    ctx = await setup();
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: `/api/admin/users/${ctx.adminId}/disable`,
+      auth: adminAuth(ctx.adminId),
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ error: "cannot_disable_last_admin" });
+
+    const admin = await ctx.client.user.findUnique({ where: { id: ctx.adminId } });
+    expect(admin?.status).toBe("ACTIVE");
+
+    const audit = await ctx.client.auditLog.findFirst({
+      where: { action: "user_disable", targetId: ctx.adminId },
+    });
+    expect(audit).toBeNull();
+  });
+
+  it("disable a second ADMIN succeeds when another ACTIVE ADMIN remains", async () => {
+    ctx = await setup();
+    const secondAdmin = await ctx.client.user.create({
+      data: {
+        username: "admin2",
+        displayName: "Admin2",
+        passwordHash: await hashPassword(STRONG_PASSWORD),
+        role: "ADMIN",
+        status: "ACTIVE",
+        mustChangePassword: false,
+      },
+    });
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: `/api/admin/users/${secondAdmin.id}/disable`,
+      auth: adminAuth(ctx.adminId),
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("enable a DISABLED user writes user_enable audit", async () => {
+    ctx = await setup();
+    await ctx.client.user.update({ where: { id: ctx.userId }, data: { status: "DISABLED" } });
+
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: `/api/admin/users/${ctx.userId}/enable`,
+      auth: adminAuth(ctx.adminId),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ userId: ctx.userId, status: "ACTIVE" });
+
+    const audit = await ctx.client.auditLog.findFirst({
+      where: { action: "user_enable", targetId: ctx.userId },
+    });
+    expect(audit?.actorUserId).toBe(ctx.adminId);
+  });
+
+  it("reset-password sets mustChangePassword=true, revokes sessions, writes audit, never returns hash", async () => {
+    ctx = await setup();
+    await ctx.client.session.create({
+      data: {
+        userId: ctx.userId,
+        tokenHash: "hash-user-active-2",
+        expiresAt: new Date(Date.now() + 86400000),
+      },
+    });
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: `/api/admin/users/${ctx.userId}/reset-password`,
+      payload: { password: "a-brand-new-password-99" },
+      auth: adminAuth(ctx.adminId),
+    });
+    expect(res.statusCode).toBe(200);
+    const bodyText = JSON.stringify(res.json());
+    expect(bodyText).not.toContain("a-brand-new-password-99");
+    expect(bodyText).not.toContain("passwordHash");
+
+    const user = await ctx.client.user.findUnique({ where: { id: ctx.userId } });
+    expect(user?.mustChangePassword).toBe(true);
+    expect(user?.passwordHash.startsWith("$argon2id$")).toBe(true);
+
+    const sessions = await ctx.client.session.findMany({ where: { userId: ctx.userId } });
+    expect(sessions.every((s) => s.revokedAt !== null)).toBe(true);
+
+    const audit = await ctx.client.auditLog.findFirst({
+      where: { action: "user_password_reset", targetId: ctx.userId },
+    });
+    expect(audit?.actorUserId).toBe(ctx.adminId);
+  });
+
+  it("revoke sessions returns revokedCount and writes session_revoke audit with count", async () => {
+    ctx = await setup();
+    await ctx.client.session.create({
+      data: {
+        userId: ctx.userId,
+        tokenHash: "hash-rev-1",
+        expiresAt: new Date(Date.now() + 86400000),
+      },
+    });
+    await ctx.client.session.create({
+      data: {
+        userId: ctx.userId,
+        tokenHash: "hash-rev-2",
+        expiresAt: new Date(Date.now() + 86400000),
+      },
+    });
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: `/api/admin/users/${ctx.userId}/sessions/revoke`,
+      auth: adminAuth(ctx.adminId),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ userId: ctx.userId, revokedCount: 2 });
+
+    const audit = await ctx.client.auditLog.findFirst({
+      where: { action: "session_revoke", targetId: ctx.userId },
+    });
+    expect(audit?.metadataJson).toMatchObject({ revokedCount: 2 });
+  });
+
+  it("revoke sessions on non-existent user returns 404 user_not_found", async () => {
+    ctx = await setup();
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: "/api/admin/users/no-such-user/sessions/revoke",
+      auth: adminAuth(ctx.adminId),
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ error: "user_not_found" });
+  });
+
+  it("transfer-owner updates only ownerId (not createdById), writes owner_transfer audit with from/to", async () => {
+    ctx = await setup();
+    const before = await ctx.client.project.findUnique({ where: { id: ctx.projectId } });
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: `/api/admin/projects/${ctx.projectId}/transfer-owner`,
+      payload: { targetUserId: ctx.adminId, reason: "handoff" },
+      auth: adminAuth(ctx.adminId),
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { projectId: string; ownerId: string; createdById: string };
+    expect(body.ownerId).toBe(ctx.adminId);
+    expect(body.createdById).toBe(before!.createdById);
+
+    const after = await ctx.client.project.findUnique({ where: { id: ctx.projectId } });
+    expect(after?.ownerId).toBe(ctx.adminId);
+    expect(after?.createdById).toBe(before!.createdById);
+
+    const audit = await ctx.client.auditLog.findFirst({
+      where: { action: "owner_transfer", targetId: ctx.projectId, actorUserId: ctx.adminId },
+    });
+    expect(audit?.actorUserId).toBe(ctx.adminId);
+    expect(audit?.metadataJson).toMatchObject({
+      fromOwnerId: ctx.userId,
+      toOwnerId: ctx.adminId,
+      reason: "handoff",
+    });
+  });
+
+  it("transfer-owner to a DISABLED user is rejected with target_user_not_active", async () => {
+    ctx = await setup();
+    await ctx.client.user.update({ where: { id: ctx.userId }, data: { status: "DISABLED" } });
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: `/api/admin/projects/${ctx.projectId}/transfer-owner`,
+      payload: { targetUserId: ctx.userId },
+      auth: adminAuth(ctx.adminId),
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ error: "target_user_not_active" });
+
+    const project = await ctx.client.project.findUnique({ where: { id: ctx.projectId } });
+    expect(project?.ownerId).toBe(ctx.userId);
+  });
+
+  it("transfer-owner to non-existent target returns 404 target_user_not_found", async () => {
+    ctx = await setup();
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: `/api/admin/projects/${ctx.projectId}/transfer-owner`,
+      payload: { targetUserId: "no-such-user" },
+      auth: adminAuth(ctx.adminId),
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ error: "target_user_not_found" });
+  });
+
+  it("transfer-owner as USER returns 403", async () => {
+    ctx = await setup();
+    const res = await ctx.app.inject({
+      method: "POST",
+      url: `/api/admin/projects/${ctx.projectId}/transfer-owner`,
+      payload: { targetUserId: ctx.adminId },
+      auth: userAuth(ctx.userId),
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("disable/enable/reset/revoke on non-existent user returns 404 user_not_found", async () => {
+    ctx = await setup();
+    const cases = [
+      { url: "/api/admin/users/no-user/disable" },
+      { url: "/api/admin/users/no-user/enable" },
+      { url: "/api/admin/users/no-user/reset-password", payload: { password: STRONG_PASSWORD } },
+    ];
+    for (const c of cases) {
+      const res = await ctx.app.inject({
+        method: "POST",
+        url: c.url,
+        payload: c.payload ?? {},
+        auth: adminAuth(ctx.adminId),
+      });
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toMatchObject({ error: "user_not_found" });
+    }
+  });
+});
