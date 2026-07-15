@@ -5,6 +5,7 @@ import type {
   StrictStructuredInvocation,
   StrictStructuredStrategy,
   StrictStructuredThinking,
+  StrictStructuredToolChoice,
   StrictStructuredToolSchema,
   StructuredPromptProvider,
 } from "./provider-contract.js";
@@ -36,6 +37,7 @@ export interface InvokeStrictStructuredOptions<T> {
     topP?: number;
     maxTokens?: number;
     thinking?: StrictStructuredThinking;
+    toolChoice?: StrictStructuredToolChoice;
   };
   interactionLogWriter?: LlmInteractionLogWriter;
 }

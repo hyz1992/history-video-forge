@@ -24,6 +24,7 @@ describe("llm operation policy classification", () => {
 
     // 短结构化判断
     expect(classifyOperation("topic.selector")).toBe("short_structured_decision");
+    expect(classifyOperation("probe.strict-tool-call")).toBe("short_structured_decision");
     expect(classifyOperation("publish.title-generator")).toBe("short_structured_decision");
     expect(classifyOperation("publish.description-generator")).toBe("short_structured_decision");
     expect(classifyOperation("publish.cover-prompt-generator")).toBe("short_structured_decision");

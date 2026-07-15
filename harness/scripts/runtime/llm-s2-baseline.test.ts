@@ -1,8 +1,69 @@
 import { describe, expect, it } from "vitest";
 
-const { validateLiveOptions } = await import("./llm-s2-baseline.js");
+const { buildExecutionMatrix, parseArgs, validateLiveOptions } = await import("./llm-s2-baseline.js");
 
 describe("llm-s2-baseline", () => {
+  it("parses an explicit candidate-only diagnostic matrix", () => {
+    const args = parseArgs([
+      "--live",
+      "--candidate-model", "glm-5.2",
+      "--profile-scope", "candidate-only",
+      "--candidate-thinking", "disabled",
+      "--force-target-tool",
+      "--enable-probe",
+      "--max-requests", "4",
+      "--max-cost-cny", "10",
+    ]);
+
+    expect(args.profileScope).toBe("candidate-only");
+    expect(args.candidateThinking).toBe("disabled");
+    expect(args.forceTargetTool).toBe(true);
+    expect(args.enableCapabilityProbe).toBe(true);
+
+    expect(buildExecutionMatrix(args, 3)).toEqual({
+      profiles: ["candidate"],
+      probeRequests: 1,
+      sampleRequests: 3,
+      requiredRequests: 4,
+      candidateOptions: {
+        thinking: "disabled",
+        forceTargetTool: true,
+      },
+    });
+  });
+
+  it("rejects invalid diagnostic scope, thinking value, and a candidate-only budget above 6", () => {
+    const invalidScope = validateLiveOptions({
+      live: true,
+      dryRun: false,
+      candidateModel: "glm-5.2",
+      maxRequests: 4,
+      maxCostCny: 10,
+      profileScope: "candidate",
+    });
+    const invalidThinking = validateLiveOptions({
+      live: true,
+      dryRun: false,
+      candidateModel: "glm-5.2",
+      maxRequests: 4,
+      maxCostCny: 10,
+      profileScope: "candidate-only",
+      candidateThinking: "fast",
+    });
+    const excessiveBudget = validateLiveOptions({
+      live: true,
+      dryRun: false,
+      candidateModel: "glm-5.2",
+      maxRequests: 7,
+      maxCostCny: 10,
+      profileScope: "candidate-only",
+    });
+
+    expect(invalidScope).toContain("--profile-scope 仅支持 both 或 candidate-only");
+    expect(invalidThinking).toContain("--candidate-thinking 仅支持 enabled 或 disabled");
+    expect(excessiveBudget).toContain("candidate-only 诊断的 --max-requests 不得超过 6");
+  });
+
   it("validates --candidate-model is required for live mode", () => {
     const errors = validateLiveOptions({
       live: true,

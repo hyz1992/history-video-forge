@@ -13,6 +13,7 @@ import type {
   LlmResponseMetadata,
   StrictStructuredInvocation,
   StrictStructuredStrategy,
+  StrictStructuredToolChoice,
   StrictStructuredToolSchema,
   StructuredPromptInvocation,
   StructuredPromptProvider,
@@ -45,6 +46,7 @@ export interface OpenAiCompatibleStrictInvokeRequest {
     topP?: number;
     maxTokens?: number;
     thinking?: "enabled" | "disabled";
+    toolChoice?: StrictStructuredToolChoice;
   };
 }
 
@@ -391,6 +393,7 @@ export function createOpenAiCompatibleProvider(
       const effectiveMaxTokens = strictEffective.maxTokens;
       const effectiveTemperature = strictEffective.temperature;
       const effectiveTopP = strictEffective.topP;
+      const effectiveToolChoice = request.options?.toolChoice ?? "auto";
 
       try {
         let attemptStartedAt = "";
@@ -414,6 +417,7 @@ export function createOpenAiCompatibleProvider(
                       topP: effectiveTopP,
                       maxTokens: effectiveMaxTokens,
                       thinking: effectiveThinking,
+                      toolChoice: effectiveToolChoice,
                     },
                   },
                   { signal },
@@ -486,6 +490,7 @@ export function createOpenAiCompatibleProvider(
             temperature: effectiveTemperature,
             topP: effectiveTopP,
             maxTokens: effectiveMaxTokens,
+            toolChoice: effectiveToolChoice,
           },
           attempts,
           responseMetadata,
@@ -522,6 +527,7 @@ export function createOpenAiCompatibleProvider(
             temperature: effectiveTemperature,
             topP: effectiveTopP,
             maxTokens: effectiveMaxTokens,
+            toolChoice: effectiveToolChoice,
           },
           attempts,
           responseMetadata,
@@ -698,7 +704,12 @@ function createDefaultInvokeStrictApi(options: {
           function: request.schema,
         },
       ],
-      tool_choice: "auto",
+      tool_choice: request.options.toolChoice === "target_function"
+        ? {
+            type: "function",
+            function: { name: request.schema.name },
+          }
+        : "auto",
     };
 
     if (request.options.temperature !== undefined) {
@@ -737,10 +748,20 @@ function createDefaultInvokeStrictApi(options: {
     const message = choices?.[0]?.message as Record<string, unknown> | undefined;
     const toolCalls = message?.tool_calls as Array<Record<string, unknown>> | undefined;
     const func = toolCalls?.[0]?.function as Record<string, unknown> | undefined;
+    const toolName = func?.name as string | undefined;
     const argumentsJson = func?.arguments as string | undefined;
 
     if (typeof argumentsJson !== "string" || !argumentsJson.trim()) {
       throw new Error("strict_structured_no_tool_call");
+    }
+
+    if (
+      request.options.toolChoice === "target_function"
+      && toolName !== request.schema.name
+    ) {
+      throw new Error(
+        `strict_structured_target_tool_mismatch: expected=${request.schema.name} actual=${toolName ?? "missing"}`,
+      );
     }
 
     return {

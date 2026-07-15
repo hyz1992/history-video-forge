@@ -73,7 +73,7 @@ interface TopicSelectorDecision {
   ranked_candidates: TopicSelectorRankedCandidate[];
 }
 
-const TOPIC_SELECTOR_STRICT_SCHEMA: StrictStructuredToolSchema = {
+export const TOPIC_SELECTOR_STRICT_SCHEMA: StrictStructuredToolSchema = {
   name: "rank_topic_candidates",
   description: "Rank every topic candidate in the selector pool with scorecards.",
   parameters: {

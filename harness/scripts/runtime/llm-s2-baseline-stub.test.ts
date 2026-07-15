@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { describe, expect, it, vi, afterAll } from "vitest";
 
-const { createGateways, runSample, describeGatewayProfile } = await import("./llm-s2-baseline.js");
+const { createGateways, runSample, runCapabilityProbe, describeGatewayProfile } = await import("./llm-s2-baseline.js");
 
 import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
 import { createOpenAiCompatibleProvider } from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
@@ -90,14 +90,70 @@ describe("llm-s2-baseline stub flow", () => {
     });
   });
 
+  it("capability probe forces the declared target function without changing normal samples", async () => {
+    const outputDir = makeSandboxOutputDir("target-tool-probe");
+    let capturedToolChoice: string | undefined;
+    let capturedScorecardSchema: Record<string, unknown> | undefined;
+    const provider = createOpenAiCompatibleProvider({
+      profile: "structured",
+      model: "glm-5.2",
+      maxAttempts: 1,
+      invokeStrictApi: vi.fn(async (request) => {
+        capturedToolChoice = request.options.toolChoice;
+        const rankedCandidates = request.schema.parameters.properties.ranked_candidates as {
+          items?: Record<string, unknown>;
+        };
+        capturedScorecardSchema = rankedCandidates.items;
+        return stubStrictResponse({
+          ranked_candidates: [{
+            candidate_id: "probe_c1",
+            quality_rank: 1,
+            quality_score: 90,
+            deductions: [],
+            risk_summary: "low",
+          }, {
+            candidate_id: "probe_c2",
+            quality_rank: 2,
+            quality_score: 80,
+            deductions: [],
+            risk_summary: "low",
+          }],
+        });
+      }) as any,
+    });
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider,
+    });
+
+    const result = await runCapabilityProbe(
+      gateway,
+      outputDir,
+      { label: "candidate", mainModel: "glm-5.2", structuredModel: "glm-5.2" },
+    );
+
+    expect(result.passed).toBe(true);
+    expect(result.observation.operation).toBe("probe.strict-tool-call");
+    expect(capturedToolChoice).toBe("target_function");
+    expect(
+      (result.observation.effectiveRequest as { toolChoice?: string } | null)?.toolChoice,
+    ).toBe("target_function");
+    expect(capturedScorecardSchema?.required).toContain("risk_summary");
+    expect(capturedScorecardSchema?.additionalProperties).toBe(false);
+  });
+
   it("topic.selector uses strict parser and sets firstPass=passed zod=passed", async () => {
     const outputDir = makeSandboxOutputDir("topic");
+    let capturedOptions: Record<string, unknown> | undefined;
 
     const strP = createOpenAiCompatibleProvider({
       profile: "structured", model: "glm-structured", maxAttempts: 1,
-      invokeStrictApi: vi.fn().mockResolvedValue(stubStrictResponse({
-        ranked_candidates: [{ candidate_id: "c1", quality_rank: 1, quality_score: 90, risk_summary: "low", deductions: [] }],
-      })) as any,
+      invokeStrictApi: vi.fn(async (request) => {
+        capturedOptions = request.options;
+        return stubStrictResponse({
+          ranked_candidates: [{ candidate_id: "c1", quality_rank: 1, quality_score: 90, risk_summary: "low", deductions: [] }],
+        });
+      }) as any,
     });
     const sg = createLlmGateway({ registry: createPromptRegistry(), provider: strP });
 
@@ -111,22 +167,31 @@ describe("llm-s2-baseline stub flow", () => {
       id: "t", operation: "topic.selector", description: "", input: {
         candidates: [{ candidate_id: "c1", event_identity: "x", title: "x", one_line_angle: "x", core_conflict: "x", strong_scene: "x", narrative_tension_map: { hook_claim: "x" } }],
       },
-    }, outputDir, mkProfile("glm-main", "glm-structured"));
+    }, outputDir, mkProfile("glm-main", "glm-structured"), {
+      thinking: "disabled",
+      forceTargetTool: true,
+    });
 
     expect(obs.status).toBe("succeeded");
     expect(obs.zodResult).toBe("passed");
     expect(obs.firstPassResult).toBe("passed");
     expect(obs.repairResult).toBe("unexercised");
     expect(obs.regenResult).toBe("unexercised");
+    expect(capturedOptions?.thinking).toBe("disabled");
+    expect(capturedOptions?.toolChoice).toBe("target_function");
   }, 15000);
 
   it("script.writer validates draft and sets repair/regen as unexercised", async () => {
     const outputDir = makeSandboxOutputDir("script");
     const draft = { script_text: "正文", estimated_duration_sec: 85, beat_trace: [{ beat: "b", excerpt: "ex", confidence: 0.9 }], quote_trace: [{ quote: "q", usage_type: "exact", excerpt: "ex" }], opening_span: "开", ending_span: "收" };
+    let capturedThinking: string | undefined;
 
     const mainP = createOpenAiCompatibleProvider({
       profile: "main", model: "glm-5.1", maxAttempts: 1,
-      invokeApi: vi.fn().mockResolvedValue(stubResponse(draft)) as any,
+      invokeApi: vi.fn(async (request) => {
+        capturedThinking = request.thinking;
+        return stubResponse(draft);
+      }) as any,
     });
     const mg = createLlmGateway({ registry: createPromptRegistry(), provider: mainP });
 
@@ -138,7 +203,7 @@ describe("llm-s2-baseline stub flow", () => {
 
     const obs = await runSample(mg, sg, {
       id: "s", operation: "script.writer", description: "", input: { type: "topic_package" },
-    }, outputDir, mkProfile("glm-5.1", "glm-4"));
+    }, outputDir, mkProfile("glm-5.1", "glm-4"), { thinking: "disabled" });
 
     expect(obs.status).toBe("succeeded");
     expect(obs.zodResult).toBe("passed");
@@ -146,16 +211,21 @@ describe("llm-s2-baseline stub flow", () => {
     expect(obs.validatorDecision).toBeDefined();
     expect(obs.repairResult).toBe("unexercised");
     expect(obs.regenResult).toBe("unexercised");
+    expect(capturedThinking).toBe("disabled");
   }, 15000);
 
   it("storyboard.planner validates plan and sets repair/regen as unexercised", async () => {
     const outputDir = makeSandboxOutputDir("storyboard");
     const segment = { segment_id: "seg-0", order: 0, script_excerpt: "excerpt", start_hint_sec: 0, end_hint_sec: 20, narrative_role: "opening" as const, visual_intent: "v", scene_description: "d", visual_elements: ["人物"], framing_hint: "wide" as const, content_type: "live_action" as const, motion_hint: "push_in" as const, editing_hint: "single" as const, on_screen_text: ["字幕"], linked_beats: ["b"], linked_quotes: ["q"], risk_notes: ["r"] };
     const plan = { plan_version: "storyboard_v1" as const, source_script_record_id: "s1", source_topic_package_id: "t1", estimated_total_duration_sec: 60, segments: [segment], global_visual_notes: ["暖色调"] };
+    let capturedThinking: string | undefined;
 
     const mainP = createOpenAiCompatibleProvider({
       profile: "main", model: "glm-5.2", maxAttempts: 1,
-      invokeApi: vi.fn().mockResolvedValue(stubResponse(plan)) as any,
+      invokeApi: vi.fn(async (request) => {
+        capturedThinking = request.thinking;
+        return stubResponse(plan);
+      }) as any,
     });
     const mg = createLlmGateway({ registry: createPromptRegistry(), provider: mainP });
 
@@ -167,7 +237,7 @@ describe("llm-s2-baseline stub flow", () => {
 
     const obs = await runSample(mg, sg, {
       id: "st", operation: "storyboard.planner", description: "", input: {},
-    }, outputDir, mkProfile("glm-5.2", "glm-5.2"));
+    }, outputDir, mkProfile("glm-5.2", "glm-5.2"), { thinking: "disabled" });
 
     expect(obs.status).toBe("succeeded");
     expect(obs.zodResult).toBe("passed");
@@ -175,6 +245,7 @@ describe("llm-s2-baseline stub flow", () => {
     expect(obs.validatorDecision).toBeDefined();
     expect(obs.repairResult).toBe("unexercised");
     expect(obs.regenResult).toBe("unexercised");
+    expect(capturedThinking).toBe("disabled");
   }, 15000);
 
   it("importing module in subprocess does not execute main()", () => {

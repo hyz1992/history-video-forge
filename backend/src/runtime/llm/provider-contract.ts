@@ -5,6 +5,8 @@ export type StrictStructuredStrategy = "json_object" | "tool_call" | "auto";
 
 export type StrictStructuredThinking = "enabled" | "disabled";
 
+export type StrictStructuredToolChoice = "auto" | "target_function";
+
 export type LlmThinkingStatus =
   | "enabled"
   | "disabled"
@@ -21,6 +23,7 @@ export interface LlmEffectiveRequest {
   maxTokens?: number;
   temperature?: number;
   topP?: number;
+  toolChoice?: StrictStructuredToolChoice;
 }
 
 export interface LlmAttemptObservation {
@@ -70,6 +73,7 @@ export interface StrictStructuredInvocation<T> {
     topP?: number;
     maxTokens?: number;
     thinking?: StrictStructuredThinking;
+    toolChoice?: StrictStructuredToolChoice;
   };
   interactionLogWriter?: LlmInteractionLogWriter;
 }

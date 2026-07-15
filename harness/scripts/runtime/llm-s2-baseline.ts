@@ -9,8 +9,11 @@ import type {
   LlmInteractionLogEntry,
   LlmInteractionLogWriter,
 } from "../../../backend/src/runtime/llm/interaction-log.js";
-import type { StrictStructuredToolSchema, StructuredPromptProvider } from "../../../backend/src/runtime/llm/provider-contract.js";
-import { parseStrictSelectorDecision } from "../../../backend/src/modules/topic/topic-recommendation.service.js";
+import type { StructuredPromptProvider } from "../../../backend/src/runtime/llm/provider-contract.js";
+import {
+  parseStrictSelectorDecision,
+  TOPIC_SELECTOR_STRICT_SCHEMA,
+} from "../../../backend/src/modules/topic/topic-recommendation.service.js";
 import { ScriptDraftPackage, StoryboardPlan } from "../../../shared/src/index.js";
 import { validateScriptDraft } from "../../../backend/src/modules/script/script-local-validator.js";
 import { validateStoryboardPlan } from "../../../backend/src/modules/storyboard/storyboard-local-validator.js";
@@ -53,6 +56,7 @@ interface RuntimeReport {
   totalSamples: number;
   totalRequests: number;
   capabilityProbes: number;
+  executionMatrix: ReturnType<typeof buildExecutionMatrix>;
   results: Array<{
     sampleId: string;
     operation: string;
@@ -79,7 +83,12 @@ export interface BaselineProfile {
   structuredModel: string;
 }
 
-function parseArgs(args: string[]): {
+export interface SampleDiagnosticOptions {
+  thinking?: "enabled" | "disabled";
+  forceTargetTool?: boolean;
+}
+
+export function parseArgs(args: string[]): {
   dryRun: boolean;
   live: boolean;
   candidateModel?: string;
@@ -88,6 +97,9 @@ function parseArgs(args: string[]): {
   maxRequests?: number;
   maxCostCny?: number;
   enableCapabilityProbe?: boolean;
+  profileScope?: string;
+  candidateThinking?: string;
+  forceTargetTool?: boolean;
 } {
   const live = args.includes("--live");
   const dryRun = args.includes("--dry-run") || !live;
@@ -114,6 +126,16 @@ function parseArgs(args: string[]): {
 
   const enableCapabilityProbe = args.includes("--enable-probe");
 
+  const profileScopeIndex = args.indexOf("--profile-scope");
+  const profileScope =
+    profileScopeIndex >= 0 ? args[profileScopeIndex + 1] : "both";
+
+  const candidateThinkingIndex = args.indexOf("--candidate-thinking");
+  const candidateThinking =
+    candidateThinkingIndex >= 0 ? args[candidateThinkingIndex + 1] : undefined;
+
+  const forceTargetTool = args.includes("--force-target-tool");
+
   return {
     dryRun,
     live,
@@ -123,6 +145,9 @@ function parseArgs(args: string[]): {
     maxRequests,
     maxCostCny,
     enableCapabilityProbe,
+    profileScope,
+    candidateThinking,
+    forceTargetTool,
   };
 }
 
@@ -143,8 +168,59 @@ export function validateLiveOptions(args: ReturnType<typeof parseArgs>): string[
   if (args.maxRequests !== undefined && args.maxRequests > 8) {
     errors.push("--max-requests 不得超过 8");
   }
+  if (
+    args.profileScope !== undefined
+    && !["both", "candidate-only"].includes(args.profileScope)
+  ) {
+    errors.push("--profile-scope 仅支持 both 或 candidate-only");
+  }
+  if (
+    args.candidateThinking !== undefined
+    && !["enabled", "disabled"].includes(args.candidateThinking)
+  ) {
+    errors.push("--candidate-thinking 仅支持 enabled 或 disabled");
+  }
+  if (
+    args.profileScope === "candidate-only"
+    && args.maxRequests !== undefined
+    && args.maxRequests > 6
+  ) {
+    errors.push("candidate-only 诊断的 --max-requests 不得超过 6");
+  }
 
   return errors;
+}
+
+export function buildExecutionMatrix(
+  args: ReturnType<typeof parseArgs>,
+  sampleCount: number,
+): {
+  profiles: Array<"current" | "candidate">;
+  probeRequests: number;
+  sampleRequests: number;
+  requiredRequests: number;
+  candidateOptions: SampleDiagnosticOptions;
+} {
+  const profiles: Array<"current" | "candidate"> =
+    args.profileScope === "candidate-only"
+      ? ["candidate"]
+      : ["current", "candidate"];
+  const probeRequests = args.enableCapabilityProbe ? 1 : 0;
+  const sampleRequests = profiles.length * sampleCount;
+  const candidateThinking =
+    args.candidateThinking === "enabled" || args.candidateThinking === "disabled"
+      ? args.candidateThinking
+      : undefined;
+  return {
+    profiles,
+    probeRequests,
+    sampleRequests,
+    requiredRequests: probeRequests + sampleRequests,
+    candidateOptions: {
+      thinking: candidateThinking,
+      forceTargetTool: args.forceTargetTool === true,
+    },
+  };
 }
 
 function getOutputDir(): string {
@@ -184,41 +260,6 @@ function loadManifest(manifestPath?: string): SampleCase[] {
   return JSON.parse(raw) as SampleCase[];
 }
 
-const CAPABILITY_PROBE_STRICT_SCHEMA: StrictStructuredToolSchema = {
-  name: "rank_topic_candidates",
-  description: "Rank every topic candidate in the selector pool with scorecards.",
-  parameters: {
-    type: "object",
-    properties: {
-      ranked_candidates: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            candidate_id: { type: "string" },
-            quality_rank: { type: "integer", minimum: 1 },
-            quality_score: { type: "integer", minimum: 0, maximum: 100 },
-            deductions: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  axis: { type: "string" },
-                  points_lost: { type: "integer", minimum: 1, maximum: 30 },
-                  reason: { type: "string" },
-                },
-                required: ["axis", "points_lost", "reason"],
-              },
-            },
-          },
-          required: ["candidate_id", "quality_rank", "quality_score", "deductions"],
-        },
-      },
-    },
-    required: ["ranked_candidates"],
-  },
-};
-
 function safeRenderMd(entries: LlmInteractionLogEntry[]): string {
   if (entries.length === 0) return "# No interaction log entries captured\n\n";
   return entries
@@ -253,7 +294,7 @@ function createEmptyObs(
   };
 }
 
-async function runCapabilityProbe(
+export async function runCapabilityProbe(
   structuredGateway: ReturnType<typeof createLlmGateway>,
   outputDir: string,
   profile: BaselineProfile,
@@ -288,7 +329,11 @@ async function runCapabilityProbe(
     ],
   };
 
-  const baseObs = createEmptyObs("probe-strict", "topic.selector", profile.label);
+  const baseObs = createEmptyObs(
+    "probe-strict",
+    "probe.strict-tool-call",
+    profile.label,
+  );
 
   try {
     if (!structuredGateway.invokeStrictStructured) {
@@ -302,10 +347,13 @@ async function runCapabilityProbe(
     const result = await structuredGateway.invokeStrictStructured({
       promptId: "topic.selector",
       input: probeInput,
-      schema: CAPABILITY_PROBE_STRICT_SCHEMA,
+      schema: TOPIC_SELECTOR_STRICT_SCHEMA,
       parse: parseStrictSelectorDecision,
       interactionLogWriter: writer,
-      options: { strategy: "tool_call" },
+      options: {
+        strategy: "tool_call",
+        toolChoice: "target_function",
+      },
       operationName: "probe.strict-tool-call",
     });
 
@@ -355,6 +403,7 @@ export async function runSample(
   sample: SampleCase,
   outputDir: string,
   profile: BaselineProfile,
+  diagnosticOptions: SampleDiagnosticOptions = {},
 ): Promise<ObservationSnapshot> {
   const interactionEntries: LlmInteractionLogEntry[] = [];
   const writer: LlmInteractionLogWriter = {
@@ -376,10 +425,16 @@ export async function runSample(
       rawResult = await structuredGateway.invokeStrictStructured({
         promptId: "topic.selector",
         input: { candidates },
-        schema: CAPABILITY_PROBE_STRICT_SCHEMA,
+        schema: TOPIC_SELECTOR_STRICT_SCHEMA,
         parse: parseStrictSelectorDecision,
         interactionLogWriter: writer,
-        options: { strategy: "tool_call" },
+        options: {
+          strategy: "tool_call",
+          thinking: diagnosticOptions.thinking,
+          toolChoice: diagnosticOptions.forceTargetTool
+            ? "target_function"
+            : undefined,
+        },
         operationName: sample.operation,
       });
       obs.firstPassResult = "passed";
@@ -391,7 +446,10 @@ export async function runSample(
         input,
         operationName: sample.operation,
         interactionLogWriter: writer,
-        options: { maxAttempts: 1 },
+        options: {
+          maxAttempts: 1,
+          thinking: diagnosticOptions.thinking,
+        },
       });
 
       try {
@@ -421,7 +479,10 @@ export async function runSample(
         input,
         operationName: sample.operation,
         interactionLogWriter: writer,
-        options: { maxAttempts: 1 },
+        options: {
+          maxAttempts: 1,
+          thinking: diagnosticOptions.thinking,
+        },
       });
 
       try {
@@ -589,6 +650,7 @@ async function runSamplesForProfile(
   manifest: SampleCase[],
   outputDir: string,
   budget: { remaining: number },
+  diagnosticOptions: SampleDiagnosticOptions = {},
 ): Promise<ObservationSnapshot[]> {
   const observations: ObservationSnapshot[] = [];
 
@@ -605,7 +667,14 @@ async function runSamplesForProfile(
     }
 
     console.error(`[baseline] 运行 ${profile.label}: ${sample.id} (${sample.operation}) main=${profile.mainModel} structured=${profile.structuredModel} …`);
-    const snap = await runSample(mainGateway, structuredGateway, sample, outputDir, profile);
+    const snap = await runSample(
+      mainGateway,
+      structuredGateway,
+      sample,
+      outputDir,
+      profile,
+      diagnosticOptions,
+    );
     observations.push(snap);
     budget.remaining -= 1;
 
@@ -633,13 +702,13 @@ async function main() {
   }
 
   const manifest = loadManifest();
-  const probeQuota = args.live && args.enableCapabilityProbe ? 1 : 0;
-  const profileQuota = args.live ? manifest.length * 2 : 0;
-  const totalBudget = args.live ? (args.maxRequests ?? profileQuota + probeQuota) : 0;
+  const executionMatrix = buildExecutionMatrix(args, manifest.length);
+  const probeQuota = executionMatrix.probeRequests;
+  const totalBudget = args.live ? (args.maxRequests ?? executionMatrix.requiredRequests) : 0;
 
-  if (args.live && probeQuota + profileQuota > totalBudget) {
+  if (args.live && executionMatrix.requiredRequests > totalBudget) {
     console.error(
-      `请求预算不足：probe(${probeQuota}) + current(${manifest.length}) + candidate(${manifest.length}) = ${probeQuota + profileQuota} > max-requests(${totalBudget})`,
+      `请求预算不足：计划 ${executionMatrix.requiredRequests} 次（profiles=${executionMatrix.profiles.join(",")}, probe=${probeQuota}）> max-requests(${totalBudget})`,
     );
     process.exit(1);
   }
@@ -662,14 +731,27 @@ async function main() {
       currentStructuredModel: currentProfile.structuredModel,
       totalSamples: manifest.length,
       totalRequests: 0,
-      capabilityProbes: 0,
-      results: manifest.flatMap((c) => [
-        { sampleId: c.id, operation: c.operation, profile: "current" as const, status: "dry_run" as const },
-        { sampleId: c.id, operation: c.operation, profile: "candidate" as const, status: "dry_run" as const },
-      ]),
+      capabilityProbes: probeQuota,
+      executionMatrix,
+      results: [
+        ...(probeQuota > 0
+          ? [{
+              sampleId: "probe-strict",
+              operation: "probe.strict-tool-call",
+              profile: "candidate" as const,
+              status: "dry_run" as const,
+            }]
+          : []),
+        ...manifest.flatMap((c) => executionMatrix.profiles.map((profile) => ({
+          sampleId: c.id,
+          operation: c.operation,
+          profile,
+          status: "dry_run" as const,
+        }))),
+      ],
       constraints: {
-        maxRequests: 0,
-        maxCostCny: 0,
+        maxRequests: executionMatrix.requiredRequests,
+        maxCostCny: args.maxCostCny ?? 0,
         ttft: "unobservable_non_streaming",
         costEnforcement: "unavailable",
       },
@@ -688,6 +770,7 @@ async function main() {
             candidate_model: report.candidateModel,
             current_models: `${currentProfile.mainModel}/${currentProfile.structuredModel}`,
             total_samples: report.totalSamples,
+            execution_matrix: executionMatrix,
           },
         },
         null,
@@ -733,11 +816,21 @@ async function main() {
     && allObservations[0].errorMessage != null;
 
   if (!probeFailed) {
-    const currentObs = await runSamplesForProfile(currentProfile, manifest, outputDir, budget);
-    allObservations.push(...currentObs);
+    if (executionMatrix.profiles.includes("current")) {
+      const currentObs = await runSamplesForProfile(currentProfile, manifest, outputDir, budget);
+      allObservations.push(...currentObs);
+    }
 
-    const candidateObs = await runSamplesForProfile(candidateProfile, manifest, outputDir, budget);
-    allObservations.push(...candidateObs);
+    if (executionMatrix.profiles.includes("candidate")) {
+      const candidateObs = await runSamplesForProfile(
+        candidateProfile,
+        manifest,
+        outputDir,
+        budget,
+        executionMatrix.candidateOptions,
+      );
+      allObservations.push(...candidateObs);
+    }
   }
 
   const report: RuntimeReport = {
@@ -749,6 +842,7 @@ async function main() {
     totalSamples: manifest.length,
     totalRequests: totalBudget - budget.remaining,
     capabilityProbes: probeQuota,
+    executionMatrix,
     results: allObservations.map((o) => ({
       sampleId: o.sampleId,
       operation: o.operation,
@@ -780,6 +874,7 @@ async function main() {
     total_samples: manifest.length,
     total_requests: totalBudget - budget.remaining,
     capability_probes: probeQuota,
+    execution_matrix: executionMatrix,
     probe_passed: probeQuota > 0 ? !probeFailed : null,
     max_requests: totalBudget,
     max_cost_cny: maxCostCny,

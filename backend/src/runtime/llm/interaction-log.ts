@@ -28,6 +28,7 @@ export interface LlmInteractionLogEntry {
     maxTokens?: number;
     temperature?: number;
     topP?: number;
+    toolChoice?: string;
   };
   attempts?: Array<{
     attempt: number;
@@ -94,6 +95,9 @@ export function renderLlmInteractionMarkdown(
       `- timeout: ${entry.effectiveRequest.timeoutMs}ms`,
       `- max_attempts: ${entry.effectiveRequest.maxAttempts}`,
     );
+    if (entry.effectiveRequest.toolChoice !== undefined) {
+      lines.push(`- tool_choice: ${entry.effectiveRequest.toolChoice}`);
+    }
     if (entry.effectiveRequest.maxTokens !== undefined) {
       lines.push(`- max_tokens: ${entry.effectiveRequest.maxTokens}`);
     }

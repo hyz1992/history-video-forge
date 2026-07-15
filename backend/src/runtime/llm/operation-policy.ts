@@ -33,6 +33,7 @@ const OPERATION_NAME_TO_CLASS: Record<string, LlmOperationClass> = {
 
   // 短结构化判断：选题打分选择、发布标题/简介/封面提示词
   "topic.selector": "short_structured_decision",
+  "probe.strict-tool-call": "short_structured_decision",
   "publish.title-generator": "short_structured_decision",
   "publish.description-generator": "short_structured_decision",
   "publish.cover-prompt-generator": "short_structured_decision",
