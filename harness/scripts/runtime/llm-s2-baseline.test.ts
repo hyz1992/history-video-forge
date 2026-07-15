@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { validateLiveOptions } from "./llm-s2-baseline.js";
+
+const { validateLiveOptions } = await import("./llm-s2-baseline.js");
 
 describe("llm-s2-baseline", () => {
   it("validates --candidate-model is required for live mode", () => {
@@ -8,7 +9,8 @@ describe("llm-s2-baseline", () => {
       dryRun: false,
       candidateModel: undefined,
       currentModel: "glm-5.1",
-      maxRequests: 3,
+      currentStructuredModel: "glm-4",
+      maxRequests: 7,
       maxCostCny: 10,
     });
 
@@ -21,6 +23,7 @@ describe("llm-s2-baseline", () => {
       dryRun: false,
       candidateModel: "glm-5.2",
       currentModel: "glm-5.1",
+      currentStructuredModel: "glm-4",
       maxRequests: undefined,
       maxCostCny: 10,
     });
@@ -34,7 +37,8 @@ describe("llm-s2-baseline", () => {
       dryRun: false,
       candidateModel: "glm-5.2",
       currentModel: "glm-5.1",
-      maxRequests: 3,
+      currentStructuredModel: "glm-4",
+      maxRequests: 7,
       maxCostCny: undefined,
     });
 
@@ -47,6 +51,7 @@ describe("llm-s2-baseline", () => {
       dryRun: false,
       candidateModel: "glm-5.2",
       currentModel: "glm-5.1",
+      currentStructuredModel: "glm-4",
       maxRequests: 10,
       maxCostCny: 10,
     });
@@ -54,13 +59,29 @@ describe("llm-s2-baseline", () => {
     expect(errors).toContain("--max-requests 不得超过 8");
   });
 
-  it("accepts valid live options without errors", () => {
+  it("accepts valid live options with budget covering current+candidate+probe", () => {
     const errors = validateLiveOptions({
       live: true,
       dryRun: false,
       candidateModel: "glm-5.2",
       currentModel: "glm-5.1",
-      maxRequests: 4,
+      currentStructuredModel: "glm-4",
+      maxRequests: 7,
+      maxCostCny: 10,
+      enableCapabilityProbe: true,
+    });
+
+    expect(errors).toHaveLength(0);
+  });
+
+  it("returns no errors for live without probe when budget covers current+candidate only", () => {
+    const errors = validateLiveOptions({
+      live: true,
+      dryRun: false,
+      candidateModel: "glm-5.2",
+      currentModel: "glm-5.1",
+      currentStructuredModel: "glm-4",
+      maxRequests: 6,
       maxCostCny: 10,
     });
 

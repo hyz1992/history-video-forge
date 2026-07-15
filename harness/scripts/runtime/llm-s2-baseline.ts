@@ -21,12 +21,15 @@ interface SampleCase {
 interface ObservationSnapshot {
   sampleId: string;
   operation: string;
+  profile: "current" | "candidate";
   status: "succeeded" | "failed" | "capability_check";
   effectiveRequest: unknown;
   attempts: unknown;
   responseMetadata: unknown;
   timing: unknown;
   rawOutputPreview: string;
+  zodResult: "passed" | "failed" | "skipped";
+  validatorResult: Record<string, unknown> | null;
   errorMessage?: string;
 }
 
@@ -35,13 +38,17 @@ interface RuntimeReport {
   live: boolean;
   candidateModel: string;
   currentModel: string;
+  currentStructuredModel: string;
   totalSamples: number;
   totalRequests: number;
   capabilityProbes: number;
   results: Array<{
     sampleId: string;
     operation: string;
+    profile: "current" | "candidate";
     status: "succeeded" | "failed" | "capability_check" | "dry_run";
+    zodResult?: string;
+    validatorDecision?: string;
   }>;
   constraints: {
     maxRequests: number;
@@ -52,14 +59,21 @@ interface RuntimeReport {
   observations: ObservationSnapshot[];
 }
 
+interface BaselineProfile {
+  label: "current" | "candidate";
+  mainModel: string;
+  structuredModel: string;
+}
+
 function parseArgs(args: string[]): {
   dryRun: boolean;
   live: boolean;
   candidateModel?: string;
   currentModel?: string;
+  currentStructuredModel?: string;
   maxRequests?: number;
   maxCostCny?: number;
-  allowCapabilityProbe?: boolean;
+  enableCapabilityProbe?: boolean;
 } {
   const live = args.includes("--live");
   const dryRun = args.includes("--dry-run") || !live;
@@ -72,6 +86,10 @@ function parseArgs(args: string[]): {
   const currentModel =
     currentModelIndex >= 0 ? args[currentModelIndex + 1] : "glm-5.1";
 
+  const currentStructuredModelIndex = args.indexOf("--current-structured-model");
+  const currentStructuredModel =
+    currentStructuredModelIndex >= 0 ? args[currentStructuredModelIndex + 1] : "glm-4";
+
   const maxRequestsIndex = args.indexOf("--max-requests");
   const maxRequests =
     maxRequestsIndex >= 0 ? Number(args[maxRequestsIndex + 1]) : undefined;
@@ -80,9 +98,18 @@ function parseArgs(args: string[]): {
   const maxCostCny =
     maxCostCnyIndex >= 0 ? Number(args[maxCostCnyIndex + 1]) : undefined;
 
-  const allowCapabilityProbe = !args.includes("--no-capability-probe");
+  const enableCapabilityProbe = args.includes("--enable-probe");
 
-  return { dryRun, live, candidateModel, maxRequests, maxCostCny, allowCapabilityProbe };
+  return {
+    dryRun,
+    live,
+    candidateModel,
+    currentModel,
+    currentStructuredModel,
+    maxRequests,
+    maxCostCny,
+    enableCapabilityProbe,
+  };
 }
 
 export function validateLiveOptions(args: ReturnType<typeof parseArgs>): string[] {
@@ -188,10 +215,8 @@ function safeRenderMd(entries: LlmInteractionLogEntry[]): string {
 async function runCapabilityProbe(
   gateway: ReturnType<typeof createLlmGateway>,
   outputDir: string,
+  profile: BaselineProfile,
 ): Promise<{ passed: boolean; probeMdPath: string; observation: ObservationSnapshot }> {
-  const registry = createPromptRegistry();
-  const prompt = registry.getPrompt("topic.selector");
-
   const interactionEntries: LlmInteractionLogEntry[] = [];
   const writer: LlmInteractionLogWriter = {
     write(entry) {
@@ -222,22 +247,25 @@ async function runCapabilityProbe(
     ],
   };
 
+  const baseObs: Omit<ObservationSnapshot, "status"> = {
+    sampleId: "probe-strict",
+    operation: "topic.selector",
+    profile: profile.label,
+    effectiveRequest: null,
+    attempts: null,
+    responseMetadata: null,
+    timing: null,
+    rawOutputPreview: "",
+    zodResult: "skipped",
+    validatorResult: null,
+  };
+
   try {
     if (!gateway.invokeStrictStructured) {
       return {
         passed: false,
         probeMdPath: "",
-        observation: {
-          sampleId: "probe-strict",
-          operation: "topic.selector",
-          status: "capability_check",
-          effectiveRequest: null,
-          attempts: null,
-          responseMetadata: null,
-          timing: null,
-          rawOutputPreview: "",
-          errorMessage: "provider does not support invokeStrictStructured",
-        },
+        observation: { ...baseObs, status: "capability_check", errorMessage: "provider does not support invokeStrictStructured" },
       };
     }
 
@@ -247,14 +275,12 @@ async function runCapabilityProbe(
       schema: CAPABILITY_PROBE_STRICT_SCHEMA,
       parse: (candidate) => candidate as unknown,
       interactionLogWriter: writer,
-      options: {
-        strategy: "tool_call",
-      },
+      options: { strategy: "tool_call" },
       operationName: "probe.strict-tool-call",
     });
 
     const md = safeRenderMd(interactionEntries);
-    const probeMdPath = resolve(outputDir, "probe-strict-capability.md");
+    const probeMdPath = resolve(outputDir, `probe-${profile.label}-capability.md`);
     writeFileSync(probeMdPath, md, "utf-8");
 
     const entry = interactionEntries[0];
@@ -262,8 +288,7 @@ async function runCapabilityProbe(
       passed: true,
       probeMdPath,
       observation: {
-        sampleId: "probe-strict",
-        operation: "topic.selector",
+        ...baseObs,
         status: "capability_check",
         effectiveRequest: entry?.effectiveRequest ?? null,
         attempts: entry?.attempts ?? [],
@@ -274,7 +299,7 @@ async function runCapabilityProbe(
     };
   } catch (error) {
     const md = safeRenderMd(interactionEntries);
-    const probeMdPath = resolve(outputDir, "probe-strict-capability.md");
+    const probeMdPath = resolve(outputDir, `probe-${profile.label}-capability.md`);
     writeFileSync(probeMdPath, md, "utf-8");
 
     const entry = interactionEntries[0];
@@ -282,14 +307,12 @@ async function runCapabilityProbe(
       passed: false,
       probeMdPath,
       observation: {
-        sampleId: "probe-strict",
-        operation: "topic.selector",
+        ...baseObs,
         status: "capability_check",
         effectiveRequest: entry?.effectiveRequest ?? null,
         attempts: entry?.attempts ?? [],
         responseMetadata: entry?.responseMetadata ?? null,
         timing: entry?.timing ?? null,
-        rawOutputPreview: "",
         errorMessage: error instanceof Error ? error.message : String(error),
       },
     };
@@ -297,11 +320,12 @@ async function runCapabilityProbe(
 }
 
 async function runSample(
-  gateway: ReturnType<typeof createLlmGateway>,
+  mainGateway: ReturnType<typeof createLlmGateway>,
+  structuredGateway: ReturnType<typeof createLlmGateway>,
   sample: SampleCase,
   outputDir: string,
+  profile: BaselineProfile,
 ): Promise<ObservationSnapshot> {
-  const registry = createPromptRegistry();
   const interactionEntries: LlmInteractionLogEntry[] = [];
   const writer: LlmInteractionLogWriter = {
     write(entry) {
@@ -309,88 +333,125 @@ async function runSample(
     },
   };
 
+  const baseObs: ObservationSnapshot = {
+    sampleId: sample.id,
+    operation: sample.operation,
+    profile: profile.label,
+    status: "failed",
+    effectiveRequest: null,
+    attempts: [],
+    responseMetadata: null,
+    timing: null,
+    rawOutputPreview: "",
+    zodResult: "skipped",
+    validatorResult: null,
+  };
+
   try {
     let result: unknown;
+    let zodResult: ObservationSnapshot["zodResult"] = "skipped";
+    let validatorResult: Record<string, unknown> | null = null;
 
     if (sample.operation === "topic.selector") {
-      if (!gateway.invokeStrictStructured) {
+      if (!structuredGateway.invokeStrictStructured) {
         throw new Error("provider does not support invokeStrictStructured");
       }
 
       const candidates = (sample.input.candidates ?? []) as Array<Record<string, unknown>>;
-      result = await gateway.invokeStrictStructured({
+      result = await structuredGateway.invokeStrictStructured({
         promptId: "topic.selector",
         input: { candidates },
         schema: CAPABILITY_PROBE_STRICT_SCHEMA,
-        parse: (candidate) => candidate as unknown,
-        interactionLogWriter: writer,
-        options: {
-          strategy: "tool_call",
+        parse: (candidate) => {
+          const { TopicCandidateCard } = require("../../../shared/src/index.js");
+          return TopicCandidateCard.parse(candidate);
         },
+        interactionLogWriter: writer,
+        options: { strategy: "tool_call" },
         operationName: sample.operation,
       });
-    } else {
-      const promptId =
-        sample.operation === "script.writer"
-          ? "script.script-writer"
-          : sample.operation === "storyboard.planner"
-            ? "storyboard.storyboard-planner"
-            : sample.operation;
-
-      const input =
-        sample.input.type === "topic_package"
-          ? buildScriptInput(sample)
-          : sample.operation === "storyboard.planner"
-            ? buildStoryboardInput(sample)
-            : sample.input;
-
-      result = await gateway.invokeStructuredPrompt({
-        promptId,
+      zodResult = "passed";
+    } else if (sample.operation === "script.writer") {
+      const input = buildScriptInput(sample);
+      result = await mainGateway.invokeStructuredPrompt({
+        promptId: "script.script-writer",
         input,
         operationName: sample.operation,
         interactionLogWriter: writer,
-        options: {
-          maxAttempts: 1,
-        },
+        options: { maxAttempts: 1 },
       });
+
+      try {
+        const { ScriptDraftPackage } = require("../../../shared/src/index.js");
+        ScriptDraftPackage.parse(result);
+        zodResult = "passed";
+
+        const { validateScriptDraft } = require("../../../backend/src/modules/script/script-local-validator.js");
+        const validation = validateScriptDraft({ draft: result, bundle: input.topic_package });
+        validatorResult = {
+          decision: validation.decision,
+          errors: validation.errors ?? [],
+          warnings: validation.warnings ?? [],
+        };
+      } catch {
+        zodResult = "failed";
+      }
+    } else if (sample.operation === "storyboard.planner") {
+      const input = buildStoryboardInput(sample);
+      result = await mainGateway.invokeStructuredPrompt({
+        promptId: "storyboard.storyboard-planner",
+        input,
+        operationName: sample.operation,
+        interactionLogWriter: writer,
+        options: { maxAttempts: 1 },
+      });
+
+      try {
+        const { StoryboardPlan } = require("../../../shared/src/index.js");
+        StoryboardPlan.parse(result);
+        zodResult = "passed";
+      } catch {
+        zodResult = "failed";
+      }
+    } else {
+      zodResult = "skipped";
     }
 
     const md = safeRenderMd(interactionEntries);
-    const mdPath = resolve(outputDir, `sample-${sample.id}.md`);
+    const mdPath = resolve(outputDir, `sample-${profile.label}-${sample.id}.md`);
     writeFileSync(mdPath, md, "utf-8");
 
     const entry = interactionEntries[0];
     return {
-      sampleId: sample.id,
-      operation: sample.operation,
+      ...baseObs,
       status: "succeeded",
       effectiveRequest: entry?.effectiveRequest ?? null,
       attempts: entry?.attempts ?? [],
       responseMetadata: entry?.responseMetadata ?? null,
       timing: entry?.timing ?? null,
       rawOutputPreview: typeof result === "object" ? JSON.stringify(result).slice(0, 500) : "",
+      zodResult,
+      validatorResult,
     };
   } catch (error) {
     const md = safeRenderMd(interactionEntries);
-    const mdPath = resolve(outputDir, `sample-${sample.id}.md`);
+    const mdPath = resolve(outputDir, `sample-${profile.label}-${sample.id}.md`);
     writeFileSync(mdPath, md, "utf-8");
 
     const entry = interactionEntries[0];
     return {
-      sampleId: sample.id,
-      operation: sample.operation,
+      ...baseObs,
       status: "failed",
       effectiveRequest: entry?.effectiveRequest ?? null,
       attempts: entry?.attempts ?? [],
       responseMetadata: entry?.responseMetadata ?? null,
       timing: entry?.timing ?? null,
-      rawOutputPreview: "",
       errorMessage: error instanceof Error ? error.message : String(error),
     };
   }
 }
 
-function buildScriptInput(sample: SampleCase): Record<string, unknown> {
+function buildScriptInput(_sample: SampleCase): Record<string, unknown> {
   return {
     topic_package: {
       event_identity: "晏子使楚",
@@ -402,19 +463,10 @@ function buildScriptInput(sample: SampleCase): Record<string, unknown> {
       strong_scene: "殿前对峙，狗门与橘枳",
       duration_band: { label: "medium" },
       packaging_seed: "楚王连压三次，晏子一次没退",
-      canonical_quotes: [
-        "使狗国者，从狗门入",
-        "橘生淮南则为橘，生于淮北则为枳",
-      ],
+      canonical_quotes: ["使狗国者，从狗门入", "橘生淮南则为橘，生于淮北则为枳"],
       canonical_quote_intents: [
-        {
-          quote: "使狗国者，从狗门入",
-          intent: "用于反击楚王以狗门羞辱齐国使节",
-        },
-        {
-          quote: "橘生淮南则为橘，生于淮北则为枳",
-          intent: "用于反击楚王以齐人善盗羞辱齐国",
-        },
+        { quote: "使狗国者，从狗门入", intent: "用于反击楚王以狗门羞辱齐国使节" },
+        { quote: "橘生淮南则为橘，生于淮北则为枳", intent: "用于反击楚王以齐人善盗羞辱齐国" },
       ],
       must_include_beats: [
         "楚王以狗门羞辱晏子",
@@ -429,7 +481,7 @@ function buildScriptInput(sample: SampleCase): Record<string, unknown> {
   };
 }
 
-function buildStoryboardInput(sample: SampleCase): Record<string, unknown> {
+function buildStoryboardInput(_sample: SampleCase): Record<string, unknown> {
   return {
     draft: {
       script_text:
@@ -461,6 +513,63 @@ function buildStoryboardInput(sample: SampleCase): Record<string, unknown> {
   };
 }
 
+function createGatewayForProfile(profile: BaselineProfile) {
+  const provider = createOpenAiCompatibleProvider({
+    model: profile.mainModel,
+    structuredModel: profile.structuredModel,
+    maxAttempts: 1,
+  });
+  return createLlmGateway({
+    registry: createPromptRegistry(),
+    provider,
+  });
+}
+
+async function runSamplesForProfile(
+  profile: BaselineProfile,
+  manifest: SampleCase[],
+  outputDir: string,
+  budget: { remaining: number },
+): Promise<ObservationSnapshot[]> {
+  const observations: ObservationSnapshot[] = [];
+
+  const mainGateway = createGatewayForProfile(profile);
+  const structuredGateway = createGatewayForProfile(profile);
+
+  for (const sample of manifest) {
+    if (budget.remaining <= 0) {
+      console.error(`[baseline] 请求预算耗尽，跳过 ${profile.label}/${sample.id}`);
+      observations.push({
+        sampleId: sample.id,
+        operation: sample.operation,
+        profile: profile.label,
+        status: "failed",
+        effectiveRequest: null,
+        attempts: [],
+        responseMetadata: null,
+        timing: null,
+        rawOutputPreview: "",
+        zodResult: "skipped",
+        validatorResult: null,
+        errorMessage: "budget_exhausted",
+      });
+      continue;
+    }
+
+    console.error(`[baseline] 运行 ${profile.label}: ${sample.id} (${sample.operation}) …`);
+    const snap = await runSample(mainGateway, structuredGateway, sample, outputDir, profile);
+    observations.push(snap);
+    budget.remaining -= 1;
+
+    console.error(
+      `[baseline] ${profile.label}/${sample.id}: ${snap.status} zod=${snap.zodResult}` +
+        (snap.timing ? ` duration=${(snap.timing as { durationMs: number }).durationMs}ms` : ""),
+    );
+  }
+
+  return observations;
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
 
@@ -476,13 +585,13 @@ async function main() {
   }
 
   const manifest = loadManifest();
-  const totalBudget = args.live ? (args.maxRequests ?? 6) : 0;
-  const probeQuota = args.live && args.allowCapabilityProbe ? 1 : 0;
-  const sampleQuota = manifest.length;
+  const probeQuota = args.live && args.enableCapabilityProbe ? 1 : 0;
+  const profileQuota = args.live ? manifest.length * 2 : 0;
+  const totalBudget = args.live ? (args.maxRequests ?? profileQuota + probeQuota) : 0;
 
-  if (args.live && probeQuota + sampleQuota > totalBudget) {
+  if (args.live && probeQuota + profileQuota > totalBudget) {
     console.error(
-      `请求预算不足：probe(${probeQuota}) + samples(${sampleQuota}) > max-requests(${totalBudget})`,
+      `请求预算不足：probe(${probeQuota}) + current(${manifest.length}) + candidate(${manifest.length}) = ${probeQuota + profileQuota} > max-requests(${totalBudget})`,
     );
     process.exit(1);
   }
@@ -490,20 +599,26 @@ async function main() {
   const outputDir = getOutputDir();
   mkdirSync(outputDir, { recursive: true });
 
+  const currentProfile: BaselineProfile = {
+    label: "current",
+    mainModel: args.currentModel ?? "glm-5.1",
+    structuredModel: args.currentStructuredModel ?? "glm-4",
+  };
+
   if (!args.live) {
     const report: RuntimeReport = {
       generatedAt: new Date().toISOString(),
       live: false,
       candidateModel: args.candidateModel ?? "none",
-      currentModel: args.currentModel ?? "glm-5.1",
+      currentModel: currentProfile.mainModel,
+      currentStructuredModel: currentProfile.structuredModel,
       totalSamples: manifest.length,
       totalRequests: 0,
       capabilityProbes: 0,
-      results: manifest.map((c) => ({
-        sampleId: c.id,
-        operation: c.operation,
-        status: "dry_run" as const,
-      })),
+      results: manifest.flatMap((c) => [
+        { sampleId: c.id, operation: c.operation, profile: "current" as const, status: "dry_run" as const },
+        { sampleId: c.id, operation: c.operation, profile: "candidate" as const, status: "dry_run" as const },
+      ]),
       constraints: {
         maxRequests: 0,
         maxCostCny: 0,
@@ -523,6 +638,7 @@ async function main() {
           summary: {
             live: false,
             candidate_model: report.candidateModel,
+            current_model: `${currentProfile.mainModel}/${currentProfile.structuredModel}`,
             total_samples: report.totalSamples,
           },
         },
@@ -535,28 +651,26 @@ async function main() {
 
   const candidateModel = args.candidateModel!;
   const maxCostCny = args.maxCostCny!;
+  const budget = { remaining: totalBudget };
 
   console.error(
-    `[baseline] 安全护栏: model=${candidateModel}, max_requests=${totalBudget}, max_cost_cny=${maxCostCny}元, cost_enforcement=unavailable`,
+    `[baseline] 安全护栏: current=${currentProfile.mainModel}/${currentProfile.structuredModel}, candidate=${candidateModel}, max_requests=${totalBudget}, max_cost_cny=${maxCostCny}元, cost_enforcement=unavailable`,
   );
 
-  const provider = createOpenAiCompatibleProvider({
-    model: candidateModel,
-    maxAttempts: 1,
-  });
-  const gateway = createLlmGateway({
-    registry: createPromptRegistry(),
-    provider,
-  });
+  const candidateProfile: BaselineProfile = {
+    label: "candidate",
+    mainModel: candidateModel,
+    structuredModel: candidateModel,
+  };
 
-  const observations: ObservationSnapshot[] = [];
-  let actualRequests = 0;
+  const allObservations: ObservationSnapshot[] = [];
 
   if (probeQuota > 0) {
-    console.error("[baseline] 开始 capability probe (strict tool-call) …");
-    const probeResult = await runCapabilityProbe(gateway, outputDir);
-    observations.push(probeResult.observation);
-    actualRequests += 1;
+    console.error("[baseline] 开始 capability probe (candidate strict tool-call) …");
+    const probeGateway = createGatewayForProfile(candidateProfile);
+    const probeResult = await runCapabilityProbe(probeGateway, outputDir, candidateProfile);
+    allObservations.push(probeResult.observation);
+    budget.remaining -= 1;
 
     if (!probeResult.passed) {
       console.error("[baseline] capability probe 失败，跳过后续样本。");
@@ -566,54 +680,34 @@ async function main() {
     }
   }
 
-  const probeFailed = observations.length > 0 && observations[0].status === "capability_check"
-    ? !(observations[0] as { status: string; errorMessage?: string }).errorMessage
-      ? false
-      : true
-    : false;
+  const probeFailed = allObservations.length > 0
+    && allObservations[0].status === "capability_check"
+    && allObservations[0].errorMessage != null;
 
   if (!probeFailed) {
-    for (const sample of manifest) {
-      if (actualRequests >= totalBudget) {
-        console.error(`[baseline] 请求预算耗尽 (${actualRequests}/${totalBudget})，跳过 ${sample.id}`);
-        observations.push({
-          sampleId: sample.id,
-          operation: sample.operation,
-          status: "failed",
-          effectiveRequest: null,
-          attempts: [],
-          responseMetadata: null,
-          timing: null,
-          rawOutputPreview: "",
-          errorMessage: "budget_exhausted",
-        });
-        continue;
-      }
+    const currentObs = await runSamplesForProfile(currentProfile, manifest, outputDir, budget);
+    allObservations.push(...currentObs);
 
-      console.error(`[baseline] 运行样本: ${sample.id} (${sample.operation}) …`);
-      const snap = await runSample(gateway, sample, outputDir);
-      observations.push(snap);
-      actualRequests += 1;
-
-      console.error(
-        `[baseline] ${sample.id}: ${snap.status}` +
-          (snap.timing ? ` duration=${(snap.timing as { durationMs: number }).durationMs}ms` : ""),
-      );
-    }
+    const candidateObs = await runSamplesForProfile(candidateProfile, manifest, outputDir, budget);
+    allObservations.push(...candidateObs);
   }
 
   const report: RuntimeReport = {
     generatedAt: new Date().toISOString(),
     live: true,
     candidateModel,
-    currentModel: args.currentModel ?? "glm-5.1",
+    currentModel: currentProfile.mainModel,
+    currentStructuredModel: currentProfile.structuredModel,
     totalSamples: manifest.length,
-    totalRequests: actualRequests,
+    totalRequests: totalBudget - budget.remaining,
     capabilityProbes: probeQuota,
-    results: observations.map((o) => ({
+    results: allObservations.map((o) => ({
       sampleId: o.sampleId,
       operation: o.operation,
+      profile: o.profile,
       status: o.status,
+      zodResult: o.zodResult,
+      validatorDecision: o.validatorResult?.decision as string | undefined,
     })),
     constraints: {
       maxRequests: totalBudget,
@@ -621,7 +715,7 @@ async function main() {
       ttft: "unobservable_non_streaming",
       costEnforcement: "unavailable",
     },
-    observations,
+    observations: allObservations,
   };
 
   const reportPath = resolve(outputDir, "baseline-report.json");
@@ -631,8 +725,9 @@ async function main() {
     report_path: reportPath,
     live: true,
     candidate_model: candidateModel,
+    current_model: `${currentProfile.mainModel}/${currentProfile.structuredModel}`,
     total_samples: manifest.length,
-    total_requests: actualRequests,
+    total_requests: totalBudget - budget.remaining,
     capability_probes: probeQuota,
     probe_passed: probeQuota > 0 ? !probeFailed : null,
     max_requests: totalBudget,
@@ -649,4 +744,3 @@ main().catch((err) => {
   console.error("llm-s2-baseline 失败:", err instanceof Error ? (err.stack ?? err.message) : String(err));
   process.exit(1);
 });
-
