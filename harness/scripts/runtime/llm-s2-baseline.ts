@@ -541,6 +541,13 @@ function buildStoryboardInput(_sample: SampleCase, _profile: BaselineProfile): R
   };
 }
 
+export function describeGatewayProfile(profile: BaselineProfile) {
+  return {
+    main: { profile: "main" as const, model: profile.mainModel },
+    structured: { profile: "structured" as const, model: profile.structuredModel },
+  };
+}
+
 export function createGateways(profile: BaselineProfile) {
   const mainProvider = createOpenAiCompatibleProvider({
     profile: "main",
@@ -772,7 +779,15 @@ async function main() {
   console.log(JSON.stringify(summary, null, 2));
 }
 
-main().catch((err) => {
-  console.error("llm-s2-baseline 失败:", err instanceof Error ? (err.stack ?? err.message) : String(err));
-  process.exit(1);
-});
+const isDirectRun = (() => {
+  if (typeof process === "undefined" || !process.argv[1]) return false;
+  const entry = process.argv[1].replace(/\\/g, "/");
+  return entry.endsWith("llm-s2-baseline.ts") || entry.endsWith("llm-s2-baseline.js");
+})();
+
+if (isDirectRun) {
+  main().catch((err) => {
+    console.error("llm-s2-baseline 失败:", err instanceof Error ? (err.stack ?? err.message) : String(err));
+    process.exit(1);
+  });
+}
