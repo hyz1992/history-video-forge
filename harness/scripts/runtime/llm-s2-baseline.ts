@@ -29,7 +29,14 @@ interface ObservationSnapshot {
   timing: unknown;
   rawOutputPreview: string;
   zodResult: "passed" | "failed" | "skipped";
-  validatorResult: Record<string, unknown> | null;
+  validatorDecision?: string;
+  validatorErrors: string[];
+  validatorWarnings: string[];
+  firstPassResult: "passed" | "failed" | "skipped";
+  repairTriggered: boolean;
+  repairResult: "passed" | "failed" | "skipped";
+  regenTriggered: boolean;
+  regenResult: "passed" | "failed" | "skipped";
   errorMessage?: string;
 }
 
@@ -37,7 +44,7 @@ interface RuntimeReport {
   generatedAt: string;
   live: boolean;
   candidateModel: string;
-  currentModel: string;
+  currentMainModel: string;
   currentStructuredModel: string;
   totalSamples: number;
   totalRequests: number;
@@ -49,6 +56,9 @@ interface RuntimeReport {
     status: "succeeded" | "failed" | "capability_check" | "dry_run";
     zodResult?: string;
     validatorDecision?: string;
+    firstPass?: string;
+    repair?: string;
+    regen?: string;
   }>;
   constraints: {
     maxRequests: number;
@@ -69,7 +79,7 @@ function parseArgs(args: string[]): {
   dryRun: boolean;
   live: boolean;
   candidateModel?: string;
-  currentModel?: string;
+  currentMainModel?: string;
   currentStructuredModel?: string;
   maxRequests?: number;
   maxCostCny?: number;
@@ -82,9 +92,9 @@ function parseArgs(args: string[]): {
   const candidateModel =
     candidateModelIndex >= 0 ? args[candidateModelIndex + 1] : undefined;
 
-  const currentModelIndex = args.indexOf("--current-model");
-  const currentModel =
-    currentModelIndex >= 0 ? args[currentModelIndex + 1] : "glm-5.1";
+  const currentMainModelIndex = args.indexOf("--current-main-model");
+  const currentMainModel =
+    currentMainModelIndex >= 0 ? args[currentMainModelIndex + 1] : "glm-5.1";
 
   const currentStructuredModelIndex = args.indexOf("--current-structured-model");
   const currentStructuredModel =
@@ -104,7 +114,7 @@ function parseArgs(args: string[]): {
     dryRun,
     live,
     candidateModel,
-    currentModel,
+    currentMainModel,
     currentStructuredModel,
     maxRequests,
     maxCostCny,
@@ -212,8 +222,61 @@ function safeRenderMd(entries: LlmInteractionLogEntry[]): string {
     .join("\n---\n");
 }
 
+function createEmptyObs(
+  sampleId: string,
+  operation: string,
+  profile: "current" | "candidate",
+): ObservationSnapshot {
+  return {
+    sampleId,
+    operation,
+    profile,
+    status: "failed",
+    effectiveRequest: null,
+    attempts: [],
+    responseMetadata: null,
+    timing: null,
+    rawOutputPreview: "",
+    zodResult: "skipped",
+    validatorDecision: undefined,
+    validatorErrors: [],
+    validatorWarnings: [],
+    firstPassResult: "skipped",
+    repairTriggered: false,
+    repairResult: "skipped",
+    regenTriggered: false,
+    regenResult: "skipped",
+  };
+}
+
+/**
+ * Strict selector parser — mirrors production parseStrictSelectorDecision
+ * from topic-recommendation.service.ts
+ */
+function parseStrictSelectorDecision(rawOutput: unknown): { ranked_candidates: unknown[] } {
+  if (!rawOutput || typeof rawOutput !== "object" || Array.isArray(rawOutput)) {
+    throw new Error("topic_selector_strict_schema_failed");
+  }
+
+  const record = rawOutput as Record<string, unknown>;
+  const rankedCandidates = record.ranked_candidates;
+
+  if (!Array.isArray(rankedCandidates)) {
+    throw new Error("topic_selector_strict_schema_failed");
+  }
+
+  const extraKeys = Object.keys(record).filter(
+    (key) => key !== "ranked_candidates",
+  );
+  if (extraKeys.length > 0) {
+    throw new Error("topic_selector_strict_schema_failed");
+  }
+
+  return { ranked_candidates: rankedCandidates as unknown[] };
+}
+
 async function runCapabilityProbe(
-  gateway: ReturnType<typeof createLlmGateway>,
+  structuredGateway: ReturnType<typeof createLlmGateway>,
   outputDir: string,
   profile: BaselineProfile,
 ): Promise<{ passed: boolean; probeMdPath: string; observation: ObservationSnapshot }> {
@@ -247,21 +310,10 @@ async function runCapabilityProbe(
     ],
   };
 
-  const baseObs: Omit<ObservationSnapshot, "status"> = {
-    sampleId: "probe-strict",
-    operation: "topic.selector",
-    profile: profile.label,
-    effectiveRequest: null,
-    attempts: null,
-    responseMetadata: null,
-    timing: null,
-    rawOutputPreview: "",
-    zodResult: "skipped",
-    validatorResult: null,
-  };
+  const baseObs = createEmptyObs("probe-strict", "topic.selector", profile.label);
 
   try {
-    if (!gateway.invokeStrictStructured) {
+    if (!structuredGateway.invokeStrictStructured) {
       return {
         passed: false,
         probeMdPath: "",
@@ -269,11 +321,11 @@ async function runCapabilityProbe(
       };
     }
 
-    const result = await gateway.invokeStrictStructured({
+    const result = await structuredGateway.invokeStrictStructured({
       promptId: "topic.selector",
       input: probeInput,
       schema: CAPABILITY_PROBE_STRICT_SCHEMA,
-      parse: (candidate) => candidate as unknown,
+      parse: parseStrictSelectorDecision,
       interactionLogWriter: writer,
       options: { strategy: "tool_call" },
       operationName: "probe.strict-tool-call",
@@ -333,88 +385,77 @@ async function runSample(
     },
   };
 
-  const baseObs: ObservationSnapshot = {
-    sampleId: sample.id,
-    operation: sample.operation,
-    profile: profile.label,
-    status: "failed",
-    effectiveRequest: null,
-    attempts: [],
-    responseMetadata: null,
-    timing: null,
-    rawOutputPreview: "",
-    zodResult: "skipped",
-    validatorResult: null,
-  };
+  const obs = createEmptyObs(sample.id, sample.operation, profile.label);
 
   try {
-    let result: unknown;
+    let rawResult: unknown;
     let zodResult: ObservationSnapshot["zodResult"] = "skipped";
-    let validatorResult: Record<string, unknown> | null = null;
+    let validatorDecision: string | undefined;
+    let validatorErrors: string[] = [];
+    let validatorWarnings: string[] = [];
 
     if (sample.operation === "topic.selector") {
-      if (!structuredGateway.invokeStrictStructured) {
-        throw new Error("provider does not support invokeStrictStructured");
-      }
-
       const candidates = (sample.input.candidates ?? []) as Array<Record<string, unknown>>;
-      result = await structuredGateway.invokeStrictStructured({
+      rawResult = await structuredGateway.invokeStrictStructured({
         promptId: "topic.selector",
         input: { candidates },
         schema: CAPABILITY_PROBE_STRICT_SCHEMA,
-        parse: (candidate) => {
-          const { TopicCandidateCard } = require("../../../shared/src/index.js");
-          return TopicCandidateCard.parse(candidate);
-        },
+        parse: parseStrictSelectorDecision,
         interactionLogWriter: writer,
         options: { strategy: "tool_call" },
         operationName: sample.operation,
       });
-      zodResult = "passed";
+      obs.firstPassResult = "passed";
+      obs.zodResult = "passed";
     } else if (sample.operation === "script.writer") {
-      const input = buildScriptInput(sample);
-      result = await mainGateway.invokeStructuredPrompt({
+      const input = buildScriptInput(sample, profile);
+      rawResult = await mainGateway.invokeStructuredPrompt({
         promptId: "script.script-writer",
         input,
         operationName: sample.operation,
         interactionLogWriter: writer,
         options: { maxAttempts: 1 },
       });
+      obs.firstPassResult = "passed";
 
       try {
         const { ScriptDraftPackage } = require("../../../shared/src/index.js");
-        ScriptDraftPackage.parse(result);
+        ScriptDraftPackage.parse(rawResult);
         zodResult = "passed";
 
         const { validateScriptDraft } = require("../../../backend/src/modules/script/script-local-validator.js");
-        const validation = validateScriptDraft({ draft: result, bundle: input.topic_package });
-        validatorResult = {
-          decision: validation.decision,
-          errors: validation.errors ?? [],
-          warnings: validation.warnings ?? [],
-        };
+        const validation = validateScriptDraft({ draft: rawResult, bundle: input.topic_package });
+        validatorDecision = validation.decision;
+        validatorErrors = validation.errors ?? [];
+        validatorWarnings = validation.warnings ?? [];
       } catch {
         zodResult = "failed";
       }
     } else if (sample.operation === "storyboard.planner") {
-      const input = buildStoryboardInput(sample);
-      result = await mainGateway.invokeStructuredPrompt({
+      const input = buildStoryboardInput(sample, profile);
+      rawResult = await mainGateway.invokeStructuredPrompt({
         promptId: "storyboard.storyboard-planner",
         input,
         operationName: sample.operation,
         interactionLogWriter: writer,
         options: { maxAttempts: 1 },
       });
+      obs.firstPassResult = "passed";
 
       try {
-        const { StoryboardPlan } = require("../../../shared/src/index.js");
-        StoryboardPlan.parse(result);
+        const { StoryboardPlan, ScriptDraftPackage } = require("../../../shared/src/index.js");
+        StoryboardPlan.parse(rawResult);
         zodResult = "passed";
+
+        const { validateStoryboardPlan } = require("../../../backend/src/modules/storyboard/storyboard-local-validator.js");
+        const draft = ScriptDraftPackage.parse(input.draft);
+        const validation = validateStoryboardPlan({ draft, plan: rawResult });
+        validatorDecision = validation.decision;
+        validatorErrors = validation.errors ?? [];
+        validatorWarnings = validation.warnings ?? [];
       } catch {
         zodResult = "failed";
       }
-    } else {
-      zodResult = "skipped";
     }
 
     const md = safeRenderMd(interactionEntries);
@@ -423,15 +464,17 @@ async function runSample(
 
     const entry = interactionEntries[0];
     return {
-      ...baseObs,
+      ...obs,
       status: "succeeded",
       effectiveRequest: entry?.effectiveRequest ?? null,
       attempts: entry?.attempts ?? [],
       responseMetadata: entry?.responseMetadata ?? null,
       timing: entry?.timing ?? null,
-      rawOutputPreview: typeof result === "object" ? JSON.stringify(result).slice(0, 500) : "",
+      rawOutputPreview: typeof rawResult === "object" ? JSON.stringify(rawResult).slice(0, 500) : "",
       zodResult,
-      validatorResult,
+      validatorDecision,
+      validatorErrors,
+      validatorWarnings,
     };
   } catch (error) {
     const md = safeRenderMd(interactionEntries);
@@ -440,7 +483,7 @@ async function runSample(
 
     const entry = interactionEntries[0];
     return {
-      ...baseObs,
+      ...obs,
       status: "failed",
       effectiveRequest: entry?.effectiveRequest ?? null,
       attempts: entry?.attempts ?? [],
@@ -451,9 +494,18 @@ async function runSample(
   }
 }
 
-function buildScriptInput(_sample: SampleCase): Record<string, unknown> {
+function buildScriptInput(_sample: SampleCase, _profile: BaselineProfile): Record<string, unknown> {
   return {
     topic_package: {
+      hard_lane: {
+        must_include_beats: [
+          "楚王以狗门羞辱晏子",
+          "晏子前两次当众顶回楚王压场",
+          "橘枳之喻第三次顶回楚王，楚国收场",
+        ],
+        forbidden_expansions: [],
+        duration_band: "medium",
+      },
       event_identity: "晏子使楚",
       title: "晏子使楚",
       selected_angle: "楚王连压三次，晏子一次没退",
@@ -461,19 +513,12 @@ function buildScriptInput(_sample: SampleCase): Record<string, unknown> {
       scope_label: "完整事件",
       core_conflict: "楚王当众羞辱，晏子不能退",
       strong_scene: "殿前对峙，狗门与橘枳",
-      duration_band: { label: "medium" },
       packaging_seed: "楚王连压三次，晏子一次没退",
       canonical_quotes: ["使狗国者，从狗门入", "橘生淮南则为橘，生于淮北则为枳"],
       canonical_quote_intents: [
         { quote: "使狗国者，从狗门入", intent: "用于反击楚王以狗门羞辱齐国使节" },
         { quote: "橘生淮南则为橘，生于淮北则为枳", intent: "用于反击楚王以齐人善盗羞辱齐国" },
       ],
-      must_include_beats: [
-        "楚王以狗门羞辱晏子",
-        "晏子前两次当众顶回楚王压场",
-        "橘枳之喻第三次顶回楚王，楚国收场",
-      ],
-      forbidden_expansions: [],
       risk_hints: [],
       source_anchor_refs: ["《晏子春秋》"],
       narrative_tension_map: { hook_claim: "楚王连压三次，晏子一次没退" },
@@ -481,12 +526,12 @@ function buildScriptInput(_sample: SampleCase): Record<string, unknown> {
   };
 }
 
-function buildStoryboardInput(_sample: SampleCase): Record<string, unknown> {
+function buildStoryboardInput(_sample: SampleCase, _profile: BaselineProfile): Record<string, unknown> {
   return {
     draft: {
       script_text:
         "楚王第一次压场时，晏子没有退。使狗国者从狗门入——他站在殿前，看着那扇为羞辱他而开的矮门，一句话就顶了回去。第二次，楚王又说齐国没人，才派这样的人来。晏子不卑不亢，用出使规矩当面驳斥。最后，楚王故意安排齐人盗劫，想用这个证明齐人本性。晏子终于落下橘生淮南则为橘、生于淮北则为枳——他在众目睽睽之下，把整个场面从羞辱晏子逆转成了羞辱楚国。事毕，楚国君臣再无挑衅之意。",
-      estimated_duration_sec: 58,
+      estimated_duration_sec: 85,
       beat_trace: [
         { beat: "狗门羞辱", excerpt: "使狗国者从狗门入", confidence: 0.92 },
         { beat: "齐国无人", excerpt: "楚王又说齐国没人", confidence: 0.9 },
@@ -513,16 +558,28 @@ function buildStoryboardInput(_sample: SampleCase): Record<string, unknown> {
   };
 }
 
-function createGatewayForProfile(profile: BaselineProfile) {
-  const provider = createOpenAiCompatibleProvider({
+function createGateways(profile: BaselineProfile) {
+  const mainProvider = createOpenAiCompatibleProvider({
+    profile: "main",
     model: profile.mainModel,
-    structuredModel: profile.structuredModel,
     maxAttempts: 1,
   });
-  return createLlmGateway({
+  const mainGateway = createLlmGateway({
     registry: createPromptRegistry(),
-    provider,
+    provider: mainProvider,
   });
+
+  const structuredProvider = createOpenAiCompatibleProvider({
+    profile: "structured",
+    model: profile.structuredModel,
+    maxAttempts: 1,
+  });
+  const structuredGateway = createLlmGateway({
+    registry: createPromptRegistry(),
+    provider: structuredProvider,
+  });
+
+  return { mainGateway, structuredGateway };
 }
 
 async function runSamplesForProfile(
@@ -533,30 +590,19 @@ async function runSamplesForProfile(
 ): Promise<ObservationSnapshot[]> {
   const observations: ObservationSnapshot[] = [];
 
-  const mainGateway = createGatewayForProfile(profile);
-  const structuredGateway = createGatewayForProfile(profile);
+  const { mainGateway, structuredGateway } = createGateways(profile);
 
   for (const sample of manifest) {
     if (budget.remaining <= 0) {
       console.error(`[baseline] 请求预算耗尽，跳过 ${profile.label}/${sample.id}`);
       observations.push({
-        sampleId: sample.id,
-        operation: sample.operation,
-        profile: profile.label,
-        status: "failed",
-        effectiveRequest: null,
-        attempts: [],
-        responseMetadata: null,
-        timing: null,
-        rawOutputPreview: "",
-        zodResult: "skipped",
-        validatorResult: null,
+        ...createEmptyObs(sample.id, sample.operation, profile.label),
         errorMessage: "budget_exhausted",
       });
       continue;
     }
 
-    console.error(`[baseline] 运行 ${profile.label}: ${sample.id} (${sample.operation}) …`);
+    console.error(`[baseline] 运行 ${profile.label}: ${sample.id} (${sample.operation}) main=${profile.mainModel} structured=${profile.structuredModel} …`);
     const snap = await runSample(mainGateway, structuredGateway, sample, outputDir, profile);
     observations.push(snap);
     budget.remaining -= 1;
@@ -601,7 +647,7 @@ async function main() {
 
   const currentProfile: BaselineProfile = {
     label: "current",
-    mainModel: args.currentModel ?? "glm-5.1",
+    mainModel: args.currentMainModel ?? "glm-5.1",
     structuredModel: args.currentStructuredModel ?? "glm-4",
   };
 
@@ -610,7 +656,7 @@ async function main() {
       generatedAt: new Date().toISOString(),
       live: false,
       candidateModel: args.candidateModel ?? "none",
-      currentModel: currentProfile.mainModel,
+      currentMainModel: currentProfile.mainModel,
       currentStructuredModel: currentProfile.structuredModel,
       totalSamples: manifest.length,
       totalRequests: 0,
@@ -638,7 +684,7 @@ async function main() {
           summary: {
             live: false,
             candidate_model: report.candidateModel,
-            current_model: `${currentProfile.mainModel}/${currentProfile.structuredModel}`,
+            current_models: `${currentProfile.mainModel}/${currentProfile.structuredModel}`,
             total_samples: report.totalSamples,
           },
         },
@@ -667,8 +713,8 @@ async function main() {
 
   if (probeQuota > 0) {
     console.error("[baseline] 开始 capability probe (candidate strict tool-call) …");
-    const probeGateway = createGatewayForProfile(candidateProfile);
-    const probeResult = await runCapabilityProbe(probeGateway, outputDir, candidateProfile);
+    const { structuredGateway } = createGateways(candidateProfile);
+    const probeResult = await runCapabilityProbe(structuredGateway, outputDir, candidateProfile);
     allObservations.push(probeResult.observation);
     budget.remaining -= 1;
 
@@ -696,7 +742,7 @@ async function main() {
     generatedAt: new Date().toISOString(),
     live: true,
     candidateModel,
-    currentModel: currentProfile.mainModel,
+    currentMainModel: currentProfile.mainModel,
     currentStructuredModel: currentProfile.structuredModel,
     totalSamples: manifest.length,
     totalRequests: totalBudget - budget.remaining,
@@ -707,7 +753,10 @@ async function main() {
       profile: o.profile,
       status: o.status,
       zodResult: o.zodResult,
-      validatorDecision: o.validatorResult?.decision as string | undefined,
+      validatorDecision: o.validatorDecision,
+      firstPass: o.firstPassResult,
+      repair: o.repairResult,
+      regen: o.regenResult,
     })),
     constraints: {
       maxRequests: totalBudget,
@@ -725,7 +774,7 @@ async function main() {
     report_path: reportPath,
     live: true,
     candidate_model: candidateModel,
-    current_model: `${currentProfile.mainModel}/${currentProfile.structuredModel}`,
+    current_models: `${currentProfile.mainModel}/${currentProfile.structuredModel}`,
     total_samples: manifest.length,
     total_requests: totalBudget - budget.remaining,
     capability_probes: probeQuota,
