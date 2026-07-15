@@ -10,6 +10,10 @@ import type {
   LlmInteractionLogWriter,
 } from "../../../backend/src/runtime/llm/interaction-log.js";
 import type { StrictStructuredToolSchema } from "../../../backend/src/runtime/llm/provider-contract.js";
+import { parseStrictSelectorDecision } from "../../../backend/src/modules/topic/topic-recommendation.service.js";
+import { ScriptDraftPackage, StoryboardPlan } from "../../../shared/src/index.js";
+import { validateScriptDraft } from "../../../backend/src/modules/script/script-local-validator.js";
+import { validateStoryboardPlan } from "../../../backend/src/modules/storyboard/storyboard-local-validator.js";
 
 interface SampleCase {
   id: string;
@@ -32,11 +36,11 @@ interface ObservationSnapshot {
   validatorDecision?: string;
   validatorErrors: string[];
   validatorWarnings: string[];
-  firstPassResult: "passed" | "failed" | "skipped";
+  firstPassResult: "passed" | "failed" | "skipped" | "unexercised";
   repairTriggered: boolean;
-  repairResult: "passed" | "failed" | "skipped";
+  repairResult: "passed" | "failed" | "skipped" | "unexercised";
   regenTriggered: boolean;
-  regenResult: "passed" | "failed" | "skipped";
+  regenResult: "passed" | "failed" | "skipped" | "unexercised";
   errorMessage?: string;
 }
 
@@ -68,8 +72,6 @@ interface RuntimeReport {
   };
   observations: ObservationSnapshot[];
 }
-
-export type { BaselineProfile };
 
 export interface BaselineProfile {
   label: "current" | "candidate";
@@ -243,38 +245,12 @@ function createEmptyObs(
     validatorDecision: undefined,
     validatorErrors: [],
     validatorWarnings: [],
-    firstPassResult: "skipped",
+    firstPassResult: "unexercised",
     repairTriggered: false,
-    repairResult: "skipped",
+    repairResult: "unexercised",
     regenTriggered: false,
-    regenResult: "skipped",
+    regenResult: "unexercised",
   };
-}
-
-/**
- * Strict selector parser — mirrors production parseStrictSelectorDecision
- * from topic-recommendation.service.ts
- */
-function parseStrictSelectorDecision(rawOutput: unknown): { ranked_candidates: unknown[] } {
-  if (!rawOutput || typeof rawOutput !== "object" || Array.isArray(rawOutput)) {
-    throw new Error("topic_selector_strict_schema_failed");
-  }
-
-  const record = rawOutput as Record<string, unknown>;
-  const rankedCandidates = record.ranked_candidates;
-
-  if (!Array.isArray(rankedCandidates)) {
-    throw new Error("topic_selector_strict_schema_failed");
-  }
-
-  const extraKeys = Object.keys(record).filter(
-    (key) => key !== "ranked_candidates",
-  );
-  if (extraKeys.length > 0) {
-    throw new Error("topic_selector_strict_schema_failed");
-  }
-
-  return { ranked_candidates: rankedCandidates as unknown[] };
 }
 
 async function runCapabilityProbe(
@@ -391,7 +367,6 @@ export async function runSample(
 
   try {
     let rawResult: unknown;
-    let zodResult: ObservationSnapshot["zodResult"] = "skipped";
     let validatorDecision: string | undefined;
     let validatorErrors: string[] = [];
     let validatorWarnings: string[] = [];
@@ -418,20 +393,26 @@ export async function runSample(
         interactionLogWriter: writer,
         options: { maxAttempts: 1 },
       });
-      obs.firstPassResult = "passed";
 
       try {
-        const { ScriptDraftPackage } = require("../../../shared/src/index.js");
         ScriptDraftPackage.parse(rawResult);
-        zodResult = "passed";
+        obs.zodResult = "passed";
+        obs.firstPassResult = "passed";
 
-        const { validateScriptDraft } = require("../../../backend/src/modules/script/script-local-validator.js");
-        const validation = validateScriptDraft({ draft: rawResult, bundle: input.topic_package });
+        const validatorBundle = {
+          hard_lane: {
+            must_include_beats: (input as Record<string, unknown>).hard_lane ? ((input as Record<string, unknown>).hard_lane as Record<string, unknown>).must_include_beats as string[] : [],
+            forbidden_expansions: [] as string[],
+            duration_band: "medium",
+          },
+        };
+        const validation = validateScriptDraft({ draft: rawResult as any, bundle: validatorBundle as any });
         validatorDecision = validation.decision;
-        validatorErrors = validation.errors ?? [];
-        validatorWarnings = validation.warnings ?? [];
+        validatorErrors = (validation.errors ?? []) as string[];
+        validatorWarnings = (validation.warnings ?? []) as string[];
       } catch {
-        zodResult = "failed";
+        obs.zodResult = "failed";
+        obs.firstPassResult = "failed";
       }
     } else if (sample.operation === "storyboard.planner") {
       const input = buildStoryboardInput(sample, profile);
@@ -442,21 +423,20 @@ export async function runSample(
         interactionLogWriter: writer,
         options: { maxAttempts: 1 },
       });
-      obs.firstPassResult = "passed";
 
       try {
-        const { StoryboardPlan, ScriptDraftPackage } = require("../../../shared/src/index.js");
         StoryboardPlan.parse(rawResult);
-        zodResult = "passed";
+        obs.zodResult = "passed";
+        obs.firstPassResult = "passed";
 
-        const { validateStoryboardPlan } = require("../../../backend/src/modules/storyboard/storyboard-local-validator.js");
         const draft = ScriptDraftPackage.parse(input.draft);
-        const validation = validateStoryboardPlan({ draft, plan: rawResult });
+        const validation = validateStoryboardPlan({ draft, plan: rawResult as any });
         validatorDecision = validation.decision;
         validatorErrors = validation.errors ?? [];
         validatorWarnings = validation.warnings ?? [];
       } catch {
-        zodResult = "failed";
+        obs.zodResult = "failed";
+        obs.firstPassResult = "failed";
       }
     }
 
@@ -473,7 +453,6 @@ export async function runSample(
       responseMetadata: entry?.responseMetadata ?? null,
       timing: entry?.timing ?? null,
       rawOutputPreview: typeof rawResult === "object" ? JSON.stringify(rawResult).slice(0, 500) : "",
-      zodResult,
       validatorDecision,
       validatorErrors,
       validatorWarnings,
@@ -499,31 +478,33 @@ export async function runSample(
 function buildScriptInput(_sample: SampleCase, _profile: BaselineProfile): Record<string, unknown> {
   return {
     topic_package: {
-      hard_lane: {
-        must_include_beats: [
-          "楚王以狗门羞辱晏子",
-          "晏子前两次当众顶回楚王压场",
-          "橘枳之喻第三次顶回楚王，楚国收场",
-        ],
-        forbidden_expansions: [],
-        duration_band: "medium",
-      },
-      event_identity: "晏子使楚",
-      title: "晏子使楚",
-      selected_angle: "楚王连压三次，晏子一次没退",
-      family_label: "外交",
-      scope_label: "完整事件",
-      core_conflict: "楚王当众羞辱，晏子不能退",
-      strong_scene: "殿前对峙，狗门与橘枳",
-      packaging_seed: "楚王连压三次，晏子一次没退",
-      canonical_quotes: ["使狗国者，从狗门入", "橘生淮南则为橘，生于淮北则为枳"],
-      canonical_quote_intents: [
-        { quote: "使狗国者，从狗门入", intent: "用于反击楚王以狗门羞辱齐国使节" },
-        { quote: "橘生淮南则为橘，生于淮北则为枳", intent: "用于反击楚王以齐人善盗羞辱齐国" },
-      ],
-      risk_hints: [],
       source_anchor_refs: ["《晏子春秋》"],
-      narrative_tension_map: { hook_claim: "楚王连压三次，晏子一次没退" },
+      canonical_quotes: ["使狗国者，从狗门入", "橘生淮南则为橘，生于淮北则为枳"],
+    },
+    hard_lane: {
+      event_identity: "晏子使楚",
+      selected_angle: "楚王连压三次，晏子一次没退",
+      core_conflict: "楚王当众羞辱，晏子不能退",
+      must_include_beats: [
+        "楚王以狗门羞辱晏子",
+        "晏子前两次当众顶回楚王压场",
+        "橘枳之喻第三次顶回楚王，楚国收场",
+      ],
+      source_anchor_refs: ["《晏子春秋》"],
+      canonical_quotes: ["使狗国者，从狗门入", "橘生淮南则为橘，生于淮北则为枳"],
+    },
+    soft_lane: {
+      narrative_tension_map: {
+        hook_claim: "楚王连压三次，晏子一次没退",
+        pressure_escalation: "楚王连续升级羞辱手段",
+        mid_reveal: "晏子每次都以子之矛攻子之盾",
+        peak_payoff: "橘枳之喻逆转全场",
+        ending_residue: "楚国君臣无言以对",
+      },
+      strong_scene: "殿前对峙，狗门与橘枳",
+    },
+    packaging_lane: {
+      hook_claim: "楚王连压三次，晏子一次没退",
     },
   };
 }

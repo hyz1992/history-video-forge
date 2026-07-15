@@ -1068,7 +1068,7 @@ function shouldFallbackToStructuredSelector(error: unknown): boolean {
   ].some((pattern) => error.message.includes(pattern));
 }
 
-function parseStrictSelectorDecision(rawOutput: unknown): TopicSelectorDecision {
+export function parseStrictSelectorDecision(rawOutput: unknown): TopicSelectorDecision {
   if (!rawOutput || typeof rawOutput !== "object" || Array.isArray(rawOutput)) {
     throw new Error("topic_selector_strict_schema_failed");
   }
