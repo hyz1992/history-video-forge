@@ -282,12 +282,16 @@ function parseProtectedProjectIds(raw: string | undefined): Set<string> {
 
 /**
  * 返回脱敏后的 LLM 配置快照，用于日志与诊断。
- * 不输出 API key 或完整 base URL，仅保留 host、模型、strategy 和 operation policy。
+ * 不输出 API key 或完整 base URL，仅保留 profile、host、模型、strategy 和 operation policy。
  * operation policy 来自单供应商策略模块，不包含模型名或 provider routing。
+ *
+ * @param profile 当前调用使用的 profile（main/structured），决定快照中 model/strategy 的呈现口径。
  */
-export function getRedactedLlmConfigSnapshot(): RedactedLlmConfigSnapshot {
+export function getRedactedLlmConfigSnapshot(
+  profile: "main" | "structured" = "main",
+): RedactedLlmConfigSnapshot {
   return redactLlmConfigSnapshot({
-    provider: env.llm.provider,
+    profile,
     baseUrl: env.llm.baseUrl,
     apiKey: env.llm.apiKey,
     model: env.llm.model,

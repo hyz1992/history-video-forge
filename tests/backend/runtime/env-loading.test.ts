@@ -193,17 +193,19 @@ describe("runtime env loading", () => {
     const { getRedactedLlmConfigSnapshot } = await import(
       "../../../backend/src/config/env.js"
     );
-    const snapshot = getRedactedLlmConfigSnapshot();
+    const snapshot = getRedactedLlmConfigSnapshot("structured");
 
     const serialized = JSON.stringify(snapshot);
     expect(serialized).not.toContain("secret-key-12345");
     expect(serialized).not.toContain("structured-secret");
+    expect(snapshot.profile).toBe("structured");
     expect(snapshot.hasApiKey).toBe(true);
     expect(snapshot.hasStructuredApiKey).toBe(true);
     expect(snapshot.baseUrlHost).toBe("open.bigmodel.cn");
     expect(snapshot.structuredBaseUrlHost).toBe("open.bigmodel.cn");
-    expect(snapshot.mainModel).toBe("glm-5.1");
+    expect(snapshot.model).toBe("glm-5.1");
     expect(snapshot.structuredModel).toBe("glm-4");
+    expect(snapshot.strategy).toBe("tool_call");
     expect(snapshot.operationPolicy).toBeDefined();
   });
 });

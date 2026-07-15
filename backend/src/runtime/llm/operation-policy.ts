@@ -17,32 +17,30 @@ export type LlmOperationClass =
   | "shadow_review"
   | "targeted_repair";
 
-export type LlmThinkingStatus =
-  | "enabled"
-  | "disabled"
-  | "provider_default";
-
 /**
- * 显式 operation name → operation class 映射。
- * 这是白名单，不是子串匹配；新增 operation 必须在此显式登记。
+ * 显式 operation name → operation class 映射（白名单，禁止子串匹配）。
+ * 新增 operation 必须在此显式登记，否则落入 unknown。
  */
 const OPERATION_NAME_TO_CLASS: Record<string, LlmOperationClass> = {
   // 核心语义生成：口播文案首稿
   "script.writer": "core_semantic_generation",
 
-  // 长结构化生成：分镜规划、分镜段重生、候选构建（输出体量大）
+  // 长结构化生成：分镜规划、分镜段重生、候选构建、资产规划（输出体量大）
   "storyboard.planner": "long_structured_generation",
   "storyboard.segment-regen": "long_structured_generation",
   "topic.candidate-builder": "long_structured_generation",
+  "asset-planning.planner": "long_structured_generation",
 
-  // 短结构化判断：选题打分选择、发布标题/简介
+  // 短结构化判断：选题打分选择、发布标题/简介/封面提示词
   "topic.selector": "short_structured_decision",
   "publish.title-generator": "short_structured_decision",
   "publish.description-generator": "short_structured_decision",
   "publish.cover-prompt-generator": "short_structured_decision",
 
-  // 局部修复：候选修复、封面对话优化、资产提示词优化
+  // 局部修复：候选修复、候选诊断、结构修复、封面对话优化、资产提示词优化
   "topic.candidate-builder-repair": "targeted_repair",
+  "topic.candidate-builder.diagnostics": "targeted_repair",
+  "asset-planning.asset-structural-repair": "targeted_repair",
   "publish.cover-prompt-optimizer": "targeted_repair",
   "asset.prompt-optimizer": "targeted_repair",
 
@@ -62,7 +60,6 @@ export function classifyOperation(operationName: string): ClassifiedOperation {
     return mapped;
   }
 
-  // 显式白名单未命中即为未知，必须记录 warning 且不得用子串推断。
   if (!warnedOperations.has(operationName)) {
     warnedOperations.add(operationName);
     // eslint-disable-next-line no-console
@@ -75,13 +72,27 @@ export function classifyOperation(operationName: string): ClassifiedOperation {
 }
 
 /**
+ * timeout 是否允许重试，按 operation class 区分。
+ *
+ * Task 9 仅授权对 core_semantic_generation 与 long_structured_generation
+ * 禁止超时原样重试；其余 class 保持既有"允许 timeout 重试"的行为，
+ * 避免在没有基线或明确批准时扩大禁止范围。
+ */
+const RETRY_ON_TIMEOUT_BY_CLASS: Record<LlmOperationClass, boolean> = {
+  core_semantic_generation: false,
+  long_structured_generation: false,
+  short_structured_decision: true,
+  shadow_review: true,
+  targeted_repair: true,
+};
+
+/**
  * 单个 operation 的策略。当前所有生成参数字段保持 undefined，
  * 表示"没有受控实验支持的值"，因此不会覆盖 profile/env defaults。
- * Task 8 明确禁止擅自写入 thinking / max tokens / timeout 默认值。
  */
 export interface OperationPolicy {
   retryOnTimeout?: boolean;
-  /** 瞬时错误（429 / 503 / 网络错误）在该 class 下的最大重试次数上限。 */
+  /** 瞬时错误（429 / 503 / 网络错误）在该 class 下的最大额外重试次数。 */
   transientRetryByClass?: Partial<Record<LlmOperationClass, number>>;
   thinking?: "enabled" | "disabled";
   maxTokens?: number;
@@ -93,15 +104,16 @@ export interface OperationPolicy {
  * 默认 operation policy。
  *
  * - 不硬编码模型名或供应商名。
- * - 不写入未经批准的 thinking / max tokens / timeout。
- * - core_semantic_generation 与 long_structured_generation 默认禁止超时重试（Task 9 契约）。
+ * - 不写入未经批准的 thinking / max tokens / timeout / maxAttempts。
+ * - timeout 重试按 class 区分（仅 core/long 禁止）。
  * - 瞬时错误在每个 class 下允许有限重试（上限 1~2 次）。
  */
 export const DEFAULT_OPERATION_POLICY: Required<
-  Pick<OperationPolicy, "retryOnTimeout" | "transientRetryByClass">
+  Pick<OperationPolicy, "transientRetryByClass">
 > &
   OperationPolicy = {
-  retryOnTimeout: false,
+  // retryOnTimeout 不在此处给单一值；按 class 解析（见 RETRY_ON_TIMEOUT_BY_CLASS）。
+  retryOnTimeout: undefined,
   transientRetryByClass: {
     core_semantic_generation: 1,
     long_structured_generation: 1,
@@ -130,15 +142,10 @@ export function getOperationPolicy(operationName: string): OperationPolicy {
     };
   }
 
-  const policy: OperationPolicy = {
-    retryOnTimeout:
-      cls === "core_semantic_generation" || cls === "long_structured_generation"
-        ? false
-        : DEFAULT_OPERATION_POLICY.retryOnTimeout,
+  return {
+    retryOnTimeout: RETRY_ON_TIMEOUT_BY_CLASS[cls],
     transientRetryByClass: DEFAULT_OPERATION_POLICY.transientRetryByClass,
   };
-
-  return policy;
 }
 
 export interface ResolveEffectiveRequestInput {
@@ -159,7 +166,7 @@ export interface ResolveEffectiveRequestInput {
 }
 
 export interface ResolvedEffectiveRequest {
-  thinking: LlmThinkingStatus;
+  thinking: "enabled" | "disabled" | "provider_default";
   maxAttempts: number;
   timeoutMs: number;
   maxTokens?: number;
@@ -179,7 +186,7 @@ export function resolveEffectiveRequest(
 ): ResolvedEffectiveRequest {
   const options = input.invocationOptions ?? {};
 
-  const thinking: LlmThinkingStatus =
+  const thinking =
     options.thinking ??
     input.operationPolicy.thinking ??
     "provider_default";
@@ -204,24 +211,30 @@ export function resolveEffectiveRequest(
   };
 }
 
+/**
+ * 脱敏后的 LLM 配置快照字段契约（对齐 S2-0 plan Task 8）：
+ * 输出 profile、model、strategy、operation policy，
+ * 以及必要的安全/可用性元信息（是否配置 key、host、timeout、maxAttempts）。
+ * 严禁输出 API key 或完整 base URL。
+ */
 export interface RedactedLlmConfigSnapshot {
-  provider: string;
+  profile: "main" | "structured";
+  model: string;
+  structuredModel: string;
+  strategy: string;
+  structuredThinking?: string;
   hasApiKey: boolean;
   hasStructuredApiKey: boolean;
   /** 仅保留 host，不输出完整 base URL 或路径。 */
   baseUrlHost: string;
   structuredBaseUrlHost: string;
-  mainModel: string;
-  structuredModel: string;
-  structuredStrategy: string;
-  structuredThinking?: string;
   timeoutMs: number;
   maxAttempts: number;
   operationPolicy: OperationPolicy;
 }
 
 export interface RedactableLlmConfig {
-  provider: string;
+  profile: "main" | "structured";
   baseUrl?: string;
   apiKey?: string;
   model: string;
@@ -248,15 +261,15 @@ export function redactLlmConfigSnapshot(
   config: RedactableLlmConfig,
 ): RedactedLlmConfigSnapshot {
   return {
-    provider: config.provider,
+    profile: config.profile,
+    model: config.model,
+    structuredModel: config.structuredModel,
+    strategy: config.structuredStrategy,
+    structuredThinking: config.structuredThinking,
     hasApiKey: Boolean(config.apiKey),
     hasStructuredApiKey: Boolean(config.structuredApiKey),
     baseUrlHost: extractHost(config.baseUrl),
     structuredBaseUrlHost: extractHost(config.structuredBaseUrl),
-    mainModel: config.model,
-    structuredModel: config.structuredModel,
-    structuredStrategy: config.structuredStrategy,
-    structuredThinking: config.structuredThinking,
     timeoutMs: config.timeoutMs,
     maxAttempts: config.maxAttempts,
     operationPolicy: config.operationPolicy,

@@ -12,28 +12,39 @@ import {
 } from "../../../backend/src/runtime/llm/operation-policy.js";
 
 describe("llm operation policy classification", () => {
-  it("maps known operation names to explicit operation classes without substring guessing", () => {
-    expect(classifyOperation("topic.selector")).toBe("short_structured_decision");
+  it("maps every production operation name to an explicit operation class without substring guessing", () => {
+    // 核心语义生成
     expect(classifyOperation("script.writer")).toBe("core_semantic_generation");
-    expect(classifyOperation("script.semantic-reviewer")).toBe("shadow_review");
+
+    // 长结构化生成（输出体量大）
     expect(classifyOperation("storyboard.planner")).toBe("long_structured_generation");
     expect(classifyOperation("storyboard.segment-regen")).toBe("long_structured_generation");
     expect(classifyOperation("topic.candidate-builder")).toBe("long_structured_generation");
-    expect(classifyOperation("topic.candidate-builder-repair")).toBe("targeted_repair");
+    expect(classifyOperation("asset-planning.planner")).toBe("long_structured_generation");
+
+    // 短结构化判断
+    expect(classifyOperation("topic.selector")).toBe("short_structured_decision");
     expect(classifyOperation("publish.title-generator")).toBe("short_structured_decision");
     expect(classifyOperation("publish.description-generator")).toBe("short_structured_decision");
     expect(classifyOperation("publish.cover-prompt-generator")).toBe("short_structured_decision");
+
+    // 局部修复
+    expect(classifyOperation("topic.candidate-builder-repair")).toBe("targeted_repair");
+    expect(classifyOperation("topic.candidate-builder.diagnostics")).toBe("targeted_repair");
+    expect(classifyOperation("asset-planning.asset-structural-repair")).toBe("targeted_repair");
     expect(classifyOperation("publish.cover-prompt-optimizer")).toBe("targeted_repair");
     expect(classifyOperation("asset.prompt-optimizer")).toBe("targeted_repair");
+
+    // shadow only
+    expect(classifyOperation("script.semantic-reviewer")).toBe("shadow_review");
   });
 
   it("does not infer semantics from substring containment", () => {
-    // "storyboard" alone must not be treated as long_structured_generation via substring match
     expect(classifyOperation("storyboard")).toBe("unknown");
-    // "selector" substring alone must not classify as topic.selector
     expect(classifyOperation("weird.selector")).toBe("unknown");
-    // "script" substring alone must not classify as script.writer
     expect(classifyOperation("script.debug")).toBe("unknown");
+    expect(classifyOperation("asset-planning.unknown")).toBe("unknown");
+    expect(classifyOperation("candidate-builder")).toBe("unknown");
   });
 
   it("falls back to conservative default with a warning for unknown operations", () => {
@@ -91,18 +102,18 @@ describe("llm operation policy precedence", () => {
   });
 
   it("does not introduce unapproved thinking / max-tokens / timeout defaults for operations", () => {
-    // Per Task 8: no baseline-backed parameter may be silently defaulted yet.
     const policy: OperationPolicy = getOperationPolicy("script.writer");
     expect(policy.thinking).toBeUndefined();
     expect(policy.maxTokens).toBeUndefined();
     expect(policy.timeoutMs).toBeUndefined();
+    expect(policy.maxAttempts).toBeUndefined();
   });
 });
 
 describe("llm config redacted snapshot", () => {
   it("exposes profile, model and strategy but never api keys or full base url", () => {
     const snapshot: RedactedLlmConfigSnapshot = redactLlmConfigSnapshot({
-      provider: "openai",
+      profile: "main",
       baseUrl: "https://open.bigmodel.cn/api/paas/v4",
       apiKey: "super-secret-key-12345",
       model: "glm-5.1",
@@ -119,19 +130,20 @@ describe("llm config redacted snapshot", () => {
     const serialized = JSON.stringify(snapshot);
     expect(serialized).not.toContain("super-secret-key-12345");
     expect(serialized).not.toContain("another-secret");
+    expect(snapshot.profile).toBe("main");
     expect(snapshot.hasApiKey).toBe(true);
     expect(snapshot.hasStructuredApiKey).toBe(true);
     expect(snapshot.baseUrlHost).toBe("open.bigmodel.cn");
     expect(snapshot.structuredBaseUrlHost).toBe("open.bigmodel.cn");
-    expect(snapshot.mainModel).toBe("glm-5.1");
+    expect(snapshot.model).toBe("glm-5.1");
     expect(snapshot.structuredModel).toBe("glm-4");
-    expect(snapshot.structuredStrategy).toBe("tool_call");
+    expect(snapshot.strategy).toBe("tool_call");
     expect(snapshot.operationPolicy).toEqual(DEFAULT_OPERATION_POLICY);
   });
 
   it("marks base url host as unavailable when base url is missing", () => {
     const snapshot = redactLlmConfigSnapshot({
-      provider: "stub",
+      profile: "structured",
       baseUrl: undefined,
       apiKey: undefined,
       model: "stub-model",
@@ -144,6 +156,7 @@ describe("llm config redacted snapshot", () => {
       operationPolicy: DEFAULT_OPERATION_POLICY,
     });
 
+    expect(snapshot.profile).toBe("structured");
     expect(snapshot.hasApiKey).toBe(false);
     expect(snapshot.hasStructuredApiKey).toBe(false);
     expect(snapshot.baseUrlHost).toBe("unavailable");
@@ -152,13 +165,19 @@ describe("llm config redacted snapshot", () => {
 });
 
 describe("llm operation policy retry semantics (Task 9 contract)", () => {
-  it("forbids retrying timeouts for core semantic and long structured generation", () => {
-    expect(
-      getOperationPolicy("script.writer").retryOnTimeout,
-    ).toBe(false);
-    expect(
-      getOperationPolicy("storyboard.planner").retryOnTimeout,
-    ).toBe(false);
+  it("forbids retrying timeouts only for core semantic and long structured generation", () => {
+    // 已批准禁止 timeout 重试的两类
+    expect(getOperationPolicy("script.writer").retryOnTimeout).toBe(false);
+    expect(getOperationPolicy("storyboard.planner").retryOnTimeout).toBe(false);
+    expect(getOperationPolicy("topic.candidate-builder").retryOnTimeout).toBe(false);
+    expect(getOperationPolicy("asset-planning.planner").retryOnTimeout).toBe(false);
+
+    // 其余 operation 保持既有行为：允许 timeout 重试（不扩大禁止范围）
+    expect(getOperationPolicy("topic.selector").retryOnTimeout).toBe(true);
+    expect(getOperationPolicy("publish.title-generator").retryOnTimeout).toBe(true);
+    expect(getOperationPolicy("topic.candidate-builder-repair").retryOnTimeout).toBe(true);
+    expect(getOperationPolicy("asset-planning.asset-structural-repair").retryOnTimeout).toBe(true);
+    expect(getOperationPolicy("script.semantic-reviewer").retryOnTimeout).toBe(true);
   });
 
   it("still allows limited retry for transient errors across operation classes", () => {
@@ -170,10 +189,8 @@ describe("llm operation policy retry semantics (Task 9 contract)", () => {
       "targeted_repair",
     ];
     for (const cls of classes) {
-      const policy = DEFAULT_OPERATION_POLICY;
-      // Transient retry cap must exist and be a small positive number per class.
-      expect(policy.transientRetryByClass[cls]).toBeGreaterThanOrEqual(1);
-      expect(policy.transientRetryByClass[cls]).toBeLessThanOrEqual(3);
+      expect(DEFAULT_OPERATION_POLICY.transientRetryByClass[cls]).toBeGreaterThanOrEqual(1);
+      expect(DEFAULT_OPERATION_POLICY.transientRetryByClass[cls]).toBeLessThanOrEqual(3);
     }
   });
 });

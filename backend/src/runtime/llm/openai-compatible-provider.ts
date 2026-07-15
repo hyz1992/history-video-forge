@@ -6,6 +6,7 @@ import type { LlmInteractionLogWriter } from "./interaction-log.js";
 import {
   classifyOperation,
   getOperationPolicy,
+  resolveEffectiveRequest,
   type LlmOperationClass,
 } from "./operation-policy.js";
 import type {
@@ -166,19 +167,27 @@ export function createOpenAiCompatibleProvider(
     async invokeStructuredPrompt<T>(
       request: StructuredPromptInvocation,
     ): Promise<T> {
-      const effectiveTimeoutMs =
-        request.options?.timeoutMs ?? options.timeoutMs ?? env.llm.timeoutMs;
-      const requestedMaxAttempts =
-        request.options?.maxAttempts ?? options.maxAttempts ?? env.llm.maxAttempts;
+      // 单一真相源：invocation options > operation policy > profile/env defaults > provider default
+      const effective = resolveEffectiveRequest({
+        operationName: request.operationName,
+        operationPolicy: getOperationPolicy(request.operationName),
+        profileDefault: {
+          maxAttempts: options.maxAttempts ?? env.llm.maxAttempts,
+          timeoutMs: options.timeoutMs ?? env.llm.timeoutMs,
+        },
+        invocationOptions: request.options,
+      });
+      const effectiveTimeoutMs = effective.timeoutMs;
+      const effectiveThinking = effective.thinking === "provider_default" ? undefined : effective.thinking;
+      const effectiveMaxTokens = effective.maxTokens;
+      const effectiveTemperature = effective.temperature;
+      const effectiveTopP = effective.topP;
+      // retry safety cap：与参数优先级分离，单独按 operation policy 收敛 attempt 上限
       const retryStrategy = resolveRetryStrategy(
         request.operationName,
-        requestedMaxAttempts,
+        effective.maxAttempts,
       );
       const effectiveMaxAttempts = retryStrategy.maxAttempts;
-      const effectiveThinking = request.options?.thinking;
-      const effectiveMaxTokens = request.options?.maxTokens;
-      const effectiveTemperature = request.options?.temperature;
-      const effectiveTopP = request.options?.topP;
       const invocationStartedAt = new Date().toISOString();
       let rawOutput = "";
       let responseMetadata: LlmResponseMetadata | undefined;
@@ -336,11 +345,24 @@ export function createOpenAiCompatibleProvider(
     async invokeStrictStructured<T>(
       request: StrictStructuredInvocation<T>,
     ): Promise<T> {
-      const effectiveTimeoutMs = options.timeoutMs ?? env.llm.timeoutMs;
-      const requestedMaxAttempts = options.maxAttempts ?? env.llm.maxAttempts;
+      // 单一真相源：invocation options > operation policy(含 profile thinking) > profile/env defaults > provider default
+      const strictEffective = resolveEffectiveRequest({
+        operationName: request.operationName,
+        operationPolicy: {
+          ...getOperationPolicy(request.operationName),
+          // structuredThinking 是 profile/env 级默认，通过 policy 层注入以保持优先级一致
+          thinking: providerConfig.structuredThinking,
+        },
+        profileDefault: {
+          maxAttempts: options.maxAttempts ?? env.llm.maxAttempts,
+          timeoutMs: options.timeoutMs ?? env.llm.timeoutMs,
+        },
+        invocationOptions: request.options,
+      });
+      const effectiveTimeoutMs = strictEffective.timeoutMs;
       const strictRetryStrategy = resolveRetryStrategy(
         request.operationName,
-        requestedMaxAttempts,
+        strictEffective.maxAttempts,
       );
       const effectiveMaxAttempts = strictRetryStrategy.maxAttempts;
       const invocationStartedAt = new Date().toISOString();
@@ -361,8 +383,9 @@ export function createOpenAiCompatibleProvider(
         providerConfig.structuredStrategy ??
         "json_object";
       const effectiveThinking =
-        request.options?.thinking ??
-        providerConfig.structuredThinking;
+        strictEffective.thinking === "provider_default"
+          ? undefined
+          : strictEffective.thinking;
 
       try {
         let attemptStartedAt = "";

@@ -260,7 +260,7 @@ describe("provider hardening", () => {
     expect(invokeApi).toHaveBeenCalledTimes(1);
   });
 
-  it("still retries transient 503 errors within policy cap for short structured decisions", async () => {
+  it("retries transient 503 errors within policy cap for short structured decisions", async () => {
     const prompt = createPromptRegistry().getPrompt("script.writer");
     let callCount = 0;
     const invokeApi = vi.fn(async () => {
@@ -285,6 +285,68 @@ describe("provider hardening", () => {
       prompt,
       input: {},
       // short_structured_decision: transient cap = 2 -> max 3 attempts total
+      operationName: "topic.selector",
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(invokeApi).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries transient 429 rate-limit errors within policy cap", async () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+    let callCount = 0;
+    const invokeApi = vi.fn(async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        throw new Error("429 Too Many Requests: throttled");
+      }
+      return { rawOutput: '{"ok":true}', content: '{"ok":true}', metadata: {} };
+    });
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-5.1",
+      baseUrl: "https://llm.example.test/v1",
+      apiKey: "test-key",
+      timeoutMs: 60000,
+      maxAttempts: 5,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+      invokeApi,
+    });
+
+    const result = await provider.invokeStructuredPrompt({
+      prompt,
+      input: {},
+      operationName: "topic.selector",
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(invokeApi).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries transient network errors within policy cap", async () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+    let callCount = 0;
+    const invokeApi = vi.fn(async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        throw new Error("fetch failed: ECONNRESET");
+      }
+      return { rawOutput: '{"ok":true}', content: '{"ok":true}', metadata: {} };
+    });
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-5.1",
+      baseUrl: "https://llm.example.test/v1",
+      apiKey: "test-key",
+      timeoutMs: 60000,
+      maxAttempts: 5,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+      invokeApi,
+    });
+
+    const result = await provider.invokeStructuredPrompt({
+      prompt,
+      input: {},
       operationName: "topic.selector",
     });
 
@@ -319,7 +381,7 @@ describe("provider hardening", () => {
     expect(invokeApi).toHaveBeenCalledTimes(1);
   });
 
-  it("does not retry schema invalid / configuration errors", async () => {
+  it("does not retry configuration (401) errors", async () => {
     const prompt = createPromptRegistry().getPrompt("script.writer");
     const invokeApi = vi.fn(async () => {
       throw new Error("401 Unauthorized: api key invalid");
@@ -343,6 +405,68 @@ describe("provider hardening", () => {
       }),
     ).rejects.toMatchObject({ code: "configuration", attemptCount: 1 });
 
+    expect(invokeApi).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not trigger a second network call when JSON parsing fails (schema invalid)", async () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+    const invokeApi = vi.fn(async () => ({
+      // 非法 JSON：attempt 成功返回，但下游 parse 失败。
+      rawOutput: "not-json",
+      content: "not-json",
+      metadata: {},
+    }));
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-5.1",
+      baseUrl: "https://llm.example.test/v1",
+      apiKey: "test-key",
+      timeoutMs: 60000,
+      maxAttempts: 3,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+      invokeApi,
+    });
+
+    await expect(
+      provider.invokeStructuredPrompt({
+        prompt,
+        input: {},
+        operationName: "topic.selector",
+      }),
+    ).rejects.toMatchObject({ code: "invalid_response" });
+
+    // 解析失败发生在 withRetry 之外，不得触发额外网络重试。
+    expect(invokeApi).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not trigger a second network call when a business validator would fail downstream", async () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+    const invokeApi = vi.fn(async () => ({
+      // 合法 JSON，provider 视为成功返回；下游业务 validator 是否通过不影响网络重试。
+      rawOutput: '{"unexpected":1}',
+      content: '{"unexpected":1}',
+      metadata: {},
+    }));
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-5.1",
+      baseUrl: "https://llm.example.test/v1",
+      apiKey: "test-key",
+      timeoutMs: 60000,
+      maxAttempts: 3,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+      invokeApi,
+    });
+
+    // provider 只负责 JSON.parse，业务 validator 在调用方；
+    // 一旦 attempt 成功返回，即便下游业务校验失败也不会触发额外网络重试。
+    const result = await provider.invokeStructuredPrompt<{ unexpected: number }>({
+      prompt,
+      input: {},
+      operationName: "topic.selector",
+    });
+
+    expect(result).toEqual({ unexpected: 1 });
     expect(invokeApi).toHaveBeenCalledTimes(1);
   });
 
