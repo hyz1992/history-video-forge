@@ -14,6 +14,14 @@ export interface InvokeStructuredPromptOptions {
   input: unknown;
   operationName?: string;
   interactionLogWriter?: LlmInteractionLogWriter;
+  options?: {
+    thinking?: "enabled" | "disabled";
+    maxTokens?: number;
+    temperature?: number;
+    topP?: number;
+    timeoutMs?: number;
+    maxAttempts?: number;
+  };
 }
 
 export interface InvokeStrictStructuredOptions<T> {
@@ -55,6 +63,7 @@ class DefaultLlmGateway implements LlmGateway {
         input: options.input,
         operationName,
         interactionLogWriter: options.interactionLogWriter,
+        options: options.options,
       });
     } catch (error) {
       throw classifyExternalError(error, {

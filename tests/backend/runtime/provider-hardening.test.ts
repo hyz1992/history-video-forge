@@ -592,4 +592,100 @@ describe("provider hardening", () => {
     expect(typeof a2.durationMs).toBe("number");
     expect(a2.retryDelayMs).toBeUndefined();
   });
+
+  it("sends thinking and sampling parameters only when explicit diagnostics options are passed", async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchSpy = vi.fn(async () =>
+      new Response(JSON.stringify({
+        choices: [{ finish_reason: "stop", message: { content: '{"ok":true}' } }],
+        usage: { prompt_tokens: 10, completion_tokens: 5 },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }),
+    ) as typeof fetch;
+    globalThis.fetch = fetchSpy;
+
+    try {
+      const provider = createOpenAiCompatibleProvider({
+        model: "glm-5.1",
+        baseUrl: "https://llm.example.test/v1",
+        apiKey: "test-key",
+        maxAttempts: 1,
+      });
+      const prompt = createPromptRegistry().getPrompt("script.writer");
+
+      const result = await provider.invokeStructuredPrompt({
+        prompt,
+        input: { seed: "slot-1" },
+        operationName: "script.writer",
+      });
+
+      expect(result).toEqual({ ok: true });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const defaultBody = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
+      expect(defaultBody.response_format).toEqual({ type: "json_object" });
+      expect(defaultBody.thinking).toBeUndefined();
+      expect(defaultBody.max_tokens).toBeUndefined();
+      expect(defaultBody.temperature).toBeUndefined();
+      expect(defaultBody.top_p).toBeUndefined();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("passes explicit diagnostic options through to the request body and records them in effective request", async () => {
+    const entries: LlmInteractionLogEntry[] = [];
+    const writer = { write: (entry: LlmInteractionLogEntry) => { entries.push(entry); } };
+    const originalFetch = globalThis.fetch;
+    const fetchSpy = vi.fn(async () =>
+      new Response(JSON.stringify({
+        choices: [{ finish_reason: "stop", message: { content: '{"ok":true}' } }],
+        usage: { prompt_tokens: 10, completion_tokens: 5 },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }),
+    ) as typeof fetch;
+    globalThis.fetch = fetchSpy;
+
+    try {
+      const provider = createOpenAiCompatibleProvider({
+        model: "glm-5.1",
+        baseUrl: "https://llm.example.test/v1",
+        apiKey: "test-key",
+        maxAttempts: 1,
+      });
+      const prompt = createPromptRegistry().getPrompt("script.writer");
+
+      const result = await provider.invokeStructuredPrompt({
+        prompt,
+        input: { seed: "slot-1" },
+        operationName: "script.writer",
+        interactionLogWriter: writer,
+        options: {
+          thinking: "disabled",
+          maxTokens: 4096,
+          temperature: 0.3,
+          topP: 0.8,
+          timeoutMs: 60000,
+          maxAttempts: 2,
+        },
+      });
+
+      expect(result).toEqual({ ok: true });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
+      expect(body.response_format).toEqual({ type: "json_object" });
+      expect(body.thinking).toEqual({ type: "disabled" });
+      expect(body.max_tokens).toBe(4096);
+      expect(body.temperature).toBe(0.3);
+      expect(body.top_p).toBe(0.8);
+
+      expect(entries).toHaveLength(1);
+      const entry = entries[0];
+      expect(entry.effectiveRequest?.thinking).toBe("disabled");
+      expect(entry.effectiveRequest?.maxTokens).toBe(4096);
+      expect(entry.effectiveRequest?.temperature).toBe(0.3);
+      expect(entry.effectiveRequest?.topP).toBe(0.8);
+      expect(entry.effectiveRequest?.timeoutMs).toBe(60000);
+      expect(entry.effectiveRequest?.maxAttempts).toBe(2);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

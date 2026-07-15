@@ -21,6 +21,10 @@ export interface OpenAiCompatibleInvokeRequest {
   input: unknown;
   operationName: string;
   model: string;
+  thinking?: "enabled" | "disabled";
+  maxTokens?: number;
+  temperature?: number;
+  topP?: number;
 }
 
 export interface OpenAiCompatibleStrictInvokeRequest {
@@ -120,8 +124,14 @@ export function createOpenAiCompatibleProvider(
     async invokeStructuredPrompt<T>(
       request: StructuredPromptInvocation,
     ): Promise<T> {
-      const effectiveTimeoutMs = options.timeoutMs ?? env.llm.timeoutMs;
-      const effectiveMaxAttempts = options.maxAttempts ?? env.llm.maxAttempts;
+      const effectiveTimeoutMs =
+        request.options?.timeoutMs ?? options.timeoutMs ?? env.llm.timeoutMs;
+      const effectiveMaxAttempts =
+        request.options?.maxAttempts ?? options.maxAttempts ?? env.llm.maxAttempts;
+      const effectiveThinking = request.options?.thinking;
+      const effectiveMaxTokens = request.options?.maxTokens;
+      const effectiveTemperature = request.options?.temperature;
+      const effectiveTopP = request.options?.topP;
       const invocationStartedAt = new Date().toISOString();
       let rawOutput = "";
       let responseMetadata: LlmResponseMetadata | undefined;
@@ -149,6 +159,10 @@ export function createOpenAiCompatibleProvider(
                     input: request.input,
                     operationName: request.operationName,
                     model,
+                    thinking: effectiveThinking,
+                    maxTokens: effectiveMaxTokens,
+                    temperature: effectiveTemperature,
+                    topP: effectiveTopP,
                   },
                   { signal },
                 ).then((env) => {
@@ -221,9 +235,12 @@ export function createOpenAiCompatibleProvider(
             profile: "main",
             model,
             strategy: "json_object",
-            thinking: "provider_default",
+            thinking: effectiveThinking ?? "provider_default",
             timeoutMs: effectiveTimeoutMs,
             maxAttempts: effectiveMaxAttempts,
+            maxTokens: effectiveMaxTokens,
+            temperature: effectiveTemperature,
+            topP: effectiveTopP,
           },
           attempts,
           responseMetadata,
@@ -254,9 +271,12 @@ export function createOpenAiCompatibleProvider(
             profile: "main",
             model,
             strategy: "json_object",
-            thinking: "provider_default",
+            thinking: effectiveThinking ?? "provider_default",
             timeoutMs: effectiveTimeoutMs,
             maxAttempts: effectiveMaxAttempts,
+            maxTokens: effectiveMaxTokens,
+            temperature: effectiveTemperature,
+            topP: effectiveTopP,
           },
           attempts,
           responseMetadata,
@@ -499,26 +519,41 @@ function createDefaultInvokeApi(options: {
       throw new Error("LLM API key or base URL is not configured.");
     }
 
+    const body: Record<string, unknown> = {
+      model: options.model,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: request.prompt.body,
+        },
+        {
+          role: "user",
+          content: JSON.stringify(request.input, null, 2),
+        },
+      ],
+    };
+
+    if (request.thinking !== undefined) {
+      body.thinking = { type: request.thinking };
+    }
+    if (request.maxTokens !== undefined) {
+      body.max_tokens = request.maxTokens;
+    }
+    if (request.temperature !== undefined) {
+      body.temperature = request.temperature;
+    }
+    if (request.topP !== undefined) {
+      body.top_p = request.topP;
+    }
+
     const response = await (options.fetchImpl ?? fetch)(`${trimTrailingSlash(options.baseUrl)}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${options.apiKey}`,
       },
-      body: JSON.stringify({
-        model: options.model,
-        response_format: { type: "json_object" },
-        messages: [
-          {
-            role: "system",
-            content: request.prompt.body,
-          },
-          {
-            role: "user",
-            content: JSON.stringify(request.input, null, 2),
-          },
-        ],
-      }),
+      body: JSON.stringify(body),
       signal: requestOptions?.signal,
     });
 

@@ -79,6 +79,14 @@ export interface StructuredPromptInvocation {
   input: unknown;
   operationName: string;
   interactionLogWriter?: LlmInteractionLogWriter;
+  options?: {
+    thinking?: "enabled" | "disabled";
+    maxTokens?: number;
+    temperature?: number;
+    topP?: number;
+    timeoutMs?: number;
+    maxAttempts?: number;
+  };
 }
 
 export interface StructuredPromptProvider {
