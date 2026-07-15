@@ -805,13 +805,13 @@ describe("prompt runtime", () => {
     });
   });
 
-  it("retries timeout failures inside the openai-compatible provider", async () => {
+  it("retries transient failures inside the openai-compatible provider", async () => {
     const { createOpenAiCompatibleProvider } = await import(
       "../../../backend/src/runtime/llm/openai-compatible-provider.js"
     );
     const invokeApi = vi
       .fn()
-      .mockRejectedValueOnce(Object.assign(new Error("request timeout"), { name: "AbortError" }))
+      .mockRejectedValueOnce(new Error("503 Service Unavailable"))
       .mockResolvedValueOnce({ rawOutput: '{"ok":true}', content: '{"ok":true}', metadata: {} });
     const provider = createOpenAiCompatibleProvider({
       model: "glm-4.5",
@@ -832,6 +832,33 @@ describe("prompt runtime", () => {
 
     expect(invokeApi).toHaveBeenCalledTimes(2);
     expect(result).toEqual({ ok: true });
+  });
+
+  it("does not retry timeout failures for long structured generation", async () => {
+    const { createOpenAiCompatibleProvider } = await import(
+      "../../../backend/src/runtime/llm/openai-compatible-provider.js"
+    );
+    const invokeApi = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error("request timeout"), { name: "AbortError" }));
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-4.5",
+      invokeApi,
+      timeoutMs: 10,
+      maxAttempts: 3,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+    });
+
+    await expect(
+      provider.invokeStructuredPrompt<{ ok: boolean }>({
+        prompt: createPromptRegistry().getPrompt("topic.candidate-builder"),
+        input: { seed: "family-slot" },
+        operationName: "topic.candidate-builder",
+      }),
+    ).rejects.toMatchObject({ code: "timeout", attemptCount: 1 });
+
+    expect(invokeApi).toHaveBeenCalledTimes(1);
   });
 
   it("runs deterministic recovery before auto-fix for structured output repair", async () => {
