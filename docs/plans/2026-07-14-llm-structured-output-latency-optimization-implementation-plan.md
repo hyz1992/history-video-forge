@@ -640,6 +640,52 @@ git add backend/src/runtime/llm/openai-compatible-provider.ts backend/src/runtim
 git commit -m "应用旗舰模型思考与结构化策略"
 ```
 
+#### Task 10 执行状态（2026-07-15）
+
+**已批准参数矩阵（仅限本次精确 operation，禁止扩展为同 class 默认值）：**
+
+| operation | mode | thinking | toolChoice | max tokens / temp / timeout / attempts |
+| --- | --- | --- | --- | --- |
+| `script.writer` | 普通 JSON mode | `disabled` | n/a | 不变（无新默认值） |
+| `storyboard.planner` | 普通 JSON mode | `disabled` | n/a | 不变 |
+| `topic.selector`（strict） | strict tool call | `disabled`（显式） | `target_function` | 不变 |
+
+**live 单样本证据（candidate-only，已由真实 GLM-5.2 调用确认，本任务不再付费复跑）：**
+
+- 证据产物：`harness/scripts/runtime/output/llm-s2-baseline/2026-07-15T195910/baseline-report.json`（只读参考，未 stage、未提交）。
+- 共 4 次请求：1 次目标 function capability probe，topic / script / storyboard 各 1 次。
+- 三项均 `thinking=disabled`，reasoning tokens 均为 0，attempt 1 成功，未 retry / repair / full regeneration。
+- topic 为 strict tool call，`tool_choice=target_function`，Zod 首次通过。
+- script（普通 JSON mode）17.689 秒，Zod 与业务 validator 首次通过。
+- storyboard（普通 JSON mode）45.375 秒，Zod 与业务 validator 首次通过。
+- 三项合计由上一轮候选策略的 353.833 秒降至 81.061 秒（单样本提速 77.1%）。
+- 人工审读未发现 script / storyboard 明显语义退化；该结论只支持本次精确 operation 策略。
+- 目标 function probe 证明当前 provider/API 路由支持指定目标工具；单样本没有证明目标 function 本身能提速，其主要收益定位为结构可靠性。
+- TTFT 在当前非流式接口下不可观测；报告固定标记 `unobservable_non_streaming`。
+- 人民币费用不能由 runner 机器核验，`cost_enforcement=unavailable`，本次 live 费用边界仅作为人工授权上限。
+
+**实现收敛说明（与提示词事实核对后执行）：**
+
+- Task 8 已完成，证据：提交 `1961088 建立LLM操作策略与配置快照`。
+- Task 9 已完成，证据：提交 `ed9dc5e 阻止长生成超时后的原样重试`、`798175b 窄整改:补齐生产operation白名单并收敛timeout策略与统一解析`、`312f04c 窄整改:统一strict解析优先级与按profile快照并真实校验validator`。
+- Task 10 实现保持既有优先级 `invocation options > exact operation policy > profile/env defaults > provider default`，保留 Task 9 retry 语义；thinking override 按 operation name 精确写入（`APPROVED_THINKING_OVERRIDE`），不按 operation class 统一写入，避免污染同 class 内未经验证的 topic.candidate-builder / storyboard.segment-regen / asset-planning.planner。
+- topic selector strict 已显式传入 `thinking=disabled` 与 `toolChoice=target_function`；provider 层已完整支持该参数，未重复重构 provider。`strict_structured_target_tool_mismatch` 已加入 `shouldFallbackToStructuredSelector`，返回错误工具时进入既有受控 structured fallback，不静默解析任意 tool call，不增加额外 retry。
+- 不批准的参数保持原状：未新增 / 修改 max tokens、temperature、top-p、timeout、max attempts、瞬时错误 retry 次数、模型名称、base URL、API key、`.env`。
+- 模型仍由环境配置选择，operation policy 不硬编码 `glm-5.2` 或未来模型名称。
+
+**非 live 验证结果：**
+
+- `npx vitest run --configLoader runner tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/provider-hardening.test.ts tests/backend/script/script-runtime-generate.test.ts tests/backend/storyboard/storyboard-generation.test.ts tests/backend/asset-planning/asset-planning-generation.test.ts --no-file-parallelism` 全部通过。
+- `npm run typecheck:backend` 通过。
+- `git diff --check` 无输出；`git diff -- harness/prompts shared/src` 无输出（prompt / schema 未改动）。
+- `tests/backend/topic/topic-runtime-recommendation.test.ts` 在干净 dev HEAD（`46c5ccc`）上已有 43 个既有失败（`failed to parse structured output: Unexpected end of JSON input` 与少量 401 鉴权失败），与本任务无关；本任务新增 / 修改的 topic strict 与 target_tool_mismatch fallback 测试（mock gateway 路径）均通过。该既有失败不在 Task 10 修复范围内，留待独立排查。
+
+**Task 10 完成边界：**
+
+- 代码与非 live 验证均已通过，Task 10 标记为完成。
+- Task 11 保持待执行：真实项目验收（优化后 live 对照、质量盲评、文档收口、`docs/plans/README.md` 与 `docs/todos/roadmap-todo.md` 的 S2-0 完成声明）仍由后续独立授权完成，不在本任务内。
+- raw output 不提交；TTFT 不可观测；成本不能机器核验。
+
 ### Task 11：前后对照、文档收口与停止
 
 **文件：**

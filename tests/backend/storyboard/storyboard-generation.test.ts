@@ -5,6 +5,9 @@ import type {
   InvokeStructuredPromptOptions,
   LlmGateway,
 } from "../../../backend/src/runtime/llm/llm-gateway.js";
+import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
+import { createOpenAiCompatibleProvider } from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
+import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 import {
   buildStoryboardPlannerPromptInput,
   generateStoryboardPlan,
@@ -148,6 +151,62 @@ describe("generateStoryboardPlan", () => {
       expect.objectContaining({
         promptId: "storyboard.planner",
       }),
+    );
+  });
+
+  it("applies Task 10 approved thinking=disabled to the storyboard.planner production call without explicit options", async () => {
+    // 生产 generateStoryboardPlan 不传 options；operation policy 必须让 invokeApi 收到 thinking=disabled。
+    const draft = makeDraft();
+    const planPayload = {
+      plan_version: "storyboard_v1",
+      source_script_record_id: "scr_001",
+      source_topic_package_id: "topic_001",
+      estimated_total_duration_sec: draft.estimated_duration_sec,
+      segments: [
+        {
+          segment_id: "sb_001",
+          order: 0,
+          script_excerpt: draft.script_text,
+          start_hint_sec: 0,
+          end_hint_sec: draft.estimated_duration_sec,
+          narrative_role: "opening",
+          visual_intent: "让观众看清整段压力推进。",
+          scene_description: "按口播顺序呈现主要场面。",
+          visual_elements: ["晏子", "楚王"],
+          framing_hint: "medium",
+          content_type: "live_action",
+          motion_hint: "static",
+          editing_hint: "single",
+          on_screen_text: [],
+          linked_beats: draft.beat_trace.map((trace) => trace.beat),
+          linked_quotes: draft.quote_trace.map((trace) => trace.quote),
+          risk_notes: [],
+        },
+      ],
+      global_visual_notes: [],
+    };
+    const invokeApi = vi.fn(async () => ({
+      rawOutput: JSON.stringify(planPayload),
+      content: JSON.stringify(planPayload),
+      metadata: {},
+    }));
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-5.2",
+        invokeApi,
+      }),
+    });
+
+    await generateStoryboardPlan(makeInput(gateway));
+
+    expect(invokeApi).toHaveBeenCalledTimes(1);
+    expect(invokeApi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationName: "storyboard.planner",
+        thinking: "disabled",
+      }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
   });
 

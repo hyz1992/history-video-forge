@@ -170,6 +170,32 @@ describe("script runtime generate", () => {
     expect(draft.script_text).toContain("楚王");
   });
 
+  it("applies Task 10 approved thinking=disabled to the script.writer production call without explicit options", async () => {
+    // 生产 generateScriptDraft 不传 options；operation policy 必须让 invokeApi 收到 thinking=disabled。
+    const invokeApi = vi.fn(async () => ({ rawOutput: JSON.stringify(runtimeDraft), content: JSON.stringify(runtimeDraft), metadata: {} }));
+    const gateway = createLlmGateway({
+      registry: createPromptRegistry(),
+      provider: createOpenAiCompatibleProvider({
+        model: "glm-5.2",
+        invokeApi,
+      }),
+    });
+
+    await (generateScriptDraft as any)({
+      bundle: scriptInputBundle,
+      llmGateway: gateway,
+    });
+
+    expect(invokeApi).toHaveBeenCalledTimes(1);
+    expect(invokeApi).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationName: "script.writer",
+        thinking: "disabled",
+      }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
   it("passes regen context into the script-writer prompt input without changing the bundle", async () => {
     const invokeApi = vi.fn(async () => ({ rawOutput: JSON.stringify(runtimeDraft), content: JSON.stringify(runtimeDraft), metadata: {} }));
     const gateway = createLlmGateway({

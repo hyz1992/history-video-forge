@@ -1,13 +1,17 @@
 /**
  * 单供应商 LLM operation policy。
  *
- * 设计约束（见 S2-0 implementation plan Task 8/9 与 AGENTS.md 高风险边界）：
+ * 设计约束（见 S2-0 implementation plan Task 8/9/10 与 AGENTS.md 高风险边界）：
  *
  * - operation name 必须显式映射到 operation class，禁止用字符串包含关系猜测语义。
  * - 未知 operation 走保守默认并记录 warning。
  * - 优先级固定为：invocation options > operation policy > profile/env defaults > provider default。
  * - policy 不包含 provider routing，也不硬编码模型名/供应商名。
- * - 没有受控实验支持的 thinking / max tokens / timeout 不得擅自写入默认值。
+ * - 只写入经真实 candidate 诊断（S2-0b live）+ 用户确认的精确 operation 参数；
+ *   未获批准的 operation 不得获得 thinking / max tokens / timeout / maxAttempts override。
+ * - thinking override 按 operation name 精确写入，禁止按 operation class 统一写入，
+ *   因为同一 class 内仍包含未经验证的 operation（例如 long_structured_generation 还包含
+ *   topic.candidate-builder、storyboard.segment-regen 和 asset-planning.planner）。
  */
 
 export type LlmOperationClass =
@@ -87,8 +91,9 @@ const RETRY_ON_TIMEOUT_BY_CLASS: Record<LlmOperationClass, boolean> = {
 };
 
 /**
- * 单个 operation 的策略。当前所有生成参数字段保持 undefined，
- * 表示"没有受控实验支持的值"，因此不会覆盖 profile/env defaults。
+ * 单个 operation 的策略。当前除 Task 10 批准的精确 thinking override 外，
+ * 其余生成参数字段保持 undefined，表示"没有受控实验支持的值"，
+ * 因此不会覆盖 profile/env defaults。
  */
 export interface OperationPolicy {
   retryOnTimeout?: boolean;
@@ -101,6 +106,30 @@ export interface OperationPolicy {
   timeoutMs?: number;
   maxAttempts?: number;
 }
+
+/**
+ * Task 10：经真实 candidate（glm-5.2）单样本诊断 + 用户确认后批准的精确 thinking override。
+ *
+ * 证据来源：harness/scripts/runtime/output/llm-s2-baseline/2026-07-15T195910/baseline-report.json
+ * 该单样本证明 script.writer（普通 JSON mode）与 storyboard.planner（普通 JSON mode）
+ * 在 thinking=disabled 下 attempt 1 成功、reasoning tokens 为 0、Zod 与业务 validator 首次通过，
+ * 且人工审读未发现明显语义退化。
+ *
+ * 边界（禁止扩展）：
+ * - 该结论只支持本次精确 operation 策略，不允许扩展为同 class 其他 operation 的默认值；
+ *   long_structured_generation 仍包含未经验证的 topic.candidate-builder、
+ *   storyboard.segment-regen 和 asset-planning.planner。
+ * - 未列入本表的 operation（含 core_semantic_generation 之外的 repair/reviewer/publish 等）
+ *   继续走保守默认，不获得 thinking override。
+ * - 不写入 max tokens / temperature / timeout / maxAttempts；这些字段没有足够样本支撑新默认值。
+ */
+const APPROVED_THINKING_OVERRIDE: Partial<
+  Record<string, OperationPolicy["thinking"]>
+> = {
+  "script.writer": "disabled",
+  "storyboard.planner": "disabled",
+};
+
 
 /**
  * 默认 operation policy。
@@ -129,9 +158,11 @@ export const DEFAULT_OPERATION_POLICY: Required<
 
 export function getOperationPolicy(operationName: string): OperationPolicy {
   const cls = classifyOperation(operationName);
+  const approvedThinking = APPROVED_THINKING_OVERRIDE[operationName];
 
   if (cls === "unknown") {
     // 保守默认：禁止超时重试，瞬时错误最多重试 1 次。
+    // 未知 operation 不得获得任何已批准 override。
     return {
       retryOnTimeout: false,
       transientRetryByClass: {
@@ -147,6 +178,10 @@ export function getOperationPolicy(operationName: string): OperationPolicy {
   return {
     retryOnTimeout: RETRY_ON_TIMEOUT_BY_CLASS[cls],
     transientRetryByClass: DEFAULT_OPERATION_POLICY.transientRetryByClass,
+    // 仅写入经真实 candidate 诊断 + 用户确认的精确 operation thinking override。
+    // 未列入 APPROVED_THINKING_OVERRIDE 的 operation 此处为 undefined，
+    // 不覆盖 profile/env defaults，保留 Task 9 的 retry 语义不变。
+    thinking: approvedThinking,
   };
 }
 

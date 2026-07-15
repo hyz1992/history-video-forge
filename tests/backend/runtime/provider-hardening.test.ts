@@ -762,7 +762,9 @@ describe("provider hardening", () => {
       expect(entry.effectiveRequest?.profile).toBe("main");
       expect(entry.effectiveRequest?.model).toBe("glm-5.1");
       expect(entry.effectiveRequest?.strategy).toBe("json_object");
-      expect(entry.effectiveRequest?.thinking).toBe("provider_default");
+      // script.writer 是 Task 10 批准关闭 thinking 的 operation；
+      // operation policy 会让 effective thinking 为 disabled（不再是 provider_default）。
+      expect(entry.effectiveRequest?.thinking).toBe("disabled");
       expect(typeof entry.effectiveRequest?.timeoutMs).toBe("number");
       expect(typeof entry.effectiveRequest?.maxAttempts).toBe("number");
 
@@ -1057,7 +1059,9 @@ describe("provider hardening", () => {
     expect(a2.retryDelayMs).toBeUndefined();
   });
 
-  it("sends thinking and sampling parameters only when explicit diagnostics options are passed", async () => {
+  it("does not send sampling parameters when an unapproved operation omits explicit options", async () => {
+    // Task 10 之后 script.writer / storyboard.planner 会从 operation policy 获得 thinking=disabled。
+    // 这里用未批准的 topic.candidate-builder 验证：未显式传参时仍不发送 thinking / sampling。
     const originalFetch = globalThis.fetch;
     const fetchSpy = vi.fn(async () =>
       new Response(JSON.stringify({
@@ -1074,12 +1078,12 @@ describe("provider hardening", () => {
         apiKey: "test-key",
         maxAttempts: 1,
       });
-      const prompt = createPromptRegistry().getPrompt("script.writer");
+      const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 
       const result = await provider.invokeStructuredPrompt({
         prompt,
         input: { seed: "slot-1" },
-        operationName: "script.writer",
+        operationName: "topic.candidate-builder",
       });
 
       expect(result).toEqual({ ok: true });
@@ -1090,6 +1094,57 @@ describe("provider hardening", () => {
       expect(defaultBody.max_tokens).toBeUndefined();
       expect(defaultBody.temperature).toBeUndefined();
       expect(defaultBody.top_p).toBeUndefined();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it("applies Task 10 approved thinking=disabled to script.writer and storyboard.planner plain JSON requests without explicit options", async () => {
+    // 即使 invocation options 不传 thinking，operation policy 也会让这两个 operation
+    // 在普通 JSON mode 请求体与 interaction log 中显式携带 thinking=disabled。
+    const originalFetch = globalThis.fetch;
+    const fetchSpy = vi.fn(async () =>
+      new Response(JSON.stringify({
+        choices: [{ finish_reason: "stop", message: { content: '{"ok":true}' } }],
+        usage: { prompt_tokens: 10, completion_tokens: 5 },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }),
+    ) as typeof fetch;
+    globalThis.fetch = fetchSpy;
+
+    const registry = createPromptRegistry();
+    try {
+      const provider = createOpenAiCompatibleProvider({
+        model: "glm-5.2",
+        baseUrl: "https://llm.example.test/v1",
+        apiKey: "test-key",
+        maxAttempts: 1,
+      });
+
+      for (const operationName of ["script.writer", "storyboard.planner"] as const) {
+        fetchSpy.mockClear();
+        const prompt = registry.getPrompt(operationName);
+        const entries: LlmInteractionLogEntry[] = [];
+        const writer = { write: (entry: LlmInteractionLogEntry) => { entries.push(entry); } };
+
+        const result = await provider.invokeStructuredPrompt({
+          prompt,
+          input: { seed: "slot-1" },
+          operationName,
+          interactionLogWriter: writer,
+        });
+
+        expect(result).toEqual({ ok: true });
+        const body = JSON.parse(fetchSpy.mock.calls[0][1]!.body as string);
+        expect(body.thinking).toEqual({ type: "disabled" });
+        // 未显式传入的 sampling 参数仍不发。
+        expect(body.max_tokens).toBeUndefined();
+        expect(body.temperature).toBeUndefined();
+        expect(body.top_p).toBeUndefined();
+
+        // interaction log 的 effective request 与请求体一致。
+        expect(entries).toHaveLength(1);
+        expect(entries[0]?.effectiveRequest?.thinking).toBe("disabled");
+      }
     } finally {
       globalThis.fetch = originalFetch;
     }

@@ -102,11 +102,45 @@ describe("llm operation policy precedence", () => {
   });
 
   it("does not introduce unapproved thinking / max-tokens / timeout defaults for operations", () => {
-    const policy: OperationPolicy = getOperationPolicy("script.writer");
-    expect(policy.thinking).toBeUndefined();
-    expect(policy.maxTokens).toBeUndefined();
-    expect(policy.timeoutMs).toBeUndefined();
-    expect(policy.maxAttempts).toBeUndefined();
+    // Task 10 仅批准 script.writer 与 storyboard.planner 关闭 thinking；
+    // 其余 operation 不得获得 thinking / maxTokens / timeoutMs / maxAttempts override。
+    const unapprovedOperations = [
+      "topic.candidate-builder",
+      "storyboard.segment-regen",
+      "asset-planning.planner",
+      "topic.selector",
+      "topic.candidate-builder-repair",
+      "asset-planning.asset-structural-repair",
+      "script.semantic-reviewer",
+      "publish.title-generator",
+    ];
+    for (const operationName of unapprovedOperations) {
+      const policy: OperationPolicy = getOperationPolicy(operationName);
+      expect(policy.thinking).toBeUndefined();
+      expect(policy.maxTokens).toBeUndefined();
+      expect(policy.timeoutMs).toBeUndefined();
+      expect(policy.maxAttempts).toBeUndefined();
+    }
+  });
+
+  it("applies the Task 10 approved thinking override only to script.writer and storyboard.planner", () => {
+    // 真实 candidate（glm-5.2）单样本诊断 + 用户确认仅批准这两个 operation 关闭 thinking。
+    expect(getOperationPolicy("script.writer").thinking).toBe("disabled");
+    expect(getOperationPolicy("storyboard.planner").thinking).toBe("disabled");
+
+    // 同 class 内未经验证的 operation 不得被一起改成 disabled。
+    expect(
+      getOperationPolicy("topic.candidate-builder").thinking,
+    ).toBeUndefined();
+    expect(
+      getOperationPolicy("storyboard.segment-regen").thinking,
+    ).toBeUndefined();
+    expect(
+      getOperationPolicy("asset-planning.planner").thinking,
+    ).toBeUndefined();
+
+    // 未知 operation 继续走保守默认，不获得任何已批准 override。
+    expect(getOperationPolicy("some.unknown.operation").thinking).toBeUndefined();
   });
 
   it("resolves thinking with invocation > policy > profile precedence", () => {
@@ -146,6 +180,36 @@ describe("llm operation policy precedence", () => {
     expect(resolved.maxTokens).toBe(4096); // invocation
     expect(resolved.temperature).toBe(0.4); // policy
     expect(resolved.topP).toBe(0.7); // policy
+  });
+
+  it("merged getOperationPolicy + resolveEffectiveRequest yields disabled thinking for approved operations in plain JSON mode", () => {
+    // 生产普通 JSON mode 调用（invokeStructuredPrompt）走的就是这条合并路径。
+    // 这里证明 script.writer / storyboard.planner 即使 invocation options 不传 thinking，
+    // effective thinking 也会被 operation policy 拉成 disabled，从而进入请求体。
+    const scriptResolved = resolveEffectiveRequest({
+      operationName: "script.writer",
+      operationPolicy: getOperationPolicy("script.writer"),
+      profileDefault: { maxAttempts: 3, timeoutMs: 240000 },
+      invocationOptions: {},
+    });
+    expect(scriptResolved.thinking).toBe("disabled");
+
+    const storyboardResolved = resolveEffectiveRequest({
+      operationName: "storyboard.planner",
+      operationPolicy: getOperationPolicy("storyboard.planner"),
+      profileDefault: { maxAttempts: 3, timeoutMs: 240000 },
+      invocationOptions: {},
+    });
+    expect(storyboardResolved.thinking).toBe("disabled");
+
+    // 未批准 operation 不受影响：profile 未给 thinking 时回到 provider_default。
+    const candidateBuilderResolved = resolveEffectiveRequest({
+      operationName: "topic.candidate-builder",
+      operationPolicy: getOperationPolicy("topic.candidate-builder"),
+      profileDefault: { maxAttempts: 3, timeoutMs: 240000 },
+      invocationOptions: {},
+    });
+    expect(candidateBuilderResolved.thinking).toBe("provider_default");
   });
 
   it("falls back to profile default for maxTokens/temperature/topP when policy absent", () => {

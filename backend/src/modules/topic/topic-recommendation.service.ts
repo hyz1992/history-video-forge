@@ -1020,6 +1020,11 @@ async function invokeTopicSelector(input: {
           options: {
             strategy: "tool_call",
             thinking: "disabled",
+            // Task 10：capability probe 已证明当前 provider/API 路由支持指定目标 function，
+            // 显式强制目标 function 以提升结构可靠性。返回错误工具或缺少目标工具时
+            // provider 会抛 strict_structured_target_tool_mismatch / strict_structured_no_tool_call，
+            // 由 shouldFallbackToStructuredSelector 进入既有受控 structured fallback。
+            toolChoice: "target_function",
           },
           interactionLogWriter: input.interactionLogWriter,
         },
@@ -1058,6 +1063,7 @@ function shouldFallbackToStructuredSelector(error: unknown): boolean {
   return [
     "strict_structured_provider_not_supported",
     "strict_structured_no_tool_call",
+    "strict_structured_target_tool_mismatch",
     "strict_structured_strategy_not_supported",
     "topic_selector_strict_schema_failed",
     "strict_selector_bad_scorecard",

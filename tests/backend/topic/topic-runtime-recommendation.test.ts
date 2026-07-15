@@ -1541,6 +1541,9 @@ describe("topic runtime recommendation", () => {
         options: expect.objectContaining({
           strategy: "tool_call",
           thinking: "disabled",
+          // Task 10：capability probe 已确认 provider 支持指定目标 function，
+          // strict 调用必须强制目标 function。
+          toolChoice: "target_function",
         }),
       }),
     );
@@ -1673,6 +1676,91 @@ describe("topic runtime recommendation", () => {
         strongScene: "the selector retries through regular json response format",
         sourceHint: "test",
         recentUsageHint: "strict fallback",
+      },
+      { llmGateway: gateway },
+    );
+
+    expect(result.candidates.map((candidate) => candidate.title)).toEqual([
+      "event-d",
+      "event-b",
+      "event-f",
+      "event-a",
+    ]);
+    expect(invokeStrictStructured).toHaveBeenCalledTimes(1);
+    expect(
+      structuredCalls.filter((request) => {
+        const promptId =
+          (request as { promptId?: string; operationName?: string }).promptId ??
+          (request as { promptId?: string; operationName?: string }).operationName;
+
+        return promptId === "topic.selector";
+      }),
+    ).toHaveLength(1);
+  });
+
+  it("falls back to structured selector when strict target function returns a mismatched tool", async () => {
+    // Task 10：strict 强制目标 function 后，provider 返回错误工具会抛
+    // strict_structured_target_tool_mismatch。该错误必须进入既有受控 structured fallback，
+    // 而不是硬失败或静默解析任意 tool call。
+    const db = createDbClient();
+    const structuredCalls: unknown[] = [];
+    const invokeStructuredPrompt = vi.fn(
+      async <T>(request: InvokeStructuredPromptOptions): Promise<T> => {
+        structuredCalls.push(request);
+        const promptId =
+          (request as { promptId?: string; operationName?: string }).promptId ??
+          (request as { promptId?: string; operationName?: string }).operationName;
+
+        if (promptId === "topic.selector") {
+          return createSelectorDecision(
+            "selector_candidate_4",
+            "selector_candidate_2",
+            "selector_candidate_6",
+            "selector_candidate_1",
+            "selector_candidate_3",
+            "selector_candidate_5",
+            "selector_candidate_7",
+            "selector_candidate_8",
+          ) as T;
+        }
+
+        return [
+          createRuntimeCandidate("event-a", "angle-a"),
+          createRuntimeCandidate("event-b", "angle-b"),
+          createRuntimeCandidate("event-c", "angle-c"),
+          createRuntimeCandidate("event-d", "angle-d"),
+          createRuntimeCandidate("event-e", "angle-e"),
+          createRuntimeCandidate("event-f", "angle-f"),
+          createRuntimeCandidate("event-g", "angle-g"),
+          createRuntimeCandidate("event-h", "angle-h"),
+        ] as T;
+      },
+    );
+    const invokeStrictStructured = vi.fn(
+      async <T>(_request: InvokeStrictStructuredOptions<T>): Promise<T> => {
+        throw new Error(
+          "strict_structured_target_tool_mismatch: expected=rank_topic_candidates actual=wrong_function",
+        );
+      },
+    );
+    const gateway: LlmGateway = {
+      invokeStructuredPrompt: async <T>(
+        options: InvokeStructuredPromptOptions,
+      ): Promise<T> => (await invokeStructuredPrompt(options)) as T,
+      invokeStrictStructured: async <T>(
+        options: InvokeStrictStructuredOptions<T>,
+      ): Promise<T> => (await invokeStrictStructured(options)) as T,
+    };
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "strict target function mismatch should fall back to structured selector",
+        coreConflict: "wrong tool must not silently parse as the target function",
+        strongScene: "the selector retries through regular json response format",
+        sourceHint: "test",
+        recentUsageHint: "target tool mismatch fallback",
       },
       { llmGateway: gateway },
     );
