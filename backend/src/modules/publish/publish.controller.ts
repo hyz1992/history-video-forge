@@ -14,6 +14,7 @@ import { getPublishLlmGateway } from "./llm-helper";
 import { savePublishPackageRecord } from "./publish-record.repository";
 import { generateTitleCandidates } from "./title-generator.service";
 import { exportPublishPackage } from "./publish-export.service";
+import { createCompositeInteractionLogWriter } from "../../runtime/trace/project-storage";
 
 function buildDefaultPublishPackage(input: {
   renderJobRecordId: string;
@@ -162,12 +163,19 @@ export async function publishGenerateController(
     executionStateJson: { generated_at: new Date().toISOString(), generating: true },
   });
 
+  const publishRunId = `publish_run_${db.generateId()}`;
+  const interactionLogWriter = createCompositeInteractionLogWriter({
+    project,
+    phase: "storyboard",
+    runId: publishRunId,
+  });
+
   // Generate cover prompt via LLM
   let coverPromptDraft: string | null = null;
   let llmUsed = false;
   try {
     const ctx = buildCoverPromptContext(db, projectId, assetManifestRecordId);
-    coverPromptDraft = await generateCoverPromptDraft(ctx);
+    coverPromptDraft = await generateCoverPromptDraft(ctx, interactionLogWriter);
     llmUsed = true;
   } catch (err) {
     notes.push(
@@ -184,6 +192,7 @@ export async function publishGenerateController(
         selectedAngle: topicPackage.selectedAngle,
         scriptSummary: scriptRecord.scriptText.slice(0, 500),
         durationSec: exportArtifact.duration_sec ?? scriptRecord.estimatedDurationSec ?? 60,
+        interactionLogWriter,
       });
       description = descResult.description;
       llmUsed = true;
@@ -204,6 +213,7 @@ export async function publishGenerateController(
         selectedAngle: topicPackage.selectedAngle,
         scriptSummary: scriptRecord.scriptText.slice(0, 300),
         durationSec: Math.round(exportArtifact.duration_sec ?? scriptRecord.estimatedDurationSec ?? 60),
+        interactionLogWriter,
       });
       titleCandidates = titleResult.candidates;
       if (titleCandidates.length > 0) {
@@ -721,12 +731,20 @@ export async function titleCandidatesController(
     }
   }
 
+  const titleRunId = `publish_title_run_${db.generateId()}`;
+  const titleInteractionLogWriter = createCompositeInteractionLogWriter({
+    project,
+    phase: "storyboard",
+    runId: titleRunId,
+  });
+
   const result = await generateTitleCandidates({
     topicTitle: topicPackage.title,
     selectedAngle: topicPackage.selectedAngle,
     scriptSummary: scriptRecord.scriptText.slice(0, 300),
     durationSec: Math.round(durationSec),
     currentTitle: currentTitle || undefined,
+    interactionLogWriter: titleInteractionLogWriter,
   });
 
   // Persist candidates to the publish package if one exists

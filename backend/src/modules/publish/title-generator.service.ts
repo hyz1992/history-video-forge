@@ -1,4 +1,5 @@
 import { getPublishLlmGateway } from "./llm-helper";
+import type { LlmInteractionLogWriter } from "../../runtime/llm/interaction-log.js";
 
 export interface TitleCandidateResult {
   candidate_id: string;
@@ -16,6 +17,7 @@ export interface TitleGenerationInput {
   scriptSummary: string;
   durationSec: number;
   currentTitle?: string;
+  interactionLogWriter?: LlmInteractionLogWriter;
 }
 
 /**
@@ -32,6 +34,7 @@ export async function generateTitleCandidates(
       candidates: TitleCandidateResult[];
     }>({
       promptId: "publish.title-generator",
+      operationName: "publish.title-generator",
       input: {
         topic_title: input.topicTitle,
         selected_angle: input.selectedAngle,
@@ -39,7 +42,7 @@ export async function generateTitleCandidates(
         duration_sec: input.durationSec,
         current_title: input.currentTitle ?? "",
       },
-      interactionLogWriter: undefined,
+      interactionLogWriter: input.interactionLogWriter,
     });
 
     // Validate styles

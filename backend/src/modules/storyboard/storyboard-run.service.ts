@@ -35,27 +35,32 @@ function buildTraceSummary(input: {
   runId: string;
   validationDecision: string;
   regenerated: boolean;
+  generateStartedAt: string;
+  generateFinishedAt: string;
+  validateStartedAt: string;
+  validateFinishedAt: string;
+  regenStartedAt?: string;
+  regenFinishedAt?: string;
 }) {
-  const now = new Date().toISOString();
   const steps = [
     {
       step_name: "storyboard-generate",
       phase: "storyboard",
       status: "succeeded",
-      started_at: now,
-      ended_at: now,
-      duration_ms: 0,
+      started_at: input.generateStartedAt,
+      ended_at: input.generateFinishedAt,
+      duration_ms: new Date(input.generateFinishedAt).getTime() - new Date(input.generateStartedAt).getTime(),
     },
   ];
 
-  if (input.regenerated) {
+  if (input.regenerated && input.regenStartedAt && input.regenFinishedAt) {
     steps.push({
       step_name: "storyboard-regenerate",
       phase: "storyboard",
       status: "succeeded",
-      started_at: now,
-      ended_at: now,
-      duration_ms: 0,
+      started_at: input.regenStartedAt,
+      ended_at: input.regenFinishedAt,
+      duration_ms: new Date(input.regenFinishedAt).getTime() - new Date(input.regenStartedAt).getTime(),
     });
   }
 
@@ -63,9 +68,9 @@ function buildTraceSummary(input: {
     step_name: "local-validate",
     phase: "storyboard",
     status: input.validationDecision === "pass" ? "succeeded" : "failed",
-    started_at: now,
-    ended_at: now,
-    duration_ms: 0,
+    started_at: input.validateStartedAt,
+    ended_at: input.validateFinishedAt,
+    duration_ms: new Date(input.validateFinishedAt).getTime() - new Date(input.validateStartedAt).getTime(),
   });
 
   return {
@@ -155,21 +160,28 @@ export async function runStoryboardGeneration(
     input.project.status = "storyboard_generating";
     await input.db.firstAggregateWriter?.syncProject(input.project);
 
+    let regenerated = false;
+    const generateStart = new Date().toISOString();
     let plan = await generateStoryboardPlan({
-    sourceScriptRecordId: scriptRecord.id,
-    sourceTopicPackageId: topicPackage.id,
-    draft,
-    topicBoundaryContext,
-    interactionLogWriter,
-  });
-  let localValidation = validateStoryboardPlan({
-    draft,
-    plan,
-  });
-  let regenerated = false;
+      sourceScriptRecordId: scriptRecord.id,
+      sourceTopicPackageId: topicPackage.id,
+      draft,
+      topicBoundaryContext,
+      interactionLogWriter,
+    });
+    const generateEnd = new Date().toISOString();
+    const validateStart = new Date().toISOString();
+    let localValidation = validateStoryboardPlan({
+      draft,
+      plan,
+    });
+    const validateEnd = new Date().toISOString();
+    let regenStart: string | undefined;
+    let regenEnd: string | undefined;
 
-  if (localValidation.decision === "regen_once") {
+    if (localValidation.decision === "regen_once") {
     regenerated = true;
+    regenStart = new Date().toISOString();
     const regenContext: {
       reason: "storyboard_local_validation_regen_once";
       errors: string[];
@@ -191,6 +203,7 @@ export async function runStoryboardGeneration(
       interactionLogWriter,
       regenerationContext: regenContext,
     });
+    regenEnd = new Date().toISOString();
     localValidation = validateStoryboardPlan({
       draft,
       plan,
@@ -204,6 +217,12 @@ export async function runStoryboardGeneration(
     runId,
     validationDecision: localValidation.decision,
     regenerated,
+    generateStartedAt: generateStart,
+    generateFinishedAt: generateEnd,
+    validateStartedAt: validateStart,
+    validateFinishedAt: validateEnd,
+    regenStartedAt: regenStart,
+    regenFinishedAt: regenEnd,
   });
   const runtimeDiagnostics = {
     checks: [

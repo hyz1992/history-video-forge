@@ -1,4 +1,5 @@
 import { getPublishLlmGateway } from "./llm-helper";
+import type { LlmInteractionLogWriter } from "../../runtime/llm/interaction-log.js";
 
 export interface DescriptionGenerationInput {
   topicTitle: string;
@@ -6,6 +7,7 @@ export interface DescriptionGenerationInput {
   scriptSummary: string;
   durationSec: number;
   platformProfile?: string;
+  interactionLogWriter?: LlmInteractionLogWriter;
 }
 
 export interface DescriptionGenerationResult {
@@ -27,6 +29,7 @@ export async function generateDescription(
       description: string;
     }>({
       promptId: "publish.description-generator",
+      operationName: "publish.description-generator",
       input: {
         topic_title: input.topicTitle,
         selected_angle: input.selectedAngle,
@@ -34,7 +37,7 @@ export async function generateDescription(
         duration_sec: input.durationSec,
         platform_profile: input.platformProfile ?? "generic",
       },
-      interactionLogWriter: undefined,
+      interactionLogWriter: input.interactionLogWriter,
     });
 
     return { description: (result.description ?? "").slice(0, 200) };

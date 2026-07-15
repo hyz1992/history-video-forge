@@ -5,6 +5,7 @@ import type { DbClient } from "../../db/client";
 import { saveAssetManifestRecord } from "../assets/asset-manifest-record.repository";
 import { getProjectStorageProfile } from "../../runtime/trace/project-storage";
 import { getPublishLlmGateway } from "./llm-helper";
+import type { LlmInteractionLogWriter } from "../../runtime/llm/interaction-log.js";
 import { copyStagedArtifactFile, preserveArtifactAfterRegistrationFailure, promoteStagedArtifactFile, resolveStagedArtifactFile, type StagedArtifactFile } from "../../runtime/files/artifact-file-commit.js";
 
 export interface CoverInitializationResult {
@@ -159,11 +160,15 @@ export function buildCoverPromptContext(
  * Generate a cover prompt via LLM using the dedicated prompt.
  * Falls back to a structured template when the LLM is unavailable.
  */
-export async function generateCoverPromptDraft(ctx: CoverPromptContext): Promise<string> {
+export async function generateCoverPromptDraft(
+  ctx: CoverPromptContext,
+  interactionLogWriter?: LlmInteractionLogWriter,
+): Promise<string> {
   try {
     const gateway = getPublishLlmGateway();
     const result = await gateway.invokeStructuredPrompt<{ cover_prompt: string }>({
       promptId: "publish.cover-prompt-generator",
+      operationName: "publish.cover-prompt-generator",
       input: {
         topic_title: ctx.topicTitle,
         selected_angle: ctx.selectedAngle,
@@ -171,7 +176,7 @@ export async function generateCoverPromptDraft(ctx: CoverPromptContext): Promise
         visual_tone: ctx.visualTone,
         selected_title: "",
       },
-      interactionLogWriter: undefined,
+      interactionLogWriter,
     });
     return result.cover_prompt?.trim() || buildFallbackCoverPrompt(ctx);
   } catch {
