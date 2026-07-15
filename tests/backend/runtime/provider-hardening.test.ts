@@ -998,6 +998,53 @@ describe("provider hardening", () => {
     );
   });
 
+  it("throws strict_structured_no_tool_call when the strict response omits tool_calls entirely", async () => {
+    // Task 10：覆盖 provider 合同链的未测环节——真实 invokeStrictStructured 在收到
+    // 缺少 tool_calls 的响应（仅有普通 content）时必须抛 strict_structured_no_tool_call，
+    // 以便 topic selector 侧的 shouldFallbackToStructuredSelector 进入受控 structured fallback。
+    const prompt = createPromptRegistry().getPrompt("topic.selector");
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-5.2",
+      baseUrl: "https://llm.example.test/v1",
+      apiKey: "test-key",
+      maxAttempts: 1,
+      fetchImpl: async () => new Response(JSON.stringify({
+        choices: [{
+          finish_reason: "stop",
+          message: {
+            content: JSON.stringify({ selected_candidate_ids: ["c1"] }),
+          },
+        }],
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    });
+
+    await expect(provider.invokeStrictStructured?.({
+      prompt,
+      input: { selector_pool: [] },
+      operationName: "probe.strict-tool-call",
+      schema: {
+        name: "select_topic_candidates",
+        description: "Select topic candidates.",
+        parameters: {
+          type: "object",
+          properties: {
+            selected_candidate_ids: { type: "array", items: { type: "string" } },
+          },
+          required: ["selected_candidate_ids"],
+          additionalProperties: false,
+        },
+      },
+      parse: (candidate) => candidate as { selected_candidate_ids: string[] },
+      options: {
+        strategy: "tool_call",
+        toolChoice: "target_function",
+      },
+    })).rejects.toThrow("strict_structured_no_tool_call");
+  });
+
   it("records each retry attempt with delay and succeeds on second attempt", async () => {
     vi.useFakeTimers();
     const entries: LlmInteractionLogEntry[] = [];
