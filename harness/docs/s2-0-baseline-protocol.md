@@ -56,7 +56,7 @@
 - 不从小样本（3 份）声称稳定 P95
 - 不把 semantic reviewer 变成自动验收门
 
-## 2026-07-15 Task 11 验收结论
+## 2026-07-15 Task 11 固定样本结论（后续真实页面发现覆盖缺口）
 
 ### 运行边界
 
@@ -99,3 +99,9 @@ Task 11 harness 的 topic 样本直连 strict gateway，不经过 `invokeTopicSe
 - 保留 `script.writer`、`storyboard.planner` 的精确 `thinking=disabled` operation policy。
 - 保留 topic strict 的 `thinking=disabled + target_function` 生产策略和受控 structured fallback。
 - 任一后续真实题材出现明显语义退化时，只回退对应 operation policy 或模型配置，不回退观测能力和 timeout 不原样重试规则。
+
+### 真实页面纠偏
+
+Task 11 之后的真实页面项目 `84ed173e-529b-4a19-bc6d-092257432b3e` 证明，完整 topic 链路还包含未被固定样本覆盖的 `topic.candidate-builder`：该 operation 使用 GLM-5.2、provider-default thinking，attempt 1 即耗时 159.954 秒并产生 4741 reasoning tokens；随后生产 selector 另耗时 33.939 秒，完整等待约 193.893 秒。
+
+因此本节只证明原固定样本中 script、storyboard 和 selector 的局部结论，不再作为“S2-0 整体完成”的证据。S2-0 必须在 builder 精确策略、8 候选质量对照和真实页面端到端验收通过后才能重新收口。

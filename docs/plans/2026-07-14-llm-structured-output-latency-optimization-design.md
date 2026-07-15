@@ -1,7 +1,7 @@
 # S2-0 旗舰模型结构化生成延迟与质量优化设计
 
 > 设计日期：2026-07-14
-> 状态：已完成代码、历史记录与运行配置复核，等待按配套实施计划执行
+> 状态：S2-0a 与首批 S2-0b 已执行；2026-07-15 真实页面验收发现 `topic.candidate-builder` 漏测，S2-0 已重新打开并等待补齐该 operation
 > 适用范围：当前智谱 OpenAI-compatible 路由下的 LLM 调用；多供应商抽象仍属于 S2-1
 
 ## 1. 决策摘要
@@ -439,3 +439,43 @@ S2-1 再实现：
 - `docs/todos/roadmap-todo.md`
 - `harness/README.md`
 - `harness/docs/prompt-registry-spec.md`
+
+## 13. 2026-07-15 真实页面补充设计：Topic Candidate Builder
+
+### 13.1 新事实与原验收缺口
+
+用户通过真实前后端页面创建项目 `84ed173e-529b-4a19-bc6d-092257432b3e` 后，完整选题流程耗时约 193.893 秒：
+
+| operation | model / thinking | attempt | duration | completion / reasoning tokens |
+| --- | --- | ---: | ---: | ---: |
+| `topic.candidate-builder` | `glm-5.2` / `provider_default` | 1 | 159.954 秒 | 8189 / 4741 |
+| `topic.selector` | `glm-5.2` / `disabled` | 1 | 33.939 秒 | 1620 / 0 |
+
+该运行没有 timeout、retry、repair 或 full regeneration。builder 占完整等待的 82.5%，因此根因不是重试放大，而是 builder 在旗舰模型上仍保留 provider-default thinking，同时承担一次生成 8 个完整 `TopicCandidateCard` 的长输出。
+
+Task 11 harness 的 topic 样本只调用 `topic.selector`，输入只有 2 个候选；它既没有运行 `topic.candidate-builder`，也没有覆盖生产页面的 8 候选串行链路。原“S2-0 完成”结论因此只对已覆盖的 script、storyboard 和 selector 成立，不能代表完整 topic 用户体验。
+
+### 13.2 已确认的第一步方案
+
+第一步只对精确 operation `topic.candidate-builder` 设置 `thinking=disabled`：
+
+- 保持 GLM-5.2；不通过回退弱模型换速度。
+- 保持 8 个原始候选、现有 prompt、schema、validator、repair 和 selector 不变。
+- 不修改 timeout、max attempts、temperature、max tokens 或 retry 语义。
+- 不把 override 扩展到 `storyboard.segment-regen`、`asset-planning.planner` 或其他同 class operation。
+- 先用 TDD 证明 effective request 为 disabled，再运行完整非 live 回归。
+- 付费 live 仍需新的请求数和人民币费用边界；真实验收必须覆盖 builder 的 8 候选输出以及完整页面总耗时。
+
+### 13.3 质量与回退闸门
+
+关闭 builder thinking 后必须同时满足：
+
+- 8 个候选均满足现有 JSON、Zod 与业务 validator 合同，不触发额外 repair/full regeneration。
+- 时代边界、具体事件粒度、候选多样性、核心冲突、强场面和三段 `must_cover_preview` 不明显退化。
+- 人工对照只使用既有 topic rubric；不得使用关键词、字符串规则或 semantic reviewer 自动门禁代替语义判断。
+- 记录 builder、selector 和完整页面总耗时；不得再用 selector 单点耗时代替选题端到端体验。
+- 若质量明显退化，只回退 `topic.candidate-builder` 的 thinking override，不回退 S2-0 已建立的观测和 retry 规则。
+
+### 13.4 后续分层
+
+如果 `thinking=disabled` 后 builder 仍不满足用户等待体验，再单独设计候选输出瘦身或分层生成。该后续任务可能影响 prompt/schema/候选合同，不能与本次单变量优化混在同一提交，也不能在没有质量基线时直接减少候选数。

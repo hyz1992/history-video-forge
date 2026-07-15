@@ -57,9 +57,9 @@
 - [x] 完成 V2 S1 真实浏览器验收补强：新增 `npm run harness:s1-browser-acceptance`，覆盖 admin 后台、migration owner 转移、代管横幅、审计日志、转移后用户可见、其他用户隔离和 USER 管理后台拦截
 - [x] 完成 V2 数据基础 Task 8.5 收口：测试矩阵、schema 复核、迁移状态机、readiness、仓储访问边界、SQLite 备份恢复、Prisma 业务切换与 JSON 写入冻结
 - [x] 完成 V1 高风险稳定化最终全量回归、故障演练和内置浏览器验收
-- [x] 完成 `S2-0`：建立 LLM effective options / attempt / usage / duration 基线，阻止长生成 timeout 原样重试，落地精确 thinking 与目标 function 策略，并完成 GLM-5.2 固定样本延迟和人工质量验收
 
 ## 进行中
+- [ ] 补齐 `S2-0` 遗漏的 `topic.candidate-builder`：关闭精确 operation thinking，保持 8 候选与合同不变，并完成真实页面端到端延迟和质量验收
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 补齐前端 v1 真实浏览器验收矩阵：空态、加载中、成功、失败、刷新、深链、重复操作
 - [ ] 收口当前未归档计划，避免历史 implementation plan 误导新任务
