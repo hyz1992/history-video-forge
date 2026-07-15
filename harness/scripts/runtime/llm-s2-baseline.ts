@@ -1,4 +1,4 @@
-﻿import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
@@ -9,7 +9,7 @@ import type {
   LlmInteractionLogEntry,
   LlmInteractionLogWriter,
 } from "../../../backend/src/runtime/llm/interaction-log.js";
-import type { StrictStructuredToolSchema } from "../../../backend/src/runtime/llm/provider-contract.js";
+import type { StrictStructuredToolSchema, StructuredPromptProvider } from "../../../backend/src/runtime/llm/provider-contract.js";
 import { parseStrictSelectorDecision } from "../../../backend/src/modules/topic/topic-recommendation.service.js";
 import { ScriptDraftPackage, StoryboardPlan } from "../../../shared/src/index.js";
 import { validateScriptDraft } from "../../../backend/src/modules/script/script-local-validator.js";
@@ -541,29 +541,41 @@ function buildStoryboardInput(_sample: SampleCase, _profile: BaselineProfile): R
   };
 }
 
-export function describeGatewayProfile(profile: BaselineProfile) {
+export type GatewayProviderConfig = {
+  profile: "main" | "structured";
+  model: string;
+  maxAttempts: number;
+};
+
+export function describeGatewayProfile(profile: BaselineProfile): {
+  main: GatewayProviderConfig;
+  structured: GatewayProviderConfig;
+} {
   return {
-    main: { profile: "main" as const, model: profile.mainModel },
-    structured: { profile: "structured" as const, model: profile.structuredModel },
+    main: { profile: "main", model: profile.mainModel, maxAttempts: 1 },
+    structured: { profile: "structured", model: profile.structuredModel, maxAttempts: 1 },
   };
 }
 
-export function createGateways(profile: BaselineProfile) {
-  const mainProvider = createOpenAiCompatibleProvider({
-    profile: "main",
-    model: profile.mainModel,
-    maxAttempts: 1,
-  });
+export type ProviderFactory = (config: GatewayProviderConfig) => StructuredPromptProvider;
+
+const defaultProviderFactory: ProviderFactory = (config) =>
+  createOpenAiCompatibleProvider(config);
+
+export function createGateways(
+  profile: BaselineProfile,
+  options: { providerFactory?: ProviderFactory } = {},
+) {
+  const factory = options.providerFactory ?? defaultProviderFactory;
+  const cfg = describeGatewayProfile(profile);
+
+  const mainProvider = factory(cfg.main);
   const mainGateway = createLlmGateway({
     registry: createPromptRegistry(),
     provider: mainProvider,
   });
 
-  const structuredProvider = createOpenAiCompatibleProvider({
-    profile: "structured",
-    model: profile.structuredModel,
-    maxAttempts: 1,
-  });
+  const structuredProvider = factory(cfg.structured);
   const structuredGateway = createLlmGateway({
     registry: createPromptRegistry(),
     provider: structuredProvider,
