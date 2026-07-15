@@ -80,7 +80,7 @@ export function renderLlmInteractionMarkdown(
     `- prompt_id: ${entry.promptId}`,
     `- prompt_stage: ${entry.promptStage}`,
     `- prompt_language: ${entry.promptLanguage}`,
-    `- prompt_file: ${entry.promptFilePath.replace(/\\/g, "/")}`,
+    `- prompt_file: ${entry.promptFilePath?.replace(/\\/g, "/") ?? "unknown"}`,
   ];
 
   if (entry.effectiveRequest) {
@@ -159,13 +159,13 @@ export function renderLlmInteractionMarkdown(
     "## System Prompt",
     "",
     "```md",
-    entry.systemPrompt.trim(),
+    entry.systemPrompt?.trim() ?? "",
     "```",
     "",
     "## 原始模型响应",
     "",
     "```text",
-    entry.rawOutput.trim(),
+    entry.rawOutput?.trim() ?? "",
     "```",
   );
 
