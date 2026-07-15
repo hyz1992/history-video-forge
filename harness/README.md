@@ -590,6 +590,9 @@ Get-ChildItem 'storage/projects' -Directory -Recurse |
 - `npx tsx harness/scripts/runtime/llm-s2-baseline.ts --live --candidate-model <model-id> --max-requests <N> --max-cost-cny <金额>` — 显式启动 live 诊断；当前 npm 版本可能吞掉 `npm run ... -- --flag` 的 flag，带参数时必须使用该直接入口
 - S2-0b 首轮候选诊断 dry-run：`npx tsx harness/scripts/runtime/llm-s2-baseline.ts --dry-run --candidate-model glm-5.2 --profile-scope candidate-only --candidate-thinking disabled --force-target-tool --enable-probe --max-requests 4 --max-cost-cny 10`
 - 上述候选诊断矩阵固定为 4 个计划请求：1 次指定目标 function 的 capability probe，以及 candidate-only 的 topic/script/storyboard 各 1 次；只有单独取得付费 live 授权后才可把 `--dry-run` 改为 `--live`
+- Task 11 优化后对照使用：`npx tsx harness/scripts/runtime/llm-s2-baseline.ts --live --candidate-model glm-5.2 --profile-scope both --force-target-tool --max-requests 6 --max-cost-cny 10`；只有新的明确授权才能再次运行
+- 2026-07-15 Task 11 的 6 次请求全部 attempt 1 成功；current 三项合计 47.749 秒，GLM-5.2 candidate 三项合计 72.822 秒，详见 `harness/docs/s2-0-baseline-protocol.md`
+- Task 11 harness 的 topic 路径直连 strict gateway；未传 `--candidate-thinking` 时报告会记录 provider default，不能把该 topic 耗时当作生产 service 的 `thinking=disabled + target_function` 精确耗时
 - 盲评协议：`harness/docs/s2-0-baseline-protocol.md`
 - 样本清单：`harness/samples/llm-s2-baseline/manifest.json`
 - 输出目录：`harness/scripts/runtime/output/llm-s2-baseline/<timestamp>/`

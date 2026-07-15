@@ -6,13 +6,14 @@
 
 ## 当前状态
 
-截至 2026-07-14：
+截至 2026-07-15：
 
 - V2 第一个大子项目 S1（用户系统、管理员权限与项目隔离）已完成全部 S1-1 到 S1-8 并通过端到端验收。
 - S1 实施记录见 `AGENTS.md` 和提交历史；V2 S1 设计草案（见下方"2026-07-13 V2 设计草案索引"）已完成使命，相关代码实现已稳定。
 - V2 数据基础 Task 8.5 已完成收口。
 - S1 后真实浏览器验收已补充：`npm run harness:s1-browser-acceptance` 覆盖 admin 后台、migration owner 转移、代管横幅、审计日志和用户隔离；`npm run harness:auth-flow-acceptance` 覆盖基础登录/退出/session 恢复。
-- 当前 V2 下一步顺序已校准：先做 `S2-0 LLM 回复速度、质量和结构化输出优化基线`，再做 `S2-1 多模型、多供应商切换`。原因是 LLM 速度与 structured output 的真实瓶颈会影响 provider/model 抽象边界、默认策略和验收指标。
+- `S2-0 LLM 回复速度、质量和结构化输出优化基线` 已完成：观测、attempt/usage/effective options、timeout/retry 收敛、精确 operation thinking policy、目标 function 和 GLM-5.2 固定样本 live 对照均已验收。
+- 当前 V2 下一步仍为 `S2-1 多模型、多供应商切换`；S2-0 已证明模型版本、thinking 和结构化策略必须按 operation 分开决策，并为后续 provider/model 抽象提供真实基线。
 - 正式 V2 产品功能已进入实施阶段；migration owner 不可登录标记 `!migration-owner-no-login`，其项目通过 admin 管理页面转移给真实用户。
 
 - [V1 高风险稳定化实施计划](./2026-07-10-v1-high-risk-stabilization-implementation-plan.md) 的主要代码任务已完成；其全量回归超时和故障演练缺口已并入 Task 8.5 的测试与切换闸门，不再作为独立的下一执行入口。
@@ -46,7 +47,7 @@
 
 旧的 Step 3-10 文档保留为范围留痕；当前执行顺序以本节为准：
 
-1. `S2-0`：LLM 回复速度、质量和结构化输出优化基线。先量化 topic/script 等 LLM 调用的耗时、失败、结构化输出稳定性和可低风险优化点；不引入多供应商抽象，不迁移正式 prompt 位置。
+1. `S2-0`（已完成）：LLM 回复速度、质量和结构化输出优化基线。已量化 topic/script/storyboard 的耗时、失败和结构化输出稳定性，并落地低风险 operation policy；未引入多供应商抽象，未修改 prompt/schema。
 2. `S2-1`：多模型、多供应商切换。基于 S2-0 的真实基线设计 provider/model/routing/run snapshot/credential reference。
 3. `S2-2`：用户偏好、生成策略与成本控制。接入用户级策略、预算和成本记录，消费 S2-1 的 provider/model 能力。
 4. `S2-3`：Prompt 治理。版本、hash、fixtures、变更说明和运行快照对齐；仍遵守 `AGENTS.md` 的 `harness/prompts/` 正式 prompt 位置规则，除非另有设计审查批准。

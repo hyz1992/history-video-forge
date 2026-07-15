@@ -703,7 +703,7 @@ git commit -m "应用旗舰模型思考与结构化策略"
 - 修改：`docs/plans/README.md`
 - 修改：`docs/todos/roadmap-todo.md`
 
-- [ ] **Step 1：运行完整非 live 回归**
+- [x] **Step 1：运行完整非 live 回归**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/provider-hardening.test.ts tests/backend/runtime/env-loading.test.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/topic-script-graph.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/script/script-runtime-generate.test.ts tests/backend/storyboard/storyboard-generation.test.ts tests/backend/asset-planning/asset-planning-generation.test.ts tests/backend/asset-planning/asset-planning-structural-repair.test.ts tests/backend/publish/cover-service.test.ts tests/backend/api/publish-api.test.ts harness/scripts/runtime/llm-s2-baseline.test.ts --no-file-parallelism
@@ -713,15 +713,15 @@ git diff --check
 
 预期：所有命令 exit 0；没有 prompt/schema/frontend diff。
 
-- [ ] **Step 2：在单独授权下运行优化后 live 对照**
+- [x] **Step 2：在单独授权下运行优化后 live 对照**
 
 复用 Task 7 的同一输入、请求数和隐私边界。没有新的明确授权则标记 `未验证`，不得沿用旧 live 结果宣称优化成功。
 
-- [ ] **Step 3：完成质量盲评**
+- [x] **Step 3：完成质量盲评**
 
 逐项标记 topic/script 质量为不劣、存在差异或退化。任一核心样本明显退化时回退对应 operation policy，不得为了速度强行通过。
 
-- [ ] **Step 4：记录结论**
+- [x] **Step 4：记录结论**
 
 文档只记录：
 
@@ -734,14 +734,14 @@ git diff --check
 
 不从小样本声称稳定 P95，也不把 semantic reviewer 变成自动验收门。
 
-- [ ] **Step 5：更新当前状态入口并提交**
+- [x] **Step 5：更新当前状态入口并提交**
 
 ```powershell
 git add harness/docs/s2-0-baseline-protocol.md harness/README.md docs/plans/README.md docs/todos/roadmap-todo.md
 git commit -m "记录S2-0延迟质量优化结果"
 ```
 
-- [ ] **Step 6：最终状态检查并停止**
+- [x] **Step 6：最终状态检查并停止**
 
 ```powershell
 git status --short
@@ -749,6 +749,17 @@ git log -n 12 --oneline
 ```
 
 预期：只保留用户原有未跟踪文件或明确说明的运行输出；不得自动进入 script 瘦身、storyboard 分层、asset repair 重构或 S2-1。
+
+#### Task 11 执行状态（2026-07-15）
+
+- 用户明确授权后运行优化后 live 对照：仓库脱敏 manifest、0 次 probe、current 3 次、GLM-5.2 candidate 3 次，共 6 次，人民币人工上限 10 元；runner 不能机器核验实际费用。
+- 6 次请求全部 attempt 1 成功，JSON/Zod/业务 validator 首次通过，未 retry、repair 或 full regeneration。
+- current 三项合计由优化前 135.231 秒降至 47.749 秒，下降 64.7%；GLM-5.2 candidate 三项合计由 provider-default thinking 的旧候选 353.833 秒降至 72.822 秒，下降 79.4%。以上为固定单样本对照，不代表稳定 P95。
+- 人工质量结论：candidate topic 更具体；script 整体不劣但记录一处 opening_span 重复偏差；storyboard 不劣且画面层次更细。semantic reviewer 保持 shadow-only。
+- Task 11 harness 的 topic 样本绕过生产 service，本轮 candidate topic 记录为 provider-default thinking；不得把该数字当作生产 `thinking=disabled + target_function` 精确耗时。生产参数由代码、非 live 测试与此前独立授权诊断共同确认。
+- 本地环境模型配置切换为 `LLM_MODEL=glm-5.2`、`LLM_STRUCTURED_MODEL=glm-5.2`；模型名仍只存在于环境配置，不进入业务 operation。
+- 完整非 live 回归 13 文件 237 项通过，backend typecheck 通过；prompt/schema/frontend 无 diff。
+- S2-0 完成并停止，不自动进入后续结构重构或 S2-1。
 
 ## 2. 完成标准
 
