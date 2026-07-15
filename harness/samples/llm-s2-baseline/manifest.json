@@ -1,0 +1,50 @@
+[
+  {
+    "id": "short-structured",
+    "operation": "topic.selector",
+    "description": "选题排序：短结构化决策样本，验证 strict tool-call 路径的观测完整性",
+    "input": {
+      "type": "selector_pool",
+      "candidates": [
+        {
+          "candidate_id": "sample_c1",
+          "event_identity": "晏子使楚",
+          "title": "晏子使楚",
+          "one_line_angle": "楚王连压三次，晏子一次没退",
+          "core_conflict": "楚王当众羞辱，晏子不能退",
+          "strong_scene": "殿前对峙，狗门与橘枳",
+          "narrative_tension_map": { "hook_claim": "楚王连压三次，晏子一次没退" }
+        },
+        {
+          "candidate_id": "sample_c2",
+          "event_identity": "完璧归赵",
+          "title": "完璧归赵",
+          "one_line_angle": "一块玉壁，一场国运赌局",
+          "core_conflict": "秦王以城换璧的致命博弈",
+          "strong_scene": "章台之上，秦王观壁",
+          "narrative_tension_map": { "hook_claim": "一块玉壁，一场国运赌局" }
+        }
+      ]
+    }
+  },
+  {
+    "id": "typical-script",
+    "operation": "script.writer",
+    "description": "口播文案：典型 script 生成样本，验证普通 JSON 路径的延迟与 usage",
+    "input": {
+      "type": "topic_package",
+      "source_sample": "yanzi-shichu",
+      "explanation": "从 harness/samples/topic-script/yanzi-shichu.sample.json 确定性构建"
+    }
+  },
+  {
+    "id": "long-or-repair",
+    "operation": "storyboard.planner",
+    "description": "分镜规划：长结构生成样本，验证完整 plan 输出延迟与结构通过率",
+    "input": {
+      "type": "script_draft",
+      "source_sample": "yanzi-shichu",
+      "explanation": "从 yanzi-shichu.sample.json 的 script 输出确定性构建"
+    }
+  }
+]

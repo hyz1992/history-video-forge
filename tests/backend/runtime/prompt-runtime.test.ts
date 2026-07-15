@@ -513,7 +513,7 @@ describe("prompt runtime", () => {
       summary: "开头抓力不足，建议只做影子评估记录。",
       confidence: 0.78,
     };
-    const invokeApi = vi.fn(async () => JSON.stringify(reviewerOutput));
+    const invokeApi = vi.fn(async () => ({ rawOutput: JSON.stringify(reviewerOutput), content: JSON.stringify(reviewerOutput), metadata: {} }));
     const gateway = createLlmGateway({
       registry: createPromptRegistry(),
       provider: createOpenAiCompatibleProvider({
@@ -759,13 +759,14 @@ describe("prompt runtime", () => {
     const { createOpenAiCompatibleProvider } = await import(
       "../../../backend/src/runtime/llm/openai-compatible-provider.js"
     );
-    const invokeApi = vi.fn(async ({ prompt, input, operationName }) =>
-      JSON.stringify({
+    const invokeApi = vi.fn(async ({ prompt, input, operationName }) => {
+      const content = JSON.stringify({
         promptId: prompt.metadata.id,
         operationName,
         input,
-      }),
-    );
+      });
+      return { rawOutput: content, content, metadata: {} };
+    });
     const provider = createOpenAiCompatibleProvider({
       model: "glm-4.5",
       invokeApi,
@@ -811,7 +812,7 @@ describe("prompt runtime", () => {
     const invokeApi = vi
       .fn()
       .mockRejectedValueOnce(Object.assign(new Error("request timeout"), { name: "AbortError" }))
-      .mockResolvedValueOnce('{"ok":true}');
+      .mockResolvedValueOnce({ rawOutput: '{"ok":true}', content: '{"ok":true}', metadata: {} });
     const provider = createOpenAiCompatibleProvider({
       model: "glm-4.5",
       invokeApi,

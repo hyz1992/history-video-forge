@@ -583,3 +583,12 @@ Get-ChildItem 'storage/projects' -Directory -Recurse |
 
 - `docs/plans/archive/topic-script/2026-05-06-script-writer-viral-first-draft-quality-design.md`
 - `docs/plans/archive/topic-script/2026-05-06-script-writer-viral-first-draft-quality-implementation-plan.md`
+
+## S2-0 旗舰模型延迟与质量诊断基线
+
+- `npm run harness:llm-s2-baseline` — dry-run 打印三样本基线计划
+- `npm run harness:llm-s2-baseline -- --live --candidate-model <model-id> --max-requests <N> --max-cost-cny <金额>` — 显式启动 live 诊断
+- 盲评协议：`harness/docs/s2-0-baseline-protocol.md`
+- 样本清单：`harness/samples/llm-s2-baseline/manifest.json`
+- 输出目录：`harness/scripts/runtime/output/llm-s2-baseline/<timestamp>/`
+- 约束：live=false 默认，缺失任一必需参数立即失败，raw output 不提交 Git

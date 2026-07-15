@@ -17,6 +17,10 @@ import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-packa
 import type { LlmInteractionLogEntry } from "../../../backend/src/runtime/llm/interaction-log.js";
 import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
 import { createOpenAiCompatibleProvider } from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
+
+function env(content: string) {
+  return { rawOutput: content, content, metadata: {} };
+}
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 import { getProjectStorageProfile } from "../../../backend/src/runtime/trace/project-storage.js";
 
@@ -134,7 +138,7 @@ const runtimeDraft = ScriptDraftPackage.parse({
 
 describe("script runtime generate", () => {
   it("sends ScriptInputBundle into the formal script-writer prompt and returns a ScriptDraftPackage", async () => {
-    const invokeApi = vi.fn(async () => JSON.stringify(runtimeDraft));
+    const invokeApi = vi.fn(async () => ({ rawOutput: JSON.stringify(runtimeDraft), content: JSON.stringify(runtimeDraft), metadata: {} }));
     const gateway = createLlmGateway({
       registry: createPromptRegistry(),
       provider: createOpenAiCompatibleProvider({
@@ -167,7 +171,7 @@ describe("script runtime generate", () => {
   });
 
   it("passes regen context into the script-writer prompt input without changing the bundle", async () => {
-    const invokeApi = vi.fn(async () => JSON.stringify(runtimeDraft));
+    const invokeApi = vi.fn(async () => ({ rawOutput: JSON.stringify(runtimeDraft), content: JSON.stringify(runtimeDraft), metadata: {} }));
     const gateway = createLlmGateway({
       registry: createPromptRegistry(),
       provider: createOpenAiCompatibleProvider({
@@ -278,9 +282,9 @@ describe("script runtime generate", () => {
 
   it("repairs minimally malformed runtime output before validating ScriptDraftPackage", async () => {
     const invokeApi = vi.fn(
-      async () => `\`\`\`json
+      async () => env(`\`\`\`json
 ${JSON.stringify(runtimeDraft)}
-\`\`\``,
+\`\`\``),
     );
     const gateway = createLlmGateway({
       registry: createPromptRegistry(),
@@ -302,9 +306,9 @@ ${JSON.stringify(runtimeDraft)}
   it("unwraps a single script_draft_package envelope before validating ScriptDraftPackage", async () => {
     const invokeApi = vi.fn(
       async () =>
-        JSON.stringify({
+        env(JSON.stringify({
           script_draft_package: runtimeDraft,
-        }),
+        })),
     );
     const gateway = createLlmGateway({
       registry: createPromptRegistry(),
@@ -327,10 +331,10 @@ ${JSON.stringify(runtimeDraft)}
   it("maps ordinal beat placeholders back to hard-lane beats before local validation", async () => {
     const invokeApi = vi.fn(
       async () =>
-        JSON.stringify({
+        env(JSON.stringify({
           ...runtimeDraft,
           beat_trace: [1, 2],
-        }),
+        })),
     );
     const gateway = createLlmGateway({
       registry: createPromptRegistry(),
@@ -369,7 +373,7 @@ ${JSON.stringify(runtimeDraft)}
   it("canonicalizes beat trace labels back to hard-lane beats before local validation", async () => {
     const invokeApi = vi.fn(
       async () =>
-        JSON.stringify({
+        env(JSON.stringify({
           ...runtimeDraft,
           beat_trace: [
             {
@@ -383,7 +387,7 @@ ${JSON.stringify(runtimeDraft)}
               confidence: 0.96,
             },
           ],
-        }),
+        })),
     );
     const gateway = createLlmGateway({
       registry: createPromptRegistry(),
@@ -439,7 +443,7 @@ ${JSON.stringify(runtimeDraft)}
       registry: createPromptRegistry(),
       provider: createOpenAiCompatibleProvider({
         model: "glm-4.5",
-        invokeApi: vi.fn(async () => JSON.stringify(weakTraceDraft)),
+        invokeApi: vi.fn(async () => ({ rawOutput: JSON.stringify(weakTraceDraft), content: JSON.stringify(weakTraceDraft), metadata: {} })),
       }),
     });
 
@@ -472,7 +476,7 @@ ${JSON.stringify(runtimeDraft)}
       registry: createPromptRegistry(),
       provider: createOpenAiCompatibleProvider({
         model: "glm-4.5",
-        invokeApi: vi.fn(async () => "not-json"),
+        invokeApi: vi.fn(async () => env("not-json")),
       }),
     });
 
@@ -496,7 +500,7 @@ ${JSON.stringify(runtimeDraft)}
       registry: createPromptRegistry(),
       provider: createOpenAiCompatibleProvider({
         model: "glm-4.5",
-        invokeApi: vi.fn(async () => JSON.stringify(runtimeDraft)),
+        invokeApi: vi.fn(async () => ({ rawOutput: JSON.stringify(runtimeDraft), content: JSON.stringify(runtimeDraft), metadata: {} })),
       }),
     });
 
@@ -789,7 +793,7 @@ ${JSON.stringify(runtimeDraft)}
       summary: "开头抓力不足，但本轮只做 shadow 评估。",
       confidence: 0.79,
     };
-    const invokeApi = vi.fn(async () => JSON.stringify(reviewerOutput));
+    const invokeApi = vi.fn(async () => ({ rawOutput: JSON.stringify(reviewerOutput), content: JSON.stringify(reviewerOutput), metadata: {} }));
     const semanticReviewGateway = createLlmGateway({
       registry: createPromptRegistry(),
       provider: createOpenAiCompatibleProvider({
@@ -857,7 +861,7 @@ ${JSON.stringify(runtimeDraft)}
 
     const invokeApi = vi.fn(
       async () =>
-        JSON.stringify({
+        env(JSON.stringify({
           answer: {
             decision: "patch_once",
             tags: ["pressure_escalation_missing", "narrative_tension_weak"],
@@ -870,7 +874,7 @@ ${JSON.stringify(runtimeDraft)}
               },
             ],
           },
-        }),
+        })),
     );
     const semanticReviewGateway = createLlmGateway({
       registry: createPromptRegistry(),
@@ -940,7 +944,7 @@ ${JSON.stringify(runtimeDraft)}
 
     const invokeApi = vi.fn(
       async () =>
-        JSON.stringify({
+        env(JSON.stringify({
           stage: "script_semantic_review",
           decision: "patch_once",
           patch_intent: "调整脚本节奏，增强画面感和冲突张力",
@@ -966,7 +970,7 @@ ${JSON.stringify(runtimeDraft)}
           ],
           summary: "脚本核心内容符合主题要求，但需要增强画面感。",
           confidence: 0.85,
-        }),
+        })),
     );
     const semanticReviewGateway = createLlmGateway({
       registry: createPromptRegistry(),
@@ -1041,3 +1045,4 @@ ${JSON.stringify(runtimeDraft)}
     expect(prompt.body).toContain("只作为 shadow 量尺");
   });
 });
+
