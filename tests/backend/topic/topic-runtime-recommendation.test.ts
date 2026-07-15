@@ -571,6 +571,7 @@ describe("topic runtime recommendation", () => {
     expect(invokeApi).toHaveBeenCalledWith(
       expect.objectContaining({
         operationName: "topic.candidate-builder",
+        thinking: "disabled",
         prompt: expect.objectContaining({
           metadata: expect.objectContaining({
             id: "topic.candidate-builder",

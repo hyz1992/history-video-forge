@@ -768,11 +768,12 @@ git log -n 12 --oneline
 **文件：**
 
 - 修改：`tests/backend/runtime/llm-operation-policy.test.ts`
+- 修改：`tests/backend/runtime/provider-hardening.test.ts`
 - 修改：`tests/backend/topic/topic-runtime-recommendation.test.ts`
 - 修改：`backend/src/runtime/llm/operation-policy.ts`
 - 修改：`docs/plans/2026-07-14-llm-structured-output-latency-optimization-implementation-plan.md`
 
-- [ ] **Step 1：写 operation policy 失败测试**
+- [x] **Step 1：写 operation policy 失败测试**
 
 调整 `llm-operation-policy.test.ts`：
 
@@ -789,7 +790,7 @@ npx vitest run --configLoader runner tests/backend/runtime/llm-operation-policy.
 
 预期：测试因 builder 仍为 `undefined/provider_default` 而失败；不得先修改生产代码。
 
-- [ ] **Step 2：写生产 topic 调用链失败测试**
+- [x] **Step 2：写生产 topic 调用链失败测试**
 
 在 `topic-runtime-recommendation.test.ts` 现有“drives candidate generation through the formal prompt registry”用例中，对真实 `createLlmGateway -> createOpenAiCompatibleProvider -> invokeApi` 路径增加断言：`topic.candidate-builder` 请求必须包含 `thinking: "disabled"`。
 
@@ -801,7 +802,7 @@ npx vitest run --configLoader runner tests/backend/topic/topic-runtime-recommend
 
 预期：测试因 invokeApi 收到的 builder thinking 为 `undefined` 而失败；现有 8 候选与 selector 断言保持不变。
 
-- [ ] **Step 3：实现最小 operation override**
+- [x] **Step 3：实现最小 operation override**
 
 只修改 `APPROVED_THINKING_OVERRIDE`：
 
@@ -815,7 +816,9 @@ const APPROVED_THINKING_OVERRIDE = {
 
 同步代码注释中的证据与边界：引用真实页面项目基线；明确该项目只证明 provider-default 慢点，关闭后的质量与耗时仍待独立 live；不得把 override 扩展到其他 operation。
 
-- [ ] **Step 4：运行 focused green 验证**
+同时把 provider-hardening 中“未批准 operation 不发送 thinking/sampling”的代表 operation 从已批准的 `topic.candidate-builder` 改为仍未批准的 `storyboard.segment-regen`；继续断言同 class 其他 operation 不受污染，不删除或放宽该合同测试。
+
+- [x] **Step 4：运行 focused green 验证**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/llm-operation-policy.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts --no-file-parallelism
@@ -823,7 +826,7 @@ npx vitest run --configLoader runner tests/backend/runtime/llm-operation-policy.
 
 预期：两文件全绿；builder 请求为 disabled；8 候选、repair、selector 与日志合同无回归。
 
-- [ ] **Step 5：运行完整非 live 回归**
+- [x] **Step 5：运行完整非 live 回归**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/provider-hardening.test.ts tests/backend/runtime/env-loading.test.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/topic-script-graph.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/script/script-runtime-generate.test.ts tests/backend/storyboard/storyboard-generation.test.ts tests/backend/asset-planning/asset-planning-generation.test.ts tests/backend/asset-planning/asset-planning-structural-repair.test.ts tests/backend/publish/cover-service.test.ts tests/backend/api/publish-api.test.ts harness/scripts/runtime/llm-s2-baseline.test.ts --no-file-parallelism
@@ -834,12 +837,20 @@ git diff -- harness/prompts shared/src frontend
 
 预期：所有命令 exit 0；prompt/schema/frontend 无 diff；本任务不执行付费请求。
 
-- [ ] **Step 6：中文提交非 live 实现并停止付费边界前的工作**
+- [x] **Step 6：中文提交非 live 实现并停止付费边界前的工作**
 
 ```powershell
-git add backend/src/runtime/llm/operation-policy.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts docs/plans/2026-07-14-llm-structured-output-latency-optimization-implementation-plan.md
+git add backend/src/runtime/llm/operation-policy.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/provider-hardening.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts docs/plans/2026-07-14-llm-structured-output-latency-optimization-implementation-plan.md
 git commit -m "关闭选题构建器无必要思考"
 ```
+
+#### Task 12 执行状态（2026-07-15）
+
+- TDD 红灯：operation policy 两项断言分别收到 `undefined` 与 `provider_default`；生产 topic service → gateway → provider 测试收到 `thinking: undefined`，均与遗漏根因一致。
+- 最小实现只把 `topic.candidate-builder` 加入精确 `APPROVED_THINKING_OVERRIDE`；没有修改其他 operation、模型、候选数量、prompt、schema、timeout、attempt 或 retry。
+- provider-hardening 原有“未批准 operation 不发送 thinking/sampling”测试改用仍未批准的 `storyboard.segment-regen`，继续证明同 class 不会被批量污染。
+- focused 回归 2 文件 67 项通过；完整非 live 回归 13 文件 237 项通过；backend typecheck 通过；prompt/schema/frontend 无 diff。
+- 本任务没有执行付费 live。关闭后的真实耗时、reasoning usage、8 候选语义质量与完整页面体验仍属于 Task 13，不得提前声明优化成功。
 
 ### Task 13：独立授权下完成真实页面验收
 

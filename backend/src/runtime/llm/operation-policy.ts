@@ -11,7 +11,7 @@
  *   未获批准的 operation 不得获得 thinking / max tokens / timeout / maxAttempts override。
  * - thinking override 按 operation name 精确写入，禁止按 operation class 统一写入，
  *   因为同一 class 内仍包含未经验证的 operation（例如 long_structured_generation 还包含
- *   topic.candidate-builder、storyboard.segment-regen 和 asset-planning.planner）。
+ *   storyboard.segment-regen 和 asset-planning.planner）。
  */
 
 export type LlmOperationClass =
@@ -108,17 +108,23 @@ export interface OperationPolicy {
 }
 
 /**
- * Task 10：经真实 candidate（glm-5.2）单样本诊断 + 用户确认后批准的精确 thinking override。
+ * Task 10 / Task 12：经真实 GLM-5.2 诊断 + 用户确认后批准的精确 thinking override。
  *
  * 证据来源：harness/scripts/runtime/output/llm-s2-baseline/2026-07-15T195910/baseline-report.json
- * 该单样本证明 script.writer（普通 JSON mode）与 storyboard.planner（普通 JSON mode）
+ * Task 10 单样本证明 script.writer（普通 JSON mode）与 storyboard.planner（普通 JSON mode）
  * 在 thinking=disabled 下 attempt 1 成功、reasoning tokens 为 0、Zod 与业务 validator 首次通过，
  * 且人工审读未发现明显语义退化。
  *
+ * Task 12 证据来源：真实页面项目 84ed173e-529b-4a19-bc6d-092257432b3e。
+ * topic.candidate-builder 在 GLM-5.2 provider-default thinking 下 attempt 1 耗时 159.954 秒，
+ * completion / reasoning tokens 为 8189 / 4741，占完整选题等待的 82.5%。用户已确认先做
+ * 单变量优化：只关闭该精确 operation thinking，保持 8 候选、prompt/schema/validator/
+ * repair/selector/timeout/retry 不变。关闭后的真实耗时与语义质量仍由 Task 13 独立 live 验收。
+ *
  * 边界（禁止扩展）：
  * - 该结论只支持本次精确 operation 策略，不允许扩展为同 class 其他 operation 的默认值；
- *   long_structured_generation 仍包含未经验证的 topic.candidate-builder、
- *   storyboard.segment-regen 和 asset-planning.planner。
+ *   long_structured_generation 仍包含未经验证的 storyboard.segment-regen 和
+ *   asset-planning.planner。
  * - 未列入本表的 operation（含 core_semantic_generation 之外的 repair/reviewer/publish 等）
  *   继续走保守默认，不获得 thinking override。
  * - 不写入 max tokens / temperature / timeout / maxAttempts；这些字段没有足够样本支撑新默认值。
@@ -128,6 +134,7 @@ const APPROVED_THINKING_OVERRIDE: Partial<
 > = {
   "script.writer": "disabled",
   "storyboard.planner": "disabled",
+  "topic.candidate-builder": "disabled",
 };
 
 

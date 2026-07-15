@@ -1107,8 +1107,9 @@ describe("provider hardening", () => {
   });
 
   it("does not send sampling parameters when an unapproved operation omits explicit options", async () => {
-    // Task 10 之后 script.writer / storyboard.planner 会从 operation policy 获得 thinking=disabled。
-    // 这里用未批准的 topic.candidate-builder 验证：未显式传参时仍不发送 thinking / sampling。
+    // Task 10 / Task 12 之后 script.writer / storyboard.planner / topic.candidate-builder
+    // 会从 operation policy 获得 thinking=disabled。这里用同 class 但仍未批准的
+    // storyboard.segment-regen 验证：未显式传参时仍不发送 thinking / sampling。
     const originalFetch = globalThis.fetch;
     const fetchSpy = vi.fn(async () =>
       new Response(JSON.stringify({
@@ -1125,12 +1126,12 @@ describe("provider hardening", () => {
         apiKey: "test-key",
         maxAttempts: 1,
       });
-      const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+      const prompt = createPromptRegistry().getPrompt("storyboard.segment-regen");
 
       const result = await provider.invokeStructuredPrompt({
         prompt,
         input: { seed: "slot-1" },
-        operationName: "topic.candidate-builder",
+        operationName: "storyboard.segment-regen",
       });
 
       expect(result).toEqual({ ok: true });

@@ -102,10 +102,9 @@ describe("llm operation policy precedence", () => {
   });
 
   it("does not introduce unapproved thinking / max-tokens / timeout defaults for operations", () => {
-    // Task 10 仅批准 script.writer 与 storyboard.planner 关闭 thinking；
+    // Task 10 批准 script.writer / storyboard.planner，Task 12 补充批准 topic.candidate-builder；
     // 其余 operation 不得获得 thinking / maxTokens / timeoutMs / maxAttempts override。
     const unapprovedOperations = [
-      "topic.candidate-builder",
       "storyboard.segment-regen",
       "asset-planning.planner",
       "topic.selector",
@@ -123,15 +122,13 @@ describe("llm operation policy precedence", () => {
     }
   });
 
-  it("applies the Task 10 approved thinking override only to script.writer and storyboard.planner", () => {
-    // 真实 candidate（glm-5.2）单样本诊断 + 用户确认仅批准这两个 operation 关闭 thinking。
+  it("applies approved thinking overrides only to exact operations", () => {
+    // Task 10 与 Task 12 的真实诊断 + 用户确认只批准以下精确 operation 关闭 thinking。
     expect(getOperationPolicy("script.writer").thinking).toBe("disabled");
     expect(getOperationPolicy("storyboard.planner").thinking).toBe("disabled");
+    expect(getOperationPolicy("topic.candidate-builder").thinking).toBe("disabled");
 
     // 同 class 内未经验证的 operation 不得被一起改成 disabled。
-    expect(
-      getOperationPolicy("topic.candidate-builder").thinking,
-    ).toBeUndefined();
     expect(
       getOperationPolicy("storyboard.segment-regen").thinking,
     ).toBeUndefined();
@@ -202,14 +199,14 @@ describe("llm operation policy precedence", () => {
     });
     expect(storyboardResolved.thinking).toBe("disabled");
 
-    // 未批准 operation 不受影响：profile 未给 thinking 时回到 provider_default。
+    // Task 12 补充批准的 builder 也必须通过普通 JSON mode 合并路径进入请求体。
     const candidateBuilderResolved = resolveEffectiveRequest({
       operationName: "topic.candidate-builder",
       operationPolicy: getOperationPolicy("topic.candidate-builder"),
       profileDefault: { maxAttempts: 3, timeoutMs: 240000 },
       invocationOptions: {},
     });
-    expect(candidateBuilderResolved.thinking).toBe("provider_default");
+    expect(candidateBuilderResolved.thinking).toBe("disabled");
   });
 
   it("falls back to profile default for maxTokens/temperature/topP when policy absent", () => {
