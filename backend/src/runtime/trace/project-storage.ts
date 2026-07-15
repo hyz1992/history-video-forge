@@ -25,6 +25,7 @@ export interface ProjectStorageProfile {
   storyboard_runs_dir: string;
   asset_plan_runs_dir: string;
   assets_runs_dir: string;
+  publish_runs_dir: string;
   rename_locked: boolean;
 }
 
@@ -89,7 +90,9 @@ function ensureRunDir(input: {
           ? profile.storyboard_runs_dir
           : input.phase === "asset_planning"
             ? profile.asset_plan_runs_dir
-            : profile.assets_runs_dir;
+            : input.phase === "publish"
+              ? profile.publish_runs_dir
+              : profile.assets_runs_dir;
   const runDir = resolveStoragePath(`${runRootDir}/${input.runId}`);
 
   mkdirSync(runDir, {
@@ -123,6 +126,7 @@ export function createProjectStorageProfile(input: {
     storyboard_runs_dir: `${rootDir}/trace/storyboard-runs`,
     asset_plan_runs_dir: `${rootDir}/trace/asset-planning-runs`,
     assets_runs_dir: `${rootDir}/trace/assets-runs`,
+    publish_runs_dir: `${rootDir}/trace/publish-runs`,
     rename_locked: input.renameLocked ?? false,
   };
 }
@@ -202,6 +206,7 @@ export function getProjectStorageProfile(project: ProjectRecord): ProjectStorage
     storyboard_runs_dir: `${rootDir}/trace/storyboard-runs`,
     asset_plan_runs_dir: `${rootDir}/trace/asset-planning-runs`,
     assets_runs_dir: `${rootDir}/trace/assets-runs`,
+    publish_runs_dir: `${rootDir}/trace/publish-runs`,
     rename_locked: project.storageRenameLocked,
   };
 }

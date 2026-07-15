@@ -7,6 +7,7 @@ describe("llm-s2-baseline", () => {
       live: true,
       dryRun: false,
       candidateModel: undefined,
+      currentModel: "glm-5.1",
       maxRequests: 3,
       maxCostCny: 10,
     });
@@ -19,6 +20,7 @@ describe("llm-s2-baseline", () => {
       live: true,
       dryRun: false,
       candidateModel: "glm-5.2",
+      currentModel: "glm-5.1",
       maxRequests: undefined,
       maxCostCny: 10,
     });
@@ -31,6 +33,7 @@ describe("llm-s2-baseline", () => {
       live: true,
       dryRun: false,
       candidateModel: "glm-5.2",
+      currentModel: "glm-5.1",
       maxRequests: 3,
       maxCostCny: undefined,
     });
@@ -43,6 +46,7 @@ describe("llm-s2-baseline", () => {
       live: true,
       dryRun: false,
       candidateModel: "glm-5.2",
+      currentModel: "glm-5.1",
       maxRequests: 10,
       maxCostCny: 10,
     });
@@ -55,6 +59,7 @@ describe("llm-s2-baseline", () => {
       live: true,
       dryRun: false,
       candidateModel: "glm-5.2",
+      currentModel: "glm-5.1",
       maxRequests: 4,
       maxCostCny: 10,
     });

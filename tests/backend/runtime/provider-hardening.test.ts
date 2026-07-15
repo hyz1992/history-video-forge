@@ -545,6 +545,7 @@ describe("provider hardening", () => {
     let callCount = 0;
     const invokeApi = vi.fn(async () => {
       callCount += 1;
+      await new Promise((r) => setTimeout(r, 500));
       if (callCount === 1) {
         throw new Error("503 Service Unavailable");
       }
@@ -568,7 +569,7 @@ describe("provider hardening", () => {
       interactionLogWriter: writer,
     });
 
-    await vi.advanceTimersByTimeAsync(1600);
+    await vi.advanceTimersByTimeAsync(2600);
     const result = await resultPromise;
     vi.useRealTimers();
 
@@ -584,12 +585,15 @@ describe("provider hardening", () => {
     expect(a1.attempt).toBe(1);
     expect(a1.outcome).toBe("error");
     expect(a1.errorCode).toBe("service_unavailable");
-    expect(typeof a1.durationMs).toBe("number");
+    expect(a1.durationMs).toBeGreaterThan(0);
+    expect(a1.finishedAt > a1.startedAt).toBe(true);
+    expect(a1.retryDelayMs).toBe(1500);
 
     const a2 = entry.attempts![1];
     expect(a2.attempt).toBe(2);
     expect(a2.outcome).toBe("success");
-    expect(typeof a2.durationMs).toBe("number");
+    expect(a2.durationMs).toBeGreaterThan(0);
+    expect(a2.finishedAt > a2.startedAt).toBe(true);
     expect(a2.retryDelayMs).toBeUndefined();
   });
 

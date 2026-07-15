@@ -130,17 +130,17 @@ export async function runTopicRecommendationGraph(
       phase: "topic",
       run_id: input.runId ?? `topic_run_${input.db.generateId()}`,
       nodes: runtime.traceNodes,
-      steps: runtime.traceNodes.map((node) =>
+      steps: [
         createStepTraceLog({
-          stepName: node.node_name,
+          stepName: "topic-recommendation-graph",
           phase: "topic",
           startedAt: graphStartedAt,
           endedAt: graphEndedAt,
-          inputRef: node.input_ref,
-          outputRef: node.output_ref,
-          failureReason: node.failure_reason,
+          inputRef: `topic-event:${input.input.canonicalName}`,
+          outputRef: `topic-candidate-list:${runtime.candidates.length}`,
+          failureReason: null,
         }),
-      ),
+      ],
     }),
     diagnostics: createRuntimeDiagnosticsSummary(diagnostics),
   };

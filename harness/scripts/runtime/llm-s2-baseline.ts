@@ -56,6 +56,7 @@ function parseArgs(args: string[]): {
   dryRun: boolean;
   live: boolean;
   candidateModel?: string;
+  currentModel?: string;
   maxRequests?: number;
   maxCostCny?: number;
   allowCapabilityProbe?: boolean;
@@ -66,6 +67,10 @@ function parseArgs(args: string[]): {
   const candidateModelIndex = args.indexOf("--candidate-model");
   const candidateModel =
     candidateModelIndex >= 0 ? args[candidateModelIndex + 1] : undefined;
+
+  const currentModelIndex = args.indexOf("--current-model");
+  const currentModel =
+    currentModelIndex >= 0 ? args[currentModelIndex + 1] : "glm-5.1";
 
   const maxRequestsIndex = args.indexOf("--max-requests");
   const maxRequests =
@@ -175,7 +180,9 @@ const CAPABILITY_PROBE_STRICT_SCHEMA: StrictStructuredToolSchema = {
 
 function safeRenderMd(entries: LlmInteractionLogEntry[]): string {
   if (entries.length === 0) return "# No interaction log entries captured\n\n";
-  return entries.map((e) => renderLlmInteractionMarkdown(e)).join("\n---\n");
+  return entries
+    .map((e, i) => renderLlmInteractionMarkdown({ ...e, sequence: i + 1 }))
+    .join("\n---\n");
 }
 
 async function runCapabilityProbe(
@@ -488,7 +495,7 @@ async function main() {
       generatedAt: new Date().toISOString(),
       live: false,
       candidateModel: args.candidateModel ?? "none",
-      currentModel: "none",
+      currentModel: args.currentModel ?? "glm-5.1",
       totalSamples: manifest.length,
       totalRequests: 0,
       capabilityProbes: 0,
@@ -599,7 +606,7 @@ async function main() {
     generatedAt: new Date().toISOString(),
     live: true,
     candidateModel,
-    currentModel: candidateModel,
+    currentModel: args.currentModel ?? "glm-5.1",
     totalSamples: manifest.length,
     totalRequests: actualRequests,
     capabilityProbes: probeQuota,
