@@ -856,14 +856,25 @@ git commit -m "关闭选题构建器无必要思考"
 
 Task 12 完成后仍不得声明优化成功。Task 13 必须取得新的候选模型、最大请求数和人民币人工费用上限；建议复用用户真实基线的同一“魏晋至唐宋·高张力历史事件推荐”输入，只运行一个新项目的完整 topic 链路（预计 builder + selector 共 2 次请求），不执行 capability probe。
 
-- [ ] **Step 1：取得新的付费 live 明确授权**
-- [ ] **Step 2：重启 backend，确认 interaction log 中 builder effective thinking 为 disabled**
-- [ ] **Step 3：通过真实浏览器生成同输入的 8 候选与最终 4 个展示项**
-- [ ] **Step 4：记录 builder、selector、完整等待、attempt、usage、repair/full regen 和 validator 结果**
-- [ ] **Step 5：按既有 topic rubric 对优化前后 8 候选做人工作品质量对照**
+- [x] **Step 1：取得新的付费 live 明确授权**
+- [x] **Step 2：重启 backend，确认 interaction log 中 builder effective thinking 为 disabled**
+- [x] **Step 3：通过真实浏览器生成同输入的 8 候选与最终 4 个展示项**
+- [x] **Step 4：记录 builder、selector、完整等待、attempt、usage、repair/full regen 和 validator 结果**
+- [x] **Step 5：按既有 topic rubric 对优化前后 8 候选做人工作品质量对照**
 - [ ] **Step 6：质量不劣且用户等待显著改善时重新收口 S2-0；否则仅回退 builder thinking override并保留诊断证据**
 
 Task 13 不得用 selector 固定样本代替页面端到端验收，不得从一个样本推断 P95，也不得在本任务顺手减少候选数量或修改 prompt/schema。
+
+#### Task 13 执行状态（2026-07-15）
+
+- 用户授权 GLM-5.2、同一“魏晋至唐宋·高张力历史事件推荐”输入、最多 2 次请求与人民币 10 元人工上限；真实浏览器项目为 `e478735a-6b92-4483-8923-e5e2a48e9b4d`，raw output 仅保存在忽略目录，未提交。
+- builder effective thinking 已确认为 `disabled`。成功调用耗时 84.484 秒，`prompt_tokens=2623`、`completion_tokens=3988`、`reasoning_tokens=0`；相对旧 builder 的 159.954 秒与 4741 reasoning tokens，单看成功调用分别下降 47.2% 与归零。
+- 第一次 builder 调用在 49.386 秒后返回供应商 1301 内容过滤。现有 topic service 追加 `safety_retry_context` 后执行了一次完整 builder regeneration；随后 selector 耗时 28.449 秒。因此本次实际 provider 请求为 3 次，超过授权的 2 次上限；发现后立即停止，没有继续请求。现有链路没有跨 service-level safety retry 的请求预算硬闸门。
+- 实际 provider 总等待为 162.319 秒，相对旧页面同链路 193.893 秒只下降 16.3%，仍约 2 分 42 秒；浏览器在 174.730 秒的下一次观察时已展示结果。单样本不能推断 P95，且当前非流式接口仍不能观测 TTFT。
+- 第二次 builder 首个可用响应直接生成 8 个候选，selector 输出最终 4 个；Zod/业务检查通过，没有本地 repair，但 1301 safety retry 本质上重新执行了完整 builder 生成，不能记为“无 full regeneration”。
+- 人工 rubric 对照显示题材多样性与冷门事件比例有改善，但存在明确语义一致性缺陷：标题“李世民玄武门射杀建成元吉”与正文中元吉由尉迟敬德杀死不一致；标题“石勒夜营焚杀王衍”与正文的推墙压死不一致。质量“不劣”门槛未通过，不使用本地关键词规则替代判断。
+- Step 6 未通过，S2-0 保持打开。暂不机械回退 builder thinking override：当前证据确认它把成功调用的 reasoning 归零并显著缩短成功调用，实际慢点转移为 1301 后的 service-level 完整重生成；是否回退或继续处理该重生成应在新的窄任务中决定。
+- 费用无法由当前日志按人民币自动核验；首次 400 响应也没有 usage。不得声称程序已证明低于 10 元，仅能确认没有再发起第四次请求。
 
 ## 2. 完成标准
 

@@ -105,3 +105,41 @@ Task 11 harness 的 topic 样本直连 strict gateway，不经过 `invokeTopicSe
 Task 11 之后的真实页面项目 `84ed173e-529b-4a19-bc6d-092257432b3e` 证明，完整 topic 链路还包含未被固定样本覆盖的 `topic.candidate-builder`：该 operation 使用 GLM-5.2、provider-default thinking，attempt 1 即耗时 159.954 秒并产生 4741 reasoning tokens；随后生产 selector 另耗时 33.939 秒，完整等待约 193.893 秒。
 
 因此本节只证明原固定样本中 script、storyboard 和 selector 的局部结论，不再作为“S2-0 整体完成”的证据。S2-0 必须在 builder 精确策略、8 候选质量对照和真实页面端到端验收通过后才能重新收口。
+
+## 2026-07-15 Task 13 真实页面对照（未通过整体闸门）
+
+### 运行边界与证据
+
+- 用户授权模型 GLM-5.2、同一“魏晋至唐宋·高张力历史事件推荐”输入、最多 2 次请求与人民币 10 元人工上限；不执行 capability probe。
+- 真实浏览器项目：`e478735a-6b92-4483-8923-e5e2a48e9b4d`；topic run：`topic_run_169338b0-1bce-44f8-9204-8c6c96b78e3e`。
+- raw output 与 interaction log 只保存在 `storage/projects/` 忽略目录，不提交。
+- 首次 builder 在 49.386 秒后返回供应商 `1301` 内容过滤；topic service 自动追加 `safety_retry_context` 并完整重生成一次，之后再调用 selector。因此实际 provider 请求为 3 次，超出授权的 2 次上限；发现后停止，没有继续请求。
+- 当前日志不能自动核验人民币费用，首次 400 响应也没有 usage；不得声称程序已证明费用低于上限。
+
+### 延迟、usage 与结构结果
+
+| 环节 | 优化前真实页面 | Task 13 | 对照结论 |
+| --- | ---: | ---: | --- |
+| builder 首次失败 | 无 | 49.386 秒，1301 content filter | 新增一次 service-level 完整重生成 |
+| builder 成功调用 | 159.954 秒，reasoning 4741 | 84.484 秒，reasoning 0 | 成功调用耗时下降 47.2%，thinking override 生效 |
+| builder 完整阶段 | 159.954 秒 | 133.915 秒 | 被内容过滤重生成抵消大部分收益 |
+| selector | 33.939 秒 | 28.449 秒，reasoning 0 | 单样本下降 16.2% |
+| provider 总等待 | 193.893 秒 | 162.319 秒 | 单样本下降 16.3%，仍约 2 分 42 秒 |
+
+- builder 成功调用 usage：`prompt_tokens=2623`、`completion_tokens=3988`、`reasoning_tokens=0`；selector：`prompt_tokens=5301`、`completion_tokens=1524`、`reasoning_tokens=0`。
+- 第一个可用 builder 响应直接通过结构和业务检查并交付 8 个候选，selector 交付最终 4 个；没有本地 repair。
+- 1301 safety retry 是修改输入后的第二次完整 builder generation，必须计为 full regeneration；不能因为两份 interaction log 的 attempt 都是 1 就记成“一次请求”。
+- 浏览器在开始后 174.730 秒的下一次观察中已展示结果；精确 provider 结束点约为 162.450 秒。TTFT 仍为非流式不可观测。
+
+### 人工质量对照
+
+- 改善：候选包含南霁云睢阳求援、石勒擒王衍、庆历党议等相对少见事件，题材多样性与新鲜度优于旧样本中较集中的高频事件池；8 个候选均在魏晋至唐宋范围，冲突、场景与三段推进完整。
+- 明确缺陷：标题“李世民玄武门射杀建成元吉”把元吉之死归到李世民，正文却写尉迟敬德追斩元吉；标题“石勒夜营焚杀王衍”写“焚杀”，正文却写推倒营墙压死。标题与正文的行为主体/死因自相矛盾，属于语义质量问题，不是 JSON/Zod 能发现的结构问题。
+- 结论：局部新鲜度有提升，但存在两处明确内部一致性缺陷，不能判定“不劣于基线”。本结论来自人工整体阅读，不使用关键词、字符串规则或本地启发式作为语义门禁。
+- semantic reviewer 保持 shadow-only，没有接入主链路或自动门禁。
+
+### 阶段结论
+
+- Task 13 已完成一次真实页面诊断，但“质量不劣且等待显著改善”的整体闸门未通过，S2-0 继续保持打开。
+- 暂不回退 `topic.candidate-builder` 的 thinking override：成功调用的 0 reasoning 与 47.2% 耗时下降已证明该精确策略有价值；当前新增主因是 1301 后的 service-level 完整重生成。下一窄任务应先收敛请求预算、内容过滤重生成编排与语义质量保护，再决定是否保留或回退该 override。
+- 不从此单样本推断 P95，不进入 S2-1，不在本记录中修改 prompt/schema 或候选数量。

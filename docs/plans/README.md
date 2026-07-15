@@ -12,8 +12,8 @@
 - S1 实施记录见 `AGENTS.md` 和提交历史；V2 S1 设计草案（见下方"2026-07-13 V2 设计草案索引"）已完成使命，相关代码实现已稳定。
 - V2 数据基础 Task 8.5 已完成收口。
 - S1 后真实浏览器验收已补充：`npm run harness:s1-browser-acceptance` 覆盖 admin 后台、migration owner 转移、代管横幅、审计日志和用户隔离；`npm run harness:auth-flow-acceptance` 覆盖基础登录/退出/session 恢复。
-- `S2-0 LLM 回复速度、质量和结构化输出优化基线` 已完成观测、timeout/retry、script/storyboard/selector operation policy 与固定样本诊断；但 2026-07-15 真实页面验收发现 `topic.candidate-builder` 未进入原样本矩阵，单次耗时 159.954 秒，S2-0 已重新打开。
-- 当前 V2 下一步仍是先补齐 S2-0 的 builder 精确 thinking 策略与完整选题端到端验收；该闸门通过后才能进入 `S2-1 多模型、多供应商切换`。
+- `S2-0 LLM 回复速度、质量和结构化输出优化基线` 已完成观测、timeout/retry、script/storyboard/selector operation policy、固定样本诊断与 `topic.candidate-builder` 精确 thinking 策略；但 2026-07-15 Task 13 真实页面验收仍未通过整体闸门。
+- Task 13 中 builder 成功调用由 159.954 秒降到 84.484 秒且 reasoning 归零，但首次调用在 49.386 秒后触发供应商 1301，业务层完整重生成使总等待仍为 162.319 秒；同时 8 候选出现标题与正文行为主体/死因不一致。当前下一步仍是收口 S2-0 的内容过滤重生成编排、请求预算与语义质量保护；通过后才能进入 `S2-1 多模型、多供应商切换`。
 - 正式 V2 产品功能已进入实施阶段；migration owner 不可登录标记 `!migration-owner-no-login`，其项目通过 admin 管理页面转移给真实用户。
 
 - [V1 高风险稳定化实施计划](./2026-07-10-v1-high-risk-stabilization-implementation-plan.md) 的主要代码任务已完成；其全量回归超时和故障演练缺口已并入 Task 8.5 的测试与切换闸门，不再作为独立的下一执行入口。
@@ -47,7 +47,7 @@
 
 旧的 Step 3-10 文档保留为范围留痕；当前执行顺序以本节为准：
 
-1. `S2-0`（进行中）：LLM 回复速度、质量和结构化输出优化基线。script、storyboard、topic selector 已完成首批低风险策略；当前补齐遗漏的 `topic.candidate-builder` thinking 与真实 8 候选端到端验收。未引入多供应商抽象，第一步不修改 prompt/schema。
+1. `S2-0`（进行中）：LLM 回复速度、质量和结构化输出优化基线。script、storyboard、topic selector 与 `topic.candidate-builder` 已完成首批精确 thinking 策略；Task 13 证明 builder 成功调用提速，但 1301 内容过滤后的完整重生成把页面等待拉回约 2 分 42 秒，且候选存在语义一致性缺陷。下一窄任务先收口 service-level 请求预算、内容过滤重生成编排与语义质量保护；未引入多供应商抽象。
 2. `S2-1`：多模型、多供应商切换。基于 S2-0 的真实基线设计 provider/model/routing/run snapshot/credential reference。
 3. `S2-2`：用户偏好、生成策略与成本控制。接入用户级策略、预算和成本记录，消费 S2-1 的 provider/model 能力。
 4. `S2-3`：Prompt 治理。版本、hash、fixtures、变更说明和运行快照对齐；仍遵守 `AGENTS.md` 的 `harness/prompts/` 正式 prompt 位置规则，除非另有设计审查批准。
