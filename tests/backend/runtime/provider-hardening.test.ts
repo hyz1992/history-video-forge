@@ -171,7 +171,7 @@ describe("provider hardening", () => {
     }
   });
 
-  it("aborts the underlying fetch before retrying a timeout", async () => {
+  it("aborts the underlying fetch when a timeout fires", async () => {
     const prompt = createPromptRegistry().getPrompt("script.writer");
     const signals: AbortSignal[] = [];
     const fetchImpl = vi.fn((_url: string, init: RequestInit = {}) => {
@@ -191,10 +191,188 @@ describe("provider hardening", () => {
       fetchImpl,
     });
 
+    // script.writer (core_semantic_generation) must not retry on timeout,
+    // so exactly one fetch is issued and its signal is aborted.
     await expect(provider.invokeStructuredPrompt({ prompt, input: {}, operationName: "script.writer" }))
-      .rejects.toMatchObject({ code: "timeout", attemptCount: 2 });
-    expect(signals).toHaveLength(2);
+      .rejects.toMatchObject({ code: "timeout", attemptCount: 1 });
+    expect(signals).toHaveLength(1);
     expect(signals.every((signal) => signal.aborted)).toBe(true);
+  });
+
+  it("does not retry a timeout for core semantic generation even when maxAttempts allows it", async () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+    let callCount = 0;
+    const invokeApi = vi.fn(async () => {
+      callCount += 1;
+      const error = new Error("request timed out");
+      error.name = "AbortError";
+      throw error;
+    });
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-5.1",
+      baseUrl: "https://llm.example.test/v1",
+      apiKey: "test-key",
+      timeoutMs: 60000,
+      maxAttempts: 3,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+      invokeApi,
+    });
+
+    await expect(
+      provider.invokeStructuredPrompt({
+        prompt,
+        input: { seed: "slot-1" },
+        operationName: "script.writer",
+      }),
+    ).rejects.toMatchObject({ code: "timeout", attemptCount: 1 });
+
+    expect(invokeApi).toHaveBeenCalledTimes(1);
+    expect(callCount).toBe(1);
+  });
+
+  it("does not retry a timeout for long structured generation", async () => {
+    const prompt = createPromptRegistry().getPrompt("storyboard.storyboard-planner");
+    const invokeApi = vi.fn(async () => {
+      const error = new Error("timed out");
+      error.name = "AbortError";
+      throw error;
+    });
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-5.1",
+      baseUrl: "https://llm.example.test/v1",
+      apiKey: "test-key",
+      timeoutMs: 60000,
+      maxAttempts: 3,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+      invokeApi,
+    });
+
+    await expect(
+      provider.invokeStructuredPrompt({
+        prompt,
+        input: {},
+        operationName: "storyboard.planner",
+      }),
+    ).rejects.toMatchObject({ code: "timeout", attemptCount: 1 });
+
+    expect(invokeApi).toHaveBeenCalledTimes(1);
+  });
+
+  it("still retries transient 503 errors within policy cap for short structured decisions", async () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+    let callCount = 0;
+    const invokeApi = vi.fn(async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        throw new Error("503 Service Unavailable");
+      }
+      return { rawOutput: '{"ok":true}', content: '{"ok":true}', metadata: {} };
+    });
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-5.1",
+      baseUrl: "https://llm.example.test/v1",
+      apiKey: "test-key",
+      timeoutMs: 60000,
+      maxAttempts: 5,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+      invokeApi,
+    });
+
+    const result = await provider.invokeStructuredPrompt({
+      prompt,
+      input: {},
+      // short_structured_decision: transient cap = 2 -> max 3 attempts total
+      operationName: "topic.selector",
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(invokeApi).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry invalid_request (400) errors even for short structured decisions", async () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+    const invokeApi = vi.fn(async () => {
+      throw new Error("400 Bad Request: invalid payload");
+    });
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-5.1",
+      baseUrl: "https://llm.example.test/v1",
+      apiKey: "test-key",
+      timeoutMs: 60000,
+      maxAttempts: 3,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+      invokeApi,
+    });
+
+    await expect(
+      provider.invokeStructuredPrompt({
+        prompt,
+        input: {},
+        operationName: "topic.selector",
+      }),
+    ).rejects.toMatchObject({ code: "invalid_request", attemptCount: 1 });
+
+    expect(invokeApi).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry schema invalid / configuration errors", async () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+    const invokeApi = vi.fn(async () => {
+      throw new Error("401 Unauthorized: api key invalid");
+    });
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-5.1",
+      baseUrl: "https://llm.example.test/v1",
+      apiKey: "test-key",
+      timeoutMs: 60000,
+      maxAttempts: 3,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+      invokeApi,
+    });
+
+    await expect(
+      provider.invokeStructuredPrompt({
+        prompt,
+        input: {},
+        operationName: "topic.selector",
+      }),
+    ).rejects.toMatchObject({ code: "configuration", attemptCount: 1 });
+
+    expect(invokeApi).toHaveBeenCalledTimes(1);
+  });
+
+  it("timeout user message does not claim automatic retry happened", async () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+    const invokeApi = vi.fn(async () => {
+      const error = new Error("timed out");
+      error.name = "AbortError";
+      throw error;
+    });
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-5.1",
+      baseUrl: "https://llm.example.test/v1",
+      apiKey: "test-key",
+      timeoutMs: 60000,
+      maxAttempts: 3,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+      invokeApi,
+    });
+
+    const error = await provider
+      .invokeStructuredPrompt({
+        prompt,
+        input: {},
+        operationName: "script.writer",
+      })
+      .catch((e) => e);
+
+    expect(error.userMessage).not.toContain("已自动重试");
   });
 
   it("invokes strict structured requests through tool calls and parses function arguments", async () => {

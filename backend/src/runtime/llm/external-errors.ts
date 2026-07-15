@@ -232,11 +232,13 @@ function buildUserMessage(code: string): string {
     case "configuration":
       return "外部服务配置异常，请检查 API Key、模型名或 Base URL。";
     case "rate_limited":
-      return "外部服务限流，已自动重试。请稍后重试。";
+      // 是否重试由 attempt log 决定，文案不得预设重试已发生。
+      return "外部服务限流。若仍失败可稍后重试。";
     case "timeout":
-      return "外部服务请求超时，已自动重试；若仍失败可稍后重试。";
+      // 不得声称已自动重试；实际是否重试以 attempt log 为准。
+      return "外部服务请求超时。可稍后重试。";
     case "network":
-      return "外部服务网络异常，已自动重试；若仍失败可稍后重试。";
+      return "外部服务网络异常。若仍失败可稍后重试。";
     case "invalid_request":
       return "外部服务拒绝了当前请求，请检查输入参数或提示词。";
     case "invalid_response":

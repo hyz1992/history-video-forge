@@ -3,6 +3,11 @@ import type { LoadedPrompt } from "../prompts/prompt-loader.js";
 import { withRetry } from "./external-errors.js";
 import { createRequestBudget, type RequestBudget } from "./request-budget.js";
 import type { LlmInteractionLogWriter } from "./interaction-log.js";
+import {
+  classifyOperation,
+  getOperationPolicy,
+  type LlmOperationClass,
+} from "./operation-policy.js";
 import type {
   LlmResponseMetadata,
   StrictStructuredInvocation,
@@ -68,6 +73,43 @@ export interface OpenAiCompatibleProviderOptions {
   structuredOutputFixer?: StructuredOutputFixer;
 }
 
+/**
+ * 根据 operation policy 解析本次调用的 retry 策略。
+ *
+ * - timeout 是否重试由 policy.retryOnTimeout 决定（core_semantic / long_structured 默认 false）。
+ * - 瞬时错误（rate_limited / service_unavailable / network）在 policy.transientRetryByClass 上限内重试。
+ * - 400/401/invalid_response/configuration 等非瞬时错误永不重试。
+ * - effective maxAttempts 取 min(requested, transientCap + 1)，避免通过增大全局 timeout/attempts 掩盖问题。
+ */
+function resolveRetryStrategy(operationName: string, requestedMaxAttempts: number): {
+  maxAttempts: number;
+  shouldRetry: (error: { code: string; retryable: boolean }, attempt: number) => boolean;
+  operationClass: LlmOperationClass | "unknown";
+} {
+  const operationClass = classifyOperation(operationName);
+  const policy = getOperationPolicy(operationName);
+  const transientCap =
+    operationClass === "unknown"
+      ? 1
+      : policy.transientRetryByClass?.[operationClass] ?? 1;
+  const transientMaxAttempts = transientCap + 1;
+  const maxAttempts = Math.max(1, Math.min(requestedMaxAttempts, transientMaxAttempts));
+
+  const shouldRetry = (error: { code: string; retryable: boolean }, attempt: number) => {
+    if (attempt >= maxAttempts) return false;
+
+    if (error.code === "timeout") {
+      return policy.retryOnTimeout === true;
+    }
+
+    // 瞬时错误：rate_limited / service_unavailable / network。
+    // invalid_request / configuration / invalid_response 的 retryable 已为 false，不会进入这里。
+    return error.retryable;
+  };
+
+  return { maxAttempts, shouldRetry, operationClass };
+}
+
 export function createOpenAiCompatibleProvider(
   options: OpenAiCompatibleProviderOptions,
 ): StructuredPromptProvider {
@@ -126,8 +168,13 @@ export function createOpenAiCompatibleProvider(
     ): Promise<T> {
       const effectiveTimeoutMs =
         request.options?.timeoutMs ?? options.timeoutMs ?? env.llm.timeoutMs;
-      const effectiveMaxAttempts =
+      const requestedMaxAttempts =
         request.options?.maxAttempts ?? options.maxAttempts ?? env.llm.maxAttempts;
+      const retryStrategy = resolveRetryStrategy(
+        request.operationName,
+        requestedMaxAttempts,
+      );
+      const effectiveMaxAttempts = retryStrategy.maxAttempts;
       const effectiveThinking = request.options?.thinking;
       const effectiveMaxTokens = request.options?.maxTokens;
       const effectiveTemperature = request.options?.temperature;
@@ -184,6 +231,7 @@ export function createOpenAiCompatibleProvider(
             provider: "llm",
             operation: request.operationName,
             maxAttempts: effectiveMaxAttempts,
+            shouldRetry: retryStrategy.shouldRetry,
             baseDelayMs: options.baseDelayMs ?? 1500,
             maxDelayMs: options.maxDelayMs ?? 8000,
             onAttempt: (obs) => {
@@ -289,7 +337,12 @@ export function createOpenAiCompatibleProvider(
       request: StrictStructuredInvocation<T>,
     ): Promise<T> {
       const effectiveTimeoutMs = options.timeoutMs ?? env.llm.timeoutMs;
-      const effectiveMaxAttempts = options.maxAttempts ?? env.llm.maxAttempts;
+      const requestedMaxAttempts = options.maxAttempts ?? env.llm.maxAttempts;
+      const strictRetryStrategy = resolveRetryStrategy(
+        request.operationName,
+        requestedMaxAttempts,
+      );
+      const effectiveMaxAttempts = strictRetryStrategy.maxAttempts;
       const invocationStartedAt = new Date().toISOString();
       let rawOutput = "";
       let parsedOutput: T | undefined;
@@ -360,6 +413,7 @@ export function createOpenAiCompatibleProvider(
             provider: "llm",
             operation: request.operationName,
             maxAttempts: effectiveMaxAttempts,
+            shouldRetry: strictRetryStrategy.shouldRetry,
             baseDelayMs: options.baseDelayMs ?? 1500,
             maxDelayMs: options.maxDelayMs ?? 8000,
             onAttempt: (obs) => {
