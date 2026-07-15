@@ -5,11 +5,20 @@ export interface ExternalErrorContext {
   operation: string;
 }
 
+export interface RetryAttemptObservation {
+  attempt: number;
+  errorCode: string;
+  errorMessage: string;
+  retryable: boolean;
+  delayMs?: number;
+}
+
 export interface RetryOptions extends ExternalErrorContext {
   maxAttempts?: number;
   baseDelayMs?: number;
   maxDelayMs?: number;
   shouldRetry?: (error: ExternalServiceError, attempt: number) => boolean;
+  onAttempt?: (observation: RetryAttemptObservation) => void;
 }
 
 export interface FailureMetadata {
@@ -151,6 +160,14 @@ export async function withRetry<T>(
         (options.shouldRetry ? options.shouldRetry(classified, attempt) : true);
 
       if (!shouldRetry) {
+        if (options.onAttempt) {
+          safeOnAttempt(options.onAttempt, {
+            attempt,
+            errorCode: classified.code,
+            errorMessage: classified.debugMessage,
+            retryable: false,
+          });
+        }
         throw classified;
       }
 
@@ -159,6 +176,16 @@ export async function withRetry<T>(
         baseDelayMs * 2 ** Math.max(0, attempt - 1),
       );
 
+      if (options.onAttempt) {
+        safeOnAttempt(options.onAttempt, {
+          attempt,
+          errorCode: classified.code,
+          errorMessage: classified.debugMessage,
+          retryable: true,
+          delayMs,
+        });
+      }
+
       if (delayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
@@ -166,6 +193,17 @@ export async function withRetry<T>(
   }
 
   throw lastError ?? classifyExternalError(new Error("Unknown external error"), options);
+}
+
+function safeOnAttempt(
+  fn: (observation: RetryAttemptObservation) => void,
+  observation: RetryAttemptObservation,
+): void {
+  try {
+    fn(observation);
+  } catch {
+    // 回调失败不得打断 retry 主流程
+  }
 }
 
 export function withAttemptCount(

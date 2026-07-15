@@ -535,4 +535,61 @@ describe("provider hardening", () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it("records each retry attempt with delay and succeeds on second attempt", async () => {
+    vi.useFakeTimers();
+    const entries: LlmInteractionLogEntry[] = [];
+    const writer = { write: (entry: LlmInteractionLogEntry) => { entries.push(entry); } };
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+
+    let callCount = 0;
+    const invokeApi = vi.fn(async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        throw new Error("503 Service Unavailable");
+      }
+      return { rawOutput: '{"ok":true}', content: '{"ok":true}', metadata: { finishReason: "stop" } };
+    });
+
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-5.1",
+      baseUrl: "https://llm.example.test/v1",
+      apiKey: "test-key",
+      maxAttempts: 3,
+      baseDelayMs: 1500,
+      maxDelayMs: 8000,
+      invokeApi,
+    });
+
+    const resultPromise = provider.invokeStructuredPrompt({
+      prompt,
+      input: { seed: "slot-1" },
+      operationName: "script.writer",
+      interactionLogWriter: writer,
+    });
+
+    await vi.advanceTimersByTimeAsync(1600);
+    const result = await resultPromise;
+    vi.useRealTimers();
+
+    expect(result).toEqual({ ok: true });
+    expect(invokeApi).toHaveBeenCalledTimes(2);
+    expect(entries).toHaveLength(1);
+
+    const entry = entries[0];
+    expect(entry.attempts).toBeDefined();
+    expect(entry.attempts).toHaveLength(2);
+
+    const a1 = entry.attempts![0];
+    expect(a1.attempt).toBe(1);
+    expect(a1.outcome).toBe("error");
+    expect(a1.errorCode).toBe("service_unavailable");
+    expect(typeof a1.durationMs).toBe("number");
+
+    const a2 = entry.attempts![1];
+    expect(a2.attempt).toBe(2);
+    expect(a2.outcome).toBe("success");
+    expect(typeof a2.durationMs).toBe("number");
+    expect(a2.retryDelayMs).toBeUndefined();
+  });
 });

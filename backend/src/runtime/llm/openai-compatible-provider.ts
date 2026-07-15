@@ -132,6 +132,7 @@ export function createOpenAiCompatibleProvider(
         durationMs: number;
         outcome: "success" | "error";
         errorCode?: string;
+        retryDelayMs?: number;
       }> = [];
 
       try {
@@ -170,6 +171,18 @@ export function createOpenAiCompatibleProvider(
             maxAttempts: effectiveMaxAttempts,
             baseDelayMs: options.baseDelayMs ?? 1500,
             maxDelayMs: options.maxDelayMs ?? 8000,
+            onAttempt: (obs) => {
+              const now = new Date().toISOString();
+              attempts.push({
+                attempt: obs.attempt,
+                startedAt: now,
+                finishedAt: now,
+                durationMs: 0,
+                outcome: "error",
+                errorCode: obs.errorCode,
+                retryDelayMs: obs.delayMs,
+              });
+            },
           },
         );
 
@@ -268,6 +281,7 @@ export function createOpenAiCompatibleProvider(
         durationMs: number;
         outcome: "success" | "error";
         errorCode?: string;
+        retryDelayMs?: number;
       }> = [];
       const effectiveStrategy =
         request.options?.strategy ??
@@ -327,6 +341,18 @@ export function createOpenAiCompatibleProvider(
             maxAttempts: effectiveMaxAttempts,
             baseDelayMs: options.baseDelayMs ?? 1500,
             maxDelayMs: options.maxDelayMs ?? 8000,
+            onAttempt: (obs) => {
+              const now = new Date().toISOString();
+              attempts.push({
+                attempt: obs.attempt,
+                startedAt: now,
+                finishedAt: now,
+                durationMs: 0,
+                outcome: "error",
+                errorCode: obs.errorCode,
+                retryDelayMs: obs.delayMs,
+              });
+            },
           },
         );
 
