@@ -28,7 +28,7 @@ export interface ProjectStorageProfile {
   rename_locked: boolean;
 }
 
-type ProjectRunPhase = "topic" | "script" | "storyboard" | "asset_planning" | "assets";
+type ProjectRunPhase = "topic" | "script" | "storyboard" | "asset_planning" | "assets" | "publish";
 
 const workspaceRoot = resolve(fileURLToPath(new URL("../../../../", import.meta.url)));
 

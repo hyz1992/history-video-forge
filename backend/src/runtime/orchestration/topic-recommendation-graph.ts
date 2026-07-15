@@ -10,7 +10,7 @@ import {
 } from "./topic-recommendation-nodes.js";
 import { createGraphTraceSummary } from "./graph-trace.js";
 import { createRuntimeDiagnosticsSummary } from "./runtime-diagnostics.js";
-import { createSyntheticStepTraceLogs } from "../trace/step-trace-log.js";
+import { createStepTraceLog } from "../trace/step-trace-log.js";
 
 const TopicRecommendationGraphStateSchema = z.object({
   node_name: z
@@ -65,6 +65,7 @@ export async function runTopicRecommendationGraph(
       name: "topic-recommendation-graph",
     });
 
+  const graphStartedAt = new Date();
   await graph.invoke({
     node_name: null,
     input_ref: null,
@@ -72,6 +73,7 @@ export async function runTopicRecommendationGraph(
     failure_reason: null,
     should_repair: false,
   });
+  const graphEndedAt = new Date();
 
   const diagnostics = [
     {
@@ -128,10 +130,17 @@ export async function runTopicRecommendationGraph(
       phase: "topic",
       run_id: input.runId ?? `topic_run_${input.db.generateId()}`,
       nodes: runtime.traceNodes,
-      steps: createSyntheticStepTraceLogs({
-        phase: "topic",
-        nodes: runtime.traceNodes,
-      }),
+      steps: runtime.traceNodes.map((node) =>
+        createStepTraceLog({
+          stepName: node.node_name,
+          phase: "topic",
+          startedAt: graphStartedAt,
+          endedAt: graphEndedAt,
+          inputRef: node.input_ref,
+          outputRef: node.output_ref,
+          failureReason: node.failure_reason,
+        }),
+      ),
     }),
     diagnostics: createRuntimeDiagnosticsSummary(diagnostics),
   };

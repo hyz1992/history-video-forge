@@ -41,7 +41,7 @@ interface RuntimeReport {
   results: Array<{
     sampleId: string;
     operation: string;
-    status: "succeeded" | "failed" | "capability_check";
+    status: "succeeded" | "failed" | "capability_check" | "dry_run";
   }>;
   constraints: {
     maxRequests: number;
@@ -175,7 +175,7 @@ const CAPABILITY_PROBE_STRICT_SCHEMA: StrictStructuredToolSchema = {
 
 function safeRenderMd(entries: LlmInteractionLogEntry[]): string {
   if (entries.length === 0) return "# No interaction log entries captured\n\n";
-  return renderLlmInteractionMarkdown(entries);
+  return entries.map((e) => renderLlmInteractionMarkdown(e)).join("\n---\n");
 }
 
 async function runCapabilityProbe(

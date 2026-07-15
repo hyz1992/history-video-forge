@@ -146,11 +146,12 @@ export function createOpenAiCompatibleProvider(
       }> = [];
 
       try {
+        let attemptStartedAt = "";
         const envelope = await withRetry(
           () => {
             requestBudget.consume(request.operationName);
 
-            const attemptStartedAt = new Date().toISOString();
+            attemptStartedAt = new Date().toISOString();
             return withTimeout(
               (signal) =>
                 invokeApi(
@@ -186,12 +187,11 @@ export function createOpenAiCompatibleProvider(
             baseDelayMs: options.baseDelayMs ?? 1500,
             maxDelayMs: options.maxDelayMs ?? 8000,
             onAttempt: (obs) => {
-              const now = new Date().toISOString();
               attempts.push({
                 attempt: obs.attempt,
-                startedAt: now,
-                finishedAt: now,
-                durationMs: 0,
+                startedAt: attemptStartedAt,
+                finishedAt: new Date().toISOString(),
+                durationMs: Date.now() - new Date(attemptStartedAt).getTime(),
                 outcome: "error",
                 errorCode: obs.errorCode,
                 retryDelayMs: obs.delayMs,
@@ -312,11 +312,12 @@ export function createOpenAiCompatibleProvider(
         providerConfig.structuredThinking;
 
       try {
+        let attemptStartedAt = "";
         const strictResult = await withRetry(
           () => {
             requestBudget.consume(request.operationName);
 
-            const attemptStartedAt = new Date().toISOString();
+            attemptStartedAt = new Date().toISOString();
             return withTimeout(
               (signal) =>
                 invokeStrictApi(
@@ -362,12 +363,11 @@ export function createOpenAiCompatibleProvider(
             baseDelayMs: options.baseDelayMs ?? 1500,
             maxDelayMs: options.maxDelayMs ?? 8000,
             onAttempt: (obs) => {
-              const now = new Date().toISOString();
               attempts.push({
                 attempt: obs.attempt,
-                startedAt: now,
-                finishedAt: now,
-                durationMs: 0,
+                startedAt: attemptStartedAt,
+                finishedAt: new Date().toISOString(),
+                durationMs: Date.now() - new Date(attemptStartedAt).getTime(),
                 outcome: "error",
                 errorCode: obs.errorCode,
                 retryDelayMs: obs.delayMs,

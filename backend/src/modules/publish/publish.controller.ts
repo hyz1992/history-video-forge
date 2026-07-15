@@ -1,4 +1,4 @@
-import type { AppResponse, RouteContext } from "../../app";
+﻿import type { AppResponse, RouteContext } from "../../app";
 import { env } from "../../config/env";
 import { saveAssetManifestRecord } from "../assets/asset-manifest-record.repository";
 import { getProjectSnapshot } from "../projects/project-snapshot.service";
@@ -166,7 +166,7 @@ export async function publishGenerateController(
   const publishRunId = `publish_run_${db.generateId()}`;
   const interactionLogWriter = createCompositeInteractionLogWriter({
     project,
-    phase: "storyboard",
+    phase: "publish",
     runId: publishRunId,
   });
 
@@ -734,7 +734,7 @@ export async function titleCandidatesController(
   const titleRunId = `publish_title_run_${db.generateId()}`;
   const titleInteractionLogWriter = createCompositeInteractionLogWriter({
     project,
-    phase: "storyboard",
+    phase: "publish",
     runId: titleRunId,
   });
 
@@ -815,3 +815,4 @@ export async function publishExportController(
     return { statusCode: 500, body: { error: "export_failed", details: message } };
   }
 }
+
