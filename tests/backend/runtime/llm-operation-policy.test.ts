@@ -28,9 +28,8 @@ describe("llm operation policy classification", () => {
     expect(classifyOperation("publish.description-generator")).toBe("short_structured_decision");
     expect(classifyOperation("publish.cover-prompt-generator")).toBe("short_structured_decision");
 
-    // 局部修复
+    // 局部修复：候选修复、结构修复、封面对话优化、资产提示词优化
     expect(classifyOperation("topic.candidate-builder-repair")).toBe("targeted_repair");
-    expect(classifyOperation("topic.candidate-builder.diagnostics")).toBe("targeted_repair");
     expect(classifyOperation("asset-planning.asset-structural-repair")).toBe("targeted_repair");
     expect(classifyOperation("publish.cover-prompt-optimizer")).toBe("targeted_repair");
     expect(classifyOperation("asset.prompt-optimizer")).toBe("targeted_repair");
@@ -108,59 +107,99 @@ describe("llm operation policy precedence", () => {
     expect(policy.timeoutMs).toBeUndefined();
     expect(policy.maxAttempts).toBeUndefined();
   });
+
+  it("resolves thinking with invocation > policy > profile precedence", () => {
+    // policy wins over profile when invocation absent
+    const resolvedPolicyWins = resolveEffectiveRequest({
+      operationName: "script.writer",
+      operationPolicy: { thinking: "disabled" },
+      profileDefault: { maxAttempts: 3, timeoutMs: 240000, thinking: "enabled" },
+      invocationOptions: {},
+    });
+    expect(resolvedPolicyWins.thinking).toBe("disabled");
+
+    // profile wins when both policy and invocation absent
+    const resolvedProfileWins = resolveEffectiveRequest({
+      operationName: "script.writer",
+      operationPolicy: {},
+      profileDefault: { maxAttempts: 3, timeoutMs: 240000, thinking: "enabled" },
+      invocationOptions: {},
+    });
+    expect(resolvedProfileWins.thinking).toBe("enabled");
+  });
+
+  it("resolves maxTokens / temperature / topP with invocation > policy > profile precedence", () => {
+    const resolved = resolveEffectiveRequest({
+      operationName: "topic.selector",
+      operationPolicy: { maxTokens: 1024, temperature: 0.4, topP: 0.7 },
+      profileDefault: {
+        maxAttempts: 3,
+        timeoutMs: 240000,
+        maxTokens: 2048,
+        temperature: 0.5,
+        topP: 0.9,
+      },
+      invocationOptions: { maxTokens: 4096 },
+    });
+
+    expect(resolved.maxTokens).toBe(4096); // invocation
+    expect(resolved.temperature).toBe(0.4); // policy
+    expect(resolved.topP).toBe(0.7); // policy
+  });
+
+  it("falls back to profile default for maxTokens/temperature/topP when policy absent", () => {
+    const resolved = resolveEffectiveRequest({
+      operationName: "topic.selector",
+      operationPolicy: {},
+      profileDefault: {
+        maxAttempts: 3,
+        timeoutMs: 240000,
+        maxTokens: 2048,
+        temperature: 0.5,
+        topP: 0.9,
+      },
+      invocationOptions: {},
+    });
+
+    expect(resolved.maxTokens).toBe(2048);
+    expect(resolved.temperature).toBe(0.5);
+    expect(resolved.topP).toBe(0.9);
+  });
 });
 
 describe("llm config redacted snapshot", () => {
-  it("exposes profile, model and strategy but never api keys or full base url", () => {
+  it("returns only profile/model/strategy/operationPolicy and selects by profile", () => {
     const snapshot: RedactedLlmConfigSnapshot = redactLlmConfigSnapshot({
-      profile: "main",
-      baseUrl: "https://open.bigmodel.cn/api/paas/v4",
-      apiKey: "super-secret-key-12345",
-      model: "glm-5.1",
-      structuredBaseUrl: "https://open.bigmodel.cn/api/paas/v4",
-      structuredApiKey: "another-secret",
+      profile: "structured",
+      mainModel: "glm-5.1",
       structuredModel: "glm-4",
+      mainStrategy: "json_object",
       structuredStrategy: "tool_call",
-      structuredThinking: "disabled",
-      timeoutMs: 240000,
-      maxAttempts: 3,
       operationPolicy: DEFAULT_OPERATION_POLICY,
     });
 
-    const serialized = JSON.stringify(snapshot);
-    expect(serialized).not.toContain("super-secret-key-12345");
-    expect(serialized).not.toContain("another-secret");
-    expect(snapshot.profile).toBe("main");
-    expect(snapshot.hasApiKey).toBe(true);
-    expect(snapshot.hasStructuredApiKey).toBe(true);
-    expect(snapshot.baseUrlHost).toBe("open.bigmodel.cn");
-    expect(snapshot.structuredBaseUrlHost).toBe("open.bigmodel.cn");
-    expect(snapshot.model).toBe("glm-5.1");
-    expect(snapshot.structuredModel).toBe("glm-4");
+    // 严格按正式计划：只输出 profile、model、strategy、operation policy
+    expect(Object.keys(snapshot).sort()).toEqual(
+      ["model", "operationPolicy", "profile", "strategy"].sort(),
+    );
+    expect(snapshot.profile).toBe("structured");
+    expect(snapshot.model).toBe("glm-4");
     expect(snapshot.strategy).toBe("tool_call");
     expect(snapshot.operationPolicy).toEqual(DEFAULT_OPERATION_POLICY);
   });
 
-  it("marks base url host as unavailable when base url is missing", () => {
+  it("selects main model and strategy when profile is main", () => {
     const snapshot = redactLlmConfigSnapshot({
-      profile: "structured",
-      baseUrl: undefined,
-      apiKey: undefined,
-      model: "stub-model",
-      structuredBaseUrl: undefined,
-      structuredApiKey: undefined,
-      structuredModel: "stub-model",
-      structuredStrategy: "json_object",
-      timeoutMs: 45000,
-      maxAttempts: 3,
+      profile: "main",
+      mainModel: "glm-5.1",
+      structuredModel: "glm-4",
+      mainStrategy: "json_object",
+      structuredStrategy: "tool_call",
       operationPolicy: DEFAULT_OPERATION_POLICY,
     });
 
-    expect(snapshot.profile).toBe("structured");
-    expect(snapshot.hasApiKey).toBe(false);
-    expect(snapshot.hasStructuredApiKey).toBe(false);
-    expect(snapshot.baseUrlHost).toBe("unavailable");
-    expect(snapshot.structuredBaseUrlHost).toBe("unavailable");
+    expect(snapshot.model).toBe("glm-5.1");
+    expect(snapshot.strategy).toBe("json_object");
   });
 });
 

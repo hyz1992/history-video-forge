@@ -282,26 +282,21 @@ function parseProtectedProjectIds(raw: string | undefined): Set<string> {
 
 /**
  * 返回脱敏后的 LLM 配置快照，用于日志与诊断。
- * 不输出 API key 或完整 base URL，仅保留 profile、host、模型、strategy 和 operation policy。
- * operation policy 来自单供应商策略模块，不包含模型名或 provider routing。
+ * 严格按 S2-0 plan Task 8：只输出 profile、model、strategy、operation policy。
+ * 按 profile 选择对应 model 与 strategy，不输出 API key 或完整 base URL。
  *
- * @param profile 当前调用使用的 profile（main/structured），决定快照中 model/strategy 的呈现口径。
+ * @param profile 当前调用使用的 profile（main/structured），决定快照中 model/strategy 的口径。
  */
 export function getRedactedLlmConfigSnapshot(
   profile: "main" | "structured" = "main",
 ): RedactedLlmConfigSnapshot {
   return redactLlmConfigSnapshot({
     profile,
-    baseUrl: env.llm.baseUrl,
-    apiKey: env.llm.apiKey,
-    model: env.llm.model,
-    structuredBaseUrl: env.llm.structuredBaseUrl,
-    structuredApiKey: env.llm.structuredApiKey,
+    mainModel: env.llm.model,
     structuredModel: env.llm.structuredModel ?? env.llm.model,
+    // main profile（普通路径）固定使用 json_object；structured strategy 来自 env。
+    mainStrategy: "json_object",
     structuredStrategy: env.llm.structuredStrategy,
-    structuredThinking: env.llm.structuredThinking,
-    timeoutMs: env.llm.timeoutMs,
-    maxAttempts: env.llm.maxAttempts,
     operationPolicy: DEFAULT_OPERATION_POLICY,
   });
 }

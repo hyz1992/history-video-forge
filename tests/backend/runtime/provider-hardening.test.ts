@@ -12,6 +12,7 @@ import {
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 import { createRequestBudget } from "../../../backend/src/runtime/llm/request-budget.js";
 import type { LlmInteractionLogEntry } from "../../../backend/src/runtime/llm/interaction-log.js";
+import { ScriptDraftPackage } from "../../../shared/src/index.js";
 
 describe("provider hardening", () => {
   it("routes structured profile to structured endpoint while preserving main profile", () => {
@@ -439,10 +440,10 @@ describe("provider hardening", () => {
     expect(invokeApi).toHaveBeenCalledTimes(1);
   });
 
-  it("does not trigger a second network call when a business validator would fail downstream", async () => {
+  it("does not trigger a second network call when a real business validator fails downstream", async () => {
     const prompt = createPromptRegistry().getPrompt("script.writer");
     const invokeApi = vi.fn(async () => ({
-      // 合法 JSON，provider 视为成功返回；下游业务 validator 是否通过不影响网络重试。
+      // 合法 JSON，但不符合 ScriptDraftPackage 业务 schema（缺 script_text 等必需字段）。
       rawOutput: '{"unexpected":1}',
       content: '{"unexpected":1}',
       metadata: {},
@@ -458,15 +459,18 @@ describe("provider hardening", () => {
       invokeApi,
     });
 
-    // provider 只负责 JSON.parse，业务 validator 在调用方；
-    // 一旦 attempt 成功返回，即便下游业务校验失败也不会触发额外网络重试。
+    // provider 只负责 JSON.parse 成功返回；业务 validator 在调用方执行。
     const result = await provider.invokeStructuredPrompt<{ unexpected: number }>({
       prompt,
       input: {},
-      operationName: "topic.selector",
+      operationName: "script.writer",
     });
+    expect(invokeApi).toHaveBeenCalledTimes(1);
 
-    expect(result).toEqual({ unexpected: 1 });
+    // 真实业务 validator 必须失败（证明这是 validator failure 而非网络失败）。
+    expect(() => ScriptDraftPackage.parse(result)).toThrow();
+
+    // 业务 validator 失败不得扩大为额外网络重试。
     expect(invokeApi).toHaveBeenCalledTimes(1);
   });
 
@@ -497,6 +501,40 @@ describe("provider hardening", () => {
       .catch((e) => e);
 
     expect(error.userMessage).not.toContain("已自动重试");
+  });
+
+  it("keeps limited retry for non-core operation timeouts and succeeds on second attempt", async () => {
+    const prompt = createPromptRegistry().getPrompt("script.writer");
+    let callCount = 0;
+    const invokeApi = vi.fn(async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        const error = new Error("request timed out");
+        error.name = "AbortError";
+        throw error;
+      }
+      return { rawOutput: '{"ok":true}', content: '{"ok":true}', metadata: {} };
+    });
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-5.1",
+      baseUrl: "https://llm.example.test/v1",
+      apiKey: "test-key",
+      timeoutMs: 60000,
+      maxAttempts: 3,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+      invokeApi,
+    });
+
+    // topic.selector 是 short_structured_decision，policy 允许 timeout 有限重试。
+    const result = await provider.invokeStructuredPrompt({
+      prompt,
+      input: {},
+      operationName: "topic.selector",
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(invokeApi).toHaveBeenCalledTimes(2);
   });
 
   it("invokes strict structured requests through tool calls and parses function arguments", async () => {

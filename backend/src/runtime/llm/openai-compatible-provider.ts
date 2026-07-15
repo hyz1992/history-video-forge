@@ -345,17 +345,19 @@ export function createOpenAiCompatibleProvider(
     async invokeStrictStructured<T>(
       request: StrictStructuredInvocation<T>,
     ): Promise<T> {
-      // 单一真相源：invocation options > operation policy(含 profile thinking) > profile/env defaults > provider default
+      // 单一真相源：invocation options > operation policy > profile/env defaults > provider default
+      // profile 级 thinking/maxTokens/temperature/topP 通过 profileDefault 承载，
+      // 由 resolveEffectiveRequest 统一按优先级解析；policy 不得被 profile 覆盖。
       const strictEffective = resolveEffectiveRequest({
         operationName: request.operationName,
-        operationPolicy: {
-          ...getOperationPolicy(request.operationName),
-          // structuredThinking 是 profile/env 级默认，通过 policy 层注入以保持优先级一致
-          thinking: providerConfig.structuredThinking,
-        },
+        operationPolicy: getOperationPolicy(request.operationName),
         profileDefault: {
           maxAttempts: options.maxAttempts ?? env.llm.maxAttempts,
           timeoutMs: options.timeoutMs ?? env.llm.timeoutMs,
+          thinking: providerConfig.structuredThinking,
+          maxTokens: providerConfig.structuredMaxTokens,
+          temperature: providerConfig.structuredTemperature,
+          topP: providerConfig.structuredTopP,
         },
         invocationOptions: request.options,
       });
@@ -386,6 +388,9 @@ export function createOpenAiCompatibleProvider(
         strictEffective.thinking === "provider_default"
           ? undefined
           : strictEffective.thinking;
+      const effectiveMaxTokens = strictEffective.maxTokens;
+      const effectiveTemperature = strictEffective.temperature;
+      const effectiveTopP = strictEffective.topP;
 
       try {
         let attemptStartedAt = "";
@@ -405,15 +410,9 @@ export function createOpenAiCompatibleProvider(
                     schema: request.schema,
                     options: {
                       strategy: effectiveStrategy,
-                      temperature:
-                        request.options?.temperature ??
-                        providerConfig.structuredTemperature,
-                      topP:
-                        request.options?.topP ??
-                        providerConfig.structuredTopP,
-                      maxTokens:
-                        request.options?.maxTokens ??
-                        providerConfig.structuredMaxTokens,
+                      temperature: effectiveTemperature,
+                      topP: effectiveTopP,
+                      maxTokens: effectiveMaxTokens,
                       thinking: effectiveThinking,
                     },
                   },
@@ -484,9 +483,9 @@ export function createOpenAiCompatibleProvider(
             thinking: effectiveThinking ?? "provider_default",
             timeoutMs: effectiveTimeoutMs,
             maxAttempts: effectiveMaxAttempts,
-            temperature: request.options?.temperature ?? providerConfig.structuredTemperature,
-            topP: request.options?.topP ?? providerConfig.structuredTopP,
-            maxTokens: request.options?.maxTokens ?? providerConfig.structuredMaxTokens,
+            temperature: effectiveTemperature,
+            topP: effectiveTopP,
+            maxTokens: effectiveMaxTokens,
           },
           attempts,
           responseMetadata,
@@ -520,9 +519,9 @@ export function createOpenAiCompatibleProvider(
             thinking: effectiveThinking ?? "provider_default",
             timeoutMs: effectiveTimeoutMs,
             maxAttempts: effectiveMaxAttempts,
-            temperature: request.options?.temperature ?? providerConfig.structuredTemperature,
-            topP: request.options?.topP ?? providerConfig.structuredTopP,
-            maxTokens: request.options?.maxTokens ?? providerConfig.structuredMaxTokens,
+            temperature: effectiveTemperature,
+            topP: effectiveTopP,
+            maxTokens: effectiveMaxTokens,
           },
           attempts,
           responseMetadata,

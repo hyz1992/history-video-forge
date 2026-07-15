@@ -37,9 +37,8 @@ const OPERATION_NAME_TO_CLASS: Record<string, LlmOperationClass> = {
   "publish.description-generator": "short_structured_decision",
   "publish.cover-prompt-generator": "short_structured_decision",
 
-  // 局部修复：候选修复、候选诊断、结构修复、封面对话优化、资产提示词优化
+  // 局部修复：候选修复、结构修复、封面对话优化、资产提示词优化
   "topic.candidate-builder-repair": "targeted_repair",
-  "topic.candidate-builder.diagnostics": "targeted_repair",
   "asset-planning.asset-structural-repair": "targeted_repair",
   "publish.cover-prompt-optimizer": "targeted_repair",
   "asset.prompt-optimizer": "targeted_repair",
@@ -96,6 +95,8 @@ export interface OperationPolicy {
   transientRetryByClass?: Partial<Record<LlmOperationClass, number>>;
   thinking?: "enabled" | "disabled";
   maxTokens?: number;
+  temperature?: number;
+  topP?: number;
   timeoutMs?: number;
   maxAttempts?: number;
 }
@@ -154,6 +155,10 @@ export interface ResolveEffectiveRequestInput {
   profileDefault: {
     maxAttempts: number;
     timeoutMs: number;
+    thinking?: "enabled" | "disabled";
+    maxTokens?: number;
+    temperature?: number;
+    topP?: number;
   };
   invocationOptions?: {
     thinking?: "enabled" | "disabled";
@@ -185,76 +190,53 @@ export function resolveEffectiveRequest(
   input: ResolveEffectiveRequestInput,
 ): ResolvedEffectiveRequest {
   const options = input.invocationOptions ?? {};
+  const profile = input.profileDefault;
 
   const thinking =
     options.thinking ??
     input.operationPolicy.thinking ??
+    profile.thinking ??
     "provider_default";
 
   const maxAttempts =
     options.maxAttempts ??
     input.operationPolicy.maxAttempts ??
-    input.profileDefault.maxAttempts;
+    profile.maxAttempts;
 
   const timeoutMs =
     options.timeoutMs ??
     input.operationPolicy.timeoutMs ??
-    input.profileDefault.timeoutMs;
+    profile.timeoutMs;
 
   return {
     thinking,
     maxAttempts,
     timeoutMs,
-    maxTokens: options.maxTokens ?? input.operationPolicy.maxTokens,
-    temperature: options.temperature,
-    topP: options.topP,
+    maxTokens: options.maxTokens ?? input.operationPolicy.maxTokens ?? profile.maxTokens,
+    temperature: options.temperature ?? input.operationPolicy.temperature ?? profile.temperature,
+    topP: options.topP ?? input.operationPolicy.topP ?? profile.topP,
   };
 }
 
 /**
- * 脱敏后的 LLM 配置快照字段契约（对齐 S2-0 plan Task 8）：
- * 输出 profile、model、strategy、operation policy，
- * 以及必要的安全/可用性元信息（是否配置 key、host、timeout、maxAttempts）。
- * 严禁输出 API key 或完整 base URL。
+ * 脱敏后的 LLM 配置快照字段契约（严格对齐 S2-0 plan Task 8）：
+ * 只输出 profile、model、strategy、operation policy。
+ * 严禁输出 API key、完整 base URL 或其它未经计划确认的扩展字段。
  */
 export interface RedactedLlmConfigSnapshot {
   profile: "main" | "structured";
   model: string;
-  structuredModel: string;
   strategy: string;
-  structuredThinking?: string;
-  hasApiKey: boolean;
-  hasStructuredApiKey: boolean;
-  /** 仅保留 host，不输出完整 base URL 或路径。 */
-  baseUrlHost: string;
-  structuredBaseUrlHost: string;
-  timeoutMs: number;
-  maxAttempts: number;
   operationPolicy: OperationPolicy;
 }
 
 export interface RedactableLlmConfig {
   profile: "main" | "structured";
-  baseUrl?: string;
-  apiKey?: string;
-  model: string;
-  structuredBaseUrl?: string;
-  structuredApiKey?: string;
+  mainModel: string;
   structuredModel: string;
+  mainStrategy: string;
   structuredStrategy: string;
-  structuredThinking?: string;
-  timeoutMs: number;
-  maxAttempts: number;
   operationPolicy: OperationPolicy;
-}
-
-function extractHost(url: string | undefined): string {
-  if (!url) return "unavailable";
-  try {
-    return new URL(url).host || "unavailable";
-  } catch {
-    return "unavailable";
-  }
 }
 
 export function redactLlmConfigSnapshot(
@@ -262,16 +244,12 @@ export function redactLlmConfigSnapshot(
 ): RedactedLlmConfigSnapshot {
   return {
     profile: config.profile,
-    model: config.model,
-    structuredModel: config.structuredModel,
-    strategy: config.structuredStrategy,
-    structuredThinking: config.structuredThinking,
-    hasApiKey: Boolean(config.apiKey),
-    hasStructuredApiKey: Boolean(config.structuredApiKey),
-    baseUrlHost: extractHost(config.baseUrl),
-    structuredBaseUrlHost: extractHost(config.structuredBaseUrl),
-    timeoutMs: config.timeoutMs,
-    maxAttempts: config.maxAttempts,
+    model:
+      config.profile === "structured" ? config.structuredModel : config.mainModel,
+    strategy:
+      config.profile === "structured"
+        ? config.structuredStrategy
+        : config.mainStrategy,
     operationPolicy: config.operationPolicy,
   };
 }

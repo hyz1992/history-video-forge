@@ -193,19 +193,27 @@ describe("runtime env loading", () => {
     const { getRedactedLlmConfigSnapshot } = await import(
       "../../../backend/src/config/env.js"
     );
-    const snapshot = getRedactedLlmConfigSnapshot("structured");
 
-    const serialized = JSON.stringify(snapshot);
+    // structured profile -> structured model + structured strategy
+    const structuredSnapshot = getRedactedLlmConfigSnapshot("structured");
+    expect(Object.keys(structuredSnapshot).sort()).toEqual(
+      ["model", "operationPolicy", "profile", "strategy"].sort(),
+    );
+    expect(structuredSnapshot.profile).toBe("structured");
+    expect(structuredSnapshot.model).toBe("glm-4");
+    expect(structuredSnapshot.strategy).toBe("tool_call");
+    expect(structuredSnapshot.operationPolicy).toBeDefined();
+
+    // main profile -> main model + json_object strategy
+    const mainSnapshot = getRedactedLlmConfigSnapshot("main");
+    expect(mainSnapshot.profile).toBe("main");
+    expect(mainSnapshot.model).toBe("glm-5.1");
+    expect(mainSnapshot.strategy).toBe("json_object");
+
+    // 不泄漏密钥或完整 base URL
+    const serialized = JSON.stringify(structuredSnapshot) + JSON.stringify(mainSnapshot);
     expect(serialized).not.toContain("secret-key-12345");
     expect(serialized).not.toContain("structured-secret");
-    expect(snapshot.profile).toBe("structured");
-    expect(snapshot.hasApiKey).toBe(true);
-    expect(snapshot.hasStructuredApiKey).toBe(true);
-    expect(snapshot.baseUrlHost).toBe("open.bigmodel.cn");
-    expect(snapshot.structuredBaseUrlHost).toBe("open.bigmodel.cn");
-    expect(snapshot.model).toBe("glm-5.1");
-    expect(snapshot.structuredModel).toBe("glm-4");
-    expect(snapshot.strategy).toBe("tool_call");
-    expect(snapshot.operationPolicy).toBeDefined();
+    expect(serialized).not.toContain("open.bigmodel.cn");
   });
 });
