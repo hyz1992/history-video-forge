@@ -675,14 +675,22 @@ git commit -m "应用旗舰模型思考与结构化策略"
 
 **非 live 验证结果：**
 
-- `npx vitest run --configLoader runner tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/provider-hardening.test.ts tests/backend/script/script-runtime-generate.test.ts tests/backend/storyboard/storyboard-generation.test.ts tests/backend/asset-planning/asset-planning-generation.test.ts --no-file-parallelism` 全部通过。
+- `npx vitest run --configLoader runner tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/provider-hardening.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/script/script-runtime-generate.test.ts tests/backend/storyboard/storyboard-generation.test.ts tests/backend/asset-planning/asset-planning-generation.test.ts --no-file-parallelism` 全部通过（6 文件、142 项全绿，含本轮窄整改后新增的 `strict_structured_no_tool_call → structured fallback` 回归）。
 - `npm run typecheck:backend` 通过。
 - `git diff --check` 无输出；`git diff -- harness/prompts shared/src` 无输出（prompt / schema 未改动）。
-- `tests/backend/topic/topic-runtime-recommendation.test.ts` 在干净 dev HEAD（`46c5ccc`）上已有 43 个既有失败（`failed to parse structured output: Unexpected end of JSON input` 与少量 401 鉴权失败），与本任务无关；本任务新增 / 修改的 topic strict 与 target_tool_mismatch fallback 测试（mock gateway 路径）均通过。该既有失败不在 Task 10 修复范围内，留待独立排查。
+
+**Task 10 回归窄整改（Codex 审查后，2026-07-15）：**
+
+首轮提交（`3af6776`）的生产实现经审查确认正确，但完整目标回归仍有 43 项失败（早于本任务存在的既有问题），按阶段闸门不能据此声明完成。本轮纯非 live 窄整改收口回归层：
+
+- 把 `tests/backend/topic/topic-runtime-recommendation.test.ts` 中 13 处旧 `invokeApi` mock 由返回裸 JSON 字符串改为返回正式 envelope `{ rawOutput, content, metadata }`（匹配当前 `OpenAiCompatibleResponseEnvelope` 契约），消除 `failed to parse structured output: Unexpected end of JSON input`。
+- 两项 API 测试（`rejects malformed...`、`normalizes each...`）补 `auth: buildTestAuth()`，按当前 `guardOwnedRoute` 鉴权合同建立登录/owner 上下文，消除 401。
+- 补充 `strict_structured_no_tool_call → structured fallback` 回归测试，与既有 `strict_structured_target_tool_mismatch → structured fallback` 共同覆盖原始验收要求的两种 fallback 情况。
+- 本轮窄整改不修改任何生产代码、prompt、schema、env、model 或 API。
 
 **Task 10 完成边界：**
 
-- 代码与非 live 验证均已通过，Task 10 标记为完成。
+- 代码与完整非 live 验证（6 文件 142 项）均已通过，Task 10 标记为完成。
 - Task 11 保持待执行：真实项目验收（优化后 live 对照、质量盲评、文档收口、`docs/plans/README.md` 与 `docs/todos/roadmap-todo.md` 的 S2-0 完成声明）仍由后续独立授权完成，不在本任务内。
 - raw output 不提交；TTFT 不可观测；成本不能机器核验。
 
