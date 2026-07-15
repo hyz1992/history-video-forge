@@ -759,7 +759,100 @@ git log -n 12 --oneline
 - Task 11 harness 的 topic 样本绕过生产 service，本轮 candidate topic 记录为 provider-default thinking；不得把该数字当作生产 `thinking=disabled + target_function` 精确耗时。生产参数由代码、非 live 测试与此前独立授权诊断共同确认。
 - 本地环境模型配置切换为 `LLM_MODEL=glm-5.2`、`LLM_STRUCTURED_MODEL=glm-5.2`；模型名仍只存在于环境配置，不进入业务 operation。
 - 完整非 live 回归 13 文件 237 项通过，backend typecheck 通过；prompt/schema/frontend 无 diff。
-- S2-0 完成并停止，不自动进入后续结构重构或 S2-1。
+- 该结论随后被真实页面纠偏：Task 11 没有覆盖 `topic.candidate-builder`，因此只完成局部验收，S2-0 重新打开并进入 Task 12。
+
+### Task 12：补齐 Topic Candidate Builder 精确 thinking 策略
+
+**目标：**只对 `topic.candidate-builder` 设置 `thinking=disabled`，保持 GLM-5.2、8 候选合同、prompt、schema、validator、repair、selector、timeout 和 retry 语义不变。
+
+**文件：**
+
+- 修改：`tests/backend/runtime/llm-operation-policy.test.ts`
+- 修改：`tests/backend/topic/topic-runtime-recommendation.test.ts`
+- 修改：`backend/src/runtime/llm/operation-policy.ts`
+- 修改：`docs/plans/2026-07-14-llm-structured-output-latency-optimization-implementation-plan.md`
+
+- [ ] **Step 1：写 operation policy 失败测试**
+
+调整 `llm-operation-policy.test.ts`：
+
+- `topic.candidate-builder` 从“未经批准 thinking override”清单移出；
+- 断言 `getOperationPolicy("topic.candidate-builder").thinking === "disabled"`；
+- 断言 effective request 在没有 invocation override 时为 `disabled`；
+- 保留 `storyboard.segment-regen`、`asset-planning.planner` 等同 class operation 为 `undefined/provider_default`。
+
+运行：
+
+```powershell
+npx vitest run --configLoader runner tests/backend/runtime/llm-operation-policy.test.ts --no-file-parallelism
+```
+
+预期：测试因 builder 仍为 `undefined/provider_default` 而失败；不得先修改生产代码。
+
+- [ ] **Step 2：写生产 topic 调用链失败测试**
+
+在 `topic-runtime-recommendation.test.ts` 现有“drives candidate generation through the formal prompt registry”用例中，对真实 `createLlmGateway -> createOpenAiCompatibleProvider -> invokeApi` 路径增加断言：`topic.candidate-builder` 请求必须包含 `thinking: "disabled"`。
+
+运行：
+
+```powershell
+npx vitest run --configLoader runner tests/backend/topic/topic-runtime-recommendation.test.ts --no-file-parallelism
+```
+
+预期：测试因 invokeApi 收到的 builder thinking 为 `undefined` 而失败；现有 8 候选与 selector 断言保持不变。
+
+- [ ] **Step 3：实现最小 operation override**
+
+只修改 `APPROVED_THINKING_OVERRIDE`：
+
+```ts
+const APPROVED_THINKING_OVERRIDE = {
+  "script.writer": "disabled",
+  "storyboard.planner": "disabled",
+  "topic.candidate-builder": "disabled",
+};
+```
+
+同步代码注释中的证据与边界：引用真实页面项目基线；明确该项目只证明 provider-default 慢点，关闭后的质量与耗时仍待独立 live；不得把 override 扩展到其他 operation。
+
+- [ ] **Step 4：运行 focused green 验证**
+
+```powershell
+npx vitest run --configLoader runner tests/backend/runtime/llm-operation-policy.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts --no-file-parallelism
+```
+
+预期：两文件全绿；builder 请求为 disabled；8 候选、repair、selector 与日志合同无回归。
+
+- [ ] **Step 5：运行完整非 live 回归**
+
+```powershell
+npx vitest run --configLoader runner tests/backend/runtime/provider-hardening.test.ts tests/backend/runtime/env-loading.test.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/topic-script-graph.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/script/script-runtime-generate.test.ts tests/backend/storyboard/storyboard-generation.test.ts tests/backend/asset-planning/asset-planning-generation.test.ts tests/backend/asset-planning/asset-planning-structural-repair.test.ts tests/backend/publish/cover-service.test.ts tests/backend/api/publish-api.test.ts harness/scripts/runtime/llm-s2-baseline.test.ts --no-file-parallelism
+npm run typecheck:backend
+git diff --check
+git diff -- harness/prompts shared/src frontend
+```
+
+预期：所有命令 exit 0；prompt/schema/frontend 无 diff；本任务不执行付费请求。
+
+- [ ] **Step 6：中文提交非 live 实现并停止付费边界前的工作**
+
+```powershell
+git add backend/src/runtime/llm/operation-policy.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts docs/plans/2026-07-14-llm-structured-output-latency-optimization-implementation-plan.md
+git commit -m "关闭选题构建器无必要思考"
+```
+
+### Task 13：独立授权下完成真实页面验收
+
+Task 12 完成后仍不得声明优化成功。Task 13 必须取得新的候选模型、最大请求数和人民币人工费用上限；建议复用用户真实基线的同一“魏晋至唐宋·高张力历史事件推荐”输入，只运行一个新项目的完整 topic 链路（预计 builder + selector 共 2 次请求），不执行 capability probe。
+
+- [ ] **Step 1：取得新的付费 live 明确授权**
+- [ ] **Step 2：重启 backend，确认 interaction log 中 builder effective thinking 为 disabled**
+- [ ] **Step 3：通过真实浏览器生成同输入的 8 候选与最终 4 个展示项**
+- [ ] **Step 4：记录 builder、selector、完整等待、attempt、usage、repair/full regen 和 validator 结果**
+- [ ] **Step 5：按既有 topic rubric 对优化前后 8 候选做人工作品质量对照**
+- [ ] **Step 6：质量不劣且用户等待显著改善时重新收口 S2-0；否则仅回退 builder thinking override并保留诊断证据**
+
+Task 13 不得用 selector 固定样本代替页面端到端验收，不得从一个样本推断 P95，也不得在本任务顺手减少候选数量或修改 prompt/schema。
 
 ## 2. 完成标准
 
