@@ -1,6 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import {
+  DEFAULT_OPERATION_POLICY,
+  redactLlmConfigSnapshot,
+  type RedactedLlmConfigSnapshot,
+} from "../runtime/llm/operation-policy.js";
+
 type RuntimeProvider = "stub" | "openai";
 type StrictStructuredStrategy = "json_object" | "tool_call" | "auto";
 type StrictStructuredThinking = "enabled" | "disabled";
@@ -272,4 +278,26 @@ function parseProtectedProjectIds(raw: string | undefined): Set<string> {
       .map((id) => id.trim())
       .filter((id) => id.length > 0),
   );
+}
+
+/**
+ * 返回脱敏后的 LLM 配置快照，用于日志与诊断。
+ * 不输出 API key 或完整 base URL，仅保留 host、模型、strategy 和 operation policy。
+ * operation policy 来自单供应商策略模块，不包含模型名或 provider routing。
+ */
+export function getRedactedLlmConfigSnapshot(): RedactedLlmConfigSnapshot {
+  return redactLlmConfigSnapshot({
+    provider: env.llm.provider,
+    baseUrl: env.llm.baseUrl,
+    apiKey: env.llm.apiKey,
+    model: env.llm.model,
+    structuredBaseUrl: env.llm.structuredBaseUrl,
+    structuredApiKey: env.llm.structuredApiKey,
+    structuredModel: env.llm.structuredModel ?? env.llm.model,
+    structuredStrategy: env.llm.structuredStrategy,
+    structuredThinking: env.llm.structuredThinking,
+    timeoutMs: env.llm.timeoutMs,
+    maxAttempts: env.llm.maxAttempts,
+    operationPolicy: DEFAULT_OPERATION_POLICY,
+  });
 }

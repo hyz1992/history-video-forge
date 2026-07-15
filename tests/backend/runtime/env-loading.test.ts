@@ -179,4 +179,31 @@ describe("runtime env loading", () => {
     const { env } = await import("../../../backend/src/config/env.js");
     expect(env.allowUnauthenticatedRemote).toBe(false);
   });
+
+  it("exposes a redacted llm config snapshot without leaking api keys or full base url", async () => {
+    process.env.LLM_PROVIDER = "openai";
+    process.env.LLM_BASE_URL = "https://open.bigmodel.cn/api/paas/v4";
+    process.env.LLM_API_KEY = "secret-key-12345";
+    process.env.LLM_MODEL = "glm-5.1";
+    process.env.LLM_STRUCTURED_BASE_URL = "https://open.bigmodel.cn/api/paas/v4";
+    process.env.LLM_STRUCTURED_API_KEY = "structured-secret";
+    process.env.LLM_STRUCTURED_MODEL = "glm-4";
+    process.env.LLM_STRUCTURED_STRATEGY = "tool_call";
+
+    const { getRedactedLlmConfigSnapshot } = await import(
+      "../../../backend/src/config/env.js"
+    );
+    const snapshot = getRedactedLlmConfigSnapshot();
+
+    const serialized = JSON.stringify(snapshot);
+    expect(serialized).not.toContain("secret-key-12345");
+    expect(serialized).not.toContain("structured-secret");
+    expect(snapshot.hasApiKey).toBe(true);
+    expect(snapshot.hasStructuredApiKey).toBe(true);
+    expect(snapshot.baseUrlHost).toBe("open.bigmodel.cn");
+    expect(snapshot.structuredBaseUrlHost).toBe("open.bigmodel.cn");
+    expect(snapshot.mainModel).toBe("glm-5.1");
+    expect(snapshot.structuredModel).toBe("glm-4");
+    expect(snapshot.operationPolicy).toBeDefined();
+  });
 });
