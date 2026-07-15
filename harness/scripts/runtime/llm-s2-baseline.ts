@@ -69,7 +69,9 @@ interface RuntimeReport {
   observations: ObservationSnapshot[];
 }
 
-interface BaselineProfile {
+export type { BaselineProfile };
+
+export interface BaselineProfile {
   label: "current" | "candidate";
   mainModel: string;
   structuredModel: string;
@@ -371,7 +373,7 @@ async function runCapabilityProbe(
   }
 }
 
-async function runSample(
+export async function runSample(
   mainGateway: ReturnType<typeof createLlmGateway>,
   structuredGateway: ReturnType<typeof createLlmGateway>,
   sample: SampleCase,
@@ -558,7 +560,7 @@ function buildStoryboardInput(_sample: SampleCase, _profile: BaselineProfile): R
   };
 }
 
-function createGateways(profile: BaselineProfile) {
+export function createGateways(profile: BaselineProfile) {
   const mainProvider = createOpenAiCompatibleProvider({
     profile: "main",
     model: profile.mainModel,

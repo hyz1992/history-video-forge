@@ -7,6 +7,6 @@
     "sourceMap": true,
     "noEmitOnError": false
   },
-  "include": ["src/**/*.ts", "../shared/src/**/*.ts"],
+  "include": ["src/**/*.ts", "../shared/src/**/*.ts", "../harness/scripts/runtime/llm-s2-baseline.ts"],
   "exclude": ["src/**/*.test.ts"]
 }
