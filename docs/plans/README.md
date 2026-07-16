@@ -17,6 +17,7 @@
 - Task 14 第一批正式设计见 [S2-0 Topic 首次安全表达与语义一致性优化设计](./2026-07-16-s2-0-topic-safety-and-semantic-consistency-design.md)：采用“首次安全表达前置 + selector 语义一致性检查”，保持 8/4 合同、schema、API 与模型不变；builder 输出瘦身留作后续独立设计。
 - Task 14 第一批实施见 [S2-0 Topic 首次安全表达与语义一致性优化实施计划](./2026-07-16-s2-0-topic-safety-and-semantic-consistency-implementation-plan.md)：builder 首次中文安全表达、1301 结构化 retry mode、selector 跨字段一致性扣分和显式预算验收入口已完成；15 个文件、255 项非 live 测试与 backend typecheck 通过。
 - Task 14 真实页面复验使用 GLM-5.2 和显式 2 请求预算，builder/selector 均 attempt 1 成功且未触发 1301，provider 合计 139.702 秒，相对 Task 13 下降 13.9%；但成功 builder 本身变慢 24.6%，总 token 增长 11.0%，且 selector 未识别“高平陵关门伏杀”“宋钦宗亲手交出城门”等标题与正文不一致。延迟仅部分改善，质量闸门未通过，S2-0 继续打开。
+- Task 15 正式设计见 [S2-0 Topic Builder 与 Selector 瘦身优化设计](./2026-07-16-s2-0-topic-builder-selector-slimming-design.md)：采用平衡瘦身方案，保持 GLM-5.2、8/4 合同、两次正常 LLM 调用、schema 与 API 不变，通过 builder prompt 去重与软预算、selector 专用投影和简洁评分继续降低成功路径负担，并加强主体、动作、因果与结果一致性。
 - 正式 V2 产品功能已进入实施阶段；migration owner 不可登录标记 `!migration-owner-no-login`，其项目通过 admin 管理页面转移给真实用户。
 
 - [V1 高风险稳定化实施计划](./2026-07-10-v1-high-risk-stabilization-implementation-plan.md) 的主要代码任务已完成；其全量回归超时和故障演练缺口已并入 Task 8.5 的测试与切换闸门，不再作为独立的下一执行入口。
