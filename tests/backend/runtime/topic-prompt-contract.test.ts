@@ -170,11 +170,20 @@ describe("topic prompt contract", () => {
   it("makes internal semantic consistency the selector first pass", () => {
     const prompt = createPromptRegistry().getPrompt("topic.selector");
 
-    expect(prompt.body).toContain("先按事件身份、行为主体、关键动作、因果结果完成一致性检查");
-    expect(prompt.body).toContain("决策者、执行者、受害者和结果承担者");
+    expect(prompt.body).toContain("先静默拆出标题和切口中的关键断言");
+    expect(prompt.body).toContain("具体主体、关键动作、直接结果与断言强度");
+    expect(prompt.body).toContain(
+      "分别在 `core_conflict`、`strong_scene` 与三条 `must_cover_preview` 中寻找支持",
+    );
+    expect(prompt.body).toContain("同一个泛称主体串联的动作在内部材料中分别属于不同人物");
+    expect(prompt.body).toContain("先确定 `consistency_issue`，再进行叙事质量排序");
+    expect(prompt.body).toContain("`risk_hints` 只是补充信息，不是完整风险清单");
     expect(prompt.body).toContain("至少有 4 个无明显冲突候选");
     expect(prompt.body).toContain("原则上不得进入前 4");
     expect(prompt.body).toContain("不能替代正式史实核查");
+    expect(prompt.body).not.toContain("靖康");
+    expect(prompt.body).not.toContain("鸿门宴");
+    expect(prompt.body).not.toContain("党锢");
   });
 
   it("requires a compact semantic consistency verdict for every selector scorecard", () => {
