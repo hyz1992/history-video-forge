@@ -926,7 +926,7 @@ describe("prompt runtime", () => {
     const prompt = createPromptRegistry().getPrompt("topic.selector");
 
     expect(prompt.metadata.language).toBe("zh-CN");
-    expect(prompt.body).toContain("行为主体");
+    expect(prompt.body).toContain("具体主体");
     expect(prompt.body).toContain("关键动作");
     expect(prompt.body).toContain("因果关系");
     expect(prompt.body).toContain("source_or_scope_risk");
