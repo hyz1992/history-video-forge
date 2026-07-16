@@ -2,16 +2,21 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 
 import { projectTopicSelectorPool } from "../../backend/src/modules/topic/topic-selector-prompt-projection.js";
+import { TOPIC_SELECTOR_STRICT_SCHEMA } from "../../backend/src/modules/topic/topic-recommendation.service.js";
+import { createOpenAiCompatibleProvider } from "../../backend/src/runtime/llm/openai-compatible-provider.js";
 import {
   DEFAULT_TOPIC_SELECTOR_SEMANTIC_FIXTURE_SET_PATH,
   buildTopicSelectorSemanticReplayPlan,
+  createTopicSelectorSemanticReplayLiveRunner,
+  evaluateTopicSelectorSemanticFixture,
   getProductionConsistencyIssueSet,
   loadTopicSelectorSemanticFixtureSet,
   parseTopicSelectorSemanticReplayArgs,
   runTopicSelectorSemanticReplay,
+  type TopicSelectorSemanticFixture,
 } from "../../harness/scripts/runtime/topic-selector-semantic-replay.js";
 
 const sandboxDirs: string[] = [];
@@ -27,6 +32,68 @@ afterAll(() => {
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+function createProviderDecision(
+  fixture: TopicSelectorSemanticFixture,
+  issues: Record<string, string> = {},
+) {
+  const ranked_candidates = fixture.selector_input.selector_pool.map(
+    (candidate, index) => ({
+      candidate_id: candidate.candidate_id,
+      quality_rank: index + 1,
+      quality_score: 100 - index,
+      deductions: [],
+      risk_summary: "fixture risk summary",
+      consistency_issue: issues[candidate.candidate_id] ?? "none",
+    }),
+  );
+
+  return {
+    ranked_candidates,
+    consistency_risk_notes: ranked_candidates
+      .filter((candidate) => candidate.consistency_issue !== "none")
+      .map((candidate) => ({
+        candidate_id: candidate.candidate_id,
+        note: `fixture note for ${candidate.candidate_id}`,
+      })),
+  };
+}
+
+function createInternalDecision(
+  fixture: TopicSelectorSemanticFixture,
+  issues: Record<string, string> = {},
+) {
+  return {
+    ranked_candidates: fixture.selector_input.selector_pool.map((candidate) => ({
+      candidate_id: candidate.candidate_id,
+      primary_consistency_issue: issues[candidate.candidate_id] ?? "none",
+    })),
+  };
+}
+
+function createObservation(fixtureId: string) {
+  return {
+    model: "glm-5.2",
+    prompt_id: "topic.selector",
+    prompt_sha256: "a".repeat(64),
+    effective_request: {
+      strategy: "tool_call",
+      thinking: "disabled",
+      toolChoice: "target_function",
+      maxAttempts: 1,
+    },
+    attempt_count: 1,
+    duration_ms: 10,
+    usage: {
+      prompt_tokens: 100,
+      completion_tokens: 20,
+      reasoning_tokens: 0,
+    },
+    finish_reason: "tool_calls",
+    tool_arguments_chars: 100 + fixtureId.length,
+    error_code: null,
+  };
+}
 
 describe("topic selector semantic replay fixtures", () => {
   it("loads the two Task 17 selector inputs and their audited annotations", () => {
@@ -272,5 +339,233 @@ describe("topic selector semantic replay request guard", () => {
       ),
     ).rejects.toThrow();
     expect(runnerCreated).toBe(0);
+  });
+});
+
+describe("topic selector semantic replay evaluation and live orchestration", () => {
+  it("passes the primary gate when all risks are recalled and records enum drift separately", async () => {
+    const outputDir = makeSandbox("live-pass");
+    const called: string[] = [];
+
+    const result = await runTopicSelectorSemanticReplay(
+      {
+        live: true,
+        confirmLive: true,
+        model: "glm-5.2",
+        maxRequests: 2,
+        maxCostCny: 1,
+        outputDir,
+      },
+      {
+        createLiveRunner: () => ({
+          runFixture: async (fixture) => {
+            called.push(fixture.fixture_id);
+            const issues = fixture.fixture_id === "task17-high-tension"
+              ? { selector_candidate_7: "actor_role_mismatch" }
+              : {
+                  selector_candidate_3: "cause_outcome_mismatch",
+                  selector_candidate_7: "overclaim_or_ambiguity",
+                };
+            return {
+              decision: createInternalDecision(fixture, issues),
+              observation: createObservation(fixture.fixture_id),
+            };
+          },
+        }),
+      },
+    );
+
+    expect(called).toEqual(["task17-high-tension", "task17-balanced"]);
+    expect(result).toMatchObject({
+      mode: "topic_selector_semantic_replay",
+      live: true,
+      automated_gate: false,
+      selector_only: true,
+      total_fixtures: 2,
+      planned_requests: 2,
+      actual_requests: 2,
+      expected_risk_count: 3,
+      recalled_risk_count: 3,
+      none_control_count: 2,
+      passed_none_control_count: 2,
+      exact_enum_match_count: 2,
+      primary_gate_passed: true,
+    });
+    expect(
+      result.results.flatMap((item) => item.annotations).map((item) => item.status),
+    ).toContain("risk_recalled_enum_differed");
+    expect(existsSync(join(outputDir, "replay-summary.json"))).toBe(true);
+    expect(existsSync(join(outputDir, "task17-high-tension.result.json"))).toBe(true);
+    expect(existsSync(join(outputDir, "task17-balanced.result.json"))).toBe(true);
+    expect(existsSync(join(outputDir, "trace.md"))).toBe(true);
+
+    const reportText = readFileSync(join(outputDir, "replay-summary.json"), "utf8");
+    expect(reportText).not.toContain("靖康城破");
+    expect(reportText).not.toContain("rawOutput");
+    expect(reportText).not.toContain("systemPrompt");
+    expect(reportText).not.toContain("api_key");
+  });
+
+  it("classifies a missed risk and a failed none control without reading candidate text", () => {
+    const [highTension] = loadTopicSelectorSemanticFixtureSet();
+    const missed = evaluateTopicSelectorSemanticFixture(
+      highTension,
+      createInternalDecision(highTension),
+    );
+    const falsePositive = evaluateTopicSelectorSemanticFixture(
+      highTension,
+      createInternalDecision(highTension, {
+        selector_candidate_7: "actor_role_mismatch",
+        selector_candidate_3: "overclaim_or_ambiguity",
+      }),
+    );
+
+    expect(missed.annotations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          candidate_id: "selector_candidate_7",
+          status: "risk_missed",
+        }),
+      ]),
+    );
+    expect(falsePositive.annotations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          candidate_id: "selector_candidate_3",
+          status: "none_control_failed",
+        }),
+      ]),
+    );
+  });
+
+  it("marks missing or unknown candidate coverage as structural failure", () => {
+    const [fixture] = loadTopicSelectorSemanticFixtureSet();
+    const missing = createInternalDecision(fixture);
+    missing.ranked_candidates.pop();
+    const unknown = createInternalDecision(fixture);
+    unknown.ranked_candidates[0].candidate_id = "unknown_candidate";
+
+    expect(evaluateTopicSelectorSemanticFixture(fixture, missing)).toMatchObject({
+      structural_failed: true,
+      error_code: "topic_selector_semantic_replay_candidate_coverage_mismatch",
+    });
+    expect(evaluateTopicSelectorSemanticFixture(fixture, unknown)).toMatchObject({
+      structural_failed: true,
+      error_code: "topic_selector_semantic_replay_candidate_coverage_mismatch",
+    });
+  });
+
+  it("does not retry a failed fixture and continues with the second budgeted fixture", async () => {
+    const called: string[] = [];
+
+    const result = await runTopicSelectorSemanticReplay(
+      {
+        live: true,
+        confirmLive: true,
+        model: "glm-5.2",
+        maxRequests: 2,
+        maxCostCny: 1,
+        outputDir: makeSandbox("live-first-fails"),
+      },
+      {
+        createLiveRunner: () => ({
+          runFixture: async (fixture) => {
+            called.push(fixture.fixture_id);
+            if (fixture.fixture_id === "task17-high-tension") {
+              throw new Error("strict failure");
+            }
+            return {
+              decision: createInternalDecision(fixture, {
+                selector_candidate_3: "overclaim_or_ambiguity",
+                selector_candidate_7: "overclaim_or_ambiguity",
+              }),
+              observation: createObservation(fixture.fixture_id),
+            };
+          },
+        }),
+      },
+    );
+
+    expect(called).toEqual(["task17-high-tension", "task17-balanced"]);
+    expect(result.actual_requests).toBe(2);
+    expect(result.results[0]).toMatchObject({ structural_failed: true });
+    expect(result.primary_gate_passed).toBe(false);
+  });
+
+  it("uses the production gateway, strict schema, parser, target tool, and one attempt", async () => {
+    const [fixture] = loadTopicSelectorSemanticFixtureSet();
+    const providerDecision = createProviderDecision(fixture, {
+      selector_candidate_7: "actor_role_mismatch",
+    });
+    const argumentsJson = JSON.stringify(providerDecision);
+    let capturedRequest: Record<string, any> | undefined;
+
+    const provider = createOpenAiCompatibleProvider({
+      profile: "structured",
+      model: "glm-5.2",
+      maxAttempts: 1,
+      invokeStrictApi: vi.fn(async (request) => {
+        capturedRequest = request as unknown as Record<string, any>;
+        return {
+          rawOutput: argumentsJson,
+          content: argumentsJson,
+          argumentsJson,
+          metadata: {
+            finishReason: "tool_calls",
+            promptTokens: 100,
+            completionTokens: 20,
+            reasoningTokens: 0,
+          },
+        };
+      }) as never,
+    });
+    const runner = createTopicSelectorSemanticReplayLiveRunner("glm-5.2", {
+      createProvider: () => provider,
+    });
+
+    const result = await runner.runFixture(fixture);
+
+    expect(capturedRequest?.schema).toBe(TOPIC_SELECTOR_STRICT_SCHEMA);
+    expect(capturedRequest?.prompt.metadata.id).toBe("topic.selector");
+    expect(capturedRequest?.input).toEqual(fixture.selector_input);
+    expect(capturedRequest?.options).toMatchObject({
+      strategy: "tool_call",
+      thinking: "disabled",
+      toolChoice: "target_function",
+    });
+    expect(result.decision.ranked_candidates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          candidate_id: "selector_candidate_7",
+          consistency_status: "risk",
+          primary_consistency_issue: "actor_role_mismatch",
+        }),
+      ]),
+    );
+    expect(result.observation).toMatchObject({
+      model: "glm-5.2",
+      prompt_id: "topic.selector",
+      attempt_count: 1,
+      tool_arguments_chars: argumentsJson.length,
+      finish_reason: "tool_calls",
+    });
+    expect(result.observation.prompt_sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.observation.effective_request).toMatchObject({
+      maxAttempts: 1,
+      strategy: "tool_call",
+      thinking: "disabled",
+      toolChoice: "target_function",
+    });
+  });
+
+  it("exposes the replay as a non-default npm command", () => {
+    const packageJson = JSON.parse(
+      readFileSync(join(process.cwd(), "package.json"), "utf8"),
+    ) as { scripts?: Record<string, string> };
+
+    expect(packageJson.scripts).toMatchObject({
+      "harness:topic-selector-semantic-replay":
+        "tsx harness/scripts/runtime/topic-selector-semantic-replay.ts",
+    });
   });
 });

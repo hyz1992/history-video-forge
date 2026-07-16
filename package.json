@@ -57,7 +57,8 @@
     "harness:ui-reference-migration:report": "tsx harness/scripts/ui-acceptance/reference-migration-report.ts",
     "harness:auth-flow-acceptance": "tsx harness/scripts/ui-acceptance/auth-flow-acceptance.ts",
     "harness:s1-browser-acceptance": "tsx harness/scripts/ui-acceptance/s1-browser-acceptance.ts",
-    "harness:llm-s2-baseline": "tsx harness/scripts/runtime/llm-s2-baseline.ts"
+    "harness:llm-s2-baseline": "tsx harness/scripts/runtime/llm-s2-baseline.ts",
+    "harness:topic-selector-semantic-replay": "tsx harness/scripts/runtime/topic-selector-semantic-replay.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.58.2",

@@ -1,7 +1,20 @@
+import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
-import { TOPIC_SELECTOR_STRICT_SCHEMA } from "../../../backend/src/modules/topic/topic-recommendation.service.js";
+import {
+  parseStrictSelectorDecision,
+  TOPIC_SELECTOR_STRICT_SCHEMA,
+} from "../../../backend/src/modules/topic/topic-recommendation.service.js";
+import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
+import type {
+  LlmInteractionLogEntry,
+  LlmInteractionLogWriter,
+} from "../../../backend/src/runtime/llm/interaction-log.js";
+import { createOpenAiCompatibleProvider } from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
+import type { StructuredPromptProvider } from "../../../backend/src/runtime/llm/provider-contract.js";
+import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 
 export const DEFAULT_TOPIC_SELECTOR_SEMANTIC_FIXTURE_SET_PATH =
   "harness/samples/topic-selector-semantic-replay/fixture-set.md";
@@ -34,7 +47,86 @@ export interface TopicSelectorSemanticReplayPlan {
 }
 
 export interface TopicSelectorSemanticReplayDependencies {
-  createLiveRunner?: (model: string) => unknown;
+  createLiveRunner?: (model: string) => TopicSelectorSemanticReplayLiveRunner;
+}
+
+export interface TopicSelectorSemanticReplayLiveRunnerDependencies {
+  createProvider?: (model: string) => StructuredPromptProvider;
+}
+
+export interface TopicSelectorSemanticReplayLiveRunner {
+  runFixture(fixture: TopicSelectorSemanticFixture): Promise<{
+    decision: TopicSelectorSemanticReplayDecision;
+    observation: TopicSelectorSemanticReplayObservation;
+  }>;
+}
+
+export interface TopicSelectorSemanticReplayDecision {
+  ranked_candidates: Array<{
+    candidate_id: string;
+    primary_consistency_issue: string;
+    consistency_status?: string;
+    [key: string]: unknown;
+  }>;
+}
+
+export interface TopicSelectorSemanticReplayObservation {
+  model: string;
+  prompt_id: string;
+  prompt_sha256: string;
+  effective_request: LlmInteractionLogEntry["effectiveRequest"] | null;
+  attempt_count: number;
+  duration_ms: number | null;
+  usage: {
+    prompt_tokens: number | null;
+    completion_tokens: number | null;
+    reasoning_tokens: number | null;
+  };
+  finish_reason: string | null;
+  tool_arguments_chars: number | null;
+  error_code: string | null;
+}
+
+export type TopicSelectorSemanticAnnotationStatus =
+  | "matched"
+  | "risk_recalled_enum_differed"
+  | "risk_missed"
+  | "none_control_failed";
+
+export interface TopicSelectorSemanticReplayFixtureResult {
+  fixture_id: string;
+  source_project_id: string;
+  source_topic_run_id: string;
+  structural_failed: boolean;
+  error_code: string | null;
+  annotations: Array<{
+    candidate_id: string;
+    expected_risk: boolean;
+    expected_issue: string;
+    actual_issue: string;
+    entered_final_candidates: boolean;
+    status: TopicSelectorSemanticAnnotationStatus;
+  }>;
+  observation: TopicSelectorSemanticReplayObservation | null;
+}
+
+export interface TopicSelectorSemanticReplaySummary {
+  mode: "topic_selector_semantic_replay";
+  live: true;
+  automated_gate: false;
+  selector_only: true;
+  fixture_set_path: string;
+  output_dir: string;
+  total_fixtures: number;
+  planned_requests: number;
+  actual_requests: number;
+  expected_risk_count: number;
+  recalled_risk_count: number;
+  none_control_count: number;
+  passed_none_control_count: number;
+  exact_enum_match_count: number;
+  primary_gate_passed: boolean;
+  results: TopicSelectorSemanticReplayFixtureResult[];
 }
 
 export interface TopicSelectorSemanticFixture {
@@ -120,8 +212,8 @@ export function buildTopicSelectorSemanticReplayPlan(
 
 export async function runTopicSelectorSemanticReplay(
   input: TopicSelectorSemanticReplayInput = {},
-  _dependencies: TopicSelectorSemanticReplayDependencies = {},
-): Promise<TopicSelectorSemanticReplayPlan> {
+  dependencies: TopicSelectorSemanticReplayDependencies = {},
+): Promise<TopicSelectorSemanticReplayPlan | TopicSelectorSemanticReplaySummary> {
   const fixtureSetPath =
     input.fixtureSetPath ?? DEFAULT_TOPIC_SELECTOR_SEMANTIC_FIXTURE_SET_PATH;
   const fixtures = loadTopicSelectorSemanticFixtureSet(fixtureSetPath);
@@ -135,7 +227,197 @@ export async function runTopicSelectorSemanticReplay(
   }
 
   validateLiveInput(input, fixtures.length);
-  throw new Error("topic_selector_semantic_replay_live_not_implemented");
+  const outputDir = input.outputDir ?? DEFAULT_TOPIC_SELECTOR_SEMANTIC_OUTPUT_DIR;
+  mkdirSync(outputDir, { recursive: true });
+  writeJson(outputDir, "replay-plan.json", plan);
+
+  const runner =
+    dependencies.createLiveRunner?.(input.model!) ??
+    createTopicSelectorSemanticReplayLiveRunner(input.model!);
+  const results: TopicSelectorSemanticReplayFixtureResult[] = [];
+  let actualRequests = 0;
+
+  for (const fixture of fixtures) {
+    actualRequests += 1;
+    let result: TopicSelectorSemanticReplayFixtureResult;
+
+    try {
+      const replay = await runner.runFixture(fixture);
+      result = {
+        ...evaluateTopicSelectorSemanticFixture(fixture, replay.decision),
+        observation: replay.observation,
+      };
+    } catch (error) {
+      result = createStructuralFailureResult(
+        fixture,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+
+    results.push(result);
+    writeJson(outputDir, `${fixture.fixture_id}.result.json`, result);
+  }
+
+  const expectedRiskCount = fixtures
+    .flatMap((fixture) => fixture.annotations)
+    .filter((annotation) => annotation.expected_risk).length;
+  const noneControlCount = fixtures
+    .flatMap((fixture) => fixture.annotations)
+    .filter((annotation) => !annotation.expected_risk).length;
+  const evaluatedAnnotations = results.flatMap((result) => result.annotations);
+  const recalledRiskCount = evaluatedAnnotations.filter(
+    (annotation) =>
+      annotation.expected_risk &&
+      (annotation.status === "matched" ||
+        annotation.status === "risk_recalled_enum_differed"),
+  ).length;
+  const passedNoneControlCount = evaluatedAnnotations.filter(
+    (annotation) => !annotation.expected_risk && annotation.status === "matched",
+  ).length;
+  const exactEnumMatchCount = evaluatedAnnotations.filter(
+    (annotation) => annotation.expected_risk && annotation.status === "matched",
+  ).length;
+  const primaryGatePassed =
+    results.every((result) => !result.structural_failed) &&
+    recalledRiskCount === expectedRiskCount &&
+    passedNoneControlCount === noneControlCount;
+
+  const summary: TopicSelectorSemanticReplaySummary = {
+    mode: "topic_selector_semantic_replay",
+    live: true,
+    automated_gate: false,
+    selector_only: true,
+    fixture_set_path: fixtureSetPath,
+    output_dir: outputDir,
+    total_fixtures: fixtures.length,
+    planned_requests: plan.required_requests,
+    actual_requests: actualRequests,
+    expected_risk_count: expectedRiskCount,
+    recalled_risk_count: recalledRiskCount,
+    none_control_count: noneControlCount,
+    passed_none_control_count: passedNoneControlCount,
+    exact_enum_match_count: exactEnumMatchCount,
+    primary_gate_passed: primaryGatePassed,
+    results,
+  };
+
+  writeJson(outputDir, "replay-summary.json", summary);
+  writeReplayTrace(outputDir, summary);
+  return summary;
+}
+
+export function evaluateTopicSelectorSemanticFixture(
+  fixture: TopicSelectorSemanticFixture,
+  decision: TopicSelectorSemanticReplayDecision,
+): TopicSelectorSemanticReplayFixtureResult {
+  const expectedIds = fixture.selector_input.selector_pool.map(
+    (candidate) => candidate.candidate_id,
+  );
+  const actualIds = decision.ranked_candidates.map(
+    (candidate) => candidate.candidate_id,
+  );
+
+  if (!sameUniqueStringSet(expectedIds, actualIds)) {
+    return createStructuralFailureResult(
+      fixture,
+      "topic_selector_semantic_replay_candidate_coverage_mismatch",
+    );
+  }
+
+  const productionIssues = getProductionConsistencyIssueSet();
+  const actualIssueById = new Map<string, string>();
+  for (const candidate of decision.ranked_candidates) {
+    if (!productionIssues.has(candidate.primary_consistency_issue)) {
+      return createStructuralFailureResult(
+        fixture,
+        "topic_selector_semantic_replay_invalid_actual_issue",
+      );
+    }
+    actualIssueById.set(candidate.candidate_id, candidate.primary_consistency_issue);
+  }
+
+  return {
+    fixture_id: fixture.fixture_id,
+    source_project_id: fixture.source.project_id,
+    source_topic_run_id: fixture.source.topic_run_id,
+    structural_failed: false,
+    error_code: null,
+    annotations: fixture.annotations.map((annotation) => {
+      const actualIssue = actualIssueById.get(annotation.candidate_id)!;
+      let status: TopicSelectorSemanticAnnotationStatus = "matched";
+
+      if (annotation.expected_risk && actualIssue === "none") {
+        status = "risk_missed";
+      } else if (!annotation.expected_risk && actualIssue !== "none") {
+        status = "none_control_failed";
+      } else if (
+        annotation.expected_risk &&
+        actualIssue !== annotation.expected_issue
+      ) {
+        status = "risk_recalled_enum_differed";
+      }
+
+      return {
+        candidate_id: annotation.candidate_id,
+        expected_risk: annotation.expected_risk,
+        expected_issue: annotation.expected_issue,
+        actual_issue: actualIssue,
+        entered_final_candidates: annotation.entered_final_candidates,
+        status,
+      };
+    }),
+    observation: null,
+  };
+}
+
+export function createTopicSelectorSemanticReplayLiveRunner(
+  model: string,
+  dependencies: TopicSelectorSemanticReplayLiveRunnerDependencies = {},
+): TopicSelectorSemanticReplayLiveRunner {
+  const provider =
+    dependencies.createProvider?.(model) ??
+    createOpenAiCompatibleProvider({
+      profile: "structured",
+      model,
+      maxAttempts: 1,
+    });
+  const gateway = createLlmGateway({
+    registry: createPromptRegistry(),
+    provider,
+  });
+
+  return {
+    async runFixture(fixture) {
+      let interaction: LlmInteractionLogEntry | null = null;
+      const writer: LlmInteractionLogWriter = {
+        write(entry) {
+          interaction = entry;
+        },
+      };
+      const decision = await gateway.invokeStrictStructured({
+        promptId: "topic.selector",
+        input: fixture.selector_input,
+        schema: TOPIC_SELECTOR_STRICT_SCHEMA,
+        parse: parseStrictSelectorDecision,
+        operationName: "topic.selector",
+        interactionLogWriter: writer,
+        options: {
+          strategy: "tool_call",
+          thinking: "disabled",
+          toolChoice: "target_function",
+        },
+      });
+
+      if (!interaction) {
+        throw new Error("topic_selector_semantic_replay_interaction_missing");
+      }
+
+      return {
+        decision,
+        observation: toReplayObservation(interaction),
+      };
+    },
+  };
 }
 
 export function parseTopicSelectorSemanticReplayArgs(
@@ -220,6 +502,138 @@ function writeJson(outputDir: string, filename: string, value: unknown) {
   writeFileSync(
     resolve(outputDir, filename),
     JSON.stringify(value, null, 2),
+    "utf8",
+  );
+}
+
+function sameUniqueStringSet(expected: string[], actual: string[]): boolean {
+  const expectedSet = new Set(expected);
+  const actualSet = new Set(actual);
+
+  return (
+    expectedSet.size === expected.length &&
+    actualSet.size === actual.length &&
+    expectedSet.size === actualSet.size &&
+    expected.every((value) => actualSet.has(value))
+  );
+}
+
+function createStructuralFailureResult(
+  fixture: TopicSelectorSemanticFixture,
+  errorCode: string,
+): TopicSelectorSemanticReplayFixtureResult {
+  return {
+    fixture_id: fixture.fixture_id,
+    source_project_id: fixture.source.project_id,
+    source_topic_run_id: fixture.source.topic_run_id,
+    structural_failed: true,
+    error_code: errorCode,
+    annotations: [],
+    observation: null,
+  };
+}
+
+function toReplayObservation(
+  entry: LlmInteractionLogEntry,
+): TopicSelectorSemanticReplayObservation {
+  return {
+    model: entry.model,
+    prompt_id: entry.promptId,
+    prompt_sha256: createHash("sha256")
+      .update(entry.systemPrompt, "utf8")
+      .digest("hex"),
+    effective_request: entry.effectiveRequest ?? null,
+    attempt_count: entry.attempts?.length ?? 0,
+    duration_ms: entry.timing?.durationMs ?? null,
+    usage: {
+      prompt_tokens: entry.responseMetadata?.promptTokens ?? null,
+      completion_tokens: entry.responseMetadata?.completionTokens ?? null,
+      reasoning_tokens: entry.responseMetadata?.reasoningTokens ?? null,
+    },
+    finish_reason: entry.responseMetadata?.finishReason ?? null,
+    tool_arguments_chars: readToolArgumentsChars(entry.rawOutput),
+    error_code: entry.errorMessage ?? null,
+  };
+}
+
+function readToolArgumentsChars(rawOutput: string): number | null {
+  try {
+    const parsed = JSON.parse(rawOutput) as unknown;
+    if (!isRecord(parsed)) {
+      return null;
+    }
+
+    if (
+      Array.isArray(parsed.ranked_candidates) &&
+      Array.isArray(parsed.consistency_risk_notes)
+    ) {
+      return rawOutput.length;
+    }
+
+    const choices = parsed.choices;
+    if (!Array.isArray(choices)) {
+      return null;
+    }
+
+    for (const rawChoice of choices) {
+      if (!isRecord(rawChoice) || !isRecord(rawChoice.message)) {
+        continue;
+      }
+      const toolCalls = rawChoice.message.tool_calls;
+      if (!Array.isArray(toolCalls)) {
+        continue;
+      }
+      for (const rawToolCall of toolCalls) {
+        if (!isRecord(rawToolCall) || !isRecord(rawToolCall.function)) {
+          continue;
+        }
+        if (
+          rawToolCall.function.name === TOPIC_SELECTOR_STRICT_SCHEMA.name &&
+          typeof rawToolCall.function.arguments === "string"
+        ) {
+          return rawToolCall.function.arguments.length;
+        }
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function writeReplayTrace(
+  outputDir: string,
+  summary: TopicSelectorSemanticReplaySummary,
+) {
+  const fixtureLines = summary.results.map((result) => {
+    const statuses = result.annotations
+      .map((annotation) => `${annotation.candidate_id}:${annotation.status}`)
+      .join(", ");
+    return `- ${result.fixture_id}: structural_failed=${result.structural_failed}, ${statuses || result.error_code || "no annotations"}`;
+  });
+
+  writeFileSync(
+    resolve(outputDir, "trace.md"),
+    [
+      "# Topic Selector Semantic Replay",
+      "",
+      `- live: ${summary.live}`,
+      `- automated_gate: ${summary.automated_gate}`,
+      `- selector_only: ${summary.selector_only}`,
+      `- planned_requests: ${summary.planned_requests}`,
+      `- actual_requests: ${summary.actual_requests}`,
+      `- expected_risk_count: ${summary.expected_risk_count}`,
+      `- recalled_risk_count: ${summary.recalled_risk_count}`,
+      `- none_control_count: ${summary.none_control_count}`,
+      `- passed_none_control_count: ${summary.passed_none_control_count}`,
+      `- exact_enum_match_count: ${summary.exact_enum_match_count}`,
+      `- primary_gate_passed: ${summary.primary_gate_passed}`,
+      "",
+      "## Fixtures",
+      "",
+      ...fixtureLines,
+    ].join("\n"),
     "utf8",
   );
 }
@@ -412,4 +826,37 @@ function readNumber(value: unknown, errorCode: string): number {
     throw new Error(errorCode);
   }
   return value;
+}
+
+async function main() {
+  const result = await runTopicSelectorSemanticReplay(
+    parseTopicSelectorSemanticReplayArgs(process.argv.slice(2)),
+  );
+  const summary = result.mode === "topic_selector_semantic_replay_plan"
+    ? {
+        mode: result.mode,
+        live: result.live,
+        fixture_count: result.fixture_count,
+        required_requests: result.required_requests,
+        actual_requests: result.actual_requests,
+      }
+    : {
+        mode: result.mode,
+        live: result.live,
+        total_fixtures: result.total_fixtures,
+        actual_requests: result.actual_requests,
+        primary_gate_passed: result.primary_gate_passed,
+        output_dir: result.output_dir,
+      };
+
+  process.stdout.write(`${JSON.stringify(summary, null, 2)}\n`);
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  void main().catch((error) => {
+    process.stderr.write(
+      `${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    process.exitCode = 1;
+  });
 }
