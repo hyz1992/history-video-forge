@@ -1092,7 +1092,6 @@ async function invokeTopicSelector(input: {
             ),
           options: {
             strategy: "tool_call",
-            thinking: "disabled",
             // Task 10：capability probe 已证明当前 provider/API 路由支持指定目标 function，
             // 显式强制目标 function 以提升结构可靠性。返回错误工具或缺少目标工具时
             // provider 会抛 strict_structured_target_tool_mismatch / strict_structured_no_tool_call，

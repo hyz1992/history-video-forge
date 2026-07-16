@@ -121,6 +121,11 @@ export interface OperationPolicy {
  * 单变量优化：只关闭该精确 operation thinking，保持 8 候选、prompt/schema/validator/
  * repair/selector/timeout/retry 不变。关闭后的真实耗时与语义质量仍由 Task 13 独立 live 验收。
  *
+ * Topic Selector 证据来源：2026-07-16 两份固定 Selector-only 回放。
+ * 在 prompt/schema/parser/fixture/目标工具/maxAttempts 均不变时，thinking=disabled 的风险召回
+ * 为 0/2，thinking=enabled 恢复为 2/2，两个 none 对照保持 2/2，effective thinking 为 2/2。
+ * 因此只为精确 operation topic.selector 启用 thinking，不扩展到 short_structured_decision class。
+ *
  * 边界（禁止扩展）：
  * - 该结论只支持本次精确 operation 策略，不允许扩展为同 class 其他 operation 的默认值；
  *   long_structured_generation 仍包含未经验证的 storyboard.segment-regen 和
@@ -135,6 +140,7 @@ const APPROVED_THINKING_OVERRIDE: Partial<
   "script.writer": "disabled",
   "storyboard.planner": "disabled",
   "topic.candidate-builder": "disabled",
+  "topic.selector": "enabled",
 };
 
 

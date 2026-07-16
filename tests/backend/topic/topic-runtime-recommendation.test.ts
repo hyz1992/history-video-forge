@@ -1842,6 +1842,7 @@ describe("topic runtime recommendation", () => {
 
     const selectorRequest = strictCalls[0] as
       | {
+          options?: Record<string, unknown>;
           input?: {
             recommendation_seed?: unknown;
             selector_pool?: Array<Record<string, unknown>>;
@@ -1894,13 +1895,13 @@ describe("topic runtime recommendation", () => {
         }),
         options: expect.objectContaining({
           strategy: "tool_call",
-          thinking: "disabled",
           // Task 10：capability probe 已确认 provider 支持指定目标 function，
           // strict 调用必须强制目标 function。
           toolChoice: "target_function",
         }),
       }),
     );
+    expect(selectorRequest?.options).not.toHaveProperty("thinking");
     expect(
       structuredCalls.filter(
         (request) =>
