@@ -1027,6 +1027,14 @@ async function selectFinalCandidatesWithTrace(input: {
     throw new Error("topic_selector_empty_after_dedup");
   }
 
+  if (selection.selectedRiskCandidateIds.length > 0) {
+    diagnostics.push({
+      code: "topic_selector_consistency_risk_backfill",
+      level: "warning",
+      reason: `一致性 pass 候选不足 ${TOPIC_CANDIDATE_TARGET_COUNT} 项，已按 Selector 原排名受控补入 ${selection.selectedRiskCandidateIds.length} 项：${selection.selectedRiskCandidateIds.join(", ")}`,
+    });
+  }
+
   return {
     candidates: selection.selected.map((entry) => entry.candidate),
     rankings: selection.selected,
@@ -1368,12 +1376,15 @@ function selectRankedCandidates(input: {
   const selectedIds: string[] = [];
   const selectedEventIdentities = new Set<string>();
   const seenCandidateIds = new Set<string>();
+  const selectedRiskCandidateIds: string[] = [];
   const rankedCandidates = [...input.decision.ranked_candidates].sort(
     (left, right) => {
       const leftRanking = rankingsById.get(left.candidate_id);
       const rightRanking = rankingsById.get(right.candidate_id);
       return (
         (leftRanking?.fatigueScore ?? 0) - (rightRanking?.fatigueScore ?? 0) ||
+        (left.consistency_status === "pass" ? 0 : 1) -
+          (right.consistency_status === "pass" ? 0 : 1) ||
         left.quality_rank - right.quality_rank ||
         right.quality_score - left.quality_score
       );
@@ -1406,6 +1417,9 @@ function selectRankedCandidates(input: {
 
     selected.push(match);
     selectedIds.push(scorecard.candidate_id);
+    if (scorecard.consistency_status === "risk") {
+      selectedRiskCandidateIds.push(scorecard.candidate_id);
+    }
     if (!allowRepeatedEventIdentities) {
       selectedEventIdentities.add(match.eventIdentity);
     }
@@ -1420,6 +1434,7 @@ function selectRankedCandidates(input: {
     selectedIds,
     rankedCandidates,
     skippedCandidateIds,
+    selectedRiskCandidateIds,
   };
 }
 

@@ -809,7 +809,11 @@ describe("topic runtime recommendation", () => {
       one_line_angle: "angle-a",
       must_cover_preview: ["a-entry", "a-action", "a-cost"],
     });
-    expect(previewTrace?.ranked_candidates?.[0]).toMatchObject({
+    expect(
+      previewTrace?.ranked_candidates?.find(
+        (candidate) => candidate.candidate_id === "selector_candidate_1",
+      ),
+    ).toMatchObject({
       candidate_id: "selector_candidate_1",
       consistency_status: "risk",
       primary_consistency_issue: "actor_role_mismatch",
@@ -824,64 +828,33 @@ describe("topic runtime recommendation", () => {
       primary_consistency_issue: "actor_role_mismatch",
       consistency_note: "标题把执行者写成了结果承担者",
     });
-    expect(previewTrace?.final_candidates).toMatchObject([
-      {
-        candidate_id: "selector_candidate_1",
-        title: "event-a",
-        one_line_angle: "angle-a",
-        must_cover_preview: ["a-entry", "a-action", "a-cost"],
-        quality_rank: 1,
-        quality_score: 99,
-        deductions: [
-          {
-            axis: "angle_freshness",
-            points_lost: 1,
-            reason: "rank 1 deduction",
-          },
-        ],
-        risk_summary: "rank 1 risk",
-        consistency_status: "risk",
-        primary_consistency_issue: "actor_role_mismatch",
-        consistency_note: "标题把执行者写成了结果承担者",
-      },
-      {
-        candidate_id: "selector_candidate_2",
-        title: "event-b",
-        one_line_angle: "angle-b",
-        must_cover_preview: ["b-entry", "b-action", "b-cost"],
-        quality_rank: 2,
-        quality_score: 98,
-        deductions: [
-          {
-            axis: "angle_freshness",
-            points_lost: 2,
-            reason: "rank 2 deduction",
-          },
-        ],
-        risk_summary: "rank 2 risk",
-      },
-      {
-        candidate_id: "selector_candidate_3",
-        title: "event-c",
-        one_line_angle: "angle-c",
-        must_cover_preview: ["c-entry", "c-action", "c-cost"],
-        quality_rank: 3,
-        quality_score: 97,
-        deductions: [
-          {
-            axis: "angle_freshness",
-            points_lost: 3,
-            reason: "rank 3 deduction",
-          },
-        ],
-        risk_summary: "rank 3 risk",
-      },
-      {
-        candidate_id: "selector_candidate_4",
-        title: "event-d",
-        one_line_angle: "angle-d",
-      },
+    expect(
+      previewTrace?.final_candidates.map((candidate) => candidate.candidate_id),
+    ).toEqual([
+      "selector_candidate_2",
+      "selector_candidate_3",
+      "selector_candidate_4",
+      "selector_candidate_5",
     ]);
+    expect(previewTrace?.final_candidates[0]).toMatchObject({
+      candidate_id: "selector_candidate_2",
+      title: "event-b",
+      one_line_angle: "angle-b",
+      must_cover_preview: ["b-entry", "b-action", "b-cost"],
+      quality_rank: 2,
+      quality_score: 98,
+      deductions: [
+        {
+          axis: "angle_freshness",
+          points_lost: 2,
+          reason: "rank 2 deduction",
+        },
+      ],
+      risk_summary: "rank 2 risk",
+      consistency_status: "pass",
+      primary_consistency_issue: "none",
+      consistency_note: "标题、切口和三段推进互相支持",
+    });
   });
 
   it("triggers topic.candidate-builder-repair when builder omits required TopicCandidateCard fields", async () => {
@@ -1584,6 +1557,127 @@ describe("topic runtime recommendation", () => {
       "event-f",
       "event-a",
     ]);
+  });
+
+  it("keeps a rank-one risk candidate out when four pass candidates are available", async () => {
+    const db = createDbClient();
+    const selectorDecision = createSelectorDecision(
+      "selector_candidate_1",
+      "selector_candidate_2",
+      "selector_candidate_3",
+      "selector_candidate_4",
+      "selector_candidate_5",
+      "selector_candidate_6",
+      "selector_candidate_7",
+      "selector_candidate_8",
+    );
+    Object.assign(selectorDecision.ranked_candidates[0], {
+      consistency_status: "risk",
+      primary_consistency_issue: "overclaim_or_ambiguity",
+      consistency_note: "短切口的主语会让结果错误关联到前置人物",
+    });
+    const { gateway, invokeApi } = createGatewayWithSelectorResponses([
+      [
+        createRuntimeCandidate("event-a", "angle-a"),
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+        createRuntimeCandidate("event-d", "angle-d"),
+        createRuntimeCandidate("event-e", "angle-e"),
+        createRuntimeCandidate("event-f", "angle-f"),
+        createRuntimeCandidate("event-g", "angle-g"),
+        createRuntimeCandidate("event-h", "angle-h"),
+      ],
+    ], [selectorDecision]);
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "clean selector candidates should outrank semantic risks",
+        coreConflict: "a high quality rank must not hide an explicit consistency risk",
+        strongScene: "four clean candidates remain available",
+        sourceHint: "test",
+        recentUsageHint: "none",
+      },
+      { llmGateway: gateway },
+    );
+
+    expect(result.selector_trace?.selected_candidate_ids).toEqual([
+      "selector_candidate_2",
+      "selector_candidate_3",
+      "selector_candidate_4",
+      "selector_candidate_5",
+    ]);
+    expect(result.candidates.map((candidate) => candidate.title)).toEqual([
+      "event-b",
+      "event-c",
+      "event-d",
+      "event-e",
+    ]);
+    expect(invokeApi).toHaveBeenCalledTimes(2);
+  });
+
+  it("backfills the best risk candidate with a warning when fewer than four pass candidates remain", async () => {
+    const db = createDbClient();
+    const selectorDecision = createSelectorDecision(
+      "selector_candidate_1",
+      "selector_candidate_2",
+      "selector_candidate_3",
+      "selector_candidate_4",
+      "selector_candidate_5",
+      "selector_candidate_6",
+      "selector_candidate_7",
+      "selector_candidate_8",
+    );
+    for (const scorecard of selectorDecision.ranked_candidates) {
+      if (scorecard.quality_rank === 1 || scorecard.quality_rank >= 5) {
+        Object.assign(scorecard, {
+          consistency_status: "risk",
+          primary_consistency_issue: "action_event_mismatch",
+          consistency_note: "关键动作与三段推进不一致",
+        });
+      }
+    }
+    const { gateway, invokeApi } = createGatewayWithSelectorResponses([
+      [
+        createRuntimeCandidate("event-a", "angle-a"),
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+        createRuntimeCandidate("event-d", "angle-d"),
+        createRuntimeCandidate("event-e", "angle-e"),
+        createRuntimeCandidate("event-f", "angle-f"),
+        createRuntimeCandidate("event-g", "angle-g"),
+        createRuntimeCandidate("event-h", "angle-h"),
+      ],
+    ], [selectorDecision]);
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-a",
+        summary: "risk backfill should stay explicit and bounded",
+        coreConflict: "only three clean candidates remain",
+        strongScene: "the best ranked risk fills the final slot",
+        sourceHint: "test",
+        recentUsageHint: "none",
+      },
+      { llmGateway: gateway },
+    );
+
+    expect(result.selector_trace?.selected_candidate_ids).toEqual([
+      "selector_candidate_2",
+      "selector_candidate_3",
+      "selector_candidate_4",
+      "selector_candidate_1",
+    ]);
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "topic_selector_consistency_risk_backfill",
+        level: "warning",
+        reason: expect.stringContaining("selector_candidate_1"),
+      }),
+    );
+    expect(invokeApi).toHaveBeenCalledTimes(2);
   });
 
   it("uses strict structured invocation for topic.selector when the gateway supports it", async () => {
