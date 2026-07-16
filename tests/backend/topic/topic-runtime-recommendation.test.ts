@@ -1539,6 +1539,46 @@ describe("topic runtime recommendation", () => {
       },
     );
 
+    const selectorRequest = strictCalls[0] as
+      | {
+          input?: {
+            recommendation_seed?: unknown;
+            selector_pool?: Array<Record<string, unknown>>;
+            recent_event_memory?: unknown[];
+          };
+        }
+      | undefined;
+    const promptPool = selectorRequest?.input?.selector_pool ?? [];
+
+    expect(promptPool).toHaveLength(8);
+    expect(promptPool.map((candidate) => candidate.candidate_id)).toEqual([
+      "selector_candidate_1",
+      "selector_candidate_2",
+      "selector_candidate_3",
+      "selector_candidate_4",
+      "selector_candidate_5",
+      "selector_candidate_6",
+      "selector_candidate_7",
+      "selector_candidate_8",
+    ]);
+    expect(promptPool[0]).toEqual(
+      expect.objectContaining({
+        event_identity: "event-a",
+        title: "event-a",
+        one_line_angle: "angle-a",
+        core_conflict: expect.any(String),
+        strong_scene: expect.any(String),
+        must_cover_preview: expect.any(Array),
+        risk_hints: expect.any(Array),
+        fatigue_score: 0,
+      }),
+    );
+    expect(promptPool[0]).not.toHaveProperty("normalized_event_identity");
+    expect(promptPool[0]).not.toHaveProperty("recently_seen");
+    expect(promptPool[0]).not.toHaveProperty("viral_rubric");
+    expect(selectorRequest?.input).toHaveProperty("recommendation_seed");
+    expect(selectorRequest?.input).toHaveProperty("recent_event_memory");
+
     expect(result.selector_trace?.selected_candidate_ids).toEqual([
       "selector_candidate_1",
       "selector_candidate_2",

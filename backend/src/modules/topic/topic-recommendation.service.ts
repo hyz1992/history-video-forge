@@ -55,6 +55,7 @@ import {
   createTopicCandidateLibraryRepository,
   type TopicCandidateLibraryRepository,
 } from "./topic-candidate-library.repository.js";
+import { projectTopicSelectorPool } from "./topic-selector-prompt-projection.js";
 
 export interface TopicRecommendationOptions {
   llmGateway?: LlmGateway;
@@ -973,7 +974,7 @@ async function selectFinalCandidatesWithTrace(input: {
     llmGateway: input.llmGateway,
     selectorInput: {
       recommendation_seed: input.input,
-      selector_pool: input.selectorPool,
+      selector_pool: projectTopicSelectorPool(input.selectorPool),
       recent_event_memory: input.recentEventMemory,
     },
     interactionLogWriter: input.interactionLogWriter,
