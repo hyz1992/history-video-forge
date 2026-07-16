@@ -921,4 +921,15 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("recent_event_memory");
     expect(prompt.body).toContain("语义上等价或明显过近");
   });
+
+  it("requires selector to deduct cross-field semantic contradictions without rewriting candidates", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.selector");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("行为主体");
+    expect(prompt.body).toContain("关键动作");
+    expect(prompt.body).toContain("因果关系");
+    expect(prompt.body).toContain("source_or_scope_risk");
+    expect(prompt.body).toContain("不得改写候选");
+  });
 });

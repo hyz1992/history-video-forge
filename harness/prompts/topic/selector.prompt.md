@@ -54,6 +54,8 @@ status: active
 - 只从给定候选池中选择，不得发明新的候选。
 - 先判断候选作为历史故事口播首稿的潜力，再排序。
 - 重点看开头留存、冲突压力、强场面、动作/对话空间、角度新鲜度、脚本可展开性与结尾余震。
+- 必须横向核对 `title`、`one_line_angle`、`core_conflict`、`strong_scene` 与 `must_cover_preview` 的行为主体、关键动作、因果关系和结果是否一致。
+- 若同一候选的主体、动作、因果或结果互相冲突，必须在 `source_or_scope_risk` 中扣分并说明冲突；只做排序与风险说明，不得改写候选。
 - 若 `recommendation_seed` 已经明确锚定具体单事件，优先保留与该事件同一 `event_identity` 的候选，不得把不同 `event_identity` 的相邻事件、同人物其他阶段或结果阶段当作同题替代。
 - 仅在宽边界 seed 下，优先选择事件不同的候选，并让排序前列覆盖不同冲突类型和不同叙事切口。
 - 若候选与 `recent_event_memory` 中的近期已推荐事件语义上等价或明显过近，应在 `fatigue_or_repetition` 中扣分。
