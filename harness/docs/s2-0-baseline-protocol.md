@@ -335,3 +335,14 @@ selector pool 对照只读取 Task 14 已保存的本地 interaction input，并
 - 最小修复只把 Markdown 写入参数改为 `selected.candidates`，不改 renderer、prompt、schema、API、模型、selector 行为或 raw trace。
 - 定向红灯后绿灯通过；完整 `topic-runtime-recommendation` 为 51/51 通过，`npm run typecheck:backend` 通过。未执行 live 请求。
 - diagnostics 最终候选真相源已修复；同输入主体歧义连续漏判仍未修，S2-0 继续保持打开。下一独立任务是语义一致性合同设计，不得把本次观测修复表述为内容质量修复。
+
+## 2026-07-16 Task 16 最终候选语义一致性合同（非 live）
+
+- `topic.selector` 的每个 scorecard 新增必填 `consistency_status`、`primary_consistency_issue`、`consistency_note`；strict schema/parser 会拒绝缺字段、非法枚举、`pass/risk` 与 issue 组合矛盾以及空 note。
+- `risk` 只表达明确的角色/动作/因果错配、事件或时代边界、语言污染及误导性歧义/过度断言；一般史源争议继续留在 deductions/risk summary，`pass` 不代表完成史实核查。
+- 本地选择只消费 LLM verdict，不读取候选文本或使用关键词：至少四个满足现有 fatigue/去重规则的 `pass` 时，`risk` 不进入最终四项；不足时按 Selector 原 rank 补位并写入 `topic_selector_consistency_risk_backfill` warning。
+- 语义 risk 本身不触发 provider retry、structured fallback、repair、完整重生成或第三次 LLM 调用；既有 strict 合同失败 fallback 边界保持不变。
+- 一致性字段已写入 Selector trace 与 candidate preview trace；Builder raw candidates 不伪造 verdict，页面、runtime diagnostics 和 recommendation Markdown 继续消费同一最终候选真相源。
+- TDD 红灯覆盖 parser 结构、trace 丢字段、rank 1 risk 排除和 pass 不足补位；完整非 live 矩阵最终为 16 文件、272/272 通过，backend typecheck、prompt language 与 diff check 通过。
+- Selector prompt 从 Task 15 的 2102 字符/63 行增至 2735 字符/71 行；这是结构化质量合同的静态成本，尚未证明真实 completion token、strict 稳定性或 latency 不退化。
+- 未修改 shared schema、API、模型、thinking、timeout、retry、repair 或默认 request budget；未执行付费 live。S2-0 继续打开，下一步只能在新的明确授权下执行两个固定样本、最多四次请求的真实页面验收。

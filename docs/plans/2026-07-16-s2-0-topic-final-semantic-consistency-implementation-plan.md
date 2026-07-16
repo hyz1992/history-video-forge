@@ -37,7 +37,7 @@
 - 修改：`tests/backend/topic/topic-runtime-recommendation.test.ts`
 - 修改：`backend/src/modules/topic/topic-recommendation.service.ts`
 
-- [ ] **Step 1：在测试 helper 中准备合法一致性 scorecard**
+- [x] **Step 1：在测试 helper 中准备合法一致性 scorecard**
 
 把测试文件现有 `createSelectorScorecard()` 默认结果扩展为：
 
@@ -56,7 +56,7 @@
 
 只更新正式 scorecard fixture；不得用全局字符串替换误改非 Selector 对象。
 
-- [ ] **Step 2：新增 strict parser 红灯测试**
+- [x] **Step 2：新增 strict parser 红灯测试**
 
 至少覆盖：
 
@@ -84,7 +84,7 @@ expect(() =>
 ).toThrow("strict_selector_bad_scorecard");
 ```
 
-- [ ] **Step 3：运行定向测试确认红灯**
+- [x] **Step 3：运行定向测试确认红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/topic/topic-runtime-recommendation.test.ts --no-file-parallelism
@@ -92,7 +92,7 @@ npx vitest run --configLoader runner tests/backend/topic/topic-runtime-recommend
 
 预期：新字段缺失/组合测试失败；失败原因必须指向 parser 仍未执行新合同，而不是 fixture 或 auth 无关错误。
 
-- [ ] **Step 4：扩展内部类型和 strict schema**
+- [x] **Step 4：扩展内部类型和 strict schema**
 
 在 `topic-recommendation.service.ts` 中新增固定枚举：
 
@@ -111,7 +111,7 @@ const TOPIC_CONSISTENCY_ISSUES = [
 
 为 `TopicSelectorRankedCandidate` 增加三个必填字段，并在 `TOPIC_SELECTOR_STRICT_SCHEMA` 每个 item 中加入相同 enum/string properties 和 required 条目。继续保持 `additionalProperties: false`。
 
-- [ ] **Step 5：实现最小 parser 结构校验**
+- [x] **Step 5：实现最小 parser 结构校验**
 
 在 `parseSelectorScorecards()` 中：
 
@@ -122,7 +122,7 @@ const TOPIC_CONSISTENCY_ISSUES = [
 
 不得读取候选标题或正文，不得用关键词推导 verdict。
 
-- [ ] **Step 6：同步 stub 和测试 fixture**
+- [x] **Step 6：同步 stub 和测试 fixture**
 
 更新 `createDefaultSelectorDecision()` 及本测试文件中所有手写 Selector scorecard，使它们显式使用 `pass/none` 默认值；只有专门风险测试使用 `risk`。
 
@@ -132,7 +132,7 @@ const TOPIC_CONSISTENCY_ISSUES = [
 rg -n "quality_rank:|risk_summary:" backend/src/modules/topic/topic-recommendation.service.ts tests/backend/topic/topic-runtime-recommendation.test.ts
 ```
 
-- [ ] **Step 7：运行 focused 回归确认绿灯**
+- [x] **Step 7：运行 focused 回归确认绿灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/runtime/provider-hardening.test.ts --no-file-parallelism
@@ -141,7 +141,7 @@ npm run typecheck:backend
 
 预期：focused 测试和 backend typecheck 通过；strict target tool、no-tool-call 和 mismatch fallback 不回归。
 
-- [ ] **Step 8：中文提交 Task 1**
+- [x] **Step 8：中文提交 Task 1**
 
 ```powershell
 git add -- backend/src/modules/topic/topic-recommendation.service.ts tests/backend/topic/topic-runtime-recommendation.test.ts
@@ -158,7 +158,7 @@ git commit -m "增加选题语义一致性结构合同"
 - 修改：`tests/backend/runtime/topic-prompt-contract.test.ts`
 - 修改：`harness/prompts/topic/selector.prompt.md`
 
-- [ ] **Step 1：写 prompt 合同红灯测试**
+- [x] **Step 1：写 prompt 合同红灯测试**
 
 新增测试，至少断言：
 
@@ -175,7 +175,7 @@ expect(prompt.body).toContain("不得使用 `risk` 表达一般史源争议");
 
 同时继续断言 prompt 必须覆盖并排序全部候选、使用目标工具、不得输出 schema 外字段。
 
-- [ ] **Step 2：运行 prompt 测试确认红灯**
+- [x] **Step 2：运行 prompt 测试确认红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts --no-file-parallelism
@@ -183,7 +183,7 @@ npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract
 
 预期：新增合同测试失败，既有 prompt metadata 与安全表达测试继续通过。
 
-- [ ] **Step 3：最小修改正式中文 Selector prompt**
+- [x] **Step 3：最小修改正式中文 Selector prompt**
 
 在输出合同中明确每项新增三个必填字段；增加一个紧凑的“一致性结论”段落：
 
@@ -195,7 +195,7 @@ npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract
 
 删除与新段落重复的旧口号，避免 prompt 反向膨胀。不得修改 Builder prompt。
 
-- [ ] **Step 4：运行 prompt 合同确认绿灯并记录规模**
+- [x] **Step 4：运行 prompt 合同确认绿灯并记录规模**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts harness/scripts/check-prompt-language.test.ts --no-file-parallelism
@@ -205,7 +205,7 @@ $prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'harness/prompts/topic/se
 
 预期：测试通过；记录字符/行数，但本任务不预设无基线支撑的硬字符阈值。
 
-- [ ] **Step 5：中文提交 Task 2**
+- [x] **Step 5：中文提交 Task 2**
 
 ```powershell
 git add -- harness/prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
@@ -221,7 +221,7 @@ git commit -m "明确选题筛选语义一致性输出"
 - 修改：`backend/src/modules/topic/topic-recommendation.service.ts`
 - 修改：`tests/backend/topic/topic-runtime-recommendation.test.ts`
 
-- [ ] **Step 1：写 trace 红灯测试**
+- [x] **Step 1：写 trace 红灯测试**
 
 在真实 `recommendTopicCandidatesWithTrace()` 路径中提供带一致性字段的 Selector 决策，断言以下位置保留相同字段：
 
@@ -239,7 +239,7 @@ expect(result.diagnostics.candidate_preview_trace?.ranked_candidates?.[0]).toMat
 
 同时检查 `final_candidates` 和 `selector_pool` 中对应候选一致。
 
-- [ ] **Step 2：运行定向测试确认红灯**
+- [x] **Step 2：运行定向测试确认红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/topic/topic-runtime-recommendation.test.ts --no-file-parallelism
@@ -247,13 +247,13 @@ npx vitest run --configLoader runner tests/backend/topic/topic-runtime-recommend
 
 预期：Selector trace 本身可能已有字段，但 candidate preview trace 丢失字段，测试失败。
 
-- [ ] **Step 3：扩展 backend 内部 diagnostics 类型与映射**
+- [x] **Step 3：扩展 backend 内部 diagnostics 类型与映射**
 
 只为 `CandidatePreviewTraceEntry` 增加三个 optional 字段，以兼容没有 Selector scorecard 的 Builder raw candidates。`TopicSelectorRankedCandidate` 的必填字段仍由 Task 1 在 topic service 内定义；更新 `toCandidatePreviewTraceEntry()`，当存在 scorecard 时复制三个字段。
 
 不得修改 `shared/src/**` 或 API response schema；这是现有 runtime diagnostics JSON 的附加可观测字段。
 
-- [ ] **Step 4：运行定向测试和 typecheck**
+- [x] **Step 4：运行定向测试和 typecheck**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/topic/topic-runtime-recommendation.test.ts --no-file-parallelism
@@ -262,7 +262,7 @@ npm run typecheck:backend
 
 预期：测试和 typecheck 通过。
 
-- [ ] **Step 5：中文提交 Task 3**
+- [x] **Step 5：中文提交 Task 3**
 
 ```powershell
 git add -- backend/src/runtime/orchestration/runtime-diagnostics.ts backend/src/modules/topic/topic-recommendation.service.ts tests/backend/topic/topic-runtime-recommendation.test.ts
@@ -279,7 +279,7 @@ git commit -m "记录选题语义一致性诊断"
 - 修改：`tests/backend/topic/topic-runtime-recommendation.test.ts`
 - 修改：`backend/src/modules/topic/topic-recommendation.service.ts`
 
-- [ ] **Step 1：写风险候选退出红灯测试**
+- [x] **Step 1：写风险候选退出红灯测试**
 
 构造 8 个不同事件身份候选：
 
@@ -290,7 +290,7 @@ git commit -m "记录选题语义一致性诊断"
 
 调用真实 service 路径并断言最终 ID 为四个 pass，不包含 candidate 1。不要直接测试新建的独立 helper，必须覆盖生产 `selectRankedCandidates()` 接线。
 
-- [ ] **Step 2：写受控补位红灯测试**
+- [x] **Step 2：写受控补位红灯测试**
 
 构造只有三个满足去重条件的 pass 候选，其余为 risk，断言：
 
@@ -300,7 +300,7 @@ git commit -m "记录选题语义一致性诊断"
 - warning reason 包含补位数量和候选 ID；
 - gateway 调用总数仍只有一次 Builder + 一次 Selector，语义 risk 没有触发第三次请求。
 
-- [ ] **Step 3：运行定向测试确认红灯**
+- [x] **Step 3：运行定向测试确认红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/topic/topic-runtime-recommendation.test.ts --no-file-parallelism
@@ -308,7 +308,7 @@ npx vitest run --configLoader runner tests/backend/topic/topic-runtime-recommend
 
 预期：当前代码仍按 rank 选择风险候选，至少第一项测试失败；不得先改生产实现。
 
-- [ ] **Step 4：最小实现一致性优先排序**
+- [x] **Step 4：最小实现一致性优先排序**
 
 在 `selectRankedCandidates()` 的现有排序中，把一致性状态放在 `quality_rank/quality_score` 之前，同时保留 fatigue 现有语义：
 
@@ -326,7 +326,7 @@ const consistencyPriority = (candidate: TopicSelectorRankedCandidate) =>
 
 确保同一事件的 pass 候选不会被同事件更高 rank 的 risk 候选抢占。
 
-- [ ] **Step 5：返回 risk backfill 信息并生成 warning**
+- [x] **Step 5：返回 risk backfill 信息并生成 warning**
 
 让选择结果返回最终选中 risk ID；在 `selectFinalCandidatesWithTrace()` 中仅当最终四项实际含 risk 时追加：
 
@@ -340,7 +340,7 @@ const consistencyPriority = (candidate: TopicSelectorRankedCandidate) =>
 
 该 warning 只记录 LLM verdict，不重新分析候选文本。
 
-- [ ] **Step 6：补齐与现有规则的组合回归**
+- [x] **Step 6：补齐与现有规则的组合回归**
 
 至少确认：
 
@@ -349,7 +349,7 @@ const consistencyPriority = (candidate: TopicSelectorRankedCandidate) =>
 - risk 补位后不足四项时仍产生既有 slots insufficient 诊断；
 - `selected_candidate_ids`、页面 candidates、runtime diagnostics 和 recommendation Markdown 仍使用同一最终真相源。
 
-- [ ] **Step 7：运行 focused 矩阵确认绿灯**
+- [x] **Step 7：运行 focused 矩阵确认绿灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/api/topic-api-runtime.test.ts tests/backend/runtime/topic-script-graph.test.ts tests/backend/runtime/provider-hardening.test.ts --no-file-parallelism
@@ -358,7 +358,7 @@ npm run typecheck:backend
 
 预期：focused 矩阵和 typecheck 通过；无 live 请求。
 
-- [ ] **Step 8：中文提交 Task 4**
+- [x] **Step 8：中文提交 Task 4**
 
 ```powershell
 git add -- backend/src/modules/topic/topic-recommendation.service.ts tests/backend/topic/topic-runtime-recommendation.test.ts
@@ -377,7 +377,7 @@ git commit -m "应用选题一致性优先与受控补位"
 - 修改：`docs/todos/roadmap-todo.md`
 - 修改：`docs/plans/2026-07-16-s2-0-topic-final-semantic-consistency-implementation-plan.md`
 
-- [ ] **Step 1：运行完整受影响矩阵**
+- [x] **Step 1：运行完整受影响矩阵**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/topic/topic-selector-prompt-projection.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/topic-event-identity-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/runtime/provider-hardening.test.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/topic-script-graph.test.ts tests/backend/api/topic-api-runtime.test.ts tests/backend/script/script-runtime-generate.test.ts tests/backend/storyboard/storyboard-generation.test.ts tests/backend/asset-planning/asset-planning-generation.test.ts tests/backend/asset-planning/asset-planning-structural-repair.test.ts harness/scripts/check-prompt-language.test.ts harness/scripts/runtime/llm-s2-baseline.test.ts harness/scripts/runtime/llm-s2-baseline-stub.test.ts --no-file-parallelism
@@ -387,7 +387,7 @@ git diff --check
 
 测试数以实际输出为准，不预写虚假总数。
 
-- [ ] **Step 2：确认禁止范围无 diff**
+- [x] **Step 2：确认禁止范围无 diff**
 
 ```powershell
 git diff -- shared/src backend/src/config backend/src/runtime/llm
@@ -397,7 +397,7 @@ git status --short
 
 预期：第一条无输出；不 stage raw output、`storage/topic-candidate-library/` 或用户已有未跟踪文件 `docs/plans/2026-07-15-trae-s2-0b-task10-launch-prompt.md`。
 
-- [ ] **Step 3：更新非 live 状态**
+- [x] **Step 3：更新非 live 状态**
 
 如实记录：
 
@@ -408,7 +408,7 @@ git status --short
 - 未执行真实 provider，速度、strict 稳定性和人工质量仍未验证；
 - S2-0 继续打开，不进入 S2-1。
 
-- [ ] **Step 4：中文提交 Task 5**
+- [x] **Step 4：中文提交 Task 5**
 
 ```powershell
 git add -- harness/docs/s2-0-baseline-protocol.md docs/plans/README.md docs/todos/roadmap-todo.md docs/plans/2026-07-16-s2-0-topic-final-semantic-consistency-implementation-plan.md
@@ -416,7 +416,7 @@ git diff --cached --check
 git commit -m "记录Task16非live验证结果"
 ```
 
-- [ ] **Step 5：停止并等待独立 live 授权**
+- [x] **Step 5：停止并等待独立 live 授权**
 
 不得自动创建项目、调用真实 provider 或扩大样本。
 
@@ -476,18 +476,28 @@ TTFT 继续标为非流式不可观测；人民币费用标为人工边界、不
 
 ## 验收清单
 
-- [ ] 每个 Selector scorecard 都包含三个一致性字段；
-- [ ] status/issue 枚举及组合由 strict schema/parser 强制；
-- [ ] 本地不通过关键词或候选文本推导 verdict；
-- [ ] 至少四个 pass 时 risk 不进入最终四项；
-- [ ] pass 不足时 risk 可受控补位并产生 warning；
-- [ ] risk 本身不触发新 LLM 请求、repair 或 full regeneration；
-- [ ] fatigue、事件去重、目标工具和既有 fallback 不回归；
-- [ ] Selector trace 与 candidate preview trace 保存同一一致性结论；
-- [ ] recommendation Markdown、页面和 runtime diagnostics 继续使用同一最终候选真相源；
-- [ ] semantic reviewer 保持 shadow-only；
-- [ ] shared schema、API、模型和运行策略不变；
-- [ ] 完整非 live 回归和 backend typecheck 通过；
-- [ ] 未获新授权时不执行 live；
-- [ ] 不处理或提交用户现有未跟踪文件；
-- [ ] 所有提交信息使用中文。
+- [x] 每个 Selector scorecard 都包含三个一致性字段；
+- [x] status/issue 枚举及组合由 strict schema/parser 强制；
+- [x] 本地不通过关键词或候选文本推导 verdict；
+- [x] 至少四个 pass 时 risk 不进入最终四项；
+- [x] pass 不足时 risk 可受控补位并产生 warning；
+- [x] risk 本身不触发新 LLM 请求、repair 或 full regeneration；
+- [x] fatigue、事件去重、目标工具和既有 fallback 不回归；
+- [x] Selector trace 与 candidate preview trace 保存同一一致性结论；
+- [x] recommendation Markdown、页面和 runtime diagnostics 继续使用同一最终候选真相源；
+- [x] semantic reviewer 保持 shadow-only；
+- [x] shared schema、API、模型和运行策略不变；
+- [x] 完整非 live 回归和 backend typecheck 通过；
+- [x] 未获新授权时不执行 live；
+- [x] 不处理或提交用户现有未跟踪文件；
+- [x] 所有提交信息使用中文。
+
+## 2026-07-16 非 live 执行记录
+
+- Task 1：strict parser 新增 8 个红灯，证明旧合同会丢弃一致性字段并接受缺字段、非法 issue、status/issue 矛盾和空 note；最小 schema/parser 实现后 topic/provider focused 88/88 与 backend typecheck 通过。提交：`6ed5998 增加选题语义一致性结构合同`。
+- Task 2：正式 Selector prompt 合同测试先红后绿；prompt 从 Task 15 的 2102 字符/63 行增至 2735 字符/71 行，新增 633 字符/8 行。prompt、runtime 与语言检查 86/86 通过。提交：`8380ad2 明确选题筛选语义一致性输出`。
+- Task 3：真实 runtime trace 红灯证明新字段只停留在 Selector trace、没有进入 candidate preview trace；最小类型与映射修改后 topic 59/59 与 backend typecheck 通过。提交：`ce79512 记录选题语义一致性诊断`。
+- Task 4：两个真实 service 红灯分别证明旧选择仍保留 rank 1 risk、且 pass 不足时没有显式补位诊断；最小排序与 warning 实现后 topic/API/graph/provider focused 100/100 与 backend typecheck 通过。提交：`714ea5e 应用选题一致性优先与受控补位`。
+- 完整矩阵首次发现 baseline stub 两个旧 scorecard fixture 缺少新字段；根因定位后只同步 fixture，并加强 capability probe 对三个 required 字段的断言。提交：`6f502e2 同步Task16基线测试夹具`。
+- 完整非 live 矩阵最终为 16 文件、272/272 通过；`npm run typecheck:backend` 与 `git diff --check` 通过。
+- 未修改 shared schema、API、模型、thinking、timeout、retry、repair 或默认 request budget；未执行真实 provider。Task 16 非 live 已完成，S2-0 继续打开，Task 6 保持未执行。

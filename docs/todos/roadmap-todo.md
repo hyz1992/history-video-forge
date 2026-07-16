@@ -59,7 +59,7 @@
 - [x] 完成 V1 高风险稳定化最终全量回归、故障演练和内置浏览器验收
 
 ## 进行中
-- [ ] 收口 `S2-0` 的完整 topic 链路：Task 15 三个 GLM-5.2 真实样本的 provider 合计稳定在 67.244–90.757 秒、总 token 为 10153–10802，最慢样本仍比 Task 14 快 35.0%，性能优化通过小样本扩展；`recommendation-diagnostics.md` 最终候选真相源已完成非 live 窄整改。Task 16 的最终候选语义一致性合同设计与实施计划已建立，下一步按 TDD 实施现有 Selector 调用内的 `pass/risk` 合同和受控补位，不再直接付费扩样
+- [ ] 收口 `S2-0` 的完整 topic 链路：Task 15 三个 GLM-5.2 真实样本的 provider 合计稳定在 67.244–90.757 秒、总 token 为 10153–10802，最慢样本仍比 Task 14 快 35.0%，性能优化通过小样本扩展；`recommendation-diagnostics.md` 最终候选真相源已完成非 live 窄整改。Task 16 的 `pass/risk` strict 合同、trace 和受控补位已完成 16 文件、272/272 非 live 回归；下一步仅在新授权下用两个固定样本、最多四次请求验收真实结构稳定性、token、延迟与人工质量
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 补齐前端 v1 真实浏览器验收矩阵：空态、加载中、成功、失败、刷新、深链、重复操作
 - [ ] 收口当前未归档计划，避免历史 implementation plan 误导新任务
