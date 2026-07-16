@@ -15,6 +15,7 @@
 - `S2-0 LLM 回复速度、质量和结构化输出优化基线` 已完成观测、timeout/retry、script/storyboard/selector operation policy、固定样本诊断与 `topic.candidate-builder` 精确 thinking 策略；但 2026-07-15 Task 13 真实页面验收仍未通过整体闸门。
 - Task 13 中 builder 成功调用由 159.954 秒降到 84.484 秒且 reasoning 归零，但首次调用在 49.386 秒后触发供应商 1301，业务层完整重生成使总等待仍为 162.319 秒；同时 8 候选出现标题与正文行为主体/死因不一致。当前下一步仍是收口 S2-0 的内容过滤重生成编排、请求预算与语义质量保护；通过后才能进入 `S2-1 多模型、多供应商切换`。
 - Task 14 第一批正式设计见 [S2-0 Topic 首次安全表达与语义一致性优化设计](./2026-07-16-s2-0-topic-safety-and-semantic-consistency-design.md)：采用“首次安全表达前置 + selector 语义一致性检查”，保持 8/4 合同、schema、API 与模型不变；builder 输出瘦身留作后续独立设计。
+- Task 14 第一批实施入口见 [S2-0 Topic 首次安全表达与语义一致性优化实施计划](./2026-07-16-s2-0-topic-safety-and-semantic-consistency-implementation-plan.md)：按 builder 首次安全表达、selector 一致性、显式预算验收入口和完整非 live 收口四个低耦合任务执行。
 - 正式 V2 产品功能已进入实施阶段；migration owner 不可登录标记 `!migration-owner-no-login`，其项目通过 admin 管理页面转移给真实用户。
 
 - [V1 高风险稳定化实施计划](./2026-07-10-v1-high-risk-stabilization-implementation-plan.md) 的主要代码任务已完成；其全量回归超时和故障演练缺口已并入 Task 8.5 的测试与切换闸门，不再作为独立的下一执行入口。
