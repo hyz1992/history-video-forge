@@ -173,7 +173,7 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("先静默拆出标题和切口中的关键断言");
     expect(prompt.body).toContain("具体主体、关键动作、直接结果与断言强度");
     expect(prompt.body).toContain(
-      "分别在 `core_conflict`、`strong_scene` 与三条 `must_cover_preview` 中寻找支持",
+      "分别在 `core_conflict`、`strong_scene` 与全部 `must_cover_preview` 中寻找支持",
     );
     expect(prompt.body).toContain("同一个泛称主体串联的动作在内部材料中分别属于不同人物");
     expect(prompt.body).toContain("先确定 `consistency_issue`，再进行叙事质量排序");
