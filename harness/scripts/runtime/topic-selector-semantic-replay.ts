@@ -13,7 +13,10 @@ import type {
   LlmInteractionLogWriter,
 } from "../../../backend/src/runtime/llm/interaction-log.js";
 import { createOpenAiCompatibleProvider } from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
-import type { StructuredPromptProvider } from "../../../backend/src/runtime/llm/provider-contract.js";
+import type {
+  StrictStructuredThinking,
+  StructuredPromptProvider,
+} from "../../../backend/src/runtime/llm/provider-contract.js";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 
 export const DEFAULT_TOPIC_SELECTOR_SEMANTIC_FIXTURE_SET_PATH =
@@ -28,6 +31,7 @@ export interface TopicSelectorSemanticReplayInput {
   live?: boolean;
   confirmLive?: boolean;
   model?: string;
+  thinking?: StrictStructuredThinking;
   maxRequests?: number;
   maxCostCny?: number;
   fixtureSetPath?: string;
@@ -39,6 +43,7 @@ export interface TopicSelectorSemanticReplayPlan {
   live: boolean;
   automated_gate: false;
   selector_only: true;
+  requested_thinking: StrictStructuredThinking | null;
   fixture_set_path: string;
   fixture_count: number;
   required_requests: number;
@@ -47,7 +52,10 @@ export interface TopicSelectorSemanticReplayPlan {
 }
 
 export interface TopicSelectorSemanticReplayDependencies {
-  createLiveRunner?: (model: string) => TopicSelectorSemanticReplayLiveRunner;
+  createLiveRunner?: (
+    model: string,
+    thinking: StrictStructuredThinking,
+  ) => TopicSelectorSemanticReplayLiveRunner;
 }
 
 export interface TopicSelectorSemanticReplayLiveRunnerDependencies {
@@ -115,6 +123,7 @@ export interface TopicSelectorSemanticReplaySummary {
   live: true;
   automated_gate: false;
   selector_only: true;
+  requested_thinking: StrictStructuredThinking;
   fixture_set_path: string;
   output_dir: string;
   total_fixtures: number;
@@ -125,6 +134,7 @@ export interface TopicSelectorSemanticReplaySummary {
   none_control_count: number;
   passed_none_control_count: number;
   exact_enum_match_count: number;
+  effective_thinking_match_count: number;
   primary_gate_passed: boolean;
   results: TopicSelectorSemanticReplayFixtureResult[];
 }
@@ -232,8 +242,8 @@ export async function runTopicSelectorSemanticReplay(
   writeJson(outputDir, "replay-plan.json", plan);
 
   const runner =
-    dependencies.createLiveRunner?.(input.model!) ??
-    createTopicSelectorSemanticReplayLiveRunner(input.model!);
+    dependencies.createLiveRunner?.(input.model!, input.thinking!) ??
+    createTopicSelectorSemanticReplayLiveRunner(input.model!, input.thinking!);
   const results: TopicSelectorSemanticReplayFixtureResult[] = [];
   let actualRequests = 0;
 
@@ -277,16 +287,22 @@ export async function runTopicSelectorSemanticReplay(
   const exactEnumMatchCount = evaluatedAnnotations.filter(
     (annotation) => annotation.expected_risk && annotation.status === "matched",
   ).length;
+  const effectiveThinkingMatchCount = results.filter(
+    (result) =>
+      result.observation?.effective_request?.thinking === input.thinking,
+  ).length;
   const primaryGatePassed =
     results.every((result) => !result.structural_failed) &&
     recalledRiskCount === expectedRiskCount &&
-    passedNoneControlCount === noneControlCount;
+    passedNoneControlCount === noneControlCount &&
+    effectiveThinkingMatchCount === fixtures.length;
 
   const summary: TopicSelectorSemanticReplaySummary = {
     mode: "topic_selector_semantic_replay",
     live: true,
     automated_gate: false,
     selector_only: true,
+    requested_thinking: input.thinking!,
     fixture_set_path: fixtureSetPath,
     output_dir: outputDir,
     total_fixtures: fixtures.length,
@@ -297,6 +313,7 @@ export async function runTopicSelectorSemanticReplay(
     none_control_count: noneControlCount,
     passed_none_control_count: passedNoneControlCount,
     exact_enum_match_count: exactEnumMatchCount,
+    effective_thinking_match_count: effectiveThinkingMatchCount,
     primary_gate_passed: primaryGatePassed,
     results,
   };
@@ -372,6 +389,7 @@ export function evaluateTopicSelectorSemanticFixture(
 
 export function createTopicSelectorSemanticReplayLiveRunner(
   model: string,
+  thinking: StrictStructuredThinking,
   dependencies: TopicSelectorSemanticReplayLiveRunnerDependencies = {},
 ): TopicSelectorSemanticReplayLiveRunner {
   const provider =
@@ -403,7 +421,7 @@ export function createTopicSelectorSemanticReplayLiveRunner(
         interactionLogWriter: writer,
         options: {
           strategy: "tool_call",
-          thinking: "disabled",
+          thinking,
           toolChoice: "target_function",
         },
       });
@@ -427,6 +445,7 @@ export function parseTopicSelectorSemanticReplayArgs(
     live: argv.includes("--live"),
     confirmLive: argv.includes("--confirm-live"),
     model: readCliValue(argv, "--model"),
+    thinking: readThinking(readCliValue(argv, "--thinking")),
     maxRequests: readOptionalNumber(readCliValue(argv, "--max-requests")),
     maxCostCny: readOptionalNumber(readCliValue(argv, "--max-cost-cny")),
     fixtureSetPath: readCliValue(argv, "--fixture-set"),
@@ -444,6 +463,7 @@ function createReplayPlan(
     live: input.live === true,
     automated_gate: false,
     selector_only: true,
+    requested_thinking: input.thinking ?? null,
     fixture_set_path: fixtureSetPath,
     fixture_count: fixtureCount,
     required_requests: fixtureCount,
@@ -468,6 +488,9 @@ function validateLiveInput(
   }
   if (input.model !== "glm-5.2") {
     throw new Error("topic_selector_semantic_replay_model_must_be_glm_5_2");
+  }
+  if (!input.thinking) {
+    throw new Error("topic_selector_semantic_replay_thinking_required");
   }
   if (input.maxRequests !== fixtureCount) {
     throw new Error(
@@ -496,6 +519,18 @@ function readCliValue(argv: string[], name: string): string | undefined {
 
 function readOptionalNumber(value: string | undefined): number | undefined {
   return value === undefined ? undefined : Number(value);
+}
+
+function readThinking(
+  value: string | undefined,
+): StrictStructuredThinking | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "enabled" || value === "disabled") {
+    return value;
+  }
+  throw new Error("topic_selector_semantic_replay_thinking_invalid");
 }
 
 function writeJson(outputDir: string, filename: string, value: unknown) {
@@ -621,6 +656,7 @@ function writeReplayTrace(
       `- live: ${summary.live}`,
       `- automated_gate: ${summary.automated_gate}`,
       `- selector_only: ${summary.selector_only}`,
+      `- requested_thinking: ${summary.requested_thinking}`,
       `- planned_requests: ${summary.planned_requests}`,
       `- actual_requests: ${summary.actual_requests}`,
       `- expected_risk_count: ${summary.expected_risk_count}`,
@@ -628,6 +664,7 @@ function writeReplayTrace(
       `- none_control_count: ${summary.none_control_count}`,
       `- passed_none_control_count: ${summary.passed_none_control_count}`,
       `- exact_enum_match_count: ${summary.exact_enum_match_count}`,
+      `- effective_thinking_match_count: ${summary.effective_thinking_match_count}`,
       `- primary_gate_passed: ${summary.primary_gate_passed}`,
       "",
       "## Fixtures",
@@ -836,6 +873,7 @@ async function main() {
     ? {
         mode: result.mode,
         live: result.live,
+        requested_thinking: result.requested_thinking,
         fixture_count: result.fixture_count,
         required_requests: result.required_requests,
         actual_requests: result.actual_requests,
@@ -843,6 +881,7 @@ async function main() {
     : {
         mode: result.mode,
         live: result.live,
+        requested_thinking: result.requested_thinking,
         total_fixtures: result.total_fixtures,
         actual_requests: result.actual_requests,
         primary_gate_passed: result.primary_gate_passed,

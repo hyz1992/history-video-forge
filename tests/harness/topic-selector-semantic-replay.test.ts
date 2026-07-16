@@ -71,14 +71,17 @@ function createInternalDecision(
   };
 }
 
-function createObservation(fixtureId: string) {
+function createObservation(
+  fixtureId: string,
+  thinking: "enabled" | "disabled" = "disabled",
+) {
   return {
     model: "glm-5.2",
     prompt_id: "topic.selector",
     prompt_sha256: "a".repeat(64),
     effective_request: {
       strategy: "tool_call",
-      thinking: "disabled",
+      thinking,
       toolChoice: "target_function",
       maxAttempts: 1,
     },
@@ -191,17 +194,23 @@ describe("topic selector semantic replay fixtures", () => {
 
 describe("topic selector semantic replay request guard", () => {
   it("builds a selector-only plan without spending requests", () => {
-    expect(buildTopicSelectorSemanticReplayPlan()).toMatchObject({
+    expect(
+      buildTopicSelectorSemanticReplayPlan({ thinking: "enabled" }),
+    ).toMatchObject({
       mode: "topic_selector_semantic_replay_plan",
       live: false,
       automated_gate: false,
       selector_only: true,
+      requested_thinking: "enabled",
       fixture_set_path: DEFAULT_TOPIC_SELECTOR_SEMANTIC_FIXTURE_SET_PATH,
       fixture_count: 2,
       required_requests: 2,
       actual_requests: 0,
     });
-    expect(buildTopicSelectorSemanticReplayPlan().required_checks).toContain(
+    expect(
+      buildTopicSelectorSemanticReplayPlan({ thinking: "enabled" })
+        .required_checks,
+    ).toContain(
       "不得使用本地字符串规则替代语义判断",
     );
   });
@@ -211,7 +220,7 @@ describe("topic selector semantic replay request guard", () => {
     let runnerCreated = 0;
 
     const result = await runTopicSelectorSemanticReplay(
-      { outputDir },
+      { outputDir, thinking: "enabled" },
       {
         createLiveRunner: (() => {
           runnerCreated += 1;
@@ -221,11 +230,19 @@ describe("topic selector semantic replay request guard", () => {
     );
 
     expect(runnerCreated).toBe(0);
-    expect(result).toMatchObject({ live: false, actual_requests: 0 });
+    expect(result).toMatchObject({
+      live: false,
+      requested_thinking: "enabled",
+      actual_requests: 0,
+    });
     expect(existsSync(join(outputDir, "replay-plan.json"))).toBe(true);
     expect(existsSync(join(outputDir, "replay-summary.json"))).toBe(false);
     expect(JSON.parse(readFileSync(join(outputDir, "replay-plan.json"), "utf8")))
-      .toMatchObject({ live: false, actual_requests: 0 });
+      .toMatchObject({
+        live: false,
+        requested_thinking: "enabled",
+        actual_requests: 0,
+      });
   });
 
   it("parses both equals and separated live option forms", () => {
@@ -234,6 +251,8 @@ describe("topic selector semantic replay request guard", () => {
         "--live",
         "--confirm-live",
         "--model=glm-5.2",
+        "--thinking",
+        "enabled",
         "--max-requests",
         "2",
         "--max-cost-cny=1.5",
@@ -242,20 +261,41 @@ describe("topic selector semantic replay request guard", () => {
       live: true,
       confirmLive: true,
       model: "glm-5.2",
+      thinking: "enabled",
       maxRequests: 2,
       maxCostCny: 1.5,
     });
   });
 
+  it("rejects unsupported thinking modes while parsing arguments", () => {
+    expect(() =>
+      parseTopicSelectorSemanticReplayArgs([
+        "--thinking=provider_default",
+      ]),
+    ).toThrow("topic_selector_semantic_replay_thinking_invalid");
+  });
+
   it.each([
     [
       "missing confirmation",
-      { live: true, model: "glm-5.2", maxRequests: 2, maxCostCny: 1 },
+      {
+        live: true,
+        model: "glm-5.2",
+        thinking: "disabled",
+        maxRequests: 2,
+        maxCostCny: 1,
+      },
       "topic_selector_semantic_replay_live_confirmation_required",
     ],
     [
       "missing model",
-      { live: true, confirmLive: true, maxRequests: 2, maxCostCny: 1 },
+      {
+        live: true,
+        confirmLive: true,
+        thinking: "disabled",
+        maxRequests: 2,
+        maxCostCny: 1,
+      },
       "topic_selector_semantic_replay_model_required",
     ],
     [
@@ -264,6 +304,7 @@ describe("topic selector semantic replay request guard", () => {
         live: true,
         confirmLive: true,
         model: "glm-4",
+        thinking: "disabled",
         maxRequests: 2,
         maxCostCny: 1,
       },
@@ -275,6 +316,7 @@ describe("topic selector semantic replay request guard", () => {
         live: true,
         confirmLive: true,
         model: "glm-5.2",
+        thinking: "disabled",
         maxRequests: 1,
         maxCostCny: 1,
       },
@@ -286,6 +328,7 @@ describe("topic selector semantic replay request guard", () => {
         live: true,
         confirmLive: true,
         model: "glm-5.2",
+        thinking: "disabled",
         maxRequests: 3,
         maxCostCny: 1,
       },
@@ -297,9 +340,21 @@ describe("topic selector semantic replay request guard", () => {
         live: true,
         confirmLive: true,
         model: "glm-5.2",
+        thinking: "disabled",
         maxRequests: 2,
       },
       "topic_selector_semantic_replay_cost_budget_required",
+    ],
+    [
+      "missing thinking",
+      {
+        live: true,
+        confirmLive: true,
+        model: "glm-5.2",
+        maxRequests: 2,
+        maxCostCny: 1,
+      },
+      "topic_selector_semantic_replay_thinking_required",
     ],
   ])("rejects %s before creating the live runner", async (_label, input, code) => {
     let runnerCreated = 0;
@@ -324,6 +379,7 @@ describe("topic selector semantic replay request guard", () => {
           live: true,
           confirmLive: true,
           model: "glm-5.2",
+          thinking: "enabled",
           maxRequests: 2,
           maxCostCny: 1,
           fixtureSetPath: "harness/samples/missing-fixture-set.md",
@@ -350,6 +406,7 @@ describe("topic selector semantic replay evaluation and live orchestration", () 
         live: true,
         confirmLive: true,
         model: "glm-5.2",
+        thinking: "enabled",
         maxRequests: 2,
         maxCostCny: 1,
         outputDir,
@@ -365,7 +422,7 @@ describe("topic selector semantic replay evaluation and live orchestration", () 
                 };
             return {
               decision: createInternalDecision(fixture, issues),
-              observation: createObservation(fixture.fixture_id),
+              observation: createObservation(fixture.fixture_id, "enabled"),
             };
           },
         }),
@@ -378,6 +435,7 @@ describe("topic selector semantic replay evaluation and live orchestration", () 
       live: true,
       automated_gate: false,
       selector_only: true,
+      requested_thinking: "enabled",
       total_fixtures: 2,
       planned_requests: 2,
       actual_requests: 2,
@@ -386,6 +444,7 @@ describe("topic selector semantic replay evaluation and live orchestration", () 
       none_control_count: 2,
       passed_none_control_count: 2,
       exact_enum_match_count: 1,
+      effective_thinking_match_count: 2,
       primary_gate_passed: true,
     });
     expect(
@@ -401,6 +460,41 @@ describe("topic selector semantic replay evaluation and live orchestration", () 
     expect(reportText).not.toContain("rawOutput");
     expect(reportText).not.toContain("systemPrompt");
     expect(reportText).not.toContain("api_key");
+  });
+
+  it("fails the primary gate when effective thinking differs from the request", async () => {
+    const result = await runTopicSelectorSemanticReplay(
+      {
+        live: true,
+        confirmLive: true,
+        model: "glm-5.2",
+        thinking: "enabled",
+        maxRequests: 2,
+        maxCostCny: 1,
+        outputDir: makeSandbox("live-thinking-mismatch"),
+      },
+      {
+        createLiveRunner: () => ({
+          runFixture: async (fixture) => ({
+            decision: createInternalDecision(
+              fixture,
+              fixture.fixture_id === "task17-high-tension"
+                ? { selector_candidate_7: "actor_role_mismatch" }
+                : { selector_candidate_3: "overclaim_or_ambiguity" },
+            ),
+            observation: createObservation(fixture.fixture_id, "disabled"),
+          }),
+        }),
+      },
+    );
+
+    expect(result).toMatchObject({
+      requested_thinking: "enabled",
+      recalled_risk_count: 2,
+      passed_none_control_count: 2,
+      effective_thinking_match_count: 0,
+      primary_gate_passed: false,
+    });
   });
 
   it("classifies a missed risk and a failed none control without reading candidate text", () => {
@@ -460,6 +554,7 @@ describe("topic selector semantic replay evaluation and live orchestration", () 
         live: true,
         confirmLive: true,
         model: "glm-5.2",
+        thinking: "enabled",
         maxRequests: 2,
         maxCostCny: 1,
         outputDir: makeSandbox("live-first-fails"),
@@ -475,7 +570,7 @@ describe("topic selector semantic replay evaluation and live orchestration", () 
               decision: createInternalDecision(fixture, {
                 selector_candidate_3: "overclaim_or_ambiguity",
               }),
-              observation: createObservation(fixture.fixture_id),
+              observation: createObservation(fixture.fixture_id, "enabled"),
             };
           },
         }),
@@ -515,9 +610,13 @@ describe("topic selector semantic replay evaluation and live orchestration", () 
         };
       }) as never,
     });
-    const runner = createTopicSelectorSemanticReplayLiveRunner("glm-5.2", {
-      createProvider: () => provider,
-    });
+    const runner = createTopicSelectorSemanticReplayLiveRunner(
+      "glm-5.2",
+      "enabled",
+      {
+        createProvider: () => provider,
+      },
+    );
 
     const result = await runner.runFixture(fixture);
 
@@ -538,7 +637,7 @@ describe("topic selector semantic replay evaluation and live orchestration", () 
     expect(capturedRequest?.input).toEqual(fixture.selector_input);
     expect(capturedRequest?.options).toMatchObject({
       strategy: "tool_call",
-      thinking: "disabled",
+      thinking: "enabled",
       toolChoice: "target_function",
     });
     expect(result.decision.ranked_candidates).toEqual(
@@ -561,7 +660,7 @@ describe("topic selector semantic replay evaluation and live orchestration", () 
     expect(result.observation.effective_request).toMatchObject({
       maxAttempts: 1,
       strategy: "tool_call",
-      thinking: "disabled",
+      thinking: "enabled",
       toolChoice: "target_function",
     });
   });
