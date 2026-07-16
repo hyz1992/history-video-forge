@@ -1169,7 +1169,13 @@ function finalizeRecommendationDiagnostics(input: {
 
       return true;
     })
-    .map((check) => enrichDiagnosticReason(check, input.finalCandidateCount));
+    .map((check) => {
+      const enriched = enrichDiagnosticReason(check, input.finalCandidateCount);
+
+      return check.code === "topic_candidate_slots_insufficient"
+        ? { ...enriched, level: "warning" as const }
+        : enriched;
+    });
 
   checks.push(...input.additionalChecks);
 

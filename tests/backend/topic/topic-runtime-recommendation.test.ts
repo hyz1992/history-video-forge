@@ -1695,7 +1695,7 @@ describe("topic runtime recommendation", () => {
     expect(result.diagnostics.checks).toContainEqual(
       expect.objectContaining({
         code: "topic_candidate_slots_insufficient",
-        level: "info",
+        level: "warning",
       }),
     );
   });
