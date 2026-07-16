@@ -113,7 +113,7 @@ Task 11 之后的真实页面项目 `84ed173e-529b-4a19-bc6d-092257432b3e` 证�
 - 用户授权模型 GLM-5.2、同一“魏晋至唐宋·高张力历史事件推荐”输入、最多 2 次请求与人民币 10 元人工上限；不执行 capability probe。
 - 真实浏览器项目：`e478735a-6b92-4483-8923-e5e2a48e9b4d`；topic run：`topic_run_169338b0-1bce-44f8-9204-8c6c96b78e3e`。
 - raw output 与 interaction log 只保存在 `storage/projects/` 忽略目录，不提交。
-- 首次 builder 在 49.386 秒后返回供应商 `1301` 内容过滤；topic service 自动追加 `safety_retry_context` 并完整重生成一次，之后再调用 selector。因此实际 provider 请求为 3 次，超出授权的 2 次上限；发现后停止，没有继续请求。
+- 首次 builder 在 49.386 秒后返回供应商 `1301` 内容过滤；topic service 自动追加 `safety_retry_context` 并完整重生成一次，之后再调用 selector。因此实际 provider 请求为 3 次，超出授权的 2 次上限；发现后停止，没有继续请求。代码已有同一 provider 实例共享的 `RequestBudget`，但本次 backend 沿用默认 20，没有显式应用授权值 2；后续 live 必须以显式预算启动。
 - 当前日志不能自动核验人民币费用，首次 400 响应也没有 usage；不得声称程序已证明费用低于上限。
 
 ### 延迟、usage 与结构结果
@@ -141,5 +141,5 @@ Task 11 之后的真实页面项目 `84ed173e-529b-4a19-bc6d-092257432b3e` 证�
 ### 阶段结论
 
 - Task 13 已完成一次真实页面诊断，但“质量不劣且等待显著改善”的整体闸门未通过，S2-0 继续保持打开。
-- 暂不回退 `topic.candidate-builder` 的 thinking override：成功调用的 0 reasoning 与 47.2% 耗时下降已证明该精确策略有价值；当前新增主因是 1301 后的 service-level 完整重生成。下一窄任务应先收敛请求预算、内容过滤重生成编排与语义质量保护，再决定是否保留或回退该 override。
+- 暂不回退 `topic.candidate-builder` 的 thinking override：成功调用的 0 reasoning 与 47.2% 耗时下降已证明该精确策略有价值；当前新增主因是 1301 后的 service-level 完整重生成。下一窄任务应前置首次安全表达、显式应用既有请求预算并补充 selector 语义一致性保护，再决定是否保留或回退该 override。
 - 不从此单样本推断 P95，不进入 S2-1，不在本记录中修改 prompt/schema 或候选数量。

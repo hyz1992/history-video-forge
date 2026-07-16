@@ -869,7 +869,7 @@ Task 13 不得用 selector 固定样本代替页面端到端验收，不得从�
 
 - 用户授权 GLM-5.2、同一“魏晋至唐宋·高张力历史事件推荐”输入、最多 2 次请求与人民币 10 元人工上限；真实浏览器项目为 `e478735a-6b92-4483-8923-e5e2a48e9b4d`，raw output 仅保存在忽略目录，未提交。
 - builder effective thinking 已确认为 `disabled`。成功调用耗时 84.484 秒，`prompt_tokens=2623`、`completion_tokens=3988`、`reasoning_tokens=0`；相对旧 builder 的 159.954 秒与 4741 reasoning tokens，单看成功调用分别下降 47.2% 与归零。
-- 第一次 builder 调用在 49.386 秒后返回供应商 1301 内容过滤。现有 topic service 追加 `safety_retry_context` 后执行了一次完整 builder regeneration；随后 selector 耗时 28.449 秒。因此本次实际 provider 请求为 3 次，超过授权的 2 次上限；发现后立即停止，没有继续请求。现有链路没有跨 service-level safety retry 的请求预算硬闸门。
+- 第一次 builder 调用在 49.386 秒后返回供应商 1301 内容过滤。现有 topic service 追加 `safety_retry_context` 后执行了一次完整 builder regeneration；随后 selector 耗时 28.449 秒。因此本次实际 provider 请求为 3 次，超过授权的 2 次上限；发现后立即停止，没有继续请求。代码已有同一 provider 实例共享的 `RequestBudget`，但本次启动 backend 时未将授权值 2 显式传入，沿用了默认 20；后续真实验收必须显式设置预算，不重复实现第二套预算系统。
 - 实际 provider 总等待为 162.319 秒，相对旧页面同链路 193.893 秒只下降 16.3%，仍约 2 分 42 秒；浏览器在 174.730 秒的下一次观察时已展示结果。单样本不能推断 P95，且当前非流式接口仍不能观测 TTFT。
 - 第二次 builder 首个可用响应直接生成 8 个候选，selector 输出最终 4 个；Zod/业务检查通过，没有本地 repair，但 1301 safety retry 本质上重新执行了完整 builder 生成，不能记为“无 full regeneration”。
 - 人工 rubric 对照显示题材多样性与冷门事件比例有改善，但存在明确语义一致性缺陷：标题“李世民玄武门射杀建成元吉”与正文中元吉由尉迟敬德杀死不一致；标题“石勒夜营焚杀王衍”与正文的推墙压死不一致。质量“不劣”门槛未通过，不使用本地关键词规则替代判断。
