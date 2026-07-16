@@ -17,10 +17,11 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("优先选择事件不同的候选");
   });
 
-  it("requires candidate-builder to generate a larger raw candidate pool", () => {
+  it("requires candidate-builder to generate exactly four candidates", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 
-    expect(prompt.body).toContain("输出 8 个候选");
+    expect(prompt.body).toContain("输出 4 个候选");
+    expect(prompt.body).not.toContain("输出 8 个候选");
   });
 
   it("requires candidate-builder to define stable event_identity naming rules", () => {
@@ -119,7 +120,7 @@ describe("topic prompt contract", () => {
   it("requires candidate-builder to avoid letting recent high-frequency events dominate the raw pool", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 
-    expect(prompt.body).toContain("不要继续让这些近期高频事件占据原始 8 候选的大多数槽位");
+    expect(prompt.body).toContain("不要继续让这些近期高频事件占据原始 4 候选的大多数槽位");
     expect(prompt.body).toContain("朝代分布");
     expect(prompt.body).toContain("冲突类型");
     expect(prompt.body).toContain("叙事结构");
@@ -129,7 +130,7 @@ describe("topic prompt contract", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 
     expect(prompt.body).toContain("若 `RecommendationSeedSet` 已经明确锚定具体单事件");
-    expect(prompt.body).toContain("原始 8 候选必须全部围绕同一 `event_identity` 展开");
+    expect(prompt.body).toContain("原始 4 候选必须全部围绕同一 `event_identity` 展开");
     expect(prompt.body).toContain("不得改写成相邻事件、同人物其他阶段、制度时期标签或结果阶段标签");
   });
 
@@ -280,5 +281,7 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("不得新增候选");
     expect(prompt.body).toContain("不得改写已有 `event_identity`");
     expect(prompt.body).toContain("不重开候选发现");
+    expect(prompt.body).toContain("不重新挑选原始 4 候选");
+    expect(prompt.body).not.toContain("原始 8 候选");
   });
 });
