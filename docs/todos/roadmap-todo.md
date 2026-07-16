@@ -59,7 +59,7 @@
 - [x] 完成 V1 高风险稳定化最终全量回归、故障演练和内置浏览器验收
 
 ## 进行中
-- [ ] 收口 `S2-0` 的完整 topic 链路：Topic Selector 推理预算隔离的正式入口见 [设计](../plans/2026-07-16-s2-0-topic-selector-thinking-isolation-design.md) 和 [实施计划](../plans/2026-07-16-s2-0-topic-selector-thinking-isolation-implementation-plan.md)。同 prompt/fixture 下 disabled 风险召回 0/2；只改 enabled 后结构、靖康/鸿门宴 risk、玄武门/巫蛊 `none`、exact enum 和 effective thinking 均为 2/2，主闸门通过。生产已为精确 `topic.selector` 启用 thinking，strict/fallback 共用 policy，不增加第三次调用，也没有本地语义规则；17 文件 302/302 与 backend typecheck 通过。当前剩余风险是两次 Selector 合计从 31.378 秒升到 424.331 秒、completion 从 2071 升到 21728（reasoning 19328）；固定语义漏判已修复，但 S2-0 性能仍需在保持质量闸门的前提下降本，暂不进入 S2-1
+- [ ] 收口 `S2-0` 的完整 topic 链路：当前正式入口为 Topic 轻审核流程 [设计](../plans/2026-07-17-s2-0-topic-light-review-flow-design.md) 和 [实施计划](../plans/2026-07-17-s2-0-topic-light-review-flow-implementation-plan.md)。生产已移除重型 `topic.selector`，调整为 Builder 生成 4 条、`topic.light-review` 逐项一致性审核、不足时最多一次原 Builder 补充且只复审新增项；最终 1～4 条正常交付，0 条才失败，风险项不进入展示、缓存、推荐轮次或下游。Builder 本轮仅做 8→4 数量适配，没有修改内容质量策略；strict/fallback、跨轮去重、观测统计、API 可变数量和部分成功均已通过非 live 回归与 backend typecheck。尚未执行新流程真实 provider/page 验证，不能声明真实耗时、首次通过率或风险召回已改善；下一步先做最小真实验证，再决定是否另起 Builder 优化，暂不进入 S2-1
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 补齐前端 v1 真实浏览器验收矩阵：空态、加载中、成功、失败、刷新、深链、重复操作
 - [ ] 收口当前未归档计划，避免历史 implementation plan 误导新任务
