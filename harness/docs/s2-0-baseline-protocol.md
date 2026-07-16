@@ -564,3 +564,30 @@ selector pool 对照只读取 Task 14 已保存的本地 interaction input，并
 - 本轮没有执行 live/provider/browser 请求。non-live 结果只证明合同、评测边界、接线、预算和回归正确，不能证明风险召回已经改善。
 - S2-0 保持打开，不进入 S2-1。下一闸门不得自动执行：必须重新取得用户对 GLM-5.2、最多 2 次请求和人民币费用上限的明确授权，之后才可对两份固定 fixture 运行 Selector-only live 回放。
 - 第一轮通过标准为结构 2/2、风险召回 2/2、`none` 对照 2/2，并保持 candidate 精确覆盖与实际请求不超过 2；单轮通过也只能视为对方向的初步支持。
+
+## 2026-07-16 Topic Selector 内部一致性召回实验（live 未通过）
+
+### 授权与请求边界
+
+- 用户在 non-live 实施完成后明确授权继续；按上一轮建议使用 `glm-5.2`、固定两份 fixture、最多 2 次请求和人民币 10 元硬预算执行 Selector-only live 回放。
+- 执行前 dry-run 为 `live=false / fixture_count=2 / required_requests=2 / actual_requests=0`；真实运行改用直接 `tsx` 入口，避免 npm 参数转发差异。
+- 真实回放实际请求 2 次，每份 fixture 各 1 次；均为目标工具、`thinking=disabled`、`maxAttempts=1`，没有 Builder、数据库、selection、fallback、repair、retry、capability probe 或浏览器操作。
+- 脱敏结果只写入已忽略的 `harness/scripts/runtime/output/topic-selector-semantic-replay/`，没有提交 raw output、system prompt、完整 fixture input 或凭据。
+
+### 真实结果
+
+| fixture | 结构 | 耗时 | prompt/completion token | tool arguments | 语义计分 |
+| --- | --- | ---: | ---: | ---: | --- |
+| 高张力 | 通过 | 15.211 秒 | 4429 / 980 | 2508 字符 | 靖康 risk 0/1，玄武门 `none` 1/1 |
+| 均衡叙事 | 通过 | 16.167 秒 | 4580 / 1091 | 2735 字符 | 鸿门宴 risk 0/1，巫蛊 `none` 1/1 |
+
+- 两份结果均精确覆盖候选全集，结构 2/2、`none` 对照 2/2；prompt hash 均为 `eff35f742e20c7fdc6ba3ccd4b404068835db0f62282aa9b7b8fc64975acbf1f`，确认使用同一版原子断言审查 prompt。
+- 靖康主体错配和鸿门宴过度断言仍都直接返回 `none`，风险召回 0/2、exact enum match 0，主闸门 `primary_gate_passed=false`。
+- 两次合计耗时 31.378 秒，prompt/completion token 合计 9009/2071。两个样本不足以推断通用性能分布，且性能不是本轮通过条件。
+
+### 阶段结论
+
+- “只把泛化检查改成原子断言—内部证据审查顺序，即可在当前 GLM-5.2 + `thinking=disabled` + 排序同调用中恢复固定风险召回”的假设被本轮固定输入否证。
+- 结构和 `none` 精度保持稳定，说明失败不在候选覆盖、compact DTO、parser、回放比较器或下游传输；风险仍发生在模型语义 verdict 层。
+- 不继续在同一任务堆叠 prompt 规则、few-shot 示例或更多请求，也不引入任何本地语义 validator、候选正文关键词/字符串匹配、正则、黑名单、相似度或规则评分。
+- S2-0 保持打开，不进入 S2-1。下一步必须作为新的窄设计重新评估当前单调用同时排序与语义审查、`thinking=disabled` 等边界；在设计确认前不再修改生产路径或追加 live。

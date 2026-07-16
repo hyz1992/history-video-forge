@@ -360,6 +360,8 @@ npm run harness:topic-selector-semantic-replay -- --live --confirm-live --model=
 
 第一轮通过条件：结构 2/2、风险召回 2/2、`none` 对照 2/2、candidate 覆盖完整、实际请求不超过 2。单轮通过只表示方向获得初步支持；任一漏判或误报都应否证当前 prompt 假设，不在同一任务继续堆叠规则或示例。
 
+实际执行：用户在 non-live 收口后明确授权 GLM-5.2、最多 2 次请求和人民币 10 元上限。两份结构均通过，`none` 对照 2/2，但靖康与鸿门宴风险召回 0/2，`primary_gate_passed=false`；当前 prompt 假设被否证，没有追加请求或规则。
+
 ## 验收清单
 
 - [x] 党锢退出内部一致性硬指标但仍保留在原始 fixture 输入和人工观察记录；
@@ -370,7 +372,7 @@ npm run harness:topic-selector-semantic-replay -- --live --confirm-live --model=
 - [x] 没有任何本地语义 validator、关键词、正则、黑名单、相似度或规则评分；
 - [x] compact DTO、parser、selection、API、shared、前端和 downstream 无改动；
 - [x] 受影响串行矩阵、backend typecheck、prompt language、dry-run 与 diff check 通过；
-- [x] 未经重新明确授权没有执行 live/provider/browser 请求；
+- [x] Live 仅在用户重新明确授权 GLM-5.2、最多 2 次请求和人民币 10 元上限后执行，实际请求 2 次且没有浏览器操作；
 - [x] 状态文档没有把 non-live 结果表述为语义召回已改善，S2-0 不进入 S2-1。
 
 ## 执行记录
@@ -384,4 +386,5 @@ npm run harness:topic-selector-semantic-replay -- --live --confirm-live --model=
 - Prompt 规模以 `5de7458` 为基线从 2827 字符/71 行变为 2949 字符/71 行，增加 122 字符、0 行；旧判断顺序被替换，没有 fixture 示例、few-shot 或多处堆叠。
 - 生产单变量只是在同一次 Selector 调用内先静默拆分具体主体、关键动作、直接结果与断言强度，再检查全部 preview；`risk_hints` 不是白名单，先确定 issue 再排序。compact DTO、parser、selection、API、downstream、模型、`thinking` 与请求策略均未修改。
 - 本地 comparator 未修改，只按人工 annotation 的 candidate ID 与 provider enum 比较；没有任何本地语义 validator，也没有候选正文关键词、字符串匹配、正则、黑名单、相似度或规则评分。
-- 未执行 live/provider/browser。non-live 不能证明风险召回改善；S2-0 保持打开，不进入 S2-1。后续必须重新取得对 GLM-5.2、最多 2 次请求和人民币预算的明确授权，才可运行两份固定 Selector-only live 回放；通过标准为风险 2/2、`none` 2/2、结构 2/2。
+- Non-live 阶段没有执行 provider/browser；随后用户明确授权 GLM-5.2、最多 2 次请求和人民币 10 元上限，Selector-only live 实际请求 2 次。两份均 attempt 1、结构 2/2、`none` 2/2，但靖康与鸿门宴均返回 `none`，风险召回 0/2，主闸门失败；没有追加请求或浏览器操作。
+- Live 结果否证了当前 prompt-only 假设，不能声明语义召回改善或收口 S2-0。下一步需重新形成窄设计，不继续堆叠 prompt 规则、few-shot、本地语义判断或未授权请求。
