@@ -93,6 +93,7 @@ describe("llm-s2-baseline stub flow", () => {
   it("capability probe forces the declared target function without changing normal samples", async () => {
     const outputDir = makeSandboxOutputDir("target-tool-probe");
     let capturedToolChoice: string | undefined;
+    let capturedSelectorSchema: Record<string, unknown> | undefined;
     let capturedScorecardSchema: Record<string, unknown> | undefined;
     const provider = createOpenAiCompatibleProvider({
       profile: "structured",
@@ -100,6 +101,7 @@ describe("llm-s2-baseline stub flow", () => {
       maxAttempts: 1,
       invokeStrictApi: vi.fn(async (request) => {
         capturedToolChoice = request.options.toolChoice;
+        capturedSelectorSchema = request.schema.parameters as Record<string, unknown>;
         const rankedCandidates = request.schema.parameters.properties.ranked_candidates as {
           items?: Record<string, unknown>;
         };
@@ -111,19 +113,16 @@ describe("llm-s2-baseline stub flow", () => {
             quality_score: 90,
             deductions: [],
             risk_summary: "low",
-            consistency_status: "pass",
-            primary_consistency_issue: "none",
-            consistency_note: "probe candidate is internally consistent",
+            consistency_issue: "none",
           }, {
             candidate_id: "probe_c2",
             quality_rank: 2,
             quality_score: 80,
             deductions: [],
             risk_summary: "low",
-            consistency_status: "pass",
-            primary_consistency_issue: "none",
-            consistency_note: "probe candidate is internally consistent",
+            consistency_issue: "none",
           }],
+          consistency_risk_notes: [],
         });
       }) as any,
     });
@@ -144,10 +143,12 @@ describe("llm-s2-baseline stub flow", () => {
     expect(
       (result.observation.effectiveRequest as { toolChoice?: string } | null)?.toolChoice,
     ).toBe("target_function");
+    expect(capturedSelectorSchema?.required).toContain("consistency_risk_notes");
     expect(capturedScorecardSchema?.required).toContain("risk_summary");
-    expect(capturedScorecardSchema?.required).toContain("consistency_status");
-    expect(capturedScorecardSchema?.required).toContain("primary_consistency_issue");
-    expect(capturedScorecardSchema?.required).toContain("consistency_note");
+    expect(capturedScorecardSchema?.required).toContain("consistency_issue");
+    expect(capturedScorecardSchema?.required).not.toContain("consistency_status");
+    expect(capturedScorecardSchema?.required).not.toContain("primary_consistency_issue");
+    expect(capturedScorecardSchema?.required).not.toContain("consistency_note");
     expect(capturedScorecardSchema?.additionalProperties).toBe(false);
   });
 
@@ -166,10 +167,9 @@ describe("llm-s2-baseline stub flow", () => {
             quality_score: 90,
             risk_summary: "low",
             deductions: [],
-            consistency_status: "pass",
-            primary_consistency_issue: "none",
-            consistency_note: "candidate fields are internally consistent",
+            consistency_issue: "none",
           }],
+          consistency_risk_notes: [],
         });
       }) as any,
     });

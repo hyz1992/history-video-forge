@@ -160,8 +160,8 @@ describe("topic prompt contract", () => {
   it("requires topic.selector to return a complete ranked candidate scorecard", () => {
     const prompt = createPromptRegistry().getPrompt("topic.selector");
 
-    expect(prompt.body).toContain("`ranked_candidates` 应尽量覆盖 `selector_pool` 中全部候选 id");
-    expect(prompt.body).toContain("`quality_rank` 必须从 1 开始且尽量不重复");
+    expect(prompt.body).toContain("`ranked_candidates` 必须且只能覆盖 `selector_pool` 中全部候选 id");
+    expect(prompt.body).toContain("`quality_rank` 必须形成完整且不重复的 1..N");
     expect(prompt.body).toContain("`quality_score` 必须是 0 到 100 的整数");
     expect(prompt.body).toContain("`deductions` 只写扣分项");
     expect(prompt.body).toContain("`risk_summary` 必须是一句话风险摘要");
@@ -180,23 +180,35 @@ describe("topic prompt contract", () => {
   it("requires a compact semantic consistency verdict for every selector scorecard", () => {
     const prompt = createPromptRegistry().getPrompt("topic.selector");
 
-    expect(prompt.body).toContain("`consistency_status` 只能是 `pass` 或 `risk`");
-    expect(prompt.body).toContain("`primary_consistency_issue`");
+    expect(prompt.body).toContain("每项只用 `consistency_issue` 表示一致性结论");
+    expect(prompt.body).toContain("顶层 `consistency_risk_notes`");
     expect(prompt.body).toContain("actor_role_mismatch");
     expect(prompt.body).toContain("action_event_mismatch");
     expect(prompt.body).toContain("cause_outcome_mismatch");
     expect(prompt.body).toContain("scope_boundary_mismatch");
     expect(prompt.body).toContain("language_contamination");
     expect(prompt.body).toContain("overclaim_or_ambiguity");
-    expect(prompt.body).toContain("`pass` 不代表完成史实核查");
-    expect(prompt.body).toContain("不得使用 `risk` 表达一般史源争议");
-    expect(prompt.body).toContain("`consistency_note` 只写一句简短中文依据");
+    expect(prompt.body).toContain("`none` 不代表完成史实核查");
+    expect(prompt.body).toContain("不得使用非 `none` 结论表达一般史源争议");
+    expect(prompt.body).toContain("`consistency_issue=none` 的候选不得写 note");
+    expect(prompt.body).toContain("每个非 `none` 候选必须且只能写一条 note");
+    expect(prompt.body).not.toContain("`consistency_status`");
+    expect(prompt.body).not.toContain("`primary_consistency_issue`");
+    expect(prompt.body).not.toContain("`consistency_note`");
+  });
+
+  it("checks assertion strength before ranking topic.selector candidates", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.selector");
+
+    expect(prompt.body).toContain("特别核对断言强度");
+    expect(prompt.body).toContain("升级为更强的确定性终局");
+    expect(prompt.body).toContain("`overclaim_or_ambiguity` 或 `cause_outcome_mismatch`");
   });
 
   it("keeps all-candidate ranking while making selector explanations concise", () => {
     const prompt = createPromptRegistry().getPrompt("topic.selector");
 
-    expect(prompt.body).toContain("必须覆盖并排序全部候选");
+    expect(prompt.body).toContain("不得遗漏、重复或发明候选池外 id");
     expect(prompt.body).toContain("通常只保留最重要的 0–2 条");
     expect(prompt.body).toContain("不复述候选全文");
     expect(prompt.body).toContain("只总结首要风险");
@@ -208,6 +220,7 @@ describe("topic prompt contract", () => {
     expect(prompt.metadata.language).toBe("zh-CN");
     expect(prompt.body).toContain("rank_topic_candidates");
     expect(prompt.body).toContain("ranked_candidates");
+    expect(prompt.body).toContain("consistency_risk_notes");
     expect(prompt.body).toContain(
       "不要输出 answer、result、explanation 或任何 schema 外字段",
     );
@@ -216,7 +229,7 @@ describe("topic prompt contract", () => {
   it("keeps topic.selector scorecard text JSON-safe for strict tool-call arguments", () => {
     const prompt = createPromptRegistry().getPrompt("topic.selector");
 
-    expect(prompt.body).toContain("`reason` 和 `risk_summary` 必须是合法 JSON 字符串");
+    expect(prompt.body).toContain("`reason`、`risk_summary` 和 note 必须是合法 JSON 字符串");
     expect(prompt.body).toContain("不要使用单引号包裹字符串");
   });
 

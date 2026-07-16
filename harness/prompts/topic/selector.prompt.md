@@ -19,22 +19,23 @@ status: active
 
 ## 输出合同
 
-- 必须通过 `rank_topic_candidates` 返回唯一正式字段 `ranked_candidates`；必须覆盖并排序全部候选。
-- `ranked_candidates` 应尽量覆盖 `selector_pool` 中全部候选 id，不得发明候选池外 id。
-- 每项必须包含 `candidate_id`、`quality_rank`、`quality_score`、`deductions`、`risk_summary`、`consistency_status`、`primary_consistency_issue`、`consistency_note`。
-- `quality_rank` 必须从 1 开始且尽量不重复；`quality_score` 必须是 0 到 100 的整数。
+- 必须通过 `rank_topic_candidates` 返回 `ranked_candidates` 与 `consistency_risk_notes`，不得返回其他顶层字段。
+- `ranked_candidates` 必须且只能覆盖 `selector_pool` 中全部候选 id，不得遗漏、重复或发明候选池外 id。
+- 每项必须包含 `candidate_id`、`quality_rank`、`quality_score`、`deductions`、`risk_summary`、`consistency_issue`。
+- `quality_rank` 必须形成完整且不重复的 1..N；`quality_score` 必须是 0 到 100 的整数。
 - `deductions` 只写扣分项，schema 仍兼容最多 4 条，但通常只保留最重要的 0–2 条；无明显扣分时返回空数组。`reason` 直接指出扣分点，不复述候选全文。
 - `risk_summary` 必须是一句话风险摘要，只总结首要风险，不重复全部 deductions；无明显风险时使用简短说明。
-- `reason` 和 `risk_summary` 必须是合法 JSON 字符串；`consistency_note` 同样必须是合法 JSON 字符串。不要使用单引号包裹字符串。
+- `reason`、`risk_summary` 和 note 必须是合法 JSON 字符串。不要使用单引号包裹字符串。
 - 不要输出 answer、result、explanation 或任何 schema 外字段。
 
 ## 一致性结论
 
-- `consistency_status` 只能是 `pass` 或 `risk`；`pass` 必须配 `primary_consistency_issue=none`，`risk` 必须配一个非 `none` issue。
-- `primary_consistency_issue` 只能是 `none`、`actor_role_mismatch`、`action_event_mismatch`、`cause_outcome_mismatch`、`scope_boundary_mismatch`、`language_contamination`、`overclaim_or_ambiguity`。
-- `risk` 只用于候选内部的角色/动作/因果错配、时代或事件边界越界、正式中文内容的外语污染，或足以误导“谁做了什么、谁承担结果”的歧义与过度断言。
-- 不得使用 `risk` 表达一般史源争议；候选内部一致但史料存在争议时，继续写入 `deductions` 或 `risk_summary`。
-- `consistency_note` 只写一句简短中文依据，不复述全文；`pass` 不代表完成史实核查或达到发布线。
+- 每项只用 `consistency_issue` 表示一致性结论，只能是 `none`、`actor_role_mismatch`、`action_event_mismatch`、`cause_outcome_mismatch`、`scope_boundary_mismatch`、`language_contamination`、`overclaim_or_ambiguity`。
+- 顶层 `consistency_risk_notes` 只收录非 `none` 候选的 `{candidate_id, note}`；全部为 `none` 时返回空数组。
+- `consistency_issue=none` 的候选不得写 note；每个非 `none` 候选必须且只能写一条 note，简短指出内部冲突依据，不复述全文。
+- 非 `none` 只用于候选内部的角色/动作/因果错配、时代或事件边界越界、正式中文内容的外语污染，或足以误导“谁做了什么、谁承担结果”的歧义与过度断言。
+- 不得使用非 `none` 结论表达一般史源争议；候选内部一致但史料存在争议时，继续写入 `deductions` 或 `risk_summary`。
+- `none` 不代表完成史实核查或达到发布线。
 
 ## 扣分轴
 
@@ -51,7 +52,7 @@ status: active
 
 ## 判断顺序
 
-1. 先按事件身份、行为主体、关键动作、因果结果完成一致性检查，横向核对 `title`、`one_line_angle`、`core_conflict`、`strong_scene` 与 `must_cover_preview`，并区分决策者、执行者、受害者和结果承担者。
+1. 先按事件身份、行为主体、关键动作、因果结果完成一致性检查，横向核对 `title`、`one_line_angle`、`core_conflict`、`strong_scene` 与 `must_cover_preview`，并区分决策者、执行者、受害者和结果承担者。特别核对断言强度：标题或切口不得把内部证据只支持的失败、受创或格局逆转，升级为更强的确定性终局；明显超出证据时标记 `overclaim_or_ambiguity` 或 `cause_outcome_mismatch`。
 2. 再判断开头留存、冲突压力、场景可视性、切口新鲜度、脚本可展开性、结尾余震与疲劳重复。
 3. 主体、动作、因果关系或结果明确冲突时，必须使用 `source_or_scope_risk` 扣分并说明；当候选池至少有 4 个无明显冲突候选时，冲突候选原则上不得进入前 4。
 4. 这里只检查候选内部是否互相支持，不能替代正式史实核查；只做排序与风险说明，不得改写候选。
