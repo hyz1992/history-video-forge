@@ -30,6 +30,7 @@ import {
   parseStrictSelectorDecision,
   recommendTopicCandidates,
   recommendTopicCandidatesWithTrace,
+  TOPIC_SELECTOR_STRICT_SCHEMA,
 } from "../../../backend/src/modules/topic/topic-recommendation.service.js";
 
 const runtimeCandidate = {
@@ -118,7 +119,11 @@ function createCompactSelectorDecision(...candidateIds: string[]) {
 }
 
 function createSelectorDecision(...candidateIds: string[]) {
-  return createCompactSelectorDecision(...candidateIds);
+  return {
+    ranked_candidates: candidateIds.map((candidateId, index) =>
+      createSelectorScorecard(candidateId, index + 1),
+    ),
+  };
 }
 
 function createSelectorDecisionFromPool(
@@ -258,26 +263,41 @@ async function seedRawCandidateCacheEntry(
 }
 
 describe("topic runtime recommendation", () => {
-  it("derives the existing internal scorecard from compact selector verdicts", () => {
-    const decision = createCompactSelectorDecision(
-      "selector_candidate_1",
-      "selector_candidate_2",
-    );
-    Object.assign(decision.ranked_candidates[1], {
-      consistency_issue: "actor_role_mismatch",
-    });
-    decision.consistency_risk_notes.push({
-      candidate_id: "selector_candidate_2",
-      note: "标题把执行者写成了结果承担者",
-    });
+  it("requires the complete per-candidate verdict in the strict schema", () => {
+    const parameters = TOPIC_SELECTOR_STRICT_SCHEMA.parameters as Record<string, any>;
+    const properties = parameters.properties as Record<string, any>;
+    const scorecard = properties.ranked_candidates.items;
 
-    const result = parseStrictSelectorDecision(decision);
+    expect(parameters.required).toEqual(["ranked_candidates"]);
+    expect(properties).not.toHaveProperty("consistency_risk_notes");
+    expect(scorecard.required).toEqual(
+      expect.arrayContaining([
+        "consistency_status",
+        "primary_consistency_issue",
+        "consistency_note",
+      ]),
+    );
+    expect(scorecard.properties).not.toHaveProperty("consistency_issue");
+  });
+
+  it("preserves valid semantic consistency fields in strict selector scorecards", () => {
+    const passScorecard = createSelectorScorecard("selector_candidate_1", 1);
+    const riskScorecard = {
+      ...createSelectorScorecard("selector_candidate_2", 2),
+      consistency_status: "risk",
+      primary_consistency_issue: "actor_role_mismatch",
+      consistency_note: "标题把执行者写成了结果承担者",
+    };
+
+    const result = parseStrictSelectorDecision({
+      ranked_candidates: [passScorecard, riskScorecard],
+    });
 
     expect(result.ranked_candidates).toEqual([
       expect.objectContaining({
         consistency_status: "pass",
         primary_consistency_issue: "none",
-        consistency_note: "",
+        consistency_note: "标题、切口和三段推进互相支持",
       }),
       expect.objectContaining({
         consistency_status: "risk",
@@ -288,94 +308,71 @@ describe("topic runtime recommendation", () => {
   });
 
   it.each([
-    ["consistency_issue"],
-  ])("rejects compact selector scorecards missing %s", (missingField) => {
+    ["consistency_status"],
+    ["primary_consistency_issue"],
+    ["consistency_note"],
+  ])("rejects strict selector scorecards missing %s", (missingField) => {
     const scorecard = {
-      ...createCompactSelectorScorecard("selector_candidate_1", 1),
+      ...createSelectorScorecard("selector_candidate_1", 1),
     } as Record<string, unknown>;
     delete scorecard[missingField];
 
     expect(() =>
       parseStrictSelectorDecision({
         ranked_candidates: [scorecard],
-        consistency_risk_notes: [],
-      }),
-    ).toThrow("strict_selector_bad_scorecard");
-  });
-
-  it("rejects compact selector verdicts without the required risk note array", () => {
-    expect(() =>
-      parseStrictSelectorDecision({
-        ranked_candidates: [
-          createCompactSelectorScorecard("selector_candidate_1", 1),
-        ],
-      }),
-    ).toThrow("topic_selector_strict_schema_failed");
-  });
-
-  it("rejects invalid compact selector issue values", () => {
-    expect(() =>
-      parseStrictSelectorDecision({
-        ranked_candidates: [
-          {
-            ...createCompactSelectorScorecard("selector_candidate_1", 1),
-            consistency_issue: "invented_issue",
-          },
-        ],
-        consistency_risk_notes: [],
       }),
     ).toThrow("strict_selector_bad_scorecard");
   });
 
   it.each([
-    ["risk without note", [], "selector_candidate_1", "actor_role_mismatch"],
-    [
-      "pass with note",
-      [{ candidate_id: "selector_candidate_1", note: "冗余说明" }],
-      "selector_candidate_1",
-      "none",
-    ],
-    [
-      "note for unknown verdict",
-      [{ candidate_id: "selector_candidate_999", note: "未知候选" }],
-      "selector_candidate_1",
-      "none",
-    ],
-    [
-      "empty risk note",
-      [{ candidate_id: "selector_candidate_1", note: "   " }],
-      "selector_candidate_1",
-      "actor_role_mismatch",
-    ],
-  ])("rejects %s", (_label, notes, candidateId, issue) => {
+    ["pass", "actor_role_mismatch"],
+    ["risk", "none"],
+    ["risk", "invented_issue"],
+  ])(
+    "rejects inconsistent strict selector verdict %s/%s",
+    (consistencyStatus, primaryConsistencyIssue) => {
+      expect(() =>
+        parseStrictSelectorDecision({
+          ranked_candidates: [
+            {
+              ...createSelectorScorecard("selector_candidate_1", 1),
+              consistency_status: consistencyStatus,
+              primary_consistency_issue: primaryConsistencyIssue,
+            },
+          ],
+        }),
+      ).toThrow("strict_selector_bad_scorecard");
+    },
+  );
+
+  it("rejects an empty strict selector consistency note", () => {
     expect(() =>
       parseStrictSelectorDecision({
         ranked_candidates: [
           {
-            ...createCompactSelectorScorecard(candidateId, 1),
-            consistency_issue: issue,
+            ...createSelectorScorecard("selector_candidate_1", 1),
+            consistency_note: "   ",
           },
         ],
-        consistency_risk_notes: notes,
       }),
     ).toThrow("strict_selector_bad_scorecard");
   });
 
-  it("rejects duplicate risk note ids", () => {
+  it("rejects the Task 17 compact provider verdict", () => {
+    expect(() =>
+      parseStrictSelectorDecision(
+        createCompactSelectorDecision("selector_candidate_1"),
+      ),
+    ).toThrow("topic_selector_strict_schema_failed");
+  });
+
+  it("rejects the compact top-level risk note array", () => {
     expect(() =>
       parseStrictSelectorDecision({
-        ranked_candidates: [
-          {
-            ...createCompactSelectorScorecard("selector_candidate_1", 1),
-            consistency_issue: "actor_role_mismatch",
-          },
-        ],
-        consistency_risk_notes: [
-          { candidate_id: "selector_candidate_1", note: "第一条" },
-          { candidate_id: "selector_candidate_1", note: "第二条" },
-        ],
+        ranked_candidates: [createSelectorScorecard("selector_candidate_1", 1)],
+        consistency_risk_notes: [],
       }),
-    ).toThrow("strict_selector_bad_scorecard");
+    ).toThrow("topic_selector_strict_schema_failed");
   });
 
   it.each([
@@ -386,19 +383,9 @@ describe("topic runtime recommendation", () => {
     expect(() =>
       parseStrictSelectorDecision({
         ranked_candidates: candidateIds.map((candidateId, index) => ({
-          ...createCompactSelectorScorecard(candidateId, qualityRanks[index]!),
+          ...createSelectorScorecard(candidateId, qualityRanks[index]!),
           quality_rank: qualityRanks[index],
         })),
-        consistency_risk_notes: [],
-      }),
-    ).toThrow("strict_selector_bad_scorecard");
-  });
-
-  it("rejects the legacy three-field provider verdict", () => {
-    expect(() =>
-      parseStrictSelectorDecision({
-        ranked_candidates: [createSelectorScorecard("selector_candidate_1", 1)],
-        consistency_risk_notes: [],
       }),
     ).toThrow("strict_selector_bad_scorecard");
   });
@@ -852,11 +839,9 @@ describe("topic runtime recommendation", () => {
       "selector_candidate_8",
     );
     Object.assign(selectorDecision.ranked_candidates[0], {
-      consistency_issue: "actor_role_mismatch",
-    });
-    selectorDecision.consistency_risk_notes.push({
-      candidate_id: "selector_candidate_1",
-      note: "标题把执行者写成了结果承担者",
+      consistency_status: "risk",
+      primary_consistency_issue: "actor_role_mismatch",
+      consistency_note: "标题把执行者写成了结果承担者",
     });
     const { gateway } = createGatewayWithSelectorResponses([
       [
@@ -949,7 +934,7 @@ describe("topic runtime recommendation", () => {
       risk_summary: "rank 2 risk",
       consistency_status: "pass",
       primary_consistency_issue: "none",
-      consistency_note: "",
+      consistency_note: "标题、切口和三段推进互相支持",
     });
   });
 
@@ -1668,11 +1653,9 @@ describe("topic runtime recommendation", () => {
       "selector_candidate_8",
     );
     Object.assign(selectorDecision.ranked_candidates[0], {
-      consistency_issue: "overclaim_or_ambiguity",
-    });
-    selectorDecision.consistency_risk_notes.push({
-      candidate_id: "selector_candidate_1",
-      note: "短切口的主语会让结果错误关联到前置人物",
+      consistency_status: "risk",
+      primary_consistency_issue: "overclaim_or_ambiguity",
+      consistency_note: "短切口的主语会让结果错误关联到前置人物",
     });
     const { gateway, invokeApi } = createGatewayWithSelectorResponses([
       [
@@ -1730,11 +1713,9 @@ describe("topic runtime recommendation", () => {
     for (const scorecard of selectorDecision.ranked_candidates) {
       if (scorecard.quality_rank === 1 || scorecard.quality_rank >= 5) {
         Object.assign(scorecard, {
-          consistency_issue: "action_event_mismatch",
-        });
-        selectorDecision.consistency_risk_notes.push({
-          candidate_id: scorecard.candidate_id,
-          note: "关键动作与三段推进不一致",
+          consistency_status: "risk",
+          primary_consistency_issue: "action_event_mismatch",
+          consistency_note: "关键动作与三段推进不一致",
         });
       }
     }
@@ -2413,7 +2394,7 @@ describe("topic runtime recommendation", () => {
 
   it("rejects selector verdicts that omit a known pool candidate", async () => {
     const db = createDbClient();
-    const incompleteDecision = createCompactSelectorDecision(
+    const incompleteDecision = createSelectorDecision(
       "selector_candidate_1",
       "selector_candidate_2",
       "selector_candidate_3",

@@ -87,22 +87,6 @@ interface TopicSelectorRankedCandidate extends CandidateQualityScorecard {
   consistency_note: string;
 }
 
-interface TopicSelectorProviderRankedCandidate extends CandidateQualityScorecard {
-  candidate_id: string;
-  deductions: Array<TopicCandidateDeduction & { axis: SelectorDeductionAxis }>;
-  consistency_issue: TopicConsistencyIssue;
-}
-
-interface TopicSelectorConsistencyRiskNote {
-  candidate_id: string;
-  note: string;
-}
-
-interface TopicSelectorProviderDecision {
-  ranked_candidates: TopicSelectorProviderRankedCandidate[];
-  consistency_risk_notes: TopicSelectorConsistencyRiskNote[];
-}
-
 interface TopicSelectorDecision {
   ranked_candidates: TopicSelectorRankedCandidate[];
 }
@@ -165,9 +149,16 @@ export const TOPIC_SELECTOR_STRICT_SCHEMA: StrictStructuredToolSchema = {
             risk_summary: {
               type: "string",
             },
-            consistency_issue: {
+            consistency_status: {
+              type: "string",
+              enum: [...TOPIC_CONSISTENCY_STATUSES],
+            },
+            primary_consistency_issue: {
               type: "string",
               enum: [...TOPIC_CONSISTENCY_ISSUES],
+            },
+            consistency_note: {
+              type: "string",
             },
           },
           required: [
@@ -176,29 +167,15 @@ export const TOPIC_SELECTOR_STRICT_SCHEMA: StrictStructuredToolSchema = {
             "quality_score",
             "deductions",
             "risk_summary",
-            "consistency_issue",
+            "consistency_status",
+            "primary_consistency_issue",
+            "consistency_note",
           ],
           additionalProperties: false,
         },
       },
-      consistency_risk_notes: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            candidate_id: {
-              type: "string",
-            },
-            note: {
-              type: "string",
-            },
-          },
-          required: ["candidate_id", "note"],
-          additionalProperties: false,
-        },
-      },
     },
-    required: ["ranked_candidates", "consistency_risk_notes"],
+    required: ["ranked_candidates"],
     additionalProperties: false,
   },
 };
@@ -590,7 +567,7 @@ function extractProviderErrorPayload(message: string): {
 
 function createDefaultSelectorDecision(
   selectorPool: Array<{ candidate_id: string }>,
-): TopicSelectorProviderDecision {
+): TopicSelectorDecision {
   return {
     ranked_candidates: selectorPool.map((candidate, index) => ({
       candidate_id: candidate.candidate_id,
@@ -598,9 +575,10 @@ function createDefaultSelectorDecision(
       quality_score: Math.max(1, 100 - index),
       deductions: [],
       risk_summary: "stub selector ranking",
-      consistency_issue: "none",
+      consistency_status: "pass",
+      primary_consistency_issue: "none",
+      consistency_note: "stub selector consistency pass",
     })),
-    consistency_risk_notes: [],
   };
 }
 
@@ -1187,14 +1165,13 @@ export function parseStrictSelectorDecision(rawOutput: unknown): TopicSelectorDe
 
   const record = rawOutput as Record<string, unknown>;
   const rankedCandidates = record.ranked_candidates;
-  const consistencyRiskNotes = record.consistency_risk_notes;
 
-  if (!Array.isArray(rankedCandidates) || !Array.isArray(consistencyRiskNotes)) {
+  if (!Array.isArray(rankedCandidates)) {
     throw new Error("topic_selector_strict_schema_failed");
   }
 
   const extraKeys = Object.keys(record).filter(
-    (key) => key !== "ranked_candidates" && key !== "consistency_risk_notes",
+    (key) => key !== "ranked_candidates",
   );
   if (extraKeys.length > 0) {
     throw new Error("topic_selector_strict_schema_failed");
@@ -1203,7 +1180,6 @@ export function parseStrictSelectorDecision(rawOutput: unknown): TopicSelectorDe
   return {
     ranked_candidates: parseSelectorScorecards(
       rankedCandidates,
-      consistencyRiskNotes,
       "topic_selector_strict_schema_failed",
     ),
   };
@@ -1232,22 +1208,13 @@ function normalizeSelectorDecision(rawOutput: unknown): TopicSelectorDecision {
     namedToolRecord?.ranked_candidates ??
     record.ranked_candidates ??
     record.rankedCandidates;
-  const consistencyRiskNotes =
-    answerRecord?.consistency_risk_notes ??
-    answerRecord?.consistencyRiskNotes ??
-    namedToolRecord?.consistency_risk_notes ??
-    namedToolRecord?.consistencyRiskNotes ??
-    record.consistency_risk_notes ??
-    record.consistencyRiskNotes;
-
-  if (!Array.isArray(rankedCandidates) || !Array.isArray(consistencyRiskNotes)) {
+  if (!Array.isArray(rankedCandidates)) {
     throw new Error("topic_selector_no_ranked_array");
   }
 
   return {
     ranked_candidates: parseSelectorScorecards(
       rankedCandidates,
-      consistencyRiskNotes,
       "topic_selector_bad_scorecard",
     ),
   };
@@ -1255,12 +1222,11 @@ function normalizeSelectorDecision(rawOutput: unknown): TopicSelectorDecision {
 
 function parseSelectorScorecards(
   rawScorecards: unknown[],
-  rawConsistencyRiskNotes: unknown[],
   errorCode: "topic_selector_bad_scorecard" | "topic_selector_strict_schema_failed",
 ): TopicSelectorRankedCandidate[] {
   const seenRanks = new Set<number>();
   const seenCandidateIds = new Set<string>();
-  const providerScorecards: TopicSelectorProviderRankedCandidate[] = [];
+  const result: TopicSelectorRankedCandidate[] = [];
   const isStrict = errorCode === "topic_selector_strict_schema_failed";
   const prefix = isStrict ? "strict_selector_bad_scorecard" : "selector_bad_scorecard";
 
@@ -1315,15 +1281,43 @@ function parseSelectorScorecards(
       throw new Error(`${prefix}: ${idxLabel} risk_summary must be string, got ${typeof riskSummary}`);
     }
 
-    const consistencyIssue = record.consistency_issue;
+    const consistencyStatus = record.consistency_status;
     if (
-      typeof consistencyIssue !== "string" ||
-      !TOPIC_CONSISTENCY_ISSUES.includes(
-        consistencyIssue as TopicConsistencyIssue,
+      typeof consistencyStatus !== "string" ||
+      !TOPIC_CONSISTENCY_STATUSES.includes(
+        consistencyStatus as TopicConsistencyStatus,
       )
     ) {
       throw new Error(
-        `${prefix}: ${idxLabel} consistency_issue is invalid`,
+        `${prefix}: ${idxLabel} consistency_status is invalid`,
+      );
+    }
+
+    const primaryConsistencyIssue = record.primary_consistency_issue;
+    if (
+      typeof primaryConsistencyIssue !== "string" ||
+      !TOPIC_CONSISTENCY_ISSUES.includes(
+        primaryConsistencyIssue as TopicConsistencyIssue,
+      )
+    ) {
+      throw new Error(
+        `${prefix}: ${idxLabel} primary_consistency_issue is invalid`,
+      );
+    }
+
+    if (
+      (consistencyStatus === "pass" && primaryConsistencyIssue !== "none") ||
+      (consistencyStatus === "risk" && primaryConsistencyIssue === "none")
+    ) {
+      throw new Error(
+        `${prefix}: ${idxLabel} consistency status and issue disagree`,
+      );
+    }
+
+    const consistencyNote = record.consistency_note;
+    if (typeof consistencyNote !== "string" || consistencyNote.trim().length === 0) {
+      throw new Error(
+        `${prefix}: ${idxLabel} consistency_note must be non-empty string`,
       );
     }
 
@@ -1332,13 +1326,15 @@ function parseSelectorScorecards(
     }
     seenRanks.add(qualityRank);
 
-    providerScorecards.push({
+    result.push({
       candidate_id: candidateId,
       quality_rank: qualityRank,
       quality_score: qualityScore,
       deductions: parseSelectorDeductions(deductions, `${prefix}: ${idxLabel}`),
       risk_summary: riskSummary,
-      consistency_issue: consistencyIssue as TopicConsistencyIssue,
+      consistency_status: consistencyStatus as TopicConsistencyStatus,
+      primary_consistency_issue: primaryConsistencyIssue as TopicConsistencyIssue,
+      consistency_note: consistencyNote.trim(),
     });
   }
 
@@ -1347,67 +1343,7 @@ function parseSelectorScorecards(
     throw new Error(`${prefix}: quality_rank must form a complete 1..N sequence`);
   }
 
-  const riskNotesByCandidateId = parseSelectorConsistencyRiskNotes(
-    rawConsistencyRiskNotes,
-    prefix,
-  );
-  const riskCandidateIds = new Set(
-    providerScorecards
-      .filter((scorecard) => scorecard.consistency_issue !== "none")
-      .map((scorecard) => scorecard.candidate_id),
-  );
-
-  if (
-    riskNotesByCandidateId.size !== riskCandidateIds.size ||
-    [...riskNotesByCandidateId.keys()].some((candidateId) => !riskCandidateIds.has(candidateId)) ||
-    [...riskCandidateIds].some((candidateId) => !riskNotesByCandidateId.has(candidateId))
-  ) {
-    throw new Error(`${prefix}: consistency risk notes do not match risk verdicts`);
-  }
-
-  return providerScorecards.map((scorecard) => ({
-    candidate_id: scorecard.candidate_id,
-    quality_rank: scorecard.quality_rank,
-    quality_score: scorecard.quality_score,
-    deductions: scorecard.deductions,
-    risk_summary: scorecard.risk_summary,
-    consistency_status: scorecard.consistency_issue === "none" ? "pass" : "risk",
-    primary_consistency_issue: scorecard.consistency_issue,
-    consistency_note:
-      scorecard.consistency_issue === "none"
-        ? ""
-        : riskNotesByCandidateId.get(scorecard.candidate_id)!,
-  }));
-}
-
-function parseSelectorConsistencyRiskNotes(
-  rawNotes: unknown[],
-  prefix: string,
-): Map<string, string> {
-  const notesByCandidateId = new Map<string, string>();
-
-  for (let i = 0; i < rawNotes.length; i++) {
-    const rawNote = rawNotes[i];
-    if (!rawNote || typeof rawNote !== "object" || Array.isArray(rawNote)) {
-      throw new Error(`${prefix}: risk note index ${i} is not an object`);
-    }
-
-    const record = rawNote as Record<string, unknown>;
-    const candidateId = record.candidate_id;
-    const note = record.note;
-    if (typeof candidateId !== "string" || candidateId.length === 0) {
-      throw new Error(`${prefix}: risk note index ${i} candidate_id is invalid`);
-    }
-    if (typeof note !== "string" || note.trim().length === 0) {
-      throw new Error(`${prefix}: risk note ${candidateId} must be non-empty string`);
-    }
-    if (notesByCandidateId.has(candidateId)) {
-      throw new Error(`${prefix}: duplicate risk note candidate_id ${candidateId}`);
-    }
-    notesByCandidateId.set(candidateId, note.trim());
-  }
-
-  return notesByCandidateId;
+  return result;
 }
 
 function parseSelectorDeductions(
