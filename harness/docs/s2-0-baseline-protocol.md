@@ -591,3 +591,41 @@ selector pool 对照只读取 Task 14 已保存的本地 interaction input，并
 - 结构和 `none` 精度保持稳定，说明失败不在候选覆盖、compact DTO、parser、回放比较器或下游传输；风险仍发生在模型语义 verdict 层。
 - 不继续在同一任务堆叠 prompt 规则、few-shot 示例或更多请求，也不引入任何本地语义 validator、候选正文关键词/字符串匹配、正则、黑名单、相似度或规则评分。
 - S2-0 保持打开，不进入 S2-1。下一步必须作为新的窄设计重新评估当前单调用同时排序与语义审查、`thinking=disabled` 等边界；在设计确认前不再修改生产路径或追加 live。
+
+## 2026-07-16 Topic Selector 推理预算隔离与召回修复（固定回放通过，性能明显回退）
+
+### 正式入口与根因隔离
+
+- 正式入口：[推理预算隔离与召回修复设计](../../docs/plans/2026-07-16-s2-0-topic-selector-thinking-isolation-design.md)（提交 `58b73db`）与[实施计划](../../docs/plans/2026-07-16-s2-0-topic-selector-thinking-isolation-implementation-plan.md)（提交 `1c30d11`）。
+- 历史对比确认：Task 16 live 前代码基线 `6b9934b` 在 `thinking=disabled` 下曾识别时代越界和主体歧义，对应验收记录提交为 `1d56e75`；但同轮也漏判“败退亡国”。因此历史证据只能说明 disabled 能识别部分显式风险，不能证明其对细粒度跨字段关系稳定合格。
+- 当前同一固定输入已经先后否证 compact/full verdict 与 prompt-only 两种解释：完整 verdict 风险仍为 0/3且 completion 增长 60.3%，原子断言 prompt 风险仍为 0/2。故本轮只改变 Selector thinking，不改模型、prompt、prompt hash、fixture、compact schema、parser、目标工具或 `maxAttempts=1`。
+- 回放入口按 TDD 增加显式 `enabled/disabled` 参数、requested/effective thinking 记录和 mismatch 闸门；22 项中 8 项先红，最小实现后 22/22 通过，提交 `8285d4d`。本机 npm 11.5.1 会吞掉脚本后的 `--thinking` 配置参数，实际 dry-run/live 因此使用直接 `npx tsx` 入口；dry-run 明确为 requested enabled、fixture 2、required requests 2、actual requests 0。
+
+### 授权与请求边界
+
+- 用户明确授权在本次会话内继续诊断、实施和执行必要固定 live，不再逐步等待批准。真实回放仍收紧为 GLM-5.2、两份冻结 fixture、每份 1 次、总请求恰好 2、人民币预算声明上限 10 元。
+- 输出写入已忽略的 `harness/scripts/runtime/output/topic-selector-semantic-replay/thinking-enabled-20260716/`；没有提交 raw output、system prompt、完整 fixture input、API key 或生成态 storage。
+- 两次均为 strict 目标工具、`maxAttempts=1`、无 retry、Builder、数据库、selection、fallback、repair、capability probe 或浏览器操作；requested/effective thinking 均为 enabled。
+
+### thinking-enabled 真实结果
+
+| fixture | 结构 | 耗时 | prompt / completion / reasoning token | tool arguments | 语义计分 |
+| --- | --- | ---: | ---: | ---: | --- |
+| 高张力 | 通过 | 220.948 秒 | 4435 / 11317 / 10115 | 2932 字符 | 靖康 `actor_role_mismatch` 1/1，玄武门 `none` 1/1 |
+| 均衡叙事 | 通过 | 203.383 秒 | 4586 / 10411 / 9213 | 2645 字符 | 鸿门宴 `overclaim_or_ambiguity` 1/1，巫蛊 `none` 1/1 |
+
+- 两份 prompt hash 均为 `eff35f742e20c7fdc6ba3ccd4b404068835db0f62282aa9b7b8fc64975acbf1f`，与上一轮 disabled 固定回放一致。
+- 结构 2/2、风险召回 2/2、`none` 对照 2/2、exact enum 2/2、effective thinking 2/2，实际请求 2，`primary_gate_passed=true`。
+- 相对同 prompt、同 fixture 的 disabled 回放，合计耗时由 31.378 秒增至 424.331 秒，为 13.52 倍（+1252.3%）；prompt token 由 9009 变为 9021（+0.1%），completion token 由 2071 增至 21728，为 10.49 倍（+949.2%），其中 reasoning token 合计 19328；tool arguments 由 5243 增至 5577（+6.4%）。主要成本来自隐藏推理，不是最终结构化 arguments 膨胀。
+
+### 生产修复与 non-live 回归
+
+- live 主闸门通过后，先写 production RED：operation policy 与 topic runtime 共 85 项中 3 项失败，分别证明 `topic.selector` 尚未获得 enabled、fallback 仍落到 provider default、strict invocation 仍显式覆盖为 disabled。
+- 最小修复只在 `APPROVED_THINKING_OVERRIDE` 为精确 operation `topic.selector` 写入 enabled，并删除 strict invocation 的 disabled 覆盖；strict 与受控 structured fallback 现均按 `operationName=topic.selector` 继承同一 policy。没有把 enabled 扩展到 `short_structured_decision` class，publish/probe 等 operation 保持未覆盖。提交为 `7fc96f9`。
+- 直接受影响合同 4 文件、137/137 通过；完整受影响矩阵 17 文件、302/302 通过；`npm run typecheck:backend` 与 prompt language 检查通过。没有修改 Builder、8/4 合同、prompt、compact DTO、parser、selection、API、前端、downstream 或 semantic reviewer shadow-only 边界，也没有新增本地语义规则或第三次 LLM 调用。
+
+### 阶段结论
+
+- 当前真实问题位于 Selector 的 8 候选语义判断，不是 Builder 生成 8 项；固定回归集证明 enabled 能把靖康和鸿门宴从 `none` 恢复为精确风险，同时不误报两个 `none` 对照。
+- 更精确的根因表述是：`thinking=disabled` 不是必然失败条件，但在“8 候选排序 + 细粒度一致性审查”同调用中，对主体合并和断言升级的推理预算不足，是当前最主要且已被同输入单变量验证的可控因素。
+- Selector 固定语义召回问题已修复并写入生产精确策略；但两个样本不能证明所有主题分布，且 13.52 倍的 Selector 延迟/10.49 倍 completion 成本不可忽略。因此 S2-0 继续打开，后续只应设计如何在保持当前质量闸门的前提下降低 reasoning 成本，不回退到已证明风险 0/2 的 disabled，也不直接进入 S2-1。

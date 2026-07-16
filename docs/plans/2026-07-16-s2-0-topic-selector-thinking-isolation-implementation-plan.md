@@ -1,6 +1,6 @@
 # S2-0 Topic Selector 推理预算隔离与召回修复实施计划
 
-> **For agentic workers:** REQUIRED: Use `superpowers:subagent-driven-development` (if subagents available and project rules allow) or `superpowers:executing-plans` to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED: Use `superpowers:subagent-driven-development` (if subagents available and project rules allow) or `superpowers:executing-plans` to implement this plan. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 在完全相同的两份固定 Selector 输入上隔离验证 `thinking=enabled`，通过风险 `2/2`、`none` `2/2`、结构 `2/2` 闸门后，把 enabled 写入 `topic.selector` 精确 operation policy，并保持 8/4、prompt、compact DTO、parser、selection、API 与下游合同不变。
 
@@ -22,7 +22,7 @@
 - Read only: `harness/scripts/runtime/topic-selector-semantic-replay.ts`
 - Read only: `tests/harness/topic-selector-semantic-replay.test.ts`
 
-- [ ] **Step 1：确认只存在用户排除的未跟踪文件**
+- [x] **Step 1：确认只存在用户排除的未跟踪文件**
 
 Run:
 
@@ -37,7 +37,7 @@ Expected：只看到以下两个用户文件，另加本实施计划（提交后
 ?? docs/plans/2026-07-16-codex-s2-0-compact-verdict-launch-prompt.md
 ```
 
-- [ ] **Step 2：确认当前失败证据仍指向 thinking disabled**
+- [x] **Step 2：确认当前失败证据仍指向 thinking disabled**
 
 Run:
 
@@ -56,7 +56,7 @@ Expected：`recalled_risk_count=0`、`passed_none_control_count=2`、`primary_ga
 
 Use: `@superpowers:test-driven-development`
 
-- [ ] **Step 1：扩展测试辅助 observation**
+- [x] **Step 1：扩展测试辅助 observation**
 
 让 `createObservation()` 接受 thinking 参数：
 
@@ -78,7 +78,7 @@ function createObservation(
 }
 ```
 
-- [ ] **Step 2：为 CLI 与 dry-run 写红灯**
+- [x] **Step 2：为 CLI 与 dry-run 写红灯**
 
 新增断言：
 
@@ -96,7 +96,7 @@ expect(() =>
 ).toThrow("topic_selector_semantic_replay_thinking_invalid");
 ```
 
-- [ ] **Step 3：为 live 参数护栏写红灯**
+- [x] **Step 3：为 live 参数护栏写红灯**
 
 现有所有合法 live stub 输入显式补 `thinking: "disabled"`；新增缺少 thinking 的拒绝用例：
 
@@ -112,7 +112,7 @@ await expect(
 ).rejects.toThrow("topic_selector_semantic_replay_thinking_required");
 ```
 
-- [ ] **Step 4：为 runner 单变量透传写红灯**
+- [x] **Step 4：为 runner 单变量透传写红灯**
 
 把真实 gateway 接线测试改为：
 
@@ -134,7 +134,7 @@ expect(result.observation.effective_request).toMatchObject({
 });
 ```
 
-- [ ] **Step 5：为 summary 和 effective thinking 闸门写红灯**
+- [x] **Step 5：为 summary 和 effective thinking 闸门写红灯**
 
 合法 stub live 传 `thinking: "enabled"`，两份 observation 也返回 enabled，断言：
 
@@ -156,7 +156,7 @@ expect(result).toMatchObject({
 });
 ```
 
-- [ ] **Step 6：运行红灯**
+- [x] **Step 6：运行红灯**
 
 Run:
 
@@ -173,7 +173,7 @@ Expected：FAIL，原因只包括 `thinking` 参数/字段/校验尚不存在或
 - Modify: `harness/scripts/runtime/topic-selector-semantic-replay.ts`
 - Test: `tests/harness/topic-selector-semantic-replay.test.ts`
 
-- [ ] **Step 1：引入正式 thinking 类型并扩展输入/输出合同**
+- [x] **Step 1：引入正式 thinking 类型并扩展输入/输出合同**
 
 从 provider contract 引入：
 
@@ -211,7 +211,7 @@ export interface TopicSelectorSemanticReplayDependencies {
 }
 ```
 
-- [ ] **Step 2：解析并验证 CLI**
+- [x] **Step 2：解析并验证 CLI**
 
 实现：
 
@@ -239,7 +239,7 @@ if (!input.thinking) {
 }
 ```
 
-- [ ] **Step 3：透传给 runner**
+- [x] **Step 3：透传给 runner**
 
 签名改为：
 
@@ -265,7 +265,7 @@ const runner =
   createTopicSelectorSemanticReplayLiveRunner(input.model!, input.thinking!);
 ```
 
-- [ ] **Step 4：把 requested/effective thinking 写入计划和闸门**
+- [x] **Step 4：把 requested/effective thinking 写入计划和闸门**
 
 plan 写入：
 
@@ -290,7 +290,7 @@ effectiveThinkingMatchCount === fixtures.length
 
 summary 和 `trace.md` 写入 `requested_thinking` 与 `effective_thinking_match_count`。CLI 的 dry-run/live 精简 stdout 同样打印 requested thinking。
 
-- [ ] **Step 5：运行最小绿灯**
+- [x] **Step 5：运行最小绿灯**
 
 Run:
 
@@ -300,17 +300,17 @@ npx vitest run --configLoader runner tests/harness/topic-selector-semantic-repla
 
 Expected：该文件全部通过。
 
-- [ ] **Step 6：运行 dry-run，确认零请求**
+- [x] **Step 6：运行 dry-run，确认零请求**
 
 Run:
 
 ```powershell
-npm run harness:topic-selector-semantic-replay -- --thinking=enabled
+npx tsx harness/scripts/runtime/topic-selector-semantic-replay.ts --thinking=enabled
 ```
 
 Expected：`mode=topic_selector_semantic_replay_plan`、`requested_thinking=enabled`、`required_requests=2`、`actual_requests=0`。
 
-- [ ] **Step 7：提交诊断入口**
+- [x] **Step 7：提交诊断入口**
 
 ```powershell
 git add -- harness/scripts/runtime/topic-selector-semantic-replay.ts tests/harness/topic-selector-semantic-replay.test.ts
@@ -327,27 +327,27 @@ git commit -m "支持选题回放隔离推理开关"
 - Generated/ignored: `harness/scripts/runtime/output/topic-selector-semantic-replay/trace.md`
 - Generated/ignored: `harness/scripts/runtime/output/topic-selector-semantic-replay/*.result.json`
 
-- [ ] **Step 1：确认环境与 dry-run**
+- [x] **Step 1：确认环境与 dry-run**
 
 Run:
 
 ```powershell
-npm run harness:topic-selector-semantic-replay -- --thinking=enabled
+npx tsx harness/scripts/runtime/topic-selector-semantic-replay.ts --thinking=enabled
 ```
 
 Expected：0 请求。不得在输出中打印 API key 或完整 prompt。
 
-- [ ] **Step 2：执行 exactly 2 requests**
+- [x] **Step 2：执行 exactly 2 requests**
 
 Run:
 
 ```powershell
-npm run harness:topic-selector-semantic-replay -- --live --confirm-live --model=glm-5.2 --thinking=enabled --max-requests=2 --max-cost-cny=10
+npx tsx harness/scripts/runtime/topic-selector-semantic-replay.ts --live --confirm-live --model=glm-5.2 --thinking=enabled --max-requests=2 --max-cost-cny=10 --output-dir=harness/scripts/runtime/output/topic-selector-semantic-replay/thinking-enabled-20260716
 ```
 
 Expected：实际请求 2；无自动重跑、Builder、数据库或浏览器操作。
 
-- [ ] **Step 3：读取脱敏 summary 并逐项判闸门**
+- [x] **Step 3：读取脱敏 summary 并逐项判闸门**
 
 Run:
 
@@ -384,11 +384,11 @@ results[*].structural_failed = false
 
 Use: `@superpowers:test-driven-development`
 
-- [ ] **Step 1：更新未批准列表**
+- [x] **Step 1：更新未批准列表**
 
 从 `unapprovedOperations` 移除 `topic.selector`，其他 operation 保持不变。
 
-- [ ] **Step 2：新增精确 enabled 期望**
+- [x] **Step 2：新增精确 enabled 期望**
 
 ```ts
 expect(getOperationPolicy("topic.selector").thinking).toBe("enabled");
@@ -398,7 +398,7 @@ expect(getOperationPolicy("probe.strict-tool-call").thinking).toBeUndefined();
 
 同时用 `resolveEffectiveRequest()` 证明无 invocation override 时 Selector strict/fallback 的 effective thinking 为 enabled。
 
-- [ ] **Step 3：更新 production strict 请求期望**
+- [x] **Step 3：更新 production strict 请求期望**
 
 在 `uses strict structured invocation for topic.selector...` 中不再期待 invocation options 硬编码 thinking：
 
@@ -410,7 +410,7 @@ expect(selectorRequest?.options).toMatchObject({
 expect(selectorRequest?.options).not.toHaveProperty("thinking");
 ```
 
-- [ ] **Step 4：运行红灯**
+- [x] **Step 4：运行红灯**
 
 Run:
 
@@ -429,7 +429,7 @@ Expected：FAIL，原因是 policy 尚未返回 enabled，且 service 仍显式�
 - Test: `tests/backend/runtime/llm-operation-policy.test.ts`
 - Test: `tests/backend/topic/topic-runtime-recommendation.test.ts`
 
-- [ ] **Step 1：批准精确 operation override**
+- [x] **Step 1：批准精确 operation override**
 
 在 `APPROVED_THINKING_OVERRIDE` 中增加：
 
@@ -439,7 +439,7 @@ Expected：FAIL，原因是 policy 尚未返回 enabled，且 service 仍显式�
 
 更新紧邻中文注释，明确证据来自本计划的两份固定 Selector-only live，不扩展到 operation class。
 
-- [ ] **Step 2：移除 strict invocation 硬编码**
+- [x] **Step 2：移除 strict invocation 硬编码**
 
 从 `invokeTopicSelector()` strict options 删除：
 
@@ -456,7 +456,7 @@ toolChoice: "target_function",
 
 这样 strict 由 operation policy 解析 enabled；fallback 的 promptId/operationName 仍为 `topic.selector`，同样继承 enabled。
 
-- [ ] **Step 3：运行绿灯**
+- [x] **Step 3：运行绿灯**
 
 Run:
 
@@ -466,7 +466,7 @@ npx vitest run --configLoader runner tests/backend/runtime/llm-operation-policy.
 
 Expected：两文件全部通过。
 
-- [ ] **Step 4：提交生产修复**
+- [x] **Step 4：提交生产修复**
 
 ```powershell
 git add -- backend/src/runtime/llm/operation-policy.ts backend/src/modules/topic/topic-recommendation.service.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts
@@ -480,7 +480,7 @@ git commit -m "启用选题选择器精确推理策略"
 
 - Verify only: affected backend/harness tests
 
-- [ ] **Step 1：运行最小合同矩阵**
+- [x] **Step 1：运行最小合同矩阵**
 
 Run:
 
@@ -490,7 +490,7 @@ npx vitest run --configLoader runner tests/harness/topic-selector-semantic-repla
 
 Expected：全部通过。
 
-- [ ] **Step 2：运行受影响 17 文件矩阵**
+- [x] **Step 2：运行受影响 17 文件矩阵**
 
 Run:
 
@@ -500,7 +500,7 @@ npx vitest run --configLoader runner tests/harness/topic-selector-semantic-repla
 
 Expected：17 个文件全部通过（修改前基线为 299/299；新增测试后记录实际计数）；不得写入或暂存 `storage/topic-candidate-library/`。
 
-- [ ] **Step 3：类型检查**
+- [x] **Step 3：类型检查**
 
 Run:
 
@@ -510,12 +510,12 @@ npm run typecheck:backend
 
 Expected：exit 0。
 
-- [ ] **Step 4：最终 dry-run**
+- [x] **Step 4：最终 dry-run**
 
 Run:
 
 ```powershell
-npm run harness:topic-selector-semantic-replay -- --thinking=enabled
+npx tsx harness/scripts/runtime/topic-selector-semantic-replay.ts --thinking=enabled
 ```
 
 Expected：0 请求，requested thinking 为 enabled。
@@ -529,7 +529,7 @@ Expected：0 请求，requested thinking 为 enabled。
 - Modify: `docs/todos/roadmap-todo.md`
 - Modify: `docs/plans/2026-07-16-s2-0-topic-selector-thinking-isolation-implementation-plan.md`
 
-- [ ] **Step 1：记录 live 数字，不复制 raw output**
+- [x] **Step 1：记录 live 数字，不复制 raw output**
 
 在 baseline protocol 追加中文小节，至少记录：
 
@@ -542,7 +542,7 @@ Expected：0 请求，requested thinking 为 enabled。
 - 与 disabled 上一轮的方向性成本对比；
 - 两样本只能证明固定回归集，不宣称全分布稳定。
 
-- [ ] **Step 2：更新当前入口**
+- [x] **Step 2：更新当前入口**
 
 `docs/plans/README.md` 与 `docs/todos/roadmap-todo.md` 应说明：
 
@@ -552,11 +552,11 @@ Expected：0 请求，requested thinking 为 enabled。
 - 若通过，精确 operation policy 已启用且不增加请求；
 - S2-0 是否收口必须按真实结果表述，不自动进入 S2-1。
 
-- [ ] **Step 3：回填本计划 checkbox 和执行结果**
+- [x] **Step 3：回填本计划 checkbox 和执行结果**
 
 将已执行步骤标记 `[x]`，附真实命令和计数；未执行或失败步骤保持 `[ ]` 并写原因。
 
-- [ ] **Step 4：提交记录**
+- [x] **Step 4：提交记录**
 
 ```powershell
 git add -- harness/docs/s2-0-baseline-protocol.md docs/plans/README.md docs/todos/roadmap-todo.md docs/plans/2026-07-16-s2-0-topic-selector-thinking-isolation-implementation-plan.md
@@ -572,18 +572,18 @@ git commit -m "记录选题推理召回修复结果"
 
 Use: `@superpowers:verification-before-completion`
 
-- [ ] **Step 1：复跑关键验证**
+- [x] **Step 1：复跑关键验证**
 
 至少重新运行：
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/topic-selector-semantic-replay.test.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts --no-file-parallelism
 npm run typecheck:backend
-npm run harness:topic-selector-semantic-replay -- --thinking=enabled
+npx tsx harness/scripts/runtime/topic-selector-semantic-replay.ts --thinking=enabled
 git diff --check
 ```
 
-- [ ] **Step 2：检查提交范围**
+- [x] **Step 2：检查提交范围**
 
 Run:
 
@@ -594,7 +594,7 @@ git log -6 --oneline
 
 Expected：只剩用户明确排除的两个未跟踪文件；不得出现 candidate library、runtime output 或 raw provider 文件。
 
-- [ ] **Step 3：逐项自审**
+- [x] **Step 3：逐项自审**
 
 确认：
 
@@ -608,14 +608,25 @@ Expected：只剩用户明确排除的两个未跟踪文件；不得出现 candi
 
 ## 验收清单
 
-- [ ] 已回答问题位于 Selector 8 选 4 的语义判断，不是 Builder 生成 8 项。
-- [ ] 已找到并记录 Task 16 `6b9934b` / `1d56e75` 的 disabled 对比及其漏判边界。
-- [ ] replay CLI 显式支持且校验 enabled/disabled。
-- [ ] dry-run 仍为 0 请求并记录 requested thinking。
-- [ ] live exactly 2 requests，effective enabled `2/2`。
-- [ ] 结构 `2/2`、风险 `2/2`、`none` `2/2`。
-- [ ] live 通过后才写入精确 production operation policy。
-- [ ] strict 不再用 invocation options 遮蔽 policy，fallback 同样继承 enabled。
-- [ ] 没有本地语义规则、第三次 LLM 调用或下游合同变化。
-- [ ] 最小/受影响回归、typecheck、dry-run、diff check 通过。
-- [ ] 未触碰或提交两个排除文件、candidate library、runtime output 或 raw provider 数据。
+- [x] 已回答问题位于 Selector 8 选 4 的语义判断，不是 Builder 生成 8 项。
+- [x] 已找到并记录 Task 16 `6b9934b` / `1d56e75` 的 disabled 对比及其漏判边界。
+- [x] replay CLI 显式支持且校验 enabled/disabled。
+- [x] dry-run 仍为 0 请求并记录 requested thinking。
+- [x] live exactly 2 requests，effective enabled `2/2`。
+- [x] 结构 `2/2`、风险 `2/2`、`none` `2/2`。
+- [x] live 通过后才写入精确 production operation policy。
+- [x] strict 不再用 invocation options 遮蔽 policy，fallback 同样继承 enabled。
+- [x] 没有本地语义规则、第三次 LLM 调用或下游合同变化。
+- [x] 最小/受影响回归、typecheck、dry-run、diff check 通过。
+- [x] 未触碰或提交两个排除文件、candidate library、runtime output 或 raw provider 数据。
+
+## 实际执行结果
+
+- 设计提交：`58b73db`；实施计划提交：`1c30d11`。
+- Replay TDD RED 为 22 项中 8 项失败，GREEN 为 22/22；诊断入口提交：`8285d4d`。
+- 本机 npm 11.5.1 会吞脚本后的 `--thinking` 参数，故按验证结果把计划命令更正为直接 `npx tsx`。最终 dry-run 为 requested enabled、fixture 2、required requests 2、actual requests 0。
+- Live 实际 2 请求：requested/effective enabled 2/2、结构 2/2、风险 2/2、`none` 2/2、exact enum 2/2、主闸门通过。高张力 220.948 秒、4435/11317/10115 tokens；均衡叙事 203.383 秒、4586/10411/9213 tokens。
+- Production TDD RED 为 85 项中 3 项失败，GREEN 为 85/85；生产策略提交：`7fc96f9`。
+- 直接受影响合同 4 文件 137/137；完整矩阵 17 文件 302/302；`npm run typecheck:backend` 通过；prompt language 包含在完整矩阵内并通过。
+- 生产改动只有精确 `topic.selector=enabled` 与删除 strict 的 disabled invocation override；Builder、8/4、prompt、compact DTO、parser、selection、API、前端、downstream 和 semantic reviewer 均未改。
+- 未触碰、暂存或提交两个用户排除文件、`storage/topic-candidate-library/`、runtime output、raw provider 数据或凭据。
