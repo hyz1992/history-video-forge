@@ -113,19 +113,16 @@ describe("llm-s2-baseline stub flow", () => {
             quality_score: 90,
             deductions: [],
             risk_summary: "low",
-            consistency_status: "pass",
-            primary_consistency_issue: "none",
-            consistency_note: "候选内部未见明确冲突",
+            consistency_issue: "none",
           }, {
             candidate_id: "probe_c2",
             quality_rank: 2,
             quality_score: 80,
             deductions: [],
             risk_summary: "low",
-            consistency_status: "pass",
-            primary_consistency_issue: "none",
-            consistency_note: "候选内部未见明确冲突",
+            consistency_issue: "none",
           }],
+          consistency_risk_notes: [],
         });
       }) as any,
     });
@@ -146,12 +143,12 @@ describe("llm-s2-baseline stub flow", () => {
     expect(
       (result.observation.effectiveRequest as { toolChoice?: string } | null)?.toolChoice,
     ).toBe("target_function");
-    expect(capturedSelectorSchema?.required).toEqual(["ranked_candidates"]);
+    expect(capturedSelectorSchema?.required).toContain("consistency_risk_notes");
     expect(capturedScorecardSchema?.required).toContain("risk_summary");
-    expect(capturedScorecardSchema?.required).not.toContain("consistency_issue");
-    expect(capturedScorecardSchema?.required).toContain("consistency_status");
-    expect(capturedScorecardSchema?.required).toContain("primary_consistency_issue");
-    expect(capturedScorecardSchema?.required).toContain("consistency_note");
+    expect(capturedScorecardSchema?.required).toContain("consistency_issue");
+    expect(capturedScorecardSchema?.required).not.toContain("consistency_status");
+    expect(capturedScorecardSchema?.required).not.toContain("primary_consistency_issue");
+    expect(capturedScorecardSchema?.required).not.toContain("consistency_note");
     expect(capturedScorecardSchema?.additionalProperties).toBe(false);
   });
 
@@ -170,10 +167,9 @@ describe("llm-s2-baseline stub flow", () => {
             quality_score: 90,
             risk_summary: "low",
             deductions: [],
-            consistency_status: "pass",
-            primary_consistency_issue: "none",
-            consistency_note: "候选内部未见明确冲突",
+            consistency_issue: "none",
           }],
+          consistency_risk_notes: [],
         });
       }) as any,
     });
