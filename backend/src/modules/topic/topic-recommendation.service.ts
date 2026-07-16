@@ -1031,6 +1031,7 @@ async function selectFinalCandidatesWithTrace(input: {
   const diagnostics: RecommendationDiagnostic[] = [];
   const decision = await invokeTopicSelector({
     llmGateway: input.llmGateway,
+    expectedCandidateIds: input.selectorPool.map((candidate) => candidate.candidate_id),
     selectorInput: {
       recommendation_seed: input.input,
       selector_pool: projectTopicSelectorPool(input.selectorPool),
@@ -1072,6 +1073,7 @@ async function selectFinalCandidatesWithTrace(input: {
 
 async function invokeTopicSelector(input: {
   llmGateway: LlmGateway;
+  expectedCandidateIds: string[];
   selectorInput: unknown;
   interactionLogWriter?: LlmInteractionLogWriter;
 }): Promise<TopicSelectorDecision> {
@@ -1083,7 +1085,11 @@ async function invokeTopicSelector(input: {
           promptId: "topic.selector",
           input: input.selectorInput,
           schema: TOPIC_SELECTOR_STRICT_SCHEMA,
-          parse: parseStrictSelectorDecision,
+          parse: (rawOutput) =>
+            assertSelectorPoolCoverage(
+              parseStrictSelectorDecision(rawOutput),
+              input.expectedCandidateIds,
+            ),
           options: {
             strategy: "tool_call",
             thinking: "disabled",
@@ -1098,13 +1104,16 @@ async function invokeTopicSelector(input: {
       });
     } catch (error) {
       if (shouldFallbackToStructuredSelector(error)) {
-        return normalizeSelectorDecision(
-          await invokeTopicStructuredPromptWithSafetyRetry<unknown>({
-            gateway: input.llmGateway,
-            promptId: "topic.selector",
-            promptInput: input.selectorInput,
-            interactionLogWriter: input.interactionLogWriter,
-          }),
+        return assertSelectorPoolCoverage(
+          normalizeSelectorDecision(
+            await invokeTopicStructuredPromptWithSafetyRetry<unknown>({
+              gateway: input.llmGateway,
+              promptId: "topic.selector",
+              promptInput: input.selectorInput,
+              interactionLogWriter: input.interactionLogWriter,
+            }),
+          ),
+          input.expectedCandidateIds,
         );
       }
 
@@ -1112,13 +1121,16 @@ async function invokeTopicSelector(input: {
     }
   }
 
-  return normalizeSelectorDecision(
-    await invokeTopicStructuredPromptWithSafetyRetry<unknown>({
-      gateway: input.llmGateway,
-      promptId: "topic.selector",
-      promptInput: input.selectorInput,
-      interactionLogWriter: input.interactionLogWriter,
-    }),
+  return assertSelectorPoolCoverage(
+    normalizeSelectorDecision(
+      await invokeTopicStructuredPromptWithSafetyRetry<unknown>({
+        gateway: input.llmGateway,
+        promptId: "topic.selector",
+        promptInput: input.selectorInput,
+        interactionLogWriter: input.interactionLogWriter,
+      }),
+    ),
+    input.expectedCandidateIds,
   );
 }
 
@@ -1134,11 +1146,38 @@ function shouldFallbackToStructuredSelector(error: unknown): boolean {
     "strict_structured_strategy_not_supported",
     "topic_selector_strict_schema_failed",
     "strict_selector_bad_scorecard",
+    "topic_selector_candidate_coverage_mismatch",
     "LLM API key or base URL is not configured.",
     "Unexpected token",
     "is not valid JSON",
     "invalid tool arguments",
   ].some((pattern) => error.message.includes(pattern));
+}
+
+function assertSelectorPoolCoverage(
+  decision: TopicSelectorDecision,
+  expectedCandidateIds: string[],
+): TopicSelectorDecision {
+  const expectedIds = new Set(expectedCandidateIds);
+  const actualIds = new Set<string>();
+
+  for (const scorecard of decision.ranked_candidates) {
+    if (!expectedIds.has(scorecard.candidate_id)) {
+      throw new Error(`topic_selector_unknown_candidate: ${scorecard.candidate_id}`);
+    }
+    actualIds.add(scorecard.candidate_id);
+  }
+
+  if (
+    actualIds.size !== expectedIds.size ||
+    expectedCandidateIds.some((candidateId) => !actualIds.has(candidateId))
+  ) {
+    throw new Error(
+      `topic_selector_candidate_coverage_mismatch: expected=${expectedCandidateIds.join(",")} actual=${[...actualIds].join(",")}`,
+    );
+  }
+
+  return decision;
 }
 
 export function parseStrictSelectorDecision(rawOutput: unknown): TopicSelectorDecision {

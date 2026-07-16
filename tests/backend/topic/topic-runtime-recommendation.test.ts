@@ -1972,7 +1972,7 @@ describe("topic runtime recommendation", () => {
     ).rejects.toThrow("topic_selector_no_ranked_array");
   });
 
-  it("falls back to regular structured selector output when strict tool-call arguments are malformed", async () => {
+  it("falls back to a complete structured selector output when the strict verdict omits a pool candidate", async () => {
     const db = createDbClient();
     const structuredCalls: unknown[] = [];
     const invokeStructuredPrompt = vi.fn(
@@ -2008,9 +2008,18 @@ describe("topic runtime recommendation", () => {
       },
     );
     const invokeStrictStructured = vi.fn(
-      async <T>(_request: InvokeStrictStructuredOptions<T>): Promise<T> => {
-        throw new Error("Unexpected token ''', invalid tool arguments is not valid JSON");
-      },
+      async <T>(request: InvokeStrictStructuredOptions<T>): Promise<T> =>
+        request.parse(
+          createCompactSelectorDecision(
+            "selector_candidate_1",
+            "selector_candidate_2",
+            "selector_candidate_3",
+            "selector_candidate_4",
+            "selector_candidate_5",
+            "selector_candidate_6",
+            "selector_candidate_7",
+          ),
+        ),
     );
     const gateway: LlmGateway = {
       invokeStructuredPrompt: async <T>(
@@ -2025,9 +2034,9 @@ describe("topic runtime recommendation", () => {
       db,
       {
         canonicalName: "seed-a",
-        summary: "strict selector may produce malformed tool-call arguments",
-        coreConflict: "fallback structured selector should keep the live run moving",
-        strongScene: "the selector retries through regular json response format",
+        summary: "strict selector may omit one actual pool candidate",
+        coreConflict: "fallback structured selector must restore complete coverage",
+        strongScene: "the selector retries through a complete regular json response",
         sourceHint: "test",
         recentUsageHint: "strict fallback",
       },
@@ -2400,6 +2409,77 @@ describe("topic runtime recommendation", () => {
         },
       ),
     ).rejects.toThrow("topic_selector_unknown_candidate");
+  });
+
+  it("rejects selector verdicts that omit a known pool candidate", async () => {
+    const db = createDbClient();
+    const incompleteDecision = createCompactSelectorDecision(
+      "selector_candidate_1",
+      "selector_candidate_2",
+      "selector_candidate_3",
+      "selector_candidate_4",
+      "selector_candidate_5",
+      "selector_candidate_6",
+      "selector_candidate_7",
+    );
+    const { gateway } = createGatewayWithSelectorResponses(
+      [[
+        createRuntimeCandidate("event-a", "angle-a"),
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+        createRuntimeCandidate("event-d", "angle-d"),
+        createRuntimeCandidate("event-e", "angle-e"),
+        createRuntimeCandidate("event-f", "angle-f"),
+        createRuntimeCandidate("event-g", "angle-g"),
+        createRuntimeCandidate("event-h", "angle-h"),
+      ]],
+      [incompleteDecision, incompleteDecision],
+    );
+
+    await expect(
+      recommendTopicCandidatesWithTrace(
+        db,
+        {
+          canonicalName: "seed-a",
+          summary: "every selector pool candidate must receive an explicit verdict",
+          coreConflict: "omission cannot be treated as an implicit pass",
+          strongScene: "the incomplete verdict must fail before final selection",
+          sourceHint: "test",
+          recentUsageHint: "none",
+        },
+        { llmGateway: gateway },
+      ),
+    ).rejects.toThrow("topic_selector_candidate_coverage_mismatch");
+  });
+
+  it("validates exact coverage against the actual four-item selector pool", async () => {
+    const db = createDbClient();
+    const { gateway } = createGatewayWithSelectorResponses([[
+      createRuntimeCandidate("event-a", "angle-a-1"),
+      createRuntimeCandidate("event-a", "angle-a-2"),
+      createRuntimeCandidate("event-b", "angle-b-1"),
+      createRuntimeCandidate("event-b", "angle-b-2"),
+      createRuntimeCandidate("event-c", "angle-c-1"),
+      createRuntimeCandidate("event-c", "angle-c-2"),
+      createRuntimeCandidate("event-d", "angle-d-1"),
+      createRuntimeCandidate("event-d", "angle-d-2"),
+    ]]);
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "broad-seed",
+        summary: "coverage follows the deduplicated selector pool size",
+        coreConflict: "the contract must not hardcode eight verdicts",
+        strongScene: "four unique events remain after local deduplication",
+        sourceHint: "test",
+        recentUsageHint: "none",
+      },
+      { llmGateway: gateway },
+    );
+
+    expect(result.selector_pool).toHaveLength(4);
+    expect(result.selector_trace?.ranked_candidates).toHaveLength(4);
   });
 
   it("rejects repeated ids instead of silently backfilling an incomplete selector verdict", async () => {
