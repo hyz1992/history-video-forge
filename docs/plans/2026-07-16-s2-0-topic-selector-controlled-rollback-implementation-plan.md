@@ -38,7 +38,7 @@
 - 修改：`tests/backend/topic/topic-runtime-recommendation.test.ts`
 - 修改：`tests/harness/topic-selector-semantic-replay.test.ts`
 
-- [ ] **Step 1：把测试 helper 改为完整逐候选 verdict**
+- [x] **Step 1：把测试 helper 改为完整逐候选 verdict**
 
 在生产 runtime 测试中把 provider scorecard helper 改成：
 
@@ -57,7 +57,7 @@
 
 删除 helper 中 `consistency_issue` 和顶层 `consistency_risk_notes`。
 
-- [ ] **Step 2：新增/恢复 strict schema 与 parser 断言**
+- [x] **Step 2：新增/恢复 strict schema 与 parser 断言**
 
 至少覆盖：
 
@@ -71,11 +71,11 @@
 8. 额外顶层 `consistency_risk_notes` 失败；
 9. 既有实际候选池缺失、重复、额外 ID 与 rank 错误覆盖测试保留。
 
-- [ ] **Step 3：更新 replay 生产 schema 期望**
+- [x] **Step 3：更新 replay 生产 schema 期望**
 
 在 replay 测试中要求生产接线观察到完整三字段，不再出现 `consistency_issue` 或顶层 `consistency_risk_notes`。
 
-- [ ] **Step 4：运行红灯**
+- [x] **Step 4：运行红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/topic/topic-runtime-recommendation.test.ts tests/harness/topic-selector-semantic-replay.test.ts --no-file-parallelism
@@ -89,11 +89,11 @@ npx vitest run --configLoader runner tests/backend/topic/topic-runtime-recommend
 
 - 修改：`backend/src/modules/topic/topic-recommendation.service.ts`
 
-- [ ] **Step 1：恢复类型定义**
+- [x] **Step 1：恢复类型定义**
 
 恢复 `TOPIC_CONSISTENCY_STATUSES = ["pass", "risk"]`、逐候选完整三字段和只含 `ranked_candidates` 的 decision。移除 provider DTO 专用的 `consistency_issue` 与 `consistency_risk_notes` 类型，但不修改内部 Topic candidate/trace 使用的三字段。
 
-- [ ] **Step 2：恢复 strict schema**
+- [x] **Step 2：恢复 strict schema**
 
 顶层只允许 `ranked_candidates`。每个 scorecard 恢复：
 
@@ -105,7 +105,7 @@ consistency_note: { type: "string" },
 
 三个字段均 required。不得删除 Task 17 的 runtime candidate coverage 校验。
 
-- [ ] **Step 3：恢复 parser 组合校验**
+- [x] **Step 3：恢复 parser 组合校验**
 
 `parseStrictSelectorDecision()` 只接受顶层 `ranked_candidates`。每项必须校验：
 
@@ -117,11 +117,11 @@ if (consistencyNote.trim().length === 0) throw ...;
 
 返回完整三字段，不从顶层 note 映射。
 
-- [ ] **Step 4：恢复 stub 与 trace 输入**
+- [x] **Step 4：恢复 stub 与 trace 输入**
 
 所有本地 stub scorecard 直接生成合法完整三字段。trace、selection 与最终候选继续读取内部三字段，不改变已有 pass 优先与 risk 补位逻辑。
 
-- [ ] **Step 5：运行绿灯**
+- [x] **Step 5：运行绿灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/topic/topic-runtime-recommendation.test.ts --no-file-parallelism
@@ -129,7 +129,7 @@ npx vitest run --configLoader runner tests/backend/topic/topic-runtime-recommend
 
 预期：该文件全部 PASS，候选全集覆盖相关测试仍通过。
 
-- [ ] **Step 6：中文提交生产合同恢复**
+- [x] **Step 6：中文提交生产合同恢复**
 
 ```powershell
 git add -- backend/src/modules/topic/topic-recommendation.service.ts tests/backend/topic/topic-runtime-recommendation.test.ts
@@ -146,7 +146,7 @@ git commit -m "恢复选题筛选完整语义结论"
 - 修改：`tests/backend/runtime/topic-prompt-contract.test.ts`
 - 修改：`harness/prompts/topic/selector.prompt.md`
 
-- [ ] **Step 1：先修改 prompt 合同测试**
+- [x] **Step 1：先修改 prompt 合同测试**
 
 要求 prompt 明确：
 
@@ -157,7 +157,7 @@ git commit -m "恢复选题筛选完整语义结论"
 - 必须覆盖本次全部候选 ID；
 - 不再出现顶层 `consistency_risk_notes` 或“none 不写 note”。
 
-- [ ] **Step 2：运行 prompt 红灯**
+- [x] **Step 2：运行 prompt 红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract.test.ts --no-file-parallelism
@@ -165,7 +165,7 @@ npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract
 
 预期：FAIL，当前 compact prompt 不满足完整 verdict 断言。
 
-- [ ] **Step 3：最小恢复中文 prompt**
+- [x] **Step 3：最小恢复中文 prompt**
 
 恢复 Task 16 的完整 verdict 表述，并保留 Task 17 后新增的两条独立规则：
 
@@ -174,7 +174,7 @@ npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract
 
 避免堆叠重复口号，不添加新的语义类别。
 
-- [ ] **Step 4：运行 prompt 绿灯与语言检查**
+- [x] **Step 4：运行 prompt 绿灯与语言检查**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract.test.ts harness/scripts/check-prompt-language.test.ts --no-file-parallelism
@@ -182,7 +182,7 @@ npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract
 
 预期：全部 PASS。
 
-- [ ] **Step 5：中文提交 prompt 恢复**
+- [x] **Step 5：中文提交 prompt 恢复**
 
 ```powershell
 git add -- harness/prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
@@ -197,7 +197,7 @@ git commit -m "恢复选题筛选逐候选语义说明"
 - 修改：`harness/scripts/runtime/topic-selector-semantic-replay.ts`
 - 修改：`tests/harness/topic-selector-semantic-replay.test.ts`
 
-- [ ] **Step 1：运行 replay 红灯**
+- [x] **Step 1：运行 replay 红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/topic-selector-semantic-replay.test.ts --no-file-parallelism
@@ -205,11 +205,11 @@ npx vitest run --configLoader runner tests/harness/topic-selector-semantic-repla
 
 预期：FAIL 于 replay 仍检查 `consistency_issue / consistency_risk_notes` 的生产兼容逻辑。
 
-- [ ] **Step 2：最小调整兼容断言**
+- [x] **Step 2：最小调整兼容断言**
 
 `assertProductionProjectionCompatible()` 改为验证每候选三个完整字段及现有 issue enum。不要修改 fixture、annotation、live 参数、请求数、费用护栏、单 attempt、目标工具、thinking、评估或脱敏输出。
 
-- [ ] **Step 3：运行 replay 绿灯与默认零请求入口**
+- [x] **Step 3：运行 replay 绿灯与默认零请求入口**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/topic-selector-semantic-replay.test.ts harness/scripts/runtime/llm-s2-baseline-stub.test.ts --no-file-parallelism
@@ -218,7 +218,7 @@ npm run harness:topic-selector-semantic-replay
 
 预期：测试全部 PASS；命令输出 `live=false`、`fixture_count=2`、`required_requests=2`、`actual_requests=0`。
 
-- [ ] **Step 4：中文提交 replay 兼容调整**
+- [x] **Step 4：中文提交 replay 兼容调整**
 
 ```powershell
 git add -- harness/scripts/runtime/topic-selector-semantic-replay.ts tests/harness/topic-selector-semantic-replay.test.ts
@@ -232,7 +232,7 @@ git commit -m "适配完整结论语义回放"
 
 **文件：**无生产修改。
 
-- [ ] **Step 1：运行受影响矩阵**
+- [x] **Step 1：运行受影响矩阵**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/topic-selector-semantic-replay.test.ts tests/backend/topic/topic-selector-prompt-projection.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/topic-event-identity-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/runtime/provider-hardening.test.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/topic-script-graph.test.ts tests/backend/api/topic-api-runtime.test.ts tests/backend/script/script-runtime-generate.test.ts tests/backend/storyboard/storyboard-generation.test.ts tests/backend/asset-planning/asset-planning-generation.test.ts tests/backend/asset-planning/asset-planning-structural-repair.test.ts harness/scripts/check-prompt-language.test.ts harness/scripts/runtime/llm-s2-baseline.test.ts harness/scripts/runtime/llm-s2-baseline-stub.test.ts --no-file-parallelism
@@ -240,7 +240,7 @@ npx vitest run --configLoader runner tests/harness/topic-selector-semantic-repla
 
 预期：全部 PASS。涉及 `storage/topic-candidate-library/` 的测试保持串行。
 
-- [ ] **Step 2：运行类型与静态边界检查**
+- [x] **Step 2：运行类型与静态边界检查**
 
 ```powershell
 npm run typecheck:backend
@@ -252,7 +252,7 @@ git status --short
 
 预期：typecheck 和 dry-run 通过；禁止范围无差异；runtime output 仍被忽略；用户两份未跟踪启动提示词未 stage。
 
-- [ ] **Step 3：核对验收清单**
+- [x] **Step 3：核对验收清单**
 
 逐项记录完整 verdict、全集覆盖、selection/trace/API/downstream、replay 请求护栏与未验证 live 项。
 
@@ -265,15 +265,15 @@ git status --short
 - 修改：`docs/todos/roadmap-todo.md`
 - 修改：本实施计划
 
-- [ ] **Step 1：记录 non-live 事实**
+- [x] **Step 1：记录 non-live 事实**
 
 如实记录回退边界、测试数量、默认零请求，以及恢复后的真实召回、strict 首通率、token 和 latency 尚未验证。
 
-- [ ] **Step 2：更新本计划执行记录**
+- [x] **Step 2：更新本计划执行记录**
 
 勾选已完成步骤，追加实际命令、测试数量、提交 ID 和与计划差异。不得把 non-live 通过写成语义质量已恢复。
 
-- [ ] **Step 3：最终文档检查与中文提交**
+- [x] **Step 3：最终文档检查与中文提交**
 
 ```powershell
 git diff --check
@@ -284,19 +284,24 @@ git commit -m "记录选题筛选受控回退基线"
 
 ## 验收清单
 
-- [ ] Task 16 完整逐候选 verdict 已恢复；
-- [ ] Task 17 实际候选池精确覆盖校验保留且测试通过；
-- [ ] compact DTO 与顶层 risk-only notes 不再属于生产 strict 合同；
-- [ ] pass/risk 与 issue 组合、空 note、非法 enum、额外字段均被拒绝；
-- [ ] prompt 保持中文、无重复口号，并保留断言强度检查；
-- [ ] 内部 selection、trace、API 和下游合同无改动；
-- [ ] replay fixtures、annotation、默认零请求、两次 live 上限和脱敏报告保留；
-- [ ] 完整受影响矩阵、backend typecheck、prompt language、dry-run 与 diff check 通过；
-- [ ] 未执行未授权 live，未提交 runtime output、storage 生成态或用户未跟踪文件；
-- [ ] 状态文档明确 S2-0 仍打开，真实召回恢复尚未验证。
+- [x] Task 16 完整逐候选 verdict 已恢复；
+- [x] Task 17 实际候选池精确覆盖校验保留且测试通过；
+- [x] compact DTO 与顶层 risk-only notes 不再属于生产 strict 合同；
+- [x] pass/risk 与 issue 组合、空 note、非法 enum、额外字段均被拒绝；
+- [x] prompt 保持中文、无重复口号，并保留断言强度检查；
+- [x] 内部 selection、trace、API 和下游合同无改动；
+- [x] replay fixtures、annotation、默认零请求、两次 live 上限和脱敏报告保留；
+- [x] 完整受影响矩阵、backend typecheck、prompt language、dry-run 与 diff check 通过；
+- [x] 未执行未授权 live，未提交 runtime output、storage 生成态或用户未跟踪文件；
+- [x] 状态文档明确 S2-0 仍打开，真实召回恢复尚未验证。
 
 ## 执行记录
 
 - 2026-07-16：用户确认采用受控局部回退，并接受恢复 Task 16 完整 verdict 带来的短期 Selector 性能回退；设计提交为 `4cb0080`。
 - 执行环境：按用户要求直接在当前 `dev` 分支操作，不创建 worktree；按当前会话约束不使用子 agent。
-
+- TDD 红灯：Topic runtime + replay 首轮 59 项失败，确认当前 compact schema/parser 与目标合同冲突；prompt 合同 3 项红灯；production schema 恢复后 replay 因旧 enum 路径出现 16 项红灯。
+- 生产合同恢复提交 `b8acec5`：Topic runtime 69/69 通过，实际候选池全集覆盖测试保留。
+- Prompt 恢复提交 `7c0ee36`：prompt contract 30/30 与 prompt language 8/8 通过，并保留 Task 17 的精确覆盖与断言强度规则。
+- Replay 兼容提交 `e6e64b8`：semantic replay 19/19 与 baseline stub 8/8 通过，默认 dry-run 仍为 0 请求。
+- 完整 non-live 收口：受影响矩阵 17 文件、300/300 通过；backend typecheck、默认 dry-run、`git diff --check`、禁止范围 diff 和 runtime output ignore 检查通过。未执行新的 live 或浏览器操作。
+- 与计划差异：baseline stub 仍生成 compact DTO，在生产 parser 恢复后按同一合同同步为完整三字段；这是受影响测试夹具兼容调整，没有扩大生产范围。

@@ -470,3 +470,23 @@ selector pool 对照只读取 Task 14 已保存的本地 interaction input，并
 
 - 固定输入 live 回放复现了语义召回不足，并新增暴露一次 strict 候选覆盖失败；因此不能声明 Task 17 质量通过，也不能收口 S2-0 或进入 S2-1。
 - 本轮只记录证据，不修改 prompt、schema、parser、selection 或下游合同。下一步应先独立诊断高张力覆盖不完整与风险全漏召回的共同根因，再形成窄设计；不得直接增加请求、恢复冗余 pass note 或引入本地关键词语义规则。
+
+## 2026-07-16 Task 17 Topic Selector 受控局部回退（非 live）
+
+### 回退边界
+
+- 根据 Task 15–17 的真实对照，当前紧凑 verdict 已从边际收益递减进入以语义质量换局部性能的负收益区间。用户确认质量优先，并接受恢复 Task 16 完整 verdict 后约 12–13 秒的短期 Selector 性能回退。
+- provider strict DTO 与中文 Selector prompt 恢复为每候选必填 `consistency_status / primary_consistency_issue / consistency_note`；parser 直接校验并保留三个字段，不再从 `consistency_issue + consistency_risk_notes` 恢复。compact DTO 和顶层 risk-only notes 不再属于生产 strict 合同。
+- Task 17 的实际 selector pool 精确同集合覆盖校验完整保留：候选数继续按本次实际 N 校验，不写死为 8；缺失、重复、额外 ID 与 rank 非完整 `1..N` 继续明确失败。
+- 内部 pass 优先、risk 排除、受控补位、trace、diagnostics、最终候选、API 与下游 Topic Package 合同没有改变。shared、前端、Builder、provider 策略、模型、thinking、timeout、retry、fallback、semantic reviewer 和数据库均无改动。
+
+### non-live 验证
+
+- TDD 红灯确认当前 Task 17 schema/parser 会拒绝完整 verdict、接受 compact DTO，replay 仍从旧字段读取 enum，prompt 仍要求顶层 risk notes；最小恢复后 Topic runtime 69/69、prompt + language 38/38、replay + baseline stub 27/27 通过。
+- 完整受影响矩阵覆盖 17 个文件、300 项测试，300/300 通过；`npm run typecheck:backend`、prompt language、默认 semantic replay dry-run、`git diff --check` 与禁止范围 diff 通过。
+- 默认回放继续输出 `fixture_count=2 / required_requests=2 / actual_requests=0`；两份 fixture、3 个风险正例、2 个 `none` 对照、两次 live 请求硬上限和脱敏报告均保留。没有执行新的 provider 或浏览器操作，运行态 output 没有提交。
+
+### 阶段结论
+
+- 受控局部回退已经在 non-live 层恢复到 Task 16 有真实质量证据的完整语义表达，同时保留 Task 17 的覆盖与诊断护栏；这不是整个分支回滚，也没有改变下游合同。
+- non-live 不能证明 GLM-5.2 风险召回已经恢复，也不能证明 strict 首通率、token 或 latency。S2-0 继续保持打开，不进入 S2-1；下一闸门是在新的明确授权下对同两份固定输入执行最多两次 Selector-only live 回放。
