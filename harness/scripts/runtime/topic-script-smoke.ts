@@ -2,6 +2,9 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { buildApp } from "../../../backend/src/app";
+import {
+  createAuthenticatedAuthContext,
+} from "../../../backend/src/auth/auth-context";
 import { mergeGraphTraceSummaries } from "../../../backend/src/runtime/orchestration/graph-trace";
 
 export interface TopicScriptSmokeSample {
@@ -65,8 +68,16 @@ export async function runTopicScriptSmoke(
 ): Promise<RunTopicScriptSmokeResult> {
   const sample = loadSample(input.samplePath);
   const app = buildApp();
+  const auth = createAuthenticatedAuthContext({
+    userId: "topic-script-smoke-user",
+    username: "topic-script-smoke-user",
+    displayName: "Topic Script Smoke User",
+    role: "USER",
+    sessionId: `topic-script-smoke-${sample.sample_id}`,
+  });
 
   const projectResponse = await app.inject({
+    auth,
     method: "POST",
     url: "/api/projects",
     payload: {
@@ -77,11 +88,19 @@ export async function runTopicScriptSmoke(
   const projectId = projectBody.project_id as string;
 
   const recommendationResponse = await app.inject({
+    auth,
     method: "POST",
     url: `/api/projects/${projectId}/topic/recommendations`,
     payload: sample.topic_request,
   });
   const recommendationBody = recommendationResponse.json();
+  if (recommendationResponse.statusCode !== 200) {
+    throw new Error(
+      `topic_recommendation_failed:${recommendationResponse.statusCode}:${
+        recommendationBody.message ?? recommendationBody.error ?? "unknown_error"
+      }`,
+    );
+  }
   const candidates = recommendationBody.candidates as Array<{
     candidate_id: string;
     event_identity: string;
@@ -89,6 +108,9 @@ export async function runTopicScriptSmoke(
     one_line_angle: string;
     must_cover_preview: string[];
   }>;
+  if (!Array.isArray(candidates)) {
+    throw new Error("topic_recommendation_candidates_missing");
+  }
 
   const selectedCandidate =
     candidates[sample.confirm_candidate_index ?? 0] ?? candidates[0];
@@ -97,6 +119,7 @@ export async function runTopicScriptSmoke(
   }
 
   const confirmResponse = await app.inject({
+    auth,
     method: "POST",
     url: `/api/projects/${projectId}/topic/candidates/${selectedCandidate.candidate_id}/confirm`,
     payload: {
@@ -106,6 +129,7 @@ export async function runTopicScriptSmoke(
   const confirmBody = confirmResponse.json();
 
   const scriptResponse = await app.inject({
+    auth,
     method: "POST",
     url: `/api/projects/${projectId}/script/generate`,
     payload: {
