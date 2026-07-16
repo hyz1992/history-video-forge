@@ -143,3 +143,25 @@ Task 11 之后的真实页面项目 `84ed173e-529b-4a19-bc6d-092257432b3e` 证�
 - Task 13 已完成一次真实页面诊断，但“质量不劣且等待显著改善”的整体闸门未通过，S2-0 继续保持打开。
 - 暂不回退 `topic.candidate-builder` 的 thinking override：成功调用的 0 reasoning 与 47.2% 耗时下降已证明该精确策略有价值；当前新增主因是 1301 后的 service-level 完整重生成。下一窄任务应前置首次安全表达、显式应用既有请求预算并补充 selector 语义一致性保护，再决定是否保留或回退该 override。
 - 不从此单样本推断 P95，不进入 S2-1，不在本记录中修改 prompt/schema 或候选数量。
+
+## 2026-07-16 Task 14 非 live 实施记录（等待真实页面复验）
+
+### 实施边界
+
+- `topic.candidate-builder` 正式中文 prompt 前置供应商安全表达：保留具体人物、对抗力量、关键动作、明确赌注和故事余震，同时避免展开血腥、尸体、酷刑、肢体伤害或猎奇处决细节。
+- 1301 内容过滤后的受控重试仍只允许一次，但 service 只追加 `reason=provider_content_filter` 与 `mode=strict_neutral_historical_planning`，不再在业务代码散落英文自然语言正式指令。
+- `topic.selector` 使用现有 `source_or_scope_risk` 对标题、切口、冲突、场景和 beats 的行为主体、关键动作、因果与结果矛盾做语义扣分；不得改写候选，不新增 schema 或本地字符串语义门禁。
+- 8 个原始候选、4 个展示候选、模型、thinking、timeout、provider retry、API 与 semantic reviewer shadow-only 边界均未改变；builder 输出瘦身不在本任务范围。
+
+### 非 live 证据
+
+- builder TDD 红灯分别证明首次 prompt 缺少安全表达边界、retry context 缺少结构化 mode 且仍带英文 instruction；最小实现后的 prompt/API focused 回归为 55/55 通过。
+- selector TDD 红灯证明缺少跨字段一致性合同；最小 prompt 修改后的 prompt/topic focused 回归为 99/99 通过。
+- 普通 structured 与 strict 路径共享同一 `RequestBudget` 的 provider 特征测试首次即通过；provider/env focused 回归为 37/37 通过。真实页面的请求上限必须在启动 backend 前用 `LLM_REQUEST_BUDGET_MAX_REQUESTS` 显式设置，harness 的 `--max-requests` 不能约束另一个后端进程。
+- 完整非 live 矩阵按当前真实路径覆盖 15 个文件、255 项测试，255/255 通过；backend typecheck 通过。验证未调用网络 provider。
+
+### 当前结论与下一闸门
+
+- Task 14 的代码、prompt、测试与验收入口已完成非 live 实施，但没有真实数据证明首次 1301 已消失、等待时间已进一步下降或候选内部一致性已改善。
+- S2-0 继续保持打开，不从非 live 结果声明性能优化成功，也不进入 S2-1。
+- 下一次真实页面对照必须独立授权模型、样本、最大请求数、人民币费用上限和 raw output 保存边界；启动 backend 时显式应用同一最大请求数。对照至少记录 builder 首次是否通过、builder/selector/端到端耗时、request 数、reasoning usage、结构通过情况和人工整体质量判断。

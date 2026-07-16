@@ -21,7 +21,7 @@
 - 修改：`harness/prompts/topic/candidate-builder.prompt.md`
 - 修改：`backend/src/modules/topic/topic-recommendation.service.ts`
 
-- [ ] **Step 1：为正式 builder prompt 写红灯测试**
+- [x] **Step 1：为正式 builder prompt 写红灯测试**
 
 在 `tests/backend/runtime/prompt-runtime.test.ts` 增加独立用例：
 
@@ -40,7 +40,7 @@ it("keeps high-tension history concrete while using provider-safe planning langu
 
 该测试只验证 prompt 合同是否存在，不用于在本地判断真实候选质量。
 
-- [ ] **Step 2：为 1301 retry 元数据写红灯测试**
+- [x] **Step 2：为 1301 retry 元数据写红灯测试**
 
 扩展 `tests/backend/api/topic-api-runtime.test.ts` 现有 `retries provider content filter rejection once before failing the topic flow` 用例：
 
@@ -60,7 +60,7 @@ expect(
 
 继续保留既有断言：首次调用不带 `safety_retry_context`，只有识别为供应商内容过滤的错误才执行一次 safety retry。
 
-- [ ] **Step 3：运行红灯并核对失败原因**
+- [x] **Step 3：运行红灯并核对失败原因**
 
 运行：
 
@@ -74,7 +74,7 @@ npx vitest run --configLoader runner tests/backend/runtime/prompt-runtime.test.t
 - API 用例因 retry context 缺少 `mode` 且仍包含 `instruction` 失败；
 - 不允许出现导入错误、fixture 错误或其他无关失败。
 
-- [ ] **Step 4：最小修改正式中文 builder prompt**
+- [x] **Step 4：最小修改正式中文 builder prompt**
 
 在 `harness/prompts/topic/candidate-builder.prompt.md` 增加一个短小的“供应商安全表达边界”段落，要求：
 
@@ -89,7 +89,7 @@ npx vitest run --configLoader runner tests/backend/runtime/prompt-runtime.test.t
 
 新增约束前检查现有 prompt，删除或合并与该段重复的表达，不堆叠同义口号，不修改输出骨架、字段和8候选要求。
 
-- [ ] **Step 5：最小修改 safety retry context**
+- [x] **Step 5：最小修改 safety retry context**
 
 在 `backend/src/modules/topic/topic-recommendation.service.ts` 把：
 
@@ -111,7 +111,7 @@ const safetyRetryContext = {
 
 不得修改 `isProviderContentFilterError()` 的识别范围，不增加 retry 次数，不把 safety retry 下沉为 provider 自动 retry。
 
-- [ ] **Step 6：运行绿灯与英文散落检查**
+- [x] **Step 6：运行绿灯与英文散落检查**
 
 运行：
 
@@ -122,7 +122,7 @@ rg -n "Use neutral historical-video planning language" backend/src harness/promp
 
 预期：测试通过；`rg` 无输出。
 
-- [ ] **Step 7：中文提交 Task 1**
+- [x] **Step 7：中文提交 Task 1**
 
 ```powershell
 git add harness/prompts/topic/candidate-builder.prompt.md backend/src/modules/topic/topic-recommendation.service.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/api/topic-api-runtime.test.ts
@@ -138,7 +138,7 @@ git commit -m "前置Topic构建器安全表达"
 - 修改：`tests/backend/runtime/prompt-runtime.test.ts`
 - 修改：`harness/prompts/topic/selector.prompt.md`
 
-- [ ] **Step 1：写 selector prompt 红灯测试**
+- [x] **Step 1：写 selector prompt 红灯测试**
 
 在 `tests/backend/runtime/prompt-runtime.test.ts` 增加：
 
@@ -155,7 +155,7 @@ it("asks the selector to penalize internal subject action and outcome conflicts"
 });
 ```
 
-- [ ] **Step 2：运行红灯**
+- [x] **Step 2：运行红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/prompt-runtime.test.ts --no-file-parallelism
@@ -163,7 +163,7 @@ npx vitest run --configLoader runner tests/backend/runtime/prompt-runtime.test.t
 
 预期：新用例因 selector prompt 缺少内部一致性规则而失败。
 
-- [ ] **Step 3：最小修改 selector prompt**
+- [x] **Step 3：最小修改 selector prompt**
 
 在 `harness/prompts/topic/selector.prompt.md` 的排序原则中加入：
 
@@ -174,7 +174,7 @@ npx vitest run --configLoader runner tests/backend/runtime/prompt-runtime.test.t
 
 不得新增 deduction axis、tool 字段、本地 validator 或自动淘汰门禁。
 
-- [ ] **Step 4：运行绿灯与 topic prompt focused 回归**
+- [x] **Step 4：运行绿灯与 topic prompt focused 回归**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/prompt-runtime.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts --no-file-parallelism
@@ -182,7 +182,7 @@ npx vitest run --configLoader runner tests/backend/runtime/prompt-runtime.test.t
 
 预期：prompt runtime 与 topic runtime 全绿；selector strict schema、target tool 和 fallback 合同无变化。
 
-- [ ] **Step 5：中文提交 Task 2**
+- [x] **Step 5：中文提交 Task 2**
 
 ```powershell
 git add harness/prompts/topic/selector.prompt.md tests/backend/runtime/prompt-runtime.test.ts
@@ -199,7 +199,7 @@ git commit -m "补充Topic选择器语义一致性检查"
 - 修改：`.env.example`
 - 修改：`harness/README.md`
 
-- [ ] **Step 1：增加普通与 strict 路径共享预算的特征测试**
+- [x] **Step 1：增加普通与 strict 路径共享预算的特征测试**
 
 在 `tests/backend/runtime/provider-hardening.test.ts` 使用同一个 provider 和 `createRequestBudget({ maxRequests: 2 })`：
 
@@ -271,7 +271,7 @@ it("shares one request budget across structured and strict invocations", async (
 
 这是对现有能力的特征测试，预期首次即通过；不得为了制造红灯修改生产实现。
 
-- [ ] **Step 2：运行共享预算特征测试**
+- [x] **Step 2：运行共享预算特征测试**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/provider-hardening.test.ts --no-file-parallelism
@@ -279,7 +279,7 @@ npx vitest run --configLoader runner tests/backend/runtime/provider-hardening.te
 
 预期：通过，证明无需新增第二套 budget。
 
-- [ ] **Step 3：补充显式环境示例与真实页面启动说明**
+- [x] **Step 3：补充显式环境示例与真实页面启动说明**
 
 在 `.env.example` 的 LLM timeout 附近增加：
 
@@ -302,7 +302,7 @@ npm run dev:backend
 - 验收结束后重新启动 backend，避免临时预算继续影响日常开发；
 - 不提交包含 API key 的 `.env`。
 
-- [ ] **Step 4：验证配置文档和预算测试**
+- [x] **Step 4：验证配置文档和预算测试**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/provider-hardening.test.ts tests/backend/runtime/env-loading.test.ts --no-file-parallelism
@@ -311,7 +311,7 @@ git diff --check
 
 预期：测试和 diff check 通过。
 
-- [ ] **Step 5：中文提交 Task 3**
+- [x] **Step 5：中文提交 Task 3**
 
 ```powershell
 git add tests/backend/runtime/provider-hardening.test.ts .env.example harness/README.md
@@ -329,16 +329,16 @@ git commit -m "明确Topic真实验收请求预算"
 - 修改：`docs/todos/roadmap-todo.md`
 - 修改：`harness/docs/s2-0-baseline-protocol.md`
 
-- [ ] **Step 1：运行完整 S2-0 非 live 回归**
+- [x] **Step 1：运行完整 S2-0 非 live 回归**
 
 ```powershell
-npx vitest run --configLoader runner tests/backend/runtime/provider-hardening.test.ts tests/backend/runtime/env-loading.test.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/topic-script-graph.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/script/script-runtime-generate.test.ts tests/backend/storyboard/storyboard-generation.test.ts tests/backend/asset-planning/asset-planning-generation.test.ts tests/backend/asset-planning/asset-planning-structural-repair.test.ts tests/backend/publish/cover-service.test.ts tests/backend/api/publish-api.test.ts tests/backend/api/topic-api-runtime.test.ts harness/scripts/runtime/llm-s2-baseline.test.ts --no-file-parallelism
+npx vitest run --configLoader runner tests/backend/runtime/provider-hardening.test.ts tests/backend/runtime/env-loading.test.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/topic-script-graph.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/script/script-runtime-generate.test.ts tests/backend/storyboard/storyboard-generation.test.ts tests/backend/asset-planning/asset-planning-generation.test.ts tests/backend/asset-planning/asset-planning-structural-repair.test.ts tests/backend/publish/cover-service.test.ts tests/backend/api/publish-api.test.ts tests/backend/api/topic-api-runtime.test.ts harness/scripts/runtime/llm-s2-baseline.test.ts harness/scripts/runtime/llm-s2-baseline-stub.test.ts --no-file-parallelism
 npm run typecheck:backend
 ```
 
 预期：所有测试与 typecheck exit 0。由于新增 prompt/API/预算特征测试，总数应高于 Task 13 的 237 项；以实际输出为准，不预写虚假数字。
 
-- [ ] **Step 2：运行边界与差异检查**
+- [x] **Step 2：运行边界与差异检查**
 
 ```powershell
 git diff --check
@@ -354,7 +354,7 @@ git status --short
 - 只有本计划允许的文件和用户原有未跟踪文件；
 - raw output、`storage/topic-candidate-library/` 与 `.env` 不进入提交。
 
-- [ ] **Step 3：更新非 live 执行状态**
+- [x] **Step 3：更新非 live 执行状态**
 
 在本计划、`docs/plans/README.md`、`docs/todos/roadmap-todo.md` 与 `harness/docs/s2-0-baseline-protocol.md` 记录：
 
@@ -365,16 +365,25 @@ git status --short
 - 未执行付费 live，速度和语义收益仍未验证；
 - S2-0 保持打开。
 
-- [ ] **Step 4：中文提交 Task 4**
+- [x] **Step 4：中文提交 Task 4**
 
 ```powershell
 git add docs/plans/2026-07-16-s2-0-topic-safety-and-semantic-consistency-implementation-plan.md docs/plans/README.md docs/todos/roadmap-todo.md harness/docs/s2-0-baseline-protocol.md
 git commit -m "记录Task14非live优化结果"
 ```
 
-- [ ] **Step 5：停止并等待独立 live 授权**
+- [x] **Step 5：停止并等待独立 live 授权**
 
 不得自动启动 backend 真实 provider、创建项目或运行付费 A/B。下一次 live 授权至少必须包含：模型、最大请求数、人民币费用上限、样本输入、raw output 保存边界；启动 backend 时必须把最大请求数显式应用到 `LLM_REQUEST_BUDGET_MAX_REQUESTS`。
+
+## 2026-07-16 非 live 执行记录
+
+- builder 合同红灯同时命中两个预期缺口：正式 prompt 缺少首次安全表达边界；1301 重试上下文缺少 `mode` 且仍携带英文 `instruction`。最小实现后，prompt/API focused 回归为 55/55 通过，英文指令检索无残留。
+- selector 合同红灯命中跨字段语义一致性缺口；加入两条短规则后，prompt runtime 与 topic runtime focused 回归为 99/99 通过。该能力仍由 LLM selector 语义判断，不是本地关键词门禁，也不改写候选。
+- 普通 structured 与 strict 调用共享同一 `RequestBudget` 的特征测试首次即通过；provider 与 env focused 回归为 37/37 通过，因此未新增第二套预算实现。
+- 完整非 live 回归按仓库真实文件路径覆盖 15 个文件、255 项测试，255/255 通过；`npm run typecheck:backend` 通过。首次矩阵命令中 4 个旧路径未被收集，随后纠正为当前路径，并额外纳入 baseline stub 测试后补跑 5 个文件、46 项，未把不完整的首轮结果当作完整验证。
+- 未执行真实 provider、未创建项目、未产生或提交 raw output；速度收益、1301 首次通过率和候选语义质量仍需新的显式 live 授权验证。
+- S2-0 保持打开，Task 14 只完成非 live 实施与验证；不得据此进入 S2-1。
 
 ## 完成标准
 
