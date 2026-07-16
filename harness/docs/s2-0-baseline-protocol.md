@@ -346,3 +346,42 @@ selector pool 对照只读取 Task 14 已保存的本地 interaction input，并
 - TDD 红灯覆盖 parser 结构、trace 丢字段、rank 1 risk 排除和 pass 不足补位；完整非 live 矩阵最终为 16 文件、272/272 通过，backend typecheck、prompt language 与 diff check 通过。
 - Selector prompt 从 Task 15 的 2102 字符/63 行增至 2735 字符/71 行；这是结构化质量合同的静态成本，尚未证明真实 completion token、strict 稳定性或 latency 不退化。
 - 未修改 shared schema、API、模型、thinking、timeout、retry、repair 或默认 request budget；未执行付费 live。S2-0 继续打开，下一步只能在新的明确授权下执行两个固定样本、最多四次请求的真实页面验收。
+
+## 2026-07-16 Task 16 真实页面验收（strict 稳定，质量保护有效但性能退化）
+
+### 授权与运行边界
+
+- 用户授权模型 GLM-5.2，固定样本为“魏晋至唐宋·高张力历史事件推荐”和“先秦至两汉·均衡叙事历史事件推荐”，最多 4 次 provider 请求，不执行 capability probe，人民币人工费用上限 20 元；raw output 允许保存但不提交。
+- backend 启动前以进程环境设置 `LLM_REQUEST_BUDGET_MAX_REQUESTS=4`，没有修改仓库环境配置。两个项目各产生 builder + selector 两个 interaction，合计正好 4 次成功请求。
+- 高张力样本：项目 `50bda4eb-63ee-46fb-b035-5c242b2911f2`，run `topic_run_989d85aa-5bfd-410f-b80c-fa8b49932f19`。
+- 均衡叙事样本：项目 `f6c06319-d730-47ba-acf8-2b117efa2065`，run `topic_run_c8e20ac0-0bf1-4627-9c56-74f2c553df81`。
+- TTFT 在非流式接口下不可观测；人民币费用仍只能按人工授权边界控制，现有日志不能机器核验实际人民币费用。
+
+### 速度、token 与 strict 结构
+
+| 样本 | builder | selector | provider 合计 | 页面观察 | 总 token |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 魏晋至唐宋·高张力 | 68.799 秒 | 28.691 秒 | 97.490 秒 | 约 101 秒见结果 | 11637 |
+| 先秦至两汉·均衡叙事 | 130.960 秒 | 27.678 秒 | 158.638 秒 | 150 秒仍生成，182 秒已完成 | 12057 |
+
+- 4 个 interaction 全部 attempt 1 成功、`reasoning_tokens=0`；builder `finish_reason=stop`，selector `finish_reason=tool_calls`，两次 strict 响应都返回目标工具 `rank_topic_candidates`。
+- 没有 provider retry、structured fallback、本地 repair、完整重生成、risk backfill 或请求预算阻断。strict 首次通过率为 2/2，普通 JSON 首次通过率为 2/2。
+- 高张力 builder/selector raw response 分别为 5794/4665 字符，selector tool arguments 为 3729 字符；均衡叙事分别为 5914/4826 字符，selector tool arguments 为 3880 字符。
+- 与相同输入的 Task 15 样本对照：selector tool arguments 从 2209/2128 增至 3729/3880 字符，completion token 从 889/855 增至 1494/1606，selector 耗时从 16.550/14.659 秒增至 28.691/27.678 秒。新增一致性合同带来的 selector 成本在两个样本中方向一致。
+- 高张力样本 provider 合计相对 Task 15 从 90.757 秒增至 97.490 秒；均衡样本从 67.244 秒增至 158.638 秒，其中 builder 在 prompt 未变的情况下从 52.585 秒跳至 130.960 秒，属于本轮可见的 provider 长尾，不能归因给 selector 合同，也不能用两个样本估算 P95。
+
+### 人工质量与 pass/risk 判断
+
+- 两个 selector pool 都是 7 pass / 1 risk，最终四项均为 pass，没有触发 risk backfill。
+- 高张力样本的明朝“靖难之役”明确越出魏晋至唐宋边界，被判为 `risk/scope_boundary_mismatch` 并排除；该判断与人工整体阅读一致。
+- 均衡叙事样本的“周召共和”把存在争议的共和行政主体写成召公周公共政，被判为 `risk/overclaim_or_ambiguity` 并排除；该判断与人工整体阅读一致。
+- 既有重复缺陷得到实际保护：明确的主体归属歧义与时代边界不再仅靠排序扣分，而是进入结构化 verdict 并影响最终选择；16 个原始候选和 8 个最终候选没有外语污染，最终 8 项没有时代越界。
+- 仍有一次明确漏判：高张力样本的“元嘉北伐”标题称“败退亡国”，正文结果只到治理受创和格局逆转，符合过度断言风险但被判 pass。该项原 rank 7、未进入最终四项，因此本轮最终展示未受影响，但 verdict recall 不能判为完全通过。
+- 最终 8 项整体有具体人物、动作、压力、结果和可展开的三段叙事，开头张力与口播潜力可用；不过高张力组仍集中于政变/清洗，均衡组最终四项中沙丘、巫蛊、诸吕三个同属宫廷权力灾变，多样性不足。精确兵力、遇害人数、人物心理与单一史源叙述仍需进入后续事实核查，`pass` 不是发布级史实门禁。
+- semantic reviewer 保持 shadow-only；本次判断由人工整体阅读完成，没有用关键词、本地字符串规则或启发式替代语义判断。
+
+### 阶段结论
+
+- Task 16 的 strict 合同、trace、pass 优先和 risk 排除在两个真实样本中稳定贯通；质量保护方向成立。
+- 本轮不能作为 S2-0 收口证据：selector 输出膨胀带来约 12–13 秒的可重复增量，均衡样本还暴露了 builder 长尾，且过度断言仍有漏判。
+- 下一步应先做独立的紧凑 verdict 设计：保留 LLM 语义判断和 risk 解释证据，减少每个 pass 候选重复输出的状态、issue 与说明；不得增加第三次 LLM 调用、不得改用较弱模型、不得把 semantic reviewer 升级为门禁，也不得用本地关键词规则补漏。设计确认和非 live 验证后，再决定是否值得执行新的付费复验；S2-0 继续打开，不进入 S2-1。

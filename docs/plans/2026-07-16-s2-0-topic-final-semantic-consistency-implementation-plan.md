@@ -434,24 +434,24 @@ git commit -m "记录Task16非live验证结果"
 - 修改：`docs/plans/2026-07-16-s2-0-topic-final-semantic-consistency-implementation-plan.md`
 - 允许本地保存但不提交：项目 raw interaction output
 
-- [ ] **Step 1：显式设置 live 请求预算**
+- [x] **Step 1：显式设置 live 请求预算**
 
 建议继续使用 GLM-5.2，两个项目合计最多 4 次 provider 请求，不执行 capability probe。backend 启动前设置与授权相同的 `LLM_REQUEST_BUDGET_MAX_REQUESTS`。
 
-- [ ] **Step 2：执行两个固定样本**
+- [x] **Step 2：执行两个固定样本**
 
 1. 复用“魏晋至唐宋·高张力历史事件推荐”；
 2. 复用一个已验证时代边界稳定的样本。
 
 每个项目正常只允许 Builder + Selector 各一次。若 strict fallback 试图产生额外请求，由总预算限制。
 
-- [ ] **Step 3：记录速度与结构稳定性**
+- [x] **Step 3：记录速度与结构稳定性**
 
 记录 Builder/Selector duration、provider 合计、页面等待近似、attempt、token usage、reasoning usage、finish reason、strict 首次通过、fallback/retry/repair/full regeneration、raw output/tool arguments 字符和 request 数。
 
 TTFT 继续标为非流式不可观测；人民币费用标为人工边界、不能机器核验。
 
-- [ ] **Step 4：人工阅读全部候选**
+- [x] **Step 4：人工阅读全部候选**
 
 检查：
 
@@ -463,11 +463,11 @@ TTFT 继续标为非流式不可观测；人民币费用标为人工边界、不
 
 不得用关键词或本地规则替代人工语义判断。
 
-- [ ] **Step 5：更新聚合报告并中文提交**
+- [x] **Step 5：更新聚合报告并中文提交**
 
 只提交聚合指标、匿名化质量结论、项目/run id；不得提交 raw output、凭据或密钥。
 
-- [ ] **Step 6：按停止条件决策**
+- [x] **Step 6：按停止条件决策**
 
 - 两样本结构稳定、正常两请求、重复缺陷被识别且质量不退化：建议收口 Topic 质量分支；
 - 大量误报 risk：回退一致性自动优先级，保留字段作诊断并另行设计；
@@ -501,3 +501,15 @@ TTFT 继续标为非流式不可观测；人民币费用标为人工边界、不
 - 完整矩阵首次发现 baseline stub 两个旧 scorecard fixture 缺少新字段；根因定位后只同步 fixture，并加强 capability probe 对三个 required 字段的断言。提交：`6f502e2 同步Task16基线测试夹具`。
 - 完整非 live 矩阵最终为 16 文件、272/272 通过；`npm run typecheck:backend` 与 `git diff --check` 通过。
 - 未修改 shared schema、API、模型、thinking、timeout、retry、repair 或默认 request budget；未执行真实 provider。Task 16 非 live 已完成，S2-0 继续打开，Task 6 保持未执行。
+
+## 2026-07-16 真实页面执行记录
+
+- 用户明确授权 GLM-5.2、两个固定样本、最多 4 次 provider 请求、不执行 capability probe、人民币 20 元人工费用上限；允许使用现有测试账号创建项目，raw output 允许保存但不提交。backend 启动前通过进程环境设置 `LLM_REQUEST_BUDGET_MAX_REQUESTS=4`，没有修改 `.env`。
+- “魏晋至唐宋·高张力历史事件推荐”：项目 `50bda4eb-63ee-46fb-b035-5c242b2911f2`，run `topic_run_989d85aa-5bfd-410f-b80c-fa8b49932f19`。builder 68.799 秒、selector 28.691 秒、provider 合计 97.490 秒，总 token 11637；页面首次观察到结果约 101 秒。
+- “先秦至两汉·均衡叙事历史事件推荐”：项目 `f6c06319-d730-47ba-acf8-2b117efa2065`，run `topic_run_c8e20ac0-0bf1-4627-9c56-74f2c553df81`。builder 130.960 秒、selector 27.678 秒、provider 合计 158.638 秒，总 token 12057；页面在 150 秒观察时仍为生成态、182 秒观察时已完成，因此 182 秒只是粗粒度观察上界。
+- 两个项目共 4 个 interaction，builder/selector 均 attempt 1 成功，`reasoning_tokens=0`；strict selector 均以目标工具 `rank_topic_candidates` 和 `finish_reason=tool_calls` 首次通过，没有 retry、repair、structured fallback、full regeneration、risk backfill 或预算阻断。TTFT 在当前非流式接口下仍不可观测，人民币费用只能按授权边界人工控制、不能由现有日志机器核验。
+- 高张力样本的 8 项中有 1 项明朝“靖难之役”越界，selector 正确标为 `risk/scope_boundary_mismatch` 并排除；均衡样本的“周召共和”主体归属歧义被正确标为 `risk/overclaim_or_ambiguity` 并排除。两个样本均为 7 pass / 1 risk，最终 8 项全为 pass，证明 verdict、strict 结构和一致性优先在本轮真实输出上贯通。
+- 人工阅读也发现 recall 尚未完全收口：高张力样本“元嘉北伐”标题写成“败退亡国”，但正文只描述治理受创和南北格局逆转，selector 仍判 pass；该项因原 rank 7 未进入最终四项，当前没有污染页面最终结果，但不能据此宣称所有明确过度断言都能识别。
+- 最终候选的开场、具体场景和三段展开整体可用，未见外语污染；但两组最终四项都偏向宫廷政变、清洗和军事逆转。尤其“均衡叙事”仍保留沙丘、巫蛊、诸吕三个宫廷权力型事件，多样性不够理想；若进入 script，精确兵力、遇害人数、李斯心理与史源单边叙述仍需人工事实核查，`pass` 不代表发布级史实通过。
+- 与同输入 Task 15 对照，一致性字段令 selector tool arguments 从 2209/2128 字符增至 3729/3880 字符，selector completion token 从 889/855 增至 1494/1606，selector 耗时从 16.550/14.659 秒增至 28.691/27.678 秒。高张力 provider 合计从 90.757 秒增至 97.490 秒；均衡样本的 builder 同时出现 52.585 秒到 130.960 秒的不可归因长尾，使 provider 合计从 67.244 秒增至 158.638 秒。
+- 结论：strict 稳定性与 risk 排除机制通过两样本真实验收，重复的主体/边界类质量缺陷获得有效保护；但一致性合同引入了稳定的 selector token/耗时成本，并存在非最终候选过度断言漏判。Task 16 只能判定为“质量安全网有效、性能与召回仍需窄收敛”，S2-0 继续打开，不自动进入 S2-1。下一步应先设计不牺牲 risk 解释力的紧凑 verdict 输出，避免继续堆 prompt、增加第三次 LLM 调用或使用本地关键词规则。

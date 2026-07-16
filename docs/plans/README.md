@@ -25,6 +25,7 @@
 - 质量仍未收口：同输入的主体歧义连续两次被 selector 排第 1，另有非最终候选出现语言污染。`recommendation-diagnostics.md` 误记 builder 原顺序前 4 项的根因已确认并完成非 live 窄整改：写入真相源改为 `selected.candidates`，回归测试先红后绿，完整 topic runtime 51/51 与 backend typecheck 通过。
 - Task 16 正式设计见 [S2-0 Topic 最终候选语义一致性合同设计](./2026-07-16-s2-0-topic-final-semantic-consistency-design.md)：采用现有 Selector 调用内的紧凑结构合同，`risk` 只表达明确的内部错配、边界、语言污染或误导性歧义；至少四个 `pass` 时 `risk` 不进入最终四项，不足时受控补位并记录 warning，不增加第三次 LLM 调用。
 - Task 16 实施见 [S2-0 Topic 最终候选语义一致性合同实施计划](./2026-07-16-s2-0-topic-final-semantic-consistency-implementation-plan.md)：strict schema/parser、正式中文 Selector prompt、runtime trace、一致性优先与受控补位均已按 TDD 完成；完整非 live 矩阵 16 文件、272/272 与 backend typecheck 通过。Selector prompt 从 2102 字符/63 行增至 2735 字符/71 行，真实 provider 的结构稳定性、token、延迟和人工质量仍需独立授权验收。
+- Task 16 真实页面验收已完成：两个 GLM-5.2 固定样本共 4 次请求，builder/selector 全部 attempt 1，普通 JSON 与 strict 目标工具均首次通过，无 retry/repair/fallback/full regeneration；两项明确的时代越界/主体歧义被判 risk 并从最终四项排除。但 provider 合计为 97.490/158.638 秒，总 token 为 11637/12057，selector 因一致性字段使 tool arguments 增至 3729/3880 字符、耗时增至 28.691/27.678 秒；另有一项非最终“败退亡国”过度断言漏判。结论为质量安全网有效但性能与 verdict recall 尚未收口，S2-0 继续打开。
 - 正式 V2 产品功能已进入实施阶段；migration owner 不可登录标记 `!migration-owner-no-login`，其项目通过 admin 管理页面转移给真实用户。
 
 - [V1 高风险稳定化实施计划](./2026-07-10-v1-high-risk-stabilization-implementation-plan.md) 的主要代码任务已完成；其全量回归超时和故障演练缺口已并入 Task 8.5 的测试与切换闸门，不再作为独立的下一执行入口。
@@ -58,7 +59,7 @@
 
 旧的 Step 3-10 文档保留为范围留痕；当前执行顺序以本节为准：
 
-1. `S2-0`（进行中）：LLM 回复速度、质量和结构化输出优化基线。Task 15 三个真实 topic 样本的 provider 等待稳定在 67.244–90.757 秒，总 token 稳定在 10153–10802，性能分支已通过小样本扩展；diagnostics 最终候选真相源已修复。Task 16 非 live 已完成，下一步在新的明确授权下用两个固定样本、最多四次请求验收一致性 verdict、strict 稳定性、token、延迟和人工质量；验收前不进入 S2-1。
+1. `S2-0`（进行中）：LLM 回复速度、质量和结构化输出优化基线。Task 15 的性能分支已通过小样本扩展；Task 16 两个真实样本证明 strict verdict 与 risk 排除机制有效，但 selector 输出和耗时出现稳定增量，且仍有一项非最终过度断言漏判。下一步先做不增加调用次数、不降低模型质量的紧凑 verdict 设计与非 live 验证，再决定是否需要新的付费复验；收口前不进入 S2-1。
 2. `S2-1`：多模型、多供应商切换。基于 S2-0 的真实基线设计 provider/model/routing/run snapshot/credential reference。
 3. `S2-2`：用户偏好、生成策略与成本控制。接入用户级策略、预算和成本记录，消费 S2-1 的 provider/model 能力。
 4. `S2-3`：Prompt 治理。版本、hash、fixtures、变更说明和运行快照对齐；仍遵守 `AGENTS.md` 的 `harness/prompts/` 正式 prompt 位置规则，除非另有设计审查批准。
