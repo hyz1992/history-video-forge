@@ -628,3 +628,13 @@ git commit -m "记录Task15真实页面诊断结论"
 - 总 token 由 14908 降至 10802；builder raw output 由 7570 降至 5497 字符，selector 实际投影由 7466 降至 4426 字符，tool arguments 由 3739 降至 3300 字符。
 - 人工阅读全部 8 项与最终 4 项：Task 14 的两项明确矛盾未复现，最终 4 项均在指定时代；但 builder 产生 1 个秦朝越界候选并由 selector 排除，最终首位候选的主语歧义仍未被 selector 识别。
 - 单样本证明瘦身方向具有显著性能收益且整体质量改善，但不足以证明通用稳定性或宣布 S2-0 完成；任务在报告与提交后停止，不进入 S2-1。
+
+## 2026-07-16 小型固定样本扩展记录
+
+- 用户独立授权新增 2 个 GLM-5.2 测试项目、合计最多 4 次 provider 请求、不执行 capability probe、人民币 20 元人工费用上限和 raw output 只保存不提交；backend 启动前显式设置 `LLM_REQUEST_BUDGET_MAX_REQUESTS=4`。
+- 同输入复验项目 `c90d303c-a7d6-468b-8bc6-42b77653f9a0`、run `topic_run_1148d047-08f3-4153-99cd-f81893cdf587`；先秦至两汉均衡叙事项目 `55528914-06fc-46b1-888e-6e330478d789`、run `topic_run_b05a85fe-d161-4130-a468-b3c69fd524b4`。
+- 两个新增项目共 4 个 interaction；builder 与 selector 均 attempt 1 成功，无 retry、repair、fallback 或 full regeneration。合并首轮后，Task 15 三样本 provider 合计范围为 67.244–90.757 秒、中位数 73.714 秒；总 token 为 10153–10802、中位数 10392。
+- 最慢 Task 15 样本仍比 Task 14 的 139.702 秒下降 35.0%；builder raw output、selector 投影和总 token 在三轮中均保持低于 Task 14，性能收益具备小样本可重复性。
+- 人工阅读新增 16 个原始候选和 8 个最终候选：边界样本全部在指定时代，两个新增项目最终 4 项均未越界；但同输入的主体歧义第二次被 selector 排到第 1，另有一个非最终候选混入英文连接词，质量保护尚未收口。
+- 两个新增项目的 `recommendation-diagnostics.md` 均记录 builder 原顺序前 4 项，而不是 selector 最终 4 项；最终选择证据必须以页面和 `runtime-diagnostics.json` 为准。
+- 扩样在聚合报告与提交后停止，不进入 S2-1；下一步先设计非 live 的最终候选语义一致性合同与 diagnostics 真相源窄整改，不继续无目的付费扩样。
