@@ -1,10 +1,41 @@
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { TOPIC_SELECTOR_STRICT_SCHEMA } from "../../../backend/src/modules/topic/topic-recommendation.service.js";
 
 export const DEFAULT_TOPIC_SELECTOR_SEMANTIC_FIXTURE_SET_PATH =
   "harness/samples/topic-selector-semantic-replay/fixture-set.md";
+
+const DEFAULT_TOPIC_SELECTOR_SEMANTIC_OUTPUT_DIR = resolve(
+  process.cwd(),
+  "harness/scripts/runtime/output/topic-selector-semantic-replay",
+);
+
+export interface TopicSelectorSemanticReplayInput {
+  live?: boolean;
+  confirmLive?: boolean;
+  model?: string;
+  maxRequests?: number;
+  maxCostCny?: number;
+  fixtureSetPath?: string;
+  outputDir?: string;
+}
+
+export interface TopicSelectorSemanticReplayPlan {
+  mode: "topic_selector_semantic_replay_plan";
+  live: boolean;
+  automated_gate: false;
+  selector_only: true;
+  fixture_set_path: string;
+  fixture_count: number;
+  required_requests: number;
+  actual_requests: 0;
+  required_checks: string[];
+}
+
+export interface TopicSelectorSemanticReplayDependencies {
+  createLiveRunner?: (model: string) => unknown;
+}
 
 export interface TopicSelectorSemanticFixture {
   fixture_id: string;
@@ -75,6 +106,122 @@ export function loadTopicSelectorSemanticFixtureSet(
   }
 
   return fixtures;
+}
+
+export function buildTopicSelectorSemanticReplayPlan(
+  input: TopicSelectorSemanticReplayInput = {},
+): TopicSelectorSemanticReplayPlan {
+  const fixtureSetPath =
+    input.fixtureSetPath ?? DEFAULT_TOPIC_SELECTOR_SEMANTIC_FIXTURE_SET_PATH;
+  const fixtures = loadTopicSelectorSemanticFixtureSet(fixtureSetPath);
+
+  return createReplayPlan(input, fixtureSetPath, fixtures.length);
+}
+
+export async function runTopicSelectorSemanticReplay(
+  input: TopicSelectorSemanticReplayInput = {},
+  _dependencies: TopicSelectorSemanticReplayDependencies = {},
+): Promise<TopicSelectorSemanticReplayPlan> {
+  const fixtureSetPath =
+    input.fixtureSetPath ?? DEFAULT_TOPIC_SELECTOR_SEMANTIC_FIXTURE_SET_PATH;
+  const fixtures = loadTopicSelectorSemanticFixtureSet(fixtureSetPath);
+  const plan = createReplayPlan(input, fixtureSetPath, fixtures.length);
+
+  if (!input.live) {
+    const outputDir = input.outputDir ?? DEFAULT_TOPIC_SELECTOR_SEMANTIC_OUTPUT_DIR;
+    mkdirSync(outputDir, { recursive: true });
+    writeJson(outputDir, "replay-plan.json", plan);
+    return plan;
+  }
+
+  validateLiveInput(input, fixtures.length);
+  throw new Error("topic_selector_semantic_replay_live_not_implemented");
+}
+
+export function parseTopicSelectorSemanticReplayArgs(
+  argv: string[],
+): TopicSelectorSemanticReplayInput {
+  return {
+    live: argv.includes("--live"),
+    confirmLive: argv.includes("--confirm-live"),
+    model: readCliValue(argv, "--model"),
+    maxRequests: readOptionalNumber(readCliValue(argv, "--max-requests")),
+    maxCostCny: readOptionalNumber(readCliValue(argv, "--max-cost-cny")),
+    fixtureSetPath: readCliValue(argv, "--fixture-set"),
+    outputDir: readCliValue(argv, "--output-dir"),
+  };
+}
+
+function createReplayPlan(
+  input: TopicSelectorSemanticReplayInput,
+  fixtureSetPath: string,
+  fixtureCount: number,
+): TopicSelectorSemanticReplayPlan {
+  return {
+    mode: "topic_selector_semantic_replay_plan",
+    live: input.live === true,
+    automated_gate: false,
+    selector_only: true,
+    fixture_set_path: fixtureSetPath,
+    fixture_count: fixtureCount,
+    required_requests: fixtureCount,
+    actual_requests: 0,
+    required_checks: [
+      "不得把 fixture 期望结果接入生产 selection",
+      "不得使用本地字符串规则替代语义判断",
+      "真实模型结果只表示固定样本 Selector 语义表现",
+    ],
+  };
+}
+
+function validateLiveInput(
+  input: TopicSelectorSemanticReplayInput,
+  fixtureCount: number,
+) {
+  if (!input.confirmLive) {
+    throw new Error("topic_selector_semantic_replay_live_confirmation_required");
+  }
+  if (!input.model) {
+    throw new Error("topic_selector_semantic_replay_model_required");
+  }
+  if (input.model !== "glm-5.2") {
+    throw new Error("topic_selector_semantic_replay_model_must_be_glm_5_2");
+  }
+  if (input.maxRequests !== fixtureCount) {
+    throw new Error(
+      "topic_selector_semantic_replay_request_budget_must_equal_fixture_count",
+    );
+  }
+  if (
+    input.maxCostCny === undefined ||
+    !Number.isFinite(input.maxCostCny) ||
+    input.maxCostCny <= 0
+  ) {
+    throw new Error("topic_selector_semantic_replay_cost_budget_required");
+  }
+}
+
+function readCliValue(argv: string[], name: string): string | undefined {
+  const equalsPrefix = `${name}=`;
+  const equalsValue = argv.find((value) => value.startsWith(equalsPrefix));
+  if (equalsValue) {
+    return equalsValue.slice(equalsPrefix.length);
+  }
+
+  const index = argv.indexOf(name);
+  return index >= 0 ? argv[index + 1] : undefined;
+}
+
+function readOptionalNumber(value: string | undefined): number | undefined {
+  return value === undefined ? undefined : Number(value);
+}
+
+function writeJson(outputDir: string, filename: string, value: unknown) {
+  writeFileSync(
+    resolve(outputDir, filename),
+    JSON.stringify(value, null, 2),
+    "utf8",
+  );
 }
 
 function loadFixturePaths(fixtureSetPath: string): string[] {

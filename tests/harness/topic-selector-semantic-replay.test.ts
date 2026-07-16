@@ -1,11 +1,32 @@
-import { describe, expect, it } from "vitest";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterAll, describe, expect, it } from "vitest";
 
 import { projectTopicSelectorPool } from "../../backend/src/modules/topic/topic-selector-prompt-projection.js";
 import {
   DEFAULT_TOPIC_SELECTOR_SEMANTIC_FIXTURE_SET_PATH,
+  buildTopicSelectorSemanticReplayPlan,
   getProductionConsistencyIssueSet,
   loadTopicSelectorSemanticFixtureSet,
+  parseTopicSelectorSemanticReplayArgs,
+  runTopicSelectorSemanticReplay,
 } from "../../harness/scripts/runtime/topic-selector-semantic-replay.js";
+
+const sandboxDirs: string[] = [];
+
+function makeSandbox(label: string) {
+  const dir = mkdtempSync(join(tmpdir(), `topic-selector-replay-${label}-`));
+  sandboxDirs.push(dir);
+  return dir;
+}
+
+afterAll(() => {
+  for (const dir of sandboxDirs) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 describe("topic selector semantic replay fixtures", () => {
   it("loads the two Task 17 selector inputs and their audited annotations", () => {
@@ -100,5 +121,156 @@ describe("topic selector semantic replay fixtures", () => {
       expect(projected).toEqual(fixture.selector_input.selector_pool);
       expect(fixture.selector_input.selector_pool).toEqual(before);
     }
+  });
+});
+
+describe("topic selector semantic replay request guard", () => {
+  it("builds a selector-only plan without spending requests", () => {
+    expect(buildTopicSelectorSemanticReplayPlan()).toMatchObject({
+      mode: "topic_selector_semantic_replay_plan",
+      live: false,
+      automated_gate: false,
+      selector_only: true,
+      fixture_set_path: DEFAULT_TOPIC_SELECTOR_SEMANTIC_FIXTURE_SET_PATH,
+      fixture_count: 2,
+      required_requests: 2,
+      actual_requests: 0,
+    });
+    expect(buildTopicSelectorSemanticReplayPlan().required_checks).toContain(
+      "不得使用本地字符串规则替代语义判断",
+    );
+  });
+
+  it("keeps the default run offline and writes only a dry-run plan", async () => {
+    const outputDir = makeSandbox("dry-run");
+    let runnerCreated = 0;
+
+    const result = await runTopicSelectorSemanticReplay(
+      { outputDir },
+      {
+        createLiveRunner: (() => {
+          runnerCreated += 1;
+          throw new Error("live runner must not be created in dry-run");
+        }) as never,
+      },
+    );
+
+    expect(runnerCreated).toBe(0);
+    expect(result).toMatchObject({ live: false, actual_requests: 0 });
+    expect(existsSync(join(outputDir, "replay-plan.json"))).toBe(true);
+    expect(existsSync(join(outputDir, "replay-summary.json"))).toBe(false);
+    expect(JSON.parse(readFileSync(join(outputDir, "replay-plan.json"), "utf8")))
+      .toMatchObject({ live: false, actual_requests: 0 });
+  });
+
+  it("parses both equals and separated live option forms", () => {
+    expect(
+      parseTopicSelectorSemanticReplayArgs([
+        "--live",
+        "--confirm-live",
+        "--model=glm-5.2",
+        "--max-requests",
+        "2",
+        "--max-cost-cny=1.5",
+      ]),
+    ).toMatchObject({
+      live: true,
+      confirmLive: true,
+      model: "glm-5.2",
+      maxRequests: 2,
+      maxCostCny: 1.5,
+    });
+  });
+
+  it.each([
+    [
+      "missing confirmation",
+      { live: true, model: "glm-5.2", maxRequests: 2, maxCostCny: 1 },
+      "topic_selector_semantic_replay_live_confirmation_required",
+    ],
+    [
+      "missing model",
+      { live: true, confirmLive: true, maxRequests: 2, maxCostCny: 1 },
+      "topic_selector_semantic_replay_model_required",
+    ],
+    [
+      "wrong model",
+      {
+        live: true,
+        confirmLive: true,
+        model: "glm-4",
+        maxRequests: 2,
+        maxCostCny: 1,
+      },
+      "topic_selector_semantic_replay_model_must_be_glm_5_2",
+    ],
+    [
+      "insufficient request budget",
+      {
+        live: true,
+        confirmLive: true,
+        model: "glm-5.2",
+        maxRequests: 1,
+        maxCostCny: 1,
+      },
+      "topic_selector_semantic_replay_request_budget_must_equal_fixture_count",
+    ],
+    [
+      "excess request budget",
+      {
+        live: true,
+        confirmLive: true,
+        model: "glm-5.2",
+        maxRequests: 3,
+        maxCostCny: 1,
+      },
+      "topic_selector_semantic_replay_request_budget_must_equal_fixture_count",
+    ],
+    [
+      "missing cost declaration",
+      {
+        live: true,
+        confirmLive: true,
+        model: "glm-5.2",
+        maxRequests: 2,
+      },
+      "topic_selector_semantic_replay_cost_budget_required",
+    ],
+  ])("rejects %s before creating the live runner", async (_label, input, code) => {
+    let runnerCreated = 0;
+
+    await expect(
+      runTopicSelectorSemanticReplay(input, {
+        createLiveRunner: (() => {
+          runnerCreated += 1;
+          throw new Error("runner should not be created");
+        }) as never,
+      }),
+    ).rejects.toThrow(code);
+    expect(runnerCreated).toBe(0);
+  });
+
+  it("loads fixtures before creating a live runner", async () => {
+    let runnerCreated = 0;
+
+    await expect(
+      runTopicSelectorSemanticReplay(
+        {
+          live: true,
+          confirmLive: true,
+          model: "glm-5.2",
+          maxRequests: 2,
+          maxCostCny: 1,
+          fixtureSetPath: "harness/samples/missing-fixture-set.md",
+        },
+        {
+          createLiveRunner: (() => {
+            runnerCreated += 1;
+            throw new Error("runner should not be created");
+          }) as never,
+        },
+      ),
+    ).rejects.toThrow();
+    expect(runnerCreated).toBe(0);
   });
 });
