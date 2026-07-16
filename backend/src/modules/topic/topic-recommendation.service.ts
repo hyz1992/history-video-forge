@@ -657,6 +657,9 @@ function toCandidatePreviewTraceEntry(input: {
           quality_score: input.scorecard.quality_score,
           deductions: input.scorecard.deductions,
           risk_summary: input.scorecard.risk_summary,
+          consistency_status: input.scorecard.consistency_status,
+          primary_consistency_issue: input.scorecard.primary_consistency_issue,
+          consistency_note: input.scorecard.consistency_note,
         }
       : {}),
   };

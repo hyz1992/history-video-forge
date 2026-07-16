@@ -747,6 +747,21 @@ describe("topic runtime recommendation", () => {
 
   it("exposes candidate preview trace across raw selector pool and final choices", async () => {
     const db = createDbClient();
+    const selectorDecision = createSelectorDecision(
+      "selector_candidate_1",
+      "selector_candidate_2",
+      "selector_candidate_3",
+      "selector_candidate_4",
+      "selector_candidate_5",
+      "selector_candidate_6",
+      "selector_candidate_7",
+      "selector_candidate_8",
+    );
+    Object.assign(selectorDecision.ranked_candidates[0], {
+      consistency_status: "risk",
+      primary_consistency_issue: "actor_role_mismatch",
+      consistency_note: "标题把执行者写成了结果承担者",
+    });
     const { gateway } = createGatewayWithSelectorResponses([
       [
         {
@@ -767,7 +782,7 @@ describe("topic runtime recommendation", () => {
         createRuntimeCandidate("event-g", "angle-g"),
         createRuntimeCandidate("event-h", "angle-h"),
       ],
-    ]);
+    ], [selectorDecision]);
 
     const result = await recommendTopicCandidatesWithTrace(
       db,
@@ -794,11 +809,20 @@ describe("topic runtime recommendation", () => {
       one_line_angle: "angle-a",
       must_cover_preview: ["a-entry", "a-action", "a-cost"],
     });
+    expect(previewTrace?.ranked_candidates?.[0]).toMatchObject({
+      candidate_id: "selector_candidate_1",
+      consistency_status: "risk",
+      primary_consistency_issue: "actor_role_mismatch",
+      consistency_note: "标题把执行者写成了结果承担者",
+    });
     expect(previewTrace?.selector_pool[0]).toMatchObject({
       candidate_id: "selector_candidate_1",
       title: "event-a",
       one_line_angle: "angle-a",
       must_cover_preview: ["a-entry", "a-action", "a-cost"],
+      consistency_status: "risk",
+      primary_consistency_issue: "actor_role_mismatch",
+      consistency_note: "标题把执行者写成了结果承担者",
     });
     expect(previewTrace?.final_candidates).toMatchObject([
       {
@@ -816,6 +840,9 @@ describe("topic runtime recommendation", () => {
           },
         ],
         risk_summary: "rank 1 risk",
+        consistency_status: "risk",
+        primary_consistency_issue: "actor_role_mismatch",
+        consistency_note: "标题把执行者写成了结果承担者",
       },
       {
         candidate_id: "selector_candidate_2",

@@ -26,6 +26,16 @@ export interface CandidatePreviewTraceEntry {
   quality_score?: number;
   deductions?: TopicCandidateDeduction[];
   risk_summary?: string;
+  consistency_status?: "pass" | "risk";
+  primary_consistency_issue?:
+    | "none"
+    | "actor_role_mismatch"
+    | "action_event_mismatch"
+    | "cause_outcome_mismatch"
+    | "scope_boundary_mismatch"
+    | "language_contamination"
+    | "overclaim_or_ambiguity";
+  consistency_note?: string;
 }
 
 export interface CandidatePreviewTrace {
