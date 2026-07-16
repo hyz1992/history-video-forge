@@ -167,6 +167,25 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("`risk_summary` 必须是一句话风险摘要");
   });
 
+  it("makes internal semantic consistency the selector first pass", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.selector");
+
+    expect(prompt.body).toContain("先按事件身份、行为主体、关键动作、因果结果完成一致性检查");
+    expect(prompt.body).toContain("决策者、执行者、受害者和结果承担者");
+    expect(prompt.body).toContain("至少有 4 个无明显冲突候选");
+    expect(prompt.body).toContain("原则上不得进入前 4");
+    expect(prompt.body).toContain("不能替代正式史实核查");
+  });
+
+  it("keeps all-candidate ranking while making selector explanations concise", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.selector");
+
+    expect(prompt.body).toContain("必须覆盖并排序全部候选");
+    expect(prompt.body).toContain("通常只保留最重要的 0–2 条");
+    expect(prompt.body).toContain("不复述候选全文");
+    expect(prompt.body).toContain("只总结首要风险");
+  });
+
   it("keeps topic.selector prompt aligned with tool-call structured output", () => {
     const prompt = createPromptRegistry().getPrompt("topic.selector");
 
