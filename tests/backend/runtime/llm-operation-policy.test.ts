@@ -24,6 +24,7 @@ describe("llm operation policy classification", () => {
 
     // 短结构化判断
     expect(classifyOperation("topic.selector")).toBe("short_structured_decision");
+    expect(classifyOperation("topic.light-review")).toBe("short_structured_decision");
     expect(classifyOperation("probe.strict-tool-call")).toBe("short_structured_decision");
     expect(classifyOperation("publish.title-generator")).toBe("short_structured_decision");
     expect(classifyOperation("publish.description-generator")).toBe("short_structured_decision");
@@ -128,6 +129,7 @@ describe("llm operation policy precedence", () => {
     expect(getOperationPolicy("storyboard.planner").thinking).toBe("disabled");
     expect(getOperationPolicy("topic.candidate-builder").thinking).toBe("disabled");
     expect(getOperationPolicy("topic.selector").thinking).toBe("enabled");
+    expect(getOperationPolicy("topic.light-review").thinking).toBeUndefined();
 
     // 同 class 内未经验证的 operation 不得被一起改成 disabled。
     expect(
@@ -283,6 +285,14 @@ describe("llm config redacted snapshot", () => {
 });
 
 describe("llm operation policy retry semantics (Task 9 contract)", () => {
+  it("uses short-structured controlled transport retry for topic light review without adding semantic thinking", () => {
+    const policy = getOperationPolicy("topic.light-review");
+
+    expect(policy.retryOnTimeout).toBe(true);
+    expect(policy.transientRetryByClass?.short_structured_decision).toBe(2);
+    expect(policy.thinking).toBeUndefined();
+  });
+
   it("forbids retrying timeouts only for core semantic and long structured generation", () => {
     // 已批准禁止 timeout 重试的两类
     expect(getOperationPolicy("script.writer").retryOnTimeout).toBe(false);

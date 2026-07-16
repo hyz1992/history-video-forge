@@ -35,8 +35,9 @@ const OPERATION_NAME_TO_CLASS: Record<string, LlmOperationClass> = {
   "topic.candidate-builder": "long_structured_generation",
   "asset-planning.planner": "long_structured_generation",
 
-  // 短结构化判断：选题打分选择、发布标题/简介/封面提示词
+  // 短结构化判断：选题打分选择/轻审核、发布标题/简介/封面提示词
   "topic.selector": "short_structured_decision",
+  "topic.light-review": "short_structured_decision",
   "probe.strict-tool-call": "short_structured_decision",
   "publish.title-generator": "short_structured_decision",
   "publish.description-generator": "short_structured_decision",
