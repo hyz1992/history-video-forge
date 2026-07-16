@@ -177,6 +177,22 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("不能替代正式史实核查");
   });
 
+  it("requires a compact semantic consistency verdict for every selector scorecard", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.selector");
+
+    expect(prompt.body).toContain("`consistency_status` 只能是 `pass` 或 `risk`");
+    expect(prompt.body).toContain("`primary_consistency_issue`");
+    expect(prompt.body).toContain("actor_role_mismatch");
+    expect(prompt.body).toContain("action_event_mismatch");
+    expect(prompt.body).toContain("cause_outcome_mismatch");
+    expect(prompt.body).toContain("scope_boundary_mismatch");
+    expect(prompt.body).toContain("language_contamination");
+    expect(prompt.body).toContain("overclaim_or_ambiguity");
+    expect(prompt.body).toContain("`pass` 不代表完成史实核查");
+    expect(prompt.body).toContain("不得使用 `risk` 表达一般史源争议");
+    expect(prompt.body).toContain("`consistency_note` 只写一句简短中文依据");
+  });
+
   it("keeps all-candidate ranking while making selector explanations concise", () => {
     const prompt = createPromptRegistry().getPrompt("topic.selector");
 
