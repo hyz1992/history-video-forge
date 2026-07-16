@@ -368,3 +368,12 @@ git commit -m "记录紧凑结论非live验证结果"
 - 2026-07-16：Task 3 更新正式中文 Selector prompt 与 baseline fixtures；prompt/baseline 38/38 通过，prompt 为 2827 字符/72 行，schema JSON 为 1476 字符，提交 `3c88029`。
 - 2026-07-16：完整 non-live 矩阵 16 文件、280/280 通过，backend typecheck、prompt language 和 diff check 通过。Task 16 两份保存 arguments 静态重排为 2874/2982 字符，相对原始 3729/3880 减少 22.9%/23.1%。
 - 未执行真实 provider、真实页面或付费 live；没有修改 shared schema、API、前端、Builder、provider、模型和运行策略。S2-0 保持打开，等待独立 live 授权。
+
+## 真实页面执行记录
+
+- 2026-07-16：用户授权内置浏览器真实测试；使用 GLM-5.2、两个固定样本、最多 4 次 provider 请求、不执行 capability probe，backend 以进程级 `LLM_REQUEST_BUDGET_MAX_REQUESTS=4` 启动。
+- 高张力项目 `5fda1609-63ed-4f0d-b47a-bb48038b3a6a` / run `topic_run_3d8da9c7-aaaa-43f9-80fe-5cc5549ec95f`：builder 82.490 秒、selector 20.498 秒、总 token 10403、tool arguments 2175 字符。
+- 均衡叙事项目 `3858fbdc-18c1-4095-ac72-55f9d4adb4b1` / run `topic_run_f5a2648f-7ade-45b5-958d-ce4f8cab1e5c`：builder 45.727 秒、selector 23.665 秒、总 token 10867、tool arguments 2526 字符。
+- 四个 interaction 均 attempt 1，普通 JSON 与 strict 目标工具均 2/2 首次通过；无 retry、repair、fallback、full regeneration、risk backfill 或预算阻断。相对 Task 16，selector arguments 减少 41.7%/34.9%，completion token 减少 43.3%/38.3%，selector 耗时减少 28.6%/14.5%。
+- 两轮均为 8 pass / 0 risk；“靖康城破”把徽宗禅位与钦宗出营谈判压成同一“皇帝”，“鸿门宴”把刘邦脱身升级成“天下归属已经注定”，两项都进入最终四项并被判 pass。实际 prompt 已包含断言强度规则，provider 原始 verdict 已是全 `none`，因此不是 parser 或下游传输丢失。
+- 结论：结构稳定性与输出体积通过，语义召回闸门未通过。未修改代码或 prompt；S2-0 继续打开，下一步需独立固化失败样本并重新设计，不进入 S2-1。

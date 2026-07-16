@@ -395,3 +395,39 @@ selector pool 对照只读取 Task 14 已保存的本地 interaction input，并
 - 对 Task 16 两份已保存 tool arguments 做只读静态重排：高张力样本从原始 3729 字符变为 2874，减少 855（22.9%）；均衡叙事样本从 3880 变为 2982，减少 898（23.1%）。若先把旧 payload minify 为 3508/3653，再对比新结构，则减少 634/671（18.1%/18.4%）。没有重新请求 provider，也没有修改或提交 raw output。
 - 完整非 live 矩阵为 16 文件、280/280 通过；`npm run typecheck:backend`、prompt language 与 `git diff --check` 通过。shared schema、API、前端、Builder、provider、模型、thinking、timeout、retry、repair、默认预算和 semantic reviewer 均无改动。
 - 本轮不能证明真实 completion token、latency、strict 首通率或语义 recall 改善，也没有验证新增断言强度规则能否识别 Task 16 的“败退亡国”漏判。未执行 live；S2-0 继续打开，不进入 S2-1。是否执行两个固定样本的付费复验，必须重新取得明确授权。
+
+## 2026-07-16 Task 17 内置浏览器真实验收（结构与体积通过，语义召回未通过）
+
+### 授权与运行边界
+
+- 用户明确授权内置浏览器真实测试；继续使用 GLM-5.2，复用“魏晋至唐宋·高张力”和“先秦至两汉·均衡叙事”两个固定样本，最多 4 次 provider 请求，不执行 capability probe。backend 启动前以进程环境设置 `LLM_REQUEST_BUDGET_MAX_REQUESTS=4`，没有修改 `.env`。
+- 高张力样本：项目 `5fda1609-63ed-4f0d-b47a-bb48038b3a6a`，run `topic_run_3d8da9c7-aaaa-43f9-80fe-5cc5549ec95f`；浏览器约 113 秒观察到最终四项。
+- 均衡叙事样本：项目 `3858fbdc-18c1-4095-ac72-55f9d4adb4b1`，run `topic_run_f5a2648f-7ade-45b5-958d-ce4f8cab1e5c`；浏览器约 76 秒观察到最终四项。
+- 两个项目共生成 4 个 interaction，raw output 只保存在忽略目录，没有提交。TTFT 与人民币实际费用仍不能由当前非流式日志机器核验。
+
+### 速度、token 与 strict 结构
+
+| 样本 | builder | selector | provider 合计 | 总 token | selector completion | tool arguments |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 魏晋至唐宋·高张力 | 82.490 秒 | 20.498 秒 | 102.988 秒 | 10403 | 847 | 2175 字符 |
+| 先秦至两汉·均衡叙事 | 45.727 秒 | 23.665 秒 | 69.392 秒 | 10867 | 991 | 2526 字符 |
+
+- 四个 interaction 均 attempt 1 成功、`reasoning_tokens=0`；builder 为 `finish_reason=stop`，selector 为目标工具 `rank_topic_candidates` 与 `finish_reason=tool_calls`。没有 provider retry、structured fallback、本地 repair、完整重生成、risk backfill 或预算阻断；普通 JSON 与 strict 首次通过率均为 2/2。
+- 相对 Task 16，同输入 selector tool arguments 从 3729/3880 降至 2175/2526，减少 41.7%/34.9%；selector completion token 从 1494/1606 降至 847/991，减少 43.3%/38.3%；selector duration 从 28.691/27.678 秒降至 20.498/23.665 秒，减少 28.6%/14.5%。两轮 completion 体积与 selector 耗时方向一致下降，但两个样本不能证明通用延迟分布。
+- 总 token 相对 Task 16 下降 10.6%/9.9%。provider 合计分别变化 +5.6%/-56.3%，差异主要来自 builder 的 82.490/45.727 秒远程波动；Builder 未改，不能把整链路时间变化归因给紧凑 verdict。
+- 相对 Task 15，当前 arguments 为 -1.5%/+18.7%，completion token 为 -4.7%/+15.9%，已经回到相近量级；但 selector duration 仍高 23.9%/61.4%。静态体积收敛已在 live 中复现，真实 latency 尚未恢复到 Task 15 水平。
+
+### 语义质量与根因边界
+
+- 两轮 provider DTO 都精确覆盖 8 个唯一 candidate ID，rank 为完整 `1..8`，旧三字段未出现在 tool arguments；parser 正确恢复内部三字段，页面、trace 与最终四项均正常。说明紧凑 schema、目标工具、parser 映射和下游合同真实贯通。
+- 两轮同时都是 8 pass / 0 risk，`consistency_risk_notes=[]`，没有实际走到 live risk note 路径。结构路径通过不等于语义召回通过。
+- 高张力最终第 4 项“靖康城破”在标题与 preview 中明确区分宋徽宗禅位出逃、宋钦宗出营谈判，但 `one_line_angle` 用同一个“皇帝”串联“禅位给儿子并出城谈判”，把两位行为主体压成一人；Selector 仍判 `none/pass` 且没有一致性扣分。这是进入最终四项的 `actor_role_mismatch` 漏判。
+- 均衡叙事最终第 1 项“鸿门宴”把“项羽放过刘邦”写成“天下归属已经注定”，而三个 preview 只支持刘邦脱身，不支持该瞬间确定最终天下归属；Selector 仍判 `none/pass`。这是进入最终四项的 `overclaim_or_ambiguity` 漏判。
+- 均衡叙事非最终“党锢之祸”还出现“永久禁止做官”“整个知识阶层的沉默”“清议传统彻底断绝”等绝对化表述，同样被判 `none/pass`。Task 16 的“败退亡国”原句本轮未复现，不能直接声明该特定缺陷已修；新增断言强度规则在本轮真实输出上没有形成可靠召回。
+- 数据流排查确认：两份实际 System Prompt 都包含紧凑合同、断言强度规则和 `overclaim_or_ambiguity` enum；provider 原始 arguments 已直接给出 8 个 `consistency_issue=none`，parser 只做确定性映射，没有丢失 risk。失败发生在模型语义 verdict 层，不是 schema、parser、trace、selection 或前端传输问题。由于候选是随机生成的，两样本也不足以证明“紧凑 DTO 必然导致 recall 下降”，只能判定当前 prompt + GLM-5.2 组合未达到质量闸门。
+
+### 阶段结论
+
+- Task 17 的结构稳定性、completion 体积和相对 Task 16 的 selector 耗时方向通过真实验收；下游合同无回归。
+- 语义质量闸门未通过：两项明确内部冲突进入最终四项，且两轮没有识别任何 risk。不能以性能收益换取 verdict recall 退化，也不能声明 S2-0 收口。
+- 本轮只记录证据，不顺手修改 prompt、schema 或 selection。下一步应先对“逐候选语义审查为何退化为全 none”做独立窄设计与失败样本固化；不得直接恢复冗余 pass note、增加第三次 LLM 调用或引入本地关键词规则。S2-0 继续打开，不进入 S2-1。
