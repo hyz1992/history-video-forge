@@ -605,3 +605,17 @@ Get-ChildItem 'storage/projects' -Directory -Recurse |
 - 样本清单：`harness/samples/llm-s2-baseline/manifest.json`
 - 输出目录：`harness/scripts/runtime/output/llm-s2-baseline/<timestamp>/`
 - 约束：live=false 默认，缺失任一必需参数立即失败，raw output 不提交 Git
+
+### Topic Selector 固定输入语义回放
+
+- `npm run harness:topic-selector-semantic-replay`：默认只加载两份 Task 17 真实 Selector fixture、校验生产投影兼容并写入 dry-run plan；不创建 provider，`actual_requests=0`。
+- fixture 位于 `harness/samples/topic-selector-semantic-replay/`，每份保留完整 8 候选输入，并同时包含高置信度风险正例与 `none` 对照。annotation 只用于回放报告，不得接入生产 selection 或自动门禁。
+- 只有取得新的明确授权后，才允许使用直接入口执行 live：
+
+  ```powershell
+  npx tsx harness/scripts/runtime/topic-selector-semantic-replay.ts --live --confirm-live --model=glm-5.2 --max-requests=2 --max-cost-cny=<显式预算>
+  ```
+
+- live 固定两份 fixture、每份一次 strict Selector 调用；使用生产 Prompt Registry、strict schema/parser、目标工具与 `thinking=disabled`，不经过 Builder、数据库、selection、structured fallback、capability probe 或浏览器。
+- 主指标只判断三个风险正例是否返回非 `none`、两个 `none` 对照是否保持 `none`；具体 issue enum 只作为辅助一致率。不得用本地关键词或字符串规则替代模型判断。
+- 输出目录为 `harness/scripts/runtime/output/topic-selector-semantic-replay/`。脱敏报告不保存 raw output、system prompt、完整 fixture input 或 API key，也不得提交运行态产物。

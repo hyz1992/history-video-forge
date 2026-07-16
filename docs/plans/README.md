@@ -28,6 +28,7 @@
 - Task 16 真实页面验收已完成：两个 GLM-5.2 固定样本共 4 次请求，builder/selector 全部 attempt 1，普通 JSON 与 strict 目标工具均首次通过，无 retry/repair/fallback/full regeneration；两项明确的时代越界/主体歧义被判 risk 并从最终四项排除。但 provider 合计为 97.490/158.638 秒，总 token 为 11637/12057，selector 因一致性字段使 tool arguments 增至 3729/3880 字符、耗时增至 28.691/27.678 秒；另有一项非最终“败退亡国”过度断言漏判。结论为质量安全网有效但性能与 verdict recall 尚未收口，S2-0 继续打开。
 - Task 17 紧凑 verdict 正式设计与实施见 [设计](./2026-07-16-s2-0-topic-selector-compact-verdict-design.md) 和 [实施计划](./2026-07-16-s2-0-topic-selector-compact-verdict-implementation-plan.md)：provider 每候选只返回 `consistency_issue`，仅为非 `none` 项返回顶层 risk note；parser 恢复现有内部三字段，实际 selector pool 精确覆盖、最终四项、trace、API 与下游合同不变。完整非 live 矩阵 16 文件、280/280 与 backend typecheck 通过；两份 Task 16 arguments 静态重排减少 22.9%/23.1%，但未执行 live，不能声明真实 token、延迟、strict 首通率或漏判改善，S2-0 继续打开。
 - Task 17 内置浏览器真实验收已完成：两个 GLM-5.2 固定样本共 4 次请求，builder/selector 全部 attempt 1，普通 JSON 与 strict 目标工具均首次通过。selector arguments 相对 Task 16 减少 41.7%/34.9%，completion token 减少 43.3%/38.3%，selector 耗时减少 28.6%/14.5%；但两轮均为 8 pass / 0 risk，“靖康城破”两位皇帝主体混合与“鸿门宴·天下归属已经注定”过度断言都进入最终四项。结构与体积通过、语义召回未通过，S2-0 继续打开，不进入 S2-1。
+- Task 17 语义回放基线见 [设计](./2026-07-16-s2-0-topic-selector-semantic-replay-design.md) 和 [实施计划](./2026-07-16-s2-0-topic-selector-semantic-replay-implementation-plan.md)：已按两个真实 run 固化 8+8 候选输入、3 个风险正例和 2 个 `none` 对照；默认 harness 为 0 请求，未来 live 固定 GLM-5.2、两份 fixture、最多两次 strict 调用。完整 non-live 矩阵 17 文件、299/299 与 backend typecheck 通过；本轮未调用 provider，不能声明语义召回已经改善，S2-0 继续打开。
 - 正式 V2 产品功能已进入实施阶段；migration owner 不可登录标记 `!migration-owner-no-login`，其项目通过 admin 管理页面转移给真实用户。
 
 - [V1 高风险稳定化实施计划](./2026-07-10-v1-high-risk-stabilization-implementation-plan.md) 的主要代码任务已完成；其全量回归超时和故障演练缺口已并入 Task 8.5 的测试与切换闸门，不再作为独立的下一执行入口。
@@ -61,7 +62,7 @@
 
 旧的 Step 3-10 文档保留为范围留痕；当前执行顺序以本节为准：
 
-1. `S2-0`（进行中）：LLM 回复速度、质量和结构化输出优化基线。Task 15 的性能分支已通过小样本扩展；Task 16 两个真实样本证明 strict verdict 与 risk 排除机制有效，但 selector 输出和耗时出现稳定增量，且仍有一项非最终过度断言漏判。下一步先做不增加调用次数、不降低模型质量的紧凑 verdict 设计与非 live 验证，再决定是否需要新的付费复验；收口前不进入 S2-1。
+1. `S2-0`（进行中）：LLM 回复速度、质量和结构化输出优化基线。Task 17 紧凑 verdict 已通过结构/体积 live 验收，但两个真实样本出现全 `none` 语义漏判；现已固化两份生产实际 Selector 输入并完成默认 0 请求的 selector-only 回放工具。下一闸门是在新的明确授权下执行最多两次固定输入 live 回放；通过前不修改 prompt、不进入 S2-1。
 2. `S2-1`：多模型、多供应商切换。基于 S2-0 的真实基线设计 provider/model/routing/run snapshot/credential reference。
 3. `S2-2`：用户偏好、生成策略与成本控制。接入用户级策略、预算和成本记录，消费 S2-1 的 provider/model 能力。
 4. `S2-3`：Prompt 治理。版本、hash、fixtures、变更说明和运行快照对齐；仍遵守 `AGENTS.md` 的 `harness/prompts/` 正式 prompt 位置规则，除非另有设计审查批准。

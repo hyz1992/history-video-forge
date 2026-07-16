@@ -41,7 +41,7 @@
 - 新增：`harness/scripts/runtime/topic-selector-semantic-replay.ts`
 - 新增：`tests/harness/topic-selector-semantic-replay.test.ts`
 
-- [ ] **Step 1：写 fixture loader 红灯测试**
+- [x] **Step 1：写 fixture loader 红灯测试**
 
 先创建测试文件并导入尚不存在的导出：
 
@@ -90,7 +90,7 @@ expect(getProductionConsistencyIssueSet()).toEqual(new Set([
 - 高张力 annotation：candidate 7 为 risk/`actor_role_mismatch`，candidate 3 为 `none`；
 - 均衡 annotation：candidate 3、7 为 risk/`overclaim_or_ambiguity`，candidate 5 为 `none`。
 
-- [ ] **Step 2：运行测试确认红灯**
+- [x] **Step 2：运行测试确认红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/topic-selector-semantic-replay.test.ts --no-file-parallelism
@@ -98,7 +98,7 @@ npx vitest run --configLoader runner tests/harness/topic-selector-semantic-repla
 
 预期：FAIL，提示 runtime 模块或 fixture set 不存在。
 
-- [ ] **Step 3：新增 fixture-set 和两份完整 fixture**
+- [x] **Step 3：新增 fixture-set 和两份完整 fixture**
 
 `fixture-set.md` 内容固定为：
 
@@ -118,7 +118,7 @@ npx vitest run --configLoader runner tests/harness/topic-selector-semantic-repla
 
 不得复制“原始模型响应”或“归一化结果”。每条 annotation 必须包含 `candidate_id`、`expected_risk`、`expected_issue`、`entered_final_candidates` 和非空中文 `rationale`。
 
-- [ ] **Step 4：实现最小 loader 和生产 enum 提取**
+- [x] **Step 4：实现最小 loader 和生产 enum 提取**
 
 在 runtime 模块中定义：
 
@@ -164,7 +164,7 @@ export interface TopicSelectorSemanticFixture {
 
 这些校验只能读取结构和 annotation，不得读取标题、切口或 preview 推导风险。
 
-- [ ] **Step 5：增加生产投影兼容测试**
+- [x] **Step 5：增加生产投影兼容测试**
 
 测试把 fixture 中每个投影候选补齐不会被输出的占位字段，再调用生产 helper：
 
@@ -183,7 +183,7 @@ expect(projected).toEqual(fixture.selector_input.selector_pool);
 
 同时断言原 fixture 对象未被修改。若类型需要收窄，定义 harness-only 输入类型，不得修改生产投影模块。
 
-- [ ] **Step 6：运行 focused 测试确认绿灯**
+- [x] **Step 6：运行 focused 测试确认绿灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/topic-selector-semantic-replay.test.ts tests/backend/topic/topic-selector-prompt-projection.test.ts --no-file-parallelism
@@ -191,7 +191,7 @@ npx vitest run --configLoader runner tests/harness/topic-selector-semantic-repla
 
 预期：两份 fixture 被加载，结构、annotation 和投影兼容测试全部 PASS；请求数仍为 0。
 
-- [ ] **Step 7：中文提交 Task 1**
+- [x] **Step 7：中文提交 Task 1**
 
 ```powershell
 git add -- harness/samples/topic-selector-semantic-replay harness/scripts/runtime/topic-selector-semantic-replay.ts tests/harness/topic-selector-semantic-replay.test.ts
@@ -208,7 +208,7 @@ git commit -m "固化选题筛选语义回放样本"
 - 修改：`harness/scripts/runtime/topic-selector-semantic-replay.ts`
 - 修改：`tests/harness/topic-selector-semantic-replay.test.ts`
 
-- [ ] **Step 1：写 dry-run plan 红灯测试**
+- [x] **Step 1：写 dry-run plan 红灯测试**
 
 新增导出并测试：
 
@@ -229,7 +229,7 @@ expect(plan.required_checks).toContain("不得使用本地字符串规则替代�
 
 给 `runTopicSelectorSemanticReplay()` 注入一个一旦调用就抛错的 `createLiveRunner`，断言默认 dry-run 不创建 runner、不创建 provider、不写 raw output，并生成 `replay-plan.json`。
 
-- [ ] **Step 2：写 live 参数拒绝红灯测试**
+- [x] **Step 2：写 live 参数拒绝红灯测试**
 
 覆盖：
 
@@ -242,7 +242,7 @@ expect(plan.required_checks).toContain("不得使用本地字符串规则替代�
 
 稳定错误码分别使用 `topic_selector_semantic_replay_*` 前缀。所有错误都必须发生在 provider 创建前。
 
-- [ ] **Step 3：运行测试确认红灯**
+- [x] **Step 3：运行测试确认红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/topic-selector-semantic-replay.test.ts --no-file-parallelism
@@ -250,7 +250,7 @@ npx vitest run --configLoader runner tests/harness/topic-selector-semantic-repla
 
 预期：FAIL，因为 plan、run 和 CLI 参数校验尚未实现。
 
-- [ ] **Step 4：实现 plan、参数解析和调用前校验**
+- [x] **Step 4：实现 plan、参数解析和调用前校验**
 
 最小输入类型：
 
@@ -290,7 +290,7 @@ export interface TopicSelectorSemanticReplayInput {
 
 CLI 同时接受 `--model glm-5.2` 与 `--model=glm-5.2` 形态；`--live` 和 `--confirm-live` 为布尔开关。不要读取或打印 API key。
 
-- [ ] **Step 5：运行 focused 测试确认绿灯**
+- [x] **Step 5：运行 focused 测试确认绿灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/topic-selector-semantic-replay.test.ts --no-file-parallelism
@@ -298,7 +298,7 @@ npx vitest run --configLoader runner tests/harness/topic-selector-semantic-repla
 
 预期：dry-run、预算拒绝和 provider-before-validation 防线全部 PASS。
 
-- [ ] **Step 6：中文提交 Task 2**
+- [x] **Step 6：中文提交 Task 2**
 
 ```powershell
 git add -- harness/scripts/runtime/topic-selector-semantic-replay.ts tests/harness/topic-selector-semantic-replay.test.ts
@@ -316,7 +316,7 @@ git commit -m "增加选题语义回放请求护栏"
 - 修改：`tests/harness/topic-selector-semantic-replay.test.ts`
 - 修改：`package.json`
 
-- [ ] **Step 1：写成功与 enum 差异红灯测试**
+- [x] **Step 1：写成功与 enum 差异红灯测试**
 
 依赖接口只允许注入一次调用函数：
 
@@ -347,7 +347,7 @@ stub 为三个风险正例返回非 `none`，但把其中一个 `overclaim_or_am
 - 相邻 enum 项状态为 `risk_recalled_enum_differed`；
 - 整体 `primary_gate_passed=true`。
 
-- [ ] **Step 2：写漏判、误报和结构失败红灯测试**
+- [x] **Step 2：写漏判、误报和结构失败红灯测试**
 
 分别覆盖：
 
@@ -367,7 +367,7 @@ stub 为三个风险正例返回非 `none`，但把其中一个 `overclaim_or_am
 - input 与 fixture 完整 `selector_input` 相等；
 - stub tool arguments 经 `parseStrictSelectorDecision()` 恢复为内部三字段。
 
-- [ ] **Step 3：运行测试确认红灯**
+- [x] **Step 3：运行测试确认红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/topic-selector-semantic-replay.test.ts --no-file-parallelism
@@ -375,7 +375,7 @@ npx vitest run --configLoader runner tests/harness/topic-selector-semantic-repla
 
 预期：FAIL，因为 live runner、比较器和报告尚未实现。
 
-- [ ] **Step 4：实现纯结构覆盖与两层比较**
+- [x] **Step 4：实现纯结构覆盖与两层比较**
 
 新增纯函数：
 
@@ -404,7 +404,7 @@ return "matched";
 
 不得读取候选标题、切口、preview 或 rationale 来决定状态。
 
-- [ ] **Step 5：实现默认生产 strict runner**
+- [x] **Step 5：实现默认生产 strict runner**
 
 导出 `createTopicSelectorSemanticReplayLiveRunner(model, dependencies?)`。`dependencies.createProvider` 只用于 non-live 测试替换底层 API；生产默认值必须创建现有 OpenAI-compatible provider。只有 live 参数全部通过后才调用该 factory：
 
@@ -442,7 +442,7 @@ gateway.invokeStrictStructured({
 
 tool arguments 字符数可在内存中解析 OpenAI-compatible raw response，找到函数名为 `rank_topic_candidates` 的 tool call 并读取 `function.arguments.length`；解析失败时记录 `null`，不得影响语义主指标。
 
-- [ ] **Step 6：实现报告文件和 CLI main**
+- [x] **Step 6：实现报告文件和 CLI main**
 
 写入：
 
@@ -474,7 +474,7 @@ summary 必须包含：
 
 CLI 直接运行时打印一份不含凭据和 raw output 的短 JSON 摘要。默认 output 目录为已忽略的 `harness/scripts/runtime/output/topic-selector-semantic-replay`。
 
-- [ ] **Step 7：增加 npm 命令并验证默认零请求**
+- [x] **Step 7：增加 npm 命令并验证默认零请求**
 
 `package.json` 新增：
 
@@ -490,7 +490,7 @@ npm run harness:topic-selector-semantic-replay
 
 预期：输出 `live=false`、`actual_requests=0`、`required_requests=2`；不得出现 provider 调用或 `.env` 缺失错误。
 
-- [ ] **Step 8：运行 focused 测试与 typecheck**
+- [x] **Step 8：运行 focused 测试与 typecheck**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/topic-selector-semantic-replay.test.ts harness/scripts/runtime/llm-s2-baseline-stub.test.ts --no-file-parallelism
@@ -499,7 +499,7 @@ npm run typecheck:backend
 
 预期：stub 两层判定、预算、生产 schema/parser 导入和 backend typecheck 全部 PASS。
 
-- [ ] **Step 9：中文提交 Task 3**
+- [x] **Step 9：中文提交 Task 3**
 
 ```powershell
 git add -- harness/scripts/runtime/topic-selector-semantic-replay.ts tests/harness/topic-selector-semantic-replay.test.ts package.json
@@ -519,7 +519,7 @@ git commit -m "实现选题筛选语义回放工具"
 - 修改：`docs/todos/roadmap-todo.md`
 - 修改：`docs/plans/2026-07-16-s2-0-topic-selector-semantic-replay-implementation-plan.md`
 
-- [ ] **Step 1：更新 harness 使用说明**
+- [x] **Step 1：更新 harness 使用说明**
 
 记录：
 
@@ -530,7 +530,7 @@ git commit -m "实现选题筛选语义回放工具"
 - raw output 不写入脱敏报告，也不得提交；
 - 未经新授权不得运行 live 命令。
 
-- [ ] **Step 2：运行完整受影响 non-live 矩阵**
+- [x] **Step 2：运行完整受影响 non-live 矩阵**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/topic-selector-semantic-replay.test.ts tests/backend/topic/topic-selector-prompt-projection.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/topic-event-identity-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/runtime/provider-hardening.test.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/topic-script-graph.test.ts tests/backend/api/topic-api-runtime.test.ts tests/backend/script/script-runtime-generate.test.ts tests/backend/storyboard/storyboard-generation.test.ts tests/backend/asset-planning/asset-planning-generation.test.ts tests/backend/asset-planning/asset-planning-structural-repair.test.ts harness/scripts/check-prompt-language.test.ts harness/scripts/runtime/llm-s2-baseline.test.ts harness/scripts/runtime/llm-s2-baseline-stub.test.ts --no-file-parallelism
@@ -541,7 +541,7 @@ git diff --check
 
 测试数量以真实输出为准。最后一个 harness 命令必须报告 `actual_requests=0`。
 
-- [ ] **Step 3：检查禁止范围和运行态数据**
+- [x] **Step 3：检查禁止范围和运行态数据**
 
 ```powershell
 git diff -- harness/prompts backend/src shared/src frontend
@@ -551,7 +551,7 @@ git ls-files -- 'harness/scripts/runtime/output/**' 'storage/**'
 
 第一条必须无输出；不得 stage `storage/**`、runtime output、raw interaction 或两份用户未跟踪启动提示词。
 
-- [ ] **Step 4：同步 S2-0 状态文档**
+- [x] **Step 4：同步 S2-0 状态文档**
 
 如实记录：
 
@@ -562,7 +562,7 @@ git ls-files -- 'harness/scripts/runtime/output/**' 'storage/**'
 - non-live 不能证明 GLM-5.2 recall、enum、token、latency 或 strict 首通率；
 - S2-0 保持打开，下一闸门是用户明确授权的两次 Selector-only live 回放。
 
-- [ ] **Step 5：更新计划执行记录并中文提交 Task 4**
+- [x] **Step 5：更新计划执行记录并中文提交 Task 4**
 
 ```powershell
 git add -- harness/README.md harness/docs/s2-0-baseline-protocol.md docs/plans/README.md docs/todos/roadmap-todo.md docs/plans/2026-07-16-s2-0-topic-selector-semantic-replay-implementation-plan.md
@@ -570,31 +570,35 @@ $check = git diff --cached --check; if ($LASTEXITCODE -ne 0) { $check; exit 1 }
 git commit -m "记录选题语义回放非live基线"
 ```
 
-- [ ] **Step 6：停止并等待独立 live 授权**
+- [x] **Step 6：停止并等待独立 live 授权**
 
 不得自动运行带 `--live` 的命令，不得创建项目或操作浏览器。即使 stub 和完整 non-live 矩阵通过，也只能声明“回放基础设施通过”，不能声明“语义召回已经改善”。
 
 ## 验收清单
 
-- [ ] 两份 fixture 完整保存 Task 17 生产实际 Selector 输入，各含 8 个候选；
-- [ ] fixture 不包含原始 provider 响应、tool arguments、凭据或完整 interaction log；
-- [ ] 三个高置信度风险正例和两个 `none` 对照固定且理由非空；
-- [ ] issue 合法性从生产 strict schema 提取，不复制 enum；
-- [ ] fixture 与 `projectTopicSelectorPool()` 当前生产投影完全兼容；
-- [ ] 默认命令不创建 provider，实际请求为 0；
-- [ ] live 缺确认、模型或预算时在 provider 创建前失败；
-- [ ] live 固定 GLM-5.2、两份 fixture、最多两次请求、每份一次且无 retry/fallback/probe；
-- [ ] live 直接复用生产 Prompt Registry、strict schema 和 parser；
-- [ ] 主指标只看 risk/non-risk，具体 enum 作为辅助指标；
-- [ ] 风险召回 enum 不同、漏判、`none` 误报和结构失败分层明确；
-- [ ] 本地不读取候选文本或使用关键词做语义判断；
-- [ ] 脱敏报告不写 raw output、system prompt、fixture input 或 API key；
-- [ ] 正式 prompt、schema/parser、selection、shared/API、前端、Builder、provider 策略均无修改；
-- [ ] 完整 non-live 矩阵、backend typecheck、prompt language、dry-run 与 diff check 通过；
-- [ ] 未执行真实 provider 或浏览器操作；
-- [ ] 不处理或提交用户现有未跟踪文件；
-- [ ] 所有提交信息使用中文。
+- [x] 两份 fixture 完整保存 Task 17 生产实际 Selector 输入，各含 8 个候选；
+- [x] fixture 不包含原始 provider 响应、tool arguments、凭据或完整 interaction log；
+- [x] 三个高置信度风险正例和两个 `none` 对照固定且理由非空；
+- [x] issue 合法性从生产 strict schema 提取，不复制 enum；
+- [x] fixture 与 `projectTopicSelectorPool()` 当前生产投影完全兼容；
+- [x] 默认命令不创建 provider，实际请求为 0；
+- [x] live 缺确认、模型或预算时在 provider 创建前失败；
+- [x] live 固定 GLM-5.2、两份 fixture、最多两次请求、每份一次且无 retry/fallback/probe；
+- [x] live 直接复用生产 Prompt Registry、strict schema 和 parser；
+- [x] 主指标只看 risk/non-risk，具体 enum 作为辅助指标；
+- [x] 风险召回 enum 不同、漏判、`none` 误报和结构失败分层明确；
+- [x] 本地不读取候选文本或使用关键词做语义判断；
+- [x] 脱敏报告不写 raw output、system prompt、fixture input 或 API key；
+- [x] 正式 prompt、schema/parser、selection、shared/API、前端、Builder、provider 策略均无修改；
+- [x] 完整 non-live 矩阵、backend typecheck、prompt language、dry-run 与 diff check 通过；
+- [x] 未执行真实 provider 或浏览器操作；
+- [x] 不处理或提交用户现有未跟踪文件；
+- [x] 所有提交信息使用中文。
 
 ## 执行记录
 
-实施时逐任务填写提交哈希、测试文件数/测试数和任何与计划不同的事实。没有真实输出前不得预填通过状态。
+- 2026-07-16：Task 1 按 TDD 固化两份真实 Selector fixture、3 个风险正例和 2 个 `none` 对照，loader 从生产 schema 提取 issue enum，并验证生产投影 round-trip；focused 2 文件、5/5 通过，提交 `6388e4e`。
+- 2026-07-16：Task 2 实现默认 dry-run、fixture-first 校验和 live 确认/模型/请求/成本护栏；13/13 通过，提交 `abd5e1b`。
+- 2026-07-16：Task 3 实现两层判定、结构失败分层、两份 fixture 各一次调用、生产 strict runner 与脱敏报告；回放与既有 baseline stub 共 27/27、backend typecheck 通过，默认命令确认 `actual_requests=0`，提交 `0eb8697`。
+- 2026-07-16：完整受影响矩阵 17 文件、299/299 通过；backend typecheck、prompt language、默认 dry-run、`git diff --check` 和禁止范围 diff 通过。没有执行真实 provider 或浏览器操作。
+- 与计划差异：用户明确要求跳过 executing-plans 默认 worktree，全部改动直接在当前 `dev` 分支完成；未使用子 agent。实现范围和 live 边界未扩大。

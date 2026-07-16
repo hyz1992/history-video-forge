@@ -59,7 +59,7 @@
 - [x] 完成 V1 高风险稳定化最终全量回归、故障演练和内置浏览器验收
 
 ## 进行中
-- [ ] 收口 `S2-0` 的完整 topic 链路：Task 17 内置浏览器真实验收已完成，两个 GLM-5.2 固定样本共 4 次请求且 strict 2/2 首次通过；selector arguments、completion token、耗时相对 Task 16 分别下降 34.9%–41.7%、38.3%–43.3%、14.5%–28.6%，证明紧凑结构在 live 中有效收敛输出。但两轮均为 8 pass / 0 risk，“靖康城破”两位皇帝主体混合与“鸿门宴·天下归属已经注定”过度断言进入最终四项，语义召回闸门未通过。下一步先固化真实失败样本并做独立窄设计，不直接恢复冗余 pass note、不增加第三次调用、不引入本地关键词规则；S2-0 保持打开，不进入 S2-1
+- [ ] 收口 `S2-0` 的完整 topic 链路：Task 17 两个真实 run 的 8+8 Selector 输入已固化为语义回放 fixture，包含 3 个风险正例与 2 个 `none` 对照；默认 harness 为 0 请求，完整 non-live 矩阵 17 文件、299/299 与 backend typecheck 通过。正式 prompt/schema/parser/selection 未改，未调用真实 provider，不能声明 GLM-5.2 召回已改善。下一闸门是重新授权后执行固定两份输入、最多两次 strict Selector live 回放；S2-0 保持打开，不进入 S2-1
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 补齐前端 v1 真实浏览器验收矩阵：空态、加载中、成功、失败、刷新、深链、重复操作
 - [ ] 收口当前未归档计划，避免历史 implementation plan 误导新任务

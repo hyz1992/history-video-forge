@@ -431,3 +431,23 @@ selector pool 对照只读取 Task 14 已保存的本地 interaction input，并
 - Task 17 的结构稳定性、completion 体积和相对 Task 16 的 selector 耗时方向通过真实验收；下游合同无回归。
 - 语义质量闸门未通过：两项明确内部冲突进入最终四项，且两轮没有识别任何 risk。不能以性能收益换取 verdict recall 退化，也不能声明 S2-0 收口。
 - 本轮只记录证据，不顺手修改 prompt、schema 或 selection。下一步应先对“逐候选语义审查为何退化为全 none”做独立窄设计与失败样本固化；不得直接恢复冗余 pass note、增加第三次 LLM 调用或引入本地关键词规则。S2-0 继续打开，不进入 S2-1。
+
+## 2026-07-16 Task 17 Topic Selector 固定输入语义回放（非 live）
+
+### fixture 与验收口径
+
+- 新增两份按真实 run 冻结的 Selector fixture：高张力来源项目/run 为 `5fda1609-63ed-4f0d-b47a-bb48038b3a6a` / `topic_run_3d8da9c7-aaaa-43f9-80fe-5cc5549ec95f`，均衡叙事来源为 `3858fbdc-18c1-4095-ac72-55f9d4adb4b1` / `topic_run_f5a2648f-7ade-45b5-958d-ce4f8cab1e5c`。每份保存生产实际投影后的完整 8 候选输入，不包含原始 provider 响应、tool arguments、凭据或完整 interaction log。
+- 高置信度人工 annotation 共 3 个风险正例和 2 个 `none` 对照：靖康候选期望 risk/`actor_role_mismatch`，鸿门宴与党锢候选期望 risk/`overclaim_or_ambiguity`；玄武门与巫蛊候选作为 `none` 对照。未标注候选不参与语义通过/失败判定。
+- 主指标只看风险正例是否返回非 `none`、`none` 对照是否保持 `none`；具体 issue enum 只记录辅助一致率。fixture loader 只校验结构、ID、annotation 和生产 enum，不读取候选文本推导标签，也没有新增关键词或本地语义启发式。
+
+### 回放工具与请求边界
+
+- 新增 `npm run harness:topic-selector-semantic-replay`。默认只加载 fixture、校验生产 `projectTopicSelectorPool()` round-trip 并写 dry-run plan，不创建 provider，实际输出为 `fixture_count=2 / required_requests=2 / actual_requests=0`。
+- 未来 live 入口必须同时提供 `--live --confirm-live --model=glm-5.2 --max-requests=2 --max-cost-cny=<显式预算>`；参数或 fixture 无效时在 runner/provider 创建前失败。两份 fixture 各调用一次，不执行 capability probe、Builder、数据库、selection、structured fallback、repair、retry 或浏览器操作。
+- 默认 runner 直接复用生产 Prompt Registry、`TOPIC_SELECTOR_STRICT_SCHEMA`、`parseStrictSelectorDecision()`、目标工具和 `thinking=disabled`；operation name 复用已登记的 `topic.selector` policy，provider `maxAttempts=1`。脱敏报告只记录 candidate ID、两层判定、prompt hash、effective request、attempt、duration、usage、finish reason 和 arguments 字符数，不写 raw output、system prompt、完整 fixture input 或 API key。
+
+### non-live 验证结果与结论
+
+- TDD 红灯依次证明 fixture/loader 不存在、dry-run/预算护栏不存在以及 live 比较器/默认 runner/npm 命令未实现；最小实现后新回放测试 19/19 通过。真实 gateway 接线测试仅替换最底层 HTTP API，确认生产 schema/parser、完整 fixture input、目标工具、`thinking=disabled`、单 attempt 和内部三字段恢复真实贯通，没有访问网络。
+- 完整受影响矩阵覆盖 17 个文件、299 项测试，299/299 通过；`npm run typecheck:backend`、prompt language、默认 dry-run 与 `git diff --check` 通过。正式 Selector prompt、schema/parser、selection、shared/API、前端、Builder 和 provider 策略均无修改。
+- 本轮没有执行真实 provider 或浏览器操作，不能证明 GLM-5.2 的风险召回、enum 一致率、strict 首通率、token 或 latency 已改善。S2-0 继续打开，下一闸门是重新取得明确授权后执行固定两份输入、最多两次请求的 Selector-only live 回放；不得从 stub 结果声明语义质量通过。
