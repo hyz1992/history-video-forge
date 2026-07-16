@@ -241,3 +241,45 @@ selector pool 对照只读取 Task 14 已保存的本地 interaction input，并
 - Task 15 已完成非 live 代码、prompt、测试和静态规模收口，但没有真实证据证明 GLM-5.2 duration、token usage 或人工语义质量已经改善。
 - S2-0 继续保持打开，不从静态字符下降声明用户等待已达标，也不进入 S2-1。
 - 下一步只能在新的明确授权下复用“魏晋至唐宋·高张力历史事件推荐”做一个新项目、最多 2 次请求的真实页面诊断；需记录 builder/selector/页面耗时、token、attempt、repair/retry/fallback、结构首次通过与人工整体质量。TTFT 仍为非流式不可观测。
+
+## 2026-07-16 Task 15 首轮真实页面诊断（性能通过，质量仍需扩大验证）
+
+### 运行边界与证据
+
+- 用户明确授权模型 GLM-5.2、固定输入“魏晋至唐宋·高张力历史事件推荐”、最多 2 次 provider 请求、不执行 capability probe、人民币 10 元人工费用上限、现有测试账号新项目，raw output 允许保存但不提交。
+- backend 启动前显式设置 `LLM_REQUEST_BUDGET_MAX_REQUESTS=2`，主模型与 structured 模型均为 GLM-5.2。
+- 真实页面项目：`465fa681-f6b6-43b9-b028-b68df45039c6`；topic run：`topic_run_e934fc08-da55-4f1f-8bb6-0e59a4d989b3`。
+- raw output 与 interaction log 只保存在 `storage/projects/` 忽略目录，不提交；共 2 个 interaction，正好是 builder 与 selector，没有 capability probe 或第三次请求。
+- 当前日志不能按人民币价格机器核验费用；TTFT 在非流式接口下仍不可观测。
+
+### 延迟、文本规模与 usage
+
+| 指标 | Task 14 | Task 15 | 单样本变化 |
+| --- | ---: | ---: | ---: |
+| builder | 105.288 秒 | 53.417 秒 | 下降 49.3% |
+| selector | 34.414 秒 | 20.297 秒 | 下降 41.0% |
+| provider 合计 | 139.702 秒 | 73.714 秒 | 下降 47.2% |
+| 总 token | 14908 | 10802 | 下降 27.5% |
+| builder raw output | 7570 字符 | 5497 字符 | 下降 27.4% |
+| selector 实际投影 | 7466 字符 | 4426 字符 | 下降 40.7% |
+| selector tool arguments | 3739 字符 | 3300 字符 | 下降 11.7% |
+
+- 页面从点击生成到首次确认 4 个结果可见约 80 秒；selector interaction 在点击后约 73.845 秒结束。页面观察存在轮询粒度，因此 80 秒只作为用户等待近似值，不伪装为精确后端耗时。
+- builder：`prompt_tokens=2152`、`completion_tokens=3198`、`reasoning_tokens=0`、`finish_reason=stop`；selector：`prompt_tokens=4072`、`completion_tokens=1380`、`reasoning_tokens=0`、`finish_reason=tool_calls`。
+- 两次调用均为 attempt 1 成功；builder 普通 JSON 首次解析并交付 8 个候选，selector strict target tool 首次交付 4 个候选。未发生 provider retry、本地 repair、structured fallback、业务 full regeneration 或请求预算阻断。
+- selector 实际投影下降同时包含“删除重复字段”和“本轮候选正文更短”两种影响，不能把 40.7% 全部归因为投影代码；但 prompt token、completion token、文本规模和耗时在本样本中同向下降。
+
+### 人工质量对照
+
+- 明确改善：Task 14 的两项明确标题—正文主体/动作矛盾没有复现；对应候选本轮三段 preview 的主体、动作、因果和结果一致。完整候选的 family label 由 Task 14 的 2 类扩展为 7 类，表面多样性改善。
+- builder 缺陷：8 个原始候选中有 1 项属于秦朝，违反“魏晋至唐宋”时代边界。selector 正确把它排到第 8、扣除范围分并排除出最终 4 项，说明用户可见结果被保护，但 builder 的硬约束并未做到首轮全通过。
+- selector 遗留：最终第 1 候选的短切口仍容易把“被杀”结果错误关联到前置的皇帝主体，正文实际是皇帝被劫持、参与朝臣被诛。selector 没有指出该主语歧义，Task 14 的同类风险尚未消失。
+- 其余候选没有发现标题与三段 preview 的明显自相矛盾；selector 能指出兵力数字的史源风险、预谋争议、改革题材的画面与展开风险、长跨度人物题材的归因风险，并把这些风险较高项降序处理。
+- 最终 4 项均在指定时代范围，且具备清晰冲突、三段推进与可口播强场面；但其中 3 项属于政变/宫廷权力翻转，最终组合仍偏同质。semantic reviewer 继续保持 shadow-only，没有接入主链路或自动门禁。
+- 总体判断：相对 Task 14，用户可见质量和完整池质量均有改善，但“时代硬约束首轮漏项”和“标题压缩造成的主体歧义”证明质量保护尚未完全收口。本结论来自人工整体阅读，不使用关键词或本地启发式门禁。
+
+### 阶段结论
+
+- Task 15 首轮真实样本满足“token、文本规模与耗时同向下降”，provider 等待从约 2 分 20 秒降至约 1 分 14 秒，证明本轮编排与合同瘦身具有显著单样本收益。
+- 单样本不能证明通用延迟分布，也不能证明语义一致性规则已稳定生效；尤其 builder 范围漏项与 selector 主语歧义仍需保留为后续诊断问题。
+- S2-0 继续保持打开，不进入 S2-1。下一步应先在新的明确授权下扩大一个小型固定样本组，确认速度收益可重复、最终候选质量不退化，再决定是否继续做窄质量优化或正式收口；不得从本次单样本直接声明全部优化完成。

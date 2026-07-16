@@ -59,7 +59,7 @@
 - [x] 完成 V1 高风险稳定化最终全量回归、故障演练和内置浏览器验收
 
 ## 进行中
-- [ ] 收口 `S2-0` 的完整 topic 链路：Task 15 已完成 builder/selector prompt 瘦身、selector 专用请求投影与一致性优先级的非 live 实施；静态 prompt 和同一历史 selector pool 均已缩短，16 个文件、260 项测试与 backend typecheck 通过。下一步需独立授权 GLM-5.2、同输入、最多 2 请求的真实页面诊断，确认速度与人工语义质量后再决定是否收口
+- [ ] 收口 `S2-0` 的完整 topic 链路：Task 15 首轮 GLM-5.2 真实页面诊断已完成，builder/selector 均 attempt 1 成功，provider 合计由 139.702 秒降至 73.714 秒，总 token 由 14908 降至 10802，性能方向得到单样本验证；但 builder 仍有 1 个时代越界候选且 selector 未识别最终首位候选的主语歧义。下一步需新的明确授权扩大一个小型固定样本组，确认速度收益可重复且最终质量不退化后再决定收口
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 补齐前端 v1 真实浏览器验收矩阵：空态、加载中、成功、失败、刷新、深链、重复操作
 - [ ] 收口当前未归档计划，避免历史 implementation plan 误导新任务

@@ -561,25 +561,25 @@ git commit -m "记录Task15非live优化结果"
 - 修改：`docs/todos/roadmap-todo.md`
 - 允许本地保存但不提交：项目 raw interaction output
 
-- [ ] **Step 1：确认服务和请求预算**
+- [x] **Step 1：确认服务和请求预算**
 
 以 GLM-5.2 和 `LLM_REQUEST_BUDGET_MAX_REQUESTS=2` 启动 backend；复用当前前端服务。不得在仓库文档或命令历史中写入账号密码，登录信息只使用用户单独提供的授权上下文。
 
-- [ ] **Step 2：创建一个新测试项目并执行同输入**
+- [x] **Step 2：创建一个新测试项目并执行同输入**
 
 输入固定为“魏晋至唐宋·高张力历史事件推荐”。最多允许 builder 与 selector 各一次真实请求；不执行 capability probe。若 repair、retry 或 fallback 试图产生第 3 次请求，预算必须阻止继续。
 
-- [ ] **Step 3：记录速度和规模**
+- [x] **Step 3：记录速度和规模**
 
 记录页面总等待、builder/selector duration、provider 合计、attempt、token usage、reasoning usage、finish reason、raw output 字符、selector 投影字符、tool arguments 字符以及 retry/repair/fallback/full regeneration。
 
 TTFT 在当前非流式接口下标为不可观测；人民币费用标为不能机器核验。
 
-- [ ] **Step 4：人工阅读全部 8 个候选与最终 4 项**
+- [x] **Step 4：人工阅读全部 8 个候选与最终 4 项**
 
 检查事件身份、主体、动作、因果、结果、三段 preview、强场面、多样性和后续口播可展开性。重点复核 Task 14 暴露的“标题声称亲手/当场/伏杀而正文不支持”类矛盾，但不得通过关键词或本地规则自动判定。
 
-- [ ] **Step 5：更新真实诊断记录并中文提交**
+- [x] **Step 5：更新真实诊断记录并中文提交**
 
 只提交聚合指标、匿名化质量结论和项目/run id；不得提交 raw output、凭据或供应商密钥。
 
@@ -589,7 +589,7 @@ git diff --cached --check
 git commit -m "记录Task15真实页面诊断结论"
 ```
 
-- [ ] **Step 6：停止，不自动进入 S2-1**
+- [x] **Step 6：停止，不自动进入 S2-1**
 
 单样本只能形成诊断证据。只有质量不退化且 token、文本规模和耗时同向改善时，才能建议扩大验证；不得据此直接宣布通用优化完成。
 
@@ -619,3 +619,12 @@ git commit -m "记录Task15真实页面诊断结论"
 - Task 14 已保存的同一真实 selector pool 只读投影由 6882 字符降至 5384 字符，下降 21.8%；未重新调用 provider，raw output 未提交。
 - 完整非 live 矩阵覆盖 16 个文件、260 项测试，260/260 通过；`npm run typecheck:backend`、prompt language 和 diff check 通过。
 - 未修改 shared schema、API、模型、thinking、timeout、retry、repair 或 request budget；未执行付费 live，速度和人工语义质量仍未验证，S2-0 保持打开。
+
+## 2026-07-16 首轮真实页面执行记录
+
+- 用户独立授权 GLM-5.2、固定输入、最多 2 次请求、不执行 capability probe、人民币 10 元人工费用上限和 raw output 只保存不提交；backend 启动前显式设置 `LLM_REQUEST_BUDGET_MAX_REQUESTS=2`。
+- 项目 `465fa681-f6b6-43b9-b028-b68df45039c6`、run `topic_run_e934fc08-da55-4f1f-8bb6-0e59a4d989b3` 共 2 个 interaction；builder 与 selector 均 attempt 1 成功，无 retry、repair、fallback 或 full regeneration。
+- builder 53.417 秒、selector 20.297 秒、provider 合计 73.714 秒；页面约 80 秒显示结果。相对 Task 14，provider 合计下降 47.2%。
+- 总 token 由 14908 降至 10802；builder raw output 由 7570 降至 5497 字符，selector 实际投影由 7466 降至 4426 字符，tool arguments 由 3739 降至 3300 字符。
+- 人工阅读全部 8 项与最终 4 项：Task 14 的两项明确矛盾未复现，最终 4 项均在指定时代；但 builder 产生 1 个秦朝越界候选并由 selector 排除，最终首位候选的主语歧义仍未被 selector 识别。
+- 单样本证明瘦身方向具有显著性能收益且整体质量改善，但不足以证明通用稳定性或宣布 S2-0 完成；任务在报告与提交后停止，不进入 S2-1。
