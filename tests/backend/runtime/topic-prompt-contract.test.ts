@@ -3,6 +3,25 @@ import { describe, expect, it } from "vitest";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 
 describe("topic prompt contract", () => {
+  it("keeps topic.light-review limited to per-candidate internal semantic consistency", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.light-review");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("只检查候选内部是否互相支持");
+    expect(prompt.body).toContain("candidate_id");
+    expect(prompt.body).toContain("consistency_issue");
+    expect(prompt.body).toContain("note");
+    expect(prompt.body).toContain("必须覆盖送审的全部 candidate id");
+    expect(prompt.body).toContain("`consistency_issue=none` 时 `note` 必须为空字符串");
+    expect(prompt.body).toContain("非 `none` 时 `note` 必须是非空的简短中文说明");
+    expect(prompt.body).not.toContain("quality_score");
+    expect(prompt.body).not.toContain("质量排序");
+    expect(prompt.body).not.toContain("扣分");
+    expect(prompt.body).not.toContain("多样性");
+    expect(prompt.body).not.toContain("疲劳");
+    expect(prompt.body).not.toContain("viral_rubric");
+  });
+
   it("registers a zh-CN topic.selector prompt dedicated to final diversity selection", () => {
     const prompt = createPromptRegistry().getPrompt("topic.selector");
 
