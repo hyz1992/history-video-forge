@@ -535,3 +535,32 @@ selector pool 对照只读取 Task 14 已保存的本地 interaction input，并
 
 - 本轮只撤销无语义收益的 provider 输出膨胀，没有修复风险召回，也没有回滚整个分支。下游合同不受影响。
 - “风险全判 none”现在是独立语义问题，不能继续归因于 compact/full DTO。S2-0 保持打开，不进入 S2-1；下一低耦合任务只为该语义问题形成正式中文设计，不追加 live、不增加第三次调用、不引入本地关键词规则。
+
+## 2026-07-16 Topic Selector 内部一致性召回实验（non-live 实施完成）
+
+### 正式入口与评测边界
+
+- 正式入口：[内部一致性召回窄设计](../../docs/plans/2026-07-16-s2-0-topic-selector-internal-consistency-recall-design.md)（提交 `3f28d94`）与[实施计划](../../docs/plans/2026-07-16-s2-0-topic-selector-internal-consistency-recall-implementation-plan.md)（提交 `5de7458`）。
+- 人工复核确认，“党锢之祸”的绝对化结论已在候选多个字段中互相重复，Selector 输入内部缺少反证；继续把它作为硬风险标注会超出“只查候选内部一致性”的可观察边界。因此它退出自动硬指标，但不是改判为 `none`：候选仍保留在原始 selector pool 中，并继续作为需要外部史实判断的人工观察。
+- 固定回放硬指标修正为 2 个风险正例（靖康主体错配、鸿门宴过度断言）和 2 个 `none` 对照（玄武门、巫蛊）。本地 comparator 没有修改，只按人工静态 annotation 的 candidate ID 与 provider 返回的 `consistency_issue` enum 比较，不读取候选正文推导、补充或覆盖语义标签。
+- 没有新增任何本地语义 validator，也没有候选正文关键词或字符串匹配、正则、黑名单、相似度、规则评分或本地启发式语义分支。
+
+### Prompt-only 单变量
+
+- 正式中文 Selector prompt 在原判断顺序的位置做单变量替换：先静默拆出标题和切口中的具体主体、关键动作、直接结果与断言强度，再到 `core_conflict`、`strong_scene` 和全部 `must_cover_preview` 中寻找内部支持；`risk_hints` 只是补充信息，不是风险白名单；先确定 `consistency_issue`，再进行排序。
+- 不输出拆解或思考过程；没有加入固定 fixture 示例、few-shot、新 issue 或新字段。compact provider DTO、parser、selection、API、shared、前端、downstream、GLM-5.2、`thinking=disabled`、timeout、retry、repair、fallback 与请求策略均未修改。
+- 以实施计划提交 `5de7458` 为基线，prompt 从 2827 字符/71 行变为 2949 字符/71 行，增加 122 字符、0 行；这是替换旧判断顺序，不是在多处堆叠同义约束。
+
+### TDD、计划差异与最终 non-live 证据
+
+- Prompt 首轮 RED：30 项中 1 项失败，证明旧 prompt 缺少原子断言措辞；最小实现后 prompt contract + language 为 38/38，提交 `3d7bd5c`。
+- 质量审查发现设计/计划中的“三条 `must_cover_preview`”与真实 schema/fallback 不符。修复先形成 30 项中 1 项失败的 RED，再将测试和 prompt 更正为“全部 `must_cover_preview`”，prompt contract + language 为 38/38，提交 `eb0e7d1`；本次状态同步再更正设计与计划正文。
+- Fixture 首轮 RED：19 项中 2 项失败，分别锁定旧党锢 annotation 与风险总数 3；移除该硬 annotation 后 19/19 通过，提交 `465b18c`。修改前后 `selector_input` SHA-256 均为 `7bf668dab41e5f22d062ebff5d7ba8560cc91ff2cf81ec68f156380134afefe8`，证明冻结候选输入未被篡改。
+- 完整矩阵首次为 298/299；唯一失败是陈旧 runtime prompt 字符串合同仍锁定“行为主体”。系统化诊断后只把该断言同步为生产 prompt 已采用的“具体主体”，随后相关 49/49 与最小矩阵 57/57 通过，提交 `b1e3261`。
+- 新鲜最终验证：最小 3 文件 57/57；受影响 17 文件 299/299；backend typecheck 通过；默认 dry-run 输出 `live=false / fixture_count=2 / required_requests=2 / actual_requests=0`；`git diff --check 5de7458..b1e3261` 通过，禁止路径 diff 为空。
+
+### 阶段结论与下一闸门
+
+- 本轮没有执行 live/provider/browser 请求。non-live 结果只证明合同、评测边界、接线、预算和回归正确，不能证明风险召回已经改善。
+- S2-0 保持打开，不进入 S2-1。下一闸门不得自动执行：必须重新取得用户对 GLM-5.2、最多 2 次请求和人民币费用上限的明确授权，之后才可对两份固定 fixture 运行 Selector-only live 回放。
+- 第一轮通过标准为结构 2/2、风险召回 2/2、`none` 对照 2/2，并保持 candidate 精确覆盖与实际请求不超过 2；单轮通过也只能视为对方向的初步支持。

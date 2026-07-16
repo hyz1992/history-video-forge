@@ -51,7 +51,7 @@
 - Modify: `tests/backend/runtime/topic-prompt-contract.test.ts`
 - Modify: `harness/prompts/topic/selector.prompt.md`
 
-- [ ] **Step 1：先写 prompt 合同红灯**
+- [x] **Step 1：先写 prompt 合同红灯**
 
 将现有 `makes internal semantic consistency the selector first pass` 与 `checks assertion strength before ranking...` 收敛为对实际审查顺序的断言，并新增 `risk_hints` 非白名单边界：
 
@@ -61,7 +61,7 @@ it("requires an atomic claim-to-evidence audit before selector ranking", () => {
 
   expect(prompt.body).toContain("先静默拆出标题和切口中的关键断言");
   expect(prompt.body).toContain("具体主体、关键动作、直接结果与断言强度");
-  expect(prompt.body).toContain("分别在 `core_conflict`、`strong_scene` 与三条 `must_cover_preview` 中寻找支持");
+  expect(prompt.body).toContain("分别在 `core_conflict`、`strong_scene` 与全部 `must_cover_preview` 中寻找支持");
   expect(prompt.body).toContain("同一个泛称主体串联的动作在内部材料中分别属于不同人物");
   expect(prompt.body).toContain("先确定 `consistency_issue`，再进行叙事质量排序");
 });
@@ -83,7 +83,7 @@ it("does not leak fixed semantic replay examples into the production prompt", ()
 
 保留现有 compact DTO、issue enum、完整候选覆盖、非史实核查、JSON-safe 和 schema 外解释禁止断言。
 
-- [ ] **Step 2：运行 prompt 红灯**
+- [x] **Step 2：运行 prompt 红灯**
 
 Run:
 
@@ -93,12 +93,12 @@ npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract
 
 Expected: FAIL 于新增的原子断言审查和 `risk_hints` 边界措辞；现有 compact 输出合同测试继续通过。
 
-- [ ] **Step 3：最小改写正式中文 prompt**
+- [x] **Step 3：最小改写正式中文 prompt**
 
 只改写 `## 判断顺序`，并在一致性证据说明中明确 `risk_hints` 边界。目标文本应表达：
 
 ```md
-1. 对每个候选，先静默拆出标题和切口中的关键断言：具体主体、关键动作、直接结果与断言强度；分别在 `core_conflict`、`strong_scene` 与三条 `must_cover_preview` 中寻找支持。`risk_hints` 只是补充信息，不是完整风险清单。
+1. 对每个候选，先静默拆出标题和切口中的关键断言：具体主体、关键动作、直接结果与断言强度；分别在 `core_conflict`、`strong_scene` 与全部 `must_cover_preview` 中寻找支持。`risk_hints` 只是补充信息，不是完整风险清单。
 2. 如果同一个泛称主体串联的动作在内部材料中分别属于不同人物，标记 `actor_role_mismatch`；如果标题或切口把内部材料只支持的脱身、失败、受创或格局变化升级为更强的确定性终局，标记 `overclaim_or_ambiguity` 或更准确的既有 issue。
 3. 先确定 `consistency_issue`，再进行叙事质量排序。主体、动作、因果关系或结果明确冲突时，必须使用 `source_or_scope_risk` 扣分并说明；当候选池至少有 4 个无明显冲突候选时，冲突候选原则上不得进入前 4。
 4. 这里只检查候选内部是否互相支持，不能替代正式史实核查；不输出上述拆解或思考过程，只按既有合同返回排序与风险结论。
@@ -106,7 +106,7 @@ Expected: FAIL 于新增的原子断言审查和 `risk_hints` 边界措辞；现
 
 优先替换旧的泛化步骤，不在其他章节重复追加同义口号。不得加入固定 fixture 名称、few-shot 示例、新 issue、新字段或 chain-of-thought 输出要求。
 
-- [ ] **Step 4：运行 prompt 与语言绿灯**
+- [x] **Step 4：运行 prompt 与语言绿灯**
 
 Run:
 
@@ -116,7 +116,7 @@ npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract
 
 Expected: 2 个文件全部 PASS；基线为 prompt contract 30 项、language 8 项，若新增两个独立测试则总数应按实际增加并如实记录。
 
-- [ ] **Step 5：确认生产变量只有 prompt，并记录 prompt 规模**
+- [x] **Step 5：确认生产变量只有 prompt，并记录 prompt 规模**
 
 Run:
 
@@ -135,7 +135,7 @@ $after = Get-Content -Raw -Encoding UTF8 harness/prompts/topic/selector.prompt.m
 
 Expected: 第一条为空；第二条只包含审查顺序和对应测试。记录修改前后字符数与行数，并人工确认旧泛化步骤被替换而非在多处叠加，没有重复或冲突约束。该规模检查不读取候选正文，也不得以字符串规则测试候选语义。
 
-- [ ] **Step 6：中文提交 prompt 实验**
+- [x] **Step 6：中文提交 prompt 实验**
 
 ```powershell
 git add -- harness/prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
@@ -153,7 +153,7 @@ git commit -m "强化选题内部断言审查顺序"
 - Modify: `harness/samples/topic-selector-semantic-replay/task17-balanced.fixture.json`
 - Modify: `harness/samples/topic-selector-semantic-replay/fixture-set.md`
 
-- [ ] **Step 1：先修改 fixture 合同测试形成红灯**
+- [x] **Step 1：先修改 fixture 合同测试形成红灯**
 
 在 `loads the two Task 17 selector inputs and their audited annotations` 中：
 
@@ -187,7 +187,7 @@ expect(annotations.filter((item) => item.expected_risk)).toHaveLength(2);
 expect(annotations.filter((item) => !item.expected_risk)).toHaveLength(2);
 ```
 
-- [ ] **Step 2：同步 stub 期望但不改比较器**
+- [x] **Step 2：同步 stub 期望但不改比较器**
 
 在 live orchestration stub 中，均衡 fixture 只模拟 `selector_candidate_3` 为非 `none`：
 
@@ -209,7 +209,7 @@ exact_enum_match_count: 1,
 
 `does not retry a failed fixture...` 的均衡 stub 也只返回鸿门宴风险。不得修改 `evaluateTopicSelectorSemanticFixture()` 或让它读取候选文本。
 
-- [ ] **Step 3：运行红灯**
+- [x] **Step 3：运行红灯**
 
 Run:
 
@@ -219,7 +219,7 @@ npx vitest run --configLoader runner tests/harness/topic-selector-semantic-repla
 
 Expected: FAIL；失败应来自均衡 fixture 仍有第三条党锢 annotation，以及汇总仍计为 3 个风险正例。若失败来自语法、fixture 路径或生产 comparator，先修正测试本身，不进入下一步。
 
-- [ ] **Step 4：最小修改静态 fixture**
+- [x] **Step 4：最小修改静态 fixture**
 
 从 `task17-balanced.fixture.json` 的 `annotations` 数组删除且只删除以下对象：
 
@@ -235,7 +235,7 @@ Expected: FAIL；失败应来自均衡 fixture 仍有第三条党锢 annotation�
 
 不得修改 `selector_input` 中任何候选字段、顺序或文字。
 
-- [ ] **Step 5：记录人工观察边界**
+- [x] **Step 5：记录人工观察边界**
 
 在 `fixture-set.md` 明确：
 
@@ -243,7 +243,7 @@ Expected: FAIL；失败应来自均衡 fixture 仍有第三条党锢 annotation�
 - 党锢仍保留在冻结输入中，但因绝对化说法已被多个候选字段互相重复，缺少内部反证，仅作为需要外部史实判断的人工观察；
 - 该调整是人工静态审查，不允许本地程序读取候选正文动态决定 annotation。
 
-- [ ] **Step 6：运行绿灯与输入边界检查**
+- [x] **Step 6：运行绿灯与输入边界检查**
 
 Run:
 
@@ -254,7 +254,7 @@ git diff -- harness/samples/topic-selector-semantic-replay/task17-balanced.fixtu
 
 Expected: semantic replay 19/19 PASS；diff 中 `selector_input` 无变化，只删除一条 annotation 并更新测试/说明。不得执行 live。
 
-- [ ] **Step 7：中文提交评测边界修正**
+- [x] **Step 7：中文提交评测边界修正**
 
 ```powershell
 git add -- tests/harness/topic-selector-semantic-replay.test.ts harness/samples/topic-selector-semantic-replay/task17-balanced.fixture.json harness/samples/topic-selector-semantic-replay/fixture-set.md
@@ -268,7 +268,7 @@ git commit -m "校正选题语义回放评测边界"
 
 **Files:** None.
 
-- [ ] **Step 1：运行最小受影响矩阵**
+- [x] **Step 1：运行最小受影响矩阵**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract.test.ts harness/scripts/check-prompt-language.test.ts tests/harness/topic-selector-semantic-replay.test.ts --no-file-parallelism
@@ -276,7 +276,7 @@ npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract
 
 Expected: 3 个文件全部 PASS；修改前基线为 57/57，新增测试后的实际数量必须记录，不得预写为固定成功数字。
 
-- [ ] **Step 2：运行 S2-0 受影响串行矩阵**
+- [x] **Step 2：运行 S2-0 受影响串行矩阵**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/topic-selector-semantic-replay.test.ts tests/backend/topic/topic-selector-prompt-projection.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/topic-event-identity-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/runtime/provider-hardening.test.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/topic-script-graph.test.ts tests/backend/api/topic-api-runtime.test.ts tests/backend/script/script-runtime-generate.test.ts tests/backend/storyboard/storyboard-generation.test.ts tests/backend/asset-planning/asset-planning-generation.test.ts tests/backend/asset-planning/asset-planning-structural-repair.test.ts harness/scripts/check-prompt-language.test.ts harness/scripts/runtime/llm-s2-baseline.test.ts harness/scripts/runtime/llm-s2-baseline-stub.test.ts --no-file-parallelism
@@ -284,7 +284,7 @@ npx vitest run --configLoader runner tests/harness/topic-selector-semantic-repla
 
 Expected: 17 个文件全部 PASS。修改前基线为 299/299；若因新增 prompt 测试增加数量，记录实际结果。串行运行，避免 topic candidate library 生成态并发读写。
 
-- [ ] **Step 3：运行类型、零请求与 diff 检查**
+- [x] **Step 3：运行类型、零请求与 diff 检查**
 
 ```powershell
 npm run typecheck:backend
@@ -302,7 +302,7 @@ Expected:
 - 用户两份未跟踪 launch prompt 仍未 stage；
 - 没有 live/provider/browser 请求。
 
-- [ ] **Step 4：逐项人工自审代码边界**
+- [x] **Step 4：逐项人工自审代码边界**
 
 检查本任务 diff，确认：
 
@@ -323,7 +323,7 @@ Expected:
 - Modify: `docs/todos/roadmap-todo.md`
 - Modify: `docs/plans/2026-07-16-s2-0-topic-selector-internal-consistency-recall-implementation-plan.md`
 
-- [ ] **Step 1：记录评测口径与实现事实**
+- [x] **Step 1：记录评测口径与实现事实**
 
 在 baseline protocol 记录：
 
@@ -333,15 +333,15 @@ Expected:
 - 实际红灯、绿灯、矩阵数量、typecheck 和 dry-run 结果；
 - 未执行 live，不能声明风险召回改善。
 
-- [ ] **Step 2：更新 S2-0 入口与下一闸门**
+- [x] **Step 2：更新 S2-0 入口与下一闸门**
 
 在 `docs/plans/README.md` 和 roadmap 中链接本设计/实施计划，并把下一闸门写为：非 live 实施完成后，重新取得明确授权，再执行固定两份输入、最多两次 Selector-only live 证伪；通过前不进入 S2-1。
 
-- [ ] **Step 3：更新计划执行记录**
+- [x] **Step 3：更新计划执行记录**
 
 勾选已完成步骤，写入各提交 ID、实际测试数量、计划差异和“未执行 live”。如果实施尚未完成，不得提前勾选或写成功结论。
 
-- [ ] **Step 4：最终文档检查与中文提交**
+- [x] **Step 4：最终文档检查与中文提交**
 
 ```powershell
 git diff --check
@@ -362,18 +362,26 @@ npm run harness:topic-selector-semantic-replay -- --live --confirm-live --model=
 
 ## 验收清单
 
-- [ ] 党锢退出内部一致性硬指标但仍保留在原始 fixture 输入和人工观察记录；
-- [ ] 硬指标为靖康、鸿门宴 2 个风险正例和玄武门、巫蛊 2 个 `none` 对照；
-- [ ] Prompt 要求先做原子断言—内部证据审查，再做排序；
-- [ ] `risk_hints` 明确为补充信息而非完整风险清单；
-- [ ] Prompt 未包含固定 fixture 名称或 few-shot 泄漏；
-- [ ] 没有任何本地语义 validator、关键词、正则、黑名单、相似度或规则评分；
-- [ ] compact DTO、parser、selection、API、shared、前端和 downstream 无改动；
-- [ ] 受影响串行矩阵、backend typecheck、prompt language、dry-run 与 diff check 通过；
-- [ ] 未经重新明确授权没有执行 live/provider/browser 请求；
-- [ ] 状态文档没有把 non-live 结果表述为语义召回已改善，S2-0 不进入 S2-1。
+- [x] 党锢退出内部一致性硬指标但仍保留在原始 fixture 输入和人工观察记录；
+- [x] 硬指标为靖康、鸿门宴 2 个风险正例和玄武门、巫蛊 2 个 `none` 对照；
+- [x] Prompt 要求先做原子断言—内部证据审查，再做排序；
+- [x] `risk_hints` 明确为补充信息而非完整风险清单；
+- [x] Prompt 未包含固定 fixture 名称或 few-shot 泄漏；
+- [x] 没有任何本地语义 validator、关键词、正则、黑名单、相似度或规则评分；
+- [x] compact DTO、parser、selection、API、shared、前端和 downstream 无改动；
+- [x] 受影响串行矩阵、backend typecheck、prompt language、dry-run 与 diff check 通过；
+- [x] 未经重新明确授权没有执行 live/provider/browser 请求；
+- [x] 状态文档没有把 non-live 结果表述为语义召回已改善，S2-0 不进入 S2-1。
 
 ## 执行记录
 
 - 2026-07-16：设计获用户确认；用户再次明确禁止任何形式的本地语义校验和本地字符串匹配。设计提交 `3f28d94`。
-- 实施尚未开始；当前基线为 prompt contract 30/30、prompt language 8/8、semantic replay 19/19，共 57/57。
+- 2026-07-16：实施计划提交 `5de7458`。Task 1 首轮 prompt 合同红灯为 30 项中 1 项失败，证明旧 prompt 缺少原子断言措辞；最小改写后 prompt contract 与 language 共 38/38 通过，提交 `3d7bd5c`。
+- 质量审查发现计划中的“三条 `must_cover_preview`”与真实 schema/fallback 不符；先将合同测试改为“全部 `must_cover_preview`”，形成 30 项中 1 项失败的红灯，再同步 prompt 并取得 prompt contract + language 38/38 绿灯，提交 `eb0e7d1`。本次状态同步再把本计划和设计按已证伪事实更正为“全部”。
+- Task 2 fixture 红灯为 19 项中 2 项失败，分别锁定旧党锢 annotation 与风险总数仍为 3；最小移除硬 annotation 后 19/19 通过，提交 `465b18c`。修改前后 `selector_input` SHA-256 均为 `7bf668dab41e5f22d062ebff5d7ba8560cc91ff2cf81ec68f156380134afefe8`，党锢仍在原始 pool 中且保留人工观察，不是改判 `none`。
+- Task 3 完整矩阵首次为 298/299；唯一失败是旧 runtime prompt 测试仍锁定“行为主体”。系统化诊断确认生产 prompt 已规范化为“具体主体”后，只同步这一行陈旧字符串合同测试，49/49 与最小矩阵 57/57 通过，提交 `b1e3261`。
+- 新鲜最终验证：最小 3 文件 57/57；受影响 17 文件 299/299；backend typecheck 通过；默认 dry-run 为 `live=false / fixture_count=2 / required_requests=2 / actual_requests=0`；`git diff --check 5de7458..b1e3261` 通过，禁止路径 diff 为空。
+- Prompt 规模以 `5de7458` 为基线从 2827 字符/71 行变为 2949 字符/71 行，增加 122 字符、0 行；旧判断顺序被替换，没有 fixture 示例、few-shot 或多处堆叠。
+- 生产单变量只是在同一次 Selector 调用内先静默拆分具体主体、关键动作、直接结果与断言强度，再检查全部 preview；`risk_hints` 不是白名单，先确定 issue 再排序。compact DTO、parser、selection、API、downstream、模型、`thinking` 与请求策略均未修改。
+- 本地 comparator 未修改，只按人工 annotation 的 candidate ID 与 provider enum 比较；没有任何本地语义 validator，也没有候选正文关键词、字符串匹配、正则、黑名单、相似度或规则评分。
+- 未执行 live/provider/browser。non-live 不能证明风险召回改善；S2-0 保持打开，不进入 S2-1。后续必须重新取得对 GLM-5.2、最多 2 次请求和人民币预算的明确授权，才可运行两份固定 Selector-only live 回放；通过标准为风险 2/2、`none` 2/2、结构 2/2。

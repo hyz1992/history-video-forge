@@ -59,7 +59,7 @@
 - [x] 完成 V1 高风险稳定化最终全量回归、故障演练和内置浏览器验收
 
 ## 进行中
-- [ ] 收口 `S2-0` 的完整 topic 链路：Task 17 紧凑 verdict 与完整 verdict 在同两份固定输入上风险召回均为 0/3。完整 verdict 只恢复结构覆盖和 `none` 对照，却使 completion token 增长 60.3%，因此已精确撤销该无语义收益的局部回退，恢复 compact provider DTO；候选全集覆盖、固定回放、请求护栏、内部三字段和下游合同均保留，non-live 17 文件、299/299 与 backend typecheck 通过。下一闸门是为“风险全判 none”形成独立窄设计，不再修改 DTO 或追加 live 请求。S2-0 保持打开，不进入 S2-1
+- [ ] 收口 `S2-0` 的完整 topic 链路：Topic Selector 内部一致性召回的 prompt-only non-live 实施已完成，硬指标经人工边界复核修正为靖康、鸿门宴 2 个风险正例与玄武门、巫蛊 2 个 `none` 对照；党锢只退出自动硬标注，仍保留在原始 pool 与人工观察中。compact DTO/parser/selection/API/downstream、模型、thinking 和请求策略不变，没有任何本地语义 validator 或候选正文字符串规则。新鲜 non-live 为最小 57/57、受影响 17 文件 299/299、backend typecheck 与零请求 dry-run 通过；未执行 live，不能声明语义召回改善。下一闸门是在重新明确授权 GLM-5.2、最多 2 次请求和人民币预算后运行两份固定 Selector-only live 回放，通过标准为结构 2/2、风险 2/2、`none` 2/2；不得自动执行。S2-0 保持打开，不进入 S2-1
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 补齐前端 v1 真实浏览器验收矩阵：空态、加载中、成功、失败、刷新、深链、重复操作
 - [ ] 收口当前未归档计划，避免历史 implementation plan 误导新任务

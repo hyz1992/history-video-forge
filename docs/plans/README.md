@@ -30,6 +30,7 @@
 - Task 17 内置浏览器真实验收已完成：两个 GLM-5.2 固定样本共 4 次请求，builder/selector 全部 attempt 1，普通 JSON 与 strict 目标工具均首次通过。selector arguments 相对 Task 16 减少 41.7%/34.9%，completion token 减少 43.3%/38.3%，selector 耗时减少 28.6%/14.5%；但两轮均为 8 pass / 0 risk，“靖康城破”两位皇帝主体混合与“鸿门宴·天下归属已经注定”过度断言都进入最终四项。结构与体积通过、语义召回未通过，S2-0 继续打开，不进入 S2-1。
 - Task 17 语义回放基线见 [设计](./2026-07-16-s2-0-topic-selector-semantic-replay-design.md) 和 [实施计划](./2026-07-16-s2-0-topic-selector-semantic-replay-implementation-plan.md)：已按两个真实 run 固化 8+8 候选输入、3 个风险正例和 2 个 `none` 对照；默认 harness 为 0 请求，完整 non-live 矩阵 17 文件、299/299 与 backend typecheck 通过。随后按授权执行两次 GLM-5.2 Selector-only live 请求：高张力 fixture 候选覆盖不完整，均衡 fixture 两个风险正例均漏召回，汇总风险召回 0/3、`none` 对照完成并通过 1/2，主闸门未通过。S2-0 继续打开，不进入 S2-1。
 - Task 17 受控局部回退见 [设计](./2026-07-16-s2-0-topic-selector-controlled-rollback-design.md) 和 [实施计划](./2026-07-16-s2-0-topic-selector-controlled-rollback-implementation-plan.md)：完整 verdict 同输入 live 虽恢复结构覆盖与 `none` 对照，但风险召回仍为 0/3，completion token 相对 compact 增长 60.3%，因此该实验性回退已按 [撤销设计](./2026-07-16-s2-0-topic-selector-rollback-reversal-design.md) 和 [撤销实施计划](./2026-07-16-s2-0-topic-selector-rollback-reversal-implementation-plan.md) 精确撤销。Provider DTO/prompt/parser 恢复 compact 结构，候选全集覆盖、固定 fixture、零请求默认 replay、两次 live 上限、脱敏报告、内部三字段和下游合同均保留；non-live 17 文件、299/299 与 backend typecheck 通过。S2-0 继续打开，下一任务只设计“风险全判 none”语义问题。
+- Topic Selector 内部一致性召回实验见 [窄设计](./2026-07-16-s2-0-topic-selector-internal-consistency-recall-design.md) 和 [实施计划](./2026-07-16-s2-0-topic-selector-internal-consistency-recall-implementation-plan.md)：non-live 实施已完成。硬指标经人工边界复核修正为靖康、鸿门宴 2 个风险正例与玄武门、巫蛊 2 个 `none` 对照；党锢因候选内部重复绝对化结论且缺少反证，只退出自动硬标注，仍保留在原始 pool 与人工观察中，不是改判 `none`。生产单变量仅替换 Selector prompt 的内部审查顺序，compact DTO/parser/selection/API/downstream、模型、thinking 和请求策略不变，也没有任何本地语义 validator 或候选正文字符串规则。新鲜 non-live 结果为最小 57/57、受影响 17 文件 299/299、backend typecheck 和零请求 dry-run 通过；未执行 live，不能声明语义召回改善。
 - 正式 V2 产品功能已进入实施阶段；migration owner 不可登录标记 `!migration-owner-no-login`，其项目通过 admin 管理页面转移给真实用户。
 
 - [V1 高风险稳定化实施计划](./2026-07-10-v1-high-risk-stabilization-implementation-plan.md) 的主要代码任务已完成；其全量回归超时和故障演练缺口已并入 Task 8.5 的测试与切换闸门，不再作为独立的下一执行入口。
@@ -63,7 +64,7 @@
 
 旧的 Step 3-10 文档保留为范围留痕；当前执行顺序以本节为准：
 
-1. `S2-0`（进行中）：LLM 回复速度、质量和结构化输出优化基线。Task 17 紧凑 verdict 与完整 verdict 在同两份固定输入上风险召回均为 0/3；完整 verdict 只恢复结构覆盖与 `none` 对照，却使 completion token 增长 60.3%，现已撤销该无语义收益的局部回退并恢复 compact provider DTO。下一闸门是为“风险全判 none”形成独立窄设计；不得继续修改 DTO 或追加 live 请求，通过前不进入 S2-1。
+1. `S2-0`（进行中）：LLM 回复速度、质量和结构化输出优化基线。Topic Selector 内部一致性召回的 prompt-only non-live 实施已完成，硬指标为 2 个风险正例与 2 个 `none` 对照；受影响 17 文件 299/299、backend typecheck 和零请求 dry-run 通过，但 non-live 不能证明语义召回改善。下一闸门是在重新明确授权 GLM-5.2、最多 2 次请求和人民币预算后，运行两份固定 Selector-only live 回放；通过标准为结构 2/2、风险 2/2、`none` 2/2。不得自动执行，通过前不进入 S2-1。
 2. `S2-1`：多模型、多供应商切换。基于 S2-0 的真实基线设计 provider/model/routing/run snapshot/credential reference。
 3. `S2-2`：用户偏好、生成策略与成本控制。接入用户级策略、预算和成本记录，消费 S2-1 的 provider/model 能力。
 4. `S2-3`：Prompt 治理。版本、hash、fixtures、变更说明和运行快照对齐；仍遵守 `AGENTS.md` 的 `harness/prompts/` 正式 prompt 位置规则，除非另有设计审查批准。

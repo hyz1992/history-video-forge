@@ -78,7 +78,7 @@ Task 16 的真实样本说明当前模型能够识别表层、显式的时代越
 正式 prompt 保持现有输出合同与 issue enum，只收敛“判断顺序”。模型应在内部执行以下步骤：
 
 1. 对每个候选，先静默拆出标题和切口中的关键断言：具体主体、主体执行的动作、动作导致的结果以及断言强度。
-2. 分别在 `core_conflict`、`strong_scene` 与三条 `must_cover_preview` 中寻找对应支持，不把 `risk_hints` 当成完整风险清单。
+2. 分别在 `core_conflict`、`strong_scene` 与全部 `must_cover_preview` 中寻找对应支持，不把 `risk_hints` 当成完整风险清单。
 3. 如果同一个泛称主体串联的动作在内部材料中分别属于不同人物，标记 `actor_role_mismatch`。
 4. 如果标题或切口声称确定性终局、灭亡、注定或同等级强结果，而内部材料只支持脱身、失败、受创或格局变化，标记 `overclaim_or_ambiguity` 或更准确的既有 issue。
 5. 先确定 `consistency_issue`，再进行叙事质量排序，避免排序任务覆盖一致性审查。
