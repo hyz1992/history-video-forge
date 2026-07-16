@@ -20,6 +20,17 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("根据当前推荐种子");
   });
 
+  it("keeps high-tension history concrete while using provider-safe planning language", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("保留具体人物");
+    expect(prompt.body).toContain("明确赌注");
+    expect(prompt.body).toContain("不展开具体血腥");
+    expect(prompt.body).toContain("strict_neutral_historical_planning");
+    expect(prompt.body).toContain("不得因为安全表达");
+  });
+
   it("keeps prompt metadata zh-CN and includes diversity instructions for open discovery", () => {
     const registry = createPromptRegistry();
 

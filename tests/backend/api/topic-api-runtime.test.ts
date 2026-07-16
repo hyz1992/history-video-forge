@@ -211,11 +211,18 @@ describe("topic api runtime", () => {
     const builderCalls = invokeStructuredPromptMock.mock.calls.filter(
       ([request]) => request.operationName !== "topic.selector",
     );
+    expect(builderCalls[0]?.[0].input).not.toHaveProperty("safety_retry_context");
     expect(builderCalls[1]?.[0].input).toMatchObject({
       safety_retry_context: {
         reason: "provider_content_filter",
+        mode: "strict_neutral_historical_planning",
       },
     });
+    expect(
+      (builderCalls[1]?.[0].input as {
+        safety_retry_context?: { instruction?: unknown };
+      }).safety_retry_context?.instruction,
+    ).toBeUndefined();
   });
 
   it("returns a readable provider failure message when topic generation is rejected", async () => {

@@ -458,9 +458,8 @@ async function invokeTopicStrictStructuredWithSafetyRetry<T>(input: {
 function withTopicSafetyRetryContext(promptInput: unknown): unknown {
   const safetyRetryContext = {
     reason: "provider_content_filter",
-    instruction:
-      "Use neutral historical-video planning language. Avoid graphic violence, explicit gore, corpses, torture details, or sensational wording; keep conflict described through decisions, pressure, setting, and consequences.",
-  };
+    mode: "strict_neutral_historical_planning",
+  } as const;
 
   if (
     promptInput &&
