@@ -123,6 +123,68 @@ describe("provider hardening", () => {
     });
   });
 
+  it("shares one request budget across structured and strict provider calls", async () => {
+    const invokeApi = vi.fn(async () => ({
+      rawOutput: '{"ok":true}',
+      content: '{"ok":true}',
+      metadata: {},
+    }));
+    const argumentsJson = '{"ranked_candidates":[]}';
+    const invokeStrictApi = vi.fn(async () => ({
+      rawOutput: argumentsJson,
+      argumentsJson,
+      metadata: { finishReason: "tool_calls" },
+    }));
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-5.2",
+      requestBudget: createRequestBudget({ maxRequests: 2 }),
+      invokeApi,
+      invokeStrictApi,
+    });
+
+    await expect(
+      provider.invokeStructuredPrompt({
+        prompt: createPromptRegistry().getPrompt("topic.candidate-builder"),
+        input: { seed: "shared-budget" },
+        operationName: "topic.candidate-builder",
+      }),
+    ).resolves.toEqual({ ok: true });
+
+    await expect(
+      provider.invokeStrictStructured?.({
+        prompt: createPromptRegistry().getPrompt("topic.selector"),
+        input: { selector_pool: [] },
+        operationName: "topic.selector",
+        schema: {
+          name: "rank_topic_candidates",
+          description: "Rank topic candidates.",
+          parameters: {
+            type: "object",
+            properties: {
+              ranked_candidates: { type: "array", items: { type: "object" } },
+            },
+            required: ["ranked_candidates"],
+            additionalProperties: false,
+          },
+        },
+        parse: (candidate) => candidate as { ranked_candidates: unknown[] },
+      }),
+    ).resolves.toEqual({ ranked_candidates: [] });
+
+    await expect(
+      provider.invokeStructuredPrompt({
+        prompt: createPromptRegistry().getPrompt("topic.candidate-builder"),
+        input: { seed: "budget-exceeded" },
+        operationName: "topic.candidate-builder",
+      }),
+    ).rejects.toMatchObject({
+      code: "budget_exceeded",
+      retryable: false,
+    });
+    expect(invokeApi).toHaveBeenCalledTimes(1);
+    expect(invokeStrictApi).toHaveBeenCalledTimes(1);
+  });
+
   it("includes provider error response body when structured requests are rejected", async () => {
     const originalFetch = globalThis.fetch;
     const prompt = createPromptRegistry().getPrompt("script.writer");

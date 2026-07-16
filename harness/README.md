@@ -588,6 +588,14 @@ Get-ChildItem 'storage/projects' -Directory -Recurse |
 
 - `npm run harness:llm-s2-baseline` — dry-run 打印三样本基线计划
 - `npx tsx harness/scripts/runtime/llm-s2-baseline.ts --live --candidate-model <model-id> --max-requests <N> --max-cost-cny <金额>` — 显式启动 live 诊断；当前 npm 版本可能吞掉 `npm run ... -- --flag` 的 flag，带参数时必须使用该直接入口
+- harness 的 `--max-requests` 只限制该诊断脚本自身。真实页面验收必须在启动后端前显式设置共享 provider 请求预算并重启后端，例如：
+
+  ```powershell
+  $env:LLM_REQUEST_BUDGET_MAX_REQUESTS="2"
+  npm run dev:backend
+  ```
+
+  验收后应恢复正常启动方式；不要把本地 `.env`、API key 或 raw output 提交到仓库。
 - S2-0b 首轮候选诊断 dry-run：`npx tsx harness/scripts/runtime/llm-s2-baseline.ts --dry-run --candidate-model glm-5.2 --profile-scope candidate-only --candidate-thinking disabled --force-target-tool --enable-probe --max-requests 4 --max-cost-cny 10`
 - 上述候选诊断矩阵固定为 4 个计划请求：1 次指定目标 function 的 capability probe，以及 candidate-only 的 topic/script/storyboard 各 1 次；只有单独取得付费 live 授权后才可把 `--dry-run` 改为 `--live`
 - Task 11 优化后对照使用：`npx tsx harness/scripts/runtime/llm-s2-baseline.ts --live --candidate-model glm-5.2 --profile-scope both --force-target-tool --max-requests 6 --max-cost-cny 10`；只有新的明确授权才能再次运行

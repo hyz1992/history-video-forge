@@ -19,6 +19,7 @@ const RUNTIME_ENV_KEYS = [
   "LLM_STRUCTURED_TOP_P",
   "LLM_STRUCTURED_MAX_TOKENS",
   "LLM_TIMEOUT_MS",
+  "LLM_REQUEST_BUDGET_MAX_REQUESTS",
   "OPENAI_BASE_URL",
   "OPENAI_API_KEY",
   "OPENAI_MODEL",
@@ -58,6 +59,7 @@ describe("runtime env loading", () => {
     process.env.LLM_STRUCTURED_TOP_P = "0.9";
     process.env.LLM_STRUCTURED_MAX_TOKENS = "2048";
     process.env.LLM_TIMEOUT_MS = "32000";
+    process.env.LLM_REQUEST_BUDGET_MAX_REQUESTS = "2";
 
     const { env } = await import("../../../backend/src/config/env.js");
 
@@ -75,6 +77,7 @@ describe("runtime env loading", () => {
       structuredTopP: 0.9,
       structuredMaxTokens: 2048,
       timeoutMs: 32000,
+      requestBudgetMaxRequests: 2,
     });
   });
 
