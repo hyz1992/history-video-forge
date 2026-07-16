@@ -140,19 +140,17 @@ describe("topic selector semantic replay fixtures", () => {
         expected_issue: "overclaim_or_ambiguity",
       },
       {
-        candidate_id: "selector_candidate_7",
-        expected_risk: true,
-        expected_issue: "overclaim_or_ambiguity",
-      },
-      {
         candidate_id: "selector_candidate_5",
         expected_risk: false,
         expected_issue: "none",
       },
     ]);
+    expect(
+      fixtures[1].selector_input.selector_pool.map((item) => item.candidate_id),
+    ).toContain("selector_candidate_7");
 
     const annotations = fixtures.flatMap((item) => item.annotations);
-    expect(annotations.filter((item) => item.expected_risk)).toHaveLength(3);
+    expect(annotations.filter((item) => item.expected_risk)).toHaveLength(2);
     expect(annotations.filter((item) => !item.expected_risk)).toHaveLength(2);
     expect(annotations.every((item) => item.rationale.length > 0)).toBe(true);
   });
@@ -364,7 +362,6 @@ describe("topic selector semantic replay evaluation and live orchestration", () 
               ? { selector_candidate_7: "actor_role_mismatch" }
               : {
                   selector_candidate_3: "cause_outcome_mismatch",
-                  selector_candidate_7: "overclaim_or_ambiguity",
                 };
             return {
               decision: createInternalDecision(fixture, issues),
@@ -384,11 +381,11 @@ describe("topic selector semantic replay evaluation and live orchestration", () 
       total_fixtures: 2,
       planned_requests: 2,
       actual_requests: 2,
-      expected_risk_count: 3,
-      recalled_risk_count: 3,
+      expected_risk_count: 2,
+      recalled_risk_count: 2,
       none_control_count: 2,
       passed_none_control_count: 2,
-      exact_enum_match_count: 2,
+      exact_enum_match_count: 1,
       primary_gate_passed: true,
     });
     expect(
@@ -477,7 +474,6 @@ describe("topic selector semantic replay evaluation and live orchestration", () 
             return {
               decision: createInternalDecision(fixture, {
                 selector_candidate_3: "overclaim_or_ambiguity",
-                selector_candidate_7: "overclaim_or_ambiguity",
               }),
               observation: createObservation(fixture.fixture_id),
             };

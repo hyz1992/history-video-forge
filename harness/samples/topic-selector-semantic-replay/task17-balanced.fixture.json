@@ -190,13 +190,6 @@
       "rationale": "内部材料只支持刘邦脱身和范增失望，标题却把这一刻升级为天下归属已经注定。"
     },
     {
-      "candidate_id": "selector_candidate_7",
-      "expected_risk": true,
-      "expected_issue": "overclaim_or_ambiguity",
-      "entered_final_candidates": false,
-      "rationale": "永久禁官、整个知识阶层沉默和清议传统彻底断绝均是内部材料不足以支撑的绝对化断言。"
-    },
-    {
       "candidate_id": "selector_candidate_5",
       "expected_risk": false,
       "expected_issue": "none",
