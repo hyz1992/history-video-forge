@@ -516,3 +516,22 @@ selector pool 对照只读取 Task 14 已保存的本地 interaction input，并
 - 受控局部回退只恢复了 strict 结构稳定性与 `none` 对照，没有恢复风险召回；此前“Task 16 完整 verdict 可能恢复语义质量”的假设被本轮固定输入否证。
 - 当前瓶颈位于 GLM-5.2 对候选内部冲突的语义判定，不在 compact/full DTO 映射、parser、候选覆盖、trace、selection、API 或下游合同。不能继续通过增加逐候选输出字段换取未出现的质量收益。
 - 本轮只记录证据，不修改 prompt、schema、parser 或 selection。S2-0 继续保持打开，不进入 S2-1；下一步应先决定是否撤销这次无语义收益的完整 verdict 回退，再为“风险全判 none”形成独立窄设计，不得追加 live 请求、本地关键词规则或第三次 LLM 调用。
+
+## 2026-07-16 Topic Selector 完整 verdict 回退撤销（非 live）
+
+### 撤销边界
+
+- 同输入 live 已否证“完整逐候选字段可以恢复风险召回”的假设，因此精确撤销实验性的完整 verdict 回退，恢复 Task 17 compact provider DTO：每候选必填 `consistency_issue`，顶层 `consistency_risk_notes` 只解释非 `none` 项。
+- Parser 继续确定性恢复内部 `consistency_status / primary_consistency_issue / consistency_note`；实际候选池精确同集合覆盖、pass 优先、risk 排除、受控补位、trace、diagnostics、API、shared、前端与 downstream 合同均未修改。
+- 固定两份 fixture、3 个风险正例、2 个 `none` 对照、默认零请求、两次 live 上限、费用护栏和脱敏报告完整保留；完整 verdict 的 non-live/live 失败证据没有删除。
+
+### TDD 与 non-live 证据
+
+- Runtime 红灯为 68 项中 58 项失败，明确来自当前 parser 仍要求完整三字段；最小恢复后 68/68 通过。Prompt 合同红灯 3 项，恢复 compact 中文合同后 prompt + language 为 38/38。Replay + baseline stub 红灯 18 项，恢复生产 enum 路径与 compact fixtures 后为 27/27。
+- 完整受影响矩阵覆盖 17 个文件、299 项测试，299/299 通过；`npm run typecheck:backend`、prompt language、默认 semantic replay dry-run、`git diff --check` 与禁止范围 diff 通过。
+- 默认回放输出继续为 `fixture_count=2 / required_requests=2 / actual_requests=0`。本轮没有执行 provider 或浏览器操作，没有提交 runtime output、raw output、凭据、storage 生成态或用户未跟踪文件。
+
+### 阶段结论
+
+- 本轮只撤销无语义收益的 provider 输出膨胀，没有修复风险召回，也没有回滚整个分支。下游合同不受影响。
+- “风险全判 none”现在是独立语义问题，不能继续归因于 compact/full DTO。S2-0 保持打开，不进入 S2-1；下一低耦合任务只为该语义问题形成正式中文设计，不追加 live、不增加第三次调用、不引入本地关键词规则。
