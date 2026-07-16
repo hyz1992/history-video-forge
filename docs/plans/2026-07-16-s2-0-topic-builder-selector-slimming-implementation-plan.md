@@ -638,3 +638,11 @@ git commit -m "记录Task15真实页面诊断结论"
 - 人工阅读新增 16 个原始候选和 8 个最终候选：边界样本全部在指定时代，两个新增项目最终 4 项均未越界；但同输入的主体歧义第二次被 selector 排到第 1，另有一个非最终候选混入英文连接词，质量保护尚未收口。
 - 两个新增项目的 `recommendation-diagnostics.md` 均记录 builder 原顺序前 4 项，而不是 selector 最终 4 项；最终选择证据必须以页面和 `runtime-diagnostics.json` 为准。
 - 扩样在聚合报告与提交后停止，不进入 S2-1；下一步先设计非 live 的最终候选语义一致性合同与 diagnostics 真相源窄整改，不继续无目的付费扩样。
+
+## 2026-07-16 diagnostics 真相源窄整改记录
+
+- 真实日志复核确认 `recommendation-diagnostics.md` 的 `Candidates` 与页面、`runtime-diagnostics.json.final_candidates` 不一致；代码追踪定位到 Markdown 写入调用误传 `postProcessed.candidates`。
+- 新增回归用 selector 将第 5–8 项排为最终 4 项；旧代码稳定写出第 1–4 项，红灯原因与 live 证据一致。
+- 最小生产修复改为传递 `selected.candidates`；不改 prompt、schema、API、模型、selector 评分、runtime diagnostics 或 interaction log。
+- 定向测试红后绿；完整 topic runtime 51/51 与 backend typecheck 通过，未执行 live。
+- diagnostics 缺陷已收口；同输入主体歧义仍是下一独立设计任务，不在本次顺手修改 prompt 或结构化合同。

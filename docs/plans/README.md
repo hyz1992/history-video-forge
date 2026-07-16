@@ -22,7 +22,7 @@
 - Task 15 非 live 实施已完成：builder/selector prompt 分别由 4933/2259 字符降至 3969/2102 字符，Task 14 同一 selector pool 经新投影由 6882 降至 5384 字符；16 个文件、260 项测试与 backend typecheck 通过。
 - Task 15 首轮真实页面诊断使用 GLM-5.2、同输入和显式 2 请求预算：builder/selector 均 attempt 1 成功，provider 合计由 Task 14 的 139.702 秒降至 73.714 秒，总 token 由 14908 降至 10802，页面约 80 秒展示结果；但 builder 仍生成 1 个秦朝越界候选（selector 已过滤），最终首位候选的主语歧义仍未被 selector 识别。性能收益显著、质量整体改善但尚不足以从单样本收口 S2-0。
 - Task 15 小型固定样本扩展已完成：三个 GLM-5.2 样本的 provider 合计为 67.244–90.757 秒，中位数 73.714 秒，最慢样本仍比 Task 14 快 35.0%；总 token 为 10153–10802，三轮全部是 builder/selector attempt 1 且无 retry/repair/fallback/full regeneration。性能收益具备小样本可重复性。
-- 质量仍未收口：同输入的主体歧义连续两次被 selector 排第 1，另有非最终候选出现语言污染；新增项目的 `recommendation-diagnostics.md` 记录的 4 项与实际 selector 最终 4 项不一致。下一步不再继续付费扩样，而应先设计非 live 的最终候选语义一致性合同与 diagnostics 真相源窄整改。
+- 质量仍未收口：同输入的主体歧义连续两次被 selector 排第 1，另有非最终候选出现语言污染。`recommendation-diagnostics.md` 误记 builder 原顺序前 4 项的根因已确认并完成非 live 窄整改：写入真相源改为 `selected.candidates`，回归测试先红后绿，完整 topic runtime 51/51 与 backend typecheck 通过。下一步不再继续付费扩样，而应先设计最终候选语义一致性合同。
 - 正式 V2 产品功能已进入实施阶段；migration owner 不可登录标记 `!migration-owner-no-login`，其项目通过 admin 管理页面转移给真实用户。
 
 - [V1 高风险稳定化实施计划](./2026-07-10-v1-high-risk-stabilization-implementation-plan.md) 的主要代码任务已完成；其全量回归超时和故障演练缺口已并入 Task 8.5 的测试与切换闸门，不再作为独立的下一执行入口。
@@ -56,7 +56,7 @@
 
 旧的 Step 3-10 文档保留为范围留痕；当前执行顺序以本节为准：
 
-1. `S2-0`（进行中）：LLM 回复速度、质量和结构化输出优化基线。Task 15 三个真实 topic 样本的 provider 等待稳定在 67.244–90.757 秒，总 token 稳定在 10153–10802，性能分支已通过小样本扩展；但 selector 对同一主体歧义连续漏判，diagnostics 最终候选记录也与页面不一致。下一步先做非 live 的质量合同与诊断真相源设计，未收口前不进入 S2-1。
+1. `S2-0`（进行中）：LLM 回复速度、质量和结构化输出优化基线。Task 15 三个真实 topic 样本的 provider 等待稳定在 67.244–90.757 秒，总 token 稳定在 10153–10802，性能分支已通过小样本扩展；diagnostics 最终候选真相源已修复，但 selector 对同一主体歧义仍连续漏判。下一步先做非 live 的最终候选语义一致性合同设计，未收口前不进入 S2-1。
 2. `S2-1`：多模型、多供应商切换。基于 S2-0 的真实基线设计 provider/model/routing/run snapshot/credential reference。
 3. `S2-2`：用户偏好、生成策略与成本控制。接入用户级策略、预算和成本记录，消费 S2-1 的 provider/model 能力。
 4. `S2-3`：Prompt 治理。版本、hash、fixtures、变更说明和运行快照对齐；仍遵守 `AGENTS.md` 的 `harness/prompts/` 正式 prompt 位置规则，除非另有设计审查批准。

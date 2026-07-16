@@ -2537,6 +2537,65 @@ describe("topic runtime recommendation", () => {
     expect(diagnosticsLogContent).not.toContain("prompt_id:");
   });
 
+  it("writes the selector final candidates into recommendation diagnostics", async () => {
+    const db = createDbClient();
+    const project = await createProject(db, {
+      name: "Topic Final Candidate Diagnostics",
+    });
+    const { gateway } = createGatewayWithSelectorResponses(
+      [[
+        createRuntimeCandidate("event-a", "angle-a"),
+        createRuntimeCandidate("event-b", "angle-b"),
+        createRuntimeCandidate("event-c", "angle-c"),
+        createRuntimeCandidate("event-d", "angle-d"),
+        createRuntimeCandidate("event-e", "angle-e"),
+        createRuntimeCandidate("event-f", "angle-f"),
+        createRuntimeCandidate("event-g", "angle-g"),
+        createRuntimeCandidate("event-h", "angle-h"),
+      ]],
+      [[
+        "selector_candidate_5",
+        "selector_candidate_6",
+        "selector_candidate_7",
+        "selector_candidate_8",
+      ]],
+    );
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        canonicalName: "seed-final-diagnostics",
+        summary: "recommendation diagnostics should match the selector result",
+        coreConflict: "the final candidate truth source must not use builder order",
+        strongScene: "the selector promotes the last four candidates",
+        sourceHint: "test",
+        recentUsageHint: "none",
+      },
+      {
+        llmGateway: gateway,
+        projectId: project.id,
+      },
+    );
+
+    const profile = getProjectStorageProfile(project);
+    const runId = String((result.trace as unknown as Record<string, unknown>).run_id);
+    const diagnosticsLogContent = readFileSync(
+      resolve(process.cwd(), profile.topic_runs_dir, runId, "recommendation-diagnostics.md"),
+      "utf8",
+    );
+    const candidatesSection = diagnosticsLogContent.match(
+      /## Candidates\n\n([\s\S]*?)(?:\n\n## Notes|\n?$)/,
+    )?.[1];
+
+    expect(candidatesSection).toBeDefined();
+    expect(candidatesSection?.split("\n")).toEqual([
+      "- event_identity=event-e | event-e | angle-e",
+      "- event_identity=event-f | event-f | angle-f",
+      "- event_identity=event-g | event-g | angle-g",
+      "- event_identity=event-h | event-h | angle-h",
+    ]);
+  });
+
   it("writes builder repair diagnostics into recommendation-diagnostics markdown", async () => {
     const db = createDbClient();
     const project = await createProject(db, {

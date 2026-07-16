@@ -327,3 +327,11 @@ selector pool 对照只读取 Task 14 已保存的本地 interaction input，并
 - Task 15 的 topic 性能优化通过小型固定样本扩展：成功路径稳定保持两次请求，provider 总等待约 67–91 秒，token 与文本规模同向下降。无需继续用付费样本证明同一性能方向。
 - 质量尚未收口：selector 对同一主体歧义连续漏判，语言污染与绝对化结果也没有被准确归因。下一任务应先做非 live 的质量合同与诊断真相源设计，不应继续堆 prompt 口号、增加本地关键词规则或直接增加第三次 LLM 调用。
 - S2-0 继续保持打开，不进入 S2-1；下一窄任务应把“修正 diagnostics 最终候选记录”和“为最终候选提供可验证的 LLM 语义一致性合同”分成低耦合步骤，再决定是否需要新的 live 授权。
+
+## 2026-07-16 Task 15 diagnostics 真相源窄整改（非 live）
+
+- 根因确认：页面和 `runtime-diagnostics.json` 均消费 `selected.candidates`，但 `recommendation-diagnostics.md` 写入调用误传 selector 之前的 `postProcessed.candidates`，因此稳定记录 builder 原顺序前 4 项。
+- 新增真实 service 回归：builder 生成 8 项、selector 明确把第 5–8 项排到最终 4 项；旧代码红灯显示 Markdown 仍写第 1–4 项。
+- 最小修复只把 Markdown 写入参数改为 `selected.candidates`，不改 renderer、prompt、schema、API、模型、selector 行为或 raw trace。
+- 定向红灯后绿灯通过；完整 `topic-runtime-recommendation` 为 51/51 通过，`npm run typecheck:backend` 通过。未执行 live 请求。
+- diagnostics 最终候选真相源已修复；同输入主体歧义连续漏判仍未修，S2-0 继续保持打开。下一独立任务是语义一致性合同设计，不得把本次观测修复表述为内容质量修复。

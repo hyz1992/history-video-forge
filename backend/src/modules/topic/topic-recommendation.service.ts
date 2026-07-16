@@ -269,7 +269,7 @@ export async function recommendTopicCandidatesWithTrace(
       project,
       runId,
       diagnostics: finalDiagnostics.checks,
-      candidates: postProcessed.candidates,
+      candidates: selected.candidates,
       annotations: postProcessed.annotations,
     });
   }
