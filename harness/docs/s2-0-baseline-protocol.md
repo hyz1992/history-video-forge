@@ -451,3 +451,22 @@ selector pool 对照只读取 Task 14 已保存的本地 interaction input，并
 - TDD 红灯依次证明 fixture/loader 不存在、dry-run/预算护栏不存在以及 live 比较器/默认 runner/npm 命令未实现；最小实现后新回放测试 19/19 通过。真实 gateway 接线测试仅替换最底层 HTTP API，确认生产 schema/parser、完整 fixture input、目标工具、`thinking=disabled`、单 attempt 和内部三字段恢复真实贯通，没有访问网络。
 - 完整受影响矩阵覆盖 17 个文件、299 项测试，299/299 通过；`npm run typecheck:backend`、prompt language、默认 dry-run 与 `git diff --check` 通过。正式 Selector prompt、schema/parser、selection、shared/API、前端、Builder 和 provider 策略均无修改。
 - 本轮没有执行真实 provider 或浏览器操作，不能证明 GLM-5.2 的风险召回、enum 一致率、strict 首通率、token 或 latency 已改善。S2-0 继续打开，下一闸门是重新取得明确授权后执行固定两份输入、最多两次请求的 Selector-only live 回放；不得从 stub 结果声明语义质量通过。
+
+## 2026-07-16 Task 17 Topic Selector 固定输入语义回放（live 未通过）
+
+### 授权与运行边界
+
+- 用户明确授权继续真实测试；使用 `glm-5.2`、固定两份 Task 17 fixture、`max-requests=2` 和人民币 10 元硬预算执行 Selector-only live 回放。
+- 实际请求数为 2，每份 fixture 各 1 次；两次均为目标工具 `tool_calls`、`thinking=disabled`、`maxAttempts=1`，没有 Builder、数据库、selection、fallback、repair、retry、capability probe 或浏览器操作。
+- 运行态结果只保存在已忽略目录 `harness/scripts/runtime/output/topic-selector-semantic-replay/`，没有提交 raw output、system prompt、完整 fixture input 或 API key。
+
+### 真实结果
+
+- 高张力 fixture：单次请求耗时 18.101 秒，prompt/completion token 为 4369/784；模型返回后触发 `topic_selector_semantic_replay_candidate_coverage_mismatch`，属于候选覆盖不完整的结构失败，因此靖康风险正例与玄武门 `none` 对照均未进入语义计分。
+- 均衡 fixture：单次请求耗时 29.210 秒，prompt/completion token 为 4520/1422；结构通过，但鸿门宴和党锢两个 `overclaim_or_ambiguity` 风险正例均返回 `none`，状态为 `risk_missed`；巫蛊 `none` 对照通过。
+- 汇总为 expected risk 3、recalled risk 0、`none` 对照 2、通过 1、exact enum match 0；主闸门 `primary_gate_passed=false`。
+
+### 阶段结论
+
+- 固定输入 live 回放复现了语义召回不足，并新增暴露一次 strict 候选覆盖失败；因此不能声明 Task 17 质量通过，也不能收口 S2-0 或进入 S2-1。
+- 本轮只记录证据，不修改 prompt、schema、parser、selection 或下游合同。下一步应先独立诊断高张力覆盖不完整与风险全漏召回的共同根因，再形成窄设计；不得直接增加请求、恢复冗余 pass note 或引入本地关键词语义规则。

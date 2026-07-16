@@ -59,7 +59,7 @@
 - [x] 完成 V1 高风险稳定化最终全量回归、故障演练和内置浏览器验收
 
 ## 进行中
-- [ ] 收口 `S2-0` 的完整 topic 链路：Task 17 两个真实 run 的 8+8 Selector 输入已固化为语义回放 fixture，包含 3 个风险正例与 2 个 `none` 对照；默认 harness 为 0 请求，完整 non-live 矩阵 17 文件、299/299 与 backend typecheck 通过。正式 prompt/schema/parser/selection 未改，未调用真实 provider，不能声明 GLM-5.2 召回已改善。下一闸门是重新授权后执行固定两份输入、最多两次 strict Selector live 回放；S2-0 保持打开，不进入 S2-1
+- [ ] 收口 `S2-0` 的完整 topic 链路：Task 17 固定输入 Selector-only live 回放已按授权执行 2 次真实 GLM-5.2 请求；高张力 fixture 因候选覆盖不完整结构失败，均衡 fixture 的 2 个风险正例均漏召回，3 个风险正例总召回为 0，2 个 `none` 对照仅 1 个完成并通过，主闸门未通过。正式 prompt/schema/parser/selection 和下游合同未改；下一步先独立诊断覆盖失败与风险漏召回根因，S2-0 保持打开，不进入 S2-1
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 补齐前端 v1 真实浏览器验收矩阵：空态、加载中、成功、失败、刷新、深链、重复操作
 - [ ] 收口当前未归档计划，避免历史 implementation plan 误导新任务
