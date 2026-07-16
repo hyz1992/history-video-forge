@@ -165,3 +165,46 @@ Task 11 之后的真实页面项目 `84ed173e-529b-4a19-bc6d-092257432b3e` 证�
 - Task 14 的代码、prompt、测试与验收入口已完成非 live 实施，但没有真实数据证明首次 1301 已消失、等待时间已进一步下降或候选内部一致性已改善。
 - S2-0 继续保持打开，不从非 live 结果声明性能优化成功，也不进入 S2-1。
 - 下一次真实页面对照必须独立授权模型、样本、最大请求数、人民币费用上限和 raw output 保存边界；启动 backend 时显式应用同一最大请求数。对照至少记录 builder 首次是否通过、builder/selector/端到端耗时、request 数、reasoning usage、结构通过情况和人工整体质量判断。
+
+## 2026-07-16 Task 14 真实页面复验（延迟部分改善，质量闸门未通过）
+
+### 运行边界与证据
+
+- 用户同意沿用上一轮真实验收边界：模型 GLM-5.2、同一“魏晋至唐宋·高张力历史事件推荐”输入、最多 2 次 provider 请求、人民币 10 元人工费用上限、hyz 账号测试项目、raw output 允许保存但不提交；未执行 capability probe。
+- 启动 backend 前显式设置 `LLM_REQUEST_BUDGET_MAX_REQUESTS=2`；主模型与 structured 模型均为 GLM-5.2。
+- 真实页面项目：`f1cf8009-325d-4acd-86ff-31cbf8c3b504`；topic run：`topic_run_55815d60-5ea7-4ef8-900f-b6d456d89d63`。
+- raw output 与 interaction log 只保存在 `storage/projects/` 忽略目录，不提交。日志共 2 个 interaction，证明本轮只发生 builder 与 selector 两次 provider 请求。
+- 当前日志仍不能按人民币价格机器核验费用；不得把请求次数和 token usage 换算成已经程序验证的实际人民币费用。
+
+### 延迟、请求与 usage
+
+| 环节 | Task 13 | Task 14 | 对照结论 |
+| --- | ---: | ---: | --- |
+| builder 首次失败 | 49.386 秒，1301 | 无 | 单样本首次安全表达未触发内容过滤 |
+| builder 成功调用 | 84.484 秒 | 105.288 秒 | 变慢 24.6%，两轮均 reasoning 0 |
+| builder 完整阶段 | 133.915 秒 | 105.288 秒 | 因消除一次 full regeneration，下降 21.4% |
+| selector | 28.449 秒 | 34.414 秒 | 变慢 21.0%，reasoning 0 |
+| provider 总等待 | 162.319 秒 | 139.702 秒 | 下降 13.9%，但仍约 2 分 20 秒 |
+| provider 请求数 | 3 | 2 | 下降 33.3%，两次均 attempt 1 成功 |
+
+- builder：`prompt_tokens=2704`、`completion_tokens=4595`、`reasoning_tokens=0`、`finish_reason=stop`；selector：`prompt_tokens=5932`、`completion_tokens=1677`、`reasoning_tokens=0`、`finish_reason=tool_calls`。
+- 两个 operation 合计 14908 tokens，相对 Task 13 的 13436 tokens 增长 11.0%；其中 builder completion 由 3988 增至 4595，是成功 builder 变慢的直接可观测线索之一，但单样本不能证明唯一因果。
+- 从页面提交到 selector interaction 完成约 139.829 秒；浏览器按间隔观察，在 161.061 秒时首次确认页面已展示结果，因此不能把 161.061 秒当成精确后端耗时。TTFT 仍为非流式不可观测。
+- builder 首次结构与业务检查通过并交付 8 个候选，selector strict tool call 交付 4 个展示候选；没有 provider retry、本地 repair 或业务层 full regeneration。
+
+### 人工质量对照
+
+- 改善：Task 13 中“李世民射杀建成元吉”的明确主体错误没有复现；本轮玄武门候选标题只写李世民亲手射杀长兄，正文则明确李世民射杀建成、尉迟敬德射杀元吉，内部关系一致。
+- 改善：8 个候选均在魏晋至唐宋范围，事件、冲突、具体场景与三段叙事推进完整；首次安全表达没有把高张力内容压扁成抽象主题。
+- 明确缺陷一：“司马懿诈病夺权：曹爽陪小皇帝出城后遭遇关门伏杀”暗示曹爽返程时遭伏杀，但正文写曹爽交出兵权后仍被夷三族；标题动作与正文因果不一致。selector 只对史源差异扣分，仍将其排第 2，没有识别该矛盾。
+- 明确缺陷二：“宋钦宗亲赴金营被扣：一个皇帝亲手交出城门后连自己也赔进去的末日”把交出城门归给宋钦宗，正文却写郭京大开城门出战导致城防崩溃；selector 将其排第 6，但扣分中没有指出主体不一致。
+- 另有风险：“唐文宗设局诛宦官反被围杀”容易被理解为唐文宗本人被围杀，正文实际是文宗被劫持、李训等朝臣被杀；该候选仍被 selector 排第 1。标题压缩造成的主语歧义没有进入 `source_or_scope_risk`。
+- 结论：selector 新规则对一般史源、范围、敏感内容和叙事质量给出了细致扣分，但没有守住本任务最关键的标题—正文主体/动作/因果一致性。质量较 Task 13 局部改善，但整体闸门仍未通过。本判断来自人工整体阅读，不使用本地字符串或关键词门禁。
+- semantic reviewer 继续保持 shadow-only，没有接入主链路或自动门禁。
+
+### 阶段结论
+
+- Task 14 在单样本中消除了 1301 引发的完整重生成，把 provider 总等待再降低 13.9%；这证明首次安全表达具有局部价值，但 139.702 秒仍不能直接宣称达到用户可接受区间。
+- 成功 builder、selector 与总 token 均反向增长，说明下一轮高性价比方向应优先复核 builder 输出体量和 selector 输入体量；是否瘦身、瘦哪些字段、如何保持 8/4 质量合同，必须先形成独立设计，不能直接删字段或改 schema。
+- selector 语义一致性 prompt 只有部分效果，不能作为已解决质量问题的证据；下一设计需比较“builder 自检收敛”“selector 更聚焦的只读一致性复核”与独立后处理等方案，但不得使用本地关键词规则，也不得把 semantic reviewer 升级为自动门禁。
+- S2-0 继续保持打开，不进入 S2-1；本轮完成报告后停止，不自动实施下一轮优化。

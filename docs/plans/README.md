@@ -13,9 +13,10 @@
 - V2 数据基础 Task 8.5 已完成收口。
 - S1 后真实浏览器验收已补充：`npm run harness:s1-browser-acceptance` 覆盖 admin 后台、migration owner 转移、代管横幅、审计日志和用户隔离；`npm run harness:auth-flow-acceptance` 覆盖基础登录/退出/session 恢复。
 - `S2-0 LLM 回复速度、质量和结构化输出优化基线` 已完成观测、timeout/retry、script/storyboard/selector operation policy、固定样本诊断与 `topic.candidate-builder` 精确 thinking 策略；但 2026-07-15 Task 13 真实页面验收仍未通过整体闸门。
-- Task 13 中 builder 成功调用由 159.954 秒降到 84.484 秒且 reasoning 归零，但首次调用在 49.386 秒后触发供应商 1301，业务层完整重生成使总等待仍为 162.319 秒；同时 8 候选出现标题与正文行为主体/死因不一致。当前下一步仍是收口 S2-0 的内容过滤重生成编排、请求预算与语义质量保护；通过后才能进入 `S2-1 多模型、多供应商切换`。
+- Task 13 中 builder 成功调用由 159.954 秒降到 84.484 秒且 reasoning 归零，但首次调用在 49.386 秒后触发供应商 1301，业务层完整重生成使总等待仍为 162.319 秒；同时 8 候选出现标题与正文行为主体/死因不一致，因此进入 Task 14 做首次安全表达与语义一致性保护。
 - Task 14 第一批正式设计见 [S2-0 Topic 首次安全表达与语义一致性优化设计](./2026-07-16-s2-0-topic-safety-and-semantic-consistency-design.md)：采用“首次安全表达前置 + selector 语义一致性检查”，保持 8/4 合同、schema、API 与模型不变；builder 输出瘦身留作后续独立设计。
-- Task 14 第一批实施见 [S2-0 Topic 首次安全表达与语义一致性优化实施计划](./2026-07-16-s2-0-topic-safety-and-semantic-consistency-implementation-plan.md)：builder 首次中文安全表达、1301 结构化 retry mode、selector 跨字段一致性扣分和显式预算验收入口已完成；15 个文件、255 项非 live 测试与 backend typecheck 通过。该结果不证明真实速度或质量收益，下一步仍是独立授权的真实页面复验。
+- Task 14 第一批实施见 [S2-0 Topic 首次安全表达与语义一致性优化实施计划](./2026-07-16-s2-0-topic-safety-and-semantic-consistency-implementation-plan.md)：builder 首次中文安全表达、1301 结构化 retry mode、selector 跨字段一致性扣分和显式预算验收入口已完成；15 个文件、255 项非 live 测试与 backend typecheck 通过。
+- Task 14 真实页面复验使用 GLM-5.2 和显式 2 请求预算，builder/selector 均 attempt 1 成功且未触发 1301，provider 合计 139.702 秒，相对 Task 13 下降 13.9%；但成功 builder 本身变慢 24.6%，总 token 增长 11.0%，且 selector 未识别“高平陵关门伏杀”“宋钦宗亲手交出城门”等标题与正文不一致。延迟仅部分改善，质量闸门未通过，S2-0 继续打开。
 - 正式 V2 产品功能已进入实施阶段；migration owner 不可登录标记 `!migration-owner-no-login`，其项目通过 admin 管理页面转移给真实用户。
 
 - [V1 高风险稳定化实施计划](./2026-07-10-v1-high-risk-stabilization-implementation-plan.md) 的主要代码任务已完成；其全量回归超时和故障演练缺口已并入 Task 8.5 的测试与切换闸门，不再作为独立的下一执行入口。
@@ -49,7 +50,7 @@
 
 旧的 Step 3-10 文档保留为范围留痕；当前执行顺序以本节为准：
 
-1. `S2-0`（进行中）：LLM 回复速度、质量和结构化输出优化基线。script、storyboard、topic selector 与 `topic.candidate-builder` 已完成首批精确 thinking 策略；Task 14 已以前置首次安全表达、显式复用共享请求预算和 selector 语义一致性检查完成非 live 实施。下一窄任务是在显式请求预算下复用 Task 13 输入做真实页面对照，验证首次 1301、端到端等待与候选内部一致性；未通过前不进入 S2-1。
+1. `S2-0`（进行中）：LLM 回复速度、质量和结构化输出优化基线。script、storyboard、topic selector 与 `topic.candidate-builder` 已完成首批精确 thinking 策略；Task 14 真实页面证明首次安全表达在单样本中避免了 1301，并把 provider 总等待降至 139.702 秒，但 token 增长、成功 builder/selector 变慢且候选内部一致性仍未守住。下一窄任务应先基于本次日志设计 builder 输出与 selector 输入瘦身及更有效的语义一致性保护；未通过质量与等待闸门前不进入 S2-1。
 2. `S2-1`：多模型、多供应商切换。基于 S2-0 的真实基线设计 provider/model/routing/run snapshot/credential reference。
 3. `S2-2`：用户偏好、生成策略与成本控制。接入用户级策略、预算和成本记录，消费 S2-1 的 provider/model 能力。
 4. `S2-3`：Prompt 治理。版本、hash、fixtures、变更说明和运行快照对齐；仍遵守 `AGENTS.md` 的 `harness/prompts/` 正式 prompt 位置规则，除非另有设计审查批准。

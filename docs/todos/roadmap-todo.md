@@ -59,7 +59,7 @@
 - [x] 完成 V1 高风险稳定化最终全量回归、故障演练和内置浏览器验收
 
 ## 进行中
-- [ ] 收口 `S2-0` 的完整 topic 链路：`topic.candidate-builder` 精确 thinking 已关闭且成功调用由 159.954 秒降至 84.484 秒；Task 14 首次安全表达、结构化 safety retry mode、共享请求预算验收入口与 selector 语义一致性检查已完成 255 项非 live 回归，下一步在显式预算下做真实页面复验
+- [ ] 收口 `S2-0` 的完整 topic 链路：Task 14 真实页面在显式 2 请求预算下未触发 1301，provider 总等待由 Task 13 的 162.319 秒降至 139.702 秒；但总 token 增长 11.0%、成功 builder/selector 分别变慢 24.6%/21.0%，且 selector 仍漏掉标题与正文不一致。下一步独立设计 builder 输出与 selector 输入瘦身及语义一致性保护
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 补齐前端 v1 真实浏览器验收矩阵：空态、加载中、成功、失败、刷新、深链、重复操作
 - [ ] 收口当前未归档计划，避免历史 implementation plan 误导新任务
