@@ -208,3 +208,36 @@ Task 11 之后的真实页面项目 `84ed173e-529b-4a19-bc6d-092257432b3e` 证�
 - 成功 builder、selector 与总 token 均反向增长，说明下一轮高性价比方向应优先复核 builder 输出体量和 selector 输入体量；是否瘦身、瘦哪些字段、如何保持 8/4 质量合同，必须先形成独立设计，不能直接删字段或改 schema。
 - selector 语义一致性 prompt 只有部分效果，不能作为已解决质量问题的证据；下一设计需比较“builder 自检收敛”“selector 更聚焦的只读一致性复核”与独立后处理等方案，但不得使用本地关键词规则，也不得把 semantic reviewer 升级为自动门禁。
 - S2-0 继续保持打开，不进入 S2-1；本轮完成报告后停止，不自动实施下一轮优化。
+
+## 2026-07-16 Task 15 非 live 实施记录（等待真实页面诊断）
+
+### 实施边界
+
+- 新增纯函数 `projectTopicSelectorPool()`，真实 `topic.selector` 请求保留全部候选、顺序、事件身份、标题、切口、family/scope、冲突、场景、三段 preview、风险与 fatigue score；删除仅供本地去重的 normalized identity、重复的 recently seen 和 builder 自评 viral rubric。
+- 完整 `SelectorPoolCandidate` 继续用于本地去重、疲劳排序、candidate library、诊断和持久化；投影只影响发送给 LLM 的请求，不截断、不改写、不排序、不做语义判断。
+- `topic.candidate-builder` 保持 8 个完整 `TopicCandidateCard`，加入字段软预算和输出前主体/动作/因果/结果自检；软预算不是 schema、validator、repair 或本地截断规则。
+- `topic.selector` 仍强制目标工具并排序全部候选，先检查内部一致性，再做叙事质量与疲劳排序；deductions 通常收敛到最重要的 0–2 条，但 strict schema 的最多 4 条兼容上限不变。
+- GLM-5.2、8/4 合同、两次正常调用、shared schema、API、thinking、timeout、retry、repair、request budget 和 semantic reviewer shadow-only 边界均未改变。
+
+### 静态规模证据
+
+| 对象 | 修改前 | 修改后 | 静态变化 |
+| --- | ---: | ---: | ---: |
+| builder prompt | 4933 字符 / 152 行 | 3969 字符 / 122 行 | 字符下降 19.5%，行数下降 19.7% |
+| selector prompt | 2259 字符 / 74 行 | 2102 字符 / 63 行 | 字符下降 6.9%，行数下降 14.9% |
+| Task 14 同一真实 selector pool 紧凑 JSON | 6882 字符 | 5384 字符 | 下降 1498 字符，21.8% |
+
+selector pool 对照只读取 Task 14 已保存的本地 interaction input，并按新纯投影计算；没有重新请求 provider，也没有提交 raw output。静态字符下降不能直接等同于 token 或 latency 下降。
+
+### TDD 与非 live 证据
+
+- 投影 helper 先经历模块缺失红灯，再用只抛 `not implemented` 的脚手架得到行为红灯，最小实现后 2/2 通过；测试证明字段边界、候选顺序、疲劳候选保留、原对象不变且固定 fixture 更短。
+- 真实 strict selector 路由测试先因仍含三个待删除字段而失败，接入投影后与完整 topic runtime 合计 52/52 通过，证明不是只测试未接线 helper。
+- Builder 与 Selector prompt 各自先新增两项失败合同测试，再做最小 prompt 重组；focused 回归分别为 76/76 与 156/156 通过。
+- 完整受影响矩阵覆盖 16 个文件、260 项测试，260/260 通过；`npm run typecheck:backend` 通过，prompt language 检查通过。测试没有调用真实网络 provider。
+
+### 当前结论与下一闸门
+
+- Task 15 已完成非 live 代码、prompt、测试和静态规模收口，但没有真实证据证明 GLM-5.2 duration、token usage 或人工语义质量已经改善。
+- S2-0 继续保持打开，不从静态字符下降声明用户等待已达标，也不进入 S2-1。
+- 下一步只能在新的明确授权下复用“魏晋至唐宋·高张力历史事件推荐”做一个新项目、最多 2 次请求的真实页面诊断；需记录 builder/selector/页面耗时、token、attempt、repair/retry/fallback、结构首次通过与人工整体质量。TTFT 仍为非流式不可观测。

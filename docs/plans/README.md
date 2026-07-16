@@ -19,6 +19,7 @@
 - Task 14 真实页面复验使用 GLM-5.2 和显式 2 请求预算，builder/selector 均 attempt 1 成功且未触发 1301，provider 合计 139.702 秒，相对 Task 13 下降 13.9%；但成功 builder 本身变慢 24.6%，总 token 增长 11.0%，且 selector 未识别“高平陵关门伏杀”“宋钦宗亲手交出城门”等标题与正文不一致。延迟仅部分改善，质量闸门未通过，S2-0 继续打开。
 - Task 15 正式设计见 [S2-0 Topic Builder 与 Selector 瘦身优化设计](./2026-07-16-s2-0-topic-builder-selector-slimming-design.md)：采用平衡瘦身方案，保持 GLM-5.2、8/4 合同、两次正常 LLM 调用、schema 与 API 不变，通过 builder prompt 去重与软预算、selector 专用投影和简洁评分继续降低成功路径负担，并加强主体、动作、因果与结果一致性。
 - Task 15 实施入口见 [S2-0 Topic Builder 与 Selector 瘦身优化实施计划](./2026-07-16-s2-0-topic-builder-selector-slimming-implementation-plan.md)：按 TDD 拆分 selector 纯投影、生产路由接入、builder/selector prompt 收敛和完整非 live 回归；真实页面诊断必须在非 live 收口后重新取得独立授权。
+- Task 15 非 live 实施已完成：builder/selector prompt 分别由 4933/2259 字符降至 3969/2102 字符，Task 14 同一 selector pool 经新投影由 6882 降至 5384 字符；16 个文件、260 项测试与 backend typecheck 通过。以上仅是静态与非 live 证据，真实速度和语义质量仍待独立授权诊断，S2-0 继续打开。
 - 正式 V2 产品功能已进入实施阶段；migration owner 不可登录标记 `!migration-owner-no-login`，其项目通过 admin 管理页面转移给真实用户。
 
 - [V1 高风险稳定化实施计划](./2026-07-10-v1-high-risk-stabilization-implementation-plan.md) 的主要代码任务已完成；其全量回归超时和故障演练缺口已并入 Task 8.5 的测试与切换闸门，不再作为独立的下一执行入口。

@@ -36,7 +36,7 @@
 - 新建：`tests/backend/topic/topic-selector-prompt-projection.test.ts`
 - 新建：`backend/src/modules/topic/topic-selector-prompt-projection.ts`
 
-- [ ] **Step 1：写投影红灯测试**
+- [x] **Step 1：写投影红灯测试**
 
 新建测试文件，使用包含完整字段的一个候选：
 
@@ -129,7 +129,7 @@ describe("topic selector prompt projection", () => {
 });
 ```
 
-- [ ] **Step 2：运行测试确认红灯**
+- [x] **Step 2：运行测试确认红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/topic/topic-selector-prompt-projection.test.ts --no-file-parallelism
@@ -137,7 +137,7 @@ npx vitest run --configLoader runner tests/backend/topic/topic-selector-prompt-p
 
 预期：FAIL，提示找不到 `topic-selector-prompt-projection.js` 或导出函数。
 
-- [ ] **Step 3：实现最小纯函数**
+- [x] **Step 3：实现最小纯函数**
 
 新建 `backend/src/modules/topic/topic-selector-prompt-projection.ts`：
 
@@ -180,7 +180,7 @@ export function projectTopicSelectorPool(
 
 函数不得进行字符截断、默认值补齐、内容清洗、排序或语义判断。
 
-- [ ] **Step 4：运行测试确认绿灯**
+- [x] **Step 4：运行测试确认绿灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/topic/topic-selector-prompt-projection.test.ts --no-file-parallelism
@@ -188,7 +188,7 @@ npx vitest run --configLoader runner tests/backend/topic/topic-selector-prompt-p
 
 预期：2 项测试通过。
 
-- [ ] **Step 5：中文提交 Task 1**
+- [x] **Step 5：中文提交 Task 1**
 
 ```powershell
 git add -- backend/src/modules/topic/topic-selector-prompt-projection.ts tests/backend/topic/topic-selector-prompt-projection.test.ts
@@ -203,7 +203,7 @@ git commit -m "新增Topic筛选请求投影"
 - 修改：`tests/backend/topic/topic-runtime-recommendation.test.ts:1482`
 - 修改：`backend/src/modules/topic/topic-recommendation.service.ts:34-55,963-980`
 
-- [ ] **Step 1：在真实 strict 路由测试中增加红灯断言**
+- [x] **Step 1：在真实 strict 路由测试中增加红灯断言**
 
 扩展现有 `uses strict structured invocation for topic.selector when the gateway supports it` 用例，在已有调用次数断言前加入：
 
@@ -251,7 +251,7 @@ expect(selectorRequest?.input).toHaveProperty("recent_event_memory");
 
 该测试必须调用 `recommendTopicCandidatesWithTrace()`，不能只测试独立 helper。
 
-- [ ] **Step 2：运行目标用例确认红灯**
+- [x] **Step 2：运行目标用例确认红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/topic/topic-runtime-recommendation.test.ts -t "uses strict structured invocation for topic.selector" --no-file-parallelism
@@ -259,7 +259,7 @@ npx vitest run --configLoader runner tests/backend/topic/topic-runtime-recommend
 
 预期：FAIL，当前真实请求仍包含 `normalized_event_identity`、`recently_seen` 与 `viral_rubric`。
 
-- [ ] **Step 3：最小接入投影**
+- [x] **Step 3：最小接入投影**
 
 在 `topic-recommendation.service.ts` 导入：
 
@@ -279,7 +279,7 @@ selectorInput: {
 
 传给 `selectRankedCandidates()`、candidate library 和持久化的仍必须是 `input.selectorPool` 完整对象。
 
-- [ ] **Step 4：运行投影与 topic runtime 测试确认绿灯**
+- [x] **Step 4：运行投影与 topic runtime 测试确认绿灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/topic/topic-selector-prompt-projection.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts --no-file-parallelism
@@ -287,7 +287,7 @@ npx vitest run --configLoader runner tests/backend/topic/topic-selector-prompt-p
 
 预期：全部通过；既有 strict/fallback、recent memory、去重、疲劳和持久化测试不回归。
 
-- [ ] **Step 5：中文提交 Task 2**
+- [x] **Step 5：中文提交 Task 2**
 
 ```powershell
 git add -- backend/src/modules/topic/topic-recommendation.service.ts tests/backend/topic/topic-runtime-recommendation.test.ts
@@ -305,7 +305,7 @@ git commit -m "接入Topic筛选精简输入"
 - 修改：`harness/prompts/topic/candidate-builder.prompt.md`
 - 回归但不修改：`tests/backend/runtime/prompt-runtime.test.ts`
 
-- [ ] **Step 1：记录修改前规模**
+- [x] **Step 1：记录修改前规模**
 
 ```powershell
 $prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'harness/prompts/topic/candidate-builder.prompt.md'
@@ -314,7 +314,7 @@ $prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'harness/prompts/topic/ca
 
 预期基线：`chars=4933`、`lines=152`。若当前值已变化，停止并先核对是否存在并行改动。
 
-- [ ] **Step 2：写软预算与一致性红灯测试**
+- [x] **Step 2：写软预算与一致性红灯测试**
 
 在 `topic-prompt-contract.test.ts` 增加：
 
@@ -343,7 +343,7 @@ it("requires builder to self-check actor action cause and outcome consistency", 
 
 在 `prompt-runtime.test.ts` 保留并继续验证 Task 14 的安全表达测试，不新增任何本地候选字符串判定。
 
-- [ ] **Step 3：运行 prompt 测试确认红灯**
+- [x] **Step 3：运行 prompt 测试确认红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts --no-file-parallelism
@@ -351,7 +351,7 @@ npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract
 
 预期：新增两项失败，既有合同测试继续通过。
 
-- [ ] **Step 4：重写 Builder prompt 的重复段落**
+- [x] **Step 4：重写 Builder prompt 的重复段落**
 
 保留 frontmatter、8 个完整候选、全部 14 个字段、时代边界、recent memory、单事件锚定、开放发现多样性、Task 14 安全表达和三段 preview 合同。完成以下最小重组：
 
@@ -383,7 +383,7 @@ npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract
 
 不得修改 `candidate-builder-repair.prompt.md`；软预算超出不能触发 repair。
 
-- [ ] **Step 5：运行 prompt 合同并检查实际瘦身**
+- [x] **Step 5：运行 prompt 合同并检查实际瘦身**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/topic-event-identity-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts --no-file-parallelism
@@ -393,7 +393,7 @@ $prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'harness/prompts/topic/ca
 
 预期：测试全部通过；字符数和行数均低于 4933/152。这里只证明 prompt 重复度下降，不宣称 provider latency 已改善。
 
-- [ ] **Step 6：中文提交 Task 3**
+- [x] **Step 6：中文提交 Task 3**
 
 ```powershell
 git add -- harness/prompts/topic/candidate-builder.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
@@ -411,7 +411,7 @@ git commit -m "精简Topic候选生成合同"
 - 修改：`harness/prompts/topic/selector.prompt.md`
 - 回归但不修改：`tests/backend/runtime/prompt-runtime.test.ts`
 
-- [ ] **Step 1：记录修改前规模**
+- [x] **Step 1：记录修改前规模**
 
 ```powershell
 $prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'harness/prompts/topic/selector.prompt.md'
@@ -420,7 +420,7 @@ $prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'harness/prompts/topic/se
 
 预期基线：`chars=2259`、`lines=74`。若当前值变化，先核对并行改动。
 
-- [ ] **Step 2：写排序优先级与简洁输出红灯测试**
+- [x] **Step 2：写排序优先级与简洁输出红灯测试**
 
 在 `topic-prompt-contract.test.ts` 增加：
 
@@ -445,7 +445,7 @@ it("keeps all-candidate ranking while making selector explanations concise", () 
 });
 ```
 
-- [ ] **Step 3：运行 prompt 测试确认红灯**
+- [x] **Step 3：运行 prompt 测试确认红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts --no-file-parallelism
@@ -453,7 +453,7 @@ npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract
 
 预期：新增两项失败。
 
-- [ ] **Step 4：收敛 Selector prompt**
+- [x] **Step 4：收敛 Selector prompt**
 
 保留 frontmatter、目标工具、全部候选排名、rank/score 字段、8 个 deduction axis、单事件锚定、recent memory、疲劳与禁止改写。合并重复的“只排序、不发明、不输出 schema 外字段”说明，并加入：
 
@@ -476,7 +476,7 @@ npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract
 
 不得修改 `TOPIC_SELECTOR_STRICT_SCHEMA`，不得把 deduction 变成本地门禁。
 
-- [ ] **Step 5：运行 prompt 与真实 selector 路径回归**
+- [x] **Step 5：运行 prompt 与真实 selector 路径回归**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/runtime/provider-hardening.test.ts --no-file-parallelism
@@ -486,7 +486,7 @@ $prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'harness/prompts/topic/se
 
 预期：测试全部通过；selector prompt 字符数和行数均低于 2259/74；strict 目标工具、no-tool-call/mismatch fallback 和完整排名合同不回归。
 
-- [ ] **Step 6：中文提交 Task 4**
+- [x] **Step 6：中文提交 Task 4**
 
 ```powershell
 git add -- harness/prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
@@ -505,7 +505,7 @@ git commit -m "精简Topic筛选与一致性规则"
 - 修改：`docs/todos/roadmap-todo.md`
 - 修改：`docs/plans/2026-07-16-s2-0-topic-builder-selector-slimming-implementation-plan.md`
 
-- [ ] **Step 1：运行完整受影响矩阵**
+- [x] **Step 1：运行完整受影响矩阵**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/topic/topic-selector-prompt-projection.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/topic-event-identity-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/runtime/provider-hardening.test.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/topic-script-graph.test.ts tests/backend/api/topic-api-runtime.test.ts tests/backend/script/script-runtime-generate.test.ts tests/backend/storyboard/storyboard-generation.test.ts tests/backend/asset-planning/asset-planning-generation.test.ts tests/backend/asset-planning/asset-planning-structural-repair.test.ts harness/scripts/check-prompt-language.test.ts harness/scripts/runtime/llm-s2-baseline.test.ts harness/scripts/runtime/llm-s2-baseline-stub.test.ts --no-file-parallelism
@@ -515,7 +515,7 @@ git diff --check
 
 预期：所有测试、typecheck 和 diff check exit 0。测试总数以实际输出为准，不预写虚假数字。
 
-- [ ] **Step 2：确认禁止范围无 diff**
+- [x] **Step 2：确认禁止范围无 diff**
 
 ```powershell
 git diff -- shared/src backend/src/config backend/src/runtime/llm
@@ -525,7 +525,7 @@ git status --short
 
 预期：第一条无输出；改动仅限本计划白名单。不得 stage `storage/topic-candidate-library/`、raw output 或用户已有未跟踪文件。
 
-- [ ] **Step 3：更新非 live 状态**
+- [x] **Step 3：更新非 live 状态**
 
 在三份状态文档和本计划末尾如实记录：
 
@@ -536,7 +536,7 @@ git status --short
 - 未执行真实 provider，速度与人工语义质量仍未验证；
 - Task 15 只完成非 live 实施，S2-0 继续打开。
 
-- [ ] **Step 4：中文提交 Task 5**
+- [x] **Step 4：中文提交 Task 5**
 
 ```powershell
 git add -- harness/docs/s2-0-baseline-protocol.md docs/plans/README.md docs/todos/roadmap-todo.md docs/plans/2026-07-16-s2-0-topic-builder-selector-slimming-implementation-plan.md
@@ -544,7 +544,7 @@ git diff --cached --check
 git commit -m "记录Task15非live优化结果"
 ```
 
-- [ ] **Step 5：停止并等待独立 live 授权**
+- [x] **Step 5：停止并等待独立 live 授权**
 
 不得自动启动真实 provider、创建项目或执行付费请求。下一次授权必须重新明确模型、最大请求数、人民币费用上限、样本输入与 raw output 边界。
 
@@ -595,17 +595,27 @@ git commit -m "记录Task15真实页面诊断结论"
 
 ## 验收清单
 
-- [ ] Selector 真实生产请求只发送专用投影，完整内部池不变；
-- [ ] 投影保留全部候选、顺序、故事证据和 fatigue score；
-- [ ] 投影删除 normalized identity、recently seen 和 viral rubric；
-- [ ] Builder 仍生成 8 个完整候选和三条 preview；
-- [ ] Builder 软预算不成为 validator、repair 或本地截断规则；
-- [ ] Builder 保留时代边界、单事件锚定、多样性和首次安全表达；
-- [ ] Selector 仍覆盖全部候选并强制目标工具；
-- [ ] Selector 优先检查主体、动作、因果和结果一致性；
-- [ ] semantic reviewer 保持 shadow-only；
-- [ ] schema、API、模型、thinking、timeout、retry、repair 和 request budget 不变；
-- [ ] 完整非 live 回归与 backend typecheck 通过；
-- [ ] 未获新授权时不执行 live；
-- [ ] 不处理或提交用户现有未跟踪文件；
-- [ ] 所有提交信息使用中文。
+- [x] Selector 真实生产请求只发送专用投影，完整内部池不变；
+- [x] 投影保留全部候选、顺序、故事证据和 fatigue score；
+- [x] 投影删除 normalized identity、recently seen 和 viral rubric；
+- [x] Builder 仍生成 8 个完整候选和三条 preview；
+- [x] Builder 软预算不成为 validator、repair 或本地截断规则；
+- [x] Builder 保留时代边界、单事件锚定、多样性和首次安全表达；
+- [x] Selector 仍覆盖全部候选并强制目标工具；
+- [x] Selector 优先检查主体、动作、因果和结果一致性；
+- [x] semantic reviewer 保持 shadow-only；
+- [x] schema、API、模型、thinking、timeout、retry、repair 和 request budget 不变；
+- [x] 完整非 live 回归与 backend typecheck 通过；
+- [x] 未获新授权时不执行 live；
+- [x] 不处理或提交用户现有未跟踪文件；
+- [x] 所有提交信息使用中文。
+
+## 2026-07-16 非 live 执行记录
+
+- Task 1：新增 `projectTopicSelectorPool()` 纯函数与 2 项测试；先记录模块缺失红灯，再用 `not implemented` 脚手架确认行为红灯，最小实现后通过。提交：`14cdae6 新增Topic筛选请求投影`。
+- Task 2：真实 strict selector 路由测试先因请求仍含 `normalized_event_identity`、`recently_seen`、`viral_rubric` 而失败；接入投影后 52/52 通过。提交：`a6e25d3 接入Topic筛选精简输入`。
+- Task 3：Builder 两项 prompt 合同测试先红后绿；prompt 从 4933 字符/152 行降至 3969 字符/122 行，focused 回归 76/76 通过。提交：`097387f 精简Topic候选生成合同`。
+- Task 4：Selector 两项 prompt 合同测试先红后绿；prompt 从 2259 字符/74 行降至 2102 字符/63 行，focused 回归 156/156 通过。提交：`8863886 精简Topic筛选与一致性规则`。
+- Task 14 已保存的同一真实 selector pool 只读投影由 6882 字符降至 5384 字符，下降 21.8%；未重新调用 provider，raw output 未提交。
+- 完整非 live 矩阵覆盖 16 个文件、260 项测试，260/260 通过；`npm run typecheck:backend`、prompt language 和 diff check 通过。
+- 未修改 shared schema、API、模型、thinking、timeout、retry、repair 或 request budget；未执行付费 live，速度和人工语义质量仍未验证，S2-0 保持打开。
