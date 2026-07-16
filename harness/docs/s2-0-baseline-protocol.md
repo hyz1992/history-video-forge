@@ -385,3 +385,13 @@ selector pool 对照只读取 Task 14 已保存的本地 interaction input，并
 - Task 16 的 strict 合同、trace、pass 优先和 risk 排除在两个真实样本中稳定贯通；质量保护方向成立。
 - 本轮不能作为 S2-0 收口证据：selector 输出膨胀带来约 12–13 秒的可重复增量，均衡样本还暴露了 builder 长尾，且过度断言仍有漏判。
 - 下一步应先做独立的紧凑 verdict 设计：保留 LLM 语义判断和 risk 解释证据，减少每个 pass 候选重复输出的状态、issue 与说明；不得增加第三次 LLM 调用、不得改用较弱模型、不得把 semantic reviewer 升级为门禁，也不得用本地关键词规则补漏。设计确认和非 live 验证后，再决定是否值得执行新的付费复验；S2-0 继续打开，不进入 S2-1。
+
+## 2026-07-16 Task 17 Topic Selector 紧凑 verdict（非 live）
+
+- provider DTO 已收敛为每候选必填 `consistency_issue` 与顶层必填 `consistency_risk_notes`：`none` 不带 note，非 `none` 必须且只能关联一条非空 note。candidate ID、quality rank、issue 与 note 关联均只做结构校验，不读取候选文本，也没有加入关键词或本地语义启发式。
+- parser 会确定性恢复现有内部 `consistency_status / primary_consistency_issue / consistency_note`，所以 pass 优先、risk 受控补位、Selector trace、最终四项 `TopicCandidateCard`、API 和下游 Topic Package 合同均不变。
+- verdict 必须与本次实际 `selector_pool` 精确同集合；覆盖数量按去重后的实际 N 校验，不写死为 8。strict 覆盖失败继续进入既有 structured fallback，fallback 仍不完整才明确失败，没有新增 retry、repair、第三次 LLM 调用或 request budget。
+- Selector prompt 从 2735 字符/71 行变为 2827 字符/72 行，增加的 92 字符主要用于精确全覆盖和断言强度规则；strict schema 紧凑 JSON 从 1401 增至 1476 字符。prompt/schema 不是本轮的压缩目标，压缩目标是按候选重复的 completion payload。
+- 对 Task 16 两份已保存 tool arguments 做只读静态重排：高张力样本从原始 3729 字符变为 2874，减少 855（22.9%）；均衡叙事样本从 3880 变为 2982，减少 898（23.1%）。若先把旧 payload minify 为 3508/3653，再对比新结构，则减少 634/671（18.1%/18.4%）。没有重新请求 provider，也没有修改或提交 raw output。
+- 完整非 live 矩阵为 16 文件、280/280 通过；`npm run typecheck:backend`、prompt language 与 `git diff --check` 通过。shared schema、API、前端、Builder、provider、模型、thinking、timeout、retry、repair、默认预算和 semantic reviewer 均无改动。
+- 本轮不能证明真实 completion token、latency、strict 首通率或语义 recall 改善，也没有验证新增断言强度规则能否识别 Task 16 的“败退亡国”漏判。未执行 live；S2-0 继续打开，不进入 S2-1。是否执行两个固定样本的付费复验，必须重新取得明确授权。

@@ -59,7 +59,7 @@
 - [x] 完成 V1 高风险稳定化最终全量回归、故障演练和内置浏览器验收
 
 ## 进行中
-- [ ] 收口 `S2-0` 的完整 topic 链路：Task 16 两个 GLM-5.2 真实样本共 4 次请求，普通 JSON 与 strict 目标工具均首次通过，两项明确 risk 被正确排除，证明质量安全网有效；但 provider 合计为 97.490/158.638 秒、总 token 为 11637/12057，selector tool arguments 和耗时相对 Task 15 同输入稳定膨胀，另有一项非最终过度断言漏判。下一步先设计并非 live 验证紧凑 verdict 输出，保留 LLM 语义判断与解释证据，不增加第三次调用、不降低模型、不引入本地关键词规则；完成后再决定是否需要新的付费复验
+- [ ] 收口 `S2-0` 的完整 topic 链路：Task 17 已完成紧凑 verdict 正式设计与非 live 实施，provider 重复结论收敛为逐候选 issue + risk-only notes，parser 恢复现有内部三字段，最终四项、trace、API 与下游合同不变；16 文件、280/280 与 backend typecheck 通过，两份 Task 16 arguments 静态重排减少 22.9%/23.1%。尚未执行 live，真实 token、延迟、strict 首通率与“败退亡国”漏判改善均未验证；S2-0 保持打开，下一步只能在新的明确授权下决定是否运行两个固定样本的付费复验，不进入 S2-1
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 补齐前端 v1 真实浏览器验收矩阵：空态、加载中、成功、失败、刷新、深链、重复操作
 - [ ] 收口当前未归档计划，避免历史 implementation plan 误导新任务
