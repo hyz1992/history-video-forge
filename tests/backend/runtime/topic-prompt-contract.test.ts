@@ -95,6 +95,27 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("scope_label");
   });
 
+  it("gives candidate-builder concise soft budgets without creating local hard gates", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("以下长度是生成偏好，不是硬性校验");
+    expect(prompt.body).toContain("`title`：18–32 个汉字");
+    expect(prompt.body).toContain("`core_conflict`：35–65 个汉字");
+    expect(prompt.body).toContain("`strong_scene`：35–65 个汉字");
+    expect(prompt.body).toContain("每条 22–42 个汉字");
+    expect(prompt.body).toContain("为准确表达历史关系可以合理超出");
+  });
+
+  it("requires builder to self-check actor action cause and outcome consistency", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.body).toContain("事件身份、行为主体、关键动作、因果和结果");
+    expect(prompt.body).toContain("决策者、执行者、受害者和最终受益者");
+    expect(prompt.body).toContain("没有把握时使用准确的中性表达");
+    expect(prompt.body).toContain("不得为了标题张力发明确定性动作");
+  });
+
   it("requires candidate-builder to avoid letting recent high-frequency events dominate the raw pool", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 
