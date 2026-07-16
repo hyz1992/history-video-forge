@@ -29,7 +29,7 @@
 - Task 17 紧凑 verdict 正式设计与实施见 [设计](./2026-07-16-s2-0-topic-selector-compact-verdict-design.md) 和 [实施计划](./2026-07-16-s2-0-topic-selector-compact-verdict-implementation-plan.md)：provider 每候选只返回 `consistency_issue`，仅为非 `none` 项返回顶层 risk note；parser 恢复现有内部三字段，实际 selector pool 精确覆盖、最终四项、trace、API 与下游合同不变。完整非 live 矩阵 16 文件、280/280 与 backend typecheck 通过；两份 Task 16 arguments 静态重排减少 22.9%/23.1%，但未执行 live，不能声明真实 token、延迟、strict 首通率或漏判改善，S2-0 继续打开。
 - Task 17 内置浏览器真实验收已完成：两个 GLM-5.2 固定样本共 4 次请求，builder/selector 全部 attempt 1，普通 JSON 与 strict 目标工具均首次通过。selector arguments 相对 Task 16 减少 41.7%/34.9%，completion token 减少 43.3%/38.3%，selector 耗时减少 28.6%/14.5%；但两轮均为 8 pass / 0 risk，“靖康城破”两位皇帝主体混合与“鸿门宴·天下归属已经注定”过度断言都进入最终四项。结构与体积通过、语义召回未通过，S2-0 继续打开，不进入 S2-1。
 - Task 17 语义回放基线见 [设计](./2026-07-16-s2-0-topic-selector-semantic-replay-design.md) 和 [实施计划](./2026-07-16-s2-0-topic-selector-semantic-replay-implementation-plan.md)：已按两个真实 run 固化 8+8 候选输入、3 个风险正例和 2 个 `none` 对照；默认 harness 为 0 请求，完整 non-live 矩阵 17 文件、299/299 与 backend typecheck 通过。随后按授权执行两次 GLM-5.2 Selector-only live 请求：高张力 fixture 候选覆盖不完整，均衡 fixture 两个风险正例均漏召回，汇总风险召回 0/3、`none` 对照完成并通过 1/2，主闸门未通过。S2-0 继续打开，不进入 S2-1。
-- Task 17 受控局部回退见 [设计](./2026-07-16-s2-0-topic-selector-controlled-rollback-design.md) 和 [实施计划](./2026-07-16-s2-0-topic-selector-controlled-rollback-implementation-plan.md)：在用户接受短期性能回退后，provider DTO/prompt/parser 已恢复 Task 16 的逐候选完整 `status / issue / note`，同时保留 Task 17 的实际候选池精确覆盖、固定 fixture、零请求默认 replay、两次 live 上限与脱敏报告。完整受影响矩阵 17 文件、300/300 与 backend typecheck 通过；shared/API/前端/Builder/下游合同未改。尚未重新执行 live，不能声明风险召回已经恢复，S2-0 继续打开。
+- Task 17 受控局部回退见 [设计](./2026-07-16-s2-0-topic-selector-controlled-rollback-design.md) 和 [实施计划](./2026-07-16-s2-0-topic-selector-controlled-rollback-implementation-plan.md)：provider DTO/prompt/parser 已恢复逐候选完整 `status / issue / note`，同时保留候选全集覆盖、固定 fixture、零请求默认 replay、两次 live 上限与脱敏报告；non-live 17 文件、300/300 与 backend typecheck 通过。随后两次 Selector-only live 均结构首通，`none` 对照 2/2，但三个风险正例仍全部漏判，风险召回仍为 0/3；相对 compact 固定输入回放，completion token 增长 60.3%，完整 verdict 没有带来语义收益。shared/API/前端/Builder/下游合同未改，S2-0 继续打开，下一步先决定是否撤销该回退。
 - 正式 V2 产品功能已进入实施阶段；migration owner 不可登录标记 `!migration-owner-no-login`，其项目通过 admin 管理页面转移给真实用户。
 
 - [V1 高风险稳定化实施计划](./2026-07-10-v1-high-risk-stabilization-implementation-plan.md) 的主要代码任务已完成；其全量回归超时和故障演练缺口已并入 Task 8.5 的测试与切换闸门，不再作为独立的下一执行入口。
@@ -63,7 +63,7 @@
 
 旧的 Step 3-10 文档保留为范围留痕；当前执行顺序以本节为准：
 
-1. `S2-0`（进行中）：LLM 回复速度、质量和结构化输出优化基线。Task 17 紧凑 verdict 已通过结构/体积 live 验收，但两个真实样本出现全 `none` 语义漏判；现已固化两份生产实际 Selector 输入并完成默认 0 请求的 selector-only 回放工具。下一闸门是在新的明确授权下执行最多两次固定输入 live 回放；通过前不修改 prompt、不进入 S2-1。
+1. `S2-0`（进行中）：LLM 回复速度、质量和结构化输出优化基线。Task 17 紧凑 verdict 与受控局部回退后的完整 verdict 在同两份固定输入上风险召回均为 0/3；完整 verdict 只恢复结构覆盖与 `none` 对照，completion token 增长 60.3%，没有恢复语义召回。下一闸门是先决定是否撤销这次无收益回退，再为“风险全判 none”形成独立窄设计；不得追加 live 请求，通过前不进入 S2-1。
 2. `S2-1`：多模型、多供应商切换。基于 S2-0 的真实基线设计 provider/model/routing/run snapshot/credential reference。
 3. `S2-2`：用户偏好、生成策略与成本控制。接入用户级策略、预算和成本记录，消费 S2-1 的 provider/model 能力。
 4. `S2-3`：Prompt 治理。版本、hash、fixtures、变更说明和运行快照对齐；仍遵守 `AGENTS.md` 的 `harness/prompts/` 正式 prompt 位置规则，除非另有设计审查批准。

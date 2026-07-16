@@ -490,3 +490,29 @@ selector pool 对照只读取 Task 14 已保存的本地 interaction input，并
 
 - 受控局部回退已经在 non-live 层恢复到 Task 16 有真实质量证据的完整语义表达，同时保留 Task 17 的覆盖与诊断护栏；这不是整个分支回滚，也没有改变下游合同。
 - non-live 不能证明 GLM-5.2 风险召回已经恢复，也不能证明 strict 首通率、token 或 latency。S2-0 继续保持打开，不进入 S2-1；下一闸门是在新的明确授权下对同两份固定输入执行最多两次 Selector-only live 回放。
+
+## 2026-07-16 Topic Selector 受控局部回退后固定输入回放（live 未通过）
+
+### 授权与运行边界
+
+- 用户确认按建议继续；沿用固定两份 Task 17 fixture、`glm-5.2`、`max-requests=2` 与人民币 10 元硬预算执行 Selector-only live 回放。
+- 第一次经 `npm run` 启动时参数被当前 npm 版本吞掉，runner 明确返回 `live=false / actual_requests=0`，没有产生 provider 请求；随后直接调用 `tsx` 入口完成真实回放。
+- 真实回放实际请求数为 2，每份 fixture 各 1 次；两次均为目标工具 `tool_calls`、`thinking=disabled`、`maxAttempts=1`，没有 Builder、数据库、selection、fallback、repair、retry、capability probe 或浏览器操作。
+- 运行态脱敏结果只保存在已忽略目录 `harness/scripts/runtime/output/topic-selector-semantic-replay/`，没有提交 raw output、system prompt、完整 fixture input 或 API key。
+
+### 真实结果
+
+| fixture | 结构 | 耗时 | prompt/completion token | tool arguments | 语义计分 |
+| --- | --- | ---: | ---: | ---: | --- |
+| 高张力 | 通过 | 28.223 秒 | 4340 / 1952 | 4593 字符 | 风险 0/1，`none` 对照 1/1 |
+| 均衡叙事 | 通过 | 21.096 秒 | 4491 / 1585 | 3802 字符 | 风险 0/2，`none` 对照 1/1 |
+
+- 两轮均 attempt 1 且候选全集覆盖通过，修复了上一次 compact 回放中高张力 fixture 的结构覆盖失败；两个 `none` 对照也由 1/2 恢复为 2/2。
+- 三个固定风险正例仍全部返回 `none`：靖康主体混合、鸿门宴过度断言和党锢绝对化表述均为 `risk_missed`。汇总为 expected risk 3、recalled risk 0、exact enum match 0，主闸门 `primary_gate_passed=false`。
+- 相对上一次 compact 固定输入回放，两次总耗时由 47.311 秒变为 49.319 秒（+4.2%），prompt token 由 8889 变为 8831（-0.7%），completion token 由 2206 增至 3537（+60.3%）。两个样本不足以推断通用延迟，但完整 verdict 的输出体量回升已真实出现，风险召回没有改善。
+
+### 阶段结论
+
+- 受控局部回退只恢复了 strict 结构稳定性与 `none` 对照，没有恢复风险召回；此前“Task 16 完整 verdict 可能恢复语义质量”的假设被本轮固定输入否证。
+- 当前瓶颈位于 GLM-5.2 对候选内部冲突的语义判定，不在 compact/full DTO 映射、parser、候选覆盖、trace、selection、API 或下游合同。不能继续通过增加逐候选输出字段换取未出现的质量收益。
+- 本轮只记录证据，不修改 prompt、schema、parser 或 selection。S2-0 继续保持打开，不进入 S2-1；下一步应先决定是否撤销这次无语义收益的完整 verdict 回退，再为“风险全判 none”形成独立窄设计，不得追加 live 请求、本地关键词规则或第三次 LLM 调用。

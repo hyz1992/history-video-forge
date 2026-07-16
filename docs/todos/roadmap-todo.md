@@ -59,7 +59,7 @@
 - [x] 完成 V1 高风险稳定化最终全量回归、故障演练和内置浏览器验收
 
 ## 进行中
-- [ ] 收口 `S2-0` 的完整 topic 链路：Task 17 紧凑 verdict 真实回放风险召回 0/3 后，已完成受控局部回退，恢复 Task 16 逐候选完整 `status / issue / note`，同时保留实际候选池精确覆盖、固定 fixture、默认零请求 replay、两次 live 上限和脱敏报告。完整 non-live 矩阵 17 文件、300/300 与 backend typecheck 通过，下游合同未改；真实召回恢复尚未验证，下一闸门是重新授权同两份输入、最多两次 Selector-only live 回放。S2-0 保持打开，不进入 S2-1
+- [ ] 收口 `S2-0` 的完整 topic 链路：Task 17 紧凑 verdict 与受控局部回退后的完整 verdict 在同两份固定输入上风险召回均为 0/3。完整 verdict 修复了结构覆盖和 `none` 对照（2/2），但 completion token 增长 60.3%，没有恢复风险召回；下游合同始终未改。下一闸门是先决定是否撤销这次无语义收益的完整 verdict 回退，再为“风险全判 none”形成独立窄设计；不得继续追加 live 请求。S2-0 保持打开，不进入 S2-1
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 补齐前端 v1 真实浏览器验收矩阵：空态、加载中、成功、失败、刷新、深链、重复操作
 - [ ] 收口当前未归档计划，避免历史 implementation plan 误导新任务
