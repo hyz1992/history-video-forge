@@ -167,7 +167,7 @@ export function getProductionConsistencyIssueSet(): Set<string> {
     "topic_selector_semantic_replay_production_issue_enum_missing",
   );
   const consistencyIssue = readRecord(
-    properties.consistency_issue,
+    properties.primary_consistency_issue,
     "topic_selector_semantic_replay_production_issue_enum_missing",
   );
   const enumValues = consistencyIssue.enum;
@@ -563,10 +563,7 @@ function readToolArgumentsChars(rawOutput: string): number | null {
       return null;
     }
 
-    if (
-      Array.isArray(parsed.ranked_candidates) &&
-      Array.isArray(parsed.consistency_risk_notes)
-    ) {
+    if (Array.isArray(parsed.ranked_candidates)) {
       return rawOutput.length;
     }
 

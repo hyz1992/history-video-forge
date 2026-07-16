@@ -44,18 +44,18 @@ function createProviderDecision(
       quality_score: 100 - index,
       deductions: [],
       risk_summary: "fixture risk summary",
-      consistency_issue: issues[candidate.candidate_id] ?? "none",
+      consistency_status:
+        (issues[candidate.candidate_id] ?? "none") === "none" ? "pass" : "risk",
+      primary_consistency_issue: issues[candidate.candidate_id] ?? "none",
+      consistency_note:
+        (issues[candidate.candidate_id] ?? "none") === "none"
+          ? "fixture candidate fields are internally consistent"
+          : `fixture note for ${candidate.candidate_id}`,
     }),
   );
 
   return {
     ranked_candidates,
-    consistency_risk_notes: ranked_candidates
-      .filter((candidate) => candidate.consistency_issue !== "none")
-      .map((candidate) => ({
-        candidate_id: candidate.candidate_id,
-        note: `fixture note for ${candidate.candidate_id}`,
-      })),
   };
 }
 
@@ -526,6 +526,19 @@ describe("topic selector semantic replay evaluation and live orchestration", () 
     const result = await runner.runFixture(fixture);
 
     expect(capturedRequest?.schema).toBe(TOPIC_SELECTOR_STRICT_SCHEMA);
+    const parameters = capturedRequest?.schema.parameters as Record<string, any>;
+    const properties = parameters.properties as Record<string, any>;
+    const scorecard = properties.ranked_candidates.items;
+    expect(parameters.required).toEqual(["ranked_candidates"]);
+    expect(properties).not.toHaveProperty("consistency_risk_notes");
+    expect(scorecard.required).toEqual(
+      expect.arrayContaining([
+        "consistency_status",
+        "primary_consistency_issue",
+        "consistency_note",
+      ]),
+    );
+    expect(scorecard.properties).not.toHaveProperty("consistency_issue");
     expect(capturedRequest?.prompt.metadata.id).toBe("topic.selector");
     expect(capturedRequest?.input).toEqual(fixture.selector_input);
     expect(capturedRequest?.options).toMatchObject({
