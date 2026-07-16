@@ -1,0 +1,207 @@
+{
+  "fixture_id": "task17-balanced",
+  "source": {
+    "project_id": "3858fbdc-18c1-4095-ac72-55f9d4adb4b1",
+    "topic_run_id": "topic_run_f5a2648f-7ade-45b5-958d-ce4f8cab1e5c",
+    "interaction_index": 2,
+    "model": "glm-5.2",
+    "task": "S2-0 Task 17",
+    "baseline_observation": "all_none"
+  },
+  "selector_input": {
+    "recent_event_memory": [],
+    "recommendation_seed": {
+      "canonicalName": "先秦至两汉·均衡叙事历史事件推荐",
+      "coreConflict": "重点筛选能体现均衡叙事、并且冲突关系清晰、人物立场可对撞的具体历史事件。",
+      "recentUsageHint": "优先选择先秦至两汉范围内近期未重复的具体事件，严格排除超出先秦至两汉范围的候选。",
+      "sourceHint": "仅使用先秦至两汉范围内相关史事与人物记载；超出先秦至两汉的事件不得采用。",
+      "strongScene": "优先寻找发生在先秦至两汉、具备宫廷裁决、当众对抗、临阵翻盘、焚毁文献、政变处决等强场景的关键历史瞬间，所有场景必须发生在先秦至两汉范围内。",
+      "summary": "请围绕先秦至两汉中具备均衡叙事特征的具体历史事件生成候选，禁止返回“王朝更迭”“古代战争”“百家争鸣”这类泛主题，不得超出先秦至两汉范围。像三国、魏晋、隋唐、宋元、明清这类超出时段的题目一律排除。优先推荐适合直接进入文案阶段的单事件主题。",
+      "tags": [
+        "ancient",
+        "balanced",
+        "system_recommendation",
+        "single_event",
+        "concrete_scene",
+        "strict_era_boundary"
+      ]
+    },
+    "selector_pool": [
+      {
+        "candidate_id": "selector_candidate_1",
+        "core_conflict": "赵高联手李斯篡改始皇遗诏赐死扶苏，赌注是秦帝国继承权与天下格局",
+        "event_identity": "沙丘之谋",
+        "family_label": "宫廷政变",
+        "fatigue_score": 0,
+        "must_cover_preview": [
+          "始皇崩于沙丘，赵高扣下遗诏，李斯面临选边站队的生死抉择",
+          "赵高以利害说动李斯合谋篡改遗诏，赐死扶苏、立胡亥为帝",
+          "扶苏接到伪诏自尽于上郡，帝国权力中枢已被偷换而天下不知"
+        ],
+        "one_line_angle": "赵高与李斯在始皇灵前私改遗诏，帝国继承权在一夜之间被偷换",
+        "risk_hints": [
+          "遗诏篡改细节史源有限，需注意史料叙述的可靠性边界"
+        ],
+        "scope_label": "秦",
+        "strong_scene": "赵高在沙丘行营始皇灵前说服李斯，窗外是酷暑与掩盖尸臭的鲍鱼车",
+        "title": "沙丘之谋：一份被篡改的遗诏如何改变秦帝国命运"
+      },
+      {
+        "candidate_id": "selector_candidate_2",
+        "core_conflict": "赵孝成王以赵括替廉颇寻求决战，白起围歼赵军，赌注是赵国国运",
+        "event_identity": "长平之战",
+        "family_label": "军事决战",
+        "fatigue_score": 0,
+        "must_cover_preview": [
+          "廉颇坚壁拒秦三年，赵国粮尽被迫换将，赵括面临必须速战速决的绝境",
+          "赵括率军渡丹水进攻被白起迂回包抄，四十万赵军被困长平谷地断粮",
+          "赵括突围阵亡后降卒被坑杀，赵国举丧震恐而六国合纵格局彻底瓦解"
+        ],
+        "one_line_angle": "赵国换帅并非轻率决策，而是国力撑不住消耗战后的孤注一掷",
+        "risk_hints": [
+          "坑杀降卒数字争议较大，需中性呈现史料来源与估算差异"
+        ],
+        "scope_label": "战国",
+        "strong_scene": "白起将赵军截为两段困于谷地，赵括在断粮四十六天后率精锐突围阵亡",
+        "title": "长平之战：赵括纸上谈兵背后的国力耗竭与四十万降卒命运"
+      },
+      {
+        "candidate_id": "selector_candidate_3",
+        "core_conflict": "项羽在范增劝杀与项伯斡旋之间放过刘邦，赌注是天下霸权归属",
+        "event_identity": "鸿门宴",
+        "family_label": "政治对峙",
+        "fatigue_score": 0,
+        "must_cover_preview": [
+          "刘邦率百余骑赴鸿门谢罪，范增暗举玉玦示意项羽动手却遭沉默无视",
+          "项庄借舞剑刺杀刘邦被项伯拔剑对挡，樊哙持盾闯帐怒斥项羽",
+          "刘邦借如厕脱身独骑逃回霸上，项羽收下白璧而范增碎斗叹竖子不足与谋"
+        ],
+        "one_line_angle": "一场宴席上的座次与剑舞，藏着楚汉相争最关键的决策瞬间",
+        "risk_hints": [
+          "宴席细节经后世文学层层渲染，需区分史源与演义成分"
+        ],
+        "scope_label": "秦末汉初",
+        "strong_scene": "范增举玉玦三次暗示项羽动手无果，项庄舞剑意在沛公被项伯以身阻挡",
+        "title": "鸿门宴：项羽放过刘邦那一刻，天下归属已经注定"
+      },
+      {
+        "candidate_id": "selector_candidate_4",
+        "core_conflict": "汉景帝腰斩晁错以求七国退兵，赌注是中央对诸侯的削藩成果与皇权",
+        "event_identity": "晁错之死",
+        "family_label": "政治清洗",
+        "fatigue_score": 0,
+        "must_cover_preview": [
+          "七国以清君侧诛晁错为名起兵，汉景帝面临战与和的抉择压力",
+          "晁错被诱至东市腰斩弃市，景帝以此向七国示好却得知叛军不退兵",
+          "景帝遣周亚夫平叛三月破吴楚，此后虽胜却再无人敢直言削藩"
+        ],
+        "one_line_angle": "汉景帝腰斩晁错以求七国退兵，却发现叛军真正要的是皇权本身",
+        "risk_hints": [
+          "腰斩细节需中性处理，避免渲染肢体伤害的猎奇化描述"
+        ],
+        "scope_label": "西汉",
+        "strong_scene": "晁错被骗至东市腰斩，斩后景帝问袁盎叛军是否可退，答曰必反",
+        "title": "晁错之死：提议削藩的人被天子当成平息叛乱的筹码"
+      },
+      {
+        "candidate_id": "selector_candidate_5",
+        "core_conflict": "江充以巫蛊之名逼反太子刘据，汉武帝误信谋反镇压亲子，赌注是太子性命与帝国储君",
+        "event_identity": "巫蛊之祸",
+        "family_label": "宫廷惨案",
+        "fatigue_score": 0,
+        "must_cover_preview": [
+          "江充在太子宫掘出桐木人，太子刘据无法自辩面临被废与囚禁之祸",
+          "太子斩江充后发兵与丞相刘屈氂长安巷战五日，武帝在甘泉宫下诏平叛",
+          "太子兵败逃亡湖县被围自缢，皇后卫子夫自杀，武帝事后知冤族灭江充"
+        ],
+        "one_line_angle": "江充用木人逼反太子，汉武帝在甘泉宫失联中误信谋反",
+        "risk_hints": [
+          "涉及皇室骨肉相残，需克制呈现自缢与族诛等后果"
+        ],
+        "scope_label": "西汉",
+        "strong_scene": "太子刘据在长安发兵斩江充后与丞相军巷战五日，最终兵败出逃",
+        "title": "巫蛊之祸：汉武帝晚年一场木偶引发的骨肉相残"
+      },
+      {
+        "candidate_id": "selector_candidate_6",
+        "core_conflict": "刘秀率三千敢死队冲击王邑四十二万大军中军，赌注是绿林军存亡与新莽命运",
+        "event_identity": "昆阳之战",
+        "family_label": "军事逆转",
+        "fatigue_score": 0,
+        "must_cover_preview": [
+          "王邑率四十二万大军围昆阳，城中守军不足万人面临粮尽城破之危",
+          "刘秀率三千敢死夜冲王邑中军阵，天降暴风大雨致新莽大军自相践踏溃散",
+          "王邑大军崩溃后新莽主力尽丧，更始军乘势西进直取长安，王莽政权覆灭"
+        ],
+        "one_line_angle": "新莽四十二万大军围城，刘秀用一次夜间突袭翻盘了整场战争",
+        "risk_hints": [
+          "天降异象记载带有天人感应色彩，需区分史实与附会"
+        ],
+        "scope_label": "新莽末东汉初",
+        "strong_scene": "刘秀率三千敢死冲击王邑中军，天降异象暴风骤雨，新莽大军溃散",
+        "title": "昆阳之战：刘秀率三千敢死冲破四十二万大军的奇迹一夜"
+      },
+      {
+        "candidate_id": "selector_candidate_7",
+        "core_conflict": "士人以清议对抗宦官集团，宦官借皇权大兴党锢禁锢士人终身，赌注是士人参政权与东汉文官根基",
+        "event_identity": "党锢之祸",
+        "family_label": "政治迫害",
+        "fatigue_score": 0,
+        "must_cover_preview": [
+          "李膺等士人以清议品评朝政激怒宦官，宦官集团以党人结党罪名上奏弹劾",
+          "宦官借天子诏令大捕党人入狱考掠株连数百人，窦武陈蕃谋诛宦官反被诛杀",
+          "第二次党锢禁锢终身且株连五族，天下名士噤声，士人清议传统彻底断绝"
+        ],
+        "one_line_angle": "士人公开品评宦官，宦官以皇帝名义将他们永久禁止做官",
+        "risk_hints": [
+          "考掠与族诛细节需中性呈现，避免酷刑猎奇化描写"
+        ],
+        "scope_label": "东汉",
+        "strong_scene": "宦官假天子诏令大捕党人，李膺等士人领袖被系狱考掠株连数百人",
+        "title": "党锢之祸：士人清议对抗宦官，代价是整个知识阶层的沉默"
+      },
+      {
+        "candidate_id": "selector_candidate_8",
+        "core_conflict": "荆轲奉燕太子丹之命携督亢地图刺杀秦王嬴政，赌注是燕国存亡",
+        "event_identity": "荆轲刺秦",
+        "family_label": "刺杀行动",
+        "fatigue_score": 0,
+        "must_cover_preview": [
+          "燕太子丹送荆轲至易水，荆轲带樊於期首级与督亢地图赴咸阳面临一去不返",
+          "荆轲在咸阳宫展地图图穷匕现追秦王绕柱，夏无且掷药囊阻隔使其被斩",
+          "荆轲被杀后秦王大怒发兵灭燕，燕太子丹被父王斩首献秦仍未能免国亡"
+        ],
+        "one_line_angle": "燕太子丹用一把匕首赌国运，荆轲在大殿上追着秦王绕柱跑",
+        "risk_hints": [
+          "刺杀场面需克制动作描写，避免血腥细节的猎奇渲染"
+        ],
+        "scope_label": "战国",
+        "strong_scene": "荆轲在咸阳宫展开督亢地图，图穷匕见后追逐秦王绕柱，被夏无且药囊阻隔",
+        "title": "荆轲刺秦：图穷匕见那一刻，燕国把国运压在一把匕首上"
+      }
+    ]
+  },
+  "annotations": [
+    {
+      "candidate_id": "selector_candidate_3",
+      "expected_risk": true,
+      "expected_issue": "overclaim_or_ambiguity",
+      "entered_final_candidates": true,
+      "rationale": "内部材料只支持刘邦脱身和范增失望，标题却把这一刻升级为天下归属已经注定。"
+    },
+    {
+      "candidate_id": "selector_candidate_7",
+      "expected_risk": true,
+      "expected_issue": "overclaim_or_ambiguity",
+      "entered_final_candidates": false,
+      "rationale": "永久禁官、整个知识阶层沉默和清议传统彻底断绝均是内部材料不足以支撑的绝对化断言。"
+    },
+    {
+      "candidate_id": "selector_candidate_5",
+      "expected_risk": false,
+      "expected_issue": "none",
+      "entered_final_candidates": true,
+      "rationale": "巫蛊候选中的主体、行动和结果在标题、切口与三段 preview 间相互支持，作为 none 对照。"
+    }
+  ]
+}

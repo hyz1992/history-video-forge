@@ -1,0 +1,200 @@
+{
+  "fixture_id": "task17-high-tension",
+  "source": {
+    "project_id": "5fda1609-63ed-4f0d-b47a-bb48038b3a6a",
+    "topic_run_id": "topic_run_3d8da9c7-aaaa-43f9-80fe-5cc5549ec95f",
+    "interaction_index": 2,
+    "model": "glm-5.2",
+    "task": "S2-0 Task 17",
+    "baseline_observation": "all_none"
+  },
+  "selector_input": {
+    "recent_event_memory": [],
+    "recommendation_seed": {
+      "canonicalName": "魏晋至唐宋·高张力历史事件推荐",
+      "coreConflict": "重点筛选能体现高张力、并且冲突关系清晰、人物立场可对撞的具体历史事件。",
+      "recentUsageHint": "优先选择魏晋至唐宋范围内近期未重复的具体事件，严格排除超出魏晋至唐宋范围的候选。",
+      "sourceHint": "仅使用魏晋至唐宋范围内相关史事与人物记载；超出魏晋至唐宋的事件不得采用。",
+      "strongScene": "优先寻找发生在魏晋至唐宋、具备宫廷裁决、当众对抗、临阵翻盘、焚毁文献、政变处决等强场景的关键历史瞬间，所有场景必须发生在魏晋至唐宋范围内。",
+      "summary": "请围绕魏晋至唐宋中具备高张力特征的具体历史事件生成候选，禁止返回“王朝更迭”“古代战争”“百家争鸣”这类泛主题，不得超出魏晋至唐宋范围。像先秦、两汉、元明清这类超出时段的题目一律排除。优先推荐适合直接进入文案阶段的单事件主题。",
+      "tags": [
+        "medieval",
+        "high",
+        "system_recommendation",
+        "single_event",
+        "concrete_scene",
+        "strict_era_boundary"
+      ]
+    },
+    "selector_pool": [
+      {
+        "candidate_id": "selector_candidate_1",
+        "core_conflict": "司马懿以病退伪装对曹爽的实际控制力，赌注是曹魏军政命脉与家族存亡",
+        "event_identity": "高平陵之变",
+        "family_label": "政变权谋",
+        "fatigue_score": 0,
+        "must_cover_preview": [
+          "司马懿被李胜探病时装作颤抖喝粥，李胜回报曹爽称其命不久",
+          "曹爽陪魏帝出城谒陵，司马懿即日关闭洛阳城门占据武库",
+          "曹爽接到奏章犹豫不决，最终弃兵权归家被夷三族"
+        ],
+        "one_line_angle": "权臣装病退场后在对手离城扫墓的一夜关闭洛阳城门翻盘",
+        "risk_hints": [
+          "人物权谋评价两极化，需注意叙事中立"
+        ],
+        "scope_label": "魏晋",
+        "strong_scene": "司马懿在洛阳太傅府中骤然起身，与司马师部署关闭城门、占领武库，曹爽一行尚在高平陵",
+        "title": "司马懿装病夺权：曹爽陪小皇帝出城扫墓"
+      },
+      {
+        "candidate_id": "selector_candidate_2",
+        "core_conflict": "梁武帝萧衍执意收留侯景以图北伐，赌注是南梁国运与建康城数十万居民存亡",
+        "event_identity": "侯景渡江",
+        "family_label": "战争灾难",
+        "fatigue_score": 0,
+        "must_cover_preview": [
+          "侯景叛东魏南奔，梁武帝力排众议纳其于寿阳并授官",
+          "侯景以清君侧为名起兵，一路渡淮南下直围建康台城",
+          "台城陷落后梁武帝被软禁净身殿，口苦求蜜不得而亡"
+        ],
+        "one_line_angle": "南朝皇帝以善意收纳北方叛将，换来都城围困与自身饿死台城",
+        "risk_hints": [
+          "涉及围城饥荒，需克制灾情细节描写"
+        ],
+        "scope_label": "南北朝",
+        "strong_scene": "侯景率八百余骑南渡淮河抵达寿阳，梁廷不仅未缴械反而授予官职，数月后侯景起兵直逼建康",
+        "title": "侯景八百人渡淮：梁武帝接纳叛将后的崩盘"
+      },
+      {
+        "candidate_id": "selector_candidate_3",
+        "core_conflict": "李世民与太子李建成围绕储位终局对撞，赌注是皇位继承权与各自阵营生死",
+        "event_identity": "玄武门之变",
+        "family_label": "宫廷政变",
+        "fatigue_score": 0,
+        "must_cover_preview": [
+          "李世民在太子与齐王多次挤压下决定先发制人，伏兵玄武门",
+          "李建成李元吉入宫察觉异变拨马欲回，李世民出呼引弓射杀",
+          "尉迟敬德持建成元吉首级示众宫门，东宫兵溃散"
+        ],
+        "one_line_angle": "皇子在皇宫北门亲手解决储位之争，胜负在一个上午内定格",
+        "risk_hints": [
+          "兄弟相残评价敏感，需中立叙事"
+        ],
+        "scope_label": "唐初",
+        "strong_scene": "李世民率长孙无忌等九人在玄武门内设伏，李建成与李元吉骑马入宫门时遭遇伏兵",
+        "title": "玄武门之变：李世民在宫门前射杀长兄"
+      },
+      {
+        "candidate_id": "selector_candidate_4",
+        "core_conflict": "唐文宗与李训郑注密谋借甘露祥瑞诛灭宦官，赌注是皇权归位与百官性命",
+        "event_identity": "甘露之变",
+        "family_label": "宫廷政变",
+        "fatigue_score": 0,
+        "must_cover_preview": [
+          "李训以左金吾杖院甘露为由请帝遣宦官验看，暗中设伏甲兵",
+          "仇士良至院察看觉幕后有兵声，挟帝拔帐退入宣政门闭门",
+          "宦官神策军入宫大杀朝臣，李训郑注及族属株连千余"
+        ],
+        "one_line_angle": "皇帝与文臣在庭院设伏诛杀宦官，因一颗假甘露暴露功亏一篑",
+        "risk_hints": [
+          "宦官专权叙事易脸谱化，需还原决策逻辑"
+        ],
+        "scope_label": "中晚唐",
+        "strong_scene": "仇士良陪同文宗至含元殿前查看所谓甘露，风动幕布露出伏兵甲胄，仇士良挟持文宗退入宣政门",
+        "title": "甘露之变：唐文宗设局诛宦官反被围困"
+      },
+      {
+        "candidate_id": "selector_candidate_5",
+        "core_conflict": "宋文帝刘义隆力主北伐中原，对阵北魏太武帝拓跋焘，赌注是淮南防线与南朝国力根基",
+        "event_identity": "元嘉北伐",
+        "family_label": "军事战略",
+        "fatigue_score": 0,
+        "must_cover_preview": [
+          "宋文帝听王玄谟封狼居胥之议，命大军北出攻滑台",
+          "魏军掘地道破滑台，宋军溃散，拓跋焘挥师南抵瓜步",
+          "建康震恐尽发民丁守江，魏军掳掠淮南北归，南朝国力骤衰"
+        ],
+        "one_line_angle": "皇帝三度仓促北伐换来敌骑饮马长江，仓促军事扩张的反面教材",
+        "risk_hints": [
+          "战争评价涉及民族叙事，需中立表述双方"
+        ],
+        "scope_label": "南北朝",
+        "strong_scene": "宋军王玄谟围攻滑台数月不下，北魏大军南下反攻，宋军溃退，魏军直抵瓜步对岸",
+        "title": "元嘉草草：宋文帝仓促北伐招致反向南侵"
+      },
+      {
+        "candidate_id": "selector_candidate_6",
+        "core_conflict": "赵王司马伦伪造禅位诏书废惠帝自立，赌注是皇位与司马氏各王的实力平衡",
+        "event_identity": "司马伦篡位",
+        "family_label": "政变权谋",
+        "fatigue_score": 0,
+        "must_cover_preview": [
+          "司马伦与孙秀伪造禅让诏书，遣甲士入宫逼惠帝交玺",
+          "三王联军讨伦，洛阳城外激战，孙秀被杀司马伦被迫退位",
+          "惠帝复位但诸王混战已不可收，八王之乱全面失控"
+        ],
+        "one_line_angle": "宗室亲王伪造圣旨废帝自立，三个月后被其他藩王联手推翻",
+        "risk_hints": [
+          "宗室内乱细节繁杂，需精简因果链"
+        ],
+        "scope_label": "西晋",
+        "strong_scene": "司马伦派甲士入宫逼惠帝交出玺绶，惠帝被迁至金墉城，孙秀大封亲信数千人为官",
+        "title": "赵王伦篡位：一场称帝闹剧触发八王连锁混战"
+      },
+      {
+        "candidate_id": "selector_candidate_7",
+        "core_conflict": "宋徽宗禅位钦宗后南逃避责，钦宗在战和间反复摇摆，赌注是北宋存亡与皇族命运",
+        "event_identity": "靖康之变",
+        "family_label": "战争灾难",
+        "fatigue_score": 0,
+        "must_cover_preview": [
+          "金军南下，徽宗仓促传位钦宗后携近臣出逃镇江",
+          "钦宗在主战主和间反复，罢李纲后又亲赴金营被扣",
+          "金兵索皇室宗亲三千余人北迁，北宋朝廷实质终结"
+        ],
+        "one_line_angle": "皇帝在敌临城下禅位给儿子并出城谈判，换来举国北迁",
+        "risk_hints": [
+          "涉及皇室屈辱叙事，需克制猎奇化描写"
+        ],
+        "scope_label": "北宋末",
+        "strong_scene": "金军二次围城，宋钦宗亲赴金营议和被扣留，金兵入开封搜刮府库并索要皇室宗亲",
+        "title": "靖康城破：宋徽宗禅位南逃与开封围城终局"
+      },
+      {
+        "candidate_id": "selector_candidate_8",
+        "core_conflict": "李元昊以藩镇身份对宋廷帝系发起挑战，赌注是党项部族独立地位与宋夏百年边境格局",
+        "event_identity": "元昊立夏",
+        "family_label": "政治建构",
+        "fatigue_score": 0,
+        "must_cover_preview": [
+          "元昊继位后改姓立年号、剃发易服，系统构建党项国家制度",
+          "元昊上表宋朝正式称帝，宋廷削赐姓绝互市发兵讨伐",
+          "三川口好水川连胜后元昊以名义称臣换实利，西夏立国"
+        ],
+        "one_line_angle": "一个受宋廷册封的边疆藩镇在十年间完成建国称帝全过程",
+        "risk_hints": [
+          "民族政权叙事需平衡宋夏双方立场"
+        ],
+        "scope_label": "北宋",
+        "strong_scene": "元昊在西夏都城兴庆府建蕃学改衣冠，遣使向宋廷递交称帝表文，宋仁宗闻讯下诏削夺赐姓",
+        "title": "元昊称帝：党项首领从受封节度使到自立王朝"
+      }
+    ]
+  },
+  "annotations": [
+    {
+      "candidate_id": "selector_candidate_7",
+      "expected_risk": true,
+      "expected_issue": "actor_role_mismatch",
+      "entered_final_candidates": true,
+      "rationale": "切口用同一个“皇帝”串联宋徽宗禅位南逃与宋钦宗出城赴金营，混淆了两个行为主体。"
+    },
+    {
+      "candidate_id": "selector_candidate_3",
+      "expected_risk": false,
+      "expected_issue": "none",
+      "entered_final_candidates": true,
+      "rationale": "玄武门候选中的人物、动作、冲突和结果相互支持，作为高张力样本的 none 对照。"
+    }
+  ]
+}
