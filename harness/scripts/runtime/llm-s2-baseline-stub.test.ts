@@ -111,12 +111,18 @@ describe("llm-s2-baseline stub flow", () => {
             quality_score: 90,
             deductions: [],
             risk_summary: "low",
+            consistency_status: "pass",
+            primary_consistency_issue: "none",
+            consistency_note: "probe candidate is internally consistent",
           }, {
             candidate_id: "probe_c2",
             quality_rank: 2,
             quality_score: 80,
             deductions: [],
             risk_summary: "low",
+            consistency_status: "pass",
+            primary_consistency_issue: "none",
+            consistency_note: "probe candidate is internally consistent",
           }],
         });
       }) as any,
@@ -139,6 +145,9 @@ describe("llm-s2-baseline stub flow", () => {
       (result.observation.effectiveRequest as { toolChoice?: string } | null)?.toolChoice,
     ).toBe("target_function");
     expect(capturedScorecardSchema?.required).toContain("risk_summary");
+    expect(capturedScorecardSchema?.required).toContain("consistency_status");
+    expect(capturedScorecardSchema?.required).toContain("primary_consistency_issue");
+    expect(capturedScorecardSchema?.required).toContain("consistency_note");
     expect(capturedScorecardSchema?.additionalProperties).toBe(false);
   });
 
@@ -151,7 +160,16 @@ describe("llm-s2-baseline stub flow", () => {
       invokeStrictApi: vi.fn(async (request) => {
         capturedOptions = request.options;
         return stubStrictResponse({
-          ranked_candidates: [{ candidate_id: "c1", quality_rank: 1, quality_score: 90, risk_summary: "low", deductions: [] }],
+          ranked_candidates: [{
+            candidate_id: "c1",
+            quality_rank: 1,
+            quality_score: 90,
+            risk_summary: "low",
+            deductions: [],
+            consistency_status: "pass",
+            primary_consistency_issue: "none",
+            consistency_note: "candidate fields are internally consistent",
+          }],
         });
       }) as any,
     });
