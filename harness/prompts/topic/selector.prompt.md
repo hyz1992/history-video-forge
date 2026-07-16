@@ -19,23 +19,22 @@ status: active
 
 ## 输出合同
 
-- 必须通过 `rank_topic_candidates` 返回 `ranked_candidates` 与 `consistency_risk_notes`，不得返回其他顶层字段。
+- 必须通过 `rank_topic_candidates` 返回 `ranked_candidates`，不得返回其他顶层字段。
 - `ranked_candidates` 必须且只能覆盖 `selector_pool` 中全部候选 id，不得遗漏、重复或发明候选池外 id。
-- 每项必须包含 `candidate_id`、`quality_rank`、`quality_score`、`deductions`、`risk_summary`、`consistency_issue`。
+- 每项必须包含 `candidate_id`、`quality_rank`、`quality_score`、`deductions`、`risk_summary`、`consistency_status`、`primary_consistency_issue`、`consistency_note`。
 - `quality_rank` 必须形成完整且不重复的 1..N；`quality_score` 必须是 0 到 100 的整数。
 - `deductions` 只写扣分项，schema 仍兼容最多 4 条，但通常只保留最重要的 0–2 条；无明显扣分时返回空数组。`reason` 直接指出扣分点，不复述候选全文。
 - `risk_summary` 必须是一句话风险摘要，只总结首要风险，不重复全部 deductions；无明显风险时使用简短说明。
-- `reason`、`risk_summary` 和 note 必须是合法 JSON 字符串。不要使用单引号包裹字符串。
+- `reason` 和 `risk_summary` 必须是合法 JSON 字符串；`consistency_note` 同样必须是合法 JSON 字符串。不要使用单引号包裹字符串。
 - 不要输出 answer、result、explanation 或任何 schema 外字段。
 
 ## 一致性结论
 
-- 每项只用 `consistency_issue` 表示一致性结论，只能是 `none`、`actor_role_mismatch`、`action_event_mismatch`、`cause_outcome_mismatch`、`scope_boundary_mismatch`、`language_contamination`、`overclaim_or_ambiguity`。
-- 顶层 `consistency_risk_notes` 只收录非 `none` 候选的 `{candidate_id, note}`；全部为 `none` 时返回空数组。
-- `consistency_issue=none` 的候选不得写 note；每个非 `none` 候选必须且只能写一条 note，简短指出内部冲突依据，不复述全文。
-- 非 `none` 只用于候选内部的角色/动作/因果错配、时代或事件边界越界、正式中文内容的外语污染，或足以误导“谁做了什么、谁承担结果”的歧义与过度断言。
-- 不得使用非 `none` 结论表达一般史源争议；候选内部一致但史料存在争议时，继续写入 `deductions` 或 `risk_summary`。
-- `none` 不代表完成史实核查或达到发布线。
+- `consistency_status` 只能是 `pass` 或 `risk`；`pass` 必须配 `primary_consistency_issue=none`，`risk` 必须配一个非 `none` issue。
+- `primary_consistency_issue` 只能是 `none`、`actor_role_mismatch`、`action_event_mismatch`、`cause_outcome_mismatch`、`scope_boundary_mismatch`、`language_contamination`、`overclaim_or_ambiguity`。
+- `risk` 只用于候选内部的角色/动作/因果错配、时代或事件边界越界、正式中文内容的外语污染，或足以误导“谁做了什么、谁承担结果”的歧义与过度断言。
+- 不得使用 `risk` 表达一般史源争议；候选内部一致但史料存在争议时，继续写入 `deductions` 或 `risk_summary`。
+- `consistency_note` 只写一句简短中文依据，不复述全文；`pass` 不代表完成史实核查或达到发布线。
 
 ## 扣分轴
 
