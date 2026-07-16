@@ -27,6 +27,7 @@ import {
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 import { getProjectStorageProfile } from "../../../backend/src/runtime/trace/project-storage.js";
 import {
+  parseStrictSelectorDecision,
   recommendTopicCandidates,
   recommendTopicCandidatesWithTrace,
 } from "../../../backend/src/modules/topic/topic-recommendation.service.js";
@@ -81,6 +82,9 @@ function createSelectorScorecard(candidateId: string, qualityRank: number) {
       },
     ],
     risk_summary: `rank ${qualityRank} risk`,
+    consistency_status: "pass",
+    primary_consistency_issue: "none",
+    consistency_note: "标题、切口和三段推进互相支持",
   };
 }
 
@@ -229,6 +233,82 @@ async function seedRawCandidateCacheEntry(
 }
 
 describe("topic runtime recommendation", () => {
+  it("preserves valid semantic consistency fields in strict selector scorecards", () => {
+    const passScorecard = createSelectorScorecard("selector_candidate_1", 1);
+    const riskScorecard = {
+      ...createSelectorScorecard("selector_candidate_2", 2),
+      consistency_status: "risk",
+      primary_consistency_issue: "actor_role_mismatch",
+      consistency_note: "标题把执行者写成了结果承担者",
+    };
+
+    const result = parseStrictSelectorDecision({
+      ranked_candidates: [passScorecard, riskScorecard],
+    });
+
+    expect(result.ranked_candidates).toEqual([
+      expect.objectContaining({
+        consistency_status: "pass",
+        primary_consistency_issue: "none",
+        consistency_note: "标题、切口和三段推进互相支持",
+      }),
+      expect.objectContaining({
+        consistency_status: "risk",
+        primary_consistency_issue: "actor_role_mismatch",
+        consistency_note: "标题把执行者写成了结果承担者",
+      }),
+    ]);
+  });
+
+  it.each([
+    ["consistency_status"],
+    ["primary_consistency_issue"],
+    ["consistency_note"],
+  ])("rejects strict selector scorecards missing %s", (missingField) => {
+    const scorecard = {
+      ...createSelectorScorecard("selector_candidate_1", 1),
+    } as Record<string, unknown>;
+    delete scorecard[missingField];
+
+    expect(() =>
+      parseStrictSelectorDecision({ ranked_candidates: [scorecard] }),
+    ).toThrow("strict_selector_bad_scorecard");
+  });
+
+  it.each([
+    ["pass", "actor_role_mismatch"],
+    ["risk", "none"],
+    ["risk", "invented_issue"],
+  ])(
+    "rejects inconsistent strict selector verdict %s/%s",
+    (consistencyStatus, primaryConsistencyIssue) => {
+      expect(() =>
+        parseStrictSelectorDecision({
+          ranked_candidates: [
+            {
+              ...createSelectorScorecard("selector_candidate_1", 1),
+              consistency_status: consistencyStatus,
+              primary_consistency_issue: primaryConsistencyIssue,
+            },
+          ],
+        }),
+      ).toThrow("strict_selector_bad_scorecard");
+    },
+  );
+
+  it("rejects an empty strict selector consistency note", () => {
+    expect(() =>
+      parseStrictSelectorDecision({
+        ranked_candidates: [
+          {
+            ...createSelectorScorecard("selector_candidate_1", 1),
+            consistency_note: "   ",
+          },
+        ],
+      }),
+    ).toThrow("strict_selector_bad_scorecard");
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
     vi.useRealTimers();

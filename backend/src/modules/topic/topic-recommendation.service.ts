@@ -65,9 +65,26 @@ export interface TopicRecommendationOptions {
 
 type SelectorDeductionAxis = string;
 
+const TOPIC_CONSISTENCY_STATUSES = ["pass", "risk"] as const;
+const TOPIC_CONSISTENCY_ISSUES = [
+  "none",
+  "actor_role_mismatch",
+  "action_event_mismatch",
+  "cause_outcome_mismatch",
+  "scope_boundary_mismatch",
+  "language_contamination",
+  "overclaim_or_ambiguity",
+] as const;
+
+type TopicConsistencyStatus = (typeof TOPIC_CONSISTENCY_STATUSES)[number];
+type TopicConsistencyIssue = (typeof TOPIC_CONSISTENCY_ISSUES)[number];
+
 interface TopicSelectorRankedCandidate extends CandidateQualityScorecard {
   candidate_id: string;
   deductions: Array<TopicCandidateDeduction & { axis: SelectorDeductionAxis }>;
+  consistency_status: TopicConsistencyStatus;
+  primary_consistency_issue: TopicConsistencyIssue;
+  consistency_note: string;
 }
 
 interface TopicSelectorDecision {
@@ -132,6 +149,17 @@ export const TOPIC_SELECTOR_STRICT_SCHEMA: StrictStructuredToolSchema = {
             risk_summary: {
               type: "string",
             },
+            consistency_status: {
+              type: "string",
+              enum: [...TOPIC_CONSISTENCY_STATUSES],
+            },
+            primary_consistency_issue: {
+              type: "string",
+              enum: [...TOPIC_CONSISTENCY_ISSUES],
+            },
+            consistency_note: {
+              type: "string",
+            },
           },
           required: [
             "candidate_id",
@@ -139,6 +167,9 @@ export const TOPIC_SELECTOR_STRICT_SCHEMA: StrictStructuredToolSchema = {
             "quality_score",
             "deductions",
             "risk_summary",
+            "consistency_status",
+            "primary_consistency_issue",
+            "consistency_note",
           ],
           additionalProperties: false,
         },
@@ -544,6 +575,9 @@ function createDefaultSelectorDecision(
       quality_score: Math.max(1, 100 - index),
       deductions: [],
       risk_summary: "stub selector ranking",
+      consistency_status: "pass",
+      primary_consistency_issue: "none",
+      consistency_note: "stub selector consistency pass",
     })),
   };
 }
@@ -1191,6 +1225,46 @@ function parseSelectorScorecards(
       throw new Error(`${prefix}: ${idxLabel} risk_summary must be string, got ${typeof riskSummary}`);
     }
 
+    const consistencyStatus = record.consistency_status;
+    if (
+      typeof consistencyStatus !== "string" ||
+      !TOPIC_CONSISTENCY_STATUSES.includes(
+        consistencyStatus as TopicConsistencyStatus,
+      )
+    ) {
+      throw new Error(
+        `${prefix}: ${idxLabel} consistency_status is invalid`,
+      );
+    }
+
+    const primaryConsistencyIssue = record.primary_consistency_issue;
+    if (
+      typeof primaryConsistencyIssue !== "string" ||
+      !TOPIC_CONSISTENCY_ISSUES.includes(
+        primaryConsistencyIssue as TopicConsistencyIssue,
+      )
+    ) {
+      throw new Error(
+        `${prefix}: ${idxLabel} primary_consistency_issue is invalid`,
+      );
+    }
+
+    if (
+      (consistencyStatus === "pass" && primaryConsistencyIssue !== "none") ||
+      (consistencyStatus === "risk" && primaryConsistencyIssue === "none")
+    ) {
+      throw new Error(
+        `${prefix}: ${idxLabel} consistency status and issue disagree`,
+      );
+    }
+
+    const consistencyNote = record.consistency_note;
+    if (typeof consistencyNote !== "string" || consistencyNote.trim().length === 0) {
+      throw new Error(
+        `${prefix}: ${idxLabel} consistency_note must be non-empty string`,
+      );
+    }
+
     if (seenRanks.has(qualityRank)) {
       continue;
     }
@@ -1202,6 +1276,9 @@ function parseSelectorScorecards(
       quality_score: qualityScore,
       deductions: parseSelectorDeductions(deductions, `${prefix}: ${idxLabel}`),
       risk_summary: riskSummary,
+      consistency_status: consistencyStatus as TopicConsistencyStatus,
+      primary_consistency_issue: primaryConsistencyIssue as TopicConsistencyIssue,
+      consistency_note: consistencyNote.trim(),
     });
   }
 
