@@ -1,12 +1,26 @@
+import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
   TOPIC_LIGHT_REVIEW_STRICT_SCHEMA,
+  parseTopicLightReviewDecision,
+  type TopicLightReviewDecision,
   type TopicLightReviewConsistencyIssue,
   type TopicLightReviewPromptCandidate,
 } from "../../../backend/src/modules/topic/topic-light-review.js";
+import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
+import type {
+  LlmInteractionLogEntry,
+  LlmInteractionLogWriter,
+} from "../../../backend/src/runtime/llm/interaction-log.js";
+import {
+  createOpenAiCompatibleProvider,
+  type OpenAiCompatibleProviderOptions,
+} from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
+import { createRequestBudget } from "../../../backend/src/runtime/llm/request-budget.js";
+import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 
 export const DEFAULT_TOPIC_LIGHT_REVIEW_THINKING_FIXTURE_PATH =
   "harness/samples/topic-light-review-thinking-replay/task17-controls.fixture.json";
@@ -39,7 +53,53 @@ export interface TopicLightReviewThinkingReplayPlan {
 }
 
 export interface TopicLightReviewThinkingReplayDependencies {
-  createLiveRunner?: (input: TopicLightReviewThinkingReplayInput) => unknown;
+  createLiveRunner?: (
+    input: TopicLightReviewThinkingReplayInput,
+  ) => TopicLightReviewThinkingReplayRunner;
+}
+
+export interface TopicLightReviewThinkingReplayObservation {
+  mode: "provider_default" | "disabled";
+  model: string;
+  prompt_id: string;
+  prompt_sha256: string;
+  effective_request: LlmInteractionLogEntry["effectiveRequest"] | null;
+  attempt_count: number;
+  duration_ms: number | null;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  reasoning_tokens: number | null;
+  finish_reason: string | null;
+  tool_arguments_chars: number | null;
+  error_code: string | null;
+}
+
+export interface TopicLightReviewThinkingReplayRoundResult {
+  decision: TopicLightReviewDecision;
+  observation: TopicLightReviewThinkingReplayObservation;
+}
+
+export interface TopicLightReviewThinkingReplayResult {
+  mode: "topic_light_review_thinking_replay";
+  live: true;
+  automated_gate: false;
+  light_review_only: true;
+  fixture_id: string;
+  actual_requests: 2;
+  rounds: [
+    TopicLightReviewThinkingReplayRoundResult,
+    TopicLightReviewThinkingReplayRoundResult,
+  ];
+}
+
+export interface TopicLightReviewThinkingReplayRunner {
+  runFixture(
+    fixture: TopicLightReviewThinkingReplayFixture,
+  ): Promise<TopicLightReviewThinkingReplayResult>;
+}
+
+export interface TopicLightReviewThinkingReplayRunnerDependencies {
+  invokeStrictApi?: OpenAiCompatibleProviderOptions["invokeStrictApi"];
 }
 
 export interface TopicLightReviewThinkingReplayAnnotation {
@@ -173,10 +233,12 @@ export function buildTopicLightReviewThinkingReplayPlan(
 export async function runTopicLightReviewThinkingReplay(
   input: TopicLightReviewThinkingReplayInput = {},
   dependencies: TopicLightReviewThinkingReplayDependencies = {},
-): Promise<TopicLightReviewThinkingReplayPlan> {
+): Promise<
+  TopicLightReviewThinkingReplayPlan | TopicLightReviewThinkingReplayResult
+> {
   const fixturePath =
     input.fixturePath ?? DEFAULT_TOPIC_LIGHT_REVIEW_THINKING_FIXTURE_PATH;
-  loadTopicLightReviewThinkingReplayFixture(fixturePath);
+  const fixture = loadTopicLightReviewThinkingReplayFixture(fixturePath);
   const plan = createReplayPlan(input, fixturePath);
 
   if (!input.live) {
@@ -192,8 +254,81 @@ export async function runTopicLightReviewThinkingReplay(
   }
 
   validateLiveInput(input);
-  dependencies.createLiveRunner?.(input);
-  throw new Error("topic_light_review_thinking_replay_live_runner_not_implemented");
+  const runner =
+    dependencies.createLiveRunner?.(input) ??
+    createTopicLightReviewThinkingReplayRunner(input.model!);
+  return runner.runFixture(fixture);
+}
+
+export function createTopicLightReviewThinkingReplayRunner(
+  model: string,
+  dependencies: TopicLightReviewThinkingReplayRunnerDependencies = {},
+): TopicLightReviewThinkingReplayRunner {
+  const requestBudget = createRequestBudget({ maxRequests: REQUIRED_REQUESTS });
+  const provider = createOpenAiCompatibleProvider({
+    profile: "structured",
+    model,
+    maxAttempts: 1,
+    requestBudget,
+    invokeStrictApi: dependencies.invokeStrictApi,
+  });
+  const gateway = createLlmGateway({
+    registry: createPromptRegistry(),
+    provider,
+  });
+
+  return {
+    async runFixture(fixture) {
+      const expectedCandidateIds = fixture.review_pool.map(
+        (candidate) => candidate.candidate_id,
+      );
+      const runRound = async (
+        mode: TopicLightReviewThinkingReplayObservation["mode"],
+      ): Promise<TopicLightReviewThinkingReplayRoundResult> => {
+        let interaction: LlmInteractionLogEntry | null = null;
+        const writer: LlmInteractionLogWriter = {
+          write(entry) {
+            interaction = entry;
+          },
+        };
+        const decision = await gateway.invokeStrictStructured({
+          promptId: "topic.light-review",
+          input: fixture.review_pool,
+          operationName: "topic.light-review-thinking-replay",
+          schema: TOPIC_LIGHT_REVIEW_STRICT_SCHEMA,
+          parse: (rawOutput) =>
+            parseTopicLightReviewDecision(rawOutput, expectedCandidateIds),
+          interactionLogWriter: writer,
+          options: {
+            strategy: "tool_call",
+            ...(mode === "disabled" ? { thinking: "disabled" as const } : {}),
+            toolChoice: "target_function",
+          },
+        });
+
+        if (!interaction) {
+          throw new Error("topic_light_review_thinking_replay_interaction_missing");
+        }
+
+        return {
+          decision,
+          observation: toReplayObservation(mode, interaction),
+        };
+      };
+
+      const providerDefault = await runRound("provider_default");
+      const disabled = await runRound("disabled");
+      return {
+        mode: "topic_light_review_thinking_replay",
+        live: true,
+        automated_gate: false,
+        light_review_only: true,
+        fixture_id: fixture.fixture_id,
+        actual_requests: REQUIRED_REQUESTS,
+        rounds: [providerDefault, disabled],
+      };
+    },
+  };
 }
 
 export function parseTopicLightReviewThinkingReplayArgs(
@@ -310,6 +445,69 @@ function getProductionIssueEnum(): Set<string> {
   return new Set(
     issueEnum.filter((issue): issue is string => typeof issue === "string"),
   );
+}
+
+function toReplayObservation(
+  mode: TopicLightReviewThinkingReplayObservation["mode"],
+  entry: LlmInteractionLogEntry,
+): TopicLightReviewThinkingReplayObservation {
+  return {
+    mode,
+    model: entry.model,
+    prompt_id: entry.promptId,
+    prompt_sha256: createHash("sha256")
+      .update(entry.systemPrompt, "utf8")
+      .digest("hex"),
+    effective_request: entry.effectiveRequest ?? null,
+    attempt_count: entry.attempts?.length ?? 0,
+    duration_ms: entry.timing?.durationMs ?? null,
+    prompt_tokens: entry.responseMetadata?.promptTokens ?? null,
+    completion_tokens: entry.responseMetadata?.completionTokens ?? null,
+    reasoning_tokens: entry.responseMetadata?.reasoningTokens ?? null,
+    finish_reason: entry.responseMetadata?.finishReason ?? null,
+    tool_arguments_chars: readToolArgumentsChars(entry.rawOutput),
+    error_code: entry.errorMessage ?? null,
+  };
+}
+
+function readToolArgumentsChars(rawOutput: string): number | null {
+  try {
+    const parsed = JSON.parse(rawOutput) as unknown;
+    if (!isRecord(parsed)) {
+      return null;
+    }
+    if (Array.isArray(parsed.candidate_reviews)) {
+      return rawOutput.length;
+    }
+
+    const choices = parsed.choices;
+    if (!Array.isArray(choices)) {
+      return null;
+    }
+    for (const rawChoice of choices) {
+      if (!isRecord(rawChoice) || !isRecord(rawChoice.message)) {
+        continue;
+      }
+      const toolCalls = rawChoice.message.tool_calls;
+      if (!Array.isArray(toolCalls)) {
+        continue;
+      }
+      for (const rawToolCall of toolCalls) {
+        if (!isRecord(rawToolCall) || !isRecord(rawToolCall.function)) {
+          continue;
+        }
+        if (
+          rawToolCall.function.name === TOPIC_LIGHT_REVIEW_STRICT_SCHEMA.name &&
+          typeof rawToolCall.function.arguments === "string"
+        ) {
+          return rawToolCall.function.arguments.length;
+        }
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

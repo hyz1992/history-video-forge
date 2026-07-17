@@ -8,10 +8,13 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
+
+import { TOPIC_LIGHT_REVIEW_STRICT_SCHEMA } from "../../backend/src/modules/topic/topic-light-review.js";
 
 import {
   buildTopicLightReviewThinkingReplayPlan,
+  createTopicLightReviewThinkingReplayRunner,
   DEFAULT_TOPIC_LIGHT_REVIEW_THINKING_FIXTURE_PATH,
   loadTopicLightReviewThinkingReplayFixture,
   parseTopicLightReviewThinkingReplayArgs,
@@ -489,29 +492,35 @@ describe("topic light review thinking replay request guard", () => {
     expect(runnerCreated).toBe(0);
   });
 
-  it("allows one live runner creation after every guard passes", async () => {
+  it("uses one injected live runner after every guard passes", async () => {
     let runnerCreated = 0;
+    let fixtureId: string | undefined;
+    const expectedResult = { mode: "offline_injected_live_result" };
 
-    await expect(
-      runTopicLightReviewThinkingReplay(
-        {
-          live: true,
-          confirmLive: true,
-          model: "glm-5.2",
-          maxRequests: 2,
-          maxCostCny: 1,
+    const result = await runTopicLightReviewThinkingReplay(
+      {
+        live: true,
+        confirmLive: true,
+        model: "glm-5.2",
+        maxRequests: 2,
+        maxCostCny: 1,
+      },
+      {
+        createLiveRunner: () => {
+          runnerCreated += 1;
+          return {
+            async runFixture(fixture) {
+              fixtureId = fixture.fixture_id;
+              return expectedResult as never;
+            },
+          };
         },
-        {
-          createLiveRunner: () => {
-            runnerCreated += 1;
-            return {};
-          },
-        },
-      ),
-    ).rejects.toThrow(
-      "topic_light_review_thinking_replay_live_runner_not_implemented",
+      },
     );
+
+    expect(result).toBe(expectedResult);
     expect(runnerCreated).toBe(1);
+    expect(fixtureId).toBe("task17-controls");
   });
 
   it("loads and validates the fixture before creating the live runner", async () => {
@@ -552,5 +561,117 @@ describe("topic light review thinking replay request guard", () => {
         name.includes("topic-light-review-thinking-replay"),
       ),
     ).toEqual(["harness:topic-light-review-thinking-replay"]);
+  });
+});
+
+describe("topic light review thinking replay live runner", () => {
+  it("runs one shared-budget provider-default and disabled request", async () => {
+    const fixture = loadTopicLightReviewThinkingReplayFixture();
+    const decision = {
+      candidate_reviews: fixture.review_pool.map((candidate) => ({
+        candidate_id: candidate.candidate_id,
+        consistency_issue: "none",
+        note: "",
+      })),
+    };
+    const argumentsJson = JSON.stringify(decision);
+    const invokeStrictApi = vi.fn(async () => ({
+      rawOutput: argumentsJson,
+      content: argumentsJson,
+      argumentsJson,
+      metadata: {
+        finishReason: "tool_calls",
+        promptTokens: 120,
+        completionTokens: 24,
+        reasoningTokens: 0,
+      },
+    }));
+    const runner = createTopicLightReviewThinkingReplayRunner("glm-5.2", {
+      invokeStrictApi: invokeStrictApi as never,
+    });
+
+    const result = await runner.runFixture(fixture);
+
+    expect(invokeStrictApi).toHaveBeenCalledTimes(2);
+    const firstRequest = invokeStrictApi.mock.calls[0][0] as Record<string, any>;
+    const secondRequest = invokeStrictApi.mock.calls[1][0] as Record<string, any>;
+    expect(firstRequest.prompt.metadata.id).toBe("topic.light-review");
+    expect(secondRequest.prompt.metadata.id).toBe("topic.light-review");
+    expect(firstRequest.operationName).toBe(
+      "topic.light-review-thinking-replay",
+    );
+    expect(secondRequest.operationName).toBe(firstRequest.operationName);
+    expect(firstRequest.input).toEqual(fixture.review_pool);
+    expect(secondRequest.input).toEqual(firstRequest.input);
+    expect(firstRequest.schema).toBe(TOPIC_LIGHT_REVIEW_STRICT_SCHEMA);
+    expect(secondRequest.schema).toBe(firstRequest.schema);
+    expect(firstRequest.model).toBe("glm-5.2");
+    expect(secondRequest.model).toBe(firstRequest.model);
+    expect(firstRequest.options).toMatchObject({
+      strategy: "tool_call",
+      toolChoice: "target_function",
+    });
+    expect(secondRequest.options).toMatchObject({
+      strategy: "tool_call",
+      thinking: "disabled",
+      toolChoice: "target_function",
+    });
+    expect(firstRequest.options.thinking).toBeUndefined();
+    expect(JSON.stringify(firstRequest.options)).not.toContain("thinking");
+    expect(JSON.stringify(secondRequest.options)).toContain(
+      '"thinking":"disabled"',
+    );
+    expect({ ...firstRequest, options: { ...firstRequest.options, thinking: undefined } }).toEqual(
+      { ...secondRequest, options: { ...secondRequest.options, thinking: undefined } },
+    );
+
+    expect(result.rounds).toHaveLength(2);
+    expect(result.rounds.map((round) => round.decision)).toEqual([
+      decision,
+      decision,
+    ]);
+    expect(result.rounds[0].observation).toMatchObject({
+      mode: "provider_default",
+      model: "glm-5.2",
+      prompt_id: "topic.light-review",
+      effective_request: {
+        profile: "structured",
+        strategy: "tool_call",
+        thinking: "provider_default",
+        maxAttempts: 1,
+        toolChoice: "target_function",
+      },
+      attempt_count: 1,
+      prompt_tokens: 120,
+      completion_tokens: 24,
+      reasoning_tokens: 0,
+      finish_reason: "tool_calls",
+      tool_arguments_chars: argumentsJson.length,
+      error_code: null,
+    });
+    expect(result.rounds[0].observation.prompt_sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.rounds[1].observation).toMatchObject({
+      mode: "disabled",
+      effective_request: { thinking: "disabled", maxAttempts: 1 },
+      attempt_count: 1,
+    });
+    const {
+      thinking: _defaultThinking,
+      ...defaultEffectiveRequest
+    } = result.rounds[0].observation.effective_request!;
+    const {
+      thinking: _disabledThinking,
+      ...disabledEffectiveRequest
+    } = result.rounds[1].observation.effective_request!;
+    expect(disabledEffectiveRequest).toEqual(defaultEffectiveRequest);
+    expect(JSON.stringify(result)).not.toContain("systemPrompt");
+    expect(JSON.stringify(result)).not.toContain("review_pool");
+    expect(JSON.stringify(result)).not.toContain(fixture.review_pool[0].title);
+    expect(JSON.stringify(result)).not.toContain("rawOutput");
+
+    await expect(runner.runFixture(fixture)).rejects.toMatchObject({
+      code: "budget_exceeded",
+    });
+    expect(invokeStrictApi).toHaveBeenCalledTimes(2);
   });
 });
