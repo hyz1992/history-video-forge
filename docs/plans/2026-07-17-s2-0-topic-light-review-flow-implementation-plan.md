@@ -551,18 +551,18 @@ git commit -m "调整选题生成与轻审核流程"
 - Modify: `docs/plans/README.md`
 - Modify: `docs/todos/roadmap-todo.md`
 
-- [ ] **Step 1: 先写新的触发边界测试并确认 RED**
+- [x] **Step 1: 先写新的触发边界测试并确认 RED**
 
 覆盖首次通过 1 个或多个候选时不再调用补充 Builder，以及首次 0 个时仍只补充一次并只审核新增候选。
 
-- [ ] **Step 2: 最小修改生产条件并确认 GREEN**
+- [x] **Step 2: 最小修改生产条件并确认 GREEN**
 
 只把补充触发条件从“首次通过数小于 4”收窄为“首次通过数等于 0”；不修改 Builder Prompt、模型参数、内容策略或审核标准。
 
-- [ ] **Step 3: 回归受影响矩阵并自审**
+- [x] **Step 3: 回归受影响矩阵并自审**
 
 运行 Topic runtime、API、Prompt 合同、语言检查和 backend typecheck；确认用户未跟踪文件及生成态候选库未被改动或暂存。
 
-- [ ] **Step 4: 使用同一燕子使楚样本执行一次显式 live check**
+- [x] **Step 4: 使用同一燕子使楚样本执行一次显式 live check**
 
 真实请求总预算仍为最多 4 次。逐次记录操作名、调用序号、成功/失败和 wall-clock 耗时，并记录总耗时、首次通过数、是否触发补充及最终展示数；若首次已有至少 1 个合格候选，预期只发生 Builder 与首次轻审核两次调用。
