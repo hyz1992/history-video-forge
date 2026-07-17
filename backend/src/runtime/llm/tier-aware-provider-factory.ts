@@ -13,6 +13,16 @@
  * 职责拆分（与 tier-aware-provider.ts 正交）：
  * - tier-aware-provider.ts：operation → tier → inner provider 选择（纯逻辑）
  * - 本模块：env + providers.json → 具体 inner provider 构造（IO + 解析）
+ *
+ * 关于直接读 process.env 而非 env 对象（重要约定）：
+ * - LLM_SMART_MODEL / LLM_FLASH_MODEL / LLM_PROVIDERS_CONFIG_PATH 通过 env 对象读取
+ *   （这几个变量已在 AppEnv.llm 显式建模）。
+ * - 但 LLM_PROVIDER_*_API_KEY（如 LLM_PROVIDER_DEEPSEEK_API_KEY）由 providers.json 的 apiKeyEnv
+ *   动态引用，变量名是数据，无法在 env.ts 静态枚举——因此 resolveTierModel 的 env 参数
+ *   直接传 process.env，由 tier-resolver 按 entry.apiKeyEnv 动态查询。
+ * - 这是有意为之的设计（design §4.1.2 "apiKeyEnv 引用 env 变量名"），不是疏漏。
+ * - 正确性保证：env.ts 的 loadLocalDotEnv 在 import 时把 .env 写入 process.env（env.ts L228-233），
+ *   本模块在 import env.ts 之后才被调用，所以 process.env 已含 .env 值。
  */
 
 import path from "node:path";
