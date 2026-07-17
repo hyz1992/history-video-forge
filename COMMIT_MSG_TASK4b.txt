@@ -1,0 +1,61 @@
+LLM gateway 接入 tier 路由（S2-1 Task 4b）
+
+S2-1 Task 4 第二步：8 个调用方从 createOpenAiCompatibleProvider 切换到
+createTierAwareProviderFromEnv，并新增 env → provider 工厂。
+
+设计依据：docs/plans/2026-07-17-s2-1-multi-provider-model-routing-design.md §4.3 / §4.4 / §5.1。
+
+改动：
+- backend/src/runtime/llm/tier-aware-provider-factory.ts（新增）：
+  - createTierAwareProviderFromEnv() 工厂：启动时 load providers.json + 解析 smart/flash tier
+  - resolveTierProviderSnapshot()：解析快照，供 Task 7 启动诊断使用
+  - 兼容回退链（design §4.4）：
+    1. LLM_SMART_MODEL 未配置 → smart 用 "default:" + LLM_MODEL（单 provider 模式）
+    2. LLM_FLASH_MODEL 未配置 → flash 复用 smart inner provider（等价单模型）
+    3. providers.json 不存在 → 单 provider 兼容模式（apiKeyEnv=null，用 LLM_API_KEY）
+  - 默认 providers.json 路径：backend/providers.json
+  - stub-model 兜底值视为"真未配置"并抛错
+- tests/backend/runtime/tier-aware-provider-factory.test.ts（新增）：
+  - 7 个测试覆盖：完整 smart/flash 解析、LLM_MODEL 回退、flash 复用 smart、
+    LLM_SMART_MODEL+LLM_MODEL 双缺失抛错、显式路径优先、工厂构造不抛错
+  - 使用 vi.resetModules 触发 env.ts 重建以反映 process.env 变更
+
+8 个调用方改造（统一模式）：
+- backend/src/modules/topic/topic-recommendation.service.ts
+- backend/src/modules/script/script-generation.service.ts
+- backend/src/modules/script/script-semantic-review.service.ts
+- backend/src/modules/storyboard/storyboard-generation.service.ts
+- backend/src/modules/asset-planning/asset-planning-generation.service.ts
+- backend/src/modules/asset-planning/asset-planning-structural-repair.service.ts
+- backend/src/modules/publish/llm-helper.ts
+- backend/src/modules/assets/assets.routes.ts（两处）
+
+每个调用方：
+1. 删除 import createOpenAiCompatibleProvider
+2. 新增 import createTierAwareProviderFromEnv
+3. createOpenAiCompatibleProvider({profile: ...}) → createTierAwareProviderFromEnv()
+（profile 参数移除：tier-aware-provider 内部按 operationName 解析 tier，
+ 不再依赖旧 main/structured profile）
+
+mock 同步（2 个测试）：
+- tests/backend/api/topic-api-runtime.test.ts：
+  mock 目标从 openai-compatible-provider.js 改为 tier-aware-provider-factory.js
+- tests/backend/api/optimize-trace.test.ts：同上
+
+验证：
+- npm run typecheck:backend 通过
+- npx vitest run tests/backend/runtime/tier-aware-provider-factory.test.ts（7/7 通过）
+- npx vitest run tests/backend/api/topic-api-runtime.test.ts tests/backend/api/optimize-trace.test.ts（9/9 通过）
+- 全量 backend：剩余失败均经 git stash 对比确认为 pre-existing failures（与本改造无关）
+
+关键设计：
+- 工厂不接管 stub：调用方保留 env.llm.provider === "stub" 判断与 stub 分支
+- 工厂在 smart/flash 未配置时按兼容回退链处理，单 provider 模式仍可工作
+- 与 operation-policy.ts 正交：thinking/retry/timeout 仍由 operation-policy 管
+
+不在本 Task 4b 范围：
+- 启动诊断日志（Task 7）
+- selector thinking 决策（Task 8 需 live 授权）
+- mode 改造（Task 9 可选）
+
+下一步：Task 7（启动时配置诊断日志）。

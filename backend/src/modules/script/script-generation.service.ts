@@ -1,7 +1,7 @@
 import { ScriptDraftPackage } from "../../../../shared/src/index.js";
 import { env, getValidatedRuntimeEnv } from "../../config/env.js";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
-import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider.js";
+import { createTierAwareProviderFromEnv } from "../../runtime/llm/tier-aware-provider-factory.js";
 import type { LlmInteractionLogWriter } from "../../runtime/llm/interaction-log.js";
 import type {
   StructuredPromptInvocation,
@@ -356,9 +356,7 @@ function createScriptWriterGateway(): LlmGateway {
 function createValidatedScriptWriterProvider(): StructuredPromptProvider {
   getValidatedRuntimeEnv();
 
-  return createOpenAiCompatibleProvider({
-    profile: "main",
-  });
+  return createTierAwareProviderFromEnv();
 }
 
 function createStubScriptWriterProvider(): StructuredPromptProvider {

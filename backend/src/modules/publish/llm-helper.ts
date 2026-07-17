@@ -1,5 +1,5 @@
 import { createLlmGateway } from "../../runtime/llm/llm-gateway";
-import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider";
+import { createTierAwareProviderFromEnv } from "../../runtime/llm/tier-aware-provider-factory";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry";
 
 let cachedGateway: ReturnType<typeof createLlmGateway> | null = null;
@@ -11,7 +11,7 @@ let cachedGateway: ReturnType<typeof createLlmGateway> | null = null;
 export function getPublishLlmGateway() {
   if (!cachedGateway) {
     const registry = createPromptRegistry();
-    const provider = createOpenAiCompatibleProvider({});
+    const provider = createTierAwareProviderFromEnv();
     cachedGateway = createLlmGateway({ registry, provider });
   }
   return cachedGateway;

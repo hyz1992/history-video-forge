@@ -4,8 +4,8 @@ import { runAssetsGeneration, registerManualArtifact, acceptArtifact } from "./a
 import { env } from "../../config/env.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 import { guardOwnedRoute } from "../../auth/authorization.js";
-import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider.js";
 import { createLlmGateway } from "../../runtime/llm/llm-gateway.js";
+import { createTierAwareProviderFromEnv } from "../../runtime/llm/tier-aware-provider-factory.js";
 import { createCompositeInteractionLogWriter } from "../../runtime/trace/project-storage.js";
 import { probeImageMetadata } from "../../http/image-probe.js";
 import { probeVideoMetadata } from "../../http/video-probe.js";
@@ -238,7 +238,7 @@ async function optimizeTaskPromptController(
 
   try {
     const registry = createPromptRegistry();
-    const provider = createOpenAiCompatibleProvider({});
+    const provider = createTierAwareProviderFromEnv();
     const gateway = createLlmGateway({ registry, provider });
 
     const interactionLogWriter = createCompositeInteractionLogWriter({
@@ -621,7 +621,7 @@ async function upgradeSegmentToVideoController(
           : null;
       } else {
         const registry = createPromptRegistry();
-        const provider = createOpenAiCompatibleProvider({});
+        const provider = createTierAwareProviderFromEnv();
         const gateway = createLlmGateway({ registry, provider });
         const interactionLogWriter = createCompositeInteractionLogWriter({
           project,

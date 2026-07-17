@@ -3,7 +3,7 @@ import { env, getValidatedRuntimeEnv } from "../../config/env.js";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
 import type { StructuredPromptProvider } from "../../runtime/llm/provider-contract.js";
 import type { LlmInteractionLogWriter } from "../../runtime/llm/interaction-log.js";
-import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider.js";
+import { createTierAwareProviderFromEnv } from "../../runtime/llm/tier-aware-provider-factory.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 
 interface ScriptInputBundleInput {
@@ -190,7 +190,5 @@ function createSemanticReviewerGateway(): LlmGateway | null {
 function createValidatedSemanticReviewerProvider(): StructuredPromptProvider {
   getValidatedRuntimeEnv();
 
-  return createOpenAiCompatibleProvider({
-    profile: "structured",
-  });
+  return createTierAwareProviderFromEnv();
 }

@@ -80,8 +80,8 @@ vi.mock("../../../backend/src/modules/topic/topic-candidate.builder.js", () => (
   }),
 }));
 
-vi.mock("../../../backend/src/runtime/llm/openai-compatible-provider.js", () => ({
-  createOpenAiCompatibleProvider: vi.fn(() => ({
+vi.mock("../../../backend/src/runtime/llm/tier-aware-provider-factory.js", () => ({
+  createTierAwareProviderFromEnv: vi.fn(() => ({
     invokeStructuredPrompt: invokeStructuredPromptMock,
   })),
 }));

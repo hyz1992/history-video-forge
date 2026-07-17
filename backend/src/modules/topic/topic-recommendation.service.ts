@@ -19,7 +19,7 @@ import {
   renderRecommendationDiagnosticsMarkdown,
   type LlmInteractionLogWriter,
 } from "../../runtime/llm/interaction-log.js";
-import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider.js";
+import { createTierAwareProviderFromEnv } from "../../runtime/llm/tier-aware-provider-factory.js";
 import type {
   StrictStructuredToolSchema,
   StructuredPromptInvocation,
@@ -416,7 +416,7 @@ function createTopicRecommendationGateway(): LlmGateway {
   const provider =
     env.llm.provider === "stub"
       ? createStubTopicRecommendationProvider()
-      : createOpenAiCompatibleProvider({});
+      : createTierAwareProviderFromEnv();
 
   return createLlmGateway({
     registry: createPromptRegistry(),

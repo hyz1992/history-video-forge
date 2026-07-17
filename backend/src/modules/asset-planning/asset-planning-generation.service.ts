@@ -10,7 +10,7 @@ import {
 import { env, getValidatedRuntimeEnv } from "../../config/env.js";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
 import type { LlmInteractionLogWriter } from "../../runtime/llm/interaction-log.js";
-import { createOpenAiCompatibleProvider } from "../../runtime/llm/openai-compatible-provider.js";
+import { createTierAwareProviderFromEnv } from "../../runtime/llm/tier-aware-provider-factory.js";
 import type {
   StructuredPromptInvocation,
   StructuredPromptProvider,
@@ -1094,9 +1094,7 @@ function createAssetPlannerGateway(): LlmGateway {
 function createValidatedAssetPlannerProvider(): StructuredPromptProvider {
   getValidatedRuntimeEnv();
 
-  return createOpenAiCompatibleProvider({
-    profile: "main",
-  });
+  return createTierAwareProviderFromEnv();
 }
 
 function createStubAssetPlannerProvider(): StructuredPromptProvider {

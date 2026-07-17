@@ -15,8 +15,8 @@ vi.mock("../../../backend/src/runtime/llm/llm-gateway.js", () => ({
   })),
 }));
 
-vi.mock("../../../backend/src/runtime/llm/openai-compatible-provider.js", () => ({
-  createOpenAiCompatibleProvider: vi.fn(() => ({})),
+vi.mock("../../../backend/src/runtime/llm/tier-aware-provider-factory.js", () => ({
+  createTierAwareProviderFromEnv: vi.fn(() => ({})),
 }));
 
 import { buildTestAuth } from "../auth/test-utils.js";
