@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it, vi } from "vitest";
 
 import { TOPIC_LIGHT_REVIEW_STRICT_SCHEMA } from "../../backend/src/modules/topic/topic-light-review.js";
+import type { LlmInteractionLogEntry } from "../../backend/src/runtime/llm/interaction-log.js";
 
 import {
   buildTopicLightReviewThinkingReplayPlan,
@@ -19,6 +20,7 @@ import {
   loadTopicLightReviewThinkingReplayFixture,
   parseTopicLightReviewThinkingReplayArgs,
   runTopicLightReviewThinkingReplay,
+  toTopicLightReviewThinkingReplayObservation,
   type TopicLightReviewThinkingReplayFixture,
 } from "../../harness/scripts/runtime/topic-light-review-thinking-replay.js";
 
@@ -568,12 +570,22 @@ describe("topic light review thinking replay live runner", () => {
   it("runs one shared-budget provider-default and disabled request", async () => {
     const fixture = loadTopicLightReviewThinkingReplayFixture();
     const decision = {
-      candidate_reviews: fixture.review_pool.map((candidate) => ({
+      candidate_reviews: fixture.review_pool.map((candidate, index) => ({
         candidate_id: candidate.candidate_id,
-        consistency_issue: "none",
-        note: "",
+        consistency_issue:
+          index === 0 ? "actor_role_mismatch" : "none",
+        note:
+          index === 0
+            ? `${candidate.title}；${candidate.one_line_angle}`
+            : "",
       })),
     };
+    const verdicts = decision.candidate_reviews.map(
+      ({ candidate_id, consistency_issue }) => ({
+        candidate_id,
+        consistency_issue,
+      }),
+    );
     const argumentsJson = JSON.stringify(decision);
     const invokeStrictApi = vi.fn(async () => ({
       rawOutput: argumentsJson,
@@ -626,9 +638,9 @@ describe("topic light review thinking replay live runner", () => {
     );
 
     expect(result.rounds).toHaveLength(2);
-    expect(result.rounds.map((round) => round.decision)).toEqual([
-      decision,
-      decision,
+    expect(result.rounds.map((round) => round.verdicts)).toEqual([
+      verdicts,
+      verdicts,
     ]);
     expect(result.rounds[0].observation).toMatchObject({
       mode: "provider_default",
@@ -664,14 +676,64 @@ describe("topic light review thinking replay live runner", () => {
       ...disabledEffectiveRequest
     } = result.rounds[1].observation.effective_request!;
     expect(disabledEffectiveRequest).toEqual(defaultEffectiveRequest);
-    expect(JSON.stringify(result)).not.toContain("systemPrompt");
-    expect(JSON.stringify(result)).not.toContain("review_pool");
-    expect(JSON.stringify(result)).not.toContain(fixture.review_pool[0].title);
-    expect(JSON.stringify(result)).not.toContain("rawOutput");
+    const publicResultJson = JSON.stringify(result);
+    expect(publicResultJson).not.toContain("systemPrompt");
+    expect(publicResultJson).not.toContain("review_pool");
+    expect(publicResultJson).not.toContain(fixture.review_pool[0].title);
+    expect(publicResultJson).not.toContain(
+      fixture.review_pool[0].one_line_angle,
+    );
+    expect(publicResultJson).not.toContain('"note"');
+    expect(publicResultJson).not.toContain("rawOutput");
 
     await expect(runner.runFixture(fixture)).rejects.toMatchObject({
       code: "budget_exceeded",
     });
     expect(invokeStrictApi).toHaveBeenCalledTimes(2);
+  });
+
+  it("redacts interaction error messages to canonical error codes", () => {
+    const sensitiveText = loadTopicLightReviewThinkingReplayFixture()
+      .review_pool[0].title;
+    const baseEntry: LlmInteractionLogEntry = {
+      generatedAt: "2026-07-17T00:00:01.000Z",
+      provider: "openai-compatible",
+      model: "glm-5.2",
+      operationName: "topic.light-review-thinking-replay",
+      promptId: "topic.light-review",
+      promptStage: "topic",
+      promptLanguage: "zh-CN",
+      promptFilePath: "harness/prompts/topic/light-review.prompt.md",
+      systemPrompt: "sensitive system prompt",
+      input: { sensitiveText },
+      rawOutput: "",
+      errorMessage: `provider rejected: ${sensitiveText}`,
+      attempts: [
+        {
+          attempt: 1,
+          startedAt: "2026-07-17T00:00:00.000Z",
+          finishedAt: "2026-07-17T00:00:01.000Z",
+          durationMs: 1_000,
+          outcome: "error",
+          errorCode: "invalid_response",
+        },
+      ],
+    };
+
+    const attempted = toTopicLightReviewThinkingReplayObservation(
+      "provider_default",
+      baseEntry,
+    );
+    const messageOnly = toTopicLightReviewThinkingReplayObservation(
+      "disabled",
+      { ...baseEntry, attempts: [] },
+    );
+
+    expect(attempted.error_code).toBe("invalid_response");
+    expect(messageOnly.error_code).toBe("llm_invocation_failed");
+    expect(JSON.stringify([attempted, messageOnly])).not.toContain(sensitiveText);
+    expect(JSON.stringify([attempted, messageOnly])).not.toContain(
+      "provider rejected",
+    );
   });
 });

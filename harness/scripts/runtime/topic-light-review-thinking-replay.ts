@@ -6,7 +6,6 @@ import { pathToFileURL } from "node:url";
 import {
   TOPIC_LIGHT_REVIEW_STRICT_SCHEMA,
   parseTopicLightReviewDecision,
-  type TopicLightReviewDecision,
   type TopicLightReviewConsistencyIssue,
   type TopicLightReviewPromptCandidate,
 } from "../../../backend/src/modules/topic/topic-light-review.js";
@@ -75,7 +74,10 @@ export interface TopicLightReviewThinkingReplayObservation {
 }
 
 export interface TopicLightReviewThinkingReplayRoundResult {
-  decision: TopicLightReviewDecision;
+  verdicts: Array<{
+    candidate_id: string;
+    consistency_issue: TopicLightReviewConsistencyIssue;
+  }>;
   observation: TopicLightReviewThinkingReplayObservation;
 }
 
@@ -311,8 +313,16 @@ export function createTopicLightReviewThinkingReplayRunner(
         }
 
         return {
-          decision,
-          observation: toReplayObservation(mode, interaction),
+          verdicts: decision.candidate_reviews.map(
+            ({ candidate_id, consistency_issue }) => ({
+              candidate_id,
+              consistency_issue,
+            }),
+          ),
+          observation: toTopicLightReviewThinkingReplayObservation(
+            mode,
+            interaction,
+          ),
         };
       };
 
@@ -447,7 +457,7 @@ function getProductionIssueEnum(): Set<string> {
   );
 }
 
-function toReplayObservation(
+export function toTopicLightReviewThinkingReplayObservation(
   mode: TopicLightReviewThinkingReplayObservation["mode"],
   entry: LlmInteractionLogEntry,
 ): TopicLightReviewThinkingReplayObservation {
@@ -466,8 +476,31 @@ function toReplayObservation(
     reasoning_tokens: entry.responseMetadata?.reasoningTokens ?? null,
     finish_reason: entry.responseMetadata?.finishReason ?? null,
     tool_arguments_chars: readToolArgumentsChars(entry.rawOutput),
-    error_code: entry.errorMessage ?? null,
+    error_code: readCanonicalErrorCode(entry),
   };
+}
+
+const CANONICAL_ERROR_CODES = new Set([
+  "budget_exceeded",
+  "configuration",
+  "invalid_request",
+  "invalid_response",
+  "network",
+  "rate_limited",
+  "service_unavailable",
+  "timeout",
+  "unknown",
+]);
+
+function readCanonicalErrorCode(entry: LlmInteractionLogEntry): string | null {
+  const attempts = entry.attempts ?? [];
+  for (let index = attempts.length - 1; index >= 0; index -= 1) {
+    const errorCode = attempts[index].errorCode;
+    if (errorCode && CANONICAL_ERROR_CODES.has(errorCode)) {
+      return errorCode;
+    }
+  }
+  return entry.errorMessage ? "llm_invocation_failed" : null;
 }
 
 function readToolArgumentsChars(rawOutput: string): number | null {
