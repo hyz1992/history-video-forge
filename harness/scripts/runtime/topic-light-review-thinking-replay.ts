@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import {
   TOPIC_LIGHT_REVIEW_STRICT_SCHEMA,
@@ -8,6 +10,37 @@ import {
 
 export const DEFAULT_TOPIC_LIGHT_REVIEW_THINKING_FIXTURE_PATH =
   "harness/samples/topic-light-review-thinking-replay/task17-controls.fixture.json";
+
+const DEFAULT_TOPIC_LIGHT_REVIEW_THINKING_OUTPUT_DIR = resolve(
+  process.cwd(),
+  "harness/scripts/runtime/output/topic-light-review-thinking-replay",
+);
+
+const REQUIRED_REQUESTS = 2;
+
+export interface TopicLightReviewThinkingReplayInput {
+  live?: boolean;
+  confirmLive?: boolean;
+  model?: string;
+  maxRequests?: number;
+  maxCostCny?: number;
+  fixturePath?: string;
+  outputDir?: string;
+}
+
+export interface TopicLightReviewThinkingReplayPlan {
+  mode: "topic_light_review_thinking_replay_plan";
+  live: boolean;
+  automated_gate: false;
+  light_review_only: true;
+  fixture_path: string;
+  required_requests: 2;
+  actual_requests: 0;
+}
+
+export interface TopicLightReviewThinkingReplayDependencies {
+  createLiveRunner?: (input: TopicLightReviewThinkingReplayInput) => unknown;
+}
 
 export interface TopicLightReviewThinkingReplayAnnotation {
   candidate_id: string;
@@ -128,6 +161,144 @@ export function loadTopicLightReviewThinkingReplayFixture(
   return rawFixture as unknown as TopicLightReviewThinkingReplayFixture;
 }
 
+export function buildTopicLightReviewThinkingReplayPlan(
+  input: TopicLightReviewThinkingReplayInput = {},
+): TopicLightReviewThinkingReplayPlan {
+  const fixturePath =
+    input.fixturePath ?? DEFAULT_TOPIC_LIGHT_REVIEW_THINKING_FIXTURE_PATH;
+  loadTopicLightReviewThinkingReplayFixture(fixturePath);
+  return createReplayPlan(input, fixturePath);
+}
+
+export async function runTopicLightReviewThinkingReplay(
+  input: TopicLightReviewThinkingReplayInput = {},
+  dependencies: TopicLightReviewThinkingReplayDependencies = {},
+): Promise<TopicLightReviewThinkingReplayPlan> {
+  const fixturePath =
+    input.fixturePath ?? DEFAULT_TOPIC_LIGHT_REVIEW_THINKING_FIXTURE_PATH;
+  loadTopicLightReviewThinkingReplayFixture(fixturePath);
+  const plan = createReplayPlan(input, fixturePath);
+
+  if (!input.live) {
+    const outputDir =
+      input.outputDir ?? DEFAULT_TOPIC_LIGHT_REVIEW_THINKING_OUTPUT_DIR;
+    mkdirSync(outputDir, { recursive: true });
+    writeFileSync(
+      resolve(outputDir, "replay-plan.json"),
+      JSON.stringify(plan, null, 2),
+      "utf8",
+    );
+    return plan;
+  }
+
+  validateLiveInput(input);
+  dependencies.createLiveRunner?.(input);
+  throw new Error("topic_light_review_thinking_replay_live_runner_not_implemented");
+}
+
+export function parseTopicLightReviewThinkingReplayArgs(
+  argv: string[],
+): TopicLightReviewThinkingReplayInput {
+  assertSupportedArguments(argv);
+  return {
+    live: argv.includes("--live"),
+    confirmLive: argv.includes("--confirm-live"),
+    model: readCliValue(argv, "--model"),
+    maxRequests: readOptionalNumber(readCliValue(argv, "--max-requests")),
+    maxCostCny: readOptionalNumber(readCliValue(argv, "--max-cost-cny")),
+    fixturePath: readCliValue(argv, "--fixture"),
+    outputDir: readCliValue(argv, "--output-dir"),
+  };
+}
+
+function createReplayPlan(
+  input: TopicLightReviewThinkingReplayInput,
+  fixturePath: string,
+): TopicLightReviewThinkingReplayPlan {
+  return {
+    mode: "topic_light_review_thinking_replay_plan",
+    live: input.live === true,
+    automated_gate: false,
+    light_review_only: true,
+    fixture_path: fixturePath,
+    required_requests: REQUIRED_REQUESTS,
+    actual_requests: 0,
+  };
+}
+
+function validateLiveInput(input: TopicLightReviewThinkingReplayInput) {
+  if (!input.confirmLive) {
+    throw new Error(
+      "topic_light_review_thinking_replay_live_confirmation_required",
+    );
+  }
+  if (!input.model) {
+    throw new Error("topic_light_review_thinking_replay_model_required");
+  }
+  if (input.model !== "glm-5.2") {
+    throw new Error(
+      "topic_light_review_thinking_replay_model_must_be_glm_5_2",
+    );
+  }
+  if (input.maxRequests !== REQUIRED_REQUESTS) {
+    throw new Error(
+      "topic_light_review_thinking_replay_request_budget_must_equal_two",
+    );
+  }
+  if (
+    input.maxCostCny === undefined ||
+    !Number.isFinite(input.maxCostCny) ||
+    input.maxCostCny <= 0
+  ) {
+    throw new Error("topic_light_review_thinking_replay_cost_budget_required");
+  }
+}
+
+function assertSupportedArguments(argv: string[]) {
+  const booleanArguments = new Set(["--live", "--confirm-live"]);
+  const valueArguments = [
+    "--model",
+    "--max-requests",
+    "--max-cost-cny",
+    "--fixture",
+    "--output-dir",
+  ];
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const argument = argv[index];
+    if (booleanArguments.has(argument)) {
+      continue;
+    }
+    if (valueArguments.some((name) => argument.startsWith(`${name}=`))) {
+      continue;
+    }
+    if (valueArguments.includes(argument)) {
+      const next = argv[index + 1];
+      if (next !== undefined && !next.startsWith("--")) {
+        index += 1;
+      }
+      continue;
+    }
+    throw new Error("topic_light_review_thinking_replay_argument_unsupported");
+  }
+}
+
+function readCliValue(argv: string[], name: string): string | undefined {
+  const equalsPrefix = `${name}=`;
+  const equalsValue = argv.find((value) => value.startsWith(equalsPrefix));
+  if (equalsValue) {
+    return equalsValue.slice(equalsPrefix.length);
+  }
+
+  const index = argv.indexOf(name);
+  const value = index >= 0 ? argv[index + 1] : undefined;
+  return value?.startsWith("--") ? undefined : value;
+}
+
+function readOptionalNumber(value: string | undefined): number | undefined {
+  return value === undefined ? undefined : Number(value);
+}
+
 function getProductionIssueEnum(): Set<string> {
   const candidateReviews = TOPIC_LIGHT_REVIEW_STRICT_SCHEMA.parameters.properties
     .candidate_reviews as JsonSchemaNode;
@@ -143,4 +314,20 @@ function getProductionIssueEnum(): Set<string> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+async function main() {
+  const plan = await runTopicLightReviewThinkingReplay(
+    parseTopicLightReviewThinkingReplayArgs(process.argv.slice(2)),
+  );
+  process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`);
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  void main().catch((error) => {
+    process.stderr.write(
+      `${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    process.exitCode = 1;
+  });
 }

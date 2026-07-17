@@ -1,11 +1,21 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
 
 import {
+  buildTopicLightReviewThinkingReplayPlan,
+  DEFAULT_TOPIC_LIGHT_REVIEW_THINKING_FIXTURE_PATH,
   loadTopicLightReviewThinkingReplayFixture,
+  parseTopicLightReviewThinkingReplayArgs,
+  runTopicLightReviewThinkingReplay,
   type TopicLightReviewThinkingReplayFixture,
 } from "../../harness/scripts/runtime/topic-light-review-thinking-replay.js";
 
@@ -60,6 +70,12 @@ function writeFixture(
   const fixturePath = join(dir, "fixture.json");
   writeFileSync(fixturePath, JSON.stringify(fixture), "utf8");
   return fixturePath;
+}
+
+function makeSandbox(label: string) {
+  const dir = mkdtempSync(join(tmpdir(), `topic-light-review-${label}-`));
+  sandboxDirs.push(dir);
+  return dir;
 }
 
 function cloneFixture(): TopicLightReviewThinkingReplayFixture {
@@ -261,5 +277,222 @@ describe("topic light review thinking replay fixture", () => {
         writeFixture(fixture, "empty-rationale"),
       ),
     ).toThrow("topic_light_review_thinking_fixture_rationale_required");
+  });
+});
+
+describe("topic light review thinking replay request guard", () => {
+  it("builds a fixed light-review-only two-request dry-run plan", () => {
+    expect(buildTopicLightReviewThinkingReplayPlan()).toEqual({
+      mode: "topic_light_review_thinking_replay_plan",
+      live: false,
+      automated_gate: false,
+      light_review_only: true,
+      fixture_path: DEFAULT_TOPIC_LIGHT_REVIEW_THINKING_FIXTURE_PATH,
+      required_requests: 2,
+      actual_requests: 0,
+    });
+  });
+
+  it("keeps the default run offline and writes only replay-plan.json", async () => {
+    const outputDir = makeSandbox("dry-run");
+    let runnerCreated = 0;
+
+    const result = await runTopicLightReviewThinkingReplay(
+      { outputDir },
+      {
+        createLiveRunner: () => {
+          runnerCreated += 1;
+          throw new Error("live runner must not be created in dry-run");
+        },
+      },
+    );
+
+    expect(runnerCreated).toBe(0);
+    expect(result).toEqual({
+      mode: "topic_light_review_thinking_replay_plan",
+      live: false,
+      automated_gate: false,
+      light_review_only: true,
+      fixture_path: DEFAULT_TOPIC_LIGHT_REVIEW_THINKING_FIXTURE_PATH,
+      required_requests: 2,
+      actual_requests: 0,
+    });
+    expect(readdirSync(outputDir)).toEqual(["replay-plan.json"]);
+    expect(
+      JSON.parse(readFileSync(join(outputDir, "replay-plan.json"), "utf8")),
+    ).toEqual(result);
+  });
+
+  it("parses equals and separated CLI value forms", () => {
+    expect(
+      parseTopicLightReviewThinkingReplayArgs([
+        "--live",
+        "--confirm-live",
+        "--model=glm-5.2",
+        "--max-requests",
+        "2",
+        "--max-cost-cny=1.5",
+        "--fixture",
+        "custom/fixture.json",
+        "--output-dir=custom/output",
+      ]),
+    ).toEqual({
+      live: true,
+      confirmLive: true,
+      model: "glm-5.2",
+      maxRequests: 2,
+      maxCostCny: 1.5,
+      fixturePath: "custom/fixture.json",
+      outputDir: "custom/output",
+    });
+  });
+
+  it.each([
+    ["--thinking=disabled"],
+    ["--unknown"],
+    ["unexpected-positional-value"],
+  ])("rejects unsupported CLI argument %s", (argument) => {
+    expect(() =>
+      parseTopicLightReviewThinkingReplayArgs([argument]),
+    ).toThrow("topic_light_review_thinking_replay_argument_unsupported");
+  });
+
+  it.each([
+    [
+      "missing confirmation",
+      {
+        live: true,
+        model: "glm-5.2",
+        maxRequests: 2,
+        maxCostCny: 1,
+      },
+      "topic_light_review_thinking_replay_live_confirmation_required",
+    ],
+    [
+      "missing model",
+      {
+        live: true,
+        confirmLive: true,
+        maxRequests: 2,
+        maxCostCny: 1,
+      },
+      "topic_light_review_thinking_replay_model_required",
+    ],
+    [
+      "wrong model",
+      {
+        live: true,
+        confirmLive: true,
+        model: "glm-4",
+        maxRequests: 2,
+        maxCostCny: 1,
+      },
+      "topic_light_review_thinking_replay_model_must_be_glm_5_2",
+    ],
+    [
+      "missing request budget",
+      {
+        live: true,
+        confirmLive: true,
+        model: "glm-5.2",
+        maxCostCny: 1,
+      },
+      "topic_light_review_thinking_replay_request_budget_must_equal_two",
+    ],
+    [
+      "wrong request budget",
+      {
+        live: true,
+        confirmLive: true,
+        model: "glm-5.2",
+        maxRequests: 3,
+        maxCostCny: 1,
+      },
+      "topic_light_review_thinking_replay_request_budget_must_equal_two",
+    ],
+    [
+      "missing cost declaration",
+      {
+        live: true,
+        confirmLive: true,
+        model: "glm-5.2",
+        maxRequests: 2,
+      },
+      "topic_light_review_thinking_replay_cost_budget_required",
+    ],
+    [
+      "zero cost declaration",
+      {
+        live: true,
+        confirmLive: true,
+        model: "glm-5.2",
+        maxRequests: 2,
+        maxCostCny: 0,
+      },
+      "topic_light_review_thinking_replay_cost_budget_required",
+    ],
+    [
+      "non-finite cost declaration",
+      {
+        live: true,
+        confirmLive: true,
+        model: "glm-5.2",
+        maxRequests: 2,
+        maxCostCny: Number.NaN,
+      },
+      "topic_light_review_thinking_replay_cost_budget_required",
+    ],
+  ])("rejects %s before creating the live runner", async (_label, input, code) => {
+    let runnerCreated = 0;
+
+    await expect(
+      runTopicLightReviewThinkingReplay(input, {
+        createLiveRunner: () => {
+          runnerCreated += 1;
+          throw new Error("runner should not be created");
+        },
+      }),
+    ).rejects.toThrow(code);
+    expect(runnerCreated).toBe(0);
+  });
+
+  it("loads and validates the fixture before creating the live runner", async () => {
+    let runnerCreated = 0;
+
+    await expect(
+      runTopicLightReviewThinkingReplay(
+        {
+          live: true,
+          confirmLive: true,
+          model: "glm-5.2",
+          maxRequests: 2,
+          maxCostCny: 1,
+          fixturePath: join(makeSandbox("missing-fixture"), "missing.json"),
+        },
+        {
+          createLiveRunner: () => {
+            runnerCreated += 1;
+            throw new Error("runner should not be created");
+          },
+        },
+      ),
+    ).rejects.toThrow();
+    expect(runnerCreated).toBe(0);
+  });
+
+  it("exposes one explicit non-default npm command", () => {
+    const packageJson = JSON.parse(
+      readFileSync(join(process.cwd(), "package.json"), "utf8"),
+    ) as { scripts?: Record<string, string> };
+
+    expect(packageJson.scripts).toMatchObject({
+      "harness:topic-light-review-thinking-replay":
+        "tsx harness/scripts/runtime/topic-light-review-thinking-replay.ts",
+    });
+    expect(
+      Object.keys(packageJson.scripts ?? {}).filter((name) =>
+        name.includes("topic-light-review-thinking-replay"),
+      ),
+    ).toEqual(["harness:topic-light-review-thinking-replay"]);
   });
 });
