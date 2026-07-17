@@ -1,11 +1,14 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   renameSync,
   rmSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, resolve } from "node:path";
@@ -38,6 +41,19 @@ const DEFAULT_TOPIC_LIGHT_REVIEW_THINKING_OUTPUT_DIR = resolve(
 );
 
 const REQUIRED_REQUESTS = 2;
+const OWNERSHIP_MARKER_FILE = ".topic-light-review-thinking-replay-owned";
+const OWNERSHIP_MARKER_CONTENT = "topic-light-review-thinking-replay:v1\n";
+const PUBLISHED_ARTIFACT_FILES = [
+  "disabled.result.json",
+  "provider-default.result.json",
+  "replay-plan.json",
+  "replay-summary.json",
+  "trace.md",
+] as const;
+const OWNED_OUTPUT_ENTRIES = new Set([
+  OWNERSHIP_MARKER_FILE,
+  ...PUBLISHED_ARTIFACT_FILES,
+]);
 
 const DEFAULT_ARTIFACT_FILE_SYSTEM: TopicLightReviewThinkingReplayArtifactFileSystem = {
   ensureDirectory(path) {
@@ -52,8 +68,23 @@ const DEFAULT_ARTIFACT_FILE_SYSTEM: TopicLightReviewThinkingReplayArtifactFileSy
   removePath(path) {
     rmSync(path, { recursive: true, force: true });
   },
+  removeFile(path) {
+    unlinkSync(path);
+  },
   pathExists(path) {
     return existsSync(path);
+  },
+  isDirectory(path) {
+    return lstatSync(path).isDirectory();
+  },
+  isFile(path) {
+    return lstatSync(path).isFile();
+  },
+  readDirectory(path) {
+    return readdirSync(path);
+  },
+  readText(path) {
+    return readFileSync(path, "utf8");
   },
   renameDirectory(source, target) {
     renameSync(source, target);
@@ -92,7 +123,12 @@ export interface TopicLightReviewThinkingReplayArtifactFileSystem {
   makeTempDirectory(prefix: string): string;
   writeText(path: string, content: string): void;
   removePath(path: string): void;
+  removeFile(path: string): void;
   pathExists(path: string): boolean;
+  isDirectory(path: string): boolean;
+  isFile(path: string): boolean;
+  readDirectory(path: string): string[];
+  readText(path: string): string;
   renameDirectory(source: string, target: string): void;
 }
 
@@ -353,7 +389,11 @@ export async function runTopicLightReviewThinkingReplay(
     );
     return result;
   } catch (error) {
-    removePathSafely(artifactFileSystem, preparedOutput.stagingDir);
+    removeCreatedStagingDirectorySafely(
+      artifactFileSystem,
+      preparedOutput.outputDir,
+      preparedOutput.stagingDir,
+    );
     throw error;
   }
 }
@@ -708,6 +748,7 @@ function normalizeThrownErrorCode(error: unknown) {
 interface PreparedLiveReplayOutput {
   outputDir: string;
   stagingDir: string;
+  existingOutputOwned: boolean;
 }
 
 function createArtifactFileSystem(
@@ -723,9 +764,14 @@ function prepareLiveReplayStagingDirectory(
 ): PreparedLiveReplayOutput {
   const outputDir = resolve(requestedOutputDir);
   fileSystem.ensureDirectory(dirname(outputDir));
+  const existingOutputOwned = fileSystem.pathExists(outputDir);
+  if (existingOutputOwned) {
+    validateOwnedPublishedDirectory(outputDir, fileSystem);
+  }
   let stagingDir: string | null = null;
   try {
     stagingDir = fileSystem.makeTempDirectory(`${outputDir}.staging-`);
+    writeOwnershipMarker(stagingDir, fileSystem);
     writeReplayJson(
       stagingDir,
       "replay-plan.json",
@@ -734,13 +780,50 @@ function prepareLiveReplayStagingDirectory(
     );
     const probePath = resolve(stagingDir, ".write-probe");
     fileSystem.writeText(probePath, "writable\n");
-    fileSystem.removePath(probePath);
-    return { outputDir, stagingDir };
+    fileSystem.removeFile(probePath);
+    return { outputDir, stagingDir, existingOutputOwned };
   } catch (error) {
     if (stagingDir) {
-      removePathSafely(fileSystem, stagingDir);
+      removeCreatedStagingDirectorySafely(
+        fileSystem,
+        outputDir,
+        stagingDir,
+      );
     }
     throw error;
+  }
+}
+
+function validateOwnedPublishedDirectory(
+  outputDir: string,
+  fileSystem: TopicLightReviewThinkingReplayArtifactFileSystem,
+) {
+  if (!fileSystem.isDirectory(outputDir)) {
+    throw new Error(
+      "topic_light_review_thinking_replay_output_directory_not_owned",
+    );
+  }
+  const markerPath = resolve(outputDir, OWNERSHIP_MARKER_FILE);
+  if (!fileSystem.pathExists(markerPath) || !fileSystem.isFile(markerPath)) {
+    throw new Error(
+      "topic_light_review_thinking_replay_output_directory_not_owned",
+    );
+  }
+  if (fileSystem.readText(markerPath) !== OWNERSHIP_MARKER_CONTENT) {
+    throw new Error(
+      "topic_light_review_thinking_replay_ownership_marker_invalid",
+    );
+  }
+
+  const entries = fileSystem.readDirectory(outputDir);
+  if (
+    entries.length !== OWNED_OUTPUT_ENTRIES.size ||
+    entries.some((entry) => !OWNED_OUTPUT_ENTRIES.has(entry)) ||
+    entries.some((entry) => !fileSystem.isFile(resolve(outputDir, entry)))
+  ) {
+    throw new Error(
+      "topic_light_review_thinking_replay_output_directory_contents_invalid",
+    );
   }
 }
 
@@ -748,47 +831,92 @@ function publishLiveReplayStagingDirectory(
   prepared: PreparedLiveReplayOutput,
   fileSystem: TopicLightReviewThinkingReplayArtifactFileSystem,
 ) {
-  const { outputDir, stagingDir } = prepared;
+  const { outputDir, stagingDir, existingOutputOwned } = prepared;
   let backupDir: string | null = null;
   try {
-    if (fileSystem.pathExists(outputDir)) {
-      backupDir = fileSystem.makeTempDirectory(`${outputDir}.backup-`);
-      fileSystem.removePath(backupDir);
+    if (existingOutputOwned) {
+      if (!fileSystem.pathExists(outputDir)) {
+        throw new Error(
+          "topic_light_review_thinking_replay_output_directory_changed",
+        );
+      }
+      validateOwnedPublishedDirectory(outputDir, fileSystem);
+      backupDir = `${outputDir}.backup-${randomUUID()}`;
       fileSystem.renameDirectory(outputDir, backupDir);
+    } else if (fileSystem.pathExists(outputDir)) {
+      throw new Error(
+        "topic_light_review_thinking_replay_output_directory_changed",
+      );
     }
     fileSystem.renameDirectory(stagingDir, outputDir);
   } catch (error) {
     if (backupDir && fileSystem.pathExists(backupDir)) {
       if (fileSystem.pathExists(outputDir)) {
-        removePathSafely(fileSystem, outputDir);
+        validateOwnedPublishedDirectory(outputDir, fileSystem);
+        fileSystem.renameDirectory(outputDir, stagingDir);
       }
       fileSystem.renameDirectory(backupDir, outputDir);
     }
-    removePathSafely(fileSystem, stagingDir);
+    removeCreatedStagingDirectorySafely(fileSystem, outputDir, stagingDir);
     throw error;
   }
 
   if (backupDir) {
     try {
-      fileSystem.removePath(backupDir);
+      removeValidatedBackupDirectory(fileSystem, prepared, backupDir);
     } catch (error) {
-      removePathSafely(fileSystem, outputDir);
+      fileSystem.renameDirectory(outputDir, stagingDir);
       if (fileSystem.pathExists(backupDir)) {
         fileSystem.renameDirectory(backupDir, outputDir);
       }
+      removeCreatedStagingDirectorySafely(fileSystem, outputDir, stagingDir);
       throw error;
     }
   }
 }
 
-function removePathSafely(
+function removeCreatedStagingDirectorySafely(
   fileSystem: TopicLightReviewThinkingReplayArtifactFileSystem,
-  path: string,
+  outputDir: string,
+  stagingDir: string,
 ) {
+  assertSafeSiblingPath(outputDir, stagingDir, "staging");
   try {
-    fileSystem.removePath(path);
+    fileSystem.removePath(stagingDir);
   } catch {
     // Keep the original preparation, write, or publication error.
+  }
+}
+
+function removeValidatedBackupDirectory(
+  fileSystem: TopicLightReviewThinkingReplayArtifactFileSystem,
+  prepared: PreparedLiveReplayOutput,
+  backupDir: string,
+) {
+  if (!prepared.existingOutputOwned) {
+    throw new Error(
+      "topic_light_review_thinking_replay_backup_ownership_missing",
+    );
+  }
+  assertSafeSiblingPath(prepared.outputDir, backupDir, "backup");
+  validateOwnedPublishedDirectory(backupDir, fileSystem);
+  fileSystem.removePath(backupDir);
+}
+
+function assertSafeSiblingPath(
+  outputDir: string,
+  candidatePath: string,
+  kind: "staging" | "backup",
+) {
+  const expectedPrefix = `${outputDir}.${kind}-`;
+  if (
+    dirname(candidatePath) !== dirname(outputDir) ||
+    !candidatePath.startsWith(expectedPrefix) ||
+    candidatePath.length <= expectedPrefix.length
+  ) {
+    throw new Error(
+      `topic_light_review_thinking_replay_unsafe_${kind}_path`,
+    );
   }
 }
 
@@ -798,6 +926,7 @@ function writeLiveReplayArtifacts(
   result: TopicLightReviewThinkingReplayResult,
   fileSystem: TopicLightReviewThinkingReplayArtifactFileSystem,
 ) {
+  writeOwnershipMarker(outputDir, fileSystem);
   writeReplayJson(outputDir, "replay-plan.json", plan, fileSystem);
   writeReplayJson(
     outputDir,
@@ -820,6 +949,16 @@ function writeLiveReplayArtifacts(
   fileSystem.writeText(
     resolve(outputDir, "trace.md"),
     renderTopicLightReviewThinkingReplayTrace(result.summary),
+  );
+}
+
+function writeOwnershipMarker(
+  outputDir: string,
+  fileSystem: TopicLightReviewThinkingReplayArtifactFileSystem,
+) {
+  fileSystem.writeText(
+    resolve(outputDir, OWNERSHIP_MARKER_FILE),
+    OWNERSHIP_MARKER_CONTENT,
   );
 }
 

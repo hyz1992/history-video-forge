@@ -1,5 +1,6 @@
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -29,6 +30,16 @@ import {
 } from "../../harness/scripts/runtime/topic-light-review-thinking-replay.js";
 
 const sandboxDirs: string[] = [];
+
+const OWNERSHIP_MARKER_FILE = ".topic-light-review-thinking-replay-owned";
+const OWNERSHIP_MARKER_CONTENT = "topic-light-review-thinking-replay:v1\n";
+const PUBLISHED_ARTIFACT_FILES = [
+  "disabled.result.json",
+  "provider-default.result.json",
+  "replay-plan.json",
+  "replay-summary.json",
+  "trace.md",
+] as const;
 
 const SOURCE_CONTROLS = [
   {
@@ -93,6 +104,18 @@ function readFlatDirectorySnapshot(dir: string) {
       .sort()
       .map((fileName) => [fileName, readFileSync(join(dir, fileName), "utf8")]),
   );
+}
+
+function writeOwnedPublishedDirectory(dir: string) {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, OWNERSHIP_MARKER_FILE),
+    OWNERSHIP_MARKER_CONTENT,
+    "utf8",
+  );
+  for (const fileName of PUBLISHED_ARTIFACT_FILES) {
+    writeFileSync(join(dir, fileName), `old:${fileName}\n`, "utf8");
+  }
 }
 
 function cloneFixture(): TopicLightReviewThinkingReplayFixture {
@@ -590,7 +613,7 @@ describe("topic light review thinking replay request guard", () => {
   it("uses one injected live runner after every guard passes", async () => {
     let runnerCreated = 0;
     let fixtureId: string | undefined;
-    const outputDir = makeSandbox("injected-live-output");
+    const outputDir = join(makeSandbox("injected-live-output"), "published-run");
     const expectedResult = makePassingResult();
     const rounds = expectedResult.rounds;
 
@@ -620,6 +643,7 @@ describe("topic light review thinking replay request guard", () => {
     expect(runnerCreated).toBe(1);
     expect(fixtureId).toBe("task17-controls");
     expect(readdirSync(outputDir).sort()).toEqual([
+      OWNERSHIP_MARKER_FILE,
       "disabled.result.json",
       "provider-default.result.json",
       "replay-plan.json",
@@ -708,14 +732,197 @@ describe("topic light review thinking replay request guard", () => {
     },
   );
 
-  it("publishes a complete directory without retaining stale files from an older run", async () => {
-    const outputDir = makeSandbox("replace-stale-output");
-    writeFileSync(join(outputDir, "stale.txt"), "must disappear", "utf8");
-    writeFileSync(
-      join(outputDir, "replay-summary.json"),
-      "old summary",
-      "utf8",
+  it("rejects an owned directory with an unknown stale file without deleting it", async () => {
+    const outputDir = makeSandbox("reject-stale-output");
+    writeOwnedPublishedDirectory(outputDir);
+    writeFileSync(join(outputDir, "stale.txt"), "must remain", "utf8");
+    const before = readFlatDirectorySnapshot(outputDir);
+    let runnerCreated = 0;
+
+    await expect(
+      runTopicLightReviewThinkingReplay(
+        {
+          live: true,
+          confirmLive: true,
+          model: "glm-5.2",
+          maxRequests: 2,
+          maxCostCny: 1,
+          outputDir,
+        },
+        {
+          createLiveRunner: () => {
+            runnerCreated += 1;
+            return { async runFixture() { return makePassingResult(); } };
+          },
+          artifactFileSystem: {
+            renameDirectory() {
+              throw new Error("unsafe_rename_attempt");
+            },
+          },
+        },
+      ),
+    ).rejects.toThrow(
+      "topic_light_review_thinking_replay_output_directory_contents_invalid",
     );
+
+    expect(runnerCreated).toBe(0);
+    expect(readFlatDirectorySnapshot(outputDir)).toEqual(before);
+  });
+
+  it.each([
+    ["worktree root", process.cwd()],
+    [
+      "shared output root",
+      join(process.cwd(), "harness/scripts/runtime/output"),
+    ],
+  ])("rejects the %s before creating a runner", async (_label, outputDir) => {
+    const beforeEntries = readdirSync(outputDir).sort();
+    let runnerCreated = 0;
+
+    await expect(
+      runTopicLightReviewThinkingReplay(
+        {
+          live: true,
+          confirmLive: true,
+          model: "glm-5.2",
+          maxRequests: 2,
+          maxCostCny: 1,
+          outputDir,
+        },
+        {
+          createLiveRunner: () => {
+            runnerCreated += 1;
+            return { async runFixture() { return makePassingResult(); } };
+          },
+          artifactFileSystem: {
+            renameDirectory() {
+              throw new Error("unsafe_rename_attempt");
+            },
+          },
+        },
+      ),
+    ).rejects.toThrow(
+      "topic_light_review_thinking_replay_output_directory_not_owned",
+    );
+
+    expect(runnerCreated).toBe(0);
+    expect(readdirSync(outputDir).sort()).toEqual(beforeEntries);
+  });
+
+  it("rejects an ordinary existing directory without a marker and preserves its files", async () => {
+    const outputDir = makeSandbox("ordinary-existing-output");
+    writeFileSync(join(outputDir, "keep.txt"), "keep me", "utf8");
+    const before = readFlatDirectorySnapshot(outputDir);
+    let runnerCreated = 0;
+
+    await expect(
+      runTopicLightReviewThinkingReplay(
+        {
+          live: true,
+          confirmLive: true,
+          model: "glm-5.2",
+          maxRequests: 2,
+          maxCostCny: 1,
+          outputDir,
+        },
+        {
+          createLiveRunner: () => {
+            runnerCreated += 1;
+            return { async runFixture() { return makePassingResult(); } };
+          },
+          artifactFileSystem: {
+            renameDirectory() {
+              throw new Error("unsafe_rename_attempt");
+            },
+          },
+        },
+      ),
+    ).rejects.toThrow(
+      "topic_light_review_thinking_replay_output_directory_not_owned",
+    );
+
+    expect(runnerCreated).toBe(0);
+    expect(readFlatDirectorySnapshot(outputDir)).toEqual(before);
+  });
+
+  it("rejects an invalid ownership marker and preserves the directory", async () => {
+    const outputDir = makeSandbox("invalid-output-marker");
+    writeOwnedPublishedDirectory(outputDir);
+    writeFileSync(join(outputDir, OWNERSHIP_MARKER_FILE), "wrong owner\n", "utf8");
+    const before = readFlatDirectorySnapshot(outputDir);
+    let runnerCreated = 0;
+
+    await expect(
+      runTopicLightReviewThinkingReplay(
+        {
+          live: true,
+          confirmLive: true,
+          model: "glm-5.2",
+          maxRequests: 2,
+          maxCostCny: 1,
+          outputDir,
+        },
+        {
+          createLiveRunner: () => {
+            runnerCreated += 1;
+            return { async runFixture() { return makePassingResult(); } };
+          },
+          artifactFileSystem: {
+            renameDirectory() {
+              throw new Error("unsafe_rename_attempt");
+            },
+          },
+        },
+      ),
+    ).rejects.toThrow(
+      "topic_light_review_thinking_replay_ownership_marker_invalid",
+    );
+
+    expect(runnerCreated).toBe(0);
+    expect(readFlatDirectorySnapshot(outputDir)).toEqual(before);
+  });
+
+  it("rejects an owned directory containing an unknown subdirectory", async () => {
+    const outputDir = makeSandbox("unknown-output-subdirectory");
+    writeOwnedPublishedDirectory(outputDir);
+    const unknownDir = join(outputDir, "unknown-dir");
+    mkdirSync(unknownDir);
+    writeFileSync(join(unknownDir, "keep.txt"), "keep me", "utf8");
+    let runnerCreated = 0;
+
+    await expect(
+      runTopicLightReviewThinkingReplay(
+        {
+          live: true,
+          confirmLive: true,
+          model: "glm-5.2",
+          maxRequests: 2,
+          maxCostCny: 1,
+          outputDir,
+        },
+        {
+          createLiveRunner: () => {
+            runnerCreated += 1;
+            return { async runFixture() { return makePassingResult(); } };
+          },
+          artifactFileSystem: {
+            renameDirectory() {
+              throw new Error("unsafe_rename_attempt");
+            },
+          },
+        },
+      ),
+    ).rejects.toThrow(
+      "topic_light_review_thinking_replay_output_directory_contents_invalid",
+    );
+
+    expect(runnerCreated).toBe(0);
+    expect(readFileSync(join(unknownDir, "keep.txt"), "utf8")).toBe("keep me");
+  });
+
+  it("atomically replaces a complete previously owned artifact directory", async () => {
+    const outputDir = makeSandbox("replace-owned-output");
+    writeOwnedPublishedDirectory(outputDir);
     const expectedResult = makePassingResult();
 
     await runTopicLightReviewThinkingReplay(
@@ -737,14 +944,13 @@ describe("topic light review thinking replay request guard", () => {
     );
 
     expect(readdirSync(outputDir).sort()).toEqual([
-      "disabled.result.json",
-      "provider-default.result.json",
-      "replay-plan.json",
-      "replay-summary.json",
-      "trace.md",
-    ]);
+      OWNERSHIP_MARKER_FILE,
+      ...PUBLISHED_ARTIFACT_FILES,
+    ].sort());
+    expect(readFileSync(join(outputDir, OWNERSHIP_MARKER_FILE), "utf8"))
+      .toBe(OWNERSHIP_MARKER_CONTENT);
     expect(readFileSync(join(outputDir, "replay-summary.json"), "utf8"))
-      .not.toContain("old summary");
+      .not.toContain("old:replay-summary.json");
   });
 
   it("keeps the previous published directory intact when staging artifact writing fails", async () => {
@@ -752,7 +958,7 @@ describe("topic light review thinking replay request guard", () => {
     const outputDir = join(parentDir, "published-run");
     writeFileSync(join(parentDir, "placeholder"), "parent", "utf8");
     const oldDir = makeSandbox("old-artifacts-source");
-    writeFileSync(join(oldDir, "old.json"), "old artifact", "utf8");
+    writeOwnedPublishedDirectory(oldDir);
     renameSync(oldDir, outputDir);
     const before = readFlatDirectorySnapshot(outputDir);
 
@@ -796,7 +1002,7 @@ describe("topic light review thinking replay request guard", () => {
     const parentDir = makeSandbox("staging-publish-failure");
     const outputDir = join(parentDir, "published-run");
     const oldDir = makeSandbox("old-published-source");
-    writeFileSync(join(oldDir, "old.json"), "old artifact", "utf8");
+    writeOwnedPublishedDirectory(oldDir);
     renameSync(oldDir, outputDir);
     const before = readFlatDirectorySnapshot(outputDir);
 
