@@ -67,8 +67,8 @@
 
 旧的 Step 3-10 文档保留为范围留痕；当前执行顺序以本节为准：
 
-1. `S2-0`（进行中）：LLM 回复速度、质量和结构化输出优化基线。生产 Topic 已从“Builder 8 条 + 重型 Selector 8 选 4”调整为“Builder 4 条 + 轻审核”；首次审核已有 1～4 条就立即交付，只有首次 0 条才执行唯一一次 Builder 补充，补充后仍为 0 条才失败，风险项不回填。Builder 本轮除数量外未改质量策略，旧 Selector prompt/parser/replay 仅保留为历史诊断能力。Thinking 隔离 A/B 进一步确认：default 用时 `105.604s` 且风险召回 2/2，disabled 用时 `4.013s` 但风险召回 0/2，因此生产继续保留 default。S2-0 继续打开；下一步不再通过堆 Prompt 或直接关 thinking 追求速度，而把快速审核模型/路由纳入 S2-1 设计输入。
-2. `S2-1`：多模型、多供应商切换。基于 S2-0 的真实基线设计 provider/model/routing/run snapshot/credential reference。
+1. `S2-0`（已完成，链路冻结）：LLM 回复速度、质量和结构化输出优化基线。S2-0 期间尝试了紧凑结论合同、selector thinking on、builder+light-review 等多轮方案，均未能解决"细粒度语义风险识别需要 reasoning、而 reasoning 在 GLM-5.x 上必然带来 70~400s 长尾"这一死结；最终于 `2968c5e` 回滚到 builder(8)+selector 架构并冻结当前模型组合下的进一步优化。selector 一致性合同与 semantic-replay 工具保留；阶段 1~4 的 67 个试错 commit 与全部实测记录完整保留在 git 历史中作为 S2-1 输入。回滚设计见 [S2-0 回滚设计](./2026-07-17-s2-0-topic-rollback-to-builder-selector-design.md) 与 [实施计划](./2026-07-17-s2-0-topic-rollback-to-builder-selector-implementation-plan.md)。
+2. `S2-1`（设计中）：多模型、多供应商切换。基于 S2-0 的真实基线设计 provider/model/routing/run snapshot/credential reference。S2-1 范围已收窄为最小可用版：引入 `smart` / `flash` 两档 tier 作为模型路由唯一维度，每个 operation 声明所需 tier，gateway 按 tier 解析到具体 `provider:model`；不引入数据库 ProviderModel / RunConfigurationSnapshot / UsageCostRecord（留给 S2-2）。设计文档见 [S2-1 多模型多供应商切换设计](./2026-07-17-s2-1-multi-provider-model-routing-design.md)。
 3. `S2-2`：用户偏好、生成策略与成本控制。接入用户级策略、预算和成本记录，消费 S2-1 的 provider/model 能力。
 4. `S2-3`：Prompt 治理。版本、hash、fixtures、变更说明和运行快照对齐；仍遵守 `AGENTS.md` 的 `harness/prompts/` 正式 prompt 位置规则，除非另有设计审查批准。
 5. `S2-4`：选题筛选条件扩充。与事件库字段协调，但不先造无法映射到事件数据的词表。
