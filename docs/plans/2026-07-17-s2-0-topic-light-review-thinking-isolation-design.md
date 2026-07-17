@@ -65,7 +65,10 @@ Topic 轻审核流程在同一“晏子使楚”样本的计时复验中，`topi
 4. disabled 轮 effective thinking 明确为 `disabled`，reasoning tokens 为 0；provider-default 轮 effective thinking 明确为 `provider_default`。
 5. 两轮的模型、Prompt SHA、strategy、tool choice、maxAttempts 和其余 effective request 完全相同，唯一允许差异是 thinking。
 6. 两轮合计实际 provider attempt 恰为 2，未发生 fallback 或 retry。
-7. disabled 轮耗时低于 provider-default 轮；若差异很小或 default reasoning tokens 本来就是 0，只记录结果，不改生产。
+7. disabled 轮耗时必须同时满足：比 provider-default 至少减少 `10s`，且不高于 provider-default 的 `60%`；仅略快不得放行。provider-default reasoning tokens 必须是明确正数，disabled reasoning tokens 必须明确为 0。
+8. 生产决策所需的 duration、effective request、attempt、token 或 Prompt SHA 任一缺失时 fail closed，只记录结果，不改生产。
+
+单轮异常必须被捕获并写入脱敏结果，不得触发 retry 或 fallback。若 provider-default 轮失败，仍可在共享预算内继续执行已计划的 disabled 轮以保留诊断价值，但最终生产门禁必为 false；两轮合计 attempt 不得超过 2。
 
 生产改动只允许在 `APPROVED_THINKING_OVERRIDE` 中增加 `"topic.light-review": "disabled"`，由 strict 调用和受控 fallback 共同继承。不得顺手修改 Prompt、max tokens、temperature、timeout、retry、Builder 或补充条件。
 
