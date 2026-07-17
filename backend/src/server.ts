@@ -56,6 +56,7 @@ function resolveRenderAdapter(): RenderAdapter | undefined {
 import { matchFileRoute, handleFileRoute } from "./http/file-routes.js";
 import { parseMultipart } from "./http/multipart.js";
 import { tryServeStatic } from "./http/static-files.js";
+import { collectTierDiagnosticsInput, logTierConfigDiagnostics } from "./runtime/llm/tier-config-diagnostics.js";
 
 async function readPayload(request: IncomingMessage) {
   const chunks: Buffer[] = [];
@@ -343,6 +344,8 @@ export async function startServer(options?: {
     await recoverAndPersistInterruptedRuns(app.db);
   }
   const sessionStore = prismaClient ? new PrismaSessionStore(prismaClient) : undefined;
+  // S2-1 Task 7：启动时打印 tier 路由诊断（脱敏，失败不阻塞启动）
+  logTierConfigDiagnostics(collectTierDiagnosticsInput());
   const server = createHttpServer(app, { publicDir, sessionStore });
   let disconnected = false;
   const disconnect = async () => {
