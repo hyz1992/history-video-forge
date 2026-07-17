@@ -29,6 +29,17 @@ interface JsonSchemaNode {
   properties?: Record<string, JsonSchemaNode>;
 }
 
+const REQUIRED_CANDIDATE_STRING_FIELDS = [
+  "candidate_id",
+  "title",
+  "one_line_angle",
+  "core_conflict",
+  "strong_scene",
+  "event_identity",
+  "family_label",
+  "scope_label",
+] as const;
+
 export function loadTopicLightReviewThinkingReplayFixture(
   fixturePath = DEFAULT_TOPIC_LIGHT_REVIEW_THINKING_FIXTURE_PATH,
 ): TopicLightReviewThinkingReplayFixture {
@@ -49,12 +60,20 @@ export function loadTopicLightReviewThinkingReplayFixture(
   const candidateIds = rawFixture.review_pool.map((candidate) => {
     if (
       !isRecord(candidate) ||
-      typeof candidate.candidate_id !== "string" ||
-      candidate.candidate_id.length === 0
+      REQUIRED_CANDIDATE_STRING_FIELDS.some(
+        (field) =>
+          typeof candidate[field] !== "string" ||
+          candidate[field].trim().length === 0,
+      ) ||
+      !Array.isArray(candidate.must_cover_preview) ||
+      candidate.must_cover_preview.length === 0 ||
+      candidate.must_cover_preview.some(
+        (item) => typeof item !== "string" || item.trim().length === 0,
+      )
     ) {
-      throw new Error("topic_light_review_thinking_fixture_invalid_candidate_id");
+      throw new Error("topic_light_review_thinking_fixture_invalid_candidate");
     }
-    return candidate.candidate_id;
+    return candidate.candidate_id as string;
   });
   if (new Set(candidateIds).size !== candidateIds.length) {
     throw new Error("topic_light_review_thinking_fixture_duplicate_candidate_id");
@@ -74,12 +93,19 @@ export function loadTopicLightReviewThinkingReplayFixture(
       typeof annotation.candidate_id !== "string" ||
       typeof annotation.expected_risk !== "boolean" ||
       typeof annotation.expected_issue !== "string" ||
+      typeof annotation.entered_final_candidates !== "boolean" ||
       typeof annotation.rationale !== "string"
     ) {
       throw new Error("topic_light_review_thinking_fixture_invalid_annotation");
     }
     if (!allowedIssues.has(annotation.expected_issue)) {
       throw new Error("topic_light_review_thinking_fixture_invalid_expected_issue");
+    }
+    if (
+      annotation.expected_risk ===
+      (annotation.expected_issue === "none")
+    ) {
+      throw new Error("topic_light_review_thinking_fixture_risk_issue_mismatch");
     }
     if (annotation.rationale.trim().length === 0) {
       throw new Error("topic_light_review_thinking_fixture_rationale_required");
