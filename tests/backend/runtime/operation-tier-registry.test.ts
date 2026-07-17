@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   getOperationTier,
@@ -103,6 +103,30 @@ describe("operation tier registry", () => {
         getOperationTier("repeated.unknown");
         getOperationTier("repeated.unknown");
       }).not.toThrow();
+    });
+
+    it("emits a warning exactly once per unknown operation (warnedOperations cache)", () => {
+      // 用本测试独有的 operation 名，避免与其他用例累积的 warnedOperations 冲突。
+      const uniqueOp = "warning.test.unique.op";
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      try {
+        getOperationTier(uniqueOp);
+        expect(warnSpy).toHaveBeenCalledTimes(1);
+        expect(warnSpy.mock.calls[0][0]).toContain(uniqueOp);
+
+        // 同一未知 operation 第二次调用：warnedOperations 命中缓存，不再触发 warning。
+        getOperationTier(uniqueOp);
+        expect(warnSpy).toHaveBeenCalledTimes(1);
+
+        // 另一个新未知 operation 仍会触发一次新的 warning。
+        const anotherOp = "warning.test.another.op";
+        getOperationTier(anotherOp);
+        expect(warnSpy).toHaveBeenCalledTimes(2);
+        expect(warnSpy.mock.calls[1][0]).toContain(anotherOp);
+      } finally {
+        warnSpy.mockRestore();
+      }
     });
   });
 });
