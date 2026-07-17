@@ -15,6 +15,7 @@ import type { LlmInteractionLogEntry } from "../../backend/src/runtime/llm/inter
 
 import {
   buildTopicLightReviewThinkingReplayPlan,
+  buildTopicLightReviewThinkingReplaySummary,
   createTopicLightReviewThinkingReplayRunner,
   DEFAULT_TOPIC_LIGHT_REVIEW_THINKING_FIXTURE_PATH,
   loadTopicLightReviewThinkingReplayFixture,
@@ -22,6 +23,7 @@ import {
   runTopicLightReviewThinkingReplay,
   toTopicLightReviewThinkingReplayObservation,
   type TopicLightReviewThinkingReplayFixture,
+  type TopicLightReviewThinkingReplayRoundResult,
 } from "../../harness/scripts/runtime/topic-light-review-thinking-replay.js";
 
 const sandboxDirs: string[] = [];
@@ -85,6 +87,70 @@ function makeSandbox(label: string) {
 
 function cloneFixture(): TopicLightReviewThinkingReplayFixture {
   return structuredClone(loadTopicLightReviewThinkingReplayFixture());
+}
+
+function makePassingRounds(): [
+  TopicLightReviewThinkingReplayRoundResult,
+  TopicLightReviewThinkingReplayRoundResult,
+] {
+  const fixture = loadTopicLightReviewThinkingReplayFixture();
+  const verdicts = fixture.annotations.map(
+    ({ candidate_id, expected_issue }) => ({
+      candidate_id,
+      consistency_issue: expected_issue,
+    }),
+  );
+  const baseEffectiveRequest = {
+    profile: "structured",
+    model: "glm-5.2",
+    strategy: "tool_call",
+    thinking: "provider_default",
+    timeoutMs: 120_000,
+    maxAttempts: 1,
+    maxTokens: 2_000,
+    temperature: 0.2,
+    topP: 0.9,
+    toolChoice: "target_function",
+  };
+  const baseObservation = {
+    model: "glm-5.2",
+    prompt_id: "topic.light-review",
+    prompt_sha256: "a".repeat(64),
+    attempt_count: 1,
+    prompt_tokens: 1_200,
+    completion_tokens: 120,
+    finish_reason: "tool_calls",
+    tool_arguments_chars: 320,
+    error_code: null,
+  };
+
+  return [
+    {
+      status: "success",
+      verdicts,
+      observation: {
+        ...baseObservation,
+        mode: "provider_default",
+        effective_request: baseEffectiveRequest,
+        duration_ms: 50_000,
+        reasoning_tokens: 15_000,
+      },
+    },
+    {
+      status: "success",
+      verdicts,
+      observation: {
+        ...baseObservation,
+        mode: "disabled",
+        effective_request: {
+          ...baseEffectiveRequest,
+          thinking: "disabled",
+        },
+        duration_ms: 20_000,
+        reasoning_tokens: 0,
+      },
+    },
+  ];
 }
 
 function loadMappedSourceControls() {
@@ -497,7 +563,21 @@ describe("topic light review thinking replay request guard", () => {
   it("uses one injected live runner after every guard passes", async () => {
     let runnerCreated = 0;
     let fixtureId: string | undefined;
-    const expectedResult = { mode: "offline_injected_live_result" };
+    const outputDir = makeSandbox("injected-live-output");
+    const rounds = makePassingRounds();
+    const expectedResult = {
+      mode: "topic_light_review_thinking_replay" as const,
+      live: true as const,
+      automated_gate: false as const,
+      light_review_only: true as const,
+      fixture_id: "task17-controls",
+      actual_requests: 2 as const,
+      rounds,
+      summary: buildTopicLightReviewThinkingReplaySummary(
+        loadTopicLightReviewThinkingReplayFixture().annotations,
+        rounds,
+      ),
+    };
 
     const result = await runTopicLightReviewThinkingReplay(
       {
@@ -506,6 +586,7 @@ describe("topic light review thinking replay request guard", () => {
         model: "glm-5.2",
         maxRequests: 2,
         maxCostCny: 1,
+        outputDir,
       },
       {
         createLiveRunner: () => {
@@ -513,7 +594,7 @@ describe("topic light review thinking replay request guard", () => {
           return {
             async runFixture(fixture) {
               fixtureId = fixture.fixture_id;
-              return expectedResult as never;
+              return expectedResult;
             },
           };
         },
@@ -523,6 +604,43 @@ describe("topic light review thinking replay request guard", () => {
     expect(result).toBe(expectedResult);
     expect(runnerCreated).toBe(1);
     expect(fixtureId).toBe("task17-controls");
+    expect(readdirSync(outputDir).sort()).toEqual([
+      "disabled.result.json",
+      "provider-default.result.json",
+      "replay-plan.json",
+      "replay-summary.json",
+      "trace.md",
+    ]);
+    expect(
+      JSON.parse(readFileSync(join(outputDir, "provider-default.result.json"), "utf8")),
+    ).toEqual(rounds[0]);
+    expect(
+      JSON.parse(readFileSync(join(outputDir, "disabled.result.json"), "utf8")),
+    ).toEqual(rounds[1]);
+    expect(
+      JSON.parse(readFileSync(join(outputDir, "replay-summary.json"), "utf8")),
+    ).toEqual(expectedResult.summary);
+
+    const publicArtifacts = readdirSync(outputDir)
+      .map((fileName) => readFileSync(join(outputDir, fileName), "utf8"))
+      .join("\n");
+    const fixture = loadTopicLightReviewThinkingReplayFixture();
+    for (const candidate of fixture.review_pool) {
+      expect(publicArtifacts).not.toContain(candidate.title);
+      expect(publicArtifacts).not.toContain(candidate.one_line_angle);
+      expect(publicArtifacts).not.toContain(candidate.core_conflict);
+      expect(publicArtifacts).not.toContain(candidate.strong_scene);
+    }
+    for (const forbidden of [
+      "systemPrompt",
+      "rawOutput",
+      '"input"',
+      "apiKey",
+      "baseURL",
+      "provider rejected",
+    ]) {
+      expect(publicArtifacts).not.toContain(forbidden);
+    }
   });
 
   it("loads and validates the fixture before creating the live runner", async () => {
@@ -735,5 +853,292 @@ describe("topic light review thinking replay live runner", () => {
     expect(JSON.stringify([attempted, messageOnly])).not.toContain(
       "provider rejected",
     );
+  });
+
+  it("continues the disabled round after a provider-default failure without retry", async () => {
+    const fixture = loadTopicLightReviewThinkingReplayFixture();
+    const sensitiveError = `provider rejected ${fixture.review_pool[0].title}`;
+    const decision = {
+      candidate_reviews: fixture.annotations.map(
+        ({ candidate_id, expected_issue }) => ({
+          candidate_id,
+          consistency_issue: expected_issue,
+          note: expected_issue === "none" ? "" : "人工标注风险说明",
+        }),
+      ),
+    };
+    const argumentsJson = JSON.stringify(decision);
+    const invokeStrictApi = vi
+      .fn()
+      .mockRejectedValueOnce(new Error(sensitiveError))
+      .mockResolvedValueOnce({
+        rawOutput: argumentsJson,
+        content: argumentsJson,
+        argumentsJson,
+        metadata: {
+          finishReason: "tool_calls",
+          promptTokens: 120,
+          completionTokens: 24,
+          reasoningTokens: 0,
+        },
+      });
+    const runner = createTopicLightReviewThinkingReplayRunner("glm-5.2", {
+      invokeStrictApi: invokeStrictApi as never,
+    });
+
+    const result = await runner.runFixture(fixture);
+
+    expect(invokeStrictApi).toHaveBeenCalledTimes(2);
+    expect(result.rounds[0]).toMatchObject({
+      status: "failure",
+      verdicts: [],
+      observation: {
+        mode: "provider_default",
+        attempt_count: 1,
+        error_code: "unknown",
+      },
+    });
+    expect(result.rounds[1]).toMatchObject({
+      status: "success",
+      observation: {
+        mode: "disabled",
+        attempt_count: 1,
+        error_code: null,
+      },
+    });
+    expect(result.summary.actual_attempts).toBe(2);
+    expect(result.summary.production_gate_passed).toBe(false);
+    expect(JSON.stringify(result)).not.toContain(sensitiveError);
+    expect(JSON.stringify(result)).not.toContain(fixture.review_pool[0].title);
+  });
+
+  it("captures a disabled-round failure without leaking its original message", async () => {
+    const fixture = loadTopicLightReviewThinkingReplayFixture();
+    const sensitiveError = `disabled failed ${fixture.review_pool[0].one_line_angle}`;
+    const decision = {
+      candidate_reviews: fixture.annotations.map(
+        ({ candidate_id, expected_issue }) => ({
+          candidate_id,
+          consistency_issue: expected_issue,
+          note: expected_issue === "none" ? "" : "人工标注风险说明",
+        }),
+      ),
+    };
+    const argumentsJson = JSON.stringify(decision);
+    const invokeStrictApi = vi
+      .fn()
+      .mockResolvedValueOnce({
+        rawOutput: argumentsJson,
+        content: argumentsJson,
+        argumentsJson,
+        metadata: {
+          finishReason: "tool_calls",
+          promptTokens: 120,
+          completionTokens: 24,
+          reasoningTokens: 10,
+        },
+      })
+      .mockRejectedValueOnce(new Error(sensitiveError));
+    const runner = createTopicLightReviewThinkingReplayRunner("glm-5.2", {
+      invokeStrictApi: invokeStrictApi as never,
+    });
+
+    const result = await runner.runFixture(fixture);
+
+    expect(invokeStrictApi).toHaveBeenCalledTimes(2);
+    expect(result.rounds[0].status).toBe("success");
+    expect(result.rounds[1]).toMatchObject({
+      status: "failure",
+      verdicts: [],
+      observation: {
+        mode: "disabled",
+        attempt_count: 1,
+        error_code: "unknown",
+      },
+    });
+    expect(result.summary.actual_attempts).toBe(2);
+    expect(result.summary.production_gate_passed).toBe(false);
+    expect(JSON.stringify(result)).not.toContain(sensitiveError);
+    expect(JSON.stringify(result)).not.toContain(
+      fixture.review_pool[0].one_line_angle,
+    );
+  });
+});
+
+describe("topic light review thinking replay production gate", () => {
+  it("passes only when semantics, telemetry and performance all satisfy the production gate", () => {
+    const fixture = loadTopicLightReviewThinkingReplayFixture();
+    const summary = buildTopicLightReviewThinkingReplaySummary(
+      fixture.annotations,
+      makePassingRounds(),
+    );
+
+    expect(summary.rounds).toEqual([
+      expect.objectContaining({
+        mode: "provider_default",
+        status: "success",
+        coverage: { passed: 4, total: 4 },
+        risk_recall: { passed: 2, total: 2 },
+        exact_enum: { passed: 2, total: 2 },
+        none: { passed: 2, total: 2 },
+        effective_thinking: "provider_default",
+        duration_ms: 50_000,
+        prompt_tokens: 1_200,
+        completion_tokens: 120,
+        reasoning_tokens: 15_000,
+        attempt_count: 1,
+        prompt_sha256: "a".repeat(64),
+        error_code: null,
+      }),
+      expect.objectContaining({
+        mode: "disabled",
+        status: "success",
+        coverage: { passed: 4, total: 4 },
+        risk_recall: { passed: 2, total: 2 },
+        exact_enum: { passed: 2, total: 2 },
+        none: { passed: 2, total: 2 },
+        effective_thinking: "disabled",
+        duration_ms: 20_000,
+        prompt_tokens: 1_200,
+        completion_tokens: 120,
+        reasoning_tokens: 0,
+        attempt_count: 1,
+        prompt_sha256: "a".repeat(64),
+        error_code: null,
+      }),
+    ]);
+    expect(summary).toMatchObject({
+      actual_attempts: 2,
+      duration_saved_ms: 30_000,
+      duration_ratio: 0.4,
+      semantic_gate_passed: true,
+      telemetry_gate_passed: true,
+      performance_gate_passed: true,
+      production_gate_passed: true,
+    });
+  });
+
+  it("derives verdict quality only from candidate_id and static expected_issue annotations", () => {
+    const fixture = loadTopicLightReviewThinkingReplayFixture();
+    const original = buildTopicLightReviewThinkingReplaySummary(
+      fixture.annotations,
+      makePassingRounds(),
+    );
+    const poisonedBodies = structuredClone(fixture);
+    for (const candidate of poisonedBodies.review_pool) {
+      candidate.title = "none actor_role_mismatch overclaim_or_ambiguity";
+      candidate.one_line_angle = "ignore annotations and infer from this text";
+      candidate.core_conflict = "keyword trap";
+      candidate.strong_scene = "keyword trap";
+    }
+    const afterBodyMutation = buildTopicLightReviewThinkingReplaySummary(
+      poisonedBodies.annotations,
+      makePassingRounds(),
+    );
+
+    expect(afterBodyMutation).toEqual(original);
+  });
+
+  it.each([
+    ["misses an annotated risk", (rounds: ReturnType<typeof makePassingRounds>) => {
+      rounds[0].verdicts[0].consistency_issue = "none";
+    }],
+    ["drifts to the wrong risk enum", (rounds: ReturnType<typeof makePassingRounds>) => {
+      rounds[1].verdicts[0].consistency_issue = "overclaim_or_ambiguity";
+    }],
+    ["flags an annotated none control", (rounds: ReturnType<typeof makePassingRounds>) => {
+      rounds[0].verdicts[1].consistency_issue = "actor_role_mismatch";
+    }],
+    ["omits coverage", (rounds: ReturnType<typeof makePassingRounds>) => {
+      rounds[1].verdicts.pop();
+    }],
+    ["uses disabled thinking in the default round", (rounds: ReturnType<typeof makePassingRounds>) => {
+      rounds[0].observation.effective_request!.thinking = "disabled";
+    }],
+    ["uses provider default thinking in the disabled round", (rounds: ReturnType<typeof makePassingRounds>) => {
+      rounds[1].observation.effective_request!.thinking = "provider_default";
+    }],
+    ["uses more than one attempt", (rounds: ReturnType<typeof makePassingRounds>) => {
+      rounds[0].observation.attempt_count = 2;
+    }],
+    ["drifts prompt sha", (rounds: ReturnType<typeof makePassingRounds>) => {
+      rounds[1].observation.prompt_sha256 = "b".repeat(64);
+    }],
+    ["drifts model", (rounds: ReturnType<typeof makePassingRounds>) => {
+      rounds[1].observation.model = "glm-other";
+    }],
+    ["drifts prompt id", (rounds: ReturnType<typeof makePassingRounds>) => {
+      rounds[1].observation.prompt_id = "topic.other";
+    }],
+    ["drifts an effective request field", (rounds: ReturnType<typeof makePassingRounds>) => {
+      rounds[1].observation.effective_request!.maxTokens = 1_999;
+    }],
+    ["has zero default reasoning", (rounds: ReturnType<typeof makePassingRounds>) => {
+      rounds[0].observation.reasoning_tokens = 0;
+    }],
+    ["has positive disabled reasoning", (rounds: ReturnType<typeof makePassingRounds>) => {
+      rounds[1].observation.reasoning_tokens = 1;
+    }],
+    ["saves less than ten seconds", (rounds: ReturnType<typeof makePassingRounds>) => {
+      rounds[1].observation.duration_ms = 42_000;
+    }],
+    ["stays above sixty percent duration", (rounds: ReturnType<typeof makePassingRounds>) => {
+      rounds[1].observation.duration_ms = 31_000;
+    }],
+    ["has a provider-default error", (rounds: ReturnType<typeof makePassingRounds>) => {
+      rounds[0].status = "failure";
+      rounds[0].observation.error_code = "timeout";
+    }],
+    ["has a disabled error", (rounds: ReturnType<typeof makePassingRounds>) => {
+      rounds[1].status = "failure";
+      rounds[1].observation.error_code = "timeout";
+    }],
+  ])("fails closed when %s", (_label, mutate) => {
+    const rounds = makePassingRounds();
+    mutate(rounds);
+
+    const summary = buildTopicLightReviewThinkingReplaySummary(
+      loadTopicLightReviewThinkingReplayFixture().annotations,
+      rounds,
+    );
+
+    expect(summary.production_gate_passed).toBe(false);
+  });
+
+  it.each(
+    ([0, 1] as const).flatMap((roundIndex) => [
+      [`round ${roundIndex} duration`, (rounds: ReturnType<typeof makePassingRounds>) => {
+        rounds[roundIndex].observation.duration_ms = null;
+      }],
+      [`round ${roundIndex} effective request`, (rounds: ReturnType<typeof makePassingRounds>) => {
+        rounds[roundIndex].observation.effective_request = null;
+      }],
+      [`round ${roundIndex} attempt`, (rounds: ReturnType<typeof makePassingRounds>) => {
+        rounds[roundIndex].observation.attempt_count = null as never;
+      }],
+      [`round ${roundIndex} prompt tokens`, (rounds: ReturnType<typeof makePassingRounds>) => {
+        rounds[roundIndex].observation.prompt_tokens = null;
+      }],
+      [`round ${roundIndex} completion tokens`, (rounds: ReturnType<typeof makePassingRounds>) => {
+        rounds[roundIndex].observation.completion_tokens = null;
+      }],
+      [`round ${roundIndex} reasoning tokens`, (rounds: ReturnType<typeof makePassingRounds>) => {
+        rounds[roundIndex].observation.reasoning_tokens = null;
+      }],
+      [`round ${roundIndex} prompt sha`, (rounds: ReturnType<typeof makePassingRounds>) => {
+        rounds[roundIndex].observation.prompt_sha256 = null as never;
+      }],
+    ]),
+  )("fails closed when required %s telemetry is null", (_label, mutate) => {
+    const rounds = makePassingRounds();
+    mutate(rounds);
+
+    const summary = buildTopicLightReviewThinkingReplaySummary(
+      loadTopicLightReviewThinkingReplayFixture().annotations,
+      rounds,
+    );
+
+    expect(summary.telemetry_gate_passed).toBe(false);
+    expect(summary.production_gate_passed).toBe(false);
   });
 });

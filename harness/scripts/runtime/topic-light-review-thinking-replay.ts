@@ -63,7 +63,7 @@ export interface TopicLightReviewThinkingReplayObservation {
   prompt_id: string;
   prompt_sha256: string;
   effective_request: LlmInteractionLogEntry["effectiveRequest"] | null;
-  attempt_count: number;
+  attempt_count: number | null;
   duration_ms: number | null;
   prompt_tokens: number | null;
   completion_tokens: number | null;
@@ -74,11 +74,43 @@ export interface TopicLightReviewThinkingReplayObservation {
 }
 
 export interface TopicLightReviewThinkingReplayRoundResult {
+  status: "success" | "failure";
   verdicts: Array<{
     candidate_id: string;
     consistency_issue: TopicLightReviewConsistencyIssue;
   }>;
   observation: TopicLightReviewThinkingReplayObservation;
+}
+
+export interface TopicLightReviewThinkingReplayRoundSummary {
+  mode: "provider_default" | "disabled";
+  status: "success" | "failure";
+  coverage: { passed: number; total: number };
+  risk_recall: { passed: number; total: number };
+  exact_enum: { passed: number; total: number };
+  none: { passed: number; total: number };
+  effective_thinking: string | null;
+  duration_ms: number | null;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  reasoning_tokens: number | null;
+  attempt_count: number | null;
+  prompt_sha256: string | null;
+  error_code: string | null;
+}
+
+export interface TopicLightReviewThinkingReplaySummary {
+  rounds: [
+    TopicLightReviewThinkingReplayRoundSummary,
+    TopicLightReviewThinkingReplayRoundSummary,
+  ];
+  actual_attempts: number | null;
+  duration_saved_ms: number | null;
+  duration_ratio: number | null;
+  semantic_gate_passed: boolean;
+  telemetry_gate_passed: boolean;
+  performance_gate_passed: boolean;
+  production_gate_passed: boolean;
 }
 
 export interface TopicLightReviewThinkingReplayResult {
@@ -92,6 +124,7 @@ export interface TopicLightReviewThinkingReplayResult {
     TopicLightReviewThinkingReplayRoundResult,
     TopicLightReviewThinkingReplayRoundResult,
   ];
+  summary: TopicLightReviewThinkingReplaySummary;
 }
 
 export interface TopicLightReviewThinkingReplayRunner {
@@ -259,7 +292,13 @@ export async function runTopicLightReviewThinkingReplay(
   const runner =
     dependencies.createLiveRunner?.(input) ??
     createTopicLightReviewThinkingReplayRunner(input.model!);
-  return runner.runFixture(fixture);
+  const result = await runner.runFixture(fixture);
+  writeLiveReplayArtifacts(
+    input.outputDir ?? DEFAULT_TOPIC_LIGHT_REVIEW_THINKING_OUTPUT_DIR,
+    plan,
+    result,
+  );
+  return result;
 }
 
 export function createTopicLightReviewThinkingReplayRunner(
@@ -278,9 +317,14 @@ export function createTopicLightReviewThinkingReplayRunner(
     registry: createPromptRegistry(),
     provider,
   });
+  let fixtureRunStarted = false;
 
   return {
     async runFixture(fixture) {
+      if (fixtureRunStarted) {
+        requestBudget.consume("topic.light-review-thinking-replay");
+      }
+      fixtureRunStarted = true;
       const expectedCandidateIds = fixture.review_pool.map(
         (candidate) => candidate.candidate_id,
       );
@@ -293,41 +337,64 @@ export function createTopicLightReviewThinkingReplayRunner(
             interaction = entry;
           },
         };
-        const decision = await gateway.invokeStrictStructured({
-          promptId: "topic.light-review",
-          input: fixture.review_pool,
-          operationName: "topic.light-review-thinking-replay",
-          schema: TOPIC_LIGHT_REVIEW_STRICT_SCHEMA,
-          parse: (rawOutput) =>
-            parseTopicLightReviewDecision(rawOutput, expectedCandidateIds),
-          interactionLogWriter: writer,
-          options: {
-            strategy: "tool_call",
-            ...(mode === "disabled" ? { thinking: "disabled" as const } : {}),
-            toolChoice: "target_function",
-          },
-        });
+        try {
+          const decision = await gateway.invokeStrictStructured({
+            promptId: "topic.light-review",
+            input: fixture.review_pool,
+            operationName: "topic.light-review-thinking-replay",
+            schema: TOPIC_LIGHT_REVIEW_STRICT_SCHEMA,
+            parse: (rawOutput) =>
+              parseTopicLightReviewDecision(rawOutput, expectedCandidateIds),
+            interactionLogWriter: writer,
+            options: {
+              strategy: "tool_call",
+              ...(mode === "disabled"
+                ? { thinking: "disabled" as const }
+                : {}),
+              toolChoice: "target_function",
+            },
+          });
+          const capturedInteraction = interaction as LlmInteractionLogEntry | null;
+          if (!capturedInteraction) {
+            throw new Error(
+              "topic_light_review_thinking_replay_interaction_missing",
+            );
+          }
 
-        if (!interaction) {
-          throw new Error("topic_light_review_thinking_replay_interaction_missing");
+          return {
+            status: "success",
+            verdicts: decision.candidate_reviews.map(
+              ({ candidate_id, consistency_issue }) => ({
+                candidate_id,
+                consistency_issue,
+              }),
+            ),
+            observation: toTopicLightReviewThinkingReplayObservation(
+              mode,
+              capturedInteraction,
+            ),
+          };
+        } catch (error) {
+          const capturedInteraction = interaction as LlmInteractionLogEntry | null;
+          return {
+            status: "failure",
+            verdicts: [],
+            observation: capturedInteraction
+              ? toTopicLightReviewThinkingReplayObservation(
+                  mode,
+                  capturedInteraction,
+                )
+              : createMissingInteractionObservation(mode, model, error),
+          };
         }
-
-        return {
-          verdicts: decision.candidate_reviews.map(
-            ({ candidate_id, consistency_issue }) => ({
-              candidate_id,
-              consistency_issue,
-            }),
-          ),
-          observation: toTopicLightReviewThinkingReplayObservation(
-            mode,
-            interaction,
-          ),
-        };
       };
 
       const providerDefault = await runRound("provider_default");
       const disabled = await runRound("disabled");
+      const rounds: [
+        TopicLightReviewThinkingReplayRoundResult,
+        TopicLightReviewThinkingReplayRoundResult,
+      ] = [providerDefault, disabled];
       return {
         mode: "topic_light_review_thinking_replay",
         live: true,
@@ -335,10 +402,321 @@ export function createTopicLightReviewThinkingReplayRunner(
         light_review_only: true,
         fixture_id: fixture.fixture_id,
         actual_requests: REQUIRED_REQUESTS,
-        rounds: [providerDefault, disabled],
+        rounds,
+        summary: buildTopicLightReviewThinkingReplaySummary(
+          fixture.annotations,
+          rounds,
+        ),
       };
     },
   };
+}
+
+export function buildTopicLightReviewThinkingReplaySummary(
+  annotations: TopicLightReviewThinkingReplayAnnotation[],
+  rounds: [
+    TopicLightReviewThinkingReplayRoundResult,
+    TopicLightReviewThinkingReplayRoundResult,
+  ],
+): TopicLightReviewThinkingReplaySummary {
+  const riskAnnotations = annotations.filter(
+    (annotation) => annotation.expected_risk,
+  );
+  const noneAnnotations = annotations.filter(
+    (annotation) => annotation.expected_issue === "none",
+  );
+  const roundSummaries = rounds.map((round) => {
+    const verdictsByCandidate = new Map<
+      string,
+      TopicLightReviewConsistencyIssue
+    >();
+    const verdictCounts = new Map<string, number>();
+    for (const verdict of round.verdicts) {
+      verdictsByCandidate.set(verdict.candidate_id, verdict.consistency_issue);
+      verdictCounts.set(
+        verdict.candidate_id,
+        (verdictCounts.get(verdict.candidate_id) ?? 0) + 1,
+      );
+    }
+    const coveragePassed = annotations.filter(
+      (annotation) => verdictCounts.get(annotation.candidate_id) === 1,
+    ).length;
+    const riskRecallPassed = riskAnnotations.filter(
+      (annotation) =>
+        verdictsByCandidate.has(annotation.candidate_id) &&
+        verdictsByCandidate.get(annotation.candidate_id) !== "none",
+    ).length;
+    const exactEnumPassed = riskAnnotations.filter(
+      (annotation) =>
+        verdictsByCandidate.get(annotation.candidate_id) ===
+        annotation.expected_issue,
+    ).length;
+    const nonePassed = noneAnnotations.filter(
+      (annotation) =>
+        verdictsByCandidate.get(annotation.candidate_id) === "none",
+    ).length;
+
+    return {
+      mode: round.observation.mode,
+      status: round.status,
+      coverage: { passed: coveragePassed, total: annotations.length },
+      risk_recall: {
+        passed: riskRecallPassed,
+        total: riskAnnotations.length,
+      },
+      exact_enum: { passed: exactEnumPassed, total: riskAnnotations.length },
+      none: { passed: nonePassed, total: noneAnnotations.length },
+      effective_thinking: round.observation.effective_request?.thinking ?? null,
+      duration_ms: round.observation.duration_ms,
+      prompt_tokens: round.observation.prompt_tokens,
+      completion_tokens: round.observation.completion_tokens,
+      reasoning_tokens: round.observation.reasoning_tokens,
+      attempt_count: round.observation.attempt_count,
+      prompt_sha256: round.observation.prompt_sha256 ?? null,
+      error_code: round.observation.error_code,
+    } satisfies TopicLightReviewThinkingReplayRoundSummary;
+  }) as [
+    TopicLightReviewThinkingReplayRoundSummary,
+    TopicLightReviewThinkingReplayRoundSummary,
+  ];
+
+  const semanticGatePassed = rounds.every((round, index) => {
+    const summary = roundSummaries[index];
+    return (
+      round.status === "success" &&
+      round.verdicts.length === annotations.length &&
+      summary.coverage.passed === summary.coverage.total &&
+      summary.risk_recall.passed === summary.risk_recall.total &&
+      summary.exact_enum.passed === summary.exact_enum.total &&
+      summary.none.passed === summary.none.total
+    );
+  });
+
+  const [providerDefault, disabled] = rounds;
+  const [providerDefaultSummary, disabledSummary] = roundSummaries;
+  const actualAttempts = readTotalAttempts(rounds);
+  const telemetryGatePassed =
+    roundsHaveCompleteTelemetry(rounds) &&
+    providerDefault.status === "success" &&
+    disabled.status === "success" &&
+    providerDefault.observation.mode === "provider_default" &&
+    disabled.observation.mode === "disabled" &&
+    providerDefault.observation.effective_request?.thinking ===
+      "provider_default" &&
+    disabled.observation.effective_request?.thinking === "disabled" &&
+    providerDefault.observation.reasoning_tokens! > 0 &&
+    disabled.observation.reasoning_tokens === 0 &&
+    actualAttempts === REQUIRED_REQUESTS &&
+    observationsMatchExceptThinking(
+      providerDefault.observation,
+      disabled.observation,
+    );
+
+  const durationSavedMs =
+    providerDefaultSummary.duration_ms !== null &&
+    disabledSummary.duration_ms !== null
+      ? providerDefaultSummary.duration_ms - disabledSummary.duration_ms
+      : null;
+  const durationRatio =
+    providerDefaultSummary.duration_ms !== null &&
+    providerDefaultSummary.duration_ms > 0 &&
+    disabledSummary.duration_ms !== null
+      ? disabledSummary.duration_ms / providerDefaultSummary.duration_ms
+      : null;
+  const performanceGatePassed =
+    durationSavedMs !== null &&
+    durationRatio !== null &&
+    durationSavedMs >= 10_000 &&
+    durationRatio <= 0.6;
+
+  return {
+    rounds: roundSummaries,
+    actual_attempts: actualAttempts,
+    duration_saved_ms: durationSavedMs,
+    duration_ratio: durationRatio,
+    semantic_gate_passed: semanticGatePassed,
+    telemetry_gate_passed: telemetryGatePassed,
+    performance_gate_passed: performanceGatePassed,
+    production_gate_passed:
+      semanticGatePassed && telemetryGatePassed && performanceGatePassed,
+  };
+}
+
+function roundsHaveCompleteTelemetry(
+  rounds: [
+    TopicLightReviewThinkingReplayRoundResult,
+    TopicLightReviewThinkingReplayRoundResult,
+  ],
+) {
+  return rounds.every(({ observation }) => {
+    const effective = observation.effective_request;
+    return (
+      observation.error_code === null &&
+      observation.model === "glm-5.2" &&
+      observation.prompt_id === "topic.light-review" &&
+      typeof observation.prompt_sha256 === "string" &&
+      /^[a-f0-9]{64}$/.test(observation.prompt_sha256) &&
+      effective !== null &&
+      effective.profile === "structured" &&
+      effective.model === observation.model &&
+      effective.strategy === "tool_call" &&
+      effective.toolChoice === "target_function" &&
+      effective.maxAttempts === 1 &&
+      observation.attempt_count === 1 &&
+      isNonNegativeNumber(observation.duration_ms) &&
+      isNonNegativeNumber(observation.prompt_tokens) &&
+      isNonNegativeNumber(observation.completion_tokens) &&
+      isNonNegativeNumber(observation.reasoning_tokens)
+    );
+  });
+}
+
+function observationsMatchExceptThinking(
+  providerDefault: TopicLightReviewThinkingReplayObservation,
+  disabled: TopicLightReviewThinkingReplayObservation,
+) {
+  if (
+    providerDefault.model !== disabled.model ||
+    providerDefault.prompt_id !== disabled.prompt_id ||
+    providerDefault.prompt_sha256 !== disabled.prompt_sha256 ||
+    !providerDefault.effective_request ||
+    !disabled.effective_request
+  ) {
+    return false;
+  }
+  const { thinking: _providerThinking, ...providerRequest } =
+    providerDefault.effective_request;
+  const { thinking: _disabledThinking, ...disabledRequest } =
+    disabled.effective_request;
+  return stableJson(providerRequest) === stableJson(disabledRequest);
+}
+
+function readTotalAttempts(
+  rounds: [
+    TopicLightReviewThinkingReplayRoundResult,
+    TopicLightReviewThinkingReplayRoundResult,
+  ],
+) {
+  const attempts = rounds.map((round) => round.observation.attempt_count);
+  return attempts.every((attempt): attempt is number => attempt !== null)
+    ? attempts.reduce((total, attempt) => total + attempt, 0)
+    : null;
+}
+
+function isNonNegativeNumber(value: number | null): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function stableJson(value: Record<string, unknown>) {
+  return JSON.stringify(
+    Object.fromEntries(
+      Object.entries(value).sort(([left], [right]) =>
+        left.localeCompare(right),
+      ),
+    ),
+  );
+}
+
+function createMissingInteractionObservation(
+  mode: TopicLightReviewThinkingReplayObservation["mode"],
+  model: string,
+  error: unknown,
+): TopicLightReviewThinkingReplayObservation {
+  return {
+    mode,
+    model,
+    prompt_id: "topic.light-review",
+    prompt_sha256: "",
+    effective_request: null,
+    attempt_count: null,
+    duration_ms: null,
+    prompt_tokens: null,
+    completion_tokens: null,
+    reasoning_tokens: null,
+    finish_reason: null,
+    tool_arguments_chars: null,
+    error_code: normalizeThrownErrorCode(error),
+  };
+}
+
+function normalizeThrownErrorCode(error: unknown) {
+  if (isRecord(error) && typeof error.code === "string") {
+    return CANONICAL_ERROR_CODES.has(error.code)
+      ? error.code
+      : "llm_invocation_failed";
+  }
+  return "llm_invocation_failed";
+}
+
+function writeLiveReplayArtifacts(
+  outputDir: string,
+  plan: TopicLightReviewThinkingReplayPlan,
+  result: TopicLightReviewThinkingReplayResult,
+) {
+  mkdirSync(outputDir, { recursive: true });
+  writeReplayJson(outputDir, "replay-plan.json", plan);
+  writeReplayJson(
+    outputDir,
+    "provider-default.result.json",
+    result.rounds[0],
+  );
+  writeReplayJson(outputDir, "disabled.result.json", result.rounds[1]);
+  writeReplayJson(outputDir, "replay-summary.json", result.summary);
+  writeFileSync(
+    resolve(outputDir, "trace.md"),
+    renderTopicLightReviewThinkingReplayTrace(result.summary),
+    "utf8",
+  );
+}
+
+function writeReplayJson(outputDir: string, fileName: string, value: unknown) {
+  writeFileSync(
+    resolve(outputDir, fileName),
+    `${JSON.stringify(value, null, 2)}\n`,
+    "utf8",
+  );
+}
+
+function renderTopicLightReviewThinkingReplayTrace(
+  summary: TopicLightReviewThinkingReplaySummary,
+) {
+  const lines = [
+    "# Topic Light Review Thinking Replay Trace",
+    "",
+    "| mode | status | thinking | duration_ms | prompt_tokens | completion_tokens | reasoning_tokens | attempts | error_code |",
+    "|---|---|---|---:|---:|---:|---:|---:|---|",
+  ];
+  for (const round of summary.rounds) {
+    lines.push(
+      `| ${round.mode} | ${round.status} | ${round.effective_thinking ?? "unavailable"} | ${round.duration_ms ?? "unavailable"} | ${round.prompt_tokens ?? "unavailable"} | ${round.completion_tokens ?? "unavailable"} | ${round.reasoning_tokens ?? "unavailable"} | ${round.attempt_count ?? "unavailable"} | ${round.error_code ?? "-"} |`,
+    );
+  }
+  lines.push(
+    "",
+    "## Semantic Counts",
+    "",
+    "| mode | coverage | risk_recall | exact_enum | none |",
+    "|---|---:|---:|---:|---:|",
+  );
+  for (const round of summary.rounds) {
+    lines.push(
+      `| ${round.mode} | ${round.coverage.passed}/${round.coverage.total} | ${round.risk_recall.passed}/${round.risk_recall.total} | ${round.exact_enum.passed}/${round.exact_enum.total} | ${round.none.passed}/${round.none.total} |`,
+    );
+  }
+  lines.push(
+    "",
+    "## Gates",
+    "",
+    `- actual_attempts: ${summary.actual_attempts ?? "unavailable"}`,
+    `- duration_saved_ms: ${summary.duration_saved_ms ?? "unavailable"}`,
+    `- duration_ratio: ${summary.duration_ratio ?? "unavailable"}`,
+    `- semantic_gate_passed: ${summary.semantic_gate_passed}`,
+    `- telemetry_gate_passed: ${summary.telemetry_gate_passed}`,
+    `- performance_gate_passed: ${summary.performance_gate_passed}`,
+    `- production_gate_passed: ${summary.production_gate_passed}`,
+    "",
+  );
+  return lines.join("\n");
 }
 
 export function parseTopicLightReviewThinkingReplayArgs(
