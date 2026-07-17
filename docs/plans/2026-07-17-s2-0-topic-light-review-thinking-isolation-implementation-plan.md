@@ -31,11 +31,11 @@
 - Create: `harness/scripts/runtime/topic-light-review-thinking-replay.ts`
 - Test: `tests/harness/topic-light-review-thinking-replay.test.ts`
 
-- [ ] **Step 1: 写 fixture 加载失败测试**
+- [x] **Step 1: 写 fixture 加载失败测试**
 
 断言加载后 candidate id 依次为 `high_tension_risk_jingkang`、`high_tension_none_xuanwumen`、`balanced_risk_hongmenyan`、`balanced_none_wugu`，全部唯一；人工期望为风险 2 项、`none` 2 项，并且每项有 rationale。
 
-- [ ] **Step 2: 运行测试确认 RED**
+- [x] **Step 2: 运行测试确认 RED**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/topic-light-review-thinking-replay.test.ts -t "loads four unique audited controls"
@@ -43,11 +43,11 @@ npx vitest run --configLoader runner tests/harness/topic-light-review-thinking-r
 
 Expected: FAIL，fixture/loader 尚不存在。
 
-- [ ] **Step 3: 写最小 fixture 与 loader**
+- [x] **Step 3: 写最小 fixture 与 loader**
 
 候选正文逐字段复制自 Task 17 两份源 fixture 的四项 annotation 对象，只替换 candidate id；不得改写候选内容或期望 enum。
 
-- [ ] **Step 4: 运行测试确认 GREEN**
+- [x] **Step 4: 运行测试确认 GREEN**
 
 使用 Step 2 同一命令，Expected: PASS。
 
@@ -58,11 +58,11 @@ Expected: FAIL，fixture/loader 尚不存在。
 - Modify: `tests/harness/topic-light-review-thinking-replay.test.ts`
 - Modify: `package.json`
 
-- [ ] **Step 1: 写 dry-run 与 guard 失败测试**
+- [x] **Step 1: 写 dry-run 与 guard 失败测试**
 
 覆盖：默认不创建 live runner；plan 固定 `required_requests=2`；缺少 `--confirm-live`、模型不是 `glm-5.2`、预算不是 2、缺少正数成本声明时均在创建 provider 前失败。
 
-- [ ] **Step 2: 运行测试确认 RED**
+- [x] **Step 2: 运行测试确认 RED**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/topic-light-review-thinking-replay.test.ts -t "request guard"
@@ -70,7 +70,7 @@ npx vitest run --configLoader runner tests/harness/topic-light-review-thinking-r
 
 Expected: FAIL，plan/guard 尚不存在。
 
-- [ ] **Step 3: 实现 plan、CLI parser、guard 和非默认 npm script**
+- [x] **Step 3: 实现 plan、CLI parser、guard 和非默认 npm script**
 
 命令名固定为：
 
@@ -80,11 +80,11 @@ Expected: FAIL，plan/guard 尚不存在。
 
 默认运行只写 `replay-plan.json`，`actual_requests=0`。
 
-- [ ] **Step 4: 运行测试确认 GREEN**
+- [x] **Step 4: 运行测试确认 GREEN**
 
 运行本测试文件全部用例，Expected: PASS，未触发任何网络调用。
 
-- [ ] **Step 5: 提交 Chunk 1**
+- [x] **Step 5: 提交 Chunk 1**
 
 ```powershell
 git add -- harness/samples/topic-light-review-thinking-replay/task17-controls.fixture.json harness/scripts/runtime/topic-light-review-thinking-replay.ts tests/harness/topic-light-review-thinking-replay.test.ts package.json
@@ -99,7 +99,7 @@ git commit -m "新增选题轻审核推理隔离回放"
 - Modify: `harness/scripts/runtime/topic-light-review-thinking-replay.ts`
 - Modify: `tests/harness/topic-light-review-thinking-replay.test.ts`
 
-- [ ] **Step 1: 写生产路径失败测试**
+- [x] **Step 1: 写生产路径失败测试**
 
 通过真实 `createOpenAiCompatibleProvider` 加 mock `invokeStrictApi`，断言：
 
@@ -111,7 +111,7 @@ git commit -m "新增选题轻审核推理隔离回放"
 - 两轮输入、Prompt SHA、model、strategy、tool choice 和除 thinking 外的 effective request 完全相同；
 - 总 attempt 恰为 2，不允许 fallback/retry。
 
-- [ ] **Step 2: 运行测试确认 RED**
+- [x] **Step 2: 运行测试确认 RED**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/topic-light-review-thinking-replay.test.ts -t "runs one shared-budget provider-default and disabled request"
@@ -119,11 +119,11 @@ npx vitest run --configLoader runner tests/harness/topic-light-review-thinking-r
 
 Expected: FAIL，A/B runner 尚未实现。
 
-- [ ] **Step 3: 实现最小 live runner**
+- [x] **Step 3: 实现最小 live runner**
 
 两轮使用相同诊断 operation name，避免未来生产 operation policy 改成 disabled 后污染 provider-default 对照；prompt id 仍为正式 `topic.light-review`。第一轮 invocation options 省略 thinking，第二轮显式 disabled。
 
-- [ ] **Step 4: 运行测试确认 GREEN**
+- [x] **Step 4: 运行测试确认 GREEN**
 
 使用 Step 2 同一命令，Expected: PASS。
 
@@ -133,11 +133,11 @@ Expected: FAIL，A/B runner 尚未实现。
 - Modify: `harness/scripts/runtime/topic-light-review-thinking-replay.ts`
 - Modify: `tests/harness/topic-light-review-thinking-replay.test.ts`
 
-- [ ] **Step 1: 写语义、性能和脱敏失败测试**
+- [x] **Step 1: 写语义、性能和脱敏失败测试**
 
 覆盖：任一轮漏召回风险、误报 `none`、enum 不精确、coverage 不完整、effective thinking 不匹配、attempt 不是 1、Prompt SHA/其余参数漂移、default reasoning 不是明确正数、disabled reasoning 不是明确 0、disabled 未同时节省至少 `10s` 且降到 default 的 `60%` 以下时，`production_gate_passed=false`。duration、effective request、attempt、token、Prompt SHA 任一为 null 时必须 fail closed；报告不得包含候选正文、system prompt、raw output、API key 或 base URL。
 
-- [ ] **Step 2: 运行测试确认 RED**
+- [x] **Step 2: 运行测试确认 RED**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/topic-light-review-thinking-replay.test.ts -t "production gate"
@@ -145,13 +145,13 @@ npx vitest run --configLoader runner tests/harness/topic-light-review-thinking-r
 
 Expected: FAIL，比较器/门禁尚不存在。
 
-- [ ] **Step 3: 实现只按 id 与静态 enum 比较的门禁**
+- [x] **Step 3: 实现只按 id 与静态 enum 比较的门禁**
 
 不得读取 title/angle/正文决定标签；风险召回、exact enum 和 `none` 对照均从 fixture annotation 与 provider 返回值直接比较。
 
 逐轮捕获异常并写脱敏失败结果，禁止 retry/fallback。首轮失败后可以继续第二轮，但最终门禁必为 false，总 attempt 不得超过共享预算 2。
 
-- [ ] **Step 4: 运行 harness 测试确认 GREEN**
+- [x] **Step 4: 运行 harness 测试确认 GREEN**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/topic-light-review-thinking-replay.test.ts
@@ -159,15 +159,15 @@ npx vitest run --configLoader runner tests/harness/topic-light-review-thinking-r
 
 Expected: PASS。
 
-- [ ] **Step 5: 运行零请求 dry-run**
+- [x] **Step 5: 运行零请求 dry-run**
 
 ```powershell
-npm run harness:topic-light-review-thinking-replay -- --output-dir harness/scripts/runtime/output/topic-light-review-thinking-replay/dry-run
+npm run harness:topic-light-review-thinking-replay -- -- --output-dir harness/scripts/runtime/output/topic-light-review-thinking-replay/dry-run
 ```
 
 Expected: `actual_requests=0`，只生成 plan。
 
-- [ ] **Step 6: 提交 Chunk 2**
+- [x] **Step 6: 提交 Chunk 2**
 
 ```powershell
 git add -- harness/scripts/runtime/topic-light-review-thinking-replay.ts tests/harness/topic-light-review-thinking-replay.test.ts package.json harness/samples/topic-light-review-thinking-replay/task17-controls.fixture.json
@@ -182,7 +182,7 @@ git commit -m "完善选题轻审核推理隔离门禁"
 - Generate: `harness/scripts/runtime/output/topic-light-review-thinking-replay/20260717-ab/*`
 - Create: `docs/records/2026-07-17-topic-light-review-thinking-isolation-live-check.md`
 
-- [ ] **Step 1: 确认非 live 回归和工作区边界**
+- [x] **Step 1: 确认非 live 回归和工作区边界**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/topic-light-review-thinking-replay.test.ts tests/backend/topic/topic-light-review.test.ts tests/backend/runtime/llm-operation-policy.test.ts
@@ -190,19 +190,21 @@ npm run typecheck:backend
 git status --short
 ```
 
-- [ ] **Step 2: 执行两请求 live**
+- [x] **Step 2: 执行两请求 live**
 
 ```powershell
-npm run harness:topic-light-review-thinking-replay -- --live --confirm-live --model glm-5.2 --max-requests 2 --max-cost-cny 1 --output-dir harness/scripts/runtime/output/topic-light-review-thinking-replay/20260717-ab
+npm run harness:topic-light-review-thinking-replay -- -- --live --confirm-live --model glm-5.2 --max-requests 2 --max-cost-cny 1 --output-dir harness/scripts/runtime/output/topic-light-review-thinking-replay/20260717-ab
 ```
 
 必须串行完成 provider-default 与 disabled，各一请求；任何失败都不得自动补请求。
 
-- [ ] **Step 3: 读取脱敏 summary 决策**
+- [x] **Step 3: 读取脱敏 summary 决策**
 
 若 `production_gate_passed=true`，进入 Task 6；否则跳过生产代码修改，只执行 Task 7 记录失败边界。
 
 ### Task 6: 仅在主门通过后精确关闭 Light Review thinking
+
+> 未执行：2026-07-17 live 的 `production_gate_passed=false`，按计划保留生产 operation policy 不变。
 
 **Files:**
 - Modify: `tests/backend/runtime/llm-operation-policy.test.ts`
@@ -243,11 +245,11 @@ Expected: FAIL，当前 thinking 为 undefined。
 - Modify: `docs/todos/roadmap-todo.md`
 - Modify: `docs/plans/2026-07-17-s2-0-topic-light-review-thinking-isolation-implementation-plan.md`
 
-- [ ] **Step 1: 记录逐轮证据和生产决策**
+- [x] **Step 1: 记录逐轮证据和生产决策**
 
 写明两轮 duration、attempt、effective thinking、prompt/completion/reasoning tokens、四项 verdict、语义门禁、性能门禁和是否修改生产；单次 A/B 不得表述为稳定分布。
 
-- [ ] **Step 2: 运行受影响矩阵**
+- [x] **Step 2: 运行受影响矩阵**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/topic-light-review-thinking-replay.test.ts tests/backend/topic/topic-light-review.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/api/topic-api-runtime.test.ts --no-file-parallelism
@@ -256,11 +258,11 @@ npm run typecheck:backend
 git diff --check
 ```
 
-- [ ] **Step 3: 自审边界**
+- [x] **Step 3: 自审边界**
 
 确认 Builder/Light Review Prompt、schema、模型、max tokens、temperature、timeout、补充条件和用户未跟踪文件均未改动；输出目录只含脱敏结果。
 
-- [ ] **Step 4: 中文提交**
+- [x] **Step 4: 中文提交**
 
 若主门通过并落地：
 

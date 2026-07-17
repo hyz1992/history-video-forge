@@ -1,0 +1,67 @@
+{
+  "rounds": [
+    {
+      "mode": "provider_default",
+      "status": "success",
+      "coverage": {
+        "passed": 4,
+        "total": 4
+      },
+      "risk_recall": {
+        "passed": 2,
+        "total": 2
+      },
+      "exact_enum": {
+        "passed": 2,
+        "total": 2
+      },
+      "none": {
+        "passed": 2,
+        "total": 2
+      },
+      "effective_thinking": "provider_default",
+      "duration_ms": 105604,
+      "prompt_tokens": 1751,
+      "completion_tokens": 6112,
+      "reasoning_tokens": 5646,
+      "attempt_count": 1,
+      "prompt_sha256": "575b8b04fc167f5aba770775e37d6c2a9ac50bd99d505724e85f9d9582feaf69",
+      "error_code": null
+    },
+    {
+      "mode": "disabled",
+      "status": "success",
+      "coverage": {
+        "passed": 4,
+        "total": 4
+      },
+      "risk_recall": {
+        "passed": 0,
+        "total": 2
+      },
+      "exact_enum": {
+        "passed": 0,
+        "total": 2
+      },
+      "none": {
+        "passed": 2,
+        "total": 2
+      },
+      "effective_thinking": "disabled",
+      "duration_ms": 4013,
+      "prompt_tokens": 1745,
+      "completion_tokens": 117,
+      "reasoning_tokens": 0,
+      "attempt_count": 1,
+      "prompt_sha256": "575b8b04fc167f5aba770775e37d6c2a9ac50bd99d505724e85f9d9582feaf69",
+      "error_code": null
+    }
+  ],
+  "actual_attempts": 2,
+  "duration_saved_ms": 101591,
+  "duration_ratio": 0.03800045452823757,
+  "semantic_gate_passed": false,
+  "telemetry_gate_passed": true,
+  "performance_gate_passed": true,
+  "production_gate_passed": false
+}

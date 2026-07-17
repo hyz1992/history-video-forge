@@ -1,0 +1,44 @@
+{
+  "status": "success",
+  "verdicts": [
+    {
+      "candidate_id": "high_tension_risk_jingkang",
+      "consistency_issue": "actor_role_mismatch"
+    },
+    {
+      "candidate_id": "high_tension_none_xuanwumen",
+      "consistency_issue": "none"
+    },
+    {
+      "candidate_id": "balanced_risk_hongmenyan",
+      "consistency_issue": "overclaim_or_ambiguity"
+    },
+    {
+      "candidate_id": "balanced_none_wugu",
+      "consistency_issue": "none"
+    }
+  ],
+  "observation": {
+    "mode": "provider_default",
+    "model": "glm-5.2",
+    "prompt_id": "topic.light-review",
+    "prompt_sha256": "575b8b04fc167f5aba770775e37d6c2a9ac50bd99d505724e85f9d9582feaf69",
+    "effective_request": {
+      "profile": "structured",
+      "model": "glm-5.2",
+      "strategy": "tool_call",
+      "thinking": "provider_default",
+      "timeoutMs": 240000,
+      "maxAttempts": 1,
+      "toolChoice": "target_function"
+    },
+    "attempt_count": 1,
+    "duration_ms": 105604,
+    "prompt_tokens": 1751,
+    "completion_tokens": 6112,
+    "reasoning_tokens": 5646,
+    "finish_reason": "tool_calls",
+    "tool_arguments_chars": 574,
+    "error_code": null
+  }
+}

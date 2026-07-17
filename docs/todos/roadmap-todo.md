@@ -59,7 +59,7 @@
 - [x] 完成 V1 高风险稳定化最终全量回归、故障演练和内置浏览器验收
 
 ## 进行中
-- [ ] 收口 `S2-0` 的完整 topic 链路：当前正式入口为 Topic 轻审核流程 [设计](../plans/2026-07-17-s2-0-topic-light-review-flow-design.md) 和 [实施计划](../plans/2026-07-17-s2-0-topic-light-review-flow-implementation-plan.md)。生产已移除重型 `topic.selector`，调整为 Builder 生成 4 条、`topic.light-review` 逐项一致性审核；首次通过 1～4 条时立即部分交付，只有首次 0 条才最多执行一次原 Builder 补充且只复审新增项，补充后仍为 0 条才失败。Builder 本轮仅做 8→4 数量适配，没有修改内容质量策略；受影响矩阵 139/139、Prompt 语言 8/8 和 backend typecheck 已通过。第二次 [Topic-only 计时复验](../records/2026-07-17-topic-light-review-live-check.md) 首轮通过 2/4，未触发补充，Builder `26.743s`、轻审核 `77.357s`、总墙钟 `104.131s`；相较旧策略同样本减少两次调用和 `27.830s`（约 `21.1%`），但轻审核仍有明显长尾。单样本只证明调用数减少，不证明普遍延迟达标；S2-0 继续打开，暂不进入 S2-1
+- [ ] 收口 `S2-0` 的完整 topic 链路：当前正式入口为 Topic 轻审核流程 [设计](../plans/2026-07-17-s2-0-topic-light-review-flow-design.md) 和 [实施计划](../plans/2026-07-17-s2-0-topic-light-review-flow-implementation-plan.md)。生产已移除重型 `topic.selector`，调整为 Builder 生成 4 条、`topic.light-review` 逐项一致性审核；首次通过 1～4 条时立即部分交付，只有首次 0 条才最多执行一次原 Builder 补充且只复审新增项，补充后仍为 0 条才失败。Builder 本轮仅做 8→4 数量适配，没有修改内容质量策略；受影响矩阵 139/139、Prompt 语言 8/8 和 backend typecheck 已通过。[Thinking 隔离真实验证](../records/2026-07-17-topic-light-review-thinking-isolation-live-check.md) 用固定四候选执行 2 次 GLM-5.2 请求：provider default `105.604s`、reasoning 5646、风险召回 2/2；disabled `4.013s`、reasoning 0、风险召回 0/2。性能与遥测门禁通过但语义门禁失败，生产未关闭 thinking。S2-0 继续打开；不再堆叠 Prompt 或本地语义规则，快速审核模型/路由转为 S2-1 的明确输入
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 补齐前端 v1 真实浏览器验收矩阵：空态、加载中、成功、失败、刷新、深链、重复操作
 - [ ] 收口当前未归档计划，避免历史 implementation plan 误导新任务

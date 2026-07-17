@@ -1,0 +1,9 @@
+{
+  "mode": "topic_light_review_thinking_replay_plan",
+  "live": true,
+  "automated_gate": false,
+  "light_review_only": true,
+  "fixture_path": "harness/samples/topic-light-review-thinking-replay/task17-controls.fixture.json",
+  "required_requests": 2,
+  "actual_requests": 0
+}
