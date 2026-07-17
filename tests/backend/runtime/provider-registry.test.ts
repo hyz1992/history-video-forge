@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -183,6 +183,49 @@ describe("provider registry loading", () => {
       };
       expect(input.configPath).toBe("/some/path.json");
       expect(input.envFallback?.baseUrl).toBe("u");
+    });
+  });
+
+  describe("shipped backend/providers.json example (S2-1 Task 6)", () => {
+    // 验证仓库内的示例配置文件能被 loadProviderRegistry 正确解析，
+    // 且不含密钥（apiKeyEnv 只引用变量名）。
+    const shippedConfigPath = resolve(
+      __dirname,
+      "../../../backend/providers.json",
+    );
+
+    it("parses successfully when the shipped example exists", () => {
+      if (!existsSync(shippedConfigPath)) {
+        // Task 6 未提交前文件可能不存在；存在时才严格校验。
+        expect(true).toBe(true);
+        return;
+      }
+      const registry = loadProviderRegistry({ configPath: shippedConfigPath });
+      expect(registry.size).toBeGreaterThanOrEqual(1);
+      for (const entry of registry.values()) {
+        expect(entry.name).toBeTruthy();
+        expect(entry.baseUrl).toBeTruthy();
+        expect(entry.apiKeyEnv).toBeTruthy();
+      }
+    });
+
+    it("shipped example does not contain plaintext api keys (R3)", () => {
+      if (!existsSync(shippedConfigPath)) {
+        expect(true).toBe(true);
+        return;
+      }
+      const raw = readFileSync(shippedConfigPath, "utf8");
+      // 示例文件不得出现 "sk-"、"replace-with" 等典型密钥占位符；
+      // apiKeyEnv 应只引用变量名，不直接写值。
+      expect(raw).not.toMatch(/sk-[A-Za-z0-9]{10,}/);
+      expect(raw).not.toMatch(/replace-with/i);
+      // 引用必须以 LLM_PROVIDER_ 前缀的 env 变量名形式出现。
+      const parsed = JSON.parse(raw) as {
+        providers: ReadonlyArray<{ apiKeyEnv: string }>;
+      };
+      for (const entry of parsed.providers) {
+        expect(entry.apiKeyEnv).toMatch(/^LLM_PROVIDER_[A-Z0-9_]+_API_KEY$/);
+      }
     });
   });
 });

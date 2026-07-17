@@ -1,0 +1,16 @@
+{
+  "_comment": "S2-1 provider 注册表（design §4.1.2）。本文件只管 provider 注册（name + baseUrl + apiKeyEnv 引用），不存密钥、不存 tier 映射。密钥通过 apiKeyEnv 引用 .env 中的变量名（如 LLM_PROVIDER_DEEPSEEK_API_KEY）。tier → provider:model 映射走 LLM_SMART_MODEL / LLM_FLASH_MODEL env 变量。文件路径可通过 LLM_PROVIDERS_CONFIG_PATH env 覆盖。删除本文件即回退到单 provider 兼容模式（使用旧 LLM_BASE_URL / LLM_API_KEY）。",
+  "_comment_format": "providers 必须是数组；每项必须有非空 name、字符串 baseUrl、非空 apiKeyEnv；name 不允许重复。格式错误启动时会抛错（不静默回退）。",
+  "providers": [
+    {
+      "name": "deepseek",
+      "baseUrl": "https://api.deepseek.com",
+      "apiKeyEnv": "LLM_PROVIDER_DEEPSEEK_API_KEY"
+    },
+    {
+      "name": "zhipu",
+      "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+      "apiKeyEnv": "LLM_PROVIDER_ZHIPU_API_KEY"
+    }
+  ]
+}
