@@ -25,6 +25,10 @@ const RUNTIME_ENV_KEYS = [
   "OPENAI_MODEL",
   "OPENAI_STRUCTURED_BASE_URL",
   "OPENAI_STRUCTURED_API_KEY",
+  // S2-1 Task 5：新增 tier 路由相关变量
+  "LLM_SMART_MODEL",
+  "LLM_FLASH_MODEL",
+  "LLM_PROVIDERS_CONFIG_PATH",
 ] as const;
 
 const originalEnv = new Map<string, string | undefined>(
@@ -218,5 +222,96 @@ describe("runtime env loading", () => {
     expect(serialized).not.toContain("secret-key-12345");
     expect(serialized).not.toContain("structured-secret");
     expect(serialized).not.toContain("open.bigmodel.cn");
+  });
+
+  // S2-1 Task 5：新增 tier 路由变量读取。
+  // 注意：本层只做原值读取，不在这里做"LLM_SMART_MODEL 缺失→回退 LLM_MODEL"
+  // 或"LLM_FLASH_MODEL 缺失→回退 smart tier"的回退组装——
+  // 跨字段回退需要 smart 已解析，属 gateway 层职责（Task 4）。
+  describe("S2-1 tier routing variables", () => {
+    it("reads LLM_SMART_MODEL / LLM_FLASH_MODEL / LLM_PROVIDERS_CONFIG_PATH when set", async () => {
+      process.env.LLM_SMART_MODEL = "deepseek:deepseek-v4-pro";
+      process.env.LLM_FLASH_MODEL = "zhipu:glm-4";
+      process.env.LLM_PROVIDERS_CONFIG_PATH = "/etc/app/providers.json";
+
+      const { env } = await import("../../../backend/src/config/env.js");
+
+      expect(env.llm.smartModel).toBe("deepseek:deepseek-v4-pro");
+      expect(env.llm.flashModel).toBe("zhipu:glm-4");
+      expect(env.llm.providersConfigPath).toBe("/etc/app/providers.json");
+    });
+
+    it("returns undefined for tier routing variables when not set (fallback is gateway-layer concern)", async () => {
+      delete process.env.LLM_SMART_MODEL;
+      delete process.env.LLM_FLASH_MODEL;
+      delete process.env.LLM_PROVIDERS_CONFIG_PATH;
+
+      const { env } = await import("../../../backend/src/config/env.js");
+
+      // env 层只读原值，缺失即 undefined；回退到 LLM_MODEL / smart tier 由 gateway 层组装。
+      expect(env.llm.smartModel).toBeUndefined();
+      expect(env.llm.flashModel).toBeUndefined();
+      expect(env.llm.providersConfigPath).toBeUndefined();
+    });
+
+    it("defaults providersConfigPath to backend/providers.json when LLM_PROVIDERS_CONFIG_PATH not set", async () => {
+      // 当 Task 6 引入 providers.json 示例后，缺省路径应指向 backend/providers.json。
+      // 但 S2-1 Task 5 阶段：env 层不主动注入默认路径（避免与 stub 模式冲突），
+      // 而是返回 undefined，由 gateway 层决定是否使用默认路径。
+      // 此测试断言"env 层不主动注入默认路径"，避免 env 层与 gateway 层职责混淆。
+      delete process.env.LLM_PROVIDERS_CONFIG_PATH;
+
+      const { env } = await import("../../../backend/src/config/env.js");
+
+      expect(env.llm.providersConfigPath).toBeUndefined();
+    });
+
+    it("keeps legacy LLM_MODEL / LLM_STRUCTURED_MODEL readable for compatibility period", async () => {
+      // S2-1 验收标准 §10.5：删除 LLM_SMART_MODEL 时 smart tier 回退到 LLM_MODEL 必须仍能工作。
+      // env 层只负责保留旧字段读取，回退组装在 gateway。
+      process.env.LLM_MODEL = "glm-5.2";
+      process.env.LLM_STRUCTURED_MODEL = "glm-4";
+      delete process.env.LLM_SMART_MODEL;
+      delete process.env.LLM_FLASH_MODEL;
+
+      const { env } = await import("../../../backend/src/config/env.js");
+
+      expect(env.llm.model).toBe("glm-5.2");
+      expect(env.llm.structuredModel).toBe("glm-4");
+      expect(env.llm.smartModel).toBeUndefined();
+      expect(env.llm.flashModel).toBeUndefined();
+    });
+
+    it("reads empty string as undefined for tier routing variables (treats empty as unset)", async () => {
+      // .env 文件可能写入 LLM_SMART_MODEL=（空值），env 层应视为未设置，
+      // 避免 tier-resolver 收到空字符串后在解析时报"env 值为空"错。
+      process.env.LLM_SMART_MODEL = "";
+      process.env.LLM_FLASH_MODEL = "";
+
+      const { env } = await import("../../../backend/src/config/env.js");
+
+      expect(env.llm.smartModel).toBeUndefined();
+      expect(env.llm.flashModel).toBeUndefined();
+    });
+
+    it("does not leak tier routing provider names into redacted snapshot (S2-1 §8 R3)", async () => {
+      // 防御性测试：redacted snapshot 当前不含 tier 字段；若未来扩展误把 provider 名带进去，
+      // 也必须确保不含 api key。
+      process.env.LLM_SMART_MODEL = "deepseek:deepseek-v4-pro";
+      process.env.LLM_FLASH_MODEL = "zhipu:glm-4";
+      process.env.LLM_PROVIDER_DEEPSEEK_API_KEY = "ds-secret-key";
+      process.env.LLM_PROVIDER_ZHIPU_API_KEY = "zhipu-secret-key";
+      process.env.LLM_MODEL = "glm-5.1";
+      process.env.LLM_STRUCTURED_MODEL = "glm-4";
+
+      const { getRedactedLlmConfigSnapshot } = await import(
+        "../../../backend/src/config/env.js"
+      );
+
+      const snapshot = getRedactedLlmConfigSnapshot("structured");
+      const serialized = JSON.stringify(snapshot);
+      expect(serialized).not.toContain("ds-secret-key");
+      expect(serialized).not.toContain("zhipu-secret-key");
+    });
   });
 });

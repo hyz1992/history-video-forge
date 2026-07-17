@@ -34,6 +34,15 @@ export interface AppEnv {
     timeoutMs: number;
     maxAttempts: number;
     requestBudgetMaxRequests: number;
+    // S2-1 Task 5：tier 路由相关变量（design §4.1.1 / §4.4）。
+    // env 层只做原值读取；跨字段回退（smart 缺失→LLM_MODEL；flash 缺失→smart tier）
+    // 由 gateway 层组装（Task 4），不在 env 层处理。
+    /** LLM_SMART_MODEL，格式 `<provider>:<model>`。未设置时为 undefined。 */
+    smartModel?: string;
+    /** LLM_FLASH_MODEL，格式 `<provider>:<model>`。未设置时为 undefined。 */
+    flashModel?: string;
+    /** LLM_PROVIDERS_CONFIG_PATH，providers.json 的绝对路径。未设置时为 undefined。 */
+    providersConfigPath?: string;
   };
 }
 
@@ -136,8 +145,34 @@ function buildEnv(dotEnvValues: Record<string, string>): AppEnv {
       requestBudgetMaxRequests: Number(
         readEnvValue("LLM_REQUEST_BUDGET_MAX_REQUESTS", dotEnvValues) ?? "20",
       ),
+      // S2-1 Task 5：tier 路由变量原值读取（空字符串视为未设置）。
+      // 跨字段回退组装在 gateway 层（Task 4），不在 env 层。
+      smartModel: readNonEmptyEnvValue("LLM_SMART_MODEL", dotEnvValues),
+      flashModel: readNonEmptyEnvValue("LLM_FLASH_MODEL", dotEnvValues),
+      providersConfigPath: readNonEmptyEnvValue(
+        "LLM_PROVIDERS_CONFIG_PATH",
+        dotEnvValues,
+      ),
     },
   };
+}
+
+/**
+ * 读取 env 变量并把空字符串视为未设置。
+ *
+ * 用于 S2-1 tier 路由变量：.env 文件可能写入 `LLM_SMART_MODEL=`（空值），
+ * 此时不应把空字符串传给 tier-resolver（会在解析时报"env 值为空"错），
+ * 而是视为未设置，让 gateway 层走旧 env 回退路径。
+ */
+function readNonEmptyEnvValue(
+  key: string,
+  dotEnvValues: Record<string, string>,
+): string | undefined {
+  const value = readEnvValue(key, dotEnvValues);
+  if (value === undefined || value.length === 0) {
+    return undefined;
+  }
+  return value;
 }
 
 function readEnvValue(
