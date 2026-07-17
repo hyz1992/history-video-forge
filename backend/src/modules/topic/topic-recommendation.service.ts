@@ -318,7 +318,7 @@ export async function recommendTopicCandidatesWithTrace(
   let refillReviewPassCount = 0;
   let refillGraphChecks: RecommendationDiagnostic[] = [];
 
-  if (acceptedCandidateIds.size < TOPIC_CANDIDATE_TARGET_COUNT) {
+  if (acceptedCandidateIds.size === 0) {
     refillAttempts = 1;
     const refillGraphInput = {
       ...input,

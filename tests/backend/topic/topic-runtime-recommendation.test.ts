@@ -729,10 +729,7 @@ describe("topic runtime recommendation", () => {
           ],
         ],
         reviewIssueMaps: [
-          {
-            selector_candidate_3: "actor_role_mismatch",
-            selector_candidate_4: "cause_outcome_mismatch",
-          },
+          { "*": "actor_role_mismatch" },
           {},
         ],
       });
@@ -751,8 +748,6 @@ describe("topic runtime recommendation", () => {
     );
 
     expect(result.candidates.map((candidate) => candidate.title)).toEqual([
-      "event-a",
-      "event-b",
       "event-e",
       "event-f",
     ]);
@@ -766,18 +761,18 @@ describe("topic runtime recommendation", () => {
     expect(result.review_trace.refill_attempts).toBe(1);
     expect(result.review_trace).toMatchObject({
       initial_candidate_count: 4,
-      initial_review_pass_count: 2,
+      initial_review_pass_count: 0,
       refill_triggered: true,
       refill_candidate_count: 2,
       refill_review_pass_count: 2,
-      final_candidate_count: 4,
+      final_candidate_count: 2,
       zero_eligible_candidate: false,
     });
   });
 
-  it("returns existing eligible candidates after refill still falls short", async () => {
+  it("returns an initial eligible candidate without triggering refill", async () => {
     const db = createDbClient();
-    const { gateway } = createGatewayWithLightReviewResponses({
+    const { gateway, operationNames, reviewInputs } = createGatewayWithLightReviewResponses({
       builderOutputs: [
         [
           createRuntimeCandidate("event-a", "angle-a"),
@@ -820,12 +815,15 @@ describe("topic runtime recommendation", () => {
     expect(result.review_trace).toMatchObject({
       initial_candidate_count: 4,
       initial_review_pass_count: 1,
-      refill_triggered: true,
-      refill_candidate_count: 3,
+      refill_triggered: false,
+      refill_candidate_count: 0,
       refill_review_pass_count: 0,
       final_candidate_count: 1,
       zero_eligible_candidate: false,
     });
+    expect(operationNames.filter((name) => name === "topic.candidate-builder")).toHaveLength(1);
+    expect(operationNames.filter((name) => name === "topic.light-review")).toHaveLength(1);
+    expect(reviewInputs).toHaveLength(1);
     expect(db.recommendationRounds.get("project-1")?.[0]?.candidates).toEqual([
       expect.objectContaining({ eventIdentity: "event-a", title: "event-a" }),
     ]);
@@ -848,9 +846,9 @@ describe("topic runtime recommendation", () => {
     );
   });
 
-  it("preserves an accepted same-event angle when refill mixes in other events", async () => {
+  it("returns an accepted same-event angle without triggering refill", async () => {
     const db = createDbClient();
-    const { gateway, reviewInputs } = createGatewayWithLightReviewResponses({
+    const { gateway, operationNames, reviewInputs } = createGatewayWithLightReviewResponses({
       builderOutputs: [
         [
           createRuntimeCandidate("shared-event", "angle-a"),
@@ -894,16 +892,14 @@ describe("topic runtime recommendation", () => {
     expect(result.review_trace.accepted_candidate_ids).toEqual([
       "selector_candidate_4",
     ]);
-    expect(reviewInputs[1]?.review_pool?.map((candidate) => candidate.title)).toEqual([
-      "event-b",
-      "event-c",
-      "event-d",
-    ]);
+    expect(result.review_trace.refill_triggered).toBe(false);
+    expect(operationNames.filter((name) => name === "topic.candidate-builder")).toHaveLength(1);
+    expect(reviewInputs).toHaveLength(1);
   });
 
   it("does not reopen a multi-event initial identity during same-event refill", async () => {
     const db = createDbClient();
-    const { gateway, reviewInputs } = createGatewayWithLightReviewResponses({
+    const { gateway, operationNames, reviewInputs } = createGatewayWithLightReviewResponses({
       builderOutputs: [
         [
           createRuntimeCandidate("event-a", "angle-a"),
@@ -919,15 +915,11 @@ describe("topic runtime recommendation", () => {
         ],
       ],
       reviewIssueMaps: [
-        {
-          selector_candidate_2: "actor_role_mismatch",
-          selector_candidate_3: "action_event_mismatch",
-          selector_candidate_4: "scope_boundary_mismatch",
-        },
+        { "*": "actor_role_mismatch" },
       ],
     });
 
-    const result = await recommendTopicCandidatesWithTrace(
+    const recommendation = recommendTopicCandidatesWithTrace(
       db,
       {
         canonicalName: "multi-event-seed",
@@ -940,10 +932,16 @@ describe("topic runtime recommendation", () => {
       { llmGateway: gateway },
     );
 
-    expect(result.candidates.map((candidate) => candidate.title)).toEqual([
-      "event-a",
-    ]);
-    expect(result.review_trace.refill_candidate_count).toBe(0);
+    await expect(recommendation).rejects.toMatchObject({
+      message: "topic_review_no_eligible_candidates",
+      review_trace: {
+        initial_review_pass_count: 0,
+        refill_triggered: true,
+        refill_candidate_count: 0,
+        final_candidate_count: 0,
+      },
+    });
+    expect(operationNames.filter((name) => name === "topic.candidate-builder")).toHaveLength(2);
     expect(reviewInputs).toHaveLength(1);
   });
 
@@ -1620,7 +1618,7 @@ describe("topic runtime recommendation", () => {
     expect(() => TopicCandidateCard.parse(candidates[0])).not.toThrow();
   });
 
-  it("performs a single repair call when the first runtime response contains fewer than three candidates", async () => {
+  it("does not refill when a short initial response still has an eligible candidate", async () => {
     const db = createDbClient();
     const { gateway, invokeApi } = createGatewayWithSelectorResponses([
       [createRuntimeCandidate("晏子使楚", "第一槽位")],
@@ -1648,9 +1646,9 @@ describe("topic runtime recommendation", () => {
       },
     );
 
-    expect(invokeApi).toHaveBeenCalledTimes(2);
-    expect(result.candidates).toHaveLength(3);
-    expect(result.review_trace.refill_attempts).toBe(1);
+    expect(invokeApi).toHaveBeenCalledTimes(1);
+    expect(result.candidates).toHaveLength(1);
+    expect(result.review_trace.refill_attempts).toBe(0);
     expect(result.diagnostics.checks).toContainEqual(
       expect.objectContaining({
         code: "topic_candidate_slots_insufficient",
@@ -1658,7 +1656,7 @@ describe("topic runtime recommendation", () => {
     );
   });
 
-  it("returns explicit diagnostics when the repair call still cannot fill all three slots", async () => {
+  it("returns short-output diagnostics without refill when one candidate is eligible", async () => {
     const db = createDbClient();
     const invokeApi = vi
       .fn()
@@ -1690,7 +1688,7 @@ describe("topic runtime recommendation", () => {
       },
     );
 
-    expect(invokeApi).toHaveBeenCalledTimes(2);
+    expect(invokeApi).toHaveBeenCalledTimes(1);
     expect(result.candidates).toHaveLength(1);
     expect(result.diagnostics.checks).toContainEqual(
       expect.objectContaining({

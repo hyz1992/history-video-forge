@@ -166,7 +166,7 @@ describe("topic api runtime", () => {
     });
   });
 
-  it("returns 200 when one eligible candidate remains after the single refill", async () => {
+  it("returns 200 without refill when one initial eligible candidate remains", async () => {
     invokeStructuredPromptMock.mockReset();
     mockTopicRuntimeResponses(
       [[
@@ -209,6 +209,14 @@ describe("topic api runtime", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().candidates).toHaveLength(1);
     expect(response.json().candidates[0]).toMatchObject({ title: "event-a" });
+    const builderCalls = invokeStructuredPromptMock.mock.calls.filter(
+      ([request]) => request.operationName === "topic.candidate-builder",
+    );
+    const reviewCalls = invokeStructuredPromptMock.mock.calls.filter(
+      ([request]) => request.operationName === "topic.light-review",
+    );
+    expect(builderCalls).toHaveLength(1);
+    expect(reviewCalls).toHaveLength(1);
   });
 
   it("returns topic_review_no_eligible_candidates only when both reviews reject all", async () => {
@@ -504,13 +512,22 @@ describe("topic api runtime", () => {
 
   it("refills to three slots and exposes partial-success diagnostics", async () => {
     invokeStructuredPromptMock.mockReset();
-    mockTopicRuntimeResponses([
-      [createRuntimeCandidate("晏子使楚", "第一槽位")],
+    mockTopicRuntimeResponses(
       [
-        createRuntimeCandidate("张巡守城", "第二槽位"),
-        createRuntimeCandidate("于谦守京", "第三槽位"),
+        [
+          createRuntimeCandidate("晏子使楚", "第一槽位"),
+          createRuntimeCandidate("张巡守城", "第二槽位"),
+          createRuntimeCandidate("于谦守京", "第三槽位"),
+          createRuntimeCandidate("土木堡之变", "第四槽位"),
+        ],
+        [
+          createRuntimeCandidate("张骞出使西域", "补充第一槽位"),
+          createRuntimeCandidate("班超经营西域", "补充第二槽位"),
+          createRuntimeCandidate("苏武牧羊", "补充第三槽位"),
+        ],
       ],
-    ]);
+      [{ "*": "actor_role_mismatch" }, {}],
+    );
 
     const app = buildApp();
     const projectResponse = await app.inject({ auth,
@@ -541,11 +558,11 @@ describe("topic api runtime", () => {
     const body = response.json();
     expect(body.candidates).toHaveLength(3);
     expect(body.runtime_diagnostics.review_trace).toMatchObject({
-      initial_candidate_count: 1,
-      initial_review_pass_count: 1,
+      initial_candidate_count: 4,
+      initial_review_pass_count: 0,
       refill_triggered: true,
-      refill_candidate_count: 2,
-      refill_review_pass_count: 2,
+      refill_candidate_count: 3,
+      refill_review_pass_count: 3,
       final_candidate_count: 3,
       zero_eligible_candidate: false,
     });
