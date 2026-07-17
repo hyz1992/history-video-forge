@@ -4,7 +4,7 @@
 
 **Goal:** 将 Topic 生产主链路从“Builder 生成 8 个 + 重型 Selector 8 选 4”调整为“Builder 生成 4 个 + 轻审核 + 最多一次补充”，并允许最终 1～4 个合格候选正常展示。
 
-**Architecture:** 保留现有 Builder 内容策略和本地去重/疲劳职责，只机械调整 Builder 目标数量。新增独立轻审核合同，生产服务只按审核 `consistency_issue` 过滤；首次不足 4 个时再运行一次原 Builder，并只审核去重后的新增候选。旧 Selector 回放能力保留，但不再进入生产推荐。
+**Architecture:** 保留现有 Builder 内容策略和本地去重/疲劳职责，只机械调整 Builder 目标数量。新增独立轻审核合同，生产服务只按审核 `consistency_issue` 过滤；首次审核已有 1～4 个合格候选时立即返回，只有首次 0 个时才再运行一次原 Builder，并只审核去重后的新增候选。旧 Selector 回放能力保留，但不再进入生产推荐。
 
 **Tech Stack:** TypeScript、Vitest、LangGraph、Zod、文件化中文 Prompt、现有 LLM Gateway strict structured/fallback。
 
@@ -537,3 +537,32 @@ git commit -m "调整选题生成与轻审核流程"
 
 只有真实证据支持后，才决定是否另起 Builder 优化设计；本计划不得顺手修改 Builder 质量策略。
 
+## 2026-07-17 补充实施：仅首次零合格时补充
+
+本节覆盖原 Task 4 中“首次不足 4 个即补充”的旧触发条件，其余轻审核、去重、部分成功和错误合同保持不变。
+
+### Task 9: 收窄补充触发条件并计时复验
+
+**Files:**
+- Modify: `tests/backend/topic/topic-runtime-recommendation.test.ts`
+- Modify: `tests/backend/api/topic-api-runtime.test.ts`
+- Modify: `backend/src/modules/topic/topic-recommendation.service.ts`
+- Modify: `docs/records/2026-07-17-topic-light-review-live-check.md`
+- Modify: `docs/plans/README.md`
+- Modify: `docs/todos/roadmap-todo.md`
+
+- [ ] **Step 1: 先写新的触发边界测试并确认 RED**
+
+覆盖首次通过 1 个或多个候选时不再调用补充 Builder，以及首次 0 个时仍只补充一次并只审核新增候选。
+
+- [ ] **Step 2: 最小修改生产条件并确认 GREEN**
+
+只把补充触发条件从“首次通过数小于 4”收窄为“首次通过数等于 0”；不修改 Builder Prompt、模型参数、内容策略或审核标准。
+
+- [ ] **Step 3: 回归受影响矩阵并自审**
+
+运行 Topic runtime、API、Prompt 合同、语言检查和 backend typecheck；确认用户未跟踪文件及生成态候选库未被改动或暂存。
+
+- [ ] **Step 4: 使用同一燕子使楚样本执行一次显式 live check**
+
+真实请求总预算仍为最多 4 次。逐次记录操作名、调用序号、成功/失败和 wall-clock 耗时，并记录总耗时、首次通过数、是否触发补充及最终展示数；若首次已有至少 1 个合格候选，预期只发生 Builder 与首次轻审核两次调用。
