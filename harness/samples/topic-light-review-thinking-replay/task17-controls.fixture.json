@@ -1,0 +1,95 @@
+{
+  "fixture_id": "task17-controls",
+  "review_pool": [
+    {
+      "candidate_id": "high_tension_risk_jingkang",
+      "core_conflict": "宋徽宗禅位钦宗后南逃避责，钦宗在战和间反复摇摆，赌注是北宋存亡与皇族命运",
+      "event_identity": "靖康之变",
+      "family_label": "战争灾难",
+      "must_cover_preview": [
+        "金军南下，徽宗仓促传位钦宗后携近臣出逃镇江",
+        "钦宗在主战主和间反复，罢李纲后又亲赴金营被扣",
+        "金兵索皇室宗亲三千余人北迁，北宋朝廷实质终结"
+      ],
+      "one_line_angle": "皇帝在敌临城下禅位给儿子并出城谈判，换来举国北迁",
+      "scope_label": "北宋末",
+      "strong_scene": "金军二次围城，宋钦宗亲赴金营议和被扣留，金兵入开封搜刮府库并索要皇室宗亲",
+      "title": "靖康城破：宋徽宗禅位南逃与开封围城终局"
+    },
+    {
+      "candidate_id": "high_tension_none_xuanwumen",
+      "core_conflict": "李世民与太子李建成围绕储位终局对撞，赌注是皇位继承权与各自阵营生死",
+      "event_identity": "玄武门之变",
+      "family_label": "宫廷政变",
+      "must_cover_preview": [
+        "李世民在太子与齐王多次挤压下决定先发制人，伏兵玄武门",
+        "李建成李元吉入宫察觉异变拨马欲回，李世民出呼引弓射杀",
+        "尉迟敬德持建成元吉首级示众宫门，东宫兵溃散"
+      ],
+      "one_line_angle": "皇子在皇宫北门亲手解决储位之争，胜负在一个上午内定格",
+      "scope_label": "唐初",
+      "strong_scene": "李世民率长孙无忌等九人在玄武门内设伏，李建成与李元吉骑马入宫门时遭遇伏兵",
+      "title": "玄武门之变：李世民在宫门前射杀长兄"
+    },
+    {
+      "candidate_id": "balanced_risk_hongmenyan",
+      "core_conflict": "项羽在范增劝杀与项伯斡旋之间放过刘邦，赌注是天下霸权归属",
+      "event_identity": "鸿门宴",
+      "family_label": "政治对峙",
+      "must_cover_preview": [
+        "刘邦率百余骑赴鸿门谢罪，范增暗举玉玦示意项羽动手却遭沉默无视",
+        "项庄借舞剑刺杀刘邦被项伯拔剑对挡，樊哙持盾闯帐怒斥项羽",
+        "刘邦借如厕脱身独骑逃回霸上，项羽收下白璧而范增碎斗叹竖子不足与谋"
+      ],
+      "one_line_angle": "一场宴席上的座次与剑舞，藏着楚汉相争最关键的决策瞬间",
+      "scope_label": "秦末汉初",
+      "strong_scene": "范增举玉玦三次暗示项羽动手无果，项庄舞剑意在沛公被项伯以身阻挡",
+      "title": "鸿门宴：项羽放过刘邦那一刻，天下归属已经注定"
+    },
+    {
+      "candidate_id": "balanced_none_wugu",
+      "core_conflict": "江充以巫蛊之名逼反太子刘据，汉武帝误信谋反镇压亲子，赌注是太子性命与帝国储君",
+      "event_identity": "巫蛊之祸",
+      "family_label": "宫廷惨案",
+      "must_cover_preview": [
+        "江充在太子宫掘出桐木人，太子刘据无法自辩面临被废与囚禁之祸",
+        "太子斩江充后发兵与丞相刘屈氂长安巷战五日，武帝在甘泉宫下诏平叛",
+        "太子兵败逃亡湖县被围自缢，皇后卫子夫自杀，武帝事后知冤族灭江充"
+      ],
+      "one_line_angle": "江充用木人逼反太子，汉武帝在甘泉宫失联中误信谋反",
+      "scope_label": "西汉",
+      "strong_scene": "太子刘据在长安发兵斩江充后与丞相军巷战五日，最终兵败出逃",
+      "title": "巫蛊之祸：汉武帝晚年一场木偶引发的骨肉相残"
+    }
+  ],
+  "annotations": [
+    {
+      "candidate_id": "high_tension_risk_jingkang",
+      "expected_risk": true,
+      "expected_issue": "actor_role_mismatch",
+      "entered_final_candidates": true,
+      "rationale": "切口用同一个“皇帝”串联宋徽宗禅位南逃与宋钦宗出城赴金营，混淆了两个行为主体。"
+    },
+    {
+      "candidate_id": "high_tension_none_xuanwumen",
+      "expected_risk": false,
+      "expected_issue": "none",
+      "entered_final_candidates": true,
+      "rationale": "玄武门候选中的人物、动作、冲突和结果相互支持，作为高张力样本的 none 对照。"
+    },
+    {
+      "candidate_id": "balanced_risk_hongmenyan",
+      "expected_risk": true,
+      "expected_issue": "overclaim_or_ambiguity",
+      "entered_final_candidates": true,
+      "rationale": "内部材料只支持刘邦脱身和范增失望，标题却把这一刻升级为天下归属已经注定。"
+    },
+    {
+      "candidate_id": "balanced_none_wugu",
+      "expected_risk": false,
+      "expected_issue": "none",
+      "entered_final_candidates": true,
+      "rationale": "巫蛊候选中的主体、行动和结果在标题、切口与三段 preview 间相互支持，作为 none 对照。"
+    }
+  ]
+}
