@@ -323,25 +323,25 @@ describe("topic light review thinking replay request guard", () => {
     ).toEqual(result);
   });
 
-  it("parses equals and separated CLI value forms", () => {
+  it.each([
+    ["model equals", ["--model=glm-5.2"], { model: "glm-5.2" }],
+    ["model separated", ["--model", "glm-5.2"], { model: "glm-5.2" }],
+    ["max requests equals", ["--max-requests=2"], { maxRequests: 2 }],
+    ["max requests separated", ["--max-requests", "2"], { maxRequests: 2 }],
+    ["max cost equals", ["--max-cost-cny=1.5"], { maxCostCny: 1.5 }],
+    ["max cost separated", ["--max-cost-cny", "1.5"], { maxCostCny: 1.5 }],
+  ])("parses %s CLI form", (_label, argv, expected) => {
+    expect(parseTopicLightReviewThinkingReplayArgs(argv)).toMatchObject(expected);
+  });
+
+  it("parses fixture and output directory value forms", () => {
     expect(
       parseTopicLightReviewThinkingReplayArgs([
-        "--live",
-        "--confirm-live",
-        "--model=glm-5.2",
-        "--max-requests",
-        "2",
-        "--max-cost-cny=1.5",
         "--fixture",
         "custom/fixture.json",
         "--output-dir=custom/output",
       ]),
-    ).toEqual({
-      live: true,
-      confirmLive: true,
-      model: "glm-5.2",
-      maxRequests: 2,
-      maxCostCny: 1.5,
+    ).toMatchObject({
       fixturePath: "custom/fixture.json",
       outputDir: "custom/output",
     });
@@ -400,7 +400,18 @@ describe("topic light review thinking replay request guard", () => {
       "topic_light_review_thinking_replay_request_budget_must_equal_two",
     ],
     [
-      "wrong request budget",
+      "insufficient request budget",
+      {
+        live: true,
+        confirmLive: true,
+        model: "glm-5.2",
+        maxRequests: 1,
+        maxCostCny: 1,
+      },
+      "topic_light_review_thinking_replay_request_budget_must_equal_two",
+    ],
+    [
+      "excess request budget",
       {
         live: true,
         confirmLive: true,
@@ -421,6 +432,17 @@ describe("topic light review thinking replay request guard", () => {
       "topic_light_review_thinking_replay_cost_budget_required",
     ],
     [
+      "negative cost declaration",
+      {
+        live: true,
+        confirmLive: true,
+        model: "glm-5.2",
+        maxRequests: 2,
+        maxCostCny: -1,
+      },
+      "topic_light_review_thinking_replay_cost_budget_required",
+    ],
+    [
       "zero cost declaration",
       {
         live: true,
@@ -432,7 +454,18 @@ describe("topic light review thinking replay request guard", () => {
       "topic_light_review_thinking_replay_cost_budget_required",
     ],
     [
-      "non-finite cost declaration",
+      "infinite cost declaration",
+      {
+        live: true,
+        confirmLive: true,
+        model: "glm-5.2",
+        maxRequests: 2,
+        maxCostCny: Number.POSITIVE_INFINITY,
+      },
+      "topic_light_review_thinking_replay_cost_budget_required",
+    ],
+    [
+      "NaN cost declaration",
       {
         live: true,
         confirmLive: true,
@@ -454,6 +487,31 @@ describe("topic light review thinking replay request guard", () => {
       }),
     ).rejects.toThrow(code);
     expect(runnerCreated).toBe(0);
+  });
+
+  it("allows one live runner creation after every guard passes", async () => {
+    let runnerCreated = 0;
+
+    await expect(
+      runTopicLightReviewThinkingReplay(
+        {
+          live: true,
+          confirmLive: true,
+          model: "glm-5.2",
+          maxRequests: 2,
+          maxCostCny: 1,
+        },
+        {
+          createLiveRunner: () => {
+            runnerCreated += 1;
+            return {};
+          },
+        },
+      ),
+    ).rejects.toThrow(
+      "topic_light_review_thinking_replay_live_runner_not_implemented",
+    );
+    expect(runnerCreated).toBe(1);
   });
 
   it("loads and validates the fixture before creating the live runner", async () => {
