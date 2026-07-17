@@ -6,7 +6,7 @@ import type { GraphTraceNodeSummary } from "./graph-trace.js";
 import { buildEventIdentityFingerprint, normalizeEventIdentityValue } from "../../modules/topic/event-normalizer.js";
 
 export const TOPIC_CANDIDATE_TARGET_COUNT = 4;
-export const TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT = 4;
+export const TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT = 8;
 
 export interface TopicRecommendationGraphDependencies {
   invokeStructuredPrompt: <T>(input: {
@@ -428,7 +428,8 @@ export function createTopicRecommendationNodes(input: {
       runtime.slotsInsufficient =
         runtime.candidates.length < TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT;
       const node = createTraceNode(runtime, "topic-candidate-generate");
-      const shouldRepair = runtime.pendingFieldRepair;
+      const shouldRepair =
+        runtime.pendingFieldRepair || runtime.slotsInsufficient;
 
       if (!shouldRepair) {
         await persistTopicCandidates(
@@ -471,6 +472,16 @@ export function createTopicRecommendationNodes(input: {
         runtime.builderDegraded = repairResult.fieldIssues.length > 0;
         runtime.builderRepairPassed = repairResult.fieldIssues.length === 0;
         runtime.pendingFieldRepair = false;
+      } else {
+        const rawOutput = await dependencies.invokeStructuredPrompt<unknown>({
+          promptId: "topic.candidate-builder",
+          input: runtime.input,
+        });
+        await applyRuntimeCandidates({
+          rawOutput,
+          runtime,
+          append: true,
+        });
       }
 
       await persistTopicCandidates(

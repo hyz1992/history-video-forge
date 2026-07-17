@@ -24,7 +24,6 @@ describe("llm operation policy classification", () => {
 
     // 短结构化判断
     expect(classifyOperation("topic.selector")).toBe("short_structured_decision");
-    expect(classifyOperation("topic.light-review")).toBe("short_structured_decision");
     expect(classifyOperation("probe.strict-tool-call")).toBe("short_structured_decision");
     expect(classifyOperation("publish.title-generator")).toBe("short_structured_decision");
     expect(classifyOperation("publish.description-generator")).toBe("short_structured_decision");
@@ -104,11 +103,11 @@ describe("llm operation policy precedence", () => {
 
   it("does not introduce unapproved thinking / max-tokens / timeout defaults for operations", () => {
     // Task 10 批准 script.writer / storyboard.planner，Task 12 补充批准 topic.candidate-builder；
-    // Topic Selector 的精确策略由独立固定回放验证，故不再属于未批准 operation。
     // 其余 operation 不得获得 thinking / maxTokens / timeoutMs / maxAttempts override。
     const unapprovedOperations = [
       "storyboard.segment-regen",
       "asset-planning.planner",
+      "topic.selector",
       "topic.candidate-builder-repair",
       "asset-planning.asset-structural-repair",
       "script.semantic-reviewer",
@@ -128,8 +127,6 @@ describe("llm operation policy precedence", () => {
     expect(getOperationPolicy("script.writer").thinking).toBe("disabled");
     expect(getOperationPolicy("storyboard.planner").thinking).toBe("disabled");
     expect(getOperationPolicy("topic.candidate-builder").thinking).toBe("disabled");
-    expect(getOperationPolicy("topic.selector").thinking).toBe("enabled");
-    expect(getOperationPolicy("topic.light-review").thinking).toBeUndefined();
 
     // 同 class 内未经验证的 operation 不得被一起改成 disabled。
     expect(
@@ -137,12 +134,6 @@ describe("llm operation policy precedence", () => {
     ).toBeUndefined();
     expect(
       getOperationPolicy("asset-planning.planner").thinking,
-    ).toBeUndefined();
-    expect(
-      getOperationPolicy("probe.strict-tool-call").thinking,
-    ).toBeUndefined();
-    expect(
-      getOperationPolicy("publish.title-generator").thinking,
     ).toBeUndefined();
 
     // 未知 operation 继续走保守默认，不获得任何已批准 override。
@@ -188,7 +179,7 @@ describe("llm operation policy precedence", () => {
     expect(resolved.topP).toBe(0.7); // policy
   });
 
-  it("merged getOperationPolicy + resolveEffectiveRequest yields each exact approved thinking strategy", () => {
+  it("merged getOperationPolicy + resolveEffectiveRequest yields disabled thinking for approved operations in plain JSON mode", () => {
     // 生产普通 JSON mode 调用（invokeStructuredPrompt）走的就是这条合并路径。
     // 这里证明 script.writer / storyboard.planner 即使 invocation options 不传 thinking，
     // effective thinking 也会被 operation policy 拉成 disabled，从而进入请求体。
@@ -216,16 +207,6 @@ describe("llm operation policy precedence", () => {
       invocationOptions: {},
     });
     expect(candidateBuilderResolved.thinking).toBe("disabled");
-
-    // Selector strict 与受控 structured fallback 都以 topic.selector 为 operationName，
-    // invocation 不覆盖时必须通过同一精确 policy 获得 enabled。
-    const selectorResolved = resolveEffectiveRequest({
-      operationName: "topic.selector",
-      operationPolicy: getOperationPolicy("topic.selector"),
-      profileDefault: { maxAttempts: 3, timeoutMs: 240000 },
-      invocationOptions: {},
-    });
-    expect(selectorResolved.thinking).toBe("enabled");
   });
 
   it("falls back to profile default for maxTokens/temperature/topP when policy absent", () => {
@@ -285,14 +266,6 @@ describe("llm config redacted snapshot", () => {
 });
 
 describe("llm operation policy retry semantics (Task 9 contract)", () => {
-  it("uses short-structured controlled transport retry for topic light review without adding semantic thinking", () => {
-    const policy = getOperationPolicy("topic.light-review");
-
-    expect(policy.retryOnTimeout).toBe(true);
-    expect(policy.transientRetryByClass?.short_structured_decision).toBe(2);
-    expect(policy.thinking).toBeUndefined();
-  });
-
   it("forbids retrying timeouts only for core semantic and long structured generation", () => {
     // 已批准禁止 timeout 重试的两类
     expect(getOperationPolicy("script.writer").retryOnTimeout).toBe(false);

@@ -36,42 +36,20 @@ function createRuntimeCandidate(title: string, angle: string) {
   };
 }
 
-function createLightReviewDecision(
-  reviewPool: Array<{ candidate_id: string }>,
-  issueByCandidateId: Record<string, string> = {},
-) {
-  return {
-    candidate_reviews: reviewPool.map((candidate) => {
-      const consistencyIssue =
-        issueByCandidateId[candidate.candidate_id] ??
-        issueByCandidateId["*"] ??
-        "none";
-
-      return {
-        candidate_id: candidate.candidate_id,
-        consistency_issue: consistencyIssue,
-        note: consistencyIssue === "none" ? "" : `${consistencyIssue} review risk`,
-      };
-    }),
-  };
-}
-
-function mockTopicRuntimeResponses(
-  builderOutputs: unknown[],
-  reviewIssueMaps: Array<Record<string, string>> = [],
-) {
+function mockTopicRuntimeResponses(builderOutputs: unknown[]) {
   let builderCallIndex = 0;
-  let reviewCallIndex = 0;
   invokeStructuredPromptMock.mockImplementation(async ({ operationName, input }) => {
-    if (operationName === "topic.light-review") {
-      const pool =
-        (input as { review_pool?: Array<{ candidate_id: string }> }).review_pool ?? [];
-      const decision = createLightReviewDecision(
-        pool,
-        reviewIssueMaps[reviewCallIndex] ?? {},
-      );
-      reviewCallIndex += 1;
-      return decision;
+    if (operationName === "topic.selector") {
+      const pool = (input as { selector_pool?: Array<{ candidate_id: string }> }).selector_pool ?? [];
+      return {
+        ranked_candidates: pool.map((c, i) => ({
+          candidate_id: c.candidate_id,
+          quality_rank: i + 1,
+          quality_score: Math.max(1, 100 - i * 10),
+          deductions: [],
+          risk_summary: "mock selector ranking",
+        })),
+      };
     }
 
     const output =
@@ -166,121 +144,21 @@ describe("topic api runtime", () => {
     });
   });
 
-  it("returns 200 without refill when one initial eligible candidate remains", async () => {
-    invokeStructuredPromptMock.mockReset();
-    mockTopicRuntimeResponses(
-      [[
-        createRuntimeCandidate("event-a", "angle-a"),
-        createRuntimeCandidate("event-b", "angle-b"),
-        createRuntimeCandidate("event-c", "angle-c"),
-        createRuntimeCandidate("event-d", "angle-d"),
-      ]],
-      [{
-        selector_candidate_2: "actor_role_mismatch",
-        selector_candidate_3: "action_event_mismatch",
-        selector_candidate_4: "scope_boundary_mismatch",
-      }],
-    );
-
-    const app = buildApp();
-    const projectResponse = await app.inject({
-      auth,
-      method: "POST",
-      url: "/api/projects",
-      payload: { name: "One Eligible Topic Candidate" },
-    });
-    const projectId = projectResponse.json().project_id as string;
-
-    const response = await app.inject({
-      auth,
-      method: "POST",
-      url: `/api/projects/${projectId}/topic/recommendations`,
-      payload: {
-        canonical_name: "one-eligible-seed",
-        summary: "Only one internally consistent candidate remains.",
-        core_conflict: "Risk candidates must not be used as backfill.",
-        strong_scene: "The single eligible option remains visible.",
-        source_hint: "test",
-        recent_usage_hint: "none",
-        tags: ["history"],
-      },
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json().candidates).toHaveLength(1);
-    expect(response.json().candidates[0]).toMatchObject({ title: "event-a" });
-    const builderCalls = invokeStructuredPromptMock.mock.calls.filter(
-      ([request]) => request.operationName === "topic.candidate-builder",
-    );
-    const reviewCalls = invokeStructuredPromptMock.mock.calls.filter(
-      ([request]) => request.operationName === "topic.light-review",
-    );
-    expect(builderCalls).toHaveLength(1);
-    expect(reviewCalls).toHaveLength(1);
-  });
-
-  it("returns topic_review_no_eligible_candidates only when both reviews reject all", async () => {
-    invokeStructuredPromptMock.mockReset();
-    mockTopicRuntimeResponses(
-      [
-        [
-          createRuntimeCandidate("event-a", "angle-a"),
-          createRuntimeCandidate("event-b", "angle-b"),
-          createRuntimeCandidate("event-c", "angle-c"),
-          createRuntimeCandidate("event-d", "angle-d"),
-        ],
-        [
-          createRuntimeCandidate("event-e", "angle-e"),
-          createRuntimeCandidate("event-f", "angle-f"),
-          createRuntimeCandidate("event-g", "angle-g"),
-          createRuntimeCandidate("event-h", "angle-h"),
-        ],
-      ],
-      [
-        { "*": "actor_role_mismatch" },
-        { "*": "cause_outcome_mismatch" },
-      ],
-    );
-
-    const app = buildApp();
-    const projectResponse = await app.inject({
-      auth,
-      method: "POST",
-      url: "/api/projects",
-      payload: { name: "Zero Eligible Topic Candidates" },
-    });
-    const projectId = projectResponse.json().project_id as string;
-
-    const response = await app.inject({
-      auth,
-      method: "POST",
-      url: `/api/projects/${projectId}/topic/recommendations`,
-      payload: {
-        canonical_name: "zero-eligible-seed",
-        summary: "Both light-review rounds reject all candidates.",
-        core_conflict: "No risk candidate may reach the user.",
-        strong_scene: "The batch fails only after the refill is exhausted.",
-        source_hint: "test",
-        recent_usage_hint: "none",
-        tags: ["history"],
-      },
-    });
-
-    expect(response.statusCode).toBe(500);
-    expect(response.json()).toMatchObject({
-      error: "topic_generate_failed",
-      message: "topic_review_no_eligible_candidates",
-    });
-  });
-
   it("retries provider content filter rejection once before failing the topic flow", async () => {
     invokeStructuredPromptMock.mockReset();
     let builderCallIndex = 0;
     invokeStructuredPromptMock.mockImplementation(async ({ operationName, input }) => {
-      if (operationName === "topic.light-review") {
-        const pool =
-          (input as { review_pool?: Array<{ candidate_id: string }> }).review_pool ?? [];
-        return createLightReviewDecision(pool);
+      if (operationName === "topic.selector") {
+        const pool = (input as { selector_pool?: Array<{ candidate_id: string }> }).selector_pool ?? [];
+        return {
+          ranked_candidates: pool.map((c, i) => ({
+            candidate_id: c.candidate_id,
+            quality_rank: i + 1,
+            quality_score: Math.max(1, 100 - i * 10),
+            deductions: [],
+            risk_summary: "mock selector ranking",
+          })),
+        };
       }
 
       builderCallIndex += 1;
@@ -331,7 +209,7 @@ describe("topic api runtime", () => {
     expect(response.json().candidates).toHaveLength(3);
 
     const builderCalls = invokeStructuredPromptMock.mock.calls.filter(
-      ([request]) => request.operationName === "topic.candidate-builder",
+      ([request]) => request.operationName !== "topic.selector",
     );
     expect(builderCalls[0]?.[0].input).not.toHaveProperty("safety_retry_context");
     expect(builderCalls[1]?.[0].input).toMatchObject({
@@ -510,24 +388,15 @@ describe("topic api runtime", () => {
     );
   });
 
-  it("refills to three slots and exposes partial-success diagnostics", async () => {
+  it("repairs to three slots and exposes diagnostics when the initial runtime output is insufficient", async () => {
     invokeStructuredPromptMock.mockReset();
-    mockTopicRuntimeResponses(
+    mockTopicRuntimeResponses([
+      [createRuntimeCandidate("晏子使楚", "第一槽位")],
       [
-        [
-          createRuntimeCandidate("晏子使楚", "第一槽位"),
-          createRuntimeCandidate("张巡守城", "第二槽位"),
-          createRuntimeCandidate("于谦守京", "第三槽位"),
-          createRuntimeCandidate("土木堡之变", "第四槽位"),
-        ],
-        [
-          createRuntimeCandidate("张骞出使西域", "补充第一槽位"),
-          createRuntimeCandidate("班超经营西域", "补充第二槽位"),
-          createRuntimeCandidate("苏武牧羊", "补充第三槽位"),
-        ],
+        createRuntimeCandidate("张巡守城", "第二槽位"),
+        createRuntimeCandidate("于谦守京", "第三槽位"),
       ],
-      [{ "*": "actor_role_mismatch" }, {}],
-    );
+    ]);
 
     const app = buildApp();
     const projectResponse = await app.inject({ auth,
@@ -557,23 +426,13 @@ describe("topic api runtime", () => {
 
     const body = response.json();
     expect(body.candidates).toHaveLength(3);
-    expect(body.runtime_diagnostics.review_trace).toMatchObject({
-      initial_candidate_count: 4,
-      initial_review_pass_count: 0,
-      refill_triggered: true,
-      refill_candidate_count: 3,
-      refill_review_pass_count: 3,
-      final_candidate_count: 3,
-      zero_eligible_candidate: false,
-    });
     expect(body.runtime_diagnostics.checks).toContainEqual(
       expect.objectContaining({
-        code: "topic_candidate_slots_insufficient",
-        level: "warning",
+        code: "topic_candidate_repair_triggered",
       }),
     );
     const builderCalls = invokeStructuredPromptMock.mock.calls.filter(
-      ([request]) => request.operationName === "topic.candidate-builder",
+      ([request]) => request.operationName !== "topic.selector",
     );
     expect(builderCalls).toHaveLength(2);
   });

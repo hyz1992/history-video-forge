@@ -41,38 +41,13 @@ export interface CandidatePreviewTraceEntry {
 export interface CandidatePreviewTrace {
   raw_candidates: CandidatePreviewTraceEntry[];
   selector_pool: CandidatePreviewTraceEntry[];
-  reviewed_candidates: CandidatePreviewTraceEntry[];
   ranked_candidates?: CandidatePreviewTraceEntry[];
   final_candidates: CandidatePreviewTraceEntry[];
-}
-
-export interface TopicReviewRejectedCandidate {
-  candidate_id: string;
-  consistency_issue: Exclude<
-    NonNullable<CandidatePreviewTraceEntry["primary_consistency_issue"]>,
-    "none"
-  >;
-  note: string;
-}
-
-export interface TopicReviewTrace {
-  reviewed_candidate_ids: string[];
-  accepted_candidate_ids: string[];
-  rejected_candidates: TopicReviewRejectedCandidate[];
-  refill_attempts: number;
-  initial_candidate_count: number;
-  initial_review_pass_count: number;
-  refill_triggered: boolean;
-  refill_candidate_count: number;
-  refill_review_pass_count: number;
-  final_candidate_count: number;
-  zero_eligible_candidate: boolean;
 }
 
 export interface RuntimeDiagnosticsSummary {
   checks: RuntimeDiagnosticCheck[];
   candidate_preview_trace?: CandidatePreviewTrace;
-  review_trace?: TopicReviewTrace;
 }
 
 export function createRuntimeDiagnosticsSummary(
