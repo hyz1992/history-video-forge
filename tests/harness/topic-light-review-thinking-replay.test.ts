@@ -1,7 +1,9 @@
 import {
+  existsSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -85,6 +87,14 @@ function makeSandbox(label: string) {
   return dir;
 }
 
+function readFlatDirectorySnapshot(dir: string) {
+  return Object.fromEntries(
+    readdirSync(dir)
+      .sort()
+      .map((fileName) => [fileName, readFileSync(join(dir, fileName), "utf8")]),
+  );
+}
+
 function cloneFixture(): TopicLightReviewThinkingReplayFixture {
   return structuredClone(loadTopicLightReviewThinkingReplayFixture());
 }
@@ -127,30 +137,47 @@ function makePassingRounds(): [
   return [
     {
       status: "success",
-      verdicts,
+      verdicts: structuredClone(verdicts),
       observation: {
         ...baseObservation,
         mode: "provider_default",
-        effective_request: baseEffectiveRequest,
+        effective_request: structuredClone(baseEffectiveRequest),
         duration_ms: 50_000,
         reasoning_tokens: 15_000,
       },
     },
     {
       status: "success",
-      verdicts,
+      verdicts: structuredClone(verdicts),
       observation: {
         ...baseObservation,
         mode: "disabled",
-        effective_request: {
-          ...baseEffectiveRequest,
-          thinking: "disabled",
-        },
+        effective_request: Object.assign(
+          structuredClone(baseEffectiveRequest),
+          { thinking: "disabled" },
+        ),
         duration_ms: 20_000,
         reasoning_tokens: 0,
       },
     },
   ];
+}
+
+function makePassingResult() {
+  const rounds = makePassingRounds();
+  return {
+    mode: "topic_light_review_thinking_replay" as const,
+    live: true as const,
+    automated_gate: false as const,
+    light_review_only: true as const,
+    fixture_id: "task17-controls",
+    actual_requests: 2 as const,
+    rounds,
+    summary: buildTopicLightReviewThinkingReplaySummary(
+      loadTopicLightReviewThinkingReplayFixture().annotations,
+      rounds,
+    ),
+  };
 }
 
 function loadMappedSourceControls() {
@@ -564,20 +591,8 @@ describe("topic light review thinking replay request guard", () => {
     let runnerCreated = 0;
     let fixtureId: string | undefined;
     const outputDir = makeSandbox("injected-live-output");
-    const rounds = makePassingRounds();
-    const expectedResult = {
-      mode: "topic_light_review_thinking_replay" as const,
-      live: true as const,
-      automated_gate: false as const,
-      light_review_only: true as const,
-      fixture_id: "task17-controls",
-      actual_requests: 2 as const,
-      rounds,
-      summary: buildTopicLightReviewThinkingReplaySummary(
-        loadTopicLightReviewThinkingReplayFixture().annotations,
-        rounds,
-      ),
-    };
+    const expectedResult = makePassingResult();
+    const rounds = expectedResult.rounds;
 
     const result = await runTopicLightReviewThinkingReplay(
       {
@@ -641,6 +656,184 @@ describe("topic light review thinking replay request guard", () => {
     ]) {
       expect(publicArtifacts).not.toContain(forbidden);
     }
+  });
+
+  it.each(["replay-plan.json", ".write-probe"])(
+    "prepares a writable staging directory before creating the live runner when %s cannot be written",
+    async (failingFileName) => {
+      const parentDir = makeSandbox(
+        `staging-prepare-failure-${failingFileName}`,
+      );
+      const outputDir = join(parentDir, "published-run");
+      let runnerCreated = 0;
+
+      await expect(
+        runTopicLightReviewThinkingReplay(
+          {
+            live: true,
+            confirmLive: true,
+            model: "glm-5.2",
+            maxRequests: 2,
+            maxCostCny: 1,
+            outputDir,
+          },
+          {
+            createLiveRunner: () => {
+              runnerCreated += 1;
+              return {
+                async runFixture() {
+                  return makePassingResult();
+                },
+              };
+            },
+            artifactFileSystem: {
+              writeText(filePath: string, content: string) {
+                if (filePath.endsWith(failingFileName)) {
+                  throw new Error("simulated_staging_prepare_failure");
+                }
+                writeFileSync(filePath, content, "utf8");
+              },
+            },
+          },
+        ),
+      ).rejects.toThrow("simulated_staging_prepare_failure");
+
+      expect(runnerCreated).toBe(0);
+      expect(existsSync(outputDir)).toBe(false);
+      expect(
+        readdirSync(parentDir).filter(
+          (name) => name.includes(".staging-") || name.includes(".backup-"),
+        ),
+      ).toEqual([]);
+    },
+  );
+
+  it("publishes a complete directory without retaining stale files from an older run", async () => {
+    const outputDir = makeSandbox("replace-stale-output");
+    writeFileSync(join(outputDir, "stale.txt"), "must disappear", "utf8");
+    writeFileSync(
+      join(outputDir, "replay-summary.json"),
+      "old summary",
+      "utf8",
+    );
+    const expectedResult = makePassingResult();
+
+    await runTopicLightReviewThinkingReplay(
+      {
+        live: true,
+        confirmLive: true,
+        model: "glm-5.2",
+        maxRequests: 2,
+        maxCostCny: 1,
+        outputDir,
+      },
+      {
+        createLiveRunner: () => ({
+          async runFixture() {
+            return expectedResult;
+          },
+        }),
+      },
+    );
+
+    expect(readdirSync(outputDir).sort()).toEqual([
+      "disabled.result.json",
+      "provider-default.result.json",
+      "replay-plan.json",
+      "replay-summary.json",
+      "trace.md",
+    ]);
+    expect(readFileSync(join(outputDir, "replay-summary.json"), "utf8"))
+      .not.toContain("old summary");
+  });
+
+  it("keeps the previous published directory intact when staging artifact writing fails", async () => {
+    const parentDir = makeSandbox("staging-write-failure");
+    const outputDir = join(parentDir, "published-run");
+    writeFileSync(join(parentDir, "placeholder"), "parent", "utf8");
+    const oldDir = makeSandbox("old-artifacts-source");
+    writeFileSync(join(oldDir, "old.json"), "old artifact", "utf8");
+    renameSync(oldDir, outputDir);
+    const before = readFlatDirectorySnapshot(outputDir);
+
+    await expect(
+      runTopicLightReviewThinkingReplay(
+        {
+          live: true,
+          confirmLive: true,
+          model: "glm-5.2",
+          maxRequests: 2,
+          maxCostCny: 1,
+          outputDir,
+        },
+        {
+          createLiveRunner: () => ({
+            async runFixture() {
+              return makePassingResult();
+            },
+          }),
+          artifactFileSystem: {
+            writeText(filePath: string, content: string) {
+              if (filePath.endsWith("disabled.result.json")) {
+                throw new Error("simulated_artifact_write_failure");
+              }
+              writeFileSync(filePath, content, "utf8");
+            },
+          },
+        },
+      ),
+    ).rejects.toThrow("simulated_artifact_write_failure");
+
+    expect(readFlatDirectorySnapshot(outputDir)).toEqual(before);
+    expect(
+      readdirSync(parentDir).filter(
+        (name) => name.includes(".staging-") || name.includes(".backup-"),
+      ),
+    ).toEqual([]);
+  });
+
+  it("restores the previous directory when atomic staging publication fails", async () => {
+    const parentDir = makeSandbox("staging-publish-failure");
+    const outputDir = join(parentDir, "published-run");
+    const oldDir = makeSandbox("old-published-source");
+    writeFileSync(join(oldDir, "old.json"), "old artifact", "utf8");
+    renameSync(oldDir, outputDir);
+    const before = readFlatDirectorySnapshot(outputDir);
+
+    await expect(
+      runTopicLightReviewThinkingReplay(
+        {
+          live: true,
+          confirmLive: true,
+          model: "glm-5.2",
+          maxRequests: 2,
+          maxCostCny: 1,
+          outputDir,
+        },
+        {
+          createLiveRunner: () => ({
+            async runFixture() {
+              return makePassingResult();
+            },
+          }),
+          artifactFileSystem: {
+            renameDirectory(source: string, target: string) {
+              if (source.includes(".staging-") && target === outputDir) {
+                throw new Error("simulated_publish_failure");
+              }
+              renameSync(source, target);
+            },
+          },
+        },
+      ),
+    ).rejects.toThrow("simulated_publish_failure");
+
+    expect(readFlatDirectorySnapshot(outputDir)).toEqual(before);
+    expect(
+      readdirSync(parentDir).filter(
+        (name) => name.includes(".staging-") || name.includes(".backup-"),
+      ),
+    ).toEqual([]);
   });
 
   it("loads and validates the fixture before creating the live runner", async () => {
@@ -1039,19 +1232,56 @@ describe("topic light review thinking replay production gate", () => {
     expect(afterBodyMutation).toEqual(original);
   });
 
+  it("builds independently mutable verdict and effective-request objects for both rounds", () => {
+    const rounds = makePassingRounds();
+
+    expect(rounds[0].verdicts).not.toBe(rounds[1].verdicts);
+    expect(rounds[0].verdicts[0]).not.toBe(rounds[1].verdicts[0]);
+    expect(rounds[0].observation.effective_request).not.toBe(
+      rounds[1].observation.effective_request,
+    );
+
+    rounds[0].verdicts[0].consistency_issue = "none";
+    rounds[0].observation.effective_request!.maxTokens = 1;
+    expect(rounds[1].verdicts[0].consistency_issue).not.toBe("none");
+    expect(rounds[1].observation.effective_request!.maxTokens).toBe(2_000);
+  });
+
   it.each([
-    ["misses an annotated risk", (rounds: ReturnType<typeof makePassingRounds>) => {
-      rounds[0].verdicts[0].consistency_issue = "none";
+    ["misses an annotated risk", 0, (round: TopicLightReviewThinkingReplayRoundResult) => {
+      round.verdicts[0].consistency_issue = "none";
     }],
-    ["drifts to the wrong risk enum", (rounds: ReturnType<typeof makePassingRounds>) => {
-      rounds[1].verdicts[0].consistency_issue = "overclaim_or_ambiguity";
+    ["drifts to the wrong risk enum", 1, (round: TopicLightReviewThinkingReplayRoundResult) => {
+      round.verdicts[0].consistency_issue = "overclaim_or_ambiguity";
     }],
-    ["flags an annotated none control", (rounds: ReturnType<typeof makePassingRounds>) => {
-      rounds[0].verdicts[1].consistency_issue = "actor_role_mismatch";
+    ["flags an annotated none control", 0, (round: TopicLightReviewThinkingReplayRoundResult) => {
+      round.verdicts[1].consistency_issue = "actor_role_mismatch";
     }],
-    ["omits coverage", (rounds: ReturnType<typeof makePassingRounds>) => {
-      rounds[1].verdicts.pop();
+    ["omits coverage", 1, (round: TopicLightReviewThinkingReplayRoundResult) => {
+      round.verdicts.pop();
     }],
+  ] as const)("fails only the targeted semantic round when %s", (_label, targetRound, mutate) => {
+    const rounds = makePassingRounds();
+    mutate(rounds[targetRound]);
+
+    const summary = buildTopicLightReviewThinkingReplaySummary(
+      loadTopicLightReviewThinkingReplayFixture().annotations,
+      rounds,
+    );
+    const untouchedRound = summary.rounds[targetRound === 0 ? 1 : 0];
+
+    expect(summary.semantic_gate_passed).toBe(false);
+    expect(untouchedRound.coverage.passed).toBe(untouchedRound.coverage.total);
+    expect(untouchedRound.risk_recall.passed).toBe(
+      untouchedRound.risk_recall.total,
+    );
+    expect(untouchedRound.exact_enum.passed).toBe(
+      untouchedRound.exact_enum.total,
+    );
+    expect(untouchedRound.none.passed).toBe(untouchedRound.none.total);
+  });
+
+  it.each([
     ["uses disabled thinking in the default round", (rounds: ReturnType<typeof makePassingRounds>) => {
       rounds[0].observation.effective_request!.thinking = "disabled";
     }],

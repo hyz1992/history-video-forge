@@ -1,6 +1,14 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
@@ -31,6 +39,27 @@ const DEFAULT_TOPIC_LIGHT_REVIEW_THINKING_OUTPUT_DIR = resolve(
 
 const REQUIRED_REQUESTS = 2;
 
+const DEFAULT_ARTIFACT_FILE_SYSTEM: TopicLightReviewThinkingReplayArtifactFileSystem = {
+  ensureDirectory(path) {
+    mkdirSync(path, { recursive: true });
+  },
+  makeTempDirectory(prefix) {
+    return mkdtempSync(prefix);
+  },
+  writeText(path, content) {
+    writeFileSync(path, content, "utf8");
+  },
+  removePath(path) {
+    rmSync(path, { recursive: true, force: true });
+  },
+  pathExists(path) {
+    return existsSync(path);
+  },
+  renameDirectory(source, target) {
+    renameSync(source, target);
+  },
+};
+
 export interface TopicLightReviewThinkingReplayInput {
   live?: boolean;
   confirmLive?: boolean;
@@ -55,6 +84,16 @@ export interface TopicLightReviewThinkingReplayDependencies {
   createLiveRunner?: (
     input: TopicLightReviewThinkingReplayInput,
   ) => TopicLightReviewThinkingReplayRunner;
+  artifactFileSystem?: Partial<TopicLightReviewThinkingReplayArtifactFileSystem>;
+}
+
+export interface TopicLightReviewThinkingReplayArtifactFileSystem {
+  ensureDirectory(path: string): void;
+  makeTempDirectory(prefix: string): string;
+  writeText(path: string, content: string): void;
+  removePath(path: string): void;
+  pathExists(path: string): boolean;
+  renameDirectory(source: string, target: string): void;
 }
 
 export interface TopicLightReviewThinkingReplayObservation {
@@ -289,16 +328,34 @@ export async function runTopicLightReviewThinkingReplay(
   }
 
   validateLiveInput(input);
-  const runner =
-    dependencies.createLiveRunner?.(input) ??
-    createTopicLightReviewThinkingReplayRunner(input.model!);
-  const result = await runner.runFixture(fixture);
-  writeLiveReplayArtifacts(
+  const artifactFileSystem = createArtifactFileSystem(
+    dependencies.artifactFileSystem,
+  );
+  const preparedOutput = prepareLiveReplayStagingDirectory(
     input.outputDir ?? DEFAULT_TOPIC_LIGHT_REVIEW_THINKING_OUTPUT_DIR,
     plan,
-    result,
+    artifactFileSystem,
   );
-  return result;
+  try {
+    const runner =
+      dependencies.createLiveRunner?.(input) ??
+      createTopicLightReviewThinkingReplayRunner(input.model!);
+    const result = await runner.runFixture(fixture);
+    writeLiveReplayArtifacts(
+      preparedOutput.stagingDir,
+      plan,
+      result,
+      artifactFileSystem,
+    );
+    publishLiveReplayStagingDirectory(
+      preparedOutput,
+      artifactFileSystem,
+    );
+    return result;
+  } catch (error) {
+    removePathSafely(artifactFileSystem, preparedOutput.stagingDir);
+    throw error;
+  }
 }
 
 export function createTopicLightReviewThinkingReplayRunner(
@@ -648,32 +705,133 @@ function normalizeThrownErrorCode(error: unknown) {
   return "llm_invocation_failed";
 }
 
+interface PreparedLiveReplayOutput {
+  outputDir: string;
+  stagingDir: string;
+}
+
+function createArtifactFileSystem(
+  overrides?: Partial<TopicLightReviewThinkingReplayArtifactFileSystem>,
+): TopicLightReviewThinkingReplayArtifactFileSystem {
+  return { ...DEFAULT_ARTIFACT_FILE_SYSTEM, ...overrides };
+}
+
+function prepareLiveReplayStagingDirectory(
+  requestedOutputDir: string,
+  plan: TopicLightReviewThinkingReplayPlan,
+  fileSystem: TopicLightReviewThinkingReplayArtifactFileSystem,
+): PreparedLiveReplayOutput {
+  const outputDir = resolve(requestedOutputDir);
+  fileSystem.ensureDirectory(dirname(outputDir));
+  let stagingDir: string | null = null;
+  try {
+    stagingDir = fileSystem.makeTempDirectory(`${outputDir}.staging-`);
+    writeReplayJson(
+      stagingDir,
+      "replay-plan.json",
+      plan,
+      fileSystem,
+    );
+    const probePath = resolve(stagingDir, ".write-probe");
+    fileSystem.writeText(probePath, "writable\n");
+    fileSystem.removePath(probePath);
+    return { outputDir, stagingDir };
+  } catch (error) {
+    if (stagingDir) {
+      removePathSafely(fileSystem, stagingDir);
+    }
+    throw error;
+  }
+}
+
+function publishLiveReplayStagingDirectory(
+  prepared: PreparedLiveReplayOutput,
+  fileSystem: TopicLightReviewThinkingReplayArtifactFileSystem,
+) {
+  const { outputDir, stagingDir } = prepared;
+  let backupDir: string | null = null;
+  try {
+    if (fileSystem.pathExists(outputDir)) {
+      backupDir = fileSystem.makeTempDirectory(`${outputDir}.backup-`);
+      fileSystem.removePath(backupDir);
+      fileSystem.renameDirectory(outputDir, backupDir);
+    }
+    fileSystem.renameDirectory(stagingDir, outputDir);
+  } catch (error) {
+    if (backupDir && fileSystem.pathExists(backupDir)) {
+      if (fileSystem.pathExists(outputDir)) {
+        removePathSafely(fileSystem, outputDir);
+      }
+      fileSystem.renameDirectory(backupDir, outputDir);
+    }
+    removePathSafely(fileSystem, stagingDir);
+    throw error;
+  }
+
+  if (backupDir) {
+    try {
+      fileSystem.removePath(backupDir);
+    } catch (error) {
+      removePathSafely(fileSystem, outputDir);
+      if (fileSystem.pathExists(backupDir)) {
+        fileSystem.renameDirectory(backupDir, outputDir);
+      }
+      throw error;
+    }
+  }
+}
+
+function removePathSafely(
+  fileSystem: TopicLightReviewThinkingReplayArtifactFileSystem,
+  path: string,
+) {
+  try {
+    fileSystem.removePath(path);
+  } catch {
+    // Keep the original preparation, write, or publication error.
+  }
+}
+
 function writeLiveReplayArtifacts(
   outputDir: string,
   plan: TopicLightReviewThinkingReplayPlan,
   result: TopicLightReviewThinkingReplayResult,
+  fileSystem: TopicLightReviewThinkingReplayArtifactFileSystem,
 ) {
-  mkdirSync(outputDir, { recursive: true });
-  writeReplayJson(outputDir, "replay-plan.json", plan);
+  writeReplayJson(outputDir, "replay-plan.json", plan, fileSystem);
   writeReplayJson(
     outputDir,
     "provider-default.result.json",
     result.rounds[0],
+    fileSystem,
   );
-  writeReplayJson(outputDir, "disabled.result.json", result.rounds[1]);
-  writeReplayJson(outputDir, "replay-summary.json", result.summary);
-  writeFileSync(
+  writeReplayJson(
+    outputDir,
+    "disabled.result.json",
+    result.rounds[1],
+    fileSystem,
+  );
+  writeReplayJson(
+    outputDir,
+    "replay-summary.json",
+    result.summary,
+    fileSystem,
+  );
+  fileSystem.writeText(
     resolve(outputDir, "trace.md"),
     renderTopicLightReviewThinkingReplayTrace(result.summary),
-    "utf8",
   );
 }
 
-function writeReplayJson(outputDir: string, fileName: string, value: unknown) {
-  writeFileSync(
+function writeReplayJson(
+  outputDir: string,
+  fileName: string,
+  value: unknown,
+  fileSystem: TopicLightReviewThinkingReplayArtifactFileSystem,
+) {
+  fileSystem.writeText(
     resolve(outputDir, fileName),
     `${JSON.stringify(value, null, 2)}\n`,
-    "utf8",
   );
 }
 
