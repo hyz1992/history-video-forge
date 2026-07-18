@@ -99,6 +99,120 @@ describe("topic recommendation graph", () => {
     expect(() => TopicCandidateCard.parse(result.candidates[0])).not.toThrow();
   });
 
+  it("prefers the candidates array when the provider wraps candidates with metadata", async () => {
+    const db = createDbClient();
+    const invokeStructuredPrompt = vi.fn(async () => ({
+      canonicalName: "metadata-wrapper",
+      tags: ["metadata", "not-candidates"],
+      candidates: [
+        createRuntimeCandidate("candidate-1", "slot-1"),
+        createRuntimeCandidate("candidate-2", "slot-2"),
+        createRuntimeCandidate("candidate-3", "slot-3"),
+        createRuntimeCandidate("candidate-4", "slot-4"),
+        createRuntimeCandidate("candidate-5", "slot-5"),
+        createRuntimeCandidate("candidate-6", "slot-6"),
+        createRuntimeCandidate("candidate-7", "slot-7"),
+        createRuntimeCandidate("candidate-8", "slot-8"),
+      ],
+    }));
+
+    const result = await runTopicRecommendationGraph(
+      {
+        db,
+        input: {
+          canonicalName: "metadata-wrapper",
+          summary: "candidate output wrapped with metadata",
+          coreConflict: "metadata arrays must not be treated as candidates",
+          strongScene: "provider returns tags before candidates",
+          sourceHint: "test",
+          recentUsageHint: "test",
+          tags: ["diplomacy", "court", "humiliation", "showdown"],
+        },
+        projectId: "project-1",
+      },
+      {
+        invokeStructuredPrompt,
+      },
+    );
+
+    expect(invokeStructuredPrompt).toHaveBeenCalledTimes(1);
+    expect(result.candidates).toHaveLength(8);
+    expect(result.candidates[0]).toMatchObject({
+      title: "candidate-1",
+      one_line_angle: "slot-1",
+    });
+    expect(result.trace.nodes[0]).toMatchObject({
+      node_name: "topic-candidate-generate",
+      output_ref: "topic-candidate-list:8",
+      failure_reason: null,
+    });
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "topic_candidate_generate_passed",
+      }),
+    );
+  });
+
+  it("repairs when the provider returns metadata without a candidate array", async () => {
+    const db = createDbClient();
+    const invokeStructuredPrompt = vi
+      .fn()
+      .mockResolvedValueOnce({
+        canonicalName: "metadata-only",
+        tags: ["metadata", "not-candidates"],
+        summary: "provider echoed the recommendation seed instead of candidates",
+      })
+      .mockResolvedValueOnce([
+        createRuntimeCandidate("candidate-1", "slot-1"),
+        createRuntimeCandidate("candidate-2", "slot-2"),
+        createRuntimeCandidate("candidate-3", "slot-3"),
+        createRuntimeCandidate("candidate-4", "slot-4"),
+        createRuntimeCandidate("candidate-5", "slot-5"),
+        createRuntimeCandidate("candidate-6", "slot-6"),
+        createRuntimeCandidate("candidate-7", "slot-7"),
+        createRuntimeCandidate("candidate-8", "slot-8"),
+      ]);
+
+    const result = await runTopicRecommendationGraph(
+      {
+        db,
+        input: {
+          canonicalName: "metadata-only",
+          summary: "first response contains no candidate array",
+          coreConflict: "graph should use the existing repair pass",
+          strongScene: "provider echoes metadata before producing candidates",
+          sourceHint: "test",
+          recentUsageHint: "test",
+          tags: ["diplomacy", "court", "humiliation", "showdown"],
+        },
+        projectId: "project-1",
+      },
+      {
+        invokeStructuredPrompt,
+      },
+    );
+
+    expect(invokeStructuredPrompt).toHaveBeenCalledTimes(2);
+    expect(result.candidates).toHaveLength(8);
+    expect(result.trace.nodes.map((node) => node.node_name)).toEqual([
+      "topic-candidate-generate",
+      "topic-candidate-repair",
+    ]);
+    expect(result.trace.nodes[0]).toMatchObject({
+      output_ref: "topic-candidate-list:0",
+      failure_reason: null,
+    });
+    expect(result.trace.nodes[1]).toMatchObject({
+      output_ref: "topic-candidate-list:8",
+      failure_reason: null,
+    });
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "topic_candidate_repair_triggered",
+      }),
+    );
+  });
+
   it("triggers a single repair pass when the provider returns too few candidates", async () => {
     const db = createDbClient();
     const invokeStructuredPrompt = vi

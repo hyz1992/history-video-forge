@@ -1107,6 +1107,80 @@ describe("provider hardening", () => {
     })).rejects.toThrow("strict_structured_no_tool_call");
   });
 
+  it("retries strict tool-call invocations when arguments JSON is malformed", async () => {
+    const prompt = createPromptRegistry().getPrompt("topic.selector");
+    const entries: LlmInteractionLogEntry[] = [];
+    let calls = 0;
+    const provider = createOpenAiCompatibleProvider({
+      model: "glm-5.2",
+      baseUrl: "https://llm.example.test/v1",
+      apiKey: "test-key",
+      maxAttempts: 2,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+      fetchImpl: async () => {
+        calls += 1;
+        const argumentsJson = calls === 1
+          ? '{"selected_candidate_ids":["c1"]} trailing'
+          : JSON.stringify({ selected_candidate_ids: ["c1"] });
+
+        return new Response(JSON.stringify({
+          choices: [{
+            finish_reason: "tool_calls",
+            message: {
+              tool_calls: [{
+                type: "function",
+                function: {
+                  name: "select_topic_candidates",
+                  arguments: argumentsJson,
+                },
+              }],
+            },
+          }],
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    });
+
+    const result = await provider.invokeStrictStructured?.({
+      prompt,
+      input: { selector_pool: [] },
+      operationName: "topic.selector",
+      schema: {
+        name: "select_topic_candidates",
+        description: "Select topic candidates.",
+        parameters: {
+          type: "object",
+          properties: {
+            selected_candidate_ids: { type: "array", items: { type: "string" } },
+          },
+          required: ["selected_candidate_ids"],
+          additionalProperties: false,
+        },
+      },
+      parse: (candidate) => candidate as { selected_candidate_ids: string[] },
+      options: {
+        strategy: "tool_call",
+        toolChoice: "target_function",
+      },
+      interactionLogWriter: {
+        write(entry) {
+          entries.push(entry);
+        },
+      },
+    });
+
+    expect(result).toEqual({ selected_candidate_ids: ["c1"] });
+    expect(calls).toBe(2);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.attempts).toMatchObject([
+      { attempt: 1, outcome: "error", errorCode: "invalid_response" },
+      { attempt: 2, outcome: "success" },
+    ]);
+  });
+
   it("records each retry attempt with delay and succeeds on second attempt", async () => {
     vi.useFakeTimers();
     const entries: LlmInteractionLogEntry[] = [];

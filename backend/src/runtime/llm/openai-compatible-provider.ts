@@ -1,6 +1,6 @@
 import { env, type AppEnv } from "../../config/env.js";
 import type { LoadedPrompt } from "../prompts/prompt-loader.js";
-import { withRetry } from "./external-errors.js";
+import { ExternalServiceError, withRetry } from "./external-errors.js";
 import { createRequestBudget, type RequestBudget } from "./request-budget.js";
 import type { LlmInteractionLogWriter } from "./interaction-log.js";
 import {
@@ -397,12 +397,12 @@ export function createOpenAiCompatibleProvider(
 
       try {
         let attemptStartedAt = "";
-        const strictResult = await withRetry(
-          () => {
+        parsedOutput = await withRetry(
+          async () => {
             requestBudget.consume(request.operationName);
 
             attemptStartedAt = new Date().toISOString();
-            return withTimeout(
+            const strictResult = await withTimeout(
               (signal) =>
                 invokeStrictApi(
                   {
@@ -421,19 +421,33 @@ export function createOpenAiCompatibleProvider(
                     },
                   },
                   { signal },
-                ).then((env) => {
-                  attempts.push({
-                    attempt: attempts.length + 1,
-                    startedAt: attemptStartedAt,
-                    finishedAt: new Date().toISOString(),
-                    durationMs: Date.now() - new Date(attemptStartedAt).getTime(),
-                    outcome: "success",
-                  });
-                  return env;
-                }),
+                ),
               effectiveTimeoutMs,
               request.operationName,
             );
+
+            rawOutput = strictResult.rawOutput;
+            responseMetadata = strictResult.metadata;
+
+            try {
+              const strictArguments = JSON.parse(
+                strictResult.argumentsJson ?? "{}",
+              );
+              const parsed = request.parse(strictArguments);
+              attempts.push({
+                attempt: attempts.length + 1,
+                startedAt: attemptStartedAt,
+                finishedAt: new Date().toISOString(),
+                durationMs: Date.now() - new Date(attemptStartedAt).getTime(),
+                outcome: "success",
+              });
+              return parsed;
+            } catch (error) {
+              throw buildStrictStructuredInvalidResponseError(
+                request.operationName,
+                error,
+              );
+            }
           },
           {
             provider: "llm",
@@ -455,10 +469,6 @@ export function createOpenAiCompatibleProvider(
             },
           },
         );
-
-        rawOutput = strictResult.rawOutput;
-        responseMetadata = strictResult.metadata;
-        parsedOutput = request.parse(JSON.parse(strictResult.argumentsJson ?? "{}"));
 
         const invocationFinishedAt = new Date().toISOString();
         await safeWrite(request.interactionLogWriter, {
@@ -784,6 +794,22 @@ function recoverJsonCandidate(rawOutput: string): string | null {
   }
 
   return trimmed;
+}
+
+function buildStrictStructuredInvalidResponseError(
+  operationName: string,
+  error: unknown,
+): ExternalServiceError {
+  const message = error instanceof Error ? error.message : String(error);
+  return new ExternalServiceError({
+    provider: "llm",
+    operation: operationName,
+    retryable: true,
+    code: "invalid_response",
+    userMessage: "外部服务返回了不符合约束的结果，请稍后重试。",
+    debugMessage: `failed to parse strict tool-call arguments: ${message}`,
+    cause: error,
+  });
 }
 
 function extractResponseMetadata(payload: Record<string, unknown>): LlmResponseMetadata {

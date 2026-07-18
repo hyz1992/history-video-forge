@@ -125,13 +125,31 @@ function normalizeTopicCandidateOutputs(rawOutput: unknown): unknown[] {
     throw new TypeError("topic_candidate_output_not_array");
   }
 
-  for (const value of Object.values(rawOutput)) {
-    if (Array.isArray(value)) {
+  const outputRecord = rawOutput as Record<string, unknown>;
+  if (Array.isArray(outputRecord.candidates)) {
+    return outputRecord.candidates;
+  }
+
+  if (Array.isArray(outputRecord.topic_candidates)) {
+    return outputRecord.topic_candidates;
+  }
+
+  for (const value of Object.values(outputRecord)) {
+    if (isCandidateRecordArray(value)) {
       return value;
     }
   }
 
-  throw new TypeError("topic_candidate_output_not_array");
+  return [];
+}
+
+function isCandidateRecordArray(value: unknown): value is unknown[] {
+  return (
+    Array.isArray(value) &&
+    value.some(
+      (item) => !!item && typeof item === "object" && !Array.isArray(item),
+    )
+  );
 }
 
 function normalizeStringArray(value: unknown): string[] {
