@@ -61,7 +61,11 @@
     "harness:topic-selector-semantic-replay": "tsx harness/scripts/runtime/topic-selector-semantic-replay.ts",
     "harness:topic-light-review-thinking-replay": "tsx harness/scripts/runtime/topic-light-review-thinking-replay.ts",
     "harness:check-prompt-changelog": "tsx harness/scripts/check-prompt-changelog.ts",
-    "harness:check-prompt-drift": "tsx harness/scripts/check-prompt-drift.ts"
+    "harness:check-prompt-drift": "tsx harness/scripts/check-prompt-drift.ts",
+    "harness:check-prompt-fixtures": "tsx harness/scripts/check-prompt-fixtures.ts",
+    "harness:check-prompt-language": "tsx harness/scripts/check-prompt-language.ts",
+    "harness:detect-duplicate-prompts": "tsx harness/scripts/detect-duplicate-prompts.ts",
+    "harness:check-prompts": "npm run harness:check-prompt-language && npm run harness:detect-duplicate-prompts && npm run harness:check-prompt-changelog && npm run harness:check-prompt-fixtures && npm run harness:check-prompt-drift"
   },
   "devDependencies": {
     "@playwright/test": "1.58.2",
@@ -71,6 +75,7 @@
     "@vue/compiler-sfc": "^3.5.17",
     "@vue/test-utils": "^2.4.6",
     "jsdom": "^26.1.0",
+    "semver": "^7.8.5",
     "tsx": "^4.20.6",
     "typescript": "^5.8.3",
     "vite": "^7.3.2",
