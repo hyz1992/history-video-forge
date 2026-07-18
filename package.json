@@ -60,7 +60,8 @@
     "harness:llm-s2-baseline": "tsx harness/scripts/runtime/llm-s2-baseline.ts",
     "harness:topic-selector-semantic-replay": "tsx harness/scripts/runtime/topic-selector-semantic-replay.ts",
     "harness:topic-light-review-thinking-replay": "tsx harness/scripts/runtime/topic-light-review-thinking-replay.ts",
-    "harness:check-prompt-changelog": "tsx harness/scripts/check-prompt-changelog.ts"
+    "harness:check-prompt-changelog": "tsx harness/scripts/check-prompt-changelog.ts",
+    "harness:check-prompt-drift": "tsx harness/scripts/check-prompt-drift.ts"
   },
   "devDependencies": {
     "@playwright/test": "1.58.2",
