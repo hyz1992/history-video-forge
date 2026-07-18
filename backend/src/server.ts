@@ -57,6 +57,8 @@ import { matchFileRoute, handleFileRoute } from "./http/file-routes.js";
 import { parseMultipart } from "./http/multipart.js";
 import { tryServeStatic } from "./http/static-files.js";
 import { collectTierDiagnosticsInput, logTierConfigDiagnostics } from "./runtime/llm/tier-config-diagnostics.js";
+import { logPromptRegistryDiagnostics } from "./runtime/llm/runtime-config-diagnostics.js";
+import { createPromptRegistry } from "./runtime/prompts/prompt-registry.js";
 
 async function readPayload(request: IncomingMessage) {
   const chunks: Buffer[] = [];
@@ -346,6 +348,8 @@ export async function startServer(options?: {
   const sessionStore = prismaClient ? new PrismaSessionStore(prismaClient) : undefined;
   // S2-1 Task 7：启动时打印 tier 路由诊断（脱敏，失败不阻塞启动）
   logTierConfigDiagnostics(collectTierDiagnosticsInput());
+  // S2-3 Task 4：启动时打印 prompt 注册摘要（失败不阻塞启动）
+  logPromptRegistryDiagnostics({ prompts: createPromptRegistry().listPrompts() });
   const server = createHttpServer(app, { publicDir, sessionStore });
   let disconnected = false;
   const disconnect = async () => {

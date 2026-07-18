@@ -7,6 +7,11 @@ import {
   redactApiKey,
   type TierDiagnosticsInput,
 } from "../../../backend/src/runtime/llm/tier-config-diagnostics.js";
+import {
+  formatPromptRegistryDiagnostics,
+  logPromptRegistryDiagnostics,
+} from "../../../backend/src/runtime/llm/runtime-config-diagnostics.js";
+import type { LoadedPrompt } from "../../../backend/src/runtime/prompts/prompt-loader.js";
 
 const SMART_RESOLVED: ResolvedModel = {
   tier: "smart",
@@ -188,6 +193,101 @@ describe("tier config diagnostics", () => {
           provider: "stub",
         });
         expect(logSpy).toHaveBeenCalled();
+      } finally {
+        logSpy.mockRestore();
+        warnSpy.mockRestore();
+      }
+    });
+  });
+
+  // S2-3 Task 4：prompt 注册诊断
+  describe("prompt registry diagnostics", () => {
+    const makePrompt = (overrides: Partial<LoadedPrompt["metadata"]> & { id: string }): LoadedPrompt => ({
+      metadata: {
+        id: overrides.id,
+        version: overrides.version ?? "v1.0.0",
+        stage: overrides.stage ?? "script",
+        language: overrides.language ?? "zh-CN",
+        consumes: overrides.consumes ?? [],
+        produces: overrides.produces ?? [],
+        status: overrides.status ?? "active",
+      },
+      body: "fake body",
+      filePath: `/fake/${overrides.id}.prompt.md`,
+      aliases: [],
+    });
+
+    it("outputs [prompt-registry] tag and lists each prompt with id + version + status", () => {
+      const output = formatPromptRegistryDiagnostics({
+        prompts: [
+          { id: "script.writer", version: "v1.0.0", status: "active" },
+          { id: "topic.selector", version: "v1.0.0", status: "active" },
+        ],
+      });
+
+      expect(output).toContain("[prompt-registry]");
+      expect(output).toContain("script.writer v1.0.0 (active)");
+      expect(output).toContain("topic.selector v1.0.0 (active)");
+    });
+
+    it("outputs status summary with correct counts", () => {
+      const output = formatPromptRegistryDiagnostics({
+        prompts: [
+          { id: "a.active", version: "v1.0.0", status: "active" },
+          { id: "b.active", version: "v1.0.0", status: "active" },
+          { id: "c.deprecated", version: "v0.9.0", status: "deprecated" },
+          { id: "d.draft", version: "v2.0.0-pre", status: "draft" },
+        ],
+      });
+
+      expect(output).toContain("校验：4/4 已注册，2 active，1 deprecated，1 draft");
+    });
+
+    it("sorts prompts by id", () => {
+      const output = formatPromptRegistryDiagnostics({
+        prompts: [
+          { id: "c.third", version: "v1.0.0", status: "active" },
+          { id: "a.first", version: "v1.0.0", status: "active" },
+          { id: "b.second", version: "v1.0.0", status: "active" },
+        ],
+      });
+
+      const idxA = output.indexOf("a.first");
+      const idxB = output.indexOf("b.second");
+      const idxC = output.indexOf("c.third");
+      expect(idxA).toBeLessThan(idxB);
+      expect(idxB).toBeLessThan(idxC);
+    });
+
+    it("does NOT output SHA in any form", () => {
+      const output = formatPromptRegistryDiagnostics({
+        prompts: [
+          { id: "script.writer", version: "v1.0.0", status: "active" },
+        ],
+      });
+
+      expect(output).not.toContain("sha256");
+      expect(output).not.toContain("sha");
+      expect(output).not.toContain("digest");
+      expect(output).not.toContain("previousSnapshot");
+    });
+
+    it("logPromptRegistryDiagnostics writes [prompt-registry] to console.info", async () => {
+      const logSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      try {
+        logPromptRegistryDiagnostics({
+          prompts: [
+            makePrompt({ id: "script.writer" }),
+            makePrompt({ id: "topic.selector" }),
+          ],
+        });
+        expect(logSpy).toHaveBeenCalled();
+        const logged = logSpy.mock.calls.map((c) => String(c[0])).join("\n");
+        expect(logged).toContain("[prompt-registry]");
+        expect(logged).toContain("script.writer");
+        expect(logged).toContain("topic.selector");
       } finally {
         logSpy.mockRestore();
         warnSpy.mockRestore();
