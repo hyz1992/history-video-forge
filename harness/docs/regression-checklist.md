@@ -7,7 +7,7 @@
 - `AGENTS.md` 与 `harness/docs/*` 没有冲突。
 - `field-design / schema-design / api-design / implementation-plan` 的关键对象命名仍然一致。
 - 受影响阶段的正式对象没有旧字段回流；必要时至少回看 `pipeline-io-spec / schema-design / api-design`。
-- 正式 prompt 的位置仍然唯一、清楚，并且全部在 `harness/prompts/`。
+- 正式 prompt 的位置仍然唯一、清楚，并且全部在 `prompts/`。
 - `runtime harness` 的脚本入口、输入约束、输出目录和 artifact 语义没有被破坏。
 - `harness/scripts/runtime/output/` 仍然只是运行产物目录，不污染仓库版本内容。
 - semantic reviewer 是否仍为 shadow-only，未被接入自动门禁或 patch 主路径。
@@ -29,7 +29,7 @@
 - `harness/docs/prompt-management.md`
 - `harness/docs/prompt-registry-spec.md`
 - `docs/architecture/script-validation-spec.md`
-- 如果修改 `script.writer`，还必须回看 `harness/prompts/script/script-writer.prompt.md` 与 `harness/docs/prompt-management.md` 中的 Script Writer 质量提示原则。
+- 如果修改 `script.writer`，还必须回看 `prompts/script/script-writer.prompt.md` 与 `harness/docs/prompt-management.md` 中的 Script Writer 质量提示原则。
 
 ### 修改 harness 入口或目录结构
 

@@ -3,6 +3,10 @@ harness/scripts/runtime/output/*
 !harness/scripts/runtime/output/.gitkeep
 .env
 storage/projects/
+
+# 临时调试 / 测试 fixture 残留
+.tmp-*
+tmp-real-browser-*
 storage/db-snapshot.json
 storage/db-snapshot.json.bak
 storage/storage.zip

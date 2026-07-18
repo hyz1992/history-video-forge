@@ -20,14 +20,13 @@ Prompt Registry 用来约束正式 prompt 的：
 当前正式 prompt 只允许存放在：
 
 ```text
-harness/
-  prompts/
-    topic/
-    script/
-    storyboard/
-    asset-planning/
-    asset/
-    publish/
+prompts/
+  topic/
+  script/
+  storyboard/
+  asset-planning/
+  asset/
+  publish/
 ```
 
 当前 runtime prompt loader 已支持的 stage：
@@ -87,7 +86,7 @@ harness/
 
 1. 所有正式 prompt 必须使用中文。
 2. 所有正式 prompt 必须显式声明 `language: zh-CN`。
-3. 所有正式 prompt 必须位于 `harness/prompts/`。
+3. 所有正式 prompt 必须位于 `prompts/`。
 4. 每个正式 prompt 都必须能被：
    - `harness/scripts/check-prompt-language.ts`
    - `harness/scripts/detect-duplicate-prompts.ts`
@@ -98,30 +97,29 @@ harness/
 ## 当前推荐的物理组织
 
 ```text
-harness/
-  prompts/
-    topic/
-      candidate-builder.prompt.md
-      candidate-builder-repair.prompt.md
-      light-review.prompt.md
-      selector.prompt.md
-    script/
-      script-writer.prompt.md
-      semantic-reviewer.prompt.md
-      patch-lift.prompt.md
-    storyboard/
-      storyboard-planner.prompt.md
-      storyboard-segment-regen.prompt.md
-    asset-planning/
-      asset-planner.prompt.md
-      asset-structural-repair.prompt.md
-    asset/
-      prompt-optimizer.prompt.md
-    publish/
-      cover-prompt-generator.prompt.md
-      cover-prompt-optimizer.prompt.md
-      description-generator.prompt.md
-      title-generator.prompt.md
+prompts/
+  topic/
+    candidate-builder.prompt.md
+    candidate-builder-repair.prompt.md
+    light-review.prompt.md
+    selector.prompt.md
+  script/
+    script-writer.prompt.md
+    semantic-reviewer.prompt.md
+    patch-lift.prompt.md
+  storyboard/
+    storyboard-planner.prompt.md
+    storyboard-segment-regen.prompt.md
+  asset-planning/
+    asset-planner.prompt.md
+    asset-structural-repair.prompt.md
+  asset/
+    prompt-optimizer.prompt.md
+  publish/
+    cover-prompt-generator.prompt.md
+    cover-prompt-optimizer.prompt.md
+    description-generator.prompt.md
+    title-generator.prompt.md
 ```
 
 说明：

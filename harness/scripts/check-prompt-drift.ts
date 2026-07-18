@@ -48,36 +48,83 @@ interface DriftEntry {
   commitB: string;
 }
 
-function gitLogForFile(filePath: string, maxCount: number, cwd: string): string[] {
+interface CommitHistoryEntry {
+  commitHash: string;
+  /** 该 commit 中本文件实际对应的仓库相对路径（含 rename 历史追踪） */
+  pathAtCommit: string;
+}
+
+/**
+ * 获取文件在最近 N 次 commit 中的历史。
+ *
+ * 关键点：用 `git log --follow --name-status` 同时拿到 commit hash 和
+ * 该 commit 中文件当时的实际路径（rename 后旧 commit 仍是旧路径）。
+ * 后续 git show 必须用 pathAtCommit，否则在迁移场景下会读不到内容。
+ */
+export function gitLogForFile(
+  filePath: string,
+  maxCount: number,
+  cwd: string,
+): CommitHistoryEntry[] {
   try {
-    const repoRoot = execSync("git rev-parse --show-toplevel", {
+    const repoRoot = execSync(`git -C "${cwd}" rev-parse --show-toplevel`, {
       encoding: "utf8",
       maxBuffer: 1024 * 1024,
-      cwd,
     }).trim();
-    const relativePath = filePath.replace(repoRoot, "").replace(/^[/\\]+/, "");
+    const normalizedPath = filePath.replace(/\\/g, "/");
+    const normalizedRoot = repoRoot.replace(/\\/g, "/");
+    const relativePath = normalizedPath.replace(normalizedRoot, "").replace(/^\//, "");
+
+    // --follow 跟随 rename；--name-status 输出每条 commit 中本文件的路径
+    // 格式示例：
+    //   <hash>
+    //   R100\told/path\tpnew/path   (rename)
+    //   M\tnew/path                  (modify)
+    //   A\tnew/path                  (add)
     const output = execSync(
-      `git log --format=%H -- "${relativePath}"`,
-      { encoding: "utf8", maxBuffer: 1024 * 1024, cwd },
+      `git -C "${cwd}" log --follow --name-status --format=__COMMIT__%H -- "${relativePath}"`,
+      { encoding: "utf8", maxBuffer: 1024 * 1024 },
     ).trim();
     if (!output) return [];
-    return output.split("\n").slice(0, maxCount);
+
+    const lines = output.split("\n");
+    const entries: CommitHistoryEntry[] = [];
+    let currentHash: string | null = null;
+
+    for (const line of lines) {
+      if (line.startsWith("__COMMIT__")) {
+        currentHash = line.slice("__COMMIT__".length).trim();
+        continue;
+      }
+      // git log --name-status 在 hash 行后会插一个空行，跳过
+      if (!line.trim()) continue;
+      if (!currentHash) continue;
+
+      // name-status 行格式： <STATUS>\tpath   或   <STATUS>\toldPath\tnewPath
+      const parts = line.split("\t");
+      if (parts.length < 2) continue;
+
+      // rename 时 git 给出 oldPath 和 newPath；本文件在该 commit 的路径是最后一个字段
+      const pathAtCommit = parts[parts.length - 1];
+      entries.push({ commitHash: currentHash, pathAtCommit });
+      currentHash = null; // 一条 commit 只取一次
+    }
+
+    return entries.slice(0, maxCount);
   } catch {
     return [];
   }
 }
 
-function gitShowFile(commitHash: string, filePath: string, cwd: string): string | null {
+function gitShowFile(
+  commitHash: string,
+  pathAtCommit: string,
+  cwd: string,
+): string | null {
   try {
-    const repoRoot = execSync("git rev-parse --show-toplevel", {
-      encoding: "utf8",
-      maxBuffer: 1024 * 1024,
-      cwd,
-    }).trim();
-    const relativePath = filePath.replace(repoRoot, "").replace(/^[/\\]+/, "");
     return execSync(
-      `git show ${commitHash}:"${relativePath}"`,
-      { encoding: "utf8", maxBuffer: 1024 * 1024, cwd },
+      `git -C "${cwd}" show ${commitHash}:"${pathAtCommit}"`,
+      { encoding: "utf8", maxBuffer: 1024 * 1024 },
     ).replace(/\r\n/gu, "\n");
   } catch {
     return null;
@@ -126,6 +173,9 @@ export function checkPromptDrift(
   for (const filePath of promptFiles) {
     const commits = gitLogForFile(filePath, opts.maxHistory, repoCwd);
     if (commits.length < 2) {
+      console.warn(
+        `[drift:skip] ${basename(filePath)}: 仅 ${commits.length} 个历史 commit，无法做 drift 检测（可能为新文件或 shallow clone）`,
+      );
       totalPrompts++;
       continue;
     }
@@ -136,12 +186,13 @@ export function checkPromptDrift(
       bodySha256: string | null;
     }> = [];
 
-    for (const commitHash of commits.reverse()) {
-      const content = gitShowFile(commitHash, filePath, repoCwd);
+    // commits 按时间倒序返回（最新在最前），reverse 成正序后再比较相邻
+    for (const entry of commits.slice().reverse()) {
+      const content = gitShowFile(entry.commitHash, entry.pathAtCommit, repoCwd);
       if (!content) continue;
       const parsed = parsePromptFrontmatter(content);
       snapshots.push({
-        commitHash,
+        commitHash: entry.commitHash,
         version: parsed.version,
         bodySha256: parsed.bodySha256,
       });

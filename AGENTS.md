@@ -108,7 +108,7 @@
 ## Prompt 规则
 
 - 所有正式 LLM prompt **必须使用中文**。
-- 所有正式 prompt **必须存放在** `harness/prompts/`。
+- 所有正式 prompt **必须存放在** `prompts/`。
 - prompt 的元数据必须显式声明 `language: zh-CN`。
 - 不允许把正式 prompt 散落在业务代码、临时 notes 或多个重复文档中。
 - 设计或调整 prompt 约束时，必须优先避免 prompt 冗余；新增约束前要先确认不会与现有约束打架、重复表达或相互抵消。

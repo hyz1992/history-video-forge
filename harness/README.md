@@ -80,9 +80,9 @@ runtime harness 是当前项目的核心验证层：
 
 不属于 harness v1 最小集；它们的核心约束应体现在 `AGENTS.md`、`definition-of-done.md`、`review-checklist.md` 中。
 
-### `harness/prompts/`
+### `prompts/`（项目根目录，非 harness/）
 
-放正式 prompt 资产。  
+放正式 prompt 资产，作为代码级资产与 harness/ 测试脚本解耦。  
 当前按阶段拆为：
 
 - `topic/`

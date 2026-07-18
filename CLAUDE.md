@@ -98,7 +98,7 @@
 ## Prompt 规则
 
 - 所有正式 LLM prompt 必须使用中文。
-- 所有正式 prompt 必须存放在 `harness/prompts/`。
+- 所有正式 prompt 必须存放在 `prompts/`。
 - prompt 元数据必须显式声明 `language: zh-CN`。
 - 新增 prompt 约束前先确认不会与现有约束重复、打架或互相抵消。
 - script writer prompt 的目标是生成可口播的历史故事首稿，不是结构摘要。

@@ -20,7 +20,7 @@ LangGraph 只作为 **backend runtime orchestration** 的实现层。
 
 当前明确不属于 LangGraph 范围的层：
 
-- `harness/prompts/` 下的 prompt registry / loader
+- `prompts/` 下的 prompt registry / loader
 - provider adapter
 - external errors / retry / structured-output-fix 基础设施
 - frontend 页面状态与交互

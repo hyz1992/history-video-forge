@@ -14,18 +14,18 @@
 
 所有正式 prompt 必须存放在：
 
-- `harness/prompts/`
+- `prompts/`
 
 当前有效目录：
 
-- `harness/prompts/topic/*`
-- `harness/prompts/script/*`
-- `harness/prompts/storyboard/*`
-- `harness/prompts/asset-planning/*`
-- `harness/prompts/asset/*`
-- `harness/prompts/publish/*`
+- `prompts/topic/*`
+- `prompts/script/*`
+- `prompts/storyboard/*`
+- `prompts/asset-planning/*`
+- `prompts/asset/*`
+- `prompts/publish/*`
 
-当前可识别 stage 见 `harness/docs/prompt-registry-spec.md`。其中 `harness/prompts/asset/*` 对应 `stage: assets`。
+当前可识别 stage 见 `harness/docs/prompt-registry-spec.md`。其中 `prompts/asset/*` 对应 `stage: assets`。
 
 ## 语言要求
 

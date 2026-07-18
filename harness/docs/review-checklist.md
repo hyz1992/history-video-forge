@@ -43,7 +43,7 @@
 ## 四、Prompt 与 Harness
 
 - 正式 prompt 是否全部使用中文？
-- 正式 prompt 是否全部位于 `harness/prompts/`？
+- 正式 prompt 是否全部位于 `prompts/`？
 - prompt 是否带有 `Prompt Registry` 所要求的最小元数据？
 - 是否存在 prompt 漫游进业务代码或散落文档的情况？
 - 本轮是否评估了 `runtime harness` 受影响范围？
