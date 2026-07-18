@@ -68,7 +68,11 @@
 旧的 Step 3-10 文档保留为范围留痕；当前执行顺序以本节为准：
 
 1. `S2-0`（已完成，链路冻结）：LLM 回复速度、质量和结构化输出优化基线。S2-0 期间尝试了紧凑结论合同、selector thinking on、builder+light-review 等多轮方案，均未能解决"细粒度语义风险识别需要 reasoning、而 reasoning 在 GLM-5.x 上必然带来 70~400s 长尾"这一死结；最终于 `2968c5e` 回滚到 builder(8)+selector 架构并冻结当前模型组合下的进一步优化。selector 一致性合同与 semantic-replay 工具保留；阶段 1~4 的 67 个试错 commit 与全部实测记录完整保留在 git 历史中作为 S2-1 输入。回滚设计见 [S2-0 回滚设计](./2026-07-17-s2-0-topic-rollback-to-builder-selector-design.md) 与 [实施计划](./2026-07-17-s2-0-topic-rollback-to-builder-selector-implementation-plan.md)。
-2. `S2-1`（设计中）：多模型、多供应商切换。基于 S2-0 的真实基线设计 provider/model/routing/run snapshot/credential reference。S2-1 范围已收窄为最小可用版：引入 `smart` / `flash` 两档 tier 作为模型路由唯一维度，每个 operation 声明所需 tier，gateway 按 tier 解析到具体 `provider:model`；不引入数据库 ProviderModel / RunConfigurationSnapshot / UsageCostRecord（留给 S2-2）。设计文档见 [S2-1 多模型多供应商切换设计](./2026-07-17-s2-1-multi-provider-model-routing-design.md)。
+2. `S2-1`（已完成，链路冻结）：多模型、多供应商切换。引入 `smart` / `flash` 两档 tier 作为模型路由唯一维度，每个 operation 声明所需 tier，gateway 按 tier 解析到具体 `provider:model`；不引入数据库 ProviderModel / RunConfigurationSnapshot / UsageCostRecord（留给 S2-2）。
+   - 设计文档见 [S2-1 多模型多供应商切换设计](./2026-07-17-s2-1-multi-provider-model-routing-design.md)。
+   - 阶段一（主链路改造）已交付：operation-tier-registry（14 operation × tier）、provider-registry（providers.json 解析）、tier-resolver（`provider:model` 解析）、tier-aware-provider（按 operationName 路由）、tier-aware-provider-factory（env + providers.json → provider）、env 接入 `LLM_SMART_MODEL` / `LLM_FLASH_MODEL` / `LLM_PROVIDERS_CONFIG_PATH`、`backend/providers.json` 示例、8 个调用方接入 tier 路由、启动诊断日志（脱敏）。完整 backend runtime 测试通过，typecheck 全程绿。
+   - 阶段二（live 验收）已交付：DeepSeek（deepseek-v4-pro）smart tier + 智谱（glm-4）flash tier 端到端冒烟通过；selector thinking 决策记录见 [2026-07-18 S2-1 Selector Thinking 决策记录](../records/2026-07-18-s2-1-selector-thinking-decision.md)：DeepSeek 不支持 thinking+tool_call，thinking=disabled 下召回 50%（达 design §6.1 下限）且 JSON 失败率 33% 为已知风险，glm-4 flash selector 召回 0/2 与 S2-0 一致证实 selector 必须走 smart tier。维持 S2-0 selector operation policy 不调整。
+   - S2-1 进入冻结状态，作为 S2-2（用户偏好、生成策略与成本控制）的输入。已知风险（DeepSeek JSON 失败率、enum 精确匹配 0/4）登记在决策记录中，不在 S2-1 范围内修复。
 3. `S2-2`：用户偏好、生成策略与成本控制。接入用户级策略、预算和成本记录，消费 S2-1 的 provider/model 能力。
 4. `S2-3`：Prompt 治理。版本、hash、fixtures、变更说明和运行快照对齐；仍遵守 `AGENTS.md` 的 `harness/prompts/` 正式 prompt 位置规则，除非另有设计审查批准。
 5. `S2-4`：选题筛选条件扩充。与事件库字段协调，但不先造无法映射到事件数据的词表。
