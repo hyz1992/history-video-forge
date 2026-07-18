@@ -4,6 +4,7 @@ import {
   type ScriptDraftPackage,
 } from "../../../../shared/src/index.js";
 import { env, getValidatedRuntimeEnv } from "../../config/env.js";
+import { createHash } from "node:crypto";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
 import type { LlmInteractionLogWriter } from "../../runtime/llm/interaction-log.js";
 import { createTierAwareProviderFromEnv } from "../../runtime/llm/tier-aware-provider-factory.js";
@@ -236,6 +237,8 @@ function createStubStoryboardPlannerProvider(): StructuredPromptProvider {
           promptStage: request.prompt.metadata.stage,
           promptLanguage: request.prompt.metadata.language,
           promptFilePath: request.prompt.filePath,
+          promptSha256: createHash("sha256").update(request.prompt.body.trim()).digest("hex"),
+          promptVersion: request.prompt.metadata.version,
           systemPrompt: request.prompt.body,
           input: request.input,
           rawOutput: JSON.stringify(segment, null, 2),
@@ -260,6 +263,8 @@ function createStubStoryboardPlannerProvider(): StructuredPromptProvider {
         promptStage: request.prompt.metadata.stage,
         promptLanguage: request.prompt.metadata.language,
         promptFilePath: request.prompt.filePath,
+        promptSha256: createHash("sha256").update(request.prompt.body.trim()).digest("hex"),
+        promptVersion: request.prompt.metadata.version,
         systemPrompt: request.prompt.body,
         input: request.input,
         rawOutput: JSON.stringify(plan, null, 2),

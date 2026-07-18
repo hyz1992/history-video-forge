@@ -39,6 +39,8 @@ export interface LlmInteractionLogEntry {
     errorCode?: string;
     retryDelayMs?: number;
   }>;
+  promptSha256: string;
+  promptVersion: string;
   responseMetadata?: {
     promptTokens?: number;
     completionTokens?: number;
@@ -82,6 +84,8 @@ export function renderLlmInteractionMarkdown(
     `- prompt_stage: ${entry.promptStage}`,
     `- prompt_language: ${entry.promptLanguage}`,
     `- prompt_file: ${entry.promptFilePath?.replace(/\\/g, "/") ?? "unknown"}`,
+    `- prompt_version: ${entry.promptVersion ?? "unknown"}`,
+    `- prompt_sha256: ${entry.promptSha256 ?? "unknown"}`,
   ];
 
   if (entry.effectiveRequest) {
@@ -296,6 +300,8 @@ export function renderTraceSectionMarkdown(
     `| Model | \`${entry.model}\` |`,
     `| Requested At | \`${requestedAt}\` |`,
     `| Status | \`${status}\` |`,
+    `| Prompt Version | \`${entry.promptVersion ?? "unknown"}\` |`,
+    `| Prompt SHA256 | \`${entry.promptSha256?.slice(0, 16) ?? "unknown"}...\` |`,
   ];
 
   if (entry.effectiveRequest) {

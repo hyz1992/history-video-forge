@@ -1,4 +1,5 @@
 import { env, type AppEnv } from "../../config/env.js";
+import { createHash } from "node:crypto";
 import type { LoadedPrompt } from "../prompts/prompt-loader.js";
 import { ExternalServiceError, withRetry } from "./external-errors.js";
 import { createRequestBudget, type RequestBudget } from "./request-budget.js";
@@ -127,6 +128,15 @@ export function createOpenAiCompatibleProvider(
     } catch {
       console.warn("openai_compatible_provider: failed to write interaction log entry");
     }
+  }
+
+  function computePromptDigest(prompt: LoadedPrompt) {
+    return {
+      promptSha256: createHash("sha256")
+        .update(prompt.body.trim())
+        .digest("hex"),
+      promptVersion: prompt.metadata.version,
+    };
   }
 
   const providerConfig = resolveOpenAiCompatibleProviderConfig({
@@ -280,6 +290,7 @@ export function createOpenAiCompatibleProvider(
           promptStage: request.prompt.metadata.stage,
           promptLanguage: request.prompt.metadata.language,
           promptFilePath: request.prompt.filePath,
+          ...computePromptDigest(request.prompt),
           systemPrompt: request.prompt.body,
           input: request.input,
           rawOutput: content,
@@ -317,6 +328,7 @@ export function createOpenAiCompatibleProvider(
           promptStage: request.prompt.metadata.stage,
           promptLanguage: request.prompt.metadata.language,
           promptFilePath: request.prompt.filePath,
+          ...computePromptDigest(request.prompt),
           systemPrompt: request.prompt.body,
           input: request.input,
           rawOutput,
@@ -480,6 +492,7 @@ export function createOpenAiCompatibleProvider(
           promptStage: request.prompt.metadata.stage,
           promptLanguage: request.prompt.metadata.language,
           promptFilePath: request.prompt.filePath,
+          ...computePromptDigest(request.prompt),
           systemPrompt: request.prompt.body,
           input: request.input,
           rawOutput,
@@ -518,6 +531,7 @@ export function createOpenAiCompatibleProvider(
           promptStage: request.prompt.metadata.stage,
           promptLanguage: request.prompt.metadata.language,
           promptFilePath: request.prompt.filePath,
+          ...computePromptDigest(request.prompt),
           systemPrompt: request.prompt.body,
           input: request.input,
           rawOutput,

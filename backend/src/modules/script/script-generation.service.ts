@@ -1,4 +1,5 @@
 import { ScriptDraftPackage } from "../../../../shared/src/index.js";
+import { createHash } from "node:crypto";
 import { env, getValidatedRuntimeEnv } from "../../config/env.js";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
 import { createTierAwareProviderFromEnv } from "../../runtime/llm/tier-aware-provider-factory.js";
@@ -379,6 +380,8 @@ function createStubScriptWriterProvider(): StructuredPromptProvider {
         promptStage: request.prompt.metadata.stage,
         promptLanguage: request.prompt.metadata.language,
         promptFilePath: request.prompt.filePath,
+        promptSha256: createHash("sha256").update(request.prompt.body.trim()).digest("hex"),
+        promptVersion: request.prompt.metadata.version,
         systemPrompt: request.prompt.body,
         input: request.input,
         rawOutput: JSON.stringify(draft, null, 2),

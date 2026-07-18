@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { createHash } from "node:crypto";
 
 import { TopicCandidateCard } from "../../../../shared/src/index.js";
 import { env } from "../../config/env.js";
@@ -447,6 +448,8 @@ function createStubTopicRecommendationProvider(): StructuredPromptProvider {
         promptStage: request.prompt.metadata.stage,
         promptLanguage: request.prompt.metadata.language,
         promptFilePath: request.prompt.filePath,
+        promptSha256: createHash("sha256").update(request.prompt.body.trim()).digest("hex"),
+        promptVersion: request.prompt.metadata.version,
         systemPrompt: request.prompt.body,
         input: request.input,
         rawOutput: JSON.stringify(candidates, null, 2),

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { createHash } from "node:crypto";
 
 import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
 import {
@@ -1390,5 +1391,241 @@ describe("provider hardening", () => {
     } finally {
       globalThis.fetch = originalFetch;
     }
+  });
+
+  // S2-3 Task 3：interaction log promptSha256 + promptVersion
+  describe("interaction log prompt sha256 and version", () => {
+    it("records promptSha256 and promptVersion on successful invokeStructuredPrompt", async () => {
+      const entries: LlmInteractionLogEntry[] = [];
+      const writer = { write: (entry: LlmInteractionLogEntry) => { entries.push(entry); } };
+      const prompt = createPromptRegistry().getPrompt("script.writer");
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn(async () =>
+        new Response(JSON.stringify({
+          choices: [{ finish_reason: "stop", message: { content: '{"ok":true}' } }],
+          usage: { prompt_tokens: 10, completion_tokens: 5 },
+        }), { status: 200, headers: { "Content-Type": "application/json" } }),
+      ) as typeof fetch;
+
+      try {
+        const provider = createOpenAiCompatibleProvider({
+          model: "glm-5.1",
+          baseUrl: "https://llm.example.test/v1",
+          apiKey: "test-key",
+          maxAttempts: 1,
+        });
+
+        await provider.invokeStructuredPrompt({
+          prompt,
+          input: { seed: "sha-test" },
+          operationName: "script.writer",
+          interactionLogWriter: writer,
+        });
+
+        expect(entries).toHaveLength(1);
+        const entry = entries[0];
+
+        // promptSha256 是 64 位 hex 字符串
+        expect(entry.promptSha256).toMatch(/^[a-f0-9]{64}$/);
+        // 等于 sha256(prompt.body.trim())
+        expect(entry.promptSha256).toBe(
+          createHash("sha256").update(prompt.body.trim()).digest("hex"),
+        );
+        // promptVersion 等于 metadata.version
+        expect(entry.promptVersion).toBe("v1.0.0");
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("records promptSha256 and promptVersion on successful invokeStrictStructured", async () => {
+      const entries: LlmInteractionLogEntry[] = [];
+      const writer = { write: (entry: LlmInteractionLogEntry) => { entries.push(entry); } };
+      const prompt = createPromptRegistry().getPrompt("topic.selector");
+      const argumentsJson = JSON.stringify({ selected_candidate_ids: ["c1"] });
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn(async () =>
+        new Response(JSON.stringify({
+          choices: [{
+            finish_reason: "tool_calls",
+            message: {
+              tool_calls: [{
+                type: "function",
+                function: { name: "select_topic_candidates", arguments: argumentsJson },
+              }],
+            },
+          }],
+          usage: { prompt_tokens: 200, completion_tokens: 50 },
+        }), { status: 200, headers: { "Content-Type": "application/json" } }),
+      ) as typeof fetch;
+
+      try {
+        const provider = createOpenAiCompatibleProvider({
+          model: "glm-5.1",
+          baseUrl: "https://llm.example.test/v1",
+          apiKey: "test-key",
+          maxAttempts: 1,
+        });
+
+        await provider.invokeStrictStructured?.({
+          prompt,
+          input: { selector_pool: [] },
+          operationName: "topic.selector",
+          schema: {
+            name: "select_topic_candidates",
+            description: "Select topic candidates.",
+            parameters: {
+              type: "object",
+              properties: {
+                selected_candidate_ids: { type: "array", items: { type: "string" } },
+              },
+              required: ["selected_candidate_ids"],
+              additionalProperties: false,
+            },
+          },
+          parse: (candidate) => candidate as { selected_candidate_ids: string[] },
+          options: { strategy: "tool_call", thinking: "disabled" },
+          interactionLogWriter: writer,
+        });
+
+        expect(entries).toHaveLength(1);
+        const entry = entries[0];
+        expect(entry.promptSha256).toMatch(/^[a-f0-9]{64}$/);
+        expect(entry.promptSha256).toBe(
+          createHash("sha256").update(prompt.body.trim()).digest("hex"),
+        );
+        expect(entry.promptVersion).toBe("v1.0.0");
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("same prompt produces identical promptSha256 across invocations", async () => {
+      const entries: LlmInteractionLogEntry[] = [];
+      const writer = { write: (entry: LlmInteractionLogEntry) => { entries.push(entry); } };
+      const prompt = createPromptRegistry().getPrompt("script.writer");
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn(async () =>
+        new Response(JSON.stringify({
+          choices: [{ finish_reason: "stop", message: { content: '{"ok":true}' } }],
+          usage: { prompt_tokens: 10, completion_tokens: 5 },
+        }), { status: 200, headers: { "Content-Type": "application/json" } }),
+      ) as typeof fetch;
+
+      try {
+        const provider = createOpenAiCompatibleProvider({
+          model: "glm-5.1",
+          baseUrl: "https://llm.example.test/v1",
+          apiKey: "test-key",
+          maxAttempts: 1,
+        });
+
+        await provider.invokeStructuredPrompt({
+          prompt,
+          input: { seed: "run-1" },
+          operationName: "script.writer",
+          interactionLogWriter: writer,
+        });
+        await provider.invokeStructuredPrompt({
+          prompt,
+          input: { seed: "run-2" },
+          operationName: "script.writer",
+          interactionLogWriter: writer,
+        });
+
+        expect(entries).toHaveLength(2);
+        expect(entries[0].promptSha256).toBe(entries[1].promptSha256);
+        expect(entries[0].promptVersion).toBe(entries[1].promptVersion);
+        expect(entries[0].promptVersion).toBe("v1.0.0");
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("different prompts produce different promptSha256", async () => {
+      const entries: LlmInteractionLogEntry[] = [];
+      const writer = { write: (entry: LlmInteractionLogEntry) => { entries.push(entry); } };
+      const promptA = createPromptRegistry().getPrompt("script.writer");
+      const promptB = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn(async () =>
+        new Response(JSON.stringify({
+          choices: [{ finish_reason: "stop", message: { content: '{"ok":true}' } }],
+          usage: { prompt_tokens: 10, completion_tokens: 5 },
+        }), { status: 200, headers: { "Content-Type": "application/json" } }),
+      ) as typeof fetch;
+
+      try {
+        const provider = createOpenAiCompatibleProvider({
+          model: "glm-5.1",
+          baseUrl: "https://llm.example.test/v1",
+          apiKey: "test-key",
+          maxAttempts: 1,
+        });
+
+        await provider.invokeStructuredPrompt({
+          prompt: promptA,
+          input: { seed: "a" },
+          operationName: "script.writer",
+          interactionLogWriter: writer,
+        });
+        await provider.invokeStructuredPrompt({
+          prompt: promptB,
+          input: { seed: "b" },
+          operationName: "topic.candidate-builder",
+          interactionLogWriter: writer,
+        });
+
+        expect(entries).toHaveLength(2);
+        expect(entries[0].promptSha256).not.toBe(entries[1].promptSha256);
+        // Both should still have valid sha256 and version
+        expect(entries[0].promptSha256).toMatch(/^[a-f0-9]{64}$/);
+        expect(entries[1].promptSha256).toMatch(/^[a-f0-9]{64}$/);
+        expect(entries[0].promptVersion).toBe("v1.0.0");
+        expect(entries[1].promptVersion).toBe("v1.0.0");
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("records promptSha256 and promptVersion even on error", async () => {
+      const entries: LlmInteractionLogEntry[] = [];
+      const writer = { write: (entry: LlmInteractionLogEntry) => { entries.push(entry); } };
+      const prompt = createPromptRegistry().getPrompt("script.writer");
+
+      const invokeApi = vi.fn(async () => {
+        throw new Error("401 Unauthorized: api key invalid");
+      });
+
+      const provider = createOpenAiCompatibleProvider({
+        model: "glm-5.1",
+        baseUrl: "https://llm.example.test/v1",
+        apiKey: "test-key",
+        maxAttempts: 1,
+        invokeApi,
+      });
+
+      await expect(
+        provider.invokeStructuredPrompt({
+          prompt,
+          input: { seed: "error-test" },
+          operationName: "topic.selector",
+          interactionLogWriter: writer,
+        }),
+      ).rejects.toBeDefined();
+
+      expect(entries).toHaveLength(1);
+      const entry = entries[0];
+      expect(entry.promptSha256).toMatch(/^[a-f0-9]{64}$/);
+      expect(entry.promptSha256).toBe(
+        createHash("sha256").update(prompt.body.trim()).digest("hex"),
+      );
+      expect(entry.promptVersion).toBe("v1.0.0");
+      expect(entry.errorMessage).toBeDefined();
+    });
   });
 });
