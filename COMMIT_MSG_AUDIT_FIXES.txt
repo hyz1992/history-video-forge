@@ -1,0 +1,51 @@
+修复 S2-1 审查发现的 P1/P2 阻断问题
+
+审查报告（用户）发现 3 个 P1 阻断 + 1 个 P2 文档冲突，本轮全部修复。
+
+P1-1：默认 providers.json 存在时旧 env fallback 失效
+- 现象：backend/providers.json 已提交 + 用户只配旧 LLM_MODEL/LLM_BASE_URL/LLM_API_KEY
+  （无 LLM_SMART_MODEL）→ resolveSmartTierModel 走 resolveTierModel("default:...") 会
+  因 registry 没注册 default 而抛 provider_not_registered。
+- 修复：resolveSmartTierModel 在 LLM_SMART_MODEL 缺失时直接用旧 env 构造 ResolvedModel，
+  不再走 resolveTierModel("default:...") 路径。
+- 测试：tests/backend/runtime/tier-aware-provider-factory.test.ts 新增 2 个测试
+  · providers.json 存在 + 仅旧 env → smart tier 正确解析为 default:LLM_MODEL
+  · providers.json 存在 + LLM_BASE_URL 缺失 → 抛清晰错误
+- 设计依据：design §4.4 第 3 点的等价扩展（providers.json 存在但 LLM_SMART_MODEL
+  缺失时也走旧 env 单 provider 回退），满足 design §10.5 验收。
+
+P1-2：纯 S2-1 新配置被 getValidatedRuntimeEnv 拦截
+- 现象：LLM_SMART_MODEL + providers.json + LLM_PROVIDER_*_API_KEY 已配，
+  但旧 LLM_BASE_URL/LLM_API_KEY/LLM_MODEL 未配 → getValidatedRuntimeEnv 抛
+  Missing runtime LLM configuration，script/storyboard/asset-planning 等
+  调用方在进入 factory 前先失败。
+- 修复：getValidatedRuntimeEnv 在 LLM_SMART_MODEL 存在时直接通过（S2-1 新配置
+  路径），具体 provider/model 解析校验由 createTierAwareProviderFromEnv 在调用时执行。
+- 测试：tests/backend/runtime/env-loading.test.ts 新增 2 个测试
+  · 仅 S2-1 LLM_SMART_MODEL 配置 → getValidatedRuntimeEnv 不抛错
+  · 既无 S2-1 也无旧 env → 抛错提示 LLM_SMART_MODEL/providers.json
+
+P1-3：publish/llm-helper.ts 未保留 stub 分支
+- 现象：LLM_PROVIDER=stub 下 getPublishLlmGateway 直接调用 factory，因 stub
+  环境无 provider:model 配置会抛"LLM_SMART_MODEL 与 LLM_MODEL 均未配置"。
+  assets.routes.optimizeTaskPrompt 已有 stub 判断（审查确认），仅 publish 漏了。
+- 修复：getPublishLlmGateway 在 stub 模式下返回总是抛 publish_stub_not_supported
+  的 gateway，由调用方既有 try/catch 兜底（与 S2-0 阶段 stub 行为一致）。
+- 测试：tests/backend/modules/publish-llm-helper-stub.test.ts 新增（3 个测试）
+  · stub 模式下不调用 factory（用 vi.doMock 监视）
+  · stub gateway 调用抛 publish_stub_not_supported
+  · stub gateway 缓存（第二次返回同一实例）
+
+P2-4：roadmap-todo.md 与 plans/README.md 状态冲突
+- 现象：plans/README.md 写 S2-0 与 S2-1 已完成冻结，但 todos/roadmap-todo.md
+  仍把 S2-0 放"进行中"、S2-1 放"待做"。
+- 修复：todos/roadmap-todo.md 把 S2-0 与 S2-1 都移到"已完成"区块，"进行中"
+  与"待做"对应条目删除；S2-2 升为待做第一项。
+
+验证：
+- npm run typecheck:backend 通过
+- npx vitest run tests/backend/runtime（全 runtime 248/248 通过，原 244 + 4 新增）
+- npx vitest run tests/backend/modules/publish-llm-helper-stub.test.ts
+  tests/backend/script tests/backend/storyboard（68/68 通过）
+
+S2-1 现已无已知阻断，可正式按"全部完成"验收。

@@ -141,6 +141,58 @@ describe("tier-aware provider factory (env -> provider)", () => {
       expect(snapshot.flash).toBeUndefined();
     });
 
+    it("falls back to legacy env even when real providers.json exists (audit P1-1 regression)", async () => {
+      // 复现审查 P1-1：默认仓库状态下 backend/providers.json 已提交，
+      // 用户只配旧 env（无 LLM_SMART_MODEL）。原实现走 resolveTierModel("default:...")
+      // 会因 registry 没有 default 而抛 provider_not_registered。
+      // 修复后应直接用旧 env 构造 ResolvedModel，不依赖 registry 注册 default。
+      const configPath = join(tempDir, "providers.json");
+      writeProvidersFile(configPath, [
+        {
+          name: "deepseek",
+          baseUrl: "https://api.deepseek.com",
+          apiKeyEnv: "LLM_PROVIDER_DEEPSEEK_API_KEY",
+        },
+        {
+          name: "zhipu",
+          baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+          apiKeyEnv: "LLM_PROVIDER_ZHIPU_API_KEY",
+        },
+      ]);
+      process.env.LLM_PROVIDERS_CONFIG_PATH = configPath;
+      delete process.env.LLM_SMART_MODEL;
+      delete process.env.LLM_FLASH_MODEL;
+      process.env.LLM_MODEL = "glm-5.2";
+      process.env.LLM_BASE_URL = "https://open.bigmodel.cn/api/paas/v4";
+      process.env.LLM_API_KEY = "legacy-key";
+
+      const { resolveTierProviderSnapshot } = await loadFactory();
+      const snapshot = resolveTierProviderSnapshot();
+
+      expect(snapshot.smart).toEqual({
+        tier: "smart",
+        provider: "default",
+        model: "glm-5.2",
+        baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+        apiKey: "legacy-key",
+      });
+      expect(snapshot.flashReusesSmart).toBe(true);
+    });
+
+    it("throws clear error when LLM_SMART_MODEL absent and legacy LLM_BASE_URL missing", async () => {
+      process.env.LLM_PROVIDERS_CONFIG_PATH = join(tempDir, "nonexistent.json");
+      delete process.env.LLM_SMART_MODEL;
+      delete process.env.LLM_FLASH_MODEL;
+      process.env.LLM_MODEL = "glm-5.2";
+      delete process.env.LLM_BASE_URL;
+      process.env.LLM_API_KEY = "legacy-key";
+
+      const { resolveTierProviderSnapshot } = await loadFactory();
+      expect(() => resolveTierProviderSnapshot()).toThrowError(
+        /LLM_SMART_MODEL|LLM_BASE_URL|smart tier/i,
+      );
+    });
+
     it("flash tier reuses smart inner provider when LLM_FLASH_MODEL absent", async () => {
       const configPath = join(tempDir, "providers.json");
       writeProvidersFile(configPath, [

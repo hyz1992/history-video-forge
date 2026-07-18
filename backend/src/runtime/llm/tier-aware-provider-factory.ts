@@ -127,10 +127,17 @@ function resolveSmartTierModel(
     });
   }
 
-  // 兼容回退：LLM_SMART_MODEL 未配置 → 使用旧 LLM_MODEL，provider=default（单 provider 模式）。
-  // 此时 registry 中应有 default provider（由 loadProviderRegistry 的 envFallback 注入）。
-  // 用 "default:" + LLM_MODEL 作为 tierModelRaw 走同一解析路径，保证 baseUrl/apiKey 解析逻辑一致。
-  // 注意：env.ts 中 LLM_MODEL 缺省会回退到 "stub-model"（env.ts L74），
+  // 兼容回退：LLM_SMART_MODEL 未配置 → 直接用旧 LLM_MODEL + LLM_BASE_URL + LLM_API_KEY
+  // 构造 ResolvedModel，不依赖 providers.json 是否注册了 default provider。
+  //
+  // 设计依据（design §4.4 第 3 点）：providers.json 不存在 → 单 provider 模式
+  // 使用 LLM_API_KEY。这里的等价扩展：即使 providers.json 存在，只要
+  // LLM_SMART_MODEL 缺失，smart tier 也走旧 env 单 provider 回退——否则默认
+  // 仓库状态下（backend/providers.json 已提交 + 用户只配旧 env）会报
+  // provider_not_registered，违反 design §10.5 验收"删除 LLM_SMART_MODEL 时
+  // smart tier 回退旧 LLM_MODEL 正常工作"。
+  //
+  // 注意：env.ts 中 LLM_MODEL 缺省会回退到 "stub-model"（env.ts L83），
   // 此兜底值不应被当作真实模型——factory 检测到 "stub-model" 时视为"真未配置"并抛错。
   const legacyModel = env.llm.model;
   if (!legacyModel || legacyModel === "stub-model") {
@@ -138,13 +145,25 @@ function resolveSmartTierModel(
       "tier-aware provider 构造失败：LLM_SMART_MODEL 与 LLM_MODEL 均未配置，无法解析 smart tier。请配置 LLM_SMART_MODEL 或保留旧 LLM_MODEL。",
     );
   }
-  return resolveTierModel({
+  const legacyBaseUrl = env.llm.baseUrl;
+  if (!legacyBaseUrl) {
+    throw new TierAwareProviderFactoryError(
+      "tier-aware provider 构造失败：LLM_SMART_MODEL 未配置且旧 LLM_BASE_URL 也未配置，无法解析 smart tier。请配置 LLM_SMART_MODEL 或保留旧 LLM_BASE_URL。",
+    );
+  }
+  const legacyApiKey = env.llm.apiKey;
+  if (!legacyApiKey) {
+    throw new TierAwareProviderFactoryError(
+      "tier-aware provider 构造失败：LLM_SMART_MODEL 未配置且旧 LLM_API_KEY 也未配置，无法解析 smart tier。请配置 LLM_SMART_MODEL 或保留旧 LLM_API_KEY。",
+    );
+  }
+  return {
     tier: "smart",
-    tierModelRaw: `default:${legacyModel}`,
-    registry,
-    env: process.env as Record<string, string | undefined>,
-    fallbackApiKey: env.llm.apiKey,
-  });
+    provider: "default",
+    model: legacyModel,
+    baseUrl: legacyBaseUrl,
+    apiKey: legacyApiKey,
+  };
 }
 
 function createInnerProvider(

@@ -54,22 +54,29 @@ export function getValidatedRuntimeEnv(): AppEnv {
   const nextEnv = buildEnv(loadedDotEnv);
 
   if (nextEnv.llm.provider !== "stub") {
-    const missingKeys: string[] = [];
+    // S2-1 新配置路径：LLM_SMART_MODEL 已配置时，smart tier 通过 factory 解析，
+    // 不再强制要求旧 LLM_BASE_URL/LLM_API_KEY/LLM_MODEL。
+    // 具体解析校验（providers.json 存在、apiKeyEnv 引用的密钥已配置）由
+    // createTierAwareProviderFromEnv 在调用时执行，不在这里重复。
+    if (!nextEnv.llm.smartModel) {
+      const missingKeys: string[] = [];
 
-    if (!nextEnv.llm.baseUrl) {
-      missingKeys.push("LLM_BASE_URL or OPENAI_BASE_URL");
-    }
-    if (!nextEnv.llm.apiKey) {
-      missingKeys.push("LLM_API_KEY or OPENAI_API_KEY");
-    }
-    if (!nextEnv.llm.model) {
-      missingKeys.push("LLM_MODEL or OPENAI_MODEL");
-    }
+      if (!nextEnv.llm.baseUrl) {
+        missingKeys.push("LLM_BASE_URL or OPENAI_BASE_URL");
+      }
+      if (!nextEnv.llm.apiKey) {
+        missingKeys.push("LLM_API_KEY or OPENAI_API_KEY");
+      }
+      if (!nextEnv.llm.model) {
+        missingKeys.push("LLM_MODEL or OPENAI_MODEL");
+      }
 
-    if (missingKeys.length > 0) {
-      throw new Error(
-        `Missing runtime LLM configuration: ${missingKeys.join(", ")}`,
-      );
+      if (missingKeys.length > 0) {
+        throw new Error(
+          `Missing runtime LLM configuration: ${missingKeys.join(", ")}. ` +
+            `Either provide legacy LLM_* variables or configure S2-1 LLM_SMART_MODEL + providers.json.`,
+        );
+      }
     }
   }
 

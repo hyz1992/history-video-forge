@@ -57,15 +57,15 @@
 - [x] 完成 V2 S1 真实浏览器验收补强：新增 `npm run harness:s1-browser-acceptance`，覆盖 admin 后台、migration owner 转移、代管横幅、审计日志、转移后用户可见、其他用户隔离和 USER 管理后台拦截
 - [x] 完成 V2 数据基础 Task 8.5 收口：测试矩阵、schema 复核、迁移状态机、readiness、仓储访问边界、SQLite 备份恢复、Prisma 业务切换与 JSON 写入冻结
 - [x] 完成 V1 高风险稳定化最终全量回归、故障演练和内置浏览器验收
+- [x] 收口 `S2-0` LLM 回复速度、质量和结构化输出优化基线：S2-0 期间尝试了紧凑结论合同、selector thinking on、builder+light-review 等多轮方案，均未能解决"细粒度语义风险识别需要 reasoning、而 reasoning 在 GLM-5.x 上必然带来 70~400s 长尾"这一死结；最终于 `2968c5e` 回滚到 builder(8)+selector 架构并冻结当前模型组合下的进一步优化。最终设计与实施计划见 [S2-0 回滚设计](../plans/2026-07-17-s2-0-topic-rollback-to-builder-selector-design.md) 与 [实施计划](../plans/2026-07-17-s2-0-topic-rollback-to-builder-selector-implementation-plan.md)；67 个试错 commit 与全部实测记录完整保留在 git 历史中作为 S2-1 输入。
+- [x] 完成 `S2-1` 多模型、多供应商切换：引入 `smart` / `flash` 两档 tier 作为模型路由唯一维度，每个 operation 声明所需 tier，gateway 按 tier 解析到具体 `provider:model`。阶段一主链路改造（operation-tier-registry / provider-registry / tier-resolver / tier-aware-provider / tier-aware-provider-factory / env 接入新变量 / providers.json 示例 / 8 个调用方接入 / 启动诊断日志）与阶段二 live 验收（DeepSeek smart + 智谱 flash 端到端冒烟、selector thinking 决策）均完成。设计见 [S2-1 设计](../plans/2026-07-17-s2-1-multi-provider-model-routing-design.md)，selector 决策记录见 [2026-07-18 S2-1 Selector Thinking 决策记录](../records/2026-07-18-s2-1-selector-thinking-decision.md)。S2-1 进入冻结状态，作为 S2-2 输入。
 
 ## 进行中
-- [ ] 收口 `S2-0` 的完整 topic 链路：当前正式入口为 Topic 轻审核流程 [设计](../plans/2026-07-17-s2-0-topic-light-review-flow-design.md) 和 [实施计划](../plans/2026-07-17-s2-0-topic-light-review-flow-implementation-plan.md)。生产已移除重型 `topic.selector`，调整为 Builder 生成 4 条、`topic.light-review` 逐项一致性审核；首次通过 1～4 条时立即部分交付，只有首次 0 条才最多执行一次原 Builder 补充且只复审新增项，补充后仍为 0 条才失败。Builder 本轮仅做 8→4 数量适配，没有修改内容质量策略；受影响矩阵 139/139、Prompt 语言 8/8 和 backend typecheck 已通过。[Thinking 隔离真实验证](../records/2026-07-17-topic-light-review-thinking-isolation-live-check.md) 用固定四候选执行 2 次 GLM-5.2 请求：provider default `105.604s`、reasoning 5646、风险召回 2/2；disabled `4.013s`、reasoning 0、风险召回 0/2。性能与遥测门禁通过但语义门禁失败，生产未关闭 thinking。S2-0 继续打开；不再堆叠 Prompt 或本地语义规则，快速审核模型/路由转为 S2-1 的明确输入
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 补齐前端 v1 真实浏览器验收矩阵：空态、加载中、成功、失败、刷新、深链、重复操作
 - [ ] 收口当前未归档计划，避免历史 implementation plan 误导新任务
 
 ## 待做
-- [ ] `S2-1` 多模型、多供应商切换：基于 S2-0 基线设计 provider/model/routing/run snapshot/credential reference
 - [ ] `S2-2` 用户偏好、生成策略与成本控制：用户级策略、预算、成本记录和运行快照
 - [ ] `S2-3` Prompt 治理：版本、hash、fixtures、变更说明、运行快照与 `harness/prompts/` 正式 prompt 规则对齐
 - [ ] `S2-4` 选题筛选条件扩充：筛选模型与事件库字段协调

@@ -150,6 +150,7 @@ describe("runtime env loading", () => {
     delete process.env.OPENAI_BASE_URL;
     delete process.env.OPENAI_API_KEY;
     delete process.env.OPENAI_MODEL;
+    delete process.env.LLM_SMART_MODEL;
 
     const { getValidatedRuntimeEnv } = await import(
       "../../../backend/src/config/env.js"
@@ -157,6 +158,41 @@ describe("runtime env loading", () => {
 
     expect(() => getValidatedRuntimeEnv()).toThrow(
       /LLM_BASE_URL|OPENAI_BASE_URL|LLM_API_KEY|OPENAI_API_KEY|LLM_MODEL|OPENAI_MODEL/u,
+    );
+  });
+
+  it("passes validation when only S2-1 LLM_SMART_MODEL is configured (audit P1-2)", async () => {
+    // 复现审查 P1-2：纯 S2-1 配置（无 LLM_BASE_URL/API_KEY/MODEL）下，
+    // getValidatedRuntimeEnv 不应拦截主链路。factory 解析由后续步骤负责。
+    process.env.LLM_PROVIDER = "openai";
+    delete process.env.LLM_BASE_URL;
+    delete process.env.LLM_API_KEY;
+    delete process.env.LLM_MODEL;
+    delete process.env.OPENAI_BASE_URL;
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.OPENAI_MODEL;
+    process.env.LLM_SMART_MODEL = "deepseek:deepseek-v4-pro";
+
+    const { getValidatedRuntimeEnv } = await import(
+      "../../../backend/src/config/env.js"
+    );
+
+    expect(() => getValidatedRuntimeEnv()).not.toThrow();
+  });
+
+  it("still requires legacy LLM_* when neither S2-1 nor legacy is configured", async () => {
+    process.env.LLM_PROVIDER = "openai";
+    delete process.env.LLM_BASE_URL;
+    delete process.env.LLM_API_KEY;
+    delete process.env.LLM_MODEL;
+    delete process.env.LLM_SMART_MODEL;
+
+    const { getValidatedRuntimeEnv } = await import(
+      "../../../backend/src/config/env.js"
+    );
+
+    expect(() => getValidatedRuntimeEnv()).toThrow(
+      /LLM_SMART_MODEL|providers\.json/u,
     );
   });
 
