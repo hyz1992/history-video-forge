@@ -1,6 +1,6 @@
 ---
 id: topic.selector
-version: v1.0.0
+version: v1.0.1
 stage: topic
 language: zh-CN
 consumes:
@@ -14,7 +14,7 @@ status: active
 
 # 任务
 
-基于推荐种子、`selector_pool` 与 `recent_event_memory`，对已有候选做质量排序。只从给定候选池中选择，不得发明新的候选、改写候选或生成下游对象。
+基于推荐种子、`selector_pool` 与 `recent_event_memory`，对已有候选做质量排序。只从给定候选池中选择，不得发明新的候选、改写候选或生成下游对象。（S2-3 Task 12 验证标记）
 
 每个候选提供事件身份、标题、切口、family/scope、`core_conflict`、`strong_scene`、`must_cover_preview`、`risk_hints` 与 `fatigue_score` 等判断证据。
 
