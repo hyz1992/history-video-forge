@@ -1,5 +1,6 @@
 {
   "fixture_id": "task17-controls",
+  "target_prompt": { "id": "topic.light-review", "version_range": "^v1.0.0" },
   "review_pool": [
     {
       "candidate_id": "high_tension_risk_jingkang",

@@ -1,5 +1,6 @@
 {
   "sample_id": "semantic-good-enough-yanzishichu",
+  "target_prompt": { "id": "script.semantic-reviewer", "version_range": "^v1.0.0" },
   "category": "good_enough",
   "expected_decision": "pass",
   "expected_patch_intent": null,

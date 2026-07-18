@@ -1,5 +1,6 @@
 {
   "fixture_id": "task17-balanced",
+  "target_prompt": { "id": "topic.selector", "version_range": "^v1.0.0" },
   "source": {
     "project_id": "3858fbdc-18c1-4095-ac72-55f9d4adb4b1",
     "topic_run_id": "topic_run_f5a2648f-7ade-45b5-958d-ce4f8cab1e5c",

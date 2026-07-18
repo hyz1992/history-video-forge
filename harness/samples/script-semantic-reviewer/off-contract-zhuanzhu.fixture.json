@@ -1,5 +1,6 @@
 {
   "sample_id": "semantic-off-contract-zhuanzhu",
+  "target_prompt": { "id": "script.semantic-reviewer", "version_range": "^v1.0.0" },
   "category": "off_contract",
   "expected_decision": "return_topic",
   "expected_patch_intent": null,

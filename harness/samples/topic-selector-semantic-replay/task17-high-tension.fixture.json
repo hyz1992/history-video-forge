@@ -1,5 +1,6 @@
 {
   "fixture_id": "task17-high-tension",
+  "target_prompt": { "id": "topic.selector", "version_range": "^v1.0.0" },
   "source": {
     "project_id": "5fda1609-63ed-4f0d-b47a-bb48038b3a6a",
     "topic_run_id": "topic_run_3d8da9c7-aaaa-43f9-80fe-5cc5549ec95f",

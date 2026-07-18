@@ -1,5 +1,6 @@
 {
   "sample_id": "semantic-weak-opening-zhuanzhu",
+  "target_prompt": { "id": "script.semantic-reviewer", "version_range": "^v1.0.0" },
   "category": "weak_lift",
   "expected_decision": "patch_once",
   "expected_patch_intent": "lift",
