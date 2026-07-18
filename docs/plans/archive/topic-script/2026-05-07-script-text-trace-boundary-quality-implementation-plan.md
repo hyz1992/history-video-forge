@@ -1,4 +1,4 @@
-# Script Text / Trace Boundary Quality Implementation Plan
+﻿# Script Text / Trace Boundary Quality Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -38,7 +38,7 @@ Execution constraints:
   - Adds one prompt-contract test for `script.writer`.
   - The test only asserts that the prompt contains the new boundary contract.
 
-- Modify: `harness/prompts/script/script-writer.prompt.md`
+- Modify: `prompts/script/script-writer.prompt.md`
   - Adds one short section or bullet group clarifying `script_text` / `beat_trace` responsibility.
   - Does not repeat existing opening, duration, ending, thin-regeneration, or “viral” constraints.
 
@@ -51,7 +51,7 @@ Execution constraints:
 **Files:**
 
 - Modify: `tests/backend/runtime/prompt-runtime.test.ts`
-- Modify: `harness/prompts/script/script-writer.prompt.md`
+- Modify: `prompts/script/script-writer.prompt.md`
 
 - [ ] **Step 1: Write the failing prompt contract test**
 
@@ -81,7 +81,7 @@ Expected: FAIL because `script.writer` does not yet contain the new boundary con
 
 - [ ] **Step 3: Add the minimal prompt contract**
 
-In `harness/prompts/script/script-writer.prompt.md`, add a short contract under the hard constraints section, near the existing `beat_trace` and `must_include_beats` rules:
+In `prompts/script/script-writer.prompt.md`, add a short contract under the hard constraints section, near the existing `beat_trace` and `must_include_beats` rules:
 
 ```markdown
 - `beat_trace.beat` 逐字复用输入 beat，用于审计；`script_text` 不要把 `must_include_beats` 原句当正文逐条交代，而要把每个 beat 在正文中写成局面推进，至少用动作、反应、压力后果中的一到两个具体元素承接；`beat_trace.excerpt` 从自然正文中截取证明片段，不要求正文写成 beat 列表。
@@ -114,7 +114,7 @@ Expected: PASS.
 Stage only the test and prompt:
 
 ```powershell
-git add tests/backend/runtime/prompt-runtime.test.ts harness/prompts/script/script-writer.prompt.md
+git add tests/backend/runtime/prompt-runtime.test.ts prompts/script/script-writer.prompt.md
 git commit -m "明确正文与追踪字段分工"
 ```
 

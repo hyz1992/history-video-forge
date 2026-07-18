@@ -1,4 +1,4 @@
-# Topic + Script Phase 3 Implementation Plan
+﻿# Topic + Script Phase 3 Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -6,7 +6,7 @@
 
 **Architecture:** 第三阶段先只升级 backend orchestration：保留现有 prompt registry / loader、LLM gateway、provider adapter、structured-output-fix，不改它们的职责边界；新增一层 LangGraph.js graph runner，把当前手写的 `script generate -> local validate -> semantic review -> patch_once / regen_once` 执行流迁入 graph。随后再把 topic recommendation 与 graph-compatible trace / diagnostics / execution snapshot 收口到同一编排语义下，并补齐运行时硬化、前端脚本工作台体验、真实巡检与 release gate。整个第三阶段仍然严格限制在 `topic + script`，不进入 `storyboard / assets / compose`。
 
-**Tech Stack:** Node.js 18+, npm workspaces, TypeScript, Zod, Vue 3, Vitest, 现有 `harness/prompts/*` 正式 prompt 资产、现有 runtime LLM gateway、LangGraph.js（官方包：`@langchain/langgraph`、`@langchain/core`；执行 `Task 1` 时必须选用当时的最新稳定版，并在 `package.json` 中固定准确版本号）。
+**Tech Stack:** Node.js 18+, npm workspaces, TypeScript, Zod, Vue 3, Vitest, 现有 `prompts/*` 正式 prompt 资产、现有 runtime LLM gateway、LangGraph.js（官方包：`@langchain/langgraph`、`@langchain/core`；执行 `Task 1` 时必须选用当时的最新稳定版，并在 `package.json` 中固定准确版本号）。
 
 ---
 

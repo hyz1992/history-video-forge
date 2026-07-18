@@ -1,4 +1,4 @@
-# 选题阶段回滚到 builder+selector 设计
+﻿# 选题阶段回滚到 builder+selector 设计
 
 ## 0. 状态
 
@@ -71,11 +71,11 @@
 
 采用**精确路径 checkout + 新建 commit** 的方式：
 
-1. `git checkout 7fc96f9~1 -- backend/src/modules/topic backend/src/runtime/orchestration/topic-recommendation-nodes.ts backend/src/runtime/orchestration/runtime-diagnostics.ts backend/src/runtime/llm/operation-policy.ts harness/prompts/topic/candidate-builder.prompt.md harness/prompts/topic/candidate-builder-repair.prompt.md`
+1. `git checkout 7fc96f9~1 -- backend/src/modules/topic backend/src/runtime/orchestration/topic-recommendation-nodes.ts backend/src/runtime/orchestration/runtime-diagnostics.ts backend/src/runtime/llm/operation-policy.ts prompts/topic/candidate-builder.prompt.md prompts/topic/candidate-builder-repair.prompt.md`
    - 该命令只把指定文件内容恢复到旧版本，**不动分支指针、不动 git 历史**。
 2. 删除 light-review 专属产物：
    - `backend/src/modules/topic/topic-light-review.ts`
-   - `harness/prompts/topic/light-review.prompt.md`
+   - `prompts/topic/light-review.prompt.md`
    - `tests/backend/topic/topic-light-review.test.ts`
    - `tests/harness/topic-light-review-thinking-replay.test.ts`
 3. 测试文件需要人工对齐（`topic-runtime-recommendation.test.ts` 等），逐个确认能否直接回到旧版本；不能直接回退的，按 `7fc96f9~1` 的合同手改。

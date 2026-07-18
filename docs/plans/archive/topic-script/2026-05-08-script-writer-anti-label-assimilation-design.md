@@ -1,4 +1,4 @@
-# Script Writer Anti-Label Assimilation Design
+﻿# Script Writer Anti-Label Assimilation Design
 
 Date: 2026-05-08
 
@@ -106,7 +106,7 @@ If the five-round result still shows obvious beat-label leakage, do not keep add
 This design should become a short implementation plan with three tasks:
 
 1. Add failing tests for the writer prompt contract and no-Brief boundary.
-2. Minimally consolidate `harness/prompts/script/script-writer.prompt.md` to express the audit/prose boundary without increasing prompt weight.
+2. Minimally consolidate `prompts/script/script-writer.prompt.md` to express the audit/prose boundary without increasing prompt weight.
 3. Run and record a five-round GLM-5.1 quality observation.
 
 Each implementation task must use TDD where code or prompt behavior is changed, then commit separately with a Chinese commit message.

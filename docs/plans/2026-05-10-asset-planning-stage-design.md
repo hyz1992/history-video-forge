@@ -1,4 +1,4 @@
-# Asset Planning Stage Design
+﻿# Asset Planning Stage Design
 
 日期：2026-05-10
 
@@ -427,7 +427,7 @@ Asset planning 本地 validator 只做结构和引用检查，不做美学判断
 
 如果 asset planning 使用 LLM，正式 prompt 必须：
 
-- 放在 `harness/prompts/asset-planning/`。
+- 放在 `prompts/asset-planning/`。
 - 元数据声明 `stage: asset_planning` 和 `language: zh-CN`。
 - 支持全局规划和 segment chunk planning 两类输入模式。
 - 只生成可被本地 merger 合并进 `AssetPlan` 的结构化规划草稿。

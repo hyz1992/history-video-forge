@@ -1,4 +1,4 @@
-# Topic Recommendation Prompt Tightening Implementation Plan
+﻿# Topic Recommendation Prompt Tightening Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -13,7 +13,7 @@
 ### Task 1: 收紧 builder 的结构输出合同
 
 **Files:**
-- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Modify: `prompts/topic/candidate-builder.prompt.md`
 - Test: `tests/backend/runtime/topic-prompt-contract.test.ts`
 
 **Step 1: Write the failing test**
@@ -51,14 +51,14 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add harness/prompts/topic/candidate-builder.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
+git add prompts/topic/candidate-builder.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
 git commit -m "收紧选题builder结构输出合同"
 ```
 
 ### Task 2: 轻量强化 builder 的源头扩池职责
 
 **Files:**
-- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Modify: `prompts/topic/candidate-builder.prompt.md`
 - Test: `tests/backend/runtime/topic-prompt-contract.test.ts`
 - Test: `tests/backend/runtime/prompt-runtime.test.ts`
 
@@ -97,14 +97,14 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add harness/prompts/topic/candidate-builder.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts
+git add prompts/topic/candidate-builder.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts
 git commit -m "强化选题builder的源头扩池约束"
 ```
 
 ### Task 3: 收紧 selector 的“严格 3 id”合同
 
 **Files:**
-- Modify: `harness/prompts/topic/selector.prompt.md`
+- Modify: `prompts/topic/selector.prompt.md`
 - Test: `tests/backend/runtime/topic-prompt-contract.test.ts`
 
 **Step 1: Write the failing test**
@@ -141,7 +141,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add harness/prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
+git add prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
 git commit -m "收紧选题selector返回数量合同"
 ```
 

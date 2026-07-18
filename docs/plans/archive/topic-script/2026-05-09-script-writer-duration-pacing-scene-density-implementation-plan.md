@@ -1,4 +1,4 @@
-# Script Writer Duration Pacing Scene Density Implementation Plan
+﻿# Script Writer Duration Pacing Scene Density Implementation Plan
 
 ## 任务
 
@@ -6,7 +6,7 @@
 
 ## 改动文件
 
-- `harness/prompts/script/script-writer.prompt.md`
+- `prompts/script/script-writer.prompt.md`
   - 收紧 medium 正文体量、估时回填、节奏推进和 beat 展开约束。
 - `backend/src/modules/script/script-local-validator.ts`
   - 调整结构下限。
@@ -68,7 +68,7 @@ npx vitest run --configLoader runner tests/backend/script/script-local-validator
 
 ### 3. 实现 prompt 收口
 
-修改 `harness/prompts/script/script-writer.prompt.md`，只替换或合并现有口播草稿约束，不堆叠重复口号。
+修改 `prompts/script/script-writer.prompt.md`，只替换或合并现有口播草稿约束，不堆叠重复口号。
 
 ### 4. 实现 validator
 

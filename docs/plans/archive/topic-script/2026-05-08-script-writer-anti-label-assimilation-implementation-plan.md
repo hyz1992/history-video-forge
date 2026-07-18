@@ -1,4 +1,4 @@
-# Script Writer Anti-Label Assimilation Implementation Plan
+﻿# Script Writer Anti-Label Assimilation Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -40,7 +40,7 @@ If a task makes the prompt longer without deleting or merging overlapping old wo
 
 - `tests/backend/runtime/prompt-runtime.test.ts`: pins the writer prompt contract loaded through Prompt Registry.
 - `tests/harness/script-brief-shadow-stopped.test.ts`: keeps executable Brief-like entry points out of runtime surfaces.
-- `harness/prompts/script/script-writer.prompt.md`: the only prompt file allowed to change in this implementation.
+- `prompts/script/script-writer.prompt.md`: the only prompt file allowed to change in this implementation.
 - `docs/records/2026-05-08-script-writer-anti-label-assimilation-quality-check.md`: records the live five-round GLM-5.1 observation after the prompt change.
 
 ## Task 1: Add Prompt Contract And No-Brief Guard Tests
@@ -80,7 +80,7 @@ const runtimeSurfaceEntries = [
   "package.json",
   "shared/src/index.ts",
   "backend/src/modules/script/script-generation.service.ts",
-  "harness/prompts/script/script-writer.prompt.md",
+  "prompts/script/script-writer.prompt.md",
 ];
 ```
 
@@ -122,13 +122,13 @@ Do not commit after Task 1. Leave the failing tests in the working tree for Task
 ## Task 2: Consolidate Writer Prompt Anti-Label Contract
 
 **Files:**
-- Modify: `harness/prompts/script/script-writer.prompt.md`
+- Modify: `prompts/script/script-writer.prompt.md`
 - Test: `tests/backend/runtime/prompt-runtime.test.ts`
 - Test: `tests/harness/script-brief-shadow-stopped.test.ts`
 
 - [ ] **Step 1: Replace overlapping beat/trace bullets with one concise section**
 
-In `harness/prompts/script/script-writer.prompt.md`, find the existing adjacent bullets that separately describe:
+In `prompts/script/script-writer.prompt.md`, find the existing adjacent bullets that separately describe:
 
 - `beat_trace` every `beat` reusing `hard_lane.must_include_beats`
 - `beat_trace.excerpt` being cut from `script_text`
@@ -152,7 +152,7 @@ Replace those overlapping bullets with this concise section. Keep all other prom
 Run:
 
 ```powershell
-git diff --word-diff -- harness/prompts/script/script-writer.prompt.md
+git diff --word-diff -- prompts/script/script-writer.prompt.md
 ```
 
 Expected:
@@ -192,7 +192,7 @@ Expected:
 Stage only the prompt and test files:
 
 ```powershell
-git add -- tests/backend/runtime/prompt-runtime.test.ts tests/harness/script-brief-shadow-stopped.test.ts harness/prompts/script/script-writer.prompt.md
+git add -- tests/backend/runtime/prompt-runtime.test.ts tests/harness/script-brief-shadow-stopped.test.ts prompts/script/script-writer.prompt.md
 git status --short
 git commit -m "收敛脚本writer反标签化合同"
 ```

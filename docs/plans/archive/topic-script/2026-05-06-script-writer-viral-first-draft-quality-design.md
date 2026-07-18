@@ -1,4 +1,4 @@
-# Script Writer Viral First-draft Quality Design
+﻿# Script Writer Viral First-draft Quality Design
 
 日期：2026-05-06
 
@@ -107,7 +107,7 @@
 
 ### 方案 A：增强 writer prompt 的口播质量合同
 
-在 `harness/prompts/script/script-writer.prompt.md` 中新增最小质量约束：
+在 `prompts/script/script-writer.prompt.md` 中新增最小质量约束：
 
 - medium 首稿不得写成摘要体量。
 - 每个 beat 要写成一段推进，而不是点名。

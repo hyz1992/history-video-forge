@@ -1,4 +1,4 @@
-# V2 验收矩阵与第一个子项目实施计划草案
+﻿# V2 验收矩阵与第一个子项目实施计划草案
 
 日期：2026-07-13
 
@@ -84,7 +84,7 @@
 
 | 验收项 | 方法 | 预期 |
 |---|---|---|
-| registry 完整性 | 扫描 harness/prompts | 全部注册 |
+| registry 完整性 | 扫描 prompts | 全部注册 |
 | 调用方扫描 | grep prompt id | 全部调用方可列出 |
 | prompt 版本追溯 | 查历史运行 RunSnapshot | 可解释版本 |
 | golden fixtures 回归 | 修改 prompt 后回归 | 通过 |

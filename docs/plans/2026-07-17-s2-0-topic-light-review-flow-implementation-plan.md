@@ -1,4 +1,4 @@
-# S2-0 Topic 轻审核流程调整实施计划
+﻿# S2-0 Topic 轻审核流程调整实施计划
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -22,11 +22,11 @@
   - 增加 reviewed candidates 诊断字段，不再依赖模型排名解释最终选择。
 - Modify: `backend/src/runtime/llm/operation-policy.ts`
   - 将 `topic.light-review` 显式登记为短结构化判断；不新增 thinking override。
-- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Modify: `prompts/topic/candidate-builder.prompt.md`
   - 只把正式数量文字从 8 改为 4。
-- Modify: `harness/prompts/topic/candidate-builder-repair.prompt.md`
+- Modify: `prompts/topic/candidate-builder-repair.prompt.md`
   - 只同步原始候选数量文字，不修改修复策略。
-- Modify: `harness/prompts/topic/light-review.prompt.md`
+- Modify: `prompts/topic/light-review.prompt.md`
   - 收窄为逐候选内部一致性审核，删除质量、多样性、疲劳和排序职责。
 - Modify: `tests/backend/topic/topic-runtime-recommendation.test.ts`
   - 删除已失效的生产 Selector 行为断言，增加轻审核与降级行为回归。
@@ -50,8 +50,8 @@
 **Files:**
 - Modify: `tests/backend/runtime/topic-prompt-contract.test.ts`
 - Modify: `tests/backend/topic/topic-graph-recommendation.test.ts`
-- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
-- Modify: `harness/prompts/topic/candidate-builder-repair.prompt.md`
+- Modify: `prompts/topic/candidate-builder.prompt.md`
+- Modify: `prompts/topic/candidate-builder-repair.prompt.md`
 - Modify: `backend/src/runtime/orchestration/topic-recommendation-nodes.ts`
 
 - [ ] **Step 1: 先把 Prompt 合同测试改为期望 4 个候选**
@@ -127,7 +127,7 @@ Expected: PASS。
 
 **Files:**
 - Create: `backend/src/modules/topic/topic-light-review.ts`
-- Modify: `harness/prompts/topic/light-review.prompt.md`
+- Modify: `prompts/topic/light-review.prompt.md`
 - Modify: `tests/backend/runtime/topic-prompt-contract.test.ts`
 - Create: `tests/backend/topic/topic-light-review.test.ts`
 
@@ -512,7 +512,7 @@ Expected: exit 0。
 
 ```powershell
 git diff --check
-git diff -- harness/prompts/topic/candidate-builder.prompt.md harness/prompts/topic/candidate-builder-repair.prompt.md
+git diff -- prompts/topic/candidate-builder.prompt.md prompts/topic/candidate-builder-repair.prompt.md
 git status --short
 ```
 

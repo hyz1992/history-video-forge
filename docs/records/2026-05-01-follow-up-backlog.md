@@ -1,4 +1,4 @@
-# 2026-05-01 Follow-up Backlog
+﻿# 2026-05-01 Follow-up Backlog
 
 ## 背景
 
@@ -10,7 +10,7 @@
 - 第 3 项“项目内持久化候选池与受控 fallback 复用”主体已完成，可从 backlog 中降级为后续运营尾项。
 - 第 4 项“topic seed 双任务语义正式模式化”是后续 topic 能力扩展前最值得优先补的设计债。
 - 第 1 项“丰富前端 seed 入口”应跟随第 4 项一起设计，不建议单独先扩 UI。
-- 第 2 项“正式 prompt 是否迁出 `harness/prompts/`”当前收益最低，继续延后。
+- 第 2 项“正式 prompt 是否迁出 `prompts/`”当前收益最低，继续延后。
 
 ---
 
@@ -19,7 +19,7 @@
 | 项目 | 当前状态 | 优先级 | 是否阻塞视频流水线下一步 | 建议处理 |
 |---|---|---:|---|---|
 | 1. 丰富前端 seed 入口 | 待设计 | P2 | 否 | 等需要强化 topic 入口时，结合第 4 项一起设计 |
-| 2. 正式 prompt 是否迁出 `harness/prompts/` | 暂缓 | P3 | 否 | 继续沿用现有目录，避免路径漂移 |
+| 2. 正式 prompt 是否迁出 `prompts/` | 暂缓 | P3 | 否 | 继续沿用现有目录，避免路径漂移 |
 | 3. 项目内持久化候选池与受控 fallback 复用 | 主体完成 | P0 已完成 / 尾项 P2 | 否 | 仅保留生命周期运营尾项 |
 | 4. `topic seed` 双任务语义正式模式化 | 待设计 | P1 | 否 | 下一次扩展 topic 入口或自定义主题前优先设计 |
 
@@ -72,18 +72,18 @@ topic 自动推荐当前已经能达到及格标准。现在单独扩 UI 入口�
 
 ---
 
-## 2. 正式 prompt 是否应迁出 `harness/prompts/`
+## 2. 正式 prompt 是否应迁出 `prompts/`
 
 ### 当前问题
 
-- `harness/prompts/` 当前承载正式项目 prompt。
+- `prompts/` 当前承载正式项目 prompt。
 - 目录名语义偏向验证基础设施，正式产品资产与 harness 资产边界存在混杂感。
 
 ### 当前判断
 
 继续暂缓，不建议现在迁移。
 
-当前以下路径和机制都依赖 `harness/prompts/`：
+当前以下路径和机制都依赖 `prompts/`：
 
 - `AGENTS.md` 中的 prompt 位置规则
 - Prompt Registry 规范
@@ -104,7 +104,7 @@ topic 自动推荐当前已经能达到及格标准。现在单独扩 UI 入口�
 
 等出现以下情况时再处理：
 
-- downstream 阶段的正式 prompt 明显增多，`harness/prompts/` 语义不再能承载。
+- downstream 阶段的正式 prompt 明显增多，`prompts/` 语义不再能承载。
 - 产品资产目录需要统一治理。
 - 需要把 prompt registry 从 harness v1 规则升级为全项目正式资产规则。
 
@@ -117,7 +117,7 @@ topic 自动推荐当前已经能达到及格标准。现在单独扩 UI 入口�
 3. 保留兼容策略或一次性更新全部引用。
 4. 回跑 prompt 检查、runtime smoke 与相关回归。
 
-在迁移前，继续遵守当前规则：所有正式 prompt 仍放在 `harness/prompts/`。
+在迁移前，继续遵守当前规则：所有正式 prompt 仍放在 `prompts/`。
 
 ---
 

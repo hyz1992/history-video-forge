@@ -1,4 +1,4 @@
-# S2-0 Topic Selector 完整 verdict 回退撤销实施计划
+﻿# S2-0 Topic Selector 完整 verdict 回退撤销实施计划
 
 > **供 agentic worker 使用：** REQUIRED：使用 `superpowers:executing-plans` 在当前 `dev` 分支执行；用户明确要求不创建 worktree，当前约束不允许子 agent。所有行为修改必须使用 `superpowers:test-driven-development`，按红灯、最小实现、绿灯推进。每一步使用复选框跟踪。
 
@@ -17,7 +17,7 @@
 | 文件 | 职责 |
 | --- | --- |
 | `backend/src/modules/topic/topic-recommendation.service.ts` | compact provider DTO、strict schema、parser 与内部三字段派生；保留候选覆盖和 selection |
-| `harness/prompts/topic/selector.prompt.md` | compact 输出合同与既有中文语义检查 |
+| `prompts/topic/selector.prompt.md` | compact 输出合同与既有中文语义检查 |
 | `tests/backend/topic/topic-runtime-recommendation.test.ts` | compact parser/schema 红绿灯、非法 notes 和候选全集覆盖回归 |
 | `tests/backend/runtime/topic-prompt-contract.test.ts` | compact prompt 合同、全集覆盖与断言强度规则 |
 | `harness/scripts/runtime/topic-selector-semantic-replay.ts` | 生产 issue enum 路径与 compact arguments 脱敏统计 |
@@ -172,7 +172,7 @@ git commit -m "恢复选题筛选紧凑结论合同"
 **文件：**
 
 - 修改：`tests/backend/runtime/topic-prompt-contract.test.ts`
-- 修改：`harness/prompts/topic/selector.prompt.md`
+- 修改：`prompts/topic/selector.prompt.md`
 
 - [x] **Step 1：先恢复 prompt compact 断言**
 
@@ -207,7 +207,7 @@ npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract
 - [x] **Step 5：中文提交 prompt 恢复**
 
 ```powershell
-git add -- harness/prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
+git add -- prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
 git diff --cached --check
 git commit -m "恢复选题筛选紧凑结论提示词"
 ```

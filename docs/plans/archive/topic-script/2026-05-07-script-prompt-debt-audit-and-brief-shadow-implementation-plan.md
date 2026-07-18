@@ -1,4 +1,4 @@
-# Script Prompt Debt Audit and Brief Shadow Implementation Plan
+﻿# Script Prompt Debt Audit and Brief Shadow Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` to implement this plan task-by-task. Use `superpowers:test-driven-development` for every code or prompt contract task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -20,7 +20,7 @@ Reason: Task 8 observation recorded `continue_to_ab_design: no`; real shadow out
 
 - Work directly on `dev`; do not create a worktree.
 - Do not stage or commit `storage/topic-candidate-library/`.
-- Do not modify `harness/prompts/script/script-writer.prompt.md` in this plan.
+- Do not modify `prompts/script/script-writer.prompt.md` in this plan.
 - Do not change `TopicPackage`, `ScriptInputBundle`, script writer runtime input, reviewer behavior, validator behavior, topic selection, UI, storyboard, asset, or compose.
 - Do not add local semantic scoring rules for "viral", "scene quality", "story completeness", or "brief usefulness".
 - Every code or prompt contract task must follow TDD: write failing test, run red, implement minimally, run green.
@@ -56,7 +56,7 @@ Reason: Task 8 observation recorded `continue_to_ab_design: no`; real shadow out
 - `harness/samples/script-writing-brief-shadow/yanzi-shichu.fixture.json`
   - A concrete shadow fixture for schema and harness tests.
 
-- `harness/prompts/script/script-writing-brief-shadow.prompt.md`
+- `prompts/script/script-writing-brief-shadow.prompt.md`
   - Formal Chinese prompt contract for producing `ScriptWritingBriefShadow`.
   - It must explicitly forbid generating `script_text`, storyboard, new beats, or new facts.
 
@@ -312,7 +312,7 @@ Run:
 ```powershell
 @'
 const fs = require("fs");
-const promptPath = "harness/prompts/script/script-writer.prompt.md";
+const promptPath = "prompts/script/script-writer.prompt.md";
 const text = fs.readFileSync(promptPath, "utf8");
 const bullets = text.split(/\r?\n/).filter((line) => /^\s*-\s+/.test(line));
 console.log(JSON.stringify({
@@ -333,7 +333,7 @@ Create `docs/records/2026-05-07-script-writer-prompt-debt-audit.md` using the te
 # Script Writer Prompt Debt Audit Record
 
 Date: 2026-05-07
-Prompt: harness/prompts/script/script-writer.prompt.md
+Prompt: prompts/script/script-writer.prompt.md
 Audit Scope: Current script.writer prompt after quote intent hard anchor work.
 
 ## Prompt Metrics
@@ -660,7 +660,7 @@ git commit -m "定义脚本brief影子结构"
 **Purpose:** Add a formal prompt contract for shadow generation without calling it from runtime.
 
 **Files:**
-- Create: `harness/prompts/script/script-writing-brief-shadow.prompt.md`
+- Create: `prompts/script/script-writing-brief-shadow.prompt.md`
 - Modify: `tests/backend/runtime/prompt-runtime.test.ts`
 
 - [ ] **Step 1: Write failing prompt registry test**
@@ -695,7 +695,7 @@ Expected: FAIL because prompt `script.writing-brief-shadow` does not exist.
 
 - [ ] **Step 3: Add prompt contract**
 
-Create `harness/prompts/script/script-writing-brief-shadow.prompt.md`:
+Create `prompts/script/script-writing-brief-shadow.prompt.md`:
 
 ```markdown
 ---
@@ -759,7 +759,7 @@ Expected: PASS.
 Run:
 
 ```powershell
-git add harness/prompts/script/script-writing-brief-shadow.prompt.md tests/backend/runtime/prompt-runtime.test.ts
+git add prompts/script/script-writing-brief-shadow.prompt.md tests/backend/runtime/prompt-runtime.test.ts
 git commit -m "新增脚本brief影子提示合同"
 ```
 

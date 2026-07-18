@@ -1,4 +1,4 @@
-# Script Beat Node Contract Quality Implementation Plan
+﻿# Script Beat Node Contract Quality Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -13,8 +13,8 @@
 ## Boundaries
 
 Allowed changes:
-- `harness/prompts/topic/candidate-builder.prompt.md`
-- `harness/prompts/topic/candidate-builder-repair.prompt.md`
+- `prompts/topic/candidate-builder.prompt.md`
+- `prompts/topic/candidate-builder-repair.prompt.md`
 - `tests/backend/runtime/topic-prompt-contract.test.ts`
 - One record under `docs/records/`
 
@@ -45,7 +45,7 @@ Do not add a local heuristic that decides whether a beat is "good", "viral", or 
 
 **Files:**
 - Modify: `tests/backend/runtime/topic-prompt-contract.test.ts`
-- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Modify: `prompts/topic/candidate-builder.prompt.md`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -75,7 +75,7 @@ Expected: `FAIL`, because `topic.candidate-builder` does not yet contain the new
 
 - [ ] **Step 3: Make the minimal prompt change**
 
-In `harness/prompts/topic/candidate-builder.prompt.md`, place this single bullet directly after the existing `must_cover_preview` bullet:
+In `prompts/topic/candidate-builder.prompt.md`, place this single bullet directly after the existing `must_cover_preview` bullet:
 
 ```md
 - `must_cover_preview` 是叙事节点，不是正文句；优先写成场景、动作或转折短语，不写解释性评价或完整总结句；名句可以作为节点锚点，但不要附带完整解释。
@@ -108,7 +108,7 @@ Expected: all tests in `topic-prompt-contract.test.ts` pass.
 Stage only the two Task 1 files:
 
 ```powershell
-git add tests/backend/runtime/topic-prompt-contract.test.ts harness/prompts/topic/candidate-builder.prompt.md
+git add tests/backend/runtime/topic-prompt-contract.test.ts prompts/topic/candidate-builder.prompt.md
 git commit -m "收紧主题候选必讲节点合同"
 ```
 
@@ -118,7 +118,7 @@ git commit -m "收紧主题候选必讲节点合同"
 
 **Files:**
 - Modify: `tests/backend/runtime/topic-prompt-contract.test.ts`
-- Modify: `harness/prompts/topic/candidate-builder-repair.prompt.md`
+- Modify: `prompts/topic/candidate-builder-repair.prompt.md`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -147,7 +147,7 @@ Expected: `FAIL`, because `topic.candidate-builder-repair` currently says it fil
 
 - [ ] **Step 3: Make the minimal prompt change**
 
-In `harness/prompts/topic/candidate-builder-repair.prompt.md`, place this single bullet under `## 处理原则` after the field-completeness bullet:
+In `prompts/topic/candidate-builder-repair.prompt.md`, place this single bullet under `## 处理原则` after the field-completeness bullet:
 
 ```md
 - 如果补齐 `must_cover_preview`，必须写成 3 条叙事节点，不是正文句；优先写成场景、动作或转折短语，不写解释性评价或完整总结句。
@@ -180,7 +180,7 @@ Expected: all tests in `topic-prompt-contract.test.ts` pass.
 Stage only the two Task 2 files:
 
 ```powershell
-git add tests/backend/runtime/topic-prompt-contract.test.ts harness/prompts/topic/candidate-builder-repair.prompt.md
+git add tests/backend/runtime/topic-prompt-contract.test.ts prompts/topic/candidate-builder-repair.prompt.md
 git commit -m "收紧主题候选修复必讲节点合同"
 ```
 

@@ -1,4 +1,4 @@
-# S2-0 Topic Selector 语义回放实施计划
+﻿# S2-0 Topic Selector 语义回放实施计划
 
 > **供 agentic worker 使用：** REQUIRED：当前任务未授权子 agent，使用 `superpowers:executing-plans` 在当前会话执行；每个实现任务必须使用 `superpowers:test-driven-development`，严格按红灯、最小实现、绿灯顺序推进。所有步骤使用复选框跟踪。
 
@@ -27,7 +27,7 @@
 | `docs/plans/README.md` | 增加本设计/计划入口并同步 S2-0 当前状态 |
 | `docs/todos/roadmap-todo.md` | 记录语义回放基线是否完成以及下一闸门 |
 
-禁止修改 `harness/prompts/topic/selector.prompt.md`、`backend/src/modules/topic/topic-recommendation.service.ts`、`backend/src/modules/topic/topic-selector-prompt-projection.ts`、`shared/src/**`、前端、Builder、provider 策略、模型策略、timeout/retry/fallback、semantic reviewer 和数据库。
+禁止修改 `prompts/topic/selector.prompt.md`、`backend/src/modules/topic/topic-recommendation.service.ts`、`backend/src/modules/topic/topic-selector-prompt-projection.ts`、`shared/src/**`、前端、Builder、provider 策略、模型策略、timeout/retry/fallback、semantic reviewer 和数据库。
 
 ## Chunk 1：真实 fixture 与只读 loader
 
@@ -544,7 +544,7 @@ git diff --check
 - [x] **Step 3：检查禁止范围和运行态数据**
 
 ```powershell
-git diff -- harness/prompts backend/src shared/src frontend
+git diff -- prompts backend/src shared/src frontend
 git status --short
 git ls-files -- 'harness/scripts/runtime/output/**' 'storage/**'
 ```

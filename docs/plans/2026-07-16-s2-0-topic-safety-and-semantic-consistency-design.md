@@ -1,4 +1,4 @@
-# S2-0 Topic 首次安全表达与语义一致性优化设计
+﻿# S2-0 Topic 首次安全表达与语义一致性优化设计
 
 ## 1. 文档定位
 
@@ -77,7 +77,7 @@ Task 13 成功 builder 的原始响应约 6371 个序列化字符，主要字段
 
 ### 4.1 Builder 首次安全表达
 
-修改 `harness/prompts/topic/candidate-builder.prompt.md`，新增一段简短中文规则：
+修改 `prompts/topic/candidate-builder.prompt.md`，新增一段简短中文规则：
 
 - 必须保留具体人物、对抗力量、关键动作、明确赌注和故事余震；
 - 用历史叙事策划语言描述冲突和后果；
@@ -105,11 +105,11 @@ Task 13 成功 builder 的原始响应约 6371 个序列化字符，主要字段
 - 正式 prompt 负责解释该 mode：retry 时进一步压缩对物理伤害的描写，只保留决策、压力、场景和后果；
 - retry 不增加新的 provider retry、退避或第三次完整生成。
 
-这样可继续区分首次请求和安全重生成，同时遵守正式 prompt 必须集中在 `harness/prompts/`、语言必须为中文的工作契约。
+这样可继续区分首次请求和安全重生成，同时遵守正式 prompt 必须集中在 `prompts/`、语言必须为中文的工作契约。
 
 ### 4.3 Selector 语义一致性
 
-修改 `harness/prompts/topic/selector.prompt.md`，在现有排序原则中增加：
+修改 `prompts/topic/selector.prompt.md`，在现有排序原则中增加：
 
 - 对照 `title`、`one_line_angle`、`core_conflict`、`strong_scene` 与 `must_cover_preview`；
 - 检查行为主体、关键动作、因果关系、事件结局是否内部一致；

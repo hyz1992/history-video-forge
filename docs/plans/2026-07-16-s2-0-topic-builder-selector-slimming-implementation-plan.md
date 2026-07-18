@@ -1,10 +1,10 @@
-# S2-0 Topic Builder 与 Selector 瘦身优化实施计划
+﻿# S2-0 Topic Builder 与 Selector 瘦身优化实施计划
 
 > **供 agentic worker 使用：** REQUIRED：使用 `superpowers:test-driven-development` 按红灯、最小实现、绿灯顺序执行。若当前任务未授权子 agent，使用 `superpowers:executing-plans` 在当前会话逐批执行并保留检查点；若用户以后明确授权子 agent，才可改用 `superpowers:subagent-driven-development`。所有步骤使用复选框跟踪。
 
 **目标：**在保持 GLM-5.2、8/4 候选合同、两次正常 LLM 调用、schema/API 与现有失败恢复不变的前提下，缩短 topic builder 与 selector 的输入输出，并提高候选内部主体、动作、因果和结果的一致性。
 
-**架构：**新增一个纯函数把完整 `SelectorPoolCandidate` 投影为较短的 LLM 请求对象，内部完整候选池继续供后处理和持久化使用；正式语义变化只修改 `harness/prompts/topic/`。Builder 使用去重后的合同、软长度预算和输出前自检，Selector 保留关键故事证据、优先检查内部一致性并输出简洁评分。
+**架构：**新增一个纯函数把完整 `SelectorPoolCandidate` 投影为较短的 LLM 请求对象，内部完整候选池继续供后处理和持久化使用；正式语义变化只修改 `prompts/topic/`。Builder 使用去重后的合同、软长度预算和输出前自检，Selector 保留关键故事证据、优先检查内部一致性并输出简洁评分。
 
 **技术栈：**TypeScript、Vitest、Zod、Prompt Registry、OpenAI-compatible provider、现有 Topic Recommendation Graph。
 
@@ -18,8 +18,8 @@
 | --- | --- |
 | `backend/src/modules/topic/topic-selector-prompt-projection.ts` | 只负责把完整 selector pool 映射成 LLM 请求投影，不做截断、改写或语义判断 |
 | `backend/src/modules/topic/topic-recommendation.service.ts` | 在真实 selector 调用入口消费投影，内部排序、去重、持久化继续使用完整候选 |
-| `harness/prompts/topic/candidate-builder.prompt.md` | Builder 的中文完整字段合同、软预算、安全表达与输出前语义自检 |
-| `harness/prompts/topic/selector.prompt.md` | Selector 的中文排序合同、一致性优先级与简洁输出规则 |
+| `prompts/topic/candidate-builder.prompt.md` | Builder 的中文完整字段合同、软预算、安全表达与输出前语义自检 |
+| `prompts/topic/selector.prompt.md` | Selector 的中文排序合同、一致性优先级与简洁输出规则 |
 | `tests/backend/topic/topic-selector-prompt-projection.test.ts` | 纯函数字段边界与不变性测试 |
 | `tests/backend/topic/topic-runtime-recommendation.test.ts` | 真实生产 selector 路由确实消费投影的回归测试 |
 | `tests/backend/runtime/topic-prompt-contract.test.ts` | Builder/Selector 正式 prompt 的结构、语义与不越界合同测试 |
@@ -302,13 +302,13 @@ git commit -m "接入Topic筛选精简输入"
 **文件：**
 
 - 修改：`tests/backend/runtime/topic-prompt-contract.test.ts`
-- 修改：`harness/prompts/topic/candidate-builder.prompt.md`
+- 修改：`prompts/topic/candidate-builder.prompt.md`
 - 回归但不修改：`tests/backend/runtime/prompt-runtime.test.ts`
 
 - [x] **Step 1：记录修改前规模**
 
 ```powershell
-$prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'harness/prompts/topic/candidate-builder.prompt.md'
+$prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'prompts/topic/candidate-builder.prompt.md'
 "chars=$($prompt.Length) lines=$(($prompt -split "`n").Count)"
 ```
 
@@ -387,7 +387,7 @@ npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/topic-event-identity-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts --no-file-parallelism
-$prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'harness/prompts/topic/candidate-builder.prompt.md'
+$prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'prompts/topic/candidate-builder.prompt.md'
 "chars=$($prompt.Length) lines=$(($prompt -split "`n").Count)"
 ```
 
@@ -396,7 +396,7 @@ $prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'harness/prompts/topic/ca
 - [x] **Step 6：中文提交 Task 3**
 
 ```powershell
-git add -- harness/prompts/topic/candidate-builder.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
+git add -- prompts/topic/candidate-builder.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
 git diff --cached --check
 git commit -m "精简Topic候选生成合同"
 ```
@@ -408,13 +408,13 @@ git commit -m "精简Topic候选生成合同"
 **文件：**
 
 - 修改：`tests/backend/runtime/topic-prompt-contract.test.ts`
-- 修改：`harness/prompts/topic/selector.prompt.md`
+- 修改：`prompts/topic/selector.prompt.md`
 - 回归但不修改：`tests/backend/runtime/prompt-runtime.test.ts`
 
 - [x] **Step 1：记录修改前规模**
 
 ```powershell
-$prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'harness/prompts/topic/selector.prompt.md'
+$prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'prompts/topic/selector.prompt.md'
 "chars=$($prompt.Length) lines=$(($prompt -split "`n").Count)"
 ```
 
@@ -480,7 +480,7 @@ npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/runtime/provider-hardening.test.ts --no-file-parallelism
-$prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'harness/prompts/topic/selector.prompt.md'
+$prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'prompts/topic/selector.prompt.md'
 "chars=$($prompt.Length) lines=$(($prompt -split "`n").Count)"
 ```
 
@@ -489,7 +489,7 @@ $prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'harness/prompts/topic/se
 - [x] **Step 6：中文提交 Task 4**
 
 ```powershell
-git add -- harness/prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
+git add -- prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
 git diff --cached --check
 git commit -m "精简Topic筛选与一致性规则"
 ```

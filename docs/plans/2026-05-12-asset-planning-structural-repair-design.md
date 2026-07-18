@@ -1,4 +1,4 @@
-# Asset Planning 结构性局部修复设计
+﻿# Asset Planning 结构性局部修复设计
 
 日期：2026-05-12
 
@@ -41,7 +41,7 @@
 
 ### 做什么
 
-- 增加正式结构修复 prompt，存放在 `harness/prompts/asset-planning/`，metadata 使用 `language: zh-CN`。
+- 增加正式结构修复 prompt，存放在 `prompts/asset-planning/`，metadata 使用 `language: zh-CN`。
 - 在 chunk draft parse / validate 失败时，对当前 chunk 做一次结构修复。
 - 在最终 `AssetPlan` 本地校验失败且错误属于可修复结构问题时，对相关 task 做一次结构补丁修复。
 - 在供应商内容过滤类错误出现时，对同一 planning unit 做一次安全表述重试。

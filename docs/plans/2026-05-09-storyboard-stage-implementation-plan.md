@@ -1,4 +1,4 @@
-# Storyboard Stage Implementation Plan
+﻿# Storyboard Stage Implementation Plan
 
 日期：2026-05-09
 
@@ -30,7 +30,7 @@
 - `backend/src/modules/storyboard/storyboard-record.repository.ts`
 - `backend/src/modules/storyboard/storyboard-run.service.ts`
 - `backend/src/modules/storyboard/storyboard.routes.ts`
-- `harness/prompts/storyboard/storyboard-planner.prompt.md`
+- `prompts/storyboard/storyboard-planner.prompt.md`
 - `tests/backend/storyboard/storyboard-local-validator.test.ts`
 - `tests/backend/storyboard/storyboard-generation.test.ts`
 - `tests/backend/api/storyboard-api.test.ts`
@@ -200,9 +200,9 @@ npx vitest run --configLoader runner tests/backend/runtime/prompt-runtime.test.t
 
 - `VALID_STAGES` 加入 `storyboard`。
 - 错误文案同步为 `stage 必须是 topic、script 或 storyboard`。
-- `stageMatchesPath()` 不需要改实现；它按 `harness/prompts/<stage>` 目录片段匹配，新增 `harness/prompts/storyboard/` 后会自然通过。测试里要覆盖这一隐式依赖，防止未来改坏。
+- `stageMatchesPath()` 不需要改实现；它按 `prompts/<stage>` 目录片段匹配，新增 `prompts/storyboard/` 后会自然通过。测试里要覆盖这一隐式依赖，防止未来改坏。
 
-新增 `harness/prompts/storyboard/storyboard-planner.prompt.md`。
+新增 `prompts/storyboard/storyboard-planner.prompt.md`。
 
 frontmatter：
 

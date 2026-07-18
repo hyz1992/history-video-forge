@@ -1,4 +1,4 @@
-# S2-0 Topic 最终候选语义一致性合同实施计划
+﻿# S2-0 Topic 最终候选语义一致性合同实施计划
 
 > **供 agentic worker 使用：** REQUIRED：使用 `superpowers:test-driven-development` 按红灯、最小实现、绿灯顺序执行。若当前任务未授权子 agent，使用 `superpowers:executing-plans` 在当前会话逐批执行并保留检查点；只有用户明确授权子 agent 时才使用 `superpowers:subagent-driven-development`。所有步骤使用复选框跟踪。
 
@@ -18,7 +18,7 @@
 | --- | --- |
 | `backend/src/modules/topic/topic-recommendation.service.ts` | 定义 Selector 内部 strict schema、解析一致性字段、按 LLM verdict 选择最终四项并产生受控补位诊断 |
 | `backend/src/runtime/orchestration/runtime-diagnostics.ts` | 扩展 backend 内部 preview trace 类型，使一致性结论可观测；不修改 shared schema/API |
-| `harness/prompts/topic/selector.prompt.md` | 说明三个必填字段、issue 枚举、判断边界和简洁输出规则 |
+| `prompts/topic/selector.prompt.md` | 说明三个必填字段、issue 枚举、判断边界和简洁输出规则 |
 | `tests/backend/topic/topic-runtime-recommendation.test.ts` | 覆盖 strict parser、真实 service 选择、risk backfill、调用次数和 trace |
 | `tests/backend/runtime/topic-prompt-contract.test.ts` | 固定正式中文 prompt 与 strict contract 的语义一致性 |
 | `tests/backend/runtime/provider-hardening.test.ts` | 回归目标工具、无工具响应和错误工具响应的 provider 合同；本任务原则上只回跑不修改 |
@@ -156,7 +156,7 @@ git commit -m "增加选题语义一致性结构合同"
 **文件：**
 
 - 修改：`tests/backend/runtime/topic-prompt-contract.test.ts`
-- 修改：`harness/prompts/topic/selector.prompt.md`
+- 修改：`prompts/topic/selector.prompt.md`
 
 - [x] **Step 1：写 prompt 合同红灯测试**
 
@@ -199,7 +199,7 @@ npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts harness/scripts/check-prompt-language.test.ts --no-file-parallelism
-$prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'harness/prompts/topic/selector.prompt.md'
+$prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'prompts/topic/selector.prompt.md'
 "chars=$($prompt.Length) lines=$(($prompt -split "`n").Count)"
 ```
 
@@ -208,7 +208,7 @@ $prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'harness/prompts/topic/se
 - [x] **Step 5：中文提交 Task 2**
 
 ```powershell
-git add -- harness/prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
+git add -- prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
 git diff --cached --check
 git commit -m "明确选题筛选语义一致性输出"
 ```

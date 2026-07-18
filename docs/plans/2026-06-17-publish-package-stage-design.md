@@ -1,4 +1,4 @@
-# 发布交付包阶段设计：封面 / 标题 / 描述 / 话题标签
+﻿# 发布交付包阶段设计：封面 / 标题 / 描述 / 话题标签
 
 日期：2026-06-17
 状态：draft
@@ -135,7 +135,7 @@ export interface PublishPackageRecord {
 4. 不覆盖项目名（TopicPackage.title 保持不变）
 
 **LLM prompt 要求**：
-- 正式 prompt 必须放在 `harness/prompts/publish/`。
+- 正式 prompt 必须放在 `prompts/publish/`。
 - 语言：中文。
 - 输入：TopicPackage、ScriptDraft 摘要、视频时长。
 - 输出：结构化标题候选数组。
@@ -158,7 +158,7 @@ export interface PublishPackageRecord {
 4. 用户可以手动编辑
 
 **LLM prompt 要求**：
-- 正式 prompt 放在 `harness/prompts/publish/`。
+- 正式 prompt 放在 `prompts/publish/`。
 - 语言：中文。
 - 输出：单条描述文本。
 

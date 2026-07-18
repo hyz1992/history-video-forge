@@ -1,4 +1,4 @@
-# Storyboard Stage Design
+﻿# Storyboard Stage Design
 
 日期：2026-05-09
 
@@ -279,7 +279,7 @@ Storyboard v1 需要 LLM 参与，因为“把口播翻译成可观看段落”�
 
 正式 prompt 要求：
 
-- 文件位置：`harness/prompts/storyboard/storyboard-planner.prompt.md`
+- 文件位置：`prompts/storyboard/storyboard-planner.prompt.md`
 - 元数据 `language: zh-CN`
 - 元数据 `stage: storyboard`
 - 只消费正式对象：

@@ -1,4 +1,4 @@
-# Topic Builder First-Pass Compliance Implementation Plan
+﻿# Topic Builder First-Pass Compliance Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -11,7 +11,7 @@
 ### Task 1: 收紧 builder 首轮字段合同表达顺序
 
 **Files:**
-- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Modify: `prompts/topic/candidate-builder.prompt.md`
 - Test: `tests/backend/runtime/topic-prompt-contract.test.ts`
 
 **Step 1: Write the failing tests**
@@ -48,14 +48,14 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add harness/prompts/topic/candidate-builder.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
+git add prompts/topic/candidate-builder.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
 git commit -m "前置选题builder首轮字段交付优先级"
 ```
 
 ### Task 2: 为 builder 增加唯一合法输出骨架
 
 **Files:**
-- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Modify: `prompts/topic/candidate-builder.prompt.md`
 - Test: `tests/backend/runtime/prompt-runtime.test.ts`
 
 **Step 1: Write the failing tests**
@@ -93,14 +93,14 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add harness/prompts/topic/candidate-builder.prompt.md tests/backend/runtime/prompt-runtime.test.ts
+git add prompts/topic/candidate-builder.prompt.md tests/backend/runtime/prompt-runtime.test.ts
 git commit -m "补充选题builder合法输出骨架"
 ```
 
 ### Task 3: 为 builder 增加极短的输出前自检
 
 **Files:**
-- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Modify: `prompts/topic/candidate-builder.prompt.md`
 - Test: `tests/backend/runtime/topic-prompt-contract.test.ts`
 
 **Step 1: Write the failing tests**
@@ -139,7 +139,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add harness/prompts/topic/candidate-builder.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
+git add prompts/topic/candidate-builder.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
 git commit -m "补充选题builder字段自检提示"
 ```
 

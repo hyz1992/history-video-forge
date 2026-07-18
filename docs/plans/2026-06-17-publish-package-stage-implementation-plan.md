@@ -1,4 +1,4 @@
-# 发布交付包阶段实施计划：封面 / 标题 / 描述 / 话题标签
+﻿# 发布交付包阶段实施计划：封面 / 标题 / 描述 / 话题标签
 
 日期：2026-06-17
 前置设计：[2026-06-17-publish-package-stage-design.md](./2026-06-17-publish-package-stage-design.md)
@@ -51,7 +51,7 @@
 - 验证：单元测试
 
 **Task 2.2**：封面提示词优化 API
-- 文件：`harness/prompts/publish/cover-prompt-optimizer.prompt.md`
+- 文件：`prompts/publish/cover-prompt-optimizer.prompt.md`
 - 语言：zh-CN；输入 ArtBible + 发布标题 + 现有封面提示词；输出优化后的封面提示词
 - 端点：`POST /api/projects/:projectId/publish/cover/prompt/optimize`（新增，不复用 assets task endpoint）
 - 验证：prompt-runtime 测试 + API 测试
@@ -65,7 +65,7 @@
 ### Phase 3：标题候选（LLM）
 
 **Task 3.1**：新增 LLM prompt
-- 文件：`harness/prompts/publish/title-generator.prompt.md`
+- 文件：`prompts/publish/title-generator.prompt.md`
 - 语言：zh-CN；输出：3-5 条标题候选，每条带 style
 - 约束：不超出历史事实断言，每条≤30 字，不使用纯情绪词堆砌
 - 验证：prompt-runtime 测试
@@ -78,7 +78,7 @@
 ### Phase 4：描述生成（LLM）
 
 **Task 4.1**：新增 LLM prompt
-- 文件：`harness/prompts/publish/description-generator.prompt.md`
+- 文件：`prompts/publish/description-generator.prompt.md`
 - 语言：zh-CN；输入 TopicPackage/ScriptDraft/视频时长；输出单条描述
 - 约束：不超过 500 字，避免史实过度断言
 - 验证：prompt-runtime 测试

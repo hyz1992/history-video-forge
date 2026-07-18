@@ -1,4 +1,4 @@
-# 选题阶段回滚到 builder+selector 实施计划
+﻿# 选题阶段回滚到 builder+selector 实施计划
 
 ## 0. 关联
 
@@ -37,9 +37,9 @@ git checkout 7fc96f9~1 -- \
   backend/src/runtime/orchestration/topic-recommendation-nodes.ts \
   backend/src/runtime/orchestration/runtime-diagnostics.ts \
   backend/src/runtime/llm/operation-policy.ts \
-  harness/prompts/topic/candidate-builder.prompt.md \
-  harness/prompts/topic/candidate-builder-repair.prompt.md \
-  harness/prompts/topic/light-review.prompt.md
+  prompts/topic/candidate-builder.prompt.md \
+  prompts/topic/candidate-builder-repair.prompt.md \
+  prompts/topic/light-review.prompt.md
 ```
 
 说明：
@@ -96,7 +96,7 @@ npx vitest run --configLoader runner \
 - `grep -r "light-review" backend/src` 应只在 stub provider 或注释中出现，不在生产主链路。
 - `grep "topic.selector" backend/src/runtime/llm/operation-policy.ts` 应**不返回** thinking override 条目。
 - `grep "TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT\|TOPIC_CANDIDATE_TARGET_COUNT" backend/src/runtime/orchestration/topic-recommendation-nodes.ts` 应均为 8。
-- `harness/prompts/topic/candidate-builder.prompt.md` 中候选数量应为 8。
+- `prompts/topic/candidate-builder.prompt.md` 中候选数量应为 8。
 
 ### Step 7：单次中文提交
 
@@ -146,9 +146,9 @@ selector 未开 thinking。selector 与 light-review 在当前模型组合下
 - backend/src/runtime/orchestration/topic-recommendation-nodes.ts
 - backend/src/runtime/orchestration/runtime-diagnostics.ts
 - backend/src/runtime/llm/operation-policy.ts
-- harness/prompts/topic/candidate-builder.prompt.md
-- harness/prompts/topic/candidate-builder-repair.prompt.md
-- harness/prompts/topic/light-review.prompt.md
+- prompts/topic/candidate-builder.prompt.md
+- prompts/topic/candidate-builder-repair.prompt.md
+- prompts/topic/light-review.prompt.md
 - tests/backend/topic/topic-runtime-recommendation.test.ts
 - tests/backend/topic/topic-graph-recommendation.test.ts
 - tests/backend/runtime/topic-prompt-contract.test.ts

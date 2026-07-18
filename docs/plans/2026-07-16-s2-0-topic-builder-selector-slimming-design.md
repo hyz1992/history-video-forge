@@ -1,4 +1,4 @@
-# S2-0 Topic Builder 与 Selector 瘦身优化设计
+﻿# S2-0 Topic Builder 与 Selector 瘦身优化设计
 
 ## 1. 文档定位
 
@@ -114,7 +114,7 @@ Task 14 已避免 Task 13 的“李世民射杀建成元吉”错误复现，但
 
 ### 6.1 Prompt 去重
 
-`harness/prompts/topic/candidate-builder.prompt.md` 应完成以下收敛：
+`prompts/topic/candidate-builder.prompt.md` 应完成以下收敛：
 
 - “完整输出全部正式字段”只保留一处合同说明和一处最终自检；
 - 合并 `event_identity` 的稳定命名、中文表达和禁止包装文案规则；

@@ -1,4 +1,4 @@
-# Asset Planning v1.1 合同加固实施计划
+﻿# Asset Planning v1.1 合同加固实施计划
 
 日期：2026-05-12（修订版）
 
@@ -105,7 +105,7 @@
 
 **改动文件：**
 - `backend/src/modules/asset-planning/asset-planning-local-validator.ts`
-- `harness/prompts/asset-planning/asset-planner.prompt.md`
+- `prompts/asset-planning/asset-planner.prompt.md`
 
 **具体步骤（validator）：**
 

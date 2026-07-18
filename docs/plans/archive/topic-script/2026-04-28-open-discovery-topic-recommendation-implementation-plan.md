@@ -1,4 +1,4 @@
-# Open Discovery Topic Recommendation Implementation Plan
+﻿# Open Discovery Topic Recommendation Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -153,7 +153,7 @@ git commit -m "补充系统推荐去重与疲劳惩罚"
 ### Task 3: 提升开放发现候选的差异化与诊断可读性
 
 **Files:**
-- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Modify: `prompts/topic/candidate-builder.prompt.md`
 - Modify: `backend/src/runtime/llm/interaction-log.ts`
 - Modify: `backend/src/modules/topic/topic-recommendation.service.ts`
 - Test: `tests/backend/runtime/prompt-runtime.test.ts`
@@ -212,7 +212,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add harness/prompts/topic/candidate-builder.prompt.md backend/src/runtime/llm/interaction-log.ts backend/src/modules/topic/topic-recommendation.service.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts
+git add prompts/topic/candidate-builder.prompt.md backend/src/runtime/llm/interaction-log.ts backend/src/modules/topic/topic-recommendation.service.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts
 git commit -m "增强开放发现推荐差异化约束"
 ```
 

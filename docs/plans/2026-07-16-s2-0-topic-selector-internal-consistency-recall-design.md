@@ -1,4 +1,4 @@
-# S2-0 Topic Selector 内部一致性召回窄设计
+﻿# S2-0 Topic Selector 内部一致性召回窄设计
 
 ## 1. 背景
 
@@ -148,7 +148,7 @@ Prompt 不应新增跨题材固定模板句，也不应重复堆叠同义口号�
 
 预计实施只涉及：
 
-- `harness/prompts/topic/selector.prompt.md`
+- `prompts/topic/selector.prompt.md`
 - 对应 prompt 约束测试
 - `harness/samples/topic-selector-semantic-replay/task17-balanced.fixture.json`
 - fixture 说明、回放统计测试与当前基线记录

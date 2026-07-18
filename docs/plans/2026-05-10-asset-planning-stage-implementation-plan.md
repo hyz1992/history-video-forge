@@ -1,4 +1,4 @@
-# Asset Planning Stage Implementation Plan
+﻿# Asset Planning Stage Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -57,7 +57,7 @@ Expected create:
 - `backend/src/modules/asset-planning/asset-plan-record.repository.ts`
 - `backend/src/modules/asset-planning/asset-planning-run.service.ts`
 - `backend/src/modules/asset-planning/asset-planning.routes.ts`
-- `harness/prompts/asset-planning/asset-planner.prompt.md`
+- `prompts/asset-planning/asset-planner.prompt.md`
 - `tests/backend/asset-planning/asset-planning-local-validator.test.ts`
 - `tests/backend/asset-planning/asset-planning-generation.test.ts`
 - `tests/backend/api/asset-planning-api.test.ts`
@@ -91,7 +91,7 @@ Expected modify:
 
 Do not modify:
 
-- `harness/prompts/storyboard/storyboard-planner.prompt.md` unless a test proves a direct compatibility break.
+- `prompts/storyboard/storyboard-planner.prompt.md` unless a test proves a direct compatibility break.
 - script writer, script validator, semantic reviewer, topic recommendation, candidate cache, event registry.
 - frontend files.
 - assets / compose implementation files.
@@ -603,7 +603,7 @@ git commit -m "新增 asset planning 共享 schema"
 
 **Files:**
 
-- Create: `harness/prompts/asset-planning/asset-planner.prompt.md`
+- Create: `prompts/asset-planning/asset-planner.prompt.md`
 - Modify: `backend/src/runtime/prompts/prompt-loader.ts`
 - Modify: `harness/scripts/check-prompt-language.ts`
 - Modify: `harness/scripts/check-prompt-language.test.ts`
@@ -623,7 +623,7 @@ it("loads asset-planning.asset-planner from harness prompts with zh-CN metadata"
   expect(prompt.metadata.stage).toBe("asset_planning");
   expect(prompt.metadata.language).toBe("zh-CN");
   expect(prompt.filePath.replace(/\\/g, "/")).toContain(
-    "/harness/prompts/asset-planning/",
+    "/prompts/asset-planning/",
   );
   expect(prompt.body).toContain("AssetPlan");
   expect(prompt.body).toContain("ProjectArtBible");
@@ -661,7 +661,7 @@ status: active
 
   expect(
     validatePromptContent(
-      "harness/prompts/asset-planning/asset-planner.prompt.md",
+      "prompts/asset-planning/asset-planner.prompt.md",
       content,
     ),
   ).toEqual([]);
@@ -699,7 +699,7 @@ Update the error message to include `asset_planning`.
 
 - [ ] **Step 4: Add formal prompt**
 
-Create `harness/prompts/asset-planning/asset-planner.prompt.md`:
+Create `prompts/asset-planning/asset-planner.prompt.md`:
 
 ```markdown
 ---
@@ -755,7 +755,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```powershell
-git add backend/src/runtime/prompts/prompt-loader.ts harness/scripts/check-prompt-language.ts harness/scripts/check-prompt-language.test.ts tests/backend/runtime/prompt-runtime.test.ts harness/prompts/asset-planning/asset-planner.prompt.md
+git add backend/src/runtime/prompts/prompt-loader.ts harness/scripts/check-prompt-language.ts harness/scripts/check-prompt-language.test.ts tests/backend/runtime/prompt-runtime.test.ts prompts/asset-planning/asset-planner.prompt.md
 git commit -m "新增 asset planning prompt 支持"
 ```
 
@@ -1504,7 +1504,7 @@ Expected:
 
 - `AssetPlan` and `AssetPlanningValidationResult` shared schemas exist and are exported.
 - Prompt registry supports `asset_planning`.
-- Formal asset planning prompt is under `harness/prompts/asset-planning/` with `language: zh-CN`.
+- Formal asset planning prompt is under `prompts/asset-planning/` with `language: zh-CN`.
 - Local validator only does structure/reference checks.
 - Generation service invokes `asset-planning.planner`.
 - Asset plan records persist and appear in project snapshot.

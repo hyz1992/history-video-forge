@@ -1,4 +1,4 @@
-# Asset Planning 结构性局部修复实施计划
+﻿# Asset Planning 结构性局部修复实施计划
 
 > **给 agentic worker 的要求：**执行本计划时必须使用 `superpowers:executing-plans` 按任务逐步推进。步骤使用 checkbox（`- [ ]`）格式，便于执行时跟踪。
 
@@ -39,7 +39,7 @@
 
 预计新增：
 
-- `harness/prompts/asset-planning/asset-structural-repair.prompt.md`
+- `prompts/asset-planning/asset-structural-repair.prompt.md`
 - `backend/src/modules/asset-planning/asset-planning-structural-repair.service.ts`
 - `tests/backend/asset-planning/asset-planning-structural-repair.test.ts`
 
@@ -59,9 +59,9 @@
 不得修改：
 
 - `shared/src/**`
-- `harness/prompts/topic/**`
-- `harness/prompts/script/**`
-- `harness/prompts/storyboard/**`
+- `prompts/topic/**`
+- `prompts/script/**`
+- `prompts/storyboard/**`
 - frontend 文件
 - assets / compose 实现文件
 - `storage/topic-candidate-library/**`
@@ -70,7 +70,7 @@
 
 **文件：**
 
-- 新增：`harness/prompts/asset-planning/asset-structural-repair.prompt.md`
+- 新增：`prompts/asset-planning/asset-structural-repair.prompt.md`
 - 修改：`backend/src/runtime/prompts/prompt-loader.ts`
 - 修改：`tests/backend/runtime/prompt-runtime.test.ts`
 - 修改：`harness/scripts/check-prompt-language.test.ts`
@@ -105,7 +105,7 @@ npx vitest run --configLoader runner tests/backend/runtime/prompt-runtime.test.t
 
 - [ ] **Step 3：新增 prompt 文件并注册**
 
-新增 `harness/prompts/asset-planning/asset-structural-repair.prompt.md`，metadata 必须包含：
+新增 `prompts/asset-planning/asset-structural-repair.prompt.md`，metadata 必须包含：
 
 ```yaml
 ---
@@ -145,7 +145,7 @@ npx vitest run --configLoader runner harness/scripts/check-prompt-language.test.
 - [ ] **Step 5：提交**
 
 ```powershell
-git add harness/prompts/asset-planning/asset-structural-repair.prompt.md backend/src/runtime/prompts/prompt-loader.ts tests/backend/runtime/prompt-runtime.test.ts harness/scripts/check-prompt-language.test.ts
+git add prompts/asset-planning/asset-structural-repair.prompt.md backend/src/runtime/prompts/prompt-loader.ts tests/backend/runtime/prompt-runtime.test.ts harness/scripts/check-prompt-language.test.ts
 git commit -m "新增 asset planning 结构修复 prompt"
 ```
 

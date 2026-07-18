@@ -1,4 +1,4 @@
-# Asset Planning v1.1 合同加固设计
+﻿# Asset Planning v1.1 合同加固设计
 
 日期：2026-05-12
 
@@ -99,7 +99,7 @@ global_audio_strategy: z.record(z.string(), z.unknown()).default({}),
 | `shared/src/asset-planning/asset-plan.schema.ts` | 修改 | AssetPlan 新增 3 个顶层字段 |
 | `backend/.../asset-planning-generation.service.ts` | 修改 | `mergeAssetPlan()` 写入 3 个字段；`buildCostSummary()` 移除 hack |
 | `backend/.../asset-planning-local-validator.ts` | 修改 | 新增 3 项检查（timing 源类型、音频 cue 合同、0 video_clip） |
-| `harness/prompts/asset-planning/asset-planner.prompt.md` | 微调 | 补一句 0 video_clip 解释指导 |
+| `prompts/asset-planning/asset-planner.prompt.md` | 微调 | 补一句 0 video_clip 解释指导 |
 
 ## 5. 不改什么
 

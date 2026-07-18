@@ -1,4 +1,4 @@
-# Script Writer Duration Pacing Scene Density Design
+﻿# Script Writer Duration Pacing Scene Density Design
 
 ## 任务
 
@@ -34,7 +34,7 @@
 
 ### 1. Prompt 收口
 
-在 `harness/prompts/script/script-writer.prompt.md` 中合并增加三类短约束：
+在 `prompts/script/script-writer.prompt.md` 中合并增加三类短约束：
 
 - `medium` 正文优先写到约 330-450 个汉字等价长度；如果正文只有 320-360 字，估时应更保守，不能硬标 85-90 秒。
 - `estimated_duration_sec` 必须根据最终正文体量回填，按约 3.6-4.6 个汉字等价长度/秒估算。

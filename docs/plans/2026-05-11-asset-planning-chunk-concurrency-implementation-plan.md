@@ -1,4 +1,4 @@
-# Asset Planning Chunk Concurrency Implementation Plan
+﻿# Asset Planning Chunk Concurrency Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -45,7 +45,7 @@
 不得修改：
 
 - `shared/src/**`
-- `harness/prompts/**`
+- `prompts/**`
 - `backend/src/modules/asset-planning/asset-planning-local-validator.ts`
 - `backend/src/modules/asset-planning/asset-planning-run.service.ts`
 - `backend/src/modules/projects/**`

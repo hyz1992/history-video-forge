@@ -1,4 +1,4 @@
-# Topic + Script Phase 2 Implementation Plan
+﻿# Topic + Script Phase 2 Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -6,7 +6,7 @@
 
 **Architecture:** 先建立“业务 runtime 唯一正式 LLM 调用层”，并让 topic candidate 生成、script writer、semantic reviewer、patch-lift 全部通过这套正式链路工作；随后让 backend 的 topic/script API、最小持久化与项目快照围绕同一条主链路收口；最后补齐 script 页面最小闭环和 runtime harness 回归。整个第二阶段继续坚持“Topic Package 先冻结、script 默认单稿、最多一次 patch_once / regen_once、不进入 storyboard/assets/compose”。
 
-**Tech Stack:** Node.js 18+, npm workspaces, TypeScript, Zod, Vue 3, Vitest, 现有 `harness/prompts/*` 正式 prompt 资产，统一 runtime LLM gateway（provider 细节后置为实现任务的一部分）。
+**Tech Stack:** Node.js 18+, npm workspaces, TypeScript, Zod, Vue 3, Vitest, 现有 `prompts/*` 正式 prompt 资产，统一 runtime LLM gateway（provider 细节后置为实现任务的一部分）。
 
 ---
 
@@ -40,7 +40,7 @@
 
 - 第一阶段 `Task 1` 到 `Task 10` 已完成
 - 全量 `npm test` 已通过
-- `harness/prompts/topic/*` 与 `harness/prompts/script/*` 已作为唯一正式 prompt 位置
+- `prompts/topic/*` 与 `prompts/script/*` 已作为唯一正式 prompt 位置
 - 当前主链路仍限制在 `topic + script`
 
 ## 第二阶段完成标准
@@ -153,9 +153,9 @@ git commit -m "冻结第二阶段基础设施迁移裁剪清单"
 
 在 `tests/backend/runtime/prompt-runtime.test.ts` 中至少覆盖：
 
-- 可从 `harness/prompts/` 加载 `topic.candidate-builder`
-- 可从 `harness/prompts/` 加载 `script.script-writer`
-- 可从 `harness/prompts/` 加载 `script.semantic-reviewer`
+- 可从 `prompts/` 加载 `topic.candidate-builder`
+- 可从 `prompts/` 加载 `script.script-writer`
+- 可从 `prompts/` 加载 `script.semantic-reviewer`
 - 元数据中必须包含 `language: zh-CN`
 - provider contract 暴露统一 `invokeStructuredPrompt` 能力
 
@@ -167,7 +167,7 @@ Expected: FAIL
 **Step 4: Write minimal implementation**
 
 - 建立唯一正式 runtime LLM gateway
-- 建立基于 `harness/prompts/` 的 prompt loader / registry
+- 建立基于 `prompts/` 的 prompt loader / registry
 - 先允许 test stub provider，不在这一步完成真实 provider 细节
 - 如需借旧基础设施，只能落在迁移裁剪清单允许的目标文件与目标范围内
 
@@ -658,7 +658,7 @@ git commit -m "升级主题脚本双层回归能力"
 
 并额外确认：
 
-- 正式 prompt 仍全部位于 `harness/prompts/`
+- 正式 prompt 仍全部位于 `prompts/`
 - `runtime harness` 只驱动正式业务链路
 - `patch_once / regen_once` 没有突破单次边界
 - script 页面可通过项目快照恢复

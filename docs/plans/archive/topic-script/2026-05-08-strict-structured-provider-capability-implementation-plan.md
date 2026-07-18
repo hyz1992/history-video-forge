@@ -1,4 +1,4 @@
-# Strict Structured Provider Capability Implementation Plan
+﻿# Strict Structured Provider Capability Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -61,7 +61,7 @@ This plan does not implement:
 - Modify `tests/backend/topic/topic-runtime-recommendation.test.ts`  
   Proves `topic.selector` uses strict invocation when available and preserves existing business validation.
 
-- Modify `harness/prompts/topic/selector.prompt.md`  
+- Modify `prompts/topic/selector.prompt.md`  
   Tightens the selector prompt so schema responsibility moves to tool parameters and the prompt stops inviting explanations.
 
 - Modify `tests/backend/runtime/topic-prompt-contract.test.ts`  
@@ -1222,7 +1222,7 @@ Expected: commit succeeds.
 ### Task 5: Topic Selector Prompt Contract Cleanup
 
 **Files:**
-- Modify: `harness/prompts/topic/selector.prompt.md`
+- Modify: `prompts/topic/selector.prompt.md`
 - Modify: `tests/backend/runtime/topic-prompt-contract.test.ts`
 
 - [ ] **Step 1: Write failing prompt contract tests**
@@ -1261,7 +1261,7 @@ Expected: FAIL because the selector prompt has not yet declared the tool-call co
 
 - [ ] **Step 3: Tighten selector prompt**
 
-In `harness/prompts/topic/selector.prompt.md`, keep the existing selection principles, recent-memory rules, concrete-event anchoring, and exactly-three requirement. Add a short output contract section:
+In `prompts/topic/selector.prompt.md`, keep the existing selection principles, recent-memory rules, concrete-event anchoring, and exactly-three requirement. Add a short output contract section:
 
 ```markdown
 ## 输出合同
@@ -1290,7 +1290,7 @@ Expected: PASS.
 Run:
 
 ```powershell
-git add harness/prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
+git add prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
 git commit -m "收紧选题选择器输出提示合同"
 ```
 

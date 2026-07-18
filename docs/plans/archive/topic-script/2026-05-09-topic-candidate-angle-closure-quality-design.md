@@ -1,4 +1,4 @@
-# Topic Candidate Angle-closure Quality Design
+﻿# Topic Candidate Angle-closure Quality Design
 
 日期：2026-05-09
 
@@ -25,7 +25,7 @@
 
 ## 方案
 
-只在 `harness/prompts/topic/candidate-builder.prompt.md` 增加一段短质量合同：
+只在 `prompts/topic/candidate-builder.prompt.md` 增加一段短质量合同：
 
 - `one_line_angle` 必须被 `must_cover_preview` 三条节点支撑。
 - 三条 preview 不得只是同一句角度的改写。

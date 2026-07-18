@@ -1,4 +1,4 @@
-# Topic Recommendation Diversity Implementation Plan
+﻿# Topic Recommendation Diversity Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -13,7 +13,7 @@
 ### Task 1: 将 builder 目标从 3 个候选扩成 8 个候选池
 
 **Files:**
-- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Modify: `prompts/topic/candidate-builder.prompt.md`
 - Modify: `backend/src/runtime/orchestration/topic-recommendation-nodes.ts`
 - Modify: `backend/src/modules/topic/topic-recommendation.service.ts`
 - Test: `tests/backend/runtime/topic-prompt-contract.test.ts`
@@ -64,7 +64,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add harness/prompts/topic/candidate-builder.prompt.md backend/src/runtime/orchestration/topic-recommendation-nodes.ts backend/src/modules/topic/topic-recommendation.service.ts tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts
+git add prompts/topic/candidate-builder.prompt.md backend/src/runtime/orchestration/topic-recommendation-nodes.ts backend/src/modules/topic/topic-recommendation.service.ts tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts
 git commit -m "扩展选题builder原始候选池"
 ```
 
@@ -135,7 +135,7 @@ git commit -m "整理选题selector候选池"
 ### Task 3: 新增 topic.selector prompt 合同
 
 **Files:**
-- Create: `harness/prompts/topic/selector.prompt.md`
+- Create: `prompts/topic/selector.prompt.md`
 - Modify: `backend/src/runtime/prompts/prompt-registry.ts`
 - Test: `tests/backend/runtime/topic-prompt-contract.test.ts`
 
@@ -169,7 +169,7 @@ Expected: FAIL because `topic.selector` does not exist yet.
 
 **Step 3: Write minimal implementation**
 
-- Add `topic.selector` prompt file under `harness/prompts/topic/`.
+- Add `topic.selector` prompt file under `prompts/topic/`.
 - Register it in the prompt registry.
 - Keep the prompt narrow:
   - input is the selector pool
@@ -190,7 +190,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add harness/prompts/topic/selector.prompt.md backend/src/runtime/prompts/prompt-registry.ts tests/backend/runtime/topic-prompt-contract.test.ts
+git add prompts/topic/selector.prompt.md backend/src/runtime/prompts/prompt-registry.ts tests/backend/runtime/topic-prompt-contract.test.ts
 git commit -m "新增选题selector提示词合同"
 ```
 
@@ -259,7 +259,7 @@ git commit -m "接入选题selector最终选择步骤"
 ### Task 5: 增加一次受控 repair 补位
 
 **Files:**
-- Modify: `harness/prompts/topic/selector.prompt.md`
+- Modify: `prompts/topic/selector.prompt.md`
 - Modify: `backend/src/modules/topic/topic-recommendation.service.ts`
 - Test: `tests/backend/topic/topic-runtime-recommendation.test.ts`
 
@@ -315,7 +315,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add harness/prompts/topic/selector.prompt.md backend/src/modules/topic/topic-recommendation.service.ts tests/backend/topic/topic-runtime-recommendation.test.ts
+git add prompts/topic/selector.prompt.md backend/src/modules/topic/topic-recommendation.service.ts tests/backend/topic/topic-runtime-recommendation.test.ts
 git commit -m "补充选题selector单次repair补位"
 ```
 

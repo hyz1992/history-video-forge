@@ -1,4 +1,4 @@
-# S2-0 Topic Selector 受控局部回退设计
+﻿# S2-0 Topic Selector 受控局部回退设计
 
 ## 1. 背景与问题
 
@@ -129,7 +129,7 @@ Task 17 的 `assertSelectorCandidateCoverage()` 类运行时校验必须保留�
 预计修改：
 
 - `backend/src/modules/topic/topic-recommendation.service.ts`
-- `harness/prompts/topic/selector.prompt.md`
+- `prompts/topic/selector.prompt.md`
 - `tests/backend/topic/topic-runtime-recommendation.test.ts`
 - `tests/backend/runtime/topic-prompt-contract.test.ts`
 - `tests/harness/topic-selector-semantic-replay.test.ts`

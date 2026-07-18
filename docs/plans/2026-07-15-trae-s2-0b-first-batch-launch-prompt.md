@@ -1,4 +1,4 @@
-# Trae S2-0b 第一批启动提示词
+﻿# Trae S2-0b 第一批启动提示词
 
 > 使用方式：在 Trae 新窗口中要求其完整阅读并执行本文件。不要只复制其中一部分。
 
@@ -201,7 +201,7 @@ git status --short
 
 另外必须检查：
 
-- `harness/prompts/**` 无 diff
+- `prompts/**` 无 diff
 - `shared/src/**` 无 diff
 - API/frontend 无 diff
 - baseline raw output 未进入 Git

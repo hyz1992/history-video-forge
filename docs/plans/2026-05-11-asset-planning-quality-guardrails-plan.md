@@ -1,4 +1,4 @@
-# Asset Planning 质量护栏实施计划
+﻿# Asset Planning 质量护栏实施计划
 
 > **给 agentic worker 的要求：**执行本计划时必须使用 `superpowers:executing-plans` 按任务逐步推进。步骤使用 checkbox（`- [ ]`）格式，便于执行时跟踪。
 
@@ -54,7 +54,7 @@
 
 预期修改：
 
-- `harness/prompts/asset-planning/asset-planner.prompt.md`
+- `prompts/asset-planning/asset-planner.prompt.md`
 - `tests/backend/runtime/prompt-runtime.test.ts`
 
 仅当某个任务明确需要时才可修改：
@@ -66,9 +66,9 @@
 - `shared/src/**`
 - `backend/src/modules/asset-planning/**`
 - `backend/src/runtime/llm/**`
-- `harness/prompts/storyboard/**`
-- `harness/prompts/script/**`
-- `harness/prompts/topic/**`
+- `prompts/storyboard/**`
+- `prompts/script/**`
+- `prompts/topic/**`
 - 前端文件
 - assets / compose 实现文件
 
@@ -77,7 +77,7 @@
 **文件：**
 
 - 修改：`tests/backend/runtime/prompt-runtime.test.ts`
-- 修改：`harness/prompts/asset-planning/asset-planner.prompt.md`
+- 修改：`prompts/asset-planning/asset-planner.prompt.md`
 
 - [ ] **Step 1：先写失败的 prompt 合同测试**
 
@@ -102,7 +102,7 @@ npx vitest run --configLoader runner tests/backend/runtime/prompt-runtime.test.t
 
 - [ ] **Step 3：更新正式 asset planning prompt**
 
-在 `harness/prompts/asset-planning/asset-planner.prompt.md` 的 `ProjectArtBible` 说明附近加入：
+在 `prompts/asset-planning/asset-planner.prompt.md` 的 `ProjectArtBible` 说明附近加入：
 
 ```md
 `ProjectArtBible` 的 `label` 优先使用中文历史实名，例如“专诸”“公子光”“吴王僚”“项羽”“孙膑”；`role` 写叙事功能，例如“赴死刺客”“决策主将”“核心谋士”。不得把核心人物写成英文泛称，也不得只用功能身份泛称代替人物身份。除 `global_prompt_prefix` 或 provider hint 这类后续生成提示外，art_bible、production_intent、risk_notes、budget_notes 等主字段必须使用中文。
@@ -123,7 +123,7 @@ npx vitest run --configLoader runner tests/backend/runtime/prompt-runtime.test.t
 运行：
 
 ```powershell
-git add tests/backend/runtime/prompt-runtime.test.ts harness/prompts/asset-planning/asset-planner.prompt.md
+git add tests/backend/runtime/prompt-runtime.test.ts prompts/asset-planning/asset-planner.prompt.md
 git commit -m "收紧 asset planning 人物命名和中文输出规则"
 ```
 
@@ -132,7 +132,7 @@ git commit -m "收紧 asset planning 人物命名和中文输出规则"
 **文件：**
 
 - 修改：`tests/backend/runtime/prompt-runtime.test.ts`
-- 修改：`harness/prompts/asset-planning/asset-planner.prompt.md`
+- 修改：`prompts/asset-planning/asset-planner.prompt.md`
 
 - [ ] **Step 1：先写失败的 prompt 合同测试**
 
@@ -177,7 +177,7 @@ npx vitest run --configLoader runner tests/backend/runtime/prompt-runtime.test.t
 运行：
 
 ```powershell
-git add tests/backend/runtime/prompt-runtime.test.ts harness/prompts/asset-planning/asset-planner.prompt.md
+git add tests/backend/runtime/prompt-runtime.test.ts prompts/asset-planning/asset-planner.prompt.md
 git commit -m "收紧 asset planning 视频任务规划规则"
 ```
 
@@ -186,7 +186,7 @@ git commit -m "收紧 asset planning 视频任务规划规则"
 **文件：**
 
 - 修改：`tests/backend/runtime/prompt-runtime.test.ts`
-- 修改：`harness/prompts/asset-planning/asset-planner.prompt.md`
+- 修改：`prompts/asset-planning/asset-planner.prompt.md`
 
 - [ ] **Step 1：先写失败的 prompt 合同测试**
 
@@ -232,7 +232,7 @@ npx vitest run --configLoader runner tests/backend/runtime/prompt-runtime.test.t
 运行：
 
 ```powershell
-git add tests/backend/runtime/prompt-runtime.test.ts harness/prompts/asset-planning/asset-planner.prompt.md
+git add tests/backend/runtime/prompt-runtime.test.ts prompts/asset-planning/asset-planner.prompt.md
 git commit -m "补充 asset planning 风险和历史质感护栏"
 ```
 

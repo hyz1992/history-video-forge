@@ -1,4 +1,4 @@
-# V2 总体设计
+﻿# V2 总体设计
 
 日期：2026-07-13
 
@@ -80,17 +80,17 @@
 
 **已验证事实：**
 
-- 正式 prompt 位于 `harness/prompts/{topic,script,storyboard,asset-planning,asset,publish}/`（共 14 个 prompt 文件）。
+- 正式 prompt 位于 `prompts/{topic,script,storyboard,asset-planning,asset,publish}/`（共 14 个 prompt 文件）。
 - Prompt Registry 规范在 [harness/docs/prompt-registry-spec.md](../../harness/docs/prompt-registry-spec.md)，要求每个 prompt 声明 `id`、`stage`、`language: zh-CN`、`consumes`、`produces`、`status`。
 - Runtime loader 在 [backend/src/runtime/prompts/prompt-registry.ts](../../backend/src/runtime/prompts/prompt-registry.ts)、[backend/src/runtime/prompts/prompt-loader.ts](../../backend/src/runtime/prompts/prompt-loader.ts)。
-- `AGENTS.md` 明确规定："所有正式 LLM prompt **必须使用中文**"、"所有正式 prompt **必须存放在** `harness/prompts/`"。
+- `AGENTS.md` 明确规定："所有正式 LLM prompt **必须使用中文**"、"所有正式 prompt **必须存放在** `prompts/`"。
 - 有检查脚本：`harness/scripts/check-prompt-language.ts`、`harness/scripts/detect-duplicate-prompts.ts`。
 - prompt 元数据目前没有语义版本、输入/输出 schema、变更说明、golden fixtures 或运行时 hash 记录。
 
 **冲突记录（必须正面处理）：**
 
 - 用户原始方向是"prompt 不应该属于 harness 目录，应作为代码级资产统一管理"。
-- 当前 `AGENTS.md` 明确规定正式 prompt 位于 `harness/prompts/`。
+- 当前 `AGENTS.md` 明确规定正式 prompt 位于 `prompts/`。
 - 采用依据：以 `AGENTS.md` 当前契约为准，直到 V2 Prompt 治理（P2）正式提出迁移方案并经审查批准。本设计文档不做迁移决策。
 
 ### 1.5 选题筛选
@@ -280,9 +280,9 @@ V2 第一版采用简单 `admin/user` RBAC：
 
 **目标：** prompt 可发现、可版本化、可测试、可追溯。
 
-**当前问题（已验证）：** 无语义版本、无输入/输出 schema、无运行时 hash、harness/prompts 与用户原始方向冲突。
+**当前问题（已验证）：** 无语义版本、无输入/输出 schema、无运行时 hash、prompts 与用户原始方向冲突。
 
-**范围：** prompt ID/版本/语言/阶段/能力/owner、输入/输出 schema、变更说明、golden fixtures、运行快照记录 prompt 版本和 hash、迁移方案（保留 harness/prompts 或迁移到顶层 prompts/）。
+**范围：** prompt ID/版本/语言/阶段/能力/owner、输入/输出 schema、变更说明、golden fixtures、运行快照记录 prompt 版本和 hash、迁移方案（保留 prompts 或迁移到顶层 prompts/）。
 
 **最小交付：** prompt registry 扩展元数据、运行快照记录 prompt 版本、golden fixtures 回归。
 
@@ -773,7 +773,7 @@ Service
 | D4 | 凭据存储 | env 引用（第一版） | 加密存储 | 简单优先，BYOK 非目标 |
 | D5 | 模型目录 | 代码配置 + 数据库配置混合 | 纯数据库 | 稳定模型代码配置，运营模型数据库 |
 | D6 | RunSnapshot 粒度 | 每次生成一条 | 每阶段一条 | 平衡可追溯和存储 |
-| D7 | Prompt 真相源 | 保留 harness/prompts（当前） | 迁移到顶层 prompts/ | 不未经审查迁移 |
+| D7 | Prompt 真相源 | 保留 prompts（当前） | 迁移到顶层 prompts/ | 不未经审查迁移 |
 | D8 | 事件库与 EventRegistry 关系 | EventLibrary 引用 EventRegistry | 合并 | 避免双真相源 |
 | D9 | 预算控制 | 软提示（第一版） | 硬限制 | 灵活优先 |
 | D10 | 媒体文件授权下载 | file-routes 增加 owner 校验 | 签名 URL | 简单优先 |

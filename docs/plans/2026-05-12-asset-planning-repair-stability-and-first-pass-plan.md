@@ -1,4 +1,4 @@
-# Asset Planning Repair Stability And First Pass Implementation Plan
+﻿# Asset Planning Repair Stability And First Pass Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -49,18 +49,18 @@
 
 - `backend/src/modules/asset-planning/asset-planning-generation.service.ts`
 - `tests/backend/asset-planning/asset-planning-generation.test.ts`
-- `harness/prompts/asset-planning/asset-structural-repair.prompt.md`
+- `prompts/asset-planning/asset-structural-repair.prompt.md`
 - `tests/backend/runtime/prompt-runtime.test.ts`
-- `harness/prompts/asset-planning/asset-planner.prompt.md`
+- `prompts/asset-planning/asset-planner.prompt.md`
 - `tests/backend/runtime/prompt-runtime.test.ts`
 - `tests/harness/asset-planning-five-round-quality-check.test.ts`
 
 预计不修改：
 
 - `shared/src/**`
-- `harness/prompts/topic/**`
-- `harness/prompts/script/**`
-- `harness/prompts/storyboard/**`
+- `prompts/topic/**`
+- `prompts/script/**`
+- `prompts/storyboard/**`
 - frontend 文件
 - assets / compose 实现文件
 - `storage/topic-candidate-library/**`
@@ -502,7 +502,7 @@ git commit -m "收窄 asset planning chunk 结构修复"
 
 **Files:**
 
-- Modify: `harness/prompts/asset-planning/asset-structural-repair.prompt.md`
+- Modify: `prompts/asset-planning/asset-structural-repair.prompt.md`
 - Modify: `tests/backend/runtime/prompt-runtime.test.ts`
 
 - [ ] **Step 1：先写 prompt 合同测试**
@@ -563,7 +563,7 @@ npx vitest run --configLoader runner harness/scripts/check-prompt-language.test.
 - [ ] **Step 5：提交**
 
 ```powershell
-git add harness/prompts/asset-planning/asset-structural-repair.prompt.md tests/backend/runtime/prompt-runtime.test.ts
+git add prompts/asset-planning/asset-structural-repair.prompt.md tests/backend/runtime/prompt-runtime.test.ts
 git commit -m "更新 asset planning 结构修复 patch 合同"
 ```
 
@@ -638,7 +638,7 @@ git status --short storage/topic-candidate-library/
 
 **Files:**
 
-- Modify: `harness/prompts/asset-planning/asset-planner.prompt.md`
+- Modify: `prompts/asset-planning/asset-planner.prompt.md`
 - Modify: `tests/backend/runtime/prompt-runtime.test.ts`
 
 - [ ] **Step 1：先写 prompt 合同测试**
@@ -708,7 +708,7 @@ npx vitest run --configLoader runner harness/scripts/check-prompt-language.test.
 - [ ] **Step 5：提交**
 
 ```powershell
-git add harness/prompts/asset-planning/asset-planner.prompt.md tests/backend/runtime/prompt-runtime.test.ts
+git add prompts/asset-planning/asset-planner.prompt.md tests/backend/runtime/prompt-runtime.test.ts
 git commit -m "强化 asset planning chunk 必填字段提示"
 ```
 

@@ -1,4 +1,4 @@
-# 项目现状与后续流水线作战地图
+﻿# 项目现状与后续流水线作战地图
 
 日期：2026-05-09
 
@@ -473,7 +473,7 @@ Storyboard 本地校验至少应考虑：
 
 如果 storyboard 需要 LLM，prompt 必须：
 
-- 放在 `harness/prompts/` 下合适阶段目录
+- 放在 `prompts/` 下合适阶段目录
 - 使用中文
 - 声明 `language: zh-CN`
 - 只消费正式对象

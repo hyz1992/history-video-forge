@@ -1,4 +1,4 @@
-# Topic Selector Quality Ranker Implementation Plan
+﻿# Topic Selector Quality Ranker Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:test-driven-development while implementing this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -14,7 +14,7 @@
 
 **Files:**
 - Modify: `tests/backend/runtime/topic-prompt-contract.test.ts`
-- Modify later: `harness/prompts/topic/selector.prompt.md`
+- Modify later: `prompts/topic/selector.prompt.md`
 
 - [ ] Add a failing test that expects `topic.selector` to describe `ranked_candidates`, `quality_rank`, `quality_score`, `deductions`, and `risk_summary`.
 - [ ] Update the old “exactly three ids” prompt test to expect full ranking instead.
@@ -54,7 +54,7 @@
 ### Task 4: Prompt Update
 
 **Files:**
-- Modify: `harness/prompts/topic/selector.prompt.md`
+- Modify: `prompts/topic/selector.prompt.md`
 
 - [ ] Rewrite selector prompt in Chinese to describe the new contract.
 - [ ] Keep metadata `language: zh-CN`.

@@ -1,4 +1,4 @@
-> 说明：本文档是 **harness 架构评估的历史留档**，用于保留当时的判断依据、取舍过程与阶段性结论。
+﻿> 说明：本文档是 **harness 架构评估的历史留档**，用于保留当时的判断依据、取舍过程与阶段性结论。
 >
 > 当前正式执行规则 **不以本文为准**，而以以下位置为准：
 >
@@ -334,7 +334,7 @@
 1. 根目录 `AGENTS.md`
 2. `harness/README.md`
 3. `harness/docs/prompt-registry-spec.md`
-4. `harness/prompts/` 的正式物理位置
+4. `prompts/` 的正式物理位置
 5. `harness/scripts/runtime/run-topic-to-script-sample.ts`
 6. prompt 中文强约束
 
@@ -396,7 +396,7 @@ harness/
 也就是：
 
 - `harness/docs/` 放规范
-- `harness/prompts/` 放正式 prompt 资产
+- `prompts/` 放正式 prompt 资产
 
 这样后续：
 
@@ -460,7 +460,7 @@ harness/
 正式 prompt 不允许散落在代码中自由书写。  
 应要求：
 
-- 正式 prompt 存放于 `harness/prompts/`
+- 正式 prompt 存放于 `prompts/`
 - prompt 元数据显式声明 `language: zh-CN`
 
 #### 检查层
@@ -513,7 +513,7 @@ harness/
    - 根目录 `AGENTS.md`
    - `harness/README.md`
    - `harness/docs/` 最小集
-   - `harness/prompts/`
+   - `prompts/`
    - `harness/scripts/` 最小集
 2. 让 harness v1 先成型
 3. 再正式进入：
@@ -554,7 +554,7 @@ harness/
   - `history-video-forge/AGENTS.md`
   - `harness/README.md`
   - `harness/docs/*`
-  - `harness/prompts/*`
+  - `prompts/*`
   - `harness/scripts/*`
 
 这些内容建议在进入业务实现前完成。

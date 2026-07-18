@@ -1,4 +1,4 @@
-# Script Writer Viral First-draft Quality Implementation Plan
+﻿# Script Writer Viral First-draft Quality Implementation Plan
 
 日期：2026-05-06
 
@@ -22,7 +22,7 @@
 ### 预期改动文件
 
 - `tests/backend/runtime/prompt-runtime.test.ts`
-- `harness/prompts/script/script-writer.prompt.md`
+- `prompts/script/script-writer.prompt.md`
 
 ### TDD
 

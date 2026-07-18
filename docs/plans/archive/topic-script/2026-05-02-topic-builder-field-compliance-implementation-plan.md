@@ -1,4 +1,4 @@
-# Topic Builder Field Compliance Implementation Plan
+﻿# Topic Builder Field Compliance Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -13,7 +13,7 @@
 ### Task 1: 冻结 builder repair prompt 合同
 
 **Files:**
-- Create: `harness/prompts/topic/candidate-builder-repair.prompt.md`
+- Create: `prompts/topic/candidate-builder-repair.prompt.md`
 - Test: `tests/backend/runtime/topic-prompt-contract.test.ts`
 - Test: `tests/backend/runtime/prompt-runtime.test.ts`
 
@@ -53,7 +53,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add harness/prompts/topic/candidate-builder-repair.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts
+git add prompts/topic/candidate-builder-repair.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts
 git commit -m "新增选题builder字段补全提示词合同"
 ```
 

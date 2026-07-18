@@ -1,4 +1,4 @@
-# S2-0 Topic Selector 受控局部回退实施计划
+﻿# S2-0 Topic Selector 受控局部回退实施计划
 
 > **供 agentic worker 使用：** REQUIRED：使用 `superpowers:executing-plans` 在当前 `dev` 分支执行；用户明确要求不创建 worktree，当前任务也未授权子 agent。每个行为改动必须使用 `superpowers:test-driven-development`，严格按红灯、最小实现、绿灯推进。所有步骤使用复选框跟踪。
 
@@ -17,7 +17,7 @@
 | 文件 | 职责 |
 | --- | --- |
 | `backend/src/modules/topic/topic-recommendation.service.ts` | 恢复 Task 16 provider DTO、strict schema 与 parser；保留 Task 17 候选覆盖检查和既有 selection |
-| `harness/prompts/topic/selector.prompt.md` | 恢复逐候选完整 verdict 指令，保留断言强度检查与候选池全覆盖要求 |
+| `prompts/topic/selector.prompt.md` | 恢复逐候选完整 verdict 指令，保留断言强度检查与候选池全覆盖要求 |
 | `tests/backend/topic/topic-runtime-recommendation.test.ts` | 先用红灯冻结完整 verdict、非法组合拒绝、全集覆盖保留及 selection 不变 |
 | `tests/backend/runtime/topic-prompt-contract.test.ts` | 先用红灯冻结中文 prompt 的完整 verdict 与全覆盖规则 |
 | `harness/scripts/runtime/topic-selector-semantic-replay.ts` | 只调整生产 schema 兼容断言；请求编排、评估和脱敏输出不变 |
@@ -144,7 +144,7 @@ git commit -m "恢复选题筛选完整语义结论"
 **文件：**
 
 - 修改：`tests/backend/runtime/topic-prompt-contract.test.ts`
-- 修改：`harness/prompts/topic/selector.prompt.md`
+- 修改：`prompts/topic/selector.prompt.md`
 
 - [x] **Step 1：先修改 prompt 合同测试**
 
@@ -185,7 +185,7 @@ npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract
 - [x] **Step 5：中文提交 prompt 恢复**
 
 ```powershell
-git add -- harness/prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
+git add -- prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
 git diff --cached --check
 git commit -m "恢复选题筛选逐候选语义说明"
 ```

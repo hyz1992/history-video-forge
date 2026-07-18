@@ -1,4 +1,4 @@
-# S2-0 Topic Selector 紧凑 verdict 实施计划
+﻿# S2-0 Topic Selector 紧凑 verdict 实施计划
 
 > **供 agentic worker 使用：** REQUIRED：当前任务未授权子 agent，使用 `superpowers:executing-plans` 在当前会话执行；每个实现任务必须使用 `superpowers:test-driven-development`，严格按红灯、最小实现、绿灯顺序推进。所有步骤使用复选框跟踪。
 
@@ -17,7 +17,7 @@
 | 文件 | 职责 |
 | --- | --- |
 | `backend/src/modules/topic/topic-recommendation.service.ts` | 定义紧凑 provider schema/DTO、纯结构 parser、池覆盖校验、内部三字段派生和现有选择接线 |
-| `harness/prompts/topic/selector.prompt.md` | 规定逐候选 issue、顶层 risk notes、精确全覆盖与断言强度规则 |
+| `prompts/topic/selector.prompt.md` | 规定逐候选 issue、顶层 risk notes、精确全覆盖与断言强度规则 |
 | `tests/backend/topic/topic-runtime-recommendation.test.ts` | 覆盖 parser、risk notes 关联、池覆盖、fallback、trace、selection 和下游不变性 |
 | `tests/backend/runtime/topic-prompt-contract.test.ts` | 固定正式中文 prompt 的紧凑合同与语义边界 |
 | `harness/scripts/runtime/llm-s2-baseline-stub.test.ts` | 同步 stub scorecard，并确认 baseline 继续消费生产 schema/parser |
@@ -225,7 +225,7 @@ git commit -m "强制选题结论完整覆盖候选池"
 **文件：**
 
 - 修改：`tests/backend/runtime/topic-prompt-contract.test.ts`
-- 修改：`harness/prompts/topic/selector.prompt.md`
+- 修改：`prompts/topic/selector.prompt.md`
 - 修改：`harness/scripts/runtime/llm-s2-baseline-stub.test.ts`
 
 - [x] **Step 1：写 prompt 合同红灯**
@@ -263,7 +263,7 @@ npx vitest run --configLoader runner tests/backend/runtime/topic-prompt-contract
 - [x] **Step 6：记录 prompt 与 schema 静态规模**
 
 ```powershell
-$prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'harness/prompts/topic/selector.prompt.md'
+$prompt = Get-Content -Raw -Encoding utf8 -LiteralPath 'prompts/topic/selector.prompt.md'
 "chars=$($prompt.Length) lines=$(($prompt -split "`n").Count)"
 npx tsx -e "import { TOPIC_SELECTOR_STRICT_SCHEMA } from './backend/src/modules/topic/topic-recommendation.service.ts'; console.log(JSON.stringify(TOPIC_SELECTOR_STRICT_SCHEMA).length)"
 ```
@@ -271,7 +271,7 @@ npx tsx -e "import { TOPIC_SELECTOR_STRICT_SCHEMA } from './backend/src/modules/
 - [x] **Step 7：中文提交 Task 3**
 
 ```powershell
-git add -- harness/prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts harness/scripts/runtime/llm-s2-baseline-stub.test.ts
+git add -- prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts harness/scripts/runtime/llm-s2-baseline-stub.test.ts
 git diff --cached --check
 git commit -m "明确选题筛选紧凑结论输出"
 ```

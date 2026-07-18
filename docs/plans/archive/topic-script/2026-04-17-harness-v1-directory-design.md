@@ -1,4 +1,4 @@
-> 说明：本文档是 **harness v1 目录结构设计的历史留档**，用于记录目录分层、迁移原则与当时的设计判断。
+﻿> 说明：本文档是 **harness v1 目录结构设计的历史留档**，用于记录目录分层、迁移原则与当时的设计判断。
 >
 > 当前正式执行规则 **不以本文为准**，而以以下位置为准：
 >
@@ -61,7 +61,7 @@
 - harness 专用目录：
   - `harness/README.md`
   - `harness/docs/*`
-  - `harness/prompts/*`
+  - `prompts/*`
   - `harness/scripts/*`
 
 也就是说：
@@ -171,7 +171,7 @@ history-video-forge/
 - `AGENTS.md` 放根目录，保证 agent 一进项目就能看到
 - `docs/` 继续承载正式产品与架构规范
 - `harness/docs/` 只放执行/治理约束
-- `harness/prompts/` 放正式 prompt 资产
+- `prompts/` 放正式 prompt 资产
 - `harness/scripts/` 放检查脚本与 runtime harness
 - `harness/scripts/runtime/output/` 预留为运行产物目录，默认 gitignored
 
@@ -232,7 +232,7 @@ history-video-forge/
   - harness 的组成是什么
   - 哪些检查必须跑
   - 当前阶段最小 runtime harness 是什么
-  - 如何使用 `harness/docs`、`harness/prompts`、`harness/scripts`
+  - 如何使用 `harness/docs`、`prompts`、`harness/scripts`
 
 它与根目录 `AGENTS.md` 的关系是：
 
@@ -262,7 +262,7 @@ history-video-forge/
 - schema / API 正式设计
 - downstream 高层设计
 
-### 5.5 `harness/prompts/`
+### 5.5 `prompts/`
 
 职责：
 
@@ -271,8 +271,8 @@ history-video-forge/
 
 推荐结构：
 
-- `harness/prompts/topic/*`
-- `harness/prompts/script/*`
+- `prompts/topic/*`
+- `prompts/script/*`
 
 约束：
 
@@ -344,7 +344,7 @@ history-video-forge/
    - `AGENTS.md`
    - `harness/README.md`
 2. 再收编 `harness/docs/`
-3. 再放入 `harness/prompts/`
+3. 再放入 `prompts/`
 4. 最后再落 `harness/scripts/`
 
 这样可以避免：
@@ -369,7 +369,7 @@ Prompt Registry 不再只停留在抽象规范。
 需要同时具备：
 
 - `harness/docs/prompt-registry-spec.md`
-- `harness/prompts/` 正式物理位置
+- `prompts/` 正式物理位置
 
 否则后续：
 
@@ -415,7 +415,7 @@ harness v1 不把模板作为核心约束层。
 - `prompt-registry-spec.md`
 - `todo-list-template.md`
 
-### 新增到 `harness/prompts/`
+### 新增到 `prompts/`
 
 - `topic/candidate-builder.prompt.md`
 - `topic/light-review.prompt.md`
@@ -498,7 +498,7 @@ harness v1 不把模板作为核心约束层。
   - 根目录 `AGENTS.md`
   - `harness/README.md`
   - `harness/docs/*`
-  - `harness/prompts/*`
+  - `prompts/*`
   - `harness/scripts/*`
 
 后续如果继续推进，应先把这份目录设计与 harness 评估结论写回正式留档，再开始落地 harness v1。

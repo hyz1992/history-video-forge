@@ -1,4 +1,4 @@
-# TopicPackage Material Shape For Peak Scene Absorption Implementation Plan
+﻿# TopicPackage Material Shape For Peak Scene Absorption Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -39,7 +39,7 @@ Do not add:
 
 ## File Responsibilities
 
-- `harness/prompts/topic/candidate-builder.prompt.md`: defines the ordered meaning of the existing `must_cover_preview` array.
+- `prompts/topic/candidate-builder.prompt.md`: defines the ordered meaning of the existing `must_cover_preview` array.
 - `tests/backend/runtime/prompt-runtime.test.ts`: pins the prompt contract through Prompt Registry.
 - `backend/src/modules/topic/topic-confirm.service.ts`: maps ordered candidate preview material into existing `TopicPackage` fields.
 - `tests/backend/topic/topic-confirm-material-shape.test.ts`: verifies the frozen package uses a concrete peak preview node, not generic `strong_scene`, for `peak_payoff`.
@@ -88,12 +88,12 @@ Do not commit after Task 1. Leave the failing test for Task 2.
 ## Task 2: Tighten Candidate Builder Preview Contract
 
 **Files:**
-- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Modify: `prompts/topic/candidate-builder.prompt.md`
 - Test: `tests/backend/runtime/prompt-runtime.test.ts`
 
 - [ ] **Step 1: Replace the current loose `must_cover_preview` wording**
 
-In `harness/prompts/topic/candidate-builder.prompt.md`, replace the existing two adjacent bullets:
+In `prompts/topic/candidate-builder.prompt.md`, replace the existing two adjacent bullets:
 
 ```markdown
 - `must_cover_preview` 必须给出 3 条可交给脚本审计的叙事节点：进入局面、关键动作、压力/代价；不得把同一句角度摘要改写三遍
@@ -113,7 +113,7 @@ with this concise ordered contract:
 Run:
 
 ```powershell
-git diff --word-diff -- harness/prompts/topic/candidate-builder.prompt.md
+git diff --word-diff -- prompts/topic/candidate-builder.prompt.md
 ```
 
 Expected:
@@ -140,7 +140,7 @@ Expected:
 Stage only the prompt and prompt-runtime test:
 
 ```powershell
-git add -- tests/backend/runtime/prompt-runtime.test.ts harness/prompts/topic/candidate-builder.prompt.md
+git add -- tests/backend/runtime/prompt-runtime.test.ts prompts/topic/candidate-builder.prompt.md
 git status --short
 git commit -m "收紧候选预览峰值节点合同"
 ```

@@ -1,4 +1,4 @@
-# Script Thin Regen Repair Context Implementation Plan
+﻿# Script Thin Regen Repair Context Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. This project explicitly works on `dev` without a worktree for this session.
 
@@ -17,7 +17,7 @@
 - Use TDD for every implementation Task: write failing test, run red, make minimal implementation, run green.
 - Do not stage or commit `storage/topic-candidate-library/`.
 - Do not modify topic, UI, downstream, storyboard, asset, compose.
-- Do not modify `harness/prompts/script/script-writer.prompt.md` in this plan.
+- Do not modify `prompts/script/script-writer.prompt.md` in this plan.
 - Do not introduce keyword rules, blacklists, semantic scoring, or local "viral" judgment.
 - Keep reviewer shadow-only. Do not connect patch / lift to the main path.
 - If real 5-round output becomes longer but more watery, record that as failure; do not add more prompt pressure.

@@ -1,4 +1,4 @@
-# S2-0 Topic Selector 内部一致性召回实施计划
+﻿# S2-0 Topic Selector 内部一致性召回实施计划
 
 > **For agentic workers:** REQUIRED: Use `superpowers:subagent-driven-development` (if subagents available) or `superpowers:executing-plans` to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking. 用户明确要求直接在当前 `dev` 分支执行，不创建 worktree。
 
@@ -19,7 +19,7 @@
 | `harness/samples/topic-selector-semantic-replay/task17-balanced.fixture.json` | 保存真实 Selector 输入和人工硬指标；本任务只移除党锢硬 annotation，不改 `selector_input` |
 | `harness/samples/topic-selector-semantic-replay/fixture-set.md` | 说明硬指标与人工观察边界 |
 | `tests/harness/topic-selector-semantic-replay.test.ts` | 冻结 2 个风险正例、2 个 `none` 对照、两次请求护栏与 ID 级比较行为 |
-| `harness/prompts/topic/selector.prompt.md` | 正式中文原子断言—内部证据审查顺序；输出合同不变 |
+| `prompts/topic/selector.prompt.md` | 正式中文原子断言—内部证据审查顺序；输出合同不变 |
 | `tests/backend/runtime/topic-prompt-contract.test.ts` | 冻结 prompt 审查顺序、`risk_hints` 边界、无 fixture 泄漏和 compact 合同 |
 | `harness/scripts/check-prompt-language.test.ts` | 验证正式 prompt 元数据与正文语言 |
 | `harness/docs/s2-0-baseline-protocol.md` | 记录评测边界修正、prompt 单变量和 non-live 证据 |
@@ -49,7 +49,7 @@
 **Files:**
 
 - Modify: `tests/backend/runtime/topic-prompt-contract.test.ts`
-- Modify: `harness/prompts/topic/selector.prompt.md`
+- Modify: `prompts/topic/selector.prompt.md`
 
 - [x] **Step 1：先写 prompt 合同红灯**
 
@@ -122,9 +122,9 @@ Run:
 
 ```powershell
 git diff -- backend/src shared/src frontend harness/scripts/runtime/topic-selector-semantic-replay.ts
-git diff -- harness/prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
-$before = (git show 3f28d94:harness/prompts/topic/selector.prompt.md | Out-String)
-$after = Get-Content -Raw -Encoding UTF8 harness/prompts/topic/selector.prompt.md
+git diff -- prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
+$before = (git show 3f28d94:prompts/topic/selector.prompt.md | Out-String)
+$after = Get-Content -Raw -Encoding UTF8 prompts/topic/selector.prompt.md
 [pscustomobject]@{
   before_chars = $before.Length
   after_chars = $after.Length
@@ -138,7 +138,7 @@ Expected: 第一条为空；第二条只包含审查顺序和对应测试。记�
 - [x] **Step 6：中文提交 prompt 实验**
 
 ```powershell
-git add -- harness/prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
+git add -- prompts/topic/selector.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
 git diff --cached --check
 git commit -m "强化选题内部断言审查顺序"
 ```

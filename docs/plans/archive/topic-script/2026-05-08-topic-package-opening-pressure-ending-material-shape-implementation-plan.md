@@ -1,4 +1,4 @@
-# TopicPackage Opening Pressure Ending Material Shape Implementation Plan
+﻿# TopicPackage Opening Pressure Ending Material Shape Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -41,7 +41,7 @@ Do not add:
 
 ## File Responsibilities
 
-- `harness/prompts/topic/candidate-builder.prompt.md`: defines the ordered meaning of the existing `must_cover_preview` array.
+- `prompts/topic/candidate-builder.prompt.md`: defines the ordered meaning of the existing `must_cover_preview` array.
 - `tests/backend/runtime/prompt-runtime.test.ts`: pins the prompt contract through Prompt Registry.
 - `backend/src/modules/topic/topic-confirm.service.ts`: maps ordered candidate preview material into existing `TopicPackage` fields.
 - `tests/backend/topic/topic-confirm-material-shape.test.ts`: verifies existing `TopicPackage` fields carry opening pressure, pressure turn, and ending residue.
@@ -90,12 +90,12 @@ Do not commit after Task 1. Leave the failing test for Task 2.
 ## Task 2: Tighten Candidate Builder Opening/Ending Contract
 
 **Files:**
-- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Modify: `prompts/topic/candidate-builder.prompt.md`
 - Test: `tests/backend/runtime/prompt-runtime.test.ts`
 
 - [ ] **Step 1: Replace the current `must_cover_preview` wording**
 
-In `harness/prompts/topic/candidate-builder.prompt.md`, replace the current three adjacent `must_cover_preview` bullets:
+In `prompts/topic/candidate-builder.prompt.md`, replace the current three adjacent `must_cover_preview` bullets:
 
 ```markdown
 - `must_cover_preview` 三条顺序必须稳定：第一条：进入压力；第二条：峰值动作或高潮兑现；第三条：代价、余震或第二名句回响。
@@ -120,7 +120,7 @@ This is a replacement of the old contract, not an additive writer-prompt pile-up
 Run:
 
 ```powershell
-git diff --word-diff -- harness/prompts/topic/candidate-builder.prompt.md
+git diff --word-diff -- prompts/topic/candidate-builder.prompt.md
 ```
 
 Expected:
@@ -146,7 +146,7 @@ Expected:
 Stage only the prompt and prompt-runtime test:
 
 ```powershell
-git add -- tests/backend/runtime/prompt-runtime.test.ts harness/prompts/topic/candidate-builder.prompt.md
+git add -- tests/backend/runtime/prompt-runtime.test.ts prompts/topic/candidate-builder.prompt.md
 git status --short
 git commit -m "收紧候选开场余震材料合同"
 ```

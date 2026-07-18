@@ -1,4 +1,4 @@
-# S2-0 旗舰模型结构化生成延迟与质量优化实施计划
+﻿# S2-0 旗舰模型结构化生成延迟与质量优化实施计划
 
 > **面向 agent 执行者：**实施本计划时必须使用 `superpowers:executing-plans`，逐任务执行并在每个提交后复核。只有用户明确授权并行代理时，才可改用 `superpowers:subagent-driven-development`。所有步骤使用复选框跟踪。
 
@@ -26,7 +26,7 @@
 
 ### 本计划不包含
 
-- 不修改 `harness/prompts/**`。
+- 不修改 `prompts/**`。
 - 不修改 topic、script、storyboard、asset planning 正式 schema。
 - 不实施 script 输出瘦身、storyboard 分层、asset planning plan-level repair 重构。
 - 不把 semantic reviewer 从 shadow-only 升级为自动门禁或自动 patch。
@@ -91,7 +91,7 @@
 ### 不得修改
 
 - `shared/src/**`
-- `harness/prompts/**`
+- `prompts/**`
 - `frontend/src/**`
 - `docs/records/2026-07-13-trae-v2-design-full-prompt.md`
 - `storage/topic-candidate-library/**`
@@ -623,7 +623,7 @@ capability probe 已确认支持时，strict body 应使用供应商接受的指
 
 - [ ] **Step 3：保证 prompt/schema 不变**
 
-运行前后对 `harness/prompts/**` 和 `shared/src/**` 做 diff；本 Task 只能改变 provider 参数和编排。
+运行前后对 `prompts/**` 和 `shared/src/**` 做 diff；本 Task 只能改变 provider 参数和编排。
 
 - [ ] **Step 4：运行受影响测试**
 
@@ -677,7 +677,7 @@ git commit -m "应用旗舰模型思考与结构化策略"
 
 - `npx vitest run --configLoader runner tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/provider-hardening.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/script/script-runtime-generate.test.ts tests/backend/storyboard/storyboard-generation.test.ts tests/backend/asset-planning/asset-planning-generation.test.ts --no-file-parallelism` 全部通过（6 文件、142 项全绿，含本轮窄整改后新增的 `strict_structured_no_tool_call → structured fallback` 回归）。
 - `npm run typecheck:backend` 通过。
-- `git diff --check` 无输出；`git diff -- harness/prompts shared/src` 无输出（prompt / schema 未改动）。
+- `git diff --check` 无输出；`git diff -- prompts shared/src` 无输出（prompt / schema 未改动）。
 
 **Task 10 回归窄整改（Codex 审查后，2026-07-15）：**
 
@@ -832,7 +832,7 @@ npx vitest run --configLoader runner tests/backend/runtime/llm-operation-policy.
 npx vitest run --configLoader runner tests/backend/runtime/provider-hardening.test.ts tests/backend/runtime/env-loading.test.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/topic-script-graph.test.ts tests/backend/topic/topic-runtime-recommendation.test.ts tests/backend/script/script-runtime-generate.test.ts tests/backend/storyboard/storyboard-generation.test.ts tests/backend/asset-planning/asset-planning-generation.test.ts tests/backend/asset-planning/asset-planning-structural-repair.test.ts tests/backend/publish/cover-service.test.ts tests/backend/api/publish-api.test.ts harness/scripts/runtime/llm-s2-baseline.test.ts --no-file-parallelism
 npm run typecheck:backend
 git diff --check
-git diff -- harness/prompts shared/src frontend
+git diff -- prompts shared/src frontend
 ```
 
 预期：所有命令 exit 0；prompt/schema/frontend 无 diff；本任务不执行付费请求。

@@ -1,4 +1,4 @@
-# Topic Package Story Completeness Implementation Plan
+﻿# Topic Package Story Completeness Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -159,7 +159,7 @@ Expected: FAIL because 当前 `confirmTopicCandidate()` 返回的 shared package
 - 补最小 `forbidden_expansions`
 - `canonical_quotes` 与 `ambiguity_notes` 先走保守空值策略
 
-注意：不新增新的 topic-package prompt，不把约束散到 `harness/prompts/topic/`。
+注意：不新增新的 topic-package prompt，不把约束散到 `prompts/topic/`。
 
 **Step 4: Run test to verify it passes**
 

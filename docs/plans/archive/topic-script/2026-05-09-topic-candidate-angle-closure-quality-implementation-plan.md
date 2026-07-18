@@ -1,4 +1,4 @@
-# Topic Candidate Angle-closure Quality Implementation Plan
+﻿# Topic Candidate Angle-closure Quality Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:test-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -15,7 +15,7 @@
 **Files:**
 
 - Modify: `tests/backend/runtime/topic-prompt-contract.test.ts`
-- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Modify: `prompts/topic/candidate-builder.prompt.md`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -37,7 +37,7 @@ Expected: FAIL because the new exact prompt contract is not present yet.
 
 - [ ] **Step 3: Write minimal prompt implementation**
 
-Add one short Chinese contract block to `harness/prompts/topic/candidate-builder.prompt.md`. Do not modify writer, selector, schema, API, or validator.
+Add one short Chinese contract block to `prompts/topic/candidate-builder.prompt.md`. Do not modify writer, selector, schema, API, or validator.
 
 - [ ] **Step 4: Run test to verify it passes**
 

@@ -1,4 +1,4 @@
-# Plans 状态说明
+﻿# Plans 状态说明
 
 `docs/plans/` 根目录只用于放置当前仍准备执行、正在执行或刚完成等待收口的设计文档与 implementation plan。
 
@@ -74,7 +74,7 @@
    - 阶段二（live 验收）已交付：DeepSeek（deepseek-v4-pro）smart tier + 智谱（glm-4）flash tier 端到端冒烟通过；selector thinking 决策记录见 [2026-07-18 S2-1 Selector Thinking 决策记录](../records/2026-07-18-s2-1-selector-thinking-decision.md)：DeepSeek 不支持 thinking+tool_call，thinking=disabled 下召回 50%（达 design §6.1 下限）且 JSON 失败率 33% 为已知风险，glm-4 flash selector 召回 0/2 与 S2-0 一致证实 selector 必须走 smart tier。维持 S2-0 selector operation policy 不调整。
    - S2-1 进入冻结状态，作为 S2-2（用户偏好、生成策略与成本控制）的输入。已知风险（DeepSeek JSON 失败率、enum 精确匹配 0/4）登记在决策记录中，不在 S2-1 范围内修复。
 3. `S2-2`：用户偏好、生成策略与成本控制。接入用户级策略、预算和成本记录，消费 S2-1 的 provider/model 能力。
-4. `S2-3`：Prompt 治理。版本、hash、fixtures、变更说明和运行快照对齐；仍遵守 `AGENTS.md` 的 `harness/prompts/` 正式 prompt 位置规则，除非另有设计审查批准。
+4. `S2-3`：Prompt 治理。版本、hash、fixtures、变更说明和运行快照对齐；仍遵守 `AGENTS.md` 的 `prompts/` 正式 prompt 位置规则，除非另有设计审查批准。
 5. `S2-4`：选题筛选条件扩充。与事件库字段协调，但不先造无法映射到事件数据的词表。
 6. `S2-5`：事件库与自定义选题。形成系统推荐、事件库、自定义三入口进入同一 Topic Package 链路。
 7. `S2-6`：历史内容策略配置化。只做可配置策略，不降低历史故事质量。

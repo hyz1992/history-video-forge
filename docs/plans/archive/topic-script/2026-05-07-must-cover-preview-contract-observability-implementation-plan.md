@@ -1,4 +1,4 @@
-# Must Cover Preview Contract Observability Implementation Plan
+﻿# Must Cover Preview Contract Observability Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -13,8 +13,8 @@
 ## Boundaries
 
 Allowed changes:
-- `harness/prompts/topic/candidate-builder.prompt.md`
-- `harness/prompts/topic/candidate-builder-repair.prompt.md`
+- `prompts/topic/candidate-builder.prompt.md`
+- `prompts/topic/candidate-builder-repair.prompt.md`
 - `tests/backend/runtime/topic-prompt-contract.test.ts`
 - `backend/src/modules/topic/topic-candidate.builder.ts`
 - `tests/backend/topic/topic-candidate.builder.test.ts`
@@ -54,8 +54,8 @@ Do not add:
 
 **Files:**
 - Modify: `tests/backend/runtime/topic-prompt-contract.test.ts`
-- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
-- Modify: `harness/prompts/topic/candidate-builder-repair.prompt.md`
+- Modify: `prompts/topic/candidate-builder.prompt.md`
+- Modify: `prompts/topic/candidate-builder-repair.prompt.md`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -107,7 +107,7 @@ Expected: `FAIL`, because `topic.candidate-builder` still contains `可写入脚
 
 - [ ] **Step 3: Make the minimal prompt change**
 
-In `harness/prompts/topic/candidate-builder.prompt.md`, replace the current `must_cover_preview` contract bullet:
+In `prompts/topic/candidate-builder.prompt.md`, replace the current `must_cover_preview` contract bullet:
 
 ```md
 - `must_cover_preview` 必须给出 3 条可写入脚本的具体 beat：进入局面、关键动作、压力/代价；不得把同一句角度摘要改写三遍
@@ -135,7 +135,7 @@ with:
 "压力或代价的叙事节点"
 ```
 
-In `harness/prompts/topic/candidate-builder-repair.prompt.md`, replace the current repair bullet:
+In `prompts/topic/candidate-builder-repair.prompt.md`, replace the current repair bullet:
 
 ```md
 - 如果补齐 `must_cover_preview`，必须写成 3 条叙事节点，不是正文句；优先写成场景、动作或转折短语，不写解释性评价或完整总结句。
@@ -172,7 +172,7 @@ Expected: all tests in `topic-prompt-contract.test.ts` pass.
 Stage only Task 1 files:
 
 ```powershell
-git add tests/backend/runtime/topic-prompt-contract.test.ts harness/prompts/topic/candidate-builder.prompt.md harness/prompts/topic/candidate-builder-repair.prompt.md
+git add tests/backend/runtime/topic-prompt-contract.test.ts prompts/topic/candidate-builder.prompt.md prompts/topic/candidate-builder-repair.prompt.md
 git commit -m "消除必讲预览提示词冲突"
 ```
 

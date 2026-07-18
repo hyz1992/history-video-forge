@@ -1,4 +1,4 @@
-# Topic Recommendation Event Identity Stability Implementation Plan
+﻿# Topic Recommendation Event Identity Stability Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -13,7 +13,7 @@
 ### Task 1: 收紧 builder prompt 的 `event_identity` 命名合同
 
 **Files:**
-- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Modify: `prompts/topic/candidate-builder.prompt.md`
 - Test: `tests/backend/runtime/topic-prompt-contract.test.ts`
 
 **Step 1: Write the failing test**
@@ -59,14 +59,14 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add harness/prompts/topic/candidate-builder.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
+git add prompts/topic/candidate-builder.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts
 git commit -m "收紧选题事件标识命名合同"
 ```
 
 ### Task 2: 给 builder 接入 `recent_event_memory` 输入合同
 
 **Files:**
-- Modify: `harness/prompts/topic/candidate-builder.prompt.md`
+- Modify: `prompts/topic/candidate-builder.prompt.md`
 - Test: `tests/backend/runtime/topic-prompt-contract.test.ts`
 - Test: `tests/backend/runtime/prompt-runtime.test.ts`
 
@@ -116,7 +116,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add harness/prompts/topic/candidate-builder.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts
+git add prompts/topic/candidate-builder.prompt.md tests/backend/runtime/topic-prompt-contract.test.ts tests/backend/runtime/prompt-runtime.test.ts
 git commit -m "为选题builder补充近期事件记忆合同"
 ```
 

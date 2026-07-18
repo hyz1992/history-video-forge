@@ -1,4 +1,4 @@
-# Harness v1 Implementation Plan
+﻿# Harness v1 Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -19,7 +19,7 @@
 **Step 1: 核对 3 条已采纳微调建议是否都已写回**
 
 检查：
-- `harness/prompts/` 已明确
+- `prompts/` 已明确
 - 模板最小集只保留 `todo-list-template.md`
 - `harness/scripts/runtime/output/` 已明确
 
@@ -42,11 +42,11 @@
 - Create: `harness/docs/prompt-registry-spec.md`
 - Create: `harness/docs/harness-engineering-rules.md`
 - Create: `harness/docs/todo-list-template.md`
-- Create: `harness/prompts/topic/candidate-builder.prompt.md`
-- Create: `harness/prompts/topic/light-review.prompt.md`
-- Create: `harness/prompts/script/script-writer.prompt.md`
-- Create: `harness/prompts/script/semantic-reviewer.prompt.md`
-- Create: `harness/prompts/script/patch-lift.prompt.md`
+- Create: `prompts/topic/candidate-builder.prompt.md`
+- Create: `prompts/topic/light-review.prompt.md`
+- Create: `prompts/script/script-writer.prompt.md`
+- Create: `prompts/script/semantic-reviewer.prompt.md`
+- Create: `prompts/script/patch-lift.prompt.md`
 - Create: `harness/scripts/run-fast-checks.ts`
 - Create: `harness/scripts/check-prompt-language.ts`
 - Create: `harness/scripts/check-schema-doc-drift.ts`

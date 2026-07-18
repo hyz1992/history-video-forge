@@ -1,10 +1,10 @@
-# S2-0 Topic 首次安全表达与语义一致性优化实施计划
+﻿# S2-0 Topic 首次安全表达与语义一致性优化实施计划
 
 > **供 agentic worker 使用：** REQUIRED：使用 `superpowers:test-driven-development` 按红灯、最小实现、绿灯顺序执行。当前任务未授权子 agent，使用 `superpowers:executing-plans` 在当前会话逐批执行并保留检查点。所有步骤使用复选框跟踪。
 
 **目标：**让 `topic.candidate-builder` 首次请求即遵守供应商安全的中文历史策划表达，保留一次受控 1301 重生成，同时让 selector 对标题、主体、动作、因果和叙事节点的内部矛盾进行语义扣分。
 
-**架构：**正式语义规则只写入 `harness/prompts/topic/`；topic service 的 safety retry 只传结构化 reason/mode，不再在业务代码注入英文自然语言指令。现有 `RequestBudget` 继续作为普通/strict HTTP attempt 的唯一请求硬闸门，后续真实页面验收通过进程环境显式设置最大请求数。
+**架构：**正式语义规则只写入 `prompts/topic/`；topic service 的 safety retry 只传结构化 reason/mode，不再在业务代码注入英文自然语言指令。现有 `RequestBudget` 继续作为普通/strict HTTP attempt 的唯一请求硬闸门，后续真实页面验收通过进程环境显式设置最大请求数。
 
 **技术栈：**TypeScript、Vitest、Zod、Prompt Registry、OpenAI-compatible provider、现有 Topic Recommendation Graph。
 
@@ -18,7 +18,7 @@
 
 - 修改：`tests/backend/runtime/prompt-runtime.test.ts`
 - 修改：`tests/backend/api/topic-api-runtime.test.ts`
-- 修改：`harness/prompts/topic/candidate-builder.prompt.md`
+- 修改：`prompts/topic/candidate-builder.prompt.md`
 - 修改：`backend/src/modules/topic/topic-recommendation.service.ts`
 
 - [x] **Step 1：为正式 builder prompt 写红灯测试**
@@ -76,7 +76,7 @@ npx vitest run --configLoader runner tests/backend/runtime/prompt-runtime.test.t
 
 - [x] **Step 4：最小修改正式中文 builder prompt**
 
-在 `harness/prompts/topic/candidate-builder.prompt.md` 增加一个短小的“供应商安全表达边界”段落，要求：
+在 `prompts/topic/candidate-builder.prompt.md` 增加一个短小的“供应商安全表达边界”段落，要求：
 
 ```md
 ## 供应商安全表达边界
@@ -117,7 +117,7 @@ const safetyRetryContext = {
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/prompt-runtime.test.ts tests/backend/api/topic-api-runtime.test.ts --no-file-parallelism
-rg -n "Use neutral historical-video planning language" backend/src harness/prompts
+rg -n "Use neutral historical-video planning language" backend/src prompts
 ```
 
 预期：测试通过；`rg` 无输出。
@@ -125,7 +125,7 @@ rg -n "Use neutral historical-video planning language" backend/src harness/promp
 - [x] **Step 7：中文提交 Task 1**
 
 ```powershell
-git add harness/prompts/topic/candidate-builder.prompt.md backend/src/modules/topic/topic-recommendation.service.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/api/topic-api-runtime.test.ts
+git add prompts/topic/candidate-builder.prompt.md backend/src/modules/topic/topic-recommendation.service.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/api/topic-api-runtime.test.ts
 git commit -m "前置Topic构建器安全表达"
 ```
 
@@ -136,7 +136,7 @@ git commit -m "前置Topic构建器安全表达"
 **文件：**
 
 - 修改：`tests/backend/runtime/prompt-runtime.test.ts`
-- 修改：`harness/prompts/topic/selector.prompt.md`
+- 修改：`prompts/topic/selector.prompt.md`
 
 - [x] **Step 1：写 selector prompt 红灯测试**
 
@@ -165,7 +165,7 @@ npx vitest run --configLoader runner tests/backend/runtime/prompt-runtime.test.t
 
 - [x] **Step 3：最小修改 selector prompt**
 
-在 `harness/prompts/topic/selector.prompt.md` 的排序原则中加入：
+在 `prompts/topic/selector.prompt.md` 的排序原则中加入：
 
 ```md
 - 对照 `title`、`one_line_angle`、`core_conflict`、`strong_scene` 与 `must_cover_preview`，检查行为主体、关键动作、因果关系和事件结局是否内部一致。
@@ -185,7 +185,7 @@ npx vitest run --configLoader runner tests/backend/runtime/prompt-runtime.test.t
 - [x] **Step 5：中文提交 Task 2**
 
 ```powershell
-git add harness/prompts/topic/selector.prompt.md tests/backend/runtime/prompt-runtime.test.ts
+git add prompts/topic/selector.prompt.md tests/backend/runtime/prompt-runtime.test.ts
 git commit -m "补充Topic选择器语义一致性检查"
 ```
 
@@ -343,7 +343,7 @@ npm run typecheck:backend
 ```powershell
 git diff --check
 git diff -- shared/src backend/src/modules/topic/topic.controller.ts frontend/src
-rg -n "Use neutral historical-video planning language" backend/src harness/prompts
+rg -n "Use neutral historical-video planning language" backend/src prompts
 git status --short
 ```
 

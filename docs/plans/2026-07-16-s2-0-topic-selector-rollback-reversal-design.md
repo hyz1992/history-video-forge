@@ -1,4 +1,4 @@
-# S2-0 Topic Selector 完整 verdict 回退撤销设计
+﻿# S2-0 Topic Selector 完整 verdict 回退撤销设计
 
 ## 1. 背景与结论
 
@@ -153,7 +153,7 @@ Task 17 的运行时候选全集覆盖检查继续位于 parser 后、selection 
 预计修改：
 
 - `backend/src/modules/topic/topic-recommendation.service.ts`
-- `harness/prompts/topic/selector.prompt.md`
+- `prompts/topic/selector.prompt.md`
 - `tests/backend/topic/topic-runtime-recommendation.test.ts`
 - `tests/backend/runtime/topic-prompt-contract.test.ts`
 - `harness/scripts/runtime/topic-selector-semantic-replay.ts`

@@ -1,4 +1,4 @@
-# Asset Planning Chunk Input Slimming Implementation Plan
+﻿# Asset Planning Chunk Input Slimming Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -36,12 +36,12 @@
 验证时可能读取：
 
 - `harness/scripts/runtime/output/2026-05-11-asset-planning-single-with-timing/**`
-- `harness/prompts/asset-planning/asset-planner.prompt.md`
+- `prompts/asset-planning/asset-planner.prompt.md`
 
 不得修改：
 
 - `shared/src/**`
-- `harness/prompts/**`
+- `prompts/**`
 - `backend/src/modules/asset-planning/asset-planning-local-validator.ts`
 - `backend/src/modules/asset-planning/asset-planning-run.service.ts`
 - `backend/src/modules/script/**`
