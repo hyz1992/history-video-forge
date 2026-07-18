@@ -1,0 +1,90 @@
+---
+id: script.writer
+version: v1.0.0
+stage: script
+language: zh-CN
+consumes:
+  - ScriptInputBundle
+produces:
+  - ScriptDraftPackage
+status: active
+---
+
+# 任务
+
+根据 `ScriptInputBundle` 生成 `ScriptDraftPackage`，在既定边界内写出可审校的口播脚本草稿。
+
+## 输入对象
+
+- `ScriptInputBundle`
+
+## 输出对象
+
+- `ScriptDraftPackage`
+- 必须输出合法 JSON 对象，且只能输出 JSON；不得输出 Markdown 或解释文字
+- 必须包含：
+  - `script_text`
+  - `estimated_duration_sec`
+  - `beat_trace`
+  - `quote_trace`
+  - `opening_span`
+  - `ending_span`
+- JSON 输出骨架：
+
+```json
+{
+  "script_text": "可口播的历史故事正文",
+  "estimated_duration_sec": 85,
+  "beat_trace": [
+    {
+      "beat": "逐字复用 hard_lane.must_include_beats 中的一条 beat",
+      "excerpt": "从 script_text 截取的完整短句",
+      "confidence": 0.9
+    }
+  ],
+  "quote_trace": [
+    {
+      "quote": "输入中的名句",
+      "usage_type": "exact",
+      "excerpt": "从 script_text 截取的完整短句"
+    }
+  ],
+  "opening_span": "独立开场钩子，不直接等于 script_text 开头",
+  "ending_span": "script_text 的结尾片段"
+}
+```
+
+## 硬约束
+
+- 必须服从 `Hard Lane`
+- 只能参考 `Soft Lane`
+- `Packaging Lane` 只能弱参考，不能反向绑死正文
+- 不得改写 `TopicPackage` 合同
+- 正文和 sidecar 一律使用中文
+
+## 审计字段与正文边界
+
+- `beat_trace.beat` 是审计字段，必须逐字复用输入 beat；输入 beat 来自 `hard_lane.must_include_beats`，不得自行改名、改写或补充。
+- `script_text` 是口播正文，不得把 `must_include_beats` 原句当标签、清单或解释句逐条复述。
+- 每条 beat 必须吸收成局面推进，至少包含动作、反应、压力变化或后果中的一个具体元素；正文要像故事推进，不像字段验收。
+- `beat_trace.excerpt` 必须从自然正文截取能证明该 beat 已写到的完整短句，不少于 14 个汉字等价长度；`beat_trace.excerpt` 必须是 `script_text` 中连续、逐字一致的原文子串；截取对话时连同正文里的引号和标点一起复制；不得用 `……`、省略号、改写或拼接多个不相邻片段；不得只填 beat 名称、序号或概括标签。
+- `canonical_quote_intents` 必须通过场面目的和结尾回响兑现；引用或转述名句时按对应 `intent` 使用，不改成其他寓意，也不把名句贴成脱离场面的解释。
+
+## 口播草稿约束
+
+- `script_text` 的口播体量必须服务于 `hard_lane.duration_band`；先按档位控制正文体量，再按约 3.6-4.6 个汉字等价长度/秒回填 `estimated_duration_sec`；`short=45-70秒`，`medium=75-95秒`，`long=90-140秒`；`estimated_duration_sec` 必须落在对应时长区间内，且不得与正文体量明显失真
+- `medium` 首稿正文优先写到约 330-450 个汉字等价长度；如果正文只有 320-360 字，估时应更保守，不能硬标 85-90 秒；只能用场景、动作、对话或转述、压力升级、即时后果补足体量，不得为了凑字数重复解释、空泛评价或喊口号
+- 先单独确定一个可独立成立的 `opening_span` 作为开场钩子；`script_text` 从 `opening_span` 之后的下一拍进入正文推进，不得在正文开头逐字重复 `opening_span`；`opening_span` 采用破壁开头：第一分句必须包含本事件的具体人物或势力，并绑定压力源、选择或代价，优先从 `core_conflict`、`stakes` 或 `narrative_tension_map` 提炼；第二分句立刻落到具体历史场面、动作或危险局面；不要用泛称惊叹替代具体压力；不得为了开头铺垫而空泛解释背景；`hook_claim` 只是包装 promise 弱参考，如需借用，必须还原成具体场面，不能机械复述或照搬，不使用固定统一开头模板；`ending_span` 必须回收到 `ending_residue` 或 `stakes`，不要空泛拔高或喊口号收尾
+- `ending_span` 必须落在代价、反讽、未平后果或场景内判断上；不要默认写成改变历史、成为典范、留名史册式空泛收尾
+- 首稿是可口播的历史故事草稿，不能写成摘要稿；每个 `must_include_beats` 要写成局面推进，而不是只点名；至少一个核心场面包含人物、动作、压力源、即时后果；如用问句开头，问句后必须进入具体场面；结尾要留下代价、反讽或判断，不要只做空泛拔高
+- 每 2-3 句必须出现新的动作、对方反应、场面压力变化或即时后果；不要连续写三句以上背景解释、抽象评价或历史意义
+- 每条 `must_include_beats` 至少展开成一个叙事单元，不能只用一句话点名后立刻跳到下一条 beat；展开时优先写人物动作、对方反应、场面压力、即时后果；每条 beat 至少写出一个可见动作和一个反应或后果；三条 beat 不能压缩成列表式交代
+- 如输入包含 `regeneration_context`，只用它修正上一稿的结构下限问题，正文不得低于 `min_script_chars_for_band` 与 `min_sentence_count_for_band`，且不得改写 `TopicPackage`；如 `regeneration_context` 指出 `script_body_too_thin`，必须沿用既有 `must_include_beats` 扩写，新增场景动作、对方反应、压力后果，不能只刚刚贴线，要明显高于 `min_script_chars_for_band`；每条 beat 至少补足一个动作、一个反应、一个后果；若 `quote_trace` 为空或材料像事件骨架，每条 beat 围绕原事实补一个动作前一拍、一个即时反应、一个后果句；不得新增人物、事件、结局或改写因果；可以补原场景内不改变事实的动作、反应、停顿、目光、场面压力；不得只重排、改写或缩短上一稿，也不得写成比上一稿稍长一点的压缩摘要
+- 如 `regeneration_context.user_feedback` 非空，用户明确指出了对上一稿的具体不满。保留事实边界不变，将用户反馈作为最优先的调整方向：逐条理解用户指出的具体问题，针对性修改对应段落或结构；不要用泛泛的总结或解释回应用户，必须体现在具体的场面推进、节奏密度或口播语气中；用户反馈与审校发现冲突时，以用户反馈为准
+
+## 禁止事项
+
+- 不擅自增删 `must_include_beats`
+- 不踩 `forbidden_expansions`
+- 不把 `hook_claim` 写成独立的新合同
+- 不输出超出 `ScriptDraftPackage` 的附加对象

@@ -110,7 +110,7 @@ function buildEnv(dotEnvValues: Record<string, string>): AppEnv {
     databaseUrl: readEnvValue("DATABASE_URL", dotEnvValues) ?? "file:./dev.db",
     promptAssetsDir:
       readEnvValue("PROMPT_ASSETS_DIR", dotEnvValues) ??
-      path.resolve(process.cwd(), "harness/prompts"),
+      path.resolve(process.cwd(), "prompts"),
     llm: {
       provider: (readEnvValue("LLM_PROVIDER", dotEnvValues) ??
         "stub") as RuntimeProvider,

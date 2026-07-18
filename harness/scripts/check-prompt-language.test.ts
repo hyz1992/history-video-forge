@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+﻿import { describe, expect, it } from "vitest";
 
 import { validatePromptContent } from "./check-prompt-language.ts";
 
@@ -19,7 +19,7 @@ status: active
 生成选题候选。`;
 
     const issues = validatePromptContent(
-      "harness/prompts/topic/candidate-builder.prompt.md",
+      "prompts/topic/candidate-builder.prompt.md",
       content,
     );
 
@@ -43,7 +43,7 @@ status: active
 Write the script draft package.`;
 
     const issues = validatePromptContent(
-      "harness/prompts/script/script-writer.prompt.md",
+      "prompts/script/script-writer.prompt.md",
       content,
     );
 
@@ -67,7 +67,7 @@ status: active
 对候选选题做轻量语义评审。`;
 
     const issues = validatePromptContent(
-      "harness/prompts/topic/light-review.prompt.md",
+      "prompts/topic/light-review.prompt.md",
       content,
     );
 
@@ -92,7 +92,7 @@ status: active
 对脚本草稿进行单一语义审校，并且只输出结构化结论。`;
 
     const issues = validatePromptContent(
-      "harness/prompts/script/semantic-reviewer.prompt.md",
+      "prompts/script/semantic-reviewer.prompt.md",
       content,
     );
 
@@ -116,7 +116,7 @@ status: active
 生成视觉段落计划。`;
 
     const issues = validatePromptContent(
-      "harness/prompts/storyboard/storyboard-planner.prompt.md",
+      "prompts/storyboard/storyboard-planner.prompt.md",
       content,
     );
 
@@ -140,7 +140,7 @@ status: active
 生成 AssetPlan。`;
 
     const issues = validatePromptContent(
-      "harness/prompts/asset-planning/asset-planner.prompt.md",
+      "prompts/asset-planning/asset-planner.prompt.md",
       content,
     );
 
@@ -164,7 +164,7 @@ status: active
 优化素材生成提示词。`;
 
     const issues = validatePromptContent(
-      "harness/prompts/asset/prompt-optimizer.prompt.md",
+      "prompts/asset/prompt-optimizer.prompt.md",
       content,
     );
 
@@ -188,7 +188,7 @@ status: active
 生成发布标题候选。`;
 
     const issues = validatePromptContent(
-      "harness/prompts/publish/title-generator.prompt.md",
+      "prompts/publish/title-generator.prompt.md",
       content,
     );
 

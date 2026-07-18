@@ -25,7 +25,7 @@ describe("test storage isolation", () => {
       promptId: "test.prompt",
       promptStage: "topic.selector",
       promptLanguage: "zh-CN",
-      promptFilePath: "harness/prompts/test.md",
+      promptFilePath: "prompts/test.md",
       systemPrompt: "test",
       input: {},
       rawOutput: "{}",

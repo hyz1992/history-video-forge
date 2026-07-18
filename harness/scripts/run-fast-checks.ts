@@ -13,9 +13,9 @@ const requiredPaths = [
   "harness/docs/prompt-management.md",
   "harness/docs/prompt-registry-spec.md",
   "harness/docs/self-review-methodology.md",
-  "harness/prompts/topic/candidate-builder.prompt.md",
-  "harness/prompts/script/script-writer.prompt.md",
-  "harness/prompts/publish/title-generator.prompt.md",
+  "prompts/topic/candidate-builder.prompt.md",
+  "prompts/script/script-writer.prompt.md",
+  "prompts/publish/title-generator.prompt.md",
   "harness/scripts/check-prompt-language.ts",
   "harness/scripts/runtime/run-topic-to-script-sample.ts",
 ];
@@ -25,7 +25,7 @@ function checkRequiredPaths(): string[] {
 }
 
 function checkPromptAssets(): Array<{ file: string; issues: string[] }> {
-  const promptRoot = resolve(process.cwd(), "harness/prompts");
+  const promptRoot = resolve(process.cwd(), "prompts");
   return collectPromptFiles(promptRoot)
     .map((file) => ({
       file,

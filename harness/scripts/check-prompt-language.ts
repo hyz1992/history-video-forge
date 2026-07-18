@@ -95,7 +95,7 @@ function stageMatchesPath(filePath: string, stage: string): boolean {
     stage === "asset_planning" ? "asset-planning" :
     stage === "assets" ? "asset" :
     stage;
-  const expectedTail = normalize(join("harness", "prompts", stageDir.toLowerCase())).toLowerCase();
+  const expectedTail = normalize(join("prompts", stageDir.toLowerCase())).toLowerCase();
   return normalizedPath.includes(expectedTail);
 }
 
@@ -149,7 +149,7 @@ export function validatePromptContent(filePath: string, content: string): string
 }
 
 function run(): number {
-  const root = resolve(process.cwd(), "harness/prompts");
+  const root = resolve(process.cwd(), "prompts");
   const promptFiles = collectPromptFiles(root);
   const invalid: Array<{ file: string; issues: string[] }> = [];
 

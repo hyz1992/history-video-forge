@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+﻿import { describe, expect, it, vi } from "vitest";
 
 import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
 import { renderLlmInteractionMarkdown } from "../../../backend/src/runtime/llm/interaction-log.js";
@@ -16,7 +16,7 @@ describe("prompt runtime", () => {
 
     expect(prompt.metadata.id).toBe("topic.candidate-builder");
     expect(prompt.metadata.language).toBe("zh-CN");
-    expect(prompt.filePath.replace(/\\/g, "/")).toContain("/harness/prompts/topic/");
+    expect(prompt.filePath.replace(/\\/g, "/")).toContain("/prompts/topic/");
     expect(prompt.body).toContain("根据当前推荐种子");
   });
 
@@ -124,7 +124,7 @@ describe("prompt runtime", () => {
       promptId: "topic.candidate-builder",
       promptStage: "topic",
       promptLanguage: "zh-CN",
-      promptFilePath: "harness/prompts/topic/candidate-builder.prompt.md",
+      promptFilePath: "prompts/topic/candidate-builder.prompt.md",
       systemPrompt: "prompt",
       input: {
         seed: "topic",
@@ -149,7 +149,7 @@ describe("prompt runtime", () => {
     expect(prompt.metadata.id).toBe("script.writer");
     expect(prompt.aliases).toContain("script.script-writer");
     expect(prompt.metadata.language).toBe("zh-CN");
-    expect(prompt.filePath.replace(/\\/g, "/")).toContain("/harness/prompts/script/");
+    expect(prompt.filePath.replace(/\\/g, "/")).toContain("/prompts/script/");
   });
 
   it("loads storyboard.storyboard-planner from harness prompts with zh-CN metadata", () => {
@@ -161,7 +161,7 @@ describe("prompt runtime", () => {
     expect(prompt.metadata.stage).toBe("storyboard");
     expect(prompt.metadata.language).toBe("zh-CN");
     expect(prompt.filePath.replace(/\\/g, "/")).toContain(
-      "/harness/prompts/storyboard/",
+      "/prompts/storyboard/",
     );
     expect(prompt.body).toContain("StoryboardPlan");
     expect(prompt.body).toContain("script_excerpt");
@@ -178,7 +178,7 @@ describe("prompt runtime", () => {
     expect(prompt.metadata.stage).toBe("asset_planning");
     expect(prompt.metadata.language).toBe("zh-CN");
     expect(prompt.filePath.replace(/\\/g, "/")).toContain(
-      "/harness/prompts/asset-planning/",
+      "/prompts/asset-planning/",
     );
     expect(prompt.body).toContain("AssetPlan");
     expect(prompt.body).toContain("ProjectArtBible");
@@ -232,7 +232,7 @@ describe("prompt runtime", () => {
     expect(prompt.metadata.stage).toBe("asset_planning");
     expect(prompt.metadata.language).toBe("zh-CN");
     expect(prompt.filePath.replace(/\\/g, "/")).toContain(
-      "/harness/prompts/asset-planning/",
+      "/prompts/asset-planning/",
     );
     expect(prompt.body).toContain("只修复结构性缺口");
     expect(prompt.body).toContain("不得修改 topic、script、storyboard");

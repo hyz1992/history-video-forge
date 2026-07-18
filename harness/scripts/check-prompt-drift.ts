@@ -9,7 +9,7 @@
  *   npx tsx harness/scripts/check-prompt-drift.ts [--max-history N]
  *
  * 规则：
- * - 对每个 harness/prompts/**\/*.prompt.md 文件：
+ * - 对每个 prompts/**\/*.prompt.md 文件：
  *   1. git log --follow --format=%H 取最近 N 次 commit（默认 5）。
  *   2. git show <hash>:<file> 取当时文件内容。
  *   3. 解析 frontmatter.version + sha256(body.trim())。
@@ -22,7 +22,7 @@ import { globSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { execSync } from "node:child_process";
 
-const PROMPTS_GLOB = resolve(process.cwd(), "harness/prompts/**/*.prompt.md");
+const PROMPTS_GLOB = resolve(process.cwd(), "prompts/**/*.prompt.md");
 const DEFAULT_MAX_HISTORY = 5;
 
 // ---- CLI ----

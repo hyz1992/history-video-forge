@@ -17,7 +17,7 @@ function collectPromptFiles(dir: string, result: string[] = []): string[] {
   return result;
 }
 
-const root = resolve(process.cwd(), "harness/prompts");
+const root = resolve(process.cwd(), "prompts");
 const promptFiles = collectPromptFiles(root);
 const groups = new Map<string, string[]>();
 

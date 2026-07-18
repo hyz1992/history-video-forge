@@ -9,7 +9,7 @@
  *   npx tsx harness/scripts/check-prompt-changelog.ts
  *
  * 规则：
- * - 扫描 harness/prompts 下所有 .prompt.md 文件。
+ * - 扫描 prompts/ 下所有 .prompt.md 文件。
  * - 对每个 prompt 用 loadPromptFile 加载（校验 frontmatter + changelog 格式）。
  * - 检查 metadata.version 是否在 changelog 中存在对应条目。
  * - 检查 changelog 条目格式合法性（version/date 正则、summary 非空）。
@@ -24,7 +24,7 @@ import {
   type PromptChangelogEntry,
 } from "../../backend/src/runtime/prompts/prompt-loader.js";
 
-const PROMPTS_GLOB = resolve(process.cwd(), "harness/prompts/**/*.prompt.md");
+const PROMPTS_GLOB = resolve(process.cwd(), "prompts/**/*.prompt.md");
 const VERSION_PATTERN = /^v(\d+)\.(\d+)\.(\d+)$/u;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 

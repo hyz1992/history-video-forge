@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const executableEntries = [
   "shared/src/script/script-writing-brief-shadow.schema.ts",
-  "harness/prompts/script/script-writing-brief-shadow.prompt.md",
+  "prompts/script/script-writing-brief-shadow.prompt.md",
   "harness/scripts/runtime/script-writing-brief-shadow.ts",
   "harness/scripts/runtime/script-brief-shadow-five-round-check.ts",
   "harness/samples/script-writing-brief-shadow/yanzi-shichu.fixture.json",
@@ -17,7 +17,7 @@ const runtimeSurfaceEntries = [
   "package.json",
   "shared/src/index.ts",
   "backend/src/modules/script/script-generation.service.ts",
-  "harness/prompts/script/script-writer.prompt.md",
+  "prompts/script/script-writer.prompt.md",
 ];
 
 describe("script brief shadow stopped state", () => {

@@ -63,7 +63,7 @@ vi.mock("../../../backend/src/config/env.js", () => ({
   env: {
     nodeEnv: "test",
     databaseUrl: "file:./test.db",
-    promptAssetsDir: process.cwd().replace(/\\/g, "/") + "/harness/prompts",
+    promptAssetsDir: process.cwd().replace(/\\/g, "/") + "/prompts",
     llm: {
       provider: "openai",
       baseUrl: "https://llm.example.test/v1",

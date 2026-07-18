@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+﻿import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -271,7 +271,7 @@ describe("asset planning five round quality check", () => {
             promptId: "asset-planning.planner",
             promptStage: "asset-planning",
             promptLanguage: "zh-CN",
-            promptFilePath: "harness/prompts/asset-planning/asset-planner.prompt.md",
+            promptFilePath: "prompts/asset-planning/asset-planner.prompt.md",
             systemPrompt: "test prompt",
             input: {
               planning_mode: "global",
@@ -289,7 +289,7 @@ describe("asset planning five round quality check", () => {
             promptId: "asset-planning.planner",
             promptStage: "asset-planning",
             promptLanguage: "zh-CN",
-            promptFilePath: "harness/prompts/asset-planning/asset-planner.prompt.md",
+            promptFilePath: "prompts/asset-planning/asset-planner.prompt.md",
             systemPrompt: "test prompt",
             input: {
               planning_mode: "segment_chunk",
@@ -313,7 +313,7 @@ describe("asset planning five round quality check", () => {
             promptStage: "asset-planning",
             promptLanguage: "zh-CN",
             promptFilePath:
-              "harness/prompts/asset-planning/asset-structural-repair.prompt.md",
+              "prompts/asset-planning/asset-structural-repair.prompt.md",
             systemPrompt: "test repair prompt",
             input: {
               repair_mode: "segment_chunk_structural_repair",
@@ -337,7 +337,7 @@ describe("asset planning five round quality check", () => {
             promptId: "asset-planning.planner",
             promptStage: "asset-planning",
             promptLanguage: "zh-CN",
-            promptFilePath: "harness/prompts/asset-planning/asset-planner.prompt.md",
+            promptFilePath: "prompts/asset-planning/asset-planner.prompt.md",
             systemPrompt: "test prompt",
             input: {
               planning_mode: "segment_chunk",
@@ -556,7 +556,7 @@ describe("asset planning five round quality check", () => {
           promptStage: "asset-planning",
           promptLanguage: "zh-CN",
           promptFilePath:
-            "harness/prompts/asset-planning/asset-planner.prompt.md",
+            "prompts/asset-planning/asset-planner.prompt.md",
           systemPrompt: "test prompt",
           input: {
             planning_mode: "segment_chunk",
