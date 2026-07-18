@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+﻿import { describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 
 import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
@@ -1433,7 +1433,7 @@ describe("provider hardening", () => {
           createHash("sha256").update(prompt.body.trim()).digest("hex"),
         );
         // promptVersion 等于 metadata.version
-        expect(entry.promptVersion).toBe("v1.0.0");
+        expect(entry.promptVersion).toBe(prompt.metadata.version);
       } finally {
         globalThis.fetch = originalFetch;
       }
@@ -1496,7 +1496,7 @@ describe("provider hardening", () => {
         expect(entry.promptSha256).toBe(
           createHash("sha256").update(prompt.body.trim()).digest("hex"),
         );
-        expect(entry.promptVersion).toBe("v1.0.0");
+        expect(entry.promptVersion).toBe(prompt.metadata.version);
       } finally {
         globalThis.fetch = originalFetch;
       }
@@ -1539,7 +1539,7 @@ describe("provider hardening", () => {
         expect(entries).toHaveLength(2);
         expect(entries[0].promptSha256).toBe(entries[1].promptSha256);
         expect(entries[0].promptVersion).toBe(entries[1].promptVersion);
-        expect(entries[0].promptVersion).toBe("v1.0.0");
+        expect(entries[0].promptVersion).toBe(prompt.metadata.version);
       } finally {
         globalThis.fetch = originalFetch;
       }
@@ -1585,8 +1585,8 @@ describe("provider hardening", () => {
         // Both should still have valid sha256 and version
         expect(entries[0].promptSha256).toMatch(/^[a-f0-9]{64}$/);
         expect(entries[1].promptSha256).toMatch(/^[a-f0-9]{64}$/);
-        expect(entries[0].promptVersion).toBe("v1.0.0");
-        expect(entries[1].promptVersion).toBe("v1.0.0");
+        expect(entries[0].promptVersion).toBe(promptA.metadata.version);
+        expect(entries[1].promptVersion).toBe(promptB.metadata.version);
       } finally {
         globalThis.fetch = originalFetch;
       }
@@ -1624,7 +1624,7 @@ describe("provider hardening", () => {
       expect(entry.promptSha256).toBe(
         createHash("sha256").update(prompt.body.trim()).digest("hex"),
       );
-      expect(entry.promptVersion).toBe("v1.0.0");
+      expect(entry.promptVersion).toBe(prompt.metadata.version);
       expect(entry.errorMessage).toBeDefined();
     });
   });
