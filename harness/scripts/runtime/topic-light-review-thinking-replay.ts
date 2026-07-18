@@ -1140,9 +1140,9 @@ export function toTopicLightReviewThinkingReplayObservation(
     mode,
     model: entry.model,
     prompt_id: entry.promptId,
-    prompt_sha256: createHash("sha256")
-      .update(entry.systemPrompt, "utf8")
-      .digest("hex"),
+    prompt_sha256:
+      entry.promptSha256 ??
+      createHash("sha256").update(entry.systemPrompt, "utf8").digest("hex"),
     effective_request: entry.effectiveRequest ?? null,
     attempt_count: entry.attempts?.length ?? 0,
     duration_ms: entry.timing?.durationMs ?? null,
