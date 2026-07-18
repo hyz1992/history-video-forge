@@ -1,5 +1,6 @@
 ---
 id: storyboard.segment-regen
+version: v1.0.0
 stage: storyboard
 language: zh-CN
 consumes:

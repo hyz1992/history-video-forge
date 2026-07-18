@@ -1,5 +1,6 @@
 ---
 id: topic.selector
+version: v1.0.0
 stage: topic
 language: zh-CN
 consumes:

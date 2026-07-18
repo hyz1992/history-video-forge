@@ -1,5 +1,6 @@
 ---
 id: asset.prompt-optimizer
+version: v1.0.0
 stage: assets
 language: zh-CN
 consumes:

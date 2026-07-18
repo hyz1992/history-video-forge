@@ -1,5 +1,6 @@
 ---
 id: publish.title-generator
+version: v1.0.0
 stage: publish
 language: zh-CN
 consumes:

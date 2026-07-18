@@ -1,5 +1,6 @@
 ---
 id: asset-planning.asset-structural-repair
+version: v1.0.0
 stage: asset_planning
 language: zh-CN
 consumes:

@@ -1,5 +1,6 @@
 ---
 id: script.writer
+version: v1.0.0
 stage: script
 language: zh-CN
 consumes:

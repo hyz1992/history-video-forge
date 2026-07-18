@@ -6,6 +6,7 @@ export type PromptStatus = "active" | "draft" | "deprecated";
 
 export interface PromptMetadata {
   id: string;
+  version: string;
   stage: PromptStage;
   language: string;
   consumes: string[];
@@ -34,6 +35,7 @@ export function loadPromptFile(filePath: string): LoadedPrompt {
   return {
     metadata: {
       id: readStringField(metadata, "id"),
+      version: asPromptVersion(readStringField(metadata, "version")),
       stage: asPromptStage(stage),
       language: readStringField(metadata, "language"),
       consumes: readStringArrayField(metadata, "consumes"),
@@ -44,6 +46,21 @@ export function loadPromptFile(filePath: string): LoadedPrompt {
     filePath: path.resolve(filePath),
     aliases: [alias],
   };
+}
+
+/**
+ * 校验 prompt version 必须形如 `vX.Y.Z`，其中 X/Y/Z 都是非负整数。
+ * 不接受预发布后缀（如 -alpha），保持简化 semver。
+ */
+const PROMPT_VERSION_PATTERN = /^v(\d+)\.(\d+)\.(\d+)$/u;
+
+function asPromptVersion(value: string): string {
+  if (!PROMPT_VERSION_PATTERN.test(value)) {
+    throw new Error(
+      `Prompt version must follow semver format vX.Y.Z (e.g. "v1.0.0). Received: "${value}".`,
+    );
+  }
+  return value;
 }
 
 export function buildPromptFileAlias(

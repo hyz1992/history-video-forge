@@ -1,5 +1,6 @@
 ---
 id: publish.cover-prompt-optimizer
+version: v1.0.0
 stage: publish
 language: zh-CN
 consumes:

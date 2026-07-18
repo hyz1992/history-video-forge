@@ -1,5 +1,6 @@
 ---
 id: asset-planning.planner
+version: v1.0.0
 stage: asset_planning
 language: zh-CN
 consumes:
