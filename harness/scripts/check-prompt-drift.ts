@@ -244,7 +244,7 @@ if (isMainModule) {
   if (result.driftCount > 0) {
     for (const d of result.driftEntries) {
       console.error(
-        `[DRIFT] ${d.file}: v${d.version} body changed but version not bumped (${d.commitA} → ${d.commitB})`,
+        `[DRIFT] ${d.file}: ${d.version} body changed but version not bumped (${d.commitA} → ${d.commitB})`,
       );
     }
     console.error(
