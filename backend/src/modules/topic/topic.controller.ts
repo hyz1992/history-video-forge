@@ -13,6 +13,7 @@ import {
   confirmTopicCandidate,
   type StoredTopicCandidate,
 } from "./topic-confirm.service";
+import { writeRefluxDraft } from "../event-library/event-library-draft.writer.js";
 
 interface TopicRecommendationSeedPayload {
   canonical_name: string;
@@ -331,6 +332,22 @@ export async function createTopicRecommendationsController(
   project.status = "topic_candidates_ready";
   project.updatedAt = new Date();
   await context.app.db.firstAggregateWriter?.syncProject(project);
+
+  // 推荐回流：异步写 EventLibraryDraft(recommendation_reflux)，不阻塞响应
+  const prismaClient = context.app.prismaClient;
+  if (prismaClient && !context.auth.anonymous) {
+    const ownerId = context.auth.userId;
+    setImmediate(() => {
+      for (const storedCandidate of storedCandidates.values()) {
+        writeRefluxDraft({
+          prisma: prismaClient,
+          candidate: storedCandidate,
+          projectId: project.id,
+          ownerId,
+        });
+      }
+    });
+  }
 
   const currentRound = projectTopicState.rounds.at(-1);
   const historyRounds = projectTopicState.rounds.slice(0, -1);
