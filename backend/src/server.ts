@@ -277,10 +277,15 @@ export function createHttpServer(
     }
 
     try {
+      // GET 请求将 query string 合并进 payload，使 controller 能读取筛选参数
+      const mergedPayload: unknown = request.method === "GET" && requestUrl.searchParams.size > 0
+        ? { ...(payload as Record<string, unknown> ?? {}), ...Object.fromEntries(requestUrl.searchParams) }
+        : payload;
+
       const appResponse = await app.inject({
         method: request.method,
         url: requestUrl.pathname,
-        payload,
+        payload: mergedPayload,
         auth: authResult?.auth,
       });
 

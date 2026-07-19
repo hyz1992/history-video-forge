@@ -3,11 +3,15 @@ import type { Server } from "node:http";
 import { existsSync, mkdirSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import Database from "better-sqlite3";
 
 import { buildApp } from "../../backend/src/app.js";
 import { createHttpServer, startServer } from "../../backend/src/server.js";
 import { buildTestAuth } from "./auth/test-utils.js";
 import { resolveServerHost } from "../../backend/src/server.js";
+import { createPrismaClient } from "../../backend/src/db/prisma-client.js";
+import { syncEventLibraryFromFiles } from "../../backend/src/modules/event-library/event-library-sync.service.js";
+import { applyAllDatabaseMigrations } from "./db/migration-test-utils.js";
 
 async function listen(server: Server) {
   await new Promise<void>((resolve, reject) => {
@@ -215,5 +219,79 @@ describe("backend http server", () => {
     expect(second.statusCode).toBe(409);
     resolveFirst();
     expect((await first).statusCode).toBe(200);
+  });
+
+  it("passes GET query params to event-library list filter", async () => {
+    const root = mkdtempSync(join(tmpdir(), "svf2-http-query-"));
+    const libDir = join(root, "storage", "event-library");
+    mkdirSync(join(libDir, "tang"), { recursive: true });
+
+    const makeJson = (overrides: Record<string, unknown>) => JSON.stringify({
+      schemaVersion: 1,
+      canonicalTitle: "X",
+      summary: "X",
+      eventRegistryCanonicalName: "X",
+      aliases: [],
+      dynasty: "唐",
+      era: "初唐",
+      characterTags: [],
+      eventTypeTags: [],
+      conflictTypeTags: [],
+      themeMotifs: [],
+      timeRange: { start: "600", end: "700", display: "七世纪" },
+      locationTags: [],
+      relationshipTags: [],
+      sourceAnchorRefs: [],
+      credibilityLevel: "high",
+      disputeNotes: null,
+      origin: "builtin",
+      angles: [],
+      ...overrides,
+    });
+
+    writeFileSync(join(libDir, "tang", "event_a.json"), makeJson({
+      canonicalTitle: "事件A", eventRegistryCanonicalName: "事件A", dynasty: "唐",
+    }), "utf8");
+    writeFileSync(join(libDir, "tang", "event_b.json"), makeJson({
+      canonicalTitle: "事件B", eventRegistryCanonicalName: "事件B", dynasty: "宋",
+    }), "utf8");
+
+    const dbPath = join(root, "test.db");
+    const sqlite = new Database(dbPath);
+    applyAllDatabaseMigrations(sqlite);
+    sqlite.close();
+
+    const prismaClient = await createPrismaClient(dbPath);
+    try {
+      await syncEventLibraryFromFiles(prismaClient, root);
+      const app = buildApp({ storageBaseDir: root, prismaClient, skipSnapshotLoad: true });
+      const server = createHttpServer(app);
+      servers.push(server);
+      const port = await listen(server);
+
+      // 无筛选：应返回全部 2 条
+      const rAll = await fetch(`http://127.0.0.1:${port}/api/event-library/entries`);
+      const bodyAll = await rAll.json() as { total: number };
+      expect(bodyAll.total).toBe(2);
+
+      // 按 dynasty=唐 筛选：应只返回 1 条
+      const rTang = await fetch(`http://127.0.0.1:${port}/api/event-library/entries?dynasty=唐`);
+      const bodyTang = await rTang.json() as { total: number; entries: Array<{ canonical_title: string }> };
+      expect(bodyTang.total).toBe(1);
+      expect(bodyTang.entries[0].canonical_title).toBe("事件A");
+
+      // 按 dynasty=宋 筛选
+      const rSong = await fetch(`http://127.0.0.1:${port}/api/event-library/entries?dynasty=宋`);
+      const bodySong = await rSong.json() as { total: number };
+      expect(bodySong.total).toBe(1);
+
+      // 按 q=事件A 搜索
+      const rQ = await fetch(`http://127.0.0.1:${port}/api/event-library/entries?q=事件A`);
+      const bodyQ = await rQ.json() as { total: number };
+      expect(bodyQ.total).toBe(1);
+    } finally {
+      await prismaClient.$disconnect();
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
