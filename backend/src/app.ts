@@ -13,6 +13,7 @@ import { registerComposeRoutes } from "./modules/compose/compose.routes";
 import { registerRenderRoutes } from "./modules/render/render.routes";
 import { registerPublishRoutes } from "./modules/publish/publish.routes";
 import { registerAdminRoutes } from "./modules/admin/admin.routes";
+import { registerEventLibraryRoutes } from "./modules/event-library/event-library.routes";
 import { loadMediaLibraryCatalog } from "./modules/assets/media-library-catalog.loader";
 import { configureVoiceProfilePersistence } from "./modules/assets/voice/voice-profile.repository";
 import { recoverInterruptedRuns } from "./runtime/recovery/interrupted-run-recovery";
@@ -305,6 +306,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
   registerRenderRoutes(app);
   registerPublishRoutes(app);
   registerAdminRoutes(app);
+  registerEventLibraryRoutes(app);
 
   return app;
 }

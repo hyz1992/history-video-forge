@@ -23,6 +23,8 @@ export interface StoredTopicCandidate {
   whyThisNow: string;
   riskHints: string[];
   viralRubric: Record<string, string>;
+  sourceMode?: string;
+  sourceRef?: Record<string, unknown>;
 }
 
 export interface ConfirmTopicCandidateInput {
