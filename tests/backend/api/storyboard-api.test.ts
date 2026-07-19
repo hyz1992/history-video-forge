@@ -337,5 +337,121 @@ describe("storyboard api", () => {
     );
     expect(prepared.project.status).toBe("script_ready");
     expect(prepared.project.activeStoryboardRecordId).toBeNull();
+
+    // P1-2: Verify no dirty placeholder — the generating record must be updated with failure state
+    const allRecords = [...app.db.storyboardRecords.values()];
+    const generatingRecords = allRecords.filter(
+      (r) => (r.executionStateJson as Record<string, unknown> | null)?.generating === true,
+    );
+    expect(generatingRecords).toHaveLength(0);
+
+    // The failed record should be persisted with generating=false and error info
+    const failedRecords = allRecords.filter(
+      (r) => {
+        const es = r.executionStateJson as Record<string, unknown> | null;
+        return es?.error === "storyboard_local_validation_failed";
+      },
+    );
+    expect(failedRecords.length).toBeGreaterThanOrEqual(1);
+    const failedEs = failedRecords[0].executionStateJson as Record<string, unknown>;
+    expect(failedEs.generating).toBe(false);
+  });
+
+  it("does not activate storyboard on unexpected error and cleans up generating state", async () => {
+    const app = buildApp();
+    const prepared = await prepareActiveScript(app);
+    generateStoryboardPlanMock.mockRejectedValue(new Error("LLM timeout"));
+
+    const response = await app.inject({
+      auth,
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/storyboard/generate`,
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toMatchObject({
+      error: "internal_server_error",
+    });
+    expect(prepared.project.status).toBe("script_ready");
+    expect(prepared.project.activeStoryboardRecordId).toBeNull();
+
+    // P1-2: All storyboard records must have generating=false
+    const allRecords = [...app.db.storyboardRecords.values()];
+    const generatingRecords = allRecords.filter(
+      (r) => (r.executionStateJson as Record<string, unknown> | null)?.generating === true,
+    );
+    expect(generatingRecords).toHaveLength(0);
+  });
+
+  it("rolls back to storyboard_ready when validation fails and previous active storyboard exists", async () => {
+    const app = buildApp();
+    const prepared = await prepareActiveScript(app);
+
+    // Create a previous active storyboard by directly inserting into the in-memory DB
+    const previousPlan = makeValidPlan({
+      sourceScriptRecordId: prepared.scriptRecord.id,
+      sourceTopicPackageId: prepared.topicPackage.id,
+      scriptText: prepared.scriptText,
+      durationSec: prepared.scriptRecord.estimatedDurationSec,
+    });
+    app.db.storyboardRecords.set("previous_sb", {
+      id: "previous_sb",
+      projectId: prepared.project.id,
+      topicPackageId: prepared.topicPackage.id,
+      scriptRecordId: prepared.scriptRecord.id,
+      planJson: previousPlan,
+      validationResultJson: { stage: "storyboard_local_validation", decision: "pass", errors: [], warnings: [], metrics: {} },
+      executionStateJson: { generating: false, regenerate_used: false },
+      graphTraceSummaryJson: null,
+      runtimeDiagnosticsJson: null,
+      createdAt: new Date(),
+    });
+    prepared.project.activeStoryboardRecordId = "previous_sb";
+    prepared.project.status = "storyboard_ready";
+
+    // Generate that will fail validation
+    const invalidPlan = {
+      ...makeValidPlan({
+        sourceScriptRecordId: prepared.scriptRecord.id,
+        sourceTopicPackageId: prepared.topicPackage.id,
+        scriptText: prepared.scriptText,
+        durationSec: prepared.scriptRecord.estimatedDurationSec,
+      }),
+      segments: [
+        {
+          ...makeValidPlan({
+            sourceScriptRecordId: prepared.scriptRecord.id,
+            sourceTopicPackageId: prepared.topicPackage.id,
+            scriptText: prepared.scriptText,
+            durationSec: prepared.scriptRecord.estimatedDurationSec,
+          }).segments[0],
+          script_excerpt: "Not in script text.",
+        },
+      ],
+    };
+    generateStoryboardPlanMock.mockResolvedValue(invalidPlan);
+
+    const response = await app.inject({
+      auth,
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/storyboard/generate`,
+    });
+
+    expect(response.statusCode).toBe(422);
+    // Should roll back to previous active storyboard, not script_ready
+    expect(prepared.project.status).toBe("storyboard_ready");
+    expect(prepared.project.activeStoryboardRecordId).toBe("previous_sb");
+
+    // P1-2: Previous active storyboard must not be damaged
+    const prevRecord = app.db.storyboardRecords.get("previous_sb");
+    expect(prevRecord).toBeDefined();
+    const prevValidation = prevRecord!.validationResultJson as Record<string, unknown>;
+    expect(prevValidation.decision).toBe("pass");
+
+    // No generating=true records
+    const generatingRecords = [...app.db.storyboardRecords.values()].filter(
+      (r) => (r.executionStateJson as Record<string, unknown> | null)?.generating === true,
+    );
+    expect(generatingRecords).toHaveLength(0);
   });
 });

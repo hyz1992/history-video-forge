@@ -1,6 +1,6 @@
 ---
 id: storyboard.planner
-version: v1.0.0
+version: v1.0.1
 stage: storyboard
 language: zh-CN
 consumes:
@@ -70,6 +70,16 @@ status: active
 `visual_strategy_preference` 为每个段落建议后续的视觉生成策略：
 - `remotion_motion`：默认值，画面由静态图 + Remotion 运镜合成，成本低。适合大部分镜头。
 - `api_video`：画面由 AI 图生视频 API 生成，成本高但动态真实。仅建议给连续动作是叙事核心的镜头，例如刺杀爆发、冲锋崩阵、战车伏击等只有动态画面才能表达动作因果的场面。
+
+# 时间预算约束
+
+你必须严格遵守以下时间规则：
+
+- `estimated_total_duration_sec` 必须等于或贴近输入 `draft.estimated_duration_sec`。允许小幅偏差，但绝不能无理由膨胀到 120s 或 160s。
+- 所有 segment 的 `(end_hint_sec - start_hint_sec)` 总和必须接近 `draft.estimated_duration_sec`，偏差不超过 25%。绝对不得超过 40%，否则会导致整体生成失败。
+- segment 时间必须单调递增：`end_hint_sec > start_hint_sec`，且前一个 `end_hint_sec` 必须 ≤ 下一个 `start_hint_sec`。
+- **不要为了给每句话都分镜而把总时长拉长。** 一句话可以只占 3-5 秒，多个短句可以合并在同一 segment 中。宁可 segment 数量略少、每个 segment 容纳更多正文，也不能把总时长撑破。
+- 如果 `regeneration_context.errors` 包含 `storyboard_timing_invalid`，你必须优先压缩、重分配 segment 时间，把总时长拉回估算范围，而不是只改视觉描述。可以把过长的 segment 拆分时间给前面，也可以把多个短 segment 合并来压缩总时长。
 
 # 质量边界
 

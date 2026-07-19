@@ -1,6 +1,6 @@
 import type { ScriptDraftPackage } from "../../../../shared/src/index.js";
 import { ScriptDraftPackage as ScriptDraftPackageSchema, StoryboardPlan } from "../../../../shared/src/index.js";
-import type { DbClient, ProjectRecord, ScriptRecord, TopicPackageRecord } from "../../db/client";
+import type { DbClient, ProjectRecord, ScriptRecord, StoryboardRecord, TopicPackageRecord } from "../../db/client";
 import { createCompositeInteractionLogWriter, persistProjectRunArtifacts } from "../../runtime/trace/project-storage.js";
 import { generateStoryboardPlan, regenerateSingleSegment } from "./storyboard-generation.service";
 import { validateStoryboardPlan } from "./storyboard-local-validator";
@@ -145,9 +145,18 @@ export async function runStoryboardGeneration(
   });
   const previousActiveStoryboardRecordId = input.project.activeStoryboardRecordId;
 
+  // Declare outside try so catch block can access them for failure-record update
+  let generatingRecord: StoryboardRecord | undefined;
+  let plan: StoryboardPlan | undefined;
+  let localValidation: ReturnType<typeof validateStoryboardPlan> | undefined;
+  let regenerated = false;
+  let graphTraceSummary: Record<string, unknown> | null = null;
+  let runtimeDiagnostics: Record<string, unknown> | null = null;
+  let executionState: Record<string, unknown> = {};
+
   try {
     // Save preliminary record BEFORE plan generation so refresh shows generating state
-    const generatingRecord = await saveStoryboardRecord(input.db, {
+    generatingRecord = await saveStoryboardRecord(input.db, {
       projectId: input.project.id,
       topicPackageId: topicPackage.id,
       scriptRecordId: scriptRecord.id,
@@ -160,9 +169,8 @@ export async function runStoryboardGeneration(
     input.project.status = "storyboard_generating";
     await input.db.firstAggregateWriter?.syncProject(input.project);
 
-    let regenerated = false;
     const generateStart = new Date().toISOString();
-    let plan = await generateStoryboardPlan({
+    plan = await generateStoryboardPlan({
       sourceScriptRecordId: scriptRecord.id,
       sourceTopicPackageId: topicPackage.id,
       draft,
@@ -171,7 +179,7 @@ export async function runStoryboardGeneration(
     });
     const generateEnd = new Date().toISOString();
     const validateStart = new Date().toISOString();
-    let localValidation = validateStoryboardPlan({
+    localValidation = validateStoryboardPlan({
       draft,
       plan,
     });
@@ -210,10 +218,10 @@ export async function runStoryboardGeneration(
     });
   }
 
-  const executionState = {
+  executionState = {
     regenerate_used: regenerated,
   };
-  const graphTraceSummary = buildTraceSummary({
+  graphTraceSummary = buildTraceSummary({
     runId,
     validationDecision: localValidation.decision,
     regenerated,
@@ -224,7 +232,7 @@ export async function runStoryboardGeneration(
     regenStartedAt: regenStart,
     regenFinishedAt: regenEnd,
   });
-  const runtimeDiagnostics = {
+  runtimeDiagnostics = {
     checks: [
       {
         code:
@@ -237,6 +245,24 @@ export async function runStoryboardGeneration(
   };
 
   if (localValidation.decision !== "pass") {
+    // Update generating record with failure state — no dirty placeholder
+    await saveStoryboardRecord(input.db, {
+      id: generatingRecord.id,
+      projectId: input.project.id,
+      topicPackageId: topicPackage.id,
+      scriptRecordId: scriptRecord.id,
+      planJson: plan as Record<string, unknown>,
+      validationResultJson: localValidation as Record<string, unknown>,
+      executionStateJson: {
+        generating: false,
+        regenerate_used: regenerated,
+        error: "storyboard_local_validation_failed",
+        run_id: runId,
+      },
+      graphTraceSummaryJson: graphTraceSummary as Record<string, unknown>,
+      runtimeDiagnosticsJson: runtimeDiagnostics as Record<string, unknown>,
+    });
+
     // Clean up generating state — validation failed
     input.project.activeStoryboardRecordId = previousActiveStoryboardRecordId;
     input.project.status = previousActiveStoryboardRecordId ? "storyboard_ready" : "script_ready";
@@ -308,6 +334,36 @@ export async function runStoryboardGeneration(
     },
   };
   } catch (error) {
+    // Update generating record with failure state — best effort
+    if (generatingRecord) {
+      try {
+        await saveStoryboardRecord(input.db, {
+          id: generatingRecord.id,
+          projectId: input.project.id,
+          topicPackageId: topicPackage.id,
+          scriptRecordId: scriptRecord.id,
+          planJson: plan ?? { plan_version: "storyboard_v1", segments: [] },
+          validationResultJson: localValidation ?? {
+            stage: "storyboard_local_validation",
+            decision: "error",
+            errors: ["internal_server_error"],
+            warnings: [],
+            metrics: {},
+          },
+          executionStateJson: {
+            generating: false,
+            regenerate_used: regenerated,
+            error: "internal_server_error",
+            run_id: runId,
+          },
+          graphTraceSummaryJson: graphTraceSummary,
+          runtimeDiagnosticsJson: runtimeDiagnostics,
+        });
+      } catch {
+        // Best effort — don't mask the original error
+      }
+    }
+
     // Clean up generating state — unexpected error
     input.project.activeStoryboardRecordId = previousActiveStoryboardRecordId;
     input.project.status = previousActiveStoryboardRecordId ? "storyboard_ready" : "script_ready";
