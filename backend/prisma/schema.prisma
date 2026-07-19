@@ -22,6 +22,8 @@ model User {
   projects           Project[]  @relation("ProjectOwner")
   createdProjects    Project[]  @relation("ProjectCreatedBy")
   auditLogs          AuditLog[] @relation("AuditActor")
+  eventLibraryEntries EventLibraryEntry[] @relation("EventLibraryEntryOwner")
+  eventLibraryDrafts  EventLibraryDraft[]  @relation("EventLibraryDraftOwner")
 
   @@index([role, status])
 }
@@ -89,6 +91,7 @@ model Project {
   publishPackageRecords        PublishPackageRecord[]         @relation("ProjectPublishPackageRecords")
   recommendationRounds         RecommendationRound[]
   auditLogs                    AuditLog[]
+  eventLibraryDrafts           EventLibraryDraft[]
 
   @@index([ownerId, updatedAt])
   @@index([createdById, createdAt])
@@ -108,6 +111,89 @@ model EventRegistryEntry {
   topicPackages             TopicPackage[]
   candidateCache            RecommendationCandidateCache[]
   recommendationExposures   RecommendationExposure[]
+  eventLibraryEntries       EventLibraryEntry[]
+}
+
+model EventLibraryEntry {
+  id                   String             @id @default(uuid())
+  eventRegistryEntryId String
+  canonicalTitle       String
+  summary              String
+  dynasty              String?
+  era                  String?
+  characterTagsJson    Json
+  eventTypeTagsJson    Json
+  conflictTypeTagsJson Json
+  themeMotifsJson      Json
+  timeRangeJson        Json?
+  locationTagsJson     Json
+  relationshipTagsJson Json
+  sourceAnchorRefsJson Json
+  credibilityLevel     String             @default("medium")
+  disputeNotes         String?
+  visibility           String             @default("public")
+  status               String             @default("draft")
+  ownerId              String?
+  originKind           String             @default("builtin")
+  originRefJson        Json?
+  libraryFingerprint   String             @unique
+  filePath             String?
+  fileContentHash      String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  eventRegistryEntry   EventRegistryEntry @relation(fields: [eventRegistryEntryId], references: [id], onDelete: Restrict)
+  owner                User?              @relation("EventLibraryEntryOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  angles               EventLibraryAngle[]
+  draftsMerged         EventLibraryDraft[] @relation("EventLibraryDraftMerge")
+
+  @@index([status, visibility])
+  @@index([dynasty])
+  @@index([status, ownerId])
+  @@index([originKind, status])
+}
+
+model EventLibraryAngle {
+  id                  String            @id @default(uuid())
+  eventLibraryEntryId String
+  angleLabel          String
+  familyLabel         String
+  scopeLabel          String            @default("standard")
+  angleFingerprint    String
+  riskHintsJson       Json
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  eventLibraryEntry   EventLibraryEntry @relation(fields: [eventLibraryEntryId], references: [id], onDelete: Cascade)
+
+  @@unique([eventLibraryEntryId, angleFingerprint])
+}
+
+model EventLibraryDraft {
+  id                     String             @id @default(uuid())
+  draftKind              String
+  projectId              String
+  candidateFingerprint   String?
+  eventRegistryEntryId   String?
+  proposedTitle          String
+  proposedSummary        String
+  proposedAnglesJson     Json
+  proposedTagsJson       Json
+  rawCustomDigest        String?
+  customRefinedEventJson Json?
+  ownerId                String
+  status                 String             @default("draft")
+  reviewerId             String?
+  reviewedAt             DateTime?
+  reviewNotes            String?
+  mergedEntryId          String?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  project                Project            @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  owner                  User               @relation("EventLibraryDraftOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  mergedEntry            EventLibraryEntry? @relation("EventLibraryDraftMerge", fields: [mergedEntryId], references: [id], onDelete: SetNull)
+
+  @@index([status, ownerId])
+  @@index([projectId])
+  @@index([draftKind, status])
 }
 
 model TopicPackage {
@@ -131,6 +217,8 @@ model TopicPackage {
   riskHintsJson             Json
   sourceAnchorRefsJson      Json
   ambiguityNotesJson        Json
+  sourceMode                String               @default("recommended")
+  sourceRefJson             Json?
   createdAt                 DateTime               @default(now())
   project                   Project                @relation("ProjectTopicPackages", fields: [projectId], references: [id], onDelete: Restrict)
   eventRegistryEntry        EventRegistryEntry?    @relation(fields: [eventRegistryEntryId], references: [id], onDelete: Restrict)

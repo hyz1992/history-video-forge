@@ -158,3 +158,98 @@ describe("V2 Prisma baseline schema", () => {
     }
   });
 });
+
+describe("S2-5 EventLibrary schema", () => {
+  it("contains EventLibraryEntry / EventLibraryAngle / EventLibraryDraft models", () => {
+    const schema = readFileSync(schemaPath, "utf8");
+    for (const modelName of ["EventLibraryEntry", "EventLibraryAngle", "EventLibraryDraft"]) {
+      modelBody(schema, modelName);
+    }
+  });
+
+  it("defines sourceMode and sourceRefJson on TopicPackage", () => {
+    const schema = readFileSync(schemaPath, "utf8");
+    const tp = modelBody(schema, "TopicPackage");
+    expect(tp).toMatch(/sourceMode\s+String\s+@default\("recommended"\)/);
+    expect(tp).toMatch(/sourceRefJson\s+Json\?/);
+  });
+
+  it("defines EventLibraryEntry with status=enumerated, time/location/relationship fields", () => {
+    const schema = readFileSync(schemaPath, "utf8");
+    const el = modelBody(schema, "EventLibraryEntry");
+    for (const fieldName of [
+      "eventRegistryEntryId",
+      "canonicalTitle",
+      "summary",
+      "dynasty",
+      "era",
+      "characterTagsJson",
+      "eventTypeTagsJson",
+      "conflictTypeTagsJson",
+      "themeMotifsJson",
+      "timeRangeJson",
+      "locationTagsJson",
+      "relationshipTagsJson",
+      "credibilityLevel",
+      "visibility",
+      "status",
+      "ownerId",
+      "originKind",
+      "originRefJson",
+      "libraryFingerprint",
+      "filePath",
+      "fileContentHash",
+    ]) {
+      expect(el, `EventLibraryEntry.${fieldName} 必须存在`).toMatch(new RegExp(`^\\s*${fieldName}\\s`, "m"));
+    }
+    expect(el).toMatch(/libraryFingerprint\s+String\s+@unique/);
+  });
+
+  it("defines EventLibraryAngle with unique angleFingerprint per entry", () => {
+    const schema = readFileSync(schemaPath, "utf8");
+    const angle = modelBody(schema, "EventLibraryAngle");
+    expect(angle).toContain("@@unique([eventLibraryEntryId, angleFingerprint])");
+    for (const fieldName of ["eventLibraryEntryId", "angleLabel", "familyLabel", "angleFingerprint"]) {
+      expect(angle, `EventLibraryAngle.${fieldName} 必须存在`).toMatch(new RegExp(`^\\s*${fieldName}\\s`, "m"));
+    }
+  });
+
+  it("defines EventLibraryDraft with nullable candidateFingerprint and draftKind", () => {
+    const schema = readFileSync(schemaPath, "utf8");
+    const draft = modelBody(schema, "EventLibraryDraft");
+    expect(draft).toMatch(/candidateFingerprint\s+String\?/);
+    expect(draft).toMatch(/draftKind\s+String/);
+    for (const fieldName of ["projectId", "proposedTitle", "proposedSummary", "ownerId", "status", "rawCustomDigest", "customRefinedEventJson", "mergedEntryId"]) {
+      expect(draft, `EventLibraryDraft.${fieldName} 必须存在`).toMatch(new RegExp(`^\\s*${fieldName}\\s`, "m"));
+    }
+  });
+
+  it("applies S2-5 migration cleanly to in-memory database", () => {
+    const database = new Database(":memory:");
+    try {
+      applyAllDatabaseMigrations(database);
+      const tableNames = database
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+        .all()
+        .map((row) => (row as { name: string }).name);
+
+      for (const tableName of ["EventLibraryEntry", "EventLibraryAngle", "EventLibraryDraft"]) {
+        expect(tableNames, `迁移后应存在 ${tableName} 表`).toContain(tableName);
+      }
+
+      // sourceMode 默认值
+      const tpCols = database.prepare("PRAGMA table_info('TopicPackage')").all()
+        .map((row) => (row as { name: string }).name);
+      expect(tpCols).toEqual(expect.arrayContaining(["sourceMode", "sourceRefJson"]));
+
+      // candidateFingerprint 可空
+      const draftCols = database.prepare("PRAGMA table_info('EventLibraryDraft')").all()
+        .map((row) => (row as { name: string; notnull: number }).name + (row as { notnull: number }).notnull);
+      const cfCol = database.prepare("PRAGMA table_info('EventLibraryDraft')").all()
+        .find((row) => (row as { name: string }).name === "candidateFingerprint") as { notnull: number };
+      expect(cfCol.notnull).toBe(0); // nullable
+    } finally {
+      database.close();
+    }
+  });
+});
