@@ -12,6 +12,7 @@ import {
 import {
   createEntry,
   findEntryByFilePath,
+  findEntryByFingerprint,
   markBuiltinAdminEntriesAsArchived,
   updateEntry,
   upsertAngles,
@@ -59,7 +60,17 @@ export async function syncEventLibraryFromFiles(
         continue;
       }
 
-      const existing = await findEntryByFilePath(prisma, relativePath);
+      let existing = await findEntryByFilePath(prisma, relativePath);
+
+      // 兼容旧版绝对路径：filePath miss 时按 fingerprint fallback 查找
+      if (!existing) {
+        const fallbackFingerprint = generateLibraryFingerprint(
+          parsed.canonicalTitle,
+          parsed.dynasty,
+          parsed.era,
+        );
+        existing = await findEntryByFingerprint(prisma, fallbackFingerprint);
+      }
 
       if (existing && existing.fileContentHash === fileContentHash) {
         // 同内容文件：若是 archived 状态则恢复为 curated
@@ -81,6 +92,7 @@ export async function syncEventLibraryFromFiles(
             disputeNotes: parsed.disputeNotes,
             originKind: parsed.origin,
             eventRegistryEntryId: existing.eventRegistryEntryId,
+            filePath: relativePath,
             fileContentHash,
           });
           result.updated++;
@@ -130,6 +142,7 @@ export async function syncEventLibraryFromFiles(
           disputeNotes: parsed.disputeNotes,
           originKind: parsed.origin,
           eventRegistryEntryId,
+          filePath: relativePath,
           fileContentHash,
         });
 

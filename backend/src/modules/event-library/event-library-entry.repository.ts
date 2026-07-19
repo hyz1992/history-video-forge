@@ -92,6 +92,7 @@ export interface UpdateEventLibraryEntryInput {
   disputeNotes?: string | null;
   originKind: string;
   eventRegistryEntryId: string;
+  filePath?: string;
   fileContentHash: string;
 }
 
@@ -119,6 +120,7 @@ export async function updateEntry(
       disputeNotes: input.disputeNotes ?? null,
       originKind: input.originKind,
       eventRegistryEntryId: input.eventRegistryEntryId,
+      ...(input.filePath !== undefined ? { filePath: input.filePath } : {}),
       fileContentHash: input.fileContentHash,
       status: "curated", // restore from archived if re-synced
     },

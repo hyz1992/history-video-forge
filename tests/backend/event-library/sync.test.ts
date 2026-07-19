@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { syncEventLibraryFromFiles } from "../../../backend/src/modules/event-library/event-library-sync.service.js";
+import { generateLibraryFingerprint } from "../../../backend/src/modules/event-library/event-library.codec.js";
 import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
 
 function makeEventJson(overrides: Record<string, unknown> = {}) {
@@ -377,6 +378,94 @@ describe("event-library sync", () => {
       const newEvent = await client.eventRegistryEntry.findFirst({ where: { canonicalName: "新事件名" } });
       expect(newEvent).not.toBeNull();
       expect(e2?.eventRegistryEntryId).toBe(newEvent?.id);
+    } finally {
+      await client.$disconnect();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("migrates old entries with absolute filePath to relative path via fingerprint fallback", async () => {
+    const root = mkdtempSync(join(tmpdir(), "svf2-el-migrate-"));
+
+    const libDir = join(root, "storage", "event-library");
+    mkdirSync(libDir, { recursive: true });
+
+    const file1 = join(libDir, "migrate-test.json");
+    writeFileSync(
+      file1,
+      makeEventJson({
+        canonicalTitle: "迁移测试事件",
+        summary: "此条目之前被写入时 filePath 是绝对路径。",
+        eventRegistryCanonicalName: "迁移测试事件",
+        angles: [],
+      }),
+      "utf8",
+    );
+
+    const dbPath = join(root, "test.db");
+    const sqlite = new Database(dbPath);
+    applyAllDatabaseMigrations(sqlite);
+    sqlite.close();
+
+    const client = await createPrismaClient(dbPath);
+
+    try {
+      // 模拟旧版 P2：直接用 Prisma 写入一条绝对路径 entry
+      const oldAbsolutePath = join(libDir, "migrate-test.json").replace(/\\/g, "/");
+
+      // 计算 fingerprint（与新版 codec 一致）
+      const oldFingerprint = generateLibraryFingerprint("迁移测试事件", "唐", "初唐");
+
+      // 先确保 EventRegistryEntry 存在（旧版也会写）
+      await client.eventRegistryEntry.create({
+        data: {
+          id: "ev-migrate",
+          canonicalName: "迁移测试事件",
+          aliasesJson: [] as never,
+          canonicalQuotesJson: [] as never,
+          canonicalQuoteIntentsJson: [] as never,
+          sourceType: "builtin",
+          isProvisional: false,
+        },
+      });
+
+      // 写入旧版绝对路径 entry
+      await client.eventLibraryEntry.create({
+        data: {
+          id: "old-entry-id",
+          eventRegistryEntryId: "ev-migrate",
+          canonicalTitle: "迁移测试事件",
+          summary: "旧摘要。",
+          dynasty: "唐",
+          era: "初唐",
+          characterTagsJson: [] as never,
+          eventTypeTagsJson: [] as never,
+          conflictTypeTagsJson: [] as never,
+          themeMotifsJson: [] as never,
+          locationTagsJson: [] as never,
+          relationshipTagsJson: [] as never,
+          sourceAnchorRefsJson: [] as never,
+          credibilityLevel: "medium",
+          visibility: "public",
+          status: "curated",
+          originKind: "builtin",
+          libraryFingerprint: oldFingerprint,
+          filePath: oldAbsolutePath,
+          fileContentHash: "old-hash",
+        },
+      });
+
+      // 运行新版同步
+      const r = await syncEventLibraryFromFiles(client, root);
+      expect(r.created).toBe(0);
+      expect(r.updated).toBe(1);
+      expect(r.errors).toHaveLength(0);
+
+      // 验证：filePath 已升级为相对路径，内容已按文件更新
+      const entry = await client.eventLibraryEntry.findUnique({ where: { id: "old-entry-id" } });
+      expect(entry?.filePath).toBe("storage/event-library/migrate-test.json");
+      expect(entry?.summary).toBe("此条目之前被写入时 filePath 是绝对路径。");
+      expect(entry?.status).toBe("curated");
     } finally {
       await client.$disconnect();
       rmSync(root, { recursive: true, force: true });
