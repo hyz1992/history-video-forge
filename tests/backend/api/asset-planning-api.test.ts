@@ -533,6 +533,12 @@ describe("asset planning api", () => {
     );
     expect(prepared.project.status).toBe("storyboard_ready");
     expect(prepared.project.activeAssetPlanRecordId).toBeNull();
+    const generatingRecords = [...app.db.assetPlanRecords.values()].filter(
+      (record) =>
+        (record.executionStateJson as Record<string, unknown> | null)
+          ?.generating === true,
+    );
+    expect(generatingRecords).toHaveLength(0);
   });
 
   it("repairs a structurally invalid asset plan before using full regen", async () => {

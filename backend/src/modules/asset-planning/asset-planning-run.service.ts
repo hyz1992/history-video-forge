@@ -277,10 +277,13 @@ export async function runAssetPlanningGeneration(
     runId,
   });
   const previousActiveAssetPlanRecordId = input.project.activeAssetPlanRecordId;
+  let generatingRecord:
+    | Awaited<ReturnType<typeof saveAssetPlanRecord>>
+    | undefined;
 
   try {
     // Save preliminary record BEFORE plan generation so refresh shows generating state
-    const generatingRecord = await saveAssetPlanRecord(input.db, {
+    generatingRecord = await saveAssetPlanRecord(input.db, {
       projectId: input.project.id,
       topicPackageId: topicPackage.id,
       scriptRecordId: scriptRecord.id,
@@ -295,14 +298,16 @@ export async function runAssetPlanningGeneration(
     await input.db.firstAggregateWriter?.syncProject(input.project);
 
     const onProgress = async (progress: import("./asset-planning-generation.service.js").AssetPlanGenerationProgress) => {
+      if (!generatingRecord) return;
+      const record = generatingRecord;
       await saveAssetPlanRecord(input.db, {
-        id: generatingRecord.id,
-        projectId: generatingRecord.projectId,
-        topicPackageId: generatingRecord.topicPackageId,
-        scriptRecordId: generatingRecord.scriptRecordId,
-        storyboardRecordId: generatingRecord.storyboardRecordId,
-        planJson: generatingRecord.planJson,
-        validationResultJson: generatingRecord.validationResultJson,
+        id: record.id,
+        projectId: record.projectId,
+        topicPackageId: record.topicPackageId,
+        scriptRecordId: record.scriptRecordId,
+        storyboardRecordId: record.storyboardRecordId,
+        planJson: record.planJson,
+        validationResultJson: record.validationResultJson,
         executionStateJson: {
           generating: true,
           run_id: runId,
@@ -313,9 +318,9 @@ export async function runAssetPlanningGeneration(
           progress_total_chunks: progress.total_chunks,
           progress_total_segments: progress.total_segments,
         },
-        graphTraceSummaryJson: generatingRecord.graphTraceSummaryJson,
-        runtimeDiagnosticsJson: generatingRecord.runtimeDiagnosticsJson,
-        createdAt: generatingRecord.createdAt,
+        graphTraceSummaryJson: record.graphTraceSummaryJson,
+        runtimeDiagnosticsJson: record.runtimeDiagnosticsJson,
+        createdAt: record.createdAt,
       });
     };
 
@@ -412,6 +417,24 @@ export async function runAssetPlanningGeneration(
 
   if (localValidation.decision !== "pass") {
     // Clean up generating state — validation failed
+    await saveAssetPlanRecord(input.db, {
+      id: generatingRecord.id,
+      projectId: generatingRecord.projectId,
+      topicPackageId: generatingRecord.topicPackageId,
+      scriptRecordId: generatingRecord.scriptRecordId,
+      storyboardRecordId: generatingRecord.storyboardRecordId,
+      planJson: plan,
+      validationResultJson: localValidation,
+      executionStateJson: {
+        ...executionState,
+        generating: false,
+        run_id: runId,
+        error: "asset_plan_local_validation_failed",
+      },
+      graphTraceSummaryJson: graphTraceSummary,
+      runtimeDiagnosticsJson: runtimeDiagnostics,
+      createdAt: generatingRecord.createdAt,
+    });
     input.project.activeAssetPlanRecordId = previousActiveAssetPlanRecordId;
     input.project.status = previousActiveAssetPlanRecordId ? "asset_plan_ready" : "storyboard_ready";
     input.project.updatedAt = new Date();
@@ -531,6 +554,26 @@ export async function runAssetPlanningGeneration(
   };
   } catch (error) {
     // Clean up generating state — unexpected error
+    if (generatingRecord) {
+      await saveAssetPlanRecord(input.db, {
+        id: generatingRecord.id,
+        projectId: generatingRecord.projectId,
+        topicPackageId: generatingRecord.topicPackageId,
+        scriptRecordId: generatingRecord.scriptRecordId,
+        storyboardRecordId: generatingRecord.storyboardRecordId,
+        planJson: generatingRecord.planJson,
+        validationResultJson: generatingRecord.validationResultJson,
+        executionStateJson: {
+          ...(generatingRecord.executionStateJson ?? {}),
+          generating: false,
+          run_id: runId,
+          error: "internal_server_error",
+        },
+        graphTraceSummaryJson: generatingRecord.graphTraceSummaryJson,
+        runtimeDiagnosticsJson: generatingRecord.runtimeDiagnosticsJson,
+        createdAt: generatingRecord.createdAt,
+      }).catch(() => undefined);
+    }
     input.project.activeAssetPlanRecordId = previousActiveAssetPlanRecordId;
     input.project.status = previousActiveAssetPlanRecordId ? "asset_plan_ready" : "storyboard_ready";
     input.project.updatedAt = new Date();

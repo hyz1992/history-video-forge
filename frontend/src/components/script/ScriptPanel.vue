@@ -187,6 +187,13 @@ const reviewDecision = computed(() => {
   return null;
 });
 
+const canConfirmVisibleScript = computed(() => {
+  const s = visibleScript.value;
+  if (!s) return false;
+  if (s.execution_state?.generating === true) return false;
+  return s.local_validation?.decision === "pass";
+});
+
 const scriptWordCount = computed(() => {
   const text = visibleScript.value?.script_text ?? "";
   return text.replace(/\s/g, "").length;
@@ -331,6 +338,10 @@ function handleSelectHistory(entryId: string) {
 }
 
 function handleConfirm() {
+  if (!canConfirmVisibleScript.value) {
+    ElMessage.warning("文案本地硬校验未通过，不能进入分镜规划");
+    return;
+  }
   if (!checkStageRollback("script")) return;
   ElMessage.success("文案已确认，进入分镜规划");
   workspaceStore.setCurrentStep(STORYBOARD_STEP_INDEX);
@@ -521,7 +532,7 @@ function handleConfirm() {
           <div v-if="visibleScript && !isViewingHistoryEntry" class="script-actions-card">
             <el-button
               type="primary"
-              :disabled="scriptStore.state.isRunningAction"
+              :disabled="scriptStore.state.isRunningAction || !canConfirmVisibleScript"
               @click="handleConfirm"
               class="script-confirm-btn"
             >

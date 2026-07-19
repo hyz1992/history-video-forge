@@ -140,12 +140,12 @@ function activeAssetsGenerating() {
   };
 }
 
-describe("asset panel auto basic generation", () => {
+describe("asset panel basic generation gate", () => {
   afterEach(() => {
     document.body.innerHTML = "";
   });
 
-  it("auto-starts basic asset generation when a ready asset plan has no manifest", async () => {
+  it("does not auto-start basic asset generation when a ready asset plan has no manifest", async () => {
     const router = await createRouterAt("/projects/project-auto-basic-assets/asset");
     const assetPlanningState = reactive({
       snapshot: {
@@ -222,9 +222,9 @@ describe("asset panel auto basic generation", () => {
 
     await flushPromises();
 
-    expect(generateAssets).toHaveBeenCalledWith({ enabledProviderTypes: ["tts", "sfx", "bgm"] });
-    expect(wrapper.find(".asset-plan-overview-wrapper").exists()).toBe(false);
-    expect(document.body.querySelector(".stage-loading-bar")).not.toBeNull();
+    expect(generateAssets).not.toHaveBeenCalled();
+    expect(wrapper.find(".asset-plan-overview-wrapper").exists()).toBe(true);
+    expect(document.body.querySelector(".stage-loading-bar")).toBeNull();
     wrapper.unmount();
   });
 });
