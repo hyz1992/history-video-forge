@@ -276,7 +276,7 @@ export async function createTopicFromLibraryController(
     const recommendation = await recommendTopicCandidatesWithTrace(
       context.app.db,
       {
-        canonicalName: entry.canonicalTitle,
+        canonicalName: seedTitle,
         summary: entry.summary,
         coreConflict: selectedAngle?.familyLabel ?? entry.canonicalTitle,
         strongScene: selectedAngle?.angleLabel ?? entry.summary.slice(0, 50),

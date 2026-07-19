@@ -85,6 +85,12 @@ describe("event-library from-library API", () => {
       expect(body.source_ref.eventLibraryEntryId).toBe(entry.id);
       expect(body.candidates.length).toBeGreaterThan(0);
 
+      // 无 angle 时，候选标题不包含 angle 标签
+      for (const c of body.candidates as Array<{ title: string }>) {
+        expect(c.title).not.toContain("从魏征的立场看");
+        expect(c.title).toContain("玄武门之变");
+      }
+
       // Verify candidates in topicCandidateStore
       const store = app.topicCandidateStore.get(project.id);
       expect(store).toBeDefined();
@@ -141,6 +147,11 @@ describe("event-library from-library API", () => {
       const body = r.json();
       expect(body.source_ref.angleId).toBe(angleId);
       expect(body.candidates.length).toBeGreaterThan(0);
+
+      // angle 标签应反映在候选标题中（可观察差异）
+      for (const c of body.candidates as Array<{ title: string }>) {
+        expect(c.title).toContain("从魏征的立场看");
+      }
 
       const store = app.topicCandidateStore.get(project.id);
       const storedCandidate = store!.rounds[0].candidates[0];
