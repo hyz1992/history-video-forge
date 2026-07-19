@@ -8,6 +8,8 @@ import {
 import { guardOwnedRoute } from "../../auth/authorization.js";
 
 export function registerEventLibraryRoutes(app: AppInstance) {
+  // 正式合同 GET；POST 为兼容别名（payload 筛选）
+  app.addRoute("GET", "/api/event-library/entries", listEntriesController);
   app.addRoute("POST", "/api/event-library/entries", listEntriesController);
   app.addRoute("GET", "/api/event-library/entries/:entryId", getEntryController);
   app.addRoute("GET", "/api/event-library/dynasties", listDynastiesController);
