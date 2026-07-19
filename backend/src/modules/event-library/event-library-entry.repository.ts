@@ -90,6 +90,8 @@ export interface UpdateEventLibraryEntryInput {
   sourceAnchorRefs: string[];
   credibilityLevel: string;
   disputeNotes?: string | null;
+  originKind: string;
+  eventRegistryEntryId: string;
   fileContentHash: string;
 }
 
@@ -115,6 +117,8 @@ export async function updateEntry(
       sourceAnchorRefsJson: input.sourceAnchorRefs as never,
       credibilityLevel: input.credibilityLevel,
       disputeNotes: input.disputeNotes ?? null,
+      originKind: input.originKind,
+      eventRegistryEntryId: input.eventRegistryEntryId,
       fileContentHash: input.fileContentHash,
       status: "curated", // restore from archived if re-synced
     },

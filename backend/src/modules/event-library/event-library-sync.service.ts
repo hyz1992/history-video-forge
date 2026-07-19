@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { relative } from "node:path";
 
 import type { AppPrismaClient } from "../../db/prisma-client.types.js";
 import {
@@ -41,13 +42,13 @@ export async function syncEventLibraryFromFiles(
   const files = scanEventLibraryFiles(rootDir);
   const scannedPaths = new Set<string>();
 
-  for (const filePath of files) {
-    // Resolve relative path for storage in DB
-    const relativePath = filePath.replace(/\\/g, "/");
+  for (const absolutePath of files) {
+    // 相对路径合同：storage/event-library/<dynasty-slug>/<event-slug>.json
+    const relativePath = relative(rootDir, absolutePath).replace(/\\/g, "/");
     scannedPaths.add(relativePath);
 
     try {
-      const raw = readFileSync(filePath, "utf8");
+      const raw = readFileSync(absolutePath, "utf8");
       const fileContentHash = computeFileContentHash(raw);
 
       let parsed: EventLibraryFile;
@@ -61,6 +62,31 @@ export async function syncEventLibraryFromFiles(
       const existing = await findEntryByFilePath(prisma, relativePath);
 
       if (existing && existing.fileContentHash === fileContentHash) {
+        // 同内容文件：若是 archived 状态则恢复为 curated
+        if (existing.status === "archived") {
+          await updateEntry(prisma, existing.id, {
+            canonicalTitle: parsed.canonicalTitle,
+            summary: parsed.summary,
+            dynasty: parsed.dynasty ?? null,
+            era: parsed.era ?? null,
+            characterTags: parsed.characterTags,
+            eventTypeTags: parsed.eventTypeTags,
+            conflictTypeTags: parsed.conflictTypeTags,
+            themeMotifs: parsed.themeMotifs,
+            timeRange: parsed.timeRange ?? null,
+            locationTags: parsed.locationTags,
+            relationshipTags: parsed.relationshipTags,
+            sourceAnchorRefs: parsed.sourceAnchorRefs,
+            credibilityLevel: parsed.credibilityLevel,
+            disputeNotes: parsed.disputeNotes,
+            originKind: parsed.origin,
+            eventRegistryEntryId: existing.eventRegistryEntryId,
+            fileContentHash,
+          });
+          result.updated++;
+          continue;
+        }
+
         result.skipped++;
         continue;
       }
@@ -78,8 +104,15 @@ export async function syncEventLibraryFromFiles(
         parsed.era,
       );
 
+      const angles = parsed.angles.map((a) => ({
+        angleLabel: a.angleLabel,
+        familyLabel: a.familyLabel,
+        scopeLabel: a.scopeLabel,
+        angleFingerprint: generateAngleFingerprint(libraryFingerprint, a.angleLabel),
+      }));
+
       if (existing) {
-        // Update existing entry, keep libraryFingerprint
+        // 更新已有 entry（文件为权威源，身份/来源字段同步更新）
         await updateEntry(prisma, existing.id, {
           canonicalTitle: parsed.canonicalTitle,
           summary: parsed.summary,
@@ -95,16 +128,12 @@ export async function syncEventLibraryFromFiles(
           sourceAnchorRefs: parsed.sourceAnchorRefs,
           credibilityLevel: parsed.credibilityLevel,
           disputeNotes: parsed.disputeNotes,
+          originKind: parsed.origin,
+          eventRegistryEntryId,
           fileContentHash,
         });
 
-        // Upsert angles
-        await upsertAngles(prisma, existing.id, parsed.angles.map((a) => ({
-          angleLabel: a.angleLabel,
-          familyLabel: a.familyLabel,
-          scopeLabel: a.scopeLabel,
-          angleFingerprint: generateAngleFingerprint(libraryFingerprint, a.angleLabel),
-        })));
+        await upsertAngles(prisma, existing.id, angles);
 
         result.updated++;
       } else {
@@ -131,14 +160,8 @@ export async function syncEventLibraryFromFiles(
           fileContentHash,
         });
 
-        // Create angles
         if (parsed.angles.length > 0) {
-          await upsertAngles(prisma, entry.id, parsed.angles.map((a) => ({
-            angleLabel: a.angleLabel,
-            familyLabel: a.familyLabel,
-            scopeLabel: a.scopeLabel,
-            angleFingerprint: generateAngleFingerprint(libraryFingerprint, a.angleLabel),
-          })));
+          await upsertAngles(prisma, entry.id, angles);
         }
 
         result.created++;

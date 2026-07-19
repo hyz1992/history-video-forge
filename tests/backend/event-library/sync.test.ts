@@ -236,4 +236,150 @@ describe("event-library sync", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it("restores archived entry to curated when same-content file reappears", async () => {
+    const root = mkdtempSync(join(tmpdir(), "svf2-el-restore-"));
+
+    const libDir = join(root, "storage", "event-library");
+    mkdirSync(libDir, { recursive: true });
+
+    const file1 = join(libDir, "test.json");
+    writeFileSync(file1, makeEventJson({ canonicalTitle: "恢复测试" }), "utf8");
+
+    const dbPath = join(root, "test.db");
+    const sqlite = new Database(dbPath);
+    applyAllDatabaseMigrations(sqlite);
+    sqlite.close();
+
+    const client = await createPrismaClient(dbPath);
+
+    try {
+      // First sync: creates entry
+      const r1 = await syncEventLibraryFromFiles(client, root);
+      expect(r1.created).toBe(1);
+
+      const e1 = await client.eventLibraryEntry.findFirst({ where: { canonicalTitle: "恢复测试" } });
+      expect(e1?.status).toBe("curated");
+      expect(e1?.filePath).toBe("storage/event-library/test.json");
+
+      // Delete file -> archive
+      rmSync(file1);
+      const r2 = await syncEventLibraryFromFiles(client, root);
+      expect(r2.archived).toBe(1);
+
+      const e2 = await client.eventLibraryEntry.findFirst({ where: { canonicalTitle: "恢复测试" } });
+      expect(e2?.status).toBe("archived");
+
+      // Restore same file
+      writeFileSync(file1, makeEventJson({ canonicalTitle: "恢复测试" }), "utf8");
+      const r3 = await syncEventLibraryFromFiles(client, root);
+      expect(r3.updated).toBe(1); // restored, not skipped
+
+      const e3 = await client.eventLibraryEntry.findFirst({ where: { canonicalTitle: "恢复测试" } });
+      expect(e3?.status).toBe("curated");
+    } finally {
+      await client.$disconnect();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("stores relative filePath, not absolute path", async () => {
+    const root = mkdtempSync(join(tmpdir(), "svf2-el-relpath-"));
+
+    const libDir = join(root, "storage", "event-library");
+    mkdirSync(join(libDir, "qin"), { recursive: true });
+
+    const file1 = join(libDir, "qin", "dazexiang.json");
+    writeFileSync(
+      file1,
+      makeEventJson({
+        canonicalTitle: "大泽乡起义",
+        summary: "陈胜吴广在大泽乡揭竿而起。",
+        eventRegistryCanonicalName: "大泽乡起义",
+        dynasty: "秦",
+        angles: [],
+      }),
+      "utf8",
+    );
+
+    const dbPath = join(root, "test.db");
+    const sqlite = new Database(dbPath);
+    applyAllDatabaseMigrations(sqlite);
+    sqlite.close();
+
+    const client = await createPrismaClient(dbPath);
+
+    try {
+      const r = await syncEventLibraryFromFiles(client, root);
+      expect(r.created).toBe(1);
+
+      const entry = await client.eventLibraryEntry.findFirst({ where: { canonicalTitle: "大泽乡起义" } });
+      expect(entry?.filePath).toBe("storage/event-library/qin/dazexiang.json");
+      // 不应包含任何绝对路径特征
+      expect(entry?.filePath).not.toContain(":");
+      expect(entry?.filePath).not.toContain(root);
+    } finally {
+      await client.$disconnect();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("updates originKind and eventRegistryEntryId when file metadata changes", async () => {
+    const root = mkdtempSync(join(tmpdir(), "svf2-el-identity-"));
+
+    const libDir = join(root, "storage", "event-library");
+    mkdirSync(libDir, { recursive: true });
+
+    const file1 = join(libDir, "test.json");
+    writeFileSync(
+      file1,
+      makeEventJson({
+        canonicalTitle: "身份测试",
+        eventRegistryCanonicalName: "旧事件名",
+        origin: "builtin",
+      }),
+      "utf8",
+    );
+
+    const dbPath = join(root, "test.db");
+    const sqlite = new Database(dbPath);
+    applyAllDatabaseMigrations(sqlite);
+    sqlite.close();
+
+    const client = await createPrismaClient(dbPath);
+
+    try {
+      await syncEventLibraryFromFiles(client, root);
+
+      const e1 = await client.eventLibraryEntry.findFirst({ where: { canonicalTitle: "身份测试" } });
+      expect(e1?.originKind).toBe("builtin");
+      const oldEventId = e1?.eventRegistryEntryId;
+
+      // Modify: change origin AND canonnicalName
+      writeFileSync(
+        file1,
+        makeEventJson({
+          canonicalTitle: "身份测试",
+          summary: "摘要已改，触发 hash 变化。",
+          eventRegistryCanonicalName: "新事件名",
+          origin: "admin",
+        }),
+        "utf8",
+      );
+
+      await syncEventLibraryFromFiles(client, root);
+
+      const e2 = await client.eventLibraryEntry.findFirst({ where: { canonicalTitle: "身份测试" } });
+      expect(e2?.originKind).toBe("admin");
+      expect(e2?.eventRegistryEntryId).not.toBe(oldEventId);
+
+      // 新 EventRegistryEntry 已创建
+      const newEvent = await client.eventRegistryEntry.findFirst({ where: { canonicalName: "新事件名" } });
+      expect(newEvent).not.toBeNull();
+      expect(e2?.eventRegistryEntryId).toBe(newEvent?.id);
+    } finally {
+      await client.$disconnect();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
