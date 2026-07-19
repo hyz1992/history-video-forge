@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { syncEventLibraryFromFiles } from "../../../backend/src/modules/event-library/event-library-sync.service.js";
-import { generateLibraryFingerprint } from "../../../backend/src/modules/event-library/event-library.codec.js";
+import { generateLibraryFingerprint, computeFileContentHash } from "../../../backend/src/modules/event-library/event-library.codec.js";
 import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
 
 function makeEventJson(overrides: Record<string, unknown> = {}) {
@@ -465,6 +465,89 @@ describe("event-library sync", () => {
       const entry = await client.eventLibraryEntry.findUnique({ where: { id: "old-entry-id" } });
       expect(entry?.filePath).toBe("storage/event-library/migrate-test.json");
       expect(entry?.summary).toBe("此条目之前被写入时 filePath 是绝对路径。");
+      expect(entry?.status).toBe("curated");
+    } finally {
+      await client.$disconnect();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("migrates old absolute filePath with same hash instead of archiving it", async () => {
+    const root = mkdtempSync(join(tmpdir(), "svf2-el-samehash-"));
+
+    const libDir = join(root, "storage", "event-library");
+    mkdirSync(libDir, { recursive: true });
+
+    const file1 = join(libDir, "samehash-test.json");
+    const fileContent = makeEventJson({
+      canonicalTitle: "同 hash 测试",
+      summary: "内容不变，但旧 entry 的 filePath 是绝对路径。",
+      eventRegistryCanonicalName: "同 hash 测试",
+      angles: [],
+    });
+    writeFileSync(file1, fileContent, "utf8");
+
+    // 计算真实 hash（与同步用的相同）
+    const realHash = computeFileContentHash(fileContent);
+
+    const dbPath = join(root, "test.db");
+    const sqlite = new Database(dbPath);
+    applyAllDatabaseMigrations(sqlite);
+    sqlite.close();
+
+    const client = await createPrismaClient(dbPath);
+
+    try {
+      const oldAbsolutePath = join(libDir, "samehash-test.json").replace(/\\/g, "/");
+      const fingerprint = generateLibraryFingerprint("同 hash 测试", "唐", "初唐");
+
+      await client.eventRegistryEntry.create({
+        data: {
+          id: "ev-samehash",
+          canonicalName: "同 hash 测试",
+          aliasesJson: [] as never,
+          canonicalQuotesJson: [] as never,
+          canonicalQuoteIntentsJson: [] as never,
+          sourceType: "builtin",
+          isProvisional: false,
+        },
+      });
+
+      // 写入旧版：绝对路径 + 真实 hash（内容未变）
+      await client.eventLibraryEntry.create({
+        data: {
+          id: "samehash-old-id",
+          eventRegistryEntryId: "ev-samehash",
+          canonicalTitle: "同 hash 测试",
+          summary: "内容不变，但旧 entry 的 filePath 是绝对路径。",
+          dynasty: "唐",
+          era: "初唐",
+          characterTagsJson: [] as never,
+          eventTypeTagsJson: [] as never,
+          conflictTypeTagsJson: [] as never,
+          themeMotifsJson: [] as never,
+          locationTagsJson: [] as never,
+          relationshipTagsJson: [] as never,
+          sourceAnchorRefsJson: [] as never,
+          credibilityLevel: "medium",
+          visibility: "public",
+          status: "curated",
+          originKind: "builtin",
+          libraryFingerprint: fingerprint,
+          filePath: oldAbsolutePath,
+          fileContentHash: realHash,  // 与当前文件内容相同
+        },
+      });
+
+      // 运行同步
+      const r = await syncEventLibraryFromFiles(client, root);
+      expect(r.skipped).toBe(0);  // 不应 skip
+      expect(r.updated).toBe(1);  // 应更新路径
+      expect(r.archived).toBe(0); // 不应归档
+      expect(r.created).toBe(0);  // 不应新建
+
+      const entry = await client.eventLibraryEntry.findUnique({ where: { id: "samehash-old-id" } });
+      expect(entry?.filePath).toBe("storage/event-library/samehash-test.json");
       expect(entry?.status).toBe("curated");
     } finally {
       await client.$disconnect();

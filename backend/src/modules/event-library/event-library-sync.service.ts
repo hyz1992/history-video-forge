@@ -73,8 +73,8 @@ export async function syncEventLibraryFromFiles(
       }
 
       if (existing && existing.fileContentHash === fileContentHash) {
-        // 同内容文件：若是 archived 状态则恢复为 curated
-        if (existing.status === "archived") {
+        // 同内容文件：需要恢复 archived 或迁移旧绝对路径时走 update
+        if (existing.status === "archived" || existing.filePath !== relativePath) {
           await updateEntry(prisma, existing.id, {
             canonicalTitle: parsed.canonicalTitle,
             summary: parsed.summary,
