@@ -71,7 +71,7 @@ export class PrismaFirstAggregateWriter {
         durationBandJson: topic.durationBandJson as never, narrativeTensionMapJson: topic.narrativeTensionMapJson as never,
         mustIncludeBeatsJson: topic.mustIncludeBeatsJson as never, forbiddenExpansionsJson: topic.forbiddenExpansionsJson as never,
         riskHintsJson: topic.riskHintsJson as never, sourceAnchorRefsJson: topic.sourceAnchorRefsJson as never,
-        ambiguityNotesJson: topic.ambiguityNotesJson as never,
+        ambiguityNotesJson: topic.ambiguityNotesJson as never, sourceRefJson: topic.sourceRefJson as never,
       } });
       await transaction.project.update({ where: { id: project.id }, data: {
         name: project.name, status: project.status, storageDisplayName: project.storageDisplayName,

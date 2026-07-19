@@ -72,6 +72,8 @@ export interface TopicPackageRecord {
   riskHintsJson: unknown[];
   sourceAnchorRefsJson: unknown[];
   ambiguityNotesJson: unknown[];
+  sourceMode: string;
+  sourceRefJson: Record<string, unknown> | null;
   createdAt: Date;
 }
 

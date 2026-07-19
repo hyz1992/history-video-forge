@@ -14,12 +14,12 @@ CREATE TABLE "EventLibraryEntry" (
     "locationTagsJson" TEXT NOT NULL DEFAULT '[]',
     "relationshipTagsJson" TEXT NOT NULL DEFAULT '[]',
     "sourceAnchorRefsJson" TEXT NOT NULL DEFAULT '[]',
-    "credibilityLevel" TEXT NOT NULL DEFAULT 'medium',
+    "credibilityLevel" TEXT NOT NULL DEFAULT 'medium' CHECK ("credibilityLevel" IN ('high', 'medium', 'low', 'disputed')),
     "disputeNotes" TEXT,
-    "visibility" TEXT NOT NULL DEFAULT 'public',
-    "status" TEXT NOT NULL DEFAULT 'draft',
+    "visibility" TEXT NOT NULL DEFAULT 'public' CHECK ("visibility" IN ('public', 'private')),
+    "status" TEXT NOT NULL DEFAULT 'draft' CHECK ("status" IN ('curated', 'pending_review', 'rejected', 'draft', 'archived')),
     "ownerId" TEXT,
-    "originKind" TEXT NOT NULL DEFAULT 'builtin',
+    "originKind" TEXT NOT NULL DEFAULT 'builtin' CHECK ("originKind" IN ('builtin', 'admin', 'recommendation_reflux', 'custom')),
     "originRefJson" TEXT,
     "libraryFingerprint" TEXT NOT NULL,
     "filePath" TEXT,
@@ -49,7 +49,7 @@ CREATE TABLE "EventLibraryAngle" (
 -- CreateTable EventLibraryDraft
 CREATE TABLE "EventLibraryDraft" (
     "id" TEXT NOT NULL PRIMARY KEY,
-    "draftKind" TEXT NOT NULL,
+    "draftKind" TEXT NOT NULL CHECK ("draftKind" IN ('recommendation_reflux', 'custom')),
     "projectId" TEXT NOT NULL,
     "candidateFingerprint" TEXT,
     "eventRegistryEntryId" TEXT,
@@ -60,7 +60,7 @@ CREATE TABLE "EventLibraryDraft" (
     "rawCustomDigest" TEXT,
     "customRefinedEventJson" TEXT,
     "ownerId" TEXT NOT NULL,
-    "status" TEXT NOT NULL DEFAULT 'draft',
+    "status" TEXT NOT NULL DEFAULT 'draft' CHECK ("status" IN ('draft', 'pending_review', 'approved', 'rejected')),
     "reviewerId" TEXT,
     "reviewedAt" DATETIME,
     "reviewNotes" TEXT,
@@ -69,7 +69,8 @@ CREATE TABLE "EventLibraryDraft" (
     "updatedAt" DATETIME NOT NULL,
     CONSTRAINT "EventLibraryDraft_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "EventLibraryDraft_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
-    CONSTRAINT "EventLibraryDraft_mergedEntryId_fkey" FOREIGN KEY ("mergedEntryId") REFERENCES "EventLibraryEntry" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+    CONSTRAINT "EventLibraryDraft_mergedEntryId_fkey" FOREIGN KEY ("mergedEntryId") REFERENCES "EventLibraryEntry" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
+    CONSTRAINT "EventLibraryDraft_reflux_fingerprint_required" CHECK ("draftKind" != 'recommendation_reflux' OR "candidateFingerprint" IS NOT NULL)
 );
 
 -- CreateIndex

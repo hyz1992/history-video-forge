@@ -20,6 +20,8 @@ export interface SaveTopicPackageInput {
   riskHintsJson?: unknown[];
   sourceAnchorRefsJson?: unknown[];
   ambiguityNotesJson?: unknown[];
+  sourceMode?: string;
+  sourceRefJson?: Record<string, unknown> | null;
 }
 
 export async function saveTopicPackage(
@@ -47,6 +49,8 @@ export async function saveTopicPackage(
     riskHintsJson: input.riskHintsJson ?? [],
     sourceAnchorRefsJson: input.sourceAnchorRefsJson ?? [],
     ambiguityNotesJson: input.ambiguityNotesJson ?? [],
+    sourceMode: input.sourceMode ?? "recommended",
+    sourceRefJson: input.sourceRefJson ?? null,
     createdAt: new Date(),
   };
 

@@ -205,6 +205,26 @@ describe("S2-5 EventLibrary schema", () => {
     expect(el).toMatch(/libraryFingerprint\s+String\s+@unique/);
   });
 
+  it("rejects invalid EventLibraryEntry status/visibility/credibilityLevel in migration", () => {
+    const database = new Database(":memory:");
+    try {
+      applyAllDatabaseMigrations(database);
+      database.exec("INSERT INTO User (id, username, displayName, passwordHash, updatedAt) VALUES ('u1','t','T','h',CURRENT_TIMESTAMP)");
+      database.exec("INSERT INTO EventRegistryEntry (id, canonicalName, aliasesJson, canonicalQuotesJson, canonicalQuoteIntentsJson, sourceType, updatedAt) VALUES ('ev1','E1','[]','[]','[]','builtin',CURRENT_TIMESTAMP)");
+      database.exec("INSERT INTO EventRegistryEntry (id, canonicalName, aliasesJson, canonicalQuotesJson, canonicalQuoteIntentsJson, sourceType, updatedAt) VALUES ('ev2','E2','[]','[]','[]','builtin',CURRENT_TIMESTAMP)");
+      database.exec("INSERT INTO EventRegistryEntry (id, canonicalName, aliasesJson, canonicalQuotesJson, canonicalQuoteIntentsJson, sourceType, updatedAt) VALUES ('ev3','E3','[]','[]','[]','builtin',CURRENT_TIMESTAMP)");
+      database.exec("INSERT INTO EventRegistryEntry (id, canonicalName, aliasesJson, canonicalQuotesJson, canonicalQuoteIntentsJson, sourceType, updatedAt) VALUES ('ev4','E4','[]','[]','[]','builtin',CURRENT_TIMESTAMP)");
+      database.exec("INSERT INTO EventRegistryEntry (id, canonicalName, aliasesJson, canonicalQuotesJson, canonicalQuoteIntentsJson, sourceType, updatedAt) VALUES ('ev5','E5','[]','[]','[]','builtin',CURRENT_TIMESTAMP)");
+      expect(() => database.exec("INSERT INTO EventLibraryEntry (id, eventRegistryEntryId, canonicalTitle, summary, libraryFingerprint, status, visibility, credibilityLevel, updatedAt) VALUES ('e1', 'ev1', 'T', 'S', 'fp1', 'curated', 'public', 'high', CURRENT_TIMESTAMP)")).not.toThrow();
+      expect(() => database.exec("INSERT INTO EventLibraryEntry (id, eventRegistryEntryId, canonicalTitle, summary, libraryFingerprint, status, updatedAt) VALUES ('e2', 'ev2', 'T', 'S', 'fp2', 'invalid_status', CURRENT_TIMESTAMP)")).toThrow();
+      expect(() => database.exec("INSERT INTO EventLibraryEntry (id, eventRegistryEntryId, canonicalTitle, summary, libraryFingerprint, visibility, updatedAt) VALUES ('e3', 'ev3', 'T', 'S', 'fp3', 'invalid_vis', CURRENT_TIMESTAMP)")).toThrow();
+      expect(() => database.exec("INSERT INTO EventLibraryEntry (id, eventRegistryEntryId, canonicalTitle, summary, libraryFingerprint, credibilityLevel, updatedAt) VALUES ('e4', 'ev4', 'T', 'S', 'fp4', 'unknown', CURRENT_TIMESTAMP)")).toThrow();
+      expect(() => database.exec("INSERT INTO EventLibraryEntry (id, eventRegistryEntryId, canonicalTitle, summary, libraryFingerprint, originKind, updatedAt) VALUES ('e5', 'ev5', 'T', 'S', 'fp5', 'foo', CURRENT_TIMESTAMP)")).toThrow();
+    } finally {
+      database.close();
+    }
+  });
+
   it("defines EventLibraryAngle with unique angleFingerprint per entry", () => {
     const schema = readFileSync(schemaPath, "utf8");
     const angle = modelBody(schema, "EventLibraryAngle");
@@ -221,6 +241,27 @@ describe("S2-5 EventLibrary schema", () => {
     expect(draft).toMatch(/draftKind\s+String/);
     for (const fieldName of ["projectId", "proposedTitle", "proposedSummary", "ownerId", "status", "rawCustomDigest", "customRefinedEventJson", "mergedEntryId"]) {
       expect(draft, `EventLibraryDraft.${fieldName} 必须存在`).toMatch(new RegExp(`^\\s*${fieldName}\\s`, "m"));
+    }
+  });
+
+  it("rejects invalid draftKind and enforces candidateFingerprint non-null for reflux", () => {
+    const database = new Database(":memory:");
+    try {
+      applyAllDatabaseMigrations(database);
+      database.exec("INSERT INTO User (id, username, displayName, passwordHash, updatedAt) VALUES ('u1','t','T','h',CURRENT_TIMESTAMP)");
+      database.exec("INSERT INTO Project (id, name, ownerId, createdById, storageKey, storageDisplayName, updatedAt) VALUES ('p1', 'P', 'u1', 'u1', 'p1', 'P', CURRENT_TIMESTAMP)");
+      // Valid: custom draft, null fingerprint
+      expect(() => database.exec("INSERT INTO EventLibraryDraft (id, draftKind, projectId, proposedTitle, proposedSummary, ownerId, updatedAt) VALUES ('d1', 'custom', 'p1', 'T', 'S', 'u1', CURRENT_TIMESTAMP)")).not.toThrow();
+      // Valid: reflux draft, fingerprint present
+      expect(() => database.exec("INSERT INTO EventLibraryDraft (id, draftKind, projectId, proposedTitle, proposedSummary, ownerId, candidateFingerprint, updatedAt) VALUES ('d2', 'recommendation_reflux', 'p1', 'T', 'S', 'u1', 'fp1', CURRENT_TIMESTAMP)")).not.toThrow();
+      // Invalid: invalid draftKind
+      expect(() => database.exec("INSERT INTO EventLibraryDraft (id, draftKind, projectId, proposedTitle, proposedSummary, ownerId, updatedAt) VALUES ('d3', 'foo', 'p1', 'T', 'S', 'u1', CURRENT_TIMESTAMP)")).toThrow();
+      // Invalid: reflux draft, fingerprint null
+      expect(() => database.exec("INSERT INTO EventLibraryDraft (id, draftKind, projectId, proposedTitle, proposedSummary, ownerId, updatedAt) VALUES ('d4', 'recommendation_reflux', 'p1', 'T', 'S', 'u1', CURRENT_TIMESTAMP)")).toThrow();
+      // Invalid: draft status
+      expect(() => database.exec("INSERT INTO EventLibraryDraft (id, draftKind, projectId, proposedTitle, proposedSummary, ownerId, status, updatedAt) VALUES ('d5', 'custom', 'p1', 'T', 'S', 'u1', 'invalid_status', CURRENT_TIMESTAMP)")).toThrow();
+    } finally {
+      database.close();
     }
   });
 
