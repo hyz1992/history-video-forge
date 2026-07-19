@@ -1,4 +1,4 @@
-﻿# Asset Planning 质量护栏实施计划
+# Asset Planning 质量护栏实施计划
 
 > **给 agentic worker 的要求：**执行本计划时必须使用 `superpowers:executing-plans` 按任务逐步推进。步骤使用 checkbox（`- [ ]`）格式，便于执行时跟踪。
 

@@ -1,4 +1,4 @@
-﻿# 选题阶段回滚到 builder+selector 设计
+# 选题阶段回滚到 builder+selector 设计
 
 ## 0. 状态
 

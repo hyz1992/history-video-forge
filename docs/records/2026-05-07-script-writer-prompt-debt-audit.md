@@ -1,4 +1,4 @@
-﻿# Script Writer Prompt Debt Audit Record
+# Script Writer Prompt Debt Audit Record
 
 Date: 2026-05-07
 Prompt: prompts/script/script-writer.prompt.md

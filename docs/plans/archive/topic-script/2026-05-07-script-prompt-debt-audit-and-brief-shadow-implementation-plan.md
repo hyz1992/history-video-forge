@@ -1,4 +1,4 @@
-﻿# Script Prompt Debt Audit and Brief Shadow Implementation Plan
+# Script Prompt Debt Audit and Brief Shadow Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` to implement this plan task-by-task. Use `superpowers:test-driven-development` for every code or prompt contract task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

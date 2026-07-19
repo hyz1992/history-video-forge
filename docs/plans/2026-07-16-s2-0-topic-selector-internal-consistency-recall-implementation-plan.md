@@ -1,4 +1,4 @@
-﻿# S2-0 Topic Selector 内部一致性召回实施计划
+# S2-0 Topic Selector 内部一致性召回实施计划
 
 > **For agentic workers:** REQUIRED: Use `superpowers:subagent-driven-development` (if subagents available) or `superpowers:executing-plans` to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking. 用户明确要求直接在当前 `dev` 分支执行，不创建 worktree。
 

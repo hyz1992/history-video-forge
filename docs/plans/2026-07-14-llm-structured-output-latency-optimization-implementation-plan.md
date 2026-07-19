@@ -1,4 +1,4 @@
-﻿# S2-0 旗舰模型结构化生成延迟与质量优化实施计划
+# S2-0 旗舰模型结构化生成延迟与质量优化实施计划
 
 > **面向 agent 执行者：**实施本计划时必须使用 `superpowers:executing-plans`，逐任务执行并在每个提交后复核。只有用户明确授权并行代理时，才可改用 `superpowers:subagent-driven-development`。所有步骤使用复选框跟踪。
 

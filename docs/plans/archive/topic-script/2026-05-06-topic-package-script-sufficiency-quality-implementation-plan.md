@@ -1,4 +1,4 @@
-﻿# Topic Package Script-sufficiency Quality Implementation Plan
+# Topic Package Script-sufficiency Quality Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:executing-plans` to implement this plan task-by-task. Each implementation task that changes code or prompt behavior must use `superpowers:test-driven-development`. Before claiming completion or committing, use `superpowers:verification-before-completion`.
 

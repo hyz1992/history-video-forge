@@ -1,4 +1,4 @@
-﻿# S2-0 Topic Selector 紧凑 verdict 实施计划
+# S2-0 Topic Selector 紧凑 verdict 实施计划
 
 > **供 agentic worker 使用：** REQUIRED：当前任务未授权子 agent，使用 `superpowers:executing-plans` 在当前会话执行；每个实现任务必须使用 `superpowers:test-driven-development`，严格按红灯、最小实现、绿灯顺序推进。所有步骤使用复选框跟踪。
 

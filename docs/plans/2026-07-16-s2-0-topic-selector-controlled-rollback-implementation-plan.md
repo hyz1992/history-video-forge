@@ -1,4 +1,4 @@
-﻿# S2-0 Topic Selector 受控局部回退实施计划
+# S2-0 Topic Selector 受控局部回退实施计划
 
 > **供 agentic worker 使用：** REQUIRED：使用 `superpowers:executing-plans` 在当前 `dev` 分支执行；用户明确要求不创建 worktree，当前任务也未授权子 agent。每个行为改动必须使用 `superpowers:test-driven-development`，严格按红灯、最小实现、绿灯推进。所有步骤使用复选框跟踪。
 

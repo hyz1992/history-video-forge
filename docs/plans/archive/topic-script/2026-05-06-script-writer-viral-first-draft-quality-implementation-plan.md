@@ -1,4 +1,4 @@
-﻿# Script Writer Viral First-draft Quality Implementation Plan
+# Script Writer Viral First-draft Quality Implementation Plan
 
 日期：2026-05-06
 

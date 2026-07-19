@@ -1,4 +1,4 @@
-﻿# S2-0 Topic 首次安全表达与语义一致性优化实施计划
+# S2-0 Topic 首次安全表达与语义一致性优化实施计划
 
 > **供 agentic worker 使用：** REQUIRED：使用 `superpowers:test-driven-development` 按红灯、最小实现、绿灯顺序执行。当前任务未授权子 agent，使用 `superpowers:executing-plans` 在当前会话逐批执行并保留检查点。所有步骤使用复选框跟踪。
 

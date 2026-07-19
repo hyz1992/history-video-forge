@@ -1,4 +1,4 @@
-﻿# Script Writer Duration Pacing Scene Density Design
+# Script Writer Duration Pacing Scene Density Design
 
 ## 任务
 

@@ -1,4 +1,4 @@
-﻿# 2026-05-01 Follow-up Backlog
+# 2026-05-01 Follow-up Backlog
 
 ## 背景
 

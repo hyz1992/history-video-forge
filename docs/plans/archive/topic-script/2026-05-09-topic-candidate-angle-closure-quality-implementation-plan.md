@@ -1,4 +1,4 @@
-﻿# Topic Candidate Angle-closure Quality Implementation Plan
+# Topic Candidate Angle-closure Quality Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:test-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

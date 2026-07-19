@@ -1,4 +1,4 @@
-﻿# S2-0 Topic Selector 完整 verdict 回退撤销设计
+# S2-0 Topic Selector 完整 verdict 回退撤销设计
 
 ## 1. 背景与结论
 

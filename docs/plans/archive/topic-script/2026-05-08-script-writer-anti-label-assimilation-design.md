@@ -1,4 +1,4 @@
-﻿# Script Writer Anti-Label Assimilation Design
+# Script Writer Anti-Label Assimilation Design
 
 Date: 2026-05-08
 

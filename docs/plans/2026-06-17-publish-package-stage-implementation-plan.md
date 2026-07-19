@@ -1,4 +1,4 @@
-﻿# 发布交付包阶段实施计划：封面 / 标题 / 描述 / 话题标签
+# 发布交付包阶段实施计划：封面 / 标题 / 描述 / 话题标签
 
 日期：2026-06-17
 前置设计：[2026-06-17-publish-package-stage-design.md](./2026-06-17-publish-package-stage-design.md)

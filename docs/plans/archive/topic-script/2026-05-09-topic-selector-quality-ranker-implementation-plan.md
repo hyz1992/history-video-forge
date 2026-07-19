@@ -1,4 +1,4 @@
-﻿# Topic Selector Quality Ranker Implementation Plan
+# Topic Selector Quality Ranker Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:test-driven-development while implementing this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

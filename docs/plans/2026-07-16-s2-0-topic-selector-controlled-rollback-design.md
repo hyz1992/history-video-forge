@@ -1,4 +1,4 @@
-﻿# S2-0 Topic Selector 受控局部回退设计
+# S2-0 Topic Selector 受控局部回退设计
 
 ## 1. 背景与问题
 

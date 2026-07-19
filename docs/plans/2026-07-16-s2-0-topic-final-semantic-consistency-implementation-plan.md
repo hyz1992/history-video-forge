@@ -1,4 +1,4 @@
-﻿# S2-0 Topic 最终候选语义一致性合同实施计划
+# S2-0 Topic 最终候选语义一致性合同实施计划
 
 > **供 agentic worker 使用：** REQUIRED：使用 `superpowers:test-driven-development` 按红灯、最小实现、绿灯顺序执行。若当前任务未授权子 agent，使用 `superpowers:executing-plans` 在当前会话逐批执行并保留检查点；只有用户明确授权子 agent 时才使用 `superpowers:subagent-driven-development`。所有步骤使用复选框跟踪。
 

@@ -1,4 +1,4 @@
-﻿# S2-0 Topic 轻审核流程调整实施计划
+# S2-0 Topic 轻审核流程调整实施计划
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 

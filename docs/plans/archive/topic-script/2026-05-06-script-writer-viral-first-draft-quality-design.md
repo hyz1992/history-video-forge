@@ -1,4 +1,4 @@
-﻿# Script Writer Viral First-draft Quality Design
+# Script Writer Viral First-draft Quality Design
 
 日期：2026-05-06
 

@@ -1,4 +1,4 @@
-﻿# Plans 状态说明
+# Plans 状态说明
 
 `docs/plans/` 根目录只用于放置当前仍准备执行、正在执行或刚完成等待收口的设计文档与 implementation plan。
 

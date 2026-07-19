@@ -1,4 +1,4 @@
-﻿# S2-0 Topic Selector 完整 verdict 回退撤销实施计划
+# S2-0 Topic Selector 完整 verdict 回退撤销实施计划
 
 > **供 agentic worker 使用：** REQUIRED：使用 `superpowers:executing-plans` 在当前 `dev` 分支执行；用户明确要求不创建 worktree，当前约束不允许子 agent。所有行为修改必须使用 `superpowers:test-driven-development`，按红灯、最小实现、绿灯推进。每一步使用复选框跟踪。
 

@@ -1,4 +1,4 @@
-﻿# 前端 HTML 参照迁移 Harness 设计
+# 前端 HTML 参照迁移 Harness 设计
 
 日期：2026-06-21
 

@@ -1,4 +1,4 @@
-﻿# S2-0 Topic Selector 内部一致性召回窄设计
+# S2-0 Topic Selector 内部一致性召回窄设计
 
 ## 1. 背景
 

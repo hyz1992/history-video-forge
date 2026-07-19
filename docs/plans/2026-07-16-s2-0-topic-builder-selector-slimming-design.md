@@ -1,4 +1,4 @@
-﻿# S2-0 Topic Builder 与 Selector 瘦身优化设计
+# S2-0 Topic Builder 与 Selector 瘦身优化设计
 
 ## 1. 文档定位
 
