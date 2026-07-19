@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "玄武门之变",
+  "summary": "李世民在玄武门伏杀建成元吉，奠定贞观之始。",
+  "eventRegistryCanonicalName": "玄武门之变",
+  "aliases": ["玄武门之变", "玄武门政变"],
+  "dynasty": "唐",
+  "era": "初唐",
+  "characterTags": ["李世民", "李建成", "李元吉", "尉迟恭"],
+  "eventTypeTags": ["朝堂博弈", "继承夺位"],
+  "conflictTypeTags": ["继承冲突", "武装政变"],
+  "themeMotifs": ["兄弟相残", "权力代价"],
+  "timeRange": { "start": "626", "end": "626", "display": "唐武德九年六月" },
+  "locationTags": ["长安", "玄武门"],
+  "relationshipTags": ["兄弟", "君臣", "储位竞争"],
+  "sourceAnchorRefs": ["旧唐书", "资治通鉴"],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从魏征的立场看这场政变",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

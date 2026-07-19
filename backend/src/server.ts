@@ -59,6 +59,7 @@ import { tryServeStatic } from "./http/static-files.js";
 import { collectTierDiagnosticsInput, logTierConfigDiagnostics } from "./runtime/llm/tier-config-diagnostics.js";
 import { logPromptRegistryDiagnostics } from "./runtime/llm/runtime-config-diagnostics.js";
 import { createPromptRegistry } from "./runtime/prompts/prompt-registry.js";
+import { syncEventLibraryFromFiles } from "./modules/event-library/event-library-sync.service.js";
 
 async function readPayload(request: IncomingMessage) {
   const chunks: Buffer[] = [];
@@ -344,6 +345,12 @@ export async function startServer(options?: {
     await hydrateSecondAggregates(app.db, prismaClient);
     await hydrateThirdAggregates(app.db, prismaClient);
     await recoverAndPersistInterruptedRuns(app.db);
+  }
+  // S2-5 P2：启动时同步事件库文件到 DB（异步，失败不阻塞启动）
+  if (prismaClient) {
+    syncEventLibraryFromFiles(prismaClient, process.cwd()).catch((error) => {
+      console.warn("event-library-sync-failed", error instanceof Error ? error.message : "unknown");
+    });
   }
   const sessionStore = prismaClient ? new PrismaSessionStore(prismaClient) : undefined;
   // S2-1 Task 7：启动时打印 tier 路由诊断（脱敏，失败不阻塞启动）
