@@ -181,32 +181,43 @@
 
 ### B. 事件库入口
 
-`GET /api/events/library`
+> 路径口径：本节路径已在 S2-5（[2026-07-19-s2-5-event-library-and-custom-topic-design.md](../plans/2026-07-19-s2-5-event-library-and-custom-topic-design.md) §7）正式化为 `/api/event-library/*` 与 `/topic/from-library`。早期草案 `/api/events/library`、`/api/projects/:projectId/topic/library-candidates` 已废弃，不再实现。
+
+`GET /api/event-library/entries`
 
 用途：
-- 浏览 curated 事件库
+- 分页浏览 curated 事件库
+- 支持 `dynasty`、`characterTag`、`eventTypeTag`、`conflictTypeTag`、`q`（标题/简介模糊匹配）筛选
+- 强制 `status=curated` 且 `visibility=public`，排除 `archived`
 
-`GET /api/events/library/:eventId`
-
-用途：
-- 获取事件详情
-
-`POST /api/projects/:projectId/topic/library-candidates`
+`GET /api/event-library/entries/:entryId`
 
 用途：
-- 对用户选中的 event 生成 2-3 个 `Topic Candidate Card`
+- 获取事件条目详情，含 angles 列表
+
+`GET /api/event-library/dynasties`
+
+用途：
+- 朝代聚合，供筛选项构造
+
+`POST /api/projects/:projectId/topic/from-library`
+
+用途：
+- 基于用户选中的 event library entry 生成 candidate
+- 入参：`eventLibraryEntryId`、可选 `angleId`
+- candidate 写入 `topicCandidateStore`，携带 `sourceMode=library`
 
 ### C. 自定义输入入口
 
-`POST /api/projects/:projectId/topic/custom-recognize`
+> 路径口径：本节路径已在 S2-5 正式化为 `/topic/from-custom`。早期草案 `/api/projects/:projectId/topic/custom-recognize`、`/api/projects/:projectId/topic/custom-candidates` 已废弃；第一版合并识别与 candidate 生成，不再拆分。
+
+`POST /api/projects/:projectId/topic/from-custom`
 
 用途：
-- 识别用户输入的事件归属
-
-`POST /api/projects/:projectId/topic/custom-candidates`
-
-用途：
-- 在事件识别完成后生成 2-3 个 `Topic Candidate Card`
+- 用户输入事件梗概，由系统（`topic.custom-refine` operation）完善成结构化事件，再生成 candidate
+- 入参：`rawDigest`（10-500 字）、可选 `hints`
+- candidate 写入 `topicCandidateStore`，携带 `sourceMode=custom` 与 `customDraftId`
+- 极端输入（空/过短/乱码/注入/非历史主题）按 S2-5 §6.4 返回 `400` 或 `422`
 
 ## 4. Topic 确认 API
 
