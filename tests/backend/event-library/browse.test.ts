@@ -42,9 +42,9 @@ describe("event-library browse API", () => {
     mkdirSync(join(libDir, "tang"), { recursive: true });
     mkdirSync(join(libDir, "song"), { recursive: true });
 
-    writeFileSync(join(libDir, "tang", "e1.json"), makeEventJson({ canonicalTitle: "玄武门之变", eventRegistryCanonicalName: "玄武门之变", dynasty: "唐" }), "utf8");
+    writeFileSync(join(libDir, "tang", "e1.json"), makeEventJson({ canonicalTitle: "玄武门之变", eventRegistryCanonicalName: "玄武门之变", dynasty: "唐", eventTypeTags: ["继承夺位"] }), "utf8");
     writeFileSync(join(libDir, "tang", "e2.json"), makeEventJson({ canonicalTitle: "贞观之治", eventRegistryCanonicalName: "贞观之治", dynasty: "唐", characterTags: ["李世民"] }), "utf8");
-    writeFileSync(join(libDir, "song", "e3.json"), makeEventJson({ canonicalTitle: "王安石变法", eventRegistryCanonicalName: "王安石变法", dynasty: "宋", era: "北宋" }), "utf8");
+    writeFileSync(join(libDir, "song", "e3.json"), makeEventJson({ canonicalTitle: "王安石变法", eventRegistryCanonicalName: "王安石变法", dynasty: "宋", era: "北宋", conflictTypeTags: ["新旧党争"] }), "utf8");
 
     const dbPath = join(root, "test.db");
     const sqlite = new Database(dbPath);
@@ -58,24 +58,46 @@ describe("event-library browse API", () => {
 
       const app = buildApp({ storageBaseDir: root, prismaClient: client, skipSnapshotLoad: true });
 
-      // List all
-      const r1 = await app.inject({ method: "POST", url: "/api/event-library/entries", payload: {} });
+      // List all (GET — 无 payload)
+      const r1 = await app.inject({ method: "GET", url: "/api/event-library/entries" });
       expect(r1.statusCode).toBe(200);
       const body1 = r1.json();
       expect(body1.total).toBe(3);
       expect(body1.entries).toHaveLength(3);
       expect(body1.entries.every((e: { credibility_level: string }) => e.credibility_level === "high")).toBe(true);
 
-      // Filter by dynasty
-      const r2 = await app.inject({ method: "POST", url: "/api/event-library/entries", payload: { dynasty: "唐" } });
+      // GET with no payload returns all entries (redundancy check)
+      const rGet = await app.inject({ method: "GET", url: "/api/event-library/entries" });
+      expect(rGet.statusCode).toBe(200);
+      expect(rGet.json().total).toBe(3);
+
+      // Filter by dynasty (GET with payload for filter params)
+      const r2 = await app.inject({ method: "GET", url: "/api/event-library/entries", payload: { dynasty: "唐" } });
       const body2 = r2.json();
       expect(body2.total).toBe(2);
       expect(body2.entries.map((e: { canonical_title: string }) => e.canonical_title)).toEqual(
         expect.arrayContaining(["玄武门之变", "贞观之治"]),
       );
 
+      // Filter by characterTag (e2 only has "李世民")
+      const rChar = await app.inject({ method: "GET", url: "/api/event-library/entries", payload: { characterTag: "李世民" } });
+      expect(rChar.json().total).toBe(1);
+
+      // Filter by eventTypeTag (e1 has "继承夺位")
+      const rType = await app.inject({ method: "GET", url: "/api/event-library/entries", payload: { eventTypeTag: "继承夺位" } });
+      expect(rType.json().total).toBe(1);
+
+      // Filter by conflictTypeTag (e3 has "新旧党争")
+      const rConflict = await app.inject({ method: "GET", url: "/api/event-library/entries", payload: { conflictTypeTag: "新旧党争" } });
+      expect(rConflict.json().total).toBe(1);
+
+      // Search by q
+      const rQ = await app.inject({ method: "GET", url: "/api/event-library/entries", payload: { q: "贞观" } });
+      expect(rQ.json().total).toBe(1);
+      expect(rQ.json().entries[0].canonical_title).toBe("贞观之治");
+
       // Pagination
-      const r3 = await app.inject({ method: "POST", url: "/api/event-library/entries", payload: { page: 1, pageSize: 1 } });
+      const r3 = await app.inject({ method: "GET", url: "/api/event-library/entries", payload: { page: 1, pageSize: 1 } });
       const body3 = r3.json();
       expect(body3.total).toBe(3);
       expect(body3.entries).toHaveLength(1);
@@ -116,7 +138,7 @@ describe("event-library browse API", () => {
       const app = buildApp({ storageBaseDir: root, prismaClient: client, skipSnapshotLoad: true });
 
       // Find the entry id
-      const entries = await app.inject({ method: "POST", url: "/api/event-library/entries", payload: {} });
+      const entries = await app.inject({ method: "GET", url: "/api/event-library/entries" });
       const entryId = entries.json().entries[0].id;
 
       // Get detail
@@ -190,7 +212,7 @@ describe("event-library browse API", () => {
 
       const app = buildApp({ storageBaseDir: root, prismaClient: client, skipSnapshotLoad: true });
 
-      const r = await app.inject({ method: "POST", url: "/api/event-library/entries", payload: {} });
+      const r = await app.inject({ method: "GET", url: "/api/event-library/entries" });
       expect(r.json().total).toBe(0);
     } finally {
       await client.$disconnect();

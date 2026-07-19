@@ -69,14 +69,14 @@ describe("event-library from-library API", () => {
       const auth = createAuthenticatedAuthContext({ userId: user.id, username: user.username, displayName: user.displayName, role: "ADMIN", sessionId: "s" });
 
       // Find the entry
-      const entriesResp = await app.inject({ method: "POST", url: "/api/event-library/entries", payload: {} });
+      const entriesResp = await app.inject({ method: "GET", url: "/api/event-library/entries" });
       const entry = entriesResp.json().entries[0];
 
-      // Generate from library
+      // Generate from library (正式 camelCase)
       const r = await app.inject({
         method: "POST",
         url: `/api/projects/${project.id}/topic/from-library`,
-        payload: { event_library_entry_id: entry.id },
+        payload: { eventLibraryEntryId: entry.id },
         auth,
       });
       expect(r.statusCode).toBe(200);
@@ -123,18 +123,18 @@ describe("event-library from-library API", () => {
       const project = await createProject(app.db, { name: "Test2", ownerId: user.id, createdById: user.id });
       const auth = createAuthenticatedAuthContext({ userId: user.id, username: user.username, displayName: user.displayName, role: "ADMIN", sessionId: "s" });
 
-      const entriesResp = await app.inject({ method: "POST", url: "/api/event-library/entries", payload: {} });
+      const entriesResp = await app.inject({ method: "GET", url: "/api/event-library/entries" });
       const entry = entriesResp.json().entries[0];
 
       // Get detail to know the angle id
       const detailResp = await app.inject({ method: "GET", url: `/api/event-library/entries/${entry.id}` });
       const angleId = detailResp.json().angles[0].id;
 
-      // Generate with angle
+      // Generate with angle (camelCase)
       const r = await app.inject({
         method: "POST",
         url: `/api/projects/${project.id}/topic/from-library`,
-        payload: { event_library_entry_id: entry.id, angle_id: angleId },
+        payload: { eventLibraryEntryId: entry.id, angleId: angleId },
         auth,
       });
       expect(r.statusCode).toBe(200);
@@ -175,7 +175,7 @@ describe("event-library from-library API", () => {
       const r = await app.inject({
         method: "POST",
         url: `/api/projects/${project.id}/topic/from-library`,
-        payload: { event_library_entry_id: "nonexistent-id" },
+        payload: { eventLibraryEntryId: "nonexistent-id" },
         auth,
       });
       expect(r.statusCode).toBe(404);

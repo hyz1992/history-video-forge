@@ -14,25 +14,50 @@ import { normalizeEventInput } from "../topic/event-normalizer";
 
 // ---- Browse / Detail / Dynasties ----
 
+function getPayloadField(payload: unknown, ...keys: string[]): string {
+  if (!payload || typeof payload !== "object") return "";
+  const record = payload as Record<string, unknown>;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "";
+}
+
+function getPayloadNumber(payload: unknown, ...keys: string[]): number | undefined {
+  if (!payload || typeof payload !== "object") return undefined;
+  const record = payload as Record<string, unknown>;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "number") return value;
+    if (typeof value === "string" && value.trim()) {
+      const n = Number(value);
+      if (!Number.isNaN(n)) return n;
+    }
+  }
+  return undefined;
+}
+
+function jsonArrayContains(value: unknown, search: string): boolean {
+  if (value == null) return false;
+  // JSON.stringify handles both arrays (native) and strings (raw SQLite JSON)
+  const str = typeof value === "string" ? value : JSON.stringify(value);
+  return str.toLowerCase().includes(search.toLowerCase());
+}
+
 export async function listEntriesController(
   context: RouteContext,
 ): Promise<AppResponse> {
   const prisma = context.app.prismaClient;
   if (!prisma) return { statusCode: 503, body: { error: "database_unavailable" } };
 
-  const dynasty = typeof context.payload === "object" && context.payload
-    ? String((context.payload as Record<string, unknown>).dynasty ?? "").trim()
-    : "";
-  const page = Math.max(1, Number(
-    typeof context.payload === "object" && context.payload
-      ? (context.payload as Record<string, unknown>).page
-      : 1,
-  ) || 1);
-  const pageSize = Math.min(100, Math.max(1, Number(
-    typeof context.payload === "object" && context.payload
-      ? (context.payload as Record<string, unknown>).pageSize
-      : 20,
-  ) || 20));
+  const dynasty = getPayloadField(context.payload, "dynasty");
+  const characterTag = getPayloadField(context.payload, "characterTag", "character_tag");
+  const eventTypeTag = getPayloadField(context.payload, "eventTypeTag", "event_type_tag");
+  const conflictTypeTag = getPayloadField(context.payload, "conflictTypeTag", "conflict_type_tag");
+  const q = getPayloadField(context.payload, "q");
+  const page = Math.max(1, getPayloadNumber(context.payload, "page") ?? 1);
+  const pageSize = Math.min(100, Math.max(1, getPayloadNumber(context.payload, "pageSize", "page_size") ?? 20));
 
   const where: Record<string, unknown> = {
     status: "curated",
@@ -40,21 +65,42 @@ export async function listEntriesController(
   };
   if (dynasty) where.dynasty = dynasty;
 
+  // Fetch all curated entries (filter in-memory for tag/q searches, since SQLite JSON filtering is limited)
   const [entries, total] = await Promise.all([
     prisma.eventLibraryEntry.findMany({
       where: where as never,
       include: { angles: true },
       orderBy: { canonicalTitle: "asc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
     }),
     prisma.eventLibraryEntry.count({ where: where as never }),
   ]);
 
+  // Apply in-memory filters for tags and search
+  let filtered = entries;
+  if (characterTag) {
+    filtered = filtered.filter((e) => jsonArrayContains(e.characterTagsJson, characterTag));
+    // Re-count for pagination after filtering
+  }
+  if (eventTypeTag) {
+    filtered = filtered.filter((e) => jsonArrayContains(e.eventTypeTagsJson, eventTypeTag));
+  }
+  if (conflictTypeTag) {
+    filtered = filtered.filter((e) => jsonArrayContains(e.conflictTypeTagsJson, conflictTypeTag));
+  }
+  if (q) {
+    const lowerQ = q.toLowerCase();
+    filtered = filtered.filter((e) =>
+      e.canonicalTitle.toLowerCase().includes(lowerQ) ||
+      e.summary.toLowerCase().includes(lowerQ),
+    );
+  }
+  const filteredTotal = filtered.length;
+  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+
   return {
     statusCode: 200,
     body: {
-      entries: entries.map((e) => ({
+      entries: paged.map((e) => ({
         id: e.id,
         canonical_title: e.canonicalTitle,
         summary: e.summary,
@@ -70,7 +116,7 @@ export async function listEntriesController(
         origin_kind: e.originKind,
         angle_count: e.angles.length,
       })),
-      total,
+      total: filteredTotal,
       page,
       page_size: pageSize,
     },
@@ -161,14 +207,12 @@ function validateFromLibraryPayload(
     return { ok: false, error: "invalid_payload" };
   }
   const record = payload as Record<string, unknown>;
-  const eventLibraryEntryId = record.event_library_entry_id;
-  if (typeof eventLibraryEntryId !== "string" || !eventLibraryEntryId.trim()) {
-    return { ok: false, error: "event_library_entry_id is required" };
+  // 正式合同 camelCase；snake_case 为兼容别名
+  const eventLibraryEntryId = getPayloadField(record, "eventLibraryEntryId", "event_library_entry_id");
+  if (!eventLibraryEntryId) {
+    return { ok: false, error: "eventLibraryEntryId is required" };
   }
-  const angleId = record.angle_id;
-  if (angleId !== undefined && typeof angleId !== "string") {
-    return { ok: false, error: "angle_id must be a string" };
-  }
+  const angleId = getPayloadField(record, "angleId", "angle_id") || undefined;
   return { ok: true, value: { event_library_entry_id: eventLibraryEntryId, angle_id: angleId } };
 }
 
