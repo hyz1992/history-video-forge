@@ -1098,4 +1098,89 @@ describe("event-library admin review", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it("admin can create entry via POST /entries and archive via DELETE /entries/:id", async () => {
+    const root = mkdtempSync(join(tmpdir(), "svf2-admin-"));
+    const dbPath = join(root, "test.db");
+    const sqlite = new Database(dbPath);
+    applyAllDatabaseMigrations(sqlite);
+    sqlite.close();
+
+    const client = await createPrismaClient(dbPath);
+
+    try {
+      await client.user.create({
+        data: {
+          id: "u-admin",
+          username: "admin",
+          displayName: "Admin",
+          passwordHash: "x",
+          role: "ADMIN",
+        },
+      });
+
+      const app = buildApp({
+        storageBaseDir: root,
+        prismaClient: client,
+        skipSnapshotLoad: true,
+      });
+
+      // 1. Create entry
+      const createRes = await app.inject({
+        method: "POST",
+        url: "/api/admin/event-library/entries",
+        payload: {
+          canonicalTitle: "Admin 创建测试",
+          summary: "管理员直接创建的测试事件",
+          dynasty: "战国",
+          era: "ancient",
+          characterTags: ["商鞅"],
+          eventTypeTags: ["变法治国"],
+          credibilityLevel: "high",
+        },
+        auth: adminAuth(),
+      });
+
+      expect(createRes.statusCode).toBe(201);
+      const createBody = createRes.json() as { entry_id: string; created: boolean };
+      expect(createBody.created).toBe(true);
+
+      // 验证 DB 中有该 entry，且写入了文件
+      const entry = await client.eventLibraryEntry.findUnique({
+        where: { id: createBody.entry_id },
+      });
+      expect(entry).toBeTruthy();
+      expect(entry!.canonicalTitle).toBe("Admin 创建测试");
+      expect(entry!.status).toBe("curated");
+      expect(entry!.originKind).toBe("admin");
+      expect(entry!.filePath).toBeTruthy();
+
+      // 验证文件已写入
+      const absFile = join(root, entry!.filePath!);
+      const fileRaw = readFileSync(absFile, "utf8");
+      const fileObj = JSON.parse(fileRaw);
+      expect(fileObj.canonicalTitle).toBe("Admin 创建测试");
+      expect(fileObj.origin).toBe("admin");
+
+      // 2. Archive entry
+      const archiveRes = await app.inject({
+        method: "DELETE",
+        url: `/api/admin/event-library/entries/${createBody.entry_id}`,
+        auth: adminAuth(),
+      });
+
+      expect(archiveRes.statusCode).toBe(200);
+      const archiveBody = archiveRes.json() as { entry_id: string; archived: boolean };
+      expect(archiveBody.archived).toBe(true);
+
+      // 验证 status 变为 archived
+      const archivedEntry = await client.eventLibraryEntry.findUnique({
+        where: { id: createBody.entry_id },
+      });
+      expect(archivedEntry!.status).toBe("archived");
+    } finally {
+      await client.$disconnect();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

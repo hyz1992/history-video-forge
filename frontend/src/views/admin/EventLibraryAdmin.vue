@@ -66,6 +66,7 @@
       <div class="section-header">
         <h3 class="section-title">公共库条目</h3>
         <div class="section-header-actions">
+          <button class="refresh-btn refresh-btn--success" @click="openCreateDialog">新建</button>
           <button class="refresh-btn" @click="loadEntries" :disabled="entryLoading">刷新</button>
           <button class="refresh-btn refresh-btn--primary" @click="triggerSync" :disabled="syncing">
             {{ syncing ? '同步中…' : '触发同步' }}
@@ -87,6 +88,7 @@
             <th>来源</th>
             <th>角度数</th>
             <th>更新时间</th>
+            <th>操作</th>
           </tr>
         </thead>
         <tbody>
@@ -101,6 +103,14 @@
             <td>{{ entry.origin_kind }}</td>
             <td>{{ entry.angle_count }}</td>
             <td>{{ formatTime(entry.updated_at) }}</td>
+            <td class="entry-actions-cell">
+              <button class="action-btn action-btn--edit" @click="openEditDialog(entry)">编辑</button>
+              <button
+                class="action-btn action-btn--archive"
+                :disabled="entry.status === 'archived'"
+                @click="archiveEntry(entry)"
+              >归档</button>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -125,6 +135,59 @@
             @click="handleReject"
           >
             {{ rejectProcessing ? '处理中…' : '确认拒绝' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Edit/Create Entry Dialog -->
+    <div v-if="editDialogVisible" class="reject-overlay" @click.self="editDialogVisible = false">
+      <div class="edit-dialog">
+        <h4 class="reject-title">{{ editIsNew ? '新建事件条目' : '编辑事件条目' }}</h4>
+        <div class="edit-form">
+          <label class="edit-field">
+            <span class="edit-label">标题 <span class="required">*</span></span>
+            <input v-model="editForm.canonical_title" class="edit-input" placeholder="事件标题" />
+          </label>
+          <label class="edit-field">
+            <span class="edit-label">摘要 <span class="required">*</span></span>
+            <textarea v-model="editForm.summary" class="edit-textarea" rows="3" placeholder="事件摘要"></textarea>
+          </label>
+          <div class="edit-row">
+            <label class="edit-field edit-field--half">
+              <span class="edit-label">朝代</span>
+              <input v-model="editForm.dynasty" class="edit-input" placeholder="如：唐" />
+            </label>
+            <label class="edit-field edit-field--half">
+              <span class="edit-label">时期</span>
+              <input v-model="editForm.era" class="edit-input" placeholder="如：初唐" />
+            </label>
+          </div>
+          <label class="edit-field">
+            <span class="edit-label">人物标签（逗号分隔）</span>
+            <input v-model="editForm.character_tags" class="edit-input" placeholder="如：李世民, 李建成" />
+          </label>
+          <label class="edit-field">
+            <span class="edit-label">事件类型标签（逗号分隔）</span>
+            <input v-model="editForm.event_type_tags" class="edit-input" placeholder="如：继承夺位, 武装政变" />
+          </label>
+          <label class="edit-field">
+            <span class="edit-label">可信度</span>
+            <select v-model="editForm.credibility_level" class="edit-input">
+              <option value="high">高</option>
+              <option value="medium">中</option>
+              <option value="low">低</option>
+            </select>
+          </label>
+        </div>
+        <div class="reject-actions">
+          <button class="action-btn action-btn--cancel" @click="editDialogVisible = false">取消</button>
+          <button
+            class="action-btn action-btn--approve"
+            :disabled="editSaving"
+            @click="handleEditSave"
+          >
+            {{ editSaving ? '保存中…' : '保存' }}
           </button>
         </div>
       </div>
@@ -243,6 +306,9 @@ interface AdminEntry {
   visibility: string;
   origin_kind: string;
   angle_count: number;
+  character_tags: string[];
+  event_type_tags: string[];
+  credibility_level: string;
   created_at: string;
   updated_at: string;
 }
@@ -285,6 +351,115 @@ async function triggerSync() {
     }
   } finally {
     syncing.value = false;
+  }
+}
+
+// ---- Edit / Create Entry ----
+interface EditForm {
+  canonical_title: string;
+  summary: string;
+  dynasty: string;
+  era: string;
+  character_tags: string;
+  event_type_tags: string;
+  credibility_level: string;
+}
+
+const editDialogVisible = ref(false);
+const editIsNew = ref(true);
+const editSaving = ref(false);
+const editEntryId = ref<string | null>(null);
+
+const defaultEditForm = (): EditForm => ({
+  canonical_title: "",
+  summary: "",
+  dynasty: "",
+  era: "",
+  character_tags: "",
+  event_type_tags: "",
+  credibility_level: "medium",
+});
+
+const editForm = ref<EditForm>(defaultEditForm());
+
+function openCreateDialog() {
+  editIsNew.value = true;
+  editEntryId.value = null;
+  editForm.value = defaultEditForm();
+  editDialogVisible.value = true;
+}
+
+function openEditDialog(entry: AdminEntry) {
+  editIsNew.value = false;
+  editEntryId.value = entry.id;
+  editForm.value = {
+    canonical_title: entry.canonical_title,
+    summary: entry.summary,
+    dynasty: entry.dynasty || "",
+    era: entry.era || "",
+    character_tags: (entry.character_tags || []).join(", "),
+    event_type_tags: (entry.event_type_tags || []).join(", "),
+    credibility_level: entry.credibility_level || "medium",
+  };
+  editDialogVisible.value = true;
+}
+
+function parseCommaList(s: string): string[] {
+  return s
+    .split(/[,，]/)
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+}
+
+async function handleEditSave() {
+  if (!editForm.value.canonical_title.trim() || !editForm.value.summary.trim()) {
+    ElMessage.warning("标题和摘要为必填项");
+    return;
+  }
+  editSaving.value = true;
+  try {
+    const body = {
+      canonicalTitle: editForm.value.canonical_title.trim(),
+      summary: editForm.value.summary.trim(),
+      dynasty: editForm.value.dynasty.trim() || undefined,
+      era: editForm.value.era.trim() || undefined,
+      characterTags: parseCommaList(editForm.value.character_tags),
+      eventTypeTags: parseCommaList(editForm.value.event_type_tags),
+      credibilityLevel: editForm.value.credibility_level,
+    };
+
+    if (editIsNew.value) {
+      await apiFetch("/api/admin/event-library/entries", { method: "POST", body });
+      ElMessage.success("已创建新条目，文件已写入");
+    } else {
+      await apiFetch(`/api/admin/event-library/entries/${editEntryId.value}`, {
+        method: "PATCH",
+        body,
+      });
+      ElMessage.success("已更新条目，文件已写入");
+    }
+
+    editDialogVisible.value = false;
+    await loadEntries();
+  } catch (e) {
+    if (e instanceof ApiError) {
+      ElMessage.error(e.code);
+    }
+  } finally {
+    editSaving.value = false;
+  }
+}
+
+async function archiveEntry(entry: AdminEntry) {
+  if (!confirm(`确定要归档「${entry.canonical_title}」吗？`)) return;
+  try {
+    await apiFetch(`/api/admin/event-library/entries/${entry.id}`, { method: "DELETE" });
+    ElMessage.success("已归档");
+    await loadEntries();
+  } catch (e) {
+    if (e instanceof ApiError) {
+      ElMessage.error(e.code);
+    }
   }
 }
 
@@ -562,5 +737,102 @@ onMounted(() => {
   gap: 8px;
   justify-content: flex-end;
   margin-top: 14px;
+}
+
+/* Edit Dialog */
+.edit-dialog {
+  width: 520px;
+  max-width: 94vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  padding: 24px;
+  border-radius: 12px;
+  background: var(--el-bg-color);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+}
+
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.edit-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--el-text-color-regular);
+}
+
+.required {
+  color: var(--el-color-danger);
+}
+
+.edit-row {
+  display: flex;
+  gap: 12px;
+}
+
+.edit-field--half {
+  flex: 1;
+}
+
+.edit-input {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--el-border-color-light);
+  font-size: 13px;
+  font-family: inherit;
+  background: var(--el-bg-color);
+  color: var(--el-text-color-regular);
+  box-sizing: border-box;
+}
+
+.edit-textarea {
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--el-border-color-light);
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+  background: var(--el-bg-color);
+  color: var(--el-text-color-regular);
+}
+
+.edit-input:focus,
+.edit-textarea:focus {
+  outline: none;
+  border-color: var(--el-color-primary);
+}
+
+/* Entry actions */
+.entry-actions-cell {
+  display: flex;
+  gap: 6px;
+}
+
+.action-btn--edit {
+  background: var(--el-color-primary);
+  color: #fff;
+  border-color: var(--el-color-primary);
+}
+
+.action-btn--archive {
+  background: var(--el-color-warning);
+  color: #fff;
+  border-color: var(--el-color-warning);
+}
+
+.refresh-btn--success {
+  background: var(--el-color-success);
+  color: #fff;
+  border-color: var(--el-color-success);
 }
 </style>

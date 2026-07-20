@@ -669,6 +669,120 @@ export async function updateAdminEntryController(context: RouteContext): Promise
 
 // ---- Trigger Sync ----
 
+// ---- Create Entry (Admin) ----
+
+export async function createAdminEntryController(context: RouteContext): Promise<AppResponse> {
+  const prisma = context.app.prismaClient;
+  if (!prisma) return { statusCode: 503, body: { error: "database_unavailable" } };
+
+  const body = context.payload as Record<string, unknown> | undefined;
+  if (!body) return { statusCode: 400, body: { error: "invalid_payload" } };
+
+  const canonicalTitle = getPayloadField(body, "canonicalTitle", "canonical_title");
+  const summary = getPayloadField(body, "summary");
+  if (!canonicalTitle || !summary) {
+    return { statusCode: 400, body: { error: "title_and_summary_required" } };
+  }
+
+  const dynasty = getPayloadField(body, "dynasty") || null;
+  const era = getPayloadField(body, "era") || null;
+  const characterTags = getPayloadArray(body, "characterTags", "character_tags");
+  const eventTypeTags = getPayloadArray(body, "eventTypeTags", "event_type_tags");
+  const conflictTypeTags = getPayloadArray(body, "conflictTypeTags", "conflict_type_tags");
+  const themeMotifs = getPayloadArray(body, "themeMotifs", "theme_motifs");
+  const locationTags = getPayloadArray(body, "locationTags", "location_tags");
+  const relationshipTags = getPayloadArray(body, "relationshipTags", "relationship_tags");
+  const sourceAnchorRefs = getPayloadArray(body, "sourceAnchorRefs", "source_anchor_refs");
+  const credibilityLevel = getPayloadField(body, "credibilityLevel", "credibility_level") || "medium";
+  const disputeNotes = getPayloadField(body, "disputeNotes", "dispute_notes") || null;
+
+  const libraryFingerprint = generateLibraryFingerprint(
+    canonicalTitle as string,
+    dynasty as string | undefined,
+    era as string | undefined,
+  );
+
+  const eventRegistryEntryId = await ensureEventRegistryEntry(prisma, canonicalTitle as string, []);
+
+  const dynastySlug = dynasty ? toAsciiSlug(dynasty as string) : "unknown";
+  const eventSlug = toAsciiSlug(canonicalTitle as string);
+  const filePath = `${EVENT_LIBRARY_ROOT_DIR}/${dynastySlug}/${eventSlug}.json`;
+
+  const fileContent: EventLibraryFile = {
+    schemaVersion: 1,
+    canonicalTitle: canonicalTitle as string,
+    summary: summary as string,
+    eventRegistryCanonicalName: canonicalTitle as string,
+    aliases: [],
+    dynasty: (dynasty as string) ?? undefined,
+    era: (era as string) ?? undefined,
+    characterTags,
+    eventTypeTags,
+    conflictTypeTags,
+    themeMotifs,
+    timeRange: undefined,
+    locationTags,
+    relationshipTags,
+    sourceAnchorRefs,
+    credibilityLevel: credibilityLevel as EventLibraryFile["credibilityLevel"],
+    disputeNotes: disputeNotes as string | null,
+    origin: "admin",
+    angles: [],
+  };
+  const json = JSON.stringify(fileContent, null, 2);
+  const fileContentHash = computeFileContentHash(json);
+
+  const created = await createEntry(prisma, {
+    eventRegistryEntryId,
+    canonicalTitle: canonicalTitle as string,
+    summary: summary as string,
+    dynasty: dynasty as string | null,
+    era: era as string | null,
+    characterTags,
+    eventTypeTags,
+    conflictTypeTags,
+    themeMotifs,
+    locationTags,
+    relationshipTags,
+    sourceAnchorRefs,
+    credibilityLevel: credibilityLevel as string,
+    disputeNotes: disputeNotes as string | null,
+    originKind: "admin",
+    libraryFingerprint,
+    filePath,
+    fileContentHash,
+  });
+
+  // 写入文件
+  const absFilePath = join(context.app.storageBaseDir, filePath);
+  mkdirSync(join(absFilePath, ".."), { recursive: true });
+  writeFileSync(absFilePath, json, "utf8");
+
+  return { statusCode: 201, body: { entry_id: created.id, created: true } };
+}
+
+// ---- Archive Entry (Admin) ----
+
+export async function archiveAdminEntryController(context: RouteContext): Promise<AppResponse> {
+  const prisma = context.app.prismaClient;
+  if (!prisma) return { statusCode: 503, body: { error: "database_unavailable" } };
+
+  const entryId = context.params.entryId;
+  if (!entryId) return { statusCode: 400, body: { error: "entry_id_required" } };
+
+  const entry = await prisma.eventLibraryEntry.findUnique({ where: { id: entryId } });
+  if (!entry) return { statusCode: 404, body: { error: "entry_not_found" } };
+
+  await prisma.eventLibraryEntry.update({
+    where: { id: entryId },
+    data: { status: "archived" },
+  });
+
+  return { statusCode: 200, body: { entry_id: entryId, archived: true } };
+}
+
+// ---- Trigger Sync ----
+
 export async function triggerSyncController(context: RouteContext): Promise<AppResponse> {
   const prisma = context.app.prismaClient;
   if (!prisma) return { statusCode: 503, body: { error: "database_unavailable" } };
