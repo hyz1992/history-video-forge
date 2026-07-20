@@ -39,6 +39,7 @@ export async function findEntryByFingerprint(
 ) {
   return prisma.eventLibraryEntry.findUnique({
     where: { libraryFingerprint },
+    include: { angles: true },
   });
 }
 

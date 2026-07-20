@@ -18,6 +18,9 @@
           <el-menu-item index="/admin/audit-logs">
             <span>审计日志</span>
           </el-menu-item>
+          <el-menu-item index="/admin/event-library">
+            <span>事件库管理</span>
+          </el-menu-item>
         </el-menu>
         <div class="admin-sidebar-footer">
           <el-button text size="small" @click="goHome">返回工作区</el-button>

@@ -1,0 +1,563 @@
+<template>
+  <div class="admin-library-page">
+    <!-- Tabs: 审核队列 | 公共库管理 -->
+    <div class="page-tabs">
+      <button
+        class="page-tab-btn"
+        :class="{ 'page-tab-btn--active': activeTab === 'review' }"
+        @click="activeTab = 'review'"
+      >审核队列</button>
+      <button
+        class="page-tab-btn"
+        :class="{ 'page-tab-btn--active': activeTab === 'entries' }"
+        @click="activeTab = 'entries'"
+      >公共库管理</button>
+    </div>
+
+    <!-- Review Queue -->
+    <div v-if="activeTab === 'review'" class="review-section">
+      <div class="section-header">
+        <h3 class="section-title">待审核草稿</h3>
+        <button class="refresh-btn" @click="loadDrafts" :disabled="draftLoading">刷新</button>
+      </div>
+
+      <div v-if="draftLoading" class="section-loading">加载中…</div>
+      <div v-else-if="draftError" class="section-error">{{ draftError }}</div>
+      <div v-else-if="drafts.length === 0" class="section-empty">
+        <p>暂无待审核的草稿</p>
+      </div>
+      <div v-else class="draft-list">
+        <div
+          v-for="draft in drafts"
+          :key="draft.id"
+          class="draft-card"
+        >
+          <div class="draft-header">
+            <span class="draft-title">{{ draft.proposed_title }}</span>
+            <span class="draft-kind">{{ draftKindLabel(draft.draft_kind) }}</span>
+          </div>
+          <p class="draft-summary">{{ draft.proposed_summary }}</p>
+          <div class="draft-meta">
+            <span>提交者：{{ draft.owner_username || draft.owner_id }}</span>
+            <span>{{ formatTime(draft.created_at) }}</span>
+          </div>
+          <div class="draft-actions">
+            <button
+              class="action-btn action-btn--approve"
+              :disabled="draft.processing"
+              @click="approveDraft(draft)"
+            >
+              {{ draft.processing ? '处理中…' : '通过' }}
+            </button>
+            <button
+              class="action-btn action-btn--reject"
+              :disabled="draft.processing"
+              @click="openRejectDialog(draft)"
+            >
+              拒绝
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Entries Management -->
+    <div v-if="activeTab === 'entries'" class="entries-section">
+      <div class="section-header">
+        <h3 class="section-title">公共库条目</h3>
+        <div class="section-header-actions">
+          <button class="refresh-btn" @click="loadEntries" :disabled="entryLoading">刷新</button>
+          <button class="refresh-btn refresh-btn--primary" @click="triggerSync" :disabled="syncing">
+            {{ syncing ? '同步中…' : '触发同步' }}
+          </button>
+        </div>
+      </div>
+
+      <div v-if="entryLoading" class="section-loading">加载中…</div>
+      <div v-else-if="entryError" class="section-error">{{ entryError }}</div>
+      <div v-else-if="entries.length === 0" class="section-empty">
+        <p>暂无条目</p>
+      </div>
+      <table v-else class="entries-table">
+        <thead>
+          <tr>
+            <th>标题</th>
+            <th>朝代</th>
+            <th>状态</th>
+            <th>来源</th>
+            <th>角度数</th>
+            <th>更新时间</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="entry in entries" :key="entry.id">
+            <td class="entry-title-cell">{{ entry.canonical_title }}</td>
+            <td>{{ entry.dynasty || '-' }}</td>
+            <td>
+              <span class="status-tag" :class="`status-tag--${entry.status}`">
+                {{ entry.status }}
+              </span>
+            </td>
+            <td>{{ entry.origin_kind }}</td>
+            <td>{{ entry.angle_count }}</td>
+            <td>{{ formatTime(entry.updated_at) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Reject Dialog -->
+    <div v-if="rejectTarget" class="reject-overlay" @click.self="rejectTarget = null">
+      <div class="reject-dialog">
+        <h4 class="reject-title">拒绝草稿</h4>
+        <p class="reject-info">草稿：{{ rejectTarget.proposed_title }}</p>
+        <textarea
+          v-model="rejectNotes"
+          class="reject-textarea"
+          placeholder="拒绝原因（可选）"
+          rows="3"
+        ></textarea>
+        <div class="reject-actions">
+          <button class="action-btn action-btn--cancel" @click="rejectTarget = null">取消</button>
+          <button
+            class="action-btn action-btn--reject"
+            :disabled="rejectProcessing"
+            @click="handleReject"
+          >
+            {{ rejectProcessing ? '处理中…' : '确认拒绝' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { onMounted, ref } from "vue";
+import { ElMessage } from "element-plus";
+import { apiFetch, ApiError } from "../../utils/api";
+
+const activeTab = ref<"review" | "entries">("review");
+
+// ---- Drafts ----
+interface DraftItem {
+  id: string;
+  draft_kind: string;
+  proposed_title: string;
+  proposed_summary: string;
+  proposed_angles: unknown[];
+  proposed_tags: Record<string, unknown>;
+  status: string;
+  owner_id: string;
+  owner_username: string | null;
+  created_at: string;
+  processing?: boolean;
+}
+
+const drafts = ref<DraftItem[]>([]);
+const draftLoading = ref(false);
+const draftError = ref<string | null>(null);
+
+function draftKindLabel(kind: string): string {
+  if (kind === "recommendation_reflux") return "推荐回流";
+  if (kind === "custom") return "自定义";
+  return kind;
+}
+
+async function loadDrafts() {
+  draftLoading.value = true;
+  draftError.value = null;
+  try {
+    const data = await apiFetch<{ drafts: DraftItem[] }>(
+      "/api/admin/event-library/drafts",
+    );
+    drafts.value = data.drafts.map((d) => ({ ...d, processing: false }));
+  } catch (e) {
+    draftError.value = e instanceof Error ? e.message : "加载草稿失败";
+  } finally {
+    draftLoading.value = false;
+  }
+}
+
+async function approveDraft(draft: DraftItem) {
+  draft.processing = true;
+  try {
+    const result = await apiFetch<{ entry_id: string; merged: boolean }>(
+      `/api/admin/event-library/drafts/${draft.id}/approve`,
+      { method: "POST" },
+    );
+    ElMessage.success(result.merged ? "已合并到已有条目" : "已创建新条目");
+    await loadDrafts();
+  } catch (e) {
+    if (e instanceof ApiError) {
+      ElMessage.error(e.code);
+    }
+    draft.processing = false;
+  }
+}
+
+// ---- Reject ----
+const rejectTarget = ref<DraftItem | null>(null);
+const rejectNotes = ref("");
+const rejectProcessing = ref(false);
+
+function openRejectDialog(draft: DraftItem) {
+  rejectTarget.value = draft;
+  rejectNotes.value = "";
+}
+
+async function handleReject() {
+  if (!rejectTarget.value || rejectProcessing.value) return;
+  rejectProcessing.value = true;
+  try {
+    await apiFetch(
+      `/api/admin/event-library/drafts/${rejectTarget.value.id}/reject`,
+      {
+        method: "POST",
+        body: { review_notes: rejectNotes.value.trim() || undefined },
+      },
+    );
+    ElMessage.success("已拒绝");
+    rejectTarget.value = null;
+    await loadDrafts();
+  } catch (e) {
+    if (e instanceof ApiError) {
+      ElMessage.error(e.code);
+    }
+  } finally {
+    rejectProcessing.value = false;
+  }
+}
+
+// ---- Entries ----
+interface AdminEntry {
+  id: string;
+  canonical_title: string;
+  summary: string;
+  dynasty: string | null;
+  era: string | null;
+  status: string;
+  visibility: string;
+  origin_kind: string;
+  angle_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+const entries = ref<AdminEntry[]>([]);
+const entryLoading = ref(false);
+const entryError = ref<string | null>(null);
+
+async function loadEntries() {
+  entryLoading.value = true;
+  entryError.value = null;
+  try {
+    const data = await apiFetch<{ entries: AdminEntry[] }>(
+      "/api/admin/event-library/entries",
+    );
+    entries.value = data.entries;
+  } catch (e) {
+    entryError.value = e instanceof Error ? e.message : "加载条目失败";
+  } finally {
+    entryLoading.value = false;
+  }
+}
+
+const syncing = ref(false);
+
+async function triggerSync() {
+  syncing.value = true;
+  try {
+    const result = await apiFetch<{ created: number; updated: number; errors: string[] }>(
+      "/api/admin/event-library/sync",
+      { method: "POST" },
+    );
+    ElMessage.success(
+      `同步完成：新增 ${result.created}，更新 ${result.updated}${result.errors.length ? `，${result.errors.length} 个错误` : ""}`,
+    );
+    await loadEntries();
+  } catch (e) {
+    if (e instanceof ApiError) {
+      ElMessage.error(e.code);
+    }
+  } finally {
+    syncing.value = false;
+  }
+}
+
+function formatTime(dateStr: string): string {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return d.toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+onMounted(() => {
+  loadDrafts();
+});
+</script>
+
+<style scoped>
+.admin-library-page {
+  max-width: 1000px;
+}
+
+.page-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+}
+
+.page-tab-btn {
+  padding: 10px 24px;
+  border-radius: 8px;
+  border: 1px solid var(--el-border-color-light);
+  background: var(--el-bg-color);
+  color: var(--el-text-color-regular);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 200ms ease;
+}
+.page-tab-btn:hover {
+  border-color: var(--el-color-primary);
+}
+.page-tab-btn--active {
+  background: var(--el-color-primary);
+  color: #fff;
+  border-color: var(--el-color-primary);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.section-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.section-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.refresh-btn {
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--el-border-color-light);
+  background: var(--el-bg-color);
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  cursor: pointer;
+}
+.refresh-btn:hover {
+  border-color: var(--el-color-primary);
+  color: var(--el-color-primary);
+}
+.refresh-btn--primary {
+  background: var(--el-color-primary);
+  color: #fff;
+  border-color: var(--el-color-primary);
+}
+
+.section-loading,
+.section-empty,
+.section-error {
+  text-align: center;
+  padding: 40px 16px;
+  color: var(--el-text-color-secondary);
+  font-size: 14px;
+}
+
+.section-error {
+  color: var(--el-color-danger);
+}
+
+/* Draft Cards */
+.draft-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.draft-card {
+  padding: 16px 20px;
+  border-radius: 10px;
+  border: 1px solid var(--el-border-color-light);
+  background: var(--el-bg-color);
+}
+
+.draft-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.draft-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.draft-kind {
+  font-size: 11px;
+  color: var(--el-color-primary);
+  background: rgba(64, 158, 255, 0.08);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.draft-summary {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.5;
+}
+
+.draft-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--el-text-color-placeholder);
+  margin-bottom: 12px;
+}
+
+.draft-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  padding: 7px 20px;
+  border-radius: 6px;
+  border: 1px solid var(--el-border-color-light);
+  background: var(--el-bg-color);
+  color: var(--el-text-color-regular);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 200ms ease;
+}
+.action-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.action-btn--approve {
+  background: var(--el-color-success);
+  color: #fff;
+  border-color: var(--el-color-success);
+}
+.action-btn--reject {
+  background: var(--el-color-danger);
+  color: #fff;
+  border-color: var(--el-color-danger);
+}
+.action-btn--cancel {
+  background: var(--el-bg-color);
+}
+
+/* Entries Table */
+.entries-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.entries-table th {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 2px solid var(--el-border-color-light);
+  font-weight: 600;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.entries-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.entry-title-cell {
+  font-weight: 500;
+}
+
+.status-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+.status-tag--curated {
+  background: rgba(103, 194, 58, 0.1);
+  color: var(--el-color-success);
+}
+.status-tag--archived {
+  background: rgba(144, 147, 153, 0.1);
+  color: var(--el-text-color-placeholder);
+}
+.status-tag--draft {
+  background: rgba(230, 162, 60, 0.1);
+  color: var(--el-color-warning);
+}
+
+/* Reject Dialog */
+.reject-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reject-dialog {
+  width: 420px;
+  max-width: 92vw;
+  padding: 24px;
+  border-radius: 12px;
+  background: var(--el-bg-color);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+}
+
+.reject-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.reject-info {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.reject-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--el-border-color-light);
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.reject-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+</style>

@@ -8,6 +8,7 @@ import AdminLayout from "../views/admin/AdminLayout.vue";
 import AdminUsersPage from "../views/admin/AdminUsersPage.vue";
 import AdminProjectsPage from "../views/admin/AdminProjectsPage.vue";
 import AdminAuditLogsPage from "../views/admin/AdminAuditLogsPage.vue";
+import EventLibraryAdmin from "../views/admin/EventLibraryAdmin.vue";
 import type { AuthStore } from "../stores/auth";
 
 export interface CreateRouterOptions {
@@ -64,6 +65,11 @@ export function createAppRouter(mode: "memory" | "web" = "memory", options?: Cre
             path: "audit-logs",
             name: "admin-audit-logs",
             component: AdminAuditLogsPage,
+          },
+          {
+            path: "event-library",
+            name: "admin-event-library",
+            component: EventLibraryAdmin,
           },
         ],
       },

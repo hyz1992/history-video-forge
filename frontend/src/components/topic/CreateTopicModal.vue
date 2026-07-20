@@ -7,6 +7,8 @@ import {
   type TopicRecommendationFilters,
   type TopicTab,
 } from "../../stores/topic";
+import EventLibraryBrowser from "../event-library/EventLibraryBrowser.vue";
+import CustomTopicInput from "../event-library/CustomTopicInput.vue";
 
 const props = defineProps<{
   visible: boolean;
@@ -80,6 +82,11 @@ function close() {
   emit("update:visible", false);
 }
 
+function onChildClose() {
+  emit("confirmed");
+  emit("update:visible", false);
+}
+
 watch(() => props.visible, (val) => {
   if (!val) {
     error.value = null;
@@ -148,11 +155,17 @@ watch(() => props.visible, (val) => {
         </template>
 
         <div
-          v-else
-          class="modal-placeholder"
+          v-else-if="activeTab === 'library'"
+          class="modal-tab-content"
         >
-          <div class="placeholder-icon">📋</div>
-          <p>{{ activeTab === 'library' ? '事件库' : '自定义选题' }}功能将在后续版本中接入。</p>
+          <EventLibraryBrowser @close="onChildClose" />
+        </div>
+
+        <div
+          v-else-if="activeTab === 'custom'"
+          class="modal-tab-content"
+        >
+          <CustomTopicInput @close="onChildClose" />
         </div>
 
         <div v-if="error" class="modal-error">
@@ -297,6 +310,12 @@ watch(() => props.visible, (val) => {
   color: var(--text-muted);
   font-size: 14px;
   text-align: center;
+}
+
+.modal-tab-content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 320px;
 }
 
 .placeholder-icon { font-size: 48px; line-height: 1; opacity: 0.5; }
