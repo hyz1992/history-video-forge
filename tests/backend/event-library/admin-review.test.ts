@@ -1,7 +1,7 @@
 // 必须在所有 import 之前设置 LLM stub 模式
 process.env.LLM_PROVIDER = "stub";
 
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
@@ -1178,6 +1178,202 @@ describe("event-library admin review", () => {
         where: { id: createBody.entry_id },
       });
       expect(archivedEntry!.status).toBe("archived");
+    } finally {
+      await client.$disconnect();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("PATCH file-synced entry overwrites original file, sync does not create orphan files", async () => {
+    const root = mkdtempSync(join(tmpdir(), "svf2-admin-"));
+    const dbPath = join(root, "test.db");
+    const sqlite = new Database(dbPath);
+    applyAllDatabaseMigrations(sqlite);
+    sqlite.close();
+
+    const client = await createPrismaClient(dbPath);
+
+    try {
+      await client.user.create({
+        data: {
+          id: "u-admin",
+          username: "admin",
+          displayName: "Admin",
+          passwordHash: "x",
+          role: "ADMIN",
+        },
+      });
+
+      // 1. 创建文件来源 entry
+      const libDir = join(root, "storage", "event-library", "tang");
+      mkdirSync(libDir, { recursive: true });
+      const filePath = join(libDir, "xuanwumen.json");
+
+      writeFileSync(filePath, JSON.stringify({
+        schemaVersion: 1,
+        canonicalTitle: "玄武门之变",
+        summary: "原始摘要",
+        eventRegistryCanonicalName: "玄武门之变",
+        aliases: [],
+        dynasty: "唐",
+        era: "初唐",
+        characterTags: ["李世民"],
+        eventTypeTags: ["继承夺位"],
+        conflictTypeTags: [],
+        themeMotifs: [],
+        locationTags: [],
+        relationshipTags: [],
+        sourceAnchorRefs: [],
+        credibilityLevel: "high",
+        disputeNotes: null,
+        origin: "builtin",
+        angles: [],
+      }, null, 2), "utf8");
+
+      const r1 = await syncEventLibraryFromFiles(client, root);
+      expect(r1.created).toBe(1);
+
+      const entry = await client.eventLibraryEntry.findFirst({
+        where: { canonicalTitle: "玄武门之变" },
+      });
+      expect(entry).toBeTruthy();
+      const originalFilePath = entry!.filePath!;
+
+      // 2. 构建 app 并编辑 entry
+      const app = buildApp({
+        storageBaseDir: root,
+        prismaClient: client,
+        skipSnapshotLoad: true,
+      });
+
+      const res = await app.inject({
+        method: "PATCH",
+        url: `/api/admin/event-library/entries/${entry!.id}`,
+        payload: {
+          summary: "修改后的摘要",
+          characterTags: ["李世民", "李建成"],
+          eventTypeTags: ["继承夺位", "武装政变"],
+        },
+        auth: adminAuth(),
+      });
+
+      expect(res.statusCode).toBe(200);
+
+      // 3. 验证磁盘只有原始路径一个 JSON 文件，无孤儿文件
+      const libFiles = readdirSync(libDir, { recursive: true, encoding: "utf8" })
+        .filter((f: string) => f.endsWith(".json"));
+      expect(libFiles).toHaveLength(1);
+      expect(libFiles[0]).toBe(originalFilePath.replace(/^.*[\\/]event-library[\\/]tang[\\/]/, ""));
+
+      // 4. 验证磁盘文件内容已更新
+      const diskContent = JSON.parse(readFileSync(join(root, originalFilePath), "utf8"));
+      expect(diskContent.summary).toBe("修改后的摘要");
+      expect(diskContent.characterTags).toContain("李建成");
+
+      // 5. 再次 sync：只有一个权威文件，内容不被覆盖
+      const r2 = await syncEventLibraryFromFiles(client, root);
+      expect(r2.archived).toBe(0);
+
+      const entry2 = await client.eventLibraryEntry.findFirst({
+        where: { id: entry!.id },
+      });
+      expect(entry2!.status).toBe("curated");
+      expect(entry2!.summary).toBe("修改后的摘要");
+      expect(entry2!.characterTagsJson).toEqual(["李世民", "李建成"]);
+      expect(entry2!.eventTypeTagsJson).toEqual(["继承夺位", "武装政变"]);
+    } finally {
+      await client.$disconnect();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("DELETE file-synced entry persists through sync (archive renames file to .archived)", async () => {
+    const root = mkdtempSync(join(tmpdir(), "svf2-admin-"));
+    const dbPath = join(root, "test.db");
+    const sqlite = new Database(dbPath);
+    applyAllDatabaseMigrations(sqlite);
+    sqlite.close();
+
+    const client = await createPrismaClient(dbPath);
+
+    try {
+      await client.user.create({
+        data: {
+          id: "u-admin",
+          username: "admin",
+          displayName: "Admin",
+          passwordHash: "x",
+          role: "ADMIN",
+        },
+      });
+
+      // 1. 创建文件来源 entry
+      const libDir = join(root, "storage", "event-library", "tang");
+      mkdirSync(libDir, { recursive: true });
+      const filePath = join(libDir, "xuanwumen.json");
+
+      writeFileSync(filePath, JSON.stringify({
+        schemaVersion: 1,
+        canonicalTitle: "玄武门之变",
+        summary: "原始摘要",
+        eventRegistryCanonicalName: "玄武门之变",
+        aliases: [],
+        dynasty: "唐",
+        era: "初唐",
+        characterTags: ["李世民"],
+        eventTypeTags: ["继承夺位"],
+        conflictTypeTags: [],
+        themeMotifs: [],
+        locationTags: [],
+        relationshipTags: [],
+        sourceAnchorRefs: [],
+        credibilityLevel: "high",
+        disputeNotes: null,
+        origin: "builtin",
+        angles: [],
+      }, null, 2), "utf8");
+
+      const r1 = await syncEventLibraryFromFiles(client, root);
+      expect(r1.created).toBe(1);
+
+      const entry = await client.eventLibraryEntry.findFirst({
+        where: { canonicalTitle: "玄武门之变" },
+      });
+      expect(entry).toBeTruthy();
+
+      // 2. 构建 app 并归档
+      const app = buildApp({
+        storageBaseDir: root,
+        prismaClient: client,
+        skipSnapshotLoad: true,
+      });
+
+      const res = await app.inject({
+        method: "DELETE",
+        url: `/api/admin/event-library/entries/${entry!.id}`,
+        auth: adminAuth(),
+      });
+
+      expect(res.statusCode).toBe(200);
+
+      // 3. 验证 .json 文件被重命名为 .json.archived
+      expect(existsSync(filePath)).toBe(false);
+      expect(existsSync(filePath + ".archived")).toBe(true);
+
+      // 4. 验证 DB 中 status 为 archived
+      const archivedEntry = await client.eventLibraryEntry.findUnique({
+        where: { id: entry!.id },
+      });
+      expect(archivedEntry!.status).toBe("archived");
+
+      // 5. 再次 sync：entry 不会被复活
+      const r2 = await syncEventLibraryFromFiles(client, root);
+      expect(r2.archived).toBe(0);
+
+      const entryAfterSync = await client.eventLibraryEntry.findUnique({
+        where: { id: entry!.id },
+      });
+      expect(entryAfterSync!.status).toBe("archived");
     } finally {
       await client.$disconnect();
       rmSync(root, { recursive: true, force: true });

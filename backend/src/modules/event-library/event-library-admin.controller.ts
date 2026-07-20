@@ -655,7 +655,7 @@ export async function updateAdminEntryController(context: RouteContext): Promise
       originKind: reloaded.originKind,
       eventRegistryEntry: reloaded.eventRegistryEntry,
       angles: (reloaded.angles as Array<{ angleLabel: string; familyLabel: string; scopeLabel: string }>),
-    });
+    }, entry.filePath || null);
   }
 
   return {
@@ -777,6 +777,17 @@ export async function archiveAdminEntryController(context: RouteContext): Promis
     where: { id: entryId },
     data: { status: "archived" },
   });
+
+  // 归档源文件：重命名为 .json.archived，使 sync 不再扫描到
+  // 不物理删除，满足设计"不物理删"约束
+  if (entry.filePath) {
+    const absPath = join(context.app.storageBaseDir, entry.filePath);
+    try {
+      renameSync(absPath, absPath + ".archived");
+    } catch {
+      // 文件可能已不存在（如从未写过文件的新建 entry）
+    }
+  }
 
   return { statusCode: 200, body: { entry_id: entryId, archived: true } };
 }
