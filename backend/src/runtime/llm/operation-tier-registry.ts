@@ -41,6 +41,9 @@ export const OPERATION_TIER_REGISTRY: Record<string, OperationTier> = {
   "publish.cover-prompt-generator": "flash",
   "publish.cover-prompt-optimizer": "flash",
   "asset.prompt-optimizer": "flash",
+
+  // 自定义选题提炼：输入自由文本 → 结构化事件，涉及事实边界判断
+  "topic.custom-refine": "smart",
 };
 
 const DEFAULT_TIER: OperationTier = "smart";

@@ -14,6 +14,10 @@ import {
   type StoredTopicCandidate,
 } from "./topic-confirm.service";
 import { writeRefluxDraft } from "../event-library/event-library-draft.writer.js";
+import {
+  buildCustomTopicRecommendations,
+  validateCustomDigest,
+} from "./topic-custom-input.service.js";
 
 interface TopicRecommendationSeedPayload {
   canonical_name: string;
@@ -427,4 +431,163 @@ export async function confirmTopicCandidateController(
     statusCode: 200,
     body: confirmed,
   };
+}
+
+// ---- 自定义选题（入口 C） ----
+
+export async function createTopicFromCustomController(
+  context: RouteContext,
+): Promise<AppResponse> {
+  // 1. 输入校验（10-500 字）
+  const rawDigest = (context.payload as Record<string, unknown>)?.rawDigest;
+  const digestResult = validateCustomDigest(rawDigest);
+  if (!digestResult.ok) {
+    return { statusCode: 400, body: { error: "invalid_custom_digest", message: digestResult.error } };
+  }
+
+  const project = await getProjectById(context.app.db, context.params.projectId);
+  if (!project) {
+    return { statusCode: 404, body: { error: "project_not_found" } };
+  }
+
+  const demoBlock = demoStageGuard(project, context.app.env.demoMode, "选题");
+  if (demoBlock) return demoBlock;
+
+  // 2. set generating state
+  project.status = "topic_generating";
+  project.updatedAt = new Date();
+  await context.app.db.firstAggregateWriter?.syncProject(project);
+
+  try {
+    // 3. LLM 提炼 + normalize + generate candidates
+    const result = await buildCustomTopicRecommendations(
+      context.app.db,
+      digestResult.value,
+    );
+
+    // 4. generate candidate ID + store in topicCandidateStore
+    const storedCandidates = new Map<string, StoredTopicCandidate>();
+    const responseCandidates: Array<Record<string, unknown>> = [];
+
+    for (const candidate of result.candidates) {
+      const normalizedCandidate = await normalizeEventInput(context.app.db, {
+        rawInput: candidate.title,
+        sourceType: "custom",
+      });
+      const candidateId = randomUUID();
+
+      const sourceRef: Record<string, unknown> = { customDraftId: null }; // draft 异步写入后回填
+
+      storedCandidates.set(candidateId, {
+        candidateId,
+        projectId: project.id,
+        event: normalizedCandidate.event,
+        title: candidate.title,
+        oneLineAngle: candidate.one_line_angle,
+        familyLabel: candidate.family_label,
+        scopeLabel: candidate.scope_label,
+        coreConflict: candidate.core_conflict,
+        strongScene: candidate.strong_scene,
+        mustCoverPreview: candidate.must_cover_preview,
+        sourceHint: candidate.source_hint,
+        recentUsageHint: candidate.recent_usage_hint,
+        whyThisNow: candidate.why_this_now,
+        riskHints: [...candidate.risk_hints],
+        viralRubric: candidate.viral_rubric
+          ? { ...(candidate.viral_rubric as Record<string, string>) }
+          : {},
+        sourceMode: "custom",
+        sourceRef,
+      });
+
+      responseCandidates.push({
+        candidate_id: candidateId,
+        ...candidate,
+      });
+    }
+
+    // 5. write to topicCandidateStore
+    const projectTopicState = context.app.topicCandidateStore.get(project.id) ?? {
+      candidatesById: new Map<string, StoredTopicCandidate>(),
+      rounds: [],
+    };
+    for (const [candidateId, storedCandidate] of storedCandidates.entries()) {
+      projectTopicState.candidatesById.set(candidateId, storedCandidate);
+    }
+    projectTopicState.rounds.push({
+      roundId: `topic_run_${randomUUID()}`,
+      roundIndex: (projectTopicState.rounds.length) + 1,
+      createdAt: new Date().toISOString(),
+      candidates: [...storedCandidates.values()],
+    } as never);
+    context.app.topicCandidateStore.set(project.id, projectTopicState);
+
+    // 6. 异步写 EventLibraryDraft(draftKind=custom)
+    const prismaClient = context.app.prismaClient;
+    if (prismaClient && !context.auth.anonymous) {
+      const draft = await prismaClient.eventLibraryDraft.create({
+        data: {
+          id: randomUUID(),
+          draftKind: "custom",
+          projectId: project.id,
+          proposedTitle: result.refined.canonicalName,
+          proposedSummary: result.refined.summary,
+          proposedAnglesJson: [],
+          proposedTagsJson: { events: [result.refined.canonicalName] },
+          rawCustomDigest: digestResult.value,
+          customRefinedEventJson: result.refined as never,
+          ownerId: context.auth.userId,
+          status: "draft",
+        },
+      });
+
+      // 回填 sourceRef 到已存储的 candidate
+      for (const c of storedCandidates.values()) {
+        c.sourceRef = { customDraftId: draft.id };
+      }
+    }
+
+    project.status = "topic_candidates_ready";
+    project.updatedAt = new Date();
+    await context.app.db.firstAggregateWriter?.syncProject(project);
+
+    return {
+      statusCode: 200,
+      body: {
+        project_id: project.id,
+        source_mode: "custom",
+        source_ref: { customDraftId: (await getPrismaDraftId(context)) ?? null },
+        candidates: responseCandidates,
+        refined: result.refined,
+      },
+    };
+  } catch (error) {
+    project.status = "topic_pending";
+    project.updatedAt = new Date();
+    await context.app.db.firstAggregateWriter?.syncProject(project).catch(() => undefined);
+
+    // ZodError → 422
+    if (error instanceof Error && error.name === "ZodError") {
+      return {
+        statusCode: 422,
+        body: { error: "custom_refine_failed", message: "无法从输入中提炼出合格事件" },
+      };
+    }
+
+    const message = error instanceof Error ? error.message : "topic_generate_failed";
+    return {
+      statusCode: 500,
+      body: { error: "topic_generate_failed", message },
+    };
+  }
+}
+
+async function getPrismaDraftId(context: RouteContext): Promise<string | null> {
+  const prisma = context.app.prismaClient;
+  if (!prisma || context.auth.anonymous) return null;
+  const draft = await prisma.eventLibraryDraft.findFirst({
+    where: { draftKind: "custom", projectId: context.params.projectId, ownerId: context.auth.userId },
+    orderBy: { createdAt: "desc" },
+  });
+  return draft?.id ?? null;
 }

@@ -12,6 +12,9 @@ export {
   RevealPosition,
   TopicDeliveryPack,
 } from "./topic/topic-delivery-pack.schema";
+export {
+  CustomRefinedEvent,
+} from "./topic/topic-custom-refine-output.schema";
 export { ScriptInputBundle } from "./script/script-input-bundle.schema";
 export { ScriptDraftPackage } from "./script/script-draft-package.schema";
 export {

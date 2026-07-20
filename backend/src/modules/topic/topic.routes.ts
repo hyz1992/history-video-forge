@@ -2,6 +2,7 @@ import type { AppInstance } from "../../app";
 import {
   confirmTopicCandidateController,
   createProjectController,
+  createTopicFromCustomController,
   createTopicRecommendationsController,
 } from "./topic.controller";
 import { guardOwnedRoute, guardUserRoute } from "../../auth/authorization.js";
@@ -17,5 +18,10 @@ export function registerTopicRoutes(app: AppInstance) {
     "POST",
     "/api/projects/:projectId/topic/candidates/:candidateId/confirm",
     guardOwnedRoute(confirmTopicCandidateController),
+  );
+  app.addRoute(
+    "POST",
+    "/api/projects/:projectId/topic/from-custom",
+    guardOwnedRoute(createTopicFromCustomController),
   );
 }

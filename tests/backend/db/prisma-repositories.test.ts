@@ -8,10 +8,10 @@ import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { PrismaProjectStore } from "../../../backend/src/db/repositories/prisma-project-store.js";
 import { PrismaRecommendationStore } from "../../../backend/src/db/repositories/prisma-recommendation-store.js";
 
-const migrationSql = readFileSync(
-  join(process.cwd(), "backend/prisma/migrations/0001_v2_baseline/migration.sql"),
-  "utf8",
-);
+const migrationSql = [
+  readFileSync(join(process.cwd(), "backend/prisma/migrations/0001_v2_baseline/migration.sql"), "utf8"),
+  readFileSync(join(process.cwd(), "backend/prisma/migrations/20260719090219_0002_event_library/migration.sql"), "utf8"),
+].join("\n");
 const tempDirectories: string[] = [];
 
 function createMigratedDatabase(): string {

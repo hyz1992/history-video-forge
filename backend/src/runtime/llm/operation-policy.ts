@@ -33,6 +33,7 @@ const OPERATION_NAME_TO_CLASS: Record<string, LlmOperationClass> = {
   "storyboard.planner": "long_structured_generation",
   "storyboard.segment-regen": "long_structured_generation",
   "topic.candidate-builder": "long_structured_generation",
+  "topic.custom-refine": "long_structured_generation",
   "asset-planning.planner": "long_structured_generation",
 
   // 短结构化判断：选题打分选择、发布标题/简介/封面提示词

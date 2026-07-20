@@ -1,0 +1,33 @@
+import { CustomRefinedEvent } from "../../../../shared/src/topic/topic-custom-refine-output.schema.js";
+import { createLlmGateway } from "../../runtime/llm/llm-gateway.js";
+import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
+import { createTierAwareProviderFromEnv } from "../../runtime/llm/tier-aware-provider-factory.js";
+import type { CustomRefinedEvent as CustomRefinedEventType } from "../../../../shared/src/topic/topic-custom-refine-output.schema.js";
+
+export interface CustomRefineInput {
+  rawDigest: string;
+}
+
+export interface CustomRefineResult {
+  refined: CustomRefinedEventType;
+}
+
+/**
+ * 调用 LLM 将用户自由文本梗概提炼为结构化历史事件。
+ * 输出经 Zod strict 校验，失败抛异常（调用方负责 catch + 返回 422）。
+ */
+export async function refineCustomTopic(
+  input: CustomRefineInput,
+): Promise<CustomRefineResult> {
+  const provider = createTierAwareProviderFromEnv();
+  const registry = createPromptRegistry();
+  const gateway = createLlmGateway({ registry, provider });
+
+  const raw = await gateway.invokeStructuredPrompt<unknown>({
+    promptId: "topic.custom-refine",
+    input: { rawDigest: input.rawDigest },
+  });
+
+  const parsed = CustomRefinedEvent.parse(raw);
+  return { refined: parsed };
+}
