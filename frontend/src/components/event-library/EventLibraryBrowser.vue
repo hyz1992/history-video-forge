@@ -13,6 +13,8 @@ const projectStore = useProjectStore();
 
 // Filters
 const dynastyFilter = ref("");
+const characterTagFilter = ref("");
+const eventTypeTagFilter = ref("");
 const searchQuery = ref("");
 const dynasties = ref<string[]>([]);
 
@@ -88,6 +90,8 @@ async function loadEntries() {
   try {
     const params = new URLSearchParams();
     if (dynastyFilter.value) params.set("dynasty", dynastyFilter.value);
+    if (characterTagFilter.value) params.set("character_tag", characterTagFilter.value);
+    if (eventTypeTagFilter.value) params.set("event_type_tag", eventTypeTagFilter.value);
     if (searchQuery.value) params.set("q", searchQuery.value);
     params.set("page", String(page.value));
     params.set("page_size", String(pageSize));
@@ -166,6 +170,16 @@ watch(dynastyFilter, () => {
   loadEntries();
 });
 
+watch(characterTagFilter, () => {
+  page.value = 1;
+  loadEntries();
+});
+
+watch(eventTypeTagFilter, () => {
+  page.value = 1;
+  loadEntries();
+});
+
 onMounted(() => {
   loadDynasties();
   loadEntries();
@@ -181,6 +195,20 @@ onMounted(() => {
           <option value="">全部朝代</option>
           <option v-for="d in dynasties" :key="d" :value="d">{{ d }}</option>
         </select>
+        <input
+          v-model="characterTagFilter"
+          type="text"
+          placeholder="人物标签…"
+          class="filter-tag-input"
+          @keyup.enter="handleSearch"
+        />
+        <input
+          v-model="eventTypeTagFilter"
+          type="text"
+          placeholder="事件类型标签…"
+          class="filter-tag-input"
+          @keyup.enter="handleSearch"
+        />
         <div class="search-box">
           <input
             v-model="searchQuery"
@@ -334,6 +362,21 @@ onMounted(() => {
   font-size: 13px;
   font-family: var(--font-family);
   cursor: pointer;
+}
+
+.filter-tag-input {
+  width: 130px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--bg-input);
+  color: var(--text-body);
+  font-size: 13px;
+  font-family: var(--font-family);
+}
+
+.filter-tag-input::placeholder {
+  color: var(--text-muted);
 }
 
 .search-box {
