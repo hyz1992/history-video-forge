@@ -603,4 +603,316 @@ describe("event-library admin review", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it("approve -> sync -> entry still curated (P1 fix: file written on approve)", async () => {
+    const root = mkdtempSync(join(tmpdir(), "svf2-admin-"));
+    const dbPath = join(root, "test.db");
+    const sqlite = new Database(dbPath);
+    applyAllDatabaseMigrations(sqlite);
+    sqlite.close();
+
+    const client = await createPrismaClient(dbPath);
+
+    try {
+      const admin = await client.user.create({
+        data: {
+          id: "u-admin",
+          username: "admin",
+          displayName: "Admin",
+          passwordHash: "x",
+          role: "ADMIN",
+        },
+      });
+
+      const app = buildApp({
+        storageBaseDir: root,
+        prismaClient: client,
+        skipSnapshotLoad: true,
+      });
+
+      await client.project.create({
+        data: {
+          id: "proj-sync",
+          ownerId: admin.id,
+          createdById: admin.id,
+          name: "Test",
+          status: "topic_pending",
+          storageKey: "proj-sync",
+          storageDisplayName: "Test",
+        },
+      });
+
+      await client.eventLibraryDraft.create({
+        data: {
+          id: "draft-sync",
+          draftKind: "recommendation_reflux",
+          candidateFingerprint: "draft-sync-fp",
+          projectId: "proj-sync",
+          proposedTitle: "同步测试事件",
+          proposedSummary: "这个事件应该在同步后仍然保留",
+          proposedAnglesJson: [],
+          proposedTagsJson: { events: ["sync_event"] },
+          ownerId: admin.id,
+          status: "draft",
+        },
+      });
+
+      // 1. Approve
+      const approveRes = await app.inject({
+        method: "POST",
+        url: "/api/admin/event-library/drafts/draft-sync/approve",
+        payload: { dynasty: "战国" },
+        auth: adminAuth(),
+      });
+      expect(approveRes.statusCode).toBe(200);
+      const approveBody = approveRes.json() as { entry_id: string };
+      expect(approveBody.entry_id).toBeTruthy();
+
+      // 2. Verify file exists
+      const entryBefore = await client.eventLibraryEntry.findUnique({
+        where: { id: approveBody.entry_id },
+      });
+      expect(entryBefore!.status).toBe("curated");
+      expect(entryBefore!.filePath).toBeTruthy();
+      expect(entryBefore!.filePath).not.toBe("");
+
+      // 3. Trigger sync
+      const syncRes = await app.inject({
+        method: "POST",
+        url: "/api/admin/event-library/sync",
+        payload: {},
+        auth: adminAuth(),
+      });
+      expect(syncRes.statusCode).toBe(200);
+
+      // 4. Entry should still be curated, not archived
+      const entryAfter = await client.eventLibraryEntry.findUnique({
+        where: { id: approveBody.entry_id },
+      });
+      expect(entryAfter!.status).toBe("curated");
+    } finally {
+      await client.$disconnect();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("review endpoint: approve via /review", async () => {
+    const root = mkdtempSync(join(tmpdir(), "svf2-admin-"));
+    const dbPath = join(root, "test.db");
+    const sqlite = new Database(dbPath);
+    applyAllDatabaseMigrations(sqlite);
+    sqlite.close();
+
+    const client = await createPrismaClient(dbPath);
+
+    try {
+      const admin = await client.user.create({
+        data: {
+          id: "u-admin",
+          username: "admin",
+          displayName: "Admin",
+          passwordHash: "x",
+          role: "ADMIN",
+        },
+      });
+
+      const app = buildApp({
+        storageBaseDir: root,
+        prismaClient: client,
+        skipSnapshotLoad: true,
+      });
+
+      await client.project.create({
+        data: {
+          id: "proj-review",
+          ownerId: admin.id,
+          createdById: admin.id,
+          name: "Test",
+          status: "topic_pending",
+          storageKey: "proj-review",
+          storageDisplayName: "Test",
+        },
+      });
+
+      await client.eventLibraryDraft.create({
+        data: {
+          id: "draft-review",
+          draftKind: "recommendation_reflux",
+          candidateFingerprint: "draft-review-fp",
+          projectId: "proj-review",
+          proposedTitle: "Review 端点测试",
+          proposedSummary: "通过统一 review 端点审核",
+          proposedAnglesJson: [],
+          proposedTagsJson: { events: ["review_event"] },
+          ownerId: admin.id,
+          status: "draft",
+        },
+      });
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/admin/event-library/drafts/draft-review/review",
+        payload: { decision: "approve", dynasty: "战国" },
+        auth: adminAuth(),
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { draft_id: string; entry_id: string; merged: boolean };
+      expect(body.draft_id).toBe("draft-review");
+      expect(body.entry_id).toBeTruthy();
+
+      // 验证写入了文件
+      const entry = await client.eventLibraryEntry.findUnique({
+        where: { id: body.entry_id },
+      });
+      expect(entry!.filePath).toBeTruthy();
+      expect(entry!.filePath).not.toBe("");
+    } finally {
+      await client.$disconnect();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("review endpoint: reject via /review", async () => {
+    const root = mkdtempSync(join(tmpdir(), "svf2-admin-"));
+    const dbPath = join(root, "test.db");
+    const sqlite = new Database(dbPath);
+    applyAllDatabaseMigrations(sqlite);
+    sqlite.close();
+
+    const client = await createPrismaClient(dbPath);
+
+    try {
+      const admin = await client.user.create({
+        data: {
+          id: "u-admin",
+          username: "admin",
+          displayName: "Admin",
+          passwordHash: "x",
+          role: "ADMIN",
+        },
+      });
+
+      const app = buildApp({
+        storageBaseDir: root,
+        prismaClient: client,
+        skipSnapshotLoad: true,
+      });
+
+      await client.project.create({
+        data: {
+          id: "proj-review2",
+          ownerId: admin.id,
+          createdById: admin.id,
+          name: "Test",
+          status: "topic_pending",
+          storageKey: "proj-review2",
+          storageDisplayName: "Test",
+        },
+      });
+
+      await client.eventLibraryDraft.create({
+        data: {
+          id: "draft-review2",
+          draftKind: "custom",
+          projectId: "proj-review2",
+          proposedTitle: "Review 拒绝测试",
+          proposedSummary: "测试拒绝",
+          proposedAnglesJson: [],
+          proposedTagsJson: {},
+          ownerId: admin.id,
+          status: "draft",
+        },
+      });
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/admin/event-library/drafts/draft-review2/review",
+        payload: { decision: "reject", review_notes: "测试拒绝原因" },
+        auth: adminAuth(),
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { draft_id: string; status: string };
+      expect(body.draft_id).toBe("draft-review2");
+      expect(body.status).toBe("rejected");
+
+      const draft = await client.eventLibraryDraft.findUnique({
+        where: { id: "draft-review2" },
+      });
+      expect(draft!.status).toBe("rejected");
+      expect(draft!.reviewNotes).toBe("测试拒绝原因");
+    } finally {
+      await client.$disconnect();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("review endpoint: invalid decision returns 400", async () => {
+    const root = mkdtempSync(join(tmpdir(), "svf2-admin-"));
+    const dbPath = join(root, "test.db");
+    const sqlite = new Database(dbPath);
+    applyAllDatabaseMigrations(sqlite);
+    sqlite.close();
+
+    const client = await createPrismaClient(dbPath);
+
+    try {
+      const admin = await client.user.create({
+        data: {
+          id: "u-admin",
+          username: "admin",
+          displayName: "Admin",
+          passwordHash: "x",
+          role: "ADMIN",
+        },
+      });
+
+      const app = buildApp({
+        storageBaseDir: root,
+        prismaClient: client,
+        skipSnapshotLoad: true,
+      });
+
+      await client.project.create({
+        data: {
+          id: "proj-review3",
+          ownerId: admin.id,
+          createdById: admin.id,
+          name: "Test",
+          status: "topic_pending",
+          storageKey: "proj-review3",
+          storageDisplayName: "Test",
+        },
+      });
+
+      await client.eventLibraryDraft.create({
+        data: {
+          id: "draft-review3",
+          draftKind: "custom",
+          projectId: "proj-review3",
+          proposedTitle: "无效决策测试",
+          proposedSummary: "测试",
+          proposedAnglesJson: [],
+          proposedTagsJson: {},
+          ownerId: admin.id,
+          status: "draft",
+        },
+      });
+
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/admin/event-library/drafts/draft-review3/review",
+        payload: { decision: "hold" },
+        auth: adminAuth(),
+      });
+
+      expect(res.statusCode).toBe(400);
+      const body = res.json() as { error: string };
+      expect(body.error).toContain("decision");
+    } finally {
+      await client.$disconnect();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

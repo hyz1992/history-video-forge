@@ -183,8 +183,8 @@ async function approveDraft(draft: DraftItem) {
   draft.processing = true;
   try {
     const result = await apiFetch<{ entry_id: string; merged: boolean }>(
-      `/api/admin/event-library/drafts/${draft.id}/approve`,
-      { method: "POST" },
+      `/api/admin/event-library/drafts/${draft.id}/review`,
+      { method: "POST", body: { decision: "approve" } },
     );
     ElMessage.success(result.merged ? "已合并到已有条目" : "已创建新条目");
     await loadDrafts();
@@ -211,10 +211,13 @@ async function handleReject() {
   rejectProcessing.value = true;
   try {
     await apiFetch(
-      `/api/admin/event-library/drafts/${rejectTarget.value.id}/reject`,
+      `/api/admin/event-library/drafts/${rejectTarget.value.id}/review`,
       {
         method: "POST",
-        body: { review_notes: rejectNotes.value.trim() || undefined },
+        body: {
+          decision: "reject",
+          review_notes: rejectNotes.value.trim() || undefined,
+        },
       },
     );
     ElMessage.success("已拒绝");

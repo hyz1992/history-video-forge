@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
+import type { AppPrismaClient } from "../../db/prisma-client.types.js";
 import type { AppResponse, RouteContext } from "../../app";
 import { requireUser } from "../../auth/authorization.js";
 import {
@@ -83,10 +84,12 @@ function snapshotJson(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value));
 }
 
-/** 将 EventLibraryEntry 序列化为 EventLibraryFile 格式并写入磁盘，返回相对路径 */
-function writeEntryToFile(
-  rootDir: string,
+/** 将 EventLibraryEntry 数据写为 JSON 文件，并回填 filePath + fileContentHash */
+async function persistEntryToFile(
+  prisma: AppPrismaClient,
+  storageBaseDir: string,
   entry: {
+    id: string;
     canonicalTitle: string;
     summary: string;
     dynasty: string | null;
@@ -105,10 +108,10 @@ function writeEntryToFile(
     eventRegistryEntry: { canonicalName: string; aliasesJson: unknown } | null;
     angles: Array<{ angleLabel: string; familyLabel: string; scopeLabel: string }>;
   },
-): string {
+): Promise<void> {
   const dynastySlug = entry.dynasty ? toAsciiSlug(entry.dynasty) : "unknown";
   const eventSlug = toAsciiSlug(entry.canonicalTitle);
-  const dirPath = join(rootDir, EVENT_LIBRARY_ROOT_DIR, dynastySlug);
+  const dirPath = join(storageBaseDir, EVENT_LIBRARY_ROOT_DIR, dynastySlug);
   mkdirSync(dirPath, { recursive: true });
   const relativePath = `${EVENT_LIBRARY_ROOT_DIR}/${dynastySlug}/${eventSlug}.json`;
 
@@ -141,8 +144,15 @@ function writeEntryToFile(
   };
 
   const json = JSON.stringify(fileContent, null, 2);
-  writeFileSync(join(dirPath, `${eventSlug}.json`), json, "utf8");
-  return relativePath;
+  const filePath = join(dirPath, `${eventSlug}.json`);
+  writeFileSync(filePath, json, "utf8");
+
+  const fileContentHash = computeFileContentHash(json);
+
+  await prisma.eventLibraryEntry.update({
+    where: { id: entry.id },
+    data: { filePath: relativePath, fileContentHash },
+  });
 }
 
 // ---- List Drafts ----
@@ -200,15 +210,16 @@ export async function listDraftsController(context: RouteContext): Promise<AppRe
   };
 }
 
-// ---- Approve Draft ----
+// ---- Unified Review (正式合同) ----
 
-export async function approveDraftController(context: RouteContext): Promise<AppResponse> {
-  const user = requireUser(context.auth);
-  const prisma = context.app.prismaClient;
-  if (!prisma) return { statusCode: 503, body: { error: "database_unavailable" } };
-
-  const draftId = context.params.draftId;
-  if (!draftId) return { statusCode: 400, body: { error: "draft_id_required" } };
+async function executeApprove(
+  context: RouteContext,
+  draftId: string,
+  adminUserId: string,
+  dynasty?: string,
+  era?: string,
+): Promise<AppResponse> {
+  const prisma = context.app.prismaClient!;
 
   const draft = await prisma.eventLibraryDraft.findUnique({
     where: { id: draftId },
@@ -223,24 +234,18 @@ export async function approveDraftController(context: RouteContext): Promise<App
     return { statusCode: 409, body: { error: "draft_already_reviewed", status: draft.status } };
   }
 
-  const dynasty = getPayloadField(context.payload, "dynasty") || undefined;
-  const era = getPayloadField(context.payload, "era") || undefined;
-
-  // Generate fingerprint from proposedTitle
   const libraryFingerprint = generateLibraryFingerprint(
     draft.proposedTitle,
     dynasty ?? null,
     era ?? null,
   );
 
-  // Check for existing entry by fingerprint
   const existingEntry = await findEntryByFingerprint(prisma, libraryFingerprint);
 
   let entryId: string;
   let merged = false;
 
   if (existingEntry) {
-    // Merge: append non-duplicate angles and tags
     merged = true;
 
     const proposedAngles = (draft.proposedAnglesJson as Array<{
@@ -249,7 +254,6 @@ export async function approveDraftController(context: RouteContext): Promise<App
       scopeLabel?: string;
     }>) ?? [];
 
-    // Only add angles that don't already exist (by angleFingerprint)
     const existingAngleFingerprints = new Set(
       (existingEntry.angles as Array<{ angleFingerprint: string }>).map((a) => a.angleFingerprint),
     );
@@ -260,7 +264,6 @@ export async function approveDraftController(context: RouteContext): Promise<App
     });
 
     if (newAngles.length > 0) {
-      // 合并路径只插入新角度，不删除已有角度（upsertAngles 会删除不在列表中的角度）
       for (const a of newAngles) {
         await prisma.eventLibraryAngle.create({
           data: {
@@ -276,13 +279,10 @@ export async function approveDraftController(context: RouteContext): Promise<App
       }
     }
 
-    // Merge proposedTags into existing tags
     const existingTags = existingEntry.characterTagsJson as Record<string, unknown>;
     const draftTags = (draft.proposedTagsJson as Record<string, unknown>) ?? {};
     const mergedTags = mergeProposedTags(draftTags, existingTags || {});
 
-    // Only update tags if they changed
-    const existingEventTypeJson = existingEntry.eventTypeTagsJson as unknown[];
     const draftEventTypeTags = Array.isArray(draftTags.events) ? draftTags.events as string[] : [];
     const mergedEventType = draftEventTypeTags.length > 0
       ? mergeUniqueStrings(
@@ -302,8 +302,35 @@ export async function approveDraftController(context: RouteContext): Promise<App
     });
 
     entryId = existingEntry.id;
+
+    // 合并后重写文件（角度和标签可能已变）
+    const reloaded = await prisma.eventLibraryEntry.findUnique({
+      where: { id: entryId },
+      include: { angles: true, eventRegistryEntry: true },
+    });
+    if (reloaded) {
+      await persistEntryToFile(prisma, context.app.storageBaseDir, {
+        id: reloaded.id,
+        canonicalTitle: reloaded.canonicalTitle,
+        summary: reloaded.summary,
+        dynasty: reloaded.dynasty,
+        era: reloaded.era,
+        characterTagsJson: reloaded.characterTagsJson,
+        eventTypeTagsJson: reloaded.eventTypeTagsJson,
+        conflictTypeTagsJson: reloaded.conflictTypeTagsJson,
+        themeMotifsJson: reloaded.themeMotifsJson,
+        timeRangeJson: reloaded.timeRangeJson,
+        locationTagsJson: reloaded.locationTagsJson,
+        relationshipTagsJson: reloaded.relationshipTagsJson,
+        sourceAnchorRefsJson: reloaded.sourceAnchorRefsJson,
+        credibilityLevel: reloaded.credibilityLevel,
+        disputeNotes: reloaded.disputeNotes,
+        originKind: reloaded.originKind,
+        eventRegistryEntry: reloaded.eventRegistryEntry,
+        angles: (reloaded.angles as Array<{ angleLabel: string; familyLabel: string; scopeLabel: string }>),
+      });
+    }
   } else {
-    // Create new entry from draft
     merged = false;
 
     const proposedAngles = (draft.proposedAnglesJson as Array<{
@@ -314,7 +341,6 @@ export async function approveDraftController(context: RouteContext): Promise<App
 
     const draftTags = (draft.proposedTagsJson as Record<string, unknown>) ?? {};
 
-    // Ensure EventRegistryEntry
     const eventRegistryEntryId = await ensureEventRegistryEntry(
       prisma,
       draft.proposedTitle,
@@ -362,14 +388,41 @@ export async function approveDraftController(context: RouteContext): Promise<App
     }
 
     entryId = entry.id;
+
+    // 写文件并回填 filePath + fileContentHash
+    const reloaded = await prisma.eventLibraryEntry.findUnique({
+      where: { id: entryId },
+      include: { angles: true, eventRegistryEntry: true },
+    });
+    if (reloaded) {
+      await persistEntryToFile(prisma, context.app.storageBaseDir, {
+        id: reloaded.id,
+        canonicalTitle: reloaded.canonicalTitle,
+        summary: reloaded.summary,
+        dynasty: reloaded.dynasty,
+        era: reloaded.era,
+        characterTagsJson: reloaded.characterTagsJson,
+        eventTypeTagsJson: reloaded.eventTypeTagsJson,
+        conflictTypeTagsJson: reloaded.conflictTypeTagsJson,
+        themeMotifsJson: reloaded.themeMotifsJson,
+        timeRangeJson: reloaded.timeRangeJson,
+        locationTagsJson: reloaded.locationTagsJson,
+        relationshipTagsJson: reloaded.relationshipTagsJson,
+        sourceAnchorRefsJson: reloaded.sourceAnchorRefsJson,
+        credibilityLevel: reloaded.credibilityLevel,
+        disputeNotes: reloaded.disputeNotes,
+        originKind: reloaded.originKind,
+        eventRegistryEntry: reloaded.eventRegistryEntry,
+        angles: (reloaded.angles as Array<{ angleLabel: string; familyLabel: string; scopeLabel: string }>),
+      });
+    }
   }
 
-  // Mark draft as approved
   await prisma.eventLibraryDraft.update({
     where: { id: draft.id },
     data: {
       status: "approved",
-      reviewerId: user.userId,
+      reviewerId: adminUserId,
       reviewedAt: new Date(),
       mergedEntryId: entryId,
     },
@@ -385,15 +438,13 @@ export async function approveDraftController(context: RouteContext): Promise<App
   };
 }
 
-// ---- Reject Draft ----
-
-export async function rejectDraftController(context: RouteContext): Promise<AppResponse> {
-  const user = requireUser(context.auth);
-  const prisma = context.app.prismaClient;
-  if (!prisma) return { statusCode: 503, body: { error: "database_unavailable" } };
-
-  const draftId = context.params.draftId;
-  if (!draftId) return { statusCode: 400, body: { error: "draft_id_required" } };
+async function executeReject(
+  context: RouteContext,
+  draftId: string,
+  adminUserId: string,
+  reviewNotes?: string | null,
+): Promise<AppResponse> {
+  const prisma = context.app.prismaClient!;
 
   const draft = await prisma.eventLibraryDraft.findUnique({ where: { id: draftId } });
   if (!draft) {
@@ -404,15 +455,13 @@ export async function rejectDraftController(context: RouteContext): Promise<AppR
     return { statusCode: 409, body: { error: "draft_already_reviewed", status: draft.status } };
   }
 
-  const reviewNotes = getPayloadField(context.payload, "reviewNotes", "review_notes") || null;
-
   await prisma.eventLibraryDraft.update({
     where: { id: draft.id },
     data: {
       status: "rejected",
-      reviewerId: user.userId,
+      reviewerId: adminUserId,
       reviewedAt: new Date(),
-      reviewNotes,
+      reviewNotes: reviewNotes ?? null,
     },
   });
 
@@ -423,6 +472,49 @@ export async function rejectDraftController(context: RouteContext): Promise<AppR
       status: "rejected",
     },
   };
+}
+
+/** 正式合同：POST /api/admin/event-library/drafts/:draftId/review */
+export async function reviewDraftController(context: RouteContext): Promise<AppResponse> {
+  const user = requireUser(context.auth);
+  const prisma = context.app.prismaClient;
+  if (!prisma) return { statusCode: 503, body: { error: "database_unavailable" } };
+
+  const draftId = context.params.draftId;
+  if (!draftId) return { statusCode: 400, body: { error: "draft_id_required" } };
+
+  const decision = getPayloadField(context.payload, "decision");
+  if (decision !== "approve" && decision !== "reject") {
+    return { statusCode: 400, body: { error: "decision 必须为 approve 或 reject" } };
+  }
+
+  if (decision === "approve") {
+    const dynasty = getPayloadField(context.payload, "dynasty") || undefined;
+    const era = getPayloadField(context.payload, "era") || undefined;
+    return executeApprove(context, draftId, user.userId, dynasty, era);
+  }
+
+  const reviewNotes = getPayloadField(context.payload, "reviewNotes", "review_notes") || null;
+  return executeReject(context, draftId, user.userId, reviewNotes);
+}
+
+// ---- 兼容别名 ----
+
+export async function approveDraftController(context: RouteContext): Promise<AppResponse> {
+  const user = requireUser(context.auth);
+  const draftId = context.params.draftId;
+  if (!draftId) return { statusCode: 400, body: { error: "draft_id_required" } };
+  const dynasty = getPayloadField(context.payload, "dynasty") || undefined;
+  const era = getPayloadField(context.payload, "era") || undefined;
+  return executeApprove(context, draftId, user.userId, dynasty, era);
+}
+
+export async function rejectDraftController(context: RouteContext): Promise<AppResponse> {
+  const user = requireUser(context.auth);
+  const draftId = context.params.draftId;
+  if (!draftId) return { statusCode: 400, body: { error: "draft_id_required" } };
+  const reviewNotes = getPayloadField(context.payload, "reviewNotes", "review_notes") || null;
+  return executeReject(context, draftId, user.userId, reviewNotes);
 }
 
 // ---- List All Entries (Admin) ----
@@ -498,7 +590,6 @@ export async function updateAdminEntryController(context: RouteContext): Promise
   const body = context.payload as Record<string, unknown> | undefined;
   if (!body) return { statusCode: 400, body: { error: "invalid_payload" } };
 
-  // Extract updatable fields
   const canonicalTitle = getPayloadField(body, "canonicalTitle", "canonical_title") || entry.canonicalTitle;
   const summary = getPayloadField(body, "summary") || entry.summary;
   const dynasty = getPayloadField(body, "dynasty") || entry.dynasty || null;
@@ -513,8 +604,7 @@ export async function updateAdminEntryController(context: RouteContext): Promise
   const credibilityLevel = getPayloadField(body, "credibilityLevel", "credibility_level") || entry.credibilityLevel;
   const disputeNotes = getPayloadField(body, "disputeNotes", "dispute_notes") || entry.disputeNotes || null;
 
-  // Update entry in DB
-  const updated = await updateEntry(prisma, entryId, {
+  await updateEntry(prisma, entryId, {
     canonicalTitle,
     summary,
     dynasty: dynasty as string | null,
@@ -534,47 +624,30 @@ export async function updateAdminEntryController(context: RouteContext): Promise
     fileContentHash: entry.fileContentHash ?? "",
   });
 
-  // Write to file
-  try {
-    const relativePath = writeEntryToFile(
-      process.cwd(),
-      {
-        canonicalTitle,
-        summary,
-        dynasty: dynasty as string | null,
-        era: era as string | null,
-        characterTagsJson: updated.characterTagsJson,
-        eventTypeTagsJson: updated.eventTypeTagsJson,
-        conflictTypeTagsJson: updated.conflictTypeTagsJson,
-        themeMotifsJson: updated.themeMotifsJson,
-        timeRangeJson: updated.timeRangeJson,
-        locationTagsJson: updated.locationTagsJson,
-        relationshipTagsJson: updated.relationshipTagsJson,
-        sourceAnchorRefsJson: updated.sourceAnchorRefsJson,
-        credibilityLevel,
-        disputeNotes,
-        originKind: entry.originKind,
-        eventRegistryEntry: entry.eventRegistryEntry,
-        angles: (entry.angles as Array<{ angleLabel: string; familyLabel: string; scopeLabel: string }>),
-      },
-    );
-
-    // Update filePath + fileContentHash in DB
-    const raw = readFileSync(
-      join(process.cwd(), relativePath),
-      "utf8",
-    );
-    const fileContentHash = computeFileContentHash(raw);
-
-    await prisma.eventLibraryEntry.update({
-      where: { id: entryId },
-      data: { filePath: relativePath, fileContentHash },
-    });
-  } catch (fileError) {
-    // File write failed but DB update succeeded — log and continue
-    console.error("event-library-admin-write-file-failed", {
-      entryId,
-      error: fileError instanceof Error ? fileError.message : String(fileError),
+  const reloaded = await prisma.eventLibraryEntry.findUnique({
+    where: { id: entryId },
+    include: { angles: true, eventRegistryEntry: true },
+  });
+  if (reloaded) {
+    await persistEntryToFile(prisma, context.app.storageBaseDir, {
+      id: reloaded.id,
+      canonicalTitle: reloaded.canonicalTitle,
+      summary: reloaded.summary,
+      dynasty: reloaded.dynasty,
+      era: reloaded.era,
+      characterTagsJson: reloaded.characterTagsJson,
+      eventTypeTagsJson: reloaded.eventTypeTagsJson,
+      conflictTypeTagsJson: reloaded.conflictTypeTagsJson,
+      themeMotifsJson: reloaded.themeMotifsJson,
+      timeRangeJson: reloaded.timeRangeJson,
+      locationTagsJson: reloaded.locationTagsJson,
+      relationshipTagsJson: reloaded.relationshipTagsJson,
+      sourceAnchorRefsJson: reloaded.sourceAnchorRefsJson,
+      credibilityLevel: reloaded.credibilityLevel,
+      disputeNotes: reloaded.disputeNotes,
+      originKind: reloaded.originKind,
+      eventRegistryEntry: reloaded.eventRegistryEntry,
+      angles: (reloaded.angles as Array<{ angleLabel: string; familyLabel: string; scopeLabel: string }>),
     });
   }
 
@@ -594,7 +667,7 @@ export async function triggerSyncController(context: RouteContext): Promise<AppR
   if (!prisma) return { statusCode: 503, body: { error: "database_unavailable" } };
 
   try {
-    const result = await syncEventLibraryFromFiles(prisma, process.cwd());
+    const result = await syncEventLibraryFromFiles(prisma, context.app.storageBaseDir);
     return { statusCode: 200, body: result };
   } catch (error) {
     const message = error instanceof Error ? error.message : "sync_failed";

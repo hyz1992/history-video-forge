@@ -2,6 +2,7 @@ import type { AppInstance } from "../../app";
 import { guardAdminRoute } from "../../auth/authorization.js";
 import {
   listDraftsController,
+  reviewDraftController,
   approveDraftController,
   rejectDraftController,
   listAdminEntriesController,
@@ -10,9 +11,12 @@ import {
 } from "./event-library-admin.controller.js";
 
 export function registerEventLibraryAdminRoutes(app: AppInstance) {
-  // Draft review
+  // Draft review（正式合同）
   app.addRoute("GET", "/api/admin/event-library/drafts", guardAdminRoute(listDraftsController));
   app.addRoute("POST", "/api/admin/event-library/drafts", guardAdminRoute(listDraftsController));
+  app.addRoute("POST", "/api/admin/event-library/drafts/:draftId/review", guardAdminRoute(reviewDraftController));
+
+  // 兼容别名
   app.addRoute("POST", "/api/admin/event-library/drafts/:draftId/approve", guardAdminRoute(approveDraftController));
   app.addRoute("POST", "/api/admin/event-library/drafts/:draftId/reject", guardAdminRoute(rejectDraftController));
 

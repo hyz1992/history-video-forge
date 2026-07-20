@@ -78,6 +78,7 @@ export interface AppInstance {
   renderAdapter?: RenderAdapter;
   prismaClient?: AppPrismaClient;
   topicCandidateStore: Map<string, ProjectTopicCandidateState>;
+  storageBaseDir: string;
   addRoute: (method: string, pattern: string, handler: RouteHandler) => void;
   inject: (request: InjectRequest) => Promise<InjectResponse>;
   healthcheck: () => { status: string; nodeEnv: string };
@@ -217,6 +218,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
     renderAdapter: options.renderAdapter,
     prismaClient: options.prismaClient,
     topicCandidateStore,
+    storageBaseDir: runtimeStorageRoot,
     addRoute(method, pattern, handler) {
       routes.push({
         method: method.toUpperCase(),
