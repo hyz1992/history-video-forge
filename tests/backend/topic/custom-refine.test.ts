@@ -71,6 +71,9 @@ describe("custom refine API", () => {
       expect(body.source_mode).toBe("custom");
       expect(body.candidates.length).toBeGreaterThan(0);
       expect(body.refined.canonicalName).toBe("玄武门之变");
+      // 验证 source_ref.customDraftId 不为 null（draft 先于 candidate 创建）
+      expect(body.source_ref.customDraftId).toBeDefined();
+      expect(body.source_ref.customDraftId).not.toBeNull();
 
       // 验证 candidate 已写入 topicCandidateStore
       const store = app.topicCandidateStore.get(project.id);

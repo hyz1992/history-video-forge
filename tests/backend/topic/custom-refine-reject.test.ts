@@ -139,4 +139,28 @@ describe("custom refine rejection", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it("returns 503 when LLM/gateway call fails (non-ZodError)", async () => {
+    const { app, client, root, project, auth } = await setupAuthApp();
+
+    try {
+      const { refineCustomTopic } = await import("../../../backend/src/modules/topic/topic-custom-refine.service.js");
+      vi.mocked(refineCustomTopic).mockRejectedValue(
+        new Error("LLM gateway timeout"),
+      );
+
+      const r = await app.inject({
+        method: "POST",
+        url: `/api/projects/${project.id}/topic/from-custom`,
+        payload: { rawDigest: "玄武门之变，李世民杀兄弟夺位" },
+        auth,
+      });
+
+      expect(r.statusCode).toBe(503);
+      expect(r.json().error).toBe("custom_refine_unavailable");
+    } finally {
+      await client.$disconnect();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });

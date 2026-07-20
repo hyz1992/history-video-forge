@@ -20,6 +20,7 @@ describe("llm operation policy classification", () => {
     expect(classifyOperation("storyboard.planner")).toBe("long_structured_generation");
     expect(classifyOperation("storyboard.segment-regen")).toBe("long_structured_generation");
     expect(classifyOperation("topic.candidate-builder")).toBe("long_structured_generation");
+    expect(classifyOperation("topic.custom-refine")).toBe("long_structured_generation");
     expect(classifyOperation("asset-planning.planner")).toBe("long_structured_generation");
 
     // 短结构化判断

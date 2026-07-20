@@ -7,6 +7,7 @@ import { normalizeEventInput } from "./event-normalizer";
 import { requireUser } from "../../auth/authorization.js";
 import {
   isProviderContentFilterError,
+  recommendTopicCandidates,
   recommendTopicCandidatesWithTrace,
 } from "./topic-recommendation.service";
 import {
@@ -14,10 +15,9 @@ import {
   type StoredTopicCandidate,
 } from "./topic-confirm.service";
 import { writeRefluxDraft } from "../event-library/event-library-draft.writer.js";
-import {
-  buildCustomTopicRecommendations,
-  validateCustomDigest,
-} from "./topic-custom-input.service.js";
+import { createDraft } from "../event-library/event-library-draft.repository.js";
+import { refineCustomTopic } from "./topic-custom-refine.service.js";
+import { validateCustomDigest } from "./topic-custom-input.service.js";
 
 interface TopicRecommendationSeedPayload {
   canonical_name: string;
@@ -459,24 +459,61 @@ export async function createTopicFromCustomController(
   await context.app.db.firstAggregateWriter?.syncProject(project);
 
   try {
-    // 3. LLM 提炼 + normalize + generate candidates
-    const result = await buildCustomTopicRecommendations(
+    // 3. LLM 提炼结构化事件
+    const { refined } = await refineCustomTopic({ rawDigest: digestResult.value });
+
+    // 4. normalize（走身份账本去重）
+    const normalized = await normalizeEventInput(context.app.db, {
+      rawInput: refined.canonicalName,
+      aliases: refined.characterTags,
+      sourceType: "custom",
+    });
+
+    // 5. 先同步创建 EventLibraryDraft(draftKind=custom)，拿到 draft.id
+    //    （合同要求：draft 先于 candidate，避免 draft 失败污染 store）
+    let customDraftId: string | null = null;
+    const prismaClient = context.app.prismaClient;
+    if (prismaClient && !context.auth.anonymous) {
+      const draft = await createDraft(prismaClient, {
+        draftKind: "custom",
+        projectId: project.id,
+        proposedTitle: refined.canonicalName,
+        proposedSummary: refined.summary,
+        proposedAngles: [],
+        proposedTags: { events: [refined.canonicalName] },
+        rawCustomDigest: digestResult.value,
+        customRefinedEvent: refined,
+        ownerId: context.auth.userId,
+      });
+      customDraftId = draft.id;
+    }
+
+    // 6. 生成 candidate
+    const candidates = await recommendTopicCandidates(
       context.app.db,
-      digestResult.value,
+      {
+        canonicalName: refined.canonicalName,
+        summary: refined.summary,
+        coreConflict: refined.summary.slice(0, 50),
+        strongScene: refined.summary.slice(0, 50),
+        sourceHint: "自定义输入",
+        recentUsageHint: "首次从自定义输入选取",
+        tags: refined.eventTypeTags,
+      },
     );
 
-    // 4. generate candidate ID + store in topicCandidateStore
+    // 7. 构建 candidate 对象（写入 store + response）
     const storedCandidates = new Map<string, StoredTopicCandidate>();
     const responseCandidates: Array<Record<string, unknown>> = [];
 
-    for (const candidate of result.candidates) {
+    for (const candidate of candidates) {
       const normalizedCandidate = await normalizeEventInput(context.app.db, {
         rawInput: candidate.title,
         sourceType: "custom",
       });
       const candidateId = randomUUID();
 
-      const sourceRef: Record<string, unknown> = { customDraftId: null }; // draft 异步写入后回填
+      const sourceRef: Record<string, unknown> = { customDraftId };
 
       storedCandidates.set(candidateId, {
         candidateId,
@@ -506,7 +543,7 @@ export async function createTopicFromCustomController(
       });
     }
 
-    // 5. write to topicCandidateStore
+    // 8. write to topicCandidateStore
     const projectTopicState = context.app.topicCandidateStore.get(project.id) ?? {
       candidatesById: new Map<string, StoredTopicCandidate>(),
       rounds: [],
@@ -522,31 +559,6 @@ export async function createTopicFromCustomController(
     } as never);
     context.app.topicCandidateStore.set(project.id, projectTopicState);
 
-    // 6. 异步写 EventLibraryDraft(draftKind=custom)
-    const prismaClient = context.app.prismaClient;
-    if (prismaClient && !context.auth.anonymous) {
-      const draft = await prismaClient.eventLibraryDraft.create({
-        data: {
-          id: randomUUID(),
-          draftKind: "custom",
-          projectId: project.id,
-          proposedTitle: result.refined.canonicalName,
-          proposedSummary: result.refined.summary,
-          proposedAnglesJson: [],
-          proposedTagsJson: { events: [result.refined.canonicalName] },
-          rawCustomDigest: digestResult.value,
-          customRefinedEventJson: result.refined as never,
-          ownerId: context.auth.userId,
-          status: "draft",
-        },
-      });
-
-      // 回填 sourceRef 到已存储的 candidate
-      for (const c of storedCandidates.values()) {
-        c.sourceRef = { customDraftId: draft.id };
-      }
-    }
-
     project.status = "topic_candidates_ready";
     project.updatedAt = new Date();
     await context.app.db.firstAggregateWriter?.syncProject(project);
@@ -556,9 +568,9 @@ export async function createTopicFromCustomController(
       body: {
         project_id: project.id,
         source_mode: "custom",
-        source_ref: { customDraftId: (await getPrismaDraftId(context)) ?? null },
+        source_ref: { customDraftId },
         candidates: responseCandidates,
-        refined: result.refined,
+        refined,
       },
     };
   } catch (error) {
@@ -566,7 +578,7 @@ export async function createTopicFromCustomController(
     project.updatedAt = new Date();
     await context.app.db.firstAggregateWriter?.syncProject(project).catch(() => undefined);
 
-    // ZodError → 422
+    // ZodError → 422（LLM 输出结构不符合 schema）
     if (error instanceof Error && error.name === "ZodError") {
       return {
         statusCode: 422,
@@ -574,20 +586,10 @@ export async function createTopicFromCustomController(
       };
     }
 
-    const message = error instanceof Error ? error.message : "topic_generate_failed";
+    // LLM / 网关调用失败 → 503 重试友好提示
     return {
-      statusCode: 500,
-      body: { error: "topic_generate_failed", message },
+      statusCode: 503,
+      body: { error: "custom_refine_unavailable", message: "提炼服务暂时不可用，请稍后重试" },
     };
   }
-}
-
-async function getPrismaDraftId(context: RouteContext): Promise<string | null> {
-  const prisma = context.app.prismaClient;
-  if (!prisma || context.auth.anonymous) return null;
-  const draft = await prisma.eventLibraryDraft.findFirst({
-    where: { draftKind: "custom", projectId: context.params.projectId, ownerId: context.auth.userId },
-    orderBy: { createdAt: "desc" },
-  });
-  return draft?.id ?? null;
 }
