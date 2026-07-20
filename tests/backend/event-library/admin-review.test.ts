@@ -1,7 +1,7 @@
 // 必须在所有 import 之前设置 LLM stub 模式
 process.env.LLM_PROVIDER = "stub";
 
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
@@ -11,6 +11,7 @@ import { buildApp } from "../../../backend/src/app.js";
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { createAuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
+import { syncEventLibraryFromFiles } from "../../../backend/src/modules/event-library/event-library-sync.service.js";
 
 /** 创建一个管理员 auth */
 function adminAuth() {
@@ -910,6 +911,188 @@ describe("event-library admin review", () => {
       expect(res.statusCode).toBe(400);
       const body = res.json() as { error: string };
       expect(body.error).toContain("decision");
+    } finally {
+      await client.$disconnect();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("merge into file-synced entry: overwrites original file, sync does not lose merged content", async () => {
+    const root = mkdtempSync(join(tmpdir(), "svf2-admin-"));
+    const dbPath = join(root, "test.db");
+    const sqlite = new Database(dbPath);
+    applyAllDatabaseMigrations(sqlite);
+    sqlite.close();
+
+    const client = await createPrismaClient(dbPath);
+
+    try {
+      const admin = await client.user.create({
+        data: {
+          id: "u-admin",
+          username: "admin",
+          displayName: "Admin",
+          passwordHash: "x",
+          role: "ADMIN",
+        },
+      });
+
+      // 1. 创建 JSON 文件并 sync 入 DB（模拟文件来源 entry）
+      const libDir = join(root, "storage", "event-library", "tang");
+      mkdirSync(libDir, { recursive: true });
+      const filePath = join(libDir, "xuanwumen.json");
+
+      const originalFile = {
+        schemaVersion: 1,
+        canonicalTitle: "玄武门之变",
+        summary: "李世民在玄武门伏杀建成元吉。",
+        eventRegistryCanonicalName: "玄武门之变",
+        aliases: ["玄武门之变"],
+        dynasty: "唐",
+        era: "初唐",
+        characterTags: ["李世民", "李建成"],
+        eventTypeTags: ["继承夺位"],
+        conflictTypeTags: ["武装政变"],
+        themeMotifs: ["权力代价"],
+        timeRange: { start: "626", end: "626", display: "唐武德九年六月" },
+        locationTags: ["长安"],
+        relationshipTags: ["兄弟"],
+        sourceAnchorRefs: ["旧唐书"],
+        credibilityLevel: "high",
+        disputeNotes: null,
+        origin: "builtin",
+        angles: [
+          {
+            angleLabel: "已有角度",
+            familyLabel: "政治",
+            scopeLabel: "standard",
+          },
+        ],
+      };
+      writeFileSync(filePath, JSON.stringify(originalFile, null, 2), "utf8");
+
+      // Sync：从文件创建 entry
+      const r1 = await syncEventLibraryFromFiles(client, root);
+      expect(r1.created).toBe(1);
+      expect(r1.errors).toHaveLength(0);
+
+      const entryAfterSync = await client.eventLibraryEntry.findFirst({
+        where: { canonicalTitle: "玄武门之变" },
+        include: { angles: true },
+      });
+      expect(entryAfterSync).toBeTruthy();
+      expect(entryAfterSync!.status).toBe("curated");
+      expect(entryAfterSync!.filePath).toBeTruthy();
+      const originalFilePath = entryAfterSync!.filePath;
+      expect(entryAfterSync!.characterTagsJson).toEqual(["李世民", "李建成"]);
+      expect(entryAfterSync!.eventTypeTagsJson).toEqual(["继承夺位"]);
+      const angleLabels1 = (entryAfterSync!.angles as Array<{ angleLabel: string }>)
+        .map((a) => a.angleLabel);
+      expect(angleLabels1).toContain("已有角度");
+
+      // 2. 构建 app 并创建同 fingerprint 草稿
+      const app = buildApp({
+        storageBaseDir: root,
+        prismaClient: client,
+        skipSnapshotLoad: true,
+      });
+
+      await client.project.create({
+        data: {
+          id: "proj-merge-fs",
+          ownerId: admin.id,
+          createdById: admin.id,
+          name: "Test",
+          status: "topic_pending",
+          storageKey: "proj-merge-fs",
+          storageDisplayName: "Test",
+        },
+      });
+
+      const { generateLibraryFingerprint, generateAngleFingerprint } =
+        await import(
+          "../../../backend/src/modules/event-library/event-library.codec.js"
+        );
+
+      await client.eventLibraryDraft.create({
+        data: {
+          id: "draft-merge-fs",
+          draftKind: "recommendation_reflux",
+          candidateFingerprint: "draft-merge-fs-fp",
+          projectId: "proj-merge-fs",
+          proposedTitle: "玄武门之变",
+          proposedSummary: "新补充的角度",
+          proposedAnglesJson: [
+            { angleLabel: "已有角度", familyLabel: "政治", scopeLabel: "standard" },
+            { angleLabel: "新角度", familyLabel: "军事", scopeLabel: "standard" },
+          ],
+          proposedTagsJson: {
+            events: ["继承夺位", "new-event"],
+          },
+          ownerId: admin.id,
+          status: "draft",
+        },
+      });
+
+      // 3. 审批草稿 → 合并到已有 entry
+      const res = await app.inject({
+        method: "POST",
+        url: "/api/admin/event-library/drafts/draft-merge-fs/approve",
+        payload: { dynasty: "唐", era: "初唐" },
+        auth: adminAuth(),
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { draft_id: string; entry_id: string; merged: boolean };
+      expect(body.merged).toBe(true);
+      expect(body.entry_id).toBe(entryAfterSync!.id);
+
+      // 4. 验证 filePath 未变（写回原文件，而非新建）
+      const entryAfterMerge = await client.eventLibraryEntry.findUnique({
+        where: { id: entryAfterSync!.id },
+        include: { angles: true },
+      });
+      expect(entryAfterMerge!.filePath).toBe(originalFilePath);
+
+      // 5. 验证磁盘文件包含合并后的内容
+      const diskContent = JSON.parse(readFileSync(join(root, originalFilePath!), "utf8"));
+      const diskAngles = diskContent.angles.map((a: { angleLabel: string }) => a.angleLabel);
+      expect(diskAngles).toContain("已有角度");
+      expect(diskAngles).toContain("新角度");
+      expect(diskContent.eventTypeTags).toContain("继承夺位");
+      expect(diskContent.eventTypeTags).toContain("new-event");
+      // characterTags 仍是数组（string[]），不是对象
+      expect(Array.isArray(diskContent.characterTags)).toBe(true);
+      expect(diskContent.characterTags).toEqual(["李世民", "李建成"]);
+
+      // 6. 验证 DB 中合并后的 angles 和 tags
+      const mergedAngles = (entryAfterMerge!.angles as Array<{ angleLabel: string }>)
+        .map((a) => a.angleLabel);
+      expect(mergedAngles).toContain("已有角度");
+      expect(mergedAngles).toContain("新角度");
+      const mergedEventTags = entryAfterMerge!.eventTypeTagsJson as string[];
+      expect(mergedEventTags).toContain("继承夺位");
+      expect(mergedEventTags).toContain("new-event");
+      // characterTagsJson 仍为 string[]，没有被错误覆盖
+      expect(entryAfterMerge!.characterTagsJson).toEqual(["李世民", "李建成"]);
+
+      // 7. 再次 sync：entry 不能被归档，合并内容不能丢失
+      const r2 = await syncEventLibraryFromFiles(client, root);
+      expect(r2.archived).toBe(0);
+
+      const entryAfterReSync = await client.eventLibraryEntry.findUnique({
+        where: { id: entryAfterSync!.id },
+        include: { angles: true },
+      });
+      expect(entryAfterReSync!.status).toBe("curated");
+      const reSyncAngles = (entryAfterReSync!.angles as Array<{ angleLabel: string }>)
+        .map((a) => a.angleLabel);
+      expect(reSyncAngles).toContain("已有角度");
+      expect(reSyncAngles).toContain("新角度");
+      const reSyncEventTags = entryAfterReSync!.eventTypeTagsJson as string[];
+      expect(reSyncEventTags).toContain("继承夺位");
+      expect(reSyncEventTags).toContain("new-event");
+      expect(entryAfterReSync!.characterTagsJson).toEqual(["李世民", "李建成"]);
     } finally {
       await client.$disconnect();
       rmSync(root, { recursive: true, force: true });

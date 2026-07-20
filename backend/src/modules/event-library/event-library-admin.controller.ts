@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { AppPrismaClient } from "../../db/prisma-client.types.js";
@@ -65,26 +65,13 @@ function mergeUniqueStrings(existing: string[], incoming: string[]): string[] {
   return [...set];
 }
 
-function mergeProposedTags(
-  draftTags: Record<string, unknown>,
-  existingTags: Record<string, unknown>,
-): Record<string, unknown> {
-  const merged: Record<string, unknown> = { ...existingTags };
-  for (const [key, value] of Object.entries(draftTags)) {
-    if (Array.isArray(value) && Array.isArray(merged[key])) {
-      merged[key] = mergeUniqueStrings(merged[key] as string[], value as string[]);
-    } else {
-      merged[key] = value;
-    }
-  }
-  return merged;
-}
-
 function snapshotJson(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value));
 }
 
-/** 将 EventLibraryEntry 数据写为 JSON 文件，并回填 filePath + fileContentHash */
+/** 将 EventLibraryEntry 数据写为 JSON 文件，并回填 filePath + fileContentHash。
+ *  若 targetPath 给出（合并场景），写入该路径并清理重名旧文件；
+ *  否则按 dynasty/title 生成新路径。 */
 async function persistEntryToFile(
   prisma: AppPrismaClient,
   storageBaseDir: string,
@@ -108,12 +95,18 @@ async function persistEntryToFile(
     eventRegistryEntry: { canonicalName: string; aliasesJson: unknown } | null;
     angles: Array<{ angleLabel: string; familyLabel: string; scopeLabel: string }>;
   },
+  targetPath?: string | null,
 ): Promise<void> {
   const dynastySlug = entry.dynasty ? toAsciiSlug(entry.dynasty) : "unknown";
   const eventSlug = toAsciiSlug(entry.canonicalTitle);
-  const dirPath = join(storageBaseDir, EVENT_LIBRARY_ROOT_DIR, dynastySlug);
-  mkdirSync(dirPath, { recursive: true });
-  const relativePath = `${EVENT_LIBRARY_ROOT_DIR}/${dynastySlug}/${eventSlug}.json`;
+
+  // 默认按 dynasty/title 生成路径
+  let relativePath = `${EVENT_LIBRARY_ROOT_DIR}/${dynastySlug}/${eventSlug}.json`;
+
+  // 合并场景：沿用已有文件路径，避免 sync 归档
+  if (targetPath) {
+    relativePath = targetPath;
+  }
 
   const fileContent: EventLibraryFile = {
     schemaVersion: 1,
@@ -144,10 +137,26 @@ async function persistEntryToFile(
   };
 
   const json = JSON.stringify(fileContent, null, 2);
-  const filePath = join(dirPath, `${eventSlug}.json`);
-  writeFileSync(filePath, json, "utf8");
-
   const fileContentHash = computeFileContentHash(json);
+
+  const absTargetPath = join(storageBaseDir, relativePath);
+  const absGeneratedPath = join(storageBaseDir, EVENT_LIBRARY_ROOT_DIR, dynastySlug, `${eventSlug}.json`);
+
+  // 如果沿用已有路径但生成路径不同，先写临时文件再 rename 确保原子性
+  if (targetPath && absTargetPath !== absGeneratedPath) {
+    mkdirSync(join(storageBaseDir, EVENT_LIBRARY_ROOT_DIR, dynastySlug), { recursive: true });
+    writeFileSync(absGeneratedPath, json, "utf8");
+    mkdirSync(join(absTargetPath, ".."), { recursive: true });
+    try { renameSync(absGeneratedPath, absTargetPath); } catch {
+      // cross-device fallback
+      writeFileSync(absTargetPath, json, "utf8");
+      unlinkSync(absGeneratedPath);
+    }
+  } else {
+    const dirPath = join(storageBaseDir, EVENT_LIBRARY_ROOT_DIR, dynastySlug);
+    mkdirSync(dirPath, { recursive: true });
+    writeFileSync(absTargetPath, json, "utf8");
+  }
 
   await prisma.eventLibraryEntry.update({
     where: { id: entry.id },
@@ -279,10 +288,9 @@ async function executeApprove(
       }
     }
 
-    const existingTags = existingEntry.characterTagsJson as Record<string, unknown>;
+    // 只合并 draftTags.events 到 eventTypeTagsJson；不覆盖 characterTagsJson
+    // （文件来源 entry 的 characterTagsJson 为 string[]，非 Record）
     const draftTags = (draft.proposedTagsJson as Record<string, unknown>) ?? {};
-    const mergedTags = mergeProposedTags(draftTags, existingTags || {});
-
     const draftEventTypeTags = Array.isArray(draftTags.events) ? draftTags.events as string[] : [];
     const mergedEventType = draftEventTypeTags.length > 0
       ? mergeUniqueStrings(
@@ -294,7 +302,6 @@ async function executeApprove(
     await prisma.eventLibraryEntry.update({
       where: { id: existingEntry.id },
       data: {
-        characterTagsJson: mergedTags as never,
         ...(draftEventTypeTags.length > 0
           ? { eventTypeTagsJson: mergedEventType as never }
           : {}),
@@ -303,7 +310,7 @@ async function executeApprove(
 
     entryId = existingEntry.id;
 
-    // 合并后重写文件（角度和标签可能已变）
+    // 合并后重写文件（角度和标签可能已变），沿用已有的 filePath
     const reloaded = await prisma.eventLibraryEntry.findUnique({
       where: { id: entryId },
       include: { angles: true, eventRegistryEntry: true },
@@ -328,7 +335,7 @@ async function executeApprove(
         originKind: reloaded.originKind,
         eventRegistryEntry: reloaded.eventRegistryEntry,
         angles: (reloaded.angles as Array<{ angleLabel: string; familyLabel: string; scopeLabel: string }>),
-      });
+      }, existingEntry.filePath);
     }
   } else {
     merged = false;
