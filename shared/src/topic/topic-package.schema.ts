@@ -37,6 +37,8 @@ export const TopicPackage = z
     ambiguity_notes: z.array(z.string().min(1)),
     duration_band: z.string().min(1),
     narrative_tension_map: NarrativeTensionMap,
+    source_mode: z.enum(["recommended", "library", "custom"]).default("recommended"),
+    source_ref: z.record(z.unknown()).nullable().default(null),
   })
   .strict();
 

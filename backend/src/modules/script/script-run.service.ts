@@ -66,6 +66,8 @@ function mapTopicPackage(record: TopicPackageRecord) {
       peak_payoff: string;
       ending_residue: string;
     },
+    source_mode: record.sourceMode ?? "recommended",
+    source_ref: record.sourceRefJson ?? null,
   };
 }
 

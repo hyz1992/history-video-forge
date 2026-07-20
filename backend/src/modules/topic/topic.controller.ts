@@ -394,6 +394,23 @@ export async function createTopicRecommendationsController(
   }
 }
 
+/** 顺序无关的浅层深等比较，避免 JSON.stringify 因字段顺序不同而误判 */
+function sourceRefEquals(
+  left: Record<string, unknown> | null,
+  right: Record<string, unknown> | null,
+): boolean {
+  if (left === null || right === null) return left === right;
+
+  const leftKeys = Object.keys(left).sort();
+  const rightKeys = Object.keys(right).sort();
+  if (leftKeys.length !== rightKeys.length) return false;
+
+  return leftKeys.every((key, index) => {
+    const rightKey = rightKeys[index];
+    return key === rightKey && left[key] === right[rightKey];
+  });
+}
+
 export async function confirmTopicCandidateController(
   context: RouteContext,
 ): Promise<AppResponse> {
@@ -419,6 +436,46 @@ export async function confirmTopicCandidateController(
         error: "candidate_not_found",
       },
     };
+  }
+
+  // sourceMode 校验：payload 中显式传入时需与 candidate 一致
+  const payloadMode = (context.payload as Record<string, unknown>)?.sourceMode as string | undefined;
+  if (payloadMode !== undefined) {
+    const validModes = ["recommended", "library", "custom"];
+    if (!validModes.includes(payloadMode)) {
+      return {
+        statusCode: 400,
+        body: {
+          error: "invalid_source_mode",
+          message: `sourceMode 必须为 recommended/library/custom 之一`,
+        },
+      };
+    }
+    const candidateMode = candidate.sourceMode ?? "recommended";
+    if (payloadMode !== candidateMode) {
+      return {
+        statusCode: 400,
+        body: {
+          error: "source_mode_mismatch",
+          message: `传入 sourceMode=${payloadMode} 与 candidate 的 ${candidateMode} 不匹配`,
+        },
+      };
+    }
+  }
+
+  // sourceRef 校验：payload 中显式传入时需与 candidate 一致（顺序无关深等比较）
+  const payloadRef = (context.payload as Record<string, unknown>)?.sourceRef as Record<string, unknown> | undefined;
+  if (payloadRef !== undefined) {
+    const candidateRef = candidate.sourceRef ?? null;
+    if (!sourceRefEquals(payloadRef, candidateRef)) {
+      return {
+        statusCode: 400,
+        body: {
+          error: "source_ref_mismatch",
+          message: "传入 sourceRef 与 candidate 存储的 sourceRef 不一致",
+        },
+      };
+    }
   }
 
   const confirmed = await confirmTopicCandidate({

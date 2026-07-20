@@ -187,6 +187,8 @@ export async function confirmTopicCandidate(input: ConfirmTopicCandidateInput) {
     riskHintsJson: topicPackage.risk_hints,
     sourceAnchorRefsJson: topicPackage.source_anchor_refs,
     ambiguityNotesJson: topicPackage.ambiguity_notes,
+    sourceMode: input.candidate.sourceMode ?? "recommended",
+    sourceRefJson: input.candidate.sourceRef ?? null,
   });
 
   input.project.name = saved.title;

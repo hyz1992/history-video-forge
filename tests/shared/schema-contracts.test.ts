@@ -246,6 +246,184 @@ describe("shared schema contracts", () => {
     expect(semanticReview.patch_intent).toBe("lift");
   });
 
+  it("provides default source_mode=recommended and null source_ref when omitted", () => {
+    const pkg = TopicPackage.parse({
+      topic_id: "topic-default-mode",
+      title: "默认来源模式",
+      selected_angle: "测试角度",
+      family_label: "测试",
+      scope_label: "单事件",
+      core_conflict: "核心冲突",
+      strong_scene: "强场面",
+      packaging_seed: "包装种子",
+      stakes: "赌注",
+      must_include_beats: ["节拍1"],
+      forbidden_expansions: [],
+      risk_hints: [],
+      source_anchor_refs: ["测试来源"],
+      canonical_quotes: [],
+      ambiguity_notes: [],
+      duration_band: "medium",
+      narrative_tension_map: {
+        hook_claim: "hook",
+        pressure_escalation: "pressure",
+        mid_reveal: "reveal",
+        peak_payoff: "payoff",
+        ending_residue: "residue",
+      },
+    });
+
+    expect(pkg.source_mode).toBe("recommended");
+    expect(pkg.source_ref).toBeNull();
+  });
+
+  it("accepts all three valid source_mode enum values", () => {
+    const base = {
+      topic_id: "topic-mode-enum",
+      title: "来源枚举",
+      selected_angle: "角度",
+      family_label: "类型",
+      scope_label: "单事件",
+      core_conflict: "冲突",
+      strong_scene: "场面",
+      packaging_seed: "种子",
+      stakes: "赌注",
+      must_include_beats: ["节拍1"],
+      forbidden_expansions: [],
+      risk_hints: [],
+      source_anchor_refs: ["来源"],
+      canonical_quotes: [],
+      ambiguity_notes: [],
+      duration_band: "medium",
+      narrative_tension_map: {
+        hook_claim: "h",
+        pressure_escalation: "p",
+        mid_reveal: "m",
+        peak_payoff: "pp",
+        ending_residue: "e",
+      },
+    };
+
+    expect(TopicPackage.parse({ ...base, source_mode: "recommended" }).source_mode)
+      .toBe("recommended");
+    expect(TopicPackage.parse({ ...base, source_mode: "library" }).source_mode)
+      .toBe("library");
+    expect(TopicPackage.parse({ ...base, source_mode: "custom" }).source_mode)
+      .toBe("custom");
+  });
+
+  it("rejects invalid source_mode values", () => {
+    const base = {
+      topic_id: "topic-bad-mode",
+      title: "非法来源",
+      selected_angle: "角度",
+      family_label: "类型",
+      scope_label: "单事件",
+      core_conflict: "冲突",
+      strong_scene: "场面",
+      packaging_seed: "种子",
+      stakes: "赌注",
+      must_include_beats: ["节拍1"],
+      forbidden_expansions: [],
+      risk_hints: [],
+      source_anchor_refs: ["来源"],
+      canonical_quotes: [],
+      ambiguity_notes: [],
+      duration_band: "medium",
+      narrative_tension_map: {
+        hook_claim: "h",
+        pressure_escalation: "p",
+        mid_reveal: "m",
+        peak_payoff: "pp",
+        ending_residue: "e",
+      },
+    };
+
+    expect(() => TopicPackage.parse({ ...base, source_mode: "external" })).toThrow();
+    expect(() => TopicPackage.parse({ ...base, source_mode: "" })).toThrow();
+  });
+
+  it("hard_lane 和 soft_lane 不包含 source_mode / source_ref", () => {
+    // hard_lane 是 ScriptInputBundle 的 strict 子 schema，不应扩展 source 元数据
+    const topicPackage = TopicPackage.parse({
+      topic_id: "topic-no-leak",
+      title: "不泄露",
+      selected_angle: "角度",
+      family_label: "类型",
+      scope_label: "单事件",
+      core_conflict: "冲突",
+      strong_scene: "场面",
+      packaging_seed: "种子",
+      stakes: "赌注",
+      must_include_beats: ["节拍1"],
+      forbidden_expansions: [],
+      risk_hints: [],
+      source_anchor_refs: ["来源"],
+      canonical_quotes: [],
+      ambiguity_notes: [],
+      duration_band: "medium",
+      narrative_tension_map: {
+        hook_claim: "h",
+        pressure_escalation: "p",
+        mid_reveal: "m",
+        peak_payoff: "pp",
+        ending_residue: "e",
+      },
+    });
+
+    // ScriptInputBundle 能解析带 source_mode/source_ref 的 topic_package
+    const bundle = ScriptInputBundle.parse({
+      topic_package: topicPackage,
+      topic_delivery_pack: {
+        opening_move: "question",
+        opening_pressure_level: "high",
+        voice_tilt: "sharper",
+        pacing_tilt: "neutral",
+        ending_tilt: "judgment",
+        visual_tilt: ["faces"],
+        hook_claim: "hook",
+        hook_emotion: "压迫",
+        reveal_position: "mid",
+        caution_notes: [],
+      },
+      hard_lane: {
+        event_identity: "test",
+        selected_angle: "角度",
+        scope_label: "单事件",
+        core_conflict: "冲突",
+        stakes: "赌注",
+        must_include_beats: ["节拍1"],
+        forbidden_expansions: [],
+        source_anchor_refs: ["来源"],
+        canonical_quotes: [],
+        ambiguity_notes: [],
+        duration_band: "medium",
+      },
+      soft_lane: {
+        narrative_tension_map: topicPackage.narrative_tension_map,
+        strong_scene: "场面",
+        voice_hint: "克制",
+      },
+      packaging_lane: {
+        hook_claim: "hook",
+        hook_emotion: "压迫",
+        reveal_position: "mid",
+        title_profile: "conflict-first",
+        cover_profile: "faces-closeup",
+        risk_posture: "controlled",
+      },
+    });
+
+    expect(bundle.topic_package.source_mode).toBe("recommended");
+    // hard_lane 和 soft_lane 是 strict schema，source_mode/source_ref 不应出现在其中
+    const hardKeys = Object.keys(bundle.hard_lane);
+    expect(hardKeys).not.toContain("source_mode");
+    expect(hardKeys).not.toContain("source_ref");
+    const softKeys = Object.keys(bundle.soft_lane);
+    expect(softKeys).not.toContain("source_mode");
+    expect(softKeys).not.toContain("source_ref");
+  });
+
   it("restricts viral rubric and reveal position enum values", () => {
     expect(() =>
       TopicCandidateCard.parse({
