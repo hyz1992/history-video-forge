@@ -24,6 +24,10 @@ function mockAuthStore(overrides: { user?: NonNullable<ReturnType<typeof createA
     logout: vi.fn(),
     clear: vi.fn(),
     isAuthenticated: () => (overrides.user ?? null) !== null,
+    authModal: { open: false, mode: "login" as const, pendingAction: null },
+    openAuthModal: vi.fn(),
+    openAuthModalForAction: vi.fn(),
+    hideAuthModal: vi.fn(),
   };
 }
 
@@ -41,7 +45,7 @@ describe("admin routes guard", () => {
       const router = createAppRouter("memory", { authStore: store as any });
       await router.push("/admin/users");
       await nextTick();
-      expect(router.currentRoute.value.path).toBe("/login");
+      expect(router.currentRoute.value.path).toBe("/");
     });
 
     it("redirects USER role away from /admin", async () => {
