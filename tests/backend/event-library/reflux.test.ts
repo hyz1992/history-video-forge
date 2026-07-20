@@ -176,4 +176,64 @@ describe("event-library recommendation reflux", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it("recommendation response is unaffected when draft write fails", async () => {
+    const root = mkdtempSync(join(tmpdir(), "svf2-reflux-fail-"));
+
+    const dbPath = join(root, "test.db");
+    const sqlite = new Database(dbPath);
+    applyAllDatabaseMigrations(sqlite);
+    sqlite.close();
+
+    const client = await createPrismaClient(dbPath);
+
+    try {
+      const user = await client.user.create({
+        data: { id: "u-reflux-fail", username: "u-reflux-fail", displayName: "U Fail", passwordHash: "x", role: "ADMIN" },
+      });
+      const app = buildApp({ storageBaseDir: root, prismaClient: client, skipSnapshotLoad: true });
+
+      // 只在 legacy DB 创建 project，不在 Prisma DB 创建
+      // draft 写入时会因 FK 失败，但推荐响应不应受影响
+      const project = await createProject(app.db, { name: "RefluxFail", ownerId: user.id, createdById: user.id });
+
+      const auth = createAuthenticatedAuthContext({
+        userId: user.id,
+        username: user.username,
+        displayName: user.displayName,
+        role: "ADMIN",
+        sessionId: "s",
+      });
+
+      const r = await app.inject({
+        method: "POST",
+        url: `/api/projects/${project.id}/topic/recommendations`,
+        payload: {
+          canonical_name: "玄武门之变",
+          summary: "李世民在玄武门伏杀建成元吉",
+          core_conflict: "兄弟夺位",
+          strong_scene: "玄武门伏杀",
+          source_hint: "测试",
+          recent_usage_hint: "无",
+          tags: ["唐朝", "政变"],
+        },
+        auth,
+      });
+
+      // draft 写入应因 FK 失败（Prisma 中无 project），但推荐响应仍为 200
+      expect(r.statusCode).toBe(200);
+      const body = r.json();
+      expect(body.candidates.length).toBeGreaterThan(0);
+
+      // 确认 draft 确实未写入
+      await waitForAsyncDrafts();
+      const drafts = await client.eventLibraryDraft.findMany({
+        where: { draftKind: "recommendation_reflux", projectId: project.id },
+      });
+      expect(drafts.length).toBe(0);
+    } finally {
+      await client.$disconnect();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
