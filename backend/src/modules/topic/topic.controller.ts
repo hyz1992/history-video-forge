@@ -209,6 +209,27 @@ export async function createProjectController(
     createdById: user.userId,
   });
 
+  // 同步创建 Prisma Project 行，确保后续 EventLibraryDraft 等 FK 可用
+  const prismaClient = context.app.prismaClient;
+  if (prismaClient && !context.auth.anonymous) {
+    await prismaClient.project.upsert({
+      where: { id: project.id },
+      create: {
+        id: project.id,
+        ownerId: project.ownerId,
+        createdById: project.createdById,
+        name: project.name,
+        status: project.status,
+        storageKey: project.id,
+        storageDisplayName: project.storageDisplayName || project.name,
+      },
+      update: {
+        name: project.name,
+        status: project.status,
+      },
+    });
+  }
+
   return {
     statusCode: 201,
     body: {
@@ -631,6 +652,12 @@ export async function createTopicFromCustomController(
       },
     };
   } catch (error) {
+    // 打印内部错误便于诊断（生产环境可通过 LOG_LEVEL 控制）
+    console.error(
+      "[topic:from-custom] 自定义选题失败：",
+      error instanceof Error ? (error.stack ?? error.message) : String(error),
+    );
+
     project.status = "topic_pending";
     project.updatedAt = new Date();
     await context.app.db.firstAggregateWriter?.syncProject(project).catch(() => undefined);
