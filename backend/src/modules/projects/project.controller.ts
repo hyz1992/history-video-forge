@@ -3,7 +3,7 @@ import { getProjectSnapshot } from "./project-snapshot.service";
 import { deleteProject } from "./project.repository";
 import { listProjectSummaries } from "./project-summary.service";
 import {
-  guardAdminRoute,
+  guardOwnedRoute,
   guardUserRoute,
   requireOwner,
 } from "../../auth/authorization.js";
@@ -48,7 +48,7 @@ export const getProjectSnapshotController = guardUserRoute(
   },
 );
 
-export const deleteProjectController = guardAdminRoute(
+export const deleteProjectController = guardOwnedRoute(
   async (context: RouteContext): Promise<AppResponse> => {
     const projectId = context.params.projectId;
 

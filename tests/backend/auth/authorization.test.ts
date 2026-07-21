@@ -162,7 +162,9 @@ describe("app.inject auth integration", () => {
     expect(response.statusCode).toBe(401);
   });
 
-  it("DELETE /api/projects/:projectId returns 403 with USER auth (not admin)", async () => {
+  it("DELETE /api/projects/:projectId returns 404 with USER auth when project does not exist", async () => {
+    // 改用 guardOwnedRoute 后：USER 删除不存在的项目返回 404（不暴露存在性）
+    // owner 删自己的项目返回 200，ADMIN 删任意项目返回 200，详见 project-delete-permission.test.ts
     const app = buildApp({ skipSnapshotLoad: true, storageBaseDir: process.cwd() });
     const auth = createAuthenticatedAuthContext({ userId: "u1", username: "a", displayName: "A", role: "USER", sessionId: "s1" });
     const response = await app.inject({
@@ -170,8 +172,8 @@ describe("app.inject auth integration", () => {
       url: "/api/projects/fake-id",
       auth,
     });
-    expect(response.statusCode).toBe(403);
-    expect(response.json()).toMatchObject({ error: "admin_required" });
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toMatchObject({ error: "project_not_found" });
   });
 
   it("POST /api/projects returns 401 with anonymous auth", async () => {
