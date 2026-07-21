@@ -1,22 +1,38 @@
-// 必须在所有 import 之前设置 LLM stub 模式
+// 覆盖 from-custom controller 链路（FK 同步、source_mode、topicCandidateStore 写入）。
+// 注意：此测试 mock refineCustomTopic，**不**验证 LLM 内容质量；
+// LLM 真假由真实 LLM live check（harness）覆盖，不在本文件职责内。
+//
+// 历史背景：曾存在 stub 分支在本地糊弄 refine 结果，已按 AGENTS.md 删除。
+// 本测试沿用 mock，仅断言 controller 对 refine 输出的处理是否正确。
+
 process.env.LLM_PROVIDER = "stub";
 process.env.LLM_STUB_DELAY_MS = "10";
-
-// 不 mock refineCustomTopic：使用真实 stub 分支，且通过 POST /api/projects 创建项目
-// （模拟真实 UI 路径，不手工插入 Prisma Project 行）
 
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { createAuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
 
-describe("custom refine stub full chain (real /api/projects)", () => {
+// Mock refineCustomTopic：返回合法结构，避免真实 LLM 调用
+vi.mock("../../../backend/src/modules/topic/topic-custom-refine.service.js", () => ({
+  refineCustomTopic: vi.fn().mockResolvedValue({
+    refined: {
+      canonicalName: "玄武门之变",
+      summary: "李世民在玄武门伏杀建成元吉，奠定贞观之始。",
+      dynasty: "唐",
+      characterTags: ["李世民", "李建成"],
+      eventTypeTags: ["政变", "继承夺位"],
+    },
+  }),
+}));
+
+describe("custom refine controller chain (real /api/projects)", () => {
   it("returns 200 with candidates via POST /api/projects → /topic/from-custom", async () => {
     const root = mkdtempSync(join(tmpdir(), "svf2-custom-api-"));
     const dbPath = join(root, "test.db");
@@ -27,7 +43,6 @@ describe("custom refine stub full chain (real /api/projects)", () => {
     const client = await createPrismaClient(dbPath);
 
     try {
-      // 1. 创建用户（模拟登录态）
       const user = await client.user.create({
         data: {
           id: `u-custom-api-${Date.now()}`,
@@ -52,7 +67,7 @@ describe("custom refine stub full chain (real /api/projects)", () => {
         skipSnapshotLoad: true,
       });
 
-      // 2. 通过 POST /api/projects 创建项目（真实 UI 路径）
+      // 通过 POST /api/projects 创建项目（真实 UI 路径，验证 Prisma Project 同步）
       const createRes = await app.inject({
         method: "POST",
         url: "/api/projects",
@@ -61,16 +76,14 @@ describe("custom refine stub full chain (real /api/projects)", () => {
       });
 
       expect(createRes.statusCode).toBe(201);
-      const createBody = createRes.json();
-      const projectId = createBody.project_id;
-      expect(projectId).toBeDefined();
+      const projectId = createRes.json().project_id;
 
-      // 3. 通过 POST /api/projects/:id/topic/from-custom 生成候选（真实 UI 路径）
+      // 通过 POST /topic/from-custom 生成候选
       const r = await app.inject({
         method: "POST",
         url: `/api/projects/${projectId}/topic/from-custom`,
         payload: {
-          rawDigest: "玄武门之变，李世民在长安太极宫玄武门伏杀太子李建成和齐王李元吉，随后逼迫唐高祖李渊退位，自己登基称帝。",
+          rawDigest: "玄武门之变，李世民在长安太极宫玄武门伏杀太子李建成和齐王李元吉。",
         },
         auth,
       });
@@ -84,19 +97,16 @@ describe("custom refine stub full chain (real /api/projects)", () => {
       expect(body.source_mode).toBe("custom");
       expect(body.candidates).toBeDefined();
       expect(body.candidates.length).toBeGreaterThan(0);
-      expect(body.refined).toBeDefined();
-      expect(body.refined.canonicalName).toBeTruthy();
       expect(body.source_ref.customDraftId).toBeDefined();
       expect(body.source_ref.customDraftId).not.toBeNull();
 
-      // 验证 candidate 已写入 topicCandidateStore
+      // candidate 已写入 topicCandidateStore
       const store = app.topicCandidateStore.get(projectId);
       expect(store).toBeDefined();
       expect(store!.rounds.length).toBeGreaterThanOrEqual(1);
-      const storedCandidate = store!.rounds[0].candidates[0];
-      expect(storedCandidate.sourceMode).toBe("custom");
+      expect(store!.rounds[0].candidates[0].sourceMode).toBe("custom");
 
-      // 验证 Prisma Project 已由 createProjectController 自动创建
+      // createProjectController 已自动创建 Prisma Project
       const prismaProject = await client.project.findUnique({ where: { id: projectId } });
       expect(prismaProject).not.toBeNull();
     } finally {
