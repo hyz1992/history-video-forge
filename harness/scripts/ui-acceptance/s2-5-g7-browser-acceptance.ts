@@ -304,7 +304,7 @@ async function main() {
       method: "POST",
       url: `/api/projects/${project.id}/topic/from-custom`,
       payload: {
-        text: "测试自定义文本",
+        rawDigest: "测试自定义文本",
       },
       auth: adminAuth(),
     });

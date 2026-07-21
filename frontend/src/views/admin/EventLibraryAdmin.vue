@@ -196,7 +196,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { onMounted, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { apiFetch, ApiError } from "../../utils/api";
 
@@ -477,6 +477,13 @@ function formatTime(dateStr: string): string {
 
 onMounted(() => {
   loadDrafts();
+});
+
+// 切换到"公共库管理" tab 时自动加载条目列表
+watch(activeTab, (tab) => {
+  if (tab === "entries") {
+    loadEntries();
+  }
 });
 </script>
 

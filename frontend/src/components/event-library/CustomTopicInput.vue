@@ -49,7 +49,7 @@ async function handleSubmit() {
     await apiFetch(`/api/projects/${projectId}/topic/from-custom`, {
       method: "POST",
       body: {
-        raw_digest: text,
+        rawDigest: text,
         era: eraFilter.value,
         tension: tensionFilter.value,
       },
