@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { apiFetch } from "../../utils/api";
-import { useTopicStore, type TopicRecommendationFilters } from "../../stores/topic";
+import { useTopicStore } from "../../stores/topic";
 import { useProjectStore } from "../../stores/project";
 
 const emit = defineEmits<{
@@ -12,22 +12,8 @@ const topicStore = useTopicStore();
 const projectStore = useProjectStore();
 
 const rawDigest = ref("");
-const eraFilter = ref<TopicRecommendationFilters["era"]>("ancient");
-const tensionFilter = ref<TopicRecommendationFilters["tension"]>("high");
 const generating = ref(false);
 const error = ref<string | null>(null);
-
-const eraOptions: { value: TopicRecommendationFilters["era"]; label: string }[] = [
-  { value: "ancient", label: "先秦至两汉" },
-  { value: "medieval", label: "魏晋至唐宋" },
-  { value: "late-imperial", label: "元明清" },
-];
-
-const tensionOptions: { value: TopicRecommendationFilters["tension"]; label: string }[] = [
-  { value: "high", label: "高张力" },
-  { value: "balanced", label: "均衡叙事" },
-  { value: "hook-first", label: "传播切口优先" },
-];
 
 async function handleSubmit() {
   if (generating.value) return;
@@ -50,8 +36,6 @@ async function handleSubmit() {
       method: "POST",
       body: {
         rawDigest: text,
-        era: eraFilter.value,
-        tension: tensionFilter.value,
       },
     });
     topicStore.selectTab("custom");
@@ -81,36 +65,6 @@ async function handleSubmit() {
       rows="5"
       :disabled="generating"
     ></textarea>
-
-    <div class="custom-filters">
-      <div class="filter-group">
-        <div class="filter-label">历史时期</div>
-        <div class="chip-row">
-          <button
-            v-for="opt in eraOptions"
-            :key="opt.value"
-            class="chip"
-            :class="{ 'chip--active': eraFilter === opt.value }"
-            :disabled="generating"
-            @click="eraFilter = opt.value"
-          >{{ opt.label }}</button>
-        </div>
-      </div>
-
-      <div class="filter-group">
-        <div class="filter-label">叙事偏好</div>
-        <div class="chip-row">
-          <button
-            v-for="opt in tensionOptions"
-            :key="opt.value"
-            class="chip"
-            :class="{ 'chip--active': tensionFilter === opt.value }"
-            :disabled="generating"
-            @click="tensionFilter = opt.value"
-          >{{ opt.label }}</button>
-        </div>
-      </div>
-    </div>
 
     <div v-if="error" class="custom-error">
       <span class="error-icon">⚠️</span>
@@ -164,64 +118,6 @@ async function handleSubmit() {
 }
 .custom-textarea:disabled {
   opacity: 0.5;
-}
-
-.custom-filters {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 16px 18px;
-  background: rgba(255, 255, 255, 0.015);
-  border: 1px solid rgba(212, 163, 95, 0.08);
-  border-radius: 12px;
-}
-
-.filter-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.filter-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-
-.chip-row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.chip {
-  padding: 8px 16px;
-  border-radius: 100px;
-  font-size: 13px;
-  font-weight: 500;
-  font-family: var(--font-family);
-  color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  cursor: pointer;
-  transition: all 220ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-.chip:hover {
-  color: var(--text-body);
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(212, 163, 95, 0.2);
-}
-.chip--active {
-  color: var(--accent-primary);
-  background: linear-gradient(135deg, rgba(212, 163, 95, 0.14), rgba(212, 163, 95, 0.06));
-  border-color: rgba(212, 163, 95, 0.35);
-  font-weight: 600;
-}
-.chip:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .custom-error {

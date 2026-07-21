@@ -578,6 +578,7 @@ export async function createTopicFromCustomController(
         recentUsageHint: "首次从自定义输入选取",
         tags: refined.eventTypeTags,
       },
+      { projectId: project.id },
     );
 
     // 7. 构建 candidate 对象（写入 store + response）
