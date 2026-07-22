@@ -287,7 +287,7 @@ export async function recommendTopicCandidatesWithTrace(
   const topicCandidateLibraryRepository =
     options?.topicCandidateLibraryRepository ??
     createTopicCandidateLibraryRepository();
-  const fallbackCandidates = options?.projectId
+  const fallbackCandidates = options?.projectId && !disableFallback
     ? await loadFallbackCandidates({
         db,
         input,
@@ -297,7 +297,15 @@ export async function recommendTopicCandidatesWithTrace(
     : {
         rankings: [],
         selectorPool: [],
-        diagnostics: [],
+        diagnostics: disableFallback
+          ? [
+              {
+                code: "topic_fallback_disabled",
+                level: "info" as const,
+                reason: "调用方显式禁用事件库 fallback（自定义入口）",
+              },
+            ]
+          : [],
       };
   const selectorRankings = [
     ...postProcessed.rankings,
