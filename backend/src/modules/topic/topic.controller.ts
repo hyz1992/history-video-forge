@@ -567,6 +567,8 @@ export async function createTopicFromCustomController(
     }
 
     // 6. 生成 candidate
+    // 自定义入口差异化合同：builder 生成 3 条 → selector 选 1 条返回；关闭事件库 fallback
+    // （用户已锁定单一事件，不需要外部 event_identity 补位）
     const candidates = await recommendTopicCandidates(
       context.app.db,
       {
@@ -577,8 +579,15 @@ export async function createTopicFromCustomController(
         sourceHint: "自定义输入",
         recentUsageHint: "首次从自定义输入选取",
         tags: refined.eventTypeTags,
+        target_candidate_count: 3,
+        final_candidate_count: 1,
       },
-      { projectId: project.id },
+      {
+        projectId: project.id,
+        rawCandidateTargetCount: 3,
+        finalCandidateCount: 1,
+        disableFallback: true,
+      },
     );
 
     // 7. 构建 candidate 对象（写入 store + response）

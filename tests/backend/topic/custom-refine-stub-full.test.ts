@@ -96,7 +96,8 @@ describe("custom refine controller chain (real /api/projects)", () => {
       const body = r.json();
       expect(body.source_mode).toBe("custom");
       expect(body.candidates).toBeDefined();
-      expect(body.candidates.length).toBeGreaterThan(0);
+      // 自定义入口差异化合同：3 → selector → 1
+      expect(body.candidates.length).toBe(1);
       expect(body.source_ref.customDraftId).toBeDefined();
       expect(body.source_ref.customDraftId).not.toBeNull();
 
