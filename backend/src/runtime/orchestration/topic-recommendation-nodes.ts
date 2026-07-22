@@ -38,6 +38,25 @@ export interface TopicRecommendationGraphRuntime {
   pendingRawBuilderCandidates: Record<string, unknown>[];
 }
 
+/**
+ * 从 graph runtime input 中解析有效目标数量（缺省回退常量）。
+ * 自定义入口通过 BuildTopicCandidatesInput.target_candidate_count / final_candidate_count
+ * 注入；不传时等价三 tab 共用 8→4。
+ */
+function resolveRawCandidateTargetCount(
+  runtime: TopicRecommendationGraphRuntime,
+): number {
+  return (
+    runtime.input.target_candidate_count ?? TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT
+  );
+}
+
+function resolveFinalCandidateCount(
+  runtime: TopicRecommendationGraphRuntime,
+): number {
+  return runtime.input.final_candidate_count ?? TOPIC_CANDIDATE_TARGET_COUNT;
+}
+
 async function persistTopicCandidates(
   runtime: TopicRecommendationGraphRuntime,
   candidates: ReturnType<typeof TopicCandidateCard.parse>[],
@@ -354,7 +373,7 @@ async function applyRuntimeCandidates(input: {
     );
   const normalizedCandidates = runtimeCandidates
     .map((candidate) => normalizeTopicCandidateCard(candidate, runtime))
-    .slice(0, TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT);
+    .slice(0, resolveRawCandidateTargetCount(runtime));
   const fieldIssues = runtimeCandidates
     .map((candidate, index) => {
       const missingFields = collectCandidateFieldIssues(candidate);
@@ -377,7 +396,7 @@ async function applyRuntimeCandidates(input: {
   if (!append) {
     runtime.pendingRawBuilderCandidates = runtimeCandidates.slice(
       0,
-      TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT,
+      resolveRawCandidateTargetCount(runtime),
     );
     runtime.pendingFieldIssues = fieldIssues;
     runtime.pendingFieldRepair = fieldIssues.length > 0;
@@ -401,7 +420,7 @@ async function applyRuntimeCandidates(input: {
     return true;
   });
   const availableSlots =
-    TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT - runtime.candidates.length;
+    resolveRawCandidateTargetCount(runtime) - runtime.candidates.length;
   const nextCandidates = repairCandidates.slice(0, Math.max(availableSlots, 0));
 
   runtime.candidates = [...runtime.candidates, ...nextCandidates];
@@ -444,7 +463,7 @@ export function createTopicRecommendationNodes(input: {
         append: false,
       });
       runtime.slotsInsufficient =
-        runtime.candidates.length < TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT;
+        runtime.candidates.length < resolveRawCandidateTargetCount(runtime);
       const node = createTraceNode(runtime, "topic-candidate-generate");
       const shouldRepair =
         runtime.pendingFieldRepair || runtime.slotsInsufficient;
@@ -452,7 +471,7 @@ export function createTopicRecommendationNodes(input: {
       if (!shouldRepair) {
         await persistTopicCandidates(
           runtime,
-          runtime.candidates.slice(0, TOPIC_CANDIDATE_TARGET_COUNT),
+          runtime.candidates.slice(0, resolveFinalCandidateCount(runtime)),
         );
       }
 
@@ -504,10 +523,10 @@ export function createTopicRecommendationNodes(input: {
 
       await persistTopicCandidates(
         runtime,
-        runtime.candidates.slice(0, TOPIC_CANDIDATE_TARGET_COUNT),
+        runtime.candidates.slice(0, resolveFinalCandidateCount(runtime)),
       );
       runtime.slotsInsufficient =
-        runtime.candidates.length < TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT;
+        runtime.candidates.length < resolveRawCandidateTargetCount(runtime);
       const node = createTraceNode(runtime, "topic-candidate-repair");
 
       return {

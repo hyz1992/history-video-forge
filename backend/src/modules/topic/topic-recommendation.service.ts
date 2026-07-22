@@ -283,6 +283,7 @@ export async function recommendTopicCandidatesWithTrace(
     projectId: options?.projectId ?? null,
     createdBefore: recommendationStartedAt,
     existingCacheRecordIds,
+    selectorPoolSize: finalCandidateCount,
   });
   const topicCandidateLibraryRepository =
     options?.topicCandidateLibraryRepository ??
@@ -315,20 +316,21 @@ export async function recommendTopicCandidatesWithTrace(
     ...postProcessed.selectorPool,
     ...fallbackCandidates.selectorPool,
   ];
-  const selected = selectorPool.length >= TOPIC_CANDIDATE_TARGET_COUNT
+  const selected = selectorPool.length >= finalCandidateCount
     ? await selectFinalCandidatesWithTrace({
         input,
         llmGateway: gateway,
         selectorPool,
         recentEventMemory,
         rankings: selectorRankings,
+        finalCandidateCount,
         interactionLogWriter,
       })
     : {
         candidates: selectorRankings
-          .slice(0, TOPIC_CANDIDATE_TARGET_COUNT)
+          .slice(0, finalCandidateCount)
           .map((entry) => entry.candidate),
-        rankings: selectorRankings.slice(0, TOPIC_CANDIDATE_TARGET_COUNT),
+        rankings: selectorRankings.slice(0, finalCandidateCount),
         selectorTrace: null,
         diagnostics: [...fallbackCandidates.diagnostics],
       };
@@ -342,6 +344,7 @@ export async function recommendTopicCandidatesWithTrace(
   const finalDiagnostics = finalizeRecommendationDiagnostics({
     checks: result.diagnostics.checks,
     finalCandidateCount: selected.candidates.length,
+    expectedTargetCount: finalCandidateCount,
     additionalChecks: [
       ...postProcessed.diagnostics,
       ...fallbackCandidates.diagnostics,
@@ -783,6 +786,12 @@ async function postProcessTopicCandidates(input: {
   projectId?: string | null;
   createdBefore: Date;
   existingCacheRecordIds: string[];
+  /**
+   * 进入 selector pool 的最大候选数。
+   * 缺省 TOPIC_CANDIDATE_TARGET_COUNT，自定义入口由 caller 决定是否覆盖。
+   * 注意：这是 pool 上限，不是最终返回数量；最终数量由 selectRankedCandidates 的 finalCandidateCount 决定。
+   */
+  selectorPoolSize?: number;
 }) {
   const historyUpperBound = new Date(input.createdBefore.getTime() + 1);
   const deduplicatedCandidates: Omit<
@@ -988,7 +997,7 @@ async function postProcessTopicCandidates(input: {
 
   return {
     candidates: rankings
-      .slice(0, TOPIC_CANDIDATE_TARGET_COUNT)
+      .slice(0, input.selectorPoolSize ?? TOPIC_CANDIDATE_TARGET_COUNT)
       .map((entry) => entry.candidate),
     rankings,
     selectorPool,
@@ -1007,27 +1016,28 @@ async function postProcessTopicCandidates(input: {
 function finalizeRecommendationDiagnostics(input: {
   checks: RecommendationDiagnostic[];
   finalCandidateCount: number;
+  expectedTargetCount: number;
   additionalChecks: RecommendationDiagnostic[];
   candidatePreviewTrace?: CandidatePreviewTrace;
 }) {
   const checks = input.checks
     .filter((check) => {
     if (check.code === "topic_candidate_slot_guard_passed") {
-      return input.finalCandidateCount === TOPIC_CANDIDATE_TARGET_COUNT;
+      return input.finalCandidateCount === input.expectedTargetCount;
     }
 
     if (check.code === "topic_candidate_slots_insufficient") {
-      return input.finalCandidateCount < TOPIC_CANDIDATE_TARGET_COUNT;
+      return input.finalCandidateCount < input.expectedTargetCount;
     }
 
     return true;
     })
-    .map((check) => enrichDiagnosticReason(check, input.finalCandidateCount));
+    .map((check) => enrichDiagnosticReason(check, input.finalCandidateCount, input.expectedTargetCount));
 
   checks.push(...input.additionalChecks);
 
   if (
-    input.finalCandidateCount === TOPIC_CANDIDATE_TARGET_COUNT &&
+    input.finalCandidateCount === input.expectedTargetCount &&
     !checks.some((check) => check.code === "topic_candidate_slot_guard_passed")
   ) {
     checks.push({
@@ -1038,13 +1048,13 @@ function finalizeRecommendationDiagnostics(input: {
   }
 
   if (
-    input.finalCandidateCount < TOPIC_CANDIDATE_TARGET_COUNT &&
+    input.finalCandidateCount < input.expectedTargetCount &&
     !checks.some((check) => check.code === "topic_candidate_slots_insufficient")
   ) {
     checks.push({
       code: "topic_candidate_slots_insufficient",
       level: "error",
-      reason: `最终仅保留 ${input.finalCandidateCount} 个候选，未满足目标槽位数 ${TOPIC_CANDIDATE_TARGET_COUNT}`,
+      reason: `最终仅保留 ${input.finalCandidateCount} 个候选，未满足目标槽位数 ${input.expectedTargetCount}`,
     });
   }
 
@@ -1060,6 +1070,7 @@ async function selectFinalCandidatesWithTrace(input: {
   selectorPool: SelectorPoolCandidate[];
   recentEventMemory: RecentEventMemoryEntry[];
   rankings: RankedRecommendationCandidate[];
+  finalCandidateCount: number;
   interactionLogWriter?: LlmInteractionLogWriter;
 }) {
   const diagnostics: RecommendationDiagnostic[] = [];
@@ -1078,6 +1089,7 @@ async function selectFinalCandidatesWithTrace(input: {
     decision,
     selectorPool: input.selectorPool,
     rankings: input.rankings,
+    finalCandidateCount: input.finalCandidateCount,
   });
 
   if (selection.selected.length === 0) {
@@ -1088,7 +1100,7 @@ async function selectFinalCandidatesWithTrace(input: {
     diagnostics.push({
       code: "topic_selector_consistency_risk_backfill",
       level: "warning",
-      reason: `一致性 pass 候选不足 ${TOPIC_CANDIDATE_TARGET_COUNT} 项，已按 Selector 原排名受控补入 ${selection.selectedRiskCandidateIds.length} 项：${selection.selectedRiskCandidateIds.join(", ")}`,
+      reason: `一致性 pass 候选不足 ${input.finalCandidateCount} 项，已按 Selector 原排名受控补入 ${selection.selectedRiskCandidateIds.length} 项：${selection.selectedRiskCandidateIds.join(", ")}`,
     });
   }
 
@@ -1497,6 +1509,7 @@ function selectRankedCandidates(input: {
   decision: TopicSelectorDecision;
   selectorPool: SelectorPoolCandidate[];
   rankings: RankedRecommendationCandidate[];
+  finalCandidateCount: number;
 }) {
   const rankingsById = new Map(
     input.rankings.map((candidate) => [candidate.candidateId, candidate] as const),
@@ -1572,7 +1585,7 @@ function selectRankedCandidates(input: {
       selectedEventIdentities.add(match.eventIdentity);
     }
 
-    if (selected.length === TOPIC_CANDIDATE_TARGET_COUNT) {
+    if (selected.length === input.finalCandidateCount) {
       break;
     }
   }
@@ -1589,6 +1602,7 @@ function selectRankedCandidates(input: {
 function enrichDiagnosticReason(
   check: RecommendationDiagnostic,
   finalCandidateCount: number,
+  expectedTargetCount: number,
 ): RecommendationDiagnostic {
   if (check.reason) {
     return check;
@@ -1597,7 +1611,7 @@ function enrichDiagnosticReason(
   if (check.code === "topic_candidate_repair_triggered") {
     return {
       ...check,
-      reason: `首轮原始候选不足 ${TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT} 个，已触发补位回填`,
+      reason: `首轮原始候选不足目标数量，已触发补位回填`,
     };
   }
 
@@ -1625,7 +1639,7 @@ function enrichDiagnosticReason(
   if (check.code === "topic_candidate_slots_insufficient") {
     return {
       ...check,
-      reason: `最终仅保留 ${finalCandidateCount} 个候选，仍低于目标槽位数 ${TOPIC_CANDIDATE_TARGET_COUNT}`,
+      reason: `最终仅保留 ${finalCandidateCount} 个候选，仍低于目标槽位数 ${expectedTargetCount}`,
     };
   }
 

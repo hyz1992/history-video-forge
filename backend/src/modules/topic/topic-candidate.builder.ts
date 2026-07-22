@@ -27,6 +27,19 @@ export interface BuildTopicCandidatesInput {
   tags?: string[];
   familyHint?: string;
   slotRubricOverrides?: CandidateRubric[];
+  /**
+   * builder 原始候选池目标数量。
+   * 由 recommendTopicCandidatesWithTrace 注入；缺省时回退 TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT。
+   * 该字段会被透传到 candidate-builder prompt 的 input（target_candidate_count），
+   * 也会被 graph runtime 用于切片与 slotsInsufficient 判定。
+   */
+  target_candidate_count?: number;
+  /**
+   * selector 后最终候选数量。
+   * 由 recommendTopicCandidatesWithTrace 注入；缺省时回退 TOPIC_CANDIDATE_TARGET_COUNT。
+   * 用于 graph 内部持久化切片（L455/L507），保证 cache 写入数量与最终返回数量一致。
+   */
+  final_candidate_count?: number;
 }
 
 interface FamilySlot {
