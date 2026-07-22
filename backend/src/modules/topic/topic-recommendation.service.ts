@@ -62,6 +62,21 @@ export interface TopicRecommendationOptions {
   llmGateway?: LlmGateway;
   projectId?: string | null;
   topicCandidateLibraryRepository?: TopicCandidateLibraryRepository;
+  /**
+   * builder 原始候选池目标数量。缺省 TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT (=8)。
+   * 自定义入口传 3。
+   */
+  rawCandidateTargetCount?: number;
+  /**
+   * selector 后最终返回候选数量。缺省 TOPIC_CANDIDATE_TARGET_COUNT (=4)。
+   * 自定义入口传 1。
+   */
+  finalCandidateCount?: number;
+  /**
+   * 是否禁用事件库 fallback。缺省 false（保持系统推荐/事件库 tab 行为）。
+   * 自定义入口传 true（用户已锁定单一事件，不需要外部 event_identity 补位）。
+   */
+  disableFallback?: boolean;
 }
 
 type SelectorDeductionAxis = string;
@@ -214,6 +229,12 @@ export async function recommendTopicCandidatesWithTrace(
   const gateway = options?.llmGateway ?? createTopicRecommendationGateway();
   const project = options?.projectId ? db.projects.get(options.projectId) : null;
   const runId = `topic_run_${db.generateId()}`;
+  // 派生数量参数（缺省=当前行为，等价三 tab 共用 8→4）
+  const rawCandidateTargetCount =
+    options?.rawCandidateTargetCount ?? TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT;
+  const finalCandidateCount =
+    options?.finalCandidateCount ?? TOPIC_CANDIDATE_TARGET_COUNT;
+  const disableFallback = options?.disableFallback ?? false;
   const recentEventMemory = await buildRecentEventMemory({
     db,
     projectId: options?.projectId ?? null,
@@ -223,6 +244,8 @@ export async function recommendTopicCandidatesWithTrace(
   const graphInput = {
     ...input,
     recent_event_memory: recentEventMemory,
+    target_candidate_count: rawCandidateTargetCount,
+    final_candidate_count: finalCandidateCount,
   };
   const interactionLogWriter = project
     ? createCompositeInteractionLogWriter({
