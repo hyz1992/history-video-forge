@@ -251,8 +251,11 @@ function compactUnique(values: Array<string | undefined>): string[] {
 export function buildTopicCandidates(input: BuildTopicCandidatesInput) {
   const familyLabel = classifyEventFamily(input);
   const slots = FAMILY_SLOTS[familyLabel];
+  const targetCount =
+    input.target_candidate_count ?? slots.length;
 
   return slots
+    .slice(0, targetCount)
     .map((slot, slotIndex) => {
       const viralRubric = deriveRubric(input, slotIndex);
 
