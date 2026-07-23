@@ -28,6 +28,90 @@ export function validateCustomDigest(
   return { ok: true, value: trimmed };
 }
 
+// ---- 应用层 prompt injection 检测 ----
+//
+// 注意（AGENTS.md 合规）：这是**防御性安全控制**，不是语义校验。
+// - 不判断内容质量（那是 LLM credibility 的职责）
+// - 只拦截明显的"指令覆盖 / 角色劫持 / 越狱"模式，作为 fast-fail 节省 LLM 调用
+// - LLM 仍会做 credibility=invalid 二次防御；本层只是第一道闸
+// - 不用模糊关键词做"是否爆款/是否历史"判断
+
+interface InjectionPattern {
+  /** 用于匹配的正则（大小写不敏感） */
+  pattern: RegExp;
+  /** 命中时返回的中文原因 */
+  reason: string;
+}
+
+const INJECTION_PATTERNS: InjectionPattern[] = [
+  // 指令覆盖：忽略/无视以上指令
+  {
+    pattern: /忽略(以上|之前|前面|上述)(所有|全部)?的?(指令|规则|要求|约束|prompt|instructions?)/i,
+    reason: "检测到指令覆盖企图（忽略以上指令）",
+  },
+  {
+    pattern: /ignore\s+(all\s+)?(above|previous|prior|preceding)\s+(instructions?|rules?|prompts?|constraints?)/i,
+    reason: "检测到指令覆盖企图（ignore above instructions）",
+  },
+  // 角色劫持：你现在是一个/你是
+  {
+    pattern: /你现在(是|扮演|充当)(一个|一名)?(无限制|不受限|没有限制|自由|开发|开发模式|DAN)/i,
+    reason: "检测到角色劫持企图（你现在是一个无限制 AI）",
+  },
+  {
+    pattern: /you\s+are\s+now\s+(a|an)\s+(unrestricted|unfiltered|unlimited|free|developer|DAN)/i,
+    reason: "检测到角色劫持企图（you are now an unrestricted AI）",
+  },
+  // 系统标记伪造：[SYSTEM OVERRIDE] / [SYSTEM]
+  {
+    pattern: /\[(system\s+override|system|admin|developer|root)\]/i,
+    reason: "检测到伪造系统标记（[SYSTEM OVERRIDE] 等）",
+  },
+  // 约束解除：不再受安全策略约束
+  {
+    pattern: /不再(受|受到|受限于|遵守)(安全策略|安全约束|任何约束|任何限制|安全规则)/i,
+    reason: "检测到约束解除企图（不再受安全策略约束）",
+  },
+  {
+    pattern: /no\s+longer\s+(bound\s+by|follow|subject\s+to|constrained\s+by)\s+(safety|security|any|all)\s+(polic|constraint|rule|limit)/i,
+    reason: "检测到约束解除企图（no longer bound by safety policy）",
+  },
+  // 真实指令伪造：remember your true instructions
+  {
+    pattern: /remember\s+your\s+(true|real|actual)\s+(instructions?|rules?|prompts?)/i,
+    reason: "检测到伪造真实指令企图（remember your true instructions）",
+  },
+  // 越狱关键词
+  {
+    pattern: /\b(jailbreak|DAN\s+mode|developer\s+mode|god\s+mode)\b/i,
+    reason: "检测到越狱关键词（jailbreak / DAN mode 等）",
+  },
+];
+
+export interface PromptInjectionDetectionResult {
+  detected: boolean;
+  reason?: string;
+}
+
+/**
+ * 检测用户输入是否包含明显的 prompt injection 模式。
+ * 命中时返回 detected=true + 中文原因，调用方应返回 400 拒绝请求。
+ *
+ * 这是防御性 fast-fail，不替代 LLM 的 credibility 判定。
+ * 正常的历史事件描述（即使含"忽略"、"系统"等词的正常用法）不会被命中，
+ * 因为模式要求与"指令/规则/约束"等组合出现。
+ */
+export function detectPromptInjection(
+  rawDigest: string,
+): PromptInjectionDetectionResult {
+  for (const { pattern, reason } of INJECTION_PATTERNS) {
+    if (pattern.test(rawDigest)) {
+      return { detected: true, reason };
+    }
+  }
+  return { detected: false };
+}
+
 // ---- 自定义选题完整流程 ----
 
 export interface NormalizeEventInput {

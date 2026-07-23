@@ -51,12 +51,12 @@ async function setupAuthApp() {
 }
 
 describe("custom refine rejection", () => {
-  it("returns 422 for prompt injection attempt", async () => {
+  it("returns 400 for prompt injection attempt (app-layer fast-fail)", async () => {
     const { app, client, root, project, auth } = await setupAuthApp();
 
     try {
       const { refineCustomTopic } = await import("../../../backend/src/modules/topic/topic-custom-refine.service.js");
-      // 模拟 LLM 拒绝提炼：抛 ZodError
+      // LLM 仍 mock 为抛 ZodError，但应用层注入检测会先拦截，不会到达 LLM
       vi.mocked(refineCustomTopic).mockRejectedValue(
         new ZodError([
           { code: "custom", path: ["canonicalName"], message: "输入不包含可识别的历史事件" },
@@ -70,8 +70,12 @@ describe("custom refine rejection", () => {
         auth,
       });
 
-      expect(r.statusCode).toBe(422);
-      expect(r.json().error).toBe("custom_refine_failed");
+      // 应用层注入检测在 LLM 之前拦截，返回 400 + prompt_injection_detected
+      // （防御性安全控制：不调用 LLM，节省成本并提供即时反馈）
+      expect(r.statusCode).toBe(400);
+      expect(r.json().error).toBe("prompt_injection_detected");
+      // LLM mock 不应被调用（应用层已 fast-fail）
+      expect(vi.mocked(refineCustomTopic)).not.toHaveBeenCalled();
     } finally {
       await client.$disconnect();
       rmSync(root, { recursive: true, force: true });
@@ -117,6 +121,7 @@ describe("custom refine rejection", () => {
           dynasty: "唐",
           characterTags: ["张三"],
           eventTypeTags: ["争议"],
+          credibility: "medium",
           sourceUncertainty: "high",
           ambiguityNotes: "多种史料记载矛盾，建议人工核查",
         },
@@ -158,6 +163,41 @@ describe("custom refine rejection", () => {
 
       expect(r.statusCode).toBe(503);
       expect(r.json().error).toBe("custom_refine_unavailable");
+    } finally {
+      await client.$disconnect();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("returns 422 when LLM marks credibility=invalid (no candidate generation)", async () => {
+    const { app, client, root, project, auth } = await setupAuthApp();
+
+    try {
+      const { refineCustomTopic } = await import("../../../backend/src/modules/topic/topic-custom-refine.service.js");
+      // LLM 判定输入无意义，credibility=invalid
+      vi.mocked(refineCustomTopic).mockResolvedValue({
+        refined: {
+          canonicalName: "无有效事件",
+          summary: "输入无法识别为历史事件描述，包含随机词堆叠。",
+          dynasty: "未知",
+          characterTags: ["未知"],
+          eventTypeTags: ["未知"],
+          credibility: "invalid",
+          refinedNote: "输入为随机词堆叠，无法识别为具体历史事件",
+        },
+      });
+
+      const r = await app.inject({
+        method: "POST",
+        url: `/api/projects/${project.id}/topic/from-custom`,
+        payload: { rawDigest: "山川河流日月星辰春夏秋冬东南西北金木水火土" },
+        auth,
+      });
+
+      expect(r.statusCode).toBe(422);
+      expect(r.json().error).toBe("custom_refine_invalid_input");
+      expect(r.json().message).toContain("随机词");
+      expect(r.json().refined.credibility).toBe("invalid");
     } finally {
       await client.$disconnect();
       rmSync(root, { recursive: true, force: true });

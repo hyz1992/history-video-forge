@@ -17,7 +17,7 @@ import {
 import { writeRefluxDraft } from "../event-library/event-library-draft.writer.js";
 import { createDraft } from "../event-library/event-library-draft.repository.js";
 import { refineCustomTopic } from "./topic-custom-refine.service.js";
-import { validateCustomDigest } from "./topic-custom-input.service.js";
+import { detectPromptInjection, validateCustomDigest } from "./topic-custom-input.service.js";
 
 interface TopicRecommendationSeedPayload {
   canonical_name: string;
@@ -523,6 +523,16 @@ export async function createTopicFromCustomController(
     return { statusCode: 400, body: { error: "invalid_custom_digest", message: digestResult.error } };
   }
 
+  // 1.1 应用层 prompt injection 检测（fast-fail，不调用 LLM）
+  //     命中明显注入模式直接 400 拒绝；正常输入不会命中（模式要求与"指令/规则"组合）
+  const injection = detectPromptInjection(digestResult.value);
+  if (injection.detected) {
+    return {
+      statusCode: 400,
+      body: { error: "prompt_injection_detected", message: injection.reason ?? "检测到可疑输入" },
+    };
+  }
+
   const project = await getProjectById(context.app.db, context.params.projectId);
   if (!project) {
     return { statusCode: 404, body: { error: "project_not_found" } };
@@ -539,6 +549,22 @@ export async function createTopicFromCustomController(
   try {
     // 3. LLM 提炼结构化事件
     const { refined } = await refineCustomTopic({ rawDigest: digestResult.value });
+
+    // 3.1 可信度闸门：invalid 直接拒绝，不进入 candidate 生成
+    //     low 仍继续生成（LLM 已收敛到代表事件），但在响应中带 refinedNote 提示用户收窄
+    if (refined.credibility === "invalid") {
+      project.status = "topic_pending";
+      project.updatedAt = new Date();
+      await context.app.db.firstAggregateWriter?.syncProject(project).catch(() => undefined);
+      return {
+        statusCode: 422,
+        body: {
+          error: "custom_refine_invalid_input",
+          message: refined.refinedNote ?? "输入无法识别为有效历史事件，请提供更具体的事件描述",
+          refined,
+        },
+      };
+    }
 
     // 4. normalize（走身份账本去重）
     const normalized = await normalizeEventInput(context.app.db, {
@@ -636,6 +662,27 @@ export async function createTopicFromCustomController(
       candidatesById: new Map<string, StoredTopicCandidate>(),
       rounds: [],
     };
+
+    // P0 闸门：候选为空时不得返回 200，必须显式 422 让前端提示用户
+    // （LLM 未脑补出事件 + selector 未选出候选 = 输入质量不足）
+    if (candidates.length === 0) {
+      project.status = "topic_pending";
+      project.updatedAt = new Date();
+      await context.app.db.firstAggregateWriter?.syncProject(project).catch(() => undefined);
+      const hint =
+        refined.credibility === "low"
+          ? refined.refinedNote ?? "输入过于宽泛，未能生成候选，请收窄到单一事件"
+          : "未能从输入中生成有效候选，请提供更具体的事件描述";
+      return {
+        statusCode: 422,
+        body: {
+          error: "custom_topic_no_candidate",
+          message: hint,
+          refined,
+        },
+      };
+    }
+
     for (const [candidateId, storedCandidate] of storedCandidates.entries()) {
       projectTopicState.candidatesById.set(candidateId, storedCandidate);
     }
@@ -659,6 +706,10 @@ export async function createTopicFromCustomController(
         source_ref: { customDraftId },
         candidates: responseCandidates,
         refined,
+        // low 可信度时附带警告提示（仍返回候选，但用户应知道输入偏宽泛）
+        ...(refined.credibility === "low" && refined.refinedNote
+          ? { warning: refined.refinedNote }
+          : {}),
       },
     };
   } catch (error) {

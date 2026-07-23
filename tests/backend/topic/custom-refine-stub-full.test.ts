@@ -28,6 +28,7 @@ vi.mock("../../../backend/src/modules/topic/topic-custom-refine.service.js", () 
       dynasty: "唐",
       characterTags: ["李世民", "李建成"],
       eventTypeTags: ["政变", "继承夺位"],
+      credibility: "high",
     },
   }),
 }));
