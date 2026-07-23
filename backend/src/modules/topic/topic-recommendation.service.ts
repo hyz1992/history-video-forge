@@ -1180,7 +1180,7 @@ async function invokeTopicSelector(input: {
   );
 }
 
-function shouldFallbackToStructuredSelector(error: unknown): boolean {
+export function shouldFallbackToStructuredSelector(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
   }
@@ -1194,9 +1194,17 @@ function shouldFallbackToStructuredSelector(error: unknown): boolean {
     "strict_selector_bad_scorecard",
     "topic_selector_candidate_coverage_mismatch",
     "LLM API key or base URL is not configured.",
+    // JSON.parse 错误措辞会随 Node 版本变化：
+    //   - Node ≤20: "Unexpected token X at position N"
+    //   - Node ≥21: "Unexpected non-whitespace character after JSON at position N"
+    //   - OpenAI SDK 自带: "is not valid JSON" / "invalid tool arguments"
+    // 为兼容多版本，把三类措辞与 provider 包装前缀都纳入白名单。
     "Unexpected token",
+    "Unexpected non-whitespace character after JSON",
     "is not valid JSON",
     "invalid tool arguments",
+    // provider 包装后的 debugMessage 前缀（parse 阶段抛出经过 buildStrictToolCallParseError）
+    "failed to parse strict tool-call arguments",
   ].some((pattern) => error.message.includes(pattern));
 }
 
