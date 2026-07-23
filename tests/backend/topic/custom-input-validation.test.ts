@@ -20,10 +20,15 @@ describe("validateCustomDigest", () => {
     expect(validateCustomDigest("   ").ok).toBe(false);
   });
 
-  it("rejects too-short input (< 10 chars)", () => {
+  it("rejects too-short input (< 4 chars)", () => {
     const r = validateCustomDigest("短");
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toContain("10");
+    if (!r.ok) expect(r.error).toContain("4");
+  });
+
+  it("rejects 3-char input (just below boundary)", () => {
+    const r = validateCustomDigest("一二三");
+    expect(r.ok).toBe(false);
   });
 
   it("rejects too-long input (> 500 chars)", () => {
@@ -32,18 +37,32 @@ describe("validateCustomDigest", () => {
     if (!r.ok) expect(r.error).toContain("500");
   });
 
-  it("accepts valid input within 10-500 chars and trims", () => {
+  it("accepts valid input within 4-500 chars and trims", () => {
     const r = validateCustomDigest("  玄武门之变，李世民杀兄弟夺位  ");
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.value).toBe("玄武门之变，李世民杀兄弟夺位");
   });
 
-  it("accepts exactly 10 chars (boundary)", () => {
-    const r = validateCustomDigest("一二三四五六七八九十");
+  it("accepts short idiom (晏子使楚, 4 chars)", () => {
+    // 关键回归：成语/典故虽短但指向性明确，必须通过长度层校验
+    // 是否真正有意义由 LLM credibility 判定，不在长度层做语义判断
+    const r = validateCustomDigest("晏子使楚");
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value).toBe("晏子使楚");
+  });
+
+  it("accepts other common idioms (完璧归赵 / 破釜沉舟)", () => {
+    expect(validateCustomDigest("完璧归赵").ok).toBe(true);
+    expect(validateCustomDigest("破釜沉舟").ok).toBe(true);
+    expect(validateCustomDigest("负荆请罪").ok).toBe(true);
+  });
+
+  it("accepts exactly 4 chars (lower boundary)", () => {
+    const r = validateCustomDigest("一二三四");
     expect(r.ok).toBe(true);
   });
 
-  it("accepts exactly 500 chars (boundary)", () => {
+  it("accepts exactly 500 chars (upper boundary)", () => {
     const r = validateCustomDigest("历".repeat(500));
     expect(r.ok).toBe(true);
   });

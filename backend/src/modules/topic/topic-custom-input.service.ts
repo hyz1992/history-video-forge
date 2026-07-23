@@ -6,6 +6,14 @@ import type { BuildTopicCandidatesInput } from "./topic-candidate.builder";
 import { refineCustomTopic } from "./topic-custom-refine.service.js";
 
 // ---- 输入校验 ----
+//
+// 长度边界设计：
+// - 下限 4 字：覆盖常见四字成语/典故（晏子使楚、完璧归赵、破釜沉舟等），
+//   这类短输入指向性明确，是中文用户最自然的历史事件表达方式。
+//   是否真正有意义交给 LLM credibility 判定（invalid → 422），不在长度层做语义判断。
+// - 上限 500 字：避免过长输入浪费 token。
+export const CUSTOM_DIGEST_MIN_LENGTH = 4;
+export const CUSTOM_DIGEST_MAX_LENGTH = 500;
 
 export interface ValidateCustomDigestResult {
   ok: true;
@@ -19,11 +27,11 @@ export function validateCustomDigest(
     return { ok: false, error: "rawDigest 必须为非空字符串" };
   }
   const trimmed = rawDigest.trim();
-  if (trimmed.length < 10) {
-    return { ok: false, error: "事件梗概过短（至少 10 字）" };
+  if (trimmed.length < CUSTOM_DIGEST_MIN_LENGTH) {
+    return { ok: false, error: `事件梗概过短（至少 ${CUSTOM_DIGEST_MIN_LENGTH} 字，支持成语/典故如"晏子使楚"）` };
   }
-  if (trimmed.length > 500) {
-    return { ok: false, error: "事件梗概过长（最多 500 字）" };
+  if (trimmed.length > CUSTOM_DIGEST_MAX_LENGTH) {
+    return { ok: false, error: `事件梗概过长（最多 ${CUSTOM_DIGEST_MAX_LENGTH} 字）` };
   }
   return { ok: true, value: trimmed };
 }

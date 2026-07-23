@@ -11,8 +11,9 @@ const emit = defineEmits<{
 const topicStore = useTopicStore();
 const projectStore = useProjectStore();
 
-// 字数限制：与后端 validateCustomDigest 保持一致（10-500 字）
-const MIN_CHARS = 10;
+// 字数限制：与后端 CUSTOM_DIGEST_MIN/MAX_LENGTH 保持一致
+// 下限 4 字：支持成语/典故（晏子使楚、完璧归赵等），是否有意义交给 LLM credibility 判定
+const MIN_CHARS = 4;
 const MAX_CHARS = 500;
 
 const rawDigest = ref("");
@@ -40,7 +41,7 @@ async function handleSubmit() {
     return;
   }
   if (text.length < MIN_CHARS) {
-    error.value = `梗概太短，请输入至少 ${MIN_CHARS} 个字`;
+    error.value = `请输入至少 ${MIN_CHARS} 个字（支持成语/典故，如"晏子使楚"）`;
     return;
   }
   if (text.length > MAX_CHARS) {
@@ -90,7 +91,7 @@ async function handleSubmit() {
       v-model="rawDigest"
       class="custom-textarea"
       :class="{ 'is-over-limit': isOverLimit }"
-      placeholder="例如：公元前 260 年，秦赵长平决战。赵括代廉颇为将，秦将白起诱敌深入、围困赵军四十余日。赵括突围阵亡，四十万赵军投降后遭坑杀…"
+      placeholder="支持成语/典故或完整描述，如「晏子使楚」或「公元前 260 年，秦赵长平决战。赵括代廉颇为将，秦将白起诱敌深入、围困赵军四十余日……」"
       rows="5"
       :maxlength="MAX_CHARS"
       :disabled="generating"
