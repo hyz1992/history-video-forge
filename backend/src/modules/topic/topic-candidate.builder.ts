@@ -40,6 +40,18 @@ export interface BuildTopicCandidatesInput {
    * 用于 graph 内部持久化切片（L455/L507），保证 cache 写入数量与最终返回数量一致。
    */
   final_candidate_count?: number;
+  /**
+   * 用户选定的切入角度（来自事件库入口）。
+   * 由 from-library controller 注入；recommended / custom 入口不传。
+   * 透传到 candidate-builder prompt 后，builder 必须围绕此角度的不同侧面生成候选，
+   * 不得偏离到其他人物视角或无关事件（详见 candidate-builder.prompt.md 的 angle_hint 约束）。
+   */
+  angle_hint?: {
+    /** 角度描述，对应 EventLibraryAngle.angleLabel */
+    label: string;
+    /** 角度家族标签，对应 EventLibraryAngle.familyLabel */
+    family: string;
+  };
 }
 
 interface FamilySlot {

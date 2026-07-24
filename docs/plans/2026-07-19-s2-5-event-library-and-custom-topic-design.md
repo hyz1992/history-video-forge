@@ -333,7 +333,13 @@ recommended / library / custom 三入口生成 candidate 后，**必须写入同
 设计原则：
 - confirm 只以 candidate 为唯一真相源生成 TopicPackage，entry/draft 不参与 TopicPackage 字段构造。
 - entry/draft 的作用是「来源追溯 + 审核依据」，不参与合同字段生成。
-- 这条规则保证三入口的 TopicPackage 生成逻辑完全一致，只有 `source_mode` 与追溯引用不同。
+- **三入口的 TopicPackage 合同字段结构（core_conflict / stakes / must_include_beats / forbidden_expansions / narrative_tension_map）完全一致**，只有 `source_mode` 与追溯引用不同。
+- **候选生成路径参数允许按入口差异化**（2026-07-24 更新，见 `docs/plans/2026-07-24-from-library-angle-binding-and-3-to-1-design.md`）：
+  - recommended：rawCandidateTargetCount=8 / finalCandidateCount=4 / disableFallback=false / 无 angle_hint
+  - library：rawCandidateTargetCount=3 / finalCandidateCount=1 / disableFallback=true / 有 angle_hint（用户选了角度时）
+  - custom：rawCandidateTargetCount=3 / finalCandidateCount=1 / disableFallback=true / 无 angle_hint
+- 路径参数差异化不影响 TopicPackage 合同字段结构，只影响 candidate 生成数量、来源池和角度约束强度。
+- 「生成逻辑完全一致」的含义是「合同字段结构一致」，不是「生成参数完全一致」。
 
 ### 5.3 不破坏 script 合同的保证
 

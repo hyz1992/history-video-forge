@@ -273,6 +273,13 @@ export async function createTopicFromLibraryController(
   await context.app.db.firstAggregateWriter?.syncProject(project);
 
   try {
+    // from-library 差异化合同（2026-07-24）：
+    // - 3→1：用户已从事件库锁定单一 curated entry，不需要 8 个发散候选，
+    //   builder 围绕该 entry 生成 3 个候选，selector 选 1 个返回。
+    // - disableFallback=true：entry 已锁定 event_identity，不需要从
+    //   topic-candidate-library 捞外部候选补位（与 from-custom 逻辑一致）。
+    // - angle_hint：用户选了角度时透传给 builder prompt，作为硬约束角度锚
+    //   （builder 必须围绕该角度的不同侧面生成，详见 candidate-builder.prompt.md）。
     const recommendation = await recommendTopicCandidatesWithTrace(
       context.app.db,
       {
@@ -283,8 +290,23 @@ export async function createTopicFromLibraryController(
         sourceHint: "事件库",
         recentUsageHint: "首次从事件库选取",
         tags: entryTags.length > 0 ? entryTags : [entry.canonicalTitle],
+        target_candidate_count: 3,
+        final_candidate_count: 1,
+        ...(selectedAngle
+          ? {
+              angle_hint: {
+                label: selectedAngle.angleLabel,
+                family: selectedAngle.familyLabel,
+              },
+            }
+          : {}),
       },
-      { projectId: project.id },
+      {
+        projectId: project.id,
+        rawCandidateTargetCount: 3,
+        finalCandidateCount: 1,
+        disableFallback: true,
+      },
     );
     const candidates = recommendation.candidates;
 
