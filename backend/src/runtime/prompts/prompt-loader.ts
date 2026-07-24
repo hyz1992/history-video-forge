@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-export type PromptStage = "topic" | "script" | "storyboard" | "asset_planning" | "assets" | "compose" | "render" | "publish";
+export type PromptStage = "topic" | "script" | "storyboard" | "asset_planning" | "assets" | "compose" | "render" | "publish" | "event_library";
 export type PromptStatus = "active" | "draft" | "deprecated";
 
 export interface PromptChangelogEntry {
@@ -338,7 +338,8 @@ function asPromptStage(value: string): PromptStage {
     value === "assets" ||
     value === "compose" ||
     value === "render" ||
-    value === "publish"
+    value === "publish" ||
+    value === "event_library"
   ) {
     return value;
   }
@@ -357,6 +358,9 @@ function asPromptStatus(value: string): PromptStatus {
 function promptStageAliasPrefix(stage: string): string {
   if (stage === "asset_planning") {
     return "asset-planning";
+  }
+  if (stage === "event_library") {
+    return "event-library";
   }
 
   return stage;

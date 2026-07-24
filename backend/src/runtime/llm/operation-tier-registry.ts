@@ -44,6 +44,9 @@ export const OPERATION_TIER_REGISTRY: Record<string, OperationTier> = {
 
   // 自定义选题提炼：输入自由文本 → 结构化事件，涉及事实边界判断
   "topic.custom-refine": "smart",
+
+  // 事件库策划条目完善：骨架 → 完整 Event Library JSON，涉及史料判断与创意角度
+  "event-library.enrich": "smart",
 };
 
 const DEFAULT_TIER: OperationTier = "smart";
