@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "萧何月下追韩信",
+  "summary": "楚汉之际，韩信因在刘邦军中不得重用而离去，萧何连夜追回并举荐其为大将，成为刘邦东向争霸的关键转折。",
+  "eventRegistryCanonicalName": "萧何月下追韩信",
+  "aliases": [],
+  "dynasty": "楚汉之际",
+  "era": "楚汉之际",
+  "characterTags": [
+    "萧何",
+    "韩信",
+    "刘邦"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "人才争夺"
+  ],
+  "themeMotifs": [
+    "求贤若渴",
+    "知人善任"
+  ],
+  "timeRange": {
+    "start": "-206",
+    "end": "-206",
+    "display": "汉元年（公元前206年）"
+  },
+  "locationTags": [
+    "南郑"
+  ],
+  "relationshipTags": [
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从萧何的立场看这场月下追击——他为何不顾一切追回一个逃兵？",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "陈桥兵变",
+  "summary": "后周显德七年，赵匡胤在陈桥驿发动兵变，黄袍加身，回师开封逼周恭帝禅位，建立宋朝，开启北宋王朝。",
+  "eventRegistryCanonicalName": "陈桥兵变",
+  "aliases": [
+    "陈桥驿兵变",
+    "黄袍加身"
+  ],
+  "dynasty": "宋",
+  "era": "宋",
+  "characterTags": [
+    "赵匡胤",
+    "赵光义",
+    "赵普",
+    "石守信"
+  ],
+  "eventTypeTags": [
+    "政变"
+  ],
+  "conflictTypeTags": [
+    "武装政变",
+    "权力交接"
+  ],
+  "themeMotifs": [
+    "黄袍加身",
+    "和平政变",
+    "权位更替"
+  ],
+  "timeRange": {
+    "start": "960",
+    "end": "960",
+    "display": "后周显德七年正月"
+  },
+  "locationTags": [
+    "陈桥驿",
+    "开封"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "兄弟",
+    "将帅"
+  ],
+  "sourceAnchorRefs": [
+    "宋史"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从赵普的视角看这场兵变——谋士如何将一次军心浮动策划为改朝换代",
+      "familyLabel": "谋略策划型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从周恭帝柴宗训的视角看这场兵变——七岁幼主面对黄袍加身的无奈",
+      "familyLabel": "权力更迭型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

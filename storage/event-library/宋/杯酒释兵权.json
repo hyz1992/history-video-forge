@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "杯酒释兵权",
+  "summary": "宋建隆二年，太祖赵匡胤为加强中央集权，设宴劝诫石守信等大将交出兵权，以和平手段收拢军权，奠定宋朝文治之基。",
+  "eventRegistryCanonicalName": "杯酒释兵权",
+  "aliases": [
+    "杯酒解兵权"
+  ],
+  "dynasty": "宋",
+  "era": "宋",
+  "characterTags": [
+    "赵匡胤",
+    "石守信",
+    "高怀德",
+    "王审琦",
+    "赵普"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈",
+    "改革"
+  ],
+  "conflictTypeTags": [
+    "中央集权",
+    "兵权集中"
+  ],
+  "themeMotifs": [
+    "权力制衡",
+    "疑忌与安抚",
+    "和平收权"
+  ],
+  "timeRange": {
+    "start": "961",
+    "end": "961",
+    "display": "宋建隆二年"
+  },
+  "locationTags": [
+    "汴京"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "袍泽"
+  ],
+  "sourceAnchorRefs": [
+    "宋史",
+    "续资治通鉴长编"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从石守信视角看杯酒释兵权——从统兵大将到富贵闲人的落差",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "赵普如何建言推动太祖释兵权：强干弱枝的谋略",
+      "familyLabel": "谋略策划型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

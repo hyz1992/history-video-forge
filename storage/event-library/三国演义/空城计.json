@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "空城计",
+  "summary": "三国时期，蜀汉丞相诸葛亮北伐时因马谡失街亭，司马懿大军直逼西城，诸葛亮无兵可用，命大开城门、自己坐城楼抚琴，司马懿疑有伏兵引军退去，成为演义中智谋退敌的经典场景。",
+  "eventRegistryCanonicalName": "空城计",
+  "aliases": ["诸葛亮空城计"],
+  "dynasty": "三国演义",
+  "era": "三国演义",
+  "characterTags": ["诸葛亮", "司马懿"],
+  "eventTypeTags": ["战争", "朝堂博弈"],
+  "conflictTypeTags": ["心理博弈", "智谋退敌"],
+  "themeMotifs": ["胆识", "智谋", "虚实"],
+  "timeRange": {
+    "start": "228",
+    "end": "228",
+    "display": "蜀汉建兴六年"
+  },
+  "locationTags": ["西城"],
+  "relationshipTags": ["敌将"],
+  "sourceAnchorRefs": ["三国演义"],
+  "credibilityLevel": "low",
+  "disputeNotes": "空城计出自《三国演义》虚构，正史中司马懿当时并不在西城方向，此事并非真实发生。",
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从司马懿的视角——他为什么宁可退兵也不赌这一把",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "诸葛亮的孤注一掷：城中只有老弱残兵，他靠什么撑住这场心理战",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

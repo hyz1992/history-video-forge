@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "项庄舞剑",
+  "summary": "楚汉之争时，项羽在鸿门设宴欲除刘邦，项庄借舞剑助兴意图行刺，幸得项伯以身翼蔽，刘邦借机脱险，拉开了楚汉相争的序幕。",
+  "eventRegistryCanonicalName": "项庄舞剑",
+  "aliases": [
+    "项庄舞剑意在沛公",
+    "鸿门宴项庄舞剑"
+  ],
+  "dynasty": "楚汉之际",
+  "era": "楚汉之际",
+  "characterTags": [
+    "项庄",
+    "项羽",
+    "刘邦",
+    "项伯",
+    "张良"
+  ],
+  "eventTypeTags": [
+    "刺杀",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "权力争斗",
+    "宴会阴谋"
+  ],
+  "themeMotifs": [
+    "宴席杀机",
+    "笑里藏刀",
+    "忠义庇护"
+  ],
+  "timeRange": {
+    "start": "-206",
+    "end": "-206",
+    "display": "汉元年"
+  },
+  "locationTags": [
+    "鸿门"
+  ],
+  "relationshipTags": [
+    "主臣",
+    "敌对",
+    "盟友"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从项伯的立场看这场宴会——他如何在叔侄情谊与道义之间抉择",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

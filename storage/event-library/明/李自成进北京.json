@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "李自成进北京",
+  "summary": "明末，李自成率大顺农民军攻陷北京，崇祯帝自缢煤山，明朝中央政权覆灭，随后吴三桂引清兵入关，揭开明清易代序幕。",
+  "eventRegistryCanonicalName": "李自成进北京",
+  "aliases": [
+    "甲申之变"
+  ],
+  "dynasty": "明",
+  "era": "明末",
+  "characterTags": [
+    "李自成",
+    "朱由检",
+    "吴三桂"
+  ],
+  "eventTypeTags": [
+    "起义",
+    "战争",
+    "投降"
+  ],
+  "conflictTypeTags": [
+    "政权更迭",
+    "农民战争"
+  ],
+  "themeMotifs": [
+    "王朝覆灭",
+    "权力更迭",
+    "农民起义"
+  ],
+  "timeRange": {
+    "start": "1644",
+    "end": "1644",
+    "display": "明崇祯十七年三月"
+  },
+  "locationTags": [
+    "北京",
+    "紫禁城"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "起义领袖与皇帝"
+  ],
+  "sourceAnchorRefs": [
+    "明史",
+    "崇祯实录"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从崇祯的视角看城破国亡的最后一刻——煤山上的绝望抉择",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "高平陵之变",
+  "summary": "三国曹魏正始十年，太傅司马懿趁大将军曹爽陪同少帝曹芳出洛阳祭扫高平陵之机，发动政变控制京城，最终诛杀曹爽并夺取曹魏实权，为司马氏代魏奠基。",
+  "eventRegistryCanonicalName": "高平陵之变",
+  "aliases": [
+    "高平陵政变"
+  ],
+  "dynasty": "三国",
+  "era": "三国",
+  "characterTags": [
+    "司马懿",
+    "曹爽",
+    "曹芳"
+  ],
+  "eventTypeTags": [
+    "政变"
+  ],
+  "conflictTypeTags": [
+    "政治夺权",
+    "宫廷政变"
+  ],
+  "themeMotifs": [
+    "权力翻盘",
+    "韬光养晦",
+    "清算政敌"
+  ],
+  "timeRange": {
+    "start": "249",
+    "end": "249",
+    "display": "曹魏正始十年正月"
+  },
+  "locationTags": [
+    "洛阳",
+    "高平陵"
+  ],
+  "relationshipTags": [
+    "托孤大臣",
+    "政敌",
+    "权力竞争"
+  ],
+  "sourceAnchorRefs": [
+    "三国志",
+    "晋书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从司马懿的视角看这场政变——如何借机夺权，一举铲除曹爽势力",
+      "familyLabel": "权谋博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从曹爽的角度看这场政变——他为何在绝对优势下惨败？",
+      "familyLabel": "权谋博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

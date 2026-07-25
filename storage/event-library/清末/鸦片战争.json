@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "鸦片战争",
+  "summary": "清道光年间，林则徐虎门销烟后，英国以武力打开中国大门，清军战败，被迫签订《南京条约》，中国沦为半殖民地半封建社会。",
+  "eventRegistryCanonicalName": "鸦片战争",
+  "aliases": [
+    "第一次鸦片战争"
+  ],
+  "dynasty": "清末",
+  "era": "晚清",
+  "characterTags": [
+    "林则徐",
+    "道光帝",
+    "琦善",
+    "义律"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "侵略战争",
+    "军事冲突"
+  ],
+  "themeMotifs": [
+    "落后挨打",
+    "禁烟与主权",
+    "不平等条约",
+    "帝国碰撞"
+  ],
+  "timeRange": {
+    "start": "1840",
+    "end": "1842",
+    "display": "清道光二十年至二十二年"
+  },
+  "locationTags": [
+    "广州",
+    "虎门",
+    "南京",
+    "舟山"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "中外对抗"
+  ],
+  "sourceAnchorRefs": [
+    "清史稿",
+    "道光朝筹办夷务始末"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从林则徐的立场看这场战争——禁烟英雄如何面对国门被破",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

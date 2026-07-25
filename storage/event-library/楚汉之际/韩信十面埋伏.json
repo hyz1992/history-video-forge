@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "韩信十面埋伏",
+  "summary": "楚汉之际，韩信率汉军于垓下设十面埋伏阵，围困项羽楚军。四面楚歌瓦解军心，项羽突围至乌江自刎，刘邦一统天下。",
+  "eventRegistryCanonicalName": "韩信十面埋伏",
+  "aliases": [
+    "垓下之战"
+  ],
+  "dynasty": "楚汉之际",
+  "era": "楚汉之际",
+  "characterTags": [
+    "韩信",
+    "项羽",
+    "刘邦"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "决战",
+    "统一战争"
+  ],
+  "themeMotifs": [
+    "以弱胜强",
+    "绝地反击",
+    "英雄末路"
+  ],
+  "timeRange": {
+    "start": "前202",
+    "end": "前202",
+    "display": "汉五年十二月"
+  },
+  "locationTags": [
+    "垓下"
+  ],
+  "relationshipTags": [
+    "敌对",
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "汉书"
+  ],
+  "credibilityLevel": "medium",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从韩信的视角，如何以十面埋伏奇阵将项羽逼入绝境",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从项羽的视角，感受英雄末路与四面楚歌的悲凉",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "李渊太原起兵",
+  "summary": "隋大业十三年，太原留守李渊在次子李世民及裴寂等人鼓动下，以尊隋讨逆为名起兵，直趋关中，最终攻占长安，奠定唐朝基业。",
+  "eventRegistryCanonicalName": "李渊太原起兵",
+  "aliases": [
+    "太原起兵",
+    "李渊起兵",
+    "晋阳起兵"
+  ],
+  "dynasty": "隋唐之际",
+  "era": "隋唐之际",
+  "characterTags": [
+    "李渊",
+    "李世民",
+    "李建成",
+    "裴寂",
+    "刘文静"
+  ],
+  "eventTypeTags": [
+    "起义",
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "反隋起义",
+    "改朝换代战争"
+  ],
+  "themeMotifs": [
+    "乱世枭雄",
+    "父子共谋",
+    "改朝换代"
+  ],
+  "timeRange": {
+    "start": "617",
+    "end": "617",
+    "display": "隋大业十三年"
+  },
+  "locationTags": [
+    "太原",
+    "长安",
+    "关中"
+  ],
+  "relationshipTags": [
+    "父子",
+    "僚属",
+    "起兵共谋"
+  ],
+  "sourceAnchorRefs": [
+    "旧唐书",
+    "新唐书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从李世民的角度看太原起兵——少年英主如何推动父亲下定反隋决心",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从李渊的角度看太原起兵——老成持重的留守如何在乱世中做出抉择",
+      "familyLabel": "权谋博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

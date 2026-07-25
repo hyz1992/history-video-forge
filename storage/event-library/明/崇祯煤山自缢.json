@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "崇祯煤山自缢",
+  "summary": "明崇祯十七年，李自成农民军攻破北京，崇祯帝在绝望中杀死妻女后，于煤山自缢，明朝二百七十六年统治终结。",
+  "eventRegistryCanonicalName": "崇祯煤山自缢",
+  "aliases": [
+    "煤山自缢",
+    "崇祯殉国",
+    "甲申之变"
+  ],
+  "dynasty": "明",
+  "era": "明末",
+  "characterTags": [
+    "崇祯帝",
+    "李自成",
+    "王承恩"
+  ],
+  "eventTypeTags": [
+    "其他"
+  ],
+  "conflictTypeTags": [
+    "王朝覆灭",
+    "自杀殉国"
+  ],
+  "themeMotifs": [
+    "英雄末路",
+    "命运无常",
+    "王朝覆灭",
+    "忠义"
+  ],
+  "timeRange": {
+    "start": "1644",
+    "end": "1644",
+    "display": "明崇祯十七年三月十九日"
+  },
+  "locationTags": [
+    "北京",
+    "煤山"
+  ],
+  "relationshipTags": [
+    "主仆",
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "明史",
+    "崇祯长编"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从陪侍太监王承恩的角度看这场悲剧——他如何见证崇祯最后的抉择并随之殉死",
+      "familyLabel": "悲剧终局型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "李自成从胜利到寻尸——他的军队如何发现煤山上的悲剧结局",
+      "familyLabel": "起义征战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "后世史家评说——崇祯自缢如何被赋予‘君王死社稷’的悲壮意义",
+      "familyLabel": "历史反思型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

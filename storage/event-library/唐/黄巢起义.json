@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "黄巢起义",
+  "summary": "唐末乾符年间，盐贩黄巢响应王仙芝起兵，转战大半个中国，一度攻陷长安称帝，最终兵败自杀，加速唐朝覆亡。",
+  "eventRegistryCanonicalName": "黄巢起义",
+  "aliases": [
+    "黄巢之乱",
+    "冲天大将军起义"
+  ],
+  "dynasty": "唐",
+  "era": "唐末",
+  "characterTags": [
+    "黄巢",
+    "王仙芝",
+    "朱温",
+    "李克用"
+  ],
+  "eventTypeTags": [
+    "起义"
+  ],
+  "conflictTypeTags": [
+    "民变",
+    "政权颠覆"
+  ],
+  "themeMotifs": [
+    "农民反抗",
+    "王朝末路",
+    "暴力轮回"
+  ],
+  "timeRange": {
+    "start": "875",
+    "end": "884",
+    "display": "唐乾符二年至中和四年"
+  },
+  "locationTags": [
+    "曹州",
+    "长安",
+    "洛阳",
+    "广州"
+  ],
+  "relationshipTags": [
+    "盟友",
+    "敌对",
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "旧唐书",
+    "资治通鉴",
+    "新唐书"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从黄巢帐下大将朱温的视角，看起义如何从巅峰走向分裂与背叛",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "一个屡试不第的书生如何成为撼动大唐的“冲天太保均平大将军”",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

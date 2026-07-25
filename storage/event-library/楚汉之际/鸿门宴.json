@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "鸿门宴",
+  "summary": "楚汉之际，项羽于鸿门设宴欲除刘邦，刘邦在张良、樊哙等人掩护下得以逃脱，项羽错失良机，为此后败亡埋下伏笔。",
+  "eventRegistryCanonicalName": "鸿门宴",
+  "aliases": [],
+  "dynasty": "楚汉之际",
+  "era": "楚汉之际",
+  "characterTags": [
+    "项羽",
+    "刘邦",
+    "范增",
+    "项庄",
+    "张良",
+    "樊哙",
+    "项伯"
+  ],
+  "eventTypeTags": [
+    "刺杀",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "宴会刺杀",
+    "权力争夺"
+  ],
+  "themeMotifs": [
+    "错失良机",
+    "生死危机",
+    "忠义与背叛"
+  ],
+  "timeRange": {
+    "start": "-206",
+    "end": "-206",
+    "display": "汉元年十二月（前206年）"
+  },
+  "locationTags": [
+    "鸿门"
+  ],
+  "relationshipTags": [
+    "对手",
+    "君臣",
+    "故交"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "汉书"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从范增的视角看这场宴会——他多次暗示动手却被项羽无视，最终功败垂成",
+      "familyLabel": "权谋博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从樊哙的视角看这场危机——闯帐、饮彘肩、斥责项羽，为刘邦赢得生机",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

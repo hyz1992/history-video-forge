@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "王安石变法",
+  "summary": "北宋神宗时期，王安石为推动富国强兵，推行青苗、免役等新法，引发朝堂新旧党争，持续十余年，最终随着神宗去世而废除。",
+  "eventRegistryCanonicalName": "王安石变法",
+  "aliases": [
+    "熙宁变法",
+    "熙丰变法"
+  ],
+  "dynasty": "宋",
+  "era": "宋",
+  "characterTags": [
+    "王安石",
+    "宋神宗",
+    "司马光"
+  ],
+  "eventTypeTags": [
+    "变法",
+    "改革"
+  ],
+  "conflictTypeTags": [
+    "朝堂党争",
+    "制度冲突"
+  ],
+  "themeMotifs": [
+    "富国强兵",
+    "改革阻力",
+    "利益反扑",
+    "制度重塑"
+  ],
+  "timeRange": {
+    "start": "1069",
+    "end": "1085",
+    "display": "宋熙宁二年至元丰八年"
+  },
+  "locationTags": [
+    "汴京"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "政敌",
+    "改革派",
+    "保守派"
+  ],
+  "sourceAnchorRefs": [
+    "宋史",
+    "续资治通鉴长编"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从司马光的视角看这场变法——旧党领袖为何誓死反对",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

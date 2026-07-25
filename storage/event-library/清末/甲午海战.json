@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "甲午海战",
+  "summary": "清末甲午战争中，北洋水师与日本联合舰队在黄海展开激战，邓世昌、丁汝昌等将领率舰奋勇抵抗，最终致远舰沉没，北洋水师遭受重创，清廷败局加速。",
+  "eventRegistryCanonicalName": "甲午海战",
+  "aliases": [
+    "黄海海战",
+    "大东沟海战"
+  ],
+  "dynasty": "清末",
+  "era": "晚清",
+  "characterTags": [
+    "邓世昌",
+    "丁汝昌",
+    "刘步蟾",
+    "伊东祐亨"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "海战",
+    "反侵略战争"
+  ],
+  "themeMotifs": [
+    "壮烈牺牲",
+    "忠勇",
+    "近代化挫折"
+  ],
+  "timeRange": {
+    "start": "1894",
+    "end": "1894",
+    "display": "清光绪二十年八月十八"
+  },
+  "locationTags": [
+    "黄海",
+    "大东沟"
+  ],
+  "relationshipTags": [
+    "同僚",
+    "上下级"
+  ],
+  "sourceAnchorRefs": [
+    "清史稿",
+    "明治天皇紀"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从邓世昌的视角看这场海战——致远舰冲向吉野号的最后时刻",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从日本联合舰队司令伊东祐亨的视角看黄海海战的战术决策",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

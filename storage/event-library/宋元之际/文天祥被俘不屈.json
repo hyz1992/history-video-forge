@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "文天祥被俘不屈",
+  "summary": "宋元之际，南宋丞相文天祥抗元兵败被俘，囚于大都三年，面对元廷威逼利诱始终不屈，最终从容就义，成为千古忠烈典范。",
+  "eventRegistryCanonicalName": "文天祥被俘不屈",
+  "aliases": [
+    "文天祥就义",
+    "文天祥宁死不屈"
+  ],
+  "dynasty": "宋元之际",
+  "era": "宋元之际",
+  "characterTags": [
+    "文天祥",
+    "忽必烈"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈",
+    "其他"
+  ],
+  "conflictTypeTags": [
+    "民族冲突",
+    "气节考验"
+  ],
+  "themeMotifs": [
+    "忠义",
+    "英雄末路",
+    "生死抉择"
+  ],
+  "timeRange": {
+    "start": "1278",
+    "end": "1283",
+    "display": "南宋祥兴元年至元至元十九年（1278—1283）"
+  },
+  "locationTags": [
+    "五坡岭",
+    "大都"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "敌我"
+  ],
+  "sourceAnchorRefs": [
+    "宋史",
+    "续资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从文天祥的立场看被俘后的心路历程——他如何以死明志",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从忽必烈的角度看他为何执意招降文天祥",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

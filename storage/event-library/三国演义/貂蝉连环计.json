@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "貂蝉连环计",
+  "summary": "东汉末年，司徒王允利用歌伎貂蝉设下连环计，离间董卓与吕布，终使吕布刺杀董卓，除掉权臣。",
+  "eventRegistryCanonicalName": "貂蝉连环计",
+  "aliases": [
+    "连环计",
+    "美人计除董卓"
+  ],
+  "dynasty": "三国演义",
+  "era": "三国演义",
+  "characterTags": [
+    "貂蝉",
+    "王允",
+    "董卓",
+    "吕布"
+  ],
+  "eventTypeTags": [
+    "刺杀",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "权臣与皇权冲突",
+    "美人计"
+  ],
+  "themeMotifs": [
+    "离间计",
+    "红颜祸水",
+    "除奸",
+    "背叛"
+  ],
+  "timeRange": {
+    "start": "192",
+    "end": "192",
+    "display": "东汉初平三年"
+  },
+  "locationTags": [
+    "长安"
+  ],
+  "relationshipTags": [
+    "义父子",
+    "主仆",
+    "情敌"
+  ],
+  "sourceAnchorRefs": [
+    "三国演义"
+  ],
+  "credibilityLevel": "low",
+  "disputeNotes": "貂蝉为《三国演义》虚构人物，正史无记载，事件纯属演义。",
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从貂蝉的视角看连环计——作为棋子她如何周旋于权臣之间",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "吕布的抉择：从董卓义子到亲手弑父的心路",
+      "familyLabel": "背叛复仇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

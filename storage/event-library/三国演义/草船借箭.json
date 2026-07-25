@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "草船借箭",
+  "summary": "三国演义中赤壁之战前夕，周瑜为刁难诸葛亮令其十日内造箭十万支，诸葛亮利用大雾天气以草船诱敌，借得曹军箭矢，化解危机。",
+  "eventRegistryCanonicalName": "草船借箭",
+  "aliases": [],
+  "dynasty": "三国演义",
+  "era": "三国演义",
+  "characterTags": [
+    "诸葛亮",
+    "周瑜",
+    "鲁肃",
+    "曹操"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "军事对抗"
+  ],
+  "themeMotifs": [
+    "神机妙算",
+    "化险为夷",
+    "知己知彼"
+  ],
+  "timeRange": {
+    "start": "208",
+    "end": "208",
+    "display": "东汉建安十三年"
+  },
+  "locationTags": [
+    "长江",
+    "赤壁"
+  ],
+  "relationshipTags": [
+    "盟友",
+    "敌对"
+  ],
+  "sourceAnchorRefs": [],
+  "credibilityLevel": "low",
+  "disputeNotes": "小说虚构情节，正史无载。原型出自《三国志》孙权濡须口借箭，但主角非诸葛亮。",
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从周瑜的视角：本想借军令除去孔明，反成就其神乎其技的传说",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从曹操的视角：江雾中的擂鼓与箭矢，他如何应对这场心理战",
+      "familyLabel": "战争决策型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

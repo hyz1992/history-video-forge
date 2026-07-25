@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "风波亭之死",
+  "summary": "南宋抗金名将岳飞被宰相秦桧以“莫须有”罪名诬陷，在临安风波亭遇害，成为千古奇冤。",
+  "eventRegistryCanonicalName": "风波亭之死",
+  "aliases": [
+    "岳飞之死",
+    "风波亭冤案"
+  ],
+  "dynasty": "宋",
+  "era": "宋",
+  "characterTags": [
+    "岳飞",
+    "秦桧",
+    "赵构"
+  ],
+  "eventTypeTags": [
+    "审判",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "政治迫害"
+  ],
+  "themeMotifs": [
+    "冤狱",
+    "忠奸对立",
+    "政治牺牲"
+  ],
+  "timeRange": {
+    "start": "1142",
+    "end": "1142",
+    "display": "宋绍兴十一年十二月"
+  },
+  "locationTags": [
+    "临安",
+    "风波亭"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "政敌"
+  ],
+  "sourceAnchorRefs": [
+    "宋史",
+    "续资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从岳飞的角度，看一位精忠报国的将领如何陷入政治漩涡，最终含冤而死",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从秦桧的立场，剖析他如何构陷岳飞，完成政治清算",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

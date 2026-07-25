@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "岳飞北伐",
+  "summary": "南宋初年，岳飞率军北伐，屡败金军，却因朝廷议和连下十二道金牌召还，后被诬陷冤杀。",
+  "eventRegistryCanonicalName": "岳飞北伐",
+  "aliases": [],
+  "dynasty": "宋",
+  "era": "宋",
+  "characterTags": [
+    "岳飞",
+    "宋高宗",
+    "秦桧",
+    "金兀术"
+  ],
+  "eventTypeTags": [
+    "战争",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "民族冲突",
+    "军事征伐"
+  ],
+  "themeMotifs": [
+    "北伐",
+    "收复失地",
+    "忠义",
+    "英雄悲歌",
+    "以少胜多"
+  ],
+  "timeRange": {
+    "start": "1134",
+    "end": "1140",
+    "display": "南宋绍兴四年至十年"
+  },
+  "locationTags": [
+    "襄阳",
+    "郾城",
+    "朱仙镇"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "将领与士兵",
+    "主战与主和"
+  ],
+  "sourceAnchorRefs": [
+    "宋史"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从岳飞的视角看北伐中的忠义与无奈——明知不可为而为之",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从宋高宗的角度看为何执意议和——皇位稳固与收复失地的权衡",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

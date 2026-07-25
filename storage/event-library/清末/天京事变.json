@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "天京事变",
+  "summary": "1856年，太平天国定都天京后，东王杨秀清逼封万岁，天王洪秀全密诏北王韦昌辉、翼王石达开回京诛杨，韦昌辉借机滥杀，引发内讧，导致天国由盛转衰。",
+  "eventRegistryCanonicalName": "天京事变",
+  "aliases": [
+    "天京内讧",
+    "杨韦事变"
+  ],
+  "dynasty": "清末",
+  "era": "晚清",
+  "characterTags": [
+    "洪秀全",
+    "杨秀清",
+    "韦昌辉",
+    "石达开"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "刺杀",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "权力斗争",
+    "武装冲突"
+  ],
+  "themeMotifs": [
+    "兄弟相残",
+    "权力代价",
+    "内部清洗"
+  ],
+  "timeRange": {
+    "start": "1856",
+    "end": "1856",
+    "display": "清咸丰六年八至十月"
+  },
+  "locationTags": [
+    "天京"
+  ],
+  "relationshipTags": [
+    "结义兄弟",
+    "君臣",
+    "权力竞争者"
+  ],
+  "sourceAnchorRefs": [
+    "清史稿",
+    "太平天国史"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从石达开的立场看事变前后的艰难抉择——勤王、避祸与出走",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

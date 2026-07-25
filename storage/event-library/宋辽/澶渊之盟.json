@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "澶渊之盟",
+  "summary": "宋真宗景德元年，辽军南侵，宰相寇准力促真宗亲征至澶州，宋军士气大振，双方最终议和，宋朝以岁币换取和平，开启宋辽百年和平。",
+  "eventRegistryCanonicalName": "澶渊之盟",
+  "aliases": [],
+  "dynasty": "宋辽",
+  "era": "宋辽",
+  "characterTags": [
+    "寇准",
+    "宋真宗",
+    "萧太后",
+    "杨亿"
+  ],
+  "eventTypeTags": [
+    "外交"
+  ],
+  "conflictTypeTags": [
+    "边境战争",
+    "和谈"
+  ],
+  "themeMotifs": [
+    "以金钱换和平",
+    "君主亲征",
+    "主战与主和"
+  ],
+  "timeRange": {
+    "start": "1004",
+    "end": "1005",
+    "display": "宋景德元年"
+  },
+  "locationTags": [
+    "澶州"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "敌国"
+  ],
+  "sourceAnchorRefs": [
+    "宋史",
+    "续资治通鉴长编"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从寇准的角度看这场谈判，他如何力排众议、促成真宗亲征并迫使辽国议和",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从宋真宗的角度看澶渊之盟——亲征的恐惧与和议后的复杂心境",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "背水一战",
+  "summary": "汉高祖三年（前204），韩信率汉军与赵军在井陉交战。韩信背水列阵，以“陷之死地而后生”激励士卒，并出奇兵袭取赵营，大破赵军，斩陈馀，擒赵王歇，为刘邦奠定北方胜局。",
+  "eventRegistryCanonicalName": "背水一战",
+  "aliases": [
+    "井陉之战",
+    "韩信破赵之战"
+  ],
+  "dynasty": "楚汉之际",
+  "era": "楚汉之际",
+  "characterTags": [
+    "韩信",
+    "张耳",
+    "陈馀",
+    "李左车"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "以少胜多",
+    "背水作战"
+  ],
+  "themeMotifs": [
+    "置之死地而后生",
+    "以弱胜强",
+    "决死一战"
+  ],
+  "timeRange": {
+    "start": "-204",
+    "end": "-204",
+    "display": "汉高祖三年（前204年）"
+  },
+  "locationTags": [
+    "井陉",
+    "泜水"
+  ],
+  "relationshipTags": [
+    "敌对",
+    "将帅",
+    "旧交反目"
+  ],
+  "sourceAnchorRefs": [
+    "史记·淮阴侯列传",
+    "汉书·韩信传"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从韩信的视角看这场战役——置之死地而后生的惊天豪赌",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

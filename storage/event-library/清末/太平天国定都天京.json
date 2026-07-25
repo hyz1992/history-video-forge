@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "太平天国定都天京",
+  "summary": "1853年，太平军攻克南京，洪秀全改南京为天京并定都，建立与清廷对峙的太平天国政权，标志着起义进入全盛，也为日后内部分裂埋下伏笔。",
+  "eventRegistryCanonicalName": "太平天国定都天京",
+  "aliases": [],
+  "dynasty": "清末",
+  "era": "晚清",
+  "characterTags": [
+    "洪秀全",
+    "杨秀清"
+  ],
+  "eventTypeTags": [
+    "起义"
+  ],
+  "conflictTypeTags": [
+    "政权建立冲突"
+  ],
+  "themeMotifs": [
+    "起义",
+    "理想与堕落",
+    "权力斗争"
+  ],
+  "timeRange": {
+    "start": "1853",
+    "end": "1853",
+    "display": "清咸丰三年二月"
+  },
+  "locationTags": [
+    "南京",
+    "天京"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "盟友"
+  ],
+  "sourceAnchorRefs": [
+    "清史稿",
+    "太平天国史料"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从洪秀全的视角看定都天京后的腐化与权力失衡，太平天国如何从理想走向内斗",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

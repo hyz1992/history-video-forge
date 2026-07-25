@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "林则徐虎门销烟",
+  "summary": "晚清鸦片泛滥，林则徐受命禁烟，于1839年在虎门海滩当众销毁收缴鸦片，引发英国不满，成为鸦片战争导火索。",
+  "eventRegistryCanonicalName": "林则徐虎门销烟",
+  "aliases": [
+    "虎门销烟"
+  ],
+  "dynasty": "清末",
+  "era": "晚清",
+  "characterTags": [
+    "林则徐",
+    "道光帝",
+    "义律"
+  ],
+  "eventTypeTags": [
+    "改革",
+    "外交"
+  ],
+  "conflictTypeTags": [
+    "禁烟冲突",
+    "中外冲突"
+  ],
+  "themeMotifs": [
+    "禁烟救国",
+    "民族抗争",
+    "外交摩擦"
+  ],
+  "timeRange": {
+    "start": "1839",
+    "end": "1839",
+    "display": "清道光十九年四月廿二至五月十五"
+  },
+  "locationTags": [
+    "虎门",
+    "广州"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "中英"
+  ],
+  "sourceAnchorRefs": [
+    "清史稿",
+    "筹办夷务始末"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从林则徐的视角，在内外压力下如何坚持禁烟",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "袁崇焕被凌迟",
+  "summary": "明崇祯三年八月，督师袁崇焕因通敌、擅杀毛文龙等罪被处以凌迟极刑，其死导致辽东防线崩溃，加速明朝灭亡。",
+  "eventRegistryCanonicalName": "袁崇焕被凌迟",
+  "aliases": [
+    "袁崇焕之死",
+    "袁督师被磔"
+  ],
+  "dynasty": "明清之际",
+  "era": "明清之际",
+  "characterTags": [
+    "袁崇焕",
+    "崇祯帝",
+    "毛文龙",
+    "皇太极"
+  ],
+  "eventTypeTags": [
+    "审判",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "君臣猜忌",
+    "冤案"
+  ],
+  "themeMotifs": [
+    "忠臣蒙冤",
+    "自毁长城",
+    "猜忌"
+  ],
+  "timeRange": {
+    "start": "1630",
+    "end": "1630",
+    "display": "明崇祯三年八月"
+  },
+  "locationTags": [
+    "北京",
+    "菜市口"
+  ],
+  "relationshipTags": [
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "明史",
+    "崇祯长编"
+  ],
+  "credibilityLevel": "disputed",
+  "disputeNotes": "袁崇焕是否通敌存在重大争议，清朝官方史料称其冤杀，民间多视其为忠烈。",
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从崇祯帝的视角审视：袁崇焕该不该杀？",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "袁崇焕的临终遗言与身后名——忠与冤的千古疑案",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}
