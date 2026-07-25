@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "努尔哈赤七大恨",
+  "summary": "后金天命三年，努尔哈赤以“七大恨”告天，控诉明朝欺压，正式兴兵反明，攻陷抚顺，揭开明清战争序幕。",
+  "eventRegistryCanonicalName": "努尔哈赤七大恨",
+  "aliases": [
+    "七大恨"
+  ],
+  "dynasty": "明",
+  "era": "明末",
+  "characterTags": [
+    "努尔哈赤"
+  ],
+  "eventTypeTags": [
+    "战争",
+    "外交"
+  ],
+  "conflictTypeTags": [
+    "民族冲突",
+    "边境战争"
+  ],
+  "themeMotifs": [
+    "反抗压迫",
+    "宣战理由",
+    "民族崛起"
+  ],
+  "timeRange": {
+    "start": "1618",
+    "end": "1618",
+    "display": "后金天命三年四月"
+  },
+  "locationTags": [
+    "赫图阿拉",
+    "辽东"
+  ],
+  "relationshipTags": [
+    "敌对",
+    "叛明"
+  ],
+  "sourceAnchorRefs": [
+    "清太祖实录",
+    "明史"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从努尔哈赤的视角，看七大恨如何凝聚女真各部人心，点燃反明怒火",
+      "familyLabel": "权谋博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从明朝边防将领的立场，看突然而至的讨明檄文如何震动辽东",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

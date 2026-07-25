@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "十常侍之乱",
+  "summary": "东汉末年，外戚何进与宦官集团矛盾激化，何进调兵入京诛杀宦官，反被十常侍斩杀于宫门，继而袁绍率兵清洗宦官，引发洛阳大乱，汉室衰微加速。",
+  "eventRegistryCanonicalName": "十常侍之乱",
+  "aliases": [
+    "十常侍之乱"
+  ],
+  "dynasty": "汉",
+  "era": "东汉末",
+  "characterTags": [
+    "张让",
+    "何进",
+    "袁绍",
+    "段珪",
+    "何太后"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "宦官干政",
+    "外戚宦官之争"
+  ],
+  "themeMotifs": [
+    "权力倾覆",
+    "宫变",
+    "忠奸对立"
+  ],
+  "timeRange": {
+    "start": "189",
+    "end": "189",
+    "display": "汉中平六年"
+  },
+  "locationTags": [
+    "洛阳",
+    "宫城"
+  ],
+  "relationshipTags": [
+    "主仆",
+    "政敌",
+    "太后与外戚"
+  ],
+  "sourceAnchorRefs": [
+    "后汉书",
+    "三国志"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从袁绍的视角看这场政变：奉何进之命诛杀宦官，却引发天下大乱",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "张让等十常侍跪求何太后，最后放手一搏的绝望与疯狂",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

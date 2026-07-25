@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "辛酉政变",
+  "summary": "1861年咸丰帝病逝后，慈禧太后联合恭亲王奕訢发动政变，铲除肃顺等顾命八大臣，开启垂帘听政，掌控晚清朝政近半个世纪。",
+  "eventRegistryCanonicalName": "辛酉政变",
+  "aliases": [
+    "祺祥政变",
+    "北京政变",
+    "慈禧政变"
+  ],
+  "dynasty": "清",
+  "era": "晚清",
+  "characterTags": [
+    "慈禧太后",
+    "恭亲王奕訢",
+    "肃顺",
+    "载垣"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "宫廷政变",
+    "权力争夺"
+  ],
+  "themeMotifs": [
+    "权力逆转",
+    "垂帘听政",
+    "生死站队"
+  ],
+  "timeRange": {
+    "start": "1861",
+    "end": "1861",
+    "display": "清咸丰十一年九月"
+  },
+  "locationTags": [
+    "北京",
+    "承德避暑山庄"
+  ],
+  "relationshipTags": [
+    "叔嫂",
+    "君臣",
+    "对手"
+  ],
+  "sourceAnchorRefs": [
+    "清史稿",
+    "清实录"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从慈禧太后的视角看这场政变：如何在丈夫死后迅速联合恭亲王夺权",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从恭亲王奕訢的立场看这场政变：在叔嫂联合中他如何权衡利弊",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

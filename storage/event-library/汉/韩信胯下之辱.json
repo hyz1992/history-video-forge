@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "韩信胯下之辱",
+  "summary": "秦末汉初，韩信未发迹时在淮阴遭市井恶少羞辱，被迫从其胯下爬过，他隐忍不发，后投军功成名就，成为一代兵仙。",
+  "eventRegistryCanonicalName": "韩信胯下之辱",
+  "aliases": [
+    "胯下之辱"
+  ],
+  "dynasty": "汉",
+  "era": "楚汉之际",
+  "characterTags": [
+    "韩信",
+    "市井恶少"
+  ],
+  "eventTypeTags": [
+    "其他"
+  ],
+  "conflictTypeTags": [],
+  "themeMotifs": [
+    "忍辱负重",
+    "逆袭",
+    "命运转折"
+  ],
+  "locationTags": [
+    "淮阴"
+  ],
+  "relationshipTags": [],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从韩信的视角看这场屈辱——他如何将胯下之辱化为北伐的起点",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "侯景之乱",
+  "summary": "南朝梁武帝末年，东魏降将侯景发动叛乱，攻克建康，饿杀武帝萧衍，立萧纲为帝，继而称帝，使江南遭到毁灭性破坏，后被陈霸先、王僧辩等平定。",
+  "eventRegistryCanonicalName": "侯景之乱",
+  "aliases": [
+    "侯景之祸",
+    "太清之难"
+  ],
+  "dynasty": "南北朝",
+  "era": "南朝",
+  "characterTags": [
+    "侯景",
+    "萧衍",
+    "萧纲",
+    "王僧辩",
+    "陈霸先"
+  ],
+  "eventTypeTags": [
+    "起义",
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "军事叛乱",
+    "政权更迭"
+  ],
+  "themeMotifs": [
+    "降将反噬",
+    "帝国衰亡",
+    "生灵涂炭",
+    "秩序崩裂"
+  ],
+  "timeRange": {
+    "start": "548",
+    "end": "552",
+    "display": "南朝梁太清二年至承圣元年"
+  },
+  "locationTags": [
+    "建康",
+    "台城",
+    "江南"
+  ],
+  "relationshipTags": [
+    "降将-君主",
+    "废立",
+    "对峙"
+  ],
+  "sourceAnchorRefs": [
+    "梁书",
+    "南史",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从侯景的立场看这场叛乱——降将的野心与反复无常",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从梁武帝的晚年看这场动乱——佞佛与腐朽如何断送江山",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从江南士族的角度看这场浩劫——衣冠南渡后的文明重创",
+      "familyLabel": "历史反思型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

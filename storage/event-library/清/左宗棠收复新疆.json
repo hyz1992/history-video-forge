@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "左宗棠收复新疆",
+  "summary": "晚清时期，左宗棠力排海防之争，抬棺西征，率军击败阿古柏势力，收复除伊犁外的新疆全境，捍卫了国家领土完整。",
+  "eventRegistryCanonicalName": "左宗棠收复新疆",
+  "aliases": [
+    "左宗棠西征",
+    "清军收复新疆"
+  ],
+  "dynasty": "清",
+  "era": "晚清",
+  "characterTags": [
+    "左宗棠",
+    "刘锦棠",
+    "阿古柏"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "边疆收复",
+    "反侵略战争"
+  ],
+  "themeMotifs": [
+    "远征",
+    "领土完整",
+    "坚定意志"
+  ],
+  "timeRange": {
+    "start": "1875",
+    "end": "1878",
+    "display": "清光绪元年至四年"
+  },
+  "locationTags": [
+    "新疆",
+    "乌鲁木齐",
+    "喀什"
+  ],
+  "relationshipTags": [
+    "军民",
+    "将领"
+  ],
+  "sourceAnchorRefs": [
+    "清史稿",
+    "左文襄公全集"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从左宗棠的视角看抬棺西征——年近七旬的决死一战",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

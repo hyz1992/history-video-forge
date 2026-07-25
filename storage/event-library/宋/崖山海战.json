@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "崖山海战",
+  "summary": "南宋祥兴二年，元军围攻崖山，南宋残军与元军在海上决战，兵败后陆秀夫背负幼帝赵昺投海，张世杰突围殉难，南宋彻底灭亡。",
+  "eventRegistryCanonicalName": "崖山海战",
+  "aliases": [
+    "崖山之战"
+  ],
+  "dynasty": "宋",
+  "era": "南宋末",
+  "characterTags": [
+    "陆秀夫",
+    "张世杰",
+    "赵昺"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "民族战争",
+    "改朝换代"
+  ],
+  "themeMotifs": [
+    "忠义",
+    "殉国",
+    "王朝终结",
+    "英雄末路"
+  ],
+  "timeRange": {
+    "start": "1279",
+    "end": "1279",
+    "display": "南宋祥兴二年二月"
+  },
+  "locationTags": [
+    "崖山",
+    "广东新会"
+  ],
+  "relationshipTags": [
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "宋史",
+    "元史"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从陆秀夫的视角看崖山绝境——背负幼帝投海的最后抉择",
+      "familyLabel": "悲剧终局型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "张世杰的突围与殉国——最后一支宋军的挣扎与覆灭",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

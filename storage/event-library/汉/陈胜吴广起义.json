@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "陈胜吴广起义",
+  "summary": "秦二世元年，陈胜、吴广等戍卒在大泽乡遇雨失期，按律当斩，遂揭竿而起，建立张楚政权，引发全国反秦浪潮。",
+  "eventRegistryCanonicalName": "陈胜吴广起义",
+  "aliases": [
+    "大泽乡起义",
+    "揭竿而起"
+  ],
+  "dynasty": "汉",
+  "era": "秦汉之际",
+  "characterTags": [
+    "陈胜",
+    "吴广"
+  ],
+  "eventTypeTags": [
+    "起义"
+  ],
+  "conflictTypeTags": [
+    "农民起义",
+    "阶级冲突"
+  ],
+  "themeMotifs": [
+    "反抗暴政",
+    "揭竿而起",
+    "乱世开局"
+  ],
+  "timeRange": {
+    "start": "公元前209",
+    "end": "公元前209",
+    "display": "秦二世元年七月"
+  },
+  "locationTags": [
+    "大泽乡"
+  ],
+  "relationshipTags": [
+    "同伴"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从陈胜的立场看起义：从戍卒到楚王，王侯将相宁有种乎？",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "霸王别姬",
+  "summary": "楚汉相争末期，西楚霸王项羽被围垓下，夜闻楚歌，知大势已去，与爱妾虞姬悲歌诀别，后突围至乌江自刎。",
+  "eventRegistryCanonicalName": "霸王别姬",
+  "aliases": [],
+  "dynasty": "汉",
+  "era": "楚汉之际",
+  "characterTags": [
+    "项羽",
+    "虞姬"
+  ],
+  "eventTypeTags": [
+    "战争",
+    "其他"
+  ],
+  "conflictTypeTags": [
+    "决战",
+    "四面楚歌"
+  ],
+  "themeMotifs": [
+    "英雄末路",
+    "诀别",
+    "爱情与死亡"
+  ],
+  "timeRange": {
+    "start": "前202",
+    "end": "前202",
+    "display": "汉五年十二月"
+  },
+  "locationTags": [
+    "垓下",
+    "乌江"
+  ],
+  "relationshipTags": [
+    "情侣",
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "medium",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从虞姬的视角看垓下之夜——她为何选择自刎明志",
+      "familyLabel": "悲剧终局型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

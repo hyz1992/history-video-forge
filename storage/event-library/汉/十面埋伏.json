@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "十面埋伏",
+  "summary": "楚汉之际，韩信在垓下设下十面埋伏，将项羽楚军重重围困。项羽突围不成，最终自刎于乌江，楚汉战争结束。",
+  "eventRegistryCanonicalName": "十面埋伏",
+  "aliases": [],
+  "dynasty": "汉",
+  "era": "楚汉之际",
+  "characterTags": [
+    "韩信",
+    "项羽"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "包围战",
+    "决战"
+  ],
+  "themeMotifs": [
+    "英雄末路",
+    "智谋胜武力"
+  ],
+  "timeRange": {
+    "start": "-202",
+    "end": "-202",
+    "display": "汉五年十二月"
+  },
+  "locationTags": [
+    "垓下",
+    "乌江"
+  ],
+  "relationshipTags": [
+    "敌对"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "资治通鉴",
+    "汉书"
+  ],
+  "credibilityLevel": "medium",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "兵仙韩信如何布下天罗地网，逼得霸王走投无路",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "力拔山兮气盖世，项羽面对十面埋伏的末路悲歌",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

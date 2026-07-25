@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "秋瑾就义",
+  "summary": "清末女革命家秋瑾因策划反清起义被捕，从容就义于绍兴轩亭口，其牺牲激荡革命浪潮，加速清朝覆灭。",
+  "eventRegistryCanonicalName": "秋瑾就义",
+  "aliases": [],
+  "dynasty": "清",
+  "era": "晚清",
+  "characterTags": [
+    "秋瑾"
+  ],
+  "eventTypeTags": [
+    "起义",
+    "审判"
+  ],
+  "conflictTypeTags": [
+    "革命起义",
+    "清廷镇压"
+  ],
+  "themeMotifs": [
+    "英雄牺牲",
+    "革命精神",
+    "女性觉醒"
+  ],
+  "timeRange": {
+    "start": "1907",
+    "end": "1907",
+    "display": "清光绪三十三年六月初六"
+  },
+  "locationTags": [
+    "绍兴",
+    "轩亭口"
+  ],
+  "relationshipTags": [
+    "革命同志",
+    "清廷官员"
+  ],
+  "sourceAnchorRefs": [
+    "清史稿"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从秋瑾狱中绝笔“秋风秋雨愁煞人”看革命者的最后时刻",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

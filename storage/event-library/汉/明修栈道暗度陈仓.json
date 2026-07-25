@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "明修栈道暗度陈仓",
+  "summary": "楚汉之际，刘邦被封汉王，退守汉中。韩信献策，表面上派人修复栈道以麻痹章邯，实则主力暗出陈仓，一举击败章邯，拉开楚汉战争序幕。",
+  "eventRegistryCanonicalName": "明修栈道暗度陈仓",
+  "aliases": [
+    "暗度陈仓"
+  ],
+  "dynasty": "汉",
+  "era": "楚汉之际",
+  "characterTags": [
+    "韩信",
+    "刘邦",
+    "章邯"
+  ],
+  "eventTypeTags": [
+    "战争",
+    "其他"
+  ],
+  "conflictTypeTags": [
+    "战略奇袭"
+  ],
+  "themeMotifs": [
+    "兵不厌诈",
+    "智谋决定战局"
+  ],
+  "timeRange": {
+    "start": "-206",
+    "end": "-206",
+    "display": "汉王元年（公元前206年）"
+  },
+  "locationTags": [
+    "汉中",
+    "栈道",
+    "陈仓"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "将帅"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从韩信的立场看这场奇谋——如何将兵法虚实战术演绎到极致",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

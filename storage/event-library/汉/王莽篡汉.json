@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "王莽篡汉",
+  "summary": "西汉末年，外戚王莽逐步掌控朝政，于初始元年十二月逼孺子婴禅让，自立为帝，改国号为“新”，终结了西汉王朝。",
+  "eventRegistryCanonicalName": "王莽篡汉",
+  "aliases": [
+    "新莽代汉",
+    "王莽代汉"
+  ],
+  "dynasty": "汉",
+  "era": "新朝",
+  "characterTags": [
+    "王莽",
+    "孺子婴",
+    "汉平帝"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "篡位",
+    "外戚专权"
+  ],
+  "themeMotifs": [
+    "权力欲望",
+    "禅让骗局",
+    "改朝换代"
+  ],
+  "timeRange": {
+    "start": "8",
+    "end": "8",
+    "display": "初始元年十二月"
+  },
+  "locationTags": [
+    "长安"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "外戚"
+  ],
+  "sourceAnchorRefs": [
+    "汉书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从王莽的视角看禅让大戏——权臣如何一步步走向帝位",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从刘氏宗室的视角看国祚转移——亡国者的无奈与反抗",
+      "familyLabel": "悲剧终局型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

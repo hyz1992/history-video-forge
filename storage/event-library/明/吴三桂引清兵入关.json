@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "吴三桂引清兵入关",
+  "summary": "明末，李自成攻破北京，明朝灭亡。山海关总兵吴三桂降清，引多尔衮率清军入关，击败李自成农民军，清朝开始定鼎中原。",
+  "eventRegistryCanonicalName": "吴三桂引清兵入关",
+  "aliases": [
+    "吴三桂降清",
+    "山海关之战",
+    "清兵入关"
+  ],
+  "dynasty": "明",
+  "era": "明末清初",
+  "characterTags": [
+    "吴三桂",
+    "多尔衮",
+    "李自成"
+  ],
+  "eventTypeTags": [
+    "投降",
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "王朝更替",
+    "民族冲突"
+  ],
+  "themeMotifs": [
+    "背叛",
+    "忠义",
+    "权力",
+    "民族冲突"
+  ],
+  "timeRange": {
+    "start": "1644",
+    "end": "1644",
+    "display": "明崇祯十七年四月"
+  },
+  "locationTags": [
+    "山海关",
+    "北京"
+  ],
+  "relationshipTags": [
+    "敌将",
+    "藩属"
+  ],
+  "sourceAnchorRefs": [
+    "明史",
+    "清史稿"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从吴三桂的视角看降清决策——冲冠一怒为红颜？",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从多尔衮的视角看入关机遇——清朝问鼎中原的转折点",
+      "familyLabel": "战略博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

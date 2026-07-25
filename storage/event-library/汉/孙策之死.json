@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "孙策之死",
+  "summary": "东汉建安五年，孙策在丹徒狩猎时遭许贡门客刺杀，重伤不治，临终前将江东基业托付给孙权，年仅二十六岁。",
+  "eventRegistryCanonicalName": "孙策之死",
+  "aliases": [
+    "孙策遇刺"
+  ],
+  "dynasty": "汉",
+  "era": "东汉末",
+  "characterTags": [
+    "孙策",
+    "孙权",
+    "许贡门客"
+  ],
+  "eventTypeTags": [
+    "刺杀"
+  ],
+  "conflictTypeTags": [
+    "刺杀",
+    "权力交接"
+  ],
+  "themeMotifs": [
+    "英年早逝",
+    "壮志未酬",
+    "暗杀",
+    "继承"
+  ],
+  "timeRange": {
+    "start": "200",
+    "end": "200",
+    "display": "东汉建安五年四月"
+  },
+  "locationTags": [
+    "丹徒",
+    "江东"
+  ],
+  "relationshipTags": [
+    "兄弟"
+  ],
+  "sourceAnchorRefs": [
+    "三国志"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从孙权的视角看兄长的突然离世与江东基业的继承",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

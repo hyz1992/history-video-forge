@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "四面楚歌",
+  "summary": "公元前202年，项羽被汉军围困于垓下，入夜听闻四面皆汉军唱楚歌，以为楚地已尽归刘邦，遂心志崩溃，率八百骑突围，最终自刎于乌江。",
+  "eventRegistryCanonicalName": "四面楚歌",
+  "aliases": [],
+  "dynasty": "汉",
+  "era": "楚汉之际",
+  "characterTags": [
+    "项羽",
+    "刘邦",
+    "韩信",
+    "虞姬"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "王朝更替",
+    "军事决战"
+  ],
+  "themeMotifs": [
+    "英雄末路",
+    "四面楚歌",
+    "心理瓦解"
+  ],
+  "timeRange": {
+    "start": "前202",
+    "end": "前202",
+    "display": "汉五年（前202年）"
+  },
+  "locationTags": [
+    "垓下"
+  ],
+  "relationshipTags": [
+    "争霸对手",
+    "统帅与部将"
+  ],
+  "sourceAnchorRefs": [
+    "史记·项羽本纪"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从韩信的角度看这场心理战——为何唱楚歌就能让楚军一夜崩溃",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

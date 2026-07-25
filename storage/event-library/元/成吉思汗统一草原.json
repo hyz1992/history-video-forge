@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "成吉思汗统一草原",
+  "summary": "12世纪末，蒙古草原诸部纷争，铁木真历经数十年征战，先后吞并蔑儿乞、塔塔儿、克烈、乃蛮等部，于1206年在斡难河源建立大蒙古国，被尊为成吉思汗，结束了草原分裂局面。",
+  "eventRegistryCanonicalName": "成吉思汗统一草原",
+  "aliases": [
+    "铁木真统一蒙古",
+    "蒙古草原统一"
+  ],
+  "dynasty": "元",
+  "era": "蒙古",
+  "characterTags": [
+    "成吉思汗",
+    "札木合",
+    "王汗",
+    "太阳汗"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "部落统一战争",
+    "军事征服"
+  ],
+  "themeMotifs": [
+    "统一",
+    "权力崛起",
+    "草原帝国"
+  ],
+  "timeRange": {
+    "start": "1189",
+    "end": "1206",
+    "display": "蒙古太祖元年"
+  },
+  "locationTags": [
+    "蒙古草原",
+    "斡难河源",
+    "不儿罕山"
+  ],
+  "relationshipTags": [
+    "安答",
+    "父子",
+    "同盟与背叛"
+  ],
+  "sourceAnchorRefs": [
+    "元史",
+    "蒙古秘史"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从札木合的视角看成吉思汗统一——从安答到宿敌的命运纠葛",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "统一背后的残酷征服：乃蛮部太阳汗的覆灭与草原部落的整合",
+      "familyLabel": "战争征服型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "袁崇焕宁远大捷",
+  "summary": "明清之际，后金大汗努尔哈赤率军围攻宁远，明将袁崇焕坚守孤城，以红夷大炮重创后金军，取得明朝对后金的首次重大胜利。",
+  "eventRegistryCanonicalName": "袁崇焕宁远大捷",
+  "aliases": [
+    "宁远大捷",
+    "宁远之战"
+  ],
+  "dynasty": "明",
+  "era": "明末清初",
+  "characterTags": [
+    "袁崇焕",
+    "努尔哈赤",
+    "满桂",
+    "祖大寿"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "边境冲突",
+    "攻城战"
+  ],
+  "themeMotifs": [
+    "以弱胜强",
+    "守城决断",
+    "战场翻盘"
+  ],
+  "timeRange": {
+    "start": "1626",
+    "end": "1626",
+    "display": "明天启六年正月"
+  },
+  "locationTags": [
+    "宁远",
+    "辽东"
+  ],
+  "relationshipTags": [
+    "敌对将帅"
+  ],
+  "sourceAnchorRefs": [
+    "明史",
+    "清史稿"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从袁崇焕的视角看宁远孤城绝境中的生死决断",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从努尔哈赤的立场审视攻城受挫与英雄迟暮",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

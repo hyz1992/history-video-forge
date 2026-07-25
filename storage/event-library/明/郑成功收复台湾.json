@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "郑成功收复台湾",
+  "summary": "明末清初，郑成功以金厦为基地，于1661年率舰队渡海，围攻荷兰殖民者，经数月激战迫其投降，收复台湾，建立明郑政权。",
+  "eventRegistryCanonicalName": "郑成功收复台湾",
+  "aliases": [
+    "郑成功攻台之役",
+    "郑成功收复台湾之战"
+  ],
+  "dynasty": "明",
+  "era": "明末清初",
+  "characterTags": [
+    "郑成功",
+    "揆一",
+    "何斌"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "民族冲突",
+    "对外战争"
+  ],
+  "themeMotifs": [
+    "收复故土",
+    "民族英雄",
+    "以弱胜强"
+  ],
+  "timeRange": {
+    "start": "1661",
+    "end": "1662",
+    "display": "明永历十五年三月至十二月"
+  },
+  "locationTags": [
+    "台湾",
+    "台南",
+    "热兰遮城"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "敌我"
+  ],
+  "sourceAnchorRefs": [
+    "清史稿",
+    "台湾外纪"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从荷兰总督揆一的视角，看这场九个月的围城战如何摧毁殖民者的决心",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

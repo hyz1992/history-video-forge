@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "札木合与成吉思汗决裂",
+  "summary": "12世纪末，蒙古铁木真与结义安答札木合因部众归属及领导权之争决裂，爆发十三翼之战。铁木真虽败却赢得人心，为其统一蒙古诸部埋下伏笔。",
+  "eventRegistryCanonicalName": "札木合与成吉思汗决裂",
+  "aliases": [],
+  "dynasty": "元",
+  "era": "蒙古",
+  "characterTags": [
+    "札木合",
+    "铁木真"
+  ],
+  "eventTypeTags": [
+    "继承夺位",
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "部众争夺",
+    "军事冲突"
+  ],
+  "themeMotifs": [
+    "结义兄弟反目",
+    "权力斗争",
+    "联盟崩溃"
+  ],
+  "timeRange": {
+    "start": "约1190",
+    "end": "约1190",
+    "display": "12世纪末"
+  },
+  "locationTags": [
+    "蒙古草原",
+    "答兰版朱思"
+  ],
+  "relationshipTags": [
+    "结义兄弟",
+    "权力争夺"
+  ],
+  "sourceAnchorRefs": [
+    "蒙古秘史",
+    "元史",
+    "史集"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从札木合的立场看这场决裂：他为何最终败给铁木真？",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从十三翼之战的惨败看铁木真如何逆势崛起",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

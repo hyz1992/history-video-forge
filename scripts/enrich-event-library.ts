@@ -135,6 +135,64 @@ function loadSourceLibrary(args: CliArgs): RawEventSkeleton[] {
   return items;
 }
 
+// ---- 朝代归一化 ----
+
+const DYNASTY_NORMALIZE_MAP: Record<string, string> = {
+  "春秋": "春秋",
+  "战国": "战国",
+  "秦": "秦",
+  "楚汉之际": "汉",
+  "秦汉之际": "汉",
+  "汉": "汉",
+  "西汉": "汉",
+  "东汉": "汉",
+  "新朝": "汉",
+  "新莽末": "汉",
+  "汉末": "汉",
+  "三国": "三国",
+  "三国演义": "三国演义",
+  "晋": "晋",
+  "西晋": "晋",
+  "东晋": "晋",
+  "南朝": "南北朝",
+  "北朝": "南北朝",
+  "北魏": "南北朝",
+  "南北朝": "南北朝",
+  "隋": "隋",
+  "隋唐之际": "隋",
+  "唐": "唐",
+  "初唐": "唐",
+  "盛唐": "唐",
+  "中唐": "唐",
+  "晚唐": "唐",
+  "唐末": "唐",
+  "五代": "唐",
+  "五代十国": "唐",
+  "宋": "宋",
+  "北宋": "宋",
+  "南宋": "宋",
+  "宋辽": "宋",
+  "宋传奇": "宋",
+  "宋元之际": "宋",
+  "元": "元",
+  "蒙古": "元",
+  "明": "明",
+  "明初": "明",
+  "明末": "明",
+  "后金": "明",
+  "明清之际": "明",
+  "清": "清",
+  "清初": "清",
+  "清末": "清",
+  "晚清": "清",
+  "近代": "近代",
+};
+
+function normalizeDynasty(dynasty: string): string {
+  const trimmed = dynasty.trim();
+  return DYNASTY_NORMALIZE_MAP[trimmed] ?? trimmed;
+}
+
 // ---- LLM 调用 + Zod 校验 ----
 
 async function enrichOne(
@@ -158,11 +216,14 @@ async function enrichOne(
   // Zod 严格校验：不通过直接抛错，调用方记到 fail-list
   const parsed = parseEventLibraryFile(raw) as unknown as Record<string, unknown>;
 
-  // 硬保障：dynasty/era 必须与骨架一致，LLM 不得修改
-  // （否则会出现"战国"→"魏"这类分类漂移，导致文件分散到不同目录）
-  if (skeleton.dynasty) {
-    parsed.dynasty = skeleton.dynasty;
+  // 硬保障 1：dynasty 必须归一化为标准大朝代
+  // （骨架的 dynasty 可能是过渡期名如"清末""楚汉之际"，需归一化到"清""汉"等）
+  if (parsed.dynasty) {
+    parsed.dynasty = normalizeDynasty(parsed.dynasty as string);
   }
+
+  // 硬保障 2：era 必须与骨架一致（若骨架有值），避免 LLM 改时期
+  // （骨架没有 era 时，保留 LLM 输出的时期）
   if (skeleton.era) {
     parsed.era = skeleton.era;
   }
