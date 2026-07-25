@@ -803,11 +803,117 @@ function recoverJsonCandidate(rawOutput: string): string | null {
   }
 
   const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/u);
-  if (fencedMatch?.[1]) {
-    return fencedMatch[1].trim();
+  const candidate = fencedMatch?.[1]?.trim() ?? trimmed;
+
+  const repaired = repairLooseJson(candidate);
+  return repaired;
+}
+
+/**
+ * 修复 LLM 输出常见的 JSON 格式错误。依次尝试：
+ * 1. 原文直接返回（让调用方按严格 JSON.parse 处理）
+ * 2. 中文标点 → 英文标点
+ * 3. 移除尾随逗号
+ * 4. 补全缺失的右括号
+ * 修复后若能 JSON.parse 成功则返回修复版，否则返回原文由调用方抛错。
+ */
+export function repairLooseJson(input: string): string {
+  // Step 1: 中文标点常见替换（LLM 中文场景高频）
+  let repaired = input
+    .replace(/，/gu, ",")
+    .replace(/：/gu, ":")
+    .replace(/“/gu, '"')
+    .replace(/”/gu, '"')
+    .replace(/‘/gu, "'")
+    .replace(/’/gu, "'");
+
+  if (isStrictJson(repaired)) {
+    return repaired;
   }
 
-  return trimmed;
+  // Step 2: 先补全缺失的右括号（可能产生 "...,}" 这样的尾随逗号）
+  const closed = closeUnbalancedBrackets(repaired);
+  if (isStrictJson(closed)) {
+    return closed;
+  }
+
+  // Step 3: 移除尾随逗号（对象/数组最后一个元素后多出逗号），再尝试解析
+  const noTrailing = closed.replace(/,(\s*[}\]])/gu, "$1");
+  if (isStrictJson(noTrailing)) {
+    return noTrailing;
+  }
+
+  // Step 4: 在缺失逗号的对象属性间补逗号
+  //   匹配 "value-end-quote" + whitespace + "key-start-quote" + 后续的 key + ":"
+  //   三种值结尾：字符串(`"`)、数字/字面量、嵌套结构(}` 或 `]`)
+  const withCommas = noTrailing
+    .replace(/"(\s+)("[^"]+"\s*:)/gu, '",$2')
+    .replace(/(\b(?:true|false|null|-?\d+(?:\.\d+)?))(\s+)("[^"]+"\s*:)/gu, '$1,$3')
+    .replace(/([}\]])(\s+)("[^"]+"\s*:)/gu, '$1,$3');
+  if (isStrictJson(withCommas)) {
+    return withCommas;
+  }
+
+  return input;
+}
+
+function isStrictJson(value: string): boolean {
+  try {
+    JSON.parse(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function closeUnbalancedBrackets(input: string): string {
+  const openStack: Array<"(" | "[" | "{"> = [];
+  let inString = false;
+  let escape = false;
+
+  for (const ch of input) {
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escape = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (ch === "(" || ch === "[" || ch === "{") {
+      openStack.push(ch);
+    } else if (ch === ")" || ch === "]" || ch === "}") {
+      // 弹出匹配的左括号（容忍轻微不匹配）
+      for (let i = openStack.length - 1; i >= 0; i -= 1) {
+        const opener = openStack[i]!;
+        if (
+          (ch === ")" && opener === "(") ||
+          (ch === "]" && opener === "[") ||
+          (ch === "}" && opener === "{")
+        ) {
+          openStack.splice(i, 1);
+          break;
+        }
+      }
+    }
+  }
+
+  let suffix = "";
+  // 字符串未闭合时简单补一个引号（尽力而为）
+  if (inString) suffix = '"' + suffix;
+  // 按开括号栈的逆序闭合（LIFO）
+  for (let i = openStack.length - 1; i >= 0; i -= 1) {
+    const opener = openStack[i];
+    if (opener === "(") suffix += ")";
+    else if (opener === "[") suffix += "]";
+    else if (opener === "{") suffix += "}";
+  }
+  return input + suffix;
 }
 
 function buildStrictStructuredInvalidResponseError(
