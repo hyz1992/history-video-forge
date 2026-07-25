@@ -145,7 +145,7 @@ describe("asset panel basic generation gate", () => {
     document.body.innerHTML = "";
   });
 
-  it("does not auto-start basic asset generation when a ready asset plan has no manifest", async () => {
+  it("auto-starts basic asset generation when a ready asset plan has no manifest", async () => {
     const router = await createRouterAt("/projects/project-auto-basic-assets/asset");
     const assetPlanningState = reactive({
       snapshot: {
@@ -221,10 +221,12 @@ describe("asset panel basic generation gate", () => {
     });
 
     await flushPromises();
+    await flushPromises();
 
-    expect(generateAssets).not.toHaveBeenCalled();
-    expect(wrapper.find(".asset-plan-overview-wrapper").exists()).toBe(true);
-    expect(document.body.querySelector(".stage-loading-bar")).toBeNull();
+    expect(generateAssets).toHaveBeenCalledTimes(1);
+    expect(generateAssets).toHaveBeenCalledWith({
+      enabledProviderTypes: ["tts", "sfx", "bgm"],
+    });
     wrapper.unmount();
   });
 });
