@@ -63,6 +63,10 @@ export interface TopicApi {
     projectId: string,
     filters: TopicRecommendationFilters,
   ) => Promise<TopicRecommendationsResponse>;
+  generateFromLibrary: (
+    projectId: string,
+    body: { event_library_entry_id: string; angle_id?: string },
+  ) => Promise<TopicRecommendationsResponse>;
   confirmCandidate: (
     projectId: string,
     candidateId: string,
@@ -91,12 +95,15 @@ export interface TopicStoreState {
   loadError: string | null;
   /** 项目快照，用于刷新后恢复 generating 状态 */
   snapshot: { current_status: string } | null;
+  /** 生成来源，用于区分 loading 文案 */
+  generationSource: "system" | "library" | null;
 }
 
 export interface TopicStore {
   state: Readonly<TopicStoreState>;
   selectTab: (tab: TopicTab) => void;
   generateSystemRecommendations: (filters?: TopicRecommendationFilters) => Promise<void>;
+  generateFromLibrary: (entryId: string, angleId?: string) => Promise<void>;
   openCandidate: (candidate: TopicCandidate, roundId?: string | null) => void;
   closeCandidate: () => void;
   confirmSelectedCandidate: () => Promise<void>;
@@ -150,6 +157,12 @@ export function createFetchTopicApi(baseUrl = ""): TopicApi {
         { method: "POST", body: buildRecommendationSeed(filters) },
       );
     },
+    async generateFromLibrary(projectId, body) {
+      return await apiFetch<TopicRecommendationsResponse>(
+        `${baseUrl}/api/projects/${projectId}/topic/from-library`,
+        { method: "POST", body },
+      );
+    },
     async confirmCandidate(projectId, candidateId) {
       return await apiFetch<TopicConfirmResponse>(
         `${baseUrl}/api/projects/${projectId}/topic/candidates/${candidateId}/confirm`,
@@ -172,6 +185,7 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
     confirmedTopicPackageId: null,
     loadError: null,
     snapshot: null,
+    generationSource: null,
   });
 
   let loadedProjectId: string | null = null;
@@ -202,6 +216,7 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
   ) {
     state.isGenerating = true;
     state.loadError = null;
+    state.generationSource = "system";
     state.snapshot = { current_status: "topic_generating" };
     const previousCandidates = state.candidates;
     const previousCurrentRound = state.currentRound;
@@ -216,6 +231,52 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
       state.isGenerating = true;
       state.snapshot = { current_status: "topic_generating" };
       const response = await input.api.generateSystemRecommendations(projectId, filters);
+      loadedProjectId = response.project_id ?? projectId;
+      state.candidates = response.candidates;
+      state.currentRound =
+        response.current_round ?? {
+          round_id: `topic-round-${Date.now()}`,
+          candidates: response.candidates,
+        };
+      state.historyRounds = response.history_rounds ?? [];
+      state.selectedCandidate = response.candidates[0] ?? null;
+      state.selectedRoundId = state.currentRound?.round_id ?? null;
+    } catch (error) {
+      state.loadError =
+        error instanceof Error ? error.message : "topic_generation_failed";
+      state.candidates = previousCandidates;
+      state.currentRound = previousCurrentRound;
+      state.selectedCandidate = previousSelectedCandidate;
+      state.selectedRoundId = previousSelectedRoundId;
+    } finally {
+      state.isGenerating = false;
+      if (!state.loadError) {
+        state.snapshot = { current_status: "topic_candidates_ready" };
+      }
+    }
+  }
+
+  async function generateFromLibrary(entryId: string, angleId?: string) {
+    state.isGenerating = true;
+    state.loadError = null;
+    state.generationSource = "library";
+    state.snapshot = { current_status: "topic_generating" };
+    const previousCandidates = state.candidates;
+    const previousCurrentRound = state.currentRound;
+    const previousSelectedCandidate = state.selectedCandidate;
+    const previousSelectedRoundId = state.selectedRoundId;
+    state.candidates = [];
+    state.currentRound = null;
+
+    try {
+      const projectId = await input.projectStore.ensureProject();
+      resetForProject(projectId);
+      state.isGenerating = true;
+      state.snapshot = { current_status: "topic_generating" };
+      const response = await input.api.generateFromLibrary(projectId, {
+        event_library_entry_id: entryId,
+        ...(angleId ? { angle_id: angleId } : {}),
+      });
       loadedProjectId = response.project_id ?? projectId;
       state.candidates = response.candidates;
       state.currentRound =
@@ -404,6 +465,7 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
     state: readonly(state),
     selectTab,
     generateSystemRecommendations,
+    generateFromLibrary,
     openCandidate,
     closeCandidate,
     confirmSelectedCandidate,

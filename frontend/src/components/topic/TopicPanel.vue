@@ -43,6 +43,21 @@ const isSnapshotGenerating = computed(
   () => topicStore.state.snapshot?.current_status === "topic_generating",
 );
 
+const generatingContent = computed(() => {
+  if (topicStore.state.generationSource === "library") {
+    return {
+      title: "正在从事件库生成选题",
+      hint: "正在基于你选择的历史事件和角度生成选题，可能需要 1-3 分钟。",
+      secondaryHint: "生成完成后结果会自动出现，无需手动刷新。",
+    };
+  }
+  return {
+    title: "正在生成选题",
+    hint: "正在调用大模型生成选题推荐，可能需要 1-3 分钟。",
+    secondaryHint: "生成完成后结果会自动出现，无需手动刷新。",
+  };
+});
+
 onMounted(async () => {
   const pid = route.params.projectId as string;
   if (pid) {
@@ -233,9 +248,9 @@ function roundLabel(round: { label?: string; round_index?: number }) {
   <div class="topic-panel">
     <template v-if="topicPhase.kind === 'generating'">
       <StageGenerating
-        title="正在生成选题"
-        hint="正在调用大模型生成选题推荐，可能需要 1-3 分钟。"
-        secondary-hint="生成完成后结果会自动出现，无需手动刷新。"
+        :title="generatingContent.title"
+        :hint="generatingContent.hint"
+        :secondary-hint="generatingContent.secondaryHint"
       >
         <template #action>
           <button class="btn btn-ghost" :disabled="isRefreshingTopicStatus" @click="handleRefreshGeneratingStatus">

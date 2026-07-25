@@ -135,18 +135,13 @@ async function handleGenerate() {
   error.value = null;
   try {
     await projectStore.createProject();
-    const body: { event_library_entry_id: string; angle_id?: string } = {
-      event_library_entry_id: selectedEntry.value.id,
-    };
-    if (selectedAngleId.value) {
-      body.angle_id = selectedAngleId.value;
-    }
-    const projectId = await projectStore.ensureProject();
-    await apiFetch(`/api/projects/${projectId}/topic/from-library`, {
-      method: "POST",
-      body,
-    });
+    await projectStore.ensureProject();
     topicStore.selectTab("library");
+    // fire-and-forget：store 立即设 isGenerating=true，组件立即跳转到 loading 页
+    topicStore.generateFromLibrary(
+      selectedEntry.value.id,
+      selectedAngleId.value || undefined,
+    );
     emit("close");
   } catch (e) {
     error.value = e instanceof Error ? e.message : "生成选题失败";
