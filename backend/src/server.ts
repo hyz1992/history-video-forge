@@ -300,6 +300,24 @@ export function createHttpServer(
   });
 }
 
+let globalErrorHandlersRegistered = false;
+
+function registerGlobalErrorHandlers() {
+  if (globalErrorHandlersRegistered) return;
+  globalErrorHandlersRegistered = true;
+
+  process.on("unhandledRejection", (reason) => {
+    const message = reason instanceof Error
+      ? (reason.stack ?? reason.message)
+      : String(reason);
+    console.error("[unhandledRejection]", message);
+  });
+
+  process.on("uncaughtException", (error) => {
+    console.error("[uncaughtException]", error.stack ?? error.message);
+  });
+}
+
 export async function startServer(options?: {
   app?: AppInstance;
   prismaClient?: AppPrismaClient;
@@ -307,6 +325,7 @@ export async function startServer(options?: {
   port?: number;
   publicDir?: string;
 }) {
+  registerGlobalErrorHandlers();
   const requestedHost = options?.host ?? process.env.SERVER_HOST ?? "127.0.0.1";
   const host = resolveServerHost({
     host: requestedHost,

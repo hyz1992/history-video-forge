@@ -300,28 +300,33 @@ export async function runAssetPlanningGeneration(
     const onProgress = async (progress: import("./asset-planning-generation.service.js").AssetPlanGenerationProgress) => {
       if (!generatingRecord) return;
       const record = generatingRecord;
-      await saveAssetPlanRecord(input.db, {
-        id: record.id,
-        projectId: record.projectId,
-        topicPackageId: record.topicPackageId,
-        scriptRecordId: record.scriptRecordId,
-        storyboardRecordId: record.storyboardRecordId,
-        planJson: record.planJson,
-        validationResultJson: record.validationResultJson,
-        executionStateJson: {
-          generating: true,
-          run_id: runId,
-          repair_used: false,
-          regenerate_used: false,
-          progress_phase: progress.phase,
-          progress_completed_chunks: progress.completed_chunks,
-          progress_total_chunks: progress.total_chunks,
-          progress_total_segments: progress.total_segments,
-        },
-        graphTraceSummaryJson: record.graphTraceSummaryJson,
-        runtimeDiagnosticsJson: record.runtimeDiagnosticsJson,
-        createdAt: record.createdAt,
-      });
+      try {
+        await saveAssetPlanRecord(input.db, {
+          id: record.id,
+          projectId: record.projectId,
+          topicPackageId: record.topicPackageId,
+          scriptRecordId: record.scriptRecordId,
+          storyboardRecordId: record.storyboardRecordId,
+          planJson: record.planJson,
+          validationResultJson: record.validationResultJson,
+          executionStateJson: {
+            generating: true,
+            run_id: runId,
+            repair_used: false,
+            regenerate_used: false,
+            progress_phase: progress.phase,
+            progress_completed_chunks: progress.completed_chunks,
+            progress_total_chunks: progress.total_chunks,
+            progress_total_segments: progress.total_segments,
+          },
+          graphTraceSummaryJson: record.graphTraceSummaryJson,
+          runtimeDiagnosticsJson: record.runtimeDiagnosticsJson,
+          createdAt: record.createdAt,
+        });
+      } catch (progressError) {
+        const message = progressError instanceof Error ? progressError.message : String(progressError);
+        interactionLogWriter.writeError(`asset_plan_progress_save_failed:${message}`);
+      }
     };
 
     let plan = await generateAssetPlan({
