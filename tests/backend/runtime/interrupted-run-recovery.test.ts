@@ -8,7 +8,6 @@ describe("interrupted run recovery", () => {
     ["topic_generating", "topic_pending"],
     ["script_generating", "script_ready"],
     ["storyboard_generating", "storyboard_ready"],
-    ["asset_plan_generating", "asset_plan_ready"],
     ["assets_generating", "assets_blocked"],
     ["render_rendering", "render_failed"],
   ])("recovers %s to %s without resubmitting", (from, to) => {
@@ -19,6 +18,36 @@ describe("interrupted run recovery", () => {
 
     expect(db.projects.get("p1")?.status).toBe(to);
     expect(result.recoveredProjectIds).toContain("p1");
+  });
+
+  it("recovers asset_plan_generating to asset_plan_ready when an active plan exists", () => {
+    const db = createDbClient();
+    db.projects.set("p1", {
+      id: "p1",
+      status: "asset_plan_generating",
+      activeAssetPlanRecordId: "plan-1",
+    } as never);
+
+    recoverInterruptedRuns(db, { recoveredAt: "2026-07-10T00:00:00.000Z" });
+
+    const project = db.projects.get("p1")!;
+    expect(project.status).toBe("asset_plan_ready");
+    expect(project.activeAssetPlanRecordId).toBe("plan-1");
+  });
+
+  it("recovers asset_plan_generating to storyboard_ready when no active plan exists (generation interrupted before completion)", () => {
+    const db = createDbClient();
+    db.projects.set("p1", {
+      id: "p1",
+      status: "asset_plan_generating",
+      activeAssetPlanRecordId: null,
+    } as never);
+
+    recoverInterruptedRuns(db, { recoveredAt: "2026-07-10T00:00:00.000Z" });
+
+    const project = db.projects.get("p1")!;
+    expect(project.status).toBe("storyboard_ready");
+    expect(project.activeAssetPlanRecordId).toBeNull();
   });
 
   it("marks submitted provider jobs failed for manual retry", () => {

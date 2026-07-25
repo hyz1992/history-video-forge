@@ -1,14 +1,27 @@
 import type { DbClient, AssetProviderJobRecord, ProjectRecord } from "../../db/client.js";
 
-const STATUS_RECOVERY: Record<string, string> = {
-  topic_generating: "topic_pending",
-  script_generating: "script_ready",
-  storyboard_generating: "storyboard_ready",
-  asset_plan_generating: "asset_plan_ready",
-  assets_generating: "assets_blocked",
-  compose_generating: "compose_ready",
-  render_rendering: "render_failed",
-};
+function resolveRecoveredStatus(project: ProjectRecord): string | null {
+  switch (project.status) {
+    case "topic_generating":
+      return "topic_pending";
+    case "script_generating":
+      return "script_ready";
+    case "storyboard_generating":
+      return "storyboard_ready";
+    case "asset_plan_generating":
+      // 规划中断时，若已有 active plan 记录则回到 asset_plan_ready，
+      // 否则说明规划未完成，回到 storyboard_ready 让用户重新触发。
+      return project.activeAssetPlanRecordId ? "asset_plan_ready" : "storyboard_ready";
+    case "assets_generating":
+      return "assets_blocked";
+    case "compose_generating":
+      return "compose_ready";
+    case "render_rendering":
+      return "render_failed";
+    default:
+      return null;
+  }
+}
 
 export interface InterruptedRunRecoveryResult {
   recoveredProjectIds: string[];
@@ -34,8 +47,19 @@ function recoverProjectRecord(db: DbClient, project: ProjectRecord, recoveredAt:
   markExecutionInterrupted(project.activeRenderJobRecordId ? db.renderJobRecords.get(project.activeRenderJobRecordId) : undefined, recoveredAt);
   markExecutionInterrupted(project.activePublishPackageRecordId ? db.publishPackageRecords.get(project.activePublishPackageRecordId) : undefined, recoveredAt);
 
-  const nextStatus = STATUS_RECOVERY[project.status];
-  if (nextStatus) project.status = nextStatus;
+  const nextStatus = resolveRecoveredStatus(project);
+  if (nextStatus) {
+    // asset_plan_generating 中断且回退到 storyboard_ready 时，
+    // 清掉 orphan 的 activeAssetPlanRecordId（指向未完成的规划）。
+    if (
+      project.status === "asset_plan_generating" &&
+      nextStatus === "storyboard_ready" &&
+      project.activeAssetPlanRecordId
+    ) {
+      project.activeAssetPlanRecordId = null;
+    }
+    project.status = nextStatus;
+  }
   project.updatedAt = new Date(recoveredAt);
 }
 
@@ -58,7 +82,7 @@ export function recoverInterruptedRuns(
     recoveredProviderJobIds: [],
   };
   for (const project of db.projects.values()) {
-    if (!STATUS_RECOVERY[project.status]) continue;
+    if (!resolveRecoveredStatus(project)) continue;
     recoverProjectRecord(db, project, recoveredAt);
     result.recoveredProjectIds.push(project.id);
   }
