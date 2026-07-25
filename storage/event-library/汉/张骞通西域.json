@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "张骞通西域",
+  "summary": "汉武帝为联合大月氏夹击匈奴，派遣张骞出使西域。途中被匈奴扣押十余年，逃脱后继续西行，虽未达成军事联盟，但开辟了汉与西域的交通，史称“凿空”。",
+  "eventRegistryCanonicalName": "张骞通西域",
+  "aliases": [
+    "张骞出使西域",
+    "西域凿空"
+  ],
+  "dynasty": "汉",
+  "era": "西汉",
+  "characterTags": [
+    "张骞",
+    "汉武帝",
+    "堂邑父"
+  ],
+  "eventTypeTags": [
+    "外交",
+    "其他"
+  ],
+  "conflictTypeTags": [
+    "汉匈冲突",
+    "外交博弈"
+  ],
+  "themeMotifs": [
+    "凿空",
+    "坚韧不拔",
+    "文化交流"
+  ],
+  "timeRange": {
+    "start": "前139",
+    "end": "前126",
+    "display": "汉武帝建元二年至元朔三年"
+  },
+  "locationTags": [
+    "长安",
+    "西域",
+    "大月氏",
+    "匈奴"
+  ],
+  "relationshipTags": [
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "汉书"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从张骞的视角看这趟凿空之旅——十余年囚徒生涯与使命的坚守",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从汉武帝的战略布局看西域外交——联月抗匈的宏图与意外收获",
+      "familyLabel": "外交博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

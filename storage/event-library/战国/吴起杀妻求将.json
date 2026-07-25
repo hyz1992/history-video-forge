@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "吴起杀妻求将",
+  "summary": "战国初期，卫人吴起在鲁国欲为将领，因妻为齐国人，为表忠心杀妻，终得鲁君信任，率军破齐。",
+  "eventRegistryCanonicalName": "吴起杀妻求将",
+  "aliases": [],
+  "dynasty": "战国",
+  "era": "战国初期",
+  "characterTags": [
+    "吴起",
+    "鲁君"
+  ],
+  "eventTypeTags": [
+    "其他"
+  ],
+  "conflictTypeTags": [
+    "政治忠诚与个人道德冲突"
+  ],
+  "themeMotifs": [
+    "权力代价",
+    "为达目的不择手段"
+  ],
+  "locationTags": [
+    "鲁国"
+  ],
+  "relationshipTags": [
+    "夫妻",
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从吴起的视角看这场赌上一切的抉择——以妻子性命换取将军之位",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从鲁国君主的角度审视这名杀妻求将的卫人——信任还是猜疑",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

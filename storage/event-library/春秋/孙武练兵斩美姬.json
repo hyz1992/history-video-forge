@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "孙武练兵斩美姬",
+  "summary": "春秋晚期，孙武以兵法见吴王阖闾，吴王令其训练宫女以试其能。孙武三令五申而宫女不听，遂斩左右队长（吴王二宠姬），众宫女遂听命进退，以显严肃军纪之效。",
+  "eventRegistryCanonicalName": "孙武练兵斩美姬",
+  "aliases": [],
+  "dynasty": "春秋",
+  "era": "春秋晚期",
+  "characterTags": [
+    "孙武",
+    "吴王阖闾",
+    "二宠姬"
+  ],
+  "eventTypeTags": [
+    "其他"
+  ],
+  "conflictTypeTags": [
+    "治军与特权冲突"
+  ],
+  "themeMotifs": [
+    "军纪严明",
+    "言出必行",
+    "权力与服从"
+  ],
+  "timeRange": {
+    "start": "约前512",
+    "end": "约前512",
+    "display": "春秋晚期（吴王阖闾时期）"
+  },
+  "locationTags": [
+    "吴国都城（姑苏）"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "将兵"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "孙武为何非斩吴王宠姬不可？从一场宫女练兵看古代将帅的立威之道",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "吴王阖闾从怒到悟：失去两名宠姬换来的孙武兵法究竟值不值？",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "渑池之会",
+  "summary": "战国时，秦昭襄王约赵惠文王会于渑池，蔺相如随行，在筵席上以机敏应对秦王的无理要求，拼死维护赵王尊严，终使赵王平安归国。",
+  "eventRegistryCanonicalName": "渑池之会",
+  "aliases": [],
+  "dynasty": "战国",
+  "era": "战国",
+  "characterTags": [
+    "蔺相如",
+    "赵惠文王",
+    "秦昭襄王"
+  ],
+  "eventTypeTags": [
+    "外交"
+  ],
+  "conflictTypeTags": [
+    "外交博弈"
+  ],
+  "themeMotifs": [
+    "临场应变",
+    "智勇双全",
+    "外交辞令"
+  ],
+  "timeRange": {
+    "start": "-279",
+    "end": "-279",
+    "display": "赵惠文王二十年（公元前279年）"
+  },
+  "locationTags": [
+    "渑池"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "敌国"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从蔺相如的视角看这场外交交锋——他如何用智勇化解秦王的羞辱",
+      "familyLabel": "外交博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

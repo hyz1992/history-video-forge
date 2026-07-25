@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "孙膑膑刑逃魏",
+  "summary": "战国时期，孙膑与庞涓同门学兵法，庞涓为魏将后嫉妒孙膑之才，设计施以膑刑。孙膑装疯寻机逃至齐国，后任军师复仇马陵。",
+  "eventRegistryCanonicalName": "孙膑膑刑逃魏",
+  "aliases": [
+    "孙膑受膑刑"
+  ],
+  "dynasty": "战国",
+  "era": "战国",
+  "characterTags": [
+    "孙膑",
+    "庞涓"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈",
+    "其他"
+  ],
+  "conflictTypeTags": [
+    "同门相残",
+    "政治迫害"
+  ],
+  "themeMotifs": [
+    "复仇",
+    "隐忍",
+    "嫉妒",
+    "忠义"
+  ],
+  "locationTags": [
+    "魏国",
+    "齐国"
+  ],
+  "relationshipTags": [
+    "同门",
+    "仇敌"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从孙膑的视角，看如何在膑刑的绝望中装疯求生，最终完成马陵复仇。",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从庞涓的视角，因嫉妒残害同门，却为自身埋下马陵自刎的结局。",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

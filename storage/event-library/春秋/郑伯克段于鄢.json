@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "郑伯克段于鄢",
+  "summary": "春秋初期，郑庄公因母武姜偏爱弟共叔段，故意纵容其叛乱，待其起兵时在鄢地一举击败，巩固君位，母子最终掘泉相见。",
+  "eventRegistryCanonicalName": "郑伯克段于鄢",
+  "aliases": [
+    "郑伯克段",
+    "克段于鄢"
+  ],
+  "dynasty": "春秋",
+  "era": "春秋早期",
+  "characterTags": [
+    "郑庄公",
+    "共叔段",
+    "武姜"
+  ],
+  "eventTypeTags": [
+    "继承夺位",
+    "朝堂博弈",
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "兄弟相残",
+    "继承冲突",
+    "宫廷斗争"
+  ],
+  "themeMotifs": [
+    "骨肉相争",
+    "权谋",
+    "纵容与反噬",
+    "母爱偏私"
+  ],
+  "timeRange": {
+    "start": "-722",
+    "end": "-722",
+    "display": "春秋鲁隐公元年（前722年）"
+  },
+  "locationTags": [
+    "郑",
+    "鄢"
+  ],
+  "relationshipTags": [
+    "兄弟",
+    "母子",
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "左传",
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从武姜的立场看这场冲突——她的偏爱如何一步步将幼子推向深渊",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从郑庄公的权谋视角，解读他欲擒故纵、克段于鄢的政治算计",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "马陵之战",
+  "summary": "战国中期，齐魏争霸，孙膑以“减灶”诱敌之策，于马陵道设伏，大败魏军，庞涓自刎，此战后魏国衰落，齐国崛起。",
+  "eventRegistryCanonicalName": "马陵之战",
+  "aliases": [
+    "马陵道之战"
+  ],
+  "dynasty": "战国",
+  "era": "战国",
+  "characterTags": [
+    "孙膑",
+    "庞涓",
+    "田忌"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "军事冲突"
+  ],
+  "themeMotifs": [
+    "计谋",
+    "复仇",
+    "以弱胜强"
+  ],
+  "timeRange": {
+    "start": "-341",
+    "end": "-341",
+    "display": "周显王二十八年"
+  },
+  "locationTags": [
+    "马陵"
+  ],
+  "relationshipTags": [
+    "同窗",
+    "对手"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从孙膑的视角，看昔日同窗庞涓如何一步步落入陷阱，完成复仇。",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

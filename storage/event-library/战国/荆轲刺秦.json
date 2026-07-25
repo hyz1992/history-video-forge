@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "荆轲刺秦",
+  "summary": "战国末期，燕太子丹为解亡国之危，遣荆轲入咸阳宫刺杀秦王政。图穷匕见之际刺杀失败，荆轲身死，加速了燕国覆灭。",
+  "eventRegistryCanonicalName": "荆轲刺秦",
+  "aliases": [
+    "荆轲刺秦王",
+    "图穷匕见",
+    "荆轲刺秦王政"
+  ],
+  "dynasty": "战国",
+  "era": "战国末期",
+  "characterTags": [
+    "荆轲",
+    "秦王政",
+    "太子丹",
+    "秦舞阳"
+  ],
+  "eventTypeTags": [
+    "刺杀"
+  ],
+  "conflictTypeTags": [
+    "刺杀未遂",
+    "政治冲突"
+  ],
+  "themeMotifs": [
+    "忠诚与牺牲",
+    "悲壮失败",
+    "以弱抗强"
+  ],
+  "timeRange": {
+    "start": "-227",
+    "end": "-227",
+    "display": "秦王政二十年（前227年）"
+  },
+  "locationTags": [
+    "咸阳",
+    "咸阳宫"
+  ],
+  "relationshipTags": [
+    "主客",
+    "君臣",
+    "敌我"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "战国策"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从荆轲的视角看这次刺杀——他为何明知不可为而为之",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从太子丹的立场体会这场绝望中的豪赌",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

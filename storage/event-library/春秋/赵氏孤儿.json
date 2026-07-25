@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "赵氏孤儿",
+  "summary": "春秋晋景公时，权臣屠岸贾灭赵氏满门，门客程婴与公孙杵臼救出遗腹子赵武，十五年后赵武复仇，复兴赵氏。",
+  "eventRegistryCanonicalName": "赵氏孤儿",
+  "aliases": [
+    "下宫之难",
+    "赵氏孤儿案"
+  ],
+  "dynasty": "春秋",
+  "era": "春秋",
+  "characterTags": [
+    "程婴",
+    "赵武",
+    "屠岸贾",
+    "公孙杵臼"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈",
+    "其他"
+  ],
+  "conflictTypeTags": [
+    "家族冲突",
+    "政治清洗",
+    "复仇"
+  ],
+  "themeMotifs": [
+    "忠义",
+    "复仇",
+    "隐忍",
+    "命运转折"
+  ],
+  "timeRange": {
+    "start": "-597",
+    "end": "-597",
+    "display": "春秋晋景公三年"
+  },
+  "locationTags": [
+    "晋国",
+    "下宫"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "主仆",
+    "仇敌"
+  ],
+  "sourceAnchorRefs": [
+    "左传",
+    "史记"
+  ],
+  "credibilityLevel": "disputed",
+  "disputeNotes": "《左传》载赵庄姬与赵婴齐私通引发内乱，赵同、赵括被灭，赵武随母在宫中长大；《史记·赵世家》则称屠岸贾灭赵，程婴救孤。后世多取《史记》说，但史实存争议。",
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从程婴视角看这场延续十五年的救孤大计，忠义与隐忍的极致演绎",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从赵武视角，身负灭门之仇的少年如何在隐忍中等待复仇之机",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从屠岸贾视角，权倾朝野的权臣如何一步步走向覆灭",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

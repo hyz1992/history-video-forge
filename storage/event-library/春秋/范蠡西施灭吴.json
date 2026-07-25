@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "范蠡西施灭吴",
+  "summary": "春秋晚期，越王勾践卧薪尝胆，范蠡献美人计将西施送入吴宫惑乱夫差，最终越国兴兵灭吴，一雪前耻。",
+  "eventRegistryCanonicalName": "范蠡西施灭吴",
+  "aliases": [
+    "美人计灭吴",
+    "西施亡吴"
+  ],
+  "dynasty": "春秋",
+  "era": "春秋晚期",
+  "characterTags": [
+    "范蠡",
+    "西施",
+    "勾践",
+    "夫差"
+  ],
+  "eventTypeTags": [
+    "战争",
+    "外交"
+  ],
+  "conflictTypeTags": [
+    "灭国战争",
+    "美人计"
+  ],
+  "themeMotifs": [
+    "复仇",
+    "美人计",
+    "兴亡",
+    "忠义"
+  ],
+  "timeRange": {
+    "start": "-473",
+    "end": "-473",
+    "display": "春秋晚期"
+  },
+  "locationTags": [
+    "会稽",
+    "姑苏"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "敌对国",
+    "情侣"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "吴越春秋"
+  ],
+  "credibilityLevel": "medium",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从范蠡的视角看这场美人计：他如何亲手将心爱的女子送入敌营，又如何在功成后泛舟而去",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "沙丘之变",
+  "summary": "秦始皇东巡途中驾崩于沙丘，赵高联合胡亥、李斯秘不发丧，篡改遗诏赐死扶苏，扶胡亥即位，秦政自此衰败。",
+  "eventRegistryCanonicalName": "沙丘之变",
+  "aliases": [
+    "沙丘政变",
+    "沙丘之谋"
+  ],
+  "dynasty": "秦",
+  "era": "秦",
+  "characterTags": [
+    "赵高",
+    "胡亥",
+    "李斯",
+    "扶苏"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "继承夺位"
+  ],
+  "conflictTypeTags": [
+    "继承冲突",
+    "篡改遗诏"
+  ],
+  "themeMotifs": [
+    "权力阴谋",
+    "篡位夺权",
+    "亡国开端"
+  ],
+  "timeRange": {
+    "start": "-210",
+    "end": "-210",
+    "display": "秦始皇三十七年七月"
+  },
+  "locationTags": [
+    "沙丘",
+    "沙丘平台"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "父子",
+    "兄弟"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从扶苏的视角看这场政变——接到伪诏时的绝望与抉择",
+      "familyLabel": "宫廷政变型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从李斯的立场看这场政治豪赌——背叛始皇帝遗愿的代价",
+      "familyLabel": "阴谋博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

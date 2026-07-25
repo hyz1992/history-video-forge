@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "商鞅变法",
+  "summary": "战国秦孝公任用商鞅推行变法，废井田、奖军功、行县制，秦国富强；孝公死后旧贵族反扑，商鞅遭车裂，但新法延续，奠定秦统一基础。",
+  "eventRegistryCanonicalName": "商鞅变法",
+  "aliases": [
+    "商君变法"
+  ],
+  "dynasty": "战国",
+  "era": "战国中期",
+  "characterTags": [
+    "商鞅",
+    "秦孝公"
+  ],
+  "eventTypeTags": [
+    "变法"
+  ],
+  "conflictTypeTags": [
+    "改革阻力",
+    "新旧势力冲突"
+  ],
+  "themeMotifs": [
+    "变法图强",
+    "制度重塑",
+    "利益反扑",
+    "改革者悲剧"
+  ],
+  "timeRange": {
+    "start": "-356",
+    "end": "-338",
+    "display": "秦孝公三年至二十四年"
+  },
+  "locationTags": [
+    "秦国",
+    "栎阳",
+    "咸阳"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "改革者与保守派"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "商君书"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从商鞅的视角看变法——如何以酷法强秦却埋下杀身之祸",
+      "familyLabel": "改革图强型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从旧贵族的立场看变法——利益受损后的反扑与复仇",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从秦孝公的立场看——雄主如何借商鞅实现富国强兵",
+      "familyLabel": "改革图强型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

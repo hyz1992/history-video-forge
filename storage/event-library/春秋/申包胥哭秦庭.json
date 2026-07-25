@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "申包胥哭秦庭",
+  "summary": "春秋晚期，吴国攻破楚国郢都，楚臣申包胥赴秦求救，在秦庭哭泣七日七夜，终感动秦哀公出兵助楚复国。",
+  "eventRegistryCanonicalName": "申包胥哭秦庭",
+  "aliases": [],
+  "dynasty": "春秋",
+  "era": "春秋晚期",
+  "characterTags": [
+    "申包胥",
+    "秦哀公"
+  ],
+  "eventTypeTags": [
+    "外交"
+  ],
+  "conflictTypeTags": [
+    "救国图存"
+  ],
+  "themeMotifs": [
+    "忠义",
+    "诚感动天",
+    "国家存亡"
+  ],
+  "timeRange": {
+    "start": "-506",
+    "end": "-505",
+    "display": "周敬王十四年（前506年）至十五年（前505年）"
+  },
+  "locationTags": [
+    "秦国都城",
+    "秦庭"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "盟友"
+  ],
+  "sourceAnchorRefs": [
+    "左传",
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从秦哀公的立场看这场哭诉——他为何从无动于衷到发兵救楚",
+      "familyLabel": "外交博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "申包胥的忠义抉择：履行对伍子胥“子能复之，我必能兴之”的誓言",
+      "familyLabel": "忠义传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

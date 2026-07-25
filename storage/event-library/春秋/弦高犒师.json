@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "弦高犒师",
+  "summary": "春秋中期，秦军欲偷袭郑国，郑商人弦高途遇秦师，假托君命以牛犒师，秦军遂退，郑国得全。",
+  "eventRegistryCanonicalName": "弦高犒师",
+  "aliases": [],
+  "dynasty": "春秋",
+  "era": "春秋中期",
+  "characterTags": [
+    "弦高",
+    "孟明视",
+    "郑穆公"
+  ],
+  "eventTypeTags": [
+    "外交"
+  ],
+  "conflictTypeTags": [
+    "军事威胁",
+    "外交反制"
+  ],
+  "themeMotifs": [
+    "智谋",
+    "爱国",
+    "临危不乱",
+    "不战而屈人之兵"
+  ],
+  "timeRange": {
+    "start": "-627",
+    "end": "-627",
+    "display": "公元前627年"
+  },
+  "locationTags": [
+    "滑国",
+    "郑国"
+  ],
+  "relationshipTags": [
+    "商人与国家",
+    "秦郑敌对"
+  ],
+  "sourceAnchorRefs": [
+    "左传"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从郑国商人弦高的视角，看他如何以十二头牛智退秦军，保全郑国",
+      "familyLabel": "外交博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

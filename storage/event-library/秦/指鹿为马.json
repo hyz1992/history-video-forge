@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "指鹿为马",
+  "summary": "秦二世时期，权臣赵高为清除异己，在朝堂上指着一头鹿说是马，以此试探大臣们的忠诚，凡不顺从者均遭迫害，动摇了秦朝根基。",
+  "eventRegistryCanonicalName": "指鹿为马",
+  "aliases": [],
+  "dynasty": "秦",
+  "era": "秦",
+  "characterTags": [
+    "赵高",
+    "秦二世"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "权臣干政",
+    "排除异己"
+  ],
+  "themeMotifs": [
+    "权力斗争",
+    "试探",
+    "愚弄"
+  ],
+  "locationTags": [
+    "咸阳"
+  ],
+  "relationshipTags": [
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从赵高的视角看这场权力试探——他如何用一只鹿清洗政敌",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从秦二世的视角看指鹿为马——傀儡皇帝的无力与愚昧",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

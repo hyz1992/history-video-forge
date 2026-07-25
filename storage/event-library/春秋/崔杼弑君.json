@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "崔杼弑君",
+  "summary": "春秋后期，齐庄公私通大夫崔杼之妻棠姜，崔杼愤而设伏，弑庄公于府中，随后立景公，清除异己，一度独揽齐国大权。",
+  "eventRegistryCanonicalName": "崔杼弑君",
+  "aliases": [
+    "崔杼弑其君"
+  ],
+  "dynasty": "春秋",
+  "era": "春秋后期",
+  "characterTags": [
+    "崔杼",
+    "齐庄公",
+    "棠姜"
+  ],
+  "eventTypeTags": [
+    "刺杀",
+    "政变"
+  ],
+  "conflictTypeTags": [
+    "弑君",
+    "权力斗争"
+  ],
+  "themeMotifs": [
+    "弑君",
+    "红颜祸水",
+    "权力清洗"
+  ],
+  "timeRange": {
+    "start": "-548",
+    "end": "-548",
+    "display": "齐庄公六年"
+  },
+  "locationTags": [
+    "临淄",
+    "崔杼府"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "私通"
+  ],
+  "sourceAnchorRefs": [
+    "左传",
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从崔杼的立场看这场刺杀——私仇如何点燃权力反杀的导火索",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从太史伯的视角看这场弑君——直书“崔杼弑其君”背后的史官风骨",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

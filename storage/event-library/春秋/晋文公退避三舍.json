@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "晋文公退避三舍",
+  "summary": "春秋时期，晋文公为报流亡时楚成王款待之恩，在城濮之战中主动退避三舍，随后大败楚军，奠定霸业。",
+  "eventRegistryCanonicalName": "晋文公退避三舍",
+  "aliases": [],
+  "dynasty": "春秋",
+  "era": "春秋",
+  "characterTags": [
+    "晋文公",
+    "子玉",
+    "楚成王"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "争霸战争"
+  ],
+  "themeMotifs": [
+    "信守承诺",
+    "以退为进",
+    "战争谋略"
+  ],
+  "timeRange": {
+    "start": "前632",
+    "end": "前632",
+    "display": "晋文公五年"
+  },
+  "locationTags": [
+    "城濮"
+  ],
+  "relationshipTags": [
+    "旧恩",
+    "军事对峙"
+  ],
+  "sourceAnchorRefs": [
+    "左传"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从令尹子玉的视角看晋军'退避三舍'——是信守承诺，还是诱敌之计？",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

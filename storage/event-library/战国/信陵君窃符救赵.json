@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "信陵君窃符救赵",
+  "summary": "战国晚期，秦围赵都邯郸，魏公子信陵君为救赵国，通过魏王宠妃如姬窃取兵符，率魏军大败秦军，解邯郸之围，奠定信陵君侠义英名。",
+  "eventRegistryCanonicalName": "信陵君窃符救赵",
+  "aliases": [],
+  "dynasty": "战国",
+  "era": "战国晚期",
+  "characterTags": [
+    "信陵君",
+    "如姬",
+    "魏王",
+    "侯嬴",
+    "朱亥"
+  ],
+  "eventTypeTags": [
+    "战争",
+    "外交",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "军事救援",
+    "抗秦联盟"
+  ],
+  "themeMotifs": [
+    "侠义",
+    "智谋",
+    "忠义",
+    "爱国"
+  ],
+  "timeRange": {
+    "start": "前257",
+    "end": "前257",
+    "display": "魏安釐王二十年"
+  },
+  "locationTags": [
+    "大梁",
+    "邯郸",
+    "邺"
+  ],
+  "relationshipTags": [
+    "兄弟",
+    "君臣",
+    "恩人"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从如姬的立场看这场窃符——她为何冒死为信陵君盗取兵符",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "侯嬴的以死相报：一个看门小吏如何策划这场惊天救援",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从魏王的视角：弟弟背弃自己，君臣兄弟的信任崩塌",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

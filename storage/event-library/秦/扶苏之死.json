@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "扶苏之死",
+  "summary": "秦始皇驾崩后,赵高与李斯合谋矫诏,逼迫公子扶苏自杀,扶苏不疑而尽,胡亥得以即位,秦朝根基自此动摇。",
+  "eventRegistryCanonicalName": "扶苏之死",
+  "aliases": [],
+  "dynasty": "秦",
+  "era": "秦",
+  "characterTags": [
+    "扶苏",
+    "赵高",
+    "胡亥",
+    "李斯"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "继承夺位"
+  ],
+  "conflictTypeTags": [
+    "继承冲突",
+    "宫廷阴谋"
+  ],
+  "themeMotifs": [
+    "矫诏篡位",
+    "忠孝与命运",
+    "权力更迭"
+  ],
+  "timeRange": {
+    "start": "-210",
+    "end": "-210",
+    "display": "秦始皇三十七年"
+  },
+  "locationTags": [
+    "沙丘",
+    "上郡"
+  ],
+  "relationshipTags": [
+    "兄弟",
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从赵高的立场看矫诏夺位——一个宦官如何翻覆秦朝权力",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从扶苏的视角看忠孝困境——接到赐死诏书时他为何选择顺从",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

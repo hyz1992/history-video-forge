@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "围魏救赵",
+  "summary": "战国中期，魏国攻赵，齐将田忌、孙膑率军救赵，孙膑献策直趋魏都大梁，迫使魏军回援，在桂陵设伏大败魏军，擒获庞涓。",
+  "eventRegistryCanonicalName": "围魏救赵",
+  "aliases": [
+    "桂陵之战"
+  ],
+  "dynasty": "战国",
+  "era": "战国中期",
+  "characterTags": [
+    "孙膑",
+    "庞涓",
+    "田忌"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "围城",
+    "伏击",
+    "战略对抗"
+  ],
+  "themeMotifs": [
+    "以智取胜",
+    "军事谋略",
+    "以弱胜强",
+    "同门相争"
+  ],
+  "timeRange": {
+    "start": "-354",
+    "end": "-353",
+    "display": "周显王十六年（前354年）至十七年（前353年）"
+  },
+  "locationTags": [
+    "桂陵",
+    "大梁",
+    "邯郸"
+  ],
+  "relationshipTags": [
+    "对手",
+    "同门"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从孙膑的视角看这场以智取胜的经典战役——如何用围城之计扭转战局",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从庞涓的视角看这场失败——被同门算计，兵败被擒",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

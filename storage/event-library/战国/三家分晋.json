@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "三家分晋",
+  "summary": "春秋末年晋卿斗争，智伯瑶率韩魏攻赵，赵襄子策反韩魏灭智，后韩虔、魏斯、赵籍被周王封侯，晋国三分。",
+  "eventRegistryCanonicalName": "三家分晋",
+  "aliases": [],
+  "dynasty": "战国",
+  "era": "战国",
+  "characterTags": [
+    "韩虔",
+    "赵襄子",
+    "魏斯",
+    "智伯瑶"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "权臣斗争",
+    "领土瓜分"
+  ],
+  "themeMotifs": [
+    "以下克上",
+    "权臣背叛",
+    "强者覆灭"
+  ],
+  "timeRange": {
+    "start": "-453",
+    "end": "-403",
+    "display": "春秋晚期至战国初期"
+  },
+  "locationTags": [
+    "晋阳",
+    "新绛",
+    "洛邑"
+  ],
+  "relationshipTags": [
+    "昔为盟友",
+    "君臣",
+    "家族恩怨"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从智伯瑶的角度看这场权力洗牌——如何从不可一袭到身死族灭",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从赵襄子的立场看晋阳攻防战——隐忍与致命反击",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

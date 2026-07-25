@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "田单火牛阵",
+  "summary": "战国晚期，燕将乐毅率五国联军伐齐，齐仅剩即墨与莒二城，田单在即墨以火牛阵奇袭燕军，大获全胜，乘势收复七十余城，成功复国。",
+  "eventRegistryCanonicalName": "田单火牛阵",
+  "aliases": [
+    "火牛阵",
+    "即墨之战",
+    "田单复齐"
+  ],
+  "dynasty": "战国",
+  "era": "战国晚期",
+  "characterTags": [
+    "田单",
+    "乐毅",
+    "燕惠王"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "奇袭战",
+    "反攻"
+  ],
+  "themeMotifs": [
+    "绝地反击",
+    "智谋",
+    "离间计",
+    "忠义"
+  ],
+  "timeRange": {
+    "start": "-279",
+    "end": "-279",
+    "display": "战国周赧王三十六年"
+  },
+  "locationTags": [
+    "即墨",
+    "莒",
+    "燕"
+  ],
+  "relationshipTags": [
+    "敌将",
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从田单的视角看这场绝地反击——孤城即墨中如何用奇谋逆转亡国危局",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从乐毅的角度看功败垂成——一代名将被离间，眼看灭齐大业毁于一旦",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

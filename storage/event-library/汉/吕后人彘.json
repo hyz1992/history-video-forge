@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "吕后人彘",
+  "summary": "西汉初年，刘邦去世后吕后掌权，为报复戚夫人，将其断手足、去眼、熏耳做成“人彘”，并召惠帝观看，惠帝受惊抑郁而终。",
+  "eventRegistryCanonicalName": "吕后人彘",
+  "aliases": [
+    "人彘事件"
+  ],
+  "dynasty": "汉",
+  "era": "西汉",
+  "characterTags": [
+    "吕后",
+    "戚夫人"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈",
+    "其他"
+  ],
+  "conflictTypeTags": [
+    "宫廷斗争",
+    "继承斗争"
+  ],
+  "themeMotifs": [
+    "复仇",
+    "权力残酷",
+    "嫉妒"
+  ],
+  "timeRange": {
+    "start": "前194",
+    "end": "前194",
+    "display": "汉惠帝元年"
+  },
+  "locationTags": [
+    "长安",
+    "宫中"
+  ],
+  "relationshipTags": [
+    "妻妾",
+    "政敌"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "汉书"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从吕后的立场看这场报复——太子之争的最终清算",
+      "familyLabel": "宫廷政变型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从戚夫人的立场看这场悲剧——宠妃的末路",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

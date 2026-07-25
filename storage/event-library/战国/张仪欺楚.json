@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "张仪欺楚",
+  "summary": "战国时期，秦相张仪以割地六百里为诱饵，诱使楚怀王与齐国断交。事后张仪称只允六里，楚王大怒发兵攻秦，却大败于丹阳，楚国由此转衰。",
+  "eventRegistryCanonicalName": "张仪欺楚",
+  "aliases": [
+    "张仪诈楚"
+  ],
+  "dynasty": "战国",
+  "era": "战国",
+  "characterTags": [
+    "张仪",
+    "楚怀王",
+    "屈原",
+    "陈轸"
+  ],
+  "eventTypeTags": [
+    "外交",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "外交欺诈",
+    "军事冲突"
+  ],
+  "themeMotifs": [
+    "权谋",
+    "欺诈",
+    "盟约背叛",
+    "试探与反制"
+  ],
+  "timeRange": {
+    "start": "-313",
+    "end": "-313",
+    "display": "楚怀王十六年（前313年）"
+  },
+  "locationTags": [
+    "咸阳",
+    "郢都"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "敌国"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "战国策"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从张仪的角度看这场欺诈——秦国连横战略下的权谋与胆识",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从楚怀王的立场回看——轻信与愤怒如何葬送楚国霸业",
+      "familyLabel": "外交博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

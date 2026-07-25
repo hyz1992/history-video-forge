@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "触龙说赵太后",
+  "summary": "战国时，秦急攻赵，赵求救于齐，齐欲以赵太后幼子长安君为质，太后不肯。触龙以“父母之爱子，则为之计深远”劝谏，赵太后醒悟，遣长安君入齐，齐兵乃出，解赵之危。",
+  "eventRegistryCanonicalName": "触龙说赵太后",
+  "aliases": [],
+  "dynasty": "战国",
+  "era": "战国后期",
+  "characterTags": [
+    "触龙",
+    "赵太后",
+    "长安君"
+  ],
+  "eventTypeTags": [
+    "外交",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "外交冲突",
+    "利益交换"
+  ],
+  "themeMotifs": [
+    "劝谏艺术",
+    "母爱计深远",
+    "国家利益与亲情博弈"
+  ],
+  "timeRange": {
+    "start": "-265",
+    "end": "-265",
+    "display": "赵孝成王元年"
+  },
+  "locationTags": [
+    "赵国",
+    "齐国"
+  ],
+  "relationshipTags": [
+    "母子",
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "战国策",
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从触龙的立场看这场劝谏——如何以家常话术破解僵局",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从赵太后的视角看母爱与国家利益的权衡",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

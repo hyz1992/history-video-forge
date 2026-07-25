@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "烛之武退秦师",
+  "summary": "春秋时期，晋秦联军围攻郑国，郑国危在旦夕。老臣烛之武夜缒出城，面见秦穆公，分析灭郑于秦无益而有害，终使秦穆公退兵，郑国转危为安。",
+  "eventRegistryCanonicalName": "烛之武退秦师",
+  "aliases": [
+    "烛之武退秦师"
+  ],
+  "dynasty": "春秋",
+  "era": "春秋",
+  "characterTags": [
+    "烛之武",
+    "秦穆公",
+    "晋文公",
+    "郑文公"
+  ],
+  "eventTypeTags": [
+    "外交",
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "大国围城",
+    "外交破局"
+  ],
+  "themeMotifs": [
+    "智谋制胜",
+    "口舌救国",
+    "不战而屈人之兵"
+  ],
+  "timeRange": {
+    "start": "-630",
+    "end": "-630",
+    "display": "鲁僖公三十年"
+  },
+  "locationTags": [
+    "郑国",
+    "氾南"
+  ],
+  "relationshipTags": [
+    "敌国",
+    "秦晋同盟"
+  ],
+  "sourceAnchorRefs": [
+    "左传"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从烛之武的视角：一位被冷落的老臣如何用三寸不烂之舌化解一场灭国危机。",
+      "familyLabel": "外交博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从秦穆公的视角：在晋文公背约的现实下，如何权衡利弊放弃灭郑以保障秦国利益。",
+      "familyLabel": "外交博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

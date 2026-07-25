@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "赵盾弑其君",
+  "summary": "春秋时期，晋灵公暴虐，欲杀正卿赵盾，赵盾出逃未出境，其族弟赵穿弑灵公，赵盾回朝拥立新君，太史董狐直书“赵盾弑其君”。",
+  "eventRegistryCanonicalName": "赵盾弑其君",
+  "aliases": [],
+  "dynasty": "春秋",
+  "era": "春秋中期",
+  "characterTags": [
+    "赵盾",
+    "晋灵公",
+    "赵穿",
+    "董狐"
+  ],
+  "eventTypeTags": [
+    "刺杀",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "弑君",
+    "权力清洗"
+  ],
+  "themeMotifs": [
+    "君臣相疑",
+    "史笔如铁",
+    "权臣与昏君"
+  ],
+  "timeRange": {
+    "start": "前607",
+    "end": "前607",
+    "display": "晋灵公十四年"
+  },
+  "locationTags": [
+    "晋国",
+    "绛都"
+  ],
+  "relationshipTags": [
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "左传",
+    "史记",
+    "春秋"
+  ],
+  "credibilityLevel": "disputed",
+  "disputeNotes": "赵盾未亲手弑君，但史官董狐以其身为正卿，亡不越境，反不讨贼，故书“赵盾弑其君”，后世对赵盾之责有争议。",
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从赵盾的立场看，流亡未出境、回国未讨贼的他，如何承担“弑君”之名？",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从太史董狐的笔端看，这则“弑君”定论背后的史官风骨",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

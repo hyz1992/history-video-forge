@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "晏子使楚",
+  "summary": "春秋时期，齐国晏子出使楚国，楚王屡次设辱，晏子以机变言辞从容应对，反辱楚国，维护了齐国尊严。",
+  "eventRegistryCanonicalName": "晏子使楚",
+  "aliases": [],
+  "dynasty": "春秋",
+  "era": "春秋",
+  "characterTags": [
+    "晏子",
+    "楚王"
+  ],
+  "eventTypeTags": [
+    "外交"
+  ],
+  "conflictTypeTags": [
+    "外交博弈",
+    "才智较量"
+  ],
+  "themeMotifs": [
+    "机智应对",
+    "外交尊严",
+    "临场反击"
+  ],
+  "locationTags": [
+    "楚国"
+  ],
+  "relationshipTags": [
+    "使者",
+    "君主"
+  ],
+  "sourceAnchorRefs": [
+    "晏子春秋",
+    "史记·管晏列传"
+  ],
+  "credibilityLevel": "medium",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从晏子的视角，看如何用一个桔子的比喻让楚国自取其辱",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从楚王的角度，审视预设的羞辱如何被转化为外交尴尬",
+      "familyLabel": "外交博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

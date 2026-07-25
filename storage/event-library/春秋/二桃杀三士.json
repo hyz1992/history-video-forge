@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "二桃杀三士",
+  "summary": "春秋齐景公时，晏婴为除隐患，设计以二桃赐三勇士，使其争功自刎，兵不血刃消弭权势威胁。",
+  "eventRegistryCanonicalName": "二桃杀三士",
+  "aliases": [],
+  "dynasty": "春秋",
+  "era": "春秋晚期",
+  "characterTags": [
+    "晏婴",
+    "公孙接",
+    "田开疆",
+    "古冶子"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "政治权谋",
+    "借刀杀人"
+  ],
+  "themeMotifs": [
+    "权谋",
+    "勇士悲剧",
+    "借刀杀人"
+  ],
+  "timeRange": {
+    "start": "前547",
+    "end": "前490",
+    "display": "春秋齐景公时"
+  },
+  "locationTags": [],
+  "relationshipTags": [
+    "君臣",
+    "同僚",
+    "竞争"
+  ],
+  "sourceAnchorRefs": [
+    "晏子春秋",
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从晏婴的视角看如何用一枚桃子打破权力平衡",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

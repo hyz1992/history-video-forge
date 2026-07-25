@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "子贡存鲁乱齐破吴强晋霸越",
+  "summary": "春秋后期，齐国田常欲伐鲁，孔子遣子贡出使。子贡巧用言辞，先说齐暂缓攻鲁转伐吴，又说吴救鲁攻齐，再说越助吴以懈其志，最后说晋备吴得强，终使鲁存、齐乱、吴破、晋强而越霸，堪称外交巅峰之作。",
+  "eventRegistryCanonicalName": "子贡存鲁乱齐破吴强晋霸越",
+  "aliases": [],
+  "dynasty": "春秋",
+  "era": "春秋晚期",
+  "characterTags": [
+    "子贡"
+  ],
+  "eventTypeTags": [
+    "外交",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "外交博弈",
+    "大国争霸"
+  ],
+  "themeMotifs": [
+    "游说",
+    "纵横术",
+    "存亡继绝"
+  ],
+  "timeRange": {
+    "start": "-484",
+    "end": "-484",
+    "display": "春秋末期"
+  },
+  "locationTags": [
+    "鲁国",
+    "齐国",
+    "吴国",
+    "晋国",
+    "越国"
+  ],
+  "relationshipTags": [
+    "师徒",
+    "外交使者"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "孔子家语"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "利口巧辞动五国——从子贡的外交说辞看春秋末期的连锁博弈",
+      "familyLabel": "外交博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

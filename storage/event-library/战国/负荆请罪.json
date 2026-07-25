@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "负荆请罪",
+  "summary": "战国时，赵国大将廉颇因蔺相如仅凭口舌之功位在自己之上而心生不满，屡次挑衅。蔺相如以国事为重，处处退让。廉颇得知其苦心后，负荆登门请罪，两人遂成刎颈之交，共保赵国。",
+  "eventRegistryCanonicalName": "负荆请罪",
+  "aliases": [
+    "将相和"
+  ],
+  "dynasty": "战国",
+  "era": "战国",
+  "characterTags": [
+    "廉颇",
+    "蔺相如"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "权力竞争",
+    "身份冲突"
+  ],
+  "themeMotifs": [
+    "知错能改",
+    "以国为重",
+    "忍辱",
+    "将相和"
+  ],
+  "timeRange": {
+    "start": "",
+    "end": "",
+    "display": ""
+  },
+  "locationTags": [
+    "邯郸"
+  ],
+  "relationshipTags": [
+    "同僚",
+    "将相",
+    "竞争对手"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从廉颇的视角看这场将相和——一位战功卓著的将军如何从嫉恨走向负荆请罪",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

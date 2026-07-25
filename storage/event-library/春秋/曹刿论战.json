@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "曹刿论战",
+  "summary": "春秋时期，齐师伐鲁，布衣曹刿请见鲁庄公，论战于长勺，以“一鼓作气”之谋助鲁军以弱胜强，大败齐师，留下千古名篇。",
+  "eventRegistryCanonicalName": "曹刿论战",
+  "aliases": [],
+  "dynasty": "春秋",
+  "era": "春秋",
+  "characterTags": [
+    "曹刿",
+    "鲁庄公"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "以弱胜强",
+    "防御战"
+  ],
+  "themeMotifs": [
+    "民心与士气",
+    "智谋制胜",
+    "战场翻盘"
+  ],
+  "timeRange": {
+    "start": "-684",
+    "end": "-684",
+    "display": "鲁庄公十年"
+  },
+  "locationTags": [
+    "长勺",
+    "鲁国"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "布衣与国君"
+  ],
+  "sourceAnchorRefs": [
+    "左传"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从曹刿的视角看这场以弱胜强的战役——一介布衣如何用谋略扭转战局",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从鲁庄公的立场看长勺之战——纳谏国君如何信任草民而赢得胜利",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

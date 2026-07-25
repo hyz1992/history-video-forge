@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "嫪毐之乱",
+  "summary": "秦王政年间，太后赵姬与嫪毐私通生子，嫪毐借太后之势权倾朝野，于公元前238年发动叛乱，被秦王政迅速平定，嫪毐车裂，门客流放，王权得以巩固。",
+  "eventRegistryCanonicalName": "嫪毐之乱",
+  "aliases": [],
+  "dynasty": "秦",
+  "era": "秦",
+  "characterTags": [
+    "嫪毐",
+    "赵姬",
+    "秦王政",
+    "吕不韦"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "宫廷政变",
+    "权力斗争"
+  ],
+  "themeMotifs": [
+    "权力",
+    "背叛",
+    "私通",
+    "血腥镇压"
+  ],
+  "timeRange": {
+    "start": "-238",
+    "end": "-238",
+    "display": "秦王政九年"
+  },
+  "locationTags": [
+    "雍城",
+    "蕲年宫"
+  ],
+  "relationshipTags": [
+    "情人",
+    "母子",
+    "君臣",
+    "主仆"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从嫪毐的视角看这场政变——从市井无赖到位极人臣，再到车裂覆灭",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从秦王政的立场看——弱冠之年如何冷静处置母亲的情人叛乱",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

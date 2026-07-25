@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "吕不韦奇货可居",
+  "summary": "战国晚期，商人吕不韦在邯郸偶遇质赵的秦公子子楚，以“奇货可居”之策倾家相助，使其归秦被立为太子。子楚继位为秦庄襄王后，吕不韦拜相封侯，完成商人到权相的政治跃迁。",
+  "eventRegistryCanonicalName": "吕不韦奇货可居",
+  "aliases": [],
+  "dynasty": "战国",
+  "era": "战国",
+  "characterTags": [
+    "吕不韦",
+    "子楚",
+    "华阳夫人"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈",
+    "继承夺位"
+  ],
+  "conflictTypeTags": [
+    "继承冲突",
+    "权力运作"
+  ],
+  "themeMotifs": [
+    "权谋",
+    "投资与回报",
+    "商人与政治"
+  ],
+  "timeRange": {
+    "start": "-262",
+    "end": "-249",
+    "display": "战国末期"
+  },
+  "locationTags": [
+    "邯郸",
+    "咸阳"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "投资者与被投资者"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "战国策"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从吕不韦的商人视角看这场政治豪赌——奇货可居的胆略与风险",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从子楚的视角看被选中成为奇货的机遇与无奈",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

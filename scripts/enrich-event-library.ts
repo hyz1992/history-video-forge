@@ -138,8 +138,18 @@ async function enrichOne(
   });
 
   // Zod 严格校验：不通过直接抛错，调用方记到 fail-list
-  const parsed = parseEventLibraryFile(raw);
-  return parsed as unknown as Record<string, unknown>;
+  const parsed = parseEventLibraryFile(raw) as unknown as Record<string, unknown>;
+
+  // 硬保障：dynasty/era 必须与骨架一致，LLM 不得修改
+  // （否则会出现"战国"→"魏"这类分类漂移，导致文件分散到不同目录）
+  if (skeleton.dynasty) {
+    parsed.dynasty = skeleton.dynasty;
+  }
+  if (skeleton.era) {
+    parsed.era = skeleton.era;
+  }
+
+  return parsed;
 }
 
 // ---- 文件写入 ----

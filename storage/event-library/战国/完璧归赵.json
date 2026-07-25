@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "完璧归赵",
+  "summary": "战国赵惠文王时，秦昭襄王假意以十五城交换和氏璧，蔺相如奉命使秦，识破秦王欺诈，完璧归赵，维护赵国尊严。",
+  "eventRegistryCanonicalName": "完璧归赵",
+  "aliases": [],
+  "dynasty": "战国",
+  "era": "战国",
+  "characterTags": [
+    "蔺相如",
+    "赵惠文王",
+    "秦昭襄王"
+  ],
+  "eventTypeTags": [
+    "外交"
+  ],
+  "conflictTypeTags": [
+    "外交讹诈",
+    "智斗"
+  ],
+  "themeMotifs": [
+    "智勇双全",
+    "维护尊严",
+    "以弱制强"
+  ],
+  "timeRange": {
+    "start": "-283",
+    "end": "-283",
+    "display": "赵惠文王十六年（公元前283年）"
+  },
+  "locationTags": [
+    "咸阳",
+    "赵国"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "外交对手"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从蔺相如的立场，看一位门客如何在秦廷上以命相搏维护国家尊严",
+      "familyLabel": "外交博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从秦昭襄王的视角，看一场精心策划的外交讹诈如何被一个使臣挫败",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

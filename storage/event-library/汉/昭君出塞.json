@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "昭君出塞",
+  "summary": "西汉竟宁元年，宫女王昭君应征和亲，远嫁南匈奴呼韩邪单于，为汉匈边境带来五十余年和平。",
+  "eventRegistryCanonicalName": "昭君出塞",
+  "aliases": [
+    "王昭君出塞",
+    "昭君和亲"
+  ],
+  "dynasty": "汉",
+  "era": "西汉",
+  "characterTags": [
+    "王昭君",
+    "呼韩邪单于"
+  ],
+  "eventTypeTags": [
+    "和亲",
+    "外交"
+  ],
+  "conflictTypeTags": [
+    "边疆冲突缓解"
+  ],
+  "themeMotifs": [
+    "远嫁和亲",
+    "边疆平衡",
+    "个人命运",
+    "临场应对",
+    "体面保卫"
+  ],
+  "timeRange": {
+    "start": "前33",
+    "end": "前33",
+    "display": "西汉竟宁元年"
+  },
+  "locationTags": [
+    "长安",
+    "匈奴王庭"
+  ],
+  "relationshipTags": [
+    "和亲联姻"
+  ],
+  "sourceAnchorRefs": [
+    "汉书",
+    "后汉书"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从王昭君的视角看这次和亲——画师弃市背后的宫廷命运",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从呼韩邪单于的立场看和亲——南匈奴的生存策略与汉匈平衡",
+      "familyLabel": "外交博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

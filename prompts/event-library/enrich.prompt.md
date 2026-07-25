@@ -1,6 +1,6 @@
 ---
 id: event-library.enrich
-version: v1.0.0
+version: v1.1.0
 stage: event_library
 language: zh-CN
 consumes:
@@ -36,6 +36,8 @@ status: active
 - `summary` (string)：一句话事件简介，30-80 字。必须包含：时代背景、核心人物、关键冲突、结局走向。基于史料常识，不得编造。
 - `eventRegistryCanonicalName` (string)：事件注册规范名，通常与 canonicalTitle 相同。用于跨条目去重。
 - `aliases` (string[])：事件别名数组，如 ["玄武门之变","玄武门政变"]。无别名时填 `[]`。
+- `dynasty` (string)：朝代。**硬约束**：必须与输入 `dynasty` 完全一致，不得修改、不得更具体化（如输入"战国"不得改成"魏""赵"等诸侯国名）。输入缺失时按事件所处朝代常识填写。
+- `era` (string)：时代。**硬约束**：必须与输入 `era` 完全一致，不得修改。输入缺失时按事件所处时代常识填写，如"春秋晚期""初唐""明末"。
 - `characterTags` (string[])：核心人物列表，来自输入 corePeople 或补充关键当事人。每人不超过 6 字。
 - `eventTypeTags` (string[])：事件类型标签，从以下选 1-3 个："政变""战争""变法""外交""继承夺位""朝堂博弈""刺杀""改革""起义""投降""和亲""巡幸""审判""流放""其他"。
 - `credibilityLevel` (enum)：史实可信度，取值 `"high"` / `"medium"` / `"low"` / `"disputed"`。
@@ -51,8 +53,6 @@ status: active
 
 ### 可选字段（能确定就填，不确定可省略）
 
-- `era` (string)：更精确的时代，如"春秋晚期""初唐""明末"。来自输入。
-- `dynasty` (string)：朝代。来自输入。
 - `conflictTypeTags` (string[])：冲突类型，如 ["继承冲突","武装政变"]。
 - `themeMotifs` (string[])：主题母题，如 ["兄弟相残","权力代价""复仇""忠义"]。
 - `timeRange` (object)：时间范围，含 `start` (string, 起始年份)、`end` (string, 结束年份)、`display` (string, 中文展示如"唐武德九年六月")。能确定具体年份或年号时填。
@@ -65,6 +65,7 @@ status: active
 
 - **仅输出结构化字段**：不得输出解释、建议、对话或额外文本。
 - **基于史料常识**：summary、angles、themeMotifs 等字段必须基于公认史实，不得编造情节、对话或细节。
+- **dynasty/era 不可修改**：`dynasty` 和 `era` 是分类硬约束，必须与输入完全一致。即使你认为更具体的诸侯国名（如"魏""赵"）更准确，也不得替换输入的朝代名（如"战国"）。这是为了保持事件库分类一致性。
 - **争议标注**：野史/传说/争议事件不得标 `high`，应降级为 `medium`/`low`/`disputed` 并在 disputeNotes 说明。
 - **标签转化**：输入的 `tags`（如"赌命一击""近身夺命"）是叙事风格，不要直接复制到 eventTypeTags/themeMotifs，需要你理解事件本质后转化为语义对齐的字段。
 - **角度创意**：angleLabel 要有叙事张力，但不能背离史实。避免"假如……"式的虚构假设。

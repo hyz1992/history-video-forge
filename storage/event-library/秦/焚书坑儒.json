@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "焚书坑儒",
+  "summary": "秦始皇统一六国后，采纳李斯建议，焚毁百家之书，坑杀术士儒生，以统一思想，巩固中央集权。",
+  "eventRegistryCanonicalName": "焚书坑儒",
+  "aliases": [
+    "焚书",
+    "坑儒",
+    "焚诗书坑术士"
+  ],
+  "dynasty": "秦",
+  "era": "秦",
+  "characterTags": [
+    "秦始皇",
+    "李斯",
+    "扶苏",
+    "淳于越"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈",
+    "其他"
+  ],
+  "conflictTypeTags": [
+    "思想控制",
+    "朝堂辩论"
+  ],
+  "themeMotifs": [
+    "思想高压",
+    "文化专制",
+    "文字狱"
+  ],
+  "timeRange": {
+    "start": "-213",
+    "end": "-212",
+    "display": "秦始皇三十四年至三十五年"
+  },
+  "locationTags": [
+    "咸阳"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "师生"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "disputed",
+  "disputeNotes": "焚书坑儒的规模、对象及具体细节存在争议，部分学者认为主要针对方士和部分儒生，并非全部儒生。",
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从主张分封的淳于越角度，看焚书令的出台——一次朝堂辩论如何演变成文化浩劫",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从扶苏的立场看这场运动——直言进谏带来的代价与命运转折",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "即墨死守与田单复齐",
+  "summary": "战国时期，燕将乐毅破齐七十余城，唯即墨与莒未下。田单被推为将，坚守即墨，后以火牛阵大破燕军，收复齐国失地。",
+  "eventRegistryCanonicalName": "即墨死守与田单复齐",
+  "aliases": [],
+  "dynasty": "战国",
+  "era": "战国",
+  "characterTags": [
+    "田单",
+    "乐毅",
+    "骑劫"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "攻防战",
+    "反攻战"
+  ],
+  "themeMotifs": [
+    "以弱胜强",
+    "绝地反击",
+    "智谋"
+  ],
+  "timeRange": {
+    "start": "前284",
+    "end": "前279",
+    "display": "周赧王三十一年至三十六年"
+  },
+  "locationTags": [
+    "即墨",
+    "莒"
+  ],
+  "relationshipTags": [
+    "将帅",
+    "敌对"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从田单的视角，看他如何利用火牛阵扭转败局",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从即墨军民的视角，感受孤城死守五年的信念",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

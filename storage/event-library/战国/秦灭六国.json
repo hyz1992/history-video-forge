@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "秦灭六国",
+  "summary": "战国末期，秦王政任用李斯、王翦等，自公元前230年至前221年，先后攻灭韩赵魏楚燕齐六国，结束诸侯割据，建立大一统秦朝。",
+  "eventRegistryCanonicalName": "秦灭六国",
+  "aliases": [
+    "秦统一六国",
+    "秦并六国"
+  ],
+  "dynasty": "战国",
+  "era": "战国末期",
+  "characterTags": [
+    "秦王政",
+    "李斯",
+    "王翦",
+    "王贲",
+    "蒙恬"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "统一战争",
+    "兼并战争"
+  ],
+  "themeMotifs": [
+    "统一霸业",
+    "战争攻伐",
+    "终结乱世"
+  ],
+  "timeRange": {
+    "start": "前230",
+    "end": "前221",
+    "display": "秦王政十七年至二十六年"
+  },
+  "locationTags": [
+    "韩国",
+    "赵国",
+    "魏国",
+    "楚国",
+    "燕国",
+    "齐国"
+  ],
+  "relationshipTags": [
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从王翦的立场看这场统一战争——老将如何步步为营，助秦王吞并六国",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从韩国末代国君的视角——小国在强秦兵锋下的挣扎与覆灭",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

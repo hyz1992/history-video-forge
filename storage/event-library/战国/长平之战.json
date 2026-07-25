@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "长平之战",
+  "summary": "战国晚期，秦赵在长平对峙，赵王中反间计以赵括代廉颇，秦将白起诱敌深入，围困赵军，赵括突围阵亡，四十余万赵卒被坑杀，奠定秦统一大势。",
+  "eventRegistryCanonicalName": "长平之战",
+  "aliases": [],
+  "dynasty": "战国",
+  "era": "战国",
+  "characterTags": [
+    "白起",
+    "廉颇",
+    "赵括",
+    "赵孝成王"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "军事对抗",
+    "围歼战"
+  ],
+  "themeMotifs": [
+    "纸上谈兵",
+    "反间计",
+    "杀降",
+    "战场决策"
+  ],
+  "timeRange": {
+    "start": "-260",
+    "end": "-260",
+    "display": "秦昭襄王四十七年"
+  },
+  "locationTags": [
+    "长平"
+  ],
+  "relationshipTags": [
+    "将帅",
+    "敌对",
+    "替代"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从廉颇的视角看这场战争——被撤换后如何面对失败",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从赵括的视角看这场生死翻盘——纸上谈兵的代价",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

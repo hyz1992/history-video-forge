@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "商鞅车裂",
+  "summary": "战国时期，商鞅在秦国推行变法使国富兵强，然触怒旧贵族。秦孝公死后，秦惠文王继位，公子虔等诬告商鞅谋反，商鞅被迫起兵反抗失败，终遭车裂之刑，但其法未废。",
+  "eventRegistryCanonicalName": "商鞅车裂",
+  "aliases": [],
+  "dynasty": "战国",
+  "era": "战国中期",
+  "characterTags": [
+    "商鞅",
+    "秦惠文王",
+    "公子虔",
+    "公孙贾"
+  ],
+  "eventTypeTags": [
+    "改革",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "变法反扑",
+    "权力清算"
+  ],
+  "themeMotifs": [
+    "改革代价",
+    "功臣末路",
+    "制度重塑"
+  ],
+  "timeRange": {
+    "start": "前338",
+    "end": "前338",
+    "display": "秦惠文王元年"
+  },
+  "locationTags": [
+    "咸阳",
+    "秦国"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "政敌"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "战国策"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从商鞅的视角回顾变法之路，为何严刑峻法最终反噬自身",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "秦惠文王面对旧贵族与商鞅的博弈，他如何权衡新法与旧怨",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

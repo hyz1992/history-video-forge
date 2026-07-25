@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "苏秦合纵佩六国相印",
+  "summary": "战国中期，纵横家苏秦游说燕、赵、韩、魏、齐、楚六国合纵抗秦，促成联盟并身佩六国相印，使秦十五年不敢东出。",
+  "eventRegistryCanonicalName": "苏秦合纵佩六国相印",
+  "aliases": [
+    "苏秦佩六国相印",
+    "合纵抗秦",
+    "六国相印"
+  ],
+  "dynasty": "战国",
+  "era": "战国",
+  "characterTags": [
+    "苏秦",
+    "燕文公",
+    "赵肃侯",
+    "张仪"
+  ],
+  "eventTypeTags": [
+    "外交",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "合纵连横",
+    "外交竞争"
+  ],
+  "themeMotifs": [
+    "纵横捭阖",
+    "口才与谋略",
+    "寒门崛起"
+  ],
+  "timeRange": {
+    "start": "-334",
+    "end": "-317",
+    "display": "战国中期"
+  },
+  "locationTags": [
+    "燕",
+    "赵",
+    "韩",
+    "魏",
+    "齐",
+    "楚",
+    "函谷关"
+  ],
+  "relationshipTags": [
+    "游说",
+    "合纵",
+    "对手"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "战国策"
+  ],
+  "credibilityLevel": "medium",
+  "disputeNotes": "苏秦生平记载与张仪年代有错乱，部分事迹可能出自后人附会，然合纵之事见于正史，基本可信。",
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从苏秦的视角看这场横跨七国的外交大博弈——他以一己之力缔造合纵联盟，身佩六国相印，威慑强秦。",
+      "familyLabel": "外交博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

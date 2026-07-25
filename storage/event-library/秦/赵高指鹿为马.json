@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "赵高指鹿为马",
+  "summary": "秦二世时，丞相赵高为测试群臣忠诚，在朝堂指鹿为马，将言鹿者一一陷害，以此清除异己，加速秦朝覆灭。",
+  "eventRegistryCanonicalName": "赵高指鹿为马",
+  "aliases": [],
+  "dynasty": "秦",
+  "era": "秦",
+  "characterTags": [
+    "赵高",
+    "秦二世"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "权力斗争",
+    "朝堂站队"
+  ],
+  "themeMotifs": [
+    "权力阴谋",
+    "忠诚测试",
+    "颠倒黑白"
+  ],
+  "timeRange": {
+    "start": "前207",
+    "end": "前207",
+    "display": "秦二世三年"
+  },
+  "locationTags": [
+    "咸阳宫"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "权臣与傀儡皇帝"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从秦二世的视角看赵高指鹿为马——傀儡皇帝的困惑与无奈",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

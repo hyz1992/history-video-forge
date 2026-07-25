@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "赵高弑二世",
+  "summary": "秦二世三年，赵高指使其婿阎乐率兵闯入望夷宫，逼秦二世胡亥自杀，随后立子婴为秦王。",
+  "eventRegistryCanonicalName": "赵高弑二世",
+  "aliases": [
+    "望夷宫之变"
+  ],
+  "dynasty": "秦",
+  "era": "秦",
+  "characterTags": [
+    "赵高",
+    "胡亥",
+    "阎乐"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "刺杀"
+  ],
+  "conflictTypeTags": [
+    "权力清洗",
+    "弑君政变"
+  ],
+  "themeMotifs": [
+    "权臣反噬",
+    "背叛",
+    "报应"
+  ],
+  "timeRange": {
+    "start": "-207",
+    "end": "-207",
+    "display": "秦二世三年八月"
+  },
+  "locationTags": [
+    "咸阳",
+    "望夷宫"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "师生"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从赵高的立场看这场政变——权倾朝野后为何必须弑君",
+      "familyLabel": "宫廷政变型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从秦二世胡亥的视角——被最信任的臣子背叛的绝望时刻",
+      "familyLabel": "背叛与绝望型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

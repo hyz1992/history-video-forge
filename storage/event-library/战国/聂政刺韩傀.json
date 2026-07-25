@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "聂政刺韩傀",
+  "summary": "战国时期，韩国严仲子与相国韩傀有仇，聂政受其托，在韩傀府上刺杀韩傀，随后击杀数十护卫，自毁面目而死，其姐聂荣认尸扬名。",
+  "eventRegistryCanonicalName": "聂政刺韩傀",
+  "aliases": [
+    "聂政刺侠累"
+  ],
+  "dynasty": "战国",
+  "era": "战国",
+  "characterTags": [
+    "聂政",
+    "韩傀",
+    "严仲子",
+    "聂荣"
+  ],
+  "eventTypeTags": [
+    "刺杀"
+  ],
+  "conflictTypeTags": [
+    "复仇",
+    "刺杀"
+  ],
+  "themeMotifs": [
+    "复仇",
+    "隐忍",
+    "一击必杀",
+    "亲情"
+  ],
+  "locationTags": [
+    "阳翟",
+    "韩傀府"
+  ],
+  "relationshipTags": [
+    "仇敌",
+    "主臣"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从聂政的视角看这场刺杀——为知己者死的决绝一击",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从聂荣认尸看这场刺杀——姐姐的勇气与对弟弟名节的捍卫",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

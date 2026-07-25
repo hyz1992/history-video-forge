@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "毛遂自荐",
+  "summary": "战国赵孝成王九年，秦围邯郸，平原君赴楚求救，门客毛遂自荐随行。在楚廷，毛遂按剑而上，陈说利害，迫使楚王歃血为盟，合纵抗秦。",
+  "eventRegistryCanonicalName": "毛遂自荐",
+  "aliases": [],
+  "dynasty": "战国",
+  "era": "战国末期",
+  "characterTags": [
+    "毛遂",
+    "平原君",
+    "楚王"
+  ],
+  "eventTypeTags": [
+    "外交"
+  ],
+  "conflictTypeTags": [
+    "外交博弈",
+    "合纵连横"
+  ],
+  "themeMotifs": [
+    "自荐",
+    "用人之道",
+    "舌战",
+    "关键时刻挺身而出"
+  ],
+  "timeRange": {
+    "start": "-257",
+    "end": "-257",
+    "display": "赵孝成王九年"
+  },
+  "locationTags": [
+    "邯郸",
+    "楚国郢都"
+  ],
+  "relationshipTags": [
+    "主客",
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从毛遂的视角，看门客如何在关键时刻自荐并一举成名",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}
