@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "勾践卧薪尝胆",
+  "summary": "春秋晚期，越王勾践被吴王夫差击败后，卧薪尝胆，励精图治，最终灭吴复仇，成就霸业。",
+  "eventRegistryCanonicalName": "勾践卧薪尝胆",
+  "aliases": [
+    "卧薪尝胆"
+  ],
+  "dynasty": "春秋",
+  "era": "春秋晚期",
+  "characterTags": [
+    "勾践",
+    "夫差",
+    "范蠡",
+    "文种"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "复仇战争",
+    "灭国战争"
+  ],
+  "themeMotifs": [
+    "复仇",
+    "隐忍",
+    "励志"
+  ],
+  "timeRange": {
+    "start": "-494",
+    "end": "-473",
+    "display": "春秋晚期"
+  },
+  "locationTags": [
+    "会稽",
+    "姑苏"
+  ],
+  "relationshipTags": [
+    "仇敌",
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "左传"
+  ],
+  "credibilityLevel": "medium",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从勾践的视角看卧薪尝胆的复仇之路——从阶下囚到霸主的蜕变",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从夫差的视角看从胜利者到亡国之君的转折——刚愎自用的代价",
+      "familyLabel": "悲剧终局型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从范蠡的视角看辅助君主复仇与功成身退的智慧",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

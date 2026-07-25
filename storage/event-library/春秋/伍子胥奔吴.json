@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "伍子胥奔吴",
+  "summary": "春秋时期，楚人伍子胥因父兄被楚平王冤杀，辗转宋郑等国逃亡至吴，后辅佐吴王阖闾伐楚复仇，鞭尸雪恨。",
+  "eventRegistryCanonicalName": "伍子胥奔吴",
+  "aliases": [
+    "伍员奔吴"
+  ],
+  "dynasty": "春秋",
+  "era": "春秋晚期",
+  "characterTags": [
+    "伍子胥",
+    "楚平王",
+    "费无忌",
+    "吴王阖闾"
+  ],
+  "eventTypeTags": [
+    "其他"
+  ],
+  "conflictTypeTags": [
+    "政治迫害",
+    "血亲复仇"
+  ],
+  "themeMotifs": [
+    "复仇",
+    "忠孝",
+    "隐忍",
+    "命运转折"
+  ],
+  "timeRange": {
+    "start": "-522",
+    "end": "-522",
+    "display": "楚平王七年(前522)"
+  },
+  "locationTags": [
+    "楚国",
+    "宋国",
+    "郑国",
+    "吴国"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "仇敌"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "左传"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "以一个复仇者的视角，看伍子胥如何隐忍逃亡，终以破楚鞭尸完成复仇",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从楚平王的角度看一场冤案如何引发楚国覆灭的连锁反应",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

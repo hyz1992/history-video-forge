@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "伍子胥鞭尸楚平王",
+  "summary": "春秋末期，伍子胥为报父兄被杀之仇，出逃吴国，辅佐吴王阖闾攻破楚都郢，掘楚平王墓鞭尸三百，以泄怨恨。",
+  "eventRegistryCanonicalName": "伍子胥鞭尸楚平王",
+  "aliases": [],
+  "dynasty": "春秋",
+  "era": "春秋晚期",
+  "characterTags": [
+    "伍子胥",
+    "楚平王"
+  ],
+  "eventTypeTags": [
+    "战争",
+    "其他"
+  ],
+  "conflictTypeTags": [
+    "复仇",
+    "国仇家恨"
+  ],
+  "themeMotifs": [
+    "复仇",
+    "隐忍",
+    "孝道",
+    "以暴制暴"
+  ],
+  "timeRange": {
+    "start": "-506",
+    "end": "-506",
+    "display": "公元前506年"
+  },
+  "locationTags": [
+    "郢都"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "仇敌"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "disputed",
+  "disputeNotes": "《史记》详载鞭尸，《左传》未记此事，后世学者对是否真正鞭尸存在争议。",
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从伍子胥的逃亡与复仇，审视隐忍十载的仇恨如何扭曲人性",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "站在楚平王的角度，看暴政与失信如何埋下身后祸根",
+      "familyLabel": "因果报应型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

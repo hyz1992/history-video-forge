@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "伍员过昭关",
+  "summary": "春秋后期，楚臣伍员因父兄被楚平王冤杀，逃亡吴国。过昭关时因盘查严密，一夜愁白头发，得以蒙混出关，最终入吴辅佐阖闾复仇。",
+  "eventRegistryCanonicalName": "伍员过昭关",
+  "aliases": [
+    "伍子胥过昭关"
+  ],
+  "dynasty": "春秋",
+  "era": "春秋晚期",
+  "characterTags": [
+    "伍员"
+  ],
+  "eventTypeTags": [
+    "其他"
+  ],
+  "conflictTypeTags": [
+    "政治迫害",
+    "逃亡"
+  ],
+  "themeMotifs": [
+    "复仇",
+    "命运转折",
+    "忠奸对立"
+  ],
+  "locationTags": [
+    "昭关"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "父子"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "左传"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从伍员的视角看昭关一夜——极境中的命运转折与复仇之路的起点",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

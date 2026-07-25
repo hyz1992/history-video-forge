@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "专诸刺王僚",
+  "summary": "春秋晚期，吴国公子光（阖闾）为夺王位，指使刺客专诸，借献鱼之机刺死吴王僚，专诸随即被杀，光遂即位。",
+  "eventRegistryCanonicalName": "专诸刺王僚",
+  "aliases": [],
+  "dynasty": "春秋",
+  "era": "春秋晚期",
+  "characterTags": [
+    "专诸",
+    "王僚",
+    "阖闾"
+  ],
+  "eventTypeTags": [
+    "刺杀",
+    "继承夺位"
+  ],
+  "conflictTypeTags": [
+    "权力斗争",
+    "刺杀夺位"
+  ],
+  "themeMotifs": [
+    "权力代价",
+    "忠诚与背叛",
+    "刺客传奇"
+  ],
+  "timeRange": {
+    "start": "前515",
+    "end": "前515",
+    "display": "公元前515年"
+  },
+  "locationTags": [
+    "吴都",
+    "王宫"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "仇敌"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从刺客专诸的视角——一场以命换命的献鱼宴",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从公子光（阖闾）的视角——忍辱负重多年，一招棋定吴国江山",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}
