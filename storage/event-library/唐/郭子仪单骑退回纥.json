@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "郭子仪单骑退回纥",
+  "summary": "唐中后期，仆固怀恩引回纥、吐蕃入侵，郭子仪单骑赴回纥营，凭昔日的威望与智谋说服酋长罢兵，化解危机。",
+  "eventRegistryCanonicalName": "郭子仪单骑退回纥",
+  "aliases": [],
+  "dynasty": "唐",
+  "era": "唐",
+  "characterTags": [
+    "郭子仪",
+    "仆固怀恩",
+    "药葛罗"
+  ],
+  "eventTypeTags": [
+    "外交"
+  ],
+  "conflictTypeTags": [
+    "边境危机",
+    "外交斡旋"
+  ],
+  "themeMotifs": [
+    "临场应对",
+    "话术压制",
+    "体面保卫"
+  ],
+  "timeRange": {
+    "start": "765",
+    "end": "765",
+    "display": "唐永泰元年"
+  },
+  "locationTags": [
+    "泾阳"
+  ],
+  "relationshipTags": [
+    "旧交",
+    "将帅"
+  ],
+  "sourceAnchorRefs": [
+    "旧唐书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从郭子仪的视角看，他如何凭一身胆魄与旧日威信，在回纥营中不战而屈人之兵",
+      "familyLabel": "外交博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从回纥酋长的立场看，为何见到郭子仪便决定退兵，信任如何跨越敌我界限",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

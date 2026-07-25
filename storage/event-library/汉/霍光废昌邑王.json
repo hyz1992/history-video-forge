@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "霍光废昌邑王",
+  "summary": "西汉昭帝崩，权臣霍光迎立昌邑王刘贺为帝，仅二十七日即以荒淫失德为由将其废黜，改立汉宣帝，开启权臣废立之端。",
+  "eventRegistryCanonicalName": "霍光废昌邑王",
+  "aliases": [
+    "霍光废立",
+    "废黜昌邑王"
+  ],
+  "dynasty": "汉",
+  "era": "西汉",
+  "characterTags": [
+    "霍光",
+    "刘贺"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈",
+    "继承夺位"
+  ],
+  "conflictTypeTags": [
+    "权臣废立",
+    "继承冲突"
+  ],
+  "themeMotifs": [
+    "权力代价",
+    "君臣博弈",
+    "试探与反制"
+  ],
+  "timeRange": {
+    "start": "-74",
+    "end": "-74",
+    "display": "汉元平元年"
+  },
+  "locationTags": [
+    "长安",
+    "未央宫"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "权臣与皇帝"
+  ],
+  "sourceAnchorRefs": [
+    "汉书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从霍光的立场看这场废立：权臣如何以合法程序废黜皇帝",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从昌邑王刘贺的视角：27天从诸侯王到皇帝再到庶民的急转直下",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

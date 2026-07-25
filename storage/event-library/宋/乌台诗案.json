@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "乌台诗案",
+  "summary": "北宋元丰二年，苏轼因诗文被指讽刺新法、谤讪朝廷，被御史台逮捕审讯，险遭杀身之祸，终贬黄州，成为宋代最著名的文字狱。",
+  "eventRegistryCanonicalName": "乌台诗案",
+  "aliases": [
+    "乌台诗狱"
+  ],
+  "dynasty": "宋",
+  "era": "北宋",
+  "characterTags": [
+    "苏轼",
+    "李定",
+    "舒亶",
+    "何正臣",
+    "宋神宗"
+  ],
+  "eventTypeTags": [
+    "审判",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "文字狱",
+    "政治斗争"
+  ],
+  "themeMotifs": [
+    "文字狱",
+    "思想高压",
+    "文人遭际",
+    "言论控制"
+  ],
+  "timeRange": {
+    "start": "1079",
+    "end": "1079",
+    "display": "宋神宗元丰二年"
+  },
+  "locationTags": [
+    "汴京",
+    "御史台"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "政敌"
+  ],
+  "sourceAnchorRefs": [
+    "宋史",
+    "续资治通鉴长编",
+    "苏轼文集"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从苏轼的视角，看一场诗文引发的牢狱之灾与人生转折",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从宋神宗的立场看这场诗案——改革与言论的边界",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

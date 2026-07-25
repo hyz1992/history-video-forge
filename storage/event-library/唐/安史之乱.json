@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "安史之乱",
+  "summary": "唐天宝年间，节度使安禄山、史思明起兵叛乱，攻陷两京，玄宗奔蜀，历时八年终被平定，成为唐朝由盛转衰的转折点。",
+  "eventRegistryCanonicalName": "安史之乱",
+  "aliases": [
+    "天宝之乱"
+  ],
+  "dynasty": "唐",
+  "era": "唐",
+  "characterTags": [
+    "安禄山",
+    "史思明",
+    "唐玄宗",
+    "杨国忠",
+    "哥舒翰",
+    "郭子仪"
+  ],
+  "eventTypeTags": [
+    "战争",
+    "起义"
+  ],
+  "conflictTypeTags": [
+    "叛乱",
+    "军阀割据"
+  ],
+  "themeMotifs": [
+    "盛极而衰",
+    "权力腐败",
+    "叛乱",
+    "忠义"
+  ],
+  "timeRange": {
+    "start": "755",
+    "end": "763",
+    "display": "唐天宝十四载至广德元年"
+  },
+  "locationTags": [
+    "洛阳",
+    "长安",
+    "范阳"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "蕃将"
+  ],
+  "sourceAnchorRefs": [
+    "旧唐书",
+    "新唐书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从唐玄宗的视角看：盛世的幻灭与逃亡的悲凉",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从郭子仪的视角看：力挽狂澜的中兴名将",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

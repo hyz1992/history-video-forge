@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "靖难之役",
+  "summary": "明建文年间，燕王朱棣以“靖难”为名起兵反抗削藩，经四年战争攻破南京，建文帝失踪，朱棣即位为永乐帝。",
+  "eventRegistryCanonicalName": "靖难之役",
+  "aliases": [
+    "燕王起兵",
+    "靖难之变"
+  ],
+  "dynasty": "明",
+  "era": "明",
+  "characterTags": [
+    "朱棣",
+    "建文帝",
+    "姚广孝",
+    "耿炳文"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "继承夺位"
+  ],
+  "conflictTypeTags": [
+    "继承冲突",
+    "内战"
+  ],
+  "themeMotifs": [
+    "权力争夺",
+    "叔侄相残",
+    "皇权合法性"
+  ],
+  "timeRange": {
+    "start": "1399",
+    "end": "1402",
+    "display": "明建文元年至建文四年"
+  },
+  "locationTags": [
+    "北平",
+    "南京",
+    "济南",
+    "灵璧"
+  ],
+  "relationshipTags": [
+    "叔侄",
+    "君臣",
+    "藩王与中央"
+  ],
+  "sourceAnchorRefs": [
+    "明史",
+    "明实录"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从建文帝的视角看削藩之策如何步步失控",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "朱棣起兵的内心挣扎与战略抉择",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

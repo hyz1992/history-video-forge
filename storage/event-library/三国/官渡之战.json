@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "官渡之战",
+  "summary": "建安五年，曹操与袁绍在官渡展开决战，曹操以弱胜强，击溃袁绍主力，奠定统一北方的基础。",
+  "eventRegistryCanonicalName": "官渡之战",
+  "aliases": [],
+  "dynasty": "三国",
+  "era": "三国",
+  "characterTags": [
+    "曹操",
+    "袁绍",
+    "许攸",
+    "张郃",
+    "高览"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "军阀混战",
+    "战略决战"
+  ],
+  "themeMotifs": [
+    "以弱胜强",
+    "奇袭",
+    "决断"
+  ],
+  "timeRange": {
+    "start": "200",
+    "end": "200",
+    "display": "建安五年"
+  },
+  "locationTags": [
+    "官渡",
+    "乌巢"
+  ],
+  "relationshipTags": [
+    "敌对",
+    "主从"
+  ],
+  "sourceAnchorRefs": [
+    "三国志",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从许攸的叛离看这场决定北方霸权的决战",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

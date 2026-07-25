@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "神龙政变",
+  "summary": "唐神龙元年，武则天病重，张柬之等大臣发动政变，诛杀张易之兄弟，逼迫武则天退位，迎唐中宗李显复位，复国号为唐。",
+  "eventRegistryCanonicalName": "神龙政变",
+  "aliases": [
+    "五王政变"
+  ],
+  "dynasty": "唐",
+  "era": "唐",
+  "characterTags": [
+    "张柬之",
+    "武则天",
+    "李显"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "继承夺位"
+  ],
+  "conflictTypeTags": [
+    "宫廷政变",
+    "皇位争夺"
+  ],
+  "themeMotifs": [
+    "权力交替",
+    "忠臣复国",
+    "老年夺权"
+  ],
+  "timeRange": {
+    "start": "705",
+    "end": "705",
+    "display": "唐神龙元年正月"
+  },
+  "locationTags": [
+    "洛阳",
+    "迎仙宫"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "母子"
+  ],
+  "sourceAnchorRefs": [
+    "旧唐书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从张柬之的立场看这场政变——年迈老臣如何孤注一掷复兴唐室",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从武则天的视角，权力黄昏中面对旧臣逼宫的最后时刻",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

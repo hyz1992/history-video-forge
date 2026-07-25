@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "玄奘西行",
+  "summary": "唐贞观年间，僧人玄奘为求取佛法真经，私渡出境，孤身穿越西域沙漠雪山，历经艰险抵达天竺，学成归国后主持译经，促进佛教传播与中外文化交流。",
+  "eventRegistryCanonicalName": "玄奘西行",
+  "aliases": [
+    "玄奘取经",
+    "玄奘西游"
+  ],
+  "dynasty": "唐",
+  "era": "唐",
+  "characterTags": [
+    "玄奘"
+  ],
+  "eventTypeTags": [
+    "其他"
+  ],
+  "conflictTypeTags": [
+    "边境禁令冲突",
+    "信念追求"
+  ],
+  "themeMotifs": [
+    "信念",
+    "远行求法",
+    "文化交流"
+  ],
+  "timeRange": {
+    "start": "627",
+    "end": "645",
+    "display": "唐贞观元年至十九年"
+  },
+  "locationTags": [
+    "长安",
+    "凉州",
+    "瓜州",
+    "高昌",
+    "天竺",
+    "那烂陀寺"
+  ],
+  "relationshipTags": [
+    "师徒",
+    "君臣",
+    "结义"
+  ],
+  "sourceAnchorRefs": [
+    "大唐西域记",
+    "旧唐书",
+    "大慈恩寺三藏法师传"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从玄奘的视角看这场万里孤征：私渡出关、沙漠断水、雪崩险途，他如何凭信念走到天竺？",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从唐太宗的视角：一位私渡出境的高僧归国，他如何从追究叛国罪转为支持译经事业？",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

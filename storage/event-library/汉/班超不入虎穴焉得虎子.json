@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "班超不入虎穴焉得虎子",
+  "summary": "东汉明帝永平十六年，班超出使鄯善，察觉匈奴使团到来而鄯善王动摇，遂夜袭匈奴营地杀其使者，以“不入虎穴焉得虎子”的胆略迫使鄯善归附汉朝。",
+  "eventRegistryCanonicalName": "班超不入虎穴焉得虎子",
+  "aliases": [],
+  "dynasty": "汉",
+  "era": "东汉",
+  "characterTags": [
+    "班超"
+  ],
+  "eventTypeTags": [
+    "外交",
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "外交冲突"
+  ],
+  "themeMotifs": [
+    "勇敢绝决",
+    "冒险",
+    "国家利益"
+  ],
+  "timeRange": {
+    "start": "73",
+    "end": "73",
+    "display": "东汉永平十六年"
+  },
+  "locationTags": [
+    "鄯善国"
+  ],
+  "relationshipTags": [
+    "敌对"
+  ],
+  "sourceAnchorRefs": [
+    "后汉书"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从随行军士的视角看这场夜袭——畏惧与信任的抉择",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

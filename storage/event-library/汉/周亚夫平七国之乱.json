@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "周亚夫平七国之乱",
+  "summary": "汉景帝三年，吴王刘濞联合六国发动叛乱，太尉周亚夫率军平叛，采取断敌粮道策略，以少胜多，三个月内平定叛乱，巩固了中央集权。",
+  "eventRegistryCanonicalName": "周亚夫平七国之乱",
+  "aliases": [],
+  "dynasty": "汉",
+  "era": "西汉",
+  "characterTags": [
+    "周亚夫",
+    "汉景帝",
+    "刘濞"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "诸侯叛乱",
+    "中央集权战争"
+  ],
+  "themeMotifs": [
+    "断敌粮道",
+    "以少胜多",
+    "忠勇抉择"
+  ],
+  "timeRange": {
+    "start": "-154",
+    "end": "-154",
+    "display": "汉景帝三年正月至三月"
+  },
+  "locationTags": [
+    "荥阳",
+    "昌邑",
+    "睢阳"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "盟友与对抗"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "汉书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从周亚夫的视角看这场平叛——君王猜忌下的生死决断",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "海瑞罢官",
+  "summary": "明嘉靖年间，户部主事海瑞上《治安疏》直言批评皇帝，触怒嘉靖，被下诏狱，嘉靖帝死后获释复官。",
+  "eventRegistryCanonicalName": "海瑞罢官",
+  "aliases": [
+    "海瑞上治安疏",
+    "海瑞骂皇帝"
+  ],
+  "dynasty": "明",
+  "era": "明",
+  "characterTags": [
+    "海瑞",
+    "嘉靖帝"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "君臣冲突",
+    "直谏被罪"
+  ],
+  "themeMotifs": [
+    "忠臣直谏",
+    "以死明志",
+    "昏君与诤臣"
+  ],
+  "timeRange": {
+    "start": "1566",
+    "end": "1566",
+    "display": "明嘉靖四十五年"
+  },
+  "locationTags": [
+    "北京",
+    "诏狱"
+  ],
+  "relationshipTags": [
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "明史"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从海瑞的视角：备好棺材，上《治安疏》，以死直谏",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

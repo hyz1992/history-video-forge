@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "壬寅宫变",
+  "summary": "明嘉靖二十一年，宫女杨金英等因不堪嘉靖帝虐待，趁其熟睡时用绳索试图勒死皇帝，事败后涉事宫女被尽数处死，嘉靖自此移居西苑，明朝宫廷格局生变。",
+  "eventRegistryCanonicalName": "壬寅宫变",
+  "aliases": [],
+  "dynasty": "明",
+  "era": "明",
+  "characterTags": [
+    "杨金英",
+    "嘉靖帝",
+    "方皇后",
+    "曹端妃"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "刺杀"
+  ],
+  "conflictTypeTags": [
+    "宫闱刺杀",
+    "反抗压迫"
+  ],
+  "themeMotifs": [
+    "权力代价",
+    "宫闱秘辛",
+    "反抗"
+  ],
+  "timeRange": {
+    "start": "1542",
+    "end": "1542",
+    "display": "明嘉靖二十一年十月"
+  },
+  "locationTags": [
+    "北京",
+    "紫禁城"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "主仆"
+  ],
+  "sourceAnchorRefs": [
+    "明史",
+    "明实录"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从宫女杨金英的立场看这场刺杀——被压迫者的绝地反击",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

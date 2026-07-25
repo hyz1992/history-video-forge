@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "蔡文姬归汉",
+  "summary": "东汉末年，名士蔡邕之女蔡文姬被南匈奴掳走，流落漠北十二年。曹操念及故旧，遣使以金璧赎回，使其归汉重振家学。",
+  "eventRegistryCanonicalName": "蔡文姬归汉",
+  "aliases": [
+    "文姬归汉"
+  ],
+  "dynasty": "汉末",
+  "era": "东汉末",
+  "characterTags": [
+    "蔡文姬",
+    "曹操",
+    "左贤王"
+  ],
+  "eventTypeTags": [
+    "外交",
+    "流放"
+  ],
+  "conflictTypeTags": [
+    "民族冲突",
+    "个人命运"
+  ],
+  "themeMotifs": [
+    "乱世飘零",
+    "故人情义",
+    "文化传承"
+  ],
+  "timeRange": {
+    "start": "206",
+    "end": "207",
+    "display": "东汉建安十一年至十二年"
+  },
+  "locationTags": [
+    "南匈奴",
+    "邺城"
+  ],
+  "relationshipTags": [
+    "故交",
+    "赎回"
+  ],
+  "sourceAnchorRefs": [
+    "后汉书"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从曹操的立场看赎回蔡文姬——是念旧还是笼络人心？",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

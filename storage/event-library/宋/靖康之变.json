@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "靖康之变",
+  "summary": "北宋靖康元年，金兵南下攻破东京，次年掳走宋徽宗、宋钦宗二帝及宗室妃嫔，北宋灭亡，史称靖康之耻。",
+  "eventRegistryCanonicalName": "靖康之变",
+  "aliases": [
+    "靖康之耻",
+    "靖康之祸"
+  ],
+  "dynasty": "宋",
+  "era": "北宋",
+  "characterTags": [
+    "宋徽宗",
+    "宋钦宗",
+    "完颜宗望",
+    "李纲"
+  ],
+  "eventTypeTags": [
+    "战争",
+    "投降"
+  ],
+  "conflictTypeTags": [
+    "外族入侵",
+    "王朝覆灭"
+  ],
+  "themeMotifs": [
+    "国破家亡",
+    "帝王末路",
+    "民族屈辱",
+    "权力代价"
+  ],
+  "timeRange": {
+    "start": "1126",
+    "end": "1127",
+    "display": "宋靖康元年十一月"
+  },
+  "locationTags": [
+    "东京",
+    "汴梁",
+    "金国"
+  ],
+  "relationshipTags": [
+    "父子",
+    "君臣",
+    "敌我"
+  ],
+  "sourceAnchorRefs": [
+    "宋史",
+    "金史"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从宋徽宗的视角看这场国难——艺术皇帝如何面对社稷崩塌",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从金将完颜宗望的视角看征服——他如何以少胜多直取中原心脏",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从主战派李纲的坚守到被贬——一个忠臣的无力与北宋最后的机会",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

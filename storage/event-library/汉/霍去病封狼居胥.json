@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "霍去病封狼居胥",
+  "summary": "西汉元狩四年，霍去病率军深入漠北，大败匈奴左贤王，于狼居胥山祭天立碑，此后匈奴远遁，漠南无王庭。",
+  "eventRegistryCanonicalName": "霍去病封狼居胥",
+  "aliases": [],
+  "dynasty": "汉",
+  "era": "西汉",
+  "characterTags": [
+    "霍去病",
+    "汉武帝"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "汉匈战争",
+    "漠北决战"
+  ],
+  "themeMotifs": [
+    "封狼居胥",
+    "少年功勋",
+    "奇袭绝域"
+  ],
+  "timeRange": {
+    "start": "-119",
+    "end": "-119",
+    "display": "西汉元狩四年"
+  },
+  "locationTags": [
+    "狼居胥山",
+    "漠北"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "汉匈敌对"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "汉书"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从霍去病视角看漠北决战——孤军深入、封狼居胥，少年将军一战封神",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

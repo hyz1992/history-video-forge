@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "九子夺嫡",
+  "summary": "清康熙年间，诸皇子为夺储位展开激烈斗争，胤禩等结成八爷党，胤禛韬光养晦，最终在康熙驾崩后即位，是为雍正帝。",
+  "eventRegistryCanonicalName": "九子夺嫡",
+  "aliases": [],
+  "dynasty": "清",
+  "era": "清",
+  "characterTags": [
+    "胤禛",
+    "胤禩",
+    "康熙",
+    "胤禵",
+    "胤礽",
+    "隆科多"
+  ],
+  "eventTypeTags": [
+    "继承夺位",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "继承冲突"
+  ],
+  "themeMotifs": [
+    "兄弟相争",
+    "权谋",
+    "储位之争"
+  ],
+  "timeRange": {
+    "start": "1708",
+    "end": "1722",
+    "display": "清康熙四十七年至康熙六十一年"
+  },
+  "locationTags": [
+    "北京",
+    "紫禁城"
+  ],
+  "relationshipTags": [
+    "父子",
+    "兄弟",
+    "储位竞争"
+  ],
+  "sourceAnchorRefs": [
+    "清史稿",
+    "康熙起居注"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从胤禩的视角看夺嫡失败——八爷党的崛起与覆灭",
+      "familyLabel": "继承夺位型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "胤禛的隐忍之道——如何在夺嫡漩涡中胜出",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

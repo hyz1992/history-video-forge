@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "郑和下西洋",
+  "summary": "明永乐至宣德年间，三宝太监郑和奉命七次率庞大船队远航西洋，遍访亚非三十余国，宣扬国威、拓展朝贡，成为世界航海史壮举，最终因国力消耗与海禁政策而终止。",
+  "eventRegistryCanonicalName": "郑和下西洋",
+  "aliases": [
+    "三宝太监下西洋"
+  ],
+  "dynasty": "明",
+  "era": "明",
+  "characterTags": [
+    "郑和",
+    "朱棣"
+  ],
+  "eventTypeTags": [
+    "外交"
+  ],
+  "conflictTypeTags": [],
+  "themeMotifs": [
+    "远航探索",
+    "朝贡体系",
+    "逆袭",
+    "命运与使命"
+  ],
+  "timeRange": {
+    "start": "1405",
+    "end": "1433",
+    "display": "明永乐三年至宣德八年"
+  },
+  "locationTags": [
+    "东南亚",
+    "南亚",
+    "西亚",
+    "东非"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "主仆"
+  ],
+  "sourceAnchorRefs": [
+    "明史",
+    "明实录"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从郑和的视角看七下西洋——一个宦官如何成为帝国远洋的象征",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从明成祖朱棣的视角看下西洋——宣扬国威背后的政治雄心与代价",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

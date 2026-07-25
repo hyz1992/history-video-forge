@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "武昌起义",
+  "summary": "1911年10月10日，湖北新军中的革命党人发动武昌起义，攻占武昌，成立湖北军政府，各省纷纷响应，最终导致清朝统治崩溃，中华民国建立。",
+  "eventRegistryCanonicalName": "武昌起义",
+  "aliases": [],
+  "dynasty": "近代",
+  "era": "近代",
+  "characterTags": [
+    "黎元洪",
+    "蒋翊武",
+    "孙武",
+    "熊秉坤"
+  ],
+  "eventTypeTags": [
+    "起义"
+  ],
+  "conflictTypeTags": [
+    "武装起义",
+    "政权更迭"
+  ],
+  "themeMotifs": [
+    "革命",
+    "秩序崩裂",
+    "天下震荡"
+  ],
+  "timeRange": {
+    "start": "1911",
+    "end": "1911",
+    "display": "清宣统三年八月十九日"
+  },
+  "locationTags": [
+    "武昌",
+    "湖北"
+  ],
+  "relationshipTags": [
+    "革命同志",
+    "官兵"
+  ],
+  "sourceAnchorRefs": [
+    "清史稿",
+    "辛亥革命史料"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从湖北新军底层目击者的视角看起义当晚的惊心动魄",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从黎元洪被推举为都督的立场审视乱局中的权力抉择",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "长坂坡赵云救主",
+  "summary": "东汉建安十三年，曹操南征，刘备败退当阳长坂。赵云在乱军中保护甘夫人与幼主刘禅，于曹军追击中杀出重围，忠勇之举传为佳话。",
+  "eventRegistryCanonicalName": "长坂坡赵云救主",
+  "aliases": [
+    "赵云单骑救主",
+    "长坂坡救阿斗"
+  ],
+  "dynasty": "三国",
+  "era": "三国",
+  "characterTags": [
+    "赵云",
+    "刘备",
+    "刘禅",
+    "甘夫人",
+    "张飞"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "追击战",
+    "掩护撤退"
+  ],
+  "themeMotifs": [
+    "忠诚",
+    "武勇",
+    "绝境求生"
+  ],
+  "timeRange": {
+    "start": "208",
+    "end": "208",
+    "display": "东汉建安十三年九月"
+  },
+  "locationTags": [
+    "当阳",
+    "长坂坡"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "父子"
+  ],
+  "sourceAnchorRefs": [
+    "三国志",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从赵云在长坂坡乱军中找到甘夫人与阿斗，单骑突围的瞬间，体会乱世中的忠勇与信念",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

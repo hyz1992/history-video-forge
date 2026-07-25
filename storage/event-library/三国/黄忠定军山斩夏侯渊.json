@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "黄忠定军山斩夏侯渊",
+  "summary": "建安二十四年，刘备与曹操争夺汉中，老将黄忠在定军山采纳法正之计，突袭斩杀曹军主将夏侯渊，扭转战局，为刘备占据汉中奠定基础。",
+  "eventRegistryCanonicalName": "黄忠定军山斩夏侯渊",
+  "aliases": [
+    "定军山之战"
+  ],
+  "dynasty": "三国",
+  "era": "三国",
+  "characterTags": [
+    "黄忠",
+    "夏侯渊",
+    "刘备",
+    "法正"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "战略决战",
+    "以弱胜强"
+  ],
+  "themeMotifs": [
+    "老将建功",
+    "扭转乾坤",
+    "战场翻盘"
+  ],
+  "timeRange": {
+    "start": "219",
+    "end": "219",
+    "display": "建安二十四年"
+  },
+  "locationTags": [
+    "定军山",
+    "汉中"
+  ],
+  "relationshipTags": [
+    "敌对将领",
+    "主将与部属"
+  ],
+  "sourceAnchorRefs": [
+    "三国志"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从黄忠的视角看这场赌上老将荣誉的奇袭",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从法正的谋略看如何以弱胜强、扭转汉中战局",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

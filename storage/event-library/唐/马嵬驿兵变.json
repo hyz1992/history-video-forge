@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "马嵬驿兵变",
+  "summary": "唐天宝十五载，安史叛军逼近长安，玄宗仓皇出逃。至马嵬驿，随行禁军哗变，杀杨国忠，逼玄宗赐死杨贵妃。太子李亨分兵灵武，不久即位，玄宗被迫退位。",
+  "eventRegistryCanonicalName": "马嵬驿兵变",
+  "aliases": [
+    "马嵬之变",
+    "马嵬坡兵变"
+  ],
+  "dynasty": "唐",
+  "era": "唐",
+  "characterTags": [
+    "唐玄宗",
+    "杨贵妃",
+    "杨国忠",
+    "陈玄礼",
+    "李亨"
+  ],
+  "eventTypeTags": [
+    "兵变",
+    "政变"
+  ],
+  "conflictTypeTags": [
+    "禁军哗变",
+    "政治清洗"
+  ],
+  "themeMotifs": [
+    "军心失控",
+    "权力倾轧",
+    "红颜薄命",
+    "秩序崩裂"
+  ],
+  "timeRange": {
+    "start": "756",
+    "end": "756",
+    "display": "唐天宝十五载六月"
+  },
+  "locationTags": [
+    "马嵬驿",
+    "长安"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "夫妻",
+    "父子"
+  ],
+  "sourceAnchorRefs": [
+    "旧唐书",
+    "资治通鉴",
+    "新唐书"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从禁军将领陈玄礼的视角看哗变——他如何在忠诚与愤怒间抉择",
+      "familyLabel": "兵变兵谏型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从杨贵妃的角度看末日降临——她最后的时刻",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "海瑞骂皇帝",
+  "summary": "明嘉靖四十五年，户部主事海瑞上《治安疏》，直言嘉靖帝迷信道教、不理朝政等过失，触怒皇帝，下狱论死。后嘉靖帝去世，海瑞获释复职。",
+  "eventRegistryCanonicalName": "海瑞骂皇帝",
+  "aliases": [
+    "海瑞上疏",
+    "治安疏事件"
+  ],
+  "dynasty": "明",
+  "era": "明",
+  "characterTags": [
+    "海瑞",
+    "嘉靖帝"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "君臣冲突",
+    "直谏"
+  ],
+  "themeMotifs": [
+    "犯颜直谏",
+    "忠义",
+    "权力与正义"
+  ],
+  "timeRange": {
+    "start": "1566",
+    "end": "1566",
+    "display": "明嘉靖四十五年"
+  },
+  "locationTags": [
+    "北京"
+  ],
+  "relationshipTags": [
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "明史",
+    "明实录"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从海瑞的视角看这次赌上性命的上疏——买好棺材、诀别家人后的抉择",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

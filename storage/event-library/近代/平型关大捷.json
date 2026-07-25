@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "平型关大捷",
+  "summary": "1937年9月，八路军115师在师长林彪指挥下，于山西平型关伏击日军辎重部队，歼敌千余人，取得抗战以来首次重大胜利，粉碎了日军不可战胜的神话。",
+  "eventRegistryCanonicalName": "平型关大捷",
+  "aliases": [
+    "平型关战役"
+  ],
+  "dynasty": "近代",
+  "era": "近代",
+  "characterTags": [
+    "林彪",
+    "聂荣臻"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "抗日战争",
+    "伏击战"
+  ],
+  "themeMotifs": [
+    "以弱胜强",
+    "首战告捷",
+    "伏击"
+  ],
+  "timeRange": {
+    "start": "1937",
+    "end": "1937",
+    "display": "1937年9月25日"
+  },
+  "locationTags": [
+    "平型关",
+    "山西"
+  ],
+  "relationshipTags": [
+    "上下级"
+  ],
+  "sourceAnchorRefs": [
+    "八路军史",
+    "中国抗日战争史"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从林彪的视角看平型关伏击战——他如何判断地形、把握战机，以弱胜强",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

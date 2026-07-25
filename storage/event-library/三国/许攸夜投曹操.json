@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "许攸夜投曹操",
+  "summary": "官渡之战期间，袁绍谋士许攸因家人被审配收押，愤而夜投曹操，献计烧毁乌巢粮草，助曹操扭转战局。",
+  "eventRegistryCanonicalName": "许攸夜投曹操",
+  "aliases": [],
+  "dynasty": "三国",
+  "era": "三国",
+  "characterTags": [
+    "许攸",
+    "曹操",
+    "袁绍"
+  ],
+  "eventTypeTags": [
+    "投降",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "背叛",
+    "粮草战"
+  ],
+  "themeMotifs": [
+    "孤注一掷",
+    "战局转折",
+    "背叛"
+  ],
+  "timeRange": {
+    "start": "200",
+    "end": "200",
+    "display": "建安五年"
+  },
+  "locationTags": [
+    "乌巢",
+    "官渡"
+  ],
+  "relationshipTags": [
+    "主臣",
+    "敌我"
+  ],
+  "sourceAnchorRefs": [
+    "三国志"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从许攸的立场看背袁投曹——家眷被害后的孤注一掷",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从曹操的视角看——赤脚迎许攸，抓住战局转折点",
+      "familyLabel": "权谋博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

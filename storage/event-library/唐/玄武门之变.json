@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "玄武门之变",
+  "summary": "唐武德九年，秦王李世民在长安玄武门伏杀太子李建成、齐王李元吉，随后逼宫即位，开启贞观之治。",
+  "eventRegistryCanonicalName": "玄武门之变",
+  "aliases": [
+    "玄武门之变",
+    "玄武门政变"
+  ],
+  "dynasty": "唐",
+  "era": "唐",
+  "characterTags": [
+    "李世民",
+    "李建成",
+    "李元吉",
+    "尉迟恭",
+    "李渊"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "继承夺位"
+  ],
+  "conflictTypeTags": [
+    "继承冲突",
+    "武装政变"
+  ],
+  "themeMotifs": [
+    "兄弟相残",
+    "权力代价",
+    "先发制人"
+  ],
+  "timeRange": {
+    "start": "626",
+    "end": "626",
+    "display": "唐武德九年六月四日"
+  },
+  "locationTags": [
+    "长安",
+    "玄武门"
+  ],
+  "relationshipTags": [
+    "兄弟",
+    "君臣",
+    "储位竞争"
+  ],
+  "sourceAnchorRefs": [
+    "旧唐书",
+    "新唐书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从魏征的立场看这场政变——旧主被杀后他如何选择",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "成也萧何，败也萧何",
+  "summary": "西汉初年，韩信因萧何力荐而拜将封侯，功高震主；后被告谋反，萧何与吕后合谋，诱韩信入长乐宫钟室斩杀，夷灭三族。",
+  "eventRegistryCanonicalName": "成也萧何，败也萧何",
+  "aliases": [],
+  "dynasty": "汉",
+  "era": "西汉",
+  "characterTags": [
+    "韩信",
+    "萧何",
+    "吕后"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "权力斗争",
+    "兔死狗烹"
+  ],
+  "themeMotifs": [
+    "成也萧何败也萧何",
+    "功臣末路",
+    "命运转折"
+  ],
+  "timeRange": {
+    "start": "-196",
+    "end": "-196",
+    "display": "汉高祖十一年"
+  },
+  "locationTags": [
+    "长安",
+    "长乐宫钟室"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "荐主与将领",
+    "政治盟友与背叛"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "汉书"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从韩信的视角回顾一生：从胯下之辱到王侯将相，最终死于知己设计的陷阱",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从萧何的抉择看忠君与情义的两难：他为何要亲自设计除掉自己最欣赏的将领",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

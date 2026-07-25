@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "狄仁杰劝武则天立嗣",
+  "summary": "武周后期，武则天在传位武氏与还政李氏间摇摆，宰相狄仁杰以母子亲情与国家稳定的利害相劝，最终说服武则天迎回李显，为李唐复辟奠定基础。",
+  "eventRegistryCanonicalName": "狄仁杰劝武则天立嗣",
+  "aliases": [],
+  "dynasty": "唐",
+  "era": "唐",
+  "characterTags": [
+    "狄仁杰",
+    "武则天"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈",
+    "继承夺位"
+  ],
+  "conflictTypeTags": [
+    "继承冲突",
+    "朝堂劝谏"
+  ],
+  "themeMotifs": [
+    "忠义",
+    "权力交接",
+    "智谋"
+  ],
+  "timeRange": {
+    "start": "698",
+    "end": "700",
+    "display": "武周圣历年间"
+  },
+  "locationTags": [
+    "洛阳"
+  ],
+  "relationshipTags": [
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "旧唐书",
+    "新唐书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从狄仁杰的立场看他如何以姑侄与母子的亲疏对比，巧妙劝说武则天归政李氏",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

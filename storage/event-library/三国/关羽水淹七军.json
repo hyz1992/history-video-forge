@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "关羽水淹七军",
+  "summary": "建安二十四年，关羽围攻樊城，利用汉水暴涨之机水淹于禁七军，擒于禁、斩庞德，威震华夏，为蜀汉北伐创造重大战果。",
+  "eventRegistryCanonicalName": "关羽水淹七军",
+  "aliases": [
+    "水淹七军"
+  ],
+  "dynasty": "三国",
+  "era": "三国",
+  "characterTags": [
+    "关羽",
+    "于禁",
+    "庞德"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "水攻",
+    "围城战"
+  ],
+  "themeMotifs": [
+    "以弱胜强",
+    "天时地利",
+    "生死决断",
+    "战场翻盘"
+  ],
+  "timeRange": {
+    "start": "219",
+    "end": "219",
+    "display": "建安二十四年秋"
+  },
+  "locationTags": [
+    "樊城",
+    "汉水"
+  ],
+  "relationshipTags": [
+    "敌对将领"
+  ],
+  "sourceAnchorRefs": [
+    "三国志",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从于禁的视角看被俘后的屈辱与抉择——五子良将的末路",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "关羽本可全胜，但水淹七军后的威震华夏如何催生了吕蒙白衣渡江的致命一击",
+      "familyLabel": "战略连锁型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

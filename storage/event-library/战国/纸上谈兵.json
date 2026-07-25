@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "纸上谈兵",
+  "summary": "战国晚期秦赵长平之战，赵王中反间计以赵括代廉颇，赵括纸上谈兵主动出击，遭白起围歼，四十余万赵军被坑杀，赵国元气大伤。",
+  "eventRegistryCanonicalName": "纸上谈兵",
+  "aliases": [],
+  "dynasty": "战国",
+  "era": "战国",
+  "characterTags": [
+    "赵括",
+    "廉颇",
+    "白起"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "围歼战",
+    "军事冲突"
+  ],
+  "themeMotifs": [
+    "纸上谈兵",
+    "临阵换将",
+    "全军覆没",
+    "轻敌冒进"
+  ],
+  "timeRange": {
+    "start": "-260",
+    "end": "-260",
+    "display": "秦昭襄王四十七年"
+  },
+  "locationTags": [
+    "长平"
+  ],
+  "relationshipTags": [
+    "将帅",
+    "敌我"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从赵括的视角看临危受命——纸上谈兵的自信如何酿成大祸",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从白起的视角看长平围歼——战神如何将对手玩弄于股掌",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从廉颇的视角看临阵换将——老将的坚守如何被反间计摧毁",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

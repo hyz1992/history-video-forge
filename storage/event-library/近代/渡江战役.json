@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "渡江战役",
+  "summary": "1949年4月，人民解放军在毛泽东、邓小平等指挥下发起渡江战役，突破长江防线，解放南京，宣告国民党统治覆灭。",
+  "eventRegistryCanonicalName": "渡江战役",
+  "aliases": [
+    "渡江作战"
+  ],
+  "dynasty": "近代",
+  "era": "近代",
+  "characterTags": [
+    "毛泽东",
+    "邓小平",
+    "朱德",
+    "刘伯承",
+    "陈毅"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "内战",
+    "渡江作战"
+  ],
+  "themeMotifs": [
+    "战略决战",
+    "以弱胜强",
+    "政权更迭"
+  ],
+  "timeRange": {
+    "start": "1949-04-20",
+    "end": "1949-06-02",
+    "display": "1949年4月-6月"
+  },
+  "locationTags": [
+    "长江",
+    "南京",
+    "上海"
+  ],
+  "relationshipTags": [
+    "上下级",
+    "同僚"
+  ],
+  "sourceAnchorRefs": [
+    "中国人民解放军战史",
+    "中国共产党历史"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从邓小平的视角看这场战役——他作为总前委书记如何统筹全局",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

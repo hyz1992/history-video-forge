@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "董卓迁都",
+  "summary": "东汉初平元年，权臣董卓因关东联军讨伐，胁迫汉献帝及朝廷百官自洛阳迁都长安，并焚毁洛阳宫室，挟天子以令天下，加剧了天下分裂的局面。",
+  "eventRegistryCanonicalName": "董卓迁都",
+  "aliases": [
+    "董卓迁都长安",
+    "董卓焚洛阳"
+  ],
+  "dynasty": "汉末",
+  "era": "东汉末",
+  "characterTags": [
+    "董卓",
+    "汉献帝"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈",
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "权臣胁迫",
+    "迁都争议"
+  ],
+  "themeMotifs": [
+    "权臣乱政",
+    "帝国飘摇",
+    "焚毁古都"
+  ],
+  "timeRange": {
+    "start": "190",
+    "end": "190",
+    "display": "东汉初平元年二月"
+  },
+  "locationTags": [
+    "洛阳",
+    "长安"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "权臣与皇帝"
+  ],
+  "sourceAnchorRefs": [
+    "后汉书",
+    "三国志"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从汉献帝的视角看迁都之路——少年天子被裹挟西行的屈辱与恐惧",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "董卓的决策逻辑：以退为进，放弃洛阳是为了巩固权力的战略考量",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

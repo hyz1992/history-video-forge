@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "杨坚篡周建隋",
+  "summary": "北周大定元年，外戚杨坚迫使静帝宇文阐禅让，代周自立，改国号为隋，定都大兴城，结束南北朝分裂，开启隋朝大一统。",
+  "eventRegistryCanonicalName": "杨坚篡周建隋",
+  "aliases": [
+    "隋文帝代周",
+    "北周禅隋"
+  ],
+  "dynasty": "隋",
+  "era": "隋",
+  "characterTags": [
+    "杨坚",
+    "宇文阐",
+    "独孤伽罗"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "继承夺位"
+  ],
+  "conflictTypeTags": [
+    "禅让夺位",
+    "外戚篡权"
+  ],
+  "themeMotifs": [
+    "权臣代立",
+    "禅让仪式",
+    "统一前奏"
+  ],
+  "timeRange": {
+    "start": "581",
+    "end": "581",
+    "display": "北周大定元年二月"
+  },
+  "locationTags": [
+    "长安",
+    "大兴城"
+  ],
+  "relationshipTags": [
+    "外戚",
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "隋书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从杨坚辅政到受禅——外戚权臣的合法化之路",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "北周旧臣的抗拒与妥协：尉迟迥举兵与迅速覆灭",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

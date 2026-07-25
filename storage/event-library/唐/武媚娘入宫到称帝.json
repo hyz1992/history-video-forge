@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "武媚娘入宫到称帝",
+  "summary": "唐太宗时武媚娘入宫为才人，高宗朝复入后宫，通过权谋铲除王皇后等政敌掌权，最终废唐建周，成为中国唯一女皇帝。",
+  "eventRegistryCanonicalName": "武媚娘入宫到称帝",
+  "aliases": [
+    "武则天称帝",
+    "武周建立",
+    "则天登基"
+  ],
+  "dynasty": "唐",
+  "era": "唐",
+  "characterTags": [
+    "武则天",
+    "李治",
+    "唐太宗",
+    "王皇后",
+    "萧淑妃"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "继承夺位"
+  ],
+  "conflictTypeTags": [
+    "宫廷斗争",
+    "篡位夺权"
+  ],
+  "themeMotifs": [
+    "女主登基",
+    "权力之路",
+    "宫斗权谋",
+    "改朝换代"
+  ],
+  "timeRange": {
+    "start": "637",
+    "end": "690",
+    "display": "唐贞观十一年至天授元年"
+  },
+  "locationTags": [
+    "长安",
+    "洛阳"
+  ],
+  "relationshipTags": [
+    "夫妻",
+    "君臣",
+    "母子",
+    "政敌"
+  ],
+  "sourceAnchorRefs": [
+    "旧唐书",
+    "新唐书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从唐高宗李治的视角看武媚娘从才人到皇后的权力攀升",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从王皇后的视角看自己被废与武则天崛起的宫斗较量",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

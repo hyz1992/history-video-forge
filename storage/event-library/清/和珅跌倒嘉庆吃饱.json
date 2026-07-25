@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "和珅跌倒嘉庆吃饱",
+  "summary": "清嘉庆四年，太上皇乾隆帝去世后，嘉庆帝迅速下旨逮捕和珅，列其二十大罪，赐死抄家，所获巨额财产充实国库，朝野震动。",
+  "eventRegistryCanonicalName": "和珅跌倒嘉庆吃饱",
+  "aliases": [
+    "和珅案",
+    "嘉庆诛和珅"
+  ],
+  "dynasty": "清",
+  "era": "清",
+  "characterTags": [
+    "和珅",
+    "嘉庆帝"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈",
+    "审判"
+  ],
+  "conflictTypeTags": [
+    "君权与权臣冲突"
+  ],
+  "themeMotifs": [
+    "贪腐清算",
+    "权力更迭",
+    "富贵无常"
+  ],
+  "timeRange": {
+    "start": "1799",
+    "end": "1799",
+    "display": "清嘉庆四年正月"
+  },
+  "locationTags": [
+    "北京",
+    "紫禁城"
+  ],
+  "relationshipTags": [
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "清史稿",
+    "清实录"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "和珅的视角：权倾朝野二十载，如何在乾隆去世后数日内从巅峰坠落",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "嘉庆帝的隐忍与雷霆：从韬光养晦到果断清算，一举肃清前朝积弊",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

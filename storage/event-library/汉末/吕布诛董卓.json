@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "吕布诛董卓",
+  "summary": "东汉末年，董卓专权废立皇帝，暴虐朝野。司徒王允策反吕布，乘董卓入宫时刺杀于未央殿前，终结董卓统治，但随即引发关中更大动乱。",
+  "eventRegistryCanonicalName": "吕布诛董卓",
+  "aliases": [
+    "刺董卓",
+    "诛杀董卓"
+  ],
+  "dynasty": "汉末",
+  "era": "东汉末",
+  "characterTags": [
+    "吕布",
+    "董卓",
+    "王允"
+  ],
+  "eventTypeTags": [
+    "刺杀",
+    "政变"
+  ],
+  "conflictTypeTags": [
+    "刺杀",
+    "权臣诛杀",
+    "政变"
+  ],
+  "themeMotifs": [
+    "背叛",
+    "权力斗争",
+    "弑主",
+    "冒险刺杀"
+  ],
+  "timeRange": {
+    "start": "192",
+    "end": "192",
+    "display": "东汉初平三年四月"
+  },
+  "locationTags": [
+    "长安",
+    "未央殿"
+  ],
+  "relationshipTags": [
+    "义父子",
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "后汉书",
+    "三国志",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从吕布的视角看这场刺杀——为何选择背叛义父董卓",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从王允的立场看这场政变——连环计背后的政治博弈",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

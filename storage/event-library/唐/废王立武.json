@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "废王立武",
+  "summary": "唐高宗永徽年间，武则天得宠，高宗谋废王皇后立武氏，长孙无忌等元老力阻未果，武后终登后位，从此权倾朝野。",
+  "eventRegistryCanonicalName": "废王立武",
+  "aliases": [],
+  "dynasty": "唐",
+  "era": "唐",
+  "characterTags": [
+    "武则天",
+    "王皇后",
+    "李治",
+    "长孙无忌",
+    "褚遂良"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "皇后废立",
+    "朝臣党争"
+  ],
+  "themeMotifs": [
+    "权力翻盘",
+    "宫斗",
+    "忠臣死谏"
+  ],
+  "timeRange": {
+    "start": "655",
+    "end": "655",
+    "display": "唐永徽六年十月"
+  },
+  "locationTags": [
+    "长安",
+    "皇宫"
+  ],
+  "relationshipTags": [
+    "夫妻",
+    "君臣",
+    "后宫争宠"
+  ],
+  "sourceAnchorRefs": [
+    "旧唐书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从武则天的视角看这场权力翻盘：她如何从逆境中逆袭为后宫主宰",
+      "familyLabel": "权力翻盘型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从长孙无忌的立场看这场废立之争：元老重臣如何步步失势",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

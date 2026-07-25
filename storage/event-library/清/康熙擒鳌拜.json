@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "康熙擒鳌拜",
+  "summary": "清康熙初年，辅政大臣鳌拜专权跋扈，康熙帝隐忍多年，于康熙八年以布库少年在武英殿设计擒拿鳌拜，一举铲除其党羽，夺回皇权。",
+  "eventRegistryCanonicalName": "康熙擒鳌拜",
+  "aliases": [
+    "康熙智擒鳌拜"
+  ],
+  "dynasty": "清",
+  "era": "清",
+  "characterTags": [
+    "康熙帝",
+    "鳌拜",
+    "索额图"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "君臣权力斗争"
+  ],
+  "themeMotifs": [
+    "少年英雄",
+    "隐忍布局",
+    "权力逆转"
+  ],
+  "timeRange": {
+    "start": "1669",
+    "end": "1669",
+    "display": "清康熙八年五月"
+  },
+  "locationTags": [
+    "北京",
+    "武英殿"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "辅政与亲政"
+  ],
+  "sourceAnchorRefs": [
+    "清史稿",
+    "清实录"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从鳌拜的立场看被擒瞬间——这位权倾朝野的辅政大臣如何一步步落入少年皇帝的圈套",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从康熙帝的视角看他如何靠一群布库少年完成惊天夺权",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

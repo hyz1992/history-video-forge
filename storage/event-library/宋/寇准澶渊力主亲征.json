@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "寇准澶渊力主亲征",
+  "summary": "北宋景德元年，辽军南侵危及汴京，朝臣多主迁都，宰相寇准力请宋真宗亲征澶州，终击退辽军并缔结澶渊之盟。",
+  "eventRegistryCanonicalName": "寇准澶渊力主亲征",
+  "aliases": [
+    "澶渊之役",
+    "澶渊亲征",
+    "澶渊之盟"
+  ],
+  "dynasty": "宋",
+  "era": "北宋",
+  "characterTags": [
+    "寇准",
+    "宋真宗"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈",
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "主战主和之争",
+    "边境战争"
+  ],
+  "themeMotifs": [
+    "力排众议",
+    "皇权威严",
+    "战争与和平"
+  ],
+  "timeRange": {
+    "start": "1004",
+    "end": "1004",
+    "display": "宋景德元年"
+  },
+  "locationTags": [
+    "澶州",
+    "宋辽边境"
+  ],
+  "relationshipTags": [
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "宋史",
+    "续资治通鉴长编"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "寇准以相位赌国运，澶州城下如何逼真宗不退",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "宋真宗从畏惧到亲征，一纸盟约如何换百年和平",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

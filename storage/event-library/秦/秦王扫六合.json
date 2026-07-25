@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "秦王扫六合",
+  "summary": "战国末期，秦王嬴政发动统一战争，先后灭韩、赵、魏、楚、燕、齐六国，终结分封，建立秦朝。",
+  "eventRegistryCanonicalName": "秦王扫六合",
+  "aliases": [
+    "秦灭六国"
+  ],
+  "dynasty": "秦",
+  "era": "秦",
+  "characterTags": [
+    "秦王政",
+    "李斯",
+    "王翦"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "统一战争"
+  ],
+  "themeMotifs": [
+    "统一",
+    "终结乱世",
+    "征战"
+  ],
+  "timeRange": {
+    "start": "-230",
+    "end": "-221",
+    "display": "秦王政十七年至二十六年"
+  },
+  "locationTags": [
+    "咸阳",
+    "六国"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "主将"
+  ],
+  "sourceAnchorRefs": [
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从王翦的立场看灭楚之战——功高震主的大将如何全身而退",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

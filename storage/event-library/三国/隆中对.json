@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "隆中对",
+  "summary": "东汉末年，刘备三顾茅庐，诸葛亮在隆中为其分析天下大势，提出占据荆益、联孙抗曹的战略规划，奠定蜀汉立国基础。",
+  "eventRegistryCanonicalName": "隆中对",
+  "aliases": [
+    "草庐对"
+  ],
+  "dynasty": "三国",
+  "era": "三国",
+  "characterTags": [
+    "诸葛亮",
+    "刘备"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈",
+    "其他"
+  ],
+  "conflictTypeTags": [
+    "战略对抗"
+  ],
+  "themeMotifs": [
+    "战略规划",
+    "三分天下",
+    "人才际遇"
+  ],
+  "timeRange": {
+    "start": "207",
+    "end": "207",
+    "display": "东汉建安十二年"
+  },
+  "locationTags": [
+    "隆中"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "主客"
+  ],
+  "sourceAnchorRefs": [
+    "三国志"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从诸葛亮的视角看这场战略对话——隐居隆中而洞察天下",
+      "familyLabel": "权谋博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

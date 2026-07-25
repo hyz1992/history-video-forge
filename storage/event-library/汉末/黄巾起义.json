@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "黄巾起义",
+  "summary": "东汉末年，张角以太平道聚众数十万，头裹黄巾发动起义，震动天下，虽遭镇压却揭开乱世序幕。",
+  "eventRegistryCanonicalName": "黄巾起义",
+  "aliases": [
+    "黄巾之乱"
+  ],
+  "dynasty": "汉末",
+  "era": "东汉末",
+  "characterTags": [
+    "张角",
+    "张宝",
+    "张梁",
+    "皇甫嵩",
+    "朱儁"
+  ],
+  "eventTypeTags": [
+    "起义",
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "宗教起义",
+    "农民战争"
+  ],
+  "themeMotifs": [
+    "揭竿而起",
+    "天下震荡",
+    "秩序崩裂"
+  ],
+  "timeRange": {
+    "start": "184",
+    "end": "184",
+    "display": "东汉灵帝中平元年（184年）"
+  },
+  "locationTags": [
+    "巨鹿",
+    "颍川",
+    "南阳",
+    "冀州"
+  ],
+  "relationshipTags": [
+    "兄弟",
+    "道首-信徒",
+    "统帅-部将"
+  ],
+  "sourceAnchorRefs": [
+    "后汉书",
+    "三国志"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从张角的视角看这场起义——他如何以符水治病聚众，掀起席卷八州的狂飙",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从皇甫嵩的视角看镇压黄巾——帝国最后的名将如何力挽狂澜",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

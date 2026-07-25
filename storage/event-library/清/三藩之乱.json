@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "三藩之乱",
+  "summary": "清康熙初年，吴三桂等三藩势力坐大，康熙帝力主撤藩，吴三桂于康熙十二年举兵反清，战火席卷南方，最终历时八年被清廷平定。",
+  "eventRegistryCanonicalName": "三藩之乱",
+  "aliases": [],
+  "dynasty": "清",
+  "era": "清",
+  "characterTags": [
+    "吴三桂",
+    "康熙帝",
+    "尚可喜",
+    "耿精忠"
+  ],
+  "eventTypeTags": [
+    "战争",
+    "起义"
+  ],
+  "conflictTypeTags": [
+    "叛乱",
+    "统一战争"
+  ],
+  "themeMotifs": [
+    "权力争斗",
+    "忠诚与背叛",
+    "统一"
+  ],
+  "timeRange": {
+    "start": "1673",
+    "end": "1681",
+    "display": "清康熙十二年至二十年"
+  },
+  "locationTags": [
+    "云南",
+    "湖南",
+    "福建"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "藩镇",
+    "反叛"
+  ],
+  "sourceAnchorRefs": [
+    "清史稿",
+    "清圣祖实录"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从康熙帝的立场看——少年天子如何力排众议撤藩平叛，奠定盛世基业",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从吴三桂的视角看——从明朝总兵到清朝藩王，再到反清首逆，他的野心与抉择",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

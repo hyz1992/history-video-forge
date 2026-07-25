@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "文成公主入藏",
+  "summary": "唐贞观年间，吐蕃赞普松赞干布遣使求亲，唐太宗将文成公主远嫁吐蕃，开启汉藏和平共处与文化交流。",
+  "eventRegistryCanonicalName": "文成公主入藏",
+  "aliases": [],
+  "dynasty": "唐",
+  "era": "唐",
+  "characterTags": [
+    "文成公主",
+    "松赞干布",
+    "唐太宗"
+  ],
+  "eventTypeTags": [
+    "和亲",
+    "外交"
+  ],
+  "conflictTypeTags": [
+    "边疆平衡",
+    "文化交融"
+  ],
+  "themeMotifs": [
+    "远嫁",
+    "个人命运",
+    "文化交流"
+  ],
+  "timeRange": {
+    "start": "641",
+    "end": "641",
+    "display": "唐贞观十五年"
+  },
+  "locationTags": [
+    "长安",
+    "吐蕃"
+  ],
+  "relationshipTags": [
+    "和亲",
+    "政治联姻"
+  ],
+  "sourceAnchorRefs": [
+    "旧唐书",
+    "新唐书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从文成公主的视角，看16岁少女如何肩负边陲和平使命远赴雪域",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从松赞干布的立场，看求娶唐公主背后的吐蕃扩张与制衡战略",
+      "familyLabel": "外交博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

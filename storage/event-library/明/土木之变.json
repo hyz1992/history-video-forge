@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "土木之变",
+  "summary": "明正统十四年，明英宗朱祁镇受太监王振怂恿御驾亲征瓦剌，在土木堡被也先围困，明军全军覆没，英宗被俘，明朝国运自此转折。",
+  "eventRegistryCanonicalName": "土木之变",
+  "aliases": [
+    "土木堡之变"
+  ],
+  "dynasty": "明",
+  "era": "明",
+  "characterTags": [
+    "明英宗",
+    "也先",
+    "王振"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "边境冲突",
+    "战争"
+  ],
+  "themeMotifs": [
+    "命运转折",
+    "权力代价",
+    "国运衰落"
+  ],
+  "timeRange": {
+    "start": "1449",
+    "end": "1449",
+    "display": "明正统十四年八月"
+  },
+  "locationTags": [
+    "土木堡"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "敌对"
+  ],
+  "sourceAnchorRefs": [
+    "明史",
+    "明实录"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从于谦的立场看土木之变——国难当头他如何力挽狂澜",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从明英宗的视角看这场突变——从亲征天子到阶下囚",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

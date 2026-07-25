@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "胡惟庸案",
+  "summary": "明洪武十三年，丞相胡惟庸被朱元璋以“谋不轨”之罪处死，受牵连者达三万余人，朱元璋借此废除中书省与丞相制，皇权专制空前强化。",
+  "eventRegistryCanonicalName": "胡惟庸案",
+  "aliases": [
+    "胡党之狱"
+  ],
+  "dynasty": "明",
+  "era": "明",
+  "characterTags": [
+    "胡惟庸",
+    "朱元璋",
+    "李善长",
+    "涂节"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈",
+    "审判"
+  ],
+  "conflictTypeTags": [
+    "皇权与相权冲突"
+  ],
+  "themeMotifs": [
+    "兔死狗烹",
+    "权力制衡",
+    "猜忌"
+  ],
+  "timeRange": {
+    "start": "1380",
+    "end": "1380",
+    "display": "明洪武十三年"
+  },
+  "locationTags": [
+    "南京",
+    "应天府"
+  ],
+  "relationshipTags": [
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "明史",
+    "明太祖实录"
+  ],
+  "credibilityLevel": "disputed",
+  "disputeNotes": "胡惟庸是否确有谋反行为存在重大争议，多数学者认为此案是朱元璋为废除丞相、强化皇权而刻意构陷的政治清洗。",
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从朱元璋的视角看——如何借一桩‘谋反案’终结千年丞相制度，完成皇权独揽",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从胡惟庸的视角看——从开国功臣到‘逆臣’，他的结局是咎由自取还是君王的必然？",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

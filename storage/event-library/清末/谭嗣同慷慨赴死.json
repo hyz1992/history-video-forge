@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "谭嗣同慷慨赴死",
+  "summary": "晚清戊戌变法失败后，谭嗣同拒绝出逃，甘愿为变法流血，从容被捕，慷慨就义于北京菜市口。",
+  "eventRegistryCanonicalName": "谭嗣同慷慨赴死",
+  "aliases": [
+    "谭嗣同殉难"
+  ],
+  "dynasty": "清末",
+  "era": "晚清",
+  "characterTags": [
+    "谭嗣同",
+    "慈禧太后",
+    "袁世凯"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "改革"
+  ],
+  "conflictTypeTags": [
+    "制度改革冲突",
+    "权力斗争",
+    "告密背叛"
+  ],
+  "themeMotifs": [
+    "改革牺牲",
+    "理想主义",
+    "忠义",
+    "赴死"
+  ],
+  "timeRange": {
+    "start": "1898",
+    "end": "1898",
+    "display": "清光绪二十四年八月"
+  },
+  "locationTags": [
+    "北京",
+    "菜市口"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "变法同志"
+  ],
+  "sourceAnchorRefs": [
+    "清史稿"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从谭嗣同的狱中题壁诗看他的内心世界与赴死决心",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从袁世凯告密视角看变法的崩溃与谭嗣同的命运",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "戊戌变法",
+  "summary": "1898年光绪帝采纳康有为、梁启超等维新派主张，推行制度革新，遭慈禧太后与守旧派反对，变法仅持续百日即以政变终结，核心人物或死或逃。",
+  "eventRegistryCanonicalName": "戊戌变法",
+  "aliases": [
+    "百日维新",
+    "戊戌维新",
+    "光绪维新"
+  ],
+  "dynasty": "清末",
+  "era": "晚清",
+  "characterTags": [
+    "光绪帝",
+    "慈禧太后",
+    "康有为",
+    "梁启超",
+    "谭嗣同",
+    "袁世凯"
+  ],
+  "eventTypeTags": [
+    "变法",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "变法冲突",
+    "宫廷政变"
+  ],
+  "themeMotifs": [
+    "改革与守旧",
+    "理想主义悲剧",
+    "权力更迭"
+  ],
+  "timeRange": {
+    "start": "1898",
+    "end": "1898",
+    "display": "清光绪二十四年四月至八月"
+  },
+  "locationTags": [
+    "北京",
+    "紫禁城",
+    "颐和园"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "帝后",
+    "师生"
+  ],
+  "sourceAnchorRefs": [
+    "清史稿",
+    "光绪朝东华录",
+    "戊戌政变记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从光绪帝的视角看这场变法——一个年轻皇帝孤注一掷的百日改革",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从慈禧太后的立场看变法——权力平衡与祖制不可动摇的守旧逻辑",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从康有为的立场看这场变革——书生议政的理想与天真",
+      "familyLabel": "变革挣扎型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

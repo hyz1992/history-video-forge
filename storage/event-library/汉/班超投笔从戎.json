@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "班超投笔从戎",
+  "summary": "东汉明帝时期，班超因不甘于文牍生涯，投笔从戎，随军出击北匈奴，随后出使西域，平定诸国，为汉朝重新打通西域通道奠定了基础。",
+  "eventRegistryCanonicalName": "班超投笔从戎",
+  "aliases": [
+    "投笔从戎"
+  ],
+  "dynasty": "汉",
+  "era": "东汉",
+  "characterTags": [
+    "班超"
+  ],
+  "eventTypeTags": [
+    "外交",
+    "其他"
+  ],
+  "conflictTypeTags": [
+    "人生抉择",
+    "弃文从武"
+  ],
+  "themeMotifs": [
+    "志在四方",
+    "投笔从戎",
+    "建功立业"
+  ],
+  "timeRange": {
+    "start": "73",
+    "end": "73",
+    "display": "东汉永平十六年"
+  },
+  "locationTags": [
+    "洛阳",
+    "西域"
+  ],
+  "relationshipTags": [
+    "上下级"
+  ],
+  "sourceAnchorRefs": [
+    "后汉书"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从班超的视角看投笔从戎——一个抄书匠如何踏上征服西域之路",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

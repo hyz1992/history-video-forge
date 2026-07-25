@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "董卓进京",
+  "summary": "东汉末，大将军何进召董卓入京诛宦官，事泄何进被杀，董卓趁乱入洛阳，废少帝立献帝，专擅朝政，开启乱世。",
+  "eventRegistryCanonicalName": "董卓进京",
+  "aliases": [
+    "董卓入京"
+  ],
+  "dynasty": "汉末",
+  "era": "东汉末",
+  "characterTags": [
+    "董卓",
+    "何进",
+    "汉少帝"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "中央与地方冲突",
+    "权臣夺权"
+  ],
+  "themeMotifs": [
+    "引狼入室",
+    "权谋斗争",
+    "废立皇帝"
+  ],
+  "timeRange": {
+    "start": "189",
+    "end": "189",
+    "display": "东汉光熹元年八月"
+  },
+  "locationTags": [
+    "洛阳"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "谋主"
+  ],
+  "sourceAnchorRefs": [
+    "后汉书",
+    "三国志"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从大将军何进的决策看这场政变——他为何引狼入室",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从董卓的视角看他如何抓住机会掌控朝廷",
+      "familyLabel": "权臣斗争型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

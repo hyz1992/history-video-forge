@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "淝水之战",
+  "summary": "东晋太元八年，前秦苻坚率百万大军南侵，东晋谢安、谢玄以八万北府兵在淝水大破秦军，苻坚败归，前秦随之瓦解。",
+  "eventRegistryCanonicalName": "淝水之战",
+  "aliases": [],
+  "dynasty": "晋",
+  "era": "东晋",
+  "characterTags": [
+    "谢玄",
+    "谢安",
+    "苻坚",
+    "朱序",
+    "苻融"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "军事冲突",
+    "南北对峙"
+  ],
+  "themeMotifs": [
+    "以少胜多",
+    "决战",
+    "命运转折"
+  ],
+  "timeRange": {
+    "start": "383",
+    "end": "383",
+    "display": "东晋太元八年"
+  },
+  "locationTags": [
+    "淝水"
+  ],
+  "relationshipTags": [
+    "敌对",
+    "君臣",
+    "叔侄"
+  ],
+  "sourceAnchorRefs": [
+    "晋书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从谢安的视角看这场战争——东晋存亡在此一役，他如何稳定军心",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从苻坚的视角看——统一天下的梦想如何被一场败仗击碎",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

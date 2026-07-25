@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "岳飞郾城大捷",
+  "summary": "南宋绍兴十年，岳飞率岳家军在郾城以少胜多，大破金兀术主力铁浮屠和拐子马，粉碎金军南下企图，成为北伐关键胜利。",
+  "eventRegistryCanonicalName": "岳飞郾城大捷",
+  "aliases": [
+    "郾城之战",
+    "郾城大破拐子马"
+  ],
+  "dynasty": "宋",
+  "era": "南宋",
+  "characterTags": [
+    "岳飞",
+    "金兀术",
+    "岳云"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "民族战争",
+    "以少胜多"
+  ],
+  "themeMotifs": [
+    "以弱胜强",
+    "忠义报国",
+    "决死一战"
+  ],
+  "timeRange": {
+    "start": "1140",
+    "end": "1140",
+    "display": "南宋绍兴十年七月"
+  },
+  "locationTags": [
+    "郾城"
+  ],
+  "relationshipTags": [
+    "敌对"
+  ],
+  "sourceAnchorRefs": [
+    "宋史",
+    "金史"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从岳飞的视角看郾城决战——背嵬军如何破铁浮屠",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从金兀术的视角看这场惨败——拐子马神话的破灭",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

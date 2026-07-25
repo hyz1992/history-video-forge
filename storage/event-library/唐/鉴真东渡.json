@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "鉴真东渡",
+  "summary": "唐天宝年间，扬州大明寺高僧鉴真应日本留学僧之邀，六次东渡日本弘扬佛法，历经海难、疾病、官府阻挠等重重磨难，最终成功抵达，成为中日文化交流的千古传奇。",
+  "eventRegistryCanonicalName": "鉴真东渡",
+  "aliases": [],
+  "dynasty": "唐",
+  "era": "唐",
+  "characterTags": [
+    "鉴真",
+    "荣睿",
+    "普照"
+  ],
+  "eventTypeTags": [
+    "外交",
+    "其他"
+  ],
+  "conflictTypeTags": [
+    "自然险阻",
+    "官府阻挠"
+  ],
+  "themeMotifs": [
+    "传播佛法",
+    "坚韧",
+    "文化交流"
+  ],
+  "timeRange": {
+    "start": "742",
+    "end": "754",
+    "display": "唐天宝年间"
+  },
+  "locationTags": [
+    "扬州",
+    "日本"
+  ],
+  "relationshipTags": [
+    "师徒",
+    "跨国交流"
+  ],
+  "sourceAnchorRefs": [
+    "宋高僧传",
+    "唐大和上东征传"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从鉴真的视角看六次东渡的生死考验与信念坚持",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从日本遣唐使荣睿的视角看邀请鉴真东渡的初衷与努力",
+      "familyLabel": "文化交流型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "重庆谈判",
+  "summary": "抗日战争胜利后，毛泽东、周恩来赴重庆与蒋介石就和平建国进行谈判，签署《双十协定》后内战仍爆发。",
+  "eventRegistryCanonicalName": "重庆谈判",
+  "aliases": [
+    "重庆和谈"
+  ],
+  "dynasty": "近代",
+  "era": "近代",
+  "characterTags": [
+    "毛泽东",
+    "蒋介石",
+    "周恩来"
+  ],
+  "eventTypeTags": [
+    "外交"
+  ],
+  "conflictTypeTags": [
+    "国共冲突",
+    "政治谈判"
+  ],
+  "themeMotifs": [
+    "和平与内战",
+    "政治博弈",
+    "话语权较量",
+    "历史转折"
+  ],
+  "timeRange": {
+    "start": "1945",
+    "end": "1945",
+    "display": "1945年8月至10月"
+  },
+  "locationTags": [
+    "重庆"
+  ],
+  "relationshipTags": [
+    "政治对手",
+    "谈判对手"
+  ],
+  "sourceAnchorRefs": [],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从周恩来的角度观察这场谈判——他是如何巧妙斡旋传递立场的",
+      "familyLabel": "外交博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

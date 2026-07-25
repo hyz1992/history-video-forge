@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "西安事变",
+  "summary": "1936年12月，张学良、杨虎城在西安扣留蒋介石，逼其停止内战、联共抗日。经各方斡旋，事变和平解决，促成抗日民族统一战线。",
+  "eventRegistryCanonicalName": "西安事变",
+  "aliases": [
+    "双十二事变"
+  ],
+  "dynasty": "近代",
+  "era": "近代",
+  "characterTags": [
+    "张学良",
+    "杨虎城",
+    "蒋介石",
+    "周恩来"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈",
+    "其他"
+  ],
+  "conflictTypeTags": [
+    "兵谏",
+    "政治危机"
+  ],
+  "themeMotifs": [
+    "民族大义",
+    "个人牺牲",
+    "政治博弈"
+  ],
+  "timeRange": {
+    "start": "1936",
+    "end": "1936",
+    "display": "1936年12月12日"
+  },
+  "locationTags": [
+    "西安",
+    "临潼华清池"
+  ],
+  "relationshipTags": [
+    "上下级",
+    "义兄弟",
+    "政治盟友"
+  ],
+  "sourceAnchorRefs": [
+    "中国近代史",
+    "中华民国史"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从张学良的视角看西安事变：民族危亡下的个人抉择",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从周恩来的视角看和平解决西安事变的谈判博弈",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

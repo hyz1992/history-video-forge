@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "文天祥过零丁洋",
+  "summary": "南宋末年，文天祥抗元兵败被俘，押解途经零丁洋，写下绝命诗《过零丁洋》，以死明志，从容殉国。",
+  "eventRegistryCanonicalName": "文天祥过零丁洋",
+  "aliases": [],
+  "dynasty": "宋",
+  "era": "南宋",
+  "characterTags": [
+    "文天祥"
+  ],
+  "eventTypeTags": [
+    "其他"
+  ],
+  "conflictTypeTags": [],
+  "themeMotifs": [
+    "忠义",
+    "殉国",
+    "气节"
+  ],
+  "timeRange": {
+    "start": "1279",
+    "end": "1279",
+    "display": "南宋祥兴二年"
+  },
+  "locationTags": [
+    "零丁洋"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "敌对"
+  ],
+  "sourceAnchorRefs": [
+    "宋史"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从被俘到殉国：文天祥在零丁洋上的最后呐喊",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

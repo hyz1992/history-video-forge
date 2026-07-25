@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "方孝孺被诛十族",
+  "summary": "明建文四年，燕王朱棣靖难夺位后，命方孝孺起草即位诏书，方孝孺宁死不从，被朱棣灭十族，以此威慑反对者。",
+  "eventRegistryCanonicalName": "方孝孺被诛十族",
+  "aliases": [
+    "方孝孺灭十族",
+    "诛十族"
+  ],
+  "dynasty": "明",
+  "era": "明",
+  "characterTags": [
+    "方孝孺",
+    "朱棣"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "继承冲突",
+    "忠义对抗"
+  ],
+  "themeMotifs": [
+    "忠义",
+    "株连",
+    "权力任性"
+  ],
+  "timeRange": {
+    "start": "1402",
+    "end": "1402",
+    "display": "明建文四年六月"
+  },
+  "locationTags": [
+    "南京"
+  ],
+  "relationshipTags": [
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "明史",
+    "明实录"
+  ],
+  "credibilityLevel": "disputed",
+  "disputeNotes": "正史仅载灭九族，诛十族之说多见于野史，存在争议。",
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从朱棣的立场看这场清洗——方孝孺为何必须死？",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从方孝孺的抉择看忠义与家族命运的冲突",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "赤壁之战",
+  "summary": "东汉末建安十三年，曹操率大军南征，孙权与刘备联军在赤壁以火攻大败曹军，奠定三国鼎立基础。",
+  "eventRegistryCanonicalName": "赤壁之战",
+  "aliases": [],
+  "dynasty": "三国",
+  "era": "三国",
+  "characterTags": [
+    "曹操",
+    "孙权",
+    "刘备",
+    "周瑜",
+    "诸葛亮",
+    "鲁肃"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "统一战争",
+    "防御战"
+  ],
+  "themeMotifs": [
+    "以弱胜强",
+    "联盟抗敌",
+    "战略决策"
+  ],
+  "timeRange": {
+    "start": "208",
+    "end": "208",
+    "display": "东汉建安十三年"
+  },
+  "locationTags": [
+    "赤壁",
+    "长江"
+  ],
+  "relationshipTags": [
+    "敌我",
+    "同盟"
+  ],
+  "sourceAnchorRefs": [
+    "三国志",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从周瑜的立场看这场决战——年轻统帅的决断与火攻奇策",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从诸葛亮的视角看孙刘联盟的促成与战略转折",
+      "familyLabel": "外交博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从曹操的角度看这场失败——统一之势为何瞬间逆转",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

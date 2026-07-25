@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "戚继光台州大捷",
+  "summary": "明嘉靖四十年，戚继光率戚家军在浙江台州与倭寇决战，九战皆捷，彻底荡平浙东倭患，奠定东南海防大局。",
+  "eventRegistryCanonicalName": "戚继光台州大捷",
+  "aliases": [
+    "台州之战"
+  ],
+  "dynasty": "明",
+  "era": "明",
+  "characterTags": [
+    "戚继光",
+    "谭纶",
+    "胡宗宪"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "抗倭战争",
+    "防御战"
+  ],
+  "themeMotifs": [
+    "以弱胜强",
+    "忠勇",
+    "民族气节"
+  ],
+  "timeRange": {
+    "start": "1561",
+    "end": "1561",
+    "display": "明嘉靖四十年"
+  },
+  "locationTags": [
+    "浙江台州",
+    "桃渚",
+    "海门"
+  ],
+  "relationshipTags": [
+    "同僚",
+    "上下级"
+  ],
+  "sourceAnchorRefs": [
+    "明史",
+    "戚少保年谱"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从戚继光的视角看台州九战九捷的战术抉择与指挥艺术",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "党锢之祸",
+  "summary": "东汉桓灵年间，宦官集团与士大夫爆发激烈冲突，李膺、陈蕃等清流名士遭党锢之祸，导致朝政崩坏，加速汉室衰亡。",
+  "eventRegistryCanonicalName": "党锢之祸",
+  "aliases": [
+    "党锢"
+  ],
+  "dynasty": "汉",
+  "era": "东汉",
+  "characterTags": [
+    "陈蕃",
+    "李膺",
+    "窦武",
+    "汉桓帝",
+    "汉灵帝",
+    "曹节"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈",
+    "其他"
+  ],
+  "conflictTypeTags": [
+    "士大夫与宦官冲突",
+    "政治清洗"
+  ],
+  "themeMotifs": [
+    "宦官专权",
+    "士人风骨",
+    "政治迫害"
+  ],
+  "timeRange": {
+    "start": "166",
+    "end": "169",
+    "display": "东汉延熹九年(166年)至建宁二年(169年)"
+  },
+  "locationTags": [
+    "洛阳"
+  ],
+  "relationshipTags": [
+    "士大夫",
+    "宦官",
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "后汉书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从李膺的视角看党锢之祸——清流领袖的挣扎与坚守",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从汉桓帝的视角看这场政治清洗——为何必须镇压士人",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

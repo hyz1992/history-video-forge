@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "苏武牧羊",
+  "summary": "西汉天汉元年，苏武奉命出使匈奴，因缑王谋反牵连被扣。匈奴多方胁迫劝降，苏武坚贞不屈，被流放北海牧羊十九年，终以汉节归国。",
+  "eventRegistryCanonicalName": "苏武牧羊",
+  "aliases": [],
+  "dynasty": "汉",
+  "era": "西汉",
+  "characterTags": [
+    "苏武",
+    "且鞮侯单于",
+    "李陵"
+  ],
+  "eventTypeTags": [
+    "外交",
+    "流放"
+  ],
+  "conflictTypeTags": [
+    "外交冲突",
+    "忠节考验"
+  ],
+  "themeMotifs": [
+    "忠诚",
+    "守节",
+    "民族气节",
+    "苦难",
+    "外交博弈"
+  ],
+  "timeRange": {
+    "start": "-100",
+    "end": "-81",
+    "display": "西汉天汉元年至始元六年"
+  },
+  "locationTags": [
+    "匈奴",
+    "北海"
+  ],
+  "relationshipTags": [
+    "汉使与单于",
+    "故交"
+  ],
+  "sourceAnchorRefs": [
+    "汉书",
+    "史记"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从李陵的视角看牧羊十九年——故交劝降下的忠义抉择",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

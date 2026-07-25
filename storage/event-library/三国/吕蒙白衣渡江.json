@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "吕蒙白衣渡江",
+  "summary": "三国时期，孙权遣吕蒙偷袭荆州，吕蒙令士卒扮作商人白衣渡江，奇袭江陵，关羽腹背受敌，败走麦城，三国格局由此转折。",
+  "eventRegistryCanonicalName": "吕蒙白衣渡江",
+  "aliases": [
+    "白衣渡江"
+  ],
+  "dynasty": "三国",
+  "era": "三国",
+  "characterTags": [
+    "吕蒙",
+    "关羽",
+    "孙权"
+  ],
+  "eventTypeTags": [
+    "战争",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "军事偷袭",
+    "战略对峙"
+  ],
+  "themeMotifs": [
+    "奇袭",
+    "轻敌",
+    "背盟",
+    "荆州争夺"
+  ],
+  "timeRange": {
+    "start": "219",
+    "end": "219",
+    "display": "东汉建安二十四年"
+  },
+  "locationTags": [
+    "江陵",
+    "麦城",
+    "荆州"
+  ],
+  "relationshipTags": [
+    "对手",
+    "背盟"
+  ],
+  "sourceAnchorRefs": [
+    "三国志"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "吕蒙白衣渡江——一场教科书式的奇袭如何让关羽败走麦城",
+      "familyLabel": "战争奇袭型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "关羽的致命疏忽：从水淹七军到败走麦城的转折点",
+      "familyLabel": "人物悲剧型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "孙权的背盟抉择：夺回荆州的赌注与代价",
+      "familyLabel": "权谋博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

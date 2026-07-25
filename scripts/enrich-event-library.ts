@@ -30,13 +30,14 @@ interface CliArgs {
   limit?: number;
   priority?: "A" | "B" | "C";
   dynasty?: string;
+  exclude: string[];
   sync: boolean;
   force: boolean;
 }
 
 function parseArgs(): CliArgs {
   const args = process.argv.slice(2);
-  const result: CliArgs = { sync: false, force: false };
+  const result: CliArgs = { sync: false, force: false, exclude: [] };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--limit" && args[i + 1]) {
@@ -52,6 +53,16 @@ function parseArgs(): CliArgs {
     } else if (arg === "--dynasty" && args[i + 1]) {
       result.dynasty = args[i + 1];
       i++;
+    } else if (arg === "--exclude" && args[i + 1]) {
+      // 逗号分隔的标题黑名单，用于跳过源数据中已知重复或低质量的条目
+      result.exclude = args[i + 1].split(",").map((s) => s.trim()).filter(Boolean);
+      i++;
+    } else if (arg === "--exclude-file" && args[i + 1]) {
+      // 从文件读 exclude 列表（逗号分隔，单行），避免命令行中文参数问题
+      const filePath = resolve(process.cwd(), args[i + 1]);
+      const content = readFileSync(filePath, "utf8");
+      result.exclude = content.split(",").map((s) => s.trim()).filter(Boolean);
+      i++;
     } else if (arg === "--sync") {
       result.sync = true;
     } else if (arg === "--force") {
@@ -63,6 +74,8 @@ function parseArgs(): CliArgs {
   --limit N        只处理前 N 条（小范围验证用）
   --priority A|B|C 只处理指定优先级（A=高质量主线，B=补充，C=边缘）
   --dynasty 春秋   只处理指定朝代
+  --exclude 标题A,标题B  跳过指定标题（用于源数据重复或低质量条目）
+  --exclude-file FILE 从文件读 exclude 列表（逗号分隔，避免命令行中文参数问题）
   --sync           跑完后自动调 sync 入库（需 DB 已初始化）
   --force          覆盖已存在的 JSON 文件（默认跳过已存在的）
   --help           显示帮助`);
@@ -103,6 +116,11 @@ function loadSourceLibrary(args: CliArgs): RawEventSkeleton[] {
   const lib = JSON.parse(raw) as RawTopicLibrary;
 
   let items = lib.items.filter((item) => item.enabled !== false);
+
+  // 排除黑名单（源数据中已知重复或低质量的标题）
+  if (args.exclude.length > 0) {
+    items = items.filter((item) => !args.exclude.includes(item.title));
+  }
 
   if (args.priority) {
     items = items.filter((item) => item.priority === args.priority);

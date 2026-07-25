@@ -1,0 +1,7 @@
+[
+  {
+    "id": "cai_wen_ji_gui_han",
+    "title": "蔡文姬归汉",
+    "error": "[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"null\",\n    \"path\": [\n      \"conflictTypeTags\"\n    ],\n    \"message\": \"Expected array, received null\"\n  }\n]"
+  }
+]

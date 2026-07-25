@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "永嘉之乱",
+  "summary": "西晋永嘉五年，匈奴汉国刘聪遣刘曜、石勒攻陷洛阳，俘虏晋怀帝，屠戮王公士民三万余人，西晋名存实亡，开启五胡乱华序幕。",
+  "eventRegistryCanonicalName": "永嘉之乱",
+  "aliases": [],
+  "dynasty": "晋",
+  "era": "西晋末",
+  "characterTags": [
+    "刘曜",
+    "石勒",
+    "晋怀帝",
+    "刘聪",
+    "王衍"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "民族冲突",
+    "攻城战",
+    "政权更迭"
+  ],
+  "themeMotifs": [
+    "国破家亡",
+    "异族入侵",
+    "王朝末日"
+  ],
+  "timeRange": {
+    "start": "311",
+    "end": "311",
+    "display": "西晋永嘉五年"
+  },
+  "locationTags": [
+    "洛阳",
+    "平阳"
+  ],
+  "relationshipTags": [
+    "匈奴汉国将领与被俘皇帝",
+    "将帅"
+  ],
+  "sourceAnchorRefs": [
+    "晋书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从晋怀帝的囚车回望洛阳——帝王末路的屈辱与王朝的崩塌",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "刘曜的崛起：匈奴汉国如何抓住西晋内乱，完成致命一击",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "石勒：从奴隶到将军，永嘉之乱中的枭雄之路",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

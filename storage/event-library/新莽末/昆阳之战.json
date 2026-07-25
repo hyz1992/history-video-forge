@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "昆阳之战",
+  "summary": "新莽末年，刘秀率汉军偏师在昆阳以不足两万兵力大破王莽四十余万主力，击杀主将王寻，新朝精锐尽丧，此战成为新莽覆灭的关键转折。",
+  "eventRegistryCanonicalName": "昆阳之战",
+  "aliases": [
+    "昆阳大战",
+    "昆阳之役"
+  ],
+  "dynasty": "新莽末",
+  "era": "新莽末",
+  "characterTags": [
+    "刘秀",
+    "王莽",
+    "王邑",
+    "王寻"
+  ],
+  "eventTypeTags": [
+    "战争",
+    "起义"
+  ],
+  "conflictTypeTags": [
+    "以少胜多",
+    "决战"
+  ],
+  "themeMotifs": [
+    "以弱胜强",
+    "生死存亡",
+    "天命所归"
+  ],
+  "timeRange": {
+    "start": "23",
+    "end": "23",
+    "display": "新莽地皇四年六月"
+  },
+  "locationTags": [
+    "昆阳"
+  ],
+  "relationshipTags": [
+    "敌对"
+  ],
+  "sourceAnchorRefs": [
+    "后汉书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从刘秀的视角看这场豪赌——以孤军挑战新莽倾国之兵",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从王邑的视角看崩溃——主帅傲慢如何葬送四十万大军",
+      "familyLabel": "战略失误型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "白门楼吕布殒命",
+  "summary": "东汉末年，吕布据守下邳，遭曹操围攻，部将叛变，兵败被擒，于白门楼被缢杀，结束风云一生。",
+  "eventRegistryCanonicalName": "白门楼吕布殒命",
+  "aliases": [
+    "吕布之死",
+    "白门楼"
+  ],
+  "dynasty": "汉末",
+  "era": "东汉末",
+  "characterTags": [
+    "吕布",
+    "曹操",
+    "陈宫",
+    "高顺"
+  ],
+  "eventTypeTags": [
+    "战争",
+    "投降"
+  ],
+  "conflictTypeTags": [
+    "军阀混战",
+    "内部叛变"
+  ],
+  "themeMotifs": [
+    "英雄末路",
+    "背信弃义",
+    "反复无常"
+  ],
+  "timeRange": {
+    "start": "198",
+    "end": "199",
+    "display": "东汉建安三年十二月"
+  },
+  "locationTags": [
+    "下邳",
+    "白门楼"
+  ],
+  "relationshipTags": [
+    "主臣",
+    "敌对"
+  ],
+  "sourceAnchorRefs": [
+    "三国志",
+    "后汉书"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从刘备的视角，看吕布白门楼求饶时他为何决定进言曹操杀之",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从陈宫的立场，透视他宁死不降、慷慨赴死的抉择",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

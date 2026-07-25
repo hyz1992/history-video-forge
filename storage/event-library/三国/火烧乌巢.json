@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "火烧乌巢",
+  "summary": "东汉末官渡之战中，曹操采纳叛将许攸之策，亲率精兵夜袭乌巢，焚毁袁绍军粮，袁军大乱，曹操乘势击溃袁绍主力，奠定统一北方的基础。",
+  "eventRegistryCanonicalName": "火烧乌巢",
+  "aliases": [
+    "乌巢之战"
+  ],
+  "dynasty": "三国",
+  "era": "三国",
+  "characterTags": [
+    "曹操",
+    "袁绍",
+    "许攸",
+    "淳于琼"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "战略决战",
+    "后勤战争"
+  ],
+  "themeMotifs": [
+    "以弱胜强",
+    "赌命一击",
+    "背叛与信任",
+    "战场翻盘"
+  ],
+  "timeRange": {
+    "start": "200",
+    "end": "200",
+    "display": "东汉建安五年十月"
+  },
+  "locationTags": [
+    "乌巢"
+  ],
+  "relationshipTags": [
+    "敌对",
+    "叛变",
+    "主臣"
+  ],
+  "sourceAnchorRefs": [
+    "三国志",
+    "后汉书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从许攸的视角看这场夜袭——叛逃者献计如何逆转战局",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从曹操的角度看生死决断——以五千精兵赌一场大胜",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "挟天子以令诸侯",
+  "summary": "东汉末年，曹操迎汉献帝至许都，以天子名义发号施令，逐步扫平北方群雄，为曹魏代汉奠定基础，三国鼎立之势由此发端。",
+  "eventRegistryCanonicalName": "挟天子以令诸侯",
+  "aliases": [
+    "奉天子以令不臣"
+  ],
+  "dynasty": "三国",
+  "era": "三国",
+  "characterTags": [
+    "曹操",
+    "汉献帝",
+    "董昭",
+    "荀彧"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "权臣与皇权",
+    "政治倾轧"
+  ],
+  "themeMotifs": [
+    "权力博弈",
+    "挟天子以令诸侯",
+    "皇权旁落"
+  ],
+  "timeRange": {
+    "start": "196",
+    "end": "196",
+    "display": "汉建安元年"
+  },
+  "locationTags": [
+    "许都"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "权臣与皇权"
+  ],
+  "sourceAnchorRefs": [
+    "三国志",
+    "后汉书"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从汉献帝的视角看这场权力游戏——被挟持的天子如何挣扎与妥协",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

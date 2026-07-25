@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "张飞喝断当阳桥",
+  "summary": "三国时期，刘备败退长坂坡，张飞据守当阳桥，以二十骑拒曹操大军，喝退追兵，掩护主力撤退。",
+  "eventRegistryCanonicalName": "张飞喝断当阳桥",
+  "aliases": [
+    "据水断桥"
+  ],
+  "dynasty": "三国",
+  "era": "三国",
+  "characterTags": [
+    "张飞",
+    "曹操",
+    "刘备",
+    "赵云"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "军事冲突",
+    "后卫阻击"
+  ],
+  "themeMotifs": [
+    "勇猛",
+    "智慧",
+    "威慑",
+    "忠义"
+  ],
+  "timeRange": {
+    "start": "208",
+    "end": "208",
+    "display": "东汉建安十三年"
+  },
+  "locationTags": [
+    "当阳桥"
+  ],
+  "relationshipTags": [
+    "敌对",
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "三国演义"
+  ],
+  "credibilityLevel": "low",
+  "disputeNotes": "此事载于《三国演义》，正史仅记载张飞据水断桥，无喝退大军之夸张描述。",
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从张飞的视角看这场断后——他如何以少胜多、以勇慑敌",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

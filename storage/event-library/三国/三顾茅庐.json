@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "三顾茅庐",
+  "summary": "东汉末年，刘备屯兵新野，为图大业求访贤才，三次亲赴隆中拜访诸葛亮，最终以诚意打动其出山，留下千古君臣遇合的佳话。",
+  "eventRegistryCanonicalName": "三顾茅庐",
+  "aliases": [
+    "三顾草庐"
+  ],
+  "dynasty": "三国",
+  "era": "三国",
+  "characterTags": [
+    "刘备",
+    "诸葛亮"
+  ],
+  "eventTypeTags": [
+    "其他"
+  ],
+  "conflictTypeTags": [],
+  "themeMotifs": [
+    "求贤若渴",
+    "知遇之恩"
+  ],
+  "timeRange": {
+    "start": "207",
+    "end": "207",
+    "display": "东汉建安十二年"
+  },
+  "locationTags": [
+    "隆中"
+  ],
+  "relationshipTags": [
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "三国志"
+  ],
+  "credibilityLevel": "medium",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从诸葛亮的立场看三次考验——他为何最终选择出山",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

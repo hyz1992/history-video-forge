@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "八王之乱",
+  "summary": "西晋时期，司马氏宗室诸王为争夺中央政权，自元康元年至光熙元年连年混战，导致西晋国力耗尽，开启五胡乱华之端。",
+  "eventRegistryCanonicalName": "八王之乱",
+  "aliases": [],
+  "dynasty": "晋",
+  "era": "西晋",
+  "characterTags": [
+    "司马亮",
+    "司马玮",
+    "司马伦",
+    "司马冏",
+    "司马乂",
+    "司马颖",
+    "司马颙",
+    "司马越"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "战争",
+    "继承夺位"
+  ],
+  "conflictTypeTags": [
+    "宗室内斗",
+    "继承冲突",
+    "武装政变"
+  ],
+  "themeMotifs": [
+    "骨肉相残",
+    "权力争夺",
+    "王朝衰落"
+  ],
+  "timeRange": {
+    "start": "291",
+    "end": "306",
+    "display": "西晋元康元年至光熙元年"
+  },
+  "locationTags": [
+    "洛阳",
+    "长安"
+  ],
+  "relationshipTags": [
+    "宗室",
+    "叔侄",
+    "兄弟"
+  ],
+  "sourceAnchorRefs": [
+    "晋书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从司马伦的视角看这场权力游戏——一步登天与瞬间覆灭",
+      "familyLabel": "宗室内斗型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从晋惠帝的弱势视角看宗室相残——皇权如何沦为傀儡",
+      "familyLabel": "皇权衰微型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

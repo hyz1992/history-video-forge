@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "夺门之变",
+  "summary": "明景泰八年，将领石亨、文臣徐有贞等趁景泰帝病重，发动政变迎被软禁在南宫的明英宗复位，改元天顺，废景泰帝为王，史称夺门之变。",
+  "eventRegistryCanonicalName": "夺门之变",
+  "aliases": [
+    "南宫复辟"
+  ],
+  "dynasty": "明",
+  "era": "明",
+  "characterTags": [
+    "明英宗",
+    "石亨",
+    "徐有贞",
+    "曹吉祥",
+    "景泰帝"
+  ],
+  "eventTypeTags": [
+    "政变",
+    "继承夺位"
+  ],
+  "conflictTypeTags": [
+    "皇位争夺",
+    "宫廷政变"
+  ],
+  "themeMotifs": [
+    "权力翻盘",
+    "君臣背叛",
+    "兄弟相疑",
+    "阴谋与时机"
+  ],
+  "timeRange": {
+    "start": "1457",
+    "end": "1457",
+    "display": "明景泰八年正月"
+  },
+  "locationTags": [
+    "北京",
+    "南宫",
+    "奉天殿"
+  ],
+  "relationshipTags": [
+    "兄弟",
+    "君臣",
+    "政变盟友"
+  ],
+  "sourceAnchorRefs": [
+    "明史",
+    "明实录"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从石亨的立场看这场政变——赌上性命的权力翻盘",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从景泰帝的视角看这场突如其来的背叛——病榻上的权力更迭",
+      "familyLabel": "宫廷政变型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

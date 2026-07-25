@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "雍正继位之谜",
+  "summary": "康熙帝驾崩后，四阿哥胤禛在隆科多支持下继位，是为雍正帝。但其继位过程存在诸多疑点，民间盛传篡改遗诏之说，合法性备受争议。",
+  "eventRegistryCanonicalName": "雍正继位之谜",
+  "aliases": [
+    "雍正夺位之谜",
+    "雍正即位疑案",
+    "雍正继位疑云"
+  ],
+  "dynasty": "清",
+  "era": "清",
+  "characterTags": [
+    "雍正帝",
+    "康熙帝",
+    "隆科多",
+    "胤禵"
+  ],
+  "eventTypeTags": [
+    "继承夺位",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "继承冲突",
+    "权力斗争"
+  ],
+  "themeMotifs": [
+    "皇权交替",
+    "继位合法性争议",
+    "兄弟斗争"
+  ],
+  "timeRange": {
+    "start": "1722",
+    "end": "1722",
+    "display": "清康熙六十一年十一月"
+  },
+  "locationTags": [
+    "北京",
+    "畅春园",
+    "紫禁城"
+  ],
+  "relationshipTags": [
+    "父子",
+    "兄弟",
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "清实录",
+    "清史稿"
+  ],
+  "credibilityLevel": "disputed",
+  "disputeNotes": "雍正继位合法性历来争议极大，主要质疑包括康熙遗诏是否被篡改、康熙临终前是否面谕传位等。野史传说众多，正史记载亦有疑点。",
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从隆科多的视角看这场权力交接——他如何成为关键人物",
+      "familyLabel": "继承博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从十四阿哥胤禵的视角：远在西北，如何错过皇位？",
+      "familyLabel": "继承博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从雍正的角度：面对质疑，他如何巩固皇位？",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

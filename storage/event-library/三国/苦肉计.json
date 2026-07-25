@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "苦肉计",
+  "summary": "三国赤壁之战前夕，周瑜为破曹军，与黄盖密谋实施苦肉计，黄盖公开受刑后诈降曹操，终以火攻大败曹军。",
+  "eventRegistryCanonicalName": "苦肉计",
+  "aliases": [
+    "周瑜打黄盖"
+  ],
+  "dynasty": "三国",
+  "era": "三国",
+  "characterTags": [
+    "黄盖",
+    "周瑜",
+    "曹操"
+  ],
+  "eventTypeTags": [
+    "战争",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "军事欺诈",
+    "诈降"
+  ],
+  "themeMotifs": [
+    "牺牲",
+    "忠诚",
+    "计谋"
+  ],
+  "timeRange": {
+    "start": "208",
+    "end": "208",
+    "display": "东汉建安十三年冬"
+  },
+  "locationTags": [
+    "赤壁",
+    "江东"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "同僚",
+    "敌我"
+  ],
+  "sourceAnchorRefs": [],
+  "credibilityLevel": "low",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从黄盖的立场看这场苦肉计——老将的忠诚与牺牲",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从曹操的视角看这场诈降——多疑者的误判",
+      "familyLabel": "谋略博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

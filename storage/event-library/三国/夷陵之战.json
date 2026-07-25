@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "夷陵之战",
+  "summary": "三国时期，蜀汉刘备为报关羽之仇亲征东吴，东吴陆逊于夷陵火烧连营，大败蜀军，刘备退守白帝城，蜀汉国力大损。",
+  "eventRegistryCanonicalName": "夷陵之战",
+  "aliases": [
+    "猇亭之战"
+  ],
+  "dynasty": "三国",
+  "era": "三国",
+  "characterTags": [
+    "刘备",
+    "陆逊",
+    "孙权",
+    "黄权"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "复仇战争",
+    "军事对抗"
+  ],
+  "themeMotifs": [
+    "复仇",
+    "以逸待劳",
+    "火烧连营"
+  ],
+  "timeRange": {
+    "start": "221",
+    "end": "222",
+    "display": "蜀汉章武元年至二年"
+  },
+  "locationTags": [
+    "夷陵",
+    "猇亭",
+    "白帝城"
+  ],
+  "relationshipTags": [
+    "联盟破裂",
+    "复仇对象",
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "三国志",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从陆逊的视角看这场战役——他如何以退为进，静待时机，最终火烧连营七百里",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从刘备的立场看这场复仇之战——倾全国之兵为何败于青年将领之手",
+      "familyLabel": "悲剧终局型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

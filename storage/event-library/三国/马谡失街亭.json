@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "马谡失街亭",
+  "summary": "三国时期，诸葛亮第一次北伐，马谡违背部署失守街亭，导致蜀军进退失据，诸葛亮被迫撤军并挥泪斩马谡。",
+  "eventRegistryCanonicalName": "马谡失街亭",
+  "aliases": [],
+  "dynasty": "三国",
+  "era": "三国",
+  "characterTags": [
+    "马谡",
+    "诸葛亮",
+    "王平"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "军事失利"
+  ],
+  "themeMotifs": [
+    "刚愎自用",
+    "军法如山",
+    "用人不当"
+  ],
+  "timeRange": {
+    "start": "228",
+    "end": "228",
+    "display": "蜀汉建兴六年"
+  },
+  "locationTags": [
+    "街亭"
+  ],
+  "relationshipTags": [
+    "上下级"
+  ],
+  "sourceAnchorRefs": [
+    "三国志",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从诸葛亮挥泪斩马谡看蜀汉第一次北伐的转折",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

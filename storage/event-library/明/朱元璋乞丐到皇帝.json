@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "朱元璋乞丐到皇帝",
+  "summary": "元末乱世中，贫苦出身的朱元璋从乞丐、和尚投军起义，历经血战削平群雄，驱逐蒙元，于1368年建立明朝，成为开国皇帝。",
+  "eventRegistryCanonicalName": "朱元璋乞丐到皇帝",
+  "aliases": [
+    "朱元璋称帝",
+    "明太祖建国"
+  ],
+  "dynasty": "明",
+  "era": "明",
+  "characterTags": [
+    "朱元璋"
+  ],
+  "eventTypeTags": [
+    "起义",
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "军事征服",
+    "阶级冲突"
+  ],
+  "themeMotifs": [
+    "草根逆袭",
+    "乱世英雄",
+    "权力奋斗"
+  ],
+  "timeRange": {
+    "start": "1352",
+    "end": "1368",
+    "display": "元至正十二年至明洪武元年"
+  },
+  "locationTags": [
+    "濠州",
+    "南京"
+  ],
+  "relationshipTags": [
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "明史",
+    "明太祖实录"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从朱元璋的视角看乱世中从草根到帝王的奋斗历程——乞儿、僧侣、义军、帝王",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

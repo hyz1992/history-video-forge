@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "败走麦城",
+  "summary": "建安二十四年，关羽北伐襄樊，东吴吕蒙白衣渡江袭取荆州，关羽回师无路，败走麦城，于临沮被擒遇害，蜀汉从此失去对荆州的控制。",
+  "eventRegistryCanonicalName": "败走麦城",
+  "aliases": [
+    "关羽走麦城"
+  ],
+  "dynasty": "三国",
+  "era": "三国",
+  "characterTags": [
+    "关羽",
+    "关平",
+    "赵累",
+    "孙权",
+    "吕蒙"
+  ],
+  "eventTypeTags": [
+    "战争"
+  ],
+  "conflictTypeTags": [
+    "势力吞并",
+    "背叛盟约"
+  ],
+  "themeMotifs": [
+    "英雄末路",
+    "命运无常",
+    "忠义"
+  ],
+  "timeRange": {
+    "start": "219",
+    "end": "219",
+    "display": "东汉建安二十四年冬"
+  },
+  "locationTags": [
+    "麦城",
+    "临沮"
+  ],
+  "relationshipTags": [
+    "敌对",
+    "盟友背叛"
+  ],
+  "sourceAnchorRefs": [
+    "三国志"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从关羽的视角看败走麦城——威震华夏后的绝境突围",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从吕蒙的视角看白衣渡江——一场精心策划的奇袭",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

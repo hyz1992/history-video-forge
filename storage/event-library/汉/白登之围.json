@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "白登之围",
+  "summary": "汉高祖七年，刘邦亲率大军北击匈奴，被冒顿单于四十万骑兵围困于白登山七日。后采纳陈平之计，重赂阏氏，单于解围一角，刘邦得以突围。",
+  "eventRegistryCanonicalName": "白登之围",
+  "aliases": [
+    "平城之围"
+  ],
+  "dynasty": "汉",
+  "era": "西汉",
+  "characterTags": [
+    "刘邦",
+    "冒顿单于",
+    "陈平",
+    "阏氏"
+  ],
+  "eventTypeTags": [
+    "战争",
+    "外交"
+  ],
+  "conflictTypeTags": [
+    "军事冲突",
+    "外交博弈"
+  ],
+  "themeMotifs": [
+    "围城求生",
+    "奇计解围",
+    "屈辱求和"
+  ],
+  "timeRange": {
+    "start": "-200",
+    "end": "-200",
+    "display": "汉高祖七年冬"
+  },
+  "locationTags": [
+    "白登山",
+    "平城"
+  ],
+  "relationshipTags": [
+    "敌对",
+    "君臣",
+    "夫妻"
+  ],
+  "sourceAnchorRefs": [
+    "史记",
+    "汉书"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从陈平的立场看这场围困——如何用奇计解开白登之围",
+      "familyLabel": "外交博弈型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从冒顿单于的角度看放走刘邦的决策——阏氏的劝说与全局考虑",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "于谦保卫北京",
+  "summary": "明正统十四年，土木堡之变后英宗被俘，瓦剌也先挟帝进逼北京，于谦力排南迁之议，拥立代宗，率军民死守京城，终退强敌，挽明朝于危亡。",
+  "eventRegistryCanonicalName": "于谦保卫北京",
+  "aliases": [
+    "北京保卫战",
+    "北京之战"
+  ],
+  "dynasty": "明",
+  "era": "明",
+  "characterTags": [
+    "于谦",
+    "明代宗",
+    "也先",
+    "石亨"
+  ],
+  "eventTypeTags": [
+    "战争",
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "抵御外族入侵",
+    "皇位争夺"
+  ],
+  "themeMotifs": [
+    "力挽狂澜",
+    "忠臣报国",
+    "临危受命"
+  ],
+  "timeRange": {
+    "start": "1449",
+    "end": "1449",
+    "display": "明正统十四年十月"
+  },
+  "locationTags": [
+    "北京"
+  ],
+  "relationshipTags": [
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "明史",
+    "明实录"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从于谦的立场看北京保卫战：排众议、拒南迁，一身系天下安危",
+      "familyLabel": "战争决战型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "从明代宗的视角：仓促即位，内倚于谦外御强敌，危机中的意外皇权",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

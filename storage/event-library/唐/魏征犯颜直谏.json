@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "魏征犯颜直谏",
+  "summary": "唐贞观年间，谏议大夫魏征多次在朝堂上直言劝谏，唐太宗虽屡被触怒却终能纳谏，成就明君贤臣典范，推动贞观之治。",
+  "eventRegistryCanonicalName": "魏征犯颜直谏",
+  "aliases": [],
+  "dynasty": "唐",
+  "era": "唐",
+  "characterTags": [
+    "魏征",
+    "唐太宗"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈"
+  ],
+  "conflictTypeTags": [
+    "君臣冲突"
+  ],
+  "themeMotifs": [
+    "直言敢谏",
+    "明君贤臣",
+    "纳谏如流"
+  ],
+  "locationTags": [
+    "长安",
+    "朝堂"
+  ],
+  "relationshipTags": [
+    "君臣"
+  ],
+  "sourceAnchorRefs": [
+    "旧唐书",
+    "资治通鉴"
+  ],
+  "credibilityLevel": "high",
+  "disputeNotes": null,
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从唐太宗的立场看魏征的直谏——盛怒之下的克制与帝王心术",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}

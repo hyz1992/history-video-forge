@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "蓝玉案",
+  "summary": "明洪武二十六年，凉国公蓝玉被指控谋反，朱元璋借此兴起大狱，株连杀戮功臣宿将一万五千余人，明初开国武将集团遭到毁灭性打击。",
+  "eventRegistryCanonicalName": "蓝玉案",
+  "aliases": [
+    "蓝党之狱",
+    "蓝玉党案"
+  ],
+  "dynasty": "明",
+  "era": "明",
+  "characterTags": [
+    "蓝玉",
+    "朱元璋"
+  ],
+  "eventTypeTags": [
+    "朝堂博弈",
+    "审判"
+  ],
+  "conflictTypeTags": [
+    "君臣冲突",
+    "政治清洗"
+  ],
+  "themeMotifs": [
+    "兔死狗烹",
+    "帝王心术",
+    "冤狱",
+    "旧账清算"
+  ],
+  "timeRange": {
+    "start": "1393",
+    "end": "1393",
+    "display": "明洪武二十六年"
+  },
+  "locationTags": [
+    "应天府",
+    "南京"
+  ],
+  "relationshipTags": [
+    "君臣",
+    "功臣"
+  ],
+  "sourceAnchorRefs": [
+    "明史",
+    "明太祖实录"
+  ],
+  "credibilityLevel": "disputed",
+  "disputeNotes": "史家多认为蓝玉骄纵或有之，但谋反罪名为朱元璋罗织，事件定性存在争议。",
+  "origin": "builtin",
+  "angles": [
+    {
+      "angleLabel": "从蓝玉的视角，看这位骄横的功臣如何一步步落入皇权的绞杀",
+      "familyLabel": "人物传奇型",
+      "scopeLabel": "standard"
+    },
+    {
+      "angleLabel": "朱元璋晚年为保江山，对开国功臣发起的最后一轮大清洗",
+      "familyLabel": "朝堂博弈型",
+      "scopeLabel": "standard"
+    }
+  ]
+}
