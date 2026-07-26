@@ -235,7 +235,10 @@ export function validateScriptDraft(input: ValidateScriptDraftInput) {
     }
 
     if (!scriptContainsTraceExcerpt(draft.script_text, matched.excerpt)) {
-      pushUnique(errors, "beat_trace_excerpt_not_in_script");
+      // LLM 写 script 时会对 beat excerpt 做字符级改写（标点、断句、修饰），
+      // 导致严格 includes 失败。这是 LLM 固有不精确性，regen 也未必能修复。
+      // 降级为 warning，不再强制 regen。
+      pushUnique(warnings, `beat_trace_excerpt_drift:${requiredBeat}`);
     }
   }
 

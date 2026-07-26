@@ -328,8 +328,12 @@ describe("script local validator", () => {
       },
     });
 
-    expect(result.decision).toBe("regen_once");
-    expect(result.errors).toContain("beat_trace_excerpt_not_in_script");
+    expect(result.decision).toBe("pass");
+    expect(result.errors).not.toContain("beat_trace_excerpt_not_in_script");
+    // 现在降级为 warning（LLM 字符级改写 excerpt 是常见情况）
+    expect(
+      result.warnings.some((w) => w.startsWith("beat_trace_excerpt_drift:")),
+    ).toBe(true);
   });
 
   it("accepts beat trace excerpts that only omit quote boundary punctuation", async () => {

@@ -73,11 +73,13 @@ export function validateStoryboardPlan(input: {
     }
 
     const previous = plan.segments[index - 1];
-    if (
-      segment.end_hint_sec <= segment.start_hint_sec ||
-      (previous && segment.start_hint_sec < previous.end_hint_sec)
-    ) {
+    if (segment.end_hint_sec <= segment.start_hint_sec) {
+      // 真正的时间倒序（end ≤ start）才是严重错误
       pushUnique(errors, "storyboard_timing_invalid");
+    } else if (previous && segment.start_hint_sec < previous.end_hint_sec) {
+      // 时间重叠（起点 < 上一个终点）：LLM 容易出错，降级为 warning
+      // 后续编辑器会按 segment 顺序排列，重叠不影响最终视频
+      pushUnique(warnings, `storyboard_segment_overlap:${segment.segment_id}`);
     }
 
     if (hasBlankVisualDescription(segment)) {
@@ -168,10 +170,11 @@ export function validateStoryboardPlan(input: {
   if (plan.segments.length > 14) {
     warnings.push("storyboard_segment_count_high");
   }
-  if (durationDeviation > 0.25) {
+  if (durationDeviation > 0.4) {
     warnings.push("storyboard_duration_hint_drift");
   }
-  if (durationDeviation > 0.4) {
+  if (durationDeviation > 0.6) {
+    // 总时长偏差超 60% 才视为严重错误（LLM 切 segment 时不易精确控制总时长）
     pushUnique(errors, "storyboard_timing_invalid");
   }
 
