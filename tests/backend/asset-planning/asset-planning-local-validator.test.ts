@@ -345,7 +345,8 @@ describe("validateAssetPlan", () => {
     [
       "asset_tts_script_coverage_missing",
       (plan: AssetPlan) => {
-        plan.tts_plan.chunks = plan.tts_plan.chunks.slice(0, 1);
+        // 让某个 chunk 的 script_excerpt 在原文中完全找不到（hasMissingExcerpt）
+        plan.tts_plan.chunks[0]!.script_excerpt = "这段文本在原 script 中不存在";
       },
     ],
     [
@@ -412,6 +413,23 @@ describe("validateAssetPlan", () => {
 
     expect(result.decision).toBe("regen_once");
     expect(result.errors).toContain(errorCode);
+  });
+
+  it("downgrades low TTS coverage (above 0 but below 0.90) to warning instead of error", () => {
+    // 模拟真实场景：LLM 切 chunk 时对部分原文做了语义微调，
+    // 字符级匹配覆盖率低于 0.90 但 chunk 的 script_excerpt 仍能在原文中找到。
+    const plan = makeBaseAssetPlan();
+    // 把第二个 chunk 的 excerpt 短化（模拟 LLM 截断），制造 ~70% 的覆盖率
+    plan.tts_plan.chunks[1]!.script_excerpt =
+      plan.tts_plan.chunks[1]!.script_excerpt.substring(0, 5);
+
+    const result = runValidation(plan);
+
+    expect(result.decision).toBe("pass");
+    expect(result.errors).not.toContain("asset_tts_script_coverage_missing");
+    expect(
+      result.warnings.some((w) => w.startsWith("asset_tts_script_coverage_low:")),
+    ).toBe(true);
   });
 
   it("reports repair_hints for repairable structural task gaps", () => {

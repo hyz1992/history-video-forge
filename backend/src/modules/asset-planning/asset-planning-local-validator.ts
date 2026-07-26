@@ -308,8 +308,17 @@ export function validateAssetPlan(input: {
   }
 
   const ttsCoverage = getTtsCoverage(input.scriptText, plan);
-  if (ttsCoverage.hasMissingExcerpt || ttsCoverage.coverageRatio < 0.95) {
+  // TTS 覆盖率：LLM 切 chunk 时会做语义微调（标点、断句），字符级精确匹配
+  // 受限于 LLM 固有能力。低于阈值只记 warning，不再报 error 强制 regen
+  // （regen 不会显著改善字符级覆盖，反而让整个流程卡死）。
+  // 严重缺失（chunk 的 script_excerpt 在原文中找不到）仍视为可恢复 error。
+  if (ttsCoverage.hasMissingExcerpt) {
     pushUnique(errors, "asset_tts_script_coverage_missing");
+  } else if (ttsCoverage.coverageRatio < 0.90) {
+    pushUnique(
+      warnings,
+      `asset_tts_script_coverage_low:${ttsCoverage.coverageRatio.toFixed(2)}`,
+    );
   }
 
   const tasksById = getTaskById(plan);
