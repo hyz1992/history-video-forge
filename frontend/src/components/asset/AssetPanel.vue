@@ -1073,52 +1073,6 @@ function handleConfirm() {
       </div>
     </div>
 
-    <!-- 基础资产生成中：规划概览 + 内联进度 -->
-    <div v-else-if="phase.kind === 'basic_assets_generating'" class="asset-plan-overview-wrapper">
-      <div class="asset-plan-overview">
-        <h3 class="asset-overview-title">资产规划概览</h3>
-        <div class="asset-overview-types">
-          <div v-for="item in planSummary" :key="item.label" class="asset-overview-type-row">
-            <span class="asset-overview-type-label">{{ item.label }}</span>
-            <el-tag size="small" type="info">{{ item.count }} 项</el-tag>
-          </div>
-        </div>
-        <div class="asset-inline-progress">
-          <el-alert
-            title="正在生成基础资产（口播、字幕、音效、配乐）"
-            type="info"
-            :closable="false"
-          />
-          <p class="asset-generating-progress">{{ generationProgress }}</p>
-        </div>
-        <div class="asset-plan-overview-actions">
-          <el-button type="primary" loading disabled>
-            生成基础资产（处理中...）
-          </el-button>
-        </div>
-      </div>
-
-      <!-- 分镜卡片骨架 -->
-      <div v-if="segments.length > 0" class="asset-segments-count">
-        <span class="asset-segments-count-text">共 {{ segmentCount }} 个镜头</span>
-      </div>
-      <div v-if="segments.length > 0" class="asset-segments">
-        <div v-for="(segment, index) in segments" :key="segment.segment_id" class="segment-card-skeleton">
-          <div class="skeleton-header">
-            <span class="skeleton-badge">#{{ index + 1 }}</span>
-            <span class="skeleton-text-short"></span>
-          </div>
-          <div class="skeleton-body">
-            <div class="skeleton-media"></div>
-            <div class="skeleton-info">
-              <div class="skeleton-line"></div>
-              <div class="skeleton-line skeleton-line--short"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- 基础资产失败 -->
     <div v-else-if="phase.kind === 'basic_assets_failed'" class="asset-plan-overview-wrapper">
       <div class="asset-plan-overview">
@@ -1142,8 +1096,22 @@ function handleConfirm() {
       </div>
     </div>
 
-    <!-- manifest 就绪：完整正文区 -->
+    <!-- 资产预览页：manifest 就绪或基础资产生成中（生成中也复用预览页布局，顶部加进度提示） -->
     <template v-else>
+      <!-- 基础资产生成中的顶部进度提示 -->
+      <el-alert
+        v-if="phase.kind === 'basic_assets_generating'"
+        class="asset-basic-generating-banner"
+        title="正在生成基础资产（口播、字幕、音效、配乐）"
+        type="info"
+        :closable="false"
+        show-icon
+      >
+        <template #default>
+          <p class="asset-generating-progress">{{ generationProgress || "正在准备..." }}</p>
+        </template>
+      </el-alert>
+
       <!-- 全局设置 -->
       <details v-if="hasGlobalInfo" class="asset-global-settings">
         <summary class="asset-global-toggle">全局设置</summary>
@@ -1515,6 +1483,16 @@ function handleConfirm() {
   display: grid;
   gap: var(--space-sm);
   margin-top: var(--space-sm);
+}
+
+/* 基础资产生成中的顶部横幅（在资产预览页顶部显示进度） */
+.asset-basic-generating-banner {
+  margin-bottom: var(--space-md);
+}
+.asset-basic-generating-banner .asset-generating-progress {
+  margin: var(--space-xs) 0 0;
+  font-size: 13px;
+  color: var(--text-secondary, inherit);
 }
 
 /* ---- Asset overview details ---- */
