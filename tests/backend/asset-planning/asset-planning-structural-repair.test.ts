@@ -402,4 +402,35 @@ describe("repairAssetPlanStructure", () => {
 
     expect(result.repairUsed).toBe(false);
   });
+
+  it("returns repairUsed=false when patch only fills irrelevant fields (no effective fix)", async () => {
+    // 模拟 trace 里观察到的真实场景：LLM 返回的 patch 没有修复任何
+    // validator 标记缺失的字段（img_001.prompt_draft 等）。
+    // 这里 patch 引用了一个不存在的 task_id，会被忽略（不改变 plan）。
+    const plan = makePlan();
+    const gateway = makeGatewayWithReply({
+      patch_type: "asset_plan_structural_patch",
+      task_patches: [
+        {
+          // 引用一个根本不在 plan 里的 task_id
+          // 注意：coerceStructuralPatch 接受这种 patch，但 applyStructuralPatch
+          // 后 effectiveChangeCount=0（因为找不到对应 task 不会修改任何字段）
+          task_id: "non_existent_task",
+          prompt_draft: "无效修复内容",
+        },
+      ],
+      dependency_patches: [],
+    });
+
+    const result = await repairAssetPlanStructure({
+      plan,
+      validation: makeValidation(),
+      storyboard,
+      llmGateway: gateway,
+    });
+
+    // patch 引用的 task 不存在 → applyStructuralPatch 会抛 asset_plan_structural_patch_task_missing
+    // 这个抛错会被外层视为修复失败，repairUsed=false
+    expect(result.repairUsed).toBe(false);
+  });
 });

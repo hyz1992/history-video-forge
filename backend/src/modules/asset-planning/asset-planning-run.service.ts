@@ -560,6 +560,7 @@ export async function runAssetPlanningGeneration(
   } catch (error) {
     // Clean up generating state — unexpected error
     if (generatingRecord) {
+      const cleanupRecordId = generatingRecord.id;
       await saveAssetPlanRecord(input.db, {
         id: generatingRecord.id,
         projectId: generatingRecord.projectId,
@@ -577,7 +578,16 @@ export async function runAssetPlanningGeneration(
         graphTraceSummaryJson: generatingRecord.graphTraceSummaryJson,
         runtimeDiagnosticsJson: generatingRecord.runtimeDiagnosticsJson,
         createdAt: generatingRecord.createdAt,
-      }).catch(() => undefined);
+      }).catch((cleanupError) => {
+        // 关键：清理失败时一定要记录，避免静默吞错让记录卡在 generating: true
+        const cleanupMsg = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+        console.error(
+          `[asset-planning] failed to clear generating state for record ${cleanupRecordId}: ${cleanupMsg}`,
+        );
+        interactionLogWriter.writeError(
+          `asset_plan_generating_state_cleanup_failed:${cleanupMsg}`,
+        );
+      });
     }
     input.project.activeAssetPlanRecordId = previousActiveAssetPlanRecordId;
     input.project.status = previousActiveAssetPlanRecordId ? "asset_plan_ready" : "storyboard_ready";

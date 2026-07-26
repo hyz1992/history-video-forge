@@ -395,7 +395,16 @@ async function parseOrRepairChunkDraft(input: {
   try {
     return parseAndValidateChunkDraft(input.rawChunkDraft, input.segments);
   } catch (error) {
-    if (!(error instanceof z.ZodError)) {
+    // 决定是否值得调用 LLM 修复：
+    // - ZodError：结构错误（字段缺失、类型错误），LLM 可以重新输出
+    // - 可修复的业务错误（segment 越界等）：LLM 知道边界后可以重新输出
+    // 其他未知错误（编程 bug）不修复，直接抛出
+    const isZodError = error instanceof z.ZodError;
+    const isRepairableBusinessError =
+      error instanceof Error &&
+      CHUNK_REPAIRABLE_BUSINESS_ERRORS.has(error.message);
+
+    if (!isZodError && !isRepairableBusinessError) {
       throw error;
     }
 
@@ -408,7 +417,9 @@ async function parseOrRepairChunkDraft(input: {
         art_bible: input.chunkPromptInput.art_bible,
         raw_task_summaries: summarizeRawChunkTasks(input.rawChunkDraft),
         raw_dependency_summaries: summarizeRawChunkDependencies(input.rawChunkDraft),
-        structural_errors: serializeStructuralError(error),
+        structural_errors: serializeStructuralError(
+          isZodError ? error : new Error(`business_validation:${error.message}`),
+        ),
       },
       interactionLogWriter: createTimedInteractionLogWriter(input.interactionLogWriter),
     });
@@ -420,11 +431,24 @@ async function parseOrRepairChunkDraft(input: {
         patch,
       );
       return parseAndValidateChunkDraft(patchedChunkDraft, input.segments);
-    } catch {
+    } catch (repairError) {
+      // 修复仍失败 → 抛原始错误（保留诊断信息）。LlmInteractionLogWriter 没有
+      // writeError 方法，用 console.warn 兜底（trace.md 已由外层记录详细错误）。
+      console.warn(
+        `[chunk-repair] chunk_structural_repair_failed:${repairError instanceof Error ? repairError.message : String(repairError)}`,
+      );
       throw error;
     }
   }
 }
+
+// 已知可以通过 LLM 修复的 chunk 业务错误（按 error.message 匹配）
+const CHUNK_REPAIRABLE_BUSINESS_ERRORS = new Set([
+  "asset_planning_chunk_task_segment_out_of_scope",
+  "asset_planning_support_image_reason_missing",
+  "asset_planning_anchor_image_budget_exceeded",
+  "asset_planning_chunk_dependency_local_id_missing",
+]);
 
 function parseAndValidateChunkDraft(
   rawChunkDraft: unknown,

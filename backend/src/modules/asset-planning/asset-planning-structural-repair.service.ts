@@ -88,6 +88,12 @@ function coerceStructuralPatch(raw: unknown): AssetPlanStructuralPatch | null {
   }
 }
 
+// LlmInteractionLogWriter 只有 write 方法，没有专门的 error 通道。
+// 用 console.error 兜底（trace.md 已由调用方在外层记录详细错误）。
+function logRepairIssue(message: string): void {
+  console.warn(`[asset-plan-repair] ${message}`);
+}
+
 export async function repairAssetPlanStructure(input: {
   plan: AssetPlan;
   validation: AssetPlanningValidationResult;
@@ -119,7 +125,7 @@ export async function repairAssetPlanStructure(input: {
   if (!patch) {
     // LLM 修复输出无法解析 → 视为修复未生效，让上层走 regen_once 兜底重生成。
     // 不抛错，避免单个字段缺失让整个资产规划流程崩溃。
-    input.interactionLogWriter?.writeError(
+    logRepairIssue(
       "asset_plan_structural_patch_unparseable:LLM 修复输出缺少 task_patches 或字段格式非法，跳过结构化修复",
     );
     return {
@@ -128,8 +134,37 @@ export async function repairAssetPlanStructure(input: {
     };
   }
 
+  // 检查 patch 是否真的修复了 validator 标记的缺失字段。
+  // 如果 patch 只填了无关字段（如 manual_upload_policy）但没填 repair_hints 指出的字段，
+  // 视为修复未生效——避免无效 patch 让流程误以为已修复。
+  let patchedPlan: AssetPlan;
+  let effectiveChangeCount: number;
+  try {
+    const result = applyStructuralPatch(input.plan, patch);
+    patchedPlan = result.plan;
+    effectiveChangeCount = result.effectiveChangeCount;
+  } catch (patchError) {
+    // patch 应用抛错（task_missing / type_invalid 等）→ 视为修复未生效
+    logRepairIssue(
+      `asset_plan_structural_patch_apply_failed:${patchError instanceof Error ? patchError.message : String(patchError)}`,
+    );
+    return {
+      plan: input.plan,
+      repairUsed: false,
+    };
+  }
+  if (effectiveChangeCount === 0) {
+    logRepairIssue(
+      "asset_plan_structural_patch_ineffective:LLM 修复输出未触及任何 repair_hints 标记的缺失字段，跳过结构化修复",
+    );
+    return {
+      plan: input.plan,
+      repairUsed: false,
+    };
+  }
+
   return {
-    plan: applyStructuralPatch(input.plan, patch),
+    plan: patchedPlan,
     repairUsed: true,
   };
 }
@@ -149,8 +184,9 @@ function isRepairableValidation(validation: AssetPlanningValidationResult) {
 function applyStructuralPatch(
   plan: AssetPlan,
   patch: AssetPlanStructuralPatch,
-): AssetPlan {
+): { plan: AssetPlan; effectiveChangeCount: number } {
   const tasksById = new Map(plan.tasks.map((task) => [task.task_id, task]));
+  let effectiveChangeCount = 0;
   const patchedTasks = plan.tasks.map((task) => {
     const taskPatch = patch.task_patches.find(
       (candidate) => candidate.task_id === task.task_id,
@@ -160,6 +196,21 @@ function applyStructuralPatch(
     }
 
     assertPatchAllowedForTask(task, taskPatch);
+
+    // 只统计"实际修复了缺失字段"的 patch（对原有 null/空值进行了非空赋值）
+    if (taskPatch.prompt_draft && !task.prompt_draft) {
+      effectiveChangeCount += 1;
+    }
+    if (taskPatch.risk_notes && task.risk_notes.length === 0) {
+      effectiveChangeCount += 1;
+    }
+    if (
+      taskPatch.parameters?.static_fallback_task_id &&
+      !(task.parameters as Record<string, unknown>).static_fallback_task_id
+    ) {
+      effectiveChangeCount += 1;
+    }
+
     return {
       ...task,
       prompt_draft: taskPatch.prompt_draft ?? task.prompt_draft,
@@ -197,13 +248,17 @@ function applyStructuralPatch(
       depends_on_task_id: dependencyPatch.depends_on_task_id,
       dependency_type: dependencyPatch.dependency_type,
     });
+    effectiveChangeCount += 1;
   }
 
-  return AssetPlan.parse({
-    ...plan,
-    tasks: patchedTasks,
-    dependencies,
-  });
+  return {
+    plan: AssetPlan.parse({
+      ...plan,
+      tasks: patchedTasks,
+      dependencies,
+    }),
+    effectiveChangeCount,
+  };
 }
 
 function assertPatchAllowedForTask(
