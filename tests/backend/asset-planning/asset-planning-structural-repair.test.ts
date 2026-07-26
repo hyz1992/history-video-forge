@@ -298,6 +298,15 @@ function makeGateway(): { gateway: LlmGateway; calls: InvokeStructuredPromptOpti
   };
 }
 
+function makeGatewayWithReply(reply: unknown): LlmGateway {
+  return {
+    async invokeStructuredPrompt<T>(): Promise<T> {
+      return reply as T;
+    },
+    invokeStrictStructured: vi.fn(),
+  };
+}
+
 describe("repairAssetPlanStructure", () => {
   it("applies structural task patches without changing task count", async () => {
     const plan = makePlan();
@@ -331,5 +340,66 @@ describe("repairAssetPlanStructure", () => {
         dependency_type: "requires_output",
       }),
     );
+  });
+
+  it("tolerates missing patch_type field (LLM frequently omits declarative metadata)", async () => {
+    const plan = makePlan();
+    const gateway = makeGatewayWithReply({
+      task_patches: [
+        {
+          task_id: "img_001",
+          prompt_draft: "古代宫门前的紧张场面",
+        },
+      ],
+      // 缺 patch_type 和 dependency_patches（真实场景中 LLM 经常这样）
+    });
+
+    const result = await repairAssetPlanStructure({
+      plan,
+      validation: makeValidation(),
+      storyboard,
+      llmGateway: gateway,
+    });
+
+    expect(result.repairUsed).toBe(true);
+    expect(
+      result.plan.tasks.find((task) => task.task_id === "img_001")?.prompt_draft,
+    ).toBe("古代宫门前的紧张场面");
+  });
+
+  it("returns repairUsed=false instead of throwing when LLM output is unparseable", async () => {
+    const plan = makePlan();
+    const gateway = makeGatewayWithReply({
+      // 缺 task_patches —— 完全无法挽救
+      random_field: "noise",
+    });
+
+    const result = await repairAssetPlanStructure({
+      plan,
+      validation: makeValidation(),
+      storyboard,
+      llmGateway: gateway,
+    });
+
+    expect(result.repairUsed).toBe(false);
+    expect(result.plan).toBe(plan);
+  });
+
+  it("returns repairUsed=false when LLM returns malformed task_patches entries", async () => {
+    const plan = makePlan();
+    const gateway = makeGatewayWithReply({
+      task_patches: [
+        { task_id: "img_001", prompt_draft: 12345 }, // 类型错误
+      ],
+    });
+
+    const result = await repairAssetPlanStructure({
+      plan,
+      validation: makeValidation(),
+      storyboard,
+      llmGateway: gateway,
+    });
+
+    expect(result.repairUsed).toBe(false);
   });
 });

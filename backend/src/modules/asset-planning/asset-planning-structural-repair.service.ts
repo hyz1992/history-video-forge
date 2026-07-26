@@ -52,9 +52,41 @@ const AssetPlanStructuralPatch = z
     task_patches: z.array(TaskPatch),
     dependency_patches: z.array(DependencyPatch),
   })
-  .strict();
+  // 允许 LLM 漏掉元字段（patch_type / dependency_patches）。
+  // LLM 在结构化输出中常会省略"声明性"字段，仅给出实质内容（task_patches）。
+  // strict 在容错后再统一施加。
+  .passthrough();
 
 type AssetPlanStructuralPatch = z.infer<typeof AssetPlanStructuralPatch>;
+
+/**
+ * 将 LLM 输出宽松地规范化为 AssetPlanStructuralPatch。
+ * - 允许缺 patch_type（声明性字段，LLM 常省略）
+ * - 允许缺 dependency_patches（默认空数组）
+ * - task_patches 必须存在且合法
+ * 任何无法挽救的格式错误都返回 null，调用方应视为"修复未生效"。
+ */
+function coerceStructuralPatch(raw: unknown): AssetPlanStructuralPatch | null {
+  if (!raw || typeof raw !== "object") return null;
+  const candidate = raw as Record<string, unknown>;
+
+  const taskPatchesRaw = candidate.task_patches;
+  if (!Array.isArray(taskPatchesRaw)) return null;
+
+  const normalized = {
+    patch_type: "asset_plan_structural_patch" as const,
+    task_patches: taskPatchesRaw,
+    dependency_patches: Array.isArray(candidate.dependency_patches)
+      ? candidate.dependency_patches
+      : [],
+  };
+
+  try {
+    return AssetPlanStructuralPatch.parse(normalized);
+  } catch {
+    return null;
+  }
+}
 
 export async function repairAssetPlanStructure(input: {
   plan: AssetPlan;
@@ -83,7 +115,18 @@ export async function repairAssetPlanStructure(input: {
     },
     interactionLogWriter: input.interactionLogWriter,
   });
-  const patch = AssetPlanStructuralPatch.parse(rawPatch);
+  const patch = coerceStructuralPatch(rawPatch);
+  if (!patch) {
+    // LLM 修复输出无法解析 → 视为修复未生效，让上层走 regen_once 兜底重生成。
+    // 不抛错，避免单个字段缺失让整个资产规划流程崩溃。
+    input.interactionLogWriter?.writeError(
+      "asset_plan_structural_patch_unparseable:LLM 修复输出缺少 task_patches 或字段格式非法，跳过结构化修复",
+    );
+    return {
+      plan: input.plan,
+      repairUsed: false,
+    };
+  }
 
   return {
     plan: applyStructuralPatch(input.plan, patch),
