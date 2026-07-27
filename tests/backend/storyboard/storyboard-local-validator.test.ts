@@ -256,4 +256,61 @@ describe("validateStoryboardPlan", () => {
 
     expect(result.errors).toContain("storyboard_empty_visual_description");
   });
+
+  it("accepts excerpt whose only diff is half/full-width comma and emits drift warning", () => {
+    // 真实事故：LLM 在 script_text 中混用了 ASCII 半角逗号,
+    // storyboard segment excerpt 又把它修正成中文全角逗号，
+    // 严格 indexOf 失败 → storyboard_excerpt_not_in_script → regen 后仍失败 → 整个 stage 卡死。
+    // 这里复刻该场景：仅一个标点不一致，应被归一化软匹配命中，并降级为 drift warning。
+    const draft = makeDraft();
+    const plan = makePlan();
+
+    // 把 sb_002 excerpt 中的 "楚王又说齐国没人，才派" 中间的全角逗号替换为半角，
+    // 而 scriptText 里仍是全角逗号，模拟 LLM 输出标点风格漂移。
+    const seg002 = plan.segments[1];
+    const driftedExcerpt = seg002.script_excerpt.replace("，才派", ",才派");
+    expect(driftedExcerpt).not.toBe(seg002.script_excerpt);
+
+    const driftedPlan = {
+      ...plan,
+      segments: plan.segments.map((segment, index) =>
+        index === 1 ? { ...segment, script_excerpt: driftedExcerpt } : segment,
+      ),
+    };
+
+    const result = validateStoryboardPlan({ draft, plan: driftedPlan });
+
+    expect(result.errors).not.toContain("storyboard_excerpt_not_in_script");
+    expect(
+      result.warnings.some((w) => w.startsWith("storyboard_excerpt_drift:sb_002")),
+    ).toBe(true);
+    // 不应再因为单一标点漂移触发 regen
+    expect(result.decision).toBe("pass");
+  });
+
+  it("accepts excerpt with quote-boundary punctuation drift", () => {
+    const draft = makeDraft();
+    const draftWithQuote = {
+      ...draft,
+      script_text: draft.script_text.replace(
+        "橘生淮南则为橘",
+        "“橘生淮南则为橘”",
+      ),
+    };
+    const plan = makePlan({
+      segments: makePlan().segments.map((segment) =>
+        segment.linked_quotes.includes("橘生淮南则为橘")
+          ? {
+              ...segment,
+              // excerpt 没有引号，但 script_text 加了中文左右引号，应仍归一化命中
+              script_excerpt: segment.script_excerpt,
+            }
+          : segment,
+      ),
+    });
+
+    const result = validateStoryboardPlan({ draft: draftWithQuote, plan });
+
+    expect(result.errors).not.toContain("storyboard_excerpt_not_in_script");
+  });
 });
