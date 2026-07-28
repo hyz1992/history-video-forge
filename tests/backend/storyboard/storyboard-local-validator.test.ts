@@ -313,4 +313,69 @@ describe("validateStoryboardPlan", () => {
 
     expect(result.errors).not.toContain("storyboard_excerpt_not_in_script");
   });
+
+  it("accepts linked_beats that drift quote boundary punctuation and emits trace_ref_drift warning", () => {
+    // 真实场景：storyboard LLM 输出的 linked_beats 与 script LLM 输出的 beat_trace
+    // 是两次独立调用，名字漂移标点（如多打引号）很常见。
+    // 严格 Set.has 会判 storyboard_trace_ref_invalid → regen，但 regen 仍可能漂移。
+    const draft = makeDraft();
+    const plan = makePlan();
+
+    // 把 sb_002 segment 的 linked_beats[0] 改为带引号的漂移版本，
+    // beat_trace 里仍是原始版本，归一化后应等价。
+    const beat = plan.segments[1].linked_beats[0]!;
+    const driftedBeat = `“${beat}”`;
+    const driftedPlan = {
+      ...plan,
+      segments: plan.segments.map((segment, index) =>
+        index === 1
+          ? { ...segment, linked_beats: [driftedBeat] }
+          : segment,
+      ),
+    };
+
+    const result = validateStoryboardPlan({ draft, plan: driftedPlan });
+
+    expect(result.errors).not.toContain("storyboard_trace_ref_invalid");
+    expect(
+      result.warnings.some((w) => w.startsWith("storyboard_trace_ref_drift:")),
+    ).toBe(true);
+  });
+
+  it("still reports storyboard_trace_ref_invalid when linked_beats is genuinely wrong", () => {
+    const draft = makeDraft();
+    const plan = makePlan({
+      segments: makePlan().segments.map((segment, index) =>
+        index === 0 ? { ...segment, linked_beats: ["不存在的 beat"] } : segment,
+      ),
+    });
+
+    const result = validateStoryboardPlan({ draft, plan });
+
+    expect(result.errors).toContain("storyboard_trace_ref_invalid");
+  });
+
+  it("reverse coverage check accepts beat names that drift punctuation in linked_beats", () => {
+    // 反向覆盖：trace 里的每个 beat 都应被 linked 引用。
+    // 如果 trace 里 beat 名字是 "狗门羞辱"，但 linked 里写成 "“狗门羞辱"，
+    // 归一化后两者等价，应不报 storyboard_trace_coverage_missing。
+    const draft = makeDraft();
+    const plan = makePlan();
+
+    // 把所有 segment 的 linked_beats 都加引号（漂移），trace 仍用原始名字
+    const driftedPlan = {
+      ...plan,
+      segments: plan.segments.map((segment) => ({
+        ...segment,
+        linked_beats: segment.linked_beats.map((beat) => `“${beat}”`),
+      })),
+    };
+
+    const result = validateStoryboardPlan({ draft, plan: driftedPlan });
+
+    expect(result.errors).not.toContain("storyboard_trace_coverage_missing");
+    expect(
+      result.warnings.some((w) => w.startsWith("storyboard_trace_ref_drift:")),
+    ).toBe(true);
+  });
 });

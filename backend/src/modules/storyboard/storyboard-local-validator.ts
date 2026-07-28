@@ -4,11 +4,70 @@ import type {
   StoryboardValidationResult,
 } from "../../../../shared/src/index.js";
 import { StoryboardValidationResult as StoryboardValidationResultSchema } from "../../../../shared/src/index.js";
-import { locateSubstringFuzzy } from "../../runtime/llm/text-match.js";
+import {
+  isTextEquivalentWithDrift,
+  locateSubstringFuzzy,
+  normalizeTextForMatching,
+} from "../../runtime/llm/text-match.js";
 
 interface LocatedExcerpt {
   start: number;
   end: number;
+}
+
+/**
+ * 把 trace 列表归一化为 lookup map。
+ *
+ * key 用 normalizeTextForMatching(rawValue) —— 这样调用方查 `map.has(normalizeTextForMatching(query))`
+ * 就能匹配标点风格漂移的引用。
+ * value 是原始 rawValue 数组（同名 trace 在数据上极少，但保留数组以稳健）。
+ *
+ * 同时返回 rawValues 顺序数组，方便"反向 Set 比较"（trace 里的每项是否被 linked 引用）。
+ */
+interface TraceLookup {
+  normalizedKeyToRaws: Map<string, string[]>;
+  rawValues: string[];
+}
+
+function buildTraceLookup(rawValues: string[]): TraceLookup {
+  const normalizedKeyToRaws = new Map<string, string[]>();
+  for (const raw of rawValues) {
+    const key = normalizeTextForMatching(raw);
+    const bucket = normalizedKeyToRaws.get(key);
+    if (bucket) {
+      bucket.push(raw);
+    } else {
+      normalizedKeyToRaws.set(key, [raw]);
+    }
+  }
+  return { normalizedKeyToRaws, rawValues };
+}
+
+function getTraceLookups(draft: ScriptDraftPackage) {
+  return {
+    beats: buildTraceLookup(draft.beat_trace.map((trace) => trace.beat)),
+    quotes: buildTraceLookup(draft.quote_trace.map((trace) => trace.quote)),
+  };
+}
+
+/**
+ * 在 trace lookup 中查找 query 对应的 raw value。
+ * 返回 { found, raw, drifted }：
+ *   - 严格匹配（raw === query）→ drifted=false
+ *   - 归一化匹配 → drifted=true
+ *   - 未匹配 → found=false
+ */
+function lookupTrace(
+  lookup: TraceLookup,
+  query: string,
+): { found: boolean; raw: string | null; drifted: boolean } {
+  for (const raw of lookup.rawValues) {
+    const cmp = isTextEquivalentWithDrift(raw, query);
+    if (cmp.equivalent) {
+      return { found: true, raw, drifted: cmp.drifted };
+    }
+  }
+  return { found: false, raw: null, drifted: false };
 }
 
 function pushUnique(target: string[], code: string) {
@@ -51,10 +110,16 @@ function hasBlankVisualDescription(segment: StoryboardPlan["segments"][number]) 
 }
 
 function getTraceSets(draft: ScriptDraftPackage) {
-  return {
-    beats: new Set(draft.beat_trace.map((trace) => trace.beat)),
-    quotes: new Set(draft.quote_trace.map((trace) => trace.quote)),
-  };
+  return getTraceLookups(draft);
+}
+
+// 用于反向覆盖检查：构造 linked 集合的 normalized key 集合。
+function buildLinkedNormalizedSet(values: string[]): Set<string> {
+  const set = new Set<string>();
+  for (const v of values) {
+    set.add(normalizeTextForMatching(v));
+  }
+  return set;
 }
 
 export function validateStoryboardPlan(input: {
@@ -88,14 +153,22 @@ export function validateStoryboardPlan(input: {
     }
 
     for (const beat of segment.linked_beats) {
-      if (!traceSets.beats.has(beat)) {
+      // 归一化等价比较：storyboard LLM 输出的 linked_beats 与 script LLM 输出的
+      // beat_trace 是两次独立调用，标点风格漂移很常见，严格 Set.has 会假阴性。
+      const found = lookupTrace(traceSets.beats, beat);
+      if (!found.found) {
         pushUnique(errors, "storyboard_trace_ref_invalid");
+      } else if (found.drifted) {
+        pushUnique(warnings, `storyboard_trace_ref_drift:${beat}`);
       }
     }
 
     for (const quote of segment.linked_quotes) {
-      if (!traceSets.quotes.has(quote)) {
+      const found = lookupTrace(traceSets.quotes, quote);
+      if (!found.found) {
         pushUnique(errors, "storyboard_trace_ref_invalid");
+      } else if (found.drifted) {
+        pushUnique(warnings, `storyboard_trace_ref_drift:${quote}`);
       }
     }
 
@@ -155,17 +228,23 @@ export function validateStoryboardPlan(input: {
     }
   }
 
-  const linkedBeats = new Set(plan.segments.flatMap((segment) => segment.linked_beats));
-  const linkedQuotes = new Set(plan.segments.flatMap((segment) => segment.linked_quotes));
+  // 反向覆盖检查：trace 里的每个 beat/quote 都应被 linked 引用覆盖。
+  // 同样走归一化等价：若 linked 用了标点漂移后的名字，仍算覆盖。
+  const linkedBeatKeys = buildLinkedNormalizedSet(
+    plan.segments.flatMap((segment) => segment.linked_beats),
+  );
+  const linkedQuoteKeys = buildLinkedNormalizedSet(
+    plan.segments.flatMap((segment) => segment.linked_quotes),
+  );
 
-  for (const beat of traceSets.beats) {
-    if (!linkedBeats.has(beat)) {
+  for (const beat of traceSets.beats.rawValues) {
+    if (!linkedBeatKeys.has(normalizeTextForMatching(beat))) {
       pushUnique(errors, "storyboard_trace_coverage_missing");
     }
   }
 
-  for (const quote of traceSets.quotes) {
-    if (!linkedQuotes.has(quote)) {
+  for (const quote of traceSets.quotes.rawValues) {
+    if (!linkedQuoteKeys.has(normalizeTextForMatching(quote))) {
       pushUnique(errors, "storyboard_trace_coverage_missing");
     }
   }
