@@ -62,8 +62,20 @@ export function normalizeTextForMatching(value: string): string {
 }
 
 export interface LocateResult {
-  /** needle 在 haystack 中的真实起始字符索引；-1 表示即使归一化后也无法匹配。 */
+  /**
+   * needle 在 haystack 中的真实起始字符索引；-1 表示即使归一化后也无法匹配。
+   * 当 drifted=false 时，与 haystack.indexOf(needle) 一致。
+   */
   index: number;
+  /**
+   * needle 在 haystack 中的真实结束字符索引（exclusive）。
+   * 当 drifted=false 时等于 index + needle.length。
+   * 当 drifted=true 时，由于 haystack 与 needle 在删除型字符（引号、空格）上
+   * 长度可能不同，end 必须重新计算以保证 [index, end) 真实覆盖 haystack 中等价
+   * 于 needle 的字符区间。调用方据此做 coverage / 顺序检查，否则会少算或多算
+   * 覆盖字符。
+   */
+  end: number;
   /** true 表示严格匹配失败、靠归一化兜底命中。调用方可据此记 drift warning。 */
   drifted: boolean;
 }
@@ -86,40 +98,60 @@ export function locateSubstringFuzzy(haystack: string, needle: string): LocateRe
   // 空字符串 fast path：JS 的 "".indexOf("") 返回 0，但我们对空 needle
   // 一律视为无法定位，避免误命中。
   if (needle.length === 0) {
-    return { index: -1, drifted: false };
+    return { index: -1, end: -1, drifted: false };
   }
 
   const direct = haystack.indexOf(needle);
   if (direct !== -1) {
-    return { index: direct, drifted: false };
+    return { index: direct, end: direct + needle.length, drifted: false };
   }
 
   const normalizedHaystack = normalizeHaystackForMatching(haystack);
   const normalizedNeedle = normalizeTextForMatching(needle);
   if (normalizedNeedle.length === 0) {
-    return { index: -1, drifted: false };
+    return { index: -1, end: -1, drifted: false };
   }
 
   const normalizedStart = normalizedHaystack.indexOf(normalizedNeedle);
   if (normalizedStart === -1) {
-    return { index: -1, drifted: false };
+    return { index: -1, end: -1, drifted: false };
   }
 
-  // 把归一化后的位置映射回原 haystack 的真实位置。
+  // 把归一化坐标 [normalizedStart, normalizedEnd) 映射回原 haystack 的真实字符区间。
+  //
   // 关键点：删除型字符（引号、空格）在归一化后不占位，所以归一化坐标 N
-  // 对应原 haystack 中"第 N 个未被删除的字符"。我们要跳过前 N 个未删除字符之前
-  // 的所有删除型字符，定位到那第 N 个未删除字符的真实索引。
+  // 对应原 haystack 中"第 N 个未被删除的字符"。我们扫描 haystack：
+  //   - normalizedIndex 表示"已扫到的未删除字符数"（-exclusive 语义：
+  //     扫到第 N 个未删除字符后，normalizedIndex 变为 N+1）。
+  //   - 在每个未删除字符处：
+  //       * 若 normalizedIndex === normalizedStart，当前位置是 needle 第一个字符 → startIndex=i。
+  //       * 若 normalizedIndex + 1 === normalizedEnd，当前位置是 needle 最后一个字符 →
+  //         end 应是 i+1（exclusive）；但 i+1 后可能还跟删除型字符，这些字符属于
+  //         后续内容前缀，不属于 needle 等价区间，所以 end 严格等于 i+1。
+  //   - 删除型字符若落在 [startIndex, end) 之间（needle 内部夹的引号/空格），
+  //     会被自然包含；落在 end 之后的不包含。
+  const normalizedEnd = normalizedStart + normalizedNeedle.length;
   let normalizedIndex = 0;
+  let startIndex = -1;
   for (let i = 0; i < haystack.length; i++) {
     if (isDroppedByNormalize(haystack[i])) {
       continue;
     }
-    if (normalizedIndex === normalizedStart) {
-      return { index: i, drifted: true };
+    if (startIndex === -1 && normalizedIndex === normalizedStart) {
+      startIndex = i;
+    }
+    if (startIndex !== -1 && normalizedIndex + 1 === normalizedEnd) {
+      // 当前字符是 needle 最后一个字符；end = i + 1（exclusive）。
+      // 后续若跟删除型字符，它们不属于 needle 等价区间，不包含在 end 内。
+      return { index: startIndex, end: i + 1, drifted: true };
     }
     normalizedIndex += 1;
   }
-  return { index: -1, drifted: false };
+  // needle 命中位置在 haystack 末尾：循环结束时 normalizedIndex 应等于 normalizedEnd。
+  if (startIndex !== -1 && normalizedIndex === normalizedEnd) {
+    return { index: startIndex, end: haystack.length, drifted: true };
+  }
+  return { index: -1, end: -1, drifted: false };
 }
 
 /**

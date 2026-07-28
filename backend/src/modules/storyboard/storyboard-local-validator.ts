@@ -174,6 +174,10 @@ export function validateStoryboardPlan(input: {
 
     const strictStart = scriptText.indexOf(segment.script_excerpt);
     let start = strictStart;
+    // end 默认按 needle 长度算（strict 命中场景）。
+    // drift 命中时改用归一化映射回的真实 end（haystack 与 needle 在删除型字符上
+    // 长度可能不同），否则 coverage / segment 顺序检查会偏。
+    let end = strictStart + segment.script_excerpt.length;
     let drift = false;
     if (start === -1) {
       // 严格 indexOf 失败，尝试标点归一化软匹配。
@@ -181,6 +185,7 @@ export function validateStoryboardPlan(input: {
       const located = locateSubstringFuzzy(scriptText, segment.script_excerpt);
       if (located.index !== -1) {
         start = located.index;
+        end = located.end;
         drift = located.drifted;
       } else {
         pushUnique(errors, "storyboard_excerpt_not_in_script");
@@ -188,7 +193,6 @@ export function validateStoryboardPlan(input: {
       }
     }
 
-    const end = start + segment.script_excerpt.length;
     locatedExcerpts.push({ start, end });
 
     if (drift) {

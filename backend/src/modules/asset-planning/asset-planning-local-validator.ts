@@ -155,9 +155,12 @@ function getTtsCoverage(scriptText: string, plan: AssetPlan) {
       driftedChunkIds.push(chunk.chunk_id);
     }
 
+    // 用 located.end 而不是 located.index + chunk.script_excerpt.length：
+    // 当 drift 涉及删除型字符（引号、空格）时，haystack 实际覆盖长度与 needle
+    // 长度不同，必须用归一化映射回的真实 end，否则 coverage 计算会偏。
     spans.push({
       start: located.index,
-      end: located.index + chunk.script_excerpt.length,
+      end: located.end,
     });
   }
 
