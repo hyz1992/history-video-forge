@@ -432,6 +432,25 @@ describe("validateAssetPlan", () => {
     ).toBe(true);
   });
 
+  it("accepts TTS chunk whose only diff is half/full-width punctuation and emits drift warning", () => {
+    // 真实事故场景：LLM 在切 chunk 时把全角逗号"修正"成半角逗号（或反过来），
+    // 严格 indexOf 失败 → hasMissingExcerpt=true → asset_tts_script_coverage_missing
+    // → 资产规划卡死。归一化软匹配应命中并降级为 drift warning。
+    const plan = makeBaseAssetPlan();
+    const originalExcerpt = plan.tts_plan.chunks[0]!.script_excerpt;
+    // 把首个全角逗号替换为半角逗号（chunk_id 来自 baseStoryboardPlan.segments[0]）
+    const driftedExcerpt = originalExcerpt.replace("，", ",");
+    expect(driftedExcerpt).not.toBe(originalExcerpt);
+    plan.tts_plan.chunks[0]!.script_excerpt = driftedExcerpt;
+
+    const result = runValidation(plan);
+
+    expect(result.errors).not.toContain("asset_tts_script_coverage_missing");
+    expect(
+      result.warnings.some((w) => w.startsWith("asset_tts_excerpt_drift:")),
+    ).toBe(true);
+  });
+
   it("reports repair_hints for repairable structural task gaps", () => {
     const plan = makeBaseAssetPlan();
     plan.tasks[2].prompt_draft = null;

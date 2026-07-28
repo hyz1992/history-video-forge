@@ -5,6 +5,7 @@ import type {
   StoryboardPlan,
 } from "../../../../shared/src/index.js";
 import { AssetPlanningValidationResult as AssetPlanningValidationResultSchema } from "../../../../shared/src/index.js";
+import { locateSubstringFuzzy } from "../../runtime/llm/text-match.js";
 
 interface LocatedExcerpt {
   start: number;
@@ -136,19 +137,27 @@ function hasDependencyCycle(plan: AssetPlan, existingTaskIds: Set<string>) {
 
 function getTtsCoverage(scriptText: string, plan: AssetPlan) {
   const spans: LocatedExcerpt[] = [];
+  const driftedChunkIds: string[] = [];
   for (const chunk of plan.tts_plan.chunks) {
-    const start = scriptText.indexOf(chunk.script_excerpt);
-    if (start === -1) {
+    // 严格 indexOf 优先；失败后做标点归一化软匹配（LLM 在切 chunk 时
+    // 经常漂移全/半角标点、引号、空格，这是 DeepSeek-V4-Pro 等模型的固有不精确性）。
+    const located = locateSubstringFuzzy(scriptText, chunk.script_excerpt);
+    if (located.index === -1) {
       return {
         coveredCharCount: 0,
         coverageRatio: 0,
         hasMissingExcerpt: true,
+        driftedChunkIds,
       };
     }
 
+    if (located.drifted) {
+      driftedChunkIds.push(chunk.chunk_id);
+    }
+
     spans.push({
-      start,
-      end: start + chunk.script_excerpt.length,
+      start: located.index,
+      end: located.index + chunk.script_excerpt.length,
     });
   }
 
@@ -157,6 +166,7 @@ function getTtsCoverage(scriptText: string, plan: AssetPlan) {
     coveredCharCount,
     coverageRatio: scriptText.length > 0 ? coveredCharCount / scriptText.length : 0,
     hasMissingExcerpt: false,
+    driftedChunkIds,
   };
 }
 
@@ -314,11 +324,16 @@ export function validateAssetPlan(input: {
   // 严重缺失（chunk 的 script_excerpt 在原文中找不到）仍视为可恢复 error。
   if (ttsCoverage.hasMissingExcerpt) {
     pushUnique(errors, "asset_tts_script_coverage_missing");
-  } else if (ttsCoverage.coverageRatio < 0.90) {
-    pushUnique(
-      warnings,
-      `asset_tts_script_coverage_low:${ttsCoverage.coverageRatio.toFixed(2)}`,
-    );
+  } else {
+    for (const chunkId of ttsCoverage.driftedChunkIds) {
+      pushUnique(warnings, `asset_tts_excerpt_drift:${chunkId}`);
+    }
+    if (ttsCoverage.coverageRatio < 0.90) {
+      pushUnique(
+        warnings,
+        `asset_tts_script_coverage_low:${ttsCoverage.coverageRatio.toFixed(2)}`,
+      );
+    }
   }
 
   const tasksById = getTaskById(plan);
