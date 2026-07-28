@@ -504,4 +504,32 @@ describe("script local validator", () => {
 
     expect(result.errors).toContain("beat_missing");
   });
+
+  it("does NOT emit beat_trace_excerpt_drift when excerpt only differs by half/full-width comma", async () => {
+    // 之前 scriptContainsTraceExcerpt 只 strip 引号边界，对全/半角逗号漂移仍判 drift。
+    // 改用 locateSubstringFuzzy 后，全/半角漂移应直接命中（drifted=false），不再
+    // 触发 beat_trace_excerpt_drift warning。
+    const draft = await generateScriptDraft({
+      bundle: scriptInputBundle,
+    });
+    const beat = scriptInputBundle.hard_lane.must_include_beats[0]!;
+    const matchedTrace = draft.beat_trace.find((t) => t.beat === beat)!;
+    // 把 excerpt 中第一个全角逗号改成半角逗号
+    const driftedExcerpt = matchedTrace.excerpt.replace("，", ",");
+    expect(driftedExcerpt).not.toBe(matchedTrace.excerpt);
+
+    const result = validateScriptDraft({
+      bundle: scriptInputBundle,
+      draft: ScriptDraftPackage.parse({
+        ...draft,
+        beat_trace: draft.beat_trace.map((t) =>
+          t.beat === beat ? { ...t, excerpt: driftedExcerpt } : t,
+        ),
+      }),
+    });
+
+    expect(result.warnings).not.toContain(
+      `beat_trace_excerpt_drift:${beat}`,
+    );
+  });
 });

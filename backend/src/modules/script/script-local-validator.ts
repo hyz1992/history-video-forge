@@ -1,5 +1,8 @@
 import { ScriptLocalValidationResult } from "../../../../shared/src/index";
-import { isTextEquivalentWithDrift } from "../../runtime/llm/text-match.js";
+import {
+  isTextEquivalentWithDrift,
+  locateSubstringFuzzy,
+} from "../../runtime/llm/text-match.js";
 
 interface ScriptInputBundleInput {
   hard_lane?: {
@@ -93,19 +96,12 @@ function getCharsPerEstimatedSecond(
   return Math.round((scriptCharCount / estimatedDurationSec) * 100) / 100;
 }
 
-function stripQuoteBoundaryPunctuation(value: string) {
-  return value.replace(/[“”"‘’'「」『』]/gu, "");
-}
-
+// 用 text-match 的归一化软匹配统一全/半角标点、引号边界、空格漂移。
+// 之前这里只 strip 引号，没处理全/半角逗号/句号/问号等，导致 LLM 在 beat excerpt
+// 与 script_text 间漂移标点时仍触发 beat_trace_excerpt_drift warning。
+// 改用 locateSubstringFuzzy 后行为与 storyboard / asset-planning 一致。
 function scriptContainsTraceExcerpt(scriptText: string, excerpt: string) {
-  const trimmedExcerpt = excerpt.trim();
-  if (scriptText.includes(trimmedExcerpt)) {
-    return true;
-  }
-
-  return stripQuoteBoundaryPunctuation(scriptText).includes(
-    stripQuoteBoundaryPunctuation(trimmedExcerpt),
-  );
+  return locateSubstringFuzzy(scriptText, excerpt).index !== -1;
 }
 
 export function validateScriptDraft(input: ValidateScriptDraftInput) {
