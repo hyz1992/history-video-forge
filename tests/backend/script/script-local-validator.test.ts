@@ -455,4 +455,53 @@ describe("script local validator", () => {
     expect(result.decision).toBe("hard_fail");
     expect(result.errors).toContain("forbidden_expansion_hit");
   });
+
+  it("accepts beat_trace whose beat name only differs by quote boundary punctuation", async () => {
+    // 真实场景：topic package 的 must_include_beats 与 script 的 beat_trace[].beat
+    // 是两次独立 LLM 调用，名字漂移标点（如多打了引号）是常见情况。
+    // 严格 === 比较会判 beat_missing → regen，但 regen 仍可能漂移。
+    const draft = await generateScriptDraft({
+      bundle: scriptInputBundle,
+    });
+    const body = draft.script_text;
+    const beat = scriptInputBundle.hard_lane.must_include_beats[0]!;
+    // 模拟 LLM 漂移：在 beat 名字两侧多打了中文引号
+    const driftedBeat = `“${beat}”`;
+    expect(driftedBeat).not.toBe(beat);
+
+    const result = validateScriptDraft({
+      bundle: scriptInputBundle,
+      draft: ScriptDraftPackage.parse({
+        ...draft,
+        script_text: body,
+        beat_trace: draft.beat_trace.map((trace) =>
+          trace.beat === beat ? { ...trace, beat: driftedBeat } : trace,
+        ),
+      }),
+    });
+
+    expect(result.errors).not.toContain("beat_missing");
+    expect(
+      result.warnings.some((w) => w.startsWith("beat_name_drift:")),
+    ).toBe(true);
+  });
+
+  it("still reports beat_missing when beat name is genuinely different", async () => {
+    const draft = await generateScriptDraft({
+      bundle: scriptInputBundle,
+    });
+
+    const result = validateScriptDraft({
+      bundle: scriptInputBundle,
+      draft: ScriptDraftPackage.parse({
+        ...draft,
+        beat_trace: draft.beat_trace.map((trace) => ({
+          ...trace,
+          beat: "完全不同的 beat 名字",
+        })),
+      }),
+    });
+
+    expect(result.errors).toContain("beat_missing");
+  });
 });

@@ -1,4 +1,5 @@
 import { ScriptLocalValidationResult } from "../../../../shared/src/index";
+import { isTextEquivalentWithDrift } from "../../runtime/llm/text-match.js";
 
 interface ScriptInputBundleInput {
   hard_lane?: {
@@ -223,10 +224,28 @@ export function validateScriptDraft(input: ValidateScriptDraftInput) {
 
   const beatTrace = draft.beat_trace as Array<Record<string, unknown>>;
   for (const requiredBeat of input.bundle.hard_lane.must_include_beats) {
-    const matched = beatTrace.find((trace) => trace.beat === requiredBeat);
+    // 用归一化等价比较：LLM 在 topic package 与 script 两次独立调用间
+    // 经常漂移 beat 名字的全/半角标点、引号边界。严格 === 比较会假阴性
+    // 导致 beat_missing → regen，但 regen 仍可能漂移，链路卡死。
+    let matched: Record<string, unknown> | undefined;
+    let beatNameDrifted = false;
+    for (const trace of beatTrace) {
+      const traceBeat = trace.beat;
+      if (typeof traceBeat !== "string") continue;
+      const cmp = isTextEquivalentWithDrift(traceBeat, requiredBeat);
+      if (cmp.equivalent) {
+        matched = trace;
+        beatNameDrifted = cmp.drifted;
+        break;
+      }
+    }
     if (!matched) {
       pushUnique(errors, "beat_missing");
       continue;
+    }
+
+    if (beatNameDrifted) {
+      pushUnique(warnings, `beat_name_drift:${requiredBeat}`);
     }
 
     if (typeof matched.excerpt !== "string" || matched.excerpt.trim().length < 14) {
@@ -245,7 +264,22 @@ export function validateScriptDraft(input: ValidateScriptDraftInput) {
   const quoteTrace = draft.quote_trace as Array<Record<string, unknown>>;
   for (const quote of input.bundle.topic_package?.canonical_quotes ?? []) {
     if (typeof quote === "string" && draft.script_text.includes(quote)) {
-      const matched = quoteTrace.find((trace) => trace.quote === quote);
+      // 同 beat，用归一化等价比较 quote 名字。
+      let matched: Record<string, unknown> | undefined;
+      let quoteNameDrifted = false;
+      for (const trace of quoteTrace) {
+        const traceQuote = trace.quote;
+        if (typeof traceQuote !== "string") continue;
+        const cmp = isTextEquivalentWithDrift(traceQuote, quote);
+        if (cmp.equivalent) {
+          matched = trace;
+          quoteNameDrifted = cmp.drifted;
+          break;
+        }
+      }
+      if (quoteNameDrifted) {
+        pushUnique(warnings, `quote_name_drift:${quote}`);
+      }
       if (
         !matched ||
         (matched.usage_type !== "exact" && matched.usage_type !== "paraphrase") ||
