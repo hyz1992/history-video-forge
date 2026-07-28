@@ -16,31 +16,23 @@ interface LocatedExcerpt {
 }
 
 /**
- * 把 trace 列表归一化为 lookup map。
+ * trace 列表的轻量包装，用于按"标点风格归一化后等价"的方式查找。
  *
- * key 用 normalizeTextForMatching(rawValue) —— 这样调用方查 `map.has(normalizeTextForMatching(query))`
- * 就能匹配标点风格漂移的引用。
- * value 是原始 rawValue 数组（同名 trace 在数据上极少，但保留数组以稳健）。
+ * 只保留 rawValues 数组（按原始顺序）。lookupTrace 用 isTextEquivalentWithDrift
+ * 逐项比较，找到第一个等价项即返回。
  *
- * 同时返回 rawValues 顺序数组，方便"反向 Set 比较"（trace 里的每项是否被 linked 引用）。
+ * 设计上 trace 列表通常 < 10 项，O(n) 遍历足够；不需要构造 normalizedKey → rawValue
+ * 的 Map（之前实现里有，但实际从未被读，是死代码）。
+ *
+ * 反向覆盖检查（"trace 里每个 beat 都被 linked 引用"）走 buildLinkedNormalizedSet
+ * 构造归一化 key 集合，避免对每个 trace 项做 O(n) 比较。
  */
 interface TraceLookup {
-  normalizedKeyToRaws: Map<string, string[]>;
   rawValues: string[];
 }
 
 function buildTraceLookup(rawValues: string[]): TraceLookup {
-  const normalizedKeyToRaws = new Map<string, string[]>();
-  for (const raw of rawValues) {
-    const key = normalizeTextForMatching(raw);
-    const bucket = normalizedKeyToRaws.get(key);
-    if (bucket) {
-      bucket.push(raw);
-    } else {
-      normalizedKeyToRaws.set(key, [raw]);
-    }
-  }
-  return { normalizedKeyToRaws, rawValues };
+  return { rawValues };
 }
 
 function getTraceLookups(draft: ScriptDraftPackage) {
@@ -52,7 +44,7 @@ function getTraceLookups(draft: ScriptDraftPackage) {
 
 /**
  * 在 trace lookup 中查找 query 对应的 raw value。
- * 返回 { found, raw, drifted }：
+ * 返回 { found, drifted }：
  *   - 严格匹配（raw === query）→ drifted=false
  *   - 归一化匹配 → drifted=true
  *   - 未匹配 → found=false
@@ -60,14 +52,14 @@ function getTraceLookups(draft: ScriptDraftPackage) {
 function lookupTrace(
   lookup: TraceLookup,
   query: string,
-): { found: boolean; raw: string | null; drifted: boolean } {
+): { found: boolean; drifted: boolean } {
   for (const raw of lookup.rawValues) {
     const cmp = isTextEquivalentWithDrift(raw, query);
     if (cmp.equivalent) {
-      return { found: true, raw, drifted: cmp.drifted };
+      return { found: true, drifted: cmp.drifted };
     }
   }
-  return { found: false, raw: null, drifted: false };
+  return { found: false, drifted: false };
 }
 
 function pushUnique(target: string[], code: string) {
@@ -109,10 +101,6 @@ function hasBlankVisualDescription(segment: StoryboardPlan["segments"][number]) 
   );
 }
 
-function getTraceSets(draft: ScriptDraftPackage) {
-  return getTraceLookups(draft);
-}
-
 // 用于反向覆盖检查：构造 linked 集合的 normalized key 集合。
 function buildLinkedNormalizedSet(values: string[]): Set<string> {
   const set = new Set<string>();
@@ -131,7 +119,7 @@ export function validateStoryboardPlan(input: {
   const { draft, plan } = input;
   const scriptText = draft.script_text;
   const locatedExcerpts: LocatedExcerpt[] = [];
-  const traceSets = getTraceSets(draft);
+  const traceSets = getTraceLookups(draft);
 
   plan.segments.forEach((segment, index) => {
     if (segment.order !== index) {
