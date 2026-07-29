@@ -8,6 +8,7 @@ import {
   createTopicCandidateLibraryRepository,
   type TopicCandidateLibraryRepository,
 } from "../../../backend/src/modules/topic/topic-candidate-library.repository.js";
+import { buildTopicCandidateLibrarySlugs } from "../../../backend/src/modules/topic/topic-candidate-library.path.js";
 
 describe("topic candidate library repository", () => {
   it("uses the isolated Vitest storage root by default", async () => {
@@ -243,18 +244,24 @@ describe("topic candidate library repository", () => {
       }>;
     };
 
+    // 通过 path 模块生成期望 slug，避免硬编码具体形式导致脆化（slug 算法可能演进，
+    // 例如从完整 UTF-8 hex 改为 SHA-256 截断）。这里只校验：
+    //   1. index.json 记录的 slug 与 path 模块生成的 slug 一致。
+    //   2. directory / candidate_file 路径用该 slug 拼接。
+    const expectedSlugs = buildTopicCandidateLibrarySlugs({
+      seedFamily: "中国古代重大历史事件",
+      seedProfile: "中国古代重大历史事件",
+    });
+    const expectedDirectory = `storage/topic-candidate-library/${expectedSlugs.seedFamilySlug}/${expectedSlugs.seedProfileSlug}`;
+
     expect(indexDocument.entries).toEqual([
       expect.objectContaining({
         seed_family: "中国古代重大历史事件",
         seed_profile: "中国古代重大历史事件",
-        seed_family_slug:
-          "u8-e4b8ade59bbde58fa4e4bba3e9878de5a4a7e58e86e58fb2e4ba8be4bbb6",
-        seed_profile_slug:
-          "u8-e4b8ade59bbde58fa4e4bba3e9878de5a4a7e58e86e58fb2e4ba8be4bbb6",
-        directory:
-          "storage/topic-candidate-library/u8-e4b8ade59bbde58fa4e4bba3e9878de5a4a7e58e86e58fb2e4ba8be4bbb6/u8-e4b8ade59bbde58fa4e4bba3e9878de5a4a7e58e86e58fb2e4ba8be4bbb6",
-        candidate_file:
-          "storage/topic-candidate-library/u8-e4b8ade59bbde58fa4e4bba3e9878de5a4a7e58e86e58fb2e4ba8be4bbb6/u8-e4b8ade59bbde58fa4e4bba3e9878de5a4a7e58e86e58fb2e4ba8be4bbb6/candidates.json",
+        seed_family_slug: expectedSlugs.seedFamilySlug,
+        seed_profile_slug: expectedSlugs.seedProfileSlug,
+        directory: expectedDirectory,
+        candidate_file: `${expectedDirectory}/candidates.json`,
       }),
     ]);
   });
