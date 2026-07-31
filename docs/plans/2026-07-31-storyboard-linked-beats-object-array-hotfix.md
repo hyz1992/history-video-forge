@@ -121,10 +121,33 @@ schema `z.array(z.string().min(1))` 没要求去重。如果 LLM 输出 `[{beat:
 
 实施本档案后，按自审建议扫描了其他阶段的 normalize 函数：
 
-- **script generation**：详见 [script-generation normalize 扫描结论](#)。
-- **asset-planning generation**：详见 [asset-planning normalize 扫描结论](#)。
+### 6.1 script generation — 无风险
 
-（扫描结论随 P2-3 任务完成后补全。）
+`backend/src/modules/script/script-generation.service.ts` 的 `normalizeScriptDraft` 容错非常完善：
+- `beat_trace` / `quote_trace` 处理对象、字符串、纯数字占位（ordinal）、未匹配项的智能 canonicalize。
+- schema（`shared/src/script/script-draft-package.schema.ts`）里 `beat_trace` / `quote_trace` 元素是**对象**（`{beat, excerpt, confidence}`），LLM 不可能把对象数组错写成"字符串数组"——那是反方向漂移。
+- `must_include_beats` / `canonical_quotes` 来自上游 input bundle，不是本次 LLM 输出，不存在漂移。
+
+**结论**：无需修复。
+
+### 6.2 asset-planning generation — 理论缺口但被修复回路兜底
+
+`backend/src/modules/asset-planning/asset-planning-generation.service.ts` 的 `normalizeChunkTaskStructure` 只验证字段是否存在，不验证元素类型。如果 LLM 把以下字符串数组字段写成对象数组，理论上会触发 ZodError：
+
+- `ChunkTaskDraft.risk_notes: z.array(z.string().min(1))`
+- `ManualUploadPolicyDraft.accepted_file_types: z.array(z.string().min(1))`
+- `ManualUploadPolicyDraft.acceptance_notes: z.array(z.string().min(1))`
+- `SegmentChunkPlanningDraft.budget_notes: z.array(z.string().min(1))`
+- `GlobalPlanningDraft.manual_review_notes: z.array(z.string().min(1))`
+
+**但实际影响极小，不修**，理由：
+
+1. **有 LLM 修复回路兜底**：asset-planning 的 `parseOrRepairChunkDraft` 在 ZodError 时会调用 `asset-planning.asset-structural-repair` prompt 让 LLM 重新输出 patch，不会卡死链路。这与 storyboard 修复前"无 regen 机会"是本质区别。
+2. **漂移概率低**：`linked_beats` 漂移是因为 input 里有 `draft.beat_trace` 对象数组诱导 LLM 模仿；asset-planning 的 input 里没有"同名结构"的对象数组字段诱导，LLM 输出对象数组的概率显著更低。
+3. **次要字段**：`risk_notes` 等是辅助字段，即使修复回路触发，也只是浪费一次 LLM 调用，不影响产线。
+4. **改进 ROI 低**：要修就要给每个字符串数组字段加 `normalizeStringArray` 扁平化，改动面较大但收益不明显。
+
+**建议**：作为已知风险记录。若后续产线观察到 asset-planning 频繁触发 structural-repair prompt，再回头补 normalize 扁平化。
 
 ## 7. 自审清单
 
