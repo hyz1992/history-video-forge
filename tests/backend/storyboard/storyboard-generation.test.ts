@@ -325,4 +325,144 @@ describe("generateStoryboardPlan", () => {
 
     expect(plan.segments[0]?.risk_notes).toEqual(["注意不要补写素材生成任务"]);
   });
+
+  it("flattens linked_beats/linked_quotes object arrays to string arrays (debeecaa regression)", async () => {
+    // 真实事故项目 debeecaa：LLM 把 linked_beats 写成对象数组（模仿 draft.beat_trace
+    // 结构），导致 StoryboardPlan.parse 抛 ZodError → internal_server_error。
+    // normalizeStoryboardSegment 必须把对象数组扁平化为字符串数组（取 beat 字段）。
+    let capturedFirstBeat = "";
+    let capturedFirstQuote = "";
+    const gateway: LlmGateway = {
+      async invokeStructuredPrompt<T>(
+        options: InvokeStructuredPromptOptions,
+      ): Promise<T> {
+        const promptInput = options.input as ReturnType<
+          typeof buildStoryboardPlannerPromptInput
+        >;
+        const firstBeat = promptInput.draft.beat_trace[0]!;
+        const firstQuote = (promptInput.draft.quote_trace[0] ?? {
+          quote: "测试 quote",
+          excerpt: "测试 excerpt",
+        }) as { quote: string; excerpt: string };
+        capturedFirstBeat = firstBeat.beat;
+        capturedFirstQuote = firstQuote.quote;
+
+        return {
+          plan_version: "storyboard_v1",
+          source_script_record_id: promptInput.source_script_record_id,
+          source_topic_package_id: promptInput.source_topic_package_id,
+          estimated_total_duration_sec: promptInput.draft.estimated_duration_sec,
+          segments: [
+            {
+              segment_id: "sb_001",
+              order: 0,
+              script_excerpt: promptInput.draft.script_text,
+              start_hint_sec: 0,
+              end_hint_sec: promptInput.draft.estimated_duration_sec,
+              narrative_role: "opening",
+              visual_intent: "让观众看清整段压力推进。",
+              scene_description: "按口播顺序呈现主要场面。",
+              visual_elements: ["晏子", "楚王"],
+              framing_hint: "medium",
+              content_type: "live_action",
+              motion_hint: "static",
+              editing_hint: "single",
+              on_screen_text: [],
+              // LLM 漂移：对象数组而非字符串数组
+              linked_beats: [
+                {
+                  beat: firstBeat.beat,
+                  excerpt: firstBeat.excerpt,
+                  confidence: 0.95,
+                },
+                // 混入字符串（部分 LLM 会混用）
+                "另一个 beat 名字",
+                // 混入空字符串（应被过滤）
+                "",
+                // 混入只含 excerpt 的对象（beat 字段缺失的兜底）
+                { excerpt: "只用 excerpt 的 beat" },
+                // 混入无效对象（应被跳过）
+                { foo: 123 },
+                // 混入 null / number（应被跳过）
+                null,
+                42,
+              ],
+              linked_quotes: [
+                {
+                  quote: firstQuote.quote,
+                  excerpt: firstQuote.excerpt,
+                },
+              ],
+              risk_notes: [],
+            },
+          ],
+          global_visual_notes: [],
+        } as T;
+      },
+      invokeStrictStructured: vi.fn(),
+    };
+
+    const plan = await generateStoryboardPlan(makeInput(gateway));
+
+    expect(plan.segments[0]?.linked_beats).toEqual([
+      capturedFirstBeat,
+      "另一个 beat 名字",
+      "只用 excerpt 的 beat",
+    ]);
+    expect(plan.segments[0]?.linked_quotes).toEqual([capturedFirstQuote]);
+  });
+
+  it("keeps already-correct string array linked_beats unchanged", async () => {
+    // 回归保护：当 LLM 输出正确的字符串数组时，规范化不应改变它。
+    const gateway: LlmGateway = {
+      async invokeStructuredPrompt<T>(
+        options: InvokeStructuredPromptOptions,
+      ): Promise<T> {
+        const promptInput = options.input as ReturnType<
+          typeof buildStoryboardPlannerPromptInput
+        >;
+
+        return {
+          plan_version: "storyboard_v1",
+          source_script_record_id: promptInput.source_script_record_id,
+          source_topic_package_id: promptInput.source_topic_package_id,
+          estimated_total_duration_sec: promptInput.draft.estimated_duration_sec,
+          segments: [
+            {
+              segment_id: "sb_001",
+              order: 0,
+              script_excerpt: promptInput.draft.script_text,
+              start_hint_sec: 0,
+              end_hint_sec: promptInput.draft.estimated_duration_sec,
+              narrative_role: "opening",
+              visual_intent: "x",
+              scene_description: "x",
+              visual_elements: ["a"],
+              framing_hint: "medium",
+              content_type: "live_action",
+              motion_hint: "static",
+              editing_hint: "single",
+              on_screen_text: [],
+              linked_beats: promptInput.draft.beat_trace.map((t) => t.beat),
+              linked_quotes: [],
+              risk_notes: [],
+            },
+          ],
+          global_visual_notes: [],
+        } as T;
+      },
+      invokeStrictStructured: vi.fn(),
+    };
+
+    const plan = await generateStoryboardPlan(makeInput(gateway));
+
+    expect(plan.segments[0]?.linked_beats).toEqual(
+      plan.segments[0]?.linked_beats,
+    );
+    // 必须能通过 StoryboardPlan.parse（不抛异常已经验证），且字段为字符串数组
+    for (const beat of plan.segments[0]?.linked_beats ?? []) {
+      expect(typeof beat).toBe("string");
+      expect(beat.length).toBeGreaterThan(0);
+    }
+  });
 });

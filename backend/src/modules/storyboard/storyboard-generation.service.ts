@@ -116,15 +116,72 @@ function normalizeStoryboardSegment(rawSegment: unknown) {
   }
 
   const segment = rawSegment as Record<string, unknown>;
-  if ("risk_notes" in segment || !("riskNotes" in segment)) {
-    return segment;
-  }
+  const { riskNotes, linked_beats, linked_quotes, ...rest } = segment;
 
-  const { riskNotes, ...rest } = segment;
+  // LLM 经常把 linked_beats / linked_quotes 写成"对象数组"（模仿 draft.beat_trace
+  // 的结构），例如 [{ beat: "...", excerpt: "...", confidence: 0.95 }]。
+  // 但 schema 期望的是字符串数组（beat 名字）。这里做容错扁平化：
+  //   - 字符串原样保留
+  //   - 对象取 beat / quote 字段（无则取 excerpt，再无则跳过）
+  //   - 其他类型跳过
+  // 真实事故项目 debeecaa-b1ee-43db-ae0c-ce31b013fb8f 就是因为这个未做容错，
+  // StoryboardPlan.parse 直接抛 ZodError → internal_server_error → 无 regen 机会。
+  const normalizedLinkedBeats = normalizeLinkedTraceArray(
+    linked_beats,
+    ["beat", "excerpt"],
+  );
+  const normalizedLinkedQuotes = normalizeLinkedTraceArray(
+    linked_quotes,
+    ["quote", "excerpt"],
+  );
+
   return {
     ...rest,
-    risk_notes: riskNotes,
+    ...(riskNotes !== undefined ? { risk_notes: riskNotes } : {}),
+    linked_beats: normalizedLinkedBeats,
+    linked_quotes: normalizedLinkedQuotes,
   };
+}
+
+/**
+ * 把 LLM 输出的 linked_beats / linked_quotes 数组规范化为非空字符串数组。
+ *
+ * - 字符串：trim 后非空则保留。
+ * - 对象：按 preferredKeys 顺序取第一个非空字符串字段。
+ * - number / boolean / null / 其他：跳过。
+ * - undefined 输入（字段缺失）：返回空数组（让 schema 默认行为决定）。
+ */
+function normalizeLinkedTraceArray(
+  value: unknown,
+  preferredKeys: string[],
+): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const out: string[] = [];
+  for (const item of value) {
+    if (typeof item === "string") {
+      const trimmed = item.trim();
+      if (trimmed.length > 0) {
+        out.push(trimmed);
+      }
+      continue;
+    }
+    if (item && typeof item === "object" && !Array.isArray(item)) {
+      const record = item as Record<string, unknown>;
+      for (const key of preferredKeys) {
+        const v = record[key];
+        if (typeof v === "string") {
+          const trimmed = v.trim();
+          if (trimmed.length > 0) {
+            out.push(trimmed);
+            break;
+          }
+        }
+      }
+    }
+  }
+  return out;
 }
 
 export interface RegenerateSingleSegmentInput {

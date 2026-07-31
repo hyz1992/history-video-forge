@@ -1,6 +1,6 @@
 ---
 id: storyboard.planner
-version: v1.0.1
+version: v1.0.2
 stage: storyboard
 language: zh-CN
 consumes:
@@ -49,8 +49,8 @@ status: active
       "motion_hint": "static",
       "editing_hint": "single",
       "on_screen_text": [],
-      "linked_beats": [],
-      "linked_quotes": [],
+      "linked_beats": ["上游 beat 的名字字符串，必须与 draft.beat_trace[].beat 完全一致"],
+      "linked_quotes": ["上游 quote 的名字字符串，必须与 draft.quote_trace[].quote 完全一致"],
       "risk_notes": [],
       "visual_strategy_preference": "remotion_motion"
     }
@@ -88,5 +88,5 @@ StoryboardPlan 是分镜规划层，不是视觉提示词编译层。你要给�
 - 保持历史质感。场景、器物、人物状态和隐喻都要尽量贴合故事时代；避免现代物件或现代隐喻，例如不要把古代受刑后的行动限制写成现代轮椅，不要把权力循环写成绞肉机。
 - 象征镜头必须保持历史质感。可以使用 `framing_hint: "symbolic"` 或 `content_type: "illustration"`，但象征画面应来自脚本中的器物、场景、人物姿态、光影或古代语境，不要把隐喻做成现代物体、过度奇观或难以生成的抽象装置。
 - 战争、刺杀、伏击、兵刃逼近、血腥可能、酷刑余波、未展开后续悬念等段落，需要在 `risk_notes` 标注可执行边界，例如使用远景、剪影、旗帜倒伏、器物破损、人物反应或光影遮挡表现，避免血腥肢体细节、现代猎奇画面和脚本外扩写。
-- `linked_beats` 用于回溯上游叙事意图。直接承载上游 beat 的 segment 必须填写 linked_beats；桥接段、纯氛围段或结尾余韵段可以留空，但不得让关键转折、高潮或结尾判断失去 trace 关联。
+- `linked_beats` 与 `linked_quotes` 是**字符串数组**，元素是上游 `draft.beat_trace[].beat` / `draft.quote_trace[].quote` 的名字字符串，不是对象，不是 `{beat, excerpt, confidence}` 结构。例如：`"linked_beats": ["出师御契丹，大军夜宿陈桥驿"]`。直接承载上游 beat 的 segment 必须填写 linked_beats；桥接段、纯氛围段或结尾余韵段可以留空，但不得让关键转折、高潮或结尾判断失去 trace 关联。
 - 结尾可以有余韵，但不得把脚本里的结尾判断扩写成未在 script_text 出现的后续剧情。若脚本只是暗示未来，只能用克制的阴影、远景、器物或人物反应暗示，并在 `risk_notes` 说明不要扩写后续战局或人物命运。
