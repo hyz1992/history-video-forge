@@ -10,7 +10,7 @@ import {
 import { env, getValidatedRuntimeEnv } from "../../config/env.js";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
 import type { LlmInteractionLogWriter } from "../../runtime/llm/interaction-log.js";
-import { parseLlmOutput } from "../../runtime/llm/llm-output-error.js";
+import { parseLlmOutput, LlmOutputError } from "../../runtime/llm/llm-output-error.js";
 import { createTierAwareProviderFromEnv } from "../../runtime/llm/tier-aware-provider-factory.js";
 import type {
   StructuredPromptInvocation,
@@ -388,7 +388,9 @@ function rejectForbiddenChunkTasks(rawChunkDraft: unknown) {
       return taskType === "tts_audio" || taskType === "subtitle_track";
     })
   ) {
-    throw new Error("asset_planning_chunk_draft_forbidden_task_type");
+    throw new LlmOutputError("asset_chunk_forbidden_task_type_violated", {
+      cause: "chunk draft 包含 tts_audio 或 subtitle_track 任务（这些由本地服务确定性创建）",
+    });
   }
 }
 
@@ -408,8 +410,8 @@ async function parseOrRepairChunkDraft(input: {
     // 其他未知错误（编程 bug）不修复，直接抛出
     const isZodError = error instanceof z.ZodError;
     const isRepairableBusinessError =
-      error instanceof Error &&
-      CHUNK_REPAIRABLE_BUSINESS_ERRORS.has(error.message);
+      error instanceof LlmOutputError &&
+      CHUNK_REPAIRABLE_BUSINESS_ERRORS.has(error.code);
 
     if (!isZodError && !isRepairableBusinessError) {
       throw error;
@@ -424,9 +426,7 @@ async function parseOrRepairChunkDraft(input: {
         art_bible: input.chunkPromptInput.art_bible,
         raw_task_summaries: summarizeRawChunkTasks(input.rawChunkDraft),
         raw_dependency_summaries: summarizeRawChunkDependencies(input.rawChunkDraft),
-        structural_errors: serializeStructuralError(
-          isZodError ? error : new Error(`business_validation:${error.message}`),
-        ),
+        structural_errors: serializeStructuralError(error),
       },
       interactionLogWriter: createTimedInteractionLogWriter(input.interactionLogWriter),
     });
@@ -449,12 +449,12 @@ async function parseOrRepairChunkDraft(input: {
   }
 }
 
-// 已知可以通过 LLM 修复的 chunk 业务错误（按 error.message 匹配）
+// 已知可以通过 LLM 修复的 chunk 业务错误（按 LlmOutputError.code 匹配）
 const CHUNK_REPAIRABLE_BUSINESS_ERRORS = new Set([
-  "asset_planning_chunk_task_segment_out_of_scope",
-  "asset_planning_support_image_reason_missing",
-  "asset_planning_anchor_image_budget_exceeded",
-  "asset_planning_chunk_dependency_local_id_missing",
+  "asset_chunk_task_segment_out_of_scope_violated",
+  "asset_chunk_support_image_reason_missing_violated",
+  "asset_chunk_anchor_image_budget_exceeded_violated",
+  "asset_chunk_dependency_local_id_missing_violated",
 ]);
 
 function parseAndValidateChunkDraft(
@@ -472,6 +472,15 @@ function parseAndValidateChunkDraft(
 function serializeStructuralError(error: unknown) {
   if (error instanceof z.ZodError) {
     return error.issues;
+  }
+
+  if (error instanceof LlmOutputError) {
+    return [
+      {
+        code: error.code,
+        cause: error.cause,
+      },
+    ];
   }
 
   if (error instanceof Error) {
@@ -819,7 +828,9 @@ function validateChunkDraft(
 
   for (const task of chunkDraft.tasks) {
     if (!segmentIds.has(task.source_segment_id)) {
-      throw new Error("asset_planning_chunk_task_segment_out_of_scope");
+      throw new LlmOutputError("asset_chunk_task_segment_out_of_scope_violated", {
+        cause: { local_task_id: task.local_task_id, source_segment_id: task.source_segment_id },
+      });
     }
 
     if (task.task_type === "image_still") {
@@ -827,7 +838,9 @@ function validateChunkDraft(
       if (imageRole === "support") {
         const reason = task.parameters.support_reason;
         if (typeof reason !== "string" || reason.trim().length === 0) {
-          throw new Error("asset_planning_support_image_reason_missing");
+          throw new LlmOutputError("asset_chunk_support_image_reason_missing_violated", {
+            cause: { local_task_id: task.local_task_id },
+          });
         }
       } else {
         anchorImageCountBySegment.set(
@@ -838,9 +851,11 @@ function validateChunkDraft(
     }
   }
 
-  for (const count of anchorImageCountBySegment.values()) {
+  for (const [segmentId, count] of anchorImageCountBySegment) {
     if (count > 1) {
-      throw new Error("asset_planning_anchor_image_budget_exceeded");
+      throw new LlmOutputError("asset_chunk_anchor_image_budget_exceeded_violated", {
+        cause: { source_segment_id: segmentId, anchor_image_count: count },
+      });
     }
   }
 
@@ -849,7 +864,13 @@ function validateChunkDraft(
       !localIds.has(dependency.task_local_id) ||
       !localIds.has(dependency.depends_on_local_task_id)
     ) {
-      throw new Error("asset_planning_chunk_dependency_local_id_missing");
+      throw new LlmOutputError("asset_chunk_dependency_local_id_missing_violated", {
+        cause: {
+          local_dependency_id: dependency.local_dependency_id,
+          task_local_id: dependency.task_local_id,
+          depends_on_local_task_id: dependency.depends_on_local_task_id,
+        },
+      });
     }
   }
 }

@@ -634,9 +634,9 @@ describe("generateAssetPlan", () => {
       };
     });
 
-    await expect(generateAssetPlan(makeInput(gateway))).rejects.toThrow(
-      /asset_planning_chunk_draft_forbidden_task_type/u,
-    );
+    await expect(generateAssetPlan(makeInput(gateway))).rejects.toMatchObject({
+      code: "asset_chunk_forbidden_task_type_violated",
+    });
   });
 
   it("normalizes null manual upload policies in chunk task drafts", async () => {
@@ -1009,9 +1009,9 @@ describe("generateAssetPlan", () => {
       };
     });
 
-    await expect(generateAssetPlan(makeInput(gateway))).rejects.toThrow(
-      /asset_planning_chunk_dependency_local_id_missing/u,
-    );
+    await expect(generateAssetPlan(makeInput(gateway))).rejects.toMatchObject({
+      code: "asset_chunk_dependency_local_id_missing_violated",
+    });
   });
 
   it("returns a plan that validation can flag when video lacks static fallback", async () => {
@@ -1087,9 +1087,9 @@ describe("generateAssetPlan", () => {
       };
     });
 
-    await expect(generateAssetPlan(makeInput(gateway, 3))).rejects.toThrow(
-      /asset_planning_support_image_reason_missing/u,
-    );
+    await expect(generateAssetPlan(makeInput(gateway, 3))).rejects.toMatchObject({
+      code: "asset_chunk_support_image_reason_missing_violated",
+    });
   });
 
   it("appends visual negative constraints to image_still prompt_draft", async () => {
