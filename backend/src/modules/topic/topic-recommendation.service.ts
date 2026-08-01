@@ -16,6 +16,7 @@ import {
   type InvokeStrictStructuredOptions,
   type LlmGateway,
 } from "../../runtime/llm/llm-gateway.js";
+import { LlmOutputError } from "../../runtime/llm/llm-output-error.js";
 import {
   renderRecommendationDiagnosticsMarkdown,
   type LlmInteractionLogWriter,
@@ -28,6 +29,7 @@ import type {
 } from "../../runtime/llm/provider-contract.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 import { runTopicRecommendationGraph } from "../../runtime/orchestration/topic-recommendation-graph.js";
+import { createGraphTraceSummary } from "../../runtime/orchestration/graph-trace.js";
 import type {
   CandidatePreviewTrace,
   CandidateQualityScorecard,
@@ -430,6 +432,44 @@ export async function recommendTopicCandidatesWithTrace(
     },
   };
   } catch (error) {
+    // LlmOutputError（fallback 路径 normalize 后仍 schema 失败的极端情况）：
+    // 把 code 写入 diagnostics 降级返回，而非直接 throw。
+    // 其他错误（selector strict schema 等）仍 throw，保持既有受控错误契约。
+    if (error instanceof LlmOutputError) {
+      interactionLogWriter?.writeError(error.code);
+      if (error.cause !== undefined) {
+        interactionLogWriter?.writeError(JSON.stringify(error.cause));
+      }
+      return {
+        candidates: [],
+        raw_candidates: [],
+        selector_pool: [],
+        selector_trace: null,
+        trace: createGraphTraceSummary({
+          phase: "topic",
+          run_id: runId,
+          nodes: [],
+        }),
+        diagnostics: finalizeRecommendationDiagnostics({
+          checks: [
+            {
+              code: error.code,
+              level: "warning",
+              reason:
+                "topic 候选 fallback 路径 normalize 后仍无法通过 schema，已降级返回空候选",
+            },
+          ],
+          finalCandidateCount: 0,
+          expectedTargetCount: finalCandidateCount,
+          additionalChecks: [],
+          candidatePreviewTrace: {
+            raw_candidates: [],
+            selector_pool: [],
+            final_candidates: [],
+          },
+        }),
+      };
+    }
     const message =
       error instanceof Error ? (error.stack ?? error.message) : String(error);
     interactionLogWriter?.writeError(message);
