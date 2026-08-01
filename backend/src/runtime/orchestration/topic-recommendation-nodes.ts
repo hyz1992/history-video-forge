@@ -3,6 +3,7 @@ import type { DbClient } from "../../db/client.js";
 import { saveCachedCandidate } from "../../modules/cache/candidate-cache.repository.js";
 import type { BuildTopicCandidatesInput } from "../../modules/topic/topic-candidate.builder.js";
 import type { GraphTraceNodeSummary } from "./graph-trace.js";
+import { parseLlmOutput } from "../llm/llm-output-error.js";
 import { buildEventIdentityFingerprint, normalizeEventIdentityValue } from "../../modules/topic/event-normalizer.js";
 
 export const TOPIC_CANDIDATE_TARGET_COUNT = 4;
@@ -245,54 +246,58 @@ function normalizeTopicCandidateCard(
         : coreElements;
   const viralRubric = normalizeViralRubric(candidate.viral_rubric);
 
-  return TopicCandidateCard.parse({
-    event_identity:
-      typeof candidate.event_identity === "string" && candidate.event_identity
-        ? candidate.event_identity
-        : runtime.input.canonicalName,
-    title:
-      typeof candidate.title === "string" && candidate.title
-        ? candidate.title
-        : runtime.input.canonicalName,
-    one_line_angle: description,
-    family_label:
-      typeof candidate.family_label === "string" && candidate.family_label
-        ? candidate.family_label
-        : typeof rubricMetadata?.family_label === "string" &&
-            rubricMetadata.family_label
-          ? rubricMetadata.family_label
-        : "通用安全槽位",
-    scope_label:
-      typeof candidate.scope_label === "string" && candidate.scope_label && candidate.scope_label !== "—"
-        ? candidate.scope_label
-        : typeof rubricMetadata?.scope_label === "string" &&
-            rubricMetadata.scope_label
-          ? rubricMetadata.scope_label
-        : "—",
-    estimated_duration_band: "medium",
-    why_this_now: typeof candidate.why_this_now === "string" && candidate.why_this_now
-      ? candidate.why_this_now
-      : "该事件具备可讲张力，适合进入文案阶段。",
-    core_conflict: typeof candidate.core_conflict === "string" && candidate.core_conflict
-      ? candidate.core_conflict
-      : `${runtime.input.canonicalName}中的关键人物在极端压力下做出不可逆的选择，由此引发的连锁反应改变了局势走向。`,
-    strong_scene: typeof candidate.strong_scene === "string" && candidate.strong_scene
-      ? candidate.strong_scene
-      : `${runtime.input.canonicalName}的核心场面涉及决定性时刻的关键选择。`,
-    must_cover_preview: completeMustCoverPreview(
-      keyElements,
-      runtime,
-      description,
-    ),
-    risk_hints: ["真实模型候选已做最小合同归一化"],
-    source_hint: typeof candidate.source_hint === "string" && candidate.source_hint
-      ? candidate.source_hint
-      : "基于历史共识推定",
-    recent_usage_hint: typeof candidate.recent_usage_hint === "string" && candidate.recent_usage_hint
-      ? candidate.recent_usage_hint
-      : "近期未使用",
-    viral_rubric: viralRubric,
-  });
+  return parseLlmOutput(
+    TopicCandidateCard,
+    {
+      event_identity:
+        typeof candidate.event_identity === "string" && candidate.event_identity
+          ? candidate.event_identity
+          : runtime.input.canonicalName,
+      title:
+        typeof candidate.title === "string" && candidate.title
+          ? candidate.title
+          : runtime.input.canonicalName,
+      one_line_angle: description,
+      family_label:
+        typeof candidate.family_label === "string" && candidate.family_label
+          ? candidate.family_label
+          : typeof rubricMetadata?.family_label === "string" &&
+              rubricMetadata.family_label
+            ? rubricMetadata.family_label
+          : "通用安全槽位",
+      scope_label:
+        typeof candidate.scope_label === "string" && candidate.scope_label && candidate.scope_label !== "—"
+          ? candidate.scope_label
+          : typeof rubricMetadata?.scope_label === "string" &&
+              rubricMetadata.scope_label
+            ? rubricMetadata.scope_label
+          : "—",
+      estimated_duration_band: "medium",
+      why_this_now: typeof candidate.why_this_now === "string" && candidate.why_this_now
+        ? candidate.why_this_now
+        : "该事件具备可讲张力，适合进入文案阶段。",
+      core_conflict: typeof candidate.core_conflict === "string" && candidate.core_conflict
+        ? candidate.core_conflict
+        : `${runtime.input.canonicalName}中的关键人物在极端压力下做出不可逆的选择，由此引发的连锁反应改变了局势走向。`,
+      strong_scene: typeof candidate.strong_scene === "string" && candidate.strong_scene
+        ? candidate.strong_scene
+        : `${runtime.input.canonicalName}的核心场面涉及决定性时刻的关键选择。`,
+      must_cover_preview: completeMustCoverPreview(
+        keyElements,
+        runtime,
+        description,
+      ),
+      risk_hints: ["真实模型候选已做最小合同归一化"],
+      source_hint: typeof candidate.source_hint === "string" && candidate.source_hint
+        ? candidate.source_hint
+        : "基于历史共识推定",
+      recent_usage_hint: typeof candidate.recent_usage_hint === "string" && candidate.recent_usage_hint
+        ? candidate.recent_usage_hint
+        : "近期未使用",
+      viral_rubric: viralRubric,
+    },
+    "topic_candidate_card_schema_invalid",
+  );
 }
 
 function normalizeViralRubric(rawRubric: unknown) {
