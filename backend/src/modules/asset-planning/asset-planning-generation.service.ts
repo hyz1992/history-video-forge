@@ -439,11 +439,19 @@ async function parseOrRepairChunkDraft(input: {
       );
       return parseAndValidateChunkDraft(patchedChunkDraft, input.segments);
     } catch (repairError) {
-      // 修复仍失败 → 抛原始错误（保留诊断信息）。LlmInteractionLogWriter 没有
+      // 修复仍失败 → 抛包装错误（保留诊断信息）。LlmInteractionLogWriter 没有
       // writeError 方法，用 console.warn 兜底（trace.md 已由外层记录详细错误）。
       console.warn(
         `[chunk-repair] chunk_structural_repair_failed:${repairError instanceof Error ? repairError.message : String(repairError)}`,
       );
+      // 原始 error 是 ZodError（结构错）→ 包装为 asset_chunk_plan_schema_invalid；
+      // 已是 LlmOutputError（5c 后的业务错）→ 原样抛；
+      // 其他未知错误（编程 bug）→ 原样抛。
+      if (error instanceof z.ZodError) {
+        throw new LlmOutputError("asset_chunk_plan_schema_invalid", {
+          cause: error.issues,
+        });
+      }
       throw error;
     }
   }

@@ -1195,6 +1195,48 @@ describe("generateAssetPlan", () => {
     }
   });
 
+  it("wraps chunk draft ZodError into asset_chunk_plan_schema_invalid when structural repair also fails", async () => {
+    // chunk draft 首次 parse 抛 ZodError（prompt_draft 为空字符串）→ 触发 repair；
+    // repair prompt 返回无效 patch（缺 patch_type/task_patches）→ repair 失败 →
+    // 应抛 LlmOutputError(asset_chunk_plan_schema_invalid)，而非裸 ZodError。
+    const { gateway } = makeGateway((options) => {
+      const input = options.input as {
+        planning_mode?: string;
+        chunk?: { segment_ids: string[] };
+      };
+      if (input.planning_mode === "global") {
+        return validGlobalPlanningDraft;
+      }
+      if (options.promptId === "asset-planning.asset-structural-repair") {
+        // 无效 patch：缺 patch_type / task_patches / dependency_patches
+        return { unrelated: true };
+      }
+
+      const draft = validChunkPlanningDraftFor(input.chunk?.segment_ids ?? []);
+      return {
+        ...draft,
+        tasks: draft.tasks.map((task, index) =>
+          index === 0 ? { ...task, prompt_draft: "" } : task,
+        ),
+      };
+    });
+
+    await expect(generateAssetPlan(makeInput(gateway, 3))).rejects.toMatchObject({
+      code: "asset_chunk_plan_schema_invalid",
+    });
+
+    try {
+      await generateAssetPlan(makeInput(gateway, 3));
+      throw new Error("should have thrown");
+    } catch (error) {
+      expect(error).toBeInstanceOf(LlmOutputError);
+      expect((error as LlmOutputError).code).toBe(
+        "asset_chunk_plan_schema_invalid",
+      );
+      expect(Array.isArray((error as LlmOutputError).cause)).toBe(true);
+    }
+  });
+
   // 说明：AssetPlan.parse 与 GlobalPlanningDraft.parse 共用同一个 parseLlmOutput
   // 包装（asset-planning-generation.service.ts 末尾）。mergeAssetPlan 是确定性
   // 合并函数，当 chunk drafts 合法时其产物结构必然满足 AssetPlan schema，无法
