@@ -35,7 +35,7 @@ export class LlmOutputError extends Error {
  * 纯数据合同，不应承载运行时错误类型。
  */
 export function parseLlmOutput<T>(
-  schema: ZodType<T>,
+  schema: ZodType<T, any, any>,
   raw: unknown,
   code: string,
 ): T {

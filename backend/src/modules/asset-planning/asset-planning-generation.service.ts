@@ -10,6 +10,7 @@ import {
 import { env, getValidatedRuntimeEnv } from "../../config/env.js";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
 import type { LlmInteractionLogWriter } from "../../runtime/llm/interaction-log.js";
+import { parseLlmOutput } from "../../runtime/llm/llm-output-error.js";
 import { createTierAwareProviderFromEnv } from "../../runtime/llm/tier-aware-provider-factory.js";
 import type {
   StructuredPromptInvocation,
@@ -194,7 +195,11 @@ export async function generateAssetPlan(
   if (hasObjectKey(rawGlobalDraft, "tasks")) {
     throw new Error("asset_planning_global_draft_must_not_include_tasks");
   }
-  const globalDraft = GlobalPlanningDraft.parse(rawGlobalDraft);
+  const globalDraft = parseLlmOutput(
+    GlobalPlanningDraft,
+    rawGlobalDraft,
+    "asset_global_plan_schema_invalid",
+  );
 
   const chunks = chunkStoryboardSegments(input.storyboard, input.chunkSize);
   const totalChunks = chunks.length;
@@ -234,8 +239,10 @@ export async function generateAssetPlan(
     },
   );
 
-  return AssetPlan.parse(
+  return parseLlmOutput(
+    AssetPlan,
     mergeAssetPlan(input, audioSkeleton, globalDraft, chunkDrafts),
+    "asset_plan_schema_invalid",
   );
 }
 

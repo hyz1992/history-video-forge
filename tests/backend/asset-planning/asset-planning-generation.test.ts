@@ -5,6 +5,7 @@ import type {
   InvokeStructuredPromptOptions,
   LlmGateway,
 } from "../../../backend/src/runtime/llm/llm-gateway.js";
+import { LlmOutputError } from "../../../backend/src/runtime/llm/llm-output-error.js";
 import { generateAssetPlan } from "../../../backend/src/modules/asset-planning/asset-planning-generation.service.js";
 
 const scriptText =
@@ -1166,4 +1167,37 @@ describe("generateAssetPlan", () => {
       expect(matches).toBe(1);
     }
   });
+
+  it("wraps GlobalPlanningDraft ZodError into LlmOutputError with asset_global_plan_schema_invalid", async () => {
+    // global draft 缺少 art_bible（normalize 无法补），schema 必报错，
+    // 应被包装成 LlmOutputError 而非裸 ZodError 冒泡。
+    const { gateway } = makeGateway((options) => {
+      const input = options.input as { planning_mode: string };
+      if (input.planning_mode === "global") {
+        return { planning_mode: "global" };
+      }
+      return validChunkPlanningDraftFor(["sb_001"]);
+    });
+
+    await expect(generateAssetPlan(makeInput(gateway))).rejects.toMatchObject({
+      code: "asset_global_plan_schema_invalid",
+    });
+
+    try {
+      await generateAssetPlan(makeInput(gateway));
+      throw new Error("should have thrown");
+    } catch (error) {
+      expect(error).toBeInstanceOf(LlmOutputError);
+      expect((error as LlmOutputError).code).toBe(
+        "asset_global_plan_schema_invalid",
+      );
+      expect(Array.isArray((error as LlmOutputError).cause)).toBe(true);
+    }
+  });
+
+  // 说明：AssetPlan.parse 与 GlobalPlanningDraft.parse 共用同一个 parseLlmOutput
+  // 包装（asset-planning-generation.service.ts 末尾）。mergeAssetPlan 是确定性
+  // 合并函数，当 chunk drafts 合法时其产物结构必然满足 AssetPlan schema，无法
+  // 在不 mock 内部函数的前提下可靠构造 AssetPlan.parse 失败场景；parseLlmOutput
+  // 本身的行为已由 tests/backend/runtime/llm-output-error.test.ts 覆盖。
 });
