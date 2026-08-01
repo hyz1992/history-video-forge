@@ -1,4 +1,4 @@
-﻿import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
 import { renderLlmInteractionMarkdown } from "../../../backend/src/runtime/llm/interaction-log.js";
@@ -57,7 +57,10 @@ describe("prompt runtime", () => {
 
     const prompt = registry.getPrompt("topic.candidate-builder");
 
-    expect(prompt.body).toContain("原始 8 候选");
+    // 候选数量已从固定 8 改为由 target_candidate_count 控制（缺省 8）；
+    // 测试只锁定"原始候选池 + 数量硬约束 + 防热点霸占"的语义不变。
+    expect(prompt.body).toContain("target_candidate_count");
+    expect(prompt.body).toContain("原始候选池");
     expect(prompt.body).toContain("大多数槽位");
     expect(prompt.body).toContain("朝代分布");
     expect(prompt.body).toContain("冲突类型");
