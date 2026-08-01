@@ -1,6 +1,6 @@
 # Generation Service 错误处理统一改造（层 3）计划
 
-- 状态：草案，待用户确认后进入实施。
+- 状态：已自审，待用户确认后进入实施（P0 scope：Tasks 1-4）。
 - 起草日期：2026-07-31。
 - 作者：Trae agent。
 - 关联故障档案：
@@ -51,41 +51,41 @@
 
 ### 2.1 错误类型分层
 
-引入一个新的错误基类与三种子类，放在 `backend/src/runtime/llm/llm-output-error.ts`：
+引入一个错误类，放在 `backend/src/runtime/llm/llm-output-error.ts`：
 
 ```ts
-// 所有"LLM 输出不符合 schema 或业务约束"的错误的基类。
+// 所有"LLM 输出不符合 schema 或业务约束"的错误的统一类。
 // 调用方（run service）可以 instanceof 判断这是 LLM 输出问题，不是代码 bug。
 export class LlmOutputError extends Error {
   // 稳定 code，写入数据库 executionStateJson.error 和 diagnostics。
-  // 例：storyboard_plan_schema_invalid、script_draft_schema_invalid。
+  // schema 不匹配：${stage}_${schema_name}_schema_invalid
+  //   例：storyboard_plan_schema_invalid、script_draft_schema_invalid
+  // 业务约束失败：${stage}_${business_rule}_violated
+  //   例：asset_chunk_boundary_violated
   readonly code: string;
-  // 原始 ZodError issues 或业务错误信息，保留诊断细节。
-  readonly cause: unknown;
+
+  constructor(code: string, options?: { cause?: unknown }) {
+    super(code, options);
+    this.name = "LlmOutputError";
+    this.code = code;
+  }
 }
-
-// schema 不匹配（字段缺失、类型错、枚举越界、多余字段等）。
-// code 命名约定：${stage}_${schema_name}_schema_invalid
-export class LlmOutputSchemaError extends LlmOutputError {}
-
-// 业务约束失败（如 segment 越界、local_id 缺失等）。
-// code 命名约定：${stage}_${business_rule}_violated
-export class LlmOutputBusinessError extends LlmOutputError {}
 ```
 
 **决策**：
 - 用 `instanceof LlmOutputError` 让 run service 一眼区分"LLM 输出问题"与"代码 bug / LLM 调用网络失败"。
+- 不引入子类（`LlmOutputSchemaError` / `LlmOutputBusinessError`）——run service 只需二分类，`code` 字符串已足够区分具体根因。
 - 不用 discriminated union 而用 class，因为既有代码大量 `throw new Error()` + `catch (error)`，class 改造最小。
-- 保留 `cause` 字段（ES2022 标准），不丢 ZodError issues。
+- 通过 `cause` options（ES2022 标准）保留原始 ZodError issues，不丢诊断细节。
 
 ### 2.2 各 generation service 改造点
 
 | service | 改造 | 优先级 |
 |---|---|---|
-| **storyboard-generation** | `StoryboardPlan.parse` 用 try/catch 包住，ZodError 包装为 `LlmOutputSchemaError("storyboard_plan_schema_invalid")`。`regenerateSingleSegment` 同理（`StoryboardSegment.parse`）。 | P0 |
-| **script-generation** | `ScriptDraftPackage.parse` 包装为 `LlmOutputSchemaError("script_draft_schema_invalid")`。 | P0 |
-| **asset-planning-generation** | `GlobalPlanningDraft.parse` 包装为 `LlmOutputSchemaError("asset_global_plan_schema_invalid")`；最终 `AssetPlan.parse` 包装为 `LlmOutputSchemaError("asset_plan_schema_invalid")`。chunk 级已有 `parseOrRepairChunkDraft`，把内部 ZodError 也包成 `LlmOutputSchemaError("asset_chunk_plan_schema_invalid")`（repair 失败抛包装错误）。`validateChunkDraft` 抛的业务错误改为 `LlmOutputBusinessError`。 | P1 |
-| **topic-recommendation** | `TopicCandidateCard.parse`（仅 fallback 路径）包装为 `LlmOutputSchemaError("topic_candidate_card_schema_invalid")`。selector 路径已用手写 code Error，本次不改。 | P2 |
+| **storyboard-generation** | `StoryboardPlan.parse` 用 try/catch 包住，ZodError 包装为 `LlmOutputError("storyboard_plan_schema_invalid", { cause: error.issues })`。`regenerateSingleSegment` 同理（`StoryboardSegment.parse`）。 | P0 |
+| **script-generation** | `ScriptDraftPackage.parse` 包装为 `LlmOutputError("script_draft_schema_invalid", { cause: error.issues })`。 | P0 |
+| **asset-planning-generation** | `GlobalPlanningDraft.parse` 包装为 `LlmOutputError("asset_global_plan_schema_invalid")`；最终 `AssetPlan.parse` 包装为 `LlmOutputError("asset_plan_schema_invalid")`。chunk 级已有 `parseOrRepairChunkDraft`，把内部 ZodError 也包成 `LlmOutputError("asset_chunk_plan_schema_invalid")`（repair 失败抛包装错误）。`validateChunkDraft` 抛的业务错误改为 `new LlmOutputError("asset_chunk_*_violated", { cause: detail })`。 | P1 |
+| **topic-recommendation** | `TopicCandidateCard.parse`（仅 fallback 路径）包装为 `LlmOutputError("topic_candidate_card_schema_invalid")`。selector 路径已用手写 code Error，本次不改。 | P2 |
 
 **约定**：
 - 包装在 generation service 内，**不在 zod schema 层**（schema 是纯校验，不应承载运行时类型）。
@@ -96,7 +96,7 @@ export class LlmOutputBusinessError extends LlmOutputError {}
       return schema.parse(raw);
     } catch (error) {
       if (error instanceof ZodError) {
-        throw new LlmOutputSchemaError(code, error.issues);
+        throw new LlmOutputError(code, { cause: error.issues });
       }
       throw error;
     }
@@ -108,10 +108,10 @@ export class LlmOutputBusinessError extends LlmOutputError {}
 | run service | 改造 | 优先级 |
 |---|---|---|
 | **storyboard-run** | catch 内判断 `error instanceof LlmOutputError`：
-  - 是 → `executionStateJson.error = error.code`（如 `storyboard_plan_schema_invalid`），不再写 `internal_server_error`。
-  - 否 → 保持 `internal_server_error`（代码 bug / LLM 网络错）。
+  - 是 → `executionStateJson.error = error.code`（如 `storyboard_plan_schema_invalid`），不再写 `internal_server_error`。追加 `interactionLogWriter.writeError(JSON.stringify(error.cause))` 保留 ZodError 字段诊断信息。
+  - 否 → 保持 `internal_server_error`（代码 bug / LLM 网络错 / ExternalServiceError）。
   修复"二次失败静默吞"：catch 内 save 再失败时 `console.error + writeError`，对齐 asset-planning-run。 | P0 |
-| **script-run** | 同 storyboard-run 错误分类；**补** generating 状态清理（catch 内回写 `executionStateJson.generating = false, error = error.code`）。 | P0 |
+| **script-run** | 同 storyboard-run 错误分类（含 `error.cause` 写入 interactionLogWriter）；**补** generating 状态清理（catch 内回写 `executionStateJson.generating = false, error = error.code`）。 | P0 |
 | **asset-planning-run** | 同 storyboard-run 错误分类。已有清理逻辑保留。 | P1 |
 | **topic-recommendation** | catch 内把 `instanceof LlmOutputError` 的 code 写入 `diagnostics.checks`，而非直接 throw。 | P2 |
 
@@ -130,8 +130,8 @@ export class LlmOutputBusinessError extends LlmOutputError {}
 ### 2.5 不做的事
 
 - **不引入新的 regen 触发条件**。`regen_once` 仍只由 validator decision 驱动，不由 schema 错误驱动（避免 LLM 反复输出错结构导致循环 regen）。
-- **不改 asset-planning 的 structural-repair prompt**。它已覆盖 chunk 级；本次只把 repair 失败的错误包成 `LlmOutputSchemaError`。
-- **不改 LlmGateway 的错误分类**（`classifyExternalError` 保留，处理 provider 网络错）。
+- **不改 asset-planning 的 structural-repair prompt**。它已覆盖 chunk 级；本次只把 repair 失败的错误包成 `LlmOutputError`。
+- **不改 LlmGateway 的错误分类**（`classifyExternalError` 保留，处理 provider 网络错）。`ExternalServiceError` 在 run service catch 中继续折叠为 `internal_server_error`，不在本次改造范围。
 - **不删既有 normalize 函数**（层 1/2 的容错仍作为第一道防线）。
 
 ---
@@ -143,10 +143,10 @@ export class LlmOutputBusinessError extends LlmOutputError {}
 | 风险 | 影响 | 缓解 |
 |---|---|---|
 | `instanceof LlmOutputError` 在跨模块/跨 realm 时失效 | run service 漏判，回退到 `internal_server_error` | 单进程单 realm，无跨 worker 序列化；测试覆盖 instanceof 行为。 |
-| 包装错误后 ZodError 原始 stack 丢失 | 排障困难 | 保留 `cause` 字段；测试验证 `error.cause.issues` 可读。 |
+| 包装错误后 ZodError 原始 stack 丢失 | 排障困难 | `error.cause` 保留 ZodError issues；run service catch 块将 `JSON.stringify(error.cause)` 写入 interactionLogWriter，确保字段级诊断信息可回溯。 |
 | 数据库历史记录里仍是 `internal_server_error` | 老数据无法回溯根因 | 不迁移老数据；新错误 code 从本计划上线后生效。 |
-| 包装引入新 bug 导致 generation 误抛错 | 链路假失败 | TDD：每个 parse 包装都有"成功路径不变 + 失败路径抛 LlmOutputSchemaError"测试。 |
-| topic-recommendation 改造面大（fallback 路径多） | 改动失控 | topic 标 P2，本次只做核心 P0/P1；topic 改造作为独立后续任务。 |
+| 包装引入新 bug 导致 generation 误抛错 | 链路假失败 | TDD：每个 parse 包装都有"成功路径不变 + 失败路径抛 LlmOutputError"测试。 |
+| topic-recommendation 改造面大（fallback 路径多） | 改动失控 | topic 标 P2，本次只做核心 P0；topic 改造作为独立后续任务。 |
 
 ### 3.2 高风险边界（AGENTS.md 约束）
 
@@ -161,7 +161,7 @@ export class LlmOutputBusinessError extends LlmOutputError {}
 
 ### Task 1：错误类型基础设施（P0）
 
-**目标**：建 `LlmOutputError` / `LlmOutputSchemaError` / `LlmOutputBusinessError` + `parseLlmOutput` 辅助函数，单测覆盖。
+**目标**：建 `LlmOutputError` + `parseLlmOutput` 辅助函数，单测覆盖。
 
 **改动文件**：
 - 新增 `backend/src/runtime/llm/llm-output-error.ts`
@@ -177,11 +177,11 @@ export class LlmOutputBusinessError extends LlmOutputError {}
 
 **改动文件**：
 - 改 `backend/src/modules/storyboard/storyboard-generation.service.ts`
-- 改/加测试 `tests/backend/storyboard/storyboard-generation.test.ts`（覆盖"ZodError 被包装为 LlmOutputSchemaError"）
+- 改/加测试 `tests/backend/storyboard/storyboard-generation.test.ts`（覆盖"ZodError 被包装为 LlmOutputError"）
 
 **闸门**：现有 11 测试零回归 + 新增 2 测试通过；typecheck 通过。
 
-**提交信息**：`feat(storyboard): StoryboardPlan.parse 包装为 LlmOutputSchemaError`
+**提交信息**：`feat(storyboard): StoryboardPlan.parse 包装为 LlmOutputError`
 
 ### Task 3：script-generation 包装 parse（P0）
 
@@ -193,7 +193,7 @@ export class LlmOutputBusinessError extends LlmOutputError {}
 
 **闸门**：现有 script 测试零回归 + 新增 1-2 测试通过；typecheck 通过。
 
-**提交信息**：`feat(script): ScriptDraftPackage.parse 包装为 LlmOutputSchemaError`
+**提交信息**：`feat(script): ScriptDraftPackage.parse 包装为 LlmOutputError`
 
 ### Task 4：storyboard-run + script-run 错误分类与清理（P0）
 
@@ -211,12 +211,12 @@ export class LlmOutputBusinessError extends LlmOutputError {}
 
 **提交信息**：`feat(storyboard,script): run service 区分 LlmOutputError 与 internal_server_error`
 
-### Task 5：asset-planning 改造（P1）
+### Task 5：asset-planning 改造（P1，后续）
 
 **目标**：
-- `GlobalPlanningDraft.parse` / 最终 `AssetPlan.parse` 包装为 `LlmOutputSchemaError`。
-- `parseOrRepairChunkDraft` 内部 ZodError 包装为 `LlmOutputSchemaError`，repair 失败抛包装错误。
-- `validateChunkDraft` 抛的业务错误改为 `LlmOutputBusinessError`。
+- `GlobalPlanningDraft.parse` / 最终 `AssetPlan.parse` 包装为 `LlmOutputError`。
+- `parseOrRepairChunkDraft` 内部 ZodError 包装为 `LlmOutputError`，repair 失败抛包装错误。
+- `validateChunkDraft` 抛的业务错误改为 `new LlmOutputError("asset_chunk_*_violated", { cause: detail })`。
 - asset-planning-run catch 区分错误类型。
 
 **改动文件**：
@@ -228,9 +228,9 @@ export class LlmOutputBusinessError extends LlmOutputError {}
 
 **提交信息**：`feat(asset-planning): 统一 LlmOutputError 包装与 run service 分类`
 
-### Task 6：topic-recommendation 改造（P2，可选）
+### Task 6：topic-recommendation 改造（P2，后续）
 
-**目标**：fallback 路径的 `TopicCandidateCard.parse` 包装为 `LlmOutputSchemaError`；catch 内把 LlmOutputError code 写入 diagnostics。
+**目标**：fallback 路径的 `TopicCandidateCard.parse` 包装为 `LlmOutputError`；catch 内把 LlmOutputError code 写入 diagnostics。
 
 **改动文件**：
 - 改 `backend/src/modules/topic/topic-recommendation.service.ts`
@@ -266,27 +266,47 @@ npm run typecheck:backend
 | 2 | 2 | 2 测试 | storyboard generation 零回归 | P0 |
 | 3 | 2 | 1-2 测试 | script 零回归 | P0 |
 | 4 | 2 + 测试 | 2-3 测试 | run service 零回归 | P0 |
-| 5 | 2 + 测试 | 3-4 测试 | asset-planning 零回归 | P1 |
-| 6 | 1 + 测试 | 1-2 测试 | topic 零回归 | P2（可选） |
+| 5 | 2 + 测试 | 3-4 测试 | asset-planning 零回归 | P1（后续） |
+| 6 | 1 + 测试 | 1-2 测试 | topic 零回归 | P2（后续） |
 | 7 | 1（文档） | 0 | 完整回归 + typecheck | - |
 
-**预计影响**：P0 4 个 Task，约 8 文件，新增约 12 测试。P1+P2 视情况扩展。
+**本次实施范围**：P0 Tasks 1-4，约 8 文件，新增约 12 测试。P1+P2 作为独立后续任务。
 
 **回滚策略**：每个 Task 独立 commit，单独 revert 不影响其他。
 
 ---
 
-## 6. 自审清单
+## 6. 自审结论（2026-07-31）
 
-- [ ] 设计是否只动错误处理层，不动 schema / prompt / 业务校验？是。
-- [ ] 是否避免了"schema 错误驱动 regen"的循环风险？是，schema 错误直接报错。
-- [ ] 是否避免了"把 LLM 输出错降级为 warning"？是，schema 错误是硬错。
-- [ ] 是否做到了"小步可验证"？是，按 Task 1-7 拆，每个独立 commit + 测试。
-- [ ] 是否覆盖了所有 generation service？是，topic/script/storyboard/asset-planning 四个都覆盖。
-- [ ] 是否覆盖了所有 run service？是，四个 run service 都改造 catch 分支。
-- [ ] 是否保留了 ZodError 诊断信息？是，通过 `cause` 字段。
-- [ ] 是否对齐了既有清理逻辑差异？是，script-run 补清理、storyboard-run 修静默吞。
-- [ ] 是否遵守 AGENTS.md 不动 schema / API / prompt？是。
+本计划经五视角自审，结论：**通过（已修正 A1/A2/A3）**。
+
+### 已修正问题
+
+| # | 严重度 | 问题 | 修正 |
+|---|--------|------|------|
+| A1 | P0 | `LlmOutputError` 无构造函数签名，`parseLlmOutput` 的 `new LlmOutputError(code, error.issues)` 与 Error 构造函数不匹配 | 补充 ES2022 `constructor(code, { cause })` 设计 |
+| A2 | P1 | `cause`（ZodError issues）不被持久化，只写 `error.message` 到 interactionLogWriter | Task 4 补充 `JSON.stringify(error.cause)` 写入 interactionLogWriter |
+| A3 | P1 | `ExternalServiceError` 在 run service catch 中的流向未说明 | §2.5 补说明"继续折叠为 internal_server_error" |
+| B2 | P1 | `cause` 不入 DB 而是仅入 interactionLogWriter——排障时需要查两个地方 | 记录为已知取舍。DB 字段 `error` 存 code（可索引），`cause` 详情存 log（可追溯） |
+
+### 验证通过项
+
+- `instanceof LlmOutputError` 在单进程 Node.js 中安全 ✓
+- schema 错误不驱动 regen，无循环风险 ✓
+- `parseLlmOutput` 中非 ZodError 异常原样 rethrow ✓
+- `ExternalServiceError` 与 `LlmOutputError.code` 命名空间不冲突 ✓
+
+### 决策点决定
+
+| 决策点 | 决定 |
+|--------|------|
+| 优先级范围 | **P0 only（Tasks 1-4）**——打 debeecaa 事故精确打击面 |
+| code 命名 | **采纳 `stage_schema_schema_invalid`** |
+| BusinessError 子类 | **不引入**——`code` 字符串已足够区分 |
+
+### 实施入口条件
+
+计划已就绪，修正并入正文。可用于 Task 1 开工。
 
 ---
 
