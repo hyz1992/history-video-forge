@@ -19,6 +19,7 @@ describe("operation tier registry", () => {
       "asset-planning.asset-structural-repair",
       "topic.selector",
       "script.semantic-reviewer",
+      "event-library.enrich",
     ];
 
     for (const operation of smartOperations) {
@@ -50,7 +51,7 @@ describe("operation tier registry", () => {
     expect(getOperationTier("topic.selector")).toBe("smart");
   });
 
-  it("registry covers all 15 expected operations", () => {
+  it("registry covers all 16 expected operations", () => {
     expect(Object.keys(OPERATION_TIER_REGISTRY).sort()).toEqual(
       [
         "script.writer",
@@ -63,6 +64,7 @@ describe("operation tier registry", () => {
         "asset-planning.asset-structural-repair",
         "topic.selector",
         "script.semantic-reviewer",
+        "event-library.enrich",
         "publish.title-generator",
         "publish.description-generator",
         "publish.cover-prompt-generator",
