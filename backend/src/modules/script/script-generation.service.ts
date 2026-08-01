@@ -4,6 +4,7 @@ import { env, getValidatedRuntimeEnv } from "../../config/env.js";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
 import { createTierAwareProviderFromEnv } from "../../runtime/llm/tier-aware-provider-factory.js";
 import type { LlmInteractionLogWriter } from "../../runtime/llm/interaction-log.js";
+import { parseLlmOutput } from "../../runtime/llm/llm-output-error.js";
 import type {
   StructuredPromptInvocation,
   StructuredPromptProvider,
@@ -75,7 +76,11 @@ export async function generateScriptDraft(input: GenerateScriptDraftInput) {
     input.bundle.hard_lane.must_include_beats,
   );
 
-  return ScriptDraftPackage.parse(draft);
+  return parseLlmOutput(
+    ScriptDraftPackage,
+    draft,
+    "script_draft_schema_invalid",
+  );
 }
 
 function buildScriptWriterPromptInput(input: GenerateScriptDraftInput) {
