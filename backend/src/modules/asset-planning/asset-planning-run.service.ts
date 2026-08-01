@@ -16,6 +16,7 @@ import {
   persistProjectRunArtifacts,
   type TraceLogWriter,
 } from "../../runtime/trace/project-storage.js";
+import { LlmOutputError } from "../../runtime/llm/llm-output-error.js";
 import { generateAssetPlan } from "./asset-planning-generation.service";
 import { validateAssetPlan } from "./asset-planning-local-validator";
 import { repairAssetPlanStructure } from "./asset-planning-structural-repair.service";
@@ -558,6 +559,9 @@ export async function runAssetPlanningGeneration(
     },
   };
   } catch (error) {
+    const errorCode =
+      error instanceof LlmOutputError ? error.code : "internal_server_error";
+
     // Clean up generating state — unexpected error
     if (generatingRecord) {
       const cleanupRecordId = generatingRecord.id;
@@ -573,7 +577,7 @@ export async function runAssetPlanningGeneration(
           ...(generatingRecord.executionStateJson ?? {}),
           generating: false,
           run_id: runId,
-          error: "internal_server_error",
+          error: errorCode,
         },
         graphTraceSummaryJson: generatingRecord.graphTraceSummaryJson,
         runtimeDiagnosticsJson: generatingRecord.runtimeDiagnosticsJson,
@@ -596,10 +600,13 @@ export async function runAssetPlanningGeneration(
     const message =
       error instanceof Error ? (error.stack ?? error.message) : String(error);
     interactionLogWriter.writeError(message);
+    if (error instanceof LlmOutputError && error.cause !== undefined) {
+      interactionLogWriter.writeError(JSON.stringify(error.cause));
+    }
     return {
       statusCode: 500,
       body: {
-        error: "internal_server_error",
+        error: errorCode,
         message: error instanceof Error ? error.message : String(error),
       },
     };

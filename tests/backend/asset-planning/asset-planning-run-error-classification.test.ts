@@ -1,0 +1,178 @@
+import { describe, expect, it, vi } from "vitest";
+
+// 替换 generateAssetPlan，让它在 run 内抛 LlmOutputError，
+// 验证 run service catch 把 executionState.error 写成 schema_invalid code。
+const generateAssetPlanMock = vi.hoisted(() => vi.fn());
+vi.mock("../../../backend/src/modules/asset-planning/asset-planning-generation.service.js", () => ({
+  generateAssetPlan: generateAssetPlanMock,
+}));
+
+import { createDbClient } from "../../../backend/src/db/client.js";
+import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository.js";
+import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/storyboard-record.repository.js";
+import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
+import { runAssetPlanningGeneration } from "../../../backend/src/modules/asset-planning/asset-planning-run.service.js";
+import { LlmOutputError } from "../../../backend/src/runtime/llm/llm-output-error.js";
+import type { StoryboardPlan } from "../../../shared/src/index.js";
+
+function makeStoryboardPlan(input: {
+  scriptRecordId: string;
+  topicPackageId: string;
+}): StoryboardPlan {
+  return {
+    plan_version: "storyboard_v1",
+    source_script_record_id: input.scriptRecordId,
+    source_topic_package_id: input.topicPackageId,
+    estimated_total_duration_sec: 40,
+    segments: [
+      {
+        segment_id: "sb_001",
+        order: 0,
+        script_excerpt: "The envoy answers in public.",
+        start_hint_sec: 0,
+        end_hint_sec: 40,
+        narrative_role: "opening",
+        visual_intent: "Show the public pressure.",
+        scene_description: "A tense public hall.",
+        visual_elements: ["envoy"],
+        framing_hint: "medium",
+        content_type: "live_action",
+        motion_hint: "static",
+        editing_hint: "single",
+        on_screen_text: [],
+        linked_beats: ["public answer"],
+        linked_quotes: [],
+        risk_notes: [],
+      },
+    ],
+    global_visual_notes: [],
+  };
+}
+
+async function prepareActiveStoryboard(db: ReturnType<typeof createDbClient>) {
+  const project = await createProject(db, { name: "Asset Plan Run Error" });
+  const topicPackage = await saveTopicPackage(db, {
+    projectId: project.id,
+    title: "Asset Plan Topic",
+    selectedAngle: "A public answer reverses the pressure.",
+    familyLabel: "diplomacy",
+    scopeLabel: "single_event",
+    coreConflict: "The envoy must answer in front of everyone.",
+    strongScene: "The hall falls quiet after the answer.",
+    packagingSeed: "One sentence changes the room.",
+    canonicalQuotesJson: [],
+    durationBandJson: { label: "medium" },
+    narrativeTensionMapJson: {
+      hook_claim: "A public pressure scene begins.",
+      pressure_escalation: "The insult keeps rising.",
+      mid_reveal: "The answer is guarding the state's face.",
+      peak_payoff: "The reply reverses the pressure.",
+      ending_residue: "Retreat would cost more than silence.",
+    },
+    mustIncludeBeatsJson: ["public answer"],
+    forbiddenExpansionsJson: [],
+    riskHintsJson: [],
+    sourceAnchorRefsJson: ["source-a"],
+  });
+  const scriptRecord = await saveScriptRecord(db, {
+    projectId: project.id,
+    topicPackageId: topicPackage.id,
+    scriptText: "The envoy answers in public.",
+    openingSpan: "Opening pressure.",
+    endingSpan: "The ending leaves a cost.",
+    estimatedDurationSec: 40,
+    beatTraceJson: [
+      {
+        beat: "public answer",
+        excerpt: "The envoy answers in public.",
+        confidence: 0.95,
+      },
+    ],
+    quoteTraceJson: [],
+    reviewStatus: "pass",
+    validationResultJson: {
+      stage: "script_local_validation",
+      decision: "pass",
+    },
+    semanticReviewResultJson: {
+      stage: "script_semantic_review",
+      decision: "pass",
+      patch_intent: null,
+    },
+    executionStateJson: { patch_used: false, regenerate_used: false },
+  });
+  const storyboardPlan = makeStoryboardPlan({
+    scriptRecordId: scriptRecord.id,
+    topicPackageId: topicPackage.id,
+  });
+  const storyboardRecord = await saveStoryboardRecord(db, {
+    projectId: project.id,
+    topicPackageId: topicPackage.id,
+    scriptRecordId: scriptRecord.id,
+    planJson: storyboardPlan,
+    validationResultJson: {
+      stage: "storyboard_local_validation",
+      decision: "pass",
+    },
+  });
+
+  project.activeTopicPackageId = topicPackage.id;
+  project.activeScriptRecordId = scriptRecord.id;
+  project.activeStoryboardRecordId = storyboardRecord.id;
+  project.status = "storyboard_ready";
+
+  return { project, topicPackage, scriptRecord, storyboardRecord };
+}
+
+describe("runAssetPlanningGeneration error classification", () => {
+  it("writes asset_plan_schema_invalid to executionState.error when generateAssetPlan throws LlmOutputError", async () => {
+    generateAssetPlanMock.mockImplementation(() => {
+      throw new LlmOutputError("asset_plan_schema_invalid", {
+        cause: [{ path: ["tasks"], message: "Required" }],
+      });
+    });
+
+    const db = createDbClient();
+    const { project } = await prepareActiveStoryboard(db);
+
+    const response = await runAssetPlanningGeneration({ db, project });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.body).toMatchObject({
+      error: "asset_plan_schema_invalid",
+    });
+
+    const failedRecord = [...db.assetPlanRecords.values()].at(-1);
+    expect(failedRecord).toBeDefined();
+    const executionState = (failedRecord!.executionStateJson ?? {}) as Record<
+      string,
+      unknown
+    >;
+    expect(executionState.generating).toBe(false);
+    expect(executionState.error).toBe("asset_plan_schema_invalid");
+  });
+
+  it("falls back to internal_server_error for non-LlmOutputError exceptions", async () => {
+    generateAssetPlanMock.mockImplementation(() => {
+      throw new Error("provider network boom");
+    });
+
+    const db = createDbClient();
+    const { project } = await prepareActiveStoryboard(db);
+
+    const response = await runAssetPlanningGeneration({ db, project });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.body).toMatchObject({ error: "internal_server_error" });
+
+    const failedRecord = [...db.assetPlanRecords.values()].at(-1);
+    expect(failedRecord).toBeDefined();
+    const executionState = (failedRecord!.executionStateJson ?? {}) as Record<
+      string,
+      unknown
+    >;
+    expect(executionState.generating).toBe(false);
+    expect(executionState.error).toBe("internal_server_error");
+  });
+});
