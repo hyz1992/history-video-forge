@@ -7,6 +7,7 @@ import { env, getValidatedRuntimeEnv } from "../../config/env.js";
 import { createHash } from "node:crypto";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
 import type { LlmInteractionLogWriter } from "../../runtime/llm/interaction-log.js";
+import { parseLlmOutput } from "../../runtime/llm/llm-output-error.js";
 import { createTierAwareProviderFromEnv } from "../../runtime/llm/tier-aware-provider-factory.js";
 import type {
   StructuredPromptInvocation,
@@ -69,7 +70,11 @@ export async function generateStoryboardPlan(input: GenerateStoryboardPlanInput)
     interactionLogWriter: input.interactionLogWriter,
   });
 
-  return StoryboardPlan.parse(normalizeStoryboardPlan(rawPlan, input));
+  return parseLlmOutput(
+    StoryboardPlan,
+    normalizeStoryboardPlan(rawPlan, input),
+    "storyboard_plan_schema_invalid",
+  );
 }
 
 function normalizeStoryboardPlan(
@@ -229,7 +234,11 @@ export async function regenerateSingleSegment(
   });
 
   const merged = mergeSegmentWithLocks(targetSegment, rawSegment);
-  return StoryboardSegment.parse(merged);
+  return parseLlmOutput(
+    StoryboardSegment,
+    merged,
+    "storyboard_segment_schema_invalid",
+  );
 }
 
 function mergeSegmentWithLocks(

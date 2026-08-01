@@ -7,10 +7,12 @@ import type {
 } from "../../../backend/src/runtime/llm/llm-gateway.js";
 import { createLlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
 import { createOpenAiCompatibleProvider } from "../../../backend/src/runtime/llm/openai-compatible-provider.js";
+import { LlmOutputError } from "../../../backend/src/runtime/llm/llm-output-error.js";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
 import {
   buildStoryboardPlannerPromptInput,
   generateStoryboardPlan,
+  regenerateSingleSegment,
 } from "../../../backend/src/modules/storyboard/storyboard-generation.service.js";
 
 function makeDraft(): ScriptDraftPackage {
@@ -463,6 +465,77 @@ describe("generateStoryboardPlan", () => {
     for (const beat of plan.segments[0]?.linked_beats ?? []) {
       expect(typeof beat).toBe("string");
       expect(beat.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("wraps ZodError from StoryboardPlan.parse into LlmOutputError with storyboard_plan_schema_invalid", async () => {
+    // LLM 输出无法被 normalize 修复的结构错误（例如 segments 缺失），
+    // 必须被包装成 LlmOutputError(code=storyboard_plan_schema_invalid)，
+    // 而不是裸 ZodError 冒泡到 run service 被折叠成 internal_server_error。
+    const gateway: LlmGateway = {
+      async invokeStructuredPrompt<T>(): Promise<T> {
+        // segments 缺失——schema 必报错，normalize 无法补
+        return { plan_version: "storyboard_v1" } as T;
+      },
+      invokeStrictStructured: vi.fn(),
+    };
+
+    await expect(generateStoryboardPlan(makeInput(gateway))).rejects.toMatchObject({
+      code: "storyboard_plan_schema_invalid",
+    });
+
+    try {
+      await generateStoryboardPlan(makeInput(gateway));
+      throw new Error("should have thrown");
+    } catch (error) {
+      expect(error).toBeInstanceOf(LlmOutputError);
+      expect((error as LlmOutputError).code).toBe(
+        "storyboard_plan_schema_invalid",
+      );
+      expect(Array.isArray((error as LlmOutputError).cause)).toBe(true);
+    }
+  });
+});
+
+describe("regenerateSingleSegment", () => {
+  it("wraps ZodError from StoryboardSegment.parse into LlmOutputError with storyboard_segment_schema_invalid", async () => {
+    // 构造一个合法 plan 作为基线
+    const basePlan = await generateStoryboardPlan(makeInput());
+    const targetSegmentId = basePlan.segments[0]!.segment_id;
+
+    // 让 segment-regen 返回一个非锁定字段类型错误（on_screen_text 应为数组），
+    // mergeSegmentWithLocks 会用 incoming 覆盖 original，导致 merged 无法通过 schema。
+    const gateway: LlmGateway = {
+      async invokeStructuredPrompt<T>(): Promise<T> {
+        return { on_screen_text: "not-an-array" } as T;
+      },
+      invokeStrictStructured: vi.fn(),
+    };
+
+    await expect(
+      regenerateSingleSegment({
+        plan: basePlan,
+        targetSegmentId,
+        userFeedback: "换一个画面",
+        llmGateway: gateway,
+      }),
+    ).rejects.toMatchObject({
+      code: "storyboard_segment_schema_invalid",
+    });
+
+    try {
+      await regenerateSingleSegment({
+        plan: basePlan,
+        targetSegmentId,
+        userFeedback: "换一个画面",
+        llmGateway: gateway,
+      });
+      throw new Error("should have thrown");
+    } catch (error) {
+      expect(error).toBeInstanceOf(LlmOutputError);
+      expect((error as LlmOutputError).code).toBe(
+        "storyboard_segment_schema_invalid",
+      );
     }
   });
 });
