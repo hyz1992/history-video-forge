@@ -1,5 +1,6 @@
 import type { DbClient, ProjectRecord, TopicPackageRecord } from "../../db/client";
 import type { LlmGateway } from "../../runtime/llm/llm-gateway.js";
+import { LlmOutputError } from "../../runtime/llm/llm-output-error.js";
 import { generateScriptDraft } from "./script-generation.service";
 import { validateScriptDraft } from "./script-local-validator";
 import { buildScriptInputBundle } from "./script-input-bundle.builder";
@@ -123,10 +124,12 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
     runId,
   });
   const previousActiveScriptRecordId = input.project.activeScriptRecordId;
+  // Declare outside try so catch block can access it for failure-record update
+  let generatingRecord: { id: string } | undefined;
 
   try {
     // Save preliminary record BEFORE graph execution so refresh shows generating state
-    const generatingRecord = await saveScriptRecord(input.db, {
+    generatingRecord = await saveScriptRecord(input.db, {
       projectId: input.project.id,
       topicPackageId: record.id,
       scriptText: "",
@@ -240,6 +243,52 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
     },
   };
   } catch (error) {
+    const errorCode =
+      error instanceof LlmOutputError ? error.code : "internal_server_error";
+
+    // Clean up generating record state — best effort, must not stay on generating: true
+    if (generatingRecord) {
+      try {
+        await saveScriptRecord(input.db, {
+          id: generatingRecord.id,
+          projectId: input.project.id,
+          topicPackageId: record.id,
+          scriptText: "",
+          openingSpan: "",
+          endingSpan: "",
+          estimatedDurationSec: 0,
+          beatTraceJson: [],
+          quoteTraceJson: [],
+          reviewStatus: "error",
+          validationResultJson: {
+            stage: "script_local_validation",
+            decision: "error",
+            errors: ["internal_server_error"],
+            warnings: [],
+            metrics: {},
+          },
+          semanticReviewResultJson: null,
+          executionStateJson: {
+            generating: false,
+            error: errorCode,
+            run_id: runId,
+          },
+          graphTraceSummaryJson: null,
+          runtimeDiagnosticsJson: null,
+        });
+      } catch (cleanupError) {
+        // 关键：清理失败时一定要记录，避免静默吞错让记录卡在 generating: true
+        const cleanupMsg =
+          cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+        console.error(
+          `[script] failed to clear generating state for record ${generatingRecord.id}: ${cleanupMsg}`,
+        );
+        interactionLogWriter.writeError(
+          `script_generating_state_cleanup_failed:${cleanupMsg}`,
+        );
+      }
+    }
+
     // Clean up generating state — unexpected error
     input.project.activeScriptRecordId = previousActiveScriptRecordId;
     input.project.status = previousActiveScriptRecordId ? "script_ready" : "script_failed";
@@ -248,10 +297,13 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
     const message =
       error instanceof Error ? (error.stack ?? error.message) : String(error);
     interactionLogWriter.writeError(message);
+    if (error instanceof LlmOutputError && error.cause !== undefined) {
+      interactionLogWriter.writeError(JSON.stringify(error.cause));
+    }
     return {
       statusCode: 500,
       body: {
-        error: "internal_server_error",
+        error: errorCode,
         message: error instanceof Error ? error.message : String(error),
       },
     };

@@ -1,6 +1,7 @@
 import type { ScriptDraftPackage } from "../../../../shared/src/index.js";
 import { ScriptDraftPackage as ScriptDraftPackageSchema, StoryboardPlan } from "../../../../shared/src/index.js";
 import type { DbClient, ProjectRecord, ScriptRecord, StoryboardRecord, TopicPackageRecord } from "../../db/client";
+import { LlmOutputError } from "../../runtime/llm/llm-output-error.js";
 import { createCompositeInteractionLogWriter, persistProjectRunArtifacts } from "../../runtime/trace/project-storage.js";
 import { generateStoryboardPlan, regenerateSingleSegment } from "./storyboard-generation.service";
 import { validateStoryboardPlan } from "./storyboard-local-validator";
@@ -334,6 +335,9 @@ export async function runStoryboardGeneration(
     },
   };
   } catch (error) {
+    const errorCode =
+      error instanceof LlmOutputError ? error.code : "internal_server_error";
+
     // Update generating record with failure state — best effort
     if (generatingRecord) {
       try {
@@ -353,14 +357,22 @@ export async function runStoryboardGeneration(
           executionStateJson: {
             generating: false,
             regenerate_used: regenerated,
-            error: "internal_server_error",
+            error: errorCode,
             run_id: runId,
           },
           graphTraceSummaryJson: graphTraceSummary,
           runtimeDiagnosticsJson: runtimeDiagnostics,
         });
-      } catch {
-        // Best effort — don't mask the original error
+      } catch (cleanupError) {
+        // 关键：清理失败时一定要记录，避免静默吞错让记录卡在 generating: true
+        const cleanupMsg =
+          cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+        console.error(
+          `[storyboard] failed to clear generating state for record ${generatingRecord.id}: ${cleanupMsg}`,
+        );
+        interactionLogWriter.writeError(
+          `storyboard_generating_state_cleanup_failed:${cleanupMsg}`,
+        );
       }
     }
 
@@ -372,10 +384,13 @@ export async function runStoryboardGeneration(
     const message =
       error instanceof Error ? (error.stack ?? error.message) : String(error);
     interactionLogWriter.writeError(message);
+    if (error instanceof LlmOutputError && error.cause !== undefined) {
+      interactionLogWriter.writeError(JSON.stringify(error.cause));
+    }
     return {
       statusCode: 500,
       body: {
-        error: "internal_server_error",
+        error: errorCode,
         message: error instanceof Error ? error.message : String(error),
       },
     };
