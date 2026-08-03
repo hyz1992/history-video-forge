@@ -1,7 +1,8 @@
 # Generation Service 错误处理统一改造（层 3）计划
 
-- 状态：已自审，待用户确认后进入实施（P0 scope：Tasks 1-4）。
+- 状态：**已实施（P0 + P1 + P2 全部完成）**。Tasks 1-7 全部落地，完整回归 635 测试通过、typecheck 通过。预存失败 `operation-tier-registry` / `prompt-runtime` 已在实施过程中修复。
 - 起草日期：2026-07-31。
+- 实施日期：2026-08-01（P0）、2026-08-03（P1+P2+Task 7）。
 - 作者：Trae agent。
 - 关联故障档案：
   - [LLM 输出文本对齐归一化容错设计](./2026-07-28-llm-output-text-normalization-design.md)（层 1：标点漂移容错）
@@ -329,3 +330,69 @@ npm run typecheck:backend
 **做法**：schema 错误时自动调用 LLM 让它修结构。
 
 **否决理由**：违反 §3.2 "不让 schema 错误驱动 regen"；LLM 输出错结构时 regen 大概率仍错，会让链路卡死。asset-planning 的 structural-repair 是受控的 chunk 级修复，不是全链路 regen，两者本质不同。
+
+---
+
+## 8. 实施记录（2026-08-01 / 2026-08-03）
+
+P0（Tasks 1-4）、P1（Task 5）、P2（Task 6）、Task 7 全部落地。
+
+### 8.1 完整错误 code 清单
+
+generation service 抛出的 `LlmOutputError.code`（全部为字符串，无子类）：
+
+| service | code | 触发点 | 含义 |
+|---|---|---|---|
+| storyboard | `storyboard_plan_schema_invalid` | `StoryboardPlan.parse` | 分镜计划整体结构不合法 |
+| storyboard | `storyboard_segment_schema_invalid` | `regenerateSingleSegment` 内 parse | 单段重生成结构不合法 |
+| script | `script_draft_schema_invalid` | `ScriptDraftPackage.parse` | 脚本草稿结构不合法 |
+| asset-planning | `asset_global_plan_schema_invalid` | `GlobalPlanningDraft.parse` | 全局规划结构不合法 |
+| asset-planning | `asset_plan_schema_invalid` | 最终 `AssetPlan.parse` | 合并产物结构不合法 |
+| asset-planning | `asset_chunk_plan_schema_invalid` | chunk repair 失败后 ZodError 包装 | chunk 结构错且 repair 仍失败 |
+| asset-planning | `asset_chunk_task_segment_out_of_scope_violated` | `validateChunkDraft` | 任务引用的 segment 越界 |
+| asset-planning | `asset_chunk_support_image_reason_missing_violated` | `validateChunkDraft` | support 图缺 reason |
+| asset-planning | `asset_chunk_anchor_image_budget_exceeded_violated` | `validateChunkDraft` | anchor 图超预算 |
+| asset-planning | `asset_chunk_dependency_local_id_missing_violated` | `validateChunkDraft` | 依赖引用不存在的 local id |
+| asset-planning | `asset_chunk_forbidden_task_type_violated` | `rejectForbiddenChunkTasks` | LLM 偷偷输出 tts/subtitle |
+| topic | `topic_candidate_card_schema_invalid` | fallback 路径 `TopicCandidateCard.parse` | normalize 后仍不合法（极端情况） |
+
+run service 写入 `executionStateJson.error` 的值：
+- 上述 `LlmOutputError.code`（当 catch 到 `instanceof LlmOutputError`）
+- `internal_server_error`（其他异常，含 `ExternalServiceError`，保持既有折叠）
+
+### 8.2 与计划的偏差
+
+| # | 偏差 | 处理 |
+|---|---|---|
+| D1 | `parseLlmOutput<T>(schema: ZodType<T>)` 对带 `.default()` 的 schema（AssetPlan）不兼容 | 签名改为 `ZodType<T, any, any>`，回跑 Task 1-3 零回归 |
+| D2 | asset-planning `validateChunkDraft`/`rejectForbiddenChunkTasks` 业务错误改 LlmOutputError 后，`CHUNK_REPAIRABLE_BUSINESS_ERRORS` 的 `error.message` 匹配失效 | 集合改为按 `LlmOutputError.code` 匹配，`isRepairableBusinessError` 改为 `instanceof LlmOutputError` |
+| D3 | 计划 §2.4 只规定改 `executionState.error`，script-run 额外动了 `validationResult.errors` | 回退为 `["internal_server_error"]`，schema code 收敛在 `executionState.error`，两 service 对称 |
+| D4 | topic `custom-refine-reject` 测试在并行模式偶发失败 | 既有并行隔离问题，非本次引入；串行模式稳定通过，作为独立后续任务排查 |
+
+### 8.3 提交记录
+
+| 阶段 | commit | 说明 |
+|---|---|---|
+| P0 Task 1 | `8b7a27f` | `feat(llm): 引入 LlmOutputError 错误类型与 parseLlmOutput 辅助函数` |
+| P0 Task 2 | `c6ad20d` | `feat(storyboard): StoryboardPlan.parse 包装为 LlmOutputError` |
+| P0 Task 3 | `d137c62` | `feat(script): ScriptDraftPackage.parse 包装为 LlmOutputError` |
+| P0 Task 4 | `4845ee4` | `feat(storyboard,script): run service 区分 LlmOutputError 与 internal_server_error` |
+| 预存修复 | `b9d0e0d` | `test(operation-tier): 同步 registry 期望清单至 16 个 operation` |
+| 预存修复 | `67fda13` | `test(prompt-runtime): 候选数量断言跟进 target_candidate_count 动态契约` |
+| P1 Task 5a | `2f0eaaf` | `feat(asset-planning): GlobalPlanningDraft 与 AssetPlan 的 parse 包装为 LlmOutputError` |
+| P1 Task 5c | `a840dac` | `feat(asset-planning): chunk 业务校验错误改为 LlmOutputError 并同步 repair 触发逻辑` |
+| P1 Task 5b | `fcdbaee` | `feat(asset-planning): chunk repair 失败时将 ZodError 包装为 LlmOutputError` |
+| P1 Task 5d | `2467fe6` | `feat(asset-planning): run service 区分 LlmOutputError 与 internal_server_error` |
+| P2 Task 6a | `a48d198` | `feat(topic): fallback 路径 TopicCandidateCard.parse 包装为 LlmOutputError` |
+| P2 Task 6b | `49f175e` | `feat(topic): LlmOutputError 降级返回 diagnostics 而非直接 throw` |
+
+### 8.4 最终闸门
+
+- 完整回归：`tests/backend/storyboard script asset-planning topic runtime` 共 **61 文件 635 测试全过**（`--no-file-parallelism`，消除 topic 既有并行隔离问题）
+- `typecheck:backend`：通过
+- 新增测试：约 20 个（覆盖 schema 包装、错误分类、repair 失败、降级返回）
+
+### 8.5 已知遗留
+
+- topic 测试套件并行隔离问题（D4）：`custom-refine-reject` 在文件并行模式偶发失败，串行稳定。建议独立任务排查 test storage isolation。
+- `cause` 仅入 interactionLogWriter 不入 DB（B2）：设计取舍，DB `error` 存 code 可索引，`cause` 详情存 log 可追溯。
