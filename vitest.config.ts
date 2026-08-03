@@ -1,7 +1,5 @@
 import vue from "@vitejs/plugin-vue";
 import { defineConfig } from "vitest/config";
-import { tmpdir } from "node:os";
-import { resolve } from "node:path";
 
 export default defineConfig({
   plugins: [vue()],
@@ -9,7 +7,9 @@ export default defineConfig({
     env: {
       VITEST: "1",
       NODE_ENV: "test",
-      STORAGE_ROOT_DIR: resolve(tmpdir(), "story-video-forge2-vitest-storage", String(process.pid)),
     },
+    // STORAGE_ROOT_DIR 由 setup file 在每个 worker 内按 worker pid 设置，
+    // 避免并行 worker 共享同一 storage 目录引发文件竞态。
+    setupFiles: ["./tests/setup/worker-storage-root.ts"],
   },
 });
