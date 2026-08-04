@@ -752,6 +752,82 @@ describe("shared schema contracts", () => {
     expect(validation.stage).toBe("asset_planning_local_validation");
   });
 
+  it("accepts optional/nullish role on art_bible locations and props", () => {
+    // 回归用例：LLM 在全局规划时会自发给 location/prop 加 role 字段
+    // （描述场景/道具的戏剧作用），并可能填 null。schema 需接受 role（含 null），
+    // 否则触发 asset_global_plan_schema_invalid。
+    const plan = AssetPlan.parse({
+      plan_version: "asset_plan_v1",
+      source_storyboard_record_id: "sr1",
+      source_script_record_id: "sc1",
+      source_topic_package_id: "tp1",
+      art_bible: {
+        era_style: "战国",
+        visual_tone: "冷色",
+        characters: [],
+        locations: [
+          {
+            location_id: "loc1",
+            label: "楚国大殿",
+            role: "权力压迫的核心场景",
+            visual_description: "高台木梁青铜灯",
+            consistency_notes: [],
+          },
+          {
+            location_id: "loc2",
+            label: "荒野",
+            role: null,
+            visual_description: "荒凉",
+            consistency_notes: [],
+          },
+        ],
+        props: [
+          {
+            prop_id: "prop1",
+            label: "宝剑",
+            role: null,
+            visual_description: "青铜剑",
+            consistency_notes: [],
+          },
+        ],
+        global_prompt_prefix: "x",
+        global_negative_prompts: [],
+        consistency_notes: [],
+      },
+      tts_plan: {
+        voice_profile_id: "v1",
+        estimated_total_duration_sec: 85,
+        chunking_strategy: "sentence_boundary",
+        chunks: [],
+      },
+      tasks: [
+        {
+          task_id: "tts_001",
+          order: 0,
+          task_type: "tts_audio",
+          source_segment_id: null,
+          source_excerpt: "口播",
+          production_intent: "TTS",
+          recommended_mode: "auto",
+          provider_hint: null,
+          prompt_draft: null,
+          parameters: {},
+          manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] },
+          risk_notes: [],
+          cost_tier: "low",
+          initial_status: "planned",
+        },
+      ],
+      dependencies: [],
+      cost_summary: { total_tasks: 1, by_type: {}, by_cost_tier: {}, estimated_provider_calls: 1, notes: [] },
+      global_production_notes: [],
+    });
+
+    expect(plan.art_bible.locations[0]!.role).toBe("权力压迫的核心场景");
+    expect(plan.art_bible.locations[1]!.role).toBeNull();
+    expect(plan.art_bible.props[0]!.role).toBeNull();
+  });
+
   it("parses asset plan with new global strategy fields", () => {
     const plan = AssetPlan.parse({
       plan_version: "asset_plan_v1",

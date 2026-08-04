@@ -43,6 +43,7 @@ export const ArtBibleLocation = z
   .object({
     location_id: z.string().min(1),
     label: z.string().min(1),
+    role: z.string().min(1).nullish(),
     visual_description: z.string().min(1),
     consistency_notes: z.array(z.string().min(1)),
   })
@@ -52,6 +53,7 @@ export const ArtBibleProp = z
   .object({
     prop_id: z.string().min(1),
     label: z.string().min(1),
+    role: z.string().min(1).nullish(),
     visual_description: z.string().min(1),
     consistency_notes: z.array(z.string().min(1)),
   })
