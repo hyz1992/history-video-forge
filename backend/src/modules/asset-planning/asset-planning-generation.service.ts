@@ -80,7 +80,7 @@ const GlobalPlanningDraft = z
     global_audio_strategy: z.record(z.string(), z.unknown()),
     manual_review_notes: z.array(z.string().min(1)),
   })
-  .strict();
+  .passthrough();
 
 const ChunkTaskDraft = z
   .object({
@@ -167,7 +167,7 @@ const SegmentChunkPlanningDraft = z
     dependencies: z.array(ChunkDependencyDraft),
     budget_notes: z.array(z.string().min(1)),
   })
-  .strict();
+  .passthrough();
 
 type GlobalPlanningDraft = z.infer<typeof GlobalPlanningDraft>;
 type SegmentChunkPlanningDraft = z.infer<typeof SegmentChunkPlanningDraft>;

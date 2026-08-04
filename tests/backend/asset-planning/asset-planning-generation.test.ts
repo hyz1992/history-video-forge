@@ -1274,6 +1274,26 @@ describe("generateAssetPlan", () => {
     }
   });
 
+  it("tolerates LLM adding unexpected top-level keys to chunk draft", async () => {
+    // 回归用例：LLM 会把全局规划阶段的 manual_review_notes 带到 chunk 输出里，
+    // SegmentChunkPlanningDraft 用 passthrough 容忍这类未知顶层字段，
+    // 不抛 asset_chunk_plan_schema_invalid。
+    const { gateway } = makeGateway((options) => {
+      const input = options.input as { planning_mode: string; chunk?: { segment_ids: string[] } };
+      if (input.planning_mode === "global") {
+        return validGlobalPlanningDraft;
+      }
+      const valid = validChunkPlanningDraftFor(input.chunk?.segment_ids ?? []);
+      return {
+        ...valid,
+        manual_review_notes: ["这个 chunk 需要关注画面连贯性"],
+      };
+    });
+
+    const plan = await generateAssetPlan(makeInput(gateway));
+    expect(plan.tasks.length).toBeGreaterThan(0);
+  });
+
   // 说明：AssetPlan.parse 与 GlobalPlanningDraft.parse 共用同一个 parseLlmOutput
   // 包装（asset-planning-generation.service.ts 末尾）。mergeAssetPlan 是确定性
   // 合并函数，当 chunk drafts 合法时其产物结构必然满足 AssetPlan schema，无法
