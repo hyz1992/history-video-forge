@@ -437,7 +437,15 @@ const TASK_TYPE_LABELS: Record<string, string> = {
 /** Blocked tasks preventing compose — anything not completed/accepted. */
 const blockedItems = computed(() => {
   const execByTaskId = executionsByTaskId.value;
-  const items: Array<{ taskId: string; type: string; segmentId: string; reason: string; taskIndex: number }> = [];
+  const items: Array<{
+    taskId: string;
+    type: string;
+    segmentId: string;
+    reason: string;
+    taskIndex: number;
+    status: string;
+    failureNote: string;
+  }> = [];
 
   // Count same-segment same-type tasks for suffix numbering
   const segmentTypeCounts = new Map<string, number>();
@@ -473,7 +481,20 @@ const blockedItems = computed(() => {
             ? "生成中"
             : "待处理";
 
-    items.push({ taskId: task.task_id, type: typeLabel, segmentId: segRef, reason, taskIndex: idxForType - 1 });
+    const notes = (exec as { notes?: string[] } | undefined)?.notes;
+    const failureNote = exec?.status === "failed" && notes && notes.length > 0
+      ? notes.join("; ")
+      : "";
+
+    items.push({
+      taskId: task.task_id,
+      type: typeLabel,
+      segmentId: segRef,
+      reason,
+      taskIndex: idxForType - 1,
+      status: exec?.status ?? "",
+      failureNote,
+    });
   }
 
   return items;
@@ -1203,6 +1224,7 @@ function handleConfirm() {
                 v-for="item in visibleBlockedItems"
                 :key="item.taskId"
                 class="asset-blocked-chip"
+                :title="item.failureNote || undefined"
                 @click="scrollToTask(item.taskId)"
               >
                 <span class="asset-blocked-chip-check" @click.stop="toggleBlockedItem(item.taskId)">
@@ -1213,6 +1235,17 @@ function handleConfirm() {
                 <el-tag :type="item.reason === '生成失败' ? 'danger' : 'warning'" size="small">
                   {{ item.reason }}
                 </el-tag>
+                <span
+                  v-if="item.failureNote"
+                  class="asset-blocked-chip-note"
+                >{{ item.failureNote }}</span>
+                <span
+                  v-if="item.status === 'failed'"
+                  class="asset-blocked-chip-retry"
+                  :class="{ 'is-loading': assetsStore.state.generatingTaskIds.has(item.taskId) }"
+                  title="重新生成此任务"
+                  @click.stop="handleGenerateTask(item.taskId)"
+                >↻</span>
               </button>
             </div>
             <button
@@ -1992,6 +2025,45 @@ details[open] > .asset-global-toggle::before {
 
 .asset-blocked-chip-type {
   color: var(--text-secondary);
+}
+
+.asset-blocked-chip-note {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-blocked-chip-retry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--accent-primary);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.asset-blocked-chip-retry:hover {
+  background: color-mix(in srgb, var(--accent-primary) 12%, transparent);
+}
+
+.asset-blocked-chip-retry.is-loading {
+  opacity: 0.5;
+  pointer-events: none;
+  animation: asset-chip-retry-spin 1s linear infinite;
+}
+
+@keyframes asset-chip-retry-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .asset-blocked-expand {
