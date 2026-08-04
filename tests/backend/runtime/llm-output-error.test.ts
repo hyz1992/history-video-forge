@@ -50,6 +50,9 @@ describe("parseLlmOutput", () => {
       parse() {
         throw new Error("boom");
       },
+      safeParse() {
+        throw new Error("boom");
+      },
     } as unknown as z.ZodType<unknown>;
     expect(() =>
       parseLlmOutput(throwingSchema, {}, "any_code"),
@@ -79,5 +82,58 @@ describe("parseLlmOutput", () => {
       expect(error instanceof Error).toBe(true);
       expect(error instanceof z.ZodError).toBe(false);
     }
+  });
+
+  it("strips unknown top-level keys from LLM output", () => {
+    const parsed = parseLlmOutput(
+      schema,
+      { name: "晏子", unexpected_field: "should be removed" },
+      "ok_code",
+    );
+    expect(parsed).toEqual({ name: "晏子" });
+  });
+
+  it("strips unknown keys at nested levels and inside array elements", () => {
+    const nested = z
+      .object({
+        tasks: z.array(
+          z.object({
+            id: z.string(),
+            policy: z.object({ allowed: z.boolean() }).strict(),
+          }).strict(),
+        ),
+        budget: z.array(z.string()),
+      })
+      .strict();
+    const raw = {
+      tasks: [
+        { id: "t1", policy: { allowed: false }, extra_task_field: true },
+        { id: "t2", policy: { allowed: true, extra_policy_field: 1 } },
+      ],
+      budget: ["a"],
+      top_level_unknown: 42,
+    };
+    const parsed = parseLlmOutput(nested, raw, "ok_code");
+    expect(parsed).toEqual({
+      tasks: [
+        { id: "t1", policy: { allowed: false } },
+        { id: "t2", policy: { allowed: true } },
+      ],
+      budget: ["a"],
+    });
+  });
+
+  it("still throws when a required field is missing after stripping unknowns", () => {
+    try {
+      parseLlmOutput(schema, { name: "ok", extra: 1 }, "should_not_throw");
+      // 上面 name 存在，extra 被剥离，应该成功；这里验证剥离后缺失必填仍抛错
+    } catch {
+      // 不应进到这里
+      throw new Error("should not throw when only unknowns present");
+    }
+    // 真正缺失必填字段
+    expect(() =>
+      parseLlmOutput(schema, { extra: 1 }, "missing_required"),
+    ).toThrow(LlmOutputError);
   });
 });
