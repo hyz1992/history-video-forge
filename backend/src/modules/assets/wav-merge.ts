@@ -179,6 +179,17 @@ function parseWavChunks(buffer: Buffer): ParsedWav {
     const chunkSize = buffer.readUInt32LE(offset + 4);
     const dataOffset = offset + 8;
 
+    if (chunkId === "data") {
+      // DashScope 流式合成返回的 WAV，data chunk size 字段写的是哨兵值
+      //（接近 0x7FFFFFFF，表示"流式长度未知"），远大于实际 PCM 字节数。
+      // 与 audio-duration-probe.readWavDurationSec 保持一致的容错策略：
+      // 用实际可用字节而非声明 size 截断 PCM 数据，并在 data chunk 后终止
+      // 遍历（哨兵值 size 无法推算下一个 chunk 的偏移）。
+      const actualDataSize = Math.min(chunkSize, buffer.length - dataOffset);
+      pcmData = buffer.subarray(dataOffset, dataOffset + actualDataSize);
+      break;
+    }
+
     if (dataOffset + chunkSize > buffer.length) {
       throw new Error(
         `WAV chunk "${chunkId}" extends past buffer end`,
@@ -197,8 +208,6 @@ function parseWavChunks(buffer: Buffer): ParsedWav {
         sampleRate: buffer.readUInt32LE(dataOffset + 4),
         bitsPerSample: buffer.readUInt16LE(dataOffset + 14),
       };
-    } else if (chunkId === "data") {
-      pcmData = buffer.subarray(dataOffset, dataOffset + chunkSize);
     }
 
     // RIFF chunks are 2-byte aligned; skip padding byte if chunkSize is odd

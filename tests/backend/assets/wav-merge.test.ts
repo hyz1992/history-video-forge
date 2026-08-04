@@ -343,4 +343,88 @@ describe("mergeWavBuffers", () => {
 
     expect(duration).toBeCloseTo(2.0, 2);
   });
+
+  // ─── DashScope streaming sentinel size ────────────────────────────────────
+
+  function makeWavBufferWithSentinelDataSize(input: {
+    durationSec: number;
+    sampleRate: number;
+    sampleValue?: number;
+  }): Buffer {
+    // 模拟 DashScope 流式合成返回的 WAV：data chunk size 字段写的是
+    // 哨兵值 0x7FFFFFEB（≈ Int32.MAX，表示"流式长度未知"），
+    // 而非实际 PCM 字节数。
+    const bytesPerSample = 2;
+    const channels = 1;
+    const byteRate = input.sampleRate * channels * bytesPerSample;
+    const blockAlign = channels * bytesPerSample;
+    const dataSize = Math.round(input.durationSec * byteRate);
+    const sampleValue = input.sampleValue ?? 10000;
+    const clamped = Math.max(-32768, Math.min(32767, sampleValue));
+    const buffer = Buffer.alloc(44 + dataSize);
+
+    buffer.write("RIFF", 0, "ascii");
+    buffer.writeUInt32LE(36 + dataSize, 4);
+    buffer.write("WAVE", 8, "ascii");
+    buffer.write("fmt ", 12, "ascii");
+    buffer.writeUInt32LE(16, 16);
+    buffer.writeUInt16LE(1, 20);
+    buffer.writeUInt16LE(channels, 22);
+    buffer.writeUInt32LE(input.sampleRate, 24);
+    buffer.writeUInt32LE(byteRate, 28);
+    buffer.writeUInt16LE(blockAlign, 32);
+    buffer.writeUInt16LE(bytesPerSample * 8, 34);
+    buffer.write("data", 36, "ascii");
+    // 哨兵值：实际 dataSize 远小于此
+    buffer.writeUInt32LE(0x7fffffeb, 40);
+
+    for (let i = 0; i < dataSize; i += 2) {
+      buffer.writeInt16LE(clamped, 44 + i);
+    }
+    return buffer;
+  }
+
+  it("DashScope 流式 WAV（data size 哨兵值）不再抛 'extends past buffer end'", () => {
+    // 回归用例：修复前 mergeWavBuffers 对 data chunk size 超界的 WAV 直接抛
+    // "WAV chunk \"data\" extends past buffer end"，导致多 chunk TTS 合并失败。
+    const wav1 = makeWavBufferWithSentinelDataSize({
+      durationSec: 1.0,
+      sampleRate: 24000,
+      sampleValue: 10000,
+    });
+    const wav2 = makeWavBufferWithSentinelDataSize({
+      durationSec: 1.0,
+      sampleRate: 24000,
+      sampleValue: 20000,
+    });
+
+    expect(() => mergeWavBuffers([wav1, wav2])).not.toThrow();
+  });
+
+  it("DashScope 流式 WAV 合并后时长与实际 PCM 字节数一致（非哨兵值）", () => {
+    const wav1 = makeWavBufferWithSentinelDataSize({
+      durationSec: 1.0,
+      sampleRate: 24000,
+      sampleValue: 10000,
+    });
+    const wav2 = makeWavBufferWithSentinelDataSize({
+      durationSec: 1.0,
+      sampleRate: 24000,
+      sampleValue: 20000,
+    });
+
+    const merged = mergeWavBuffers([wav1, wav2]);
+    const duration = readAudioDurationSec({
+      data: merged,
+      format: "wav",
+      sampleRate: 24000,
+    });
+
+    // 合并后的 WAV header 用实际 PCM 字节数重建，时长应准确为 2.0 秒，
+    // 而非哨兵值暗示的 ~24 小时。
+    expect(duration).toBeCloseTo(2.0, 1);
+    expect(countRiffHeaders(merged)).toBe(1);
+    // 合并后 data chunk size 字段应为真实字节数，不再是哨兵值
+    expect(merged.readUInt32LE(40)).toBeLessThan(0x7fffff00);
+  });
 });
