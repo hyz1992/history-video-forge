@@ -1237,6 +1237,43 @@ describe("generateAssetPlan", () => {
     }
   });
 
+  it("tolerates LLM omitting manual_upload_policy subfields in chunk draft", async () => {
+    // 回归用例：LLM 在多 chunk 规划时系统性漏写 manual_upload_policy 的子字段
+    // （required / accepted_file_types / acceptance_notes），曾导致
+    // asset_chunk_plan_schema_invalid 失败。ManualUploadPolicyDraft 加 default 后
+    // 应自动补默认值，不再抛错。
+    const { gateway } = makeGateway((options) => {
+      const input = options.input as { planning_mode: string; chunk?: { segment_ids: string[] } };
+      if (input.planning_mode === "global") {
+        return validGlobalPlanningDraft;
+      }
+      const valid = validChunkPlanningDraftFor(input.chunk?.segment_ids ?? []);
+      return {
+        ...valid,
+        tasks: valid.tasks.map((task) => ({
+          ...task,
+          manual_upload_policy: { allowed: true },
+        })),
+      };
+    });
+
+    const plan = await generateAssetPlan(makeInput(gateway));
+
+    // 关键：chunk draft 的 manual_upload_policy 只含 {allowed:true}，
+    // 缺 required/accepted_file_types/acceptance_notes，但 schema 的 default
+    // 应自动补全，不抛 asset_chunk_plan_schema_invalid。
+    expect(plan.tasks.length).toBeGreaterThan(0);
+    for (const task of plan.tasks) {
+      expect(task.manual_upload_policy).toEqual(
+        expect.objectContaining({
+          required: false,
+          accepted_file_types: [],
+          acceptance_notes: [],
+        }),
+      );
+    }
+  });
+
   // 说明：AssetPlan.parse 与 GlobalPlanningDraft.parse 共用同一个 parseLlmOutput
   // 包装（asset-planning-generation.service.ts 末尾）。mergeAssetPlan 是确定性
   // 合并函数，当 chunk drafts 合法时其产物结构必然满足 AssetPlan schema，无法
