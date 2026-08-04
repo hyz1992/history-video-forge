@@ -90,12 +90,13 @@ export const TtsPlanningSummary = z
 
 export const ManualUploadPolicy = z
   .object({
-    allowed: z.boolean(),
-    required: z.boolean(),
-    accepted_file_types: z.array(z.string().min(1)),
-    acceptance_notes: z.array(z.string().min(1)),
+    allowed: z.boolean().default(false),
+    required: z.boolean().default(false),
+    accepted_file_types: z.array(z.string().min(1)).default([]),
+    acceptance_notes: z.array(z.string().min(1)).default([]),
   })
-  .strict();
+  .strict()
+  .default({ allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] });
 
 export const AssetTask = z
   .object({

@@ -855,6 +855,95 @@ describe("shared schema contracts", () => {
     expect(plan.global_audio_strategy).toEqual({});
   });
 
+  it("fills defaults for manual_upload_policy subfields when LLM omits them", () => {
+    // 回归用例：LLM 在多 chunk 规划时系统性漏写 manual_upload_policy 的子字段
+    // （required / accepted_file_types / acceptance_notes），导致
+    // asset_chunk_plan_schema_invalid 失败。修复后 schema 自动补默认值。
+    const baseTask = {
+      task_id: "tts_001",
+      order: 0,
+      task_type: "tts_audio" as const,
+      source_segment_id: null,
+      source_excerpt: "全片口播",
+      production_intent: "TTS",
+      recommended_mode: "auto" as const,
+      provider_hint: null,
+      prompt_draft: null,
+      parameters: {},
+      risk_notes: [],
+      cost_tier: "low" as const,
+      initial_status: "planned" as const,
+    };
+
+    // 1. manual_upload_policy 完全缺失 → 整个对象补默认
+    const plan1 = AssetPlan.parse({
+      plan_version: "asset_plan_v1",
+      source_storyboard_record_id: "sr1",
+      source_script_record_id: "sc1",
+      source_topic_package_id: "tp1",
+      art_bible: {
+        era_style: "战国",
+        visual_tone: "冷色",
+        characters: [],
+        locations: [],
+        props: [],
+        global_prompt_prefix: "x",
+        global_negative_prompts: [],
+        consistency_notes: [],
+      },
+      tts_plan: {
+        voice_profile_id: "v1",
+        estimated_total_duration_sec: 85,
+        chunking_strategy: "sentence_boundary",
+        chunks: [],
+      },
+      tasks: [{ ...baseTask }],
+      dependencies: [],
+      cost_summary: { total_tasks: 1, by_type: {}, by_cost_tier: {}, estimated_provider_calls: 1, notes: [] },
+      global_production_notes: [],
+    });
+    expect(plan1.tasks[0]!.manual_upload_policy).toEqual({
+      allowed: false,
+      required: false,
+      accepted_file_types: [],
+      acceptance_notes: [],
+    });
+
+    // 2. manual_upload_policy 只有 allowed，缺其余子字段 → 子字段各自补默认
+    const plan2 = AssetPlan.parse({
+      plan_version: "asset_plan_v1",
+      source_storyboard_record_id: "sr1",
+      source_script_record_id: "sc1",
+      source_topic_package_id: "tp1",
+      art_bible: {
+        era_style: "战国",
+        visual_tone: "冷色",
+        characters: [],
+        locations: [],
+        props: [],
+        global_prompt_prefix: "x",
+        global_negative_prompts: [],
+        consistency_notes: [],
+      },
+      tts_plan: {
+        voice_profile_id: "v1",
+        estimated_total_duration_sec: 85,
+        chunking_strategy: "sentence_boundary",
+        chunks: [],
+      },
+      tasks: [{ ...baseTask, manual_upload_policy: { allowed: true } }],
+      dependencies: [],
+      cost_summary: { total_tasks: 1, by_type: {}, by_cost_tier: {}, estimated_provider_calls: 1, notes: [] },
+      global_production_notes: [],
+    });
+    expect(plan2.tasks[0]!.manual_upload_policy).toEqual({
+      allowed: true,
+      required: false,
+      accepted_file_types: [],
+      acceptance_notes: [],
+    });
+  });
+
   it("rejects invalid asset planning enums and empty required prompt drafts", () => {
     expect(() =>
       AssetPlan.parse({
