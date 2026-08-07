@@ -61,7 +61,13 @@ function handleStepClick(index: number) {
   workspaceStore.setCurrentStep(index);
   const step = PIPELINE_STEPS[index];
   if (step) {
-    router.push(`/projects/${route.params.projectId}/${step.key}`);
+    // Preserve query params (e.g. owner_id / admin_view for admin deputizing)
+    // so the admin banner and admin resource access survive tab switches.
+    const query = { ...route.query };
+    router.push({
+      path: `/projects/${route.params.projectId}/${step.key}`,
+      query,
+    });
   }
 }
 

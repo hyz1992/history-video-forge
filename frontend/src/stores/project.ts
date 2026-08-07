@@ -157,7 +157,10 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
 
   function syncProject(snapshot: ProjectSnapshot) {
     state.projectId = snapshot.project_id;
-    state.projectOwnerId = snapshot.owner_id ?? null;
+    // Preserve existing owner when the incoming snapshot omits it (e.g.
+    // status-only syncs from downstream stores). This keeps the admin
+    // deputizing banner stable across panel reloads / tab switches.
+    state.projectOwnerId = snapshot.owner_id ?? state.projectOwnerId ?? null;
     state.currentStatus = snapshot.current_status;
     upsertProject(snapshot);
   }
