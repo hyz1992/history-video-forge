@@ -82,6 +82,36 @@ describe("check-prompt-drift core logic（S2-3 Task 8）", () => {
     expect(typeof mod.checkPromptDrift).toBe("function");
     expect(typeof mod.parsePromptFrontmatter).toBe("function");
   });
+
+  it("filters only explicitly registered historical prompt drift entries", async () => {
+    const { filterKnownPromptDriftEntries } = await import(
+      "../../harness/scripts/check-prompt-drift.js"
+    );
+
+    const knownEntry = {
+      file: "candidate-builder.prompt.md",
+      version: "v1.0.0",
+      commitA: "068c556",
+      commitB: "3273024",
+    };
+    const unknownEntry = {
+      ...knownEntry,
+      commitB: "abcdef0",
+    };
+
+    const result = filterKnownPromptDriftEntries(
+      [knownEntry, unknownEntry],
+      [
+        {
+          ...knownEntry,
+          reason: "historical drift before prompt changelog gate",
+        },
+      ],
+    );
+
+    expect(result.knownDriftEntries).toEqual([knownEntry]);
+    expect(result.activeDriftEntries).toEqual([unknownEntry]);
+  });
 });
 
 /**

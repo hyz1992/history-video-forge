@@ -25,6 +25,28 @@ import { execSync } from "node:child_process";
 const PROMPTS_GLOB = resolve(process.cwd(), "prompts/**/*.prompt.md");
 const DEFAULT_MAX_HISTORY = 5;
 
+export interface DriftEntry {
+  file: string;
+  version: string;
+  commitA: string;
+  commitB: string;
+}
+
+export interface KnownPromptDriftEntry extends DriftEntry {
+  reason: string;
+}
+
+export const KNOWN_PROMPT_DRIFTS: KnownPromptDriftEntry[] = [
+  {
+    file: "candidate-builder.prompt.md",
+    version: "v1.0.0",
+    commitA: "068c556",
+    commitB: "3273024",
+    reason:
+      "Historical body drift before the prompt changelog gate; current v1.1.0 records the target_candidate_count and angle_hint contract.",
+  },
+];
+
 // ---- CLI ----
 
 let maxHistory = DEFAULT_MAX_HISTORY;
@@ -40,13 +62,6 @@ for (let i = 2; i < process.argv.length; i++) {
 }
 
 // ---- 核心逻辑 ----
-
-interface DriftEntry {
-  file: string;
-  version: string;
-  commitA: string;
-  commitB: string;
-}
 
 interface CommitHistoryEntry {
   commitHash: string;
@@ -158,12 +173,43 @@ export function parsePromptFrontmatter(source: string): {
   return { version, bodySha256 };
 }
 
+export function filterKnownPromptDriftEntries(
+  driftEntries: DriftEntry[],
+  knownDrifts: KnownPromptDriftEntry[] = KNOWN_PROMPT_DRIFTS,
+): {
+  activeDriftEntries: DriftEntry[];
+  knownDriftEntries: DriftEntry[];
+} {
+  const activeDriftEntries: DriftEntry[] = [];
+  const knownDriftEntries: DriftEntry[] = [];
+
+  for (const entry of driftEntries) {
+    const isKnown = knownDrifts.some(
+      (known) =>
+        known.file === entry.file &&
+        known.version === entry.version &&
+        known.commitA === entry.commitA &&
+        known.commitB === entry.commitB,
+    );
+
+    if (isKnown) {
+      knownDriftEntries.push(entry);
+    } else {
+      activeDriftEntries.push(entry);
+    }
+  }
+
+  return { activeDriftEntries, knownDriftEntries };
+}
+
 export function checkPromptDrift(
   promptFiles: string[],
   opts: { maxHistory: number; cwd?: string },
 ): {
   driftCount: number;
   driftEntries: DriftEntry[];
+  knownDriftCount: number;
+  knownDriftEntries: DriftEntry[];
   promptCount: number;
 } {
   const repoCwd = opts.cwd ?? process.cwd();
@@ -223,9 +269,14 @@ export function checkPromptDrift(
     totalPrompts++;
   }
 
+  const { activeDriftEntries, knownDriftEntries } =
+    filterKnownPromptDriftEntries(driftEntries);
+
   return {
-    driftCount: driftEntries.length,
-    driftEntries,
+    driftCount: activeDriftEntries.length,
+    driftEntries: activeDriftEntries,
+    knownDriftCount: knownDriftEntries.length,
+    knownDriftEntries,
     promptCount: totalPrompts,
   };
 }
@@ -251,6 +302,12 @@ if (isMainModule) {
       `\n${result.promptCount} prompt checked，${result.driftCount} drift detected`,
     );
     process.exit(1);
+  }
+
+  for (const d of result.knownDriftEntries) {
+    console.warn(
+      `[drift:known] ${d.file}: ${d.version} historical drift skipped (${d.commitA} -> ${d.commitB})`,
+    );
   }
 
   console.log(
