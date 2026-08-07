@@ -5,13 +5,42 @@
       <el-button type="primary" @click="openCreateDialog">创建用户</el-button>
     </div>
 
+    <el-form inline class="filters">
+      <el-form-item label="搜索">
+        <el-input
+          v-model="filters.search"
+          placeholder="用户名 / 显示名"
+          clearable
+          style="width: 200px"
+          @keyup.enter="onSearch"
+          @clear="onSearch"
+        />
+      </el-form-item>
+      <el-form-item label="角色">
+        <el-select v-model="filters.role" placeholder="全部" clearable style="width: 130px" @change="onSearch">
+          <el-option label="管理员" value="ADMIN" />
+          <el-option label="普通用户" value="USER" />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="状态">
+        <el-select v-model="filters.status" placeholder="全部" clearable style="width: 130px" @change="onSearch">
+          <el-option label="正常" value="ACTIVE" />
+          <el-option label="已停用" value="DISABLED" />
+        </el-select>
+      </el-form-item>
+      <el-form-item>
+        <el-button type="primary" @click="onSearch">查询</el-button>
+        <el-button @click="resetFilters">重置</el-button>
+      </el-form-item>
+    </el-form>
+
     <el-table :data="users" v-loading="loading" stripe class="users-table">
       <el-table-column prop="username" label="用户名" min-width="120" />
       <el-table-column prop="displayName" label="显示名" min-width="120" />
       <el-table-column label="角色" width="80">
         <template #default="{ row }">
           <el-tag :type="row.role === 'ADMIN' ? 'danger' : 'info'" size="small">
-            {{ row.role }}
+            {{ row.role === 'ADMIN' ? '管理员' : '用户' }}
           </el-tag>
         </template>
       </el-table-column>
@@ -32,9 +61,12 @@
           {{ row.lastLoginAt ? formatTime(row.lastLoginAt) : "从未登录" }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="340" fixed="right">
+      <el-table-column label="操作" width="400" fixed="right">
         <template #default="{ row }">
           <div class="action-buttons">
+            <el-button size="small" type="primary" @click="viewUserProjects(row)">
+              查看项目
+            </el-button>
             <el-button
               v-if="row.status === 'ACTIVE'"
               size="small"
@@ -73,6 +105,17 @@
       </template>
     </el-table>
 
+    <div class="pagination-bar">
+      <el-pagination
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next"
+        @change="loadUsers"
+      />
+    </div>
+
     <el-dialog v-model="showCreateDialog" title="创建用户" width="420px">
       <el-form :model="createForm" label-position="top">
         <el-form-item label="用户名">
@@ -110,6 +153,7 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from "vue";
+import { useRouter } from "vue-router";
 import { ElMessage, ElMessageBox } from "element-plus";
 
 import { apiFetch, ApiError } from "../../utils/api";
@@ -127,17 +171,57 @@ interface AdminUser {
   isMigrationOwner: boolean;
 }
 
+const router = useRouter();
 const loading = ref(false);
 const users = ref<AdminUser[]>([]);
+const total = ref(0);
+const currentPage = ref(1);
+const pageSize = ref(20);
+
+const filters = reactive({
+  search: "",
+  role: "",
+  status: "",
+});
+
+function buildQueryString(): string {
+  const params = new URLSearchParams();
+  params.set("limit", String(pageSize.value));
+  params.set("offset", String((currentPage.value - 1) * pageSize.value));
+  if (filters.search.trim()) params.set("search", filters.search.trim());
+  if (filters.role) params.set("role", filters.role);
+  if (filters.status) params.set("status", filters.status);
+  return params.toString();
+}
 
 async function loadUsers() {
   loading.value = true;
   try {
-    const data = await apiFetch<{ items: AdminUser[] }>("/api/admin/users");
+    const data = await apiFetch<{ items: AdminUser[]; total: number }>(
+      `/api/admin/users?${buildQueryString()}`,
+    );
     users.value = data.items;
+    total.value = data.total;
   } finally {
     loading.value = false;
   }
+}
+
+function onSearch() {
+  currentPage.value = 1;
+  loadUsers();
+}
+
+function resetFilters() {
+  filters.search = "";
+  filters.role = "";
+  filters.status = "";
+  currentPage.value = 1;
+  loadUsers();
+}
+
+function viewUserProjects(user: AdminUser) {
+  router.push(`/admin/projects?owner_id=${encodeURIComponent(user.id)}`);
 }
 
 onMounted(() => {
@@ -309,6 +393,9 @@ async function confirmRevokeSessions(user: AdminUser) {
   font-size: 20px;
   font-weight: 600;
 }
+.filters {
+  margin-bottom: 16px;
+}
 .users-table {
   width: 100%;
 }
@@ -328,5 +415,10 @@ async function confirmRevokeSessions(user: AdminUser) {
 .reset-info {
   margin: 0 0 12px;
   font-size: 14px;
+}
+.pagination-bar {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>
