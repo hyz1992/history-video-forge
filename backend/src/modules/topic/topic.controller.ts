@@ -5,6 +5,7 @@ import { createProject, getProjectById } from "../projects/project.repository";
 import { demoStageGuard } from "../../shared/demo-stage-guard";
 import { normalizeEventInput } from "./event-normalizer";
 import { requireUser } from "../../auth/authorization.js";
+import { LlmOutputError } from "../../runtime/llm/llm-output-error.js";
 import {
   isProviderContentFilterError,
   recommendTopicCandidates,
@@ -723,8 +724,8 @@ export async function createTopicFromCustomController(
     project.updatedAt = new Date();
     await context.app.db.firstAggregateWriter?.syncProject(project).catch(() => undefined);
 
-    // ZodError → 422（LLM 输出结构不符合 schema）
-    if (error instanceof Error && error.name === "ZodError") {
+    // LlmOutputError → 422（LLM 输出结构不符合 schema）
+    if (error instanceof LlmOutputError) {
       return {
         statusCode: 422,
         body: { error: "custom_refine_failed", message: "无法从输入中提炼出合格事件" },

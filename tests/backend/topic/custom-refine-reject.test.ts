@@ -7,12 +7,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
 import { describe, expect, it, vi } from "vitest";
-import { ZodError } from "zod";
 
 import { buildApp } from "../../../backend/src/app.js";
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { createAuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { LlmOutputError } from "../../../backend/src/runtime/llm/llm-output-error.js";
 import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
 
 // Mock refineCustomTopic — tests will override behavior via vi.mocked()
@@ -56,11 +56,11 @@ describe("custom refine rejection", () => {
 
     try {
       const { refineCustomTopic } = await import("../../../backend/src/modules/topic/topic-custom-refine.service.js");
-      // LLM 仍 mock 为抛 ZodError，但应用层注入检测会先拦截，不会到达 LLM
+      // LLM 仍 mock 为抛 LlmOutputError，但应用层注入检测会先拦截，不会到达 LLM
       vi.mocked(refineCustomTopic).mockRejectedValue(
-        new ZodError([
-          { code: "custom", path: ["canonicalName"], message: "输入不包含可识别的历史事件" },
-        ]),
+        new LlmOutputError("topic_custom_refine_schema_invalid", {
+          cause: [{ code: "custom", path: ["canonicalName"], message: "输入不包含可识别的历史事件" }],
+        }),
       );
 
       const r = await app.inject({
@@ -88,9 +88,9 @@ describe("custom refine rejection", () => {
     try {
       const { refineCustomTopic } = await import("../../../backend/src/modules/topic/topic-custom-refine.service.js");
       vi.mocked(refineCustomTopic).mockRejectedValue(
-        new ZodError([
-          { code: "custom", path: ["canonicalName"], message: "输入不包含可识别的历史事件" },
-        ]),
+        new LlmOutputError("topic_custom_refine_schema_invalid", {
+          cause: [{ code: "custom", path: ["canonicalName"], message: "输入不包含可识别的历史事件" }],
+        }),
       );
 
       const r = await app.inject({

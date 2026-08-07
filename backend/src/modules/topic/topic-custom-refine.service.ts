@@ -1,5 +1,6 @@
 import { CustomRefinedEvent } from "../../../../shared/src/topic/topic-custom-refine-output.schema.js";
 import { createLlmGateway } from "../../runtime/llm/llm-gateway.js";
+import { parseLlmOutput } from "../../runtime/llm/llm-output-error.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 import { createTierAwareProviderFromEnv } from "../../runtime/llm/tier-aware-provider-factory.js";
 import type { CustomRefinedEvent as CustomRefinedEventType } from "../../../../shared/src/topic/topic-custom-refine-output.schema.js";
@@ -33,6 +34,10 @@ export async function refineCustomTopic(
     input: { rawDigest: input.rawDigest },
   });
 
-  const parsed = CustomRefinedEvent.parse(raw);
+  const parsed = parseLlmOutput(
+    CustomRefinedEvent,
+    raw,
+    "topic_custom_refine_schema_invalid",
+  );
   return { refined: parsed };
 }
