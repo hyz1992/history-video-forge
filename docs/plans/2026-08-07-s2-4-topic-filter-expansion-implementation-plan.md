@@ -1,12 +1,12 @@
-# S2-4 推荐选题筛选条件扩充 Implementation Plan
+# S2-4 推荐选题筛选条件扩充实施计划
 
-> **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **给执行 agent：** 必须使用 superpowers:subagent-driven-development（如果有可用子 agent）或 superpowers:executing-plans 执行本计划。步骤使用 checkbox（`- [ ]`）语法跟踪。
 
-**Goal:** 为系统推荐入口新增结构化 `TopicRecommendationFilter`，让筛选条件进入请求、LLM 输入、filter fingerprint、持久化诊断和前端 UI。
+**目标：** 为系统推荐入口新增结构化 `TopicRecommendationFilter`，让筛选条件进入请求、LLM 输入、filter fingerprint、持久化诊断和前端 UI。
 
-**Architecture:** 第一版保留现有 seed 文本合同，在其旁边新增 `filters` 结构合同；后端规范化后生成 `topic_filter_fingerprint` 并透传到 builder、RecommendationRound、RecommendationExposure、RecommendationCandidateCache 和 diagnostics。系统推荐 tab 扩展 UI；事件库 tab 与自定义 tab 不改。
+**架构：** 第一版保留现有 seed 文本合同，在其旁边新增 `filters` 结构合同；后端规范化后生成 `topic_filter_fingerprint` 并透传到 builder、RecommendationRound、RecommendationExposure、RecommendationCandidateCache 和 diagnostics。系统推荐 tab 扩展 UI；事件库 tab 与自定义 tab 不改。
 
-**Tech Stack:** TypeScript、Zod、Prisma 7、Vitest、Vue 3、Element Plus、现有 prompt registry 与 runtime harness。
+**技术栈：** TypeScript、Zod、Prisma 7、Vitest、Vue 3、Element Plus、现有 prompt registry 与 runtime harness。
 
 ---
 
@@ -66,15 +66,15 @@
 
 ---
 
-## Task 1: Shared Filter Schema
+## 任务 1：共享筛选 schema
 
-**Files:**
+**文件：**
 
-- Create: `shared/src/topic/topic-recommendation-filter.schema.ts`
-- Modify: `shared/src/index.ts`
-- Test: `tests/shared/topic-recommendation-filter.test.ts`
+- 新建：`shared/src/topic/topic-recommendation-filter.schema.ts`
+- 修改：`shared/src/index.ts`
+- 测试：`tests/shared/topic-recommendation-filter.test.ts`
 
-- [ ] **Step 1: Write failing schema tests**
+- [ ] **步骤 1：编写失败的 schema 测试**
 
 新增测试：
 
@@ -127,17 +127,17 @@ describe("TopicRecommendationFilter", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify RED**
+- [ ] **步骤 2：运行测试确认 RED**
 
-Run:
+运行：
 
 `npx vitest run tests/shared/topic-recommendation-filter.test.ts --configLoader runner`
 
-Expected: FAIL because module does not exist.
+预期：失败，因为模块尚不存在。
 
-- [ ] **Step 3: Implement schema minimally**
+- [ ] **步骤 3：最小实现 schema**
 
-Implement:
+实现：
 
 - enum `era_band`: `ancient / medieval / late_imperial`
 - enum aliases accepted by normalizer: `late-imperial`
@@ -147,15 +147,15 @@ Implement:
 - arrays max sizes per design
 - fingerprint via `node:crypto` `sha256(JSON.stringify(normalized)).slice(0, 16)`
 
-- [ ] **Step 4: Run GREEN**
+- [ ] **步骤 4：运行 GREEN**
 
-Run:
+运行：
 
 `npx vitest run tests/shared/topic-recommendation-filter.test.ts --configLoader runner`
 
-Expected: PASS.
+预期：通过。
 
-- [ ] **Step 5: Commit**
+- [ ] **步骤 5：提交**
 
 ```bash
 git add shared/src/topic/topic-recommendation-filter.schema.ts shared/src/index.ts tests/shared/topic-recommendation-filter.test.ts
@@ -164,50 +164,50 @@ git commit -m "feat(topic): 增加推荐筛选合同"
 
 ---
 
-## Task 2: API Payload Validation
+## 任务 2：API payload 校验
 
-**Files:**
+**文件：**
 
-- Modify: `backend/src/modules/topic/topic.controller.ts`
-- Test: `tests/backend/topic/topic-recommendation-filter-api.test.ts`
+- 修改：`backend/src/modules/topic/topic.controller.ts`
+- 测试：`tests/backend/topic/topic-recommendation-filter-api.test.ts`
 
-- [ ] **Step 1: Write failing API tests**
+- [ ] **步骤 1：编写失败的 API 测试**
 
-Tests:
+测试：
 
 1. `POST /api/projects/:id/topic/recommendations` with valid `filters` returns `200`.
 2. Invalid enum returns `400` with `error: "invalid_topic_filter"`.
 3. Missing `filters` keeps existing behavior.
 
-Use stub LLM mode or existing app test helpers. Reuse patterns from `tests/backend/topic/custom-refine-stub-full.test.ts`.
+使用 stub LLM 模式或现有 app 测试 helper。复用 `tests/backend/topic/custom-refine-stub-full.test.ts` 中的模式。
 
-- [ ] **Step 2: Run RED**
+- [ ] **步骤 2：运行 RED**
 
-Run:
-
-`npx vitest run tests/backend/topic/topic-recommendation-filter-api.test.ts --configLoader runner`
-
-Expected: valid filter test fails because payload field is ignored or not propagated; invalid filter test fails because no `invalid_topic_filter`.
-
-- [ ] **Step 3: Implement validation**
-
-In `validateTopicRecommendationSeed`:
-
-- Parse optional `filters`.
-- On Zod error return invalid topic filter result.
-- Preserve existing missing-field behavior for seed fields.
-
-Do not change route auth or source mode behavior.
-
-- [ ] **Step 4: Run GREEN**
-
-Run:
+运行：
 
 `npx vitest run tests/backend/topic/topic-recommendation-filter-api.test.ts --configLoader runner`
 
-Expected: PASS.
+预期：合法 filter 测试失败，因为 payload 字段尚未被处理或透传；非法 filter 测试失败，因为尚无 `invalid_topic_filter`。
 
-- [ ] **Step 5: Commit**
+- [ ] **步骤 3：实现校验**
+
+在 `validateTopicRecommendationSeed` 中：
+
+- 解析可选 `filters`。
+- Zod 报错时返回 `invalid_topic_filter` 结果。
+- 保留 seed 字段现有的缺字段行为。
+
+不修改 route auth 或 source mode 行为。
+
+- [ ] **步骤 4：运行 GREEN**
+
+运行：
+
+`npx vitest run tests/backend/topic/topic-recommendation-filter-api.test.ts --configLoader runner`
+
+预期：通过。
+
+- [ ] **步骤 5：提交**
 
 ```bash
 git add backend/src/modules/topic/topic.controller.ts tests/backend/topic/topic-recommendation-filter-api.test.ts
@@ -216,17 +216,17 @@ git commit -m "feat(topic): 推荐接口接收结构化筛选"
 
 ---
 
-## Task 3: Builder Input Propagation
+## 任务 3：Builder 输入透传
 
-**Files:**
+**文件：**
 
-- Modify: `backend/src/modules/topic/topic-candidate.builder.ts`
-- Modify: `backend/src/modules/topic/topic-recommendation.service.ts`
-- Test: `tests/backend/topic/topic-recommendation-filter-trace.test.ts`
+- 修改：`backend/src/modules/topic/topic-candidate.builder.ts`
+- 修改：`backend/src/modules/topic/topic-recommendation.service.ts`
+- 测试：`tests/backend/topic/topic-recommendation-filter-trace.test.ts`
 
-- [ ] **Step 1: Write failing trace test**
+- [ ] **步骤 1：编写失败的 trace 测试**
 
-Use mocked `invokeStructuredPrompt` or existing trace hooks to assert builder input contains:
+使用 mock 的 `invokeStructuredPrompt` 或现有 trace hooks，断言 builder input 包含：
 
 ```ts
 topic_filter: {
@@ -239,30 +239,30 @@ topic_filter_fingerprint: "<16 hex chars>"
 
 Also assert old request without filters does not include `topic_filter`.
 
-- [ ] **Step 2: Run RED**
+- [ ] **步骤 2：运行 RED**
 
-Run:
-
-`npx vitest run tests/backend/topic/topic-recommendation-filter-trace.test.ts --configLoader runner`
-
-Expected: FAIL because builder input lacks filter fields.
-
-- [ ] **Step 3: Implement propagation**
-
-- Extend `BuildTopicCandidatesInput`.
-- In `recommendTopicCandidatesWithTrace`, normalize `input.filters` or equivalent field before graph input.
-- Pass `topic_filter` and fingerprint to `graphInput`.
-- Ensure custom/library callers that do not pass filters remain unchanged.
-
-- [ ] **Step 4: Run GREEN**
-
-Run:
+运行：
 
 `npx vitest run tests/backend/topic/topic-recommendation-filter-trace.test.ts --configLoader runner`
 
-Expected: PASS for propagation assertions.
+预期：失败，因为 builder input 尚无 filter 字段。
 
-- [ ] **Step 5: Commit**
+- [ ] **步骤 3：实现透传**
+
+- 扩展 `BuildTopicCandidatesInput`。
+- 在 `recommendTopicCandidatesWithTrace` 中，在 graph input 前规范化 `input.filters` 或等价字段。
+- 将 `topic_filter` 与 fingerprint 传入 `graphInput`。
+- 确保不传 filters 的 custom/library 调用方行为不变。
+
+- [ ] **步骤 4：运行 GREEN**
+
+运行：
+
+`npx vitest run tests/backend/topic/topic-recommendation-filter-trace.test.ts --configLoader runner`
+
+预期：透传断言通过。
+
+- [ ] **步骤 5：提交**
 
 ```bash
 git add backend/src/modules/topic/topic-candidate.builder.ts backend/src/modules/topic/topic-recommendation.service.ts tests/backend/topic/topic-recommendation-filter-trace.test.ts
@@ -271,36 +271,36 @@ git commit -m "feat(topic): 筛选条件透传到推荐生成输入"
 
 ---
 
-## Task 4: Prisma Persistence
+## 任务 4：Prisma 持久化
 
-**Files:**
+**文件：**
 
-- Modify: `backend/prisma/schema.prisma`
-- Create: `backend/prisma/migrations/<timestamp>_topic_recommendation_filter/migration.sql`
-- Modify: `backend/src/db/client.ts`
-- Modify: recommendation round repository file located by `rg "recordProjectRecommendationRound" backend/src`
-- Test: extend `tests/backend/topic/topic-recommendation-filter-trace.test.ts`
+- 修改：`backend/prisma/schema.prisma`
+- 新建：`backend/prisma/migrations/<timestamp>_topic_recommendation_filter/migration.sql`
+- 修改：`backend/src/db/client.ts`
+- 修改：通过 `rg "recordProjectRecommendationRound" backend/src` 定位到的 recommendation round repository 文件
+- 测试：扩展 `tests/backend/topic/topic-recommendation-filter-trace.test.ts`
 
-- [ ] **Step 1: Write failing persistence assertions**
+- [ ] **步骤 1：编写失败的持久化断言**
 
-Assert after one filtered recommendation:
+在一次带筛选推荐后断言：
 
-- Latest `RecommendationRound.filterFingerprint` equals expected.
+- 最新 `RecommendationRound.filterFingerprint` 等于预期值。
 - `RecommendationRound.filterJson` contains normalized filter.
 - `RecommendationExposure.filterFingerprint` is set.
 - `RecommendationCandidateCache.filterFingerprint` is set for new cache entries.
 
-- [ ] **Step 2: Run RED**
+- [ ] **步骤 2：运行 RED**
 
-Run:
+运行：
 
 `npx vitest run tests/backend/topic/topic-recommendation-filter-trace.test.ts --configLoader runner`
 
-Expected: FAIL because fields do not exist.
+预期：失败，因为字段尚不存在。
 
-- [ ] **Step 3: Add schema fields**
+- [ ] **步骤 3：增加 schema 字段**
 
-Schema:
+Schema：
 
 ```prisma
 model RecommendationCandidateCache {
@@ -323,31 +323,31 @@ model RecommendationExposure {
 }
 ```
 
-Migration SQL uses nullable columns for backward compatibility.
+Migration SQL 使用可空列保持向后兼容。
 
-- [ ] **Step 4: Wire repositories and in-memory db**
+- [ ] **步骤 4：接入 repositories 和 in-memory db**
 
-- Existing rows and old JSON snapshots should hydrate with undefined/null filter fields.
+- 既有 rows 和旧 JSON snapshots 应能以 undefined/null filter fields 正常 hydrate。
 - `recordProjectRecommendationRound` accepts `filterFingerprint` and `filterJson`.
-- Cache writer accepts `filterFingerprint`.
+- 缓存写入器接收 `filterFingerprint`。
 
-- [ ] **Step 5: Generate Prisma client**
+- [ ] **步骤 5：生成 Prisma client**
 
-Run:
+运行：
 
 `npm run prisma:generate`
 
-Expected: Prisma client generation succeeds.
+预期：Prisma client 生成成功。
 
-- [ ] **Step 6: Run GREEN**
+- [ ] **步骤 6：运行 GREEN**
 
-Run:
+运行：
 
 `npx vitest run tests/backend/topic/topic-recommendation-filter-trace.test.ts --configLoader runner`
 
-Expected: PASS.
+预期：通过。
 
-- [ ] **Step 7: Commit**
+- [ ] **步骤 7：提交**
 
 ```bash
 git add backend/prisma/schema.prisma backend/prisma/migrations backend/src/db/client.ts backend/src tests/backend/topic/topic-recommendation-filter-trace.test.ts
@@ -356,32 +356,32 @@ git commit -m "feat(topic): 持久化推荐筛选上下文"
 
 ---
 
-## Task 5: Diagnostics
+## 任务 5：诊断输出
 
-**Files:**
+**文件：**
 
-- Modify: `backend/src/modules/topic/topic-recommendation.service.ts`
-- Test: extend `tests/backend/topic/topic-recommendation-filter-trace.test.ts`
+- 修改：`backend/src/modules/topic/topic-recommendation.service.ts`
+- 测试：扩展 `tests/backend/topic/topic-recommendation-filter-trace.test.ts`
 
-- [ ] **Step 1: Write failing diagnostics assertions**
+- [ ] **步骤 1：编写失败的 diagnostics 断言**
 
-Assert generated diagnostics markdown includes:
+断言生成的 diagnostics markdown 包含：
 
 - `filter_fingerprint`
 - `normalized_filter`
 - selected tags such as `dynasties: 唐`
 
-- [ ] **Step 2: Run RED**
+- [ ] **步骤 2：运行 RED**
 
-Run:
+运行：
 
 `npx vitest run tests/backend/topic/topic-recommendation-filter-trace.test.ts --configLoader runner`
 
-Expected: FAIL because diagnostics omit filter section.
+预期：失败，因为 diagnostics 尚未包含 filter section。
 
-- [ ] **Step 3: Implement diagnostics section**
+- [ ] **步骤 3：实现 diagnostics section**
 
-Update diagnostics model/markdown renderer with a compact section:
+更新 diagnostics model/markdown renderer，增加一个紧凑 section：
 
 ```markdown
 ## Filter
@@ -391,17 +391,17 @@ Update diagnostics model/markdown renderer with a compact section:
 - filter_effect_summary: ...
 ```
 
-Do not duplicate full prompt text.
+不要重复完整 prompt 文本。
 
-- [ ] **Step 4: Run GREEN**
+- [ ] **步骤 4：运行 GREEN**
 
-Run:
+运行：
 
 `npx vitest run tests/backend/topic/topic-recommendation-filter-trace.test.ts --configLoader runner`
 
-Expected: PASS.
+预期：通过。
 
-- [ ] **Step 5: Commit**
+- [ ] **步骤 5：提交**
 
 ```bash
 git add backend/src/modules/topic/topic-recommendation.service.ts tests/backend/topic/topic-recommendation-filter-trace.test.ts
@@ -410,29 +410,29 @@ git commit -m "feat(topic): 推荐诊断记录筛选上下文"
 
 ---
 
-## Task 6: Prompt Update
+## 任务 6：Prompt 更新
 
-**Files:**
+**文件：**
 
-- Modify: `prompts/topic/candidate-builder.prompt.md`
-- Modify: `prompts/topic/candidate-builder.changes.md`
-- Test: prompt checks and prompt contract tests located by `rg "candidate-builder" tests harness -n`
+- 修改：`prompts/topic/candidate-builder.prompt.md`
+- 修改：`prompts/topic/candidate-builder.changes.md`
+- 测试：通过 `rg "candidate-builder" tests harness -n` 定位到的 prompt checks 和 prompt contract tests
 
-- [ ] **Step 1: Write or update failing prompt contract test**
+- [ ] **步骤 1：编写或更新失败的 prompt 合同测试**
 
-Add assertion that candidate-builder prompt mentions `topic_filter` and `exclude_terms`.
+增加断言，要求 candidate-builder prompt 提到 `topic_filter` 与 `exclude_terms`。
 
-Run:
+运行：
 
 `npx vitest run tests/backend/topic/topic-prompt-contract.test.ts --configLoader runner`
 
-Expected: FAIL before prompt update.
+预期：prompt 更新前失败。
 
-- [ ] **Step 2: Update prompt minimally**
+- [ ] **步骤 2：最小更新 prompt**
 
-Bump version, for example `v1.1.0 -> v1.2.0` if current is `v1.1.0`.
+提升版本号，例如当前为 `v1.1.0` 时提升到 `v1.2.0`。
 
-Add short Chinese rules:
+增加简短中文规则：
 
 - `topic_filter` 是结构化筛选约束。
 - `era_band/dynasties` 是时代边界。
@@ -440,23 +440,23 @@ Add short Chinese rules:
 - `exclude_terms` 必须回避。
 - 无法全部满足时，先保证具体单事件和叙事质量。
 
-- [ ] **Step 3: Update changelog**
+- [ ] **步骤 3：更新 changelog**
 
-Add matching changelog entry with date `2026-08-07`.
+增加日期为 `2026-08-07` 的匹配 changelog 记录。
 
-- [ ] **Step 4: Run GREEN**
+- [ ] **步骤 4：运行 GREEN**
 
-Run:
+运行：
 
 `npx vitest run tests/backend/topic/topic-prompt-contract.test.ts --configLoader runner`
 
-Run:
+运行：
 
 `npm run harness:check-prompts`
 
-Expected: both PASS.
+预期：两项都通过。
 
-- [ ] **Step 5: Commit**
+- [ ] **步骤 5：提交**
 
 ```bash
 git add prompts/topic/candidate-builder.prompt.md prompts/topic/candidate-builder.changes.md tests/backend/topic/topic-prompt-contract.test.ts
@@ -465,46 +465,46 @@ git commit -m "feat(prompt): 推荐生成支持结构化筛选"
 
 ---
 
-## Task 7: Frontend Store and UI
+## 任务 7：前端 store 与 UI
 
-**Files:**
+**文件：**
 
-- Modify: `frontend/src/stores/topic.ts`
-- Modify: `frontend/src/components/topic/CreateTopicModal.vue`
-- Test: add or extend frontend tests if existing setup covers this component; otherwise use typecheck/build.
+- 修改：`frontend/src/stores/topic.ts`
+- 修改：`frontend/src/components/topic/CreateTopicModal.vue`
+- 测试：如果现有前端测试体系覆盖该组件，则新增或扩展前端测试；否则使用 typecheck/build 验证。
 
-- [ ] **Step 1: Write failing frontend/store test if available**
+- [ ] **步骤 1：如可用，编写失败的 frontend/store 测试**
 
 If existing frontend unit test infrastructure is available for stores/components, assert:
 
 - `generateSystemRecommendations` sends `filters` in snake_case.
 - sessionStorage stores a single JSON key `topic-recommendation-filter`.
 
-If no suitable test exists, document the gap in commit message and rely on frontend build plus browser acceptance in Task 8.
+如果没有合适的测试基础，在提交信息中说明缺口，并依赖 frontend build 与任务 8 的浏览器验收。
 
-- [ ] **Step 2: Implement store changes**
+- [ ] **步骤 2：实现 store 变更**
 
-- Extend `TopicRecommendationFilters`.
-- Replace scattered keys with one serialized filter key.
+- 扩展 `TopicRecommendationFilters`。
+- 用一个序列化 filter key 替代散落的 keys。
 - `buildRecommendationSeed` keeps existing readable seed text and includes `filters`.
 
-- [ ] **Step 3: Implement UI**
+- [ ] **步骤 3：实现 UI**
 
-System tab:
+System tab：
 
-- Basic row: era, tension, dynasties.
-- Advanced row/toggle: character tags, event type tags, conflict tags, theme motifs, credibility, exclude terms.
-- Use compact controls; avoid turning the modal into a large landing page.
+- 基础行：era、tension、dynasties。
+- 高级行/toggle：character tags、event type tags、conflict tags、theme motifs、credibility、exclude terms。
+- 使用紧凑控件，避免把 modal 做成大型 landing page。
 
-- [ ] **Step 4: Verify frontend**
+- [ ] **步骤 4：验证 frontend**
 
-Run:
+运行：
 
 `npm run build:frontend`
 
-Expected: PASS.
+预期：通过。
 
-- [ ] **Step 5: Commit**
+- [ ] **步骤 5：提交**
 
 ```bash
 git add frontend/src/stores/topic.ts frontend/src/components/topic/CreateTopicModal.vue
@@ -513,57 +513,57 @@ git commit -m "feat(frontend): 系统推荐支持结构化筛选"
 
 ---
 
-## Task 8: Regression and Acceptance
+## 任务 8：回归与验收
 
-**Files:**
+**文件：**
 
-- Modify: `package.json` only if adding a dedicated harness script is necessary.
-- Prefer adding tests under `tests/backend/topic/` and existing browser harness only if S2-4 UI needs browser coverage.
+- 修改：仅在必须新增专用 harness script 时修改 `package.json`。
+- 优先在 `tests/backend/topic/` 下新增测试；只有 S2-4 UI 确实需要浏览器覆盖时才接入现有 browser harness。
 
-- [ ] **Step 1: Run focused backend tests**
+- [ ] **步骤 1：运行聚焦 backend 测试**
 
-Run:
+运行：
 
 `npx vitest run tests/shared/topic-recommendation-filter.test.ts tests/backend/topic/topic-recommendation-filter-api.test.ts tests/backend/topic/topic-recommendation-filter-trace.test.ts tests/backend/event-library/from-library.test.ts tests/backend/topic/custom-refine-stub-full.test.ts --configLoader runner`
 
-Expected: PASS.
+预期：通过。
 
-- [ ] **Step 2: Run prompt checks**
+- [ ] **步骤 2：运行 prompt checks**
 
-Run:
+运行：
 
 `npm run harness:check-prompts`
 
-Expected: PASS.
+预期：通过。
 
-- [ ] **Step 3: Run typechecks/builds**
+- [ ] **步骤 3：运行 typechecks/builds**
 
-Run:
+运行：
 
 `npm run typecheck:backend`
 
-Run:
+运行：
 
 `npm run build:frontend`
 
-Expected: both PASS.
+预期：两项都通过。
 
-- [ ] **Step 4: Optional live check**
+- [ ] **步骤 4：可选 live check**
 
-Only with explicit user approval:
+仅在用户明确授权后：
 
-- Run one Tang + inheritance filter sample.
-- Run one Song + diplomacy/humiliation filter sample.
-- Record request IDs, elapsed time, filter fingerprint, and qualitative result in `docs/records/`.
+- 运行一个 Tang + inheritance filter 样本。
+- 运行一个 Song + diplomacy/humiliation filter 样本。
+- 在 `docs/records/` 记录 request IDs、elapsed time、filter fingerprint 与定性结果。
 
-- [ ] **Step 5: Update status docs**
+- [ ] **步骤 5：更新状态文档**
 
-If implementation is complete:
+如果实现已完成：
 
-- Move S2-4 item in `docs/todos/roadmap-todo.md` to done.
-- Update `docs/plans/README.md` current status with validation commands.
+- 将 `docs/todos/roadmap-todo.md` 中的 S2-4 item 移到 done。
+- 用验证命令更新 `docs/plans/README.md` 当前状态。
 
-- [ ] **Step 6: Final commit**
+- [ ] **步骤 6：最终提交**
 
 ```bash
 git add docs/todos/roadmap-todo.md docs/plans/README.md docs/records
@@ -572,30 +572,30 @@ git commit -m "docs: 收口 S2-4 推荐筛选实现状态"
 
 ---
 
-## Verification Matrix
+## 验证矩阵
 
-Minimum non-live closeout:
+最小非 live 收口：
 
 - `npx vitest run tests/shared/topic-recommendation-filter.test.ts tests/backend/topic/topic-recommendation-filter-api.test.ts tests/backend/topic/topic-recommendation-filter-trace.test.ts --configLoader runner`
 - `npm run harness:check-prompts`
 - `npm run typecheck:backend`
 - `npm run build:frontend`
 
-Recommended regression:
+推荐回归：
 
 - `npx vitest run tests/backend/event-library/from-library.test.ts tests/backend/topic/custom-refine-stub-full.test.ts tests/backend/runtime/operation-tier-registry.test.ts --configLoader runner`
 
-Live check:
+Live check：
 
-- Explicit opt-in only.
-- Do not claim S2-4 live quality without recorded run IDs and outputs.
+- 仅在明确 opt-in 后执行。
+- 没有记录 run IDs 和 outputs 时，不声明 S2-4 live quality。
 
 ---
 
-## Notes for Implementers
+## 实现者备注
 
-- Do not add local semantic matching rules that decide whether an event really belongs to a tag.
-- Do not mutate `TopicPackage` script-facing hard/soft lanes.
-- Do not change from-library 3->1 or from-custom 3->1 behavior.
-- Do not stage or commit `storage/topic-candidate-library/` generated data unless a task explicitly asks for it.
-- If prompt changes cause `harness:check-prompts` to fail, fix prompt metadata/changelog/fixture compatibility before moving on.
+- 不新增本地语义匹配规则来判断某事件是否真的属于某个 tag。
+- 不修改 `TopicPackage` 面向 script 的 hard/soft lanes。
+- 不修改 from-library 3->1 或 from-custom 3->1 行为。
+- 除非任务明确要求，不 stage 或 commit `storage/topic-candidate-library/` 生成态数据。
+- 如果 prompt 变更导致 `harness:check-prompts` 失败，先修复 prompt metadata/changelog/fixture 兼容性，再继续下一步。

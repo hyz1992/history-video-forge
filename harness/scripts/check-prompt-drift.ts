@@ -311,6 +311,8 @@ if (isMainModule) {
   }
 
   console.log(
-    `${result.promptCount} prompt checked，no drift detected`,
+    result.knownDriftCount > 0
+      ? `${result.promptCount} prompt checked, no active drift detected (${result.knownDriftCount} known historical drift skipped)`
+      : `${result.promptCount} prompt checked, no drift detected`,
   );
 }
