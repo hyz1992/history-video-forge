@@ -143,7 +143,6 @@ describe("TopicRecommendationFilter", () => {
 - enum aliases accepted by normalizer: `late-imperial`
 - enum `narrative_orientation`: `high_tension / balanced / contrarian_hook / comeback / spread_first`
 - legacy `tension` aliases accepted by normalizer: `high -> high_tension`、`hook-first -> contrarian_hook`
-- `credibility_levels`: `high / medium / low / disputed`
 - arrays max sizes per design
 - fingerprint via `node:crypto` `sha256(JSON.stringify(normalized)).slice(0, 16)`
 
@@ -494,7 +493,9 @@ If existing frontend unit test infrastructure is available for stores/components
 System tab：
 
 - 基础行：era_band、dynasties、narrative_orientation。
-- 高级行/toggle：relationship tags、event type tags、theme motifs、credibility、exclude terms。
+- 高级行/toggle：relationship tags、event type tags、theme motifs、exclude terms。
+- era_band 与 dynasties 必须表现为父子关系：先选时代范围，再展示该范围下的朝代；dynasties 可不选。
+- relationship tags、event type tags、theme motifs 都需要有「不限」默认态。
 - 除 exclude terms 外，其余筛选均使用固定选项，不使用自由 tag input。
 - 使用紧凑控件，避免把 modal 做成大型 landing page。
 

@@ -57,7 +57,7 @@
       width: 960px;
       max-width: 94vw;
       max-height: 90vh;
-      min-height: 640px;
+      min-height: 600px;
       overflow-y: auto;
       background: linear-gradient(180deg, #141c2b 0%, var(--bg-card) 160px);
       border: 1px solid var(--border-default);
@@ -155,8 +155,8 @@
     .modal-filters {
       display: flex;
       flex-direction: column;
-      gap: 18px;
-      padding: 20px 24px 18px;
+      gap: 14px;
+      padding: 18px 20px 16px;
       background: rgba(255, 255, 255, 0.015);
       border: 1px solid rgba(212, 163, 95, 0.08);
       border-radius: 14px;
@@ -164,8 +164,8 @@
 
     .basic-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 18px 24px;
+      grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.65fr);
+      gap: 14px 18px;
     }
 
     .filter-group {
@@ -177,6 +177,33 @@
 
     .filter-group--wide {
       grid-column: 1 / -1;
+    }
+
+    .filter-group--timeline {
+      gap: 12px;
+    }
+
+    .child-filter {
+      margin-top: 2px;
+      padding: 12px 12px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(212, 163, 95, 0.08);
+      background: rgba(0, 0, 0, 0.1);
+    }
+
+    .child-label {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .child-label span {
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 500;
     }
 
     .filter-head {
@@ -209,8 +236,8 @@
     }
 
     .chip {
-      min-height: 40px;
-      padding: 9px 18px;
+      min-height: 36px;
+      padding: 8px 15px;
       border-radius: 100px;
       font-size: 13.5px;
       font-weight: 500;
@@ -237,8 +264,8 @@
     }
 
     .chip--small {
-      min-height: 32px;
-      padding: 7px 13px;
+      min-height: 30px;
+      padding: 6px 11px;
       font-size: 12.5px;
     }
 
@@ -312,18 +339,22 @@
     }
 
     .advanced-panel {
-      margin-top: 14px;
+      margin-top: 12px;
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 14px 18px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
     }
 
     .filter-mini {
       min-width: 0;
-      padding: 14px;
+      padding: 12px;
       border-radius: 10px;
       border: 1px solid rgba(255, 255, 255, 0.055);
       background: rgba(0, 0, 0, 0.1);
+    }
+
+    .filter-mini--exclude {
+      grid-column: span 1;
     }
 
     .filter-mini .filter-label {
@@ -446,6 +477,7 @@
       .advanced-panel {
         grid-template-columns: 1fr;
       }
+      .filter-mini--exclude { grid-column: auto; }
       .modal-filters { padding: 18px 16px; }
       .advanced-summary { display: none; }
       .modal-actions { padding-bottom: 4px; }
@@ -468,12 +500,29 @@
 
       <section class="modal-filters" aria-label="推荐筛选">
         <div class="basic-grid">
-          <div class="filter-group">
+          <div class="filter-group filter-group--timeline">
             <div class="filter-label">时代范围</div>
             <div class="chip-row">
+              <button class="chip">不限</button>
               <button class="chip">先秦至两汉</button>
               <button class="chip chip--active">魏晋至唐宋</button>
               <button class="chip">元明清</button>
+            </div>
+
+            <div class="child-filter">
+              <div class="filter-head">
+                <div class="child-label">朝代 <span>随时代范围变化</span></div>
+                <div class="filter-count">可不选，最多 3 个</div>
+              </div>
+              <div class="chip-row">
+                <button class="chip chip--small">不限</button>
+                <button class="chip chip--small">魏晋</button>
+                <button class="chip chip--small">南北朝</button>
+                <button class="chip chip--small">隋</button>
+                <button class="chip chip--small chip--active">唐</button>
+                <button class="chip chip--small">五代</button>
+                <button class="chip chip--small">宋</button>
+              </div>
             </div>
           </div>
 
@@ -486,27 +535,13 @@
               <button class="chip">绝境翻盘</button>
             </div>
           </div>
-
-          <div class="filter-group filter-group--wide">
-            <div class="filter-head">
-              <div class="filter-label">朝代</div>
-              <div class="filter-count">最多 3 个</div>
-            </div>
-            <div class="chip-row">
-              <button class="chip chip--active">唐</button>
-              <button class="chip">宋</button>
-              <button class="chip">明</button>
-              <button class="chip">汉</button>
-              <button class="chip chip--ghost">+ 输入朝代</button>
-            </div>
-          </div>
         </div>
 
         <details class="advanced-toggle" open>
           <summary>
             <span class="advanced-title">更多筛选</span>
             <span class="advanced-summary">
-              人物关系、事件类型、主题关注、可信度、排除项
+              人物关系、事件类型、主题关注、排除项；均可保持不限
               <span class="chevron">⌄</span>
             </span>
           </summary>
@@ -515,7 +550,8 @@
             <div class="filter-mini">
               <div class="filter-label">人物关系</div>
               <div class="chip-row">
-                <button class="chip chip--small chip--active">君臣</button>
+                <button class="chip chip--small chip--active">不限</button>
+                <button class="chip chip--small">君臣</button>
                 <button class="chip chip--small">父子</button>
                 <button class="chip chip--small">兄弟</button>
                 <button class="chip chip--small">敌对阵营</button>
@@ -525,7 +561,8 @@
             <div class="filter-mini">
               <div class="filter-label">事件类型</div>
               <div class="chip-row">
-                <button class="chip chip--small chip--active">夺位</button>
+                <button class="chip chip--small chip--active">不限</button>
+                <button class="chip chip--small">夺位</button>
                 <button class="chip chip--small">政变</button>
                 <button class="chip chip--small">战争</button>
                 <button class="chip chip--small">外交羞辱</button>
@@ -536,24 +573,15 @@
             <div class="filter-mini">
               <div class="filter-label">主题关注</div>
               <div class="chip-row">
-                <button class="chip chip--small chip--active">权力代价</button>
+                <button class="chip chip--small chip--active">不限</button>
+                <button class="chip chip--small">权力代价</button>
                 <button class="chip chip--small">信任崩塌</button>
                 <button class="chip chip--small">制度压迫</button>
                 <button class="chip chip--small">家族撕裂</button>
               </div>
             </div>
 
-            <div class="filter-mini">
-              <div class="filter-label">可信度</div>
-              <div class="chip-row">
-                <button class="chip chip--small chip--active">高</button>
-                <button class="chip chip--small chip--active">中</button>
-                <button class="chip chip--small">低</button>
-                <button class="chip chip--small">有争议</button>
-              </div>
-            </div>
-
-            <div class="filter-mini">
+            <div class="filter-mini filter-mini--exclude">
               <div class="filter-label">排除项</div>
               <div class="tag-input">
                 <span class="tag">神话<button aria-label="移除">×</button></span>

@@ -17,7 +17,7 @@
 
 ### 1.1 任务
 
-S2-4 要把系统推荐入口从当前的「历史时期 + 叙事偏好」扩展为结构化筛选系统，让用户能按时代范围、朝代、人物关系、事件类型、主题关注、叙事取向和可信度偏好影响推荐结果。
+S2-4 要把系统推荐入口从当前的「历史时期 + 叙事偏好」扩展为结构化筛选系统，让用户能按时代范围、朝代、人物关系、事件类型、主题关注和叙事取向影响推荐结果。
 
 ### 1.2 目标
 
@@ -40,7 +40,6 @@ S2-5 已完成事件库与自定义选题主链路，并在 `EventLibraryEntry` 
 - `eventTypeTagsJson`
 - `themeMotifsJson`
 - `relationshipTagsJson`
-- `credibilityLevel`
 
 三入口已通过 `sourceMode/sourceRefJson` 汇入同一 `TopicPackage`。事件库浏览已支持部分字段筛选，说明字段与 UI 交互模式已有可复用基础。
 
@@ -80,11 +79,10 @@ S2-5 已完成事件库与自定义选题主链路，并在 `EventLibraryEntry` 
 | 字段 | 类型 | 含义 | 第一版规则 |
 |---|---|---|---|
 | `era_band` | enum | 粗粒度历史时期 | 兼容现有 `era`，值为 `ancient / medieval / late_imperial` |
-| `dynasties` | string[] | 朝代 | 可空；非空时最多 3 个 |
+| `dynasties` | string[] | 朝代 | 时代范围下的二级筛选；可空；非空时最多 3 个 |
 | `relationship_tags` | string[] | 人物关系 | 可空；最多 5 个；第一版使用固定选项 |
 | `event_type_tags` | string[] | 事件类型 | 可空；最多 5 个 |
 | `theme_motifs` | string[] | 主题关注 | 可空；最多 5 个；第一版使用固定选项 |
-| `credibility_levels` | enum[] | 史料可信度偏好 | 可空；值为 `high / medium / low / disputed` |
 | `exclude_terms` | string[] | 排除项 | 可空；最多 8 个；仅作为 prompt 负向约束和诊断，不进入 EventLibrary |
 | `narrative_orientation` | enum | 叙事取向 | 整合原叙事偏好与叙事钩子；兼容旧 `tension` 输入 |
 
@@ -146,7 +144,6 @@ S2-5 已完成事件库与自定义选题主链路，并在 `EventLibraryEntry` 
     "relationship_tags": ["兄弟"],
     "event_type_tags": ["夺位"],
     "theme_motifs": ["权力代价"],
-    "credibility_levels": ["high", "medium"],
     "exclude_terms": ["神话", "演义"],
     "narrative_orientation": "high_tension"
   }
@@ -216,15 +213,15 @@ topic_filter_fingerprint?: string;
 系统推荐 tab 扩展为两层：
 
 1. **基础筛选**：时代范围、朝代、叙事取向。
-2. **展开筛选**：人物关系、事件类型、主题关注、可信度、排除项。
+2. **展开筛选**：人物关系、事件类型、主题关注、排除项。
 
 第一版 UI 规则：
 
-- 朝代作为时代范围下的二级筛选：先选时代范围，再展示对应朝代固定选项。
+- 朝代作为时代范围下的二级筛选：先选时代范围，再展示对应朝代固定选项；朝代可不选。
+- 更多筛选中的人物关系、事件类型、主题关注都允许不选，UI 用「不限」作为默认态。
 - 除排除项外，其余高级筛选均使用固定 chip 选项，不使用自由 tag input。
 - 不再提供独立「冲突类型」筛选，避免和事件类型重复或冲突。
 - 不再提供独立「叙事钩子」筛选，统一合入基础筛选里的叙事取向。
-- 可信度使用多选。
 - 排除项使用 tag input。
 - 保留 sessionStorage，但 key 迁移到一个 `topic-recommendation-filter` JSON，避免散落多个 key。
 
