@@ -39,6 +39,30 @@
         <button class="refresh-btn" @click="resetDraftFilters">重置</button>
       </div>
 
+      <div v-if="drafts.length > 0" class="batch-bar">
+        <label class="batch-select-all">
+          <input type="checkbox" :checked="allDraftsSelected" @change="toggleSelectAllDrafts($event.target.checked)" />
+          全选
+        </label>
+        <span class="batch-count">已选 {{ selectedDraftIds.length }} / {{ drafts.length }}</span>
+        <div class="batch-actions">
+          <button
+            class="refresh-btn refresh-btn--success"
+            :disabled="selectedDraftIds.length === 0 || batchProcessing"
+            @click="batchApprove"
+          >
+            批量通过
+          </button>
+          <button
+            class="refresh-btn refresh-btn--danger"
+            :disabled="selectedDraftIds.length === 0 || batchProcessing"
+            @click="batchReject"
+          >
+            批量拒绝
+          </button>
+        </div>
+      </div>
+
       <div v-if="draftLoading" class="section-loading">加载中…</div>
       <div v-else-if="draftError" class="section-error">{{ draftError }}</div>
       <div v-else-if="drafts.length === 0" class="section-empty">
@@ -49,7 +73,19 @@
           v-for="draft in drafts"
           :key="draft.id"
           class="draft-card"
+          :class="{ 'draft-card--selected': selectedDraftIds.includes(draft.id) }"
         >
+          <div class="draft-select-row">
+            <label class="draft-select-label">
+              <input
+                type="checkbox"
+                :checked="selectedDraftIds.includes(draft.id)"
+                :disabled="draft.processing"
+                @change="toggleDraftSelected(draft.id, $event.target.checked)"
+              />
+              选择此草稿
+            </label>
+          </div>
           <div class="draft-header">
             <span class="draft-title">{{ draft.proposed_title }}</span>
             <span class="draft-kind">{{ draftKindLabel(draft.draft_kind) }}</span>
@@ -249,7 +285,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { apiFetch, ApiError } from "../../utils/api";
 
@@ -380,6 +416,96 @@ async function handleReject() {
   } finally {
     rejectProcessing.value = false;
   }
+}
+
+// ---- Batch review ----
+const selectedDraftIds = ref<string[]>([]);
+const batchProcessing = ref(false);
+
+const allDraftsSelected = computed(() =>
+  drafts.value.length > 0 && drafts.value.every((d) => selectedDraftIds.value.includes(d.id)),
+);
+
+function toggleDraftSelected(id: string, checked: boolean) {
+  if (checked) {
+    if (!selectedDraftIds.value.includes(id)) selectedDraftIds.value.push(id);
+  } else {
+    selectedDraftIds.value = selectedDraftIds.value.filter((x) => x !== id);
+  }
+}
+
+function toggleSelectAllDrafts(checked: boolean) {
+  selectedDraftIds.value = checked ? drafts.value.map((d) => d.id) : [];
+}
+
+async function batchApprove() {
+  const ids = [...selectedDraftIds.value];
+  if (ids.length === 0 || batchProcessing.value) return;
+  if (!confirm(`确认批量通过 ${ids.length} 条草稿？`)) return;
+  batchProcessing.value = true;
+  let ok = 0;
+  let fail = 0;
+  await Promise.all(ids.map(async (id) => {
+    const draft = drafts.value.find((d) => d.id === id);
+    if (!draft) return;
+    draft.processing = true;
+    try {
+      await apiFetch(`/api/admin/event-library/drafts/${id}/review`, {
+        method: "POST",
+        body: { decision: "approve" },
+      });
+      ok += 1;
+    } catch {
+      fail += 1;
+    } finally {
+      draft.processing = false;
+    }
+  }));
+  batchProcessing.value = false;
+  selectedDraftIds.value = [];
+  if (fail === 0) {
+    ElMessage.success(`批量通过完成：成功 ${ok} 条`);
+  } else {
+    ElMessage.warning(`批量通过完成：成功 ${ok}，失败 ${fail}`);
+  }
+  await loadDrafts();
+}
+
+async function batchReject() {
+  const ids = [...selectedDraftIds.value];
+  if (ids.length === 0 || batchProcessing.value) return;
+  const notes = prompt(`确认批量拒绝 ${ids.length} 条草稿。\n拒绝原因（可选）：`, "") ?? "";
+  if (notes === null) return;
+  batchProcessing.value = true;
+  let ok = 0;
+  let fail = 0;
+  await Promise.all(ids.map(async (id) => {
+    const draft = drafts.value.find((d) => d.id === id);
+    if (!draft) return;
+    draft.processing = true;
+    try {
+      await apiFetch(`/api/admin/event-library/drafts/${id}/review`, {
+        method: "POST",
+        body: {
+          decision: "reject",
+          review_notes: notes.trim() || undefined,
+        },
+      });
+      ok += 1;
+    } catch {
+      fail += 1;
+    } finally {
+      draft.processing = false;
+    }
+  }));
+  batchProcessing.value = false;
+  selectedDraftIds.value = [];
+  if (fail === 0) {
+    ElMessage.success(`批量拒绝完成：成功 ${ok} 条`);
+  } else {
+    ElMessage.warning(`批量拒绝完成：成功 ${ok}，失败 ${fail}`);
+  }
+  await loadDrafts();
 }
 
 // ---- Entries ----
@@ -982,6 +1108,60 @@ watch(activeTab, (tab) => {
   background: var(--el-color-success);
   color: #fff;
   border-color: var(--el-color-success);
+}
+
+.refresh-btn--danger {
+  background: var(--el-color-danger);
+  color: #fff;
+  border-color: var(--el-color-danger);
+}
+
+.batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  margin-bottom: 12px;
+  background: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+}
+
+.batch-select-all {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.batch-count {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.batch-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.draft-select-row {
+  margin-bottom: 8px;
+}
+
+.draft-select-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  cursor: pointer;
+}
+
+.draft-card--selected {
+  border-color: var(--el-color-primary);
+  background: rgba(64, 158, 255, 0.04);
 }
 
 .filter-bar {
