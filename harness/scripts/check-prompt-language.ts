@@ -12,6 +12,7 @@ const VALID_STAGES = new Set([
   "compose",
   "render",
   "publish",
+  "event_library",
 ]);
 const VALID_STATUSES = new Set(["active", "draft", "deprecated"]);
 
@@ -94,6 +95,7 @@ function stageMatchesPath(filePath: string, stage: string): boolean {
   const stageDir =
     stage === "asset_planning" ? "asset-planning" :
     stage === "assets" ? "asset" :
+    stage === "event_library" ? "event-library" :
     stage;
   const expectedTail = normalize(join("prompts", stageDir.toLowerCase())).toLowerCase();
   return normalizedPath.includes(expectedTail);
@@ -122,7 +124,7 @@ export function validatePromptContent(filePath: string, content: string): string
 
   const stage = metadata.stage;
   if (typeof stage !== "string" || !VALID_STAGES.has(stage)) {
-    issues.push("stage 必须是 topic、script、storyboard、asset_planning、assets、compose、render 或 publish");
+    issues.push("stage 必须是 topic、script、storyboard、asset_planning、assets、compose、render、publish 或 event_library");
   } else if (!stageMatchesPath(filePath, stage)) {
     issues.push(`stage 与 prompt 所在目录不一致：${stage}`);
   }

@@ -194,4 +194,28 @@ status: active
 
     expect(issues).toEqual([]);
   });
+
+  it("允许 event-library prompt 使用 event_library stage 并匹配目录", () => {
+    const content = `---
+id: event-library.enrich
+stage: event_library
+language: zh-CN
+consumes:
+  - RawHistoricalEventSkeleton
+produces:
+  - EventLibraryFile
+status: active
+---
+
+# 任务
+
+完善事件库条目。`;
+
+    const issues = validatePromptContent(
+      "prompts/event-library/enrich.prompt.md",
+      content,
+    );
+
+    expect(issues).toEqual([]);
+  });
 });
