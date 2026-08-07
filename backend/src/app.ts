@@ -229,17 +229,29 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
     async inject(request) {
       const method = request.method.toUpperCase();
 
+      // Separate pathname and query string so GET requests can carry filters
+      // (mirrors what server.ts does at the HTTP layer for real requests).
+      const queryIndex = request.url.indexOf("?");
+      const pathname = queryIndex >= 0 ? request.url.slice(0, queryIndex) : request.url;
+      const query: Record<string, string> = {};
+      if (queryIndex >= 0) {
+        const searchParams = new URLSearchParams(request.url.slice(queryIndex + 1));
+        for (const [key, value] of searchParams.entries()) {
+          query[key] = value;
+        }
+      }
+
       for (const route of routes) {
         if (route.method !== method) {
           continue;
         }
 
-        const params = matchRoute(route.pattern, request.url);
+        const params = matchRoute(route.pattern, pathname);
         if (!params) {
           continue;
         }
 
-        const stage = method === "POST" ? getGenerationStage(request.url) : null;
+        const stage = method === "POST" ? getGenerationStage(pathname) : null;
         let release: (() => void) | undefined;
         if (stage && params.projectId) {
           try {
@@ -256,10 +268,14 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
         }
         let response: AppResponse;
         try {
+          const basePayload = request.payload ?? {};
+          const mergedPayload = method === "GET" && Object.keys(query).length > 0
+            ? { ...(basePayload as Record<string, unknown>), ...query }
+            : basePayload;
           response = await route.handler({
             app,
             params,
-            payload: request.payload ?? {},
+            payload: mergedPayload,
             auth: request.auth ?? createAnonymousAuthContext(),
           });
         } finally {

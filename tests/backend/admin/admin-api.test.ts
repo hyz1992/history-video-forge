@@ -305,6 +305,86 @@ describe("admin API (S1-5a read-only)", () => {
     const realAdmin = body.items.find((u) => u.username === "admin");
     expect(realAdmin?.isMigrationOwner).toBe(false);
   });
+
+  it("GET /api/admin/users returns pagination metadata (total/limit/offset)", async () => {
+    ctx = await setup();
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: "/api/admin/users?limit=1&offset=0",
+      auth: adminAuth(ctx.adminId),
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { items: unknown[]; total: number; limit: number; offset: number };
+    expect(body.total).toBe(2);
+    expect(body.limit).toBe(1);
+    expect(body.offset).toBe(0);
+    expect(body.items).toHaveLength(1);
+  });
+
+  it("GET /api/admin/users?search=ali filters by username/displayName", async () => {
+    ctx = await setup();
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: "/api/admin/users?search=ali",
+      auth: adminAuth(ctx.adminId),
+    });
+    const body = res.json() as { items: Array<{ username: string }>; total: number };
+    expect(body.items.every((u) => u.username === "alice")).toBe(true);
+    expect(body.total).toBe(1);
+  });
+
+  it("GET /api/admin/users?role=USER filters by role", async () => {
+    ctx = await setup();
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: "/api/admin/users?role=USER",
+      auth: adminAuth(ctx.adminId),
+    });
+    const body = res.json() as { items: Array<{ role: string }>; total: number };
+    expect(body.items.every((u) => u.role === "USER")).toBe(true);
+    expect(body.total).toBe(1);
+  });
+
+  it("GET /api/admin/projects returns ownerUsername and ownerDisplayName", async () => {
+    ctx = await setup();
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: "/api/admin/projects",
+      auth: adminAuth(ctx.adminId),
+    });
+    const body = res.json() as {
+      items: Array<{ ownerId: string; ownerUsername: string; ownerDisplayName: string }>;
+    };
+    expect(body.items[0]!.ownerId).toBe(ctx.userId);
+    expect(body.items[0]!.ownerUsername).toBe("alice");
+    expect(body.items[0]!.ownerDisplayName).toBe("Alice");
+  });
+
+  it("GET /api/admin/projects?owner_id=<uid> filters by owner", async () => {
+    ctx = await setup();
+    const otherProjectId = await seedProject(ctx.client, ctx.adminId);
+    mirrorProjectToMemory(ctx.app, otherProjectId, ctx.adminId);
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: `/api/admin/projects?owner_id=${ctx.userId}`,
+      auth: adminAuth(ctx.adminId),
+    });
+    const body = res.json() as { items: Array<{ ownerId: string }>; total: number };
+    expect(body.items.every((p) => p.ownerId === ctx.userId)).toBe(true);
+    expect(body.total).toBe(1);
+  });
+
+  it("GET /api/admin/projects?search=Admin filters by project name", async () => {
+    ctx = await setup();
+    const res = await ctx.app.inject({
+      method: "GET",
+      url: "/api/admin/projects?search=Admin",
+      auth: adminAuth(ctx.adminId),
+    });
+    const body = res.json() as { items: Array<{ name: string }>; total: number };
+    expect(body.items.every((p) => p.name.includes("Admin"))).toBe(true);
+    expect(body.total).toBeGreaterThanOrEqual(1);
+  });
 });
 
 describe("admin API without prismaClient", () => {

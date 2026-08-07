@@ -10,8 +10,8 @@ import {
   adminTransferProjectOwner,
   AdminServiceError,
   fetchAuditLogs,
-  listAllProjects,
-  listAllUsers,
+  listProjectsPage,
+  listUsersPage,
   type CreateUserInput,
 } from "./admin.service.js";
 
@@ -49,13 +49,26 @@ function parseNumber(value: unknown): number | undefined {
   return n;
 }
 
+function parseString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 export const listUsersController = guardAdminRoute(
   async (context: RouteContext): Promise<AppResponse> => {
     requireAdmin(context.auth);
     const client = context.app.prismaClient;
     if (!client) return prismaUnavailable();
-    const users = await listAllUsers(client);
-    return { statusCode: 200, body: { items: users } };
+    const q = context.payload ?? {};
+    const page = await listUsersPage(client, {
+      search: parseString(q.search),
+      role: parseString(q.role),
+      status: parseString(q.status),
+      limit: parseNumber(q.limit),
+      offset: parseNumber(q.offset),
+    });
+    return { statusCode: 200, body: page };
   },
 );
 
@@ -64,8 +77,16 @@ export const listProjectsController = guardAdminRoute(
     requireAdmin(context.auth);
     const client = context.app.prismaClient;
     if (!client) return prismaUnavailable();
-    const projects = await listAllProjects(client);
-    return { statusCode: 200, body: { items: projects } };
+    const q = context.payload ?? {};
+    const includeArchived = q.include_archived === "1" || q.include_archived === "true";
+    const page = await listProjectsPage(client, {
+      search: parseString(q.search),
+      ownerId: parseString(q.owner_id),
+      status: includeArchived && parseString(q.status) === undefined ? undefined : parseString(q.status),
+      limit: parseNumber(q.limit),
+      offset: parseNumber(q.offset),
+    });
+    return { statusCode: 200, body: page };
   },
 );
 

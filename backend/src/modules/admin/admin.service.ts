@@ -23,6 +23,8 @@ export interface AdminProjectSummary {
   id: string;
   name: string;
   ownerId: string;
+  ownerUsername: string;
+  ownerDisplayName: string;
   createdById: string;
   status: string;
   archivedAt: Date | null;
@@ -35,6 +37,36 @@ export interface AdminAuditLogPage {
   total: number;
   limit: number;
   offset: number;
+}
+
+export interface AdminUserPage {
+  items: AdminUserSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface AdminProjectPage {
+  items: AdminProjectSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface AdminUserListQuery {
+  search?: string;
+  role?: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface AdminProjectListQuery {
+  search?: string;
+  ownerId?: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
 }
 
 const MIGRATION_OWNER_NO_LOGIN_MARKER = "!migration-owner-no-login";
@@ -66,27 +98,119 @@ function toUserSummary(row: {
 }
 
 export async function listAllUsers(client: AppPrismaClient): Promise<AdminUserSummary[]> {
-  const users = await client.user.findMany({
-    orderBy: { createdAt: "asc" },
-  });
-  return users.map(toUserSummary);
+  const page = await listUsersPage(client, {});
+  return page.items;
+}
+
+function buildUserWhere(query: AdminUserListQuery): Record<string, unknown> {
+  const where: Record<string, unknown> = {};
+  if (query.role && (query.role === "ADMIN" || query.role === "USER")) {
+    where.role = query.role;
+  }
+  if (query.status && (query.status === "ACTIVE" || query.status === "DISABLED")) {
+    where.status = query.status;
+  }
+  if (query.search && query.search.trim().length > 0) {
+    const kw = query.search.trim();
+    where.OR = [
+      { username: { contains: kw } },
+      { displayName: { contains: kw } },
+    ];
+  }
+  return where;
+}
+
+function clampLimit(value: number | undefined): number {
+  if (!value || value <= 0) return 50;
+  if (value > 200) return 200;
+  return value;
+}
+
+function clampOffset(value: number | undefined): number {
+  if (!value || value < 0) return 0;
+  return value;
+}
+
+export async function listUsersPage(
+  client: AppPrismaClient,
+  query: AdminUserListQuery,
+): Promise<AdminUserPage> {
+  const where = buildUserWhere(query);
+  const limit = clampLimit(query.limit);
+  const offset = clampOffset(query.offset);
+  const [users, total] = await Promise.all([
+    client.user.findMany({
+      where,
+      orderBy: { createdAt: "asc" },
+      take: limit,
+      skip: offset,
+    }),
+    client.user.count({ where }),
+  ]);
+  return { items: users.map(toUserSummary), total, limit, offset };
 }
 
 export async function listAllProjects(client: AppPrismaClient): Promise<AdminProjectSummary[]> {
-  const projects = await client.project.findMany({
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      ownerId: true,
-      createdById: true,
-      status: true,
-      archivedAt: true,
-      createdAt: true,
-      updatedAt: true,
-    },
-  });
-  return projects;
+  const page = await listProjectsPage(client, {});
+  return page.items;
+}
+
+function buildProjectWhere(query: AdminProjectListQuery): Record<string, unknown> {
+  const where: Record<string, unknown> = {};
+  if (query.ownerId && query.ownerId.trim().length > 0) {
+    where.ownerId = query.ownerId.trim();
+  }
+  if (query.status && query.status.trim().length > 0) {
+    if (query.status === "archived") {
+      where.archivedAt = { not: null };
+    } else {
+      where.AND = [
+        { status: { contains: query.status.trim() } },
+        { archivedAt: null },
+      ];
+    }
+  } else {
+    where.archivedAt = null;
+  }
+  if (query.search && query.search.trim().length > 0) {
+    const kw = query.search.trim();
+    where.name = { contains: kw };
+  }
+  return where;
+}
+
+export async function listProjectsPage(
+  client: AppPrismaClient,
+  query: AdminProjectListQuery,
+): Promise<AdminProjectPage> {
+  const where = buildProjectWhere(query);
+  const limit = clampLimit(query.limit);
+  const offset = clampOffset(query.offset);
+  const [rows, total] = await Promise.all([
+    client.project.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      skip: offset,
+      include: {
+        owner: { select: { username: true, displayName: true } },
+      },
+    }),
+    client.project.count({ where }),
+  ]);
+  const items: AdminProjectSummary[] = rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    ownerId: row.ownerId,
+    ownerUsername: row.owner?.username ?? "",
+    ownerDisplayName: row.owner?.displayName ?? "",
+    createdById: row.createdById,
+    status: row.status,
+    archivedAt: row.archivedAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  }));
+  return { items, total, limit, offset };
 }
 
 export async function fetchAuditLogs(
