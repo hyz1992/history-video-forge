@@ -469,7 +469,7 @@
       <section class="modal-filters" aria-label="推荐筛选">
         <div class="basic-grid">
           <div class="filter-group">
-            <div class="filter-label">历史时期</div>
+            <div class="filter-label">时代范围</div>
             <div class="chip-row">
               <button class="chip">先秦至两汉</button>
               <button class="chip chip--active">魏晋至唐宋</button>
@@ -478,11 +478,12 @@
           </div>
 
           <div class="filter-group">
-            <div class="filter-label">叙事偏好</div>
+            <div class="filter-label">叙事取向</div>
             <div class="chip-row">
-              <button class="chip chip--active">高张力</button>
+              <button class="chip chip--active">高张力冲突</button>
               <button class="chip">均衡叙事</button>
-              <button class="chip">传播切口优先</button>
+              <button class="chip">反常识切入</button>
+              <button class="chip">绝境翻盘</button>
             </div>
           </div>
 
@@ -505,45 +506,40 @@
           <summary>
             <span class="advanced-title">更多筛选</span>
             <span class="advanced-summary">
-              人物、事件类型、冲突类型、母题、可信度、排除项
+              人物关系、事件类型、主题关注、可信度、排除项
               <span class="chevron">⌄</span>
             </span>
           </summary>
 
           <div class="advanced-panel">
             <div class="filter-mini">
-              <div class="filter-label">人物标签</div>
-              <div class="tag-input">
-                <span class="tag">帝王<button aria-label="移除">×</button></span>
-                <span class="tag">权臣<button aria-label="移除">×</button></span>
-                <input placeholder="输入人物标签">
+              <div class="filter-label">人物关系</div>
+              <div class="chip-row">
+                <button class="chip chip--small chip--active">君臣</button>
+                <button class="chip chip--small">父子</button>
+                <button class="chip chip--small">兄弟</button>
+                <button class="chip chip--small">敌对阵营</button>
               </div>
             </div>
 
             <div class="filter-mini">
               <div class="filter-label">事件类型</div>
               <div class="chip-row">
-                <button class="chip chip--small chip--active">继承夺位</button>
-                <button class="chip chip--small">宫廷政变</button>
-                <button class="chip chip--small">边疆危机</button>
+                <button class="chip chip--small chip--active">夺位</button>
+                <button class="chip chip--small">政变</button>
+                <button class="chip chip--small">战争</button>
+                <button class="chip chip--small">外交羞辱</button>
+                <button class="chip chip--small">冤案</button>
               </div>
             </div>
 
             <div class="filter-mini">
-              <div class="filter-label">冲突类型</div>
-              <div class="chip-row">
-                <button class="chip chip--small chip--active">兄弟冲突</button>
-                <button class="chip chip--small">君臣博弈</button>
-                <button class="chip chip--small">派系倾轧</button>
-              </div>
-            </div>
-
-            <div class="filter-mini">
-              <div class="filter-label">主题母题</div>
+              <div class="filter-label">主题关注</div>
               <div class="chip-row">
                 <button class="chip chip--small chip--active">权力代价</button>
-                <button class="chip chip--small">命运反转</button>
                 <button class="chip chip--small">信任崩塌</button>
+                <button class="chip chip--small">制度压迫</button>
+                <button class="chip chip--small">家族撕裂</button>
               </div>
             </div>
 

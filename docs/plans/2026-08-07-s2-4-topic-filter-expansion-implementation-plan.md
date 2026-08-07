@@ -90,14 +90,14 @@ describe("TopicRecommendationFilter", () => {
   it("normalizes legacy enum spellings and sorts arrays", () => {
     const filter = normalizeTopicRecommendationFilter({
       era_band: "late-imperial",
-      tension: "hook-first",
+      narrative_orientation: "contrarian_hook",
       dynasties: [" 唐 ", "宋", "唐"],
       event_type_tags: [" 继承夺位 ", ""],
     });
 
     expect(filter).toEqual({
       era_band: "late_imperial",
-      tension: "hook_first",
+      narrative_orientation: "contrarian_hook",
       dynasties: ["唐", "宋"],
       event_type_tags: ["继承夺位"],
     });
@@ -106,11 +106,11 @@ describe("TopicRecommendationFilter", () => {
   it("creates stable fingerprint for equivalent filters", () => {
     const a = getTopicRecommendationFilterFingerprint({
       dynasties: ["宋", "唐"],
-      tension: "high",
+      narrative_orientation: "high_tension",
     });
     const b = getTopicRecommendationFilterFingerprint({
       dynasties: [" 唐 ", "宋"],
-      tension: "high",
+      narrative_orientation: "high_tension",
     });
 
     expect(a).toBe(b);
@@ -141,8 +141,8 @@ describe("TopicRecommendationFilter", () => {
 
 - enum `era_band`: `ancient / medieval / late_imperial`
 - enum aliases accepted by normalizer: `late-imperial`
-- enum `tension`: `high / balanced / hook_first`
-- enum aliases accepted by normalizer: `hook-first`
+- enum `narrative_orientation`: `high_tension / balanced / contrarian_hook / comeback / spread_first`
+- legacy `tension` aliases accepted by normalizer: `high -> high_tension`、`hook-first -> contrarian_hook`
 - `credibility_levels`: `high / medium / low / disputed`
 - arrays max sizes per design
 - fingerprint via `node:crypto` `sha256(JSON.stringify(normalized)).slice(0, 16)`
@@ -229,11 +229,12 @@ git commit -m "feat(topic): 推荐接口接收结构化筛选"
 使用 mock 的 `invokeStructuredPrompt` 或现有 trace hooks，断言 builder input 包含：
 
 ```ts
-topic_filter: {
-  dynasties: ["唐"],
-  event_type_tags: ["继承夺位"],
-  tension: "high",
-},
+  topic_filter: {
+    dynasties: ["唐"],
+    relationship_tags: ["兄弟"],
+    event_type_tags: ["夺位"],
+    narrative_orientation: "high_tension",
+  },
 topic_filter_fingerprint: "<16 hex chars>"
 ```
 
@@ -492,8 +493,9 @@ If existing frontend unit test infrastructure is available for stores/components
 
 System tab：
 
-- 基础行：era、tension、dynasties。
-- 高级行/toggle：character tags、event type tags、conflict tags、theme motifs、credibility、exclude terms。
+- 基础行：era_band、dynasties、narrative_orientation。
+- 高级行/toggle：relationship tags、event type tags、theme motifs、credibility、exclude terms。
+- 除 exclude terms 外，其余筛选均使用固定选项，不使用自由 tag input。
 - 使用紧凑控件，避免把 modal 做成大型 landing page。
 
 - [ ] **步骤 4：验证 frontend**

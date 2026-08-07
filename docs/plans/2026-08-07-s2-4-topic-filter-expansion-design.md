@@ -17,7 +17,7 @@
 
 ### 1.1 任务
 
-S2-4 要把系统推荐入口从当前的「历史时期 + 叙事偏好」扩展为结构化筛选系统，让用户能按朝代、人物标签、事件类型、冲突类型、主题母题和可信度偏好影响推荐结果。
+S2-4 要把系统推荐入口从当前的「历史时期 + 叙事偏好」扩展为结构化筛选系统，让用户能按时代范围、朝代、人物关系、事件类型、主题关注、叙事取向和可信度偏好影响推荐结果。
 
 ### 1.2 目标
 
@@ -37,10 +37,9 @@ S2-5 已完成事件库与自定义选题主链路，并在 `EventLibraryEntry` 
 
 - `dynasty`
 - `era`
-- `characterTagsJson`
 - `eventTypeTagsJson`
-- `conflictTypeTagsJson`
 - `themeMotifsJson`
+- `relationshipTagsJson`
 - `credibilityLevel`
 
 三入口已通过 `sourceMode/sourceRefJson` 汇入同一 `TopicPackage`。事件库浏览已支持部分字段筛选，说明字段与 UI 交互模式已有可复用基础。
@@ -82,13 +81,12 @@ S2-5 已完成事件库与自定义选题主链路，并在 `EventLibraryEntry` 
 |---|---|---|---|
 | `era_band` | enum | 粗粒度历史时期 | 兼容现有 `era`，值为 `ancient / medieval / late_imperial` |
 | `dynasties` | string[] | 朝代 | 可空；非空时最多 3 个 |
-| `character_tags` | string[] | 人物/角色标签 | 可空；最多 5 个 |
+| `relationship_tags` | string[] | 人物关系 | 可空；最多 5 个；第一版使用固定选项 |
 | `event_type_tags` | string[] | 事件类型 | 可空；最多 5 个 |
-| `conflict_type_tags` | string[] | 冲突类型 | 可空；最多 5 个 |
-| `theme_motifs` | string[] | 主题母题 | 可空；最多 5 个 |
+| `theme_motifs` | string[] | 主题关注 | 可空；最多 5 个；第一版使用固定选项 |
 | `credibility_levels` | enum[] | 史料可信度偏好 | 可空；值为 `high / medium / low / disputed` |
 | `exclude_terms` | string[] | 排除项 | 可空；最多 8 个；仅作为 prompt 负向约束和诊断，不进入 EventLibrary |
-| `tension` | enum | 叙事偏好 | 兼容现有值 `high / balanced / hook_first` |
+| `narrative_orientation` | enum | 叙事取向 | 整合原叙事偏好与叙事钩子；兼容旧 `tension` 输入 |
 
 命名约定：
 
@@ -126,7 +124,7 @@ S2-5 已完成事件库与自定义选题主链路，并在 `EventLibraryEntry` 
 1. trim。
 2. 折叠连续空白。
 3. 数组去空、去重、排序。
-4. enum 做兼容映射：`late-imperial -> late_imperial`，`hook-first -> hook_first`。
+4. enum 做兼容映射：`late-imperial -> late_imperial`；旧 `tension` 映射到 `narrative_orientation`。
 5. 空数组从规范化结果中移除。
 
 ### 5.2 API Payload
@@ -145,12 +143,12 @@ S2-5 已完成事件库与自定义选题主链路，并在 `EventLibraryEntry` 
   "filters": {
     "era_band": "medieval",
     "dynasties": ["唐"],
-    "event_type_tags": ["继承夺位"],
-    "conflict_type_tags": ["兄弟冲突"],
+    "relationship_tags": ["兄弟"],
+    "event_type_tags": ["夺位"],
     "theme_motifs": ["权力代价"],
     "credibility_levels": ["high", "medium"],
     "exclude_terms": ["神话", "演义"],
-    "tension": "high"
+    "narrative_orientation": "high_tension"
   }
 }
 ```
@@ -174,7 +172,7 @@ topic_filter_fingerprint?: string;
 
 - 若存在 `topic_filter`，候选必须优先满足筛选条件。
 - `dynasties / era_band` 是边界约束，不能越界。
-- `event_type_tags / conflict_type_tags / theme_motifs` 是软偏好，但候选应尽量显式呼应。
+- `relationship_tags / event_type_tags / theme_motifs / narrative_orientation` 是软偏好，但候选应尽量显式呼应。
 - `exclude_terms` 是负向约束。
 - 无法满足所有软偏好时，优先保证具体单事件、时代边界和叙事质量。
 
@@ -217,13 +215,15 @@ topic_filter_fingerprint?: string;
 
 系统推荐 tab 扩展为两层：
 
-1. **基础筛选**：历史时期、叙事偏好、朝代。
-2. **展开筛选**：人物标签、事件类型、冲突类型、主题母题、可信度、排除项。
+1. **基础筛选**：时代范围、朝代、叙事取向。
+2. **展开筛选**：人物关系、事件类型、主题关注、可信度、排除项。
 
 第一版 UI 规则：
 
-- 朝代可用固定多选 chips 或输入型多选，先不做远程搜索。
-- 人物/事件/冲突/母题使用轻量 tag input，允许用户输入自由标签。
+- 朝代作为时代范围下的二级筛选：先选时代范围，再展示对应朝代固定选项。
+- 除排除项外，其余高级筛选均使用固定 chip 选项，不使用自由 tag input。
+- 不再提供独立「冲突类型」筛选，避免和事件类型重复或冲突。
+- 不再提供独立「叙事钩子」筛选，统一合入基础筛选里的叙事取向。
 - 可信度使用多选。
 - 排除项使用 tag input。
 - 保留 sessionStorage，但 key 迁移到一个 `topic-recommendation-filter` JSON，避免散落多个 key。
