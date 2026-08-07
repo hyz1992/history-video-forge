@@ -172,6 +172,7 @@ export async function listDraftsController(context: RouteContext): Promise<AppRe
 
   const status = getPayloadField(context.payload, "status") || undefined;
   const draftKind = getPayloadField(context.payload, "draftKind", "draft_kind") || undefined;
+  const search = getPayloadField(context.payload, "search") || undefined;
   const page = Math.max(1, getPayloadNumber(context.payload, "page") ?? 1);
   const pageSize = Math.min(100, Math.max(1, getPayloadNumber(context.payload, "pageSize", "page_size") ?? 20));
 
@@ -182,6 +183,12 @@ export async function listDraftsController(context: RouteContext): Promise<AppRe
     where.status = { in: ["draft", "pending_review"] };
   }
   if (draftKind) where.draftKind = draftKind;
+  if (search) {
+    where.OR = [
+      { proposedTitle: { contains: search } },
+      { proposedSummary: { contains: search } },
+    ];
+  }
 
   const [drafts, total] = await Promise.all([
     prisma.eventLibraryDraft.findMany({
@@ -531,11 +538,20 @@ export async function listAdminEntriesController(context: RouteContext): Promise
   if (!prisma) return { statusCode: 503, body: { error: "database_unavailable" } };
 
   const status = getPayloadField(context.payload, "status") || undefined;
+  const dynasty = getPayloadField(context.payload, "dynasty") || undefined;
+  const search = getPayloadField(context.payload, "search") || undefined;
   const page = Math.max(1, getPayloadNumber(context.payload, "page") ?? 1);
   const pageSize = Math.min(100, Math.max(1, getPayloadNumber(context.payload, "pageSize", "page_size") ?? 20));
 
   const where: Record<string, unknown> = {};
   if (status) where.status = status;
+  if (dynasty) where.dynasty = dynasty;
+  if (search) {
+    where.OR = [
+      { canonicalTitle: { contains: search } },
+      { summary: { contains: search } },
+    ];
+  }
 
   const [entries, total] = await Promise.all([
     prisma.eventLibraryEntry.findMany({

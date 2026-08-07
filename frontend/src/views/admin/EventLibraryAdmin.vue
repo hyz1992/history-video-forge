@@ -18,7 +18,25 @@
     <div v-if="activeTab === 'review'" class="review-section">
       <div class="section-header">
         <h3 class="section-title">待审核草稿</h3>
-        <button class="refresh-btn" @click="loadDrafts" :disabled="draftLoading">刷新</button>
+        <div class="section-header-actions">
+          <button class="refresh-btn" @click="loadDrafts" :disabled="draftLoading">刷新</button>
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <input
+          v-model="draftFilters.search"
+          class="filter-input"
+          placeholder="搜索标题或摘要"
+          @keyup.enter="onDraftSearch"
+        />
+        <select v-model="draftFilters.draftKind" class="filter-select" @change="onDraftSearch">
+          <option value="">全部类型</option>
+          <option value="recommendation_reflux">推荐回流</option>
+          <option value="custom">自定义</option>
+        </select>
+        <button class="refresh-btn refresh-btn--primary" @click="onDraftSearch">查询</button>
+        <button class="refresh-btn" @click="resetDraftFilters">重置</button>
       </div>
 
       <div v-if="draftLoading" class="section-loading">加载中…</div>
@@ -59,6 +77,12 @@
           </div>
         </div>
       </div>
+
+      <div v-if="draftTotal > draftPageSize" class="pagination-bar">
+        <button class="refresh-btn" :disabled="draftPage <= 1" @click="changeDraftPage(draftPage - 1)">上一页</button>
+        <span class="page-info">{{ draftPage }} / {{ Math.ceil(draftTotal / draftPageSize) }}（共 {{ draftTotal }} 条）</span>
+        <button class="refresh-btn" :disabled="draftPage * draftPageSize >= draftTotal" @click="changeDraftPage(draftPage + 1)">下一页</button>
+      </div>
     </div>
 
     <!-- Entries Management -->
@@ -72,6 +96,29 @@
             {{ syncing ? '同步中…' : '触发同步' }}
           </button>
         </div>
+      </div>
+
+      <div class="filter-bar">
+        <input
+          v-model="entryFilters.search"
+          class="filter-input"
+          placeholder="搜索标题或摘要"
+          @keyup.enter="onEntrySearch"
+        />
+        <input
+          v-model="entryFilters.dynasty"
+          class="filter-input filter-input--narrow"
+          placeholder="朝代"
+          @keyup.enter="onEntrySearch"
+        />
+        <select v-model="entryFilters.status" class="filter-select" @change="onEntrySearch">
+          <option value="">全部状态</option>
+          <option value="curated">已收录</option>
+          <option value="draft">草稿</option>
+          <option value="archived">已归档</option>
+        </select>
+        <button class="refresh-btn refresh-btn--primary" @click="onEntrySearch">查询</button>
+        <button class="refresh-btn" @click="resetEntryFilters">重置</button>
       </div>
 
       <div v-if="entryLoading" class="section-loading">加载中…</div>
@@ -97,10 +144,10 @@
             <td>{{ entry.dynasty || '-' }}</td>
             <td>
               <span class="status-tag" :class="`status-tag--${entry.status}`">
-                {{ entry.status }}
+                {{ entryStatusLabel(entry.status) }}
               </span>
             </td>
-            <td>{{ entry.origin_kind }}</td>
+            <td>{{ entryOriginLabel(entry.origin_kind) }}</td>
             <td>{{ entry.angle_count }}</td>
             <td>{{ formatTime(entry.updated_at) }}</td>
             <td class="entry-actions-cell">
@@ -114,6 +161,12 @@
           </tr>
         </tbody>
       </table>
+
+      <div v-if="entryTotal > entryPageSize" class="pagination-bar">
+        <button class="refresh-btn" :disabled="entryPage <= 1" @click="changeEntryPage(entryPage - 1)">上一页</button>
+        <span class="page-info">{{ entryPage }} / {{ Math.ceil(entryTotal / entryPageSize) }}（共 {{ entryTotal }} 条）</span>
+        <button class="refresh-btn" :disabled="entryPage * entryPageSize >= entryTotal" @click="changeEntryPage(entryPage + 1)">下一页</button>
+      </div>
     </div>
 
     <!-- Reject Dialog -->
@@ -220,6 +273,10 @@ interface DraftItem {
 const drafts = ref<DraftItem[]>([]);
 const draftLoading = ref(false);
 const draftError = ref<string | null>(null);
+const draftPage = ref(1);
+const draftPageSize = ref(20);
+const draftTotal = ref(0);
+const draftFilters = reactive({ search: "", draftKind: "" });
 
 function draftKindLabel(kind: string): string {
   if (kind === "recommendation_reflux") return "推荐回流";
@@ -227,19 +284,49 @@ function draftKindLabel(kind: string): string {
   return kind;
 }
 
+function buildDraftQueryParams(): Record<string, string> {
+  const params: Record<string, string> = {
+    page: String(draftPage.value),
+    page_size: String(draftPageSize.value),
+  };
+  if (draftFilters.search.trim()) params.search = draftFilters.search.trim();
+  if (draftFilters.draftKind) params.draft_kind = draftFilters.draftKind;
+  return params;
+}
+
 async function loadDrafts() {
   draftLoading.value = true;
   draftError.value = null;
   try {
-    const data = await apiFetch<{ drafts: DraftItem[] }>(
-      "/api/admin/event-library/drafts",
+    const params = new URLSearchParams(buildDraftQueryParams()).toString();
+    const data = await apiFetch<{ drafts: DraftItem[]; total: number; page: number; page_size: number }>(
+      `/api/admin/event-library/drafts?${params}`,
     );
     drafts.value = data.drafts.map((d) => ({ ...d, processing: false }));
+    draftTotal.value = data.total ?? data.drafts.length;
+    draftPageSize.value = data.page_size ?? draftPageSize.value;
   } catch (e) {
     draftError.value = e instanceof Error ? e.message : "加载草稿失败";
   } finally {
     draftLoading.value = false;
   }
+}
+
+function onDraftSearch() {
+  draftPage.value = 1;
+  loadDrafts();
+}
+
+function resetDraftFilters() {
+  draftFilters.search = "";
+  draftFilters.draftKind = "";
+  draftPage.value = 1;
+  loadDrafts();
+}
+
+function changeDraftPage(page: number) {
+  draftPage.value = page;
+  loadDrafts();
 }
 
 async function approveDraft(draft: DraftItem) {
@@ -316,20 +403,74 @@ interface AdminEntry {
 const entries = ref<AdminEntry[]>([]);
 const entryLoading = ref(false);
 const entryError = ref<string | null>(null);
+const entryPage = ref(1);
+const entryPageSize = ref(20);
+const entryTotal = ref(0);
+const entryFilters = reactive({ search: "", dynasty: "", status: "" });
+
+const ENTRY_STATUS_LABELS: Record<string, string> = {
+  curated: "已收录",
+  draft: "草稿",
+  archived: "已归档",
+};
+const ENTRY_ORIGIN_LABELS: Record<string, string> = {
+  builtin: "内置",
+  admin: "管理员",
+  draft: "草稿合并",
+};
+
+function entryStatusLabel(status: string): string {
+  return ENTRY_STATUS_LABELS[status] ?? status;
+}
+function entryOriginLabel(origin: string): string {
+  return ENTRY_ORIGIN_LABELS[origin] ?? origin;
+}
+
+function buildEntryQueryParams(): Record<string, string> {
+  const params: Record<string, string> = {
+    page: String(entryPage.value),
+    page_size: String(entryPageSize.value),
+  };
+  if (entryFilters.search.trim()) params.search = entryFilters.search.trim();
+  if (entryFilters.dynasty.trim()) params.dynasty = entryFilters.dynasty.trim();
+  if (entryFilters.status) params.status = entryFilters.status;
+  return params;
+}
 
 async function loadEntries() {
   entryLoading.value = true;
   entryError.value = null;
   try {
-    const data = await apiFetch<{ entries: AdminEntry[] }>(
-      "/api/admin/event-library/entries",
+    const params = new URLSearchParams(buildEntryQueryParams()).toString();
+    const data = await apiFetch<{ entries: AdminEntry[]; total: number; page: number; page_size: number }>(
+      `/api/admin/event-library/entries?${params}`,
     );
     entries.value = data.entries;
+    entryTotal.value = data.total ?? data.entries.length;
+    entryPageSize.value = data.page_size ?? entryPageSize.value;
   } catch (e) {
     entryError.value = e instanceof Error ? e.message : "加载条目失败";
   } finally {
     entryLoading.value = false;
   }
+}
+
+function onEntrySearch() {
+  entryPage.value = 1;
+  loadEntries();
+}
+
+function resetEntryFilters() {
+  entryFilters.search = "";
+  entryFilters.dynasty = "";
+  entryFilters.status = "";
+  entryPage.value = 1;
+  loadEntries();
+}
+
+function changeEntryPage(page: number) {
+  entryPage.value = page;
+  loadEntries();
 }
 
 const syncing = ref(false);
@@ -841,5 +982,54 @@ watch(activeTab, (tab) => {
   background: var(--el-color-success);
   color: #fff;
   border-color: var(--el-color-success);
+}
+
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.filter-input {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--el-border-color-light);
+  font-size: 13px;
+  background: var(--el-bg-color);
+  color: var(--el-text-color-regular);
+  box-sizing: border-box;
+  min-width: 180px;
+}
+
+.filter-input--narrow {
+  min-width: 100px;
+  max-width: 120px;
+}
+
+.filter-select {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--el-border-color-light);
+  font-size: 13px;
+  background: var(--el-bg-color);
+  color: var(--el-text-color-regular);
+  box-sizing: border-box;
+  min-width: 120px;
+}
+
+.pagination-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 16px;
+  padding: 12px 0;
+}
+
+.page-info {
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
 }
 </style>
