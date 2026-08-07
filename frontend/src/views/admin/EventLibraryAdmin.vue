@@ -490,7 +490,7 @@ async function batchApprove() {
 async function batchReject() {
   const ids = [...selectedDraftIds.value];
   if (ids.length === 0 || batchProcessing.value) return;
-  const notes = prompt(`确认批量拒绝 ${ids.length} 条草稿。\n拒绝原因（可选）：`, "") ?? "";
+  const notes = prompt(`确认批量拒绝 ${ids.length} 条草稿。\n拒绝原因（可选）：`, "");
   if (notes === null) return;
   batchProcessing.value = true;
   let ok = 0;
