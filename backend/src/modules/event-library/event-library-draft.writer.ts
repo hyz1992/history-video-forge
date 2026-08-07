@@ -42,6 +42,10 @@ export async function writeRefluxDraft(input: WriteRefluxDraftInput): Promise<vo
       ],
       proposedTags: {
         events: [input.candidate.event.canonicalName],
+        // scopeLabel 实际语义就是朝代（如"春秋""战国""魏晋"），
+        // familyLabel 是事件家族（如"军事政变型"）——保留两者供审批参考。
+        dynasty: input.candidate.scopeLabel || null,
+        family_label: input.candidate.familyLabel || null,
       },
       ownerId: input.ownerId,
     });

@@ -250,10 +250,18 @@ async function executeApprove(
     return { statusCode: 409, body: { error: "draft_already_reviewed", status: draft.status } };
   }
 
+  // 朝代/时期回退：管理员未显式指定时，优先取草稿自带的结构化字段
+  // （recommendation_reflux 的 scopeLabel，或 custom 的 LLM refined.dynasty）。
+  const draftTags = (draft.proposedTagsJson as Record<string, unknown>) ?? {};
+  const resolvedDynasty = dynasty
+    || (typeof draftTags.dynasty === "string" && draftTags.dynasty.trim() ? draftTags.dynasty.trim() : undefined);
+  const resolvedEra = era
+    || (typeof draftTags.era === "string" && draftTags.era.trim() ? draftTags.era.trim() : undefined);
+
   const libraryFingerprint = generateLibraryFingerprint(
     draft.proposedTitle,
-    dynasty ?? null,
-    era ?? null,
+    resolvedDynasty ?? null,
+    resolvedEra ?? null,
   );
 
   const existingEntry = await findEntryByFingerprint(prisma, libraryFingerprint);
@@ -365,8 +373,8 @@ async function executeApprove(
       eventRegistryEntryId,
       canonicalTitle: draft.proposedTitle,
       summary: draft.proposedSummary,
-      dynasty: dynasty ?? null,
-      era: era ?? null,
+      dynasty: resolvedDynasty ?? null,
+      era: resolvedEra ?? null,
       characterTags: Array.isArray(draftTags.characterTags)
         ? draftTags.characterTags as string[]
         : [],

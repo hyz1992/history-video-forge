@@ -585,7 +585,11 @@ export async function createTopicFromCustomController(
         proposedTitle: refined.canonicalName,
         proposedSummary: refined.summary,
         proposedAngles: [],
-        proposedTags: { events: [refined.canonicalName] },
+        proposedTags: {
+          events: [refined.canonicalName],
+          dynasty: refined.dynasty,
+          era: refined.era,
+        },
         rawCustomDigest: digestResult.value,
         customRefinedEvent: refined,
         ownerId: context.auth.userId,

@@ -92,6 +92,12 @@
           </div>
           <p class="draft-summary">{{ draft.proposed_summary }}</p>
           <div class="draft-meta">
+            <span class="draft-meta-tag" v-if="draftDynasty(draft)">
+              朝代：{{ draftDynasty(draft) }}
+            </span>
+            <span class="draft-meta-tag" v-if="draftEra(draft)">
+              时期：{{ draftEra(draft) }}
+            </span>
             <span>提交者：{{ draft.owner_username || draft.owner_id }}</span>
             <span>{{ formatTime(draft.created_at) }}</span>
           </div>
@@ -318,6 +324,16 @@ function draftKindLabel(kind: string): string {
   if (kind === "recommendation_reflux") return "推荐回流";
   if (kind === "custom") return "自定义";
   return kind;
+}
+
+function draftDynasty(draft: DraftItem): string {
+  const v = draft.proposed_tags?.dynasty;
+  return typeof v === "string" && v.trim() ? v.trim() : "";
+}
+
+function draftEra(draft: DraftItem): string {
+  const v = draft.proposed_tags?.era;
+  return typeof v === "string" && v.trim() ? v.trim() : "";
 }
 
 function buildDraftQueryParams(): Record<string, string> {
@@ -881,6 +897,15 @@ watch(activeTab, (tab) => {
   font-size: 12px;
   color: var(--el-text-color-placeholder);
   margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.draft-meta-tag {
+  color: var(--el-color-primary);
+  background: rgba(64, 158, 255, 0.08);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
 }
 
 .draft-actions {
