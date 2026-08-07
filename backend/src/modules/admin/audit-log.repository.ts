@@ -15,6 +15,8 @@ export interface AuditLogQuery {
 export interface AuditLogRecord {
   id: string;
   actorUserId: string | null;
+  actorUsername: string | null;
+  actorDisplayName: string | null;
   projectId: string | null;
   action: string;
   targetType: string;
@@ -58,6 +60,9 @@ export async function queryAuditLogs(
       orderBy: { createdAt: "desc" },
       take: limit,
       skip: offset,
+      include: {
+        actor: { select: { username: true, displayName: true } },
+      },
     }),
     client.auditLog.count({ where }),
   ]);
@@ -66,6 +71,8 @@ export async function queryAuditLogs(
     items: items.map((row) => ({
       id: row.id,
       actorUserId: row.actorUserId,
+      actorUsername: row.actor?.username ?? null,
+      actorDisplayName: row.actor?.displayName ?? null,
       projectId: row.projectId,
       action: row.action,
       targetType: row.targetType,
