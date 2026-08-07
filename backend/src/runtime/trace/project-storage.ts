@@ -64,6 +64,18 @@ function buildProjectRootDir(input: {
   return process.env.STORAGE_ROOT_DIR ? resolve(resolveStorageBaseDir(), relativeRoot) : relativeRoot;
 }
 
+/** Build the project storage directory path relative to the workspace root,
+ *  without resolving against STORAGE_ROOT_DIR. Used by the hydrator to
+ *  reconstruct the on-disk path from persisted DB fields. */
+export function buildProjectStorageRelativeDir(input: {
+  createdAt: Date;
+  displayName: string;
+  shortId: string;
+}): string {
+  const dateSegment = input.createdAt.toISOString().slice(0, 10);
+  return `storage/projects/${dateSegment}/${input.displayName} [${input.shortId}]`;
+}
+
 function resolveStoragePath(relativePath: string) {
   return isAbsolute(relativePath) ? relativePath : resolve(resolveStorageBaseDir(), relativePath);
 }

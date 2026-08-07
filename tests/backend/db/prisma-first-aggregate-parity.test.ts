@@ -24,7 +24,14 @@ describe("first aggregate Prisma hydration parity", () => {
       await client.recommendationRound.create({ data: { projectId: project.id, roundIndex: 1, exposures: { create: [{ eventRegistryEntryId: event.id, eventIdentity: "晏子使楚", title: "晏子使楚", fingerprint: "fp", selectedAt: new Date() }] } } });
       const db = createDbClient(); const candidateState = new Map();
       await hydrateFirstAggregates(db, candidateState, client, { storageRoot: root });
-      expect(db.projects.get(project.id)).toMatchObject({ name: "Project", storageRootDir: join(root, "storage", "projects", "stable-project-key") });
+      const projectRow = await client.project.findUnique({ where: { id: project.id } });
+      const expectedDateSegment = projectRow!.createdAt.toISOString().slice(0, 10);
+      // buildShortId pads to 8 chars, so "project" (6 chars) -> "project0"
+      expect(db.projects.get(project.id)).toMatchObject({
+        name: "Project",
+        storageRootDir: join(root, "storage", "projects", expectedDateSegment, "Project [p_project0]"),
+        storageShortId: "p_project0",
+      });
       expect(db.events.get(event.id)).toMatchObject({ canonicalName: "晏子使楚", aliases: ["晏婴使楚"] });
       expect(db.topicPackages.get("topic")).toMatchObject({ selectedAngle: "外交反击", mustIncludeBeatsJson: ["入楚"] });
       expect(db.candidateCache.get("cache")).toMatchObject({ fingerprint: "fp", viralRubricJson: { hook: "羞辱" } });

@@ -4,9 +4,18 @@ import type { ProjectTopicCandidateState } from "../../app.js";
 import type { StoredTopicCandidate } from "../../modules/topic/topic-confirm.service.js";
 import type { CandidateCacheRecord, DbClient, EventRegistryRecord, ProjectRecord, ProjectRecommendationRoundRecord, TopicPackageRecord } from "../client.js";
 import type { AppPrismaClient } from "../prisma-client.types.js";
+import { buildProjectStorageRelativeDir } from "../../runtime/trace/project-storage.js";
 
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const array = <T>(value: unknown): T[] => Array.isArray(value) ? value as T[] : [];
+
+/** Reconstruct the on-disk short id from the project UUID, matching the
+ *  convention used by project-storage.ts (`p_<first 8 hex chars>`). */
+function buildShortId(projectId: string): string {
+  const compact = projectId.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
+  const shortBody = (compact.slice(0, 8) || "00000000").padEnd(8, "0");
+  return `p_${shortBody}`;
+}
 
 export async function hydrateFirstAggregates(
   db: DbClient,
@@ -37,8 +46,20 @@ export async function hydrateFirstAggregates(
       latestAssetsRunTraceJson: row.latestAssetsRunTraceJson ? object(row.latestAssetsRunTraceJson) : null,
       latestComposeRunTraceJson: row.latestComposeRunTraceJson ? object(row.latestComposeRunTraceJson) : null,
       latestRenderRunTraceJson: row.latestRenderRunTraceJson ? object(row.latestRenderRunTraceJson) : null,
-      storageDisplayName: row.storageDisplayName, storageShortId: row.storageKey.slice(-8),
-      storageRootDir: join(options.storageRoot, "storage", "projects", row.storageKey),
+      storageDisplayName: row.storageDisplayName,
+      storageShortId: buildShortId(row.id),
+      // Reconstruct the on-disk storage root from createdAt + displayName +
+      // shortId, matching the layout used by project-storage.ts when files
+      // are written. The DB storageKey is the project UUID (used for
+      // uniqueness), NOT the on-disk directory name.
+      storageRootDir: join(
+        options.storageRoot,
+        buildProjectStorageRelativeDir({
+          createdAt: row.createdAt,
+          displayName: row.storageDisplayName || row.name,
+          shortId: buildShortId(row.id),
+        }),
+      ),
       storageRenameLocked: row.storageRenameLocked, createdAt: row.createdAt, updatedAt: row.updatedAt,
     };
     db.projects.set(record.id, record);
