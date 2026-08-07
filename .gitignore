@@ -26,3 +26,6 @@ temp/
 backend/dist/
 backend/src/generated/prisma/
 frontend/dist/
+
+storage/event-library/unknown/
+
