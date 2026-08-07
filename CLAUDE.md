@@ -192,8 +192,10 @@ shared/src/
   render/
   *.schema.ts            共享 Zod schema
 
+prompts/                 正式 prompt 资产（项目根目录，非 harness/）
+
 harness/
-  prompts/               正式 prompt
+  docs/                  执行规范与质量规则
   scripts/runtime/       live-check 与 smoke 脚本
 ```
 

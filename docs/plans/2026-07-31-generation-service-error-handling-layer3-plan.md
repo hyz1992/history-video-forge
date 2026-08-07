@@ -46,6 +46,8 @@
 - 不改 schema、不改 API 形状、不改 frontend。
 - 不消除 ZodError——zod 仍是结构校验权威；只是把 ZodError 包成稳定类型再抛。
 
+> 更新（2026-08-04）：`parseLlmOutput` 已增强为"先递归剥离 `unrecognized_keys` 再校验"。zod 仍是结构校验权威；但 LLM 自发添加的语义字段（如 location 的 `role`、chunk 的 `manual_review_notes`）不再触发 `LlmOutputError`——它们会在 parse 前被静默剥离。真正的结构错误（字段缺失、类型错、枚举非法）仍照常抛 `LlmOutputError`。详见 §2.2 的实现说明。
+
 ---
 
 ## 2. 设计
@@ -92,17 +94,18 @@ export class LlmOutputError extends Error {
 - 包装在 generation service 内，**不在 zod schema 层**（schema 是纯校验，不应承载运行时类型）。
 - 包装函数复用，例如：
   ```ts
+  // 当前实现（2026-08-04 起）：parse 前会递归剥离 unrecognized_keys，
+  // 剥离耗尽后仍失败的 ZodError 才包成 LlmOutputError。
   function parseLlmOutput<T>(schema: ZodType<T>, raw: unknown, code: string): T {
-    try {
-      return schema.parse(raw);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        throw new LlmOutputError(code, { cause: error.issues });
-      }
-      throw error;
+    const result = stripUnknownKeysAndParse(schema, raw);
+    if (result.ok) {
+      return result.value;
     }
+    throw new LlmOutputError(code, { cause: result.error.issues });
   }
   ```
+  - `stripUnknownKeysAndParse` 内部循环（上限 8 轮）：先 `schema.safeParse`，若失败且**只含 `unrecognized_keys`** 错误，按 `issue.path + issue.keys` 定位删除多余键后重试；若仍含其他错误（`invalid_type` / `invalid_enum` 等）或无键可删，返回该 ZodError。
+  - 设计意图：LLM 输出层 schema 普遍使用 `.strict()`，但 LLM 天然会多输出语义字段。`unrecognized_keys` 不当作结构错误；真正的结构错误仍正常抛出。
 
 ### 2.3 各 run service 改造点
 
@@ -295,6 +298,7 @@ npm run typecheck:backend
 - `instanceof LlmOutputError` 在单进程 Node.js 中安全 ✓
 - schema 错误不驱动 regen，无循环风险 ✓
 - `parseLlmOutput` 中非 ZodError 异常原样 rethrow ✓
+- `parseLlmOutput` 只剥离 `unrecognized_keys`，不影响 `invalid_type`/`invalid_enum` 等真正结构错误的抛出 ✓
 - `ExternalServiceError` 与 `LlmOutputError.code` 命名空间不冲突 ✓
 
 ### 决策点决定
@@ -355,6 +359,7 @@ generation service 抛出的 `LlmOutputError.code`（全部为字符串，无子
 | asset-planning | `asset_chunk_dependency_local_id_missing_violated` | `validateChunkDraft` | 依赖引用不存在的 local id |
 | asset-planning | `asset_chunk_forbidden_task_type_violated` | `rejectForbiddenChunkTasks` | LLM 偷偷输出 tts/subtitle |
 | topic | `topic_candidate_card_schema_invalid` | fallback 路径 `TopicCandidateCard.parse` | normalize 后仍不合法（极端情况） |
+| topic | `topic_custom_refine_schema_invalid` | `refineCustomTopic` 内 `parseLlmOutput(CustomRefinedEvent, ...)` | 自定义梗概提炼结构不合法（经 stripUnknown 剥离多余键后仍不合法） |
 
 run service 写入 `executionStateJson.error` 的值：
 - 上述 `LlmOutputError.code`（当 catch 到 `instanceof LlmOutputError`）

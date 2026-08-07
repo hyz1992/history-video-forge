@@ -31,6 +31,13 @@ Date: 2026-05-26
 
 ## Current Baseline
 
+> ⚠️ 实施进度更新（2026-08-04）：以下"已有前端"与"关键差距"描述的是 2026-05-26 的基线。截至 2026-08-04，下方 Goals 中列出的绝大多数目标已实现：
+> - AssetPanel 已从 stub 升级为可操作面板：支持逐任务自动生成（`handleGenerateTask`）、手动上传（`handleUploadFile`）、批量生成（`handleGenerateMissing` / `handleGenerateSelected` / `handleGenerateByType`）、视频升级（`handleUpgradeVideo`）；失败任务展示失败原因 chip 并提供"重新生成此任务"按钮。
+> - 后端 multipart 文件上传端点与静态文件服务已实现。
+> - ComposePanel、RenderPanel、6 步管线（含渲染导出）均已落地。
+>
+> 本节以下内容保留作为历史基线参照，不作为当前实现真相源；当前实现以代码为准。
+
 ### 已有前端
 
 - **TopicPanel / ScriptPanel / StoryboardPanel**：功能完整，已对接后端 API。

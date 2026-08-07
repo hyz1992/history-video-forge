@@ -727,12 +727,20 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 |---|---|
 | `era_style` | 时代、服化道、空间质感等全局时代风格 |
 | `visual_tone` | 全片视觉情绪与光色倾向 |
-| `characters` | 角色一致性描述 |
-| `locations` | 场景一致性描述 |
-| `props` | 道具一致性描述 |
+| `characters` | 角色一致性描述（见 `ArtBibleCharacter`） |
+| `locations` | 场景一致性描述（见 `ArtBibleLocation`） |
+| `props` | 道具一致性描述（见 `ArtBibleProp`） |
 | `global_prompt_prefix` | 视觉任务可复用的全局 prompt 前缀 |
 | `global_negative_prompts` | 全局负向提示词 |
 | `consistency_notes` | 跨任务一致性约束 |
+
+`characters` / `locations` / `props` 数组元素的子字段：
+
+| 子对象 | 必填字段 | 可选字段 | 说明 |
+|---|---|---|---|
+| `ArtBibleCharacter` | `character_id`、`label`、`role`、`visual_description`、`consistency_notes` | — | 角色一致性锚点；`role` 描述人物戏剧作用，必填 |
+| `ArtBibleLocation` | `location_id`、`label`、`visual_description`、`consistency_notes` | `role` | 场景一致性锚点；`role` 描述场景戏剧作用，可为 `string \| null \| undefined`（LLM 常自发提供，schema 以 `.nullish()` 接受） |
+| `ArtBibleProp` | `prop_id`、`label`、`visual_description`、`consistency_notes` | `role` | 道具一致性锚点；`role` 同上，可为空 |
 
 ### `VoiceIntent`
 
@@ -765,7 +773,7 @@ shared schema 层应实现为判别联合，而不是扁平对象：
 | `provider_hint` | 可选 provider 提示，不代表已调用 provider |
 | `prompt_draft` | 视觉类任务的 prompt 草稿；TTS、字幕、音效、BGM、运镜 cue 可为 `null` |
 | `parameters` | 结构化参数 |
-| `manual_upload_policy` | 是否允许或要求人工上传替代素材 |
+| `manual_upload_policy` | 人工上传策略，含 `allowed`、`required`、`accepted_file_types`、`acceptance_notes` 四个子字段。schema 对四个子字段及整体对象均声明了 `.default()`（缺省时自动填为 `{ allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] }`），LLM 漏写子字段不会触发校验失败 |
 | `risk_notes` | 结构性风险提示 |
 | `cost_tier` | `free / low / medium / high` |
 | `initial_status` | `planned / blocked` |
