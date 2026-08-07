@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "canonicalTitle": "黄袍加身：一场没有流血的王朝更迭",
+  "summary": "赵匡胤与后周孤儿寡母的隐形对抗，在契丹入侵的假情报下，军队将领集体倒戈，赵匡胤须在忠义与野心间做出抉择，赌注是新王朝能否以最小代价建立",
+  "eventRegistryCanonicalName": "黄袍加身：一场没有流血的王朝更迭",
+  "aliases": [],
+  "characterTags": [],
+  "eventTypeTags": [
+    "黄袍加身：一场没有流血的王朝更迭"
+  ],
+  "conflictTypeTags": [],
+  "themeMotifs": [],
+  "locationTags": [],
+  "relationshipTags": [],
+  "sourceAnchorRefs": [],
+  "credibilityLevel": "medium",
+  "disputeNotes": null,
+  "origin": "admin",
+  "angles": [
+    {
+      "angleLabel": "赵匡胤醉卧之间被披上龙袍，用最少的血腥完成政权交割",
+      "familyLabel": "军事政变型",
+      "scopeLabel": "宋朝"
+    }
+  ]
+}

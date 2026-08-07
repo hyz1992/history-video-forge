@@ -3,6 +3,9 @@
     <el-container class="admin-container">
       <el-aside width="200px" class="admin-sidebar">
         <div class="admin-sidebar-title">管理后台</div>
+        <div class="admin-sidebar-back">
+          <el-button text size="small" @click="goHome">← 返回工作区</el-button>
+        </div>
         <el-menu
           :default-active="activeMenu"
           router
@@ -22,9 +25,6 @@
             <span>事件库管理</span>
           </el-menu-item>
         </el-menu>
-        <div class="admin-sidebar-footer">
-          <el-button text size="small" @click="goHome">返回工作区</el-button>
-        </div>
       </el-aside>
       <el-main class="admin-main">
         <router-view />
@@ -74,9 +74,9 @@ function goHome() {
   flex: 1;
   border-right: none;
 }
-.admin-sidebar-footer {
-  padding: 12px 16px;
-  border-top: 1px solid var(--el-border-color-light, #e4e7ed);
+.admin-sidebar-back {
+  padding: 4px 12px 8px;
+  border-bottom: 1px solid var(--el-border-color-light, #e4e7ed);
 }
 .admin-main {
   padding: 24px;
