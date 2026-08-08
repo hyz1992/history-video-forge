@@ -18,6 +18,7 @@ storage/migration/
 storage/media-library/
 .playwright-mcp/
 .superpowers/
+.worktrees/
 .codex/
 storage/topic-candidate-library/
 storage/voice-profiles/
