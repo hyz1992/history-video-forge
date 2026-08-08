@@ -71,8 +71,7 @@ describe("topic store recommendation input", () => {
       exclude_terms: ["演义", "神话"],
     });
     expect(body.summary).toContain("唐至宋辽夏金");
-    expect(body).not.toHaveProperty("tension");
-    expect(JSON.stringify(body)).not.toContain("hook-first");
+    expect(JSON.stringify(body)).not.toContain("medieval");
   });
 
   it("omits unlimited and auto fields while preserving the required seed", async () => {

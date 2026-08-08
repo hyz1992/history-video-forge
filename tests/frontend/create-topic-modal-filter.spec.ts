@@ -75,6 +75,8 @@ describe("CreateTopicModal recommendation filters", () => {
   });
 
   it("keeps range selection continuous and submits the complete intermediate period list", async () => {
+    const getItem = vi.spyOn(Storage.prototype, "getItem");
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
     const { wrapper, generateSystemRecommendations } = mountModal();
     await wrapper.get('[data-testid="period-start"]').setValue("4");
     await wrapper.get('[data-testid="period-end"]').setValue("6");
@@ -92,8 +94,8 @@ describe("CreateTopicModal recommendation filters", () => {
     expect(sessionStorage.getItem(TOPIC_RECOMMENDATION_FILTER_STORAGE_KEY)).toBe(
       JSON.stringify(draft),
     );
-    expect(sessionStorage.getItem("topic-era-filter")).toBeNull();
-    expect(sessionStorage.getItem("topic-tension-filter")).toBeNull();
+    expect(getItem.mock.calls.every(([key]) => key === TOPIC_RECOMMENDATION_FILTER_STORAGE_KEY)).toBe(true);
+    expect(setItem.mock.calls.every(([key]) => key === TOPIC_RECOMMENDATION_FILTER_STORAGE_KEY)).toBe(true);
   });
 
   it("supports unlimited and fixed single-select filters with explicit clearing", async () => {

@@ -3,7 +3,10 @@ import { computed, nextTick, onMounted, ref } from "vue";
 import { ElMessage } from "element-plus";
 import { useRoute, useRouter } from "vue-router";
 
-import { useTopicStore } from "../../stores/topic";
+import {
+  loadTopicRecommendationFilterDraft,
+  useTopicStore,
+} from "../../stores/topic";
 import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 import { useStagePolling } from "../../composables/useStagePolling";
@@ -78,13 +81,6 @@ onMounted(async () => {
 
 const isRefreshingTopicStatus = ref(false);
 const historyOpen = ref(false);
-
-function readFilters() {
-  return {
-    era: (sessionStorage.getItem("topic-era-filter") ?? "ancient") as "ancient" | "medieval" | "late-imperial",
-    tension: (sessionStorage.getItem("topic-tension-filter") ?? "high") as "high" | "balanced" | "hook-first",
-  };
-}
 
 const currentCandidates = computed(
   () => topicStore.state.currentRound?.candidates ?? topicStore.state.candidates,
@@ -176,7 +172,7 @@ async function handleRefreshBatch() {
   isRefreshing.value = true;
   await nextTick();
   try {
-    const filters = readFilters();
+    const filters = loadTopicRecommendationFilterDraft();
     const generation = topicStore.generateSystemRecommendations(filters);
     startPolling();
     await generation;
@@ -197,7 +193,7 @@ async function handleRefreshBatch() {
 
 async function handleRegenerate() {
   if (!checkStageRollback("topic")) return;
-  const filters = readFilters();
+  const filters = loadTopicRecommendationFilterDraft();
   const generation = topicStore.generateSystemRecommendations(filters);
   startPolling();
   await generation;

@@ -1,13 +1,14 @@
 import { inject, reactive, readonly, type InjectionKey } from "vue";
 import {
+  TOPIC_RECOMMENDATION_EXCLUDE_TERM_MAX_LENGTH,
   TOPIC_RECOMMENDATION_PERIOD_GROUPS,
+  TopicRecommendationCentralActorType,
+  TopicRecommendationEventDomain,
+  TopicRecommendationStorytellingLens,
   expandTopicRecommendationPeriodRange,
   normalizeTopicRecommendationFilter,
-  type TopicRecommendationCentralActorType,
-  type TopicRecommendationEventDomain,
   type TopicRecommendationFilter,
   type TopicRecommendationPeriodId,
-  type TopicRecommendationStorytellingLens,
 } from "../../../shared/src";
 import { apiFetch } from "../utils/api";
 
@@ -160,6 +161,91 @@ export function createDefaultTopicRecommendationFilterDraft(): TopicRecommendati
   };
 }
 
+export function loadTopicRecommendationFilterDraft(
+  storage: Pick<Storage, "getItem"> = sessionStorage,
+): TopicRecommendationFilterDraft {
+  const stored = storage.getItem(TOPIC_RECOMMENDATION_FILTER_STORAGE_KEY);
+  if (!stored) return createDefaultTopicRecommendationFilterDraft();
+  try {
+    return parseTopicRecommendationFilterDraft(JSON.parse(stored)) ??
+      createDefaultTopicRecommendationFilterDraft();
+  } catch {
+    return createDefaultTopicRecommendationFilterDraft();
+  }
+}
+
+export function saveTopicRecommendationFilterDraft(
+  draft: TopicRecommendationFilterDraft,
+  storage: Pick<Storage, "setItem"> = sessionStorage,
+): TopicRecommendationFilterDraft {
+  const normalized = parseTopicRecommendationFilterDraft(draft) ??
+    createDefaultTopicRecommendationFilterDraft();
+  storage.setItem(
+    TOPIC_RECOMMENDATION_FILTER_STORAGE_KEY,
+    JSON.stringify(normalized),
+  );
+  return normalized;
+}
+
+function parseTopicRecommendationFilterDraft(
+  value: unknown,
+): TopicRecommendationFilterDraft | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<TopicRecommendationFilterDraft>;
+  const eraBand = candidate.era_band;
+  const group = TOPIC_RECOMMENDATION_PERIOD_GROUPS.find(
+    (item) => item.id === eraBand,
+  );
+  if (eraBand !== "unlimited" && !group) return null;
+
+  let periodStartId: TopicRecommendationPeriodId | null = null;
+  let periodEndId: TopicRecommendationPeriodId | null = null;
+  if (group) {
+    const periodIds = group.periods.map((period) => period.id as string);
+    const startIndex = periodIds.indexOf(candidate.period_start_id ?? "");
+    const endIndex = periodIds.indexOf(candidate.period_end_id ?? "");
+    if (startIndex < 0 || endIndex < startIndex) return null;
+    periodStartId = group.periods[startIndex].id;
+    periodEndId = group.periods[endIndex].id;
+  }
+
+  const eventDomain = candidate.event_domain === "unlimited"
+    ? "unlimited"
+    : TopicRecommendationEventDomain.safeParse(candidate.event_domain).data;
+  const actorType = candidate.central_actor_type === "unlimited"
+    ? "unlimited"
+    : TopicRecommendationCentralActorType.safeParse(candidate.central_actor_type).data;
+  const lens = candidate.storytelling_lens === "auto"
+    ? "auto"
+    : TopicRecommendationStorytellingLens.safeParse(candidate.storytelling_lens).data;
+  if (!eventDomain || !actorType || !lens || !Array.isArray(candidate.exclude_terms)) {
+    return null;
+  }
+  if (
+    candidate.exclude_terms.length > 8 ||
+    candidate.exclude_terms.some(
+      (term) =>
+        typeof term !== "string" ||
+        term.length > TOPIC_RECOMMENDATION_EXCLUDE_TERM_MAX_LENGTH,
+    )
+  ) {
+    return null;
+  }
+  const excludeTerms = [...new Set(
+    candidate.exclude_terms.map((term) => term.trim()).filter(Boolean),
+  )];
+
+  return {
+    era_band: eraBand,
+    period_start_id: periodStartId,
+    period_end_id: periodEndId,
+    event_domain: eventDomain,
+    central_actor_type: actorType,
+    storytelling_lens: lens,
+    exclude_terms: excludeTerms,
+  };
+}
+
 export function buildTopicRecommendationFilters(
   draft: TopicRecommendationFilterDraft,
 ): TopicRecommendationFilter | undefined {
@@ -227,7 +313,7 @@ export function createFetchTopicApi(baseUrl = ""): TopicApi {
         {
           method: "POST",
           body: {
-            ...buildRecommendationSeed(filters),
+            ...buildRecommendationSeed(normalizedFilters),
             ...(normalizedFilters ? { filters: normalizedFilters } : {}),
           },
         },
@@ -557,9 +643,9 @@ export function useTopicStore() {
 }
 
 function buildRecommendationSeed(
-  filters: TopicRecommendationFilters,
+  filters: TopicRecommendationFilter | undefined,
 ): TopicRecommendationSeed {
-  const periodLabel = describeDraftPeriod(filters);
+  const periodLabel = describeFormalPeriodRange(filters);
 
   return {
     canonical_name: `${periodLabel}历史事件推荐`,
@@ -569,7 +655,6 @@ function buildRecommendationSeed(
     source_hint: `仅使用${periodLabel}范围内相关史事与人物记载。`,
     recent_usage_hint: `优先选择${periodLabel}范围内近期未重复的具体事件。`,
     tags: [
-      filters.era_band,
       "system_recommendation",
       "single_event",
       "concrete_scene",
@@ -578,19 +663,17 @@ function buildRecommendationSeed(
   };
 }
 
-function describeDraftPeriod(filters: TopicRecommendationFilterDraft) {
-  if (
-    filters.era_band === "unlimited" ||
-    !filters.period_start_id ||
-    !filters.period_end_id
-  ) {
+function describeFormalPeriodRange(filters: TopicRecommendationFilter | undefined) {
+  if (!filters?.period_range) {
     return "不限时期";
   }
   const periods = TOPIC_RECOMMENDATION_PERIOD_GROUPS.flatMap(
     (group) => group.periods,
   );
-  const start = periods.find((period) => period.id === filters.period_start_id);
-  const end = periods.find((period) => period.id === filters.period_end_id);
-  if (!start || !end) return "所选时期";
-  return start.id === end.id ? start.label : `${start.label}至${end.label}`;
+  const labels = filters.period_range.included_period_ids.map(
+    (periodId) => periods.find((period) => period.id === periodId)?.label,
+  ).filter((label): label is string => Boolean(label));
+  if (!labels.length) return "所选时期";
+  if (labels.length === 1) return labels[0];
+  return `${labels[0]}至${labels[labels.length - 1]}（含${labels.join("、")}）`;
 }

@@ -12,8 +12,8 @@ import {
 } from "../../../../shared/src";
 import { useProjectStore } from "../../stores/project";
 import {
-  TOPIC_RECOMMENDATION_FILTER_STORAGE_KEY,
-  createDefaultTopicRecommendationFilterDraft,
+  loadTopicRecommendationFilterDraft,
+  saveTopicRecommendationFilterDraft,
   useTopicStore,
   type TopicRecommendationEraBand,
   type TopicRecommendationFilterDraft,
@@ -76,7 +76,9 @@ const tabOptions: Array<{ value: TopicTab; label: string }> = [
   { value: "library", label: "事件库" },
   { value: "custom", label: "自定义选题" },
 ];
-const draft = reactive<TopicRecommendationFilterDraft>(loadDraft());
+const draft = reactive<TopicRecommendationFilterDraft>(
+  loadTopicRecommendationFilterDraft(),
+);
 const isAdvancedOpen = ref(
   draft.event_domain !== "unlimited" ||
   draft.central_actor_type !== "unlimited" ||
@@ -111,56 +113,6 @@ const periodStyle = computed(() => {
     "--range-width": `${width}%`,
   };
 });
-
-function loadDraft(): TopicRecommendationFilterDraft {
-  const fallback = createDefaultTopicRecommendationFilterDraft();
-  const stored = sessionStorage.getItem(TOPIC_RECOMMENDATION_FILTER_STORAGE_KEY);
-  if (!stored) return fallback;
-  try {
-    return validateStoredDraft(JSON.parse(stored)) ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function validateStoredDraft(value: unknown): TopicRecommendationFilterDraft | null {
-  if (!value || typeof value !== "object") return null;
-  const candidate = value as Partial<TopicRecommendationFilterDraft>;
-  const era = eraOptions.find((option) => option.value === candidate.era_band)?.value;
-  if (!era) return null;
-  const group = TOPIC_RECOMMENDATION_PERIOD_GROUPS.find((item) => item.id === era);
-  if (era !== "unlimited") {
-    if (!group) return null;
-    const ids = group.periods.map((period) => period.id);
-    const start = ids.indexOf(candidate.period_start_id as never);
-    const end = ids.indexOf(candidate.period_end_id as never);
-    if (start < 0 || end < start) return null;
-  }
-  const eventDomain = candidate.event_domain === "unlimited" ||
-    eventOptions.some((option) => option.value === candidate.event_domain)
-      ? candidate.event_domain
-      : null;
-  const actorType = candidate.central_actor_type === "unlimited" ||
-    actorOptions.some((option) => option.value === candidate.central_actor_type)
-      ? candidate.central_actor_type
-      : null;
-  const lens = lensOptions.some((option) => option.value === candidate.storytelling_lens)
-    ? candidate.storytelling_lens
-    : null;
-  if (!eventDomain || !actorType || !lens || !Array.isArray(candidate.exclude_terms)) {
-    return null;
-  }
-  const excludeTerms = normalizeExcludeTerms(candidate.exclude_terms);
-  return {
-    era_band: era,
-    period_start_id: era === "unlimited" ? null : candidate.period_start_id ?? null,
-    period_end_id: era === "unlimited" ? null : candidate.period_end_id ?? null,
-    event_domain: eventDomain,
-    central_actor_type: actorType,
-    storytelling_lens: lens,
-    exclude_terms: excludeTerms,
-  };
-}
 
 function selectEra(era: TopicRecommendationEraBand) {
   draft.era_band = era;
@@ -207,13 +159,10 @@ function removeExcludeTerm(index: number) {
 }
 
 function saveDraft() {
-  const snapshot: TopicRecommendationFilterDraft = {
+  return saveTopicRecommendationFilterDraft({
     ...draft,
     exclude_terms: normalizeExcludeTerms(draft.exclude_terms),
-  };
-  Object.assign(draft, snapshot);
-  sessionStorage.setItem(TOPIC_RECOMMENDATION_FILTER_STORAGE_KEY, JSON.stringify(snapshot));
-  return snapshot;
+  });
 }
 
 async function handleGenerate() {
