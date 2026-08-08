@@ -94,6 +94,17 @@ function createFallbackRepository() {
   return { repository, listBySeed };
 }
 
+function expectNormalizedFilterContract(
+  input: Record<string, unknown>,
+  expectedFilter: Record<string, unknown>,
+) {
+  expect(input).not.toHaveProperty("filters");
+  expect(input).toMatchObject({
+    topic_filter: expectedFilter,
+    topic_filter_fingerprint: expect.stringMatching(/^[a-f0-9]{16}$/),
+  });
+}
+
 describe("topic recommendation filter service trace", () => {
   it("normalizes meaningful filters, sends one contract to builder, and disables fallback", async () => {
     const db = createDbClient();
@@ -119,19 +130,76 @@ describe("topic recommendation filter service trace", () => {
     );
 
     expect(builderInputs.length).toBeGreaterThan(0);
-    expect(builderInputs[0]).toMatchObject({
-      topic_filter: {
+    for (const builderInput of builderInputs) {
+      expectNormalizedFilterContract(builderInput, {
         event_domain: "military_warfare",
         storytelling_lens: "turning_point",
         exclude_terms: ["folklore", "legend"],
-      },
-      topic_filter_fingerprint: expect.stringMatching(/^[a-f0-9]{16}$/),
-    });
-    expect(builderInputs[0]).not.toHaveProperty("filters");
+      });
+    }
     expect(listBySeed).not.toHaveBeenCalled();
     expect(result.candidates.map((candidate) => candidate.title)).toEqual([
       "generated-event-1",
     ]);
+  });
+
+  it("keeps normalized filters in a field-repair recommendation seed", async () => {
+    const db = createDbClient();
+    const builderInputs: Array<Record<string, unknown>> = [];
+    const invokeStructuredPrompt = vi.fn(async (options) => {
+      builderInputs.push(options.input as Record<string, unknown>);
+      if (builderInputs.length === 1) {
+        return [{
+          event_identity: "incomplete-event",
+          viral_rubric: generatedCandidate.viral_rubric,
+        }] as never;
+      }
+
+      return [{
+        ...generatedCandidate,
+        event_identity: "repaired-event",
+        title: "repaired-event",
+      }] as never;
+    });
+    const gateway: LlmGateway = {
+      invokeStructuredPrompt,
+      invokeStrictStructured: vi.fn(async () => {
+        throw new Error("selector should not run for an insufficient pool");
+      }),
+    };
+    const { repository } = createFallbackRepository();
+
+    await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        ...seedInput,
+        filters: {
+          event_domain: "law_justice",
+          storytelling_lens: "origins_analysis",
+        },
+      },
+      {
+        projectId: "project-filtered-field-repair",
+        llmGateway: gateway,
+        topicCandidateLibraryRepository: repository,
+      },
+    );
+
+    expect(builderInputs).toHaveLength(2);
+    for (const builderInput of builderInputs) {
+      expect(builderInput).not.toHaveProperty("filters");
+    }
+
+    const repairInput = builderInputs[1];
+    expect(repairInput).toHaveProperty("recommendation_seed");
+    const recommendationSeed = repairInput?.recommendation_seed as
+      | Record<string, unknown>
+      | undefined;
+    expect(recommendationSeed).toBeDefined();
+    expectNormalizedFilterContract(recommendationSeed!, {
+      event_domain: "law_justice",
+      storytelling_lens: "origins_analysis",
+    });
   });
 
   it("keeps the raw filters contract out of the selector prompt input", async () => {
