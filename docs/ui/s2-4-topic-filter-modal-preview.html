@@ -241,22 +241,25 @@
     .period-track {
       left: 0;
       right: 0;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.035);
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.045);
     }
 
     .period-track-active {
+      top: 9px;
       left: var(--range-left);
       width: var(--range-width);
-      background: linear-gradient(90deg, rgba(212, 163, 95, 0.58), rgba(228, 189, 120, 0.9));
-      box-shadow: 0 0 10px rgba(212, 163, 95, 0.14);
+      height: 6px;
+      background: #d9a85f;
+      box-shadow: 0 0 12px rgba(217, 168, 95, 0.28);
     }
 
     .period-slider {
       position: absolute;
-      inset: 0;
+      top: 0;
+      left: -9px;
       z-index: 3;
-      width: 100%;
+      width: calc(100% + 18px);
       height: 24px;
       margin: 0;
       appearance: none;
@@ -306,8 +309,8 @@
     }
 
     .period-slider::-moz-range-thumb {
-      width: 16px;
-      height: 16px;
+      width: 18px;
+      height: 18px;
       border: 2px solid #2b241d;
       border-radius: 50%;
       background: var(--accent-primary-light);
@@ -507,29 +510,17 @@
       box-shadow: 0 0 12px rgba(212, 163, 95, 0.3);
     }
 
-    .advanced-summary {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--text-muted);
-      font-size: 12px;
-    }
-
-    .chevron {
-      width: 22px;
-      height: 22px;
-      border-radius: 50%;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
+    .advanced-action {
       color: rgba(212, 163, 95, 0.82);
-      background: rgba(212, 163, 95, 0.07);
-      border: 1px solid rgba(212, 163, 95, 0.12);
-      transform: rotate(180deg);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 22px;
+      transition: color 0.16s ease;
     }
 
-    .advanced-toggle:not([open]) .chevron {
-      transform: rotate(0deg);
+    .advanced-toggle summary:hover .advanced-action,
+    .advanced-toggle summary:focus-visible .advanced-action {
+      color: var(--accent-primary-light);
     }
 
     .advanced-panel {
@@ -689,7 +680,6 @@
       }
       .filter-mini--exclude { grid-column: auto; }
       .modal-filters { padding: 18px 16px; }
-      .advanced-summary { display: none; }
       .modal-actions { padding-bottom: 4px; }
       .modal-btn--primary { width: 100%; }
     }
@@ -761,10 +751,7 @@
         <details class="advanced-toggle" open>
           <summary>
             <span class="advanced-title">更多筛选</span>
-            <span class="advanced-summary">
-              事件领域、主角类型、排除项；均可保持不限
-              <span class="chevron">⌄</span>
-            </span>
+            <span class="advanced-action" id="advancedAction">收起筛选</span>
           </summary>
 
           <div class="advanced-panel">
@@ -850,6 +837,8 @@
     const periodStart = document.getElementById("periodStart");
     const periodEnd = document.getElementById("periodEnd");
     const periodSelection = document.getElementById("periodSelection");
+    const advancedToggle = document.querySelector(".advanced-toggle");
+    const advancedAction = document.getElementById("advancedAction");
 
     let activeEra = "medieval";
     let activePeriods = periodGroups[activeEra];
@@ -919,6 +908,13 @@
       }
       updatePeriodSelection();
     });
+
+    function updateAdvancedAction() {
+      advancedAction.textContent = advancedToggle.open ? "收起筛选" : "展开筛选";
+    }
+
+    advancedToggle.addEventListener("toggle", updateAdvancedAction);
+    updateAdvancedAction();
 
     eraButtons.forEach((button) => {
       button.addEventListener("click", () => {
