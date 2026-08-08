@@ -82,7 +82,8 @@ export async function hydrateFirstAggregates(
   }
   for (const row of caches) {
     if (row.projectId && !db.projects.has(row.projectId)) continue;
-    const record: CandidateCacheRecord = { ...row, viralRubricJson: object(row.viralRubricJson),
+    const record: CandidateCacheRecord = { ...row, filterFingerprint: row.filterFingerprint,
+      viralRubricJson: object(row.viralRubricJson),
       estimatedDurationBandJson: row.estimatedDurationBandJson, mustCoverPreviewJson: array(row.mustCoverPreviewJson),
       riskHintsJson: array<string>(row.riskHintsJson) };
     db.candidateCache.set(record.id, record);
@@ -90,8 +91,11 @@ export async function hydrateFirstAggregates(
   for (const row of rounds) {
     if (!db.projects.has(row.projectId)) continue;
     const record: ProjectRecommendationRoundRecord = { projectId: row.projectId, createdAt: row.createdAt,
+      filterFingerprint: row.filterFingerprint,
+      filterJson: row.filterJson as ProjectRecommendationRoundRecord["filterJson"],
       candidates: row.exposures.map((item) => ({ eventRegistryEntryId: item.eventRegistryEntryId ?? "", eventIdentity: item.eventIdentity,
-        title: item.title, fingerprint: item.fingerprint, createdAt: item.selectedAt })) };
+        title: item.title, fingerprint: item.fingerprint, filterFingerprint: item.filterFingerprint,
+        createdAt: item.selectedAt })) };
     const projectRounds = db.recommendationRounds.get(row.projectId) ?? [];
     projectRounds.push(record); db.recommendationRounds.set(row.projectId, projectRounds);
     db.topicRunCounts.set(row.projectId, Math.max(db.topicRunCounts.get(row.projectId) ?? 0, row.roundIndex));

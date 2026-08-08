@@ -49,18 +49,26 @@ export class PrismaRecommendationStore implements RecommendationStore {
             data: {
               projectId: input.projectId,
               roundIndex: (latest._max.roundIndex ?? 0) + 1,
+              filterFingerprint: input.filterFingerprint ?? null,
+              filterJson: input.filterJson ? input.filterJson as never : undefined,
               exposures: { create: input.candidates.map((candidate, index) => ({
-                ...candidate, selectedAt: new Date(selectedAt + index),
+                ...candidate,
+                filterFingerprint: candidate.filterFingerprint ?? input.filterFingerprint ?? null,
+                selectedAt: new Date(selectedAt + index),
               })) },
             },
             include: { exposures: { orderBy: { selectedAt: "asc" } } },
           });
           return {
-            id: round.id, projectId: round.projectId, roundIndex: round.roundIndex, createdAt: round.createdAt,
+            id: round.id, projectId: round.projectId, roundIndex: round.roundIndex,
+            filterFingerprint: round.filterFingerprint,
+            filterJson: round.filterJson as StoredRecommendationRound["filterJson"],
+            createdAt: round.createdAt,
             candidates: round.exposures.map((exposure) => ({
               id: exposure.id, eventRegistryEntryId: exposure.eventRegistryEntryId,
               eventIdentity: exposure.eventIdentity, title: exposure.title,
-              fingerprint: exposure.fingerprint, selectedAt: exposure.selectedAt,
+              fingerprint: exposure.fingerprint, filterFingerprint: exposure.filterFingerprint,
+              selectedAt: exposure.selectedAt,
             })),
           };
         });

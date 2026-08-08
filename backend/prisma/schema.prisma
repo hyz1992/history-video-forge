@@ -239,6 +239,7 @@ model RecommendationCandidateCache {
   eventRegistryEntryId      String?
   eventIdentity             String?
   fingerprint               String
+  filterFingerprint         String?
   oneLineAngle              String
   familyLabel               String
   scopeLabel                String
@@ -256,6 +257,7 @@ model RecommendationCandidateCache {
   eventRegistryEntry        EventRegistryEntry? @relation(fields: [eventRegistryEntryId], references: [id], onDelete: Restrict)
 
   @@unique([projectId, fingerprint])
+  @@index([projectId, filterFingerprint, createdAt])
   @@index([projectId, eventIdentity, createdAt])
   @@index([eventRegistryEntryId])
 }
@@ -466,14 +468,17 @@ model AssetProviderJobRecord {
 }
 
 model RecommendationRound {
-  id         String                   @id @default(uuid())
-  projectId  String
-  roundIndex Int
-  createdAt  DateTime                 @default(now())
-  project    Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  exposures  RecommendationExposure[]
+  id                String                   @id @default(uuid())
+  projectId         String
+  roundIndex        Int
+  filterFingerprint String?
+  filterJson        Json?
+  createdAt         DateTime                 @default(now())
+  project           Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  exposures         RecommendationExposure[]
 
   @@unique([projectId, roundIndex])
+  @@index([projectId, filterFingerprint, createdAt])
   @@index([projectId, createdAt])
 }
 
@@ -483,12 +488,14 @@ model RecommendationExposure {
   eventRegistryEntryId String?
   eventIdentity        String?
   fingerprint          String
+  filterFingerprint    String?
   title                String?
   selectedAt           DateTime            @default(now())
   round                RecommendationRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
   eventRegistryEntry   EventRegistryEntry? @relation(fields: [eventRegistryEntryId], references: [id], onDelete: Restrict)
 
   @@unique([roundId, fingerprint])
+  @@index([filterFingerprint, selectedAt])
   @@index([eventIdentity, selectedAt])
   @@index([eventRegistryEntryId])
 }

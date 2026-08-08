@@ -433,15 +433,19 @@ export async function recommendTopicCandidatesWithTrace(
   await persistPostProcessedCandidates(db, {
     projectId: options.projectId,
     candidates: selected.rankings,
+    filterFingerprint: topicFilterFingerprint,
   });
   await recordProjectRecommendationRound(db, {
     projectId: options.projectId,
     createdAt: recommendationStartedAt,
+    filterFingerprint: topicFilterFingerprint,
+    filterJson: normalizedFilter,
     candidates: selected.rankings.map((candidate) => ({
       eventRegistryEntryId: candidate.eventId,
       eventIdentity: candidate.eventIdentity,
       title: candidate.candidate.title,
       fingerprint: candidate.fingerprint,
+      filterFingerprint: topicFilterFingerprint,
     })),
   });
 
@@ -1791,6 +1795,7 @@ async function persistPostProcessedCandidates(
   input: {
     projectId: string;
     candidates: RankedRecommendationCandidate[];
+    filterFingerprint?: string;
   },
 ) {
   for (const candidate of input.candidates) {
@@ -1799,6 +1804,7 @@ async function persistPostProcessedCandidates(
       eventRegistryEntryId: candidate.eventId,
       eventIdentity: candidate.eventIdentity,
       fingerprint: candidate.fingerprint,
+      filterFingerprint: input.filterFingerprint,
       oneLineAngle: candidate.candidate.one_line_angle,
       familyLabel: candidate.candidate.family_label,
       scopeLabel: candidate.candidate.scope_label,

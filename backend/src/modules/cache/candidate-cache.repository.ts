@@ -1,3 +1,4 @@
+import type { TopicRecommendationFilter } from "../../../../shared/src/topic/topic-recommendation-filter.schema.js";
 import type { CandidateCacheRecord, DbClient, ProjectRecommendationRoundRecord } from "../../db/client";
 
 export interface SaveCachedCandidateInput {
@@ -5,6 +6,7 @@ export interface SaveCachedCandidateInput {
   eventRegistryEntryId?: string | null;
   eventIdentity?: string | null;
   fingerprint: string;
+  filterFingerprint?: string | null;
   oneLineAngle: string;
   familyLabel: string;
   scopeLabel: string;
@@ -29,6 +31,7 @@ export async function saveCachedCandidate(
     eventRegistryEntryId: input.eventRegistryEntryId ?? null,
     eventIdentity: input.eventIdentity ?? null,
     fingerprint: input.fingerprint,
+    filterFingerprint: input.filterFingerprint,
     oneLineAngle: input.oneLineAngle,
     familyLabel: input.familyLabel,
     scopeLabel: input.scopeLabel,
@@ -93,11 +96,14 @@ export async function recordProjectRecommendationRound(
   input: {
     projectId: string;
     createdAt?: Date;
+    filterFingerprint?: string | null;
+    filterJson?: TopicRecommendationFilter | null;
     candidates: Array<{
       eventRegistryEntryId: string;
       eventIdentity?: string | null;
       title?: string | null;
       fingerprint: string;
+      filterFingerprint?: string | null;
     }>;
   },
 ): Promise<ProjectRecommendationRoundRecord> {
@@ -106,11 +112,14 @@ export async function recordProjectRecommendationRound(
   const round: ProjectRecommendationRoundRecord = {
     projectId: input.projectId,
     createdAt: input.createdAt ?? new Date(),
+    filterFingerprint: input.filterFingerprint,
+    filterJson: input.filterJson,
     candidates: input.candidates.map((candidate) => ({
       eventRegistryEntryId: candidate.eventRegistryEntryId,
       eventIdentity: candidate.eventIdentity ?? null,
       title: candidate.title ?? null,
       fingerprint: candidate.fingerprint,
+      filterFingerprint: candidate.filterFingerprint ?? input.filterFingerprint,
       createdAt: input.createdAt ?? new Date(),
     })),
   };

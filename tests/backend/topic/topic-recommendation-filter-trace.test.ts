@@ -141,6 +141,26 @@ describe("topic recommendation filter service trace", () => {
     expect(result.candidates.map((candidate) => candidate.title)).toEqual([
       "generated-event-1",
     ]);
+
+    const round = db.recommendationRounds.get("project-filtered")?.at(-1);
+    expect(round).toMatchObject({
+      filterFingerprint: expect.stringMatching(/^[a-f0-9]{16}$/),
+      filterJson: {
+        event_domain: "military_warfare",
+        storytelling_lens: "turning_point",
+        exclude_terms: ["folklore", "legend"],
+      },
+    });
+    expect(round?.candidates).toEqual([
+      expect.objectContaining({
+        filterFingerprint: round?.filterFingerprint,
+      }),
+    ]);
+    const cacheRecords = [...db.candidateCache.values()];
+    expect(cacheRecords.length).toBeGreaterThan(0);
+    expect(cacheRecords.every(
+      (candidate) => candidate.filterFingerprint === round?.filterFingerprint,
+    )).toBe(true);
   });
 
   it("keeps normalized filters in a field-repair recommendation seed", async () => {
@@ -264,6 +284,14 @@ describe("topic recommendation filter service trace", () => {
       "generated-event-1",
       "fallback-event",
     ]);
+    const round = db.recommendationRounds.get("project-unfiltered")?.at(-1);
+    expect(round?.filterFingerprint).toBeUndefined();
+    expect(round?.filterJson).toBeUndefined();
+    expect(round?.candidates.every((candidate) => candidate.filterFingerprint === undefined))
+      .toBe(true);
+    expect([...db.candidateCache.values()].every(
+      (candidate) => candidate.filterFingerprint === undefined,
+    )).toBe(true);
   });
 
   it("preserves an explicit fallback disable option for an auto-only filter", async () => {
