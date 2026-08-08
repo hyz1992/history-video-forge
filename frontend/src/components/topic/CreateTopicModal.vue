@@ -192,6 +192,7 @@ function removeExcludeTerm(index: number) {
 
 function handleExcludeEnter(event: KeyboardEvent) {
   if (event.isComposing || isExcludeComposing.value) return;
+  event.preventDefault();
   addExcludeTerm();
 }
 
@@ -526,7 +527,7 @@ onBeforeUnmount(restorePreviousFocus);
                     placeholder="输入后回车"
                     @compositionstart="isExcludeComposing = true"
                     @compositionend="isExcludeComposing = false"
-                    @keydown.enter.prevent="handleExcludeEnter"
+                    @keydown.enter="handleExcludeEnter"
                   >
                 </div>
               </div>

@@ -239,13 +239,27 @@ describe("CreateTopicModal recommendation filters", () => {
     const input = wrapper.get('[data-testid="exclude-input"]');
     await input.setValue("南北朝");
     await input.trigger("compositionstart");
-    await input.trigger("keydown", { key: "Enter", isComposing: true });
+    const composingEnter = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+      isComposing: true,
+    });
+    input.element.dispatchEvent(composingEnter);
+    await nextTick();
+    expect(composingEnter.defaultPrevented).toBe(false);
     expect(wrapper.findAll('[data-testid="exclude-tag"]')).toHaveLength(0);
     expect((input.element as HTMLInputElement).value).toBe("南北朝");
 
     await input.trigger("compositionend");
-    await input.trigger("keydown", { key: "Enter" });
+    const committedEnter = new KeyboardEvent("keydown", {
+      key: "Enter",
+      bubbles: true,
+      cancelable: true,
+    });
+    input.element.dispatchEvent(committedEnter);
     await nextTick();
+    expect(committedEnter.defaultPrevented).toBe(true);
     expect(wrapper.findAll('[data-testid="exclude-tag"]')).toHaveLength(1);
     expect((wrapper.get('[data-testid="exclude-input"]').element as HTMLInputElement).value).toBe("");
   });
