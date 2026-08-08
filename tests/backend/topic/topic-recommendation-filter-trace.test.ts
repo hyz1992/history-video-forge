@@ -353,7 +353,7 @@ describe("topic recommendation filter service trace", () => {
       },
     );
 
-    expect(builderInputs.length).toBeGreaterThan(0);
+    expect(builderInputs).toHaveLength(1);
     for (const builderInput of builderInputs) {
       expectNormalizedFilterContract(builderInput, {
         event_domain: "military_warfare",
@@ -403,7 +403,9 @@ describe("topic recommendation filter service trace", () => {
   it("keeps normalized filters in a field-repair recommendation seed", async () => {
     const db = createDbClient();
     const builderInputs: Array<Record<string, unknown>> = [];
+    const promptIds: string[] = [];
     const invokeStructuredPrompt = vi.fn(async (options) => {
+      promptIds.push(options.promptId);
       builderInputs.push(options.input as Record<string, unknown>);
       if (builderInputs.length === 1) {
         return [{
@@ -443,6 +445,10 @@ describe("topic recommendation filter service trace", () => {
     );
 
     expect(builderInputs).toHaveLength(2);
+    expect(promptIds).toEqual([
+      "topic.candidate-builder",
+      "topic.candidate-builder-repair",
+    ]);
     for (const builderInput of builderInputs) {
       expect(builderInput).not.toHaveProperty("filters");
     }
@@ -516,6 +522,7 @@ describe("topic recommendation filter service trace", () => {
     expect(builderInputs[0]).not.toHaveProperty("filters");
     expect(builderInputs[0]).not.toHaveProperty("topic_filter");
     expect(builderInputs[0]).not.toHaveProperty("topic_filter_fingerprint");
+    expect(builderInputs).toHaveLength(2);
     expect(listBySeed).toHaveBeenCalledTimes(1);
     expect(result.candidates.map((candidate) => candidate.title)).toEqual([
       "generated-event-1",

@@ -36,6 +36,8 @@ describe("topic prompt contract", () => {
 
   it("requires candidate-builder to apply topic filters in two ordered stages", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+    const eventIdentityStageIndex = prompt.body.indexOf("第一阶段：先确定事件身份");
+    const storytellingStageIndex = prompt.body.indexOf("第二阶段：再组织讲述角度");
 
     expect(prompt.body).toContain("第一阶段：先确定事件身份");
     expect(prompt.body).toContain(
@@ -43,6 +45,8 @@ describe("topic prompt contract", () => {
     );
     expect(prompt.body).toContain("第二阶段：再组织讲述角度");
     expect(prompt.body).toContain("不得借讲述视角替换第一阶段已经确定的事件");
+    expect(eventIdentityStageIndex).toBeGreaterThanOrEqual(0);
+    expect(storytellingStageIndex).toBeGreaterThan(eventIdentityStageIndex);
   });
 
   it("defines non-overlapping event and actor classification criteria", () => {

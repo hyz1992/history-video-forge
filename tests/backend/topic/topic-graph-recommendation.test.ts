@@ -257,6 +257,50 @@ describe("topic recommendation graph", () => {
     );
   });
 
+  it("does not refill candidate slots when a meaningful filter returns fewer valid candidates", async () => {
+    const db = createDbClient();
+    const invokeStructuredPrompt = vi.fn(async () => [
+      createRuntimeCandidate("晏子使楚", "第一槽位"),
+    ]);
+
+    const result = await runTopicRecommendationGraph(
+      {
+        db,
+        input: {
+          canonicalName: "晏子使楚",
+          summary: "只保留满足结构化筛选的事件。",
+          coreConflict: "楚王当众压场，晏子必须当场顶回。",
+          strongScene: "楚王连续压场，晏子一句句顶回去。",
+          sourceHint: "《晏子春秋》",
+          recentUsageHint: "近期未出现同 event_id",
+          topic_filter: {
+            event_domain: "diplomacy_relations",
+          },
+          topic_filter_fingerprint: "0123456789abcdef",
+        },
+        projectId: "project-filtered",
+      },
+      {
+        invokeStructuredPrompt,
+      },
+    );
+
+    expect(invokeStructuredPrompt).toHaveBeenCalledTimes(1);
+    expect(result.candidates).toHaveLength(1);
+    expect(result.trace.nodes.map((node) => node.node_name)).toEqual([
+      "topic-candidate-generate",
+    ]);
+    expect(result.diagnostics.checks).not.toContainEqual(
+      expect.objectContaining({ code: "topic_candidate_repair_triggered" }),
+    );
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "topic_candidate_slots_insufficient",
+        level: "info",
+      }),
+    );
+  });
+
   it("returns explicit diagnostics when a single repair pass still cannot fill the preferred four candidate slots", async () => {
     const db = createDbClient();
     const invokeStructuredPrompt = vi
