@@ -8,8 +8,11 @@ import {
   TopicCandidateCard,
 } from "../../../../shared/src/index.js";
 import type {
+  TopicRecommendationCentralActorType,
+  TopicRecommendationEventDomain,
   TopicRecommendationFilter,
   TopicRecommendationFilterInput,
+  TopicRecommendationStorytellingLens,
 } from "../../../../shared/src/topic/topic-recommendation-filter.schema.js";
 import { env } from "../../config/env.js";
 import type { DbClient } from "../../db/client";
@@ -1176,6 +1179,35 @@ const TOPIC_PERIOD_LABELS = new Map(
   ),
 );
 
+const TOPIC_EVENT_DOMAIN_LABELS = {
+  political_power: "政治权力",
+  military_warfare: "军事战争",
+  institutions_governance: "制度治理",
+  diplomacy_relations: "外交交涉",
+  law_justice: "法律司法",
+  society_livelihood: "社会民生",
+  thought_culture: "思想文化",
+} satisfies Record<TopicRecommendationEventDomain, string>;
+
+const TOPIC_CENTRAL_ACTOR_TYPE_LABELS = {
+  ruler: "帝王君主",
+  court_elite: "宫廷权贵",
+  civil_official: "文官政务",
+  military_actor: "军事人物",
+  intellectual_actor: "学者思想家",
+  religious_actor: "宗教人物",
+  civilian: "民间人物",
+  collective: "群体多方",
+} satisfies Record<TopicRecommendationCentralActorType, string>;
+
+const TOPIC_STORYTELLING_LENS_LABELS = {
+  key_decision: "关键决策",
+  relationship_dynamics: "人物博弈",
+  turning_point: "局势转折",
+  origins_analysis: "因果拆解",
+  aftermath: "后果追踪",
+} satisfies Record<TopicRecommendationStorytellingLens, string>;
+
 function buildRecommendationFilterDiagnostics(input: {
   normalizedFilter?: TopicRecommendationFilter;
   filterFingerprint?: string;
@@ -1196,13 +1228,17 @@ function buildRecommendationFilterDiagnostics(input: {
     );
   }
   if (filter.event_domain) {
-    summaryParts.push(`事件领域：${filter.event_domain}`);
+    summaryParts.push(`事件领域：${TOPIC_EVENT_DOMAIN_LABELS[filter.event_domain]}`);
   }
   if (filter.central_actor_type) {
-    summaryParts.push(`主角类型：${filter.central_actor_type}`);
+    summaryParts.push(
+      `主角类型：${TOPIC_CENTRAL_ACTOR_TYPE_LABELS[filter.central_actor_type]}`,
+    );
   }
   if (filter.storytelling_lens) {
-    summaryParts.push(`讲述视角：${filter.storytelling_lens}`);
+    summaryParts.push(
+      `讲述视角：${TOPIC_STORYTELLING_LENS_LABELS[filter.storytelling_lens]}`,
+    );
   }
   if (filter.exclude_terms?.length) {
     summaryParts.push(

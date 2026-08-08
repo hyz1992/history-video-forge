@@ -220,6 +220,60 @@ describe("topic recommendation filter service trace", () => {
     }
   });
 
+  it("writes filter diagnostics when a project recommendation degrades on LLM output", async () => {
+    const tempRoot = mkdtempSync(resolve(tmpdir(), "topic-error-diagnostics-"));
+    const previousStorageRoot = process.env.STORAGE_ROOT_DIR;
+    process.env.STORAGE_ROOT_DIR = tempRoot;
+
+    try {
+      const db = createDbClient();
+      const project = await createProject(db, {
+        name: "Degraded Recommendation Diagnostics",
+      });
+      const gateway: LlmGateway = {
+        invokeStructuredPrompt: vi.fn(async () => {
+          throw new LlmOutputError("topic_candidate_schema_invalid", {
+            cause: "invalid candidate payload",
+          });
+        }),
+        invokeStrictStructured: vi.fn(async () => {
+          throw new Error("selector should not run");
+        }),
+      };
+
+      const result = await recommendTopicCandidatesWithTrace(
+        db,
+        {
+          ...seedInput,
+          filters: { central_actor_type: "civil_official" },
+        },
+        { projectId: project.id, llmGateway: gateway },
+      );
+
+      const runId = String(
+        (result.trace as unknown as Record<string, unknown>).run_id,
+      );
+      const profile = getProjectStorageProfile(project);
+      const markdown = readFileSync(
+        resolve(profile.topic_runs_dir, runId, "recommendation-diagnostics.md"),
+        "utf8",
+      );
+
+      expect(markdown).toContain("## Filter");
+      expect(markdown).toMatch(/- filter_fingerprint: [a-f0-9]{16}/);
+      expect(markdown).toContain("- normalized_filter:");
+      expect(markdown).toContain("- filter_match_status: insufficient");
+      expect(markdown).toContain("- filter_match_shortfall: 4");
+    } finally {
+      if (previousStorageRoot === undefined) {
+        delete process.env.STORAGE_ROOT_DIR;
+      } else {
+        process.env.STORAGE_ROOT_DIR = previousStorageRoot;
+      }
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   it("reports a full match for meaningful filters", async () => {
     const db = createDbClient();
     const { gateway } = createCapturingGateway(4);
@@ -239,7 +293,9 @@ describe("topic recommendation filter service trace", () => {
               "song_liao_xia_jin",
             ],
           },
-          event_domain: "military_warfare",
+          event_domain: "diplomacy_relations",
+          central_actor_type: "religious_actor",
+          storytelling_lens: "aftermath",
         },
       },
       {
@@ -260,12 +316,18 @@ describe("topic recommendation filter service trace", () => {
             "song_liao_xia_jin",
           ],
         },
-        event_domain: "military_warfare",
+        event_domain: "diplomacy_relations",
+        central_actor_type: "religious_actor",
+        storytelling_lens: "aftermath",
       },
-      filter_effect_summary: expect.stringContaining("唐、五代十国、宋辽夏金"),
+      filter_effect_summary:
+        "时期：唐、五代十国、宋辽夏金；事件领域：外交交涉；主角类型：宗教人物；讲述视角：后果追踪",
       filter_match_status: "full",
       filter_match_shortfall: 0,
     });
+    expect(result.diagnostics.filter_effect_summary).not.toMatch(
+      /diplomacy_relations|religious_actor|aftermath/,
+    );
   });
 
   it("normalizes meaningful filters, sends one contract to builder, and disables fallback", async () => {

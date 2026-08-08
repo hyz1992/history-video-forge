@@ -25,9 +25,14 @@ describe("recommendation diagnostics markdown", () => {
               "song_liao_xia_jin",
             ],
           },
-          exclude_terms: ["演义`\n- 伪史"],
+          exclude_terms: [
+            "[链接](https://example.com)",
+            "<details>",
+            "`代码`",
+          ],
         },
-        filter_effect_summary: "时期：唐、五代十国、宋辽夏金；排除：演义`\n- 伪史",
+        filter_effect_summary:
+          "时期：唐、五代十国、宋辽夏金；排除项：\\路径 *星* _线_ {花} [链接](https://example.com) <details> #标题 +加 -减 !警告 |管道| `代码`",
         filter_match_status: "full",
         filter_match_shortfall: 0,
       },
@@ -35,13 +40,37 @@ describe("recommendation diagnostics markdown", () => {
 
     expect(markdown).toContain("## Filter");
     expect(markdown).toContain("- filter_fingerprint: 0123456789abcdef");
-    expect(markdown).toContain("- normalized_filter: {");
+    expect(markdown).toContain("- normalized_filter:\n\n    {");
     expect(markdown).toContain("five_dynasties_ten_kingdoms");
     expect(markdown).toContain("唐、五代十国、宋辽夏金");
     expect(markdown).toContain("- filter_match_status: full");
     expect(markdown).toContain("- filter_match_shortfall: 0");
-    expect(markdown).toContain("演义\\` / - 伪史");
-    expect(markdown).not.toContain("\n- 伪史\n");
+    const normalizedFilterBlock = markdown
+      .split("- normalized_filter:\n")[1]
+      ?.split("- filter_effect_summary:")[0];
+    expect(normalizedFilterBlock).toBeDefined();
+    expect(
+      normalizedFilterBlock!
+        .split("\n")
+        .filter(Boolean)
+        .every((line) => line.startsWith("    ")),
+    ).toBe(true);
+    expect(normalizedFilterBlock).toContain("    \"exclude_terms\": [");
+    expect(normalizedFilterBlock).toContain("[链接](https://example.com)");
+    expect(normalizedFilterBlock).toContain("<details>");
+    expect(normalizedFilterBlock).toContain("`代码`");
+    expect(markdown).toContain("\\\\路径");
+    expect(markdown).toContain("\\*星\\*");
+    expect(markdown).toContain("\\_线\\_");
+    expect(markdown).toContain("\\{花\\}");
+    expect(markdown).toContain("\\[链接\\]\\(https://example.com\\)");
+    expect(markdown).toContain("\\<details\\>");
+    expect(markdown).toContain("\\#标题");
+    expect(markdown).toContain("\\+加");
+    expect(markdown).toContain("\\-减");
+    expect(markdown).toContain("\\!警告");
+    expect(markdown).toContain("\\|管道\\|");
+    expect(markdown).toContain("\\`代码\\`");
     expect(markdown).not.toContain("Prompt");
   });
 

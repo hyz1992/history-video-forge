@@ -233,12 +233,22 @@ export function renderRecommendationDiagnosticsMarkdown(
   ];
 
   if (input.filter) {
+    const normalizedFilterJson = JSON.stringify(
+      input.filter.normalized_filter,
+      null,
+      2,
+    )
+      .split("\n")
+      .map((line) => `    ${line}`);
     lines.push(
       "## Filter",
       "",
       `- filter_fingerprint: ${normalizeMarkdownAnnotation(input.filter.filter_fingerprint)}`,
-      `- normalized_filter: ${normalizeMarkdownAnnotation(JSON.stringify(input.filter.normalized_filter))}`,
-      `- filter_effect_summary: ${normalizeMarkdownAnnotation(input.filter.filter_effect_summary)}`,
+      "- normalized_filter:",
+      "",
+      ...normalizedFilterJson,
+      "",
+      `- filter_effect_summary: ${escapeMarkdownPlainText(input.filter.filter_effect_summary)}`,
       `- filter_match_status: ${input.filter.filter_match_status}`,
       `- filter_match_shortfall: ${input.filter.filter_match_shortfall}`,
       "",
@@ -273,6 +283,17 @@ export function renderRecommendationDiagnosticsMarkdown(
 
   lines.push("");
   return lines.join("\n");
+}
+
+function escapeMarkdownPlainText(value: string) {
+  const normalized = value
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(" / ");
+
+  return normalized.replace(/([\\`*_{}\[\]()<>#+!|\-])/g, "\\$1");
 }
 
 export function normalizeMarkdownAnnotation(annotation: string) {
