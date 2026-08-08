@@ -6,6 +6,9 @@ import {
   normalizeTopicRecommendationFilter,
   TopicCandidateCard,
 } from "../../../../shared/src/index.js";
+import type {
+  TopicRecommendationFilterInput,
+} from "../../../../shared/src/topic/topic-recommendation-filter.schema.js";
 import { env } from "../../config/env.js";
 import type { DbClient } from "../../db/client";
 import {
@@ -84,6 +87,13 @@ export interface TopicRecommendationOptions {
    */
   disableFallback?: boolean;
 }
+
+export type TopicRecommendationRequestInput = Omit<
+  BuildTopicCandidatesInput,
+  "topic_filter" | "topic_filter_fingerprint"
+> & {
+  filters?: TopicRecommendationFilterInput;
+};
 
 type SelectorDeductionAxis = string;
 
@@ -227,7 +237,7 @@ export const TOPIC_SELECTOR_STRICT_SCHEMA: StrictStructuredToolSchema = {
 
 export async function recommendTopicCandidatesWithTrace(
   db: DbClient,
-  input: BuildTopicCandidatesInput,
+  input: TopicRecommendationRequestInput,
   options?: TopicRecommendationOptions,
 ) {
   const recommendationStartedAt = new Date();
@@ -242,8 +252,6 @@ export async function recommendTopicCandidatesWithTrace(
     options?.finalCandidateCount ?? TOPIC_CANDIDATE_TARGET_COUNT;
   const {
     filters,
-    topic_filter: _topicFilter,
-    topic_filter_fingerprint: _topicFilterFingerprint,
     ...seedInput
   } = input;
   const normalizedFilter = filters === undefined
@@ -503,7 +511,7 @@ export async function recommendTopicCandidatesWithTrace(
 
 export async function recommendTopicCandidates(
   db: DbClient,
-  input: BuildTopicCandidatesInput,
+  input: TopicRecommendationRequestInput,
   options?: TopicRecommendationOptions,
 ) {
   const result = await recommendTopicCandidatesWithTrace(db, input, options);

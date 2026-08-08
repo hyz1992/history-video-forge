@@ -1,7 +1,6 @@
 import { TopicCandidateCard } from "../../../../shared/src/index";
 import type {
   TopicRecommendationFilter,
-  TopicRecommendationFilterInput,
 } from "../../../../shared/src/topic/topic-recommendation-filter.schema";
 
 import {
@@ -31,7 +30,6 @@ export interface BuildTopicCandidatesInput {
   tags?: string[];
   familyHint?: string;
   slotRubricOverrides?: CandidateRubric[];
-  filters?: TopicRecommendationFilterInput;
   topic_filter?: TopicRecommendationFilter;
   topic_filter_fingerprint?: string;
   /**

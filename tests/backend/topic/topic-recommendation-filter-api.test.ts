@@ -124,6 +124,7 @@ describe("topic recommendation filter HTTP chain", () => {
       },
     ],
     ["unknown filter field", { event_domain: "political_power", conflict_core: "status" }],
+    ["overlong exclude term", { exclude_terms: ["x".repeat(41)] }],
   ])("rejects %s before invoking the builder", async (_name, filters) => {
     const app = buildApp();
     const projectId = await createProject(app);
@@ -139,8 +140,32 @@ describe("topic recommendation filter HTTP chain", () => {
     });
 
     expect(response.statusCode).toBe(400);
-    expect(response.json()).toMatchObject({
+    expect(response.json()).toEqual({
       error: "invalid_topic_filter",
+      invalid_fields: ["filters"],
+    });
+    expect(builderCapture.inputs).toHaveLength(0);
+  });
+
+  it("prioritizes an invalid recommendation seed over an invalid filter", async () => {
+    const app = buildApp();
+    const projectId = await createProject(app);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectId}/topic/recommendations`,
+      payload: {
+        ...seedPayload,
+        canonical_name: "",
+        filters: { event_domain: "invalid-domain" },
+      },
+      auth: buildTestAuth(),
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      error: "invalid_topic_recommendation_seed",
+      invalid_fields: expect.arrayContaining(["canonical_name"]),
     });
     expect(builderCapture.inputs).toHaveLength(0);
   });

@@ -16,6 +16,7 @@ export {
   CustomRefinedEvent,
 } from "./topic/topic-custom-refine-output.schema";
 export {
+  TOPIC_RECOMMENDATION_EXCLUDE_TERM_MAX_LENGTH,
   TOPIC_RECOMMENDATION_PERIOD_GROUPS,
   TopicRecommendationCentralActorType,
   TopicRecommendationEventDomain,

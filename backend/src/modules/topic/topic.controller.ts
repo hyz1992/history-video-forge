@@ -266,11 +266,7 @@ export async function createTopicRecommendationsController(
       statusCode: 400,
       body: {
         error: "invalid_topic_filter",
-        issues: validatedFilters.error.issues.map((issue) => ({
-          code: issue.code,
-          path: issue.path,
-          message: issue.message,
-        })),
+        invalid_fields: ["filters"],
       },
     };
   }
