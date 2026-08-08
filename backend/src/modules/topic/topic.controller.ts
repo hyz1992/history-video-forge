@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import { TopicRecommendationFilterInputSchema } from "../../../../shared/src/index.js";
 import type { AppResponse, RouteContext } from "../../app";
 import { createProject, getProjectById } from "../projects/project.repository";
 import { demoStageGuard } from "../../shared/demo-stage-guard";
@@ -254,6 +255,26 @@ export async function createTopicRecommendationsController(
     };
   }
 
+  const rawFilters = context.payload && typeof context.payload === "object"
+    ? (context.payload as Record<string, unknown>).filters
+    : undefined;
+  const validatedFilters = rawFilters === undefined
+    ? undefined
+    : TopicRecommendationFilterInputSchema.safeParse(rawFilters);
+  if (validatedFilters && !validatedFilters.success) {
+    return {
+      statusCode: 400,
+      body: {
+        error: "invalid_topic_filter",
+        issues: validatedFilters.error.issues.map((issue) => ({
+          code: issue.code,
+          path: issue.path,
+          message: issue.message,
+        })),
+      },
+    };
+  }
+
   const project = await getProjectById(context.app.db, context.params.projectId);
   if (!project) {
     return {
@@ -285,6 +306,7 @@ export async function createTopicRecommendationsController(
       canonicalQuotes: validatedPayload.value.canonical_quotes,
       canonicalQuoteIntents: validatedPayload.value.canonical_quote_intents,
       tags: validatedPayload.value.tags,
+      ...(validatedFilters?.success ? { filters: validatedFilters.data } : {}),
     },
     {
       projectId: project.id,

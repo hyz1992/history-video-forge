@@ -2,7 +2,10 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 
-import { TopicCandidateCard } from "../../../../shared/src/index.js";
+import {
+  normalizeTopicRecommendationFilter,
+  TopicCandidateCard,
+} from "../../../../shared/src/index.js";
 import { env } from "../../config/env.js";
 import type { DbClient } from "../../db/client";
 import {
@@ -59,6 +62,7 @@ import {
   type TopicCandidateLibraryRepository,
 } from "./topic-candidate-library.repository.js";
 import { projectTopicSelectorPool } from "./topic-selector-prompt-projection.js";
+import { createTopicRecommendationFilterFingerprint } from "./topic-recommendation-filter.fingerprint.js";
 
 export interface TopicRecommendationOptions {
   llmGateway?: LlmGateway;
@@ -236,7 +240,27 @@ export async function recommendTopicCandidatesWithTrace(
     options?.rawCandidateTargetCount ?? TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT;
   const finalCandidateCount =
     options?.finalCandidateCount ?? TOPIC_CANDIDATE_TARGET_COUNT;
-  const disableFallback = options?.disableFallback ?? false;
+  const {
+    filters,
+    topic_filter: _topicFilter,
+    topic_filter_fingerprint: _topicFilterFingerprint,
+    ...seedInput
+  } = input;
+  const normalizedFilter = filters === undefined
+    ? undefined
+    : normalizeTopicRecommendationFilter(filters);
+  const topicFilterFingerprint = normalizedFilter
+    ? createTopicRecommendationFilterFingerprint(normalizedFilter)
+    : undefined;
+  const normalizedSeedInput: BuildTopicCandidatesInput = {
+    ...seedInput,
+    ...(normalizedFilter ? { topic_filter: normalizedFilter } : {}),
+    ...(topicFilterFingerprint
+      ? { topic_filter_fingerprint: topicFilterFingerprint }
+      : {}),
+  };
+  const disableFallback = Boolean(normalizedFilter) ||
+    (options?.disableFallback ?? false);
   const recentEventMemory = await buildRecentEventMemory({
     db,
     projectId: options?.projectId ?? null,
@@ -244,7 +268,7 @@ export async function recommendTopicCandidatesWithTrace(
     existingCacheRecordIds,
   });
   const graphInput = {
-    ...input,
+    ...normalizedSeedInput,
     recent_event_memory: recentEventMemory,
     target_candidate_count: rawCandidateTargetCount,
     final_candidate_count: finalCandidateCount,
@@ -280,7 +304,7 @@ export async function recommendTopicCandidatesWithTrace(
   );
   const postProcessed = await postProcessTopicCandidates({
     db,
-    seedInput: input,
+    seedInput: normalizedSeedInput,
     candidates: result.candidates,
     projectId: options?.projectId ?? null,
     createdBefore: recommendationStartedAt,
@@ -293,7 +317,7 @@ export async function recommendTopicCandidatesWithTrace(
   const fallbackCandidates = options?.projectId && !disableFallback
     ? await loadFallbackCandidates({
         db,
-        input,
+        input: normalizedSeedInput,
         repository: topicCandidateLibraryRepository,
         existingRankings: postProcessed.rankings,
       })
@@ -320,7 +344,7 @@ export async function recommendTopicCandidatesWithTrace(
   ];
   const selected = selectorPool.length >= finalCandidateCount
     ? await selectFinalCandidatesWithTrace({
-        input,
+        input: normalizedSeedInput,
         llmGateway: gateway,
         selectorPool,
         recentEventMemory,
@@ -388,7 +412,7 @@ export async function recommendTopicCandidatesWithTrace(
   }
 
   await persistTopicCandidateLibraryEntries({
-    input,
+    input: normalizedSeedInput,
     projectId: options.projectId,
     runId,
     rawCandidates: result.candidates,

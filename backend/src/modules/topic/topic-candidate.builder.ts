@@ -1,4 +1,8 @@
 import { TopicCandidateCard } from "../../../../shared/src/index";
+import type {
+  TopicRecommendationFilter,
+  TopicRecommendationFilterInput,
+} from "../../../../shared/src/topic/topic-recommendation-filter.schema";
 
 import {
   classifyEventFamily,
@@ -27,6 +31,9 @@ export interface BuildTopicCandidatesInput {
   tags?: string[];
   familyHint?: string;
   slotRubricOverrides?: CandidateRubric[];
+  filters?: TopicRecommendationFilterInput;
+  topic_filter?: TopicRecommendationFilter;
+  topic_filter_fingerprint?: string;
   /**
    * builder 原始候选池目标数量。
    * 由 recommendTopicCandidatesWithTrace 注入；缺省时回退 TOPIC_RAW_CANDIDATE_POOL_TARGET_COUNT。
