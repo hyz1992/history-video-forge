@@ -12,7 +12,9 @@
 
 ## 0. 实施边界
 
-设计文档：`docs/plans/2026-08-07-s2-4-topic-filter-expansion-design.md`
+执行状态：已于 2026-08-08 完成；真实 LLM live check 保留为显式验证项。
+
+设计文档：`docs/plans/archive/2026-08-07-s2-4-topic-filter-expansion-design.md`
 
 本计划只实现 S2-4 第一版：
 
