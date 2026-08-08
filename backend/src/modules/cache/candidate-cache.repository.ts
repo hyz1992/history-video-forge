@@ -25,9 +25,17 @@ export async function saveCachedCandidate(
   db: DbClient,
   input: SaveCachedCandidateInput,
 ): Promise<CandidateCacheRecord> {
+  const projectId = input.projectId ?? null;
+  const existingRecord = projectId
+    ? [...db.candidateCache.values()].find(
+        (candidate) =>
+          candidate.projectId === projectId &&
+          candidate.fingerprint === input.fingerprint,
+      )
+    : undefined;
   const record: CandidateCacheRecord = {
-    id: db.generateId(),
-    projectId: input.projectId ?? null,
+    id: existingRecord?.id ?? db.generateId(),
+    projectId,
     eventRegistryEntryId: input.eventRegistryEntryId ?? null,
     eventIdentity: input.eventIdentity ?? null,
     fingerprint: input.fingerprint,
@@ -44,10 +52,21 @@ export async function saveCachedCandidate(
     recentUsageHint: input.recentUsageHint ?? "",
     whyThisNow: input.whyThisNow ?? "",
     riskHintsJson: input.riskHintsJson ?? [],
-    createdAt: new Date(),
+    createdAt: existingRecord?.createdAt ?? new Date(),
   };
 
   await db.firstAggregateWriter?.saveCandidate(record);
+  if (projectId) {
+    for (const [recordId, candidate] of db.candidateCache) {
+      if (
+        recordId !== record.id &&
+        candidate.projectId === projectId &&
+        candidate.fingerprint === record.fingerprint
+      ) {
+        db.candidateCache.delete(recordId);
+      }
+    }
+  }
   db.candidateCache.set(record.id, record);
 
   return record;
