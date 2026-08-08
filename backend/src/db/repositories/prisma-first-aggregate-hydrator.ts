@@ -4,6 +4,7 @@ import type { ProjectTopicCandidateState } from "../../app.js";
 import type { StoredTopicCandidate } from "../../modules/topic/topic-confirm.service.js";
 import type { CandidateCacheRecord, DbClient, EventRegistryRecord, ProjectRecord, ProjectRecommendationRoundRecord, TopicPackageRecord } from "../client.js";
 import type { AppPrismaClient } from "../prisma-client.types.js";
+import { parseRecommendationRoundFilterJson } from "./recommendation-round-filter.js";
 import { buildProjectStorageRelativeDir } from "../../runtime/trace/project-storage.js";
 
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -28,6 +29,9 @@ export async function hydrateFirstAggregates(
     client.recommendationCandidateCache.findMany(),
     client.recommendationRound.findMany({ orderBy: [{ projectId: "asc" }, { roundIndex: "asc" }], include: { exposures: { orderBy: { selectedAt: "asc" } } } }),
   ]);
+  const roundFilters = new Map(
+    rounds.map((round) => [round.id, parseRecommendationRoundFilterJson(round.filterJson)]),
+  );
   db.projects.clear(); db.events.clear(); db.topicPackages.clear(); db.candidateCache.clear();
   db.recommendationRounds.clear(); db.topicRunCounts.clear(); topicCandidateStore.clear();
 
@@ -92,7 +96,7 @@ export async function hydrateFirstAggregates(
     if (!db.projects.has(row.projectId)) continue;
     const record: ProjectRecommendationRoundRecord = { projectId: row.projectId, createdAt: row.createdAt,
       filterFingerprint: row.filterFingerprint,
-      filterJson: row.filterJson as ProjectRecommendationRoundRecord["filterJson"],
+      filterJson: roundFilters.get(row.id)!,
       candidates: row.exposures.map((item) => ({ eventRegistryEntryId: item.eventRegistryEntryId ?? "", eventIdentity: item.eventIdentity,
         title: item.title, fingerprint: item.fingerprint, filterFingerprint: item.filterFingerprint,
         createdAt: item.selectedAt })) };

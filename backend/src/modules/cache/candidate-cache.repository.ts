@@ -122,7 +122,6 @@ export async function recordProjectRecommendationRound(
       eventIdentity?: string | null;
       title?: string | null;
       fingerprint: string;
-      filterFingerprint?: string | null;
     }>;
   },
 ): Promise<ProjectRecommendationRoundRecord> {
@@ -138,7 +137,7 @@ export async function recordProjectRecommendationRound(
       eventIdentity: candidate.eventIdentity ?? null,
       title: candidate.title ?? null,
       fingerprint: candidate.fingerprint,
-      filterFingerprint: candidate.filterFingerprint ?? input.filterFingerprint,
+      filterFingerprint: input.filterFingerprint,
       createdAt: input.createdAt ?? new Date(),
     })),
   };

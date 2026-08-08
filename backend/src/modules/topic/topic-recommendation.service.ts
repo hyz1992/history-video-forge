@@ -445,7 +445,6 @@ export async function recommendTopicCandidatesWithTrace(
       eventIdentity: candidate.eventIdentity,
       title: candidate.candidate.title,
       fingerprint: candidate.fingerprint,
-      filterFingerprint: topicFilterFingerprint,
     })),
   });
 
