@@ -1,6 +1,14 @@
 <script setup lang="ts">
 import { Close, Lightning } from "@element-plus/icons-vue";
-import { computed, reactive, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from "vue";
 
 import {
   TOPIC_RECOMMENDATION_EXCLUDE_TERM_MAX_LENGTH,
@@ -33,7 +41,12 @@ const topicStore = useTopicStore();
 const activeTab = ref<TopicTab>("system");
 const isGenerating = ref(false);
 const excludeInput = ref("");
+const isExcludeComposing = ref(false);
 const error = ref<string | null>(null);
+const dialogRef = ref<HTMLElement | null>(null);
+const closeButtonRef = ref<HTMLButtonElement | null>(null);
+const activeRangeHandle = ref<"start" | "end">("end");
+let previouslyFocusedElement: HTMLElement | null = null;
 
 const eraOptions: Array<{ value: TopicRecommendationEraBand; label: string }> = [
   { value: "unlimited", label: "不限" },
@@ -113,8 +126,21 @@ const periodStyle = computed(() => {
     "--range-width": `${width}%`,
   };
 });
+const frontRangeHandle = computed<"start" | "end">(() => {
+  if (startIndex.value !== endIndex.value) return activeRangeHandle.value;
+  if (startIndex.value === currentPeriods.value.length - 1) return "start";
+  if (startIndex.value === 0) return "end";
+  return activeRangeHandle.value;
+});
+const startValueText = computed(() =>
+  `起点：${currentPeriods.value[startIndex.value]?.label ?? "不限"}`,
+);
+const endValueText = computed(() =>
+  `终点：${currentPeriods.value[endIndex.value]?.label ?? "不限"}`,
+);
 
 function selectEra(era: TopicRecommendationEraBand) {
+  if (isGenerating.value) return;
   draft.era_band = era;
   if (era === "unlimited") {
     draft.period_start_id = null;
@@ -127,11 +153,15 @@ function selectEra(era: TopicRecommendationEraBand) {
 }
 
 function updateStart(event: Event) {
+  if (isGenerating.value) return;
+  activeRangeHandle.value = "start";
   const value = Math.min(Number((event.target as HTMLInputElement).value), endIndex.value);
   draft.period_start_id = currentPeriods.value[value]?.id ?? null;
 }
 
 function updateEnd(event: Event) {
+  if (isGenerating.value) return;
+  activeRangeHandle.value = "end";
   const value = Math.max(Number((event.target as HTMLInputElement).value), startIndex.value);
   draft.period_end_id = currentPeriods.value[value]?.id ?? null;
 }
@@ -147,6 +177,7 @@ function normalizeExcludeTerms(values: unknown[]) {
 }
 
 function addExcludeTerm() {
+  if (isGenerating.value || isExcludeComposing.value) return;
   const value = excludeInput.value.trim().slice(0, TOPIC_RECOMMENDATION_EXCLUDE_TERM_MAX_LENGTH);
   if (value && draft.exclude_terms.length < 8 && !draft.exclude_terms.includes(value)) {
     draft.exclude_terms.push(value);
@@ -155,7 +186,29 @@ function addExcludeTerm() {
 }
 
 function removeExcludeTerm(index: number) {
+  if (isGenerating.value) return;
   draft.exclude_terms.splice(index, 1);
+}
+
+function handleExcludeEnter(event: KeyboardEvent) {
+  if (event.isComposing || isExcludeComposing.value) return;
+  addExcludeTerm();
+}
+
+function selectLens(value: TopicRecommendationFilterDraft["storytelling_lens"]) {
+  if (!isGenerating.value) draft.storytelling_lens = value;
+}
+
+function selectEventDomain(value: TopicRecommendationFilterDraft["event_domain"]) {
+  if (!isGenerating.value) draft.event_domain = value;
+}
+
+function selectActorType(value: TopicRecommendationFilterDraft["central_actor_type"]) {
+  if (!isGenerating.value) draft.central_actor_type = value;
+}
+
+function toggleAdvanced() {
+  if (!isGenerating.value) isAdvancedOpen.value = !isAdvancedOpen.value;
 }
 
 function saveDraft() {
@@ -186,27 +239,102 @@ function close() {
   if (!isGenerating.value) emit("update:visible", false);
 }
 
+function getFocusableElements() {
+  if (!dialogRef.value) return [];
+  return Array.from(dialogRef.value.querySelectorAll<HTMLElement>(
+    'button:not(:disabled), input:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
+  )).filter((element) => !element.hasAttribute("hidden"));
+}
+
+function handleDialogKeydown(event: KeyboardEvent) {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    close();
+    return;
+  }
+  if (event.key !== "Tab") return;
+  const focusable = getFocusableElements();
+  if (!focusable.length) {
+    event.preventDefault();
+    dialogRef.value?.focus();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+async function focusDialog() {
+  await nextTick();
+  closeButtonRef.value?.focus();
+  if (document.activeElement !== closeButtonRef.value) dialogRef.value?.focus();
+}
+
+function restorePreviousFocus() {
+  if (previouslyFocusedElement?.isConnected) previouslyFocusedElement.focus();
+  previouslyFocusedElement = null;
+}
+
 function onChildClose() {
   emit("confirmed");
   emit("update:visible", false);
 }
 
 watch(() => props.visible, (visible) => {
-  if (!visible) {
+  if (visible) {
+    previouslyFocusedElement = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    void focusDialog();
+  } else {
     error.value = null;
     activeTab.value = "system";
+    restorePreviousFocus();
   }
 });
+
+onMounted(() => {
+  if (!props.visible) return;
+  previouslyFocusedElement = document.activeElement instanceof HTMLElement
+    ? document.activeElement
+    : null;
+  void focusDialog();
+});
+
+onBeforeUnmount(restorePreviousFocus);
 </script>
 
 <template>
   <Teleport to="body">
     <div v-if="visible" class="modal-overlay">
-      <section class="modal-box" aria-label="新建项目">
-        <button v-if="!isGenerating" class="modal-close" aria-label="关闭" @click="close">
+      <section
+        ref="dialogRef"
+        class="modal-box"
+        data-testid="topic-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-topic-title"
+        tabindex="-1"
+        @keydown="handleDialogKeydown"
+      >
+        <button
+          ref="closeButtonRef"
+          class="modal-close"
+          data-testid="modal-close"
+          aria-label="关闭"
+          :disabled="isGenerating"
+          :aria-disabled="isGenerating"
+          @click="close"
+        >
           <Close />
         </button>
-        <div class="modal-title">新建项目</div>
+        <h2 id="create-topic-title" class="modal-title">新建项目</h2>
         <nav class="modal-tabs" aria-label="选题来源">
           <button
             v-for="tab in tabOptions"
@@ -214,6 +342,8 @@ watch(() => props.visible, (visible) => {
             class="tab-btn"
             :class="{ 'tab-btn--active': activeTab === tab.value }"
             :disabled="isGenerating"
+            :aria-disabled="isGenerating"
+            :aria-pressed="activeTab === tab.value"
             @click="activeTab = tab.value"
           >{{ tab.label }}</button>
         </nav>
@@ -229,6 +359,8 @@ watch(() => props.visible, (visible) => {
                   class="chip"
                   :class="{ 'chip--active': draft.era_band === option.value }"
                   :disabled="isGenerating"
+                  :aria-disabled="isGenerating"
+                  :aria-pressed="draft.era_band === option.value"
                   @click="selectEra(option.value)"
                 >{{ option.label }}</button>
               </div>
@@ -245,22 +377,30 @@ watch(() => props.visible, (visible) => {
                       <div class="period-track-active"></div>
                       <input
                         class="period-slider period-slider--start"
+                        :class="{ 'period-slider--front': frontRangeHandle === 'start' }"
                         data-testid="period-start"
                         type="range"
                         min="0"
                         :max="Math.max(currentPeriods.length - 1, 0)"
                         :value="startIndex"
+                        :disabled="isGenerating"
+                        :aria-disabled="isGenerating"
                         aria-label="历史区间起点"
+                        :aria-valuetext="startValueText"
                         @input="updateStart"
                       >
                       <input
                         class="period-slider period-slider--end"
+                        :class="{ 'period-slider--front': frontRangeHandle === 'end' }"
                         data-testid="period-end"
                         type="range"
                         min="0"
                         :max="Math.max(currentPeriods.length - 1, 0)"
                         :value="endIndex"
+                        :disabled="isGenerating"
+                        :aria-disabled="isGenerating"
                         aria-label="历史区间终点"
+                        :aria-valuetext="endValueText"
                         @input="updateEnd"
                       >
                     </div>
@@ -286,7 +426,9 @@ watch(() => props.visible, (visible) => {
                   class="chip"
                   :class="{ 'chip--active': draft.storytelling_lens === option.value }"
                   :disabled="isGenerating"
-                  @click="draft.storytelling_lens = option.value"
+                  :aria-disabled="isGenerating"
+                  :aria-pressed="draft.storytelling_lens === option.value"
+                  @click="selectLens(option.value)"
                 >{{ option.label }}</button>
               </div>
             </div>
@@ -295,7 +437,15 @@ watch(() => props.visible, (visible) => {
           <div class="advanced-toggle">
             <div class="advanced-head">
               <span class="advanced-title">更多筛选</span>
-              <button class="advanced-action" type="button" @click="isAdvancedOpen = !isAdvancedOpen">
+              <button
+                class="advanced-action"
+                data-testid="advanced-toggle"
+                type="button"
+                :disabled="isGenerating"
+                :aria-disabled="isGenerating"
+                :aria-expanded="isAdvancedOpen"
+                @click="toggleAdvanced"
+              >
                 {{ isAdvancedOpen ? '收起筛选' : '展开筛选' }}
               </button>
             </div>
@@ -307,14 +457,20 @@ watch(() => props.visible, (visible) => {
                     class="chip chip--small"
                     data-testid="event-unlimited"
                     :class="{ 'chip--active': draft.event_domain === 'unlimited' }"
-                    @click="draft.event_domain = 'unlimited'"
+                    :disabled="isGenerating"
+                    :aria-disabled="isGenerating"
+                    :aria-pressed="draft.event_domain === 'unlimited'"
+                    @click="selectEventDomain('unlimited')"
                   >不限</button>
                   <button
                     v-for="option in eventOptions"
                     :key="option.value"
                     class="chip chip--small"
                     :class="{ 'chip--active': draft.event_domain === option.value }"
-                    @click="draft.event_domain = option.value"
+                    :disabled="isGenerating"
+                    :aria-disabled="isGenerating"
+                    :aria-pressed="draft.event_domain === option.value"
+                    @click="selectEventDomain(option.value)"
                   >{{ option.label }}</button>
                 </div>
               </div>
@@ -325,14 +481,20 @@ watch(() => props.visible, (visible) => {
                     class="chip chip--small"
                     data-testid="actor-unlimited"
                     :class="{ 'chip--active': draft.central_actor_type === 'unlimited' }"
-                    @click="draft.central_actor_type = 'unlimited'"
+                    :disabled="isGenerating"
+                    :aria-disabled="isGenerating"
+                    :aria-pressed="draft.central_actor_type === 'unlimited'"
+                    @click="selectActorType('unlimited')"
                   >不限</button>
                   <button
                     v-for="option in actorOptions"
                     :key="option.value"
                     class="chip chip--small"
                     :class="{ 'chip--active': draft.central_actor_type === option.value }"
-                    @click="draft.central_actor_type = option.value"
+                    :disabled="isGenerating"
+                    :aria-disabled="isGenerating"
+                    :aria-pressed="draft.central_actor_type === option.value"
+                    @click="selectActorType(option.value)"
                   >{{ option.label }}</button>
                 </div>
               </div>
@@ -342,9 +504,16 @@ watch(() => props.visible, (visible) => {
                   <span class="filter-count">{{ draft.exclude_terms.length }}/8</span>
                 </div>
                 <div class="tag-input">
-                  <span v-for="(term, index) in draft.exclude_terms" :key="term" class="tag" data-testid="exclude-tag">
-                    {{ term }}
-                    <button data-testid="remove-exclude" :aria-label="`删除排除项 ${term}`" @click="removeExcludeTerm(index)">
+                  <span v-for="(term, index) in draft.exclude_terms" :key="term" class="tag tag--bounded" data-testid="exclude-tag">
+                    <span class="tag-text" data-testid="exclude-tag-text" :title="term">{{ term }}</span>
+                    <button
+                      data-testid="remove-exclude"
+                      :aria-label="`删除排除项 ${term}`"
+                      :title="`删除 ${term}`"
+                      :disabled="isGenerating"
+                      :aria-disabled="isGenerating"
+                      @click="removeExcludeTerm(index)"
+                    >
                       <Close />
                     </button>
                   </span>
@@ -352,9 +521,12 @@ watch(() => props.visible, (visible) => {
                     v-model="excludeInput"
                     data-testid="exclude-input"
                     :maxlength="TOPIC_RECOMMENDATION_EXCLUDE_TERM_MAX_LENGTH"
-                    :disabled="draft.exclude_terms.length >= 8"
+                    :disabled="isGenerating || draft.exclude_terms.length >= 8"
+                    :aria-disabled="isGenerating || draft.exclude_terms.length >= 8"
                     placeholder="输入后回车"
-                    @keydown.enter.prevent="addExcludeTerm"
+                    @compositionstart="isExcludeComposing = true"
+                    @compositionend="isExcludeComposing = false"
+                    @keydown.enter.prevent="handleExcludeEnter"
                   >
                 </div>
               </div>
@@ -371,13 +543,20 @@ watch(() => props.visible, (visible) => {
 
         <div v-if="error" class="modal-error">
           <span>{{ error }}</span>
-          <button class="modal-btn modal-btn--retry" @click="handleGenerate">重试</button>
+          <button
+            class="modal-btn modal-btn--retry"
+            :disabled="isGenerating"
+            :aria-disabled="isGenerating"
+            @click="handleGenerate"
+          >重试</button>
         </div>
         <div class="modal-actions">
           <button
             v-if="activeTab === 'system'"
             class="modal-btn modal-btn--primary"
+            data-testid="generate-topic"
             :disabled="isGenerating"
+            :aria-disabled="isGenerating"
             :class="{ 'modal-btn--loading': isGenerating }"
             @click="handleGenerate"
           >
@@ -454,7 +633,7 @@ button { letter-spacing: 0; }
 }
 
 .modal-title {
-  margin-left: -30px;
+  margin: 0 0 0 -30px;
   padding-right: 40px;
   color: var(--text-heading);
   font-size: 28px;
@@ -578,7 +757,9 @@ button { letter-spacing: 0; }
   background: transparent;
   pointer-events: none;
 }
-.period-slider--end { z-index: 4; }
+.period-slider--front { z-index: 4; }
+.period-slider:disabled::-webkit-slider-thumb { cursor: not-allowed; }
+.period-slider:disabled::-moz-range-thumb { cursor: not-allowed; }
 .period-slider::-webkit-slider-runnable-track { height: 4px; background: transparent; }
 .period-slider::-webkit-slider-thumb {
   width: 18px;
@@ -654,6 +835,7 @@ button { letter-spacing: 0; }
   border: 0;
   cursor: pointer;
 }
+.advanced-action:disabled { opacity: 0.55; cursor: not-allowed; }
 .advanced-panel {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -695,7 +877,24 @@ button { letter-spacing: 0; }
   border: 1px solid rgba(212, 163, 95, 0.16);
   border-radius: 100px;
 }
-.tag button { width: 14px; height: 14px; padding: 2px; color: inherit; background: transparent; border: 0; cursor: pointer; }
+.tag--bounded { max-width: 100%; min-width: 0; }
+.tag-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tag button {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  padding: 2px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.tag button:disabled { opacity: 0.55; cursor: not-allowed; }
 .tag-input input { min-width: 72px; flex: 1; color: var(--text-body); background: transparent; border: 0; outline: 0; font-size: 12px; }
 
 .modal-tab-content { flex: 1; min-height: 320px; overflow-y: auto; }
