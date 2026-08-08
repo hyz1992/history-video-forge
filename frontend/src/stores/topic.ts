@@ -1,4 +1,14 @@
 import { inject, reactive, readonly, type InjectionKey } from "vue";
+import {
+  TOPIC_RECOMMENDATION_PERIOD_GROUPS,
+  expandTopicRecommendationPeriodRange,
+  normalizeTopicRecommendationFilter,
+  type TopicRecommendationCentralActorType,
+  type TopicRecommendationEventDomain,
+  type TopicRecommendationFilter,
+  type TopicRecommendationPeriodId,
+  type TopicRecommendationStorytellingLens,
+} from "../../../shared/src";
 import { apiFetch } from "../utils/api";
 
 import type { ProjectStore } from "./project";
@@ -116,9 +126,68 @@ export interface CreateTopicStoreInput {
   api: TopicApi;
 }
 
-export interface TopicRecommendationFilters {
-  era: "ancient" | "medieval" | "late-imperial";
-  tension: "high" | "balanced" | "hook-first";
+export type TopicRecommendationEraBand =
+  | "unlimited"
+  | (typeof TOPIC_RECOMMENDATION_PERIOD_GROUPS)[number]["id"];
+
+export interface TopicRecommendationFilterDraft {
+  era_band: TopicRecommendationEraBand;
+  period_start_id: TopicRecommendationPeriodId | null;
+  period_end_id: TopicRecommendationPeriodId | null;
+  event_domain: TopicRecommendationEventDomain | "unlimited";
+  central_actor_type: TopicRecommendationCentralActorType | "unlimited";
+  storytelling_lens: TopicRecommendationStorytellingLens | "auto";
+  exclude_terms: string[];
+}
+
+export type TopicRecommendationFilters = TopicRecommendationFilterDraft;
+
+export const TOPIC_RECOMMENDATION_FILTER_STORAGE_KEY =
+  "topic-recommendation-filter";
+
+export function createDefaultTopicRecommendationFilterDraft(): TopicRecommendationFilterDraft {
+  const medieval = TOPIC_RECOMMENDATION_PERIOD_GROUPS.find(
+    (group) => group.id === "medieval",
+  )!;
+  return {
+    era_band: "medieval",
+    period_start_id: medieval.periods[0].id,
+    period_end_id: medieval.periods[medieval.periods.length - 1].id,
+    event_domain: "unlimited",
+    central_actor_type: "unlimited",
+    storytelling_lens: "auto",
+    exclude_terms: [],
+  };
+}
+
+export function buildTopicRecommendationFilters(
+  draft: TopicRecommendationFilterDraft,
+): TopicRecommendationFilter | undefined {
+  const periodRange =
+    draft.era_band !== "unlimited" &&
+    draft.period_start_id &&
+    draft.period_end_id
+      ? {
+          start_id: draft.period_start_id,
+          end_id: draft.period_end_id,
+          included_period_ids: expandTopicRecommendationPeriodRange(
+            draft.period_start_id,
+            draft.period_end_id,
+          ),
+        }
+      : undefined;
+
+  return normalizeTopicRecommendationFilter({
+    ...(periodRange ? { period_range: periodRange } : {}),
+    ...(draft.event_domain !== "unlimited"
+      ? { event_domain: draft.event_domain }
+      : {}),
+    ...(draft.central_actor_type !== "unlimited"
+      ? { central_actor_type: draft.central_actor_type }
+      : {}),
+    storytelling_lens: draft.storytelling_lens,
+    exclude_terms: draft.exclude_terms,
+  });
 }
 
 export interface TopicRecommendationSeed {
@@ -152,9 +221,16 @@ export function createFetchTopicApi(baseUrl = ""): TopicApi {
       }
     },
     async generateSystemRecommendations(projectId, filters) {
+      const normalizedFilters = buildTopicRecommendationFilters(filters);
       return await apiFetch<TopicRecommendationsResponse>(
         `${baseUrl}/api/projects/${projectId}/topic/recommendations`,
-        { method: "POST", body: buildRecommendationSeed(filters) },
+        {
+          method: "POST",
+          body: {
+            ...buildRecommendationSeed(filters),
+            ...(normalizedFilters ? { filters: normalizedFilters } : {}),
+          },
+        },
       );
     },
     async generateFromLibrary(projectId, body) {
@@ -209,10 +285,7 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
   }
 
   async function generateSystemRecommendations(
-    filters: TopicRecommendationFilters = {
-      era: "ancient",
-      tension: "high",
-    },
+    filters: TopicRecommendationFilters = createDefaultTopicRecommendationFilterDraft(),
   ) {
     state.isGenerating = true;
     state.loadError = null;
@@ -486,20 +559,17 @@ export function useTopicStore() {
 function buildRecommendationSeed(
   filters: TopicRecommendationFilters,
 ): TopicRecommendationSeed {
-  const eraLabel = mapEraLabel(filters.era);
-  const tensionLabel = mapTensionLabel(filters.tension);
-  const outOfRangeExamples = mapEraOutOfRangeExamples(filters.era);
+  const periodLabel = describeDraftPeriod(filters);
 
   return {
-    canonical_name: `${eraLabel}·${tensionLabel}历史事件推荐`,
-    summary: `请围绕${eraLabel}中具备${tensionLabel}特征的具体历史事件生成候选，禁止返回“王朝更迭”“古代战争”“百家争鸣”这类泛主题，不得超出${eraLabel}范围。像${outOfRangeExamples}这类超出时段的题目一律排除。优先推荐适合直接进入文案阶段的单事件主题。`,
-    core_conflict: `重点筛选能体现${tensionLabel}、并且冲突关系清晰、人物立场可对撞的具体历史事件。`,
-    strong_scene: `优先寻找发生在${eraLabel}、具备宫廷裁决、当众对抗、临阵翻盘、焚毁文献、政变处决等强场景的关键历史瞬间，所有场景必须发生在${eraLabel}范围内。`,
-    source_hint: `仅使用${eraLabel}范围内相关史事与人物记载；超出${eraLabel}的事件不得采用。`,
-    recent_usage_hint: `优先选择${eraLabel}范围内近期未重复的具体事件，严格排除超出${eraLabel}范围的候选。`,
+    canonical_name: `${periodLabel}历史事件推荐`,
+    summary: `请围绕${periodLabel}内的具体历史事件生成候选，禁止返回“王朝更迭”“古代战争”“百家争鸣”这类泛主题。结构化筛选条件以 filters 为准，优先推荐适合直接进入文案阶段的单事件主题。`,
+    core_conflict: "优先选择冲突关系清晰、人物立场可辨、叙事推进明确的具体历史事件。",
+    strong_scene: `优先寻找发生在${periodLabel}内、具有明确人物行动与局势变化的关键历史瞬间。`,
+    source_hint: `仅使用${periodLabel}范围内相关史事与人物记载。`,
+    recent_usage_hint: `优先选择${periodLabel}范围内近期未重复的具体事件。`,
     tags: [
-      normalizeTag(filters.era),
-      normalizeTag(filters.tension),
+      filters.era_band,
       "system_recommendation",
       "single_event",
       "concrete_scene",
@@ -508,39 +578,19 @@ function buildRecommendationSeed(
   };
 }
 
-function mapEraLabel(era: TopicRecommendationFilters["era"]) {
-  switch (era) {
-    case "ancient":
-      return "先秦至两汉";
-    case "medieval":
-      return "魏晋至唐宋";
-    case "late-imperial":
-      return "元明清";
+function describeDraftPeriod(filters: TopicRecommendationFilterDraft) {
+  if (
+    filters.era_band === "unlimited" ||
+    !filters.period_start_id ||
+    !filters.period_end_id
+  ) {
+    return "不限时期";
   }
-}
-
-function mapTensionLabel(tension: TopicRecommendationFilters["tension"]) {
-  switch (tension) {
-    case "high":
-      return "高张力";
-    case "balanced":
-      return "均衡叙事";
-    case "hook-first":
-      return "传播切口优先";
-  }
-}
-
-function mapEraOutOfRangeExamples(era: TopicRecommendationFilters["era"]) {
-  switch (era) {
-    case "ancient":
-      return "三国、魏晋、隋唐、宋元、明清";
-    case "medieval":
-      return "先秦、两汉、元明清";
-    case "late-imperial":
-      return "先秦、两汉、魏晋、隋唐、宋元";
-  }
-}
-
-function normalizeTag(value: string) {
-  return value.replace(/-/g, "_");
+  const periods = TOPIC_RECOMMENDATION_PERIOD_GROUPS.flatMap(
+    (group) => group.periods,
+  );
+  const start = periods.find((period) => period.id === filters.period_start_id);
+  const end = periods.find((period) => period.id === filters.period_end_id);
+  if (!start || !end) return "所选时期";
+  return start.id === end.id ? start.label : `${start.label}至${end.label}`;
 }
