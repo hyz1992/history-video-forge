@@ -191,6 +191,36 @@
       background: rgba(0, 0, 0, 0.1);
     }
 
+    .child-filter .chip-row {
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-bottom: 4px;
+      overscroll-behavior-inline: contain;
+      scroll-snap-type: x proximity;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(212, 163, 95, 0.26) transparent;
+    }
+
+    .child-filter .chip-row::-webkit-scrollbar {
+      height: 4px;
+    }
+
+    .child-filter .chip-row::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .child-filter .chip-row::-webkit-scrollbar-thumb {
+      background: rgba(212, 163, 95, 0.24);
+      border-radius: 4px;
+    }
+
+    .child-filter .chip {
+      flex: 0 0 auto;
+      scroll-snap-align: start;
+    }
+
     .child-label {
       display: flex;
       align-items: baseline;
@@ -362,6 +392,22 @@
       letter-spacing: 0.08em;
     }
 
+    .option-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      align-items: stretch;
+    }
+
+    .option-grid .chip {
+      width: 100%;
+      min-width: 0;
+      min-height: 30px;
+      padding: 6px 7px;
+      font-size: 12px;
+      text-align: center;
+    }
+
     .tag-input {
       min-height: 38px;
       display: flex;
@@ -483,6 +529,12 @@
       .modal-actions { padding-bottom: 4px; }
       .modal-btn--primary { width: 100%; }
     }
+
+    @media (max-width: 420px) {
+      .option-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
   </style>
 </head>
 <body>
@@ -551,7 +603,7 @@
           <div class="advanced-panel">
             <div class="filter-mini">
               <div class="filter-label">事件领域</div>
-              <div class="chip-row">
+              <div class="option-grid">
                 <button class="chip chip--small chip--active">不限</button>
                 <button class="chip chip--small">权力更替</button>
                 <button class="chip chip--small">军事冲突</button>
@@ -565,7 +617,7 @@
 
             <div class="filter-mini">
               <div class="filter-label">主角类型</div>
-              <div class="chip-row">
+              <div class="option-grid">
                 <button class="chip chip--small chip--active">不限</button>
                 <button class="chip chip--small">统治者</button>
                 <button class="chip chip--small">宗室贵族</button>

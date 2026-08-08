@@ -500,7 +500,9 @@ System tab：
 - 基础行：era_band、dynasties、storytelling_lens。
 - 高级行/toggle：event_domain、protagonist_type、exclude_terms。
 - era_band 与 dynasties 必须表现为父子关系：先选时代范围，再展示该范围下的朝代；dynasties 可不选。
+- dynasties 选项保持单行，溢出时支持触控滑动、触控板横移、`Shift + 滚轮`和拖动细滚动条；不增加常驻左右箭头，也不劫持普通纵向滚轮。
 - event_domain、protagonist_type 都需要有「不限」默认态；storytelling_lens 默认「系统判断」。
+- event_domain、protagonist_type 在常规视口使用等宽三列网格，小于 `420px` 时降为两列。
 - 除 exclude terms 外，其余筛选均使用固定选项，不使用自由 tag input。
 - 使用紧凑控件，避免把 modal 做成大型 landing page。
 
