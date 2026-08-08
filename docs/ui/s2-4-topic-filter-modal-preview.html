@@ -217,8 +217,8 @@
 
     .period-range {
       --period-count: 7;
-      --range-left: 66.6667%;
-      --range-width: 33.3333%;
+      --range-left: 0%;
+      --range-width: 100%;
       position: relative;
       min-width: 476px;
       padding: 4px 6px 0;
@@ -719,14 +719,14 @@
             <div class="child-filter">
               <div class="filter-head">
                 <div class="child-label">历史区间 <span>随时代范围变化</span></div>
-                <div class="period-selection" id="periodSelection">已选：唐、五代十国、宋</div>
+                <div class="period-selection" id="periodSelection">已选：三国、两晋、南北朝、隋、唐、五代十国、宋辽夏金</div>
               </div>
               <div class="period-range-scroll" id="periodRangeScroll">
                 <div class="period-range" id="periodRange">
                   <div class="period-track-shell">
                     <div class="period-track"></div>
                     <div class="period-track-active"></div>
-                    <input class="period-slider period-slider--start" id="periodStart" type="range" min="0" max="6" value="4" aria-label="历史区间起点">
+                    <input class="period-slider period-slider--start" id="periodStart" type="range" min="0" max="6" value="0" aria-label="历史区间起点">
                     <input class="period-slider period-slider--end" id="periodEnd" type="range" min="0" max="6" value="6" aria-label="历史区间终点">
                   </div>
                   <div class="period-marks" id="periodMarks"></div>
@@ -739,12 +739,12 @@
           <div class="filter-group">
             <div class="filter-label">讲述视角</div>
             <div class="chip-row">
-              <button class="chip chip--active">系统判断</button>
-              <button class="chip">关键决策</button>
-              <button class="chip">人物博弈</button>
-              <button class="chip">局势转折</button>
-              <button class="chip">因果拆解</button>
-              <button class="chip">后果追踪</button>
+              <button class="chip chip--active" data-lens="auto">系统判断</button>
+              <button class="chip" data-lens="key_decision">关键决策</button>
+              <button class="chip" data-lens="relationship_dynamics">人物博弈</button>
+              <button class="chip" data-lens="turning_point">局势转折</button>
+              <button class="chip" data-lens="origins_analysis">前因追溯</button>
+              <button class="chip" data-lens="aftermath">后果追踪</button>
             </div>
           </div>
         </div>
@@ -759,29 +759,29 @@
             <div class="filter-mini">
               <div class="filter-label">事件领域</div>
               <div class="option-grid">
-                <button class="chip chip--small chip--active">不限</button>
-                <button class="chip chip--small">权力更替</button>
-                <button class="chip chip--small">军事冲突</button>
-                <button class="chip chip--small">制度变革</button>
-                <button class="chip chip--small">外交互动</button>
-                <button class="chip chip--small">司法案件</button>
-                <button class="chip chip--small">社会动乱</button>
-                <button class="chip chip--small">思想文化</button>
+                <button class="chip chip--small chip--active" data-domain="">不限</button>
+                <button class="chip chip--small" data-domain="political_power">政治权力</button>
+                <button class="chip chip--small" data-domain="military_warfare">军事战争</button>
+                <button class="chip chip--small" data-domain="institutions_governance">制度治理</button>
+                <button class="chip chip--small" data-domain="diplomacy_relations">外交交涉</button>
+                <button class="chip chip--small" data-domain="law_justice">法律司法</button>
+                <button class="chip chip--small" data-domain="society_livelihood">社会民生</button>
+                <button class="chip chip--small" data-domain="thought_culture">思想文化</button>
               </div>
             </div>
 
             <div class="filter-mini">
-              <div class="filter-label">主角类型</div>
+              <div class="filter-label">中心行动者</div>
               <div class="option-grid">
-                <button class="chip chip--small chip--active">不限</button>
-                <button class="chip chip--small">统治者</button>
-                <button class="chip chip--small">宗室贵族</button>
-                <button class="chip chip--small">文官</button>
-                <button class="chip chip--small">将帅军人</button>
-                <button class="chip chip--small">学者思想家</button>
-                <button class="chip chip--small">宗教人物</button>
-                <button class="chip chip--small">民间人物</button>
-                <button class="chip chip--small">群像事件</button>
+                <button class="chip chip--small chip--active" data-actor="">不限</button>
+                <button class="chip chip--small" data-actor="ruler">帝王君主</button>
+                <button class="chip chip--small" data-actor="court_elite">宫廷权贵</button>
+                <button class="chip chip--small" data-actor="civil_official">文官政务</button>
+                <button class="chip chip--small" data-actor="military_actor">军事人物</button>
+                <button class="chip chip--small" data-actor="intellectual_actor">学者思想家</button>
+                <button class="chip chip--small" data-actor="religious_actor">宗教人物</button>
+                <button class="chip chip--small" data-actor="civilian">民间人物</button>
+                <button class="chip chip--small" data-actor="collective">群体多方</button>
               </div>
             </div>
 
@@ -809,24 +809,25 @@
   <script>
     const periodGroups = {
       ancient: [
-        { id: "spring_autumn", label: "春秋", kind: "dynasty" },
-        { id: "warring_states", label: "战国", kind: "dynasty" },
-        { id: "qin", label: "秦", kind: "dynasty" },
-        { id: "han", label: "汉", kind: "dynasty" },
+        { id: "xia_shang_western_zhou", label: "夏商西周", kind: "period" },
+        { id: "spring_autumn", label: "春秋", kind: "period" },
+        { id: "warring_states", label: "战国", kind: "period" },
+        { id: "qin", label: "秦", kind: "period" },
+        { id: "han", label: "两汉", kind: "period" },
       ],
       medieval: [
-        { id: "three_kingdoms", label: "三国", kind: "dynasty" },
-        { id: "jin", label: "晋", kind: "dynasty" },
-        { id: "southern_northern", label: "南北朝", kind: "dynasty" },
-        { id: "sui", label: "隋", kind: "dynasty" },
-        { id: "tang", label: "唐", kind: "dynasty" },
-        { id: "five_dynasties", label: "五代十国", kind: "era" },
-        { id: "song", label: "宋", kind: "dynasty" },
+        { id: "three_kingdoms", label: "三国", kind: "period" },
+        { id: "two_jin", label: "两晋", kind: "period" },
+        { id: "southern_northern", label: "南北朝", kind: "period" },
+        { id: "sui", label: "隋", kind: "period" },
+        { id: "tang", label: "唐", kind: "period" },
+        { id: "five_dynasties_ten_kingdoms", label: "五代十国", kind: "period" },
+        { id: "song_liao_xia_jin", label: "宋辽夏金", kind: "period" },
       ],
       late_imperial: [
-        { id: "yuan", label: "元", kind: "dynasty" },
-        { id: "ming", label: "明", kind: "dynasty" },
-        { id: "qing", label: "清", kind: "dynasty" },
+        { id: "yuan", label: "元", kind: "period" },
+        { id: "ming", label: "明", kind: "period" },
+        { id: "qing", label: "清", kind: "period" },
       ],
     };
 
@@ -925,7 +926,7 @@
       });
     });
 
-    renderPeriodRange("medieval", [4, 6]);
+    renderPeriodRange("medieval", [0, 6]);
   </script>
 </body>
 </html>
