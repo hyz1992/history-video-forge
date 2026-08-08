@@ -52,7 +52,7 @@ async function createFixture() {
   return { root, client, project, db };
 }
 
-function candidateInput(projectId: string, fingerprint: string) {
+function candidateInput(projectId: string | null, fingerprint: string) {
   return {
     projectId,
     fingerprint,
@@ -160,11 +160,26 @@ describe("topic recommendation filter persistence", () => {
     const { client, project, db } = await createFixture();
 
     try {
-      await saveCachedCandidate(db, {
+      const filteredRecord = await saveCachedCandidate(db, {
         ...candidateInput(project.id, "reused-candidate"),
         filterFingerprint: "0123456789abcdef",
       });
-      await saveCachedCandidate(db, candidateInput(project.id, "reused-candidate"));
+      const unfilteredRecord = await saveCachedCandidate(
+        db,
+        candidateInput(project.id, "reused-candidate"),
+      );
+
+      const inMemoryRecords = [...db.candidateCache.values()].filter(
+        (record) => record.projectId === project.id &&
+          record.fingerprint === "reused-candidate",
+      );
+      expect(inMemoryRecords).toHaveLength(1);
+      expect(inMemoryRecords[0]?.filterFingerprint).toBeUndefined();
+      expect(unfilteredRecord).toMatchObject({
+        id: filteredRecord.id,
+        createdAt: filteredRecord.createdAt,
+        filterFingerprint: undefined,
+      });
 
       const cache = await client.recommendationCandidateCache.findFirstOrThrow({
         where: { projectId: project.id, fingerprint: "reused-candidate" },
@@ -173,5 +188,34 @@ describe("topic recommendation filter persistence", () => {
     } finally {
       await client.$disconnect();
     }
+  });
+
+  it("keeps different projects isolated and global cache writes append-only", async () => {
+    const db = createDbClient();
+
+    const projectOne = await saveCachedCandidate(
+      db,
+      candidateInput("project-one", "shared-fingerprint"),
+    );
+    const projectTwo = await saveCachedCandidate(
+      db,
+      candidateInput("project-two", "shared-fingerprint"),
+    );
+    const firstGlobal = await saveCachedCandidate(
+      db,
+      candidateInput(null, "shared-fingerprint"),
+    );
+    const secondGlobal = await saveCachedCandidate(
+      db,
+      candidateInput(null, "shared-fingerprint"),
+    );
+
+    expect(new Set([
+      projectOne.id,
+      projectTwo.id,
+      firstGlobal.id,
+      secondGlobal.id,
+    ])).toHaveLength(4);
+    expect([...db.candidateCache.values()]).toHaveLength(4);
   });
 });
