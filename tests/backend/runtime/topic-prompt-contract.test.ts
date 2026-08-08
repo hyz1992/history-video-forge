@@ -24,6 +24,83 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toMatch(/未提供时默认.*8|缺省.*8/);
   });
 
+  it("registers candidate-builder v1.2.0 with the normalized topic filter input", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.metadata.version).toBe("v1.2.0");
+    expect(prompt.metadata.language).toBe("zh-CN");
+    expect(prompt.body).toContain("`topic_filter`（可选）");
+    expect(prompt.body).toContain("`topic_filter_fingerprint`（可选）");
+    expect(prompt.body).toContain("规范化的结构化筛选合同，不是自然语言建议");
+  });
+
+  it("requires candidate-builder to apply topic filters in two ordered stages", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.body).toContain("第一阶段：先确定事件身份");
+    expect(prompt.body).toContain(
+      "依次使用 `period_range.included_period_ids`、`event_domain`、`central_actor_type` 和 `exclude_terms`",
+    );
+    expect(prompt.body).toContain("第二阶段：再组织讲述角度");
+    expect(prompt.body).toContain("不得借讲述视角替换第一阶段已经确定的事件");
+  });
+
+  it("defines non-overlapping event and actor classification criteria", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.body).toContain("`event_domain` 按核心事件身份分类");
+    expect(prompt.body).toContain("不按事件背景、使用手段或后续影响分类");
+    expect(prompt.body).toContain("`central_actor_type` 按人物在该事件中的主要施力渠道分类");
+    expect(prompt.body).toContain("不按人物一生中的最高身份分类");
+  });
+
+  it("keeps the five storytelling lenses semantically distinct", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.body).toContain("`key_decision`：只聚焦行动者面临的选择");
+    expect(prompt.body).toContain("`turning_point`：只聚焦局势状态发生反转");
+    expect(prompt.body).toContain("`origins_analysis`：只分析事件发生之前的成因");
+    expect(prompt.body).toContain("`aftermath`：只分析事件发生之后的影响");
+    expect(prompt.body).toContain("`relationship_dynamics`：聚焦人物之间的博弈关系");
+  });
+
+  it("combines positive filters with AND and gives exclusions priority", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.body).toContain("所有已提供的正向筛选维度必须同时满足（AND）");
+    expect(prompt.body).toContain("`exclude_terms` 的优先级高于全部正向条件");
+    expect(prompt.body).toContain("少返回候选或返回空数组");
+    expect(prompt.body).toContain("绝不能同时执行相反命令");
+  });
+
+  it("makes filtered quantity conditional without weakening unfiltered quantity", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.body).toContain("有 `topic_filter` 时");
+    expect(prompt.body).toContain("事实准确性与完整筛选匹配高于 `target_candidate_count`");
+    expect(prompt.body).toContain("不得放宽筛选、编造史实或用未筛选事件补齐");
+    expect(prompt.body).toContain("无 `topic_filter` 时");
+    expect(prompt.body).toContain("必须严格匹配 `target_candidate_count`");
+    expect(prompt.body).not.toContain("生成数量是硬约束，必须严格匹配");
+  });
+
+  it("treats included_period_ids as the complete continuous allowlist", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.body).toContain("`period_range.included_period_ids` 是完整连续时期列表");
+    expect(prompt.body).toContain("逐项视为允许范围");
+    expect(prompt.body).toContain("不能只读取 `start_id` 和 `end_id`");
+    expect(prompt.body).toContain("不得漏掉五代十国等中间时期");
+  });
+
+  it("does not turn filter ids into copy or historical fabrication", () => {
+    const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
+
+    expect(prompt.body).toContain("不得机械复制枚举 ID 或筛选文案");
+    expect(prompt.body).toContain("`title`、`one_line_angle` 或正文");
+    expect(prompt.body).toContain("不得为满足筛选而编造历史事实");
+  });
+
   it("does not hardcode the legacy 'output 8 candidates' wording", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 
