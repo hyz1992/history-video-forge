@@ -1,4 +1,5 @@
 import type { AppPrismaClient } from "../prisma-client.types.js";
+import { parseRecommendationRoundFilterJson } from "./recommendation-round-filter.js";
 import type { RecommendationStore, RecordRecommendationRoundInput, StoredRecommendationRound } from "./recommendation-store.js";
 
 function isRetryableConflict(error: unknown): boolean {
@@ -53,7 +54,7 @@ export class PrismaRecommendationStore implements RecommendationStore {
               filterJson: input.filterJson ? input.filterJson as never : undefined,
               exposures: { create: input.candidates.map((candidate, index) => ({
                 ...candidate,
-                filterFingerprint: candidate.filterFingerprint ?? input.filterFingerprint ?? null,
+                filterFingerprint: input.filterFingerprint ?? null,
                 selectedAt: new Date(selectedAt + index),
               })) },
             },
@@ -62,7 +63,7 @@ export class PrismaRecommendationStore implements RecommendationStore {
           return {
             id: round.id, projectId: round.projectId, roundIndex: round.roundIndex,
             filterFingerprint: round.filterFingerprint,
-            filterJson: round.filterJson as StoredRecommendationRound["filterJson"],
+            filterJson: parseRecommendationRoundFilterJson(round.filterJson),
             createdAt: round.createdAt,
             candidates: round.exposures.map((exposure) => ({
               id: exposure.id, eventRegistryEntryId: exposure.eventRegistryEntryId,
@@ -74,6 +75,7 @@ export class PrismaRecommendationStore implements RecommendationStore {
         });
       } catch (error) {
         if (error instanceof Error && error.message === "project_scope_denied") throw error;
+        if (error instanceof Error && error.message === "recommendation_round_filter_invalid") throw error;
         if (!isRetryableConflict(error)) throw new Error("recommendation_round_persistence_failed");
         if (attempt === 3) throw new Error("recommendation_round_conflict");
       }

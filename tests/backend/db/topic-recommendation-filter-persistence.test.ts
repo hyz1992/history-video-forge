@@ -8,6 +8,7 @@ import { createDbClient } from "../../../backend/src/db/client.js";
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { hydrateFirstAggregates } from "../../../backend/src/db/repositories/prisma-first-aggregate-hydrator.js";
 import { PrismaFirstAggregateWriter } from "../../../backend/src/db/repositories/prisma-first-aggregate-writer.js";
+import { PrismaRecommendationStore } from "../../../backend/src/db/repositories/prisma-recommendation-store.js";
 import {
   recordProjectRecommendationRound,
   saveCachedCandidate,
@@ -92,17 +93,18 @@ describe("topic recommendation filter persistence", () => {
         ...candidateInput(project.id, "candidate-fingerprint"),
         filterFingerprint,
       });
-      await recordProjectRecommendationRound(db, {
+      const legacyShapedCandidate = {
+        eventRegistryEntryId: "",
+        eventIdentity: "event-candidate-fingerprint",
+        title: "Filtered event",
+        fingerprint: "candidate-fingerprint",
+        filterFingerprint: "ffffffffffffffff",
+      };
+      const inMemoryRound = await recordProjectRecommendationRound(db, {
         projectId: project.id,
         filterFingerprint,
         filterJson,
-        candidates: [{
-          eventRegistryEntryId: "",
-          eventIdentity: "event-candidate-fingerprint",
-          title: "Filtered event",
-          fingerprint: "candidate-fingerprint",
-          filterFingerprint,
-        }],
+        candidates: [legacyShapedCandidate],
       });
 
       const cache = await client.recommendationCandidateCache.findFirstOrThrow();
@@ -111,6 +113,9 @@ describe("topic recommendation filter persistence", () => {
       });
       expect(cache.filterFingerprint).toBe(filterFingerprint);
       expect(round).toMatchObject({ filterFingerprint, filterJson });
+      expect(inMemoryRound.candidates).toEqual([
+        expect.objectContaining({ filterFingerprint }),
+      ]);
       expect(round.exposures).toEqual([
         expect.objectContaining({ filterFingerprint }),
       ]);
@@ -151,6 +156,47 @@ describe("topic recommendation filter persistence", () => {
       expect(hydratedRound?.filterFingerprint).toBeNull();
       expect(hydratedRound?.filterJson).toBeNull();
       expect(hydratedRound?.candidates[0]?.filterFingerprint).toBeNull();
+    } finally {
+      await client.$disconnect();
+    }
+  });
+
+  it("rejects malformed filter JSON returned by the Prisma recommendation store", async () => {
+    const { client, project } = await createFixture();
+
+    try {
+      const store = new PrismaRecommendationStore(client);
+      await expect(store.recordRound({
+        projectId: project.id,
+        ownerId: project.ownerId,
+        filterFingerprint: "0123456789abcdef",
+        filterJson: { invalid: true } as never,
+        candidates: [],
+      })).rejects.toThrow("recommendation_round_filter_invalid");
+    } finally {
+      await client.$disconnect();
+    }
+  });
+
+  it("rejects malformed persisted filter JSON during hydration", async () => {
+    const { root, client, project } = await createFixture();
+
+    try {
+      await client.recommendationRound.create({
+        data: {
+          projectId: project.id,
+          roundIndex: 1,
+          filterFingerprint: "0123456789abcdef",
+          filterJson: { invalid: true },
+        },
+      });
+
+      await expect(hydrateFirstAggregates(
+        createDbClient(),
+        new Map(),
+        client,
+        { storageRoot: root },
+      )).rejects.toThrow("recommendation_round_filter_invalid");
     } finally {
       await client.$disconnect();
     }

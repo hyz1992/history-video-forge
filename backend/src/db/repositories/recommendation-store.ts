@@ -5,7 +5,6 @@ export interface RecommendationExposureInput {
   eventIdentity: string | null;
   title: string | null;
   fingerprint: string;
-  filterFingerprint?: string | null;
 }
 
 export interface RecordRecommendationRoundInput {
@@ -23,7 +22,11 @@ export interface StoredRecommendationRound {
   filterFingerprint: string | null;
   filterJson: TopicRecommendationFilter | null;
   createdAt: Date;
-  candidates: Array<RecommendationExposureInput & { id: string; selectedAt: Date }>;
+  candidates: Array<RecommendationExposureInput & {
+    id: string;
+    filterFingerprint: string | null;
+    selectedAt: Date;
+  }>;
 }
 
 export interface RecommendationStore {

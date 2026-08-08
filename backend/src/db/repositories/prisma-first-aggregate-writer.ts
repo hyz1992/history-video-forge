@@ -61,7 +61,6 @@ export class PrismaFirstAggregateWriter {
       candidates: record.candidates.map((candidate) => ({
         eventRegistryEntryId: candidate.eventRegistryEntryId || null, eventIdentity: candidate.eventIdentity,
         title: candidate.title, fingerprint: candidate.fingerprint,
-        filterFingerprint: candidate.filterFingerprint,
       })),
     });
   }
