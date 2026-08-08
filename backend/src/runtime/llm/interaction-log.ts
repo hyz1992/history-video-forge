@@ -1,3 +1,5 @@
+import type { TopicRecommendationFilter } from "../../../../shared/src/topic/topic-recommendation-filter.schema.js";
+
 export interface LlmInteractionLogEntry {
   generatedAt: string;
   provider: string;
@@ -66,6 +68,15 @@ export interface RecommendationDiagnosticsMarkdownInput {
     one_line_angle: string;
   }>;
   annotations: string[];
+  filter?: RecommendationFilterDiagnostics;
+}
+
+export interface RecommendationFilterDiagnostics {
+  filter_fingerprint: string;
+  normalized_filter: TopicRecommendationFilter;
+  filter_effect_summary: string;
+  filter_match_status: "full" | "insufficient";
+  filter_match_shortfall: number;
 }
 
 export function renderLlmInteractionMarkdown(
@@ -219,9 +230,22 @@ export function renderRecommendationDiagnosticsMarkdown(
     `- generated_at: ${input.generatedAt}`,
     `- candidate_count: ${input.candidates.length}`,
     "",
-    "## Diagnostics",
-    "",
   ];
+
+  if (input.filter) {
+    lines.push(
+      "## Filter",
+      "",
+      `- filter_fingerprint: ${normalizeMarkdownAnnotation(input.filter.filter_fingerprint)}`,
+      `- normalized_filter: ${normalizeMarkdownAnnotation(JSON.stringify(input.filter.normalized_filter))}`,
+      `- filter_effect_summary: ${normalizeMarkdownAnnotation(input.filter.filter_effect_summary)}`,
+      `- filter_match_status: ${input.filter.filter_match_status}`,
+      `- filter_match_shortfall: ${input.filter.filter_match_shortfall}`,
+      "",
+    );
+  }
+
+  lines.push("## Diagnostics", "");
 
   for (const check of input.diagnostics) {
     const reasonSuffix = check.reason

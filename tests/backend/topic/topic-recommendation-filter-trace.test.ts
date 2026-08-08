@@ -4,6 +4,7 @@ import { createDbClient } from "../../../backend/src/db/client.js";
 import { recommendTopicCandidatesWithTrace } from "../../../backend/src/modules/topic/topic-recommendation.service.js";
 import type { TopicCandidateLibraryRepository } from "../../../backend/src/modules/topic/topic-candidate-library.repository.js";
 import type { LlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
+import { LlmOutputError } from "../../../backend/src/runtime/llm/llm-output-error.js";
 
 const seedInput = {
   canonicalName: "medieval-history-recommendation",
@@ -106,6 +107,54 @@ function expectNormalizedFilterContract(
 }
 
 describe("topic recommendation filter service trace", () => {
+  it("reports a full match for meaningful filters", async () => {
+    const db = createDbClient();
+    const { gateway } = createCapturingGateway(4);
+    const { repository } = createFallbackRepository();
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        ...seedInput,
+        filters: {
+          period_range: {
+            start_id: "tang",
+            end_id: "song_liao_xia_jin",
+            included_period_ids: [
+              "tang",
+              "five_dynasties_ten_kingdoms",
+              "song_liao_xia_jin",
+            ],
+          },
+          event_domain: "military_warfare",
+        },
+      },
+      {
+        llmGateway: gateway,
+        topicCandidateLibraryRepository: repository,
+      },
+    );
+
+    expect(result.diagnostics).toMatchObject({
+      filter_fingerprint: expect.stringMatching(/^[a-f0-9]{16}$/),
+      normalized_filter: {
+        period_range: {
+          start_id: "tang",
+          end_id: "song_liao_xia_jin",
+          included_period_ids: [
+            "tang",
+            "five_dynasties_ten_kingdoms",
+            "song_liao_xia_jin",
+          ],
+        },
+        event_domain: "military_warfare",
+      },
+      filter_effect_summary: expect.stringContaining("唐、五代十国、宋辽夏金"),
+      filter_match_status: "full",
+      filter_match_shortfall: 0,
+    });
+  });
+
   it("normalizes meaningful filters, sends one contract to builder, and disables fallback", async () => {
     const db = createDbClient();
     const { gateway, builderInputs } = createCapturingGateway();
@@ -161,6 +210,19 @@ describe("topic recommendation filter service trace", () => {
     expect(cacheRecords.every(
       (candidate) => candidate.filterFingerprint === round?.filterFingerprint,
     )).toBe(true);
+    expect(result.diagnostics).toMatchObject({
+      filter_fingerprint: expect.stringMatching(/^[a-f0-9]{16}$/),
+      normalized_filter: {
+        event_domain: "military_warfare",
+        storytelling_lens: "turning_point",
+        exclude_terms: ["folklore", "legend"],
+      },
+      filter_match_status: "insufficient",
+      filter_match_shortfall: 3,
+    });
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({ code: "topic_candidate_slots_insufficient" }),
+    );
   });
 
   it("keeps normalized filters in a field-repair recommendation seed", async () => {
@@ -292,6 +354,11 @@ describe("topic recommendation filter service trace", () => {
     expect([...db.candidateCache.values()].every(
       (candidate) => candidate.filterFingerprint === undefined,
     )).toBe(true);
+    expect(result.diagnostics).not.toHaveProperty("filter_fingerprint");
+    expect(result.diagnostics).not.toHaveProperty("normalized_filter");
+    expect(result.diagnostics).not.toHaveProperty("filter_effect_summary");
+    expect(result.diagnostics).not.toHaveProperty("filter_match_status");
+    expect(result.diagnostics).not.toHaveProperty("filter_match_shortfall");
   });
 
   it("preserves an explicit fallback disable option for an auto-only filter", async () => {
@@ -317,5 +384,39 @@ describe("topic recommendation filter service trace", () => {
     expect(result.candidates.map((candidate) => candidate.title)).toEqual([
       "generated-event-1",
     ]);
+  });
+
+  it("keeps filter diagnostics when LLM output validation degrades to an empty result", async () => {
+    const db = createDbClient();
+    const gateway: LlmGateway = {
+      invokeStructuredPrompt: vi.fn(async () => {
+        throw new LlmOutputError("topic_candidate_schema_invalid", {
+          cause: "invalid candidate payload",
+        });
+      }),
+      invokeStrictStructured: vi.fn(async () => {
+        throw new Error("selector should not run");
+      }),
+    };
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        ...seedInput,
+        filters: { central_actor_type: "civil_official" },
+      },
+      { llmGateway: gateway },
+    );
+
+    expect(result.candidates).toEqual([]);
+    expect(result.diagnostics).toMatchObject({
+      filter_fingerprint: expect.stringMatching(/^[a-f0-9]{16}$/),
+      normalized_filter: { central_actor_type: "civil_official" },
+      filter_match_status: "insufficient",
+      filter_match_shortfall: 4,
+    });
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({ code: "topic_candidate_slots_insufficient" }),
+    );
   });
 });
