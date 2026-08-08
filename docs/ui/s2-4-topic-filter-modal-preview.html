@@ -341,7 +341,7 @@
     .advanced-panel {
       margin-top: 12px;
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 12px;
     }
 
@@ -527,12 +527,14 @@
           </div>
 
           <div class="filter-group">
-            <div class="filter-label">叙事取向</div>
+            <div class="filter-label">讲述视角</div>
             <div class="chip-row">
-              <button class="chip chip--active">高张力冲突</button>
-              <button class="chip">均衡叙事</button>
-              <button class="chip">反常识切入</button>
-              <button class="chip">绝境翻盘</button>
+              <button class="chip chip--active">系统判断</button>
+              <button class="chip">关键决策</button>
+              <button class="chip">人物博弈</button>
+              <button class="chip">局势转折</button>
+              <button class="chip">因果拆解</button>
+              <button class="chip">后果追踪</button>
             </div>
           </div>
         </div>
@@ -541,43 +543,38 @@
           <summary>
             <span class="advanced-title">更多筛选</span>
             <span class="advanced-summary">
-              人物关系、事件类型、主题关注、排除项；均可保持不限
+              事件领域、主角类型、排除项；均可保持不限
               <span class="chevron">⌄</span>
             </span>
           </summary>
 
           <div class="advanced-panel">
             <div class="filter-mini">
-              <div class="filter-label">人物关系</div>
+              <div class="filter-label">事件领域</div>
               <div class="chip-row">
                 <button class="chip chip--small chip--active">不限</button>
-                <button class="chip chip--small">君臣</button>
-                <button class="chip chip--small">父子</button>
-                <button class="chip chip--small">兄弟</button>
-                <button class="chip chip--small">敌对阵营</button>
+                <button class="chip chip--small">权力更替</button>
+                <button class="chip chip--small">军事冲突</button>
+                <button class="chip chip--small">制度变革</button>
+                <button class="chip chip--small">外交互动</button>
+                <button class="chip chip--small">司法案件</button>
+                <button class="chip chip--small">社会动乱</button>
+                <button class="chip chip--small">思想文化</button>
               </div>
             </div>
 
             <div class="filter-mini">
-              <div class="filter-label">事件类型</div>
+              <div class="filter-label">主角类型</div>
               <div class="chip-row">
                 <button class="chip chip--small chip--active">不限</button>
-                <button class="chip chip--small">夺位</button>
-                <button class="chip chip--small">政变</button>
-                <button class="chip chip--small">战争</button>
-                <button class="chip chip--small">外交羞辱</button>
-                <button class="chip chip--small">冤案</button>
-              </div>
-            </div>
-
-            <div class="filter-mini">
-              <div class="filter-label">主题关注</div>
-              <div class="chip-row">
-                <button class="chip chip--small chip--active">不限</button>
-                <button class="chip chip--small">权力代价</button>
-                <button class="chip chip--small">信任崩塌</button>
-                <button class="chip chip--small">制度压迫</button>
-                <button class="chip chip--small">家族撕裂</button>
+                <button class="chip chip--small">统治者</button>
+                <button class="chip chip--small">宗室贵族</button>
+                <button class="chip chip--small">文官</button>
+                <button class="chip chip--small">将帅军人</button>
+                <button class="chip chip--small">学者思想家</button>
+                <button class="chip chip--small">宗教人物</button>
+                <button class="chip chip--small">民间人物</button>
+                <button class="chip chip--small">群像事件</button>
               </div>
             </div>
 

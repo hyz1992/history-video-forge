@@ -4,7 +4,7 @@
 
 **目标：** 为系统推荐入口新增结构化 `TopicRecommendationFilter`，让筛选条件进入请求、LLM 输入、filter fingerprint、持久化诊断和前端 UI。
 
-**架构：** 第一版保留现有 seed 文本合同，在其旁边新增 `filters` 结构合同；后端规范化后生成 `topic_filter_fingerprint` 并透传到 builder、RecommendationRound、RecommendationExposure、RecommendationCandidateCache 和 diagnostics。系统推荐 tab 扩展 UI；事件库 tab 与自定义 tab 不改。
+**架构：** 第一版保留现有 seed 文本合同，在其旁边新增 `filters` 结构合同；事件选择字段与讲述视角字段分层进入 builder，后端规范化后生成 `topic_filter_fingerprint` 并透传到 RecommendationRound、RecommendationExposure、RecommendationCandidateCache 和 diagnostics。系统推荐 tab 扩展 UI；事件库 tab 与自定义 tab 不改。
 
 **技术栈：** TypeScript、Zod、Prisma 7、Vitest、Vue 3、Element Plus、现有 prompt registry 与 runtime harness。
 
@@ -31,7 +31,7 @@
 - `shared/src/topic/topic-recommendation-filter.schema.ts`
   - 定义 `TopicRecommendationFilter`、规范化、fingerprint。
 - `tests/shared/topic-recommendation-filter.test.ts`
-  - 覆盖 filter schema、兼容映射、稳定 fingerprint。
+  - 覆盖 filter schema、封闭枚举、稳定 fingerprint 和时代/朝代结构冲突。
 - `tests/backend/topic/topic-recommendation-filter-api.test.ts`
   - 覆盖 `/topic/recommendations` 接收/拒绝 filters。
 - `tests/backend/topic/topic-recommendation-filter-trace.test.ts`
@@ -87,30 +87,34 @@ import {
 } from "../../shared/src/topic/topic-recommendation-filter.schema";
 
 describe("TopicRecommendationFilter", () => {
-  it("normalizes legacy enum spellings and sorts arrays", () => {
+  it("normalizes enum spellings and sorts arrays", () => {
     const filter = normalizeTopicRecommendationFilter({
       era_band: "late-imperial",
-      narrative_orientation: "contrarian_hook",
       dynasties: [" 唐 ", "宋", "唐"],
-      event_type_tags: [" 继承夺位 ", ""],
+      event_domain: "power_transition",
+      protagonist_type: "royal_nobility",
+      storytelling_lens: "key_decision",
     });
 
     expect(filter).toEqual({
       era_band: "late_imperial",
-      narrative_orientation: "contrarian_hook",
       dynasties: ["唐", "宋"],
-      event_type_tags: ["继承夺位"],
+      event_domain: "power_transition",
+      protagonist_type: "royal_nobility",
+      storytelling_lens: "key_decision",
     });
   });
 
   it("creates stable fingerprint for equivalent filters", () => {
     const a = getTopicRecommendationFilterFingerprint({
       dynasties: ["宋", "唐"],
-      narrative_orientation: "high_tension",
+      event_domain: "power_transition",
+      storytelling_lens: "key_decision",
     });
     const b = getTopicRecommendationFilterFingerprint({
       dynasties: [" 唐 ", "宋"],
-      narrative_orientation: "high_tension",
+      event_domain: "power_transition",
+      storytelling_lens: "key_decision",
     });
 
     expect(a).toBe(b);
@@ -141,8 +145,10 @@ describe("TopicRecommendationFilter", () => {
 
 - enum `era_band`: `ancient / medieval / late_imperial`
 - enum aliases accepted by normalizer: `late-imperial`
-- enum `narrative_orientation`: `high_tension / balanced / contrarian_hook / comeback / spread_first`
-- legacy `tension` aliases accepted by normalizer: `high -> high_tension`、`hook-first -> contrarian_hook`
+- enum `event_domain`: `power_transition / military_conflict / institutional_change / diplomatic_interaction / judicial_case / social_unrest / thought_culture`
+- enum `protagonist_type`: `ruler / royal_nobility / civil_official / military_personnel / scholar_thinker / religious_figure / commoner / ensemble`
+- enum `storytelling_lens`: `system_decide / key_decision / relationship_dynamics / turning_point / causal_analysis / aftermath`
+- 旧 `tension` 不映射到 `storytelling_lens`；未传 filters 的请求继续走旧 seed 行为
 - arrays max sizes per design
 - fingerprint via `node:crypto` `sha256(JSON.stringify(normalized)).slice(0, 16)`
 
@@ -230,9 +236,9 @@ git commit -m "feat(topic): 推荐接口接收结构化筛选"
 ```ts
   topic_filter: {
     dynasties: ["唐"],
-    relationship_tags: ["兄弟"],
-    event_type_tags: ["夺位"],
-    narrative_orientation: "high_tension",
+    event_domain: "power_transition",
+    protagonist_type: "royal_nobility",
+    storytelling_lens: "key_decision",
   },
 topic_filter_fingerprint: "<16 hex chars>"
 ```
@@ -420,7 +426,7 @@ git commit -m "feat(topic): 推荐诊断记录筛选上下文"
 
 - [ ] **步骤 1：编写或更新失败的 prompt 合同测试**
 
-增加断言，要求 candidate-builder prompt 提到 `topic_filter` 与 `exclude_terms`。
+增加断言，要求 candidate-builder prompt 提到 `topic_filter`、`exclude_terms`，并明确“先选择事件，再应用讲述视角”。
 
 运行：
 
@@ -435,10 +441,9 @@ git commit -m "feat(topic): 推荐诊断记录筛选上下文"
 增加简短中文规则：
 
 - `topic_filter` 是结构化筛选约束。
-- `era_band/dynasties` 是时代边界。
-- 标签类字段是优先偏好。
-- `exclude_terms` 必须回避。
-- 无法全部满足时，先保证具体单事件和叙事质量。
+- 第一阶段使用 `era_band / dynasties / event_domain / protagonist_type / exclude_terms` 选择事件。
+- 第二阶段使用 `storytelling_lens` 组织候选角度，不得替换第一阶段确定的 `event_identity`。
+- 不得把枚举文案机械复制进标题或描述，也不得为满足筛选而编造史实。
 
 - [ ] **步骤 3：更新 changelog**
 
@@ -492,10 +497,10 @@ If existing frontend unit test infrastructure is available for stores/components
 
 System tab：
 
-- 基础行：era_band、dynasties、narrative_orientation。
-- 高级行/toggle：relationship tags、event type tags、theme motifs、exclude terms。
+- 基础行：era_band、dynasties、storytelling_lens。
+- 高级行/toggle：event_domain、protagonist_type、exclude_terms。
 - era_band 与 dynasties 必须表现为父子关系：先选时代范围，再展示该范围下的朝代；dynasties 可不选。
-- relationship tags、event type tags、theme motifs 都需要有「不限」默认态。
+- event_domain、protagonist_type 都需要有「不限」默认态；storytelling_lens 默认「系统判断」。
 - 除 exclude terms 外，其余筛选均使用固定选项，不使用自由 tag input。
 - 使用紧凑控件，避免把 modal 做成大型 landing page。
 
@@ -555,8 +560,8 @@ git commit -m "feat(frontend): 系统推荐支持结构化筛选"
 
 仅在用户明确授权后：
 
-- 运行一个 Tang + inheritance filter 样本。
-- 运行一个 Song + diplomacy/humiliation filter 样本。
+- 运行一个唐 + 权力更替 + 宗室权贵 + 关键决策样本。
+- 运行一个宋 + 外交互动 + 文官 + 人物博弈样本。
 - 在 `docs/records/` 记录 request IDs、elapsed time、filter fingerprint 与定性结果。
 
 - [ ] **步骤 5：更新状态文档**
@@ -598,6 +603,7 @@ Live check：
 ## 实现者备注
 
 - 不新增本地语义匹配规则来判断某事件是否真的属于某个 tag。
+- 不把 `themeMotifsJson`、`relationshipTagsJson` 或旧 `tension` 自动转换为新枚举；任何语义迁移必须由正式 LLM prompt 或后续独立设计承担。
 - 不修改 `TopicPackage` 面向 script 的 hard/soft lanes。
 - 不修改 from-library 3->1 或 from-custom 3->1 行为。
 - 除非任务明确要求，不 stage 或 commit `storage/topic-candidate-library/` 生成态数据。
