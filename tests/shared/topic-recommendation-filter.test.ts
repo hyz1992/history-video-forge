@@ -1,0 +1,221 @@
+import { createHash } from "node:crypto";
+
+import { describe, expect, it } from "vitest";
+
+import {
+  TOPIC_RECOMMENDATION_PERIOD_GROUPS,
+  TopicRecommendationFilterInputSchema,
+  TopicRecommendationFilterSchema,
+  createTopicRecommendationFilterFingerprint,
+  expandTopicRecommendationPeriodRange,
+  normalizeTopicRecommendationFilter,
+} from "../../shared/src/index.js";
+
+describe("TopicRecommendationFilter", () => {
+  it("keeps the fixed period group and period order", () => {
+    expect(TOPIC_RECOMMENDATION_PERIOD_GROUPS).toEqual([
+      {
+        id: "ancient",
+        periods: [
+          { id: "xia_shang_western_zhou", label: "夏商西周" },
+          { id: "spring_autumn", label: "春秋" },
+          { id: "warring_states", label: "战国" },
+          { id: "qin", label: "秦" },
+          { id: "han", label: "两汉" },
+        ],
+      },
+      {
+        id: "medieval",
+        periods: [
+          { id: "three_kingdoms", label: "三国" },
+          { id: "two_jin", label: "两晋" },
+          { id: "southern_northern", label: "南北朝" },
+          { id: "sui", label: "隋" },
+          { id: "tang", label: "唐" },
+          { id: "five_dynasties_ten_kingdoms", label: "五代十国" },
+          { id: "song_liao_xia_jin", label: "宋辽夏金" },
+        ],
+      },
+      {
+        id: "late_imperial",
+        periods: [
+          { id: "yuan", label: "元" },
+          { id: "ming", label: "明" },
+          { id: "qing", label: "清" },
+        ],
+      },
+    ]);
+  });
+
+  it("expands inclusive continuous ranges across intermediate periods", () => {
+    expect(expandTopicRecommendationPeriodRange("two_jin", "tang")).toEqual([
+      "two_jin",
+      "southern_northern",
+      "sui",
+      "tang",
+    ]);
+    expect(
+      expandTopicRecommendationPeriodRange("tang", "song_liao_xia_jin"),
+    ).toEqual([
+      "tang",
+      "five_dynasties_ten_kingdoms",
+      "song_liao_xia_jin",
+    ]);
+  });
+
+  it("rejects unknown or reversed period endpoints", () => {
+    expect(() =>
+      expandTopicRecommendationPeriodRange("unknown", "tang"),
+    ).toThrow(/unknown/i);
+    expect(() =>
+      expandTopicRecommendationPeriodRange("tang", "unknown"),
+    ).toThrow(/unknown/i);
+    expect(() =>
+      expandTopicRecommendationPeriodRange("tang", "two_jin"),
+    ).toThrow(/after/i);
+  });
+
+  it("accepts the fixed enums and a complete period range", () => {
+    const input = {
+      period_range: {
+        start_id: "tang",
+        end_id: "song_liao_xia_jin",
+        included_period_ids: [
+          "tang",
+          "five_dynasties_ten_kingdoms",
+          "song_liao_xia_jin",
+        ],
+      },
+      event_domain: "political_power",
+      central_actor_type: "court_elite",
+      storytelling_lens: "key_decision",
+    } as const;
+
+    expect(TopicRecommendationFilterInputSchema.parse(input)).toEqual(input);
+    expect(TopicRecommendationFilterSchema.parse(input)).toEqual(input);
+    expect(normalizeTopicRecommendationFilter(input)).toEqual(input);
+  });
+
+  it("rejects omitted, reordered, reversed, and unknown included periods", () => {
+    const range = {
+      start_id: "tang",
+      end_id: "song_liao_xia_jin",
+    };
+
+    for (const included_period_ids of [
+      ["tang", "song_liao_xia_jin"],
+      ["tang", "song_liao_xia_jin", "five_dynasties_ten_kingdoms"],
+      ["tang", "unknown", "song_liao_xia_jin"],
+    ]) {
+      expect(() =>
+        TopicRecommendationFilterSchema.parse({
+          period_range: { ...range, included_period_ids },
+        }),
+      ).toThrow();
+    }
+
+    expect(() =>
+      TopicRecommendationFilterSchema.parse({
+        period_range: {
+          start_id: "tang",
+          end_id: "two_jin",
+          included_period_ids: ["tang", "two_jin"],
+        },
+      }),
+    ).toThrow();
+  });
+
+  it("allows auto only in input and normalizes no-op filters to undefined", () => {
+    expect(
+      TopicRecommendationFilterInputSchema.parse({ storytelling_lens: "auto" }),
+    ).toEqual({ storytelling_lens: "auto" });
+    expect(() =>
+      TopicRecommendationFilterSchema.parse({ storytelling_lens: "auto" }),
+    ).toThrow();
+
+    expect(normalizeTopicRecommendationFilter({})).toBeUndefined();
+    expect(
+      normalizeTopicRecommendationFilter({ storytelling_lens: "auto" }),
+    ).toBeUndefined();
+    expect(
+      normalizeTopicRecommendationFilter({ exclude_terms: [" ", "\t"] }),
+    ).toBeUndefined();
+  });
+
+  it("trims, deduplicates, and sorts exclude terms without adding defaults", () => {
+    expect(
+      normalizeTopicRecommendationFilter({
+        exclude_terms: [" 演义 ", "神话", "演义", "", "  "],
+      }),
+    ).toEqual({ exclude_terms: ["演义", "神话"] });
+
+    expect(() =>
+      TopicRecommendationFilterInputSchema.parse({
+        exclude_terms: Array.from({ length: 9 }, (_, index) => `term-${index}`),
+      }),
+    ).toThrow();
+  });
+
+  it("trims input strings before producing the strict normalized contract", () => {
+    expect(
+      normalizeTopicRecommendationFilter({
+        period_range: {
+          start_id: " tang ",
+          end_id: " song_liao_xia_jin ",
+          included_period_ids: [
+            " tang ",
+            " five_dynasties_ten_kingdoms ",
+            " song_liao_xia_jin ",
+          ],
+        },
+        event_domain: " political_power ",
+        central_actor_type: " court_elite ",
+        storytelling_lens: " key_decision ",
+      }),
+    ).toEqual({
+      period_range: {
+        start_id: "tang",
+        end_id: "song_liao_xia_jin",
+        included_period_ids: [
+          "tang",
+          "five_dynasties_ten_kingdoms",
+          "song_liao_xia_jin",
+        ],
+      },
+      event_domain: "political_power",
+      central_actor_type: "court_elite",
+      storytelling_lens: "key_decision",
+    });
+  });
+
+  it("normalizes auto and missing lens to the same stable SHA-256 fingerprint", () => {
+    const withAuto = { event_domain: "political_power", storytelling_lens: "auto" } as const;
+    const withoutAuto = { event_domain: "political_power" } as const;
+    const normalized = normalizeTopicRecommendationFilter(withoutAuto);
+    const expected = createHash("sha256")
+      .update(JSON.stringify(normalized))
+      .digest("hex")
+      .slice(0, 16);
+
+    expect(normalizeTopicRecommendationFilter(withAuto)).toEqual(normalized);
+    expect(createTopicRecommendationFilterFingerprint(withAuto)).toBe(expected);
+    expect(createTopicRecommendationFilterFingerprint(withoutAuto)).toBe(expected);
+    expect(expected).toMatch(/^[a-f0-9]{16}$/);
+    expect(createTopicRecommendationFilterFingerprint({})).toBeUndefined();
+  });
+
+  it("rejects invalid enum values and never accepts era_band", () => {
+    expect(() =>
+      TopicRecommendationFilterInputSchema.parse({ event_domain: "war" }),
+    ).toThrow();
+    expect(() =>
+      TopicRecommendationFilterInputSchema.parse({ central_actor_type: "general" }),
+    ).toThrow();
+    expect(() =>
+      TopicRecommendationFilterInputSchema.parse({ storytelling_lens: "conflict" }),
+    ).toThrow();
+    expect(() =>
+      TopicRecommendationFilterInputSchema.parse({ era_band: "medieval" }),
+    ).toThrow();
+  });
+});

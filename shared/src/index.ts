@@ -15,6 +15,19 @@ export {
 export {
   CustomRefinedEvent,
 } from "./topic/topic-custom-refine-output.schema";
+export {
+  TOPIC_RECOMMENDATION_PERIOD_GROUPS,
+  TopicRecommendationCentralActorType,
+  TopicRecommendationEventDomain,
+  TopicRecommendationFilterInputSchema,
+  TopicRecommendationFilterSchema,
+  TopicRecommendationPeriodId,
+  TopicRecommendationStorytellingLens,
+  createTopicRecommendationFilterFingerprint,
+  expandTopicRecommendationPeriodRange,
+  getTopicRecommendationFilterFingerprint,
+  normalizeTopicRecommendationFilter,
+} from "./topic/topic-recommendation-filter.schema";
 export { ScriptInputBundle } from "./script/script-input-bundle.schema";
 export { ScriptDraftPackage } from "./script/script-draft-package.schema";
 export {
