@@ -1,9 +1,10 @@
 import vue from "@vitejs/plugin-vue";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
   plugins: [vue()],
   test: {
+    exclude: [...configDefaults.exclude, "**/.worktrees/**"],
     env: {
       VITEST: "1",
       NODE_ENV: "test",

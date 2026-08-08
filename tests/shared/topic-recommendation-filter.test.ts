@@ -1,5 +1,6 @@
-import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 
+import { build } from "esbuild";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -9,12 +10,32 @@ import {
   TopicRecommendationFilterInputSchema,
   TopicRecommendationFilterSchema,
   TopicRecommendationStorytellingLens,
-  createTopicRecommendationFilterFingerprint,
   expandTopicRecommendationPeriodRange,
   normalizeTopicRecommendationFilter,
 } from "../../shared/src/index.js";
 
 describe("TopicRecommendationFilter", () => {
+  it("bundles the shared schema for a browser platform", async () => {
+    await expect(
+      build({
+        bundle: true,
+        entryPoints: [
+          fileURLToPath(
+            new URL(
+              "../../shared/src/topic/topic-recommendation-filter.schema.ts",
+              import.meta.url,
+            ),
+          ),
+        ],
+        external: ["zod"],
+        format: "esm",
+        logLevel: "silent",
+        platform: "browser",
+        write: false,
+      }),
+    ).resolves.toBeDefined();
+  });
+
   it("locks the complete closed enum options", () => {
     expect(TopicRecommendationEventDomain.options).toEqual([
       "political_power",
@@ -194,6 +215,24 @@ describe("TopicRecommendationFilter", () => {
     ).toThrow();
   });
 
+  it("requires canonical exclude terms in the normalized schema", () => {
+    expect(() =>
+      TopicRecommendationFilterSchema.parse({
+        exclude_terms: [" ", "演义", "演义"],
+      }),
+    ).toThrow();
+    expect(() =>
+      TopicRecommendationFilterSchema.parse({
+        exclude_terms: ["神话", "演义"],
+      }),
+    ).toThrow();
+    expect(
+      TopicRecommendationFilterSchema.parse({
+        exclude_terms: ["演义", "神话"],
+      }),
+    ).toEqual({ exclude_terms: ["演义", "神话"] });
+  });
+
   it("trims input strings before producing the strict normalized contract", () => {
     expect(
       normalizeTopicRecommendationFilter({
@@ -224,38 +263,6 @@ describe("TopicRecommendationFilter", () => {
       central_actor_type: "court_elite",
       storytelling_lens: "key_decision",
     });
-  });
-
-  it("normalizes auto and missing lens to the same stable SHA-256 fingerprint", () => {
-    const withAuto = { event_domain: "political_power", storytelling_lens: "auto" } as const;
-    const withoutAuto = { event_domain: "political_power" } as const;
-    const normalized = normalizeTopicRecommendationFilter(withoutAuto);
-    const expected = createHash("sha256")
-      .update(JSON.stringify(normalized))
-      .digest("hex")
-      .slice(0, 16);
-
-    expect(normalizeTopicRecommendationFilter(withAuto)).toEqual(normalized);
-    expect(createTopicRecommendationFilterFingerprint(withAuto)).toBe(expected);
-    expect(createTopicRecommendationFilterFingerprint(withoutAuto)).toBe(expected);
-    expect(expected).toMatch(/^[a-f0-9]{16}$/);
-    expect(createTopicRecommendationFilterFingerprint({})).toBeUndefined();
-  });
-
-  it("creates the same fingerprint for equivalent field and exclude-term order", () => {
-    const first = createTopicRecommendationFilterFingerprint({
-      event_domain: "political_power",
-      central_actor_type: "court_elite",
-      exclude_terms: [" 演义 ", "神话", "演义"],
-    });
-    const second = createTopicRecommendationFilterFingerprint({
-      exclude_terms: ["神话", " 演义", "神话 "],
-      central_actor_type: "court_elite",
-      event_domain: "political_power",
-    });
-
-    expect(first).toBe(second);
-    expect(first).toMatch(/^[a-f0-9]{16}$/);
   });
 
   it("rejects invalid enum values and never accepts era_band", () => {
