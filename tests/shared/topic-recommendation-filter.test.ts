@@ -4,14 +4,46 @@ import { describe, expect, it } from "vitest";
 
 import {
   TOPIC_RECOMMENDATION_PERIOD_GROUPS,
+  TopicRecommendationCentralActorType,
+  TopicRecommendationEventDomain,
   TopicRecommendationFilterInputSchema,
   TopicRecommendationFilterSchema,
+  TopicRecommendationStorytellingLens,
   createTopicRecommendationFilterFingerprint,
   expandTopicRecommendationPeriodRange,
   normalizeTopicRecommendationFilter,
 } from "../../shared/src/index.js";
 
 describe("TopicRecommendationFilter", () => {
+  it("locks the complete closed enum options", () => {
+    expect(TopicRecommendationEventDomain.options).toEqual([
+      "political_power",
+      "military_warfare",
+      "institutions_governance",
+      "diplomacy_relations",
+      "law_justice",
+      "society_livelihood",
+      "thought_culture",
+    ]);
+    expect(TopicRecommendationCentralActorType.options).toEqual([
+      "ruler",
+      "court_elite",
+      "civil_official",
+      "military_actor",
+      "intellectual_actor",
+      "religious_actor",
+      "civilian",
+      "collective",
+    ]);
+    expect(TopicRecommendationStorytellingLens.options).toEqual([
+      "key_decision",
+      "relationship_dynamics",
+      "turning_point",
+      "origins_analysis",
+      "aftermath",
+    ]);
+  });
+
   it("keeps the fixed period group and period order", () => {
     expect(TOPIC_RECOMMENDATION_PERIOD_GROUPS).toEqual([
       {
@@ -106,6 +138,12 @@ describe("TopicRecommendationFilter", () => {
       ["tang", "song_liao_xia_jin"],
       ["tang", "song_liao_xia_jin", "five_dynasties_ten_kingdoms"],
       ["tang", "unknown", "song_liao_xia_jin"],
+      [
+        "tang",
+        "five_dynasties_ten_kingdoms",
+        "song_liao_xia_jin",
+        "yuan",
+      ],
     ]) {
       expect(() =>
         TopicRecommendationFilterSchema.parse({
@@ -202,6 +240,22 @@ describe("TopicRecommendationFilter", () => {
     expect(createTopicRecommendationFilterFingerprint(withoutAuto)).toBe(expected);
     expect(expected).toMatch(/^[a-f0-9]{16}$/);
     expect(createTopicRecommendationFilterFingerprint({})).toBeUndefined();
+  });
+
+  it("creates the same fingerprint for equivalent field and exclude-term order", () => {
+    const first = createTopicRecommendationFilterFingerprint({
+      event_domain: "political_power",
+      central_actor_type: "court_elite",
+      exclude_terms: [" 演义 ", "神话", "演义"],
+    });
+    const second = createTopicRecommendationFilterFingerprint({
+      exclude_terms: ["神话", " 演义", "神话 "],
+      central_actor_type: "court_elite",
+      event_domain: "political_power",
+    });
+
+    expect(first).toBe(second);
+    expect(first).toMatch(/^[a-f0-9]{16}$/);
   });
 
   it("rejects invalid enum values and never accepts era_band", () => {
