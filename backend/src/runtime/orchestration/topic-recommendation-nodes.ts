@@ -70,6 +70,7 @@ async function persistTopicCandidates(
         eventIdentity: normalizeEventIdentityValue(candidate.event_identity),
         angle: candidate.one_line_angle,
       }),
+      filterFingerprint: runtime.input.topic_filter_fingerprint,
       oneLineAngle: candidate.one_line_angle,
       familyLabel: candidate.family_label,
       scopeLabel: candidate.scope_label,

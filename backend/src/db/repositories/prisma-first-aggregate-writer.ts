@@ -43,6 +43,7 @@ export class PrismaFirstAggregateWriter {
       where: { projectId_fingerprint: { projectId: record.projectId, fingerprint: record.fingerprint } },
       create: { ...record, viralRubricJson: record.viralRubricJson as never, estimatedDurationBandJson: record.estimatedDurationBandJson as never, mustCoverPreviewJson: record.mustCoverPreviewJson as never, riskHintsJson: record.riskHintsJson as never }, update: {
         eventRegistryEntryId: record.eventRegistryEntryId, eventIdentity: record.eventIdentity,
+        filterFingerprint: record.filterFingerprint ?? null,
         oneLineAngle: record.oneLineAngle, familyLabel: record.familyLabel, scopeLabel: record.scopeLabel,
         viralRubricJson: record.viralRubricJson as never, estimatedDurationBandJson: record.estimatedDurationBandJson as never,
         strongScene: record.strongScene, coreConflict: record.coreConflict, mustCoverPreviewJson: record.mustCoverPreviewJson as never,
@@ -55,9 +56,12 @@ export class PrismaFirstAggregateWriter {
   async recordRecommendationRound(record: ProjectRecommendationRoundRecord, projectOwnerId: string): Promise<void> {
     await new PrismaRecommendationStore(this.client).recordRound({
       projectId: record.projectId, ownerId: projectOwnerId,
+      filterFingerprint: record.filterFingerprint,
+      filterJson: record.filterJson,
       candidates: record.candidates.map((candidate) => ({
         eventRegistryEntryId: candidate.eventRegistryEntryId || null, eventIdentity: candidate.eventIdentity,
         title: candidate.title, fingerprint: candidate.fingerprint,
+        filterFingerprint: candidate.filterFingerprint,
       })),
     });
   }

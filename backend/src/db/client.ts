@@ -9,6 +9,7 @@ import type {
   RenderValidationResult,
   VoiceProfile,
 } from "../../../shared/src/index.js";
+import type { TopicRecommendationFilter } from "../../../shared/src/topic/topic-recommendation-filter.schema.js";
 
 export interface ProjectRecord {
   id: string;
@@ -83,6 +84,7 @@ export interface CandidateCacheRecord {
   eventRegistryEntryId: string | null;
   eventIdentity: string | null;
   fingerprint: string;
+  filterFingerprint?: string | null;
   oneLineAngle: string;
   familyLabel: string;
   scopeLabel: string;
@@ -237,12 +239,15 @@ export interface ProjectRecommendationRoundCandidateRecord {
   eventIdentity: string | null;
   title: string | null;
   fingerprint: string;
+  filterFingerprint?: string | null;
   createdAt: Date;
 }
 
 export interface ProjectRecommendationRoundRecord {
   projectId: string;
   createdAt: Date;
+  filterFingerprint?: string | null;
+  filterJson?: TopicRecommendationFilter | null;
   candidates: ProjectRecommendationRoundCandidateRecord[];
 }
 
