@@ -191,34 +191,198 @@
       background: rgba(0, 0, 0, 0.1);
     }
 
-    .child-filter .chip-row {
-      flex-wrap: nowrap;
+    .period-range-scroll {
       overflow-x: auto;
       overflow-y: hidden;
-      padding-bottom: 4px;
+      margin-top: 4px;
+      padding: 2px 0 5px;
       overscroll-behavior-inline: contain;
-      scroll-snap-type: x proximity;
       -webkit-overflow-scrolling: touch;
       scrollbar-width: thin;
       scrollbar-color: rgba(212, 163, 95, 0.26) transparent;
     }
 
-    .child-filter .chip-row::-webkit-scrollbar {
+    .period-range-scroll::-webkit-scrollbar {
       height: 4px;
     }
 
-    .child-filter .chip-row::-webkit-scrollbar-track {
+    .period-range-scroll::-webkit-scrollbar-track {
       background: transparent;
     }
 
-    .child-filter .chip-row::-webkit-scrollbar-thumb {
+    .period-range-scroll::-webkit-scrollbar-thumb {
       background: rgba(212, 163, 95, 0.24);
       border-radius: 4px;
     }
 
-    .child-filter .chip {
-      flex: 0 0 auto;
-      scroll-snap-align: start;
+    .period-range {
+      --period-count: 7;
+      --range-left: 66.6667%;
+      --range-width: 33.3333%;
+      position: relative;
+      min-width: 476px;
+      padding: 4px 6px 0;
+    }
+
+    .period-track-shell {
+      position: relative;
+      height: 24px;
+      margin-inline: calc(50% / var(--period-count));
+    }
+
+    .period-track,
+    .period-track-active {
+      position: absolute;
+      top: 10px;
+      height: 4px;
+      border-radius: 4px;
+    }
+
+    .period-track {
+      left: 0;
+      right: 0;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.035);
+    }
+
+    .period-track-active {
+      left: var(--range-left);
+      width: var(--range-width);
+      background: linear-gradient(90deg, rgba(212, 163, 95, 0.58), rgba(228, 189, 120, 0.9));
+      box-shadow: 0 0 10px rgba(212, 163, 95, 0.14);
+    }
+
+    .period-slider {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      width: 100%;
+      height: 24px;
+      margin: 0;
+      appearance: none;
+      -webkit-appearance: none;
+      background: transparent;
+      pointer-events: none;
+    }
+
+    .period-slider--end {
+      z-index: 4;
+    }
+
+    .period-slider:focus-visible {
+      outline: none;
+    }
+
+    .period-slider:focus-visible::-webkit-slider-thumb {
+      box-shadow: 0 0 0 4px rgba(212, 163, 95, 0.24), 0 2px 8px rgba(0, 0, 0, 0.42);
+    }
+
+    .period-slider:focus-visible::-moz-range-thumb {
+      box-shadow: 0 0 0 4px rgba(212, 163, 95, 0.24), 0 2px 8px rgba(0, 0, 0, 0.42);
+    }
+
+    .period-slider::-webkit-slider-runnable-track {
+      height: 4px;
+      background: transparent;
+    }
+
+    .period-slider::-webkit-slider-thumb {
+      width: 18px;
+      height: 18px;
+      margin-top: -7px;
+      border: 2px solid #2b241d;
+      border-radius: 50%;
+      appearance: none;
+      -webkit-appearance: none;
+      background: var(--accent-primary-light);
+      box-shadow: 0 0 0 2px rgba(212, 163, 95, 0.2), 0 2px 8px rgba(0, 0, 0, 0.42);
+      cursor: grab;
+      pointer-events: auto;
+    }
+
+    .period-slider::-moz-range-track {
+      height: 4px;
+      background: transparent;
+    }
+
+    .period-slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border: 2px solid #2b241d;
+      border-radius: 50%;
+      background: var(--accent-primary-light);
+      box-shadow: 0 0 0 2px rgba(212, 163, 95, 0.2), 0 2px 8px rgba(0, 0, 0, 0.42);
+      cursor: grab;
+      pointer-events: auto;
+    }
+
+    .period-slider:active::-webkit-slider-thumb {
+      cursor: grabbing;
+      transform: scale(1.06);
+    }
+
+    .period-marks {
+      display: grid;
+      grid-template-columns: repeat(var(--period-count), minmax(0, 1fr));
+      margin-top: -24px;
+      pointer-events: none;
+    }
+
+    .period-mark {
+      position: relative;
+      min-width: 0;
+      padding-top: 30px;
+      color: var(--text-muted);
+      font-size: 11px;
+      line-height: 1.2;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .period-mark::before {
+      content: "";
+      position: absolute;
+      top: 9px;
+      left: 50%;
+      width: 7px;
+      height: 7px;
+      border: 2px solid #211c18;
+      border-radius: 50%;
+      background: #4c443b;
+      transform: translateX(-50%);
+      transition: background 160ms ease, box-shadow 160ms ease;
+    }
+
+    .period-mark--active {
+      color: var(--accent-primary-light);
+      font-weight: 600;
+    }
+
+    .period-mark--active::before {
+      background: var(--accent-primary-light);
+      box-shadow: 0 0 0 2px rgba(212, 163, 95, 0.12);
+    }
+
+    .period-empty {
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .period-range[hidden],
+    .period-empty[hidden] {
+      display: none;
+    }
+
+    .period-selection {
+      max-width: 72%;
+      color: rgba(212, 163, 95, 0.78);
+      font-size: 11px;
+      line-height: 1.45;
+      text-align: right;
     }
 
     .child-label {
@@ -555,25 +719,28 @@
           <div class="filter-group filter-group--timeline">
             <div class="filter-label">时代范围</div>
             <div class="chip-row">
-              <button class="chip">不限</button>
-              <button class="chip">先秦至两汉</button>
-              <button class="chip chip--active">魏晋至唐宋</button>
-              <button class="chip">元明清</button>
+              <button class="chip" data-era="all">不限</button>
+              <button class="chip" data-era="ancient">先秦至两汉</button>
+              <button class="chip chip--active" data-era="medieval">魏晋至唐宋</button>
+              <button class="chip" data-era="late_imperial">元明清</button>
             </div>
 
             <div class="child-filter">
               <div class="filter-head">
-                <div class="child-label">朝代 <span>随时代范围变化</span></div>
-                <div class="filter-count">可不选，最多 3 个</div>
+                <div class="child-label">历史区间 <span>随时代范围变化</span></div>
+                <div class="period-selection" id="periodSelection">已选：唐、五代十国、宋</div>
               </div>
-              <div class="chip-row">
-                <button class="chip chip--small">不限</button>
-                <button class="chip chip--small">魏晋</button>
-                <button class="chip chip--small">南北朝</button>
-                <button class="chip chip--small">隋</button>
-                <button class="chip chip--small chip--active">唐</button>
-                <button class="chip chip--small">五代</button>
-                <button class="chip chip--small">宋</button>
+              <div class="period-range-scroll" id="periodRangeScroll">
+                <div class="period-range" id="periodRange">
+                  <div class="period-track-shell">
+                    <div class="period-track"></div>
+                    <div class="period-track-active"></div>
+                    <input class="period-slider period-slider--start" id="periodStart" type="range" min="0" max="6" value="4" aria-label="历史区间起点">
+                    <input class="period-slider period-slider--end" id="periodEnd" type="range" min="0" max="6" value="6" aria-label="历史区间终点">
+                  </div>
+                  <div class="period-marks" id="periodMarks"></div>
+                </div>
+                <div class="period-empty" id="periodEmpty" hidden>不限历史区间</div>
               </div>
             </div>
           </div>
@@ -650,5 +817,118 @@
       </div>
     </section>
   </main>
+
+  <script>
+    const periodGroups = {
+      ancient: [
+        { id: "spring_autumn", label: "春秋", kind: "dynasty" },
+        { id: "warring_states", label: "战国", kind: "dynasty" },
+        { id: "qin", label: "秦", kind: "dynasty" },
+        { id: "han", label: "汉", kind: "dynasty" },
+      ],
+      medieval: [
+        { id: "three_kingdoms", label: "三国", kind: "dynasty" },
+        { id: "jin", label: "晋", kind: "dynasty" },
+        { id: "southern_northern", label: "南北朝", kind: "dynasty" },
+        { id: "sui", label: "隋", kind: "dynasty" },
+        { id: "tang", label: "唐", kind: "dynasty" },
+        { id: "five_dynasties", label: "五代十国", kind: "era" },
+        { id: "song", label: "宋", kind: "dynasty" },
+      ],
+      late_imperial: [
+        { id: "yuan", label: "元", kind: "dynasty" },
+        { id: "ming", label: "明", kind: "dynasty" },
+        { id: "qing", label: "清", kind: "dynasty" },
+      ],
+    };
+
+    const eraButtons = Array.from(document.querySelectorAll("[data-era]"));
+    const periodRangeScroll = document.getElementById("periodRangeScroll");
+    const periodRange = document.getElementById("periodRange");
+    const periodMarks = document.getElementById("periodMarks");
+    const periodEmpty = document.getElementById("periodEmpty");
+    const periodStart = document.getElementById("periodStart");
+    const periodEnd = document.getElementById("periodEnd");
+    const periodSelection = document.getElementById("periodSelection");
+
+    let activeEra = "medieval";
+    let activePeriods = periodGroups[activeEra];
+
+    function updatePeriodSelection() {
+      const startIndex = Number(periodStart.value);
+      const endIndex = Number(periodEnd.value);
+      const denominator = Math.max(activePeriods.length - 1, 1);
+      const selected = activePeriods.slice(startIndex, endIndex + 1);
+      const selectedText = selected.map((period) => period.label).join("、");
+
+      periodRange.style.setProperty("--range-left", `${(startIndex / denominator) * 100}%`);
+      periodRange.style.setProperty("--range-width", `${((endIndex - startIndex) / denominator) * 100}%`);
+      periodSelection.textContent = `已选：${selectedText}`;
+      periodSelection.title = selectedText;
+
+      Array.from(periodMarks.children).forEach((mark, index) => {
+        mark.classList.toggle("period-mark--active", index >= startIndex && index <= endIndex);
+      });
+    }
+
+    function renderPeriodRange(era, initialRange) {
+      activeEra = era;
+      activePeriods = periodGroups[era] ?? [];
+      const isUnlimited = activePeriods.length === 0;
+
+      periodRange.hidden = isUnlimited;
+      periodEmpty.hidden = !isUnlimited;
+      periodSelection.textContent = isUnlimited ? "已选：不限" : "";
+      periodSelection.title = "";
+
+      if (isUnlimited) return;
+
+      const lastIndex = activePeriods.length - 1;
+      const startIndex = Math.min(initialRange?.[0] ?? 0, lastIndex);
+      const endIndex = Math.max(startIndex, Math.min(initialRange?.[1] ?? lastIndex, lastIndex));
+
+      periodRange.style.setProperty("--period-count", activePeriods.length);
+      periodRange.style.minWidth = `${Math.max(360, activePeriods.length * 68)}px`;
+      periodStart.max = String(lastIndex);
+      periodEnd.max = String(lastIndex);
+      periodStart.value = String(startIndex);
+      periodEnd.value = String(endIndex);
+      periodMarks.replaceChildren(...activePeriods.map((period) => {
+        const mark = document.createElement("span");
+        mark.className = "period-mark";
+        mark.textContent = period.label;
+        mark.dataset.periodId = period.id;
+        mark.dataset.periodKind = period.kind;
+        return mark;
+      }));
+
+      updatePeriodSelection();
+      periodRangeScroll.scrollLeft = 0;
+    }
+
+    periodStart.addEventListener("input", () => {
+      if (Number(periodStart.value) > Number(periodEnd.value)) {
+        periodStart.value = periodEnd.value;
+      }
+      updatePeriodSelection();
+    });
+
+    periodEnd.addEventListener("input", () => {
+      if (Number(periodEnd.value) < Number(periodStart.value)) {
+        periodEnd.value = periodStart.value;
+      }
+      updatePeriodSelection();
+    });
+
+    eraButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        eraButtons.forEach((item) => item.classList.remove("chip--active"));
+        button.classList.add("chip--active");
+        renderPeriodRange(button.dataset.era);
+      });
+    });
+
+    renderPeriodRange("medieval", [4, 6]);
+  </script>
 </body>
 </html>
