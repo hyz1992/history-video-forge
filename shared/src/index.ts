@@ -23,9 +23,7 @@ export {
   TopicRecommendationFilterSchema,
   TopicRecommendationPeriodId,
   TopicRecommendationStorytellingLens,
-  createTopicRecommendationFilterFingerprint,
   expandTopicRecommendationPeriodRange,
-  getTopicRecommendationFilterFingerprint,
   normalizeTopicRecommendationFilter,
 } from "./topic/topic-recommendation-filter.schema";
 export { ScriptInputBundle } from "./script/script-input-bundle.schema";

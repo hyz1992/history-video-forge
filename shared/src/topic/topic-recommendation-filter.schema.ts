@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 import { z } from "zod";
 
 export const TOPIC_RECOMMENDATION_PERIOD_GROUPS = [
@@ -158,11 +156,41 @@ const TopicRecommendationFilterInputFields = {
   exclude_terms: z.array(z.string()).max(8).optional(),
 };
 
+const TopicRecommendationCanonicalExcludeTerms = z
+  .array(z.string().min(1))
+  .max(8)
+  .superRefine((terms, context) => {
+    terms.forEach((term, index) => {
+      if (term !== term.trim()) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [index],
+          message: "exclude term must be trimmed and non-empty",
+        });
+      }
+    });
+
+    if (new Set(terms).size !== terms.length) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "exclude terms must not contain duplicates",
+      });
+    }
+
+    const sorted = [...terms].sort();
+    if (sorted.some((term, index) => term !== terms[index])) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "exclude terms must use the default string sort order",
+      });
+    }
+  });
+
 const TopicRecommendationFilterFields = {
   period_range: TopicRecommendationPeriodRangeSchema.optional(),
   event_domain: TopicRecommendationEventDomain.optional(),
   central_actor_type: TopicRecommendationCentralActorType.optional(),
-  exclude_terms: z.array(z.string()).max(8).optional(),
+  exclude_terms: TopicRecommendationCanonicalExcludeTerms.optional(),
 };
 
 export const TopicRecommendationFilterInputSchema = z
@@ -202,21 +230,6 @@ export function normalizeTopicRecommendationFilter(
 
   return Object.keys(normalized).length > 0 ? normalized : undefined;
 }
-
-export function createTopicRecommendationFilterFingerprint(
-  input: TopicRecommendationFilterInput,
-): string | undefined {
-  const normalized = normalizeTopicRecommendationFilter(input);
-  if (!normalized) return undefined;
-
-  return createHash("sha256")
-    .update(JSON.stringify(normalized))
-    .digest("hex")
-    .slice(0, 16);
-}
-
-export const getTopicRecommendationFilterFingerprint =
-  createTopicRecommendationFilterFingerprint;
 
 export type TopicRecommendationPeriodId = z.infer<
   typeof TopicRecommendationPeriodId
