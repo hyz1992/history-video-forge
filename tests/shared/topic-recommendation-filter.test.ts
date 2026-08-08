@@ -4,6 +4,7 @@ import { build } from "esbuild";
 import { describe, expect, it } from "vitest";
 
 import {
+  TOPIC_RECOMMENDATION_EXCLUDE_TERM_MAX_LENGTH,
   TOPIC_RECOMMENDATION_PERIOD_GROUPS,
   TopicRecommendationCentralActorType,
   TopicRecommendationEventDomain,
@@ -211,6 +212,38 @@ describe("TopicRecommendationFilter", () => {
     expect(() =>
       TopicRecommendationFilterInputSchema.parse({
         exclude_terms: Array.from({ length: 9 }, (_, index) => `term-${index}`),
+      }),
+    ).toThrow();
+  });
+
+  it("limits every raw and normalized exclude term to 40 characters", () => {
+    const acceptedTerm = "x".repeat(40);
+    const rejectedTerm = "x".repeat(41);
+
+    expect(TOPIC_RECOMMENDATION_EXCLUDE_TERM_MAX_LENGTH).toBe(40);
+    expect(
+      TopicRecommendationFilterInputSchema.parse({
+        exclude_terms: [acceptedTerm],
+      }),
+    ).toEqual({ exclude_terms: [acceptedTerm] });
+    expect(
+      TopicRecommendationFilterSchema.parse({
+        exclude_terms: [acceptedTerm],
+      }),
+    ).toEqual({ exclude_terms: [acceptedTerm] });
+    expect(() =>
+      TopicRecommendationFilterInputSchema.parse({
+        exclude_terms: [rejectedTerm],
+      }),
+    ).toThrow();
+    expect(() =>
+      TopicRecommendationFilterSchema.parse({
+        exclude_terms: [rejectedTerm],
+      }),
+    ).toThrow();
+    expect(() =>
+      TopicRecommendationFilterInputSchema.parse({
+        exclude_terms: [` ${acceptedTerm} `],
       }),
     ).toThrow();
   });

@@ -1,21 +1,14 @@
 import { createHash } from "node:crypto";
 
-import {
-  normalizeTopicRecommendationFilter,
-} from "../../../../shared/src/index.js";
-
-type TopicRecommendationFilterInput = Parameters<
-  typeof normalizeTopicRecommendationFilter
->[0];
+import type {
+  TopicRecommendationFilter,
+} from "../../../../shared/src/topic/topic-recommendation-filter.schema.js";
 
 export function createTopicRecommendationFilterFingerprint(
-  input: TopicRecommendationFilterInput,
-): string | undefined {
-  const normalized = normalizeTopicRecommendationFilter(input);
-  if (!normalized) return undefined;
-
+  input: TopicRecommendationFilter,
+): string {
   return createHash("sha256")
-    .update(JSON.stringify(normalized))
+    .update(JSON.stringify(input))
     .digest("hex")
     .slice(0, 16);
 }

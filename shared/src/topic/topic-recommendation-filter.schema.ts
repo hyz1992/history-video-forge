@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const TOPIC_RECOMMENDATION_EXCLUDE_TERM_MAX_LENGTH = 40;
+
 export const TOPIC_RECOMMENDATION_PERIOD_GROUPS = [
   {
     id: "ancient",
@@ -153,11 +155,16 @@ const TopicRecommendationFilterInputFields = {
   period_range: TopicRecommendationPeriodRangeInputSchema.optional(),
   event_domain: trimInto(TopicRecommendationEventDomain).optional(),
   central_actor_type: trimInto(TopicRecommendationCentralActorType).optional(),
-  exclude_terms: z.array(z.string()).max(8).optional(),
+  exclude_terms: z
+    .array(z.string().max(TOPIC_RECOMMENDATION_EXCLUDE_TERM_MAX_LENGTH))
+    .max(8)
+    .optional(),
 };
 
 const TopicRecommendationCanonicalExcludeTerms = z
-  .array(z.string().min(1))
+  .array(
+    z.string().min(1).max(TOPIC_RECOMMENDATION_EXCLUDE_TERM_MAX_LENGTH),
+  )
   .max(8)
   .superRefine((terms, context) => {
     terms.forEach((term, index) => {
