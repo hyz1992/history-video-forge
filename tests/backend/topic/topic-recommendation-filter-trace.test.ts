@@ -1,10 +1,15 @@
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import { createDbClient } from "../../../backend/src/db/client.js";
+import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import { recommendTopicCandidatesWithTrace } from "../../../backend/src/modules/topic/topic-recommendation.service.js";
 import type { TopicCandidateLibraryRepository } from "../../../backend/src/modules/topic/topic-candidate-library.repository.js";
 import type { LlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
 import { LlmOutputError } from "../../../backend/src/runtime/llm/llm-output-error.js";
+import { getProjectStorageProfile } from "../../../backend/src/runtime/trace/project-storage.js";
 
 const seedInput = {
   canonicalName: "medieval-history-recommendation",
@@ -107,6 +112,114 @@ function expectNormalizedFilterContract(
 }
 
 describe("topic recommendation filter service trace", () => {
+  it("writes meaningful filter diagnostics through the real project run path", async () => {
+    const tempRoot = mkdtempSync(resolve(tmpdir(), "topic-filter-diagnostics-"));
+    const previousStorageRoot = process.env.STORAGE_ROOT_DIR;
+    process.env.STORAGE_ROOT_DIR = tempRoot;
+
+    try {
+      const db = createDbClient();
+      const project = await createProject(db, {
+        name: "Filtered Recommendation Diagnostics",
+      });
+      const { gateway } = createCapturingGateway(4);
+      const { repository } = createFallbackRepository();
+
+      const result = await recommendTopicCandidatesWithTrace(
+        db,
+        {
+          ...seedInput,
+          filters: {
+            period_range: {
+              start_id: "tang",
+              end_id: "song_liao_xia_jin",
+              included_period_ids: [
+                "tang",
+                "five_dynasties_ten_kingdoms",
+                "song_liao_xia_jin",
+              ],
+            },
+          },
+        },
+        {
+          projectId: project.id,
+          llmGateway: gateway,
+          topicCandidateLibraryRepository: repository,
+        },
+      );
+
+      const runId = String(
+        (result.trace as unknown as Record<string, unknown>).run_id,
+      );
+      const profile = getProjectStorageProfile(project);
+      const markdown = readFileSync(
+        resolve(profile.topic_runs_dir, runId, "recommendation-diagnostics.md"),
+        "utf8",
+      );
+
+      expect(markdown).toContain("## Filter");
+      expect(markdown).toMatch(/- filter_fingerprint: [a-f0-9]{16}/);
+      expect(markdown).toContain("- normalized_filter:");
+      expect(markdown).toContain("- filter_match_status: full");
+      expect(markdown).toContain("- filter_match_shortfall: 0");
+      expect(markdown).toContain("唐、五代十国、宋辽夏金");
+    } finally {
+      if (previousStorageRoot === undefined) {
+        delete process.env.STORAGE_ROOT_DIR;
+      } else {
+        process.env.STORAGE_ROOT_DIR = previousStorageRoot;
+      }
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("omits the Filter section from an auto-only project diagnostics file", async () => {
+    const tempRoot = mkdtempSync(resolve(tmpdir(), "topic-auto-diagnostics-"));
+    const previousStorageRoot = process.env.STORAGE_ROOT_DIR;
+    process.env.STORAGE_ROOT_DIR = tempRoot;
+
+    try {
+      const db = createDbClient();
+      const project = await createProject(db, {
+        name: "Auto Recommendation Diagnostics",
+      });
+      const { gateway } = createCapturingGateway(4);
+      const { repository } = createFallbackRepository();
+
+      const result = await recommendTopicCandidatesWithTrace(
+        db,
+        {
+          ...seedInput,
+          filters: { storytelling_lens: "auto" },
+        },
+        {
+          projectId: project.id,
+          llmGateway: gateway,
+          topicCandidateLibraryRepository: repository,
+        },
+      );
+
+      const runId = String(
+        (result.trace as unknown as Record<string, unknown>).run_id,
+      );
+      const profile = getProjectStorageProfile(project);
+      const markdown = readFileSync(
+        resolve(profile.topic_runs_dir, runId, "recommendation-diagnostics.md"),
+        "utf8",
+      );
+
+      expect(markdown).not.toContain("## Filter");
+      expect(markdown).not.toContain("filter_fingerprint");
+    } finally {
+      if (previousStorageRoot === undefined) {
+        delete process.env.STORAGE_ROOT_DIR;
+      } else {
+        process.env.STORAGE_ROOT_DIR = previousStorageRoot;
+      }
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   it("reports a full match for meaningful filters", async () => {
     const db = createDbClient();
     const { gateway } = createCapturingGateway(4);
