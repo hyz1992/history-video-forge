@@ -24,10 +24,10 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toMatch(/未提供时默认.*8|缺省.*8/);
   });
 
-  it("registers candidate-builder v1.2.0 with the normalized topic filter input", () => {
+  it("registers candidate-builder v1.2.1 with the normalized topic filter input", () => {
     const prompt = createPromptRegistry().getPrompt("topic.candidate-builder");
 
-    expect(prompt.metadata.version).toBe("v1.2.0");
+    expect(prompt.metadata.version).toBe("v1.2.1");
     expect(prompt.metadata.language).toBe("zh-CN");
     expect(prompt.body).toContain("`topic_filter`（可选）");
     expect(prompt.body).toContain("`topic_filter_fingerprint`（可选）");
@@ -56,6 +56,11 @@ describe("topic prompt contract", () => {
     expect(prompt.body).toContain("不按事件背景、使用手段或后续影响分类");
     expect(prompt.body).toContain("`central_actor_type` 按人物在该事件中的主要施力渠道分类");
     expect(prompt.body).toContain("不按人物一生中的最高身份分类");
+    expect(prompt.body).toContain("政变即使使用武装，只要核心是政权归属变化，归 `political_power`");
+    expect(prompt.body).toContain("法律制度设计归 `institutions_governance`，具体审判和处置归 `law_justice`");
+    expect(prompt.body).toContain("宗室成员领兵作战归 `military_actor`");
+    expect(prompt.body).toContain("依靠血缘或宫廷身份争权才归 `court_elite`");
+    expect(prompt.body).toContain("以文官职权推动政务才归 `civil_official`");
   });
 
   it("keeps the five storytelling lenses semantically distinct", () => {

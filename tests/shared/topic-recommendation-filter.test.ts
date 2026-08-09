@@ -129,6 +129,22 @@ describe("TopicRecommendationFilter", () => {
     ).toThrow(/after/i);
   });
 
+  it("rejects period endpoints from different parent groups", () => {
+    expect(() =>
+      expandTopicRecommendationPeriodRange("han", "three_kingdoms"),
+    ).toThrow(/same period group/i);
+
+    expect(() =>
+      TopicRecommendationFilterInputSchema.parse({
+        period_range: {
+          start_id: "han",
+          end_id: "three_kingdoms",
+          included_period_ids: ["han", "three_kingdoms"],
+        },
+      }),
+    ).toThrow();
+  });
+
   it("accepts the fixed enums and a complete period range", () => {
     const input = {
       period_range: {
@@ -216,6 +232,28 @@ describe("TopicRecommendationFilter", () => {
     ).toThrow();
   });
 
+  it("collapses exclude-term whitespace before length checks and canonicalization", () => {
+    const fortyCharacters = "x".repeat(40);
+
+    expect(
+      normalizeTopicRecommendationFilter({
+        exclude_terms: [
+          "神话  演义",
+          " 神话\t演义 ",
+          ` ${fortyCharacters} `,
+        ],
+      }),
+    ).toEqual({
+      exclude_terms: [fortyCharacters, "神话 演义"],
+    });
+
+    expect(() =>
+      TopicRecommendationFilterSchema.parse({
+        exclude_terms: ["神话  演义"],
+      }),
+    ).toThrow();
+  });
+
   it("limits every raw and normalized exclude term to 40 characters", () => {
     const acceptedTerm = "x".repeat(40);
     const rejectedTerm = "x".repeat(41);
@@ -241,11 +279,11 @@ describe("TopicRecommendationFilter", () => {
         exclude_terms: [rejectedTerm],
       }),
     ).toThrow();
-    expect(() =>
-      TopicRecommendationFilterInputSchema.parse({
+    expect(
+      normalizeTopicRecommendationFilter({
         exclude_terms: [` ${acceptedTerm} `],
       }),
-    ).toThrow();
+    ).toEqual({ exclude_terms: [acceptedTerm] });
   });
 
   it("requires canonical exclude terms in the normalized schema", () => {

@@ -1,6 +1,6 @@
 ---
 id: topic.candidate-builder
-version: v1.2.0
+version: v1.2.1
 stage: topic
 language: zh-CN
 consumes:
@@ -108,7 +108,10 @@ status: active
 - 依次使用 `period_range.included_period_ids`、`event_domain`、`central_actor_type` 和 `exclude_terms` 选择符合条件的具体历史事件，并据此确定稳定的 `event_identity`。
 - `period_range.included_period_ids` 是完整连续时期列表，必须将其中每一项逐项视为允许范围；不能只读取 `start_id` 和 `end_id`，不得漏掉五代十国等中间时期。
 - `event_domain` 按核心事件身份分类，不按事件背景、使用手段或后续影响分类。
+- 政变即使使用武装，只要核心是政权归属变化，归 `political_power`；具体战役归 `military_warfare`；盟约和使节交涉归 `diplomacy_relations`。
+- 法律制度设计归 `institutions_governance`，具体审判和处置归 `law_justice`；不得因一次审判涉及制度背景就混用两个领域。
 - `central_actor_type` 按人物在该事件中的主要施力渠道分类，不按人物一生中的最高身份分类。
+- 宗室成员领兵作战归 `military_actor`，依靠血缘或宫廷身份争权才归 `court_elite`，以文官职权推动政务才归 `civil_official`。
 - 所有已提供的正向筛选维度必须同时满足（AND）。`exclude_terms` 的优先级高于全部正向条件；条件冲突时，少返回候选或返回空数组，绝不能同时执行相反命令。
 
 ### 第二阶段：再组织讲述角度

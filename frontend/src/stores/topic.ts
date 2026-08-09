@@ -649,7 +649,7 @@ function buildRecommendationSeed(
 
   return {
     canonical_name: `${periodLabel}历史事件推荐`,
-    summary: `请围绕${periodLabel}内的具体历史事件生成候选，禁止返回“王朝更迭”“古代战争”“百家争鸣”这类泛主题。结构化筛选条件以 filters 为准，优先推荐适合直接进入文案阶段的单事件主题。`,
+    summary: `请围绕${periodLabel}内的具体历史事件生成候选，禁止返回“王朝更迭”“古代战争”“百家争鸣”这类泛主题。结构化筛选条件以 topic_filter 为准，优先推荐适合直接进入文案阶段的单事件主题。`,
     core_conflict: "优先选择冲突关系清晰、人物立场可辨、叙事推进明确的具体历史事件。",
     strong_scene: `优先寻找发生在${periodLabel}内、具有明确人物行动与局势变化的关键历史瞬间。`,
     source_hint: `仅使用${periodLabel}范围内相关史事与人物记载。`,

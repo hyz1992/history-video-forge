@@ -123,6 +123,16 @@ describe("topic recommendation filter HTTP chain", () => {
         },
       },
     ],
+    [
+      "period endpoints from different parent groups",
+      {
+        period_range: {
+          start_id: "han",
+          end_id: "three_kingdoms",
+          included_period_ids: ["han", "three_kingdoms"],
+        },
+      },
+    ],
     ["unknown filter field", { event_domain: "political_power", conflict_core: "status" }],
     ["overlong exclude term", { exclude_terms: ["x".repeat(41)] }],
   ])("rejects %s before invoking the builder", async (_name, filters) => {

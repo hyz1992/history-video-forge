@@ -71,6 +71,8 @@ describe("topic store recommendation input", () => {
       exclude_terms: ["演义", "神话"],
     });
     expect(body.summary).toContain("唐至宋辽夏金");
+    expect(body.summary).toContain("topic_filter");
+    expect(body.summary).not.toContain("以 filters 为准");
     expect(JSON.stringify(body)).not.toContain("medieval");
   });
 

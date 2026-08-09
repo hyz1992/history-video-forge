@@ -83,21 +83,30 @@ export function expandTopicRecommendationPeriodRange(
   startId: string,
   endId: string,
 ): TopicRecommendationPeriodId[] {
-  const startIndex = TOPIC_RECOMMENDATION_PERIOD_IDS.indexOf(
-    startId as TopicRecommendationPeriodId,
+  const startGroup = TOPIC_RECOMMENDATION_PERIOD_GROUPS.find((group) =>
+    group.periods.some((period) => period.id === startId),
   );
-  const endIndex = TOPIC_RECOMMENDATION_PERIOD_IDS.indexOf(
-    endId as TopicRecommendationPeriodId,
+  const endGroup = TOPIC_RECOMMENDATION_PERIOD_GROUPS.find((group) =>
+    group.periods.some((period) => period.id === endId),
   );
 
-  if (startIndex < 0 || endIndex < 0) {
-    throw new Error(`Unknown topic recommendation period: ${startIndex < 0 ? startId : endId}`);
+  if (!startGroup || !endGroup) {
+    throw new Error(`Unknown topic recommendation period: ${!startGroup ? startId : endId}`);
   }
+  if (startGroup.id !== endGroup.id) {
+    throw new Error("Topic recommendation period endpoints must belong to the same period group");
+  }
+
+  const periodIds = startGroup.periods.map(
+    (period) => period.id,
+  ) as TopicRecommendationPeriodId[];
+  const startIndex = periodIds.indexOf(startId as TopicRecommendationPeriodId);
+  const endIndex = periodIds.indexOf(endId as TopicRecommendationPeriodId);
   if (startIndex > endIndex) {
     throw new Error(`Topic recommendation period start ${startId} is after end ${endId}`);
   }
 
-  return TOPIC_RECOMMENDATION_PERIOD_IDS.slice(startIndex, endIndex + 1);
+  return periodIds.slice(startIndex, endIndex + 1);
 }
 
 const TopicRecommendationPeriodRangeSchema = z
@@ -151,12 +160,19 @@ const TopicRecommendationPeriodRangeInputSchema = z
 const trimInto = <T extends z.ZodTypeAny>(schema: T) =>
   z.string().transform((value) => value.trim()).pipe(schema);
 
+const normalizeExcludeTerm = (value: string) => value.trim().replace(/\s+/g, " ");
+
+const TopicRecommendationExcludeTermInput = z
+  .string()
+  .transform(normalizeExcludeTerm)
+  .pipe(z.string().max(TOPIC_RECOMMENDATION_EXCLUDE_TERM_MAX_LENGTH));
+
 const TopicRecommendationFilterInputFields = {
   period_range: TopicRecommendationPeriodRangeInputSchema.optional(),
   event_domain: trimInto(TopicRecommendationEventDomain).optional(),
   central_actor_type: trimInto(TopicRecommendationCentralActorType).optional(),
   exclude_terms: z
-    .array(z.string().max(TOPIC_RECOMMENDATION_EXCLUDE_TERM_MAX_LENGTH))
+    .array(TopicRecommendationExcludeTermInput)
     .max(8)
     .optional(),
 };
@@ -168,11 +184,11 @@ const TopicRecommendationCanonicalExcludeTerms = z
   .max(8)
   .superRefine((terms, context) => {
     terms.forEach((term, index) => {
-      if (term !== term.trim()) {
+      if (term !== normalizeExcludeTerm(term)) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
           path: [index],
-          message: "exclude term must be trimmed and non-empty",
+          message: "exclude term must be whitespace-normalized and non-empty",
         });
       }
     });
@@ -221,7 +237,7 @@ export function normalizeTopicRecommendationFilter(
 ): TopicRecommendationFilter | undefined {
   const parsed = TopicRecommendationFilterInputSchema.parse(input);
   const excludeTerms = parsed.exclude_terms
-    ? [...new Set(parsed.exclude_terms.map((term) => term.trim()).filter(Boolean))].sort()
+    ? [...new Set(parsed.exclude_terms.filter(Boolean))].sort()
     : undefined;
   const normalized = TopicRecommendationFilterSchema.parse({
     ...(parsed.period_range ? { period_range: parsed.period_range } : {}),
