@@ -28,6 +28,7 @@ export const OPERATION_TIER_REGISTRY: Record<string, OperationTier> = {
   "topic.candidate-builder-repair": "smart",
   "asset-planning.planner": "smart",
   "asset-planning.asset-structural-repair": "smart",
+  "asset-planning.global-structural-repair": "smart",
 
   // 短结构化判断：需要 reasoning 才能保证召回（S2-0 实测：flash 召回 0/2）
   "topic.selector": "smart",

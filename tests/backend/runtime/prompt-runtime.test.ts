@@ -243,6 +243,29 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("本地逻辑只定位缺口，不代写风险文案");
   });
 
+  it("loads asset-planning.global-structural-repair with its exact registry contract", () => {
+    const prompt = createPromptRegistry().getPrompt(
+      "asset-planning.global-structural-repair",
+    );
+
+    expect(prompt.metadata).toMatchObject({
+      id: "asset-planning.global-structural-repair",
+      version: "v1.0.0",
+      stage: "asset_planning",
+      language: "zh-CN",
+      consumes: ["GlobalPlanningStructuralRepairInput"],
+      produces: ["GlobalPlanningStructuralPatch"],
+      status: "active",
+    });
+    expect(prompt.body).toContain("allowed_repair_paths");
+    expect(prompt.body).toContain("normalized_draft");
+    expect(prompt.body).toContain("repair_context");
+    expect(prompt.body).toContain("global_planning_structural_patch");
+    expect(prompt.body).toContain("不得输出 Markdown");
+    expect(prompt.body).toContain("不得输出 segment tasks");
+    expect(prompt.body).toContain("不得输出 dependencies");
+  });
+
   it("documents asset planning chunk required field checklist", () => {
     const registry = createPromptRegistry();
     const prompt = registry.getPrompt("asset-planning.planner");

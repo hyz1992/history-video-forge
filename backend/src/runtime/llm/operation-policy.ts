@@ -47,6 +47,7 @@ const OPERATION_NAME_TO_CLASS: Record<string, LlmOperationClass> = {
   // 局部修复：候选修复、结构修复、封面对话优化、资产提示词优化
   "topic.candidate-builder-repair": "targeted_repair",
   "asset-planning.asset-structural-repair": "targeted_repair",
+  "asset-planning.global-structural-repair": "targeted_repair",
   "publish.cover-prompt-optimizer": "targeted_repair",
   "asset.prompt-optimizer": "targeted_repair",
 

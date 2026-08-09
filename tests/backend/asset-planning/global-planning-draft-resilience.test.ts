@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import missingPropNotesFixture from "../../fixtures/asset-planning/global-draft-props-missing-consistency-notes.json";
 import { ProjectArtBible } from "../../../shared/src/index.js";
 import {
+  GlobalPlanningStructuralPatch,
+  applyGlobalPlanningStructuralPatch,
   normalizeGlobalPlanningDraftStructure,
 } from "../../../backend/src/modules/asset-planning/global-planning-draft-resilience.js";
 
@@ -183,5 +185,166 @@ describe("normalizeGlobalPlanningDraftStructure", () => {
     expect(new Set(identities).size).toBe(identities.length);
     expect(identities).toEqual([...identities].sort());
     expect(second).toEqual(first);
+  });
+});
+
+describe("applyGlobalPlanningStructuralPatch", () => {
+  it("applies only authorized exact paths without mutating the draft", () => {
+    const draft = {
+      art_bible: {
+        props: [
+          { prop_id: "p1", consistency_notes: [] },
+          { prop_id: "p2", consistency_notes: [] },
+        ],
+      },
+      manual_review_notes: [],
+    };
+    const original = structuredClone(draft);
+    const patch = GlobalPlanningStructuralPatch.parse({
+      patch_type: "global_planning_structural_patch",
+      patches: [
+        {
+          path: ["art_bible", "props", 1, "consistency_notes"],
+          value: ["保持第二件道具的材质与形制一致"],
+        },
+        {
+          path: ["manual_review_notes"],
+          value: ["需要人工确认道具年代"],
+        },
+      ],
+    });
+
+    const result = applyGlobalPlanningStructuralPatch({
+      draft,
+      patch,
+      allowedRepairPaths: [
+        ["art_bible", "props", 1, "consistency_notes"],
+        ["manual_review_notes"],
+      ],
+    });
+
+    expect(result).toEqual({
+      art_bible: {
+        props: [
+          { prop_id: "p1", consistency_notes: [] },
+          {
+            prop_id: "p2",
+            consistency_notes: ["保持第二件道具的材质与形制一致"],
+          },
+        ],
+      },
+      manual_review_notes: ["需要人工确认道具年代"],
+    });
+    expect(draft).toEqual(original);
+  });
+
+  it.each([
+    {
+      name: "extra path",
+      allowedRepairPaths: [["art_bible", "props", 0, "consistency_notes"]],
+      patchPath: ["manual_review_notes"],
+    },
+    {
+      name: "parent overwrite",
+      allowedRepairPaths: [["art_bible", "props", 0, "consistency_notes"]],
+      patchPath: ["art_bible", "props", 0],
+    },
+  ])("rejects $name instead of using path prefixes", ({ allowedRepairPaths, patchPath }) => {
+    const patch = GlobalPlanningStructuralPatch.parse({
+      patch_type: "global_planning_structural_patch",
+      patches: [{ path: patchPath, value: [] }],
+    });
+
+    expect(() =>
+      applyGlobalPlanningStructuralPatch({
+        draft: { art_bible: { props: [{ consistency_notes: [] }] } },
+        patch,
+        allowedRepairPaths,
+      }),
+    ).toThrow(/allowed/i);
+  });
+
+  it("rejects duplicate structural paths", () => {
+    const path = ["manual_review_notes"] as const;
+    const patch = GlobalPlanningStructuralPatch.parse({
+      patch_type: "global_planning_structural_patch",
+      patches: [
+        { path, value: ["一"] },
+        { path, value: ["二"] },
+      ],
+    });
+
+    expect(() =>
+      applyGlobalPlanningStructuralPatch({
+        draft: { manual_review_notes: [] },
+        patch,
+        allowedRepairPaths: [[...path]],
+      }),
+    ).toThrow(/duplicate/i);
+  });
+
+  it.each([
+    { name: "negative array index", path: ["items", -1] },
+    { name: "out-of-bounds array index", path: ["items", 1] },
+    { name: "string key on array", path: ["items", "0"] },
+    { name: "numeric key on object", path: ["nested", 0] },
+    { name: "missing parent", path: ["missing", "value"] },
+  ])("rejects $name", ({ path }) => {
+    const rawPatch = {
+      patch_type: "global_planning_structural_patch",
+      patches: [{ path, value: "替换值" }],
+    };
+
+    expect(() => {
+      const patch = GlobalPlanningStructuralPatch.parse(rawPatch);
+      applyGlobalPlanningStructuralPatch({
+        draft: { items: ["原值"], nested: {} },
+        patch,
+        allowedRepairPaths: [path],
+      });
+    }).toThrow();
+  });
+
+  it("allows root replacement only when the empty root path is explicitly allowed", () => {
+    const patch = GlobalPlanningStructuralPatch.parse({
+      patch_type: "global_planning_structural_patch",
+      patches: [{ path: [], value: { replacement: true } }],
+    });
+
+    expect(
+      applyGlobalPlanningStructuralPatch({
+        draft: { replacement: false },
+        patch,
+        allowedRepairPaths: [[]],
+      }),
+    ).toEqual({ replacement: true });
+    expect(() =>
+      applyGlobalPlanningStructuralPatch({
+        draft: { replacement: false },
+        patch,
+        allowedRepairPaths: [["replacement"]],
+      }),
+    ).toThrow(/allowed/i);
+  });
+
+  it("validates every patch before applying any of them", () => {
+    const draft = { first: "原始值", items: ["原始项"] };
+    const original = structuredClone(draft);
+    const patch = GlobalPlanningStructuralPatch.parse({
+      patch_type: "global_planning_structural_patch",
+      patches: [
+        { path: ["first"], value: "本不应提交" },
+        { path: ["items", 9], value: "越界" },
+      ],
+    });
+
+    expect(() =>
+      applyGlobalPlanningStructuralPatch({
+        draft,
+        patch,
+        allowedRepairPaths: [["first"], ["items", 9]],
+      }),
+    ).toThrow();
+    expect(draft).toEqual(original);
   });
 });

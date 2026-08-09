@@ -33,6 +33,7 @@ describe("llm operation policy classification", () => {
     // 局部修复：候选修复、结构修复、封面对话优化、资产提示词优化
     expect(classifyOperation("topic.candidate-builder-repair")).toBe("targeted_repair");
     expect(classifyOperation("asset-planning.asset-structural-repair")).toBe("targeted_repair");
+    expect(classifyOperation("asset-planning.global-structural-repair")).toBe("targeted_repair");
     expect(classifyOperation("publish.cover-prompt-optimizer")).toBe("targeted_repair");
     expect(classifyOperation("asset.prompt-optimizer")).toBe("targeted_repair");
 
@@ -279,6 +280,7 @@ describe("llm operation policy retry semantics (Task 9 contract)", () => {
     expect(getOperationPolicy("publish.title-generator").retryOnTimeout).toBe(true);
     expect(getOperationPolicy("topic.candidate-builder-repair").retryOnTimeout).toBe(true);
     expect(getOperationPolicy("asset-planning.asset-structural-repair").retryOnTimeout).toBe(true);
+    expect(getOperationPolicy("asset-planning.global-structural-repair").retryOnTimeout).toBe(true);
     expect(getOperationPolicy("script.semantic-reviewer").retryOnTimeout).toBe(true);
   });
 

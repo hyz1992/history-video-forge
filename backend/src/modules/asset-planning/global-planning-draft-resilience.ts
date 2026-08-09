@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export const GLOBAL_FORBIDDEN_CHUNK_KEYS = [
   "chunk_id",
   "tasks",
@@ -17,6 +19,27 @@ export type GlobalDraftNormalizationAction =
     };
 
 type PlainObject = Record<string, unknown>;
+type StructuralPath = Array<string | number>;
+
+export const GlobalPlanningStructuralPatch = z
+  .object({
+    patch_type: z.literal("global_planning_structural_patch"),
+    patches: z.array(
+      z
+        .object({
+          path: z.array(
+            z.union([z.string(), z.number().int().nonnegative()]),
+          ),
+          value: z.unknown(),
+        })
+        .strict(),
+    ),
+  })
+  .strict();
+
+export type GlobalPlanningStructuralPatch = z.infer<
+  typeof GlobalPlanningStructuralPatch
+>;
 
 function isPlainObject(value: unknown): value is PlainObject {
   if (value === null || typeof value !== "object") return false;
@@ -33,6 +56,104 @@ function cloneStructure(value: unknown): unknown {
     clone[key] = cloneStructure(child);
   }
   return clone;
+}
+
+function pathsEqual(left: StructuralPath, right: StructuralPath): boolean {
+  return (
+    left.length === right.length &&
+    left.every((segment, index) => segment === right[index])
+  );
+}
+
+function pathIdentity(path: StructuralPath): string {
+  return JSON.stringify(path);
+}
+
+function validatePatchTarget(draft: unknown, path: StructuralPath): void {
+  if (path.length === 0) return;
+
+  let parent: unknown = draft;
+  for (let index = 0; index < path.length; index += 1) {
+    const segment = path[index];
+    const isFinal = index === path.length - 1;
+
+    if (Array.isArray(parent)) {
+      if (
+        typeof segment !== "number" ||
+        !Number.isInteger(segment) ||
+        segment < 0 ||
+        segment >= parent.length
+      ) {
+        throw new Error(`invalid array patch path: ${pathIdentity(path)}`);
+      }
+      if (!isFinal) parent = parent[segment];
+      continue;
+    }
+
+    if (!isPlainObject(parent) || typeof segment !== "string") {
+      throw new Error(`invalid object patch path: ${pathIdentity(path)}`);
+    }
+    if (!isFinal) {
+      if (!Object.prototype.hasOwnProperty.call(parent, segment)) {
+        throw new Error(`missing patch parent: ${pathIdentity(path)}`);
+      }
+      parent = parent[segment];
+    }
+  }
+}
+
+function applyValidatedPatch(
+  draft: unknown,
+  path: StructuralPath,
+  value: unknown,
+): unknown {
+  if (path.length === 0) return cloneStructure(value);
+
+  let parent = draft as PlainObject | unknown[];
+  for (let index = 0; index < path.length - 1; index += 1) {
+    parent = parent[path[index] as never] as PlainObject | unknown[];
+  }
+  parent[path[path.length - 1] as never] = cloneStructure(value) as never;
+  return draft;
+}
+
+export function applyGlobalPlanningStructuralPatch(input: {
+  draft: unknown;
+  patch: GlobalPlanningStructuralPatch;
+  allowedRepairPaths: Array<Array<string | number>>;
+}): unknown {
+  const patch = GlobalPlanningStructuralPatch.parse(input.patch);
+  const seenPaths = new Set<string>();
+
+  if (
+    patch.patches.length > 1 &&
+    patch.patches.some(({ path }) => path.length === 0)
+  ) {
+    throw new Error("root patch cannot be combined with other patches");
+  }
+
+  for (const entry of patch.patches) {
+    if (
+      !input.allowedRepairPaths.some((allowedPath) =>
+        pathsEqual(entry.path, allowedPath),
+      )
+    ) {
+      throw new Error(`patch path is not allowed: ${pathIdentity(entry.path)}`);
+    }
+
+    const identity = pathIdentity(entry.path);
+    if (seenPaths.has(identity)) {
+      throw new Error(`duplicate patch path: ${identity}`);
+    }
+    seenPaths.add(identity);
+    validatePatchTarget(input.draft, entry.path);
+  }
+
+  let result = cloneStructure(input.draft);
+  for (const entry of patch.patches) {
+    result = applyValidatedPatch(result, entry.path, entry.value);
+  }
+  return result;
 }
 
 function insertArrayDefault(
