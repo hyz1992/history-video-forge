@@ -363,7 +363,7 @@ async function emitGlobalStructureEventSafely(
 ): Promise<void> {
   if (!callback) return;
   try {
-    await callback(event);
+    await callback(structuredClone(event));
   } catch (error) {
     console.warn(
       `[asset-planning] global_structure_event_callback_failed:${
@@ -381,6 +381,35 @@ function toGlobalPlanningSchemaIssues(
     path: [...issue.path],
     message: issue.message,
   }));
+}
+
+function parseGlobalPlanningDraftCandidate(value: unknown):
+  | { success: true; data: GlobalPlanningDraft }
+  | { success: false; issues: GlobalPlanningSchemaIssue[] } {
+  try {
+    return {
+      success: true,
+      data: parseLlmOutput(
+        GlobalPlanningDraft,
+        value,
+        "asset_global_plan_schema_invalid",
+      ),
+    };
+  } catch (error) {
+    if (
+      !(error instanceof LlmOutputError) ||
+      error.code !== "asset_global_plan_schema_invalid"
+    ) {
+      throw error;
+    }
+    if (!Array.isArray(error.cause)) {
+      throw error;
+    }
+    return {
+      success: false,
+      issues: toGlobalPlanningSchemaIssues(error.cause as z.ZodIssue[]),
+    };
+  }
 }
 
 function serializeGlobalRepairFailure(error: unknown): unknown[] {
@@ -409,10 +438,10 @@ async function parseOrRepairGlobalDraft(input: {
     });
   }
 
-  const initialResult = GlobalPlanningDraft.safeParse(normalized.value);
+  const initialResult = parseGlobalPlanningDraftCandidate(normalized.value);
   if (initialResult.success) return initialResult.data;
 
-  const initialIssues = toGlobalPlanningSchemaIssues(initialResult.error.issues);
+  const initialIssues = initialResult.issues;
   await emitGlobalStructureEventSafely(input.input.onGlobalStructureEvent, {
     type: "repair_started",
     issues: initialIssues,
@@ -463,34 +492,39 @@ async function parseOrRepairGlobalDraft(input: {
         actions: normalizedPatchedDraft.actions,
       });
     }
-    const finalResult = GlobalPlanningDraft.safeParse(
+    const finalResult = parseGlobalPlanningDraftCandidate(
       normalizedPatchedDraft.value,
     );
     if (!finalResult.success) {
-      finalIssues = toGlobalPlanningSchemaIssues(finalResult.error.issues);
-      throw finalResult.error;
+      finalIssues = finalResult.issues;
+    } else {
+      await emitGlobalStructureEventSafely(input.input.onGlobalStructureEvent, {
+        type: "repair_succeeded",
+      });
+      return finalResult.data;
     }
-    await emitGlobalStructureEventSafely(input.input.onGlobalStructureEvent, {
-      type: "repair_succeeded",
-    });
-    return finalResult.data;
   } catch (error) {
-    if (finalIssues.length === 0) {
-      patchIssues = serializeGlobalRepairFailure(error);
+    if (
+      !(error instanceof z.ZodError) &&
+      !(error instanceof GlobalPlanningStructuralPatchError)
+    ) {
+      throw error;
     }
-    const failure = {
-      initial_issues: initialIssues,
-      patch_issues: patchIssues,
-      final_issues: finalIssues,
-    };
-    await emitGlobalStructureEventSafely(input.input.onGlobalStructureEvent, {
-      type: "repair_failed",
-      ...failure,
-    });
-    throw new LlmOutputError("asset_global_plan_structural_repair_failed", {
-      cause: failure,
-    });
+    patchIssues = serializeGlobalRepairFailure(error);
   }
+
+  const failure = {
+    initial_issues: initialIssues,
+    patch_issues: patchIssues,
+    final_issues: finalIssues,
+  };
+  await emitGlobalStructureEventSafely(input.input.onGlobalStructureEvent, {
+    type: "repair_failed",
+    ...failure,
+  });
+  throw new LlmOutputError("asset_global_plan_structural_repair_failed", {
+    cause: failure,
+  });
 }
 
 async function invokePlanningPromptWithSafetyRetry(input: {

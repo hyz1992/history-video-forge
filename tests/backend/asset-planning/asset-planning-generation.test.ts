@@ -452,6 +452,70 @@ describe("generateAssetPlan", () => {
     ]);
   });
 
+  it.each(["characters", "locations", "props"] as const)(
+    "strips nested unknown keys from art_bible.%s without global repair",
+    async (collectionKey) => {
+      const artBible = {
+        ...validGlobalPlanningDraft.art_bible,
+        characters: [
+          {
+            character_id: "character_1",
+            label: "人物一",
+            role: "核心人物",
+            visual_description: "古代人物形象",
+            consistency_notes: [],
+          },
+        ],
+        locations: [
+          {
+            location_id: "location_1",
+            label: "场景一",
+            role: "主要场景",
+            visual_description: "古代宫殿场景",
+            consistency_notes: [],
+          },
+        ],
+        props: [
+          {
+            prop_id: "prop_1",
+            label: "道具一",
+            role: "关键道具",
+            visual_description: "古代木质道具",
+            consistency_notes: [],
+          },
+        ],
+      };
+      artBible[collectionKey] = artBible[collectionKey].map((entry) => ({
+        ...entry,
+        extra_note: "模型自发增加的未知字段",
+      }));
+      const rawGlobalDraft = {
+        ...validGlobalPlanningDraft,
+        art_bible: artBible,
+      };
+      const { gateway, calls } = makeGateway((options) => {
+        if (options.promptId === "asset-planning.global-structural-repair") {
+          throw new Error("nested unknown keys must not trigger global repair");
+        }
+        const promptInput = options.input as {
+          planning_mode?: string;
+          chunk?: { segment_ids: string[] };
+        };
+        if (promptInput.planning_mode === "global") return rawGlobalDraft;
+        return validChunkPlanningDraftFor(promptInput.chunk?.segment_ids ?? []);
+      });
+
+      const plan = await generateAssetPlan(makeInput(gateway));
+
+      expect(AssetPlan.parse(plan)).toEqual(plan);
+      expect(calls).toHaveLength(3);
+      expect(calls.map((call) => call.promptId)).not.toContain(
+        "asset-planning.global-structural-repair",
+      );
+      expect(plan.art_bible[collectionKey][0]).not.toHaveProperty("extra_note");
+    },
+  );
+
   it("builds a compact leaf repair input and invokes global repair exactly once", async () => {
     const invalidDraft = structuredClone(missingPropNotesFixture) as {
       art_bible: { props: Array<Record<string, unknown>> };
@@ -772,6 +836,138 @@ describe("generateAssetPlan", () => {
         expect.objectContaining({ type: "repair_provider_failed" }),
       ]),
     );
+  });
+
+  it("isolates repair input and successful result from malicious event payload mutation", async () => {
+    const invalidDraft = structuredClone(missingPropNotesFixture) as {
+      art_bible: { props: Array<Record<string, unknown>> };
+    };
+    invalidDraft.art_bible.props[0] = {
+      ...invalidDraft.art_bible.props[0],
+      consistency_notes: [],
+    };
+    delete invalidDraft.art_bible.props[0].visual_description;
+
+    function createRepairingGateway() {
+      const repairInputs: unknown[] = [];
+      const result = makeGateway((options) => {
+        if (options.promptId === "asset-planning.global-structural-repair") {
+          repairInputs.push(structuredClone(options.input));
+          return {
+            patch_type: "global_planning_structural_patch",
+            patches: [
+              {
+                path: ["art_bible", "props", 0, "visual_description"],
+                value: "修复后的深色木质小型道具",
+              },
+            ],
+          };
+        }
+        const promptInput = options.input as {
+          planning_mode?: string;
+          chunk?: { segment_ids: string[] };
+        };
+        if (promptInput.planning_mode === "global") return invalidDraft;
+        return validChunkPlanningDraftFor(promptInput.chunk?.segment_ids ?? []);
+      });
+      return { ...result, repairInputs };
+    }
+
+    const baseline = createRepairingGateway();
+    const malicious = createRepairingGateway();
+    const expected = await generateAssetPlan(makeInput(baseline.gateway));
+    const actual = await generateAssetPlan({
+      ...makeInput(malicious.gateway),
+      onGlobalStructureEvent(event) {
+        if (event.type === "normalization_applied") {
+          event.actions.splice(0, event.actions.length);
+        }
+        if (event.type === "repair_started") {
+          event.issues.splice(0, event.issues.length, {
+            code: "tampered",
+            path: ["manual_review_notes"],
+            message: "恶意改写",
+          });
+        }
+      },
+    });
+
+    expect(actual).toEqual(expected);
+    expect(malicious.repairInputs).toEqual(baseline.repairInputs);
+    expect(malicious.calls).toHaveLength(baseline.calls.length);
+    expect(
+      (malicious.repairInputs[0] as { allowed_repair_paths: unknown })
+        .allowed_repair_paths,
+    ).toEqual([["art_bible", "props", 0, "visual_description"]]);
+  });
+
+  it("isolates repair failure cause from malicious event payload mutation", async () => {
+    const invalidDraft = structuredClone(missingPropNotesFixture) as {
+      art_bible: { props: Array<Record<string, unknown>> };
+    };
+    invalidDraft.art_bible.props[0] = {
+      ...invalidDraft.art_bible.props[0],
+      consistency_notes: [],
+    };
+    delete invalidDraft.art_bible.props[0].visual_description;
+
+    function createFailingGateway() {
+      return makeGateway((options) => {
+        if (options.promptId === "asset-planning.global-structural-repair") {
+          return {
+            patch_type: "global_planning_structural_patch",
+            patches: [{ path: ["manual_review_notes"], value: [] }],
+          };
+        }
+        return invalidDraft;
+      });
+    }
+
+    async function captureFailure(
+      onGlobalStructureEvent?: (event: GlobalDraftStructureEvent) => void,
+    ) {
+      const run = createFailingGateway();
+      let caught: unknown;
+      try {
+        await generateAssetPlan({
+          ...makeInput(run.gateway),
+          onGlobalStructureEvent,
+        });
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(LlmOutputError);
+      return { error: caught as LlmOutputError, calls: run.calls };
+    }
+
+    const baseline = await captureFailure();
+    const malicious = await captureFailure((event) => {
+      if (event.type === "normalization_applied") {
+        event.actions.splice(0, event.actions.length);
+      }
+      if (event.type === "repair_failed") {
+        event.initial_issues.splice(0, event.initial_issues.length);
+        event.patch_issues.splice(0, event.patch_issues.length);
+        event.final_issues.splice(0, event.final_issues.length);
+      }
+    });
+
+    expect(malicious.error.cause).toEqual(baseline.error.cause);
+    expect(malicious.calls).toHaveLength(baseline.calls.length);
+    expect(malicious.error.cause).toMatchObject({
+      initial_issues: expect.arrayContaining([
+        expect.objectContaining({
+          path: ["art_bible", "props", 0, "visual_description"],
+        }),
+      ]),
+      patch_issues: expect.arrayContaining([
+        expect.objectContaining({
+          code: "patch_path_not_allowed",
+          path: ["manual_review_notes"],
+        }),
+      ]),
+      final_issues: [],
+    });
   });
 
   it.each(["sync", "async"] as const)(
