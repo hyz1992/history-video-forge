@@ -1,0 +1,72 @@
+{
+  "planning_mode": "global",
+  "art_bible": {
+    "era_style": "脱敏时代视觉风格",
+    "visual_tone": "克制、清晰、统一的叙事画面",
+    "characters": [],
+    "locations": [],
+    "props": [
+      {
+        "prop_id": "prop_001",
+        "label": "道具一",
+        "role": "场景线索",
+        "visual_description": "深色木质小型道具"
+      },
+      {
+        "prop_id": "prop_002",
+        "label": "道具二",
+        "role": "行动线索",
+        "visual_description": "带有磨损痕迹的金属道具"
+      },
+      {
+        "prop_id": "prop_003",
+        "label": "道具三",
+        "role": "身份线索",
+        "visual_description": "朴素织物制成的随身物件"
+      },
+      {
+        "prop_id": "prop_004",
+        "label": "道具四",
+        "role": "空间线索",
+        "visual_description": "低饱和陶制器物"
+      },
+      {
+        "prop_id": "prop_005",
+        "label": "道具五",
+        "role": "冲突线索",
+        "visual_description": "边缘有使用痕迹的纸质物件"
+      },
+      {
+        "prop_id": "prop_006",
+        "label": "道具六",
+        "role": "转折线索",
+        "visual_description": "纹理清晰的石制小件"
+      },
+      {
+        "prop_id": "prop_007",
+        "label": "道具七",
+        "role": "环境线索",
+        "visual_description": "表面暗哑的铜制器物"
+      },
+      {
+        "prop_id": "prop_008",
+        "label": "道具八",
+        "role": "结尾线索",
+        "visual_description": "造型简洁的封存容器"
+      }
+    ],
+    "global_prompt_prefix": "脱敏历史题材画面，统一时代质感",
+    "global_negative_prompts": [],
+    "consistency_notes": []
+  },
+  "visual_budget": {
+    "default_path": "image_still_plus_render_motion_cue"
+  },
+  "downgrade_policy": {
+    "video_to_still_fallback": true
+  },
+  "global_audio_strategy": {
+    "bgm_policy": "保持克制"
+  },
+  "manual_review_notes": []
+}
