@@ -338,6 +338,57 @@ describe("applyGlobalPlanningStructuralPatch", () => {
   });
 
   it.each([
+    {
+      name: "parent before child",
+      patches: [
+        { path: ["a"], value: "父级覆盖" },
+        { path: ["a", "b"], value: "子级覆盖" },
+      ],
+    },
+    {
+      name: "child before parent",
+      patches: [
+        { path: ["a", "b"], value: "子级覆盖" },
+        { path: ["a"], value: "父级覆盖" },
+      ],
+    },
+  ])("rejects overlapping paths regardless of order: $name", ({ patches }) => {
+    const draft = { a: { b: "原始值", c: "保留值" } };
+    const original = structuredClone(draft);
+    const patch = GlobalPlanningStructuralPatch.parse({
+      patch_type: "global_planning_structural_patch",
+      patches,
+    });
+
+    expect(() =>
+      applyGlobalPlanningStructuralPatch({
+        draft,
+        patch,
+        allowedRepairPaths: [["a"], ["a", "b"]],
+      }),
+    ).toThrow("global_planning_structural_patch_overlapping_paths");
+    expect(draft).toEqual(original);
+  });
+
+  it("allows sibling paths to be applied together", () => {
+    const patch = GlobalPlanningStructuralPatch.parse({
+      patch_type: "global_planning_structural_patch",
+      patches: [
+        { path: ["a", "b"], value: "新值一" },
+        { path: ["a", "c"], value: "新值二" },
+      ],
+    });
+
+    expect(
+      applyGlobalPlanningStructuralPatch({
+        draft: { a: { b: "原值一", c: "原值二" } },
+        patch,
+        allowedRepairPaths: [["a", "b"], ["a", "c"]],
+      }),
+    ).toEqual({ a: { b: "新值一", c: "新值二" } });
+  });
+
+  it.each([
     { name: "negative array index", path: ["items", -1] },
     { name: "out-of-bounds array index", path: ["items", 1] },
     { name: "string key on array", path: ["items", "0"] },

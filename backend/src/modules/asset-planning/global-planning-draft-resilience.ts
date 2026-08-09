@@ -74,6 +74,16 @@ function pathsEqual(left: StructuralPath, right: StructuralPath): boolean {
   );
 }
 
+function isStrictPathPrefix(
+  prefix: StructuralPath,
+  candidate: StructuralPath,
+): boolean {
+  return (
+    prefix.length < candidate.length &&
+    prefix.every((segment, index) => segment === candidate[index])
+  );
+}
+
 function pathIdentity(path: StructuralPath): string {
   return JSON.stringify(path);
 }
@@ -134,13 +144,6 @@ export function applyGlobalPlanningStructuralPatch(input: {
   const patch = GlobalPlanningStructuralPatch.parse(input.patch);
   const seenPaths = new Set<string>();
 
-  if (
-    patch.patches.length > 1 &&
-    patch.patches.some(({ path }) => path.length === 0)
-  ) {
-    throw new Error("root patch cannot be combined with other patches");
-  }
-
   for (const entry of patch.patches) {
     if (
       !input.allowedRepairPaths.some((allowedPath) =>
@@ -156,6 +159,23 @@ export function applyGlobalPlanningStructuralPatch(input: {
     }
     seenPaths.add(identity);
     validatePatchTarget(input.draft, entry.path);
+  }
+
+  for (let leftIndex = 0; leftIndex < patch.patches.length; leftIndex += 1) {
+    for (
+      let rightIndex = leftIndex + 1;
+      rightIndex < patch.patches.length;
+      rightIndex += 1
+    ) {
+      const leftPath = patch.patches[leftIndex].path;
+      const rightPath = patch.patches[rightIndex].path;
+      if (
+        isStrictPathPrefix(leftPath, rightPath) ||
+        isStrictPathPrefix(rightPath, leftPath)
+      ) {
+        throw new Error("global_planning_structural_patch_overlapping_paths");
+      }
+    }
   }
 
   let result = cloneStructure(input.draft);
