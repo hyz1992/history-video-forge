@@ -301,6 +301,47 @@ describe("topic recommendation graph", () => {
     );
   });
 
+  it("keeps a single candidate object returned for a filtered recommendation", async () => {
+    const db = createDbClient();
+    const invokeStructuredPrompt = vi.fn(async () =>
+      createRuntimeCandidate("甘露之变", "唐文宗除宦失败的关键决策"),
+    );
+
+    const result = await runTopicRecommendationGraph(
+      {
+        db,
+        input: {
+          canonicalName: "唐至宋辽夏金历史事件推荐",
+          summary: "只保留满足结构化筛选的事件。",
+          coreConflict: "唐文宗试图铲除宦官势力。",
+          strongScene: "唐文宗等待除宦计划发动。",
+          sourceHint: "《资治通鉴》",
+          recentUsageHint: "近期未出现同 event_id",
+          topic_filter: {
+            event_domain: "political_power",
+            central_actor_type: "court_elite",
+            storytelling_lens: "key_decision",
+          },
+          topic_filter_fingerprint: "0123456789abcdef",
+        },
+        projectId: "project-filtered-single-object",
+      },
+      {
+        invokeStructuredPrompt,
+      },
+    );
+
+    expect(invokeStructuredPrompt).toHaveBeenCalledTimes(1);
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]).toMatchObject({
+      title: "甘露之变",
+      one_line_angle: "唐文宗除宦失败的关键决策",
+    });
+    expect(result.trace.nodes[0]).toMatchObject({
+      output_ref: "topic-candidate-list:1",
+    });
+  });
+
   it("returns explicit diagnostics when a single repair pass still cannot fill the preferred four candidate slots", async () => {
     const db = createDbClient();
     const invokeStructuredPrompt = vi

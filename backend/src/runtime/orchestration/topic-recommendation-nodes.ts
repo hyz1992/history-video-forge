@@ -155,6 +155,10 @@ function normalizeTopicCandidateOutputs(rawOutput: unknown): unknown[] {
     return outputRecord.topic_candidates;
   }
 
+  if (TopicCandidateCard.safeParse(outputRecord).success) {
+    return [outputRecord];
+  }
+
   for (const value of Object.values(outputRecord)) {
     if (isCandidateRecordArray(value)) {
       return value;
