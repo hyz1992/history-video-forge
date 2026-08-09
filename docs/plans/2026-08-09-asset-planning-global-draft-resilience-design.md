@@ -20,7 +20,8 @@
 ## 实施结果（2026-08-10）
 
 - Task 1-4 的实现提交范围为 `09d0302` 至 `0c2d8ed`：已接入确定性归一化、精确路径结构补丁、单次 global repair、provider attempt 上限、成功/失败诊断持久化及 harness 汇总。
-- 完整 non-live 验证矩阵通过：12 个测试文件、252 项测试全部通过；Prompt Registry 治理、后端 typecheck 与 backend build 均为 exit 0。
+- 完整 non-live 验证矩阵通过：12 个测试文件、257 项测试全部通过；Prompt Registry 治理、后端 typecheck 与 backend build 均为 exit 0。
+- 最终审查整改已纳入 `7f6f60a`：初次解析与 repair 后解析统一复用 `parseLlmOutput`，保留 nested `unrecognized_keys` 的确定性剥离兼容；结构事件 callback 接收 `structuredClone` 快照，隔离调用方对 payload 的 mutation。整改后复审结论为 Approved。
 - 最终共享 `ProjectArtBible` / `AssetPlan` schema 未修改；实现未写入生成态 `storage/`，真实故障 fixture 已脱敏。
 - 本轮未执行真实 provider、故障项目重跑或五轮 live check，因此只能声明 non-live 实施完成，不能声明真实项目已恢复。
 

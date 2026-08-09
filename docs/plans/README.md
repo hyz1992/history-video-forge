@@ -8,7 +8,7 @@
 
 截至 2026-08-10：
 
-- Asset Planning global draft 结构韧性修复已完成 non-live 实施，等待显式 live 验收：正式设计见 [Asset Planning Global Draft 结构韧性设计](./2026-08-09-asset-planning-global-draft-resilience-design.md)，执行记录见 [Asset Planning Global Draft 结构韧性实施计划](./2026-08-10-asset-planning-global-draft-resilience-implementation-plan.md)。稳定边界为确定性 notes 空数组归一化、一次精确路径 structural repair、provider 最多 2 attempts、成功/失败诊断持久化；最终共享 schema 保持严格，不扩展到其他阶段。完整矩阵 12 个测试文件、252 项测试通过，Prompt 治理、后端 typecheck 与 build 通过；真实项目与五轮 live check 尚未执行。
+- Asset Planning global draft 结构韧性修复已完成 non-live 实施，等待显式 live 验收：正式设计见 [Asset Planning Global Draft 结构韧性设计](./2026-08-09-asset-planning-global-draft-resilience-design.md)，执行记录见 [Asset Planning Global Draft 结构韧性实施计划](./2026-08-10-asset-planning-global-draft-resilience-implementation-plan.md)。稳定边界为确定性 notes 空数组归一化、一次精确路径 structural repair、provider 最多 2 attempts、成功/失败诊断持久化；最终审查又统一了初次/repair 后兼容解析，并用事件 payload 快照隔离 callback mutation。最终共享 schema 保持严格，不扩展到其他阶段。完整矩阵 12 个测试文件、257 项测试通过，Prompt 治理、后端 typecheck 与 build 通过；真实项目与五轮 live check 尚未执行。
 
 - V2 第一个大子项目 S1（用户系统、管理员权限与项目隔离）已完成全部 S1-1 到 S1-8 并通过端到端验收。
 - S1 实施记录见 `AGENTS.md` 和提交历史；V2 S1 设计草案（见下方"2026-07-13 V2 设计草案索引"）已完成使命，相关代码实现已稳定。
@@ -128,7 +128,7 @@ S2-4「推荐选题筛选条件扩充」已完成实现并通过专项回归、�
 - 真实项目 `121f51e3-4f82-4686-aed7-d57a99dafe73` 的 global planning 响应中，8 个 `art_bible.props` 全部漏写 `consistency_notes`，触发 `asset_global_plan_schema_invalid`；该问题发生在 chunk 规划之前，不属于既有 chunk repair 覆盖范围。
 - 本设计只收口 asset planning global draft：先用确定性结构归一化补齐无需语义判断的 notes 类空数组；严格解析仍失败时，最多调用一次 global structural repair；最终共享 `ProjectArtBible` / `AssetPlan` schema 保持严格。
 - 本设计不扩展成跨 generation service 通用框架，不修改 topic / script / storyboard 语义，不用本地规则生成语义内容，也不恢复无限重试。
-- 截至 2026-08-10，non-live 实施已经完成：真实 8-prop 脱敏 fixture 可零 repair 归一化，非机械错误只允许一次精确路径 repair，失败分类、paths、数据库诊断和 trace 已落地；12 个测试文件、252 项测试及 Prompt 治理、后端 typecheck/build 通过。真实 provider、故障项目重跑与五轮 live check 仍待显式执行。
+- 截至 2026-08-10，non-live 实施已经完成：真实 8-prop 脱敏 fixture 可零 repair 归一化，非机械错误只允许一次精确路径 repair，失败分类、paths、数据库诊断和 trace 已落地；最终审查补强 nested `unrecognized_keys` 的统一兼容解析与 callback payload mutation 隔离；12 个测试文件、257 项测试及 Prompt 治理、后端 typecheck/build 通过。真实 provider、故障项目重跑与五轮 live check 仍待显式执行。
 
 ## 2026-05-15 Assets 阶段设计
 

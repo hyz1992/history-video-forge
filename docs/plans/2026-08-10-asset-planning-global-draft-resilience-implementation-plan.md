@@ -445,7 +445,8 @@ git commit -m "记录资产规划全局结构韧性实施结果"
 ## 实施与验证结果（2026-08-10）
 
 - Task 1-4 实现提交：`09d0302` 至 `0c2d8ed`。原计划红灯均有本次 agent 执行日志：Task 1 模块缺失；Task 2 pure/runtime 断言失败及后续必填值、重叠路径红灯；Task 3 新回归、typed path 红灯；Task 4 trace/API/harness/normalization total/unsupported payload 红灯。两次补强 characterization 首次即绿，不宣称为红灯。
-- 完整 Vitest 矩阵：exit 0，12 个测试文件、252 项测试全部通过。
+- 完整 Vitest 矩阵：exit 0，12 个测试文件、257 项测试全部通过。
+- Final review 先以 5 项 RED 锁定 nested `unrecognized_keys` 兼容解析和 callback payload mutation 隔离，再由 `7f6f60a` 统一初次/repair 后 `parseLlmOutput` 路径并为事件传递 `structuredClone` 快照；完整矩阵复跑通过，最终复审结论为 Approved。
 - `npm run harness:check-prompts`：exit 0；19 个 Prompt 语言与重复检查通过、19/19 changelog 通过、12/12 fixture contracts 通过、19 个 Prompt 无 active drift（1 个新 Prompt 因仅 1 个历史提交跳过 drift，1 个已知历史 drift 按既有规则跳过）。
 - `npm run typecheck:backend`：exit 0。
 - `npm run build:backend`：exit 0。
