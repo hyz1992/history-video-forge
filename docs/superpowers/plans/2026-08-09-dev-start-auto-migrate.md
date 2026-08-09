@@ -18,21 +18,21 @@
 - Modify: `dev_start.py`
 - Create: `tests/dev_start_test.py`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 覆盖以下行为：`parse_args([]).prepare_db` 为真；`--skip-db-prepare` 为假；旧 `--prepare-db` 仍为真；准备命令包含 `prisma migrate deploy` 且不包含 `migrate dev`。
 
-- [ ] **Step 2: 运行红灯**
+- [x] **Step 2: 运行红灯**
 
 Run: `python -m unittest tests/dev_start_test.py -v`
 
 Expected: FAIL，因为当前默认不准备数据库，且命令仍是 `migrate dev`。
 
-- [ ] **Step 3: 写最小实现**
+- [x] **Step 3: 写最小实现**
 
 调整 argparse 默认值和参数，修改 `build_prepare_commands`，同步脚本说明与日志。
 
-- [ ] **Step 4: 运行绿灯和静态检查**
+- [x] **Step 4: 运行绿灯和静态检查**
 
 Run: `python -m unittest tests/dev_start_test.py -v`
 
@@ -40,10 +40,10 @@ Run: `python -m py_compile dev_start.py tests/dev_start_test.py`
 
 Expected: PASS。
 
-- [ ] **Step 5: 真实启动验证**
+- [x] **Step 5: 真实启动验证**
 
 运行默认数据库准备，启动服务并检查 `/api/healthcheck`，随后停止本次验证进程。
 
-- [ ] **Step 6: 提交**
+- [x] **Step 6: 提交**
 
 Commit: `fix(dev): 启动前默认应用数据库迁移`
