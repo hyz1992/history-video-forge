@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import type { ProjectTopicCandidateState } from "../../app.js";
@@ -16,6 +17,44 @@ function buildShortId(projectId: string): string {
   const compact = projectId.replace(/[^a-zA-Z0-9]/g, "").toLowerCase();
   const shortBody = (compact.slice(0, 8) || "00000000").padEnd(8, "0");
   return `p_${shortBody}`;
+}
+
+/** Resolve the on-disk storage root for a project.
+ *
+ *  历史原因导致磁盘上可能同时存在两种目录布局的残留：
+ *  - 日期格式（project-storage.ts 现行写入路径）：
+ *    storage/projects/<YYYY-MM-DD>/<displayName> [<shortId>]/
+ *  - UUID 格式（早期/部分环境写入路径）：storage/projects/<storageKey>/
+ *
+ *  仅靠目录是否存在不足以判定真实文件所在（可能有空壳残留目录），
+ *  这里用 project.json 作为"完整内容"标志：哪个目录有 project.json 就用哪个。
+ *  两者都没有时（新项目首次 hydrate，目录尚未创建）默认返回日期格式。 */
+function resolveProjectStorageRoot(input: {
+  storageRoot: string;
+  createdAt: Date;
+  displayName: string;
+  shortId: string;
+  storageKey: string;
+}): string {
+  const dateLayout = join(
+    input.storageRoot,
+    buildProjectStorageRelativeDir({
+      createdAt: input.createdAt,
+      displayName: input.displayName,
+      shortId: input.shortId,
+    }),
+  );
+  if (existsSync(join(dateLayout, "project.json"))) return dateLayout;
+
+  const uuidLayout = join(input.storageRoot, "storage", "projects", input.storageKey);
+  if (existsSync(join(uuidLayout, "project.json"))) return uuidLayout;
+
+  // 两种布局都没有 project.json：新项目首次 hydrate 目录尚未创建，
+  // 或极旧项目从未写过 project.json。按日期格式目录是否存在兜底，
+  // 都不存在则返回日期格式（project-storage.ts 后续会按这个布局创建）。
+  if (existsSync(dateLayout)) return dateLayout;
+  if (existsSync(uuidLayout)) return uuidLayout;
+  return dateLayout;
 }
 
 export async function hydrateFirstAggregates(
@@ -54,16 +93,15 @@ export async function hydrateFirstAggregates(
       storageShortId: buildShortId(row.id),
       // Reconstruct the on-disk storage root from createdAt + displayName +
       // shortId, matching the layout used by project-storage.ts when files
-      // are written. The DB storageKey is the project UUID (used for
-      // uniqueness), NOT the on-disk directory name.
-      storageRootDir: join(
-        options.storageRoot,
-        buildProjectStorageRelativeDir({
-          createdAt: row.createdAt,
-          displayName: row.storageDisplayName || row.name,
-          shortId: buildShortId(row.id),
-        }),
-      ),
+      // 探测磁盘上的真实存储目录（日期格式优先，UUID 格式回退），
+      // 兼容历史遗留的混合布局。
+      storageRootDir: resolveProjectStorageRoot({
+        storageRoot: options.storageRoot,
+        createdAt: row.createdAt,
+        displayName: row.storageDisplayName || row.name,
+        shortId: buildShortId(row.id),
+        storageKey: row.storageKey,
+      }),
       storageRenameLocked: row.storageRenameLocked, createdAt: row.createdAt, updatedAt: row.updatedAt,
     };
     db.projects.set(record.id, record);
