@@ -120,6 +120,13 @@ S2-4「推荐选题筛选条件扩充」已完成实现并通过专项回归、�
 - 本轮计划只处理 asset planning 结构稳定性：空 `prompt_draft`、缺失 `risk_notes`、缺少 `video_clip` 静态兜底、供应商内容过滤安全重试。
 - 该计划不引入 semantic reviewer，不实现 assets / compose / 前端，不修改 topic / script / storyboard 语义链路。
 
+## 2026-08-09 Asset Planning Global Draft 结构韧性设计
+
+- 新增 [Asset Planning Global Draft 结构韧性设计](./2026-08-09-asset-planning-global-draft-resilience-design.md)。
+- 真实项目 `121f51e3-4f82-4686-aed7-d57a99dafe73` 的 global planning 响应中，8 个 `art_bible.props` 全部漏写 `consistency_notes`，触发 `asset_global_plan_schema_invalid`；该问题发生在 chunk 规划之前，不属于既有 chunk repair 覆盖范围。
+- 本设计只收口 asset planning global draft：先用确定性结构归一化补齐无需语义判断的 notes 类空数组；严格解析仍失败时，最多调用一次 global structural repair；最终共享 `ProjectArtBible` / `AssetPlan` schema 保持严格。
+- 本设计不扩展成跨 generation service 通用框架，不修改 topic / script / storyboard 语义，不用本地规则生成语义内容，也不恢复无限重试。
+
 ## 2026-05-15 Assets 阶段设计
 
 - 新增 [Assets Stage Design](./2026-05-15-assets-stage-design.md)。
