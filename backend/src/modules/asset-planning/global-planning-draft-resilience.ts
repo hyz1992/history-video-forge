@@ -59,7 +59,7 @@ function normalizeCollectionNotes(
     insertArrayDefault(
       entry,
       "consistency_notes",
-      `$.art_bible.${collectionKey}[${index}].consistency_notes`,
+      `art_bible.${collectionKey}[${index}].consistency_notes`,
       actions,
     );
   });
@@ -92,7 +92,7 @@ export function normalizeGlobalPlanningDraftStructure(raw: unknown): {
     delete value[key];
     actions.push({
       type: "forbidden_chunk_key_removed",
-      path: `$.${key}`,
+      path: key,
       key,
     });
   }
@@ -100,7 +100,7 @@ export function normalizeGlobalPlanningDraftStructure(raw: unknown): {
   insertArrayDefault(
     value,
     "manual_review_notes",
-    "$.manual_review_notes",
+    "manual_review_notes",
     actions,
   );
 
@@ -109,13 +109,13 @@ export function normalizeGlobalPlanningDraftStructure(raw: unknown): {
     insertArrayDefault(
       artBible,
       "global_negative_prompts",
-      "$.art_bible.global_negative_prompts",
+      "art_bible.global_negative_prompts",
       actions,
     );
     insertArrayDefault(
       artBible,
       "consistency_notes",
-      "$.art_bible.consistency_notes",
+      "art_bible.consistency_notes",
       actions,
     );
     normalizeCollectionNotes(artBible, "characters", actions);

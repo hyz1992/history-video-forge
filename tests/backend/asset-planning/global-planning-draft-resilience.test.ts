@@ -27,7 +27,7 @@ describe("normalizeGlobalPlanningDraftStructure", () => {
     expect(result.actions).toEqual(
       Array.from({ length: 8 }, (_, index) => ({
         type: "default_inserted",
-        path: `$.art_bible.props[${index}].consistency_notes`,
+        path: `art_bible.props[${index}].consistency_notes`,
       })),
     );
     expect(missingPropNotesFixture).toEqual(original);
@@ -66,12 +66,12 @@ describe("normalizeGlobalPlanningDraftStructure", () => {
       },
     });
     expect(result.actions).toEqual([
-      { type: "default_inserted", path: "$.art_bible.characters[0].consistency_notes" },
-      { type: "default_inserted", path: "$.art_bible.consistency_notes" },
-      { type: "default_inserted", path: "$.art_bible.global_negative_prompts" },
-      { type: "default_inserted", path: "$.art_bible.locations[0].consistency_notes" },
-      { type: "default_inserted", path: "$.art_bible.props[0].consistency_notes" },
-      { type: "default_inserted", path: "$.manual_review_notes" },
+      { type: "default_inserted", path: "art_bible.characters[0].consistency_notes" },
+      { type: "default_inserted", path: "art_bible.consistency_notes" },
+      { type: "default_inserted", path: "art_bible.global_negative_prompts" },
+      { type: "default_inserted", path: "art_bible.locations[0].consistency_notes" },
+      { type: "default_inserted", path: "art_bible.props[0].consistency_notes" },
+      { type: "default_inserted", path: "manual_review_notes" },
     ]);
   });
 
@@ -144,22 +144,22 @@ describe("normalizeGlobalPlanningDraftStructure", () => {
     expect(result.actions).toEqual([
       {
         type: "forbidden_chunk_key_removed",
-        path: "$.budget_notes",
+        path: "budget_notes",
         key: "budget_notes",
       },
       {
         type: "forbidden_chunk_key_removed",
-        path: "$.chunk_id",
+        path: "chunk_id",
         key: "chunk_id",
       },
       {
         type: "forbidden_chunk_key_removed",
-        path: "$.dependencies",
+        path: "dependencies",
         key: "dependencies",
       },
       {
         type: "forbidden_chunk_key_removed",
-        path: "$.tasks",
+        path: "tasks",
         key: "tasks",
       },
     ]);
