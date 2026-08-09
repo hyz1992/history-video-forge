@@ -16,6 +16,79 @@ import type { LlmInteractionLogEntry } from "../../../backend/src/runtime/llm/in
 import { ScriptDraftPackage } from "../../../shared/src/index.js";
 
 describe("provider hardening", () => {
+  it("caps global structural repair at two retryable attempts and one non-retryable attempt", async () => {
+    const prompt = createPromptRegistry().getPrompt(
+      "asset-planning.global-structural-repair",
+    );
+    const retryableInvoke = vi.fn(async () => {
+      throw new Error("503 Service Unavailable");
+    });
+    const retryableEntries: LlmInteractionLogEntry[] = [];
+    const retryableProvider = createOpenAiCompatibleProvider({
+      model: "glm-5.2",
+      baseUrl: "https://llm.example.test/v1",
+      apiKey: "test-key",
+      maxAttempts: 5,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+      invokeApi: retryableInvoke,
+    });
+
+    await expect(
+      retryableProvider.invokeStructuredPrompt({
+        prompt,
+        input: { normalized_draft: {} },
+        operationName: "asset-planning.global-structural-repair",
+        options: { maxAttempts: 2 },
+        interactionLogWriter: {
+          write(entry) {
+            retryableEntries.push(entry);
+          },
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "service_unavailable",
+      attemptCount: 2,
+    });
+    expect(retryableInvoke).toHaveBeenCalledTimes(2);
+    expect(retryableEntries[0]?.effectiveRequest?.maxAttempts).toBe(2);
+    expect(retryableEntries[0]?.attempts).toHaveLength(2);
+
+    const nonRetryableInvoke = vi.fn(async () => {
+      throw new Error("400 Bad Request");
+    });
+    const nonRetryableEntries: LlmInteractionLogEntry[] = [];
+    const nonRetryableProvider = createOpenAiCompatibleProvider({
+      model: "glm-5.2",
+      baseUrl: "https://llm.example.test/v1",
+      apiKey: "test-key",
+      maxAttempts: 5,
+      baseDelayMs: 0,
+      maxDelayMs: 0,
+      invokeApi: nonRetryableInvoke,
+    });
+
+    await expect(
+      nonRetryableProvider.invokeStructuredPrompt({
+        prompt,
+        input: { normalized_draft: {} },
+        operationName: "asset-planning.global-structural-repair",
+        options: { maxAttempts: 2 },
+        interactionLogWriter: {
+          write(entry) {
+            nonRetryableEntries.push(entry);
+          },
+        },
+      }),
+    ).rejects.toMatchObject({
+      code: "invalid_request",
+      attemptCount: 1,
+    });
+    expect(nonRetryableInvoke).toHaveBeenCalledTimes(1);
+    expect(nonRetryableEntries[0]?.effectiveRequest?.maxAttempts).toBe(2);
+    expect(nonRetryableEntries[0]?.attempts).toHaveLength(1);
+  });
+
   it("routes structured profile to structured endpoint while preserving main profile", () => {
     const config = {
       provider: "openai" as const,

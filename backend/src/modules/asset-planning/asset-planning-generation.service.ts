@@ -9,6 +9,7 @@ import {
 } from "../../../../shared/src/index.js";
 import { env, getValidatedRuntimeEnv } from "../../config/env.js";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
+import { ExternalServiceError } from "../../runtime/llm/external-errors.js";
 import type { LlmInteractionLogWriter } from "../../runtime/llm/interaction-log.js";
 import { parseLlmOutput, LlmOutputError } from "../../runtime/llm/llm-output-error.js";
 import { createTierAwareProviderFromEnv } from "../../runtime/llm/tier-aware-provider-factory.js";
@@ -17,9 +18,17 @@ import type {
   StructuredPromptProvider,
 } from "../../runtime/llm/provider-contract.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
+import {
+  applyGlobalPlanningStructuralPatch,
+  GlobalPlanningStructuralPatch,
+  normalizeGlobalPlanningDraftStructure,
+  type GlobalDraftNormalizationAction,
+} from "./global-planning-draft-resilience.js";
 
 const PROMPT_ID = "asset-planning.planner";
 const STRUCTURAL_REPAIR_PROMPT_ID = "asset-planning.asset-structural-repair";
+const GLOBAL_STRUCTURAL_REPAIR_PROMPT_ID =
+  "asset-planning.global-structural-repair";
 
 export interface AssetPlanningTopicBoundaryContext {
   title: string;
@@ -42,6 +51,27 @@ export interface AssetPlanGenerationProgress {
   total_segments: number;
 }
 
+export type GlobalDraftStructureEvent =
+  | {
+      type: "normalization_applied";
+      actions: GlobalDraftNormalizationAction[];
+    }
+  | {
+      type: "repair_started";
+      issues: GlobalPlanningSchemaIssue[];
+    }
+  | { type: "repair_succeeded" }
+  | {
+      type: "repair_failed";
+      initial_issues: unknown[];
+      patch_issues: unknown[];
+      final_issues: unknown[];
+    }
+  | {
+      type: "repair_provider_failed";
+      error_code: string;
+    };
+
 export interface GenerateAssetPlanInput {
   sourceStoryboardRecordId: string;
   sourceScriptRecordId: string;
@@ -54,6 +84,9 @@ export interface GenerateAssetPlanInput {
   chunkSize?: number;
   chunkConcurrency?: number;
   onProgress?: (progress: AssetPlanGenerationProgress) => void | Promise<void>;
+  onGlobalStructureEvent?: (
+    event: GlobalDraftStructureEvent,
+  ) => void | Promise<void>;
   regenerationContext?: {
     reason: "asset_planning_local_validation_regen_once";
     errors: string[];
@@ -174,6 +207,27 @@ type SegmentChunkPlanningDraft = z.infer<typeof SegmentChunkPlanningDraft>;
 type ChunkTaskDraft = z.infer<typeof ChunkTaskDraft>;
 type SegmentChunkStructuralPatch = z.infer<typeof SegmentChunkStructuralPatch>;
 
+interface GlobalPlanningSchemaIssue {
+  code: string;
+  path: Array<string | number>;
+  message: string;
+}
+
+export interface GlobalPlanningStructuralRepairInput {
+  normalized_draft: unknown;
+  schema_issues: GlobalPlanningSchemaIssue[];
+  allowed_repair_paths: Array<Array<string | number>>;
+  repair_context: {
+    topic_boundary_context?: AssetPlanningTopicBoundaryContext;
+    storyboard_visual_projection?: Array<{
+      segment_id: string;
+      narrative_role: string;
+      scene_description: string;
+      visual_elements: string[];
+    }>;
+  };
+}
+
 interface LocalTaskMapping {
   chunkIndex: number;
   localTaskId: string;
@@ -193,14 +247,11 @@ export async function generateAssetPlan(
     promptInput: buildGlobalPromptInput(input, audioSkeleton.tts_plan),
     interactionLogWriter: input.interactionLogWriter,
   });
-  if (hasObjectKey(rawGlobalDraft, "tasks")) {
-    throw new Error("asset_planning_global_draft_must_not_include_tasks");
-  }
-  const globalDraft = parseLlmOutput(
-    GlobalPlanningDraft,
+  const globalDraft = await parseOrRepairGlobalDraft({
+    gateway,
+    input,
     rawGlobalDraft,
-    "asset_global_plan_schema_invalid",
-  );
+  });
 
   const chunks = chunkStoryboardSegments(input.storyboard, input.chunkSize);
   const totalChunks = chunks.length;
@@ -245,6 +296,197 @@ export async function generateAssetPlan(
     mergeAssetPlan(input, audioSkeleton, globalDraft, chunkDrafts),
     "asset_plan_schema_invalid",
   );
+}
+
+function pathsEqual(
+  left: Array<string | number>,
+  right: Array<string | number>,
+) {
+  return (
+    left.length === right.length &&
+    left.every((segment, index) => segment === right[index])
+  );
+}
+
+function needsBroadRepairContext(path: Array<string | number>) {
+  return [
+    [],
+    ["art_bible"],
+    ["art_bible", "characters"],
+    ["art_bible", "locations"],
+    ["art_bible", "props"],
+  ].some((candidate) => pathsEqual(path, candidate));
+}
+
+export function buildGlobalPlanningStructuralRepairInput(input: {
+  normalizedDraft: unknown;
+  issues: GlobalPlanningSchemaIssue[];
+  topicBoundaryContext: AssetPlanningTopicBoundaryContext;
+  storyboard: StoryboardPlan;
+}): GlobalPlanningStructuralRepairInput {
+  const schemaIssues = input.issues.map((issue) => ({
+    code: issue.code,
+    path: [...issue.path],
+    message: issue.message,
+  }));
+  const allowedRepairPaths = Array.from(
+    new Map(
+      schemaIssues.map((issue) => [JSON.stringify(issue.path), [...issue.path]]),
+    ).values(),
+  );
+  const includeContext = allowedRepairPaths.some(needsBroadRepairContext);
+
+  return {
+    normalized_draft: input.normalizedDraft,
+    schema_issues: schemaIssues,
+    allowed_repair_paths: allowedRepairPaths,
+    repair_context: includeContext
+      ? {
+          topic_boundary_context: input.topicBoundaryContext,
+          storyboard_visual_projection: input.storyboard.segments.map(
+            (segment) => ({
+              segment_id: segment.segment_id,
+              narrative_role: segment.narrative_role,
+              scene_description: segment.scene_description,
+              visual_elements: segment.visual_elements,
+            }),
+          ),
+        }
+      : {},
+  };
+}
+
+async function emitGlobalStructureEventSafely(
+  callback: GenerateAssetPlanInput["onGlobalStructureEvent"],
+  event: GlobalDraftStructureEvent,
+): Promise<void> {
+  if (!callback) return;
+  try {
+    await callback(event);
+  } catch (error) {
+    console.warn(
+      `[asset-planning] global_structure_event_callback_failed:${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+}
+
+function toGlobalPlanningSchemaIssues(
+  issues: z.ZodIssue[],
+): GlobalPlanningSchemaIssue[] {
+  return issues.map((issue) => ({
+    code: issue.code,
+    path: [...issue.path],
+    message: issue.message,
+  }));
+}
+
+function serializeGlobalRepairFailure(error: unknown): unknown[] {
+  if (error instanceof z.ZodError) return error.issues;
+  if (error instanceof Error) {
+    return [{ name: error.name, message: error.message }];
+  }
+  return [{ message: String(error) }];
+}
+
+async function parseOrRepairGlobalDraft(input: {
+  gateway: LlmGateway;
+  input: GenerateAssetPlanInput;
+  rawGlobalDraft: unknown;
+}): Promise<GlobalPlanningDraft> {
+  const normalized = normalizeGlobalPlanningDraftStructure(
+    input.rawGlobalDraft,
+  );
+  if (normalized.actions.length > 0) {
+    await emitGlobalStructureEventSafely(input.input.onGlobalStructureEvent, {
+      type: "normalization_applied",
+      actions: normalized.actions,
+    });
+  }
+
+  const initialResult = GlobalPlanningDraft.safeParse(normalized.value);
+  if (initialResult.success) return initialResult.data;
+
+  const initialIssues = toGlobalPlanningSchemaIssues(initialResult.error.issues);
+  await emitGlobalStructureEventSafely(input.input.onGlobalStructureEvent, {
+    type: "repair_started",
+    issues: initialIssues,
+  });
+  const repairInput = buildGlobalPlanningStructuralRepairInput({
+    normalizedDraft: normalized.value,
+    issues: initialIssues,
+    topicBoundaryContext: input.input.topicBoundaryContext,
+    storyboard: input.input.storyboard,
+  });
+
+  let rawPatch: unknown;
+  try {
+    rawPatch = await input.gateway.invokeStructuredPrompt<unknown>({
+      promptId: GLOBAL_STRUCTURAL_REPAIR_PROMPT_ID,
+      operationName: GLOBAL_STRUCTURAL_REPAIR_PROMPT_ID,
+      input: repairInput,
+      options: { maxAttempts: 2 },
+      interactionLogWriter: createTimedInteractionLogWriter(
+        input.input.interactionLogWriter,
+      ),
+    });
+  } catch (error) {
+    if (error instanceof ExternalServiceError) {
+      await emitGlobalStructureEventSafely(input.input.onGlobalStructureEvent, {
+        type: "repair_provider_failed",
+        error_code: error.code,
+      });
+    }
+    throw error;
+  }
+
+  let patchIssues: unknown[] = [];
+  let finalIssues: unknown[] = [];
+  try {
+    const patch = GlobalPlanningStructuralPatch.parse(rawPatch);
+    const patchedDraft = applyGlobalPlanningStructuralPatch({
+      draft: normalized.value,
+      patch,
+      allowedRepairPaths: repairInput.allowed_repair_paths,
+    });
+    const normalizedPatchedDraft = normalizeGlobalPlanningDraftStructure(
+      patchedDraft,
+    );
+    if (normalizedPatchedDraft.actions.length > 0) {
+      await emitGlobalStructureEventSafely(input.input.onGlobalStructureEvent, {
+        type: "normalization_applied",
+        actions: normalizedPatchedDraft.actions,
+      });
+    }
+    const finalResult = GlobalPlanningDraft.safeParse(
+      normalizedPatchedDraft.value,
+    );
+    if (!finalResult.success) {
+      finalIssues = toGlobalPlanningSchemaIssues(finalResult.error.issues);
+      throw finalResult.error;
+    }
+    await emitGlobalStructureEventSafely(input.input.onGlobalStructureEvent, {
+      type: "repair_succeeded",
+    });
+    return finalResult.data;
+  } catch (error) {
+    if (finalIssues.length === 0) {
+      patchIssues = serializeGlobalRepairFailure(error);
+    }
+    const failure = {
+      initial_issues: initialIssues,
+      patch_issues: patchIssues,
+      final_issues: finalIssues,
+    };
+    await emitGlobalStructureEventSafely(input.input.onGlobalStructureEvent, {
+      type: "repair_failed",
+      ...failure,
+    });
+    throw new LlmOutputError("asset_global_plan_structural_repair_failed", {
+      cause: failure,
+    });
+  }
 }
 
 async function invokePlanningPromptWithSafetyRetry(input: {
@@ -307,10 +549,6 @@ function isProviderContentFilterError(error: unknown): boolean {
       /content[_ -]?filter/i.test(codeText) ||
       /content[_ -]?filter/i.test(message))
   );
-}
-
-function hasObjectKey(value: unknown, key: string) {
-  return Boolean(value && typeof value === "object" && key in value);
 }
 
 function createTimedInteractionLogWriter(

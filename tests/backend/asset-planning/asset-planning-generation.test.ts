@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 
 import { AssetPlan, type ScriptDraftPackage, type StoryboardPlan } from "../../../shared/src/index.js";
 import type {
@@ -6,7 +7,12 @@ import type {
   LlmGateway,
 } from "../../../backend/src/runtime/llm/llm-gateway.js";
 import { LlmOutputError } from "../../../backend/src/runtime/llm/llm-output-error.js";
-import { generateAssetPlan } from "../../../backend/src/modules/asset-planning/asset-planning-generation.service.js";
+import { ExternalServiceError } from "../../../backend/src/runtime/llm/external-errors.js";
+import {
+  buildGlobalPlanningStructuralRepairInput,
+  generateAssetPlan,
+  type GlobalDraftStructureEvent,
+} from "../../../backend/src/modules/asset-planning/asset-planning-generation.service.js";
 
 const scriptText =
   "楚王第一次压场时，晏子没有退。他站在殿前，看着那扇为羞辱他而开的矮门。第二次，楚王又说齐国没人，才派这样的人来。晏子没有急着争辩，只把规矩一句句摆回去。最后，楚国拿齐人盗窃来羞辱齐国。晏子用橘生淮南则为橘，把第三次压场顶回楚王脸上。";
@@ -162,6 +168,16 @@ const validGlobalPlanningDraft = {
   },
   manual_review_notes: [],
 };
+
+const missingPropNotesFixture = JSON.parse(
+  readFileSync(
+    new URL(
+      "../../fixtures/asset-planning/global-draft-props-missing-consistency-notes.json",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+) as Record<string, unknown>;
 
 function validChunkPlanningDraftFor(
   segmentIds: string[],
@@ -341,6 +357,397 @@ async function waitUntil(predicate: () => boolean) {
 }
 
 describe("generateAssetPlan", () => {
+  it("normalizes the real eight-prop missing-notes fixture without global repair", async () => {
+    const events: GlobalDraftStructureEvent[] = [];
+    const { gateway, calls } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.planner") {
+        const promptInput = options.input as {
+          planning_mode: string;
+          chunk?: { segment_ids: string[] };
+        };
+        if (promptInput.planning_mode === "global") {
+          return missingPropNotesFixture;
+        }
+        return validChunkPlanningDraftFor(promptInput.chunk?.segment_ids ?? []);
+      }
+      throw new Error(`unexpected_prompt:${options.promptId}`);
+    });
+
+    const plan = await generateAssetPlan({
+      ...makeInput(gateway),
+      onGlobalStructureEvent: (event) => events.push(event),
+    });
+
+    expect(AssetPlan.parse(plan)).toEqual(plan);
+    expect(calls).toHaveLength(3);
+    expect(calls.map((call) => call.promptId)).not.toContain(
+      "asset-planning.global-structural-repair",
+    );
+    expect(events).toEqual([
+      {
+        type: "normalization_applied",
+        actions: Array.from({ length: 8 }, (_, index) => ({
+          type: "default_inserted",
+          path: `art_bible.props[${index}].consistency_notes`,
+        })),
+      },
+    ]);
+  });
+
+  it("removes exact global chunk keys while preserving passthrough fields", async () => {
+    const events: GlobalDraftStructureEvent[] = [];
+    const pollutedDraft = {
+      ...validGlobalPlanningDraft,
+      tasks: [{ ignored: true }],
+      dependencies: [],
+      chunk_id: "wrong-mode",
+      budget_notes: [],
+      future_global_field: { keep: true },
+    };
+    const { gateway, calls } = makeGateway((options) => {
+      const promptInput = options.input as {
+        planning_mode?: string;
+        chunk?: { segment_ids: string[] };
+      };
+      if (promptInput.planning_mode === "global") return pollutedDraft;
+      return validChunkPlanningDraftFor(promptInput.chunk?.segment_ids ?? []);
+    });
+
+    const plan = await generateAssetPlan({
+      ...makeInput(gateway),
+      onGlobalStructureEvent: (event) => events.push(event),
+    });
+
+    expect(plan.tasks.length).toBeGreaterThan(0);
+    expect(calls).toHaveLength(3);
+    expect(calls.map((call) => call.promptId)).not.toContain(
+      "asset-planning.global-structural-repair",
+    );
+    expect(events).toEqual([
+      {
+        type: "normalization_applied",
+        actions: [
+          {
+            type: "forbidden_chunk_key_removed",
+            path: "budget_notes",
+            key: "budget_notes",
+          },
+          {
+            type: "forbidden_chunk_key_removed",
+            path: "chunk_id",
+            key: "chunk_id",
+          },
+          {
+            type: "forbidden_chunk_key_removed",
+            path: "dependencies",
+            key: "dependencies",
+          },
+          {
+            type: "forbidden_chunk_key_removed",
+            path: "tasks",
+            key: "tasks",
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("builds a compact leaf repair input and invokes global repair exactly once", async () => {
+    const invalidDraft = structuredClone(missingPropNotesFixture) as {
+      art_bible: { props: Array<Record<string, unknown>> };
+    };
+    invalidDraft.art_bible.props[0] = {
+      ...invalidDraft.art_bible.props[0],
+      consistency_notes: [],
+    };
+    delete invalidDraft.art_bible.props[0].visual_description;
+    const events: GlobalDraftStructureEvent[] = [];
+    const { gateway, calls } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.global-structural-repair") {
+        return {
+          patch_type: "global_planning_structural_patch",
+          patches: [
+            {
+              path: ["art_bible", "props", 0, "visual_description"],
+              value: "修复后的深色木质小型道具",
+            },
+          ],
+        };
+      }
+      const promptInput = options.input as {
+        planning_mode?: string;
+        chunk?: { segment_ids: string[] };
+      };
+      if (promptInput.planning_mode === "global") return invalidDraft;
+      return validChunkPlanningDraftFor(promptInput.chunk?.segment_ids ?? []);
+    });
+
+    const plan = await generateAssetPlan({
+      ...makeInput(gateway),
+      onGlobalStructureEvent: (event) => events.push(event),
+    });
+
+    expect(AssetPlan.parse(plan)).toEqual(plan);
+    const repairCalls = calls.filter(
+      (call) => call.promptId === "asset-planning.global-structural-repair",
+    );
+    expect(repairCalls).toHaveLength(1);
+    expect(repairCalls[0]).toMatchObject({
+      operationName: "asset-planning.global-structural-repair",
+      options: { maxAttempts: 2 },
+    });
+    expect(repairCalls[0].input).toEqual({
+      normalized_draft: expect.any(Object),
+      schema_issues: [
+        expect.objectContaining({
+          path: ["art_bible", "props", 0, "visual_description"],
+        }),
+      ],
+      allowed_repair_paths: [
+        ["art_bible", "props", 0, "visual_description"],
+      ],
+      repair_context: {},
+    });
+    expect(Object.keys(repairCalls[0].input as object).sort()).toEqual([
+      "allowed_repair_paths",
+      "normalized_draft",
+      "repair_context",
+      "schema_issues",
+    ]);
+    for (const forbidden of [
+      "raw_draft",
+      "script_text",
+      "tts_plan",
+      "storyboard",
+      "global_prompt_input",
+      "safety_retry_context",
+    ]) {
+      expect(repairCalls[0].input).not.toHaveProperty(forbidden);
+    }
+    expect(events.map((event) => event.type)).toEqual([
+      "normalization_applied",
+      "repair_started",
+      "repair_succeeded",
+    ]);
+  });
+
+  it("adds compact context only for exact root, art bible, or collection issues", () => {
+    const normalizedDraft = { planning_mode: "global" };
+    const leaf = buildGlobalPlanningStructuralRepairInput({
+      normalizedDraft,
+      issues: [
+        {
+          code: "invalid_type",
+          path: ["art_bible", "props", 0, "visual_description"],
+          message: "Required",
+        },
+      ],
+      topicBoundaryContext: baseTopicBoundaryContext,
+      storyboard: baseStoryboardPlan,
+    });
+    expect(leaf.repair_context).toEqual({});
+
+    for (const path of [
+      [],
+      ["art_bible"],
+      ["art_bible", "characters"],
+      ["art_bible", "locations"],
+      ["art_bible", "props"],
+    ] as Array<Array<string | number>>) {
+      const contextual = buildGlobalPlanningStructuralRepairInput({
+        normalizedDraft,
+        issues: [{ code: "invalid_type", path, message: "Required" }],
+        topicBoundaryContext: baseTopicBoundaryContext,
+        storyboard: baseStoryboardPlan,
+      });
+      expect(contextual.repair_context.topic_boundary_context).toEqual(
+        baseTopicBoundaryContext,
+      );
+      expect(contextual.repair_context.storyboard_visual_projection?.[0]).toEqual({
+        segment_id: "sb_001",
+        narrative_role: "opening",
+        scene_description: "楚国殿前，矮门和众人的目光形成压迫。",
+        visual_elements: ["楚王", "晏子", "矮门"],
+      });
+      expect(contextual.repair_context.storyboard_visual_projection?.[0]).not.toHaveProperty(
+        "script_excerpt",
+      );
+    }
+  });
+
+  it.each([
+    {
+      name: "extra path",
+      patch: {
+        patch_type: "global_planning_structural_patch",
+        patches: [{ path: ["manual_review_notes"], value: [] }],
+      },
+    },
+    {
+      name: "parent overwrite",
+      patch: {
+        patch_type: "global_planning_structural_patch",
+        patches: [{ path: ["art_bible", "props", 0], value: {} }],
+      },
+    },
+    {
+      name: "duplicate path",
+      patch: {
+        patch_type: "global_planning_structural_patch",
+        patches: [
+          {
+            path: ["art_bible", "props", 0, "visual_description"],
+            value: "a",
+          },
+          {
+            path: ["art_bible", "props", 0, "visual_description"],
+            value: "b",
+          },
+        ],
+      },
+    },
+    {
+      name: "still invalid",
+      patch: {
+        patch_type: "global_planning_structural_patch",
+        patches: [
+          {
+            path: ["art_bible", "props", 0, "visual_description"],
+            value: "",
+          },
+        ],
+      },
+    },
+  ])("fails one bounded repair with separated issue buckets: $name", async ({ patch }) => {
+    const invalidDraft = structuredClone(missingPropNotesFixture) as {
+      art_bible: { props: Array<Record<string, unknown>> };
+    };
+    invalidDraft.art_bible.props[0] = {
+      ...invalidDraft.art_bible.props[0],
+      consistency_notes: [],
+    };
+    delete invalidDraft.art_bible.props[0].visual_description;
+    const events: GlobalDraftStructureEvent[] = [];
+    const { gateway, calls } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.global-structural-repair") {
+        return patch;
+      }
+      return invalidDraft;
+    });
+
+    let caught: unknown;
+    try {
+      await generateAssetPlan({
+        ...makeInput(gateway),
+        onGlobalStructureEvent: (event) => events.push(event),
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(LlmOutputError);
+    expect(caught).toMatchObject({
+      code: "asset_global_plan_structural_repair_failed",
+      cause: {
+        initial_issues: expect.any(Array),
+        patch_issues: expect.any(Array),
+        final_issues: expect.any(Array),
+      },
+    });
+    expect(
+      calls.filter(
+        (call) => call.promptId === "asset-planning.global-structural-repair",
+      ),
+    ).toHaveLength(1);
+    const failed = events.find((event) => event.type === "repair_failed");
+    expect(failed).toEqual({
+      type: "repair_failed",
+      ...((caught as LlmOutputError).cause as Record<string, unknown>),
+    });
+  });
+
+  it("rethrows a global repair provider error and reports its code", async () => {
+    const invalidDraft = { planning_mode: "global" };
+    const providerError = new ExternalServiceError({
+      provider: "llm",
+      operation: "asset-planning.global-structural-repair",
+      retryable: false,
+      code: "configuration",
+      userMessage: "配置错误",
+      debugMessage: "bad key",
+    });
+    const events: GlobalDraftStructureEvent[] = [];
+    const { gateway, calls } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.global-structural-repair") {
+        throw providerError;
+      }
+      return invalidDraft;
+    });
+
+    await expect(
+      generateAssetPlan({
+        ...makeInput(gateway),
+        onGlobalStructureEvent: (event) => events.push(event),
+      }),
+    ).rejects.toBe(providerError);
+    expect(
+      calls.filter(
+        (call) => call.promptId === "asset-planning.global-structural-repair",
+      ),
+    ).toHaveLength(1);
+    expect(events.at(-1)).toEqual({
+      type: "repair_provider_failed",
+      error_code: "configuration",
+    });
+  });
+
+  it.each(["sync", "async"] as const)(
+    "isolates %s global structure callback failures from generation",
+    async (mode) => {
+      const baseline = makeGateway((options) => {
+        const promptInput = options.input as {
+          planning_mode?: string;
+          chunk?: { segment_ids: string[] };
+        };
+        if (promptInput.planning_mode === "global") {
+          return missingPropNotesFixture;
+        }
+        return validChunkPlanningDraftFor(promptInput.chunk?.segment_ids ?? []);
+      });
+      const noisy = makeGateway((options) => {
+        const promptInput = options.input as {
+          planning_mode?: string;
+          chunk?: { segment_ids: string[] };
+        };
+        if (promptInput.planning_mode === "global") {
+          return missingPropNotesFixture;
+        }
+        return validChunkPlanningDraftFor(promptInput.chunk?.segment_ids ?? []);
+      });
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+      try {
+        const expected = await generateAssetPlan(makeInput(baseline.gateway));
+        const actual = await generateAssetPlan({
+          ...makeInput(noisy.gateway),
+          onGlobalStructureEvent:
+            mode === "sync"
+              ? () => {
+                  throw new Error("sync callback failure");
+                }
+              : async () => {
+                  throw new Error("async callback failure");
+                },
+        });
+
+        expect(actual).toEqual(expected);
+        expect(noisy.calls).toHaveLength(baseline.calls.length);
+        expect(warn).toHaveBeenCalledTimes(1);
+      } finally {
+        warn.mockRestore();
+      }
+    },
+  );
   it("builds local audio skeleton and invokes chunked planning prompts", async () => {
     const { gateway, calls } = makeGateway();
 
@@ -593,23 +1000,6 @@ describe("generateAssetPlan", () => {
     });
     expect(calls[1]?.input).not.toHaveProperty("storyboard_outline");
     expect(calls[1]?.input).not.toHaveProperty("script_context");
-  });
-
-  it("rejects global drafts that include asset tasks", async () => {
-    const { gateway } = makeGateway((options) => {
-      const input = options.input as { planning_mode: string };
-      if (input.planning_mode === "global") {
-        return {
-          ...validGlobalPlanningDraft,
-          tasks: [],
-        };
-      }
-      return validChunkPlanningDraftFor(["sb_001"]);
-    });
-
-    await expect(generateAssetPlan(makeInput(gateway))).rejects.toThrow(
-      /asset_planning_global_draft_must_not_include_tasks/u,
-    );
   });
 
   it("rejects chunk drafts that include tts or subtitle tasks", async () => {
@@ -1168,31 +1558,25 @@ describe("generateAssetPlan", () => {
     }
   });
 
-  it("wraps GlobalPlanningDraft ZodError into LlmOutputError with asset_global_plan_schema_invalid", async () => {
-    // global draft 缺少 art_bible（normalize 无法补），schema 必报错，
-    // 应被包装成 LlmOutputError 而非裸 ZodError 冒泡。
+  it("wraps an unrepaired global draft in the stable structural repair error", async () => {
     const { gateway } = makeGateway((options) => {
-      const input = options.input as { planning_mode: string };
-      if (input.planning_mode === "global") {
-        return { planning_mode: "global" };
+      if (options.promptId === "asset-planning.global-structural-repair") {
+        return {
+          patch_type: "global_planning_structural_patch",
+          patches: [{ path: ["art_bible"], value: {} }],
+        };
       }
-      return validChunkPlanningDraftFor(["sb_001"]);
+      return { planning_mode: "global" };
     });
 
     await expect(generateAssetPlan(makeInput(gateway))).rejects.toMatchObject({
-      code: "asset_global_plan_schema_invalid",
+      code: "asset_global_plan_structural_repair_failed",
+      cause: {
+        initial_issues: expect.any(Array),
+        patch_issues: [],
+        final_issues: expect.any(Array),
+      },
     });
-
-    try {
-      await generateAssetPlan(makeInput(gateway));
-      throw new Error("should have thrown");
-    } catch (error) {
-      expect(error).toBeInstanceOf(LlmOutputError);
-      expect((error as LlmOutputError).code).toBe(
-        "asset_global_plan_schema_invalid",
-      );
-      expect(Array.isArray((error as LlmOutputError).cause)).toBe(true);
-    }
   });
 
   it("wraps chunk draft ZodError into asset_chunk_plan_schema_invalid when structural repair also fails", async () => {
