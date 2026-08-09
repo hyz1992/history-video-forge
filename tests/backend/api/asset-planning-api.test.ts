@@ -770,6 +770,9 @@ describe("asset planning api", () => {
   });
 
   it("preserves the external error boundary while persisting provider repair failure diagnostics", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "asset-plan-api-provider-failure-trace-"));
+    storageRoots.push(root);
+    process.env.STORAGE_ROOT_DIR = root;
     const app = buildApp();
     const prepared = await prepareActiveStoryboard(app);
     generateAssetPlanMock.mockImplementationOnce(async (input) => {
@@ -793,6 +796,10 @@ describe("asset planning api", () => {
     const diagnostics = failed.runtimeDiagnosticsJson as { checks: Array<{ code: string }> };
     expect(diagnostics.checks).toContainEqual({ code: "asset_global_structural_repair_provider_failed", level: "error" });
     expect(diagnostics.checks.map((check) => check.code)).not.toContain("asset_global_structural_repair_failed");
+    const profile = getProjectStorageProfile(prepared.project)!;
+    const trace = readFileSync(resolve(root, profile.trace_dir, "trace.md"), "utf8");
+    expect(trace).toContain('"type": "repair_provider_failed"');
+    expect(trace).toContain('"error_code": "llm_service_unavailable"');
   });
 
   it("does not fail generation when the diagnostic trace callback cannot write", async () => {
