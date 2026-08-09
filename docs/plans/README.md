@@ -6,7 +6,9 @@
 
 ## 当前状态
 
-截至 2026-07-17：
+截至 2026-08-10：
+
+- Asset Planning global draft 结构韧性修复已进入实施：正式设计见 [Asset Planning Global Draft 结构韧性设计](./2026-08-09-asset-planning-global-draft-resilience-design.md)，执行入口见 [Asset Planning Global Draft 结构韧性实施计划](./2026-08-10-asset-planning-global-draft-resilience-implementation-plan.md)。本轮只处理 global LLM 边界的确定性归一化、一次受限结构修复及失败诊断持久化，不放宽最终共享 schema，也不扩展到其他阶段。
 
 - V2 第一个大子项目 S1（用户系统、管理员权限与项目隔离）已完成全部 S1-1 到 S1-8 并通过端到端验收。
 - S1 实施记录见 `AGENTS.md` 和提交历史；V2 S1 设计草案（见下方"2026-07-13 V2 设计草案索引"）已完成使命，相关代码实现已稳定。

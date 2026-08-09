@@ -2,7 +2,7 @@
 
 - 日期：2026-08-09
 - 自审修订日期：2026-08-10
-- 状态：设计已确认，等待 implementation plan
+- 状态：设计已确认，implementation plan 已建立，等待实施
 - 范围：仅 `asset planning` 的 global draft 结构稳定性
 - 关联真实故障项目：`121f51e3-4f82-4686-aed7-d57a99dafe73`
 - 关联错误码：`asset_global_plan_schema_invalid`
@@ -457,7 +457,9 @@ type GlobalDraftStructureEvent =
     }
   | {
       type: "repair_failed";
-      issues: unknown[];
+      initial_issues: unknown[];
+      patch_issues: unknown[];
+      final_issues: unknown[];
     }
   | {
       type: "repair_provider_failed";
@@ -465,7 +467,9 @@ type GlobalDraftStructureEvent =
     };
 ```
 
-回调只报告事件，不参与控制流，不允许改变 draft。
+回调只报告事件，不参与控制流，不允许改变 draft。generation service 必须通过安全 emitter 调用回调：回调同步抛错或 Promise reject 时只记录 warning，不得让诊断、trace 或磁盘写入失败改变 normalize / repair / chunk 的业务结果。
+
+`repair_failed` 必须把首次 schema issues、patch 解析或路径校验 issues、应用后最终 schema issues 分栏携带；不存在的阶段使用空数组，禁止压平成无法区分来源的一组 issues。
 
 为保持 harness 和纯 generation 单测调用简单，TypeScript 输入字段可以是 optional；但生产 `runAssetPlanningGeneration` 必须提供该回调，API/run service 测试必须锁定这一点。未提供回调不得改变生成结果。
 
