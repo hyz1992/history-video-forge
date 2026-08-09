@@ -258,11 +258,38 @@ describe("asset planning five round quality check", () => {
       {
         requireRealEnv: false,
         planGenerator: async ({
+          round,
           sourceStoryboardRecordId,
           sourceScriptRecordId,
           sourceTopicPackageId,
           interactionLogWriter,
+          onGlobalStructureEvent,
         }) => {
+          if (round === 1) {
+            await onGlobalStructureEvent?.({
+              type: "normalization_applied",
+              actions: [
+                { type: "default_inserted", path: "art_bible.props[0].consistency_notes" },
+                { type: "default_inserted", path: "tasks[0].risk_notes" },
+              ],
+            });
+            await onGlobalStructureEvent?.({ type: "repair_started", issues: [] });
+            await onGlobalStructureEvent?.({ type: "repair_succeeded" });
+          } else if (round === 2) {
+            await onGlobalStructureEvent?.({ type: "repair_started", issues: [] });
+            await onGlobalStructureEvent?.({
+              type: "repair_failed",
+              initial_issues: [],
+              patch_issues: [],
+              final_issues: [],
+            });
+          } else if (round === 3) {
+            await onGlobalStructureEvent?.({ type: "repair_started", issues: [] });
+            await onGlobalStructureEvent?.({
+              type: "repair_provider_failed",
+              error_code: "llm_service_unavailable",
+            });
+          }
           interactionLogWriter?.write({
             generatedAt: "2026-05-11T00:00:00.000Z",
             provider: "test-provider",
@@ -375,6 +402,13 @@ describe("asset planning five round quality check", () => {
       total_rounds: 5,
       passed_rounds: 5,
       failed_rounds: 0,
+      global_structure_normalization_event_count: 1,
+      global_structure_normalization_used_rounds: 1,
+      global_structure_normalized_path_count: 2,
+      global_structural_repair_used_rounds: 3,
+      global_structural_repair_succeeded_rounds: 1,
+      global_structural_repair_failed_rounds: 1,
+      global_structural_repair_provider_failed_rounds: 1,
     });
 
     const summary = JSON.parse(
@@ -392,6 +426,12 @@ describe("asset planning five round quality check", () => {
         repair_wall_time_ms: number;
         regen_wall_time_ms: number;
         llm_call_count: number;
+        global_structure_normalization_event_count: number;
+        global_structure_normalized_path_count: number;
+        global_structural_repair_used: boolean;
+        global_structural_repair_succeeded: boolean;
+        global_structural_repair_failed: boolean;
+        global_structural_repair_provider_failed: boolean;
       }>;
     };
     expect(summary.total_rounds).toBe(5);
@@ -410,6 +450,22 @@ describe("asset planning five round quality check", () => {
       repair_wall_time_ms: 25,
       regen_wall_time_ms: 0,
       llm_call_count: 4,
+      global_structure_normalization_event_count: 1,
+      global_structure_normalized_path_count: 2,
+      global_structural_repair_used: true,
+      global_structural_repair_succeeded: true,
+      global_structural_repair_failed: false,
+      global_structural_repair_provider_failed: false,
+    });
+    expect(summary.rounds[1]).toMatchObject({
+      global_structural_repair_used: true,
+      global_structural_repair_failed: true,
+      global_structural_repair_provider_failed: false,
+    });
+    expect(summary.rounds[2]).toMatchObject({
+      global_structural_repair_used: true,
+      global_structural_repair_failed: false,
+      global_structural_repair_provider_failed: true,
     });
     expect(summary.rounds[0]?.first_pass_wall_time_ms).toEqual(expect.any(Number));
     expect(existsSync(join(outputDir, "gemini-review-pack.md"))).toBe(true);
@@ -424,6 +480,12 @@ describe("asset planning five round quality check", () => {
     const runtimeDiagnostics = JSON.parse(
       readFileSync(join(outputDir, "round-1", "runtime-diagnostics.json"), "utf8"),
     ) as {
+      global_structure_observation?: {
+        global_structure_normalization_event_count: number;
+        global_structure_normalized_path_count: number;
+        global_structural_repair_used: boolean;
+        global_structural_repair_succeeded: boolean;
+      };
       llm_calls?: Array<{
         sequence: number;
         prompt_id: string;
@@ -436,6 +498,14 @@ describe("asset planning five round quality check", () => {
         safety_retry_context_reason: string | null;
       }>;
     };
+    expect(runtimeDiagnostics.global_structure_observation).toEqual({
+      global_structure_normalization_event_count: 1,
+      global_structure_normalized_path_count: 2,
+      global_structural_repair_used: true,
+      global_structural_repair_succeeded: true,
+      global_structural_repair_failed: false,
+      global_structural_repair_provider_failed: false,
+    });
     expect(runtimeDiagnostics.llm_calls).toHaveLength(4);
     expect(runtimeDiagnostics.llm_calls?.slice(0, 2)).toEqual([
       expect.objectContaining({

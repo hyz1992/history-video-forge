@@ -17,7 +17,10 @@ import {
   type TraceLogWriter,
 } from "../../runtime/trace/project-storage.js";
 import { LlmOutputError } from "../../runtime/llm/llm-output-error.js";
-import { generateAssetPlan } from "./asset-planning-generation.service";
+import {
+  generateAssetPlan,
+  type GlobalDraftStructureEvent,
+} from "./asset-planning-generation.service";
 import { validateAssetPlan } from "./asset-planning-local-validator";
 import { repairAssetPlanStructure } from "./asset-planning-structural-repair.service";
 import { saveAssetPlanRecord } from "./asset-plan-record.repository";
@@ -157,20 +160,25 @@ function buildRuntimeDiagnostics(input: {
   regenerated: boolean;
   planStructuralRepairUsed: boolean;
   staleSourceDetected: boolean;
+  globalStructure?: ReturnType<typeof aggregateGlobalStructureEvents>;
+  globalStructureFailureCode?: string;
+  includeLocalValidation?: boolean;
 }) {
-  const checks = [
-    {
-      code:
-        input.validationDecision === "pass"
-          ? "asset_planning_local_validation_passed"
-          : "asset_planning_local_validation_failed",
-      level: input.validationDecision === "pass" ? "info" : "error",
-    },
-    ...input.validationErrors.map((error) => ({
-      code: error,
-      level: "error",
-    })),
-  ];
+  const checks = input.includeLocalValidation === false
+    ? []
+    : [
+        {
+          code:
+            input.validationDecision === "pass"
+              ? "asset_planning_local_validation_passed"
+              : "asset_planning_local_validation_failed",
+          level: input.validationDecision === "pass" ? "info" : "error",
+        },
+        ...input.validationErrors.map((error) => ({
+          code: error,
+          level: "error",
+        })),
+      ];
 
   if (input.regenerated) {
     checks.push({
@@ -193,7 +201,96 @@ function buildRuntimeDiagnostics(input: {
     });
   }
 
-  return { checks };
+  if (input.globalStructure?.global_structure_normalization_used) {
+    checks.push({
+      code: "asset_global_structure_normalization_used",
+      level: "warning",
+    });
+  }
+  if (input.globalStructure?.global_plan_mode_contamination_normalized) {
+    checks.push({
+      code: "asset_global_plan_mode_contamination_normalized",
+      level: "warning",
+    });
+  }
+  if (input.globalStructure?.global_structural_repair_used) {
+    checks.push({
+      code: "asset_global_structural_repair_used",
+      level: "warning",
+    });
+  }
+  if (input.globalStructureFailureCode) {
+    checks.push({
+      code: input.globalStructureFailureCode,
+      level: "error",
+    });
+  }
+
+  return {
+    checks: checks.filter(
+      (check, index, all) =>
+        all.findIndex((candidate) => candidate.code === check.code) === index,
+    ),
+  };
+}
+
+function aggregateGlobalStructureEvents(events: GlobalDraftStructureEvent[]) {
+  const normalizationActions = events.flatMap((event) =>
+    event.type === "normalization_applied" ? event.actions : [],
+  );
+  const normalizedPaths = [
+    ...new Set(
+      normalizationActions
+        .filter((action) => action.type === "default_inserted")
+        .map((action) => action.path),
+    ),
+  ].sort();
+  return {
+    global_structure_normalization_used: normalizationActions.length > 0,
+    global_structure_normalized_paths: normalizedPaths.slice(0, 50),
+    global_structure_normalized_path_count: normalizedPaths.length,
+    global_structure_paths_truncated: normalizedPaths.length > 50,
+    global_plan_mode_contamination_normalized: normalizationActions.some(
+      (action) => action.type === "forbidden_chunk_key_removed",
+    ),
+    global_structural_repair_used: events.some(
+      (event) => event.type === "repair_started",
+    ),
+  };
+}
+
+function formatIssuePath(path: Array<string | number>) {
+  if (path.length === 0) return "<root>";
+  return path.reduce<string>((formatted, segment) => {
+    if (typeof segment === "number") return `${formatted}[${segment}]`;
+    return formatted ? `${formatted}.${segment}` : segment;
+  }, "");
+}
+
+function extractIssuePaths(error: unknown) {
+  if (!(error instanceof LlmOutputError) || error.cause === undefined) return [];
+  const cause = error.cause as Record<string, unknown>;
+  const collections = [
+    cause.initial_issues,
+    cause.patch_issues,
+    cause.final_issues,
+  ];
+  const paths = collections.flatMap((collection) =>
+    Array.isArray(collection)
+      ? collection.flatMap((issue) => {
+          if (typeof issue !== "object" || issue === null) return [];
+          const path = (issue as Record<string, unknown>).path;
+          if (!Array.isArray(path)) return [];
+          if (
+            !path.every(
+              (part) => typeof part === "string" || typeof part === "number",
+            )
+          ) return [];
+          return [formatIssuePath(path as Array<string | number>)];
+        })
+      : [],
+  );
+  return [...new Set(paths)].sort().slice(0, 20);
 }
 
 function isStaleSource(input: {
@@ -278,6 +375,22 @@ export async function runAssetPlanningGeneration(
     runId,
   });
   const previousActiveAssetPlanRecordId = input.project.activeAssetPlanRecordId;
+  const globalStructureEvents: GlobalDraftStructureEvent[] = [];
+  const onGlobalStructureEvent = async (event: GlobalDraftStructureEvent) => {
+    globalStructureEvents.push(event);
+    try {
+      interactionLogWriter.writeDiagnostic(
+        "asset-planning.global-structure",
+        event,
+      );
+    } catch (traceError) {
+      const message =
+        traceError instanceof Error ? traceError.message : String(traceError);
+      console.warn(
+        `[asset-planning] failed to write global structure diagnostic: ${message}`,
+      );
+    }
+  };
   let generatingRecord:
     | Awaited<ReturnType<typeof saveAssetPlanRecord>>
     | undefined;
@@ -339,6 +452,7 @@ export async function runAssetPlanningGeneration(
     topicBoundaryContext,
     interactionLogWriter,
     onProgress,
+    onGlobalStructureEvent,
   });
   let localValidation = validateAssetPlan(
     buildValidationInput({
@@ -384,6 +498,7 @@ export async function runAssetPlanningGeneration(
       draft,
       topicBoundaryContext,
       interactionLogWriter,
+      onGlobalStructureEvent,
       regenerationContext: {
         reason: "asset_planning_local_validation_regen_once",
         errors: localValidation.errors,
@@ -415,10 +530,12 @@ export async function runAssetPlanningGeneration(
     regenerated,
     planStructuralRepairUsed,
     staleSourceDetected,
+    globalStructure: aggregateGlobalStructureEvents(globalStructureEvents),
   });
   const executionState = {
     regenerate_used: regenerated,
     plan_structural_repair_used: planStructuralRepairUsed,
+    ...aggregateGlobalStructureEvents(globalStructureEvents),
   };
 
   if (localValidation.decision !== "pass") {
@@ -489,6 +606,7 @@ export async function runAssetPlanningGeneration(
       regenerated,
       planStructuralRepairUsed,
       staleSourceDetected,
+      globalStructure: aggregateGlobalStructureEvents(globalStructureEvents),
     });
 
     return {
@@ -561,6 +679,31 @@ export async function runAssetPlanningGeneration(
   } catch (error) {
     const errorCode =
       error instanceof LlmOutputError ? error.code : "internal_server_error";
+    const globalStructure = aggregateGlobalStructureEvents(globalStructureEvents);
+    const globalStructureFailureCode = globalStructureEvents.some(
+      (event) => event.type === "repair_provider_failed",
+    )
+      ? "asset_global_structural_repair_provider_failed"
+      : globalStructureEvents.some((event) => event.type === "repair_failed") ||
+          errorCode === "asset_global_plan_structural_repair_failed"
+        ? "asset_global_structural_repair_failed"
+        : undefined;
+    const failureDiagnostics = buildRuntimeDiagnostics({
+      validationDecision: "pass",
+      validationErrors: [],
+      regenerated: false,
+      planStructuralRepairUsed: false,
+      staleSourceDetected: false,
+      globalStructure,
+      globalStructureFailureCode,
+      includeLocalValidation: false,
+    });
+    const failureExecutionState = {
+      ...globalStructure,
+      generating: false,
+      run_id: runId,
+      error: errorCode,
+    };
 
     // Clean up generating state — unexpected error
     if (generatingRecord) {
@@ -574,13 +717,10 @@ export async function runAssetPlanningGeneration(
         planJson: generatingRecord.planJson,
         validationResultJson: generatingRecord.validationResultJson,
         executionStateJson: {
-          ...(generatingRecord.executionStateJson ?? {}),
-          generating: false,
-          run_id: runId,
-          error: errorCode,
+          ...failureExecutionState,
         },
         graphTraceSummaryJson: generatingRecord.graphTraceSummaryJson,
-        runtimeDiagnosticsJson: generatingRecord.runtimeDiagnosticsJson,
+        runtimeDiagnosticsJson: failureDiagnostics,
         createdAt: generatingRecord.createdAt,
       }).catch((cleanupError) => {
         // 关键：清理失败时一定要记录，避免静默吞错让记录卡在 generating: true
@@ -608,6 +748,10 @@ export async function runAssetPlanningGeneration(
       body: {
         error: errorCode,
         message: error instanceof Error ? error.message : String(error),
+        repair_used: globalStructure.global_structural_repair_used,
+        ...(errorCode === "asset_global_plan_structural_repair_failed"
+          ? { issue_paths: extractIssuePaths(error) }
+          : {}),
       },
     };
   }

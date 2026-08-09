@@ -16,6 +16,7 @@ import {
   generateAssetPlan,
   type AssetPlanningTopicBoundaryContext,
   type GenerateAssetPlanInput,
+  type GlobalDraftStructureEvent,
 } from "../../../backend/src/modules/asset-planning/asset-planning-generation.service";
 import { validateAssetPlan } from "../../../backend/src/modules/asset-planning/asset-planning-local-validator";
 import {
@@ -67,6 +68,12 @@ export interface AssetPlanningFiveRoundRoundResult {
   chunk_structural_repair_used: boolean;
   plan_structural_repair_used: boolean;
   provider_safety_retry_used: boolean;
+  global_structure_normalization_event_count: number;
+  global_structure_normalized_path_count: number;
+  global_structural_repair_used: boolean;
+  global_structural_repair_succeeded: boolean;
+  global_structural_repair_failed: boolean;
+  global_structural_repair_provider_failed: boolean;
   first_pass_wall_time_ms: number;
   repair_wall_time_ms: number;
   regen_wall_time_ms: number;
@@ -86,6 +93,13 @@ export interface AssetPlanningFiveRoundQualityCheckResult
   extends AssetPlanningFiveRoundQualityCheckPlan {
   passed_rounds: number;
   failed_rounds: number;
+  global_structure_normalization_event_count: number;
+  global_structure_normalization_used_rounds: number;
+  global_structure_normalized_path_count: number;
+  global_structural_repair_used_rounds: number;
+  global_structural_repair_succeeded_rounds: number;
+  global_structural_repair_failed_rounds: number;
+  global_structural_repair_provider_failed_rounds: number;
   rounds: AssetPlanningFiveRoundRoundResult[];
 }
 
@@ -128,6 +142,42 @@ interface RepairChainMetrics {
   repair_wall_time_ms: number;
   regen_wall_time_ms: number;
   llm_call_count: number;
+}
+
+interface GlobalStructureObservation {
+  global_structure_normalization_event_count: number;
+  global_structure_normalized_path_count: number;
+  global_structural_repair_used: boolean;
+  global_structural_repair_succeeded: boolean;
+  global_structural_repair_failed: boolean;
+  global_structural_repair_provider_failed: boolean;
+}
+
+function aggregateGlobalStructureEvents(
+  events: GlobalDraftStructureEvent[],
+): GlobalStructureObservation {
+  const normalizationEvents = events.filter(
+    (event) => event.type === "normalization_applied",
+  );
+  const normalizedPaths = new Set(
+    normalizationEvents.flatMap((event) =>
+      event.type === "normalization_applied"
+        ? event.actions
+            .filter((action) => action.type === "default_inserted")
+            .map((action) => action.path)
+        : [],
+    ),
+  );
+  return {
+    global_structure_normalization_event_count: normalizationEvents.length,
+    global_structure_normalized_path_count: normalizedPaths.size,
+    global_structural_repair_used: events.some((event) => event.type === "repair_started"),
+    global_structural_repair_succeeded: events.some((event) => event.type === "repair_succeeded"),
+    global_structural_repair_failed: events.some((event) => event.type === "repair_failed"),
+    global_structural_repair_provider_failed: events.some(
+      (event) => event.type === "repair_provider_failed",
+    ),
+  };
 }
 
 export function buildAssetPlanningFiveRoundQualityCheckPlan(
@@ -214,6 +264,10 @@ export async function runAssetPlanningFiveRoundQualityCheck(
     }
 
     const llmCallDiagnostics: RuntimeLlmCallDiagnostics[] = [];
+    const globalStructureEvents: GlobalDraftStructureEvent[] = [];
+    const onGlobalStructureEvent = (event: GlobalDraftStructureEvent) => {
+      globalStructureEvents.push(event);
+    };
     const interactionLogWriter = createRoundInteractionLogWriter(
       roundOutputDir,
       llmCallDiagnostics,
@@ -234,6 +288,7 @@ export async function runAssetPlanningFiveRoundQualityCheck(
             draft: source.draft,
             topicBoundaryContext: source.topicBoundaryContext,
             interactionLogWriter,
+            onGlobalStructureEvent,
             chunkConcurrency: input.chunkConcurrency,
             round,
           }),
@@ -264,6 +319,7 @@ export async function runAssetPlanningFiveRoundQualityCheck(
               draft: source.draft,
               topicBoundaryContext: source.topicBoundaryContext,
               interactionLogWriter,
+              onGlobalStructureEvent,
               chunkConcurrency: input.chunkConcurrency,
               round,
               regenerationContext: {
@@ -314,6 +370,9 @@ export async function runAssetPlanningFiveRoundQualityCheck(
         firstPassWallTimeMs,
         regenWallTimeMs,
       });
+      const globalStructureObservation = aggregateGlobalStructureEvents(
+        globalStructureEvents,
+      );
       const runtimeDiagnostics = {
         llm_calls: llmCallDiagnostics,
         checks: [
@@ -321,6 +380,7 @@ export async function runAssetPlanningFiveRoundQualityCheck(
           ...buildRepairChainChecks(repairChainMetrics),
         ],
         repair_chain_metrics: repairChainMetrics,
+        global_structure_observation: globalStructureObservation,
       };
 
       writeJson(roundOutputDir, "asset-plan.json", assetPlan);
@@ -363,6 +423,7 @@ export async function runAssetPlanningFiveRoundQualityCheck(
         plan_structural_repair_used:
           repairChainMetrics.plan_structural_repair_used,
         provider_safety_retry_used: repairChainMetrics.provider_safety_retry_used,
+        ...globalStructureObservation,
         first_pass_wall_time_ms: repairChainMetrics.first_pass_wall_time_ms,
         repair_wall_time_ms: repairChainMetrics.repair_wall_time_ms,
         regen_wall_time_ms: repairChainMetrics.regen_wall_time_ms,
@@ -392,6 +453,9 @@ export async function runAssetPlanningFiveRoundQualityCheck(
         firstPassWallTimeMs,
         regenWallTimeMs,
       });
+      const globalStructureObservation = aggregateGlobalStructureEvents(
+        globalStructureEvents,
+      );
       const runtimeDiagnostics = {
         llm_calls: llmCallDiagnostics,
         checks: [
@@ -399,6 +463,7 @@ export async function runAssetPlanningFiveRoundQualityCheck(
           ...buildRepairChainChecks(repairChainMetrics),
         ],
         repair_chain_metrics: repairChainMetrics,
+        global_structure_observation: globalStructureObservation,
       };
       writeJson(roundOutputDir, "runtime-diagnostics.json", runtimeDiagnostics);
       writeRoundTrace(roundOutputDir, {
@@ -436,6 +501,7 @@ export async function runAssetPlanningFiveRoundQualityCheck(
         plan_structural_repair_used:
           repairChainMetrics.plan_structural_repair_used,
         provider_safety_retry_used: repairChainMetrics.provider_safety_retry_used,
+        ...globalStructureObservation,
         first_pass_wall_time_ms: repairChainMetrics.first_pass_wall_time_ms,
         repair_wall_time_ms: repairChainMetrics.repair_wall_time_ms,
         regen_wall_time_ms: repairChainMetrics.regen_wall_time_ms,
@@ -456,6 +522,29 @@ export async function runAssetPlanningFiveRoundQualityCheck(
     ...plan,
     passed_rounds: rounds.filter((round) => round.status === "round-ready").length,
     failed_rounds: rounds.filter((round) => round.status === "round-failed").length,
+    global_structure_normalization_event_count: rounds.reduce(
+      (sum, round) => sum + round.global_structure_normalization_event_count,
+      0,
+    ),
+    global_structure_normalization_used_rounds: rounds.filter(
+      (round) => round.global_structure_normalization_event_count > 0,
+    ).length,
+    global_structure_normalized_path_count: rounds.reduce(
+      (sum, round) => sum + round.global_structure_normalized_path_count,
+      0,
+    ),
+    global_structural_repair_used_rounds: rounds.filter(
+      (round) => round.global_structural_repair_used,
+    ).length,
+    global_structural_repair_succeeded_rounds: rounds.filter(
+      (round) => round.global_structural_repair_succeeded,
+    ).length,
+    global_structural_repair_failed_rounds: rounds.filter(
+      (round) => round.global_structural_repair_failed,
+    ).length,
+    global_structural_repair_provider_failed_rounds: rounds.filter(
+      (round) => round.global_structural_repair_provider_failed,
+    ).length,
     rounds,
   };
 
@@ -552,6 +641,7 @@ function readCompletedRoundIfAvailable(input: {
         repair_chain_metrics?: Partial<RepairChainMetrics>;
         llm_calls?: RuntimeLlmCallDiagnostics[];
         checks?: RuntimeDiagnosticCheck[];
+        global_structure_observation?: Partial<GlobalStructureObservation>;
       })
     : {};
   const repairChainMetrics =
@@ -563,6 +653,30 @@ function readCompletedRoundIfAvailable(input: {
       firstPassWallTimeMs: 0,
       regenWallTimeMs: 0,
     });
+  const globalStructureObservation: GlobalStructureObservation = {
+    global_structure_normalization_event_count:
+      runtimeDiagnostics.global_structure_observation
+        ?.global_structure_normalization_event_count ?? 0,
+    global_structure_normalized_path_count:
+      runtimeDiagnostics.global_structure_observation
+        ?.global_structure_normalized_path_count ?? 0,
+    global_structural_repair_used: Boolean(
+      runtimeDiagnostics.global_structure_observation
+        ?.global_structural_repair_used,
+    ),
+    global_structural_repair_succeeded: Boolean(
+      runtimeDiagnostics.global_structure_observation
+        ?.global_structural_repair_succeeded,
+    ),
+    global_structural_repair_failed: Boolean(
+      runtimeDiagnostics.global_structure_observation
+        ?.global_structural_repair_failed,
+    ),
+    global_structural_repair_provider_failed: Boolean(
+      runtimeDiagnostics.global_structure_observation
+        ?.global_structural_repair_provider_failed,
+    ),
+  };
   return {
     reviewMarkdown,
     roundResult: {
@@ -581,6 +695,7 @@ function readCompletedRoundIfAvailable(input: {
       provider_safety_retry_used: Boolean(
         repairChainMetrics.provider_safety_retry_used,
       ),
+      ...globalStructureObservation,
       first_pass_wall_time_ms: repairChainMetrics.first_pass_wall_time_ms ?? 0,
       repair_wall_time_ms: repairChainMetrics.repair_wall_time_ms ?? 0,
       regen_wall_time_ms: repairChainMetrics.regen_wall_time_ms ?? 0,

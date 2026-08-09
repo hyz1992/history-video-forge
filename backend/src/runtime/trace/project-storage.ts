@@ -301,6 +301,7 @@ function sanitizeSlug(value: string) {
  */
 export interface TraceLogWriter extends LlmInteractionLogWriter {
   writeError(message: string): void;
+  writeDiagnostic(label: string, payload: unknown): void;
 }
 
 export function createProjectTraceAppender(
@@ -376,6 +377,48 @@ export function createProjectTraceAppender(
       ].join("\n");
       appendFileSync(traceFilePath, lines, "utf8");
     },
+
+    writeDiagnostic(label: string, payload: unknown) {
+      if (!headerWritten) {
+        const header = [
+          "# StoryForge LLM Trace Log",
+          "",
+          `- **Project ID**: \`${projectId}\``,
+          "",
+          "---",
+          "",
+        ].join("\n");
+        writeFileSync(traceFilePath, header, "utf8");
+        headerWritten = true;
+      }
+
+      let serialized: string;
+      try {
+        serialized = JSON.stringify(payload, null, 2);
+      } catch (error) {
+        serialized = JSON.stringify({
+          serialization_error:
+            error instanceof Error ? error.message : String(error),
+        }, null, 2);
+      }
+      appendFileSync(
+        traceFilePath,
+        [
+          "## Service Diagnostic",
+          "",
+          `- **Label**: \`${label}\``,
+          `- **Time**: \`${new Date().toISOString()}\``,
+          "",
+          "```json",
+          serialized,
+          "```",
+          "",
+          "---",
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+    },
   };
 }
 
@@ -399,6 +442,9 @@ export function createCompositeInteractionLogWriter(input: {
     },
     writeError(message: string) {
       traceAppender.writeError(message);
+    },
+    writeDiagnostic(label: string, payload: unknown) {
+      traceAppender.writeDiagnostic(label, payload);
     },
   };
 }

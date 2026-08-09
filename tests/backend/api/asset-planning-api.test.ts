@@ -1,4 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const generateAssetPlanMock = vi.hoisted(() => vi.fn());
 const repairAssetPlanStructureMock = vi.hoisted(() => vi.fn());
@@ -16,11 +19,15 @@ import { getProjectSnapshot } from "../../../backend/src/modules/projects/projec
 import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository.js";
 import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/storyboard-record.repository.js";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
+import { ExternalServiceError } from "../../../backend/src/runtime/llm/external-errors.js";
+import { LlmOutputError } from "../../../backend/src/runtime/llm/llm-output-error.js";
+import { getProjectStorageProfile } from "../../../backend/src/runtime/trace/project-storage.js";
 import type { AssetPlan, StoryboardPlan } from "../../../shared/src/index.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 
 const scriptText =
   "Opening pressure. The envoy answers in public. The ending leaves a cost.";
+const storageRoots: string[] = [];
 
 function makeStoryboardPlan(input: {
   scriptRecordId: string;
@@ -320,6 +327,13 @@ describe("asset planning api", () => {
     }));
   });
 
+  afterEach(() => {
+    delete process.env.STORAGE_ROOT_DIR;
+    for (const root of storageRoots.splice(0)) {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("returns 404 when the project does not exist", async () => {
     const app = buildApp();
 
@@ -592,6 +606,225 @@ describe("asset planning api", () => {
         ]),
       },
     });
+  });
+
+  it("persists normalized global structure diagnostics and writes the event to trace", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "asset-plan-api-diagnostic-"));
+    storageRoots.push(root);
+    process.env.STORAGE_ROOT_DIR = root;
+    const app = buildApp();
+    const prepared = await prepareActiveStoryboard(app);
+    generateAssetPlanMock.mockImplementationOnce(async (input) => {
+      await input.onGlobalStructureEvent?.({
+        type: "normalization_applied",
+        actions: [
+          { type: "default_inserted", path: "tasks[2].risk_notes" },
+          { type: "default_inserted", path: "art_bible.props[0].consistency_notes" },
+          { type: "default_inserted", path: "tasks[2].risk_notes" },
+          { type: "forbidden_chunk_key_removed", path: "tasks", key: "tasks" },
+        ],
+      });
+      return makeAssetPlan({
+        storyboardRecordId: prepared.storyboardRecord.id,
+        scriptRecordId: prepared.scriptRecord.id,
+        topicPackageId: prepared.topicPackage.id,
+      });
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/asset-plan/generate`,
+      auth,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      execution_state: {
+        global_structure_normalization_used: true,
+        global_structure_normalized_paths: [
+          "art_bible.props[0].consistency_notes",
+          "tasks[2].risk_notes",
+        ],
+        global_structure_normalized_path_count: 2,
+        global_structure_paths_truncated: false,
+        global_structural_repair_used: false,
+      },
+      runtime_diagnostics: {
+        checks: expect.arrayContaining([
+          { code: "asset_global_structure_normalization_used", level: "warning" },
+          { code: "asset_global_plan_mode_contamination_normalized", level: "warning" },
+        ]),
+      },
+    });
+    const record = app.db.assetPlanRecords.get(response.json().asset_plan_record_id)!;
+    expect(record.executionStateJson).toMatchObject(response.json().execution_state);
+    const profile = getProjectStorageProfile(prepared.project)!;
+    const trace = readFileSync(resolve(root, profile.trace_dir, "trace.md"), "utf8");
+    expect(trace).toContain("asset-planning.global-structure");
+    expect(trace).toContain('"type": "normalization_applied"');
+    expect(trace).toContain('"actions"');
+  });
+
+  it("caps normalized paths at 50 while retaining the pre-truncation count", async () => {
+    const app = buildApp();
+    const prepared = await prepareActiveStoryboard(app);
+    generateAssetPlanMock.mockImplementationOnce(async (input) => {
+      await input.onGlobalStructureEvent?.({
+        type: "normalization_applied",
+        actions: Array.from({ length: 55 }, (_, index) => ({
+          type: "default_inserted",
+          path: `tasks[${String(index).padStart(2, "0")}].risk_notes`,
+        })),
+      });
+      return makeAssetPlan({
+        storyboardRecordId: prepared.storyboardRecord.id,
+        scriptRecordId: prepared.scriptRecord.id,
+        topicPackageId: prepared.topicPackage.id,
+      });
+    });
+
+    const response = await app.inject({ method: "POST", url: `/api/projects/${prepared.project.id}/asset-plan/generate`, auth });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().execution_state).toMatchObject({
+      global_structure_normalized_path_count: 55,
+      global_structure_paths_truncated: true,
+    });
+    expect(response.json().execution_state.global_structure_normalized_paths).toHaveLength(50);
+  });
+
+  it("persists repair success diagnostics and passes the callback to regeneration", async () => {
+    const app = buildApp();
+    const prepared = await prepareActiveStoryboard(app);
+    const invalid = makeAssetPlan({
+      storyboardRecordId: prepared.storyboardRecord.id,
+      scriptRecordId: prepared.scriptRecord.id,
+      sourceScriptOverride: "script_record_other",
+      topicPackageId: prepared.topicPackage.id,
+    });
+    const valid = makeAssetPlan({
+      storyboardRecordId: prepared.storyboardRecord.id,
+      scriptRecordId: prepared.scriptRecord.id,
+      topicPackageId: prepared.topicPackage.id,
+    });
+    generateAssetPlanMock
+      .mockImplementationOnce(async (input) => {
+        await input.onGlobalStructureEvent?.({ type: "repair_started", issues: [] });
+        await input.onGlobalStructureEvent?.({ type: "repair_succeeded" });
+        return invalid;
+      })
+      .mockImplementationOnce(async (input) => {
+        await input.onGlobalStructureEvent?.({ type: "repair_started", issues: [] });
+        await input.onGlobalStructureEvent?.({ type: "repair_succeeded" });
+        return valid;
+      });
+
+    const response = await app.inject({ method: "POST", url: `/api/projects/${prepared.project.id}/asset-plan/generate`, auth });
+    expect(response.statusCode).toBe(200);
+    expect(generateAssetPlanMock).toHaveBeenNthCalledWith(1, expect.objectContaining({ onGlobalStructureEvent: expect.any(Function) }));
+    expect(generateAssetPlanMock).toHaveBeenNthCalledWith(2, expect.objectContaining({ onGlobalStructureEvent: expect.any(Function) }));
+    expect(response.json()).toMatchObject({
+      execution_state: { global_structural_repair_used: true },
+      runtime_diagnostics: { checks: expect.arrayContaining([{ code: "asset_global_structural_repair_used", level: "warning" }]) },
+    });
+  });
+
+  it("returns bounded structural issue paths and persists schema repair failure diagnostics", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "asset-plan-api-failure-trace-"));
+    storageRoots.push(root);
+    process.env.STORAGE_ROOT_DIR = root;
+    const app = buildApp();
+    const prepared = await prepareActiveStoryboard(app);
+    const initial_issues = Array.from({ length: 22 }, (_, index) => ({ path: ["tasks", index, "risk_notes"], message: `secret-${index}`, value: "narrative" }));
+    const patch_issues = [{ path: ["art_bible", "props", 0, "consistency_notes"], message: "secret" }];
+    const final_issues = [{ path: [], message: "secret-root" }];
+    generateAssetPlanMock.mockImplementationOnce(async (input) => {
+      await input.onGlobalStructureEvent?.({ type: "repair_started", issues: initial_issues });
+      await input.onGlobalStructureEvent?.({ type: "repair_failed", initial_issues, patch_issues, final_issues });
+      throw new LlmOutputError("asset_global_plan_structural_repair_failed", {
+        cause: { initial_issues, patch_issues, final_issues },
+      });
+    });
+
+    const response = await app.inject({ method: "POST", url: `/api/projects/${prepared.project.id}/asset-plan/generate`, auth });
+    expect(response.statusCode).toBe(500);
+    const body = response.json();
+    expect(body).toMatchObject({ error: "asset_global_plan_structural_repair_failed", repair_used: true });
+    expect(body.issue_paths).toHaveLength(20);
+    expect(body.issue_paths).toEqual([...body.issue_paths].sort());
+    expect(body.issue_paths).toContain("<root>");
+    expect(JSON.stringify(body.issue_paths)).not.toContain("secret");
+    expect(JSON.stringify(body.issue_paths)).not.toContain("narrative");
+    const failed = [...app.db.assetPlanRecords.values()][0];
+    expect(failed.executionStateJson).toMatchObject({ generating: false, global_structural_repair_used: true });
+    expect(failed.runtimeDiagnosticsJson).toMatchObject({
+      checks: expect.arrayContaining([{ code: "asset_global_structural_repair_failed", level: "error" }]),
+    });
+    expect(prepared.project.status).toBe("storyboard_ready");
+    expect(prepared.project.activeAssetPlanRecordId).toBeNull();
+    const profile = getProjectStorageProfile(prepared.project)!;
+    const trace = readFileSync(resolve(root, profile.trace_dir, "trace.md"), "utf8");
+    expect(trace).toContain('"type": "repair_failed"');
+    expect(trace).toContain('"initial_issues"');
+    expect(trace).toContain('"patch_issues"');
+    expect(trace).toContain('"final_issues"');
+  });
+
+  it("preserves the external error boundary while persisting provider repair failure diagnostics", async () => {
+    const app = buildApp();
+    const prepared = await prepareActiveStoryboard(app);
+    generateAssetPlanMock.mockImplementationOnce(async (input) => {
+      await input.onGlobalStructureEvent?.({ type: "repair_started", issues: [] });
+      await input.onGlobalStructureEvent?.({ type: "repair_provider_failed", error_code: "llm_service_unavailable" });
+      throw new ExternalServiceError({
+        provider: "llm",
+        operation: "asset-planning.global-structural-repair",
+        retryable: true,
+        code: "llm_service_unavailable",
+        userMessage: "temporarily unavailable",
+        debugMessage: "provider unavailable",
+      });
+    });
+
+    const response = await app.inject({ method: "POST", url: `/api/projects/${prepared.project.id}/asset-plan/generate`, auth });
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toMatchObject({ error: "internal_server_error", repair_used: true });
+    expect(response.json()).not.toHaveProperty("attempt_count");
+    const failed = [...app.db.assetPlanRecords.values()][0];
+    const diagnostics = failed.runtimeDiagnosticsJson as { checks: Array<{ code: string }> };
+    expect(diagnostics.checks).toContainEqual({ code: "asset_global_structural_repair_provider_failed", level: "error" });
+    expect(diagnostics.checks.map((check) => check.code)).not.toContain("asset_global_structural_repair_failed");
+  });
+
+  it("does not fail generation when the diagnostic trace callback cannot write", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "asset-plan-api-trace-failure-"));
+    storageRoots.push(root);
+    process.env.STORAGE_ROOT_DIR = root;
+    const app = buildApp();
+    const prepared = await prepareActiveStoryboard(app);
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    generateAssetPlanMock.mockImplementationOnce(async (input) => {
+      const profile = getProjectStorageProfile(prepared.project)!;
+      const traceDir = resolve(root, profile.trace_dir);
+      rmSync(traceDir, { recursive: true, force: true });
+      writeFileSync(traceDir, "temporarily block trace directory", "utf8");
+      await input.onGlobalStructureEvent?.({
+        type: "normalization_applied",
+        actions: [{ type: "default_inserted", path: "art_bible.props[0].consistency_notes" }],
+      });
+      rmSync(traceDir, { force: true });
+      mkdirSync(traceDir, { recursive: true });
+      return makeAssetPlan({
+        storyboardRecordId: prepared.storyboardRecord.id,
+        scriptRecordId: prepared.scriptRecord.id,
+        topicPackageId: prepared.topicPackage.id,
+      });
+    });
+
+    const response = await app.inject({ method: "POST", url: `/api/projects/${prepared.project.id}/asset-plan/generate`, auth });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().execution_state.global_structure_normalization_used).toBe(true);
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining("failed to write global structure diagnostic"));
+    warning.mockRestore();
   });
 
   it("returns 409 and does not activate when the active storyboard changes during generation", async () => {
