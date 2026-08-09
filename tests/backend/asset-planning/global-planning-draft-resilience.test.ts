@@ -4,6 +4,7 @@ import missingPropNotesFixture from "../../fixtures/asset-planning/global-draft-
 import { ProjectArtBible } from "../../../shared/src/index.js";
 import {
   GlobalPlanningStructuralPatch,
+  GlobalPlanningStructuralPatchError,
   applyGlobalPlanningStructuralPatch,
   normalizeGlobalPlanningDraftStructure,
 } from "../../../backend/src/modules/asset-planning/global-planning-draft-resilience.js";
@@ -303,19 +304,31 @@ describe("applyGlobalPlanningStructuralPatch", () => {
       allowedRepairPaths: [["art_bible", "props", 0, "consistency_notes"]],
       patchPath: ["art_bible", "props", 0],
     },
-  ])("rejects $name instead of using path prefixes", ({ allowedRepairPaths, patchPath }) => {
+  ])("rejects $name with its exact structured path", ({ allowedRepairPaths, patchPath }) => {
     const patch = GlobalPlanningStructuralPatch.parse({
       patch_type: "global_planning_structural_patch",
       patches: [{ path: patchPath, value: [] }],
     });
 
-    expect(() =>
+    let caught: unknown;
+    try {
       applyGlobalPlanningStructuralPatch({
         draft: { art_bible: { props: [{ consistency_notes: [] }] } },
         patch,
         allowedRepairPaths,
-      }),
-    ).toThrow(/allowed/i);
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(GlobalPlanningStructuralPatchError);
+    expect((caught as GlobalPlanningStructuralPatchError).issues).toEqual([
+      {
+        code: "patch_path_not_allowed",
+        path: patchPath,
+        message: expect.any(String),
+      },
+    ]);
   });
 
   it("rejects duplicate structural paths", () => {
@@ -328,13 +341,25 @@ describe("applyGlobalPlanningStructuralPatch", () => {
       ],
     });
 
-    expect(() =>
+    let caught: unknown;
+    try {
       applyGlobalPlanningStructuralPatch({
         draft: { manual_review_notes: [] },
         patch,
         allowedRepairPaths: [[...path]],
-      }),
-    ).toThrow(/duplicate/i);
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(GlobalPlanningStructuralPatchError);
+    expect((caught as GlobalPlanningStructuralPatchError).issues).toEqual([
+      {
+        code: "duplicate_patch_path",
+        path: [...path],
+        message: expect.any(String),
+      },
+    ]);
   });
 
   it.each([
@@ -360,13 +385,30 @@ describe("applyGlobalPlanningStructuralPatch", () => {
       patches,
     });
 
-    expect(() =>
+    let caught: unknown;
+    try {
       applyGlobalPlanningStructuralPatch({
         draft,
         patch,
         allowedRepairPaths: [["a"], ["a", "b"]],
-      }),
-    ).toThrow("global_planning_structural_patch_overlapping_paths");
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(GlobalPlanningStructuralPatchError);
+    expect((caught as GlobalPlanningStructuralPatchError).issues).toEqual([
+      {
+        code: "overlapping_patch_paths",
+        path: ["a"],
+        message: expect.any(String),
+      },
+      {
+        code: "overlapping_patch_paths",
+        path: ["a", "b"],
+        message: expect.any(String),
+      },
+    ]);
     expect(draft).toEqual(original);
   });
 
@@ -388,26 +430,67 @@ describe("applyGlobalPlanningStructuralPatch", () => {
     ).toEqual({ a: { b: "新值一", c: "新值二" } });
   });
 
+  it("rejects a negative array index at the patch schema boundary", () => {
+    expect(
+      GlobalPlanningStructuralPatch.safeParse({
+        patch_type: "global_planning_structural_patch",
+        patches: [{ path: ["items", -1], value: "替换值" }],
+      }).success,
+    ).toBe(false);
+  });
+
   it.each([
-    { name: "negative array index", path: ["items", -1] },
-    { name: "out-of-bounds array index", path: ["items", 1] },
-    { name: "string key on array", path: ["items", "0"] },
-    { name: "numeric key on object", path: ["nested", 0] },
-    { name: "missing parent", path: ["missing", "value"] },
-  ])("rejects $name", ({ path }) => {
+    {
+      name: "out-of-bounds array index",
+      path: ["items", 1],
+      code: "array_index_out_of_bounds",
+    },
+    {
+      name: "string key on array",
+      path: ["items", "0"],
+      code: "invalid_array_path_segment",
+    },
+    {
+      name: "numeric key on object",
+      path: ["nested", 0],
+      code: "invalid_object_path_segment",
+    },
+    {
+      name: "missing parent",
+      path: ["missing", "value"],
+      code: "missing_patch_parent",
+    },
+    {
+      name: "primitive parent",
+      path: ["primitive", "value"],
+      code: "invalid_patch_parent",
+    },
+  ])("rejects $name with a structured issue", ({ path, code }) => {
     const rawPatch = {
       patch_type: "global_planning_structural_patch",
       patches: [{ path, value: "替换值" }],
     };
 
-    expect(() => {
+    let caught: unknown;
+    try {
       const patch = GlobalPlanningStructuralPatch.parse(rawPatch);
       applyGlobalPlanningStructuralPatch({
-        draft: { items: ["原值"], nested: {} },
+        draft: { items: ["原值"], nested: {}, primitive: "原值" },
         patch,
         allowedRepairPaths: [path],
       });
-    }).toThrow();
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(GlobalPlanningStructuralPatchError);
+    expect((caught as GlobalPlanningStructuralPatchError).issues).toEqual([
+      {
+        code,
+        path,
+        message: expect.any(String),
+      },
+    ]);
   });
 
   it("allows root replacement only when the empty root path is explicitly allowed", () => {

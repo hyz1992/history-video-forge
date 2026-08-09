@@ -21,6 +21,31 @@ export type GlobalDraftNormalizationAction =
 type PlainObject = Record<string, unknown>;
 type StructuralPath = Array<string | number>;
 
+export interface GlobalPlanningStructuralPatchIssue {
+  code: string;
+  path: Array<string | number>;
+  message: string;
+}
+
+export class GlobalPlanningStructuralPatchError extends Error {
+  readonly issues: GlobalPlanningStructuralPatchIssue[];
+
+  constructor(issues: GlobalPlanningStructuralPatchIssue[]) {
+    super(issues.map((issue) => issue.message).join("; "));
+    this.name = "GlobalPlanningStructuralPatchError";
+    this.issues = issues.map((issue) => ({
+      ...issue,
+      path: [...issue.path],
+    }));
+  }
+}
+
+function throwPatchIssues(
+  ...issues: GlobalPlanningStructuralPatchIssue[]
+): never {
+  throw new GlobalPlanningStructuralPatchError(issues);
+}
+
 export const GlobalPlanningStructuralPatch = z
   .object({
     patch_type: z.literal("global_planning_structural_patch"),
@@ -100,21 +125,46 @@ function validatePatchTarget(draft: unknown, path: StructuralPath): void {
       if (
         typeof segment !== "number" ||
         !Number.isInteger(segment) ||
-        segment < 0 ||
-        segment >= parent.length
+        segment < 0
       ) {
-        throw new Error(`invalid array patch path: ${pathIdentity(path)}`);
+        throwPatchIssues({
+          code: "invalid_array_path_segment",
+          path,
+          message: `array patch path requires a non-negative integer index: ${pathIdentity(path)}`,
+        });
+      }
+      if (segment >= parent.length) {
+        throwPatchIssues({
+          code: "array_index_out_of_bounds",
+          path,
+          message: `array patch index is out of bounds: ${pathIdentity(path)}`,
+        });
       }
       if (!isFinal) parent = parent[segment];
       continue;
     }
 
-    if (!isPlainObject(parent) || typeof segment !== "string") {
-      throw new Error(`invalid object patch path: ${pathIdentity(path)}`);
+    if (!isPlainObject(parent)) {
+      throwPatchIssues({
+        code: "invalid_patch_parent",
+        path,
+        message: `patch parent is not an object or array: ${pathIdentity(path)}`,
+      });
+    }
+    if (typeof segment !== "string") {
+      throwPatchIssues({
+        code: "invalid_object_path_segment",
+        path,
+        message: `object patch path requires a string key: ${pathIdentity(path)}`,
+      });
     }
     if (!isFinal) {
       if (!Object.prototype.hasOwnProperty.call(parent, segment)) {
-        throw new Error(`missing patch parent: ${pathIdentity(path)}`);
+        throwPatchIssues({
+          code: "missing_patch_parent",
+          path,
+          message: `patch parent does not exist: ${pathIdentity(path)}`,
+        });
       }
       parent = parent[segment];
     }
@@ -150,12 +200,20 @@ export function applyGlobalPlanningStructuralPatch(input: {
         pathsEqual(entry.path, allowedPath),
       )
     ) {
-      throw new Error(`patch path is not allowed: ${pathIdentity(entry.path)}`);
+      throwPatchIssues({
+        code: "patch_path_not_allowed",
+        path: entry.path,
+        message: `patch path is not allowed: ${pathIdentity(entry.path)}`,
+      });
     }
 
     const identity = pathIdentity(entry.path);
     if (seenPaths.has(identity)) {
-      throw new Error(`duplicate patch path: ${identity}`);
+      throwPatchIssues({
+        code: "duplicate_patch_path",
+        path: entry.path,
+        message: `duplicate patch path: ${identity}`,
+      });
     }
     seenPaths.add(identity);
     validatePatchTarget(input.draft, entry.path);
@@ -173,7 +231,21 @@ export function applyGlobalPlanningStructuralPatch(input: {
         isStrictPathPrefix(leftPath, rightPath) ||
         isStrictPathPrefix(rightPath, leftPath)
       ) {
-        throw new Error("global_planning_structural_patch_overlapping_paths");
+        const [parentPath, childPath] = isStrictPathPrefix(leftPath, rightPath)
+          ? [leftPath, rightPath]
+          : [rightPath, leftPath];
+        throwPatchIssues(
+          {
+            code: "overlapping_patch_paths",
+            path: parentPath,
+            message: `patch path overlaps another patch path: ${pathIdentity(parentPath)}`,
+          },
+          {
+            code: "overlapping_patch_paths",
+            path: childPath,
+            message: `patch path overlaps another patch path: ${pathIdentity(childPath)}`,
+          },
+        );
       }
     }
   }

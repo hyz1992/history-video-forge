@@ -21,6 +21,7 @@ import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 import {
   applyGlobalPlanningStructuralPatch,
   GlobalPlanningStructuralPatch,
+  GlobalPlanningStructuralPatchError,
   normalizeGlobalPlanningDraftStructure,
   type GlobalDraftNormalizationAction,
 } from "./global-planning-draft-resilience.js";
@@ -384,6 +385,9 @@ function toGlobalPlanningSchemaIssues(
 
 function serializeGlobalRepairFailure(error: unknown): unknown[] {
   if (error instanceof z.ZodError) return error.issues;
+  if (error instanceof GlobalPlanningStructuralPatchError) {
+    return error.issues;
+  }
   if (error instanceof Error) {
     return [{ name: error.name, message: error.message }];
   }

@@ -579,6 +579,10 @@ describe("generateAssetPlan", () => {
     {
       name: "extra path",
       failureStage: "patch" as const,
+      expectedPatchIssue: {
+        code: "patch_path_not_allowed",
+        path: ["manual_review_notes"],
+      },
       patch: {
         patch_type: "global_planning_structural_patch",
         patches: [{ path: ["manual_review_notes"], value: [] }],
@@ -587,6 +591,10 @@ describe("generateAssetPlan", () => {
     {
       name: "parent overwrite",
       failureStage: "patch" as const,
+      expectedPatchIssue: {
+        code: "patch_path_not_allowed",
+        path: ["art_bible", "props", 0],
+      },
       patch: {
         patch_type: "global_planning_structural_patch",
         patches: [{ path: ["art_bible", "props", 0], value: {} }],
@@ -595,6 +603,10 @@ describe("generateAssetPlan", () => {
     {
       name: "duplicate path",
       failureStage: "patch" as const,
+      expectedPatchIssue: {
+        code: "duplicate_patch_path",
+        path: ["art_bible", "props", 0, "visual_description"],
+      },
       patch: {
         patch_type: "global_planning_structural_patch",
         patches: [
@@ -612,6 +624,7 @@ describe("generateAssetPlan", () => {
     {
       name: "still invalid",
       failureStage: "final" as const,
+      expectedPatchIssue: null,
       patch: {
         patch_type: "global_planning_structural_patch",
         patches: [
@@ -622,7 +635,7 @@ describe("generateAssetPlan", () => {
         ],
       },
     },
-  ])("fails one bounded repair with separated issue buckets: $name", async ({ patch, failureStage }) => {
+  ])("fails one bounded repair with separated issue buckets: $name", async ({ patch, failureStage, expectedPatchIssue }) => {
     const invalidDraft = structuredClone(missingPropNotesFixture) as {
       art_bible: { props: Array<Record<string, unknown>> };
     };
@@ -666,7 +679,11 @@ describe("generateAssetPlan", () => {
       ]),
     );
     if (failureStage === "patch") {
-      expect(cause.patch_issues.length).toBeGreaterThan(0);
+      expect(cause.patch_issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining(expectedPatchIssue ?? {}),
+        ]),
+      );
       expect(cause.final_issues).toEqual([]);
     } else {
       expect(cause.patch_issues).toEqual([]);
