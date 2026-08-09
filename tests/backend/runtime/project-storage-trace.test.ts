@@ -12,9 +12,14 @@ import {
 } from "../../../backend/src/runtime/trace/project-storage.js";
 
 const roots: string[] = [];
+const originalStorageRootDir = process.env.STORAGE_ROOT_DIR;
 
 afterEach(() => {
-  delete process.env.STORAGE_ROOT_DIR;
+  if (originalStorageRootDir === undefined) {
+    delete process.env.STORAGE_ROOT_DIR;
+  } else {
+    process.env.STORAGE_ROOT_DIR = originalStorageRootDir;
+  }
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
@@ -68,5 +73,27 @@ describe("project storage diagnostic trace", () => {
     const trace = readFileSync(resolve(root, profile.trace_dir, "trace.md"), "utf8");
     expect(trace).toContain("known failure");
     expect(trace).toContain("[Error]");
+  });
+
+  it.each([
+    ["undefined", undefined],
+    ["function", () => undefined],
+    ["symbol", Symbol("diagnostic")],
+  ])("serializes unsupported top-level %s payloads with a stable fallback", async (valueType, payload) => {
+    const root = mkdtempSync(resolve(tmpdir(), "asset-plan-unsupported-diagnostic-"));
+    roots.push(root);
+    process.env.STORAGE_ROOT_DIR = root;
+    const project = await createProject(createDbClient(), {
+      name: "Unsupported Diagnostic Payload",
+    });
+    const writer = createProjectTraceAppender(project);
+
+    writer.writeDiagnostic("unsupported-payload", payload);
+
+    const profile = getProjectStorageProfile(project)!;
+    const trace = readFileSync(resolve(root, profile.trace_dir, "trace.md"), "utf8");
+    expect(trace).toContain('"serialization_error": "unsupported_top_level_value"');
+    expect(trace).toContain(`"value_type": "${valueType}"`);
+    expect(trace).not.toContain("```json\n\n```");
   });
 });

@@ -28,6 +28,7 @@ import { buildTestAuth } from "../auth/test-utils.js";
 const scriptText =
   "Opening pressure. The envoy answers in public. The ending leaves a cost.";
 const storageRoots: string[] = [];
+const originalStorageRootDir = process.env.STORAGE_ROOT_DIR;
 
 function makeStoryboardPlan(input: {
   scriptRecordId: string;
@@ -328,7 +329,11 @@ describe("asset planning api", () => {
   });
 
   afterEach(() => {
-    delete process.env.STORAGE_ROOT_DIR;
+    if (originalStorageRootDir === undefined) {
+      delete process.env.STORAGE_ROOT_DIR;
+    } else {
+      process.env.STORAGE_ROOT_DIR = originalStorageRootDir;
+    }
     for (const root of storageRoots.splice(0)) {
       rmSync(root, { recursive: true, force: true });
     }

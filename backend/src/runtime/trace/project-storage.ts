@@ -394,7 +394,11 @@ export function createProjectTraceAppender(
 
       let serialized: string;
       try {
-        serialized = JSON.stringify(payload, null, 2);
+        const candidate = JSON.stringify(payload, null, 2);
+        serialized = candidate ?? JSON.stringify({
+          serialization_error: "unsupported_top_level_value",
+          value_type: typeof payload,
+        }, null, 2);
       } catch (error) {
         serialized = JSON.stringify({
           serialization_error:
