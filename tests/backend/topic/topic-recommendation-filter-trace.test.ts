@@ -1,9 +1,15 @@
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import { createDbClient } from "../../../backend/src/db/client.js";
+import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import { recommendTopicCandidatesWithTrace } from "../../../backend/src/modules/topic/topic-recommendation.service.js";
 import type { TopicCandidateLibraryRepository } from "../../../backend/src/modules/topic/topic-candidate-library.repository.js";
 import type { LlmGateway } from "../../../backend/src/runtime/llm/llm-gateway.js";
+import { LlmOutputError } from "../../../backend/src/runtime/llm/llm-output-error.js";
+import { getProjectStorageProfile } from "../../../backend/src/runtime/trace/project-storage.js";
 
 const seedInput = {
   canonicalName: "medieval-history-recommendation",
@@ -106,6 +112,224 @@ function expectNormalizedFilterContract(
 }
 
 describe("topic recommendation filter service trace", () => {
+  it("writes meaningful filter diagnostics through the real project run path", async () => {
+    const tempRoot = mkdtempSync(resolve(tmpdir(), "topic-filter-diagnostics-"));
+    const previousStorageRoot = process.env.STORAGE_ROOT_DIR;
+    process.env.STORAGE_ROOT_DIR = tempRoot;
+
+    try {
+      const db = createDbClient();
+      const project = await createProject(db, {
+        name: "Filtered Recommendation Diagnostics",
+      });
+      const { gateway } = createCapturingGateway(4);
+      const { repository } = createFallbackRepository();
+
+      const result = await recommendTopicCandidatesWithTrace(
+        db,
+        {
+          ...seedInput,
+          filters: {
+            period_range: {
+              start_id: "tang",
+              end_id: "song_liao_xia_jin",
+              included_period_ids: [
+                "tang",
+                "five_dynasties_ten_kingdoms",
+                "song_liao_xia_jin",
+              ],
+            },
+          },
+        },
+        {
+          projectId: project.id,
+          llmGateway: gateway,
+          topicCandidateLibraryRepository: repository,
+        },
+      );
+
+      const runId = String(
+        (result.trace as unknown as Record<string, unknown>).run_id,
+      );
+      const profile = getProjectStorageProfile(project);
+      const markdown = readFileSync(
+        resolve(profile.topic_runs_dir, runId, "recommendation-diagnostics.md"),
+        "utf8",
+      );
+
+      expect(markdown).toContain("## Filter");
+      expect(markdown).toMatch(/- filter_fingerprint: [a-f0-9]{16}/);
+      expect(markdown).toContain("- normalized_filter:");
+      expect(markdown).toContain("- filter_match_status: full");
+      expect(markdown).toContain("- filter_match_shortfall: 0");
+      expect(markdown).toContain("唐、五代十国、宋辽夏金");
+    } finally {
+      if (previousStorageRoot === undefined) {
+        delete process.env.STORAGE_ROOT_DIR;
+      } else {
+        process.env.STORAGE_ROOT_DIR = previousStorageRoot;
+      }
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("omits the Filter section from an auto-only project diagnostics file", async () => {
+    const tempRoot = mkdtempSync(resolve(tmpdir(), "topic-auto-diagnostics-"));
+    const previousStorageRoot = process.env.STORAGE_ROOT_DIR;
+    process.env.STORAGE_ROOT_DIR = tempRoot;
+
+    try {
+      const db = createDbClient();
+      const project = await createProject(db, {
+        name: "Auto Recommendation Diagnostics",
+      });
+      const { gateway } = createCapturingGateway(4);
+      const { repository } = createFallbackRepository();
+
+      const result = await recommendTopicCandidatesWithTrace(
+        db,
+        {
+          ...seedInput,
+          filters: { storytelling_lens: "auto" },
+        },
+        {
+          projectId: project.id,
+          llmGateway: gateway,
+          topicCandidateLibraryRepository: repository,
+        },
+      );
+
+      const runId = String(
+        (result.trace as unknown as Record<string, unknown>).run_id,
+      );
+      const profile = getProjectStorageProfile(project);
+      const markdown = readFileSync(
+        resolve(profile.topic_runs_dir, runId, "recommendation-diagnostics.md"),
+        "utf8",
+      );
+
+      expect(markdown).not.toContain("## Filter");
+      expect(markdown).not.toContain("filter_fingerprint");
+    } finally {
+      if (previousStorageRoot === undefined) {
+        delete process.env.STORAGE_ROOT_DIR;
+      } else {
+        process.env.STORAGE_ROOT_DIR = previousStorageRoot;
+      }
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("writes filter diagnostics when a project recommendation degrades on LLM output", async () => {
+    const tempRoot = mkdtempSync(resolve(tmpdir(), "topic-error-diagnostics-"));
+    const previousStorageRoot = process.env.STORAGE_ROOT_DIR;
+    process.env.STORAGE_ROOT_DIR = tempRoot;
+
+    try {
+      const db = createDbClient();
+      const project = await createProject(db, {
+        name: "Degraded Recommendation Diagnostics",
+      });
+      const gateway: LlmGateway = {
+        invokeStructuredPrompt: vi.fn(async () => {
+          throw new LlmOutputError("topic_candidate_schema_invalid", {
+            cause: "invalid candidate payload",
+          });
+        }),
+        invokeStrictStructured: vi.fn(async () => {
+          throw new Error("selector should not run");
+        }),
+      };
+
+      const result = await recommendTopicCandidatesWithTrace(
+        db,
+        {
+          ...seedInput,
+          filters: { central_actor_type: "civil_official" },
+        },
+        { projectId: project.id, llmGateway: gateway },
+      );
+
+      const runId = String(
+        (result.trace as unknown as Record<string, unknown>).run_id,
+      );
+      const profile = getProjectStorageProfile(project);
+      const markdown = readFileSync(
+        resolve(profile.topic_runs_dir, runId, "recommendation-diagnostics.md"),
+        "utf8",
+      );
+
+      expect(markdown).toContain("## Filter");
+      expect(markdown).toMatch(/- filter_fingerprint: [a-f0-9]{16}/);
+      expect(markdown).toContain("- normalized_filter:");
+      expect(markdown).toContain("- filter_match_status: insufficient");
+      expect(markdown).toContain("- filter_match_shortfall: 4");
+    } finally {
+      if (previousStorageRoot === undefined) {
+        delete process.env.STORAGE_ROOT_DIR;
+      } else {
+        process.env.STORAGE_ROOT_DIR = previousStorageRoot;
+      }
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("reports a full match for meaningful filters", async () => {
+    const db = createDbClient();
+    const { gateway } = createCapturingGateway(4);
+    const { repository } = createFallbackRepository();
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        ...seedInput,
+        filters: {
+          period_range: {
+            start_id: "tang",
+            end_id: "song_liao_xia_jin",
+            included_period_ids: [
+              "tang",
+              "five_dynasties_ten_kingdoms",
+              "song_liao_xia_jin",
+            ],
+          },
+          event_domain: "diplomacy_relations",
+          central_actor_type: "religious_actor",
+          storytelling_lens: "aftermath",
+        },
+      },
+      {
+        llmGateway: gateway,
+        topicCandidateLibraryRepository: repository,
+      },
+    );
+
+    expect(result.diagnostics).toMatchObject({
+      filter_fingerprint: expect.stringMatching(/^[a-f0-9]{16}$/),
+      normalized_filter: {
+        period_range: {
+          start_id: "tang",
+          end_id: "song_liao_xia_jin",
+          included_period_ids: [
+            "tang",
+            "five_dynasties_ten_kingdoms",
+            "song_liao_xia_jin",
+          ],
+        },
+        event_domain: "diplomacy_relations",
+        central_actor_type: "religious_actor",
+        storytelling_lens: "aftermath",
+      },
+      filter_effect_summary:
+        "时期：唐、五代十国、宋辽夏金；事件领域：外交交涉；主角类型：宗教人物；讲述视角：后果追踪",
+      filter_match_status: "full",
+      filter_match_shortfall: 0,
+    });
+    expect(result.diagnostics.filter_effect_summary).not.toMatch(
+      /diplomacy_relations|religious_actor|aftermath/,
+    );
+  });
+
   it("normalizes meaningful filters, sends one contract to builder, and disables fallback", async () => {
     const db = createDbClient();
     const { gateway, builderInputs } = createCapturingGateway();
@@ -129,7 +353,7 @@ describe("topic recommendation filter service trace", () => {
       },
     );
 
-    expect(builderInputs.length).toBeGreaterThan(0);
+    expect(builderInputs).toHaveLength(1);
     for (const builderInput of builderInputs) {
       expectNormalizedFilterContract(builderInput, {
         event_domain: "military_warfare",
@@ -161,12 +385,27 @@ describe("topic recommendation filter service trace", () => {
     expect(cacheRecords.every(
       (candidate) => candidate.filterFingerprint === round?.filterFingerprint,
     )).toBe(true);
+    expect(result.diagnostics).toMatchObject({
+      filter_fingerprint: expect.stringMatching(/^[a-f0-9]{16}$/),
+      normalized_filter: {
+        event_domain: "military_warfare",
+        storytelling_lens: "turning_point",
+        exclude_terms: ["folklore", "legend"],
+      },
+      filter_match_status: "insufficient",
+      filter_match_shortfall: 3,
+    });
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({ code: "topic_candidate_slots_insufficient" }),
+    );
   });
 
   it("keeps normalized filters in a field-repair recommendation seed", async () => {
     const db = createDbClient();
     const builderInputs: Array<Record<string, unknown>> = [];
+    const promptIds: string[] = [];
     const invokeStructuredPrompt = vi.fn(async (options) => {
+      promptIds.push(options.promptId);
       builderInputs.push(options.input as Record<string, unknown>);
       if (builderInputs.length === 1) {
         return [{
@@ -206,6 +445,10 @@ describe("topic recommendation filter service trace", () => {
     );
 
     expect(builderInputs).toHaveLength(2);
+    expect(promptIds).toEqual([
+      "topic.candidate-builder",
+      "topic.candidate-builder-repair",
+    ]);
     for (const builderInput of builderInputs) {
       expect(builderInput).not.toHaveProperty("filters");
     }
@@ -279,6 +522,7 @@ describe("topic recommendation filter service trace", () => {
     expect(builderInputs[0]).not.toHaveProperty("filters");
     expect(builderInputs[0]).not.toHaveProperty("topic_filter");
     expect(builderInputs[0]).not.toHaveProperty("topic_filter_fingerprint");
+    expect(builderInputs).toHaveLength(2);
     expect(listBySeed).toHaveBeenCalledTimes(1);
     expect(result.candidates.map((candidate) => candidate.title)).toEqual([
       "generated-event-1",
@@ -292,6 +536,11 @@ describe("topic recommendation filter service trace", () => {
     expect([...db.candidateCache.values()].every(
       (candidate) => candidate.filterFingerprint === undefined,
     )).toBe(true);
+    expect(result.diagnostics).not.toHaveProperty("filter_fingerprint");
+    expect(result.diagnostics).not.toHaveProperty("normalized_filter");
+    expect(result.diagnostics).not.toHaveProperty("filter_effect_summary");
+    expect(result.diagnostics).not.toHaveProperty("filter_match_status");
+    expect(result.diagnostics).not.toHaveProperty("filter_match_shortfall");
   });
 
   it("preserves an explicit fallback disable option for an auto-only filter", async () => {
@@ -317,5 +566,39 @@ describe("topic recommendation filter service trace", () => {
     expect(result.candidates.map((candidate) => candidate.title)).toEqual([
       "generated-event-1",
     ]);
+  });
+
+  it("keeps filter diagnostics when LLM output validation degrades to an empty result", async () => {
+    const db = createDbClient();
+    const gateway: LlmGateway = {
+      invokeStructuredPrompt: vi.fn(async () => {
+        throw new LlmOutputError("topic_candidate_schema_invalid", {
+          cause: "invalid candidate payload",
+        });
+      }),
+      invokeStrictStructured: vi.fn(async () => {
+        throw new Error("selector should not run");
+      }),
+    };
+
+    const result = await recommendTopicCandidatesWithTrace(
+      db,
+      {
+        ...seedInput,
+        filters: { central_actor_type: "civil_official" },
+      },
+      { llmGateway: gateway },
+    );
+
+    expect(result.candidates).toEqual([]);
+    expect(result.diagnostics).toMatchObject({
+      filter_fingerprint: expect.stringMatching(/^[a-f0-9]{16}$/),
+      normalized_filter: { central_actor_type: "civil_official" },
+      filter_match_status: "insufficient",
+      filter_match_shortfall: 4,
+    });
+    expect(result.diagnostics.checks).toContainEqual(
+      expect.objectContaining({ code: "topic_candidate_slots_insufficient" }),
+    );
   });
 });

@@ -472,7 +472,8 @@ export function createTopicRecommendationNodes(input: {
         runtime.candidates.length < resolveRawCandidateTargetCount(runtime);
       const node = createTraceNode(runtime, "topic-candidate-generate");
       const shouldRepair =
-        runtime.pendingFieldRepair || runtime.slotsInsufficient;
+        runtime.pendingFieldRepair ||
+        (!runtime.input.topic_filter && runtime.slotsInsufficient);
 
       if (!shouldRepair) {
         await persistTopicCandidates(

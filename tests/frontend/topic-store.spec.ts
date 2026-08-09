@@ -1,13 +1,28 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { createFetchTopicApi, createTopicStore } from "../../frontend/src/stores/topic";
+import {
+  createFetchTopicApi,
+  createTopicStore,
+  type TopicRecommendationFilterDraft,
+} from "../../frontend/src/stores/topic";
+
+const medievalDraft = (overrides: Partial<TopicRecommendationFilterDraft> = {}): TopicRecommendationFilterDraft => ({
+  era_band: "medieval",
+  period_start_id: "three_kingdoms",
+  period_end_id: "song_liao_xia_jin",
+  event_domain: "unlimited",
+  central_actor_type: "unlimited",
+  storytelling_lens: "auto",
+  exclude_terms: [],
+  ...overrides,
+});
 
 describe("topic store recommendation input", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("sends canonical recommendation seed fields derived from system filters", async () => {
+  it("sends a complete continuous period range and structured filters", async () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
       headers: new Headers({ "content-type": "application/json" }),
@@ -19,10 +34,13 @@ describe("topic store recommendation input", () => {
     vi.stubGlobal("fetch", fetchMock);
     const api = createFetchTopicApi();
 
-    await api.generateSystemRecommendations("project-1", {
-      era: "late-imperial",
-      tension: "hook-first",
-    });
+    await api.generateSystemRecommendations("project-1", medievalDraft({
+      period_start_id: "tang",
+      event_domain: "military_warfare",
+      central_actor_type: "military_actor",
+      storytelling_lens: "turning_point",
+      exclude_terms: [" 演义 ", "神话", "演义", ""],
+    }));
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
@@ -37,34 +55,53 @@ describe("topic store recommendation input", () => {
     );
 
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
-    expect(body).toMatchObject({
-      canonical_name: expect.stringContaining("元明清"),
-      summary: expect.stringContaining("元明清"),
-      core_conflict: expect.stringContaining("传播切口优先"),
-      strong_scene: expect.stringContaining("元明清"),
-      source_hint: expect.stringContaining("元明清"),
-      recent_usage_hint: expect.stringContaining("元明清"),
+    expect(body.filters).toEqual({
+      period_range: {
+        start_id: "tang",
+        end_id: "song_liao_xia_jin",
+        included_period_ids: [
+          "tang",
+          "five_dynasties_ten_kingdoms",
+          "song_liao_xia_jin",
+        ],
+      },
+      event_domain: "military_warfare",
+      central_actor_type: "military_actor",
+      storytelling_lens: "turning_point",
+      exclude_terms: ["演义", "神话"],
     });
-    expect(body.tags).toEqual(
-      expect.arrayContaining([
-        "late_imperial",
-        "hook_first",
-        "system_recommendation",
-        "single_event",
-        "concrete_scene",
-        "strict_era_boundary",
-      ]),
-    );
-    expect(body.canonical_name).not.toContain("晏子使楚");
-    expect(body.summary).toContain("具体");
-    expect(body.summary).toContain("历史事件");
-    expect(body.summary).toContain("禁止返回");
-    expect(body.summary).toContain("不得超出元明清范围");
-    expect(body.strong_scene).toContain("宫廷");
-    expect(body.strong_scene).toContain("当众对抗");
-    expect(body.strong_scene).toContain("必须发生在元明清范围内");
-    expect(body.source_hint).toContain("超出元明清");
-    expect(body.recent_usage_hint).toContain("严格排除超出元明清范围");
+    expect(body.summary).toContain("唐至宋辽夏金");
+    expect(body.summary).toContain("topic_filter");
+    expect(body.summary).not.toContain("以 filters 为准");
+    expect(JSON.stringify(body)).not.toContain("medieval");
+  });
+
+  it("omits unlimited and auto fields while preserving the required seed", async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      headers: new Headers({ "content-type": "application/json" }),
+      json: async () => ({ project_id: "project-1", candidates: [] }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createFetchTopicApi().generateSystemRecommendations("project-1", {
+      ...medievalDraft(),
+      era_band: "unlimited",
+      period_start_id: null,
+      period_end_id: null,
+    });
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(body).not.toHaveProperty("filters");
+    expect(body).toMatchObject({
+      canonical_name: expect.any(String),
+      summary: expect.any(String),
+      core_conflict: expect.any(String),
+      strong_scene: expect.any(String),
+      source_hint: expect.any(String),
+      recent_usage_hint: expect.any(String),
+      tags: expect.any(Array),
+    });
   });
 
   it("throws instead of treating non-2xx topic recommendation responses as successful candidates", async () => {
@@ -80,10 +117,7 @@ describe("topic store recommendation input", () => {
     const api = createFetchTopicApi();
 
     await expect(
-      api.generateSystemRecommendations("project-1", {
-        era: "medieval",
-        tension: "balanced",
-      }),
+      api.generateSystemRecommendations("project-1", medievalDraft()),
     ).rejects.toMatchObject({
       message: expect.stringContaining("invalid_topic_recommendation_seed"),
     });
@@ -103,10 +137,7 @@ describe("topic store recommendation input", () => {
     const api = createFetchTopicApi();
 
     await expect(
-      api.generateSystemRecommendations("project-1", {
-        era: "ancient",
-        tension: "high",
-      }),
+      api.generateSystemRecommendations("project-1", medievalDraft()),
     ).rejects.toThrow("LLM provider timeout after 120 seconds");
   });
 
@@ -145,15 +176,10 @@ describe("topic store recommendation input", () => {
       api,
     });
 
-    await store.generateSystemRecommendations({
-      era: "medieval",
-      tension: "balanced",
-    });
+    const draft = medievalDraft({ storytelling_lens: "aftermath" });
+    await store.generateSystemRecommendations(draft);
 
-    expect(api.generateSystemRecommendations).toHaveBeenCalledWith("project-1", {
-      era: "medieval",
-      tension: "balanced",
-    });
+    expect(api.generateSystemRecommendations).toHaveBeenCalledWith("project-1", draft);
   });
 
   it("returns the loaded snapshot so polling can inspect topic generation status", async () => {

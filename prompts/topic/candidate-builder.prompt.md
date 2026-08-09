@@ -1,12 +1,14 @@
 ---
 id: topic.candidate-builder
-version: v1.1.0
+version: v1.2.1
 stage: topic
 language: zh-CN
 consumes:
   - RecommendationSeedSet
   - EventRegistryContext
   - recent_event_memory
+  - topic_filter
+  - topic_filter_fingerprint
 produces:
   - TopicCandidateCard[]
 status: active
@@ -14,7 +16,7 @@ status: active
 
 # 任务
 
-根据当前推荐种子、事件记忆与已确认边界，生成结构化 `TopicCandidateCard` 候选。具体数量由输入字段 `target_candidate_count` 指定；未提供时默认按 8 生成。生成数量是硬约束，必须严格匹配。
+根据当前推荐种子、事件记忆与已确认边界，生成结构化 `TopicCandidateCard` 候选。具体数量由输入字段 `target_candidate_count` 指定；未提供时默认按 8 生成。数量约束是否允许不足，取决于输入中是否存在 `topic_filter`。
 
 ## 输入对象
 
@@ -22,12 +24,14 @@ status: active
 - `EventRegistryContext`
 - `recent_event_memory`
 - `target_candidate_count`（可选，缺省 8）：本次需要生成的候选数量。
+- `topic_filter`（可选）：规范化的结构化筛选合同，不是自然语言建议。
+- `topic_filter_fingerprint`（可选）：筛选合同的稳定追踪标识；只用于识别本次筛选上下文，不得自行改写或从中推断筛选条件。
 
 ## 输出合同
 
 - 首轮输出的第一优先级，是先完整满足 `TopicCandidateCard` 最小字段合同；多样性与时代分布建立在先完整交付字段之后。
 - 必须直接输出 `TopicCandidateCard[]`，不得包 `TopicCandidateCard` 外层对象，不写解释或长篇文案。
-- 先输出对应数量的候选（数量以 `target_candidate_count` 为准，缺省 8），作为原始候选池。唯一合法输出骨架：
+- 无 `topic_filter` 时，必须严格匹配 `target_candidate_count`，缺省为 8；有 `topic_filter` 时按下文筛选数量规则执行。输出作为原始候选池。唯一合法输出骨架：
 
 ```json
 [
@@ -94,6 +98,36 @@ status: active
 - 宽边界 seed 优先拉开事件多样性，分散到不同人物、事件链或冲突场景；同一事件若保留多个候选，角度也必须明显不同。
 - 不要继续让这些近期高频事件占据原始候选的大多数槽位；对宽边界 seed，主动拉开朝代分布、冲突类型与叙事结构。
 - 候选必须落在具体历史事件，不得使用朝代阶段、战争类型、思想流派或人物群像级别的泛主题。
+
+## topic_filter 结构化筛选合同（推荐入口）
+
+`topic_filter` 是规范化的结构化筛选合同，不是自然语言建议。存在该对象时，必须严格按以下两阶段顺序执行：
+
+### 第一阶段：先确定事件身份
+
+- 依次使用 `period_range.included_period_ids`、`event_domain`、`central_actor_type` 和 `exclude_terms` 选择符合条件的具体历史事件，并据此确定稳定的 `event_identity`。
+- `period_range.included_period_ids` 是完整连续时期列表，必须将其中每一项逐项视为允许范围；不能只读取 `start_id` 和 `end_id`，不得漏掉五代十国等中间时期。
+- `event_domain` 按核心事件身份分类，不按事件背景、使用手段或后续影响分类。
+- 政变即使使用武装，只要核心是政权归属变化，归 `political_power`；具体战役归 `military_warfare`；盟约和使节交涉归 `diplomacy_relations`。
+- 法律制度设计归 `institutions_governance`，具体审判和处置归 `law_justice`；不得因一次审判涉及制度背景就混用两个领域。
+- `central_actor_type` 按人物在该事件中的主要施力渠道分类，不按人物一生中的最高身份分类。
+- 宗室成员领兵作战归 `military_actor`，依靠血缘或宫廷身份争权才归 `court_elite`，以文官职权推动政务才归 `civil_official`。
+- 所有已提供的正向筛选维度必须同时满足（AND）。`exclude_terms` 的优先级高于全部正向条件；条件冲突时，少返回候选或返回空数组，绝不能同时执行相反命令。
+
+### 第二阶段：再组织讲述角度
+
+- 只在第一阶段确定的事件内部使用 `storytelling_lens` 组织 `one_line_angle`、冲突焦点和叙事节点，不得借讲述视角替换第一阶段已经确定的事件。
+- `key_decision`：只聚焦行动者面临的选择，以及选择当时的压力和代价。
+- `turning_point`：只聚焦局势状态发生反转，以及反转前后的关键变化。
+- `origins_analysis`：只分析事件发生之前的成因，不提前占用事件之后的影响。
+- `aftermath`：只分析事件发生之后的影响，不倒退为事件起因分析。
+- `relationship_dynamics`：聚焦人物之间的博弈关系，不改写为单人决策或泛局势转折。
+
+### 筛选数量与事实边界
+
+- 有 `topic_filter` 时，事实准确性与完整筛选匹配高于 `target_candidate_count`；无法足量时必须少返回候选或返回空数组，不得放宽筛选、编造史实或用未筛选事件补齐。
+- 无 `topic_filter` 时，数量仍是硬约束，必须严格匹配 `target_candidate_count`；未提供时缺省为 8。
+- 不得机械复制枚举 ID 或筛选文案到 `title`、`one_line_angle` 或正文；必须把筛选结果转化为自然、具体的历史叙事表达，不得为满足筛选而编造历史事实。
 
 ## angle_hint 角度锚约束（事件库入口）
 

@@ -4,7 +4,7 @@
 
 语义修订：2026-08-08
 
-状态：正式设计，待按实施计划进入代码实现。
+状态：已完成实现并于 2026-08-08 通过专项回归与真实浏览器验收；2026-08-09 完成最终审查修复。
 
 关联文档：
 
@@ -259,15 +259,15 @@ topic_filter_fingerprint?: string;
 
 ### 5.5 诊断输出
 
-`recommendation-diagnostics.md` 增加：
+合法筛选进入推荐运行后，`recommendation-diagnostics.md` 记录：
 
 - `filter_fingerprint`
 - `normalized_filter`
-- `filter_tags`
-- `filter_conflicts`（仅结构冲突，例如区间端点不在同一时期表、`included_period_ids` 跳项或缺项）
 - `filter_effect_summary`
 - `filter_match_status`: `full / insufficient`
 - `filter_match_shortfall`：因严格筛选而少于目标数量时记录缺口；复用现有 slots insufficient 能力，不新增语义预检阶段
+
+结构冲突（例如区间端点不在同一时期表、`included_period_ids` 跳项或缺项）在 controller 输入校验阶段直接返回 `400 invalid_topic_filter`，不进入 LLM 调用，因此不在推荐运行 diagnostics 中重复记录 `filter_conflicts`。`normalized_filter` 已完整表达筛选值，不再另造与其重复的 `filter_tags`。
 
 ---
 

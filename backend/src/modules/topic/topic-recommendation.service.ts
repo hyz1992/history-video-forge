@@ -4,10 +4,15 @@ import { createHash } from "node:crypto";
 
 import {
   normalizeTopicRecommendationFilter,
+  TOPIC_RECOMMENDATION_PERIOD_GROUPS,
   TopicCandidateCard,
 } from "../../../../shared/src/index.js";
 import type {
+  TopicRecommendationCentralActorType,
+  TopicRecommendationEventDomain,
+  TopicRecommendationFilter,
   TopicRecommendationFilterInput,
+  TopicRecommendationStorytellingLens,
 } from "../../../../shared/src/topic/topic-recommendation-filter.schema.js";
 import { env } from "../../config/env.js";
 import type { DbClient } from "../../db/client";
@@ -26,6 +31,7 @@ import { LlmOutputError } from "../../runtime/llm/llm-output-error.js";
 import {
   renderRecommendationDiagnosticsMarkdown,
   type LlmInteractionLogWriter,
+  type RecommendationFilterDiagnostics,
 } from "../../runtime/llm/interaction-log.js";
 import { createTierAwareProviderFromEnv } from "../../runtime/llm/tier-aware-provider-factory.js";
 import type {
@@ -375,6 +381,12 @@ export async function recommendTopicCandidatesWithTrace(
     finalRankings: selected.rankings,
     selectorTrace: selected.selectorTrace,
   });
+  const filterDiagnostics = buildRecommendationFilterDiagnostics({
+    normalizedFilter,
+    filterFingerprint: topicFilterFingerprint,
+    selectedCandidateCount: selected.candidates.length,
+    expectedTargetCount: finalCandidateCount,
+  });
   const finalDiagnostics = finalizeRecommendationDiagnostics({
     checks: result.diagnostics.checks,
     finalCandidateCount: selected.candidates.length,
@@ -385,6 +397,7 @@ export async function recommendTopicCandidatesWithTrace(
       ...selected.diagnostics,
     ],
     candidatePreviewTrace,
+    filter: filterDiagnostics,
   });
 
   if (project) {
@@ -394,6 +407,7 @@ export async function recommendTopicCandidatesWithTrace(
       diagnostics: finalDiagnostics.checks,
       candidates: selected.candidates,
       annotations: postProcessed.annotations,
+      filter: filterDiagnostics,
     });
   }
 
@@ -475,6 +489,41 @@ export async function recommendTopicCandidatesWithTrace(
       if (error.cause !== undefined) {
         interactionLogWriter?.writeError(JSON.stringify(error.cause));
       }
+      const degradedFilterDiagnostics = buildRecommendationFilterDiagnostics({
+        normalizedFilter,
+        filterFingerprint: topicFilterFingerprint,
+        selectedCandidateCount: 0,
+        expectedTargetCount: finalCandidateCount,
+      });
+      const degradedDiagnostics = finalizeRecommendationDiagnostics({
+        checks: [
+          {
+            code: error.code,
+            level: "warning",
+            reason:
+              "topic 候选 fallback 路径 normalize 后仍无法通过 schema，已降级返回空候选",
+          },
+        ],
+        finalCandidateCount: 0,
+        expectedTargetCount: finalCandidateCount,
+        additionalChecks: [],
+        candidatePreviewTrace: {
+          raw_candidates: [],
+          selector_pool: [],
+          final_candidates: [],
+        },
+        filter: degradedFilterDiagnostics,
+      });
+      if (project) {
+        writeRecommendationDiagnosticsMarkdown({
+          project,
+          runId,
+          diagnostics: degradedDiagnostics.checks,
+          candidates: [],
+          annotations: [],
+          filter: degradedFilterDiagnostics,
+        });
+      }
       return {
         candidates: [],
         raw_candidates: [],
@@ -485,24 +534,7 @@ export async function recommendTopicCandidatesWithTrace(
           run_id: runId,
           nodes: [],
         }),
-        diagnostics: finalizeRecommendationDiagnostics({
-          checks: [
-            {
-              code: error.code,
-              level: "warning",
-              reason:
-                "topic 候选 fallback 路径 normalize 后仍无法通过 schema，已降级返回空候选",
-            },
-          ],
-          finalCandidateCount: 0,
-          expectedTargetCount: finalCandidateCount,
-          additionalChecks: [],
-          candidatePreviewTrace: {
-            raw_candidates: [],
-            selector_pool: [],
-            final_candidates: [],
-          },
-        }),
+        diagnostics: degradedDiagnostics,
       };
     }
     const message =
@@ -1094,6 +1126,7 @@ function finalizeRecommendationDiagnostics(input: {
   expectedTargetCount: number;
   additionalChecks: RecommendationDiagnostic[];
   candidatePreviewTrace?: CandidatePreviewTrace;
+  filter?: RecommendationFilterDiagnostics;
 }) {
   const checks = input.checks
     .filter((check) => {
@@ -1136,6 +1169,95 @@ function finalizeRecommendationDiagnostics(input: {
   return {
     checks,
     candidate_preview_trace: input.candidatePreviewTrace,
+    ...(input.filter ? input.filter : {}),
+  };
+}
+
+const TOPIC_PERIOD_LABELS = new Map(
+  TOPIC_RECOMMENDATION_PERIOD_GROUPS.flatMap((group) =>
+    group.periods.map((period) => [period.id, period.label] as const),
+  ),
+);
+
+const TOPIC_EVENT_DOMAIN_LABELS = {
+  political_power: "政治权力",
+  military_warfare: "军事战争",
+  institutions_governance: "制度治理",
+  diplomacy_relations: "外交交涉",
+  law_justice: "法律司法",
+  society_livelihood: "社会民生",
+  thought_culture: "思想文化",
+} satisfies Record<TopicRecommendationEventDomain, string>;
+
+const TOPIC_CENTRAL_ACTOR_TYPE_LABELS = {
+  ruler: "帝王君主",
+  court_elite: "宫廷权贵",
+  civil_official: "文官政务",
+  military_actor: "军事人物",
+  intellectual_actor: "学者思想家",
+  religious_actor: "宗教人物",
+  civilian: "民间人物",
+  collective: "群体多方",
+} satisfies Record<TopicRecommendationCentralActorType, string>;
+
+const TOPIC_STORYTELLING_LENS_LABELS = {
+  key_decision: "关键决策",
+  relationship_dynamics: "人物博弈",
+  turning_point: "局势转折",
+  origins_analysis: "因果拆解",
+  aftermath: "后果追踪",
+} satisfies Record<TopicRecommendationStorytellingLens, string>;
+
+function buildRecommendationFilterDiagnostics(input: {
+  normalizedFilter?: TopicRecommendationFilter;
+  filterFingerprint?: string;
+  selectedCandidateCount: number;
+  expectedTargetCount: number;
+}): RecommendationFilterDiagnostics | undefined {
+  if (!input.normalizedFilter || !input.filterFingerprint) {
+    return undefined;
+  }
+
+  const summaryParts: string[] = [];
+  const filter = input.normalizedFilter;
+  if (filter.period_range) {
+    summaryParts.push(
+      `时期：${filter.period_range.included_period_ids
+        .map((periodId) => TOPIC_PERIOD_LABELS.get(periodId) ?? periodId)
+        .join("、")}`,
+    );
+  }
+  if (filter.event_domain) {
+    summaryParts.push(`事件领域：${TOPIC_EVENT_DOMAIN_LABELS[filter.event_domain]}`);
+  }
+  if (filter.central_actor_type) {
+    summaryParts.push(
+      `主角类型：${TOPIC_CENTRAL_ACTOR_TYPE_LABELS[filter.central_actor_type]}`,
+    );
+  }
+  if (filter.storytelling_lens) {
+    summaryParts.push(
+      `讲述视角：${TOPIC_STORYTELLING_LENS_LABELS[filter.storytelling_lens]}`,
+    );
+  }
+  if (filter.exclude_terms?.length) {
+    summaryParts.push(
+      `排除项：${filter.exclude_terms
+        .map((term) => term.replace(/\s+/g, " ").trim())
+        .join("、")}`,
+    );
+  }
+
+  const shortfall = Math.max(
+    0,
+    input.expectedTargetCount - input.selectedCandidateCount,
+  );
+  return {
+    filter_fingerprint: input.filterFingerprint,
+    normalized_filter: filter,
+    filter_effect_summary: summaryParts.join("；"),
+    filter_match_status: shortfall === 0 ? "full" : "insufficient",
+    filter_match_shortfall: shortfall,
   };
 }
 
@@ -2016,6 +2138,7 @@ function writeRecommendationDiagnosticsMarkdown(input: {
   diagnostics: RecommendationDiagnostic[];
   candidates: RecommendationCandidate[];
   annotations: string[];
+  filter?: RecommendationFilterDiagnostics;
 }) {
   const profile = getProjectStorageProfile(input.project);
   const runDir = resolve(process.cwd(), profile.topic_runs_dir, input.runId);
@@ -2032,6 +2155,7 @@ function writeRecommendationDiagnosticsMarkdown(input: {
         one_line_angle: candidate.one_line_angle,
       })),
       annotations: input.annotations,
+      filter: input.filter,
     }),
     "utf8",
   );
