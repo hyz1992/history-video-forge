@@ -1,6 +1,7 @@
 # Asset Planning Global Draft 结构韧性设计
 
 - 日期：2026-08-09
+- 自审修订日期：2026-08-10
 - 状态：设计已确认，等待 implementation plan
 - 范围：仅 `asset planning` 的 global draft 结构稳定性
 - 关联真实故障项目：`121f51e3-4f82-4686-aed7-d57a99dafe73`
@@ -138,7 +139,7 @@ buildGlobalPromptInput
   -> 严格解析 GlobalPlanningDraft
        -> pass：进入 segment chunks
        -> fail：调用一次 global structural repair
-                  -> 严格解析修复结果
+                  -> 严格解析 patch / 校验路径 / 原子应用 / 再次严格解析 draft
                        -> pass：进入 segment chunks
                        -> fail：asset_global_plan_structural_repair_failed
   -> chunk planning / chunk repair
@@ -253,6 +254,8 @@ const GLOBAL_FORBIDDEN_CHUNK_KEYS = [
 
 原因：这四个字段的含义完全属于 segment chunk，在 global 模式下没有合法消费方，删除不涉及语义推断；但必须留诊断，不能静默掩盖模型模式混淆。
 
+当前 generation service 在 normalizer 之前存在 `hasObjectKey(rawGlobalDraft, "tasks")` 硬失败 guard。实施时必须删除该 guard，由本节精确 denylist 归一化统一接管；否则 `tasks` 会在 normalizer 运行前抢先失败，本设计的数据流无法成立。对应旧错误 `asset_planning_global_draft_must_not_include_tasks` 不再作为生产分支保留，改由 `asset_global_plan_mode_contamination_normalized` 诊断覆盖。
+
 ## 6. Global Structural Repair
 
 ### 6.1 触发条件
@@ -261,7 +264,7 @@ const GLOBAL_FORBIDDEN_CHUNK_KEYS = [
 
 - 确定性归一化后 `GlobalPlanningDraft` 仍产生 Zod issues。
 
-不因 provider 网络错误、超时或内容过滤进入该修复路径；外部错误继续走既有 provider 错误处理和安全重试边界。
+首次 global planner 的 provider 网络错误、超时或内容过滤不进入该修复路径；外部错误继续走既有 provider 错误处理和安全重试边界。若已经开始 global structural repair，而 repair 调用自身发生 provider 错误，则不发起第二次逻辑 repair，按 §6.3 的 provider 内部 attempt 上限结束，并在 runtime diagnostics 记录 `asset_global_structural_repair_provider_failed`。
 
 ### 6.2 正式 Prompt
 
@@ -287,13 +290,37 @@ status: active
 
 其中 `GlobalPlanningStructuralRepairInput` 和 `GlobalPlanningStructuralPatch` 是本设计冻结的 asset planning 阶段内部结构合同，不是新的跨阶段产品对象。Prompt 必须能被 `check-prompt-language.ts` 和 `detect-duplicate-prompts.ts` 扫描，并符合 `harness/docs/prompt-registry-spec.md`。
 
-Prompt 输入：
+Prompt 输入合同冻结为：
 
-- 原始 global prompt input。
-- 模型原始 global draft。
-- 确定性归一化后的 draft。
-- 精确 Zod issues 和由其导出的 `allowed_repair_paths`。
-- 允许输出的 `GlobalPlanningDraft` 骨架。
+```ts
+interface GlobalPlanningStructuralRepairInput {
+  normalized_draft: unknown;
+  schema_issues: Array<{
+    code: string;
+    path: Array<string | number>;
+    message: string;
+  }>;
+  allowed_repair_paths: Array<Array<string | number>>;
+  repair_context: {
+    topic_boundary_context?: AssetPlanningTopicBoundaryContext;
+    storyboard_visual_projection?: Array<{
+      segment_id: string;
+      narrative_role: string;
+      scene_description: string;
+      visual_elements: string[];
+    }>;
+  };
+}
+```
+
+输入收敛规则：
+
+- 始终传归一化后的 draft、精确 issues 和 allowed paths。
+- 不重复传模型原始 draft；原始响应只保留在交互日志中。
+- 叶子字段或单个数组元素字段缺失时，`repair_context` 为空，优先利用 normalized draft 中已有语义。
+- `art_bible`、`characters`、`locations`、`props` 或根对象缺失时，才提供 topic boundary 与 storyboard visual projection。
+- 不传完整 `script_text`、TTS plan、完整 StoryboardPlan 或完整原始 global prompt input，避免 repair 输入重复膨胀。
+- 输出骨架只存在于正式 repair Prompt，不再作为运行时 input 重复发送。
 
 Prompt 输出不是完整 global draft，而是最小结构补丁：
 
@@ -312,7 +339,7 @@ Prompt 要求：
 - 只修复结构问题。
 - 每个 patch 的 `path` 必须来自输入的 `allowed_repair_paths`。
 - 不输出未被请求的路径，不重写已经合法的字段。
-- 当路径值需要语义内容时，仅根据原 global input 和原 draft 补该字段。
+- 当路径值需要语义内容时，仅根据 normalized draft 和按规则提供的 `repair_context` 补该字段。
 - 不输出 tasks、dependencies 或其他 segment chunk 内容。
 - 输出 `GlobalPlanningStructuralPatch` JSON 对象。
 - 不输出 Markdown 或解释文字。
@@ -333,13 +360,14 @@ Prompt 要求：
 - operation policy：`targeted_repair`。
 - tier：沿用资产规划结构修复的 `smart` tier，避免另建模型配置维度。
 - 每个 global planning unit 最多发起一次逻辑 repair invocation。
-- 该 invocation 显式覆盖为最多 2 次实际 provider attempt：首次调用加最多一次瞬时错误重试。
-- 仅网络错误、429、503 允许第二次 provider attempt；timeout、内容过滤、schema 错误和其他 4xx 不重试。
+- invocation options 显式传入 `maxAttempts: 2`，将实际 provider attempt 总数限制为最多 2。
+- provider 内部是否执行第二次 attempt 完全沿用当前 `targeted_repair` 规则：timeout、rate_limited、service_unavailable 或 network 被分类为 retryable 时允许再试一次；非 retryable 的 invalid_request、configuration、invalid_response 等不重试。
+- 本设计不新增 operation 级 retry-code 白名单，也不修改其他 `targeted_repair` operation 的行为。
 - global repair 不复用 `invokePlanningPromptWithSafetyRetry`，避免内容过滤再产生隐藏的第二次逻辑调用。
 - 修复调用不再触发第二次 global repair。
 - 不回退成再次调用完整 `asset-planning.planner(global)`。
 
-“最多一次 repair”指一次逻辑 invocation；在瞬时外部错误下，实际 provider attempt 上限为 2。该上限必须进入 effective request 和交互日志，并由 operation policy 测试锁定。
+“最多一次 repair”指一次逻辑 invocation；实际 provider attempt 上限为 2。该上限进入 effective request，实际 attempts 继续由现有 LLM 交互日志记录并作为唯一真相源，不重复复制到 `AssetPlanRecord.executionStateJson`。operation policy 测试必须锁定 operation class，provider 策略测试必须锁定 `maxAttempts: 2` 的有效上限。
 
 ### 6.4 修复结果处理
 
@@ -359,13 +387,19 @@ Prompt 要求：
 - 不激活失败占位记录。
 - run service 清理 `generating` 并回退项目状态，保持现有事务边界。
 
+如果 repair 调用本身抛出 `ExternalServiceError`：
+
+- generation service 原样向上抛出，不包装成 schema repair 失败。
+- run service 保持当前外部错误返回边界，不新增错误类。
+- 结构事件必须发出 `repair_provider_failed`，runtime diagnostics 写入 `asset_global_structural_repair_provider_failed`，完整外部错误码和 attempt count 保留在交互日志与项目 trace。
+
 ## 7. 严格合同与职责边界
 
 ### 7.1 共享 schema 保持不变
 
-`ProjectArtBible` 和 `AssetPlan` 继续作为最终权威合同，不增加全局 `.passthrough()`，不把语义必填字段改成 optional，也不把所有数组无条件 default。
+`ProjectArtBible` 和 `AssetPlan` 继续作为最终权威合同，保持当前 `.strict()`，不把语义必填字段改成 optional，也不把所有数组无条件 default。仅 LLM 边界内部的 `GlobalPlanningDraft` 保留当前顶层 `.passthrough()`，并由 §5.5 的精确 denylist 单独处理 chunk 模式污染。
 
-LLM 边界的容错不能泄漏到数据库、API、harness 或其他调用方。
+归一化后的宽松中间 draft 不能作为数据库、API、harness 或其他调用方的新输入合同；只有通过严格 `ProjectArtBible` / `AssetPlan` schema 的最终产物可以进入下游。归一化和 repair 的诊断信息允许按 §8 写入数据库、API 和 trace，它们属于运行观测，不是宽松数据合同。
 
 ### 7.2 本地逻辑只做结构工作
 
@@ -420,12 +454,14 @@ type GlobalDraftStructureEvent =
     }
   | {
       type: "repair_succeeded";
-      provider_attempts: 1 | 2;
     }
   | {
       type: "repair_failed";
       issues: unknown[];
-      provider_attempts: 1 | 2;
+    }
+  | {
+      type: "repair_provider_failed";
+      error_code: string;
     };
 ```
 
@@ -433,7 +469,7 @@ type GlobalDraftStructureEvent =
 
 为保持 harness 和纯 generation 单测调用简单，TypeScript 输入字段可以是 optional；但生产 `runAssetPlanningGeneration` 必须提供该回调，API/run service 测试必须锁定这一点。未提供回调不得改变生成结果。
 
-repair 调用封装必须返回 `{ patch, providerAttempts }`；失败时抛出的结构化错误也必须携带 `providerAttempts`。该数值来自 gateway 的实际 attempts metadata，不由 run service 根据异常类型推测。generation service 据此发出 `repair_succeeded` 或 `repair_failed` 事件，run service 只聚合事件。
+事件只表达业务结构阶段是否进入、成功或失败，不重复承载 provider attempt 数。provider effective request 与实际 attempts 已由 `LlmInteractionLogEntry` 记录；避免为了复制日志元数据而改变通用 `LlmGateway` 的 `Promise<T>` 返回合同。
 
 ### 8.2 execution state
 
@@ -447,8 +483,7 @@ repair 调用封装必须返回 `{ patch, providerAttempts }`；失败时抛出�
   ],
   "global_structure_normalized_path_count": 8,
   "global_structure_paths_truncated": false,
-  "global_structural_repair_used": false,
-  "global_structural_repair_provider_attempts": 0
+  "global_structural_repair_used": false
 }
 ```
 
@@ -460,8 +495,8 @@ repair 调用封装必须返回 `{ patch, providerAttempts }`；失败时抛出�
 - `global_structure_normalized_paths` 最多保存前 50 条。
 - 超过 50 条时 `global_structure_paths_truncated = true`。
 - `global_structural_repair_used` 在逻辑 repair invocation 开始时置为 `true`，无论最终成功或失败。
-- `global_structural_repair_provider_attempts` 保存实际 provider attempt 数，取值只能是 `0 | 1 | 2`。
 - 完整 normalization actions、首次 issues、patch issues 和最终 issues 写入项目 `trace.md`，不塞入 execution state。
+- provider effective max attempts 与实际 attempt 列表只保留在对应 LLM 交互日志，不在 execution state 重复存储。
 
 ### 8.3 runtime diagnostics
 
@@ -470,13 +505,14 @@ repair 调用封装必须返回 `{ patch, providerAttempts }`；失败时抛出�
 - `asset_global_structure_normalization_used`
 - `asset_global_structural_repair_used`
 - `asset_global_structural_repair_failed`
+- `asset_global_structural_repair_provider_failed`
 - `asset_global_plan_mode_contamination_normalized`
 
 记录位置冻结为：
 
 - 成功：写入激活 `AssetPlanRecord.executionStateJson` 和 `runtimeDiagnosticsJson`，现有项目 snapshot 随 active asset plan 暴露这些字段。
-- 失败：写入失败占位 `AssetPlanRecord.executionStateJson`，并把完整错误写入项目 `trace.md`。
-- 生成 API 失败响应新增 `issue_paths`、`repair_used`、`repair_provider_attempts`；`issue_paths` 取首次 Zod issues、patch 校验 issues、最终 Zod issues 的路径并集，统一格式化、去重排序后最多返回前 20 条，不返回原始语义内容。
+- 失败：同时更新失败占位 `AssetPlanRecord.executionStateJson` 和 `runtimeDiagnosticsJson`，并把完整错误写入项目 `trace.md`。异常清理不得继续复用占位记录原有的空 `runtimeDiagnosticsJson`；必须用本轮已聚合的 structure events 构造失败 diagnostics 后一并保存。
+- 生成 API 的结构失败响应新增 `issue_paths`、`repair_used`；`issue_paths` 取首次 Zod issues、patch 校验 issues、最终 Zod issues 的路径并集，统一格式化、去重排序后最多返回前 20 条，不返回原始语义内容。repair provider 外部失败继续走当前外部错误响应边界，attempt 详情从交互日志和 trace 读取。
 - 前端第一版不新增错误详情 UI，继续显示失败文案；但 API、数据库和 trace 已具备可定位证据。
 
 ## 9. 错误处理矩阵
@@ -490,8 +526,10 @@ repair 调用封装必须返回 `{ patch, providerAttempts }`；失败时抛出�
 | `characters` 整体缺失 | 不补空数组 | 调用一次 | 修复成功后继续，否则失败 |
 | global 输出含精确 denylist 字段 | 删除归一化副本并记诊断 | 不调用 | 继续严格解析 |
 | global 输出完全不是对象 | 不处理 | 调用一次 | 修复成功后继续，否则失败 |
-| provider 超时/网络错误 | 不处理 | 不调用 | 保持既有外部错误路径 |
-| provider 内容过滤 | 不处理 | 不调用 | 保持既有安全重试路径 |
+| 首次 planner provider 超时/网络错误 | 不处理 | 不调用 | 保持既有外部错误路径 |
+| 首次 planner provider 内容过滤 | 不处理 | 不调用 | 保持既有安全重试路径 |
+| repair provider retryable 错误 | 不处理 | 同一 invocation 内最多 2 attempts | 仍失败则外部错误 + repair provider failed 诊断 |
+| repair provider 非 retryable 错误 | 不处理 | 不重试 | 外部错误 + repair provider failed 诊断 |
 | 修复结果仍不合法 | 仅补 allowlist | 不再调用 | `asset_global_plan_structural_repair_failed` |
 
 ## 10. 测试设计
@@ -518,7 +556,7 @@ repair 调用封装必须返回 `{ patch, providerAttempts }`；失败时抛出�
 - repair 只能应用首次 issue 对应的精确 paths，额外或父级覆盖 patch 必须失败。
 - repair 返回仍不合法结构时，抛 `asset_global_plan_structural_repair_failed`。
 - repair 不得被调用第二次。
-- repair 首次 provider 调用遇到 429/503/网络错误时最多重试一次；timeout、内容过滤和 schema 错误不重试。
+- repair invocation 的 `maxAttempts: 2` 生效；retryable / non-retryable 行为与现有 provider policy 一致。
 - 原有 chunk repair、plan repair 和 provider safety retry 行为不变。
 
 当前 `validGlobalPlanningDraft.art_bible.props` 不再只使用空数组覆盖所有用例；至少增加一个包含真实 prop 元素的基础 fixture。
@@ -530,7 +568,9 @@ repair 调用封装必须返回 `{ patch, providerAttempts }`；失败时抛出�
 - global repair 成功时记录 `global_structural_repair_used: true`。
 - global repair 失败时清除 `generating`，恢复项目原状态并保存稳定错误码。
 - 字段级 issues 写入 trace，不被折叠成只有 `internal_server_error`。
-- API 失败响应最多返回 20 条脱敏 issue paths，并准确返回 repair invocation / provider attempt 状态。
+- repair provider 外部失败时记录 `asset_global_structural_repair_provider_failed`，不误报成 schema repair failed。
+- global schema repair 失败和 repair provider 外部失败的检查码必须写入失败占位记录 `runtimeDiagnosticsJson`，不能只存在于 trace。
+- API 结构失败响应最多返回 20 条脱敏 issue paths，并准确返回 repair invocation 状态。
 
 ### 10.4 非 live 回归
 
@@ -544,6 +584,8 @@ tests/backend/api/asset-planning-api.test.ts
 tests/backend/runtime/prompt-runtime.test.ts
 tests/backend/runtime/llm-operation-policy.test.ts
 tests/backend/runtime/operation-tier-registry.test.ts
+tests/backend/runtime/provider-hardening.test.ts
+tests/harness/asset-planning-five-round-quality-check.test.ts
 harness/scripts/check-prompt-language.test.ts
 ```
 
@@ -551,7 +593,18 @@ harness/scripts/check-prompt-language.test.ts
 
 ```text
 npx vitest run --configLoader runner ... --no-file-parallelism
+npm run harness:check-prompts
 ```
+
+`npm run harness:check-prompts` 是新增正式 repair Prompt 的完整治理闸门，必须覆盖语言、重复 Prompt、changelog、fixture 和 drift 检查，不能只运行语言检查。
+
+本次真实失败形状固化为最小脱敏 fixture：
+
+```text
+tests/fixtures/asset-planning/global-draft-props-missing-consistency-notes.json
+```
+
+fixture 只保留复现结构所需的 global draft 字段和 8 个脱敏 prop，不复制项目完整 script、storyboard、人物姓名或其他业务正文。纯函数和 generation service 测试必须共同消费该 fixture，避免两套手写样本漂移。
 
 ### 10.5 真实验收
 
@@ -602,12 +655,16 @@ npx vitest run --configLoader runner ... --no-file-parallelism
 
 缓解：不继续叠加修复；第二次严格解析失败即稳定终止，并同时记录首次和修复后的 issues。
 
+### 风险 6：repair 输入重复膨胀
+
+缓解：repair 只接收 normalized draft、issues、allowed paths 和按缺失层级条件提供的紧凑视觉投影；不重复发送原始 draft、完整 script、TTS plan、完整 StoryboardPlan 或完整 global prompt input。
+
 ## 13. 预计改动边界
 
 后续 implementation plan 应把实现拆成低耦合任务，预计只涉及：
 
 - `backend/src/modules/asset-planning/`：global normalizer、generation service、run diagnostics。
-- `backend/src/runtime/llm/`：注册新的 operation policy / tier（如现有注册表要求）。
+- `backend/src/runtime/llm/`：只注册新的 operation class / tier，并用现有 invocation options 将 `maxAttempts` 限制为 2；不新增 retry-code 框架，不修改通用 `LlmGateway` 返回合同。
 - `prompts/asset-planning/`：新增正式中文 global structural repair Prompt。
 - `tests/backend/asset-planning/`、相关 runtime / prompt 测试。
 - 必要的文档索引和验证记录。
