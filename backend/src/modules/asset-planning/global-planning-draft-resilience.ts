@@ -32,7 +32,16 @@ export const GlobalPlanningStructuralPatch = z
           ),
           value: z.unknown(),
         })
-        .strict(),
+        .strict()
+        .superRefine((item, context) => {
+          if (!Object.prototype.hasOwnProperty.call(item, "value")) {
+            context.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ["value"],
+              message: "value is required",
+            });
+          }
+        }),
     ),
   })
   .strict();

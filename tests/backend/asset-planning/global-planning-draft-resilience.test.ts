@@ -189,6 +189,60 @@ describe("normalizeGlobalPlanningDraftStructure", () => {
 });
 
 describe("applyGlobalPlanningStructuralPatch", () => {
+  it("requires an explicit value key and rejects malformed patch shapes", () => {
+    const invalidPatches = [
+      {
+        patch_type: "global_planning_structural_patch",
+        patches: [{ path: ["manual_review_notes"] }],
+      },
+      {
+        patch_type: "global_planning_structural_patch",
+        patches: [],
+        extra: true,
+      },
+      {
+        patch_type: "global_planning_structural_patch",
+        patches: [{ path: ["manual_review_notes"], value: [], extra: true }],
+      },
+      {
+        patch_type: "wrong_patch_type",
+        patches: [],
+      },
+      {
+        patch_type: "global_planning_structural_patch",
+        patches: [{ path: ["items", -1], value: null }],
+      },
+      {
+        patch_type: "global_planning_structural_patch",
+        patches: [{ path: ["items", 0.5], value: null }],
+      },
+      {
+        patch_type: "global_planning_structural_patch",
+        patches: [{ path: ["items", true], value: null }],
+      },
+      {
+        patch_type: "global_planning_structural_patch",
+        patches: [{ path: ["items", { index: 0 }], value: null }],
+      },
+    ];
+
+    for (const patch of invalidPatches) {
+      expect(GlobalPlanningStructuralPatch.safeParse(patch).success).toBe(false);
+    }
+  });
+
+  it.each([null, { nested: "值" }, ["数组值"], "字符串值"])(
+    "accepts explicit JSON patch value %#",
+    (value) => {
+      expect(
+        GlobalPlanningStructuralPatch.safeParse({
+          patch_type: "global_planning_structural_patch",
+          patches: [{ path: ["manual_review_notes"], value }],
+        }).success,
+      ).toBe(true);
+    },
+  );
+
   it("applies only authorized exact paths without mutating the draft", () => {
     const draft = {
       art_bible: {
