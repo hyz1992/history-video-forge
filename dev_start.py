@@ -6,7 +6,7 @@ StoryForge 本地开发一键启动脚本。
 1. 并行启动后端和前端开发服务
 2. 将两路日志按来源打前缀，便于区分
 3. 支持 Ctrl+C 一次性优雅停止所有子进程
-4. 可选执行数据库准备流程（Prisma generate + migrate dev）
+4. 默认执行数据库准备流程（Prisma generate + migrate deploy）
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ def build_prepare_commands() -> list[list[str]]:
     """返回数据库准备命令列表，按顺序执行。"""
     return [
         ["npx", "prisma", "generate"],
-        ["npx", "prisma", "migrate", "dev"],
+        ["npx", "prisma", "migrate", "deploy"],
     ]
 
 
@@ -73,11 +73,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Start StoryForge backend and frontend for local development."
     )
-    parser.add_argument(
+    database_group = parser.add_mutually_exclusive_group()
+    database_group.add_argument(
         "--prepare-db",
+        dest="prepare_db",
         action="store_true",
-        help="Run `prisma generate` and `prisma migrate dev` in backend before startup.",
+        help="Prepare the database before startup (default; retained for compatibility).",
     )
+    database_group.add_argument(
+        "--skip-db-prepare",
+        dest="prepare_db",
+        action="store_false",
+        help="Skip Prisma Client generation and pending database migrations.",
+    )
+    parser.set_defaults(prepare_db=True)
     return parser.parse_args(argv)
 
 
@@ -90,7 +99,7 @@ def prepare_database(repo_root: Path) -> int:
     - 成功返回 0
     """
     backend_dir = repo_root / "backend"
-    print("[system] preparing database (prisma generate + prisma migrate dev)...")
+    print("[system] preparing database (prisma generate + prisma migrate deploy)...")
     for cmd in build_prepare_commands():
         resolved_cmd = resolve_command(cmd)
         print(f"[system] running in backend: {' '.join(cmd)}")
