@@ -578,6 +578,7 @@ describe("generateAssetPlan", () => {
   it.each([
     {
       name: "extra path",
+      failureStage: "patch" as const,
       patch: {
         patch_type: "global_planning_structural_patch",
         patches: [{ path: ["manual_review_notes"], value: [] }],
@@ -585,6 +586,7 @@ describe("generateAssetPlan", () => {
     },
     {
       name: "parent overwrite",
+      failureStage: "patch" as const,
       patch: {
         patch_type: "global_planning_structural_patch",
         patches: [{ path: ["art_bible", "props", 0], value: {} }],
@@ -592,6 +594,7 @@ describe("generateAssetPlan", () => {
     },
     {
       name: "duplicate path",
+      failureStage: "patch" as const,
       patch: {
         patch_type: "global_planning_structural_patch",
         patches: [
@@ -608,6 +611,7 @@ describe("generateAssetPlan", () => {
     },
     {
       name: "still invalid",
+      failureStage: "final" as const,
       patch: {
         patch_type: "global_planning_structural_patch",
         patches: [
@@ -618,7 +622,7 @@ describe("generateAssetPlan", () => {
         ],
       },
     },
-  ])("fails one bounded repair with separated issue buckets: $name", async ({ patch }) => {
+  ])("fails one bounded repair with separated issue buckets: $name", async ({ patch, failureStage }) => {
     const invalidDraft = structuredClone(missingPropNotesFixture) as {
       art_bible: { props: Array<Record<string, unknown>> };
     };
@@ -646,14 +650,34 @@ describe("generateAssetPlan", () => {
     }
 
     expect(caught).toBeInstanceOf(LlmOutputError);
-    expect(caught).toMatchObject({
-      code: "asset_global_plan_structural_repair_failed",
-      cause: {
-        initial_issues: expect.any(Array),
-        patch_issues: expect.any(Array),
-        final_issues: expect.any(Array),
-      },
-    });
+    expect((caught as LlmOutputError).code).toBe(
+      "asset_global_plan_structural_repair_failed",
+    );
+    const cause = (caught as LlmOutputError).cause as {
+      initial_issues: Array<{ path?: Array<string | number> }>;
+      patch_issues: unknown[];
+      final_issues: Array<{ path?: Array<string | number> }>;
+    };
+    expect(cause.initial_issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: ["art_bible", "props", 0, "visual_description"],
+        }),
+      ]),
+    );
+    if (failureStage === "patch") {
+      expect(cause.patch_issues.length).toBeGreaterThan(0);
+      expect(cause.final_issues).toEqual([]);
+    } else {
+      expect(cause.patch_issues).toEqual([]);
+      expect(cause.final_issues).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: ["art_bible", "props", 0, "visual_description"],
+          }),
+        ]),
+      );
+    }
     expect(
       calls.filter(
         (call) => call.promptId === "asset-planning.global-structural-repair",
@@ -662,7 +686,7 @@ describe("generateAssetPlan", () => {
     const failed = events.find((event) => event.type === "repair_failed");
     expect(failed).toEqual({
       type: "repair_failed",
-      ...((caught as LlmOutputError).cause as Record<string, unknown>),
+      ...cause,
     });
   });
 
@@ -699,6 +723,38 @@ describe("generateAssetPlan", () => {
       type: "repair_provider_failed",
       error_code: "configuration",
     });
+  });
+
+  it("rethrows a non-provider repair gateway error without provider failure event", async () => {
+    const ordinaryError = new Error("repair gateway programming failure");
+    const events: GlobalDraftStructureEvent[] = [];
+    const { gateway, calls } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.global-structural-repair") {
+        throw ordinaryError;
+      }
+      return { planning_mode: "global" };
+    });
+
+    await expect(
+      generateAssetPlan({
+        ...makeInput(gateway),
+        onGlobalStructureEvent: (event) => events.push(event),
+      }),
+    ).rejects.toBe(ordinaryError);
+    expect(
+      calls.filter(
+        (call) => call.promptId === "asset-planning.global-structural-repair",
+      ),
+    ).toHaveLength(1);
+    expect(events.map((event) => event.type)).toEqual([
+      "normalization_applied",
+      "repair_started",
+    ]);
+    expect(events).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ type: "repair_provider_failed" }),
+      ]),
+    );
   });
 
   it.each(["sync", "async"] as const)(
