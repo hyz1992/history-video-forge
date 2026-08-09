@@ -2,7 +2,7 @@
 
 - 日期：2026-08-09
 - 自审修订日期：2026-08-10
-- 状态：设计已确认，implementation plan 已建立，等待实施
+- 状态：non-live 实施完成，等待显式 live 验收
 - 范围：仅 `asset planning` 的 global draft 结构稳定性
 - 关联真实故障项目：`121f51e3-4f82-4686-aed7-d57a99dafe73`
 - 关联错误码：`asset_global_plan_schema_invalid`
@@ -16,6 +16,13 @@
 ## 一句话结论
 
 保留最终 `ProjectArtBible` / `AssetPlan` 严格合同，在 LLM global 响应与严格解析之间增加“确定性结构归一化”，并为归一化后仍存在的 global 结构错误增加一次受控结构修复；可安全确定的空数组由本地补齐，需要语义内容的字段仍交给 LLM，修复后再次严格解析，仍失败才终止本轮。
+
+## 实施结果（2026-08-10）
+
+- Task 1-4 的实现提交范围为 `09d0302` 至 `0c2d8ed`：已接入确定性归一化、精确路径结构补丁、单次 global repair、provider attempt 上限、成功/失败诊断持久化及 harness 汇总。
+- 完整 non-live 验证矩阵通过：12 个测试文件、252 项测试全部通过；Prompt Registry 治理、后端 typecheck 与 backend build 均为 exit 0。
+- 最终共享 `ProjectArtBible` / `AssetPlan` schema 未修改；实现未写入生成态 `storage/`，真实故障 fixture 已脱敏。
+- 本轮未执行真实 provider、故障项目重跑或五轮 live check，因此只能声明 non-live 实施完成，不能声明真实项目已恢复。
 
 ## 1. 已确认问题
 

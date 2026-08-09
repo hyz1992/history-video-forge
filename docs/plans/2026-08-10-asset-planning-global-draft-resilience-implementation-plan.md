@@ -45,11 +45,11 @@
 - 创建：`tests/backend/asset-planning/global-planning-draft-resilience.test.ts`
 - 创建：`backend/src/modules/asset-planning/global-planning-draft-resilience.ts`
 
-- [ ] **Step 1：创建最小脱敏 fixture**
+- [x] **Step 1：创建最小脱敏 fixture**
 
 保留完整合法 global draft 骨架和 8 个脱敏 prop；每个 prop 显式缺少 `consistency_notes`，不得复制真实项目正文或姓名。
 
-- [ ] **Step 2：写 normalizer 红灯**
+- [x] **Step 2：写 normalizer 红灯**
 
 从 fixture 读取对象并断言：
 
@@ -72,7 +72,7 @@ expect(fixture).toEqual(before);
 
 另拆分测试覆盖顶层三个 allowlist 数组、characters/locations/props 混合、已有非空值保留、字符串不转换、错误父类型不抛、四个 denylist 字段删除、其他未知顶层字段保留和 actions 稳定去重排序。
 
-- [ ] **Step 3：运行红灯**
+- [x] **Step 3：运行红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/asset-planning/global-planning-draft-resilience.test.ts --no-file-parallelism
@@ -80,7 +80,7 @@ npx vitest run --configLoader runner tests/backend/asset-planning/global-plannin
 
 预期：因模块/导出尚不存在失败；不得因 fixture JSON 非法失败。
 
-- [ ] **Step 4：实现最小 normalizer**
+- [x] **Step 4：实现最小 normalizer**
 
 冻结并导出：
 
@@ -101,14 +101,14 @@ export function normalizeGlobalPlanningDraftStructure(raw: unknown): {
 
 只在父对象/数组元素类型正确且字段为 `undefined` 时写入 `[]`；用 `structuredClone` 或等价纯复制保护原输入。禁止创建缺失的 `art_bible`、集合或元素对象。
 
-- [ ] **Step 5：运行 pure tests 绿灯并 typecheck**
+- [x] **Step 5：运行 pure tests 绿灯并 typecheck**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/asset-planning/global-planning-draft-resilience.test.ts --no-file-parallelism
 npm run typecheck:backend
 ```
 
-- [ ] **Step 6：中文提交 Task 1**
+- [x] **Step 6：中文提交 Task 1**
 
 ```powershell
 git add -- backend/src/modules/asset-planning/global-planning-draft-resilience.ts tests/backend/asset-planning/global-planning-draft-resilience.test.ts tests/fixtures/asset-planning/global-draft-props-missing-consistency-notes.json
@@ -132,7 +132,7 @@ git commit -m "增加资产规划全局草稿确定性归一化"
 - 修改：`backend/src/runtime/llm/operation-policy.ts`
 - 修改：`backend/src/runtime/llm/operation-tier-registry.ts`
 
-- [ ] **Step 1：写 patch 红灯**
+- [x] **Step 1：写 patch 红灯**
 
 至少覆盖：合法精确路径原子应用、额外路径拒绝、父级覆盖拒绝、重复路径拒绝、非法/越界数组路径拒绝、根 issue `[]` 才允许根替换、任一非法 patch 时原对象不变。
 
@@ -154,19 +154,19 @@ export function applyGlobalPlanningStructuralPatch(input: {
 }): unknown;
 ```
 
-- [ ] **Step 2：运行 patch 红灯**
+- [x] **Step 2：运行 patch 红灯**
 
 运行 Task 1 同一 pure test 文件，确认因 patch API 缺失失败。
 
-- [ ] **Step 3：实现最小 path helper 与原子 patch**
+- [x] **Step 3：实现最小 path helper 与原子 patch**
 
 从 Zod issues 原样生成 `allowedRepairPaths`；使用结构化数组比较，不用字符串前缀判断。先完整校验所有 patch，再在副本上应用，禁止部分提交。
 
-- [ ] **Step 4：运行 pure tests 绿灯**
+- [x] **Step 4：运行 pure tests 绿灯**
 
 运行 pure test 文件，确认 normalizer 与 patch 全部通过。
 
-- [ ] **Step 5：写 Prompt/registry 红灯**
+- [x] **Step 5：写 Prompt/registry 红灯**
 
 测试必须断言新 Prompt：
 
@@ -176,24 +176,24 @@ export function applyGlobalPlanningStructuralPatch(input: {
 - operation class 为 `targeted_repair`；
 - tier 为 `smart`。
 
-- [ ] **Step 6：运行 registry 红灯**
+- [x] **Step 6：运行 registry 红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/prompt-runtime.test.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/operation-tier-registry.test.ts --no-file-parallelism
 ```
 
-- [ ] **Step 7：增加中文 Prompt 与显式 registry 映射**
+- [x] **Step 7：增加中文 Prompt 与显式 registry 映射**
 
 Prompt 只允许输出 `GlobalPlanningStructuralPatch`，逐条强调 path 必须来自 `allowed_repair_paths`、不得输出 Markdown、不得重写合法字段或 segment task。新增 v1.0.0 changes 文件；只给两个现有白名单各增加一个精确 operation，不改 class 默认策略。
 
-- [ ] **Step 8：运行 Prompt 治理绿灯**
+- [x] **Step 8：运行 Prompt 治理绿灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/prompt-runtime.test.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/operation-tier-registry.test.ts --no-file-parallelism
 npm run harness:check-prompts
 ```
 
-- [ ] **Step 9：中文提交 Task 2**
+- [x] **Step 9：中文提交 Task 2**
 
 ```powershell
 git add -- backend/src/modules/asset-planning/global-planning-draft-resilience.ts backend/src/runtime/llm/operation-policy.ts backend/src/runtime/llm/operation-tier-registry.ts prompts/asset-planning/global-structural-repair.prompt.md prompts/asset-planning/global-structural-repair.changes.md tests/backend/asset-planning/global-planning-draft-resilience.test.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/operation-tier-registry.test.ts
@@ -211,11 +211,11 @@ git commit -m "增加资产规划全局结构修复合同"
 - 修改：`tests/backend/runtime/provider-hardening.test.ts`
 - 修改：`backend/src/modules/asset-planning/asset-planning-generation.service.ts`
 
-- [ ] **Step 1：让 generation fixture 消费真实故障 fixture**
+- [x] **Step 1：让 generation fixture 消费真实故障 fixture**
 
 把基础合法 global draft 至少扩展为一个真实 prop；新增用例读取 8-prop fixture，确认 1 次 global planner + 既有 chunk calls，无 global repair 调用且最终 `AssetPlan.parse()` 通过。
 
-- [ ] **Step 2：写 generation repair 红灯**
+- [x] **Step 2：写 generation repair 红灯**
 
 分别覆盖：
 
@@ -236,7 +236,7 @@ git commit -m "增加资产规划全局结构修复合同"
 将原“global 含 tasks 必须失败”的旧测试替换为 denylist 归一化测试。
 同时重写当前“缺少 `art_bible` 时抛 `asset_global_plan_schema_invalid`”测试：新合同下应恰好进入一次 repair；若 patch 无效或修后仍不合法，断言 `asset_global_plan_structural_repair_failed`，并确认 cause 同时保留首次 issues、patch 校验 issues（若有）和最终 issues。`asset_global_plan_schema_invalid` 不再作为该生产分支的最终错误码。
 
-- [ ] **Step 3：运行 generation 红灯**
+- [x] **Step 3：运行 generation 红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/asset-planning/asset-planning-generation.test.ts --no-file-parallelism
@@ -244,7 +244,7 @@ npx vitest run --configLoader runner tests/backend/asset-planning/asset-planning
 
 预期：新事件/repair 调用断言失败，旧 hard guard 测试被新行为取代。
 
-- [ ] **Step 4：扩展 generation 输入事件合同**
+- [x] **Step 4：扩展 generation 输入事件合同**
 
 新增可选回调：
 
@@ -265,7 +265,7 @@ async function emitGlobalStructureEventSafely(
 
 同步 throw 和 Promise reject 均捕获并 `console.warn`，不得重新抛出。`repair_failed` payload 冻结为三个分栏数组：`initial_issues`、`patch_issues`、`final_issues`。
 
-- [ ] **Step 5：实现 parse-normalize-repair 数据流**
+- [x] **Step 5：实现 parse-normalize-repair 数据流**
 
 删除 `hasObjectKey(rawGlobalDraft, "tasks")` hard guard。先 normalize 并报告 actions，再使用 `GlobalPlanningDraft.safeParse`；失败时构造紧凑 repair input，调用 gateway：
 
@@ -281,18 +281,18 @@ await gateway.invokeStructuredPrompt<unknown>({
 
 严格 parse patch、原子应用、再 normalize 和 parse。所有 schema/patch 失败统一抛 `LlmOutputError("asset_global_plan_structural_repair_failed")` 并在 cause 保存首次/patch/最终 issues；外部错误不包装。
 
-- [ ] **Step 6：锁定 provider effective attempt 上限**
+- [x] **Step 6：锁定 provider effective attempt 上限**
 
 在 `provider-hardening.test.ts` 用真实 provider policy 路径证明 invocation `maxAttempts: 2` 覆盖 profile 更大值，并分别验证 retryable 最多两次、non-retryable 一次；不修改通用 gateway 返回合同。
 
-- [ ] **Step 7：运行 generation/provider 绿灯与回归**
+- [x] **Step 7：运行 generation/provider 绿灯与回归**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/asset-planning/global-planning-draft-resilience.test.ts tests/backend/asset-planning/asset-planning-generation.test.ts tests/backend/runtime/provider-hardening.test.ts --no-file-parallelism
 npm run typecheck:backend
 ```
 
-- [ ] **Step 8：中文提交 Task 3**
+- [x] **Step 8：中文提交 Task 3**
 
 ```powershell
 git add -- backend/src/modules/asset-planning/asset-planning-generation.service.ts tests/backend/asset-planning/asset-planning-generation.test.ts tests/backend/runtime/provider-hardening.test.ts
@@ -313,7 +313,7 @@ git commit -m "接入资产规划全局草稿受限结构修复"
 - 修改：`tests/harness/asset-planning-five-round-quality-check.test.ts`
 - 修改：`harness/scripts/runtime/asset-planning-five-round-quality-check.ts`
 
-- [ ] **Step 1：写 run/API 红灯**
+- [x] **Step 1：写 run/API 红灯**
 
 通过现有 generation mock 主动发送结构事件，覆盖：
 
@@ -324,17 +324,17 @@ git commit -m "接入资产规划全局草稿受限结构修复"
 - 结构失败响应只返回 `issue_paths` 最多 20 条、`repair_used`，不包含 value/语义正文。
 - 成功 normalization 的完整 actions，以及 schema repair 失败分栏的 `initial_issues/patch_issues/final_issues`，均可从真实 `trace.md` 分别读回；API 仍只返回脱敏 paths。
 
-- [ ] **Step 2：运行 API 红灯**
+- [x] **Step 2：运行 API 红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/api/asset-planning-api.test.ts --no-file-parallelism
 ```
 
-- [ ] **Step 3：为 trace writer 写独立红灯**
+- [x] **Step 3：为 trace writer 写独立红灯**
 
 在 `tests/backend/runtime/project-storage-trace.test.ts` 创建临时项目存储，断言新的服务诊断写入方法会生成独立的 `Service Diagnostic` 段落，保留 label 与完整 JSON payload，且不创建伪 LLM interaction 文件、不标记为 `Error`。
 
-- [ ] **Step 4：运行 trace writer 红灯**
+- [x] **Step 4：运行 trace writer 红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/project-storage-trace.test.ts --no-file-parallelism
@@ -342,7 +342,7 @@ npx vitest run --configLoader runner tests/backend/runtime/project-storage-trace
 
 预期：因 `TraceLogWriter.writeDiagnostic` 尚不存在失败。
 
-- [ ] **Step 5：实现最小 trace diagnostic appender**
+- [x] **Step 5：实现最小 trace diagnostic appender**
 
 给 `TraceLogWriter` 增加：
 
@@ -352,23 +352,23 @@ writeDiagnostic(label: string, payload: unknown): void;
 
 `createProjectTraceAppender` 只向 project `trace.md` 追加脱敏前的服务内部结构 JSON；`createCompositeInteractionLogWriter` 只转发给 trace appender，不写入 `llm-interactions/`。现有 `write` / `writeError` 行为保持不变。
 
-- [ ] **Step 6：运行 trace writer 绿灯**
+- [x] **Step 6：运行 trace writer 绿灯**
 
 运行 Step 4 命令，预期通过。
 
-- [ ] **Step 7：实现无副作用事件聚合器**
+- [x] **Step 7：实现无副作用事件聚合器**
 
 在 run service 当前请求作用域保存 events；production `generateAssetPlan` 首次调用和 regen 调用均提供回调。聚合规则严格按设计：default paths 去重排序、最多 50，污染字段不混入路径计数，repair_started 即置 repair used。
 
-- [ ] **Step 8：扩展成功/失败持久化、trace 与脱敏响应**
+- [x] **Step 8：扩展成功/失败持久化、trace 与脱敏响应**
 
 `buildRuntimeDiagnostics` 接收结构事件；catch 清理时用已聚合 events 新建失败 diagnostics，不能继续复用 placeholder 的 `null`。对 `LlmOutputError(asset_global_plan_structural_repair_failed)` 从 cause 收集纯路径并格式化，去重排序后最多 20 条；provider 错误保持现有错误边界。每次事件到达后尝试用 `writeDiagnostic` 写结构化 label/payload：normalization 保存完整 actions，repair_started/failed 分栏保存 `initial_issues/patch_issues/final_issues`，provider failure 保存稳定错误码；不得把 raw draft 或 patch value 回传给 API。run callback 内部也要隔离 `writeDiagnostic` 异常并记录 warning，形成 generation safe emitter 与存储回调的双层防护。
 
-- [ ] **Step 9：写 harness 红灯**
+- [x] **Step 9：写 harness 红灯**
 
 在 `tests/harness/asset-planning-five-round-quality-check.test.ts` 断言已有 round runtime diagnostics 汇总必须包含：normalization 使用次数/路径总量、global repair 使用次数/成功/失败分类；fixture 模式只消费记录，不增加 provider 请求。
 
-- [ ] **Step 10：运行 harness 红灯**
+- [x] **Step 10：运行 harness 红灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/asset-planning-five-round-quality-check.test.ts --no-file-parallelism
@@ -376,18 +376,18 @@ npx vitest run --configLoader runner tests/harness/asset-planning-five-round-qua
 
 预期：因现有 summary 尚无 global structure 聚合字段失败，而不是因 provider 或 fixture 初始化失败。
 
-- [ ] **Step 11：实现 harness 最小汇总**
+- [x] **Step 11：实现 harness 最小汇总**
 
 在现有报告聚合中读取记录字段，增加 normalization/repair 计数与失败分类；不增加 provider 请求，不把 live 变成默认门禁。
 
-- [ ] **Step 12：运行 API/trace/harness 绿灯**
+- [x] **Step 12：运行 API/trace/harness 绿灯**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/api/asset-planning-api.test.ts tests/backend/runtime/project-storage-trace.test.ts tests/harness/asset-planning-five-round-quality-check.test.ts --no-file-parallelism
 npm run typecheck:backend
 ```
 
-- [ ] **Step 13：中文提交 Task 4**
+- [x] **Step 13：中文提交 Task 4**
 
 ```powershell
 git add -- backend/src/modules/asset-planning/asset-planning-run.service.ts backend/src/runtime/trace/project-storage.ts tests/backend/api/asset-planning-api.test.ts tests/backend/runtime/project-storage-trace.test.ts harness/scripts/runtime/asset-planning-five-round-quality-check.ts tests/harness/asset-planning-five-round-quality-check.test.ts
@@ -405,7 +405,7 @@ git commit -m "持久化资产规划全局结构诊断"
 - 修改：`docs/plans/2026-08-10-asset-planning-global-draft-resilience-implementation-plan.md`
 - 修改：`docs/plans/README.md`
 
-- [ ] **Step 1：运行正式验证矩阵**
+- [x] **Step 1：运行正式验证矩阵**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/asset-planning/asset-planning-generation.test.ts tests/backend/asset-planning/global-planning-draft-resilience.test.ts tests/backend/asset-planning/asset-planning-run-error-classification.test.ts tests/backend/asset-planning/asset-planning-local-validator.test.ts tests/backend/api/asset-planning-api.test.ts tests/backend/runtime/project-storage-trace.test.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/operation-tier-registry.test.ts tests/backend/runtime/provider-hardening.test.ts tests/harness/asset-planning-five-round-quality-check.test.ts harness/scripts/check-prompt-language.test.ts --no-file-parallelism
@@ -416,15 +416,15 @@ npm run build:backend
 
 预期：全部 exit 0；不得用局部单测替代这组最终验证。
 
-- [ ] **Step 2：回读验收清单**
+- [x] **Step 2：回读验收清单**
 
 逐项核对设计 §11：真实故障 fixture 不多调用 LLM、机械 notes 缺失可过、非机械错误仅一次 repair、最终 shared schema 严格、既有 repairs 无回归、失败分类和 paths 可观测、不新增本地语义判断。
 
-- [ ] **Step 3：更新文档状态和复选框**
+- [x] **Step 3：更新文档状态和复选框**
 
 把设计状态改为“非 live 实施完成，等待显式 live 验收”；记录实际测试数量与未执行 live 的边界。不得声称真实项目已恢复，除非另行执行显式 live check。
 
-- [ ] **Step 4：最终 diff 自审**
+- [x] **Step 4：最终 diff 自审**
 
 ```powershell
 git diff --check
@@ -434,13 +434,23 @@ git diff --stat
 
 确认没有修改 `shared/src/**`，没有生成态 storage 数据，没有 API key 或真实项目正文。
 
-- [ ] **Step 5：中文提交 Task 5**
+- [x] **Step 5：中文提交 Task 5**
 
 ```powershell
 git add -- docs/plans/2026-08-09-asset-planning-global-draft-resilience-design.md docs/plans/2026-08-10-asset-planning-global-draft-resilience-implementation-plan.md docs/plans/README.md
 git diff --cached --check
 git commit -m "记录资产规划全局结构韧性实施结果"
 ```
+
+## 实施与验证结果（2026-08-10）
+
+- Task 1-4 实现提交：`09d0302` 至 `0c2d8ed`。原计划红灯均有本次 agent 执行日志：Task 1 模块缺失；Task 2 pure/runtime 断言失败及后续必填值、重叠路径红灯；Task 3 新回归、typed path 红灯；Task 4 trace/API/harness/normalization total/unsupported payload 红灯。两次补强 characterization 首次即绿，不宣称为红灯。
+- 完整 Vitest 矩阵：exit 0，12 个测试文件、252 项测试全部通过。
+- `npm run harness:check-prompts`：exit 0；19 个 Prompt 语言与重复检查通过、19/19 changelog 通过、12/12 fixture contracts 通过、19 个 Prompt 无 active drift（1 个新 Prompt 因仅 1 个历史提交跳过 drift，1 个已知历史 drift 按既有规则跳过）。
+- `npm run typecheck:backend`：exit 0。
+- `npm run build:backend`：exit 0。
+- Windows npm/npx wrapper 输出了 `Test-Path: Access is denied` 权限 warning，但四条命令均返回 exit 0；预期的 chunk repair 与 unknown operation stderr 来自失败分支/保守默认策略测试，不是测试失败。
+- 边界检查：`shared/src/**` 与 `storage/` 均无本轮实现改动；fixture 使用脱敏占位内容；未发现 API key、secret 或真实项目正文。
 
 ## 显式 live 验收边界
 
