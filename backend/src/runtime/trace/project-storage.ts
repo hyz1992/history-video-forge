@@ -324,6 +324,43 @@ function formatDiagnosticIssuePath(path: unknown): string | undefined {
   }, "");
 }
 
+const SAFE_RESILIENCE_EVENT_TYPES = new Set([
+  "legacy_chunk_patch_coerced",
+  "legacy_chunk_patch_coercion_failed",
+  "legacy_audio_timing_canonicalized",
+  "legacy_audio_timing_canonicalization_failed",
+]);
+const SAFE_RESILIENCE_ERROR_CODES = new Set([
+  "asset_legacy_chunk_patch_coercion_failed",
+  "asset_legacy_audio_timing_rebind_ambiguous",
+]);
+const SAFE_RESILIENCE_ACTION_TYPES = new Set([
+  "single_wrapper_unwrapped",
+  "missing_discriminator_defaulted",
+  "audio_timing_rebound",
+]);
+const SAFE_RESILIENCE_PATH_FIELDS = new Set([
+  "patch_fields", "dependencies", "depends_on_task_id", "dependency_type",
+  "task_id", "tasks", "local_task_id", "local_dependency_id",
+  "task_local_id", "depends_on_local_task_id",
+]);
+
+function sanitizeResiliencePath(path: unknown): string | undefined {
+  const formatted = Array.isArray(path)
+    ? formatDiagnosticIssuePath(path.slice(0, 12))
+    : typeof path === "string" && path.length <= 256
+      ? path
+      : undefined;
+  if (formatted === undefined || formatted === "<root>") return formatted;
+  const parts = formatted.split(/[.\[\]]/u).filter(Boolean);
+  if (parts.length > 12) return undefined;
+  return parts.every((part) =>
+    /^[0-9]{1,6}$/u.test(part) || SAFE_RESILIENCE_PATH_FIELDS.has(part),
+  )
+    ? formatted
+    : "$unknown";
+}
+
 export function sanitizeAssetPlanningResilienceDiagnostic(
   payload: unknown,
 ): Record<string, unknown> {
@@ -331,35 +368,322 @@ export function sanitizeAssetPlanningResilienceDiagnostic(
     return { type: "unknown_resilience_event" };
   }
 
-  const type =
-    typeof payload.type === "string" ? payload.type : "unknown_resilience_event";
+  const type = typeof payload.type === "string" &&
+      SAFE_RESILIENCE_EVENT_TYPES.has(payload.type)
+    ? payload.type
+    : "unknown_resilience_event";
   const result: Record<string, unknown> = { type };
-  if (typeof payload.error_code === "string") {
+  if (typeof payload.error_code === "string" &&
+      SAFE_RESILIENCE_ERROR_CODES.has(payload.error_code)) {
     result.error_code = payload.error_code;
   }
 
-  if (Array.isArray(payload.actions)) {
-    const actionTypes = payload.actions.flatMap((action) =>
+  const rawActionTypes = Array.isArray(payload.actions)
+    ? payload.actions.flatMap((action) =>
       isDiagnosticRecord(action) && typeof action.type === "string"
         ? [action.type]
-        : [],
-    );
-    result.action_types = [...new Set(actionTypes)].sort();
-    result.action_count = payload.actions.length;
+        : [])
+    : Array.isArray(payload.action_types)
+      ? payload.action_types.filter((action): action is string =>
+          typeof action === "string")
+      : [];
+  const actionTypes = rawActionTypes.filter((action) =>
+    SAFE_RESILIENCE_ACTION_TYPES.has(action));
+  if (rawActionTypes.length > 0 || Number.isSafeInteger(payload.action_count)) {
+    result.action_types = [...new Set(actionTypes)].sort().slice(0, 20);
+    result.action_count = Array.isArray(payload.actions)
+      ? payload.actions.length
+      : Math.min(Math.max(Number(payload.action_count), 0), 1_000_000);
   }
 
-  if (Array.isArray(payload.issues)) {
-    const issuePaths = payload.issues.flatMap((issue) => {
+  const rawIssuePaths = Array.isArray(payload.issues)
+    ? payload.issues.flatMap((issue) => {
       if (!isDiagnosticRecord(issue)) return [];
-      const path = formatDiagnosticIssuePath(issue.path);
+      const path = sanitizeResiliencePath(issue.path);
       return path === undefined ? [] : [path];
-    });
-    result.issue_count = payload.issues.length;
-    result.issue_paths = [...new Set(issuePaths)].sort().slice(0, 20);
-    result.issues_truncated = issuePaths.length > 20;
+    })
+    : Array.isArray(payload.issue_paths)
+      ? payload.issue_paths.flatMap((path) => {
+          const sanitized = sanitizeResiliencePath(path);
+          return sanitized === undefined ? [] : [sanitized];
+        })
+      : [];
+  if (Array.isArray(payload.issues) || Number.isSafeInteger(payload.issue_count)) {
+    result.issue_count = Array.isArray(payload.issues)
+      ? payload.issues.length
+      : Math.min(Math.max(Number(payload.issue_count), 0), 1_000_000);
+    result.issue_paths = [...new Set(rawIssuePaths)].sort().slice(0, 20);
+    result.issues_truncated = payload.issues_truncated === true || rawIssuePaths.length > 20;
   }
 
   return result;
+}
+
+const SAFE_GLOBAL_STRUCTURE_EVENT_TYPES = new Set([
+  "normalization_applied", "repair_started", "repair_succeeded",
+  "repair_failed", "repair_provider_failed",
+]);
+const SAFE_GLOBAL_STRUCTURE_ACTION_TYPES = new Set([
+  "default_inserted", "forbidden_chunk_key_removed",
+]);
+const SAFE_GLOBAL_STRUCTURE_PATH_FIELDS = new Set([
+  "plan_version", "characters", "locations", "visual_rules", "audio_rules",
+  "visual_style", "continuity_rules", "negative_constraints", "bgm_plan",
+  "global_ambience", "global_sfx_policy", "art_bible", "props",
+  "consistency_notes", "tasks", "risk_notes", "dependencies", "budget_notes",
+  "chunk_id",
+]);
+
+function sanitizeGlobalStructurePath(path: unknown): string | undefined {
+  const rawParts = Array.isArray(path)
+    ? path.slice(0, 12)
+    : typeof path === "string" && path.length <= 256
+      ? path.match(/[^.\[\]]+|\d+/gu)?.slice(0, 12)
+      : undefined;
+  if (!rawParts) return undefined;
+  if (rawParts.length === 0) return "<root>";
+  const safeParts = rawParts.map((part) => {
+    if (typeof part === "number") {
+      return Number.isSafeInteger(part) && part >= 0 ? part : "$index";
+    }
+    if (/^\d{1,6}$/u.test(part)) return Number(part);
+    return SAFE_GLOBAL_STRUCTURE_PATH_FIELDS.has(part) ? part : "$unknown";
+  });
+  return formatDiagnosticIssuePath(safeParts);
+}
+
+function sanitizeGlobalStructureIssues(payload: Record<string, unknown>) {
+  const rawCollections = [
+    payload.issues,
+    payload.initial_issues,
+    payload.patch_issues,
+    payload.final_issues,
+  ].filter(Array.isArray) as unknown[][];
+  const rawIssues = rawCollections.flat();
+  const paths = rawIssues.length > 0
+    ? rawIssues.flatMap((issue) => {
+        if (!isDiagnosticRecord(issue)) return [];
+        const path = sanitizeGlobalStructurePath(issue.path);
+        return path === undefined ? [] : [path];
+      })
+    : Array.isArray(payload.issue_paths)
+      ? payload.issue_paths.flatMap((path) => {
+          const sanitized = sanitizeGlobalStructurePath(path);
+          return sanitized === undefined ? [] : [sanitized];
+        })
+      : [];
+  const uniquePaths = [...new Set(paths)].sort();
+  const issueCount = rawIssues.length > 0
+    ? rawIssues.length
+    : Number.isSafeInteger(payload.issue_count) && Number(payload.issue_count) >= 0
+      ? Math.min(Number(payload.issue_count), 1_000_000)
+      : 0;
+  return {
+    issue_count: issueCount,
+    issue_paths: uniquePaths.slice(0, 20),
+    issues_truncated: payload.issues_truncated === true || uniquePaths.length > 20,
+  };
+}
+
+export function sanitizeAssetPlanningGlobalStructureDiagnostic(
+  payload: unknown,
+): Record<string, unknown> {
+  if (!isDiagnosticRecord(payload) ||
+      typeof payload.type !== "string" ||
+      !SAFE_GLOBAL_STRUCTURE_EVENT_TYPES.has(payload.type)) {
+    return { type: "unknown_global_structure_event" };
+  }
+  const type = payload.type;
+  if (type === "repair_succeeded") return { type };
+  if (type === "repair_provider_failed") {
+    return {
+      type,
+      error_code: "asset_global_structural_repair_provider_failed",
+    };
+  }
+  if (type === "normalization_applied") {
+    const rawActions = Array.isArray(payload.actions) ? payload.actions : [];
+    const rawTypes = rawActions.length > 0
+      ? rawActions.flatMap((action) =>
+          isDiagnosticRecord(action) && typeof action.type === "string"
+            ? [action.type]
+            : [])
+      : Array.isArray(payload.action_types)
+        ? payload.action_types.filter((value): value is string =>
+            typeof value === "string")
+        : [];
+    const rawPaths = rawActions.length > 0
+      ? rawActions.flatMap((action) => {
+          if (!isDiagnosticRecord(action)) return [];
+          const path = sanitizeGlobalStructurePath(action.path);
+          return path === undefined ? [] : [path];
+        })
+      : Array.isArray(payload.action_paths)
+        ? payload.action_paths.flatMap((path) => {
+            const sanitized = sanitizeGlobalStructurePath(path);
+            return sanitized === undefined ? [] : [sanitized];
+          })
+        : [];
+    const actionPaths = [...new Set(rawPaths)].sort();
+    return {
+      type,
+      action_count: rawActions.length > 0
+        ? rawActions.length
+        : Number.isSafeInteger(payload.action_count) && Number(payload.action_count) >= 0
+          ? Math.min(Number(payload.action_count), 1_000_000)
+          : 0,
+      action_types: [...new Set(rawTypes.filter((value) =>
+        SAFE_GLOBAL_STRUCTURE_ACTION_TYPES.has(value)))].sort().slice(0, 20),
+      action_paths: actionPaths.slice(0, 20),
+      actions_truncated: payload.actions_truncated === true || actionPaths.length > 20,
+    };
+  }
+  return { type, ...sanitizeGlobalStructureIssues(payload) };
+}
+
+const SAFE_INTENT_CHUNK_STATUSES = new Set([
+  "queued", "running", "generated", "repaired", "regenerated", "compiled", "failed",
+]);
+const SAFE_INTENT_CHUNK_STAGES = new Set([
+  "queued", "running", "generated", "repaired", "regenerated", "compiled",
+]);
+const SAFE_INTENT_FAILURE_CLASSES = new Set(["llm_output", "provider", "business"]);
+const SAFE_INTENT_COMPILER_ACTIONS = new Set([
+  "visual_strategy_applied",
+  "global_bgm_owner_bound",
+]);
+const SAFE_INTENT_FAILURE_CODES = new Set([
+  "asset_segment_intent_invalid",
+  "asset_chunk_plan_schema_invalid",
+  "asset_chunk_forbidden_task_type_violated",
+  "asset_chunk_task_segment_out_of_scope_violated",
+  "asset_chunk_support_image_reason_missing_violated",
+  "asset_chunk_anchor_image_budget_exceeded_violated",
+  "asset_chunk_dependency_local_id_missing_violated",
+  "intent_chunk_business_failed",
+  "content_filter",
+  "configuration",
+  "rate_limited",
+  "timeout",
+  "network",
+  "invalid_request",
+  "invalid_response",
+  "service_unavailable",
+  "budget_exceeded",
+  "unknown",
+]);
+const SAFE_INTENT_DIAGNOSTIC_PATH_FIELDS = new Set([
+  "$unknown", "planning_mode", "segments", "source_segment_id", "intents",
+  "asset_kind", "production_intent", "image_prompt", "video_prompt_reserve",
+  "image_role", "support_reason", "risk_notes", "video_prompt",
+  "why_static_insufficient", "required_tags", "mood_tags", "selection_label",
+  "timing_basis", "scope", "segment_ids", "volume", "fade_in_sec",
+  "fade_out_sec", "budget_notes",
+]);
+
+function isSafeIntentDiagnosticPath(path: string): boolean {
+  if (path.length === 0 || path.length > 256) return false;
+  const parts = path.split(/[.\[\]]/u).filter(Boolean);
+  return parts.length <= 12 && parts.every((part) =>
+    /^[0-9]{1,6}$/u.test(part) || SAFE_INTENT_DIAGNOSTIC_PATH_FIELDS.has(part),
+  );
+}
+
+function boundedDiagnosticCount(value: unknown): number {
+  return Number.isSafeInteger(value) && Number(value) >= 0
+    ? Math.min(Number(value), 1_000_000)
+    : 0;
+}
+
+export function sanitizeAssetPlanningIntentChunkDiagnostic(
+  payload: unknown,
+): Record<string, unknown> {
+  const rawChunks = isDiagnosticRecord(payload) && Array.isArray(payload.chunks)
+    ? payload.chunks
+    : [];
+  const chunks = rawChunks.slice(0, 100).flatMap((rawChunk) => {
+    if (!isDiagnosticRecord(rawChunk)) return [];
+    const chunkId = typeof rawChunk.chunk_id === "string" &&
+      /^chunk_[0-9]{3,6}$/u.test(rawChunk.chunk_id)
+      ? rawChunk.chunk_id
+      : null;
+    const chunkIndex = Number.isSafeInteger(rawChunk.chunk_index) &&
+      Number(rawChunk.chunk_index) >= 0 && Number(rawChunk.chunk_index) < 100_000
+      ? Number(rawChunk.chunk_index)
+      : null;
+    if (chunkId === null || chunkIndex === null) return [];
+    const status = typeof rawChunk.status === "string" &&
+      SAFE_INTENT_CHUNK_STATUSES.has(rawChunk.status)
+      ? rawChunk.status
+      : "failed";
+    const stage = typeof rawChunk.stage === "string" &&
+      SAFE_INTENT_CHUNK_STAGES.has(rawChunk.stage)
+      ? rawChunk.stage
+      : "generated";
+    const accounting = isDiagnosticRecord(rawChunk.accounting)
+      ? rawChunk.accounting
+      : {};
+    const logicalInvocation = boundedDiagnosticCount(accounting.logical_invocation);
+    const safetyInvocation = boundedDiagnosticCount(accounting.safety_invocation);
+    const compilerActions = Array.isArray(rawChunk.compiler_actions)
+      ? [...new Set(rawChunk.compiler_actions.flatMap((code) =>
+          typeof code === "string" && SAFE_INTENT_COMPILER_ACTIONS.has(code)
+            ? [code]
+            : [],
+        ))].sort()
+      : [];
+    const issuePaths = Array.isArray(rawChunk.issue_paths)
+      ? [...new Set(rawChunk.issue_paths.flatMap((path) =>
+          typeof path === "string" &&
+          isSafeIntentDiagnosticPath(path)
+            ? [path]
+            : [],
+        ))].sort().slice(0, 20)
+      : [];
+    return [{
+      chunk_id: chunkId,
+      chunk_index: chunkIndex,
+      status,
+      stage,
+      accounting: {
+        business_slot: boundedDiagnosticCount(accounting.business_slot),
+        business_invocation: Math.max(0, logicalInvocation - safetyInvocation),
+        logical_invocation: logicalInvocation,
+        safety_invocation: safetyInvocation,
+        provider_attempts: boundedDiagnosticCount(accounting.provider_attempts),
+        network_request_count: boundedDiagnosticCount(accounting.network_request_count),
+      },
+      compiler_actions: compilerActions,
+      issue_paths: issuePaths,
+      ...(typeof rawChunk.error_code === "string" || status === "failed"
+        ? {
+            error_code:
+              typeof rawChunk.error_code === "string" &&
+              SAFE_INTENT_FAILURE_CODES.has(rawChunk.error_code)
+                ? rawChunk.error_code
+                : "intent_chunk_business_failed",
+          }
+        : {}),
+      ...(typeof rawChunk.failure_class === "string" &&
+        SAFE_INTENT_FAILURE_CLASSES.has(rawChunk.failure_class)
+        ? { failure_class: rawChunk.failure_class }
+        : {}),
+    }];
+  });
+  const statusCounts = Object.fromEntries(
+    [...SAFE_INTENT_CHUNK_STATUSES]
+      .map((status) => [status, chunks.filter((chunk) => chunk.status === status).length])
+      .filter(([, count]) => Number(count) > 0),
+  );
+  const startedFailureCount = chunks.filter((chunk) => chunk.status === "failed").length;
+  return {
+    chunk_count: chunks.length,
+    chunks,
+    status_counts: statusCounts,
+    started_failure_count: startedFailureCount,
+    attached_failure_count: Math.max(0, startedFailureCount - 1),
+    chunks_truncated: rawChunks.length > 100,
+  };
 }
 
 export function createProjectTraceAppender(
@@ -455,16 +779,19 @@ export function createProjectTraceAppender(
         const diagnosticPayload =
           label === "asset-planning.resilience"
             ? sanitizeAssetPlanningResilienceDiagnostic(payload)
+            : label === "asset-planning.global-structure"
+              ? sanitizeAssetPlanningGlobalStructureDiagnostic(payload)
+            : label === "asset-planning.intent-chunks"
+              ? sanitizeAssetPlanningIntentChunkDiagnostic(payload)
             : payload;
         const candidate = JSON.stringify(diagnosticPayload, null, 2);
         serialized = candidate ?? JSON.stringify({
           serialization_error: "unsupported_top_level_value",
           value_type: typeof payload,
         }, null, 2);
-      } catch (error) {
+      } catch {
         serialized = JSON.stringify({
-          serialization_error:
-            error instanceof Error ? error.message : String(error),
+          serialization_error: "diagnostic_serialization_failed",
         }, null, 2);
       }
       appendFileSync(

@@ -138,6 +138,149 @@ async function prepareActiveStoryboard(db: ReturnType<typeof createDbClient>) {
 }
 
 describe("runAssetPlanningGeneration error classification", () => {
+  it.each([
+    ["ordinary", () => new Error("RAW_GLOBAL_SECRET ordinary")],
+    ["llm", () => new LlmOutputError("secret_token_123", {
+      cause: { message: "RAW_GLOBAL_SECRET cause", value: "secret_token_123" },
+    })],
+  ])("freezes %s global failures across API, DB, trace, and artifacts", async (_kind, makeFailure) => {
+    const previousStorageRoot = process.env.STORAGE_ROOT_DIR;
+    const root = mkdtempSync(resolve(tmpdir(), "asset-plan-global-failure-boundary-"));
+    process.env.STORAGE_ROOT_DIR = root;
+    try {
+      generateAssetPlanMock.mockClear();
+      generateAssetPlanMock.mockImplementation(() => { throw makeFailure(); });
+      const db = createDbClient();
+      const { project } = await prepareActiveStoryboard(db);
+
+      const response = await runAssetPlanningGeneration({ db, project });
+
+      expect(response.statusCode).toBe(500);
+      expect(response.body).toEqual({
+        error: "internal_server_error",
+        repair_used: false,
+      });
+      expect(response.body).not.toHaveProperty("message");
+      const failed = [...db.assetPlanRecords.values()].at(-1)!;
+      expect(failed.executionStateJson).toMatchObject({
+        generating: false,
+        error: "internal_server_error",
+      });
+      const runId = (failed.executionStateJson as { run_id: string }).run_id;
+      const profile = getProjectStorageProfile(project)!;
+      const trace = readFileSync(resolve(root, profile.trace_dir, "trace.md"), "utf8");
+      const runtimeArtifact = readFileSync(
+        resolve(root, profile.asset_plan_runs_dir, runId, "runtime-diagnostics.json"),
+        "utf8",
+      );
+      const graphArtifact = readFileSync(
+        resolve(root, profile.asset_plan_runs_dir, runId, "graph-trace-summary.json"),
+        "utf8",
+      );
+      const serialized = JSON.stringify({
+        api: response.body,
+        execution: failed.executionStateJson,
+        diagnostics: failed.runtimeDiagnosticsJson,
+        trace,
+        runtimeArtifact,
+        graphArtifact,
+      });
+      expect(serialized).not.toContain("RAW_GLOBAL_SECRET");
+      expect(serialized).not.toContain("secret_token_123");
+      expect(trace).toContain('{"error_code":"internal_server_error"}');
+    } finally {
+      if (previousStorageRoot === undefined) delete process.env.STORAGE_ROOT_DIR;
+      else process.env.STORAGE_ROOT_DIR = previousStorageRoot;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("persists cloned bounded intent chunk diagnostics on failure and writes a redacted service trace", async () => {
+    const previousStorageRoot = process.env.STORAGE_ROOT_DIR;
+    const root = mkdtempSync(resolve(tmpdir(), "asset-plan-intent-settled-failure-"));
+    process.env.STORAGE_ROOT_DIR = root;
+    const rawSecret = `RAW_INTENT_SETTLED_SECRET_${"x".repeat(200)}`;
+    try {
+      generateAssetPlanMock.mockClear();
+      generateAssetPlanMock.mockImplementation(async (input) => {
+        const event = {
+          type: "intent_chunk_settled",
+          chunk_id: "chunk_001",
+          chunk_index: 0,
+          outcome: "failure",
+          status: "failed",
+          stage: "regenerated",
+          error_code: "asset_segment_intent_invalid",
+          failure_class: "llm_output",
+          compiler_actions: [],
+          accounting: {
+            chunk_id: "chunk_001",
+            business_slot: 3,
+            logical_invocation: 3,
+            safety_invocation: 1,
+            provider_attempts: 6,
+            network_request_count: 6,
+          },
+          prompt: rawSecret,
+          issues: [{ message: rawSecret, value: rawSecret }],
+        };
+        await input.onIntentChunkSettled?.(event);
+        event.chunk_id = rawSecret;
+        throw new LlmOutputError("asset_segment_intent_invalid");
+      });
+      const db = createDbClient();
+      const { project } = await prepareActiveStoryboard(db);
+
+      const response = await runAssetPlanningGeneration({ db, project });
+
+      expect(response.statusCode).toBe(500);
+      expect(response.body).not.toHaveProperty("message");
+      expect(generateAssetPlanMock).toHaveBeenCalledTimes(1);
+      expect(generateAssetPlanMock).toHaveBeenCalledWith(expect.objectContaining({
+        onIntentChunkSettled: expect.any(Function),
+      }));
+      const failed = [...db.assetPlanRecords.values()].at(-1)!;
+      const expectedChunk = expect.objectContaining({
+        chunk_id: "chunk_001",
+        chunk_index: 0,
+        status: "failed",
+        stage: "regenerated",
+        error_code: "asset_segment_intent_invalid",
+        failure_class: "llm_output",
+        compiler_actions: [],
+        accounting: expect.objectContaining({
+          logical_invocation: 3,
+          safety_invocation: 1,
+          provider_attempts: 6,
+          network_request_count: 6,
+        }),
+      });
+      expect(failed.executionStateJson).toMatchObject({
+        intent_chunk_diagnostics: { chunk_count: 1, chunks: [expectedChunk] },
+      });
+      expect(failed.runtimeDiagnosticsJson).toMatchObject({
+        intent_chunk_diagnostics: { chunk_count: 1, chunks: [expectedChunk] },
+      });
+      const persisted = JSON.stringify({
+        execution: failed.executionStateJson,
+        diagnostics: failed.runtimeDiagnosticsJson,
+        api: response.body,
+      });
+      expect(persisted).not.toContain("RAW_INTENT_SETTLED_SECRET");
+      expect(persisted).not.toContain('"issues":');
+      const profile = getProjectStorageProfile(project)!;
+      const trace = readFileSync(resolve(root, profile.trace_dir, "trace.md"), "utf8");
+      expect(trace).toContain("asset-planning.intent-chunks");
+      expect(trace).toContain('"chunk_id": "chunk_001"');
+      expect(trace).not.toContain("RAW_INTENT_SETTLED_SECRET");
+      expect(trace).not.toContain('"issues":');
+    } finally {
+      if (previousStorageRoot === undefined) delete process.env.STORAGE_ROOT_DIR;
+      else process.env.STORAGE_ROOT_DIR = previousStorageRoot;
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("drains an in-flight progress save before the final failure cleanup write", async () => {
     generateAssetPlanMock.mockClear();
     const progressSaveStarted = deferred();
@@ -179,6 +322,7 @@ describe("runAssetPlanningGeneration error classification", () => {
     await progressCallback;
 
     expect(response.statusCode).toBe(500);
+    expect(response.body).not.toHaveProperty("message");
     expect(saveCalls).toBe(3);
     const failed = [...db.assetPlanRecords.values()].at(-1)!;
     expect(failed.executionStateJson).toMatchObject({
@@ -196,13 +340,22 @@ describe("runAssetPlanningGeneration error classification", () => {
     try {
       generateAssetPlanMock.mockClear();
       generateAssetPlanMock.mockImplementation(() => {
-        throw new AssetPlanCompilerInvariantError([{
-          code: rawSecret,
-          path: [rawSecret, -1, Number.NaN],
-          segment_id: rawSecret,
-          task_id: rawSecret,
-          chunk_index: -1,
-        }] as never);
+        throw new AssetPlanCompilerInvariantError([
+          {
+            code: "task_id_collision",
+            path: ["tasks", 0, "task_id"],
+            segment_id: "sb_001",
+            task_id: "secret_token_123",
+            chunk_index: 0,
+          },
+          {
+            code: rawSecret,
+            path: [rawSecret, -1, Number.NaN],
+            segment_id: rawSecret,
+            task_id: rawSecret,
+            chunk_index: -1,
+          },
+        ] as never);
       });
       const db = createDbClient();
       const { project } = await prepareActiveStoryboard(db);
@@ -212,9 +365,9 @@ describe("runAssetPlanningGeneration error classification", () => {
       expect(response.statusCode).toBe(500);
       expect(response.body).toEqual({
         error: "asset_plan_compiler_invariant_failed",
-        message: "asset_plan_compiler_invariant_failed",
         repair_used: false,
       });
+      expect(response.body).not.toHaveProperty("message");
       expect(generateAssetPlanMock).toHaveBeenCalledTimes(1);
       const failed = [...db.assetPlanRecords.values()].at(-1)!;
       expect(failed.executionStateJson).toMatchObject({
@@ -223,15 +376,10 @@ describe("runAssetPlanningGeneration error classification", () => {
       });
       expect(failed.runtimeDiagnosticsJson).toMatchObject({
         compiler_invariant_failure: {
-          issue_count: 1,
+          issue_count: 2,
           issues_truncated: false,
-          issues: [{
-            code: "compiler_invariant_issue",
-            path: ["$unknown", "$index", "$index"],
-            segment_id: null,
-            task_id: null,
-            chunk_index: null,
-          }],
+          issue_codes: ["compiler_invariant_issue", "task_id_collision"],
+          issue_paths: ["$unknown.$index.$index", "tasks[0].task_id"],
         },
       });
       const serialized = JSON.stringify({
@@ -240,9 +388,13 @@ describe("runAssetPlanningGeneration error classification", () => {
         diagnostics: failed.runtimeDiagnosticsJson,
       });
       expect(serialized).not.toContain("RAW_SECRET_COMPILER");
+      expect(serialized).not.toContain("secret_token_123");
+      expect(serialized).not.toContain('"issues":');
       const profile = getProjectStorageProfile(project)!;
       const trace = readFileSync(resolve(root, profile.trace_dir, "trace.md"), "utf8");
       expect(trace).not.toContain("RAW_SECRET_COMPILER");
+      expect(trace).not.toContain("secret_token_123");
+      expect(trace).not.toContain('"issues":');
       expect(trace).not.toContain("AssetPlanCompilerInvariantError:");
       expect(trace).toContain('"error_code":"asset_plan_compiler_invariant_failed"');
     } finally {
@@ -250,6 +402,39 @@ describe("runAssetPlanningGeneration error classification", () => {
       else process.env.STORAGE_ROOT_DIR = previousStorageRoot;
       rmSync(root, { recursive: true, force: true });
     }
+  });
+
+  it("marks compiler summaries truncated when unique projected paths exceed the cap", async () => {
+    generateAssetPlanMock.mockClear();
+    generateAssetPlanMock.mockImplementation(() => {
+      throw new AssetPlanCompilerInvariantError(
+        Array.from({ length: 21 }, (_, index) => ({
+          code: "task_id_collision",
+          path: ["tasks", index, "task_id"],
+          chunk_index: index,
+        })) as never,
+      );
+    });
+    const db = createDbClient();
+    const { project } = await prepareActiveStoryboard(db);
+
+    const response = await runAssetPlanningGeneration({ db, project });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.body).not.toHaveProperty("message");
+    const failed = [...db.assetPlanRecords.values()].at(-1)!;
+    expect(failed.runtimeDiagnosticsJson).toMatchObject({
+      compiler_invariant_failure: {
+        issue_count: 21,
+        issues_truncated: true,
+        issue_codes: ["task_id_collision"],
+      },
+    });
+    expect(
+      (failed.runtimeDiagnosticsJson as {
+        compiler_invariant_failure: { issue_paths: string[] };
+      }).compiler_invariant_failure.issue_paths,
+    ).toHaveLength(20);
   });
 
   it("classifies invalid intent as terminal LLM output without full regeneration", async () => {
@@ -276,6 +461,7 @@ describe("runAssetPlanningGeneration error classification", () => {
 
     expect(response.statusCode).toBe(500);
     expect(response.body).toMatchObject({ error: "asset_segment_intent_invalid" });
+    expect(response.body).not.toHaveProperty("message");
     expect(generateAssetPlanMock).toHaveBeenCalledTimes(1);
     expect(project.activeAssetPlanRecordId).toBe(previousActiveId);
     expect(project.status).toBe("asset_plan_ready");
@@ -302,6 +488,7 @@ describe("runAssetPlanningGeneration error classification", () => {
     expect(response.body).toMatchObject({
       error: "asset_plan_schema_invalid",
     });
+    expect(response.body).not.toHaveProperty("message");
 
     const failedRecord = [...db.assetPlanRecords.values()].at(-1);
     expect(failedRecord).toBeDefined();
@@ -325,6 +512,7 @@ describe("runAssetPlanningGeneration error classification", () => {
 
     expect(response.statusCode).toBe(500);
     expect(response.body).toMatchObject({ error: "internal_server_error" });
+    expect(response.body).not.toHaveProperty("message");
 
     const failedRecord = [...db.assetPlanRecords.values()].at(-1);
     expect(failedRecord).toBeDefined();
@@ -373,6 +561,7 @@ describe("runAssetPlanningGeneration error classification", () => {
       issue_count: 1,
       issue_paths: ["dependencies[7].depends_on_task_id"],
     });
+    expect(response.body).not.toHaveProperty("message");
     expect(JSON.stringify(response.body)).not.toContain("dep-secret");
     expect(JSON.stringify(response.body)).not.toContain("motion-secret");
     expect(generateAssetPlanMock).toHaveBeenCalledTimes(1);

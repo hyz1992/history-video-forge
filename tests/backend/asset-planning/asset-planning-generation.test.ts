@@ -341,6 +341,12 @@ function makeInput(llmGateway: LlmGateway, chunkSize = 2) {
   };
 }
 
+function deferred<T = void>() {
+  let resolvePromise!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((resolve) => { resolvePromise = resolve; });
+  return { promise, resolve: resolvePromise };
+}
+
 function interactionEntry(attemptCount: number): LlmInteractionLogEntry {
   return {
     generatedAt: "2026-08-10T00:00:00.000Z", provider: "test", model: "test",
@@ -466,7 +472,10 @@ describe("generateAssetPlan", () => {
       "asset-planning.segment-intent-repair",
     ]);
     expect(calls.slice(1).every((call) => call.options?.maxAttempts === 2)).toBe(true);
-    expect(events.at(-1)).toMatchObject({ type: "intent_chunk_settled", chunk_id: "chunk_001", outcome: "success" });
+    expect(events.at(-1)).toMatchObject({
+      type: "intent_chunk_settled", chunk_id: "chunk_001", outcome: "success",
+      status: "compiled", stage: "repaired",
+    });
   });
 
   it("accepts the bounded patch_fields wrapper drift and append_intent repair", async () => {
@@ -545,6 +554,8 @@ describe("generateAssetPlan", () => {
     ]);
     expect(events.at(-1)).toMatchObject({
       type: "intent_chunk_settled",
+      status: "compiled",
+      stage: "regenerated",
       accounting: {
         business_slot: 3, logical_invocation: 3, safety_invocation: 0,
         provider_attempts: 3, network_request_count: 3,
@@ -565,6 +576,28 @@ describe("generateAssetPlan", () => {
     })).resolves.toMatchObject({ plan_version: "asset_plan_v1" });
   });
 
+  it("isolates interaction log writer failures without losing settled accounting", async () => {
+    const events: IntentChunkSettledEvent[] = [];
+    const writer = { write: vi.fn(() => { throw new Error("trace_writer_failed"); }) };
+    const { gateway } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+      options.interactionLogWriter?.write(interactionEntry(2));
+      const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+      return validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
+    });
+
+    await expect(generateAssetPlan({
+      ...makeInput(gateway, 3), generationMode: "intent_compiler",
+      interactionLogWriter: writer,
+      onIntentChunkSettled: (event) => events.push(event),
+    })).resolves.toMatchObject({ plan_version: "asset_plan_v1" });
+    expect(writer.write).toHaveBeenCalled();
+    expect(events[0]).toMatchObject({
+      status: "compiled",
+      accounting: { provider_attempts: 2, network_request_count: 2 },
+    });
+  });
+
   it("reports actual per-chunk interaction attempts and one bounded safety invocation", async () => {
     const events: IntentChunkSettledEvent[] = [];
     let intentInvocation = 0;
@@ -582,7 +615,9 @@ describe("generateAssetPlan", () => {
     });
     const settled = events.find((event) => event.type === "intent_chunk_settled");
     expect(settled).toEqual({
-      type: "intent_chunk_settled", chunk_id: "chunk_001", outcome: "success",
+      type: "intent_chunk_settled", chunk_id: "chunk_001", chunk_index: 0,
+      outcome: "success", status: "compiled", stage: "generated",
+      compiler_actions: ["global_bgm_owner_bound", "visual_strategy_applied"],
       accounting: {
         chunk_id: "chunk_001", business_slot: 1, logical_invocation: 2,
         safety_invocation: 1, provider_attempts: 3, network_request_count: 3,
@@ -713,6 +748,58 @@ describe("generateAssetPlan", () => {
     });
   });
 
+  it("maps an arbitrary valid-looking chunk error code to the frozen business fallback", async () => {
+    const secretFailure = Object.assign(new Error("TOP_SECRET_MESSAGE"), {
+      code: "secret_token_123",
+    });
+    const settled: IntentChunkSettledEvent[] = [];
+    const { gateway } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+      throw secretFailure;
+    });
+
+    const failure = await generateAssetPlan({
+      ...makeInput(gateway, 3),
+      generationMode: "intent_compiler",
+      onIntentChunkSettled: (event) => settled.push(event),
+    }).catch((error) => error);
+
+    expect(failure).toBe(secretFailure);
+    expect(settled[0]).toMatchObject({
+      status: "failed",
+      error_code: "intent_chunk_business_failed",
+      failure_class: "business",
+    });
+    expect(JSON.stringify(settled)).not.toContain("secret_token_123");
+    expect(JSON.stringify(settled)).not.toContain("TOP_SECRET_MESSAGE");
+  });
+
+  it("uses fixed warning codes when callbacks expose secret error messages", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const { gateway } = makeGateway((options) => {
+        if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+        const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+        return validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
+      });
+      await generateAssetPlan({
+        ...makeInput(gateway, 3),
+        generationMode: "intent_compiler",
+        onProgress: () => { throw new Error("TOP_SECRET_PROGRESS"); },
+        onGlobalStructureEvent: () => { throw new Error("TOP_SECRET_GLOBAL"); },
+        onIntentChunkSettled: () => { throw new Error("TOP_SECRET_SETTLED"); },
+      });
+      const serializedWarnings = JSON.stringify(warning.mock.calls);
+      expect(serializedWarnings).not.toContain("TOP_SECRET");
+      expect(warning.mock.calls.flat()).toEqual(expect.arrayContaining([
+        "[asset-planning] progress_callback_failed",
+        "[asset-planning] intent_chunk_settled_callback_failed",
+      ]));
+    } finally {
+      warning.mockRestore();
+    }
+  });
+
   it("gives initial and regeneration independent safety quotas while capping five logical invocations at ten attempts", async () => {
     const settled: IntentChunkSettledEvent[] = [];
     let plannerCalls = 0;
@@ -797,6 +884,67 @@ describe("generateAssetPlan", () => {
       })).resolves.toMatchObject({ plan_version: "asset_plan_v1" });
     },
   );
+
+  it("settles only the two started workers, leaves six chunks queued, and selects the lowest chunk failure", async () => {
+    const storyboard = makeStoryboardWithSegmentCount(8);
+    const chunkOne = deferred<void>();
+    const chunkTwo = deferred<void>();
+    const started: string[] = [];
+    const settled: IntentChunkSettledEvent[] = [];
+    const lowerIndexFailure = new LlmOutputError("asset_segment_intent_invalid");
+    const firstCompletedFailure = new LlmOutputError("asset_chunk_plan_schema_invalid");
+    const { gateway } = makeGateway(async (options) => {
+      if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+      const promptInput = options.input as { chunk_id: string };
+      started.push(promptInput.chunk_id);
+      if (promptInput.chunk_id === "chunk_001") {
+        await chunkOne.promise;
+        throw lowerIndexFailure;
+      }
+      if (promptInput.chunk_id === "chunk_002") {
+        await chunkTwo.promise;
+        throw firstCompletedFailure;
+      }
+      throw new Error(`queued_chunk_was_started:${promptInput.chunk_id}`);
+    });
+
+    const running = generateAssetPlan({
+      ...makeInput(gateway, 1),
+      storyboard,
+      generationMode: "intent_compiler",
+      chunkConcurrency: 2,
+      onIntentChunkSettled: (event) => settled.push(event),
+    }).catch((error: unknown) => error);
+    await waitUntil(() => started.length === 2);
+    chunkTwo.resolve();
+    await new Promise<void>((resolveImmediate) => setImmediate(resolveImmediate));
+    expect(started).toEqual(["chunk_001", "chunk_002"]);
+    chunkOne.resolve();
+
+    const failure = await running;
+    expect(failure).toBe(lowerIndexFailure);
+    expect(started).toEqual(["chunk_001", "chunk_002"]);
+    expect(settled).toHaveLength(8);
+    expect(settled.slice(0, 2)).toEqual([
+      expect.objectContaining({ chunk_id: "chunk_001", chunk_index: 0, status: "failed", stage: "generated" }),
+      expect.objectContaining({ chunk_id: "chunk_002", chunk_index: 1, status: "failed", stage: "generated" }),
+    ]);
+    expect(settled.slice(2)).toEqual(
+      Array.from({ length: 6 }, (_, index) => expect.objectContaining({
+        chunk_id: `chunk_${String(index + 3).padStart(3, "0")}`,
+        chunk_index: index + 2,
+        status: "queued",
+        stage: "queued",
+        accounting: expect.objectContaining({ logical_invocation: 0, provider_attempts: 0 }),
+      })),
+    );
+    expect((failure as { intentChunkDiagnostics?: unknown }).intentChunkDiagnostics).toMatchObject({
+      started_failure_count: 2,
+      attached_failures: [
+        expect.objectContaining({ chunk_id: "chunk_002", error_code: "asset_chunk_plan_schema_invalid" }),
+      ],
+    });
+  });
 
   it("rejects non-plain repair outers without invoking getters or proxy traps", () => {
     let getterCalls = 0;

@@ -39,9 +39,16 @@ describe("project storage diagnostic trace", () => {
 
     writer.writeDiagnostic("asset-planning.global-structure", {
       type: "repair_failed",
-      initial_issues: [{ path: ["art_bible", "props", 0, "consistency_notes"] }],
+      initial_issues: [{
+        path: ["art_bible", "props", 0, "consistency_notes"],
+        message: "RAW_GLOBAL_SINK_SECRET",
+        value: "secret_token_123",
+      }],
       patch_issues: [],
       final_issues: [{ path: ["tasks", 2, "risk_notes"] }],
+      actions: [{ type: "secret_action_123", value: "RAW_GLOBAL_SINK_SECRET" }],
+      stack: "RAW_GLOBAL_SINK_SECRET stack",
+      cause: { message: "RAW_GLOBAL_SINK_SECRET cause" },
     });
 
     const profile = getProjectStorageProfile(project);
@@ -50,6 +57,14 @@ describe("project storage diagnostic trace", () => {
     expect(trace).toContain("Service Diagnostic");
     expect(trace).toContain("asset-planning.global-structure");
     expect(trace).toContain('"type": "repair_failed"');
+    expect(trace).toContain('"issue_count": 2');
+    expect(trace).toContain('"issue_paths"');
+    expect(trace).not.toContain("RAW_GLOBAL_SINK_SECRET");
+    expect(trace).not.toContain("secret_token_123");
+    expect(trace).not.toContain('"initial_issues"');
+    expect(trace).not.toContain('"actions"');
+    expect(trace).not.toContain('"stack"');
+    expect(trace).not.toContain('"cause"');
     expect(trace).not.toContain("## [Error]");
     const interactionDir = resolve(
       root,
@@ -110,6 +125,59 @@ describe("project storage diagnostic trace", () => {
     expect(trace).not.toContain("after_task_id");
   });
 
+  it("redacts intent chunk diagnostics to bounded status, stage, counts, and compiler action codes", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "asset-plan-intent-chunk-trace-"));
+    roots.push(root);
+    process.env.STORAGE_ROOT_DIR = root;
+    const project = await createProject(createDbClient(), {
+      name: "Intent Chunk Diagnostic",
+    });
+    const writer = createProjectTraceAppender(project);
+    const rawSecret = `RAW_INTENT_TRACE_SECRET_${"x".repeat(200)}`;
+
+    writer.writeDiagnostic("asset-planning.intent-chunks", {
+      chunk_count: 1,
+      chunks: [{
+        chunk_id: "chunk_001",
+        chunk_index: 0,
+        status: "failed",
+        stage: "regenerated",
+        error_code: "secret_token_123",
+        failure_class: "llm_output",
+        compiler_actions: ["visual_strategy_applied", rawSecret],
+        issue_paths: ["segments[0].source_segment_id", rawSecret],
+        accounting: {
+          business_slot: 3,
+          logical_invocation: 3,
+          safety_invocation: 1,
+          provider_attempts: 6,
+          network_request_count: 6,
+        },
+        prompt: rawSecret,
+        raw_response: rawSecret,
+        issues: [{ path: [rawSecret], message: rawSecret, value: rawSecret }],
+        task_id: rawSecret,
+        dependency_id: rawSecret,
+      }],
+    });
+
+    const profile = getProjectStorageProfile(project)!;
+    const trace = readFileSync(resolve(root, profile.trace_dir, "trace.md"), "utf8");
+    expect(trace).toContain("asset-planning.intent-chunks");
+    expect(trace).toContain('"chunk_id": "chunk_001"');
+    expect(trace).toContain('"logical_invocation": 3');
+    expect(trace).toContain('"compiler_actions"');
+    expect(trace).toContain("visual_strategy_applied");
+    expect(trace).toContain("segments[0].source_segment_id");
+    expect(trace).toContain('"error_code": "intent_chunk_business_failed"');
+    expect(trace).not.toContain("secret_token_123");
+    expect(trace).not.toContain("RAW_INTENT_TRACE_SECRET");
+    expect(trace).not.toContain("raw_response");
+    expect(trace).not.toContain('"issues"');
+    expect(trace).not.toContain("task_id");
+    expect(trace).not.toContain("dependency_id");
+  });
+
   it.each([
     ["undefined", undefined],
     ["function", () => undefined],
@@ -130,5 +198,28 @@ describe("project storage diagnostic trace", () => {
     expect(trace).toContain('"serialization_error": "unsupported_top_level_value"');
     expect(trace).toContain(`"value_type": "${valueType}"`);
     expect(trace).not.toContain("```json\n\n```");
+  });
+
+  it("uses a stable fallback when diagnostic serialization throws", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "asset-plan-throwing-diagnostic-"));
+    roots.push(root);
+    process.env.STORAGE_ROOT_DIR = root;
+    const project = await createProject(createDbClient(), {
+      name: "Throwing Diagnostic Payload",
+    });
+    const writer = createProjectTraceAppender(project);
+
+    writer.writeDiagnostic("throwing-payload", {
+      toJSON() {
+        throw new Error("RAW_SERIALIZATION_SECRET");
+      },
+    });
+
+    const profile = getProjectStorageProfile(project)!;
+    const trace = readFileSync(resolve(root, profile.trace_dir, "trace.md"), "utf8");
+    expect(trace).toContain(
+      '"serialization_error": "diagnostic_serialization_failed"',
+    );
+    expect(trace).not.toContain("RAW_SERIALIZATION_SECRET");
   });
 });

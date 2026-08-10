@@ -134,6 +134,27 @@ const SAFE_INTENT_KINDS = new Set([
   "bgm_cue",
 ]);
 
+const SAFE_INTENT_FAILURE_CODES = new Set([
+  "asset_segment_intent_invalid",
+  "asset_chunk_plan_schema_invalid",
+  "asset_chunk_forbidden_task_type_violated",
+  "asset_chunk_task_segment_out_of_scope_violated",
+  "asset_chunk_support_image_reason_missing_violated",
+  "asset_chunk_anchor_image_budget_exceeded_violated",
+  "asset_chunk_dependency_local_id_missing_violated",
+  "intent_chunk_business_failed",
+  "content_filter",
+  "configuration",
+  "rate_limited",
+  "timeout",
+  "network",
+  "invalid_request",
+  "invalid_response",
+  "service_unavailable",
+  "budget_exceeded",
+  "unknown",
+]);
+
 function redactIntentIssues(
   issues: ReturnType<typeof inspectSegmentIntentBatch>["issues"],
   segments: StoryboardPlan["segments"],
@@ -230,8 +251,22 @@ export type AssetPlanningResilienceEvent =
 export interface IntentChunkSettledEvent {
   type: "intent_chunk_settled";
   chunk_id: string;
-  outcome: "success" | "failure";
+  chunk_index: number;
+  outcome: "success" | "failure" | "pending";
+  status:
+    | "queued"
+    | "running"
+    | "generated"
+    | "repaired"
+    | "regenerated"
+    | "compiled"
+    | "failed";
+  stage: "queued" | "running" | "generated" | "repaired" | "regenerated" | "compiled";
   accounting: ChunkInteractionAccountingSnapshot;
+  compiler_actions: string[];
+  error_code?: string;
+  failure_class?: "llm_output" | "provider" | "business";
+  issue_paths?: string[];
 }
 
 export type GlobalDraftStructureEvent = AssetPlanningResilienceEvent;
@@ -389,10 +424,11 @@ export async function generateAssetPlan(
 
   if (input.generationMode === "intent_compiler") {
     let completedChunks = 0;
-    const compiledChunks = await mapWithConcurrency(
+    const chunkBatch = await settleIntentChunks({
       chunks,
-      normalizeChunkConcurrency(input.chunkConcurrency),
-      async (segments, chunkIndex): Promise<CompiledIntentChunkInput> => {
+      concurrency: normalizeChunkConcurrency(input.chunkConcurrency),
+      onSettled: input.onIntentChunkSettled,
+      worker: async (segments, chunkIndex, captureSettled): Promise<CompiledIntentChunkInput> => {
         const plannerInput = buildSegmentIntentPlannerInput({
           chunk_id: `chunk_${String(chunkIndex + 1).padStart(3, "0")}`,
           is_first_chunk: chunkIndex === 0,
@@ -408,7 +444,8 @@ export async function generateAssetPlan(
           segments,
           isFirstChunk: chunkIndex === 0,
           interactionLogWriter: input.interactionLogWriter,
-          onSettled: input.onIntentChunkSettled,
+          chunkIndex,
+          onSettled: captureSettled,
         });
         completedChunks += 1;
         await emitProgressSafely(input.onProgress, {
@@ -423,25 +460,52 @@ export async function generateAssetPlan(
           draft,
         };
       },
-    );
-    return compileAssetPlanFromIntents({
-      sourceIds: {
-        storyboardRecordId: input.sourceStoryboardRecordId,
-        scriptRecordId: input.sourceScriptRecordId,
-        topicPackageId: input.sourceTopicPackageId,
-      },
-      storyboard: input.storyboard,
-      draft: input.draft,
-      globalDraft: {
-        art_bible: globalDraft.art_bible,
-        visual_budget: globalDraft.visual_budget,
-        downgrade_policy: globalDraft.downgrade_policy,
-        global_audio_strategy: globalDraft.global_audio_strategy,
-        manual_review_notes: globalDraft.manual_review_notes,
-      },
-      audioSkeleton,
-      chunks: compiledChunks,
-    }).plan;
+    });
+    let compiled: ReturnType<typeof compileAssetPlanFromIntents>;
+    try {
+      compiled = compileAssetPlanFromIntents({
+        sourceIds: {
+          storyboardRecordId: input.sourceStoryboardRecordId,
+          scriptRecordId: input.sourceScriptRecordId,
+          topicPackageId: input.sourceTopicPackageId,
+        },
+        storyboard: input.storyboard,
+        draft: input.draft,
+        globalDraft: {
+          art_bible: globalDraft.art_bible,
+          visual_budget: globalDraft.visual_budget,
+          downgrade_policy: globalDraft.downgrade_policy,
+          global_audio_strategy: globalDraft.global_audio_strategy,
+          manual_review_notes: globalDraft.manual_review_notes,
+        },
+        audioSkeleton,
+        chunks: chunkBatch.results,
+      });
+    } catch (error) {
+      for (const event of chunkBatch.events) {
+        await emitIntentChunkSettledSafely(input.onIntentChunkSettled, event);
+      }
+      throw error;
+    }
+    const actionCodesBySegment = new Map<string, Set<string>>();
+    for (const action of compiled.actions) {
+      const codes = actionCodesBySegment.get(action.segment_id) ?? new Set<string>();
+      codes.add(action.code);
+      actionCodesBySegment.set(action.segment_id, codes);
+    }
+    for (const event of chunkBatch.events) {
+      if (event.outcome !== "success") continue;
+      event.status = "compiled";
+      event.compiler_actions = [
+        ...new Set(
+          chunks[event.chunk_index]!.flatMap((segment) =>
+            [...(actionCodesBySegment.get(segment.segment_id) ?? [])],
+          ),
+        ),
+      ].sort();
+      await emitIntentChunkSettledSafely(input.onIntentChunkSettled, event);
+    }
+    return compiled.plan;
   }
 
   let completedChunks = 0;
@@ -639,6 +703,7 @@ async function generateIntentChunkWithResilience(input: {
   plannerInput: ReturnType<typeof buildSegmentIntentPlannerInput>;
   segments: StoryboardPlan["segments"];
   isFirstChunk: boolean;
+  chunkIndex: number;
   interactionLogWriter?: LlmInteractionLogWriter;
   onSettled?: GenerateAssetPlanInput["onIntentChunkSettled"];
 }) {
@@ -653,6 +718,8 @@ async function generateIntentChunkWithResilience(input: {
   let repairIssues: SegmentIntentIssue[] = [];
   let finalIssues: SegmentIntentIssue[] = [];
   let outcome: "success" | "failure" = "failure";
+  let finalStatus: "generated" | "repaired" | "regenerated" = "generated";
+  let failure: unknown;
 
   try {
     for (;;) {
@@ -668,6 +735,7 @@ async function generateIntentChunkWithResilience(input: {
         initialInspection = inspectSegmentIntentBatch({ raw, context });
         if (initialInspection.parsedDraft && initialInspection.issues.length === 0) {
           outcome = "success";
+          finalStatus = "generated";
           return initialInspection.parsedDraft;
         }
         state = "repair";
@@ -719,6 +787,7 @@ async function generateIntentChunkWithResilience(input: {
             context,
           });
           outcome = "success";
+          finalStatus = "repaired";
           return repaired;
         } catch (error) {
           if (
@@ -751,6 +820,7 @@ async function generateIntentChunkWithResilience(input: {
       finalIssues = inspection.issues;
       if (inspection.parsedDraft && inspection.issues.length === 0) {
         outcome = "success";
+        finalStatus = "regenerated";
         return inspection.parsedDraft;
       }
       throw new LlmOutputError("asset_segment_intent_invalid", {
@@ -761,14 +831,80 @@ async function generateIntentChunkWithResilience(input: {
         },
       });
     }
+  } catch (error) {
+    failure = error;
+    throw error;
   } finally {
     await emitIntentChunkSettledSafely(input.onSettled, {
       type: "intent_chunk_settled",
       chunk_id: chunkId,
+      chunk_index: input.chunkIndex,
       outcome,
+      status: outcome === "success" ? finalStatus : "failed",
+      stage: finalStatus,
       accounting: accounting.snapshot(),
+      compiler_actions: [],
+      ...(outcome === "failure"
+        ? {
+            error_code: stableIntentFailureCode(failure),
+            failure_class: classifyIntentFailure(failure),
+            issue_paths: extractIntentFailureIssuePaths(failure),
+          }
+        : {}),
     });
   }
+}
+
+function extractIntentFailureIssuePaths(error: unknown): string[] {
+  if (!(error instanceof LlmOutputError) || !error.cause ||
+    typeof error.cause !== "object") return [];
+  const cause = error.cause as Record<string, unknown>;
+  const paths: string[] = [];
+  for (const issues of [cause.initial_issues, cause.repair_issues, cause.final_issues]) {
+    if (!Array.isArray(issues)) continue;
+    for (const issue of issues) {
+      if (!issue || typeof issue !== "object") continue;
+      const path = (issue as { path?: unknown }).path;
+      if (!Array.isArray(path)) continue;
+      const safeParts: Array<string | number> = [];
+      for (const part of path.slice(0, 12)) {
+        if (typeof part === "number" && Number.isSafeInteger(part) && part >= 0) {
+          safeParts.push(part);
+        } else if (typeof part === "string" &&
+          (SAFE_INTENT_ISSUE_PATH_FIELDS.has(part) || part === "$unknown")) {
+          safeParts.push(part);
+        }
+      }
+      const formatted = safeParts.reduce<string>((value, part) =>
+        typeof part === "number"
+          ? `${value}[${part}]`
+          : value ? `${value}.${part}` : part,
+      "");
+      if (formatted) paths.push(formatted);
+    }
+  }
+  return [...new Set(paths)].sort().slice(0, 20);
+}
+
+function stableIntentFailureCode(error: unknown): string {
+  if (isProviderContentFilterError(error)) return "content_filter";
+  if (error && typeof error === "object") {
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === "string" && SAFE_INTENT_FAILURE_CODES.has(code)) {
+      return code;
+    }
+  }
+  return "intent_chunk_business_failed";
+}
+
+function classifyIntentFailure(
+  error: unknown,
+): "llm_output" | "provider" | "business" {
+  if (error instanceof LlmOutputError) return "llm_output";
+  if (error instanceof ExternalServiceError || isProviderContentFilterError(error)) {
+    return "provider";
+  }
+  return "business";
 }
 
 async function emitIntentChunkSettledSafely(
@@ -778,10 +914,8 @@ async function emitIntentChunkSettledSafely(
   if (!callback) return;
   try {
     await callback(structuredClone(event));
-  } catch (error) {
-    console.warn(
-      `[asset-planning] intent_chunk_settled_callback_failed:${error instanceof Error ? error.message : String(error)}`,
-    );
+  } catch {
+    console.warn("[asset-planning] intent_chunk_settled_callback_failed");
   }
 }
 
@@ -792,10 +926,8 @@ async function emitProgressSafely(
   if (!callback) return;
   try {
     await callback(structuredClone(progress));
-  } catch (error) {
-    console.warn(
-      `[asset-planning] progress_callback_failed:${error instanceof Error ? error.message : String(error)}`,
-    );
+  } catch {
+    console.warn("[asset-planning] progress_callback_failed");
   }
 }
 
@@ -864,12 +996,8 @@ async function emitGlobalStructureEventSafely(
   if (!callback) return;
   try {
     await callback(structuredClone(event));
-  } catch (error) {
-    console.warn(
-      `[asset-planning] global_structure_event_callback_failed:${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
+  } catch {
+    console.warn("[asset-planning] global_structure_event_callback_failed");
   }
 }
 
@@ -1101,16 +1229,138 @@ function createTimedInteractionLogWriter(
   return {
     write(entry) {
       const finishedAtMs = Date.now();
-      return writer.write({
-        ...entry,
-        timing: {
-          startedAt,
-          finishedAt: new Date(finishedAtMs).toISOString(),
-          durationMs: Math.max(0, finishedAtMs - startedAtMs),
-        },
-      });
+      try {
+        const result = writer.write({
+          ...entry,
+          timing: {
+            startedAt,
+            finishedAt: new Date(finishedAtMs).toISOString(),
+            durationMs: Math.max(0, finishedAtMs - startedAtMs),
+          },
+        });
+        if (result && typeof result.then === "function") {
+          return result.catch(() => {
+            console.warn("[asset-planning] interaction_log_writer_failed");
+          });
+        }
+      } catch {
+        console.warn("[asset-planning] interaction_log_writer_failed");
+      }
     },
   };
+}
+
+async function settleIntentChunks(input: {
+  chunks: Array<StoryboardPlan["segments"]>;
+  concurrency: number;
+  onSettled?: GenerateAssetPlanInput["onIntentChunkSettled"];
+  worker: (
+    segments: StoryboardPlan["segments"],
+    chunkIndex: number,
+    captureSettled: NonNullable<GenerateAssetPlanInput["onIntentChunkSettled"]>,
+  ) => Promise<CompiledIntentChunkInput>;
+}): Promise<{ results: CompiledIntentChunkInput[]; events: IntentChunkSettledEvent[] }> {
+  const events: IntentChunkSettledEvent[] = input.chunks.map((_, chunkIndex) => {
+    const chunkId = `chunk_${String(chunkIndex + 1).padStart(3, "0")}`;
+    return {
+      type: "intent_chunk_settled",
+      chunk_id: chunkId,
+      chunk_index: chunkIndex,
+      outcome: "pending",
+      status: "queued",
+      stage: "queued",
+      accounting: {
+        chunk_id: chunkId,
+        business_slot: 0,
+        logical_invocation: 0,
+        safety_invocation: 0,
+        provider_attempts: 0,
+        network_request_count: 0,
+      },
+      compiler_actions: [],
+    };
+  });
+  const results: CompiledIntentChunkInput[] = new Array(input.chunks.length);
+  const failures: Array<{ chunkIndex: number; error: unknown }> = [];
+  let nextIndex = 0;
+  let stopRequested = false;
+
+  async function runWorker(): Promise<void> {
+    for (;;) {
+      if (stopRequested || nextIndex >= input.chunks.length) return;
+      const chunkIndex = nextIndex;
+      nextIndex += 1;
+      events[chunkIndex] = {
+        ...events[chunkIndex]!,
+        status: "running",
+        stage: "running",
+      };
+      let captured: IntentChunkSettledEvent | undefined;
+      try {
+        results[chunkIndex] = await input.worker(
+          input.chunks[chunkIndex]!,
+          chunkIndex,
+          async (event) => {
+            captured = structuredClone(event);
+          },
+        );
+        if (captured) events[chunkIndex] = captured;
+      } catch (error) {
+        if (captured) {
+          events[chunkIndex] = captured;
+        } else {
+          events[chunkIndex] = {
+            ...events[chunkIndex]!,
+            outcome: "failure",
+            status: "failed",
+            stage: "generated",
+            error_code: stableIntentFailureCode(error),
+            failure_class: classifyIntentFailure(error),
+          };
+        }
+        failures.push({ chunkIndex, error });
+        stopRequested = true;
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from(
+      { length: Math.min(input.concurrency, input.chunks.length) },
+      () => runWorker(),
+    ),
+  );
+
+  if (failures.length > 0) {
+    failures.sort((left, right) => left.chunkIndex - right.chunkIndex);
+    for (const event of events) {
+      await emitIntentChunkSettledSafely(input.onSettled, event);
+    }
+    const primary = failures[0]!;
+    const attachedFailures = failures.slice(1).map(({ chunkIndex }) => ({
+      chunk_id: events[chunkIndex]!.chunk_id,
+      chunk_index: chunkIndex,
+      error_code: events[chunkIndex]!.error_code ?? "intent_chunk_business_failed",
+      failure_class: events[chunkIndex]!.failure_class ?? "business",
+    }));
+    if (primary.error && typeof primary.error === "object") {
+      try {
+        Object.defineProperty(primary.error, "intentChunkDiagnostics", {
+          configurable: true,
+          enumerable: false,
+          value: {
+            started_failure_count: failures.length,
+            attached_failures: attachedFailures,
+          },
+        });
+      } catch {
+        // Diagnostic attachment is best-effort and must never replace business failure.
+      }
+    }
+    throw primary.error;
+  }
+
+  return { results, events };
 }
 
 async function mapWithConcurrency<TInput, TOutput>(
@@ -1241,9 +1491,7 @@ async function parseOrRepairChunkDraft(input: {
     } catch (repairError) {
       // 修复仍失败 → 抛包装错误（保留诊断信息）。LlmInteractionLogWriter 没有
       // writeError 方法，用 console.warn 兜底（trace.md 已由外层记录详细错误）。
-      console.warn(
-        `[chunk-repair] chunk_structural_repair_failed:${repairError instanceof Error ? repairError.message : String(repairError)}`,
-      );
+      console.warn("[asset-planning] chunk_structural_repair_failed");
       // 原始 error 是 ZodError（结构错）→ 包装为 asset_chunk_plan_schema_invalid；
       // 已是 LlmOutputError（5c 后的业务错）→ 原样抛；
       // 其他未知错误（编程 bug）→ 原样抛。
