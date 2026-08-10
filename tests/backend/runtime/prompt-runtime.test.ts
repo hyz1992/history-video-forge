@@ -7,8 +7,110 @@ import type {
   StructuredPromptProvider,
 } from "../../../backend/src/runtime/llm/provider-contract.js";
 import { createPromptRegistry } from "../../../backend/src/runtime/prompts/prompt-registry.js";
+import {
+  SEGMENT_INTENT_PLANNER_OUTPUT_SCHEMA,
+  SEGMENT_INTENT_REPAIR_OUTPUT_SCHEMA,
+} from "../../../backend/src/modules/asset-planning/segment-intent-prompt-input.js";
+import {
+  SegmentAssetIntentBatchDraft,
+  SegmentIntentRepairPatch,
+} from "../../../backend/src/modules/asset-planning/segment-asset-intent.js";
 
 describe("prompt runtime", () => {
+  it("loads segment intent prompts with exact strict registry contracts", () => {
+    const registry = createPromptRegistry();
+    const planner = registry.getPrompt("asset-planning.segment-intent-planner");
+    const repair = registry.getPrompt("asset-planning.segment-intent-repair");
+
+    expect(planner.metadata).toMatchObject({
+      id: "asset-planning.segment-intent-planner",
+      version: "v1.0.0",
+      stage: "asset_planning",
+      language: "zh-CN",
+      consumes: ["SegmentIntentPlannerInput"],
+      produces: ["SegmentAssetIntentBatchDraft"],
+      status: "active",
+    });
+    expect(repair.metadata).toMatchObject({
+      id: "asset-planning.segment-intent-repair",
+      version: "v1.0.0",
+      stage: "asset_planning",
+      language: "zh-CN",
+      consumes: ["SegmentIntentRepairInput"],
+      produces: ["SegmentIntentRepairPatch"],
+      status: "active",
+    });
+    expect(planner.body).toContain("严格 `SegmentAssetIntentBatchDraft`");
+    expect(planner.body).toContain("每个分段精确一次");
+    expect(planner.body).toContain("visual_strategy_preference");
+    expect(planner.body).toContain(
+      "`visual_strategy_preference` 为 `null` 时，默认输出一个 `image_still` 锚点图和一个 `render_motion_cue`",
+    );
+    expect(planner.body).toContain(
+      "只有 `why_static_insufficient` 非空时才允许额外输出 `video_clip`",
+    );
+    expect(planner.body).toContain(
+      "`api_video` 必须输出一个 `image_still` 锚点图和一个 `video_clip`",
+    );
+    expect(planner.body).toContain(
+      "`remotion_motion` 必须输出一个 `image_still` 锚点图和一个 `render_motion_cue`，并禁止输出 `video_clip`",
+    );
+    expect(planner.body).not.toContain("无偏好时按预算与降级策略选择");
+    expect(planner.body).toContain("首个分块的第一段");
+    expect(planner.body).toContain("非首个分块禁止输出 `global`");
+    expect(planner.body).toContain("asset_kind");
+    expect(planner.body).toContain("planning_mode");
+    expect(planner.body).toContain("source_segment_id");
+    expect(planner.body).not.toContain("生成 task_id");
+    expect(repair.body).toContain("严格 `SegmentIntentRepairPatch`");
+    expect(repair.body).toContain("只修复 `allowed_operations`");
+    expect(repair.body).toContain("replace_field");
+    expect(repair.body).toContain("append_intent");
+    expect(repair.body).toContain("不得完整重写");
+    expect(repair.body).not.toContain("分析 message");
+    for (const narrativeEnglish of [
+      "typed operations",
+      "visual strategy preference",
+      "global BGM owner",
+      "正式 wire",
+      "正式 schema",
+      "对应正式 schema",
+    ]) {
+      expect(planner.body).not.toContain(narrativeEnglish);
+      expect(repair.body).not.toContain(narrativeEnglish);
+    }
+  });
+
+  it("keeps the repair prompt JSON example valid against the canonical patch schema", () => {
+    const repair = createPromptRegistry().getPrompt(
+      "asset-planning.segment-intent-repair",
+    );
+    const example = repair.body.match(/```json\n([\s\S]*?)\n```/u)?.[1];
+
+    expect(example).toBeDefined();
+    expect(() =>
+      SegmentIntentRepairPatch.parse(JSON.parse(example!)),
+    ).not.toThrow();
+    expect(example).toContain('"production_intent"');
+    expect(example).toContain('"image_prompt"');
+    expect(example).toContain('"video_prompt_reserve"');
+    expect(example).toContain('"image_role"');
+    expect(example).toContain('"support_reason"');
+    expect(example).toContain('"risk_notes"');
+    expect(repair.body).toContain(
+      "其他 `expected_kind` 必须按正式输出结构提交对应联合类型的完整对象",
+    );
+    expect(repair.body).not.toContain("示例仅展示");
+  });
+
+  it("associates segment intent prompt outputs with the canonical schemas", () => {
+    expect(SEGMENT_INTENT_PLANNER_OUTPUT_SCHEMA).toBe(
+      SegmentAssetIntentBatchDraft,
+    );
+    expect(SEGMENT_INTENT_REPAIR_OUTPUT_SCHEMA).toBe(
+      SegmentIntentRepairPatch,
+    );
+  });
   it("loads topic.candidate-builder from harness prompts with zh-CN metadata", () => {
     const registry = createPromptRegistry();
 

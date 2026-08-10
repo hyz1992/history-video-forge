@@ -35,6 +35,7 @@ const OPERATION_NAME_TO_CLASS: Record<string, LlmOperationClass> = {
   "topic.candidate-builder": "long_structured_generation",
   "topic.custom-refine": "long_structured_generation",
   "asset-planning.planner": "long_structured_generation",
+  "asset-planning.segment-intent-planner": "long_structured_generation",
   "event-library.enrich": "long_structured_generation",
 
   // 短结构化判断：选题打分选择、发布标题/简介/封面提示词
@@ -48,6 +49,7 @@ const OPERATION_NAME_TO_CLASS: Record<string, LlmOperationClass> = {
   "topic.candidate-builder-repair": "targeted_repair",
   "asset-planning.asset-structural-repair": "targeted_repair",
   "asset-planning.global-structural-repair": "targeted_repair",
+  "asset-planning.segment-intent-repair": "targeted_repair",
   "publish.cover-prompt-optimizer": "targeted_repair",
   "asset.prompt-optimizer": "targeted_repair",
 

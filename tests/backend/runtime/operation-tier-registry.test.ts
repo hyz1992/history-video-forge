@@ -18,6 +18,8 @@ describe("operation tier registry", () => {
       "asset-planning.planner",
       "asset-planning.asset-structural-repair",
       "asset-planning.global-structural-repair",
+      "asset-planning.segment-intent-planner",
+      "asset-planning.segment-intent-repair",
       "topic.selector",
       "script.semantic-reviewer",
       "event-library.enrich",
@@ -52,7 +54,7 @@ describe("operation tier registry", () => {
     expect(getOperationTier("topic.selector")).toBe("smart");
   });
 
-  it("registry covers all 17 expected operations", () => {
+  it("registry covers all 19 expected operations", () => {
     expect(Object.keys(OPERATION_TIER_REGISTRY).sort()).toEqual(
       [
         "script.writer",
@@ -64,6 +66,8 @@ describe("operation tier registry", () => {
         "asset-planning.planner",
         "asset-planning.asset-structural-repair",
         "asset-planning.global-structural-repair",
+        "asset-planning.segment-intent-planner",
+        "asset-planning.segment-intent-repair",
         "topic.selector",
         "script.semantic-reviewer",
         "event-library.enrich",

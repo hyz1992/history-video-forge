@@ -22,6 +22,7 @@ describe("llm operation policy classification", () => {
     expect(classifyOperation("topic.candidate-builder")).toBe("long_structured_generation");
     expect(classifyOperation("topic.custom-refine")).toBe("long_structured_generation");
     expect(classifyOperation("asset-planning.planner")).toBe("long_structured_generation");
+    expect(classifyOperation("asset-planning.segment-intent-planner")).toBe("long_structured_generation");
 
     // 短结构化判断
     expect(classifyOperation("topic.selector")).toBe("short_structured_decision");
@@ -34,6 +35,7 @@ describe("llm operation policy classification", () => {
     expect(classifyOperation("topic.candidate-builder-repair")).toBe("targeted_repair");
     expect(classifyOperation("asset-planning.asset-structural-repair")).toBe("targeted_repair");
     expect(classifyOperation("asset-planning.global-structural-repair")).toBe("targeted_repair");
+    expect(classifyOperation("asset-planning.segment-intent-repair")).toBe("targeted_repair");
     expect(classifyOperation("publish.cover-prompt-optimizer")).toBe("targeted_repair");
     expect(classifyOperation("asset.prompt-optimizer")).toBe("targeted_repair");
 
@@ -109,6 +111,8 @@ describe("llm operation policy precedence", () => {
     const unapprovedOperations = [
       "storyboard.segment-regen",
       "asset-planning.planner",
+      "asset-planning.segment-intent-planner",
+      "asset-planning.segment-intent-repair",
       "topic.selector",
       "topic.candidate-builder-repair",
       "asset-planning.asset-structural-repair",
