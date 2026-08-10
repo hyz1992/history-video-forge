@@ -1,0 +1,155 @@
+{
+  "plan_version": "asset_plan_v1",
+  "source_storyboard_record_id": "storyboard_record_synthetic_long_15",
+  "source_script_record_id": "script_record_synthetic_salt_road_15",
+  "source_topic_package_id": "topic_package_synthetic_salt_road",
+  "art_bible": {
+    "era_style": "架空古代云岭驿城",
+    "visual_tone": "冷灰雨夜逐步转为清晨暖光的写实调查质感",
+    "characters": [
+      {
+        "character_id": "char_shen_cen",
+        "label": "沈岑",
+        "role": "巡仓使",
+        "visual_description": "三十余岁，深灰布袍，束发，随身带防水账袋。",
+        "consistency_notes": ["不使用任何真实历史人物肖像。"]
+      },
+      {
+        "character_id": "char_lu_he",
+        "label": "陆禾",
+        "role": "书吏",
+        "visual_description": "二十余岁，青色短褙子，携木板、墨笔和量绳。",
+        "consistency_notes": ["湿账与量绳在相关分镜中保持一致。"]
+      }
+    ],
+    "locations": [
+      {
+        "location_id": "loc_east_storehouse",
+        "label": "东仓",
+        "role": "主要调查现场",
+        "visual_description": "木梁盐仓、石板排水槽和后砌砖墙组成的架空驿城仓房。",
+        "consistency_notes": ["仓门、排水槽、后墙的相对方位固定。"]
+      }
+    ],
+    "props": [
+      {
+        "prop_id": "prop_public_scale",
+        "label": "驿城公秤",
+        "role": "公开复秤工具",
+        "visual_description": "木制横梁秤与标准铜锤，不含现代金属刻度盘。",
+        "consistency_notes": ["秤杆和铜锤造型在所有镜头一致。"]
+      }
+    ],
+    "global_prompt_prefix": "架空古代云岭驿城，竖屏写实历史短片，雨水方向与仓储空间连续。",
+    "global_negative_prompts": ["真实人物肖像", "现代建筑", "现代机械秤", "可识别真实官印"],
+    "consistency_notes": ["全部人物、地点和事件为合成架空内容。"]
+  },
+  "visual_budget": {
+    "default_path": "image_still_plus_render_motion_cue",
+    "video_clip_policy": "仅开场雨夜奔跑使用视频候选"
+  },
+  "downgrade_policy": {
+    "video_to_still_fallback": true,
+    "fallback_required": true
+  },
+  "global_audio_strategy": {
+    "bgm_policy": "全片低频克制底乐",
+    "sfx_policy": "只在证据落案时使用具象音效"
+  },
+  "tts_plan": {
+    "voice_profile_id": "voice_profile_synthetic_narrator",
+    "estimated_total_duration_sec": 90,
+    "chunking_strategy": "sentence_boundary",
+    "chunks": [
+      {
+        "chunk_id": "tts_chunk_full_synthetic_story",
+        "order": 0,
+        "script_excerpt": "天还没有亮，云岭驿城的急钟先响了三遍。连夜暴雨冲断盐道，东仓门缝里却流出一线白水，像有人把整袋官盐倒进泥沟。巡仓使沈岑踩着没过脚背的积水赶到时，守仓人都说只是屋顶漏雨，可他看见门闩外侧沾着新鲜桐油，显然有人在雨夜重新封过门。仓门打开，最上层的盐包全被浸湿，底下几排却干得反常。账房忙着解释，说先搬进来的旧盐垫在高处，后到的新盐压在下面。沈岑没有争辩，只让人把每排盐包的封绳颜色、堆放方向和地面水痕逐一画进临时仓图，谁也不准挪动半步。驿丞催他赶紧封仓上报，因为午后就有运盐队入城，耽误一天便要赔付大笔脚费。沈岑反而命人停下新车，还把仓门前的石阶洗净。他说如果只是漏雨，水痕应该从屋檐向内延伸；如今白水却从仓心向外流，说明里面有东西在持续溶化，越急着盖门，证据消失得越快。年轻书吏陆禾从湿账里捡出三张粘在一起的验收入票。票上写着同一日、同一批盐，却盖了两种略有差别的朱印：一枚边缘磨损，一枚四角锋利。她把纸贴到窗边，发现锋利的那枚压在旧墨之上，像是雨前补盖，而磨损的印迹反倒被水晕开。沈岑让人搬来驿城公秤，不拆袋，只先称每排最外侧的六包。旧账记每包五十斤，实称却有的不足四十斤，有的超过六十斤。若只是受潮，重量只会增加，不会一轻一重。围观的脚夫开始低声议论，驿丞则反复强调公秤多年未校，不能据此定案。一个替盐队赶车二十年的老驭手认出封绳结法，说官仓平日用双回结，眼前几包却是商队常用的燕尾结。他不敢直接指认谁，只说三日前在南坡见过空车夜行，车轮包着麻布，没有铃声。沈岑把这句话记入证词，却没有立刻抓人，因为夜车可能运粮，也可能避雨，单凭结法更不能证明盐被换走。午时未到，府城传来手令，要求日落前恢复盐道，否则以阻塞军需论处。驿丞把手令铺在沈岑面前，提醒他一旦开仓翻检，今晚所有盐车都走不了。沈岑看着不断变浅的白水，决定只查仓底排水槽，用最小范围换最后一次取证机会。夜色落下，工匠掀开排水槽的石板，里面没有淤泥，只有一层细小木屑和几片蓝色漆皮。仓里盐架是原木色，只有城南废漆坊的旧门刷过这种蓝漆。陆禾又从槽口量到后墙，发现水流绕过主仓直指一块新砌砖墙，墙缝中的灰浆甚至还没完全变硬。众人赶到废漆坊，那里早已空置，院角却堆着刚洗过的麻布和断裂封绳。驿丞说这些东西随处可见，仍不能证明与官仓有关。沈岑没有搜屋，只取走麻布上的盐霜、蓝漆碎片和一段燕尾结，分别封进三只陶罐，并请街坊在封条上按下手印。回仓路上，一名盐商在桥头拦住沈岑，提出替驿城补足所有短缺，只求不要继续追查。盐商说暴雨之后人人都难，补上数量便没有损失。沈岑回答，短缺可以补，调换的时辰和开门的人却补不回来；若今天让一笔银钱抹平证据，明天每场雨都会变成新的借口。第二天清晨，沈岑没有宣布罪名，而是请脚夫、商户和府城校秤官共同见证复秤。他先用标准铜锤校准公秤，再随机抽取轻包、重包和正常盐包各三袋。轻包里混着晒干河沙，重包夹有吸水碎布，只有表层是真盐。陆禾当众核对封绳、票据和水痕，三条证据终于指向同一批夜换盐包。新砌砖墙被拆开，后面不是密道，而是一间贴着主仓的狭长夹层。夹层里堆着尚未运走的官盐，袋口都换成商队封绳。蓝漆门板正好卡住排水槽，雨水灌入后溶出盐水，也把木屑和漆皮带到仓外。原本用来遮掩的暴雨，反而替所有人画出了搬运路线。驿丞见证据齐全，只得交出夜间开仓名册。名册显示他收受盐商钱款，安排空车从南坡入城，再用掺沙盐包填回原位。沈岑没有把所有守仓人一并定罪，而是按钥匙交接、搬运时段和所得钱物分别记录责任；被迫参与且主动作证的脚夫保留工钱，毁改账票的人另行候审。盐道在第三日重新开放。府城问沈岑为何宁可冒着延误军需的风险，也不先补足数量再慢慢查。他说仓里的盐只少了一夜，若让假印、假秤和假封绳变成惯例，往后每一袋都要有人付出双倍代价。陆禾把那册湿账晾在廊下，纸页皱得再也压不平，却成了驿城最清楚的一份证据。后来云岭每逢雨季都要提前校秤、双人交钥，并把排水槽纳入验仓。人们记住的不是沈岑抓了谁，而是那句他在复秤前说的话：账可以湿，秤不能偏。暴雨会冲散脚印，也会让藏在墙后的盐自己流出来；真正挡住下一次偷换的，是人人看得见的程序。",
+        "estimated_duration_sec": 90
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "task_id": "tts_full_story", "order": 0, "task_type": "tts_audio", "source_segment_id": null,
+      "source_excerpt": "合成架空盐道故事全文旁白", "production_intent": "生成完整中文旁白音频。", "recommended_mode": "auto", "provider_hint": "default_tts", "prompt_draft": null,
+      "parameters": { "voice_profile_id": "voice_profile_synthetic_narrator" },
+      "manual_upload_policy": { "allowed": false, "required": false, "accepted_file_types": [], "acceptance_notes": [] },
+      "risk_notes": [], "cost_tier": "low", "initial_status": "planned"
+    },
+    {
+      "task_id": "subtitle_full_story", "order": 1, "task_type": "subtitle_track", "source_segment_id": null,
+      "source_excerpt": "合成架空盐道故事全文字幕", "production_intent": "按旁白时序生成竖屏字幕。", "recommended_mode": "auto", "provider_hint": null, "prompt_draft": null,
+      "parameters": { "language": "zh-CN" },
+      "manual_upload_policy": { "allowed": false, "required": false, "accepted_file_types": [], "acceptance_notes": [] },
+      "risk_notes": [], "cost_tier": "free", "initial_status": "planned"
+    },
+    {
+      "task_id": "image_seg_001_anchor", "order": 2, "task_type": "image_still", "source_segment_id": "seg_001",
+      "source_excerpt": "天还没有亮，云岭驿城的急钟先响了三遍。连夜暴雨冲断盐道，东仓门缝里却流出一线白水，像有人把整袋官盐倒进泥沟。巡仓使沈岑踩着没过脚背的积水赶到时，守仓人都说只是屋顶漏雨，可他看见门闩外侧沾着新鲜桐油，显然有人在雨夜重新封过门。",
+      "production_intent": "建立开场雨夜盐仓异常的锚点画面。", "recommended_mode": "manual_allowed", "provider_hint": null,
+      "prompt_draft": "架空古代驿城暴雨夜，巡仓使赶到东仓，门缝流出白色盐水，竖屏写实历史质感。",
+      "parameters": { "aspect_ratio": "9:16", "image_role": "anchor", "video_prompt_reserve": "镜头沿白色盐水向仓门推近，再抬到新桐油门闩。" },
+      "manual_upload_policy": { "allowed": true, "required": false, "accepted_file_types": ["image/png", "image/jpeg"], "acceptance_notes": ["保持仓门与水流方向一致。"] },
+      "risk_notes": ["人物与地点均为合成架空内容。"], "cost_tier": "low", "initial_status": "planned"
+    },
+    {
+      "task_id": "video_seg_001", "order": 3, "task_type": "video_clip", "source_segment_id": "seg_001",
+      "source_excerpt": "天还没有亮，云岭驿城的急钟先响了三遍。连夜暴雨冲断盐道，东仓门缝里却流出一线白水，像有人把整袋官盐倒进泥沟。巡仓使沈岑踩着没过脚背的积水赶到时，守仓人都说只是屋顶漏雨，可他看见门闩外侧沾着新鲜桐油，显然有人在雨夜重新封过门。",
+      "production_intent": "表现巡仓使踩水赶到和白水持续外流的连续动作。", "recommended_mode": "manual_allowed", "provider_hint": null,
+      "prompt_draft": "架空古代驿城暴雨夜，巡仓使踩过积水快步赶到东仓，白色盐水持续从门缝流出。",
+      "parameters": { "static_fallback_task_id": "image_seg_001_anchor", "why_static_insufficient": "赶到、俯身检查与盐水持续外流需要连续动作建立开场紧迫感。" },
+      "manual_upload_policy": { "allowed": true, "required": false, "accepted_file_types": ["video/mp4", "video/quicktime"], "acceptance_notes": ["失败时必须降级到开场锚点图。"] },
+      "risk_notes": ["不得出现现代雨具或真实人物肖像。"], "cost_tier": "high", "initial_status": "planned"
+    },
+    {
+      "task_id": "image_seg_002_anchor", "order": 4, "task_type": "image_still", "source_segment_id": "seg_002",
+      "source_excerpt": "仓门打开，最上层的盐包全被浸湿，底下几排却干得反常。账房忙着解释，说先搬进来的旧盐垫在高处，后到的新盐压在下面。沈岑没有争辩，只让人把每排盐包的封绳颜色、堆放方向和地面水痕逐一画进临时仓图，谁也不准挪动半步。",
+      "production_intent": "呈现湿干倒置与临时仓图。", "recommended_mode": "manual_allowed", "provider_hint": null,
+      "prompt_draft": "架空古代盐仓纵深，上层湿盐包与底排干盐包形成对比，书吏在木板绘制仓图。",
+      "parameters": { "aspect_ratio": "9:16", "image_role": "anchor", "video_prompt_reserve": "从湿盐包缓慢下移到底排干包，再横移到仓图。" },
+      "manual_upload_policy": { "allowed": true, "required": false, "accepted_file_types": ["image/png", "image/jpeg"], "acceptance_notes": [] },
+      "risk_notes": ["盐包堆放方向需与仓图一致。"], "cost_tier": "low", "initial_status": "planned"
+    },
+    {
+      "task_id": "motion_seg_002", "order": 5, "task_type": "render_motion_cue", "source_segment_id": "seg_002",
+      "source_excerpt": "仓门打开，最上层的盐包全被浸湿，底下几排却干得反常。账房忙着解释，说先搬进来的旧盐垫在高处，后到的新盐压在下面。沈岑没有争辩，只让人把每排盐包的封绳颜色、堆放方向和地面水痕逐一画进临时仓图，谁也不准挪动半步。",
+      "production_intent": "在静态仓图画面上进行克制推近。", "recommended_mode": "auto", "provider_hint": null, "prompt_draft": null,
+      "parameters": { "recipe_type": "push_in", "duration_sec": 6, "easing": "ease-in-out" },
+      "manual_upload_policy": { "allowed": false, "required": false, "accepted_file_types": [], "acceptance_notes": [] },
+      "risk_notes": ["运动不能裁掉湿干盐包对照。"], "cost_tier": "free", "initial_status": "planned"
+    },
+    {
+      "task_id": "sfx_seg_005", "order": 6, "task_type": "sfx_cue", "source_segment_id": "seg_005",
+      "source_excerpt": "沈岑让人搬来驿城公秤，不拆袋，只先称每排最外侧的六包。旧账记每包五十斤，实称却有的不足四十斤，有的超过六十斤。若只是受潮，重量只会增加，不会一轻一重。围观的脚夫开始低声议论，驿丞则反复强调公秤多年未校，不能据此定案。",
+      "production_intent": "在公秤落定时加入克制的证据揭示音。", "recommended_mode": "auto", "provider_hint": null, "prompt_draft": null,
+      "parameters": { "required_tags": ["木槌落案", "盐包摩擦"], "mood_tags": ["克制", "紧张"], "library_item_id": null, "selection_label": "公开复秤揭示音" },
+      "manual_upload_policy": { "allowed": true, "required": false, "accepted_file_types": ["audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp4", "audio/aac", "audio/ogg"], "acceptance_notes": ["不可盖过旁白。"] },
+      "risk_notes": [], "cost_tier": "low", "initial_status": "planned"
+    },
+    {
+      "task_id": "bgm_global", "order": 7, "task_type": "bgm_cue", "source_segment_id": null,
+      "source_excerpt": "合成架空盐道故事全片", "production_intent": "以低频弦乐维持调查紧张感，并在结尾收束。", "recommended_mode": "auto", "provider_hint": null, "prompt_draft": null,
+      "parameters": { "required_tags": ["低频弦乐", "缓慢鼓点"], "mood_tags": ["悬疑", "坚决"], "volume": 0.28, "fade_in_sec": 1.5, "fade_out_sec": 2, "scope": "global", "segment_ids": [], "library_item_id": null, "selection_label": "盐道查仓底乐" },
+      "manual_upload_policy": { "allowed": true, "required": false, "accepted_file_types": ["audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp4", "audio/aac", "audio/ogg"], "acceptance_notes": ["需允许全片循环或延展。"] },
+      "risk_notes": [], "cost_tier": "low", "initial_status": "planned"
+    }
+  ],
+  "dependencies": [
+    { "dependency_id": "dep_subtitle_after_tts", "task_id": "subtitle_full_story", "depends_on_task_id": "tts_full_story", "dependency_type": "requires_timing" },
+    { "dependency_id": "dep_video_after_image", "task_id": "video_seg_001", "depends_on_task_id": "image_seg_001_anchor", "dependency_type": "requires_output" },
+    { "dependency_id": "dep_motion_after_image", "task_id": "motion_seg_002", "depends_on_task_id": "image_seg_002_anchor", "dependency_type": "requires_output" },
+    { "dependency_id": "dep_sfx_after_tts", "task_id": "sfx_seg_005", "depends_on_task_id": "tts_full_story", "dependency_type": "requires_timing" }
+  ],
+  "cost_summary": {
+    "total_tasks": 8,
+    "by_type": { "tts_audio": 1, "subtitle_track": 1, "image_still": 2, "video_clip": 1, "render_motion_cue": 1, "sfx_cue": 1, "bgm_cue": 1 },
+    "by_cost_tier": { "free": 2, "low": 5, "medium": 0, "high": 1 },
+    "estimated_provider_calls": 4,
+    "notes": ["高成本视频仅用于开场雨夜奔跑，静态主图始终保留。"]
+  },
+  "global_production_notes": [
+    "TTS 与字幕任务由本地服务确定性创建。",
+    "其余分镜允许在下游保持缺省视觉路由，本基线只冻结已规划任务的兼容合同。"
+  ]
+}

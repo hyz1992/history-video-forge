@@ -1,0 +1,205 @@
+{
+  "source_ids": {
+    "storyboard_record_id": "storyboard_record_synthetic_long_21",
+    "script_record_id": "script_record_synthetic_salt_road_21",
+    "topic_package_id": "topic_package_synthetic_salt_road"
+  },
+  "script": {
+    "script_text": "天未亮，云岭驿城的急钟先响三遍。暴雨冲断盐道，东仓门缝却流出白水，像有整袋官盐正在泥里融化。沈岑赶到仓门，守仓人都说只是漏雨。他却看见门闩外侧有新桐油，最湿的盐包在上层，底排反而干燥。沈岑不许任何人挪包，让书吏陆禾记录封绳颜色、堆放方向和地面水痕，再把每排位置画成仓图。湿账里粘着三张验收入票，同日同批盐却盖着两种朱印：旧印被水晕开，新印四角锋利，压在旧墨之上。沈岑搬来公秤，先称每排外侧盐包。旧账都写五十斤，实称却一轻一重；若只是受潮，重量只会增加。老驭手认出封绳结法不对。官仓惯用双回结，眼前几袋却是商队燕尾结，三日前还有包麻车轮的空车夜行。府城手令要求日落前恢复盐道。驿丞催促封仓，沈岑看着逐渐变浅的白水，只争取检查仓底排水槽。石板掀开，槽里没有淤泥，只有细木屑和蓝漆片。仓内全是原木色，这些蓝漆显然来自别处。陆禾用量绳追水路，发现盐水绕过主仓直指后墙。那面墙刚砌不久，缝里的灰浆尚未完全变硬。城南废漆坊虽已空置，院角却有洗过的麻布、断封绳和同色漆片。沈岑把三类证物分装陶罐，请街坊按印见证。回仓路上，盐商愿补齐所有短缺，只求停止追查。沈岑拒绝说，数量能补，开门的时辰和改账的人补不回来。次日清晨，脚夫、商户和府城校秤官共同到场。沈岑先用标准铜锤校秤，再随机抽取轻包、重包和正常盐包。轻包剖开，里面混着晒干河沙；重包夹着吸水碎布，表层才是真盐，受潮的说法当场站不住脚。陆禾依次展示双印票据、燕尾封绳和排水槽漆片。三条互不依赖的线索都落到同一批夜换盐包。新砌砖墙被拆开，后面是一间狭长夹层。尚未运走的官盐堆在里面，蓝漆门板正卡着排水槽。夹层里的袋口都换成商队封绳。雨水溶出盐水，又把门板木屑与漆片带到仓外，遮掩现场的暴雨反而画出路线。驿丞交出夜间开仓名册。名册记录的钥匙时段与南坡空车相合，也显示他收钱安排掺沙盐包填回原位。沈岑没有只凭名册结案。他分别询问守门人、搬运脚夫和校秤官，让三份证词对照钥匙交接、盐包重量与所得钱物。责任按证据拆开：主动改票者候审，被迫搬运且及时作证者保留工钱，未接触钥匙的人不被一并牵连。第三日盐道重新开放，积压盐车逐辆出城。府城没有再要求先补数量，而是把完整证物和复秤记录一并收存。驿城新增雨季校秤、双人交钥和排水槽巡检。每次验仓都由两名不同岗位的人签名，任何单人都不能独自改账开门。陆禾把湿账晾在廊下，纸页皱得再也压不平。人们记住沈岑复秤前的话：账可以湿，秤不能偏；挡住下一次偷换的，是人人看得见的程序。",
+    "estimated_duration_sec": 126,
+    "beat_trace": [
+      { "beat": "雨夜白水", "excerpt": "东仓门缝却流出白水", "confidence": 1 },
+      { "beat": "双印与轻重", "excerpt": "同日同批盐却盖着两种朱印", "confidence": 1 },
+      { "beat": "日落取证", "excerpt": "只争取检查仓底排水槽", "confidence": 1 },
+      { "beat": "拒绝补偿", "excerpt": "数量能补，开门的时辰和改账的人补不回来", "confidence": 1 },
+      { "beat": "公开复秤", "excerpt": "三条互不依赖的线索都落到同一批夜换盐包", "confidence": 1 },
+      { "beat": "分证定责", "excerpt": "责任按证据拆开", "confidence": 1 },
+      { "beat": "程序余震", "excerpt": "挡住下一次偷换的，是人人看得见的程序", "confidence": 1 }
+    ],
+    "quote_trace": [
+      { "quote": "账可以湿，秤不能偏", "usage_type": "exact", "excerpt": "账可以湿，秤不能偏" }
+    ],
+    "opening_span": "天未亮，云岭驿城的急钟先响三遍。",
+    "ending_span": "挡住下一次偷换的，是人人看得见的程序。"
+  },
+  "storyboard": {
+    "plan_version": "storyboard_v1",
+    "source_script_record_id": "script_record_synthetic_salt_road_21",
+    "source_topic_package_id": "topic_package_synthetic_salt_road",
+    "estimated_total_duration_sec": 126,
+    "segments": [
+      {
+        "segment_id": "seg_001", "order": 0,
+        "script_excerpt": "天未亮，云岭驿城的急钟先响三遍。暴雨冲断盐道，东仓门缝却流出白水，像有整袋官盐正在泥里融化。",
+        "start_hint_sec": 0, "end_hint_sec": 6, "narrative_role": "opening",
+        "visual_intent": "用暴雨和白色盐水建立异常。", "scene_description": "暴雨中的架空驿城东仓门缝流出白水。",
+        "visual_elements": ["驿城急钟", "东仓门", "白色盐水"], "framing_hint": "wide", "content_type": "live_action", "motion_hint": "push_in", "editing_hint": "single",
+        "on_screen_text": ["盐仓为什么在流白水？"], "linked_beats": ["雨夜白水"], "linked_quotes": [], "risk_notes": ["合成架空事件。"], "visual_strategy_preference": "api_video"
+      },
+      {
+        "segment_id": "seg_002", "order": 1,
+        "script_excerpt": "沈岑赶到仓门，守仓人都说只是漏雨。他却看见门闩外侧有新桐油，最湿的盐包在上层，底排反而干燥。",
+        "start_hint_sec": 6, "end_hint_sec": 12, "narrative_role": "setup",
+        "visual_intent": "对比湿盐包与干燥底排。", "scene_description": "门闩新桐油与仓内湿干倒置同时入画。",
+        "visual_elements": ["新桐油", "湿盐包", "干燥底排"], "framing_hint": "medium", "content_type": "illustration", "motion_hint": "push_in", "editing_hint": "cutaway",
+        "on_screen_text": [], "linked_beats": ["雨夜白水"], "linked_quotes": [], "risk_notes": ["仓储陈设保持一致。"], "visual_strategy_preference": "remotion_motion"
+      },
+      {
+        "segment_id": "seg_003", "order": 2,
+        "script_excerpt": "沈岑不许任何人挪包，让书吏陆禾记录封绳颜色、堆放方向和地面水痕，再把每排位置画成仓图。",
+        "start_hint_sec": 12, "end_hint_sec": 18, "narrative_role": "setup",
+        "visual_intent": "表现封锁现场和绘制仓图。", "scene_description": "陆禾在木板上绘仓图，盐包保持原位。",
+        "visual_elements": ["封绳", "地面水痕", "仓图"], "framing_hint": "medium", "content_type": "live_action", "motion_hint": "pan", "editing_hint": "single",
+        "on_screen_text": [], "linked_beats": ["雨夜白水"], "linked_quotes": [], "risk_notes": ["不生成现代测绘工具。"], "visual_strategy_preference": null
+      },
+      {
+        "segment_id": "seg_004", "order": 3,
+        "script_excerpt": "湿账里粘着三张验收入票，同日同批盐却盖着两种朱印：旧印被水晕开，新印四角锋利，压在旧墨之上。",
+        "start_hint_sec": 18, "end_hint_sec": 24, "narrative_role": "turn",
+        "visual_intent": "以透光湿票显示双印先后。", "scene_description": "窗光穿过湿票，两种朱印边缘可辨。",
+        "visual_elements": ["湿账", "旧朱印", "新朱印"], "framing_hint": "detail", "content_type": "live_action", "motion_hint": "static", "editing_hint": "single",
+        "on_screen_text": ["同批盐，两种印"], "linked_beats": ["双印与轻重"], "linked_quotes": [], "risk_notes": ["印记为合成纹样。"]
+      },
+      {
+        "segment_id": "seg_005", "order": 4,
+        "script_excerpt": "沈岑搬来公秤，先称每排外侧盐包。旧账都写五十斤，实称却一轻一重；若只是受潮，重量只会增加。",
+        "start_hint_sec": 24, "end_hint_sec": 30, "narrative_role": "pressure",
+        "visual_intent": "用秤杆摆动呈现轻重矛盾。", "scene_description": "木秤依次吊起盐包，秤杆落点明显不同。",
+        "visual_elements": ["木制公秤", "盐包", "旧账"], "framing_hint": "close", "content_type": "live_action", "motion_hint": "push_in", "editing_hint": "montage",
+        "on_screen_text": ["同账不同重"], "linked_beats": ["双印与轻重"], "linked_quotes": [], "risk_notes": ["度量衡为架空叙事表达。"], "visual_strategy_preference": "remotion_motion"
+      },
+      {
+        "segment_id": "seg_006", "order": 5,
+        "script_excerpt": "老驭手认出封绳结法不对。官仓惯用双回结，眼前几袋却是商队燕尾结，三日前还有包麻车轮的空车夜行。",
+        "start_hint_sec": 30, "end_hint_sec": 36, "narrative_role": "setup",
+        "visual_intent": "对照两种结法并闪回无铃夜车。", "scene_description": "老驭手手中并列两种绳结，背景出现包麻车轮。",
+        "visual_elements": ["双回结", "燕尾结", "包麻车轮"], "framing_hint": "detail", "content_type": "illustration", "motion_hint": "pan", "editing_hint": "cutaway",
+        "on_screen_text": [], "linked_beats": ["双印与轻重"], "linked_quotes": [], "risk_notes": ["证词只作为线索。"]
+      },
+      {
+        "segment_id": "seg_007", "order": 6,
+        "script_excerpt": "府城手令要求日落前恢复盐道。驿丞催促封仓，沈岑看着逐渐变浅的白水，只争取检查仓底排水槽。",
+        "start_hint_sec": 36, "end_hint_sec": 42, "narrative_role": "pressure",
+        "visual_intent": "并置日落期限和消失中的证据。", "scene_description": "手令压案，门外白水在夕光中变浅。",
+        "visual_elements": ["手令", "夕光", "排水槽"], "framing_hint": "close", "content_type": "live_action", "motion_hint": "pull_back", "editing_hint": "single",
+        "on_screen_text": ["日落前最后一次取证"], "linked_beats": ["日落取证"], "linked_quotes": [], "risk_notes": ["文书制度为架空设定。"], "visual_strategy_preference": "api_video"
+      },
+      {
+        "segment_id": "seg_008", "order": 7,
+        "script_excerpt": "石板掀开，槽里没有淤泥，只有细木屑和蓝漆片。仓内全是原木色，这些蓝漆显然来自别处。",
+        "start_hint_sec": 42, "end_hint_sec": 48, "narrative_role": "turn",
+        "visual_intent": "特写排水槽中的蓝漆片。", "scene_description": "灯笼照亮石槽木屑和蓝色漆片。",
+        "visual_elements": ["石板", "细木屑", "蓝漆片"], "framing_hint": "detail", "content_type": "live_action", "motion_hint": "push_in", "editing_hint": "single",
+        "on_screen_text": [], "linked_beats": ["日落取证"], "linked_quotes": [], "risk_notes": ["只使用古代照明。"], "visual_strategy_preference": "remotion_motion"
+      },
+      {
+        "segment_id": "seg_009", "order": 8,
+        "script_excerpt": "陆禾用量绳追水路，发现盐水绕过主仓直指后墙。那面墙刚砌不久，缝里的灰浆尚未完全变硬。",
+        "start_hint_sec": 48, "end_hint_sec": 54, "narrative_role": "turn",
+        "visual_intent": "量绳把排水槽和新墙连接。", "scene_description": "量绳沿盐水痕迹拉到潮湿的新砌砖墙。",
+        "visual_elements": ["量绳", "盐水痕", "新灰浆"], "framing_hint": "medium", "content_type": "live_action", "motion_hint": "pan", "editing_hint": "cutaway",
+        "on_screen_text": [], "linked_beats": ["日落取证"], "linked_quotes": [], "risk_notes": ["空间方位与前镜连续。"], "visual_strategy_preference": null
+      },
+      {
+        "segment_id": "seg_010", "order": 9,
+        "script_excerpt": "城南废漆坊虽已空置，院角却有洗过的麻布、断封绳和同色漆片。沈岑把三类证物分装陶罐，请街坊按印见证。",
+        "start_hint_sec": 54, "end_hint_sec": 60, "narrative_role": "bridge",
+        "visual_intent": "展示三类证物分别封存。", "scene_description": "废漆坊院内三只陶罐被逐一封口。",
+        "visual_elements": ["洗过麻布", "断封绳", "封口陶罐"], "framing_hint": "medium", "content_type": "live_action", "motion_hint": "pan", "editing_hint": "montage",
+        "on_screen_text": [], "linked_beats": ["日落取证"], "linked_quotes": [], "risk_notes": ["取证程序为合成设计。"]
+      },
+      {
+        "segment_id": "seg_011", "order": 10,
+        "script_excerpt": "回仓路上，盐商愿补齐所有短缺，只求停止追查。沈岑拒绝说，数量能补，开门的时辰和改账的人补不回来。",
+        "start_hint_sec": 60, "end_hint_sec": 66, "narrative_role": "pressure",
+        "visual_intent": "表现银袋诱惑和明确拒绝。", "scene_description": "石桥上盐商递出银袋，沈岑不伸手。",
+        "visual_elements": ["雨后石桥", "银袋", "远处仓灯"], "framing_hint": "medium", "content_type": "live_action", "motion_hint": "static", "editing_hint": "single",
+        "on_screen_text": ["数量能补，证据补不回来"], "linked_beats": ["拒绝补偿"], "linked_quotes": [], "risk_notes": ["人物不映射真实群体。"], "visual_strategy_preference": "api_video"
+      },
+      {
+        "segment_id": "seg_012", "order": 11,
+        "script_excerpt": "次日清晨，脚夫、商户和府城校秤官共同到场。沈岑先用标准铜锤校秤，再随机抽取轻包、重包和正常盐包。",
+        "start_hint_sec": 66, "end_hint_sec": 72, "narrative_role": "peak",
+        "visual_intent": "建立公开见证与随机抽样。", "scene_description": "晨光下众人围住校准后的公秤。",
+        "visual_elements": ["标准铜锤", "公秤", "三类盐包"], "framing_hint": "wide", "content_type": "live_action", "motion_hint": "push_in", "editing_hint": "single",
+        "on_screen_text": ["公开复秤"], "linked_beats": ["公开复秤"], "linked_quotes": [], "risk_notes": ["校秤官为架空职务。"], "visual_strategy_preference": "remotion_motion"
+      },
+      {
+        "segment_id": "seg_013", "order": 12,
+        "script_excerpt": "轻包剖开，里面混着晒干河沙；重包夹着吸水碎布，表层才是真盐，受潮的说法当场站不住脚。",
+        "start_hint_sec": 72, "end_hint_sec": 78, "narrative_role": "peak",
+        "visual_intent": "剖开盐包揭示河沙和碎布。", "scene_description": "两只盐包打开，河沙与吸水碎布清楚可见。",
+        "visual_elements": ["河沙", "吸水碎布", "表层真盐"], "framing_hint": "close", "content_type": "live_action", "motion_hint": "push_in", "editing_hint": "montage",
+        "on_screen_text": [], "linked_beats": ["公开复秤"], "linked_quotes": [], "risk_notes": ["避免夸张危险动作。"], "visual_strategy_preference": "api_video"
+      },
+      {
+        "segment_id": "seg_014", "order": 13,
+        "script_excerpt": "陆禾依次展示双印票据、燕尾封绳和排水槽漆片。三条互不依赖的线索都落到同一批夜换盐包。",
+        "start_hint_sec": 78, "end_hint_sec": 84, "narrative_role": "peak",
+        "visual_intent": "三类证据在同一案板汇合。", "scene_description": "票据、绳结和漆片分列案板三格。",
+        "visual_elements": ["双印票据", "燕尾封绳", "蓝漆片"], "framing_hint": "detail", "content_type": "illustration", "motion_hint": "pan", "editing_hint": "montage",
+        "on_screen_text": ["三条线索，同一批盐"], "linked_beats": ["公开复秤"], "linked_quotes": [], "risk_notes": ["证物外观与前镜一致。"], "visual_strategy_preference": "remotion_motion"
+      },
+      {
+        "segment_id": "seg_015", "order": 14,
+        "script_excerpt": "新砌砖墙被拆开，后面是一间狭长夹层。尚未运走的官盐堆在里面，蓝漆门板正卡着排水槽。",
+        "start_hint_sec": 84, "end_hint_sec": 90, "narrative_role": "peak",
+        "visual_intent": "拆墙显出暗仓和蓝漆门板。", "scene_description": "砖墙开口后露出夹层盐包和横卡门板。",
+        "visual_elements": ["拆墙", "夹层盐包", "蓝漆门板"], "framing_hint": "wide", "content_type": "live_action", "motion_hint": "pull_back", "editing_hint": "single",
+        "on_screen_text": [], "linked_beats": ["公开复秤"], "linked_quotes": [], "risk_notes": ["暗仓方位保持连续。"], "visual_strategy_preference": "api_video"
+      },
+      {
+        "segment_id": "seg_016", "order": 15,
+        "script_excerpt": "夹层里的袋口都换成商队封绳。雨水溶出盐水，又把门板木屑与漆片带到仓外，遮掩现场的暴雨反而画出路线。",
+        "start_hint_sec": 90, "end_hint_sec": 96, "narrative_role": "turn",
+        "visual_intent": "用路线图回扣全部物证。", "scene_description": "盐水流线从夹层穿过蓝门板延伸到仓外。",
+        "visual_elements": ["商队封绳", "盐水路线", "木屑漆片"], "framing_hint": "symbolic", "content_type": "illustration", "motion_hint": "pan", "editing_hint": "cutaway",
+        "on_screen_text": ["暴雨画出了路线"], "linked_beats": ["公开复秤"], "linked_quotes": [], "risk_notes": ["新增独立分镜一，解释物证链。"], "visual_strategy_preference": "remotion_motion"
+      },
+      {
+        "segment_id": "seg_017", "order": 16,
+        "script_excerpt": "驿丞交出夜间开仓名册。名册记录的钥匙时段与南坡空车相合，也显示他收钱安排掺沙盐包填回原位。",
+        "start_hint_sec": 96, "end_hint_sec": 102, "narrative_role": "turn",
+        "visual_intent": "让名册时段与夜车路线对齐。", "scene_description": "开仓名册、钥匙和南坡路线图并排。",
+        "visual_elements": ["开仓名册", "仓门钥匙", "南坡路线"], "framing_hint": "close", "content_type": "illustration", "motion_hint": "push_in", "editing_hint": "single",
+        "on_screen_text": [], "linked_beats": ["分证定责"], "linked_quotes": [], "risk_notes": ["新增独立分镜二，名册为合成内容。"], "visual_strategy_preference": null
+      },
+      {
+        "segment_id": "seg_018", "order": 17,
+        "script_excerpt": "沈岑没有只凭名册结案。他分别询问守门人、搬运脚夫和校秤官，让三份证词对照钥匙交接、盐包重量与所得钱物。",
+        "start_hint_sec": 102, "end_hint_sec": 108, "narrative_role": "bridge",
+        "visual_intent": "把三份证词与三类记录交叉排列。", "scene_description": "三名证人分坐不同位置，案上记录以线相连。",
+        "visual_elements": ["三名证人", "钥匙记录", "称量记录"], "framing_hint": "medium", "content_type": "live_action", "motion_hint": "pan", "editing_hint": "montage",
+        "on_screen_text": ["名册不是唯一证据"], "linked_beats": ["分证定责"], "linked_quotes": [], "risk_notes": ["新增独立分镜三，避免审讯暴力。"], "visual_strategy_preference": "remotion_motion"
+      },
+      {
+        "segment_id": "seg_019", "order": 18,
+        "script_excerpt": "责任按证据拆开：主动改票者候审，被迫搬运且及时作证者保留工钱，未接触钥匙的人不被一并牵连。",
+        "start_hint_sec": 108, "end_hint_sec": 114, "narrative_role": "ending",
+        "visual_intent": "用分栏记录表现责任区分。", "scene_description": "案卷分成改票、搬运、未涉钥匙三栏。",
+        "visual_elements": ["分栏案卷", "证词", "工钱袋"], "framing_hint": "detail", "content_type": "illustration", "motion_hint": "static", "editing_hint": "cutaway",
+        "on_screen_text": ["同案，不同责任"], "linked_beats": ["分证定责"], "linked_quotes": [], "risk_notes": ["新增独立分镜四，不对应真实司法制度。"], "visual_strategy_preference": null
+      },
+      {
+        "segment_id": "seg_020", "order": 19,
+        "script_excerpt": "第三日盐道重新开放，积压盐车逐辆出城。府城没有再要求先补数量，而是把完整证物和复秤记录一并收存。",
+        "start_hint_sec": 114, "end_hint_sec": 120, "narrative_role": "ending",
+        "visual_intent": "展示盐道恢复与证物归档。", "scene_description": "盐车穿过城门，封存陶罐和复秤记录进入档架。",
+        "visual_elements": ["出城盐车", "封存陶罐", "复秤记录"], "framing_hint": "wide", "content_type": "live_action", "motion_hint": "pull_back", "editing_hint": "cutaway",
+        "on_screen_text": [], "linked_beats": ["程序余震"], "linked_quotes": [], "risk_notes": ["新增独立分镜五，制度为架空设定。"], "visual_strategy_preference": "api_video"
+      },
+      {
+        "segment_id": "seg_021", "order": 20,
+        "script_excerpt": "驿城新增雨季校秤、双人交钥和排水槽巡检。每次验仓都由两名不同岗位的人签名，任何单人都不能独自改账开门。陆禾把湿账晾在廊下，纸页皱得再也压不平。人们记住沈岑复秤前的话：账可以湿，秤不能偏；挡住下一次偷换的，是人人看得见的程序。",
+        "start_hint_sec": 120, "end_hint_sec": 126, "narrative_role": "ending",
+        "visual_intent": "用双人交钥和湿账完成程序余震。", "scene_description": "两人共同交钥，归零公秤旁的湿账在廊下晾干。",
+        "visual_elements": ["双人交钥", "归零公秤", "廊下湿账"], "framing_hint": "symbolic", "content_type": "illustration", "motion_hint": "static", "editing_hint": "montage",
+        "on_screen_text": ["账可以湿，秤不能偏"], "linked_beats": ["程序余震"], "linked_quotes": ["账可以湿，秤不能偏"], "risk_notes": ["新增独立分镜六，片尾标注合成架空。"], "visual_strategy_preference": "remotion_motion"
+      }
+    ],
+    "global_visual_notes": [
+      "全部人物、地点与事件均为合成架空内容。",
+      "21 个分镜均显式落盘，不在运行时复制或改写真实项目。"
+    ]
+  }
+}

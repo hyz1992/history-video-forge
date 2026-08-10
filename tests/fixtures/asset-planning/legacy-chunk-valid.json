@@ -1,0 +1,60 @@
+{
+  "planning_mode": "segment_chunk",
+  "chunk_id": "chunk_synthetic_seg_001",
+  "tasks": [
+    {
+      "local_task_id": "local_image_seg_001",
+      "task_type": "image_still",
+      "source_segment_id": "seg_001",
+      "source_excerpt": "天还没有亮，云岭驿城的急钟先响了三遍。连夜暴雨冲断盐道，东仓门缝里却流出一线白水，像有人把整袋官盐倒进泥沟。巡仓使沈岑踩着没过脚背的积水赶到时，守仓人都说只是屋顶漏雨，可他看见门闩外侧沾着新鲜桐油，显然有人在雨夜重新封过门。",
+      "production_intent": "建立雨夜盐仓异常的静态主视觉。",
+      "recommended_mode": "manual_allowed",
+      "provider_hint": null,
+      "prompt_draft": "架空古代驿城暴雨夜，东仓门缝流出白色盐水，巡仓使俯身检查新桐油门闩，竖屏写实历史质感。",
+      "parameters": {
+        "aspect_ratio": "9:16",
+        "image_role": "anchor",
+        "video_prompt_reserve": "镜头沿白色盐水缓慢推近仓门，再抬到门闩的新桐油。"
+      },
+      "manual_upload_policy": {
+        "allowed": true,
+        "required": false,
+        "accepted_file_types": ["image/png", "image/jpeg"],
+        "acceptance_notes": ["需保持雨水方向与仓门方位一致。"]
+      },
+      "risk_notes": ["全部人物、地点与事件为合成架空内容。"],
+      "cost_tier": "low"
+    },
+    {
+      "local_task_id": "local_motion_seg_001",
+      "task_type": "render_motion_cue",
+      "source_segment_id": "seg_001",
+      "source_excerpt": "天还没有亮，云岭驿城的急钟先响了三遍。连夜暴雨冲断盐道，东仓门缝里却流出一线白水，像有人把整袋官盐倒进泥沟。巡仓使沈岑踩着没过脚背的积水赶到时，守仓人都说只是屋顶漏雨，可他看见门闩外侧沾着新鲜桐油，显然有人在雨夜重新封过门。",
+      "production_intent": "给静态主图增加克制推近。",
+      "recommended_mode": "auto",
+      "provider_hint": null,
+      "prompt_draft": null,
+      "parameters": {
+        "recipe_type": "push_in",
+        "duration_sec": 6
+      },
+      "manual_upload_policy": {
+        "allowed": false,
+        "required": false,
+        "accepted_file_types": [],
+        "acceptance_notes": []
+      },
+      "risk_notes": ["运动幅度不得破坏仓门与水流位置。"],
+      "cost_tier": "free"
+    }
+  ],
+  "dependencies": [
+    {
+      "local_dependency_id": "dep_local_motion_after_image",
+      "task_local_id": "local_motion_seg_001",
+      "depends_on_local_task_id": "local_image_seg_001",
+      "dependency_type": "requires_output"
+    }
+  ],
+  "budget_notes": ["开场优先保留一张锚点图，运动由本地渲染完成。"]
+}

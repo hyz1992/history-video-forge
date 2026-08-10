@@ -1,0 +1,12 @@
+{
+  "patch_fields": {
+    "task_patches": [
+      {
+        "local_task_id": "local_image_synthetic_001",
+        "recommended_mode": "manual_allowed",
+        "cost_tier": "low"
+      }
+    ],
+    "dependency_patches": []
+  }
+}
