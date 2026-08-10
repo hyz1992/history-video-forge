@@ -1,7 +1,7 @@
 # Asset Planning 语义意图编译韧性设计
 
 - 日期：2026-08-10
-- 状态：设计与实施计划已通过独立审查，待分块实施
+- 状态：实施完成；15 / 21 分镜 live 双闸门通过，默认模式切换为 `intent_compiler`
 - 范围：仅 `asset planning` 内部生成、编译、修复和诊断边界
 - 关联故障：长文案、15 个分镜时资产规划概率性失败
 - 关联证据：三轮合成长样本 live check 为 1 次成功、2 次失败
@@ -11,7 +11,7 @@
 - 第一轮规格审查发现 multi-segment 合同缺口和既有下游行为未完整承接，已改为 batch typed union，并冻结用户视觉策略、图片升级、motion、音频和 MIME 合同。
 - 第二轮补齐 typed repair、legacy timing 安全重绑定、BGM 所有权、调用上限和 live 双闸门。
 - 最终规格审查结论为 `Approved`，无剩余 Critical/Important。
-- 实施计划的 5 个 Chunk 均逐块复审至 `Approved`；当前尚未实施生产代码，不能声明修复完成。
+- 实施计划的 5 个 Chunk 均逐块复审至 `Approved` 并完成实现；真实验收结果见 `docs/records/2026-08-10-asset-planning-intent-compiler-live-check.md`。
 
 ## 1. 任务与结论
 

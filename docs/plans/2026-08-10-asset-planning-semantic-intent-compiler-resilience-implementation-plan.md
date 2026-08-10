@@ -1,8 +1,8 @@
 # Asset Planning 语义意图编译韧性实施计划
 
 - 日期：2026-08-10
-- 状态：5 个 Chunk 已逐块审查通过，待实施
-- 当前默认路径：legacy；只有 non-live 与显式 live 双闸门通过后才允许切换
+- 状态：实施完成；non-live 与显式 live 双闸门均通过
+- 当前默认路径：`intent_compiler`；显式 `legacy` 回滚仍可用
 
 > **供 agentic worker 使用：** REQUIRED：使用 `superpowers:subagent-driven-development`（有 subagent 时）或 `superpowers:executing-plans` 执行；每个生产行为必须先按 `superpowers:test-driven-development` 写红灯并确认因目标能力缺失而失败，再写最小实现。每个 Chunk 完成后先独立代码审查，再进入下一 Chunk。
 
@@ -610,17 +610,17 @@ git commit -m "验证资产规划编译器下游兼容性"
 - 修改：`tests/harness/asset-planning-five-round-quality-check.test.ts`
 - 创建：`docs/records/2026-08-10-asset-planning-intent-compiler-live-check.md`（仅在 live 获授权并实际执行后）
 
-- [ ] **Step 1：写 harness RED**
+- [x] **Step 1：写 harness RED**
 
 报告必须同时输出：总轮次、有效 provider 轮次、端到端成功、provider failures、structural/compiler failures、repair/regeneration/safety/provider attempts、补跑轮次和零分母状态。默认 dry-run/fixture 模式不得调用真实 provider。
 
-- [ ] **Step 2：运行 harness RED**
+- [x] **Step 2：运行 harness RED**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/asset-planning-five-round-quality-check.test.ts --no-file-parallelism
 ```
 
-- [ ] **Step 3：实现汇总并运行 GREEN**
+- [x] **Step 3：实现汇总并运行 GREEN**
 
 ```powershell
 npx vitest run --configLoader runner tests/harness/asset-planning-five-round-quality-check.test.ts --no-file-parallelism
@@ -629,7 +629,7 @@ npm run harness:asset-planning-five-round-quality-check -- --fixture=tests/fixtu
 npm run harness:asset-planning-five-round-quality-check -- --fixture=tests/fixtures/asset-planning/long-21-segment-input.json --mode=intent_compiler --rounds=2 --max-makeup-rounds=2 --dry-run
 ```
 
-- [ ] **Step 4：中文提交 Task 10 non-live 实现**
+- [x] **Step 4：中文提交 Task 10 non-live 实现**
 
 ```powershell
 git add -- harness/scripts/runtime/asset-planning-five-round-quality-check.ts tests/harness/asset-planning-five-round-quality-check.test.ts
@@ -638,13 +638,13 @@ git diff --cached --check
 git commit -m "扩展资产规划长分镜验收工具"
 ```
 
-- [ ] **Step 5：真实 provider 调用前强制授权停点**
+- [x] **Step 5：真实 provider 调用前强制授权停点**
 
 先执行 `--help` 与上一步两个 dry-run，读取当前 provider/model 的脱敏配置，计算并报告：15 分镜目标 5 + 最多补跑 2、21 分镜目标 2 + 最多补跑 2；每 chunk 保守 network 上限 10；预计 chunk 数、最坏请求数、凭据来源类别、输出目录和中止方式。然后向用户取得当次真实 provider/费用授权。
 
 未取得明确授权时停止：Chunk 5 只能标记“non-live 完成，live 未验证”，不得运行 `--live`、不得切默认模式。即使此前已原则同意测试，也要在可见预算确定后确认范围。
 
-- [ ] **Step 6：执行 15 分镜显式 live**
+- [x] **Step 6：执行 15 分镜显式 live**
 
 使用合成 fixture、`intent_compiler` 模式，目标 5 个有效轮次；基础设施失败保留且最多补跑 2 次。命令以 harness 最终参数为准，并在执行前用 `--help`/dry-run 确认不会读取真实项目：
 
@@ -652,7 +652,7 @@ git commit -m "扩展资产规划长分镜验收工具"
 npm run harness:asset-planning-five-round-quality-check -- --fixture=tests/fixtures/asset-planning/long-15-segment-input.json --mode=intent_compiler --rounds=5 --max-makeup-rounds=2 --live
 ```
 
-- [ ] **Step 7：执行 21 分镜压力 live**
+- [x] **Step 7：执行 21 分镜压力 live**
 
 使用已提交、已在 Task 1 验证精确覆盖的 21 分镜合成 fixture；目标 2 个有效轮次、最多补跑 2 次：
 
@@ -660,11 +660,13 @@ npm run harness:asset-planning-five-round-quality-check -- --fixture=tests/fixtu
 npm run harness:asset-planning-five-round-quality-check -- --fixture=tests/fixtures/asset-planning/long-21-segment-input.json --mode=intent_compiler --rounds=2 --max-makeup-rounds=2 --live
 ```
 
-- [ ] **Step 8：评估双闸门并记录**
+- [x] **Step 8：评估双闸门并记录**
 
 必须满足 structural/compiler failures=0，15 分镜 5/5 有效轮次端到端成功，21 分镜 2/2 有效轮次端到端成功；否则不得切默认模式。provider 失败轮次继续显示在总报告中。
 
 无论通过或失败，都新增/更新 `docs/records/2026-08-10-asset-planning-intent-compiler-live-check.md`，记录授权范围、总轮次、有效轮次、所有失败分类、调用对账和报告路径。若失败，保持默认 legacy，中文提交该记录并停止，不进入 Task 11。
+
+实施结果：修复前首次 15 分镜运行 0/5，5 轮均为 structural/compiler failure；证据定位到五类意图字段合同未完整进入 Prompt，且设计要求的未知键机械剥离未接入。提交 `003d6cc` 收口后，15 分镜用 6 个实际轮次取得 5/5 有效成功（1 个 provider failure 补跑），21 分镜 2/2 成功；两组 structural/compiler failure 均为 0，regeneration 均为 0。完整授权、调用对账与报告路径见 `docs/records/2026-08-10-asset-planning-intent-compiler-live-check.md`。
 
 ### Task 11：通过闸门后切默认、观察并收口文档
 
@@ -679,7 +681,7 @@ npm run harness:asset-planning-five-round-quality-check -- --fixture=tests/fixtu
 - 修改：本设计和本实施计划的状态/实施证据
 - 修改：`docs/records/2026-08-10-asset-planning-intent-compiler-live-check.md`
 
-- [ ] **Step 1：仅在 live 双闸门通过后写默认切换 RED**
+- [x] **Step 1：仅在 live 双闸门通过后写默认切换 RED**
 
 断言未配置时默认 `intent_compiler`，显式 `legacy` 仍可回滚；API 无模式参数且 in-flight 冻结。
 
@@ -689,7 +691,7 @@ npx vitest run --configLoader runner tests/backend/config/env.test.ts --no-file-
 
 预期：因当前未配置默认仍为 `legacy` 而失败；不得因未知值校验或 fixture 问题失败。
 
-- [ ] **Step 2：切默认并跑完整验证**
+- [x] **Step 2：切默认并跑完整验证**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/config/env.test.ts tests/backend/asset-planning tests/backend/api/asset-planning-api.test.ts tests/backend/runtime/prompt-runtime.test.ts tests/backend/runtime/llm-operation-policy.test.ts tests/backend/runtime/operation-tier-registry.test.ts tests/backend/runtime/provider-hardening.test.ts tests/backend/runtime/project-storage-trace.test.ts tests/harness/asset-planning-five-round-quality-check.test.ts tests/backend/assets/assets-manifest-builder.test.ts tests/backend/assets/assets-upload.test.ts tests/backend/assets/assets-execution-engine.test.ts tests/backend/assets/assets-run-service.test.ts tests/backend/assets/dashscope-image-provider.test.ts tests/backend/assets/dashscope-image-to-video-provider.test.ts tests/backend/assets/local-sfx-provider.test.ts tests/backend/assets/local-bgm-provider.test.ts tests/backend/compose/compose-timeline-builder.test.ts tests/backend/render/remotion-input-builder.test.ts --no-file-parallelism
@@ -699,11 +701,13 @@ npm run build:backend
 git diff --check
 ```
 
-- [ ] **Step 3：更新正式文档和实施证据**
+实施结果：默认切换 RED 为 3 项中 1 项按预期失败，明确收到 `legacy` 而期望 `intent_compiler`；最小切换后 env 定向测试 3/3 通过。首次完整矩阵发现 2 个 legacy API 用例隐式依赖旧默认，测试显式选择回滚模式并增加环境隔离后，最终 30 个文件、548 项测试全部通过；Prompt 治理、后端 typecheck、backend build 与 `git diff --check` 均通过。
+
+- [x] **Step 3：更新正式文档和实施证据**
 
 准确记录 RED/GREEN、提交、live 总轮次/有效轮次/失败分类/调用数和报告路径。未执行项标 `未验证`，不得追认历史红灯或夸大为永不失败。
 
-- [ ] **Step 4：中文提交并请求 Chunk 5 最终审查**
+- [x] **Step 4：中文提交并请求 Chunk 5 最终审查**
 
 ```powershell
 git add -- backend/src/config/env.ts backend/.env.example tests/backend/config/env.test.ts docs/records/2026-08-10-asset-planning-intent-compiler-live-check.md docs/architecture/pipeline-io-spec.md docs/architecture/downstream-stage-high-level-design.md docs/plans/README.md docs/plans/2026-08-10-asset-planning-semantic-intent-compiler-resilience-design.md docs/plans/2026-08-10-asset-planning-semantic-intent-compiler-resilience-implementation-plan.md
@@ -713,13 +717,13 @@ git commit -m "完成资产规划语义意图编译迁移"
 
 ## 最终验收清单
 
-- [ ] 原始诉求：已确认的字段机械漏写、repair wrapper 和非法 timing 路径由确定性实现消除；本次 15/21 分镜 live 样本满足双闸门。
-- [ ] 原 global `consistency_notes` 韧性继续通过。
-- [ ] shared AssetPlan、API、DB、激活事务和下游合同无修改。
-- [ ] `api_video/remotion_motion` 用户偏好、图片升级视频、motion、SFX/BGM、manual upload 均有真实 compiler 输出回归。
-- [ ] compiler invariant 不进入 LLM repair 或完整 plan regeneration。
-- [ ] failed chunk 有界，其他成功 chunk 不重复调用，所有已启动调用 settled 并可对账。
-- [ ] live 双闸门通过；provider 失败与 structural/compiler 失败分开报告。
-- [ ] 验收结论分别标注 non-live、live、未验证项和剩余 provider/内容过滤风险，不表述为永不失败。
-- [ ] 显式 `legacy` 回滚仍可用，内部 intent 不落库，不需数据迁移。
-- [ ] 所有提交中文且未包含用户无关文件或生成态 storage。
+- [x] 原始诉求：已确认的字段机械漏写、repair wrapper 和非法 timing 路径由确定性实现消除；本次 15/21 分镜 live 样本满足双闸门。
+- [x] 原 global `consistency_notes` 韧性继续通过。
+- [x] shared AssetPlan、API、DB、激活事务和下游合同无修改。
+- [x] `api_video/remotion_motion` 用户偏好、图片升级视频、motion、SFX/BGM、manual upload 均有真实 compiler 输出回归。
+- [x] compiler invariant 不进入 LLM repair 或完整 plan regeneration。
+- [x] failed chunk 有界，其他成功 chunk 不重复调用，所有已启动调用 settled 并可对账。
+- [x] live 双闸门通过；provider 失败与 structural/compiler 失败分开报告。
+- [x] 验收结论分别标注 non-live、live、未验证项和剩余 provider/内容过滤风险，不表述为永不失败。
+- [x] 显式 `legacy` 回滚仍可用，内部 intent 不落库，不需数据迁移。
+- [x] 所有提交中文且未包含用户无关文件或生成态 storage。

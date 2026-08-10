@@ -172,8 +172,10 @@ function buildEnv(dotEnvValues: Record<string, string>): AppEnv {
 function readAssetPlanningGenerationMode(
   value: string | undefined,
 ): AssetPlanningGenerationMode {
-  if (value === undefined || value === "legacy") return "legacy";
-  if (value === "intent_compiler") return value;
+  if (value === undefined || value === "intent_compiler") {
+    return "intent_compiler";
+  }
+  if (value === "legacy") return "legacy";
   throw new Error(
     "ASSET_PLANNING_GENERATION_MODE must be legacy or intent_compiler",
   );

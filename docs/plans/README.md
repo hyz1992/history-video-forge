@@ -8,7 +8,7 @@
 
 截至 2026-08-10：
 
-- Asset Planning 长文案/多分镜结构失败的下一阶段正式方案已批准，见 [语义意图编译韧性设计](./2026-08-10-asset-planning-semantic-intent-compiler-resilience-design.md) 与 [实施计划](./2026-08-10-asset-planning-semantic-intent-compiler-resilience-implementation-plan.md)。方案保持 shared `AssetPlan`、API、数据库和下游合同不变，在 Asset Planning 内部把 LLM 语义意图与 ID、顺序、策略、参数、依赖、成本等确定性编译分离；先用窄 legacy 防线覆盖已见 repair wrapper/非法 timing，再以临时内部模式、shadow parity、完整下游矩阵和 15/21 分镜 live 双闸门渐进切换。设计与 5 个实施 Chunk 均已独立审查通过，当前尚未实施生产代码，默认仍为 legacy。
+- Asset Planning 长文案/多分镜结构失败的语义意图编译方案已完成实施并通过 live 双闸门，见 [设计](./2026-08-10-asset-planning-semantic-intent-compiler-resilience-design.md)、[实施计划](./2026-08-10-asset-planning-semantic-intent-compiler-resilience-implementation-plan.md) 与 [真实验收记录](../records/2026-08-10-asset-planning-intent-compiler-live-check.md)。15 分镜取得 5/5 有效轮次成功，21 分镜取得 2/2，结构/编译失败均为 0；默认生成模式已切换为 `intent_compiler`，显式 `legacy` 回滚继续保留。shared `AssetPlan`、API、数据库和下游合同未改变。
 
 - Asset Planning global draft 结构韧性修复已完成 non-live 实施，等待显式 live 验收：正式设计见 [Asset Planning Global Draft 结构韧性设计](./2026-08-09-asset-planning-global-draft-resilience-design.md)，执行记录见 [Asset Planning Global Draft 结构韧性实施计划](./2026-08-10-asset-planning-global-draft-resilience-implementation-plan.md)。稳定边界为确定性 notes 空数组归一化、一次精确路径 structural repair、provider 最多 2 attempts、成功/失败诊断持久化；最终审查又统一了初次/repair 后兼容解析，并用事件 payload 快照隔离 callback mutation。最终共享 schema 保持严格，不扩展到其他阶段。完整矩阵 12 个测试文件、257 项测试通过，Prompt 治理、后端 typecheck 与 build 通过；真实项目与五轮 live check 尚未执行。
 

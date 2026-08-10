@@ -45,6 +45,8 @@ const scriptText =
   "Opening pressure. The envoy answers in public. The ending leaves a cost.";
 const storageRoots: string[] = [];
 const originalStorageRootDir = process.env.STORAGE_ROOT_DIR;
+const originalAssetPlanningGenerationMode =
+  process.env.ASSET_PLANNING_GENERATION_MODE;
 
 function makeStoryboardPlan(input: {
   scriptRecordId: string;
@@ -481,6 +483,12 @@ describe("asset planning api", () => {
     } else {
       process.env.STORAGE_ROOT_DIR = originalStorageRootDir;
     }
+    if (originalAssetPlanningGenerationMode === undefined) {
+      delete process.env.ASSET_PLANNING_GENERATION_MODE;
+    } else {
+      process.env.ASSET_PLANNING_GENERATION_MODE =
+        originalAssetPlanningGenerationMode;
+    }
     for (const root of storageRoots.splice(0)) {
       rmSync(root, { recursive: true, force: true });
     }
@@ -800,7 +808,8 @@ describe("asset planning api", () => {
     expect(trace).not.toContain('"issues":');
   });
 
-  it("returns 422 without full regeneration when local validation remains invalid", async () => {
+  it("returns 422 in legacy mode without full regeneration when local validation remains invalid", async () => {
+    process.env.ASSET_PLANNING_GENERATION_MODE = "legacy";
     const app = buildApp();
     const prepared = await prepareActiveStoryboard(app);
     generateAssetPlanMock.mockResolvedValue(
@@ -885,6 +894,7 @@ describe("asset planning api", () => {
   });
 
   it("repairs a structurally invalid legacy asset plan once without full regeneration", async () => {
+    process.env.ASSET_PLANNING_GENERATION_MODE = "legacy";
     const app = buildApp();
     const prepared = await prepareActiveStoryboard(app);
     const invalidPlan = makeAssetPlan({

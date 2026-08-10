@@ -9,8 +9,14 @@ afterEach(() => {
 });
 
 describe("asset planning generation mode env", () => {
-  it("defaults to legacy and accepts the two production modes", async () => {
+  it("defaults to intent compiler after the live gate passes", async () => {
     delete process.env.ASSET_PLANNING_GENERATION_MODE;
+    const module = await import("../../../backend/src/config/env.js");
+    expect(module.env.assetPlanningGenerationMode).toBe("intent_compiler");
+  });
+
+  it("keeps explicit legacy rollback and intent compiler selection available", async () => {
+    process.env.ASSET_PLANNING_GENERATION_MODE = "legacy";
     let module = await import("../../../backend/src/config/env.js");
     expect(module.env.assetPlanningGenerationMode).toBe("legacy");
 

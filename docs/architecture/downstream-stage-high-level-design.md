@@ -225,6 +225,8 @@ Asset Planning v1 当前边界：
 
 - 输入来自 active `StoryboardRecord` 及其来源 `ScriptRecord` / `TopicPackage`。
 - 输出 `AssetPlan`、`AssetPlanningValidationResult`、`AssetPlanRecord`。
+- 默认生成路径为 LLM typed segment intent 加本地确定性 compiler；ID、顺序、策略参数、依赖、成本与音频骨架不再交给分块 LLM 猜测。
+- shared `AssetPlan`、API、数据库与 assets / compose / render / publish 消费合同保持不变；显式 `ASSET_PLANNING_GENERATION_MODE=legacy` 可在观察期回滚。
 - 提供 `POST /api/projects/:projectId/asset-plan/generate`。
 - project snapshot 返回 `active_asset_plan` 与 `latest_asset_plan_run`。
 - 新 script 或 storyboard 激活后会清空过期 active asset plan 指针。

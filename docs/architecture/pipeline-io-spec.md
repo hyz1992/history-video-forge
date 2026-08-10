@@ -249,8 +249,9 @@ Asset Planning v1 消费 active `StoryboardRecord` 及其来源 `ScriptRecord` /
 生成边界：
 
 - `tts_audio` 与 `subtitle_track` 任务由本地确定性生成。
-- LLM 只负责全局 `ProjectArtBible` 和分块视觉 / SFX / BGM 草稿。
-- 本地 merger 负责全局 `task_id`、依赖重写、成本汇总和最终 `AssetPlan` 组装。
+- LLM 只负责全局 `ProjectArtBible` 和分块 typed 视觉 / SFX / BGM 语义意图；默认模式为 `intent_compiler`。
+- 本地 compiler 负责意图规范化、全局 `task_id`、顺序、策略参数、合法依赖、成本汇总和最终 `AssetPlan` 组装。
+- `ASSET_PLANNING_GENERATION_MODE=legacy` 仍作为显式回滚开关；一次 run 启动时冻结模式，API 不接受客户端传入模式。
 - local validator 只做结构、引用、依赖和覆盖检查，不判断审美、爆款、历史相似度或 prompt 质量。
 - semantic reviewer 不参与 asset planning 主链路。
 
