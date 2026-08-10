@@ -186,12 +186,49 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+const BATCH_WIRE_KEYS = new Set(
+  Object.keys(SegmentAssetIntentBatchDraft.shape),
+);
+const SEGMENT_WIRE_KEYS = new Set(Object.keys(SegmentIntentEntry.shape));
+const INTENT_WIRE_KEYS: Record<
+  SegmentAssetIntentKind,
+  ReadonlySet<string>
+> = {
+  image_still: new Set(Object.keys(ImageStillIntent.shape)),
+  video_clip: new Set(Object.keys(VideoClipIntent.shape)),
+  render_motion_cue: new Set(Object.keys(RenderMotionCueIntent.shape)),
+  sfx_cue: new Set(Object.keys(SfxCueIntent.shape)),
+  bgm_cue: new Set(Object.keys(BgmCueIntent.shape)),
+};
+
+function stripUnknownWireKeys(
+  record: Record<string, unknown>,
+  allowedKeys: ReadonlySet<string>,
+): void {
+  for (const key of Object.keys(record)) {
+    if (!allowedKeys.has(key)) delete record[key];
+  }
+}
+
 function cloneAndNormalize(
   raw: unknown,
   context: SegmentIntentValidationContext,
 ): unknown {
   const cloned: unknown = structuredClone(raw);
   if (!isRecord(cloned) || !Array.isArray(cloned.segments)) return cloned;
+  stripUnknownWireKeys(cloned, BATCH_WIRE_KEYS);
+  for (const entry of cloned.segments) {
+    if (!isRecord(entry)) continue;
+    stripUnknownWireKeys(entry, SEGMENT_WIRE_KEYS);
+    if (!Array.isArray(entry.intents)) continue;
+    for (const intent of entry.intents) {
+      if (!isRecord(intent)) continue;
+      const kind = SegmentAssetIntentKind.safeParse(intent.asset_kind);
+      if (kind.success) {
+        stripUnknownWireKeys(intent, INTENT_WIRE_KEYS[kind.data]);
+      }
+    }
+  }
   const orderById = new Map(
     context.segments.map((segment, index) => [segment.segment_id, index]),
   );

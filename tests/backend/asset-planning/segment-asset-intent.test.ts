@@ -126,14 +126,25 @@ describe("semantic intent schema and context", () => {
     expect(raw).toEqual(snapshot);
   });
 
-  it("requires budget_notes and rejects old simplified semantic fields", () => {
+  it("requires budget_notes and strips unknown wire fields before strict parsing", () => {
     const missingBudget = validDraft();
     delete (missingBudget as { budget_notes?: unknown }).budget_notes;
     expect(inspect(missingBudget).parsedDraft).toBeUndefined();
 
-    const oldMotion = validDraft();
-    (oldMotion.segments[1]!.intents[1] as Record<string, unknown>).motion_style = "push_in";
-    expect(inspect(oldMotion).parsedDraft).toBeUndefined();
+    const noisy = validDraft() as ReturnType<typeof validDraft> & Record<string, unknown>;
+    noisy.unexpected_batch = "drop-me";
+    (noisy.segments[0] as unknown as Record<string, unknown>).unexpected_segment = true;
+    (noisy.segments[0]!.intents[0] as Record<string, unknown>).prompt_draft = "drop-me";
+    (noisy.segments[0]!.intents[2] as Record<string, unknown>).sfx_prompt = "drop-me";
+    (noisy.segments[0]!.intents[3] as Record<string, unknown>).music_description = "drop-me";
+    (noisy.segments[1]!.intents[1] as Record<string, unknown>).motion_prompt = "drop-me";
+    const original = structuredClone(noisy);
+
+    const result = inspect(noisy);
+    expect(result.issues).toEqual([]);
+    expect(result.parsedDraft).toBeDefined();
+    expect(JSON.stringify(result.normalizedDraft)).not.toContain("drop-me");
+    expect(noisy).toEqual(original);
   });
 
   it("rejects every legacy wire alias instead of coercing it", () => {

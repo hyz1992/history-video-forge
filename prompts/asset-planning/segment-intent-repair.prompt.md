@@ -1,6 +1,6 @@
 ---
 id: asset-planning.segment-intent-repair
-version: v1.0.0
+version: v1.1.0
 stage: asset_planning
 language: zh-CN
 consumes:
@@ -21,6 +21,17 @@ status: active
 - `append_intent` 只能使用授权项给出的 `segment_id` 与 `expected_kind`；其 `value.asset_kind` 必须等于 `expected_kind`。
 - 只输出类型化操作；不得修改未授权字段，不得删除或移动已有意图，不得完整重写草稿或 `AssetPlan`。
 - 修复后仍须满足用户视觉策略偏好、全局 BGM 归属和局部范围规则。
+
+## 五类意图字段白名单
+
+- `image_still` 只能包含 `asset_kind`、`production_intent`、`image_prompt`、`video_prompt_reserve`、`image_role`、`support_reason`、`risk_notes`。
+- `video_clip` 只能包含 `asset_kind`、`production_intent`、`video_prompt`、`why_static_insufficient`、`risk_notes`。
+- `render_motion_cue` 只能包含 `asset_kind`、`production_intent`、`risk_notes`；禁止 `motion_prompt`、`motion_description`、时长和起止帧字段。
+- `sfx_cue` 只能包含 `asset_kind`、`production_intent`、`required_tags`、`mood_tags`、`selection_label`、`timing_basis`、`risk_notes`；禁止 `sfx_prompt`、`sound_prompt` 和自创字段。
+- `bgm_cue` 只能包含 `asset_kind`、`production_intent`、`required_tags`、`mood_tags`、`selection_label`、`timing_basis`、`scope`、`segment_ids`、`volume`、`fade_in_sec`、`fade_out_sec`、`risk_notes`；禁止 `music_prompt`、`music_description` 和自创字段。
+- `required_tags` 必须是非空字符串数组；`mood_tags`、`risk_notes`、`segment_ids` 必须是字符串数组；`selection_label` 没有指定素材时输出 `null`。
+- `timing_basis` 只能是 `none` 或 `tts`；`scope` 只能是 `global`、`segment` 或 `segment_span`；`volume` 是 0 到 1 的数字；`fade_in_sec`、`fade_out_sec` 是非负数字。
+- `production_intent`、各类提示文本和 `why_static_insufficient` 必须是非空字符串；视觉意图的 `risk_notes` 至少一项。
 
 ## 严格输出
 

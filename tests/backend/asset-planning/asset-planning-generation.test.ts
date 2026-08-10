@@ -1042,6 +1042,54 @@ describe("generateAssetPlan", () => {
       ]));
   });
 
+  it("mechanically strips live-style unknown intent fields before compiling without repair", async () => {
+    const { gateway, calls } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.planner") {
+        return validGlobalPlanningDraft;
+      }
+      if (options.promptId === "asset-planning.segment-intent-planner") {
+        const promptInput = options.input as {
+          is_first_chunk: boolean;
+          segments: StoryboardPlan["segments"];
+        };
+        const draft = validIntentDraftFor(
+          promptInput.segments,
+          promptInput.is_first_chunk,
+        ) as ReturnType<typeof validIntentDraftFor> & Record<string, unknown>;
+        draft.live_batch_note = "drop-me";
+        (draft.segments[0] as unknown as Record<string, unknown>).live_segment_note =
+          "drop-me";
+        (draft.segments[0]!.intents[0] as Record<string, unknown>).prompt_draft =
+          "drop-me";
+        const motion = draft.segments[0]!.intents.find(
+          (intent) => intent.asset_kind === "render_motion_cue",
+        );
+        if (motion) {
+          (motion as Record<string, unknown>).motion_prompt = "drop-me";
+        }
+        const bgm = draft.segments[0]!.intents.find(
+          (intent) => intent.asset_kind === "bgm_cue",
+        );
+        if (bgm) {
+          (bgm as Record<string, unknown>).music_description = "drop-me";
+        }
+        return draft;
+      }
+      throw new Error(`unexpected_prompt:${options.promptId}`);
+    });
+
+    const plan = await generateAssetPlan({
+      ...makeInput(gateway, 3),
+      generationMode: "intent_compiler",
+    });
+
+    expect(AssetPlan.parse(plan)).toEqual(plan);
+    expect(calls.map((call) => call.promptId)).toEqual([
+      "asset-planning.planner",
+      "asset-planning.segment-intent-planner",
+    ]);
+  });
+
   it("fails invalid intent output after bounded repair and regeneration without leaking raw output", async () => {
     const rawSecret = `RAW_SECRET_FROM_MODEL_${"x".repeat(300)}`;
     const { gateway, calls } = makeGateway((options) => {

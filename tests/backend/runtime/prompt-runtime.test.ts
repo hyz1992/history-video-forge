@@ -12,6 +12,7 @@ import {
   SEGMENT_INTENT_REPAIR_OUTPUT_SCHEMA,
 } from "../../../backend/src/modules/asset-planning/segment-intent-prompt-input.js";
 import {
+  SegmentAssetIntent,
   SegmentAssetIntentBatchDraft,
   SegmentIntentRepairPatch,
 } from "../../../backend/src/modules/asset-planning/segment-asset-intent.js";
@@ -24,7 +25,7 @@ describe("prompt runtime", () => {
 
     expect(planner.metadata).toMatchObject({
       id: "asset-planning.segment-intent-planner",
-      version: "v1.0.0",
+      version: "v1.1.0",
       stage: "asset_planning",
       language: "zh-CN",
       consumes: ["SegmentIntentPlannerInput"],
@@ -33,7 +34,7 @@ describe("prompt runtime", () => {
     });
     expect(repair.metadata).toMatchObject({
       id: "asset-planning.segment-intent-repair",
-      version: "v1.0.0",
+      version: "v1.1.0",
       stage: "asset_planning",
       language: "zh-CN",
       consumes: ["SegmentIntentRepairInput"],
@@ -61,12 +62,42 @@ describe("prompt runtime", () => {
     expect(planner.body).toContain("asset_kind");
     expect(planner.body).toContain("planning_mode");
     expect(planner.body).toContain("source_segment_id");
+    expect(planner.body).toContain(
+      "`render_motion_cue` 只能包含 `asset_kind`、`production_intent`、`risk_notes`",
+    );
+    expect(planner.body).toContain(
+      "`sfx_cue` 只能包含 `asset_kind`、`production_intent`、`required_tags`、`mood_tags`、`selection_label`、`timing_basis`、`risk_notes`",
+    );
+    expect(planner.body).toContain(
+      "`bgm_cue` 只能包含 `asset_kind`、`production_intent`、`required_tags`、`mood_tags`、`selection_label`、`timing_basis`、`scope`、`segment_ids`、`volume`、`fade_in_sec`、`fade_out_sec`、`risk_notes`",
+    );
+    expect(planner.body).toContain(
+      "`required_tags` 必须是非空字符串数组",
+    );
+    expect(planner.body).toContain(
+      "`volume` 是 0 到 1 的数字",
+    );
+    expect(planner.body).toContain(
+      "视觉意图的 `risk_notes` 至少一项",
+    );
+    expect(planner.body).not.toContain('"motion_prompt"');
+    expect(planner.body).not.toContain('"sfx_prompt"');
+    expect(planner.body).not.toContain('"music_description"');
     expect(planner.body).not.toContain("生成 task_id");
     expect(repair.body).toContain("严格 `SegmentIntentRepairPatch`");
     expect(repair.body).toContain("只修复 `allowed_operations`");
     expect(repair.body).toContain("replace_field");
     expect(repair.body).toContain("append_intent");
     expect(repair.body).toContain("不得完整重写");
+    expect(repair.body).toContain(
+      "`render_motion_cue` 只能包含 `asset_kind`、`production_intent`、`risk_notes`",
+    );
+    expect(repair.body).toContain(
+      "`sfx_cue` 只能包含 `asset_kind`、`production_intent`、`required_tags`、`mood_tags`、`selection_label`、`timing_basis`、`risk_notes`",
+    );
+    expect(repair.body).toContain(
+      "`bgm_cue` 只能包含 `asset_kind`、`production_intent`、`required_tags`、`mood_tags`、`selection_label`、`timing_basis`、`scope`、`segment_ids`、`volume`、`fade_in_sec`、`fade_out_sec`、`risk_notes`",
+    );
     expect(repair.body).not.toContain("分析 message");
     for (const narrativeEnglish of [
       "typed operations",
@@ -101,6 +132,19 @@ describe("prompt runtime", () => {
       "其他 `expected_kind` 必须按正式输出结构提交对应联合类型的完整对象",
     );
     expect(repair.body).not.toContain("示例仅展示");
+  });
+
+  it("keeps planner batch and video examples valid against the canonical intent schemas", () => {
+    const planner = createPromptRegistry().getPrompt(
+      "asset-planning.segment-intent-planner",
+    );
+    const examples = [...planner.body.matchAll(/```json\n([\s\S]*?)\n```/gu)].map(
+      (match) => JSON.parse(match[1]!),
+    );
+
+    expect(examples).toHaveLength(2);
+    expect(() => SegmentAssetIntentBatchDraft.parse(examples[0])).not.toThrow();
+    expect(() => SegmentAssetIntent.parse(examples[1])).not.toThrow();
   });
 
   it("associates segment intent prompt outputs with the canonical schemas", () => {
