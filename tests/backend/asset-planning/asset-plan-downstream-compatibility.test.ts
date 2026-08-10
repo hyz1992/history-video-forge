@@ -14,6 +14,10 @@ import {
 import { validateAssetPlan } from "../../../backend/src/modules/asset-planning/asset-planning-local-validator.js";
 import { generateAssetPlan } from "../../../backend/src/modules/asset-planning/asset-planning-generation.service.js";
 import {
+  compileAssetPlanFromIntents,
+  type AssetPlanCompilerInput,
+} from "../../../backend/src/modules/asset-planning/asset-plan-intent-compiler.js";
+import {
   readBgmCueParams,
   readSfxCueParams,
 } from "../../../backend/src/modules/assets/audio-cue-params.js";
@@ -126,6 +130,87 @@ function expectContinuousStoryboardReferences(
   );
   expect(storyboard.segments.map((segment) => segment.script_excerpt).join(""))
     .toBe(script.script_text);
+}
+
+function makeCompilerInput(
+  fixture: ReturnType<typeof parseLongFixture>,
+): AssetPlanCompilerInput {
+  const legacy = AssetPlan.parse(readFixture("legacy-plan-valid.json"));
+  const scriptText = fixture.script.script_text;
+  const ttsTask: AssetPlanType["tasks"][number] = {
+    task_id: "tts_001", order: 0, task_type: "tts_audio", source_segment_id: null,
+    source_excerpt: scriptText, production_intent: "生成全片口播音频", recommended_mode: "auto",
+    provider_hint: "default_tts", prompt_draft: null, parameters: { voice_profile_id: "voice_default_male_storyteller", chunk_ids: fixture.storyboard.segments.map((_, index) => `tts_${String(index + 1).padStart(3, "0")}`) },
+    manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] },
+    risk_notes: [], cost_tier: "low", initial_status: "planned",
+  };
+  const subtitleTask: AssetPlanType["tasks"][number] = {
+    task_id: "subtitle_001", order: 1, task_type: "subtitle_track", source_segment_id: null,
+    source_excerpt: scriptText, production_intent: "根据 TTS 时间戳生成字幕轨", recommended_mode: "auto",
+    provider_hint: null, prompt_draft: null, parameters: { format: "srt", source_tts_task_id: "tts_001" },
+    manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] },
+    risk_notes: [], cost_tier: "free", initial_status: "planned",
+  };
+  return {
+    sourceIds: {
+      storyboardRecordId: fixture.sourceIds.storyboard_record_id,
+      scriptRecordId: fixture.sourceIds.script_record_id,
+      topicPackageId: fixture.sourceIds.topic_package_id,
+    },
+    storyboard: fixture.storyboard,
+    draft: fixture.script,
+    globalDraft: {
+      art_bible: legacy.art_bible,
+      visual_budget: legacy.visual_budget,
+      downgrade_policy: legacy.downgrade_policy,
+      global_audio_strategy: legacy.global_audio_strategy,
+      manual_review_notes: ["人工复核长稿资产一致性"],
+    },
+    audioSkeleton: {
+      tts_plan: {
+        voice_profile_id: "voice_default_male_storyteller",
+        estimated_total_duration_sec: fixture.storyboard.estimated_total_duration_sec,
+        chunking_strategy: "segment_boundary",
+        chunks: fixture.storyboard.segments.map((segment, index) => ({
+          chunk_id: `tts_${String(index + 1).padStart(3, "0")}`, order: index,
+          script_excerpt: segment.script_excerpt,
+          estimated_duration_sec: segment.end_hint_sec - segment.start_hint_sec,
+        })),
+      },
+      tasks: [ttsTask, subtitleTask],
+      dependencies: [{ dependency_id: "dep_subtitle_001_after_tts_001", task_id: "subtitle_001", depends_on_task_id: "tts_001", dependency_type: "requires_timing" }],
+    },
+    chunks: fixture.storyboard.segments.map((segment, index) => ({
+      chunkIndex: index,
+      inputSegmentIds: [segment.segment_id],
+      draft: {
+        planning_mode: "segment_intent_batch",
+        segments: [{
+          source_segment_id: segment.segment_id,
+          intents: [
+            {
+              asset_kind: "image_still", production_intent: "建立本段主视觉", image_prompt: segment.scene_description,
+              video_prompt_reserve: `镜头延展：${segment.visual_intent}`, image_role: "anchor", support_reason: null,
+              risk_notes: ["复核史实与人物一致性"],
+            },
+            ...(segment.visual_strategy_preference === "api_video"
+              ? [{ asset_kind: "video_clip" as const, production_intent: "表现连续动作", video_prompt: segment.scene_description, why_static_insufficient: "连续动作推动叙事", risk_notes: ["复核动作连续性"] }]
+              : [{ asset_kind: "render_motion_cue" as const, production_intent: "以本地运镜增强节奏", risk_notes: ["复核运镜幅度"] }]),
+            ...(index === 0 ? [{
+              asset_kind: "sfx_cue" as const, production_intent: "强调段落动作节点",
+              required_tags: ["木槌", "回响"], mood_tags: ["克制"], selection_label: "长稿段落音效",
+              timing_basis: "tts" as const, risk_notes: [],
+            }] : []),
+            ...(index === 0 ? [{
+              asset_kind: "bgm_cue" as const, production_intent: "建立全片底乐", required_tags: ["历史", "克制"], mood_tags: ["悬疑"], selection_label: "长稿底乐",
+              timing_basis: "tts" as const, scope: "global" as const, segment_ids: [], volume: 0.28, fade_in_sec: 1, fade_out_sec: 2, risk_notes: [],
+            }] : []),
+          ],
+        }],
+        budget_notes: [`segment:${segment.segment_id}`],
+      },
+    })),
+  };
 }
 
 describe("asset plan downstream compatibility fixtures", () => {
@@ -490,6 +575,44 @@ describe("asset plan downstream compatibility fixtures", () => {
       notes: ["高成本视频仅用于开场雨夜奔跑，静态主图始终保留。"],
     });
   });
+
+  it.each(["long-15-segment-input.json", "long-21-segment-input.json"])(
+    "keeps compiler output for %s valid across schema, validator, audio readers and manifest",
+    (filename) => {
+      const fixture = parseLongFixture(filename);
+      const compiled = compileAssetPlanFromIntents(makeCompilerInput(fixture));
+      const plan = AssetPlan.parse(compiled.plan);
+      const validation = validateAssetPlan({
+        plan,
+        storyboard: fixture.storyboard,
+        scriptText: fixture.script.script_text,
+        storyboardRecordId: fixture.sourceIds.storyboard_record_id,
+        scriptRecordId: fixture.sourceIds.script_record_id,
+        topicPackageId: fixture.sourceIds.topic_package_id,
+      });
+      expect(validation.errors).toEqual([]);
+      expect(validation.decision).toBe("pass");
+
+      const bgmTask = plan.tasks.find((task) => task.task_type === "bgm_cue")!;
+      expect(readBgmCueParams(bgmTask.parameters)).toMatchObject({
+        requiredTags: ["历史", "克制"], scope: "global", segmentIds: [],
+      });
+      const sfxTask = plan.tasks.find((task) => task.task_type === "sfx_cue")!;
+      expect(readSfxCueParams(sfxTask.parameters)).toEqual({
+        requiredTags: ["木槌", "回响"], moodTags: ["克制"],
+        libraryItemId: null, selectionLabel: "长稿段落音效",
+      });
+      expect(sfxTask.parameters.timing_basis).toBe("tts");
+      const manifest = buildInitialAssetManifest({
+        assetPlanRecordId: `compiled_${fixture.storyboard.segments.length}`,
+        assetPlan: plan,
+        segmentIds: fixture.storyboard.segments.map((segment) => segment.segment_id),
+      });
+      expect(manifest.audio_summary.tts_chunk_routes).toHaveLength(fixture.storyboard.segments.length);
+      expect(manifest.segment_routes).toHaveLength(fixture.storyboard.segments.length);
+      expect(manifest.segment_routes.every((route) => route.visual_task_id !== null)).toBe(true);
+    },
+  );
 
   it("freezes the observed repair wrapper drift and isolated legacy timing error", () => {
     const wrapper = z.record(z.string(), z.unknown()).parse(

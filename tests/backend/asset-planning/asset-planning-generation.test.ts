@@ -1991,6 +1991,34 @@ describe("generateAssetPlan", () => {
     }
   });
 
+  it("keeps character-anchor enrichment limited to image visual fields after helper extraction", async () => {
+    const visibleLabel = baseStoryboardPlan.segments[0]!.visual_elements[0]!;
+    const { gateway } = makeGateway((options) => {
+      const input = options.input as { planning_mode?: string; chunk?: { segment_ids: string[] } };
+      if (input.planning_mode === "global") {
+        return {
+          ...validGlobalPlanningDraft,
+          art_bible: {
+            ...validGlobalPlanningDraft.art_bible,
+            characters: [
+              { character_id: "visible", label: visibleLabel, role: "画面人物", visual_description: "束发深衣，神情克制", consistency_notes: [] },
+              { character_id: "offscreen", label: "仅口播提及者", role: "画外人物", visual_description: "不应进入画面提示", consistency_notes: [] },
+            ],
+          },
+        };
+      }
+      return validChunkPlanningDraftFor(input.chunk?.segment_ids ?? []);
+    });
+
+    const plan = await generateAssetPlan(makeInput(gateway));
+    const firstImage = plan.tasks.find(
+      (task) => task.task_type === "image_still" && task.source_segment_id === "sb_001",
+    )!;
+    expect(firstImage.prompt_draft).toContain(`[角色锚点] ${visibleLabel}：束发深衣，神情克制`);
+    expect(firstImage.prompt_draft).not.toContain("不应进入画面提示");
+    expect(firstImage.prompt_draft).toContain("【视觉约束】");
+  });
+
   it("appends visual negative constraints to video_clip prompt_draft", async () => {
     const { gateway } = makeGateway(async (options) => {
       const input = options.input as { planning_mode: string; chunk?: { segment_ids: string[] } };

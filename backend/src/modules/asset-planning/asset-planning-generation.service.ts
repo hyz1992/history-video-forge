@@ -33,6 +33,8 @@ import {
   type LegacyChunkResilienceAction,
   type SegmentChunkStructuralPatch as SegmentChunkStructuralPatchType,
 } from "./legacy-chunk-resilience.js";
+import { enrichAssetVisualPrompt } from "./asset-plan-prompt-enrichment.js";
+import type { LocalAudioSkeleton } from "./asset-plan-intent-compiler.js";
 
 const PROMPT_ID = "asset-planning.planner";
 const STRUCTURAL_REPAIR_PROMPT_ID = "asset-planning.asset-structural-repair";
@@ -1046,7 +1048,7 @@ function buildChunkPromptInput(
   };
 }
 
-function buildLocalAudioSkeleton(input: GenerateAssetPlanInput) {
+function buildLocalAudioSkeleton(input: GenerateAssetPlanInput): LocalAudioSkeleton {
   const ttsChunks = input.storyboard.segments.map((segment, index) => ({
     chunk_id: `tts_${String(index + 1).padStart(3, "0")}`,
     order: index,
@@ -1197,84 +1199,6 @@ function validateChunkDraft(
   }
 }
 
-/**
- * For image_still tasks, look up the source storyboard segment and
- * append ArtBible character visual descriptions when the segment
- * references those characters.  This gives every image prompt a
- * stable character anchor without changing the LLM prompt.
- */
-function enrichPromptWithCharacterAnchor(
-  taskDraft: ChunkTaskDraft,
-  storyboardSegments: StoryboardPlan["segments"],
-  artBible: GlobalPlanningDraft["art_bible"],
-): string | null {
-  if (taskDraft.task_type !== "image_still" || !taskDraft.prompt_draft) {
-    return taskDraft.prompt_draft;
-  }
-
-  const segment = storyboardSegments.find(
-    (seg) => seg.segment_id === taskDraft.source_segment_id,
-  );
-  if (!segment) {
-    return taskDraft.prompt_draft;
-  }
-
-  /**
-   * Match characters using visual fields only, not script_excerpt.
-   * script_excerpt may name characters that the narration references but
-   * the shot does not actually show — injecting them would pollute the
-   * image prompt with off-screen figures.
-   */
-  const segmentText = [
-    segment.scene_description ?? "",
-    ...(segment.visual_elements ?? []),
-  ].join(" ");
-
-  const matchedChars = artBible.characters.filter((c) =>
-    segmentText.includes(c.label),
-  );
-
-  if (matchedChars.length === 0) {
-    return taskDraft.prompt_draft;
-  }
-
-  const anchors = matchedChars
-    .map((c) => `${c.label}：${c.visual_description}`)
-    .join("；");
-
-  return `${taskDraft.prompt_draft}\n[角色锚点] ${anchors}`;
-}
-
-/**
- * Append generic visual negative constraints to image/video prompts
- * so every visual prompt starts with stable era/anachronism guards.
- * These are fixed production contracts, not LLM-generated suggestions.
- */
-const VISUAL_CONSTRAINT_BASE =
-  "写实历史质感，建筑、发型、服饰、器物、文字形制必须符合%s背景，无现代物品、无现代建筑、无民国/近代造型、无动漫风、无奇幻特效、无游戏质感";
-
-function enrichPromptWithVisualConstraints(
-  taskDraft: ChunkTaskDraft,
-  eraStyle?: string | null,
-): string | null {
-  if (
-    (taskDraft.task_type !== "image_still" && taskDraft.task_type !== "video_clip") ||
-    !taskDraft.prompt_draft
-  ) {
-    return taskDraft.prompt_draft;
-  }
-
-  const era = (eraStyle ?? "").trim() || "当前项目朝代";
-  const constraint = VISUAL_CONSTRAINT_BASE.replace("%s", era);
-  const prompt = taskDraft.prompt_draft;
-  // Check against the base pattern to avoid duplication
-  if (/写实历史质感，建筑、发型、服饰、器物、文字形制必须符合/.test(prompt)) {
-    return prompt;
-  }
-
-  return `${prompt}\n【视觉约束】${constraint}。`;
-}
-
 function mergeAssetPlan(
   input: GenerateAssetPlanInput,
   audioSkeleton: ReturnType<typeof buildLocalAudioSkeleton>,
@@ -1310,14 +1234,13 @@ function mergeAssetPlan(
         production_intent: taskDraft.production_intent,
         recommended_mode: taskDraft.recommended_mode,
         provider_hint: taskDraft.provider_hint,
-        prompt_draft: enrichPromptWithVisualConstraints({
-          ...taskDraft,
-          prompt_draft: enrichPromptWithCharacterAnchor(
-            taskDraft,
-            input.storyboard.segments,
-            globalDraft.art_bible,
-          ),
-        }, globalDraft.art_bible.era_style),
+        prompt_draft: enrichAssetVisualPrompt({
+          taskType: taskDraft.task_type,
+          promptDraft: taskDraft.prompt_draft,
+          sourceSegmentId: taskDraft.source_segment_id,
+          storyboardSegments: input.storyboard.segments,
+          artBible: globalDraft.art_bible,
+        }),
         parameters: rewriteTaskParameterLocalIds(taskDraft.parameters, localToGlobal),
         manual_upload_policy: taskDraft.manual_upload_policy,
         risk_notes: rewriteLocalTaskIdsInTextList(taskDraft.risk_notes, localToGlobal),
