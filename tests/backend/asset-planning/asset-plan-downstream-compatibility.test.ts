@@ -577,7 +577,7 @@ describe("asset plan downstream compatibility fixtures", () => {
   });
 
   it.each(["long-15-segment-input.json", "long-21-segment-input.json"])(
-    "keeps compiler output for %s valid across schema, validator, audio readers and manifest",
+    "keeps compiler output for %s valid across schema, validator and downstream manifest contracts",
     (filename) => {
       const fixture = parseLongFixture(filename);
       const compiled = compileAssetPlanFromIntents(makeCompilerInput(fixture));
@@ -593,16 +593,116 @@ describe("asset plan downstream compatibility fixtures", () => {
       expect(validation.errors).toEqual([]);
       expect(validation.decision).toBe("pass");
 
+      expect(compiled.actions).toEqual([
+        ...fixture.storyboard.segments.map((segment) => ({
+          code: "visual_strategy_applied",
+          segment_id: segment.segment_id,
+          preference: segment.visual_strategy_preference ?? "default",
+        })),
+        {
+          code: "global_bgm_owner_bound",
+          segment_id: fixture.storyboard.segments[0]!.segment_id,
+        },
+      ]);
+
+      const acceptedAudioTypes = [
+        "audio/mpeg",
+        "audio/wav",
+        "audio/x-wav",
+        "audio/mp4",
+        "audio/aac",
+        "audio/ogg",
+      ];
+      for (const segment of fixture.storyboard.segments) {
+        const segmentTasks = plan.tasks.filter(
+          (task) => task.source_segment_id === segment.segment_id,
+        );
+        const anchor = segmentTasks.find(
+          (task) =>
+            task.task_type === "image_still" &&
+            task.parameters.image_role === "anchor",
+        )!;
+        expect(anchor).toMatchObject({
+          source_excerpt: segment.script_excerpt,
+          recommended_mode: "manual_allowed",
+          manual_upload_policy: {
+            allowed: true,
+            required: false,
+            accepted_file_types: ["image/png", "image/jpeg"],
+          },
+        });
+        expect(anchor.parameters.video_prompt_reserve).toEqual(
+          expect.any(String),
+        );
+
+        if (segment.visual_strategy_preference === "api_video") {
+          const video = segmentTasks.find(
+            (task) => task.task_type === "video_clip",
+          )!;
+          expect(video.parameters).toMatchObject({
+            static_fallback_task_id: anchor.task_id,
+            why_static_insufficient: expect.any(String),
+          });
+          expect(video.manual_upload_policy.accepted_file_types).toEqual([
+            "video/mp4",
+            "video/quicktime",
+          ]);
+          expect(plan.dependencies).toContainEqual({
+            dependency_id: `dep_${video.task_id}_after_${anchor.task_id}_requires_output`,
+            task_id: video.task_id,
+            depends_on_task_id: anchor.task_id,
+            dependency_type: "requires_output",
+          });
+        } else {
+          const motion = segmentTasks.find(
+            (task) => task.task_type === "render_motion_cue",
+          )!;
+          expect(motion.parameters).toEqual({
+            recipe_type: segment.motion_hint,
+            source_image_task_id: anchor.task_id,
+          });
+          expect(motion.manual_upload_policy).toMatchObject({
+            allowed: false,
+            required: false,
+            accepted_file_types: [],
+          });
+          expect(plan.dependencies).toContainEqual({
+            dependency_id: `dep_${motion.task_id}_after_${anchor.task_id}_requires_output`,
+            task_id: motion.task_id,
+            depends_on_task_id: anchor.task_id,
+            dependency_type: "requires_output",
+          });
+        }
+      }
+
       const bgmTask = plan.tasks.find((task) => task.task_type === "bgm_cue")!;
       expect(readBgmCueParams(bgmTask.parameters)).toMatchObject({
         requiredTags: ["历史", "克制"], scope: "global", segmentIds: [],
       });
+      expect(bgmTask.source_segment_id).toBe(
+        fixture.storyboard.segments[0]!.segment_id,
+      );
+      expect(bgmTask.manual_upload_policy.accepted_file_types).toEqual(
+        acceptedAudioTypes,
+      );
       const sfxTask = plan.tasks.find((task) => task.task_type === "sfx_cue")!;
       expect(readSfxCueParams(sfxTask.parameters)).toEqual({
         requiredTags: ["木槌", "回响"], moodTags: ["克制"],
         libraryItemId: null, selectionLabel: "长稿段落音效",
       });
       expect(sfxTask.parameters.timing_basis).toBe("tts");
+      expect(sfxTask.manual_upload_policy.accepted_file_types).toEqual(
+        acceptedAudioTypes,
+      );
+      for (const audioTask of [sfxTask, bgmTask]) {
+        expect(plan.dependencies).toContainEqual({
+          dependency_id: `dep_${audioTask.task_id}_after_tts_001_requires_timing`,
+          task_id: audioTask.task_id,
+          depends_on_task_id: "tts_001",
+          dependency_type: "requires_timing",
+        });
+      }
+
       const manifest = buildInitialAssetManifest({
         assetPlanRecordId: `compiled_${fixture.storyboard.segments.length}`,
         assetPlan: plan,
@@ -610,7 +710,66 @@ describe("asset plan downstream compatibility fixtures", () => {
       });
       expect(manifest.audio_summary.tts_chunk_routes).toHaveLength(fixture.storyboard.segments.length);
       expect(manifest.segment_routes).toHaveLength(fixture.storyboard.segments.length);
-      expect(manifest.segment_routes.every((route) => route.visual_task_id !== null)).toBe(true);
+      expect(manifest.notes).not.toContain(
+        "tts_chunk_segment_count_mismatch: TTS chunks and storyboard segments differ in count",
+      );
+      expect(manifest.audio_summary.bgm_placements).toEqual([
+        expect.objectContaining({
+          source_task_id: bgmTask.task_id,
+          scope: "global",
+          start_policy: "timeline_start",
+          end_policy: "timeline_end",
+          segment_ids: [],
+          volume: 0.28,
+          fade_in_sec: 1,
+          fade_out_sec: 2,
+        }),
+      ]);
+
+      for (const segment of fixture.storyboard.segments) {
+        const route = manifest.segment_routes.find(
+          (candidate) => candidate.segment_id === segment.segment_id,
+        )!;
+        expect(route.tts_artifact_id).not.toBeNull();
+        if (segment.visual_strategy_preference === "api_video") {
+          expect(route).toMatchObject({
+            visual_route_type: "video_clip",
+            motion_artifact_id: null,
+          });
+        } else {
+          const motionTask = plan.tasks.find(
+            (task) =>
+              task.source_segment_id === segment.segment_id &&
+              task.task_type === "render_motion_cue",
+          )!;
+          expect(route).toMatchObject({
+            visual_route_type: "image_with_motion",
+            motion_artifact_id: `artifact_motion_${motionTask.task_id}`,
+          });
+          expect(manifest.artifacts).toContainEqual(
+            expect.objectContaining({
+              artifact_id: `artifact_motion_${motionTask.task_id}`,
+              artifact_type: "motion_recipe",
+              origin: "inline",
+              metadata: expect.objectContaining({
+                recipe_type: segment.motion_hint,
+              }),
+            }),
+          );
+        }
+      }
+
+      expect(manifest.executions).toHaveLength(plan.tasks.length);
+      expect(
+        manifest.executions.filter(
+          (execution) => execution.task_type === "render_motion_cue",
+        ).every(
+          (execution) =>
+            execution.status === "completed" &&
+            execution.origin === "local" &&
+            execution.output_artifact_ids.length === 1,
+        ),
+      ).toBe(true);
     },
   );
 

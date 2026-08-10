@@ -5,6 +5,7 @@ import type { DbClient, ProjectRecord } from "../../../backend/src/db/client.js"
 import { buildInitialAssetManifest } from "../../../backend/src/modules/assets/assets-manifest-builder.js";
 import { saveAssetManifestRecord } from "../../../backend/src/modules/assets/asset-manifest-record.repository.js";
 import { buildApp, type AppInstance } from "../../../backend/src/app.js";
+import { buildTestAuth } from "../auth/test-utils.js";
 import { createServer } from "node:http";
 import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -101,6 +102,7 @@ function createFormData(boundary: string, fieldName: string, filename: string, m
 }
 
 describe("upload artifact", () => {
+  const auth = buildTestAuth({ userId: "owner-1" });
   let db: DbClient;
   let project: ProjectRecord;
   let storageRoot: string;
@@ -110,7 +112,10 @@ describe("upload artifact", () => {
     mkdirSync(storageRoot, { recursive: true });
 
     db = createDbClient();
-    project = await createProject(db, { name: "upload test" });
+    project = await createProject(db, {
+      name: "upload test",
+      ownerId: auth.userId,
+    });
     project.storageRootDir = storageRoot;
     project.activeAssetPlanRecordId = ASSET_PLAN_RECORD_ID;
     project.status = "asset_plan_ready";
@@ -197,6 +202,7 @@ describe("upload artifact", () => {
           truncated: false,
         },
       },
+      auth,
     });
   }
 
@@ -248,6 +254,7 @@ describe("upload artifact", () => {
           truncated: true,
         },
       },
+      auth,
     });
     expect(response.statusCode).toBe(413);
     expect(response.json().error).toBe("asset_upload_file_too_large");
