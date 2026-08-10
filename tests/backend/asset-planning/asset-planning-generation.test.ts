@@ -8,10 +8,14 @@ import type {
 } from "../../../backend/src/runtime/llm/llm-gateway.js";
 import { LlmOutputError } from "../../../backend/src/runtime/llm/llm-output-error.js";
 import { ExternalServiceError } from "../../../backend/src/runtime/llm/external-errors.js";
+import type { LlmInteractionLogEntry } from "../../../backend/src/runtime/llm/interaction-log.js";
 import {
   buildGlobalPlanningStructuralRepairInput,
   generateAssetPlan,
+  parseSegmentIntentRepairPatch,
   type GlobalDraftStructureEvent,
+  type AssetPlanningResilienceEvent,
+  type IntentChunkSettledEvent,
 } from "../../../backend/src/modules/asset-planning/asset-planning-generation.service.js";
 
 const scriptText =
@@ -337,6 +341,19 @@ function makeInput(llmGateway: LlmGateway, chunkSize = 2) {
   };
 }
 
+function interactionEntry(attemptCount: number): LlmInteractionLogEntry {
+  return {
+    generatedAt: "2026-08-10T00:00:00.000Z", provider: "test", model: "test",
+    operationName: "private", promptId: "private", promptStage: "asset_planning",
+    promptLanguage: "zh-CN", promptFilePath: "private", systemPrompt: "RAW_SECRET",
+    input: { private: true }, rawOutput: "RAW_SECRET", promptSha256: "hash", promptVersion: "1",
+    attempts: Array.from({ length: attemptCount }, (_, index) => ({
+      attempt: index + 1, startedAt: "a", finishedAt: "b", durationMs: 1,
+      outcome: index + 1 === attemptCount ? "success" as const : "error" as const,
+    })),
+  };
+}
+
 function validIntentDraftFor(segments: StoryboardPlan["segments"], first: boolean) {
   return {
     planning_mode: "segment_intent_batch",
@@ -417,6 +434,423 @@ async function waitUntil(predicate: () => boolean) {
 }
 
 describe("generateAssetPlan", () => {
+  it("repairs an invalid intent chunk once with a strict replace_field patch", async () => {
+    const events: IntentChunkSettledEvent[] = [];
+    const { gateway, calls } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+      if (options.promptId === "asset-planning.segment-intent-planner") {
+        const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+        const invalid = validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
+        delete (invalid.segments[0]!.intents[0] as { production_intent?: string }).production_intent;
+        return invalid;
+      }
+      if (options.promptId === "asset-planning.segment-intent-repair") {
+        return {
+          patch_type: "segment_asset_intent_repair",
+          operations: [{ operation: "replace_field", path: ["segments", 0, "intents", 0, "production_intent"], value: "修复后的制作意图" }],
+        };
+      }
+      throw new Error(`unexpected_prompt:${options.promptId}`);
+    });
+
+    const plan = await generateAssetPlan({
+      ...makeInput(gateway, 3),
+      generationMode: "intent_compiler",
+      onIntentChunkSettled: (event) => events.push(event),
+    });
+
+    expect(AssetPlan.parse(plan)).toEqual(plan);
+    expect(calls.map((call) => call.promptId)).toEqual([
+      "asset-planning.planner",
+      "asset-planning.segment-intent-planner",
+      "asset-planning.segment-intent-repair",
+    ]);
+    expect(calls.slice(1).every((call) => call.options?.maxAttempts === 2)).toBe(true);
+    expect(events.at(-1)).toMatchObject({ type: "intent_chunk_settled", chunk_id: "chunk_001", outcome: "success" });
+  });
+
+  it("accepts the bounded patch_fields wrapper drift and append_intent repair", async () => {
+    const { gateway, calls } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+      if (options.promptId === "asset-planning.segment-intent-planner") {
+        const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+        const invalid = validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
+        invalid.segments[0]!.intents = invalid.segments[0]!.intents.filter((intent) => intent.asset_kind !== "render_motion_cue");
+        return invalid;
+      }
+      if (options.promptId === "asset-planning.segment-intent-repair") {
+        return { patch_fields: { operations: [{
+          operation: "append_intent", segment_id: "sb_001", expected_kind: "render_motion_cue",
+          value: { asset_kind: "render_motion_cue", production_intent: "增加轻微运镜", risk_notes: ["保持主体稳定"] },
+        }] } };
+      }
+      throw new Error(`unexpected_prompt:${options.promptId}`);
+    });
+    await expect(generateAssetPlan({ ...makeInput(gateway, 3), generationMode: "intent_compiler" })).resolves.toMatchObject({ plan_version: "asset_plan_v1" });
+    expect(calls.filter((call) => call.promptId === "asset-planning.segment-intent-repair")).toHaveLength(1);
+  });
+
+  it("regenerates only once after repair failure and never repairs regenerated output", async () => {
+    let plannerCalls = 0;
+    const { gateway, calls } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+      if (options.promptId === "asset-planning.segment-intent-planner") {
+        plannerCalls += 1;
+        const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean; regeneration_context?: unknown };
+        expect(options.options).toEqual({ maxAttempts: 2 });
+        if (plannerCalls === 2) {
+          expect(promptInput.regeneration_context).toEqual({ reason: "segment_intent_repair_failed", instruction: "重新生成当前 chunk 的完整 intent batch" });
+          expect(JSON.stringify(promptInput.regeneration_context)).not.toContain("issues");
+        }
+        const invalid = validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
+        delete (invalid.segments[0]!.intents[0] as { production_intent?: string }).production_intent;
+        return invalid;
+      }
+      if (options.promptId === "asset-planning.segment-intent-repair") return { operations: [] };
+      throw new Error(`unexpected_prompt:${options.promptId}`);
+    });
+    const failure = await generateAssetPlan({ ...makeInput(gateway, 3), generationMode: "intent_compiler" }).catch((error) => error);
+    expect(failure).toMatchObject({ code: "asset_segment_intent_invalid" });
+    expect(calls.map((call) => call.promptId)).toEqual([
+      "asset-planning.planner", "asset-planning.segment-intent-planner",
+      "asset-planning.segment-intent-repair", "asset-planning.segment-intent-planner",
+    ]);
+  });
+
+  it("accepts one regenerated chunk after a repair patch schema failure", async () => {
+    let plannerCalls = 0;
+    const events: IntentChunkSettledEvent[] = [];
+    const { gateway, calls } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+      options.interactionLogWriter?.write(interactionEntry(1));
+      if (options.promptId === "asset-planning.segment-intent-planner") {
+        plannerCalls += 1;
+        const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+        const draft = validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
+        if (plannerCalls === 1) {
+          delete (draft.segments[0]!.intents[0] as { production_intent?: string }).production_intent;
+        }
+        return draft;
+      }
+      if (options.promptId === "asset-planning.segment-intent-repair") return { patch_fields: { operations: [], unexpected: true } };
+      throw new Error(`unexpected_prompt:${options.promptId}`);
+    });
+    await expect(generateAssetPlan({
+      ...makeInput(gateway, 3), generationMode: "intent_compiler",
+      onIntentChunkSettled: (event) => events.push(event),
+    })).resolves.toMatchObject({ plan_version: "asset_plan_v1" });
+    expect(calls.map((call) => call.promptId)).toEqual([
+      "asset-planning.planner", "asset-planning.segment-intent-planner",
+      "asset-planning.segment-intent-repair", "asset-planning.segment-intent-planner",
+    ]);
+    expect(events.at(-1)).toMatchObject({
+      type: "intent_chunk_settled",
+      accounting: {
+        business_slot: 3, logical_invocation: 3, safety_invocation: 0,
+        provider_attempts: 3, network_request_count: 3,
+      },
+    });
+  });
+
+  it("isolates sync and async progress/resilience callback failures", async () => {
+    const { gateway } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+      const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+      return validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
+    });
+    await expect(generateAssetPlan({
+      ...makeInput(gateway, 3), generationMode: "intent_compiler",
+      onProgress: () => { throw new Error("sync callback"); },
+      onIntentChunkSettled: async (event) => { (event as { chunk_id?: string }).chunk_id = "mutated"; throw new Error("async callback"); },
+    })).resolves.toMatchObject({ plan_version: "asset_plan_v1" });
+  });
+
+  it("reports actual per-chunk interaction attempts and one bounded safety invocation", async () => {
+    const events: IntentChunkSettledEvent[] = [];
+    let intentInvocation = 0;
+    const { gateway, calls } = makeGateway(async (options) => {
+      if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+      intentInvocation += 1;
+      await options.interactionLogWriter?.write(interactionEntry(intentInvocation === 1 ? 2 : 1));
+      if (intentInvocation === 1) throw { code: "content_filter", status: 400 };
+      const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+      return validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
+    });
+    await generateAssetPlan({
+      ...makeInput(gateway, 3), generationMode: "intent_compiler",
+      onIntentChunkSettled: (event) => events.push(event),
+    });
+    const settled = events.find((event) => event.type === "intent_chunk_settled");
+    expect(settled).toEqual({
+      type: "intent_chunk_settled", chunk_id: "chunk_001", outcome: "success",
+      accounting: {
+        chunk_id: "chunk_001", business_slot: 1, logical_invocation: 2,
+        safety_invocation: 1, provider_attempts: 3, network_request_count: 3,
+      },
+    });
+    expect(JSON.stringify(settled)).not.toContain("RAW_SECRET");
+    expect(calls.slice(1).every((call) => call.options?.maxAttempts === 2)).toBe(true);
+    expect(calls).toHaveLength(3);
+  });
+
+  it("does not safety-retry repair content filtering and proceeds directly to regeneration", async () => {
+    const settled: IntentChunkSettledEvent[] = [];
+    let plannerCalls = 0;
+    const { gateway, calls } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+      options.interactionLogWriter?.write(interactionEntry(1));
+      if (options.promptId === "asset-planning.segment-intent-repair") {
+        throw { code: "content_filter", status: 400 };
+      }
+      plannerCalls += 1;
+      const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+      const draft = validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
+      if (plannerCalls === 1) {
+        delete (draft.segments[0]!.intents[0] as { production_intent?: string }).production_intent;
+      }
+      return draft;
+    });
+    await generateAssetPlan({
+      ...makeInput(gateway, 3), generationMode: "intent_compiler",
+      onIntentChunkSettled: (event) => settled.push(event),
+    });
+    expect(calls.map((call) => call.promptId)).toEqual([
+      "asset-planning.planner",
+      "asset-planning.segment-intent-planner",
+      "asset-planning.segment-intent-repair",
+      "asset-planning.segment-intent-planner",
+    ]);
+    expect(calls[3]!.input).toHaveProperty("regeneration_context");
+    expect(settled[0]!.accounting).toMatchObject({
+      business_slot: 3, logical_invocation: 3, safety_invocation: 0,
+    });
+  });
+
+  it("rethrows an ordinary repair gateway programming error without regeneration", async () => {
+    const programmingError = new Error("repair_programming_bug");
+    const { gateway, calls } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+      if (options.promptId === "asset-planning.segment-intent-repair") throw programmingError;
+      const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+      const draft = validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
+      delete (draft.segments[0]!.intents[0] as { production_intent?: string }).production_intent;
+      return draft;
+    });
+    const failure = await generateAssetPlan({ ...makeInput(gateway, 3), generationMode: "intent_compiler" }).catch((error) => error);
+    expect(failure).toBe(programmingError);
+    expect(calls.map((call) => call.promptId)).toEqual([
+      "asset-planning.planner", "asset-planning.segment-intent-planner",
+      "asset-planning.segment-intent-repair",
+    ]);
+  });
+
+  it("regenerates after an ExternalServiceError from repair", async () => {
+    let plannerCalls = 0;
+    const repairFailure = new ExternalServiceError({
+      provider: "llm", operation: "repair", retryable: true,
+      code: "service_unavailable", userMessage: "repair unavailable",
+      debugMessage: "repair unavailable", attemptCount: 2,
+    });
+    const { gateway, calls } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+      if (options.promptId === "asset-planning.segment-intent-repair") throw repairFailure;
+      plannerCalls += 1;
+      const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+      const draft = validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
+      if (plannerCalls === 1) delete (draft.segments[0]!.intents[0] as { production_intent?: string }).production_intent;
+      return draft;
+    });
+    await expect(generateAssetPlan({ ...makeInput(gateway, 3), generationMode: "intent_compiler" })).resolves.toMatchObject({ plan_version: "asset_plan_v1" });
+    expect(calls.at(-1)!.promptId).toBe("asset-planning.segment-intent-planner");
+    expect(calls.at(-1)!.input).toHaveProperty("regeneration_context");
+  });
+
+  it("preserves a regeneration ExternalServiceError and its failure metadata", async () => {
+    let plannerCalls = 0;
+    const regenerationFailure = new ExternalServiceError({
+      provider: "llm", operation: "regeneration", retryable: false,
+      code: "invalid_request", userMessage: "regen failed",
+      debugMessage: "regen failed", attemptCount: 1,
+    });
+    const { gateway, calls } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+      if (options.promptId === "asset-planning.segment-intent-repair") return { operations: [] };
+      plannerCalls += 1;
+      if (plannerCalls === 2) throw regenerationFailure;
+      const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+      const draft = validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
+      delete (draft.segments[0]!.intents[0] as { production_intent?: string }).production_intent;
+      return draft;
+    });
+    const failure = await generateAssetPlan({ ...makeInput(gateway, 3), generationMode: "intent_compiler" }).catch((error) => error);
+    expect(failure).toBe(regenerationFailure);
+    expect(failure).toBeInstanceOf(ExternalServiceError);
+    expect(failure).toMatchObject({
+      code: "invalid_request",
+      failureMetadata: { failure_reason: "invalid_request", attempt_count: 1 },
+    });
+    expect(calls).toHaveLength(4);
+  });
+
+  it("counts a logical invocation when the gateway throws before writing an interaction entry", async () => {
+    const gatewayFailure = new Error("gateway_sync_failure");
+    const settled: IntentChunkSettledEvent[] = [];
+    const { gateway } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+      throw gatewayFailure;
+    });
+    const failure = await generateAssetPlan({
+      ...makeInput(gateway, 3), generationMode: "intent_compiler",
+      onIntentChunkSettled: (event) => settled.push(event),
+    }).catch((error) => error);
+    expect(failure).toBe(gatewayFailure);
+    expect(settled[0]).toMatchObject({
+      outcome: "failure",
+      accounting: {
+        business_slot: 1, logical_invocation: 1, safety_invocation: 0,
+        provider_attempts: 0, network_request_count: 0,
+      },
+    });
+  });
+
+  it("gives initial and regeneration independent safety quotas while capping five logical invocations at ten attempts", async () => {
+    const settled: IntentChunkSettledEvent[] = [];
+    let plannerCalls = 0;
+    const { gateway, calls } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+      options.interactionLogWriter?.write(interactionEntry(2));
+      if (options.promptId === "asset-planning.segment-intent-repair") {
+        return { operations: [] };
+      }
+      plannerCalls += 1;
+      if (plannerCalls === 1 || plannerCalls === 3) {
+        throw { code: "content_filter", status: 400 };
+      }
+      const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+      const draft = validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
+      if (plannerCalls === 2) {
+        delete (draft.segments[0]!.intents[0] as { production_intent?: string }).production_intent;
+      }
+      return draft;
+    });
+    await generateAssetPlan({
+      ...makeInput(gateway, 3), generationMode: "intent_compiler",
+      onIntentChunkSettled: (event) => settled.push(event),
+    });
+    expect(calls.map((call) => call.promptId)).toEqual([
+      "asset-planning.planner",
+      "asset-planning.segment-intent-planner",
+      "asset-planning.segment-intent-planner",
+      "asset-planning.segment-intent-repair",
+      "asset-planning.segment-intent-planner",
+      "asset-planning.segment-intent-planner",
+    ]);
+    expect(calls.slice(1).every((call) => call.options?.maxAttempts === 2)).toBe(true);
+    expect(calls[2]!.input).toHaveProperty("safety_retry_context");
+    expect(calls[5]!.input).toMatchObject({
+      regeneration_context: expect.any(Object),
+      safety_retry_context: expect.any(Object),
+    });
+    expect(settled[0]!.accounting).toEqual({
+      chunk_id: "chunk_001", business_slot: 3, logical_invocation: 5,
+      safety_invocation: 2, provider_attempts: 10, network_request_count: 10,
+    });
+  });
+
+  it("routes settled accounting only to its dedicated cloned callback", async () => {
+    const globalEvents: AssetPlanningResilienceEvent[] = [];
+    const settledEvents: IntentChunkSettledEvent[] = [];
+    const { gateway } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+      const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+      return validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
+    });
+    await generateAssetPlan({
+      ...makeInput(gateway, 3), generationMode: "intent_compiler",
+      onGlobalStructureEvent: (event) => globalEvents.push(event),
+      onIntentChunkSettled: (event) => {
+        settledEvents.push(structuredClone(event));
+        (event as { chunk_id: string }).chunk_id = "mutated";
+      },
+    });
+    expect(globalEvents).toEqual([]);
+    expect(settledEvents).toEqual([
+      expect.objectContaining({ type: "intent_chunk_settled", chunk_id: "chunk_001" }),
+    ]);
+  });
+
+  it.each(["sync", "async"] as const)(
+    "isolates %s dedicated settled callback failure",
+    async (mode) => {
+      const { gateway } = makeGateway((options) => {
+        if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+        const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+        return validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
+      });
+      await expect(generateAssetPlan({
+        ...makeInput(gateway, 3), generationMode: "intent_compiler",
+        onIntentChunkSettled(event) {
+          (event as { chunk_id: string }).chunk_id = "mutated";
+          if (mode === "sync") throw new Error("sync settled callback");
+          return Promise.reject(new Error("async settled callback"));
+        },
+      })).resolves.toMatchObject({ plan_version: "asset_plan_v1" });
+    },
+  );
+
+  it("rejects non-plain repair outers without invoking getters or proxy traps", () => {
+    let getterCalls = 0;
+    let proxyTraps = 0;
+    const getterOuter = {} as Record<string, unknown>;
+    Object.defineProperty(getterOuter, "operations", {
+      enumerable: true,
+      get() { getterCalls += 1; return []; },
+    });
+    const proxy = new Proxy({ operations: [] }, {
+      get() { proxyTraps += 1; return undefined; },
+      ownKeys() { proxyTraps += 1; return []; },
+      getOwnPropertyDescriptor() { proxyTraps += 1; return undefined; },
+      getPrototypeOf() { proxyTraps += 1; return Object.prototype; },
+    });
+    expect(() => parseSegmentIntentRepairPatch(getterOuter)).toThrow();
+    expect(() => parseSegmentIntentRepairPatch(proxy)).toThrow();
+    expect(getterCalls).toBe(0);
+    expect(proxyTraps).toBe(0);
+  });
+
+  it.each([
+    ["null prototype", () => Object.assign(Object.create(null), { operations: [] })],
+    ["custom prototype", () => Object.assign(Object.create({ inherited: true }), { operations: [] })],
+    ["non-enumerable sibling", () => {
+      const value = { operations: [] } as Record<string, unknown>;
+      Object.defineProperty(value, "secret", { value: "RAW_SECRET", enumerable: false });
+      return value;
+    }],
+    ["symbol sibling", () => ({ operations: [], [Symbol("secret")]: "RAW_SECRET" })],
+    ["nested wrapper", () => ({ patch_fields: { patch_fields: { operations: [] } } })],
+    ["wrapper sibling", () => ({ patch_fields: { operations: [] }, secret: "RAW_SECRET" })],
+  ] as const)("rejects unsafe repair outer: %s", (_label, factory) => {
+    let failure: unknown;
+    try { parseSegmentIntentRepairPatch(factory()); } catch (error) { failure = error; }
+    expect(failure).toBeDefined();
+    expect(JSON.stringify(failure)).not.toContain("RAW_SECRET");
+  });
+
+  it("keeps canonical, exact missing-discriminator, and one exact wrapper compatible", () => {
+    const operation = {
+      operation: "replace_field", path: ["segments", 0, "intents", 0, "production_intent"], value: "修复",
+    };
+    for (const candidate of [
+      { patch_type: "segment_asset_intent_repair", operations: [operation] },
+      { operations: [operation] },
+      { patch_fields: { operations: [operation] } },
+    ]) {
+      expect(parseSegmentIntentRepairPatch(candidate)).toMatchObject({
+        patch_type: "segment_asset_intent_repair", operations: [operation],
+      });
+    }
+  });
+
   it("uses exactly one intent planner call per chunk and compiles in storyboard order", async () => {
     const storyboard = structuredClone(baseStoryboardPlan);
     storyboard.segments[0]!.visual_strategy_preference = "api_video";
@@ -460,10 +894,13 @@ describe("generateAssetPlan", () => {
       ]));
   });
 
-  it("fails invalid intent output immediately without legacy or repair prompts", async () => {
+  it("fails invalid intent output after bounded repair and regeneration without leaking raw output", async () => {
     const rawSecret = `RAW_SECRET_FROM_MODEL_${"x".repeat(300)}`;
     const { gateway, calls } = makeGateway((options) => {
       if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+      if (options.promptId === "asset-planning.segment-intent-repair") {
+        return { operations: [] };
+      }
       if (options.promptId === "asset-planning.segment-intent-planner") {
         return {
           planning_mode: "segment_intent_batch",
@@ -484,19 +921,21 @@ describe("generateAssetPlan", () => {
     }).catch((error: unknown) => error);
     expect(failure).toMatchObject({
       code: "asset_segment_intent_invalid",
-      cause: { issues: expect.any(Array) },
+      cause: { initial_issues: expect.any(Array), final_issues: expect.any(Array) },
     });
     const serializedFailure = JSON.stringify(failure);
     expect(serializedFailure).not.toContain("RAW_SECRET_FROM_MODEL");
     const safeIssues = (failure as LlmOutputError).cause as {
-      issues: Array<{ path: Array<string | number>; segment_id: string | null }>;
+      initial_issues: Array<{ path: Array<string | number>; segment_id: string | null }>;
     };
-    expect(safeIssues.issues.every((issue) => issue.path.length <= 12)).toBe(true);
-    expect(safeIssues.issues.every((issue) => issue.segment_id === null || baseStoryboardPlan.segments.some(
+    expect(safeIssues.initial_issues.every((issue) => issue.path.length <= 12)).toBe(true);
+    expect(safeIssues.initial_issues.every((issue) => issue.segment_id === null || baseStoryboardPlan.segments.some(
       (segment) => segment.segment_id === issue.segment_id,
     ))).toBe(true);
     expect(calls.map((call) => call.promptId)).toEqual([
       "asset-planning.planner",
+      "asset-planning.segment-intent-planner",
+      "asset-planning.segment-intent-repair",
       "asset-planning.segment-intent-planner",
     ]);
   });
@@ -512,6 +951,9 @@ describe("generateAssetPlan", () => {
     expect(explicitPlan).toEqual(defaultPlan);
     expect([...defaultRun.calls, ...explicitRun.calls].some(
       (call) => call.promptId === "asset-planning.segment-intent-planner",
+    )).toBe(false);
+    expect([...defaultRun.calls, ...explicitRun.calls].some(
+      (call) => call.promptId === "asset-planning.segment-intent-repair",
     )).toBe(false);
   });
   it("normalizes the real eight-prop missing-notes fixture without global repair", async () => {

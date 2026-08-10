@@ -16,6 +16,32 @@ import type { LlmInteractionLogEntry } from "../../../backend/src/runtime/llm/in
 import { ScriptDraftPackage } from "../../../shared/src/index.js";
 
 describe("provider hardening", () => {
+  it.each([
+    "asset-planning.segment-intent-planner",
+    "asset-planning.segment-intent-repair",
+  ])("records the real one/two provider attempt ceiling for %s", async (promptId) => {
+    const prompt = createPromptRegistry().getPrompt(promptId);
+    for (const sample of [
+      { message: "503 Service Unavailable", expected: 2 },
+      { message: "400 Bad Request", expected: 1 },
+    ]) {
+      const invokeApi = vi.fn(async () => { throw new Error(sample.message); });
+      const entries: LlmInteractionLogEntry[] = [];
+      const provider = createOpenAiCompatibleProvider({
+        model: "glm-5.2", baseUrl: "https://llm.example.test/v1", apiKey: "test-key",
+        maxAttempts: 5, baseDelayMs: 0, maxDelayMs: 0, invokeApi,
+      });
+      await expect(provider.invokeStructuredPrompt({
+        prompt, input: {}, operationName: promptId, options: { maxAttempts: 2 },
+        interactionLogWriter: { write: (entry) => { entries.push(entry); } },
+      })).rejects.toMatchObject({ attemptCount: sample.expected });
+      expect(invokeApi).toHaveBeenCalledTimes(sample.expected);
+      expect(entries).toHaveLength(1);
+      expect(entries[0]!.attempts).toHaveLength(sample.expected);
+      expect(entries[0]!.effectiveRequest?.maxAttempts).toBe(2);
+    }
+  });
+
   it("caps global structural repair at two retryable attempts and one non-retryable attempt", async () => {
     const prompt = createPromptRegistry().getPrompt(
       "asset-planning.global-structural-repair",
