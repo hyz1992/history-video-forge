@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import {
   AssetPlan,
@@ -21,32 +22,37 @@ import type {
   InvokeStructuredPromptOptions,
   LlmGateway,
 } from "../../../backend/src/runtime/llm/llm-gateway.js";
+import { LlmOutputError } from "../../../backend/src/runtime/llm/llm-output-error.js";
 
-interface LongAssetPlanningFixture {
-  source_ids: {
-    storyboard_record_id: string;
-    script_record_id: string;
-    topic_package_id: string;
-  };
-  script: unknown;
-  storyboard: unknown;
-}
+const LongAssetPlanningFixture = z
+  .object({
+    source_ids: z
+      .object({
+        storyboard_record_id: z.string().min(1),
+        script_record_id: z.string().min(1),
+        topic_package_id: z.string().min(1),
+      })
+      .strict(),
+    script: ScriptDraftPackage,
+    storyboard: StoryboardPlan,
+  })
+  .strict();
 
-function readFixture<T>(filename: string): T {
+function readFixture(filename: string): unknown {
   return JSON.parse(
     readFileSync(
       new URL(`../../fixtures/asset-planning/${filename}`, import.meta.url),
       "utf8",
     ),
-  ) as T;
+  ) as unknown;
 }
 
 function parseLongFixture(filename: string) {
-  const fixture = readFixture<LongAssetPlanningFixture>(filename);
+  const fixture = LongAssetPlanningFixture.parse(readFixture(filename));
   return {
     sourceIds: fixture.source_ids,
-    script: ScriptDraftPackage.parse(fixture.script),
-    storyboard: StoryboardPlan.parse(fixture.storyboard),
+    script: fixture.script,
+    storyboard: fixture.storyboard,
   };
 }
 
@@ -72,11 +78,13 @@ function makeTopicBoundaryContext() {
 function makeLegacyGateway(
   plan: AssetPlanType,
   chunkDraft: Record<string, unknown>,
-): LlmGateway {
-  return {
+): { gateway: LlmGateway; calls: InvokeStructuredPromptOptions[] } {
+  const calls: InvokeStructuredPromptOptions[] = [];
+  const gateway: LlmGateway = {
     async invokeStructuredPrompt<T>(
       options: InvokeStructuredPromptOptions,
     ): Promise<T> {
+      calls.push(options);
       const input = options.input as { planning_mode?: string };
       if (input.planning_mode === "global") {
         return {
@@ -92,6 +100,7 @@ function makeLegacyGateway(
     },
     invokeStrictStructured: vi.fn(),
   };
+  return { gateway, calls };
 }
 
 function expectContinuousStoryboardReferences(
@@ -108,12 +117,15 @@ function expectContinuousStoryboardReferences(
     expect(segment.linked_quotes.every((quote) => quoteNames.has(quote))).toBe(
       true,
     );
-    if (index > 0) {
-      expect(segment.start_hint_sec).toBeGreaterThanOrEqual(
-        storyboard.segments[index - 1]!.end_hint_sec,
-      );
-    }
+    expect(segment.start_hint_sec).toBe(
+      index === 0 ? 0 : storyboard.segments[index - 1]!.end_hint_sec,
+    );
   }
+  expect(storyboard.segments.at(-1)!.end_hint_sec).toBe(
+    storyboard.estimated_total_duration_sec,
+  );
+  expect(storyboard.segments.map((segment) => segment.script_excerpt).join(""))
+    .toBe(script.script_text);
 }
 
 describe("asset plan downstream compatibility fixtures", () => {
@@ -164,11 +176,9 @@ describe("asset plan downstream compatibility fixtures", () => {
 
   it("accepts the legacy chunk fixture through the current generation parser", async () => {
     const long15 = parseLongFixture("long-15-segment-input.json");
-    const plan = AssetPlan.parse(
-      readFixture("legacy-plan-valid.json"),
-    );
-    const chunkDraft = readFixture<Record<string, unknown>>(
-      "legacy-chunk-valid.json",
+    const plan = AssetPlan.parse(readFixture("legacy-plan-valid.json"));
+    const chunkDraft = z.record(z.string(), z.unknown()).parse(
+      readFixture("legacy-chunk-valid.json"),
     );
     const firstStoryboard: StoryboardPlanType = {
       ...long15.storyboard,
@@ -176,25 +186,153 @@ describe("asset plan downstream compatibility fixtures", () => {
       segments: [long15.storyboard.segments[0]!],
     };
 
-    await expect(
-      generateAssetPlan({
+    const { gateway, calls } = makeLegacyGateway(plan, chunkDraft);
+    const generated = await generateAssetPlan({
+      sourceStoryboardRecordId: long15.sourceIds.storyboard_record_id,
+      sourceScriptRecordId: long15.sourceIds.script_record_id,
+      sourceTopicPackageId: long15.sourceIds.topic_package_id,
+      storyboard: firstStoryboard,
+      draft: long15.script,
+      topicBoundaryContext: makeTopicBoundaryContext(),
+      llmGateway: gateway,
+      chunkSize: 1,
+    });
+
+    expect(generated).toMatchObject({
+      plan_version: "asset_plan_v1",
+      source_storyboard_record_id: long15.sourceIds.storyboard_record_id,
+      source_script_record_id: long15.sourceIds.script_record_id,
+      source_topic_package_id: long15.sourceIds.topic_package_id,
+    });
+    const generatedImage = generated.tasks.find(
+      (task) => task.task_id === "img_003",
+    );
+    const generatedMotion = generated.tasks.find(
+      (task) => task.task_id === "motion_004",
+    );
+    expect(generatedImage).toMatchObject({
+      task_type: "image_still",
+      source_segment_id: "seg_001",
+      source_excerpt: firstStoryboard.segments[0]!.script_excerpt,
+    });
+    expect(generatedMotion).toMatchObject({
+      task_type: "render_motion_cue",
+      source_segment_id: "seg_001",
+      source_excerpt: firstStoryboard.segments[0]!.script_excerpt,
+    });
+    expect(generated.dependencies).toContainEqual({
+      dependency_id: "dep_2_dep_local_motion_after_image",
+      task_id: "motion_004",
+      depends_on_task_id: "img_003",
+      dependency_type: "requires_output",
+    });
+    expect(generated.cost_summary).toMatchObject({
+      total_tasks: 4,
+      by_type: {
+        tts_audio: 1,
+        subtitle_track: 1,
+        image_still: 1,
+        render_motion_cue: 1,
+      },
+      by_cost_tier: { free: 2, low: 2, medium: 0, high: 0 },
+      estimated_provider_calls: 2,
+    });
+    expect(calls).toHaveLength(2);
+    expect(
+      calls.map(
+        (call) => (call.input as { planning_mode?: string }).planning_mode,
+      ),
+    ).toEqual(["global", "segment_chunk"]);
+  });
+
+  it("characterizes wrapper drift as a current repair-boundary failure", async () => {
+    const long15 = parseLongFixture("long-15-segment-input.json");
+    const plan = AssetPlan.parse(readFixture("legacy-plan-valid.json"));
+    const validChunk = z.record(z.string(), z.unknown()).parse(
+      readFixture("legacy-chunk-valid.json"),
+    );
+    const wrapperDrift = readFixture(
+      "legacy-chunk-repair-wrapper-drift.json",
+    );
+    const tasks = z.array(z.record(z.string(), z.unknown())).parse(
+      validChunk.tasks,
+    );
+    const { recommended_mode: _recommendedMode, ...invalidFirstTask } =
+      tasks[0]!;
+    const invalidChunk = {
+      ...validChunk,
+      tasks: [invalidFirstTask, ...tasks.slice(1)],
+    };
+    const calls: InvokeStructuredPromptOptions[] = [];
+    const gateway: LlmGateway = {
+      async invokeStructuredPrompt<T>(
+        options: InvokeStructuredPromptOptions,
+      ): Promise<T> {
+        calls.push(options);
+        if (options.promptId === "asset-planning.asset-structural-repair") {
+          return wrapperDrift as T;
+        }
+        const input = options.input as { planning_mode?: string };
+        if (input.planning_mode === "global") {
+          return {
+            planning_mode: "global",
+            art_bible: plan.art_bible,
+            visual_budget: plan.visual_budget,
+            downgrade_policy: plan.downgrade_policy,
+            global_audio_strategy: plan.global_audio_strategy,
+            manual_review_notes: [],
+          } as T;
+        }
+        return invalidChunk as T;
+      },
+      invokeStrictStructured: vi.fn(),
+    };
+    const firstStoryboard: StoryboardPlanType = {
+      ...long15.storyboard,
+      estimated_total_duration_sec: 6,
+      segments: [long15.storyboard.segments[0]!],
+    };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    // Task 1 固定当前 strict repair 边界：真实 wrapper drift 会进入 repair Prompt，
+    // 随后稳定失败。Task 2 接入窄 coercion 后，应把该 characterization 迁移为成功回归。
+    let caught: unknown;
+    try {
+      await generateAssetPlan({
         sourceStoryboardRecordId: long15.sourceIds.storyboard_record_id,
         sourceScriptRecordId: long15.sourceIds.script_record_id,
         sourceTopicPackageId: long15.sourceIds.topic_package_id,
         storyboard: firstStoryboard,
         draft: long15.script,
         topicBoundaryContext: makeTopicBoundaryContext(),
-        llmGateway: makeLegacyGateway(plan, chunkDraft),
+        llmGateway: gateway,
         chunkSize: 1,
-      }),
-    ).resolves.toMatchObject({ plan_version: "asset_plan_v1" });
+      });
+    } catch (error) {
+      caught = error;
+    } finally {
+      warn.mockRestore();
+    }
+
+    expect(caught).toBeInstanceOf(LlmOutputError);
+    expect((caught as LlmOutputError).code).toBe(
+      "asset_chunk_plan_schema_invalid",
+    );
+    expect(
+      calls.filter(
+        (call) => call.promptId === "asset-planning.asset-structural-repair",
+      ),
+    ).toHaveLength(1);
+    expect(calls.map((call) => call.promptId)).toEqual([
+      "asset-planning.planner",
+      "asset-planning.planner",
+      "asset-planning.asset-structural-repair",
+    ]);
   });
 
   it("keeps a complete legacy AssetPlan valid for the local validator and downstream readers", () => {
     const long15 = parseLongFixture("long-15-segment-input.json");
-    const plan = AssetPlan.parse(
-      readFixture("legacy-plan-valid.json"),
-    );
+    const plan = AssetPlan.parse(readFixture("legacy-plan-valid.json"));
 
     const validation = validateAssetPlan({
       plan,
@@ -294,6 +432,23 @@ describe("asset plan downstream compatibility fixtures", () => {
         (segment) => segment.segment_id,
       ),
     });
+    expect(manifest.notes).not.toContain(
+      "tts_chunk_segment_count_mismatch: TTS chunks and storyboard segments differ in count",
+    );
+    expect(manifest.audio_summary.tts_chunk_routes).toHaveLength(
+      long15.storyboard.segments.length,
+    );
+    expect(
+      manifest.segment_routes.every(
+        (route) => route.tts_artifact_id !== null,
+      ),
+    ).toBe(true);
+    for (const [index, segment] of long15.storyboard.segments.entries()) {
+      expect(manifest.audio_summary.tts_chunk_routes[index]).toMatchObject({
+        segment_ids: [segment.segment_id],
+        script_excerpt: segment.script_excerpt,
+      });
+    }
     expect(manifest.segment_routes).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -337,8 +492,8 @@ describe("asset plan downstream compatibility fixtures", () => {
   });
 
   it("freezes the observed repair wrapper drift and isolated legacy timing error", () => {
-    const wrapper = readFixture<Record<string, unknown>>(
-      "legacy-chunk-repair-wrapper-drift.json",
+    const wrapper = z.record(z.string(), z.unknown()).parse(
+      readFixture("legacy-chunk-repair-wrapper-drift.json"),
     );
     expect(Object.keys(wrapper)).toEqual(["patch_fields"]);
     expect(wrapper).not.toHaveProperty("patch_type");
