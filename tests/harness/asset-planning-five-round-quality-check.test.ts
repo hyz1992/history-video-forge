@@ -853,6 +853,114 @@ describe("asset planning five round quality check", () => {
     });
   });
 
+  it("accepts complete process runtime configuration without cwd env and rejects missing key or model", async () => {
+    const originalCwd = process.cwd();
+    const isolatedCwd = mkdtempSync(join(tmpdir(), "svf2-runtime-env-process-"));
+    const fixture = join(
+      originalCwd,
+      "tests/fixtures/asset-planning/long-15-segment-input.json",
+    );
+    const managedKeys = [
+      "LLM_PROVIDER",
+      "LLM_BASE_URL",
+      "LLM_API_KEY",
+      "LLM_MODEL",
+      "LLM_SMART_MODEL",
+      "LLM_PROVIDERS_CONFIG_PATH",
+    ] as const;
+    const originalValues = Object.fromEntries(
+      managedKeys.map((key) => [key, process.env[key]]),
+    );
+    const loadFreshRunner = async () => {
+      vi.resetModules();
+      return import(
+        "../../harness/scripts/runtime/asset-planning-five-round-quality-check"
+      );
+    };
+    const setLegacyRuntimeEnv = (overrides: Record<string, string | undefined>) => {
+      for (const key of managedKeys) delete process.env[key];
+      Object.assign(process.env, {
+        LLM_PROVIDER: "openai",
+        LLM_BASE_URL: "https://runtime.example.invalid/v1",
+        LLM_API_KEY: "runtime-secret-must-not-leak",
+        LLM_MODEL: "runtime-model",
+      });
+      for (const [key, value] of Object.entries(overrides)) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    };
+    try {
+      process.chdir(isolatedCwd);
+      setLegacyRuntimeEnv({});
+      const complete = await loadFreshRunner();
+      const planGenerator = vi.fn(
+        async ({ sourceStoryboardRecordId, sourceScriptRecordId, sourceTopicPackageId }) =>
+          makeAssetPlan({
+            storyboardRecordId: sourceStoryboardRecordId,
+            scriptRecordId: sourceScriptRecordId,
+            topicPackageId: sourceTopicPackageId,
+          }),
+      );
+      const outputDir = join(isolatedCwd, "complete-output");
+      await expect(
+        complete.runAssetPlanningFiveRoundQualityCheck(
+          {
+            fixture,
+            outputDir,
+            rounds: 1,
+            mode: "intent_compiler",
+            live: true,
+          },
+          { requireRealEnv: true, planGenerator },
+        ),
+      ).resolves.toMatchObject({ valid_provider_rounds: 1 });
+      expect(planGenerator).toHaveBeenCalledOnce();
+      expect(readAllTextFiles(outputDir)).not.toContain(
+        "runtime-secret-must-not-leak",
+      );
+
+      for (const missing of ["LLM_API_KEY", "LLM_MODEL"] as const) {
+        setLegacyRuntimeEnv({ [missing]: undefined });
+        const incomplete = await loadFreshRunner();
+        await expect(
+          incomplete.runAssetPlanningFiveRoundQualityCheck(
+            {
+              fixture,
+              outputDir: join(isolatedCwd, `missing-${missing}`),
+              rounds: 1,
+              mode: "intent_compiler",
+              live: true,
+            },
+            { requireRealEnv: true, planGenerator: vi.fn() },
+          ),
+        ).rejects.toThrow(/asset_planning_live_check_(real_env_missing|runtime_config_invalid)/u);
+      }
+      for (const key of managedKeys) delete process.env[key];
+      const empty = await loadFreshRunner();
+      await expect(
+        empty.runAssetPlanningFiveRoundQualityCheck(
+          {
+            fixture,
+            outputDir: join(isolatedCwd, "empty-runtime"),
+            rounds: 1,
+            mode: "intent_compiler",
+            live: true,
+          },
+          { requireRealEnv: true, planGenerator: vi.fn() },
+        ),
+      ).rejects.toThrow("asset_planning_live_check_real_env_missing");
+    } finally {
+      process.chdir(originalCwd);
+      for (const key of managedKeys) {
+        const value = originalValues[key];
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+      vi.resetModules();
+    }
+  });
+
   it("accepts Windows npm.cmd argument forwarding for help and fixture dry-run", () => {
     const outputDir = mkdtempSync(join(tmpdir(), "svf2-asset-planning-cli-spawn-"));
     const help = spawnNpm([

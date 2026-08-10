@@ -507,18 +507,40 @@ function collectContentTreeFiles(
 async function resolveRuntimeFingerprintInputs(
   input: AssetPlanningFiveRoundQualityCheckInput,
   injected: AssetPlanningRuntimeFingerprintInputs | undefined,
+  requireRealEnv: boolean,
 ): Promise<AssetPlanningRuntimeFingerprintInputs> {
   if (input.live !== true) {
     return defaultPlanRuntimeFingerprintInputs(input);
   }
-  if (injected) {
+  if (injected && !requireRealEnv) {
     return normalizeRuntimeFingerprintInputs(injected);
   }
 
   const { getValidatedRuntimeEnv } = await import(
     "../../../backend/src/config/env"
   );
-  const runtimeEnv = getValidatedRuntimeEnv();
+  let runtimeEnv: ReturnType<typeof getValidatedRuntimeEnv>;
+  try {
+    runtimeEnv = getValidatedRuntimeEnv();
+  } catch {
+    throw new Error("asset_planning_live_check_runtime_config_invalid");
+  }
+  if (requireRealEnv) {
+    if (runtimeEnv.llm.provider === "stub") {
+      throw new Error("asset_planning_live_check_real_env_missing");
+    }
+    try {
+      const { resolveTierProviderSnapshot } = await import(
+        "../../../backend/src/runtime/llm/tier-aware-provider-factory"
+      );
+      resolveTierProviderSnapshot();
+    } catch {
+      throw new Error("asset_planning_live_check_runtime_config_invalid");
+    }
+  }
+  if (injected) {
+    return normalizeRuntimeFingerprintInputs(injected);
+  }
   const smartModel = runtimeEnv.llm.smartModel?.trim();
   const separator = smartModel?.indexOf(":") ?? -1;
   const providerId =
@@ -710,16 +732,10 @@ export async function runAssetPlanningFiveRoundQualityCheck(
   }
 
   const requireRealEnv = dependencies.requireRealEnv ?? true;
-  if (
-    input.live === true &&
-    requireRealEnv &&
-    !existsSync(resolve(process.cwd(), ".env"))
-  ) {
-    throw new Error("asset_planning_live_check_real_env_missing");
-  }
   const runtimeFingerprintInputs = await resolveRuntimeFingerprintInputs(
     input,
     dependencies.runtimeFingerprintInputs,
+    requireRealEnv,
   );
   const previewPlan = buildAssetPlanningFiveRoundQualityCheckPlan(
     input,
