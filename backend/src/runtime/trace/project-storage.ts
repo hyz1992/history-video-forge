@@ -304,6 +304,64 @@ export interface TraceLogWriter extends LlmInteractionLogWriter {
   writeDiagnostic(label: string, payload: unknown): void;
 }
 
+function isDiagnosticRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function formatDiagnosticIssuePath(path: unknown): string | undefined {
+  if (
+    !Array.isArray(path) ||
+    !path.every(
+      (part) => typeof part === "string" || typeof part === "number",
+    )
+  ) {
+    return undefined;
+  }
+  if (path.length === 0) return "<root>";
+  return path.reduce<string>((formatted, segment) => {
+    if (typeof segment === "number") return `${formatted}[${segment}]`;
+    return formatted ? `${formatted}.${segment}` : segment;
+  }, "");
+}
+
+export function sanitizeAssetPlanningResilienceDiagnostic(
+  payload: unknown,
+): Record<string, unknown> {
+  if (!isDiagnosticRecord(payload)) {
+    return { type: "unknown_resilience_event" };
+  }
+
+  const type =
+    typeof payload.type === "string" ? payload.type : "unknown_resilience_event";
+  const result: Record<string, unknown> = { type };
+  if (typeof payload.error_code === "string") {
+    result.error_code = payload.error_code;
+  }
+
+  if (Array.isArray(payload.actions)) {
+    const actionTypes = payload.actions.flatMap((action) =>
+      isDiagnosticRecord(action) && typeof action.type === "string"
+        ? [action.type]
+        : [],
+    );
+    result.action_types = [...new Set(actionTypes)].sort();
+    result.action_count = payload.actions.length;
+  }
+
+  if (Array.isArray(payload.issues)) {
+    const issuePaths = payload.issues.flatMap((issue) => {
+      if (!isDiagnosticRecord(issue)) return [];
+      const path = formatDiagnosticIssuePath(issue.path);
+      return path === undefined ? [] : [path];
+    });
+    result.issue_count = payload.issues.length;
+    result.issue_paths = [...new Set(issuePaths)].sort().slice(0, 20);
+    result.issues_truncated = issuePaths.length > 20;
+  }
+
+  return result;
+}
+
 export function createProjectTraceAppender(
   project: ProjectRecord,
 ): TraceLogWriter {
@@ -394,7 +452,11 @@ export function createProjectTraceAppender(
 
       let serialized: string;
       try {
-        const candidate = JSON.stringify(payload, null, 2);
+        const diagnosticPayload =
+          label === "asset-planning.resilience"
+            ? sanitizeAssetPlanningResilienceDiagnostic(payload)
+            : payload;
+        const candidate = JSON.stringify(diagnosticPayload, null, 2);
         serialized = candidate ?? JSON.stringify({
           serialization_error: "unsupported_top_level_value",
           value_type: typeof payload,

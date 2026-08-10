@@ -75,6 +75,41 @@ describe("project storage diagnostic trace", () => {
     expect(trace).toContain("[Error]");
   });
 
+  it("redacts legacy resilience action values and keeps bounded diagnostic facts", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "asset-plan-resilience-trace-"));
+    roots.push(root);
+    process.env.STORAGE_ROOT_DIR = root;
+    const project = await createProject(createDbClient(), {
+      name: "Legacy Resilience Diagnostic",
+    });
+    const writer = createProjectTraceAppender(project);
+
+    writer.writeDiagnostic("asset-planning.resilience", {
+      type: "legacy_audio_timing_canonicalized",
+      actions: [
+        {
+          type: "audio_timing_rebound",
+          dependency_id: "dep-secret",
+          before_task_id: "motion-secret",
+          after_task_id: "tts-secret",
+          reason_code: "invalid_audio_timing_source",
+        },
+      ],
+    });
+
+    const profile = getProjectStorageProfile(project)!;
+    const trace = readFileSync(resolve(root, profile.trace_dir, "trace.md"), "utf8");
+    expect(trace).toContain("asset-planning.resilience");
+    expect(trace).toContain('"type": "legacy_audio_timing_canonicalized"');
+    expect(trace).toContain('"action_types"');
+    expect(trace).toContain('"action_count": 1');
+    expect(trace).not.toContain("dep-secret");
+    expect(trace).not.toContain("motion-secret");
+    expect(trace).not.toContain("tts-secret");
+    expect(trace).not.toContain("before_task_id");
+    expect(trace).not.toContain("after_task_id");
+  });
+
   it.each([
     ["undefined", undefined],
     ["function", () => undefined],

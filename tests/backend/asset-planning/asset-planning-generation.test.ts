@@ -179,6 +179,16 @@ const missingPropNotesFixture = JSON.parse(
   ),
 ) as Record<string, unknown>;
 
+const legacyChunkRepairWrapperFixture = JSON.parse(
+  readFileSync(
+    new URL(
+      "../../fixtures/asset-planning/legacy-chunk-repair-wrapper-drift.json",
+      import.meta.url,
+    ),
+    "utf8",
+  ),
+) as Record<string, unknown>;
+
 function validChunkPlanningDraftFor(
   segmentIds: string[],
   storyboard: StoryboardPlan = baseStoryboardPlan,
@@ -1495,6 +1505,222 @@ describe("generateAssetPlan", () => {
     expect(repairInput).toHaveProperty("raw_task_summaries");
     expect(repairInput).toHaveProperty("structural_errors");
   });
+
+  it("accepts the observed single repair wrapper once and reports mechanical actions", async () => {
+    const events: Array<{ type: string; actions?: unknown[] }> = [];
+    const promptIds: string[] = [];
+    const { gateway } = makeGateway((options) => {
+      promptIds.push(options.promptId);
+      const input = options.input as {
+        planning_mode?: "global" | "segment_chunk";
+        chunk?: { segment_ids: string[] };
+      };
+      if (input.planning_mode === "global") return validGlobalPlanningDraft;
+      if (options.promptId === "asset-planning.asset-structural-repair") {
+        return legacyChunkRepairWrapperFixture;
+      }
+
+      const draft = validChunkPlanningDraftFor(
+        input.chunk?.segment_ids ?? [],
+      );
+      return {
+        ...draft,
+        tasks: draft.tasks.map((task, index) =>
+          index === 0
+            ? {
+                ...task,
+                local_task_id: "local_image_synthetic_001",
+                recommended_mode: undefined,
+                cost_tier: undefined,
+              }
+            : task,
+        ),
+        dependencies: draft.dependencies.map((dependency) => ({
+          ...dependency,
+          depends_on_local_task_id:
+            dependency.depends_on_local_task_id === "local_img_sb_001"
+              ? "local_image_synthetic_001"
+              : dependency.depends_on_local_task_id,
+        })),
+      };
+    });
+
+    const plan = await generateAssetPlan({
+      ...makeInput(gateway, 3),
+      onGlobalStructureEvent: (event) => events.push(event),
+    });
+
+    expect(AssetPlan.parse(plan)).toEqual(plan);
+    expect(
+      promptIds.filter(
+        (promptId) => promptId === "asset-planning.asset-structural-repair",
+      ),
+    ).toHaveLength(1);
+    expect(events).toContainEqual({
+      type: "legacy_chunk_patch_coerced",
+      actions: [
+        { type: "single_wrapper_unwrapped" },
+        { type: "missing_discriminator_defaulted" },
+      ],
+    });
+  });
+
+  it("reports a bounded wrapper coercion failure while preserving the chunk error", async () => {
+    const events: Array<Record<string, unknown>> = [];
+    const { gateway } = makeGateway((options) => {
+      const input = options.input as {
+        planning_mode?: "global" | "segment_chunk";
+        chunk?: { segment_ids: string[] };
+      };
+      if (input.planning_mode === "global") return validGlobalPlanningDraft;
+      if (options.promptId === "asset-planning.asset-structural-repair") {
+        return {
+          patch_fields: legacyChunkRepairWrapperFixture.patch_fields,
+          secret_sibling: "must-not-propagate",
+        };
+      }
+      const draft = validChunkPlanningDraftFor(
+        input.chunk?.segment_ids ?? [],
+      );
+      return {
+        ...draft,
+        tasks: draft.tasks.map((task, index) =>
+          index === 0 ? { ...task, recommended_mode: undefined } : task,
+        ),
+      };
+    });
+
+    await expect(
+      generateAssetPlan({
+        ...makeInput(gateway, 3),
+        onGlobalStructureEvent: (event) => events.push(event),
+      }),
+    ).rejects.toMatchObject({ code: "asset_chunk_plan_schema_invalid" });
+
+    expect(events).toContainEqual({
+      type: "legacy_chunk_patch_coercion_failed",
+      error_code: "asset_legacy_chunk_patch_coercion_failed",
+      issues: expect.arrayContaining([
+        expect.objectContaining({
+          code: expect.any(String),
+          path: expect.any(Array),
+        }),
+      ]),
+    });
+    expect(JSON.stringify(events)).not.toContain("must-not-propagate");
+  });
+
+  it("rebinds invalid audio timing to the unique TTS without another generation call", async () => {
+    const events: Array<{ type: string; actions?: unknown[] }> = [];
+    const { gateway, calls } = makeGateway((options) => {
+      const input = options.input as {
+        planning_mode?: "global" | "segment_chunk";
+        chunk?: { segment_ids: string[] };
+      };
+      if (input.planning_mode === "global") return validGlobalPlanningDraft;
+      const draft = validChunkPlanningDraftFor(
+        input.chunk?.segment_ids ?? [],
+      );
+      return {
+        ...draft,
+        dependencies: [
+          ...draft.dependencies,
+          {
+            local_dependency_id: "dep_sfx_bad_timing",
+            task_local_id: "local_sfx_sb_001",
+            depends_on_local_task_id: "local_motion_sb_001",
+            dependency_type: "requires_timing",
+          },
+        ],
+      };
+    });
+
+    const plan = await generateAssetPlan({
+      ...makeInput(gateway, 3),
+      onGlobalStructureEvent: (event) => events.push(event),
+    });
+
+    const tts = plan.tasks.find((task) => task.task_type === "tts_audio")!;
+    const sfx = plan.tasks.find((task) => task.task_type === "sfx_cue")!;
+    expect(plan.dependencies).toContainEqual(
+      expect.objectContaining({
+        task_id: sfx.task_id,
+        depends_on_task_id: tts.task_id,
+        dependency_type: "requires_timing",
+      }),
+    );
+    expect(calls).toHaveLength(2);
+    expect(events).toContainEqual({
+      type: "legacy_audio_timing_canonicalized",
+      actions: [
+        expect.objectContaining({
+          type: "audio_timing_rebound",
+          reason_code: "invalid_audio_timing_source",
+        }),
+      ],
+    });
+  });
+
+  it.each(["sync", "async"] as const)(
+    "isolates %s legacy resilience callback failures from the final plan",
+    async (mode) => {
+      const { gateway } = makeGateway((options) => {
+        const input = options.input as {
+          planning_mode?: "global" | "segment_chunk";
+          chunk?: { segment_ids: string[] };
+        };
+        if (input.planning_mode === "global") return validGlobalPlanningDraft;
+        const draft = validChunkPlanningDraftFor(
+          input.chunk?.segment_ids ?? [],
+        );
+        return {
+          ...draft,
+          dependencies: [
+            ...draft.dependencies,
+            {
+              local_dependency_id: "dep_sfx_bad_timing",
+              task_local_id: "local_sfx_sb_001",
+              depends_on_local_task_id: "local_motion_sb_001",
+              dependency_type: "requires_timing",
+            },
+          ],
+        };
+      });
+      const warning = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+
+      try {
+        const plan = await generateAssetPlan({
+          ...makeInput(gateway, 3),
+          onGlobalStructureEvent:
+            mode === "sync"
+              ? (event) => {
+                  if ("actions" in event) event.actions.splice(0);
+                  throw new Error("sync resilience callback failure");
+                }
+              : async (event) => {
+                  if ("actions" in event) event.actions.splice(0);
+                  throw new Error("async resilience callback failure");
+                },
+        });
+
+        const timingEdge = plan.dependencies.find(
+          (dependency) => dependency.dependency_type === "requires_timing" &&
+            plan.tasks.find((task) => task.task_id === dependency.task_id)
+              ?.task_type === "sfx_cue",
+        );
+        expect(
+          plan.tasks.find(
+            (task) => task.task_id === timingEdge?.depends_on_task_id,
+          )?.task_type,
+        ).toBe("tts_audio");
+        expect(warning).toHaveBeenCalledTimes(1);
+      } finally {
+        warning.mockRestore();
+      }
+    },
+  );
 
   it("retries global provider content filter errors once with safety retry context", async () => {
     const globalInputs: Array<Record<string, unknown>> = [];

@@ -25,6 +25,14 @@ import {
   normalizeGlobalPlanningDraftStructure,
   type GlobalDraftNormalizationAction,
 } from "./global-planning-draft-resilience.js";
+import {
+  canonicalizeLegacyAudioTiming,
+  coerceLegacyChunkStructuralPatch,
+  LegacyChunkResilienceError,
+  type LegacyAudioTimingIssue,
+  type LegacyChunkResilienceAction,
+  type SegmentChunkStructuralPatch as SegmentChunkStructuralPatchType,
+} from "./legacy-chunk-resilience.js";
 
 const PROMPT_ID = "asset-planning.planner";
 const STRUCTURAL_REPAIR_PROMPT_ID = "asset-planning.asset-structural-repair";
@@ -52,7 +60,7 @@ export interface AssetPlanGenerationProgress {
   total_segments: number;
 }
 
-export type GlobalDraftStructureEvent =
+export type AssetPlanningResilienceEvent =
   | {
       type: "normalization_applied";
       actions: GlobalDraftNormalizationAction[];
@@ -71,7 +79,30 @@ export type GlobalDraftStructureEvent =
   | {
       type: "repair_provider_failed";
       error_code: string;
+    }
+  | {
+      type: "legacy_chunk_patch_coerced";
+      actions: LegacyChunkResilienceAction[];
+    }
+  | {
+      type: "legacy_chunk_patch_coercion_failed";
+      error_code: "asset_legacy_chunk_patch_coercion_failed";
+      issues: Array<{
+        code: string;
+        path: Array<string | number>;
+      }>;
+    }
+  | {
+      type: "legacy_audio_timing_canonicalized";
+      actions: LegacyChunkResilienceAction[];
+    }
+  | {
+      type: "legacy_audio_timing_canonicalization_failed";
+      error_code: "asset_legacy_audio_timing_rebind_ambiguous";
+      issues: LegacyAudioTimingIssue[];
     };
+
+export type GlobalDraftStructureEvent = AssetPlanningResilienceEvent;
 
 export interface GenerateAssetPlanInput {
   sourceStoryboardRecordId: string;
@@ -86,7 +117,7 @@ export interface GenerateAssetPlanInput {
   chunkConcurrency?: number;
   onProgress?: (progress: AssetPlanGenerationProgress) => void | Promise<void>;
   onGlobalStructureEvent?: (
-    event: GlobalDraftStructureEvent,
+    event: AssetPlanningResilienceEvent,
   ) => void | Promise<void>;
   regenerationContext?: {
     reason: "asset_planning_local_validation_regen_once";
@@ -157,42 +188,6 @@ const ChunkDependencyDraft = z
   })
   .strict();
 
-const ChunkTaskStructuralPatch = z
-  .object({
-    local_task_id: z.string().min(1),
-    recommended_mode: z
-      .enum(["auto", "manual_allowed", "manual_preferred", "placeholder_only"])
-      .optional(),
-    provider_hint: z.string().min(1).nullable().optional(),
-    prompt_draft: z.string().min(1).nullable().optional(),
-    parameters: z.record(z.string(), z.unknown()).optional(),
-    manual_upload_policy: ManualUploadPolicyDraft.optional(),
-    risk_notes: z.array(z.string().min(1)).optional(),
-    cost_tier: z.enum(["free", "low", "medium", "high"]).optional(),
-  })
-  .strict();
-
-const ChunkDependencyStructuralPatch = z
-  .object({
-    local_dependency_id: z.string().min(1),
-    task_local_id: z.string().min(1),
-    depends_on_local_task_id: z.string().min(1),
-    dependency_type: z.enum([
-      "requires_output",
-      "requires_timing",
-      "requires_selection",
-    ]),
-  })
-  .strict();
-
-const SegmentChunkStructuralPatch = z
-  .object({
-    patch_type: z.literal("segment_chunk_structural_patch"),
-    task_patches: z.array(ChunkTaskStructuralPatch),
-    dependency_patches: z.array(ChunkDependencyStructuralPatch),
-  })
-  .strict();
-
 const SegmentChunkPlanningDraft = z
   .object({
     planning_mode: z.literal("segment_chunk"),
@@ -206,7 +201,6 @@ const SegmentChunkPlanningDraft = z
 type GlobalPlanningDraft = z.infer<typeof GlobalPlanningDraft>;
 type SegmentChunkPlanningDraft = z.infer<typeof SegmentChunkPlanningDraft>;
 type ChunkTaskDraft = z.infer<typeof ChunkTaskDraft>;
-type SegmentChunkStructuralPatch = z.infer<typeof SegmentChunkStructuralPatch>;
 
 interface GlobalPlanningSchemaIssue {
   code: string;
@@ -280,6 +274,7 @@ export async function generateAssetPlan(
         rawChunkDraft,
         chunkPromptInput,
         segments,
+        onResilienceEvent: input.onGlobalStructureEvent,
       });
       completedChunks += 1;
       await input.onProgress?.({
@@ -292,11 +287,30 @@ export async function generateAssetPlan(
     },
   );
 
-  return parseLlmOutput(
+  const mergedPlan = parseLlmOutput(
     AssetPlan,
     mergeAssetPlan(input, audioSkeleton, globalDraft, chunkDrafts),
     "asset_plan_schema_invalid",
   );
+  try {
+    const canonicalized = canonicalizeLegacyAudioTiming(mergedPlan);
+    if (canonicalized.actions.length > 0) {
+      await emitGlobalStructureEventSafely(input.onGlobalStructureEvent, {
+        type: "legacy_audio_timing_canonicalized",
+        actions: canonicalized.actions,
+      });
+    }
+    return canonicalized.plan;
+  } catch (error) {
+    if (error instanceof LegacyChunkResilienceError) {
+      await emitGlobalStructureEventSafely(input.onGlobalStructureEvent, {
+        type: "legacy_audio_timing_canonicalization_failed",
+        error_code: error.code,
+        issues: error.issues,
+      });
+    }
+    throw error;
+  }
 }
 
 function pathsEqual(
@@ -677,6 +691,7 @@ async function parseOrRepairChunkDraft(input: {
   rawChunkDraft: unknown;
   chunkPromptInput: ReturnType<typeof buildChunkPromptInput>;
   segments: StoryboardPlan["segments"];
+  onResilienceEvent: GenerateAssetPlanInput["onGlobalStructureEvent"];
 }): Promise<SegmentChunkPlanningDraft> {
   try {
     return parseAndValidateChunkDraft(input.rawChunkDraft, input.segments);
@@ -709,7 +724,29 @@ async function parseOrRepairChunkDraft(input: {
     });
 
     try {
-      const patch = SegmentChunkStructuralPatch.parse(repairedPatch);
+      let coercedPatch: ReturnType<typeof coerceLegacyChunkStructuralPatch>;
+      try {
+        coercedPatch = coerceLegacyChunkStructuralPatch(repairedPatch);
+      } catch (coercionError) {
+        if (coercionError instanceof z.ZodError) {
+          await emitGlobalStructureEventSafely(input.onResilienceEvent, {
+            type: "legacy_chunk_patch_coercion_failed",
+            error_code: "asset_legacy_chunk_patch_coercion_failed",
+            issues: coercionError.issues.map((issue) => ({
+              code: issue.code,
+              path: [...issue.path],
+            })),
+          });
+        }
+        throw coercionError;
+      }
+      if (coercedPatch.actions.length > 0) {
+        await emitGlobalStructureEventSafely(input.onResilienceEvent, {
+          type: "legacy_chunk_patch_coerced",
+          actions: coercedPatch.actions,
+        });
+      }
+      const patch = coercedPatch.patch;
       const patchedChunkDraft = applyChunkStructuralPatch(
         input.rawChunkDraft,
         patch,
@@ -882,7 +919,7 @@ function summarizeRawChunkDependencies(rawChunkDraft: unknown) {
 
 function applyChunkStructuralPatch(
   rawChunkDraft: unknown,
-  patch: SegmentChunkStructuralPatch,
+  patch: SegmentChunkStructuralPatchType,
 ) {
   if (!rawChunkDraft || typeof rawChunkDraft !== "object") {
     return rawChunkDraft;

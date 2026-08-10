@@ -13,6 +13,7 @@ import { saveScriptRecord } from "../../../backend/src/modules/script/script-rec
 import { saveStoryboardRecord } from "../../../backend/src/modules/storyboard/storyboard-record.repository.js";
 import { saveTopicPackage } from "../../../backend/src/modules/topic/topic-package.repository.js";
 import { runAssetPlanningGeneration } from "../../../backend/src/modules/asset-planning/asset-planning-run.service.js";
+import { LegacyChunkResilienceError } from "../../../backend/src/modules/asset-planning/legacy-chunk-resilience.js";
 import { LlmOutputError } from "../../../backend/src/runtime/llm/llm-output-error.js";
 import type { StoryboardPlan } from "../../../shared/src/index.js";
 
@@ -174,5 +175,71 @@ describe("runAssetPlanningGeneration error classification", () => {
     >;
     expect(executionState.generating).toBe(false);
     expect(executionState.error).toBe("internal_server_error");
+  });
+
+  it("persists bounded legacy timing failure diagnostics without regeneration or activation", async () => {
+    generateAssetPlanMock.mockClear();
+    generateAssetPlanMock.mockImplementation(async (input) => {
+      await input.onGlobalStructureEvent?.({
+        type: "legacy_audio_timing_canonicalization_failed",
+        error_code: "asset_legacy_audio_timing_rebind_ambiguous",
+        issues: [
+          {
+            code: "audio_timing_rebind_ambiguous",
+            path: ["dependencies", 7, "depends_on_task_id"],
+            tts_task_count: 0,
+            dependency_id: "dep-secret",
+            before_task_id: "motion-secret",
+          },
+        ],
+      });
+      throw new LegacyChunkResilienceError([
+        {
+          code: "audio_timing_rebind_ambiguous",
+          path: ["dependencies", 7, "depends_on_task_id"],
+          tts_task_count: 0,
+        },
+      ]);
+    });
+
+    const db = createDbClient();
+    const { project } = await prepareActiveStoryboard(db);
+
+    const response = await runAssetPlanningGeneration({ db, project });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.body).toMatchObject({
+      error: "asset_legacy_audio_timing_rebind_ambiguous",
+      failure_class: "deterministic_resilience",
+      issue_count: 1,
+      issue_paths: ["dependencies[7].depends_on_task_id"],
+    });
+    expect(JSON.stringify(response.body)).not.toContain("dep-secret");
+    expect(JSON.stringify(response.body)).not.toContain("motion-secret");
+    expect(generateAssetPlanMock).toHaveBeenCalledTimes(1);
+    expect(project.activeAssetPlanRecordId).toBeNull();
+    expect(project.status).toBe("storyboard_ready");
+
+    const failedRecord = [...db.assetPlanRecords.values()].at(-1)!;
+    expect(failedRecord.executionStateJson).toMatchObject({
+      generating: false,
+      error: "asset_legacy_audio_timing_rebind_ambiguous",
+      legacy_audio_timing_rebind_failed: true,
+      legacy_audio_timing_issue_count: 1,
+      legacy_audio_timing_issue_paths: [
+        "dependencies[7].depends_on_task_id",
+      ],
+    });
+    expect(JSON.stringify(failedRecord.executionStateJson)).not.toContain(
+      "dep-secret",
+    );
+    expect(failedRecord.runtimeDiagnosticsJson).toMatchObject({
+      checks: expect.arrayContaining([
+        {
+          code: "asset_legacy_audio_timing_rebind_ambiguous",
+          level: "error",
+        },
+      ]),
+    });
   });
 });

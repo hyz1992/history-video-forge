@@ -19,8 +19,9 @@ import {
 import { LlmOutputError } from "../../runtime/llm/llm-output-error.js";
 import {
   generateAssetPlan,
-  type GlobalDraftStructureEvent,
+  type AssetPlanningResilienceEvent,
 } from "./asset-planning-generation.service";
+import { LegacyChunkResilienceError } from "./legacy-chunk-resilience.js";
 import { validateAssetPlan } from "./asset-planning-local-validator";
 import { repairAssetPlanStructure } from "./asset-planning-structural-repair.service";
 import { saveAssetPlanRecord } from "./asset-plan-record.repository";
@@ -28,6 +29,67 @@ import { saveAssetPlanRecord } from "./asset-plan-record.repository";
 export interface RunAssetPlanningGenerationInput {
   db: DbClient;
   project: ProjectRecord;
+}
+
+function writeTraceErrorSafely(writer: TraceLogWriter, message: string) {
+  try {
+    writer.writeError(message);
+  } catch (traceError) {
+    const failureMessage =
+      traceError instanceof Error ? traceError.message : String(traceError);
+    console.warn(
+      `[asset-planning] failed to write error diagnostic: ${failureMessage}`,
+    );
+  }
+}
+
+const NOOP_TRACE_LOG_WRITER: TraceLogWriter = {
+  write() {},
+  writeError() {},
+  writeDiagnostic() {},
+};
+
+function createTraceLogWriterSafely(input: {
+  project: ProjectRecord;
+  runId: string;
+}): TraceLogWriter {
+  try {
+    return createCompositeInteractionLogWriter({
+      project: input.project,
+      phase: "asset_planning",
+      runId: input.runId,
+    });
+  } catch (traceError) {
+    const message =
+      traceError instanceof Error ? traceError.message : String(traceError);
+    console.warn(
+      `[asset-planning] failed to initialize trace writer: ${message}`,
+    );
+    return NOOP_TRACE_LOG_WRITER;
+  }
+}
+
+function persistRunDiagnosticsSafely(input: {
+  project: ProjectRecord;
+  runId: string;
+  traceSummary: Record<string, unknown>;
+  runtimeDiagnostics: Record<string, unknown>;
+}) {
+  try {
+    persistProjectRunArtifacts({
+      project: input.project,
+      phase: "asset_planning",
+      runId: input.runId,
+      traceSummary: input.traceSummary,
+      runtimeDiagnostics: input.runtimeDiagnostics,
+    });
+  } catch (traceError) {
+    const message =
+      traceError instanceof Error ? traceError.message : String(traceError);
+    console.warn(
+      `[asset-planning] failed to persist run diagnostics: ${message}`,
+    );
+  }
 }
 
 function mapScriptDraft(record: ScriptRecord) {
@@ -225,6 +287,30 @@ function buildRuntimeDiagnostics(input: {
       level: "error",
     });
   }
+  if (input.globalStructure?.legacy_chunk_patch_coercion_used) {
+    checks.push({
+      code: "asset_legacy_chunk_patch_coerced",
+      level: "warning",
+    });
+  }
+  if (input.globalStructure?.legacy_chunk_patch_coercion_failed) {
+    checks.push({
+      code: "asset_legacy_chunk_patch_coercion_failed",
+      level: "error",
+    });
+  }
+  if (input.globalStructure?.legacy_audio_timing_rebind_used) {
+    checks.push({
+      code: "asset_legacy_audio_timing_rebound",
+      level: "warning",
+    });
+  }
+  if (input.globalStructure?.legacy_audio_timing_rebind_failed) {
+    checks.push({
+      code: "asset_legacy_audio_timing_rebind_ambiguous",
+      level: "error",
+    });
+  }
 
   return {
     checks: checks.filter(
@@ -234,7 +320,7 @@ function buildRuntimeDiagnostics(input: {
   };
 }
 
-function aggregateGlobalStructureEvents(events: GlobalDraftStructureEvent[]) {
+function aggregateGlobalStructureEvents(events: AssetPlanningResilienceEvent[]) {
   const normalizationActions = events.flatMap((event) =>
     event.type === "normalization_applied" ? event.actions : [],
   );
@@ -244,6 +330,26 @@ function aggregateGlobalStructureEvents(events: GlobalDraftStructureEvent[]) {
         .filter((action) => action.type === "default_inserted")
         .map((action) => action.path),
     ),
+  ].sort();
+  const chunkPatchActions = events.flatMap((event) =>
+    event.type === "legacy_chunk_patch_coerced" ? event.actions : [],
+  );
+  const chunkPatchIssues = events.flatMap((event) =>
+    event.type === "legacy_chunk_patch_coercion_failed" ? event.issues : [],
+  );
+  const chunkPatchIssuePaths = [
+    ...new Set(chunkPatchIssues.map((issue) => formatIssuePath(issue.path))),
+  ].sort();
+  const timingActions = events.flatMap((event) =>
+    event.type === "legacy_audio_timing_canonicalized" ? event.actions : [],
+  );
+  const timingIssues = events.flatMap((event) =>
+    event.type === "legacy_audio_timing_canonicalization_failed"
+      ? event.issues
+      : [],
+  );
+  const timingIssuePaths = [
+    ...new Set(timingIssues.map((issue) => formatIssuePath(issue.path))),
   ].sort();
   return {
     global_structure_normalization_used: normalizationActions.length > 0,
@@ -256,6 +362,25 @@ function aggregateGlobalStructureEvents(events: GlobalDraftStructureEvent[]) {
     global_structural_repair_used: events.some(
       (event) => event.type === "repair_started",
     ),
+    legacy_chunk_patch_coercion_used: chunkPatchActions.length > 0,
+    legacy_chunk_patch_action_types: [
+      ...new Set(chunkPatchActions.map((action) => action.type)),
+    ].sort(),
+    legacy_chunk_patch_action_count: chunkPatchActions.length,
+    legacy_chunk_patch_coercion_failed: chunkPatchIssues.length > 0,
+    legacy_chunk_patch_issue_paths: chunkPatchIssuePaths.slice(0, 20),
+    legacy_chunk_patch_issue_count: chunkPatchIssues.length,
+    legacy_chunk_patch_issues_truncated: chunkPatchIssuePaths.length > 20,
+    legacy_audio_timing_rebind_used: timingActions.some(
+      (action) => action.type === "audio_timing_rebound",
+    ),
+    legacy_audio_timing_rebind_count: timingActions.filter(
+      (action) => action.type === "audio_timing_rebound",
+    ).length,
+    legacy_audio_timing_rebind_failed: timingIssues.length > 0,
+    legacy_audio_timing_issue_paths: timingIssuePaths.slice(0, 20),
+    legacy_audio_timing_issue_count: timingIssues.length,
+    legacy_audio_timing_issues_truncated: timingIssuePaths.length > 20,
   };
 }
 
@@ -291,6 +416,37 @@ function extractIssuePaths(error: unknown) {
       : [],
   );
   return [...new Set(paths)].sort().slice(0, 20);
+}
+
+function buildResilienceFailureTracePayload(input: {
+  errorCode: string;
+  globalStructure: ReturnType<typeof aggregateGlobalStructureEvents>;
+}): Record<string, unknown> | undefined {
+  const isResilienceFailure =
+    input.globalStructure.legacy_chunk_patch_coercion_failed ||
+    input.globalStructure.legacy_audio_timing_rebind_failed;
+  if (!isResilienceFailure) return undefined;
+
+  const issuePaths = [
+    ...new Set([
+      ...input.globalStructure.legacy_chunk_patch_issue_paths,
+      ...input.globalStructure.legacy_audio_timing_issue_paths,
+    ]),
+  ].sort();
+  const issueCount =
+    input.globalStructure.legacy_chunk_patch_issue_count +
+    input.globalStructure.legacy_audio_timing_issue_count;
+
+  return {
+    error_code: input.errorCode,
+    failure_class: "deterministic_resilience",
+    issue_count: issueCount,
+    issue_paths: issuePaths.slice(0, 20),
+    issues_truncated:
+      input.globalStructure.legacy_chunk_patch_issues_truncated ||
+      input.globalStructure.legacy_audio_timing_issues_truncated ||
+      issuePaths.length > 20,
+  };
 }
 
 function isStaleSource(input: {
@@ -369,18 +525,19 @@ export async function runAssetPlanningGeneration(
   const draft = mapScriptDraft(scriptRecord);
   const topicBoundaryContext = mapTopicBoundaryContext(topicPackage);
   const runId = `asset_plan_run_${input.db.generateId()}`;
-  const interactionLogWriter = createCompositeInteractionLogWriter({
+  const interactionLogWriter = createTraceLogWriterSafely({
     project: input.project,
-    phase: "asset_planning",
     runId,
   });
   const previousActiveAssetPlanRecordId = input.project.activeAssetPlanRecordId;
-  const globalStructureEvents: GlobalDraftStructureEvent[] = [];
-  const onGlobalStructureEvent = async (event: GlobalDraftStructureEvent) => {
+  const globalStructureEvents: AssetPlanningResilienceEvent[] = [];
+  const onGlobalStructureEvent = async (event: AssetPlanningResilienceEvent) => {
     globalStructureEvents.push(event);
     try {
       interactionLogWriter.writeDiagnostic(
-        "asset-planning.global-structure",
+        event.type.startsWith("legacy_")
+          ? "asset-planning.resilience"
+          : "asset-planning.global-structure",
         event,
       );
     } catch (traceError) {
@@ -439,7 +596,10 @@ export async function runAssetPlanningGeneration(
         });
       } catch (progressError) {
         const message = progressError instanceof Error ? progressError.message : String(progressError);
-        interactionLogWriter.writeError(`asset_plan_progress_save_failed:${message}`);
+        writeTraceErrorSafely(
+          interactionLogWriter,
+          `asset_plan_progress_save_failed:${message}`,
+        );
       }
     };
 
@@ -652,9 +812,8 @@ export async function runAssetPlanningGeneration(
   input.project.status = "asset_plan_ready";
   input.project.updatedAt = new Date();
   await input.db.secondAggregateWriter?.activateAssetPlan(input.project, assetPlanRecord);
-  persistProjectRunArtifacts({
+  persistRunDiagnosticsSafely({
     project: input.project,
-    phase: "asset_planning",
     runId,
     traceSummary: graphTraceSummary as unknown as Record<string, unknown>,
     runtimeDiagnostics: runtimeDiagnostics as unknown as Record<string, unknown>,
@@ -678,7 +837,10 @@ export async function runAssetPlanningGeneration(
   };
   } catch (error) {
     const errorCode =
-      error instanceof LlmOutputError ? error.code : "internal_server_error";
+      error instanceof LlmOutputError ||
+      error instanceof LegacyChunkResilienceError
+        ? error.code
+        : "internal_server_error";
     const globalStructure = aggregateGlobalStructureEvents(globalStructureEvents);
     const globalStructureFailureCode = globalStructureEvents.some(
       (event) => event.type === "repair_provider_failed",
@@ -728,7 +890,8 @@ export async function runAssetPlanningGeneration(
         console.error(
           `[asset-planning] failed to clear generating state for record ${cleanupRecordId}: ${cleanupMsg}`,
         );
-        interactionLogWriter.writeError(
+        writeTraceErrorSafely(
+          interactionLogWriter,
           `asset_plan_generating_state_cleanup_failed:${cleanupMsg}`,
         );
       });
@@ -737,11 +900,25 @@ export async function runAssetPlanningGeneration(
     input.project.status = previousActiveAssetPlanRecordId ? "asset_plan_ready" : "storyboard_ready";
     input.project.updatedAt = new Date();
     await input.db.firstAggregateWriter?.syncProject(input.project).catch(() => undefined);
-    const message =
-      error instanceof Error ? (error.stack ?? error.message) : String(error);
-    interactionLogWriter.writeError(message);
-    if (error instanceof LlmOutputError && error.cause !== undefined) {
-      interactionLogWriter.writeError(JSON.stringify(error.cause));
+    const resilienceFailureTracePayload = buildResilienceFailureTracePayload({
+      errorCode,
+      globalStructure,
+    });
+    if (resilienceFailureTracePayload) {
+      writeTraceErrorSafely(
+        interactionLogWriter,
+        JSON.stringify(resilienceFailureTracePayload, null, 2),
+      );
+    } else {
+      const message =
+        error instanceof Error ? (error.stack ?? error.message) : String(error);
+      writeTraceErrorSafely(interactionLogWriter, message);
+      if (error instanceof LlmOutputError && error.cause !== undefined) {
+        writeTraceErrorSafely(
+          interactionLogWriter,
+          JSON.stringify(error.cause),
+        );
+      }
     }
     return {
       statusCode: 500,
@@ -751,6 +928,19 @@ export async function runAssetPlanningGeneration(
         repair_used: globalStructure.global_structural_repair_used,
         ...(errorCode === "asset_global_plan_structural_repair_failed"
           ? { issue_paths: extractIssuePaths(error) }
+          : {}),
+        ...(error instanceof LegacyChunkResilienceError
+          ? {
+              failure_class: "deterministic_resilience",
+              issue_count: error.issues.length,
+              issue_paths: [
+                ...new Set(
+                  error.issues.map((issue) => formatIssuePath(issue.path)),
+                ),
+              ]
+                .sort()
+                .slice(0, 20),
+            }
           : {}),
       },
     };

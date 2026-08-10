@@ -14,6 +14,7 @@ vi.mock("../../../backend/src/modules/asset-planning/asset-planning-structural-r
 }));
 
 import { buildApp } from "../../../backend/src/app.js";
+import { LegacyChunkResilienceError } from "../../../backend/src/modules/asset-planning/legacy-chunk-resilience.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import { getProjectSnapshot } from "../../../backend/src/modules/projects/project-snapshot.service.js";
 import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository.js";
@@ -670,6 +671,277 @@ describe("asset planning api", () => {
     expect(trace).toContain('"actions"');
   });
 
+  it("persists redacted wrapper and timing success diagnostics without changing the success contract", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "asset-plan-api-resilience-"));
+    storageRoots.push(root);
+    process.env.STORAGE_ROOT_DIR = root;
+    const app = buildApp();
+    const prepared = await prepareActiveStoryboard(app);
+    generateAssetPlanMock.mockImplementationOnce(async (input) => {
+      await input.onGlobalStructureEvent?.({
+        type: "legacy_chunk_patch_coerced",
+        actions: [
+          { type: "single_wrapper_unwrapped" },
+          { type: "missing_discriminator_defaulted" },
+        ],
+      });
+      await input.onGlobalStructureEvent?.({
+        type: "legacy_audio_timing_canonicalized",
+        actions: [
+          {
+            type: "audio_timing_rebound",
+            dependency_id: "dep-secret",
+            before_task_id: "motion-secret",
+            after_task_id: "tts-secret",
+            reason_code: "invalid_audio_timing_source",
+          },
+        ],
+      });
+      return makeAssetPlan({
+        storyboardRecordId: prepared.storyboardRecord.id,
+        scriptRecordId: prepared.scriptRecord.id,
+        topicPackageId: prepared.topicPackage.id,
+      });
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/asset-plan/generate`,
+      auth,
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body).toMatchObject({
+      asset_plan_record_id: expect.any(String),
+      execution_state: {
+        legacy_chunk_patch_coercion_used: true,
+        legacy_chunk_patch_action_types: [
+          "missing_discriminator_defaulted",
+          "single_wrapper_unwrapped",
+        ],
+        legacy_audio_timing_rebind_used: true,
+        legacy_audio_timing_rebind_count: 1,
+      },
+      runtime_diagnostics: {
+        checks: expect.arrayContaining([
+          { code: "asset_legacy_chunk_patch_coerced", level: "warning" },
+          { code: "asset_legacy_audio_timing_rebound", level: "warning" },
+        ]),
+      },
+    });
+    expect(JSON.stringify(body.execution_state)).not.toContain("dep-secret");
+    expect(JSON.stringify(body.execution_state)).not.toContain("motion-secret");
+    expect(JSON.stringify(body.runtime_diagnostics)).not.toContain("tts-secret");
+
+    const record = app.db.assetPlanRecords.get(body.asset_plan_record_id)!;
+    expect(record.executionStateJson).toMatchObject(body.execution_state);
+    const profile = getProjectStorageProfile(prepared.project)!;
+    const trace = readFileSync(resolve(root, profile.trace_dir, "trace.md"), "utf8");
+    expect(trace).toContain("asset-planning.resilience");
+    expect(trace).toContain('"action_types"');
+    expect(trace).not.toContain("dep-secret");
+    expect(trace).not.toContain("motion-secret");
+    expect(trace).not.toContain("tts-secret");
+  });
+
+  it("returns a bounded timing ambiguity error and restores project state", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "asset-plan-api-timing-failure-"));
+    storageRoots.push(root);
+    process.env.STORAGE_ROOT_DIR = root;
+    const app = buildApp();
+    const prepared = await prepareActiveStoryboard(app);
+    generateAssetPlanMock.mockImplementationOnce(async (input) => {
+      await input.onGlobalStructureEvent?.({
+        type: "legacy_audio_timing_canonicalization_failed",
+        error_code: "asset_legacy_audio_timing_rebind_ambiguous",
+        issues: [
+          {
+            code: "audio_timing_rebind_ambiguous",
+            path: ["dependencies", 4, "depends_on_task_id"],
+            tts_task_count: 2,
+            dependency_id: "dep-secret",
+            before_task_id: "motion-secret",
+          },
+        ],
+      });
+      throw new LegacyChunkResilienceError([
+        {
+          code: "audio_timing_rebind_ambiguous",
+          path: ["dependencies", 4, "depends_on_task_id"],
+          tts_task_count: 2,
+        },
+      ]);
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/asset-plan/generate`,
+      auth,
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toEqual({
+      error: "asset_legacy_audio_timing_rebind_ambiguous",
+      message: "asset_legacy_audio_timing_rebind_ambiguous",
+      repair_used: false,
+      failure_class: "deterministic_resilience",
+      issue_count: 1,
+      issue_paths: ["dependencies[4].depends_on_task_id"],
+    });
+    expect(generateAssetPlanMock).toHaveBeenCalledTimes(1);
+    expect(prepared.project.activeAssetPlanRecordId).toBeNull();
+    expect(prepared.project.status).toBe("storyboard_ready");
+    const failed = [...app.db.assetPlanRecords.values()].at(-1)!;
+    expect(failed.executionStateJson).toMatchObject({
+      generating: false,
+      error: "asset_legacy_audio_timing_rebind_ambiguous",
+      legacy_audio_timing_rebind_failed: true,
+    });
+    expect(failed.runtimeDiagnosticsJson).toMatchObject({
+      checks: expect.arrayContaining([
+        {
+          code: "asset_legacy_audio_timing_rebind_ambiguous",
+          level: "error",
+        },
+      ]),
+    });
+    const profile = getProjectStorageProfile(prepared.project)!;
+    const trace = readFileSync(resolve(root, profile.trace_dir, "trace.md"), "utf8");
+    expect(trace).toContain('"issue_count": 1');
+    expect(trace).not.toContain("dep-secret");
+    expect(trace).not.toContain("motion-secret");
+  });
+
+  it("keeps the bounded timing error when resilience and error trace writes both fail", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "asset-plan-api-timing-trace-failure-"));
+    storageRoots.push(root);
+    process.env.STORAGE_ROOT_DIR = root;
+    const app = buildApp();
+    const prepared = await prepareActiveStoryboard(app);
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    generateAssetPlanMock.mockImplementationOnce(async (input) => {
+      const profile = getProjectStorageProfile(prepared.project)!;
+      const traceDir = resolve(root, profile.trace_dir);
+      rmSync(traceDir, { recursive: true, force: true });
+      writeFileSync(traceDir, "block every trace write", "utf8");
+      await input.onGlobalStructureEvent?.({
+        type: "legacy_audio_timing_canonicalization_failed",
+        error_code: "asset_legacy_audio_timing_rebind_ambiguous",
+        issues: [
+          {
+            code: "audio_timing_rebind_ambiguous",
+            path: ["dependencies", 1, "depends_on_task_id"],
+            tts_task_count: 0,
+          },
+        ],
+      });
+      throw new LegacyChunkResilienceError([
+        {
+          code: "audio_timing_rebind_ambiguous",
+          path: ["dependencies", 1, "depends_on_task_id"],
+          tts_task_count: 0,
+        },
+      ]);
+    });
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: `/api/projects/${prepared.project.id}/asset-plan/generate`,
+        auth,
+      });
+
+      expect(response.statusCode).toBe(500);
+      expect(response.json()).toMatchObject({
+        error: "asset_legacy_audio_timing_rebind_ambiguous",
+        failure_class: "deterministic_resilience",
+        issue_count: 1,
+      });
+      expect(prepared.project.status).toBe("storyboard_ready");
+      expect(prepared.project.activeAssetPlanRecordId).toBeNull();
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining("failed to write global structure diagnostic"),
+      );
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining("failed to write error diagnostic"),
+      );
+    } finally {
+      warning.mockRestore();
+      const profile = getProjectStorageProfile(prepared.project)!;
+      const traceDir = resolve(root, profile.trace_dir);
+      rmSync(traceDir, { force: true });
+      mkdirSync(traceDir, { recursive: true });
+    }
+  });
+
+  it("persists a redacted wrapper coercion failure without changing the chunk error boundary", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "asset-plan-api-wrapper-failure-"));
+    storageRoots.push(root);
+    process.env.STORAGE_ROOT_DIR = root;
+    const app = buildApp();
+    const prepared = await prepareActiveStoryboard(app);
+    generateAssetPlanMock.mockImplementationOnce(async (input) => {
+      await input.onGlobalStructureEvent?.({
+        type: "legacy_chunk_patch_coercion_failed",
+        error_code: "asset_legacy_chunk_patch_coercion_failed",
+        issues: [
+          {
+            code: "unrecognized_keys",
+            path: ["patch_fields"],
+            dependency_id: "dep-secret",
+          },
+        ],
+      });
+      throw new LlmOutputError("asset_chunk_plan_schema_invalid", {
+        cause: [
+          {
+            code: "unrecognized_keys",
+            path: ["patch_fields"],
+            message: "secret-zod-message-for-task-secret",
+            received: "dependency-secret-received-value",
+            keys: ["secret_unknown_wrapper_key"],
+          },
+        ],
+      });
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/asset-plan/generate`,
+      auth,
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toMatchObject({
+      error: "asset_chunk_plan_schema_invalid",
+    });
+    expect(response.json()).not.toHaveProperty("issue_paths");
+    const failed = [...app.db.assetPlanRecords.values()].at(-1)!;
+    expect(failed.executionStateJson).toMatchObject({
+      legacy_chunk_patch_coercion_failed: true,
+      legacy_chunk_patch_issue_count: 1,
+      legacy_chunk_patch_issue_paths: ["patch_fields"],
+    });
+    expect(failed.runtimeDiagnosticsJson).toMatchObject({
+      checks: expect.arrayContaining([
+        {
+          code: "asset_legacy_chunk_patch_coercion_failed",
+          level: "error",
+        },
+      ]),
+    });
+    const profile = getProjectStorageProfile(prepared.project)!;
+    const trace = readFileSync(resolve(root, profile.trace_dir, "trace.md"), "utf8");
+    expect(trace).toContain('"issue_paths"');
+    expect(trace).toContain('"error_code": "asset_chunk_plan_schema_invalid"');
+    expect(trace).toContain('"failure_class": "deterministic_resilience"');
+    expect(trace).not.toContain("dep-secret");
+    expect(trace).not.toContain("secret-zod-message-for-task-secret");
+    expect(trace).not.toContain("dependency-secret-received-value");
+    expect(trace).not.toContain("secret_unknown_wrapper_key");
+  });
+
   it("caps normalized paths at 50 while retaining the pre-truncation count", async () => {
     const app = buildApp();
     const prepared = await prepareActiveStoryboard(app);
@@ -837,6 +1109,60 @@ describe("asset planning api", () => {
     expect(response.json().execution_state.global_structure_normalization_used).toBe(true);
     expect(warning).toHaveBeenCalledWith(expect.stringContaining("failed to write global structure diagnostic"));
     warning.mockRestore();
+  });
+
+  it("activates a successful plan when trace storage stays unavailable from writer initialization through artifact persistence", async () => {
+    const root = mkdtempSync(resolve(tmpdir(), "asset-plan-api-trace-unavailable-success-"));
+    storageRoots.push(root);
+    process.env.STORAGE_ROOT_DIR = root;
+    const app = buildApp();
+    const prepared = await prepareActiveStoryboard(app);
+    const profile = getProjectStorageProfile(prepared.project)!;
+    const traceDir = resolve(root, profile.trace_dir);
+    mkdirSync(resolve(traceDir, ".."), { recursive: true });
+    rmSync(traceDir, { recursive: true, force: true });
+    writeFileSync(traceDir, "block trace storage for the whole request", "utf8");
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    generateAssetPlanMock.mockResolvedValueOnce(
+      makeAssetPlan({
+        storyboardRecordId: prepared.storyboardRecord.id,
+        scriptRecordId: prepared.scriptRecord.id,
+        topicPackageId: prepared.topicPackage.id,
+      }),
+    );
+
+    try {
+      const response = await app.inject({
+        method: "POST",
+        url: `/api/projects/${prepared.project.id}/asset-plan/generate`,
+        auth,
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body).toMatchObject({
+        asset_plan_record_id: expect.any(String),
+        execution_state: { regenerate_used: false },
+      });
+      expect(generateAssetPlanMock).toHaveBeenCalledTimes(1);
+      expect(prepared.project.status).toBe("asset_plan_ready");
+      expect(prepared.project.activeAssetPlanRecordId).toBe(
+        body.asset_plan_record_id,
+      );
+      expect(app.db.assetPlanRecords.get(body.asset_plan_record_id)).toMatchObject({
+        id: body.asset_plan_record_id,
+      });
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining("failed to initialize trace writer"),
+      );
+      expect(warning).toHaveBeenCalledWith(
+        expect.stringContaining("failed to persist run diagnostics"),
+      );
+    } finally {
+      warning.mockRestore();
+      rmSync(traceDir, { force: true });
+      mkdirSync(traceDir, { recursive: true });
+    }
   });
 
   it("returns 409 and does not activate when the active storyboard changes during generation", async () => {
