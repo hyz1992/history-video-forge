@@ -17,6 +17,7 @@ import {
   type TraceLogWriter,
 } from "../../runtime/trace/project-storage.js";
 import { LlmOutputError } from "../../runtime/llm/llm-output-error.js";
+import { getValidatedRuntimeEnv } from "../../config/env.js";
 import {
   generateAssetPlan,
   type AssetPlanningResilienceEvent,
@@ -25,6 +26,10 @@ import { LegacyChunkResilienceError } from "./legacy-chunk-resilience.js";
 import { validateAssetPlan } from "./asset-planning-local-validator";
 import { repairAssetPlanStructure } from "./asset-planning-structural-repair.service";
 import { saveAssetPlanRecord } from "./asset-plan-record.repository";
+import {
+  AssetPlanCompilerInvariantError,
+  type AssetPlanCompilerIssue,
+} from "./asset-plan-intent-compiler.js";
 
 export interface RunAssetPlanningGenerationInput {
   db: DbClient;
@@ -392,6 +397,91 @@ function formatIssuePath(path: Array<string | number>) {
   }, "");
 }
 
+const SAFE_COMPILER_ISSUE_CODES = new Set([
+  "storyboard_order_invalid",
+  "storyboard_segment_id_duplicate",
+  "chunk_index_duplicate",
+  "chunk_index_sequence_invalid",
+  "chunk_segment_sequence_mismatch",
+  "unknown_segment",
+  "missing_segment",
+  "duplicate_segment",
+  "visual_strategy_mismatch",
+  "audio_skeleton_mismatch",
+  "unsupported_intent_kind",
+  "global_bgm_owner_invalid",
+  "visual_anchor_duplicate",
+  "visual_anchor_missing",
+  "task_id_collision",
+  "dependency_endpoint_invalid",
+  "dependency_duplicate",
+  "compiled_plan_schema_invalid",
+  "asset_audio_cue_no_input_contract",
+  "asset_dependency_cycle_detected",
+  "asset_dependency_task_missing",
+  "asset_dependency_timing_source_invalid",
+  "asset_plan_source_script_mismatch",
+  "asset_plan_source_storyboard_mismatch",
+  "asset_plan_source_topic_mismatch",
+  "asset_plan_zero_video_clip_without_explanation",
+  "asset_subtitle_missing_tts_dependency",
+  "asset_task_id_duplicate",
+  "asset_task_order_invalid",
+  "asset_task_source_segment_invalid",
+  "asset_tts_excerpt_drift",
+  "asset_tts_script_coverage_low",
+  "asset_tts_script_coverage_missing",
+  "asset_video_missing_static_fallback",
+  "asset_visual_prompt_missing",
+  "asset_visual_risk_notes_missing",
+]);
+
+const SAFE_COMPILER_PATH_FIELDS = new Set([
+  "sourceIds", "storyboardRecordId", "scriptRecordId", "topicPackageId",
+  "storyboard", "segments", "segment_id", "order", "draft", "globalDraft",
+  "audioSkeleton", "tts_plan", "tasks", "dependencies", "chunks",
+  "chunkIndex", "inputSegmentIds", "planning_mode", "source_segment_id",
+  "intents", "asset_kind", "task_id", "dependency_id", "depends_on_task_id",
+  "dependency_type", "visual_strategy_preference", "art_bible",
+  "visual_budget", "downgrade_policy", "global_audio_strategy",
+]);
+
+function redactCompilerInvariantIssues(
+  issues: AssetPlanCompilerIssue[],
+  storyboard: StoryboardPlan,
+) {
+  const trustedSegmentIds = new Set(
+    storyboard.segments
+      .map((segment) => segment.segment_id)
+      .filter((segmentId) => segmentId.length <= 128),
+  );
+  return issues.slice(0, 50).map((issue) => ({
+    code: SAFE_COMPILER_ISSUE_CODES.has(issue.code)
+      ? issue.code
+      : "compiler_invariant_issue",
+    path: (issue.path ?? []).slice(0, 12).map((part) => {
+      if (typeof part === "string") {
+        return SAFE_COMPILER_PATH_FIELDS.has(part) ? part : "$unknown";
+      }
+      return Number.isSafeInteger(part) && part >= 0 ? part : "$index";
+    }),
+    segment_id:
+      issue.segment_id !== undefined && trustedSegmentIds.has(issue.segment_id)
+        ? issue.segment_id
+        : null,
+    task_id:
+      issue.task_id !== undefined && /^[a-z][a-z0-9_-]{0,63}$/u.test(issue.task_id)
+        ? issue.task_id
+        : null,
+    chunk_index:
+      issue.chunk_index !== undefined &&
+      Number.isSafeInteger(issue.chunk_index) &&
+      issue.chunk_index >= 0
+        ? issue.chunk_index
+        : null,
+  }));
+}
+
 function extractIssuePaths(error: unknown) {
   if (!(error instanceof LlmOutputError) || error.cause === undefined) return [];
   const cause = error.cause as Record<string, unknown>;
@@ -489,6 +579,7 @@ function buildValidationInput(input: {
 export async function runAssetPlanningGeneration(
   input: RunAssetPlanningGenerationInput,
 ) {
+  const generationMode = getValidatedRuntimeEnv().assetPlanningGenerationMode;
   if (!input.project.activeStoryboardRecordId) {
     return {
       statusCode: 409,
@@ -551,6 +642,8 @@ export async function runAssetPlanningGeneration(
   let generatingRecord:
     | Awaited<ReturnType<typeof saveAssetPlanRecord>>
     | undefined;
+  let acceptProgressUpdates = true;
+  let progressWriteChain: Promise<void> = Promise.resolve();
 
   try {
     // Save preliminary record BEFORE plan generation so refresh shows generating state
@@ -568,11 +661,13 @@ export async function runAssetPlanningGeneration(
     input.project.status = "asset_plan_generating";
     await input.db.firstAggregateWriter?.syncProject(input.project);
 
-    const onProgress = async (progress: import("./asset-planning-generation.service.js").AssetPlanGenerationProgress) => {
-      if (!generatingRecord) return;
+    const onProgress = (progress: import("./asset-planning-generation.service.js").AssetPlanGenerationProgress) => {
+      if (!acceptProgressUpdates || !generatingRecord) return;
       const record = generatingRecord;
-      try {
-        await saveAssetPlanRecord(input.db, {
+      const queuedWrite = progressWriteChain.then(async () => {
+        if (!acceptProgressUpdates) return;
+        try {
+          await saveAssetPlanRecord(input.db, {
           id: record.id,
           projectId: record.projectId,
           topicPackageId: record.topicPackageId,
@@ -593,14 +688,17 @@ export async function runAssetPlanningGeneration(
           graphTraceSummaryJson: record.graphTraceSummaryJson,
           runtimeDiagnosticsJson: record.runtimeDiagnosticsJson,
           createdAt: record.createdAt,
-        });
-      } catch (progressError) {
-        const message = progressError instanceof Error ? progressError.message : String(progressError);
-        writeTraceErrorSafely(
-          interactionLogWriter,
-          `asset_plan_progress_save_failed:${message}`,
-        );
-      }
+          });
+        } catch (progressError) {
+          const message = progressError instanceof Error ? progressError.message : String(progressError);
+          writeTraceErrorSafely(
+            interactionLogWriter,
+            `asset_plan_progress_save_failed:${message}`,
+          );
+        }
+      });
+      progressWriteChain = queuedWrite;
+      return queuedWrite;
     };
 
     let plan = await generateAssetPlan({
@@ -610,6 +708,7 @@ export async function runAssetPlanningGeneration(
     storyboard,
     draft,
     topicBoundaryContext,
+    generationMode,
     interactionLogWriter,
     onProgress,
     onGlobalStructureEvent,
@@ -657,6 +756,7 @@ export async function runAssetPlanningGeneration(
       storyboard,
       draft,
       topicBoundaryContext,
+      generationMode,
       interactionLogWriter,
       onGlobalStructureEvent,
       regenerationContext: {
@@ -697,6 +797,8 @@ export async function runAssetPlanningGeneration(
     plan_structural_repair_used: planStructuralRepairUsed,
     ...aggregateGlobalStructureEvents(globalStructureEvents),
   };
+  acceptProgressUpdates = false;
+  await progressWriteChain;
 
   if (localValidation.decision !== "pass") {
     // Clean up generating state — validation failed
@@ -836,11 +938,22 @@ export async function runAssetPlanningGeneration(
     },
   };
   } catch (error) {
+    acceptProgressUpdates = false;
+    await progressWriteChain;
     const errorCode =
       error instanceof LlmOutputError ||
-      error instanceof LegacyChunkResilienceError
+      error instanceof LegacyChunkResilienceError ||
+      error instanceof AssetPlanCompilerInvariantError
         ? error.code
         : "internal_server_error";
+    const compilerInvariantFailure =
+      error instanceof AssetPlanCompilerInvariantError
+        ? {
+            issue_count: error.issues.length,
+            issues_truncated: error.issues.length > 50,
+            issues: redactCompilerInvariantIssues(error.issues, storyboard),
+          }
+        : undefined;
     const globalStructure = aggregateGlobalStructureEvents(globalStructureEvents);
     const globalStructureFailureCode = globalStructureEvents.some(
       (event) => event.type === "repair_provider_failed",
@@ -850,16 +963,21 @@ export async function runAssetPlanningGeneration(
           errorCode === "asset_global_plan_structural_repair_failed"
         ? "asset_global_structural_repair_failed"
         : undefined;
-    const failureDiagnostics = buildRuntimeDiagnostics({
-      validationDecision: "pass",
-      validationErrors: [],
-      regenerated: false,
-      planStructuralRepairUsed: false,
-      staleSourceDetected: false,
-      globalStructure,
-      globalStructureFailureCode,
-      includeLocalValidation: false,
-    });
+    const failureDiagnostics = {
+      ...buildRuntimeDiagnostics({
+        validationDecision: "pass",
+        validationErrors: [],
+        regenerated: false,
+        planStructuralRepairUsed: false,
+        staleSourceDetected: false,
+        globalStructure,
+        globalStructureFailureCode,
+        includeLocalValidation: false,
+      }),
+      ...(compilerInvariantFailure
+        ? { compiler_invariant_failure: compilerInvariantFailure }
+        : {}),
+    };
     const failureExecutionState = {
       ...globalStructure,
       generating: false,
@@ -904,7 +1022,15 @@ export async function runAssetPlanningGeneration(
       errorCode,
       globalStructure,
     });
-    if (resilienceFailureTracePayload) {
+    if (compilerInvariantFailure) {
+      writeTraceErrorSafely(
+        interactionLogWriter,
+        JSON.stringify({
+          error_code: "asset_plan_compiler_invariant_failed",
+          compiler_invariant_failure: compilerInvariantFailure,
+        }),
+      );
+    } else if (resilienceFailureTracePayload) {
       writeTraceErrorSafely(
         interactionLogWriter,
         JSON.stringify(resilienceFailureTracePayload, null, 2),

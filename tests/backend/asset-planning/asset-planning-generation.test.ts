@@ -337,6 +337,56 @@ function makeInput(llmGateway: LlmGateway, chunkSize = 2) {
   };
 }
 
+function validIntentDraftFor(segments: StoryboardPlan["segments"], first: boolean) {
+  return {
+    planning_mode: "segment_intent_batch",
+    segments: segments.map((segment, index) => ({
+      source_segment_id: segment.segment_id,
+      intents: [
+        {
+          asset_kind: "image_still",
+          production_intent: `生成 ${segment.segment_id} 主视觉`,
+          image_prompt: `历史写实画面，${segment.scene_description}`,
+          video_prompt_reserve: `历史写实视频，${segment.scene_description}`,
+          image_role: "anchor",
+          support_reason: null,
+          risk_notes: ["避免现代元素"],
+        },
+        ...(segment.visual_strategy_preference === "api_video"
+          ? [{
+              asset_kind: "video_clip",
+              production_intent: `为 ${segment.segment_id} 生成视频`,
+              video_prompt: `历史写实视频，${segment.scene_description}`,
+              why_static_insufficient: "动作连续性必须由视频表达",
+              risk_notes: ["避免现代元素"],
+            }]
+          : [{
+              asset_kind: "render_motion_cue",
+              production_intent: `为 ${segment.segment_id} 添加轻微运镜`,
+              risk_notes: ["保持主体稳定"],
+            }]),
+        ...(first && index === 0
+          ? [{
+              asset_kind: "bgm_cue",
+              production_intent: "生成全片克制底乐",
+              required_tags: ["克制"],
+              mood_tags: ["紧张"],
+              selection_label: "全片底乐",
+              timing_basis: "tts",
+              scope: "global",
+              segment_ids: [],
+              volume: 0.35,
+              fade_in_sec: 0.5,
+              fade_out_sec: 1,
+              risk_notes: [],
+            }]
+          : []),
+      ],
+    })),
+    budget_notes: ["intent compiler 测试预算"],
+  };
+}
+
 function makeStoryboardWithSegmentCount(count: number): StoryboardPlan {
   return {
     ...baseStoryboardPlan,
@@ -367,6 +417,103 @@ async function waitUntil(predicate: () => boolean) {
 }
 
 describe("generateAssetPlan", () => {
+  it("uses exactly one intent planner call per chunk and compiles in storyboard order", async () => {
+    const storyboard = structuredClone(baseStoryboardPlan);
+    storyboard.segments[0]!.visual_strategy_preference = "api_video";
+    storyboard.segments[1]!.visual_strategy_preference = "remotion_motion";
+    storyboard.segments[2]!.visual_strategy_preference = null;
+    const { gateway, calls } = makeGateway(async (options) => {
+      if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+      if (options.promptId === "asset-planning.segment-intent-planner") {
+        const promptInput = options.input as { is_first_chunk: boolean; segments: StoryboardPlan["segments"] };
+        if (promptInput.is_first_chunk) {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        return validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
+      }
+      throw new Error(`unexpected_prompt:${options.promptId}`);
+    });
+
+    const plan = await generateAssetPlan({
+      ...makeInput(gateway, 2),
+      storyboard,
+      generationMode: "intent_compiler",
+    });
+
+    expect(AssetPlan.parse(plan)).toEqual(plan);
+    expect(calls.filter((call) => call.promptId === "asset-planning.planner")).toHaveLength(1);
+    expect(calls.filter((call) => call.promptId === "asset-planning.segment-intent-planner")).toHaveLength(2);
+    expect(calls.some((call) => call.promptId.includes("repair"))).toBe(false);
+    expect(plan.tasks.map((task) => task.order)).toEqual(
+      plan.tasks.map((_, index) => index),
+    );
+    expect(plan.tasks.find((task) => task.source_segment_id === "sb_001" && task.task_type === "video_clip"))
+      .toBeDefined();
+    expect(plan.tasks.find((task) => task.source_segment_id === "sb_002" && task.task_type === "render_motion_cue"))
+      .toBeDefined();
+    expect(plan.tasks.some((task) => task.source_segment_id === "sb_002" && task.task_type === "video_clip"))
+      .toBe(false);
+    expect(plan.tasks.filter((task) => task.task_type === "tts_audio" || task.task_type === "subtitle_track"))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ task_id: "tts_001" }),
+        expect.objectContaining({ task_id: "subtitle_001" }),
+      ]));
+  });
+
+  it("fails invalid intent output immediately without legacy or repair prompts", async () => {
+    const rawSecret = `RAW_SECRET_FROM_MODEL_${"x".repeat(300)}`;
+    const { gateway, calls } = makeGateway((options) => {
+      if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
+      if (options.promptId === "asset-planning.segment-intent-planner") {
+        return {
+          planning_mode: "segment_intent_batch",
+          segments: [{
+            source_segment_id: rawSecret,
+            intents: [{ asset_kind: "image_still", [rawSecret]: rawSecret }],
+          }],
+          budget_notes: [],
+          [rawSecret]: rawSecret,
+        };
+      }
+      throw new Error(`forbidden_prompt:${options.promptId}`);
+    });
+
+    const failure = await generateAssetPlan({
+      ...makeInput(gateway, 3),
+      generationMode: "intent_compiler",
+    }).catch((error: unknown) => error);
+    expect(failure).toMatchObject({
+      code: "asset_segment_intent_invalid",
+      cause: { issues: expect.any(Array) },
+    });
+    const serializedFailure = JSON.stringify(failure);
+    expect(serializedFailure).not.toContain("RAW_SECRET_FROM_MODEL");
+    const safeIssues = (failure as LlmOutputError).cause as {
+      issues: Array<{ path: Array<string | number>; segment_id: string | null }>;
+    };
+    expect(safeIssues.issues.every((issue) => issue.path.length <= 12)).toBe(true);
+    expect(safeIssues.issues.every((issue) => issue.segment_id === null || baseStoryboardPlan.segments.some(
+      (segment) => segment.segment_id === issue.segment_id,
+    ))).toBe(true);
+    expect(calls.map((call) => call.promptId)).toEqual([
+      "asset-planning.planner",
+      "asset-planning.segment-intent-planner",
+    ]);
+  });
+
+  it("keeps default and explicit legacy behavior identical and never calls intent planner", async () => {
+    const defaultRun = makeGateway();
+    const explicitRun = makeGateway();
+    const defaultPlan = await generateAssetPlan(makeInput(defaultRun.gateway));
+    const explicitPlan = await generateAssetPlan({
+      ...makeInput(explicitRun.gateway),
+      generationMode: "legacy",
+    });
+    expect(explicitPlan).toEqual(defaultPlan);
+    expect([...defaultRun.calls, ...explicitRun.calls].some(
+      (call) => call.promptId === "asset-planning.segment-intent-planner",
+    )).toBe(false);
+  });
   it("normalizes the real eight-prop missing-notes fixture without global repair", async () => {
     const events: GlobalDraftStructureEvent[] = [];
     const { gateway, calls } = makeGateway((options) => {

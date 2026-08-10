@@ -5,10 +5,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const generateAssetPlanMock = vi.hoisted(() => vi.fn());
 const repairAssetPlanStructureMock = vi.hoisted(() => vi.fn());
-
-vi.mock("../../../backend/src/modules/asset-planning/asset-planning-generation.service.js", () => ({
-  generateAssetPlan: generateAssetPlanMock,
+const actualGenerationState = vi.hoisted(() => ({
+  enabled: false,
+  gateway: null as unknown,
 }));
+
+vi.mock("../../../backend/src/modules/asset-planning/asset-planning-generation.service.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../backend/src/modules/asset-planning/asset-planning-generation.service.js")>();
+  return {
+    ...actual,
+    generateAssetPlan: (input: Parameters<typeof actual.generateAssetPlan>[0]) => {
+      if (!actualGenerationState.enabled) return generateAssetPlanMock(input);
+      generateAssetPlanMock(input);
+      return actual.generateAssetPlan({
+        ...input,
+        llmGateway: actualGenerationState.gateway as Parameters<typeof actual.generateAssetPlan>[0]["llmGateway"],
+      });
+    },
+  };
+});
 vi.mock("../../../backend/src/modules/asset-planning/asset-planning-structural-repair.service.js", () => ({
   repairAssetPlanStructure: repairAssetPlanStructureMock,
 }));
@@ -321,12 +336,150 @@ describe("asset planning api", () => {
   const auth = buildTestAuth({ userId: "owner-1" });
 
   beforeEach(() => {
+    actualGenerationState.enabled = false;
+    actualGenerationState.gateway = null;
     generateAssetPlanMock.mockReset();
     repairAssetPlanStructureMock.mockReset();
     repairAssetPlanStructureMock.mockImplementation(async (input) => ({
       plan: input.plan,
       repairUsed: false,
     }));
+  });
+
+  it("redacts invalid intent metadata across the real generation and API failure boundary", async () => {
+    const previousMode = process.env.ASSET_PLANNING_GENERATION_MODE;
+    const rawSecret = `RAW_SECRET_FROM_MODEL_${"x".repeat(300)}`;
+    const root = mkdtempSync(resolve(tmpdir(), "asset-plan-api-intent-invalid-"));
+    storageRoots.push(root);
+    process.env.STORAGE_ROOT_DIR = root;
+    process.env.ASSET_PLANNING_GENERATION_MODE = "intent_compiler";
+    try {
+      const calls: string[] = [];
+      actualGenerationState.enabled = true;
+      actualGenerationState.gateway = {
+        invokeStructuredPrompt: vi.fn(async (options: { promptId: string }) => {
+          calls.push(options.promptId);
+          if (options.promptId === "asset-planning.planner") {
+            return {
+              planning_mode: "global",
+              art_bible: {
+                era_style: "ancient court", visual_tone: "restrained realism",
+                characters: [], locations: [], props: [],
+                global_prompt_prefix: "historical realism",
+                global_negative_prompts: ["modern objects"],
+                consistency_notes: ["consistent visual style"],
+              },
+              visual_budget: { mode: "balanced" },
+              downgrade_policy: { video_to_image: true },
+              global_audio_strategy: {},
+              manual_review_notes: [],
+            };
+          }
+          if (options.promptId === "asset-planning.segment-intent-planner") {
+            return {
+              planning_mode: "segment_intent_batch",
+              segments: [{ source_segment_id: rawSecret, intents: [], [rawSecret]: rawSecret }],
+              budget_notes: [],
+              [rawSecret]: rawSecret,
+            };
+          }
+          throw new Error(`unexpected_prompt:${options.promptId}`);
+        }),
+        invokeStrictStructured: vi.fn(),
+      };
+      const app = buildApp();
+      const prepared = await prepareActiveStoryboard(app);
+      const previousActiveId = "asset_plan_record_previous";
+      prepared.project.activeAssetPlanRecordId = previousActiveId;
+      prepared.project.status = "asset_plan_ready";
+
+      const response = await app.inject({
+        method: "POST",
+        url: `/api/projects/${prepared.project.id}/asset-plan/generate`,
+        auth,
+      });
+
+      expect(response.statusCode).toBe(500);
+      expect(response.json()).toMatchObject({ error: "asset_segment_intent_invalid" });
+      expect(calls).toEqual([
+        "asset-planning.planner",
+        "asset-planning.segment-intent-planner",
+      ]);
+      expect(generateAssetPlanMock).toHaveBeenCalledTimes(1);
+      expect(repairAssetPlanStructureMock).not.toHaveBeenCalled();
+      expect(prepared.project.activeAssetPlanRecordId).toBe(previousActiveId);
+      expect(prepared.project.status).toBe("asset_plan_ready");
+      const failed = [...app.db.assetPlanRecords.values()].at(-1)!;
+      expect(failed.id).not.toBe(previousActiveId);
+      expect(failed.executionStateJson).toMatchObject({ generating: false, error: "asset_segment_intent_invalid" });
+      const persisted = JSON.stringify({
+        api: response.json(),
+        execution: failed.executionStateJson,
+        diagnostics: failed.runtimeDiagnosticsJson,
+      });
+      expect(persisted).not.toContain("RAW_SECRET_FROM_MODEL");
+      const profile = getProjectStorageProfile(prepared.project)!;
+      const trace = readFileSync(resolve(root, profile.trace_dir, "trace.md"), "utf8");
+      expect(trace).not.toContain("RAW_SECRET_FROM_MODEL");
+      const issuePaths = [...trace.matchAll(/"path":(\[[^\]]*\])/gu)].map(
+        (match) => JSON.parse(match[1]!) as Array<string | number>,
+      );
+      expect(issuePaths.length).toBeGreaterThan(0);
+      expect(issuePaths.every((path) => path.length <= 12)).toBe(true);
+      expect(issuePaths.flatMap((path) => path).every((part) =>
+        typeof part === "number" || part.length <= 32,
+      )).toBe(true);
+    } finally {
+      actualGenerationState.enabled = false;
+      actualGenerationState.gateway = null;
+      if (previousMode === undefined) delete process.env.ASSET_PLANNING_GENERATION_MODE;
+      else process.env.ASSET_PLANNING_GENERATION_MODE = previousMode;
+    }
+  });
+
+  it("freezes generation mode once for the whole request without exposing it in the API", async () => {
+    const previousMode = process.env.ASSET_PLANNING_GENERATION_MODE;
+    process.env.ASSET_PLANNING_GENERATION_MODE = "intent_compiler";
+    try {
+      const app = buildApp();
+      const prepared = await prepareActiveStoryboard(app);
+      generateAssetPlanMock
+        .mockImplementationOnce(async () => {
+          process.env.ASSET_PLANNING_GENERATION_MODE = "legacy";
+          return makeAssetPlan({
+            storyboardRecordId: prepared.storyboardRecord.id,
+            scriptRecordId: prepared.scriptRecord.id,
+            sourceScriptOverride: "force_regeneration",
+            topicPackageId: prepared.topicPackage.id,
+          });
+        })
+        .mockResolvedValueOnce(
+          makeAssetPlan({
+            storyboardRecordId: prepared.storyboardRecord.id,
+            scriptRecordId: prepared.scriptRecord.id,
+            topicPackageId: prepared.topicPackage.id,
+          }),
+        );
+
+      const response = await app.inject({
+        method: "POST",
+        url: `/api/projects/${prepared.project.id}/asset-plan/generate`,
+        auth,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(generateAssetPlanMock).toHaveBeenCalledTimes(2);
+      for (const [generationInput] of generateAssetPlanMock.mock.calls) {
+        expect(generationInput).toEqual(
+          expect.objectContaining({ generationMode: "intent_compiler" }),
+        );
+      }
+      expect(response.json()).not.toHaveProperty("generation_mode");
+      expect(response.json()).not.toHaveProperty("mode");
+    } finally {
+      if (previousMode === undefined) delete process.env.ASSET_PLANNING_GENERATION_MODE;
+      else process.env.ASSET_PLANNING_GENERATION_MODE = previousMode;
+    }
   });
 
   afterEach(() => {

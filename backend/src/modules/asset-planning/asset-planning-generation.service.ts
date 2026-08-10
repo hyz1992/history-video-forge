@@ -8,6 +8,7 @@ import {
   type StoryboardPlan,
 } from "../../../../shared/src/index.js";
 import { env, getValidatedRuntimeEnv } from "../../config/env.js";
+import type { AssetPlanningGenerationMode } from "../../config/env.js";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
 import { ExternalServiceError } from "../../runtime/llm/external-errors.js";
 import type { LlmInteractionLogWriter } from "../../runtime/llm/interaction-log.js";
@@ -34,12 +35,118 @@ import {
   type SegmentChunkStructuralPatch as SegmentChunkStructuralPatchType,
 } from "./legacy-chunk-resilience.js";
 import { enrichAssetVisualPrompt } from "./asset-plan-prompt-enrichment.js";
-import type { LocalAudioSkeleton } from "./asset-plan-intent-compiler.js";
+import {
+  compileAssetPlanFromIntents,
+  type CompiledIntentChunkInput,
+  type LocalAudioSkeleton,
+} from "./asset-plan-intent-compiler.js";
+import { buildSegmentIntentPlannerInput } from "./segment-intent-prompt-input.js";
+import { inspectSegmentIntentBatch } from "./segment-asset-intent.js";
 
 const PROMPT_ID = "asset-planning.planner";
 const STRUCTURAL_REPAIR_PROMPT_ID = "asset-planning.asset-structural-repair";
 const GLOBAL_STRUCTURAL_REPAIR_PROMPT_ID =
   "asset-planning.global-structural-repair";
+const SEGMENT_INTENT_PLANNER_PROMPT_ID =
+  "asset-planning.segment-intent-planner";
+
+const SAFE_INTENT_ISSUE_CODES = new Set([
+  "missing_required_field",
+  "invalid_type",
+  "invalid_literal",
+  "invalid_union",
+  "invalid_union_discriminator",
+  "invalid_enum_value",
+  "invalid_arguments",
+  "invalid_return_type",
+  "invalid_date",
+  "invalid_string",
+  "invalid_intersection_types",
+  "unrecognized_keys",
+  "custom",
+  "too_small",
+  "too_big",
+  "not_multiple_of",
+  "not_finite",
+  "missing_required_intent_kind",
+  "global_bgm_owner_invalid",
+  "global_bgm_segment_ids_invalid",
+  "bgm_segment_ids_empty",
+  "bgm_segment_ids_duplicate",
+  "bgm_segment_ids_outside_chunk",
+  "bgm_segment_ids_not_ordered",
+  "unknown_segment",
+  "duplicate_segment",
+  "visual_anchor_count_invalid",
+  "duplicate_intent_kind",
+  "visual_anchor_binding_invalid",
+  "visual_strategy_mismatch",
+  "missing_segment",
+]);
+
+const SAFE_INTENT_ISSUE_PATH_FIELDS = new Set([
+  "planning_mode",
+  "segments",
+  "source_segment_id",
+  "intents",
+  "asset_kind",
+  "production_intent",
+  "image_prompt",
+  "video_prompt_reserve",
+  "image_role",
+  "support_reason",
+  "risk_notes",
+  "video_prompt",
+  "why_static_insufficient",
+  "required_tags",
+  "mood_tags",
+  "selection_label",
+  "timing_basis",
+  "scope",
+  "segment_ids",
+  "volume",
+  "fade_in_sec",
+  "fade_out_sec",
+  "budget_notes",
+]);
+
+const SAFE_INTENT_KINDS = new Set([
+  "image_still",
+  "video_clip",
+  "render_motion_cue",
+  "sfx_cue",
+  "bgm_cue",
+]);
+
+function redactIntentIssues(
+  issues: ReturnType<typeof inspectSegmentIntentBatch>["issues"],
+  segments: StoryboardPlan["segments"],
+) {
+  const trustedSegmentIds = new Set(
+    segments
+      .map((segment) => segment.segment_id)
+      .filter((segmentId) => segmentId.length <= 128),
+  );
+  return issues.slice(0, 50).map((issue) => ({
+    code: SAFE_INTENT_ISSUE_CODES.has(issue.code)
+      ? issue.code
+      : "segment_intent_issue",
+    path: issue.path.slice(0, 12).map((part) => {
+      if (typeof part === "string") {
+        return SAFE_INTENT_ISSUE_PATH_FIELDS.has(part) ? part : "$unknown";
+      }
+      return Number.isSafeInteger(part) && part >= 0 ? part : "$index";
+    }),
+    segment_id:
+      issue.segment_id !== null && trustedSegmentIds.has(issue.segment_id)
+        ? issue.segment_id
+        : null,
+    expected_kind:
+      issue.expected_kind !== null && SAFE_INTENT_KINDS.has(issue.expected_kind)
+        ? issue.expected_kind
+        : null,
+  }));
+}
 
 export interface AssetPlanningTopicBoundaryContext {
   title: string;
@@ -107,6 +214,7 @@ export type AssetPlanningResilienceEvent =
 export type GlobalDraftStructureEvent = AssetPlanningResilienceEvent;
 
 export interface GenerateAssetPlanInput {
+  generationMode?: AssetPlanningGenerationMode;
   sourceStoryboardRecordId: string;
   sourceScriptRecordId: string;
   sourceTopicPackageId: string;
@@ -252,6 +360,74 @@ export async function generateAssetPlan(
 
   const chunks = chunkStoryboardSegments(input.storyboard, input.chunkSize);
   const totalChunks = chunks.length;
+
+  if (input.generationMode === "intent_compiler") {
+    let completedChunks = 0;
+    const compiledChunks = await mapWithConcurrency(
+      chunks,
+      normalizeChunkConcurrency(input.chunkConcurrency),
+      async (segments, chunkIndex): Promise<CompiledIntentChunkInput> => {
+        const plannerInput = buildSegmentIntentPlannerInput({
+          chunk_id: `chunk_${String(chunkIndex + 1).padStart(3, "0")}`,
+          is_first_chunk: chunkIndex === 0,
+          segments,
+          art_bible: globalDraft.art_bible,
+          visual_budget: globalDraft.visual_budget,
+          downgrade_policy: globalDraft.downgrade_policy,
+          global_audio_strategy: globalDraft.global_audio_strategy,
+        });
+        const rawIntentDraft = await gateway.invokeStructuredPrompt<unknown>({
+          promptId: SEGMENT_INTENT_PLANNER_PROMPT_ID,
+          operationName: SEGMENT_INTENT_PLANNER_PROMPT_ID,
+          input: plannerInput,
+          interactionLogWriter: input.interactionLogWriter,
+        });
+        const inspection = inspectSegmentIntentBatch({
+          raw: rawIntentDraft,
+          context: { segments, isFirstChunk: chunkIndex === 0 },
+        });
+        if (!inspection.parsedDraft || inspection.issues.length > 0) {
+          throw new LlmOutputError("asset_segment_intent_invalid", {
+            cause: {
+              issues: redactIntentIssues(inspection.issues, segments),
+              issue_count: inspection.issues.length,
+              issues_truncated: inspection.issues.length > 50,
+            },
+          });
+        }
+        completedChunks += 1;
+        await input.onProgress?.({
+          phase: "chunks",
+          completed_chunks: completedChunks,
+          total_chunks: totalChunks,
+          total_segments: totalSegments,
+        });
+        return {
+          chunkIndex,
+          inputSegmentIds: segments.map((segment) => segment.segment_id),
+          draft: inspection.parsedDraft,
+        };
+      },
+    );
+    return compileAssetPlanFromIntents({
+      sourceIds: {
+        storyboardRecordId: input.sourceStoryboardRecordId,
+        scriptRecordId: input.sourceScriptRecordId,
+        topicPackageId: input.sourceTopicPackageId,
+      },
+      storyboard: input.storyboard,
+      draft: input.draft,
+      globalDraft: {
+        art_bible: globalDraft.art_bible,
+        visual_budget: globalDraft.visual_budget,
+        downgrade_policy: globalDraft.downgrade_policy,
+        global_audio_strategy: globalDraft.global_audio_strategy,
+        manual_review_notes: globalDraft.manual_review_notes,
+      },
+      audioSkeleton,
+      chunks: compiledChunks,
+    }).plan;
+  }
 
   let completedChunks = 0;
   const chunkDrafts = await mapWithConcurrency(

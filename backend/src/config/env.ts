@@ -10,6 +10,7 @@ import {
 type RuntimeProvider = "stub" | "openai";
 type StrictStructuredStrategy = "json_object" | "tool_call" | "auto";
 type StrictStructuredThinking = "enabled" | "disabled";
+export type AssetPlanningGenerationMode = "legacy" | "intent_compiler";
 
 export interface AppEnv {
   nodeEnv: string;
@@ -18,6 +19,7 @@ export interface AppEnv {
   protectedProjectIds: Set<string>;
   databaseUrl: string;
   promptAssetsDir: string;
+  assetPlanningGenerationMode: AssetPlanningGenerationMode;
   llm: {
     provider: RuntimeProvider;
     baseUrl?: string;
@@ -111,6 +113,9 @@ function buildEnv(dotEnvValues: Record<string, string>): AppEnv {
     promptAssetsDir:
       readEnvValue("PROMPT_ASSETS_DIR", dotEnvValues) ??
       path.resolve(process.cwd(), "prompts"),
+    assetPlanningGenerationMode: readAssetPlanningGenerationMode(
+      readEnvValue("ASSET_PLANNING_GENERATION_MODE", dotEnvValues),
+    ),
     llm: {
       provider: (readEnvValue("LLM_PROVIDER", dotEnvValues) ??
         "stub") as RuntimeProvider,
@@ -162,6 +167,16 @@ function buildEnv(dotEnvValues: Record<string, string>): AppEnv {
       ),
     },
   };
+}
+
+function readAssetPlanningGenerationMode(
+  value: string | undefined,
+): AssetPlanningGenerationMode {
+  if (value === undefined || value === "legacy") return "legacy";
+  if (value === "intent_compiler") return value;
+  throw new Error(
+    "ASSET_PLANNING_GENERATION_MODE must be legacy or intent_compiler",
+  );
 }
 
 /**
