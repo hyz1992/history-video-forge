@@ -21,11 +21,14 @@ export interface ActiveScriptSnapshot {
   opening_span: string;
   ending_span: string;
   estimated_duration_sec: number;
-  review_decision: "pass" | "patch_once" | "regen_once" | "return_topic";
+  review_decision: "pass" | "patch_once" | "regen_once" | "return_topic" | "skipped" | "hard_fail";
   patch_intent: "fix" | "lift" | null;
   local_validation: {
     stage: string;
     decision: string;
+    errors?: ReadonlyArray<string>;
+    warnings?: ReadonlyArray<string>;
+    metrics?: Readonly<Record<string, string | number | boolean | null>>;
   };
   semantic_review: {
     stage: string;

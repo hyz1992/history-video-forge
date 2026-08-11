@@ -52,7 +52,7 @@ function createWorkspaceStoreStub() {
 }
 
 describe("script panel confirm gate", () => {
-  it("disables confirmation when local hard validation failed", async () => {
+  it("disables confirmation and shows hard_fail tag + local cause when local validation hard-fails and semantic review is skipped", async () => {
     const router = createAppRouter();
     await router.push("/projects/project-script-gate/script");
     await router.isReady();
@@ -75,20 +75,23 @@ describe("script panel confirm gate", () => {
                   opening_span: "too",
                   ending_span: "short",
                   estimated_duration_sec: 45,
-                  review_decision: "hard_fail",
+                  review_decision: "skipped",
                   patch_intent: null,
                   local_validation: {
                     stage: "script_local_validation",
                     decision: "hard_fail",
-                    errors: ["script_body_too_thin"],
+                    errors: ["duration_extreme"],
                     warnings: [],
-                    metrics: {},
+                    metrics: {
+                      script_char_count: 40,
+                      min_script_chars_for_band: 180,
+                    },
                   },
                   semantic_review: {
                     stage: "script_semantic_review",
-                    decision: "hard_fail",
+                    decision: "skipped",
                     patch_intent: null,
-                    summary: "本地硬校验未通过，未进入语义审校。",
+                    summary: "稿件存在不可恢复的结构问题（如必填字段缺失或时长极端），已停止自动推进，未进入语义审校。",
                     soft_issues: [],
                   },
                   execution_state: {
@@ -117,6 +120,18 @@ describe("script panel confirm gate", () => {
 
     const confirmButton = wrapper.get(".script-confirm-btn");
     expect(confirmButton.attributes("disabled")).toBe("");
+
+    const tags = wrapper.findAll(".script-review-heading .el-tag");
+    const tagTexts = tags.map((t) => t.text());
+    expect(tagTexts).toContain("需修改");
+    expect(tagTexts).not.toContain("建议重生成");
+
+    const issueTexts = wrapper.findAll(".script-review-issue").map((n) => n.text());
+    const joined = issueTexts.join("\n");
+    expect(joined).toContain("时长偏差过大");
+    expect(joined).toContain("正文 40 字");
+    expect(joined).toContain("篇幅下限 180");
+
     await confirmButton.trigger("click");
     expect(workspaceStore.setCurrentStep).not.toHaveBeenCalled();
     expect(router.currentRoute.value.path).toBe("/projects/project-script-gate/script");
@@ -146,14 +161,19 @@ describe("script panel confirm gate", () => {
                   opening_span: "still",
                   ending_span: "short",
                   estimated_duration_sec: 45,
-                  review_decision: "regen_once",
+                  review_decision: "skipped",
                   patch_intent: null,
                   local_validation: {
                     stage: "script_local_validation",
                     decision: "regen_once",
                     errors: ["script_body_too_thin"],
                     warnings: [],
-                    metrics: {},
+                    metrics: {
+                      script_char_count: 232,
+                      script_sentence_count: 5,
+                      min_script_chars_for_band: 320,
+                      min_sentence_count_for_band: 8,
+                    },
                   },
                   semantic_review: {
                     stage: "script_semantic_review",
@@ -188,6 +208,20 @@ describe("script panel confirm gate", () => {
 
     const confirmButton = wrapper.get(".script-confirm-btn");
     expect(confirmButton.attributes("disabled")).toBe("");
+
+    const tags = wrapper.findAll(".script-review-heading .el-tag");
+    const tagTexts = tags.map((t) => t.text());
+    expect(tagTexts).toContain("建议重生成");
+    expect(tagTexts).not.toContain("需修改");
+
+    const issueTexts = wrapper.findAll(".script-review-issue").map((n) => n.text());
+    const joined = issueTexts.join("\n");
+    expect(joined).toContain("篇幅偏薄");
+    expect(joined).toContain("正文 232 字");
+    expect(joined).toContain("篇幅下限 320");
+    expect(joined).toContain("句子 5");
+    expect(joined).toContain("下限 8");
+
     const regenButton = wrapper.find(".script-regen-btn");
     expect(regenButton.exists()).toBe(true);
     expect(regenButton.attributes("disabled")).toBeUndefined();

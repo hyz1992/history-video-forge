@@ -167,6 +167,20 @@ const reviewIssues = computed(() => {
     issues.push({ code: "review_summary", message: s.semantic_review.summary });
   }
 
+  const localErrors = s.local_validation?.errors ?? [];
+  for (const code of localErrors) {
+    const bareCode = code.split(":")[0];
+    issues.push({
+      code: bareCode,
+      message: humanizeIssueCode(bareCode),
+    });
+  }
+
+  const localMetricsHint = formatLocalValidationMetrics(s.local_validation?.metrics);
+  if (localMetricsHint) {
+    issues.push({ code: "", message: localMetricsHint });
+  }
+
   const softIssues = s.semantic_review.soft_issues ?? [];
   for (const item of softIssues) {
     if (typeof item === "string") {
@@ -179,12 +193,46 @@ const reviewIssues = computed(() => {
   return issues;
 });
 
+function formatLocalValidationMetrics(
+  metrics?: Readonly<Record<string, string | number | boolean | null>>,
+): string | null {
+  if (!metrics) return null;
+  const parts: string[] = [];
+  const charCount = metrics.script_char_count;
+  const minForBand = metrics.min_script_chars_for_band;
+  const minForDuration = metrics.min_script_chars_for_estimated_duration;
+  const sentenceCount = metrics.script_sentence_count;
+  const minSentence = metrics.min_sentence_count_for_band;
+
+  if (typeof charCount === "number") {
+    const targets: string[] = [];
+    if (typeof minForBand === "number") targets.push(`篇幅下限 ${minForBand}`);
+    if (typeof minForDuration === "number" && minForDuration !== minForBand) {
+      targets.push(`时长推算下限 ${minForDuration}`);
+    }
+    parts.push(
+      targets.length > 0
+        ? `正文 ${charCount} 字（${targets.join("，")}）`
+        : `正文 ${charCount} 字`,
+    );
+  }
+  if (typeof sentenceCount === "number" && typeof minSentence === "number") {
+    parts.push(`句子 ${sentenceCount}（下限 ${minSentence}）`);
+  }
+  return parts.length > 0 ? parts.join("；") : null;
+}
+
 const reviewDecision = computed(() => {
   const s = visibleScript.value;
   if (!s) return null;
-  if (s.semantic_review?.decision) return s.semantic_review.decision;
-  if (s.local_validation?.decision) return s.local_validation.decision;
-  return null;
+  const semanticDecision = s.semantic_review?.decision;
+  if (semanticDecision && semanticDecision !== "skipped") {
+    return semanticDecision;
+  }
+  if (s.local_validation?.decision) {
+    return s.local_validation.decision;
+  }
+  return semanticDecision ?? null;
 });
 
 const canConfirmVisibleScript = computed(() => {
@@ -279,6 +327,19 @@ const ISSUE_CODE_MAP: Record<string, string> = {
   ending_weak: "结尾力度",
   script_body_too_thin: "篇幅偏薄",
   conflict_pressure: "冲突压力",
+  script_empty_or_short: "正文过短",
+  duration_body_mismatch: "时长与正文体量不匹配",
+  opening_missing: "缺少开头",
+  ending_missing: "缺少结尾",
+  beat_missing: "缺少必要情节",
+  beat_trace_weak: "情节摘录过短",
+  quote_trace_incomplete: "引用追溯不完整",
+  placeholder_found: "存在占位符",
+  duration_severe: "时长偏差较大",
+  duration_extreme: "时长偏差过大",
+  forbidden_expansion_hit: "命中禁用扩写",
+  bundle_missing_field: "上游字段缺失",
+  draft_missing_field: "稿件字段缺失",
 };
 
 function humanizeIssueCode(code: string) {
@@ -289,6 +350,12 @@ const historyEntries = computed(() => {
   const total = scriptStore.state.history.length;
   return scriptStore.state.history.map((entry, idx) => {
     const versionNum = total - idx;
+    const semanticDecision = entry.script.semantic_review?.decision;
+    const localDecision = entry.script.local_validation?.decision;
+    const displayDecision =
+      semanticDecision && semanticDecision !== "skipped"
+        ? semanticDecision
+        : localDecision ?? semanticDecision ?? null;
     return {
       entry_id: entry.entry_id,
       label: entry.label,
@@ -296,7 +363,7 @@ const historyEntries = computed(() => {
       versionLabel: versionNum === 1 ? "首稿" : `V${versionNum}`,
       script_text: entry.script.script_text,
       word_count: entry.script.script_text.replace(/\s/g, "").length,
-      review_decision: entry.script.review_decision,
+      review_decision: displayDecision,
       created_at: entry.script.created_at,
       execution_state: entry.script.execution_state,
     };
@@ -339,15 +406,6 @@ function handleSelectHistory(entryId: string) {
 
 function handleConfirm() {
   if (!canConfirmVisibleScript.value) {
-    const decision = visibleScript.value?.local_validation?.decision;
-    const regenerateUsed = visibleScript.value?.execution_state?.regenerate_used;
-    if (decision === "hard_fail") {
-      ElMessage.warning("稿件存在不可恢复的结构问题，请回到选题阶段或带反馈重新生成");
-    } else if (decision === "regen_once" && regenerateUsed) {
-      ElMessage.warning("已自动重新生成一次仍未达标，可点击“带反馈重新生成”再做一次人工修复");
-    } else {
-      ElMessage.warning("文案本地硬校验未通过，可点击“带反馈重新生成”进行修复");
-    }
     return;
   }
   if (!checkStageRollback("script")) return;
