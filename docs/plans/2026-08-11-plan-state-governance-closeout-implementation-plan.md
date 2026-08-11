@@ -80,6 +80,28 @@ if ($collisions.Count -gt 0) { throw "archive_name_collision:$($collisions.Name 
 运行以下 PowerShell。扫描器跳过 fenced code、行内 code、`http(s)`、`mailto:`、`file:` 与纯锚点；对即将移动的 107 份 source 预先归一成归档后的逻辑路径，因此移动前后可以直接比较：
 
 ```powershell
+$ErrorActionPreference = 'Stop'
+$utf8NoBom = [Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding = $utf8NoBom
+$OutputEncoding = $utf8NoBom
+$env:GIT_CONFIG_COUNT = '1'
+$env:GIT_CONFIG_KEY_0 = 'core.quotepath'
+$env:GIT_CONFIG_VALUE_0 = 'false'
+
+function Get-RelativePathCompat([string]$BasePath, [string]$TargetPath) {
+  $baseFull = [IO.Path]::GetFullPath($BasePath).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar,
+    [IO.Path]::AltDirectorySeparatorChar
+  ) + [IO.Path]::DirectorySeparatorChar
+  $targetFull = [IO.Path]::GetFullPath($TargetPath)
+  $baseUri = [Uri]::new($baseFull)
+  $targetUri = [Uri]::new($targetFull)
+  if ($baseUri.Scheme -ne $targetUri.Scheme) { return $targetFull }
+  return [Uri]::UnescapeDataString(
+    $baseUri.MakeRelativeUri($targetUri).ToString()
+  ).Replace('/', [IO.Path]::DirectorySeparatorChar)
+}
+
 function Get-MarkdownBrokenLinks([bool]$AfterMove) {
   $repo = (Resolve-Path '.').Path
   $issues = [System.Collections.Generic.List[string]]::new()
@@ -87,7 +109,7 @@ function Get-MarkdownBrokenLinks([bool]$AfterMove) {
   $markdownFiles | ForEach-Object {
       $file = Get-Item -LiteralPath $_ -ErrorAction Stop
       $inFence = $false
-      $relativeSource = [IO.Path]::GetRelativePath($repo, $file.FullName).Replace('\', '/')
+      $relativeSource = (Get-RelativePathCompat $repo $file.FullName).Replace('\', '/')
       $logicalSource = if (-not $AfterMove -and $relativeSource -match '^docs/plans/2026-') {
         $relativeSource.Replace('docs/plans/', 'docs/plans/archive/')
       } else { $relativeSource }
@@ -104,7 +126,7 @@ function Get-MarkdownBrokenLinks([bool]$AfterMove) {
           if (-not $target -or $target -match '^(https?:|mailto:|file:|#)') { continue }
           $candidate = [IO.Path]::GetFullPath((Join-Path $file.DirectoryName $target))
           if (-not (Test-Path -LiteralPath $candidate)) {
-            $logicalTarget = [IO.Path]::GetRelativePath($repo, $candidate).Replace('\', '/')
+            $logicalTarget = (Get-RelativePathCompat $repo $candidate).Replace('\', '/')
             $issues.Add("$logicalSource|$logicalTarget")
           }
         }
@@ -116,7 +138,7 @@ $baseline = Get-MarkdownBrokenLinks $false
 [IO.File]::WriteAllLines(
   "$env:TEMP\history-video-forge-broken-links-before.txt",
   [string[]]$baseline,
-  [Text.UTF8Encoding]::new($false)
+  $utf8NoBom
 )
 "BROKEN_BASELINE_COUNT=$($baseline.Count)"
 ```
@@ -318,7 +340,7 @@ rg -n '前端 v1|S2-2|archive|global.*repair|未归档计划' docs/README.md doc
 
 - [ ] **Step 1：比较断链基线**
 
-原样重新定义 Task 1 Step 3 的 `Get-MarkdownBrokenLinks`，然后运行：
+在同一 PowerShell 进程中原样重新执行 Task 1 Step 3 的 `$ErrorActionPreference`、UTF-8 无 BOM 输出设置、进程级 `core.quotepath=false` Git 覆盖，以及完整的 `Get-RelativePathCompat` 与 `Get-MarkdownBrokenLinks` 定义，然后运行：
 
 ```powershell
 $baseline = @(Get-Content -Encoding utf8 "$env:TEMP\history-video-forge-broken-links-before.txt")
