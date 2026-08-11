@@ -339,7 +339,15 @@ function handleSelectHistory(entryId: string) {
 
 function handleConfirm() {
   if (!canConfirmVisibleScript.value) {
-    ElMessage.warning("文案本地硬校验未通过，不能进入分镜规划");
+    const decision = visibleScript.value?.local_validation?.decision;
+    const regenerateUsed = visibleScript.value?.execution_state?.regenerate_used;
+    if (decision === "hard_fail") {
+      ElMessage.warning("稿件存在不可恢复的结构问题，请回到选题阶段或带反馈重新生成");
+    } else if (decision === "regen_once" && regenerateUsed) {
+      ElMessage.warning("已自动重新生成一次仍未达标，可点击“带反馈重新生成”再做一次人工修复");
+    } else {
+      ElMessage.warning("文案本地硬校验未通过，可点击“带反馈重新生成”进行修复");
+    }
     return;
   }
   if (!checkStageRollback("script")) return;
@@ -537,6 +545,14 @@ function handleConfirm() {
               class="script-confirm-btn"
             >
               确认文案，进入分镜规划
+            </el-button>
+            <el-button
+              v-if="!canConfirmVisibleScript"
+              :disabled="scriptStore.state.isRunningAction"
+              @click="showRegenModal = true"
+              class="script-regen-btn"
+            >
+              带反馈重新生成
             </el-button>
           </div>
         </div>

@@ -25,6 +25,7 @@ export interface RunScriptRunGraphInput {
   bundle: ScriptRunGraphRuntime["bundle"];
   allowPatch?: boolean;
   allowRegen?: boolean;
+  allowLocalRepairRegen?: boolean;
   forceRegen?: boolean;
   runId?: string;
 }
@@ -37,7 +38,9 @@ export async function runScriptRunGraph(
     bundle: input.bundle,
     allowPatch: input.allowPatch ?? false,
     allowRegen: input.allowRegen ?? false,
+    allowLocalRepairRegen: input.allowLocalRepairRegen ?? true,
     forceRegen: input.forceRegen ?? false,
+    regenerateUsed: false,
     draft: null,
     localValidation: null,
     semanticReview: null,
@@ -71,7 +74,7 @@ export async function runScriptRunGraph(
           regenerate_used: state.regenerate_used,
         });
 
-        if (next === "regen-once" && runtime.allowRegen) {
+        if (next === "regen-once" && runtime.allowLocalRepairRegen) {
           return "regen-once" as const;
         }
 
@@ -133,6 +136,7 @@ export async function runScriptRunGraph(
     buildSkippedSemanticReview({
       localDecision: runtime.localValidation.decision,
       allowRegen: runtime.allowRegen,
+      regenerateUsed: runtime.regenerateUsed,
     });
 
   const finalSemanticReview =

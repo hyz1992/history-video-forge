@@ -33,7 +33,9 @@ export interface ScriptRunGraphRuntime {
   bundle: ScriptInputBundle;
   allowPatch: boolean;
   allowRegen: boolean;
+  allowLocalRepairRegen: boolean;
   forceRegen: boolean;
+  regenerateUsed: boolean;
   draft: ScriptDraft | null;
   localValidation: LocalValidation | null;
   semanticReview: SemanticReview | ReturnType<typeof buildSkippedSemanticReview> | null;
@@ -76,7 +78,13 @@ function requireSemanticReview(
 export function buildSkippedSemanticReview(input: {
   localDecision: "pass" | "regen_once" | "hard_fail";
   allowRegen: boolean;
+  regenerateUsed?: boolean;
 }) {
+  const summary = resolveSkippedSemanticReviewSummary({
+    localDecision: input.localDecision,
+    regenerateUsed: input.regenerateUsed ?? false,
+  });
+
   return {
     stage: "script_semantic_review" as const,
     decision: "skipped" as const,
@@ -84,9 +92,24 @@ export function buildSkippedSemanticReview(input: {
     hard_issues: [],
     soft_issues: [],
     patch_targets: [],
-    summary: "本地硬校验未通过，未进入语义审校。",
+    summary,
     confidence: 0.5,
   };
+}
+
+function resolveSkippedSemanticReviewSummary(input: {
+  localDecision: "pass" | "regen_once" | "hard_fail";
+  regenerateUsed: boolean;
+}): string {
+  if (input.localDecision === "hard_fail") {
+    return "稿件存在不可恢复的结构问题（如必填字段缺失或时长极端），已停止自动推进，未进入语义审校。";
+  }
+
+  if (input.localDecision === "regen_once" && input.regenerateUsed) {
+    return "已自动重新生成一次，仍未达到本地结构下限，未进入语义审校。可使用“带反馈重新生成”再做一次人工修复。";
+  }
+
+  return "本次稿件未达到本地结构下限，未进入语义审校。";
 }
 
 export function createScriptRunNodes(input: {
@@ -142,6 +165,7 @@ export function createScriptRunNodes(input: {
         runtime.semanticReview = buildSkippedSemanticReview({
           localDecision: runtime.localValidation.decision,
           allowRegen: runtime.allowRegen,
+          regenerateUsed: runtime.regenerateUsed,
         });
       }
 
@@ -191,6 +215,7 @@ export function createScriptRunNodes(input: {
           : buildSkippedSemanticReview({
               localDecision: localValidation.decision,
             allowRegen: runtime.allowRegen,
+            regenerateUsed: runtime.regenerateUsed,
           });
 
       const stateUpdate = createNodeStateUpdate("semantic-review", {
@@ -256,6 +281,7 @@ export function createScriptRunNodes(input: {
             regenerationContext: generateInput?.regenerationContext,
           }),
       });
+      runtime.regenerateUsed = true;
 
       const stateUpdate = createNodeStateUpdate("regen-once", {
         input_ref: runtime.localValidation

@@ -604,4 +604,157 @@ describe("script run graph", () => {
       }),
     );
   });
+
+  it("auto-triggers one local-repair regen by default when local validation returns regen_once", async () => {
+    const calls: string[] = [];
+    const generateDraft = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        calls.push("script-generate");
+        return passDraft;
+      })
+      .mockImplementationOnce(async () => {
+        calls.push("script-generate");
+        return regeneratedDraft;
+      });
+    const validateDraft = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        calls.push("local-validate");
+        return createRegenLocalValidation();
+      })
+      .mockImplementationOnce(() => {
+        calls.push("local-validate");
+        return createPassLocalValidation();
+      });
+
+    const result = await runScriptRunGraph(
+      {
+        bundle: inputBundle,
+      },
+      {
+        generateDraft,
+        validateDraft,
+        reviewSemantics: vi.fn(() => {
+          calls.push("semantic-review");
+          return createPassSemanticReview();
+        }),
+        patchDraft: vi.fn(async () => patchedDraft),
+        regenerateDraft: vi.fn(async ({ generateDraft: rerunGenerateDraft }) => {
+          calls.push("regen-once");
+          return rerunGenerateDraft();
+        }),
+      },
+    );
+
+    expect(calls).toEqual([
+      "script-generate",
+      "local-validate",
+      "regen-once",
+      "script-generate",
+      "local-validate",
+      "semantic-review",
+    ]);
+    expect(result.draft).toEqual(regeneratedDraft);
+    expect(result.localValidation.decision).toBe("pass");
+    expect(result.executionState).toEqual({
+      patch_used: false,
+      regenerate_used: true,
+    });
+  });
+
+  it("stops after one auto local-repair regen when the second draft still returns regen_once, and surfaces the layered summary", async () => {
+    const calls: string[] = [];
+    const generateDraft = vi
+      .fn()
+      .mockImplementationOnce(async () => {
+        calls.push("script-generate");
+        return passDraft;
+      })
+      .mockImplementationOnce(async () => {
+        calls.push("script-generate");
+        return regeneratedDraft;
+      });
+    const validateDraft = vi.fn(() => {
+      calls.push("local-validate");
+      return createRegenLocalValidation();
+    });
+
+    const result = await runScriptRunGraph(
+      {
+        bundle: inputBundle,
+      },
+      {
+        generateDraft,
+        validateDraft,
+        reviewSemantics: vi.fn(() => {
+          throw new Error("semantic review should not run");
+        }),
+        patchDraft: vi.fn(async () => patchedDraft),
+        regenerateDraft: vi.fn(async ({ generateDraft: rerunGenerateDraft }) => {
+          calls.push("regen-once");
+          return rerunGenerateDraft();
+        }),
+      },
+    );
+
+    expect(calls).toEqual([
+      "script-generate",
+      "local-validate",
+      "regen-once",
+      "script-generate",
+      "local-validate",
+    ]);
+    expect(result.draft).toEqual(regeneratedDraft);
+    expect(result.localValidation.decision).toBe("regen_once");
+    expect(result.executionState).toEqual({
+      patch_used: false,
+      regenerate_used: true,
+    });
+    expect(result.semanticReview.decision).toBe("skipped");
+    expect(result.semanticReview.summary).toContain("已自动重新生成一次");
+    expect(result.runtimeDiagnostics.checks).toContainEqual(
+      expect.objectContaining({
+        code: "regen_output_still_too_thin_after_repair_context",
+        level: "warning",
+      }),
+    );
+  });
+
+  it("respects allowLocalRepairRegen=false to disable the auto local-repair regen", async () => {
+    const calls: string[] = [];
+    const regenerateDraft = vi.fn(async () => {
+      calls.push("regen-once");
+      return regeneratedDraft;
+    });
+
+    const result = await runScriptRunGraph(
+      {
+        bundle: inputBundle,
+        allowLocalRepairRegen: false,
+      },
+      {
+        generateDraft: vi.fn(async () => {
+          calls.push("script-generate");
+          return passDraft;
+        }),
+        validateDraft: vi.fn(() => {
+          calls.push("local-validate");
+          return createRegenLocalValidation();
+        }),
+        reviewSemantics: vi.fn(() => {
+          throw new Error("semantic review should not run");
+        }),
+        patchDraft: vi.fn(async () => patchedDraft),
+        regenerateDraft,
+      },
+    );
+
+    expect(calls).toEqual(["script-generate", "local-validate"]);
+    expect(regenerateDraft).not.toHaveBeenCalled();
+    expect(result.localValidation.decision).toBe("regen_once");
+    expect(result.executionState.regenerate_used).toBe(false);
+    expect(result.semanticReview.decision).toBe("skipped");
+    expect(result.semanticReview.summary).toContain("未达到本地结构下限");
+  });
 });

@@ -122,4 +122,75 @@ describe("script panel confirm gate", () => {
     expect(router.currentRoute.value.path).toBe("/projects/project-script-gate/script");
     wrapper.unmount();
   });
+
+  it("shows the regen escape button when local validation soft-fails after auto regen", async () => {
+    const router = createAppRouter();
+    await router.push("/projects/project-script-gate/script");
+    await router.isReady();
+    const workspaceStore = createWorkspaceStoreStub();
+
+    const wrapper = mount(ScriptPanel, {
+      global: {
+        plugins: [router, ElementPlus],
+        provide: {
+          [projectStoreKey as symbol]: createProjectStoreStub() as never,
+          [workspaceStoreKey as symbol]: workspaceStore as never,
+          [scriptStoreKey as symbol]: {
+            state: reactive({
+              snapshot: {
+                project_id: "project-script-gate",
+                current_status: "script_ready",
+                active_script: {
+                  script_record_id: "script-regen-once",
+                  script_text: "still too short after auto regen",
+                  opening_span: "still",
+                  ending_span: "short",
+                  estimated_duration_sec: 45,
+                  review_decision: "regen_once",
+                  patch_intent: null,
+                  local_validation: {
+                    stage: "script_local_validation",
+                    decision: "regen_once",
+                    errors: ["script_body_too_thin"],
+                    warnings: [],
+                    metrics: {},
+                  },
+                  semantic_review: {
+                    stage: "script_semantic_review",
+                    decision: "skipped",
+                    patch_intent: null,
+                    summary: "已自动重新生成一次，仍未达到本地结构下限，未进入语义审校。",
+                    soft_issues: [],
+                  },
+                  execution_state: {
+                    patch_used: false,
+                    regenerate_used: true,
+                  },
+                  created_at: "2026-07-19T00:00:00.000Z",
+                },
+              },
+              history: [],
+              selectedHistoryEntryId: null,
+              isLoading: false,
+              isRunningAction: false,
+              loadError: null,
+            }),
+            async loadActiveScriptSnapshot() {},
+            async retryLoadActiveScriptSnapshot() {},
+            generateInitialScript: pendingPromise,
+            selectHistoryEntry() {},
+            runPatchOnce: pendingPromise,
+            runRegenOnce: pendingPromise,
+          } as never,
+        },
+      },
+    });
+
+    const confirmButton = wrapper.get(".script-confirm-btn");
+    expect(confirmButton.attributes("disabled")).toBe("");
+    const regenButton = wrapper.find(".script-regen-btn");
+    expect(regenButton.exists()).toBe(true);
+    expect(regenButton.attributes("disabled")).toBeUndefined();
+    wrapper.unmount();
+  });
 });

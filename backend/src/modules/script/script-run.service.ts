@@ -77,6 +77,7 @@ export interface RunScriptGenerationInput {
   project: ProjectRecord;
   allowPatch?: boolean;
   allowRegen?: boolean;
+  allowLocalRepairRegen?: boolean;
   forceRegen?: boolean;
   userFeedback?: string;
   semanticReviewGateway?: LlmGateway;
@@ -160,6 +161,7 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
       bundle: inputBundle,
       allowPatch: false,
       allowRegen: input.allowRegen ?? false,
+      allowLocalRepairRegen: input.allowLocalRepairRegen ?? true,
       forceRegen: input.forceRegen ?? false,
       runId,
     },
@@ -234,6 +236,7 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
       run_mode: "sync_runtime",
       allow_patch: input.allowPatch ?? false,
       allow_regen: input.allowRegen ?? false,
+      allow_local_repair_regen: input.allowLocalRepairRegen ?? true,
       input_bundle: inputBundle,
       draft,
       local_validation: localValidation,
