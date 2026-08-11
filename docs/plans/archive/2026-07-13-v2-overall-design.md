@@ -4,7 +4,7 @@
 
 状态：设计草案，等待人工审查。未通过审查前不进入任何代码实现。
 
-> **实施闸门（最高优先级）：** 本设计不绕过 Task 8.5 收口。状态入口 [docs/plans/README.md](../plans/README.md) 明确"Task 8.5 完成前不进入用户系统实现"。Task 8.5-9（文件提交协议 + ProviderJob 中断恢复）和 Task 8.5-10（JSON 写入冻结 + 最终验收）关闭前，P0.1/P0.2 只能作为设计草案，不得进入 auth 代码实现。Task 8.5 完成后，本设计需按最终 schema 和切换结果重新审阅。
+> **实施闸门（最高优先级）：** 本设计不绕过 Task 8.5 收口。状态入口 [docs/plans/README.md](../README.md) 明确"Task 8.5 完成前不进入用户系统实现"。Task 8.5-9（文件提交协议 + ProviderJob 中断恢复）和 Task 8.5-10（JSON 写入冻结 + 最终验收）关闭前，P0.1/P0.2 只能作为设计草案，不得进入 auth 代码实现。Task 8.5 完成后，本设计需按最终 schema 和切换结果重新审阅。
 
 ---
 
@@ -26,23 +26,23 @@
 
 **已验证事实：**
 
-- Prisma schema 位于 [backend/prisma/schema.prisma](../../backend/prisma/schema.prisma)，datasource 为 `sqlite`。
+- Prisma schema 位于 [backend/prisma/schema.prisma](../../../backend/prisma/schema.prisma)，datasource 为 `sqlite`。
 - 已有 2 个 migration：`0001_v2_baseline`、`0002_candidate_card_recovery`。
 - migration 已使用 SQLite CHECK 约束固化 `User.role IN ('ADMIN','USER')`、`User.status IN ('ACTIVE','DISABLED')`，并有 trigger 校验 Project active record 的同项目一致性。
 - User 表已存在字段：`id`、`username`、`displayName`、`passwordHash`、`role`、`status`、`mustChangePassword`、`lastLoginAt`、`createdAt`、`updatedAt`。
 - Session 表已存在字段：`id`、`userId`、`tokenHash`、`expiresAt`、`revokedAt`、`lastSeenAt`、`userAgentHash`、`ipPrefix`、`createdAt`。
 - AuditLog 表已存在字段：`actorUserId`、`projectId`、`action`、`targetType`、`targetId`、`metadataJson`、`createdAt`。
 - DataMigrationRun、DatabaseActivation 已有迁移状态机和激活记录表。
-- [backend/src/server.ts](../../backend/src/server.ts) 启动时已强制要求数据库存在、已激活、Prisma readiness 通过；`/readyz` 检查 persistence + media library + database 三项。
-- 第一批聚合（Project、Event Registry、Topic Package、Candidate Cache、Recommendation）已切换到 Prisma writer 并完成真实浏览器验收（见 [docs/records/2026-07-12-v2-first-aggregate-browser-acceptance.md](../records/2026-07-12-v2-first-aggregate-browser-acceptance.md)）。
+- [backend/src/server.ts](../../../backend/src/server.ts) 启动时已强制要求数据库存在、已激活、Prisma readiness 通过；`/readyz` 检查 persistence + media library + database 三项。
+- 第一批聚合（Project、Event Registry、Topic Package、Candidate Cache、Recommendation）已切换到 Prisma writer 并完成真实浏览器验收（见 [docs/records/2026-07-12-v2-first-aggregate-browser-acceptance.md](../../records/2026-07-12-v2-first-aggregate-browser-acceptance.md)）。
 - 第二批聚合（Script、Storyboard、AssetPlan）已切换到 Prisma writer 并通过回归。
 - 第三批聚合（AssetManifest、Compose、RenderJob、PublishPackage、ProviderJob）已建立 hydration、save-only writer、activation transaction，但 Task 8.5-9 尚未完全关闭（文件提交协议和 ProviderJob 中断恢复未完成）。
 
 **关键架构事实（已验证）：**
 
-- [backend/src/db/client.ts](../../backend/src/db/client.ts) 的 `DbClient` 仍然是 Map-based 内存模型。Prisma 只作为 writer/hydrator 旁路。运行时所有读写仍走 Map。
-- [backend/src/db/repositories/prisma-project-store.ts](../../backend/src/db/repositories/prisma-project-store.ts) 已有 `findByIdForOwner`、`findByIdForSystem`、`listByOwner`、`updateActiveRecordsForOwner` 等 owner-scoped 接口，但业务主链路 [backend/src/modules/projects/project.repository.ts](../../backend/src/modules/projects/project.repository.ts) 仍使用旧的不带 owner 的 Map 接口。
-- [backend/src/db/repositories/prisma-first-aggregate-writer.ts](../../backend/src/db/repositories/prisma-first-aggregate-writer.ts) 在创建项目时强制 `ownerId = this.ownerId, createdById = this.ownerId`，并在所有写操作中校验 owner scope。
+- [backend/src/db/client.ts](../../../backend/src/db/client.ts) 的 `DbClient` 仍然是 Map-based 内存模型。Prisma 只作为 writer/hydrator 旁路。运行时所有读写仍走 Map。
+- [backend/src/db/repositories/prisma-project-store.ts](../../../backend/src/db/repositories/prisma-project-store.ts) 已有 `findByIdForOwner`、`findByIdForSystem`、`listByOwner`、`updateActiveRecordsForOwner` 等 owner-scoped 接口，但业务主链路 [backend/src/modules/projects/project.repository.ts](../../../backend/src/modules/projects/project.repository.ts) 仍使用旧的不带 owner 的 Map 接口。
+- [backend/src/db/repositories/prisma-first-aggregate-writer.ts](../../../backend/src/db/repositories/prisma-first-aggregate-writer.ts) 在创建项目时强制 `ownerId = this.ownerId, createdById = this.ownerId`，并在所有写操作中校验 owner scope。
 
 **待确认项：**
 
@@ -52,23 +52,23 @@
 
 **已验证事实：**
 
-- [backend/src/app.ts](../../backend/src/app.ts) 的 `RouteContext` 不携带任何 user 信息。所有 controller 无法识别调用者。
-- [backend/src/server.ts](../../backend/src/server.ts) 的 HTTP server 没有 auth middleware。只有 `resolveServerHost` 做"非回环绑定必须显式 opt-in"的简单保护。
-- [docs/architecture/api-design.md](../architecture/api-design.md) 第 89 行正式记录："当前 API 仍无正式用户鉴权；非回环绑定必须显式 opt-in，仅适用于受控演示环境。"
-- [backend/src/config/env.ts](../../backend/src/config/env.ts) 只有 `allowUnauthenticatedRemote` 和 `protectedProjectIds` 两个简陋的安全控制。
-- [backend/src/modules/projects/project.controller.ts](../../backend/src/modules/projects/project.controller.ts) 的 `listProjectsController` 返回所有项目，`getProjectSnapshotController` 只检查项目存在不检查 owner。
-- [backend/src/http/file-routes.ts](../../backend/src/http/file-routes.ts) 的 `handleFileRoute` 通过 `app.db.projects.get(match.projectId)` 获取项目，完全不校验调用者权限。任何人只要知道 projectId 就能下载 artifact/render/publish 包。这是典型 IDOR 漏洞。
+- [backend/src/app.ts](../../../backend/src/app.ts) 的 `RouteContext` 不携带任何 user 信息。所有 controller 无法识别调用者。
+- [backend/src/server.ts](../../../backend/src/server.ts) 的 HTTP server 没有 auth middleware。只有 `resolveServerHost` 做"非回环绑定必须显式 opt-in"的简单保护。
+- [docs/architecture/api-design.md](../../architecture/api-design.md) 第 89 行正式记录："当前 API 仍无正式用户鉴权；非回环绑定必须显式 opt-in，仅适用于受控演示环境。"
+- [backend/src/config/env.ts](../../../backend/src/config/env.ts) 只有 `allowUnauthenticatedRemote` 和 `protectedProjectIds` 两个简陋的安全控制。
+- [backend/src/modules/projects/project.controller.ts](../../../backend/src/modules/projects/project.controller.ts) 的 `listProjectsController` 返回所有项目，`getProjectSnapshotController` 只检查项目存在不检查 owner。
+- [backend/src/http/file-routes.ts](../../../backend/src/http/file-routes.ts) 的 `handleFileRoute` 通过 `app.db.projects.get(match.projectId)` 获取项目，完全不校验调用者权限。任何人只要知道 projectId 就能下载 artifact/render/publish 包。这是典型 IDOR 漏洞。
 - 当前"用户"概念只有环境变量 `LOCAL_PROJECT_OWNER_ID`，是一个不可登录的 migration owner。
 
 ### 1.3 Provider 与模型
 
 **已验证事实：**
 
-- LLM provider 在 [backend/src/config/env.ts](../../backend/src/config/env.ts) 中只有 `stub | openai` 两种，硬编码为单一模型配置（`LLM_MODEL`、`LLM_STRUCTURED_MODEL` 等）。
-- LLM 调用通过 [backend/src/runtime/llm/llm-gateway.ts](../../backend/src/runtime/llm/llm-gateway.ts) 的 `LlmGateway` 抽象，但底层 provider 是单一 OpenAI-compatible 实现。
-- Assets 阶段已有较好的 provider 抽象：[backend/src/modules/assets/assets-provider-adapter.ts](../../backend/src/modules/assets/assets-provider-adapter.ts) 定义了 `AssetProviderAdapter` 接口，覆盖 `tts | image | video | sfx | bgm` 五种能力。
-- DashScope 凭据通过 `process.env.ALIYUN_DASHSCOPE_API_KEY` 直接读取（见 [backend/src/modules/assets/assets-run.service.ts](../../backend/src/modules/assets/assets-run.service.ts) 第 163 行、[backend/src/modules/publish/publish.controller.ts](../../backend/src/modules/publish/publish.controller.ts) 第 617 行），没有凭据管理抽象。
-- ProviderJob 已有幂等合同：`(assetRunId, executionId, taskId, attemptCount)` 复合唯一键（见 [backend/prisma/schema.prisma](../../backend/prisma/schema.prisma) 第 375 行）。
+- LLM provider 在 [backend/src/config/env.ts](../../../backend/src/config/env.ts) 中只有 `stub | openai` 两种，硬编码为单一模型配置（`LLM_MODEL`、`LLM_STRUCTURED_MODEL` 等）。
+- LLM 调用通过 [backend/src/runtime/llm/llm-gateway.ts](../../../backend/src/runtime/llm/llm-gateway.ts) 的 `LlmGateway` 抽象，但底层 provider 是单一 OpenAI-compatible 实现。
+- Assets 阶段已有较好的 provider 抽象：[backend/src/modules/assets/assets-provider-adapter.ts](../../../backend/src/modules/assets/assets-provider-adapter.ts) 定义了 `AssetProviderAdapter` 接口，覆盖 `tts | image | video | sfx | bgm` 五种能力。
+- DashScope 凭据通过 `process.env.ALIYUN_DASHSCOPE_API_KEY` 直接读取（见 [backend/src/modules/assets/assets-run.service.ts](../../../backend/src/modules/assets/assets-run.service.ts) 第 163 行、[backend/src/modules/publish/publish.controller.ts](../../../backend/src/modules/publish/publish.controller.ts) 第 617 行），没有凭据管理抽象。
+- ProviderJob 已有幂等合同：`(assetRunId, executionId, taskId, attemptCount)` 复合唯一键（见 [backend/prisma/schema.prisma](../../../backend/prisma/schema.prisma) 第 375 行）。
 - 没有 Run Configuration Snapshot 实体——每次运行不会记录实际使用的 provider、model、参数和 prompt 版本。
 - 没有 Usage/Cost Record——token、图片、秒数、费用不被持久化追踪。
 
@@ -81,8 +81,8 @@
 **已验证事实：**
 
 - 正式 prompt 位于 `prompts/{topic,script,storyboard,asset-planning,asset,publish}/`（共 14 个 prompt 文件）。
-- Prompt Registry 规范在 [harness/docs/prompt-registry-spec.md](../../harness/docs/prompt-registry-spec.md)，要求每个 prompt 声明 `id`、`stage`、`language: zh-CN`、`consumes`、`produces`、`status`。
-- Runtime loader 在 [backend/src/runtime/prompts/prompt-registry.ts](../../backend/src/runtime/prompts/prompt-registry.ts)、[backend/src/runtime/prompts/prompt-loader.ts](../../backend/src/runtime/prompts/prompt-loader.ts)。
+- Prompt Registry 规范在 [harness/docs/prompt-registry-spec.md](../../../harness/docs/prompt-registry-spec.md)，要求每个 prompt 声明 `id`、`stage`、`language: zh-CN`、`consumes`、`produces`、`status`。
+- Runtime loader 在 [backend/src/runtime/prompts/prompt-registry.ts](../../../backend/src/runtime/prompts/prompt-registry.ts)、[backend/src/runtime/prompts/prompt-loader.ts](../../../backend/src/runtime/prompts/prompt-loader.ts)。
 - `AGENTS.md` 明确规定："所有正式 LLM prompt **必须使用中文**"、"所有正式 prompt **必须存放在** `prompts/`"。
 - 有检查脚本：`harness/scripts/check-prompt-language.ts`、`harness/scripts/detect-duplicate-prompts.ts`。
 - prompt 元数据目前没有语义版本、输入/输出 schema、变更说明、golden fixtures 或运行时 hash 记录。
@@ -105,7 +105,7 @@
 
 **已验证事实：**
 
-- [frontend/src/router/index.ts](../../frontend/src/router/index.ts) 只有 4 条路由：`/`、`/projects`、`/projects/:projectId/:step`、`/projects/:projectId`。没有登录页。
+- [frontend/src/router/index.ts](../../../frontend/src/router/index.ts) 只有 4 条路由：`/`、`/projects`、`/projects/:projectId/:step`、`/projects/:projectId`。没有登录页。
 - 前端 stores 没有 user/auth 状态。
 - 前端工作区 6 步：选题 → 文案 → 分镜 → 资产 → 合成渲染 → 发布交付。
 
@@ -113,13 +113,13 @@
 
 ## 2. 已完成基础设施与不得重复建设清单
 
-> **前置说明（重要）：** 本节描述的是"设计意图上已完成、V2 不得回退"的基础设施。其中部分项仍处于 Task 8.5 收口过程中（见本节末"仍需在 V2 中收口"），不能笼统当作 `已验证` 的事实。每项末尾的标注反映当前真实状态。当前状态入口 [docs/plans/README.md](../plans/README.md) 仍明确"Task 8.5 完成前不进入用户系统实现"。
+> **前置说明（重要）：** 本节描述的是"设计意图上已完成、V2 不得回退"的基础设施。其中部分项仍处于 Task 8.5 收口过程中（见本节末"仍需在 V2 中收口"），不能笼统当作 `已验证` 的事实。每项末尾的标注反映当前真实状态。当前状态入口 [docs/plans/README.md](../README.md) 仍明确"Task 8.5 完成前不进入用户系统实现"。
 
-1. **Prisma 是正式业务持久化入口（生产启动路径）**——`部分已验证`。生产启动固定使用 Prisma writer，数据库未初始化/未激活时 `/readyz` 返回 503，`startServer` 在 Prisma 模式下不调用 `saveDbSnapshot()`。**但运行时读写仍走 `DbClient` 内存 Map**（见 [backend/src/db/client.ts](../../backend/src/db/client.ts)），Prisma 当前是 writer/hydrator 旁路；Task 8.5-10 的 JSON 写入冻结和最终切换验收未完成。
-2. **旧 JSON 适配器只用于迁移和测试 fixture（目标态）**——`部分已验证 / 待收口`。生产 mutation 路径在 Prisma 模式下不调用 `saveDbSnapshot()`，但 `saveDbSnapshot` 代码路径仍存在，且 Task 8.5-10 的"JSON 写入冻结"闸门未关闭。当前状态入口 [docs/plans/README.md](../plans/README.md) 仍描述业务以 Map/JSON 为实际主存储。
-3. **项目数据已具备迁移、readiness、备份恢复和重启恢复基础**——`已验证`。见 [docs/records/2026-07-11-v2-database-activation-readiness-verification.md](../records/2026-07-11-v2-database-activation-readiness-verification.md)、[docs/operations/database-runbook.md](../operations/database-runbook.md)（若存在）。
+1. **Prisma 是正式业务持久化入口（生产启动路径）**——`部分已验证`。生产启动固定使用 Prisma writer，数据库未初始化/未激活时 `/readyz` 返回 503，`startServer` 在 Prisma 模式下不调用 `saveDbSnapshot()`。**但运行时读写仍走 `DbClient` 内存 Map**（见 [backend/src/db/client.ts](../../../backend/src/db/client.ts)），Prisma 当前是 writer/hydrator 旁路；Task 8.5-10 的 JSON 写入冻结和最终切换验收未完成。
+2. **旧 JSON 适配器只用于迁移和测试 fixture（目标态）**——`部分已验证 / 待收口`。生产 mutation 路径在 Prisma 模式下不调用 `saveDbSnapshot()`，但 `saveDbSnapshot` 代码路径仍存在，且 Task 8.5-10 的"JSON 写入冻结"闸门未关闭。当前状态入口 [docs/plans/README.md](../README.md) 仍描述业务以 Map/JSON 为实际主存储。
+3. **项目数据已具备迁移、readiness、备份恢复和重启恢复基础**——`已验证`。见 [docs/records/2026-07-11-v2-database-activation-readiness-verification.md](../../records/2026-07-11-v2-database-activation-readiness-verification.md)、[docs/operations/database-runbook.md](../../operations/database-runbook.md)（若存在）。
 4. **ProviderJob 已有幂等与恢复合同（数据模型层）**——`部分已验证`。`(assetRunId, executionId, taskId, attemptCount)` 复合唯一键已落地，save-only writer 已接入；**但 ProviderJob 跨重启恢复语义未完成验证**（Task 8.5-9 未关闭）。
-5. **V1 主链路及真实浏览器关键路径已完成收口验证**——`已验证`（第一批聚合）。见 [docs/records/2026-07-12-v2-first-aggregate-browser-acceptance.md](../records/2026-07-12-v2-first-aggregate-browser-acceptance.md)。第二、三批聚合的浏览器端到端验收覆盖度低于第一批。
+5. **V1 主链路及真实浏览器关键路径已完成收口验证**——`已验证`（第一批聚合）。见 [docs/records/2026-07-12-v2-first-aggregate-browser-acceptance.md](../../records/2026-07-12-v2-first-aggregate-browser-acceptance.md)。第二、三批聚合的浏览器端到端验收覆盖度低于第一批。
 6. **自动推荐选题的重复记忆已经持久化**——`已验证`。RecommendationRound、RecommendationExposure、CandidateCache 均在 Prisma。
 7. **active pointer 事务语义已落地（数据模型层）**——`部分已验证`。第三批聚合的 activation transaction 已建立（AssetManifest → Compose → Render → Publish），失败保留旧 active；**但 Task 8.5-9 的文件提交协议和 ProviderJob 中断恢复未完成**，因此"失败保留旧 active"在文件系统层面尚未完全验证。
 8. **数据库 trigger 校验同项目一致性**——`已验证`。`Project_active_records_same_project_on_insert`、`Project_active_records_same_project` trigger 已存在。
@@ -130,7 +130,7 @@
 
 - **Task 8.5-9 未关闭**：第三批聚合的文件提交协议（临时文件 → 校验 → 原子移动 → 数据库登记）和 ProviderJob 中断恢复未完成。`已验证`。
 - **Task 8.5-10 未执行**：JSON 写入冻结、Prisma 业务切换最终验收未完成。`已验证`。
-- **放行条件**：状态入口 [docs/plans/README.md](../plans/README.md) 第 12 行明确"Task 8.5 完成前不进入用户系统实现"。本设计不绕过该闸门。
+- **放行条件**：状态入口 [docs/plans/README.md](../README.md) 第 12 行明确"Task 8.5 完成前不进入用户系统实现"。本设计不绕过该闸门。
 
 ---
 
@@ -202,7 +202,7 @@ V2 第一版采用简单 `admin/user` RBAC：
 
 **非目标：** 开放注册、社交登录、多因素认证、组织/团队、密码找回流程（管理员重置即可）。
 
-**前置依赖：** Task 8.5 收口（状态入口 [docs/plans/README.md](../plans/README.md) 明确"Task 8.5 完成前不进入用户系统实现"）。本设计只是 P0.1 的**设计草案**，不是实施放行；Task 8.5-9（文件提交协议 + ProviderJob 中断恢复）和 Task 8.5-10（JSON 写入冻结 + 最终验收）关闭前，不得进入 auth 代码实现。
+**前置依赖：** Task 8.5 收口（状态入口 [docs/plans/README.md](../README.md) 明确"Task 8.5 完成前不进入用户系统实现"）。本设计只是 P0.1 的**设计草案**，不是实施放行；Task 8.5-9（文件提交协议 + ProviderJob 中断恢复）和 Task 8.5-10（JSON 写入冻结 + 最终验收）关闭前，不得进入 auth 代码实现。
 
 **与 Task 8.5 的关系说明：** P0.1/P0.2 不修改 schema、不动 ProviderJob、不动文件提交协议，因此与 Task 8.5 剩余工作**代码层低耦合**，但状态闸门仍以 Task 8.5 完成为准。Task 8.5 完成后，本设计需按最终 schema 和切换结果**重新审阅**才能进入实施。
 
@@ -723,7 +723,7 @@ Service
 
 | 阶段 | 内容 | 闸门 | 停止条件 |
 |---|---|---|---|
-| **P0.0（前置）** | **Task 8.5-9 / 8.5-10 收口**：文件提交协议、ProviderJob 中断恢复、JSON 写入冻结、Prisma 业务切换最终验收 | 状态入口放行（[docs/plans/README.md](../plans/README.md)） | **Task 8.5 未完成不进入 P0.1 实施**；P0.1/P0.2 当前只是设计草案 |
+| **P0.0（前置）** | **Task 8.5-9 / 8.5-10 收口**：文件提交协议、ProviderJob 中断恢复、JSON 写入冻结、Prisma 业务切换最终验收 | 状态入口放行（[docs/plans/README.md](../README.md)） | **Task 8.5 未完成不进入 P0.1 实施**；P0.1/P0.2 当前只是设计草案 |
 | P0.1 | 用户系统与管理员权限（详细设计见独立文档） | 用户/权限设计冻结 + schema 审查通过 + Task 8.5 完成 | 未冻结不修改 schema；Task 8.5 未完成不开 auth 实现 |
 | P0.2 | 项目及全部派生资源隔离 | 用户 A/B 隔离矩阵通过 | 未通过不进入 P0.3 |
 | P0.3 | 多模型、多供应商基础抽象 | provider 能力合同冻结 + 至少一种能力真实/mock 切换 | 合同未冻结不做用户偏好 |

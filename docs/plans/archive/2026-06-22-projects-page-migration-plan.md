@@ -150,7 +150,7 @@
 
 ## 四、样式冲突与避让清单
 
-与 [landing-page.css 的第 5 节](file:///d:/ai_learn/history-video-forge/docs/plans/2026-06-21-landing-page-1-to-1-porting-plan.md#L529) 格式一致：
+与 [landing-page.css 的第 5 节](file:///d:/ai_learn/history-video-forge/docs/plans/archive/2026-06-21-landing-page-1-to-1-porting-plan.md#L529) 格式一致：
 
 ### 4.1 已加前缀隔离的 class
 

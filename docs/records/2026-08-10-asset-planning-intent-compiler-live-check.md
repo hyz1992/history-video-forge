@@ -59,6 +59,21 @@
 | makeup rounds | 0 |
 | accounting incomplete | 0 |
 
+## Global draft 边界观察
+
+本轮补充只读核对主工作区已有成功轮次的 `round-result.json`，未重新调用 provider：15 分镜取 `live-20260810-15-v2` 的 round 1、2、3、5、6，21 分镜取 `live-20260810-21-v1` 的 round 1、2。7 个有效轮次均为成功轮，诊断字段汇总如下：
+
+| 诊断字段 | 7 个有效成功轮结果 |
+| --- | --- |
+| `global_structure_normalization_event_count` | 均为 `0` |
+| `global_structure_normalized_path_count` | 均为 `0` |
+| `global_structural_repair_used` | 均为 `false` |
+| `global_structural_repair_succeeded` | 均为 `false` |
+| `global_structural_repair_failed` | 均为 `false` |
+| `global_structural_repair_provider_failed` | 均为 `false` |
+
+因此，这 7 个 live 轮次只证明包含 global normalization / structural repair 的当前代码与 `intent_compiler` 正常路径兼容；global normalization 与 structural repair 的异常恢复分支没有在 live 中实际触发，仍只有 non-live 证据。该证据缺口不自动触发付费 provider 重跑，仅在真实故障复现或另行明确授权并记录成本与输出时验证。
+
 ## 结论与剩余风险
 
 双闸门满足正式设计：15 分镜 5/5 有效轮次端到端成功，21 分镜 2/2 成功，且两组 `structural_compiler_failure_rounds=0`。因此默认模式可以切换到 `intent_compiler`，同时保留显式 `ASSET_PLANNING_GENERATION_MODE=legacy` 回滚。

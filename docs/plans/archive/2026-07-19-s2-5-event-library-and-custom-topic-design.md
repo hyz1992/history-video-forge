@@ -10,8 +10,8 @@
 - 上游总设：[2026-07-13-v2-overall-design.md](./2026-07-13-v2-overall-design.md)
 - 决策与风险：[2026-07-13-v2-decisions-and-risks.md](./2026-07-13-v2-decisions-and-risks.md) D8
 - Prisma 适用性：[2026-07-13-v2-prisma-schema-applicability-review.md](./2026-07-13-v2-prisma-schema-applicability-review.md) P1
-- 主题阶段设计：[../architecture/topic-stage-design.md](../architecture/topic-stage-design.md)
-- 字段设计：[../data/field-design.md](../data/field-design.md)
+- 主题阶段设计：[../architecture/topic-stage-design.md](../../architecture/topic-stage-design.md)
+- 字段设计：[../data/field-design.md](../../data/field-design.md)
 - 实施计划：[2026-07-19-s2-5-event-library-and-custom-topic-implementation-plan.md](./2026-07-19-s2-5-event-library-and-custom-topic-implementation-plan.md)
 
 ---
@@ -31,10 +31,10 @@
 
 | 维度 | 状态 | 证据 |
 |---|---|---|
-| 系统推荐入口 | 已实现 | `POST /api/projects/:projectId/topic/recommendations`，见 [topic.routes.ts](../../backend/src/modules/topic/topic.routes.ts) |
-| 事件库（EventLibrary） | 代码不存在 | 仅有 17 行壳子 [topic-library.service.ts](../../backend/src/modules/topic/topic-library.service.ts)，未接路由 |
-| 自定义选题 | 壳子，未接路由 | [topic-custom-input.service.ts](../../backend/src/modules/topic/topic-custom-input.service.ts) 仅做 normalize + 调 recommendation |
-| `source_mode` 字段 | 设计有、代码无 | [field-design.md L147](../data/field-design.md) 写了；[schema.prisma](../../backend/prisma/schema.prisma) `TopicPackage` 0 命中 |
+| 系统推荐入口 | 已实现 | `POST /api/projects/:projectId/topic/recommendations`，见 [topic.routes.ts](../../../backend/src/modules/topic/topic.routes.ts) |
+| 事件库（EventLibrary） | 代码不存在 | 仅有 17 行壳子 [topic-library.service.ts](../../../backend/src/modules/topic/topic-library.service.ts)，未接路由 |
+| 自定义选题 | 壳子，未接路由 | [topic-custom-input.service.ts](../../../backend/src/modules/topic/topic-custom-input.service.ts) 仅做 normalize + 调 recommendation |
+| `source_mode` 字段 | 设计有、代码无 | [field-design.md L147](../../data/field-design.md) 写了；[schema.prisma](../../../backend/prisma/schema.prisma) `TopicPackage` 0 命中 |
 | EventRegistryEntry | 已存在 | 定位为「LLM 输出归一化账本」，含 `isProvisional`/`isCurated` 状态 |
 
 ### 1.2 用户核心理念（本设计的最高约束）
@@ -60,10 +60,10 @@
 | 编号 | 决策项 | 最终选择 | 依据 |
 |---|---|---|---|
 | D1 | EventLibrary 物理存储 | **DB 为运行时主，目录+文件为公共库同步源** | 用户理念 1+2；目录文件便于 git 版本管理与人工编辑；DB 便于频繁写入（推荐回流、审核状态流转） |
-| D2 | EventLibrary 与 EventRegistry 关系 | **A. 引用不合并** | [topic-stage-design.md L92-L120](../architecture/topic-stage-design.md) 已将 EventRegistry 定位为「身份账本」；合并会破坏既有合同、产生双职责耦合 |
+| D2 | EventLibrary 与 EventRegistry 关系 | **A. 引用不合并** | [topic-stage-design.md L92-L120](../../architecture/topic-stage-design.md) 已将 EventRegistry 定位为「身份账本」；合并会破坏既有合同、产生双职责耦合 |
 | D3 | 自定义选题事实风险检查 | **A. LLM 完成 + 结构校验** | 用户理念 5「体验闭环即可」；加独立语义审与该目标不符；AGENTS.md 禁止关键词黑名单冒充语义校验 |
 | D4 | S2-4 协调策略 | **C. S2-5 字段定义纳入筛选维度预留** | EventLibrary 字段一次性纳入朝代/人物/事件类型标签，S2-4 后续基于此建词表，避免回改 |
-| D5 | 三入口合并到 TopicPackage | **统一 TopicPackage 格式 + 新增 `source_mode` 字段** | 用户理念 6；[field-design.md L147](../data/field-design.md) 已预留 `recommended/library/custom` 三态 |
+| D5 | 三入口合并到 TopicPackage | **统一 TopicPackage 格式 + 新增 `source_mode` 字段** | 用户理念 6；[field-design.md L147](../../data/field-design.md) 已预留 `recommended/library/custom` 三态 |
 | D6 | `CustomTopicDraft` 是否独立建表 | **不独立建表，第一版用 `EventLibraryDraft` 统一承接，通过 `draftKind` 区分** | 推荐回流草稿与自定义选题草稿最终都进入同一「管理员审核 → 升级 `EventLibraryEntry`」流程；第一版避免新增第四张表。roadmap 中的 `CustomTopicDraft` 在本设计中落地为 `EventLibraryDraft(draftKind=custom)` |
 
 ---
@@ -219,7 +219,7 @@
 
 路径约定：`storage/event-library/<dynasty-slug>/<event-slug>.json`
 
-> 注：`storage/topic-candidate-library/` 已有先例（见 [topic-candidate-library.path.ts](../../backend/src/modules/topic/topic-candidate-library.path.ts)），可参考其 codec 与 path 工具模式。
+> 注：`storage/topic-candidate-library/` 已有先例（见 [topic-candidate-library.path.ts](../../../backend/src/modules/topic/topic-candidate-library.path.ts)），可参考其 codec 与 path 工具模式。
 
 文件 schema（单个事件一条）：
 
@@ -261,7 +261,7 @@
 
 三层指纹，互不冲突：
 
-1. **事件身份指纹**（已有，复用 [event-normalizer.ts](../../backend/src/modules/topic/event-normalizer.ts) `buildEventIdentityFingerprint`）：基于 `eventIdentity` 归一化。
+1. **事件身份指纹**（已有，复用 [event-normalizer.ts](../../../backend/src/modules/topic/event-normalizer.ts) `buildEventIdentityFingerprint`）：基于 `eventIdentity` 归一化。
 2. **库内去重指纹** `libraryFingerprint`（新增）：基于 `canonicalTitle + dynasty + era` 归一化，用于 EventLibraryEntry 唯一约束。同一事件不同别名命中同一指纹时拒绝新建，强制走合并。
 3. **角度指纹** `angleFingerprint`（新增）：基于 `eventFingerprint + normalize(angleLabel)`，用于 EventLibraryAngle 唯一约束，防止「换句话说就无限重复」（R5-3）。
 
@@ -273,7 +273,7 @@
 
 ### 5.1 新增字段：`source_mode`
 
-在 [schema.prisma](../../backend/prisma/schema.prisma) `TopicPackage` 表新增：
+在 [schema.prisma](../../../backend/prisma/schema.prisma) `TopicPackage` 表新增：
 
 ```prisma
 sourceMode    String  @default("recommended")
@@ -291,9 +291,9 @@ sourceRefJson Json?
 - `custom`：`{ "customDraftId": "..." }`
 
 同步更新：
-- shared schema（`shared/src/topic/topic-package.schema.ts`）：新增 `source_mode` 枚举 `recommended / library / custom`，default `recommended`；新增 `source_ref` optional（[field-design.md](../data/field-design.md) L147 已预留）。
+- shared schema（`shared/src/topic/topic-package.schema.ts`）：新增 `source_mode` 枚举 `recommended / library / custom`，default `recommended`；新增 `source_ref` optional（[field-design.md](../../data/field-design.md) L147 已预留）。
 - backend zod schema（confirm 入参校验）。
-- [topic-confirm.service.ts](../../backend/src/modules/topic/topic-confirm.service.ts) 写入时显式赋值 `sourceMode` 与 `sourceRefJson`，从 `StoredTopicCandidate.sourceRef` 透传。
+- [topic-confirm.service.ts](../../../backend/src/modules/topic/topic-confirm.service.ts) 写入时显式赋值 `sourceMode` 与 `sourceRefJson`，从 `StoredTopicCandidate.sourceRef` 透传。
 - script 阶段输入边界：`source_mode` / `source_ref` 不参与 script hard_lane/soft_lane，也不改变 writer prompt 输入语义。
 
 #### `source_mode` 的 schema 边界（D5 实现细节）
@@ -308,7 +308,7 @@ sourceRefJson Json?
 
 ### 5.2 confirm 流程扩展
 
-当前 confirm 流程（`confirmTopicCandidateController`）从 `topicCandidateStore` 通过 `candidateId` 取候选（[topic.controller.ts](../../backend/src/modules/topic/topic.controller.ts) 已有 `StoredTopicCandidate` / `topicCandidateStore`）。扩展为三入口共用：
+当前 confirm 流程（`confirmTopicCandidateController`）从 `topicCandidateStore` 通过 `candidateId` 取候选（[topic.controller.ts](../../../backend/src/modules/topic/topic.controller.ts) 已有 `StoredTopicCandidate` / `topicCandidateStore`）。扩展为三入口共用：
 
 ```text
 confirm 入参新增 sourceMode 字段（缺省 recommended，向后兼容）
@@ -476,7 +476,7 @@ prompt 注入防护（D3 体验闭环）：
 
 ### 7.0 API 命名决策（替换 api-design.md 草案）
 
-本设计采用 `/api/event-library/*` 与 `/topic/from-library`、`/topic/from-custom` 作为 S2-5 正式路径，**替换**早期 [api-design.md](../architecture/api-design.md) 中 `/api/events/library`、`/api/projects/:projectId/topic/library-candidates`、`/api/projects/:projectId/topic/custom-recognize`、`/api/projects/:projectId/topic/custom-candidates` 草案。原因是：
+本设计采用 `/api/event-library/*` 与 `/topic/from-library`、`/topic/from-custom` 作为 S2-5 正式路径，**替换**早期 [api-design.md](../../architecture/api-design.md) 中 `/api/events/library`、`/api/projects/:projectId/topic/library-candidates`、`/api/projects/:projectId/topic/custom-recognize`、`/api/projects/:projectId/topic/custom-candidates` 草案。原因是：
 
 1. `event-library` 是正式资源名，避免与 `EventRegistry` 混淆（`/api/events/library` 容易被误读为 EventRegistry 的子资源）。
 2. `from-library` / `from-custom` 与现有 `/topic/recommendations` 入口并列，表达「三入口生成 candidate」的对称语义。
@@ -529,7 +529,7 @@ prompt 注入防护（D3 体验闭环）：
 
 ### 8.1 CreateTopicModal 改造
 
-当前 [CreateTopicModal.vue](../../frontend/src/components/CreateTopicModal.vue) 三 tab 是占位文字。改造为：
+当前 [CreateTopicModal.vue](../../../frontend/src/components/CreateTopicModal.vue) 三 tab 是占位文字。改造为：
 
 - **Tab A 推荐**：保持现有「生成推荐」按钮，结果列表不变。
 - **Tab B 事件库**：

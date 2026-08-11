@@ -181,7 +181,7 @@
 
 ### B. 事件库入口
 
-> 路径口径：本节路径已在 S2-5（[2026-07-19-s2-5-event-library-and-custom-topic-design.md](../plans/2026-07-19-s2-5-event-library-and-custom-topic-design.md) §7）正式化为 `/api/event-library/*` 与 `/topic/from-library`。早期草案 `/api/events/library`、`/api/projects/:projectId/topic/library-candidates` 已废弃，不再实现。
+> 路径口径：本节路径已在 S2-5（[2026-07-19-s2-5-event-library-and-custom-topic-design.md](../plans/archive/2026-07-19-s2-5-event-library-and-custom-topic-design.md) §7）正式化为 `/api/event-library/*` 与 `/topic/from-library`。早期草案 `/api/events/library`、`/api/projects/:projectId/topic/library-candidates` 已废弃，不再实现。
 
 `GET /api/event-library/entries`
 

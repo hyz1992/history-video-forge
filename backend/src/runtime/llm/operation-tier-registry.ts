@@ -1,7 +1,7 @@
 /**
  * Operation → Tier 映射注册表（S2-1）。
  *
- * 设计约束（见 docs/plans/2026-07-17-s2-1-multi-provider-model-routing-design.md §4.2）：
+ * 设计约束（见 docs/plans/archive/2026-07-17-s2-1-multi-provider-model-routing-design.md §4.2）：
  *
  * - tier 是模型路由的唯一配置维度，与 mode（tool_call vs json_object）正交。
  * - tier 划分按"是否需要 reasoning 深度"二元化：smart / flash。

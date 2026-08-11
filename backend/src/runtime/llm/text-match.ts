@@ -1,5 +1,5 @@
 /**
- * LLM 输出文本对齐归一化工具（设计：docs/plans/2026-07-28-llm-output-text-normalization-design.md）。
+ * LLM 输出文本对齐归一化工具（设计：docs/plans/archive/2026-07-28-llm-output-text-normalization-design.md）。
  *
  * 用途：LLM 在两次独立调用之间（如 topic package → script → storyboard），
  * 经常出现标点风格漂移（全/半角逗号、引号边界、空格），导致 validator 用

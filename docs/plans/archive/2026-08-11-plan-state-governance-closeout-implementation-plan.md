@@ -51,10 +51,19 @@ $trackedPlans | ForEach-Object { git ls-files --error-unmatch -- $_ | Out-Null }
 运行：
 
 ```powershell
-git status --short
+$currentStatus = @(git status --short)
+if ($currentStatus.Count -gt 0) { throw "current_worktree_not_clean:$($currentStatus -join ',')" }
+
+$mainWorktreeLine = @(git worktree list --porcelain | Where-Object { $_ -match '^worktree ' } | Select-Object -First 1)
+if ($mainWorktreeLine.Count -ne 1) { throw 'main_worktree_not_found' }
+$mainWorktree = $mainWorktreeLine[0] -replace '^worktree ', ''
+$mainUserStatus = @(git -C $mainWorktree status --short -- _tmp_classify.mjs scripts/migrate-uuid-storage-to-date.mjs)
+if ($mainUserStatus.Count -ne 2 -or @($mainUserStatus | Where-Object { $_ -notmatch '^\?\? ' }).Count -gt 0) {
+  throw 'main_user_untracked_file_status_changed'
+}
 ```
 
-预期：除本任务文档外，仍只有用户原有的 `_tmp_classify.mjs` 与 `scripts/migrate-uuid-storage-to-date.mjs` 未跟踪；不得修改或 stage 它们。
+预期：当前隔离 worktree 为 clean；两个用户原有脚本只存在于 `git worktree list --porcelain` 返回的首个主工作区中，另行只读核对时分别显示 `??`。不得把它们复制到当前 worktree，也不得修改或 stage 它们。
 
 - [ ] **Step 2：冻结计划文件清单**
 
@@ -377,7 +386,7 @@ git status --short
 git diff --stat
 ```
 
-预期：`git diff --check` exit 0；状态只包含本任务文档移动、链接与状态入口修改，以及两个未跟踪用户脚本。
+预期：`git diff --check` exit 0；当前隔离 worktree 状态只包含本任务文档移动、链接与状态入口修改。两个未跟踪用户脚本不在该 worktree，其主工作区边界已由 Task 1 Step 1 单独只读核对。
 
 - [ ] **Step 4：按原始请求自审**
 
@@ -389,7 +398,7 @@ git diff --stat
 - 已修：Asset Planning live/non-live 证据边界。
 - 已修：路线图治理项。
 - 已验证：无新增本地 Markdown 断链。
-- 未改：业务代码、Prompt、schema、API、测试、storage、付费 provider 与用户未跟踪脚本。
+- 未改：业务行为、Prompt、schema、API、测试、storage、付费 provider 与用户未跟踪脚本；`.env.example` 与 8 个 backend runtime 文件仅修正注释或归档路径字符串。
 
 ### Task 8：中文提交并归档本计划
 
@@ -402,13 +411,24 @@ git diff --stat
 运行精确 pathspec：
 
 ```powershell
-git add -A -- docs/plans docs/README.md docs/todos/roadmap-todo.md `
+git add -A -- .env.example docs/plans docs/README.md docs/todos/roadmap-todo.md `
   docs/architecture/api-design.md docs/architecture/script-validation-spec.md `
   docs/records/2026-05-17-project-status-for-claude-review.md `
   docs/records/2026-05-17-compose-stage-completion-checklist.md `
   docs/records/2026-07-12-trae-v2-handoff.md `
-  harness/docs/s2-0-baseline-protocol.md
+  docs/records/2026-08-10-asset-planning-intent-compiler-live-check.md `
+  harness/docs/s2-0-baseline-protocol.md `
+  backend/src/runtime/llm/operation-tier-registry.ts `
+  backend/src/runtime/llm/provider-registry.ts `
+  backend/src/runtime/llm/runtime-config-diagnostics.ts `
+  backend/src/runtime/llm/text-match.ts `
+  backend/src/runtime/llm/tier-aware-provider-factory.ts `
+  backend/src/runtime/llm/tier-aware-provider.ts `
+  backend/src/runtime/llm/tier-config-diagnostics.ts `
+  backend/src/runtime/llm/tier-resolver.ts
 ```
+
+其中 `.env.example` 与上述 8 个 backend runtime 文件共 9 项只包含注释或归档路径字符串修正，不改变运行行为。
 
 不得使用 `git add .`、`git add -A`（无 pathspec）或会包含用户未跟踪脚本的宽泛命令。
 
@@ -424,6 +444,7 @@ $cached = @(git diff --cached --name-only)
 $unexpected = @($cached | Where-Object {
   $_ -notmatch '^docs/plans/' -and
   $_ -notin @(
+    '.env.example',
     'docs/README.md',
     'docs/todos/roadmap-todo.md',
     'docs/architecture/api-design.md',
@@ -431,19 +452,32 @@ $unexpected = @($cached | Where-Object {
     'docs/records/2026-05-17-project-status-for-claude-review.md',
     'docs/records/2026-05-17-compose-stage-completion-checklist.md',
     'docs/records/2026-07-12-trae-v2-handoff.md',
-    'harness/docs/s2-0-baseline-protocol.md'
+    'docs/records/2026-08-10-asset-planning-intent-compiler-live-check.md',
+    'harness/docs/s2-0-baseline-protocol.md',
+    'backend/src/runtime/llm/operation-tier-registry.ts',
+    'backend/src/runtime/llm/provider-registry.ts',
+    'backend/src/runtime/llm/runtime-config-diagnostics.ts',
+    'backend/src/runtime/llm/text-match.ts',
+    'backend/src/runtime/llm/tier-aware-provider-factory.ts',
+    'backend/src/runtime/llm/tier-aware-provider.ts',
+    'backend/src/runtime/llm/tier-config-diagnostics.ts',
+    'backend/src/runtime/llm/tier-resolver.ts'
   )
 })
 if ($unexpected.Count -gt 0) { throw "unexpected_staged_paths:$($unexpected -join ',')" }
 $userCached = @(git diff --cached --name-only -- _tmp_classify.mjs scripts/migrate-uuid-storage-to-date.mjs)
 if ($userCached.Count -gt 0) { throw 'user_untracked_files_staged' }
-$userStatus = @(git status --short -- _tmp_classify.mjs scripts/migrate-uuid-storage-to-date.mjs)
-if ($userStatus.Count -ne 2 -or @($userStatus | Where-Object { $_ -notmatch '^\?\? ' }).Count -gt 0) {
-  throw 'user_untracked_file_status_changed'
+
+$mainWorktreeLine = @(git worktree list --porcelain | Where-Object { $_ -match '^worktree ' } | Select-Object -First 1)
+if ($mainWorktreeLine.Count -ne 1) { throw 'main_worktree_not_found' }
+$mainWorktree = $mainWorktreeLine[0] -replace '^worktree ', ''
+$mainUserStatus = @(git -C $mainWorktree status --short -- _tmp_classify.mjs scripts/migrate-uuid-storage-to-date.mjs)
+if ($mainUserStatus.Count -ne 2 -or @($mainUserStatus | Where-Object { $_ -notmatch '^\?\? ' }).Count -gt 0) {
+  throw 'main_user_untracked_file_status_changed'
 }
 ```
 
-预期：allowlist 硬断言通过；两个用户脚本仍分别显示 `??`，暂存区不包含业务代码或 storage。
+预期：allowlist 硬断言通过；当前 worktree 的 `$userCached` 为 0，主工作区中的两个用户脚本仍分别显示 `??`；暂存区不包含 allowlist 外文件或 storage，纳入的 8 个 backend runtime 文件无运行行为变化。
 
 - [ ] **Step 3：中文提交**
 
@@ -460,8 +494,18 @@ git commit -m "收口历史计划与当前状态入口"
 运行：
 
 ```powershell
-git status --short
+$currentStatus = @(git status --short)
+if ($currentStatus.Count -gt 0) { throw "current_worktree_not_clean:$($currentStatus -join ',')" }
+
+$mainWorktreeLine = @(git worktree list --porcelain | Where-Object { $_ -match '^worktree ' } | Select-Object -First 1)
+if ($mainWorktreeLine.Count -ne 1) { throw 'main_worktree_not_found' }
+$mainWorktree = $mainWorktreeLine[0] -replace '^worktree ', ''
+$mainUserStatus = @(git -C $mainWorktree status --short -- _tmp_classify.mjs scripts/migrate-uuid-storage-to-date.mjs)
+if ($mainUserStatus.Count -ne 2 -or @($mainUserStatus | Where-Object { $_ -notmatch '^\?\? ' }).Count -gt 0) {
+  throw 'main_user_untracked_file_status_changed'
+}
+
 git log -3 --oneline
 ```
 
-预期：只剩两个用户原有未跟踪脚本；最近提交依次包含治理设计、治理实施计划和最终收口提交。
+预期：当前隔离 worktree 为 clean；主工作区仍保留两个分别显示 `??` 的用户脚本；最近提交依次包含治理设计、治理实施计划和最终收口提交。

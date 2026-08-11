@@ -57,16 +57,16 @@
 - [x] 完成 V2 S1 真实浏览器验收补强：新增 `npm run harness:s1-browser-acceptance`，覆盖 admin 后台、migration owner 转移、代管横幅、审计日志、转移后用户可见、其他用户隔离和 USER 管理后台拦截
 - [x] 完成 V2 数据基础 Task 8.5 收口：测试矩阵、schema 复核、迁移状态机、readiness、仓储访问边界、SQLite 备份恢复、Prisma 业务切换与 JSON 写入冻结
 - [x] 完成 V1 高风险稳定化最终全量回归、故障演练和内置浏览器验收
-- [x] 收口 `S2-0` LLM 回复速度、质量和结构化输出优化基线：S2-0 期间尝试了紧凑结论合同、selector thinking on、builder+light-review 等多轮方案，均未能解决"细粒度语义风险识别需要 reasoning、而 reasoning 在 GLM-5.x 上必然带来 70~400s 长尾"这一死结；最终于 `2968c5e` 回滚到 builder(8)+selector 架构并冻结当前模型组合下的进一步优化。最终设计与实施计划见 [S2-0 回滚设计](../plans/2026-07-17-s2-0-topic-rollback-to-builder-selector-design.md) 与 [实施计划](../plans/2026-07-17-s2-0-topic-rollback-to-builder-selector-implementation-plan.md)；67 个试错 commit 与全部实测记录完整保留在 git 历史中作为 S2-1 输入。
-- [x] 完成 `S2-1` 多模型、多供应商切换：引入 `smart` / `flash` 两档 tier 作为模型路由唯一维度，每个 operation 声明所需 tier，gateway 按 tier 解析到具体 `provider:model`。阶段一主链路改造（operation-tier-registry / provider-registry / tier-resolver / tier-aware-provider / tier-aware-provider-factory / env 接入新变量 / providers.json 示例 / 8 个调用方接入 / 启动诊断日志）与阶段二 live 验收（DeepSeek smart + 智谱 flash 端到端冒烟、selector thinking 决策）均完成。设计见 [S2-1 设计](../plans/2026-07-17-s2-1-multi-provider-model-routing-design.md)，selector 决策记录见 [2026-07-18 S2-1 Selector Thinking 决策记录](../records/2026-07-18-s2-1-selector-thinking-decision.md)。S2-1 进入冻结状态，作为 S2-2 输入。
+- [x] 收口 `S2-0` LLM 回复速度、质量和结构化输出优化基线：S2-0 期间尝试了紧凑结论合同、selector thinking on、builder+light-review 等多轮方案，均未能解决"细粒度语义风险识别需要 reasoning、而 reasoning 在 GLM-5.x 上必然带来 70~400s 长尾"这一死结；最终于 `2968c5e` 回滚到 builder(8)+selector 架构并冻结当前模型组合下的进一步优化。最终设计与实施计划见 [S2-0 回滚设计](../plans/archive/2026-07-17-s2-0-topic-rollback-to-builder-selector-design.md) 与 [实施计划](../plans/archive/2026-07-17-s2-0-topic-rollback-to-builder-selector-implementation-plan.md)；67 个试错 commit 与全部实测记录完整保留在 git 历史中作为 S2-1 输入。
+- [x] 完成 `S2-1` 多模型、多供应商切换：引入 `smart` / `flash` 两档 tier 作为模型路由唯一维度，每个 operation 声明所需 tier，gateway 按 tier 解析到具体 `provider:model`。阶段一主链路改造（operation-tier-registry / provider-registry / tier-resolver / tier-aware-provider / tier-aware-provider-factory / env 接入新变量 / providers.json 示例 / 8 个调用方接入 / 启动诊断日志）与阶段二 live 验收（DeepSeek smart + 智谱 flash 端到端冒烟、selector thinking 决策）均完成。设计见 [S2-1 设计](../plans/archive/2026-07-17-s2-1-multi-provider-model-routing-design.md)，selector 决策记录见 [2026-07-18 S2-1 Selector Thinking 决策记录](../records/2026-07-18-s2-1-selector-thinking-decision.md)。S2-1 进入冻结状态，作为 S2-2 输入。
+- [x] 收口当前未归档计划，避免历史 implementation plan 误导新任务（2026-08-11 完成；`docs/plans/` 根目录仅保留状态 README，历史计划已移入 `archive/` 且不可续跑）
 
 ## 进行中
 - [ ] 细化 `family_confidence` 计算规则
 - [ ] 补齐前端 v1 真实浏览器验收矩阵：空态、加载中、成功、失败、刷新、深链、重复操作
-- [ ] 收口当前未归档计划，避免历史 implementation plan 误导新任务
 
 ## 待做
-- [ ] `S2-2` 用户偏好、生成策略与成本控制：用户级策略、预算、成本记录和运行快照
+- [ ] `S2-2` 用户偏好、生成策略与成本控制：尚未启动；启动时须结合 `AGENTS.md`、正式架构、当前代码和实际验证结果，按当日日期新建中文 design 与 implementation plan，再设计用户级策略、预算、成本记录和运行快照
 - [x] `S2-3` Prompt 治理：版本、hash、fixtures、变更说明、运行快照与 `prompts/` 正式 prompt 规则对齐（2026-07-18 完成）
 - [x] `S2-4` 选题筛选条件扩充：结构化筛选合同、连续历史区间、生成提示词、fingerprint/持久化/诊断与新建项目弹窗已落地（2026-08-08 完成；真实 LLM live check 未纳入默认验收）
 - [x] `S2-5` 事件库与自定义选题：系统推荐、事件库、自定义三入口进入同一 Topic Package 链路（2026-07-20 G7 验收通过）
@@ -94,5 +94,11 @@
 - [第四阶段设计文档](../plans/archive/topic-script/2026-04-21-topic-script-phase-4-design.md)
 - [第四阶段实施计划](../plans/archive/topic-script/2026-04-21-topic-script-phase-4-implementation-plan.md)
 
-## 阻塞项
+## 剩余风险与验证缺口
+
 - [ ] DashScope 图生视频真实小样本验证默认不执行；如要验证需明确批准成本并记录 request id、耗时、费用和失败模式
+- Asset Planning global normalization / structural repair 异常恢复目前只有 non-live 证据；后续 7 个有效 live 轮次均未触发该分支。该证据缺口不自动升级为付费 live 任务，仅在真实故障复现或另行明确授权时验证，详见 [最近一次 Asset Planning live 记录](../records/2026-08-10-asset-planning-intent-compiler-live-check.md)。
+
+## 阻塞项
+
+- 当前无。

@@ -1,7 +1,7 @@
 /**
  * Tier → Provider:Model 解析器（S2-1 Task 3）。
  *
- * 设计约束（见 docs/plans/2026-07-17-s2-1-multi-provider-model-routing-design.md §4.1.1 / §4.3 / §4.4）：
+ * 设计约束（见 docs/plans/archive/2026-07-17-s2-1-multi-provider-model-routing-design.md §4.1.1 / §4.3 / §4.4）：
  *
  * - tier 走 env 变量（LLM_SMART_MODEL / LLM_FLASH_MODEL），格式固定 `<provider>:<model>`（opencode 风格）。
  * - 解析时关联 provider-registry 拿到 baseUrl 与 apiKeyEnv 引用，再从 env 取实际 api key。

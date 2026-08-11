@@ -151,7 +151,7 @@ Do not start renderer/export work without a new design and implementation plan.
 Renderer-stage design has now been created:
 
 - `docs/architecture/renderer-stage-design.md`
-- `docs/plans/2026-05-17-renderer-stage-implementation-plan.md`
+- `docs/plans/archive/2026-05-17-renderer-stage-implementation-plan.md`
 
 Recommended next step: review the renderer design and implementation plan, then begin only Task 1 if the review passes.
 

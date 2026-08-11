@@ -1,7 +1,7 @@
 /**
  * env → tier-aware provider 工厂（S2-1 Task 4b）。
  *
- * 设计约束（见 docs/plans/2026-07-17-s2-1-multi-provider-model-routing-design.md §4.3 / §4.4 / §5.1）：
+ * 设计约束（见 docs/plans/archive/2026-07-17-s2-1-multi-provider-model-routing-design.md §4.3 / §4.4 / §5.1）：
  *
  * - 启动时一次性 load providers.json + 解析 smart/flash tier，构造 inner provider 缓存。
  * - 兼容回退链（design §4.4）：

@@ -540,7 +540,7 @@ selector pool 对照只读取 Task 14 已保存的本地 interaction input，并
 
 ### 正式入口与评测边界
 
-- 正式入口：[内部一致性召回窄设计](../../docs/plans/2026-07-16-s2-0-topic-selector-internal-consistency-recall-design.md)（提交 `3f28d94`）与[实施计划](../../docs/plans/2026-07-16-s2-0-topic-selector-internal-consistency-recall-implementation-plan.md)（提交 `5de7458`）。
+- 正式入口：[内部一致性召回窄设计](../../docs/plans/archive/2026-07-16-s2-0-topic-selector-internal-consistency-recall-design.md)（提交 `3f28d94`）与[实施计划](../../docs/plans/archive/2026-07-16-s2-0-topic-selector-internal-consistency-recall-implementation-plan.md)（提交 `5de7458`）。
 - 人工复核确认，“党锢之祸”的绝对化结论已在候选多个字段中互相重复，Selector 输入内部缺少反证；继续把它作为硬风险标注会超出“只查候选内部一致性”的可观察边界。因此它退出自动硬指标，但不是改判为 `none`：候选仍保留在原始 selector pool 中，并继续作为需要外部史实判断的人工观察。
 - 固定回放硬指标修正为 2 个风险正例（靖康主体错配、鸿门宴过度断言）和 2 个 `none` 对照（玄武门、巫蛊）。本地 comparator 没有修改，只按人工静态 annotation 的 candidate ID 与 provider 返回的 `consistency_issue` enum 比较，不读取候选正文推导、补充或覆盖语义标签。
 - 没有新增任何本地语义 validator，也没有候选正文关键词或字符串匹配、正则、黑名单、相似度、规则评分或本地启发式语义分支。
@@ -596,7 +596,7 @@ selector pool 对照只读取 Task 14 已保存的本地 interaction input，并
 
 ### 正式入口与根因隔离
 
-- 正式入口：[推理预算隔离与召回修复设计](../../docs/plans/2026-07-16-s2-0-topic-selector-thinking-isolation-design.md)（提交 `58b73db`）与[实施计划](../../docs/plans/2026-07-16-s2-0-topic-selector-thinking-isolation-implementation-plan.md)（提交 `1c30d11`）。
+- 正式入口：[推理预算隔离与召回修复设计](../../docs/plans/archive/2026-07-16-s2-0-topic-selector-thinking-isolation-design.md)（提交 `58b73db`）与[实施计划](../../docs/plans/archive/2026-07-16-s2-0-topic-selector-thinking-isolation-implementation-plan.md)（提交 `1c30d11`）。
 - 历史对比确认：Task 16 live 前代码基线 `6b9934b` 在 `thinking=disabled` 下曾识别时代越界和主体歧义，对应验收记录提交为 `1d56e75`；但同轮也漏判“败退亡国”。因此历史证据只能说明 disabled 能识别部分显式风险，不能证明其对细粒度跨字段关系稳定合格。
 - 当前同一固定输入已经先后否证 compact/full verdict 与 prompt-only 两种解释：完整 verdict 风险仍为 0/3且 completion 增长 60.3%，原子断言 prompt 风险仍为 0/2。故本轮只改变 Selector thinking，不改模型、prompt、prompt hash、fixture、compact schema、parser、目标工具或 `maxAttempts=1`。
 - 回放入口按 TDD 增加显式 `enabled/disabled` 参数、requested/effective thinking 记录和 mismatch 闸门；22 项中 8 项先红，最小实现后 22/22 通过，提交 `8285d4d`。本机 npm 11.5.1 会吞掉脚本后的 `--thinking` 配置参数，实际 dry-run/live 因此使用直接 `npx tsx` 入口；dry-run 明确为 requested enabled、fixture 2、required requests 2、actual requests 0。

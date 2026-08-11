@@ -6,7 +6,7 @@
 
 在进入“用户系统与管理员权限”实现前，把现有 Prisma 脚手架收口为可真实承载业务的单一主存储：迁移状态可恢复、readiness 可信、正式数据库可备份恢复、业务 API 不再写 JSON、项目归属合同默认拒绝越权，并取得自动化与真实重启恢复证据。
 
-本计划是 [V2 数据基础与迁移实施计划](../superpowers/plans/2026-07-10-v2-data-foundation-implementation-plan.md) 的补充闸门；风险来源见 [近期提交审查记录](../records/2026-07-11-v2-data-foundation-commit-review.md)。
+本计划是 [V2 数据基础与迁移实施计划](../../superpowers/plans/2026-07-10-v2-data-foundation-implementation-plan.md) 的补充闸门；风险来源见 [近期提交审查记录](../../records/2026-07-11-v2-data-foundation-commit-review.md)。
 
 ## 2. 范围边界
 

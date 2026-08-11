@@ -141,7 +141,7 @@
 | `duration_mild_drift` | 时长轻微偏差 | 偏离档位不超过 `15%` |
 | `beat_trace_low_confidence` | trace 自报置信度低，但覆盖齐全 | `confidence` 偏低 |
 | `quote_trace_all_paraphrase` | 原文全部意译而非直引 | 无明显误用 |
-| `beat_trace_excerpt_drift:{beat}` | beat excerpt 严格 includes 失败，但语义上仍在 script 中 | LLM 对 excerpt 做字符级改写（标点、断句、修饰）；regen 不会改善，降级为 warning。详见 [LLM 输出文本对齐归一化容错设计](../plans/2026-07-28-llm-output-text-normalization-design.md)。 |
+| `beat_trace_excerpt_drift:{beat}` | beat excerpt 严格 includes 失败，但语义上仍在 script 中 | LLM 对 excerpt 做字符级改写（标点、断句、修饰）；regen 不会改善，降级为 warning。详见 [LLM 输出文本对齐归一化容错设计](../plans/archive/2026-07-28-llm-output-text-normalization-design.md)。 |
 | `beat_name_drift:{beat}` | beat 名字严格相等失败，但归一化后等价 | topic package 与 script 两次独立 LLM 调用间漂移全/半角标点、引号边界。 |
 | `quote_name_drift:{quote}` | quote 名字严格相等失败，但归一化后等价 | 同上。 |
 

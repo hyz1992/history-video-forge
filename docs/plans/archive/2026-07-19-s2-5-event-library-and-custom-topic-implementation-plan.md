@@ -7,7 +7,7 @@
 关联：
 
 - 设计文档：[2026-07-19-s2-5-event-library-and-custom-topic-design.md](./2026-07-19-s2-5-event-library-and-custom-topic-design.md)
-- AGENTS 工作契约：[../../AGENTS.md](../../AGENTS.md)
+- AGENTS 工作契约：[../../AGENTS.md](../../../AGENTS.md)
 - roadmap：[2026-07-13-v2-roadmap-step3-10.md](./2026-07-13-v2-roadmap-step3-10.md) Step 5
 
 ---
@@ -50,7 +50,7 @@ P0 API 文档同步（✅ 已在本轮整改完成）
 
 ### P0：API 文档同步 ✅ 已在本次文档整改中完成
 
-**目标**：把 [api-design.md](../architecture/api-design.md) 中事件库与自定义入口的旧草案路径替换为 S2-5 正式路径，消除路径冲突。**本次文档整改已执行，不再作为后续实施阶段。**
+**目标**：把 [api-design.md](../../architecture/api-design.md) 中事件库与自定义入口的旧草案路径替换为 S2-5 正式路径，消除路径冲突。**本次文档整改已执行，不再作为后续实施阶段。**
 
 **已完成**：
 - `docs/architecture/api-design.md`：旧路径已替换，旧草案标注为「已废弃，不再实现」。
@@ -101,7 +101,7 @@ P0 API 文档同步（✅ 已在本轮整改完成）
 - `backend/src/modules/event-library/event-library-sync.service.ts`：扫描 `storage/event-library/**/*.json` -> upsert DB。
 - `backend/src/modules/event-library/event-library-entry.repository.ts`：CRUD + fingerprint 查询。
 - `backend/src/modules/event-library/event-library.codec.ts`：文件 schema 解析与校验。
-- `backend/src/modules/event-library/event-library.path.ts`：路径约定工具（参考 [topic-candidate-library.path.ts](../../backend/src/modules/topic/topic-candidate-library.path.ts)）。
+- `backend/src/modules/event-library/event-library.path.ts`：路径约定工具（参考 [topic-candidate-library.path.ts](../../../backend/src/modules/topic/topic-candidate-library.path.ts)）。
 - `storage/event-library/_sample/sample-event.json`：示例文件（用于测试）。
 - `tests/backend/event-library/sync.test.ts`：同步逻辑测试。
 

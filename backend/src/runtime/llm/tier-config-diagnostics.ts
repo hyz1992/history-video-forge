@@ -1,7 +1,7 @@
 /**
  * 启动时 tier 路由配置诊断（S2-1 Task 7）。
  *
- * 设计约束（见 docs/plans/2026-07-17-s2-1-multi-provider-model-routing-design.md §8 R4 / §10.9）：
+ * 设计约束（见 docs/plans/archive/2026-07-17-s2-1-multi-provider-model-routing-design.md §8 R4 / §10.9）：
  *
  * - backend 启动时打印实际生效的 tier→provider:model 与 provider 注册情况（脱敏）。
  * - 兼容期半切换状态明确：标识 "兼容模式"（provider=default 或 flashReusesSmart=true）。

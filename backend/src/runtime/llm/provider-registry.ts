@@ -1,7 +1,7 @@
 /**
  * Provider 注册表（S2-1 Task 2）。
  *
- * 设计约束（见 docs/plans/2026-07-17-s2-1-multi-provider-model-routing-design.md §4.1.2）：
+ * 设计约束（见 docs/plans/archive/2026-07-17-s2-1-multi-provider-model-routing-design.md §4.1.2）：
  *
  * - providers.json 只管 provider 注册（name + baseUrl + apiKeyEnv 引用），不存密钥、不存 tier 映射。
  * - tier → provider:model 映射走 env（Task 3 实现），与本注册表正交。

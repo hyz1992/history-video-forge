@@ -22,13 +22,13 @@ S2-0 阶段（含本次会话的 light-review 试错）共经历 67 个提交 + 
 > **任务难度存在明显的二元分化：需要 reasoning 深度的任务（writer、planner、selector）必须用高能力模型；不需要 reasoning 的短结构化任务（title、description、cover-prompt）用快速模型更合适。**
 
 实测证据：
-- `topic.light-review` 在 GLM-5.2 thinking off 下召回 0/2；在 glm-4 下召回 0/2（[thinking-isolation-live-check](../../docs/records/2026-07-17-topic-light-review-thinking-isolation-live-check.md)）。
+- `topic.light-review` 在 GLM-5.2 thinking off 下召回 0/2；在 glm-4 下召回 0/2（[thinking-isolation-live-check](../../../docs/records/2026-07-17-topic-light-review-thinking-isolation-live-check.md)）。
 - `topic.selector` 在 GLM-5.2 thinking off 下固定回放召回 0/2；thinking on 下 2/2 但单次 31s→424s。
-- `publish.*` 系列短输出在 glm-4 上延迟更低（[2026-05-08 记录](../../docs/records/2026-05-08-glm-5-1-structured-profile-issue.md)）。
+- `publish.*` 系列短输出在 glm-4 上延迟更低（[2026-05-08 记录](../../../docs/records/2026-05-08-glm-5-1-structured-profile-issue.md)）。
 
 ### 1.2 当前配置的根本问题
 
-当前 [env.ts](../../backend/src/config/env.ts) 用 `LLM_MODEL` / `LLM_STRUCTURED_MODEL` 两个全局变量定位模型，存在三个根本缺陷：
+当前 [env.ts](../../../backend/src/config/env.ts) 用 `LLM_MODEL` / `LLM_STRUCTURED_MODEL` 两个全局变量定位模型，存在三个根本缺陷：
 
 1. **维度错配**：`STRUCTURED` 实际混合了"模型路由"和"调用方式（tool_call vs json_object）"两个独立职责，导致切换模型时牵一发动全身。
 2. **粒度过粗**：所有 short_structured_decision 类 operation 共用一个模型，无法区分"`topic.selector` 需要 reasoning"和"`publish.title-generator` 不需要 reasoning"。

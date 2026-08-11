@@ -45,7 +45,7 @@ That is not true yet. There is no implemented renderer/export stage, no MP4 outp
 ## Links to New Review Documents
 
 - Renderer design: `docs/architecture/renderer-stage-design.md`
-- Renderer implementation plan: `docs/plans/2026-05-17-renderer-stage-implementation-plan.md`
+- Renderer implementation plan: `docs/plans/archive/2026-05-17-renderer-stage-implementation-plan.md`
 - Compose completion checklist: `docs/records/2026-05-17-compose-stage-completion-checklist.md`
 - Assets completion checklist: `docs/records/2026-05-16-assets-stage-completion-checklist.md`
 

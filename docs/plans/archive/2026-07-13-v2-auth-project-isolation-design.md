@@ -4,7 +4,7 @@
 
 状态：设计草案，等待人工审查。未通过审查前不修改正式 Prisma schema，不创建 migration，不接入 auth，不修改页面。
 
-> **实施闸门（最高优先级）：** 本设计是 P0.1/P0.2 的**设计草案**，不是实施放行。实施入口受 Task 8.5 收口约束（状态入口 [docs/plans/README.md](../plans/README.md) 明确"Task 8.5 完成前不进入用户系统实现"）。Task 8.5-9/8.5-10 关闭后，本设计需按最终 schema 和切换结果重新审阅，再经独立审查批准，才进入实施。
+> **实施闸门（最高优先级）：** 本设计是 P0.1/P0.2 的**设计草案**，不是实施放行。实施入口受 Task 8.5 收口约束（状态入口 [docs/plans/README.md](../README.md) 明确"Task 8.5 完成前不进入用户系统实现"）。Task 8.5-9/8.5-10 关闭后，本设计需按最终 schema 和切换结果重新审阅，再经独立审查批准，才进入实施。
 
 本设计是 [V2 总体设计](./2026-07-13-v2-overall-design.md) 的第一个子项目详细设计，覆盖 V2 P0.1 和 P0.2。
 
@@ -534,7 +534,7 @@ function requireAdmin(auth: AuthContext): void {
 
 ### 8.1 IDOR 防护（项目 API）
 
-**当前漏洞（已验证）：** [project.controller.ts](../../backend/src/modules/projects/project.controller.ts) 不检查 owner。
+**当前漏洞（已验证）：** [project.controller.ts](../../../backend/src/modules/projects/project.controller.ts) 不检查 owner。
 
 **修复：**
 
@@ -561,7 +561,7 @@ export async function getProjectSnapshotController(context: RouteContext): Promi
 
 ### 8.2 媒体 URI 越权防护
 
-**当前漏洞（已验证）：** [file-routes.ts](../../backend/src/http/file-routes.ts) 不检查 owner。
+**当前漏洞（已验证）：** [file-routes.ts](../../../backend/src/http/file-routes.ts) 不检查 owner。
 
 **修复：**
 
@@ -581,7 +581,7 @@ export async function handleFileRoute(match, response, app, auth) {
 }
 ```
 
-**关键：** `handleFileRoute` 需要接收 auth 参数，这要求 [server.ts](../../backend/src/server.ts) 在调用它之前先运行 auth middleware。
+**关键：** `handleFileRoute` 需要接收 auth 参数，这要求 [server.ts](../../../backend/src/server.ts) 在调用它之前先运行 auth middleware。
 
 ### 8.3 任务 ID 越权防护
 

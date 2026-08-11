@@ -4,7 +4,7 @@
 
 状态：设计草案。本文档为 [V2 总体设计](./2026-07-13-v2-overall-design.md) 的附件，审查当前 Prisma schema 是否适合 V2，**不实施任何变更**。
 
-事实基准：[backend/prisma/schema.prisma](../../backend/prisma/schema.prisma)、[backend/prisma/migrations/](../../backend/prisma/migrations/)。
+事实基准：[backend/prisma/schema.prisma](../../../backend/prisma/schema.prisma)、[backend/prisma/migrations/](../../../backend/prisma/migrations/)。
 
 ---
 

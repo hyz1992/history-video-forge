@@ -11,7 +11,7 @@
 3. `docs/requirements/product-requirements.md`
 4. `docs/data/schema-design.md`
 5. `docs/architecture/pipeline-io-spec.md`
-6. `docs/plans/2026-07-11-v2-data-foundation-closeout-implementation-plan.md`
+6. `docs/plans/archive/2026-07-11-v2-data-foundation-closeout-implementation-plan.md`
 7. `docs/records/2026-07-12-v2-data-foundation-closeout-verification.md`
 
 ## 不可破坏的基础合同

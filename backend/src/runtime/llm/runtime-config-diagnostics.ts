@@ -1,7 +1,7 @@
 /**
  * 启动时 prompt 注册诊断（S2-3 Task 4）。
  *
- * 设计约束（见 docs/plans/2026-07-18-s2-3-prompt-governance-design.md §3.2）：
+ * 设计约束（见 docs/plans/archive/2026-07-18-s2-3-prompt-governance-design.md §3.2）：
  *
  * - 仅输出 id + version + status 三字段。
  * - 不做 SHA drift 检测（drift 由 Task 8 check-prompt-drift 离线脚本完成）。

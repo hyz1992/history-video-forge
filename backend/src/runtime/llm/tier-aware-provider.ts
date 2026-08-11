@@ -1,7 +1,7 @@
 /**
  * Tier-aware provider：按 operationName 路由到 smart/flash inner provider（S2-1 Task 4a）。
  *
- * 设计约束（见 docs/plans/2026-07-17-s2-1-multi-provider-model-routing-design.md §3.1 / §4.3 / §5.2）：
+ * 设计约束（见 docs/plans/archive/2026-07-17-s2-1-multi-provider-model-routing-design.md §3.1 / §4.3 / §5.2）：
  *
  * - tier 是模型路由的唯一维度，与 mode（tool_call vs json_object）正交。
  * - 本 provider 不解析具体 provider:model，只做 operation → tier → inner provider 的选择。
