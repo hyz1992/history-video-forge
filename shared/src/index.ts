@@ -38,6 +38,9 @@ export {
   StoryboardPlan,
   StoryboardSegment,
 } from "./storyboard/storyboard-plan.schema";
+// generation-configuration.schema：Zod 运行时值与同名类型一起导出。
+// CapabilitySlot 是唯一的纯类型（无同名 Zod const），单独用 export type，
+// 否则 tsx/ESM 运行时会把它当成值导入并报 SyntaxError（见 P1-1 整改）。
 export {
   ApiVideoQuality,
   ApiVideoSuitability,
@@ -45,17 +48,45 @@ export {
   BudgetConfiguration,
   CAPABILITY_SLOTS,
   CapabilitySelectionMap,
-  CapabilitySlot,
+  CONFIGURATION_HASH_ALGORITHM,
   CreativePreferences,
   DEFAULT_GENERATION_CONFIGURATION,
   GenerationConfigurationV1,
+  KNOWN_HASH_PREFIXES,
   ModelSelection,
   ResolutionTraceEntry,
+  ResolvedCapabilityMapSchema,
+  ResolvedGenerationConfigurationV1Schema,
+  ResolvedProviderModelSchema,
+  ResolvedSegmentVisualRouteSchema,
   ResolvedVisualRoute,
   RunConfigurationSnapshotV1,
   SegmentVisualStrategyOverride,
   VideoGenerationStrategy,
 } from "./generation/generation-configuration.schema";
+export type {
+  CapabilitySlot,
+  ResolvedCapabilityMap,
+  ResolvedGenerationConfigurationV1,
+  ResolvedProviderModel,
+  ResolvedSegmentVisualRoute,
+} from "./generation/generation-configuration.schema";
+// generation-configuration-resolver：运行时函数 + 纯类型（接口/type alias）
+export {
+  canonicalStringify,
+  deterministicHash,
+  resolveGenerationConfiguration,
+} from "./generation/generation-configuration-resolver";
+export type {
+  GenerationOperation,
+  GenerationResolverError,
+  GenerationResolverErrorCode,
+  ProviderModelCatalogEntry,
+  ResolveGenerationConfigurationInput,
+  ResolveGenerationConfigurationResult,
+  SegmentInput,
+  SystemGenerationConstraints,
+} from "./generation/generation-configuration-resolver";
 export { StoryboardValidationResult } from "./storyboard/storyboard-validation.schema";
 export {
   AssetPlan,

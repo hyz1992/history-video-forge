@@ -1,12 +1,21 @@
+import { z } from "zod";
+
 import {
-  type ApiVideoSuitability,
   type AppliedConstraint,
   type CapabilitySlot,
   type GenerationConfigurationV1,
+  type ResolvedCapabilityMap,
+  type ResolvedGenerationConfigurationV1,
+  type ResolvedProviderModel,
+  type ResolvedSegmentVisualRoute,
   type ResolutionTraceEntry,
-  type ResolvedVisualRoute,
   type SegmentVisualStrategyOverride,
+  ApiVideoSuitability as ApiVideoSuitabilitySchema,
+  CAPABILITY_SLOTS,
   GenerationConfigurationV1 as GenerationConfigurationV1Schema,
+  ResolvedCapabilityMapSchema,
+  ResolvedGenerationConfigurationV1Schema,
+  ResolvedSegmentVisualRouteSchema,
   SegmentVisualStrategyOverride as SegmentVisualStrategyOverrideSchema,
 } from "./generation-configuration.schema.js";
 
@@ -22,101 +31,115 @@ import {
  *   稳定 segment override、provider/model 目录快照），不读取当前用户默认。
  * - 禁止使用关键词、字符串匹配或本地语义猜测生成 suitability；suitability 由
  *   Storyboard 阶段产出，本解析器只做机械映射。
+ * - 所有非法输入必须返回结构化错误（`generation_configuration_invalid` 等），
+ *   不得抛出异常或静默吞掉损坏数据/客户端错误。
  */
 
 // --- 输入合同 --------------------------------------------------------------
 
-export type GenerationOperation =
-  | "topic.generate"
-  | "script.generate"
-  | "storyboard.generate"
-  | "asset_plan.generate"
-  | "assets.generate"
-  | "publish.generate";
+export const GenerationOperationSchema = z.enum([
+  "topic.generate",
+  "script.generate",
+  "storyboard.generate",
+  "asset_plan.generate",
+  "assets.generate",
+  "publish.generate",
+]);
+export type GenerationOperation = z.infer<typeof GenerationOperationSchema>;
 
-export interface SystemGenerationConstraints {
-  /**
-   * 系统/管理员是否启用了真实视频 provider。false 时所有 API 视频路线被强制降级为
-   * remotion，包括分镜覆盖也不能绕过。
-   */
-  apiVideoProviderEnabled: boolean;
-}
+export const SystemGenerationConstraintsSchema = z
+  .object({
+    /**
+     * 系统/管理员是否启用了真实视频 provider。false 时所有 API 视频路线被强制降级为
+     * remotion，包括分镜覆盖也不能绕过。
+     */
+    apiVideoProviderEnabled: z.boolean(),
+  })
+  .strict();
+export type SystemGenerationConstraints = z.infer<
+  typeof SystemGenerationConstraintsSchema
+>;
 
-export interface ProviderModelCatalogEntry {
-  /** 用户配置保存时引用的稳定模型 ID（catalog 主键）。 */
-  provider_model_id: string;
-  /** 该模型所属 capability slot。 */
-  capability: CapabilitySlot;
-  /** 服务端 provider 注册 key（不向前端暴露 base url / 凭据）。 */
-  provider_key: string;
-  /** provider 内部 model id。 */
-  model_id: string;
-  /** 模型版本，可空。 */
-  model_version?: string | null;
-  /** active 表示可用于新运行；disabled 表示不可用。 */
-  status: "active" | "disabled";
-}
+export const ProviderModelCatalogEntrySchema = z
+  .object({
+    /** 用户配置保存时引用的稳定模型 ID（catalog 主键）。 */
+    provider_model_id: z.string().min(1),
+    /** 该模型所属 capability slot。 */
+    capability: z.enum(CAPABILITY_SLOTS),
+    /** 服务端 provider 注册 key（不向前端暴露 base url / 凭据）。 */
+    provider_key: z.string().min(1),
+    /** provider 内部 model id。 */
+    model_id: z.string().min(1),
+    /** 模型版本，可空。 */
+    model_version: z.string().min(1).nullable().optional(),
+    /** active 表示可用于新运行；disabled 表示不可用。 */
+    status: z.enum(["active", "disabled"]),
+  })
+  .strict();
+export type ProviderModelCatalogEntry = z.infer<
+  typeof ProviderModelCatalogEntrySchema
+>;
 
-export interface SegmentInput {
-  segment_id: string;
-  /** Storyboard 阶段产出的四档适配度。 */
-  api_video_suitability: ApiVideoSuitability;
-}
+export const SegmentInputSchema = z
+  .object({
+    segment_id: z.string().min(1),
+    /** Storyboard 阶段产出的四档适配度。 */
+    api_video_suitability: ApiVideoSuitabilitySchema,
+  })
+  .strict();
+export type SegmentInput = z.infer<typeof SegmentInputSchema>;
 
-export interface ResolveGenerationConfigurationInput {
-  /** 已冻结的项目配置（真相源）。 */
-  projectConfiguration: GenerationConfigurationV1;
-  projectConfigurationRevision: number;
-  /**
-   * 项目配置冻结时的来源用户默认 revision；只是元数据，运行时不再读取当前用户默认。
-   */
-  sourceUserPreferenceRevision: number | null;
-  /** 单次运行覆盖，S2-2A 只允许覆盖 video/budget。 */
-  runOverrides?: Partial<GenerationConfigurationV1>;
-  /** 分镜级覆盖，优先级高于 run override 与项目配置，但不能绕过管理员禁用。 */
-  segmentOverrides?: Record<string, SegmentVisualStrategyOverride>;
-  systemConstraints: SystemGenerationConstraints;
-  providerModelCatalog: ProviderModelCatalogEntry[];
-  operation: GenerationOperation;
-  /** 本次运行涉及的分镜及其 storyboard 适配度。 */
-  segmentInputs?: SegmentInput[];
-}
+/**
+ * run override 只允许覆盖 video 与 budget（S2-2A 范围）；capabilities 与 creative
+ * 由项目配置决定（B/C 才开放修改）。这里用 Zod 严格刻画可覆盖字段子集。
+ */
+const RunOverridesSchema = z
+  .object({
+    video: z
+      .object({
+        strategy: GenerationConfigurationV1Schema.shape.video.shape.strategy.optional(),
+        api_quality: GenerationConfigurationV1Schema.shape.video.shape.api_quality.optional(),
+      })
+      .strict()
+      .optional(),
+    budget: z
+      .object({
+        max_paid_cost_micros_per_run:
+          GenerationConfigurationV1Schema.shape.budget.shape.max_paid_cost_micros_per_run.optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .optional();
 
-// --- 输出合同 --------------------------------------------------------------
+export const ResolveGenerationConfigurationInputSchema = z
+  .object({
+    /** 已冻结的项目配置（真相源）。 */
+    projectConfiguration: GenerationConfigurationV1Schema,
+    projectConfigurationRevision: z.number().int().nonnegative(),
+    /**
+     * 项目配置冻结时的来源用户默认 revision；只是元数据，运行时不再读取当前用户默认。
+     */
+    sourceUserPreferenceRevision: z.number().int().nonnegative().nullable(),
+    /** 单次运行覆盖，S2-2A 只允许覆盖 video/budget。 */
+    runOverrides: RunOverridesSchema,
+    /** 分镜级覆盖，优先级高于 run override 与项目配置，但不能绕过管理员禁用。 */
+    segmentOverrides: z
+      .record(z.string().min(1), SegmentVisualStrategyOverrideSchema)
+      .optional(),
+    systemConstraints: SystemGenerationConstraintsSchema,
+    providerModelCatalog: z.array(ProviderModelCatalogEntrySchema),
+    operation: GenerationOperationSchema,
+    /** 本次运行涉及的分镜及其 storyboard 适配度。 */
+    segmentInputs: z.array(SegmentInputSchema).optional(),
+  })
+  .strict();
+export type ResolveGenerationConfigurationInput = z.infer<
+  typeof ResolveGenerationConfigurationInputSchema
+>;
 
-export interface ResolvedProviderModel {
-  mode: "auto" | "fixed";
-  provider_model_id: string;
-  provider_key: string;
-  model_id: string;
-}
-
-export interface ResolvedSegmentVisualRoute {
-  segment_id: string;
-  /** Storyboard 原始适配度（只读输入）。 */
-  api_video_suitability: ApiVideoSuitability;
-  /** 用户覆盖值（null 表示继承）。 */
-  segment_override: SegmentVisualStrategyOverride;
-  /** 最终解析的实际路线。 */
-  resolved_route: ResolvedVisualRoute;
-  /** 确定性原因码，供审计与 trace 使用。 */
-  reason_code: string;
-}
-
-export interface ResolvedGenerationConfigurationV1 {
-  schema_version: "resolved_generation_configuration_v1";
-  source_revisions: {
-    source_user_preference_revision: number | null;
-    project_configuration_revision: number;
-  };
-  effective: GenerationConfigurationV1;
-  resolved_capabilities: Partial<Record<CapabilitySlot, ResolvedProviderModel>>;
-  segment_visual_routes: ResolvedSegmentVisualRoute[];
-  constraints_applied: AppliedConstraint[];
-  resolution_trace: ResolutionTraceEntry[];
-  configuration_hash: string;
-  pricing_hash: string;
-}
+// --- 错误合同 --------------------------------------------------------------
 
 export type GenerationResolverErrorCode =
   | "generation_configuration_invalid"
@@ -128,7 +151,11 @@ export type GenerationResolverErrorCode =
 
 export interface GenerationResolverError {
   code: GenerationResolverErrorCode;
+  /** 关联 capability slot（capability 类错误必填）。 */
   capability?: CapabilitySlot;
+  /** 关联分镜 id（分镜覆盖类错误必填）。 */
+  segment_id?: string;
+  /** 面向审计与日志的公开原因，不得包含凭据细节。 */
   message: string;
 }
 
@@ -161,8 +188,11 @@ export function canonicalStringify(value: unknown): string {
 
 /**
  * 64-bit FNV-1a 哈希（确定性、非加密）。
- * 选择 FNV-1a 而非 node:crypto 是为了让 shared 包保持无 Node 依赖；
- * 该哈希只用于检测配置/价格漂移，不承担安全用途。
+ *
+ * 选择 FNV-1a 而非 node:crypto 是为了让 shared 包保持无 Node 依赖。
+ * 返回值带 `fnv1a64:` 前缀，明确标识算法，便于审计判断算法强度。
+ * 重要：FNV-1a 只用于检测配置/价格漂移，不得作为授权边界或安全指纹；
+ * 任何安全敏感用途必须改用真正的加密哈希并同步更换前缀。
  */
 export function deterministicHash(input: string): string {
   // FNV-1a 64-bit (使用 BigInt 防止溢出)
@@ -178,6 +208,10 @@ export function deterministicHash(input: string): string {
 
 // --- 矩阵核心 --------------------------------------------------------------
 
+type VideoStrategyValue = GenerationConfigurationV1["video"]["strategy"];
+type ApiVideoSuitabilityValue = z.infer<typeof ApiVideoSuitabilitySchema>;
+type VisualRoute = "api_video" | "remotion";
+
 /**
  * 四档策略 × 四档适配度的视觉路线矩阵。
  *
@@ -185,8 +219,8 @@ export function deterministicHash(input: string): string {
  * 任何 suitability→route 的判断必须经过本表，禁止本地语义猜测。
  */
 const STRATEGY_SUITABILITY_MATRIX: Record<
-  GenerationConfigurationV1["video"]["strategy"],
-  Record<ApiVideoSuitability, ResolvedVisualRoute>
+  VideoStrategyValue,
+  Record<ApiVideoSuitabilityValue, VisualRoute>
 > = {
   all_api_video: {
     remotion_only: "remotion",
@@ -215,14 +249,6 @@ const STRATEGY_SUITABILITY_MATRIX: Record<
 };
 
 // --- capability 解析 -------------------------------------------------------
-
-const CAPABILITY_SLOTS: CapabilitySlot[] = [
-  "llm.smart",
-  "llm.flash",
-  "image.generate",
-  "video.image_to_video",
-  "tts.synthesize",
-];
 
 function resolveCapabilitySlot(
   slot: CapabilitySlot,
@@ -309,9 +335,16 @@ function resolveCapabilitySlot(
 
 function applyStrategyMatrix(
   strategy: GenerationConfigurationV1["video"]["strategy"],
-  suitability: ApiVideoSuitability,
-): ResolvedVisualRoute {
+  suitability: ApiVideoSuitabilityValue,
+): VisualRoute {
   return STRATEGY_SUITABILITY_MATRIX[strategy][suitability];
+}
+
+interface SegmentRouteDecision {
+  route: VisualRoute;
+  reason_code: string;
+  override_applied: boolean;
+  admin_downgraded: boolean;
 }
 
 function resolveSegmentRoute(
@@ -319,12 +352,7 @@ function resolveSegmentRoute(
   effectiveStrategy: GenerationConfigurationV1["video"]["strategy"],
   override: SegmentVisualStrategyOverride,
   apiVideoProviderEnabled: boolean,
-): {
-  route: ResolvedVisualRoute;
-  reason_code: string;
-  override_applied: boolean;
-  admin_downgraded: boolean;
-} {
+): SegmentRouteDecision {
   // 1. 管理员禁用是最高优先级的硬约束，连分镜覆盖也不能绕过。
   if (!apiVideoProviderEnabled) {
     // 如果继承策略矩阵会给出 api_video，或覆盖想要 api_video，都被降级。
@@ -378,15 +406,16 @@ function resolveSegmentRoute(
 /**
  * S2-2A run override 只允许覆盖 video 与 budget。
  * capabilities 与 creative 由项目配置决定（B/C 才开放修改）。
+ *
+ * 输入已由 ResolveGenerationConfigurationInputSchema 校验过 runOverrides 形状，
+ * 因此这里不再 try/catch；若合并结果违反 GenerationConfigurationV1（例如 override
+ * 把 budget 改成非法值），由主入口的 safeParse 兜底返回结构化错误。
  */
 function applyRunOverrides(
   project: GenerationConfigurationV1,
-  overrides?: Partial<GenerationConfigurationV1>,
+  overrides: NonNullable<ResolveGenerationConfigurationInput["runOverrides"]>,
 ): GenerationConfigurationV1 {
-  if (!overrides) {
-    return project;
-  }
-  const merged: GenerationConfigurationV1 = {
+  return {
     ...project,
     video: {
       strategy: overrides.video?.strategy ?? project.video.strategy,
@@ -399,14 +428,27 @@ function applyRunOverrides(
         project.budget.max_paid_cost_micros_per_run,
     },
   };
-  return GenerationConfigurationV1Schema.parse(merged);
 }
 
 // --- 主入口 ----------------------------------------------------------------
 
 export function resolveGenerationConfiguration(
-  input: ResolveGenerationConfigurationInput,
+  rawInput: unknown,
 ): ResolveGenerationConfigurationResult {
+  // 0. 全输入运行时校验：损坏的项目配置、catalog、system constraints、覆盖值等
+  //    统一在这里转成结构化错误，禁止后续逻辑因 undefined 字段抛 TypeError。
+  const parsedInput = ResolveGenerationConfigurationInputSchema.safeParse(rawInput);
+  if (!parsedInput.success) {
+    return {
+      ok: false,
+      error: {
+        code: "generation_configuration_invalid",
+        message: `invalid resolver input: ${parsedInput.error.message}`,
+      },
+    };
+  }
+  const input = parsedInput.data;
+
   const resolutionTrace: ResolutionTraceEntry[] = [];
   const constraintsApplied: AppliedConstraint[] = [];
 
@@ -415,27 +457,51 @@ export function resolveGenerationConfiguration(
     note: `used frozen project config revision ${input.projectConfigurationRevision}`,
   });
 
-  // 1. 合并 run override。
+  // 1. 合并 run override，并对合并后的 effective 配置再做一次完整校验。
   let effective = input.projectConfiguration;
   if (input.runOverrides) {
-    effective = applyRunOverrides(input.projectConfiguration, input.runOverrides);
+    const merged = applyRunOverrides(input.projectConfiguration, input.runOverrides);
+    const mergedParse = GenerationConfigurationV1Schema.safeParse(merged);
+    if (!mergedParse.success) {
+      return {
+        ok: false,
+        error: {
+          code: "generation_configuration_invalid",
+          message: `merged run override produced invalid configuration: ${mergedParse.error.message}`,
+        },
+      };
+    }
+    effective = mergedParse.data;
     resolutionTrace.push({
       layer: "run_override",
       note: "applied run overrides to video/budget",
     });
   }
 
-  // 2. 解析 capability slot。
-  const resolvedCapabilities: Partial<Record<CapabilitySlot, ResolvedProviderModel>> = {};
+  // 2. 解析五个 capability slot，产出完整 ResolvedCapabilityMap。
+  const resolvedCapabilitiesPartial: Partial<Record<CapabilitySlot, ResolvedProviderModel>> = {};
   for (const slot of CAPABILITY_SLOTS) {
     const result = resolveCapabilitySlot(slot, effective, input.providerModelCatalog);
     if (!result.ok) {
       return result;
     }
-    resolvedCapabilities[slot] = result.value;
+    resolvedCapabilitiesPartial[slot] = result.value;
   }
+  // 强类型校验：resolved_capabilities 必须为五个 slot 各提供一个已解析 provider/model。
+  const resolvedCapabilitiesParse = ResolvedCapabilityMapSchema.safeParse(resolvedCapabilitiesPartial);
+  if (!resolvedCapabilitiesParse.success) {
+    return {
+      ok: false,
+      error: {
+        code: "generation_configuration_invalid",
+        message: `resolved capabilities map is incomplete: ${resolvedCapabilitiesParse.error.message}`,
+      },
+    };
+  }
+  const resolvedCapabilities: ResolvedCapabilityMap = resolvedCapabilitiesParse.data;
 
-  // 3. 解析分镜路线。
+  // 3. 解析分镜路线。非法覆盖值已在输入 schema 阶段被拒绝（不会进入这里）；
+  //    segment_override 为 null 表示继承项目策略。
   const segmentRoutes: ResolvedSegmentVisualRoute[] = [];
   const adminDisabled = !input.systemConstraints.apiVideoProviderEnabled;
   if (adminDisabled) {
@@ -452,26 +518,24 @@ export function resolveGenerationConfiguration(
   const segments = input.segmentInputs ?? [];
   let anyOverrideApplied = false;
   for (const segment of segments) {
-    const rawOverride = input.segmentOverrides?.[segment.segment_id] ?? null;
-    // 校验覆盖值合法性，防止任意字符串注入。
-    const overrideParse = SegmentVisualStrategyOverrideSchema.safeParse(rawOverride);
-    const override = overrideParse.success ? overrideParse.data : null;
+    const override: SegmentVisualStrategyOverride =
+      input.segmentOverrides?.[segment.segment_id] ?? null;
 
-    const resolved = resolveSegmentRoute(
+    const decision = resolveSegmentRoute(
       segment,
       effective.video.strategy,
       override,
       input.systemConstraints.apiVideoProviderEnabled,
     );
-    if (resolved.override_applied) {
+    if (decision.override_applied) {
       anyOverrideApplied = true;
     }
     segmentRoutes.push({
       segment_id: segment.segment_id,
       api_video_suitability: segment.api_video_suitability,
       segment_override: override,
-      resolved_route: resolved.route,
-      reason_code: resolved.reason_code,
+      resolved_route: decision.route,
+      reason_code: decision.reason_code,
     });
   }
   if (anyOverrideApplied) {
@@ -481,7 +545,8 @@ export function resolveGenerationConfiguration(
     });
   }
 
-  // 4. 计算确定性 hash。
+  // 4. 计算确定性 hash。configuration_hash 与 pricing_hash 都使用 fnv1a64 前缀，
+  //    名实相符，便于审计判断算法强度（见 P2 整改）。
   const configurationPayload = {
     schema_version: "resolved_generation_configuration_v1",
     source_revisions: {
@@ -492,14 +557,8 @@ export function resolveGenerationConfiguration(
     resolved_capabilities: resolvedCapabilities,
     segment_visual_routes: segmentRoutes,
   };
-  const configuration_hash = `sha256:${deterministicHash(
-    canonicalStringify(configurationPayload),
-  ).slice("fnv1a64:".length)}`;
-
-  // pricing_hash 仅由 catalog 内容决定。
-  const pricing_hash = `sha256:${deterministicHash(
-    canonicalStringify(input.providerModelCatalog),
-  ).slice("fnv1a64:".length)}`;
+  const configuration_hash = deterministicHash(canonicalStringify(configurationPayload));
+  const pricing_hash = deterministicHash(canonicalStringify(input.providerModelCatalog));
 
   const value: ResolvedGenerationConfigurationV1 = {
     schema_version: "resolved_generation_configuration_v1",
@@ -516,5 +575,17 @@ export function resolveGenerationConfiguration(
     pricing_hash,
   };
 
-  return { ok: true, value };
+  // 最终输出再过一次强类型 schema 校验，确保 resolver 产出永远满足合同。
+  const outputParse = ResolvedGenerationConfigurationV1Schema.safeParse(value);
+  if (!outputParse.success) {
+    return {
+      ok: false,
+      error: {
+        code: "generation_configuration_invalid",
+        message: `resolver produced invalid output: ${outputParse.error.message}`,
+      },
+    };
+  }
+
+  return { ok: true, value: outputParse.data };
 }

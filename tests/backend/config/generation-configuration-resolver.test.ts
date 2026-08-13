@@ -542,3 +542,115 @@ describe("resolveGenerationConfiguration deterministic outputs", () => {
     }
   });
 });
+
+describe("resolveGenerationConfiguration structured error on invalid input", () => {
+  // P1-2a: 损坏的项目配置（capabilities 缺字段）必须返回结构化错误，而不是抛异常。
+  it("returns generation_configuration_invalid when project config capabilities are broken", () => {
+    const brokenConfig = {
+      ...baseConfig,
+      capabilities: { "llm.smart": { mode: "auto" } },
+    } as unknown as GenerationConfigurationV1;
+    let threw = false;
+    let result: ReturnType<typeof resolveGenerationConfiguration> = { ok: true, value: undefined as never };
+    try {
+      result = resolveGenerationConfiguration(
+        buildInput({ projectConfiguration: brokenConfig }),
+      );
+    } catch (e) {
+      threw = true;
+    }
+    expect(threw).toBe(false);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("generation_configuration_invalid");
+  });
+
+  it("returns generation_configuration_invalid when systemConstraints is missing the flag", () => {
+    const result = resolveGenerationConfiguration({
+      ...buildInput({}),
+      // @ts-expect-error intentionally broken input
+      systemConstraints: {},
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("generation_configuration_invalid");
+  });
+
+  it("returns generation_configuration_invalid when providerModelCatalog entry is malformed", () => {
+    const result = resolveGenerationConfiguration(
+      buildInput({
+        providerModelCatalog: [
+          // @ts-expect-error intentionally malformed (missing provider_key)
+          { provider_model_id: "x", capability: "llm.smart", model_id: "m", status: "active" },
+        ],
+      }),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("generation_configuration_invalid");
+  });
+
+  // P1-2b: 非法分镜覆盖必须返回结构化错误，而不是被静默改成 null（继承）。
+  it("returns generation_configuration_invalid for an illegal segment override value", () => {
+    const result = resolveGenerationConfiguration(
+      buildInput({
+        segmentInputs: [
+          { segment_id: "seg_1", api_video_suitability: "api_video_beneficial" },
+        ],
+        segmentOverrides: {
+          // @ts-expect-error intentionally illegal override value
+          seg_1: "GARBAGE",
+        },
+      }),
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("generation_configuration_invalid");
+  });
+
+  it("accepts legal override values api_video / remotion_motion / null", () => {
+    for (const override of ["api_video", "remotion_motion", null] as const) {
+      const result = resolveGenerationConfiguration(
+        buildInput({
+          segmentInputs: [
+            { segment_id: "seg_1", api_video_suitability: "api_video_beneficial" },
+          ],
+          segmentOverrides: { seg_1: override },
+        }),
+      );
+      expect(result.ok).toBe(true);
+    }
+  });
+});
+
+describe("resolveGenerationConfiguration hash algorithm identity", () => {
+  // P2: hash 前缀必须名实相符——当前是 FNV-1a64，必须标识为 fnv1a64，不能冒充 sha256。
+  it("configuration_hash and pricing_hash use the fnv1a64 prefix", () => {
+    const resolved = resolveGenerationConfiguration(buildInput({}));
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    expect(resolved.value.configuration_hash.startsWith("fnv1a64:")).toBe(true);
+    expect(resolved.value.pricing_hash.startsWith("fnv1a64:")).toBe(true);
+    // FNV-1a64 输出固定 16 位十六进制
+    expect(resolved.value.configuration_hash.slice("fnv1a64:".length)).toMatch(/^[0-9a-f]{16}$/);
+    expect(resolved.value.pricing_hash.slice("fnv1a64:".length)).toMatch(/^[0-9a-f]{16}$/);
+  });
+
+  it("never claims sha256 strength it does not have", () => {
+    const resolved = resolveGenerationConfiguration(buildInput({}));
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    // sha256 hex 应为 64 位；当前实现不应使用该前缀。
+    expect(resolved.value.configuration_hash.startsWith("sha256:")).toBe(false);
+  });
+
+  it("identical inputs produce identical hashes; different project revision produces different config hash", () => {
+    const a = resolveGenerationConfiguration(buildInput({ projectConfigurationRevision: 1 }));
+    const b = resolveGenerationConfiguration(buildInput({ projectConfigurationRevision: 1 }));
+    const c = resolveGenerationConfiguration(buildInput({ projectConfigurationRevision: 2 }));
+    expect(a.ok && b.ok && c.ok).toBe(true);
+    if (!(a.ok && b.ok && c.ok)) return;
+    expect(a.value.configuration_hash).toBe(b.value.configuration_hash);
+    expect(a.value.configuration_hash).not.toBe(c.value.configuration_hash);
+  });
+});

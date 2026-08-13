@@ -177,7 +177,7 @@ export const DEFAULT_GENERATION_CONFIGURATION: GenerationConfigurationV1 = {
   },
 };
 
-// --- Run Configuration Snapshot（不可变运行快照合同） ----------------------
+// --- Resolution trace & applied constraints --------------------------------
 
 export const ResolutionTraceEntry = z
   .object({
@@ -207,12 +207,57 @@ export const AppliedConstraint = z
   .strict();
 export type AppliedConstraint = z.infer<typeof AppliedConstraint>;
 
+// --- Resolver output sub-schemas（强类型，供 resolver 与 snapshot 复用） ----
+
 /**
- * 不可变运行快照。重新运行必须创建新快照；repository 不提供 update。
+ * 解析后单个 capability slot 的实际 provider/model。
  */
-export const RunConfigurationSnapshotV1 = z
+export const ResolvedProviderModelSchema = z
   .object({
-    schema_version: z.literal("run_configuration_snapshot_v1"),
+    mode: z.enum(["auto", "fixed"]),
+    provider_model_id: z.string().min(1),
+    provider_key: z.string().min(1),
+    model_id: z.string().min(1),
+  })
+  .strict();
+export type ResolvedProviderModel = z.infer<typeof ResolvedProviderModelSchema>;
+
+/**
+ * 解析后单个分镜的视觉路线。
+ */
+export const ResolvedSegmentVisualRouteSchema = z
+  .object({
+    segment_id: z.string().min(1),
+    api_video_suitability: ApiVideoSuitability,
+    segment_override: SegmentVisualStrategyOverride,
+    resolved_route: ResolvedVisualRoute,
+    reason_code: z.string().min(1),
+  })
+  .strict();
+export type ResolvedSegmentVisualRoute = z.infer<
+  typeof ResolvedSegmentVisualRouteSchema
+>;
+
+/**
+ * resolved_capabilities 必须为五个固定 slot 各提供一个已解析 provider/model。
+ */
+export const ResolvedCapabilityMapSchema = z
+  .object({
+    "llm.smart": ResolvedProviderModelSchema,
+    "llm.flash": ResolvedProviderModelSchema,
+    "image.generate": ResolvedProviderModelSchema,
+    "video.image_to_video": ResolvedProviderModelSchema,
+    "tts.synthesize": ResolvedProviderModelSchema,
+  })
+  .strict();
+export type ResolvedCapabilityMap = z.infer<typeof ResolvedCapabilityMapSchema>;
+
+/**
+ * resolver 输出合同（详细设计 5.2 节）。
+ */
+export const ResolvedGenerationConfigurationV1Schema = z
+  .object({
+    schema_version: z.literal("resolved_generation_configuration_v1"),
     source_revisions: z
       .object({
         source_user_preference_revision: z.number().int().nonnegative().nullable(),
@@ -220,12 +265,77 @@ export const RunConfigurationSnapshotV1 = z
       })
       .strict(),
     effective: GenerationConfigurationV1,
-    resolved_capabilities: z.record(z.enum(CAPABILITY_SLOTS), z.unknown()),
-    segment_visual_routes: z.array(z.unknown()),
+    resolved_capabilities: ResolvedCapabilityMapSchema,
+    segment_visual_routes: z.array(ResolvedSegmentVisualRouteSchema),
     constraints_applied: z.array(AppliedConstraint),
     resolution_trace: z.array(ResolutionTraceEntry),
     configuration_hash: z.string().min(1),
     pricing_hash: z.string().min(1),
+  })
+  .strict();
+export type ResolvedGenerationConfigurationV1 = z.infer<
+  typeof ResolvedGenerationConfigurationV1Schema
+>;
+
+// --- Hash algorithm identity ----------------------------------------------
+
+/**
+ * 配置/价格 hash 的算法标识。
+ *
+ * 当前实现使用 64-bit FNV-1a（确定性、非加密）。FNV-1a 只用于检测配置/价格漂移，
+ * 不得作为授权边界或安全指纹；任何安全敏感用途必须改用真正的加密哈希并更换该标识。
+ */
+export const CONFIGURATION_HASH_ALGORITHM = "fnv1a64";
+
+/**
+ * 可信的 hash 算法标识前缀。`configuration_hash`/`pricing_hash` 必须以其中之一开头。
+ */
+export const KNOWN_HASH_PREFIXES = [
+  "fnv1a64:",
+  // 预留给后续任务在引入 node:crypto 时升级的真实加密算法
+  "sha256:",
+] as const;
+
+// --- Run Configuration Snapshot（不可变运行快照合同，详细设计 4.6 节） -----
+
+/**
+ * 不可变运行快照。重新运行必须创建新快照；repository 不提供 update。
+ *
+ * 该 schema 是任务 2 持久化合同的强类型基础，包含详细设计 4.6 节规定的全部字段：
+ * 运行定位、来源 revision、resolved 配置、trace、关联 quote、费用与预算授权、价格版本、
+ * 创建时间。
+ */
+export const RunConfigurationSnapshotV1 = z
+  .object({
+    schema_version: z.literal("run_configuration_snapshot_v1"),
+    // 运行定位（owner scope 与 run 定位由持久化层填充，resolver 不直接产出这些字段）
+    project_id: z.string().min(1),
+    user_id: z.string().min(1).nullable(),
+    stage: z.string().min(1),
+    operation: z.string().min(1),
+    run_id: z.string().min(1).nullable(),
+    // 来源 revision
+    source_revisions: z
+      .object({
+        source_user_preference_revision: z.number().int().nonnegative().nullable(),
+        project_configuration_revision: z.number().int().nonnegative(),
+      })
+      .strict(),
+    // resolved 配置（强类型，禁止 unknown）
+    resolved: ResolvedGenerationConfigurationV1Schema,
+    configuration_hash: z.string().min(1),
+    // 关联 quote（免费运行为 null）
+    quote_id: z.string().min(1).nullable(),
+    // 费用与预算授权（微元十进制字符串）
+    estimated_cost_micros: z.string().regex(/^(0|[1-9][0-9]*)$/).nullable(),
+    authorization_cost_micros: z.string().regex(/^(0|[1-9][0-9]*)$/).nullable(),
+    budget_limit_micros: z.string().regex(/^(0|[1-9][0-9]*)$/).nullable(),
+    budget_override_authorized: z.boolean(),
+    // 价格版本集合
+    pricing_version_set: z.array(z.string().min(1)),
+    pricing_hash: z.string().min(1),
+    // 创建时间（ISO 8601 字符串）
+    created_at: z.string().min(1),
   })
   .strict();
 export type RunConfigurationSnapshotV1 = z.infer<

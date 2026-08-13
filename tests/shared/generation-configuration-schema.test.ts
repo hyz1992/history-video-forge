@@ -364,49 +364,170 @@ describe("GenerationConfigurationV1 schema", () => {
     });
   });
 
-  describe("RunConfigurationSnapshotV1 wraps an immutable resolved snapshot", () => {
-    it("accepts a minimal snapshot with resolved configuration and trace hashes", () => {
-      const snapshot = RunConfigurationSnapshotV1.parse({
-        schema_version: "run_configuration_snapshot_v1",
-        source_revisions: {
-          source_user_preference_revision: null,
-          project_configuration_revision: 3,
-        },
-        effective: DEFAULT_GENERATION_CONFIGURATION,
-        resolved_capabilities: {},
-        segment_visual_routes: [],
-        constraints_applied: [],
-        resolution_trace: [
-          { layer: "project_configuration", note: "used frozen project config" },
-        ],
-        configuration_hash: "sha256:abc",
-        pricing_hash: "sha256:pricing-v1",
-      });
+  describe("RunConfigurationSnapshotV1 is a strongly-typed immutable snapshot", () => {
+    // 一个完整、有效的 resolved 配置（五个 capability slot 全部已解析），作为 snapshot
+    // 内嵌 resolved 字段的基础。强类型化后 snapshot 不再接受 garbage。
+    const validResolvedCapability = {
+      mode: "auto" as const,
+      provider_model_id: "dashscope.qwen-max",
+      provider_key: "dashscope",
+      model_id: "qwen-max",
+    };
+    const validResolved = {
+      schema_version: "resolved_generation_configuration_v1",
+      source_revisions: {
+        source_user_preference_revision: null,
+        project_configuration_revision: 3,
+      },
+      effective: DEFAULT_GENERATION_CONFIGURATION,
+      resolved_capabilities: {
+        "llm.smart": validResolvedCapability,
+        "llm.flash": { ...validResolvedCapability, provider_model_id: "dashscope.qwen-flash", model_id: "qwen-flash" },
+        "image.generate": { ...validResolvedCapability, provider_model_id: "dashscope.wanx", model_id: "wanx-v1" },
+        "video.image_to_video": { ...validResolvedCapability, provider_model_id: "dashscope.video", model_id: "video-v1" },
+        "tts.synthesize": { ...validResolvedCapability, provider_model_id: "dashscope.tts", model_id: "qwen3-tts" },
+      },
+      segment_visual_routes: [],
+      constraints_applied: [],
+      resolution_trace: [
+        { layer: "project_configuration", note: "used frozen project config" },
+      ],
+      configuration_hash: "fnv1a64:abc123",
+      pricing_hash: "fnv1a64:pricing-v1",
+    };
 
+    const validSnapshot = {
+      schema_version: "run_configuration_snapshot_v1",
+      project_id: "proj_001",
+      user_id: "user_001",
+      stage: "assets",
+      operation: "assets.generate",
+      run_id: "run_001",
+      source_revisions: validResolved.source_revisions,
+      resolved: validResolved,
+      configuration_hash: "fnv1a64:abc123",
+      quote_id: null,
+      estimated_cost_micros: "12345",
+      authorization_cost_micros: "14000",
+      budget_limit_micros: null,
+      budget_override_authorized: false,
+      pricing_version_set: ["dashscope-cn-2026-08-12"],
+      pricing_hash: "fnv1a64:pricing-v1",
+      created_at: "2026-08-13T00:00:00.000Z",
+    };
+
+    it("accepts a complete snapshot with run identity, costs, budget authorization and pricing", () => {
+      const snapshot = RunConfigurationSnapshotV1.parse(validSnapshot);
       expect(snapshot.schema_version).toBe("run_configuration_snapshot_v1");
+      expect(snapshot.project_id).toBe("proj_001");
+      expect(snapshot.operation).toBe("assets.generate");
       expect(snapshot.source_revisions.project_configuration_revision).toBe(3);
-      expect(snapshot.effective.video.strategy).toBe("prefer_remotion");
-      expect(snapshot.configuration_hash).toBe("sha256:abc");
+      expect(snapshot.resolved.effective.video.strategy).toBe("prefer_remotion");
+      expect(snapshot.resolved.resolved_capabilities["llm.smart"].provider_model_id).toBe(
+        "dashscope.qwen-max",
+      );
+      expect(snapshot.budget_override_authorized).toBe(false);
+      expect(snapshot.pricing_version_set).toEqual(["dashscope-cn-2026-08-12"]);
     });
 
-    it("rejects snapshot with a mutable effective configuration (still strict)", () => {
+    it("rejects snapshot missing run identity fields (project_id/operation)", () => {
       expect(() =>
         RunConfigurationSnapshotV1.parse({
-          schema_version: "run_configuration_snapshot_v1",
-          source_revisions: {
-            source_user_preference_revision: null,
-            project_configuration_revision: 3,
+          ...validSnapshot,
+          project_id: undefined,
+        }),
+      ).toThrow();
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          operation: undefined,
+        }),
+      ).toThrow();
+    });
+
+    it("rejects snapshot missing cost/budget/pricing fields", () => {
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          estimated_cost_micros: undefined,
+        }),
+      ).toThrow();
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          budget_override_authorized: undefined,
+        }),
+      ).toThrow();
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          pricing_version_set: undefined,
+        }),
+      ).toThrow();
+    });
+
+    it("rejects non-decimal-string cost micros", () => {
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          estimated_cost_micros: 12345,
+        }),
+      ).toThrow();
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          estimated_cost_micros: "1.5",
+        }),
+      ).toThrow();
+    });
+
+    it("rejects garbage resolved_capabilities (number instead of resolved model)", () => {
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          resolved: {
+            ...validResolved,
+            resolved_capabilities: {
+              ...validResolved.resolved_capabilities,
+              "llm.smart": 123,
+            },
           },
-          effective: {
-            ...DEFAULT_GENERATION_CONFIGURATION,
-            unexpected: true,
+        }),
+      ).toThrow();
+    });
+
+    it("rejects garbage segment_visual_routes (string instead of route object)", () => {
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          resolved: {
+            ...validResolved,
+            segment_visual_routes: ["garbage"],
           },
-          resolved_capabilities: {},
-          segment_visual_routes: [],
-          constraints_applied: [],
-          resolution_trace: [],
-          configuration_hash: "sha256:abc",
-          pricing_hash: "sha256:pricing-v1",
+        }),
+      ).toThrow();
+    });
+
+    it("rejects resolved_capabilities missing any of the five slots", () => {
+      const incomplete = { ...validResolved.resolved_capabilities };
+      // @ts-expect-error intentionally removing a required slot
+      delete incomplete["llm.smart"];
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          resolved: {
+            ...validResolved,
+            resolved_capabilities: incomplete,
+          },
+        }),
+      ).toThrow();
+    });
+
+    it("rejects an unknown top-level field (snapshot stays strict)", () => {
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          unexpected_field: true,
         }),
       ).toThrow();
     });
