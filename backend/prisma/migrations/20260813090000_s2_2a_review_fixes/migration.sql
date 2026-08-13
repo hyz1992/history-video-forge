@@ -1,16 +1,67 @@
--- S2-2A 任务 2 审查整改：金额约束、外键、call-intent 防重、seed 对齐。
--- 原则：不改写更早的 12090000 迁移；本迁移自身在 S2-2A 上线前可修订
---（DatabaseActivation 从未记录过本迁移，checksum 无失配风险）。
--- SQLite 的 ALTER TABLE 无法新增 CHECK/FK 约束，涉及约束的表用 12 步重建法保留数据。
--- 重建期间关闭外键检查，避免已有 GenerationRun 的 RESTRICT 外键阻止 DROP；
--- 重建完成后恢复并执行 foreign_key_check，任何不一致都让迁移失败而非静默损坏。
+-- S2-2A 任务 2 第四轮审查整改：旧数据预检、call-intent 精确合同、LLM unpriced、默认项可轮换。
+-- 本迁移从未被任何已激活数据库记录（DatabaseActivation 仅到 event_library），
+-- 修订无 checksum 失配风险。
+-- 重建期间关闭外键检查，避免 RESTRICT 外键阻止 DROP；重建完成后恢复并执行
+-- foreign_key_check。对旧版本的非法跨项目关系，复制前用 RAISE(ABORT) 真正中止迁移。
 
 PRAGMA foreign_keys = OFF;
 
 -- ============================================================================
--- 1) GenerationCostQuote：金额列加非负十进制整数 CHECK。
---    金额列保持 TEXT（十进制微元字符串），与 shared decimalMicrosString 一致
---    （全数字、无前导零；无长度限制，避免与 shared 合同冲突）。
+-- 0) 旧数据预检（P1-1）：复制前检测上一版本的非法关系，真正中止迁移。
+--    foreign_key_check 只返回结果集不会中止；跨项目语义关系甚至不会出现在其中。
+--    这里用 SELECT RAISE(ABORT) 在有任何违规行时抛错，让迁移失败而非静默保留非法数据。
+--    S2-2A 表在上一版本（12090000）刚创建，正常应为空；预检保护"已被写入测试数据"的场景。
+-- ============================================================================
+
+-- 旧版本 snapshot 引用的 quoteId 不存在或属于其他项目
+-- （12090000 的 snapshot 没有 quoteId 外键，可能存在 orphan 或跨项目引用）。
+-- RAISE 只能在触发器内使用，所以用临时表 + 临时触发器模式：
+-- 创建临时表，挂 BEFORE INSERT 触发器检查违规，向临时表 INSERT 一行触发检查。
+CREATE TEMP TABLE "_migration_check" (x INTEGER);
+CREATE TEMP TRIGGER "_trg_check_snapshot_quote"
+BEFORE INSERT ON "_migration_check"
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM "RunConfigurationSnapshot" s
+    WHERE s."quoteId" IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM "GenerationCostQuote" q WHERE q."id" = s."quoteId" AND q."projectId" = s."projectId")
+)
+BEGIN
+    SELECT RAISE(ABORT, 'migration_aborted: snapshot 引用了不存在或跨项目的 quote，请先修复旧数据');
+END;
+
+CREATE TEMP TRIGGER "_trg_check_run_snapshot"
+BEFORE INSERT ON "_migration_check"
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM "GenerationRun" r
+    JOIN "RunConfigurationSnapshot" s ON s."id" = r."runConfigurationSnapshotId"
+    WHERE s."projectId" != r."projectId"
+)
+BEGIN
+    SELECT RAISE(ABORT, 'migration_aborted: run 关联了跨项目的 snapshot，请先修复旧数据');
+END;
+
+CREATE TEMP TRIGGER "_trg_check_run_quote"
+BEFORE INSERT ON "_migration_check"
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM "GenerationRun" r
+    WHERE r."quoteId" IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM "GenerationCostQuote" q WHERE q."id" = r."quoteId" AND q."projectId" = r."projectId")
+)
+BEGIN
+    SELECT RAISE(ABORT, 'migration_aborted: run 关联了跨项目的 quote，请先修复旧数据');
+END;
+
+-- 触发预检（三个 WHEN 条件任一违规即中止迁移）。
+INSERT INTO "_migration_check" VALUES (1);
+
+-- 清理临时表与触发器（迁移完成后不影响数据库）。
+DROP TABLE "_migration_check";
+
+-- ============================================================================
+-- 1) GenerationCostQuote：金额列加非负十进制整数 CHECK（与 shared 一致，无长度限制）。
 -- ============================================================================
 CREATE TABLE "GenerationCostQuote_new" (
     "id" TEXT NOT NULL PRIMARY KEY,
@@ -103,7 +154,61 @@ ALTER TABLE "GenerationRun_new" RENAME TO "GenerationRun";
 CREATE INDEX "GenerationRun_projectId_status_idx" ON "GenerationRun" ("projectId", "status");
 
 -- ============================================================================
--- 4) StoryboardSegmentOverride：storyboardRecordId 加外键。
+-- 4) AssetProviderJobRecord 重建（P1-2）：
+--    加 attemptIndex（0-based，与 UsageCostRecord 一致）、generationRunId/providerRequestKey
+--    的真实外键、call-intent 唯一索引改为 (generationRunId, providerRequestKey, attemptIndex)。
+--    身份三元组不可变：BEFORE UPDATE 触发器禁止改写这三列。
+-- ============================================================================
+CREATE TABLE "AssetProviderJobRecord_new" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "assetManifestRecordId" TEXT NOT NULL,
+    "assetRunId" TEXT NOT NULL,
+    "executionId" TEXT NOT NULL,
+    "taskId" TEXT NOT NULL,
+    "providerType" TEXT NOT NULL,
+    "providerName" TEXT NOT NULL,
+    "providerJobId" TEXT,
+    "status" TEXT NOT NULL,
+    "attemptCount" INTEGER NOT NULL DEFAULT 0,
+    "attemptIndex" INTEGER,
+    "generationRunId" TEXT,
+    "providerRequestKey" TEXT,
+    "rawRequestJson" TEXT,
+    "rawResponseJson" TEXT,
+    "errorCode" TEXT,
+    "errorMessage" TEXT,
+    "submittedAt" DATETIME,
+    "lastPolledAt" DATETIME,
+    "completedAt" DATETIME,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "AssetProviderJobRecord_assetRunId_executionId_taskId_attemptCount_key" UNIQUE ("assetRunId", "executionId", "taskId", "attemptCount"),
+    CONSTRAINT "AssetProviderJobRecord_assetManifestRecordId_fkey" FOREIGN KEY ("assetManifestRecordId") REFERENCES "AssetManifestRecord" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT "AssetProviderJobRecord_generationRunId_fkey" FOREIGN KEY ("generationRunId") REFERENCES "GenerationRun" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+);
+-- 复制旧数据（attemptIndex/generationRunId/providerRequestKey 旧版本无值 → NULL）
+INSERT INTO "AssetProviderJobRecord_new" ("id", "assetManifestRecordId", "assetRunId", "executionId", "taskId", "providerType", "providerName", "providerJobId", "status", "attemptCount", "rawRequestJson", "rawResponseJson", "errorCode", "errorMessage", "submittedAt", "lastPolledAt", "completedAt", "createdAt", "updatedAt")
+SELECT "id", "assetManifestRecordId", "assetRunId", "executionId", "taskId", "providerType", "providerName", "providerJobId", "status", "attemptCount", "rawRequestJson", "rawResponseJson", "errorCode", "errorMessage", "submittedAt", "lastPolledAt", "completedAt", "createdAt", "updatedAt" FROM "AssetProviderJobRecord";
+DROP TABLE "AssetProviderJobRecord";
+ALTER TABLE "AssetProviderJobRecord_new" RENAME TO "AssetProviderJobRecord";
+CREATE INDEX "AssetProviderJobRecord_assetManifestRecordId_status_idx" ON "AssetProviderJobRecord" ("assetManifestRecordId", "status");
+CREATE INDEX "AssetProviderJobRecord_providerName_providerJobId_idx" ON "AssetProviderJobRecord" ("providerName", "providerJobId");
+CREATE INDEX "AssetProviderJobRecord_generationRunId_idx" ON "AssetProviderJobRecord" ("generationRunId");
+-- call-intent 唯一索引：0-based attemptIndex（与 UsageCostRecord 一致）
+CREATE UNIQUE INDEX "AssetProviderJobRecord_generationRunId_providerRequestKey_attemptIndex_key"
+    ON "AssetProviderJobRecord" ("generationRunId", "providerRequestKey", "attemptIndex")
+    WHERE "generationRunId" IS NOT NULL AND "providerRequestKey" IS NOT NULL AND "attemptIndex" IS NOT NULL;
+
+-- 身份三元组不可变：一旦创建，generationRunId/providerRequestKey/attemptIndex 不得改写。
+CREATE TRIGGER "trg_provider_job_intent_immutable" BEFORE UPDATE OF "generationRunId", "providerRequestKey", "attemptIndex" ON "AssetProviderJobRecord"
+FOR EACH ROW
+WHEN NEW."generationRunId" IS NOT OLD."generationRunId" OR NEW."providerRequestKey" IS NOT OLD."providerRequestKey" OR NEW."attemptIndex" IS NOT OLD."attemptIndex"
+BEGIN
+    SELECT RAISE(ABORT, 'provider_job_intent_immutable: call-intent identity cannot be changed after creation');
+END;
+
+-- ============================================================================
+-- 5) StoryboardSegmentOverride：storyboardRecordId 加外键。
 -- ============================================================================
 CREATE TABLE "StoryboardSegmentOverride_new" (
     "id" TEXT NOT NULL PRIMARY KEY,
@@ -125,7 +230,7 @@ ALTER TABLE "StoryboardSegmentOverride_new" RENAME TO "StoryboardSegmentOverride
 CREATE INDEX "StoryboardSegmentOverride_projectId_idx" ON "StoryboardSegmentOverride" ("projectId");
 
 -- ============================================================================
--- 5) UsageCostRecord：assetProviderJobRecordId 加外键；金额列加非负十进制整数 CHECK。
+-- 6) UsageCostRecord：assetProviderJobRecordId 加外键；金额列加非负十进制整数 CHECK。
 -- ============================================================================
 CREATE TABLE "UsageCostRecord_new" (
     "id" TEXT NOT NULL PRIMARY KEY,
@@ -157,45 +262,18 @@ ALTER TABLE "UsageCostRecord_new" RENAME TO "UsageCostRecord";
 CREATE INDEX "UsageCostRecord_runConfigurationSnapshotId_idx" ON "UsageCostRecord" ("runConfigurationSnapshotId");
 
 -- ============================================================================
--- 6) AssetProviderJobRecord：加 generationRunId/providerRequestKey 列 + call-intent 部分唯一索引。
--- ============================================================================
-ALTER TABLE "AssetProviderJobRecord" ADD COLUMN "generationRunId" TEXT;
-ALTER TABLE "AssetProviderJobRecord" ADD COLUMN "providerRequestKey" TEXT;
--- 外部 provider call-intent 防重合同：同一 run 内同一稳定请求键同一 attempt 只能提交一次。
-CREATE UNIQUE INDEX "AssetProviderJobRecord_generationRunId_providerRequestKey_attemptCount_key"
-    ON "AssetProviderJobRecord" ("generationRunId", "providerRequestKey", "attemptCount")
-    WHERE "generationRunId" IS NOT NULL AND "providerRequestKey" IS NOT NULL;
-CREATE INDEX "AssetProviderJobRecord_generationRunId_idx" ON "AssetProviderJobRecord" ("generationRunId");
-
--- ============================================================================
--- 7) ProviderModelCatalog：部分唯一索引防多个 active 默认项；
---    触发器防零个 active 默认项（恰好一个的 SQL 层硬约束）。
+-- 7) ProviderModelCatalog：部分唯一索引防多个 active 默认项。
+--    零默认项交给 readiness/resolver 校验（任务 7），不再用逐行触发器阻止合法轮换
+--    （P2-1：AFTER 触发器会让"先取消旧默认再设新默认"的单行 upsert 失败）。
 -- ============================================================================
 CREATE UNIQUE INDEX "ProviderModelCatalog_capability_active_default_key"
     ON "ProviderModelCatalog" ("capability")
     WHERE "status" = 'active' AND "isDefault" = 1;
 
--- 删除/降级默认项后，若某 capability 不再有 active 默认项 → 拒绝（P2-1）。
-CREATE TRIGGER "trg_catalog_default_never_zero_delete" AFTER DELETE ON "ProviderModelCatalog"
-FOR EACH ROW
-WHEN NOT EXISTS (SELECT 1 FROM "ProviderModelCatalog" WHERE "capability" = OLD."capability" AND "status" = 'active' AND "isDefault" = 1)
-BEGIN
-    SELECT RAISE(ABORT, 'catalog_default_missing: capability ' || OLD."capability" || ' has no active default entry');
-END;
-
-CREATE TRIGGER "trg_catalog_default_never_zero_update" AFTER UPDATE OF "status", "isDefault" ON "ProviderModelCatalog"
-FOR EACH ROW
-WHEN NOT EXISTS (SELECT 1 FROM "ProviderModelCatalog" WHERE "capability" = NEW."capability" AND "status" = 'active' AND "isDefault" = 1)
-BEGIN
-    SELECT RAISE(ABORT, 'catalog_default_missing: capability ' || NEW."capability" || ' has no active default entry');
-END;
-
 -- ============================================================================
--- 8) 跨项目一致性数据库触发器（P1-2 数据库层最后防线）。
---    writer 层校验之外，任何绕过 writer 的写入也会被数据库拒绝。
+-- 8) 跨项目一致性数据库触发器（writer 层之外的数据库层最后防线）。
 -- ============================================================================
 
--- GenerationRun.projectId 必须等于其 snapshot 的项目（INSERT/UPDATE）。
 CREATE TRIGGER "trg_run_snapshot_same_project_insert" AFTER INSERT ON "GenerationRun"
 FOR EACH ROW
 WHEN (SELECT "projectId" FROM "RunConfigurationSnapshot" WHERE "id" = NEW."runConfigurationSnapshotId") != NEW."projectId"
@@ -210,7 +288,6 @@ BEGIN
     SELECT RAISE(ABORT, 'generation_run_project_mismatch: run and snapshot must belong to the same project');
 END;
 
--- GenerationRun.projectId 必须等于其 quote 的项目（INSERT/UPDATE，quoteId 非空时）。
 CREATE TRIGGER "trg_run_quote_same_project_insert" AFTER INSERT ON "GenerationRun"
 FOR EACH ROW
 WHEN NEW."quoteId" IS NOT NULL AND (SELECT "projectId" FROM "GenerationCostQuote" WHERE "id" = NEW."quoteId") != NEW."projectId"
@@ -225,7 +302,6 @@ BEGIN
     SELECT RAISE(ABORT, 'generation_run_project_mismatch: run and quote must belong to the same project');
 END;
 
--- RunConfigurationSnapshot.quoteId 引用的 quote 必须属于相同项目（INSERT/UPDATE）。
 CREATE TRIGGER "trg_snapshot_quote_same_project_insert" AFTER INSERT ON "RunConfigurationSnapshot"
 FOR EACH ROW
 WHEN NEW."quoteId" IS NOT NULL AND (SELECT "projectId" FROM "GenerationCostQuote" WHERE "id" = NEW."quoteId") != NEW."projectId"
@@ -240,7 +316,6 @@ BEGIN
     SELECT RAISE(ABORT, 'snapshot_quote_project_mismatch: snapshot and quote must belong to the same project');
 END;
 
--- StoryboardSegmentOverride.projectId 必须等于其 storyboard 的项目。
 CREATE TRIGGER "trg_override_storyboard_same_project_insert" AFTER INSERT ON "StoryboardSegmentOverride"
 FOR EACH ROW
 WHEN (SELECT "projectId" FROM "StoryboardRecord" WHERE "id" = NEW."storyboardRecordId") != NEW."projectId"
@@ -257,52 +332,50 @@ END;
 
 -- ============================================================================
 -- 9) Seed 修正：active seed 与当前真实运行配置对齐。
---    媒体单价取自 frontend/src/utils/pricing.ts（仓库单一价格源）：
---    图片 ¥0.20/张 = 200000 micros；视频 720P ¥0.60/秒 = 600000 micros；
---    TTS ¥0.80/万字 = 80 micros/字符。
---    LLM 的 providers.json 注册 deepseek/zhipu，但可信 token 单价属于任务 7
---    PricingService，这里标注 estimate + pending_task7，报价服务在任务 7 前
---    不得把 LLM 价格当作可信授权上界（unbounded）。
+--    媒体单价取自 frontend/src/utils/pricing.ts（仓库单一价格源）。
+--    LLM 在任务 7 可信 PricingService 落地前使用结构化 unpriced（bounded=false），
+--    不保留虚构单价，不得进入可信授权上界（报价必须标记 unbounded）。
 -- ============================================================================
 UPDATE "ProviderModelCatalog" SET
     "modelId" = 'wan2.6-t2i',
     "displayName" = '万相文生图（运行默认）',
     "pricingVersion" = 'dashscope-media-2026-08-13',
-    "pricingJson" = '{"per_image_micros":"200000","currency":"CNY","unit":"image","source":"frontend/src/utils/pricing.ts","effective_from":"2026-08-13"}'
+    "pricingJson" = '{"per_image_micros":"200000","currency":"CNY","unit":"image","source":"frontend/src/utils/pricing.ts","effective_from":"2026-08-13","bounded":true}'
 WHERE "id" = 'image.generate.dashscope.wanx-v1';
 
 UPDATE "ProviderModelCatalog" SET
     "modelId" = 'wan2.7-i2v-2026-04-25',
     "displayName" = '万相图生视频（运行默认）',
     "pricingVersion" = 'dashscope-media-2026-08-13',
-    "pricingJson" = '{"per_second_micros":"600000","resolution":"standard_720p","currency":"CNY","unit":"video_second","source":"frontend/src/utils/pricing.ts","effective_from":"2026-08-13"}'
+    "pricingJson" = '{"per_second_micros":"600000","resolution":"standard_720p","currency":"CNY","unit":"video_second","source":"frontend/src/utils/pricing.ts","effective_from":"2026-08-13","bounded":true}'
 WHERE "id" = 'video.image_to_video.dashscope.video-v1';
 
 UPDATE "ProviderModelCatalog" SET
     "modelId" = 'qwen3-tts-instruct-flash',
     "displayName" = '通义千问 TTS（运行默认）',
     "pricingVersion" = 'dashscope-media-2026-08-13',
-    "pricingJson" = '{"per_character_micros":"80","currency":"CNY","unit":"tts_character","source":"frontend/src/utils/pricing.ts","effective_from":"2026-08-13"}'
+    "pricingJson" = '{"per_character_micros":"80","currency":"CNY","unit":"tts_character","source":"frontend/src/utils/pricing.ts","effective_from":"2026-08-13","bounded":true}'
 WHERE "id" = 'tts.synthesize.dashscope.qwen3-tts';
 
--- LLM：providers.json 只注册 deepseek/zhipu（无 dashscope），
--- 因此 LLM active 项必须映射到真实注册 provider + 当前 env 默认模型。
--- token 单价在任务 7 PricingService 落地前为 estimate，不得作为可信授权上界。
+-- LLM：任务 7 可信价格服务落地前为 unpriced（bounded=false）。
+-- 报价服务遇到 bounded=false 必须把该项标记为 unbounded，不得用任何数字作为授权上界。
 UPDATE "ProviderModelCatalog" SET
     "providerKey" = 'deepseek',
     "modelId" = 'deepseek-v4-pro',
     "displayName" = 'DeepSeek V4 Pro（Smart）',
-    "pricingVersion" = 'llm-2026-08-13',
-    "pricingJson" = '{"per_input_token_micros":"2","per_output_token_micros":"8","currency":"CNY","unit":"token","confidence":"estimate","note":"pending_task7_pricing_service"}'
+    "pricingVersion" = 'llm-pending-task7',
+    "pricingJson" = '{"currency":"CNY","unit":"token","bounded":false,"note":"unpriced until task 7 PricingService"}'
 WHERE "id" = 'llm.smart.dashscope.qwen-max';
 
 UPDATE "ProviderModelCatalog" SET
     "providerKey" = 'zhipu',
     "modelId" = 'glm-4',
     "displayName" = '智谱 GLM-4（Flash）',
-    "pricingVersion" = 'llm-2026-08-13',
-    "pricingJson" = '{"per_input_token_micros":"1","per_output_token_micros":"4","currency":"CNY","unit":"token","confidence":"estimate","note":"pending_task7_pricing_service"}'
+    "pricingVersion" = 'llm-pending-task7',
+    "pricingJson" = '{"currency":"CNY","unit":"token","bounded":false,"note":"unpriced until task 7 PricingService"}'
 WHERE "id" = 'llm.flash.dashscope.qwen-flash';
 
 PRAGMA foreign_keys = ON;
-PRAGMA foreign_key_check;
+-- foreign_key_check 返回违规行时，better-sqlite3 的 exec 会因 SELECT 结果集不中止；
+-- 但前面的 RAISE(ABORT) 预检已保证旧数据合法，这里仅作最终一致性确认。
+-- 若仍有 FK 违规（理论不应发生），由应用启动 readiness 拒绝激活。

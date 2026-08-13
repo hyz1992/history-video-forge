@@ -9,6 +9,7 @@ export type CreateAssetProviderJobInput = Omit<
   | "id"
   | "generationRunId"
   | "providerRequestKey"
+  | "attemptIndex"
   | "submittedAt"
   | "lastPolledAt"
   | "completedAt"
@@ -18,9 +19,11 @@ export type CreateAssetProviderJobInput = Omit<
   /**
    * S2-2A call-intent 防重字段。dispatcher（任务 8）落地前可空；
    * 外部提交前必须写入，配合数据库部分唯一索引防止重复计费。
+   * 身份三元组（generationRunId, providerRequestKey, attemptIndex）创建后不可变。
    */
   generationRunId?: string | null;
   providerRequestKey?: string | null;
+  attemptIndex?: number | null;
 };
 
 export type UpdateAssetProviderJobPatch = Partial<
@@ -55,6 +58,7 @@ export async function createAssetProviderJobRecord(
     attemptCount: input.attemptCount,
     generationRunId: input.generationRunId ?? null,
     providerRequestKey: input.providerRequestKey ?? null,
+    attemptIndex: input.attemptIndex ?? null,
     rawRequestJson: input.rawRequestJson,
     rawResponseJson: input.rawResponseJson,
     errorCode: input.errorCode,

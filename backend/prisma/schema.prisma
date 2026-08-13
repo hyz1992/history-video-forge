@@ -458,9 +458,12 @@ model AssetProviderJobRecord {
   providerJobId         String?
   status                String
   attemptCount          Int                 @default(0)
-  // S2-2A 外部 provider call-intent 防重合同（P1-1 整改）：
-  // 外部提交前写库，靠 (generationRunId, providerRequestKey, attemptCount)
-  // 唯一约束阻止并发 dispatcher 重复计费。旧行两者为 null（partial index 不约束）。
+  // S2-2A 外部 provider call-intent 防重合同（P1 整改）：
+  // attemptIndex 是冻结合同的 0-based attempt（与 UsageCostRecord.attemptIndex 一致），
+  // 区别于运行态 1-based attemptCount（provider 重试计数）。外部提交前写库，靠
+  // (generationRunId, providerRequestKey, attemptIndex) 唯一约束阻止并发 dispatcher
+  // 重复计费。旧行三者可空（partial index 不约束）；身份三元组创建后不可变。
+  attemptIndex          Int?
   generationRunId       String?
   providerRequestKey    String?
   rawRequestJson        Json?

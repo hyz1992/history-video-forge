@@ -182,10 +182,11 @@ describe("S2-2A generation configuration schema", () => {
 
   // --- S2-2A 任务 2 审查整改（20260813090000_s2_2a_review_fixes） ---
 
-  it("AssetProviderJobRecord has generationRunId / providerRequestKey for call-intent dedup", () => {
+  it("AssetProviderJobRecord has generationRunId / providerRequestKey / attemptIndex for call-intent dedup", () => {
     const m = modelBody(schema, "AssetProviderJobRecord");
     expect(m).toMatch(/generationRunId\s+String\?/);
     expect(m).toMatch(/providerRequestKey\s+String\?/);
+    expect(m).toMatch(/attemptIndex\s+Int\?/);
     expect(m).toMatch(/generationRun\s+GenerationRun\?/);
     expect(m).toContain("@@index([generationRunId])");
   });
