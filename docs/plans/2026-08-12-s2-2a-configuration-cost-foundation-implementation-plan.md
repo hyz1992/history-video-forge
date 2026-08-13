@@ -597,6 +597,7 @@ POST /api/projects/:projectId/generation-cost-quotes
 断言：
 
 - quote 有 10 分钟有效期、一次性消费、configuration hash、pricing hash、逐项明细。
+- quote 在创建时计算并持久化 `quoteFingerprint`（SHA-256，基于 canonical quote 内容）；提交时按相同 canonical 输入重算并比对，不一致则拒绝。
 - 预算比较使用 `authorizationCostMicros`，不是估算值。
 - unbounded item 要求显式 authorization。
 - 配置/价格/asset plan 变化使旧 quote 提交失败。

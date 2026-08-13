@@ -47,11 +47,11 @@ const result = resolveGenerationConfiguration({
   sourceUserPreferenceRevision: null,
   systemConstraints: { apiVideoProviderEnabled: true },
   providerModelCatalog: [
-    { provider_model_id: "dashscope.qwen-max", capability: "llm.smart", provider_key: "dashscope", model_id: "qwen-max", status: "active" },
-    { provider_model_id: "dashscope.qwen-flash", capability: "llm.flash", provider_key: "dashscope", model_id: "qwen-flash", status: "active" },
-    { provider_model_id: "dashscope.wanx", capability: "image.generate", provider_key: "dashscope", model_id: "wanx-v1", status: "active" },
-    { provider_model_id: "dashscope.video", capability: "video.image_to_video", provider_key: "dashscope", model_id: "video-v1", status: "active" },
-    { provider_model_id: "dashscope.tts", capability: "tts.synthesize", provider_key: "dashscope", model_id: "qwen3-tts", status: "active" },
+    { provider_model_id: "dashscope.qwen-max", capability: "llm.smart", provider_key: "dashscope", model_id: "qwen-max", status: "active", is_default: true },
+    { provider_model_id: "dashscope.qwen-flash", capability: "llm.flash", provider_key: "dashscope", model_id: "qwen-flash", status: "active", is_default: true },
+    { provider_model_id: "dashscope.wanx", capability: "image.generate", provider_key: "dashscope", model_id: "wanx-v1", status: "active", is_default: true },
+    { provider_model_id: "dashscope.video", capability: "video.image_to_video", provider_key: "dashscope", model_id: "video-v1", status: "active", is_default: true },
+    { provider_model_id: "dashscope.tts", capability: "tts.synthesize", provider_key: "dashscope", model_id: "qwen3-tts", status: "active", is_default: true },
   ],
   operation: "assets.generate",
 });

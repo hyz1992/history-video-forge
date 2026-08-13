@@ -34,6 +34,7 @@ const baseConfig: GenerationConfigurationV1 = {
 /**
  * 一个完整的 active catalog，让矩阵/约束/覆盖类用例聚焦路线解析，
  * 不被 capability 解析失败干扰；capability 专属用例在下面单独控制 catalog。
+ * 每个 capability 恰好一个 is_default=true active 项（auto 选择硬合同）。
  */
 const fullActiveCatalog: ProviderModelCatalogEntry[] = [
   {
@@ -42,6 +43,7 @@ const fullActiveCatalog: ProviderModelCatalogEntry[] = [
     provider_key: "dashscope",
     model_id: "qwen-max",
     status: "active",
+    is_default: true,
   },
   {
     provider_model_id: "dashscope.qwen-flash",
@@ -49,6 +51,7 @@ const fullActiveCatalog: ProviderModelCatalogEntry[] = [
     provider_key: "dashscope",
     model_id: "qwen-flash",
     status: "active",
+    is_default: true,
   },
   {
     provider_model_id: "dashscope.wanx",
@@ -56,6 +59,7 @@ const fullActiveCatalog: ProviderModelCatalogEntry[] = [
     provider_key: "dashscope",
     model_id: "wanx-v1",
     status: "active",
+    is_default: true,
   },
   {
     provider_model_id: "dashscope.video",
@@ -63,6 +67,7 @@ const fullActiveCatalog: ProviderModelCatalogEntry[] = [
     provider_key: "dashscope",
     model_id: "video-v1",
     status: "active",
+    is_default: true,
   },
   {
     provider_model_id: "dashscope.tts",
@@ -70,6 +75,7 @@ const fullActiveCatalog: ProviderModelCatalogEntry[] = [
     provider_key: "dashscope",
     model_id: "qwen3-tts",
     status: "active",
+    is_default: true,
   },
 ];
 
@@ -336,6 +342,7 @@ describe("resolveGenerationConfiguration capability resolution", () => {
       provider_key: "dashscope",
       model_id: "qwen-max",
       status: "active",
+      is_default: true,
     },
     {
       provider_model_id: "dashscope.qwen-flash",
@@ -343,6 +350,7 @@ describe("resolveGenerationConfiguration capability resolution", () => {
       provider_key: "dashscope",
       model_id: "qwen-flash",
       status: "active",
+      is_default: true,
     },
     {
       provider_model_id: "dashscope.wanx",
@@ -350,6 +358,7 @@ describe("resolveGenerationConfiguration capability resolution", () => {
       provider_key: "dashscope",
       model_id: "wanx-v1",
       status: "active",
+      is_default: true,
     },
     {
       provider_model_id: "dashscope.video",
@@ -357,6 +366,7 @@ describe("resolveGenerationConfiguration capability resolution", () => {
       provider_key: "dashscope",
       model_id: "video-v1",
       status: "active",
+      is_default: true,
     },
     {
       provider_model_id: "dashscope.tts",
@@ -364,6 +374,7 @@ describe("resolveGenerationConfiguration capability resolution", () => {
       provider_key: "dashscope",
       model_id: "qwen3-tts",
       status: "active",
+      is_default: true,
     },
   ];
 
@@ -523,16 +534,33 @@ describe("resolveGenerationConfiguration deterministic outputs", () => {
     }
   });
 
-  it("catalog_hash does NOT reflect price-only changes (pricing_hash is PricingService's job)", () => {
-    // P1-1: resolver 输入不含价格字段，catalog_hash 只反映 catalog 结构。
-    // 加 is_default 标记（结构变化）会改 hash；但纯价格变化（属于任务 7）不影响 resolver。
-    const catalogWithDefault = fullActiveCatalog.map((entry) =>
+  it("catalog_hash does NOT include price fields (pricing_hash is PricingService's job)", () => {
+    // P1-1: catalog 输入合同不含任何价格字段（strict schema 拒绝 pricing_* 字段），
+    // 所以 catalog_hash 只反映 catalog 结构，价格变化不会进入 resolver。
+    // 这里验证：给 catalog 加一个价格字段会被 schema 拒绝（resolver 返回结构化错误），
+    // 而不是被静默纳入 hash。
+    const catalogWithPriceField = fullActiveCatalog.map((entry) => ({
+      ...entry,
+      // @ts-expect-error catalog schema is strict and rejects price fields
+      price_per_unit_micros: "999",
+    }));
+    const resolved = resolveGenerationConfiguration(
+      buildInput({ providerModelCatalog: catalogWithPriceField }),
+    );
+    expect(resolved.ok).toBe(false);
+    if (resolved.ok) return;
+    expect(resolved.error.code).toBe("generation_configuration_invalid");
+  });
+
+  it("catalog_hash changes when model_id content changes", () => {
+    // catalog_hash 反映 catalog 结构内容（model_id 是结构字段）。
+    const catalogModified = fullActiveCatalog.map((entry) =>
       entry.provider_model_id === "dashscope.qwen-max"
-        ? { ...entry, is_default: true }
+        ? { ...entry, model_id: "qwen-max-v2" }
         : entry,
     );
     const a = resolveGenerationConfiguration(buildInput({ providerModelCatalog: fullActiveCatalog }));
-    const b = resolveGenerationConfiguration(buildInput({ providerModelCatalog: catalogWithDefault }));
+    const b = resolveGenerationConfiguration(buildInput({ providerModelCatalog: catalogModified }));
     expect(a.ok).toBe(true);
     expect(b.ok).toBe(true);
     if (a.ok && b.ok) {
@@ -684,8 +712,8 @@ describe("resolveGenerationConfiguration hash algorithm identity and boundaries"
 });
 
 describe("resolveGenerationConfiguration auto default model selection", () => {
-  // P2: auto 必须优先选择 is_default=true 的 active 项，而不是依赖数组顺序。
-  it("auto prefers the is_default=true entry regardless of array order", () => {
+  // P1: auto 必须选择 is_default=true 的 active 项，而不是依赖数组顺序。
+  it("auto selects the is_default=true entry regardless of array order", () => {
     const catalogReordered: ProviderModelCatalogEntry[] = [
       // 非 default 项排在前面
       { provider_model_id: "dashscope.qwen-max-v2", capability: "llm.smart", provider_key: "dashscope", model_id: "qwen-max-v2", status: "active", is_default: false },
@@ -701,12 +729,19 @@ describe("resolveGenerationConfiguration auto default model selection", () => {
     expect(resolved.value.resolved_capabilities["llm.smart"].model_id).toBe("qwen-max");
   });
 
-  it("auto with no is_default entry falls back to first active entry", () => {
-    // 没有 is_default=true 时，退回数组首项（兼容当前测试 catalog 都不带 is_default 的情况）
-    const resolved = resolveGenerationConfiguration(buildInput({}));
-    expect(resolved.ok).toBe(true);
-    if (!resolved.ok) return;
-    expect(resolved.value.resolved_capabilities["llm.smart"].model_id).toBe("qwen-max");
+  // P1: 零默认项必须返回结构化错误，不再退回数组首项（彻底消除顺序依赖）。
+  it("auto rejects a capability with zero active default entries", () => {
+    const catalogNoDefault: ProviderModelCatalogEntry[] = fullActiveCatalog.map((e) => ({
+      ...e,
+      is_default: false,
+    }));
+    const resolved = resolveGenerationConfiguration(
+      buildInput({ providerModelCatalog: catalogNoDefault }),
+    );
+    expect(resolved.ok).toBe(false);
+    if (resolved.ok) return;
+    expect(resolved.error.code).toBe("generation_configuration_invalid");
+    expect(resolved.error.capability).toBe("llm.smart");
   });
 
   it("auto rejects a catalog with multiple active default entries for one capability", () => {
@@ -725,5 +760,33 @@ describe("resolveGenerationConfiguration auto default model selection", () => {
     if (resolved.ok) return;
     expect(resolved.error.code).toBe("generation_configuration_invalid");
     expect(resolved.error.capability).toBe("llm.smart");
+  });
+
+  // P1: catalog_hash 必须对数组顺序不敏感（catalog 语义上是按 ID 标识的集合）。
+  it("catalog_hash is stable regardless of catalog row order", () => {
+    const reordered = [...fullActiveCatalog].reverse();
+    const a = resolveGenerationConfiguration(buildInput({ providerModelCatalog: fullActiveCatalog }));
+    const b = resolveGenerationConfiguration(buildInput({ providerModelCatalog: reordered }));
+    expect(a.ok && b.ok).toBe(true);
+    if (!(a.ok && b.ok)) return;
+    // 解析出的默认模型相同
+    expect(a.value.resolved_capabilities["llm.smart"].model_id).toBe(
+      b.value.resolved_capabilities["llm.smart"].model_id,
+    );
+    // catalog_hash 也相同（规范化排序后计算）
+    expect(a.value.catalog_hash).toBe(b.value.catalog_hash);
+  });
+
+  it("catalog_hash rejects duplicate provider_model_id entries", () => {
+    const catalogDup: ProviderModelCatalogEntry[] = [
+      ...fullActiveCatalog,
+      { ...fullActiveCatalog[0]! },
+    ];
+    const resolved = resolveGenerationConfiguration(
+      buildInput({ providerModelCatalog: catalogDup }),
+    );
+    expect(resolved.ok).toBe(false);
+    if (resolved.ok) return;
+    expect(resolved.error.code).toBe("generation_configuration_invalid");
   });
 });

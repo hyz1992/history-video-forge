@@ -399,6 +399,9 @@ describe("GenerationConfigurationV1 schema", () => {
       catalog_hash: CATALOG_HASH,
     };
 
+    const QUOTE_FINGERPRINT = "sha256:" + "b".repeat(64);
+    const PRICING_HASH = "sha256:" + "a".repeat(64);
+    // 基线 validSnapshot 是一个完整的付费运行（quote_id 非空 + 全部绑定证据齐全）。
     const validSnapshot = {
       schema_version: "run_configuration_snapshot_v1",
       project_id: "proj_001",
@@ -411,20 +414,20 @@ describe("GenerationConfigurationV1 schema", () => {
       // 顶层 hash 必须与 resolved 内部一致（superRefine 校验）
       configuration_hash: CONFIG_HASH,
       catalog_hash: CATALOG_HASH,
-      quote_id: null,
-      // 加密级 quote 指纹（任务 8 产出，可空）
-      quote_fingerprint: null,
+      quote_id: "quote_001",
+      // 加密级 quote 指纹（quote 创建时计算持久化，提交时重算比对）
+      quote_fingerprint: QUOTE_FINGERPRINT,
       estimated_cost_micros: "12345",
       authorization_cost_micros: "14000",
       budget_limit_micros: null,
       budget_override_authorized: false,
       pricing_version_set: ["dashscope-cn-2026-08-12"],
-      // 定价 hash（任务 7 PricingService 产出，SHA-256 格式，可空）
-      pricing_hash: "sha256:" + "a".repeat(64),
+      // 定价 hash（任务 7 PricingService 产出，SHA-256 格式）
+      pricing_hash: PRICING_HASH,
       created_at: "2026-08-13T00:00:00.000Z",
     };
 
-    it("accepts a complete snapshot with run identity, costs, budget authorization and pricing", () => {
+    it("accepts a complete quoted snapshot with full binding evidence", () => {
       const snapshot = RunConfigurationSnapshotV1.parse(validSnapshot);
       expect(snapshot.schema_version).toBe("run_configuration_snapshot_v1");
       expect(snapshot.project_id).toBe("proj_001");
@@ -438,14 +441,78 @@ describe("GenerationConfigurationV1 schema", () => {
       expect(snapshot.pricing_version_set).toEqual(["dashscope-cn-2026-08-12"]);
     });
 
-    it("accepts a free-run snapshot where quote_fingerprint and pricing_hash are null", () => {
+    it("accepts a free-run snapshot with no quote binding evidence", () => {
       const snapshot = RunConfigurationSnapshotV1.parse({
         ...validSnapshot,
+        quote_id: null,
         quote_fingerprint: null,
         pricing_hash: null,
+        pricing_version_set: [],
+        // 免费运行的费用字段可为 null（无报价）
+        estimated_cost_micros: null,
+        authorization_cost_micros: null,
       });
+      expect(snapshot.quote_id).toBeNull();
       expect(snapshot.quote_fingerprint).toBeNull();
       expect(snapshot.pricing_hash).toBeNull();
+      expect(snapshot.pricing_version_set).toEqual([]);
+    });
+
+    // P1-3 核心断言：付费运行（quote_id 非空）必须携带完整绑定证据。
+    it("rejects a quoted run missing quote_fingerprint", () => {
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          quote_fingerprint: null,
+        }),
+      ).toThrow();
+    });
+
+    it("rejects a quoted run missing pricing_hash", () => {
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          pricing_hash: null,
+        }),
+      ).toThrow();
+    });
+
+    it("rejects a quoted run with empty pricing_version_set", () => {
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          pricing_version_set: [],
+        }),
+      ).toThrow();
+    });
+
+    it("rejects a quoted run missing estimated_cost_micros", () => {
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          estimated_cost_micros: null,
+        }),
+      ).toThrow();
+    });
+
+    it("rejects a quoted run missing authorization_cost_micros", () => {
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          authorization_cost_micros: null,
+        }),
+      ).toThrow();
+    });
+
+    it("rejects a free run that carries residual pricing evidence", () => {
+      // 免费 run（quote_id=null）不得残留 pricing_hash
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          quote_id: null,
+          // quote_fingerprint/pricing_hash/pricing_version_set 仍保留 → 矛盾
+        }),
+      ).toThrow();
     });
 
     it("rejects snapshot missing run identity fields (project_id/operation)", () => {

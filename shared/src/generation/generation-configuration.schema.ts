@@ -419,6 +419,78 @@ export const RunConfigurationSnapshotV1 = z
           "top-level source_revisions.source_user_preference_revision must match resolved value",
       });
     }
+
+    // 付费/免费运行的 quote 绑定一致性（P1-3 整改）。
+    // 付费运行（quote_id 非空）：必须同时具备加密级 quote_fingerprint、定价 hash、
+    //   非空价格版本集合、以及报价金额（estimated/authorization cost）。
+    // 免费运行（quote_id 为 null）：不得携带任何 quote 绑定证据，否则语义矛盾。
+    const isQuotedRun = snapshot.quote_id !== null;
+    if (isQuotedRun) {
+      if (snapshot.quote_fingerprint === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["quote_fingerprint"],
+          message:
+            "quoted run (quote_id non-null) must carry a quote_fingerprint",
+        });
+      }
+      if (snapshot.pricing_hash === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["pricing_hash"],
+          message: "quoted run (quote_id non-null) must carry a pricing_hash",
+        });
+      }
+      if (snapshot.pricing_version_set.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["pricing_version_set"],
+          message:
+            "quoted run (quote_id non-null) must carry at least one pricing version",
+        });
+      }
+      if (snapshot.estimated_cost_micros === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["estimated_cost_micros"],
+          message:
+            "quoted run (quote_id non-null) must carry estimated_cost_micros",
+        });
+      }
+      if (snapshot.authorization_cost_micros === null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["authorization_cost_micros"],
+          message:
+            "quoted run (quote_id non-null) must carry authorization_cost_micros",
+        });
+      }
+    } else {
+      // 免费运行：不得残留 quote 绑定证据。
+      if (snapshot.quote_fingerprint !== null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["quote_fingerprint"],
+          message:
+            "free run (quote_id null) must not carry a quote_fingerprint",
+        });
+      }
+      if (snapshot.pricing_hash !== null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["pricing_hash"],
+          message: "free run (quote_id null) must not carry a pricing_hash",
+        });
+      }
+      if (snapshot.pricing_version_set.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["pricing_version_set"],
+          message:
+            "free run (quote_id null) must not carry pricing versions",
+        });
+      }
+    }
   });
 export type RunConfigurationSnapshotV1 = z.infer<
   typeof RunConfigurationSnapshotV1

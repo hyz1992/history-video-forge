@@ -170,6 +170,52 @@ export type ResolveGenerationConfigurationResult =
   | { ok: true; value: ResolvedGenerationConfigurationV1 }
   | { ok: false; error: GenerationResolverError };
 
+// --- catalog 规范化（用于稳定 hash） ---------------------------------------
+
+/**
+ * 将 catalog 规范化为按 `provider_model_id` 排序、主键唯一的数组，供 catalog_hash
+ * 使用。catalog 在语义上是按稳定 ID 标识的集合，直接哈希原始数组会让数据库返回顺序
+ * 变化被误判为目录漂移（P1-2 整改）。
+ *
+ * 返回结果结构：
+ * - ok=true：规范化的 catalog 数组（仅含参与 hash 的字段，按主键字典序排序）。
+ * - ok=false：存在重复 provider_model_id，返回结构化错误。
+ */
+function normalizeCatalogForHash(
+  catalog: ProviderModelCatalogEntry[],
+):
+  | { ok: true; value: Array<Record<string, unknown>> }
+  | { ok: false; error: GenerationResolverError } {
+  const seen = new Set<string>();
+  const normalized: Array<Record<string, unknown>> = [];
+  for (const entry of catalog) {
+    if (seen.has(entry.provider_model_id)) {
+      return {
+        ok: false,
+        error: {
+          code: "generation_configuration_invalid",
+          message: `duplicate provider_model_id in catalog: ${entry.provider_model_id}`,
+        },
+      };
+    }
+    seen.add(entry.provider_model_id);
+    // 只保留参与 hash 的语义字段（不含可能漂移的元数据如 updated_at）。
+    normalized.push({
+      provider_model_id: entry.provider_model_id,
+      capability: entry.capability,
+      provider_key: entry.provider_key,
+      model_id: entry.model_id,
+      model_version: entry.model_version ?? null,
+      status: entry.status,
+      is_default: entry.is_default,
+    });
+  }
+  normalized.sort((a, b) =>
+    String(a.provider_model_id).localeCompare(String(b.provider_model_id)),
+  );
+  return { ok: true, value: normalized };
+}
+
 // --- 确定性哈希 ------------------------------------------------------------
 
 /**
@@ -322,22 +368,13 @@ function resolveCapabilitySlot(
     };
   }
 
-  // auto: 优先选择该 capability 下 is_default=true 的 active 条目作为平台默认。
-  // 这避免依赖 catalog 数组顺序（数据库返回顺序可能变化），让默认模型/价格/hash 稳定。
-  // 每个 capability 的 active 默认项必须唯一；多于一个返回结构化错误，防止 seed 漂移。
-  const defaultEntries = activeEntries.filter((entry) => entry.is_default);
-  if (defaultEntries.length > 1) {
-    return {
-      ok: false,
-      error: {
-        code: "generation_configuration_invalid",
-        capability: slot,
-        message: `capability ${slot} has ${defaultEntries.length} active default entries; expected at most one`,
-      },
-    };
-  }
-  const defaultEntry = defaultEntries[0] ?? activeEntries[0];
-  if (!defaultEntry) {
+  // auto: 选择该 capability 下 is_default=true 的 active 条目作为平台默认。
+  // 关键约束（P1 整改）：每个 capability **恰好一个** active 默认项。
+  //   - 多于一个：seed 漂移，返回结构化错误。
+  //   - 零个：catalog seed 不完整，返回结构化错误（不再退回数组首项，彻底消除
+  //     对数据库返回顺序的依赖——这是 auto 选择稳定性的硬合同）。
+  // 这保证相同 catalog 内容（无论行顺序）永远解析出相同默认模型/价格/hash。
+  if (activeEntries.length === 0) {
     return {
       ok: false,
       error: {
@@ -347,6 +384,28 @@ function resolveCapabilitySlot(
       },
     };
   }
+  const defaultEntries = activeEntries.filter((entry) => entry.is_default);
+  if (defaultEntries.length === 0) {
+    return {
+      ok: false,
+      error: {
+        code: "generation_configuration_invalid",
+        capability: slot,
+        message: `capability ${slot} has no active default entry; auto mode requires exactly one is_default=true active entry per capability`,
+      },
+    };
+  }
+  if (defaultEntries.length > 1) {
+    return {
+      ok: false,
+      error: {
+        code: "generation_configuration_invalid",
+        capability: slot,
+        message: `capability ${slot} has ${defaultEntries.length} active default entries; expected exactly one`,
+      },
+    };
+  }
+  const defaultEntry = defaultEntries[0]!;
   return {
     ok: true,
     value: {
@@ -590,7 +649,14 @@ export function resolveGenerationConfiguration(
     segment_visual_routes: segmentRoutes,
   };
   const configuration_hash = deterministicHash(canonicalStringify(configurationPayload));
-  const catalog_hash = deterministicHash(canonicalStringify(input.providerModelCatalog));
+  // catalog 在语义上是按 provider_model_id 标识的集合，不是有序数组。
+  // 直接哈希数组会让数据库返回顺序变化被误判为目录漂移，导致有效 quote 被拒绝。
+  // 因此先按稳定主键排序、校验唯一，再计算 hash（P1-2 整改）。
+  const catalogForHash = normalizeCatalogForHash(input.providerModelCatalog);
+  if (!catalogForHash.ok) {
+    return { ok: false, error: catalogForHash.error };
+  }
+  const catalog_hash = deterministicHash(canonicalStringify(catalogForHash.value));
 
   const value: ResolvedGenerationConfigurationV1 = {
     schema_version: "resolved_generation_configuration_v1",

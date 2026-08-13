@@ -180,7 +180,9 @@ S2-2A 只允许修改 `video` 和 `budget`；`creative` 保留 null，`capabilit
 | `id` | quote UUID |
 | `projectId/userId` | owner scope |
 | `operation` | 本次生成 operation |
-| `configurationHash` | 报价绑定的 resolved config hash |
+| `configurationHash` | 报价绑定的 resolved config 漂移检测 hash（提交时重算比对） |
+| `quoteFingerprint` | quote 创建时计算并持久化的内容指纹（SHA-256），提交时按相同 canonical 输入重算并比对，证明提交的 quote 内容与创建时一致 |
+| `pricingHash` | 任务 7 PricingService 基于标准化价格内容生成的 SHA-256 |
 | `pricingVersionSetJson` | 使用的价格版本集合 |
 | `itemsJson` | capability/provider/model/单位/数量/分项金额 |
 | `estimatedCostMicros` | 总预估微元 |
@@ -196,9 +198,15 @@ quote 默认有效期 10 分钟。配置 revision、模型状态、价格版本�
 
 > **hash 与指纹边界澄清（S2-2A 任务 1 整改）**
 >
-> - `configurationHash` 是 resolved 配置的 canonical JSON 漂移检测 hash：提交时服务端重新解析并比对，确认 quote 基于的配置未被改过。它是**确定性漂移检测**，不是密码学防伪。
-> - `pricingVersionSetJson` + 任务 7 PricingService 产出的 `pricing_hash`（SHA-256，基于标准化价格内容）共同覆盖价格变化检测；价格单独变化使旧 quote 失效由这两者承担，而不是 `configurationHash`。
-> - 付费 quote 的**加密级防篡改绑定**由任务 8 提交事务生成的独立 `quote_fingerprint`（SHA-256）承担，不复用漂移检测 hash。`authorizationCostMicros` 数值比较才是真正的预算授权边界。
+> 三类 hash/指纹职责严格分离，不得混用：
+>
+> - **漂移检测（FNV-1a64，resolver 产出）**：`configurationHash` 与 `catalogHash` 是 canonical JSON 的确定性比对，提交时服务端重新解析并比对，确认 quote 基于的配置/目录未被改过。不是密码学防伪。
+> - **定价指纹（SHA-256，任务 7 PricingService 产出）**：`pricingHash` 基于标准化价格内容生成，覆盖价格变化检测（价格单独变化使旧 quote 失效）。
+> - **quote 内容绑定（SHA-256，quote 创建时计算持久化）**：`quoteFingerprint` 在 quote 创建时对 canonical quote 内容（configuration hash、pricing hash、items、authorization cost 等）计算并持久化；提交时按相同 canonical 输入重算并比对，证明提交的 quote 内容与创建时一致。这是碰撞安全的内容指纹，用于检测服务端内部 quote 数据在创建到提交之间被篡改或漂移；它不是对客户端携带数据的真实性认证（若需要认证客户端携带数据，应使用 HMAC/签名，不属于当前 S2-2A 范围）。
+>
+> `authorizationCostMicros` 数值比较才是真正的预算授权边界。
+>
+> `quoteFingerprint` 与 `GenerationRun.payloadFingerprint`（见 4.7）的职责区别：`quoteFingerprint` 绑定的是**报价内容**（配置 + 价格 + 费用明细），用于提交时验证 quote 完整性；`payloadFingerprint` 绑定的是**提交负载**（quote + 用户 selection + override），用于幂等键判重（相同 key + 相同 payload 返回同 run）。两者作用于不同阶段、不同数据集。
 
 ### 4.6 `RunConfigurationSnapshot`
 
@@ -219,10 +227,10 @@ quote 默认有效期 10 分钟。配置 revision、模型状态、价格版本�
 | `budgetOverrideAuthorized` | 是否授权超额 |
 | `pricingVersionSetJson` | 价格版本 |
 | `pricingHash` | 任务 7 PricingService 基于标准化价格内容生成的 SHA-256，可空（免费运行） |
-| `quoteFingerprint` | 任务 8 提交事务生成的加密级 quote 防篡改指纹（SHA-256），可空（免费运行） |
+| `quoteFingerprint` | 来自关联 quote 的内容指纹（quote 创建时计算持久化，见 4.5），snapshot 创建时从 quote 复制；免费运行为 null |
 | `createdAt` | 创建时间 |
 
-数据库 repository 不提供 update；重新运行必须创建新快照。`configurationHash` 与 `catalogHash`（resolver 产出的目录漂移检测 hash）只用于提交时漂移比对，不是授权边界；加密级授权由 `quoteFingerprint` 承担。
+数据库 repository 不提供 update；重新运行必须创建新快照。`configurationHash` 与 `catalogHash`（resolver 产出的目录漂移检测 hash）只用于提交时漂移比对，不是授权边界；quote 内容绑定由 `quoteFingerprint` 承担。snapshot 的 quote 绑定字段（quoteId、quoteFingerprint、pricingHash、pricingVersionSet、报价金额）必须成套出现或成套缺失（任务 1 已在 shared schema 用 superRefine 强制）。
 
 ### 4.7 `GenerationRun`
 
@@ -465,12 +473,13 @@ LLM typed intent 仍负责视觉/SFX/BGM 语义，不负责配置优先级。loc
 
 1. 锁定并校验 quote owner、project、operation、过期和未消费状态。
 2. 计算 payload fingerprint；检查 `(project, operation, idempotency_key)` 是否已有 run。
-3. 重新解析配置并验证 configuration hash。
+3. 重新解析配置并验证 configuration hash（漂移检测，与 quote.configurationHash 比对）。
 4. 重新验证 catalog status、凭据 readiness 和价格版本。
-5. `authorizationCostMicros` 超预算或存在 unbounded item 且无授权时返回 `409 generation_budget_exceeded`。
-6. 在同一事务创建 `RunConfigurationSnapshot` 与 `GenerationRun(status=pending_dispatch)`。
-7. 在同一事务标记 quote consumed，并写超额授权 AuditLog（如适用）。
-8. 事务提交后由可恢复 dispatcher 进入现有 provider job/LLM 执行合同。
+5. 按 quote 创建时相同的 canonical 输入重算 `quoteFingerprint`（SHA-256），与 quote 持久化的值比对；不一致则 quote 内容在创建后发生漂移，拒绝并重新报价。
+6. `authorizationCostMicros` 超预算或存在 unbounded item 且无授权时返回 `409 generation_budget_exceeded`。
+7. 在同一事务创建 `RunConfigurationSnapshot`（含从 quote 复制的 quoteFingerprint/pricingHash/pricingVersionSet）与 `GenerationRun(status=pending_dispatch)`。
+8. 在同一事务标记 quote consumed，并写超额授权 AuditLog（如适用）。
+9. 事务提交后由可恢复 dispatcher 进入现有 provider job/LLM 执行合同。
 
 quote 消费、snapshot 和 pending run 创建必须同事务；provider 外部提交继续依赖现有幂等 job/call-intent 合同，不能把数据库事务跨到外部网络调用。
 
