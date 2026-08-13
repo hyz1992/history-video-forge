@@ -30,7 +30,7 @@ const manifestData = (record: AssetManifestRecord) => ({ projectId: record.proje
 const composeData = (record: ComposeRecord) => ({ projectId: record.projectId, assetManifestRecordId: record.assetManifestRecordId, timelineJson: record.timelineJson as never, validationResultJson: record.validationResultJson as never, executionStateJson: record.executionStateJson as never, graphTraceSummaryJson: record.graphTraceSummaryJson as never, runtimeDiagnosticsJson: record.runtimeDiagnosticsJson as never });
 const renderData = (record: RenderJobRecord) => ({ projectId: record.projectId, composeRecordId: record.composeRecordId, assetManifestRecordId: record.assetManifestRecordId, status: record.status, profileJson: record.profileJson as never, outputArtifactJson: record.outputArtifactJson as never, validationResultJson: record.validationResultJson as never, executionStateJson: record.executionStateJson as never, graphTraceSummaryJson: record.graphTraceSummaryJson as never, runtimeDiagnosticsJson: record.runtimeDiagnosticsJson as never });
 const publishData = (record: PublishPackageRecord) => ({ projectId: record.projectId, renderJobRecordId: record.renderJobRecordId, topicPackageId: record.topicPackageId, scriptRecordId: record.scriptRecordId, storyboardRecordId: record.storyboardRecordId, assetManifestRecordId: record.assetManifestRecordId, packageJson: record.packageJson as never, validationResultJson: record.validationResultJson as never, executionStateJson: record.executionStateJson as never });
-const providerJobData = (record: AssetProviderJobRecord) => ({ assetManifestRecordId: record.assetManifestRecordId, assetRunId: record.assetRunId, executionId: record.executionId, taskId: record.taskId, providerType: record.providerType, providerName: record.providerName, providerJobId: record.providerJobId, status: record.status, attemptCount: record.attemptCount, rawRequestJson: record.rawRequestJson as never, rawResponseJson: record.rawResponseJson as never, errorCode: record.errorCode, errorMessage: record.errorMessage, submittedAt: record.submittedAt, lastPolledAt: record.lastPolledAt, completedAt: record.completedAt });
+const providerJobData = (record: AssetProviderJobRecord) => ({ assetManifestRecordId: record.assetManifestRecordId, assetRunId: record.assetRunId, executionId: record.executionId, taskId: record.taskId, providerType: record.providerType, providerName: record.providerName, providerJobId: record.providerJobId, status: record.status, attemptCount: record.attemptCount, generationRunId: record.generationRunId, providerRequestKey: record.providerRequestKey, rawRequestJson: record.rawRequestJson as never, rawResponseJson: record.rawResponseJson as never, errorCode: record.errorCode, errorMessage: record.errorMessage, submittedAt: record.submittedAt, lastPolledAt: record.lastPolledAt, completedAt: record.completedAt });
 
 export class PrismaThirdAggregateWriter {
   constructor(private readonly client: AppPrismaClient) {}
@@ -176,6 +176,18 @@ export class PrismaThirdAggregateWriter {
     assertValidNullableMicros(record.estimatedCostMicros, "estimated_cost_micros");
     assertValidNullableMicros(record.authorizationCostMicros, "authorization_cost_micros");
     assertValidNullableMicros(record.budgetLimitMicros, "budget_limit_micros");
+    // P1-2：snapshot 引用的 quote 必须属于相同项目（数据库触发器为最后防线，
+    // 这里在 writer 层提前给出可读错误）。
+    if (record.quoteId !== null) {
+      const quote = await this.client.generationCostQuote.findUnique({
+        where: { id: record.quoteId },
+        select: { projectId: true },
+      });
+      if (!quote) throw new Error("snapshot_quote_not_found");
+      if (quote.projectId !== record.projectId) {
+        throw new Error("snapshot_quote_project_mismatch: snapshot and quote must belong to the same project");
+      }
+    }
     await this.client.runConfigurationSnapshot.create({ data: {
       id: record.id, projectId: record.projectId, userId: record.userId,
       stage: record.stage, operation: record.operation, runId: record.runId,

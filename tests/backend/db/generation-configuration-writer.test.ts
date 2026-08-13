@@ -160,4 +160,75 @@ describe("S2-2A third aggregate writer project consistency", () => {
       await client.$disconnect();
     }
   });
+
+  it("rejects a snapshot whose quote belongs to a different project", async () => {
+    const databasePath = createMigratedDatabase();
+    const client = await createPrismaClient(databasePath);
+    try {
+      await client.user.create({ data: { id: "u1", username: "t", displayName: "T", passwordHash: "h", role: "USER" } });
+      await seedTwoProjects(client as never, "u1");
+      const writer = new PrismaThirdAggregateWriter(client);
+      // p2 的 quote
+      const quote: GenerationCostQuoteRecord = {
+        id: "q2", projectId: "p2", userId: null, operation: "assets.generate",
+        configurationHash: "fnv1a64:111111111111abc1", quoteFingerprint: "sha256:" + "a".repeat(64),
+        pricingHash: "sha256:" + "b".repeat(64), pricingVersionSetJson: ["v1"], itemsJson: [],
+        estimatedCostMicros: "100", authorizationCostMicros: "100",
+        containsUnboundedItem: false, budgetLimitMicros: null, overBudget: false,
+        expiresAt: new Date(Date.now() + 600000), consumedAt: null,
+        createdAt: new Date(), updatedAt: new Date(),
+      };
+      await writer.saveGenerationCostQuote(quote);
+      // p1 snapshot 引用 p2 quote → 拒绝
+      const snapshot = snapshotRecord("p1", "snap1");
+      snapshot.quoteId = "q2";
+      snapshot.quoteFingerprint = "sha256:" + "a".repeat(64);
+      await expect(writer.appendRunConfigurationSnapshot(snapshot)).rejects.toThrow(
+        "snapshot_quote_project_mismatch",
+      );
+    } finally {
+      await client.$disconnect();
+    }
+  });
+});
+
+describe("S2-2A first aggregate writer project-configuration binding", () => {
+  it("rejects creating a project whose frozen configuration binds another project", async () => {
+    const databasePath = createMigratedDatabase();
+    const client = await createPrismaClient(databasePath);
+    try {
+      await client.user.create({ data: { id: "u1", username: "t", displayName: "T", passwordHash: "h", role: "USER" } });
+      await seedTwoProjects(client as never, "u1");
+      const writer = await import("../../../backend/src/db/repositories/prisma-first-aggregate-writer.js").then((m) => m.PrismaFirstAggregateWriter.create(client, "u1"));
+
+      const project: import("../../../backend/src/db/client.js").ProjectRecord = {
+        id: "p3", name: "P3", ownerId: "u1", createdById: "u1", status: "active",
+        activeTopicPackageId: null, activeScriptRecordId: null, activeStoryboardRecordId: null,
+        activeAssetPlanRecordId: null, activeAssetManifestRecordId: null, activeComposeRecordId: null,
+        activeRenderJobRecordId: null, activePublishPackageRecordId: null,
+        latestTopicRunTraceJson: null, latestScriptRunTraceJson: null, latestStoryboardRunTraceJson: null,
+        latestAssetPlanRunTraceJson: null, latestAssetsRunTraceJson: null, latestComposeRunTraceJson: null,
+        latestRenderRunTraceJson: null,
+        storageDisplayName: "P3", storageShortId: "p_00000000", storageRootDir: "storage/projects/x", storageRenameLocked: false,
+        createdAt: new Date(), updatedAt: new Date(),
+      };
+      // configuration 绑定到已存在的 p1，而不是被创建的 p3 → 拒绝
+      const config: import("../../../backend/src/db/client.js").ProjectGenerationConfigurationRecord = {
+        id: "c1", projectId: "p1", schemaVersion: "generation_configuration_v1", revision: 1,
+        sourceUserPreferenceRevision: null,
+        configurationJson: { schema_version: "generation_configuration_v1" } as never,
+        createdAt: new Date(), updatedAt: new Date(),
+      };
+      await expect(writer.createProjectWithGenerationConfiguration(project, config)).rejects.toThrow(
+        "project_configuration_project_mismatch",
+      );
+      // 回滚：p3 不存在，p1 的配置未被覆盖
+      const p3 = await client.project.findUnique({ where: { id: "p3" } });
+      expect(p3).toBeNull();
+      const p1Config = await client.projectGenerationConfiguration.findUnique({ where: { projectId: "p1" } });
+      expect(p1Config).toBeNull();
+    } finally {
+      await client.$disconnect();
+    }
+  });
 });

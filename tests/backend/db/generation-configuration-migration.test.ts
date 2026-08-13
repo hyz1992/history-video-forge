@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import { applyAllDatabaseMigrations } from "./migration-test-utils.js";
@@ -241,9 +243,12 @@ describe("S2-2A review fixes migration", () => {
     try {
       db.pragma("foreign_keys = OFF"); // 本用例只验证唯一索引，不依赖 FK 链
       db.exec("INSERT INTO AssetProviderJobRecord (id, assetManifestRecordId, assetRunId, executionId, taskId, providerType, providerName, status, attemptCount, generationRunId, providerRequestKey, createdAt, updatedAt) VALUES ('j1','am1','r1','e1','t1','image','d','succeeded',0,'gr1','pk1',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
-      // 同 run + 同 key + 同 attempt → 拒绝
+      // 同 run + 同 key + 同 attempt → 拒绝。
+      // j2 使用不同旧键 (assetRunId='r2')，只重复 call-intent 三元组
+      // (generationRunId='gr1', providerRequestKey='pk1', attemptCount=0)，
+      // 排除旧唯一键 (assetRunId, executionId, taskId, attemptCount) 造成的假阳性。
       expect(() =>
-        db.exec("INSERT INTO AssetProviderJobRecord (id, assetManifestRecordId, assetRunId, executionId, taskId, providerType, providerName, status, attemptCount, generationRunId, providerRequestKey, createdAt, updatedAt) VALUES ('j2','am1','r1','e1','t1','image','d','succeeded',0,'gr1','pk1',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"),
+        db.exec("INSERT INTO AssetProviderJobRecord (id, assetManifestRecordId, assetRunId, executionId, taskId, providerType, providerName, status, attemptCount, generationRunId, providerRequestKey, createdAt, updatedAt) VALUES ('j2','am1','r2','e1','t1','image','d','succeeded',0,'gr1','pk1',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"),
       ).toThrow();
       // 同 key 不同 attempt → 允许
       expect(() =>
@@ -307,6 +312,59 @@ describe("S2-2A review fixes migration", () => {
       expect(() =>
         db.exec("INSERT INTO StoryboardSegmentOverride (id, projectId, storyboardRecordId, segmentId, revision, updatedAt) VALUES ('o1','p1','missing-storyboard','s1',1,CURRENT_TIMESTAMP)"),
       ).toThrow();
+    } finally {
+      db.close();
+    }
+  });
+});
+
+describe("S2-2A review fixes in-place upgrade", () => {
+  // P1-1：从上一版本（12090000）插入已有数据后，执行 13090000 增量升级必须
+  // 保留全部数据（重建表期间关闭外键检查，避免 RESTRICT 外键阻止 DROP）。
+  it("upgrades in place and preserves existing run/snapshot/quote/usage data", () => {
+    const { readdirSync } = require("node:fs") as typeof import("node:fs");
+    const migrationsRoot = join(process.cwd(), "backend/prisma/migrations");
+    const migrationFiles = readdirSync(migrationsRoot, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((e) => ({
+        name: e.name,
+        sql: readFileSync(join(migrationsRoot, e.name, "migration.sql"), "utf8"),
+      }));
+    // 上一版本 = 到 20260812090000_s2_2a_generation_configuration 为止
+    const previous = migrationFiles.filter((m) => m.name.startsWith("20260812090000") || m.name.localeCompare("20260812090000") < 0);
+    const upgrade = migrationFiles.filter((m) => m.name.startsWith("20260813090000"));
+
+    const db = new Database(":memory:");
+    try {
+      db.pragma("foreign_keys = ON");
+      for (const m of previous) db.exec(m.sql);
+
+      // 在上一版本 schema 中写入一整套运行数据
+      db.exec("INSERT INTO User (id, username, displayName, passwordHash, updatedAt) VALUES ('u1','t','T','h',CURRENT_TIMESTAMP)");
+      db.exec("INSERT INTO Project (id, name, ownerId, createdById, storageKey, storageDisplayName, updatedAt) VALUES ('p1','P','u1','u1','p1','P',CURRENT_TIMESTAMP)");
+      db.exec("INSERT INTO GenerationCostQuote (id, projectId, operation, configurationHash, quoteFingerprint, pricingHash, pricingVersionSetJson, itemsJson, estimatedCostMicros, authorizationCostMicros, containsUnboundedItem, overBudget, expiresAt, createdAt, updatedAt) VALUES ('q1','p1','a','h','f','p','[]','[]','100','50',0,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
+      db.exec("INSERT INTO RunConfigurationSnapshot (id, projectId, stage, operation, projectConfigurationRevision, schemaVersion, configurationHash, resolvedConfigurationJson, resolutionTraceJson, pricingVersionSetJson, budgetOverrideAuthorized, createdAt, updatedAt) VALUES ('snap1','p1','assets','a',1,'v','h','{}','[]','[]',0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
+      db.exec("INSERT INTO GenerationRun (id, projectId, operation, idempotencyKey, payloadFingerprint, runConfigurationSnapshotId, dispatchPayloadJson, status, dispatchClaimCount, createdAt, updatedAt) VALUES ('r1','p1','assets.generate','k1','fp','snap1','{}','pending_dispatch',0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
+      db.exec("INSERT INTO GenerationRunEvent (id, generationRunId, eventType, eventJson, createdAt) VALUES ('e1','r1','x','{}',CURRENT_TIMESTAMP)");
+      db.exec("INSERT INTO UsageCostRecord (id, runConfigurationSnapshotId, capability, providerKey, modelId, providerRequestKey, attemptIndex, status, unitType, estimatedCostMicros, costBasis, createdAt, updatedAt) VALUES ('u1','snap1','llm.smart','d','m','prk',0,'planned','token','0','estimate',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
+
+      // 执行增量升级（不得抛 FOREIGN KEY constraint failed）
+      expect(() => db.exec(upgrade[0]!.sql)).not.toThrow();
+
+      // 数据全部保留
+      const count = (table: string) => (db.prepare(`SELECT COUNT(*) as n FROM ${table}`).get() as { n: number }).n;
+      expect(count("GenerationRun")).toBe(1);
+      expect(count("GenerationRunEvent")).toBe(1);
+      expect(count("UsageCostRecord")).toBe(1);
+      expect(count("GenerationCostQuote")).toBe(1);
+      expect(count("RunConfigurationSnapshot")).toBe(1);
+
+      // 触发器已就位：跨项目 run/snapshot 被数据库拒绝
+      db.exec("INSERT INTO RunConfigurationSnapshot (id, projectId, stage, operation, projectConfigurationRevision, schemaVersion, configurationHash, resolvedConfigurationJson, resolutionTraceJson, pricingVersionSetJson, budgetOverrideAuthorized, createdAt, updatedAt) VALUES ('snap2','p1','assets','a',1,'v','h','{}','[]','[]',0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
+      expect(() =>
+        db.exec("INSERT INTO GenerationRun (id, projectId, operation, idempotencyKey, payloadFingerprint, runConfigurationSnapshotId, dispatchPayloadJson, status, dispatchClaimCount, createdAt, updatedAt) VALUES ('r2','p1','assets.generate','k2','fp','snap2','{}','pending_dispatch',0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"),
+      ).not.toThrow();
     } finally {
       db.close();
     }

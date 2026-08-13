@@ -7,12 +7,21 @@ import type {
 export type CreateAssetProviderJobInput = Omit<
   AssetProviderJobRecord,
   | "id"
+  | "generationRunId"
+  | "providerRequestKey"
   | "submittedAt"
   | "lastPolledAt"
   | "completedAt"
   | "createdAt"
   | "updatedAt"
->;
+> & {
+  /**
+   * S2-2A call-intent 防重字段。dispatcher（任务 8）落地前可空；
+   * 外部提交前必须写入，配合数据库部分唯一索引防止重复计费。
+   */
+  generationRunId?: string | null;
+  providerRequestKey?: string | null;
+};
 
 export type UpdateAssetProviderJobPatch = Partial<
   Pick<
@@ -44,6 +53,8 @@ export async function createAssetProviderJobRecord(
     providerJobId: input.providerJobId,
     status: input.status,
     attemptCount: input.attemptCount,
+    generationRunId: input.generationRunId ?? null,
+    providerRequestKey: input.providerRequestKey ?? null,
     rawRequestJson: input.rawRequestJson,
     rawResponseJson: input.rawResponseJson,
     errorCode: input.errorCode,

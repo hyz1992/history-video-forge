@@ -38,7 +38,7 @@
 | `voiceProfiles` | 版本化音色 catalog | 文件资产 | 首版不建主表；用户偏好只保存 profile id 引用，运行时仍由 catalog 解析 |
 | `userGenerationPreferences` | `UserGenerationPreference` | 主表 | S2-2A 新增；每用户一行，`userId` 唯一，revision 乐观并发，完整配置 JSON |
 | `projectGenerationConfigurations` | `ProjectGenerationConfiguration` | 主表 | S2-2A 新增；每项目一行，`projectId` 唯一，来源用户默认 revision 可空 |
-| `providerModelCatalog` | `ProviderModelCatalog` | 主表 | S2-2A 新增；服务端受控 seed，每 capability 恰好一个 active 默认项（partial unique index 强制），金额/价格 JSON |
+| `providerModelCatalog` | `ProviderModelCatalog` | 主表 | S2-2A 新增；服务端受控 seed，每 capability 恰好一个 active 默认项（partial unique index 防多个 + 触发器防零个），金额/价格 JSON |
 | `storyboardSegmentOverrides` | `StoryboardSegmentOverride` | 主表 | S2-2A 新增；`(storyboardRecordId, segmentId)` 唯一，`projectId` 仅 owner scope |
 | `generationCostQuotes` | `GenerationCostQuote` | 主表 | S2-2A 新增；一次性报价，创建时持久化 `quoteFingerprint`，金额列非负十进制微元 CHECK |
 | `runConfigurationSnapshots` | `RunConfigurationSnapshot` | 主表（append-only） | S2-2A 新增；不可变，repository 不提供 update，quote 绑定字段成套出现/缺失 |

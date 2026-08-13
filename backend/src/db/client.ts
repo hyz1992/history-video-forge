@@ -225,6 +225,9 @@ export interface AssetProviderJobRecord {
   providerJobId: string | null;
   status: AssetProviderJobStatus;
   attemptCount: number;
+  // S2-2A call-intent 防重字段（外部提交前写库，配合部分唯一索引防重复计费）。
+  generationRunId: string | null;
+  providerRequestKey: string | null;
   rawRequestJson: Record<string, unknown> | null;
   rawResponseJson: Record<string, unknown> | null;
   errorCode: string | null;
