@@ -37,7 +37,7 @@
 - 新建：`tests/shared/generation-configuration-schema.test.ts`
 - 新建：`tests/backend/config/generation-configuration-resolver.test.ts`
 
-- [ ] **步骤 1：先写 schema 失败测试**
+- [x] **步骤 1：先写 schema 失败测试**
 
 覆盖以下合同：
 
@@ -59,7 +59,7 @@ npx vitest run --configLoader runner tests/shared/generation-configuration-schem
 
 预期：失败，提示配置 schema 尚不存在。
 
-- [ ] **步骤 2：实现最小共享 schema 并导出**
+- [x] **步骤 2：实现最小共享 schema 并导出**
 
 至少导出：
 
@@ -75,7 +75,7 @@ npx vitest run --configLoader runner tests/shared/generation-configuration-schem
 
 严格实现详细设计中的完整 `GenerationConfigurationV1` 形状。A 不提供修改 `creative` 或 fixed capability 的 UI/API，但不能删除这些已批准字段；B/C 将直接复用同一 schema，不再更换配置作用域或 snapshot 合同。
 
-- [ ] **步骤 3：先写解析器失败测试**
+- [x] **步骤 3：先写解析器失败测试**
 
 测试矩阵必须逐项覆盖：
 
@@ -102,7 +102,7 @@ npx vitest run --configLoader runner tests/backend/config/generation-configurati
 
 预期：失败，提示解析器尚不存在。
 
-- [ ] **步骤 4：实现纯函数解析器**
+- [x] **步骤 4：实现纯函数解析器**
 
 解析器输入只允许：
 
@@ -123,14 +123,14 @@ npx vitest run --configLoader runner tests/backend/config/generation-configurati
 
 禁止使用关键词、字符串匹配或本地语义猜测生成 suitability。
 
-- [ ] **步骤 5：运行最小验证**
+- [x] **步骤 5：运行最小验证**
 
 ```powershell
 npx vitest run --configLoader runner tests/shared/generation-configuration-schema.test.ts tests/backend/config/generation-configuration-resolver.test.ts
 npx tsc -p shared/tsconfig.json --noEmit
 ```
 
-- [ ] **步骤 6：自审并提交**
+- [x] **步骤 6：自审并提交**
 
 确认默认值、四档矩阵和优先级均只有一个实现来源。
 
