@@ -157,7 +157,7 @@ git commit -m "实现生成配置合同与确定性解析器"
 - 新建：`tests/backend/db/generation-configuration-schema.test.ts`
 - 新建：`tests/backend/db/generation-configuration-migration.test.ts`
 
-- [ ] **步骤 1：先写数据库合同失败测试**
+- [x] **步骤 1：先写数据库合同失败测试**
 
 要求 schema/迁移包含：
 
@@ -189,7 +189,7 @@ npx vitest run --configLoader runner --no-file-parallelism tests/backend/db/gene
 
 预期：失败，提示模型和迁移缺失。
 
-- [ ] **步骤 2：实现 Prisma 模型和增量迁移**
+- [x] **步骤 2：实现 Prisma 模型和增量迁移**
 
 迁移原则：
 
@@ -199,11 +199,11 @@ npx vitest run --configLoader runner --no-file-parallelism tests/backend/db/gene
 - `ProviderModelCatalog` 必须包含 `isDefault Boolean` 字段，且每个 capability 恰好一个 `active + isDefault=true` 项（resolver auto 解析的硬合同，任务 1 已强制）。迁移 SQL 必须为每个 capability 标记一个 active 默认项；数据库测试覆盖零个/多个默认项失败。
 - 金额数据库列使用 `BigInt` 或可证明不溢出的整数列；API 边界转字符串。
 
-- [ ] **步骤 3：扩展内存态 `DbClient` 兼容现有测试架构**
+- [x] **步骤 3：扩展内存态 `DbClient` 兼容现有测试架构**
 
 为九个新实体加入类型与 Map/repository 接口，使 legacy 测试态与 Prisma 激活态行为一致。不要把新记录塞进旧项目快照 JSON 充当长期真相源；legacy Map 只服务测试和当前双写过渡。
 
-- [ ] **步骤 4：实现聚合 writer/hydrator 映射**
+- [x] **步骤 4：实现聚合 writer/hydrator 映射**
 
 按所有权拆分：
 
@@ -213,7 +213,7 @@ npx vitest run --configLoader runner --no-file-parallelism tests/backend/db/gene
 
 若现有 writer 边界无法保证 quote 消费事务，则在任务 8 新增专用 Prisma transaction repository，不要在这里伪装事务。
 
-- [ ] **步骤 5：生成并验证 Prisma**
+- [x] **步骤 5：生成并验证 Prisma**
 
 ```powershell
 npm run prisma:generate
@@ -221,7 +221,7 @@ npx prisma validate --config backend/prisma.config.ts
 npx vitest run --configLoader runner --no-file-parallelism tests/backend/db/generation-configuration-schema.test.ts tests/backend/db/generation-configuration-migration.test.ts tests/backend/db/prisma-schema.test.ts tests/backend/db/prisma-repositories.test.ts
 ```
 
-- [ ] **步骤 6：自审并提交**
+- [x] **步骤 6：自审并提交**
 
 ```powershell
 git add backend/prisma backend/src/db tests/backend/db/generation-configuration-schema.test.ts tests/backend/db/generation-configuration-migration.test.ts
