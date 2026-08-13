@@ -466,7 +466,10 @@ export const RunConfigurationSnapshotV1 = z
         });
       }
     } else {
-      // 免费运行：不得残留 quote 绑定证据。
+      // 免费运行：不得残留 quote 绑定证据，也不得表达正费用或预算超额授权。
+      // 设计只允许纯本地免 quote 操作使用此分支，因此费用只能为 null 或 "0"，
+      // 且 budget_override_authorized 必须为 false（无 quote 即无超额授权来源）。
+      // budget_limit_micros 可保留项目预算值（仅展示用，不构成授权）。
       if (snapshot.quote_fingerprint !== null) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -488,6 +491,36 @@ export const RunConfigurationSnapshotV1 = z
           path: ["pricing_version_set"],
           message:
             "free run (quote_id null) must not carry pricing versions",
+        });
+      }
+      if (
+        snapshot.estimated_cost_micros !== null &&
+        snapshot.estimated_cost_micros !== "0"
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["estimated_cost_micros"],
+          message:
+            'free run (quote_id null) estimated_cost_micros must be null or "0"',
+        });
+      }
+      if (
+        snapshot.authorization_cost_micros !== null &&
+        snapshot.authorization_cost_micros !== "0"
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["authorization_cost_micros"],
+          message:
+            'free run (quote_id null) authorization_cost_micros must be null or "0"',
+        });
+      }
+      if (snapshot.budget_override_authorized) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["budget_override_authorized"],
+          message:
+            "free run (quote_id null) must not authorize budget override",
         });
       }
     }

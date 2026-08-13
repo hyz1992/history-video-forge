@@ -196,6 +196,7 @@ npx vitest run --configLoader runner --no-file-parallelism tests/backend/db/gene
 - 只新增表、索引和必要外键，不改写 `0001_v2_baseline`。
 - 为现有项目惰性补默认配置，不在迁移 SQL 中重写历史 storyboard/asset JSON。
 - `ProviderModelCatalog` 初始只插入当前真实可调用的 DashScope 媒体模型和现有 LLM 配置映射；不可用能力标记 disabled，而不是伪造可选项。
+- `ProviderModelCatalog` 必须包含 `isDefault Boolean` 字段，且每个 capability 恰好一个 `active + isDefault=true` 项（resolver auto 解析的硬合同，任务 1 已强制）。迁移 SQL 必须为每个 capability 标记一个 active 默认项；数据库测试覆盖零个/多个默认项失败。
 - 金额数据库列使用 `BigInt` 或可证明不溢出的整数列；API 边界转字符串。
 
 - [ ] **步骤 3：扩展内存态 `DbClient` 兼容现有测试架构**
@@ -540,6 +541,7 @@ git commit -m "实现视频策略降级与严格阻塞语义"
 - 无法给出上界的 item 标记 `unbounded`，不能被预算检查当作零。
 - 前端传入 unit price 被忽略/拒绝。
 - demo/test/unconfigured 环境的视频 catalog 强制不可真实派发。
+- catalog seed 与 readiness 校验每个 capability 恰好一个 `active + isDefault=true` 项（resolver auto 解析硬合同）：零个或多个默认项都必须使 readiness 失败，不得静默通过。
 - LLM active 项必须与 `providers.json`、tier resolver 和健康服务端凭据一致；媒体 active 项必须与 adapter registry 和凭据一致。不一致项不得报价或进入新运行。
 
 运行：

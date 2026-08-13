@@ -515,6 +515,68 @@ describe("GenerationConfigurationV1 schema", () => {
       ).toThrow();
     });
 
+    // P1-2 核心断言：免 quote 快照不得表达正费用或预算超额授权。
+    it("rejects a free run with positive estimated_cost_micros", () => {
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          quote_id: null,
+          quote_fingerprint: null,
+          pricing_hash: null,
+          pricing_version_set: [],
+          estimated_cost_micros: "1000000",
+          authorization_cost_micros: null,
+          budget_override_authorized: false,
+        }),
+      ).toThrow();
+    });
+
+    it("rejects a free run with positive authorization_cost_micros", () => {
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          quote_id: null,
+          quote_fingerprint: null,
+          pricing_hash: null,
+          pricing_version_set: [],
+          estimated_cost_micros: null,
+          authorization_cost_micros: "1000000",
+          budget_override_authorized: false,
+        }),
+      ).toThrow();
+    });
+
+    it("rejects a free run with budget_override_authorized=true", () => {
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          quote_id: null,
+          quote_fingerprint: null,
+          pricing_hash: null,
+          pricing_version_set: [],
+          estimated_cost_micros: null,
+          authorization_cost_micros: null,
+          budget_override_authorized: true,
+        }),
+      ).toThrow();
+    });
+
+    it("accepts a free run with zero cost and no override", () => {
+      // 免 quote 运行允许 null 或 "0" 费用，budget_override_authorized=false
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          quote_id: null,
+          quote_fingerprint: null,
+          pricing_hash: null,
+          pricing_version_set: [],
+          estimated_cost_micros: "0",
+          authorization_cost_micros: "0",
+          budget_override_authorized: false,
+        }),
+      ).not.toThrow();
+    });
+
     it("rejects snapshot missing run identity fields (project_id/operation)", () => {
       expect(() =>
         RunConfigurationSnapshotV1.parse({

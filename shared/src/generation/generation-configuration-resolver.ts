@@ -75,10 +75,12 @@ export const ProviderModelCatalogEntrySchema = z
     /** active 表示可用于新运行；disabled 表示不可用。 */
     status: z.enum(["active", "disabled"]),
     /**
-     * 是否为该 capability 的 auto 模式默认模型。resolver 在 auto 模式下优先选择
-     * `is_default=true` 的 active 项；每个 capability 至多一个 active 默认项
-     * （由 resolveCapabilitySlot 校验，多于一个返回结构化错误）。
-     * 默认 false，保证不显式声明时不会意外成为默认。
+     * 是否为该 capability 的 auto 模式默认模型。resolver 在 auto 模式下选择
+     * `is_default=true` 的 active 项；每个 capability **恰好一个** active 默认项
+     * （由 resolveCapabilitySlot 校验：零个或多个都返回 generation_configuration_invalid，
+     * 彻底消除对 catalog 数组顺序的依赖）。
+     * 默认 false，保证不显式声明时不会意外成为默认；catalog seed 必须为每个
+     * capability 显式标记恰好一个 active 默认项。
      */
     is_default: z.boolean().default(false),
   })
@@ -210,9 +212,16 @@ function normalizeCatalogForHash(
       is_default: entry.is_default,
     });
   }
-  normalized.sort((a, b) =>
-    String(a.provider_model_id).localeCompare(String(b.provider_model_id)),
-  );
+  // 使用 UTF-16 code-unit 比较（a < b / a > b），而非 localeCompare。
+  // localeCompare 依赖运行环境默认 locale，跨节点或非 ASCII ID 时排序可能不同，
+  // 导致相同 catalog 产出不同 hash（P2 整改）。
+  normalized.sort((a, b) => {
+    const aid = String(a.provider_model_id);
+    const bid = String(b.provider_model_id);
+    if (aid < bid) return -1;
+    if (aid > bid) return 1;
+    return 0;
+  });
   return { ok: true, value: normalized };
 }
 

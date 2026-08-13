@@ -146,6 +146,7 @@ S2-2A 只允许修改 `video` 和 `budget`；`creative` 保留 null，`capabilit
 | `pricingVersion` | string | 当前价格版本 |
 | `pricingJson` | Json | 计价单位与单价 |
 | `status` | active/disabled | 是否可用于新运行 |
+| `isDefault` | Boolean | 是否为该 capability 的 auto 模式默认模型。每个 capability **恰好一个** `active + isDefault=true` 项（由 readiness 校验：零个或多个都失败），保证 auto 解析不依赖 catalog 数组顺序 |
 | `createdAt/updatedAt` | timestamp | 目录时间 |
 
 职责边界：
@@ -156,6 +157,7 @@ S2-2A 只允许修改 `video` 和 `budget`；`creative` 保留 null，`capabilit
 - readiness 必须确认所有 active catalog 项都能映射到已注册 adapter/provider 和健康的服务端凭据。
 - catalog 由服务端受控 seed 提供 capability、model 和价格元数据，不从 `providers.json` 自动派生；LLM active 项必须通过 tier resolver 与 provider registry 交叉校验，媒体 active 项必须与 adapter registry 交叉校验。
 - 任一 active 项无法解析 provider/model、找不到 adapter 或缺少健康凭据时，该项不得进入报价与新运行；启动 readiness 必须返回明确的不一致原因，禁止 catalog 与连接注册静默漂移。
+- **默认项唯一性硬约束**：每个 capability 必须恰好一个 `active + isDefault=true` 项。readiness 与 resolver 都会校验：零个默认项（auto 无法稳定解析）或多个默认项（seed 漂移）都直接失败，不得进入报价与新运行。
 - Catalog API 不返回 base URL、env var、credential id 或密钥。
 
 ### 4.4 `StoryboardSegmentOverride`
@@ -202,11 +204,39 @@ quote 默认有效期 10 分钟。配置 revision、模型状态、价格版本�
 >
 > - **漂移检测（FNV-1a64，resolver 产出）**：`configurationHash` 与 `catalogHash` 是 canonical JSON 的确定性比对，提交时服务端重新解析并比对，确认 quote 基于的配置/目录未被改过。不是密码学防伪。
 > - **定价指纹（SHA-256，任务 7 PricingService 产出）**：`pricingHash` 基于标准化价格内容生成，覆盖价格变化检测（价格单独变化使旧 quote 失效）。
-> - **quote 内容绑定（SHA-256，quote 创建时计算持久化）**：`quoteFingerprint` 在 quote 创建时对 canonical quote 内容（configuration hash、pricing hash、items、authorization cost 等）计算并持久化；提交时按相同 canonical 输入重算并比对，证明提交的 quote 内容与创建时一致。这是碰撞安全的内容指纹，用于检测服务端内部 quote 数据在创建到提交之间被篡改或漂移；它不是对客户端携带数据的真实性认证（若需要认证客户端携带数据，应使用 HMAC/签名，不属于当前 S2-2A 范围）。
+> - **quote 内容绑定（SHA-256，quote 创建时计算持久化）**：`quoteFingerprint` 在 quote 创建时对 `QuoteFingerprintPayloadV1`（见下方定义）的 canonical JSON 计算 SHA-256 并持久化；提交时按相同 canonical 输入重算并比对，证明提交的 quote 内容与创建时一致。这是碰撞安全的内容指纹，用于检测服务端内部 quote 数据在创建到提交之间被篡改或漂移；它不是对客户端携带数据的真实性认证（若需要认证客户端携带数据，应使用 HMAC/签名，不属于当前 S2-2A 范围）。
 >
 > `authorizationCostMicros` 数值比较才是真正的预算授权边界。
 >
 > `quoteFingerprint` 与 `GenerationRun.payloadFingerprint`（见 4.7）的职责区别：`quoteFingerprint` 绑定的是**报价内容**（配置 + 价格 + 费用明细），用于提交时验证 quote 完整性；`payloadFingerprint` 绑定的是**提交负载**（quote + 用户 selection + override），用于幂等键判重（相同 key + 相同 payload 返回同 run）。两者作用于不同阶段、不同数据集。
+
+#### `QuoteFingerprintPayloadV1`（quote 内容指纹的冻结合同）
+
+quote 创建与提交阶段必须按同一份 payload 计算 fingerprint，不得各自实现。字段集合、排序与编码规则如下：
+
+| 字段 | 类型 | 编码规则 |
+|---|---|---|
+| `payload_version` | 字面量 `"quote_fingerprint_v1"` | 固定字符串，前置（版本化，未来变更字段集合时升级版本号） |
+| `project_id` | string | 原值 |
+| `operation` | string | 原值 |
+| `configuration_hash` | string | resolver 产出的漂移检测 hash（`fnv1a64:<16-hex>`） |
+| `catalog_hash` | string | resolver 产出的目录漂移 hash（`fnv1a64:<16-hex>`） |
+| `pricing_hash` | string | PricingService 产出的定价 hash（`sha256:<64-hex>`） |
+| `pricing_version_set` | string[] | 按字典序升序排序后编码；空数组编码为 `[]` |
+| `items` | object[] | 每项含 `capability`/`provider_model_id`/`unit_type`/`units`/`estimated_cost_micros`；按 `(capability, provider_model_id, unit_type)` 复合键字典序升序排序 |
+| `estimated_cost_micros` | string | 十进制微元字符串 |
+| `authorization_cost_micros` | string | 十进制微元字符串 |
+| `contains_unbounded_item` | boolean | 原值 |
+| `budget_limit_micros` | string \| null | null 编码为 JSON `null`；非 null 为十进制微元字符串 |
+| `expires_at` | string | ISO 8601 原值（创建时确定，提交时比对用于检测过期窗口篡改） |
+
+**canonical JSON 规则**（与 resolver 的 `canonicalStringify` 一致）：
+
+- 对象键按 UTF-16 code-unit 字典序排序（与 locale 无关）。
+- 数组按上表指定的排序键排序；无排序键的数组保持原顺序。
+- null 值编码为 JSON `null`，不省略字段。
+- 无尾随逗号、无多余空格。
+- fingerprint = `"sha256:" + sha256(canonical_json).hex`，hex 为 64 位小写。
 
 ### 4.6 `RunConfigurationSnapshot`
 
