@@ -74,6 +74,13 @@ export const ProviderModelCatalogEntrySchema = z
     model_version: z.string().min(1).nullable().optional(),
     /** active 表示可用于新运行；disabled 表示不可用。 */
     status: z.enum(["active", "disabled"]),
+    /**
+     * 是否为该 capability 的 auto 模式默认模型。resolver 在 auto 模式下优先选择
+     * `is_default=true` 的 active 项；每个 capability 至多一个 active 默认项
+     * （由 resolveCapabilitySlot 校验，多于一个返回结构化错误）。
+     * 默认 false，保证不显式声明时不会意外成为默认。
+     */
+    is_default: z.boolean().default(false),
   })
   .strict();
 export type ProviderModelCatalogEntry = z.infer<
@@ -187,12 +194,20 @@ export function canonicalStringify(value: unknown): string {
 }
 
 /**
- * 64-bit FNV-1a 哈希（确定性、非加密）。
+ * 64-bit FNV-1a 漂移检测 hash（确定性、非加密）。
  *
- * 选择 FNV-1a 而非 node:crypto 是为了让 shared 包保持无 Node 依赖。
+ * 用途边界（P1-2 整改，务必遵守）：
+ * - **仅用于漂移检测**：configuration_hash / catalog_hash 在提交时由服务端重新解析
+ *   并比对，确认 quote 基于的配置/目录未被改过。这是确定性比对，不是密码学防伪。
+ * - **不得用于授权边界或防篡改指纹**：付费 quote 的加密级绑定由任务 8 在提交事务
+ *   中生成的 `quote_fingerprint`（SHA-256）承担，不复用本函数输出。
+ * - **不得用于定价 hash**：价格变化检测由任务 7 PricingService 基于 normalized 价格
+ *   内容生成 pricing_hash，resolver 不产出。
+ *
+ * 选择 FNV-1a 而非 node:crypto 是为了让 shared 包保持无 Node 依赖、resolver 保持
+ * 纯同步纯函数。漂移检测不需要加密强度：攻击面要求能控制服务端 canonical JSON 的
+ * 计算结果，而 canonical JSON 由服务端确定性生成（见 canonicalStringify）。
  * 返回值带 `fnv1a64:` 前缀，明确标识算法，便于审计判断算法强度。
- * 重要：FNV-1a 只用于检测配置/价格漂移，不得作为授权边界或安全指纹；
- * 任何安全敏感用途必须改用真正的加密哈希并同步更换前缀。
  */
 export function deterministicHash(input: string): string {
   // FNV-1a 64-bit (使用 BigInt 防止溢出)
@@ -307,9 +322,21 @@ function resolveCapabilitySlot(
     };
   }
 
-  // auto: 取该 capability 下第一个 active 条目作为平台默认。
-  // 目录顺序由服务端 seed 决定；readiness 保证 active 项都能解析到 adapter/provider。
-  const defaultEntry = activeEntries[0];
+  // auto: 优先选择该 capability 下 is_default=true 的 active 条目作为平台默认。
+  // 这避免依赖 catalog 数组顺序（数据库返回顺序可能变化），让默认模型/价格/hash 稳定。
+  // 每个 capability 的 active 默认项必须唯一；多于一个返回结构化错误，防止 seed 漂移。
+  const defaultEntries = activeEntries.filter((entry) => entry.is_default);
+  if (defaultEntries.length > 1) {
+    return {
+      ok: false,
+      error: {
+        code: "generation_configuration_invalid",
+        capability: slot,
+        message: `capability ${slot} has ${defaultEntries.length} active default entries; expected at most one`,
+      },
+    };
+  }
+  const defaultEntry = defaultEntries[0] ?? activeEntries[0];
   if (!defaultEntry) {
     return {
       ok: false,
@@ -545,8 +572,13 @@ export function resolveGenerationConfiguration(
     });
   }
 
-  // 4. 计算确定性 hash。configuration_hash 与 pricing_hash 都使用 fnv1a64 前缀，
-  //    名实相符，便于审计判断算法强度（见 P2 整改）。
+  // 4. 计算确定性漂移检测 hash。
+  //    - configuration_hash：resolved 配置的 canonical JSON hash，用于提交时比对
+  //      配置是否漂移（quote 基于的配置是否被改过）。
+  //    - catalog_hash：provider/model 目录内容的 canonical JSON hash（不含价格），
+  //      用于检测目录漂移。价格变化检测由任务 7 PricingService 的 pricing_hash 承担，
+  //      resolver 不产出定价 hash。
+  //    两者都用 FNV-1a64，只做漂移检测；加密级 quote 绑定由任务 8 quote_fingerprint 承担。
   const configurationPayload = {
     schema_version: "resolved_generation_configuration_v1",
     source_revisions: {
@@ -558,7 +590,7 @@ export function resolveGenerationConfiguration(
     segment_visual_routes: segmentRoutes,
   };
   const configuration_hash = deterministicHash(canonicalStringify(configurationPayload));
-  const pricing_hash = deterministicHash(canonicalStringify(input.providerModelCatalog));
+  const catalog_hash = deterministicHash(canonicalStringify(input.providerModelCatalog));
 
   const value: ResolvedGenerationConfigurationV1 = {
     schema_version: "resolved_generation_configuration_v1",
@@ -572,7 +604,7 @@ export function resolveGenerationConfiguration(
     constraints_applied: constraintsApplied,
     resolution_trace: resolutionTrace,
     configuration_hash,
-    pricing_hash,
+    catalog_hash,
   };
 
   // 最终输出再过一次强类型 schema 校验，确保 resolver 产出永远满足合同。

@@ -207,6 +207,40 @@ export const AppliedConstraint = z
   .strict();
 export type AppliedConstraint = z.infer<typeof AppliedConstraint>;
 
+// --- Hash algorithm identity ----------------------------------------------
+
+/**
+ * 漂移检测 hash 算法标识。
+ *
+ * 当前实现使用 64-bit FNV-1a（确定性、非加密）。它**只用于检测配置/目录漂移**：
+ * 提交时服务端重新解析并比对 hash，确认 quote 基于的配置/目录未被改过。
+ * 它**不得作为授权边界或防篡改指纹**——加密级 quote 绑定由任务 8 的
+ * quote_fingerprint（SHA-256，提交事务在服务端生成）承担。
+ *
+ * 选择 FNV-1a 而非 node:crypto 是为了让 shared 包保持无 Node 依赖、resolver 保持
+ * 纯同步纯函数。漂移检测不需要加密强度：攻击面要求能控制服务端 canonical JSON 的
+ * 计算结果，而 canonical JSON 由服务端确定性生成（见 canonicalStringify）。
+ */
+export const DRIFT_HASH_ALGORITHM = "fnv1a64";
+
+/**
+ * 漂移检测 hash 的格式 schema：固定 `fnv1a64:` 前缀 + 16 位十六进制。
+ * 若后续升级算法，在此扩展并同步更新 KNOWN_DRIFT_HASH_PREFIXES。
+ */
+export const DriftHashSchema = z
+  .string()
+  .regex(/^fnv1a64:[0-9a-f]{16}$/, "drift hash must be fnv1a64:<16-hex>");
+
+/**
+ * 可信的漂移 hash 前缀（用于跨字段一致性校验与审计）。
+ */
+export const KNOWN_DRIFT_HASH_PREFIXES = ["fnv1a64:"] as const;
+
+/**
+ * 加密级 hash 前缀（任务 8 quote_fingerprint 使用，resolver 当前不产出）。
+ */
+export const KNOWN_CRYPTO_HASH_PREFIXES = ["sha256:"] as const;
+
 // --- Resolver output sub-schemas（强类型，供 resolver 与 snapshot 复用） ----
 
 /**
@@ -254,6 +288,19 @@ export type ResolvedCapabilityMap = z.infer<typeof ResolvedCapabilityMapSchema>;
 
 /**
  * resolver 输出合同（详细设计 5.2 节）。
+ *
+ * 重要边界（P1-1/P1-2 整改）：
+ * - `configuration_hash` 与 `catalog_hash` 都由 resolver 用 FNV-1a64 计算，**只用于
+ *   漂移检测**（提交时重新解析并比对，确认 quote 基于的配置/目录未被改过）。它们
+ *   **不是授权边界指纹**：攻击者要伪造等于构造服务端 canonical JSON，而 canonical
+ *   JSON 由服务端确定性生成。
+ * - resolver **不产出 `pricing_hash`**：定价 hash 必须由任务 7 的可信 PricingService
+ *   基于标准化价格版本与价格内容生成，并随 quote 一起持久化（见 RunConfigurationSnapshotV1。
+ *   pricing_hash 可空字段）。之前把 catalog hash 命名为 pricing_hash 是错误：catalog
+ *   输入不含任何价格信息，价格单独变化时该 hash 不会变化，无法支撑"价格变化使旧 quote
+ *   失效"。
+ * - 加密级 quote 绑定（防篡改授权）由任务 8 在提交事务中生成的独立
+ *   `quote_fingerprint` 承担，不复用这里的漂移检测 hash。
  */
 export const ResolvedGenerationConfigurationV1Schema = z
   .object({
@@ -269,32 +316,17 @@ export const ResolvedGenerationConfigurationV1Schema = z
     segment_visual_routes: z.array(ResolvedSegmentVisualRouteSchema),
     constraints_applied: z.array(AppliedConstraint),
     resolution_trace: z.array(ResolutionTraceEntry),
-    configuration_hash: z.string().min(1),
-    pricing_hash: z.string().min(1),
+    configuration_hash: DriftHashSchema,
+    /**
+     * provider/model 目录内容的漂移检测 hash（不含价格）。价格变化检测由
+     * PricingService 的 pricing_hash（任务 7）承担。
+     */
+    catalog_hash: DriftHashSchema,
   })
   .strict();
 export type ResolvedGenerationConfigurationV1 = z.infer<
   typeof ResolvedGenerationConfigurationV1Schema
 >;
-
-// --- Hash algorithm identity ----------------------------------------------
-
-/**
- * 配置/价格 hash 的算法标识。
- *
- * 当前实现使用 64-bit FNV-1a（确定性、非加密）。FNV-1a 只用于检测配置/价格漂移，
- * 不得作为授权边界或安全指纹；任何安全敏感用途必须改用真正的加密哈希并更换该标识。
- */
-export const CONFIGURATION_HASH_ALGORITHM = "fnv1a64";
-
-/**
- * 可信的 hash 算法标识前缀。`configuration_hash`/`pricing_hash` 必须以其中之一开头。
- */
-export const KNOWN_HASH_PREFIXES = [
-  "fnv1a64:",
-  // 预留给后续任务在引入 node:crypto 时升级的真实加密算法
-  "sha256:",
-] as const;
 
 // --- Run Configuration Snapshot（不可变运行快照合同，详细设计 4.6 节） -----
 
@@ -304,6 +336,11 @@ export const KNOWN_HASH_PREFIXES = [
  * 该 schema 是任务 2 持久化合同的强类型基础，包含详细设计 4.6 节规定的全部字段：
  * 运行定位、来源 revision、resolved 配置、trace、关联 quote、费用与预算授权、价格版本、
  * 创建时间。
+ *
+ * 一致性约束（P1-3 整改）：顶层 `configuration_hash`/`catalog_hash`/`source_revisions`
+ * 必须与 `resolved` 内部对应字段完全一致；hash 字段强制 `fnv1a64:` 格式；`created_at`
+ * 强制 ISO 8601；`pricing_hash`/`quote_fingerprint` 可空（分别由任务 7 PricingService
+ * 与任务 8 提交事务填充，resolver 不产出）。
  */
 export const RunConfigurationSnapshotV1 = z
   .object({
@@ -323,9 +360,13 @@ export const RunConfigurationSnapshotV1 = z
       .strict(),
     // resolved 配置（强类型，禁止 unknown）
     resolved: ResolvedGenerationConfigurationV1Schema,
-    configuration_hash: z.string().min(1),
+    // 漂移检测 hash：顶层副本必须与 resolved 内部一致（见 superRefine）
+    configuration_hash: DriftHashSchema,
+    catalog_hash: DriftHashSchema,
     // 关联 quote（免费运行为 null）
     quote_id: z.string().min(1).nullable(),
+    // 加密级 quote 指纹（任务 8 提交事务生成，resolver 不产出；免费运行可空）
+    quote_fingerprint: z.string().regex(/^sha256:[0-9a-f]{64}$/).nullable(),
     // 费用与预算授权（微元十进制字符串）
     estimated_cost_micros: z.string().regex(/^(0|[1-9][0-9]*)$/).nullable(),
     authorization_cost_micros: z.string().regex(/^(0|[1-9][0-9]*)$/).nullable(),
@@ -333,11 +374,52 @@ export const RunConfigurationSnapshotV1 = z
     budget_override_authorized: z.boolean(),
     // 价格版本集合
     pricing_version_set: z.array(z.string().min(1)),
-    pricing_hash: z.string().min(1),
-    // 创建时间（ISO 8601 字符串）
-    created_at: z.string().min(1),
+    // 定价 hash：由任务 7 PricingService 基于标准化价格内容生成；免费/未报价运行可空
+    pricing_hash: z.string().regex(/^sha256:[0-9a-f]{64}$/).nullable(),
+    // 创建时间（ISO 8601）
+    created_at: z.string().datetime({ offset: true }),
   })
-  .strict();
+  .strict()
+  .superRefine((snapshot, ctx) => {
+    // 顶层 hash 必须与 resolved 内部一致，防止持久化层写入时漂移。
+    if (snapshot.configuration_hash !== snapshot.resolved.configuration_hash) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["configuration_hash"],
+        message:
+          "top-level configuration_hash must match resolved.configuration_hash",
+      });
+    }
+    if (snapshot.catalog_hash !== snapshot.resolved.catalog_hash) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["catalog_hash"],
+        message: "top-level catalog_hash must match resolved.catalog_hash",
+      });
+    }
+    if (
+      snapshot.source_revisions.project_configuration_revision !==
+      snapshot.resolved.source_revisions.project_configuration_revision
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["source_revisions", "project_configuration_revision"],
+        message:
+          "top-level source_revisions.project_configuration_revision must match resolved value",
+      });
+    }
+    if (
+      snapshot.source_revisions.source_user_preference_revision !==
+      snapshot.resolved.source_revisions.source_user_preference_revision
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["source_revisions", "source_user_preference_revision"],
+        message:
+          "top-level source_revisions.source_user_preference_revision must match resolved value",
+      });
+    }
+  });
 export type RunConfigurationSnapshotV1 = z.infer<
   typeof RunConfigurationSnapshotV1
 >;

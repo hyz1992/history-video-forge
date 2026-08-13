@@ -373,6 +373,9 @@ describe("GenerationConfigurationV1 schema", () => {
       provider_key: "dashscope",
       model_id: "qwen-max",
     };
+    // 漂移检测 hash 必须符合 fnv1a64:<16-hex> 格式（DriftHashSchema 强制）。
+    const CONFIG_HASH = "fnv1a64:111111111111abc1";
+    const CATALOG_HASH = "fnv1a64:222222222222def2";
     const validResolved = {
       schema_version: "resolved_generation_configuration_v1",
       source_revisions: {
@@ -392,8 +395,8 @@ describe("GenerationConfigurationV1 schema", () => {
       resolution_trace: [
         { layer: "project_configuration", note: "used frozen project config" },
       ],
-      configuration_hash: "fnv1a64:abc123",
-      pricing_hash: "fnv1a64:pricing-v1",
+      configuration_hash: CONFIG_HASH,
+      catalog_hash: CATALOG_HASH,
     };
 
     const validSnapshot = {
@@ -405,14 +408,19 @@ describe("GenerationConfigurationV1 schema", () => {
       run_id: "run_001",
       source_revisions: validResolved.source_revisions,
       resolved: validResolved,
-      configuration_hash: "fnv1a64:abc123",
+      // 顶层 hash 必须与 resolved 内部一致（superRefine 校验）
+      configuration_hash: CONFIG_HASH,
+      catalog_hash: CATALOG_HASH,
       quote_id: null,
+      // 加密级 quote 指纹（任务 8 产出，可空）
+      quote_fingerprint: null,
       estimated_cost_micros: "12345",
       authorization_cost_micros: "14000",
       budget_limit_micros: null,
       budget_override_authorized: false,
       pricing_version_set: ["dashscope-cn-2026-08-12"],
-      pricing_hash: "fnv1a64:pricing-v1",
+      // 定价 hash（任务 7 PricingService 产出，SHA-256 格式，可空）
+      pricing_hash: "sha256:" + "a".repeat(64),
       created_at: "2026-08-13T00:00:00.000Z",
     };
 
@@ -428,6 +436,16 @@ describe("GenerationConfigurationV1 schema", () => {
       );
       expect(snapshot.budget_override_authorized).toBe(false);
       expect(snapshot.pricing_version_set).toEqual(["dashscope-cn-2026-08-12"]);
+    });
+
+    it("accepts a free-run snapshot where quote_fingerprint and pricing_hash are null", () => {
+      const snapshot = RunConfigurationSnapshotV1.parse({
+        ...validSnapshot,
+        quote_fingerprint: null,
+        pricing_hash: null,
+      });
+      expect(snapshot.quote_fingerprint).toBeNull();
+      expect(snapshot.pricing_hash).toBeNull();
     });
 
     it("rejects snapshot missing run identity fields (project_id/operation)", () => {
@@ -477,6 +495,80 @@ describe("GenerationConfigurationV1 schema", () => {
         RunConfigurationSnapshotV1.parse({
           ...validSnapshot,
           estimated_cost_micros: "1.5",
+        }),
+      ).toThrow();
+    });
+
+    it("rejects drift hashes without the fnv1a64:<16-hex> format", () => {
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          resolved: { ...validResolved, configuration_hash: "different" },
+          configuration_hash: "different",
+        }),
+      ).toThrow();
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          resolved: { ...validResolved, catalog_hash: "not-a-hash" },
+          catalog_hash: "not-a-hash",
+        }),
+      ).toThrow();
+    });
+
+    it("rejects non-SHA-256 pricing_hash and quote_fingerprint values", () => {
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          pricing_hash: "fnv1a64:short",
+        }),
+      ).toThrow();
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          quote_fingerprint: "not-a-fingerprint",
+        }),
+      ).toThrow();
+    });
+
+    it("rejects non-ISO created_at", () => {
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          created_at: "not-a-date",
+        }),
+      ).toThrow();
+    });
+
+    // P1-3 核心断言：顶层与 resolved 内部字段必须一致（superRefine）。
+    it("rejects when top-level configuration_hash differs from resolved.configuration_hash", () => {
+      const mismatched = "fnv1a64:999999999999fff9";
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          configuration_hash: mismatched, // 顶层与 resolved.configuration_hash 不一致
+        }),
+      ).toThrow();
+    });
+
+    it("rejects when top-level catalog_hash differs from resolved.catalog_hash", () => {
+      const mismatched = "fnv1a64:999999999999fff9";
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          catalog_hash: mismatched,
+        }),
+      ).toThrow();
+    });
+
+    it("rejects when top-level source_revisions differs from resolved.source_revisions", () => {
+      expect(() =>
+        RunConfigurationSnapshotV1.parse({
+          ...validSnapshot,
+          source_revisions: {
+            source_user_preference_revision: null,
+            project_configuration_revision: 99, // 与 resolved 内部的 3 不一致
+          },
         }),
       ).toThrow();
     });

@@ -490,7 +490,7 @@ describe("resolveGenerationConfiguration capability resolution", () => {
 });
 
 describe("resolveGenerationConfiguration deterministic outputs", () => {
-  it("produces a stable pricing_hash from the catalog", () => {
+  it("produces a stable catalog_hash from the catalog", () => {
     const a = resolveGenerationConfiguration(
       buildInput({ providerModelCatalog: fullActiveCatalog }),
     );
@@ -500,11 +500,11 @@ describe("resolveGenerationConfiguration deterministic outputs", () => {
     expect(a.ok).toBe(true);
     expect(b.ok).toBe(true);
     if (a.ok && b.ok) {
-      expect(a.value.pricing_hash).toBe(b.value.pricing_hash);
+      expect(a.value.catalog_hash).toBe(b.value.catalog_hash);
     }
   });
 
-  it("different catalog produces a different pricing_hash", () => {
+  it("different catalog produces a different catalog_hash", () => {
     const catalogB: ProviderModelCatalogEntry[] = fullActiveCatalog.map((entry) =>
       entry.provider_model_id === "dashscope.qwen-max"
         ? { ...entry, model_id: "qwen-max-v2" }
@@ -519,7 +519,25 @@ describe("resolveGenerationConfiguration deterministic outputs", () => {
     expect(a.ok).toBe(true);
     expect(b.ok).toBe(true);
     if (a.ok && b.ok) {
-      expect(a.value.pricing_hash).not.toBe(b.value.pricing_hash);
+      expect(a.value.catalog_hash).not.toBe(b.value.catalog_hash);
+    }
+  });
+
+  it("catalog_hash does NOT reflect price-only changes (pricing_hash is PricingService's job)", () => {
+    // P1-1: resolver 输入不含价格字段，catalog_hash 只反映 catalog 结构。
+    // 加 is_default 标记（结构变化）会改 hash；但纯价格变化（属于任务 7）不影响 resolver。
+    const catalogWithDefault = fullActiveCatalog.map((entry) =>
+      entry.provider_model_id === "dashscope.qwen-max"
+        ? { ...entry, is_default: true }
+        : entry,
+    );
+    const a = resolveGenerationConfiguration(buildInput({ providerModelCatalog: fullActiveCatalog }));
+    const b = resolveGenerationConfiguration(buildInput({ providerModelCatalog: catalogWithDefault }));
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    if (a.ok && b.ok) {
+      // is_default 是 catalog 结构字段，会进入 canonical JSON，所以 hash 变化是正确的。
+      expect(a.value.catalog_hash).not.toBe(b.value.catalog_hash);
     }
   });
 
@@ -623,25 +641,35 @@ describe("resolveGenerationConfiguration structured error on invalid input", () 
   });
 });
 
-describe("resolveGenerationConfiguration hash algorithm identity", () => {
-  // P2: hash 前缀必须名实相符——当前是 FNV-1a64，必须标识为 fnv1a64，不能冒充 sha256。
-  it("configuration_hash and pricing_hash use the fnv1a64 prefix", () => {
+describe("resolveGenerationConfiguration hash algorithm identity and boundaries", () => {
+  // P2: 漂移检测 hash 前缀必须名实相符——当前是 FNV-1a64，必须标识为 fnv1a64，不能冒充 sha256。
+  it("configuration_hash and catalog_hash use the fnv1a64 drift-detection prefix", () => {
     const resolved = resolveGenerationConfiguration(buildInput({}));
     expect(resolved.ok).toBe(true);
     if (!resolved.ok) return;
     expect(resolved.value.configuration_hash.startsWith("fnv1a64:")).toBe(true);
-    expect(resolved.value.pricing_hash.startsWith("fnv1a64:")).toBe(true);
+    expect(resolved.value.catalog_hash.startsWith("fnv1a64:")).toBe(true);
     // FNV-1a64 输出固定 16 位十六进制
     expect(resolved.value.configuration_hash.slice("fnv1a64:".length)).toMatch(/^[0-9a-f]{16}$/);
-    expect(resolved.value.pricing_hash.slice("fnv1a64:".length)).toMatch(/^[0-9a-f]{16}$/);
+    expect(resolved.value.catalog_hash.slice("fnv1a64:".length)).toMatch(/^[0-9a-f]{16}$/);
   });
 
-  it("never claims sha256 strength it does not have", () => {
+  it("resolver does not produce pricing_hash (pricing hash is PricingService's job, task 7)", () => {
+    // P1-1: resolver 不再产出 pricing_hash。catalog_hash 只反映目录结构，不含价格。
     const resolved = resolveGenerationConfiguration(buildInput({}));
     expect(resolved.ok).toBe(true);
     if (!resolved.ok) return;
-    // sha256 hex 应为 64 位；当前实现不应使用该前缀。
+    expect((resolved.value as Record<string, unknown>).pricing_hash).toBeUndefined();
+    expect("catalog_hash" in resolved.value).toBe(true);
+  });
+
+  it("drift hashes never claim sha256 strength they do not have", () => {
+    const resolved = resolveGenerationConfiguration(buildInput({}));
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    // sha256 hex 应为 64 位；漂移检测 hash 不应使用该前缀（授权指纹才用，由任务 8 产出）。
     expect(resolved.value.configuration_hash.startsWith("sha256:")).toBe(false);
+    expect(resolved.value.catalog_hash.startsWith("sha256:")).toBe(false);
   });
 
   it("identical inputs produce identical hashes; different project revision produces different config hash", () => {
@@ -652,5 +680,50 @@ describe("resolveGenerationConfiguration hash algorithm identity", () => {
     if (!(a.ok && b.ok && c.ok)) return;
     expect(a.value.configuration_hash).toBe(b.value.configuration_hash);
     expect(a.value.configuration_hash).not.toBe(c.value.configuration_hash);
+  });
+});
+
+describe("resolveGenerationConfiguration auto default model selection", () => {
+  // P2: auto 必须优先选择 is_default=true 的 active 项，而不是依赖数组顺序。
+  it("auto prefers the is_default=true entry regardless of array order", () => {
+    const catalogReordered: ProviderModelCatalogEntry[] = [
+      // 非 default 项排在前面
+      { provider_model_id: "dashscope.qwen-max-v2", capability: "llm.smart", provider_key: "dashscope", model_id: "qwen-max-v2", status: "active", is_default: false },
+      { provider_model_id: "dashscope.qwen-max", capability: "llm.smart", provider_key: "dashscope", model_id: "qwen-max", status: "active", is_default: true },
+      ...fullActiveCatalog.filter((e) => e.capability !== "llm.smart"),
+    ];
+    const resolved = resolveGenerationConfiguration(
+      buildInput({ providerModelCatalog: catalogReordered }),
+    );
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    // 即使 default 项在数组第二个，auto 仍选它
+    expect(resolved.value.resolved_capabilities["llm.smart"].model_id).toBe("qwen-max");
+  });
+
+  it("auto with no is_default entry falls back to first active entry", () => {
+    // 没有 is_default=true 时，退回数组首项（兼容当前测试 catalog 都不带 is_default 的情况）
+    const resolved = resolveGenerationConfiguration(buildInput({}));
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    expect(resolved.value.resolved_capabilities["llm.smart"].model_id).toBe("qwen-max");
+  });
+
+  it("auto rejects a catalog with multiple active default entries for one capability", () => {
+    const catalogTwoDefaults: ProviderModelCatalogEntry[] = fullActiveCatalog.flatMap((e) =>
+      e.capability === "llm.smart"
+        ? [
+            { ...e, is_default: true },
+            { ...e, provider_model_id: "dashscope.qwen-max-v2", model_id: "qwen-max-v2", is_default: true },
+          ]
+        : [e],
+    );
+    const resolved = resolveGenerationConfiguration(
+      buildInput({ providerModelCatalog: catalogTwoDefaults }),
+    );
+    expect(resolved.ok).toBe(false);
+    if (resolved.ok) return;
+    expect(resolved.error.code).toBe("generation_configuration_invalid");
+    expect(resolved.error.capability).toBe("llm.smart");
   });
 });

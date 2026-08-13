@@ -194,6 +194,12 @@ S2-2A 只允许修改 `video` 和 `budget`；`creative` 保留 null，`capabilit
 
 quote 默认有效期 10 分钟。配置 revision、模型状态、价格版本或运行输入数量发生变化时，提交必须拒绝并重新报价。预算门禁比较 `authorizationCostMicros`；若存在 unbounded item，则即使预计费用低于预算也要求显式授权。
 
+> **hash 与指纹边界澄清（S2-2A 任务 1 整改）**
+>
+> - `configurationHash` 是 resolved 配置的 canonical JSON 漂移检测 hash：提交时服务端重新解析并比对，确认 quote 基于的配置未被改过。它是**确定性漂移检测**，不是密码学防伪。
+> - `pricingVersionSetJson` + 任务 7 PricingService 产出的 `pricing_hash`（SHA-256，基于标准化价格内容）共同覆盖价格变化检测；价格单独变化使旧 quote 失效由这两者承担，而不是 `configurationHash`。
+> - 付费 quote 的**加密级防篡改绑定**由任务 8 提交事务生成的独立 `quote_fingerprint`（SHA-256）承担，不复用漂移检测 hash。`authorizationCostMicros` 数值比较才是真正的预算授权边界。
+
 ### 4.6 `RunConfigurationSnapshot`
 
 | 字段 | 含义 |
@@ -212,9 +218,11 @@ quote 默认有效期 10 分钟。配置 revision、模型状态、价格版本�
 | `budgetLimitMicros` | 预算，可空 |
 | `budgetOverrideAuthorized` | 是否授权超额 |
 | `pricingVersionSetJson` | 价格版本 |
+| `pricingHash` | 任务 7 PricingService 基于标准化价格内容生成的 SHA-256，可空（免费运行） |
+| `quoteFingerprint` | 任务 8 提交事务生成的加密级 quote 防篡改指纹（SHA-256），可空（免费运行） |
 | `createdAt` | 创建时间 |
 
-数据库 repository 不提供 update；重新运行必须创建新快照。
+数据库 repository 不提供 update；重新运行必须创建新快照。`configurationHash` 与 `catalogHash`（resolver 产出的目录漂移检测 hash）只用于提交时漂移比对，不是授权边界；加密级授权由 `quoteFingerprint` 承担。
 
 ### 4.7 `GenerationRun`
 
