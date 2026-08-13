@@ -25,7 +25,7 @@
 
 ---
 
-## 实施块一：共享合同、解析器与持久化底座
+## Chunk 1：共享合同、解析器与持久化底座
 
 ### 任务 1：建立共享配置合同和纯函数解析器
 
@@ -302,7 +302,7 @@ git commit -m "实现用户与项目生成配置接口"
 
 ---
 
-## 实施块二：Storyboard 到 Assets 的确定性视觉路线
+## Chunk 2：Storyboard 到 Assets 的确定性视觉路线
 
 ### 任务 4：拆分分镜适配度与用户覆盖
 
@@ -316,11 +316,15 @@ git commit -m "实现用户与项目生成配置接口"
 - 修改：`prompts/storyboard/storyboard-segment-regen.prompt.md`
 - 修改：`prompts/storyboard/storyboard-segment-regen.changes.md`
 - 修改：`backend/src/modules/storyboard/storyboard-generation.service.ts`
+- 修改：`backend/src/modules/storyboard/storyboard-run.service.ts`
 - 修改：`backend/src/modules/storyboard/storyboard.routes.ts`
+- 新建：`backend/src/modules/storyboard/storyboard-plan-compatibility.ts`
 - 新建：`backend/src/modules/storyboard/storyboard-segment-override.repository.ts`
+- 修改：`backend/src/modules/asset-planning/asset-planning-run.service.ts`
 - 修改：`frontend/src/stores/storyboard.ts`
 - 修改：`frontend/src/components/storyboard/StoryboardPanel.vue`
 - 新建：`tests/backend/storyboard/storyboard-video-suitability.test.ts`
+- 新建：`tests/backend/storyboard/storyboard-plan-compatibility.test.ts`
 - 新建：`tests/backend/storyboard/storyboard-segment-override.test.ts`
 - 修改：`tests/backend/api/storyboard-api.test.ts`
 - 修改：`tests/frontend/stores/storyboard.test.ts`（若不存在则新建）
@@ -330,6 +334,8 @@ git commit -m "实现用户与项目生成配置接口"
 要求：
 
 - `StoryboardSegment` 用 `api_video_suitability` 取代 `visual_strategy_preference`。
+- 正式新 schema 保持 strict，不接受旧字段；历史记录由独立 decoder 转为只读 `legacy_visual_strategy_hint`，override 保持 null。旧 `api_video` 确定性映射为 `api_video_strongly_recommended`，旧 `remotion_motion`/空值映射为 `remotion_sufficient`，再由当前项目策略解析路线。
+- 旧记录可以继续打开并重跑 Asset Planning；新保存/API 输出不再含 `visual_strategy_preference`。
 - 四档适配度必须逐段存在，LLM/stub 都不能留空。
 - `visual_strategy_override` 不写回 `StoryboardPlan`。
 - segment regenerate 保留 `segment_id`，因此同 storyboard record 的覆盖仍生效。
@@ -338,18 +344,22 @@ git commit -m "实现用户与项目生成配置接口"
 运行：
 
 ```powershell
-npx vitest run --configLoader runner tests/backend/storyboard/storyboard-video-suitability.test.ts tests/backend/storyboard/storyboard-segment-override.test.ts tests/backend/api/storyboard-api.test.ts
+npx vitest run --configLoader runner tests/backend/storyboard/storyboard-video-suitability.test.ts tests/backend/storyboard/storyboard-plan-compatibility.test.ts tests/backend/storyboard/storyboard-segment-override.test.ts tests/backend/api/storyboard-api.test.ts
 ```
 
 预期：失败，旧字段仍在合同和路由中。
 
-- [ ] **步骤 2：更新正式中文 prompt 与 changelog**
+- [ ] **步骤 2：实现历史分镜兼容读取边界**
+
+`decodeStoredStoryboardPlan()` 先尝试正式新 schema，再尝试隔离的 legacy schema；旧值只生成 `legacy_visual_strategy_hint`，不得写入 `StoryboardPlan`、override 或新 prompt。将 storyboard segment regenerate 和 asset planning 的直接 `StoryboardPlan.parse(record.planJson)` 改为调用该 decoder。
+
+- [ ] **步骤 3：更新正式中文 prompt 与 changelog**
 
 Prompt 只负责判断“静态图+Remotion 是否足够表达动作因果”，输出四档 suitability；不让 LLM 直接决定付费调用，也不把用户预算/财富状态写进 prompt。
 
 同时更新 prompt 版本、fixture/drift/changelog 所需元数据，保持 `language: zh-CN`。
 
-- [ ] **步骤 3：实现独立 override repository/API**
+- [ ] **步骤 4：实现独立 override repository/API**
 
 将现有 segment strategy PATCH 改为写 `StoryboardSegmentOverride`：
 
@@ -359,7 +369,7 @@ Prompt 只负责判断“静态图+Remotion 是否足够表达动作因果”，
 - 权限检查沿用 `guardOwnedRoute`；
 - 不直接修改历史 `planJson`。
 
-- [ ] **步骤 4：更新前端展示与 store**
+- [ ] **步骤 5：更新前端展示与 store**
 
 分镜卡同时展示：
 
@@ -368,17 +378,17 @@ Prompt 只负责判断“静态图+Remotion 是否足够表达动作因果”，
 - 当前解析结果；
 - 受管理员/测试态约束时的不可用原因。
 
-- [ ] **步骤 5：运行 prompt 与分镜回归**
+- [ ] **步骤 6：运行 prompt 与分镜回归**
 
 ```powershell
 npm run harness:check-prompts
-npx vitest run --configLoader runner tests/backend/storyboard/storyboard-video-suitability.test.ts tests/backend/storyboard/storyboard-segment-override.test.ts tests/backend/storyboard/storyboard-generation.test.ts tests/backend/api/storyboard-api.test.ts tests/frontend/stores/storyboard.test.ts
+npx vitest run --configLoader runner tests/backend/storyboard/storyboard-video-suitability.test.ts tests/backend/storyboard/storyboard-plan-compatibility.test.ts tests/backend/storyboard/storyboard-segment-override.test.ts tests/backend/storyboard/storyboard-generation.test.ts tests/backend/asset-planning/asset-plan-downstream-compatibility.test.ts tests/backend/api/storyboard-api.test.ts tests/frontend/stores/storyboard.test.ts
 ```
 
-- [ ] **步骤 6：自审并提交**
+- [ ] **步骤 7：自审并提交**
 
 ```powershell
-git add shared/src/storyboard shared/src/index.ts prompts/storyboard backend/src/modules/storyboard frontend/src/stores/storyboard.ts frontend/src/components/storyboard/StoryboardPanel.vue tests/backend/storyboard tests/backend/api/storyboard-api.test.ts tests/frontend/stores/storyboard.test.ts
+git add shared/src/storyboard shared/src/index.ts prompts/storyboard backend/src/modules/storyboard backend/src/modules/asset-planning/asset-planning-run.service.ts frontend/src/stores/storyboard.ts frontend/src/components/storyboard/StoryboardPanel.vue tests/backend/storyboard tests/backend/api/storyboard-api.test.ts tests/frontend/stores/storyboard.test.ts
 git commit -m "拆分分镜视频适配度与用户覆盖"
 ```
 
@@ -505,7 +515,7 @@ git commit -m "实现视频策略降级与严格阻塞语义"
 
 ---
 
-## 实施块三：后端报价、幂等付费运行与费用账本
+## Chunk 3：后端报价、幂等付费运行与费用账本
 
 ### 任务 7：建立 provider/model 目录与后端全能力价格服务
 
@@ -514,6 +524,7 @@ git commit -m "实现视频策略降级与严格阻塞语义"
 - 新建：`backend/src/modules/generation-cost/provider-model-catalog.repository.ts`
 - 新建：`backend/src/modules/generation-cost/pricing.service.ts`
 - 新建：`backend/src/modules/generation-cost/pricing-catalog.seed.ts`
+- 新建：`backend/src/modules/generation-cost/generation-capability-readiness.ts`
 - 修改：`backend/src/config/env.ts`
 - 新建：`tests/backend/config/provider-model-catalog.test.ts`
 - 新建：`tests/backend/config/pricing-service.test.ts`
@@ -529,6 +540,7 @@ git commit -m "实现视频策略降级与严格阻塞语义"
 - 无法给出上界的 item 标记 `unbounded`，不能被预算检查当作零。
 - 前端传入 unit price 被忽略/拒绝。
 - demo/test/unconfigured 环境的视频 catalog 强制不可真实派发。
+- LLM active 项必须与 `providers.json`、tier resolver 和健康服务端凭据一致；媒体 active 项必须与 adapter registry 和凭据一致。不一致项不得报价或进入新运行。
 
 运行：
 
@@ -540,7 +552,7 @@ npx vitest run --configLoader runner tests/backend/config/provider-model-catalog
 
 - [ ] **步骤 2：实现目录 seed 与价格版本 hash**
 
-价格必须集中在后端，带 `pricingVersion`、生效时间和来源备注。不要把密钥或环境变量名写进 catalog 响应。
+价格必须集中在后端，带 `pricingVersion`、生效时间和来源备注。catalog 使用服务端受控 seed，不从只含连接信息的 `providers.json` 自动派生；启动 readiness 对两者做交叉校验。不要把密钥或环境变量名写进响应。
 
 - [ ] **步骤 3：实现纯计价服务**
 
@@ -551,7 +563,7 @@ npx vitest run --configLoader runner tests/backend/config/provider-model-catalog
 ```powershell
 npx vitest run --configLoader runner tests/backend/config/provider-model-catalog.test.ts tests/backend/config/pricing-service.test.ts tests/backend/config/env.test.ts
 git add backend/src/modules/generation-cost backend/src/config/env.ts tests/backend/config/provider-model-catalog.test.ts tests/backend/config/pricing-service.test.ts
-git commit -m "建立媒体模型目录与后端价格服务"
+git commit -m "建立生成能力目录与后端价格服务"
 ```
 
 ### 任务 8：实现 quote、snapshot 和幂等 GenerationRun 事务
@@ -566,6 +578,7 @@ git commit -m "建立媒体模型目录与后端价格服务"
 - 新建：`backend/src/modules/generation-run/generation-run.service.ts`
 - 新建：`backend/src/modules/generation-run/generation-run-dispatcher.ts`
 - 修改：`backend/src/app.ts`
+- 修改：`backend/src/server.ts`
 - 新建：`tests/backend/cost/generation-cost-quote.test.ts`
 - 新建：`tests/backend/runtime/generation-run-idempotency.test.ts`
 - 新建：`tests/backend/runtime/generation-run-concurrency.test.ts`
@@ -602,10 +615,12 @@ POST /api/projects/:projectId/generation-cost-quotes
 - quote 消费、snapshot 创建、`pending_dispatch` run 创建在同一 Prisma transaction。
 - 事务提交前绝不调用外部 provider。
 - crash 后 dispatcher 能恢复 `pending_dispatch`。
+- 提交事务完成后立即触发 dispatcher；服务启动时扫描 pending/lease-expired run；服务存活期间执行低频 lease-expiry sweep。
 - 两个 dispatcher 并发领取同一 run 时，只有一个能通过带版本/lease 到期条件的原子更新获得 lease。
 - lease 持有者崩溃后，其他 worker 只能在 lease 到期后接管；未到期不得重复派发。
 - 每个外部 call intent 依赖数据库唯一约束判重，只有 intent 持有者可执行首次 provider submit。
 - provider 不支持幂等且远端结果不确定时进入 `needs_reconciliation`，不自动重复提交。
+- 启动扫描和周期 sweep 都必须跳过 `needs_reconciliation`。
 - `authorize_budget_override=true` 成功消费 quote 时，在同一事务写入包含 actor、quote、授权上界、预算和原因的 `AuditLog`；事务失败时审计和 run 一起回滚。
 
 运行：
@@ -631,7 +646,7 @@ npx vitest run --configLoader runner --no-file-parallelism tests/backend/cost/ge
 5. 追加 run event；
 6. 更新当前 run 状态并释放/刷新 lease，不修改 snapshot。
 
-重复 dispatcher 只能恢复/轮询已有 provider job，不能凭空再次计费提交。
+重复 dispatcher 只能恢复/轮询已有 provider job，不能凭空再次计费提交。`backend/src/server.ts` 在服务 readiness 完成后启动一次恢复扫描和低频 sweep，并在关闭时清理定时器；测试使用注入时钟/显式 tick，不依赖真实等待。
 
 - [ ] **步骤 5：注册 API 并运行恢复测试**
 
@@ -643,11 +658,11 @@ npx tsc -p backend/tsconfig.json --noEmit
 - [ ] **步骤 6：自审并提交**
 
 ```powershell
-git add backend/src/modules/generation-cost backend/src/modules/generation-run backend/src/app.ts tests/backend/cost tests/backend/runtime/generation-run-idempotency.test.ts tests/backend/runtime/generation-run-concurrency.test.ts tests/backend/runtime/generation-run-recovery.test.ts tests/backend/api/generation-cost-api.test.ts tests/backend/auth/authorization.test.ts
+git add backend/src/modules/generation-cost backend/src/modules/generation-run backend/src/app.ts backend/src/server.ts tests/backend/cost tests/backend/runtime/generation-run-idempotency.test.ts tests/backend/runtime/generation-run-concurrency.test.ts tests/backend/runtime/generation-run-recovery.test.ts tests/backend/api/generation-cost-api.test.ts tests/backend/auth/authorization.test.ts
 git commit -m "实现报价与幂等付费运行事务"
 ```
 
-### 任务 9：接入 LLM 与 Assets 真实调用并记录实际费用
+### 任务 9A：接入 Assets 媒体调用并记录实际费用
 
 **文件：**
 
@@ -658,28 +673,18 @@ git commit -m "实现报价与幂等付费运行事务"
 - 修改：`backend/src/modules/assets/providers/dashscope/dashscope-image-provider.ts`
 - 修改：`backend/src/modules/assets/providers/dashscope/dashscope-image-to-video-provider.ts`
 - 修改：`backend/src/modules/assets/providers/dashscope/dashscope-tts-provider.ts`
-- 修改：`backend/src/runtime/llm/llm-gateway.ts`
-- 修改：`backend/src/runtime/llm/interaction-log.ts`
-- 修改：`backend/src/modules/topic/topic.routes.ts`
-- 修改：`backend/src/modules/script/script.routes.ts`
-- 修改：`backend/src/modules/storyboard/storyboard.routes.ts`
-- 修改：`backend/src/modules/asset-planning/asset-planning.routes.ts`
-- 修改：`backend/src/modules/publish/publish.routes.ts`
 - 新建：`backend/src/modules/generation-cost/usage-cost-recorder.ts`
 - 新建：`tests/backend/cost/usage-cost-recording.test.ts`
-- 新建：`tests/backend/cost/llm-paid-generation-gate.test.ts`
 - 新建：`tests/backend/assets/paid-generation-gate.test.ts`
 - 修改：`tests/backend/assets/asset-provider-job-repository.test.ts`
 - 修改：`tests/backend/api/assets-api.test.ts`
 
 - [ ] **步骤 1：先写付费闸门失败测试**
 
-覆盖所有真实 `llm.smart`、`llm.flash`、image、video、TTS 提交入口：
+覆盖所有真实 image、video、TTS 提交入口：
 
 - 无有效 run/snapshot/quote 时不得调用 provider。
 - 同 provider job attempt 只记一条 usage。
-- 同 LLM interaction/attempt 只记一条 usage，`UsageCostRecord.interactionId` 可反查原 interaction log。
-- LLM usage 使用 provider 返回的 input/output token；无 provider usage 时保留 null actual 和估算 cost basis，不能伪造实际 token。
 - actual cost 与 estimate 分开存储和返回。
 - retry 必须新 quote、新 GenerationRun、新 attempt。
 - actual 超出 authorization bound 时追加 `pricing_overrun`，并将对应 catalog item 标记待审/禁用；不能改写已消费 quote。
@@ -688,7 +693,7 @@ git commit -m "实现报价与幂等付费运行事务"
 运行：
 
 ```powershell
-npx vitest run --configLoader runner tests/backend/assets/paid-generation-gate.test.ts tests/backend/cost/llm-paid-generation-gate.test.ts tests/backend/cost/usage-cost-recording.test.ts tests/backend/assets/asset-provider-job-repository.test.ts
+npx vitest run --configLoader runner tests/backend/assets/paid-generation-gate.test.ts tests/backend/cost/usage-cost-recording.test.ts tests/backend/assets/asset-provider-job-repository.test.ts
 ```
 
 预期：失败，现有入口可直接选择 provider mode。
@@ -698,7 +703,6 @@ npx vitest run --configLoader runner tests/backend/assets/paid-generation-gate.t
 兼容迁移策略：
 
 - UI 仍调用现有 Assets 生成 API，但必须先取得 quote，并在同一现有生成请求中提交 quote/idempotency 字段；`GenerationRun` 是后端内部运行记录，不新增另一条公开提交链路。
-- topic/script/storyboard/asset-plan/publish 的现有真实 LLM 生成 API 同样必须先取得对应 operation quote，并在原请求中提交相同三个治理字段；stub/local provider 允许零金额 quote 或设计允许的纯本地免 quote 路径。
 - 旧无 quote API 在开发过渡期返回明确 `paid_generation_quote_required`；不得静默替用户创建无限预算授权。
 - demo/test 始终保留无真实 API 的本地路径。
 
@@ -709,19 +713,54 @@ provider 响应无法给出精确账单时记录 `actualCostState: estimated_aft
 - [ ] **步骤 4：运行资产回归**
 
 ```powershell
-npx vitest run --configLoader runner tests/backend/assets/paid-generation-gate.test.ts tests/backend/cost/llm-paid-generation-gate.test.ts tests/backend/cost/usage-cost-recording.test.ts tests/backend/assets/asset-provider-job-repository.test.ts tests/backend/assets/assets-run-service.test.ts tests/backend/assets/assets-execution-regression.test.ts tests/backend/api/topic-api-runtime.test.ts tests/backend/api/script-generate-runtime.test.ts tests/backend/api/storyboard-api.test.ts tests/backend/api/asset-planning-api.test.ts tests/backend/api/publish-api.test.ts tests/backend/api/assets-api.test.ts
+npx vitest run --configLoader runner tests/backend/assets/paid-generation-gate.test.ts tests/backend/cost/usage-cost-recording.test.ts tests/backend/assets/asset-provider-job-repository.test.ts tests/backend/assets/assets-run-service.test.ts tests/backend/assets/assets-execution-regression.test.ts tests/backend/api/assets-api.test.ts
 ```
 
 - [ ] **步骤 5：自审并提交**
 
 ```powershell
-git add backend/src/modules/assets backend/src/modules/topic/topic.routes.ts backend/src/modules/script/script.routes.ts backend/src/modules/storyboard/storyboard.routes.ts backend/src/modules/asset-planning/asset-planning.routes.ts backend/src/modules/publish/publish.routes.ts backend/src/runtime/llm backend/src/modules/generation-cost/usage-cost-recorder.ts tests/backend/assets tests/backend/cost tests/backend/api
-git commit -m "为付费生成接入预算闸门与费用账本"
+git add backend/src/modules/assets backend/src/modules/generation-cost/usage-cost-recorder.ts tests/backend/assets tests/backend/cost/usage-cost-recording.test.ts tests/backend/api/assets-api.test.ts
+git commit -m "为媒体生成接入预算闸门与费用账本"
+```
+
+### 任务 9B：接入 LLM 调用并记录 token 费用
+
+**文件：**
+
+- 修改：`backend/src/runtime/llm/llm-gateway.ts`
+- 修改：`backend/src/runtime/llm/interaction-log.ts`
+- 修改：`backend/src/modules/topic/topic.routes.ts`
+- 修改：`backend/src/modules/script/script.routes.ts`
+- 修改：`backend/src/modules/storyboard/storyboard.routes.ts`
+- 修改：`backend/src/modules/asset-planning/asset-planning.routes.ts`
+- 修改：`backend/src/modules/publish/publish.routes.ts`
+- 新建：`tests/backend/cost/llm-paid-generation-gate.test.ts`
+- 修改：`tests/backend/cost/usage-cost-recording.test.ts`
+
+- [ ] **步骤 1：先写 LLM 付费闸门与 token 记账失败测试**
+
+真实 `llm.smart`、`llm.flash` operation 必须持有效 quote/snapshot/run；同 interaction/attempt 只记一条 usage，`interactionId` 可反查 interaction log。优先使用 provider 返回的 input/output token；缺失 usage 时保留 null actual 和估算 cost basis，不伪造实际 token。
+
+- [ ] **步骤 2：接入 gateway 与既有生成入口**
+
+topic/script/storyboard/asset-plan/publish 原生成 API 接受 `cost_quote_id`、`authorize_budget_override`、`idempotency_key` 并复用 `GenerationRunService`；stub/local 只走零金额 quote 或设计允许的纯本地免 quote 路径。
+
+- [ ] **步骤 3：运行 LLM 回归**
+
+```powershell
+npx vitest run --configLoader runner tests/backend/cost/llm-paid-generation-gate.test.ts tests/backend/cost/usage-cost-recording.test.ts tests/backend/api/topic-api-runtime.test.ts tests/backend/api/script-generate-runtime.test.ts tests/backend/api/storyboard-api.test.ts tests/backend/api/asset-planning-api.test.ts tests/backend/api/publish-api.test.ts
+```
+
+- [ ] **步骤 4：自审并提交**
+
+```powershell
+git add backend/src/runtime/llm backend/src/modules/topic/topic.routes.ts backend/src/modules/script/script.routes.ts backend/src/modules/storyboard/storyboard.routes.ts backend/src/modules/asset-planning/asset-planning.routes.ts backend/src/modules/publish/publish.routes.ts tests/backend/cost/llm-paid-generation-gate.test.ts tests/backend/cost/usage-cost-recording.test.ts tests/backend/api/topic-api-runtime.test.ts tests/backend/api/script-generate-runtime.test.ts tests/backend/api/storyboard-api.test.ts tests/backend/api/asset-planning-api.test.ts tests/backend/api/publish-api.test.ts
+git commit -m "为LLM生成接入预算闸门与费用账本"
 ```
 
 ---
 
-## 实施块四：前端设置、报价确认、成本页与全链路验收
+## Chunk 4：前端设置、报价确认、成本页与全链路验收
 
 ### 任务 10：实现用户设置和项目设置 UI
 
@@ -892,7 +931,11 @@ git commit -m "新增媒体生成报价确认与成本明细"
 npm run prisma:generate
 npx prisma validate --config backend/prisma.config.ts
 npm run harness:check-prompts
-npx vitest run --configLoader runner --no-file-parallelism tests/shared tests/backend/config tests/backend/db tests/backend/storyboard tests/backend/asset-planning tests/backend/assets tests/backend/cost tests/backend/runtime/generation-run-idempotency.test.ts tests/backend/runtime/generation-run-concurrency.test.ts tests/backend/runtime/generation-run-recovery.test.ts tests/backend/api tests/backend/s2-2a-e2e-acceptance.test.ts
+npx vitest run --configLoader runner tests/shared tests/backend/config
+npx vitest run --configLoader runner --no-file-parallelism tests/backend/db
+npx vitest run --configLoader runner tests/backend/storyboard tests/backend/asset-planning
+npx vitest run --configLoader runner --no-file-parallelism tests/backend/assets tests/backend/cost tests/backend/runtime/generation-run-idempotency.test.ts tests/backend/runtime/generation-run-concurrency.test.ts tests/backend/runtime/generation-run-recovery.test.ts
+npx vitest run --configLoader runner tests/backend/api tests/backend/auth tests/backend/s2-2a-e2e-acceptance.test.ts
 npx vitest run --configLoader runner tests/frontend tests/harness/s2-2a-browser-acceptance.test.ts
 npx tsc -p shared/tsconfig.json --noEmit
 npx tsc -p backend/tsconfig.json --noEmit
@@ -901,7 +944,7 @@ npm run build
 git diff --check
 ```
 
-说明：若一次运行全部 `tests/backend/db` 过慢，可按目录分批，但涉及同一 SQLite/生成态存储的测试必须保留 `--no-file-parallelism`。
+以上分批是默认验证方式，不再把全部后端测试塞进一个串行进程。数据库、费用运行和可能共享生成态存储的批次保留 `--no-file-parallelism`；其他批次允许 Vitest 正常并发。每批单独记录退出码和失败文件，上一批失败不得继续宣称整体通过。
 
 - [ ] **步骤 5：显式 live check（非默认门禁）**
 
@@ -936,8 +979,11 @@ git commit -m "完成S2-2A配置与成本基础验收"
 - 四档映射由纯函数测试完整覆盖，无关键词式语义判断。
 - 用户默认与项目冻结语义通过 repository/API 测试。
 - 分镜 suitability 与 override 分表/分合同，历史 StoryboardPlan 不被覆盖操作污染。
+- 旧 StoryboardPlan 只能经独立兼容 decoder 读取；新 schema、prompt、持久化和 API 不再接受或输出旧字段。
 - 所有真实 LLM、image、video、TTS 调用都经过有效 quote、snapshot 和 GenerationRun。
 - quote 一次性、幂等键、payload fingerprint、事务和 dispatcher 恢复均有自动化证据。
+- dispatcher 的立即派发、启动恢复、lease-expiry sweep 与 `needs_reconciliation` 排除规则均有确定性测试。
+- active catalog 与 LLM provider/tier、媒体 adapter、服务端凭据的 readiness 交叉校验通过。
 - 严格模式失败不自动降级；显式 fallback 与优先模式自动 fallback 都有事件证据。
 - actual route 与 actual cost 可追踪，snapshot 保持不可变。
 - 前端价格硬编码不再拥有授权决策权。

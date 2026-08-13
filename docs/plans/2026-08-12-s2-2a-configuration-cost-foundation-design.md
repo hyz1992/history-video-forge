@@ -154,6 +154,8 @@ S2-2A 只允许修改 `video` 和 `budget`；`creative` 保留 null，`capabilit
 - `backend/providers.json` 仍只承担 LLM provider 连接注册。
 - 媒体 adapter registry 仍由代码提供。
 - readiness 必须确认所有 active catalog 项都能映射到已注册 adapter/provider 和健康的服务端凭据。
+- catalog 由服务端受控 seed 提供 capability、model 和价格元数据，不从 `providers.json` 自动派生；LLM active 项必须通过 tier resolver 与 provider registry 交叉校验，媒体 active 项必须与 adapter registry 交叉校验。
+- 任一 active 项无法解析 provider/model、找不到 adapter 或缺少健康凭据时，该项不得进入报价与新运行；启动 readiness 必须返回明确的不一致原因，禁止 catalog 与连接注册静默漂移。
 - Catalog API 不返回 base URL、env var、credential id 或密钥。
 
 ### 4.4 `StoryboardSegmentOverride`
@@ -229,11 +231,15 @@ quote 默认有效期 10 分钟。配置 revision、模型状态、价格版本�
 | `runConfigurationSnapshotId` | 不可变快照，unique |
 | `dispatchPayloadJson` | 恢复执行所需的最小非敏感 payload |
 | `status` | pending_dispatch/running/succeeded/failed/needs_reconciliation |
+| `dispatchLeaseOwner/dispatchLeaseExpiresAt` | dispatcher 原子领取与过期接管 |
+| `dispatchClaimCount` | 领取次数，用于恢复审计 |
 | `createdAt/updatedAt` | 时间 |
 
 唯一约束为 `(projectId, operation, idempotencyKey)`。相同 key + 相同 fingerprint 返回已有 run；相同 key + 不同 fingerprint 返回 `409 generation_idempotency_payload_conflict`。
 
 quote 消费、snapshot 创建和 `GenerationRun(status=pending_dispatch)` 创建必须在同一数据库事务内完成。事务提交后由可恢复 dispatcher 执行；进程在外部调用前崩溃时可以继续 pending run。每个 provider adapter 仍须在外部提交前写入现有 provider job/call intent。若 provider 不支持幂等且在“远端已执行、本地未确认”窗口中断，run 进入 `needs_reconciliation`，禁止自动重试造成二次计费。
+
+dispatcher 的恢复触发固定为三层：正常提交事务完成后立即派发；服务启动时扫描 `pending_dispatch` 和 lease 已过期的运行；服务存活期间执行低频 lease-expiry sweep，接管因局部异常遗留的可恢复运行。扫描永远跳过 `needs_reconciliation`。同一运行必须通过条件更新原子取得 lease，同一外部 call intent 必须通过稳定 request key 与数据库唯一约束防止重复计费提交。
 
 ### 4.8 `GenerationRunEvent`
 
@@ -341,6 +347,8 @@ storyboard prompt 只判断适配度，不读取预算、不决定 provider/mode
 用户覆盖不写入不可变 `StoryboardPlan`，而是保存到 `StoryboardSegmentOverride`。项目 snapshot/API 将 suitability、override 和当前 route preview 投影给前端。逐分镜 PATCH API 使用 `expected_revision` 更新 override，并记录用户、时间和旧/新值。
 
 逐段 regenerate 必须保持原 `segment_id`，因此 override 自动保留，除非用户明确清除。完整 storyboard regenerate 创建新 `StoryboardRecord`，不做基于顺序或文本的自动继承；UI 必须提前提示。
+
+历史 `StoryboardRecord.planJson` 通过独立兼容解码器读取：正式新 `StoryboardPlan` schema 只接受 `api_video_suitability` 并继续保持 strict；兼容解码器单独识别旧 `visual_strategy_preference`，将其转换为只读 `legacy_visual_strategy_hint`，不得把它认定为用户覆盖，`visual_strategy_override` 仍为 null。兼容映射是确定性的：旧 `api_video` 作为 `api_video_strongly_recommended` 语义提示，旧 `remotion_motion` 或空值作为 `remotion_sufficient`；随后仍由当前项目策略和系统约束解析最终路线。新生成、重新生成、持久化和 API 输出都不得再写旧字段。旧记录重跑 Asset Planning 时必须先经过该解码器，禁止让 legacy 字段进入新 prompt 或正式下游合同。
 
 ### 6.2 Asset Planning
 
@@ -588,6 +596,8 @@ PATCH 必须携带 override `expected_revision`。完整 storyboard regenerate �
 - 预算等于/低于/高于报价和超额授权。
 - 预计费用、授权上界、unbounded item 和实际费用异常高于上界。
 - 相同幂等 key 的同 payload 重放与不同 payload 冲突。
+- legacy storyboard 字段到只读 hint/suitability 的确定性映射，新 schema 严格拒绝旧字段。
+- catalog active 项与 LLM provider/tier、媒体 adapter 和凭据 readiness 的一致性。
 
 ### 13.2 Repository/API
 
@@ -597,10 +607,12 @@ PATCH 必须携带 override `expected_revision`。完整 storyboard regenerate �
 - owner 隔离、admin 代管和审计。
 - snapshot 不可更新。
 - quote、snapshot、pending run 同事务；pending run 可恢复。
+- 提交后立即派发、启动扫描、lease 到期 sweep 和多 dispatcher 原子领取。
 - `needs_reconciliation` 禁止自动二次提交。
 - usage record 与 provider job/interaction 关联。
 - usage record attempt 唯一约束避免重复记账。
 - 逐段 regenerate 保留 override；完整 regenerate 不猜测迁移 override。
+- 既有 storyboard 可经兼容 decoder 打开并重跑 Asset Planning，新产物不再输出旧字段。
 - API 不返回凭据字段。
 
 ### 13.3 流水线集成
