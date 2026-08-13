@@ -453,6 +453,31 @@ describe("S2-2A review fixes in-place upgrade", () => {
     }
   });
 
+  it("aborts upgrade when previous version has orphan storyboard override (missing storyboard)", () => {
+    const { readdirSync } = require("node:fs") as typeof import("node:fs");
+    const migrationsRoot = join(process.cwd(), "backend/prisma/migrations");
+    const migrationFiles = readdirSync(migrationsRoot, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((e) => ({ name: e.name, sql: readFileSync(join(migrationsRoot, e.name, "migration.sql"), "utf8") }));
+    const previous = migrationFiles.filter((m) => m.name.startsWith("20260812090000") || m.name.localeCompare("20260812090000") < 0);
+    const upgrade = migrationFiles.filter((m) => m.name.startsWith("20260813090000"));
+
+    const db = new Database(":memory:");
+    try {
+      db.pragma("foreign_keys = ON");
+      for (const m of previous) db.exec(m.sql);
+      db.exec("INSERT INTO User (id, username, displayName, passwordHash, updatedAt) VALUES ('u1','t','T','h',CURRENT_TIMESTAMP)");
+      db.exec("INSERT INTO Project (id, name, ownerId, createdById, storageKey, storageDisplayName, updatedAt) VALUES ('p1','P','u1','u1','p1','P',CURRENT_TIMESTAMP)");
+      // override 引用不存在的 storyboard（旧版本无外键）
+      db.exec("INSERT INTO StoryboardSegmentOverride (id, projectId, storyboardRecordId, segmentId, revision, updatedAt) VALUES ('o1','p1','missing-storyboard','s1',1,CURRENT_TIMESTAMP)");
+
+      expect(() => db.exec(upgrade[0]!.sql)).toThrow("migration_aborted");
+    } finally {
+      db.close();
+    }
+  });
+
   it("aborts upgrade when previous version has usage cost referencing orphan provider job", () => {
     const { readdirSync } = require("node:fs") as typeof import("node:fs");
     const migrationsRoot = join(process.cwd(), "backend/prisma/migrations");
@@ -516,6 +541,45 @@ describe("S2-2A call-intent triple consistency", () => {
       db.pragma("foreign_keys = OFF");
       expect(() =>
         db.exec("INSERT INTO AssetProviderJobRecord (id, assetManifestRecordId, assetRunId, executionId, taskId, providerType, providerName, status, attemptCount, createdAt, updatedAt) VALUES ('j1','am1','r1','e1','t1','image','d','prepared',0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"),
+      ).not.toThrow();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("rejects decimal attemptIndex in provider job (SQLite real type)", () => {
+    const db = new Database(":memory:");
+    try {
+      applyAllDatabaseMigrations(db);
+      db.pragma("foreign_keys = OFF");
+      expect(() =>
+        db.exec("INSERT INTO AssetProviderJobRecord (id, assetManifestRecordId, assetRunId, executionId, taskId, providerType, providerName, status, attemptCount, attemptIndex, generationRunId, providerRequestKey, createdAt, updatedAt) VALUES ('j1','am1','r1','e1','t1','image','d','prepared',1,1.5,'gr1','pk1',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"),
+      ).toThrow();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("rejects negative and decimal attemptIndex in usage cost record", () => {
+    const db = new Database(":memory:");
+    try {
+      applyAllDatabaseMigrations(db);
+      db.pragma("foreign_keys = OFF");
+      // 先建 snapshot 让 usage 的 FK 满足
+      db.exec("INSERT INTO Project (id, name, ownerId, createdById, storageKey, storageDisplayName, updatedAt) VALUES ('p1','P','u1','u1','p1','P',CURRENT_TIMESTAMP)");
+      db.exec("INSERT INTO User (id, username, displayName, passwordHash, updatedAt) VALUES ('u1','t','T','h',CURRENT_TIMESTAMP)");
+      db.exec("INSERT INTO RunConfigurationSnapshot (id, projectId, stage, operation, projectConfigurationRevision, schemaVersion, configurationHash, resolvedConfigurationJson, resolutionTraceJson, pricingVersionSetJson, budgetOverrideAuthorized, createdAt, updatedAt) VALUES ('snap1','p1','assets','a',1,'v','h','{}','[]','[]',0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
+      // 负数拒绝
+      expect(() =>
+        db.exec("INSERT INTO UsageCostRecord (id, runConfigurationSnapshotId, capability, providerKey, modelId, providerRequestKey, attemptIndex, status, unitType, estimatedCostMicros, costBasis, createdAt, updatedAt) VALUES ('u1','snap1','llm.smart','d','m','prk',-1,'planned','token','0','estimate',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"),
+      ).toThrow();
+      // 小数拒绝
+      expect(() =>
+        db.exec("INSERT INTO UsageCostRecord (id, runConfigurationSnapshotId, capability, providerKey, modelId, providerRequestKey, attemptIndex, status, unitType, estimatedCostMicros, costBasis, createdAt, updatedAt) VALUES ('u2','snap1','llm.smart','d','m','prk',1.5,'planned','token','0','estimate',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"),
+      ).toThrow();
+      // 合法整数接受
+      expect(() =>
+        db.exec("INSERT INTO UsageCostRecord (id, runConfigurationSnapshotId, capability, providerKey, modelId, providerRequestKey, attemptIndex, status, unitType, estimatedCostMicros, costBasis, createdAt, updatedAt) VALUES ('u3','snap1','llm.smart','d','m','prk',0,'planned','token','0','estimate',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"),
       ).not.toThrow();
     } finally {
       db.close();

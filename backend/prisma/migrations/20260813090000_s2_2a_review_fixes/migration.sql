@@ -60,11 +60,13 @@ BEFORE INSERT ON "_migration_check"
 FOR EACH ROW
 WHEN EXISTS (
     SELECT 1 FROM "StoryboardSegmentOverride" o
-    JOIN "StoryboardRecord" s ON s."id" = o."storyboardRecordId"
-    WHERE s."projectId" != o."projectId"
+    WHERE NOT EXISTS (
+        SELECT 1 FROM "StoryboardRecord" s
+        WHERE s."id" = o."storyboardRecordId" AND s."projectId" = o."projectId"
+    )
 )
 BEGIN
-    SELECT RAISE(ABORT, 'migration_aborted: storyboard override 关联了跨项目的 storyboard，请先修复旧数据');
+    SELECT RAISE(ABORT, 'migration_aborted: storyboard override 引用了不存在或跨项目的 storyboard，请先修复旧数据');
 END;
 
 -- usage cost → asset provider job orphan（本迁移新增 assetProviderJobRecordId 外键）
@@ -209,10 +211,10 @@ CREATE TABLE "AssetProviderJobRecord_new" (
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
     -- call-intent 三元组一致性（P1-2）：三者必须全空或全非空；
-    -- 非空时 attemptIndex >= 0。防止残缺三元组绕过 partial unique index。
+    -- 非空时 attemptIndex 必须是真整数（typeof='integer'，拒绝 real）且 >= 0。
     CONSTRAINT "AssetProviderJobRecord_call_intent_consistency" CHECK (
       ("generationRunId" IS NULL AND "providerRequestKey" IS NULL AND "attemptIndex" IS NULL)
-      OR ("generationRunId" IS NOT NULL AND "providerRequestKey" IS NOT NULL AND "attemptIndex" IS NOT NULL AND "attemptIndex" >= 0)
+      OR ("generationRunId" IS NOT NULL AND "providerRequestKey" IS NOT NULL AND "attemptIndex" IS NOT NULL AND typeof("attemptIndex") = 'integer' AND "attemptIndex" >= 0)
     ),
     CONSTRAINT "AssetProviderJobRecord_assetRunId_executionId_taskId_attemptCount_key" UNIQUE ("assetRunId", "executionId", "taskId", "attemptCount"),
     CONSTRAINT "AssetProviderJobRecord_assetManifestRecordId_fkey" FOREIGN KEY ("assetManifestRecordId") REFERENCES "AssetManifestRecord" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
@@ -274,7 +276,7 @@ CREATE TABLE "UsageCostRecord_new" (
     "providerKey" TEXT NOT NULL,
     "modelId" TEXT NOT NULL,
     "providerRequestKey" TEXT NOT NULL,
-    "attemptIndex" INTEGER NOT NULL,
+    "attemptIndex" INTEGER NOT NULL CHECK (typeof("attemptIndex") = 'integer' AND "attemptIndex" >= 0),
     "status" TEXT NOT NULL CHECK ("status" IN ('planned', 'submitted', 'succeeded', 'failed', 'canceled')),
     "unitType" TEXT NOT NULL CHECK ("unitType" IN ('token', 'image', 'video_second', 'tts_character', 'request')),
     "inputUnits" INTEGER,
