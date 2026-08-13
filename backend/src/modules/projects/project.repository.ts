@@ -1,6 +1,8 @@
-import type { DbClient, ProjectRecord } from "../../db/client";
+import type { DbClient, ProjectGenerationConfigurationRecord, ProjectRecord } from "../../db/client";
+import { DEFAULT_GENERATION_CONFIGURATION, type GenerationConfigurationV1 } from "../../../../shared/src/index.js";
 import { initializeProjectStorage } from "../../runtime/trace/project-storage.js";
 import { deleteProjectStorage, saveProjectMetadata } from "../../db/persistence.js";
+import { getUserGenerationPreference } from "../generation-config/generation-config.repository.js";
 
 export interface CreateProjectInput {
   name: string;
@@ -44,13 +46,37 @@ export async function createProject(
   };
 
   initializeProjectStorage(project);
-  await db.firstAggregateWriter?.createProject(project);
+
+  // S2-2A：创建项目时冻结当时的用户默认配置为 ProjectGenerationConfiguration。
+  // Prisma 激活态使用 createProjectWithGenerationConfiguration（同事务，避免半成品）；
+  // 内存态在项目写入后立即写入配置 Map。
+  const userPref = getUserGenerationPreference(db, effectiveOwnerId);
+  const frozenConfig: GenerationConfigurationV1 = userPref
+    ? userPref.configuration
+    : { ...DEFAULT_GENERATION_CONFIGURATION };
+  const configRecord: ProjectGenerationConfigurationRecord = {
+    id: db.generateId(),
+    projectId: project.id,
+    schemaVersion: "generation_configuration_v1",
+    revision: 1,
+    sourceUserPreferenceRevision: userPref?.revision ?? null,
+    configurationJson: frozenConfig,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  if (db.firstAggregateWriter) {
+    // Prisma 激活态：Project 与冻结配置在同一事务创建（任一失败不留半成品）
+    await db.firstAggregateWriter.createProjectWithGenerationConfiguration(project, configRecord);
+  }
+  // 内存态（无 writer）不做持久化调用
   // Never persist to disk under test — avoids polluting storage/projects/
   if (!process.env.VITEST) {
     saveProjectMetadata(project);
   }
 
   db.projects.set(project.id, project);
+  db.projectGenerationConfigurations.set(configRecord.id, configRecord);
 
   return project;
 }

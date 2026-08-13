@@ -15,6 +15,7 @@ import { registerPublishRoutes } from "./modules/publish/publish.routes";
 import { registerAdminRoutes } from "./modules/admin/admin.routes";
 import { registerEventLibraryRoutes } from "./modules/event-library/event-library.routes";
 import { registerEventLibraryAdminRoutes } from "./modules/event-library/event-library-admin.routes";
+import { registerGenerationConfigRoutes } from "./modules/generation-config/generation-config.routes";
 import { loadMediaLibraryCatalog } from "./modules/assets/media-library-catalog.loader";
 import { configureVoiceProfilePersistence } from "./modules/assets/voice/voice-profile.repository";
 import { recoverInterruptedRuns } from "./runtime/recovery/interrupted-run-recovery";
@@ -327,6 +328,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
   registerAdminRoutes(app);
   registerEventLibraryRoutes(app);
   registerEventLibraryAdminRoutes(app);
+  registerGenerationConfigRoutes(app);
 
   return app;
 }

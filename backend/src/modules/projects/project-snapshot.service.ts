@@ -383,5 +383,24 @@ export async function getProjectSnapshot(
           };
         })()
       : null,
+    // S2-2A：生成配置快照（只读，从冻结的项目配置映射）
+    generation_configuration: (() => {
+      for (const config of db.projectGenerationConfigurations.values()) {
+        if (config.projectId === project.id) {
+          return {
+            configuration: config.configurationJson,
+            revision: config.revision,
+            source_user_preference_revision: config.sourceUserPreferenceRevision,
+          };
+        }
+      }
+      return null;
+    })(),
+    // S2-2A：只读成本摘要占位（无 usage 时为零）
+    cost_summary: {
+      total_estimated_cost_micros: "0",
+      total_actual_cost_micros: "0",
+      record_count: 0,
+    },
   };
 }
