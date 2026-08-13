@@ -179,4 +179,36 @@ describe("S2-2A generation configuration schema", () => {
       "@@unique([runConfigurationSnapshotId, providerRequestKey, attemptIndex])",
     );
   });
+
+  // --- S2-2A 任务 2 审查整改（20260813090000_s2_2a_review_fixes） ---
+
+  it("AssetProviderJobRecord has generationRunId / providerRequestKey for call-intent dedup", () => {
+    const m = modelBody(schema, "AssetProviderJobRecord");
+    expect(m).toMatch(/generationRunId\s+String\?/);
+    expect(m).toMatch(/providerRequestKey\s+String\?/);
+    expect(m).toMatch(/generationRun\s+GenerationRun\?/);
+    expect(m).toContain("@@index([generationRunId])");
+  });
+
+  it("GenerationRun has quote relation and ProviderModelCatalog has isDefault", () => {
+    const run = modelBody(schema, "GenerationRun");
+    expect(run).toMatch(/quote\s+GenerationCostQuote\?/);
+    const catalog = modelBody(schema, "ProviderModelCatalog");
+    expect(catalog).toMatch(/isDefault\s+Boolean/);
+  });
+
+  it("RunConfigurationSnapshot has quote relation", () => {
+    const m = modelBody(schema, "RunConfigurationSnapshot");
+    expect(m).toMatch(/quote\s+GenerationCostQuote\?/);
+  });
+
+  it("StoryboardSegmentOverride has storyboardRecord relation", () => {
+    const m = modelBody(schema, "StoryboardSegmentOverride");
+    expect(m).toMatch(/storyboardRecord\s+StoryboardRecord/);
+  });
+
+  it("UsageCostRecord has assetProviderJobRecord relation", () => {
+    const m = modelBody(schema, "UsageCostRecord");
+    expect(m).toMatch(/assetProviderJobRecord\s+AssetProviderJobRecord\?/);
+  });
 });

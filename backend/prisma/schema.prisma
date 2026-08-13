@@ -315,6 +315,7 @@ model StoryboardRecord {
   assetPlanRecords       AssetPlanRecord[]
   assetManifestRecords   AssetManifestRecord[]
   publishPackageRecords  PublishPackageRecord[]
+  segmentOverrides       StoryboardSegmentOverride[]
 
   @@index([projectId, createdAt])
   @@index([topicPackageId])
@@ -457,6 +458,11 @@ model AssetProviderJobRecord {
   providerJobId         String?
   status                String
   attemptCount          Int                 @default(0)
+  // S2-2A 外部 provider call-intent 防重合同（P1-1 整改）：
+  // 外部提交前写库，靠 (generationRunId, providerRequestKey, attemptCount)
+  // 唯一约束阻止并发 dispatcher 重复计费。旧行两者为 null（partial index 不约束）。
+  generationRunId       String?
+  providerRequestKey    String?
   rawRequestJson        Json?
   rawResponseJson       Json?
   errorCode             String?
@@ -467,10 +473,13 @@ model AssetProviderJobRecord {
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
   assetManifestRecord   AssetManifestRecord @relation(fields: [assetManifestRecordId], references: [id], onDelete: Restrict)
+  generationRun         GenerationRun?      @relation(fields: [generationRunId], references: [id], onDelete: SetNull)
+  usageCostRecords      UsageCostRecord[]
 
   @@unique([assetRunId, executionId, taskId, attemptCount])
   @@index([assetManifestRecordId, status])
   @@index([providerName, providerJobId])
+  @@index([generationRunId])
 }
 
 model RecommendationRound {
@@ -609,7 +618,8 @@ model StoryboardSegmentOverride {
   updatedByUserId      String?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
-  project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project              Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  storyboardRecord     StoryboardRecord   @relation(fields: [storyboardRecordId], references: [id], onDelete: Cascade)
 
   @@unique([storyboardRecordId, segmentId])
   @@index([projectId])
@@ -636,6 +646,8 @@ model GenerationCostQuote {
   createdAt                 DateTime  @default(now())
   updatedAt                 DateTime  @updatedAt
   project                   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  generationRuns            GenerationRun[]
+  snapshots                 RunConfigurationSnapshot[]
 
   @@index([projectId, operation])
 }
@@ -663,7 +675,8 @@ model RunConfigurationSnapshot {
   pricingVersionSetJson         Json
   createdAt                     DateTime @default(now())
   updatedAt                     DateTime @updatedAt
-  project                       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project                       Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  quote                         GenerationCostQuote? @relation(fields: [quoteId], references: [id], onDelete: SetNull)
   generationRuns                GenerationRun[]
   usageCostRecords              UsageCostRecord[]
 
@@ -689,7 +702,9 @@ model GenerationRun {
   updatedAt                     DateTime  @updatedAt
   project                       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   snapshot                      RunConfigurationSnapshot @relation(fields: [runConfigurationSnapshotId], references: [id], onDelete: Restrict)
+  quote                         GenerationCostQuote? @relation(fields: [quoteId], references: [id], onDelete: Restrict)
   events                        GenerationRunEvent[]
+  providerJobs                  AssetProviderJobRecord[]
 
   @@unique([projectId, operation, idempotencyKey])
   @@index([projectId, status])
@@ -731,6 +746,7 @@ model UsageCostRecord {
   createdAt                     DateTime @default(now())
   updatedAt                     DateTime @updatedAt
   snapshot                      RunConfigurationSnapshot @relation(fields: [runConfigurationSnapshotId], references: [id], onDelete: Cascade)
+  assetProviderJobRecord        AssetProviderJobRecord? @relation(fields: [assetProviderJobRecordId], references: [id], onDelete: SetNull)
 
   @@unique([runConfigurationSnapshotId, providerRequestKey, attemptIndex])
   @@index([runConfigurationSnapshotId])

@@ -51,10 +51,10 @@ describe("S2-2A generation configuration migration", () => {
     const db = new Database(":memory:");
     try {
       applyAllDatabaseMigrations(db);
-      // 合法 status
+      // 合法 status（isDefault=0，避免撞 active 默认项唯一约束）
       expect(() =>
         db.exec(
-          "INSERT INTO ProviderModelCatalog (id, capability, providerKey, modelId, status, isDefault, pricingVersion, pricingJson, parameterCapabilitiesJson, displayName, updatedAt) VALUES ('m1','llm.smart','dashscope','qwen-max','active',1,'v1','{}','{}','Q',CURRENT_TIMESTAMP)",
+          "INSERT INTO ProviderModelCatalog (id, capability, providerKey, modelId, status, isDefault, pricingVersion, pricingJson, parameterCapabilitiesJson, displayName, updatedAt) VALUES ('m1','llm.smart','dashscope','qwen-max','active',0,'v1','{}','{}','Q',CURRENT_TIMESTAMP)",
         ),
       ).not.toThrow();
       // 非法 status
@@ -199,6 +199,113 @@ describe("S2-2A generation configuration migration", () => {
         db.exec(
           "INSERT INTO ProjectGenerationConfiguration (id, projectId, schemaVersion, revision, configurationJson, createdAt, updatedAt) VALUES ('c2','p1','generation_configuration_v1',1,'{}',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)",
         ),
+      ).toThrow();
+    } finally {
+      db.close();
+    }
+  });
+});
+
+/**
+ * S2-2A 任务 2 审查整改（20260813090000_s2_2a_review_fixes）：
+ * 金额 CHECK、call-intent 防重、seed 对齐、catalog 默认项唯一。
+ */
+describe("S2-2A review fixes migration", () => {
+  function openMigrated() {
+    const db = new Database(":memory:");
+    applyAllDatabaseMigrations(db);
+    return db;
+  }
+
+  it("rejects non-decimal or negative micros in quote amounts", () => {
+    const db = openMigrated();
+    try {
+      db.exec("INSERT INTO User (id, username, displayName, passwordHash, updatedAt) VALUES ('u1','t','T','h',CURRENT_TIMESTAMP)");
+      db.exec("INSERT INTO Project (id, name, ownerId, createdById, storageKey, storageDisplayName, updatedAt) VALUES ('p1','P','u1','u1','p1','P',CURRENT_TIMESTAMP)");
+      const insert = (id: string, estimated: string, authorization: string) =>
+        db.exec(
+          `INSERT INTO GenerationCostQuote (id, projectId, operation, configurationHash, quoteFingerprint, pricingHash, pricingVersionSetJson, itemsJson, estimatedCostMicros, authorizationCostMicros, containsUnboundedItem, overBudget, expiresAt, createdAt, updatedAt) VALUES ('${id}','p1','a','h','f','p','[]','[]','${estimated}','${authorization}',0,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)`,
+        );
+      expect(() => insert("q1", "not-money", "0")).toThrow();
+      expect(() => insert("q2", "0", "-7")).toThrow();
+      expect(() => insert("q3", "1.5", "0")).toThrow();
+      expect(() => insert("q4", "01", "0")).toThrow();
+      expect(() => insert("q5", "100", "50")).not.toThrow();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("rejects duplicate provider call-intent (generationRunId, providerRequestKey, attemptCount)", () => {
+    const db = openMigrated();
+    try {
+      db.pragma("foreign_keys = OFF"); // 本用例只验证唯一索引，不依赖 FK 链
+      db.exec("INSERT INTO AssetProviderJobRecord (id, assetManifestRecordId, assetRunId, executionId, taskId, providerType, providerName, status, attemptCount, generationRunId, providerRequestKey, createdAt, updatedAt) VALUES ('j1','am1','r1','e1','t1','image','d','succeeded',0,'gr1','pk1',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
+      // 同 run + 同 key + 同 attempt → 拒绝
+      expect(() =>
+        db.exec("INSERT INTO AssetProviderJobRecord (id, assetManifestRecordId, assetRunId, executionId, taskId, providerType, providerName, status, attemptCount, generationRunId, providerRequestKey, createdAt, updatedAt) VALUES ('j2','am1','r1','e1','t1','image','d','succeeded',0,'gr1','pk1',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"),
+      ).toThrow();
+      // 同 key 不同 attempt → 允许
+      expect(() =>
+        db.exec("INSERT INTO AssetProviderJobRecord (id, assetManifestRecordId, assetRunId, executionId, taskId, providerType, providerName, status, attemptCount, generationRunId, providerRequestKey, createdAt, updatedAt) VALUES ('j3','am1','r1','e1','t1','image','d','succeeded',1,'gr1','pk1',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"),
+      ).not.toThrow();
+      // 旧行（无 generationRunId/providerRequestKey）不受约束
+      expect(() =>
+        db.exec("INSERT INTO AssetProviderJobRecord (id, assetManifestRecordId, assetRunId, executionId, taskId, providerType, providerName, status, attemptCount, createdAt, updatedAt) VALUES ('j4','am1','rB','e1','t1','image','d','succeeded',0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"),
+      ).not.toThrow();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("rejects a second active default catalog entry for one capability", () => {
+    const db = openMigrated();
+    try {
+      expect(() =>
+        db.exec("INSERT INTO ProviderModelCatalog (id, capability, providerKey, modelId, status, isDefault, pricingVersion, pricingJson, parameterCapabilitiesJson, displayName, updatedAt) VALUES ('llm.smart.extra','llm.smart','d','m','active',1,'v','{}','{}','X',CURRENT_TIMESTAMP)"),
+      ).toThrow();
+      // 非默认 active 项允许
+      expect(() =>
+        db.exec("INSERT INTO ProviderModelCatalog (id, capability, providerKey, modelId, status, isDefault, pricingVersion, pricingJson, parameterCapabilitiesJson, displayName, updatedAt) VALUES ('llm.smart.non-default','llm.smart','d','m','active',0,'v','{}','{}','Y',CURRENT_TIMESTAMP)"),
+      ).not.toThrow();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("seed aligns with real runtime defaults and provides pricing", () => {
+    const db = openMigrated();
+    try {
+      const rows = db
+        .prepare("SELECT capability, providerKey, modelId, isDefault, pricingJson FROM ProviderModelCatalog WHERE status='active'")
+        .all() as { capability: string; providerKey: string; modelId: string; isDefault: number; pricingJson: string }[];
+      const byCap = Object.fromEntries(rows.map((r) => [r.capability, r]));
+      // 媒体模型与 assets-run.service.ts 当前默认一致
+      expect(byCap["image.generate"]!.modelId).toBe("wan2.6-t2i");
+      expect(byCap["video.image_to_video"]!.modelId).toBe("wan2.7-i2v-2026-04-25");
+      expect(byCap["tts.synthesize"]!.modelId).toBe("qwen3-tts-instruct-flash");
+      // LLM 映射到 providers.json 真实注册 provider
+      expect(byCap["llm.smart"]!.providerKey).toBe("deepseek");
+      expect(byCap["llm.flash"]!.providerKey).toBe("zhipu");
+      // 每个 active 默认项都有非空 pricingJson
+      for (const row of rows) {
+        expect(row.isDefault).toBe(1);
+        const pricing = JSON.parse(row.pricingJson) as Record<string, string>;
+        expect(pricing.currency).toBe("CNY");
+        expect(Object.keys(pricing).length).toBeGreaterThan(1);
+      }
+    } finally {
+      db.close();
+    }
+  });
+
+  it("rejects orphan storyboard segment override (foreign key)", () => {
+    const db = openMigrated();
+    try {
+      db.exec("INSERT INTO User (id, username, displayName, passwordHash, updatedAt) VALUES ('u1','t','T','h',CURRENT_TIMESTAMP)");
+      db.exec("INSERT INTO Project (id, name, ownerId, createdById, storageKey, storageDisplayName, updatedAt) VALUES ('p1','P','u1','u1','p1','P',CURRENT_TIMESTAMP)");
+      expect(() =>
+        db.exec("INSERT INTO StoryboardSegmentOverride (id, projectId, storyboardRecordId, segmentId, revision, updatedAt) VALUES ('o1','p1','missing-storyboard','s1',1,CURRENT_TIMESTAMP)"),
       ).toThrow();
     } finally {
       db.close();

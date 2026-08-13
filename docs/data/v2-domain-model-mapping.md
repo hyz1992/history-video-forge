@@ -36,6 +36,15 @@
 | `recommendationRounds` | `RecommendationRound` + `RecommendationExposure` | 主表 + 子表 | 数组拆为轮次及曝光明细；按项目与轮次建立唯一约束 |
 | `mediaLibraryItems` | 版本化媒体 catalog | 文件资产 | 首版不建主表；保持现有 catalog，数据库仅在业务记录中保存相对引用 |
 | `voiceProfiles` | 版本化音色 catalog | 文件资产 | 首版不建主表；用户偏好只保存 profile id 引用，运行时仍由 catalog 解析 |
+| `userGenerationPreferences` | `UserGenerationPreference` | 主表 | S2-2A 新增；每用户一行，`userId` 唯一，revision 乐观并发，完整配置 JSON |
+| `projectGenerationConfigurations` | `ProjectGenerationConfiguration` | 主表 | S2-2A 新增；每项目一行，`projectId` 唯一，来源用户默认 revision 可空 |
+| `providerModelCatalog` | `ProviderModelCatalog` | 主表 | S2-2A 新增；服务端受控 seed，每 capability 恰好一个 active 默认项（partial unique index 强制），金额/价格 JSON |
+| `storyboardSegmentOverrides` | `StoryboardSegmentOverride` | 主表 | S2-2A 新增；`(storyboardRecordId, segmentId)` 唯一，`projectId` 仅 owner scope |
+| `generationCostQuotes` | `GenerationCostQuote` | 主表 | S2-2A 新增；一次性报价，创建时持久化 `quoteFingerprint`，金额列非负十进制微元 CHECK |
+| `runConfigurationSnapshots` | `RunConfigurationSnapshot` | 主表（append-only） | S2-2A 新增；不可变，repository 不提供 update，quote 绑定字段成套出现/缺失 |
+| `generationRuns` | `GenerationRun` | 主表 | S2-2A 新增；`(projectId, operation, idempotencyKey)` 唯一，run/snapshot/quote 同项目一致性由 writer 事务级强校验 |
+| `generationRunEvents` | `GenerationRunEvent` | 主表（append-only） | S2-2A 新增；无 `updatedAt`，只追加 |
+| `usageCostRecords` | `UsageCostRecord` | 主表 | S2-2A 新增；`(runConfigurationSnapshotId, providerRequestKey, attemptIndex)` 唯一防重复记账 |
 
 `voiceProfilePersistence` 不是 Map，也不是领域数据；它是运行时文件持久化配置，不进入数据库。后续若允许用户创建音色，再以独立设计升级 `VoiceProfile` 为主表，不能机械复制当前 Map。
 
