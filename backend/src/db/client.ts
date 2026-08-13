@@ -3,7 +3,9 @@ import { randomUUID } from "node:crypto";
 import type {
   AssetPlan,
   AssetPlanningValidationResult,
+  CapabilitySlot,
   ExportArtifact,
+  GenerationConfigurationV1,
   MediaLibraryItem,
   RenderJobStatus,
   RenderValidationResult,
@@ -251,6 +253,154 @@ export interface ProjectRecommendationRoundRecord {
   candidates: ProjectRecommendationRoundCandidateRecord[];
 }
 
+// --- S2-2A 生成配置与费用治理 record 接口 ---------------------------------
+// 金额字段统一为 string（十进制微元），与 shared decimalMicrosString 一致。
+
+export interface UserGenerationPreferenceRecord {
+  id: string;
+  userId: string;
+  schemaVersion: string;
+  revision: number;
+  configurationJson: GenerationConfigurationV1;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ProjectGenerationConfigurationRecord {
+  id: string;
+  projectId: string;
+  schemaVersion: string;
+  revision: number;
+  sourceUserPreferenceRevision: number | null;
+  configurationJson: GenerationConfigurationV1;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ProviderModelCatalogRecord {
+  id: string;
+  capability: CapabilitySlot;
+  providerKey: string;
+  modelId: string;
+  modelVersion: string | null;
+  displayName: string;
+  qualityTier: string | null;
+  speedTier: string | null;
+  parameterCapabilitiesJson: Record<string, unknown>;
+  pricingVersion: string;
+  pricingJson: Record<string, unknown>;
+  status: "active" | "disabled";
+  isDefault: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface StoryboardSegmentOverrideRecord {
+  id: string;
+  projectId: string;
+  storyboardRecordId: string;
+  segmentId: string;
+  strategyOverride: "api_video" | "remotion_motion" | null;
+  revision: number;
+  updatedByUserId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface GenerationCostQuoteRecord {
+  id: string;
+  projectId: string;
+  userId: string | null;
+  operation: string;
+  configurationHash: string;
+  quoteFingerprint: string;
+  pricingHash: string;
+  pricingVersionSetJson: string[];
+  itemsJson: unknown[];
+  estimatedCostMicros: string;
+  authorizationCostMicros: string;
+  containsUnboundedItem: boolean;
+  budgetLimitMicros: string | null;
+  overBudget: boolean;
+  expiresAt: Date;
+  consumedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface RunConfigurationSnapshotRecord {
+  id: string;
+  projectId: string;
+  userId: string | null;
+  stage: string;
+  operation: string;
+  runId: string | null;
+  projectConfigurationRevision: number;
+  schemaVersion: string;
+  configurationHash: string;
+  resolvedConfigurationJson: Record<string, unknown>;
+  resolutionTraceJson: unknown[];
+  quoteId: string | null;
+  quoteFingerprint: string | null;
+  estimatedCostMicros: string | null;
+  authorizationCostMicros: string | null;
+  budgetLimitMicros: string | null;
+  budgetOverrideAuthorized: boolean;
+  pricingHash: string | null;
+  pricingVersionSetJson: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface GenerationRunRecord {
+  id: string;
+  projectId: string;
+  userId: string | null;
+  operation: string;
+  idempotencyKey: string;
+  payloadFingerprint: string;
+  quoteId: string | null;
+  runConfigurationSnapshotId: string;
+  dispatchPayloadJson: Record<string, unknown>;
+  status: "pending_dispatch" | "running" | "succeeded" | "failed" | "needs_reconciliation";
+  dispatchLeaseOwner: string | null;
+  dispatchLeaseExpiresAt: Date | null;
+  dispatchClaimCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface GenerationRunEventRecord {
+  id: string;
+  generationRunId: string;
+  eventType: string;
+  segmentId: string | null;
+  eventJson: Record<string, unknown>;
+  createdAt: Date;
+}
+
+export interface UsageCostRecordRecord {
+  id: string;
+  runConfigurationSnapshotId: string;
+  assetProviderJobRecordId: string | null;
+  interactionId: string | null;
+  capability: string;
+  providerKey: string;
+  modelId: string;
+  providerRequestKey: string;
+  attemptIndex: number;
+  status: "planned" | "submitted" | "succeeded" | "failed" | "canceled";
+  unitType: "token" | "image" | "video_second" | "tts_character" | "request";
+  inputUnits: number | null;
+  outputUnits: number | null;
+  estimatedCostMicros: string;
+  actualCostMicros: string | null;
+  costBasis: "estimate" | "provider_usage" | "provider_invoice";
+  durationMs: number | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface DbClient {
   generateId: () => string;
   projects: Map<string, ProjectRecord>;
@@ -274,6 +424,16 @@ export interface DbClient {
     enabled: boolean;
     loaded: boolean;
   };
+  // S2-2A 内存态集合（legacy 测试态与 Prisma 双写过渡；不塞进项目快照 JSON）
+  userGenerationPreferences: Map<string, UserGenerationPreferenceRecord>;
+  projectGenerationConfigurations: Map<string, ProjectGenerationConfigurationRecord>;
+  providerModelCatalog: Map<string, ProviderModelCatalogRecord>;
+  storyboardSegmentOverrides: Map<string, StoryboardSegmentOverrideRecord>;
+  generationCostQuotes: Map<string, GenerationCostQuoteRecord>;
+  runConfigurationSnapshots: Map<string, RunConfigurationSnapshotRecord>;
+  generationRuns: Map<string, GenerationRunRecord>;
+  generationRunEvents: Map<string, GenerationRunEventRecord[]>;
+  usageCostRecords: Map<string, UsageCostRecordRecord>;
   firstAggregateWriter?: {
     ownerId: string;
     createProject(record: ProjectRecord): Promise<void>;
@@ -283,6 +443,13 @@ export interface DbClient {
     saveCandidate(record: CandidateCacheRecord): Promise<void>;
     recordRecommendationRound(record: ProjectRecommendationRoundRecord, projectOwnerId: string): Promise<void>;
     activateTopic(project: ProjectRecord, topic: TopicPackageRecord): Promise<void>;
+    saveUserGenerationPreference(record: UserGenerationPreferenceRecord): Promise<void>;
+    saveProjectGenerationConfiguration(record: ProjectGenerationConfigurationRecord): Promise<void>;
+    saveProviderModelCatalogEntry(record: ProviderModelCatalogRecord): Promise<void>;
+    createProjectWithGenerationConfiguration(
+      project: ProjectRecord,
+      configuration: ProjectGenerationConfigurationRecord,
+    ): Promise<void>;
   };
   secondAggregateWriter?: {
     saveScript(record: ScriptRecord): Promise<void>;
@@ -291,6 +458,7 @@ export interface DbClient {
     activateScript(project: ProjectRecord, record: ScriptRecord): Promise<void>;
     activateStoryboard(project: ProjectRecord, record: StoryboardRecord): Promise<void>;
     activateAssetPlan(project: ProjectRecord, record: AssetPlanRecord): Promise<void>;
+    saveStoryboardSegmentOverride(record: StoryboardSegmentOverrideRecord): Promise<void>;
   };
   thirdAggregateWriter?: {
     saveAssetManifest(record: AssetManifestRecord, projectOwnerId: string): Promise<void>;
@@ -302,6 +470,11 @@ export interface DbClient {
     activateCompose(project: ProjectRecord, record: ComposeRecord): Promise<void>;
     activateRender(project: ProjectRecord, record: RenderJobRecord): Promise<void>;
     activatePublish(project: ProjectRecord, record: PublishPackageRecord): Promise<void>;
+    saveGenerationCostQuote(record: GenerationCostQuoteRecord): Promise<void>;
+    appendRunConfigurationSnapshot(record: RunConfigurationSnapshotRecord): Promise<void>;
+    saveGenerationRun(record: GenerationRunRecord): Promise<void>;
+    appendGenerationRunEvent(record: GenerationRunEventRecord): Promise<void>;
+    saveUsageCostRecord(record: UsageCostRecordRecord): Promise<void>;
   };
 }
 
@@ -328,5 +501,14 @@ export function createDbClient(): DbClient {
       enabled: false,
       loaded: false,
     },
+    userGenerationPreferences: new Map<string, UserGenerationPreferenceRecord>(),
+    projectGenerationConfigurations: new Map<string, ProjectGenerationConfigurationRecord>(),
+    providerModelCatalog: new Map<string, ProviderModelCatalogRecord>(),
+    storyboardSegmentOverrides: new Map<string, StoryboardSegmentOverrideRecord>(),
+    generationCostQuotes: new Map<string, GenerationCostQuoteRecord>(),
+    runConfigurationSnapshots: new Map<string, RunConfigurationSnapshotRecord>(),
+    generationRuns: new Map<string, GenerationRunRecord>(),
+    generationRunEvents: new Map<string, GenerationRunEventRecord[]>(),
+    usageCostRecords: new Map<string, UsageCostRecordRecord>(),
   };
 }

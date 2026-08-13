@@ -3,7 +3,17 @@ import { join } from "node:path";
 
 import type { ProjectTopicCandidateState } from "../../app.js";
 import type { StoredTopicCandidate } from "../../modules/topic/topic-confirm.service.js";
-import type { CandidateCacheRecord, DbClient, EventRegistryRecord, ProjectRecord, ProjectRecommendationRoundRecord, TopicPackageRecord } from "../client.js";
+import type {
+  CandidateCacheRecord,
+  DbClient,
+  EventRegistryRecord,
+  ProjectGenerationConfigurationRecord,
+  ProjectRecord,
+  ProjectRecommendationRoundRecord,
+  ProviderModelCatalogRecord,
+  TopicPackageRecord,
+  UserGenerationPreferenceRecord,
+} from "../client.js";
 import type { AppPrismaClient } from "../prisma-client.types.js";
 import { parseRecommendationRoundFilterJson } from "./recommendation-round-filter.js";
 import { buildProjectStorageRelativeDir } from "../../runtime/trace/project-storage.js";
@@ -73,16 +83,20 @@ export async function hydrateFirstAggregates(
   client: AppPrismaClient,
   options: { storageRoot: string },
 ): Promise<void> {
-  const [projects, events, packages, caches, rounds] = await Promise.all([
+  const [projects, events, packages, caches, rounds, userPreferences, projectConfigurations, catalog] = await Promise.all([
     client.project.findMany({ where: { archivedAt: null } }), client.eventRegistryEntry.findMany(), client.topicPackage.findMany(),
     client.recommendationCandidateCache.findMany(),
     client.recommendationRound.findMany({ orderBy: [{ projectId: "asc" }, { roundIndex: "asc" }], include: { exposures: { orderBy: { selectedAt: "asc" } } } }),
+    client.userGenerationPreference.findMany(),
+    client.projectGenerationConfiguration.findMany(),
+    client.providerModelCatalog.findMany(),
   ]);
   const roundFilters = new Map(
     rounds.map((round) => [round.id, parseRecommendationRoundFilterJson(round.filterJson)]),
   );
   db.projects.clear(); db.events.clear(); db.topicPackages.clear(); db.candidateCache.clear();
   db.recommendationRounds.clear(); db.topicRunCounts.clear(); topicCandidateStore.clear();
+  db.userGenerationPreferences.clear(); db.projectGenerationConfigurations.clear(); db.providerModelCatalog.clear();
 
   for (const row of projects) {
     const record: ProjectRecord = {
@@ -170,5 +184,37 @@ export async function hydrateFirstAggregates(
     for (const candidate of candidates) state.candidatesById.set(candidate.candidateId, candidate);
     state.rounds.push({ roundId: row.id, roundIndex: row.roundIndex, createdAt: row.createdAt.toISOString(), candidates });
     topicCandidateStore.set(row.projectId, state);
+  }
+  // S2-2A：用户默认偏好、项目冻结配置与 provider/model 目录。
+  // 用户偏好与目录无项目范围，全量加载；项目配置按内存态 projects 过滤孤儿行。
+  for (const row of userPreferences) {
+    const record: UserGenerationPreferenceRecord = {
+      id: row.id, userId: row.userId, schemaVersion: row.schemaVersion, revision: row.revision,
+      configurationJson: object(row.configurationJson) as UserGenerationPreferenceRecord["configurationJson"],
+      createdAt: row.createdAt, updatedAt: row.updatedAt,
+    };
+    db.userGenerationPreferences.set(record.id, record);
+  }
+  for (const row of projectConfigurations) {
+    if (!db.projects.has(row.projectId)) continue;
+    const record: ProjectGenerationConfigurationRecord = {
+      id: row.id, projectId: row.projectId, schemaVersion: row.schemaVersion, revision: row.revision,
+      sourceUserPreferenceRevision: row.sourceUserPreferenceRevision,
+      configurationJson: object(row.configurationJson) as ProjectGenerationConfigurationRecord["configurationJson"],
+      createdAt: row.createdAt, updatedAt: row.updatedAt,
+    };
+    db.projectGenerationConfigurations.set(record.id, record);
+  }
+  for (const row of catalog) {
+    const record: ProviderModelCatalogRecord = {
+      id: row.id, capability: row.capability as ProviderModelCatalogRecord["capability"],
+      providerKey: row.providerKey, modelId: row.modelId, modelVersion: row.modelVersion,
+      displayName: row.displayName, qualityTier: row.qualityTier, speedTier: row.speedTier,
+      parameterCapabilitiesJson: object(row.parameterCapabilitiesJson),
+      pricingVersion: row.pricingVersion, pricingJson: object(row.pricingJson),
+      status: row.status as ProviderModelCatalogRecord["status"], isDefault: row.isDefault,
+      createdAt: row.createdAt, updatedAt: row.updatedAt,
+    };
+    db.providerModelCatalog.set(record.id, record);
   }
 }

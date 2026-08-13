@@ -24,6 +24,7 @@ model User {
   auditLogs          AuditLog[] @relation("AuditActor")
   eventLibraryEntries EventLibraryEntry[] @relation("EventLibraryEntryOwner")
   eventLibraryDrafts  EventLibraryDraft[]  @relation("EventLibraryDraftOwner")
+  generationPreference UserGenerationPreference?
 
   @@index([role, status])
 }
@@ -92,6 +93,11 @@ model Project {
   recommendationRounds         RecommendationRound[]
   auditLogs                    AuditLog[]
   eventLibraryDrafts           EventLibraryDraft[]
+  generationConfiguration      ProjectGenerationConfiguration?
+  storyboardSegmentOverrides   StoryboardSegmentOverride[]
+  generationCostQuotes         GenerationCostQuote[]
+  runConfigurationSnapshots    RunConfigurationSnapshot[]
+  generationRuns               GenerationRun[]
 
   @@index([ownerId, updatedAt])
   @@index([createdById, createdAt])
@@ -540,4 +546,192 @@ model DatabaseActivation {
   sourceSha256      String?
   activatedAt       DateTime @default(now())
   updatedAt         DateTime @updatedAt
+}
+
+// --- S2-2A 生成配置与费用治理（详细设计第 4 节） -------------------------
+
+/// 用户默认生成偏好（每个用户一行）。S2-2A 只允许修改 video/budget。
+model UserGenerationPreference {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  schemaVersion      String
+  revision           Int      @default(1)
+  configurationJson  Json
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// 项目冻结的生成配置（每个项目一行）。项目创建时从当时用户默认复制。
+model ProjectGenerationConfiguration {
+  id                            String   @id @default(uuid())
+  projectId                     String   @unique
+  schemaVersion                 String
+  revision                      Int      @default(1)
+  sourceUserPreferenceRevision  Int?
+  configurationJson             Json
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+  project                       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+/// 服务端受控 provider/model 目录。用户可见可选模型、启用状态和价格的运行真相源。
+/// 每个 capability 恰好一个 active+isDefault=true 项（resolver auto 解析硬合同）。
+model ProviderModelCatalog {
+  id                          String   @id
+  capability                  String
+  providerKey                 String
+  modelId                     String
+  modelVersion                String?
+  displayName                 String
+  qualityTier                 String?
+  speedTier                   String?
+  parameterCapabilitiesJson   Json
+  pricingVersion              String
+  pricingJson                 Json
+  status                      String   @default("disabled")
+  isDefault                   Boolean  @default(false)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  @@index([capability, status])
+}
+
+/// 分镜级视觉策略覆盖。唯一约束为 (storyboardRecordId, segmentId)；
+/// projectId 只用于 owner scope/index。
+model StoryboardSegmentOverride {
+  id                   String   @id @default(uuid())
+  projectId            String
+  storyboardRecordId   String
+  segmentId            String
+  strategyOverride     String?
+  revision             Int      @default(1)
+  updatedByUserId      String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  project              Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([storyboardRecordId, segmentId])
+  @@index([projectId])
+}
+
+/// 生成成本报价。quote 创建时计算并持久化 quoteFingerprint，提交时重算比对。
+model GenerationCostQuote {
+  id                        String    @id @default(uuid())
+  projectId                 String
+  userId                    String?
+  operation                 String
+  configurationHash         String
+  quoteFingerprint          String
+  pricingHash               String
+  pricingVersionSetJson     Json
+  itemsJson                 Json
+  estimatedCostMicros       String
+  authorizationCostMicros   String
+  containsUnboundedItem     Boolean   @default(false)
+  budgetLimitMicros         String?
+  overBudget                Boolean   @default(false)
+  expiresAt                 DateTime
+  consumedAt                DateTime?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+  project                   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, operation])
+}
+
+/// 不可变运行配置快照。repository 不提供 update；重新运行创建新快照。
+model RunConfigurationSnapshot {
+  id                            String   @id @default(uuid())
+  projectId                     String
+  userId                        String?
+  stage                         String
+  operation                     String
+  runId                         String?
+  projectConfigurationRevision  Int
+  schemaVersion                 String
+  configurationHash             String
+  resolvedConfigurationJson     Json
+  resolutionTraceJson           Json
+  quoteId                       String?
+  quoteFingerprint              String?
+  estimatedCostMicros           String?
+  authorizationCostMicros       String?
+  budgetLimitMicros             String?
+  budgetOverrideAuthorized      Boolean  @default(false)
+  pricingHash                   String?
+  pricingVersionSetJson         Json
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+  project                       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  generationRuns                GenerationRun[]
+  usageCostRecords              UsageCostRecord[]
+
+  @@index([projectId])
+}
+
+/// 生成运行记录。用户提交、quote 消费、snapshot 和可恢复执行之间的持久化桥梁。
+model GenerationRun {
+  id                            String    @id @default(uuid())
+  projectId                     String
+  userId                        String?
+  operation                     String
+  idempotencyKey                String
+  payloadFingerprint            String
+  quoteId                       String?   @unique
+  runConfigurationSnapshotId    String    @unique
+  dispatchPayloadJson           Json
+  status                        String
+  dispatchLeaseOwner            String?
+  dispatchLeaseExpiresAt        DateTime?
+  dispatchClaimCount            Int       @default(0)
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
+  project                       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  snapshot                      RunConfigurationSnapshot @relation(fields: [runConfigurationSnapshotId], references: [id], onDelete: Restrict)
+  events                        GenerationRunEvent[]
+
+  @@unique([projectId, operation, idempotencyKey])
+  @@index([projectId, status])
+}
+
+/// 运行事件（append-only）。自动降级、用户接受 fallback、实际路线变化写事件。
+model GenerationRunEvent {
+  id               String   @id @default(uuid())
+  generationRunId  String
+  eventType        String
+  segmentId        String?
+  eventJson        Json
+  createdAt        DateTime @default(now())
+  generationRun    GenerationRun @relation(fields: [generationRunId], references: [id], onDelete: Cascade)
+
+  @@index([generationRunId])
+}
+
+/// 统一计量与成本视图。不替代 interaction log 或 provider job。
+/// 唯一约束防止重复回放同一 provider attempt 产生重复费用。
+model UsageCostRecord {
+  id                            String   @id @default(uuid())
+  runConfigurationSnapshotId    String
+  assetProviderJobRecordId      String?
+  interactionId                 String?
+  capability                    String
+  providerKey                   String
+  modelId                       String
+  providerRequestKey            String
+  attemptIndex                  Int
+  status                        String
+  unitType                      String
+  inputUnits                    Int?
+  outputUnits                   Int?
+  estimatedCostMicros           String
+  actualCostMicros              String?
+  costBasis                     String
+  durationMs                    Int?
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+  snapshot                      RunConfigurationSnapshot @relation(fields: [runConfigurationSnapshotId], references: [id], onDelete: Cascade)
+
+  @@unique([runConfigurationSnapshotId, providerRequestKey, attemptIndex])
+  @@index([runConfigurationSnapshotId])
 }

@@ -1,4 +1,4 @@
-import type { AssetPlanRecord, DbClient, ScriptRecord, StoryboardRecord } from "../client.js";
+import type { AssetPlanRecord, DbClient, ScriptRecord, StoryboardRecord, StoryboardSegmentOverrideRecord } from "../client.js";
 import type { AppPrismaClient } from "../prisma-client.types.js";
 
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -7,12 +7,14 @@ const array = (value: unknown): unknown[] => Array.isArray(value) ? value : [];
 
 export async function hydrateSecondAggregates(db: DbClient, client: AppPrismaClient): Promise<void> {
   const projectIds = [...db.projects.keys()];
-  const [scripts, storyboards, assetPlans] = await Promise.all([
+  const [scripts, storyboards, assetPlans, segmentOverrides] = await Promise.all([
     client.scriptRecord.findMany({ where: { projectId: { in: projectIds } } }),
     client.storyboardRecord.findMany({ where: { projectId: { in: projectIds } } }),
     client.assetPlanRecord.findMany({ where: { projectId: { in: projectIds } } }),
+    client.storyboardSegmentOverride.findMany({ where: { projectId: { in: projectIds } } }),
   ]);
   db.scriptRecords.clear(); db.storyboardRecords.clear(); db.assetPlanRecords.clear();
+  db.storyboardSegmentOverrides.clear();
   for (const row of scripts) {
     const record: ScriptRecord = { ...row, beatTraceJson: array(row.beatTraceJson), quoteTraceJson: array(row.quoteTraceJson),
       validationResultJson: nullableObject(row.validationResultJson), semanticReviewResultJson: nullableObject(row.semanticReviewResultJson),
@@ -31,5 +33,15 @@ export async function hydrateSecondAggregates(db: DbClient, client: AppPrismaCli
       executionStateJson: object(row.executionStateJson), graphTraceSummaryJson: nullableObject(row.graphTraceSummaryJson),
       runtimeDiagnosticsJson: nullableObject(row.runtimeDiagnosticsJson) };
     db.assetPlanRecords.set(record.id, record);
+  }
+  // S2-2A：分镜级视觉策略覆盖。
+  for (const row of segmentOverrides) {
+    const record: StoryboardSegmentOverrideRecord = {
+      id: row.id, projectId: row.projectId, storyboardRecordId: row.storyboardRecordId, segmentId: row.segmentId,
+      strategyOverride: row.strategyOverride as StoryboardSegmentOverrideRecord["strategyOverride"],
+      revision: row.revision, updatedByUserId: row.updatedByUserId,
+      createdAt: row.createdAt, updatedAt: row.updatedAt,
+    };
+    db.storyboardSegmentOverrides.set(record.id, record);
   }
 }

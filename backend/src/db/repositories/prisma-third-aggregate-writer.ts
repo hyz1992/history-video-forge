@@ -2,9 +2,14 @@ import type {
   AssetManifestRecord,
   AssetProviderJobRecord,
   ComposeRecord,
+  GenerationCostQuoteRecord,
+  GenerationRunEventRecord,
+  GenerationRunRecord,
   ProjectRecord,
   PublishPackageRecord,
   RenderJobRecord,
+  RunConfigurationSnapshotRecord,
+  UsageCostRecordRecord,
 } from "../client.js";
 import type { AppPrismaClient } from "../prisma-client.types.js";
 
@@ -115,6 +120,104 @@ export class PrismaThirdAggregateWriter {
       if (scoped.activeRenderJobRecordId !== record.renderJobRecordId) throw new Error("publish_activation_stale_source");
       if (render?.assetManifestRecordId !== record.assetManifestRecordId || [render, topic, script, storyboard, manifest, stored].some((item) => item?.projectId !== project.id)) throw new Error("publish_activation_project_mismatch");
       await tx.project.update({ where: { id: project.id }, data: { status: project.status, activePublishPackageRecordId: record.id } });
+    });
+  }
+
+  // --- S2-2A 报价、运行快照、运行、事件、用量成本 ---
+
+  async saveGenerationCostQuote(record: GenerationCostQuoteRecord): Promise<void> {
+    const data = {
+      projectId: record.projectId,
+      userId: record.userId,
+      operation: record.operation,
+      configurationHash: record.configurationHash,
+      quoteFingerprint: record.quoteFingerprint,
+      pricingHash: record.pricingHash,
+      pricingVersionSetJson: record.pricingVersionSetJson as never,
+      itemsJson: record.itemsJson as never,
+      estimatedCostMicros: record.estimatedCostMicros,
+      authorizationCostMicros: record.authorizationCostMicros,
+      containsUnboundedItem: record.containsUnboundedItem,
+      budgetLimitMicros: record.budgetLimitMicros,
+      overBudget: record.overBudget,
+      expiresAt: record.expiresAt,
+      consumedAt: record.consumedAt,
+      updatedAt: record.updatedAt,
+    };
+    await this.client.generationCostQuote.upsert({
+      where: { id: record.id },
+      create: { id: record.id, ...data, createdAt: record.createdAt },
+      update: data,
+    });
+  }
+
+  /**
+   * 追加不可变运行快照。不提供 update 方法（详细设计 4.6 节）。
+   */
+  async appendRunConfigurationSnapshot(record: RunConfigurationSnapshotRecord): Promise<void> {
+    await this.client.runConfigurationSnapshot.create({ data: {
+      id: record.id, projectId: record.projectId, userId: record.userId,
+      stage: record.stage, operation: record.operation, runId: record.runId,
+      projectConfigurationRevision: record.projectConfigurationRevision, schemaVersion: record.schemaVersion,
+      configurationHash: record.configurationHash,
+      resolvedConfigurationJson: record.resolvedConfigurationJson as never,
+      resolutionTraceJson: record.resolutionTraceJson as never,
+      quoteId: record.quoteId, quoteFingerprint: record.quoteFingerprint,
+      estimatedCostMicros: record.estimatedCostMicros, authorizationCostMicros: record.authorizationCostMicros,
+      budgetLimitMicros: record.budgetLimitMicros, budgetOverrideAuthorized: record.budgetOverrideAuthorized,
+      pricingHash: record.pricingHash, pricingVersionSetJson: record.pricingVersionSetJson as never,
+      createdAt: record.createdAt, updatedAt: record.updatedAt,
+    } });
+  }
+
+  async saveGenerationRun(record: GenerationRunRecord): Promise<void> {
+    const data = {
+      projectId: record.projectId, userId: record.userId, operation: record.operation,
+      idempotencyKey: record.idempotencyKey, payloadFingerprint: record.payloadFingerprint,
+      quoteId: record.quoteId, runConfigurationSnapshotId: record.runConfigurationSnapshotId,
+      dispatchPayloadJson: record.dispatchPayloadJson as never,
+      status: record.status,
+      dispatchLeaseOwner: record.dispatchLeaseOwner, dispatchLeaseExpiresAt: record.dispatchLeaseExpiresAt,
+      dispatchClaimCount: record.dispatchClaimCount, updatedAt: record.updatedAt,
+    };
+    await this.client.generationRun.upsert({
+      where: { id: record.id },
+      create: { id: record.id, ...data, createdAt: record.createdAt },
+      update: data,
+    });
+  }
+
+  /**
+   * 追加运行事件（append-only）。不提供 update。
+   */
+  async appendGenerationRunEvent(record: GenerationRunEventRecord): Promise<void> {
+    await this.client.generationRunEvent.create({ data: {
+      id: record.id, generationRunId: record.generationRunId, eventType: record.eventType,
+      segmentId: record.segmentId, eventJson: record.eventJson as never, createdAt: record.createdAt,
+    } });
+  }
+
+  async saveUsageCostRecord(record: UsageCostRecordRecord): Promise<void> {
+    const data = {
+      runConfigurationSnapshotId: record.runConfigurationSnapshotId,
+      assetProviderJobRecordId: record.assetProviderJobRecordId, interactionId: record.interactionId,
+      capability: record.capability, providerKey: record.providerKey, modelId: record.modelId,
+      providerRequestKey: record.providerRequestKey, attemptIndex: record.attemptIndex,
+      status: record.status, unitType: record.unitType,
+      inputUnits: record.inputUnits, outputUnits: record.outputUnits,
+      estimatedCostMicros: record.estimatedCostMicros, actualCostMicros: record.actualCostMicros,
+      costBasis: record.costBasis, durationMs: record.durationMs, updatedAt: record.updatedAt,
+    };
+    await this.client.usageCostRecord.upsert({
+      where: {
+        runConfigurationSnapshotId_providerRequestKey_attemptIndex: {
+          runConfigurationSnapshotId: record.runConfigurationSnapshotId,
+          providerRequestKey: record.providerRequestKey,
+          attemptIndex: record.attemptIndex,
+        },
+      },
+      create: { id: record.id, ...data, createdAt: record.createdAt },
+      update: data,
     });
   }
 }

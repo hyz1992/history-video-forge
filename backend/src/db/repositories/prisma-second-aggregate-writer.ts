@@ -1,4 +1,4 @@
-import type { AssetPlanRecord, ProjectRecord, ScriptRecord, StoryboardRecord } from "../client.js";
+import type { AssetPlanRecord, ProjectRecord, ScriptRecord, StoryboardRecord, StoryboardSegmentOverrideRecord } from "../client.js";
 import type { AppPrismaClient } from "../prisma-client.types.js";
 
 const scriptData = (record: ScriptRecord) => ({
@@ -94,6 +94,29 @@ export class PrismaSecondAggregateWriter {
         latestAssetPlanRunTraceJson: project.latestAssetPlanRunTraceJson as never, latestAssetsRunTraceJson: project.latestAssetsRunTraceJson as never,
         latestComposeRunTraceJson: project.latestComposeRunTraceJson as never, latestRenderRunTraceJson: project.latestRenderRunTraceJson as never,
       } });
+    });
+  }
+
+  // --- S2-2A 分镜级视觉策略覆盖 ---
+
+  /**
+   * 保存分镜覆盖。唯一约束为 (storyboardRecordId, segmentId)；
+   * projectId 只用于 owner scope/index，不另造第二套唯一语义。
+   */
+  async saveStoryboardSegmentOverride(record: StoryboardSegmentOverrideRecord): Promise<void> {
+    const data = {
+      projectId: record.projectId,
+      storyboardRecordId: record.storyboardRecordId,
+      segmentId: record.segmentId,
+      strategyOverride: record.strategyOverride,
+      revision: record.revision,
+      updatedByUserId: record.updatedByUserId,
+      updatedAt: record.updatedAt,
+    };
+    await this.client.storyboardSegmentOverride.upsert({
+      where: { storyboardRecordId_segmentId: { storyboardRecordId: record.storyboardRecordId, segmentId: record.segmentId } },
+      create: { id: record.id, ...data, createdAt: record.createdAt },
+      update: data,
     });
   }
 }

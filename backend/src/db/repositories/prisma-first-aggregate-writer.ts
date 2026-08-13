@@ -1,4 +1,13 @@
-import type { CandidateCacheRecord, EventRegistryRecord, ProjectRecord, ProjectRecommendationRoundRecord, TopicPackageRecord } from "../client.js";
+import type {
+  CandidateCacheRecord,
+  EventRegistryRecord,
+  ProjectGenerationConfigurationRecord,
+  ProjectRecord,
+  ProjectRecommendationRoundRecord,
+  ProviderModelCatalogRecord,
+  TopicPackageRecord,
+  UserGenerationPreferenceRecord,
+} from "../client.js";
 import type { AppPrismaClient } from "../prisma-client.types.js";
 import { PrismaRecommendationStore } from "./prisma-recommendation-store.js";
 
@@ -79,6 +88,88 @@ export class PrismaFirstAggregateWriter {
       await transaction.project.update({ where: { id: project.id }, data: {
         name: project.name, status: project.status, storageDisplayName: project.storageDisplayName,
         storageRenameLocked: project.storageRenameLocked, activeTopicPackageId: topic.id, activeScriptRecordId: null,
+      } });
+    });
+  }
+
+  // --- S2-2A 生成配置与费用治理 ---
+
+  async saveUserGenerationPreference(record: UserGenerationPreferenceRecord): Promise<void> {
+    const data = {
+      userId: record.userId,
+      schemaVersion: record.schemaVersion,
+      revision: record.revision,
+      configurationJson: record.configurationJson as never,
+    };
+    await this.client.userGenerationPreference.upsert({
+      where: { userId: record.userId },
+      create: { id: record.id, ...data, createdAt: record.createdAt, updatedAt: record.updatedAt },
+      update: { ...data, updatedAt: record.updatedAt },
+    });
+  }
+
+  async saveProjectGenerationConfiguration(record: ProjectGenerationConfigurationRecord): Promise<void> {
+    const data = {
+      projectId: record.projectId,
+      schemaVersion: record.schemaVersion,
+      revision: record.revision,
+      sourceUserPreferenceRevision: record.sourceUserPreferenceRevision,
+      configurationJson: record.configurationJson as never,
+    };
+    await this.client.projectGenerationConfiguration.upsert({
+      where: { projectId: record.projectId },
+      create: { id: record.id, ...data, createdAt: record.createdAt, updatedAt: record.updatedAt },
+      update: { ...data, updatedAt: record.updatedAt },
+    });
+  }
+
+  async saveProviderModelCatalogEntry(record: ProviderModelCatalogRecord): Promise<void> {
+    const data = {
+      capability: record.capability,
+      providerKey: record.providerKey,
+      modelId: record.modelId,
+      modelVersion: record.modelVersion,
+      displayName: record.displayName,
+      qualityTier: record.qualityTier,
+      speedTier: record.speedTier,
+      parameterCapabilitiesJson: record.parameterCapabilitiesJson as never,
+      pricingVersion: record.pricingVersion,
+      pricingJson: record.pricingJson as never,
+      status: record.status,
+      isDefault: record.isDefault,
+      updatedAt: record.updatedAt,
+    };
+    await this.client.providerModelCatalog.upsert({
+      where: { id: record.id },
+      create: { id: record.id, ...data, createdAt: record.createdAt },
+      update: data,
+    });
+  }
+
+  /**
+   * 在同一事务创建 Project 与冻结的 ProjectGenerationConfiguration。
+   * 任一写入失败都不留下半成品 Project（详细设计 4.2 节）。
+   * 不允许先调用 createProject 提交后再补配置。
+   */
+  async createProjectWithGenerationConfiguration(
+    project: ProjectRecord,
+    configuration: ProjectGenerationConfigurationRecord,
+  ): Promise<void> {
+    await this.client.$transaction(async (transaction) => {
+      const scoped = await transaction.project.findFirst({
+        where: { id: project.id, ownerId: project.ownerId },
+        select: { id: true },
+      });
+      if (scoped) throw new Error("project_already_exists");
+      await transaction.project.create({ data: {
+        id: project.id, ownerId: project.ownerId, createdById: project.createdById, name: project.name, status: project.status,
+        storageKey: project.id, storageDisplayName: project.storageDisplayName, storageRenameLocked: project.storageRenameLocked,
+      } });
+      await transaction.projectGenerationConfiguration.create({ data: {
+        id: configuration.id, projectId: configuration.projectId, schemaVersion: configuration.schemaVersion,
+        revision: configuration.revision, sourceUserPreferenceRevision: configuration.sourceUserPreferenceRevision,
+        configurationJson: configuration.configurationJson as never,
+        createdAt: configuration.createdAt, updatedAt: configuration.updatedAt,
       } });
     });
   }
