@@ -422,4 +422,103 @@ describe("S2-2A review fixes in-place upgrade", () => {
       db.close();
     }
   });
+
+  it("aborts upgrade when previous version has cross-project override-storyboard relation", () => {
+    const { readdirSync } = require("node:fs") as typeof import("node:fs");
+    const migrationsRoot = join(process.cwd(), "backend/prisma/migrations");
+    const migrationFiles = readdirSync(migrationsRoot, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((e) => ({ name: e.name, sql: readFileSync(join(migrationsRoot, e.name, "migration.sql"), "utf8") }));
+    const previous = migrationFiles.filter((m) => m.name.startsWith("20260812090000") || m.name.localeCompare("20260812090000") < 0);
+    const upgrade = migrationFiles.filter((m) => m.name.startsWith("20260813090000"));
+
+    const db = new Database(":memory:");
+    try {
+      db.pragma("foreign_keys = ON");
+      for (const m of previous) db.exec(m.sql);
+      db.exec("INSERT INTO User (id, username, displayName, passwordHash, updatedAt) VALUES ('u1','t','T','h',CURRENT_TIMESTAMP)");
+      db.exec("INSERT INTO Project (id, name, ownerId, createdById, storageKey, storageDisplayName, updatedAt) VALUES ('p1','P','u1','u1','p1','P',CURRENT_TIMESTAMP)");
+      db.exec("INSERT INTO Project (id, name, ownerId, createdById, storageKey, storageDisplayName, updatedAt) VALUES ('p2','P2','u1','u1','p2','P2',CURRENT_TIMESTAMP)");
+      // p2 的 storyboard chain
+      db.exec("INSERT INTO TopicPackage (id, projectId, title, selectedAngle, familyLabel, scopeLabel, coreConflict, strongScene, stakes, packagingSeed, canonicalQuotesJson, canonicalQuoteIntentsJson, durationBandJson, narrativeTensionMapJson, mustIncludeBeatsJson, forbiddenExpansionsJson, riskHintsJson, sourceAnchorRefsJson, ambiguityNotesJson, createdAt) VALUES ('tp1','p2','T','A','F','S','C','SC','ST','PS','[]','[]','{}','{}','[]','[]','[]','[]','[]',CURRENT_TIMESTAMP)");
+      db.exec("INSERT INTO ScriptRecord (id, projectId, topicPackageId, scriptText, openingSpan, endingSpan, estimatedDurationSec, beatTraceJson, quoteTraceJson, reviewStatus, createdAt) VALUES ('sr1','p2','tp1','T','O','E',10,'[]','[]','draft',CURRENT_TIMESTAMP)");
+      db.exec("INSERT INTO StoryboardRecord (id, projectId, topicPackageId, scriptRecordId, planJson, validationResultJson, createdAt) VALUES ('sb1','p2','tp1','sr1','{}','{}',CURRENT_TIMESTAMP)");
+      // p1 的 override 引用 p2 的 storyboard（跨项目）
+      db.exec("INSERT INTO StoryboardSegmentOverride (id, projectId, storyboardRecordId, segmentId, revision, updatedAt) VALUES ('o1','p1','sb1','s1',1,CURRENT_TIMESTAMP)");
+
+      expect(() => db.exec(upgrade[0]!.sql)).toThrow("migration_aborted");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("aborts upgrade when previous version has usage cost referencing orphan provider job", () => {
+    const { readdirSync } = require("node:fs") as typeof import("node:fs");
+    const migrationsRoot = join(process.cwd(), "backend/prisma/migrations");
+    const migrationFiles = readdirSync(migrationsRoot, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((e) => ({ name: e.name, sql: readFileSync(join(migrationsRoot, e.name, "migration.sql"), "utf8") }));
+    const previous = migrationFiles.filter((m) => m.name.startsWith("20260812090000") || m.name.localeCompare("20260812090000") < 0);
+    const upgrade = migrationFiles.filter((m) => m.name.startsWith("20260813090000"));
+
+    const db = new Database(":memory:");
+    try {
+      db.pragma("foreign_keys = ON");
+      for (const m of previous) db.exec(m.sql);
+      db.exec("INSERT INTO User (id, username, displayName, passwordHash, updatedAt) VALUES ('u1','t','T','h',CURRENT_TIMESTAMP)");
+      db.exec("INSERT INTO Project (id, name, ownerId, createdById, storageKey, storageDisplayName, updatedAt) VALUES ('p1','P','u1','u1','p1','P',CURRENT_TIMESTAMP)");
+      db.exec("INSERT INTO GenerationCostQuote (id, projectId, operation, configurationHash, quoteFingerprint, pricingHash, pricingVersionSetJson, itemsJson, estimatedCostMicros, authorizationCostMicros, containsUnboundedItem, overBudget, expiresAt, createdAt, updatedAt) VALUES ('q1','p1','a','h','f','p','[]','[]','0','0',0,0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
+      db.exec("INSERT INTO RunConfigurationSnapshot (id, projectId, stage, operation, projectConfigurationRevision, schemaVersion, configurationHash, resolvedConfigurationJson, resolutionTraceJson, pricingVersionSetJson, budgetOverrideAuthorized, createdAt, updatedAt) VALUES ('snap1','p1','assets','a',1,'v','h','{}','[]','[]',0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
+      // usage 引用不存在的 provider job
+      db.exec("INSERT INTO UsageCostRecord (id, runConfigurationSnapshotId, assetProviderJobRecordId, capability, providerKey, modelId, providerRequestKey, attemptIndex, status, unitType, estimatedCostMicros, costBasis, createdAt, updatedAt) VALUES ('u1','snap1','missing-job','llm.smart','d','m','prk',0,'planned','token','0','estimate',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)");
+
+      expect(() => db.exec(upgrade[0]!.sql)).toThrow("migration_aborted");
+    } finally {
+      db.close();
+    }
+  });
+});
+
+describe("S2-2A call-intent triple consistency", () => {
+  it("rejects partial call-intent triple (two non-null, one null)", () => {
+    const db = new Database(":memory:");
+    try {
+      applyAllDatabaseMigrations(db);
+      db.pragma("foreign_keys = OFF");
+      // generationRunId + providerRequestKey 非空，attemptIndex NULL → 违反三元组一致性
+      expect(() =>
+        db.exec("INSERT INTO AssetProviderJobRecord (id, assetManifestRecordId, assetRunId, executionId, taskId, providerType, providerName, status, attemptCount, generationRunId, providerRequestKey, createdAt, updatedAt) VALUES ('j1','am1','r1','e1','t1','image','d','prepared',1,'gr1','pk1',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"),
+      ).toThrow();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("rejects negative attemptIndex", () => {
+    const db = new Database(":memory:");
+    try {
+      applyAllDatabaseMigrations(db);
+      db.pragma("foreign_keys = OFF");
+      expect(() =>
+        db.exec("INSERT INTO AssetProviderJobRecord (id, assetManifestRecordId, assetRunId, executionId, taskId, providerType, providerName, status, attemptCount, attemptIndex, generationRunId, providerRequestKey, createdAt, updatedAt) VALUES ('j1','am1','r1','e1','t1','image','d','prepared',1,-1,'gr1','pk1',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"),
+      ).toThrow();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("accepts all-null call-intent triple (legacy row without intent)", () => {
+    const db = new Database(":memory:");
+    try {
+      applyAllDatabaseMigrations(db);
+      db.pragma("foreign_keys = OFF");
+      expect(() =>
+        db.exec("INSERT INTO AssetProviderJobRecord (id, assetManifestRecordId, assetRunId, executionId, taskId, providerType, providerName, status, attemptCount, createdAt, updatedAt) VALUES ('j1','am1','r1','e1','t1','image','d','prepared',0,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)"),
+      ).not.toThrow();
+    } finally {
+      db.close();
+    }
+  });
 });

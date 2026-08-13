@@ -476,7 +476,7 @@ model AssetProviderJobRecord {
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
   assetManifestRecord   AssetManifestRecord @relation(fields: [assetManifestRecordId], references: [id], onDelete: Restrict)
-  generationRun         GenerationRun?      @relation(fields: [generationRunId], references: [id], onDelete: SetNull)
+  generationRun         GenerationRun?      @relation(fields: [generationRunId], references: [id], onDelete: Restrict)
   usageCostRecords      UsageCostRecord[]
 
   @@unique([assetRunId, executionId, taskId, attemptCount])

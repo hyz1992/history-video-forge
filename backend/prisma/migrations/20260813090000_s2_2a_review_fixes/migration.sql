@@ -54,7 +54,33 @@ BEGIN
     SELECT RAISE(ABORT, 'migration_aborted: run 关联了跨项目的 quote，请先修复旧数据');
 END;
 
--- 触发预检（三个 WHEN 条件任一违规即中止迁移）。
+-- storyboard override → storyboard 同项目（本迁移新增 storyboardRecordId 外键 + 同项目语义）
+CREATE TEMP TRIGGER "_trg_check_override_storyboard"
+BEFORE INSERT ON "_migration_check"
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM "StoryboardSegmentOverride" o
+    JOIN "StoryboardRecord" s ON s."id" = o."storyboardRecordId"
+    WHERE s."projectId" != o."projectId"
+)
+BEGIN
+    SELECT RAISE(ABORT, 'migration_aborted: storyboard override 关联了跨项目的 storyboard，请先修复旧数据');
+END;
+
+-- usage cost → asset provider job orphan（本迁移新增 assetProviderJobRecordId 外键）
+CREATE TEMP TRIGGER "_trg_check_usage_provider_job"
+BEFORE INSERT ON "_migration_check"
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM "UsageCostRecord" u
+    WHERE u."assetProviderJobRecordId" IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM "AssetProviderJobRecord" j WHERE j."id" = u."assetProviderJobRecordId")
+)
+BEGIN
+    SELECT RAISE(ABORT, 'migration_aborted: usage cost 引用了不存在的 provider job，请先修复旧数据');
+END;
+
+-- 触发预检（任一 WHEN 条件违规即中止迁移）。
 INSERT INTO "_migration_check" VALUES (1);
 
 -- 清理临时表与触发器（迁移完成后不影响数据库）。
@@ -182,9 +208,16 @@ CREATE TABLE "AssetProviderJobRecord_new" (
     "completedAt" DATETIME,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" DATETIME NOT NULL,
+    -- call-intent 三元组一致性（P1-2）：三者必须全空或全非空；
+    -- 非空时 attemptIndex >= 0。防止残缺三元组绕过 partial unique index。
+    CONSTRAINT "AssetProviderJobRecord_call_intent_consistency" CHECK (
+      ("generationRunId" IS NULL AND "providerRequestKey" IS NULL AND "attemptIndex" IS NULL)
+      OR ("generationRunId" IS NOT NULL AND "providerRequestKey" IS NOT NULL AND "attemptIndex" IS NOT NULL AND "attemptIndex" >= 0)
+    ),
     CONSTRAINT "AssetProviderJobRecord_assetRunId_executionId_taskId_attemptCount_key" UNIQUE ("assetRunId", "executionId", "taskId", "attemptCount"),
     CONSTRAINT "AssetProviderJobRecord_assetManifestRecordId_fkey" FOREIGN KEY ("assetManifestRecordId") REFERENCES "AssetManifestRecord" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
-    CONSTRAINT "AssetProviderJobRecord_generationRunId_fkey" FOREIGN KEY ("generationRunId") REFERENCES "GenerationRun" ("id") ON DELETE SET NULL ON UPDATE CASCADE
+    -- P2：ON DELETE RESTRICT（审计历史不可丢失；SET NULL 会与身份不可变触发器冲突）。
+    CONSTRAINT "AssetProviderJobRecord_generationRunId_fkey" FOREIGN KEY ("generationRunId") REFERENCES "GenerationRun" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 -- 复制旧数据（attemptIndex/generationRunId/providerRequestKey 旧版本无值 → NULL）
 INSERT INTO "AssetProviderJobRecord_new" ("id", "assetManifestRecordId", "assetRunId", "executionId", "taskId", "providerType", "providerName", "providerJobId", "status", "attemptCount", "rawRequestJson", "rawResponseJson", "errorCode", "errorMessage", "submittedAt", "lastPolledAt", "completedAt", "createdAt", "updatedAt")
