@@ -8,9 +8,9 @@
 
 ## 当前状态
 
-截至 2026-08-12：
+截至 2026-08-13：
 
-- `S2-2` 已完成用户需求澄清与总体方案批准，当前设计入口为 [S2-2 总体设计](./2026-08-12-s2-2-generation-configuration-overall-design.md)，第一棒详细设计入口为 [S2-2A 配置与成本基础详细设计](./2026-08-12-s2-2a-configuration-cost-foundation-design.md)。
+- `S2-2` 已完成用户需求澄清与总体方案批准，当前设计入口为 [S2-2 总体设计](./2026-08-12-s2-2-generation-configuration-overall-design.md)，第一棒入口为 [S2-2A 配置与成本基础详细设计](./2026-08-12-s2-2a-configuration-cost-foundation-design.md)和[实施计划](./2026-08-12-s2-2a-configuration-cost-foundation-implementation-plan.md)。
 - 2026-08-11 已完成 `docs/plans/` 根目录历史计划归档；根目录现在只保留本 README 与当前已获批准、准备执行的 S2-2 文档。
 - 本轮计划状态治理的[设计](./archive/2026-08-11-plan-state-governance-closeout-design.md)与[实施计划](./archive/2026-08-11-plan-state-governance-closeout-implementation-plan.md)也已归入历史证据区。
 
