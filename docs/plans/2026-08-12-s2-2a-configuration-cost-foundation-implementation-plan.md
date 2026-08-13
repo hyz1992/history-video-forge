@@ -244,7 +244,7 @@ git commit -m "新增生成配置与费用治理数据模型"
 - 新建：`tests/backend/api/generation-config-api.test.ts`
 - 修改：`tests/frontend/project-store.spec.ts`
 
-- [ ] **步骤 1：先写 repository/API 失败测试**
+- [x] **步骤 1：先写 repository/API 失败测试**
 
 覆盖：
 
@@ -266,7 +266,7 @@ npx vitest run --configLoader runner tests/backend/config/generation-config-repo
 
 预期：失败，提示路由/服务不存在。
 
-- [ ] **步骤 2：实现 repository 与服务**
+- [x] **步骤 2：实现 repository 与服务**
 
 服务必须：
 
@@ -278,7 +278,7 @@ npx vitest run --configLoader runner tests/backend/config/generation-config-repo
 
 为此给 first aggregate 增加专用 `createProjectWithGenerationConfiguration(...)` 事务方法，不允许先调用现有 `createProject` 提交后再补配置。测试必须注入第二次写入失败，并断言 Project 与配置均不存在。
 
-- [ ] **步骤 3：注册路由并扩展项目快照**
+- [x] **步骤 3：注册路由并扩展项目快照**
 
 项目快照增加：
 
@@ -287,14 +287,14 @@ npx vitest run --configLoader runner tests/backend/config/generation-config-repo
 - `configuration_invalidation_preview`；
 - 只读成本摘要占位（没有 usage 时为零）。
 
-- [ ] **步骤 4：运行最小回归**
+- [x] **步骤 4：运行最小回归**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/config/generation-config-repository.test.ts tests/backend/api/generation-config-api.test.ts tests/backend/api/project-snapshot-api.test.ts tests/frontend/project-store.spec.ts
 npx tsc -p backend/tsconfig.json --noEmit
 ```
 
-- [ ] **步骤 5：自审并提交**
+- [x] **步骤 5：自审并提交**
 
 ```powershell
 git add backend/src/modules/generation-config backend/src/modules/projects backend/src/app.ts tests/backend/config tests/backend/api/generation-config-api.test.ts tests/frontend/project-store.spec.ts
