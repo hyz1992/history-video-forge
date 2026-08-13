@@ -38,6 +38,24 @@ export {
   StoryboardPlan,
   StoryboardSegment,
 } from "./storyboard/storyboard-plan.schema";
+export {
+  ApiVideoQuality,
+  ApiVideoSuitability,
+  AppliedConstraint,
+  BudgetConfiguration,
+  CAPABILITY_SLOTS,
+  CapabilitySelectionMap,
+  CapabilitySlot,
+  CreativePreferences,
+  DEFAULT_GENERATION_CONFIGURATION,
+  GenerationConfigurationV1,
+  ModelSelection,
+  ResolutionTraceEntry,
+  ResolvedVisualRoute,
+  RunConfigurationSnapshotV1,
+  SegmentVisualStrategyOverride,
+  VideoGenerationStrategy,
+} from "./generation/generation-configuration.schema";
 export { StoryboardValidationResult } from "./storyboard/storyboard-validation.schema";
 export {
   AssetPlan,
