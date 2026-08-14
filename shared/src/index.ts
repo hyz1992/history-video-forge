@@ -45,6 +45,7 @@ export {
   ApiVideoQuality,
   ApiVideoSuitability,
   AppliedConstraint,
+  assertS22AScopeConstraints,
   BudgetConfiguration,
   CAPABILITY_SLOTS,
   CapabilitySelectionMap,
@@ -62,6 +63,8 @@ export {
   ResolvedProviderModelSchema,
   ResolvedSegmentVisualRouteSchema,
   ResolvedVisualRoute,
+  S2_2A_ConfigPatchRequest,
+  S2_2A_PATCH_ALLOWED_FIELDS,
   RunConfigurationSnapshotV1,
   SegmentVisualStrategyOverride,
   VideoGenerationStrategy,
@@ -72,6 +75,7 @@ export type {
   ResolvedGenerationConfigurationV1,
   ResolvedProviderModel,
   ResolvedSegmentVisualRoute,
+  S2_2A_ConfigPatchRequest as S2_2A_ConfigPatchRequestType,
 } from "./generation/generation-configuration.schema";
 // generation-configuration-resolver：运行时函数 + 纯类型（接口/type alias）
 export {

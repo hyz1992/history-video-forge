@@ -177,6 +177,71 @@ export const DEFAULT_GENERATION_CONFIGURATION: GenerationConfigurationV1 = {
   },
 };
 
+/**
+ * S2-2A 专用 PATCH schema（详细设计 3.1 节 + 实施计划任务 3）。
+ * A 阶段只允许修改 video 和 budget；creative 三项必须保持 null，
+ * 五个 capability 必须保持 {mode:"auto"}。
+ * 完整 GenerationConfigurationV1 仍用于持久化和快照（B/C 可扩展），
+ * 但 A 阶段 API 入口用此 strict schema 拒绝越权字段。
+ */
+export const S2_2A_PATCH_ALLOWED_FIELDS = z
+  .object({
+    video: z.object({
+      strategy: VideoGenerationStrategy,
+      api_quality: ApiVideoQuality,
+    }),
+    budget: BudgetConfiguration,
+    // 强制 creative 全 null（A 阶段不接受 B/C 字段）
+    creative: z.object({
+      voice_profile_id: z.null(),
+      art_style_preset_id: z.null(),
+      subtitle_style_preset_id: z.null(),
+    }),
+    // 强制 capabilities 全 auto（A 阶段不接受 fixed）
+    capabilities: z.object({
+      "llm.smart": z.object({ mode: z.literal("auto") }),
+      "llm.flash": z.object({ mode: z.literal("auto") }),
+      "image.generate": z.object({ mode: z.literal("auto") }),
+      "video.image_to_video": z.object({ mode: z.literal("auto") }),
+      "tts.synthesize": z.object({ mode: z.literal("auto") }),
+    }),
+  })
+  .strict();
+
+/**
+ * S2-2A PATCH 请求包装：expected_revision + 允许修改的字段子集。
+ */
+export const S2_2A_ConfigPatchRequest = z
+  .object({
+    expected_revision: z.number().int().nonnegative().nullable(),
+    video: z.object({
+      strategy: VideoGenerationStrategy,
+      api_quality: ApiVideoQuality,
+    }),
+    budget: BudgetConfiguration,
+  })
+  .strict();
+export type S2_2A_ConfigPatchRequest = z.infer<typeof S2_2A_ConfigPatchRequest>;
+
+/**
+ * 验证完整配置是否符合 S2-2A 约束（creative 全 null + capabilities 全 auto）。
+ * 用于在持久化前拒绝 B/C 字段被提前写入。
+ */
+export function assertS22AScopeConstraints(
+  config: GenerationConfigurationV1,
+): { ok: true } | { ok: false; reason: string } {
+  if (config.creative.voice_profile_id !== null || config.creative.art_style_preset_id !== null || config.creative.subtitle_style_preset_id !== null) {
+    return { ok: false, reason: "S2-2A 不允许设置 creative 偏好（voice_profile_id / art_style_preset_id / subtitle_style_preset_id 必须为 null）" };
+  }
+  for (const slot of Object.keys(config.capabilities)) {
+    const sel = config.capabilities[slot as keyof typeof config.capabilities];
+    if (sel.mode !== "auto") {
+      return { ok: false, reason: `S2-2A 不允许 fixed capability（${slot} 必须为 auto）` };
+    }
+  }
+  return { ok: true };
+}
+
 // --- Resolution trace & applied constraints --------------------------------
 
 export const ResolutionTraceEntry = z

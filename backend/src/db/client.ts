@@ -454,6 +454,24 @@ export interface DbClient {
       project: ProjectRecord,
       configuration: ProjectGenerationConfigurationRecord,
     ): Promise<void>;
+    /**
+     * CAS 更新用户偏好：条件 WHERE userId + revision=expectedRevision，
+     * 成功（count=1）返回 true 并同事务写 AuditLog。
+     * 失败（count=0）返回 false（revision 冲突）。
+     */
+    casUpdateUserGenerationPreference(
+      record: UserGenerationPreferenceRecord,
+      expectedRevision: number,
+      audit: { actorUserId: string; oldRevision: number; newRevision: number; diff: Record<string, unknown> },
+    ): Promise<boolean>;
+    /**
+     * CAS 更新项目配置：条件 WHERE projectId + revision=expectedRevision。
+     */
+    casUpdateProjectGenerationConfiguration(
+      record: ProjectGenerationConfigurationRecord,
+      expectedRevision: number,
+      audit: { actorUserId: string; projectId: string; oldRevision: number; newRevision: number; diff: Record<string, unknown> },
+    ): Promise<boolean>;
   };
   secondAggregateWriter?: {
     saveScript(record: ScriptRecord): Promise<void>;

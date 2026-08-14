@@ -1,6 +1,7 @@
 import { statSync } from "node:fs";
 import type { DbClient, ScriptRecord } from "../../db/client";
 import { getProjectStorageProfile } from "../../runtime/trace/project-storage.js";
+import { getProjectGenerationConfiguration } from "../generation-config/generation-config.repository.js";
 
 function summarizeTraceRun(trace: Record<string, unknown> | null | undefined) {
   if (!trace) {
@@ -383,19 +384,29 @@ export async function getProjectSnapshot(
           };
         })()
       : null,
-    // S2-2A：生成配置快照（只读，从冻结的项目配置映射）
+    // S2-2A：生成配置快照（只读）。使用 getProjectGenerationConfiguration 确保旧项目
+    // 通过普通快照读取时也触发 backfill（返回 source: backfilled_default）。
     generation_configuration: (() => {
-      for (const config of db.projectGenerationConfigurations.values()) {
-        if (config.projectId === project.id) {
-          return {
-            configuration: config.configurationJson,
-            revision: config.revision,
-            source_user_preference_revision: config.sourceUserPreferenceRevision,
-          };
-        }
-      }
-      return null;
+      const config = getProjectGenerationConfiguration(db, project.id, project.ownerId);
+      return {
+        configuration: config.configuration,
+        revision: config.revision,
+        source: config.source,
+        source_user_preference_revision: config.sourceUserPreferenceRevision,
+        updated_at: config.updatedAt.toISOString(),
+        diff_from_user_default: config.diff_from_user_default,
+      };
     })(),
+    // S2-2A：配置版本（独立字段，便于前端快速判断是否需要刷新）
+    generation_configuration_version: (() => {
+      const config = getProjectGenerationConfiguration(db, project.id);
+      return config.revision;
+    })(),
+    // S2-2A：失效预览占位（当前配置与上一版的差异影响；无变更时为 none）
+    configuration_invalidation_preview: {
+      affected_stages: ["none"],
+      note: "当前配置为最新冻结版本；如需变更请通过项目配置 API。",
+    },
     // S2-2A：只读成本摘要占位（无 usage 时为零）
     cost_summary: {
       total_estimated_cost_micros: "0",

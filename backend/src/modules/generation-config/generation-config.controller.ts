@@ -8,25 +8,30 @@ import {
   upsertProjectGenerationConfiguration,
   listPublicGenerationCapabilities,
 } from "./generation-config.repository.js";
-import { DEFAULT_GENERATION_CONFIGURATION, GenerationConfigurationV1 } from "../../../../shared/src/index.js";
+import {
+  DEFAULT_GENERATION_CONFIGURATION,
+  S2_2A_ConfigPatchRequest,
+  type GenerationConfigurationV1,
+} from "../../../../shared/src/index.js";
 
 /**
  * S2-2A 生成配置 controller。
  * 所有响应使用 snake_case（与现有 API 一致）。
+ * P1-3：请求用 S2_2A_ConfigPatchRequest strict schema 校验（只允许 video/budget）。
  */
 
 // --- 用户默认偏好 ---
 
 export const getUserPreferenceController = guardUserRoute(
-  (context: RouteContext): AppResponse => {
+  async (context: RouteContext): Promise<AppResponse> => {
     const user = requireUser(context.auth);
     const result = getUserGenerationPreference(context.app.db, user.userId);
     if (!result) {
       // 旧用户无偏好 → backfill 默认
-      const backfilled = upsertUserGenerationPreference(context.app.db, user.userId, {
+      const backfilled = await upsertUserGenerationPreference(context.app.db, user.userId, {
         expected_revision: null,
-        configuration: getDefaultConfig(),
-      });
+        configuration: { ...DEFAULT_GENERATION_CONFIGURATION },
+      }, user.userId);
       if (!backfilled.ok) return { statusCode: 500, body: { error: "preference_backfill_failed" } };
       return {
         statusCode: 200,
@@ -34,6 +39,7 @@ export const getUserPreferenceController = guardUserRoute(
           source: "backfilled_default",
           revision: backfilled.value.revision,
           configuration: backfilled.value.configuration,
+          updated_at: backfilled.value.updatedAt.toISOString(),
         },
       };
     }
@@ -43,28 +49,28 @@ export const getUserPreferenceController = guardUserRoute(
         source: "stored",
         revision: result.revision,
         configuration: result.configuration,
+        updated_at: result.updatedAt.toISOString(),
       },
     };
   },
 );
 
 export const patchUserPreferenceController = guardUserRoute(
-  (context: RouteContext): AppResponse => {
+  async (context: RouteContext): Promise<AppResponse> => {
     const user = requireUser(context.auth);
-    const payload = context.payload ?? {};
-    const parseResult = parseConfigPatchPayload(payload);
-    if (!parseResult.ok) return parseResult.response;
-    const result = upsertUserGenerationPreference(context.app.db, user.userId, {
-      expected_revision: parseResult.expected_revision,
-      configuration: parseResult.configuration,
-    });
+    const parsed = parsePatchPayload(context.payload);
+    if (!parsed.ok) return parsed.response;
+    const result = await upsertUserGenerationPreference(context.app.db, user.userId, {
+      expected_revision: parsed.expected_revision,
+      configuration: parsed.configuration,
+    }, user.userId);
     if (!result.ok) {
+      if (result.error.code === "configuration_invalid_s2_2a_scope") {
+        return { statusCode: 400, body: { error: result.error.code, reason: result.error.reason } };
+      }
       return {
         statusCode: 409,
-        body: {
-          error: result.error.code,
-          current_revision: result.error.current_revision,
-        },
+        body: { error: result.error.code, current_revision: result.error.current_revision },
       };
     }
     return {
@@ -72,6 +78,7 @@ export const patchUserPreferenceController = guardUserRoute(
       body: {
         revision: result.value.revision,
         configuration: result.value.configuration,
+        updated_at: result.value.updatedAt.toISOString(),
       },
     };
   },
@@ -81,7 +88,8 @@ export const patchUserPreferenceController = guardUserRoute(
 
 export const getProjectConfigController = guardOwnedRoute(
   (context: RouteContext): AppResponse => {
-    const result = getProjectGenerationConfiguration(context.app.db, context.params.projectId);
+    const user = requireUser(context.auth);
+    const result = getProjectGenerationConfiguration(context.app.db, context.params.projectId, user.userId);
     return {
       statusCode: 200,
       body: {
@@ -89,27 +97,29 @@ export const getProjectConfigController = guardOwnedRoute(
         revision: result.revision,
         source: result.source,
         source_user_preference_revision: result.sourceUserPreferenceRevision,
+        updated_at: result.updatedAt.toISOString(),
+        diff_from_user_default: result.diff_from_user_default,
       },
     };
   },
 );
 
 export const patchProjectConfigController = guardOwnedRoute(
-  (context: RouteContext): AppResponse => {
-    const payload = context.payload ?? {};
-    const parseResult = parseConfigPatchPayload(payload);
-    if (!parseResult.ok) return parseResult.response;
-    const result = upsertProjectGenerationConfiguration(context.app.db, context.params.projectId, {
-      expected_revision: parseResult.expected_revision!,
-      configuration: parseResult.configuration,
-    });
+  async (context: RouteContext): Promise<AppResponse> => {
+    const user = requireUser(context.auth);
+    const parsed = parsePatchPayload(context.payload);
+    if (!parsed.ok) return parsed.response;
+    const result = await upsertProjectGenerationConfiguration(context.app.db, context.params.projectId, {
+      expected_revision: parsed.expected_revision!,
+      configuration: parsed.configuration,
+    }, user.userId);
     if (!result.ok) {
+      if (result.error.code === "configuration_invalid_s2_2a_scope") {
+        return { statusCode: 400, body: { error: result.error.code, reason: result.error.reason } };
+      }
       return {
         statusCode: 409,
-        body: {
-          error: result.error.code,
-          current_revision: result.error.current_revision,
-        },
+        body: { error: result.error.code, current_revision: result.error.current_revision },
       };
     }
     return {
@@ -117,6 +127,7 @@ export const patchProjectConfigController = guardOwnedRoute(
       body: {
         configuration: result.value.configuration,
         revision: result.value.revision,
+        updated_at: result.value.updatedAt.toISOString(),
         invalidation_preview: result.value.invalidation_preview,
       },
     };
@@ -137,7 +148,7 @@ export const getGenerationCapabilitiesController = guardUserRoute(
   },
 );
 
-// --- 辅助：payload 解析 ---
+// --- 辅助：payload 解析（P1-3：S2_2A strict schema）---
 
 interface ParsedPayload {
   ok: boolean;
@@ -146,24 +157,32 @@ interface ParsedPayload {
   response: AppResponse;
 }
 
-function parseConfigPatchPayload(payload: unknown): ParsedPayload {
-  const p = payload as Record<string, unknown>;
-  if (!p || typeof p !== "object") {
-    return { ok: false, expected_revision: null, configuration: getDefaultConfig(), response: { statusCode: 400, body: { error: "invalid_payload" } } };
+function parsePatchPayload(payload: unknown): ParsedPayload {
+  // P1-3：用 S2_2A_ConfigPatchRequest strict schema 校验请求包装
+  // （只允许 expected_revision + video + budget，拒绝 creative/capabilities 越权字段）
+  const parseResult = S2_2A_ConfigPatchRequest.safeParse(payload);
+  if (!parseResult.success) {
+    return {
+      ok: false,
+      expected_revision: null,
+      configuration: { ...DEFAULT_GENERATION_CONFIGURATION },
+      response: { statusCode: 400, body: { error: "invalid_patch_payload", detail: parseResult.error.message } },
+    };
   }
-  // expected_revision 可以是 null（新建）或 number（更新）
-  const expectedRevision = p.expected_revision === null ? null : typeof p.expected_revision === "number" ? p.expected_revision : undefined;
-  if (expectedRevision === undefined) {
-    return { ok: false, expected_revision: null, configuration: getDefaultConfig(), response: { statusCode: 400, body: { error: "expected_revision_required" } } };
-  }
-  // 用 shared schema 校验 configuration
-  const configResult = GenerationConfigurationV1.safeParse(p.configuration);
-  if (!configResult.success) {
-    return { ok: false, expected_revision: null, configuration: getDefaultConfig(), response: { statusCode: 400, body: { error: "configuration_invalid", detail: configResult.error.message } } };
-  }
-  return { ok: true, expected_revision: expectedRevision, configuration: configResult.data, response: { statusCode: 200, body: {} } };
-}
-
-function getDefaultConfig(): GenerationConfigurationV1 {
-  return { ...DEFAULT_GENERATION_CONFIGURATION };
+  const p = parseResult.data;
+  // 组装完整 GenerationConfigurationV1（creative 全 null + capabilities 全 auto）
+  const fullConfig: GenerationConfigurationV1 = {
+    schema_version: "generation_configuration_v1",
+    video: p.video,
+    budget: p.budget,
+    creative: { voice_profile_id: null, art_style_preset_id: null, subtitle_style_preset_id: null },
+    capabilities: {
+      "llm.smart": { mode: "auto" },
+      "llm.flash": { mode: "auto" },
+      "image.generate": { mode: "auto" },
+      "video.image_to_video": { mode: "auto" },
+      "tts.synthesize": { mode: "auto" },
+    },
+  };
+  return { ok: true, expected_revision: p.expected_revision, configuration: fullConfig, response: { statusCode: 200, body: {} } };
 }

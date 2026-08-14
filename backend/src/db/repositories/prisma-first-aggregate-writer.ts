@@ -179,4 +179,79 @@ export class PrismaFirstAggregateWriter {
       } });
     });
   }
+
+  /**
+   * CAS 更新用户偏好：条件 WHERE userId + revision=expectedRevision。
+   * 成功时同事务写 AuditLog（只含公开 diff，不含凭据）。
+   */
+  async casUpdateUserGenerationPreference(
+    record: UserGenerationPreferenceRecord,
+    expectedRevision: number,
+    audit: { actorUserId: string; oldRevision: number; newRevision: number; diff: Record<string, unknown> },
+  ): Promise<boolean> {
+    return this.client.$transaction(async (tx) => {
+      const result = await tx.userGenerationPreference.updateMany({
+        where: { userId: record.userId, revision: expectedRevision },
+        data: {
+          revision: record.revision,
+          configurationJson: record.configurationJson as never,
+          schemaVersion: record.schemaVersion,
+          updatedAt: record.updatedAt,
+        },
+      });
+      if (result.count !== 1) return false;
+      await tx.auditLog.create({
+        data: {
+          actorUserId: audit.actorUserId,
+          action: "generation_preference_update",
+          targetType: "UserGenerationPreference",
+          targetId: record.userId,
+          metadataJson: {
+            old_revision: audit.oldRevision,
+            new_revision: audit.newRevision,
+            diff: audit.diff,
+          } as never,
+        },
+      });
+      return true;
+    });
+  }
+
+  /**
+   * CAS 更新项目配置：条件 WHERE projectId + revision=expectedRevision。
+   * 成功时同事务写 AuditLog（含 projectId）。
+   */
+  async casUpdateProjectGenerationConfiguration(
+    record: ProjectGenerationConfigurationRecord,
+    expectedRevision: number,
+    audit: { actorUserId: string; projectId: string; oldRevision: number; newRevision: number; diff: Record<string, unknown> },
+  ): Promise<boolean> {
+    return this.client.$transaction(async (tx) => {
+      const result = await tx.projectGenerationConfiguration.updateMany({
+        where: { projectId: record.projectId, revision: expectedRevision },
+        data: {
+          revision: record.revision,
+          configurationJson: record.configurationJson as never,
+          schemaVersion: record.schemaVersion,
+          updatedAt: record.updatedAt,
+        },
+      });
+      if (result.count !== 1) return false;
+      await tx.auditLog.create({
+        data: {
+          actorUserId: audit.actorUserId,
+          projectId: audit.projectId,
+          action: "project_generation_configuration_update",
+          targetType: "ProjectGenerationConfiguration",
+          targetId: record.projectId,
+          metadataJson: {
+            old_revision: audit.oldRevision,
+            new_revision: audit.newRevision,
+            diff: audit.diff,
+          } as never,
+        },
+      });
+      return true;
+    });
+  }
 }

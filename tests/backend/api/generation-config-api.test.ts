@@ -6,16 +6,9 @@ import { DEFAULT_GENERATION_CONFIGURATION } from "../../../shared/src/index.js";
 import type { AuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 
 /**
- * S2-2A 任务 3 步骤 1：API 失败测试。
- *
- * 覆盖：
- * - GET/PATCH /api/me/generation-preferences
- * - GET/PATCH /api/projects/:projectId/generation-configuration
- * - GET /api/generation-capabilities
- * - 乐观锁 409 冲突码
- * - owner 隔离
- * - 创建项目时复制用户默认
- * - 修改用户默认不改变已有项目
+ * S2-2A 任务 3 整改：API 测试。
+ * P1-3：PATCH 只允许 { expected_revision, video, budget }（strict schema）。
+ * P1-1：repository async。
  */
 describe("generation-config API", () => {
   const auth = buildTestAuth({ userId: "user-a" });
@@ -39,21 +32,19 @@ describe("generation-config API", () => {
       expect(body.source).toBe("backfilled_default");
       expect(body.configuration).toEqual(DEFAULT_GENERATION_CONFIGURATION);
       expect(body.revision).toBe(1);
+      expect(body.updated_at).toBeDefined();
     });
 
     it("PATCH updates user preference with correct expected_revision", async () => {
       const app = buildApp();
-      // 先 GET 触发 backfill
       await app.inject({ method: "GET", url: "/api/me/generation-preferences", auth });
       const res = await app.inject({
         method: "PATCH",
         url: "/api/me/generation-preferences",
         payload: {
           expected_revision: 1,
-          configuration: {
-            ...DEFAULT_GENERATION_CONFIGURATION,
-            video: { strategy: "all_api_video", api_quality: "high_1080p" },
-          },
+          video: { strategy: "all_api_video", api_quality: "high_1080p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
         },
         auth,
       });
@@ -61,6 +52,7 @@ describe("generation-config API", () => {
       const body = res.json();
       expect(body.revision).toBe(2);
       expect(body.configuration.video.strategy).toBe("all_api_video");
+      expect(body.updated_at).toBeDefined();
     });
 
     it("PATCH with stale revision returns 409 generation_preference_revision_conflict", async () => {
@@ -71,7 +63,8 @@ describe("generation-config API", () => {
         url: "/api/me/generation-preferences",
         payload: {
           expected_revision: 99,
-          configuration: DEFAULT_GENERATION_CONFIGURATION,
+          video: { strategy: "all_api_video", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
         },
         auth,
       });
@@ -79,22 +72,35 @@ describe("generation-config API", () => {
       expect(res.json().error).toBe("generation_preference_revision_conflict");
     });
 
-    it("GET/PATCH only accesses current user (not other users)", async () => {
+    it("PATCH rejects creative fields (S2-2A scope)", async () => {
       const app = buildApp();
-      // user-a sets preference
+      await app.inject({ method: "GET", url: "/api/me/generation-preferences", auth });
+      const res = await app.inject({
+        method: "PATCH",
+        url: "/api/me/generation-preferences",
+        payload: {
+          expected_revision: 1,
+          video: { strategy: "all_api_video", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
+          creative: { voice_profile_id: "voice-1" },  // 越权字段
+        },
+        auth,
+      });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it("GET/PATCH only accesses current user", async () => {
+      const app = buildApp();
       await app.inject({
         method: "PATCH",
         url: "/api/me/generation-preferences",
         payload: {
           expected_revision: null,
-          configuration: {
-            ...DEFAULT_GENERATION_CONFIGURATION,
-            video: { strategy: "prefer_api_video", api_quality: "standard_720p" },
-          },
+          video: { strategy: "prefer_api_video", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
         },
         auth,
       });
-      // user-b reads own preference (should be backfilled default, not user-a's)
       const res = await app.inject({ method: "GET", url: "/api/me/generation-preferences", auth: otherAuth });
       expect(res.statusCode).toBe(200);
       expect(res.json().source).toBe("backfilled_default");
@@ -114,6 +120,7 @@ describe("generation-config API", () => {
       expect(res.statusCode).toBe(200);
       const body = res.json();
       expect(body.configuration).toEqual(DEFAULT_GENERATION_CONFIGURATION);
+      expect(body.updated_at).toBeDefined();
     });
 
     it("GET returns 404 for non-owned project", async () => {
@@ -130,21 +137,14 @@ describe("generation-config API", () => {
     it("PATCH updates project configuration with invalidation preview", async () => {
       const app = buildApp();
       const projectId = await createProjectForUser(app, auth);
-      // 先 GET 触发配置写入（创建项目时已复制，但确保 revision）
-      await app.inject({
-        method: "GET",
-        url: `/api/projects/${projectId}/generation-configuration`,
-        auth,
-      });
+      await app.inject({ method: "GET", url: `/api/projects/${projectId}/generation-configuration`, auth });
       const res = await app.inject({
         method: "PATCH",
         url: `/api/projects/${projectId}/generation-configuration`,
         payload: {
           expected_revision: 1,
-          configuration: {
-            ...DEFAULT_GENERATION_CONFIGURATION,
-            video: { strategy: "all_remotion", api_quality: "standard_720p" },
-          },
+          video: { strategy: "all_remotion", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
         },
         auth,
       });
@@ -152,22 +152,20 @@ describe("generation-config API", () => {
       const body = res.json();
       expect(body.revision).toBe(2);
       expect(body.invalidation_preview).toBeDefined();
+      expect(body.updated_at).toBeDefined();
     });
 
     it("PATCH with stale revision returns 409 project_generation_configuration_revision_conflict", async () => {
       const app = buildApp();
       const projectId = await createProjectForUser(app, auth);
-      await app.inject({
-        method: "GET",
-        url: `/api/projects/${projectId}/generation-configuration`,
-        auth,
-      });
+      await app.inject({ method: "GET", url: `/api/projects/${projectId}/generation-configuration`, auth });
       const res = await app.inject({
         method: "PATCH",
         url: `/api/projects/${projectId}/generation-configuration`,
         payload: {
           expected_revision: 99,
-          configuration: DEFAULT_GENERATION_CONFIGURATION,
+          video: { strategy: "all_remotion", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
         },
         auth,
       });
@@ -179,22 +177,17 @@ describe("generation-config API", () => {
   describe("project creation copies user default", () => {
     it("creating a project freezes the current user default", async () => {
       const app = buildApp();
-      // user-a sets a non-default strategy
       await app.inject({
         method: "PATCH",
         url: "/api/me/generation-preferences",
         payload: {
           expected_revision: null,
-          configuration: {
-            ...DEFAULT_GENERATION_CONFIGURATION,
-            video: { strategy: "all_api_video", api_quality: "high_1080p" },
-          },
+          video: { strategy: "all_api_video", api_quality: "high_1080p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
         },
         auth,
       });
-      // 创建项目
       const projectId = await createProjectForUser(app, auth);
-      // 读取项目配置 → 应冻结为 all_api_video
       const res = await app.inject({
         method: "GET",
         url: `/api/projects/${projectId}/generation-configuration`,
@@ -207,34 +200,27 @@ describe("generation-config API", () => {
 
     it("modifying user default after project creation does not change existing project", async () => {
       const app = buildApp();
-      // 设置用户默认为 all_api_video
       await app.inject({
         method: "PATCH",
         url: "/api/me/generation-preferences",
         payload: {
           expected_revision: null,
-          configuration: {
-            ...DEFAULT_GENERATION_CONFIGURATION,
-            video: { strategy: "all_api_video", api_quality: "standard_720p" },
-          },
+          video: { strategy: "all_api_video", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
         },
         auth,
       });
       const projectId = await createProjectForUser(app, auth);
-      // 修改用户默认为 all_remotion
       await app.inject({
         method: "PATCH",
         url: "/api/me/generation-preferences",
         payload: {
           expected_revision: 2,
-          configuration: {
-            ...DEFAULT_GENERATION_CONFIGURATION,
-            video: { strategy: "all_remotion", api_quality: "standard_720p" },
-          },
+          video: { strategy: "all_remotion", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
         },
         auth,
       });
-      // 项目配置应保持冻结的 all_api_video
       const res = await app.inject({
         method: "GET",
         url: `/api/projects/${projectId}/generation-configuration`,
@@ -245,9 +231,8 @@ describe("generation-config API", () => {
   });
 
   describe("GET /api/generation-capabilities", () => {
-    it("returns 200 with capability catalog", async () => {
+    it("returns 200 with capability catalog including provider/model/availability", async () => {
       const app = buildApp();
-      // 手动 seed 一个 active catalog 条目（内存态无迁移 seed）
       app.db.providerModelCatalog.set("test.llm.smart", {
         id: "test.llm.smart",
         capability: "llm.smart",
@@ -257,7 +242,7 @@ describe("generation-config API", () => {
         displayName: "DeepSeek V4 Pro",
         qualityTier: "high",
         speedTier: "slow",
-        parameterCapabilitiesJson: {},
+        parameterCapabilitiesJson: { thinking: true },
         pricingVersion: "v1",
         pricingJson: { bounded: false },
         status: "active",
@@ -265,16 +250,13 @@ describe("generation-config API", () => {
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-      const res = await app.inject({
-        method: "GET",
-        url: "/api/generation-capabilities",
-        auth,
-      });
+      const res = await app.inject({ method: "GET", url: "/api/generation-capabilities", auth });
       expect(res.statusCode).toBe(200);
       const body = res.json();
-      expect(Array.isArray(body.capabilities)).toBe(true);
       expect(body.capabilities.length).toBeGreaterThan(0);
-      expect(body.capabilities[0].capability).toBe("llm.smart");
+      expect(body.capabilities[0].provider_key).toBe("deepseek");
+      expect(body.capabilities[0].model_id).toBe("deepseek-v4-pro");
+      expect(body.capabilities[0].availability).toBe("enabled");
     });
   });
 });
