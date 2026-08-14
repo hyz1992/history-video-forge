@@ -11,8 +11,10 @@ import {
 import {
   DEFAULT_GENERATION_CONFIGURATION,
   S2_2A_ConfigPatchRequest,
+  S2_2A_ProjectConfigPatchRequest,
   type GenerationConfigurationV1,
 } from "../../../../shared/src/index.js";
+import type { ZodTypeAny } from "zod";
 
 /**
  * S2-2A 生成配置 controller。
@@ -58,7 +60,7 @@ export const getUserPreferenceController = guardUserRoute(
 export const patchUserPreferenceController = guardUserRoute(
   async (context: RouteContext): Promise<AppResponse> => {
     const user = requireUser(context.auth);
-    const parsed = parsePatchPayload(context.payload);
+    const parsed = parsePatchPayload(context.payload, S2_2A_ConfigPatchRequest);
     if (!parsed.ok) return parsed.response;
     const result = await upsertUserGenerationPreference(context.app.db, user.userId, {
       expected_revision: parsed.expected_revision,
@@ -87,9 +89,9 @@ export const patchUserPreferenceController = guardUserRoute(
 // --- 项目冻结配置 ---
 
 export const getProjectConfigController = guardOwnedRoute(
-  (context: RouteContext): AppResponse => {
+  async (context: RouteContext): Promise<AppResponse> => {
     const user = requireUser(context.auth);
-    const result = getProjectGenerationConfiguration(context.app.db, context.params.projectId, user.userId);
+    const result = await getProjectGenerationConfiguration(context.app.db, context.params.projectId, user.userId);
     return {
       statusCode: 200,
       body: {
@@ -107,7 +109,7 @@ export const getProjectConfigController = guardOwnedRoute(
 export const patchProjectConfigController = guardOwnedRoute(
   async (context: RouteContext): Promise<AppResponse> => {
     const user = requireUser(context.auth);
-    const parsed = parsePatchPayload(context.payload);
+    const parsed = parsePatchPayload(context.payload, S2_2A_ProjectConfigPatchRequest);
     if (!parsed.ok) return parsed.response;
     const result = await upsertProjectGenerationConfiguration(context.app.db, context.params.projectId, {
       expected_revision: parsed.expected_revision!,
@@ -157,10 +159,9 @@ interface ParsedPayload {
   response: AppResponse;
 }
 
-function parsePatchPayload(payload: unknown): ParsedPayload {
-  // P1-3：用 S2_2A_ConfigPatchRequest strict schema 校验请求包装
-  // （只允许 expected_revision + video + budget，拒绝 creative/capabilities 越权字段）
-  const parseResult = S2_2A_ConfigPatchRequest.safeParse(payload);
+function parsePatchPayload(payload: unknown, schema: ZodTypeAny): ParsedPayload {
+  // P1-3 + P2-2：用 strict schema 校验请求包装
+  const parseResult = schema.safeParse(payload);
   if (!parseResult.success) {
     return {
       ok: false,

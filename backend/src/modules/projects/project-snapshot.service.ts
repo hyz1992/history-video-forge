@@ -386,8 +386,8 @@ export async function getProjectSnapshot(
       : null,
     // S2-2A：生成配置快照（只读）。使用 getProjectGenerationConfiguration 确保旧项目
     // 通过普通快照读取时也触发 backfill（返回 source: backfilled_default）。
-    generation_configuration: (() => {
-      const config = getProjectGenerationConfiguration(db, project.id, project.ownerId);
+    generation_configuration: await (async () => {
+      const config = await getProjectGenerationConfiguration(db, project.id, project.ownerId);
       return {
         configuration: config.configuration,
         revision: config.revision,
@@ -399,8 +399,10 @@ export async function getProjectSnapshot(
     })(),
     // S2-2A：配置版本（独立字段，便于前端快速判断是否需要刷新）
     generation_configuration_version: (() => {
-      const config = getProjectGenerationConfiguration(db, project.id);
-      return config.revision;
+      const record = db.projectGenerationConfigurations.size > 0
+        ? [...db.projectGenerationConfigurations.values()].find((c) => c.projectId === project.id)
+        : null;
+      return record?.revision ?? 1;
     })(),
     // S2-2A：失效预览占位（当前配置与上一版的差异影响；无变更时为 none）
     configuration_invalidation_preview: {

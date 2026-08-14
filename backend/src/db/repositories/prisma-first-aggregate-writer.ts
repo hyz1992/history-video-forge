@@ -181,77 +181,123 @@ export class PrismaFirstAggregateWriter {
   }
 
   /**
-   * CAS 更新用户偏好：条件 WHERE userId + revision=expectedRevision。
-   * 成功时同事务写 AuditLog（只含公开 diff，不含凭据）。
+   * CAS 更新或创建用户偏好。
+   * expectedRevision=0 → 事务内 create（唯一冲突→已存在，返回 actualRevision）。
+   * expectedRevision>0 → 条件 updateMany WHERE revision=expectedRevision。
    */
-  async casUpdateUserGenerationPreference(
+  async casUpsertUserGenerationPreference(
     record: UserGenerationPreferenceRecord,
     expectedRevision: number,
     audit: { actorUserId: string; oldRevision: number; newRevision: number; diff: Record<string, unknown> },
-  ): Promise<boolean> {
-    return this.client.$transaction(async (tx) => {
-      const result = await tx.userGenerationPreference.updateMany({
-        where: { userId: record.userId, revision: expectedRevision },
-        data: {
-          revision: record.revision,
-          configurationJson: record.configurationJson as never,
-          schemaVersion: record.schemaVersion,
-          updatedAt: record.updatedAt,
-        },
+  ): Promise<{ success: boolean; actualRevision: number | null }> {
+    try {
+      return await this.client.$transaction(async (tx) => {
+        if (expectedRevision === 0) {
+          // 首次创建
+          try {
+            await tx.userGenerationPreference.create({
+              data: {
+                id: record.id, userId: record.userId, schemaVersion: record.schemaVersion,
+                revision: record.revision, configurationJson: record.configurationJson as never,
+                createdAt: record.createdAt, updatedAt: record.updatedAt,
+              },
+            });
+          } catch {
+            // 唯一冲突 → 已被并发创建，查询实际 revision
+            const existing = await tx.userGenerationPreference.findUnique({
+              where: { userId: record.userId }, select: { revision: true },
+            });
+            return { success: false, actualRevision: existing?.revision ?? null };
+          }
+        } else {
+          const result = await tx.userGenerationPreference.updateMany({
+            where: { userId: record.userId, revision: expectedRevision },
+            data: {
+              revision: record.revision, configurationJson: record.configurationJson as never,
+              schemaVersion: record.schemaVersion, updatedAt: record.updatedAt,
+            },
+          });
+          if (result.count !== 1) {
+            const existing = await tx.userGenerationPreference.findUnique({
+              where: { userId: record.userId }, select: { revision: true },
+            });
+            return { success: false, actualRevision: existing?.revision ?? null };
+          }
+        }
+        await tx.auditLog.create({
+          data: {
+            actorUserId: audit.actorUserId,
+            action: expectedRevision === 0 ? "generation_preference_create" : "generation_preference_update",
+            targetType: "UserGenerationPreference",
+            targetId: record.userId,
+            metadataJson: {
+              old_revision: audit.oldRevision, new_revision: audit.newRevision, diff: audit.diff,
+            } as never,
+          },
+        });
+        return { success: true, actualRevision: record.revision };
       });
-      if (result.count !== 1) return false;
-      await tx.auditLog.create({
-        data: {
-          actorUserId: audit.actorUserId,
-          action: "generation_preference_update",
-          targetType: "UserGenerationPreference",
-          targetId: record.userId,
-          metadataJson: {
-            old_revision: audit.oldRevision,
-            new_revision: audit.newRevision,
-            diff: audit.diff,
-          } as never,
-        },
-      });
-      return true;
-    });
+    } catch {
+      return { success: false, actualRevision: null };
+    }
   }
 
   /**
-   * CAS 更新项目配置：条件 WHERE projectId + revision=expectedRevision。
-   * 成功时同事务写 AuditLog（含 projectId）。
+   * CAS 更新或创建项目配置（同语义）。
    */
-  async casUpdateProjectGenerationConfiguration(
+  async casUpsertProjectGenerationConfiguration(
     record: ProjectGenerationConfigurationRecord,
     expectedRevision: number,
     audit: { actorUserId: string; projectId: string; oldRevision: number; newRevision: number; diff: Record<string, unknown> },
-  ): Promise<boolean> {
-    return this.client.$transaction(async (tx) => {
-      const result = await tx.projectGenerationConfiguration.updateMany({
-        where: { projectId: record.projectId, revision: expectedRevision },
-        data: {
-          revision: record.revision,
-          configurationJson: record.configurationJson as never,
-          schemaVersion: record.schemaVersion,
-          updatedAt: record.updatedAt,
-        },
+  ): Promise<{ success: boolean; actualRevision: number | null }> {
+    try {
+      return await this.client.$transaction(async (tx) => {
+        if (expectedRevision === 0) {
+          try {
+            await tx.projectGenerationConfiguration.create({
+              data: {
+                id: record.id, projectId: record.projectId, schemaVersion: record.schemaVersion,
+                revision: record.revision, sourceUserPreferenceRevision: record.sourceUserPreferenceRevision,
+                configurationJson: record.configurationJson as never,
+                createdAt: record.createdAt, updatedAt: record.updatedAt,
+              },
+            });
+          } catch {
+            const existing = await tx.projectGenerationConfiguration.findUnique({
+              where: { projectId: record.projectId }, select: { revision: true },
+            });
+            return { success: false, actualRevision: existing?.revision ?? null };
+          }
+        } else {
+          const result = await tx.projectGenerationConfiguration.updateMany({
+            where: { projectId: record.projectId, revision: expectedRevision },
+            data: {
+              revision: record.revision, configurationJson: record.configurationJson as never,
+              schemaVersion: record.schemaVersion, updatedAt: record.updatedAt,
+            },
+          });
+          if (result.count !== 1) {
+            const existing = await tx.projectGenerationConfiguration.findUnique({
+              where: { projectId: record.projectId }, select: { revision: true },
+            });
+            return { success: false, actualRevision: existing?.revision ?? null };
+          }
+        }
+        await tx.auditLog.create({
+          data: {
+            actorUserId: audit.actorUserId, projectId: audit.projectId,
+            action: expectedRevision === 0 ? "project_generation_configuration_create" : "project_generation_configuration_update",
+            targetType: "ProjectGenerationConfiguration",
+            targetId: record.projectId,
+            metadataJson: {
+              old_revision: audit.oldRevision, new_revision: audit.newRevision, diff: audit.diff,
+            } as never,
+          },
+        });
+        return { success: true, actualRevision: record.revision };
       });
-      if (result.count !== 1) return false;
-      await tx.auditLog.create({
-        data: {
-          actorUserId: audit.actorUserId,
-          projectId: audit.projectId,
-          action: "project_generation_configuration_update",
-          targetType: "ProjectGenerationConfiguration",
-          targetId: record.projectId,
-          metadataJson: {
-            old_revision: audit.oldRevision,
-            new_revision: audit.newRevision,
-            diff: audit.diff,
-          } as never,
-        },
-      });
-      return true;
-    });
+    } catch {
+      return { success: false, actualRevision: null };
+    }
   }
 }

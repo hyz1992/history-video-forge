@@ -104,9 +104,9 @@ describe("generation-config repository", () => {
   });
 
   describe("project generation configuration", () => {
-    it("returns backfilled_default for project without configuration", () => {
+    it("returns backfilled_default for project without configuration", async () => {
       const db = createDbClient();
-      const result = getProjectGenerationConfiguration(db, "p1");
+      const result = await getProjectGenerationConfiguration(db, "p1");
       expect(result.source).toBe("backfilled_default");
       expect(result.configuration).toEqual(DEFAULT_GENERATION_CONFIGURATION);
       expect(result.updatedAt).toBeInstanceOf(Date);

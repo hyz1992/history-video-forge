@@ -209,7 +209,7 @@ export const S2_2A_PATCH_ALLOWED_FIELDS = z
   .strict();
 
 /**
- * S2-2A PATCH 请求包装：expected_revision + 允许修改的字段子集。
+ * S2-2A 用户偏好 PATCH 请求包装：expected_revision 可 null（首次创建）。
  */
 export const S2_2A_ConfigPatchRequest = z
   .object({
@@ -222,6 +222,22 @@ export const S2_2A_ConfigPatchRequest = z
   })
   .strict();
 export type S2_2A_ConfigPatchRequest = z.infer<typeof S2_2A_ConfigPatchRequest>;
+
+/**
+ * S2-2A 项目配置 PATCH 请求包装：expected_revision 必须是非负整数（不接受 null）。
+ * 项目配置在创建项目时已冻结，或首次读取时 backfill，因此始终有 revision。
+ */
+export const S2_2A_ProjectConfigPatchRequest = z
+  .object({
+    expected_revision: z.number().int().nonnegative(),
+    video: z.object({
+      strategy: VideoGenerationStrategy,
+      api_quality: ApiVideoQuality,
+    }),
+    budget: BudgetConfiguration,
+  })
+  .strict();
+export type S2_2A_ProjectConfigPatchRequest = z.infer<typeof S2_2A_ProjectConfigPatchRequest>;
 
 /**
  * 验证完整配置是否符合 S2-2A 约束（creative 全 null + capabilities 全 auto）。

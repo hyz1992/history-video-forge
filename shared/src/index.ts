@@ -65,6 +65,7 @@ export {
   ResolvedVisualRoute,
   S2_2A_ConfigPatchRequest,
   S2_2A_PATCH_ALLOWED_FIELDS,
+  S2_2A_ProjectConfigPatchRequest,
   RunConfigurationSnapshotV1,
   SegmentVisualStrategyOverride,
   VideoGenerationStrategy,

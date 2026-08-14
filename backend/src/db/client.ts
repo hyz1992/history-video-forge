@@ -455,23 +455,25 @@ export interface DbClient {
       configuration: ProjectGenerationConfigurationRecord,
     ): Promise<void>;
     /**
-     * CAS 更新用户偏好：条件 WHERE userId + revision=expectedRevision，
-     * 成功（count=1）返回 true 并同事务写 AuditLog。
-     * 失败（count=0）返回 false（revision 冲突）。
+     * CAS 更新或创建用户偏好。
+     * expectedRevision=0 → 事务内 create（唯一冲突→已存在，返回 actualRevision）。
+     * expectedRevision>0 → 条件 updateMany WHERE revision=expectedRevision。
+     * 返回 { success, actualRevision }：成功时 success=true；
+     * 失败时 success=false 且 actualRevision 为数据库当前 revision（供客户端重试）。
      */
-    casUpdateUserGenerationPreference(
+    casUpsertUserGenerationPreference(
       record: UserGenerationPreferenceRecord,
       expectedRevision: number,
       audit: { actorUserId: string; oldRevision: number; newRevision: number; diff: Record<string, unknown> },
-    ): Promise<boolean>;
+    ): Promise<{ success: boolean; actualRevision: number | null }>;
     /**
-     * CAS 更新项目配置：条件 WHERE projectId + revision=expectedRevision。
+     * CAS 更新或创建项目配置（同语义）。
      */
-    casUpdateProjectGenerationConfiguration(
+    casUpsertProjectGenerationConfiguration(
       record: ProjectGenerationConfigurationRecord,
       expectedRevision: number,
       audit: { actorUserId: string; projectId: string; oldRevision: number; newRevision: number; diff: Record<string, unknown> },
-    ): Promise<boolean>;
+    ): Promise<{ success: boolean; actualRevision: number | null }>;
   };
   secondAggregateWriter?: {
     saveScript(record: ScriptRecord): Promise<void>;

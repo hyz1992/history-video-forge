@@ -102,17 +102,18 @@ export async function upsertUserGenerationPreference(
 
   const diff = computeConfigDiff(existing?.configuration, input.configuration);
 
-  // P1-1：Prisma 激活态走 CAS（条件更新 + 审计同事务），await 完成再更新内存
-  if (db.firstAggregateWriter?.casUpdateUserGenerationPreference) {
-    const success = await db.firstAggregateWriter.casUpdateUserGenerationPreference(
+  // P1-1：Prisma 激活态走 CAS upsert（条件更新或首条创建 + 审计同事务），await 完成再更新内存
+  if (db.firstAggregateWriter?.casUpsertUserGenerationPreference) {
+    const result = await db.firstAggregateWriter.casUpsertUserGenerationPreference(
       record,
       existing ? existing.revision : 0,
       { actorUserId, oldRevision: existing ? existing.revision : 0, newRevision, diff },
     );
-    if (!success) {
+    if (!result.success) {
+      // P2-1：返回数据库实际 revision（而非本地旧 revision）
       return {
         ok: false,
-        error: { code: "generation_preference_revision_conflict", current_revision: existing ? existing.revision : 0 },
+        error: { code: "generation_preference_revision_conflict", current_revision: result.actualRevision ?? existing?.revision ?? 0 },
       };
     }
   } else {
@@ -166,14 +167,14 @@ export function findProjectConfigRecord(db: DbClient, projectId: string): Projec
   return null;
 }
 
-export function getProjectGenerationConfiguration(
+export async function getProjectGenerationConfiguration(
   db: DbClient,
   projectId: string,
   actorUserId?: string,
-): ProjectConfigResult {
+): Promise<ProjectConfigResult> {
   const record = findProjectConfigRecord(db, projectId);
   if (!record) {
-    // 旧项目无配置 → backfill 默认
+    // 旧项目无配置 → backfill 默认（P1-2：await 持久化完成）
     return backfillProjectGenerationConfiguration(db, projectId, null, actorUserId);
   }
   // 计算与当前用户默认的差异
@@ -191,12 +192,12 @@ export function getProjectGenerationConfiguration(
   };
 }
 
-export function backfillProjectGenerationConfiguration(
+export async function backfillProjectGenerationConfiguration(
   db: DbClient,
   projectId: string,
   sourceUserPreferenceRevision: number | null,
   actorUserId?: string,
-): ProjectConfigResult {
+): Promise<ProjectConfigResult> {
   const now = new Date();
   const record: ProjectGenerationConfigurationRecord = {
     id: db.generateId(),
@@ -208,8 +209,36 @@ export function backfillProjectGenerationConfiguration(
     createdAt: now,
     updatedAt: now,
   };
+  // P1-2：Prisma 激活态走 casUpsert（首条创建，幂等），await 完成才更新内存
+  if (db.firstAggregateWriter?.casUpsertProjectGenerationConfiguration) {
+    const result = await db.firstAggregateWriter.casUpsertProjectGenerationConfiguration(
+      record,
+      0,
+      { actorUserId: actorUserId ?? "system", projectId, oldRevision: 0, newRevision: 1, diff: { created: true } },
+    );
+    if (!result.success) {
+      // 并发 loser：另一请求已创建配置，读取已有记录返回 stored
+      const existing = findProjectConfigRecord(db, projectId);
+      if (existing) {
+        return {
+          projectId, revision: existing.revision, configuration: existing.configurationJson,
+          schemaVersion: existing.schemaVersion, source: "stored",
+          sourceUserPreferenceRevision: existing.sourceUserPreferenceRevision,
+          updatedAt: existing.updatedAt, diff_from_user_default: null,
+        };
+      }
+      // 极端：DB 有记录但内存没有（hydrator 未加载），用 actualRevision 回退
+      return {
+        projectId, revision: result.actualRevision ?? 1,
+        configuration: record.configurationJson, schemaVersion: record.schemaVersion,
+        source: "stored", sourceUserPreferenceRevision, updatedAt: now, diff_from_user_default: null,
+      };
+    }
+  } else {
+    void db.firstAggregateWriter?.saveProjectGenerationConfiguration(record);
+  }
+  // 数据库成功后才更新内存 Map
   db.projectGenerationConfigurations.set(record.id, record);
-  void db.firstAggregateWriter?.saveProjectGenerationConfiguration(record);
   const userPref = actorUserId ? getUserGenerationPreference(db, actorUserId) : null;
   const diff = userPref ? computeConfigDiff(userPref.configuration, record.configurationJson) : null;
   return {
@@ -236,7 +265,7 @@ export async function upsertProjectGenerationConfiguration(
     return { ok: false, error: { code: "configuration_invalid_s2_2a_scope", reason: scopeCheck.reason } };
   }
 
-  const current = getProjectGenerationConfiguration(db, projectId, actorUserId);
+  const current = await getProjectGenerationConfiguration(db, projectId, actorUserId);
 
   if (input.expected_revision !== current.revision) {
     return {
@@ -261,17 +290,18 @@ export async function upsertProjectGenerationConfiguration(
   };
   const diff = computeConfigDiff(current.configuration, input.configuration);
 
-  // P1-1：Prisma CAS + 审计同事务
-  if (db.firstAggregateWriter?.casUpdateProjectGenerationConfiguration) {
-    const success = await db.firstAggregateWriter.casUpdateProjectGenerationConfiguration(
+  // P1-1：Prisma CAS upsert + 审计同事务
+  if (db.firstAggregateWriter?.casUpsertProjectGenerationConfiguration) {
+    const result = await db.firstAggregateWriter.casUpsertProjectGenerationConfiguration(
       updated,
       current.revision,
       { actorUserId, projectId, oldRevision: current.revision, newRevision, diff },
     );
-    if (!success) {
+    if (!result.success) {
+      // P2-1：返回数据库实际 revision
       return {
         ok: false,
-        error: { code: "project_generation_configuration_revision_conflict", current_revision: current.revision },
+        error: { code: "project_generation_configuration_revision_conflict", current_revision: result.actualRevision ?? current.revision },
       };
     }
   } else {
