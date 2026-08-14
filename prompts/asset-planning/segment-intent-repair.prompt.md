@@ -1,6 +1,6 @@
 ---
 id: asset-planning.segment-intent-repair
-version: v1.1.0
+version: v1.2.0
 stage: asset_planning
 language: zh-CN
 consumes:
@@ -20,7 +20,7 @@ status: active
 - `replace_field` 只能使用授权项给出的完整叶路径，并只输出该路径的新 `value`。
 - `append_intent` 只能使用授权项给出的 `segment_id` 与 `expected_kind`；其 `value.asset_kind` 必须等于 `expected_kind`。
 - 只输出类型化操作；不得修改未授权字段，不得删除或移动已有意图，不得完整重写草稿或 `AssetPlan`。
-- 修复后仍须满足用户视觉策略偏好、全局 BGM 归属和局部范围规则。
+- 修复后仍须满足 `segment_routes` 中每段解析出的最终视觉路线、全局 BGM 归属和局部范围规则。
 
 ## 五类意图字段白名单
 

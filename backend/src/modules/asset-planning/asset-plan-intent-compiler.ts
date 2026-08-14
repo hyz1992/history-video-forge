@@ -2,13 +2,13 @@ import {
   AssetPlan as AssetPlanSchema,
   type AssetPlan,
   type AssetTask,
+  type ResolvedSegmentVisualRoute,
   type ScriptDraftPackage,
   type StoryboardPlan,
 } from "../../../../shared/src/index.js";
 import { isDeepStrictEqual } from "node:util";
 import type { SegmentAssetIntentBatchDraft } from "./segment-asset-intent.js";
 import { enrichAssetVisualPrompt } from "./asset-plan-prompt-enrichment.js";
-import { suitabilityToPreferenceHint } from "../storyboard/storyboard-plan-compatibility.js";
 import { validateAssetPlan } from "./asset-planning-local-validator.js";
 
 export interface GlobalPlanningCompilerDraft {
@@ -42,10 +42,20 @@ export interface AssetPlanCompilerInput {
   globalDraft: GlobalPlanningCompilerDraft;
   audioSkeleton: LocalAudioSkeleton;
   chunks: CompiledIntentChunkInput[];
+  /**
+   * S2-2A 任务 5：resolver 输出的每段最终视觉路线（编排输入，纯机械消费）。
+   * compiler 不读取 api_video_suitability 做语义推导，只按路线核对意图组合。
+   */
+  segmentVisualRoutes: ReadonlyMap<string, ResolvedSegmentVisualRoute>;
 }
 
 export type AssetPlanCompilerAction =
-  | { code: "visual_strategy_applied"; segment_id: string; preference: "api_video" | "remotion_motion" | "default" }
+  | {
+      code: "visual_strategy_applied";
+      segment_id: string;
+      route: "api_video" | "remotion";
+      reason_code: string;
+    }
   | { code: "global_bgm_owner_bound"; segment_id: string };
 
 export interface AssetPlanCompilerIssue {
@@ -151,20 +161,35 @@ function validateInput(input: AssetPlanCompilerInput) {
     if (count === 0) issues.push({ code: "missing_segment", segment_id: segment.segment_id });
     if (count > 1) issues.push({ code: "duplicate_segment", segment_id: segment.segment_id });
   }
+  // S2-2A 任务 5：按 resolver 输出的最终路线机械核对意图组合。
+  // compiler 不得从 api_video_suitability 重新推导路线，缺路线直接拒绝。
+  const intentCounts = new Map<string, { video: number; motion: number }>();
   for (const chunk of input.chunks) {
     for (const entry of chunk.draft.segments) {
-      const segment = orderedSegments.find((candidate) => candidate.segment_id === entry.source_segment_id);
-      if (!segment) continue;
-      const videoCount = entry.intents.filter((intent) => intent.asset_kind === "video_clip").length;
-      const motionCount = entry.intents.filter((intent) => intent.asset_kind === "render_motion_cue").length;
-      // S2-2A 任务 4 过渡：从四档适配度推导偏好提示（任务 5 改为消费 resolved route）
-      const preference = suitabilityToPreferenceHint(segment.api_video_suitability);
-      if (
-        (preference === "api_video" && videoCount === 0) ||
-        (preference === "remotion_motion" && (motionCount === 0 || videoCount > 0))
-      ) {
-        issues.push({ code: "visual_strategy_mismatch", segment_id: segment.segment_id, chunk_index: chunk.chunkIndex });
-      }
+      const counts = intentCounts.get(entry.source_segment_id) ?? { video: 0, motion: 0 };
+      counts.video += entry.intents.filter((intent) => intent.asset_kind === "video_clip").length;
+      counts.motion += entry.intents.filter((intent) => intent.asset_kind === "render_motion_cue").length;
+      intentCounts.set(entry.source_segment_id, counts);
+    }
+  }
+  for (const segment of orderedSegments) {
+    const routeEntry = input.segmentVisualRoutes.get(segment.segment_id);
+    if (!routeEntry) {
+      issues.push({ code: "visual_route_missing", segment_id: segment.segment_id });
+      continue;
+    }
+    const counts = intentCounts.get(segment.segment_id) ?? { video: 0, motion: 0 };
+    const routeViolated =
+      routeEntry.resolved_route === "api_video"
+        ? counts.video === 0 || counts.motion === 0
+        : counts.motion === 0 || counts.video > 0;
+    if (routeViolated) {
+      issues.push({ code: "visual_strategy_mismatch", segment_id: segment.segment_id });
+    }
+  }
+  for (const segmentId of input.segmentVisualRoutes.keys()) {
+    if (!segmentIds.has(segmentId)) {
+      issues.push({ code: "visual_route_unknown_segment", segment_id: segmentId });
     }
   }
 
@@ -372,7 +397,15 @@ export function compileAssetPlanFromIntents(input: AssetPlanCompilerInput): { pl
       Math.min(...right.inputSegmentIds.map((segmentId) => segmentOrder.get(segmentId)!)))
     .flatMap((chunk) => chunk.draft.budget_notes);
   const actions: AssetPlanCompilerAction[] = [
-    ...orderedSegments.map((segment) => ({ code: "visual_strategy_applied" as const, segment_id: segment.segment_id, preference: suitabilityToPreferenceHint(segment.api_video_suitability) })),
+    ...orderedSegments.map((segment) => {
+      const routeEntry = input.segmentVisualRoutes.get(segment.segment_id)!;
+      return {
+        code: "visual_strategy_applied" as const,
+        segment_id: segment.segment_id,
+        route: routeEntry.resolved_route,
+        reason_code: routeEntry.reason_code,
+      };
+    }),
     { code: "global_bgm_owner_bound", segment_id: firstSegmentId },
   ];
   const candidate = {

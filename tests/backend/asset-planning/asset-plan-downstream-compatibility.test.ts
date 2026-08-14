@@ -51,11 +51,27 @@ function readFixture(filename: string): unknown {
   ) as unknown;
 }
 
-/** S2-2A 任务 4：suitability 的 api_video 语义判断（与 suitabilityToPreferenceHint 一致）。 */
+/** S2-2A 任务 4：suitability 的 api_video 语义判断（任务 5 后仅用于构造 route 输入）。 */
 function isApiVideoSuitability(
   suitability: "remotion_only" | "remotion_sufficient" | "api_video_beneficial" | "api_video_strongly_recommended",
 ): boolean {
   return suitability === "api_video_beneficial" || suitability === "api_video_strongly_recommended";
+}
+
+/** S2-2A 任务 5：从 storyboard 构造 resolver 输出的路线输入（测试辅助，非运行时逻辑）。 */
+function makeRoutes(storyboard: StoryboardPlanType): Map<string, import("../../../shared/src/index.js").ResolvedSegmentVisualRoute> {
+  return new Map(
+    storyboard.segments.map((segment) => [
+      segment.segment_id,
+      {
+        segment_id: segment.segment_id,
+        segment_override: null,
+        api_video_suitability: segment.api_video_suitability,
+        resolved_route: isApiVideoSuitability(segment.api_video_suitability) ? "api_video" : "remotion",
+        reason_code: "test_route",
+      },
+    ]),
+  );
 }
 
 
@@ -188,6 +204,7 @@ function makeCompilerInput(
       tasks: [ttsTask, subtitleTask],
       dependencies: [{ dependency_id: "dep_subtitle_001_after_tts_001", task_id: "subtitle_001", depends_on_task_id: "tts_001", dependency_type: "requires_timing" }],
     },
+    segmentVisualRoutes: makeRoutes(fixture.storyboard),
     chunks: fixture.storyboard.segments.map((segment, index) => ({
       chunkIndex: index,
       inputSegmentIds: [segment.segment_id],
@@ -202,7 +219,10 @@ function makeCompilerInput(
               risk_notes: ["复核史实与人物一致性"],
             },
             ...(isApiVideoSuitability(segment.api_video_suitability)
-              ? [{ asset_kind: "video_clip" as const, production_intent: "表现连续动作", video_prompt: segment.scene_description, why_static_insufficient: "连续动作推动叙事", risk_notes: ["复核动作连续性"] }]
+              ? [
+                  { asset_kind: "video_clip" as const, production_intent: "表现连续动作", video_prompt: segment.scene_description, why_static_insufficient: "连续动作推动叙事", risk_notes: ["复核动作连续性"] },
+                  { asset_kind: "render_motion_cue" as const, production_intent: "以本地运镜增强节奏", risk_notes: ["复核运镜幅度"] },
+                ]
               : [{ asset_kind: "render_motion_cue" as const, production_intent: "以本地运镜增强节奏", risk_notes: ["复核运镜幅度"] }]),
             ...(index === 0 ? [{
               asset_kind: "sfx_cue" as const, production_intent: "强调段落动作节点",
@@ -287,6 +307,7 @@ describe("asset plan downstream compatibility fixtures", () => {
       storyboard: firstStoryboard,
       draft: long15.script,
       topicBoundaryContext: makeTopicBoundaryContext(),
+      segmentVisualRoutes: makeRoutes(firstStoryboard),
       llmGateway: gateway,
       chunkSize: 1,
     });
@@ -398,6 +419,7 @@ describe("asset plan downstream compatibility fixtures", () => {
         storyboard: firstStoryboard,
         draft: long15.script,
         topicBoundaryContext: makeTopicBoundaryContext(),
+        segmentVisualRoutes: makeRoutes(firstStoryboard),
         llmGateway: gateway,
         chunkSize: 1,
       });
@@ -605,7 +627,8 @@ describe("asset plan downstream compatibility fixtures", () => {
         ...fixture.storyboard.segments.map((segment) => ({
           code: "visual_strategy_applied",
           segment_id: segment.segment_id,
-          preference: isApiVideoSuitability(segment.api_video_suitability) ? "api_video" : "remotion_motion",
+          route: isApiVideoSuitability(segment.api_video_suitability) ? "api_video" : "remotion",
+          reason_code: "test_route",
         })),
         {
           code: "global_bgm_owner_bound",

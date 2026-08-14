@@ -176,6 +176,9 @@ function makeAssetPlan(input: {
         prompt_draft: "ancient public hall, tense envoy, cinematic vertical frame",
         parameters: {
           aspect_ratio: "9:16",
+          image_role: "anchor",
+          support_reason: null,
+          video_prompt_reserve: "slow push-in on the envoy",
         },
         manual_upload_policy: {
           allowed: true,

@@ -1,10 +1,14 @@
 import {
   ScriptDraftPackage,
   StoryboardPlan,
+  resolveGenerationConfiguration,
   type AssetPlan,
   type AssetPlanningValidationResult,
+  type ResolvedSegmentVisualRoute,
 } from "../../../../shared/src/index.js";
 import { decodeStoredStoryboardPlan } from "../storyboard/storyboard-plan-compatibility.js";
+import { resolveSystemGenerationConstraints } from "../generation-config/system-constraints.js";
+import { getProjectGenerationConfiguration } from "../generation-config/generation-config.repository.js";
 import type {
   DbClient,
   ProjectRecord,
@@ -38,6 +42,8 @@ import {
 export interface RunAssetPlanningGenerationInput {
   db: DbClient;
   project: ProjectRecord;
+  /** 演示/测试态：与 storyboard 快照一致的真实系统约束来源。 */
+  demoMode: boolean;
 }
 
 function writeTraceErrorSafely(writer: TraceLogWriter, message: string) {
@@ -468,7 +474,8 @@ const SAFE_COMPILER_PATH_FIELDS = new Set([
   "audioSkeleton", "tts_plan", "tasks", "dependencies", "chunks",
   "chunkIndex", "inputSegmentIds", "planning_mode", "source_segment_id",
   "intents", "asset_kind", "task_id", "dependency_id", "depends_on_task_id",
-  "dependency_type", "visual_strategy_preference", "art_bible",
+  "dependency_type", "segmentVisualRoutes", "resolved_route", "reason_code",
+  "route", "art_bible",
   "visual_budget", "downgrade_policy", "global_audio_strategy",
 ]);
 
@@ -678,6 +685,7 @@ function buildValidationInput(input: {
   topicPackage: TopicPackageRecord;
   storyboard: StoryboardPlan;
   plan: AssetPlan;
+  segmentVisualRoutes: ReadonlyMap<string, ResolvedSegmentVisualRoute>;
 }) {
   return {
     storyboardRecordId: input.storyboardRecord.id,
@@ -686,6 +694,7 @@ function buildValidationInput(input: {
     storyboard: input.storyboard,
     scriptText: input.scriptRecord.scriptText,
     plan: input.plan,
+    segmentVisualRoutes: input.segmentVisualRoutes,
   };
 }
 
@@ -740,6 +749,58 @@ export async function runAssetPlanningGeneration(
   const storyboard = storyboardDecoded.value.plan;
   const draft = mapScriptDraft(scriptRecord);
   const topicBoundaryContext = mapTopicBoundaryContext(topicPackage);
+
+  // S2-2A 任务 5：与 storyboard 快照同源的 resolver 解析，产出每段最终视觉路线。
+  // Asset Planning 全链路只消费该路线；解析失败时机械降级为全 Remotion
+  // （不产生任何 API 视频调用），理由记录为 route_resolution_error。
+  const routeOverrides = [...input.db.storyboardSegmentOverrides.values()].filter(
+    (o) => o.storyboardRecordId === storyboardRecord.id,
+  );
+  const configResult = await getProjectGenerationConfiguration(
+    input.db,
+    input.project.id,
+    input.project.ownerId,
+  );
+  const routeResolution = resolveGenerationConfiguration({
+    projectConfiguration: configResult.configuration,
+    projectConfigurationRevision: configResult.revision,
+    sourceUserPreferenceRevision: configResult.sourceUserPreferenceRevision,
+    systemConstraints: resolveSystemGenerationConstraints(input.demoMode),
+    providerModelCatalog: [...input.db.providerModelCatalog.values()].map((entry) => ({
+      provider_model_id: entry.id,
+      capability: entry.capability,
+      provider_key: entry.providerKey,
+      model_id: entry.modelId,
+      model_version: entry.modelVersion,
+      status: entry.status,
+      is_default: entry.isDefault,
+    })),
+    operation: "asset_plan.generate",
+    segmentInputs: storyboard.segments.map((s) => ({
+      segment_id: s.segment_id,
+      api_video_suitability: s.api_video_suitability,
+    })),
+    segmentOverrides: Object.fromEntries(
+      routeOverrides.map((o) => [o.segmentId, o.strategyOverride]),
+    ),
+  });
+  const segmentVisualRoutes = new Map<string, ResolvedSegmentVisualRoute>();
+  if (routeResolution.ok) {
+    for (const route of routeResolution.value.segment_visual_routes) {
+      segmentVisualRoutes.set(route.segment_id, route);
+    }
+  } else {
+    for (const segment of storyboard.segments) {
+      segmentVisualRoutes.set(segment.segment_id, {
+        segment_id: segment.segment_id,
+        segment_override: null,
+        api_video_suitability: segment.api_video_suitability,
+        resolved_route: "remotion",
+        reason_code: "route_resolution_error",
+      });
+    }
+  }
+
   const runId = `asset_plan_run_${input.db.generateId()}`;
   const interactionLogWriter = createTraceLogWriterSafely({
     project: input.project,
@@ -878,6 +939,7 @@ export async function runAssetPlanningGeneration(
     draft,
     topicBoundaryContext,
     generationMode,
+    segmentVisualRoutes,
     interactionLogWriter,
     onProgress,
     onGlobalStructureEvent,
@@ -890,6 +952,7 @@ export async function runAssetPlanningGeneration(
       topicPackage,
       storyboard,
       plan,
+      segmentVisualRoutes,
     }),
   );
   let regenerated = false;
@@ -924,6 +987,7 @@ export async function runAssetPlanningGeneration(
           topicPackage,
           storyboard,
           plan,
+          segmentVisualRoutes,
         }),
       );
     }

@@ -412,7 +412,7 @@ git commit -m "拆分分镜视频适配度与用户覆盖"
 - 修改：`tests/backend/asset-planning/asset-plan-intent-compiler.test.ts`
 - 修改：`tests/backend/asset-planning/segment-intent-prompt-input.test.ts`
 
-- [ ] **步骤 1：先写路由编译失败测试**
+- [x] **步骤 1：先写路由编译失败测试**
 
 逐段断言：
 
@@ -430,22 +430,22 @@ npx vitest run --configLoader runner tests/backend/asset-planning/resolved-visua
 
 预期：失败，当前 compiler 仍直接消费旧 preference。
 
-- [ ] **步骤 2：更新 intent 输入与 compiler**
+- [x] **步骤 2：更新 intent 输入与 compiler**
 
 将 resolved route 作为编排输入；编译器负责机械补齐 anchor/fallback/cue。LLM 只生成具体视觉意图，不得自行越级增加 API 视频。
 
-- [ ] **步骤 3：更新正式 prompt 与 validator**
+- [x] **步骤 3：更新正式 prompt 与 validator**
 
 删除旧 `visual_strategy_preference` 规则，新增 resolved route 精确合同。validator 对 API route 缺 anchor/fallback/cue 直接报硬错误。
 
-- [ ] **步骤 4：运行最小回归和 prompt 检查**
+- [x] **步骤 4：运行最小回归和 prompt 检查**
 
 ```powershell
 npm run harness:check-prompts
 npx vitest run --configLoader runner tests/backend/asset-planning/resolved-visual-route.test.ts tests/backend/asset-planning/asset-plan-intent-compiler.test.ts tests/backend/asset-planning/segment-intent-prompt-input.test.ts tests/backend/asset-planning/asset-planning-local-validator.test.ts tests/backend/asset-planning/asset-plan-downstream-compatibility.test.ts
 ```
 
-- [ ] **步骤 5：自审并提交**
+- [x] **步骤 5：自审并提交**
 
 ```powershell
 git add backend/src/modules/asset-planning prompts/asset-planning tests/backend/asset-planning
@@ -507,7 +507,7 @@ POST /api/projects/:projectId/assets/runs/:runId/segments/:segmentId/accept-fall
 npx vitest run --configLoader runner tests/backend/assets/video-strategy-execution.test.ts tests/backend/assets/assets-execution-engine.test.ts tests/backend/assets/assets-execution-regression.test.ts tests/backend/assets/assets-local-validator.test.ts tests/backend/api/assets-api.test.ts
 ```
 
-- [ ] **步骤 5：自审并提交**
+- [x] **步骤 5：自审并提交**
 
 ```powershell
 git add shared/src/assets backend/src/modules/assets tests/backend/assets tests/backend/api/assets-api.test.ts
@@ -719,7 +719,7 @@ provider 响应无法给出精确账单时记录 `actualCostState: estimated_aft
 npx vitest run --configLoader runner tests/backend/assets/paid-generation-gate.test.ts tests/backend/cost/usage-cost-recording.test.ts tests/backend/assets/asset-provider-job-repository.test.ts tests/backend/assets/assets-run-service.test.ts tests/backend/assets/assets-execution-regression.test.ts tests/backend/api/assets-api.test.ts
 ```
 
-- [ ] **步骤 5：自审并提交**
+- [x] **步骤 5：自审并提交**
 
 ```powershell
 git add backend/src/modules/assets backend/src/modules/generation-cost/usage-cost-recorder.ts tests/backend/assets tests/backend/cost/usage-cost-recording.test.ts tests/backend/api/assets-api.test.ts

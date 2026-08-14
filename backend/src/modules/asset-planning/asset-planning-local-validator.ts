@@ -2,6 +2,7 @@ import type {
   AssetPlan,
   AssetPlanningValidationResult,
   AssetTask,
+  ResolvedSegmentVisualRoute,
   StoryboardPlan,
 } from "../../../../shared/src/index.js";
 import { AssetPlanningValidationResult as AssetPlanningValidationResultSchema } from "../../../../shared/src/index.js";
@@ -242,6 +243,12 @@ export function validateAssetPlan(input: {
   storyboard: StoryboardPlan;
   scriptText: string;
   plan: AssetPlan;
+  /**
+   * S2-2A 任务 5：resolver 输出的每段最终视觉路线（可选）。
+   * 提供时对每段做机械路线核对：API route 缺锚点/video/motion、Remotion route
+   * 规划 video 都直接报硬错误；不提供时保持纯结构校验（legacy 调用兼容）。
+   */
+  segmentVisualRoutes?: ReadonlyMap<string, ResolvedSegmentVisualRoute>;
 }): AssetPlanningValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -370,6 +377,40 @@ export function validateAssetPlan(input: {
       !hasAudioInputContract(task)
     ) {
       pushUnique(warnings, `asset_audio_cue_no_input_contract:${task.task_id}`);
+    }
+  }
+
+  // S2-2A 任务 5：resolver 路线核对（机械合同检查，不做语义判断）。
+  // API route 段必须同时有锚点图、video_clip 与 render_motion_cue；
+  // Remotion route 段必须只有锚点图 + render_motion_cue。
+  if (input.segmentVisualRoutes) {
+    for (const segment of input.storyboard.segments) {
+      const routeEntry = input.segmentVisualRoutes.get(segment.segment_id);
+      if (!routeEntry) continue;
+      const segmentTasks = plan.tasks.filter(
+        (task) => task.source_segment_id === segment.segment_id,
+      );
+      const hasAnchor = segmentTasks.some(
+        (task) =>
+          task.task_type === "image_still" &&
+          task.parameters.image_role === "anchor",
+      );
+      const videoCount = segmentTasks.filter(
+        (task) => task.task_type === "video_clip",
+      ).length;
+      const motionCount = segmentTasks.filter(
+        (task) => task.task_type === "render_motion_cue",
+      ).length;
+      if (!hasAnchor) {
+        pushUnique(errors, "asset_segment_anchor_missing");
+      }
+      const routeViolated =
+        routeEntry.resolved_route === "api_video"
+          ? videoCount === 0 || motionCount === 0
+          : motionCount === 0 || videoCount > 0;
+      if (routeViolated) {
+        pushUnique(errors, "asset_segment_visual_route_violation");
+      }
     }
   }
 

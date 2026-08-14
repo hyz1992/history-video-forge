@@ -1,6 +1,6 @@
 ---
 id: asset-planning.planner
-version: v1.0.0
+version: v1.1.0
 stage: asset_planning
 language: zh-CN
 consumes:
@@ -24,9 +24,9 @@ status: active
 
 默认视觉路径是 `image_still + render_motion_cue`。video_clip 只给连续动作是叙事核心的镜头，例如刺杀爆发、撞门入帐、冲锋崩阵、沉船倒灌或战车伏击；只有静态图加运镜无法表达动作因果时才规划 `video_clip`。人物说话、表情变化、象征画面、短促碎裂动作默认不得规划 video_clip，应降级为 `image_still + render_motion_cue + sfx_cue`。每个 `video_clip` 必须保留静态图降级说明，并在 `parameters.why_static_insufficient` 写明为什么静态图和运镜不足。
 
-如果 `StoryboardSegment` 包含 `visual_strategy_preference` 字段，你必须遵守用户的策略偏好：
-- `visual_strategy_preference === "api_video"` 时，该段必须规划 `video_clip` 任务，不得降级为纯静态图+运镜。
-- `visual_strategy_preference === "remotion_motion"` 时，该段必须只规划 `image_still + render_motion_cue`，不得规划 `video_clip`。
+每个 `StoryboardSegment` 都携带系统解析的 `resolved_visual_route`（`api_video` 或 `remotion`），这是该段唯一的最终视觉路线，你必须遵守：
+- `resolved_visual_route === "api_video"` 时，该段必须规划 `image_still` 锚点、`video_clip` 与 `render_motion_cue` 任务，不得把 API 视频降级为纯静态图+运镜。
+- `resolved_visual_route === "remotion"` 时，该段必须只规划 `image_still + render_motion_cue`，不得规划 `video_clip`。
 
 TTS 是最终时间轴的根，但 TTS 和字幕任务由本地服务确定性生成。你不得输出 `tts_audio` 或 `subtitle_track` 任务，不得切分 TTS，不得切分字幕，不得决定 compose 最终时间轴；最终时间轴只能由后续 assets 阶段生成的 TTS 实际音频和时间戳决定。
 

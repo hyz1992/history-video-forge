@@ -1,7 +1,6 @@
 import { z } from "zod";
 
-import type { StoryboardPlan } from "../../../../shared/src/index.js";
-import { suitabilityToPreferenceHint } from "../storyboard/storyboard-plan-compatibility.js";
+import type { ResolvedVisualRoute, StoryboardPlan } from "../../../../shared/src/index.js";
 
 export const SegmentAssetIntentKind = z.enum([
   "image_still",
@@ -159,6 +158,11 @@ export type SegmentIntentRepairPatch = z.infer<typeof SegmentIntentRepairPatch>;
 export interface SegmentIntentValidationContext {
   segments: StoryboardPlan["segments"];
   isFirstChunk: boolean;
+  /**
+   * S2-2A 任务 5：resolver 输出的每段最终视觉路线（编排输入）。
+   * 本地逻辑只做机械核对，不得从 api_video_suitability 重新推导路线。
+   */
+  segment_routes: ReadonlyMap<string, ResolvedVisualRoute>;
 }
 
 export interface SegmentIntentIssue {
@@ -532,10 +536,12 @@ function validateContext(
     }
 
     const storyboardSegment = storyboardById.get(entry.source_segment_id);
-    const preference = storyboardSegment
-      ? suitabilityToPreferenceHint(storyboardSegment.api_video_suitability)
-      : "remotion_motion";
-    if (preference === "api_video") {
+    // 任务 5：直接消费 resolver 输出的最终路线；未知段（已报 unknown_segment）
+    // 保守按 remotion 核对，避免重复报错叠加误导。
+    const route = storyboardSegment
+      ? (context.segment_routes.get(entry.source_segment_id) ?? "remotion")
+      : "remotion";
+    if (route === "api_video") {
       if (videoCount === 0) {
         issues.push(
           contextIssue(
@@ -543,6 +549,16 @@ function validateContext(
             intentsPath,
             entry.source_segment_id,
             "video_clip",
+          ),
+        );
+      }
+      if (motionCount === 0) {
+        issues.push(
+          contextIssue(
+            "missing_required_intent_kind",
+            intentsPath,
+            entry.source_segment_id,
+            "render_motion_cue",
           ),
         );
       }
@@ -557,7 +573,7 @@ function validateContext(
           ),
         );
       }
-      if (preference === "remotion_motion" && videoCount > 0) {
+      if (videoCount > 0) {
         issues.push(
           contextIssue(
             "visual_strategy_mismatch",

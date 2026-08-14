@@ -54,12 +54,23 @@ const globalAudioStrategy: AssetPlan["global_audio_strategy"] = {
   bgm_cue_policy: "首段建立主题",
 };
 
+function segmentRoutesFor(segments: StoryboardPlan["segments"]) {
+  return segments.map((segment) => ({
+    segment_id: segment.segment_id,
+    resolved_route:
+      segment.api_video_suitability === "api_video_beneficial" ||
+      segment.api_video_suitability === "api_video_strongly_recommended"
+        ? "api_video"
+        : "remotion",
+  }));
+}
+
 const repairContext = {
   chunk_id: "chunk-1",
   is_first_chunk: false,
   segment_ids: ["seg-1"],
-  visual_strategy_preferences: [
-    { segment_id: "seg-1", preference: null },
+  segment_routes: [
+    { segment_id: "seg-1", resolved_route: "remotion" },
   ],
 } as const;
 
@@ -76,6 +87,7 @@ describe("segment intent planner prompt input", () => {
       chunk_id: "chunk-1",
       is_first_chunk: true,
       segments,
+      segment_routes: segmentRoutesFor(segments),
       art_bible: artBible,
       visual_budget: visualBudget,
       downgrade_policy: downgradePolicy,
@@ -91,6 +103,7 @@ describe("segment intent planner prompt input", () => {
       "chunk_id",
       "is_first_chunk",
       "segments",
+      "segment_routes",
       "art_bible",
       "visual_budget",
       "downgrade_policy",
@@ -112,6 +125,7 @@ describe("segment intent planner prompt input", () => {
     const base = {
       chunk_id: "chunk-1",
       is_first_chunk: false,
+      segment_routes: [],
       art_bible: artBible,
       visual_budget: visualBudget,
       downgrade_policy: downgradePolicy,
@@ -140,6 +154,7 @@ describe("segment intent planner prompt input", () => {
         chunk_id: "chunk-1",
         is_first_chunk: false,
         segments: [segment("seg-1")],
+        segment_routes: [{ segment_id: "seg-1", resolved_route: "remotion" }],
         art_bible: artBible,
         visual_budget: { generated_at: new Date() } as never,
         downgrade_policy: downgradePolicy,
@@ -193,8 +208,8 @@ describe("segment intent repair prompt input", () => {
         chunk_id: "chunk-1",
         is_first_chunk: true,
         segment_ids: ["seg-1"],
-        visual_strategy_preferences: [
-          { segment_id: "seg-1", preference: "api_video" },
+        segment_routes: [
+          { segment_id: "seg-1", resolved_route: "api_video" },
         ],
       },
       message: "不得被解析为授权",
@@ -275,8 +290,8 @@ describe("segment intent repair prompt input", () => {
         chunk_id: "chunk-1",
         is_first_chunk: false,
         segment_ids: ["seg-1"],
-        visual_strategy_preferences: [
-          { segment_id: "seg-1", preference: null },
+        segment_routes: [
+          { segment_id: "seg-1", resolved_route: "remotion" },
         ],
       },
     });
@@ -570,9 +585,9 @@ describe("segment intent repair prompt input", () => {
         chunk_id: "chunk-1",
         is_first_chunk: false,
         segment_ids: ["seg-1", "seg-2"],
-        visual_strategy_preferences: [
-          { segment_id: "seg-1", preference: null },
-          { segment_id: "seg-2", preference: "api_video" },
+        segment_routes: [
+          { segment_id: "seg-1", resolved_route: "remotion" },
+          { segment_id: "seg-2", resolved_route: "api_video" },
         ],
       },
     });

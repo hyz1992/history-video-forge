@@ -41,20 +41,6 @@ function mapLegacyPreferenceToSuitability(
 }
 
 /**
- * 过渡辅助（S2-2A 任务 4→5 之间）：suitability → 旧偏好语义的机械映射。
- * 任务 5 会把 Asset Planning 改为直接消费 resolved route，本函数届时移除。
- * 这是确定性映射，不做任何语义判断。
- */
-export function suitabilityToPreferenceHint(
-  suitability: "remotion_only" | "remotion_sufficient" | "api_video_beneficial" | "api_video_strongly_recommended",
-): "remotion_motion" | "api_video" {
-  if (suitability === "api_video_beneficial" || suitability === "api_video_strongly_recommended") {
-    return "api_video";
-  }
-  return "remotion_motion";
-}
-
-/**
  * 兼容读取结果。
  * plan：可直接进入下游合同的 StoryboardPlan（不含 legacy 字段）。
  * legacy_hints：只读投影，segment_id → 历史适配度提示（旧记录才有值，新记录为空 Map）。

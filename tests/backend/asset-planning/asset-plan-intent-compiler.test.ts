@@ -12,8 +12,7 @@ import {
 import type { SegmentAssetIntentBatchDraft } from "../../../backend/src/modules/asset-planning/segment-asset-intent.js";
 import { validateAssetPlan } from "../../../backend/src/modules/asset-planning/asset-planning-local-validator.js";
 
-function makeStoryboard(count: number): StoryboardPlan {
-  return {
+function makeStoryboard(count: number): StoryboardPlan {  return {
     plan_version: "storyboard_v1",
     source_script_record_id: "script_record",
     source_topic_package_id: "topic_package",
@@ -40,6 +39,12 @@ function makeStoryboard(count: number): StoryboardPlan {
     })),
     global_visual_notes: [],
   };
+}
+
+function isApiVideoSuitability(
+  suitability: StoryboardPlan["segments"][number]["api_video_suitability"],
+): boolean {
+  return suitability === "api_video_beneficial" || suitability === "api_video_strongly_recommended";
 }
 
 function image(role: "anchor" | "support" = "anchor", suffix = "") {
@@ -155,7 +160,7 @@ function makeChunks(storyboard: StoryboardPlan, size = 2): CompiledIntentChunkIn
       source_segment_id: segment.segment_id,
       intents: [
         image(),
-        ...(segment.api_video_suitability === "api_video_strongly_recommended" || segment.api_video_suitability === "api_video_beneficial" ? [video()] : [motion()]),
+        ...(isApiVideoSuitability(segment.api_video_suitability) ? [video(), motion()] : [motion()]),
         sfx(),
         ...(segment.order === 0 ? [bgm("global", [])] : []),
       ],
@@ -170,6 +175,13 @@ function makeInput(count = 3): AssetPlanCompilerInput {
   return {
     sourceIds: { storyboardRecordId: "storyboard_record", scriptRecordId: "script_record", topicPackageId: "topic_package" },
     storyboard, draft: makeDraft(storyboard), globalDraft: makeGlobal(), audioSkeleton: makeAudio(storyboard), chunks: makeChunks(storyboard),
+    segmentVisualRoutes: new Map(storyboard.segments.map((segment) => [segment.segment_id, {
+      segment_id: segment.segment_id,
+      segment_override: null,
+      api_video_suitability: segment.api_video_suitability,
+      resolved_route: isApiVideoSuitability(segment.api_video_suitability) ? "api_video" : "remotion",
+      reason_code: "test_route",
+    }])),
   };
 }
 
@@ -269,7 +281,7 @@ describe("compileAssetPlanFromIntents", () => {
     const compiled = compileAssetPlanFromIntents(input);
     expect(compiled.plan.tasks.find((task) => task.task_type === "bgm_cue")?.source_segment_id).toBe("seg_001");
     expect(compiled.actions).toContainEqual({ code: "global_bgm_owner_bound", segment_id: "seg_001" });
-    expect(compiled.actions).toContainEqual({ code: "visual_strategy_applied", segment_id: "seg_003", preference: "remotion_motion" });
+    expect(compiled.actions).toContainEqual({ code: "visual_strategy_applied", segment_id: "seg_003", route: "remotion", reason_code: "test_route" });
   });
 
   it.each([1, 15, 21])("compiles %i segments with exact coverage", (count) => {

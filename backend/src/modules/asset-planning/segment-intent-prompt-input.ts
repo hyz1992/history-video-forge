@@ -1,6 +1,6 @@
 import { isProxy } from "node:util/types";
 
-import type { AssetPlan, StoryboardPlan } from "../../../../shared/src/index.js";
+import type { AssetPlan, ResolvedVisualRoute, StoryboardPlan } from "../../../../shared/src/index.js";
 import {
   SegmentAssetIntentBatchDraft,
   SegmentAssetIntentKind,
@@ -16,6 +16,11 @@ export interface SegmentIntentPlannerInput {
   chunk_id: string;
   is_first_chunk: boolean;
   segments: StoryboardPlan["segments"];
+  /**
+   * S2-2A 任务 5：resolver 输出的每段最终视觉路线（机械编排输入）。
+   * LLM 只按该路线规划意图，不得自行增删 API 视频。
+   */
+  segment_routes: Array<{ segment_id: string; resolved_route: ResolvedVisualRoute }>;
   art_bible: AssetPlan["art_bible"];
   visual_budget: AssetPlan["visual_budget"];
   downgrade_policy: AssetPlan["downgrade_policy"];
@@ -41,10 +46,7 @@ export interface SegmentIntentRepairInput {
     chunk_id: string;
     is_first_chunk: boolean;
     segment_ids: string[];
-    visual_strategy_preferences: Array<{
-      segment_id: string;
-      preference: "api_video" | "remotion_motion" | null;
-    }>;
+    segment_routes: Array<{ segment_id: string; resolved_route: ResolvedVisualRoute }>;
   };
 }
 
@@ -368,6 +370,7 @@ export function buildSegmentIntentPlannerInput(
     chunk_id: readOwnDataProperty(source, "chunk_id") as string,
     is_first_chunk: readOwnDataProperty(source, "is_first_chunk") as boolean,
     segments: readOwnDataProperty(source, "segments") as StoryboardPlan["segments"],
+    segment_routes: readOwnDataProperty(source, "segment_routes") as SegmentIntentPlannerInput["segment_routes"],
     art_bible: readOwnDataProperty(source, "art_bible") as AssetPlan["art_bible"],
     visual_budget: readOwnDataProperty(
       source,
@@ -389,7 +392,33 @@ export function buildSegmentIntentPlannerInput(
   if (new Set(ids).size !== ids.length) {
     throw new Error("segment intent chunk 的 segment_id 必须唯一");
   }
+  validatePlannerSegmentRoutes(result.segment_routes, result.segments);
   return result;
+}
+
+/**
+ * 任务 5：planner 输入的路线投影必须与 chunk 内 segments 一一对应，
+ * 且 resolved_route 只允许 resolver 的两个合法值；缺漏或越权值直接拒绝，
+ * 避免 prompt 输入与校验上下文出现两套路线。
+ */
+function validatePlannerSegmentRoutes(
+  routes: SegmentIntentPlannerInput["segment_routes"],
+  segments: StoryboardPlan["segments"],
+): void {
+  const expectedIds = new Set(segments.map((segment) => segment.segment_id));
+  const seen = new Set<string>();
+  if (routes.length !== segments.length) {
+    throw new Error("segment_routes 必须与 chunk 内 segments 一一对应");
+  }
+  for (const route of routes) {
+    if (route.resolved_route !== "api_video" && route.resolved_route !== "remotion") {
+      throw new Error("segment_routes 包含非法 resolved_route");
+    }
+    if (!expectedIds.has(route.segment_id) || seen.has(route.segment_id)) {
+      throw new Error("segment_routes 与 chunk 内 segments 不一致");
+    }
+    seen.add(route.segment_id);
+  }
 }
 
 export function buildSegmentIntentRepairInput(

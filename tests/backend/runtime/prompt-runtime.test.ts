@@ -25,7 +25,7 @@ describe("prompt runtime", () => {
 
     expect(planner.metadata).toMatchObject({
       id: "asset-planning.segment-intent-planner",
-      version: "v1.1.0",
+      version: "v1.2.0",
       stage: "asset_planning",
       language: "zh-CN",
       consumes: ["SegmentIntentPlannerInput"],
@@ -34,7 +34,7 @@ describe("prompt runtime", () => {
     });
     expect(repair.metadata).toMatchObject({
       id: "asset-planning.segment-intent-repair",
-      version: "v1.1.0",
+      version: "v1.2.0",
       stage: "asset_planning",
       language: "zh-CN",
       consumes: ["SegmentIntentRepairInput"],
@@ -43,20 +43,20 @@ describe("prompt runtime", () => {
     });
     expect(planner.body).toContain("严格 `SegmentAssetIntentBatchDraft`");
     expect(planner.body).toContain("每个分段精确一次");
-    expect(planner.body).toContain("visual_strategy_preference");
+    expect(planner.body).toContain("segment_routes");
     expect(planner.body).toContain(
-      "`visual_strategy_preference` 为 `null` 时，默认输出一个 `image_still` 锚点图和一个 `render_motion_cue`",
+      "`segment_routes` 是系统已解析的最终路线",
     );
     expect(planner.body).toContain(
-      "只有 `why_static_insufficient` 非空时才允许额外输出 `video_clip`",
+      "只有 `resolved_route` 明确为 `api_video` 的段才允许 `video_clip`",
     );
     expect(planner.body).toContain(
-      "`api_video` 必须输出一个 `image_still` 锚点图和一个 `video_clip`",
+      "`resolved_route === \"api_video\"` 时，该段必须输出一个 `image_still` 锚点图、一个 `video_clip` 和一个 `render_motion_cue`",
     );
     expect(planner.body).toContain(
-      "`remotion_motion` 必须输出一个 `image_still` 锚点图和一个 `render_motion_cue`，并禁止输出 `video_clip`",
+      "`resolved_route === \"remotion\"` 时，该段必须输出一个 `image_still` 锚点图和一个 `render_motion_cue`，并禁止输出 `video_clip`",
     );
-    expect(planner.body).not.toContain("无偏好时按预算与降级策略选择");
+    expect(planner.body).not.toContain("visual_strategy_preference");
     expect(planner.body).toContain("首个分块的第一段");
     expect(planner.body).toContain("非首个分块禁止输出 `global`");
     expect(planner.body).toContain("asset_kind");

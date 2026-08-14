@@ -34,7 +34,12 @@ const segments: StoryboardPlan["segments"] = [
   },
 ];
 
-const context = { segments, isFirstChunk: true };
+const segmentRoutes = new Map([
+  ["seg_001", "api_video" as const],
+  ["seg_002", "remotion" as const],
+  ["seg_003", "remotion" as const],
+]);
+const context = { segments, isFirstChunk: true, segment_routes: segmentRoutes };
 
 function image(image_role: "anchor" | "support" = "anchor") {
   return {
@@ -100,7 +105,7 @@ function validDraft() {
   return {
     planning_mode: "segment_intent_batch",
     segments: [
-      { source_segment_id: "seg_001", intents: [image(), video(), sfx(), bgm()] },
+      { source_segment_id: "seg_001", intents: [image(), video(), motion(), sfx(), bgm()] },
       { source_segment_id: "seg_002", intents: [image(), motion()] },
       { source_segment_id: "seg_003", intents: [image(), motion()] },
     ],
@@ -197,12 +202,12 @@ describe("semantic intent schema and context", () => {
 
   it("uses required_tags/mood_tags/selection_label/timing_basis for audio", () => {
     const raw = validDraft();
-    const audio = raw.segments[0]!.intents[2] as Record<string, unknown>;
+    const audio = raw.segments[0]!.intents[3] as Record<string, unknown>;
     audio.required_tags = [];
     expect(inspect(raw).parsedDraft).toBeUndefined();
 
     const wrongTiming = validDraft();
-    (wrongTiming.segments[0]!.intents[2] as Record<string, unknown>).timing_basis = "segment_start";
+    (wrongTiming.segments[0]!.intents[3] as Record<string, unknown>).timing_basis = "segment_start";
     expect(inspect(wrongTiming).parsedDraft).toBeUndefined();
   });
 
@@ -275,14 +280,18 @@ describe("visual strategy invariants", () => {
     expect(codes(motionOnly)).toContain("visual_anchor_count_invalid");
   });
 
-  it("api_video requires anchor image plus video and permits an additional motion", () => {
+  it("api_video requires anchor image plus video and render_motion_cue", () => {
     const noVideo = validDraft();
     noVideo.segments[0]!.intents = [image(), bgm()];
     expect(codes(noVideo)).toContain("missing_required_intent_kind");
 
-    const withMotion = validDraft();
-    withMotion.segments[0]!.intents.splice(2, 0, motion());
-    expect(inspect(withMotion).issues).toEqual([]);
+    const noMotion = validDraft();
+    noMotion.segments[0]!.intents = noMotion.segments[0]!.intents.filter(
+      (intent) => intent.asset_kind !== "render_motion_cue",
+    );
+    expect(codes(noMotion)).toContain("missing_required_intent_kind");
+
+    expect(inspect(validDraft()).issues).toEqual([]);
   });
 
   it("remotion_motion requires image+motion and forbids every video", () => {
@@ -327,11 +336,11 @@ describe("BGM ownership and scope", () => {
   });
 
   it("forbids global BGM in later chunks but permits local scopes", () => {
-    expect(codes(validDraft(), { segments, isFirstChunk: false })).toContain("global_bgm_owner_invalid");
+    expect(codes(validDraft(), { segments, isFirstChunk: false, segment_routes: segmentRoutes })).toContain("global_bgm_owner_invalid");
     const later = validDraft();
     later.segments[0]!.intents = later.segments[0]!.intents.filter((intent) => intent.asset_kind !== "bgm_cue");
     later.segments[1]!.intents.push(bgm("segment"));
-    expect(inspect(later, { segments, isFirstChunk: false }).issues).toEqual([]);
+    expect(inspect(later, { segments, isFirstChunk: false, segment_routes: segmentRoutes }).issues).toEqual([]);
   });
 
   it("does not mistake a local BGM for the required global owner", () => {
@@ -502,7 +511,7 @@ describe("typed atomic repair", () => {
     expect(inspection.issues).toEqual([
       expect.objectContaining({
         code: "global_bgm_segment_ids_invalid",
-        path: ["segments", 0, "intents", 3, "segment_ids"],
+        path: ["segments", 0, "intents", 4, "segment_ids"],
         segment_id: "seg_001",
         expected_kind: "bgm_cue",
       }),
@@ -546,7 +555,7 @@ describe("typed atomic repair", () => {
     const inspection = inspect(raw);
     const replace = {
       operation: "replace_field" as const,
-      path: ["segments", 0, "intents", 3, "segment_ids"],
+      path: ["segments", 0, "intents", 4, "segment_ids"],
       value: ["seg_001"],
     };
     const append = {

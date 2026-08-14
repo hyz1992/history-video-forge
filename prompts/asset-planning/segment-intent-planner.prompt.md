@@ -1,6 +1,6 @@
 ---
 id: asset-planning.segment-intent-planner
-version: v1.1.0
+version: v1.2.0
 stage: asset_planning
 language: zh-CN
 consumes:
@@ -17,8 +17,10 @@ status: active
 ## 规划规则
 
 - `planning_mode` 固定为 `segment_intent_batch`；输入中的每个分段精确一次出现在 `segments`，顺序不变，使用原 `segment_id` 写入 `source_segment_id`。
-- 严格遵守 `visual_strategy_preference`：`api_video` 必须输出一个 `image_still` 锚点图和一个 `video_clip`；`remotion_motion` 必须输出一个 `image_still` 锚点图和一个 `render_motion_cue`，并禁止输出 `video_clip`。锚点图的 `image_role` 必须为 `anchor`。
-- `visual_strategy_preference` 为 `null` 时，默认输出一个 `image_still` 锚点图和一个 `render_motion_cue`；只有 `why_static_insufficient` 非空时才允许额外输出 `video_clip`。
+- 严格遵守输入 `segment_routes` 中每段解析出的最终视觉路线：
+  - `resolved_route === "api_video"` 时，该段必须输出一个 `image_still` 锚点图、一个 `video_clip` 和一个 `render_motion_cue`；锚点图的 `image_role` 必须为 `anchor`，`video_clip` 与 `render_motion_cue` 都必须对应同段锚点图。
+  - `resolved_route === "remotion"` 时，该段必须输出一个 `image_still` 锚点图和一个 `render_motion_cue`，并禁止输出 `video_clip`。
+- `segment_routes` 是系统已解析的最终路线，不得按分镜内容自行增删 `video_clip`；只有 `resolved_route` 明确为 `api_video` 的段才允许 `video_clip`。
 - 每段精确一个锚点图，其 `image_role` 为 `anchor`。动效或视频必须与同段锚点图对应；只有锚点图不足时才增加 `support` 辅助图，并填写原因。
 - 根据分镜叙事功能规划必要的 `sfx_cue`；配乐可以使用 `segment` 或 `segment_span` 局部范围。
 - 首个分块的第一段是全片全局 BGM 的唯一归属段，且全分块只能有一个全局 BGM。非首个分块禁止输出 `global`，但允许局部范围。

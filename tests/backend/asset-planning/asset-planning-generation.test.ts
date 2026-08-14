@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 
-import { AssetPlan, type ScriptDraftPackage, type StoryboardPlan } from "../../../shared/src/index.js";
+import { AssetPlan, type ResolvedSegmentVisualRoute, type ScriptDraftPackage, type StoryboardPlan } from "../../../shared/src/index.js";
 import type {
   InvokeStructuredPromptOptions,
   LlmGateway,
@@ -328,17 +328,44 @@ function makeGateway(
   return { gateway, calls };
 }
 
-function makeInput(llmGateway: LlmGateway, chunkSize = 2) {
+function makeInput(
+  llmGateway: LlmGateway,
+  chunkSize = 2,
+  storyboard: StoryboardPlan = baseStoryboardPlan,
+) {
   return {
     sourceStoryboardRecordId: "storyboard_record_1",
     sourceScriptRecordId: "script_record_1",
     sourceTopicPackageId: "topic_package_1",
-    storyboard: baseStoryboardPlan,
+    storyboard,
     draft: baseScriptDraft,
     topicBoundaryContext: baseTopicBoundaryContext,
+    segmentVisualRoutes: makeSegmentRoutes(storyboard),
     llmGateway,
     chunkSize,
   };
+}
+
+/** S2-2A 任务 5：从 storyboard 构造 resolver 输出的路线输入（测试辅助）。 */
+function makeSegmentRoutes(
+  storyboard: StoryboardPlan,
+): Map<string, ResolvedSegmentVisualRoute> {
+  return new Map(
+    storyboard.segments.map((segment) => [
+      segment.segment_id,
+      {
+        segment_id: segment.segment_id,
+        segment_override: null,
+        api_video_suitability: segment.api_video_suitability,
+        resolved_route:
+          segment.api_video_suitability === "api_video_beneficial" ||
+          segment.api_video_suitability === "api_video_strongly_recommended"
+            ? "api_video"
+            : "remotion",
+        reason_code: "test_route",
+      },
+    ]),
+  );
 }
 
 function deferred<T = void>() {
@@ -376,13 +403,20 @@ function validIntentDraftFor(segments: StoryboardPlan["segments"], first: boolea
           risk_notes: ["避免现代元素"],
         },
         ...(segment.api_video_suitability === "api_video_strongly_recommended" || segment.api_video_suitability === "api_video_beneficial"
-          ? [{
-              asset_kind: "video_clip",
-              production_intent: `为 ${segment.segment_id} 生成视频`,
-              video_prompt: `历史写实视频，${segment.scene_description}`,
-              why_static_insufficient: "动作连续性必须由视频表达",
-              risk_notes: ["避免现代元素"],
-            }]
+          ? [
+              {
+                asset_kind: "video_clip",
+                production_intent: `为 ${segment.segment_id} 生成视频`,
+                video_prompt: `历史写实视频，${segment.scene_description}`,
+                why_static_insufficient: "动作连续性必须由视频表达",
+                risk_notes: ["避免现代元素"],
+              },
+              {
+                asset_kind: "render_motion_cue",
+                production_intent: `为 ${segment.segment_id} 添加轻微运镜`,
+                risk_notes: ["保持主体稳定"],
+              },
+            ]
           : [{
               asset_kind: "render_motion_cue",
               production_intent: `为 ${segment.segment_id} 添加轻微运镜`,
@@ -909,8 +943,7 @@ describe("generateAssetPlan", () => {
     });
 
     const running = generateAssetPlan({
-      ...makeInput(gateway, 1),
-      storyboard,
+      ...makeInput(gateway, 1, storyboard),
       generationMode: "intent_compiler",
       chunkConcurrency: 2,
       onIntentChunkSettled: (event) => settled.push(event),
@@ -1017,8 +1050,7 @@ describe("generateAssetPlan", () => {
     });
 
     const plan = await generateAssetPlan({
-      ...makeInput(gateway, 2),
-      storyboard,
+      ...makeInput(gateway, 2, storyboard),
       generationMode: "intent_compiler",
     });
 
@@ -1871,8 +1903,7 @@ describe("generateAssetPlan", () => {
     });
 
     const running = generateAssetPlan({
-      ...makeInput(gateway, 1),
-      storyboard,
+      ...makeInput(gateway, 1, storyboard),
     });
 
     let waitError: unknown = null;
@@ -1929,8 +1960,7 @@ describe("generateAssetPlan", () => {
     });
 
     const running = generateAssetPlan({
-      ...makeInput(gateway, 1),
-      storyboard,
+      ...makeInput(gateway, 1, storyboard),
       chunkConcurrency: 1,
     });
 
@@ -1965,8 +1995,7 @@ describe("generateAssetPlan", () => {
     });
 
     const running = generateAssetPlan({
-      ...makeInput(gateway, 1),
-      storyboard,
+      ...makeInput(gateway, 1, storyboard),
       chunkConcurrency: 4,
     });
 
@@ -2016,8 +2045,7 @@ describe("generateAssetPlan", () => {
 
     await expect(
       generateAssetPlan({
-        ...makeInput(gateway, 1),
-        storyboard,
+        ...makeInput(gateway, 1, storyboard),
         chunkConcurrency: 2,
       }),
     ).rejects.toThrow("chunk_002_failed");

@@ -5,10 +5,10 @@ import {
   AssetPlan,
   ProjectArtBible,
   type AssetTask,
+  type ResolvedSegmentVisualRoute,
   type ScriptDraftPackage,
   type StoryboardPlan,
 } from "../../../../shared/src/index.js";
-import { suitabilityToPreferenceHint } from "../storyboard/storyboard-plan-compatibility.js";
 import { env, getValidatedRuntimeEnv } from "../../config/env.js";
 import type { AssetPlanningGenerationMode } from "../../config/env.js";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
@@ -280,6 +280,11 @@ export interface GenerateAssetPlanInput {
   storyboard: StoryboardPlan;
   draft: ScriptDraftPackage;
   topicBoundaryContext: AssetPlanningTopicBoundaryContext;
+  /**
+   * S2-2A 任务 5：resolver 输出的每段最终视觉路线（编排输入）。
+   * 生成服务只把路线投影进 prompt/校验/编译，不做语义推导。
+   */
+  segmentVisualRoutes: ReadonlyMap<string, ResolvedSegmentVisualRoute>;
   llmGateway?: LlmGateway;
   interactionLogWriter?: LlmInteractionLogWriter;
   chunkSize?: number;
@@ -404,6 +409,13 @@ interface LocalTaskMapping {
 export async function generateAssetPlan(
   input: GenerateAssetPlanInput,
 ): Promise<AssetPlan> {
+  // 任务 5：每段必须携带 resolver 输出的最终路线，缺项是编排错误，
+  // 不允许静默降级成 remotion（降级决策只属于 resolver）。
+  for (const segment of input.storyboard.segments) {
+    if (!input.segmentVisualRoutes.get(segment.segment_id)) {
+      throw new Error("asset_planning_segment_visual_route_missing");
+    }
+  }
   const gateway = input.llmGateway ?? createAssetPlannerGateway();
   const audioSkeleton = buildLocalAudioSkeleton(input);
   const totalSegments = input.storyboard.segments.length;
@@ -434,6 +446,10 @@ export async function generateAssetPlan(
           chunk_id: `chunk_${String(chunkIndex + 1).padStart(3, "0")}`,
           is_first_chunk: chunkIndex === 0,
           segments,
+          segment_routes: segments.map((segment) => ({
+            segment_id: segment.segment_id,
+            resolved_route: input.segmentVisualRoutes.get(segment.segment_id)!.resolved_route,
+          })),
           art_bible: globalDraft.art_bible,
           visual_budget: globalDraft.visual_budget,
           downgrade_policy: globalDraft.downgrade_policy,
@@ -443,6 +459,7 @@ export async function generateAssetPlan(
           gateway,
           plannerInput,
           segments,
+          segmentRoutes: input.segmentVisualRoutes,
           isFirstChunk: chunkIndex === 0,
           interactionLogWriter: input.interactionLogWriter,
           chunkIndex,
@@ -481,6 +498,7 @@ export async function generateAssetPlan(
         },
         audioSkeleton,
         chunks: chunkBatch.results,
+        segmentVisualRoutes: input.segmentVisualRoutes,
       });
     } catch (error) {
       for (const event of chunkBatch.events) {
@@ -703,12 +721,22 @@ async function generateIntentChunkWithResilience(input: {
   gateway: LlmGateway;
   plannerInput: ReturnType<typeof buildSegmentIntentPlannerInput>;
   segments: StoryboardPlan["segments"];
+  segmentRoutes: ReadonlyMap<string, ResolvedSegmentVisualRoute>;
   isFirstChunk: boolean;
   chunkIndex: number;
   interactionLogWriter?: LlmInteractionLogWriter;
   onSettled?: GenerateAssetPlanInput["onIntentChunkSettled"];
 }) {
-  const context = { segments: input.segments, isFirstChunk: input.isFirstChunk };
+  const context = {
+    segments: input.segments,
+    isFirstChunk: input.isFirstChunk,
+    segment_routes: new Map(
+      input.segments.map((segment) => [
+        segment.segment_id,
+        input.segmentRoutes.get(segment.segment_id)!.resolved_route,
+      ]),
+    ),
+  };
   const chunkId = input.plannerInput.chunk_id;
   const accounting = createChunkInteractionAccounting(
     chunkId,
@@ -752,9 +780,9 @@ async function generateIntentChunkWithResilience(input: {
             chunk_id: chunkId,
             is_first_chunk: input.isFirstChunk,
             segment_ids: input.segments.map((segment) => segment.segment_id),
-            visual_strategy_preferences: input.segments.map((segment) => ({
+            segment_routes: input.segments.map((segment) => ({
               segment_id: segment.segment_id,
-              preference: suitabilityToPreferenceHint(segment.api_video_suitability),
+              resolved_route: input.segmentRoutes.get(segment.segment_id)!.resolved_route,
             })),
           },
         });
@@ -1775,7 +1803,12 @@ function buildChunkPromptInput(
     chunk: {
       chunk_id: `chunk_${String(chunkIndex + 1).padStart(3, "0")}`,
       segment_ids: segmentIds,
-      segments,
+      // S2-2A 任务 5：每段投影 resolver 输出的最终视觉路线，
+      // LLM 只按该路线规划任务，不再看到或推导旧 preference。
+      segments: segments.map((segment) => ({
+        ...segment,
+        resolved_visual_route: input.segmentVisualRoutes.get(segment.segment_id)!.resolved_route,
+      })),
     },
     regeneration_context: input.regenerationContext ?? null,
   };

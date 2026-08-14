@@ -23,6 +23,7 @@ async function generateAssetPlanController(
   return runAssetPlanningGeneration({
     db: context.app.db,
     project,
+    demoMode: context.app.env.demoMode,
   });
 }
 

@@ -14,6 +14,29 @@ const fixture = JSON.parse(readFileSync(new URL(
   import.meta.url,
 ), "utf8")) as { legacyPlan: unknown; compilerInput: AssetPlanCompilerInput };
 
+/** S2-2A 任务 5：fixture 是 JSON，无法表示 Map；测试侧从 storyboard 构造 route 输入。 */
+function withVisualRoutes(input: AssetPlanCompilerInput): AssetPlanCompilerInput {
+  return {
+    ...input,
+    segmentVisualRoutes: new Map(
+      input.storyboard.segments.map((segment) => [
+        segment.segment_id,
+        {
+          segment_id: segment.segment_id,
+          segment_override: null,
+          api_video_suitability: segment.api_video_suitability,
+          resolved_route:
+            segment.api_video_suitability === "api_video_beneficial" ||
+            segment.api_video_suitability === "api_video_strongly_recommended"
+              ? "api_video"
+              : "remotion",
+          reason_code: "shadow_fixture_route",
+        },
+      ]),
+    ),
+  };
+}
+
 function projectRelativeSpecifiers(source: string): string[] {
   return [
     ...source.matchAll(/\bfrom\s+["']([^"']+)["']/gu),
@@ -72,7 +95,7 @@ describe("intent compiler shadow report", () => {
     const legacyPlan = AssetPlan.parse(fixture.legacyPlan);
     const beforeLegacy = structuredClone(legacyPlan);
     const beforeCompilerInput = structuredClone(fixture.compilerInput);
-    const report = buildIntentCompilerShadowReport({ legacyPlan, compilerInput: fixture.compilerInput });
+    const report = buildIntentCompilerShadowReport({ legacyPlan, compilerInput: withVisualRoutes(structuredClone(fixture.compilerInput)) });
 
     expect(report).toEqual({
       matched: false,
@@ -104,11 +127,11 @@ describe("intent compiler shadow report", () => {
   });
 
   it("reports controlled source, policy, coverage, and dependency differences with stable codes", () => {
-    const compiled = compileAssetPlanFromIntents(structuredClone(fixture.compilerInput)).plan;
+    const compiled = compileAssetPlanFromIntents(withVisualRoutes(structuredClone(fixture.compilerInput))).plan;
     const compare = (mutate: (legacy: AssetPlan) => void) => {
       const legacy = structuredClone(compiled);
       mutate(legacy);
-      return buildIntentCompilerShadowReport({ legacyPlan: legacy, compilerInput: fixture.compilerInput }).differences;
+      return buildIntentCompilerShadowReport({ legacyPlan: legacy, compilerInput: withVisualRoutes(structuredClone(fixture.compilerInput)) }).differences;
     };
 
     expect(compare((legacy) => { legacy.source_storyboard_record_id = "other_storyboard"; })).toEqual([
@@ -128,12 +151,12 @@ describe("intent compiler shadow report", () => {
   });
 
   it("measures task type redistribution even when total task count is unchanged", () => {
-    const compiled = compileAssetPlanFromIntents(structuredClone(fixture.compilerInput)).plan;
+    const compiled = compileAssetPlanFromIntents(withVisualRoutes(structuredClone(fixture.compilerInput))).plan;
     const legacy = structuredClone(compiled);
     legacy.tasks.find((task) => task.task_type === "bgm_cue")!.task_type = "sfx_cue";
     const difference = buildIntentCompilerShadowReport({
       legacyPlan: legacy,
-      compilerInput: fixture.compilerInput,
+      compilerInput: withVisualRoutes(structuredClone(fixture.compilerInput)),
     }).differences.find((item) => item.code === "task_type_counts_mismatch");
     expect(difference).toEqual({
       code: "task_type_counts_mismatch",
