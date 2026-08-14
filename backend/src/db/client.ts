@@ -456,16 +456,15 @@ export interface DbClient {
     ): Promise<void>;
     /**
      * CAS 更新或创建用户偏好。
-     * expectedRevision=0 → 事务内 create（唯一冲突→已存在，返回 actualRevision）。
+     * expectedRevision=0 → 事务内 create（唯一冲突→返回完整现有记录）。
      * expectedRevision>0 → 条件 updateMany WHERE revision=expectedRevision。
-     * 返回 { success, actualRevision }：成功时 success=true；
-     * 失败时 success=false 且 actualRevision 为数据库当前 revision（供客户端重试）。
+     * 只有唯一约束冲突返回 conflict + existingRecord；其他事务异常继续抛出。
      */
     casUpsertUserGenerationPreference(
       record: UserGenerationPreferenceRecord,
       expectedRevision: number,
       audit: { actorUserId: string; oldRevision: number; newRevision: number; diff: Record<string, unknown> },
-    ): Promise<{ success: boolean; actualRevision: number | null }>;
+    ): Promise<{ success: true } | { success: false; conflict: true; existingRecord: UserGenerationPreferenceRecord }>;
     /**
      * CAS 更新或创建项目配置（同语义）。
      */
@@ -473,7 +472,7 @@ export interface DbClient {
       record: ProjectGenerationConfigurationRecord,
       expectedRevision: number,
       audit: { actorUserId: string; projectId: string; oldRevision: number; newRevision: number; diff: Record<string, unknown> },
-    ): Promise<{ success: boolean; actualRevision: number | null }>;
+    ): Promise<{ success: true } | { success: false; conflict: true; existingRecord: ProjectGenerationConfigurationRecord }>;
   };
   secondAggregateWriter?: {
     saveScript(record: ScriptRecord): Promise<void>;

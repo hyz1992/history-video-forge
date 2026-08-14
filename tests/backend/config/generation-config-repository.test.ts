@@ -2,9 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import { DEFAULT_GENERATION_CONFIGURATION } from "../../../shared/src/index.js";
 import { createDbClient } from "../../../backend/src/db/client.js";
+import type {
+  ProjectGenerationConfigurationRecord,
+  UserGenerationPreferenceRecord,
+} from "../../../backend/src/db/client.js";
 import {
   getUserGenerationPreference,
   upsertUserGenerationPreference,
+  getOrBackfillUserGenerationPreference,
   getProjectGenerationConfiguration,
   upsertProjectGenerationConfiguration,
   listPublicGenerationCapabilities,
@@ -173,6 +178,86 @@ describe("generation-config repository", () => {
       // 不泄露凭据
       expect(e).not.toHaveProperty("api_key");
       expect(e).not.toHaveProperty("apiKeyEnv");
+    });
+  });
+
+  describe("concurrent backfill losers (P1)", () => {
+    it("user preference concurrent loser returns stored from existingRecord instead of failing", async () => {
+      const db = createDbClient();
+      // 模拟另一请求已并发创建的数据库记录（winner 的结果）
+      const winnerRecord: UserGenerationPreferenceRecord = {
+        id: "winner-id",
+        userId: "u1",
+        schemaVersion: "generation_configuration_v1",
+        revision: 1,
+        configurationJson: { ...DEFAULT_GENERATION_CONFIGURATION },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      // mock writer：create 触发唯一冲突（P2002），返回数据库现有记录
+      db.firstAggregateWriter = {
+        casUpsertUserGenerationPreference: async () => ({
+          success: false as const,
+          conflict: true as const,
+          existingRecord: winnerRecord,
+        }),
+      };
+
+      const result = await getOrBackfillUserGenerationPreference(db, "u1", "u1");
+      // loser 不报错，返回 stored + winner 的记录
+      expect(result.source).toBe("stored");
+      expect(result.revision).toBe(1);
+      // 内存已同步（后续读取一致）
+      const synced = getUserGenerationPreference(db, "u1");
+      expect(synced?.revision).toBe(1);
+      expect(synced?.configuration).toEqual(winnerRecord.configurationJson);
+    });
+
+    it("project backfill loser syncs memory so subsequent PATCH works", async () => {
+      const db = createDbClient();
+      const dbRecord: ProjectGenerationConfigurationRecord = {
+        id: "db-id",
+        projectId: "p1",
+        schemaVersion: "generation_configuration_v1",
+        revision: 1,
+        sourceUserPreferenceRevision: null,
+        configurationJson: { ...DEFAULT_GENERATION_CONFIGURATION },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      // mock writer：create 冲突返回数据库记录；后续 update 成功
+      db.firstAggregateWriter = {
+        casUpsertProjectGenerationConfiguration: async (record, expectedRevision) => {
+          if (expectedRevision === 0) {
+            return { success: false as const, conflict: true as const, existingRecord: dbRecord };
+          }
+          return { success: true as const };
+        },
+      };
+
+      // loser 读取（backfill 冲突 → stored）
+      const result = await getProjectGenerationConfiguration(db, "p1");
+      expect(result.source).toBe("stored");
+      expect(result.revision).toBe(1);
+      // 内存已同步：后续 PATCH 不再 project_config_not_found_after_backfill
+      const patch = await upsertProjectGenerationConfiguration(db, "p1", {
+        expected_revision: 1,
+        configuration: { ...DEFAULT_GENERATION_CONFIGURATION, video: { strategy: "all_remotion", api_quality: "standard_720p" } },
+      }, "u1");
+      expect(patch.ok).toBe(true);
+    });
+
+    it("project backfill rethrows non-unique transaction errors instead of faking success", async () => {
+      const db = createDbClient();
+      // mock writer：审计 FK 失败等非唯一约束错误必须抛出
+      db.firstAggregateWriter = {
+        casUpsertProjectGenerationConfiguration: async () => {
+          throw new Error("audit_log_fk_failed");
+        },
+      };
+      await expect(getProjectGenerationConfiguration(db, "p1")).rejects.toThrow("audit_log_fk_failed");
+      // 内存不能有虚假记录
+      expect(db.projectGenerationConfigurations.size).toBe(0);
     });
   });
 });

@@ -120,3 +120,70 @@ describe("project store owner_id propagation", () => {
     }
   });
 });
+
+describe("project store S2-2A snapshot fields propagation", () => {
+  it("getProject maps generation configuration, version, preview and cost summary", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        project_id: "proj-s2a",
+        name: "S2-2A项目",
+        current_status: "topic_pending",
+        generation_configuration: {
+          configuration: { schema_version: "generation_configuration_v1" },
+          revision: 2,
+          source: "stored",
+          source_user_preference_revision: 1,
+          updated_at: "2026-08-14T00:00:00.000Z",
+        },
+        generation_configuration_version: 2,
+        configuration_invalidation_preview: {
+          affected_stages: ["asset_planning"],
+          note: "配置变更仅保存，不自动触发下游生成。",
+        },
+        cost_summary: {
+          total_estimated_cost_micros: "0",
+          total_actual_cost_micros: "0",
+          record_count: 0,
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const api = createFetchProjectApi();
+      const snapshot = await api.getProject!("proj-s2a");
+
+      expect(snapshot.generation_configuration?.revision).toBe(2);
+      expect(snapshot.generation_configuration?.source).toBe("stored");
+      expect(snapshot.generation_configuration_version).toBe(2);
+      expect(snapshot.configuration_invalidation_preview?.affected_stages).toEqual(["asset_planning"]);
+      expect(snapshot.cost_summary?.record_count).toBe(0);
+      expect(snapshot.cost_summary?.total_estimated_cost_micros).toBe("0");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("getProject leaves new fields undefined when backend omits them", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        project_id: "proj-legacy",
+        name: "旧快照",
+        current_status: "script_ready",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const api = createFetchProjectApi();
+      const snapshot = await api.getProject!("proj-legacy");
+
+      expect(snapshot.generation_configuration).toBeNull();
+      expect(snapshot.generation_configuration_version).toBeUndefined();
+      expect(snapshot.configuration_invalidation_preview).toBeUndefined();
+      expect(snapshot.cost_summary).toBeUndefined();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

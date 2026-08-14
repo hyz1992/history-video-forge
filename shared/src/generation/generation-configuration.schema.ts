@@ -239,6 +239,70 @@ export const S2_2A_ProjectConfigPatchRequest = z
   .strict();
 export type S2_2A_ProjectConfigPatchRequest = z.infer<typeof S2_2A_ProjectConfigPatchRequest>;
 
+// --- S2-2A API 响应 DTO（实施计划任务 3：请求与响应都用共享 Zod 校验） -------
+
+/** 失效预览（配置变更影响的最早阶段，不自动触发下游）。 */
+export const ConfigurationInvalidationPreview = z
+  .object({
+    affected_stages: z.array(z.string().min(1)),
+    note: z.string().min(1),
+  })
+  .strict();
+export type ConfigurationInvalidationPreview = z.infer<typeof ConfigurationInvalidationPreview>;
+
+/** GET/PATCH /api/me/generation-preferences 响应。 */
+export const UserGenerationPreferenceResponse = z
+  .object({
+    source: z.enum(["stored", "backfilled_default"]),
+    revision: z.number().int().nonnegative(),
+    configuration: GenerationConfigurationV1,
+    updated_at: z.string().min(1),
+  })
+  .strict();
+export type UserGenerationPreferenceResponse = z.infer<typeof UserGenerationPreferenceResponse>;
+
+/** GET/PATCH /api/projects/:id/generation-configuration 响应。 */
+export const ProjectGenerationConfigurationResponse = z
+  .object({
+    source: z.enum(["stored", "backfilled_default"]),
+    revision: z.number().int().nonnegative(),
+    configuration: GenerationConfigurationV1,
+    updated_at: z.string().min(1),
+    source_user_preference_revision: z.number().int().nonnegative().nullable(),
+    diff_from_user_default: z.record(z.string(), z.unknown()).nullable(),
+    invalidation_preview: ConfigurationInvalidationPreview,
+  })
+  .strict();
+export type ProjectGenerationConfigurationResponse = z.infer<typeof ProjectGenerationConfigurationResponse>;
+
+/** GET /api/generation-capabilities 单项与整体响应。 */
+export const PublicCapabilityEntrySchema = z
+  .object({
+    id: z.string().min(1),
+    capability: z.enum(CAPABILITY_SLOTS),
+    provider_key: z.string().min(1),
+    model_id: z.string().min(1),
+    model_version: z.string().min(1).nullable(),
+    display_name: z.string().min(1),
+    quality_tier: z.string().min(1).nullable(),
+    speed_tier: z.string().min(1).nullable(),
+    parameter_capabilities: z.record(z.string(), z.unknown()),
+    pricing_version: z.string().min(1),
+    pricing: z.record(z.string(), z.unknown()),
+    status: z.enum(["active", "disabled"]),
+    is_default: z.boolean(),
+    availability: z.enum(["enabled", "disabled"]),
+  })
+  .strict();
+export type PublicCapabilityEntryDto = z.infer<typeof PublicCapabilityEntrySchema>;
+
+export const GenerationCapabilitiesResponse = z
+  .object({
+    capabilities: z.array(PublicCapabilityEntrySchema),
+  })
+  .strict();
+export type GenerationCapabilitiesResponse = z.infer<typeof GenerationCapabilitiesResponse>;
+
 /**
  * 验证完整配置是否符合 S2-2A 约束（creative 全 null + capabilities 全 auto）。
  * 用于在持久化前拒绝 B/C 字段被提前写入。

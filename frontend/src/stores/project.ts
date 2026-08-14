@@ -13,6 +13,27 @@ export interface ProjectSnapshot {
   duration_sec?: number | null;
   aspect_ratio?: string | null;
   thumbnail_url?: string | null;
+  /** S2-2A：项目冻结的生成配置快照（只读）。 */
+  generation_configuration?: {
+    configuration: Record<string, unknown>;
+    revision: number;
+    source: "stored" | "backfilled_default";
+    source_user_preference_revision: number | null;
+    updated_at: string;
+  } | null;
+  /** S2-2A：配置版本（便于快速判断是否需要刷新）。 */
+  generation_configuration_version?: number;
+  /** S2-2A：配置失效预览。 */
+  configuration_invalidation_preview?: {
+    affected_stages: string[];
+    note: string;
+  };
+  /** S2-2A：只读成本摘要占位。 */
+  cost_summary?: {
+    total_estimated_cost_micros: string;
+    total_actual_cost_micros: string;
+    record_count: number;
+  };
 }
 
 export interface CreateProjectInput {
@@ -73,11 +94,19 @@ export function createFetchProjectApi(baseUrl = ""): ProjectApi {
       const data = await apiFetch<Record<string, unknown>>(`${baseUrl}/api/projects/${projectId}`);
       const topicPkg = data.active_topic_package as Record<string, unknown> | null | undefined;
       const rawName = data.display_name ?? topicPkg?.canonical_title ?? data.name ?? undefined;
+      const generationConfig = data.generation_configuration as ProjectSnapshot["generation_configuration"];
+      const invalidationPreview = data.configuration_invalidation_preview as ProjectSnapshot["configuration_invalidation_preview"];
+      const costSummary = data.cost_summary as ProjectSnapshot["cost_summary"];
       return {
         project_id: (data.project_id ?? projectId) as string,
         current_status: (data.current_status ?? "") as string,
         owner_id: typeof data.owner_id === "string" ? data.owner_id : undefined,
         display_name: typeof rawName === "string" ? rawName : undefined,
+        generation_configuration: generationConfig ?? null,
+        generation_configuration_version:
+          typeof data.generation_configuration_version === "number" ? data.generation_configuration_version : undefined,
+        configuration_invalidation_preview: invalidationPreview,
+        cost_summary: costSummary,
       };
     },
     async deleteProject(projectId) {

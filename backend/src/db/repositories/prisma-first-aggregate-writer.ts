@@ -182,122 +182,146 @@ export class PrismaFirstAggregateWriter {
 
   /**
    * CAS 更新或创建用户偏好。
-   * expectedRevision=0 → 事务内 create（唯一冲突→已存在，返回 actualRevision）。
+   * expectedRevision=0 → 事务内 create（唯一冲突→返回完整现有记录）。
    * expectedRevision>0 → 条件 updateMany WHERE revision=expectedRevision。
+   * 只有明确的唯一约束冲突（Prisma P2002）返回 conflict + existingRecord；
+   * 其他事务异常（审计 FK 失败、I/O 等）继续抛出，由调用方处理。
    */
   async casUpsertUserGenerationPreference(
     record: UserGenerationPreferenceRecord,
     expectedRevision: number,
     audit: { actorUserId: string; oldRevision: number; newRevision: number; diff: Record<string, unknown> },
-  ): Promise<{ success: boolean; actualRevision: number | null }> {
-    try {
-      return await this.client.$transaction(async (tx) => {
-        if (expectedRevision === 0) {
-          // 首次创建
-          try {
-            await tx.userGenerationPreference.create({
-              data: {
-                id: record.id, userId: record.userId, schemaVersion: record.schemaVersion,
-                revision: record.revision, configurationJson: record.configurationJson as never,
-                createdAt: record.createdAt, updatedAt: record.updatedAt,
-              },
-            });
-          } catch {
-            // 唯一冲突 → 已被并发创建，查询实际 revision
-            const existing = await tx.userGenerationPreference.findUnique({
-              where: { userId: record.userId }, select: { revision: true },
-            });
-            return { success: false, actualRevision: existing?.revision ?? null };
-          }
-        } else {
-          const result = await tx.userGenerationPreference.updateMany({
-            where: { userId: record.userId, revision: expectedRevision },
+  ): Promise<{ success: true } | { success: false; conflict: true; existingRecord: UserGenerationPreferenceRecord }> {
+    return this.client.$transaction(async (tx) => {
+      if (expectedRevision === 0) {
+        try {
+          await tx.userGenerationPreference.create({
             data: {
+              id: record.id, userId: record.userId, schemaVersion: record.schemaVersion,
               revision: record.revision, configurationJson: record.configurationJson as never,
-              schemaVersion: record.schemaVersion, updatedAt: record.updatedAt,
+              createdAt: record.createdAt, updatedAt: record.updatedAt,
             },
           });
-          if (result.count !== 1) {
-            const existing = await tx.userGenerationPreference.findUnique({
-              where: { userId: record.userId }, select: { revision: true },
-            });
-            return { success: false, actualRevision: existing?.revision ?? null };
+        } catch (error) {
+          if (isUniqueConstraintError(error)) {
+            const existing = await tx.userGenerationPreference.findUnique({ where: { userId: record.userId } });
+            if (!existing) throw error;
+            return { success: false, conflict: true, existingRecord: mapUserPreferenceRow(existing) };
           }
+          throw error;
         }
-        await tx.auditLog.create({
+      } else {
+        const result = await tx.userGenerationPreference.updateMany({
+          where: { userId: record.userId, revision: expectedRevision },
           data: {
-            actorUserId: audit.actorUserId,
-            action: expectedRevision === 0 ? "generation_preference_create" : "generation_preference_update",
-            targetType: "UserGenerationPreference",
-            targetId: record.userId,
-            metadataJson: {
-              old_revision: audit.oldRevision, new_revision: audit.newRevision, diff: audit.diff,
-            } as never,
+            revision: record.revision, configurationJson: record.configurationJson as never,
+            schemaVersion: record.schemaVersion, updatedAt: record.updatedAt,
           },
         });
-        return { success: true, actualRevision: record.revision };
+        if (result.count !== 1) {
+          const existing = await tx.userGenerationPreference.findUnique({ where: { userId: record.userId } });
+          return { success: false, conflict: true, existingRecord: existing ? mapUserPreferenceRow(existing) : record };
+        }
+      }
+      await tx.auditLog.create({
+        data: {
+          actorUserId: audit.actorUserId,
+          action: expectedRevision === 0 ? "generation_preference_create" : "generation_preference_update",
+          targetType: "UserGenerationPreference",
+          targetId: record.userId,
+          metadataJson: {
+            old_revision: audit.oldRevision, new_revision: audit.newRevision, diff: audit.diff,
+          } as never,
+        },
       });
-    } catch {
-      return { success: false, actualRevision: null };
-    }
+      return { success: true };
+    });
   }
 
   /**
-   * CAS 更新或创建项目配置（同语义）。
+   * CAS 更新或创建项目配置（同语义：仅唯一约束冲突返回 conflict + 完整现有记录）。
    */
   async casUpsertProjectGenerationConfiguration(
     record: ProjectGenerationConfigurationRecord,
     expectedRevision: number,
     audit: { actorUserId: string; projectId: string; oldRevision: number; newRevision: number; diff: Record<string, unknown> },
-  ): Promise<{ success: boolean; actualRevision: number | null }> {
-    try {
-      return await this.client.$transaction(async (tx) => {
-        if (expectedRevision === 0) {
-          try {
-            await tx.projectGenerationConfiguration.create({
-              data: {
-                id: record.id, projectId: record.projectId, schemaVersion: record.schemaVersion,
-                revision: record.revision, sourceUserPreferenceRevision: record.sourceUserPreferenceRevision,
-                configurationJson: record.configurationJson as never,
-                createdAt: record.createdAt, updatedAt: record.updatedAt,
-              },
-            });
-          } catch {
-            const existing = await tx.projectGenerationConfiguration.findUnique({
-              where: { projectId: record.projectId }, select: { revision: true },
-            });
-            return { success: false, actualRevision: existing?.revision ?? null };
-          }
-        } else {
-          const result = await tx.projectGenerationConfiguration.updateMany({
-            where: { projectId: record.projectId, revision: expectedRevision },
+  ): Promise<{ success: true } | { success: false; conflict: true; existingRecord: ProjectGenerationConfigurationRecord }> {
+    return this.client.$transaction(async (tx) => {
+      if (expectedRevision === 0) {
+        try {
+          await tx.projectGenerationConfiguration.create({
             data: {
-              revision: record.revision, configurationJson: record.configurationJson as never,
-              schemaVersion: record.schemaVersion, updatedAt: record.updatedAt,
+              id: record.id, projectId: record.projectId, schemaVersion: record.schemaVersion,
+              revision: record.revision, sourceUserPreferenceRevision: record.sourceUserPreferenceRevision,
+              configurationJson: record.configurationJson as never,
+              createdAt: record.createdAt, updatedAt: record.updatedAt,
             },
           });
-          if (result.count !== 1) {
-            const existing = await tx.projectGenerationConfiguration.findUnique({
-              where: { projectId: record.projectId }, select: { revision: true },
-            });
-            return { success: false, actualRevision: existing?.revision ?? null };
+        } catch (error) {
+          if (isUniqueConstraintError(error)) {
+            const existing = await tx.projectGenerationConfiguration.findUnique({ where: { projectId: record.projectId } });
+            if (!existing) throw error;
+            return { success: false, conflict: true, existingRecord: mapProjectConfigRow(existing) };
           }
+          throw error;
         }
-        await tx.auditLog.create({
+      } else {
+        const result = await tx.projectGenerationConfiguration.updateMany({
+          where: { projectId: record.projectId, revision: expectedRevision },
           data: {
-            actorUserId: audit.actorUserId, projectId: audit.projectId,
-            action: expectedRevision === 0 ? "project_generation_configuration_create" : "project_generation_configuration_update",
-            targetType: "ProjectGenerationConfiguration",
-            targetId: record.projectId,
-            metadataJson: {
-              old_revision: audit.oldRevision, new_revision: audit.newRevision, diff: audit.diff,
-            } as never,
+            revision: record.revision, configurationJson: record.configurationJson as never,
+            schemaVersion: record.schemaVersion, updatedAt: record.updatedAt,
           },
         });
-        return { success: true, actualRevision: record.revision };
+        if (result.count !== 1) {
+          const existing = await tx.projectGenerationConfiguration.findUnique({ where: { projectId: record.projectId } });
+          return { success: false, conflict: true, existingRecord: existing ? mapProjectConfigRow(existing) : record };
+        }
+      }
+      await tx.auditLog.create({
+        data: {
+          actorUserId: audit.actorUserId, projectId: audit.projectId,
+          action: expectedRevision === 0 ? "project_generation_configuration_create" : "project_generation_configuration_update",
+          targetType: "ProjectGenerationConfiguration",
+          targetId: record.projectId,
+          metadataJson: {
+            old_revision: audit.oldRevision, new_revision: audit.newRevision, diff: audit.diff,
+          } as never,
+        },
       });
-    } catch {
-      return { success: false, actualRevision: null };
-    }
+      return { success: true };
+    });
   }
+}
+
+// --- 行映射与错误识别辅助 ---------------------------------------------------
+
+/** Prisma 唯一约束冲突错误码（P2002）。其他错误不得折叠为 conflict。 */
+function isUniqueConstraintError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "P2002";
+}
+
+function mapUserPreferenceRow(row: { id: string; userId: string; schemaVersion: string; revision: number; configurationJson: unknown; createdAt: Date; updatedAt: Date }): UserGenerationPreferenceRecord {
+  return {
+    id: row.id,
+    userId: row.userId,
+    schemaVersion: row.schemaVersion,
+    revision: row.revision,
+    configurationJson: row.configurationJson as UserGenerationPreferenceRecord["configurationJson"],
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function mapProjectConfigRow(row: { id: string; projectId: string; schemaVersion: string; revision: number; sourceUserPreferenceRevision: number | null; configurationJson: unknown; createdAt: Date; updatedAt: Date }): ProjectGenerationConfigurationRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    schemaVersion: row.schemaVersion,
+    revision: row.revision,
+    sourceUserPreferenceRevision: row.sourceUserPreferenceRevision,
+    configurationJson: row.configurationJson as ProjectGenerationConfigurationRecord["configurationJson"],
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
 }
