@@ -159,6 +159,11 @@ export function createProjectStore(api: ProjectApi): ProjectStore {
       duration: formatDurationSec(snapshot.duration_sec ?? undefined),
       aspect_ratio: snapshot.aspect_ratio ?? undefined,
       thumbnail_url: snapshot.thumbnail_url ?? undefined,
+      // S2-2A：保留生成配置快照字段（否则 loadProject 后 store.state 丢失它们）
+      generation_configuration: snapshot.generation_configuration ?? undefined,
+      generation_configuration_version: snapshot.generation_configuration_version,
+      configuration_invalidation_preview: snapshot.configuration_invalidation_preview,
+      cost_summary: snapshot.cost_summary,
     };
   }
 

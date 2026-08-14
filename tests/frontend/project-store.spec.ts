@@ -122,7 +122,7 @@ describe("project store owner_id propagation", () => {
 });
 
 describe("project store S2-2A snapshot fields propagation", () => {
-  it("getProject maps generation configuration, version, preview and cost summary", async () => {
+  it("loadProject keeps generation configuration fields in store.state.projects", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse(200, {
         project_id: "proj-s2a",
@@ -151,14 +151,18 @@ describe("project store S2-2A snapshot fields propagation", () => {
 
     try {
       const api = createFetchProjectApi();
-      const snapshot = await api.getProject!("proj-s2a");
+      const store = createProjectStore(api);
+      await store.loadProject("proj-s2a");
 
-      expect(snapshot.generation_configuration?.revision).toBe(2);
-      expect(snapshot.generation_configuration?.source).toBe("stored");
-      expect(snapshot.generation_configuration_version).toBe(2);
-      expect(snapshot.configuration_invalidation_preview?.affected_stages).toEqual(["asset_planning"]);
-      expect(snapshot.cost_summary?.record_count).toBe(0);
-      expect(snapshot.cost_summary?.total_estimated_cost_micros).toBe("0");
+      const row = store.state.projects.find((p) => p.project_id === "proj-s2a");
+      expect(row).toBeDefined();
+      // 关键：字段必须进入 store.state（经 syncProject → toProjectListItem 不被丢弃）
+      expect(row!.generation_configuration?.revision).toBe(2);
+      expect(row!.generation_configuration?.source).toBe("stored");
+      expect(row!.generation_configuration_version).toBe(2);
+      expect(row!.configuration_invalidation_preview?.affected_stages).toEqual(["asset_planning"]);
+      expect(row!.cost_summary?.record_count).toBe(0);
+      expect(row!.cost_summary?.total_estimated_cost_micros).toBe("0");
     } finally {
       vi.unstubAllGlobals();
     }

@@ -115,7 +115,8 @@ describe("generation-config repository", () => {
       expect(result.source).toBe("backfilled_default");
       expect(result.configuration).toEqual(DEFAULT_GENERATION_CONFIGURATION);
       expect(result.updatedAt).toBeInstanceOf(Date);
-      expect(result.diff_from_user_default).toBeNull();
+      // P2-1：无偏好记录时隐式默认就是 DEFAULT，backfill 的配置与默认一致 → 空 diff（非 null）
+      expect(result.diff_from_user_default).toEqual({});
     });
 
     it("updates project configuration with correct expected_revision", async () => {
@@ -129,6 +130,27 @@ describe("generation-config repository", () => {
       if (!result.ok) return;
       expect(result.value.revision).toBe(2);
       expect(result.value.invalidation_preview).toBeDefined();
+    });
+
+    // P2-1 回归：用户无持久化偏好时，隐式默认是 DEFAULT；项目改成 all_api_video 后
+    // GET 的 diff 与 invalidation_preview 必须正确（不能返回 null/none）。
+    it("computes diff against implicit DEFAULT when user has no persisted preference", async () => {
+      const db = createDbClient();
+      // 用户 u1 无偏好记录；项目 p1 改为 all_api_video
+      await getProjectGenerationConfiguration(db, "p1", "u1");
+      const patch = await upsertProjectGenerationConfiguration(db, "p1", {
+        expected_revision: 1,
+        configuration: { ...DEFAULT_GENERATION_CONFIGURATION, video: { strategy: "all_api_video", api_quality: "standard_720p" } },
+      }, "u1");
+      expect(patch.ok).toBe(true);
+      if (!patch.ok) return;
+      // PATCH 成功响应的 diff 非空（与隐式默认 prefer_remotion 不同）
+      expect(patch.value.diff_from_user_default).not.toEqual({});
+      expect(patch.value.diff_from_user_default).toHaveProperty("video");
+
+      // 随后 GET 的 diff 与 preview 一致
+      const read = await getProjectGenerationConfiguration(db, "p1", "u1");
+      expect(read.diff_from_user_default).toHaveProperty("video");
     });
 
     it("rejects project config update with stale revision", async () => {

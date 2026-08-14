@@ -231,4 +231,60 @@ describe("S2-2A first aggregate writer project-configuration binding", () => {
       await client.$disconnect();
     }
   });
+
+  // 实施计划任务 3 明确要求：注入第二次写入失败（Project 成功后配置写入失败），
+  // 断言 Project 与配置均不存在（同事务回滚）。
+  it("rolls back both project and configuration when the configuration write fails (P2002)", async () => {
+    const databasePath = createMigratedDatabase();
+    const client = await createPrismaClient(databasePath);
+    try {
+      await client.user.create({ data: { id: "u1", username: "t", displayName: "T", passwordHash: "h", role: "USER" } });
+      await seedTwoProjects(client as never, "u1");
+      const writer = await import("../../../backend/src/db/repositories/prisma-first-aggregate-writer.js").then((m) => m.PrismaFirstAggregateWriter.create(client, "u1"));
+
+      const project: import("../../../backend/src/db/client.js").ProjectRecord = {
+        id: "p3", name: "P3", ownerId: "u1", createdById: "u1", status: "active",
+        activeTopicPackageId: null, activeScriptRecordId: null, activeStoryboardRecordId: null,
+        activeAssetPlanRecordId: null, activeAssetManifestRecordId: null, activeComposeRecordId: null,
+        activeRenderJobRecordId: null, activePublishPackageRecordId: null,
+        latestTopicRunTraceJson: null, latestScriptRunTraceJson: null, latestStoryboardRunTraceJson: null,
+        latestAssetPlanRunTraceJson: null, latestAssetsRunTraceJson: null, latestComposeRunTraceJson: null,
+        latestRenderRunTraceJson: null,
+        storageDisplayName: "P3", storageShortId: "p_00000000", storageRootDir: "storage/projects/x", storageRenameLocked: false,
+        createdAt: new Date(), updatedAt: new Date(),
+      };
+      // 配置使用与 p1 已有配置相同的 id → 第二次写入触发 P2002 唯一冲突
+      // 先给 p1 建一条配置，让 id "c1" 被占用
+      await client.projectGenerationConfiguration.create({
+        data: {
+          id: "c1", projectId: "p1", schemaVersion: "generation_configuration_v1", revision: 1,
+          configurationJson: { schema_version: "generation_configuration_v1" } as never,
+          createdAt: new Date(), updatedAt: new Date(),
+        },
+      });
+      const config: import("../../../backend/src/db/client.js").ProjectGenerationConfigurationRecord = {
+        id: "c1", // 与已有记录冲突 → P2002
+        projectId: "p3",
+        schemaVersion: "generation_configuration_v1", revision: 1,
+        sourceUserPreferenceRevision: null,
+        configurationJson: { schema_version: "generation_configuration_v1" } as never,
+        createdAt: new Date(), updatedAt: new Date(),
+      };
+
+      // 第二次写入（配置 create）失败 → 整个事务回滚
+      await expect(writer.createProjectWithGenerationConfiguration(project, config)).rejects.toThrow();
+
+      // 断言 Project 与配置均不存在（p3 未创建；p1 的原配置 c1 未被改动）
+      const p3 = await client.project.findUnique({ where: { id: "p3" } });
+      expect(p3).toBeNull();
+      const p3Config = await client.projectGenerationConfiguration.findUnique({ where: { projectId: "p3" } });
+      expect(p3Config).toBeNull();
+      // p1 的原配置仍存在且 revision=1（未被覆盖）
+      const p1Config = await client.projectGenerationConfiguration.findUnique({ where: { id: "c1" } });
+      expect(p1Config?.projectId).toBe("p1");
+      expect(p1Config?.revision).toBe(1);
+    } finally {
+      await client.$disconnect();
+    }
+  });
 });

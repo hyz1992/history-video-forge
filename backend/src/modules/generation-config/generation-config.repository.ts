@@ -245,9 +245,10 @@ export async function getProjectGenerationConfiguration(
     // 旧项目无配置 → backfill 默认（P1-2：await 持久化完成）
     return backfillProjectGenerationConfiguration(db, projectId, null, actorUserId);
   }
-  // 计算与当前用户默认的差异
-  const userPref = actorUserId ? getUserGenerationPreference(db, actorUserId) : null;
-  const diff = userPref ? computeConfigDiff(userPref.configuration, record.configurationJson) : null;
+  // P2：计算与用户默认的差异。无持久化偏好时，隐式默认仍是 DEFAULT_GENERATION_CONFIGURATION
+  //（新项目冻结的就是它），不能把"没有记录"当成"没有可比较默认值"。
+  const userDefault = getEffectiveUserDefaultConfig(db, actorUserId);
+  const diff = computeConfigDiff(userDefault, record.configurationJson);
   return {
     projectId,
     revision: record.revision,
@@ -258,6 +259,20 @@ export async function getProjectGenerationConfiguration(
     updatedAt: record.updatedAt,
     diff_from_user_default: diff,
   };
+}
+
+/**
+ * 用户的有效默认配置：持久化偏好存在时用偏好；否则用 DEFAULT_GENERATION_CONFIGURATION。
+ */
+function getEffectiveUserDefaultConfig(
+  db: DbClient,
+  actorUserId?: string,
+): GenerationConfigurationV1 {
+  if (actorUserId) {
+    const pref = getUserGenerationPreference(db, actorUserId);
+    if (pref) return pref.configuration;
+  }
+  return { ...DEFAULT_GENERATION_CONFIGURATION };
 }
 
 export async function backfillProjectGenerationConfiguration(
@@ -290,8 +305,7 @@ export async function backfillProjectGenerationConfiguration(
       // 后续同进程 PATCH 才不会 project_config_not_found_after_backfill。
       syncProjectConfigRecord(db, result.existingRecord);
       const synced = findProjectConfigRecord(db, projectId)!;
-      const userPref = actorUserId ? getUserGenerationPreference(db, actorUserId) : null;
-      const diff = userPref ? computeConfigDiff(userPref.configuration, synced.configurationJson) : null;
+      const diff = computeConfigDiff(getEffectiveUserDefaultConfig(db, actorUserId), synced.configurationJson);
       return {
         projectId, revision: synced.revision, configuration: synced.configurationJson,
         schemaVersion: synced.schemaVersion, source: "stored",
@@ -304,8 +318,7 @@ export async function backfillProjectGenerationConfiguration(
   }
   // 数据库成功后才更新内存 Map
   db.projectGenerationConfigurations.set(record.id, record);
-  const userPref = actorUserId ? getUserGenerationPreference(db, actorUserId) : null;
-  const diff = userPref ? computeConfigDiff(userPref.configuration, record.configurationJson) : null;
+  const diff = computeConfigDiff(getEffectiveUserDefaultConfig(db, actorUserId), record.configurationJson);
   return {
     projectId,
     revision: 1,
@@ -386,7 +399,8 @@ export async function upsertProjectGenerationConfiguration(
       source: "stored",
       sourceUserPreferenceRevision: updated.sourceUserPreferenceRevision,
       updatedAt: now,
-      diff_from_user_default: null,
+      // P2：基于用户有效默认（持久化偏好或 DEFAULT）计算真实公开 diff
+      diff_from_user_default: computeConfigDiff(getEffectiveUserDefaultConfig(db, actorUserId), input.configuration),
       invalidation_preview: computeInvalidationPreview(current.configuration, input.configuration),
     },
   };
