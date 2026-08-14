@@ -168,6 +168,87 @@ describe("project store S2-2A snapshot fields propagation", () => {
     }
   });
 
+  it("status-only syncProject keeps previously loaded generation config fields", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        project_id: "proj-s2a",
+        name: "S2-2A项目",
+        current_status: "topic_pending",
+        generation_configuration: {
+          configuration: { schema_version: "generation_configuration_v1" },
+          revision: 2,
+          source: "stored",
+          source_user_preference_revision: 1,
+          updated_at: "2026-08-14T00:00:00.000Z",
+        },
+        generation_configuration_version: 2,
+        configuration_invalidation_preview: {
+          affected_stages: ["asset_planning"],
+          note: "配置变更仅保存，不自动触发下游生成。",
+        },
+        cost_summary: {
+          total_estimated_cost_micros: "0",
+          total_actual_cost_micros: "0",
+          record_count: 0,
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const api = createFetchProjectApi();
+      const store = createProjectStore(api);
+      await store.loadProject("proj-s2a");
+
+      // 模拟下游 store（script/assets 等）只同步状态
+      store.syncProject({ project_id: "proj-s2a", current_status: "script_ready" });
+
+      const row = store.state.projects.find((p) => p.project_id === "proj-s2a");
+      expect(row).toBeDefined();
+      // 关键：状态型 sync 不能清空已加载的生成配置字段
+      expect(row!.generation_configuration?.revision).toBe(2);
+      expect(row!.generation_configuration_version).toBe(2);
+      expect(row!.configuration_invalidation_preview?.affected_stages).toEqual(["asset_planning"]);
+      expect(row!.cost_summary?.record_count).toBe(0);
+      // 状态本身更新
+      expect(row!.current_status).toBe("script_ready");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("explicit null generation_configuration clears the field", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(200, {
+        project_id: "proj-clear",
+        name: "清除项目",
+        current_status: "topic_pending",
+        generation_configuration: {
+          configuration: { schema_version: "generation_configuration_v1" },
+          revision: 1,
+          source: "stored",
+          source_user_preference_revision: null,
+          updated_at: "2026-08-14T00:00:00.000Z",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const api = createFetchProjectApi();
+      const store = createProjectStore(api);
+      await store.loadProject("proj-clear");
+      expect(store.state.projects.find((p) => p.project_id === "proj-clear")?.generation_configuration?.revision).toBe(1);
+
+      // 明确传 null → 清空
+      store.syncProject({ project_id: "proj-clear", current_status: "script_ready", generation_configuration: null });
+      const row = store.state.projects.find((p) => p.project_id === "proj-clear");
+      expect(row!.generation_configuration).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("getProject leaves new fields undefined when backend omits them", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       jsonResponse(200, {
