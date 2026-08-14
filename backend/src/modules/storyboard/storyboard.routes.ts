@@ -8,7 +8,7 @@ import { decodeStoredStoryboardPlan } from "./storyboard-plan-compatibility";
 import { guardOwnedRoute, requireUser } from "../../auth/authorization.js";
 import { resolveGenerationConfiguration } from "../../../../shared/src/index.js";
 import { getProjectGenerationConfiguration } from "../generation-config/generation-config.repository.js";
-import { resolveSystemGenerationConstraints } from "../generation-config/system-constraints.js";
+import { resolveSystemGenerationConstraints, unavailableReasonFromRoute } from "../generation-config/system-constraints.js";
 
 interface StoryboardGeneratePayload {
   user_feedback?: string;
@@ -146,6 +146,7 @@ async function updateSegmentStrategyController(
   const routeInfo = resolved.ok && resolved.value.segment_visual_routes[0]
     ? resolved.value.segment_visual_routes[0]
     : null;
+  const reasonCode = routeInfo?.reason_code ?? (resolved.ok ? "route_resolution_failed" : "route_resolution_error");
 
   return {
     statusCode: 200,
@@ -156,9 +157,11 @@ async function updateSegmentStrategyController(
       strategy_override: upsert.value.strategyOverride,
       api_video_suitability: segment.api_video_suitability,
       resolved_route: routeInfo?.resolved_route ?? "remotion",
-      // P2：返回确定性 reason_code（resolver 生成），失败时给出不可用原因
-      reason_code: routeInfo?.reason_code ?? (resolved.ok ? "route_resolution_failed" : "route_resolution_error"),
-      unavailable_reason: resolved.ok ? null : "配置或目录解析失败，暂按 Remotion 预览",
+      // P1：reason_code → 不可用原因统一映射（与快照共用）
+      reason_code: reasonCode,
+      unavailable_reason: resolved.ok
+        ? unavailableReasonFromRoute(reasonCode)
+        : "配置或目录解析失败，暂按 Remotion 预览",
     },
   };
 }

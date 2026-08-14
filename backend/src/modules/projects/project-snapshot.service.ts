@@ -4,7 +4,7 @@ import { getProjectStorageProfile } from "../../runtime/trace/project-storage.js
 import { getProjectGenerationConfiguration } from "../generation-config/generation-config.repository.js";
 import { decodeStoredStoryboardPlan } from "../storyboard/storyboard-plan-compatibility.js";
 import { resolveGenerationConfiguration } from "../../../../shared/src/index.js";
-import { resolveSystemGenerationConstraints } from "../generation-config/system-constraints.js";
+import { resolveSystemGenerationConstraints, unavailableReasonFromRoute } from "../generation-config/system-constraints.js";
 
 function summarizeTraceRun(trace: Record<string, unknown> | null | undefined) {
   if (!trace) {
@@ -142,21 +142,25 @@ async function buildStoryboardSnapshotSegment(
     const routesById = resolved.ok
       ? new Map(resolved.value.segment_visual_routes.map((r) => [r.segment_id, r]))
       : new Map();
-    // P2：解析失败时给出真实不可用原因（不再伪装 strategy_matrix_remotion）
-    const unavailableReason = resolved.ok
-      ? null
-      : (resolved.error?.message ?? "配置或目录解析失败，暂按 Remotion 预览");
+    // P1：统一 reason_code → 不可用原因映射。
+    // 系统约束降级时 resolver 正常返回 ok=true（reason_code=api_video_provider_disabled），
+    // 此时必须展示降级原因；只有真正解析失败才用错误消息。
+    const resolveUnavailable = (reasonCode: string): string | null =>
+      resolved.ok
+        ? unavailableReasonFromRoute(reasonCode)
+        : (resolved.error?.message ?? "配置或目录解析失败，暂按 Remotion 预览");
     segmentStrategies = plan.segments.map((segment) => {
       const override = overrides.find((o) => o.segmentId === segment.segment_id) ?? null;
       const route = routesById.get(segment.segment_id);
+      const reasonCode = route?.reason_code ?? "strategy_matrix_remotion";
       return {
         segment_id: segment.segment_id,
         api_video_suitability: segment.api_video_suitability,
         strategy_override: override?.strategyOverride ?? null,
         override_revision: override?.revision ?? null,
         resolved_route: route?.resolved_route ?? "remotion",
-        reason_code: route?.reason_code ?? "strategy_matrix_remotion",
-        unavailable_reason: unavailableReason,
+        reason_code: reasonCode,
+        unavailable_reason: resolveUnavailable(reasonCode),
       };
     });
   }
