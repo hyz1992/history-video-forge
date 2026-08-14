@@ -8,6 +8,7 @@ import {
 import { isDeepStrictEqual } from "node:util";
 import type { SegmentAssetIntentBatchDraft } from "./segment-asset-intent.js";
 import { enrichAssetVisualPrompt } from "./asset-plan-prompt-enrichment.js";
+import { suitabilityToPreferenceHint } from "../storyboard/storyboard-plan-compatibility.js";
 import { validateAssetPlan } from "./asset-planning-local-validator.js";
 
 export interface GlobalPlanningCompilerDraft {
@@ -156,11 +157,11 @@ function validateInput(input: AssetPlanCompilerInput) {
       if (!segment) continue;
       const videoCount = entry.intents.filter((intent) => intent.asset_kind === "video_clip").length;
       const motionCount = entry.intents.filter((intent) => intent.asset_kind === "render_motion_cue").length;
-      const preference = segment.visual_strategy_preference;
+      // S2-2A 任务 4 过渡：从四档适配度推导偏好提示（任务 5 改为消费 resolved route）
+      const preference = suitabilityToPreferenceHint(segment.api_video_suitability);
       if (
         (preference === "api_video" && videoCount === 0) ||
-        (preference === "remotion_motion" && (motionCount === 0 || videoCount > 0)) ||
-        ((preference === null || preference === undefined) && motionCount === 0)
+        (preference === "remotion_motion" && (motionCount === 0 || videoCount > 0))
       ) {
         issues.push({ code: "visual_strategy_mismatch", segment_id: segment.segment_id, chunk_index: chunk.chunkIndex });
       }
@@ -371,7 +372,7 @@ export function compileAssetPlanFromIntents(input: AssetPlanCompilerInput): { pl
       Math.min(...right.inputSegmentIds.map((segmentId) => segmentOrder.get(segmentId)!)))
     .flatMap((chunk) => chunk.draft.budget_notes);
   const actions: AssetPlanCompilerAction[] = [
-    ...orderedSegments.map((segment) => ({ code: "visual_strategy_applied" as const, segment_id: segment.segment_id, preference: segment.visual_strategy_preference ?? "default" as const })),
+    ...orderedSegments.map((segment) => ({ code: "visual_strategy_applied" as const, segment_id: segment.segment_id, preference: suitabilityToPreferenceHint(segment.api_video_suitability) })),
     { code: "global_bgm_owner_bound", segment_id: firstSegmentId },
   ];
   const candidate = {

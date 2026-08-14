@@ -4,6 +4,7 @@ import {
   type AssetPlan,
   type AssetPlanningValidationResult,
 } from "../../../../shared/src/index.js";
+import { decodeStoredStoryboardPlan } from "../storyboard/storyboard-plan-compatibility.js";
 import type {
   DbClient,
   ProjectRecord,
@@ -724,7 +725,19 @@ export async function runAssetPlanningGeneration(
     };
   }
 
-  const storyboard = StoryboardPlan.parse(storyboardRecord.planJson);
+  // S2-2A 任务 4：旧 StoryboardPlan 必须先经兼容解码器读取，
+  // 禁止让 legacy visual_strategy_preference 进入新 prompt 或正式下游合同。
+  const storyboardDecoded = decodeStoredStoryboardPlan(storyboardRecord.planJson);
+  if (!storyboardDecoded.ok) {
+    return {
+      statusCode: 500,
+      body: {
+        error: "storyboard_plan_invalid",
+        detail: storyboardDecoded.error,
+      },
+    };
+  }
+  const storyboard = storyboardDecoded.value.plan;
   const draft = mapScriptDraft(scriptRecord);
   const topicBoundaryContext = mapTopicBoundaryContext(topicPackage);
   const runId = `asset_plan_run_${input.db.generateId()}`;

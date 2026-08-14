@@ -375,7 +375,7 @@ function validIntentDraftFor(segments: StoryboardPlan["segments"], first: boolea
           support_reason: null,
           risk_notes: ["避免现代元素"],
         },
-        ...(segment.visual_strategy_preference === "api_video"
+        ...(segment.api_video_suitability === "api_video_strongly_recommended" || segment.api_video_suitability === "api_video_beneficial"
           ? [{
               asset_kind: "video_clip",
               production_intent: `为 ${segment.segment_id} 生成视频`,
@@ -1001,9 +1001,9 @@ describe("generateAssetPlan", () => {
 
   it("uses exactly one intent planner call per chunk and compiles in storyboard order", async () => {
     const storyboard = structuredClone(baseStoryboardPlan);
-    storyboard.segments[0]!.visual_strategy_preference = "api_video";
-    storyboard.segments[1]!.visual_strategy_preference = "remotion_motion";
-    storyboard.segments[2]!.visual_strategy_preference = null;
+    storyboard.segments[0]!.api_video_suitability = "api_video_strongly_recommended";
+    storyboard.segments[1]!.api_video_suitability = "remotion_sufficient";
+    storyboard.segments[2]!.api_video_suitability = "remotion_sufficient";
     const { gateway, calls } = makeGateway(async (options) => {
       if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
       if (options.promptId === "asset-planning.segment-intent-planner") {

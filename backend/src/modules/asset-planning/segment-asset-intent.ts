@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { StoryboardPlan } from "../../../../shared/src/index.js";
+import { suitabilityToPreferenceHint } from "../storyboard/storyboard-plan-compatibility.js";
 
 export const SegmentAssetIntentKind = z.enum([
   "image_still",
@@ -530,8 +531,10 @@ function validateContext(
       );
     }
 
-    const preference = storyboardById.get(entry.source_segment_id)
-      ?.visual_strategy_preference;
+    const storyboardSegment = storyboardById.get(entry.source_segment_id);
+    const preference = storyboardSegment
+      ? suitabilityToPreferenceHint(storyboardSegment.api_video_suitability)
+      : "remotion_motion";
     if (preference === "api_video") {
       if (videoCount === 0) {
         issues.push(

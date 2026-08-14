@@ -36,7 +36,8 @@ function makeStoryboard(count: number): StoryboardPlan {
       linked_beats: [],
       linked_quotes: [],
       risk_notes: [],
-      visual_strategy_preference: index % 3 === 0 ? "api_video" : index % 3 === 1 ? "remotion_motion" : null,
+      api_video_suitability: index % 3 === 0 ? "api_video_strongly_recommended" : "remotion_sufficient",
+      legacy_visual_strategy_hint: null,
     })),
     global_visual_notes: [],
   };
@@ -155,7 +156,7 @@ function makeChunks(storyboard: StoryboardPlan, size = 2): CompiledIntentChunkIn
       source_segment_id: segment.segment_id,
       intents: [
         image(),
-        ...(segment.visual_strategy_preference === "api_video" ? [video()] : [motion()]),
+        ...(segment.api_video_suitability === "api_video_strongly_recommended" || segment.api_video_suitability === "api_video_beneficial" ? [video()] : [motion()]),
         sfx(),
         ...(segment.order === 0 ? [bgm("global", [])] : []),
       ],
@@ -269,7 +270,7 @@ describe("compileAssetPlanFromIntents", () => {
     const compiled = compileAssetPlanFromIntents(input);
     expect(compiled.plan.tasks.find((task) => task.task_type === "bgm_cue")?.source_segment_id).toBe("seg_001");
     expect(compiled.actions).toContainEqual({ code: "global_bgm_owner_bound", segment_id: "seg_001" });
-    expect(compiled.actions).toContainEqual({ code: "visual_strategy_applied", segment_id: "seg_003", preference: "default" });
+    expect(compiled.actions).toContainEqual({ code: "visual_strategy_applied", segment_id: "seg_003", preference: "remotion_motion" });
   });
 
   it.each([1, 15, 21])("compiles %i segments with exact coverage", (count) => {

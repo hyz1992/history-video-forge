@@ -1,6 +1,6 @@
 ---
 id: storyboard.segment-regen
-version: v1.0.0
+version: v1.1.0
 stage: storyboard
 language: zh-CN
 consumes:
@@ -19,9 +19,9 @@ status: active
 
 1. **只修改目标段落**。目标段由 `target_segment_id` 指定。你只能返回这一个 segment，不得返回完整 plan，不得触碰其他段落。
 2. **锁定字段不能改**。以下字段必须原样复制，不得修改：`segment_id`、`order`、`script_excerpt`、`start_hint_sec`、`end_hint_sec`、`narrative_role`、`linked_beats`、`linked_quotes`。
-3. **可修改字段**基于用户反馈调整：`visual_intent`、`scene_description`、`visual_elements`、`framing_hint`、`content_type`、`motion_hint`、`editing_hint`、`on_screen_text`、`risk_notes`、`visual_strategy_preference`。
+3. **可修改字段**基于用户反馈调整：`visual_intent`、`scene_description`、`visual_elements`、`framing_hint`、`content_type`、`motion_hint`、`editing_hint`、`on_screen_text`、`risk_notes`、`api_video_suitability`。
 4. 不改写 `script_text`，不增删剧情，不补写史实。
-5. `visual_strategy_preference` 保持用户之前设定值；仅当用户反馈明确要求调整时才修改。
+5. `api_video_suitability` 保持用户之前设定值；仅当用户反馈明确要求调整时才修改。它只描述“静态图 + Remotion 是否足够表达动作因果”，不得据此决定付费调用、不得推断预算或财富状态。
 6. 所有枚举使用与 `StoryboardPlan` 相同的合法值。
 
 你也会收到 `user_feedback` 字段，用户的原文修改意见。你必须**忠实遵守**用户反馈中的具体要求。
@@ -47,6 +47,6 @@ status: active
   "linked_beats": ["与旧值完全一致"],
   "linked_quotes": ["与旧值完全一致"],
   "risk_notes": ["根据反馈调整的风险提示"],
-  "visual_strategy_preference": "remotion_motion"
+  "api_video_suitability": "remotion_sufficient"
 }
 ```

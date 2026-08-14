@@ -8,6 +8,7 @@ import {
   type ScriptDraftPackage,
   type StoryboardPlan,
 } from "../../../../shared/src/index.js";
+import { suitabilityToPreferenceHint } from "../storyboard/storyboard-plan-compatibility.js";
 import { env, getValidatedRuntimeEnv } from "../../config/env.js";
 import type { AssetPlanningGenerationMode } from "../../config/env.js";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
@@ -753,7 +754,7 @@ async function generateIntentChunkWithResilience(input: {
             segment_ids: input.segments.map((segment) => segment.segment_id),
             visual_strategy_preferences: input.segments.map((segment) => ({
               segment_id: segment.segment_id,
-              preference: segment.visual_strategy_preference ?? null,
+              preference: suitabilityToPreferenceHint(segment.api_video_suitability),
             })),
           },
         });

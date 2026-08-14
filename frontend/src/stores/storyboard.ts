@@ -17,7 +17,19 @@ export interface StoryboardSegment {
   framing_hint: string;
   start_hint_sec: number;
   end_hint_sec: number;
-  visual_strategy_preference?: "remotion_motion" | "api_video" | null;
+  // S2-2A 任务 4：四档适配度（LLM/stub 输出）
+  api_video_suitability?:
+    | "remotion_only"
+    | "remotion_sufficient"
+    | "api_video_beneficial"
+    | "api_video_strongly_recommended";
+  // 只读历史提示（旧 plan 兼容映射）
+  legacy_visual_strategy_hint?:
+    | "remotion_only"
+    | "remotion_sufficient"
+    | "api_video_beneficial"
+    | "api_video_strongly_recommended"
+    | null;
 }
 
 export interface StoryboardPlan {
@@ -60,7 +72,8 @@ export interface StoryboardApi {
     projectId: string,
     segmentId: string,
     strategy: "remotion_motion" | "api_video" | null,
-  ): Promise<void>;
+    expectedRevision?: number | null,
+  ): Promise<Record<string, unknown>>;
   regenerateSegment(
     projectId: string,
     segmentId: string,
@@ -87,11 +100,17 @@ export function createFetchStoryboardApi(baseUrl = ""): StoryboardApi {
         body: { user_feedback: userFeedback },
       });
     },
-    async updateSegmentStrategy(projectId, segmentId, strategy) {
-      await apiFetch(`${baseUrl}/api/projects/${projectId}/storyboard/strategy`, {
+    async updateSegmentStrategy(projectId, segmentId, strategy, expectedRevision = null) {
+      // S2-2A 任务 4：写独立 override（visual_strategy_override），带乐观锁 revision
+      const response = await apiFetch<Record<string, unknown>>(`${baseUrl}/api/projects/${projectId}/storyboard/strategy`, {
         method: "PATCH",
-        body: { segment_id: segmentId, visual_strategy_preference: strategy },
+        body: {
+          segment_id: segmentId,
+          visual_strategy_override: strategy,
+          expected_revision: expectedRevision,
+        },
       });
+      return response;
     },
     async regenerateSegment(projectId, segmentId, userFeedback) {
       await apiFetch(`${baseUrl}/api/projects/${projectId}/storyboard/segments/${segmentId}/regen`, {
@@ -267,28 +286,18 @@ export function createStoryboardStore(
     if (!projectId) return;
 
     try {
-      await input.api.updateSegmentStrategy(projectId, segmentId, strategy);
+      const response = await input.api.updateSegmentStrategy(projectId, segmentId, strategy);
+      // 成功：刷新快照（从后端重新读取 plan + route preview）
+      await loadActiveStoryboardSnapshot(projectId);
+      return response;
     } catch {
       // Stub mode / offline — proceed with local-only update
     }
 
+    // 本地兜底：不写 plan（override 独立于 StoryboardPlan）
     const snapshot = state.snapshot;
-    if (!snapshot?.active_storyboard?.plan) return;
-
-    const plan = snapshot.active_storyboard.plan;
-    const segments = plan.segments;
-    const segment = segments.find((s) => s.segment_id === segmentId);
-    if (segment) {
-      segment.visual_strategy_preference = strategy;
-    }
-
-    state.snapshot = {
-      ...snapshot,
-      active_storyboard: {
-        ...snapshot.active_storyboard,
-        plan: { ...plan, segments: [...segments] },
-      },
-    };
+    if (!snapshot) return;
+    state.snapshot = { ...snapshot };
   }
 
   async function regenerateSegment(

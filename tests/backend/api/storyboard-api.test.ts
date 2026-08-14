@@ -43,6 +43,9 @@ function makeValidPlan(input: {
         linked_beats: ["public answer"],
         linked_quotes: [],
         risk_notes: [],
+        // S2-2A 任务 4：四档适配度必填
+        api_video_suitability: "remotion_sufficient",
+        legacy_visual_strategy_hint: null,
       },
     ],
     global_visual_notes: [],
@@ -453,5 +456,103 @@ describe("storyboard api", () => {
       (r) => (r.executionStateJson as Record<string, unknown> | null)?.generating === true,
     );
     expect(generatingRecords).toHaveLength(0);
+  });
+
+  // S2-2A 任务 4：PATCH strategy 改为写独立 override（不修改 planJson）
+  async function prepareActiveStoryboard(app: ReturnType<typeof buildApp>) {
+    const prepared = await prepareActiveScript(app);
+    const plan = makeValidPlan({
+      sourceScriptRecordId: prepared.scriptRecord.id,
+      sourceTopicPackageId: prepared.topicPackage.id,
+      scriptText: prepared.scriptText,
+      durationSec: prepared.scriptRecord.estimatedDurationSec,
+    });
+    generateStoryboardPlanMock.mockResolvedValueOnce(plan);
+    const response = await app.inject({
+      auth,
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/storyboard/generate`,
+    });
+    expect(response.statusCode).toBe(200);
+    const storyboardRecordId = response.json().storyboard_record_id as string;
+    return { prepared, storyboardRecordId };
+  }
+
+  it("PATCH strategy writes independent override with revision and does not mutate planJson", async () => {
+    const app = buildApp();
+    const { prepared, storyboardRecordId } = await prepareActiveStoryboard(app);
+
+    const response = await app.inject({
+      auth,
+      method: "PATCH",
+      url: `/api/projects/${prepared.project.id}/storyboard/strategy`,
+      payload: {
+        segment_id: "sb_001",
+        visual_strategy_override: "api_video",
+        expected_revision: null,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body).toMatchObject({
+      segment_id: "sb_001",
+      revision: 1,
+      strategy_override: "api_video",
+    });
+    expect(body.api_video_suitability).toBeDefined();
+    expect(body.resolved_route).toBeDefined();
+
+    // planJson 未被修改
+    const record = app.db.storyboardRecords.get(storyboardRecordId)!;
+    const segments = (record.planJson as { segments: Array<Record<string, unknown>> }).segments;
+    expect(segments[0]).not.toHaveProperty("visual_strategy_override");
+    expect(segments[0]).not.toHaveProperty("visual_strategy_preference");
+    expect(segments[0]).toHaveProperty("api_video_suitability");
+  });
+
+  it("PATCH strategy with stale revision returns 409 storyboard_segment_override_revision_conflict", async () => {
+    const app = buildApp();
+    const { prepared } = await prepareActiveStoryboard(app);
+
+    await app.inject({
+      auth,
+      method: "PATCH",
+      url: `/api/projects/${prepared.project.id}/storyboard/strategy`,
+      payload: {
+        segment_id: "sb_001",
+        visual_strategy_override: "api_video",
+        expected_revision: null,
+      },
+    });
+    const response = await app.inject({
+      auth,
+      method: "PATCH",
+      url: `/api/projects/${prepared.project.id}/storyboard/strategy`,
+      payload: {
+        segment_id: "sb_001",
+        visual_strategy_override: "remotion_motion",
+        expected_revision: 99,
+      },
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error).toBe("storyboard_segment_override_revision_conflict");
+  });
+
+  it("PATCH strategy with illegal override value returns 400", async () => {
+    const app = buildApp();
+    const { prepared } = await prepareActiveStoryboard(app);
+
+    const response = await app.inject({
+      auth,
+      method: "PATCH",
+      url: `/api/projects/${prepared.project.id}/storyboard/strategy`,
+      payload: {
+        segment_id: "sb_001",
+        visual_strategy_override: "inherit",
+        expected_revision: null,
+      },
+    });
+    expect(response.statusCode).toBe(400);
   });
 });

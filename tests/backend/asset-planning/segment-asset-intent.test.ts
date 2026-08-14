@@ -14,7 +14,7 @@ const segments: StoryboardPlan["segments"] = [
     scene_description: "守军关闭城门", visual_elements: ["城门"], framing_hint: "wide",
     content_type: "live_action", motion_hint: "push_in", editing_hint: "single",
     on_screen_text: [], linked_beats: ["beat_1"], linked_quotes: [], risk_notes: ["时代准确"],
-    visual_strategy_preference: "api_video",
+    api_video_suitability: "api_video_strongly_recommended",
   },
   {
     segment_id: "seg_002", order: 1, script_excerpt: "密信藏入烛台。", start_hint_sec: 6,
@@ -22,7 +22,7 @@ const segments: StoryboardPlan["segments"] = [
     scene_description: "密信与烛火", visual_elements: ["密信"], framing_hint: "detail",
     content_type: "illustration", motion_hint: "pan", editing_hint: "single",
     on_screen_text: [], linked_beats: ["beat_2"], linked_quotes: [], risk_notes: ["文字模糊"],
-    visual_strategy_preference: "remotion_motion",
+    api_video_suitability: "remotion_sufficient",
   },
   {
     segment_id: "seg_003", order: 2, script_excerpt: "决定无法撤回。", start_hint_sec: 12,
@@ -30,7 +30,7 @@ const segments: StoryboardPlan["segments"] = [
     scene_description: "人物走出宫门", visual_elements: ["背影"], framing_hint: "medium",
     content_type: "illustration", motion_hint: "static", editing_hint: "single",
     on_screen_text: [], linked_beats: ["beat_3"], linked_quotes: [], risk_notes: ["服饰准确"],
-    visual_strategy_preference: null,
+    api_video_suitability: "remotion_sufficient",
   },
 ];
 
@@ -295,14 +295,15 @@ describe("visual strategy invariants", () => {
     expect(codes(withVideo)).toContain("visual_strategy_mismatch");
   });
 
-  it("default requires image+motion and permits only schema-valid optional video", () => {
+  it("default (remotion_sufficient) requires image+motion and forbids video", () => {
     const imageOnly = validDraft();
     imageOnly.segments[2]!.intents = [image()];
     expect(codes(imageOnly)).toContain("missing_required_intent_kind");
 
+    // S2-2A 任务 4：null 默认映射为 remotion_sufficient → remotion 语义，多余 video 触发 mismatch
     const withVideo = validDraft();
     withVideo.segments[2]!.intents.push(video());
-    expect(inspect(withVideo).issues).toEqual([]);
+    expect(codes(withVideo)).toContain("visual_strategy_mismatch");
   });
 });
 

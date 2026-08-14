@@ -59,16 +59,27 @@
         "narrative_role": "opening",
         "visual_intent": "以雨夜白水和新桐油制造立即可见的疑点。",
         "scene_description": "架空古代驿城暴雨未停，巡仓使在东仓门前俯看流出的白色盐水。",
-        "visual_elements": ["雨夜驿城", "仓门白水", "桐油门闩"],
+        "visual_elements": [
+          "雨夜驿城",
+          "仓门白水",
+          "桐油门闩"
+        ],
         "framing_hint": "wide",
         "content_type": "live_action",
         "motion_hint": "push_in",
         "editing_hint": "single",
-        "on_screen_text": ["雨夜，盐仓在流白水"],
-        "linked_beats": ["雨夜白水"],
+        "on_screen_text": [
+          "雨夜，盐仓在流白水"
+        ],
+        "linked_beats": [
+          "雨夜白水"
+        ],
         "linked_quotes": [],
-        "risk_notes": ["全部人物、地名与事件均为合成架空内容。"],
-        "visual_strategy_preference": "api_video"
+        "risk_notes": [
+          "全部人物、地名与事件均为合成架空内容。"
+        ],
+        "api_video_suitability": "api_video_strongly_recommended",
+        "legacy_visual_strategy_hint": null
       },
       {
         "segment_id": "seg_002",
@@ -79,16 +90,25 @@
         "narrative_role": "setup",
         "visual_intent": "建立仓内湿干倒置和封锁现场的调查方法。",
         "scene_description": "盐仓纵深里湿包压着干包，书吏在木板上绘制仓图。",
-        "visual_elements": ["湿盐包", "干燥底排", "临时仓图"],
+        "visual_elements": [
+          "湿盐包",
+          "干燥底排",
+          "临时仓图"
+        ],
         "framing_hint": "medium",
         "content_type": "illustration",
         "motion_hint": "push_in",
         "editing_hint": "cutaway",
         "on_screen_text": [],
-        "linked_beats": ["雨夜白水"],
+        "linked_beats": [
+          "雨夜白水"
+        ],
         "linked_quotes": [],
-        "risk_notes": ["盐仓结构保持架空古代设定一致。"],
-        "visual_strategy_preference": "remotion_motion"
+        "risk_notes": [
+          "盐仓结构保持架空古代设定一致。"
+        ],
+        "api_video_suitability": "remotion_sufficient",
+        "legacy_visual_strategy_hint": null
       },
       {
         "segment_id": "seg_003",
@@ -99,16 +119,27 @@
         "narrative_role": "pressure",
         "visual_intent": "把时间压力和逆向水痕同时推到观众面前。",
         "scene_description": "驿丞指向排队盐车催促，沈岑蹲在洗净石阶旁观察逆流白水。",
-        "visual_elements": ["等待盐车", "洗净石阶", "逆向水痕"],
+        "visual_elements": [
+          "等待盐车",
+          "洗净石阶",
+          "逆向水痕"
+        ],
         "framing_hint": "medium",
         "content_type": "live_action",
         "motion_hint": "pan",
         "editing_hint": "cutaway",
-        "on_screen_text": ["水为什么从仓心向外流？"],
-        "linked_beats": ["雨夜白水"],
+        "on_screen_text": [
+          "水为什么从仓心向外流？"
+        ],
+        "linked_beats": [
+          "雨夜白水"
+        ],
         "linked_quotes": [],
-        "risk_notes": ["避免把架空制度误写成真实史制。"],
-        "visual_strategy_preference": null
+        "risk_notes": [
+          "避免把架空制度误写成真实史制。"
+        ],
+        "api_video_suitability": "remotion_sufficient",
+        "legacy_visual_strategy_hint": null
       },
       {
         "segment_id": "seg_004",
@@ -119,15 +150,27 @@
         "narrative_role": "turn",
         "visual_intent": "用透光纸票展示双印先后关系。",
         "scene_description": "书吏在雨后窗光前举起湿票，两枚朱印的边缘清晰可比。",
-        "visual_elements": ["湿账票", "两枚朱印", "窗边透光"],
+        "visual_elements": [
+          "湿账票",
+          "两枚朱印",
+          "窗边透光"
+        ],
         "framing_hint": "detail",
         "content_type": "live_action",
         "motion_hint": "static",
         "editing_hint": "single",
-        "on_screen_text": ["同一批盐，两种印"],
-        "linked_beats": ["湿账双印"],
+        "on_screen_text": [
+          "同一批盐，两种印"
+        ],
+        "linked_beats": [
+          "湿账双印"
+        ],
         "linked_quotes": [],
-        "risk_notes": ["票据文字只作抽象纹理，不生成可误认的真实官印。"]
+        "risk_notes": [
+          "票据文字只作抽象纹理，不生成可误认的真实官印。"
+        ],
+        "api_video_suitability": "remotion_sufficient",
+        "legacy_visual_strategy_hint": null
       },
       {
         "segment_id": "seg_005",
@@ -138,16 +181,27 @@
         "narrative_role": "pressure",
         "visual_intent": "通过秤杆左右摆动呈现重量矛盾。",
         "scene_description": "木制公秤上不同盐包使秤杆剧烈偏转，脚夫围成半圈。",
-        "visual_elements": ["木制公秤", "轻重盐包", "围观脚夫"],
+        "visual_elements": [
+          "木制公秤",
+          "轻重盐包",
+          "围观脚夫"
+        ],
         "framing_hint": "close",
         "content_type": "live_action",
         "motion_hint": "push_in",
         "editing_hint": "montage",
-        "on_screen_text": ["同账不同重"],
-        "linked_beats": ["湿账双印"],
+        "on_screen_text": [
+          "同账不同重"
+        ],
+        "linked_beats": [
+          "湿账双印"
+        ],
         "linked_quotes": [],
-        "risk_notes": ["称量单位为架空叙事表达，不对应精确历史度量衡。"],
-        "visual_strategy_preference": "remotion_motion"
+        "risk_notes": [
+          "称量单位为架空叙事表达，不对应精确历史度量衡。"
+        ],
+        "api_video_suitability": "remotion_sufficient",
+        "legacy_visual_strategy_hint": null
       },
       {
         "segment_id": "seg_006",
@@ -158,15 +212,25 @@
         "narrative_role": "setup",
         "visual_intent": "让绳结证词成为线索而非直接定罪。",
         "scene_description": "老驭手展示两种封绳结，背景虚化出包麻车轮的夜车记忆。",
-        "visual_elements": ["双回结", "燕尾结", "包麻车轮"],
+        "visual_elements": [
+          "双回结",
+          "燕尾结",
+          "包麻车轮"
+        ],
         "framing_hint": "detail",
         "content_type": "illustration",
         "motion_hint": "pan",
         "editing_hint": "cutaway",
         "on_screen_text": [],
-        "linked_beats": ["湿账双印"],
+        "linked_beats": [
+          "湿账双印"
+        ],
         "linked_quotes": [],
-        "risk_notes": ["明确证词仍需其他证据印证。"]
+        "risk_notes": [
+          "明确证词仍需其他证据印证。"
+        ],
+        "api_video_suitability": "remotion_sufficient",
+        "legacy_visual_strategy_hint": null
       },
       {
         "segment_id": "seg_007",
@@ -177,16 +241,27 @@
         "narrative_role": "pressure",
         "visual_intent": "把日落期限与即将消失的盐水证据并置。",
         "scene_description": "手令压在案上，门外夕光下白色盐水正逐渐变淡。",
-        "visual_elements": ["府城手令", "夕光", "变浅白水"],
+        "visual_elements": [
+          "府城手令",
+          "夕光",
+          "变浅白水"
+        ],
         "framing_hint": "close",
         "content_type": "live_action",
         "motion_hint": "pull_back",
         "editing_hint": "single",
-        "on_screen_text": ["日落前，证据和盐道只能先救一个？"],
-        "linked_beats": ["排水槽取证"],
+        "on_screen_text": [
+          "日落前，证据和盐道只能先救一个？"
+        ],
+        "linked_beats": [
+          "排水槽取证"
+        ],
         "linked_quotes": [],
-        "risk_notes": ["手令内容保持合成，不套用真实历史文书。"],
-        "visual_strategy_preference": "api_video"
+        "risk_notes": [
+          "手令内容保持合成，不套用真实历史文书。"
+        ],
+        "api_video_suitability": "api_video_strongly_recommended",
+        "legacy_visual_strategy_hint": null
       },
       {
         "segment_id": "seg_008",
@@ -197,16 +272,27 @@
         "narrative_role": "turn",
         "visual_intent": "用排水槽里的木屑和蓝漆把调查方向转向后墙。",
         "scene_description": "灯笼照亮石槽中的蓝漆碎片，量绳从槽口延伸到新砌砖墙。",
-        "visual_elements": ["石槽木屑", "蓝色漆皮", "新砌砖墙"],
+        "visual_elements": [
+          "石槽木屑",
+          "蓝色漆皮",
+          "新砌砖墙"
+        ],
         "framing_hint": "detail",
         "content_type": "live_action",
         "motion_hint": "push_in",
         "editing_hint": "cutaway",
-        "on_screen_text": ["漆皮来自哪里？"],
-        "linked_beats": ["排水槽取证"],
+        "on_screen_text": [
+          "漆皮来自哪里？"
+        ],
+        "linked_beats": [
+          "排水槽取证"
+        ],
         "linked_quotes": [],
-        "risk_notes": ["夜间照明仅使用油灯与灯笼。"],
-        "visual_strategy_preference": "remotion_motion"
+        "risk_notes": [
+          "夜间照明仅使用油灯与灯笼。"
+        ],
+        "api_video_suitability": "remotion_sufficient",
+        "legacy_visual_strategy_hint": null
       },
       {
         "segment_id": "seg_009",
@@ -217,16 +303,25 @@
         "narrative_role": "bridge",
         "visual_intent": "展示证物分别封存和街坊见证的程序。",
         "scene_description": "废漆坊院内，三只陶罐依次装入盐霜、漆片和绳结并封口。",
-        "visual_elements": ["洗过麻布", "三只陶罐", "街坊手印"],
+        "visual_elements": [
+          "洗过麻布",
+          "三只陶罐",
+          "街坊手印"
+        ],
         "framing_hint": "medium",
         "content_type": "live_action",
         "motion_hint": "pan",
         "editing_hint": "montage",
         "on_screen_text": [],
-        "linked_beats": ["排水槽取证"],
+        "linked_beats": [
+          "排水槽取证"
+        ],
         "linked_quotes": [],
-        "risk_notes": ["封存流程为架空叙事设计。"],
-        "visual_strategy_preference": null
+        "risk_notes": [
+          "封存流程为架空叙事设计。"
+        ],
+        "api_video_suitability": "remotion_sufficient",
+        "legacy_visual_strategy_hint": null
       },
       {
         "segment_id": "seg_010",
@@ -237,15 +332,27 @@
         "narrative_role": "pressure",
         "visual_intent": "在雨后石桥上呈现补偿诱惑与拒绝。",
         "scene_description": "盐商把银袋推到桥栏，沈岑没有伸手，远处仓灯仍亮。",
-        "visual_elements": ["雨后石桥", "银袋", "远处仓灯"],
+        "visual_elements": [
+          "雨后石桥",
+          "银袋",
+          "远处仓灯"
+        ],
         "framing_hint": "medium",
         "content_type": "live_action",
         "motion_hint": "static",
         "editing_hint": "single",
-        "on_screen_text": ["数量能补，开门的人补不回来"],
-        "linked_beats": ["排水槽取证"],
+        "on_screen_text": [
+          "数量能补，开门的人补不回来"
+        ],
+        "linked_beats": [
+          "排水槽取证"
+        ],
         "linked_quotes": [],
-        "risk_notes": ["不把盐商塑造成任何真实群体映射。"]
+        "risk_notes": [
+          "不把盐商塑造成任何真实群体映射。"
+        ],
+        "api_video_suitability": "remotion_sufficient",
+        "legacy_visual_strategy_hint": null
       },
       {
         "segment_id": "seg_011",
@@ -256,16 +363,27 @@
         "narrative_role": "peak",
         "visual_intent": "以公开复秤和剖开盐包形成主揭示。",
         "scene_description": "晨光下公秤完成校准，三类盐包被依次打开，河沙和碎布暴露。",
-        "visual_elements": ["标准铜锤", "公开复秤", "河沙碎布"],
+        "visual_elements": [
+          "标准铜锤",
+          "公开复秤",
+          "河沙碎布"
+        ],
         "framing_hint": "wide",
         "content_type": "live_action",
         "motion_hint": "push_in",
         "editing_hint": "montage",
-        "on_screen_text": ["公开复秤"],
-        "linked_beats": ["公开复秤"],
+        "on_screen_text": [
+          "公开复秤"
+        ],
+        "linked_beats": [
+          "公开复秤"
+        ],
         "linked_quotes": [],
-        "risk_notes": ["人群构图保持架空驿城身份层次。"],
-        "visual_strategy_preference": "api_video"
+        "risk_notes": [
+          "人群构图保持架空驿城身份层次。"
+        ],
+        "api_video_suitability": "api_video_strongly_recommended",
+        "legacy_visual_strategy_hint": null
       },
       {
         "segment_id": "seg_012",
@@ -276,16 +394,27 @@
         "narrative_role": "peak",
         "visual_intent": "拆墙显出夹层，并串联白水、木屑和漆皮。",
         "scene_description": "砖墙打开后露出狭长夹层，蓝漆门板横卡排水槽，盐包堆至深处。",
-        "visual_elements": ["拆开的砖墙", "暗仓盐包", "蓝漆门板"],
+        "visual_elements": [
+          "拆开的砖墙",
+          "暗仓盐包",
+          "蓝漆门板"
+        ],
         "framing_hint": "wide",
         "content_type": "illustration",
         "motion_hint": "pull_back",
         "editing_hint": "single",
-        "on_screen_text": ["暴雨画出了搬运路线"],
-        "linked_beats": ["公开复秤"],
+        "on_screen_text": [
+          "暴雨画出了搬运路线"
+        ],
+        "linked_beats": [
+          "公开复秤"
+        ],
         "linked_quotes": [],
-        "risk_notes": ["暗仓结构需与前段排水槽方位一致。"],
-        "visual_strategy_preference": "remotion_motion"
+        "risk_notes": [
+          "暗仓结构需与前段排水槽方位一致。"
+        ],
+        "api_video_suitability": "remotion_sufficient",
+        "legacy_visual_strategy_hint": null
       },
       {
         "segment_id": "seg_013",
@@ -296,16 +425,27 @@
         "narrative_role": "turn",
         "visual_intent": "从破案转入按证据区分责任。",
         "scene_description": "开仓名册摊在案上，不同证词与钥匙交接记录被分栏整理。",
-        "visual_elements": ["开仓名册", "钥匙交接", "分栏记录"],
+        "visual_elements": [
+          "开仓名册",
+          "钥匙交接",
+          "分栏记录"
+        ],
         "framing_hint": "close",
         "content_type": "illustration",
         "motion_hint": "pan",
         "editing_hint": "cutaway",
-        "on_screen_text": ["同案，不同责任"],
-        "linked_beats": ["公开复秤"],
+        "on_screen_text": [
+          "同案，不同责任"
+        ],
+        "linked_beats": [
+          "公开复秤"
+        ],
         "linked_quotes": [],
-        "risk_notes": ["不借架空案件影射现实个人或机构。"],
-        "visual_strategy_preference": null
+        "risk_notes": [
+          "不借架空案件影射现实个人或机构。"
+        ],
+        "api_video_suitability": "remotion_sufficient",
+        "legacy_visual_strategy_hint": null
       },
       {
         "segment_id": "seg_014",
@@ -316,16 +456,25 @@
         "narrative_role": "ending",
         "visual_intent": "恢复盐道，同时保留皱湿账册作为代价符号。",
         "scene_description": "盐车重新通过城门，廊下湿账在风中翻动，纸页布满水痕。",
-        "visual_elements": ["重开盐道", "廊下湿账", "水痕纸页"],
+        "visual_elements": [
+          "重开盐道",
+          "廊下湿账",
+          "水痕纸页"
+        ],
         "framing_hint": "symbolic",
         "content_type": "live_action",
         "motion_hint": "pull_back",
         "editing_hint": "cutaway",
         "on_screen_text": [],
-        "linked_beats": ["程序余震"],
+        "linked_beats": [
+          "程序余震"
+        ],
         "linked_quotes": [],
-        "risk_notes": ["结尾避免宣称任何真实历史制度来源。"],
-        "visual_strategy_preference": "remotion_motion"
+        "risk_notes": [
+          "结尾避免宣称任何真实历史制度来源。"
+        ],
+        "api_video_suitability": "remotion_sufficient",
+        "legacy_visual_strategy_hint": null
       },
       {
         "segment_id": "seg_015",
@@ -336,16 +485,29 @@
         "narrative_role": "ending",
         "visual_intent": "用双人交钥、校秤和白水回扣程序余震。",
         "scene_description": "雨季前两名守仓人共同交接钥匙，公秤归零，排水槽保持清洁。",
-        "visual_elements": ["双人交钥", "归零公秤", "清洁排水槽"],
+        "visual_elements": [
+          "双人交钥",
+          "归零公秤",
+          "清洁排水槽"
+        ],
         "framing_hint": "symbolic",
         "content_type": "illustration",
         "motion_hint": "static",
         "editing_hint": "montage",
-        "on_screen_text": ["账可以湿，秤不能偏"],
-        "linked_beats": ["程序余震"],
-        "linked_quotes": ["账可以湿，秤不能偏"],
-        "risk_notes": ["片尾明确标注故事为合成架空案例。"],
-        "visual_strategy_preference": "remotion_motion"
+        "on_screen_text": [
+          "账可以湿，秤不能偏"
+        ],
+        "linked_beats": [
+          "程序余震"
+        ],
+        "linked_quotes": [
+          "账可以湿，秤不能偏"
+        ],
+        "risk_notes": [
+          "片尾明确标注故事为合成架空案例。"
+        ],
+        "api_video_suitability": "remotion_sufficient",
+        "legacy_visual_strategy_hint": null
       }
     ],
     "global_visual_notes": [

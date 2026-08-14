@@ -1,5 +1,14 @@
 import { z } from "zod";
 
+import { ApiVideoSuitability } from "../generation/generation-configuration.schema.js";
+
+/**
+ * 分镜四档视频适配度（详细设计 6.1 节）。
+ * 复用 generation-configuration.schema 的 ApiVideoSuitability（单一来源）。
+ * LLM/stub 只判断"静态图+Remotion 是否足够表达动作因果"，不决定付费调用。
+ * 适配度到实际路线的映射由纯函数 resolver 完成。
+ */
+
 export const StoryboardSegment = z
   .object({
     segment_id: z.string().min(1),
@@ -27,10 +36,16 @@ export const StoryboardSegment = z
     linked_beats: z.array(z.string().min(1)),
     linked_quotes: z.array(z.string().min(1)),
     risk_notes: z.array(z.string().min(1)),
-    visual_strategy_preference: z
-      .enum(["remotion_motion", "api_video"])
-      .nullable()
-      .optional(),
+    /**
+     * 四档视频适配度（必填，LLM/stub 都不能留空）。
+     * 取代旧 visual_strategy_preference（S2-2A 任务 4）。
+     */
+    api_video_suitability: ApiVideoSuitability,
+    /**
+     * 只读历史提示：旧 StoryboardPlan 的 visual_strategy_preference 经兼容解码器
+     * 确定性映射而来。新生成的 plan 恒为 null；不写入 override、不进入新 prompt。
+     */
+    legacy_visual_strategy_hint: ApiVideoSuitability.nullable().default(null),
   })
   .strict()
   .refine((segment) => segment.end_hint_sec > segment.start_hint_sec, {

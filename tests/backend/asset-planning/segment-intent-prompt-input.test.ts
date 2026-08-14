@@ -33,7 +33,7 @@ function segment(
     linked_beats: ["beat-1"],
     linked_quotes: [],
     risk_notes: ["避免现代物件"],
-    visual_strategy_preference: preference,
+    api_video_suitability: preference === "api_video" ? "api_video_strongly_recommended" : "remotion_sufficient",
   };
 }
 

@@ -51,6 +51,14 @@ function readFixture(filename: string): unknown {
   ) as unknown;
 }
 
+/** S2-2A 任务 4：suitability 的 api_video 语义判断（与 suitabilityToPreferenceHint 一致）。 */
+function isApiVideoSuitability(
+  suitability: "remotion_only" | "remotion_sufficient" | "api_video_beneficial" | "api_video_strongly_recommended",
+): boolean {
+  return suitability === "api_video_beneficial" || suitability === "api_video_strongly_recommended";
+}
+
+
 function parseLongFixture(filename: string) {
   const fixture = LongAssetPlanningFixture.parse(readFixture(filename));
   return {
@@ -193,7 +201,7 @@ function makeCompilerInput(
               video_prompt_reserve: `镜头延展：${segment.visual_intent}`, image_role: "anchor", support_reason: null,
               risk_notes: ["复核史实与人物一致性"],
             },
-            ...(segment.visual_strategy_preference === "api_video"
+            ...(isApiVideoSuitability(segment.api_video_suitability)
               ? [{ asset_kind: "video_clip" as const, production_intent: "表现连续动作", video_prompt: segment.scene_description, why_static_insufficient: "连续动作推动叙事", risk_notes: ["复核动作连续性"] }]
               : [{ asset_kind: "render_motion_cue" as const, production_intent: "以本地运镜增强节奏", risk_notes: ["复核运镜幅度"] }]),
             ...(index === 0 ? [{
@@ -233,10 +241,10 @@ describe("asset plan downstream compatibility fixtures", () => {
     expect(
       new Set(
         long15.storyboard.segments.map(
-          (segment) => segment.visual_strategy_preference,
+          (segment) => segment.api_video_suitability,
         ),
       ),
-    ).toEqual(new Set(["api_video", "remotion_motion", null, undefined]));
+    ).toEqual(new Set(["api_video_strongly_recommended", "remotion_sufficient"]));
     expectContinuousStoryboardReferences(long15.script, long15.storyboard);
 
     expect(long21.sourceIds.topic_package_id).toBe(
@@ -597,7 +605,7 @@ describe("asset plan downstream compatibility fixtures", () => {
         ...fixture.storyboard.segments.map((segment) => ({
           code: "visual_strategy_applied",
           segment_id: segment.segment_id,
-          preference: segment.visual_strategy_preference ?? "default",
+          preference: isApiVideoSuitability(segment.api_video_suitability) ? "api_video" : "remotion_motion",
         })),
         {
           code: "global_bgm_owner_bound",
@@ -635,7 +643,7 @@ describe("asset plan downstream compatibility fixtures", () => {
           expect.any(String),
         );
 
-        if (segment.visual_strategy_preference === "api_video") {
+        if (isApiVideoSuitability(segment.api_video_suitability)) {
           const video = segmentTasks.find(
             (task) => task.task_type === "video_clip",
           )!;
@@ -731,7 +739,7 @@ describe("asset plan downstream compatibility fixtures", () => {
           (candidate) => candidate.segment_id === segment.segment_id,
         )!;
         expect(route.tts_artifact_id).not.toBeNull();
-        if (segment.visual_strategy_preference === "api_video") {
+        if (isApiVideoSuitability(segment.api_video_suitability)) {
           expect(route).toMatchObject({
             visual_route_type: "video_clip",
             motion_artifact_id: null,

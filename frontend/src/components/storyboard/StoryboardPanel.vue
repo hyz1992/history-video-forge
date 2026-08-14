@@ -388,22 +388,28 @@ async function handleSegmentRegenSubmit(userFeedback: string) {
 /*  Visual strategy toggle                                                    */
 /* -------------------------------------------------------------------------- */
 
-const strategyLabels: Record<string, { label: string; icon: string; class: string }> = {
-  remotion_motion: { label: "Remotion 运镜", icon: "🎬", class: "strategy-remotion" },
-  api_video: { label: "AI 视频生成", icon: "🤖", class: "strategy-api-video" },
+/* S2-2A 任务 4：四档适配度展示 + 用户覆盖 toggle */
+
+const suitabilityLabels: Record<string, { label: string; icon: string; class: string; title: string }> = {
+  remotion_only: { label: "仅 Remotion", icon: "🎬", class: "strategy-remotion", title: "适配度：静态图+运镜足够，几乎不需要连续动作" },
+  remotion_sufficient: { label: "Remotion 足够", icon: "🎬", class: "strategy-remotion", title: "适配度：静态图+Remotion 足够表达" },
+  api_video_beneficial: { label: "视频更佳", icon: "🤖", class: "strategy-api-video", title: "适配度：动态画面更生动，静态图仍可成立" },
+  api_video_strongly_recommended: { label: "强烈建议视频", icon: "🤖", class: "strategy-api-video", title: "适配度：连续动作是叙事核心，强烈建议 AI 视频" },
 };
 
-function strategyInfo(segment: StoryboardSegment) {
-  const key = segment.visual_strategy_preference ?? "remotion_motion";
-  const entry = strategyLabels[key] ?? strategyLabels.remotion_motion;
+function suitabilityInfo(segment: StoryboardSegment) {
+  const key = segment.api_video_suitability ?? "remotion_sufficient";
+  const entry = suitabilityLabels[key] ?? suitabilityLabels.remotion_sufficient;
   return {
     class: entry.class,
     icon: entry.icon,
     label: entry.label,
-    title:
-      segment.visual_strategy_preference === "api_video"
-        ? "点击切换为 Remotion 运镜"
-        : "点击升级为 AI 视频生成",
+    title: entry.title,
+    // 用户覆盖 toggle：suitability 为 API 倾向时提示切回 Remotion，否则提示升级
+    toggleTitle:
+      key === "api_video_strongly_recommended" || key === "api_video_beneficial"
+        ? "覆盖为 Remotion 运镜（继承时由策略矩阵决定）"
+        : "覆盖为 AI 视频生成",
   };
 }
 
@@ -411,10 +417,10 @@ const isSwitchingStrategy = ref(false);
 const switchingSegmentId = ref<string | null>(null);
 
 async function handleToggleStrategy(segment: StoryboardSegment) {
-  const next =
-    segment.visual_strategy_preference === "api_video"
-      ? ("remotion_motion" as const)
-      : ("api_video" as const);
+  const isApiLeaning =
+    segment.api_video_suitability === "api_video_strongly_recommended" ||
+    segment.api_video_suitability === "api_video_beneficial";
+  const next = isApiLeaning ? ("remotion_motion" as const) : ("api_video" as const);
 
   isSwitchingStrategy.value = true;
   switchingSegmentId.value = segment.segment_id;
@@ -627,8 +633,8 @@ function scrollToTop() {
                 </span>
                 <button
                   class="storyboard-strategy-badge"
-                  :class="strategyInfo(segment).class"
-                  :title="strategyInfo(segment).title"
+                  :class="suitabilityInfo(segment).class"
+                  :title="suitabilityInfo(segment).toggleTitle"
                   :disabled="isSwitchingStrategy || isRegeneratingSegment"
                   @click.stop.prevent="handleToggleStrategy(segment)"
                 >
@@ -636,8 +642,8 @@ function scrollToTop() {
                     切换中...
                   </template>
                   <template v-else>
-                    {{ strategyInfo(segment).icon }}
-                    {{ strategyInfo(segment).label }}
+                    {{ suitabilityInfo(segment).icon }}
+                    {{ suitabilityInfo(segment).label }}
                   </template>
                 </button>
                 <button

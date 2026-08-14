@@ -2,8 +2,12 @@ import type { AppInstance, AppResponse, RouteContext } from "../../app";
 import { getProjectById } from "../projects/project.repository";
 import { demoStageGuard } from "../../shared/demo-stage-guard";
 import { runStoryboardGeneration, runStoryboardSegmentRegeneration } from "./storyboard-run.service";
-import { getStoryboardRecordById, saveStoryboardRecord } from "./storyboard-record.repository";
-import { guardOwnedRoute } from "../../auth/authorization.js";
+import { getStoryboardRecordById } from "./storyboard-record.repository";
+import { getSegmentOverride, upsertSegmentOverride } from "./storyboard-segment-override.repository";
+import { decodeStoredStoryboardPlan } from "./storyboard-plan-compatibility";
+import { guardOwnedRoute, requireUser } from "../../auth/authorization.js";
+import { resolveGenerationConfiguration } from "../../../../shared/src/index.js";
+import { getProjectGenerationConfiguration } from "../generation-config/generation-config.repository.js";
 
 interface StoryboardGeneratePayload {
   user_feedback?: string;
@@ -11,7 +15,8 @@ interface StoryboardGeneratePayload {
 
 interface StoryboardUpdateStrategyPayload {
   segment_id: string;
-  visual_strategy_preference: "remotion_motion" | "api_video" | null;
+  visual_strategy_override: "remotion_motion" | "api_video" | null;
+  expected_revision: number | null;
 }
 
 interface StoryboardSegmentRegenPayload {
@@ -84,38 +89,75 @@ async function updateSegmentStrategyController(
   }
 
   const payload = context.payload as StoryboardUpdateStrategyPayload;
-  const plan = record.planJson as Record<string, unknown>;
-  const segments = plan.segments as Array<Record<string, unknown>> | undefined;
-  if (!segments) {
-    return { statusCode: 400, body: { error: "no_segments_in_plan" } };
+  // 兼容读取：旧 plan 经 decoder 后才读 suitability
+  const decoded = decodeStoredStoryboardPlan(record.planJson);
+  if (!decoded.ok) {
+    return { statusCode: 500, body: { error: "storyboard_plan_invalid" } };
   }
-
-  const segment = segments.find(
+  const segment = decoded.value.plan.segments.find(
     (s) => s.segment_id === payload.segment_id,
   );
   if (!segment) {
     return { statusCode: 404, body: { error: "segment_not_found" } };
   }
 
-  segment.visual_strategy_preference = payload.visual_strategy_preference;
-
-  await saveStoryboardRecord(context.app.db, {
-    id: record.id,
-    projectId: record.projectId,
-    topicPackageId: record.topicPackageId,
-    scriptRecordId: record.scriptRecordId,
-    planJson: plan,
-    validationResultJson: record.validationResultJson as Record<string, unknown>,
-    executionStateJson: record.executionStateJson as Record<string, unknown> | null,
-    graphTraceSummaryJson: record.graphTraceSummaryJson as Record<string, unknown> | null,
-    runtimeDiagnosticsJson: record.runtimeDiagnosticsJson as Record<string, unknown> | null,
+  const user = requireUser(context.auth);
+  // S2-2A 任务 4：写独立 override（不修改 planJson）
+  const upsert = upsertSegmentOverride(context.app.db, {
+    projectId: project.id,
+    storyboardRecordId: record.id,
+    segmentId: payload.segment_id,
+    strategyOverride: payload.visual_strategy_override,
+    expectedRevision: payload.expected_revision,
+    updatedByUserId: user.userId,
   });
+  if (!upsert.ok) {
+    if (upsert.error.code === "invalid_override_value") {
+      return { statusCode: 400, body: { error: upsert.error.code, reason: upsert.error.reason } };
+    }
+    return {
+      statusCode: 409,
+      body: { error: upsert.error.code, current_revision: upsert.error.current_revision },
+    };
+  }
+
+  // 解析最终路线：项目配置 + 分镜覆盖 + suitability
+  const projectConfig = await getProjectGenerationConfiguration(context.app.db, project.id, user.userId);
+  const resolved = resolveGenerationConfiguration({
+    projectConfiguration: projectConfig.configuration,
+    projectConfigurationRevision: projectConfig.revision,
+    sourceUserPreferenceRevision: projectConfig.sourceUserPreferenceRevision,
+    systemConstraints: { apiVideoProviderEnabled: true },
+    providerModelCatalog: [...context.app.db.providerModelCatalog.values()].map((entry) => ({
+      provider_model_id: entry.id,
+      capability: entry.capability,
+      provider_key: entry.providerKey,
+      model_id: entry.modelId,
+      model_version: entry.modelVersion,
+      status: entry.status,
+      is_default: entry.isDefault,
+    })),
+    operation: "assets.generate",
+    segmentInputs: [{ segment_id: segment.segment_id, api_video_suitability: segment.api_video_suitability }],
+    segmentOverrides: { [segment.segment_id]: payload.visual_strategy_override },
+  });
+  const route = resolved.ok
+    ? resolved.value.segment_visual_routes[0]?.resolved_route ?? "remotion"
+    : "remotion";
 
   return {
     statusCode: 200,
-    body: { updated: true, segment_id: payload.segment_id },
+    body: {
+      updated: true,
+      segment_id: payload.segment_id,
+      revision: upsert.value.revision,
+      strategy_override: upsert.value.strategyOverride,
+      api_video_suitability: segment.api_video_suitability,
+      resolved_route: route,
+    },
   };
 }
+
 
 export function registerStoryboardRoutes(app: AppInstance) {
   app.addRoute(

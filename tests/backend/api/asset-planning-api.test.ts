@@ -76,6 +76,8 @@ function makeStoryboardPlan(input: {
         linked_beats: ["public answer"],
         linked_quotes: [],
         risk_notes: ["Keep historical texture and avoid modern elements."],
+        api_video_suitability: "remotion_sufficient",
+        legacy_visual_strategy_hint: null,
       },
     ],
     global_visual_notes: [],

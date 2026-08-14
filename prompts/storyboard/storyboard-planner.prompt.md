@@ -1,6 +1,6 @@
 ---
 id: storyboard.planner
-version: v1.0.2
+version: v1.1.0
 stage: storyboard
 language: zh-CN
 consumes:
@@ -52,7 +52,7 @@ status: active
       "linked_beats": ["上游 beat 的名字字符串，必须与 draft.beat_trace[].beat 完全一致"],
       "linked_quotes": ["上游 quote 的名字字符串，必须与 draft.quote_trace[].quote 完全一致"],
       "risk_notes": [],
-      "visual_strategy_preference": "remotion_motion"
+      "api_video_suitability": "remotion_sufficient"
     }
   ],
   "global_visual_notes": []
@@ -67,9 +67,14 @@ status: active
 - `motion_hint`: `static`, `push_in`, `pull_back`, `pan`
 - `editing_hint`: `single`, `cutaway`, `montage`
 
-`visual_strategy_preference` 为每个段落建议后续的视觉生成策略：
-- `remotion_motion`：默认值，画面由静态图 + Remotion 运镜合成，成本低。适合大部分镜头。
-- `api_video`：画面由 AI 图生视频 API 生成，成本高但动态真实。仅建议给连续动作是叙事核心的镜头，例如刺杀爆发、冲锋崩阵、战车伏击等只有动态画面才能表达动作因果的场面。
+`api_video_suitability` 为每个段落判断“静态图 + Remotion 运镜是否足够表达动作因果”的适配度，必须四选一：
+
+- `remotion_only`：本段几乎不需要连续动作，静态图 + 运镜即可充分表达。
+- `remotion_sufficient`：默认值，静态图 + Remotion 运镜足够表达，适合大部分镜头。
+- `api_video_beneficial`：动态画面能让本段更生动，但静态图仍可成立。
+- `api_video_strongly_recommended`：连续动作是叙事核心，例如刺杀爆发、冲锋崩阵、战车伏击等只有动态画面才能表达动作因果的场面。
+
+你只负责判断适配度，不得决定是否付费调用、不得读取或推断任何预算或用户财富状态，不得输出 provider/model 或费用相关内容。适配度到最终视觉路线的映射由后端解析器完成。
 
 # 时间预算约束
 
