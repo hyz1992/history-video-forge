@@ -37,7 +37,6 @@ function makeStoryboard(count: number): StoryboardPlan {
       linked_quotes: [],
       risk_notes: [],
       api_video_suitability: index % 3 === 0 ? "api_video_strongly_recommended" : "remotion_sufficient",
-      legacy_visual_strategy_hint: null,
     })),
     global_visual_notes: [],
   };

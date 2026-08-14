@@ -41,11 +41,6 @@ export const StoryboardSegment = z
      * 取代旧 visual_strategy_preference（S2-2A 任务 4）。
      */
     api_video_suitability: ApiVideoSuitability,
-    /**
-     * 只读历史提示：旧 StoryboardPlan 的 visual_strategy_preference 经兼容解码器
-     * 确定性映射而来。新生成的 plan 恒为 null；不写入 override、不进入新 prompt。
-     */
-    legacy_visual_strategy_hint: ApiVideoSuitability.nullable().default(null),
   })
   .strict()
   .refine((segment) => segment.end_hint_sec > segment.start_hint_sec, {

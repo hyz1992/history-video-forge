@@ -78,8 +78,7 @@
         "risk_notes": [
           "全部人物、地名与事件均为合成架空内容。"
         ],
-        "api_video_suitability": "api_video_strongly_recommended",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "api_video_strongly_recommended"
       },
       {
         "segment_id": "seg_002",
@@ -107,8 +106,7 @@
         "risk_notes": [
           "盐仓结构保持架空古代设定一致。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_003",
@@ -138,8 +136,7 @@
         "risk_notes": [
           "避免把架空制度误写成真实史制。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_004",
@@ -169,8 +166,7 @@
         "risk_notes": [
           "票据文字只作抽象纹理，不生成可误认的真实官印。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_005",
@@ -200,8 +196,7 @@
         "risk_notes": [
           "称量单位为架空叙事表达，不对应精确历史度量衡。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_006",
@@ -229,8 +224,7 @@
         "risk_notes": [
           "明确证词仍需其他证据印证。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_007",
@@ -260,8 +254,7 @@
         "risk_notes": [
           "手令内容保持合成，不套用真实历史文书。"
         ],
-        "api_video_suitability": "api_video_strongly_recommended",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "api_video_strongly_recommended"
       },
       {
         "segment_id": "seg_008",
@@ -291,8 +284,7 @@
         "risk_notes": [
           "夜间照明仅使用油灯与灯笼。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_009",
@@ -320,8 +312,7 @@
         "risk_notes": [
           "封存流程为架空叙事设计。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_010",
@@ -351,8 +342,7 @@
         "risk_notes": [
           "不把盐商塑造成任何真实群体映射。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_011",
@@ -382,8 +372,7 @@
         "risk_notes": [
           "人群构图保持架空驿城身份层次。"
         ],
-        "api_video_suitability": "api_video_strongly_recommended",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "api_video_strongly_recommended"
       },
       {
         "segment_id": "seg_012",
@@ -413,8 +402,7 @@
         "risk_notes": [
           "暗仓结构需与前段排水槽方位一致。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_013",
@@ -444,8 +432,7 @@
         "risk_notes": [
           "不借架空案件影射现实个人或机构。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_014",
@@ -473,8 +460,7 @@
         "risk_notes": [
           "结尾避免宣称任何真实历史制度来源。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_015",
@@ -506,8 +492,7 @@
         "risk_notes": [
           "片尾明确标注故事为合成架空案例。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       }
     ],
     "global_visual_notes": [

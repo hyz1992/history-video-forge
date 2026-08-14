@@ -88,8 +88,7 @@
         "risk_notes": [
           "合成架空事件。"
         ],
-        "api_video_suitability": "api_video_strongly_recommended",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "api_video_strongly_recommended"
       },
       {
         "segment_id": "seg_002",
@@ -117,8 +116,7 @@
         "risk_notes": [
           "仓储陈设保持一致。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_003",
@@ -146,8 +144,7 @@
         "risk_notes": [
           "不生成现代测绘工具。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_004",
@@ -177,8 +174,7 @@
         "risk_notes": [
           "印记为合成纹样。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_005",
@@ -208,8 +204,7 @@
         "risk_notes": [
           "度量衡为架空叙事表达。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_006",
@@ -237,8 +232,7 @@
         "risk_notes": [
           "证词只作为线索。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_007",
@@ -268,8 +262,7 @@
         "risk_notes": [
           "文书制度为架空设定。"
         ],
-        "api_video_suitability": "api_video_strongly_recommended",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "api_video_strongly_recommended"
       },
       {
         "segment_id": "seg_008",
@@ -297,8 +290,7 @@
         "risk_notes": [
           "只使用古代照明。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_009",
@@ -326,8 +318,7 @@
         "risk_notes": [
           "空间方位与前镜连续。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_010",
@@ -355,8 +346,7 @@
         "risk_notes": [
           "取证程序为合成设计。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_011",
@@ -386,8 +376,7 @@
         "risk_notes": [
           "人物不映射真实群体。"
         ],
-        "api_video_suitability": "api_video_strongly_recommended",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "api_video_strongly_recommended"
       },
       {
         "segment_id": "seg_012",
@@ -417,8 +406,7 @@
         "risk_notes": [
           "校秤官为架空职务。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_013",
@@ -446,8 +434,7 @@
         "risk_notes": [
           "避免夸张危险动作。"
         ],
-        "api_video_suitability": "api_video_strongly_recommended",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "api_video_strongly_recommended"
       },
       {
         "segment_id": "seg_014",
@@ -477,8 +464,7 @@
         "risk_notes": [
           "证物外观与前镜一致。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_015",
@@ -506,8 +492,7 @@
         "risk_notes": [
           "暗仓方位保持连续。"
         ],
-        "api_video_suitability": "api_video_strongly_recommended",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "api_video_strongly_recommended"
       },
       {
         "segment_id": "seg_016",
@@ -537,8 +522,7 @@
         "risk_notes": [
           "新增独立分镜一，解释物证链。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_017",
@@ -566,8 +550,7 @@
         "risk_notes": [
           "新增独立分镜二，名册为合成内容。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_018",
@@ -597,8 +580,7 @@
         "risk_notes": [
           "新增独立分镜三，避免审讯暴力。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_019",
@@ -628,8 +610,7 @@
         "risk_notes": [
           "新增独立分镜四，不对应真实司法制度。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       },
       {
         "segment_id": "seg_020",
@@ -657,8 +638,7 @@
         "risk_notes": [
           "新增独立分镜五，制度为架空设定。"
         ],
-        "api_video_suitability": "api_video_strongly_recommended",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "api_video_strongly_recommended"
       },
       {
         "segment_id": "seg_021",
@@ -690,8 +670,7 @@
         "risk_notes": [
           "新增独立分镜六，片尾标注合成架空。"
         ],
-        "api_video_suitability": "remotion_sufficient",
-        "legacy_visual_strategy_hint": null
+        "api_video_suitability": "remotion_sufficient"
       }
     ],
     "global_visual_notes": [

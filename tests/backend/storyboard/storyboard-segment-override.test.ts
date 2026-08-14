@@ -16,14 +16,14 @@ import {
  * - 不直接修改历史 planJson。
  */
 describe("storyboard segment override repository", () => {
-  it("returns null when no override exists for the segment", () => {
+  it("returns null when no override exists for the segment", async () => {
     const db = createDbClient();
     expect(getSegmentOverride(db, "storyboard-1", "sb_001")).toBeNull();
   });
 
-  it("creates an override with revision 1", () => {
+  it("creates an override with revision 1", async () => {
     const db = createDbClient();
-    const result = upsertSegmentOverride(db, {
+    const result = await upsertSegmentOverride(db, {
       projectId: "p1",
       storyboardRecordId: "storyboard-1",
       segmentId: "sb_001",
@@ -41,7 +41,7 @@ describe("storyboard segment override repository", () => {
     expect(read?.revision).toBe(1);
   });
 
-  it("updates override with correct expected_revision", () => {
+  it("updates override with correct expected_revision", async () => {
     const db = createDbClient();
     upsertSegmentOverride(db, {
       projectId: "p1",
@@ -51,7 +51,7 @@ describe("storyboard segment override repository", () => {
       expectedRevision: null,
       updatedByUserId: "u1",
     });
-    const result = upsertSegmentOverride(db, {
+    const result = await upsertSegmentOverride(db, {
       projectId: "p1",
       storyboardRecordId: "storyboard-1",
       segmentId: "sb_001",
@@ -65,7 +65,7 @@ describe("storyboard segment override repository", () => {
     expect(result.value.strategyOverride).toBe("remotion_motion");
   });
 
-  it("rejects stale expected_revision with 409 conflict code", () => {
+  it("rejects stale expected_revision with 409 conflict code", async () => {
     const db = createDbClient();
     upsertSegmentOverride(db, {
       projectId: "p1",
@@ -75,7 +75,7 @@ describe("storyboard segment override repository", () => {
       expectedRevision: null,
       updatedByUserId: "u1",
     });
-    const result = upsertSegmentOverride(db, {
+    const result = await upsertSegmentOverride(db, {
       projectId: "p1",
       storyboardRecordId: "storyboard-1",
       segmentId: "sb_001",
@@ -88,7 +88,7 @@ describe("storyboard segment override repository", () => {
     expect(result.error.code).toBe("storyboard_segment_override_revision_conflict");
   });
 
-  it("clears override with null (inherit), creating revision 2", () => {
+  it("clears override with null (inherit), creating revision 2", async () => {
     const db = createDbClient();
     upsertSegmentOverride(db, {
       projectId: "p1",
@@ -98,7 +98,7 @@ describe("storyboard segment override repository", () => {
       expectedRevision: null,
       updatedByUserId: "u1",
     });
-    const result = upsertSegmentOverride(db, {
+    const result = await upsertSegmentOverride(db, {
       projectId: "p1",
       storyboardRecordId: "storyboard-1",
       segmentId: "sb_001",
@@ -112,9 +112,9 @@ describe("storyboard segment override repository", () => {
     expect(result.value.revision).toBe(2);
   });
 
-  it("rejects illegal override values (no inherit string)", () => {
+  it("rejects illegal override values (no inherit string)", async () => {
     const db = createDbClient();
-    const result = upsertSegmentOverride(db, {
+    const result = await upsertSegmentOverride(db, {
       projectId: "p1",
       storyboardRecordId: "storyboard-1",
       segmentId: "sb_001",
@@ -126,7 +126,7 @@ describe("storyboard segment override repository", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("does not mutate the storyboard planJson (override is independent)", () => {
+  it("does not mutate the storyboard planJson (override is independent)", async () => {
     const db = createDbClient();
     // 预置一个 planJson 记录
     db.storyboardRecords.set("storyboard-1", {

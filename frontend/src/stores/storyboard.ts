@@ -23,13 +23,6 @@ export interface StoryboardSegment {
     | "remotion_sufficient"
     | "api_video_beneficial"
     | "api_video_strongly_recommended";
-  // 只读历史提示（旧 plan 兼容映射）
-  legacy_visual_strategy_hint?:
-    | "remotion_only"
-    | "remotion_sufficient"
-    | "api_video_beneficial"
-    | "api_video_strongly_recommended"
-    | null;
 }
 
 export interface StoryboardPlan {
@@ -46,12 +39,23 @@ export interface StoryboardValidationResult {
   metrics: Record<string, unknown>;
 }
 
+export interface SegmentStrategyProjection {
+  segment_id: string;
+  api_video_suitability: string;
+  strategy_override: "api_video" | "remotion_motion" | null;
+  override_revision: number | null;
+  resolved_route: string;
+  reason_code: string;
+}
+
 export interface ActiveStoryboardSnapshot {
   plan: StoryboardPlan | null;
   validation_result: StoryboardValidationResult | null;
   execution_state: Record<string, unknown> | null;
   graph_trace_summary: Record<string, unknown> | null;
   runtime_diagnostics: Record<string, unknown> | null;
+  /** S2-2A：分镜策略投影（suitability/override/route/reason） */
+  segment_strategies?: SegmentStrategyProjection[];
 }
 
 export interface StoryboardSnapshot {
@@ -129,6 +133,8 @@ export interface StoryboardStoreState {
   isLoading: boolean;
   isGenerating: boolean;
   loadError: string | null;
+  /** 分镜策略覆盖操作错误（409 冲突等），不静默吞掉。 */
+  strategyError: string | null;
   snapshot: StoryboardSnapshot | null;
 }
 
@@ -151,6 +157,20 @@ export interface StoryboardStore {
 /* -------------------------------------------------------------------------- */
 /*  Factory                                                                   */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * 从快照的 segment_strategies 投影中读取指定分镜的 override revision。
+ * 无 override（null/继承）时返回 null（首建路径）。
+ */
+function findSegmentOverrideRevision(
+  snapshot: StoryboardSnapshot | null,
+  segmentId: string,
+): number | null {
+  const strategies = snapshot?.active_storyboard?.segment_strategies;
+  if (!strategies) return null;
+  const entry = strategies.find((s) => s.segment_id === segmentId);
+  return entry?.override_revision ?? null;
+}
 
 export interface CreateStoryboardStoreInput {
   projectStore: ProjectStore;
@@ -285,19 +305,25 @@ export function createStoryboardStore(
     const projectId = input.projectStore.state.projectId;
     if (!projectId) return;
 
-    try {
-      const response = await input.api.updateSegmentStrategy(projectId, segmentId, strategy);
-      // 成功：刷新快照（从后端重新读取 plan + route preview）
-      await loadActiveStoryboardSnapshot(projectId);
-      return response;
-    } catch {
-      // Stub mode / offline — proceed with local-only update
-    }
+    // P1：从快照读取当前 override revision（没有 override 时为 null = 首建），
+    // 后续操作必须携带真实 revision，否则第二次必然 409。
+    const overrideRevision = findSegmentOverrideRevision(state.snapshot, segmentId);
 
-    // 本地兜底：不写 plan（override 独立于 StoryboardPlan）
-    const snapshot = state.snapshot;
-    if (!snapshot) return;
-    state.snapshot = { ...snapshot };
+    state.strategyError = null;
+    try {
+      const response = await input.api.updateSegmentStrategy(projectId, segmentId, strategy, overrideRevision);
+      // 成功：刷新快照（从后端重新读取 plan + route preview + override revision）
+      await loadActiveStoryboardSnapshot();
+      return response;
+    } catch (error) {
+      // P1：不静默吞掉——409 冲突等必须暴露给 UI
+      const message = toErrorMessage(error);
+      state.strategyError = message.includes("storyboard_segment_override_revision_conflict")
+        ? "分镜策略已被其他操作更新，请刷新后重试"
+        : message;
+      // 重新加载快照，让 UI 显示数据库真实状态
+      await loadActiveStoryboardSnapshot();
+    }
   }
 
   async function regenerateSegment(

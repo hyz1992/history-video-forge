@@ -45,7 +45,6 @@ function makeValidPlan(input: {
         risk_notes: [],
         // S2-2A 任务 4：四档适配度必填
         api_video_suitability: "remotion_sufficient",
-        legacy_visual_strategy_hint: null,
       },
     ],
     global_visual_notes: [],

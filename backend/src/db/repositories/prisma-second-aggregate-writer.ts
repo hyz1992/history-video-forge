@@ -119,4 +119,74 @@ export class PrismaSecondAggregateWriter {
       update: data,
     });
   }
+
+  /**
+   * 分镜覆盖 CAS（P1 整改）：expectedRevision=0 → 事务内 create（唯一冲突→返回现有记录）；
+   * expectedRevision>0 → 条件 updateMany WHERE revision=expectedRevision。
+   * 只有唯一约束冲突（P2002）返回 conflict + existingRecord；其他事务异常继续抛出。
+   */
+  async casUpsertStoryboardSegmentOverride(
+    record: StoryboardSegmentOverrideRecord,
+    expectedRevision: number,
+  ): Promise<{ success: true } | { success: false; conflict: true; existingRecord: StoryboardSegmentOverrideRecord }> {
+    return this.client.$transaction(async (tx) => {
+      if (expectedRevision === 0) {
+        try {
+          await tx.storyboardSegmentOverride.create({
+            data: {
+              id: record.id, projectId: record.projectId, storyboardRecordId: record.storyboardRecordId,
+              segmentId: record.segmentId, strategyOverride: record.strategyOverride,
+              revision: record.revision, updatedByUserId: record.updatedByUserId,
+              createdAt: record.createdAt, updatedAt: record.updatedAt,
+            },
+          });
+        } catch (error) {
+          if (isUniqueConstraintError(error)) {
+            const existing = await tx.storyboardSegmentOverride.findUnique({
+              where: { storyboardRecordId_segmentId: { storyboardRecordId: record.storyboardRecordId, segmentId: record.segmentId } },
+            });
+            if (!existing) throw error;
+            return { success: false, conflict: true, existingRecord: mapOverrideRow(existing) };
+          }
+          throw error;
+        }
+      } else {
+        const result = await tx.storyboardSegmentOverride.updateMany({
+          where: { storyboardRecordId: record.storyboardRecordId, segmentId: record.segmentId, revision: expectedRevision },
+          data: {
+            strategyOverride: record.strategyOverride,
+            revision: record.revision,
+            updatedByUserId: record.updatedByUserId,
+            updatedAt: record.updatedAt,
+          },
+        });
+        if (result.count !== 1) {
+          const existing = await tx.storyboardSegmentOverride.findUnique({
+            where: { storyboardRecordId_segmentId: { storyboardRecordId: record.storyboardRecordId, segmentId: record.segmentId } },
+          });
+          return { success: false, conflict: true, existingRecord: existing ? mapOverrideRow(existing) : record };
+        }
+      }
+      return { success: true };
+    });
+  }
+}
+
+/** Prisma 唯一约束冲突错误码（P2002）。其他错误不得折叠为 conflict。 */
+function isUniqueConstraintError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "P2002";
+}
+
+function mapOverrideRow(row: {
+  id: string; projectId: string; storyboardRecordId: string; segmentId: string;
+  strategyOverride: string | null; revision: number; updatedByUserId: string | null;
+  createdAt: Date; updatedAt: Date;
+}): StoryboardSegmentOverrideRecord {
+  return {
+    id: row.id, projectId: row.projectId, storyboardRecordId: row.storyboardRecordId,
+    segmentId: row.segmentId,
+    strategyOverride: row.strategyOverride as StoryboardSegmentOverrideRecord["strategyOverride"],
+    revision: row.revision, updatedByUserId: row.updatedByUserId,
+    createdAt: row.createdAt, updatedAt: row.updatedAt,
+  };
 }

@@ -7,7 +7,7 @@ import { StoryboardPlan } from "../../../../shared/src/index.js";
  * 旧 visual_strategy_preference 确定性映射为只读 legacy_visual_strategy_hint：
  * - 旧 api_video → api_video_strongly_recommended
  * - 旧 remotion_motion / 缺失 → remotion_sufficient
- * 旧值不得写入 StoryboardPlan 的 override、不得进入新 prompt。
+ * 旧值不得写入 StoryboardPlan（hint 是 decoder 的独立投影，不进正式合同）。
  */
 
 interface LegacyStoryboardPlanShape {
@@ -54,15 +54,20 @@ export function suitabilityToPreferenceHint(
   return "remotion_motion";
 }
 
+/**
+ * 兼容读取结果。
+ * plan：可直接进入下游合同的 StoryboardPlan（不含 legacy 字段）。
+ * legacy_hints：只读投影，segment_id → 历史适配度提示（旧记录才有值，新记录为空 Map）。
+ */
 export type DecodeStoryboardPlanResult =
-  | { ok: true; value: { plan: StoryboardPlan } }
+  | { ok: true; value: { plan: StoryboardPlan; legacy_hints: Record<string, "api_video_strongly_recommended" | "remotion_sufficient"> } }
   | { ok: false; error: string };
 
 export function decodeStoredStoryboardPlan(stored: unknown): DecodeStoryboardPlanResult {
-  // 1. 先试正式新 schema（含 api_video_suitability，strict）
+  // 1. 先试正式新 schema（含 api_video_suitability，strict，无 legacy 字段）
   const modernParse = StoryboardPlan.safeParse(stored);
   if (modernParse.success) {
-    return { ok: true, value: { plan: modernParse.data } };
+    return { ok: true, value: { plan: modernParse.data, legacy_hints: {} } };
   }
 
   // 2. 再试隔离的 legacy schema（允许 visual_strategy_preference）
@@ -76,16 +81,18 @@ export function decodeStoredStoryboardPlan(stored: unknown): DecodeStoryboardPla
     return { ok: false, error: "invalid_storyboard_plan" };
   }
 
+  const legacyHints: Record<string, "api_video_strongly_recommended" | "remotion_sufficient"> = {};
   const legacySegments = stored.segments.map((segment) => {
     const legacy = segment.visual_strategy_preference;
-    // 旧值只映射为只读 hint；suitability 用 hint 值（确定性映射）
+    // 旧值只映射为只读 hint 投影；suitability 用 hint 值（确定性映射）
     const hint = mapLegacyPreferenceToSuitability(legacy);
-    // 构造新 schema 兼容的 segment（剔除旧字段，补适配度）
+    const segmentId = typeof segment.segment_id === "string" ? segment.segment_id : "";
+    if (segmentId) legacyHints[segmentId] = hint;
+    // 构造新 schema 兼容的 segment（剔除旧字段，补适配度；不写 legacy 字段）
     const { visual_strategy_preference: _dropped, ...rest } = segment;
     return {
       ...rest,
       api_video_suitability: hint,
-      legacy_visual_strategy_hint: hint,
     };
   });
 
@@ -102,5 +109,5 @@ export function decodeStoredStoryboardPlan(stored: unknown): DecodeStoryboardPla
   if (!migratedParse.success) {
     return { ok: false, error: "legacy_storyboard_plan_invalid" };
   }
-  return { ok: true, value: { plan: migratedParse.data } };
+  return { ok: true, value: { plan: migratedParse.data, legacy_hints: legacyHints } };
 }

@@ -400,16 +400,28 @@ const suitabilityLabels: Record<string, { label: string; icon: string; class: st
 function suitabilityInfo(segment: StoryboardSegment) {
   const key = segment.api_video_suitability ?? "remotion_sufficient";
   const entry = suitabilityLabels[key] ?? suitabilityLabels.remotion_sufficient;
+  // S2-2A：读取投影中的用户覆盖（strategy_override 非 null 时展示覆盖状态）
+  const projection = activeStoryboard.value?.segment_strategies?.find(
+    (s) => s.segment_id === segment.segment_id,
+  );
+  const override = projection?.strategy_override ?? null;
+  const overrideLabel =
+    override === "api_video"
+      ? { label: "已覆盖：AI 视频", icon: "🤖", class: "strategy-api-video" }
+      : override === "remotion_motion"
+        ? { label: "已覆盖：Remotion", icon: "🎬", class: "strategy-remotion" }
+        : null;
+  const shown = overrideLabel ?? entry;
+  const toggleTitle =
+    key === "api_video_strongly_recommended" || key === "api_video_beneficial"
+      ? "覆盖为 Remotion 运镜（继承时由策略矩阵决定）"
+      : "覆盖为 AI 视频生成";
   return {
-    class: entry.class,
-    icon: entry.icon,
-    label: entry.label,
-    title: entry.title,
-    // 用户覆盖 toggle：suitability 为 API 倾向时提示切回 Remotion，否则提示升级
-    toggleTitle:
-      key === "api_video_strongly_recommended" || key === "api_video_beneficial"
-        ? "覆盖为 Remotion 运镜（继承时由策略矩阵决定）"
-        : "覆盖为 AI 视频生成",
+    class: shown.class,
+    icon: shown.icon,
+    label: shown.label,
+    title: overrideLabel ? `${entry.title}；当前为用户覆盖` : entry.title,
+    toggleTitle,
   };
 }
 
@@ -417,10 +429,18 @@ const isSwitchingStrategy = ref(false);
 const switchingSegmentId = ref<string | null>(null);
 
 async function handleToggleStrategy(segment: StoryboardSegment) {
-  const isApiLeaning =
-    segment.api_video_suitability === "api_video_strongly_recommended" ||
-    segment.api_video_suitability === "api_video_beneficial";
-  const next = isApiLeaning ? ("remotion_motion" as const) : ("api_video" as const);
+  // S2-2A：已有 override 时点击清除（回到 null/继承）；否则按适配度倾向切换
+  const projection = activeStoryboard.value?.segment_strategies?.find(
+    (s) => s.segment_id === segment.segment_id,
+  );
+  const currentOverride = projection?.strategy_override ?? null;
+  const next =
+    currentOverride !== null
+      ? null
+      : segment.api_video_suitability === "api_video_strongly_recommended" ||
+          segment.api_video_suitability === "api_video_beneficial"
+        ? ("remotion_motion" as const)
+        : ("api_video" as const);
 
   isSwitchingStrategy.value = true;
   switchingSegmentId.value = segment.segment_id;

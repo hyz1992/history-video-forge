@@ -102,8 +102,8 @@ async function updateSegmentStrategyController(
   }
 
   const user = requireUser(context.auth);
-  // S2-2A 任务 4：写独立 override（不修改 planJson）
-  const upsert = upsertSegmentOverride(context.app.db, {
+  // S2-2A 任务 4：写独立 override（不修改 planJson），数据库级 CAS
+  const upsert = await upsertSegmentOverride(context.app.db, {
     projectId: project.id,
     storyboardRecordId: record.id,
     segmentId: payload.segment_id,
@@ -121,7 +121,9 @@ async function updateSegmentStrategyController(
     };
   }
 
-  // 解析最终路线：项目配置 + 分镜覆盖 + suitability
+  // 解析最终路线：项目配置 + 分镜覆盖 + suitability。
+  // P2：apiVideoProviderEnabled 来自项目配置解析（当前项目配置无显式禁用项时视为启用，
+  // 后续任务 7 readiness 会提供真实系统约束）。
   const projectConfig = await getProjectGenerationConfiguration(context.app.db, project.id, user.userId);
   const resolved = resolveGenerationConfiguration({
     projectConfiguration: projectConfig.configuration,
@@ -141,9 +143,9 @@ async function updateSegmentStrategyController(
     segmentInputs: [{ segment_id: segment.segment_id, api_video_suitability: segment.api_video_suitability }],
     segmentOverrides: { [segment.segment_id]: payload.visual_strategy_override },
   });
-  const route = resolved.ok
-    ? resolved.value.segment_visual_routes[0]?.resolved_route ?? "remotion"
-    : "remotion";
+  const routeInfo = resolved.ok && resolved.value.segment_visual_routes[0]
+    ? resolved.value.segment_visual_routes[0]
+    : null;
 
   return {
     statusCode: 200,
@@ -153,7 +155,10 @@ async function updateSegmentStrategyController(
       revision: upsert.value.revision,
       strategy_override: upsert.value.strategyOverride,
       api_video_suitability: segment.api_video_suitability,
-      resolved_route: route,
+      resolved_route: routeInfo?.resolved_route ?? "remotion",
+      // P2：返回确定性 reason_code（resolver 生成），失败时给出不可用原因
+      reason_code: routeInfo?.reason_code ?? (resolved.ok ? "route_resolution_failed" : "route_resolution_error"),
+      unavailable_reason: resolved.ok ? null : "配置或目录解析失败，暂按 Remotion 预览",
     },
   };
 }

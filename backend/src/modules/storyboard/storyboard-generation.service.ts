@@ -392,7 +392,6 @@ function buildDeterministicStoryboardPlan(
       risk_notes: [],
       // S2-2A 任务 4：stub 不判断适配度，统一 remotion_sufficient（静态图+运镜足够）
       api_video_suitability: "remotion_sufficient",
-      legacy_visual_strategy_hint: null,
     };
   });
 

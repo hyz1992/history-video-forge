@@ -482,6 +482,14 @@ export interface DbClient {
     activateStoryboard(project: ProjectRecord, record: StoryboardRecord): Promise<void>;
     activateAssetPlan(project: ProjectRecord, record: AssetPlanRecord): Promise<void>;
     saveStoryboardSegmentOverride(record: StoryboardSegmentOverrideRecord): Promise<void>;
+    /**
+     * 分镜覆盖 CAS：expectedRevision=0 → create（唯一冲突→existingRecord）；
+     * expectedRevision>0 → updateMany WHERE revision。只有 P2002 返回 conflict。
+     */
+    casUpsertStoryboardSegmentOverride(
+      record: StoryboardSegmentOverrideRecord,
+      expectedRevision: number,
+    ): Promise<{ success: true } | { success: false; conflict: true; existingRecord: StoryboardSegmentOverrideRecord }>;
   };
   thirdAggregateWriter?: {
     saveAssetManifest(record: AssetManifestRecord, projectOwnerId: string): Promise<void>;

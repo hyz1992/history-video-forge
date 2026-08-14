@@ -2,6 +2,8 @@ import { statSync } from "node:fs";
 import type { DbClient, ScriptRecord } from "../../db/client";
 import { getProjectStorageProfile } from "../../runtime/trace/project-storage.js";
 import { getProjectGenerationConfiguration } from "../generation-config/generation-config.repository.js";
+import { decodeStoredStoryboardPlan } from "../storyboard/storyboard-plan-compatibility.js";
+import { resolveGenerationConfiguration } from "../../../../shared/src/index.js";
 
 function summarizeTraceRun(trace: Record<string, unknown> | null | undefined) {
   if (!trace) {
@@ -86,6 +88,80 @@ export function resolveEffectiveStatus(project: {
   if (s.startsWith("storyboard") && !project.activeScriptRecordId) return resolveEffectiveStatus({ ...project, status: "script_ready" });
   if (s.startsWith("script") && !project.activeTopicPackageId) return "topic_pending";
   return s;
+}
+
+/**
+ * S2-2A 任务 4：storyboard 快照段。
+ * - plan 经兼容解码器输出（旧记录不含 visual_strategy_preference）。
+ * - 附加 segment_strategies 投影：suitability、override、override_revision、
+ *   resolved_route、reason_code（前端三态展示的数据源）。
+ */
+async function buildStoryboardSnapshotSegment(
+  db: DbClient,
+  project: import("../../db/client.js").ProjectRecord,
+  storyboardRecord: import("../../db/client.js").StoryboardRecord,
+): Promise<Record<string, unknown>> {
+  const decoded = decodeStoredStoryboardPlan(storyboardRecord.planJson);
+  const plan = decoded.ok ? decoded.value.plan : null;
+
+  // 解析每段路线（项目配置 + override + suitability）
+  let segmentStrategies: Array<Record<string, unknown>> = [];
+  if (plan) {
+    const overrides = [...db.storyboardSegmentOverrides.values()].filter(
+      (o) => o.storyboardRecordId === storyboardRecord.id,
+    );
+    const configResult = await getProjectGenerationConfiguration(db, project.id, project.ownerId);
+    const resolved = resolveGenerationConfiguration({
+      projectConfiguration: configResult.configuration,
+      projectConfigurationRevision: configResult.revision,
+      sourceUserPreferenceRevision: configResult.sourceUserPreferenceRevision,
+      systemConstraints: { apiVideoProviderEnabled: true },
+      providerModelCatalog: [...db.providerModelCatalog.values()].map((entry) => ({
+        provider_model_id: entry.id,
+        capability: entry.capability,
+        provider_key: entry.providerKey,
+        model_id: entry.modelId,
+        model_version: entry.modelVersion,
+        status: entry.status,
+        is_default: entry.isDefault,
+      })),
+      operation: "assets.generate",
+      segmentInputs: plan.segments.map((s) => ({
+        segment_id: s.segment_id,
+        api_video_suitability: s.api_video_suitability,
+      })),
+      segmentOverrides: Object.fromEntries(
+        overrides.map((o) => [o.segmentId, o.strategyOverride]),
+      ),
+    });
+    const routesById = resolved.ok
+      ? new Map(resolved.value.segment_visual_routes.map((r) => [r.segment_id, r]))
+      : new Map();
+    segmentStrategies = plan.segments.map((segment) => {
+      const override = overrides.find((o) => o.segmentId === segment.segment_id) ?? null;
+      const route = routesById.get(segment.segment_id);
+      return {
+        segment_id: segment.segment_id,
+        api_video_suitability: segment.api_video_suitability,
+        strategy_override: override?.strategyOverride ?? null,
+        override_revision: override?.revision ?? null,
+        resolved_route: route?.resolved_route ?? "remotion",
+        reason_code: route?.reason_code ?? "strategy_matrix_remotion",
+      };
+    });
+  }
+
+  return {
+    storyboard_record_id: storyboardRecord.id,
+    source_script_record_id: storyboardRecord.scriptRecordId,
+    plan,
+    local_validation: storyboardRecord.validationResultJson,
+    execution_state: storyboardRecord.executionStateJson ?? { regenerate_used: false },
+    graph_trace_summary: storyboardRecord.graphTraceSummaryJson,
+    runtime_diagnostics: storyboardRecord.runtimeDiagnosticsJson,
+    // S2-2A：分镜策略投影（三态展示）
+    segment_strategies: segmentStrategies,
+  };
 }
 
 export async function getProjectSnapshot(
@@ -241,17 +317,7 @@ export async function getProjectSnapshot(
       : null,
     script_history: scriptHistory,
     active_storyboard: storyboardRecord
-      ? {
-          storyboard_record_id: storyboardRecord.id,
-          source_script_record_id: storyboardRecord.scriptRecordId,
-          plan: storyboardRecord.planJson,
-          local_validation: storyboardRecord.validationResultJson,
-          execution_state: storyboardRecord.executionStateJson ?? {
-            regenerate_used: false,
-          },
-          graph_trace_summary: storyboardRecord.graphTraceSummaryJson,
-          runtime_diagnostics: storyboardRecord.runtimeDiagnosticsJson,
-        }
+      ? await buildStoryboardSnapshotSegment(db, project, storyboardRecord)
       : null,
     active_asset_plan: assetPlanRecord
       ? {

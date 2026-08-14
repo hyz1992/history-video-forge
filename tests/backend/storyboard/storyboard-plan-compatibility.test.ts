@@ -7,9 +7,9 @@ import { decodeStoredStoryboardPlan } from "../../../backend/src/modules/storybo
  *
  * 详细设计 6.1 节：
  * - decodeStoredStoryboardPlan 先试正式新 schema，再试隔离的 legacy schema。
- * - 旧 visual_strategy_preference 确定性映射为只读 legacy_visual_strategy_hint：
+ * - 旧 visual_strategy_preference 确定性映射为只读 legacy_hints 投影：
  *   旧 api_video → api_video_strongly_recommended；旧 remotion_motion/空 → remotion_sufficient。
- * - 旧值不得写入 StoryboardPlan、override 或新 prompt。
+ * - hint 是 decoder 的独立投影，不写入 StoryboardPlan 正式合同。
  */
 
 const legacySegment = {
@@ -44,7 +44,7 @@ function legacyPlan(segments: Array<Record<string, unknown>>) {
 }
 
 describe("decodeStoredStoryboardPlan legacy compatibility", () => {
-  it("decodes a modern plan (with api_video_suitability) as-is", () => {
+  it("decodes a modern plan (with api_video_suitability) as-is with empty legacy hints", () => {
     const modern = legacyPlan([
       { ...legacySegment, api_video_suitability: "api_video_beneficial" },
     ]);
@@ -52,22 +52,25 @@ describe("decodeStoredStoryboardPlan legacy compatibility", () => {
     expect(decoded.ok).toBe(true);
     if (!decoded.ok) return;
     expect(decoded.value.plan.segments[0]!.api_video_suitability).toBe("api_video_beneficial");
-    expect(decoded.value.plan.segments[0]!.legacy_visual_strategy_hint).toBeNull();
+    // 现代 plan 无 legacy hint
+    expect(decoded.value.legacy_hints).toEqual({});
   });
 
-  it("maps legacy api_video to api_video_strongly_recommended hint", () => {
+  it("maps legacy api_video to api_video_strongly_recommended hint projection", () => {
     const legacy = legacyPlan([
       { ...legacySegment, visual_strategy_preference: "api_video" },
     ]);
     const decoded = decodeStoredStoryboardPlan(legacy);
     expect(decoded.ok).toBe(true);
     if (!decoded.ok) return;
-    const segment = decoded.value.plan.segments[0]!;
-    expect(segment.legacy_visual_strategy_hint).toBe("api_video_strongly_recommended");
+    // hint 在独立投影中
+    expect(decoded.value.legacy_hints["sb_001"]).toBe("api_video_strongly_recommended");
     // 语义提示同步到 suitability（由当前项目策略解析最终路线）
-    expect(segment.api_video_suitability).toBe("api_video_strongly_recommended");
+    expect(decoded.value.plan.segments[0]!.api_video_suitability).toBe("api_video_strongly_recommended");
+    // 正式 plan 不含 hint 字段
+    expect(decoded.value.plan.segments[0]).not.toHaveProperty("legacy_visual_strategy_hint");
     // 输出不含旧字段
-    expect(segment).not.toHaveProperty("visual_strategy_preference");
+    expect(decoded.value.plan.segments[0]).not.toHaveProperty("visual_strategy_preference");
   });
 
   it("maps legacy remotion_motion and missing values to remotion_sufficient hint", () => {
@@ -78,8 +81,8 @@ describe("decodeStoredStoryboardPlan legacy compatibility", () => {
     const decoded = decodeStoredStoryboardPlan(legacy);
     expect(decoded.ok).toBe(true);
     if (!decoded.ok) return;
-    expect(decoded.value.plan.segments[0]!.legacy_visual_strategy_hint).toBe("remotion_sufficient");
-    expect(decoded.value.plan.segments[1]!.legacy_visual_strategy_hint).toBe("remotion_sufficient");
+    expect(decoded.value.legacy_hints["sb_001"]).toBe("remotion_sufficient");
+    expect(decoded.value.legacy_hints["sb_002"]).toBe("remotion_sufficient");
   });
 
   it("rejects invalid stored plans (neither modern nor legacy)", () => {
@@ -97,10 +100,9 @@ describe("decodeStoredStoryboardPlan legacy compatibility", () => {
     const decoded = decodeStoredStoryboardPlan(legacy);
     expect(decoded.ok).toBe(true);
     if (!decoded.ok) return;
-    // 序列化后不得再出现旧字段（下游 prompt/合同不受污染）
+    // 序列化后不得再出现旧字段或 hint 字段（下游 prompt/合同不受污染）
     const serialized = JSON.stringify(decoded.value.plan);
     expect(serialized).not.toContain("visual_strategy_preference");
-    // 但保留 hint 供只读展示
-    expect(serialized).toContain("legacy_visual_strategy_hint");
+    expect(serialized).not.toContain("legacy_visual_strategy_hint");
   });
 });

@@ -5,6 +5,7 @@ import { LlmOutputError } from "../../runtime/llm/llm-output-error.js";
 import { createCompositeInteractionLogWriter, persistProjectRunArtifacts } from "../../runtime/trace/project-storage.js";
 import { generateStoryboardPlan, regenerateSingleSegment } from "./storyboard-generation.service";
 import { validateStoryboardPlan } from "./storyboard-local-validator";
+import { decodeStoredStoryboardPlan } from "./storyboard-plan-compatibility";
 import { saveStoryboardRecord } from "./storyboard-record.repository";
 
 function mapScriptDraft(record: ScriptRecord): ScriptDraftPackage {
@@ -425,7 +426,13 @@ export async function runStoryboardSegmentRegeneration(
     return { statusCode: 404, body: { error: "storyboard_record_not_found" } };
   }
 
-  const existingPlan = StoryboardPlan.parse(storyboardRecord.planJson);
+  // P1：旧 StoryboardPlan 必须先经兼容解码器读取（含 visual_strategy_preference 的记录
+  // 无法被正式 schema 直接解析，必须走 legacy 路径才能执行局部重生成）。
+  const decoded = decodeStoredStoryboardPlan(storyboardRecord.planJson);
+  if (!decoded.ok) {
+    return { statusCode: 500, body: { error: "storyboard_plan_invalid" } };
+  }
+  const existingPlan = decoded.value.plan;
   const targetSegment = existingPlan.segments.find(
     (s) => s.segment_id === input.segmentId,
   );
