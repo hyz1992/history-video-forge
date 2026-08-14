@@ -4,6 +4,7 @@ import { getProjectStorageProfile } from "../../runtime/trace/project-storage.js
 import { getProjectGenerationConfiguration } from "../generation-config/generation-config.repository.js";
 import { decodeStoredStoryboardPlan } from "../storyboard/storyboard-plan-compatibility.js";
 import { resolveGenerationConfiguration } from "../../../../shared/src/index.js";
+import { resolveSystemGenerationConstraints } from "../generation-config/system-constraints.js";
 
 function summarizeTraceRun(trace: Record<string, unknown> | null | undefined) {
   if (!trace) {
@@ -100,9 +101,13 @@ async function buildStoryboardSnapshotSegment(
   db: DbClient,
   project: import("../../db/client.js").ProjectRecord,
   storyboardRecord: import("../../db/client.js").StoryboardRecord,
+  demoMode: boolean,
 ): Promise<Record<string, unknown>> {
   const decoded = decodeStoredStoryboardPlan(storyboardRecord.planJson);
   const plan = decoded.ok ? decoded.value.plan : null;
+
+  // P2：真实系统约束单一来源（demo 态禁用真实视频 provider）
+  const constraints = resolveSystemGenerationConstraints(demoMode);
 
   // 解析每段路线（项目配置 + override + suitability）
   let segmentStrategies: Array<Record<string, unknown>> = [];
@@ -115,7 +120,7 @@ async function buildStoryboardSnapshotSegment(
       projectConfiguration: configResult.configuration,
       projectConfigurationRevision: configResult.revision,
       sourceUserPreferenceRevision: configResult.sourceUserPreferenceRevision,
-      systemConstraints: { apiVideoProviderEnabled: true },
+      systemConstraints: constraints,
       providerModelCatalog: [...db.providerModelCatalog.values()].map((entry) => ({
         provider_model_id: entry.id,
         capability: entry.capability,
@@ -137,6 +142,10 @@ async function buildStoryboardSnapshotSegment(
     const routesById = resolved.ok
       ? new Map(resolved.value.segment_visual_routes.map((r) => [r.segment_id, r]))
       : new Map();
+    // P2：解析失败时给出真实不可用原因（不再伪装 strategy_matrix_remotion）
+    const unavailableReason = resolved.ok
+      ? null
+      : (resolved.error?.message ?? "配置或目录解析失败，暂按 Remotion 预览");
     segmentStrategies = plan.segments.map((segment) => {
       const override = overrides.find((o) => o.segmentId === segment.segment_id) ?? null;
       const route = routesById.get(segment.segment_id);
@@ -147,6 +156,7 @@ async function buildStoryboardSnapshotSegment(
         override_revision: override?.revision ?? null,
         resolved_route: route?.resolved_route ?? "remotion",
         reason_code: route?.reason_code ?? "strategy_matrix_remotion",
+        unavailable_reason: unavailableReason,
       };
     });
   }
@@ -159,7 +169,7 @@ async function buildStoryboardSnapshotSegment(
     execution_state: storyboardRecord.executionStateJson ?? { regenerate_used: false },
     graph_trace_summary: storyboardRecord.graphTraceSummaryJson,
     runtime_diagnostics: storyboardRecord.runtimeDiagnosticsJson,
-    // S2-2A：分镜策略投影（三态展示）
+    // S2-2A：分镜策略投影（四层信息展示：适配度/覆盖/路线/原因）
     segment_strategies: segmentStrategies,
   };
 }
@@ -168,6 +178,7 @@ export async function getProjectSnapshot(
   db: DbClient,
   projectId: string,
   topicCandidateStore?: Map<string, any>,
+  options?: { demoMode?: boolean },
 ) {
   const project = db.projects.get(projectId);
   if (!project) {
@@ -317,7 +328,7 @@ export async function getProjectSnapshot(
       : null,
     script_history: scriptHistory,
     active_storyboard: storyboardRecord
-      ? await buildStoryboardSnapshotSegment(db, project, storyboardRecord)
+      ? await buildStoryboardSnapshotSegment(db, project, storyboardRecord, options?.demoMode ?? false)
       : null,
     active_asset_plan: assetPlanRecord
       ? {

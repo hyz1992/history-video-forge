@@ -123,58 +123,107 @@ export class PrismaSecondAggregateWriter {
   /**
    * 分镜覆盖 CAS（P1 整改）：expectedRevision=0 → 事务内 create（唯一冲突→返回现有记录）；
    * expectedRevision>0 → 条件 updateMany WHERE revision=expectedRevision。
-   * 只有唯一约束冲突（P2002）返回 conflict + existingRecord；其他事务异常继续抛出。
+   * 冲突归类：
+   * - P2002（唯一约束冲突）→ conflict + existingRecord
+   * - updateMany count=0 → conflict + existingRecord
+   * - P1008 / P2034（SQLite 双连接并发锁超时，事务已回滚）→ 事务外重读，记录存在即 conflict；
+   *   记录不存在且为首建则重试一次。其他事务异常继续抛出。
    */
   async casUpsertStoryboardSegmentOverride(
     record: StoryboardSegmentOverrideRecord,
     expectedRevision: number,
   ): Promise<{ success: true } | { success: false; conflict: true; existingRecord: StoryboardSegmentOverrideRecord }> {
-    return this.client.$transaction(async (tx) => {
-      if (expectedRevision === 0) {
-        try {
-          await tx.storyboardSegmentOverride.create({
+    try {
+      return await this.client.$transaction(async (tx) => {
+        if (expectedRevision === 0) {
+          try {
+            await tx.storyboardSegmentOverride.create({
+              data: {
+                id: record.id, projectId: record.projectId, storyboardRecordId: record.storyboardRecordId,
+                segmentId: record.segmentId, strategyOverride: record.strategyOverride,
+                revision: record.revision, updatedByUserId: record.updatedByUserId,
+                createdAt: record.createdAt, updatedAt: record.updatedAt,
+              },
+            });
+          } catch (error) {
+            if (isUniqueConstraintError(error)) {
+              const existing = await tx.storyboardSegmentOverride.findUnique({
+                where: { storyboardRecordId_segmentId: { storyboardRecordId: record.storyboardRecordId, segmentId: record.segmentId } },
+              });
+              if (!existing) throw error;
+              return { success: false, conflict: true, existingRecord: mapOverrideRow(existing) };
+            }
+            throw error;
+          }
+        } else {
+          const result = await tx.storyboardSegmentOverride.updateMany({
+            where: { storyboardRecordId: record.storyboardRecordId, segmentId: record.segmentId, revision: expectedRevision },
             data: {
-              id: record.id, projectId: record.projectId, storyboardRecordId: record.storyboardRecordId,
-              segmentId: record.segmentId, strategyOverride: record.strategyOverride,
-              revision: record.revision, updatedByUserId: record.updatedByUserId,
-              createdAt: record.createdAt, updatedAt: record.updatedAt,
+              strategyOverride: record.strategyOverride,
+              revision: record.revision,
+              updatedByUserId: record.updatedByUserId,
+              updatedAt: record.updatedAt,
             },
           });
-        } catch (error) {
-          if (isUniqueConstraintError(error)) {
+          if (result.count !== 1) {
             const existing = await tx.storyboardSegmentOverride.findUnique({
               where: { storyboardRecordId_segmentId: { storyboardRecordId: record.storyboardRecordId, segmentId: record.segmentId } },
             });
-            if (!existing) throw error;
-            return { success: false, conflict: true, existingRecord: mapOverrideRow(existing) };
+            return { success: false, conflict: true, existingRecord: existing ? mapOverrideRow(existing) : record };
           }
-          throw error;
         }
-      } else {
-        const result = await tx.storyboardSegmentOverride.updateMany({
-          where: { storyboardRecordId: record.storyboardRecordId, segmentId: record.segmentId, revision: expectedRevision },
-          data: {
-            strategyOverride: record.strategyOverride,
-            revision: record.revision,
-            updatedByUserId: record.updatedByUserId,
-            updatedAt: record.updatedAt,
-          },
+        return { success: true };
+      });
+    } catch (error) {
+      // P1：SQLite 双连接并发时 loser 可能因锁等待超时抛 P1008（事务已回滚）。
+      // 事务外受控重读：记录存在即确认被竞争写入 → conflict；
+      // 记录不存在且为 expectedRevision=0 首建 → 重试一次单语句 create（原子，无事务锁竞争）。
+      if (isTransactionBusyError(error)) {
+        const existing = await this.client.storyboardSegmentOverride.findUnique({
+          where: { storyboardRecordId_segmentId: { storyboardRecordId: record.storyboardRecordId, segmentId: record.segmentId } },
         });
-        if (result.count !== 1) {
-          const existing = await tx.storyboardSegmentOverride.findUnique({
-            where: { storyboardRecordId_segmentId: { storyboardRecordId: record.storyboardRecordId, segmentId: record.segmentId } },
-          });
-          return { success: false, conflict: true, existingRecord: existing ? mapOverrideRow(existing) : record };
+        if (existing) {
+          return { success: false, conflict: true, existingRecord: mapOverrideRow(existing) };
         }
+        if (expectedRevision === 0) {
+          try {
+            await this.client.storyboardSegmentOverride.create({
+              data: {
+                id: record.id, projectId: record.projectId, storyboardRecordId: record.storyboardRecordId,
+                segmentId: record.segmentId, strategyOverride: record.strategyOverride,
+                revision: record.revision, updatedByUserId: record.updatedByUserId,
+                createdAt: record.createdAt, updatedAt: record.updatedAt,
+              },
+            });
+            return { success: true };
+          } catch (retryError) {
+            if (isUniqueConstraintError(retryError) || isTransactionBusyError(retryError)) {
+              const after = await this.client.storyboardSegmentOverride.findUnique({
+                where: { storyboardRecordId_segmentId: { storyboardRecordId: record.storyboardRecordId, segmentId: record.segmentId } },
+              });
+              if (after) return { success: false, conflict: true, existingRecord: mapOverrideRow(after) };
+            }
+            throw retryError;
+          }
+        }
+        // expectedRevision>0 且记录不存在：并发窗口内被删除或尚未创建，按 conflict 处理
+        return { success: false, conflict: true, existingRecord: record };
       }
-      return { success: true };
-    });
+      throw error;
+    }
   }
 }
 
 /** Prisma 唯一约束冲突错误码（P2002）。其他错误不得折叠为 conflict。 */
 function isUniqueConstraintError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && (error as { code?: string }).code === "P2002";
+}
+
+/** SQLite 双连接并发锁等待超时（P1008）或事务冲突（P2034）。 */
+function isTransactionBusyError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("code" in error)) return false;
+  const code = (error as { code?: string }).code;
+  return code === "P1008" || code === "P2034";
 }
 
 function mapOverrideRow(row: {

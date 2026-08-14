@@ -400,52 +400,41 @@ const suitabilityLabels: Record<string, { label: string; icon: string; class: st
 function suitabilityInfo(segment: StoryboardSegment) {
   const key = segment.api_video_suitability ?? "remotion_sufficient";
   const entry = suitabilityLabels[key] ?? suitabilityLabels.remotion_sufficient;
-  // S2-2A：读取投影中的用户覆盖（strategy_override 非 null 时展示覆盖状态）
+  return {
+    class: entry.class,
+    icon: entry.icon,
+    label: entry.label,
+    title: entry.title,
+  };
+}
+
+/**
+ * S2-2A：从快照投影读取分镜策略全量信息（适配度/覆盖/路线/原因）。
+ * 投影缺失时给出保守默认值。
+ */
+function strategyProjection(segment: StoryboardSegment) {
   const projection = activeStoryboard.value?.segment_strategies?.find(
     (s) => s.segment_id === segment.segment_id,
   );
-  const override = projection?.strategy_override ?? null;
-  const overrideLabel =
-    override === "api_video"
-      ? { label: "已覆盖：AI 视频", icon: "🤖", class: "strategy-api-video" }
-      : override === "remotion_motion"
-        ? { label: "已覆盖：Remotion", icon: "🎬", class: "strategy-remotion" }
-        : null;
-  const shown = overrideLabel ?? entry;
-  const toggleTitle =
-    key === "api_video_strongly_recommended" || key === "api_video_beneficial"
-      ? "覆盖为 Remotion 运镜（继承时由策略矩阵决定）"
-      : "覆盖为 AI 视频生成";
   return {
-    class: shown.class,
-    icon: shown.icon,
-    label: shown.label,
-    title: overrideLabel ? `${entry.title}；当前为用户覆盖` : entry.title,
-    toggleTitle,
+    strategy_override: projection?.strategy_override ?? null,
+    resolved_route: projection?.resolved_route ?? "remotion",
+    reason_code: projection?.reason_code ?? "strategy_matrix_remotion",
+    unavailable_reason: projection?.unavailable_reason ?? null,
   };
 }
 
 const isSwitchingStrategy = ref(false);
 const switchingSegmentId = ref<string | null>(null);
 
-async function handleToggleStrategy(segment: StoryboardSegment) {
-  // S2-2A：已有 override 时点击清除（回到 null/继承）；否则按适配度倾向切换
-  const projection = activeStoryboard.value?.segment_strategies?.find(
-    (s) => s.segment_id === segment.segment_id,
-  );
-  const currentOverride = projection?.strategy_override ?? null;
-  const next =
-    currentOverride !== null
-      ? null
-      : segment.api_video_suitability === "api_video_strongly_recommended" ||
-          segment.api_video_suitability === "api_video_beneficial"
-        ? ("remotion_motion" as const)
-        : ("api_video" as const);
-
+async function handleSetOverride(
+  segment: StoryboardSegment,
+  override: "api_video" | "remotion_motion" | null,
+) {
   isSwitchingStrategy.value = true;
   switchingSegmentId.value = segment.segment_id;
   try {
-    await storyboardStore.updateSegmentStrategyPreference(segment.segment_id, next);
+    await storyboardStore.updateSegmentStrategyPreference(segment.segment_id, override);
   } finally {
     isSwitchingStrategy.value = false;
     switchingSegmentId.value = null;
@@ -627,6 +616,13 @@ function scrollToTop() {
 
       <!-- Segment cards -->
       <div v-if="segments.length > 0" class="storyboard-segments-section">
+          <div
+            v-if="storyboardStore.state.strategyError"
+            class="storyboard-strategy-error"
+            role="alert"
+          >
+            {{ storyboardStore.state.strategyError }}
+          </div>
           <article
             v-for="(segment, index) in segments"
             :key="segment.segment_id"
@@ -651,21 +647,46 @@ function scrollToTop() {
                 <span class="storyboard-segment-time">
                   {{ formatSeconds(segment.start_hint_sec) }} – {{ formatSeconds(segment.end_hint_sec) }}
                 </span>
-                <button
+                <!-- S2-2A：四层信息同时展示：AI 适配度 / 用户覆盖 / 解析路线 / 原因 -->
+                <span
                   class="storyboard-strategy-badge"
                   :class="suitabilityInfo(segment).class"
-                  :title="suitabilityInfo(segment).toggleTitle"
-                  :disabled="isSwitchingStrategy || isRegeneratingSegment"
-                  @click.stop.prevent="handleToggleStrategy(segment)"
+                  :title="suitabilityInfo(segment).title"
                 >
-                  <template v-if="isSwitchingStrategy && switchingSegmentId === segment.segment_id">
-                    切换中...
-                  </template>
-                  <template v-else>
-                    {{ suitabilityInfo(segment).icon }}
-                    {{ suitabilityInfo(segment).label }}
-                  </template>
-                </button>
+                  {{ suitabilityInfo(segment).icon }}
+                  {{ suitabilityInfo(segment).label }}
+                </span>
+                <span
+                  class="storyboard-route-badge"
+                  :class="strategyProjection(segment).resolved_route === 'api_video' ? 'strategy-api-video' : 'strategy-remotion'"
+                >
+                  路线：{{ strategyProjection(segment).resolved_route === "api_video" ? "AI 视频" : "Remotion" }}
+                </span>
+                <span
+                  v-if="strategyProjection(segment).unavailable_reason"
+                  class="storyboard-unavailable-reason"
+                  :title="strategyProjection(segment).unavailable_reason"
+                >
+                  ⚠ {{ strategyProjection(segment).unavailable_reason }}
+                </span>
+                <!-- 三态选择：API 视频 / Remotion / 继承 -->
+                <span class="storyboard-override-select">
+                  <button
+                    :class="{ active: strategyProjection(segment).strategy_override === 'api_video' }"
+                    :disabled="isSwitchingStrategy || isRegeneratingSegment"
+                    @click.stop.prevent="handleSetOverride(segment, 'api_video')"
+                  >AI 视频</button>
+                  <button
+                    :class="{ active: strategyProjection(segment).strategy_override === 'remotion_motion' }"
+                    :disabled="isSwitchingStrategy || isRegeneratingSegment"
+                    @click.stop.prevent="handleSetOverride(segment, 'remotion_motion')"
+                  >Remotion</button>
+                  <button
+                    :class="{ active: strategyProjection(segment).strategy_override === null }"
+                    :disabled="isSwitchingStrategy || isRegeneratingSegment"
+                    @click.stop.prevent="handleSetOverride(segment, null)"
+                  >继承</button>
+                </span>
                 <button
                   class="storyboard-segment-regen-btn"
                   title="重新生成此分镜"
@@ -1267,6 +1288,68 @@ details[open] > .storyboard-metrics-toggle::before {
 .storyboard-strategy-badge:disabled {
   opacity: 0.55;
   cursor: wait;
+}
+
+.storyboard-route-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  border-radius: 6px;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  color: rgba(220, 220, 220, 0.85);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.storyboard-unavailable-reason {
+  font-size: 0.72rem;
+  color: #e6a23c;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.storyboard-override-select {
+  display: inline-flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.storyboard-override-select button {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border: 1px solid rgba(128, 128, 128, 0.3);
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(200, 200, 200, 0.7);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.storyboard-override-select button:hover:not(:disabled) {
+  color: #fff;
+  border-color: rgba(200, 200, 200, 0.6);
+}
+
+.storyboard-override-select button.active {
+  background: rgba(93, 150, 255, 0.18);
+  border-color: rgba(93, 150, 255, 0.55);
+  color: #9cc0ff;
+}
+
+.storyboard-override-select button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.storyboard-strategy-error {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(230, 162, 60, 0.1);
+  border: 1px solid rgba(230, 162, 60, 0.4);
+  color: #e6a23c;
+  font-size: 0.8rem;
 }
 
 .strategy-remotion {

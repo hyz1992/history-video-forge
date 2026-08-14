@@ -8,6 +8,7 @@ import { decodeStoredStoryboardPlan } from "./storyboard-plan-compatibility";
 import { guardOwnedRoute, requireUser } from "../../auth/authorization.js";
 import { resolveGenerationConfiguration } from "../../../../shared/src/index.js";
 import { getProjectGenerationConfiguration } from "../generation-config/generation-config.repository.js";
+import { resolveSystemGenerationConstraints } from "../generation-config/system-constraints.js";
 
 interface StoryboardGeneratePayload {
   user_feedback?: string;
@@ -122,14 +123,13 @@ async function updateSegmentStrategyController(
   }
 
   // 解析最终路线：项目配置 + 分镜覆盖 + suitability。
-  // P2：apiVideoProviderEnabled 来自项目配置解析（当前项目配置无显式禁用项时视为启用，
-  // 后续任务 7 readiness 会提供真实系统约束）。
+  // P2：真实系统约束单一来源（demo/测试态禁用真实视频 provider）
   const projectConfig = await getProjectGenerationConfiguration(context.app.db, project.id, user.userId);
   const resolved = resolveGenerationConfiguration({
     projectConfiguration: projectConfig.configuration,
     projectConfigurationRevision: projectConfig.revision,
     sourceUserPreferenceRevision: projectConfig.sourceUserPreferenceRevision,
-    systemConstraints: { apiVideoProviderEnabled: true },
+    systemConstraints: resolveSystemGenerationConstraints(context.app.env.demoMode),
     providerModelCatalog: [...context.app.db.providerModelCatalog.values()].map((entry) => ({
       provider_model_id: entry.id,
       capability: entry.capability,

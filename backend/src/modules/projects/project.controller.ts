@@ -31,6 +31,7 @@ export const getProjectSnapshotController = guardUserRoute(
       context.app.db,
       context.params.projectId,
       (context.app as any).topicCandidateStore,
+      { demoMode: context.app.env.demoMode },
     );
     if (!snapshot) {
       return {
