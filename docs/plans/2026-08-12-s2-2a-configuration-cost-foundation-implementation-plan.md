@@ -330,7 +330,7 @@ git commit -m "实现用户与项目生成配置接口"
 - 修改：`tests/backend/api/storyboard-api.test.ts`
 - 修改：`tests/frontend/stores/storyboard.test.ts`（若不存在则新建）
 
-- [ ] **步骤 1：先写分镜合同失败测试**
+- [x] **步骤 1：先写分镜合同失败测试**
 
 要求：
 
@@ -350,17 +350,17 @@ npx vitest run --configLoader runner tests/backend/storyboard/storyboard-video-s
 
 预期：失败，旧字段仍在合同和路由中。
 
-- [ ] **步骤 2：实现历史分镜兼容读取边界**
+- [x] **步骤 2：实现历史分镜兼容读取边界**
 
 `decodeStoredStoryboardPlan()` 先尝试正式新 schema，再尝试隔离的 legacy schema；旧值只生成 `legacy_visual_strategy_hint`，不得写入 `StoryboardPlan`、override 或新 prompt。将 storyboard segment regenerate 和 asset planning 的直接 `StoryboardPlan.parse(record.planJson)` 改为调用该 decoder。
 
-- [ ] **步骤 3：更新正式中文 prompt 与 changelog**
+- [x] **步骤 3：更新正式中文 prompt 与 changelog**
 
 Prompt 只负责判断“静态图+Remotion 是否足够表达动作因果”，输出四档 suitability；不让 LLM 直接决定付费调用，也不把用户预算/财富状态写进 prompt。
 
 同时更新 prompt 版本、fixture/drift/changelog 所需元数据，保持 `language: zh-CN`。
 
-- [ ] **步骤 4：实现独立 override repository/API**
+- [x] **步骤 4：实现独立 override repository/API**
 
 将现有 segment strategy PATCH 改为写 `StoryboardSegmentOverride`：
 
@@ -370,7 +370,7 @@ Prompt 只负责判断“静态图+Remotion 是否足够表达动作因果”，
 - 权限检查沿用 `guardOwnedRoute`；
 - 不直接修改历史 `planJson`。
 
-- [ ] **步骤 5：更新前端展示与 store**
+- [x] **步骤 5：更新前端展示与 store**
 
 分镜卡同时展示：
 
@@ -379,14 +379,14 @@ Prompt 只负责判断“静态图+Remotion 是否足够表达动作因果”，
 - 当前解析结果；
 - 受管理员/测试态约束时的不可用原因。
 
-- [ ] **步骤 6：运行 prompt 与分镜回归**
+- [x] **步骤 6：运行 prompt 与分镜回归**
 
 ```powershell
 npm run harness:check-prompts
 npx vitest run --configLoader runner tests/backend/storyboard/storyboard-video-suitability.test.ts tests/backend/storyboard/storyboard-plan-compatibility.test.ts tests/backend/storyboard/storyboard-segment-override.test.ts tests/backend/storyboard/storyboard-generation.test.ts tests/backend/asset-planning/asset-plan-downstream-compatibility.test.ts tests/backend/api/storyboard-api.test.ts tests/frontend/stores/storyboard.test.ts
 ```
 
-- [ ] **步骤 7：自审并提交**
+- [x] **步骤 7：自审并提交**
 
 ```powershell
 git add shared/src/storyboard shared/src/index.ts prompts/storyboard backend/src/modules/storyboard backend/src/modules/asset-planning/asset-planning-run.service.ts frontend/src/stores/storyboard.ts frontend/src/components/storyboard/StoryboardPanel.vue tests/backend/storyboard tests/backend/api/storyboard-api.test.ts tests/frontend/stores/storyboard.test.ts
