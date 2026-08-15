@@ -999,6 +999,26 @@ const response = await app.inject({
     expect(body.manifest.segment_routes[0]?.visual_route_type).toBe("video_clip");
   });
 
+  it("rejects client provider credentials with 400 client_provider_credentials_not_allowed", async () => {
+    const app = buildApp();
+    const prepared = await prepareActiveAssetPlan(app);
+    for (const payload of [
+      { provider_mode: "dashscope" },
+      { dashscope: { api_key: "test-key" } },
+    ]) {
+      const response = await app.inject({
+        method: "POST",
+        url: `/api/projects/${prepared.project.id}/assets/generate`,
+        payload: { ...payload, execution_mode: "auto_available" },
+        auth,
+      });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toMatchObject({
+        error: "client_provider_credentials_not_allowed",
+      });
+    }
+  });
+
   it("supports execution_mode dry_run and confirms no provider adapter is invoked", async () => {
     const app = buildApp();
     const prepared = await prepareActiveAssetPlan(app);

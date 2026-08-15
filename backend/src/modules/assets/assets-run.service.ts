@@ -14,6 +14,8 @@ import type {
 import {
   AssetArtifact as AssetArtifactSchema,
   AssetExecutionOptions as AssetExecutionOptionsSchema,
+  canonicalStringify,
+  deterministicHash,
   type GenerationConfigurationV1,
 } from "../../../../shared/src/index.js";
 import { getProjectGenerationConfiguration } from "../generation-config/generation-config.repository.js";
@@ -67,6 +69,25 @@ export interface RunAssetsGenerationInput {
   missingOnly?: boolean;
   /** Only process these specific task IDs. */
   taskIds?: string[];
+}
+
+/**
+ * S2-2A 任务 6：判断 route 决策字段是否为"未决策"默认值。
+ * 用于局部重试合并时决定是否用旧 route 的决策覆盖新默认值。
+ */
+function isDefaultRouteDecision(field: string, value: unknown): boolean {
+  switch (field) {
+    case "video_strategy":
+      return value === "prefer_remotion";
+    case "fallback_decision":
+      return value === "none";
+    case "route_events":
+      return Array.isArray(value) && value.length === 0;
+    case "notes":
+      return Array.isArray(value) && value.length === 0;
+    default:
+      return value === undefined || value === null || value === "";
+  }
 }
 
 function isRealArtifact(art: Record<string, unknown>): boolean {
@@ -571,6 +592,11 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
       "primary_visual_artifact_id", "fallback_visual_artifact_id",
       "motion_artifact_id", "image_artifact_id", "video_artifact_id",
     ]);
+    // S2-2A 任务 6 整改：策略决策字段同样参与合并。新 route 是 builder 默认值时
+    // （本轮未触碰该段/未产生新决策）保留旧 route 的决策与诊断，避免局部重试丢失。
+    const STRATEGY_DECISION_FIELDS = new Set([
+      "video_strategy", "fallback_decision", "route_events", "notes",
+    ]);
 
     const existingNewRoutes = (Array.isArray((manifest as Record<string, unknown>).segment_routes)
       ? (manifest as Record<string, unknown>).segment_routes as Record<string, unknown>[]
@@ -595,6 +621,14 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
           const newVal = (merged as Record<string, unknown>)[field];
           // Fill null / empty / undefined values from the old route.
           if (oldVal != null && oldVal !== "" && (newVal == null || newVal === "")) {
+            (merged as Record<string, unknown>)[field] = oldVal;
+          }
+        }
+        // 决策字段：新值为默认（未决策）时保留旧值；新值已有决策则不覆盖。
+        for (const field of STRATEGY_DECISION_FIELDS) {
+          const oldVal = (oldRoute as Record<string, unknown>)[field];
+          const newVal = (merged as Record<string, unknown>)[field];
+          if (isDefaultRouteDecision(field, newVal) && !isDefaultRouteDecision(field, oldVal)) {
             (merged as Record<string, unknown>)[field] = oldVal;
           }
         }
@@ -893,9 +927,11 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   }
 
   // Step 9: Create and save manifest record
+  // S2-2A 任务 6 整改：保留 run_id，accept-fallback 依赖它校验当前运行。
   const executionState = {
     execution_mode: executionOptions.execution_mode,
     voice_profile_id: executionOptions.voice_profile_id,
+    run_id: runId,
     activated: true,
   };
 
@@ -1171,6 +1207,13 @@ export interface AcceptSegmentFallbackInput {
   segmentId: string;
   /** 客户端声明的预期 run id；与 manifest 记录的执行 run 不一致时拒绝。 */
   expectedRunId: string;
+  /** 客户端看到的 manifest 指纹（CAS）；与当前记录不一致时拒绝并发覆盖。 */
+  expectedVersion: string;
+}
+
+/** 计算 manifest 内容指纹，作为 accept-fallback 的并发版本（CAS）。 */
+export function manifestFallbackVersion(manifest: AssetManifest): string {
+  return deterministicHash(canonicalStringify(manifest));
 }
 
 /**
@@ -1184,7 +1227,7 @@ export interface AcceptSegmentFallbackInput {
 export async function acceptSegmentFallback(
   input: AcceptSegmentFallbackInput,
 ) {
-  const { db, project, runId, segmentId, expectedRunId } = input;
+  const { db, project, runId, segmentId, expectedRunId, expectedVersion } = input;
 
   if (!project.activeAssetManifestRecordId) {
     return { statusCode: 409, body: { error: "active_assets_missing" } };
@@ -1210,6 +1253,13 @@ export async function acceptSegmentFallback(
   }
 
   const manifest = manifestRecord.manifestJson as unknown as AssetManifest;
+  // CAS：客户端必须基于当前 manifest 指纹接受，防止并发覆盖。
+  if (manifestFallbackVersion(manifest) !== expectedVersion) {
+    return {
+      statusCode: 409,
+      body: { error: "assets_fallback_version_mismatch" },
+    };
+  }
   const route = manifest.segment_routes.find(
     (item) => item.segment_id === segmentId,
   );
@@ -1223,10 +1273,22 @@ export async function acceptSegmentFallback(
     };
   }
 
-  // 激活前必须同段 anchor + Remotion cue 齐备，否则不能伪装 ready
+  // 激活前必须同段 anchor + Remotion cue 齐备，且 artifact 真实存在、类型正确，
+  // 否则不能伪装 ready。
   const anchorArtifactId =
     route.fallback_visual_artifact_id ?? route.primary_visual_artifact_id;
-  if (!anchorArtifactId || !route.motion_artifact_id) {
+  const anchorArtifact = anchorArtifactId
+    ? manifest.artifacts.find((item) => item.artifact_id === anchorArtifactId)
+    : undefined;
+  const motionArtifact = route.motion_artifact_id
+    ? manifest.artifacts.find((item) => item.artifact_id === route.motion_artifact_id)
+    : undefined;
+  if (
+    !anchorArtifact ||
+    anchorArtifact.artifact_type !== "image" ||
+    !motionArtifact ||
+    motionArtifact.artifact_type !== "motion_recipe"
+  ) {
     return {
       statusCode: 409,
       body: { error: "segment_fallback_incomplete" },
@@ -1275,7 +1337,29 @@ export async function acceptSegmentFallback(
   }
 
   manifestRecord.manifestJson = manifest as unknown as Record<string, unknown>;
+  // 在 execution state 追加可审计事件（fallback_accepted run event）
+  const executionState = {
+    ...(manifestRecord.executionStateJson ?? {}),
+    events: [
+      ...(Array.isArray(manifestRecord.executionStateJson?.events)
+        ? manifestRecord.executionStateJson.events
+        : []),
+      {
+        event_type: "fallback_accepted",
+        segment_id: segmentId,
+        run_id: runId,
+        occurred_at: new Date().toISOString(),
+      },
+    ],
+  };
+  manifestRecord.executionStateJson = executionState;
   project.updatedAt = new Date();
+
+  // S2-2A 任务 6 整改：接受结果必须持久化（Prisma writer + 项目同步），
+  // 只改内存会在重启后丢失。
+  const projectOwnerId = db.projects.get(project.id)?.ownerId ?? "system";
+  await db.thirdAggregateWriter?.saveAssetManifest(manifestRecord, projectOwnerId);
+  await db.firstAggregateWriter?.syncProject(project);
 
   return {
     statusCode: 200,
@@ -1283,6 +1367,7 @@ export async function acceptSegmentFallback(
       project_id: project.id,
       asset_manifest_record_id: manifestRecord.id,
       segment_id: segmentId,
+      version: manifestFallbackVersion(manifest),
       manifest,
     },
   };

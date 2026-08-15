@@ -763,9 +763,10 @@ describe("asset plan downstream compatibility fixtures", () => {
         )!;
         expect(route.tts_artifact_id).not.toBeNull();
         if (isApiVideoSuitability(segment.api_video_suitability)) {
+          // API route 同时保留同段 motion artifact（Remotion 降级路径）
           expect(route).toMatchObject({
             visual_route_type: "video_clip",
-            motion_artifact_id: null,
+            motion_artifact_id: expect.any(String),
           });
         } else {
           const motionTask = plan.tasks.find(

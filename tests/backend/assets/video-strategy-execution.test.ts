@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { executeAssetManifest } from "../../../backend/src/modules/assets/assets-execution-engine.js";
 import { createAssetProviderRegistry } from "../../../backend/src/modules/assets/assets-provider-registry.js";
-import { acceptSegmentFallback } from "../../../backend/src/modules/assets/assets-run.service.js";
+import {
+  acceptSegmentFallback,
+  manifestFallbackVersion,
+} from "../../../backend/src/modules/assets/assets-run.service.js";
 import { saveAssetManifestRecord } from "../../../backend/src/modules/assets/asset-manifest-record.repository.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import type { AssetProviderAdapter } from "../../../backend/src/modules/assets/assets-provider-adapter.js";
@@ -78,6 +81,14 @@ function makeVideoManifest(input: {
         file_uri: "generated://image.png",
         created_at: "2026-05-16T00:00:00.000Z",
         metadata: { width: 1080, height: 1920 },
+      },
+      {
+        artifact_id: "artifact_motion_001",
+        artifact_type: "motion_recipe",
+        origin: "inline",
+        file_uri: "inline://motion-recipe/001",
+        created_at: "2026-05-16T00:00:00.000Z",
+        metadata: { recipe_type: "push_in" },
       },
     ],
     audio_summary: {
@@ -221,12 +232,14 @@ describe("accept-segment-fallback", () => {
 
   it("activates image-with-motion and records fallback_accepted for a blocked segment", async () => {
     const { db, project, manifest } = await makeBlockedManifestRecord();
+    const version = manifestFallbackVersion(manifest);
     const response = await acceptSegmentFallback({
       db,
       project,
       runId: "assets_run_001",
       segmentId: "sb_001",
       expectedRunId: "assets_run_001",
+      expectedVersion: version,
     });
 
     expect(response.statusCode).toBe(200);
@@ -238,21 +251,32 @@ describe("accept-segment-fallback", () => {
     expect(route.route_events[0]).toMatchObject({
       event_type: "fallback_accepted",
     });
+    // 响应带新版本（CAS）
+    expect(response.body).toMatchObject({ version: expect.any(String) });
     // 持久化到 active manifest 记录（原运行快照不变，这里验证的是当前可变执行视图）
     const saved = db.assetManifestRecords.get(project.activeAssetManifestRecordId!)!;
     const savedRoute = (saved.manifestJson as { segment_routes: SegmentAssetRoute[] }).segment_routes[0]!;
     expect(savedRoute.fallback_decision).toBe("user_accepted");
     expect(manifest.segment_routes[0]!.fallback_decision).toBe("none");
+    // 可审计事件持久化在 executionState
+    expect(saved.executionStateJson?.events).toContainEqual(
+      expect.objectContaining({
+        event_type: "fallback_accepted",
+        segment_id: "sb_001",
+        run_id: "assets_run_001",
+      }),
+    );
   });
 
   it("rejects fallback acceptance when the expected run id does not match the manifest run", async () => {
-    const { db, project } = await makeBlockedManifestRecord();
+    const { db, project, manifest } = await makeBlockedManifestRecord();
     const response = await acceptSegmentFallback({
       db,
       project,
       runId: "assets_run_001",
       segmentId: "sb_001",
       expectedRunId: "assets_run_stale",
+      expectedVersion: manifestFallbackVersion(manifest),
     });
     expect(response.statusCode).toBe(409);
     expect(response.body).toMatchObject({ error: "assets_fallback_run_mismatch" });
@@ -267,12 +291,14 @@ describe("accept-segment-fallback", () => {
         readiness: "blocked",
       }],
     };
+    const manifest = db.assetManifestRecords.get(project.activeAssetManifestRecordId!)!.manifestJson as AssetManifest;
     const response = await acceptSegmentFallback({
       db,
       project,
       runId: "assets_run_001",
       segmentId: "sb_001",
       expectedRunId: "assets_run_001",
+      expectedVersion: manifestFallbackVersion(manifest),
     });
     expect(response.statusCode).toBe(409);
     expect(response.body).toMatchObject({ error: "segment_fallback_not_awaiting_decision" });
@@ -287,12 +313,53 @@ describe("accept-segment-fallback", () => {
         readiness: "blocked_waiting_user",
       }],
     };
+    const manifest = db.assetManifestRecords.get(project.activeAssetManifestRecordId!)!.manifestJson as AssetManifest;
     const response = await acceptSegmentFallback({
       db,
       project,
       runId: "assets_run_001",
       segmentId: "sb_001",
       expectedRunId: "assets_run_001",
+      expectedVersion: manifestFallbackVersion(manifest),
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({ error: "segment_fallback_incomplete" });
+  });
+
+  it("rejects fallback acceptance when the manifest version does not match (CAS)", async () => {
+    const { db, project, manifest } = await makeBlockedManifestRecord();
+    const response = await acceptSegmentFallback({
+      db,
+      project,
+      runId: "assets_run_001",
+      segmentId: "sb_001",
+      expectedRunId: "assets_run_001",
+      expectedVersion: "stale-version",
+    });
+    expect(response.statusCode).toBe(409);
+    expect(response.body).toMatchObject({ error: "assets_fallback_version_mismatch" });
+    // 拒绝后记录未被修改
+    const saved = db.assetManifestRecords.get(project.activeAssetManifestRecordId!)!;
+    expect((saved.manifestJson as { segment_routes: SegmentAssetRoute[] }).segment_routes[0]!.fallback_decision).toBe("none");
+  });
+
+  it("rejects fallback acceptance when the anchor artifact does not exist", async () => {
+    const { db, project } = await makeBlockedManifestRecord();
+    const record = db.assetManifestRecords.get(project.activeAssetManifestRecordId!)!;
+    record.manifestJson = {
+      ...(record.manifestJson as Record<string, unknown>),
+      artifacts: (record.manifestJson as { artifacts: Array<{ artifact_id: string }> }).artifacts.filter(
+        (item) => item.artifact_id !== "artifact_img_001",
+      ),
+    };
+    const manifest = record.manifestJson as AssetManifest;
+    const response = await acceptSegmentFallback({
+      db,
+      project,
+      runId: "assets_run_001",
+      segmentId: "sb_001",
+      expectedRunId: "assets_run_001",
+      expectedVersion: manifestFallbackVersion(manifest),
     });
     expect(response.statusCode).toBe(409);
     expect(response.body).toMatchObject({ error: "segment_fallback_incomplete" });
@@ -323,7 +390,8 @@ describe("video strategy execution state machine", () => {
     const manifest = (await result).manifest;
     const route = manifest.segment_routes[0]!;
 
-    expect(manifest.executions[0]!.status).toBe("failed");
+    // 自动降级成功 → execution 进入 validator 认可的终态，允许继续 Compose
+    expect(manifest.executions[0]!.status).toBe("skipped_with_fallback");
     expect(route.visual_route_type).toBe("image_with_motion");
     expect(route.readiness).toBe("ready");
     expect(route.fallback_decision).toBe("automatic");
@@ -364,6 +432,74 @@ describe("video strategy execution state machine", () => {
     expect(noMotion.manifest.segment_routes[0]!.readiness).toBe("blocked");
     expect(noMotion.manifest.segment_routes[0]!.visual_route_type).toBe("video_clip");
     expect(noMotion.manifest.segment_routes[0]!.route_events).toEqual([]);
+  });
+
+  it("enters the strategy state machine when no video adapter exists", async () => {
+    const db = createDbClient();
+    const manifest = makeVideoManifest({ strategy: "all_api_video" });
+    // registry 只有 image adapter，没有 video
+    const registry = createAssetProviderRegistry([
+      {
+        providerName: "fake_image_only",
+        providerType: "image",
+        canHandle: ({ taskType }) => taskType === "image_still",
+        prepare: async () => ({ providerJobId: null, rawRequestJson: {} }),
+        submit: async () => ({ providerJobId: null, rawResponseJson: {} }),
+        poll: async () => ({ status: "completed", rawResponseJson: {} }),
+        download: async () => [],
+        normalizeResult: async () => ({ artifacts: [], notes: [] }),
+        cancel: async () => undefined,
+      },
+    ]);
+    const result = await executeAssetManifest({
+      db,
+      assetManifestRecordId: "manifest_001",
+      assetRunId: "assets_run_001",
+      manifest,
+      registry,
+      assetPlan: makeVideoAssetPlan(),
+      projectStorageRootDir: "unused",
+    });
+    const executed = result.manifest;
+    expect(executed.executions[0]!.status).toBe("failed");
+    expect(executed.executions[0]!.notes.join("\n")).toContain("no video adapter");
+    expect(executed.segment_routes[0]!.readiness).toBe("blocked_waiting_user");
+
+    const auto = await executeAssetManifest({
+      db,
+      assetManifestRecordId: "manifest_002",
+      assetRunId: "assets_run_002",
+      manifest: makeVideoManifest({ strategy: "prefer_api_video" }),
+      registry,
+      assetPlan: makeVideoAssetPlan(),
+      projectStorageRootDir: "unused",
+    });
+    expect(auto.manifest.segment_routes[0]!.fallback_decision).toBe("automatic");
+    expect(auto.manifest.executions[0]!.status).toBe("skipped_with_fallback");
+  });
+
+  it("skips video execution when the segment route is missing", async () => {
+    const { db, result } = runEngine(
+      makeVideoManifest({ strategy: "all_api_video" }),
+    );
+    // 删除段 route：无法确认策略时保守跳过，不寻找视频 adapter
+    const manifest = (await result).manifest;
+    manifest.segment_routes = [];
+    manifest.executions[0]!.status = "planned";
+    manifest.executions[0]!.completed_at = null;
+    manifest.executions[0]!.provider_id = null;
+    manifest.executions[0]!.notes = [];
+    const second = await executeAssetManifest({
+      db,
+      assetManifestRecordId: "manifest_002",
+      assetRunId: "assets_run_002",
+      manifest,
+      registry: createAssetProviderRegistry([makeFailingVideoAdapter()]),
+      assetPlan: makeVideoAssetPlan(),
+      projectStorageRootDir: "unused",
+    });
+    expect(second.manifest.executions[0]!.status).toBe("skipped_with_fallback");
+    expect(second.manifest.executions[0]!.notes.join("\n")).toContain("route 缺失");
   });
 
   it("never creates a video provider job under all_remotion", async () => {

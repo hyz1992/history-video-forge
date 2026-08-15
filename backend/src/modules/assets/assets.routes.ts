@@ -42,6 +42,31 @@ function checkDemoModeVisualBlock(context: RouteContext, taskTypes: string[]): A
   };
 }
 
+/**
+ * S2-2A 任务 6：客户端不得携带 provider 授权信息（provider_mode / dashscope api key）。
+ * 发现即明确拒绝，不静默忽略。
+ */
+function rejectClientProviderCredentials(
+  payload: Record<string, unknown>,
+): AppResponse | null {
+  const hasProviderMode =
+    typeof payload.provider_mode === "string" && payload.provider_mode.length > 0;
+  const dashscopePayload =
+    typeof payload.dashscope === "object" && payload.dashscope !== null
+      ? (payload.dashscope as Record<string, unknown>)
+      : {};
+  const hasApiKey =
+    typeof dashscopePayload.api_key === "string" &&
+    dashscopePayload.api_key.length > 0;
+  if (hasProviderMode || hasApiKey) {
+    return {
+      statusCode: 400,
+      body: { error: "client_provider_credentials_not_allowed" },
+    };
+  }
+  return null;
+}
+
 async function generateAssetsController(
   context: RouteContext,
 ): Promise<AppResponse> {
@@ -57,6 +82,8 @@ async function generateAssetsController(
 
   // DEMO_MODE: block if payload includes image/video generation
   const payload = context.payload as Record<string, unknown>;
+  const credentialsBlock = rejectClientProviderCredentials(payload);
+  if (credentialsBlock) return credentialsBlock;
   const enabledProviderTypes = Array.isArray(payload.enabled_provider_types)
     ? payload.enabled_provider_types as string[]
     : undefined;
@@ -484,6 +511,8 @@ async function generateTaskController(
   }
 
   const payload = context.payload as Record<string, unknown>;
+  const credentialsBlock = rejectClientProviderCredentials(payload);
+  if (credentialsBlock) return credentialsBlock;
   const voiceProfileId =
     (payload.voice_profile_id as string | undefined) ?? "voice_default_male_storyteller";
 
@@ -507,10 +536,12 @@ async function acceptSegmentFallbackController(
   const payload = context.payload as Record<string, unknown>;
   const expectedRunId =
     typeof payload.expected_run_id === "string" ? payload.expected_run_id : "";
-  if (!expectedRunId) {
+  const expectedVersion =
+    typeof payload.expected_version === "string" ? payload.expected_version : "";
+  if (!expectedRunId || !expectedVersion) {
     return {
       statusCode: 422,
-      body: { error: "expected_run_id_required" },
+      body: { error: "expected_run_id_and_version_required" },
     };
   }
 
@@ -520,6 +551,7 @@ async function acceptSegmentFallbackController(
     runId: context.params.runId,
     segmentId: context.params.segmentId,
     expectedRunId,
+    expectedVersion,
   });
 }
 

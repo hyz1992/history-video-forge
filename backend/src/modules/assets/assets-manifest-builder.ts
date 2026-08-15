@@ -268,9 +268,12 @@ function buildSegmentRoutes(
     let readiness: SegmentAssetRoute["readiness"] = "blocked";
 
     if (info.hasVideo) {
-      // Video takes priority, but since no real artifact exists, mark as blocked
+      // Video takes priority, but since no real artifact exists, mark as blocked.
+      // S2-2A 任务 6 整改：API route 同时保留同段 inline motion artifact 引用，
+      // 自动降级/用户接受 fallback 时必须有 Remotion cue。
       visualRouteType = "video_clip";
       primaryVisualArtifactId = null; // no real artifact
+      motionArtifactId = info.motionArtifactId;
       readiness = "blocked";
     } else if (info.hasImage && info.hasMotion) {
       visualRouteType = "image_with_motion";

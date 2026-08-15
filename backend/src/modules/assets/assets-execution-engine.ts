@@ -100,14 +100,17 @@ export async function executeAssetManifest(
 
     // 4. Select adapter.
     // S2-2A 任务 6：all_remotion 永不调用视频 provider——即使客户端构造了
-    // video task，也按 manifest 中持久化的策略跳过，不创建 provider job。
+    // video task，也按 manifest 中持久化的策略跳过，不创建 provider job；
+    // 段 route 缺失时保守跳过（无法确认策略就不执行视频）。
     if (execution.task_type === "video_clip") {
       const route = findSegmentRoute(manifestCopy, planTask.source_segment_id);
-      if (route && (route.video_strategy ?? "prefer_remotion") === "all_remotion") {
+      if (!route || (route.video_strategy ?? "prefer_remotion") === "all_remotion") {
         execution.status = "skipped_with_fallback";
         execution.notes = [
           ...execution.notes,
-          "[strategy] all_remotion 段不调用视频 provider",
+          route
+            ? "[strategy] all_remotion 段不调用视频 provider"
+            : "[strategy] 段 route 缺失，跳过视频执行",
         ];
         continue;
       }
@@ -117,7 +120,26 @@ export async function executeAssetManifest(
       enabledProviderTypes:
         manifestCopy.execution_options.enabled_provider_types,
     });
-    if (!adapter) continue; // no adapter — skip, don't fail.
+    if (!adapter) {
+      // S2-2A 任务 6 整改：视频 provider 不可用是正式失败原因，
+      // 必须进入同一策略状态机（严格阻塞或自动降级），不能直接跳过。
+      if (execution.task_type === "video_clip") {
+        execution.status = "failed";
+        execution.completed_at = new Date().toISOString();
+        execution.notes = [
+          ...execution.notes,
+          "[engine] no video adapter available",
+        ];
+        handleVideoStrategyFailure(
+          manifestCopy,
+          planTask,
+          execution,
+          "video_provider_unavailable",
+          "no video adapter in registry",
+        );
+      }
+      continue;
+    }
 
     // 5. Build context.
     const ctx: AssetProviderContext = {
@@ -193,6 +215,7 @@ async function runAdapterPipeline(
       handleVideoStrategyFailure(
         manifest,
         planTask,
+        execution,
         pollResult.errorCode ?? "video_provider_error",
         pollResult.errorMessage ?? "no message",
       );
@@ -256,7 +279,7 @@ async function runAdapterPipeline(
       `[engine] adapter pipeline error: ${message}`,
     ];
     // S2-2A 任务 6：管线异常同样按段视频策略处理
-    handleVideoStrategyFailure(manifest, planTask, "adapter_pipeline_error", message);
+    handleVideoStrategyFailure(manifest, planTask, execution, "adapter_pipeline_error", message);
   }
 }
 
@@ -282,6 +305,7 @@ function findSegmentRoute(
 function handleVideoStrategyFailure(
   manifest: AssetManifest,
   planTask: AssetPlan["tasks"][number],
+  execution: AssetManifest["executions"][number],
   reasonCode: string,
   reasonMessage: string,
 ): void {
@@ -327,6 +351,9 @@ function handleVideoStrategyFailure(
   ];
   route.readiness = "ready";
   route.notes = [...route.notes, failureNote];
+  // 自动降级成功 → execution 进入 validator 认可的终态，允许继续 Compose
+  execution.status = "skipped_with_fallback";
+  execution.completed_at = new Date().toISOString();
 }
 
 /**

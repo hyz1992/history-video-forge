@@ -31,7 +31,17 @@ import {
   updateVoiceProfileProviderState,
 } from "../../../backend/src/modules/assets/voice/voice-profile.repository.js";
 import { createToneWavBuffer } from "../../../backend/src/modules/assets/providers/audio-fixture.js";
-import type { AssetManifest, AssetPlan } from "../../../shared/src/index.js";
+import type {
+  AssetManifest,
+  AssetPlan,
+  SegmentAssetRoute,
+} from "../../../shared/src/index.js";
+import { DEFAULT_GENERATION_CONFIGURATION } from "../../../shared/src/index.js";
+import {
+  acceptSegmentFallback,
+  manifestFallbackVersion,
+} from "../../../backend/src/modules/assets/assets-run.service.js";
+import { validateAssetsManifest } from "../../../backend/src/modules/assets/assets-local-validator.js";
 
 const TOPIC_PACKAGE_ID = "topic_001";
 const SCRIPT_RECORD_ID = "script_001";
@@ -1057,6 +1067,144 @@ describe("execution engine integration", () => {
     if (tempDir) {
       await rm(tempDir, { recursive: true, force: true }).catch(() => {});
     }
+  });
+
+  it("end-to-end: all_api_video failure blocks, accept-fallback activates and persists", async () => {
+    tempDir = join(tmpdir(), `assets-e2e-fallback-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+    const { db, project } = await prepareProjectWithAssetPlan();
+    project.storageRootDir = tempDir;
+
+    // 注入 all_api_video 项目配置：更新已有记录或新建（memory db）
+    const existingConfig = [...db.projectGenerationConfigurations.values()].find(
+      (record) => record.projectId === project.id,
+    );
+    if (existingConfig) {
+      existingConfig.configurationJson = {
+        ...existingConfig.configurationJson,
+        video: {
+          ...existingConfig.configurationJson.video,
+          strategy: "all_api_video",
+        },
+      };
+      existingConfig.updatedAt = new Date();
+    } else {
+      db.projectGenerationConfigurations.set("cfg_e2e", {
+        id: "cfg_e2e",
+        projectId: project.id,
+        schemaVersion: "generation_configuration_v1",
+        revision: 1,
+        sourceUserPreferenceRevision: null,
+        configurationJson: {
+          ...DEFAULT_GENERATION_CONFIGURATION,
+          video: {
+            ...DEFAULT_GENERATION_CONFIGURATION.video,
+            strategy: "all_api_video",
+          },
+        },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+    // plan 含 image + motion + video；fake registry 无 video adapter → 无 adapter 失败路径
+    db.assetPlanRecords.get(ASSET_PLAN_RECORD_ID)!.planJson =
+      makeImageToVideoAssetPlan();
+
+    const response = await runAssetsGeneration({
+      db,
+      project,
+      voiceProfileId: "voice_custom",
+      executionMode: "auto_available",
+    });
+    expect(response.statusCode).toBe(200);
+    const manifest = (response.body as { manifest: AssetManifest }).manifest;
+    const videoExec = manifest.executions.find(
+      (e) => e.task_type === "video_clip",
+    )!;
+    expect(videoExec.status).toBe("failed");
+    const route = manifest.segment_routes[0]!;
+    expect(route.video_strategy).toBe("all_api_video");
+    expect(route.visual_route_type).toBe("video_clip");
+    expect(route.readiness).toBe("blocked_waiting_user");
+    // API route 必须保留同段 motion cue（C1a）
+    expect(route.motion_artifact_id).not.toBeNull();
+
+    // validator 识别严格阻塞
+    const record = db.assetManifestRecords.get(project.activeAssetManifestRecordId!)!;
+    const validation = await validateAssetsManifest({
+      assetPlanRecordId: record.assetPlanRecordId,
+      storyboardRecordId: record.storyboardRecordId,
+      scriptRecordId: record.scriptRecordId,
+      topicPackageId: record.topicPackageId,
+      assetPlan: db.assetPlanRecords.get(record.assetPlanRecordId)!.planJson as AssetPlan,
+      manifest,
+      projectStorageRootDir: project.storageRootDir,
+    });
+    expect(validation.decision).toBe("blocked");
+    expect(validation.errors).toContain("assets_execution_incomplete");
+
+    // accept-fallback（CAS version + run id 校验）
+    const runId = record.executionStateJson?.run_id as string;
+    expect(runId).toEqual(expect.any(String));
+    const accept = await acceptSegmentFallback({
+      db,
+      project,
+      runId,
+      segmentId: "sb_001",
+      expectedRunId: runId,
+      expectedVersion: manifestFallbackVersion(manifest),
+    });
+    expect(accept.statusCode).toBe(200);
+
+    // reload：决策与事件持久化在记录中
+    const reloaded = db.assetManifestRecords.get(project.activeAssetManifestRecordId!)!;
+    const reloadedRoute = (reloaded.manifestJson as { segment_routes: SegmentAssetRoute[] }).segment_routes[0]!;
+    expect(reloadedRoute.visual_route_type).toBe("image_with_motion");
+    expect(reloadedRoute.fallback_decision).toBe("user_accepted");
+    expect(reloadedRoute.readiness).toBe("ready");
+    expect(reloaded.executionStateJson?.events).toContainEqual(
+      expect.objectContaining({ event_type: "fallback_accepted", segment_id: "sb_001" }),
+    );
+  });
+
+  it("partial retry preserves the automatic fallback decision from the previous run", async () => {
+    tempDir = join(tmpdir(), `assets-fallback-retry-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+    const { db, project } = await prepareProjectWithAssetPlan();
+    project.storageRootDir = tempDir;
+    db.assetPlanRecords.get(ASSET_PLAN_RECORD_ID)!.planJson =
+      makeImageToVideoAssetPlan();
+
+    // 第一次 run：prefer_remotion（默认）自动降级
+    const first = await runAssetsGeneration({
+      db,
+      project,
+      voiceProfileId: "voice_custom",
+      executionMode: "auto_available",
+    });
+    expect(first.statusCode).toBe(200);
+    const firstManifest = (first.body as { manifest: AssetManifest }).manifest;
+    const firstRoute = firstManifest.segment_routes[0]!;
+    expect(firstRoute.fallback_decision).toBe("automatic");
+    expect(firstRoute.route_events).toHaveLength(1);
+
+    // 第二次 run：只重试 tts 任务，不应丢失上一轮的路线决策
+    const ttsTask = (db.assetPlanRecords.get(ASSET_PLAN_RECORD_ID)!.planJson as { tasks: Array<{ task_id: string; task_type: string }> }).tasks.find(
+      (t) => t.task_type === "tts_audio",
+    )!;
+    const second = await runAssetsGeneration({
+      db,
+      project,
+      voiceProfileId: "voice_custom",
+      executionMode: "auto_available",
+      taskIds: [ttsTask.task_id],
+    });
+    expect(second.statusCode).toBe(200);
+    const secondManifest = (second.body as { manifest: AssetManifest }).manifest;
+    const secondRoute = secondManifest.segment_routes[0]!;
+    expect(secondRoute.fallback_decision).toBe("automatic");
+    expect(secondRoute.route_events).toHaveLength(1);
+    expect(secondRoute.visual_route_type).toBe("image_with_motion");
   });
 
   it("keeps dry_run as manifest-only without generated artifacts", async () => {
