@@ -616,7 +616,12 @@ describe("asset planning api", () => {
     });
 
     expect(response.statusCode).toBe(500);
-    expect(response.json()).toMatchObject({ error: "asset_plan_route_resolution_failed" });
+    expect(response.json()).toMatchObject({
+      error: "asset_plan_route_resolution_failed",
+      // 透传 resolver 的公开安全字段，便于 UI 精确提示
+      reason_code: "generation_capability_unavailable",
+      capability: expect.any(String),
+    });
     expect(response.json().detail).toEqual(expect.any(String));
     expect(generateAssetPlanMock).not.toHaveBeenCalled();
     expect(repairAssetPlanStructureMock).not.toHaveBeenCalled();

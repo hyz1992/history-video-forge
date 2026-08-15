@@ -1840,7 +1840,15 @@ function buildChunkPromptInput(
     visual_budget: globalDraft.visual_budget,
     downgrade_policy: globalDraft.downgrade_policy,
     global_audio_strategy: globalDraft.global_audio_strategy,
-    storyboard: input.storyboard,
+    // 任务 5 整改：顶层 storyboard 与 chunk.segments 一样投影为 prompt DTO，
+    // 整个 legacy chunk payload 不得出现 api_video_suitability。
+    storyboard: {
+      ...input.storyboard,
+      segments: projectSegmentIntentPromptSegments(
+        input.storyboard.segments,
+        visualRouteMap(input.segmentVisualRoutes),
+      ),
+    },
     draft: input.draft,
     chunk: {
       chunk_id: `chunk_${String(chunkIndex + 1).padStart(3, "0")}`,

@@ -91,6 +91,7 @@
   "dependencies": [
     { "dependency_id": "dep_subtitle_after_tts", "task_id": "subtitle_full_story", "depends_on_task_id": "tts_full_story", "dependency_type": "requires_timing" },
     { "dependency_id": "dep_video_after_image", "task_id": "video_seg_001", "depends_on_task_id": "image_seg_001_anchor", "dependency_type": "requires_output" },
+    { "dependency_id": "dep_motion_after_image", "task_id": "motion_seg_002", "depends_on_task_id": "image_seg_002_anchor", "dependency_type": "requires_output" },
     { "dependency_id": "dep_sfx_invalid_timing", "task_id": "sfx_seg_005", "depends_on_task_id": "motion_seg_002", "dependency_type": "requires_timing" }
   ],
   "cost_summary": {

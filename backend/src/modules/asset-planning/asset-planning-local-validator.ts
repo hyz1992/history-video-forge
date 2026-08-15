@@ -189,67 +189,90 @@ function hasSubtitleTtsTimingDependency(
   });
 }
 
-function isSegmentAnchorImage(task: AssetTask | undefined): task is AssetTask {
-  return Boolean(
-    task &&
-    task.task_type === "image_still" &&
-    task.parameters.image_role === "anchor",
+/**
+ * S2-2A 任务 5 整改：先建立每段唯一 anchor，再强制显式 fallback、video 依赖和
+ * motion 绑定全部精确指向该 anchor。
+ *
+ * anchor 唯一性由调用方校验（每段 anchor 数量必须恰好 1，否则 anchor_duplicate/
+ * anchor_missing 已报错）；这里只按"伪唯一"anchor 做精确引用核对。
+ */
+
+/**
+ * video 的静态 fallback 必须等于同段唯一 anchor：
+ * - 显式 static_fallback_task_id 存在时，必须精确等于该 anchor；
+ *   错误显式引用（跨段/support/不存在）不能被任何 requires_output 依赖掩盖。
+ * - 无显式引用时，requires_output 依赖必须指向该 anchor。
+ */
+function hasValidStaticFallback(
+  videoTask: AssetTask,
+  plan: AssetPlan,
+  anchorsBySegment: ReadonlyMap<string, string>,
+) {
+  const anchorTaskId = anchorsBySegment.get(videoTask.source_segment_id ?? "");
+  if (!anchorTaskId) return false;
+  const explicit =
+    typeof videoTask.parameters.static_fallback_task_id === "string"
+      ? videoTask.parameters.static_fallback_task_id
+      : null;
+  if (explicit !== null) {
+    return explicit === anchorTaskId;
+  }
+  return plan.dependencies.some((dependency) =>
+    dependency.task_id === videoTask.task_id &&
+    dependency.dependency_type === "requires_output" &&
+    dependency.depends_on_task_id === anchorTaskId,
   );
 }
 
 /**
- * S2-2A 任务 5 整改：video 的静态 fallback 必须绑定同段唯一锚点图。
- * static_fallback_task_id 或 requires_output 依赖的 image_still 都必须与
- * video 同 segment 且 image_role 为 anchor；跨段或 support 图不算有效 fallback。
- */
-function hasStaticFallback(
-  videoTask: AssetTask,
-  plan: AssetPlan,
-  tasksById: Map<string, AssetTask>,
-) {
-  const fallbackTaskId =
-    typeof videoTask.parameters.static_fallback_task_id === "string"
-      ? videoTask.parameters.static_fallback_task_id
-      : null;
-  if (fallbackTaskId) {
-    const fallback = tasksById.get(fallbackTaskId);
-    if (
-      isSegmentAnchorImage(fallback) &&
-      fallback.source_segment_id === videoTask.source_segment_id
-    ) {
-      return true;
-    }
-  }
-
-  return plan.dependencies.some((dependency) => {
-    const upstream = tasksById.get(dependency.depends_on_task_id);
-    return (
-      dependency.task_id === videoTask.task_id &&
-      dependency.dependency_type === "requires_output" &&
-      isSegmentAnchorImage(upstream) &&
-      upstream.source_segment_id === videoTask.source_segment_id
-    );
-  });
-}
-
-/**
- * S2-2A 任务 5 整改：render_motion_cue 必须绑定同段唯一锚点图。
- * source_image_task_id 指向跨段或非 anchor 图都属于无效绑定，直接硬错误。
+ * render_motion_cue 必须绑定同段唯一 anchor：
+ * source_image_task_id 与 requires_output 依赖都必须精确指向该 anchor。
  */
 function hasMotionCueSameAnchorBinding(
   motionTask: AssetTask,
-  tasksById: Map<string, AssetTask>,
+  plan: AssetPlan,
+  anchorsBySegment: ReadonlyMap<string, string>,
 ) {
+  const anchorTaskId = anchorsBySegment.get(motionTask.source_segment_id ?? "");
+  if (!anchorTaskId) return false;
   const sourceTaskId =
     typeof motionTask.parameters.source_image_task_id === "string"
       ? motionTask.parameters.source_image_task_id
       : null;
-  if (!sourceTaskId) return false;
-  const source = tasksById.get(sourceTaskId);
-  return Boolean(
-    isSegmentAnchorImage(source) &&
-    source.source_segment_id === motionTask.source_segment_id,
+  if (sourceTaskId !== anchorTaskId) return false;
+  return plan.dependencies.some((dependency) =>
+    dependency.task_id === motionTask.task_id &&
+    dependency.dependency_type === "requires_output" &&
+    dependency.depends_on_task_id === anchorTaskId,
   );
+}
+
+/**
+ * 统计每段 anchor 任务：数量必须恰好 1。0 个由 video/motion 绑定检查兜底报错；
+ * 超过 1 个直接报 anchor_duplicate（任何绑定都不再可信）。
+ */
+function buildAnchorsBySegment(
+  plan: AssetPlan,
+): { anchorsBySegment: Map<string, string>; duplicateSegments: string[] } {
+  const anchorsBySegment = new Map<string, string>();
+  const anchorCountBySegment = new Map<string, number>();
+  for (const task of plan.tasks) {
+    if (
+      task.task_type === "image_still" &&
+      task.parameters.image_role === "anchor" &&
+      task.source_segment_id !== null
+    ) {
+      anchorCountBySegment.set(
+        task.source_segment_id,
+        (anchorCountBySegment.get(task.source_segment_id) ?? 0) + 1,
+      );
+      anchorsBySegment.set(task.source_segment_id, task.task_id);
+    }
+  }
+  const duplicateSegments = [...anchorCountBySegment.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([segmentId]) => segmentId);
+  return { anchorsBySegment, duplicateSegments };
 }
 
 function hasNonEmptyRiskNotes(task: AssetTask) {
@@ -387,6 +410,13 @@ export function validateAssetPlan(input: {
   }
 
   const tasksById = getTaskById(plan);
+  // 任务 5 整改：先确定每段唯一 anchor；重复 anchor 直接硬失败，
+  // 后续 video/motion 的精确绑定只信任唯一 anchor。
+  const { anchorsBySegment, duplicateSegments } = buildAnchorsBySegment(plan);
+  for (const segmentId of duplicateSegments) {
+    pushUnique(errors, "asset_segment_anchor_duplicate");
+    void segmentId;
+  }
   for (const dependency of plan.dependencies) {
     if (dependency.dependency_type === "requires_timing") {
       const upstream = tasksById.get(dependency.depends_on_task_id);
@@ -406,7 +436,7 @@ export function validateAssetPlan(input: {
 
     if (
       task.task_type === "video_clip" &&
-      !hasStaticFallback(task, plan, tasksById)
+      !hasValidStaticFallback(task, plan, anchorsBySegment)
     ) {
       pushUnique(errors, "asset_video_missing_static_fallback");
       pushRepairHint(repairHints, task, "static_fallback_task_id");
@@ -414,7 +444,7 @@ export function validateAssetPlan(input: {
 
     if (
       task.task_type === "render_motion_cue" &&
-      !hasMotionCueSameAnchorBinding(task, tasksById)
+      !hasMotionCueSameAnchorBinding(task, plan, anchorsBySegment)
     ) {
       pushUnique(errors, "asset_motion_cue_binding_invalid");
       pushRepairHint(repairHints, task, "source_image_task_id");

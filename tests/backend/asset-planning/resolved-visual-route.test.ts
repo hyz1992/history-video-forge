@@ -516,7 +516,7 @@ describe("resolved visual route anchor binding validation", () => {
       parameters: { image_role: "support", support_reason: "补充", video_prompt_reserve: "预留" },
     };
     const videoTask = {
-      task_id: "video_s000_01", order: 5, task_type: "video_clip", source_segment_id: "seg_001",
+      task_id: "video_s000_01", order: 4, task_type: "video_clip", source_segment_id: "seg_001",
       source_excerpt: input.storyboard.segments[0]!.script_excerpt, production_intent: "连续动作",
       recommended_mode: "manual_allowed", provider_hint: null,
       prompt_draft: "动作画面", parameters: { why_static_insufficient: "必须连续", static_fallback_task_id: supportImage.task_id },
@@ -561,6 +561,103 @@ describe("resolved visual route anchor binding validation", () => {
       risk_notes: ["风险"], cost_tier: "free", initial_status: "planned",
     };
     const validation = runValidation(input, [input.anchor1, supportImage, motionTask]);
+    expect(validation.errors).toContain("asset_motion_cue_binding_invalid");
+  });
+
+  it("fails a motion cue with a correct source but no requires_output dependency", () => {
+    const input = makeTwoSegmentPlan();
+    const motionTask = {
+      task_id: "motion_s000_01", order: 4, task_type: "render_motion_cue", source_segment_id: "seg_001",
+      source_excerpt: input.storyboard.segments[0]!.script_excerpt, production_intent: "运镜",
+      recommended_mode: "auto", provider_hint: null, prompt_draft: null,
+      parameters: { recipe_type: "push_in", source_image_task_id: input.anchor1.task_id },
+      manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] },
+      risk_notes: ["风险"], cost_tier: "free", initial_status: "planned",
+    };
+    // source 正确但缺少 requires_output 依赖（依赖必须与 source 指向同一 anchor）
+    const validation = runValidation(input, [input.anchor1, input.anchor2, motionTask], [
+      { dependency_id: "dep_video_after_img1", task_id: "video_s000_01", depends_on_task_id: input.anchor1.task_id, dependency_type: "requires_output" },
+    ]);
+    expect(validation.errors).toContain("asset_motion_cue_binding_invalid");
+  });
+
+  it("fails an explicit cross-segment fallback even when a correct requires_output dependency exists", () => {
+    const input = makeTwoSegmentPlan();
+    const crossSegmentVideo = {
+      task_id: "video_s000_01", order: 4, task_type: "video_clip", source_segment_id: "seg_001",
+      source_excerpt: input.storyboard.segments[0]!.script_excerpt, production_intent: "连续动作",
+      recommended_mode: "manual_allowed", provider_hint: null,
+      prompt_draft: "动作画面", parameters: { why_static_insufficient: "必须连续", static_fallback_task_id: input.anchor2.task_id },
+      manual_upload_policy: { allowed: true, required: false, accepted_file_types: ["video/mp4"], acceptance_notes: [] },
+      risk_notes: ["风险"], cost_tier: "high", initial_status: "planned",
+    };
+    // 显式 fallback 指向跨段 anchor 是错误引用，不能被同段正确的 requires_output 依赖掩盖
+    const validation = runValidation(input, [input.anchor1, input.anchor2, crossSegmentVideo], [
+      { dependency_id: "dep_video_after_img1", task_id: crossSegmentVideo.task_id, depends_on_task_id: input.anchor1.task_id, dependency_type: "requires_output" },
+    ]);
+    expect(validation.errors).toContain("asset_video_missing_static_fallback");
+  });
+
+  it("fails a segment with duplicate anchors", () => {
+    const input = makeTwoSegmentPlan();
+    const duplicateAnchor = {
+      ...input.anchor1,
+      task_id: "img_s000_02",
+      order: 3,
+    };
+    const videoTask = {
+      task_id: "video_s000_01", order: 4, task_type: "video_clip", source_segment_id: "seg_001",
+      source_excerpt: input.storyboard.segments[0]!.script_excerpt, production_intent: "连续动作",
+      recommended_mode: "manual_allowed", provider_hint: null,
+      prompt_draft: "动作画面", parameters: { why_static_insufficient: "必须连续", static_fallback_task_id: input.anchor1.task_id },
+      manual_upload_policy: { allowed: true, required: false, accepted_file_types: ["video/mp4"], acceptance_notes: [] },
+      risk_notes: ["风险"], cost_tier: "high", initial_status: "planned",
+    };
+    const motionTask = {
+      task_id: "motion_s000_01", order: 5, task_type: "render_motion_cue", source_segment_id: "seg_001",
+      source_excerpt: input.storyboard.segments[0]!.script_excerpt, production_intent: "运镜",
+      recommended_mode: "auto", provider_hint: null, prompt_draft: null,
+      parameters: { recipe_type: "push_in", source_image_task_id: input.anchor1.task_id },
+      manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] },
+      risk_notes: ["风险"], cost_tier: "free", initial_status: "planned",
+    };
+    const validation = runValidation(input, [input.anchor1, duplicateAnchor, videoTask, motionTask], [
+      { dependency_id: "dep_video_after_img1", task_id: videoTask.task_id, depends_on_task_id: input.anchor1.task_id, dependency_type: "requires_output" },
+      { dependency_id: "dep_motion_after_img1", task_id: motionTask.task_id, depends_on_task_id: input.anchor1.task_id, dependency_type: "requires_output" },
+    ]);
+    expect(validation.errors).toContain("asset_segment_anchor_duplicate");
+  });
+
+  it("fails video and motion bound to different anchors in one segment", () => {
+    const input = makeTwoSegmentPlan();
+    const secondAnchor = {
+      ...input.anchor1,
+      task_id: "img_s000_02",
+      order: 3,
+    };
+    const videoTask = {
+      task_id: "video_s000_01", order: 4, task_type: "video_clip", source_segment_id: "seg_001",
+      source_excerpt: input.storyboard.segments[0]!.script_excerpt, production_intent: "连续动作",
+      recommended_mode: "manual_allowed", provider_hint: null,
+      prompt_draft: "动作画面", parameters: { why_static_insufficient: "必须连续", static_fallback_task_id: input.anchor1.task_id },
+      manual_upload_policy: { allowed: true, required: false, accepted_file_types: ["video/mp4"], acceptance_notes: [] },
+      risk_notes: ["风险"], cost_tier: "high", initial_status: "planned",
+    };
+    const motionTask = {
+      task_id: "motion_s000_01", order: 5, task_type: "render_motion_cue", source_segment_id: "seg_001",
+      source_excerpt: input.storyboard.segments[0]!.script_excerpt, production_intent: "运镜",
+      recommended_mode: "auto", provider_hint: null, prompt_draft: null,
+      parameters: { recipe_type: "push_in", source_image_task_id: input.anchor1.task_id },
+      manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] },
+      risk_notes: ["风险"], cost_tier: "free", initial_status: "planned",
+    };
+    // 两个 anchor 时任何绑定都不再可信：video 绑 anchor1、motion 也绑 anchor1，
+    // 但段内 anchor 已重复 → 唯一性错误 + 精确绑定错误同时出现
+    const validation = runValidation(input, [input.anchor1, secondAnchor, videoTask, motionTask], [
+      { dependency_id: "dep_video_after_img1", task_id: videoTask.task_id, depends_on_task_id: input.anchor1.task_id, dependency_type: "requires_output" },
+      { dependency_id: "dep_motion_after_img1", task_id: motionTask.task_id, depends_on_task_id: input.anchor1.task_id, dependency_type: "requires_output" },
+    ]);
+    expect(validation.errors).toContain("asset_segment_anchor_duplicate");
     expect(validation.errors).toContain("asset_motion_cue_binding_invalid");
   });
 });

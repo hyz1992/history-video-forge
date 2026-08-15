@@ -786,11 +786,20 @@ export async function runAssetPlanningGeneration(
     ),
   });
   if (!routeResolution.ok) {
+    // 透传 resolver 的公开安全字段（code/capability/segment_id 均无凭据细节），
+    // 便于后续 UI 精确提示失败原因。
     return {
       statusCode: 500,
       body: {
         error: "asset_plan_route_resolution_failed",
         detail: routeResolution.error.message,
+        reason_code: routeResolution.error.code,
+        ...(routeResolution.error.capability
+          ? { capability: routeResolution.error.capability }
+          : {}),
+        ...(routeResolution.error.segment_id
+          ? { segment_id: routeResolution.error.segment_id }
+          : {}),
       },
     };
   }

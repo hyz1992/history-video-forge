@@ -2139,6 +2139,20 @@ describe("generateAssetPlan", () => {
       expect(projected).not.toHaveProperty("api_video_suitability");
       expect(projected).not.toHaveProperty("visual_strategy_preference");
     }
+    // 整改：legacy chunk prompt 顶层 storyboard 也必须投影，整个 payload 不得泄漏 suitability
+    const chunkPayload = calls[1]!.input as {
+      storyboard: { segments: Array<Record<string, unknown>> };
+    };
+    for (const projected of chunkPayload.storyboard.segments) {
+      expect(projected).not.toHaveProperty("api_video_suitability");
+      expect(projected).not.toHaveProperty("visual_strategy_preference");
+      expect(projected).toHaveProperty("resolved_visual_route");
+    }
+    for (const payload of [calls[0]!.input, calls[1]!.input]) {
+      const serialized = JSON.stringify(payload);
+      expect(serialized).not.toContain("api_video_suitability");
+      expect(serialized).not.toContain("visual_strategy_preference");
+    }
     expect(calls[1]?.input).not.toHaveProperty("storyboard_outline");
     expect(calls[1]?.input).not.toHaveProperty("script_context");
   });
