@@ -23,6 +23,23 @@ import { saveAssetManifestRecord } from "../../../backend/src/modules/assets/ass
 import type { AssetManifest, AssetPlan, AssetsValidationResult, StoryboardPlan } from "../../../shared/src/index.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 
+/** S2-2A 任务 6：provider 授权只来自后端 env。 */
+const DASHSCOPE_ENV: Record<string, string> = {
+  ALIYUN_DASHSCOPE_API_KEY: "test-key",
+  ALIYUN_DASHSCOPE_BASE_URL: "https://dashscope.test",
+  ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL: "wan2.6-t2i",
+  ALIYUN_DASHSCOPE_TTS_MODEL: "qwen3-tts-instruct-flash",
+  ALIYUN_DASHSCOPE_IMAGE_TO_VIDEO_MODEL: "wan2.7-i2v-api-test",
+  ALIYUN_DASHSCOPE_IMAGE_TO_VIDEO_RESOLUTION: "1080P",
+  ALIYUN_DASHSCOPE_IMAGE_TO_VIDEO_DURATION_SEC: "7",
+};
+
+function injectDashscopeEnv() {
+  for (const [key, value] of Object.entries(DASHSCOPE_ENV)) {
+    vi.stubEnv(key, value);
+  }
+}
+
 const scriptText =
   "Opening pressure. The envoy answers in public. The ending leaves a cost.";
 
@@ -561,6 +578,7 @@ describe("assets generate api", () => {
 
   afterEach(async () => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     if (tempDir) {
       await rm(tempDir, { recursive: true, force: true }).catch(() => {});
       tempDir = "";
@@ -813,21 +831,14 @@ describe("assets generate api", () => {
       }),
     );
 
+    injectDashscopeEnv();
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${prepared.project.id}/assets/generate`,
       payload: {
         voice_profile_id: "voice_system_ethan",
         execution_mode: "auto_available",
-        provider_mode: "dashscope",
-        dashscope: {
-          api_key: "test-key",
-          base_url: "https://dashscope.test",
-          image_model: "wan2.6-t2i",
-          tts_model: "qwen3-tts-instruct-flash",
-          image_poll_interval_ms: 0,
-          image_max_poll_attempts: 1,
-        },
+
       },
       auth,
     });
@@ -968,26 +979,13 @@ describe("assets generate api", () => {
       }),
     );
 
-    const response = await app.inject({
+        injectDashscopeEnv();
+const response = await app.inject({
       method: "POST",
       url: `/api/projects/${prepared.project.id}/assets/generate`,
       payload: {
         voice_profile_id: "voice_default_male_storyteller",
         execution_mode: "auto_available",
-        provider_mode: "dashscope",
-        dashscope: {
-          api_key: "test-key",
-          base_url: "https://dashscope.test",
-          image_model: "wan2.6-t2i",
-          tts_model: "qwen3-tts-instruct-flash",
-          image_poll_interval_ms: 0,
-          image_max_poll_attempts: 1,
-          image_to_video_model: "wan2.7-i2v-api-test",
-          image_to_video_resolution: "1080P",
-          image_to_video_duration_sec: 7,
-          image_to_video_poll_interval_ms: 0,
-          image_to_video_max_poll_attempts: 1,
-        },
       },
       auth,
     });

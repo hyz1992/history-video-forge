@@ -468,7 +468,7 @@ git commit -m "按解析结果编译分镜资产路线"
 - 修改：`tests/backend/assets/assets-execution-regression.test.ts`
 - 修改：`tests/backend/api/assets-api.test.ts`
 
-- [ ] **步骤 1：先写状态机失败测试**
+- [x] **步骤 1：先写状态机失败测试**
 
 覆盖：
 
@@ -487,7 +487,7 @@ npx vitest run --configLoader runner tests/backend/assets/video-strategy-executi
 
 预期：失败，当前执行器会按既有逻辑切 route。
 
-- [ ] **步骤 2：实现执行状态与事件接口**
+- [x] **步骤 2：实现执行状态与事件接口**
 
 新增显式 endpoint：
 
@@ -497,11 +497,11 @@ POST /api/projects/:projectId/assets/runs/:runId/segments/:segmentId/accept-fall
 
 请求必须带预期 run/version，防止对过期失败接受 fallback。
 
-- [ ] **步骤 3：移除客户端 provider mode 决策权**
+- [x] **步骤 3：移除客户端 provider mode 决策权**
 
 `generateAssetsController`、单任务生成和视频升级不再接受 `provider_mode`、DashScope API key 或任意 model 作为授权来源；它们只引用后端 resolved snapshot/quote。
 
-- [ ] **步骤 4：运行执行器回归**
+- [x] **步骤 4：运行执行器回归**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/assets/video-strategy-execution.test.ts tests/backend/assets/assets-execution-engine.test.ts tests/backend/assets/assets-execution-regression.test.ts tests/backend/assets/assets-local-validator.test.ts tests/backend/api/assets-api.test.ts

@@ -99,6 +99,19 @@ export async function executeAssetManifest(
     }
 
     // 4. Select adapter.
+    // S2-2A 任务 6：all_remotion 永不调用视频 provider——即使客户端构造了
+    // video task，也按 manifest 中持久化的策略跳过，不创建 provider job。
+    if (execution.task_type === "video_clip") {
+      const route = findSegmentRoute(manifestCopy, planTask.source_segment_id);
+      if (route && (route.video_strategy ?? "prefer_remotion") === "all_remotion") {
+        execution.status = "skipped_with_fallback";
+        execution.notes = [
+          ...execution.notes,
+          "[strategy] all_remotion 段不调用视频 provider",
+        ];
+        continue;
+      }
+    }
     const adapter = registry.findAdapter({
       taskType: execution.task_type,
       enabledProviderTypes:
@@ -176,6 +189,13 @@ async function runAdapterPipeline(
         ...execution.notes,
         `[engine] provider poll failed: ${pollResult.errorCode ?? "unknown"} — ${pollResult.errorMessage ?? "no message"}`,
       ];
+      // S2-2A 任务 6：按段视频策略处理失败（严格阻塞或自动降级）
+      handleVideoStrategyFailure(
+        manifest,
+        planTask,
+        pollResult.errorCode ?? "video_provider_error",
+        pollResult.errorMessage ?? "no message",
+      );
       return;
     }
 
@@ -235,7 +255,78 @@ async function runAdapterPipeline(
       ...execution.notes,
       `[engine] adapter pipeline error: ${message}`,
     ];
+    // S2-2A 任务 6：管线异常同样按段视频策略处理
+    handleVideoStrategyFailure(manifest, planTask, "adapter_pipeline_error", message);
   }
+}
+
+// ─── S2-2A 任务 6：视频策略状态机 ────────────────────────────────────────────
+
+function findSegmentRoute(
+  manifest: AssetManifest,
+  segmentId: string | null,
+): AssetManifest["segment_routes"][number] | null {
+  if (!segmentId) return null;
+  return manifest.segment_routes.find((route) => route.segment_id === segmentId) ?? null;
+}
+
+/**
+ * API 视频失败后的策略分支：
+ * - all_api_video（严格）：进入 blocked_waiting_user，不自动改 manifest route，
+ *   fallback artifact 保留，等用户显式 accept-fallback 或重试。
+ * - prefer_api_video / prefer_remotion（自动）：降级为 image_with_motion 并记录
+ *   automatic_fallback 事件；同段 anchor 或 Remotion cue 缺一不可，否则保持
+ *   blocked 不得伪装 ready。
+ * - all_remotion：engine 层已跳过，不进入本函数。
+ */
+function handleVideoStrategyFailure(
+  manifest: AssetManifest,
+  planTask: AssetPlan["tasks"][number],
+  reasonCode: string,
+  reasonMessage: string,
+): void {
+  if (planTask.task_type !== "video_clip") return;
+  const route = findSegmentRoute(manifest, planTask.source_segment_id);
+  if (!route) return;
+
+  const strategy = route.video_strategy ?? "prefer_remotion";
+  const failureNote = `[strategy] api video failed: ${reasonCode} — ${reasonMessage}`;
+
+  if (strategy === "all_api_video") {
+    route.readiness = "blocked_waiting_user";
+    route.notes = [...route.notes, failureNote];
+    return;
+  }
+
+  // 自动降级要求同段 fallback anchor 与 Remotion cue 齐备
+  const hasAnchor =
+    route.fallback_visual_artifact_id !== null ||
+    route.primary_visual_artifact_id !== null;
+  const hasMotion = route.motion_artifact_id !== null;
+  if (!hasAnchor || !hasMotion) {
+    route.readiness = "blocked";
+    route.notes = [
+      ...route.notes,
+      `[strategy] auto fallback unavailable: anchor=${hasAnchor} motion=${hasMotion}; ${failureNote}`,
+    ];
+    return;
+  }
+
+  if (route.primary_visual_artifact_id === null) {
+    route.primary_visual_artifact_id = route.fallback_visual_artifact_id;
+  }
+  route.visual_route_type = "image_with_motion";
+  route.fallback_decision = "automatic";
+  route.route_events = [
+    ...(route.route_events ?? []),
+    {
+      event_type: "automatic_fallback",
+      occurred_at: new Date().toISOString(),
+      reason_code: reasonCode,
+    },
+  ];
+  route.readiness = "ready";
+  route.notes = [...route.notes, failureNote];
 }
 
 /**

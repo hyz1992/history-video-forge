@@ -301,6 +301,10 @@ function buildSegmentRoutes(
       bgm_placement_ids: [],
       readiness,
       notes: [],
+      // S2-2A 任务 6：策略由 run.service 按项目配置覆写，此处给缺省值
+      video_strategy: "prefer_remotion",
+      fallback_decision: "none",
+      route_events: [],
     });
   }
 

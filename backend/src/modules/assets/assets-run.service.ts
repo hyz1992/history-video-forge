@@ -14,7 +14,9 @@ import type {
 import {
   AssetArtifact as AssetArtifactSchema,
   AssetExecutionOptions as AssetExecutionOptionsSchema,
+  type GenerationConfigurationV1,
 } from "../../../../shared/src/index.js";
+import { getProjectGenerationConfiguration } from "../generation-config/generation-config.repository.js";
 import { saveAssetManifestRecord } from "./asset-manifest-record.repository";
 import { getAssetManifestRecordById } from "./asset-manifest-record.repository";
 import { buildInitialAssetManifest } from "./assets-manifest-builder";
@@ -60,8 +62,6 @@ export interface RunAssetsGenerationInput {
   project: ProjectRecord;
   voiceProfileId: string;
   executionMode: string;
-  providerMode?: AssetsProviderMode;
-  dashscope?: DashscopeProviderConfig;
   enabledProviderTypes?: string[];
   /** Only process tasks that are not yet completed/accepted. */
   missingOnly?: boolean;
@@ -208,13 +208,13 @@ function readOptionalNumber(value: string | undefined): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function buildProviderRegistry(input: {
-  db: DbClient;
-  providerMode: AssetsProviderMode | undefined;
-  dashscope: DashscopeProviderConfig | undefined;
-}) {
-  if (input.providerMode === "dashscope" || input.providerMode === "dashscope_tts") {
-    const dashscope = readDashscopeConfig(input.dashscope);
+function buildProviderRegistry(input: { db: DbClient }) {
+  // S2-2A 任务 6：provider 授权只来自后端 env（API key 存在时启用真实 provider），
+  // 客户端不得指定 provider_mode / model / api key。
+  const providerMode: AssetsProviderMode | undefined =
+    process.env.ALIYUN_DASHSCOPE_API_KEY ? "dashscope" : undefined;
+  if (providerMode === "dashscope") {
+    const dashscope = readDashscopeConfig(undefined);
     const ttsProvider = createDashscopeTtsProvider({
       apiKey: dashscope.apiKey,
       baseUrl: dashscope.baseUrl,
@@ -223,20 +223,6 @@ function buildProviderRegistry(input: {
       sampleRate: dashscope.ttsSampleRate,
       db: input.db,
     });
-
-    if (input.providerMode === "dashscope_tts") {
-      return createAssetProviderRegistry([
-        ttsProvider,
-        createLocalSubtitleProvider({
-          dashscopeApiKey: dashscope.apiKey,
-          dashscopeBaseUrl: dashscope.baseUrl,
-          dashscopeAsrModel: dashscope.asrModel,
-        }),
-        createFakeImageProvider(),
-        createLocalSfxProvider(input.db),
-        createLocalBgmProvider(input.db),
-      ]);
-    }
 
     return createAssetProviderRegistry([
       ttsProvider,
@@ -500,6 +486,26 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     executionOptions,
   });
 
+  // Step 6a-0: S2-2A 任务 6——解析项目视频策略并写入每条 route。
+  // 策略是项目冻结配置（客户端不可覆盖），决定 API 视频失败时严格阻塞或自动降级。
+  let videoStrategy: GenerationConfigurationV1["video"]["strategy"] = "prefer_remotion";
+  try {
+    const configResult = await getProjectGenerationConfiguration(
+      db,
+      project.id,
+      project.ownerId,
+    );
+    videoStrategy = configResult.configuration.video.strategy;
+  } catch {
+    return {
+      statusCode: 500,
+      body: { error: "assets_video_strategy_resolution_failed" },
+    };
+  }
+  for (const route of manifest.segment_routes) {
+    route.video_strategy = videoStrategy;
+  }
+
   // Step 6a: For missing_only / task_ids modes, load the existing manifest
   // so we can merge new results into it rather than replacing everything.
   let existingManifest: Record<string, unknown> | null = null;
@@ -654,11 +660,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   if (executionOptions.execution_mode === "dry_run") {
     manifest.artifacts = [];
   } else if (executionOptions.execution_mode === "auto_available") {
-    const registry = buildProviderRegistry({
-      db,
-      providerMode: input.providerMode,
-      dashscope: input.dashscope,
-    });
+    const registry = buildProviderRegistry({ db });
 
     const tempManifestRecord = await saveAssetManifestRecord(db, {
       projectId: project.id,
@@ -1159,6 +1161,131 @@ export interface AcceptArtifactInput {
   project: ProjectRecord;
   taskId: string;
   artifactId: string;
+}
+
+export interface AcceptSegmentFallbackInput {
+  db: DbClient;
+  project: ProjectRecord;
+  /** accept-fallback 请求路径中的 run id（用于审计与防过期校验）。 */
+  runId: string;
+  segmentId: string;
+  /** 客户端声明的预期 run id；与 manifest 记录的执行 run 不一致时拒绝。 */
+  expectedRunId: string;
+}
+
+/**
+ * S2-2A 任务 6：用户显式接受严格模式（all_api_video）失败段的 Remotion fallback。
+ * - 仅允许对 blocked_waiting_user 状态的段接受；
+ * - 必须携带预期 run id，防止对过期失败接受 fallback；
+ * - 激活 image-with-motion 前校验同段 anchor 与 Remotion cue 齐备（不能伪装成功）；
+ * - 写 fallback_accepted 事件；原运行快照（旧 manifest 记录）保持不变，
+ *   只更新当前可变执行视图（active manifest 记录）。
+ */
+export async function acceptSegmentFallback(
+  input: AcceptSegmentFallbackInput,
+) {
+  const { db, project, runId, segmentId, expectedRunId } = input;
+
+  if (!project.activeAssetManifestRecordId) {
+    return { statusCode: 409, body: { error: "active_assets_missing" } };
+  }
+  const manifestRecord = await getAssetManifestRecordById(
+    db,
+    project.activeAssetManifestRecordId,
+  );
+  if (!manifestRecord) {
+    return { statusCode: 409, body: { error: "active_assets_missing" } };
+  }
+
+  // 防过期：请求必须针对当前执行 run
+  const executionRunId =
+    typeof manifestRecord.executionStateJson?.run_id === "string"
+      ? manifestRecord.executionStateJson.run_id
+      : null;
+  if (runId !== expectedRunId || executionRunId !== expectedRunId) {
+    return {
+      statusCode: 409,
+      body: { error: "assets_fallback_run_mismatch" },
+    };
+  }
+
+  const manifest = manifestRecord.manifestJson as unknown as AssetManifest;
+  const route = manifest.segment_routes.find(
+    (item) => item.segment_id === segmentId,
+  );
+  if (!route) {
+    return { statusCode: 404, body: { error: "segment_route_not_found" } };
+  }
+  if (route.readiness !== "blocked_waiting_user") {
+    return {
+      statusCode: 409,
+      body: { error: "segment_fallback_not_awaiting_decision" },
+    };
+  }
+
+  // 激活前必须同段 anchor + Remotion cue 齐备，否则不能伪装 ready
+  const anchorArtifactId =
+    route.fallback_visual_artifact_id ?? route.primary_visual_artifact_id;
+  if (!anchorArtifactId || !route.motion_artifact_id) {
+    return {
+      statusCode: 409,
+      body: { error: "segment_fallback_incomplete" },
+    };
+  }
+
+  route.visual_route_type = "image_with_motion";
+  route.primary_visual_artifact_id = anchorArtifactId;
+  route.fallback_decision = "user_accepted";
+  route.route_events = [
+    ...(route.route_events ?? []),
+    {
+      event_type: "fallback_accepted",
+      occurred_at: new Date().toISOString(),
+      reason_code: "user_accept_fallback",
+    },
+  ];
+  route.readiness = "ready";
+  route.notes = [
+    ...route.notes,
+    `[strategy] user accepted Remotion fallback for segment ${segmentId} (run ${runId})`,
+  ];
+
+  // 重跑 validator 更新 manifest 就绪度与项目状态
+  const assetPlanRecord = db.assetPlanRecords.get(manifestRecord.assetPlanRecordId);
+  if (assetPlanRecord) {
+    const localValidation = await validateAssetsManifest({
+      assetPlanRecordId: manifestRecord.assetPlanRecordId,
+      storyboardRecordId: manifestRecord.storyboardRecordId,
+      scriptRecordId: manifestRecord.scriptRecordId,
+      topicPackageId: manifestRecord.topicPackageId,
+      assetPlan: assetPlanRecord.planJson as unknown as AssetPlan,
+      manifest,
+      projectStorageRootDir: project.storageRootDir,
+    });
+    manifest.readiness = localValidation.decision;
+    manifestRecord.validationResultJson =
+      localValidation as unknown as Record<string, unknown>;
+    if (localValidation.decision === "ready_for_compose") {
+      project.status = "assets_ready";
+    } else if (localValidation.decision === "partial") {
+      project.status = "assets_partial";
+    } else {
+      project.status = "assets_blocked";
+    }
+  }
+
+  manifestRecord.manifestJson = manifest as unknown as Record<string, unknown>;
+  project.updatedAt = new Date();
+
+  return {
+    statusCode: 200,
+    body: {
+      project_id: project.id,
+      asset_manifest_record_id: manifestRecord.id,
+      segment_id: segmentId,
+      manifest,
+    },
+  };
 }
 
 export async function acceptArtifact(input: AcceptArtifactInput) {

@@ -48,6 +48,7 @@ export const SegmentReadiness = z.enum([
   "ready",
   "blocked",
   "fallback_ready",
+  "blocked_waiting_user",
 ]);
 
 export const ManifestReadiness = z.enum([
@@ -415,6 +416,39 @@ export const AssetAudioSummary = z
 
 // ─── Segment Asset Route ─────────────────────────────────────────────────────
 
+/**
+ * 视频策略（S2-2A 任务 6）：项目冻结配置解析后的最终视频策略。
+ * 决定 API 视频失败时的行为：严格（all_api_video 阻塞等用户决策）或自动降级。
+ * 缺省 prefer_remotion 兼容旧 manifest。
+ */
+export const VideoStrategy = z.enum([
+  "all_api_video",
+  "prefer_api_video",
+  "prefer_remotion",
+  "all_remotion",
+]);
+export type VideoStrategy = z.infer<typeof VideoStrategy>;
+
+/**
+ * 视觉路线降级决策：none（未决策）/ automatic（自动降级）/ user_accepted（用户显式接受）。
+ */
+export const FallbackDecision = z.enum([
+  "none",
+  "automatic",
+  "user_accepted",
+]);
+export type FallbackDecision = z.infer<typeof FallbackDecision>;
+
+/** 路线决策事件（可审计）：automatic_fallback / fallback_accepted。 */
+export const RouteDecisionEvent = z
+  .object({
+    event_type: z.enum(["automatic_fallback", "fallback_accepted"]),
+    occurred_at: z.string().min(1),
+    reason_code: z.string().min(1).nullable(),
+  })
+  .strict();
+export type RouteDecisionEvent = z.infer<typeof RouteDecisionEvent>;
+
 export const SegmentAssetRoute = z
   .object({
     segment_id: z.string().min(1),
@@ -428,6 +462,9 @@ export const SegmentAssetRoute = z
     bgm_placement_ids: z.array(z.string().min(1)),
     readiness: SegmentReadiness,
     notes: z.array(z.string()),
+    video_strategy: VideoStrategy.default("prefer_remotion"),
+    fallback_decision: FallbackDecision.default("none"),
+    route_events: z.array(RouteDecisionEvent).default([]),
   })
   .strict();
 

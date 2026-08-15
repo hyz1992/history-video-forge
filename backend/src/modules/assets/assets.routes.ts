@@ -1,6 +1,11 @@
 import type { AppInstance, AppResponse, RouteContext } from "../../app";
 import { getProjectById } from "../projects/project.repository";
-import { runAssetsGeneration, registerManualArtifact, acceptArtifact } from "./assets-run.service";
+import {
+  runAssetsGeneration,
+  registerManualArtifact,
+  acceptArtifact,
+  acceptSegmentFallback,
+} from "./assets-run.service";
 import { env } from "../../config/env.js";
 import { createPromptRegistry } from "../../runtime/prompts/prompt-registry.js";
 import { guardOwnedRoute } from "../../auth/authorization.js";
@@ -88,41 +93,18 @@ async function generateAssetsController(
   const executionMode =
     payload.execution_mode as string | undefined
       ?? "auto_available";
-  const providerMode =
-    payload.provider_mode === "dashscope" || payload.provider_mode === "dashscope_tts"
-      ? payload.provider_mode
-      : env.llm.provider === "openai" ? "dashscope" : undefined;
-  const dashscopePayload =
-    typeof payload.dashscope === "object" && payload.dashscope !== null
-      ? payload.dashscope as Record<string, unknown>
-      : {};
   const missingOnly = requestedMode === "missing_only";
 
+  // S2-2A 任务 6：provider 授权只来自后端 env/resolved 配置，
+  // 客户端不得通过 provider_mode / dashscope api key / model 指定。
   return runAssetsGeneration({
     db: context.app.db,
     project,
     voiceProfileId,
     executionMode,
-    providerMode,
     enabledProviderTypes,
     missingOnly,
     taskIds: requestedTaskIds,
-    dashscope: {
-      apiKey: dashscopePayload.api_key as string | undefined,
-      baseUrl: dashscopePayload.base_url as string | undefined,
-      imageModel: dashscopePayload.image_model as string | undefined,
-      imageSize: dashscopePayload.image_size as string | undefined,
-      imagePollIntervalMs: readOptionalNumber(dashscopePayload.image_poll_interval_ms),
-      imageMaxPollAttempts: readOptionalNumber(dashscopePayload.image_max_poll_attempts),
-      imageToVideoModel: dashscopePayload.image_to_video_model as string | undefined,
-      imageToVideoResolution: dashscopePayload.image_to_video_resolution as string | undefined,
-      imageToVideoDurationSec: readOptionalNumber(dashscopePayload.image_to_video_duration_sec),
-      imageToVideoPollIntervalMs: readOptionalNumber(dashscopePayload.image_to_video_poll_interval_ms),
-      imageToVideoMaxPollAttempts: readOptionalNumber(dashscopePayload.image_to_video_max_poll_attempts),
-      ttsModel: dashscopePayload.tts_model as string | undefined,
-      ttsFormat: readDashscopeTtsFormat(dashscopePayload.tts_format),
-      ttsSampleRate: readOptionalNumber(dashscopePayload.tts_sample_rate),
-    },
   });
 }
 
@@ -504,18 +486,40 @@ async function generateTaskController(
   const payload = context.payload as Record<string, unknown>;
   const voiceProfileId =
     (payload.voice_profile_id as string | undefined) ?? "voice_default_male_storyteller";
-  const providerMode =
-    payload.provider_mode === "dashscope" || payload.provider_mode === "dashscope_tts"
-      ? payload.provider_mode
-      : env.llm.provider === "openai" ? "dashscope" : undefined;
 
   return runAssetsGeneration({
     db: context.app.db,
     project,
     voiceProfileId,
     executionMode: "auto_available",
-    providerMode,
     taskIds: [taskId],
+  });
+}
+
+async function acceptSegmentFallbackController(
+  context: RouteContext,
+): Promise<AppResponse> {
+  const project = await getProjectById(context.app.db, context.params.projectId);
+  if (!project) {
+    return { statusCode: 404, body: { error: "project_not_found" } };
+  }
+
+  const payload = context.payload as Record<string, unknown>;
+  const expectedRunId =
+    typeof payload.expected_run_id === "string" ? payload.expected_run_id : "";
+  if (!expectedRunId) {
+    return {
+      statusCode: 422,
+      body: { error: "expected_run_id_required" },
+    };
+  }
+
+  return acceptSegmentFallback({
+    db: context.app.db,
+    project,
+    runId: context.params.runId,
+    segmentId: context.params.segmentId,
+    expectedRunId,
   });
 }
 
@@ -712,6 +716,11 @@ export function registerAssetsRoutes(app: AppInstance) {
     "POST",
     "/api/projects/:projectId/assets/segments/:segmentId/upgrade-video",
     guardOwnedRoute(upgradeSegmentToVideoController),
+  );
+  app.addRoute(
+    "POST",
+    "/api/projects/:projectId/assets/runs/:runId/segments/:segmentId/accept-fallback",
+    guardOwnedRoute(acceptSegmentFallbackController),
   );
   app.addRoute(
     "POST",

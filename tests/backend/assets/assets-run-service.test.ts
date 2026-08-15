@@ -3,6 +3,21 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+/** S2-2A 任务 6：provider 授权只来自后端 env；测试通过 env 注入驱动 DashScope。 */
+const DASHSCOPE_ENV: Record<string, string> = {
+  ALIYUN_DASHSCOPE_API_KEY: "test-key",
+  ALIYUN_DASHSCOPE_BASE_URL: "https://dashscope.test",
+  ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL: "wan2.6-t2i",
+  ALIYUN_DASHSCOPE_TTS_MODEL: "qwen3-tts-instruct-flash",
+  ALIYUN_DASHSCOPE_IMAGE_TO_VIDEO_MODEL: "wan2.7-i2v-2026-04-25",
+};
+
+function injectDashscopeEnv() {
+  for (const [key, value] of Object.entries(DASHSCOPE_ENV)) {
+    vi.stubEnv(key, value);
+  }
+}
+
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import {
@@ -249,6 +264,7 @@ describe("assets run service integration", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   afterEach(async () => {
@@ -638,20 +654,12 @@ describe("assets run service integration", () => {
     const { db, project } = await prepareProjectWithAssetPlan();
     project.storageRootDir = integrationTempDir;
 
-    const response = await runAssetsGeneration({
+    injectDashscopeEnv();
+const response = await runAssetsGeneration({
       db,
       project,
       voiceProfileId: "voice_system_ethan",
       executionMode: "auto_available",
-      providerMode: "dashscope",
-      dashscope: {
-        apiKey: "test-key",
-        baseUrl: "https://dashscope.test",
-        imageModel: "wan2.6-t2i",
-        ttsModel: "qwen3-tts-instruct-flash",
-        imagePollIntervalMs: 0,
-        imageMaxPollAttempts: 1,
-      },
     });
     const body = response.body as { manifest: AssetManifest };
 
@@ -667,7 +675,7 @@ describe("assets run service integration", () => {
     expect(fetchMock).toHaveBeenCalled();
   });
 
-  it("can use DashScope TTS while keeping fake image generation local", async () => {
+  it("keeps all providers fake when the backend env has no dashscope api key", async () => {
     integrationTempDir = join(tmpdir(), `assets-dashscope-tts-only-${Date.now()}`);
     await mkdir(integrationTempDir, { recursive: true });
 
@@ -711,12 +719,6 @@ describe("assets run service integration", () => {
       project,
       voiceProfileId: "voice_system_ethan",
       executionMode: "auto_available",
-      providerMode: "dashscope_tts",
-      dashscope: {
-        apiKey: "test-key",
-        baseUrl: "https://dashscope.test",
-        ttsModel: "qwen3-tts-instruct-flash",
-      },
     });
     const body = response.body as { manifest: AssetManifest };
     const providerNames = [...db.assetProviderJobRecords.values()].map(
@@ -725,14 +727,12 @@ describe("assets run service integration", () => {
 
     expect(response.statusCode).toBe(200);
     expect(body.manifest.artifacts.some(
-      (artifact) =>
-        (artifact.metadata as Record<string, unknown>).provider_name === "dashscope_tts",
-    )).toBe(true);
-    expect(body.manifest.artifacts.some(
       (artifact) => artifact.artifact_type === "image",
     )).toBe(true);
-    expect(providerNames).toContain("dashscope_tts");
+    // 无 env key 时全部走 fake provider，不得出现 dashscope
+    expect(providerNames).toContain("fake_tts");
     expect(providerNames).toContain("fake_image");
+    expect(providerNames).not.toContain("dashscope_tts");
     expect(providerNames).not.toContain("dashscope_image");
     expect(providerNames).not.toContain("dashscope_image_to_video");
   });
@@ -823,20 +823,12 @@ describe("assets run service integration", () => {
     configureVoiceProfilePersistence(db, { rootDir: integrationTempDir });
     project.storageRootDir = integrationTempDir;
 
-    const response = await runAssetsGeneration({
+    injectDashscopeEnv();
+const response = await runAssetsGeneration({
       db,
       project,
       voiceProfileId: "voice_preset_cold_authority",
       executionMode: "auto_available",
-      providerMode: "dashscope",
-      dashscope: {
-        apiKey: "test-key",
-        baseUrl: "https://dashscope.test",
-        imageModel: "wan2.6-t2i",
-        ttsModel: "qwen3-tts-instruct-flash",
-        imagePollIntervalMs: 0,
-        imageMaxPollAttempts: 1,
-      },
     });
 
     expect(response.statusCode).toBe(200);
@@ -959,12 +951,12 @@ describe("assets run service integration", () => {
       imageToVideoMaxPollAttempts: 1,
     };
 
-    const response = await runAssetsGeneration({
+    injectDashscopeEnv();
+const response = await runAssetsGeneration({
       db,
       project,
       voiceProfileId: "voice_custom",
       executionMode: "auto_available",
-      providerMode: "dashscope",
       dashscope,
     });
     const body = response.body as { manifest: AssetManifest };
@@ -1018,18 +1010,12 @@ describe("assets run service integration", () => {
     project.storageRootDir = integrationTempDir;
     db.assetPlanRecords.get(ASSET_PLAN_RECORD_ID)!.planJson =
       makeImageToVideoAssetPlan();
-    const dashscope = {
-      apiKey: "test-key", baseUrl: "https://dashscope.test",
-      ttsModel: "qwen3-tts-instruct-flash", imageModel: "wan2.6-t2i",
-      imageToVideoModel: "wan2.7-i2v-2026-04-25",
-      imagePollIntervalMs: 0, imageMaxPollAttempts: 1,
-      imageToVideoPollIntervalMs: 0, imageToVideoMaxPollAttempts: 1,
-    };
+    injectDashscopeEnv();
 
     // Step 1: full run to generate image first
     const first = await runAssetsGeneration({
       db, project, voiceProfileId: "voice_custom",
-      executionMode: "auto_available", providerMode: "dashscope", dashscope,
+      executionMode: "auto_available",
     });
     const firstBody = first.body as { manifest: AssetManifest };
     expect(firstBody.manifest.segment_routes[0]?.primary_visual_artifact_id).toBeDefined();
@@ -1042,7 +1028,7 @@ describe("assets run service integration", () => {
 
     const second = await runAssetsGeneration({
       db, project, voiceProfileId: "voice_custom",
-      executionMode: "auto_available", providerMode: "dashscope", dashscope,
+      executionMode: "auto_available",
       taskIds: [videoTask!.task_id],
     });
     const secondBody = second.body as { manifest: AssetManifest };
@@ -1075,6 +1061,7 @@ describe("execution engine integration", () => {
 
   it("keeps dry_run as manifest-only without generated artifacts", async () => {
     const { db, project } = await prepareProjectWithAssetPlan();
+
     const response = await runAssetsGeneration({
       db,
       project,
