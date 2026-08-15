@@ -198,10 +198,34 @@ function hasSubtitleTtsTimingDependency(
  */
 
 /**
+ * S2-2A 任务 5 整改：requires_output 依赖图必须与任务参数表达同一素材来源。
+ * 每个 video/motion 恰好一条 requires_output，且 depends_on_task_id 精确等于
+ * 同段唯一 anchor；多一条、少一条或指向其他图片都直接失败。
+ */
+function hasExactSingleAnchorOutputBinding(
+  task: AssetTask,
+  plan: AssetPlan,
+  anchorsBySegment: ReadonlyMap<string, string>,
+): boolean {
+  const anchorTaskId = anchorsBySegment.get(task.source_segment_id ?? "");
+  if (!anchorTaskId) return false;
+  const outputDependencies = plan.dependencies.filter(
+    (dependency) =>
+      dependency.task_id === task.task_id &&
+      dependency.dependency_type === "requires_output",
+  );
+  return (
+    outputDependencies.length === 1 &&
+    outputDependencies[0]!.depends_on_task_id === anchorTaskId
+  );
+}
+
+/**
  * video 的静态 fallback 必须等于同段唯一 anchor：
  * - 显式 static_fallback_task_id 存在时，必须精确等于该 anchor；
- *   错误显式引用（跨段/support/不存在）不能被任何 requires_output 依赖掩盖。
- * - 无显式引用时，requires_output 依赖必须指向该 anchor。
+ *   错误显式引用（跨段/support/不存在）不能被依赖图掩盖。
+ * - 无论显式引用是否存在，requires_output 依赖必须恰好一条且指向该 anchor，
+ *   保证 task parameters 与 dependency graph 表达同一素材来源。
  */
 function hasValidStaticFallback(
   videoTask: AssetTask,
@@ -214,19 +238,13 @@ function hasValidStaticFallback(
     typeof videoTask.parameters.static_fallback_task_id === "string"
       ? videoTask.parameters.static_fallback_task_id
       : null;
-  if (explicit !== null) {
-    return explicit === anchorTaskId;
-  }
-  return plan.dependencies.some((dependency) =>
-    dependency.task_id === videoTask.task_id &&
-    dependency.dependency_type === "requires_output" &&
-    dependency.depends_on_task_id === anchorTaskId,
-  );
+  if (explicit !== null && explicit !== anchorTaskId) return false;
+  return hasExactSingleAnchorOutputBinding(videoTask, plan, anchorsBySegment);
 }
 
 /**
  * render_motion_cue 必须绑定同段唯一 anchor：
- * source_image_task_id 与 requires_output 依赖都必须精确指向该 anchor。
+ * source_image_task_id 与唯一的 requires_output 依赖都必须精确指向该 anchor。
  */
 function hasMotionCueSameAnchorBinding(
   motionTask: AssetTask,
@@ -240,11 +258,7 @@ function hasMotionCueSameAnchorBinding(
       ? motionTask.parameters.source_image_task_id
       : null;
   if (sourceTaskId !== anchorTaskId) return false;
-  return plan.dependencies.some((dependency) =>
-    dependency.task_id === motionTask.task_id &&
-    dependency.dependency_type === "requires_output" &&
-    dependency.depends_on_task_id === anchorTaskId,
-  );
+  return hasExactSingleAnchorOutputBinding(motionTask, plan, anchorsBySegment);
 }
 
 /**
