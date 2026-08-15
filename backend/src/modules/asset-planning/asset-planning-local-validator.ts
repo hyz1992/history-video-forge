@@ -189,6 +189,19 @@ function hasSubtitleTtsTimingDependency(
   });
 }
 
+function isSegmentAnchorImage(task: AssetTask | undefined): task is AssetTask {
+  return Boolean(
+    task &&
+    task.task_type === "image_still" &&
+    task.parameters.image_role === "anchor",
+  );
+}
+
+/**
+ * S2-2A 任务 5 整改：video 的静态 fallback 必须绑定同段唯一锚点图。
+ * static_fallback_task_id 或 requires_output 依赖的 image_still 都必须与
+ * video 同 segment 且 image_role 为 anchor；跨段或 support 图不算有效 fallback。
+ */
 function hasStaticFallback(
   videoTask: AssetTask,
   plan: AssetPlan,
@@ -198,8 +211,14 @@ function hasStaticFallback(
     typeof videoTask.parameters.static_fallback_task_id === "string"
       ? videoTask.parameters.static_fallback_task_id
       : null;
-  if (fallbackTaskId && tasksById.get(fallbackTaskId)?.task_type === "image_still") {
-    return true;
+  if (fallbackTaskId) {
+    const fallback = tasksById.get(fallbackTaskId);
+    if (
+      isSegmentAnchorImage(fallback) &&
+      fallback.source_segment_id === videoTask.source_segment_id
+    ) {
+      return true;
+    }
   }
 
   return plan.dependencies.some((dependency) => {
@@ -207,9 +226,30 @@ function hasStaticFallback(
     return (
       dependency.task_id === videoTask.task_id &&
       dependency.dependency_type === "requires_output" &&
-      upstream?.task_type === "image_still"
+      isSegmentAnchorImage(upstream) &&
+      upstream.source_segment_id === videoTask.source_segment_id
     );
   });
+}
+
+/**
+ * S2-2A 任务 5 整改：render_motion_cue 必须绑定同段唯一锚点图。
+ * source_image_task_id 指向跨段或非 anchor 图都属于无效绑定，直接硬错误。
+ */
+function hasMotionCueSameAnchorBinding(
+  motionTask: AssetTask,
+  tasksById: Map<string, AssetTask>,
+) {
+  const sourceTaskId =
+    typeof motionTask.parameters.source_image_task_id === "string"
+      ? motionTask.parameters.source_image_task_id
+      : null;
+  if (!sourceTaskId) return false;
+  const source = tasksById.get(sourceTaskId);
+  return Boolean(
+    isSegmentAnchorImage(source) &&
+    source.source_segment_id === motionTask.source_segment_id,
+  );
 }
 
 function hasNonEmptyRiskNotes(task: AssetTask) {
@@ -370,6 +410,14 @@ export function validateAssetPlan(input: {
     ) {
       pushUnique(errors, "asset_video_missing_static_fallback");
       pushRepairHint(repairHints, task, "static_fallback_task_id");
+    }
+
+    if (
+      task.task_type === "render_motion_cue" &&
+      !hasMotionCueSameAnchorBinding(task, tasksById)
+    ) {
+      pushUnique(errors, "asset_motion_cue_binding_invalid");
+      pushRepairHint(repairHints, task, "source_image_task_id");
     }
 
     if (

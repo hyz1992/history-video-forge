@@ -751,8 +751,9 @@ export async function runAssetPlanningGeneration(
   const topicBoundaryContext = mapTopicBoundaryContext(topicPackage);
 
   // S2-2A 任务 5：与 storyboard 快照同源的 resolver 解析，产出每段最终视觉路线。
-  // Asset Planning 全链路只消费该路线；解析失败时机械降级为全 Remotion
-  // （不产生任何 API 视频调用），理由记录为 route_resolution_error。
+  // 解析失败是权威错误（配置损坏/catalog 缺失/固定模型不可用），必须在调用 LLM、
+  // 创建 AssetPlanRecord 之前结构化失败退出，不得伪造 Remotion 路线吞掉
+  // all_api_video、显式 API override 或 capability 错误。
   const routeOverrides = [...input.db.storyboardSegmentOverrides.values()].filter(
     (o) => o.storyboardRecordId === storyboardRecord.id,
   );
@@ -784,21 +785,18 @@ export async function runAssetPlanningGeneration(
       routeOverrides.map((o) => [o.segmentId, o.strategyOverride]),
     ),
   });
+  if (!routeResolution.ok) {
+    return {
+      statusCode: 500,
+      body: {
+        error: "asset_plan_route_resolution_failed",
+        detail: routeResolution.error.message,
+      },
+    };
+  }
   const segmentVisualRoutes = new Map<string, ResolvedSegmentVisualRoute>();
-  if (routeResolution.ok) {
-    for (const route of routeResolution.value.segment_visual_routes) {
-      segmentVisualRoutes.set(route.segment_id, route);
-    }
-  } else {
-    for (const segment of storyboard.segments) {
-      segmentVisualRoutes.set(segment.segment_id, {
-        segment_id: segment.segment_id,
-        segment_override: null,
-        api_video_suitability: segment.api_video_suitability,
-        resolved_route: "remotion",
-        reason_code: "route_resolution_error",
-      });
-    }
+  for (const route of routeResolution.value.segment_visual_routes) {
+    segmentVisualRoutes.set(route.segment_id, route);
   }
 
   const runId = `asset_plan_run_${input.db.generateId()}`;

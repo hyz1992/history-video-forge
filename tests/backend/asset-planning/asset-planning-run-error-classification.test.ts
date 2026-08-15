@@ -62,7 +62,38 @@ function makeStoryboardPlan(input: {
   };
 }
 
+function seedGenerationCatalog(db: ReturnType<typeof createDbClient>) {
+  const now = new Date();
+  const catalogSeed: Array<[string, string]> = [
+    ["llm.smart", "dashscope.qwen-max"],
+    ["llm.flash", "dashscope.qwen-flash"],
+    ["image.generate", "dashscope.wanx-v1"],
+    ["video.image_to_video", "dashscope.video-v1"],
+    ["tts.synthesize", "dashscope.tts"],
+  ];
+  for (const [capability, id] of catalogSeed) {
+    db.providerModelCatalog.set(id, {
+      id,
+      capability: capability as never,
+      providerKey: "dashscope",
+      modelId: id,
+      modelVersion: null,
+      displayName: id,
+      qualityTier: null,
+      speedTier: null,
+      parameterCapabilitiesJson: {},
+      pricingVersion: "v1",
+      pricingJson: { bounded: true },
+      status: "active",
+      isDefault: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+}
+
 async function prepareActiveStoryboard(db: ReturnType<typeof createDbClient>) {
+  seedGenerationCatalog(db);
   const project = await createProject(db, { name: "Asset Plan Run Error" });
   const topicPackage = await saveTopicPackage(db, {
     projectId: project.id,
@@ -153,7 +184,7 @@ describe("runAssetPlanningGeneration error classification", () => {
       const db = createDbClient();
       const { project } = await prepareActiveStoryboard(db);
 
-      const response = await runAssetPlanningGeneration({ db, project });
+      const response = await runAssetPlanningGeneration({ db, project, demoMode: false });
 
       expect(response.statusCode).toBe(500);
       expect(response.body).toEqual({
@@ -231,7 +262,7 @@ describe("runAssetPlanningGeneration error classification", () => {
       const db = createDbClient();
       const { project } = await prepareActiveStoryboard(db);
 
-      const response = await runAssetPlanningGeneration({ db, project });
+      const response = await runAssetPlanningGeneration({ db, project, demoMode: false });
 
       expect(response.statusCode).toBe(500);
       expect(response.body).not.toHaveProperty("message");
@@ -314,7 +345,7 @@ describe("runAssetPlanningGeneration error classification", () => {
     });
     const { project } = await prepareActiveStoryboard(db);
 
-    const run = runAssetPlanningGeneration({ db, project });
+    const run = runAssetPlanningGeneration({ db, project, demoMode: false });
     await progressSaveStarted.promise;
     await new Promise<void>((resolveImmediate) => setImmediate(resolveImmediate));
     releaseProgressSave.resolve();
@@ -360,7 +391,7 @@ describe("runAssetPlanningGeneration error classification", () => {
       const db = createDbClient();
       const { project } = await prepareActiveStoryboard(db);
 
-      const response = await runAssetPlanningGeneration({ db, project });
+      const response = await runAssetPlanningGeneration({ db, project, demoMode: false });
 
       expect(response.statusCode).toBe(500);
       expect(response.body).toEqual({
@@ -418,7 +449,7 @@ describe("runAssetPlanningGeneration error classification", () => {
     const db = createDbClient();
     const { project } = await prepareActiveStoryboard(db);
 
-    const response = await runAssetPlanningGeneration({ db, project });
+    const response = await runAssetPlanningGeneration({ db, project, demoMode: false });
 
     expect(response.statusCode).toBe(500);
     expect(response.body).not.toHaveProperty("message");
@@ -457,7 +488,7 @@ describe("runAssetPlanningGeneration error classification", () => {
     project.activeAssetPlanRecordId = previousActiveId;
     project.status = "asset_plan_ready";
 
-    const response = await runAssetPlanningGeneration({ db, project });
+    const response = await runAssetPlanningGeneration({ db, project, demoMode: false });
 
     expect(response.statusCode).toBe(500);
     expect(response.body).toMatchObject({ error: "asset_segment_intent_invalid" });
@@ -482,7 +513,7 @@ describe("runAssetPlanningGeneration error classification", () => {
     const db = createDbClient();
     const { project } = await prepareActiveStoryboard(db);
 
-    const response = await runAssetPlanningGeneration({ db, project });
+    const response = await runAssetPlanningGeneration({ db, project, demoMode: false });
 
     expect(response.statusCode).toBe(500);
     expect(response.body).toMatchObject({
@@ -508,7 +539,7 @@ describe("runAssetPlanningGeneration error classification", () => {
     const db = createDbClient();
     const { project } = await prepareActiveStoryboard(db);
 
-    const response = await runAssetPlanningGeneration({ db, project });
+    const response = await runAssetPlanningGeneration({ db, project, demoMode: false });
 
     expect(response.statusCode).toBe(500);
     expect(response.body).toMatchObject({ error: "internal_server_error" });
@@ -552,7 +583,7 @@ describe("runAssetPlanningGeneration error classification", () => {
     const db = createDbClient();
     const { project } = await prepareActiveStoryboard(db);
 
-    const response = await runAssetPlanningGeneration({ db, project });
+    const response = await runAssetPlanningGeneration({ db, project, demoMode: false });
 
     expect(response.statusCode).toBe(500);
     expect(response.body).toMatchObject({

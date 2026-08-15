@@ -347,9 +347,11 @@ describe("prompt runtime", () => {
     expect(prompt.body).toContain("prompt_draft 必须优先使用中文");
     expect(prompt.body).toContain("prompt_draft 不得整段写成英文");
     expect(prompt.body).toContain("risk_notes 等主字段必须使用中文");
-    expect(prompt.body).toContain("video_clip 只给连续动作是叙事核心的镜头");
+    expect(prompt.body).toContain("resolved_visual_route");
+    expect(prompt.body).toContain("这是该段唯一的最终视觉路线");
+    expect(prompt.body).toContain("你不得按镜头语义自行增删 `video_clip`");
     expect(prompt.body).toContain("why_static_insufficient");
-    expect(prompt.body).toContain("人物说话、表情变化、象征画面、短促碎裂动作默认不得规划 video_clip");
+    expect(prompt.body).toContain("`resolved_visual_route === \"remotion\"` 时，该段必须只规划 `image_still + render_motion_cue`，不得规划 `video_clip`");
     expect(prompt.body).toContain("每个 video_clip 必须依赖同 segment 的 image_still");
     expect(prompt.body).toContain("static_fallback_task_id");
     expect(prompt.body).toContain("video_clip 到 image_still 的 requires_output 依赖");

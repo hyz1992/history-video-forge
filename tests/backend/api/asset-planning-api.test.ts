@@ -48,6 +48,37 @@ const originalStorageRootDir = process.env.STORAGE_ROOT_DIR;
 const originalAssetPlanningGenerationMode =
   process.env.ASSET_PLANNING_GENERATION_MODE;
 
+/** 与 storyboard 快照同源：resolver 需要每 capability 一个 active 默认项才能成功解析。 */
+function seedGenerationCatalog(app: ReturnType<typeof buildApp>) {
+  const now = new Date();
+  const catalogSeed: Array<[string, string]> = [
+    ["llm.smart", "dashscope.qwen-max"],
+    ["llm.flash", "dashscope.qwen-flash"],
+    ["image.generate", "dashscope.wanx-v1"],
+    ["video.image_to_video", "dashscope.video-v1"],
+    ["tts.synthesize", "dashscope.tts"],
+  ];
+  for (const [capability, id] of catalogSeed) {
+    app.db.providerModelCatalog.set(id, {
+      id,
+      capability: capability as never,
+      providerKey: "dashscope",
+      modelId: id,
+      modelVersion: null,
+      displayName: id,
+      qualityTier: null,
+      speedTier: null,
+      parameterCapabilitiesJson: {},
+      pricingVersion: "v1",
+      pricingJson: { bounded: true },
+      status: "active",
+      isDefault: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+}
+
 function makeStoryboardPlan(input: {
   scriptRecordId: string;
   topicPackageId: string;
@@ -201,7 +232,8 @@ function makeAssetPlan(input: {
         provider_hint: null,
         prompt_draft: null,
         parameters: {
-          motion: "push_in",
+          recipe_type: "push_in",
+          source_image_task_id: "img_001",
         },
         manual_upload_policy: {
           allowed: false,
@@ -250,6 +282,7 @@ function makeAssetPlan(input: {
 }
 
 async function prepareActiveStoryboard(app: ReturnType<typeof buildApp>) {
+  seedGenerationCatalog(app);
   const project = await createProject(app.db, {
     name: "Asset Planning API Flow",
     ownerId: "owner-1",
@@ -569,6 +602,29 @@ describe("asset planning api", () => {
     });
   });
 
+  it("returns 500 before invoking LLM or persisting any record when route resolution fails", async () => {
+    const app = buildApp();
+    const prepared = await prepareActiveStoryboard(app);
+    // 破坏 catalog：resolver 无法解析任何 capability 默认项 → 结构化失败
+    app.db.providerModelCatalog.clear();
+    const recordsBefore = app.db.assetPlanRecords.size;
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/asset-plan/generate`,
+      auth,
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(response.json()).toMatchObject({ error: "asset_plan_route_resolution_failed" });
+    expect(response.json().detail).toEqual(expect.any(String));
+    expect(generateAssetPlanMock).not.toHaveBeenCalled();
+    expect(repairAssetPlanStructureMock).not.toHaveBeenCalled();
+    expect(app.db.assetPlanRecords.size).toBe(recordsBefore);
+    expect(prepared.project.status).toBe("storyboard_ready");
+    expect(prepared.project.activeAssetPlanRecordId).toBeNull();
+  });
+
   it("returns 404 when the storyboard source topic was deleted", async () => {
     const app = buildApp();
     const prepared = await prepareActiveStoryboard(app);
@@ -753,6 +809,13 @@ describe("asset planning api", () => {
         status: "compiled",
         stage: "repaired",
         compiler_actions: ["visual_strategy_applied", rawSecret],
+        visual_route_decisions: [
+          { segment_id: "sb_001", route: "remotion", reason_code: "strategy_matrix_remotion" },
+          { segment_id: "sb_002", route: "api_video", reason_code: "strategy_matrix_api_video" },
+          { segment_id: rawSecret, route: "api_video", reason_code: "strategy_matrix_api_video" },
+          { segment_id: "sb_003", route: "api_video", reason_code: rawSecret },
+          { segment_id: "sb_004", route: "api_video", reason_code: "strategy_matrix_api_video", [rawSecret]: rawSecret },
+        ],
         accounting: {
           chunk_id: "chunk_001",
           business_slot: 2,
@@ -788,6 +851,11 @@ describe("asset planning api", () => {
         status: "compiled",
         stage: "repaired",
         compiler_actions: ["visual_strategy_applied"],
+        visual_route_decisions: [
+          { segment_id: "sb_001", route: "remotion", reason_code: "strategy_matrix_remotion" },
+          { segment_id: "sb_002", route: "api_video", reason_code: "strategy_matrix_api_video" },
+          { segment_id: "sb_004", route: "api_video", reason_code: "strategy_matrix_api_video" },
+        ],
         accounting: expect.objectContaining({
           business_invocation: 2,
           logical_invocation: 2,

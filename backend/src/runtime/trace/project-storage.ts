@@ -552,6 +552,16 @@ const SAFE_INTENT_COMPILER_ACTIONS = new Set([
   "visual_strategy_applied",
   "global_bgm_owner_bound",
 ]);
+const SAFE_INTENT_ROUTES = new Set(["api_video", "remotion"]);
+
+/** resolver 的 reason_code 结构化白名单：枚举值或 strategy_matrix_* / segment_override_* / provider 降级。 */
+const SAFE_INTENT_ROUTE_REASON_CODES = new Set([
+  "strategy_matrix_api_video",
+  "strategy_matrix_remotion",
+  "segment_override_api_video",
+  "segment_override_remotion",
+  "api_video_provider_disabled",
+]);
 const SAFE_INTENT_FAILURE_CODES = new Set([
   "asset_segment_intent_invalid",
   "asset_chunk_plan_schema_invalid",
@@ -640,6 +650,26 @@ export function sanitizeAssetPlanningIntentChunkDiagnostic(
             : [],
         ))].sort().slice(0, 20)
       : [];
+    const visualRouteDecisions = Array.isArray(rawChunk.visual_route_decisions)
+      ? rawChunk.visual_route_decisions.slice(0, 50).flatMap((entry) => {
+          if (!isDiagnosticRecord(entry)) return [];
+          const segmentId = typeof entry.segment_id === "string" &&
+            /^[A-Za-z0-9_\-]{1,64}$/u.test(entry.segment_id)
+            ? entry.segment_id
+            : null;
+          const route =
+            typeof entry.route === "string" && SAFE_INTENT_ROUTES.has(entry.route)
+              ? entry.route
+              : null;
+          const reasonCode = typeof entry.reason_code === "string" &&
+            SAFE_INTENT_ROUTE_REASON_CODES.has(entry.reason_code)
+            ? entry.reason_code
+            : null;
+          return segmentId && route && reasonCode
+            ? [{ segment_id: segmentId, route, reason_code: reasonCode }]
+            : [];
+        })
+      : [];
     return [{
       chunk_id: chunkId,
       chunk_index: chunkIndex,
@@ -654,6 +684,7 @@ export function sanitizeAssetPlanningIntentChunkDiagnostic(
         network_request_count: boundedDiagnosticCount(accounting.network_request_count),
       },
       compiler_actions: compilerActions,
+      visual_route_decisions: visualRouteDecisions,
       issue_paths: issuePaths,
       ...(typeof rawChunk.error_code === "string" || status === "failed"
         ? {

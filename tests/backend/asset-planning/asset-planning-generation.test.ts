@@ -387,7 +387,12 @@ function interactionEntry(attemptCount: number): LlmInteractionLogEntry {
   };
 }
 
-function validIntentDraftFor(segments: StoryboardPlan["segments"], first: boolean) {
+type PromptSegmentLike = {
+  segment_id: string;
+  resolved_visual_route: "api_video" | "remotion";
+};
+
+function validIntentDraftFor(segments: PromptSegmentLike[], first: boolean) {
   return {
     planning_mode: "segment_intent_batch",
     segments: segments.map((segment, index) => ({
@@ -402,7 +407,7 @@ function validIntentDraftFor(segments: StoryboardPlan["segments"], first: boolea
           support_reason: null,
           risk_notes: ["避免现代元素"],
         },
-        ...(segment.api_video_suitability === "api_video_strongly_recommended" || segment.api_video_suitability === "api_video_beneficial"
+        ...(segment.resolved_visual_route === "api_video"
           ? [
               {
                 asset_kind: "video_clip",
@@ -479,7 +484,7 @@ describe("generateAssetPlan", () => {
     const { gateway, calls } = makeGateway((options) => {
       if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
       if (options.promptId === "asset-planning.segment-intent-planner") {
-        const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+        const promptInput = options.input as { segments: PromptSegmentLike[]; is_first_chunk: boolean };
         const invalid = validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
         delete (invalid.segments[0]!.intents[0] as { production_intent?: string }).production_intent;
         return invalid;
@@ -516,7 +521,7 @@ describe("generateAssetPlan", () => {
     const { gateway, calls } = makeGateway((options) => {
       if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
       if (options.promptId === "asset-planning.segment-intent-planner") {
-        const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+        const promptInput = options.input as { segments: PromptSegmentLike[]; is_first_chunk: boolean };
         const invalid = validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
         invalid.segments[0]!.intents = invalid.segments[0]!.intents.filter((intent) => intent.asset_kind !== "render_motion_cue");
         return invalid;
@@ -568,7 +573,7 @@ describe("generateAssetPlan", () => {
       options.interactionLogWriter?.write(interactionEntry(1));
       if (options.promptId === "asset-planning.segment-intent-planner") {
         plannerCalls += 1;
-        const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+        const promptInput = options.input as { segments: PromptSegmentLike[]; is_first_chunk: boolean };
         const draft = validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
         if (plannerCalls === 1) {
           delete (draft.segments[0]!.intents[0] as { production_intent?: string }).production_intent;
@@ -600,7 +605,7 @@ describe("generateAssetPlan", () => {
   it("isolates sync and async progress/resilience callback failures", async () => {
     const { gateway } = makeGateway((options) => {
       if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
-      const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+      const promptInput = options.input as { segments: PromptSegmentLike[]; is_first_chunk: boolean };
       return validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
     });
     await expect(generateAssetPlan({
@@ -616,7 +621,7 @@ describe("generateAssetPlan", () => {
     const { gateway } = makeGateway((options) => {
       if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
       options.interactionLogWriter?.write(interactionEntry(2));
-      const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+      const promptInput = options.input as { segments: PromptSegmentLike[]; is_first_chunk: boolean };
       return validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
     });
 
@@ -640,7 +645,7 @@ describe("generateAssetPlan", () => {
       intentInvocation += 1;
       await options.interactionLogWriter?.write(interactionEntry(intentInvocation === 1 ? 2 : 1));
       if (intentInvocation === 1) throw { code: "content_filter", status: 400 };
-      const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+      const promptInput = options.input as { segments: PromptSegmentLike[]; is_first_chunk: boolean };
       return validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
     });
     await generateAssetPlan({
@@ -652,6 +657,11 @@ describe("generateAssetPlan", () => {
       type: "intent_chunk_settled", chunk_id: "chunk_001", chunk_index: 0,
       outcome: "success", status: "compiled", stage: "generated",
       compiler_actions: ["global_bgm_owner_bound", "visual_strategy_applied"],
+      visual_route_decisions: [
+        { segment_id: "sb_001", route: "remotion", reason_code: "test_route" },
+        { segment_id: "sb_002", route: "remotion", reason_code: "test_route" },
+        { segment_id: "sb_003", route: "remotion", reason_code: "test_route" },
+      ],
       accounting: {
         chunk_id: "chunk_001", business_slot: 1, logical_invocation: 2,
         safety_invocation: 1, provider_attempts: 3, network_request_count: 3,
@@ -672,7 +682,7 @@ describe("generateAssetPlan", () => {
         throw { code: "content_filter", status: 400 };
       }
       plannerCalls += 1;
-      const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+      const promptInput = options.input as { segments: PromptSegmentLike[]; is_first_chunk: boolean };
       const draft = validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
       if (plannerCalls === 1) {
         delete (draft.segments[0]!.intents[0] as { production_intent?: string }).production_intent;
@@ -700,7 +710,7 @@ describe("generateAssetPlan", () => {
     const { gateway, calls } = makeGateway((options) => {
       if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
       if (options.promptId === "asset-planning.segment-intent-repair") throw programmingError;
-      const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+      const promptInput = options.input as { segments: PromptSegmentLike[]; is_first_chunk: boolean };
       const draft = validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
       delete (draft.segments[0]!.intents[0] as { production_intent?: string }).production_intent;
       return draft;
@@ -724,7 +734,7 @@ describe("generateAssetPlan", () => {
       if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
       if (options.promptId === "asset-planning.segment-intent-repair") throw repairFailure;
       plannerCalls += 1;
-      const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+      const promptInput = options.input as { segments: PromptSegmentLike[]; is_first_chunk: boolean };
       const draft = validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
       if (plannerCalls === 1) delete (draft.segments[0]!.intents[0] as { production_intent?: string }).production_intent;
       return draft;
@@ -746,7 +756,7 @@ describe("generateAssetPlan", () => {
       if (options.promptId === "asset-planning.segment-intent-repair") return { operations: [] };
       plannerCalls += 1;
       if (plannerCalls === 2) throw regenerationFailure;
-      const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+      const promptInput = options.input as { segments: PromptSegmentLike[]; is_first_chunk: boolean };
       const draft = validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
       delete (draft.segments[0]!.intents[0] as { production_intent?: string }).production_intent;
       return draft;
@@ -813,7 +823,7 @@ describe("generateAssetPlan", () => {
     try {
       const { gateway } = makeGateway((options) => {
         if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
-        const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+        const promptInput = options.input as { segments: PromptSegmentLike[]; is_first_chunk: boolean };
         return validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
       });
       await generateAssetPlan({
@@ -847,7 +857,7 @@ describe("generateAssetPlan", () => {
       if (plannerCalls === 1 || plannerCalls === 3) {
         throw { code: "content_filter", status: 400 };
       }
-      const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+      const promptInput = options.input as { segments: PromptSegmentLike[]; is_first_chunk: boolean };
       const draft = validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
       if (plannerCalls === 2) {
         delete (draft.segments[0]!.intents[0] as { production_intent?: string }).production_intent;
@@ -883,7 +893,7 @@ describe("generateAssetPlan", () => {
     const settledEvents: IntentChunkSettledEvent[] = [];
     const { gateway } = makeGateway((options) => {
       if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
-      const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+      const promptInput = options.input as { segments: PromptSegmentLike[]; is_first_chunk: boolean };
       return validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
     });
     await generateAssetPlan({
@@ -905,7 +915,7 @@ describe("generateAssetPlan", () => {
     async (mode) => {
       const { gateway } = makeGateway((options) => {
         if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
-        const promptInput = options.input as { segments: StoryboardPlan["segments"]; is_first_chunk: boolean };
+        const promptInput = options.input as { segments: PromptSegmentLike[]; is_first_chunk: boolean };
         return validIntentDraftFor(promptInput.segments, promptInput.is_first_chunk);
       });
       await expect(generateAssetPlan({
@@ -1037,6 +1047,7 @@ describe("generateAssetPlan", () => {
     storyboard.segments[0]!.api_video_suitability = "api_video_strongly_recommended";
     storyboard.segments[1]!.api_video_suitability = "remotion_sufficient";
     storyboard.segments[2]!.api_video_suitability = "remotion_sufficient";
+    const settled: IntentChunkSettledEvent[] = [];
     const { gateway, calls } = makeGateway(async (options) => {
       if (options.promptId === "asset-planning.planner") return validGlobalPlanningDraft;
       if (options.promptId === "asset-planning.segment-intent-planner") {
@@ -1052,6 +1063,16 @@ describe("generateAssetPlan", () => {
     const plan = await generateAssetPlan({
       ...makeInput(gateway, 2, storyboard),
       generationMode: "intent_compiler",
+      onIntentChunkSettled: (event) => settled.push(event),
+    });
+    // 缺口3：编译后事件必须携带每段 route 决策（segment_id/route/reason_code）
+    expect(settled[0]).toMatchObject({
+      type: "intent_chunk_settled",
+      status: "compiled",
+      visual_route_decisions: [
+        { segment_id: "sb_001", route: "api_video", reason_code: "test_route" },
+        { segment_id: "sb_002", route: "remotion", reason_code: "test_route" },
+      ],
     });
 
     expect(AssetPlan.parse(plan)).toEqual(plan);
@@ -2068,13 +2089,22 @@ describe("generateAssetPlan", () => {
       source_storyboard_record_id: "storyboard_record_1",
       source_script_record_id: "script_record_1",
       source_topic_package_id: "topic_package_1",
-      storyboard: baseStoryboardPlan,
+      storyboard: {
+        ...baseStoryboardPlan,
+        segments: expect.any(Array),
+      },
       draft: baseScriptDraft,
       topic_boundary_context: baseTopicBoundaryContext,
       regeneration_context: {
         reason: "asset_planning_local_validation_regen_once",
       },
     });
+    // 缺口2：global prompt 的分镜段是投影 DTO，不携带 api_video_suitability
+    const globalStoryboard = calls[0]!.input as {
+      storyboard: { segments: Array<Record<string, unknown>> };
+    };
+    expect(globalStoryboard.storyboard.segments[0]).not.toHaveProperty("api_video_suitability");
+    expect(globalStoryboard.storyboard.segments[0]).toHaveProperty("resolved_visual_route");
     expect(calls[1]?.input).toMatchObject({
       planning_mode: "segment_chunk",
       topic_boundary_context: baseTopicBoundaryContext,
@@ -2082,14 +2112,33 @@ describe("generateAssetPlan", () => {
       visual_budget: validGlobalPlanningDraft.visual_budget,
       downgrade_policy: validGlobalPlanningDraft.downgrade_policy,
       global_audio_strategy: validGlobalPlanningDraft.global_audio_strategy,
-      storyboard: baseStoryboardPlan,
+      storyboard: {
+        ...baseStoryboardPlan,
+        segments: expect.any(Array),
+      },
       draft: baseScriptDraft,
       chunk: {
         chunk_id: "chunk_001",
         segment_ids: ["sb_001", "sb_002"],
-        segments: baseStoryboardPlan.segments.slice(0, 2),
+        segments: [
+          expect.objectContaining({
+            segment_id: "sb_001",
+            resolved_visual_route: expect.any(String),
+          }),
+          expect.objectContaining({
+            segment_id: "sb_002",
+            resolved_visual_route: expect.any(String),
+          }),
+        ],
       },
     });
+    // 缺口2：legacy chunk prompt 的段也是投影 DTO，不携带 api_video_suitability
+    const chunkSegments = (calls[1]!.input as { chunk: { segments: Array<Record<string, unknown>> } }).chunk.segments;
+    expect(chunkSegments).toHaveLength(2);
+    for (const projected of chunkSegments) {
+      expect(projected).not.toHaveProperty("api_video_suitability");
+      expect(projected).not.toHaveProperty("visual_strategy_preference");
+    }
     expect(calls[1]?.input).not.toHaveProperty("storyboard_outline");
     expect(calls[1]?.input).not.toHaveProperty("script_context");
   });

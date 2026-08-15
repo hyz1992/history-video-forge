@@ -108,7 +108,7 @@
       "task_id": "motion_seg_002", "order": 5, "task_type": "render_motion_cue", "source_segment_id": "seg_002",
       "source_excerpt": "仓门打开，最上层的盐包全被浸湿，底下几排却干得反常。账房忙着解释，说先搬进来的旧盐垫在高处，后到的新盐压在下面。沈岑没有争辩，只让人把每排盐包的封绳颜色、堆放方向和地面水痕逐一画进临时仓图，谁也不准挪动半步。",
       "production_intent": "在静态仓图画面上进行克制推近。", "recommended_mode": "auto", "provider_hint": null, "prompt_draft": null,
-      "parameters": { "recipe_type": "push_in", "duration_sec": 6, "easing": "ease-in-out" },
+      "parameters": { "recipe_type": "push_in", "duration_sec": 6, "easing": "ease-in-out", "source_image_task_id": "image_seg_002_anchor" },
       "manual_upload_policy": { "allowed": false, "required": false, "accepted_file_types": [], "acceptance_notes": [] },
       "risk_notes": ["运动不能裁掉湿干盐包对照。"], "cost_tier": "free", "initial_status": "planned"
     },

@@ -12,10 +12,66 @@ export const SEGMENT_INTENT_PLANNER_OUTPUT_SCHEMA =
   SegmentAssetIntentBatchDraft;
 export const SEGMENT_INTENT_REPAIR_OUTPUT_SCHEMA = SegmentIntentRepairPatch;
 
+/**
+ * S2-2A 任务 5：prompt 专用分镜段投影（Prompt Segment DTO）。
+ * 只保留 resolved route 与视觉叙事字段，剔除 api_video_suitability 等
+ * 上游解析字段——LLM 不得看到或解释适配度，路线只由 resolver 决定。
+ */
+export type SegmentIntentPromptSegment = Pick<
+  StoryboardPlan["segments"][number],
+  | "segment_id"
+  | "order"
+  | "script_excerpt"
+  | "narrative_role"
+  | "visual_intent"
+  | "scene_description"
+  | "visual_elements"
+  | "framing_hint"
+  | "content_type"
+  | "motion_hint"
+  | "editing_hint"
+  | "on_screen_text"
+  | "risk_notes"
+> & {
+  resolved_visual_route: ResolvedVisualRoute;
+};
+
+/**
+ * 机械投影：把 StoryboardPlan 段映射为 prompt 段 DTO。
+ * routes 必须与 segments 一一对应（调用方先校验），缺失时抛错而不是静默降级。
+ */
+export function projectSegmentIntentPromptSegments(
+  segments: StoryboardPlan["segments"],
+  routes: ReadonlyMap<string, ResolvedVisualRoute>,
+): SegmentIntentPromptSegment[] {
+  return segments.map((segment) => {
+    const route = routes.get(segment.segment_id);
+    if (!route) {
+      throw new Error("segment_routes 缺少分段路线");
+    }
+    return {
+      segment_id: segment.segment_id,
+      order: segment.order,
+      script_excerpt: segment.script_excerpt,
+      narrative_role: segment.narrative_role,
+      visual_intent: segment.visual_intent,
+      scene_description: segment.scene_description,
+      visual_elements: segment.visual_elements,
+      framing_hint: segment.framing_hint,
+      content_type: segment.content_type,
+      motion_hint: segment.motion_hint,
+      editing_hint: segment.editing_hint,
+      on_screen_text: segment.on_screen_text,
+      risk_notes: segment.risk_notes,
+      resolved_visual_route: route,
+    };
+  });
+}
+
 export interface SegmentIntentPlannerInput {
   chunk_id: string;
   is_first_chunk: boolean;
-  segments: StoryboardPlan["segments"];
+  segments: SegmentIntentPromptSegment[];
   /**
    * S2-2A 任务 5：resolver 输出的每段最终视觉路线（机械编排输入）。
    * LLM 只按该路线规划意图，不得自行增删 API 视频。
@@ -50,7 +106,10 @@ export interface SegmentIntentRepairInput {
   };
 }
 
-export interface SegmentIntentPlannerSource extends SegmentIntentPlannerInput {
+export interface SegmentIntentPlannerSource
+  extends Omit<SegmentIntentPlannerInput, "segments"> {
+  /** 输入是原始 StoryboardPlan 段；build 内部投影为 prompt DTO。 */
+  segments: StoryboardPlan["segments"];
   [key: string]: unknown;
 }
 
@@ -393,7 +452,18 @@ export function buildSegmentIntentPlannerInput(
     throw new Error("segment intent chunk 的 segment_id 必须唯一");
   }
   validatePlannerSegmentRoutes(result.segment_routes, result.segments);
-  return result;
+  // 任务 5 整改：prompt 只收到投影 DTO（剔除 api_video_suitability 等上游字段）
+  const routeById = new Map(
+    result.segment_routes.map((route) => [route.segment_id, route.resolved_route]),
+  );
+  const projectedSegments = projectSegmentIntentPromptSegments(
+    result.segments,
+    routeById,
+  );
+  return jsonSafeCloneAndFreeze({
+    ...result,
+    segments: projectedSegments,
+  });
 }
 
 /**

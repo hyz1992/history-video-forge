@@ -6,6 +6,7 @@ import {
   ProjectArtBible,
   type AssetTask,
   type ResolvedSegmentVisualRoute,
+  type ResolvedVisualRoute,
   type ScriptDraftPackage,
   type StoryboardPlan,
 } from "../../../../shared/src/index.js";
@@ -45,6 +46,7 @@ import {
 import {
   buildSegmentIntentPlannerInput,
   buildSegmentIntentRepairInput,
+  projectSegmentIntentPromptSegments,
 } from "./segment-intent-prompt-input.js";
 import {
   applySegmentIntentRepair,
@@ -265,6 +267,15 @@ export interface IntentChunkSettledEvent {
   stage: "queued" | "running" | "generated" | "repaired" | "regenerated" | "compiled";
   accounting: ChunkInteractionAccountingSnapshot;
   compiler_actions: string[];
+  /**
+   * S2-2A 任务 5 整改：每段最终视觉路线的结构化决策（segment_id/route/reason_code）。
+   * 与 compiler_actions 并列持久化，保证运行 trace 可追溯每段采用什么路线及原因。
+   */
+  visual_route_decisions: Array<{
+    segment_id: string;
+    route: "api_video" | "remotion";
+    reason_code: string;
+  }>;
   error_code?: string;
   failure_class?: "llm_output" | "provider" | "business";
   issue_paths?: string[];
@@ -522,6 +533,20 @@ export async function generateAssetPlan(
           ),
         ),
       ].sort();
+      event.visual_route_decisions = chunks[event.chunk_index]!.flatMap((segment) => {
+        const action = compiled.actions.find(
+          (candidate) =>
+            candidate.code === "visual_strategy_applied" &&
+            candidate.segment_id === segment.segment_id,
+        );
+        return action && action.code === "visual_strategy_applied"
+          ? [{
+              segment_id: action.segment_id,
+              route: action.route,
+              reason_code: action.reason_code,
+            }]
+          : [];
+      });
       await emitIntentChunkSettledSafely(input.onIntentChunkSettled, event);
     }
     return compiled.plan;
@@ -873,6 +898,7 @@ async function generateIntentChunkWithResilience(input: {
       stage: finalStatus,
       accounting: accounting.snapshot(),
       compiler_actions: [],
+      visual_route_decisions: [],
       ...(outcome === "failure"
         ? {
             error_code: stableIntentFailureCode(failure),
@@ -1307,6 +1333,7 @@ async function settleIntentChunks(input: {
         network_request_count: 0,
       },
       compiler_actions: [],
+      visual_route_decisions: [],
     };
   });
   const results: CompiledIntentChunkInput[] = new Array(input.chunks.length);
@@ -1756,6 +1783,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
+function visualRouteMap(
+  routes: ReadonlyMap<string, ResolvedSegmentVisualRoute>,
+): ReadonlyMap<string, ResolvedVisualRoute> {
+  return new Map(
+    [...routes].map(([segmentId, route]) => [segmentId, route.resolved_route]),
+  );
+}
+
 function buildGlobalPromptInput(
   input: GenerateAssetPlanInput,
   ttsPlan: AssetPlan["tts_plan"],
@@ -1765,7 +1800,14 @@ function buildGlobalPromptInput(
     source_storyboard_record_id: input.sourceStoryboardRecordId,
     source_script_record_id: input.sourceScriptRecordId,
     source_topic_package_id: input.sourceTopicPackageId,
-    storyboard: input.storyboard,
+    // 任务 5 整改：storyboard 段投影为 prompt DTO（剔除 suitability 等上游字段）
+    storyboard: {
+      ...input.storyboard,
+      segments: projectSegmentIntentPromptSegments(
+        input.storyboard.segments,
+        visualRouteMap(input.segmentVisualRoutes),
+      ),
+    },
     draft: input.draft,
     topic_boundary_context: input.topicBoundaryContext,
     local_tts_plan: ttsPlan,
@@ -1803,12 +1845,12 @@ function buildChunkPromptInput(
     chunk: {
       chunk_id: `chunk_${String(chunkIndex + 1).padStart(3, "0")}`,
       segment_ids: segmentIds,
-      // S2-2A 任务 5：每段投影 resolver 输出的最终视觉路线，
-      // LLM 只按该路线规划任务，不再看到或推导旧 preference。
-      segments: segments.map((segment) => ({
-        ...segment,
-        resolved_visual_route: input.segmentVisualRoutes.get(segment.segment_id)!.resolved_route,
-      })),
+      // S2-2A 任务 5：每段投影 resolver 输出的最终视觉路线（prompt DTO），
+      // LLM 只按该路线规划任务，不再看到或推导 suitability。
+      segments: projectSegmentIntentPromptSegments(
+        segments,
+        visualRouteMap(input.segmentVisualRoutes),
+      ),
     },
     regeneration_context: input.regenerationContext ?? null,
   };

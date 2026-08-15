@@ -63,15 +63,24 @@
       "risk_notes": ["不得出现现代雨具。"], "cost_tier": "high", "initial_status": "planned"
     },
     {
-      "task_id": "motion_seg_002", "order": 4, "task_type": "render_motion_cue", "source_segment_id": "seg_002",
+      "task_id": "image_seg_002_anchor", "order": 4, "task_type": "image_still", "source_segment_id": "seg_002",
+      "source_excerpt": "仓门打开，最上层的盐包全被浸湿，底下几排却干得反常。账房忙着解释，说先搬进来的旧盐垫在高处，后到的新盐压在下面。沈岑没有争辩，只让人把每排盐包的封绳颜色、堆放方向和地面水痕逐一画进临时仓图，谁也不准挪动半步。",
+      "production_intent": "呈现湿干倒置与临时仓图。", "recommended_mode": "manual_allowed", "provider_hint": null,
+      "prompt_draft": "架空古代盐仓纵深，上层湿盐包与底排干盐包形成对比，书吏在木板绘制仓图。",
+      "parameters": { "aspect_ratio": "9:16", "image_role": "anchor", "video_prompt_reserve": "从湿盐包缓慢下移到底排干包，再横移到仓图。" },
+      "manual_upload_policy": { "allowed": true, "required": false, "accepted_file_types": ["image/png", "image/jpeg"], "acceptance_notes": [] },
+      "risk_notes": ["盐包堆放方向需与仓图一致。"], "cost_tier": "low", "initial_status": "planned"
+    },
+    {
+      "task_id": "motion_seg_002", "order": 5, "task_type": "render_motion_cue", "source_segment_id": "seg_002",
       "source_excerpt": "仓门打开，最上层的盐包全被浸湿，底下几排却干得反常。账房忙着解释，说先搬进来的旧盐垫在高处，后到的新盐压在下面。沈岑没有争辩，只让人把每排盐包的封绳颜色、堆放方向和地面水痕逐一画进临时仓图，谁也不准挪动半步。",
       "production_intent": "为湿干盐包对照提供本地推近。", "recommended_mode": "auto", "provider_hint": null, "prompt_draft": null,
-      "parameters": { "recipe_type": "push_in", "duration_sec": 6 },
+      "parameters": { "recipe_type": "push_in", "duration_sec": 6, "source_image_task_id": "image_seg_002_anchor" },
       "manual_upload_policy": { "allowed": false, "required": false, "accepted_file_types": [], "acceptance_notes": [] },
       "risk_notes": ["运动不得裁掉湿干对照。"], "cost_tier": "free", "initial_status": "planned"
     },
     {
-      "task_id": "sfx_seg_005", "order": 5, "task_type": "sfx_cue", "source_segment_id": "seg_005",
+      "task_id": "sfx_seg_005", "order": 6, "task_type": "sfx_cue", "source_segment_id": "seg_005",
       "source_excerpt": "沈岑让人搬来驿城公秤，不拆袋，只先称每排最外侧的六包。旧账记每包五十斤，实称却有的不足四十斤，有的超过六十斤。若只是受潮，重量只会增加，不会一轻一重。围观的脚夫开始低声议论，驿丞则反复强调公秤多年未校，不能据此定案。",
       "production_intent": "在公秤落定时加入证据揭示音。", "recommended_mode": "auto", "provider_hint": null, "prompt_draft": null,
       "parameters": { "required_tags": ["木槌落案"], "mood_tags": ["紧张"], "selection_label": "复秤揭示音" },

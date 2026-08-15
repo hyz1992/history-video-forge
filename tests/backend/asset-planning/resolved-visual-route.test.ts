@@ -430,6 +430,141 @@ describe("resolved visual route validation", () => {
   });
 });
 
+describe("resolved visual route anchor binding validation", () => {
+  function makeTwoSegmentPlan() {
+    const storyboard = makeStoryboard([
+      { segment_id: "seg_001", resolved_route: "api_video" },
+      { segment_id: "seg_002", resolved_route: "remotion" },
+    ]);
+    const scriptText = storyboard.segments.map((segment) => segment.script_excerpt).join("");
+    const audio = makeAudio(storyboard);
+    const basePlan = {
+      plan_version: "asset_plan_v1" as const,
+      source_storyboard_record_id: "storyboard_record",
+      source_script_record_id: "script_record",
+      source_topic_package_id: "topic_package",
+      art_bible: makeGlobal().art_bible,
+      visual_budget: { mode: "balanced" },
+      downgrade_policy: { video_to_image: true },
+      global_audio_strategy: makeGlobal().global_audio_strategy,
+      tts_plan: audio.tts_plan,
+      dependencies: [] as Array<Record<string, unknown>>,
+      cost_summary: { total_tasks: 0, by_type: {}, by_cost_tier: { free: 0, low: 0, medium: 0, high: 0 }, estimated_provider_calls: 0, notes: [] },
+      global_production_notes: [],
+    };
+    const anchor1 = {
+      task_id: "img_s000_01", order: 2, task_type: "image_still", source_segment_id: "seg_001",
+      source_excerpt: storyboard.segments[0]!.script_excerpt, production_intent: "主视觉",
+      recommended_mode: "manual_allowed", provider_hint: null,
+      prompt_draft: "历史画面", parameters: { image_role: "anchor", support_reason: null, video_prompt_reserve: "预留" },
+      manual_upload_policy: { allowed: true, required: false, accepted_file_types: ["image/png"], acceptance_notes: [] },
+      risk_notes: ["风险"], cost_tier: "low", initial_status: "planned",
+    };
+    const anchor2 = {
+      task_id: "img_s001_01", order: 3, task_type: "image_still", source_segment_id: "seg_002",
+      source_excerpt: storyboard.segments[1]!.script_excerpt, production_intent: "主视觉",
+      recommended_mode: "manual_allowed", provider_hint: null,
+      prompt_draft: "历史画面", parameters: { image_role: "anchor", support_reason: null, video_prompt_reserve: "预留" },
+      manual_upload_policy: { allowed: true, required: false, accepted_file_types: ["image/png"], acceptance_notes: [] },
+      risk_notes: ["风险"], cost_tier: "low", initial_status: "planned",
+    };
+    return { storyboard, scriptText, audio, basePlan, anchor1, anchor2 };
+  }
+
+  function runValidation(input: ReturnType<typeof makeTwoSegmentPlan>, extraTasks: Array<Record<string, unknown>>, extraDependencies: Array<Record<string, unknown>> = []) {
+    return validateAssetPlan({
+      plan: AssetPlan.parse({
+        ...input.basePlan,
+        tasks: [...input.audio.tasks, ...extraTasks],
+        dependencies: extraDependencies,
+        cost_summary: {
+          total_tasks: input.audio.tasks.length + extraTasks.length,
+          by_type: {}, by_cost_tier: { free: 0, low: 0, medium: 0, high: 0 },
+          estimated_provider_calls: 1, notes: [],
+        },
+      }),
+      storyboard: input.storyboard,
+      scriptText: input.scriptText,
+      storyboardRecordId: "storyboard_record",
+      scriptRecordId: "script_record",
+      topicPackageId: "topic_package",
+      segmentVisualRoutes: makeRoutes(input.storyboard),
+    });
+  }
+
+  it("fails a video_clip whose static fallback points to another segment's anchor", () => {
+    const input = makeTwoSegmentPlan();
+    const crossSegmentVideo = {
+      task_id: "video_s000_01", order: 4, task_type: "video_clip", source_segment_id: "seg_001",
+      source_excerpt: input.storyboard.segments[0]!.script_excerpt, production_intent: "连续动作",
+      recommended_mode: "manual_allowed", provider_hint: null,
+      prompt_draft: "动作画面", parameters: { why_static_insufficient: "必须连续", static_fallback_task_id: input.anchor2.task_id },
+      manual_upload_policy: { allowed: true, required: false, accepted_file_types: ["video/mp4"], acceptance_notes: [] },
+      risk_notes: ["风险"], cost_tier: "high", initial_status: "planned",
+    };
+    const validation = runValidation(input, [input.anchor1, input.anchor2, crossSegmentVideo], [
+      { dependency_id: "dep_video_after_img2", task_id: crossSegmentVideo.task_id, depends_on_task_id: input.anchor2.task_id, dependency_type: "requires_output" },
+    ]);
+    expect(validation.errors).toContain("asset_video_missing_static_fallback");
+  });
+
+  it("fails a video_clip whose static fallback points to a support image", () => {
+    const input = makeTwoSegmentPlan();
+    const supportImage = {
+      ...input.anchor1,
+      task_id: "img_s000_02",
+      parameters: { image_role: "support", support_reason: "补充", video_prompt_reserve: "预留" },
+    };
+    const videoTask = {
+      task_id: "video_s000_01", order: 5, task_type: "video_clip", source_segment_id: "seg_001",
+      source_excerpt: input.storyboard.segments[0]!.script_excerpt, production_intent: "连续动作",
+      recommended_mode: "manual_allowed", provider_hint: null,
+      prompt_draft: "动作画面", parameters: { why_static_insufficient: "必须连续", static_fallback_task_id: supportImage.task_id },
+      manual_upload_policy: { allowed: true, required: false, accepted_file_types: ["video/mp4"], acceptance_notes: [] },
+      risk_notes: ["风险"], cost_tier: "high", initial_status: "planned",
+    };
+    const validation = runValidation(input, [input.anchor1, supportImage, videoTask], [
+      { dependency_id: "dep_video_after_support", task_id: videoTask.task_id, depends_on_task_id: supportImage.task_id, dependency_type: "requires_output" },
+    ]);
+    expect(validation.errors).toContain("asset_video_missing_static_fallback");
+  });
+
+  it("fails a render_motion_cue whose source_image_task_id points across segments", () => {
+    const input = makeTwoSegmentPlan();
+    const crossSegmentMotion = {
+      task_id: "motion_s001_01", order: 4, task_type: "render_motion_cue", source_segment_id: "seg_002",
+      source_excerpt: input.storyboard.segments[1]!.script_excerpt, production_intent: "运镜",
+      recommended_mode: "auto", provider_hint: null, prompt_draft: null,
+      parameters: { recipe_type: "push_in", source_image_task_id: input.anchor1.task_id },
+      manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] },
+      risk_notes: ["风险"], cost_tier: "free", initial_status: "planned",
+    };
+    const validation = runValidation(input, [input.anchor1, input.anchor2, crossSegmentMotion], [
+      { dependency_id: "dep_motion_after_img1", task_id: crossSegmentMotion.task_id, depends_on_task_id: input.anchor1.task_id, dependency_type: "requires_output" },
+    ]);
+    expect(validation.errors).toContain("asset_motion_cue_binding_invalid");
+  });
+
+  it("fails a render_motion_cue whose source_image_task_id points to a support image", () => {
+    const input = makeTwoSegmentPlan();
+    const supportImage = {
+      ...input.anchor1,
+      task_id: "img_s000_02",
+      parameters: { image_role: "support", support_reason: "补充", video_prompt_reserve: "预留" },
+    };
+    const motionTask = {
+      task_id: "motion_s000_02", order: 5, task_type: "render_motion_cue", source_segment_id: "seg_001",
+      source_excerpt: input.storyboard.segments[0]!.script_excerpt, production_intent: "运镜",
+      recommended_mode: "auto", provider_hint: null, prompt_draft: null,
+      parameters: { recipe_type: "push_in", source_image_task_id: supportImage.task_id },
+      manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] },
+      risk_notes: ["风险"], cost_tier: "free", initial_status: "planned",
+    };
+    const validation = runValidation(input, [input.anchor1, supportImage, motionTask]);
+    expect(validation.errors).toContain("asset_motion_cue_binding_invalid");
+  });
+});
+
 describe("resolved visual route prompt input", () => {
   it("carries segment_routes into planner input without any legacy preference field", () => {
     const storyboard = makeStoryboard([
@@ -455,6 +590,39 @@ describe("resolved visual route prompt input", () => {
     ]);
     expect(JSON.stringify(plannerInput)).not.toContain("visual_strategy_preference");
     expect(JSON.stringify(plannerInput)).not.toContain("preference");
+  });
+
+  it("projects segments without api_video_suitability when suitability contradicts the resolved route", () => {
+    // suitability 强烈推荐 API 视频，但 resolver 给出的最终路线是 remotion
+    const storyboard = makeStoryboard([
+      { segment_id: "seg_001", resolved_route: "remotion" },
+      { segment_id: "seg_002", resolved_route: "api_video" },
+    ]);
+    storyboard.segments[0]!.api_video_suitability = "api_video_strongly_recommended";
+    storyboard.segments[1]!.api_video_suitability = "remotion_sufficient";
+    const plannerInput = buildSegmentIntentPlannerInput({
+      chunk_id: "chunk_001",
+      is_first_chunk: true,
+      segments: storyboard.segments,
+      segment_routes: [
+        { segment_id: "seg_001", resolved_route: "remotion" },
+        { segment_id: "seg_002", resolved_route: "api_video" },
+      ],
+      art_bible: makeGlobal().art_bible,
+      visual_budget: { mode: "balanced" },
+      downgrade_policy: { video_to_image: true },
+      global_audio_strategy: makeGlobal().global_audio_strategy,
+    });
+    // 投影后的 segments 只含视觉叙事字段 + resolved_visual_route
+    for (const projected of plannerInput.segments) {
+      expect(projected).not.toHaveProperty("api_video_suitability");
+      expect(projected).not.toHaveProperty("visual_strategy_preference");
+      expect(projected.resolved_visual_route).toBe(
+        projected.segment_id === "seg_001" ? "remotion" : "api_video",
+      );
+    }
+    expect(JSON.stringify(plannerInput)).not.toContain("api_video_suitability");
+    expect(JSON.stringify(plannerInput)).not.toContain("visual_strategy_preference");
   });
 
   it("rejects planner input whose segment_routes do not match the chunk segments", () => {

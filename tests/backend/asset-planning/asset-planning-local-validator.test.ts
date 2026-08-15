@@ -163,6 +163,9 @@ function makeBaseAssetPlan(): AssetPlan {
         prompt_draft: "战国宫门前，齐国使节站在低矮狗洞前，众人注视",
         parameters: {
           aspect_ratio: "9:16",
+          image_role: "anchor",
+          support_reason: null,
+          video_prompt_reserve: "缓慢推进，突出狗门与众人目光",
         },
         manual_upload_policy: {
           allowed: true,
@@ -185,7 +188,8 @@ function makeBaseAssetPlan(): AssetPlan {
         provider_hint: null,
         prompt_draft: null,
         parameters: {
-          motion: "push_in",
+          recipe_type: "push_in",
+          source_image_task_id: "img_001",
         },
         manual_upload_policy: {
           allowed: false,
@@ -201,8 +205,8 @@ function makeBaseAssetPlan(): AssetPlan {
         task_id: "video_001",
         order: 4,
         task_type: "video_clip",
-        source_segment_id: "sb_003",
-        source_excerpt: baseStoryboardPlan.segments[2].script_excerpt,
+        source_segment_id: "sb_001",
+        source_excerpt: baseStoryboardPlan.segments[0].script_excerpt,
         production_intent: "表现橘枳之喻的高潮转折",
         recommended_mode: "manual_preferred",
         provider_hint: "video_provider",
