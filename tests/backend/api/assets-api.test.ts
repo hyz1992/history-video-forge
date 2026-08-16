@@ -1019,6 +1019,39 @@ const response = await app.inject({
     }
   });
 
+  it("rejects client provider credentials on single-task and upgrade-video entries", async () => {
+    const app = buildApp();
+    const prepared = await prepareActiveAssetPlan(app);
+    const planRecord = app.db.assetPlanRecords.get(prepared.assetPlanRecord.id)!;
+    const imageTask = (planRecord.planJson as { tasks: Array<{ task_id: string; task_type: string }> }).tasks.find(
+      (t) => t.task_type === "image_still",
+    )!;
+
+    // 单任务生成入口
+    const taskResponse = await app.inject({
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/assets/tasks/${imageTask.task_id}/generate`,
+      payload: { provider_mode: "dashscope" },
+      auth,
+    });
+    expect(taskResponse.statusCode).toBe(400);
+    expect(taskResponse.json()).toMatchObject({
+      error: "client_provider_credentials_not_allowed",
+    });
+
+    // 视频升级入口
+    const upgradeResponse = await app.inject({
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/assets/segments/sb_001/upgrade-video`,
+      payload: { dashscope: { api_key: "test-key" } },
+      auth,
+    });
+    expect(upgradeResponse.statusCode).toBe(400);
+    expect(upgradeResponse.json()).toMatchObject({
+      error: "client_provider_credentials_not_allowed",
+    });
+  });
+
   it("supports execution_mode dry_run and confirms no provider adapter is invoked", async () => {
     const app = buildApp();
     const prepared = await prepareActiveAssetPlan(app);

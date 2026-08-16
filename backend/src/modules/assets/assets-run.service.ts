@@ -843,6 +843,11 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     configResult,
     segmentIds,
   });
+
+  // I2 整改：run 创建后的整个流程共享失败收尾——
+  // 任何异常（generating 保存、临时 manifest 保存、engine、校验、激活）都
+  // 必须把正式 GenerationRun 收尾为 failed，不能遗留 running。
+  try {
   let executionManifestRecordId: string | null = null;
 
   // Set active pointer BEFORE execution so refresh during generation shows status
@@ -1208,6 +1213,11 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
       runtime_diagnostics: null,
     },
   };
+  } catch (error) {
+    // 统一失败收尾：任何未处理的异常都结束 run，避免永久 running
+    await finalizeAssetsGenerationRun(db, runId, "failed");
+    throw error;
+  }
 }
 
 // ─── Manual Artifact Registration ───────────────────────────────────────────
@@ -1642,23 +1652,28 @@ export async function acceptSegmentFallback(
   }
   candidateRecord.revision = expectedRevision + 1;
 
-  // 事务成功：发布内存状态（manifest 记录、项目状态、内存事件通道）
+  // 事务成功：只发布内存镜像。
+  // 数据库侧（manifest CAS、project、event、audit）已由 acceptSegmentFallbackCommit
+  // 在单个事务内完成；这里不再调用 syncProject / appendAssetsRunEvent，避免
+  // 重复写入与"数据库已提交但接口报错"的模糊状态。
   db.assetManifestRecords.set(candidateRecord.id, candidateRecord);
   project.updatedAt = new Date();
   project.status = targetProjectStatus;
-  await db.firstAggregateWriter?.syncProject(project);
-
-  await appendAssetsRunEvent({
-    db,
-    runId,
-    eventType: "fallback_accepted",
-    segmentId,
-    eventJson: {
-      reason: "user_accept_fallback",
-      visual_route_type: "image_with_motion",
-      actor_user_id: actorUserId,
-    },
-  });
+  if (!txCommit) {
+    // 无事务 writer（内存模式）：顺序补项目同步与内存事件通道
+    await db.firstAggregateWriter?.syncProject(project);
+    await appendAssetsRunEvent({
+      db,
+      runId,
+      eventType: "fallback_accepted",
+      segmentId,
+      eventJson: {
+        reason: "user_accept_fallback",
+        visual_route_type: "image_with_motion",
+        actor_user_id: actorUserId,
+      },
+    });
+  }
 
   return {
     statusCode: 200,

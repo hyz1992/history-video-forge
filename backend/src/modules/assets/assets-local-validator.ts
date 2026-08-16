@@ -216,10 +216,11 @@ export async function validateAssetsManifest(input: {
         }
       }
       if (
-        route.visual_route_type !== "video_clip" &&
         route.fallback_visual_artifact_id &&
         !producerOutputs.image.has(route.fallback_visual_artifact_id)
       ) {
+        // 所有路线的静态 fallback 都必须来自同段 image producer，
+        // 成功 API 视频也不能引用其他段的图片作为 fallback。
         pushUnique(errors, "assets_segment_visual_producer_mismatch");
       }
       if (

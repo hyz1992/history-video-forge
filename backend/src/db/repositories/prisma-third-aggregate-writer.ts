@@ -260,7 +260,9 @@ export class PrismaThirdAggregateWriter {
           segmentId: input.segmentId,
           eventJson: {
             reason: "user_accept_fallback",
-            visual_route_type: "image_with_motion",
+            old_route: "video_clip",
+            new_route: "image_with_motion",
+            actor_user_id: input.actorUserId,
           },
         },
       });
