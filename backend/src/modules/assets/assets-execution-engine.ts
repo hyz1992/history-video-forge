@@ -10,6 +10,7 @@ import type {
   AssetTaskExecution,
 } from "../../../../shared/src/index.js";
 import type { DbClient } from "../../db/client.js";
+import { appendAssetsRunEvent } from "./assets-run.service.js";
 import { createAssetProviderJobRecord } from "./asset-provider-job.repository.js";
 import type {
   AssetProviderAdapter,
@@ -134,6 +135,8 @@ export async function executeAssetManifest(
           manifestCopy,
           planTask,
           execution,
+          db,
+          assetRunId,
           "video_provider_unavailable",
           "no video adapter in registry",
         );
@@ -216,6 +219,8 @@ async function runAdapterPipeline(
         manifest,
         planTask,
         execution,
+        db,
+        assetRunId,
         pollResult.errorCode ?? "video_provider_error",
         pollResult.errorMessage ?? "no message",
       );
@@ -279,7 +284,15 @@ async function runAdapterPipeline(
       `[engine] adapter pipeline error: ${message}`,
     ];
     // S2-2A 任务 6：管线异常同样按段视频策略处理
-    handleVideoStrategyFailure(manifest, planTask, execution, "adapter_pipeline_error", message);
+    handleVideoStrategyFailure(
+      manifest,
+      planTask,
+      execution,
+      db,
+      assetRunId,
+      "adapter_pipeline_error",
+      message,
+    );
   }
 }
 
@@ -306,6 +319,8 @@ function handleVideoStrategyFailure(
   manifest: AssetManifest,
   planTask: AssetPlan["tasks"][number],
   execution: AssetManifest["executions"][number],
+  db: DbClient,
+  assetRunId: string,
   reasonCode: string,
   reasonMessage: string,
 ): void {
@@ -354,6 +369,18 @@ function handleVideoStrategyFailure(
   // 自动降级成功 → execution 进入 validator 认可的终态，允许继续 Compose
   execution.status = "skipped_with_fallback";
   execution.completed_at = new Date().toISOString();
+  // S2-2A 任务 6 整改：自动降级写正式 append-only run event
+  appendAssetsRunEvent({
+    db,
+    runId: assetRunId,
+    eventType: "automatic_fallback",
+    segmentId: route.segment_id,
+    eventJson: {
+      reason_code: reasonCode,
+      reason_message: reasonMessage,
+      fallback_decision: "automatic",
+    },
+  });
 }
 
 /**

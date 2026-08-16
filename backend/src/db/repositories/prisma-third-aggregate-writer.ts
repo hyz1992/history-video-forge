@@ -26,7 +26,7 @@ function assertValidNullableMicros(value: string | null, field: string): void {
   if (value !== null) assertValidMicros(value, field);
 }
 
-const manifestData = (record: AssetManifestRecord) => ({ projectId: record.projectId, topicPackageId: record.topicPackageId, scriptRecordId: record.scriptRecordId, storyboardRecordId: record.storyboardRecordId, assetPlanRecordId: record.assetPlanRecordId, manifestJson: record.manifestJson as never, validationResultJson: record.validationResultJson as never, executionStateJson: record.executionStateJson as never, graphTraceSummaryJson: record.graphTraceSummaryJson as never, runtimeDiagnosticsJson: record.runtimeDiagnosticsJson as never });
+const manifestData = (record: AssetManifestRecord) => ({ projectId: record.projectId, revision: record.revision, topicPackageId: record.topicPackageId, scriptRecordId: record.scriptRecordId, storyboardRecordId: record.storyboardRecordId, assetPlanRecordId: record.assetPlanRecordId, manifestJson: record.manifestJson as never, validationResultJson: record.validationResultJson as never, executionStateJson: record.executionStateJson as never, graphTraceSummaryJson: record.graphTraceSummaryJson as never, runtimeDiagnosticsJson: record.runtimeDiagnosticsJson as never });
 const composeData = (record: ComposeRecord) => ({ projectId: record.projectId, assetManifestRecordId: record.assetManifestRecordId, timelineJson: record.timelineJson as never, validationResultJson: record.validationResultJson as never, executionStateJson: record.executionStateJson as never, graphTraceSummaryJson: record.graphTraceSummaryJson as never, runtimeDiagnosticsJson: record.runtimeDiagnosticsJson as never });
 const renderData = (record: RenderJobRecord) => ({ projectId: record.projectId, composeRecordId: record.composeRecordId, assetManifestRecordId: record.assetManifestRecordId, status: record.status, profileJson: record.profileJson as never, outputArtifactJson: record.outputArtifactJson as never, validationResultJson: record.validationResultJson as never, executionStateJson: record.executionStateJson as never, graphTraceSummaryJson: record.graphTraceSummaryJson as never, runtimeDiagnosticsJson: record.runtimeDiagnosticsJson as never });
 const publishData = (record: PublishPackageRecord) => ({ projectId: record.projectId, renderJobRecordId: record.renderJobRecordId, topicPackageId: record.topicPackageId, scriptRecordId: record.scriptRecordId, storyboardRecordId: record.storyboardRecordId, assetManifestRecordId: record.assetManifestRecordId, packageJson: record.packageJson as never, validationResultJson: record.validationResultJson as never, executionStateJson: record.executionStateJson as never });
@@ -47,6 +47,25 @@ export class PrismaThirdAggregateWriter {
     await this.assertProjectScope(record.projectId, projectOwnerId);
     const data = manifestData(record);
     await this.client.assetManifestRecord.upsert({ where: { id: record.id }, create: { id: record.id, ...data, createdAt: record.createdAt }, update: data });
+  }
+
+  /**
+   * S2-2A 任务 6：数据库原子 CAS 保存（accept-fallback 用）。
+   * 仅当记录存在且 revision 等于预期值时更新，并把 revision 递增 1；
+   * 失败返回 false，调用方按版本冲突处理。
+   */
+  async casUpsertAssetManifest(
+    record: AssetManifestRecord,
+    expectedRevision: number,
+    projectOwnerId: string,
+  ): Promise<boolean> {
+    await this.assertProjectScope(record.projectId, projectOwnerId);
+    const data = manifestData(record);
+    const result = await this.client.assetManifestRecord.updateMany({
+      where: { id: record.id, revision: expectedRevision },
+      data: { ...data, revision: { increment: 1 } },
+    });
+    return result.count === 1;
   }
   async saveCompose(record: ComposeRecord, projectOwnerId: string): Promise<void> {
     await this.assertProjectScope(record.projectId, projectOwnerId);

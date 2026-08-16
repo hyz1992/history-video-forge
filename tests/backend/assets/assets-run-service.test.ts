@@ -37,10 +37,7 @@ import type {
   SegmentAssetRoute,
 } from "../../../shared/src/index.js";
 import { DEFAULT_GENERATION_CONFIGURATION } from "../../../shared/src/index.js";
-import {
-  acceptSegmentFallback,
-  manifestFallbackVersion,
-} from "../../../backend/src/modules/assets/assets-run.service.js";
+import { acceptSegmentFallback } from "../../../backend/src/modules/assets/assets-run.service.js";
 import { validateAssetsManifest } from "../../../backend/src/modules/assets/assets-local-validator.js";
 
 const TOPIC_PACKAGE_ID = "topic_001";
@@ -1152,19 +1149,42 @@ describe("execution engine integration", () => {
       runId,
       segmentId: "sb_001",
       expectedRunId: runId,
-      expectedVersion: manifestFallbackVersion(manifest),
+      expectedVersion: String(record.revision),
     });
     expect(accept.statusCode).toBe(200);
 
     // reload：决策与事件持久化在记录中
     const reloaded = db.assetManifestRecords.get(project.activeAssetManifestRecordId!)!;
-    const reloadedRoute = (reloaded.manifestJson as { segment_routes: SegmentAssetRoute[] }).segment_routes[0]!;
+    const reloadedManifest = reloaded.manifestJson as AssetManifest;
+    const reloadedRoute = (reloadedManifest as { segment_routes: SegmentAssetRoute[] }).segment_routes[0]!;
     expect(reloadedRoute.visual_route_type).toBe("image_with_motion");
     expect(reloadedRoute.fallback_decision).toBe("user_accepted");
     expect(reloadedRoute.readiness).toBe("ready");
-    expect(reloaded.executionStateJson?.events).toContainEqual(
-      expect.objectContaining({ event_type: "fallback_accepted", segment_id: "sb_001" }),
+    // C1：接受后 video execution 进入终态，validator 放行 → 可继续 Compose
+    const reloadedVideoExec = reloadedManifest.executions.find(
+      (e) => e.task_type === "video_clip",
+    )!;
+    expect(reloadedVideoExec.status).toBe("skipped_with_fallback");
+    const postAcceptValidation = await validateAssetsManifest({
+      assetPlanRecordId: reloaded.assetPlanRecordId,
+      storyboardRecordId: reloaded.storyboardRecordId,
+      scriptRecordId: reloaded.scriptRecordId,
+      topicPackageId: reloaded.topicPackageId,
+      assetPlan: db.assetPlanRecords.get(reloaded.assetPlanRecordId)!.planJson as AssetPlan,
+      manifest: reloadedManifest,
+      projectStorageRootDir: project.storageRootDir,
+    });
+    // errors 为空即放行 Compose；warnings 只产生 partial（可继续）
+    expect(postAcceptValidation.errors).toEqual([]);
+    expect(postAcceptValidation.decision).not.toBe("blocked");
+    expect(project.status).not.toBe("assets_blocked");
+    // 正式 append-only run event
+    const events = db.generationRunEvents.get(runId) ?? [];
+    expect(events).toContainEqual(
+      expect.objectContaining({ eventType: "fallback_accepted", segmentId: "sb_001" }),
     );
+    // CAS：接受后 revision 递增
+    expect(reloaded.revision).toBeGreaterThan(1);
   });
 
   it("partial retry preserves the automatic fallback decision from the previous run", async () => {

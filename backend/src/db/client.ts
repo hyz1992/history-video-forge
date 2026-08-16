@@ -155,6 +155,8 @@ export interface AssetManifestRecord {
   scriptRecordId: string;
   storyboardRecordId: string;
   assetPlanRecordId: string;
+  /** S2-2A 任务 6：乐观并发版本号（accept-fallback 的数据库原子 CAS）。 */
+  revision: number;
   manifestJson: Record<string, unknown>;
   validationResultJson: Record<string, unknown>;
   executionStateJson: Record<string, unknown> | null;
@@ -493,6 +495,12 @@ export interface DbClient {
   };
   thirdAggregateWriter?: {
     saveAssetManifest(record: AssetManifestRecord, projectOwnerId: string): Promise<void>;
+    /** S2-2A 任务 6：数据库原子 CAS 保存；revision 不匹配返回 false。 */
+    casUpsertAssetManifest?(
+      record: AssetManifestRecord,
+      expectedRevision: number,
+      projectOwnerId: string,
+    ): Promise<boolean>;
     saveCompose(record: ComposeRecord, projectOwnerId: string): Promise<void>;
     saveRender(record: RenderJobRecord, projectOwnerId: string): Promise<void>;
     savePublish(record: PublishPackageRecord, projectOwnerId: string): Promise<void>;

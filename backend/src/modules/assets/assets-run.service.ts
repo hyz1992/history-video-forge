@@ -90,6 +90,98 @@ function isDefaultRouteDecision(field: string, value: unknown): boolean {
   }
 }
 
+/**
+ * S2-2A 任务 6：为 assets run 建立正式 GenerationRun 与配置快照（幂等）。
+ * run event 的 generationRunId 必须指向存在的 GenerationRun（外键约束）。
+ */
+function ensureAssetsGenerationRun(input: {
+  db: DbClient;
+  project: ProjectRecord;
+  runId: string;
+  configResult: Awaited<ReturnType<typeof getProjectGenerationConfiguration>>;
+  segmentIds: string[];
+}) {
+  const { db, project, runId, configResult, segmentIds } = input;
+  if (db.generationRuns.has(runId)) return;
+
+  const snapshot: import("../../db/client.js").RunConfigurationSnapshotRecord = {
+    id: db.generateId(),
+    projectId: project.id,
+    userId: project.ownerId,
+    stage: "assets",
+    operation: "assets.generate",
+    runId,
+    projectConfigurationRevision: configResult.revision,
+    schemaVersion: configResult.schemaVersion,
+    configurationHash: deterministicHash(canonicalStringify(configResult.configuration)),
+    resolvedConfigurationJson: configResult.configuration,
+    resolutionTraceJson: [],
+    quoteId: null,
+    quoteFingerprint: null,
+    estimatedCostMicros: null,
+    authorizationCostMicros: null,
+    budgetLimitMicros: null,
+    budgetOverrideAuthorized: false,
+    pricingHash: null,
+    pricingVersionSetJson: [],
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  const run: import("../../db/client.js").GenerationRunRecord = {
+    id: runId,
+    projectId: project.id,
+    userId: project.ownerId,
+    operation: "assets.generate",
+    idempotencyKey: runId,
+    payloadFingerprint: deterministicHash(canonicalStringify({ segmentIds })),
+    quoteId: null,
+    runConfigurationSnapshotId: snapshot.id,
+    dispatchPayloadJson: { segmentIds },
+    status: "running",
+    dispatchLeaseOwner: null,
+    dispatchLeaseExpiresAt: null,
+    dispatchClaimCount: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+  db.runConfigurationSnapshots.set(snapshot.id, snapshot);
+  db.generationRuns.set(run.id, run);
+  try {
+    void db.thirdAggregateWriter?.appendRunConfigurationSnapshot(snapshot);
+    void db.thirdAggregateWriter?.saveGenerationRun(run);
+  } catch {
+    // 事件/审计持久化失败不阻断资产生成主流程
+  }
+}
+
+/**
+ * S2-2A 任务 6：追加 append-only run event（不提供 update）。
+ * 审计写入失败只记警告，不阻断业务。
+ */
+export function appendAssetsRunEvent(input: {
+  db: DbClient;
+  runId: string;
+  eventType: "automatic_fallback" | "fallback_accepted";
+  segmentId: string | null;
+  eventJson: Record<string, unknown>;
+}) {
+  const { db, runId, eventType, segmentId, eventJson } = input;
+  const record: import("../../db/client.js").GenerationRunEventRecord = {
+    id: db.generateId(),
+    generationRunId: runId,
+    eventType,
+    segmentId,
+    eventJson,
+    createdAt: new Date(),
+  };
+  db.generationRunEvents.set(runId, [...(db.generationRunEvents.get(runId) ?? []), record]);
+  try {
+    void db.thirdAggregateWriter?.appendGenerationRunEvent(record);
+  } catch {
+    console.warn("[assets] run event persistence failed");
+  }
+}
+
 function isRealArtifact(art: Record<string, unknown>): boolean {
   const uri = typeof art.file_uri === "string" ? art.file_uri : "";
   return uri.length > 0 && !uri.startsWith("planned://");
@@ -509,20 +601,20 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
 
   // Step 6a-0: S2-2A 任务 6——解析项目视频策略并写入每条 route。
   // 策略是项目冻结配置（客户端不可覆盖），决定 API 视频失败时严格阻塞或自动降级。
-  let videoStrategy: GenerationConfigurationV1["video"]["strategy"] = "prefer_remotion";
+  let configResult: Awaited<ReturnType<typeof getProjectGenerationConfiguration>>;
   try {
-    const configResult = await getProjectGenerationConfiguration(
+    configResult = await getProjectGenerationConfiguration(
       db,
       project.id,
       project.ownerId,
     );
-    videoStrategy = configResult.configuration.video.strategy;
   } catch {
     return {
       statusCode: 500,
       body: { error: "assets_video_strategy_resolution_failed" },
     };
   }
+  const videoStrategy = configResult.configuration.video.strategy;
   for (const route of manifest.segment_routes) {
     route.video_strategy = videoStrategy;
   }
@@ -673,6 +765,16 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     projectStorageRootDir: project.storageRootDir,
     runId,
   });
+
+  // S2-2A 任务 6 整改：建立正式 GenerationRun + 配置快照，供 append-only
+  // run event（automatic_fallback / fallback_accepted）引用。
+  ensureAssetsGenerationRun({
+    db,
+    project,
+    runId,
+    configResult,
+    segmentIds,
+  });
   let executionManifestRecordId: string | null = null;
 
   // Set active pointer BEFORE execution so refresh during generation shows status
@@ -809,6 +911,12 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
             if (key === "visual_route_type") continue;
             merged[key] = value;
           }
+        }
+        // S2-2A 任务 6 整改：touched 段的策略决策字段以本轮新决策为准
+        // （非默认值时覆盖旧值，避免视频重试产生的新 fallback 决策丢失）。
+        for (const field of ["video_strategy", "fallback_decision", "route_events", "notes"] as const) {
+          const newVal = newRoute[field];
+          if (!isDefaultRouteDecision(field, newVal)) merged[field] = newVal;
         }
         mergedRoutes.push(merged);
       }
@@ -1016,6 +1124,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
       project_id: project.id,
       asset_manifest_record_id: assetManifestRecord.id,
       source_asset_plan_record_id: assetPlanRecord.id,
+      version: String(assetManifestRecord.revision),
       manifest,
       local_validation: localValidation,
       execution_state: executionState,
@@ -1211,10 +1320,7 @@ export interface AcceptSegmentFallbackInput {
   expectedVersion: string;
 }
 
-/** 计算 manifest 内容指纹，作为 accept-fallback 的并发版本（CAS）。 */
-export function manifestFallbackVersion(manifest: AssetManifest): string {
-  return deterministicHash(canonicalStringify(manifest));
-}
+
 
 /**
  * S2-2A 任务 6：用户显式接受严格模式（all_api_video）失败段的 Remotion fallback。
@@ -1253,8 +1359,15 @@ export async function acceptSegmentFallback(
   }
 
   const manifest = manifestRecord.manifestJson as unknown as AssetManifest;
-  // CAS：客户端必须基于当前 manifest 指纹接受，防止并发覆盖。
-  if (manifestFallbackVersion(manifest) !== expectedVersion) {
+  // CAS：客户端必须基于当前 revision 接受，防止并发覆盖。
+  const expectedRevision = Number.parseInt(expectedVersion, 10);
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) {
+    return {
+      statusCode: 422,
+      body: { error: "expected_version_invalid" },
+    };
+  }
+  if (expectedRevision !== manifestRecord.revision) {
     return {
       statusCode: 409,
       body: { error: "assets_fallback_version_mismatch" },
@@ -1283,11 +1396,33 @@ export async function acceptSegmentFallback(
   const motionArtifact = route.motion_artifact_id
     ? manifest.artifacts.find((item) => item.artifact_id === route.motion_artifact_id)
     : undefined;
+  // I5 整改：anchor/motion 必须由当前 segment 的 image_still / render_motion_cue
+  // execution 产出（output_artifact_ids 证据），跨段 artifact 不得激活 fallback。
+  const producerPlanRecord = db.assetPlanRecords.get(manifestRecord.assetPlanRecordId);
+  const producerTaskIds = new Set(
+    producerPlanRecord
+      ? (producerPlanRecord.planJson as unknown as AssetPlan).tasks
+          .filter(
+            (task) =>
+              task.source_segment_id === segmentId &&
+              (task.task_type === "image_still" ||
+                task.task_type === "render_motion_cue"),
+          )
+          .map((task) => task.task_id)
+      : [],
+  );
+  const producerOutputs = new Set(
+    manifest.executions
+      .filter((execution) => producerTaskIds.has(execution.task_id))
+      .flatMap((execution) => execution.output_artifact_ids),
+  );
   if (
     !anchorArtifact ||
     anchorArtifact.artifact_type !== "image" ||
+    !producerOutputs.has(anchorArtifactId ?? "") ||
     !motionArtifact ||
-    motionArtifact.artifact_type !== "motion_recipe"
+    motionArtifact.artifact_type !== "motion_recipe" ||
+    !producerOutputs.has(route.motion_artifact_id ?? "")
   ) {
     return {
       statusCode: 409,
@@ -1311,6 +1446,31 @@ export async function acceptSegmentFallback(
     ...route.notes,
     `[strategy] user accepted Remotion fallback for segment ${segmentId} (run ${runId})`,
   ];
+
+  // 该段的 video execution 转为 validator 认可的终态，
+  // 否则 manifest/project 仍保持 blocked，无法继续 Compose。
+  const assetPlanRecordForExec = db.assetPlanRecords.get(manifestRecord.assetPlanRecordId);
+  if (assetPlanRecordForExec) {
+    const assetPlanForExec = assetPlanRecordForExec.planJson as unknown as AssetPlan;
+    const segmentVideoTaskIds = new Set(
+      assetPlanForExec.tasks
+        .filter(
+          (task) =>
+            task.task_type === "video_clip" &&
+            task.source_segment_id === segmentId,
+        )
+        .map((task) => task.task_id),
+    );
+    for (const execution of manifest.executions) {
+      if (!segmentVideoTaskIds.has(execution.task_id)) continue;
+      execution.status = "skipped_with_fallback";
+      execution.completed_at = new Date().toISOString();
+      execution.notes = [
+        ...execution.notes,
+        `[strategy] user accepted Remotion fallback for segment ${segmentId} (run ${runId})`,
+      ];
+    }
+  }
 
   // 重跑 validator 更新 manifest 就绪度与项目状态
   const assetPlanRecord = db.assetPlanRecords.get(manifestRecord.assetPlanRecordId);
@@ -1337,28 +1497,38 @@ export async function acceptSegmentFallback(
   }
 
   manifestRecord.manifestJson = manifest as unknown as Record<string, unknown>;
-  // 在 execution state 追加可审计事件（fallback_accepted run event）
-  const executionState = {
-    ...(manifestRecord.executionStateJson ?? {}),
-    events: [
-      ...(Array.isArray(manifestRecord.executionStateJson?.events)
-        ? manifestRecord.executionStateJson.events
-        : []),
-      {
-        event_type: "fallback_accepted",
-        segment_id: segmentId,
-        run_id: runId,
-        occurred_at: new Date().toISOString(),
-      },
-    ],
-  };
-  manifestRecord.executionStateJson = executionState;
   project.updatedAt = new Date();
+
+  // S2-2A 任务 6 整改：fallback_accepted 写入正式 append-only run event
+  // （GenerationRunEvent），不放入可被整体覆盖的 executionStateJson。
+  appendAssetsRunEvent({
+    db,
+    runId,
+    eventType: "fallback_accepted",
+    segmentId,
+    eventJson: {
+      reason: "user_accept_fallback",
+      visual_route_type: "image_with_motion",
+    },
+  });
 
   // S2-2A 任务 6 整改：接受结果必须持久化（Prisma writer + 项目同步），
   // 只改内存会在重启后丢失。
   const projectOwnerId = db.projects.get(project.id)?.ownerId ?? "system";
-  await db.thirdAggregateWriter?.saveAssetManifest(manifestRecord, projectOwnerId);
+  const casWriter = db.thirdAggregateWriter?.casUpsertAssetManifest;
+  if (casWriter) {
+    // 数据库原子 CAS：revision 不匹配说明并发修改，拒绝本次接受
+    const applied = await casWriter(manifestRecord, expectedRevision, projectOwnerId);
+    if (!applied) {
+      return {
+        statusCode: 409,
+        body: { error: "assets_fallback_version_mismatch" },
+      };
+    }
+  } else {
+    await db.thirdAggregateWriter?.saveAssetManifest(manifestRecord, projectOwnerId);
+  }
+  manifestRecord.revision += 1;
   await db.firstAggregateWriter?.syncProject(project);
 
   return {
@@ -1367,7 +1537,7 @@ export async function acceptSegmentFallback(
       project_id: project.id,
       asset_manifest_record_id: manifestRecord.id,
       segment_id: segmentId,
-      version: manifestFallbackVersion(manifest),
+      version: String(manifestRecord.revision),
       manifest,
     },
   };

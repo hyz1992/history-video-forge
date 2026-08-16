@@ -3,10 +3,12 @@ import { normalizeAssetManifestDates } from "./manifest-date-normalizer.js";
 
 export type SaveAssetManifestRecordInput = Omit<
   AssetManifestRecord,
-  "id" | "createdAt"
+  "id" | "createdAt" | "revision"
 > & {
   id?: string;
   createdAt?: Date;
+  /** 乐观并发版本号；缺省 1（新记录）。 */
+  revision?: number;
 };
 
 export async function saveAssetManifestRecord(
@@ -15,6 +17,7 @@ export async function saveAssetManifestRecord(
 ): Promise<AssetManifestRecord> {
   const record: AssetManifestRecord = {
     id: input.id ?? db.generateId(),
+    revision: input.revision ?? 1,
     projectId: input.projectId,
     topicPackageId: input.topicPackageId,
     scriptRecordId: input.scriptRecordId,

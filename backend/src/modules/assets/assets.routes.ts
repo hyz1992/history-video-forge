@@ -576,6 +576,8 @@ async function upgradeSegmentToVideoController(
 
   const segmentId = context.params.segmentId;
   const payload = context.payload as Record<string, unknown>;
+  const credentialsBlock = rejectClientProviderCredentials(payload);
+  if (credentialsBlock) return credentialsBlock;
 
   // Validate the project has an active asset plan and manifest
   if (!project.activeAssetManifestRecordId) {

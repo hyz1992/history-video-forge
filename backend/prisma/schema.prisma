@@ -350,6 +350,7 @@ model AssetPlanRecord {
 model AssetManifestRecord {
   id                     String                   @id @default(uuid())
   projectId              String
+  revision               Int                      @default(1)
   topicPackageId         String
   scriptRecordId         String
   storyboardRecordId     String
