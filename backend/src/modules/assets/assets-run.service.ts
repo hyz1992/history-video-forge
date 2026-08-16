@@ -148,15 +148,19 @@ async function ensureAssetsGenerationRun(input: {
   };
   db.runConfigurationSnapshots.set(snapshot.id, snapshot);
   db.generationRuns.set(run.id, run);
-  // C1 整改：按依赖顺序 await（run 依赖 snapshot，event 依赖 run），
-  // 避免外键竞态；写入失败只记警告，不阻断资产生成主流程。
+  // I 整改：正式 run/snapshot 持久化失败必须阻断派发（Provider 调用前），
+  // 否则后续 run event 会因缺少外键父记录而丢失，且无法证明运行来源。
   try {
     if (db.thirdAggregateWriter) {
       await db.thirdAggregateWriter.appendRunConfigurationSnapshot(snapshot);
       await db.thirdAggregateWriter.saveGenerationRun(run);
     }
   } catch (error) {
-    console.warn("[assets] generation run persistence failed", error);
+    db.generationRuns.delete(run.id);
+    db.runConfigurationSnapshots.delete(snapshot.id);
+    throw new Error(
+      `assets_generation_run_persistence_failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }
 
@@ -192,22 +196,31 @@ export async function appendAssetsRunEvent(input: {
 
 /**
  * S2-2A 任务 6：正式 GenerationRun 状态收尾（succeeded/failed）。
+ * throwOnFailure=true（成功路径）：数据库收尾失败必须显式失败，不能把
+ * "重启后仍 running" 当成功；false（失败路径）：标记 needs_reconciliation
+ * 并警告，避免覆盖原有业务错误。
  */
 async function finalizeAssetsGenerationRun(
   db: DbClient,
   runId: string,
   status: "succeeded" | "failed",
+  options: { throwOnFailure?: boolean } = {},
 ) {
   const run = db.generationRuns.get(runId);
   if (!run) return;
   run.status = status;
   run.updatedAt = new Date();
+  if (!db.thirdAggregateWriter) return;
   try {
-    if (db.thirdAggregateWriter) {
-      await db.thirdAggregateWriter.saveGenerationRun(run);
-    }
+    await db.thirdAggregateWriter.saveGenerationRun(run);
   } catch (error) {
-    console.warn("[assets] generation run finalize failed", error);
+    run.status = "needs_reconciliation";
+    if (options.throwOnFailure) {
+      throw new Error(
+        `assets_generation_run_finalize_failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    console.warn("[assets] generation run finalize failed, marked needs_reconciliation", error);
   }
 }
 
@@ -1196,8 +1209,9 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     traceSummary: traceSummary as unknown as Record<string, unknown>,
   });
 
-  // C1 整改：正式 run 收尾为 succeeded（失败路径在 catch 中置 failed）
-  await finalizeAssetsGenerationRun(db, runId, "succeeded");
+  // C1 整改：正式 run 收尾为 succeeded（失败路径在 catch 中置 failed）；
+  // 成功路径的收尾失败必须显式暴露（throwOnFailure）。
+  await finalizeAssetsGenerationRun(db, runId, "succeeded", { throwOnFailure: true });
 
   return {
     statusCode: 200,
@@ -1618,9 +1632,10 @@ export async function acceptSegmentFallback(
 
   // C2 整改：数据库原子事务（CAS manifest + project + run event + audit），
   // 任一失败整体回滚；成功后才发布内存状态。
-  const txCommit = db.thirdAggregateWriter?.acceptSegmentFallbackCommit;
-  if (txCommit) {
-    const applied = await txCommit({
+  // 注意：必须保留 writer 接收者调用类方法，解绑提取会丢失 this。
+  const writer = db.thirdAggregateWriter;
+  if (writer?.acceptSegmentFallbackCommit) {
+    const applied = await writer.acceptSegmentFallbackCommit({
       manifestRecord: candidateRecord,
       expectedRevision,
       projectStatus: targetProjectStatus,
@@ -1635,11 +1650,10 @@ export async function acceptSegmentFallback(
         body: { error: "assets_fallback_version_mismatch" },
       };
     }
-  } else {
-    // 无 writer（内存模式）：顺序执行 CAS/保存，事件只写内存通道
-    const casWriter = db.thirdAggregateWriter?.casUpsertAssetManifest;
-    if (casWriter) {
-      const applied = await casWriter(candidateRecord, expectedRevision, projectOwnerId);
+  } else if (writer) {
+    // 无事务能力（旧 writer）：顺序执行 CAS/保存，事件只写内存通道
+    if (writer.casUpsertAssetManifest) {
+      const applied = await writer.casUpsertAssetManifest(candidateRecord, expectedRevision, projectOwnerId);
       if (!applied) {
         return {
           statusCode: 409,
@@ -1647,7 +1661,7 @@ export async function acceptSegmentFallback(
         };
       }
     } else {
-      await db.thirdAggregateWriter?.saveAssetManifest(candidateRecord, projectOwnerId);
+      await writer.saveAssetManifest(candidateRecord, projectOwnerId);
     }
   }
   candidateRecord.revision = expectedRevision + 1;
@@ -1659,7 +1673,25 @@ export async function acceptSegmentFallback(
   db.assetManifestRecords.set(candidateRecord.id, candidateRecord);
   project.updatedAt = new Date();
   project.status = targetProjectStatus;
-  if (!txCommit) {
+  if (writer?.acceptSegmentFallbackCommit) {
+    // 事务已写数据库；把事件镜像到内存通道，进程内事件视图与数据库一致
+    db.generationRunEvents.set(runId, [
+      ...(db.generationRunEvents.get(runId) ?? []),
+      {
+        id: db.generateId(),
+        generationRunId: runId,
+        eventType: "fallback_accepted",
+        segmentId,
+        eventJson: {
+          reason: "user_accept_fallback",
+          old_route: "video_clip",
+          new_route: "image_with_motion",
+          actor_user_id: actorUserId,
+        },
+        createdAt: new Date(),
+      },
+    ]);
+  } else {
     // 无事务 writer（内存模式）：顺序补项目同步与内存事件通道
     await db.firstAggregateWriter?.syncProject(project);
     await appendAssetsRunEvent({

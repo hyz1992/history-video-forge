@@ -8,6 +8,9 @@ import Database from "better-sqlite3";
 import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
 import { PrismaThirdAggregateWriter } from "../../../backend/src/db/repositories/prisma-third-aggregate-writer.js";
 import { applyAllDatabaseMigrations } from "./migration-test-utils.js";
+import { createDbClient } from "../../../backend/src/db/client.js";
+import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
+import { acceptSegmentFallback } from "../../../backend/src/modules/assets/assets-run.service.js";
 import type {
   AssetManifestRecord,
   GenerationRunRecord,
@@ -241,6 +244,136 @@ describe("S2-2A accept-fallback Prisma transaction", () => {
       expect(events).toHaveLength(0);
       const audits = await client.auditLog.findMany();
       expect(audits).toHaveLength(0);
+    } finally {
+      await client.$disconnect();
+    }
+  });
+});
+
+describe("S2-2A accept-fallback service over real Prisma writer", () => {
+  it("accepts through the service without losing writer this-binding", async () => {
+    const databasePath = createMigratedDatabase();
+    const client = await createPrismaClient(databasePath);
+    try {
+      await client.user.create({ data: { id: "u1", username: "t", displayName: "T", passwordHash: "h", role: "USER" } });
+      await client.project.create({
+        data: { id: "p1", name: "P1", ownerId: "u1", createdById: "u1", status: "assets_blocked", storageKey: "p1", storageDisplayName: "P1", storageRenameLocked: false },
+      });
+      await seedSourceChain(client as never, "p1");
+      const writer = new PrismaThirdAggregateWriter(client);
+      await writer.appendRunConfigurationSnapshot(snapshotRecord("p1", "snap1"));
+      await writer.saveGenerationRun(runRecord("p1", "run_1", "snap1"));
+      await writer.saveAssetManifest(manifestRecord("p1", "manifest_1", 1), "u1");
+
+      // 内存 db 镜像（service 读取的视图），并挂真实 Prisma writer
+      const db = createDbClient();
+      const project = await createProject(db, { name: "P1", ownerId: "u1" });
+      project.id = "p1";
+      project.status = "assets_blocked";
+      db.projects.set("p1", project);
+      const dbManifest = manifestRecord("p1", "manifest_1", 1);
+      dbManifest.manifestJson = {
+        manifest_version: "asset_manifest_v1",
+        segment_routes: [
+          {
+            segment_id: "sb_001",
+            tts_artifact_id: null,
+            subtitle_artifact_id: null,
+            primary_visual_artifact_id: "artifact_img_1",
+            visual_route_type: "video_clip",
+            motion_artifact_id: "artifact_motion_1",
+            fallback_visual_artifact_id: "artifact_img_1",
+            sfx_artifact_ids: [],
+            bgm_placement_ids: [],
+            readiness: "blocked_waiting_user",
+            notes: [],
+          },
+        ],
+        executions: [
+          { execution_id: "exec_img_1", task_id: "task_img_1", task_type: "image_still", status: "completed", origin: "provider", started_at: "2026-01-01T00:00:00.000Z", completed_at: "2026-01-01T00:00:00.000Z", provider_id: "fake", attempts: 1, output_artifact_ids: ["artifact_img_1"], notes: [] },
+          { execution_id: "exec_motion_1", task_id: "task_motion_1", task_type: "render_motion_cue", status: "completed", origin: "local", started_at: "2026-01-01T00:00:00.000Z", completed_at: "2026-01-01T00:00:00.000Z", provider_id: null, attempts: 0, output_artifact_ids: ["artifact_motion_1"], notes: [] },
+          { execution_id: "exec_video_1", task_id: "task_video_1", task_type: "video_clip", status: "failed", origin: "provider", started_at: "2026-01-01T00:00:00.000Z", completed_at: "2026-01-01T00:00:00.000Z", provider_id: "fake", attempts: 1, output_artifact_ids: [], notes: [] },
+        ],
+        artifacts: [
+          { artifact_id: "artifact_img_1", artifact_type: "image", origin: "provider", file_uri: "generated://img.png", created_at: "2026-01-01T00:00:00.000Z", metadata: {} },
+          { artifact_id: "artifact_motion_1", artifact_type: "motion_recipe", origin: "inline", file_uri: "inline://motion-recipe/1", created_at: "2026-01-01T00:00:00.000Z", metadata: {} },
+        ],
+        audio_summary: {
+          voice_profile_id: "v",
+          tts_total_duration_sec: null,
+          tts_chunk_artifact_ids: [],
+          tts_chunk_routes: [],
+          tts_merged_artifact_id: null,
+          subtitle_artifact_id: null,
+          bgm_placements: [],
+          sfx_artifact_ids: [],
+        },
+      };
+      dbManifest.executionStateJson = { run_id: "run_1", activated: true };
+      db.assetManifestRecords.set("manifest_1", dbManifest);
+      project.activeAssetManifestRecordId = "manifest_1";
+      db.assetPlanRecords.set("asset_plan_1", {
+        id: "asset_plan_1",
+        projectId: "p1",
+        topicPackageId: "topic_1",
+        scriptRecordId: "script_1",
+        storyboardRecordId: "storyboard_1",
+        planJson: {
+          plan_version: "asset_plan_v1",
+          source_storyboard_record_id: "storyboard_1",
+          source_script_record_id: "script_1",
+          source_topic_package_id: "topic_1",
+          art_bible: {},
+          visual_budget: {},
+          downgrade_policy: {},
+          global_audio_strategy: {},
+          tts_plan: { voice_profile_id: "v", estimated_total_duration_sec: 5, chunking_strategy: "segment_boundary", chunks: [] },
+          tasks: [
+            { task_id: "task_img_1", order: 0, task_type: "image_still", source_segment_id: "sb_001", source_excerpt: "x", production_intent: "i", recommended_mode: "auto", provider_hint: null, prompt_draft: null, parameters: {}, manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] }, risk_notes: [], cost_tier: "low", initial_status: "planned" },
+            { task_id: "task_motion_1", order: 1, task_type: "render_motion_cue", source_segment_id: "sb_001", source_excerpt: "x", production_intent: "m", recommended_mode: "auto", provider_hint: null, prompt_draft: null, parameters: {}, manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] }, risk_notes: [], cost_tier: "free", initial_status: "planned" },
+            { task_id: "task_video_1", order: 2, task_type: "video_clip", source_segment_id: "sb_001", source_excerpt: "x", production_intent: "v", recommended_mode: "auto", provider_hint: null, prompt_draft: null, parameters: {}, manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] }, risk_notes: [], cost_tier: "high", initial_status: "planned" },
+          ],
+          dependencies: [],
+          cost_summary: { total_tasks: 3, by_type: {}, by_cost_tier: { free: 0, low: 0, medium: 0, high: 0 }, estimated_provider_calls: 0, notes: [] },
+          global_production_notes: [],
+        },
+        validationResultJson: { stage: "asset_planning_local_validation", decision: "pass" },
+        executionStateJson: {},
+        graphTraceSummaryJson: null,
+        runtimeDiagnosticsJson: null,
+        createdAt: new Date(),
+      });
+      db.generationRuns.set("run_1", runRecord("p1", "run_1", "snap1"));
+      db.thirdAggregateWriter = writer as never;
+
+      const response = await acceptSegmentFallback({
+        db,
+        project,
+        runId: "run_1",
+        segmentId: "sb_001",
+        expectedRunId: "run_1",
+        expectedVersion: "1",
+        actorUserId: "u1",
+      });
+
+      // 服务层经真实 writer 事务路径成功（不再 TypeError）
+      expect(response.statusCode).toBe(200);
+      const body = response.body as { version: string; manifest: { segment_routes: Array<{ fallback_decision: string }> } };
+      expect(body.version).toBe("2");
+      expect(body.manifest.segment_routes[0]!.fallback_decision).toBe("user_accepted");
+
+      // 数据库侧：revision=2、event 恰好一条、audit 一条
+      const row = await client.assetManifestRecord.findUnique({ where: { id: "manifest_1" } });
+      expect(row?.revision).toBe(2);
+      const events = await client.generationRunEvent.findMany({ where: { generationRunId: "run_1" } });
+      expect(events).toHaveLength(1);
+      expect(events[0]!.eventType).toBe("fallback_accepted");
+      const audits = await client.auditLog.findMany({ where: { projectId: "p1" } });
+      expect(audits).toHaveLength(1);
+      expect(audits[0]!.actorUserId).toBe("u1");
+
+      // 进程内事件视图已镜像
+      expect(db.generationRunEvents.get("run_1") ?? []).toHaveLength(1);
     } finally {
       await client.$disconnect();
     }

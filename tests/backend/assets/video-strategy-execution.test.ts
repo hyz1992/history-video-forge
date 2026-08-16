@@ -647,4 +647,64 @@ describe("successful api video route validation", () => {
     expect(validation.errors).not.toContain("assets_segment_visual_producer_mismatch");
     expect(validation.errors).not.toContain("assets_execution_incomplete");
   });
+
+  it("fails a successful video_clip route whose static fallback points to another segment", async () => {
+    // 成功 API 视频的 primary 来自本段 video，但 fallback 引用跨段 image → 硬错误
+    const db = createDbClient();
+    const project = await createProject(db, { name: "Video Cross Fallback" });
+    const manifest = makeVideoManifest({ strategy: "prefer_api_video" });
+    manifest.segment_routes[0]!.visual_route_type = "video_clip";
+    manifest.segment_routes[0]!.primary_visual_artifact_id = "artifact_video_001";
+    manifest.segment_routes[0]!.fallback_visual_artifact_id = "artifact_img_cross";
+    manifest.segment_routes[0]!.readiness = "ready";
+    manifest.artifacts.push({
+      artifact_id: "artifact_video_001",
+      artifact_type: "video",
+      origin: "provider",
+      file_uri: "generated://video.mp4",
+      created_at: "2026-05-16T00:00:00.000Z",
+      metadata: { duration_sec: 5, width: 1080, height: 1920, fps: 30 },
+    });
+    manifest.artifacts.push({
+      artifact_id: "artifact_img_cross",
+      artifact_type: "image",
+      origin: "provider",
+      file_uri: "generated://cross.png",
+      created_at: "2026-05-16T00:00:00.000Z",
+      metadata: { width: 1080, height: 1920 },
+    });
+    const videoExecution = manifest.executions.find((e) => e.task_id === "video_001")!;
+    videoExecution.status = "completed";
+    videoExecution.completed_at = "2026-05-16T00:00:00.000Z";
+    videoExecution.provider_id = "fake_video";
+    videoExecution.attempts = 1;
+    videoExecution.output_artifact_ids = ["artifact_video_001"];
+    // 跨段 image 由另一个段的 producer 产出（本段 image producer 只有 artifact_img_001）
+    const plan = makeVideoAssetPlan();
+    db.assetPlanRecords.set("asset_plan_cross", {
+      id: "asset_plan_cross",
+      projectId: project.id,
+      topicPackageId: "topic_001",
+      scriptRecordId: "script_001",
+      storyboardRecordId: "storyboard_001",
+      planJson: plan,
+      validationResultJson: { stage: "asset_planning_local_validation", decision: "pass" },
+      executionStateJson: {},
+      graphTraceSummaryJson: null,
+      runtimeDiagnosticsJson: null,
+      createdAt: new Date(),
+    });
+
+    const validation = await validateAssetsManifest({
+      assetPlanRecordId: "asset_plan_cross",
+      storyboardRecordId: "storyboard_001",
+      scriptRecordId: "script_001",
+      topicPackageId: "topic_001",
+      assetPlan: plan,
+      manifest,
+      projectStorageRootDir: undefined,
+    });
+    // 跨段 fallback 必须失败（同段 image producer 只产出 artifact_img_001）
+    expect(validation.errors).toContain("assets_segment_visual_producer_mismatch");
+  });
 });
