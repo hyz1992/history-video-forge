@@ -406,6 +406,22 @@ async function handleVideoStrategyFailure(
     return;
   }
 
+  // S2-2A 任务 6 整改：正式 route_auto_downgraded 事件必须先成功落库，
+  // 持久化失败抛错 → 本次自动降级不得激活（route/execution 均不改动）。
+  await appendAssetsRunEvent({
+    db,
+    runId: assetRunId,
+    eventType: "route_auto_downgraded",
+    segmentId: route.segment_id,
+    eventJson: {
+      old_route: "video_clip",
+      new_route: "image_with_motion",
+      reason_code: reasonCode,
+      reason_message: reasonMessage,
+      fallback_decision: "automatic",
+    },
+  });
+
   if (route.primary_visual_artifact_id === null) {
     route.primary_visual_artifact_id = route.fallback_visual_artifact_id;
   }
@@ -424,20 +440,6 @@ async function handleVideoStrategyFailure(
   // 自动降级成功 → execution 进入 validator 认可的终态，允许继续 Compose
   execution.status = "skipped_with_fallback";
   execution.completed_at = new Date().toISOString();
-  // S2-2A 任务 6 整改：自动降级写正式 append-only run event
-  await appendAssetsRunEvent({
-    db,
-    runId: assetRunId,
-    eventType: "route_auto_downgraded",
-    segmentId: route.segment_id,
-    eventJson: {
-      old_route: "video_clip",
-      new_route: "image_with_motion",
-      reason_code: reasonCode,
-      reason_message: reasonMessage,
-      fallback_decision: "automatic",
-    },
-  });
 }
 
 /**

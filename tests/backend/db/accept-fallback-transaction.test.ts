@@ -80,6 +80,22 @@ async function seedSourceChain(
   });
 }
 
+function fallbackEventRecord(runId: string, segmentId: string) {
+  return {
+    id: "event_pregen_1",
+    generationRunId: runId,
+    eventType: "fallback_accepted" as const,
+    segmentId,
+    eventJson: {
+      reason: "user_accept_fallback",
+      old_route: "video_clip",
+      new_route: "image_with_motion",
+      actor_user_id: "u1",
+    },
+    createdAt: new Date("2026-08-17T00:00:00.000Z"),
+  };
+}
+
 function manifestRecord(projectId: string, id: string, revision: number): AssetManifestRecord {
   return {
     id, projectId, revision,
@@ -129,6 +145,7 @@ describe("S2-2A accept-fallback Prisma transaction", () => {
         projectOwnerId: "u1",
         runId: "run_1",
         segmentId: "sb_001",
+        event: fallbackEventRecord("run_1", "sb_001"),
       });
       expect(applied).toBe(true);
 
@@ -187,6 +204,7 @@ describe("S2-2A accept-fallback Prisma transaction", () => {
           projectOwnerId: "u1",
           runId: "run_1",
           segmentId: "sb_001",
+          event: fallbackEventRecord("run_1", "sb_001"),
         });
       };
 
@@ -232,6 +250,7 @@ describe("S2-2A accept-fallback Prisma transaction", () => {
           projectOwnerId: "u1",
           runId: "run_missing",
           segmentId: "sb_001",
+          event: fallbackEventRecord("run_missing", "sb_001"),
         }),
       ).rejects.toThrow();
 

@@ -553,6 +553,44 @@ describe("video strategy execution state machine", () => {
     expect(auto.manifest.executions.find((e) => e.task_type === "video_clip")!.status).toBe("skipped_with_fallback");
   });
 
+  it("does not activate auto fallback when the route_auto_downgraded event cannot persist", async () => {
+    const db = createDbClient();
+    // mock writer：事件持久化失败（数据库不可用）
+    db.thirdAggregateWriter = {
+      appendGenerationRunEvent: async () => {
+        throw new Error("db-down");
+      },
+    } as never;
+    const manifest = makeVideoManifest({ strategy: "prefer_api_video" });
+    const snapshot = structuredClone(manifest);
+
+    let thrown: unknown;
+    try {
+      await executeAssetManifest({
+        db,
+        assetManifestRecordId: "manifest_001",
+        assetRunId: "assets_run_001",
+        manifest,
+        registry: createAssetProviderRegistry([makeFailingVideoAdapter()]),
+        assetPlan: makeVideoAssetPlan(),
+        projectStorageRootDir: "unused",
+      });
+    } catch (error) {
+      thrown = error;
+    }
+    // 事件持久化失败 → 执行失败，自动降级不得激活
+    expect(thrown).toBeDefined();
+    const route = manifest.segment_routes[0]!;
+    expect(route.visual_route_type).toBe("video_clip");
+    expect(route.readiness).toBe("blocked");
+    expect(route.fallback_decision).toBe("none");
+    expect(route.route_events).toEqual([]);
+    // 内存事件通道未发布（数据库成功前不发布）
+    expect(db.generationRunEvents.size).toBe(0);
+    // 其余 manifest 内容未被篡改
+    expect(manifest.segment_routes[0]!.segment_id).toBe(snapshot.segment_routes[0]!.segment_id);
+  });
+
   it("skips video execution when the segment route is missing", async () => {
     const { db, result } = runEngine(
       makeVideoManifest({ strategy: "all_api_video" }),

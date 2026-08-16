@@ -166,7 +166,9 @@ async function ensureAssetsGenerationRun(input: {
 
 /**
  * S2-2A 任务 6：追加 append-only run event（不提供 update）。
- * 审计写入失败只记警告，不阻断业务。
+ * 数据库写入成功后才发布内存事件；持久化失败必须抛错——
+ * 正式路线变更事件（route_auto_downgraded / fallback_accepted）丢失时
+ * 不得静默继续，调用方据此阻止激活或进入 reconciliation。
  */
 export async function appendAssetsRunEvent(input: {
   db: DbClient;
@@ -184,14 +186,10 @@ export async function appendAssetsRunEvent(input: {
     eventJson,
     createdAt: new Date(),
   };
-  db.generationRunEvents.set(runId, [...(db.generationRunEvents.get(runId) ?? []), record]);
-  try {
-    if (db.thirdAggregateWriter) {
-      await db.thirdAggregateWriter.appendGenerationRunEvent(record);
-    }
-  } catch (error) {
-    console.warn("[assets] run event persistence failed", error);
+  if (db.thirdAggregateWriter) {
+    await db.thirdAggregateWriter.appendGenerationRunEvent(record);
   }
+  db.generationRunEvents.set(runId, [...(db.generationRunEvents.get(runId) ?? []), record]);
 }
 
 /**
@@ -1633,6 +1631,20 @@ export async function acceptSegmentFallback(
   // C2 整改：数据库原子事务（CAS manifest + project + run event + audit），
   // 任一失败整体回滚；成功后才发布内存状态。
   // 注意：必须保留 writer 接收者调用类方法，解绑提取会丢失 this。
+  // Minor1 整改：事件由服务预生成（id/createdAt），事务与内存镜像使用同一身份。
+  const fallbackEvent: import("../../db/client.js").GenerationRunEventRecord = {
+    id: db.generateId(),
+    generationRunId: runId,
+    eventType: "fallback_accepted",
+    segmentId,
+    eventJson: {
+      reason: "user_accept_fallback",
+      old_route: "video_clip",
+      new_route: "image_with_motion",
+      actor_user_id: actorUserId,
+    },
+    createdAt: new Date(),
+  };
   const writer = db.thirdAggregateWriter;
   if (writer?.acceptSegmentFallbackCommit) {
     const applied = await writer.acceptSegmentFallbackCommit({
@@ -1643,6 +1655,7 @@ export async function acceptSegmentFallback(
       projectOwnerId,
       runId,
       segmentId,
+      event: fallbackEvent,
     });
     if (!applied) {
       return {
@@ -1674,22 +1687,10 @@ export async function acceptSegmentFallback(
   project.updatedAt = new Date();
   project.status = targetProjectStatus;
   if (writer?.acceptSegmentFallbackCommit) {
-    // 事务已写数据库；把事件镜像到内存通道，进程内事件视图与数据库一致
+    // 事务已写数据库；用同一预生成事件镜像到内存通道（身份稳定）
     db.generationRunEvents.set(runId, [
       ...(db.generationRunEvents.get(runId) ?? []),
-      {
-        id: db.generateId(),
-        generationRunId: runId,
-        eventType: "fallback_accepted",
-        segmentId,
-        eventJson: {
-          reason: "user_accept_fallback",
-          old_route: "video_clip",
-          new_route: "image_with_motion",
-          actor_user_id: actorUserId,
-        },
-        createdAt: new Date(),
-      },
+      fallbackEvent,
     ]);
   } else {
     // 无事务 writer（内存模式）：顺序补项目同步与内存事件通道

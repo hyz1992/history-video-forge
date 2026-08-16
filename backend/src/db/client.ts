@@ -522,6 +522,7 @@ export interface DbClient {
       projectOwnerId: string;
       runId: string;
       segmentId: string;
+      event: GenerationRunEventRecord;
     }): Promise<boolean>;
     /** S2-2A 任务 6：追加审计日志（append-only）。 */
     appendAuditLog?(input: {

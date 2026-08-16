@@ -240,6 +240,8 @@ export class PrismaThirdAggregateWriter {
     projectOwnerId: string;
     runId: string;
     segmentId: string;
+    /** 预生成的 fallback_accepted 事件（id/createdAt 由服务生成，内存镜像同身份）。 */
+    event: GenerationRunEventRecord;
   }): Promise<boolean> {
     await this.assertProjectScope(input.manifestRecord.projectId, input.projectOwnerId);
     const data = manifestData(input.manifestRecord);
@@ -255,15 +257,12 @@ export class PrismaThirdAggregateWriter {
       });
       await transaction.generationRunEvent.create({
         data: {
+          id: input.event.id,
           generationRunId: input.runId,
-          eventType: "fallback_accepted",
-          segmentId: input.segmentId,
-          eventJson: {
-            reason: "user_accept_fallback",
-            old_route: "video_clip",
-            new_route: "image_with_motion",
-            actor_user_id: input.actorUserId,
-          },
+          eventType: input.event.eventType,
+          segmentId: input.event.segmentId,
+          eventJson: input.event.eventJson as never,
+          createdAt: input.event.createdAt,
         },
       });
       await transaction.auditLog.create({
