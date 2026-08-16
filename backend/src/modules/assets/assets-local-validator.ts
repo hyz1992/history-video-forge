@@ -132,6 +132,23 @@ export async function validateAssetsManifest(input: {
 
   // ── Route visual references ─────────────────────────────────────────────
 
+  // S2-2A 任务 6 整改：预计算每段 producer execution 的产出（image_still /
+  // render_motion_cue），兜底阻止跨段或错误 producer 的 artifact 引用。
+  const producerOutputsBySegment = new Map<string, { image: Set<string>; motion: Set<string> }>();
+  for (const task of assetPlan.tasks) {
+    if (!task.source_segment_id) continue;
+    if (task.task_type !== "image_still" && task.task_type !== "render_motion_cue") continue;
+    const outputs = producerOutputsBySegment.get(task.source_segment_id) ?? { image: new Set<string>(), motion: new Set<string>() };
+    for (const execution of manifest.executions) {
+      if (execution.task_id !== task.task_id) continue;
+      for (const artifactId of execution.output_artifact_ids) {
+        if (task.task_type === "image_still") outputs.image.add(artifactId);
+        else outputs.motion.add(artifactId);
+      }
+    }
+    producerOutputsBySegment.set(task.source_segment_id, outputs);
+  }
+
   let videoFallbackUsed = false;
 
   for (const route of manifest.segment_routes) {
@@ -168,6 +185,25 @@ export async function validateAssetsManifest(input: {
       !artifactIds.has(route.motion_artifact_id)
     ) {
       pushUnique(errors, "assets_segment_visual_missing");
+    }
+
+    // S2-2A 任务 6 整改：主图/fallback 必须由本段 image_still 产出，
+    // motion 必须由本段 render_motion_cue 产出（跨段引用直接硬错误）。
+    const producerOutputs = producerOutputsBySegment.get(route.segment_id);
+    if (producerOutputs) {
+      const primaryOrFallback = route.primary_visual_artifact_id ?? route.fallback_visual_artifact_id;
+      if (
+        primaryOrFallback &&
+        !producerOutputs.image.has(primaryOrFallback)
+      ) {
+        pushUnique(errors, "assets_segment_visual_producer_mismatch");
+      }
+      if (
+        route.motion_artifact_id &&
+        !producerOutputs.motion.has(route.motion_artifact_id)
+      ) {
+        pushUnique(errors, "assets_segment_visual_producer_mismatch");
+      }
     }
 
     // Detect video fallback: route uses image_with_motion instead of video_clip

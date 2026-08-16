@@ -350,6 +350,8 @@ export async function getProjectSnapshot(
     active_assets: assetManifestRecord
       ? {
           asset_manifest_record_id: assetManifestRecord.id,
+          // S2-2A 任务 6：暴露 manifest revision，accept-fallback 的 expected_version 来源
+          version: String(assetManifestRecord.revision),
           source_topic_package_id: assetManifestRecord.topicPackageId,
           source_script_record_id: assetManifestRecord.scriptRecordId,
           source_storyboard_record_id: assetManifestRecord.storyboardRecordId,

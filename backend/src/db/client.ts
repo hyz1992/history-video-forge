@@ -513,6 +513,15 @@ export interface DbClient {
     appendRunConfigurationSnapshot(record: RunConfigurationSnapshotRecord): Promise<void>;
     saveGenerationRun(record: GenerationRunRecord): Promise<void>;
     appendGenerationRunEvent(record: GenerationRunEventRecord): Promise<void>;
+    /** S2-2A 任务 6：追加审计日志（append-only）。 */
+    appendAuditLog?(input: {
+      actorUserId: string | null;
+      projectId: string | null;
+      action: string;
+      targetType: string;
+      targetId: string | null;
+      metadataJson: Record<string, unknown> | null;
+    }): Promise<void>;
     saveUsageCostRecord(record: UsageCostRecordRecord): Promise<void>;
   };
 }

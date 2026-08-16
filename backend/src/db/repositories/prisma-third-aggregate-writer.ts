@@ -226,6 +226,27 @@ export class PrismaThirdAggregateWriter {
     } });
   }
 
+  /** S2-2A 任务 6：追加审计日志（append-only）。 */
+  async appendAuditLog(input: {
+    actorUserId: string | null;
+    projectId: string | null;
+    action: string;
+    targetType: string;
+    targetId: string | null;
+    metadataJson: Record<string, unknown> | null;
+  }): Promise<void> {
+    await this.client.auditLog.create({
+      data: {
+        actorUserId: input.actorUserId,
+        projectId: input.projectId,
+        action: input.action,
+        targetType: input.targetType,
+        targetId: input.targetId,
+        metadataJson: input.metadataJson as never,
+      },
+    });
+  }
+
   async saveGenerationRun(record: GenerationRunRecord): Promise<void> {
     // P1-3：run 关联的 snapshot 与 quote 必须属于同一个项目（SQLite/Prisma
     // 无法用声明式跨表复合 FK 表达，写入时事务级强校验）。

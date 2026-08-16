@@ -1187,6 +1187,63 @@ describe("execution engine integration", () => {
     expect(reloaded.revision).toBeGreaterThan(1);
   });
 
+  it("video retry after strategy switch follows the current prefer_remotion config", async () => {
+    tempDir = join(tmpdir(), `assets-strategy-switch-${Date.now()}`);
+    await mkdir(tempDir, { recursive: true });
+    const { db, project } = await prepareProjectWithAssetPlan();
+    project.storageRootDir = tempDir;
+    db.assetPlanRecords.get(ASSET_PLAN_RECORD_ID)!.planJson =
+      makeImageToVideoAssetPlan();
+
+    const setStrategy = (strategy: string) => {
+      const existing = [...db.projectGenerationConfigurations.values()].find(
+        (record) => record.projectId === project.id,
+      );
+      if (existing) {
+        existing.configurationJson = {
+          ...existing.configurationJson,
+          video: { ...existing.configurationJson.video, strategy: strategy as never },
+        };
+      }
+    };
+
+    // 第一次：all_api_video 严格阻塞
+    setStrategy("all_api_video");
+    const first = await runAssetsGeneration({
+      db,
+      project,
+      voiceProfileId: "voice_custom",
+      executionMode: "auto_available",
+    });
+    expect(first.statusCode).toBe(200);
+    const firstManifest = (first.body as { manifest: AssetManifest }).manifest;
+    expect(firstManifest.segment_routes[0]!.video_strategy).toBe("all_api_video");
+    expect(firstManifest.segment_routes[0]!.readiness).toBe("blocked_waiting_user");
+
+    // 切换策略为 prefer_remotion 后局部重试 video：
+    // 本轮配置解析必须生效（prefer_remotion 是合法策略，不是未决策默认值），
+    // 视频失败自动降级并保存新决策，不得被旧 all_api_video 覆盖。
+    setStrategy("prefer_remotion");
+    const videoTask = (db.assetPlanRecords.get(ASSET_PLAN_RECORD_ID)!.planJson as { tasks: Array<{ task_id: string; task_type: string }> }).tasks.find(
+      (t) => t.task_type === "video_clip",
+    )!;
+    const second = await runAssetsGeneration({
+      db,
+      project,
+      voiceProfileId: "voice_custom",
+      executionMode: "auto_available",
+      taskIds: [videoTask.task_id],
+    });
+    expect(second.statusCode).toBe(200);
+    const secondManifest = (second.body as { manifest: AssetManifest }).manifest;
+    const route = secondManifest.segment_routes[0]!;
+    expect(route.video_strategy).toBe("prefer_remotion");
+    expect(route.fallback_decision).toBe("automatic");
+    expect(route.route_events).toHaveLength(1);
+    expect(route.route_events[0]).toMatchObject({ event_type: "automatic_fallback" });
+    expect(route.visual_route_type).toBe("image_with_motion");
+  });
+
   it("partial retry preserves the automatic fallback decision from the previous run", async () => {
     tempDir = join(tmpdir(), `assets-fallback-retry-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });

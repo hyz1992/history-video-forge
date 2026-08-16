@@ -131,12 +131,13 @@ export async function executeAssetManifest(
           ...execution.notes,
           "[engine] no video adapter available",
         ];
-        handleVideoStrategyFailure(
+        await handleVideoStrategyFailure(
           manifestCopy,
           planTask,
           execution,
           db,
           assetRunId,
+          assetPlan,
           "video_provider_unavailable",
           "no video adapter in registry",
         );
@@ -215,12 +216,13 @@ async function runAdapterPipeline(
         `[engine] provider poll failed: ${pollResult.errorCode ?? "unknown"} — ${pollResult.errorMessage ?? "no message"}`,
       ];
       // S2-2A 任务 6：按段视频策略处理失败（严格阻塞或自动降级）
-      handleVideoStrategyFailure(
+      await handleVideoStrategyFailure(
         manifest,
         planTask,
         execution,
         db,
         assetRunId,
+        ctx.assetPlan,
         pollResult.errorCode ?? "video_provider_error",
         pollResult.errorMessage ?? "no message",
       );
@@ -284,12 +286,13 @@ async function runAdapterPipeline(
       `[engine] adapter pipeline error: ${message}`,
     ];
     // S2-2A 任务 6：管线异常同样按段视频策略处理
-    handleVideoStrategyFailure(
+    await handleVideoStrategyFailure(
       manifest,
       planTask,
       execution,
       db,
       assetRunId,
+      ctx.assetPlan,
       "adapter_pipeline_error",
       message,
     );
@@ -315,15 +318,16 @@ function findSegmentRoute(
  *   blocked 不得伪装 ready。
  * - all_remotion：engine 层已跳过，不进入本函数。
  */
-function handleVideoStrategyFailure(
+async function handleVideoStrategyFailure(
   manifest: AssetManifest,
   planTask: AssetPlan["tasks"][number],
   execution: AssetManifest["executions"][number],
   db: DbClient,
   assetRunId: string,
+  assetPlan: AssetPlan,
   reasonCode: string,
   reasonMessage: string,
-): void {
+): Promise<void> {
   if (planTask.task_type !== "video_clip") return;
   const route = findSegmentRoute(manifest, planTask.source_segment_id);
   if (!route) return;
@@ -337,11 +341,44 @@ function handleVideoStrategyFailure(
     return;
   }
 
-  // 自动降级要求同段 fallback anchor 与 Remotion cue 齐备
-  const hasAnchor =
-    route.fallback_visual_artifact_id !== null ||
-    route.primary_visual_artifact_id !== null;
-  const hasMotion = route.motion_artifact_id !== null;
+  // 自动降级要求同段 fallback anchor 与 Remotion cue 齐备，且分别由本段
+  // image_still / render_motion_cue execution 产出（跨段引用不得伪装 ready）。
+  const anchorArtifactId =
+    route.fallback_visual_artifact_id ?? route.primary_visual_artifact_id;
+  const imageProducerTaskIds = new Set(
+    assetPlan.tasks
+      .filter(
+        (task) =>
+          task.source_segment_id === route.segment_id &&
+          task.task_type === "image_still",
+      )
+      .map((task) => task.task_id),
+  );
+  const motionProducerTaskIds = new Set(
+    assetPlan.tasks
+      .filter(
+        (task) =>
+          task.source_segment_id === route.segment_id &&
+          task.task_type === "render_motion_cue",
+      )
+      .map((task) => task.task_id),
+  );
+  const imageProducerOutputs = new Set(
+    manifest.executions
+      .filter((execution) => imageProducerTaskIds.has(execution.task_id))
+      .flatMap((execution) => execution.output_artifact_ids),
+  );
+  const motionProducerOutputs = new Set(
+    manifest.executions
+      .filter((execution) => motionProducerTaskIds.has(execution.task_id))
+      .flatMap((execution) => execution.output_artifact_ids),
+  );
+  const hasAnchor = Boolean(
+    anchorArtifactId && imageProducerOutputs.has(anchorArtifactId),
+  );
+  const hasMotion = Boolean(
+    route.motion_artifact_id && motionProducerOutputs.has(route.motion_artifact_id),
+  );
   if (!hasAnchor || !hasMotion) {
     route.readiness = "blocked";
     route.notes = [
@@ -370,7 +407,7 @@ function handleVideoStrategyFailure(
   execution.status = "skipped_with_fallback";
   execution.completed_at = new Date().toISOString();
   // S2-2A 任务 6 整改：自动降级写正式 append-only run event
-  appendAssetsRunEvent({
+  await appendAssetsRunEvent({
     db,
     runId: assetRunId,
     eventType: "automatic_fallback",
