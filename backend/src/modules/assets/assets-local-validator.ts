@@ -133,17 +133,28 @@ export async function validateAssetsManifest(input: {
   // ── Route visual references ─────────────────────────────────────────────
 
   // S2-2A 任务 6 整改：预计算每段 producer execution 的产出（image_still /
-  // render_motion_cue），兜底阻止跨段或错误 producer 的 artifact 引用。
-  const producerOutputsBySegment = new Map<string, { image: Set<string>; motion: Set<string> }>();
+  // render_motion_cue / video_clip），兜底阻止跨段或错误 producer 的 artifact 引用。
+  const producerOutputsBySegment = new Map<string, { image: Set<string>; motion: Set<string>; video: Set<string> }>();
   for (const task of assetPlan.tasks) {
     if (!task.source_segment_id) continue;
-    if (task.task_type !== "image_still" && task.task_type !== "render_motion_cue") continue;
-    const outputs = producerOutputsBySegment.get(task.source_segment_id) ?? { image: new Set<string>(), motion: new Set<string>() };
+    if (
+      task.task_type !== "image_still" &&
+      task.task_type !== "render_motion_cue" &&
+      task.task_type !== "video_clip"
+    ) {
+      continue;
+    }
+    const outputs = producerOutputsBySegment.get(task.source_segment_id) ?? {
+      image: new Set<string>(),
+      motion: new Set<string>(),
+      video: new Set<string>(),
+    };
     for (const execution of manifest.executions) {
       if (execution.task_id !== task.task_id) continue;
       for (const artifactId of execution.output_artifact_ids) {
         if (task.task_type === "image_still") outputs.image.add(artifactId);
-        else outputs.motion.add(artifactId);
+        else if (task.task_type === "render_motion_cue") outputs.motion.add(artifactId);
+        else outputs.video.add(artifactId);
       }
     }
     producerOutputsBySegment.set(task.source_segment_id, outputs);
@@ -187,23 +198,42 @@ export async function validateAssetsManifest(input: {
       pushUnique(errors, "assets_segment_visual_missing");
     }
 
-    // S2-2A 任务 6 整改：主图/fallback 必须由本段 image_still 产出，
-    // motion 必须由本段 render_motion_cue 产出（跨段引用直接硬错误）。
+    // S2-2A 任务 6 整改：按路线类型校验 producer 绑定：
+    // - video_clip：primary 必须由本段 video_clip 产出，fallback 由 image_still 产出；
+    // - image_with_motion：primary/fallback 由 image_still 产出，motion 由
+    //   render_motion_cue 产出；
+    // - image_only：primary 由 image_still 产出。
     const producerOutputs = producerOutputsBySegment.get(route.segment_id);
     if (producerOutputs) {
-      const primaryOrFallback = route.primary_visual_artifact_id ?? route.fallback_visual_artifact_id;
+      const primaryArtifactId = route.primary_visual_artifact_id;
+      if (primaryArtifactId) {
+        const primaryOk =
+          route.visual_route_type === "video_clip"
+            ? producerOutputs.video.has(primaryArtifactId)
+            : producerOutputs.image.has(primaryArtifactId);
+        if (!primaryOk) {
+          pushUnique(errors, "assets_segment_visual_producer_mismatch");
+        }
+      }
       if (
-        primaryOrFallback &&
-        !producerOutputs.image.has(primaryOrFallback)
+        route.visual_route_type !== "video_clip" &&
+        route.fallback_visual_artifact_id &&
+        !producerOutputs.image.has(route.fallback_visual_artifact_id)
       ) {
         pushUnique(errors, "assets_segment_visual_producer_mismatch");
       }
       if (
+        route.visual_route_type === "image_with_motion" &&
         route.motion_artifact_id &&
         !producerOutputs.motion.has(route.motion_artifact_id)
       ) {
         pushUnique(errors, "assets_segment_visual_producer_mismatch");
       }
+    } else if (
+      route.primary_visual_artifact_id || route.motion_artifact_id
+    ) {
+      // 段有视觉引用但没有任何 producer 任务 → 引用无法追溯，硬错误
+      pushUnique(errors, "assets_segment_visual_producer_mismatch");
     }
 
     // Detect video fallback: route uses image_with_motion instead of video_clip

@@ -226,6 +226,61 @@ export class PrismaThirdAggregateWriter {
     } });
   }
 
+  /**
+   * S2-2A 任务 6：accept-fallback 的数据库原子提交。
+   * 在单个事务内完成 manifest CAS（revision 条件更新并递增）、项目状态更新、
+   * fallback_accepted run event 与审计日志；任一失败整体回滚。
+   * 返回 false 表示 revision 冲突（事务内无任何写入）。
+   */
+  async acceptSegmentFallbackCommit(input: {
+    manifestRecord: AssetManifestRecord;
+    expectedRevision: number;
+    projectStatus: string;
+    actorUserId: string | null;
+    projectOwnerId: string;
+    runId: string;
+    segmentId: string;
+  }): Promise<boolean> {
+    await this.assertProjectScope(input.manifestRecord.projectId, input.projectOwnerId);
+    const data = manifestData(input.manifestRecord);
+    return this.client.$transaction(async (transaction) => {
+      const updated = await transaction.assetManifestRecord.updateMany({
+        where: { id: input.manifestRecord.id, revision: input.expectedRevision },
+        data: { ...data, revision: { increment: 1 } },
+      });
+      if (updated.count !== 1) return false;
+      await transaction.project.update({
+        where: { id: input.manifestRecord.projectId },
+        data: { status: input.projectStatus, updatedAt: new Date() },
+      });
+      await transaction.generationRunEvent.create({
+        data: {
+          generationRunId: input.runId,
+          eventType: "fallback_accepted",
+          segmentId: input.segmentId,
+          eventJson: {
+            reason: "user_accept_fallback",
+            visual_route_type: "image_with_motion",
+          },
+        },
+      });
+      await transaction.auditLog.create({
+        data: {
+          actorUserId: input.actorUserId,
+          projectId: input.manifestRecord.projectId,
+          action: "assets.accept_fallback",
+          targetType: "asset_manifest_segment",
+          targetId: input.segmentId,
+          metadataJson: {
+            run_id: input.runId,
+            visual_route_type: "image_with_motion",
+          },
+        },
+      });
+      return true;
+    });
+  }
+
   /** S2-2A 任务 6：追加审计日志（append-only）。 */
   async appendAuditLog(input: {
     actorUserId: string | null;

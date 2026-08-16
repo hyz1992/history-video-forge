@@ -552,6 +552,8 @@ async function acceptSegmentFallbackController(
     segmentId: context.params.segmentId,
     expectedRunId,
     expectedVersion,
+    // 审计 actor：认证用户（guardOwnedRoute 保证已登录且为项目 owner）
+    actorUserId: context.auth.anonymous ? null : context.auth.userId,
   });
 }
 

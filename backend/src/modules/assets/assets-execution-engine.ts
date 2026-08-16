@@ -196,6 +196,10 @@ async function runAdapterPipeline(
       providerJobId: prepared.providerJobId,
       status: "prepared",
       attemptCount: execution.attempts,
+      // S2-2A 任务 6 整改：job 关联正式 run 与 0-based attempt 索引，
+      // 支撑重试不复用旧 quote 的可审计证据。
+      generationRunId: assetRunId,
+      attemptIndex: Math.max(0, execution.attempts - 1),
       rawRequestJson: prepared.rawRequestJson,
       rawResponseJson: null,
       errorCode: null,
@@ -373,11 +377,25 @@ async function handleVideoStrategyFailure(
       .filter((execution) => motionProducerTaskIds.has(execution.task_id))
       .flatMap((execution) => execution.output_artifact_ids),
   );
+  // I5 整改：anchor/motion 除 producer 证据外，还必须真实存在于 manifest.artifacts
+  // 且类型正确（image / motion_recipe），损坏或错误类型的输出不得标记 ready。
+  const anchorArtifact = anchorArtifactId
+    ? manifest.artifacts.find((item) => item.artifact_id === anchorArtifactId)
+    : undefined;
+  const motionCueArtifact = route.motion_artifact_id
+    ? manifest.artifacts.find((item) => item.artifact_id === route.motion_artifact_id)
+    : undefined;
   const hasAnchor = Boolean(
-    anchorArtifactId && imageProducerOutputs.has(anchorArtifactId),
+    anchorArtifactId &&
+    anchorArtifact &&
+    anchorArtifact.artifact_type === "image" &&
+    imageProducerOutputs.has(anchorArtifactId),
   );
   const hasMotion = Boolean(
-    route.motion_artifact_id && motionProducerOutputs.has(route.motion_artifact_id),
+    route.motion_artifact_id &&
+    motionCueArtifact &&
+    motionCueArtifact.artifact_type === "motion_recipe" &&
+    motionProducerOutputs.has(route.motion_artifact_id),
   );
   if (!hasAnchor || !hasMotion) {
     route.readiness = "blocked";
@@ -410,9 +428,11 @@ async function handleVideoStrategyFailure(
   await appendAssetsRunEvent({
     db,
     runId: assetRunId,
-    eventType: "automatic_fallback",
+    eventType: "route_auto_downgraded",
     segmentId: route.segment_id,
     eventJson: {
+      old_route: "video_clip",
+      new_route: "image_with_motion",
       reason_code: reasonCode,
       reason_message: reasonMessage,
       fallback_decision: "automatic",

@@ -513,6 +513,16 @@ export interface DbClient {
     appendRunConfigurationSnapshot(record: RunConfigurationSnapshotRecord): Promise<void>;
     saveGenerationRun(record: GenerationRunRecord): Promise<void>;
     appendGenerationRunEvent(record: GenerationRunEventRecord): Promise<void>;
+    /** S2-2A 任务 6：accept-fallback 原子事务提交（CAS + project + event + audit）。 */
+    acceptSegmentFallbackCommit?(input: {
+      manifestRecord: AssetManifestRecord;
+      expectedRevision: number;
+      projectStatus: string;
+      actorUserId: string | null;
+      projectOwnerId: string;
+      runId: string;
+      segmentId: string;
+    }): Promise<boolean>;
     /** S2-2A 任务 6：追加审计日志（append-only）。 */
     appendAuditLog?(input: {
       actorUserId: string | null;

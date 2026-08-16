@@ -167,7 +167,7 @@ async function ensureAssetsGenerationRun(input: {
 export async function appendAssetsRunEvent(input: {
   db: DbClient;
   runId: string;
-  eventType: "automatic_fallback" | "fallback_accepted";
+  eventType: "route_auto_downgraded" | "fallback_accepted";
   segmentId: string | null;
   eventJson: Record<string, unknown>;
 }) {
@@ -1078,6 +1078,8 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     project.status = "asset_plan_ready";
     project.updatedAt = new Date();
     await db.firstAggregateWriter?.syncProject(project);
+    // C3 整改：stale-source 是失败出口，正式 run 必须收尾
+    await finalizeAssetsGenerationRun(db, runId, "failed");
     const traceSummary = buildTraceSummary({
       runId,
       validationDecision: localValidation.decision,
@@ -1134,6 +1136,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     });
   } catch (error) {
     await preserveAssetsRunStorage(runStorage).catch(() => undefined);
+    await finalizeAssetsGenerationRun(db, runId, "failed");
     throw error;
   }
 
@@ -1149,6 +1152,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     }
   } catch (error) {
     await preserveAssetsRunStorage(runStorage).catch(() => undefined);
+    await finalizeAssetsGenerationRun(db, runId, "failed");
     throw error;
   }
 
@@ -1169,6 +1173,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     await db.thirdAggregateWriter?.activateAssetManifest(project, assetManifestRecord);
   } catch (error) {
     await preserveAssetsRunStorage(runStorage).catch(() => undefined);
+    await finalizeAssetsGenerationRun(db, runId, "failed");
     project.activeAssetManifestRecordId = previousActiveAssetManifestRecordId;
     project.status = previousActiveAssetManifestRecordId ? "assets_ready" : "asset_plan_ready";
     await db.firstAggregateWriter?.syncProject(project);
@@ -1389,6 +1394,8 @@ export interface AcceptSegmentFallbackInput {
   expectedRunId: string;
   /** 客户端看到的 manifest 指纹（CAS）；与当前记录不一致时拒绝并发覆盖。 */
   expectedVersion: string;
+  /** 触发接受的授权用户（审计 actor）；缺省用项目 owner。 */
+  actorUserId?: string | null;
 }
 
 
@@ -1405,6 +1412,7 @@ export async function acceptSegmentFallback(
   input: AcceptSegmentFallbackInput,
 ) {
   const { db, project, runId, segmentId, expectedRunId, expectedVersion } = input;
+  const actorUserId = input.actorUserId ?? project.ownerId ?? null;
 
   if (!project.activeAssetManifestRecordId) {
     return { statusCode: 409, body: { error: "active_assets_missing" } };
@@ -1566,6 +1574,9 @@ export async function acceptSegmentFallback(
 
   // 重跑 validator 更新就绪度（基于候选副本，只读）
   let candidateDecision: "ready_for_compose" | "blocked" | "partial" = "blocked";
+  let candidateValidation:
+    | Awaited<ReturnType<typeof validateAssetsManifest>>
+    | null = null;
   if (assetPlanRecord && assetPlan) {
     const localValidation = await validateAssetsManifest({
       assetPlanRecordId: manifestRecord.assetPlanRecordId,
@@ -1578,22 +1589,36 @@ export async function acceptSegmentFallback(
     });
     candidateDecision = localValidation.decision;
     candidateManifest.readiness = localValidation.decision;
+    candidateValidation = localValidation;
   }
 
-  // 数据库原子 CAS：revision 不匹配说明并发修改，拒绝本次接受
   const candidateRecord = structuredClone(manifestRecord);
   candidateRecord.manifestJson = candidateManifest as unknown as Record<string, unknown>;
-  candidateRecord.validationResultJson = {
-    stage: "assets_local_validation",
-    decision: candidateDecision,
-    errors: [],
-    warnings: [],
-    metrics: {},
-  };
+  // I6 整改：持久化真实 validator 结果（errors/warnings/metrics 不伪造）
+  candidateRecord.validationResultJson = candidateValidation
+    ? (candidateValidation as unknown as Record<string, unknown>)
+    : { stage: "assets_local_validation", decision: candidateDecision, errors: [], warnings: [], metrics: {} };
   const projectOwnerId = db.projects.get(project.id)?.ownerId ?? "system";
-  const casWriter = db.thirdAggregateWriter?.casUpsertAssetManifest;
-  if (casWriter) {
-    const applied = await casWriter(candidateRecord, expectedRevision, projectOwnerId);
+  const targetProjectStatus =
+    candidateDecision === "ready_for_compose"
+      ? "assets_ready"
+      : candidateDecision === "partial"
+        ? "assets_partial"
+        : "assets_blocked";
+
+  // C2 整改：数据库原子事务（CAS manifest + project + run event + audit），
+  // 任一失败整体回滚；成功后才发布内存状态。
+  const txCommit = db.thirdAggregateWriter?.acceptSegmentFallbackCommit;
+  if (txCommit) {
+    const applied = await txCommit({
+      manifestRecord: candidateRecord,
+      expectedRevision,
+      projectStatus: targetProjectStatus,
+      actorUserId,
+      projectOwnerId,
+      runId,
+      segmentId,
+    });
     if (!applied) {
       return {
         statusCode: 409,
@@ -1601,20 +1626,26 @@ export async function acceptSegmentFallback(
       };
     }
   } else {
-    await db.thirdAggregateWriter?.saveAssetManifest(candidateRecord, projectOwnerId);
+    // 无 writer（内存模式）：顺序执行 CAS/保存，事件只写内存通道
+    const casWriter = db.thirdAggregateWriter?.casUpsertAssetManifest;
+    if (casWriter) {
+      const applied = await casWriter(candidateRecord, expectedRevision, projectOwnerId);
+      if (!applied) {
+        return {
+          statusCode: 409,
+          body: { error: "assets_fallback_version_mismatch" },
+        };
+      }
+    } else {
+      await db.thirdAggregateWriter?.saveAssetManifest(candidateRecord, projectOwnerId);
+    }
   }
   candidateRecord.revision = expectedRevision + 1;
 
-  // CAS 成功：发布内存状态（manifest 记录、项目状态、正式事件、审计日志）
+  // 事务成功：发布内存状态（manifest 记录、项目状态、内存事件通道）
   db.assetManifestRecords.set(candidateRecord.id, candidateRecord);
   project.updatedAt = new Date();
-  if (candidateDecision === "ready_for_compose") {
-    project.status = "assets_ready";
-  } else if (candidateDecision === "partial") {
-    project.status = "assets_partial";
-  } else {
-    project.status = "assets_blocked";
-  }
+  project.status = targetProjectStatus;
   await db.firstAggregateWriter?.syncProject(project);
 
   await appendAssetsRunEvent({
@@ -1625,22 +1656,9 @@ export async function acceptSegmentFallback(
     eventJson: {
       reason: "user_accept_fallback",
       visual_route_type: "image_with_motion",
+      actor_user_id: actorUserId,
     },
   });
-  try {
-    if (db.thirdAggregateWriter?.appendAuditLog) {
-      await db.thirdAggregateWriter.appendAuditLog({
-        actorUserId: null,
-        projectId: project.id,
-        action: "assets.accept_fallback",
-        targetType: "asset_manifest_segment",
-        targetId: segmentId,
-        metadataJson: { run_id: runId, visual_route_type: "image_with_motion" },
-      });
-    }
-  } catch (error) {
-    console.warn("[assets] audit log persistence failed", error);
-  }
 
   return {
     statusCode: 200,

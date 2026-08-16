@@ -4,6 +4,7 @@ import { createDbClient } from "../../../backend/src/db/client.js";
 import { executeAssetManifest } from "../../../backend/src/modules/assets/assets-execution-engine.js";
 import { createAssetProviderRegistry } from "../../../backend/src/modules/assets/assets-provider-registry.js";
 import { acceptSegmentFallback } from "../../../backend/src/modules/assets/assets-run.service.js";
+import { validateAssetsManifest } from "../../../backend/src/modules/assets/assets-local-validator.js";
 import { saveAssetManifestRecord } from "../../../backend/src/modules/assets/asset-manifest-record.repository.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import type { AssetProviderAdapter } from "../../../backend/src/modules/assets/assets-provider-adapter.js";
@@ -589,5 +590,61 @@ describe("video strategy execution state machine", () => {
     expect([...db.assetProviderJobRecords.values()].some(
       (job) => job.taskId === "video_001",
     )).toBe(false);
+  });
+});
+
+describe("successful api video route validation", () => {
+  it("accepts a successful video_clip route: primary from video producer, fallback from image producer", async () => {
+    // 成功 API 视频：route video_clip、primary=video artifact、fallback=image artifact
+    const db = createDbClient();
+    const project = await createProject(db, { name: "Video Success" });
+    const manifest = makeVideoManifest({ strategy: "prefer_api_video" });
+    manifest.segment_routes[0]!.visual_route_type = "video_clip";
+    manifest.segment_routes[0]!.primary_visual_artifact_id = "artifact_video_001";
+    manifest.segment_routes[0]!.fallback_visual_artifact_id = "artifact_img_001";
+    manifest.segment_routes[0]!.readiness = "ready";
+    manifest.artifacts.push({
+      artifact_id: "artifact_video_001",
+      artifact_type: "video",
+      origin: "provider",
+      file_uri: "generated://video.mp4",
+      created_at: "2026-05-16T00:00:00.000Z",
+      metadata: { duration_sec: 5, width: 1080, height: 1920, fps: 30 },
+    });
+    const videoExecution = manifest.executions.find(
+      (e) => e.task_id === "video_001",
+    )!;
+    videoExecution.status = "completed";
+    videoExecution.started_at = "2026-05-16T00:00:00.000Z";
+    videoExecution.completed_at = "2026-05-16T00:00:00.000Z";
+    videoExecution.provider_id = "fake_video";
+    videoExecution.attempts = 1;
+    videoExecution.output_artifact_ids = ["artifact_video_001"];
+    db.assetPlanRecords.set("asset_plan_success", {
+      id: "asset_plan_success",
+      projectId: project.id,
+      topicPackageId: "topic_001",
+      scriptRecordId: "script_001",
+      storyboardRecordId: "storyboard_001",
+      planJson: makeVideoAssetPlan(),
+      validationResultJson: { stage: "asset_planning_local_validation", decision: "pass" },
+      executionStateJson: {},
+      graphTraceSummaryJson: null,
+      runtimeDiagnosticsJson: null,
+      createdAt: new Date(),
+    });
+
+    const validation = await validateAssetsManifest({
+      assetPlanRecordId: "asset_plan_success",
+      storyboardRecordId: "storyboard_001",
+      scriptRecordId: "script_001",
+      topicPackageId: "topic_001",
+      assetPlan: makeVideoAssetPlan(),
+      manifest,
+      projectStorageRootDir: undefined,
+    });
+    // C1 回归保护：成功 API 视频不得产生 producer mismatch 或 execution incomplete
+    expect(validation.errors).not.toContain("assets_segment_visual_producer_mismatch");
+    expect(validation.errors).not.toContain("assets_execution_incomplete");
   });
 });

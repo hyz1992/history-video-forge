@@ -581,7 +581,8 @@ describe("validateAssetsManifest", () => {
   // ── Video fallback: image+motion is acceptable with warning ───────────────
 
   it("allows video task with image+motion fallback but warns assets_video_fallback_used", async () => {
-    // video task execution has no video artifact, but uses image + motion
+    // video task execution has no video artifact, but uses image + motion；
+    // S2-2A 任务 6：fallback 的 image/motion 必须由同段（sb_002）producer 产出。
     const motionArtifact = makeMotionArtifact("artifact_motion_1", "artifact_img_1");
 
     const result = await runValidation({
@@ -594,6 +595,18 @@ describe("validateAssetsManifest", () => {
           output_artifact_ids: ["artifact_img_1"],
         }),
         makeBaseExecution({
+          execution_id: "exec_img_2",
+          task_id: "task_img_2",
+          task_type: "image_still",
+          output_artifact_ids: ["artifact_img_2"],
+        }),
+        makeBaseExecution({
+          execution_id: "exec_motion_2",
+          task_id: "task_motion_2",
+          task_type: "render_motion_cue",
+          output_artifact_ids: ["artifact_motion_1"],
+        }),
+        makeBaseExecution({
           execution_id: "exec_video_1",
           task_id: "task_video_1",
           task_type: "video_clip",
@@ -603,17 +616,54 @@ describe("validateAssetsManifest", () => {
       artifacts: [
         makeBaseArtifact(),
         makeImageArtifact("artifact_img_1"),
+        makeImageArtifact("artifact_img_2"),
         motionArtifact,
       ],
       segment_routes: [
         makeBaseSegmentRoute(),
         makeBaseSegmentRoute({
           segment_id: "sb_002",
-          primary_visual_artifact_id: "artifact_img_1",
+          primary_visual_artifact_id: "artifact_img_2",
           visual_route_type: "image_with_motion",
           motion_artifact_id: "artifact_motion_1",
           readiness: "fallback_ready",
         }),
+      ],
+    }, {
+      tasks: [
+        ...(makeBaseAssetPlan().tasks ?? []),
+        {
+          task_id: "task_img_2",
+          order: 3,
+          task_type: "image_still",
+          source_segment_id: "sb_002",
+          source_excerpt: "画面描述2",
+          production_intent: "生成分镜2的静态图",
+          recommended_mode: "auto",
+          provider_hint: "wanx",
+          prompt_draft: "战国大殿画面",
+          parameters: {},
+          manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] },
+          risk_notes: ["保持战国质感"],
+          cost_tier: "low",
+          initial_status: "planned",
+        },
+        {
+          task_id: "task_motion_2",
+          order: 4,
+          task_type: "render_motion_cue",
+          source_segment_id: "sb_002",
+          source_excerpt: "运镜描述",
+          production_intent: "分镜2本地运镜",
+          recommended_mode: "auto",
+          provider_hint: null,
+          prompt_draft: null,
+          parameters: { recipe_type: "push_in", source_image_task_id: "task_img_2" },
+          manual_upload_policy: { allowed: false, required: false, accepted_file_types: [], acceptance_notes: [] },
+          risk_notes: [],
+          cost_tier: "free",
+          initial_status: "planned",
+        },
       ],
     });
 
