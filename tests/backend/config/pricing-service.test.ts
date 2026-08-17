@@ -442,6 +442,46 @@ describe("pricing service unit pricing", () => {
     expect(result.value.items[0]?.estimated_cost_micros).toBeNull();
   });
 
+  it("falls back to zero price for free video entries on declared qualities only", () => {
+    const freeVideo = makeCatalogEntry({
+      id: "video.image_to_video.free.test",
+      capability: "video.image_to_video",
+      parameterCapabilitiesJson: {
+        api_video_qualities: ["standard_720p", "high_1080p"],
+        max_duration_seconds_per_task: 15,
+      },
+      pricingJson: {
+        unit_type: "video_second",
+        currency: "CNY",
+        free: true,
+        source_note: "free fixture（无价格 map）",
+      },
+    });
+    const base = {
+      capability: "video.image_to_video" as const,
+      provider_model_id: "video.image_to_video.free.test",
+      unit_type: "video_second" as const,
+      operation: "assets.generate" as const,
+      video_task_count: 2,
+      estimated_seconds_total: 10,
+    };
+    const declared = price({
+      catalog: [freeVideo],
+      workload: [{ ...base, parameters: { api_quality: "standard_720p" } }],
+    });
+    if (!declared.ok) throw new Error(declared.error.message);
+    expect(declared.value.estimated_cost_micros).toBe("0");
+    expect(declared.value.authorization_cost_micros).toBe("0");
+    expect(declared.value.contains_unbounded_item).toBe(false);
+
+    // free 不授予未声明档位（Remotion 风格字符串仍拒绝）。
+    const undeclared = price({
+      catalog: [freeVideo],
+      workload: [{ ...base, parameters: { api_quality: "1080P" } }],
+    });
+    expect(undeclared.ok).toBe(false);
+  });
+
   it("prices stub/free catalog entries as exact zero without marking them unbounded", () => {
     const seed = buildPricingCatalogSeed({ llm: { mode: "stub" } });
     const result = price({

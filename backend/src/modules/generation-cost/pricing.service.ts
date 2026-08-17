@@ -253,7 +253,11 @@ function parseDecimalMicros(value: unknown): bigint | null {
   }
 }
 
-/** 解析目录项 pricingJson。free 条目返回零价；缺失/无法解析的价格返回 null（→unbounded）。 */
+/**
+ * 解析目录项 pricingJson。
+ * - free 条目在价格缺失时回退零价（零外部费用）；free 且有价时仍按价计算。
+ * - 非 free 条目价格缺失/无法解析时返回 null（→unbounded）。
+ */
 function parseCatalogPricing(entry: CatalogEntry): CatalogPricing {
   const pricing = entry.pricingJson as Record<string, unknown>;
   const unitType = pricing["unit_type"];
@@ -514,11 +518,12 @@ function priceItem(
         ? (caps["api_video_qualities"] as unknown[])
         : [];
       const requestedQuality = workloadItem.parameters.api_quality;
-      if (
-        !declaredQualities.includes(requestedQuality) ||
-        !videoPricing.microsPerSecondByQuality ||
-        !(requestedQuality in videoPricing.microsPerSecondByQuality)
-      ) {
+      const pricedQuality =
+        videoPricing.microsPerSecondByQuality?.[requestedQuality] ??
+        // free 条目缺价 map 时，对目录声明的档位回退零价（与其他单位一致）；
+        // 未声明的档位仍然拒绝，free 不授予未声明能力。
+        (videoPricing.free && declaredQualities.includes(requestedQuality) ? 0n : null);
+      if (!declaredQualities.includes(requestedQuality) || pricedQuality === null) {
         return {
           ok: false,
           error: {
@@ -528,7 +533,7 @@ function priceItem(
           },
         };
       }
-      const pricePerSecond = videoPricing.microsPerSecondByQuality[requestedQuality]!;
+      const pricePerSecond = pricedQuality;
 
       const capsMaxSeconds = caps["max_duration_seconds_per_task"];
       const maxSecondsPerTask =
