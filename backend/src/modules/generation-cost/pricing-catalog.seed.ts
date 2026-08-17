@@ -39,6 +39,19 @@ export type LlmTierSeedInput =
   | { mode: "resolution_failed" };
 
 /**
+ * tier → slot 目标解析的唯一实现（seed 与 readiness 共用，禁止各自复制一份）。
+ * flash 未配置或声明 reusesSmart 时复用 smart；resolution_failed 由调用方处理。
+ */
+export function resolveLlmTierTarget(
+  llm: Extract<LlmTierSeedInput, { mode: "resolved" }>,
+  slot: "llm.smart" | "llm.flash",
+): { providerKey: string; modelId: string } {
+  if (slot === "llm.smart") return llm.smart;
+  if (llm.flash && "reusesSmart" in llm.flash) return llm.smart;
+  return llm.flash ?? llm.smart;
+}
+
+/**
  * 已核实的 LLM token 价格表（CNY，微元/百万 token）。
  *
  * 只允许写入来源可核实的公开价（官方定价页快照 + 核实日期）。
@@ -217,15 +230,15 @@ function buildLlmSeedEntries(
     return [];
   }
 
-  const flash =
-    llm.flash && "reusesSmart" in llm.flash ? llm.smart : llm.flash ?? llm.smart;
+  const smart = resolveLlmTierTarget(llm, "llm.smart");
+  const flash = resolveLlmTierTarget(llm, "llm.flash");
 
   return [
     buildLlmEntry({
       slot: "llm.smart",
-      providerKey: llm.smart.providerKey,
-      modelId: llm.smart.modelId,
-      pricing: llmTokenPricing(llm.smart),
+      providerKey: smart.providerKey,
+      modelId: smart.modelId,
+      pricing: llmTokenPricing(smart),
       isDefault: true,
     }),
     buildLlmEntry({

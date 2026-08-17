@@ -165,28 +165,29 @@ describe("pricing catalog seed", () => {
   });
 });
 
+/** 任务 2 迁移种下的占位行（dashscope LLM + 空 pricing），seed 应用后必须被禁用。 */
+function makeStaleMigrationRow(): ProviderModelCatalogRecord {
+  const now = new Date();
+  return {
+    id: "llm.smart.dashscope.qwen-max",
+    capability: "llm.smart",
+    providerKey: "dashscope",
+    modelId: "qwen-max",
+    modelVersion: null,
+    displayName: "通义千问 Max（智能）",
+    qualityTier: "high",
+    speedTier: "slow",
+    parameterCapabilitiesJson: {},
+    pricingVersion: "dashscope-llm-2026-08-12",
+    pricingJson: {},
+    status: "active",
+    isDefault: true,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 describe("provider model catalog repository", () => {
-  function makeStaleMigrationRow(): ProviderModelCatalogRecord {
-    // 任务 2 迁移种下的占位行（dashscope LLM + 空 pricing），seed 应用后必须被禁用。
-    const now = new Date();
-    return {
-      id: "llm.smart.dashscope.qwen-max",
-      capability: "llm.smart",
-      providerKey: "dashscope",
-      modelId: "qwen-max",
-      modelVersion: null,
-      displayName: "通义千问 Max（智能）",
-      qualityTier: "high",
-      speedTier: "slow",
-      parameterCapabilitiesJson: {},
-      pricingVersion: "dashscope-llm-2026-08-12",
-      pricingJson: {},
-      status: "active",
-      isDefault: true,
-      createdAt: now,
-      updatedAt: now,
-    };
-  }
 
   it("applies the seed and disables stale rows that are not part of the seed", async () => {
     const db = createDbClient();
@@ -217,11 +218,47 @@ describe("provider model catalog repository", () => {
     expect(second.disabledStaleIds).toEqual([]);
     expect(listProviderModelCatalog(db).length).toBe(seed.length);
   });
+
+  it("persists through the first-aggregate writer before updating the in-memory map", async () => {
+    const db = createDbClient();
+    const persisted: string[] = [];
+    db.firstAggregateWriter = {
+      ownerId: "test",
+      async saveProviderModelCatalogEntry(record: ProviderModelCatalogRecord) {
+        persisted.push(record.id);
+      },
+    } as never;
+    const seed = buildPricingCatalogSeed(REAL_TIER_INPUT);
+    await applyProviderModelCatalogSeed(db, seed);
+    expect(persisted.length).toBe(seed.length);
+    expect(listProviderModelCatalog(db).length).toBe(seed.length);
+  });
+
+  it("propagates writer failures and does not update memory for the failed entry", async () => {
+    // 对抗（diff_reviewer I-4）：writer 失败必须向上传播，且失败条目不得先入内存。
+    const db = createDbClient();
+    const seed = buildPricingCatalogSeed(REAL_TIER_INPUT);
+    const failingId = seed[0]!.id;
+    db.firstAggregateWriter = {
+      ownerId: "test",
+      async saveProviderModelCatalogEntry(record: ProviderModelCatalogRecord) {
+        if (record.id === failingId) {
+          throw new Error("simulated writer failure");
+        }
+      },
+    } as never;
+    await expect(applyProviderModelCatalogSeed(db, seed)).rejects.toThrow(
+      "simulated writer failure",
+    );
+    expect(db.providerModelCatalog.has(failingId)).toBe(false);
+  });
 });
 
 describe("generation capability readiness", () => {
   function readinessInput(
-    overrides?: Partial<GenerationCapabilityReadinessInput>,
+    overrides: Partial<GenerationCapabilityReadinessInput> & {
+      catalog: ProviderModelCatalogRecord[];
+    },
   ): GenerationCapabilityReadinessInput {
     return { ...REAL_TIER_INPUT, ...overrides };
   }
@@ -381,6 +418,21 @@ describe("generation capability readiness", () => {
     // 非 demo 的正常环境 + 已配置凭据：视频可真实派发。
     const normalResult = evaluateGenerationCapabilityReadiness(readinessInput({ catalog: seed }));
     expect(normalResult.items[videoEntry.id]?.realDispatchAllowed).toBe(true);
+  });
+
+  it("keeps readiness ok=true when only stale disabled rows exist alongside a healthy seed", () => {
+    // 对抗（diff_reviewer I-2）：disabled 是目录合法状态（迁移占位行被 seed 禁用后仍在表内），
+    // 不得让 Prisma 部署态 readiness 永久 ok=false；disabled 行本身保持不可报价。
+    const seed = buildPricingCatalogSeed(REAL_TIER_INPUT);
+    const stale = makeStaleMigrationRow();
+    stale.status = "disabled";
+    stale.isDefault = false;
+    const result = evaluateGenerationCapabilityReadiness(
+      readinessInput({ catalog: [...seed, stale] }),
+    );
+    expect(result.ok).toBe(true);
+    expect(result.items[stale.id]?.quotable).toBe(false);
+    expect(result.issues).toEqual([]);
   });
 
   it("does not leak secrets or env var names in readiness output", () => {

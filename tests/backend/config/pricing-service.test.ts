@@ -341,6 +341,107 @@ describe("pricing service unit pricing", () => {
     expect(result.value.authorization_cost_micros).toBe("7000");
   });
 
+  it("keeps the authorization bound >= estimate when estimated tokens exceed the operation budget", () => {
+    // 对抗（diff_reviewer I-1）：估算 token 超出 budget 时，授权上界不得低于估算，
+    // 否则预算门禁按更小的授权值放行，形成低估漏洞。
+    const result = price({
+      catalog: [pricedLlmEntry()],
+      workload: [
+        {
+          capability: "llm.smart",
+          provider_model_id: "llm.smart.test.priced",
+          unit_type: "token",
+          operation: "topic.generate", // budget 80000/40000
+          estimated_input_tokens: 400000,
+          estimated_output_tokens: 200000,
+        },
+      ],
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    const estimated = Number(result.value.estimated_cost_micros!);
+    const authorization = Number(result.value.authorization_cost_micros!);
+    expect(authorization).toBeGreaterThanOrEqual(estimated);
+    expect(authorization).toBe(estimated); // 超预算时授权取较大值（=估算）
+  });
+
+  it("keeps the authorization bound >= estimate when estimated video seconds exceed the per-task cap total", () => {
+    const result = price({
+      catalog: [videoEntry()],
+      workload: [
+        {
+          capability: "video.image_to_video",
+          provider_model_id: "video.image_to_video.dashscope.test",
+          unit_type: "video_second",
+          operation: "assets.generate",
+          video_task_count: 3, // 上限 3 × 15s = 45s
+          estimated_seconds_total: 100, // 输入与任务上限不一致
+          parameters: { api_quality: "standard_720p" },
+        },
+      ],
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    const estimated = Number(result.value.estimated_cost_micros!);
+    const authorization = Number(result.value.authorization_cost_micros!);
+    expect(authorization).toBeGreaterThanOrEqual(estimated);
+  });
+
+  it("rounds fractional estimated video seconds up instead of down", () => {
+    const result = price({
+      catalog: [videoEntry()],
+      workload: [
+        {
+          capability: "video.image_to_video",
+          provider_model_id: "video.image_to_video.dashscope.test",
+          unit_type: "video_second",
+          operation: "assets.generate",
+          video_task_count: 1,
+          estimated_seconds_total: 2.4,
+          parameters: { api_quality: "standard_720p" },
+        },
+      ],
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    // 2.4s 向上取整为 3s × 600000，不低估。
+    expect(result.value.estimated_cost_micros).toBe("1800000");
+  });
+
+  it("returns zero totals for an empty workload instead of null", () => {
+    // 空 workload 是零费用报价；null 金额保留给 unbounded 语义。
+    const result = price({ catalog: [imageEntry()], workload: [] });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value.estimated_cost_micros).toBe("0");
+    expect(result.value.authorization_cost_micros).toBe("0");
+    expect(result.value.contains_unbounded_item).toBe(false);
+  });
+
+  it("treats negative price strings as unparseable (unbounded), never negative cost", () => {
+    const entry = makeCatalogEntry({
+      id: "image.generate.negative",
+      capability: "image.generate",
+      pricingJson: {
+        unit_type: "image",
+        currency: "CNY",
+        price_micros_per_image: "-200000",
+        source_note: "脏数据 fixture",
+      },
+    });
+    const result = price({
+      catalog: [entry],
+      workload: [
+        {
+          capability: "image.generate",
+          provider_model_id: "image.generate.negative",
+          unit_type: "image",
+          operation: "assets.generate",
+          image_count: 1,
+        },
+      ],
+    });
+    if (!result.ok) throw new Error(result.error.message);
+    expect(result.value.contains_unbounded_item).toBe(true);
+    expect(result.value.items[0]?.estimated_cost_micros).toBeNull();
+  });
+
   it("prices stub/free catalog entries as exact zero without marking them unbounded", () => {
     const seed = buildPricingCatalogSeed({ llm: { mode: "stub" } });
     const result = price({
@@ -521,6 +622,54 @@ describe("pricing service input hardening", () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.code).toBe("pricing_unit_type_mismatch");
+  });
+
+  it("rejects workload capability that does not match the catalog entry capability", () => {
+    const result = price({
+      catalog: [imageEntry()],
+      workload: [
+        {
+          capability: "llm.flash",
+          provider_model_id: "image.generate.dashscope.test",
+          unit_type: "image",
+          operation: "assets.generate",
+          image_count: 1,
+        },
+      ],
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("pricing_capability_mismatch");
+  });
+
+  it("rejects malformed catalog entries with a structured error instead of throwing", () => {
+    // 对抗（diff_reviewer I-3）：active 条目缺 pricingJson 等脏数据必须落结构化错误，
+    // 不得以裸 TypeError 崩溃。
+    const malformed = {
+      id: "image.generate.malformed",
+      capability: "image.generate",
+      providerKey: "dashscope",
+      modelId: "broken",
+      status: "active",
+      isDefault: false,
+      pricingVersion: "v",
+      // 故意缺 pricingJson / parameterCapabilitiesJson
+    };
+    const result = price({
+      catalog: [malformed as never],
+      workload: [
+        {
+          capability: "image.generate",
+          provider_model_id: "image.generate.malformed",
+          unit_type: "image",
+          operation: "assets.generate",
+          image_count: 1,
+        },
+      ],
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("pricing_invalid_workload");
   });
 });
 

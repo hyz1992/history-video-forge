@@ -28,9 +28,11 @@ export interface ApplySeedResult {
 /**
  * 应用服务端受控目录 seed。
  *
- * - seed 内条目按 id upsert（Map + firstAggregateWriter），保持 active 状态。
+ * - seed 内条目按 id upsert（firstAggregateWriter + 内存 Map），保持 active 状态。
  * - 不在 seed 内的既有条目（如任务 2 迁移的占位行）统一降级为
  *   status=disabled、isDefault=false，避免与 seed 并存形成多个 active 默认项。
+ * - 写序遵循"数据库成功后才更新内存"（任务 3/6 已确立的模式）：writer 失败时
+ *   错误向上传播，内存只反映已成功持久化的前缀；重跑 seed 可自愈。
  * - 幂等：重复应用同一 seed 不会再产生 disabledStaleIds。
  */
 export async function applyProviderModelCatalogSeed(
@@ -41,7 +43,7 @@ export async function applyProviderModelCatalogSeed(
   const disabledStaleIds: string[] = [];
   const now = new Date();
 
-  // 1. 禁用不在 seed 内的陈旧行（已 disabled 的行跳过，保证幂等）。
+  // 1. 禁用不在 seed 内的陈旧行（已 disabled 且非默认的行跳过，保证幂等）。
   for (const existing of db.providerModelCatalog.values()) {
     if (seedIds.has(existing.id)) continue;
     if (existing.status !== "active" && !existing.isDefault) continue;
@@ -51,15 +53,15 @@ export async function applyProviderModelCatalogSeed(
       isDefault: false,
       updatedAt: now,
     };
-    db.providerModelCatalog.set(disabled.id, disabled);
     await db.firstAggregateWriter?.saveProviderModelCatalogEntry(disabled);
+    db.providerModelCatalog.set(disabled.id, disabled);
     disabledStaleIds.push(disabled.id);
   }
 
-  // 2. upsert seed 条目（内存态先写 Map，Prisma 激活态同步落库）。
+  // 2. upsert seed 条目（先持久化，成功后才更新内存）。
   for (const entry of seed) {
-    db.providerModelCatalog.set(entry.id, entry);
     await db.firstAggregateWriter?.saveProviderModelCatalogEntry(entry);
+    db.providerModelCatalog.set(entry.id, entry);
   }
 
   return {

@@ -1,6 +1,9 @@
 import type { ProviderModelCatalogRecord } from "../../db/client.js";
 import { CAPABILITY_SLOTS } from "../../../../shared/src/index.js";
-import type { LlmTierSeedInput } from "./pricing-catalog.seed.js";
+import {
+  resolveLlmTierTarget,
+  type LlmTierSeedInput,
+} from "./pricing-catalog.seed.js";
 
 /**
  * S2-2A 任务 7：生成能力 readiness 交叉校验。
@@ -33,7 +36,6 @@ const REAL_VIDEO_CAPABILITIES = ["video.image_to_video"] as const;
 export type ReadinessIssueCode =
   | "catalog_missing_active_default"
   | "catalog_multiple_active_defaults"
-  | "catalog_entry_disabled"
   | "llm_tier_mismatch"
   | "llm_provider_unavailable"
   | "media_adapter_unregistered"
@@ -132,14 +134,10 @@ export function evaluateGenerationCapabilityReadiness(
     for (const entry of activeEntries) {
       validateEntryConsistency(entry, input, pushIssue);
     }
-    for (const entry of entries.filter((e) => e.status !== "active")) {
-      pushIssue(entry, {
-        code: "catalog_entry_disabled",
-        capability,
-        provider_model_id: entry.id,
-        message: `目录项 ${entry.id} 处于 disabled 状态，不得报价或进入新运行`,
-      });
-    }
+    // disabled 行是目录的合法状态（详细设计 4.3：status=disabled 表示不可用于新运行），
+    // 不构成 readiness issue——否则任务 2 迁移占位行被 seed 禁用后，Prisma 部署态
+    // readiness 会永久 ok=false。disabled 行的不可报价语义由下方 items 的
+    // quotable=false 与计价服务的 status 检查共同保证。
   }
 
   // 2. demo/test 环境强制视频不可真实派发（即使凭据已配置）。
@@ -226,11 +224,10 @@ function validateLlmEntry(
   const target =
     input.llm.mode === "stub"
       ? { providerKey: "stub", modelId: "stub-model" }
-      : entry.capability === "llm.smart"
-        ? input.llm.smart
-        : input.llm.flash && "reusesSmart" in input.llm.flash
-          ? input.llm.smart
-          : (input.llm.flash ?? input.llm.smart);
+      : resolveLlmTierTarget(
+          input.llm,
+          entry.capability === "llm.smart" ? "llm.smart" : "llm.flash",
+        );
 
   if (
     entry.providerKey !== target.providerKey ||

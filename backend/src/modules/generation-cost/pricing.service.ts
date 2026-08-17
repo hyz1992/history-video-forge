@@ -95,17 +95,47 @@ export const PricingWorkloadItemSchema = z.discriminatedUnion("unit_type", [
 ]);
 export type PricingWorkloadItem = z.infer<typeof PricingWorkloadItemSchema>;
 
+/**
+ * catalog 条目的运行时结构校验（防脏数据导致裸 TypeError）。
+ * passthrough：catalog 记录还有展示字段（displayName 等），这里只守卫计价
+ * 必需的结构，不复制完整记录合同（真相源是 DbClient 的 ProviderModelCatalogRecord）。
+ */
+const CatalogEntrySchema = z
+  .object({
+    id: z.string().min(1),
+    capability: z.enum(CAPABILITY_SLOTS),
+    providerKey: z.string().min(1),
+    modelId: z.string().min(1),
+    status: z.enum(["active", "disabled"]),
+    isDefault: z.boolean(),
+    pricingVersion: z.string().min(1),
+    pricingJson: z.record(z.string(), z.unknown()),
+    parameterCapabilitiesJson: z.record(z.string(), z.unknown()),
+  })
+  .passthrough();
+
+/** 运行时校验后的 catalog 条目结构（内部消费类型）。 */
+type CatalogEntry = z.infer<typeof CatalogEntrySchema>;
+
 export const PriceGenerationWorkloadInputSchema = z
   .object({
-    catalog: z.array(z.custom<ProviderModelCatalogRecord>()),
+    catalog: z.array(CatalogEntrySchema),
     /** readiness 判定不可报价的目录项（服务端注入，如 tier 不一致/凭据缺失）。 */
     blockedProviderModelIds: z.array(z.string().min(1)).optional(),
     workload: z.array(PricingWorkloadItemSchema),
   })
   .strict();
-export type PriceGenerationWorkloadInput = z.infer<
-  typeof PriceGenerationWorkloadInputSchema
->;
+
+/**
+ * 计价输入的静态合同。catalog 静态类型使用 DbClient 记录（真相源）；
+ * zod schema 只做运行时结构守卫（passthrough 输出带索引签名，不适合作为
+* 对外输入类型）。PricingWorkloadItem 是 strict 判别联合，输入输出一致。
+ */
+export interface PriceGenerationWorkloadInput {
+  catalog: ProviderModelCatalogRecord[];
+  blockedProviderModelIds?: string[];
+  workload: PricingWorkloadItem[];
+}
 
 // --- operation token budget --------------------------------------------------
 
@@ -214,7 +244,8 @@ type CatalogPricing =
   | { kind: "unknown" };
 
 function parseDecimalMicros(value: unknown): bigint | null {
-  if (typeof value !== "string" || !/^-?\d+$/u.test(value)) return null;
+  // 只接受非负十进制整数字符串；负价为脏数据，按不可解析处理（→unbounded）。
+  if (typeof value !== "string" || !/^\d+$/u.test(value)) return null;
   try {
     return BigInt(value);
   } catch {
@@ -223,7 +254,7 @@ function parseDecimalMicros(value: unknown): bigint | null {
 }
 
 /** 解析目录项 pricingJson。free 条目返回零价；缺失/无法解析的价格返回 null（→unbounded）。 */
-function parseCatalogPricing(entry: ProviderModelCatalogRecord): CatalogPricing {
+function parseCatalogPricing(entry: CatalogEntry): CatalogPricing {
   const pricing = entry.pricingJson as Record<string, unknown>;
   const unitType = pricing["unit_type"];
   const free = pricing["free"] === true;
@@ -238,13 +269,19 @@ function parseCatalogPricing(entry: ProviderModelCatalogRecord): CatalogPricing 
       return { kind: "token", free, inputMicrosPerMillion: input, outputMicrosPerMillion: output };
     }
     case "image": {
-      const price = parseDecimalMicros(pricing["price_micros_per_image"]);
+      const price = free
+        ? parseDecimalMicros(pricing["price_micros_per_image"]) ?? 0n
+        : parseDecimalMicros(pricing["price_micros_per_image"]);
       return { kind: "image", free, microsPerImage: price };
     }
     case "video_second": {
       const raw = pricing["price_micros_per_second_by_quality"];
       if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-        return { kind: "video_second", free, microsPerSecondByQuality: null };
+        return {
+          kind: "video_second",
+          free,
+          microsPerSecondByQuality: free ? {} : null,
+        };
       }
       const map: Record<string, bigint> = {};
       for (const [quality, value] of Object.entries(raw as Record<string, unknown>)) {
@@ -257,11 +294,15 @@ function parseCatalogPricing(entry: ProviderModelCatalogRecord): CatalogPricing 
       return { kind: "video_second", free, microsPerSecondByQuality: map };
     }
     case "tts_character": {
-      const price = parseDecimalMicros(pricing["price_micros_per_10k_characters"]);
+      const price = free
+        ? parseDecimalMicros(pricing["price_micros_per_10k_characters"]) ?? 0n
+        : parseDecimalMicros(pricing["price_micros_per_10k_characters"]);
       return { kind: "tts_character", free, microsPer10kCharacters: price };
     }
     case "request": {
-      const price = parseDecimalMicros(pricing["price_micros_per_request"]);
+      const price = free
+        ? parseDecimalMicros(pricing["price_micros_per_request"]) ?? 0n
+        : parseDecimalMicros(pricing["price_micros_per_request"]);
       return { kind: "request", free, microsPerRequest: price };
     }
     default:
@@ -289,7 +330,7 @@ export function priceGenerationWorkload(
   const catalogById = new Map(input.catalog.map((entry) => [entry.id, entry]));
 
   const items: PricedWorkloadItem[] = [];
-  const usedEntries: ProviderModelCatalogRecord[] = [];
+  const usedEntries: CatalogEntry[] = [];
 
   for (const workloadItem of input.workload) {
     const entry = catalogById.get(workloadItem.provider_model_id);
@@ -334,15 +375,15 @@ export function priceGenerationWorkload(
   }
 
   // 汇总：任何 unbounded 项都使总估算/总授权为 null（预算比较不得当零）。
+  // 空 workload 是零费用报价（免费/纯本地运行），金额为 "0" 而不是 null——
+  // null 保留给 unbounded 语义。
   const containsUnbounded = items.some((item) => item.unbounded);
-  const totalEstimated =
-    containsUnbounded || items.length === 0
-      ? null
-      : items.reduce((sum, item) => sum + BigInt(item.estimated_cost_micros!), 0n).toString();
-  const totalAuthorization =
-    containsUnbounded || items.length === 0
-      ? null
-      : items.reduce((sum, item) => sum + BigInt(item.authorization_cost_micros!), 0n).toString();
+  const totalEstimated = containsUnbounded
+    ? null
+    : items.reduce((sum, item) => sum + BigInt(item.estimated_cost_micros!), 0n).toString();
+  const totalAuthorization = containsUnbounded
+    ? null
+    : items.reduce((sum, item) => sum + BigInt(item.authorization_cost_micros!), 0n).toString();
 
   // pricing hash：对本次报价实际使用的目录价格内容做标准化 SHA-256。
   const uniqueUsedEntries = [...new Map(usedEntries.map((e) => [e.id, e])).values()].sort((a, b) => {
@@ -378,7 +419,7 @@ export function priceGenerationWorkload(
 
 function priceItem(
   workloadItem: PricingWorkloadItem,
-  entry: ProviderModelCatalogRecord,
+  entry: CatalogEntry,
   pricing: CatalogPricing,
 ): { ok: true; value: PricedWorkloadItem } | { ok: false; error: { code: PricingErrorCode; message: string; provider_model_id?: string } } {
   // 单位必须与目录计价单位一致（目录未声明单位视作 unknown，不参与计价）。
@@ -422,10 +463,15 @@ function priceItem(
       const estimated =
         ceilDiv(BigInt(workloadItem.estimated_input_tokens) * inPrice, MICRO_PER_UNIT) +
         ceilDiv(BigInt(workloadItem.estimated_output_tokens) * outPrice, MICRO_PER_UNIT);
+      // 授权上界以 operation token budget 为基线；但当估算 token 已超出 budget 时
+      // （如超大 prompt），budget 不再是该 workload 的上界——授权取两者较大值，
+      // 保证 authorizationCostMicros 永远 >= estimatedCostMicros（预算门禁不变量）。
+      // 注：同一 operation 的多个 LLM item 各自套用完整 budget，方向保守（门禁更严）。
       const budget = OPERATION_TOKEN_BUDGETS[workloadItem.operation];
-      const authorization =
+      const budgetBound =
         ceilDiv(BigInt(budget.max_input_tokens) * inPrice, MICRO_PER_UNIT) +
         ceilDiv(BigInt(budget.max_output_tokens) * outPrice, MICRO_PER_UNIT);
+      const authorization = estimated > budgetBound ? estimated : budgetBound;
       return {
         ok: true,
         value: {
@@ -495,9 +541,14 @@ function priceItem(
       }
 
       const taskCount = BigInt(workloadItem.video_task_count);
-      const estimatedSeconds = workloadItem.estimated_seconds_total ?? Number(taskCount * BigInt(maxSecondsPerTask));
-      const estimated = ceilDiv(BigInt(Math.round(estimatedSeconds)) * pricePerSecond, 1n);
-      const authorization = taskCount * BigInt(maxSecondsPerTask) * pricePerSecond;
+      // 估算秒数向上取整，不因小数秒低估费用；授权按任务数×每任务上限秒数。
+      const estimatedSecondsCeil = BigInt(
+        Math.ceil(workloadItem.estimated_seconds_total ?? Number(taskCount * BigInt(maxSecondsPerTask))),
+      );
+      const estimated = estimatedSecondsCeil * pricePerSecond;
+      const taskBound = taskCount * BigInt(maxSecondsPerTask) * pricePerSecond;
+      // 估算秒数超出任务上限合计时（输入不一致），授权取较大值，保持 auth >= est 不变量。
+      const authorization = estimated > taskBound ? estimated : taskBound;
       return {
         ok: true,
         value: {
