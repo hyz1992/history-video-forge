@@ -56,6 +56,7 @@ runtime harness 是当前项目的核心验证层：
 6. `harness/docs/prompt-registry-spec.md`
 7. `harness/docs/harness-engineering-rules.md`
 8. `harness/docs/self-review-methodology.md`
+9. `harness/docs/independent-review-protocol.md`
 
 ---
 
@@ -71,6 +72,7 @@ runtime harness 是当前项目的核心验证层：
 - prompt 管理
 - Prompt Registry 规范
 - harness 工程规则
+- 独立审查协议（会话内审查-整改循环、审查分级 T0/T1/T2、反递归边界）
 - `todo-list-template.md`
 
 注意：
