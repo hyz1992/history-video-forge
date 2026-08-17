@@ -530,7 +530,7 @@ git commit -m "实现视频策略降级与严格阻塞语义"
 - 新建：`tests/backend/config/provider-model-catalog.test.ts`
 - 新建：`tests/backend/config/pricing-service.test.ts`
 
-- [ ] **步骤 1：先写目录与计价失败测试**
+- [x] **步骤 1：先写目录与计价失败测试**
 
 覆盖当前真实能力：
 
@@ -552,15 +552,15 @@ npx vitest run --configLoader runner tests/backend/config/provider-model-catalog
 
 预期：失败，后端目录和价格服务不存在。
 
-- [ ] **步骤 2：实现目录 seed 与价格版本 hash**
+- [x] **步骤 2：实现目录 seed 与价格版本 hash**
 
 价格必须集中在后端，带 `pricingVersion`、生效时间和来源备注。catalog 使用服务端受控 seed，不从只含连接信息的 `providers.json` 自动派生；启动 readiness 对两者做交叉校验。不要把密钥或环境变量名写进响应。
 
-- [ ] **步骤 3：实现纯计价服务**
+- [x] **步骤 3：实现纯计价服务**
 
 输入只接受标准 operation workload 与 resolved provider/model；同时支持 token、image、video_second、tts_character、request 单位，输出逐项费用、总估算、授权上界、unbounded items 和 pricing hash。
 
-- [ ] **步骤 4：运行验证并提交**
+- [x] **步骤 4：运行验证并提交**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/config/provider-model-catalog.test.ts tests/backend/config/pricing-service.test.ts tests/backend/config/env.test.ts
