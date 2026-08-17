@@ -20,6 +20,15 @@ export interface AppEnv {
   databaseUrl: string;
   promptAssetsDir: string;
   assetPlanningGenerationMode: AssetPlanningGenerationMode;
+  /**
+   * S2-2A 任务 7：生成成本治理相关 env 状态。
+   * mediaCredentialConfigured 是"unconfigured 环境"判定的单一 env 来源：
+   * 媒体凭据未配置时，付费媒体目录项不得报价/真实派发（readiness 交叉校验）。
+   */
+  generation: {
+    /** 服务端 DashScope 媒体凭据是否已配置（非空）。不暴露凭据值本身。 */
+    mediaCredentialConfigured: boolean;
+  };
   llm: {
     provider: RuntimeProvider;
     baseUrl?: string;
@@ -116,6 +125,10 @@ function buildEnv(dotEnvValues: Record<string, string>): AppEnv {
     assetPlanningGenerationMode: readAssetPlanningGenerationMode(
       readEnvValue("ASSET_PLANNING_GENERATION_MODE", dotEnvValues),
     ),
+    generation: {
+      mediaCredentialConfigured:
+        readNonEmptyEnvValue("ALIYUN_DASHSCOPE_API_KEY", dotEnvValues) !== undefined,
+    },
     llm: {
       provider: (readEnvValue("LLM_PROVIDER", dotEnvValues) ??
         "stub") as RuntimeProvider,
