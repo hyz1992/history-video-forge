@@ -426,7 +426,7 @@ LLM typed intent 仍负责视觉/SFX/BGM 语义，不负责配置优先级。loc
 2. usage cost record 保存失败请求的预计/实际可知费用。
 3. append `route_auto_downgraded` run event。
 4. 当前 `AssetManifest` 的实际 segment route 切换为 `image_with_motion`。
-5. notes/diagnostics 写入 `api_video_auto_downgraded` 和公开失败原因。
+5. notes 写入 `[strategy] api video failed: {reason_code} — {message}` 格式的降级说明，route_events 追加 `automatic_fallback`。
 6. assets 可继续进入 compose。
 
 ### 7.3 严格模式
@@ -434,7 +434,7 @@ LLM typed intent 仍负责视觉/SFX/BGM 语义，不负责配置优先级。loc
 `all_api_video` 下 API 视频失败：
 
 1. fallback artifact 保留但不自动激活。
-2. segment readiness 进入 `awaiting_video_retry_or_fallback_acceptance`。
+2. segment readiness 进入 `blocked_waiting_user`。
 3. assets decision 为 blocked/partial，不能假装全部 API 已完成。
 4. 用户可以重试 video task，或调用显式 accept-fallback API。
 5. accept-fallback 写审计日志和 `fallback_accepted` run event，并在 manifest 激活 image-with-motion；原运行快照保持不变。
