@@ -23,6 +23,12 @@ export interface ProviderDispatchGateTarget {
   capability: PaidMediaCapability;
   providerKey: string;
   modelId: string;
+  /**
+   * 当前部署区域（纵深防护，可选）：提供时要求匹配目录行声明的
+   * deployment_scope，防止目录被非 bootstrap 手段写入他区 active 行时
+   * 按旧区域价格派发。
+   */
+  deploymentScope?: string;
 }
 
 export type ProviderDispatchGateDecision =
@@ -32,7 +38,8 @@ export type ProviderDispatchGateDecision =
       reason_code:
         | "catalog_entry_missing"
         | "catalog_entry_disabled"
-        | "catalog_entry_mismatch";
+        | "catalog_entry_mismatch"
+        | "catalog_entry_scope_mismatch";
       capability: PaidMediaCapability;
       provider_key: string;
       model_id: string;
@@ -48,6 +55,18 @@ export function checkProviderDispatchGate(
   db: DbClient,
   target: ProviderDispatchGateTarget,
 ): ProviderDispatchGateDecision {
+  const deny = (
+    reason_code: Exclude<ProviderDispatchGateDecision, { allowed: true }>["reason_code"],
+    message: string,
+  ): ProviderDispatchGateDecision => ({
+    allowed: false,
+    reason_code,
+    capability: target.capability,
+    provider_key: target.providerKey,
+    model_id: target.modelId,
+    message,
+  });
+
   let capabilityHasActiveRow = false;
   for (const entry of db.providerModelCatalog.values()) {
     if (entry.capability !== target.capability) continue;
@@ -56,33 +75,31 @@ export function checkProviderDispatchGate(
       continue;
     }
     if (entry.status !== "active") {
-      return {
-        allowed: false,
-        reason_code: "catalog_entry_disabled",
-        capability: target.capability,
-        provider_key: target.providerKey,
-        model_id: target.modelId,
-        message: `目录项 ${entry.id} 不可用于新运行（disabled），禁止真实派发`,
-      };
+      return deny(
+        "catalog_entry_disabled",
+        `目录项 ${entry.id} 不可用于新运行（disabled），禁止真实派发`,
+      );
+    }
+    if (
+      target.deploymentScope !== undefined &&
+      (entry.parameterCapabilitiesJson as Record<string, unknown>)["deployment_scope"] !==
+        target.deploymentScope
+    ) {
+      return deny(
+        "catalog_entry_scope_mismatch",
+        `目录项 ${entry.id} 的部署区域与当前运行区域 (${target.deploymentScope}) 不一致，禁止真实派发`,
+      );
     }
     return { allowed: true };
   }
   if (capabilityHasActiveRow) {
-    return {
-      allowed: false,
-      reason_code: "catalog_entry_mismatch",
-      capability: target.capability,
-      provider_key: target.providerKey,
-      model_id: target.modelId,
-      message: `capability ${target.capability} 存在 active 目录项，但与实际执行模型 (${target.providerKey}:${target.modelId}) 不匹配，禁止真实派发`,
-    };
+    return deny(
+      "catalog_entry_mismatch",
+      `capability ${target.capability} 存在 active 目录项，但与实际执行模型 (${target.providerKey}:${target.modelId}) 不匹配，禁止真实派发`,
+    );
   }
-  return {
-    allowed: false,
-    reason_code: "catalog_entry_missing",
-    capability: target.capability,
-    provider_key: target.providerKey,
-    model_id: target.modelId,
-    message: `capability ${target.capability} 没有目录项 (${target.providerKey}:${target.modelId})，禁止真实派发`,
-  };
+  return deny(
+    "catalog_entry_missing",
+    `capability ${target.capability} 没有目录项 (${target.providerKey}:${target.modelId})，禁止真实派发`,
+  );
 }

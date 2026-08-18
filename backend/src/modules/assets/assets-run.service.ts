@@ -26,6 +26,7 @@ import { validateAssetsManifest } from "./assets-local-validator";
 import { createAssetProviderRegistry } from "./assets-provider-registry.js";
 import type { AssetProviderAdapter } from "./assets-provider-adapter.js";
 import { checkProviderDispatchGate } from "../generation-cost/provider-dispatch-gate.js";
+import { resolveDashscopeDeploymentScope } from "../generation-cost/pricing-catalog.seed.js";
 import { executeAssetManifest } from "./assets-execution-engine.js";
 import { createFakeTtsProvider } from "./providers/fake-tts-provider.js";
 import { createFakeImageProvider } from "./providers/fake-image-provider.js";
@@ -394,6 +395,7 @@ export function buildProviderRegistry(input: { db: DbClient }) {
       capability: "tts.synthesize",
       providerKey: "dashscope",
       modelId: dashscope.ttsModel,
+      deploymentScope: resolveDashscopeDeploymentScope(dashscope.baseUrl),
     });
     if (gateTts.allowed) {
       adapters.unshift(
@@ -414,6 +416,7 @@ export function buildProviderRegistry(input: { db: DbClient }) {
       capability: "image.generate",
       providerKey: "dashscope",
       modelId: dashscope.imageModel,
+      deploymentScope: resolveDashscopeDeploymentScope(dashscope.baseUrl),
     });
     if (gateImage.allowed) {
       adapters.unshift(
@@ -434,6 +437,7 @@ export function buildProviderRegistry(input: { db: DbClient }) {
       capability: "video.image_to_video",
       providerKey: "dashscope",
       modelId: dashscope.imageToVideoModel,
+      deploymentScope: resolveDashscopeDeploymentScope(dashscope.baseUrl),
     });
     if (gateVideo.allowed) {
       adapters.unshift(

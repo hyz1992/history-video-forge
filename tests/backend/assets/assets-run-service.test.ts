@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 /** S2-2A 任务 6：provider 授权只来自后端 env；测试通过 env 注入驱动 DashScope。 */
 const DASHSCOPE_ENV: Record<string, string> = {
   ALIYUN_DASHSCOPE_API_KEY: "test-key",
-  ALIYUN_DASHSCOPE_BASE_URL: "https://dashscope.test",
+  ALIYUN_DASHSCOPE_BASE_URL: "https://dashscope.aliyuncs.com",
   ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL: "wan2.6-t2i",
   ALIYUN_DASHSCOPE_TTS_MODEL: "qwen3-tts-instruct-flash",
   ALIYUN_DASHSCOPE_IMAGE_TO_VIDEO_MODEL: "wan2.7-i2v-2026-04-25",
@@ -611,7 +611,7 @@ describe("assets run service integration", () => {
     const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
       const urlText = String(url);
       const headers = new Headers(init?.headers);
-      if (urlText.startsWith("https://dashscope.test/")) {
+      if (urlText.startsWith("https://dashscope.aliyuncs.com/")) {
         expect(headers.get("authorization")).toBe("Bearer test-key");
       }
 
@@ -703,7 +703,7 @@ const response = await runAssetsGeneration({
     const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
       const urlText = String(url);
       const headers = new Headers(init?.headers);
-      if (urlText.startsWith("https://dashscope.test/")) {
+      if (urlText.startsWith("https://dashscope.aliyuncs.com/")) {
         expect(headers.get("authorization")).toBe("Bearer test-key");
       }
 
@@ -865,7 +865,7 @@ const response = await runAssetsGeneration({
     const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
       const urlText = String(url);
       const headers = new Headers(init?.headers);
-      if (urlText.startsWith("https://dashscope.test/")) {
+      if (urlText.startsWith("https://dashscope.aliyuncs.com/")) {
         expect(headers.get("authorization")).toBe("Bearer test-key");
       }
 
@@ -963,7 +963,7 @@ const response = await runAssetsGeneration({
       makeImageToVideoAssetPlan();
     const dashscope = {
       apiKey: "test-key",
-      baseUrl: "https://dashscope.test",
+      baseUrl: "https://dashscope.aliyuncs.com",
       ttsModel: "qwen3-tts-instruct-flash",
       imageModel: "wan2.6-t2i",
       imageToVideoModel: "wan2.7-i2v-2026-04-25",
@@ -1001,7 +1001,7 @@ const response = await runAssetsGeneration({
     const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
       const urlText = String(url);
       const headers = new Headers(init?.headers);
-      if (urlText.startsWith("https://dashscope.test/")) {
+      if (urlText.startsWith("https://dashscope.aliyuncs.com/")) {
         expect(headers.get("authorization")).toBe("Bearer test-key");
       }
       if (urlText.endsWith("/api/v1/services/aigc/multimodal-generation/generation")) {

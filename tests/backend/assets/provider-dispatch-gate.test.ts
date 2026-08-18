@@ -4,6 +4,7 @@ import { createDbClient } from "../../../backend/src/db/client.js";
 import type { DbClient } from "../../../backend/src/db/client.js";
 import { buildProviderRegistry } from "../../../backend/src/modules/assets/assets-run.service.js";
 import { checkProviderDispatchGate } from "../../../backend/src/modules/generation-cost/provider-dispatch-gate.js";
+import { resolveDashscopeDeploymentScope } from "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js";
 import { buildPricingCatalogSeed } from "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js";
 
 /**
@@ -103,6 +104,33 @@ describe("provider dispatch gate", () => {
     expect(
       registry.findAdapter({ taskType: "video_clip", enabledProviderTypes: ["video"] }),
     ).toBeNull();
+  });
+
+  it("blocks dispatch when the catalog row declares a different deployment scope", () => {
+    injectDashscopeEnv();
+    const db = createDbClient();
+    seedDashscopeCatalog(db);
+    // 目录行声明 cn-beijing，gate 被注入 singapore 运行区域 → 拒绝。
+    const decision = checkProviderDispatchGate(db, {
+      capability: "video.image_to_video",
+      providerKey: "dashscope",
+      modelId: "wan2.7-i2v-2026-04-25",
+      deploymentScope: "singapore",
+    });
+    expect(decision.allowed).toBe(false);
+    if (!decision.allowed) {
+      expect(decision.reason_code).toBe("catalog_entry_scope_mismatch");
+    }
+  });
+
+  it("resolves deployment scope from exact hostnames only and fails closed otherwise", () => {
+    expect(resolveDashscopeDeploymentScope(undefined)).toBe("cn-beijing");
+    expect(resolveDashscopeDeploymentScope("https://dashscope.aliyuncs.com/api/v1")).toBe("cn-beijing");
+    expect(resolveDashscopeDeploymentScope("https://dashscope-intl.aliyuncs.com")).toBe("singapore");
+    // 含 aliyuncs 子串的私有代理域名不得误判为已知区域（精确主机匹配）。
+    expect(resolveDashscopeDeploymentScope("https://dashscope.aliyuncs.com.evil.example")).toBe("unknown");
+    expect(resolveDashscopeDeploymentScope("https://private.example.com")).toBe("unknown");
+    expect(resolveDashscopeDeploymentScope("not-a-url")).toBe("unknown");
   });
 
   it("reports structured gate decisions without secrets or env var names", () => {

@@ -26,7 +26,7 @@ import { buildTestAuth } from "../auth/test-utils.js";
 /** S2-2A 任务 6：provider 授权只来自后端 env。 */
 const DASHSCOPE_ENV: Record<string, string> = {
   ALIYUN_DASHSCOPE_API_KEY: "test-key",
-  ALIYUN_DASHSCOPE_BASE_URL: "https://dashscope.test",
+  ALIYUN_DASHSCOPE_BASE_URL: "https://dashscope.aliyuncs.com",
   ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL: "wan2.6-t2i",
   ALIYUN_DASHSCOPE_TTS_MODEL: "qwen3-tts-instruct-flash",
   ALIYUN_DASHSCOPE_IMAGE_TO_VIDEO_MODEL: "wan2.7-i2v-2026-04-25",
@@ -796,7 +796,7 @@ describe("assets generate api", () => {
       vi.fn(async (url: string | URL, init?: RequestInit) => {
         const urlText = String(url);
         const headers = new Headers(init?.headers);
-        if (urlText.startsWith("https://dashscope.test/")) {
+        if (urlText.startsWith("https://dashscope.aliyuncs.com/")) {
           expect(headers.get("authorization")).toBe("Bearer test-key");
         }
 
@@ -908,7 +908,7 @@ describe("assets generate api", () => {
       vi.fn(async (url: string | URL, init?: RequestInit) => {
         const urlText = String(url);
         const headers = new Headers(init?.headers);
-        if (urlText.startsWith("https://dashscope.test/")) {
+        if (urlText.startsWith("https://dashscope.aliyuncs.com/")) {
           expect(headers.get("authorization")).toBe("Bearer test-key");
         }
 

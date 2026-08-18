@@ -149,6 +149,32 @@ describe("generation cost catalog bootstrap (prisma)", () => {
     expect(videoRow?.isDefault).toBe(false);
   });
 
+  it("disables media rows and keeps llm rows when restarting under an unknown deployment scope", async () => {
+    // 区域链路（diff_reviewer Minor-4）：北京 bootstrap 后媒体行 active；
+    // 切换未知 endpoint 重启 → 媒体行被禁用（公开目录无媒体行），LLM 行保留，
+    // readiness 输出 capability 级 media_deployment_scope_unknown。
+    const { client, db } = await createBootstrappedContext();
+    void client;
+    const unknownInput = {
+      llm: RESOLVED_LLM_INPUT,
+      media: { registeredModels: [], credentialConfigured: true, deploymentScope: "unknown" as const },
+      environment: NORMAL_ENVIRONMENT,
+    };
+    const result = await bootstrapGenerationCostCatalog(db, unknownInput);
+    expect(result.readiness.ok).toBe(false);
+    expect(
+      result.readiness.issues.filter((i) => i.code === "media_deployment_scope_unknown").length,
+    ).toBe(3);
+    for (const capability of ["image.generate", "video.image_to_video", "tts.synthesize"]) {
+      const row = listProviderModelCatalog(db).find((e) => e.capability === capability);
+      expect(row?.status, capability).toBe("disabled");
+    }
+    // LLM 不受区域影响：seed 行保持 active（占位行被禁用后仍存在）。
+    const llmRows = listProviderModelCatalog(db).filter((e) => e.capability === "llm.smart");
+    expect(llmRows.some((e) => e.status === "active")).toBe(true);
+    expect(llmRows.some((e) => e.status === "disabled")).toBe(true); // 迁移占位行
+  });
+
   it("rolls back the whole batch when any catalog upsert fails mid-way", async () => {
     const { client, db } = await createBootstrappedContext();
     const before = await client.providerModelCatalog.count();
