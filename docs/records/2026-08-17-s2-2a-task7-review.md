@@ -1,6 +1,6 @@
 # S2-2A 任务 7 审查记录（T2）
 
-日期：2026-08-17
+日期：2026-08-17（首轮）／2026-08-18（重开整改）
 
 任务：S2-2A 任务 7 —— 建立 provider/model 目录与后端全能力价格服务。
 
@@ -8,15 +8,18 @@
 
 - `0c75bde` 建立生成能力目录与后端价格服务（初始实现）
 - `39c4dc9` 整改任务 7 一轮：授权上界不低于估算、disabled 行不翻转 readiness、catalog 运行时校验与 writer 失败路径测试
-- 本记录随第三轮 Minor 整改（free 视频档位零价回退 + 注释修正）一并提交
+- `df30c62` 整改任务 7 二轮：free 视频档位零价回退并落盘 T2 审查记录与移交项
+- `1809111` 勾选计划任务 7 完成复选框
+- `f959c91` 重开整改（用户外部校准审计后）：启动接线目录 seed 与 readiness、媒体模型精确交叉校验、安全整数防护与事务批量 seed
 
 审查级别：T2（共享配置合同与费用）。按 harness/docs/independent-review-protocol.md 执行：diff_reviewer + contract_reviewer 并行首轮 → 整改 → 双 reviewer 复审收敛 → final_reviewer 终审一次。
 
 验证证据：
 
-- `npx vitest run --configLoader runner tests/backend/config/` → 全部通过（首轮 111，二轮 121，三轮 122）
+- `npx vitest run --configLoader runner tests/backend/config/` → 全部通过（首轮 111，二轮 121，三轮 122；重开整改后 134）
 - `npx tsc -p backend/tsconfig.json --noEmit` → 0 错误
-- 根 tsconfig 中与本任务相关文件无类型错误（.vue 解析与 asset-planning store 的报错为存量问题，非本任务引入）
+- 重开整改追加：`tests/backend/db/`（串行）26 文件 124 通过；`tests/backend/assets/`（串行）40 文件 251 通过；`npm run build:backend` 通过
+- 根 tsconfig 中与本任务相关文件无类型错误（.vue 解析与 asset-planning store 等报错为存量问题，基线 394 个，非本任务引入）
 
 ## 有效 finding 与闭环
 
@@ -32,7 +35,16 @@
 
 reviewer 事实错误更正：contract_reviewer 首轮 F2 断言"根 .env 未设置 LLM_SMART_MODEL/LLM_FLASH_MODEL"，经 grep 复核与 reviewer 二轮自查（其检索输出被 head 截断）确认错误；当前环境即 resolved tier 模式。
 
-## 移交项（后续任务必须承接）
+## 移交项状态更新（2026-08-18 重开整改后）
+
+原移交项 1/2（下节保留原文备查）已由 `f959c91` **闭合**：
+
+1. ~~启动期 catalog seed 应用与 readiness 交叉校验接线~~ → `backend/src/server.ts` 在 Prisma hydrate 后调用 `bootstrapGenerationCostCatalog`（`backend/src/modules/generation-cost/generation-cost-bootstrap.ts`）：真实 tier（stub/resolved/resolution_failed 含 legacy 回退映射）、媒体支持矩阵（`readDashscopeConfig`，env 覆盖后的真实执行模型）、凭据与环境全部进入 seed 与 readiness；不可报价项物化为目录 disabled，目录 API（只返回 active）与报价边界（pricing service 拒绝非 active）消费同一状态。真实 Prisma 启动集成测试：`tests/backend/db/generation-cost-catalog-bootstrap.test.ts`。
+2. ~~legacy env → seed 的 tier 映射语义~~ → `resolveGenerationCostBootstrapInput`：legacy 单 provider 回退由 tier resolver 解析为 provider="default"+legacy model，flash 未配置映射 reusesSmart；tier 解析失败映射 resolution_failed（seed 无 LLM 行，readiness 报缺默认项，fail-safe）。
+
+**启动处置策略补记**（设计 4.3 未定义，本次经用户重开指令授权后由实现固化，终审记录在案）：seed 持久化失败向上传播 = 启动失败（fail-closed，与迁移/hydrate 失败同等对待）；readiness 未完全通过不阻断启动（demo/test 环境必然存在视频禁派发约束，属正常运行状态），结果物化为目录 disabled + 公开原因码告警。物化是环境态：下次启动 seed 按当前环境重新 upsert，环境恢复后自动纠正（有跨环境恢复测试）。
+
+## 原移交项（2026-08-17 首轮记录，已被上述更新闭合）
 
 以下两项在任务 7 文件范围（不含 server.ts/app.ts）内无法完成，且实施计划任务 8 的现有步骤（quote/幂等/事务/dispatcher/路由注册）未显式承接。**归属需要用户裁决**（归入任务 8 增补步骤，或单独微任务）：
 
@@ -41,9 +53,16 @@ reviewer 事实错误更正：contract_reviewer 首轮 F2 断言"根 .env 未设
 
 ## 用户知情裁决项（不阻塞任务 7 关闭）
 
-- **真实 LLM 价格核实**：`VERIFIED_LLM_TOKEN_PRICING` 为空表，当前 smart（deepseek:deepseek-v4-pro）/flash（zhipu:glm-4）条目 unpriced → 全部 LLM 报价 unbounded，需显式授权。运营核实公开价后登记即可获得可信上界。建议在任务 8 报价链路上线前裁决。
+- **真实 LLM 价格核实**：`VERIFIED_LLM_TOKEN_PRICING` 为空表，当前 smart（deepseek:deepseek-v4-pro）/flash（zhipu:glm-4）条目 unpriced → 全部 LLM 报价 unbounded，需显式授权。运营核实公开价后登记即可获得可信上界。建议在任务 8 报价链路上线前裁决。（媒体价格已由外部审计核实与阿里云官方页一致：wan2.7-i2v 720P ¥0.6/秒、1080P ¥1/秒、qwen3-tts-instruct-flash ¥0.8/万字符。）
 
 ## 未验证项
 
 - 真实付费 provider 调用（按边界不触发；live check 需用户显式授权）。
-- Prisma 激活态下 `saveProviderModelCatalogEntry` 的真实落库集成行为（沿用任务 2/6 的测试基础设施状态，内存态 + writer 接口测试覆盖）。
+- ~~Prisma 激活态下 seed 真实落库~~ → 重开整改后已由 `tests/backend/db/generation-cost-catalog-bootstrap.test.ts` 覆盖（真实迁移 + Prisma client + DB 行断言 + 事务回滚）。
+- `startServer` 全进程启动时序无自动化测试（bootstrap 函数级已有 Prisma 集成覆盖；时序证据为 server.ts 代码位置 + tsc/build；补进程级启动冒烟属测试基建补强，建议随任务 8 顺带）。
+
+## 重开整改轮 reviewer 结论摘要（2026-08-18）
+
+- diff_reviewer：codex P1-1/P1-2/P1-3/P3 全部已闭合，无 Critical/Important 新问题；5 项 Minor（server 接线进程级测试缺失、跨环境恢复测试缺失[已补]、启动重写 updatedAt 噪音、凭据全局布尔近似[当前单 provider 等价]、env 覆盖模型→capability 不可报价[fail-closed 功能限制]）。
+- contract_reviewer：codex 验收基准 1-4 已闭合、基准 5（原部分修/未验证项）全部转已修/已验证、基准 6（任务 8+ 越界）未发现越界；4 项 Minor（审查记录滞后[本轮已更新]、单布尔凭据近似、启动处置策略未回写设计文档[已补记于本记录]、物化后 capability 零 active 默认项的次生状态[留档]）。
+- 物化次生状态留档：demo/test/unconfigured 下视频 capability 物化后为 0 个 active 默认项；对物化后目录重跑 readiness 会得到 catalog_missing_active_default（当前无此调用点，readiness 仅启动时执行一次）。

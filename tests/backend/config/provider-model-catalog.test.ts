@@ -570,6 +570,25 @@ describe("generation cost bootstrap", () => {
     expect(second.disabledProviderModelIds).toEqual([]);
     expect(listProviderModelCatalog(db).length).toBe(5);
   });
+
+  it("restores active catalog rows when the environment recovers (demo then non-demo restart)", async () => {
+    // 物化 disabled 是环境态：demo 启动禁视频 → 恢复正常环境重启后，
+    // seed 重新以 active upsert，视频目录项自动恢复。
+    const db = createDbClient();
+    await bootstrapGenerationCostCatalog(db, {
+      ...REAL_TIER_INPUT,
+      environment: { demoMode: true, testEnv: false },
+    });
+    const videoId = listProviderModelCatalog(db).find(
+      (e) => e.capability === "video.image_to_video",
+    )!.id;
+    expect(db.providerModelCatalog.get(videoId)?.status).toBe("disabled");
+
+    const recovered = await bootstrapGenerationCostCatalog(db, REAL_TIER_INPUT);
+    expect(recovered.readiness.ok).toBe(true);
+    expect(db.providerModelCatalog.get(videoId)?.status).toBe("active");
+    expect(db.providerModelCatalog.get(videoId)?.isDefault).toBe(true);
+  });
 });
 
 describe("resolve generation cost bootstrap input", () => {
