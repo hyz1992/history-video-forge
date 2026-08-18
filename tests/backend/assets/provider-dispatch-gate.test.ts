@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createDbClient } from "../../../backend/src/db/client.js";
 import type { DbClient } from "../../../backend/src/db/client.js";
-import { buildProviderRegistry } from "../../../backend/src/modules/assets/assets-run.service.js";
+import { buildProviderRegistry, readDashscopeConfig } from "../../../backend/src/modules/assets/assets-run.service.js";
 import { checkProviderDispatchGate } from "../../../backend/src/modules/generation-cost/provider-dispatch-gate.js";
 import { resolveDashscopeDeploymentScope } from "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js";
 import { buildPricingCatalogSeed } from "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js";
@@ -187,6 +187,31 @@ describe("provider dispatch gate", () => {
     expect(resolveDashscopeDeploymentScope("https://dashscope-intl.aliyuncs.com:8080")).toBe("unknown");
     // 显式 443 端口仍是合法 https。
     expect(resolveDashscopeDeploymentScope("https://dashscope.aliyuncs.com:443")).toBe("cn-beijing");
+    // codex 四审 I-1：显式空字符串是畸形 endpoint（adapter 会保留并拼相对路径），
+    // 必须 unknown fail-closed，而不是当成"未配置"的北京默认。
+    expect(resolveDashscopeDeploymentScope("")).toBe("unknown");
+    expect(resolveDashscopeDeploymentScope("   ")).toBe("unknown");
+  });
+
+  it("normalizes an empty base url to undefined so adapter, catalog and gate share the default beijing endpoint", () => {
+    // codex 四审 I-1 反例转正：ALIYUN_DASHSCOPE_BASE_URL="" 时，
+    // readDashscopeConfig 归一化为 undefined → adapter 用默认 https 北京地址，
+    // 目录（北京 active）与真实 adapter 配置一致 → 正常注册，不再拼相对路径。
+    vi.stubEnv("ALIYUN_DASHSCOPE_API_KEY", "test-key");
+    vi.stubEnv("ALIYUN_DASHSCOPE_BASE_URL", "");
+    const config = readDashscopeConfig(undefined);
+    expect(config.baseUrl).toBeUndefined();
+    expect(resolveDashscopeDeploymentScope(config.baseUrl)).toBe("cn-beijing");
+
+    const db = createDbClient();
+    seedDashscopeCatalog(db);
+    const registry = buildProviderRegistry({ db });
+    expect(
+      registry.findAdapter({ taskType: "video_clip", enabledProviderTypes: ["video"] }),
+    ).not.toBeNull();
+    expect(
+      registry.findAdapter({ taskType: "image_still", enabledProviderTypes: ["image"] }),
+    ).not.toBeNull();
   });
 
   it("reports structured gate decisions without secrets or env var names", () => {

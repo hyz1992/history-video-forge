@@ -319,7 +319,13 @@ function buildExecutionOptions(input: {
 export function readDashscopeConfig(input: DashscopeProviderConfig | undefined) {
   return {
     apiKey: input?.apiKey ?? process.env.ALIYUN_DASHSCOPE_API_KEY ?? "",
-    baseUrl: input?.baseUrl ?? process.env.ALIYUN_DASHSCOPE_BASE_URL,
+    // S2-2A 任务 7 四审（codex I-1）：baseUrl 配置语义统一为 nullish——
+    // 显式空字符串（.env 中 ALIYUN_DASHSCOPE_BASE_URL=）归一为 undefined，
+    // 使 adapter 的 `?? "https://dashscope.aliyuncs.com"` 默认值生效，
+    // 不再拼出相对 /api/v1 路径；bootstrap、gate 与 adapter 消费同一规范化值。
+    baseUrl: readOptionalDashscopeBaseUrl(
+      input?.baseUrl ?? process.env.ALIYUN_DASHSCOPE_BASE_URL,
+    ),
     imageModel:
       input?.imageModel ??
       process.env.ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL ??
@@ -364,6 +370,13 @@ function readOptionalNumber(value: string | undefined): number | undefined {
   }
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/** baseUrl 空字符串/纯空白归一为 undefined（adapter 的 nullish 默认值生效）。 */
+function readOptionalDashscopeBaseUrl(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? undefined : trimmed;
 }
 
 // S2-2A 任务 7 二次重开（codex P1-A）：导出供 gate 相关测试直接构造 registry。

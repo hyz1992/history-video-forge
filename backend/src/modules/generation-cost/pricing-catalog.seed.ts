@@ -124,15 +124,18 @@ export type DashscopeDeploymentScope = "cn-beijing" | "singapore" | "unknown";
 
 /**
  * 从 DashScope baseUrl 推导部署区域。
- * - 未配置 → cn-beijing（DashScope SDK 默认接入域名）。
- * - 仅接受 https: 协议、官方精确主机、空端口或 443；其他（http/ftp/非 443 端口/
- *   私有域名/无法解析）→ unknown（fail-closed：不种媒体目录、不报价、不派发）。
- *   防止 HTTP 明文传输 Bearer API key（codex 三审 I-2）。
+ * - 未配置（undefined）→ cn-beijing（DashScope SDK 默认接入域名，adapter 的
+ *   nullish 默认值即 https://dashscope.aliyuncs.com）。
+ * - 仅接受 https: 协议、空端口或 443、官方精确主机；其他（含**显式空字符串**、
+ *   http/ftp/非 443 端口/私有域名/无法解析）→ unknown（fail-closed：不种媒体
+ *   目录、不报价、不派发）。空字符串会被 adapter 保留并拼出相对 endpoint，
+ *   必须视为畸形而非"未配置"（codex 四审 I-1）。
  */
 export function resolveDashscopeDeploymentScope(
   baseUrl: string | undefined,
 ): DashscopeDeploymentScope {
-  if (!baseUrl) return "cn-beijing";
+  if (baseUrl === undefined) return "cn-beijing";
+  if (typeof baseUrl !== "string" || baseUrl.length === 0) return "unknown";
   let url: URL;
   try {
     url = new URL(baseUrl);
