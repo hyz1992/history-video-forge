@@ -50,6 +50,10 @@ export type ProviderDispatchGateDecision =
 /**
  * 权威目录 gate：检查将要真实调用的 (capability, provider, model) 是否为
  * active 目录项。纯函数，只读 db.providerModelCatalog 快照。
+ *
+ * 候选行可能因区域切换/旧目录升级共存（如北京 disabled + 新加坡 active）：
+ * 必须扫描全部候选，优先返回 `active + deployment_scope 精确匹配` 的当前行；
+ * 只有不存在精确 active 行时才返回 disabled / scope_mismatch / mismatch。
  */
 export function checkProviderDispatchGate(
   db: DbClient,
@@ -68,29 +72,42 @@ export function checkProviderDispatchGate(
   });
 
   let capabilityHasActiveRow = false;
+  let scopeMismatchEntry: { id: string; scope: unknown } | null = null;
+  let disabledExactEntry: { id: string } | null = null;
+
   for (const entry of db.providerModelCatalog.values()) {
     if (entry.capability !== target.capability) continue;
     if (entry.status === "active") capabilityHasActiveRow = true;
+    // 只关心同 (capability, provider, model) 的候选行；其余行仅用于 mismatch 判定。
     if (entry.providerKey !== target.providerKey || entry.modelId !== target.modelId) {
       continue;
     }
-    if (entry.status !== "active") {
-      return deny(
-        "catalog_entry_disabled",
-        `目录项 ${entry.id} 不可用于新运行（disabled），禁止真实派发`,
-      );
+    const declaredScope = (entry.parameterCapabilitiesJson as Record<string, unknown>)["deployment_scope"];
+    const scopeMatches =
+      target.deploymentScope === undefined || declaredScope === target.deploymentScope;
+
+    if (entry.status === "active" && scopeMatches) {
+      return { allowed: true };
     }
-    if (
-      target.deploymentScope !== undefined &&
-      (entry.parameterCapabilitiesJson as Record<string, unknown>)["deployment_scope"] !==
-        target.deploymentScope
-    ) {
-      return deny(
-        "catalog_entry_scope_mismatch",
-        `目录项 ${entry.id} 的部署区域与当前运行区域 (${target.deploymentScope}) 不一致，禁止真实派发`,
-      );
+    if (entry.status === "active") {
+      // active 但区域不匹配：记住用于 scope_mismatch（优先于 disabled 报告）。
+      scopeMismatchEntry ??= { id: entry.id, scope: declaredScope };
+    } else {
+      disabledExactEntry ??= { id: entry.id };
     }
-    return { allowed: true };
+  }
+
+  if (scopeMismatchEntry) {
+    return deny(
+      "catalog_entry_scope_mismatch",
+      `目录项 ${scopeMismatchEntry.id} 的部署区域 (${String(scopeMismatchEntry.scope)}) 与当前运行区域 (${target.deploymentScope}) 不一致，禁止真实派发`,
+    );
+  }
+  if (disabledExactEntry) {
+    return deny(
+      "catalog_entry_disabled",
+      `目录项 ${disabledExactEntry.id} 不可用于新运行（disabled），禁止真实派发`,
+    );
   }
   if (capabilityHasActiveRow) {
     return deny(

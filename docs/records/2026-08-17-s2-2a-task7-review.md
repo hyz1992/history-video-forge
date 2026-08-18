@@ -21,7 +21,7 @@
 验证证据：
 
 - `npx vitest run --configLoader runner tests/backend/config/` → 全部通过（首轮 111，二轮 121，三轮 122；重开整改后 135；二次重开后 140）
-- 二次重开轮（2026-08-18）：config 140 / api 130 / db 125（串行）/ assets 258（串行，含 dispatch gate 8 用例）；backend tsc 0 错误；build:backend 通过
+- 二次重开轮（2026-08-18）：config 140 / api 130 / db 125（串行）/ assets 258（串行，含 dispatch gate 7 用例）；backend tsc 0 错误；build:backend 通过
 - `npx tsc -p backend/tsconfig.json --noEmit` → 0 错误
 - 重开整改追加：`tests/backend/db/`（串行）26 文件 124 通过；`tests/backend/assets/`（串行）40 文件 251 通过；`npm run build:backend` 通过
 - 根 tsconfig 中与本任务相关文件无类型错误（.vue 解析与 asset-planning store 等报错为存量问题，基线 394 个，非本任务引入）
@@ -64,7 +64,7 @@ reviewer 事实错误更正：contract_reviewer 首轮 F2 断言"根 .env 未设
 
 - codex 第二轮 finding：P1-A（派发绕过 catalog gate）、P1-B（区域未进定价/readiness）、P3-A（事务测试 this 解绑假阳性）、P3-B（resolution_failed 丢失原因码）。
 - diff_reviewer 与 contract_reviewer 均判定四项全部闭合、无 Critical/Important 新问题；闭合成因：
-  - P1-A：`provider-dispatch-gate.ts` 纯函数 gate（missing/disabled/mismatch/scope_mismatch 四态），`buildProviderRegistry` 三真实 adapter 逐个过 gate（未通过不注册，执行引擎 no-adapter 路径不 fetch/不建 job）；三个生成入口（全量/单任务/升级）收敛于 `runAssetsGeneration` 单点；codex 反例"空 catalog+凭据仍调用视频"转正测试。
+  - P1-A：`provider-dispatch-gate.ts` 纯函数 gate（missing/disabled/mismatch/scope_mismatch 四态），`buildProviderRegistry` 三真实 adapter 逐个过 gate（未通过不注册，执行引擎 no-adapter 路径不 fetch/不建 job）；三个生成入口（全量/单任务直接经 `runAssetsGeneration`；upgrade-video 只创建 video_clip 任务，实际派发经后续单任务生成进入同一 gate 边界）；codex 反例"空 catalog+凭据仍调用视频"转正测试。
   - P1-B：`resolveDashscopeDeploymentScope`（精确主机匹配）→ 区域进目录 id/pricingVersion/pricingJson/readiness；新加坡视频价 749420/1124130 微元每秒（codex 核实值），未核实的新加坡 image/tts unpriced→unbounded；unknown 区域不种媒体行且 capability 级 `media_deployment_scope_unknown`。
   - P3-A：回滚测试经 writer 实例调用并断言 DB CHECK 约束错误（非 this undefined）。
   - P3-B：capability 级 `llm_provider_unavailable` / `media_deployment_scope_unknown` 在无条目时也可达。

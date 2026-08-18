@@ -106,6 +106,55 @@ describe("provider dispatch gate", () => {
     ).toBeNull();
   });
 
+  it("allows the current active scope row even when an old-scope disabled row exists", () => {
+    // codex 三审 I-1 复现：北京行 disabled + 新加坡行 active（切区后旧行保留），
+    // 请求新加坡必须放行，不能被先遇到的 disabled 行抢先拒绝。
+    const db = createDbClient();
+    const seed = buildPricingCatalogSeed({
+      llm: { mode: "stub" },
+      media: { deploymentScope: "cn-beijing" },
+    });
+    const video = seed.find((e) => e.capability === "video.image_to_video")!;
+    const beijingRow = { ...video, status: "disabled" as const, isDefault: false };
+    const singaporeRow = {
+      ...video,
+      id: "video.image_to_video.dashscope.singapore.wan2.7-i2v-2026-04-25",
+      parameterCapabilitiesJson: { ...video.parameterCapabilitiesJson, deployment_scope: "singapore" },
+    };
+    // 故意让 disabled 北京行先插入（Map 顺序反排），验证扫描全候选而非首个匹配。
+    db.providerModelCatalog.set(beijingRow.id, beijingRow);
+    db.providerModelCatalog.set(singaporeRow.id, singaporeRow);
+
+    const decision = checkProviderDispatchGate(db, {
+      capability: "video.image_to_video",
+      providerKey: "dashscope",
+      modelId: "wan2.7-i2v-2026-04-25",
+      deploymentScope: "singapore",
+    });
+    expect(decision.allowed).toBe(true);
+  });
+
+  it("still denies when only an old-scope disabled row exists", () => {
+    const db = createDbClient();
+    const seed = buildPricingCatalogSeed({
+      llm: { mode: "stub" },
+      media: { deploymentScope: "cn-beijing" },
+    });
+    const video = seed.find((e) => e.capability === "video.image_to_video")!;
+    db.providerModelCatalog.set(video.id, { ...video, status: "disabled", isDefault: false });
+
+    const decision = checkProviderDispatchGate(db, {
+      capability: "video.image_to_video",
+      providerKey: "dashscope",
+      modelId: "wan2.7-i2v-2026-04-25",
+      deploymentScope: "singapore",
+    });
+    expect(decision.allowed).toBe(false);
+    if (!decision.allowed) {
+      expect(decision.reason_code).toBe("catalog_entry_disabled");
+    }
+  });
+
   it("blocks dispatch when the catalog row declares a different deployment scope", () => {
     injectDashscopeEnv();
     const db = createDbClient();
@@ -123,7 +172,7 @@ describe("provider dispatch gate", () => {
     }
   });
 
-  it("resolves deployment scope from exact hostnames only and fails closed otherwise", () => {
+  it("resolves deployment scope from exact https hostnames only and fails closed otherwise", () => {
     expect(resolveDashscopeDeploymentScope(undefined)).toBe("cn-beijing");
     expect(resolveDashscopeDeploymentScope("https://dashscope.aliyuncs.com/api/v1")).toBe("cn-beijing");
     expect(resolveDashscopeDeploymentScope("https://dashscope-intl.aliyuncs.com")).toBe("singapore");
@@ -131,6 +180,13 @@ describe("provider dispatch gate", () => {
     expect(resolveDashscopeDeploymentScope("https://dashscope.aliyuncs.com.evil.example")).toBe("unknown");
     expect(resolveDashscopeDeploymentScope("https://private.example.com")).toBe("unknown");
     expect(resolveDashscopeDeploymentScope("not-a-url")).toBe("unknown");
+    // codex 三审 I-2：非 https / 非标准端口必须 fail-closed（防 Bearer key 明文传输）。
+    expect(resolveDashscopeDeploymentScope("http://dashscope.aliyuncs.com")).toBe("unknown");
+    expect(resolveDashscopeDeploymentScope("ftp://dashscope-intl.aliyuncs.com")).toBe("unknown");
+    expect(resolveDashscopeDeploymentScope("https://dashscope.aliyuncs.com:8443")).toBe("unknown");
+    expect(resolveDashscopeDeploymentScope("https://dashscope-intl.aliyuncs.com:8080")).toBe("unknown");
+    // 显式 443 端口仍是合法 https。
+    expect(resolveDashscopeDeploymentScope("https://dashscope.aliyuncs.com:443")).toBe("cn-beijing");
   });
 
   it("reports structured gate decisions without secrets or env var names", () => {

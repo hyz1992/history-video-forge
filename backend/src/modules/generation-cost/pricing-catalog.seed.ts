@@ -125,21 +125,24 @@ export type DashscopeDeploymentScope = "cn-beijing" | "singapore" | "unknown";
 /**
  * 从 DashScope baseUrl 推导部署区域。
  * - 未配置 → cn-beijing（DashScope SDK 默认接入域名）。
- * - dashscope-intl.aliyuncs.com（精确主机）→ singapore。
- * - dashscope.aliyuncs.com（精确主机）→ cn-beijing。
- * - 其他/私有/无法解析 → unknown（fail-closed：不种媒体目录、不报价、不派发）。
- * 用 URL hostname 精确匹配而非子串包含，防止含 aliyuncs 子串的私有代理域名被误判。
+ * - 仅接受 https: 协议、官方精确主机、空端口或 443；其他（http/ftp/非 443 端口/
+ *   私有域名/无法解析）→ unknown（fail-closed：不种媒体目录、不报价、不派发）。
+ *   防止 HTTP 明文传输 Bearer API key（codex 三审 I-2）。
  */
 export function resolveDashscopeDeploymentScope(
   baseUrl: string | undefined,
 ): DashscopeDeploymentScope {
   if (!baseUrl) return "cn-beijing";
-  let hostname: string;
+  let url: URL;
   try {
-    hostname = new URL(baseUrl).hostname.toLowerCase();
+    url = new URL(baseUrl);
   } catch {
     return "unknown";
   }
+  if (url.protocol !== "https:") return "unknown";
+  const port = url.port;
+  if (port !== "" && port !== "443") return "unknown";
+  const hostname = url.hostname.toLowerCase();
   if (hostname === "dashscope-intl.aliyuncs.com") return "singapore";
   if (hostname === "dashscope.aliyuncs.com") return "cn-beijing";
   return "unknown";
