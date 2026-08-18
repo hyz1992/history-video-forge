@@ -1,6 +1,6 @@
 # S2-2A 任务 7 审查记录（T2）
 
-日期：2026-08-17（首轮）／2026-08-18（重开整改）
+日期：2026-08-17（首轮）／2026-08-18（重开整改、二次重开收口）
 
 任务：S2-2A 任务 7 —— 建立 provider/model 目录与后端全能力价格服务。
 
@@ -11,6 +11,10 @@
 - `df30c62` 整改任务 7 二轮：free 视频档位零价回退并落盘 T2 审查记录与移交项
 - `1809111` 勾选计划任务 7 完成复选框
 - `f959c91` 重开整改（用户外部校准审计后）：启动接线目录 seed 与 readiness、媒体模型精确交叉校验、安全整数防护与事务批量 seed
+- `2821b0f` 补跨环境恢复测试并更新任务 7 审查记录闭合移交项
+- `4e836da` 修正任务 7 审查记录重开轮测试计数
+- `b85dc5f` 二次重开整改（codex 第二轮）：真实派发过目录闸门、部署区域进定价与 readiness、事务测试绑定修正与 LLM 原因码
+- `b9a3ff1` 二次重开收口：区域精确主机解析、派发闸门区域纵深防护与 Prisma 区域链路测试
 
 审查级别：T2（共享配置合同与费用）。按 harness/docs/independent-review-protocol.md 执行：diff_reviewer + contract_reviewer 并行首轮 → 整改 → 双 reviewer 复审收敛 → final_reviewer 终审一次。
 
@@ -54,6 +58,17 @@ reviewer 事实错误更正：contract_reviewer 首轮 F2 断言"根 .env 未设
 ## 用户知情裁决项（不阻塞任务 7 关闭）
 
 - **真实 LLM 价格核实**：`VERIFIED_LLM_TOKEN_PRICING` 为空表，当前 smart（deepseek:deepseek-v4-pro）/flash（zhipu:glm-4）条目 unpriced → 全部 LLM 报价 unbounded，需显式授权。运营核实公开价后登记即可获得可信上界。建议在任务 8 报价链路上线前裁决。（媒体价格已由外部审计核实与阿里云官方页一致：wan2.7-i2v 720P ¥0.6/秒、1080P ¥1/秒、qwen3-tts-instruct-flash ¥0.8/万字符。）
+
+## 二次重开整改轮 reviewer 结论摘要（2026-08-18，codex 第二轮审计后）
+
+- codex 第二轮 finding：P1-A（派发绕过 catalog gate）、P1-B（区域未进定价/readiness）、P3-A（事务测试 this 解绑假阳性）、P3-B（resolution_failed 丢失原因码）。
+- diff_reviewer 与 contract_reviewer 均判定四项全部闭合、无 Critical/Important 新问题；闭合成因：
+  - P1-A：`provider-dispatch-gate.ts` 纯函数 gate（missing/disabled/mismatch/scope_mismatch 四态），`buildProviderRegistry` 三真实 adapter 逐个过 gate（未通过不注册，执行引擎 no-adapter 路径不 fetch/不建 job）；三个生成入口（全量/单任务/升级）收敛于 `runAssetsGeneration` 单点；codex 反例"空 catalog+凭据仍调用视频"转正测试。
+  - P1-B：`resolveDashscopeDeploymentScope`（精确主机匹配）→ 区域进目录 id/pricingVersion/pricingJson/readiness；新加坡视频价 749420/1124130 微元每秒（codex 核实值），未核实的新加坡 image/tts unpriced→unbounded；unknown 区域不种媒体行且 capability 级 `media_deployment_scope_unknown`。
+  - P3-A：回滚测试经 writer 实例调用并断言 DB CHECK 约束错误（非 this undefined）。
+  - P3-B：capability 级 `llm_provider_unavailable` / `media_deployment_scope_unknown` 在无条目时也可达。
+- 二次收口（b9a3ff1）：区域解析改 URL hostname 精确匹配（防含 aliyuncs 子串的私有域名误判）；gate 增 `deploymentScope` 纵深对照（catalog_entry_scope_mismatch）；补 Prisma unknown 区域重启链路测试与区域派生测试；存量 dashscope 测试 baseUrl 对齐真实域名。
+- **已知边界留档（不阻塞任务 7 关闭）**：`local-subtitle-provider` 在 API key 存在时经 `transcribeAudioFile` 发起真实 DashScope ASR 付费调用，该调用不在 gate 范围内（ASR 不属于任务 1 冻结的五个 capability slot 合同；codex 四项未点名）。后续若将 ASR 纳入付费治理，需先扩展 capability 合同。
 
 ## 未验证项
 
