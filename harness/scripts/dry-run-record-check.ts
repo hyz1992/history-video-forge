@@ -15,19 +15,21 @@ const RECORD_PATH = resolve(process.cwd(), "docs/records/2026-08-18-review-proto
 
 /** 单一事实源：新增候选/授权/迭代时只改这里，脚本据此核验记录。 */
 const FACTS = {
-  maxCandidate: 11,
-  activeCandidate: 11,
+  maxCandidate: 12,
+  activeCandidate: 12,
   /** 形成失败（formation_failed）的候选编号。 */
-  formationFailed: [2, 3, 4, 5, 6, 8, 9, 10],
+  formationFailed: [2, 3, 4, 5, 6, 8, 9, 10, 11],
   /** 经 final 判失败的候选。 */
   finalFailed: [1],
   /** 经 final 通过但结论被后续事件失效的候选。 */
   finalPassedInvalidated: [7],
   authorizations: 5,
   finalsExecuted: 2,
-  r6Events: 10,
+  r6Events: 11,
   /** 轮 4 的迭代总数。 */
-  iterations: 7,
+  iterations: 8,
+  /** R6-10/R6-11 对象是否已全部修复（修复后记录不得残留"留有已知瑕疵"表述）。 */
+  knownDefectsFixed: true,
 };
 
 const CHINESE_DIGITS: Record<string, number> = {
@@ -137,10 +139,22 @@ for (const n of FACTS.finalPassedInvalidated) {
     `候选 ${n} 行缺失或未标“终审通过 + R6-7 失效”`);
 }
 
+// C8-active：当前候选必须有表格行且带待终审标记。
+const activeRow = content.split("\n").find((line) => line.startsWith(`| 候选 ${FACTS.activeCandidate}（`));
+check("C8-active-row", activeRow !== undefined, `候选 ${FACTS.activeCandidate}（当前候选）表格行缺失`);
+check("C8-active-marker", activeRow !== undefined && (activeRow.includes("见终审结论") || activeRow.includes("待终审")),
+  `候选 ${FACTS.activeCandidate} 行缺少待终审标记`);
+
+// C10：已知缺陷修复状态表述一致（修复后禁止残留"留有已知瑕疵"类陈旧声明）。
+if (FACTS.knownDefectsFixed) {
+  check("C10-known-defects", !liveContent.includes("留有已知瑕疵") && !liveContent.includes("留档不再修复"),
+    "knownDefectsFixed=true 但记录仍残留留有已知瑕疵/留档不再修复陈旧表述");
+}
+
 // C9：终止性表述不再宣称“终局/无有效终审”（候选 11 存在时）。
 if (FACTS.activeCandidate === FACTS.maxCandidate) {
   check("C9-terminal-claim", !content.includes("无有效通过终审"),
-    "候选 11 待终审，不得残留“无有效通过终审”终局表述");
+    FACTS.activeCandidate + " 待终审，不得残留“无有效通过终审”终局表述");
 }
 
 // 输出。
