@@ -197,7 +197,7 @@ describe("provider dispatch gate", () => {
     // codex 四审 I-1 反例转正：ALIYUN_DASHSCOPE_BASE_URL="" 时，
     // readDashscopeConfig 归一化为 undefined → adapter 用默认 https 北京地址，
     // 目录（北京 active）与真实 adapter 配置一致 → 正常注册，不再拼相对路径。
-    injectDashscopeEnv(); // stub 全部六项，避免开发者 shell 残留模型 env 造成失配
+    injectDashscopeEnv(); // stub 全部 DashScope env，避免开发者 shell 残留模型 env 造成失配
     vi.stubEnv("ALIYUN_DASHSCOPE_BASE_URL", "");
     const config = readDashscopeConfig(undefined);
     expect(config.baseUrl).toBeUndefined();

@@ -17,6 +17,7 @@
 - `b9a3ff1` 二次重开收口：区域精确主机解析、派发闸门区域纵深防护与 Prisma 区域链路测试
 - `53188b0` 三次重开收口（codex 第三轮）：派发闸门优先匹配当前区域 active 行、区域解析强制 https 与标准端口
 - `0fd2305` 四次重开收口（codex 第四轮）：baseUrl 空字符串归一化统一 adapter 与目录语义并防御性 fail-closed
+- `3099c9b` 四审收口：补测试确定性 stub、非法 endpoint 端到端拒绝用例并更新审查记录
 
 审查级别：T2（共享配置合同与费用）。按 harness/docs/independent-review-protocol.md 执行：diff_reviewer + contract_reviewer 并行首轮 → 整改 → 双 reviewer 复审收敛 → final_reviewer 终审一次。
 
@@ -25,7 +26,7 @@
 - `npx vitest run --configLoader runner tests/backend/config/` → 全部通过（首轮 111，二轮 121，三轮 122；重开整改后 135；二次重开后 140）
 - 二次重开轮（2026-08-18）：config 140 / api 130 / db 125（串行）/ assets 258（串行，含 dispatch gate 7 用例）；backend tsc 0 错误；build:backend 通过
 - 三次重开轮（2026-08-18）：assets 260（串行，含 dispatch gate 9 用例）/ config 140 / api 130 / db bootstrap 4；backend tsc 0 错误；build:backend 通过
-- 四次重开轮（2026-08-18）：assets 261（串行，含 dispatch gate 10 用例）/ config 140 / api 130 / db 125（串行）；backend tsc 0 错误；build:backend 通过
+- 四次重开轮（2026-08-18）：assets 262（串行，含 dispatch gate 11 用例）/ config 140 / api 130 / db 125（串行）；backend tsc 0 错误；build:backend 通过
 - `npx tsc -p backend/tsconfig.json --noEmit` → 0 错误
 - 重开整改追加：`tests/backend/db/`（串行）26 文件 124 通过；`tests/backend/assets/`（串行）40 文件 251 通过；`npm run build:backend` 通过
 - 根 tsconfig 中与本任务相关文件无类型错误（.vue 解析与 asset-planning store 等报错为存量问题，基线 394 个，非本任务引入）
