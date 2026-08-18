@@ -6,7 +6,7 @@ argument-hint: [可选：补充说明或点名审查级别]
 读取 `harness/docs/independent-review-protocol.md` 并严格按其执行会话内独立审查（T2 任务必须同时遵守 R1-R6 硬约束）：
 
 1. 判定本次改动的审查级别（T0/T1/T2）。若任务开始时已声明级别，先核对实际 diff 是否仍匹配该级别；不匹配则按协议"只升不降"规则升级并重新声明。T2 任务（及按协议适用 R1 的 T1 任务）开始时冻结 `TASK_BASE_SHA`（任务首个改动前的 HEAD），并记录在任务状态中。
-2. 按协议组装最小 review package：目标与允许范围（任务开始的结构化输出）、相关设计文档片段、`TASK_BASE_SHA..HEAD` 累计 diff 与未提交改动（必须；上轮增量 diff 仅作辅助）、验证命令与结果、未闭合 finding（仅 diff/contract reviewer 复审轮携带；final_reviewer 不携带，见第 3 步两阶段流程）。
+2. 按协议组装最小 review package：目标与允许范围（任务开始的结构化输出）、相关设计文档片段、`TASK_BASE_SHA..HEAD` 累计 diff 与未提交改动（必须；上轮增量 diff 仅作辅助）、验证命令与结果（final_reviewer 于第二阶段提供，阶段一不携带）、未闭合 finding（仅 diff/contract reviewer 复审轮携带；final_reviewer 不携带，见第 3 步两阶段流程）。
 3. 按级别 spawn 只读审查子代理，角色完整指令必须放进 prompt：
    - T1：diff_reviewer 一轮；
    - T2：diff_reviewer + contract_reviewer 收敛后，final_reviewer 按两阶段流程终审：

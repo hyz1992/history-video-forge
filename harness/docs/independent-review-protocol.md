@@ -88,9 +88,9 @@
 ## 收敛条件
 
 - T1：一轮 diff_reviewer 无 Critical 即收敛。
-- T2：diff_reviewer 与 contract_reviewer 均无 Critical 且 Important 全部闭环后，final_reviewer 终审一次（按 R5 去叙事化输入）。
+- T2：diff_reviewer 与 contract_reviewer 均无 Critical 且 Important 全部闭环后，final_reviewer 对该候选终审一次（按 R5 去叙事化输入）。
 - **终审闭环路径**：final_reviewer 发现 Critical 或 Important 时，该候选收敛周期失败；修复后必须**重新经过 diff_reviewer + contract_reviewer 收敛**，形成新候选后再调用一次 final_reviewer。"调用一次"限定为**每个候选收敛周期一次**，不是整个任务生命周期一次；同一任务的多个候选周期可以有多次 final（每次都是对新候选的独立终审，前一次终审已判该候选失败，不存在"同一候选重复终审"）。final 只发现 Minor 时不重开，Minor 随候选收尾处理或留档。
-- **循环上限**：同一任务内审查-整改循环不超过 3 轮；**每轮 = 一次"整改 + 复审"迭代**，同一候选周期内 final 至多一次（见终审闭环路径），3 轮上限覆盖所有候选周期的全部迭代。候选周期内 diff/contract 反复不收敛同样消耗轮数，不允许无限重试（对齐 `AGENTS.md` 禁止事项）。
+- **循环上限**：同一任务内审查-整改循环不超过 3 轮；**每轮 = 一次"整改 + 复审"迭代**，同一候选周期内 final 至多一次（见终审闭环路径），3 轮上限覆盖所有候选周期的全部迭代；final 终审本身不单独计轮，其失败后触发的整改+复审计入轮数。候选周期内 diff/contract 反复不收敛同样消耗轮数，不允许无限重试（对齐 `AGENTS.md` 禁止事项）。
 - **术语**：**候选** = 通过 diff_reviewer + contract_reviewer 收敛、等待终审的代码状态；**候选收敛周期** = 从候选形成到终审判定（通过或失败）的完整过程。
 
 ## T2 审查硬约束（R1-R6）
@@ -109,7 +109,7 @@
 
 **T2 任务（shared schema / API / prompt / validator / 状态机 / 事务并发 / 费用 / 跨阶段合同）必须逐条执行**；T1 任务按相关性适用——满足以下任一触发条件即适用对应条款：触碰状态型功能（R1/R3）、触碰安全边界或不可信外部输入（R4）、产生新分支/新状态（R1/R2）、记录中填写任何测试数字（R6）、执行终审（R5）。六条硬约束：
 
-**R1 整改后增量全审**：每轮整改完成后，**从任务固定基准到当前 HEAD 的完整累计 diff** 必须作为独立审查对象重新审查一次，不得只复查上一轮 finding 清单，也不得只审查本轮整改补丁。任务开始时主 agent 必须冻结 `TASK_BASE_SHA`（任务首个改动前的 HEAD，即首个提交的父提交）；每轮审查向 reviewer 提供：`TASK_BASE_SHA..HEAD` 累计 diff + 当前未提交改动（必须），上轮 review head → 当前 head 的增量 diff 只能作为辅助（可选）。只传最新整改补丁会让 reviewer 看不到"旧实现 × 新修复"的组合缺陷。为修复 finding 新增的分支、状态和数据维度一律视作新功能。
+**R1 整改后增量全审**：每轮整改完成后，**从任务固定基准到当前 HEAD 的完整累计 diff** 必须作为独立审查对象重新审查一次，不得只复查上一轮 finding 清单，也不得只审查本轮整改补丁。任务开始时主 agent 必须冻结 `TASK_BASE_SHA`（任务首个改动前的 HEAD，即首个提交的父提交；冻结前先确认工作树干净，无关未提交改动先提交或隔离，避免混入累计 diff）；每轮审查向 reviewer 提供：`TASK_BASE_SHA..HEAD` 累计 diff + 当前未提交改动（必须），上轮 review head → 当前 head 的增量 diff 只能作为辅助（可选）。只传最新整改补丁会让 reviewer 看不到"旧实现 × 新修复"的组合缺陷。为修复 finding 新增的分支、状态和数据维度一律视作新功能。
 
 **R2 finding 不变量化**：每个被接受的 Critical/Important finding（以及揭示某一类问题的 Minor）必须提炼成一条**不变量**（描述性命题，不含具体反例）并闭环验证。闭环方式按 finding 类型分流：
 - 行为型/状态型 finding（逻辑分支、状态机、事务、边界输入）：基于不变量生成**至少两个反向组合自动化测试**；
