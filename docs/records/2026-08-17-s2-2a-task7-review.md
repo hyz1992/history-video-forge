@@ -1,6 +1,6 @@
 # S2-2A 任务 7 审查记录（T2）
 
-日期：2026-08-17（首轮）／2026-08-18（重开整改、二次重开收口）
+日期：2026-08-17（首轮）／2026-08-18（重开整改、二次重开收口、三次重开收口）
 
 任务：S2-2A 任务 7 —— 建立 provider/model 目录与后端全能力价格服务。
 
@@ -15,6 +15,7 @@
 - `4e836da` 修正任务 7 审查记录重开轮测试计数
 - `b85dc5f` 二次重开整改（codex 第二轮）：真实派发过目录闸门、部署区域进定价与 readiness、事务测试绑定修正与 LLM 原因码
 - `b9a3ff1` 二次重开收口：区域精确主机解析、派发闸门区域纵深防护与 Prisma 区域链路测试
+- `53188b0` 三次重开收口（codex 第三轮）：派发闸门优先匹配当前区域 active 行、区域解析强制 https 与标准端口
 
 审查级别：T2（共享配置合同与费用）。按 harness/docs/independent-review-protocol.md 执行：diff_reviewer + contract_reviewer 并行首轮 → 整改 → 双 reviewer 复审收敛 → final_reviewer 终审一次。
 
@@ -22,6 +23,7 @@
 
 - `npx vitest run --configLoader runner tests/backend/config/` → 全部通过（首轮 111，二轮 121，三轮 122；重开整改后 135；二次重开后 140）
 - 二次重开轮（2026-08-18）：config 140 / api 130 / db 125（串行）/ assets 258（串行，含 dispatch gate 7 用例）；backend tsc 0 错误；build:backend 通过
+- 三次重开轮（2026-08-18）：assets 260（串行，含 dispatch gate 9 用例）/ config 140 / api 130 / db bootstrap 4；backend tsc 0 错误；build:backend 通过
 - `npx tsc -p backend/tsconfig.json --noEmit` → 0 错误
 - 重开整改追加：`tests/backend/db/`（串行）26 文件 124 通过；`tests/backend/assets/`（串行）40 文件 251 通过；`npm run build:backend` 通过
 - 根 tsconfig 中与本任务相关文件无类型错误（.vue 解析与 asset-planning store 等报错为存量问题，基线 394 个，非本任务引入）
@@ -70,6 +72,15 @@ reviewer 事实错误更正：contract_reviewer 首轮 F2 断言"根 .env 未设
   - P3-B：capability 级 `llm_provider_unavailable` / `media_deployment_scope_unknown` 在无条目时也可达。
 - 二次收口（b9a3ff1）：区域解析改 URL hostname 精确匹配（防含 aliyuncs 子串的私有域名误判）；gate 增 `deploymentScope` 纵深对照（catalog_entry_scope_mismatch）；补 Prisma unknown 区域重启链路测试与区域派生测试；存量 dashscope 测试 baseUrl 对齐真实域名。
 - **已知边界留档（不阻塞任务 7 关闭）**：`local-subtitle-provider` 在 API key 存在时经 `transcribeAudioFile` 发起真实 DashScope ASR 付费调用，该调用不在 gate 范围内（ASR 不属于任务 1 冻结的五个 capability slot 合同；codex 四项未点名）。后续若将 ASR 纳入付费治理，需先扩展 capability 合同。
+
+## 三次重开整改轮 reviewer 结论摘要（2026-08-18，codex 第三轮审计后）
+
+- codex 第三轮 finding：I-1（gate 遇旧区域 disabled 行抢先拒绝当前 active 行）、I-2（区域解析允许 http/ftp/非标准端口携带 Bearer key 派发）、Minor（记录 gate 测试数与 upgrade-video 描述）。
+- diff_reviewer 与 contract_reviewer 均判定三项全部闭合、无 Critical/Important 新问题：
+  - I-1：`checkProviderDispatchGate` 改为全量扫描候选行，优先返回 active + scope 精确匹配行；兜底顺序 scope_mismatch → disabled → mismatch → missing；Map 顺序无关；对抗测试覆盖"北京 disabled 先插入 + 新加坡 active → 放行"与"仅旧区 disabled → 拒绝"。
+  - I-2：`resolveDashscopeDeploymentScope` 要求 https: 协议、空端口或 443、官方精确 hostname，否则 unknown fail-closed；对抗测试覆盖 http/ftp/8443/8080/私有域名/无法解析。
+  - Minor：记录修正为 7 用例并准确描述 upgrade-video（只建任务，派发经单任务生成进入 gate）。
+- 观察留档（非必改）：URL 带 userinfo 仍解析为已知区域（连接仍是 https 官方主机，Bearer 不落明文，不违反 I-2 字面要求），可选后续加固。
 
 ## 未验证项
 
