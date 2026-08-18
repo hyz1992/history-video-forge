@@ -79,3 +79,16 @@
 - validator 校验分支是否按 route/策略类型区分（如成功 API 视频不应被按 fallback 规则误判）？
 - 测试是否隔离：stub 的 env/global 在用例后是否恢复（`vi.stubEnv` 需 `vi.unstubAllEnvs`），是否存在用例间污染？
 - 提交前是否用 `git status` 核对了“不改什么”清单？验收清单是否逐项标注，有没有把局部通过表述为整体通过？
+
+## 八、高频问题专项：组合、生命周期、外部输入与证据纪律
+
+本节由 S2-2A 任务 7 四轮外部校准审计的重复 finding 沉淀而来，是 diff_reviewer 与实施者自审的必查项。凡涉及目录、迁移、状态机、事务、配置或任何来自数据库 JSON / env / 文件的外部输入，以下每条都必须能回答（与协议 R1-R6 配套）：
+
+- 本轮的整改 diff 是否作为**新功能**整体重新审查过？两个各自正确的修复组合后是否可能产生新状态（如"区域化目录 ID"×"dispatch gate"→旧区域 disabled 行与新区域 active 行共存）？
+- 每个被修复的 finding 是否已提炼成不变量，并至少有两个**反向组合**测试（顺序反排、多错误行、状态序列），而不只是原反例转正？
+- 状态型功能是否有迁移序列测试（upgraded / switched / recovered / duplicated / reordered / partially_failed 至少 4 类），而不是只用全新状态构造？
+- URL/endpoint 校验是否覆盖全部要素（scheme、hostname、port，必要时 path）？是否存在"只查 hostname 漏掉 http/ftp/非标准端口"这类半校验？
+- 数据库/外部错误测试是否断言错误**来源与类型**（如 CHECK 约束而非 `this` 解绑 TypeError），并证明真正经过了目标代码路径？是否出现过"抛错 ✅ + 数据没留下 ✅"但事务根本没执行的假阳性？
+- 外部输入（数据库 JSON、env、文件）是否按不可信数据设计过测试：`15.5`、超安全整数、`NaN`、空字符串、非法协议、旧版本残留行？
+- 审查记录中的测试数量、命令输出与状态标注是否从实际运行结果重填？记录与实测不符时是否按 Important 上报？
+- final_reviewer 是否只收到原始需求、设计定位、base/head SHA 与代码（无整改叙事）？
