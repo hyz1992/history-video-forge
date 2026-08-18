@@ -197,7 +197,7 @@ describe("provider dispatch gate", () => {
     // codex 四审 I-1 反例转正：ALIYUN_DASHSCOPE_BASE_URL="" 时，
     // readDashscopeConfig 归一化为 undefined → adapter 用默认 https 北京地址，
     // 目录（北京 active）与真实 adapter 配置一致 → 正常注册，不再拼相对路径。
-    vi.stubEnv("ALIYUN_DASHSCOPE_API_KEY", "test-key");
+    injectDashscopeEnv(); // stub 全部六项，避免开发者 shell 残留模型 env 造成失配
     vi.stubEnv("ALIYUN_DASHSCOPE_BASE_URL", "");
     const config = readDashscopeConfig(undefined);
     expect(config.baseUrl).toBeUndefined();
@@ -212,6 +212,30 @@ describe("provider dispatch gate", () => {
     expect(
       registry.findAdapter({ taskType: "image_still", enabledProviderTypes: ["image"] }),
     ).not.toBeNull();
+
+    // 纯空白同样归一化为 undefined（与 .env 空值惯例一致）。
+    vi.stubEnv("ALIYUN_DASHSCOPE_BASE_URL", "   ");
+    expect(readDashscopeConfig(undefined).baseUrl).toBeUndefined();
+  });
+
+  it("blocks all real dashscope adapters when the endpoint is not a recognized https host", () => {
+    // 端到端对抗：非法 endpoint（http 明文）→ scope unknown → 目录无媒体行
+    // → gate 拒绝全部真实 adapter，不产生任何外部调用。
+    vi.stubEnv("ALIYUN_DASHSCOPE_API_KEY", "test-key");
+    vi.stubEnv("ALIYUN_DASHSCOPE_BASE_URL", "http://dashscope.aliyuncs.com");
+    const db = createDbClient();
+    // 即使目录残留北京 active 行，gate 的 scope 对照也会拒绝（unknown ≠ cn-beijing）。
+    seedDashscopeCatalog(db);
+    const registry = buildProviderRegistry({ db });
+    expect(
+      registry.findAdapter({ taskType: "video_clip", enabledProviderTypes: ["video"] }),
+    ).toBeNull();
+    expect(
+      registry.findAdapter({ taskType: "image_still", enabledProviderTypes: ["image"] }),
+    ).toBeNull();
+    expect(
+      registry.findAdapter({ taskType: "tts_audio", enabledProviderTypes: ["tts"] }),
+    ).toBeNull();
   });
 
   it("reports structured gate decisions without secrets or env var names", () => {
