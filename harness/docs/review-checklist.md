@@ -84,8 +84,8 @@
 
 本节由 S2-2A 任务 7 四轮外部校准审计的重复 finding 沉淀而来，是 diff_reviewer 与实施者自审的必查项。凡涉及目录、迁移、状态机、事务、配置或任何来自数据库 JSON / env / 文件的外部输入，以下每条都必须能回答（与协议 R1-R6 配套）：
 
-- 本轮的整改 diff 是否作为**新功能**整体重新审查过？两个各自正确的修复组合后是否可能产生新状态（如"区域化目录 ID"×"dispatch gate"→旧区域 disabled 行与新区域 active 行共存）？
-- 每个被修复的 finding 是否已提炼成不变量，并至少有两个**反向组合**测试（顺序反排、多错误行、状态序列），而不只是原反例转正？
+- 本轮的整改是否按 **`TASK_BASE_SHA..HEAD` 累计 diff** 整体重新审查过（不只是本轮整改补丁）？两个各自正确的修复组合后是否可能产生新状态（如"区域化目录 ID"×"dispatch gate"→旧区域 disabled 行与新区域 active 行共存）？
+- 每个被修复的 finding 是否已提炼成不变量并闭环？闭环方式是否按 finding 类型分流（行为型 → 至少两个反向组合自动化测试；文档/流程型 → 机器检查或两项独立验证且计数类须核对实际运行输出；live/UI 型 → 真实运行证据；不适用时记录理由与替代证据）？
 - 状态型功能是否有迁移序列测试（upgraded / switched / recovered / duplicated / reordered / partially_failed 至少 4 类），而不是只用全新状态构造？
 - URL/endpoint 校验是否覆盖全部要素（scheme、hostname、port，必要时 path）？是否存在"只查 hostname 漏掉 http/ftp/非标准端口"这类半校验？
 - 数据库/外部错误测试是否断言错误**来源与类型**（如 CHECK 约束而非 `this` 解绑 TypeError），并证明真正经过了目标代码路径？是否出现过"抛错 ✅ + 数据没留下 ✅"但事务根本没执行的假阳性？
