@@ -88,8 +88,9 @@
 ## 收敛条件
 
 - T1：一轮 diff_reviewer 无 Critical 即收敛。
-- T2：diff_reviewer 与 contract_reviewer 均无 Critical 且 Important 全部闭环后，final_reviewer 终审一次；终审发现 Critical 则重开循环。
-- **循环上限**：同一任务内审查-整改循环不超过 3 轮；超过即停止并向用户报告分歧点，不允许无限重试（对齐 `AGENTS.md` 禁止事项）。
+- T2：diff_reviewer 与 contract_reviewer 均无 Critical 且 Important 全部闭环后，final_reviewer 终审一次（按 R5 去叙事化输入）。
+- **终审闭环路径**：final_reviewer 发现 Critical 或 Important 时，该候选收敛周期失败；修复后必须**重新经过 diff_reviewer + contract_reviewer 收敛**，形成新候选后再调用一次 final_reviewer。"调用一次"限定为**每个候选收敛周期一次**，不是整个任务生命周期一次；同一任务的多个候选周期可以有多次 final（每次都是对新候选的独立终审，前一次终审已判该候选失败，不存在"同一候选重复终审"）。final 只发现 Minor 时不重开，Minor 随候选收尾处理或留档。
+- **循环上限**：同一任务内审查-整改循环不超过 3 轮（每轮 = 整改 + 复审 + 候选终审）；超过即停止并向用户报告分歧点，不允许无限重试（对齐 `AGENTS.md` 禁止事项）。
 
 ## T2 审查硬约束（R1-R6）
 
@@ -103,11 +104,18 @@
 | 一轮 P1-3 | 名义类型 vs 不可信运行时数据（15.5 → BigInt） | R4 |
 | 二轮 P1-1 / 一轮 P1-1 | 模块级正确误当链路级正确（接线缺位） | R1 + R3 |
 | 三轮 Minor | 记录计数失真（凭印象填 8 实际 7） | R6 |
-| 二轮 P1-1（终审叙事锚定） | final_reviewer 输入含整改叙事 | R5 |**T2 任务（shared schema / API / prompt / validator / 状态机 / 事务并发 / 费用 / 跨阶段合同）必须逐条执行**；T1 任务按相关性适用——满足以下任一触发条件即适用对应条款：触碰状态型功能（R1/R3）、触碰安全边界或不可信外部输入（R4）、产生新分支/新状态（R1/R2）、记录中填写任何测试数字（R6）、执行终审（R5）。六条硬约束：
+| 二轮 P1-1（终审叙事锚定） | final_reviewer 输入含整改叙事 | R5 |
 
-**R1 整改后增量全审**：每轮整改完成后，**整个新增 diff** 必须作为独立审查对象重新审查一次，不得只复查上一轮 finding 清单。为修复 finding 新增的分支、状态和数据维度一律视作新功能。两个各自正确的修复组合后可能产生新状态（如"区域化目录 ID"×"dispatch gate"→"旧区域 disabled + 新区域 active 共存"），增量全审是唯一能捕捉此类组合缺陷的时点。
+**T2 任务（shared schema / API / prompt / validator / 状态机 / 事务并发 / 费用 / 跨阶段合同）必须逐条执行**；T1 任务按相关性适用——满足以下任一触发条件即适用对应条款：触碰状态型功能（R1/R3）、触碰安全边界或不可信外部输入（R4）、产生新分支/新状态（R1/R2）、记录中填写任何测试数字（R6）、执行终审（R5）。六条硬约束：
 
-**R2 finding 不变量化**：每个被接受的 Critical/Important finding（以及揭示某一类问题的 Minor）必须提炼成一条**不变量**（描述性命题，不含具体反例），并基于不变量生成**至少两个反向组合测试**。反例只证明"这个例子修好了"，不变量测试才证明"这一类问题不存在"。纯外观/措辞级 Minor 不强制。示例：
+**R1 整改后增量全审**：每轮整改完成后，**从任务固定基准到当前 HEAD 的完整累计 diff** 必须作为独立审查对象重新审查一次，不得只复查上一轮 finding 清单，也不得只审查本轮整改补丁。任务开始时主 agent 必须冻结 `TASK_BASE_SHA`（任务首个改动前的 HEAD，即首个提交的父提交）；每轮审查向 reviewer 提供：`TASK_BASE_SHA..HEAD` 累计 diff + 当前未提交改动（必须），上轮 review head → 当前 head 的增量 diff 只能作为辅助（可选）。只传最新整改补丁会让 reviewer 看不到"旧实现 × 新修复"的组合缺陷。为修复 finding 新增的分支、状态和数据维度一律视作新功能。
+
+**R2 finding 不变量化**：每个被接受的 Critical/Important finding（以及揭示某一类问题的 Minor）必须提炼成一条**不变量**（描述性命题，不含具体反例）并闭环验证。闭环方式按 finding 类型分流：
+- 行为型/状态型 finding（逻辑分支、状态机、事务、边界输入）：基于不变量生成**至少两个反向组合自动化测试**；
+- 文档/流程型 finding（合同漂移、记录计数、过程违规）：机器检查（grep/脚本断言等）或**两项独立验证**（如两次独立来源核对）；
+- live/UI 型 finding（浏览器、真实 provider）：真实运行证据；
+- 不适用自动化测试的 finding：记录不适用理由与替代证据，由 reviewer 确认替代证据成立后闭环。
+反例只证明"这个例子修好了"，不变量测试才证明"这一类问题不存在"。纯外观/措辞级 Minor 不强制。示例：
 - 反例："disabled 项不能派发" → 不变量："只要存在 capability/provider/model/scope 完全匹配的 active 行，其他旧行的状态与遍历顺序不得影响结果" → 测试：disabled 在前 active 在后、active 在前 disabled 在后、多错误 scope、Map/hydrate 顺序反排。
 - 反例："hostname 不能带恶意后缀" → 不变量："只有明确允许的 HTTPS origin（scheme + hostname + port）才能获得已知区域、报价与派发许可" → 测试：http/ftp/非 443 端口/私有域名/无法解析全部 fail-closed。
 
