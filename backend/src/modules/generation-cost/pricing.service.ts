@@ -536,8 +536,12 @@ function priceItem(
       const pricePerSecond = pricedQuality;
 
       const capsMaxSeconds = caps["max_duration_seconds_per_task"];
+      // 上限必须是正安全整数（BigInt 转换约束）；小数/超大/非数值一律视为
+      // 无可信上限 → unbounded，绝不抛 RangeError 绕过结构化错误合同。
       const maxSecondsPerTask =
-        typeof capsMaxSeconds === "number" && Number.isFinite(capsMaxSeconds) && capsMaxSeconds > 0
+        typeof capsMaxSeconds === "number" &&
+        Number.isSafeInteger(capsMaxSeconds) &&
+        capsMaxSeconds >= 1
           ? capsMaxSeconds
           : null;
       if (maxSecondsPerTask === null) {
@@ -547,10 +551,20 @@ function priceItem(
 
       const taskCount = BigInt(workloadItem.video_task_count);
       // 估算秒数向上取整，不因小数秒低估费用；授权按任务数×每任务上限秒数。
-      const estimatedSecondsCeil = BigInt(
-        Math.ceil(workloadItem.estimated_seconds_total ?? Number(taskCount * BigInt(maxSecondsPerTask))),
-      );
-      const estimated = estimatedSecondsCeil * pricePerSecond;
+      const rawEstimatedSeconds =
+        workloadItem.estimated_seconds_total ?? Number(taskCount * BigInt(maxSecondsPerTask));
+      const estimatedSecondsCeil = Math.ceil(rawEstimatedSeconds);
+      if (!Number.isSafeInteger(estimatedSecondsCeil)) {
+        return {
+          ok: false,
+          error: {
+            code: "pricing_invalid_workload",
+            provider_model_id: entry.id,
+            message: `估算视频秒数超出安全整数范围：${rawEstimatedSeconds}`,
+          },
+        };
+      }
+      const estimated = BigInt(estimatedSecondsCeil) * pricePerSecond;
       const taskBound = taskCount * BigInt(maxSecondsPerTask) * pricePerSecond;
       // 估算秒数超出任务上限合计时（输入不一致），授权取较大值，保持 auth >= est 不变量。
       const authorization = estimated > taskBound ? estimated : taskBound;

@@ -311,7 +311,9 @@ function buildExecutionOptions(input: {
   });
 }
 
-function readDashscopeConfig(input: DashscopeProviderConfig | undefined) {
+// S2-2A 任务 7 重开：导出供 generation-cost bootstrap 构建媒体支持矩阵
+// （目录 readiness 用 env 覆盖后的真实执行模型做精确交叉校验）。只加导出，不改逻辑。
+export function readDashscopeConfig(input: DashscopeProviderConfig | undefined) {
   return {
     apiKey: input?.apiKey ?? process.env.ALIYUN_DASHSCOPE_API_KEY ?? "",
     baseUrl: input?.baseUrl ?? process.env.ALIYUN_DASHSCOPE_BASE_URL,

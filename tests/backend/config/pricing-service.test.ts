@@ -405,6 +405,65 @@ describe("pricing service unit pricing", () => {
     expect(result.value.estimated_cost_micros).toBe("1800000");
   });
 
+  it("treats a non-safe-integer per-task duration cap as unbounded instead of throwing", () => {
+    // codex P1-3 复现：max_duration_seconds_per_task=15.5 曾让 BigInt(15.5) 抛 RangeError，
+    // 绕过结构化错误合同；现在非正安全整数上限一律视为无可信上限 → unbounded。
+    for (const badCap of [15.5, 1e21, Number.POSITIVE_INFINITY, 0, -3]) {
+      const entry = makeCatalogEntry({
+        id: "video.image_to_video.badcap",
+        capability: "video.image_to_video",
+        parameterCapabilitiesJson: {
+          api_video_qualities: ["standard_720p"],
+          max_duration_seconds_per_task: badCap,
+        },
+        pricingJson: {
+          unit_type: "video_second",
+          currency: "CNY",
+          price_micros_per_second_by_quality: { standard_720p: "600000" },
+          source_note: "脏数据 fixture",
+        },
+      });
+      const result = price({
+        catalog: [entry],
+        workload: [
+          {
+            capability: "video.image_to_video",
+            provider_model_id: "video.image_to_video.badcap",
+            unit_type: "video_second",
+            operation: "assets.generate",
+            video_task_count: 1,
+            estimated_seconds_total: 5,
+            parameters: { api_quality: "standard_720p" },
+          },
+        ],
+      });
+      expect(result.ok, `cap=${badCap}`).toBe(true);
+      if (!result.ok) continue;
+      expect(result.value.contains_unbounded_item, `cap=${badCap}`).toBe(true);
+      expect(result.value.authorization_cost_micros).toBeNull();
+    }
+  });
+
+  it("rejects estimated video seconds outside the safe integer range with a structured error", () => {
+    const result = price({
+      catalog: [videoEntry()],
+      workload: [
+        {
+          capability: "video.image_to_video",
+          provider_model_id: "video.image_to_video.dashscope.test",
+          unit_type: "video_second",
+          operation: "assets.generate",
+          video_task_count: 1,
+          estimated_seconds_total: 1e300,
+          parameters: { api_quality: "standard_720p" },
+        },
+      ],
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("pricing_invalid_workload");
+  });
+
   it("returns zero totals for an empty workload instead of null", () => {
     // 空 workload 是零费用报价；null 金额保留给 unbounded 语义。
     const result = price({ catalog: [imageEntry()], workload: [] });

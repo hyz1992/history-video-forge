@@ -124,6 +124,24 @@ export class PrismaFirstAggregateWriter {
   }
 
   async saveProviderModelCatalogEntry(record: ProviderModelCatalogRecord): Promise<void> {
+    await this.client.providerModelCatalog.upsert(
+      this.buildProviderModelCatalogUpsert(record),
+    );
+  }
+
+  /**
+   * 目录 seed 批量应用（S2-2A 任务 7 重开，codex P3）：单事务按序 upsert，
+   * 任一失败整体回滚，不留半应用状态（避免启动中段失败时 capability 暂无默认项）。
+   */
+  async applyProviderModelCatalogSeedBatch(records: ProviderModelCatalogRecord[]): Promise<void> {
+    await this.client.$transaction(
+      records.map((record) =>
+        this.client.providerModelCatalog.upsert(this.buildProviderModelCatalogUpsert(record)),
+      ),
+    );
+  }
+
+  private buildProviderModelCatalogUpsert(record: ProviderModelCatalogRecord) {
     const data = {
       capability: record.capability,
       providerKey: record.providerKey,
@@ -139,11 +157,11 @@ export class PrismaFirstAggregateWriter {
       isDefault: record.isDefault,
       updatedAt: record.updatedAt,
     };
-    await this.client.providerModelCatalog.upsert({
+    return {
       where: { id: record.id },
       create: { id: record.id, ...data, createdAt: record.createdAt },
       update: data,
-    });
+    };
   }
 
   /**

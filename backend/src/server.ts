@@ -59,6 +59,10 @@ import { collectTierDiagnosticsInput, logTierConfigDiagnostics } from "./runtime
 import { logPromptRegistryDiagnostics } from "./runtime/llm/runtime-config-diagnostics.js";
 import { createPromptRegistry } from "./runtime/prompts/prompt-registry.js";
 import { initializeFirstAggregateRuntime } from "./runtime/startup/first-aggregate-startup.js";
+import {
+  bootstrapGenerationCostCatalog,
+  resolveGenerationCostBootstrapInputFromEnv,
+} from "./modules/generation-cost/generation-cost-bootstrap.js";
 
 async function readPayload(request: IncomingMessage) {
   const chunks: Buffer[] = [];
@@ -375,6 +379,13 @@ export async function startServer(options?: {
     });
     await hydrateSecondAggregates(app.db, prismaClient);
     await hydrateThirdAggregates(app.db, prismaClient);
+    // S2-2A 任务 7 重开（codex P1-1）：hydrate 后应用服务端受控目录 seed 并执行
+    // readiness 交叉校验（真实 tier/媒体配置/凭据/环境）；不可报价项物化为目录
+    // disabled。seed 持久化失败向上传播 = 启动失败（fail-closed）。
+    await bootstrapGenerationCostCatalog(
+      app.db,
+      resolveGenerationCostBootstrapInputFromEnv(),
+    );
     await recoverAndPersistInterruptedRuns(app.db);
   }
   const sessionStore = prismaClient ? new PrismaSessionStore(prismaClient) : undefined;

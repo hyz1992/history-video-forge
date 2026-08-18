@@ -16,6 +16,11 @@ import {
   evaluateGenerationCapabilityReadiness,
   type GenerationCapabilityReadinessInput,
 } from "../../../backend/src/modules/generation-cost/generation-capability-readiness.js";
+import {
+  bootstrapGenerationCostCatalog,
+  resolveGenerationCostBootstrapInput,
+} from "../../../backend/src/modules/generation-cost/generation-cost-bootstrap.js";
+import { listPublicGenerationCapabilities } from "../../../backend/src/modules/generation-config/generation-config.repository.js";
 
 /**
  * S2-2A 任务 7：provider/model 目录 seed、repository 与 readiness 交叉校验测试。
@@ -24,6 +29,13 @@ import {
  * 任务 7 步骤 1/步骤 2；详细设计 4.3 节（ProviderModelCatalog）。
  */
 
+/** 与 seed 媒体模型一致的 adapter 支持矩阵（capability/provider/model 精确匹配）。 */
+const DASHSCOPE_REGISTERED_MODELS = [
+  { capability: "image.generate" as const, providerKey: "dashscope", modelId: "wan2.6-t2i" },
+  { capability: "video.image_to_video" as const, providerKey: "dashscope", modelId: "wan2.7-i2v-2026-04-25" },
+  { capability: "tts.synthesize" as const, providerKey: "dashscope", modelId: "qwen3-tts-instruct-flash" },
+];
+
 const REAL_TIER_INPUT = {
   llm: {
     mode: "resolved" as const,
@@ -31,7 +43,7 @@ const REAL_TIER_INPUT = {
     flash: { providerKey: "zhipu", modelId: "glm-4" },
   },
   media: {
-    adapterProviderKeys: ["dashscope"],
+    registeredModels: DASHSCOPE_REGISTERED_MODELS,
     credentialConfigured: true,
   },
   environment: { demoMode: false, testEnv: false },
@@ -360,7 +372,7 @@ describe("generation capability readiness", () => {
     const result = evaluateGenerationCapabilityReadiness(
       readinessInput({
         catalog: seed,
-        media: { adapterProviderKeys: [], credentialConfigured: true },
+        media: { registeredModels: [], credentialConfigured: true },
       }),
     );
     expect(result.ok).toBe(false);
@@ -377,7 +389,7 @@ describe("generation capability readiness", () => {
     const result = evaluateGenerationCapabilityReadiness(
       readinessInput({
         catalog: seed,
-        media: { adapterProviderKeys: ["dashscope"], credentialConfigured: false },
+        media: { registeredModels: DASHSCOPE_REGISTERED_MODELS, credentialConfigured: false },
       }),
     );
     expect(result.ok).toBe(false);
@@ -411,7 +423,7 @@ describe("generation capability readiness", () => {
     const unconfiguredResult = evaluateGenerationCapabilityReadiness(
       readinessInput({
         catalog: seed,
-        media: { adapterProviderKeys: ["dashscope"], credentialConfigured: false },
+        media: { registeredModels: DASHSCOPE_REGISTERED_MODELS, credentialConfigured: false },
       }),
     );
     expect(unconfiguredResult.items[videoEntry.id]?.realDispatchAllowed).toBe(false);
@@ -435,17 +447,195 @@ describe("generation capability readiness", () => {
     expect(result.issues).toEqual([]);
   });
 
+  it("marks media entries not quotable when the catalog modelId is not the actually configured model", () => {
+    // codex P1-2 复现：目录视频模型改成不存在/被 env 覆盖为另一个模型时，
+    // readiness 不得返回 ok=true（按 seed 模型报价、按另一模型调用）。
+    const seed = buildPricingCatalogSeed(REAL_TIER_INPUT);
+    const mismatchedSeed = seed.map((entry) =>
+      entry.capability === "video.image_to_video"
+        ? { ...entry, modelId: "does-not-exist" }
+        : entry,
+    );
+    const result = evaluateGenerationCapabilityReadiness(
+      readinessInput({ catalog: mismatchedSeed }),
+    );
+    expect(result.ok).toBe(false);
+    const videoEntry = mismatchedSeed.find((e) => e.capability === "video.image_to_video")!;
+    expect(result.items[videoEntry.id]?.quotable).toBe(false);
+    expect(result.items[videoEntry.id]?.issues).toContain("media_model_not_registered");
+  });
+
+  it("accepts a catalog model that matches an env-overridden adapter configuration", () => {
+    // 实际运行配置被 env 覆盖为其他模型时，seed 模型不一致 → 不可报价；
+    // 把 seed 与矩阵一起换成覆盖后的模型则恢复一致。
+    const overriddenModels = DASHSCOPE_REGISTERED_MODELS.map((m) =>
+      m.capability === "image.generate" ? { ...m, modelId: "wan2.7-t2i" } : m,
+    );
+    const seed = buildPricingCatalogSeed(REAL_TIER_INPUT).map((entry) =>
+      entry.capability === "image.generate" ? { ...entry, modelId: "wan2.7-t2i" } : entry,
+    );
+    const result = evaluateGenerationCapabilityReadiness(
+      readinessInput({
+        catalog: seed,
+        media: { registeredModels: overriddenModels, credentialConfigured: true },
+      }),
+    );
+    expect(result.ok).toBe(true);
+  });
+
   it("does not leak secrets or env var names in readiness output", () => {
     const seed = buildPricingCatalogSeed(REAL_TIER_INPUT);
     const result = evaluateGenerationCapabilityReadiness(
       readinessInput({
         catalog: seed,
-        media: { adapterProviderKeys: [], credentialConfigured: false },
+        media: { registeredModels: [], credentialConfigured: false },
       }),
     );
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain("ALIYUN_DASHSCOPE_API_KEY");
     expect(serialized).not.toContain("LLM_PROVIDER_");
     expect(serialized).not.toContain("apiKeyEnv");
+  });
+});
+
+describe("generation cost bootstrap", () => {
+  it("applies the seed and keeps all entries active and quotable in a configured environment", async () => {
+    const db = createDbClient();
+    const result = await bootstrapGenerationCostCatalog(db, REAL_TIER_INPUT);
+    expect(result.readiness.ok).toBe(true);
+    expect(result.disabledProviderModelIds).toEqual([]);
+    const entries = listProviderModelCatalog(db);
+    expect(entries.length).toBe(5);
+    for (const entry of entries) {
+      expect(entry.status, entry.id).toBe("active");
+    }
+  });
+
+  it("materializes non-quotable entries as disabled catalog rows so the public catalog hides them", async () => {
+    const db = createDbClient();
+    // demo 环境强制视频不可真实派发 → 视频目录行物化为 disabled，公开目录不再展示。
+    const result = await bootstrapGenerationCostCatalog(db, {
+      ...REAL_TIER_INPUT,
+      environment: { demoMode: true, testEnv: false },
+    });
+    expect(result.readiness.ok).toBe(false);
+    const videoEntry = listProviderModelCatalog(db).find(
+      (e) => e.capability === "video.image_to_video",
+    )!;
+    expect(videoEntry.status).toBe("disabled");
+    expect(
+      listPublicGenerationCapabilities(db).find((e) => e.id === videoEntry.id),
+    ).toBeUndefined();
+    expect(listPublicGenerationCapabilities(db).length).toBe(4);
+  });
+
+  it("disables media rows when media credentials are unconfigured", async () => {
+    const db = createDbClient();
+    const result = await bootstrapGenerationCostCatalog(db, {
+      ...REAL_TIER_INPUT,
+      media: { registeredModels: [], credentialConfigured: false },
+    });
+    expect(result.readiness.ok).toBe(false);
+    const mediaEntries = listProviderModelCatalog(db).filter((e) =>
+      ["image.generate", "video.image_to_video", "tts.synthesize"].includes(e.capability),
+    );
+    for (const entry of mediaEntries) {
+      expect(entry.status, entry.id).toBe("disabled");
+    }
+  });
+
+  it("seeds no llm rows and reports missing defaults when tier resolution failed", async () => {
+    const db = createDbClient();
+    const result = await bootstrapGenerationCostCatalog(db, {
+      ...REAL_TIER_INPUT,
+      llm: { mode: "resolution_failed" },
+    });
+    expect(result.readiness.ok).toBe(false);
+    expect(
+      result.readiness.issues.filter((i) => i.code === "catalog_missing_active_default").length,
+    ).toBe(2);
+    expect(
+      listProviderModelCatalog(db).filter((e) => e.capability.startsWith("llm.")),
+    ).toHaveLength(0);
+    // 媒体不受 LLM 解析失败影响。
+    expect(
+      listProviderModelCatalog(db).find((e) => e.capability === "image.generate")?.status,
+    ).toBe("active");
+  });
+
+  it("is idempotent across restarts in the same environment", async () => {
+    const db = createDbClient();
+    await bootstrapGenerationCostCatalog(db, REAL_TIER_INPUT);
+    const second = await bootstrapGenerationCostCatalog(db, REAL_TIER_INPUT);
+    expect(second.disabledProviderModelIds).toEqual([]);
+    expect(listProviderModelCatalog(db).length).toBe(5);
+  });
+});
+
+describe("resolve generation cost bootstrap input", () => {
+  it("maps stub llm provider to stub seed input without touching tier or media config", () => {
+    const input = resolveGenerationCostBootstrapInput({
+      llmProvider: "stub",
+      resolveTierSnapshot: () => {
+        throw new Error("must not be called in stub mode");
+      },
+      mediaCredentialConfigured: false,
+      readDashscopeMediaConfig: () => {
+        throw new Error("must not be called without credentials");
+      },
+      demoMode: false,
+      testEnv: false,
+    });
+    expect(input.llm).toEqual({ mode: "stub" });
+    expect(input.media).toEqual({ registeredModels: [], credentialConfigured: false });
+  });
+
+  it("maps a resolved tier snapshot to resolved seed input with flash reuse", () => {
+    const input = resolveGenerationCostBootstrapInput({
+      llmProvider: "openai",
+      resolveTierSnapshot: () =>
+        ({
+          smart: { tier: "smart", provider: "deepseek", model: "deepseek-v4-pro", baseUrl: "https://x", apiKey: "k" },
+          flashReusesSmart: true,
+        }) as never,
+      mediaCredentialConfigured: true,
+      readDashscopeMediaConfig: () =>
+        ({
+          imageModel: "wan2.6-t2i",
+          imageToVideoModel: "wan2.7-i2v-2026-04-25",
+          ttsModel: "qwen3-tts-instruct-flash",
+        }) as never,
+      demoMode: false,
+      testEnv: false,
+    });
+    expect(input.llm).toEqual({
+      mode: "resolved",
+      smart: { providerKey: "deepseek", modelId: "deepseek-v4-pro" },
+      flash: { reusesSmart: true },
+    });
+    expect(input.media.credentialConfigured).toBe(true);
+    expect(input.media.registeredModels).toContainEqual({
+      capability: "video.image_to_video",
+      providerKey: "dashscope",
+      modelId: "wan2.7-i2v-2026-04-25",
+    });
+  });
+
+  it("maps tier snapshot failure to resolution_failed and unconfigured media to an empty matrix", () => {
+    const input = resolveGenerationCostBootstrapInput({
+      llmProvider: "openai",
+      resolveTierSnapshot: () => {
+        throw new Error("api key missing");
+      },
+      mediaCredentialConfigured: false,
+      readDashscopeMediaConfig: () => {
+        throw new Error("must not be called without credentials");
+      },
+      demoMode: false,
+      testEnv: true,
+    });
+    expect(input.llm).toEqual({ mode: "resolution_failed" });
+    expect(input.media.registeredModels).toEqual([]);
+    expect(input.environment).toEqual({ demoMode: false, testEnv: true });
   });
 });

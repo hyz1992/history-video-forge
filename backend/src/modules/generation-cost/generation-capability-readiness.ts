@@ -24,12 +24,6 @@ import {
 
 /** LLM capability slot（readiness 侧的显式集合，避免字符串前缀猜测）。 */
 const LLM_CAPABILITIES = ["llm.smart", "llm.flash"] as const;
-/** 受凭据/adapter 约束的媒体 capability slot。 */
-const MEDIA_CAPABILITIES = [
-  "image.generate",
-  "video.image_to_video",
-  "tts.synthesize",
-] as const;
 /** demo/test 环境强制禁止真实派发的 capability（真实付费视频 API）。 */
 const REAL_VIDEO_CAPABILITIES = ["video.image_to_video"] as const;
 
@@ -39,15 +33,33 @@ export type ReadinessIssueCode =
   | "llm_tier_mismatch"
   | "llm_provider_unavailable"
   | "media_adapter_unregistered"
+  | "media_model_not_registered"
   | "media_credential_unconfigured"
   | "real_video_dispatch_disabled";
+
+/** 受 adapter/凭据约束的媒体 capability slot。 */
+type MediaCapability = "image.generate" | "video.image_to_video" | "tts.synthesize";
+
+/**
+ * 当前实际注册的媒体 adapter 支持矩阵条目。
+ * readiness 用 (capability, providerKey, modelId) 精确匹配目录项，防止
+ * "按 seed 模型报价、按另一个模型实际调用"（codex 审计 P1-2）。
+ */
+export interface MediaRegisteredModel {
+  capability: MediaCapability;
+  providerKey: string;
+  modelId: string;
+}
 
 export interface GenerationCapabilityReadinessInput {
   catalog: ProviderModelCatalogRecord[];
   llm: LlmTierSeedInput;
   media: {
-    /** 媒体 adapter registry 当前注册的 provider key（如 ["dashscope"]）。 */
-    adapterProviderKeys: string[];
+    /**
+     * 当前实际注册的媒体 adapter 支持矩阵（每个 capability 实际配置的
+     * provider + model，含 env 覆盖后的真实执行模型）。
+     */
+    registeredModels: MediaRegisteredModel[];
     /** 服务端媒体凭据是否已配置（非空）。 */
     credentialConfigured: boolean;
   };
@@ -198,7 +210,11 @@ function validateEntryConsistency(
     validateLlmEntry(entry, input, pushIssue);
     return;
   }
-  if ((MEDIA_CAPABILITIES as readonly string[]).includes(entry.capability)) {
+  if (
+    entry.capability === "image.generate" ||
+    entry.capability === "video.image_to_video" ||
+    entry.capability === "tts.synthesize"
+  ) {
     validateMediaEntry(entry, input, pushIssue);
   }
 }
@@ -250,12 +266,30 @@ function validateMediaEntry(
     issue: GenerationCapabilityReadinessIssue,
   ) => void,
 ): void {
-  if (!input.media.adapterProviderKeys.includes(entry.providerKey)) {
+  const registered = input.media.registeredModels;
+  const providerRegistered = registered.some((m) => m.providerKey === entry.providerKey);
+  if (!providerRegistered) {
     pushIssue(entry, {
       code: "media_adapter_unregistered",
       capability: entry.capability,
       provider_model_id: entry.id,
       message: `媒体目录项 ${entry.id} 的 provider (${entry.providerKey}) 未在 adapter registry 注册，不得报价或进入新运行`,
+    });
+  } else if (
+    !registered.some(
+      (m) =>
+        m.capability === entry.capability &&
+        m.providerKey === entry.providerKey &&
+        m.modelId === entry.modelId,
+    )
+  ) {
+    // (capability, provider, model) 精确匹配：目录模型必须与实际执行模型一致
+    // （含 env 覆盖后的配置），否则"按 seed 模型报价、按另一模型调用"。
+    pushIssue(entry, {
+      code: "media_model_not_registered",
+      capability: entry.capability,
+      provider_model_id: entry.id,
+      message: `媒体目录项 ${entry.id} 的模型 (${entry.providerKey}:${entry.modelId}) 与该 capability 的实际 adapter 配置不一致，不得报价或进入新运行`,
     });
   }
   if (!input.media.credentialConfigured) {

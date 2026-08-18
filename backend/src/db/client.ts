@@ -452,6 +452,12 @@ export interface DbClient {
     saveUserGenerationPreference(record: UserGenerationPreferenceRecord): Promise<void>;
     saveProjectGenerationConfiguration(record: ProjectGenerationConfigurationRecord): Promise<void>;
     saveProviderModelCatalogEntry(record: ProviderModelCatalogRecord): Promise<void>;
+    /**
+     * 目录 seed 批量应用（S2-2A 任务 7 重开，codex P3）：单事务内按序 upsert
+     * 全部记录，任一失败整体回滚。可选方法：Prisma writer 提供，内存态测试
+     * writer 可只实现逐条方法，repository 自动回退。
+     */
+    applyProviderModelCatalogSeedBatch?(records: ProviderModelCatalogRecord[]): Promise<void>;
     createProjectWithGenerationConfiguration(
       project: ProjectRecord,
       configuration: ProjectGenerationConfigurationRecord,
