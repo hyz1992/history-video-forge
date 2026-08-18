@@ -45,6 +45,7 @@ const REAL_TIER_INPUT = {
   media: {
     registeredModels: DASHSCOPE_REGISTERED_MODELS,
     credentialConfigured: true,
+    deploymentScope: "cn-beijing" as const,
   },
   environment: { demoMode: false, testEnv: false },
 };
@@ -116,6 +117,7 @@ describe("pricing catalog seed", () => {
         smart: { providerKey: "deepseek", modelId: "deepseek-v4-pro" },
         flash: { reusesSmart: true },
       },
+      media: { deploymentScope: "cn-beijing" },
     });
     const byCapability = new Map(seed.map((e) => [e.capability, e]));
     expect(byCapability.get("llm.flash")?.providerKey).toBe("deepseek");
@@ -142,7 +144,7 @@ describe("pricing catalog seed", () => {
 
   it("carries pricing version, effective time and source notes without secrets or env var names", () => {
     const seed = buildPricingCatalogSeed(REAL_TIER_INPUT);
-    expect(MEDIA_PRICING_VERSION).toMatch(/^dashscope-media-\d{4}-\d{2}-\d{2}$/);
+    expect(MEDIA_PRICING_VERSION).toMatch(/^dashscope-media-(cn-beijing|singapore)-\d{4}-\d{2}-\d{2}$/);
     expect(SEED_EFFECTIVE_AT).toMatch(/^\d{4}-\d{2}-\d{2}/);
     for (const entry of seed) {
       expect(entry.pricingVersion.length).toBeGreaterThan(0);
@@ -372,7 +374,7 @@ describe("generation capability readiness", () => {
     const result = evaluateGenerationCapabilityReadiness(
       readinessInput({
         catalog: seed,
-        media: { registeredModels: [], credentialConfigured: true },
+        media: { registeredModels: [], credentialConfigured: true, deploymentScope: "cn-beijing" as const },
       }),
     );
     expect(result.ok).toBe(false);
@@ -389,7 +391,7 @@ describe("generation capability readiness", () => {
     const result = evaluateGenerationCapabilityReadiness(
       readinessInput({
         catalog: seed,
-        media: { registeredModels: DASHSCOPE_REGISTERED_MODELS, credentialConfigured: false },
+        media: { registeredModels: DASHSCOPE_REGISTERED_MODELS, credentialConfigured: false, deploymentScope: "cn-beijing" as const },
       }),
     );
     expect(result.ok).toBe(false);
@@ -423,7 +425,7 @@ describe("generation capability readiness", () => {
     const unconfiguredResult = evaluateGenerationCapabilityReadiness(
       readinessInput({
         catalog: seed,
-        media: { registeredModels: DASHSCOPE_REGISTERED_MODELS, credentialConfigured: false },
+        media: { registeredModels: DASHSCOPE_REGISTERED_MODELS, credentialConfigured: false, deploymentScope: "cn-beijing" as const },
       }),
     );
     expect(unconfiguredResult.items[videoEntry.id]?.realDispatchAllowed).toBe(false);
@@ -477,10 +479,95 @@ describe("generation capability readiness", () => {
     const result = evaluateGenerationCapabilityReadiness(
       readinessInput({
         catalog: seed,
-        media: { registeredModels: overriddenModels, credentialConfigured: true },
+        media: { registeredModels: overriddenModels, credentialConfigured: true, deploymentScope: "cn-beijing" as const },
       }),
     );
     expect(result.ok).toBe(true);
+  });
+
+  it("seeds singapore-scoped catalog prices and leaves unverified singapore models unpriced", () => {
+    // codex P1-B：同一 wan2.7-i2v 新加坡价（720P ¥0.74942/s、1080P ¥1.12413/s）
+    // 高于北京价；未核实的新加坡 image/tts 价格必须 unpriced（→unbounded）。
+    const seed = buildPricingCatalogSeed({
+      llm: REAL_TIER_INPUT.llm,
+      media: { deploymentScope: "singapore" },
+    });
+    const video = seed.find((e) => e.capability === "video.image_to_video")!;
+    expect(video.id).toBe("video.image_to_video.dashscope.singapore.wan2.7-i2v-2026-04-25");
+    const pricing = video.pricingJson as {
+      price_micros_per_second_by_quality: Record<string, string>;
+    };
+    expect(pricing.price_micros_per_second_by_quality).toEqual({
+      standard_720p: "749420",
+      high_1080p: "1124130",
+    });
+
+    const image = seed.find((e) => e.capability === "image.generate")!;
+    expect(image.pricingJson).toMatchObject({ unpriced: true });
+    const tts = seed.find((e) => e.capability === "tts.synthesize")!;
+    expect(tts.pricingJson).toMatchObject({ unpriced: true });
+  });
+
+  it("fails closed on unknown dashscope deployment scope with capability-level reason codes", () => {
+    // codex P1-B + P3-B：未知 endpoint 不种媒体行；readiness 输出 capability 级
+    // media_deployment_scope_unknown（可区分于目录损坏）。
+    const result = evaluateGenerationCapabilityReadiness(
+      readinessInput({
+        catalog: buildPricingCatalogSeed({
+          llm: REAL_TIER_INPUT.llm,
+          media: { deploymentScope: "unknown" },
+        }),
+        media: { registeredModels: [], credentialConfigured: true, deploymentScope: "unknown" },
+      }),
+    );
+    expect(result.ok).toBe(false);
+    const scopeIssues = result.issues.filter((i) => i.code === "media_deployment_scope_unknown");
+    expect(scopeIssues.map((i) => i.capability).sort()).toEqual([
+      "image.generate",
+      "tts.synthesize",
+      "video.image_to_video",
+    ]);
+  });
+
+  it("reports capability-level llm_provider_unavailable when tier resolution failed without entries", () => {
+    // codex P3-B：resolution_failed 无 LLM 行可挂时，llm_provider_unavailable 也必须可达，
+    // 供运维区分目录损坏与 provider/凭据解析失败。
+    const result = evaluateGenerationCapabilityReadiness(
+      readinessInput({
+        catalog: buildPricingCatalogSeed({
+          llm: { mode: "resolution_failed" },
+          media: { deploymentScope: "cn-beijing" },
+        }),
+        llm: { mode: "resolution_failed" },
+      }),
+    );
+    expect(result.ok).toBe(false);
+    const llmIssues = result.issues.filter((i) => i.code === "llm_provider_unavailable");
+    expect(llmIssues.map((i) => i.capability).sort()).toEqual(["llm.flash", "llm.smart"]);
+  });
+
+  it("marks catalog rows of a different deployment scope as not quotable", () => {
+    // 目录行声明北京价，但运行 baseUrl 切到了新加坡：不得按旧区域价格报价。
+    const seed = buildPricingCatalogSeed({
+      llm: REAL_TIER_INPUT.llm,
+      media: { deploymentScope: "cn-beijing" },
+    });
+    const result = evaluateGenerationCapabilityReadiness(
+      readinessInput({
+        catalog: seed,
+        media: {
+          registeredModels: DASHSCOPE_REGISTERED_MODELS,
+          credentialConfigured: true,
+          deploymentScope: "singapore",
+        },
+      }),
+    );
+    expect(result.ok).toBe(false);
+    const mediaEntries = seed.filter((e) => !e.capability.startsWith("llm."));
+    for (const entry of mediaEntries) {
+      expect(result.items[entry.id]?.quotable, entry.id).toBe(false);
+      expect(result.items[entry.id]?.issues).toContain("media_deployment_scope_mismatch");
+    }
   });
 
   it("does not leak secrets or env var names in readiness output", () => {
@@ -488,7 +575,7 @@ describe("generation capability readiness", () => {
     const result = evaluateGenerationCapabilityReadiness(
       readinessInput({
         catalog: seed,
-        media: { registeredModels: [], credentialConfigured: false },
+        media: { registeredModels: [], credentialConfigured: false, deploymentScope: "cn-beijing" as const },
       }),
     );
     const serialized = JSON.stringify(result);
@@ -533,7 +620,7 @@ describe("generation cost bootstrap", () => {
     const db = createDbClient();
     const result = await bootstrapGenerationCostCatalog(db, {
       ...REAL_TIER_INPUT,
-      media: { registeredModels: [], credentialConfigured: false },
+      media: { registeredModels: [], credentialConfigured: false, deploymentScope: "cn-beijing" as const },
     });
     expect(result.readiness.ok).toBe(false);
     const mediaEntries = listProviderModelCatalog(db).filter((e) =>
@@ -606,7 +693,7 @@ describe("resolve generation cost bootstrap input", () => {
       testEnv: false,
     });
     expect(input.llm).toEqual({ mode: "stub" });
-    expect(input.media).toEqual({ registeredModels: [], credentialConfigured: false });
+    expect(input.media).toEqual({ registeredModels: [], credentialConfigured: false, deploymentScope: "cn-beijing" });
   });
 
   it("maps a resolved tier snapshot to resolved seed input with flash reuse", () => {
@@ -623,6 +710,7 @@ describe("resolve generation cost bootstrap input", () => {
           imageModel: "wan2.6-t2i",
           imageToVideoModel: "wan2.7-i2v-2026-04-25",
           ttsModel: "qwen3-tts-instruct-flash",
+          baseUrl: "https://dashscope.aliyuncs.com",
         }) as never,
       demoMode: false,
       testEnv: false,
@@ -633,11 +721,42 @@ describe("resolve generation cost bootstrap input", () => {
       flash: { reusesSmart: true },
     });
     expect(input.media.credentialConfigured).toBe(true);
+    expect(input.media.deploymentScope).toBe("cn-beijing");
     expect(input.media.registeredModels).toContainEqual({
       capability: "video.image_to_video",
       providerKey: "dashscope",
       modelId: "wan2.7-i2v-2026-04-25",
     });
+  });
+
+  it("maps an intl base url to the singapore deployment scope and an unrecognized endpoint to unknown", () => {
+    const makeDeps = (baseUrl: string | undefined) => ({
+      llmProvider: "openai",
+      resolveTierSnapshot: () =>
+        ({
+          smart: { tier: "smart", provider: "deepseek", model: "deepseek-v4-pro", baseUrl: "https://x", apiKey: "k" },
+          flashReusesSmart: true,
+        }) as never,
+      mediaCredentialConfigured: true,
+      readDashscopeMediaConfig: () =>
+        ({
+          imageModel: "wan2.6-t2i",
+          imageToVideoModel: "wan2.7-i2v-2026-04-25",
+          ttsModel: "qwen3-tts-instruct-flash",
+          baseUrl,
+        }) as never,
+      demoMode: false,
+      testEnv: false,
+    });
+
+    const intl = resolveGenerationCostBootstrapInput(makeDeps("https://dashscope-intl.aliyuncs.com"));
+    expect(intl.media.deploymentScope).toBe("singapore");
+    expect(intl.media.registeredModels.length).toBe(3);
+
+    const unknown = resolveGenerationCostBootstrapInput(makeDeps("https://private.example.com"));
+    expect(unknown.media.deploymentScope).toBe("unknown");
+    // 区域未知：无已核实价格真相，不注册任何媒体模型（fail-closed）。
+    expect(unknown.media.registeredModels).toEqual([]);
   });
 
   it("maps tier snapshot failure to resolution_failed and unconfigured media to an empty matrix", () => {

@@ -24,6 +24,8 @@ import { getAssetManifestRecordById } from "./asset-manifest-record.repository";
 import { buildInitialAssetManifest } from "./assets-manifest-builder";
 import { validateAssetsManifest } from "./assets-local-validator";
 import { createAssetProviderRegistry } from "./assets-provider-registry.js";
+import type { AssetProviderAdapter } from "./assets-provider-adapter.js";
+import { checkProviderDispatchGate } from "../generation-cost/provider-dispatch-gate.js";
 import { executeAssetManifest } from "./assets-execution-engine.js";
 import { createFakeTtsProvider } from "./providers/fake-tts-provider.js";
 import { createFakeImageProvider } from "./providers/fake-image-provider.js";
@@ -363,49 +365,93 @@ function readOptionalNumber(value: string | undefined): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function buildProviderRegistry(input: { db: DbClient }) {
+// S2-2A 任务 7 二次重开（codex P1-A）：导出供 gate 相关测试直接构造 registry。
+// 真实 DashScope adapter 注册前必须通过权威目录 gate。
+export function buildProviderRegistry(input: { db: DbClient }) {
   // S2-2A 任务 6：provider 授权只来自后端 env（API key 存在时启用真实 provider），
   // 客户端不得指定 provider_mode / model / api key。
   const providerMode: AssetsProviderMode | undefined =
     process.env.ALIYUN_DASHSCOPE_API_KEY ? "dashscope" : undefined;
   if (providerMode === "dashscope") {
     const dashscope = readDashscopeConfig(undefined);
-    const ttsProvider = createDashscopeTtsProvider({
-      apiKey: dashscope.apiKey,
-      baseUrl: dashscope.baseUrl,
-      model: dashscope.ttsModel,
-      format: dashscope.ttsFormat,
-      sampleRate: dashscope.ttsSampleRate,
-      db: input.db,
-    });
 
-    return createAssetProviderRegistry([
-      ttsProvider,
+    // S2-2A 任务 7 二次重开：真实付费 adapter（tts/image/video）逐个过目录 gate；
+    // 未通过的 adapter 不注册——执行引擎 no-adapter 路径保证不创建外部调用、
+    // 不 fetch、不建 provider job（视频走策略状态机，其余任务跳过）。
+    // 目录由启动 bootstrap 按当前环境物化：demo/test、模型失配、区域未知、
+    // 凭据缺失都会在此 fail-closed；目录为空（bootstrap 未运行）同样拒绝。
+    const adapters: AssetProviderAdapter[] = [
       createLocalSubtitleProvider({
         dashscopeApiKey: dashscope.apiKey,
         dashscopeBaseUrl: dashscope.baseUrl,
         dashscopeAsrModel: dashscope.asrModel,
       }),
-      createDashscopeImageProvider({
-        apiKey: dashscope.apiKey,
-        baseUrl: dashscope.baseUrl,
-        model: dashscope.imageModel,
-        size: dashscope.imageSize,
-        pollIntervalMs: dashscope.imagePollIntervalMs,
-        maxPollAttempts: dashscope.imageMaxPollAttempts,
-      }),
-      createDashscopeImageToVideoProvider({
-        apiKey: dashscope.apiKey,
-        baseUrl: dashscope.baseUrl,
-        model: dashscope.imageToVideoModel,
-        resolution: dashscope.imageToVideoResolution,
-        durationSec: dashscope.imageToVideoDurationSec,
-        pollIntervalMs: dashscope.imageToVideoPollIntervalMs,
-        maxPollAttempts: dashscope.imageToVideoMaxPollAttempts,
-      }),
       createLocalSfxProvider(input.db),
       createLocalBgmProvider(input.db),
-    ]);
+    ];
+
+    const gateTts = checkProviderDispatchGate(input.db, {
+      capability: "tts.synthesize",
+      providerKey: "dashscope",
+      modelId: dashscope.ttsModel,
+    });
+    if (gateTts.allowed) {
+      adapters.unshift(
+        createDashscopeTtsProvider({
+          apiKey: dashscope.apiKey,
+          baseUrl: dashscope.baseUrl,
+          model: dashscope.ttsModel,
+          format: dashscope.ttsFormat,
+          sampleRate: dashscope.ttsSampleRate,
+          db: input.db,
+        }),
+      );
+    } else {
+      warnDispatchGateBlocked("tts.synthesize", gateTts);
+    }
+
+    const gateImage = checkProviderDispatchGate(input.db, {
+      capability: "image.generate",
+      providerKey: "dashscope",
+      modelId: dashscope.imageModel,
+    });
+    if (gateImage.allowed) {
+      adapters.unshift(
+        createDashscopeImageProvider({
+          apiKey: dashscope.apiKey,
+          baseUrl: dashscope.baseUrl,
+          model: dashscope.imageModel,
+          size: dashscope.imageSize,
+          pollIntervalMs: dashscope.imagePollIntervalMs,
+          maxPollAttempts: dashscope.imageMaxPollAttempts,
+        }),
+      );
+    } else {
+      warnDispatchGateBlocked("image.generate", gateImage);
+    }
+
+    const gateVideo = checkProviderDispatchGate(input.db, {
+      capability: "video.image_to_video",
+      providerKey: "dashscope",
+      modelId: dashscope.imageToVideoModel,
+    });
+    if (gateVideo.allowed) {
+      adapters.unshift(
+        createDashscopeImageToVideoProvider({
+          apiKey: dashscope.apiKey,
+          baseUrl: dashscope.baseUrl,
+          model: dashscope.imageToVideoModel,
+          resolution: dashscope.imageToVideoResolution,
+          durationSec: dashscope.imageToVideoDurationSec,
+          pollIntervalMs: dashscope.imageToVideoPollIntervalMs,
+          maxPollAttempts: dashscope.imageToVideoMaxPollAttempts,
+        }),
+      );
+    } else {
+      warnDispatchGateBlocked("video.image_to_video", gateVideo);
+    }
+
+    return createAssetProviderRegistry(adapters);
   }
 
   return createAssetProviderRegistry([
@@ -415,6 +461,19 @@ function buildProviderRegistry(input: { db: DbClient }) {
     createLocalSfxProvider(input.db),
     createLocalBgmProvider(input.db),
   ]);
+}
+
+function warnDispatchGateBlocked(
+  capability: string,
+  decision:
+    | { allowed: true }
+    | { allowed: false; reason_code: string; message: string },
+): void {
+  if (decision.allowed) return;
+  // 只输出公开原因码与公开消息，不含密钥/环境变量名。
+  console.warn(
+    `[assets-dispatch-gate] capability ${capability} 真实派发被目录闸门阻止（${decision.reason_code}）：${decision.message}`,
+  );
 }
 
 function allowedArtifactTypesForTask(taskType: AssetPlan["tasks"][number]["task_type"]) {

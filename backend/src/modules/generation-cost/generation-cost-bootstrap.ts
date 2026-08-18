@@ -2,7 +2,12 @@ import { env } from "../../config/env.js";
 import type { DbClient } from "../../db/client.js";
 import { resolveTierProviderSnapshot, type TierProviderSnapshot } from "../../runtime/llm/tier-aware-provider-factory.js";
 import { readDashscopeConfig } from "../assets/assets-run.service.js";
-import { buildPricingCatalogSeed, type LlmTierSeedInput } from "./pricing-catalog.seed.js";
+import {
+  buildPricingCatalogSeed,
+  resolveDashscopeDeploymentScope,
+  type DashscopeDeploymentScope,
+  type LlmTierSeedInput,
+} from "./pricing-catalog.seed.js";
 import {
   applyProviderModelCatalogSeed,
   disableProviderModelCatalogEntries,
@@ -46,6 +51,8 @@ export interface DashscopeMediaConfigProjection {
   imageModel: string;
   imageToVideoModel: string;
   ttsModel: string;
+  /** 运行时 baseUrl（undefined = SDK 默认北京接入）。 */
+  baseUrl: string | undefined;
 }
 
 export interface GenerationCostBootstrapEnvDeps {
@@ -66,6 +73,8 @@ export interface GenerationCostBootstrapEnvDeps {
  *
  * 媒体支持矩阵只包含当前实际构建 adapter 会使用的模型（与 assets-run
  * buildProviderRegistry 的启用条件一致：凭据存在才有真实 DashScope adapter）。
+ * 部署区域由运行 baseUrl 推导并贯穿 seed 与 readiness；未知区域 fail-closed
+ * （媒体矩阵为空、seed 不种媒体行）。
  */
 export function resolveGenerationCostBootstrapInput(
   deps: GenerationCostBootstrapEnvDeps,
@@ -91,20 +100,29 @@ export function resolveGenerationCostBootstrapInput(
   if (!deps.mediaCredentialConfigured) {
     return {
       llm,
-      media: { registeredModels: [], credentialConfigured: false },
+      media: {
+        registeredModels: [],
+        credentialConfigured: false,
+        deploymentScope: "cn-beijing",
+      },
       environment: { demoMode: deps.demoMode, testEnv: deps.testEnv },
     };
   }
   const media = deps.readDashscopeMediaConfig();
+  const deploymentScope = resolveDashscopeDeploymentScope(media.baseUrl);
   return {
     llm,
     media: {
-      registeredModels: [
-        { capability: "image.generate", providerKey: "dashscope", modelId: media.imageModel },
-        { capability: "video.image_to_video", providerKey: "dashscope", modelId: media.imageToVideoModel },
-        { capability: "tts.synthesize", providerKey: "dashscope", modelId: media.ttsModel },
-      ],
+      registeredModels:
+        deploymentScope === "unknown"
+          ? [] // 区域未知：无已核实价格真相，不注册任何媒体模型（fail-closed）
+          : [
+              { capability: "image.generate", providerKey: "dashscope", modelId: media.imageModel },
+              { capability: "video.image_to_video", providerKey: "dashscope", modelId: media.imageToVideoModel },
+              { capability: "tts.synthesize", providerKey: "dashscope", modelId: media.ttsModel },
+            ],
       credentialConfigured: true,
+      deploymentScope,
     },
     environment: { demoMode: deps.demoMode, testEnv: deps.testEnv },
   };
@@ -122,6 +140,7 @@ export function resolveGenerationCostBootstrapInputFromEnv(): GenerationCostBoot
         imageModel: config.imageModel,
         imageToVideoModel: config.imageToVideoModel,
         ttsModel: config.ttsModel,
+        baseUrl: config.baseUrl,
       };
     },
     demoMode: env.demoMode,
@@ -137,7 +156,13 @@ export async function bootstrapGenerationCostCatalog(
   db: DbClient,
   input: GenerationCostBootstrapInput,
 ): Promise<GenerationCostBootstrapResult> {
-  await applyProviderModelCatalogSeed(db, buildPricingCatalogSeed({ llm: input.llm }));
+  await applyProviderModelCatalogSeed(
+    db,
+    buildPricingCatalogSeed({
+      llm: input.llm,
+      media: { deploymentScope: input.media.deploymentScope },
+    }),
+  );
 
   const readiness = evaluateGenerationCapabilityReadiness({
     ...input,

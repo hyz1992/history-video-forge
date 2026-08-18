@@ -20,8 +20,8 @@ import type { ProviderModelCatalogRecord } from "../../db/client.js";
 /** seed 生效时间（ISO 8601，价格快照的生效起点）。 */
 export const SEED_EFFECTIVE_AT = "2026-08-17T00:00:00+08:00";
 
-/** DashScope 媒体（image / video / tts）价格版本。 */
-export const MEDIA_PRICING_VERSION = "dashscope-media-2026-08-17";
+/** DashScope 媒体价格版本（北京 workspace；按区域生成的版本串见 mediaPricingVersion）。 */
+export const MEDIA_PRICING_VERSION = "dashscope-media-cn-beijing-2026-08-17";
 
 /**
  * LLM seed 输入：当前真实 tier 解析结果的抽象。
@@ -116,39 +116,81 @@ function toRecord(input: SeedEntryInput): ProviderModelCatalogRecord {
 }
 
 /**
+ * DashScope 部署区域（deployment scope）。
+ * 同一模型在北京与新加坡（dashscope-intl）价格不同；价格目录与 readiness
+ * 都必须绑定区域，未知 endpoint fail-closed（不得按猜测区域报价/派发）。
+ */
+export type DashscopeDeploymentScope = "cn-beijing" | "singapore" | "unknown";
+
+/**
+ * 从 DashScope baseUrl 推导部署区域。
+ * - 未配置 → cn-beijing（DashScope SDK 默认接入域名）。
+ * - dashscope-intl.aliyuncs.com → singapore。
+ * - dashscope.aliyuncs.com → cn-beijing。
+ * - 其他/私有/无法识别 → unknown（fail-closed：不种媒体目录、不报价、不派发）。
+ */
+export function resolveDashscopeDeploymentScope(
+  baseUrl: string | undefined,
+): DashscopeDeploymentScope {
+  if (!baseUrl) return "cn-beijing";
+  if (baseUrl.includes("dashscope-intl.aliyuncs.com")) return "singapore";
+  if (baseUrl.includes("dashscope.aliyuncs.com")) return "cn-beijing";
+  return "unknown";
+}
+
+/**
  * 构建五个 capability slot 的目录 seed。
  *
  * - 媒体三项（image / video / tts）固定映射当前真实 DashScope 模型
- *   （与 assets-run readDashscopeConfig 的服务端默认模型一致）。
+ *   （与 assets-run readDashscopeConfig 的服务端默认模型一致），目录 id 与
+ *   价格按部署区域区分；unknown 区域不种媒体行（fail-closed）。
  * - LLM 两项按传入 tier 映射当前真实 provider/model；stub 模式映射为零外部费用。
  * - 每个 capability 恰好一个 active + isDefault=true 项（resolver auto 硬合同；
  *   readiness 会再校验一次，零个/多个默认项都会失败）。
  */
 export function buildPricingCatalogSeed(input: {
   llm: LlmTierSeedInput;
+  media: { deploymentScope: DashscopeDeploymentScope };
 }): ProviderModelCatalogRecord[] {
+  const scope = input.media.deploymentScope;
+  if (scope === "unknown") {
+    // 未知区域没有已核实价格真相：不种媒体行（readiness 报 capability 级
+    // media_deployment_scope_unknown + 缺默认项），不得报价或派发。
+    return buildLlmSeedEntries(input.llm);
+  }
   const entries: ProviderModelCatalogRecord[] = [
     toRecord({
-      id: "image.generate.dashscope.wan2.6-t2i",
+      id: `image.generate.dashscope.${scope}.wan2.6-t2i`,
       capability: "image.generate",
       providerKey: "dashscope",
       modelId: "wan2.6-t2i",
       displayName: "万相文生图（wan2.6-t2i）",
       qualityTier: "standard",
       speedTier: "standard",
-      parameterCapabilitiesJson: {},
-      pricingVersion: MEDIA_PRICING_VERSION,
-      pricingJson: {
-        unit_type: "image",
-        currency: "CNY",
-        price_micros_per_image: "200000",
-        effective_at: SEED_EFFECTIVE_AT,
-        source_note: DASHSCOPE_MEDIA_SOURCE_NOTE,
-      },
+      parameterCapabilitiesJson: { deployment_scope: scope },
+      pricingVersion: mediaPricingVersion(scope),
+      pricingJson:
+        scope === "singapore"
+          ? {
+              // 新加坡 workspace 的 wan2.6-t2i 价格未核实：unpriced → unbounded。
+              unit_type: "image",
+              currency: "CNY",
+              unpriced: true,
+              effective_at: SEED_EFFECTIVE_AT,
+              source_note:
+                "dashscope-intl 新加坡文生图价格未核实：按 unbounded 处理，运营核实后登记",
+            }
+          : {
+              unit_type: "image",
+              currency: "CNY",
+              price_micros_per_image: "200000",
+              effective_at: SEED_EFFECTIVE_AT,
+              source_note: DASHSCOPE_MEDIA_SOURCE_NOTE,
+            },
       isDefault: true,
     }),
     toRecord({
-      id: "video.image_to_video.dashscope.wan2.7-i2v-2026-04-25",
+      id: `video.image_to_video.dashscope.${scope}.wan2.7-i2v-2026-04-25`,
       capability: "video.image_to_video",
       providerKey: "dashscope",
       modelId: "wan2.7-i2v-2026-04-25",
@@ -159,47 +201,64 @@ export function buildPricingCatalogSeed(input: {
       // 与 Remotion 成片分辨率（720P/1080P 像素串）语义分离，禁止混用。
       // 时长边界与 provider 实际 clamp 行为一致（2-15 秒/任务）。
       parameterCapabilitiesJson: {
+        deployment_scope: scope,
         api_video_qualities: ["standard_720p", "high_1080p"],
         min_duration_seconds_per_task: 2,
         max_duration_seconds_per_task: 15,
       },
-      pricingVersion: MEDIA_PRICING_VERSION,
+      pricingVersion: mediaPricingVersion(scope),
       pricingJson: {
         unit_type: "video_second",
         currency: "CNY",
-        price_micros_per_second_by_quality: {
-          standard_720p: "600000",
-          high_1080p: "1000000",
-        },
+        price_micros_per_second_by_quality:
+          scope === "singapore"
+            ? // 阿里云百炼新加坡价（外部审计核实）：720P ¥0.74942/秒、1080P ¥1.12413/秒。
+              { standard_720p: "749420", high_1080p: "1124130" }
+            : { standard_720p: "600000", high_1080p: "1000000" },
         effective_at: SEED_EFFECTIVE_AT,
-        source_note: DASHSCOPE_MEDIA_SOURCE_NOTE,
+        source_note: `${DASHSCOPE_MEDIA_SOURCE_NOTE}${scope === "singapore" ? "（新加坡 workspace 价，help.aliyun.com/zh/model-studio/wan2-7-i2v）" : ""}`,
       },
       isDefault: true,
     }),
     toRecord({
-      id: "tts.synthesize.dashscope.qwen3-tts-instruct-flash",
+      id: `tts.synthesize.dashscope.${scope}.qwen3-tts-instruct-flash`,
       capability: "tts.synthesize",
       providerKey: "dashscope",
       modelId: "qwen3-tts-instruct-flash",
       displayName: "通义千问 TTS（qwen3-tts-instruct-flash）",
       qualityTier: "standard",
       speedTier: "fast",
-      parameterCapabilitiesJson: {},
-      pricingVersion: MEDIA_PRICING_VERSION,
-      pricingJson: {
-        unit_type: "tts_character",
-        currency: "CNY",
-        price_micros_per_10k_characters: "800000",
-        effective_at: SEED_EFFECTIVE_AT,
-        // 服务端实际配置的 TTS 模型；价格沿用项目内已核实的 qwen3-tts 家族万字符价。
-        source_note: DASHSCOPE_MEDIA_SOURCE_NOTE,
-      },
+      parameterCapabilitiesJson: { deployment_scope: scope },
+      pricingVersion: mediaPricingVersion(scope),
+      pricingJson:
+        scope === "singapore"
+          ? {
+              unit_type: "tts_character",
+              currency: "CNY",
+              unpriced: true,
+              effective_at: SEED_EFFECTIVE_AT,
+              source_note:
+                "dashscope-intl 新加坡 TTS 价格未核实：按 unbounded 处理，运营核实后登记",
+            }
+          : {
+              unit_type: "tts_character",
+              currency: "CNY",
+              price_micros_per_10k_characters: "800000",
+              effective_at: SEED_EFFECTIVE_AT,
+              // 服务端实际配置的 TTS 模型；价格沿用项目内已核实的 qwen3-tts 家族万字符价。
+              source_note: DASHSCOPE_MEDIA_SOURCE_NOTE,
+            },
       isDefault: true,
     }),
   ];
 
   entries.push(...buildLlmSeedEntries(input.llm));
   return entries;
+}
+
+/** 媒体价格版本按部署区域区分（价格目录与区域绑定）。 */
+function mediaPricingVersion(scope: Exclude<DashscopeDeploymentScope, "unknown">): string {
+  return `dashscope-media-${scope}-2026-08-17`;
 }
 
 function buildLlmSeedEntries(

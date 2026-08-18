@@ -29,7 +29,7 @@ const DASHSCOPE_ENV: Record<string, string> = {
   ALIYUN_DASHSCOPE_BASE_URL: "https://dashscope.test",
   ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL: "wan2.6-t2i",
   ALIYUN_DASHSCOPE_TTS_MODEL: "qwen3-tts-instruct-flash",
-  ALIYUN_DASHSCOPE_IMAGE_TO_VIDEO_MODEL: "wan2.7-i2v-api-test",
+  ALIYUN_DASHSCOPE_IMAGE_TO_VIDEO_MODEL: "wan2.7-i2v-2026-04-25",
   ALIYUN_DASHSCOPE_IMAGE_TO_VIDEO_RESOLUTION: "1080P",
   ALIYUN_DASHSCOPE_IMAGE_TO_VIDEO_DURATION_SEC: "7",
 };
@@ -38,6 +38,19 @@ function injectDashscopeEnv() {
   for (const [key, value] of Object.entries(DASHSCOPE_ENV)) {
     vi.stubEnv(key, value);
   }
+}
+
+/**
+ * S2-2A 任务 7 二次重开：真实 DashScope adapter 派发必须通过目录 gate。
+ * 测试种入与 DASHSCOPE_ENV 一致的北京 catalog。
+ */
+async function seedDashscopeDispatchCatalog(app: ReturnType<typeof buildApp>) {
+  const { buildPricingCatalogSeed } = await import("../../../backend/src/modules/generation-cost/pricing-catalog.seed.js");
+  const { applyProviderModelCatalogSeed } = await import("../../../backend/src/modules/generation-cost/provider-model-catalog.repository.js");
+  await applyProviderModelCatalogSeed(
+    app.db,
+    buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } }),
+  );
 }
 
 const scriptText =
@@ -832,6 +845,7 @@ describe("assets generate api", () => {
     );
 
     injectDashscopeEnv();
+    await seedDashscopeDispatchCatalog(app);
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${prepared.project.id}/assets/generate`,
@@ -932,7 +946,7 @@ describe("assets generate api", () => {
               duration: number;
             };
           };
-          expect(body.model).toBe("wan2.7-i2v-api-test");
+          expect(body.model).toBe("wan2.7-i2v-2026-04-25");
           expect(body.parameters.resolution).toBe("1080P");
           expect(body.parameters.duration).toBe(7);
           return new Response(
@@ -980,6 +994,7 @@ describe("assets generate api", () => {
     );
 
         injectDashscopeEnv();
+        await seedDashscopeDispatchCatalog(app);
 const response = await app.inject({
       method: "POST",
       url: `/api/projects/${prepared.project.id}/assets/generate`,

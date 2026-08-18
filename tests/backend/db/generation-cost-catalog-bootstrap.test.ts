@@ -71,6 +71,7 @@ const CONFIGURED_MEDIA_INPUT = {
     { capability: "tts.synthesize" as const, providerKey: "dashscope", modelId: "qwen3-tts-instruct-flash" },
   ],
   credentialConfigured: true,
+  deploymentScope: "cn-beijing" as const,
 };
 
 const NORMAL_ENVIRONMENT = { demoMode: false, testEnv: false };
@@ -120,7 +121,7 @@ describe("generation cost catalog bootstrap (prisma)", () => {
     expect(seedRow?.pricingVersion).toBe("llm-deepseek-2026-08-17");
 
     const mediaRow = await client.providerModelCatalog.findUnique({
-      where: { id: "video.image_to_video.dashscope.wan2.7-i2v-2026-04-25" },
+      where: { id: "video.image_to_video.dashscope.cn-beijing.wan2.7-i2v-2026-04-25" },
     });
     expect(mediaRow?.status).toBe("active");
     expect(mediaRow?.isDefault).toBe(true);
@@ -138,11 +139,11 @@ describe("generation cost catalog bootstrap (prisma)", () => {
     });
     expect(result.readiness.ok).toBe(false);
     expect(result.disabledProviderModelIds).toEqual([
-      "video.image_to_video.dashscope.wan2.7-i2v-2026-04-25",
+      "video.image_to_video.dashscope.cn-beijing.wan2.7-i2v-2026-04-25",
     ]);
 
     const videoRow = await client.providerModelCatalog.findUnique({
-      where: { id: "video.image_to_video.dashscope.wan2.7-i2v-2026-04-25" },
+      where: { id: "video.image_to_video.dashscope.cn-beijing.wan2.7-i2v-2026-04-25" },
     });
     expect(videoRow?.status).toBe("disabled");
     expect(videoRow?.isDefault).toBe(false);
@@ -161,9 +162,19 @@ describe("generation cost catalog bootstrap (prisma)", () => {
       // 违反数据库 CHECK 约束的 capability 会让事务中段失败。
       capability: "not.acapability" as never,
     };
-    const batchApply = db.firstAggregateWriter?.applyProviderModelCatalogSeedBatch;
-    expect(batchApply).toBeDefined();
-    await expect(batchApply!([probeA, invalid, probeB])).rejects.toThrow();
+    // 直接经 writer 实例调用（保留 this 绑定，codex P3-A：抽出方法会因 this 解绑
+    // 抛 TypeError 形成假阳性），并断言触发的是数据库 CHECK 约束而非 this 错误。
+    const writer = db.firstAggregateWriter!;
+    const failure = await writer
+      .applyProviderModelCatalogSeedBatch!([probeA, invalid, probeB])
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expect(failure).toBeInstanceOf(Error);
+    const message = failure instanceof Error ? failure.message : String(failure);
+    expect(message).not.toContain("Cannot read properties of undefined");
+    expect(message).toMatch(/constraint|check/i);
 
     const after = await client.providerModelCatalog.count();
     expect(after).toBe(before); // 成功前缀（probeA）也被回滚，不留半应用状态

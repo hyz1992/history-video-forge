@@ -542,7 +542,7 @@ describe("pricing service unit pricing", () => {
   });
 
   it("prices stub/free catalog entries as exact zero without marking them unbounded", () => {
-    const seed = buildPricingCatalogSeed({ llm: { mode: "stub" } });
+    const seed = buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } });
     const result = price({
       catalog: seed,
       workload: [

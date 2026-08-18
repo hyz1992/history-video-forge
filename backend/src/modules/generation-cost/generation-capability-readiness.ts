@@ -2,6 +2,7 @@ import type { ProviderModelCatalogRecord } from "../../db/client.js";
 import { CAPABILITY_SLOTS } from "../../../../shared/src/index.js";
 import {
   resolveLlmTierTarget,
+  type DashscopeDeploymentScope,
   type LlmTierSeedInput,
 } from "./pricing-catalog.seed.js";
 
@@ -22,8 +23,6 @@ import {
  * - 输出不得包含密钥、apiKeyEnv 引用或环境变量名（issue 使用公开原因码）。
  */
 
-/** LLM capability slot（readiness 侧的显式集合，避免字符串前缀猜测）。 */
-const LLM_CAPABILITIES = ["llm.smart", "llm.flash"] as const;
 /** demo/test 环境强制禁止真实派发的 capability（真实付费视频 API）。 */
 const REAL_VIDEO_CAPABILITIES = ["video.image_to_video"] as const;
 
@@ -35,6 +34,8 @@ export type ReadinessIssueCode =
   | "media_adapter_unregistered"
   | "media_model_not_registered"
   | "media_credential_unconfigured"
+  | "media_deployment_scope_unknown"
+  | "media_deployment_scope_mismatch"
   | "real_video_dispatch_disabled";
 
 /** 受 adapter/凭据约束的媒体 capability slot。 */
@@ -62,6 +63,8 @@ export interface GenerationCapabilityReadinessInput {
     registeredModels: MediaRegisteredModel[];
     /** 服务端媒体凭据是否已配置（非空）。 */
     credentialConfigured: boolean;
+    /** 当前 DashScope 部署区域（由运行 baseUrl 推导）。 */
+    deploymentScope: DashscopeDeploymentScope;
   };
   environment: {
     demoMode: boolean;
@@ -143,6 +146,27 @@ export function evaluateGenerationCapabilityReadiness(
       }
     }
 
+    // capability 级环境原因码（P3-B）：LLM tier 解析失败 / 媒体部署区域未知时，
+    // 即使没有目录条目可挂，也必须输出可区分的公开原因码，供运维定位
+    // （目录损坏 ≠ provider/凭据解析失败 ≠ 区域未知）。
+    if (input.llm.mode === "resolution_failed" && isLlmCapability(capability)) {
+      issues.push({
+        code: "llm_provider_unavailable",
+        capability,
+        message: "LLM tier 解析失败（provider 未注册或服务端凭据缺失），LLM 目录项不可报价",
+      });
+    }
+    if (
+      input.media.deploymentScope === "unknown" &&
+      isMediaCapability(capability)
+    ) {
+      issues.push({
+        code: "media_deployment_scope_unknown",
+        capability,
+        message: "DashScope 接入区域无法识别，付费媒体目录项不可报价或派发（fail-closed）",
+      });
+    }
+
     for (const entry of activeEntries) {
       validateEntryConsistency(entry, input, pushIssue);
     }
@@ -198,6 +222,18 @@ export function evaluateGenerationCapabilityReadiness(
   };
 }
 
+function isLlmCapability(capability: string): boolean {
+  return capability === "llm.smart" || capability === "llm.flash";
+}
+
+function isMediaCapability(capability: string): capability is "image.generate" | "video.image_to_video" | "tts.synthesize" {
+  return (
+    capability === "image.generate" ||
+    capability === "video.image_to_video" ||
+    capability === "tts.synthesize"
+  );
+}
+
 function validateEntryConsistency(
   entry: ProviderModelCatalogRecord,
   input: GenerationCapabilityReadinessInput,
@@ -206,15 +242,11 @@ function validateEntryConsistency(
     issue: GenerationCapabilityReadinessIssue,
   ) => void,
 ): void {
-  if ((LLM_CAPABILITIES as readonly string[]).includes(entry.capability)) {
+  if (isLlmCapability(entry.capability)) {
     validateLlmEntry(entry, input, pushIssue);
     return;
   }
-  if (
-    entry.capability === "image.generate" ||
-    entry.capability === "video.image_to_video" ||
-    entry.capability === "tts.synthesize"
-  ) {
+  if (isMediaCapability(entry.capability)) {
     validateMediaEntry(entry, input, pushIssue);
   }
 }
@@ -290,6 +322,21 @@ function validateMediaEntry(
       capability: entry.capability,
       provider_model_id: entry.id,
       message: `媒体目录项 ${entry.id} 的模型 (${entry.providerKey}:${entry.modelId}) 与该 capability 的实际 adapter 配置不一致，不得报价或进入新运行`,
+    });
+  }
+  // 部署区域必须一致：目录行声明的区域与当前运行 baseUrl 推导的区域不同
+  // （同一模型跨区域价格不同）时，不得按旧区域价格报价。
+  const declaredScope =
+    (entry.parameterCapabilitiesJson as Record<string, unknown>)["deployment_scope"];
+  if (
+    input.media.deploymentScope !== "unknown" &&
+    declaredScope !== input.media.deploymentScope
+  ) {
+    pushIssue(entry, {
+      code: "media_deployment_scope_mismatch",
+      capability: entry.capability,
+      provider_model_id: entry.id,
+      message: `媒体目录项 ${entry.id} 的部署区域 (${String(declaredScope)}) 与当前运行区域 (${input.media.deploymentScope}) 不一致，不得报价`,
     });
   }
   if (!input.media.credentialConfigured) {

@@ -18,6 +18,19 @@ function injectDashscopeEnv() {
   }
 }
 
+/**
+ * S2-2A 任务 7 二次重开：真实 DashScope adapter 派发必须通过目录 gate。
+ * 测试种入与 DASHSCOPE_ENV 一致的北京 catalog（真实 bootstrap 会产出同等行）。
+ */
+async function seedDashscopeDispatchCatalog(db: ReturnType<typeof createDbClient>) {
+  const { buildPricingCatalogSeed } = await import("../../../backend/src/modules/generation-cost/pricing-catalog.seed.js");
+  const { applyProviderModelCatalogSeed } = await import("../../../backend/src/modules/generation-cost/provider-model-catalog.repository.js");
+  await applyProviderModelCatalogSeed(
+    db,
+    buildPricingCatalogSeed({ llm: { mode: "stub" }, media: { deploymentScope: "cn-beijing" } }),
+  );
+}
+
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import {
@@ -662,6 +675,7 @@ describe("assets run service integration", () => {
     project.storageRootDir = integrationTempDir;
 
     injectDashscopeEnv();
+    await seedDashscopeDispatchCatalog(db);
 const response = await runAssetsGeneration({
       db,
       project,
@@ -831,6 +845,7 @@ const response = await runAssetsGeneration({
     project.storageRootDir = integrationTempDir;
 
     injectDashscopeEnv();
+    await seedDashscopeDispatchCatalog(db);
 const response = await runAssetsGeneration({
       db,
       project,
@@ -959,6 +974,7 @@ const response = await runAssetsGeneration({
     };
 
     injectDashscopeEnv();
+    await seedDashscopeDispatchCatalog(db);
 const response = await runAssetsGeneration({
       db,
       project,
@@ -1018,6 +1034,7 @@ const response = await runAssetsGeneration({
     db.assetPlanRecords.get(ASSET_PLAN_RECORD_ID)!.planJson =
       makeImageToVideoAssetPlan();
     injectDashscopeEnv();
+    await seedDashscopeDispatchCatalog(db);
 
     // Step 1: full run to generate image first
     const first = await runAssetsGeneration({
