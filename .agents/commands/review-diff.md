@@ -13,7 +13,7 @@ argument-hint: [可选：补充说明或点名审查级别]
      - 第一阶段（R5 去叙事化）：final_reviewer 只收到用户原始需求/验收清单、设计文档与实施计划定位、`TASK_BASE_SHA`、当前 HEAD、`TASK_BASE_SHA..HEAD` 累计 diff 与未提交改动——不含验证结果、未闭合 finding、整改说明或"哪些测试已通过"；
      - 第二阶段：final_reviewer 独立形成 finding 后，再提供验证命令与结果供其核对证据。
 4. 每轮审查后运行 `git status --porcelain` 核对工作树未被审查子代理改动。
-5. 对每条 finding 整改并复审（每轮审查重新提供 `TASK_BASE_SHA..HEAD` 累计 diff），直至满足协议收敛条件；final_reviewer 发现 Critical/Important 时该候选失败，重新经过 diff + contract 收敛形成新候选后再终审；循环超过 3 轮未收敛则停止并向用户报告分歧点。
+5. 对每条 finding 整改并复审（每轮审查重新提供 `TASK_BASE_SHA..HEAD` 累计 diff），直至满足协议收敛条件；final_reviewer 发现 Critical/Important 时该候选失败，重新经过 diff + contract 收敛形成新候选后再终审；final 只发现 Minor 时不重开，Minor 随候选收尾处理或留档；循环超过 3 轮未收敛则停止并向用户报告分歧点。
 6. 输出结构化审查结论：审查级别、轮次、各轮 finding 数（Critical/Important/Minor）、修复证据、残余风险。
 
 $ARGUMENTS
