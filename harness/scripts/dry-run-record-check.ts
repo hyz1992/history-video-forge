@@ -53,6 +53,8 @@ export interface RecordFacts {
   postInvariantRecurrences: number;
   /** 候选覆盖范围表述的起点（如"候选 5 至 N"）。 */
   coverageStartCandidate: number;
+  /** closed 终局时活文档禁止残留的陈旧待终审语序（黑名单锚，按记录定制）。 */
+  staleActiveTenseAnchors: string[];
 }
 
 /** 封存 dry-run 记录（docs/records/2026-08-18-review-protocol-dry-run.md）的事实。 */
@@ -73,6 +75,7 @@ export const DRY_RUN_FACTS: RecordFacts = {
   samePatternRecurrences: 8,
   postInvariantRecurrences: 5,
   coverageStartCandidate: 5,
+  staleActiveTenseAnchors: ["终审为当前待执行的有效终审", "候选 11 待终审"],
 };
 
 // --- 核心检查（纯函数） ---------------------------------------------------------
@@ -84,7 +87,7 @@ const CHINESE_DIGITS: Record<string, number> = {
 function parseChineseNumber(text: string): number | null {
   if (text.length === 1) return CHINESE_DIGITS[text] ?? null;
   if (text === "十") return 10;
-  const match = /^十([一二三四五六七八九十])$/.exec(text);
+  const match = /^十([一二三四五六七八九])$/.exec(text);
   if (match) return 10 + CHINESE_DIGITS[match[1]!]!;
   return null;
 }
@@ -242,10 +245,10 @@ export function checkRecordConsistency(content: string, facts: RecordFacts): str
     check("C9-terminal-claim", !content.includes("无有效通过终审"),
       `${facts.activeCandidate} 待终审，不得残留“无有效通过终审”终局表述`);
   } else {
-    // 裸词"待终审"可作为模式名被合法引用（如盲区清单），只锚定完整陈旧语序。
-    check("C9-closed-stale",
-      !liveContent.includes("终审为当前待执行的有效终审") && !liveContent.includes("候选 1 待终审") && !liveContent.includes("候选 11 待终审"),
-      "closed=true 但活文档仍残留待终审活引用");
+    // 裸词"待终审"可作为模式名被合法引用（如盲区清单），只锚定 facts 声明的陈旧语序。
+    const staleAnchor = facts.staleActiveTenseAnchors.find((anchor) => liveContent.includes(anchor));
+    check("C9-closed-stale", staleAnchor === undefined,
+      `closed=true 但活文档仍残留待终审活引用（命中锚：${staleAnchor ?? ""}）`);
   }
 
   return failures;
