@@ -109,13 +109,32 @@ export async function listUsageRecordsByProject(
     const snapshotIds = (
       await prismaClient.runConfigurationSnapshot.findMany({ where: { projectId }, select: { id: true } })
     ).map((row) => row.id);
-    const rows =
+    const [snapshotRows, runRows, usageRows] = await Promise.all([
       snapshotIds.length === 0
-        ? []
-        : await prismaClient.usageCostRecord.findMany({
+        ? Promise.resolve([])
+        : prismaClient.runConfigurationSnapshot.findMany({ where: { id: { in: snapshotIds } } }),
+      snapshotIds.length === 0
+        ? Promise.resolve([])
+        : prismaClient.generationRun.findMany({
             where: { runConfigurationSnapshotId: { in: snapshotIds } },
-          });
-    const records = rows.map(toUsageRecord);
+          }),
+      snapshotIds.length === 0
+        ? Promise.resolve([])
+        : prismaClient.usageCostRecord.findMany({
+            where: { runConfigurationSnapshotId: { in: snapshotIds } },
+          }),
+    ]);
+    // 关联记录一并同步镜像：costs/records 的 run_id/run_status/operation
+    // 在冷镜像进程下也必须从 DB 恢复（外部审查 N1 同根因）
+    for (const row of snapshotRows) {
+      const record = toSnapshotRecord(row);
+      db.runConfigurationSnapshots.set(record.id, record);
+    }
+    for (const row of runRows) {
+      const record = toRunRecord(row);
+      db.generationRuns.set(record.id, record);
+    }
+    const records = usageRows.map(toUsageRecord);
     for (const record of records) db.usageCostRecords.set(record.id, record);
     return records.sort(compareByCreatedAt);
   }
@@ -125,6 +144,44 @@ export async function listUsageRecordsByProject(
     if (snapshot && snapshot.projectId === projectId) records.push(record);
   }
   return records.sort(compareByCreatedAt);
+}
+
+// --- Prisma row → record 转换 -------------------------------------------------
+
+function toRunRecord(row: {
+  id: string;
+  projectId: string;
+  userId: string | null;
+  operation: string;
+  idempotencyKey: string;
+  payloadFingerprint: string;
+  quoteId: string | null;
+  runConfigurationSnapshotId: string;
+  dispatchPayloadJson: unknown;
+  status: string;
+  dispatchLeaseOwner: string | null;
+  dispatchLeaseExpiresAt: Date | null;
+  dispatchClaimCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}): import("../../db/client.js").GenerationRunRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    userId: row.userId,
+    operation: row.operation,
+    idempotencyKey: row.idempotencyKey,
+    payloadFingerprint: row.payloadFingerprint,
+    quoteId: row.quoteId,
+    runConfigurationSnapshotId: row.runConfigurationSnapshotId,
+    dispatchPayloadJson: row.dispatchPayloadJson as Record<string, unknown>,
+    status: row.status as import("../../db/client.js").GenerationRunRecord["status"],
+    dispatchLeaseOwner: row.dispatchLeaseOwner,
+    dispatchLeaseExpiresAt: row.dispatchLeaseExpiresAt,
+    dispatchClaimCount: row.dispatchClaimCount,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
 }
 
 // --- 排序辅助 ---------------------------------------------------------------

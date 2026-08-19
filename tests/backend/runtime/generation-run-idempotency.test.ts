@@ -563,3 +563,58 @@ describe("cold-mirror submit and cost reads with DB as authority (external revie
     expect(summary.run_status_counts.pending_dispatch).toBe(1);
   });
 });
+
+describe("cold-mirror cost records association (N4 fix)", () => {
+  it("costs/records restores run_id/run_status/operation from the database when the mirror is cold", async () => {
+    const { client, db, project, quote, repository } = await createPrismaContext();
+    const submit = await createOrRestoreGenerationRun(
+      db, project, "u1", submitInput(quote.id, { idempotencyKey: "cold-records-1" }),
+      { readinessInput: buildQuotableReadinessInput(), repository },
+    );
+    if (!submit.ok) throw new Error("submit failed");
+    const runId = submit.value.run.id;
+
+    // 写入一条 usage record（任务 9A 才生产，这里直接落库模拟）
+    const snapshot = db.runConfigurationSnapshots.get(submit.value.snapshot.id)!;
+    await client.usageCostRecord.create({
+      data: {
+        id: "usage-cold-1",
+        runConfigurationSnapshotId: snapshot.id,
+        assetProviderJobRecordId: null,
+        interactionId: null,
+        capability: "image.generate",
+        providerKey: "dashscope",
+        modelId: "wan2.6-t2i",
+        providerRequestKey: "intent-cold-1",
+        attemptIndex: 0,
+        status: "succeeded",
+        unitType: "image",
+        inputUnits: 1,
+        outputUnits: 1,
+        estimatedCostMicros: "200000",
+        actualCostMicros: "200000",
+        costBasis: "provider_usage",
+        durationMs: 1000,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    // 冷镜像：清空全部相关镜像
+    db.generationCostQuotes.clear();
+    db.runConfigurationSnapshots.clear();
+    db.generationRuns.clear();
+    db.usageCostRecords.clear();
+
+    const { listProjectCostRecords } = await import("../../../backend/src/modules/generation-cost/generation-cost.service.js");
+    const records = await listProjectCostRecords(db, project.id, client);
+    expect(records.length).toBe(1);
+    const record = records[0]!;
+    // 关联字段从 DB 恢复，而非降级为 null/unknown
+    expect(record.run_id).toBe(runId);
+    expect(record.run_status).toBe("pending_dispatch");
+    expect(record.operation).toBe("assets.generate");
+    expect(record.estimated_cost_cny).toBe("0.200000");
+    expect(record.actual_cost_cny).toBe("0.200000");
+  });
+});
