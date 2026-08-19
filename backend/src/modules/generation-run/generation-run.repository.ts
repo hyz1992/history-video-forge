@@ -66,11 +66,15 @@ export interface GenerationRunRepository {
    * 防存活 worker 被其他 worker 接管重复派发）。返回 false = lease 已易主/丢失。
    */
   renewLease(runId: string, workerId: string, leaseUntil: Date, now: Date): Promise<boolean>;
-  /** 更新 run 状态；releaseLease=true 时清空 lease（终态）。 */
+  /**
+   * 更新 run 状态；releaseLease=true 时清空 lease（终态）。
+   * 不变量：needs_reconciliation 是对账终态，默认禁止被覆盖（迟到的 finalize
+   * 不得抹掉对账信号）；9A 对账工具如需改写传 allowOverwriteNeedsReconciliation。
+   */
   updateRunStatus(
     runId: string,
     status: GenerationRunRecord["status"],
-    options: { releaseLease: boolean; now: Date },
+    options: { releaseLease: boolean; now: Date; allowOverwriteNeedsReconciliation?: boolean },
   ): Promise<GenerationRunRecord | null>;
   appendRunEvent(record: GenerationRunEventRecord): Promise<void>;
   /**
@@ -213,6 +217,9 @@ function createMapRepository(db: DbClient): GenerationRunRepository {
     async updateRunStatus(runId, status, options) {
       const run = db.generationRuns.get(runId);
       if (!run) return null;
+      if (run.status === "needs_reconciliation" && !options.allowOverwriteNeedsReconciliation) {
+        return run;
+      }
       run.status = status;
       if (options.releaseLease) {
         run.dispatchLeaseOwner = null;
@@ -605,7 +612,12 @@ function createPrismaRepository(db: DbClient, client: AppPrismaClient): Generati
         data["dispatchLeaseOwner"] = null;
         data["dispatchLeaseExpiresAt"] = null;
       }
-      await client.generationRun.updateMany({ where: { id: runId }, data });
+      // 条件更新：needs_reconciliation 终态默认不可覆盖（对账信号保护）
+      const where: Record<string, unknown> = { id: runId };
+      if (!options.allowOverwriteNeedsReconciliation) {
+        where["status"] = { not: "needs_reconciliation" };
+      }
+      await client.generationRun.updateMany({ where, data });
       const row = await client.generationRun.findUnique({ where: { id: runId } });
       if (!row) return null;
       const run = toRunRecord(row);

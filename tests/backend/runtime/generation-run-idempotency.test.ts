@@ -760,3 +760,54 @@ describe("Prisma concurrent same-key loser recovers the winner run (final review
     expect(loser.value.run.id).toBe(winner.value.run.id);
   });
 });
+
+describe("needs_reconciliation terminal state protection (final review I-1 fix)", () => {
+  it("a late finalize cannot overwrite needs_reconciliation with failed/succeeded", async () => {
+    const app = buildApp();
+    await seedQuotableCatalog(app);
+    const project = await prepareQuoteProject(app.db);
+    const repository = createGenerationRunRepository(app.db);
+    const quoteResult = await createGenerationCostQuote(
+      app.db, project, project.ownerId, { operation: "assets.generate" },
+      { readinessInput: buildQuotableReadinessInput() },
+    );
+    if (!quoteResult.ok) throw new Error("quote failed");
+    const submit = await createOrRestoreGenerationRun(
+      app.db, project, project.ownerId, submitInput(quoteResult.value.quote.id, { idempotencyKey: "recon-protect-1" }),
+      { readinessInput: buildQuotableReadinessInput(), repository },
+    );
+    if (!submit.ok) throw new Error("submit failed");
+    const runId = submit.value.run.id;
+
+    // handler 判定结果不确定 → needs_reconciliation 终态
+    const dispatcher = createGenerationRunDispatcher({
+      db: app.db, repository, workerId: "worker-recon", leaseDurationMs: 30_000,
+      handlers: { "assets.generate": async () => ({ status: "needs_reconciliation" as const, reason_code: "remote_state_uncertain", message: "unknown" }) },
+    });
+    const first = await dispatcher.dispatch(runId);
+    expect(first.dispatched).toBe(true);
+    expect(app.db.generationRuns.get(runId)!.status).toBe("needs_reconciliation");
+
+    // 迟到的 finalize（如另一 dispatcher 的 outcome 或内部收尾）尝试写 failed/succeeded
+    const lateFailed = await repository.updateRunStatus(runId, "failed", { releaseLease: true, now: new Date() });
+    expect(lateFailed?.status).toBe("needs_reconciliation");
+    const lateSucceeded = await repository.updateRunStatus(runId, "succeeded", { releaseLease: true, now: new Date() });
+    expect(lateSucceeded?.status).toBe("needs_reconciliation");
+    expect(app.db.generationRuns.get(runId)!.status).toBe("needs_reconciliation");
+  });
+
+  it("Prisma mode: needs_reconciliation row is not overwritten in the database", async () => {
+    const { client, db, project, quote, repository } = await createPrismaContext();
+    const submit = await createOrRestoreGenerationRun(
+      db, project, "u1", submitInput(quote.id, { idempotencyKey: "recon-protect-2" }),
+      { readinessInput: buildQuotableReadinessInput(), repository },
+    );
+    if (!submit.ok) throw new Error("submit failed");
+    await repository.claimRun(submit.value.run.id, "w", new Date(Date.now() + 30_000), new Date());
+    await repository.updateRunStatus(submit.value.run.id, "needs_reconciliation", { releaseLease: true, now: new Date() });
+    const blocked = await repository.updateRunStatus(submit.value.run.id, "failed", { releaseLease: true, now: new Date() });
+    expect(blocked?.status).toBe("needs_reconciliation");
+    const dbRun = await client.generationRun.findUnique({ where: { id: submit.value.run.id } });
+    expect(dbRun?.status).toBe("needs_reconciliation");
+  });
+});
