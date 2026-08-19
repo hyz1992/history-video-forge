@@ -116,7 +116,9 @@
 - 文档/流程型 finding（合同漂移、记录计数、过程违规）：机器检查（grep/脚本断言等）或**两项独立验证**（如两次独立来源核对）；计数类 finding 的替代证据必须包含对实际运行输出的核对（与 R6 一致），不得两次静态核对同一陈旧来源；
 - live/UI 型 finding（浏览器、真实 provider）：真实运行证据；
 - 不适用自动化测试的 finding：记录不适用理由与替代证据，由 reviewer 确认替代证据成立后闭环。
-反例只证明"这个例子修好了"，不变量测试才证明"这一类问题不存在"。纯外观/措辞级 Minor 不强制。示例：
+反例只证明"这个例子修好了"，不变量测试才证明"这一类问题不存在"。纯外观/措辞级 Minor 不强制。
+- **过程记录类**（同一任务 ≥2 轮审查-整改的 docs/records/ 记录）：结构化区块（候选/轮次/计数/授权等多对象交叉引用）**建议用 `harness/scripts/dry-run-record-check.ts` 的 `checkRecordConsistency(content, facts)` 纯函数核验**（CLI 支持 `--record/--facts` 参数化复用；配套单测见同目录 `.test.ts`）。dry-run 实证：此类记录手改多行漏一行的复发率极高，锚定式机器核验是唯一可靠下限，但仍不覆盖自然语言语序——复杂记录的结构化数据应尽量收敛到单一事实表。
+示例：
 - 反例："disabled 项不能派发" → 不变量："只要存在 capability/provider/model/scope 完全匹配的 active 行，其他旧行的状态与遍历顺序不得影响结果" → 测试：disabled 在前 active 在后、active 在前 disabled 在后、多错误 scope、Map/hydrate 顺序反排。
 - 反例："hostname 不能带恶意后缀" → 不变量："只有明确允许的 HTTPS origin（scheme + hostname + port）才能获得已知区域、报价与派发许可" → 测试：http/ftp/非 443 端口/私有域名/无法解析全部 fail-closed。
 
