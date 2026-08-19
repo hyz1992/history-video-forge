@@ -217,6 +217,7 @@ describe("render runtime smoke harness", () => {
       outputDir,
       ttsProvider: "dashscope_tts",
       ttsText: "Custom narration text.",
+      seedCatalog: true,
     });
 
     const assetsResponse = JSON.parse(

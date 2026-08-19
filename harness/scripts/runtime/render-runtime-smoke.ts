@@ -32,6 +32,13 @@ export interface RunRenderRuntimeSmokeInput {
   ttsProvider?: "fake_tts" | "dashscope_tts";
   ttsText?: string;
   includeSfx?: boolean;
+  /**
+   * 测试/演示环境下预种北京 catalog（任务 7 dispatch gate 适配）：
+   * 真实 DashScope adapter 需要 active 目录行才被注册；测试 stub 了服务端
+   * 凭据时若不种 catalog，gate 会全挡真实 adapter 且无 fake 回退，导致
+   * tts/image 任务无 adapter。CLI 生产场景由启动 bootstrap 种，无需此选项。
+   */
+  seedCatalog?: boolean;
   dashscope?: {
     apiKey?: string;
     baseUrl?: string;
@@ -519,6 +526,17 @@ export async function runRenderRuntimeSmoke(
   mkdirSync(finalOutputDir, { recursive: true });
 
   const app = buildApp({ renderAdapter: createSmokeRenderAdapter(adapter) });
+  if (input.seedCatalog) {
+    const { buildPricingCatalogSeed } = await import(
+      "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js"
+    );
+    for (const entry of buildPricingCatalogSeed({
+      llm: { mode: "stub" },
+      media: { deploymentScope: "cn-beijing" },
+    })) {
+      app.db.providerModelCatalog.set(entry.id, entry);
+    }
+  }
   const projectBody = await injectOrThrow({
     app,
     method: "POST",
