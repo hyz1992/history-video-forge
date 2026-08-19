@@ -180,7 +180,7 @@ describe("render runtime smoke harness", () => {
     const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
       const urlText = String(url);
       const headers = new Headers(init?.headers);
-      if (urlText.startsWith("https://dashscope.test/")) {
+      if (urlText.startsWith("https://dashscope.aliyuncs.com/")) {
         expect(headers.get("authorization")).toBe("Bearer test-key");
       }
 
@@ -198,6 +198,29 @@ describe("render runtime smoke harness", () => {
         );
       }
 
+      if (urlText.endsWith("/api/v1/services/aigc/image-generation/generation")) {
+        return new Response(
+          JSON.stringify({ output: { task_id: "task_smoke_image" } }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (urlText.endsWith("/api/v1/tasks/task_smoke_image")) {
+        return new Response(
+          JSON.stringify({
+            output: { task_id: "task_smoke_image", task_status: "SUCCEEDED", results: [{ url: "https://example.test/image.png" }] },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      if (urlText === "https://example.test/image.png") {
+        return new Response(new Uint8Array([137, 80, 78, 71]), {
+          status: 200,
+          headers: { "content-type": "image/png" },
+        });
+      }
+
       if (urlText === "https://example.test/audio.wav") {
         return new Response(createToneWavBuffer({ durationSec: 1 }), {
           status: 200,
@@ -212,7 +235,7 @@ describe("render runtime smoke harness", () => {
     // 服务端凭据由后端 env 提供（任务 6 合同）；此处 stub 服务端 env，
     // runner 不向 API payload 携带任何凭据。
     vi.stubEnv("ALIYUN_DASHSCOPE_API_KEY", "test-key");
-    vi.stubEnv("ALIYUN_DASHSCOPE_BASE_URL", "https://dashscope.test");
+    vi.stubEnv("ALIYUN_DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com");
     await runRenderRuntimeSmoke({
       outputDir,
       ttsProvider: "dashscope_tts",
@@ -248,7 +271,8 @@ describe("render runtime smoke harness", () => {
         (artifact) => artifact.artifact_type === "image",
       ),
     ).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    // 6 次：tts 提交、audio 下载、image 提交、image 轮询、image 下载、voice-design 解析。
+    expect(fetchMock).toHaveBeenCalledTimes(6);
   });
 
   it("uses the requested BGM id when provided", async () => {
