@@ -60,21 +60,21 @@ export function createGenerationRunDispatcher(options: {
   const nowFn = options.now ?? (() => new Date());
 
   async function dispatch(runId: string): Promise<DispatchResult> {
-    const run = options.repository.getRunById(runId);
+    const run = await options.repository.getRunById(runId);
     if (!run) return { dispatched: false, reason: "run_not_found" };
 
     const now = nowFn();
     const leaseUntil = new Date(now.getTime() + options.leaseDurationMs);
     const claimed = await options.repository.claimRun(runId, options.workerId, leaseUntil, now);
     if (!claimed) {
-      const current = options.repository.getRunById(runId);
+      const current = await options.repository.getRunById(runId);
       if (current && current.status === "running" && current.dispatchLeaseExpiresAt !== null) {
         return { dispatched: false, reason: "lease_held" };
       }
       return { dispatched: false, reason: "not_claimable" };
     }
 
-    const claimedRun = options.repository.getRunById(runId)!;
+    const claimedRun = (await options.repository.getRunById(runId))!;
     const project = options.db.projects.get(claimedRun.projectId);
     const handler = options.handlers[claimedRun.operation];
 

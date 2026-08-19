@@ -879,7 +879,7 @@ export async function listProjectCostRecords(
       run_id: run?.id ?? null,
       run_status: run?.status ?? null,
       snapshot_id: record.runConfigurationSnapshotId,
-      operation: snapshot?.operation ?? "",
+      operation: snapshot?.operation ?? "unknown",
       capability: record.capability,
       provider_key: record.providerKey,
       model_id: record.modelId,

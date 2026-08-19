@@ -75,12 +75,12 @@ export interface GenerationRunRepository {
   appendRunEvent(record: GenerationRunEventRecord): Promise<void>;
   /** 可恢复运行：pending_dispatch 或 lease 已过期；永远排除 needs_reconciliation。 */
   listRecoverableRuns(now: Date): GenerationRunRecord[];
-  getRunById(runId: string): GenerationRunRecord | null;
+  getRunById(runId: string): Promise<GenerationRunRecord | null>;
   getRunByKey(
     projectId: string,
     operation: string,
     idempotencyKey: string,
-  ): GenerationRunRecord | null;
+  ): Promise<GenerationRunRecord | null>;
   listRunsByProject(projectId: string): GenerationRunRecord[];
 }
 
@@ -217,10 +217,12 @@ function createMapRepository(db: DbClient): GenerationRunRepository {
       }
       return runs;
     },
-    getRunById(runId) {
+    // 数据库为权威：另一进程/worker 提交或 claim 后本地内存镜像可能未同步，
+    // 幂等重放与 dispatcher 恢复必须查 DB（跨进程正确性）。
+    async getRunById(runId) {
       return db.generationRuns.get(runId) ?? null;
     },
-    getRunByKey(projectId, operation, idempotencyKey) {
+    async getRunByKey(projectId, operation, idempotencyKey) {
       return getRunByKeyMap(db, projectId, operation, idempotencyKey);
     },
     listRunsByProject(projectId) {
@@ -497,11 +499,25 @@ function createPrismaRepository(db: DbClient, client: AppPrismaClient): Generati
       }
       return runs;
     },
-    getRunById(runId) {
-      return db.generationRuns.get(runId) ?? null;
+    // 数据库为权威：另一进程/worker 提交或 claim 后本地内存镜像可能未同步，
+    // 幂等重放与 dispatcher 恢复必须查 DB（跨进程正确性）。
+    async getRunById(runId) {
+      const row = await client.generationRun.findUnique({ where: { id: runId } });
+      if (!row) return null;
+      const run = toRunRecord(row);
+      syncRunToMemory(db, run);
+      return run;
     },
-    getRunByKey(projectId, operation, idempotencyKey) {
-      return getRunByKeyMap(db, projectId, operation, idempotencyKey);
+    async getRunByKey(projectId, operation, idempotencyKey) {
+      const row = await client.generationRun.findUnique({
+        where: {
+          projectId_operation_idempotencyKey: { projectId, operation, idempotencyKey },
+        },
+      });
+      if (!row) return null;
+      const run = toRunRecord(row);
+      syncRunToMemory(db, run);
+      return run;
     },
     listRunsByProject(projectId) {
       return listRunsByProject(db, projectId);

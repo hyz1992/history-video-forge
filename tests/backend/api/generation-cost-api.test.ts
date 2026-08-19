@@ -341,3 +341,43 @@ describe("generation cost API", () => {
     }
   });
 });
+
+describe("generation cost API submit payload fidelity (final review fixes)", () => {
+  it("submit without enabled_provider_types keeps the default-open semantics (no empty array)", async () => {
+    const app = buildApiApp();
+    await seedQuotableCatalog(app);
+    const auth = buildTestAuth({ userId: "user-a" });
+    const { project } = await prepareAssetsApiProject(app, auth);
+    buildInitialAssetManifestMock.mockReturnValue(makeManifest({
+      assetPlanRecordId: project.activeAssetPlanRecordId!,
+      storyboardRecordId: project.activeStoryboardRecordId!,
+      scriptRecordId: project.activeScriptRecordId!,
+      assetPlan: makeQuoteAssetPlan({ storyboardRecordId: project.activeStoryboardRecordId!, scriptRecordId: project.activeScriptRecordId!, topicPackageId: project.activeTopicPackageId ?? "tp" }),
+    }));
+    validateAssetsManifestMock.mockReturnValue({
+      stage: "assets_local_validation",
+      decision: "ready_for_compose",
+      errors: [],
+      warnings: [],
+      metrics: { task_count: 3, execution_count: 0, artifact_count: 0, segment_route_count: 1 },
+    });
+
+    const quoteRes = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/generation-cost-quotes`,
+      payload: { operation: "assets.generate" },
+      auth,
+    });
+    const quoteId = quoteRes.json().quote_id as string;
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/assets/generate`,
+      payload: { cost_quote_id: quoteId, idempotency_key: "payload-fidelity-1" },
+      auth,
+    });
+    expect(res.statusCode).toBe(200);
+    const run = [...app.db.generationRuns.values()][0]!;
+    // 空数组的语义是"全部禁用"；未传必须保持默认全开（不落空数组）
+    expect(run.dispatchPayloadJson.enabled_provider_types).toBeUndefined();
+  });
+});

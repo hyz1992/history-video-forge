@@ -92,6 +92,34 @@ function submitInput(quoteId: string, overrides: Partial<Parameters<typeof creat
   };
 }
 
+async function createPrismaContext() {
+    const databasePath = createMigratedDatabase();
+    const client = await createPrismaClient(databasePath);
+    openClients.push(client);
+    await client.user.create({ data: { id: "u1", username: "t", displayName: "T", passwordHash: "h", role: "USER" } });
+    await client.user.create({ data: { id: "u2", username: "t2", displayName: "T2", passwordHash: "h", role: "USER" } });
+    const firstWriter = await PrismaFirstAggregateWriter.create(client, "u1");
+    const app = buildApp({
+      firstAggregateWriter: firstWriter,
+      secondAggregateWriter: new PrismaSecondAggregateWriter(client, "u1"),
+      thirdAggregateWriter: new PrismaThirdAggregateWriter(client),
+      prismaClient: client,
+    });
+    await hydrateFirstAggregates(app.db, new Map() as never, client, { storageRoot: process.cwd() });
+    await hydrateSecondAggregates(app.db, client);
+    await hydrateThirdAggregates(app.db, client);
+    const db = app.db;
+    await seedQuotableCatalog(app);
+    const project = await createProject(db, { name: "T", ownerId: "u1" });
+    const quoteResult = await createGenerationCostQuote(
+      db, project, project.ownerId, { operation: "assets.generate" },
+      { readinessInput: buildQuotableReadinessInput() },
+    );
+    if (!quoteResult.ok) throw new Error("quote creation failed");
+    const repository = createGenerationRunRepository(db, client);
+    return { client, db, project, quote: quoteResult.value.quote, repository };
+  }
+
 describe("generation run idempotency (legacy Map mode)", () => {
   it("same key + same payload returns the same run without re-consuming the quote", async () => {
     const { app, project, quote, repository } = await prepareMapSubmitContext();
@@ -203,33 +231,6 @@ describe("generation run idempotency (legacy Map mode)", () => {
 });
 
 describe("generation run submit transaction (Prisma mode)", () => {
-  async function createPrismaContext() {
-    const databasePath = createMigratedDatabase();
-    const client = await createPrismaClient(databasePath);
-    openClients.push(client);
-    await client.user.create({ data: { id: "u1", username: "t", displayName: "T", passwordHash: "h", role: "USER" } });
-    await client.user.create({ data: { id: "u2", username: "t2", displayName: "T2", passwordHash: "h", role: "USER" } });
-    const firstWriter = await PrismaFirstAggregateWriter.create(client, "u1");
-    const app = buildApp({
-      firstAggregateWriter: firstWriter,
-      secondAggregateWriter: new PrismaSecondAggregateWriter(client, "u1"),
-      thirdAggregateWriter: new PrismaThirdAggregateWriter(client),
-      prismaClient: client,
-    });
-    await hydrateFirstAggregates(app.db, new Map() as never, client, { storageRoot: process.cwd() });
-    await hydrateSecondAggregates(app.db, client);
-    await hydrateThirdAggregates(app.db, client);
-    const db = app.db;
-    await seedQuotableCatalog(app);
-    const project = await createProject(db, { name: "T", ownerId: "u1" });
-    const quoteResult = await createGenerationCostQuote(
-      db, project, project.ownerId, { operation: "assets.generate" },
-      { readinessInput: buildQuotableReadinessInput() },
-    );
-    if (!quoteResult.ok) throw new Error("quote creation failed");
-    const repository = createGenerationRunRepository(db, client);
-    return { client, db, project, quote: quoteResult.value.quote, repository };
-  }
 
   it("commits quote consumption + snapshot + pending run + override audit in one transaction", async () => {
     const { client, db, project, quote, repository } = await createPrismaContext();
@@ -402,5 +403,63 @@ describe("generation run idempotency edge cases (review round 1 fixes)", () => {
     if (!accepted.ok) return;
     // 超额授权审计与 run 同事务写入
     expect([...app.db.auditLogs.values()].some((log) => log.action === "generation.budget_override_authorized")).toBe(true);
+  });
+});
+
+describe("generation run cross-process idempotency (Prisma DB as authority, final review fixes)", () => {
+  it("replay with stale in-memory mirror returns the same run from the database (not 409 consumed)", async () => {
+    const { client, db, project, quote, repository } = await createPrismaContext();
+    const first = await createOrRestoreGenerationRun(
+      db, project, "u1", submitInput(quote.id, { idempotencyKey: "cross-proc-key-1" }),
+      { readinessInput: buildQuotableReadinessInput(), repository },
+    );
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+
+    // 模拟另一进程提交后本进程内存镜像未同步：清空本地镜像
+    db.generationRuns.clear();
+    const replay = await createOrRestoreGenerationRun(
+      db, project, "u1", submitInput(quote.id, { idempotencyKey: "cross-proc-key-1" }),
+      { readinessInput: buildQuotableReadinessInput(), repository },
+    );
+    expect(replay.ok).toBe(true);
+    if (!replay.ok) return;
+    expect(replay.value.created).toBe(false);
+    expect(replay.value.run.id).toBe(first.value.run.id);
+    // 镜像已从 DB 同步回
+    expect(db.generationRuns.get(first.value.run.id)).not.toBeUndefined();
+  });
+
+  it("two dispatchers racing on the same run in Prisma mode: only one wins the atomic lease", async () => {
+    const { client, db, project, quote, repository } = await createPrismaContext();
+    const submit = await createOrRestoreGenerationRun(
+      db, project, "u1", submitInput(quote.id, { idempotencyKey: "prisma-race-1" }),
+      { readinessInput: buildQuotableReadinessInput(), repository },
+    );
+    if (!submit.ok) throw new Error("submit failed");
+    const runId = submit.value.run.id;
+    // 清空镜像，让两个 dispatcher 都从 DB 读到 pending run
+    db.generationRuns.clear();
+
+    const calls = { submit: 0 };
+    const dispatcherA = createGenerationRunDispatcher({
+      db, repository, workerId: "prisma-A", leaseDurationMs: 30_000,
+      handlers: { "assets.generate": async () => { calls.submit += 1; return { status: "succeeded" }; } },
+    });
+    const dispatcherB = createGenerationRunDispatcher({
+      db, repository, workerId: "prisma-B", leaseDurationMs: 30_000,
+      handlers: { "assets.generate": async () => { calls.submit += 1; return { status: "succeeded" }; } },
+    });
+    const [resultA, resultB] = await Promise.all([
+      dispatcherA.dispatch(runId),
+      dispatcherB.dispatch(runId),
+    ]);
+    expect(resultA.dispatched || resultB.dispatched).toBe(true);
+    expect([resultA, resultB].filter((r) => r.dispatched).length).toBe(1);
+    expect(calls.submit).toBe(1);
+
+    const dbRun = await client.generationRun.findUnique({ where: { id: runId } });
+    expect(dbRun?.status).toBe("succeeded");
+    expect(dbRun?.dispatchClaimCount).toBe(1);
   });
 });

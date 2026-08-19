@@ -122,7 +122,7 @@ export async function createOrRestoreGenerationRun(
     selection: input.selection,
     run_overrides: input.runOverrides,
   });
-  const existing = deps.repository.getRunByKey(project.id, input.operation, input.idempotencyKey);
+  const existing = await deps.repository.getRunByKey(project.id, input.operation, input.idempotencyKey);
   if (existing) {
     if (existing.payloadFingerprint !== payloadFingerprint) {
       return {

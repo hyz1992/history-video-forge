@@ -264,7 +264,8 @@ async function generateAssetsController(
     return submitGenerationRun(context, "assets.generate", selection, {
       voice_profile_id: voiceProfileId,
       execution_mode: executionMode,
-      enabled_provider_types: enabledProviderTypes ?? [],
+      // 未传时保持 undefined（执行端默认全开）；空数组语义是"全部禁用"，不能混用
+      enabled_provider_types: enabledProviderTypes,
       mode: requestedMode ?? null,
       task_ids: requestedTaskIds ?? [],
     });
@@ -676,7 +677,7 @@ async function generateTaskController(
     return submitGenerationRun(context, "assets.generate", { task_ids: [taskId] }, {
       voice_profile_id: voiceProfileId,
       execution_mode: "auto_available",
-      enabled_provider_types: [],
+      enabled_provider_types: undefined,
       mode: null,
       task_ids: [taskId],
     });
