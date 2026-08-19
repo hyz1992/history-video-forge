@@ -6,6 +6,7 @@ import type {
 } from "../../db/client.js";
 import {
   canonicalStringify,
+  deterministicHash,
   type GenerationOperation,
   type GenerationQuoteRunOverrides,
   type GenerationQuoteSelection,
@@ -95,7 +96,8 @@ export function computeRunPayloadFingerprint(input: {
     selection: normalizedSelection,
     run_overrides: input.run_overrides ?? null,
   };
-  return canonicalStringify(payload);
+  // canonical hash（与 legacy 路径一致的确定性 hash；幂等判重键）
+  return deterministicHash(canonicalStringify(payload));
 }
 
 export async function createOrRestoreGenerationRun(
@@ -162,9 +164,10 @@ export async function createOrRestoreGenerationRun(
   }
 
   // 7-8. 同一事务：snapshot + pending_dispatch run + quote 消费 + 审计
-  const snapshot = buildSnapshot(db, project, quote, input, revalidated.value, now);
+  const runId = db.generateId();
+  const snapshot = buildSnapshot(db, project, quote, input, revalidated.value, runId, now);
   const run: GenerationRunRecord = {
-    id: db.generateId(),
+    id: runId,
     projectId: project.id,
     userId: actorUserId,
     operation: input.operation,
@@ -236,6 +239,9 @@ export async function createOrRestoreGenerationRun(
     if (transaction.error.code === "generation_quote_consumed") {
       return { ok: false, error: { code: "generation_quote_consumed", message: "quote already consumed" } };
     }
+    if (transaction.error.code === "generation_quote_expired") {
+      return { ok: false, error: { code: "generation_quote_expired", message: "quote expired; create a new quote" } };
+    }
     return { ok: false, error: { code: "generation_run_persistence_failed", message: "run transaction failed" } };
   }
 
@@ -249,6 +255,7 @@ function buildSnapshot(
   quote: NonNullable<ReturnType<typeof findQuoteById>>,
   input: SubmitGenerationInput,
   revalidated: Extract<RevalidateQuoteResult, { ok: true }>["value"],
+  runId: string,
   now: Date,
 ): RunConfigurationSnapshotRecord {
   const resolved = revalidated.resolved as ResolvedGenerationConfigurationV1;
@@ -259,7 +266,7 @@ function buildSnapshot(
     userId: project.ownerId,
     stage: input.operation,
     operation: input.operation,
-    runId: null,
+    runId,
     projectConfigurationRevision: resolved.source_revisions.project_configuration_revision,
     schemaVersion: "resolved_generation_configuration_v1",
     configurationHash: quote.configurationHash,
@@ -270,7 +277,7 @@ function buildSnapshot(
     estimatedCostMicros: quote.estimatedCostMicros,
     authorizationCostMicros: quote.authorizationCostMicros,
     budgetLimitMicros: quote.budgetLimitMicros,
-    budgetOverrideAuthorized: input.authorizeBudgetOverride,
+    budgetOverrideAuthorized: revalidated.requires_budget_override,
     pricingHash: pricing.pricing_hash,
     pricingVersionSetJson: pricing.pricing_versions,
     createdAt: now,

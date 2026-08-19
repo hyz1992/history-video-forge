@@ -92,6 +92,18 @@ export function createGenerationRunDispatcher(options: {
         message: `project ${claimedRun.projectId} not found for run ${runId}`,
       };
     } else {
+      // handler 执行期间周期性续期 lease（leaseDurationMs/2 间隔）：
+      // 存活 worker 的长任务不会被其他 worker 在 lease 到期后接管重复派发；
+      // 崩溃 worker 停止续期，lease 到期后仍可被接管（恢复语义不变）。
+      const renewalTimer = setInterval(() => {
+        const renewalNow = nowFn();
+        void options.repository.renewLease(
+          runId,
+          options.workerId,
+          new Date(renewalNow.getTime() + options.leaseDurationMs),
+          renewalNow,
+        );
+      }, Math.max(1, Math.floor(options.leaseDurationMs / 2)));
       try {
         outcome = await handler(claimedRun, { db: options.db, project });
       } catch (error) {
@@ -100,6 +112,8 @@ export function createGenerationRunDispatcher(options: {
           reason_code: "dispatch_handler_exception",
           message: error instanceof Error ? error.message : String(error),
         };
+      } finally {
+        clearInterval(renewalTimer);
       }
     }
 

@@ -46,6 +46,7 @@ export type CreateRunTransactionResult =
       error:
         | { code: "generation_quote_not_found" }
         | { code: "generation_quote_consumed" }
+        | { code: "generation_quote_expired" }
         | { code: "generation_run_conflict"; existing: GenerationRunRecord };
     };
 
@@ -60,6 +61,11 @@ export interface GenerationRunRepository {
    * 写 leaseOwner/leaseUntil 并递增 claimCount、置 running。返回 false = 未取得 lease。
    */
   claimRun(runId: string, workerId: string, leaseUntil: Date, now: Date): Promise<boolean>;
+  /**
+   * 续期 lease：只有 leaseOwner 仍是本 worker 时延长 leaseUntil（handler 执行期间
+   * 防存活 worker 被其他 worker 接管重复派发）。返回 false = lease 已易主/丢失。
+   */
+  renewLease(runId: string, workerId: string, leaseUntil: Date, now: Date): Promise<boolean>;
   /** 更新 run 状态；releaseLease=true 时清空 lease（终态）。 */
   updateRunStatus(
     runId: string,
@@ -108,7 +114,8 @@ function withProjectLock<T>(db: DbClient, projectId: string, fn: () => Promise<T
   const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
-  locks.set(projectId, previous.then(() => gate));
+  // 存 gate 本身（不是链式 promise），finally 中可用恒等判断清理条目
+  locks.set(projectId, gate);
   return previous.then(async () => {
     try {
       return await fn();
@@ -127,12 +134,17 @@ function createMapRepository(db: DbClient): GenerationRunRepository {
       return withProjectLock(db, input.quote.projectId, async () => {
         const quote = db.generationCostQuotes.get(input.quote.id);
         if (!quote) return { ok: false, error: { code: "generation_quote_not_found" } };
-        if (quote.consumedAt !== null) {
-          return { ok: false, error: { code: "generation_quote_consumed" } };
-        }
+        // 幂等裁决优先：并发同 key 提交的败者必须先看到已有 run（返回 conflict 由
+        // 服务层按 fingerprint 裁决），而不是误报 quote_consumed。
         const existing = getRunByKeyMap(db, input.run.projectId, input.run.operation, input.run.idempotencyKey);
         if (existing) {
           return { ok: false, error: { code: "generation_run_conflict", existing } };
+        }
+        if (quote.consumedAt !== null) {
+          return { ok: false, error: { code: "generation_quote_consumed" } };
+        }
+        if (quote.expiresAt.getTime() <= input.now.getTime()) {
+          return { ok: false, error: { code: "generation_quote_expired" } };
         }
         // 校验全部通过后才变更（失败回滚模拟：任何前置校验失败都不会留下半成品）
         quote.consumedAt = input.now;
@@ -167,6 +179,14 @@ function createMapRepository(db: DbClient): GenerationRunRepository {
       run.dispatchLeaseOwner = workerId;
       run.dispatchLeaseExpiresAt = leaseUntil;
       run.dispatchClaimCount += 1;
+      run.updatedAt = now;
+      return true;
+    },
+    async renewLease(runId, workerId, leaseUntil, now) {
+      const run = db.generationRuns.get(runId);
+      if (!run) return false;
+      if (run.dispatchLeaseOwner !== workerId) return false;
+      run.dispatchLeaseExpiresAt = leaseUntil;
       run.updatedAt = now;
       return true;
     },
@@ -284,7 +304,8 @@ function createPrismaRepository(db: DbClient, client: AppPrismaClient): Generati
         await client.$transaction(async (tx) => {
           const quote = await tx.generationCostQuote.findUnique({ where: { id: input.quote.id } });
           if (!quote) throw new QuoteAbort("generation_quote_not_found");
-          if (quote.consumedAt !== null) throw new QuoteAbort("generation_quote_consumed");
+          // 幂等裁决优先：并发同 key 提交的败者必须先看到已有 run（RunConflictAbort
+          // 中止事务，由服务层按 fingerprint 裁决），而不是误报 quote_consumed。
           const existing = await tx.generationRun.findUnique({
             where: {
               projectId_operation_idempotencyKey: {
@@ -295,6 +316,10 @@ function createPrismaRepository(db: DbClient, client: AppPrismaClient): Generati
             },
           });
           if (existing) throw new RunConflictAbort(toRunRecord(existing));
+          if (quote.consumedAt !== null) throw new QuoteAbort("generation_quote_consumed");
+          if (quote.expiresAt.getTime() <= input.now.getTime()) {
+            throw new QuoteAbort("generation_quote_expired");
+          }
 
           // 1. 原子消费 quote（条件更新：只有未消费行能被置为 consumedAt）。
           const consumed = await tx.generationCostQuote.updateMany({
@@ -384,7 +409,10 @@ function createPrismaRepository(db: DbClient, client: AppPrismaClient): Generati
           return { ok: false as const, error: { code: "generation_run_conflict" as const, existing: error.existing } };
         }
         if (error instanceof QuoteAbort) {
-          return { ok: false as const, error: { code: error.code as "generation_quote_not_found" | "generation_quote_consumed" } };
+          return {
+            ok: false as const,
+            error: { code: error.code as "generation_quote_not_found" | "generation_quote_consumed" | "generation_quote_expired" },
+          };
         }
         throw error;
       }
@@ -413,6 +441,17 @@ function createPrismaRepository(db: DbClient, client: AppPrismaClient): Generati
           dispatchClaimCount: { increment: 1 },
           updatedAt: now,
         },
+      });
+      if (result.count !== 1) return false;
+      const row = await client.generationRun.findUnique({ where: { id: runId } });
+      if (row) syncRunToMemory(db, toRunRecord(row));
+      return true;
+    },
+    async renewLease(runId, workerId, leaseUntil, now) {
+      // 条件更新：只有 lease 仍归本 worker 时才延长（防易主后误续）
+      const result = await client.generationRun.updateMany({
+        where: { id: runId, dispatchLeaseOwner: workerId },
+        data: { dispatchLeaseExpiresAt: leaseUntil, updatedAt: now },
       });
       if (result.count !== 1) return false;
       const row = await client.generationRun.findUnique({ where: { id: runId } });
@@ -481,7 +520,12 @@ function isUniqueConstraintError(error: unknown): boolean {
 
 /** 事务内中止哨兵：携带结构化错误码，中止整个事务且不提交任何写入。 */
 class QuoteAbort extends Error {
-  constructor(public readonly code: "generation_quote_not_found" | "generation_quote_consumed") {
+  constructor(
+    public readonly code:
+      | "generation_quote_not_found"
+      | "generation_quote_consumed"
+      | "generation_quote_expired",
+  ) {
     super(code);
     this.name = "QuoteAbort";
   }

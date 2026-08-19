@@ -254,3 +254,47 @@ describe("generation run dispatcher concurrency", () => {
     expect(events[events.length - 1]!.eventJson).toMatchObject({ reason_code: "provider_rejected" });
   });
 });
+
+describe("generation run dispatcher lease renewal (review round 1 fixes)", () => {
+  it("a live worker's long-running handler is not taken over after its lease would have expired", async () => {
+    const app = buildApp();
+    await seedQuotableCatalog(app);
+    const project = await prepareQuoteProject(app.db);
+    const { run, repository } = await prepareRun(app.db, project);
+
+    const calls = { submit: 0 };
+    const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+    const leaseDurationMs = 100;
+    const workerA = createGenerationRunDispatcher({
+      db: app.db, repository, workerId: "worker-A", leaseDurationMs, now: () => new Date(),
+      handlers: {
+        "assets.generate": async () => {
+          calls.submit += 1;
+          // 长任务：超过初始 lease 时长（renew 每 lease/2=50ms 续期保住 lease）
+          await delay(300);
+          return { status: "succeeded" };
+        },
+      },
+    });
+    const workerB = createGenerationRunDispatcher({
+      db: app.db, repository, workerId: "worker-B", leaseDurationMs, now: () => new Date(),
+      handlers: { "assets.generate": async () => { calls.submit += 1; return { status: "succeeded" }; } },
+    });
+
+    const dispatchPromise = workerA.dispatch(run.id);
+    // 等 A 的 handler 进入执行并已 claim
+    await delay(30);
+    // 初始 lease（100ms）即将到期，但 A 仍在执行（renew 生效）→ B 不得接管
+    await delay(120);
+    const attempt = await workerB.dispatch(run.id);
+    expect(attempt.dispatched).toBe(false);
+    if (!attempt.dispatched) expect(attempt.reason).toBe("lease_held");
+    expect(calls.submit).toBe(1);
+
+    await dispatchPromise;
+    const stored = app.db.generationRuns.get(run.id)!;
+    expect(stored.status).toBe("succeeded");
+    expect(stored.dispatchClaimCount).toBe(1);
+    expect(calls.submit).toBe(1);
+  });
+});

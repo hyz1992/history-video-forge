@@ -19,7 +19,7 @@ import { createOrRestoreGenerationRun } from "../../../backend/src/modules/gener
 import { createGenerationRunDispatcher } from "../../../backend/src/modules/generation-run/generation-run-dispatcher.js";
 import { createGenerationCostQuote } from "../../../backend/src/modules/generation-cost/generation-cost.service.js";
 import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
-import { buildQuotableReadinessInput, prepareQuoteProject, seedQuotableCatalog } from "../cost/quote-test-context.js";
+import { buildQuotableReadinessInput, prepareQuoteProject, seedQuotableCatalog, REAL_TIER_INPUT } from "../cost/quote-test-context.js";
 import type { AppPrismaClient } from "../../../backend/src/db/prisma-client.types.js";
 import type { GenerationRunRecord } from "../../../backend/src/db/client.js";
 
@@ -305,5 +305,102 @@ describe("generation run submit transaction (Prisma mode)", () => {
     // 第二张 quote 未被消费
     const dbQuote2 = await client.generationCostQuote.findUnique({ where: { id: quote2.value.quote.id } });
     expect(dbQuote2?.consumedAt).toBeNull();
+  });
+});
+
+describe("generation run idempotency edge cases (review round 1 fixes)", () => {
+  it("concurrent same-key same-payload submits both succeed and return the same run (loser restores, not 409 consumed)", async () => {
+    const { app, project, quote, repository } = await prepareMapSubmitContext();
+    const deps = { readinessInput: buildQuotableReadinessInput(), repository };
+    const [first, second] = await Promise.all([
+      createOrRestoreGenerationRun(app.db, project, project.ownerId, submitInput(quote.id, { idempotencyKey: "race-key-1" }), deps),
+      createOrRestoreGenerationRun(app.db, project, project.ownerId, submitInput(quote.id, { idempotencyKey: "race-key-1" }), deps),
+    ]);
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+    // 败者返回与胜者相同的 run（幂等恢复），而不是 generation_quote_consumed
+    expect(second.value.run.id).toBe(first.value.run.id);
+    expect(second.value.created).toBe(false);
+    expect([...app.db.generationRuns.values()].length).toBe(1);
+    expect(app.db.generationCostQuotes.get(quote.id)!.consumedAt).not.toBeNull();
+  });
+
+  it("submit replays run_overrides from the quote creation; missing override is rejected", async () => {
+    const app = buildApp();
+    await seedQuotableCatalog(app);
+    const project = await prepareQuoteProject(app.db);
+    const runOverrides = { video: { strategy: "all_api_video" as const } };
+    const quoteResult = await createGenerationCostQuote(
+      app.db, project, project.ownerId,
+      { operation: "assets.generate", run_overrides: runOverrides },
+      { readinessInput: buildQuotableReadinessInput() },
+    );
+    expect(quoteResult.ok).toBe(true);
+    if (!quoteResult.ok) return;
+    const repository = createGenerationRunRepository(app.db);
+
+    // 提交重放相同 run_overrides → 通过
+    const okResult = await createOrRestoreGenerationRun(
+      app.db, project, project.ownerId,
+      submitInput(quoteResult.value.quote.id, { idempotencyKey: "override-key-1", runOverrides: runOverrides }),
+      { readinessInput: buildQuotableReadinessInput(), repository },
+    );
+    expect(okResult.ok).toBe(true);
+    if (!okResult.ok) return;
+    expect(okResult.value.created).toBe(true);
+
+    // 不带 override 的提交（另一 key）：quote 创建输入未重放 → 拒绝
+    const quote2 = await createGenerationCostQuote(
+      app.db, project, project.ownerId,
+      { operation: "assets.generate", run_overrides: runOverrides },
+      { readinessInput: buildQuotableReadinessInput() },
+    );
+    if (!quote2.ok) throw new Error("second quote failed");
+    const missing = await createOrRestoreGenerationRun(
+      app.db, project, project.ownerId,
+      submitInput(quote2.value.quote.id, { idempotencyKey: "override-key-2" }),
+      { readinessInput: buildQuotableReadinessInput(), repository },
+    );
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.error.code).toBe("generation_quote_configuration_changed");
+  });
+
+  it("budget gate rejects unbounded submit without override and accepts with override", async () => {
+    const app = buildApp();
+    await seedQuotableCatalog(app, REAL_TIER_INPUT);
+    const project = await prepareQuoteProject(app.db);
+    const quoteResult = await createGenerationCostQuote(
+      app.db, project, project.ownerId, { operation: "topic.generate" },
+      { readinessInput: buildQuotableReadinessInput(REAL_TIER_INPUT) },
+    );
+    if (!quoteResult.ok) throw new Error("quote failed");
+    const repository = createGenerationRunRepository(app.db);
+
+    const denied = await createOrRestoreGenerationRun(
+      app.db, project, project.ownerId,
+      submitInput(quoteResult.value.quote.id, { operation: "topic.generate", idempotencyKey: "budget-key-1", authorizeBudgetOverride: false }),
+      { readinessInput: buildQuotableReadinessInput(REAL_TIER_INPUT), repository },
+    );
+    expect(denied.ok).toBe(false);
+    if (!denied.ok) expect(denied.error.code).toBe("generation_budget_exceeded");
+    // 未授权时 quote 未被消费、无 run 产生
+    expect(app.db.generationCostQuotes.get(quoteResult.value.quote.id)!.consumedAt).toBeNull();
+    expect(app.db.generationRuns.size).toBe(0);
+
+    const quote2 = await createGenerationCostQuote(
+      app.db, project, project.ownerId, { operation: "topic.generate" },
+      { readinessInput: buildQuotableReadinessInput(REAL_TIER_INPUT) },
+    );
+    if (!quote2.ok) throw new Error("second quote failed");
+    const accepted = await createOrRestoreGenerationRun(
+      app.db, project, project.ownerId,
+      submitInput(quote2.value.quote.id, { operation: "topic.generate", idempotencyKey: "budget-key-2", authorizeBudgetOverride: true }),
+      { readinessInput: buildQuotableReadinessInput(REAL_TIER_INPUT), repository },
+    );
+    expect(accepted.ok).toBe(true);
+    if (!accepted.ok) return;
+    // 超额授权审计与 run 同事务写入
+    expect([...app.db.auditLogs.values()].some((log) => log.action === "generation.budget_override_authorized")).toBe(true);
   });
 });

@@ -19,19 +19,33 @@ import { resolve, relative, isAbsolute, sep, extname } from "node:path";
 import { randomBytes } from "node:crypto";
 import { createOrRestoreGenerationRun } from "../generation-run/generation-run.service.js";
 import { resolveGenerationCostBootstrapInputFromEnv } from "../generation-cost/generation-cost-bootstrap.js";
-import type { GenerationQuoteSelection } from "../../../../shared/src/index.js";
+import { GenerationQuoteRunOverridesSchema, type GenerationQuoteRunOverrides, type GenerationQuoteSelection } from "../../../../shared/src/index.js";
 
 // --- S2-2A 任务 8：提交协议（cost_quote_id / authorize_budget_override / idempotency_key） ---
 
 type SubmitFieldsResult =
   | { present: false }
-  | { present: true; invalid: boolean; fields?: { cost_quote_id: string; authorize_budget_override: boolean; idempotency_key: string } };
+  | {
+      present: true;
+      invalid: boolean;
+      fields?: {
+        cost_quote_id: string;
+        authorize_budget_override: boolean;
+        idempotency_key: string;
+        run_overrides: GenerationQuoteRunOverrides;
+      };
+    };
 
 function extractSubmitFields(payload: Record<string, unknown>): SubmitFieldsResult {
   const hasQuote = typeof payload.cost_quote_id === "string" && payload.cost_quote_id.length > 0;
   const hasKey = typeof payload.idempotency_key === "string" && payload.idempotency_key.length > 0;
   if (!hasQuote && !hasKey) return { present: false };
   if (!hasQuote || !hasKey) return { present: true, invalid: true };
+  // 提交可重放 quote 创建时的 run_overrides（GenerationQuoteRunOverridesSchema strict 校验）
+  const runOverridesParse = GenerationQuoteRunOverridesSchema.safeParse(payload.run_overrides);
+  if (!runOverridesParse.success) {
+    return { present: true, invalid: true };
+  }
   return {
     present: true,
     invalid: false,
@@ -39,6 +53,7 @@ function extractSubmitFields(payload: Record<string, unknown>): SubmitFieldsResu
       cost_quote_id: payload.cost_quote_id as string,
       authorize_budget_override: payload.authorize_budget_override === true,
       idempotency_key: payload.idempotency_key as string,
+      run_overrides: runOverridesParse.data,
     },
   };
 }
@@ -73,7 +88,7 @@ async function submitGenerationRun(
       authorizeBudgetOverride: fields.authorize_budget_override,
       idempotencyKey: fields.idempotency_key,
       selection,
-      runOverrides: undefined,
+      runOverrides: fields.run_overrides,
       dispatchPayload,
     },
     {
@@ -82,7 +97,10 @@ async function submitGenerationRun(
     },
   );
   if (!result.ok) {
-    const statusCode = result.error.code === "generation_quote_not_found" ? 404 : 409;
+    // 404：quote 不存在；500：服务端持久化故障（可重试）；其余业务冲突一律 409
+    let statusCode = 409;
+    if (result.error.code === "generation_quote_not_found") statusCode = 404;
+    if (result.error.code === "generation_run_persistence_failed") statusCode = 500;
     return { statusCode, body: { error: result.error.code, message: result.error.message } };
   }
 
