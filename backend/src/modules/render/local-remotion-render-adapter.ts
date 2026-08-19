@@ -152,7 +152,20 @@ export function createLocalRemotionRenderAdapter(
           outDir: bundleOutDir,
           publicDir: input.projectStorageRootDir ?? input.outputDir,
           enableCaching: false,
-          webpackOverride: (config) => config,
+          // S2-2A 任务 1 修复：shared 源码内按仓库惯例使用 .js 后缀导入同目录 .ts
+          // （如 generation-configuration-resolver.ts → ./generation-configuration.schema.js），
+          // Remotion bundler 需 extensionAlias 才能把 .js 解析到 .ts 源，否则
+          // renderer 间接依赖 shared 新模块时打包失败（Module not found）。
+          webpackOverride: (config) => ({
+            ...config,
+            resolve: {
+              ...config.resolve,
+              extensionAlias: {
+                ...config.resolve?.extensionAlias,
+                ".js": [".ts", ".tsx", ".js"],
+              },
+            },
+          }),
         });
         const selectedComposition = await selectComposition({
           serveUrl,
