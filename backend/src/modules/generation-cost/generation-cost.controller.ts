@@ -48,7 +48,11 @@ export const createGenerationQuoteController = guardOwnedRoute(
 export const getProjectCostSummaryController = guardOwnedRoute(
   async (context: RouteContext): Promise<AppResponse> => {
     requireUser(context.auth);
-    const summary = await getProjectCostSummary(context.app.db, context.params.projectId);
+    const summary = await getProjectCostSummary(
+      context.app.db,
+      context.params.projectId,
+      context.app.prismaClient,
+    );
     return { statusCode: 200, body: summary };
   },
 );
@@ -56,7 +60,11 @@ export const getProjectCostSummaryController = guardOwnedRoute(
 export const getProjectCostRecordsController = guardOwnedRoute(
   async (context: RouteContext): Promise<AppResponse> => {
     requireUser(context.auth);
-    const records = await listProjectCostRecords(context.app.db, context.params.projectId);
+    const records = await listProjectCostRecords(
+      context.app.db,
+      context.params.projectId,
+      context.app.prismaClient,
+    );
     const body = ProjectCostRecordsResponseSchema.parse({ records, total: records.length });
     return { statusCode: 200, body };
   },
@@ -69,6 +77,7 @@ export const getRunConfigurationController = guardOwnedRoute(
       context.app.db,
       context.params.projectId,
       context.params.runId,
+      context.app.prismaClient,
     );
     if (!result) {
       return { statusCode: 404, body: { error: "generation_run_not_found" } };

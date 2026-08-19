@@ -518,3 +518,48 @@ describe("generation run Prisma-mode sweep scans the database (final review fixe
     expect(dbRun?.status).toBe("needs_reconciliation");
   });
 });
+
+describe("cold-mirror submit and cost reads with DB as authority (external review N1/F1 fixes)", () => {
+  it("submit finds the quote from the database when the quote mirror is cold", async () => {
+    const { db, project, quote, repository } = await createPrismaContext();
+    // 清空 quote 镜像：模拟另一进程创建 quote 后本进程冷启动
+    db.generationCostQuotes.clear();
+    const result = await createOrRestoreGenerationRun(
+      db, project, "u1", submitInput(quote.id, { idempotencyKey: "cold-quote-1" }),
+      { readinessInput: buildQuotableReadinessInput(), repository },
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.created).toBe(true);
+    // 镜像已从 DB 同步回
+    expect(db.generationCostQuotes.get(quote.id)).not.toBeUndefined();
+  });
+
+  it("cost read APIs read from the database when the in-memory mirror is cold", async () => {
+    const { client, db, project, quote, repository } = await createPrismaContext();
+    const submit = await createOrRestoreGenerationRun(
+      db, project, "u1", submitInput(quote.id, { idempotencyKey: "cold-cost-1" }),
+      { readinessInput: buildQuotableReadinessInput(), repository },
+    );
+    if (!submit.ok) throw new Error("submit failed");
+    const runId = submit.value.run.id;
+
+    // 清空全部相关镜像（quotes/snapshots/runs）
+    db.generationCostQuotes.clear();
+    db.runConfigurationSnapshots.clear();
+    db.generationRuns.clear();
+
+    const { getRunConfiguration, getProjectCostSummary } = await import("../../../backend/src/modules/generation-cost/generation-cost.service.js");
+    const config = await getRunConfiguration(db, project.id, runId, client);
+    expect(config).not.toBeNull();
+    expect(config?.run_id).toBe(runId);
+    expect(config?.run_status).toBe("pending_dispatch");
+    expect(config?.configuration_hash).toBeTruthy();
+
+    const summary = await getProjectCostSummary(db, project.id, client);
+    expect(summary.run_count).toBe(1);
+    expect(summary.quote_count).toBe(1);
+    expect(summary.consumed_quote_count).toBe(1);
+    expect(summary.run_status_counts.pending_dispatch).toBe(1);
+  });
+});

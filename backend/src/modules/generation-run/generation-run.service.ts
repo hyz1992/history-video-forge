@@ -1,5 +1,6 @@
 import type {
   DbClient,
+  GenerationCostQuoteRecord,
   GenerationRunRecord,
   ProjectRecord,
   RunConfigurationSnapshotRecord,
@@ -14,7 +15,7 @@ import {
   type ResolvedGenerationConfigurationV1,
 } from "../../../../shared/src/index.js";
 import type { QuoteReadinessInput } from "../generation-cost/generation-cost.service.js";
-import { findQuoteById } from "../generation-cost/generation-cost.repository.js";
+
 import {
   revalidateQuoteForCommit,
   type RevalidateQuoteResult,
@@ -106,8 +107,9 @@ export async function createOrRestoreGenerationRun(
 ): Promise<SubmitGenerationResult> {
   const now = deps.now?.() ?? new Date();
 
-  // 1. quote 校验（project-scoped 查询；原子消费在事务内完成）
-  const quote = findQuoteById(db, project.id, input.costQuoteId);
+  // 1. quote 校验（project-scoped；Prisma 态由 repository 直查数据库并同步镜像，
+  //    冷镜像进程对有效 quote 不再误报 not_found；原子消费在事务内完成）
+  const quote = await deps.repository.getQuoteById(input.costQuoteId, project.id);
   if (!quote) {
     return { ok: false, error: { code: "generation_quote_not_found", message: "quote not found for this project" } };
   }
@@ -250,7 +252,7 @@ export async function createOrRestoreGenerationRun(
 function buildSnapshot(
   db: DbClient,
   project: ProjectRecord,
-  quote: NonNullable<ReturnType<typeof findQuoteById>>,
+  quote: GenerationCostQuoteRecord,
   input: SubmitGenerationInput,
   revalidated: Extract<RevalidateQuoteResult, { ok: true }>["value"],
   runId: string,

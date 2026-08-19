@@ -4,9 +4,11 @@ import { env } from "../../config/env.js";
 import type {
   DbClient,
   GenerationCostQuoteRecord,
+  GenerationRunRecord,
   ProjectRecord,
   RunConfigurationSnapshotRecord,
 } from "../../db/client.js";
+import type { AppPrismaClient } from "../../db/prisma-client.types.js";
 import {
   canonicalStringify,
   resolveGenerationConfiguration,
@@ -803,11 +805,15 @@ export async function revalidateQuoteForCommit(
 export async function getProjectCostSummary(
   db: DbClient,
   projectId: string,
+  prismaClient?: AppPrismaClient,
 ): Promise<ProjectCostSummary> {
-  const quotes = listQuotesByProject(db, projectId);
-  const snapshots = listSnapshotsByProject(db, projectId);
-  const usageRecords = listUsageRecordsByProject(db, projectId);
-  const runs = listRunsByProject(db, projectId);
+  // prismaClient 传入时以数据库为权威（外部审查 N1：跨进程成本只读不能只读内存镜像）
+  const [quotes, snapshots, usageRecords, runs] = await Promise.all([
+    listQuotesByProject(db, projectId, prismaClient),
+    listSnapshotsByProject(db, projectId, prismaClient),
+    listUsageRecordsByProject(db, projectId, prismaClient),
+    listRunsByProject(db, projectId, prismaClient),
+  ]);
 
   let totalEstimated = 0n;
   let totalAuthorization = 0n;
@@ -870,8 +876,10 @@ export async function getProjectCostSummary(
 export async function listProjectCostRecords(
   db: DbClient,
   projectId: string,
+  prismaClient?: AppPrismaClient,
 ): Promise<ProjectCostRecord[]> {
-  const records = listUsageRecordsByProject(db, projectId).map((record) => {
+  const usageRecords = await listUsageRecordsByProject(db, projectId, prismaClient);
+  const records = usageRecords.map((record) => {
     const snapshot = db.runConfigurationSnapshots.get(record.runConfigurationSnapshotId);
     const run = snapshot?.runId ? db.generationRuns.get(snapshot.runId) : undefined;
     return ProjectCostRecordSchema.parse({
@@ -901,13 +909,28 @@ export async function getRunConfiguration(
   db: DbClient,
   projectId: string,
   runId: string,
+  prismaClient?: AppPrismaClient,
 ): Promise<GenerationRunConfigurationResponse | null> {
-  const run = db.generationRuns.get(runId);
-  if (!run || run.projectId !== projectId) return null;
-  const snapshot: RunConfigurationSnapshotRecord | undefined = db.runConfigurationSnapshots.get(
-    run.runConfigurationSnapshotId,
-  );
-  if (!snapshot) return null;
+  // prismaClient 传入时直查数据库（外部审查 N1：跨进程读另一实例创建的 run 不 404）
+  let run: GenerationRunRecord | undefined;
+  let snapshot: RunConfigurationSnapshotRecord | undefined;
+  if (prismaClient) {
+    const runRow = await prismaClient.generationRun.findUnique({ where: { id: runId } });
+    if (!runRow || runRow.projectId !== projectId) return null;
+    run = toRunRecordForCost(runRow);
+    db.generationRuns.set(run.id, run);
+    const snapshotRow = await prismaClient.runConfigurationSnapshot.findUnique({
+      where: { id: run.runConfigurationSnapshotId },
+    });
+    if (!snapshotRow) return null;
+    snapshot = toSnapshotRecordForCost(snapshotRow);
+    db.runConfigurationSnapshots.set(snapshot.id, snapshot);
+  } else {
+    run = db.generationRuns.get(runId);
+    if (!run || run.projectId !== projectId) return null;
+    snapshot = db.runConfigurationSnapshots.get(run.runConfigurationSnapshotId);
+    if (!snapshot) return null;
+  }
   return GenerationRunConfigurationResponseSchema.parse({
     run_id: run.id,
     run_status: run.status,
@@ -917,6 +940,92 @@ export async function getRunConfiguration(
     snapshot: snapshot.resolvedConfigurationJson,
     created_at: run.createdAt.toISOString(),
   });
+}
+
+// --- Prisma row → record 转换（成本只读路径专用） ---------------------------
+
+function toRunRecordForCost(row: {
+  id: string;
+  projectId: string;
+  userId: string | null;
+  operation: string;
+  idempotencyKey: string;
+  payloadFingerprint: string;
+  quoteId: string | null;
+  runConfigurationSnapshotId: string;
+  dispatchPayloadJson: unknown;
+  status: string;
+  dispatchLeaseOwner: string | null;
+  dispatchLeaseExpiresAt: Date | null;
+  dispatchClaimCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}): GenerationRunRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    userId: row.userId,
+    operation: row.operation,
+    idempotencyKey: row.idempotencyKey,
+    payloadFingerprint: row.payloadFingerprint,
+    quoteId: row.quoteId,
+    runConfigurationSnapshotId: row.runConfigurationSnapshotId,
+    dispatchPayloadJson: row.dispatchPayloadJson as Record<string, unknown>,
+    status: row.status as GenerationRunRecord["status"],
+    dispatchLeaseOwner: row.dispatchLeaseOwner,
+    dispatchLeaseExpiresAt: row.dispatchLeaseExpiresAt,
+    dispatchClaimCount: row.dispatchClaimCount,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function toSnapshotRecordForCost(row: {
+  id: string;
+  projectId: string;
+  userId: string | null;
+  stage: string;
+  operation: string;
+  runId: string | null;
+  projectConfigurationRevision: number;
+  schemaVersion: string;
+  configurationHash: string;
+  resolvedConfigurationJson: unknown;
+  resolutionTraceJson: unknown;
+  quoteId: string | null;
+  quoteFingerprint: string | null;
+  estimatedCostMicros: string | null;
+  authorizationCostMicros: string | null;
+  budgetLimitMicros: string | null;
+  budgetOverrideAuthorized: boolean;
+  pricingHash: string | null;
+  pricingVersionSetJson: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+}): RunConfigurationSnapshotRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    userId: row.userId,
+    stage: row.stage,
+    operation: row.operation,
+    runId: row.runId,
+    projectConfigurationRevision: row.projectConfigurationRevision,
+    schemaVersion: row.schemaVersion,
+    configurationHash: row.configurationHash,
+    resolvedConfigurationJson: row.resolvedConfigurationJson as Record<string, unknown>,
+    resolutionTraceJson: row.resolutionTraceJson as unknown[],
+    quoteId: row.quoteId,
+    quoteFingerprint: row.quoteFingerprint,
+    estimatedCostMicros: row.estimatedCostMicros,
+    authorizationCostMicros: row.authorizationCostMicros,
+    budgetLimitMicros: row.budgetLimitMicros,
+    budgetOverrideAuthorized: row.budgetOverrideAuthorized,
+    pricingHash: row.pricingHash,
+    pricingVersionSetJson: row.pricingVersionSetJson as string[],
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
 }
 
 export { findQuoteById };

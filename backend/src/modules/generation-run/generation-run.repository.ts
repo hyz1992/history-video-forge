@@ -78,6 +78,12 @@ export interface GenerationRunRepository {
    * 用户面读取仍以 projectId 为入口（generation-cost.repository）。
    */
   getSnapshotById(snapshotId: string): Promise<RunConfigurationSnapshotRecord | null>;
+  /**
+   * 按 quoteId 读取（服务端恢复路径专用：提交事务前的 quote 校验）。
+   * projectId 参与过滤（与用户面 findQuoteById 同语义，跨项目不可见）；
+   * Prisma 态直查数据库并同步镜像（跨进程冷镜像进程提交不再 404）。
+   */
+  getQuoteById(quoteId: string, projectId: string): Promise<GenerationCostQuoteRecord | null>;
   /** 可恢复运行：pending_dispatch 或 lease 已过期；永远排除 needs_reconciliation。 */
   listRecoverableRuns(now: Date): Promise<GenerationRunRecord[]>;
   getRunById(runId: string): Promise<GenerationRunRecord | null>;
@@ -86,22 +92,34 @@ export interface GenerationRunRepository {
     operation: string,
     idempotencyKey: string,
   ): Promise<GenerationRunRecord | null>;
-  listRunsByProject(projectId: string): GenerationRunRecord[];
+  listRunsByProject(projectId: string): Promise<GenerationRunRecord[]>;
 }
 
 // --- 独立查询（供 cost service 等消费方使用） -------------------------------
 
-/** 按 projectId 列出全部 run（创建时间升序）。 */
-export function listRunsByProject(db: DbClient, projectId: string): GenerationRunRecord[] {
+/** 按 projectId 列出全部 run（创建时间升序）。prismaClient 传入时以数据库为权威。 */
+export async function listRunsByProject(
+  db: DbClient,
+  projectId: string,
+  prismaClient?: AppPrismaClient,
+): Promise<GenerationRunRecord[]> {
+  if (prismaClient) {
+    const rows = await prismaClient.generationRun.findMany({ where: { projectId } });
+    const runs = rows.map(toRunRecord);
+    for (const run of runs) syncRunToMemory(db, run);
+    return runs.sort(compareRunByCreatedAt);
+  }
   const runs: GenerationRunRecord[] = [];
   for (const run of db.generationRuns.values()) {
     if (run.projectId === projectId) runs.push(run);
   }
-  return runs.sort((a, b) => {
-    if (a.createdAt.getTime() < b.createdAt.getTime()) return -1;
-    if (a.createdAt.getTime() > b.createdAt.getTime()) return 1;
-    return 0;
-  });
+  return runs.sort(compareRunByCreatedAt);
+}
+
+function compareRunByCreatedAt(a: GenerationRunRecord, b: GenerationRunRecord): number {
+  if (a.createdAt.getTime() < b.createdAt.getTime()) return -1;
+  if (a.createdAt.getTime() > b.createdAt.getTime()) return 1;
+  return 0;
 }
 
 // --- Map 模式锁 -------------------------------------------------------------
@@ -232,6 +250,11 @@ function createMapRepository(db: DbClient): GenerationRunRepository {
     async getSnapshotById(snapshotId) {
       return db.runConfigurationSnapshots.get(snapshotId) ?? null;
     },
+    async getQuoteById(quoteId, projectId) {
+      const quote = db.generationCostQuotes.get(quoteId);
+      if (!quote || quote.projectId !== projectId) return null;
+      return quote;
+    },
     listRunsByProject(projectId) {
       return listRunsByProject(db, projectId);
     },
@@ -296,6 +319,48 @@ function toRunRecord(row: {
 
 function syncRunToMemory(db: DbClient, run: GenerationRunRecord): void {
   db.generationRuns.set(run.id, run);
+}
+
+function toQuoteRecord(row: {
+  id: string;
+  projectId: string;
+  userId: string | null;
+  operation: string;
+  configurationHash: string;
+  quoteFingerprint: string;
+  pricingHash: string;
+  pricingVersionSetJson: unknown;
+  itemsJson: unknown;
+  estimatedCostMicros: string;
+  authorizationCostMicros: string;
+  containsUnboundedItem: boolean;
+  budgetLimitMicros: string | null;
+  overBudget: boolean;
+  expiresAt: Date;
+  consumedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): GenerationCostQuoteRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    userId: row.userId,
+    operation: row.operation,
+    configurationHash: row.configurationHash,
+    quoteFingerprint: row.quoteFingerprint,
+    pricingHash: row.pricingHash,
+    pricingVersionSetJson: row.pricingVersionSetJson as string[],
+    itemsJson: row.itemsJson as unknown[],
+    estimatedCostMicros: row.estimatedCostMicros,
+    authorizationCostMicros: row.authorizationCostMicros,
+    containsUnboundedItem: row.containsUnboundedItem,
+    budgetLimitMicros: row.budgetLimitMicros,
+    overBudget: row.overBudget,
+    expiresAt: row.expiresAt,
+    consumedAt: row.consumedAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
 }
 
 function toSnapshotRecord(row: {
@@ -582,6 +647,13 @@ function createPrismaRepository(db: DbClient, client: AppPrismaClient): Generati
       const snapshot = toSnapshotRecord(row);
       db.runConfigurationSnapshots.set(snapshot.id, snapshot);
       return snapshot;
+    },
+    async getQuoteById(quoteId, projectId) {
+      const row = await client.generationCostQuote.findUnique({ where: { id: quoteId } });
+      if (!row || row.projectId !== projectId) return null;
+      const quote = toQuoteRecord(row);
+      db.generationCostQuotes.set(quote.id, quote);
+      return quote;
     },
     listRunsByProject(projectId) {
       return listRunsByProject(db, projectId);

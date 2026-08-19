@@ -327,8 +327,8 @@ describe("quote record lookups are project-scoped", () => {
     await seedQuotableCatalog(app);
     const quote = await prepareTopicQuote(app.db);
     const otherProject = await prepareQuoteProject(app.db, "user-b");
-    expect(findQuoteById(app.db, otherProject.id, quote.id)).toBeNull();
-    expect(findQuoteById(app.db, quote.projectId, quote.id)).not.toBeNull();
+    expect(await findQuoteById(app.db, otherProject.id, quote.id)).toBeNull();
+    expect(await findQuoteById(app.db, quote.projectId, quote.id)).not.toBeNull();
   });
 });
 
