@@ -72,6 +72,12 @@ export interface RunAssetsGenerationInput {
   missingOnly?: boolean;
   /** Only process these specific task IDs. */
   taskIds?: string[];
+  /**
+   * S2-2A 任务 8：由 GenerationRunService 提交事务预建的 run。
+   * 传入时跳过 ensureAssetsGenerationRun（run/snapshot 已由事务创建），
+   * runId 即该 run 的 id（恢复执行与事件归属复用同一 run）。
+   */
+  generationRunId?: string;
 }
 
 /**
@@ -107,6 +113,8 @@ async function ensureAssetsGenerationRun(input: {
   segmentIds: string[];
 }) {
   const { db, project, runId, configResult, segmentIds } = input;
+  // S2-2A 任务 8：run 已由 GenerationRunService 提交事务预建（quote 消费 + snapshot
+  // 同事务完成），此处不再创建，保持 run/snapshot 身份唯一。
   if (db.generationRuns.has(runId)) return;
 
   const snapshot: import("../../db/client.js").RunConfigurationSnapshotRecord = {
@@ -917,7 +925,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   }
 
   // Step 6c: Execution engine integration
-  const runId = `assets_run_${db.generateId()}`;
+  const runId = input.generationRunId ?? `assets_run_${db.generateId()}`;
   const runStorage = resolveAssetsRunStorage({
     projectStorageRootDir: project.storageRootDir,
     runId,
@@ -1886,5 +1894,55 @@ export async function acceptArtifact(input: AcceptArtifactInput) {
       asset_manifest_record_id: manifestRecord.id,
       manifest,
     },
+  };
+}
+
+// ─── GenerationRun dispatcher handler（S2-2A 任务 8） ────────────────────────
+
+/**
+ * assets.generate 的 dispatcher handler。
+ *
+ * 从 run.dispatchPayloadJson 恢复执行输入（提交时持久化的最小非敏感 payload；
+ * 凭据只在执行时从服务端 credential registry 解析），以预建 run 身份执行既有
+ * assets 流程。流程的 AppResponse 原样透传给同步提交方（2xx = succeeded，
+ * 其余为 failed；内部异常由 dispatcher 统一捕获）。
+ *
+ * 外部调用意图的防重（provider job + providerRequestKey + attemptIndex）由
+ * 既有 provider job 合同承担（任务 6 call-intent 字段）；usage 记账与
+ * needs_reconciliation 细化在任务 9A 接入。
+ */
+export function createAssetsDispatchHandler(): import("../generation-run/generation-run-dispatcher.js").GenerationRunDispatchHandler {
+  return async (run, { db, project }) => {
+    const payload = run.dispatchPayloadJson as {
+      voice_profile_id?: string;
+      execution_mode?: string;
+      enabled_provider_types?: string[];
+      mode?: string | null;
+      task_ids?: string[];
+    };
+    const response = await runAssetsGeneration({
+      db,
+      project,
+      voiceProfileId: payload.voice_profile_id ?? "voice_default_male_storyteller",
+      executionMode: payload.execution_mode ?? "auto_available",
+      enabledProviderTypes: payload.enabled_provider_types,
+      missingOnly: payload.mode === "missing_only",
+      taskIds:
+        Array.isArray(payload.task_ids) && payload.task_ids.length > 0
+          ? payload.task_ids
+          : undefined,
+      generationRunId: run.id,
+    });
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return { status: "succeeded", response };
+    }
+    const errorCode =
+      (response.body as { error?: string } | undefined)?.error ?? "assets_generation_failed";
+    return {
+      status: "failed",
+      reason_code: errorCode,
+      message: `assets generation returned HTTP ${response.statusCode}`,
+      response,
+    };
   };
 }

@@ -99,6 +99,32 @@ export type {
   SegmentInput,
   SystemGenerationConstraints,
 } from "./generation/generation-configuration-resolver";
+// generation-cost-api.schema：S2-2A 任务 8 报价/成本/运行配置 API 合同
+export {
+  CnyDecimalString,
+  GENERATION_SUBMIT_ERROR_CODES,
+  GenerationQuoteItemSchema,
+  GenerationQuoteRequestSchema,
+  GenerationQuoteResponseSchema,
+  GenerationQuoteRunOverridesSchema,
+  GenerationQuoteSelectionSchema,
+  GenerationRunConfigurationResponseSchema,
+  ProjectCostRecordSchema,
+  ProjectCostRecordsResponseSchema,
+  ProjectCostSummarySchema,
+} from "./generation/generation-cost-api.schema";
+export type {
+  GenerationQuoteItem,
+  GenerationQuoteRequest,
+  GenerationQuoteResponse,
+  GenerationQuoteRunOverrides,
+  GenerationQuoteSelection,
+  GenerationRunConfigurationResponse,
+  GenerationSubmitErrorCode,
+  ProjectCostRecord,
+  ProjectCostRecordsResponse,
+  ProjectCostSummary,
+} from "./generation/generation-cost-api.schema";
 export { StoryboardValidationResult } from "./storyboard/storyboard-validation.schema";
 export {
   AssetPlan,

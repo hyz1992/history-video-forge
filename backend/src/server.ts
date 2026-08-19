@@ -387,6 +387,19 @@ export async function startServer(options?: {
       resolveGenerationCostBootstrapInputFromEnv(),
     );
     await recoverAndPersistInterruptedRuns(app.db);
+    // S2-2A 任务 8：readiness 完成后启动一次恢复扫描 + 低频 lease-expiry sweep。
+    // 扫描与 sweep 都跳过 needs_reconciliation；定时器在关闭时清理。
+    const generationRunDispatcher = app.generationRunDispatcher;
+    void generationRunDispatcher.scanAndDispatch().catch((error) => {
+      console.error("[generation-run-dispatcher] startup recovery scan failed", error);
+    });
+    const dispatchSweepTimer = setInterval(() => {
+      void generationRunDispatcher.scanAndDispatch().catch((error) => {
+        console.error("[generation-run-dispatcher] lease-expiry sweep failed", error);
+      });
+    }, DISPATCH_SWEEP_INTERVAL_MS);
+    dispatchSweepTimer.unref?.();
+    serverCloseCleanup.push(() => clearInterval(dispatchSweepTimer));
   }
   const sessionStore = prismaClient ? new PrismaSessionStore(prismaClient) : undefined;
   // S2-1 Task 7：启动时打印 tier 路由诊断（脱敏，失败不阻塞启动）
@@ -411,6 +424,13 @@ export async function startServer(options?: {
   });
 
   const shutdown = () => {
+    for (const cleanup of serverCloseCleanup.splice(0)) {
+      try {
+        cleanup();
+      } catch {
+        // 关闭清理失败不阻断退出
+      }
+    }
     app.persist();
     server.close(() => { void disconnect().finally(() => { process.exitCode = 0; }); });
   };
@@ -431,6 +451,12 @@ export async function startServer(options?: {
 function isDirectRun() {
   return !!process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 }
+
+/** S2-2A 任务 8：dispatcher 低频 lease-expiry sweep 间隔（服务存活期间）。 */
+export const DISPATCH_SWEEP_INTERVAL_MS = 60_000;
+
+/** 关闭时清理的定时器/资源（server close 时执行）。 */
+const serverCloseCleanup: Array<() => void> = [];
 
 if (isDirectRun()) {
   startServer()

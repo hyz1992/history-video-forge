@@ -314,6 +314,36 @@ function parseCatalogPricing(entry: CatalogEntry): CatalogPricing {
   }
 }
 
+// --- 定价 hash ---------------------------------------------------------------
+
+/**
+ * 基于标准化价格内容计算定价 hash（SHA-256，sha256:<64-hex>）。
+ * 按 provider_model_id 字典序排序后编码（消除输入顺序影响）；
+ * 价格单独变化会改变 hash，用于提交时检测价格漂移（任务 8 revalidate）。
+ */
+export function computePricingHash(
+  entries: Array<{
+    provider_model_id: string;
+    pricing_version: string;
+    pricing: Record<string, unknown>;
+  }>,
+): string {
+  const sorted = [...entries].sort((a, b) => {
+    if (a.provider_model_id < b.provider_model_id) return -1;
+    if (a.provider_model_id > b.provider_model_id) return 1;
+    return 0;
+  });
+  const hashPayload = {
+    schema_version: "pricing_hash_v1",
+    entries: sorted.map((entry) => ({
+      provider_model_id: entry.provider_model_id,
+      pricing_version: entry.pricing_version,
+      pricing: entry.pricing,
+    })),
+  };
+  return `sha256:${createHash("sha256").update(canonicalStringify(hashPayload)).digest("hex")}`;
+}
+
 // --- 主入口 -------------------------------------------------------------------
 
 export function priceGenerationWorkload(
@@ -390,22 +420,14 @@ export function priceGenerationWorkload(
     : items.reduce((sum, item) => sum + BigInt(item.authorization_cost_micros!), 0n).toString();
 
   // pricing hash：对本次报价实际使用的目录价格内容做标准化 SHA-256。
-  const uniqueUsedEntries = [...new Map(usedEntries.map((e) => [e.id, e])).values()].sort((a, b) => {
-    if (a.id < b.id) return -1;
-    if (a.id > b.id) return 1;
-    return 0;
-  });
-  const hashPayload = {
-    schema_version: "pricing_hash_v1",
-    entries: uniqueUsedEntries.map((entry) => ({
+  const uniqueUsedEntries = [...new Map(usedEntries.map((e) => [e.id, e])).values()];
+  const pricingHash = computePricingHash(
+    uniqueUsedEntries.map((entry) => ({
       provider_model_id: entry.id,
       pricing_version: entry.pricingVersion,
       pricing: entry.pricingJson,
     })),
-  };
-  const pricingHash = `sha256:${createHash("sha256")
-    .update(canonicalStringify(hashPayload))
-    .digest("hex")}`;
+  );
   const pricingVersions = [...new Set(uniqueUsedEntries.map((e) => e.pricingVersion))].sort();
 
   return {

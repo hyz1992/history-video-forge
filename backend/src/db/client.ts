@@ -407,6 +407,22 @@ export interface UsageCostRecordRecord {
   updatedAt: Date;
 }
 
+/**
+ * 审计日志（append-only）的内存态镜像。
+ * Prisma 激活态由事务/thirdAggregateWriter 落库；legacy Map 态只保存在内存
+ * （不入 fixture 快照），用于事务合同的回滚模拟与断言。
+ */
+export interface AuditLogRecord {
+  id: string;
+  actorUserId: string | null;
+  projectId: string | null;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  metadataJson: Record<string, unknown> | null;
+  createdAt: Date;
+}
+
 export interface DbClient {
   generateId: () => string;
   projects: Map<string, ProjectRecord>;
@@ -440,6 +456,7 @@ export interface DbClient {
   generationRuns: Map<string, GenerationRunRecord>;
   generationRunEvents: Map<string, GenerationRunEventRecord[]>;
   usageCostRecords: Map<string, UsageCostRecordRecord>;
+  auditLogs: Map<string, AuditLogRecord>;
   firstAggregateWriter?: {
     ownerId: string;
     createProject(record: ProjectRecord): Promise<void>;
@@ -575,5 +592,6 @@ export function createDbClient(): DbClient {
     generationRuns: new Map<string, GenerationRunRecord>(),
     generationRunEvents: new Map<string, GenerationRunEventRecord[]>(),
     usageCostRecords: new Map<string, UsageCostRecordRecord>(),
+    auditLogs: new Map<string, AuditLogRecord>(),
   };
 }

@@ -16,6 +16,11 @@ import { registerAdminRoutes } from "./modules/admin/admin.routes";
 import { registerEventLibraryRoutes } from "./modules/event-library/event-library.routes";
 import { registerEventLibraryAdminRoutes } from "./modules/event-library/event-library-admin.routes";
 import { registerGenerationConfigRoutes } from "./modules/generation-config/generation-config.routes";
+import { registerGenerationCostRoutes } from "./modules/generation-cost/generation-cost.routes";
+import { createGenerationRunRepository, type GenerationRunRepository } from "./modules/generation-run/generation-run.repository";
+import { createGenerationRunDispatcher, type GenerationRunDispatcher } from "./modules/generation-run/generation-run-dispatcher";
+import { createAssetsDispatchHandler } from "./modules/assets/assets-run.service";
+import type { QuoteReadinessInput } from "./modules/generation-cost/generation-cost.service";
 import { loadMediaLibraryCatalog } from "./modules/assets/media-library-catalog.loader";
 import { configureVoiceProfilePersistence } from "./modules/assets/voice/voice-profile.repository";
 import { recoverInterruptedRuns } from "./runtime/recovery/interrupted-run-recovery";
@@ -97,6 +102,15 @@ export interface AppInstance {
   persistenceMode: "legacy" | "prisma";
   persist: () => { ok: boolean; error: string | null };
   stageLocks: ReturnType<typeof createProjectStageLockRegistry>;
+  /** S2-2A 任务 8：GenerationRun 提交事务 repository（Map 锁 / Prisma 事务）。 */
+  generationRunRepository: GenerationRunRepository;
+  /** S2-2A 任务 8：可恢复 dispatcher（提交后立即派发 + 启动扫描 + 低频 sweep）。 */
+  generationRunDispatcher: GenerationRunDispatcher;
+  /**
+   * S2-2A 任务 8：报价/提交的 readiness 输入注入点（测试用）。
+   * 缺省时每请求从真实 env 推导（resolveGenerationCostBootstrapInputFromEnv）。
+   */
+  generationQuoteReadinessInput?: QuoteReadinessInput;
 }
 
 function matchRoute(pattern: string, url: string): Record<string, string> | null {
@@ -139,6 +153,8 @@ export interface BuildAppOptions {
   secondAggregateWriter?: PrismaSecondAggregateWriter;
   thirdAggregateWriter?: PrismaThirdAggregateWriter;
   prismaClient?: AppPrismaClient;
+  /** S2-2A 任务 8：报价 readiness 输入注入（缺省从真实 env 推导）。 */
+  generationQuoteReadinessInput?: QuoteReadinessInput;
 }
 
 export function buildApp(options: BuildAppOptions = {}): AppInstance {
@@ -207,6 +223,8 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
     return persist();
   }
 
+  // S2-2A 任务 8：GenerationRun 事务 repository + 可恢复 dispatcher（单例接线）。
+  const generationRunRepository = createGenerationRunRepository(db, options.prismaClient);
   const app: AppInstance = {
     env,
     db,
@@ -220,6 +238,17 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
     prismaClient: options.prismaClient,
     topicCandidateStore,
     storageBaseDir: runtimeStorageRoot,
+    generationQuoteReadinessInput: options.generationQuoteReadinessInput,
+    generationRunRepository,
+    generationRunDispatcher: createGenerationRunDispatcher({
+      db,
+      repository: generationRunRepository,
+      workerId: `main-dispatcher-${process.pid}`,
+      leaseDurationMs: 30_000,
+      handlers: {
+        "assets.generate": createAssetsDispatchHandler(),
+      },
+    }),
     addRoute(method, pattern, handler) {
       routes.push({
         method: method.toUpperCase(),
@@ -329,6 +358,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
   registerEventLibraryRoutes(app);
   registerEventLibraryAdminRoutes(app);
   registerGenerationConfigRoutes(app);
+  registerGenerationCostRoutes(app);
 
   return app;
 }

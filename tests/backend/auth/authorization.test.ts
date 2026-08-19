@@ -247,3 +247,51 @@ describe("cross-user owner isolation", () => {
     expect(bAttempt.json()).toMatchObject({ error: "project_not_found" });
   });
 });
+
+describe("generation cost owner isolation (S2-2A 任务 8)", () => {
+  it("user B cannot read cost summary / records / run configuration of user A's project", async () => {
+    const app = buildApp({ skipSnapshotLoad: true, storageBaseDir: process.cwd() });
+    const userA = createAuthenticatedAuthContext({ userId: "user-a", username: "a", displayName: "A", role: "USER", sessionId: "s-a" });
+    const userB = createAuthenticatedAuthContext({ userId: "user-b", username: "b", displayName: "B", role: "USER", sessionId: "s-b" });
+
+    const created = await app.inject({ method: "POST", url: "/api/projects", payload: { name: "A项目" }, auth: userA });
+    const projectId = created.json().project_id as string;
+
+    // 其他用户即使猜到 quote/run/snapshot/cost id 也只能得到 404
+    for (const url of [
+      `/api/projects/${projectId}/costs/summary`,
+      `/api/projects/${projectId}/costs/records`,
+      `/api/projects/${projectId}/runs/any-run-id/configuration`,
+    ]) {
+      const res = await app.inject({ method: "GET", url, auth: userB });
+      expect(res.statusCode).toBe(404);
+      expect(res.json()).toMatchObject({ error: "project_not_found" });
+    }
+
+    const quoteAttempt = await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectId}/generation-cost-quotes`,
+      payload: { operation: "topic.generate" },
+      auth: userB,
+    });
+    expect(quoteAttempt.statusCode).toBe(404);
+    expect(quoteAttempt.json()).toMatchObject({ error: "project_not_found" });
+  });
+
+  it("anonymous user cannot create quotes or read costs", async () => {
+    const app = buildApp({ skipSnapshotLoad: true, storageBaseDir: process.cwd() });
+    const userA = createAuthenticatedAuthContext({ userId: "user-a", username: "a", displayName: "A", role: "USER", sessionId: "s-a" });
+    const created = await app.inject({ method: "POST", url: "/api/projects", payload: { name: "A项目" }, auth: userA });
+    const projectId = created.json().project_id as string;
+
+    const quoteAttempt = await app.inject({
+      method: "POST",
+      url: `/api/projects/${projectId}/generation-cost-quotes`,
+      payload: { operation: "topic.generate" },
+    });
+    expect(quoteAttempt.statusCode).toBe(401);
+
+    const summary = await app.inject({ method: "GET", url: `/api/projects/${projectId}/costs/summary` });
+    expect(summary.statusCode).toBe(401);
+  });
+});

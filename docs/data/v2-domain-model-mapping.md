@@ -45,6 +45,7 @@
 | `generationRuns` | `GenerationRun` | 主表 | S2-2A 新增；`(projectId, operation, idempotencyKey)` 唯一，run/snapshot/quote 同项目一致性由 writer 事务级强校验 |
 | `generationRunEvents` | `GenerationRunEvent` | 主表（append-only） | S2-2A 新增；无 `updatedAt`，只追加 |
 | `usageCostRecords` | `UsageCostRecord` | 主表 | S2-2A 新增；`(runConfigurationSnapshotId, providerRequestKey, attemptIndex)` 唯一防重复记账 |
+| `auditLogs` | `AuditLog` | 主表（append-only） | S2-2A 新增内存镜像；Prisma 激活态由事务/thirdAggregateWriter 落库，legacy Map 态仅内存（不入 fixture 快照），预算超额授权审计与 quote 消费同事务 |
 
 `voiceProfilePersistence` 不是 Map，也不是领域数据；它是运行时文件持久化配置，不进入数据库。后续若允许用户创建音色，再以独立设计升级 `VoiceProfile` 为主表，不能机械复制当前 Map。
 

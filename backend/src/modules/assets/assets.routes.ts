@@ -17,6 +17,112 @@ import { probeVideoMetadata } from "../../http/video-probe.js";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { resolve, relative, isAbsolute, sep, extname } from "node:path";
 import { randomBytes } from "node:crypto";
+import { createOrRestoreGenerationRun } from "../generation-run/generation-run.service.js";
+import { resolveGenerationCostBootstrapInputFromEnv } from "../generation-cost/generation-cost-bootstrap.js";
+import type { GenerationQuoteSelection } from "../../../../shared/src/index.js";
+
+// --- S2-2A 任务 8：提交协议（cost_quote_id / authorize_budget_override / idempotency_key） ---
+
+type SubmitFieldsResult =
+  | { present: false }
+  | { present: true; invalid: boolean; fields?: { cost_quote_id: string; authorize_budget_override: boolean; idempotency_key: string } };
+
+function extractSubmitFields(payload: Record<string, unknown>): SubmitFieldsResult {
+  const hasQuote = typeof payload.cost_quote_id === "string" && payload.cost_quote_id.length > 0;
+  const hasKey = typeof payload.idempotency_key === "string" && payload.idempotency_key.length > 0;
+  if (!hasQuote && !hasKey) return { present: false };
+  if (!hasQuote || !hasKey) return { present: true, invalid: true };
+  return {
+    present: true,
+    invalid: false,
+    fields: {
+      cost_quote_id: payload.cost_quote_id as string,
+      authorize_budget_override: payload.authorize_budget_override === true,
+      idempotency_key: payload.idempotency_key as string,
+    },
+  };
+}
+
+/**
+ * GenerationRunService 统一创建/恢复 run（不新增公开 /generation-runs 路由）；
+ * 事务提交后立即由 dispatcher 派发。幂等重放返回既有 run 状态。
+ */
+async function submitGenerationRun(
+  context: RouteContext,
+  operation: "assets.generate",
+  selection: GenerationQuoteSelection,
+  dispatchPayload: Record<string, unknown>,
+): Promise<AppResponse> {
+  const submit = extractSubmitFields(context.payload as Record<string, unknown>);
+  if (!submit.present || submit.invalid || !submit.fields) {
+    return { statusCode: 400, body: { error: "generation_submit_fields_incomplete" } };
+  }
+  const fields = submit.fields;
+  const project = context.app.db.projects.get(context.params.projectId)!;
+  const actorUserId = context.auth.anonymous ? null : context.auth.userId;
+  const readinessInput =
+    context.app.generationQuoteReadinessInput ?? resolveGenerationCostBootstrapInputFromEnv();
+
+  const result = await createOrRestoreGenerationRun(
+    context.app.db,
+    project,
+    actorUserId ?? "system",
+    {
+      operation,
+      costQuoteId: fields.cost_quote_id,
+      authorizeBudgetOverride: fields.authorize_budget_override,
+      idempotencyKey: fields.idempotency_key,
+      selection,
+      runOverrides: undefined,
+      dispatchPayload,
+    },
+    {
+      readinessInput,
+      repository: context.app.generationRunRepository,
+    },
+  );
+  if (!result.ok) {
+    const statusCode = result.error.code === "generation_quote_not_found" ? 404 : 409;
+    return { statusCode, body: { error: result.error.code, message: result.error.message } };
+  }
+
+  const { run, created } = result.value;
+  if (created) {
+    const dispatchResult = await context.app.generationRunDispatcher.dispatch(run.id);
+    if (
+      dispatchResult.dispatched &&
+      dispatchResult.outcome.status !== "needs_reconciliation" &&
+      dispatchResult.outcome.response
+    ) {
+      // 透传 assets 流程响应，并附 run id 供客户端幂等关联（additive，不改原响应形状）
+      const body = dispatchResult.outcome.response.body;
+      const mergedBody =
+        typeof body === "object" && body !== null
+          ? { ...(body as Record<string, unknown>), generation_run_id: run.id }
+          : body;
+      return { statusCode: dispatchResult.outcome.response.statusCode, body: mergedBody };
+    }
+    if (dispatchResult.dispatched && dispatchResult.outcome.status === "failed") {
+      return {
+        statusCode: 500,
+        body: {
+          error: "generation_run_dispatch_failed",
+          reason_code: dispatchResult.outcome.reason_code,
+        },
+      };
+    }
+  }
+  // 幂等重放 / 进行中（lease 未到期不重复派发）：返回 run 状态
+  return {
+    statusCode: 200,
+    body: {
+      generation_run_id: run.id,
+      run_status: run.status,
+      idempotency_replayed: !created,
+      asset_manifest_record_id: project.activeAssetManifestRecordId ?? null,
+    },
+  };
+}
 
 function readOptionalNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
@@ -121,6 +227,30 @@ async function generateAssetsController(
     payload.execution_mode as string | undefined
       ?? "auto_available";
   const missingOnly = requestedMode === "missing_only";
+
+  // S2-2A 任务 8：提交协议（cost_quote_id / authorize_budget_override / idempotency_key）。
+  // 提供任一字段时走 GenerationRunService 事务创建/恢复 run；都不提供则保持旧路径。
+  // demo 视觉拦截与凭据拦截同样适用于提交路径（在事务创建前返回）。
+  const submitFields = extractSubmitFields(payload);
+  if (submitFields.present) {
+    if (submitFields.invalid) {
+      return {
+        statusCode: 400,
+        body: { error: "generation_submit_fields_incomplete", message: "cost_quote_id 与 idempotency_key 必须同时提供" },
+      };
+    }
+    const selection: GenerationQuoteSelection = {
+      mode: missingOnly ? "missing_only" : undefined,
+      task_ids: requestedTaskIds ?? [],
+    };
+    return submitGenerationRun(context, "assets.generate", selection, {
+      voice_profile_id: voiceProfileId,
+      execution_mode: executionMode,
+      enabled_provider_types: enabledProviderTypes ?? [],
+      mode: requestedMode ?? null,
+      task_ids: requestedTaskIds ?? [],
+    });
+  }
 
   // S2-2A 任务 6：provider 授权只来自后端 env/resolved 配置，
   // 客户端不得通过 provider_mode / dashscope api key / model 指定。
@@ -515,6 +645,24 @@ async function generateTaskController(
   if (credentialsBlock) return credentialsBlock;
   const voiceProfileId =
     (payload.voice_profile_id as string | undefined) ?? "voice_default_male_storyteller";
+
+  // S2-2A 任务 8：单任务生成同样接受提交协议（selection 只含该任务）。
+  const submitFields = extractSubmitFields(payload);
+  if (submitFields.present) {
+    if (submitFields.invalid) {
+      return {
+        statusCode: 400,
+        body: { error: "generation_submit_fields_incomplete", message: "cost_quote_id 与 idempotency_key 必须同时提供" },
+      };
+    }
+    return submitGenerationRun(context, "assets.generate", { task_ids: [taskId] }, {
+      voice_profile_id: voiceProfileId,
+      execution_mode: "auto_available",
+      enabled_provider_types: [],
+      mode: null,
+      task_ids: [taskId],
+    });
+  }
 
   return runAssetsGeneration({
     db: context.app.db,
