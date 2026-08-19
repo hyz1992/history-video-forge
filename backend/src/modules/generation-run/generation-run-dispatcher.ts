@@ -40,7 +40,10 @@ export interface GenerationRunDispatchHandler {
 
 export type DispatchResult =
   | { dispatched: true; outcome: DispatchOutcome }
-  | { dispatched: false; reason: "run_not_found" | "not_claimable" | "lease_held" };
+  | {
+      dispatched: false;
+      reason: "run_not_found" | "not_claimable" | "lease_held" | "project_context_unavailable";
+    };
 
 export interface GenerationRunDispatcher {
   /** 提交后立即派发：claim → handler → event → 终态。 */
@@ -63,6 +66,15 @@ export function createGenerationRunDispatcher(options: {
     const run = await options.repository.getRunById(runId);
     if (!run) return { dispatched: false, reason: "run_not_found" };
 
+    // 执行上下文检查在 claim 之前：跨进程 sweep（DB 权威）可能发现本进程镜像
+    // 中没有 project 上下文的 run（hydrate 仅启动执行）。此时必须跳过派发——
+    // 绝不能置终态 failed（那会永久误杀一个 quote 已消费的可恢复 run）；
+    // lease 到期后由持有该 project 上下文的实例接管。
+    const project = options.db.projects.get(run.projectId);
+    if (!project) {
+      return { dispatched: false, reason: "project_context_unavailable" };
+    }
+
     const now = nowFn();
     const leaseUntil = new Date(now.getTime() + options.leaseDurationMs);
     const claimed = await options.repository.claimRun(runId, options.workerId, leaseUntil, now);
@@ -75,7 +87,6 @@ export function createGenerationRunDispatcher(options: {
     }
 
     const claimedRun = (await options.repository.getRunById(runId))!;
-    const project = options.db.projects.get(claimedRun.projectId);
     const handler = options.handlers[claimedRun.operation];
 
     let outcome: DispatchOutcome;
@@ -84,12 +95,6 @@ export function createGenerationRunDispatcher(options: {
         status: "failed",
         reason_code: "dispatch_handler_missing",
         message: `no dispatch handler registered for operation ${claimedRun.operation}`,
-      };
-    } else if (!project) {
-      outcome = {
-        status: "failed",
-        reason_code: "project_not_found",
-        message: `project ${claimedRun.projectId} not found for run ${runId}`,
       };
     } else {
       // handler 执行期间周期性续期 lease（leaseDurationMs/2 间隔）：
@@ -180,6 +185,8 @@ export function createGenerationRunDispatcher(options: {
       const result = await dispatch(run.id);
       if (result.dispatched) claimed += 1;
     }
+    // project_context_unavailable：跳过（run 保持原状态，其他实例接管），
+    // 不影响其余候选的派发。
     return { claimed };
   }
 

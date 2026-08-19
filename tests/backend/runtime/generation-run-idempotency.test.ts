@@ -618,3 +618,32 @@ describe("cold-mirror cost records association (N4 fix)", () => {
     expect(record.actual_cost_cny).toBe("0.200000");
   });
 });
+
+describe("cross-process dispatch with cold project mirror (final review Important-1 fix)", () => {
+  it("skips dispatch without marking the run failed when the project context is not in the mirror", async () => {
+    const { client, db, project, quote, repository } = await createPrismaContext();
+    const submit = await createOrRestoreGenerationRun(
+      db, project, "u1", submitInput(quote.id, { idempotencyKey: "cold-project-1" }),
+      { readinessInput: buildQuotableReadinessInput(), repository },
+    );
+    if (!submit.ok) throw new Error("submit failed");
+    const runId = submit.value.run.id;
+
+    // 冷 project 镜像：sweep（DB 权威）发现 run，但本进程没有 project 上下文
+    db.projects.clear();
+    db.generationRuns.clear();
+
+    const calls = { submit: 0 };
+    const dispatcher = createGenerationRunDispatcher({
+      db, repository, workerId: "cold-project-worker", leaseDurationMs: 30_000,
+      handlers: { "assets.generate": async () => { calls.submit += 1; return { status: "succeeded" }; } },
+    });
+    const result = await dispatcher.scanAndDispatch();
+    expect(result.claimed).toBe(0);
+    expect(calls.submit).toBe(0);
+
+    // run 未被误杀：仍在数据库中保持 pending_dispatch（可被持有 project 上下文的实例接管）
+    const dbRun = await client.generationRun.findUnique({ where: { id: runId } });
+    expect(dbRun?.status).toBe("pending_dispatch");
+  });
+});
