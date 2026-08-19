@@ -115,6 +115,17 @@ describe("dry-run-record-check 核心函数", () => {
     expect(failures.some((f) => f.includes("C9-closed-stale"))).toBe(true);
   });
 
+  it("陈旧语序锚来自 FACTS 而非硬编码（C9，P2-3 回归）", () => {
+    const factsVariant = { ...DRY_RUN_FACTS, staleActiveTenseAnchors: ["另一种陈旧语序"] };
+    const mutated = minimalRecord(factsVariant) + "\n另一种陈旧语序";
+    const failures = checkRecordConsistency(mutated, factsVariant);
+    expect(failures.some((f) => f.includes("C9-closed-stale"))).toBe(true);
+    // 原锚在变体 facts 下不再触发（证明由 facts 驱动）。
+    const baseRecord = minimalRecord(factsVariant) + "\n候选 11 待终审";
+    const failuresBase = checkRecordConsistency(baseRecord, factsVariant);
+    expect(failuresBase.some((f) => f.includes("C9-closed-stale"))).toBe(false);
+  });
+
   it("待终审模式：active 候选存在时 C9 禁止无有效通过终审表述", () => {
     const openFacts = { ...DRY_RUN_FACTS, activeCandidate: 14, closed: false, maxCandidate: 14 };
     const record = minimalRecord(openFacts)
