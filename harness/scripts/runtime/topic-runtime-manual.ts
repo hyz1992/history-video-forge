@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { buildApp } from "../../../backend/src/app.js";
+import { createAuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 
 export interface TopicRuntimeManualRequest {
   canonical_name: string;
@@ -28,12 +29,20 @@ export async function runTopicRuntimeManual(
   input: RunTopicRuntimeManualInput,
 ): Promise<RunTopicRuntimeManualResult> {
   const app = buildApp();
+  const smokeAuth = createAuthenticatedAuthContext({
+    userId: "smoke-owner",
+    username: "smoke-owner",
+    displayName: "Smoke Owner",
+    role: "ADMIN",
+    sessionId: "smoke-session",
+  });
   const projectResponse = await app.inject({
     method: "POST",
     url: "/api/projects",
     payload: {
       name: `Topic Runtime Manual - ${input.request.canonical_name}`,
     },
+    auth: smokeAuth,
   });
   const projectId = projectResponse.json().project_id as string;
 
@@ -41,6 +50,7 @@ export async function runTopicRuntimeManual(
     method: "POST",
     url: `/api/projects/${projectId}/topic/recommendations`,
     payload: input.request,
+    auth: smokeAuth,
   });
   const recommendationBody = recommendationResponse.json();
 
