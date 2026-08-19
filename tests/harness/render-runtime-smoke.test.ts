@@ -23,6 +23,7 @@ describe("render runtime smoke harness", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     for (const tempDir of tempDirs.splice(0)) {
       rmSync(tempDir, { recursive: true, force: true });
     }
@@ -208,14 +209,14 @@ describe("render runtime smoke harness", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
+    // 服务端凭据由后端 env 提供（任务 6 合同）；此处 stub 服务端 env，
+    // runner 不向 API payload 携带任何凭据。
+    vi.stubEnv("ALIYUN_DASHSCOPE_API_KEY", "test-key");
+    vi.stubEnv("ALIYUN_DASHSCOPE_BASE_URL", "https://dashscope.test");
     await runRenderRuntimeSmoke({
       outputDir,
       ttsProvider: "dashscope_tts",
       ttsText: "Custom narration text.",
-      dashscope: {
-        apiKey: "test-key",
-        baseUrl: "https://dashscope.test",
-      },
     });
 
     const assetsResponse = JSON.parse(
