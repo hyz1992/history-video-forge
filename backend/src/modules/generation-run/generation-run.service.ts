@@ -236,11 +236,35 @@ export async function createOrRestoreGenerationRun(
       }
       return { ok: true, value: { run: existingRun, snapshot: restoredSnapshot, created: false } };
     }
-    if (transaction.error.code === "generation_quote_consumed") {
-      return { ok: false, error: { code: "generation_quote_consumed", message: "quote already consumed" } };
-    }
-    if (transaction.error.code === "generation_quote_expired") {
-      return { ok: false, error: { code: "generation_quote_expired", message: "quote expired; create a new quote" } };
+    if (
+      transaction.error.code === "generation_quote_consumed" ||
+      transaction.error.code === "generation_quote_expired"
+    ) {
+      // 并发同 key 提交的败者路径（Prisma read-committed：事务内 run 查询看不到
+      // 未提交的胜者，败者在 quote 行锁上中止）。胜者此时已提交——事务外回查
+      // run-by-key：同 fingerprint 幂等恢复同 run；否则才是真正的 quote 状态错误。
+      const winner = await deps.repository.getRunByKey(project.id, input.operation, input.idempotencyKey);
+      if (winner) {
+        if (winner.payloadFingerprint !== payloadFingerprint) {
+          return {
+            ok: false,
+            error: {
+              code: "generation_idempotency_payload_conflict",
+              message: "same idempotency key submitted with a different payload; use a new key for a new payload",
+            },
+          };
+        }
+        const winnerSnapshot = await deps.repository.getSnapshotById(winner.runConfigurationSnapshotId);
+        if (!winnerSnapshot) {
+          return { ok: false, error: { code: "generation_run_persistence_failed", message: "existing run snapshot missing" } };
+        }
+        return { ok: true, value: { run: winner, snapshot: winnerSnapshot, created: false } };
+      }
+      const message =
+        transaction.error.code === "generation_quote_consumed"
+          ? "quote already consumed"
+          : "quote expired; create a new quote";
+      return { ok: false, error: { code: transaction.error.code, message } };
     }
     return { ok: false, error: { code: "generation_run_persistence_failed", message: "run transaction failed" } };
   }

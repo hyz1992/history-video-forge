@@ -647,3 +647,116 @@ describe("cross-process dispatch with cold project mirror (final review Importan
     expect(dbRun?.status).toBe("pending_dispatch");
   });
 });
+
+describe("legacy in-flight runs are never taken over by sweep (final review C1 fix)", () => {
+  it("a running run with null lease (legacy in-flight) is not claimed by scan or dispatch", async () => {
+    const { client, db, project, quote, repository } = await createPrismaContext();
+    const submit = await createOrRestoreGenerationRun(
+      db, project, "u1", submitInput(quote.id, { idempotencyKey: "legacy-run-1" }),
+      { readinessInput: buildQuotableReadinessInput(), repository },
+    );
+    if (!submit.ok) throw new Error("submit failed");
+    const runId = submit.value.run.id;
+
+    // 模拟 legacy 在跑 run：running + 从未持有 lease（ensureAssetsGenerationRun 形状）
+    await client.generationRun.update({
+      where: { id: runId },
+      data: { status: "running", dispatchLeaseOwner: null, dispatchLeaseExpiresAt: null },
+    });
+    db.generationRuns.clear();
+    db.runConfigurationSnapshots.clear();
+
+    const calls = { submit: 0 };
+    const dispatcher = createGenerationRunDispatcher({
+      db, repository, workerId: "sweep-worker", leaseDurationMs: 30_000,
+      handlers: { "assets.generate": async () => { calls.submit += 1; return { status: "succeeded" }; } },
+    });
+    const scan = await dispatcher.scanAndDispatch();
+    expect(scan.claimed).toBe(0);
+    // 直接 dispatch 同样拒绝
+    const direct = await dispatcher.dispatch(runId);
+    expect(direct.dispatched).toBe(false);
+    expect(calls.submit).toBe(0);
+    // run 状态不被 sweep 改写（仍由原始执行者持有）
+    const dbRun = await client.generationRun.findUnique({ where: { id: runId } });
+    expect(dbRun?.status).toBe("running");
+    expect(dbRun?.dispatchClaimCount).toBe(0);
+  });
+
+  it("a running run whose lease expired IS taken over (claim semantics unchanged)", async () => {
+    const app = buildApp();
+    await seedQuotableCatalog(app);
+    const project = await prepareQuoteProject(app.db);
+    const repository = createGenerationRunRepository(app.db);
+    const quoteResult = await createGenerationCostQuote(
+      app.db, project, project.ownerId, { operation: "assets.generate" },
+      { readinessInput: buildQuotableReadinessInput() },
+    );
+    if (!quoteResult.ok) throw new Error("quote failed");
+    const submitResult = await createOrRestoreGenerationRun(
+      app.db, project, project.ownerId, submitInput(quoteResult.value.quote.id, { idempotencyKey: "expired-lease-1" }),
+      { readinessInput: buildQuotableReadinessInput(), repository },
+    );
+    if (!submitResult.ok) throw new Error("submit failed");
+    const run = submitResult.value.run;
+    // 已 claim 且 lease 过期的 running run 仍可接管
+    const expired: typeof run = {
+      ...run, status: "running", dispatchLeaseOwner: "dead-worker",
+      dispatchLeaseExpiresAt: new Date(Date.now() - 5000), dispatchClaimCount: 1,
+    };
+    app.db.generationRuns.set(run.id, expired);
+    const dispatcher = createGenerationRunDispatcher({
+      db: app.db, repository, workerId: "takeover-worker", leaseDurationMs: 30_000,
+      handlers: { "assets.generate": async () => ({ status: "succeeded" as const }) },
+    });
+    const result = await dispatcher.dispatch(run.id);
+    expect(result.dispatched).toBe(true);
+    expect(app.db.generationRuns.get(run.id)!.dispatchClaimCount).toBe(2);
+  });
+});
+
+describe("Prisma concurrent same-key loser recovers the winner run (final review I1 fix)", () => {
+  it("quote_consumed transaction abort re-queries run-by-key and restores the same run", async () => {
+    const app = buildApp();
+    await seedQuotableCatalog(app);
+    const project = await prepareQuoteProject(app.db);
+    const quoteResult = await createGenerationCostQuote(
+      app.db, project, project.ownerId, { operation: "assets.generate" },
+      { readinessInput: buildQuotableReadinessInput() },
+    );
+    if (!quoteResult.ok) throw new Error("quote failed");
+    const repository = createGenerationRunRepository(app.db);
+
+    // 胜者先行提交（同 key 同 payload）
+    const winner = await createOrRestoreGenerationRun(
+      app.db, project, project.ownerId, submitInput(quoteResult.value.quote.id, { idempotencyKey: "race-loser-1" }),
+      { readinessInput: buildQuotableReadinessInput(), repository },
+    );
+    if (!winner.ok) throw new Error("winner failed");
+
+    // 模拟败者（read-committed 时序）：事务开始时胜者尚未提交——quote 仍未消费
+    // （revalidate 通过）、run 不可见（预检查 miss）；事务内撞 quote 行锁，胜者提交后
+    // 条件消费失败中止（quote_consumed）；中止后回查能看到已提交的胜者 run。
+    const preCommitQuote = { ...quoteResult.value.quote, consumedAt: null };
+    let runByKeyCalls = 0;
+    const loserRepo = {
+      ...repository,
+      getQuoteById: async () => preCommitQuote,
+      getRunByKey: async () => {
+        runByKeyCalls += 1;
+        // 第一次（预检查）：胜者不可见；第二次（中止后回查）：胜者已提交
+        return runByKeyCalls === 1 ? null : winner.value.run;
+      },
+      createRunTransaction: () => Promise.resolve({ ok: false as const, error: { code: "generation_quote_consumed" as const } }),
+    };
+    const loser = await createOrRestoreGenerationRun(
+      app.db, project, project.ownerId, submitInput(quoteResult.value.quote.id, { idempotencyKey: "race-loser-1" }),
+      { readinessInput: buildQuotableReadinessInput(), repository: loserRepo },
+    );
+    // 败者经事务外回查恢复胜者 run（不再误报 quote_consumed）
+    expect(loser.ok).toBe(true);
+    if (!loser.ok) return;
+    expect(loser.value.created).toBe(false);
+    expect(loser.value.run.id).toBe(winner.value.run.id);
+  });
+});

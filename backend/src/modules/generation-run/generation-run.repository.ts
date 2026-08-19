@@ -191,13 +191,10 @@ function createMapRepository(db: DbClient): GenerationRunRepository {
       });
     },
     async claimRun(runId, workerId, leaseUntil, now) {
-      // 同步检查-设置：单线程内原子，等价于数据库条件更新。
+      // 同步检查-设置：单线程内原子，等价于数据库条件更新（同一恢复条件）。
       const run = db.generationRuns.get(runId);
       if (!run) return false;
-      if (run.status !== "pending_dispatch" && run.status !== "running") return false;
-      if (run.dispatchLeaseExpiresAt !== null && run.dispatchLeaseExpiresAt.getTime() >= now.getTime()) {
-        return false;
-      }
+      if (!isRecoverableRun(run, now)) return false;
       run.status = "running";
       run.dispatchLeaseOwner = workerId;
       run.dispatchLeaseExpiresAt = leaseUntil;
@@ -232,10 +229,7 @@ function createMapRepository(db: DbClient): GenerationRunRepository {
     async listRecoverableRuns(now) {
       const runs: GenerationRunRecord[] = [];
       for (const run of db.generationRuns.values()) {
-        if (run.status !== "pending_dispatch" && run.status !== "running") continue;
-        if (run.dispatchLeaseExpiresAt !== null && run.dispatchLeaseExpiresAt.getTime() >= now.getTime()) {
-          continue;
-        }
+        if (!isRecoverableRun(run, now)) continue;
         runs.push(run);
       }
       return runs;
@@ -261,6 +255,18 @@ function createMapRepository(db: DbClient): GenerationRunRepository {
   };
 }
 
+/** 与 Prisma recoverableRunWhere 同一恢复条件（Map 态）。 */
+function isRecoverableRun(run: GenerationRunRecord, now: Date): boolean {
+  if (run.status === "pending_dispatch") {
+    return run.dispatchLeaseExpiresAt === null || run.dispatchLeaseExpiresAt.getTime() < now.getTime();
+  }
+  if (run.status === "running") {
+    // running 必须 lease 非 null 且已过期；lease=null 是 legacy 在跑 run，禁止接管
+    return run.dispatchLeaseExpiresAt !== null && run.dispatchLeaseExpiresAt.getTime() < now.getTime();
+  }
+  return false;
+}
+
 function getRunByKeyMap(
   db: DbClient,
   projectId: string,
@@ -280,6 +286,22 @@ function getRunByKeyMap(
 }
 
 // --- Prisma 实现 ------------------------------------------------------------
+
+/**
+ * 可恢复 run 的权威条件（设计 4.7）：
+ * - pending_dispatch（从未派发，或 lease 已过期）：lease 可空或已过期；
+ * - running：必须 lease 非 null 且已过期（曾设置 lease 的 claim 过期接管）；
+ *   running + lease=null 是 legacy 在跑 run，不属于派发协议，禁止接管。
+ */
+function recoverableRunWhere(now: Date) {
+  return {
+    OR: [
+      { status: "pending_dispatch", dispatchLeaseExpiresAt: null },
+      { status: "pending_dispatch", dispatchLeaseExpiresAt: { lt: now } },
+      { status: "running", dispatchLeaseExpiresAt: { lt: now } },
+    ],
+  };
+}
 
 function toRunRecord(row: {
   id: string;
@@ -550,12 +572,9 @@ function createPrismaRepository(db: DbClient, client: AppPrismaClient): Generati
       return { ok: true as const, run: input.run };
     },
     async claimRun(runId, workerId, leaseUntil, now) {
+      // 与 listRecoverableRuns 同一恢复条件（claim 是最终原子裁决）
       const result = await client.generationRun.updateMany({
-        where: {
-          id: runId,
-          status: { in: ["pending_dispatch", "running"] },
-          OR: [{ dispatchLeaseExpiresAt: null }, { dispatchLeaseExpiresAt: { lt: now } }],
-        },
+        where: { id: runId, ...recoverableRunWhere(now) },
         data: {
           status: "running",
           dispatchLeaseOwner: workerId,
@@ -611,11 +630,10 @@ function createPrismaRepository(db: DbClient, client: AppPrismaClient): Generati
     async listRecoverableRuns(now) {
       // 数据库为权威：其他进程遗留的 pending/lease-expired run 不在本地镜像中，
       // 存活期 sweep 必须查 DB 才能接管（启动扫描有 hydrate 先行，低频 sweep 没有）。
+      // running + lease=null 是 legacy 在跑 run（不属派发协议，无 lease 可判过期），
+      // 绝不接管——否则 sweep 会与正在执行的原始请求并发重跑（重复执行/重复计费）。
       const rows = await client.generationRun.findMany({
-        where: {
-          status: { in: ["pending_dispatch", "running"] },
-          OR: [{ dispatchLeaseExpiresAt: null }, { dispatchLeaseExpiresAt: { lt: now } }],
-        },
+        where: recoverableRunWhere(now),
       });
       const runs = rows.map(toRunRecord);
       for (const run of runs) syncRunToMemory(db, run);
