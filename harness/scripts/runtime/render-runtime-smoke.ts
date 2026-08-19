@@ -318,6 +318,64 @@ function makeAssetPlan(input: {
   };
 }
 
+/** 内置 smoke bgm catalog（storage/media-library 生成态文件缺失时使用）。 */
+const SMOKE_BGM_CATALOG_FIXTURE: Array<{
+  item: {
+    library_item_id: string;
+    type: "bgm";
+    file_uri: string;
+    mime_type: string;
+    duration_sec: number;
+    loopable: boolean;
+    tags: string[];
+    mood_tags: string[];
+    license: {
+      license_type: "provider_generated";
+      commercial_use_allowed: boolean;
+      attribution_required: boolean;
+    };
+    file_hash: string;
+    imported_at: string;
+    approved_for_use: boolean;
+  };
+  volumeHint: number | null;
+}> = [
+  {
+    item: {
+      library_item_id: "bgm_hist_ancient_china_solemn_001",
+      type: "bgm",
+      file_uri: "fixtures/bgm-ancient-china-solemn.wav",
+      mime_type: "audio/wav",
+      duration_sec: 12,
+      loopable: true,
+      tags: ["background", "drone"],
+      mood_tags: ["tense", "dark"],
+      license: { license_type: "provider_generated", commercial_use_allowed: true, attribution_required: false },
+      file_hash: "smoke-fixture-solemn",
+      imported_at: "2026-08-19T00:00:00.000Z",
+      approved_for_use: true,
+    },
+    volumeHint: 0.16,
+  },
+  {
+    item: {
+      library_item_id: "bgm_hist_reflective_ending_001",
+      type: "bgm",
+      file_uri: "fixtures/bgm-reflective-ending.wav",
+      mime_type: "audio/wav",
+      duration_sec: 10,
+      loopable: true,
+      tags: ["background", "reflective"],
+      mood_tags: ["calm", "ending"],
+      license: { license_type: "provider_generated", commercial_use_allowed: true, attribution_required: false },
+      file_hash: "smoke-fixture-reflective",
+      imported_at: "2026-08-19T00:00:00.000Z",
+      approved_for_use: true,
+    },
+    volumeHint: 0.14,
+  },
+];
+
 async function seedSmokeMediaLibrary(
   app: ReturnType<typeof buildApp>,
   input: { bgmLibraryItemId?: string } = {},
@@ -332,10 +390,10 @@ async function seedSmokeMediaLibrary(
     volume: 0.25,
   };
 
-  if (existsSync(lightweightBgmCatalogPath)) {
-    const loadedBgmItems = await loadLightweightBgmCatalogItems(
-      lightweightBgmCatalogPath,
-    );
+  const loadedBgmItems = existsSync(lightweightBgmCatalogPath)
+    ? await loadLightweightBgmCatalogItems(lightweightBgmCatalogPath)
+    : SMOKE_BGM_CATALOG_FIXTURE;
+  if (loadedBgmItems.length > 0) {
     for (const entry of loadedBgmItems) {
       await saveMediaLibraryItem(app.db, entry.item);
     }
