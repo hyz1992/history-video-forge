@@ -210,6 +210,7 @@ describe("storyboard five round quality check", () => {
               linked_beats: draft.beat_trace.map((trace) => trace.beat),
               linked_quotes: draft.quote_trace.map((trace) => trace.quote),
               risk_notes: [],
+              api_video_suitability: "remotion_sufficient",
             },
           ],
           global_visual_notes: ["固定 script 输入，只观察 storyboard planning 稳定性。"],
@@ -320,6 +321,7 @@ describe("storyboard five round quality check", () => {
                 linked_beats: draft.beat_trace.map((trace) => trace.beat),
                 linked_quotes: draft.quote_trace.map((trace) => trace.quote),
                 risk_notes: [],
+                api_video_suitability: "remotion_sufficient",
               },
             ],
             global_visual_notes: [],
@@ -380,6 +382,7 @@ describe("storyboard five round quality check", () => {
                 linked_quotes:
                   callCount === 1 ? [] : draft.quote_trace.map((trace) => trace.quote),
                 risk_notes: [],
+                api_video_suitability: "remotion_sufficient",
               },
             ],
             global_visual_notes: [],

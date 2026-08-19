@@ -1,3 +1,4 @@
+import { createAuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -233,6 +234,15 @@ async function injectOrThrow(input: {
     method: input.method,
     url: input.url,
     payload: input.payload,
+    // S1-3 授权合同：POST /api/projects 等路由要求认证用户；harness 烟测
+    // 使用固定测试用户（与 tests/backend/api 惯例一致），非真实登录。
+    auth: createAuthenticatedAuthContext({
+      userId: "smoke-owner",
+      username: "smoke-owner",
+      displayName: "Smoke Owner",
+      role: "ADMIN",
+      sessionId: "smoke-session",
+    }),
   });
 
   if (response.statusCode >= 400) {

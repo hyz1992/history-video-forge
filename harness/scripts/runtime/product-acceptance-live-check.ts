@@ -1,3 +1,4 @@
+import { createAuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -263,31 +264,13 @@ export function buildProductAcceptanceAssetsPayload(input: {
   env: ProductAcceptanceEnv;
   dashscope?: ProductAcceptanceLiveCheckInput["dashscope"];
 }) {
-  const apiKey = input.dashscope?.apiKey ?? input.env.ALIYUN_DASHSCOPE_API_KEY;
-  if (!apiKey) {
-    throw new Error("product_acceptance_dashscope_api_key_missing");
-  }
-
+  // S2-2A 任务 6 合同：客户端不得携带 provider_mode / dashscope api_key；
+  // 真实 provider 授权只来自后端 env（服务端凭据由 readDashscopeConfig 解析）。
+  // dashscope 输入仅用于本地诊断与 live 链路的参数展示，不进入 API payload。
+  void input.dashscope;
   return {
     voice_profile_id: "voice_system_ethan",
     execution_mode: "auto_available",
-    provider_mode: "dashscope",
-    dashscope: {
-      api_key: apiKey,
-      base_url:
-        input.dashscope?.baseUrl ??
-        input.env.ALIYUN_DASHSCOPE_BASE_URL ??
-        "https://dashscope.aliyuncs.com",
-      image_model:
-        input.dashscope?.imageModel ??
-        input.env.ALIYUN_DASHSCOPE_TEXT_TO_IMAGE_MODEL ??
-        "wan2.6-t2i",
-      tts_model:
-        input.dashscope?.ttsModel ??
-        input.env.ALIYUN_DASHSCOPE_TTS_MODEL ??
-        "qwen3-tts-instruct-flash",
-      tts_format: "wav",
-    },
   };
 }
 
@@ -999,6 +982,15 @@ async function injectOrThrow(input: {
     method: input.method,
     url: input.url,
     payload: input.payload,
+    // S1-3 授权合同：POST /api/projects 等路由要求认证用户；harness 烟测
+    // 使用固定测试用户（与 tests/backend/api 惯例一致），非真实登录。
+    auth: createAuthenticatedAuthContext({
+      userId: "smoke-owner",
+      username: "smoke-owner",
+      displayName: "Smoke Owner",
+      role: "ADMIN",
+      sessionId: "smoke-session",
+    }),
   });
   const body = response.json() as Record<string, unknown>;
   if (response.statusCode >= 400) {

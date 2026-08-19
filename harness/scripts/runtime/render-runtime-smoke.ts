@@ -1,3 +1,4 @@
+import { createAuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -457,6 +458,15 @@ async function injectOrThrow(input: {
     method: input.method,
     url: input.url,
     payload: input.payload,
+    // S1-3 授权合同：POST /api/projects 等路由要求认证用户；harness 烟测
+    // 使用固定测试用户（与 tests/backend/api 惯例一致），非真实登录。
+    auth: createAuthenticatedAuthContext({
+      userId: "smoke-owner",
+      username: "smoke-owner",
+      displayName: "Smoke Owner",
+      role: "ADMIN",
+      sessionId: "smoke-session",
+    }),
   });
 
   if (response.statusCode >= 400) {
@@ -541,23 +551,14 @@ export async function runRenderRuntimeSmoke(
     method: "POST",
     url: `/api/projects/${projectId}/assets/generate`,
     payload: {
+      // S2-2A 任务 6 合同：客户端不得携带 provider_mode / dashscope api_key；
+      // 真实 provider 授权只来自后端 env（服务端凭据由 readDashscopeConfig 解析）。
+      // ttsProvider 仅影响选择的服务端 voice profile 与后续断言。
       voice_profile_id:
         input.ttsProvider === "dashscope_tts"
           ? "voice_system_ethan"
           : "voice_render_smoke",
       execution_mode: "auto_available",
-      ...(input.ttsProvider === "dashscope_tts"
-        ? {
-            provider_mode: "dashscope_tts",
-            dashscope: {
-              api_key: input.dashscope?.apiKey ?? env.ALIYUN_DASHSCOPE_API_KEY,
-              base_url:
-                input.dashscope?.baseUrl ?? env.ALIYUN_DASHSCOPE_BASE_URL,
-              tts_model:
-                input.dashscope?.ttsModel ?? env.ALIYUN_DASHSCOPE_TTS_MODEL,
-            },
-          }
-        : {}),
     },
   });
   writeJson(finalOutputDir, "assets-response.json", assetsBody);

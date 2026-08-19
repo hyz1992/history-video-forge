@@ -153,6 +153,7 @@ function writeFixedStoryboardSource(sourceDir: string, index: number) {
         linked_beats: ["public answer"],
         linked_quotes: [],
         risk_notes: [],
+        api_video_suitability: "remotion_sufficient",
       },
     ],
     global_visual_notes: [],

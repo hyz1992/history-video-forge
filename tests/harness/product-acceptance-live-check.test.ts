@@ -288,17 +288,11 @@ describe("product acceptance live-check harness", () => {
       },
     });
 
-    expect(payload).toMatchObject({
+    // S2-2A 任务 6 合同：payload 不得携带 provider_mode / dashscope 凭据；
+    // 真实 provider 授权只来自后端 env。此处仅断言公开字段。
+    expect(payload).toEqual({
       voice_profile_id: "voice_system_ethan",
       execution_mode: "auto_available",
-      provider_mode: "dashscope",
-      dashscope: {
-        api_key: "key",
-        base_url: "https://dashscope.test",
-        image_model: "wan2.6-t2i",
-        tts_model: "qwen3-tts-instruct-flash",
-        tts_format: "wav",
-      },
     });
   });
 
@@ -320,14 +314,9 @@ describe("product acceptance live-check harness", () => {
           ttsModel: "cli-tts",
         },
       }),
-    ).toMatchObject({
-      dashscope: {
-        api_key: "cli-key",
-        base_url: "https://cli-dashscope.test",
-        image_model: "cli-image",
-        tts_model: "cli-tts",
-        tts_format: "wav",
-      },
+    ).toEqual({
+      voice_profile_id: "voice_system_ethan",
+      execution_mode: "auto_available",
     });
   });
 
@@ -806,6 +795,7 @@ function makeStoryboardPlanFixture() {
         linked_beats: ["楚王设局"],
         linked_quotes: [],
         risk_notes: ["避免现代服饰和文字水印"],
+        api_video_suitability: "remotion_sufficient",
       },
     ],
     global_visual_notes: ["整体保持中国古代历史正剧质感"],
