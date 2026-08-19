@@ -15,20 +15,20 @@ const RECORD_PATH = resolve(process.cwd(), "docs/records/2026-08-18-review-proto
 
 /** 单一事实源：新增候选/授权/迭代时只改这里，脚本据此核验记录。 */
 const FACTS = {
-  maxCandidate: 12,
-  activeCandidate: 12,
+  maxCandidate: 13,
+  activeCandidate: 13,
   /** 形成失败（formation_failed）的候选编号。 */
-  formationFailed: [2, 3, 4, 5, 6, 8, 9, 10, 11],
+  formationFailed: [2, 3, 4, 5, 6, 8, 9, 10, 11, 12],
   /** 经 final 判失败的候选。 */
   finalFailed: [1],
   /** 经 final 通过但结论被后续事件失效的候选。 */
   finalPassedInvalidated: [7],
-  authorizations: 5,
+  authorizations: 6,
   finalsExecuted: 2,
-  r6Events: 11,
+  r6Events: 12,
   /** 轮 4 的迭代总数。 */
-  iterations: 8,
-  /** R6-10/R6-11 对象是否已全部修复（修复后记录不得残留"留有已知瑕疵"表述）。 */
+  iterations: 9,
+  /** R6-10/R6-11/R6-12 对象是否已全部修复（修复后记录不得残留"留有已知瑕疵"表述）。 */
   knownDefectsFixed: true,
 };
 
@@ -151,7 +151,23 @@ if (FACTS.knownDefectsFixed) {
     "knownDefectsFixed=true 但记录仍残留留有已知瑕疵/留档不再修复陈旧表述");
 }
 
-// C9：终止性表述不再宣称“终局/无有效终审”（候选 11 存在时）。
+// C11：自由文本 R6 计数锚定——活文档中"R6 N次拦截 / N次复发 / N次发生在"类
+// 计数表述必须与 FACTS.r6Events 及同模式复发次数一致（R6-12 盲区补丁）。
+const SAME_PATTERN_RECURRENCES = 8;
+for (const match of liveContent.matchAll(/R6 ([一二三四五六七八九十\d]+)次拦截/g)) {
+  const stated = /^\d+$/.test(match[1]!) ? Number(match[1]!) : parseChineseNumber(match[1]!);
+  check("C11-r6-freetext", stated === FACTS.r6Events, `自由文本"R6 ${match[1]}次拦截" ≠ 事实 ${FACTS.r6Events}`);
+}
+for (const match of liveContent.matchAll(/同模式([一二三四五六七八九十\d]+)次复发/g)) {
+  const stated = /^\d+$/.test(match[1]!) ? Number(match[1]!) : parseChineseNumber(match[1]!);
+  check("C11-recurrence-freetext", stated === SAME_PATTERN_RECURRENCES, `自由文本"同模式${match[1]}次复发" ≠ 事实 ${SAME_PATTERN_RECURRENCES}`);
+}
+for (const match of liveContent.matchAll(/([一二三四五六七八九十\d]+)次发生在(?:不变量|grep 不变量|不变量\/脚本)/g)) {
+  const stated = /^\d+$/.test(match[1]!) ? Number(match[1]!) : parseChineseNumber(match[1]!);
+  check("C11-post-invariant-freetext", stated === 5, `自由文本"${match[1]}次发生在不变量" ≠ 事实 5`);
+}
+
+// C9：终止性表述不再宣称“终局/无有效终审”（存在待终审候选时）。
 if (FACTS.activeCandidate === FACTS.maxCandidate) {
   check("C9-terminal-claim", !content.includes("无有效通过终审"),
     FACTS.activeCandidate + " 待终审，不得残留“无有效通过终审”终局表述");
