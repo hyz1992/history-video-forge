@@ -416,8 +416,10 @@ describe("generation run cross-process idempotency (Prisma DB as authority, fina
     expect(first.ok).toBe(true);
     if (!first.ok) return;
 
-    // 模拟另一进程提交后本进程内存镜像未同步：清空本地镜像
+    // 模拟另一进程提交后本进程内存镜像未同步：清空本地镜像（run 与 snapshot 都清，
+    // 覆盖冷镜像进程场景——重放路径的快照查找必须同样走 DB）
     db.generationRuns.clear();
+    db.runConfigurationSnapshots.clear();
     const replay = await createOrRestoreGenerationRun(
       db, project, "u1", submitInput(quote.id, { idempotencyKey: "cross-proc-key-1" }),
       { readinessInput: buildQuotableReadinessInput(), repository },
@@ -461,5 +463,58 @@ describe("generation run cross-process idempotency (Prisma DB as authority, fina
     const dbRun = await client.generationRun.findUnique({ where: { id: runId } });
     expect(dbRun?.status).toBe("succeeded");
     expect(dbRun?.dispatchClaimCount).toBe(1);
+  });
+});
+
+describe("generation run Prisma-mode sweep scans the database (final review fixes)", () => {
+  it("takes over a pending run created by another process (cold in-memory mirror)", async () => {
+    const { client, db, project, quote, repository } = await createPrismaContext();
+    const submit = await createOrRestoreGenerationRun(
+      db, project, "u1", submitInput(quote.id, { idempotencyKey: "db-scan-key-1" }),
+      { readinessInput: buildQuotableReadinessInput(), repository },
+    );
+    if (!submit.ok) throw new Error("submit failed");
+    const runId = submit.value.run.id;
+
+    // 冷镜像：本进程没有任何 run/snapshot 镜像（另一进程创建的）
+    db.generationRuns.clear();
+    db.runConfigurationSnapshots.clear();
+
+    const calls = { submit: 0 };
+    const dispatcher = createGenerationRunDispatcher({
+      db, repository, workerId: "db-scan-worker", leaseDurationMs: 30_000,
+      handlers: { "assets.generate": async () => { calls.submit += 1; return { status: "succeeded" }; } },
+    });
+    // 低频 sweep 的显式 tick：从 DB 扫描 pending run 并接管
+    const result = await dispatcher.scanAndDispatch();
+    expect(result.claimed).toBe(1);
+    expect(calls.submit).toBe(1);
+    const dbRun = await client.generationRun.findUnique({ where: { id: runId } });
+    expect(dbRun?.status).toBe("succeeded");
+  });
+
+  it("Prisma-mode sweep skips needs_reconciliation runs from the database", async () => {
+    const { client, db, project, quote, repository } = await createPrismaContext();
+    const submit = await createOrRestoreGenerationRun(
+      db, project, "u1", submitInput(quote.id, { idempotencyKey: "db-scan-key-2" }),
+      { readinessInput: buildQuotableReadinessInput(), repository },
+    );
+    if (!submit.ok) throw new Error("submit failed");
+    const runId = submit.value.run.id;
+    // 直接置为 needs_reconciliation 并清镜像
+    await client.generationRun.update({ where: { id: runId }, data: { status: "needs_reconciliation" } });
+    db.generationRuns.clear();
+    db.runConfigurationSnapshots.clear();
+
+    const calls = { submit: 0 };
+    const dispatcher = createGenerationRunDispatcher({
+      db, repository, workerId: "db-scan-worker", leaseDurationMs: 30_000,
+      handlers: { "assets.generate": async () => { calls.submit += 1; return { status: "succeeded" }; } },
+    });
+    const result = await dispatcher.scanAndDispatch();
+    expect(result.claimed).toBe(0);
+    expect(calls.submit).toBe(0);
+    const dbRun = await client.generationRun.findUnique({ where: { id: runId } });
+    expect(dbRun?.status).toBe("needs_reconciliation");
   });
 });

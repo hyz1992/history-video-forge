@@ -174,7 +174,7 @@ export function createGenerationRunDispatcher(options: {
   }
 
   async function scanAndDispatch(): Promise<{ claimed: number }> {
-    const runs = options.repository.listRecoverableRuns(nowFn());
+    const runs = await options.repository.listRecoverableRuns(nowFn());
     let claimed = 0;
     for (const run of runs) {
       const result = await dispatch(run.id);

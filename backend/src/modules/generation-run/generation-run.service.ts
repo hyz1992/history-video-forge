@@ -14,10 +14,7 @@ import {
   type ResolvedGenerationConfigurationV1,
 } from "../../../../shared/src/index.js";
 import type { QuoteReadinessInput } from "../generation-cost/generation-cost.service.js";
-import {
-  findQuoteById,
-  findSnapshotById,
-} from "../generation-cost/generation-cost.repository.js";
+import { findQuoteById } from "../generation-cost/generation-cost.repository.js";
 import {
   revalidateQuoteForCommit,
   type RevalidateQuoteResult,
@@ -133,7 +130,8 @@ export async function createOrRestoreGenerationRun(
         },
       };
     }
-    const snapshot = findSnapshotById(db, project.id, existing.runConfigurationSnapshotId);
+    // 快照随 run 一次从权威源加载（Prisma 态为 DB，Map 态为内存）
+    const snapshot = await deps.repository.getSnapshotById(existing.runConfigurationSnapshotId);
     if (!snapshot) {
       return { ok: false, error: { code: "generation_run_persistence_failed", message: "existing run snapshot missing" } };
     }
@@ -230,7 +228,7 @@ export async function createOrRestoreGenerationRun(
           },
         };
       }
-      const restoredSnapshot = findSnapshotById(db, project.id, existingRun.runConfigurationSnapshotId);
+      const restoredSnapshot = await deps.repository.getSnapshotById(existingRun.runConfigurationSnapshotId);
       if (!restoredSnapshot) {
         return { ok: false, error: { code: "generation_run_persistence_failed", message: "existing run snapshot missing" } };
       }

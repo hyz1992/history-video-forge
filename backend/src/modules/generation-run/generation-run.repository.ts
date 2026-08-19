@@ -73,8 +73,13 @@ export interface GenerationRunRepository {
     options: { releaseLease: boolean; now: Date },
   ): Promise<GenerationRunRecord | null>;
   appendRunEvent(record: GenerationRunEventRecord): Promise<void>;
+  /**
+   * 按 snapshotId 读取（服务端恢复路径专用：重放/冲突恢复需随 run 一次加载快照）。
+   * 用户面读取仍以 projectId 为入口（generation-cost.repository）。
+   */
+  getSnapshotById(snapshotId: string): Promise<RunConfigurationSnapshotRecord | null>;
   /** 可恢复运行：pending_dispatch 或 lease 已过期；永远排除 needs_reconciliation。 */
-  listRecoverableRuns(now: Date): GenerationRunRecord[];
+  listRecoverableRuns(now: Date): Promise<GenerationRunRecord[]>;
   getRunById(runId: string): Promise<GenerationRunRecord | null>;
   getRunByKey(
     projectId: string,
@@ -206,7 +211,7 @@ function createMapRepository(db: DbClient): GenerationRunRepository {
       events.push(record);
       db.generationRunEvents.set(record.generationRunId, events);
     },
-    listRecoverableRuns(now) {
+    async listRecoverableRuns(now) {
       const runs: GenerationRunRecord[] = [];
       for (const run of db.generationRuns.values()) {
         if (run.status !== "pending_dispatch" && run.status !== "running") continue;
@@ -217,13 +222,15 @@ function createMapRepository(db: DbClient): GenerationRunRepository {
       }
       return runs;
     },
-    // 数据库为权威：另一进程/worker 提交或 claim 后本地内存镜像可能未同步，
-    // 幂等重放与 dispatcher 恢复必须查 DB（跨进程正确性）。
+    // legacy Map 态：内存即存储（无数据库），镜像不会"未同步"。
     async getRunById(runId) {
       return db.generationRuns.get(runId) ?? null;
     },
     async getRunByKey(projectId, operation, idempotencyKey) {
       return getRunByKeyMap(db, projectId, operation, idempotencyKey);
+    },
+    async getSnapshotById(snapshotId) {
+      return db.runConfigurationSnapshots.get(snapshotId) ?? null;
     },
     listRunsByProject(projectId) {
       return listRunsByProject(db, projectId);
@@ -289,6 +296,54 @@ function toRunRecord(row: {
 
 function syncRunToMemory(db: DbClient, run: GenerationRunRecord): void {
   db.generationRuns.set(run.id, run);
+}
+
+function toSnapshotRecord(row: {
+  id: string;
+  projectId: string;
+  userId: string | null;
+  stage: string;
+  operation: string;
+  runId: string | null;
+  projectConfigurationRevision: number;
+  schemaVersion: string;
+  configurationHash: string;
+  resolvedConfigurationJson: unknown;
+  resolutionTraceJson: unknown;
+  quoteId: string | null;
+  quoteFingerprint: string | null;
+  estimatedCostMicros: string | null;
+  authorizationCostMicros: string | null;
+  budgetLimitMicros: string | null;
+  budgetOverrideAuthorized: boolean;
+  pricingHash: string | null;
+  pricingVersionSetJson: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+}): RunConfigurationSnapshotRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    userId: row.userId,
+    stage: row.stage,
+    operation: row.operation,
+    runId: row.runId,
+    projectConfigurationRevision: row.projectConfigurationRevision,
+    schemaVersion: row.schemaVersion,
+    configurationHash: row.configurationHash,
+    resolvedConfigurationJson: row.resolvedConfigurationJson as Record<string, unknown>,
+    resolutionTraceJson: row.resolutionTraceJson as unknown[],
+    quoteId: row.quoteId,
+    quoteFingerprint: row.quoteFingerprint,
+    estimatedCostMicros: row.estimatedCostMicros,
+    authorizationCostMicros: row.authorizationCostMicros,
+    budgetLimitMicros: row.budgetLimitMicros,
+    budgetOverrideAuthorized: row.budgetOverrideAuthorized,
+    pricingHash: row.pricingHash,
+    pricingVersionSetJson: row.pricingVersionSetJson as string[],
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
 }
 
 class RunConflictAbort extends Error {
@@ -488,15 +543,17 @@ function createPrismaRepository(db: DbClient, client: AppPrismaClient): Generati
       events.push(record);
       db.generationRunEvents.set(record.generationRunId, events);
     },
-    listRecoverableRuns(now) {
-      const runs: GenerationRunRecord[] = [];
-      for (const run of db.generationRuns.values()) {
-        if (run.status !== "pending_dispatch" && run.status !== "running") continue;
-        if (run.dispatchLeaseExpiresAt !== null && run.dispatchLeaseExpiresAt.getTime() >= now.getTime()) {
-          continue;
-        }
-        runs.push(run);
-      }
+    async listRecoverableRuns(now) {
+      // 数据库为权威：其他进程遗留的 pending/lease-expired run 不在本地镜像中，
+      // 存活期 sweep 必须查 DB 才能接管（启动扫描有 hydrate 先行，低频 sweep 没有）。
+      const rows = await client.generationRun.findMany({
+        where: {
+          status: { in: ["pending_dispatch", "running"] },
+          OR: [{ dispatchLeaseExpiresAt: null }, { dispatchLeaseExpiresAt: { lt: now } }],
+        },
+      });
+      const runs = rows.map(toRunRecord);
+      for (const run of runs) syncRunToMemory(db, run);
       return runs;
     },
     // 数据库为权威：另一进程/worker 提交或 claim 后本地内存镜像可能未同步，
@@ -518,6 +575,13 @@ function createPrismaRepository(db: DbClient, client: AppPrismaClient): Generati
       const run = toRunRecord(row);
       syncRunToMemory(db, run);
       return run;
+    },
+    async getSnapshotById(snapshotId) {
+      const row = await client.runConfigurationSnapshot.findUnique({ where: { id: snapshotId } });
+      if (!row) return null;
+      const snapshot = toSnapshotRecord(row);
+      db.runConfigurationSnapshots.set(snapshot.id, snapshot);
+      return snapshot;
     },
     listRunsByProject(projectId) {
       return listRunsByProject(db, projectId);
