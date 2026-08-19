@@ -16,9 +16,10 @@ const RECORD_PATH = resolve(process.cwd(), "docs/records/2026-08-18-review-proto
 /** 单一事实源：新增候选/授权/迭代时只改这里，脚本据此核验记录。 */
 const FACTS = {
   maxCandidate: 13,
-  activeCandidate: 13,
+  /** dry-run 已收尾终局（无待终审候选）时为 null。 */
+  activeCandidate: null,
   /** 形成失败（formation_failed）的候选编号。 */
-  formationFailed: [2, 3, 4, 5, 6, 8, 9, 10, 11, 12],
+  formationFailed: [2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13],
   /** 经 final 判失败的候选。 */
   finalFailed: [1],
   /** 经 final 通过但结论被后续事件失效的候选。 */
@@ -26,10 +27,12 @@ const FACTS = {
   authorizations: 6,
   finalsExecuted: 2,
   r6Events: 12,
-  /** 轮 4 的迭代总数。 */
-  iterations: 9,
+  /** 轮 4 的迭代总数（含收尾落盘迭代十）。 */
+  iterations: 10,
   /** R6-10/R6-11/R6-12 对象是否已全部修复（修复后记录不得残留"留有已知瑕疵"表述）。 */
   knownDefectsFixed: true,
+  /** dry-run 是否已收尾终局。 */
+  closed: true,
 };
 
 const CHINESE_DIGITS: Record<string, number> = {
@@ -139,14 +142,20 @@ for (const n of FACTS.finalPassedInvalidated) {
     `候选 ${n} 行缺失或未标“终审通过 + R6-7 失效”`);
 }
 
-// C8-active：当前候选必须有表格行且带待终审标记。
-const activeRow = content.split("\n").find((line) => line.startsWith(`| 候选 ${FACTS.activeCandidate}（`));
-check("C8-active-row", activeRow !== undefined, `候选 ${FACTS.activeCandidate}（当前候选）表格行缺失`);
-check("C8-active-marker", activeRow !== undefined && (activeRow.includes("见终审结论") || activeRow.includes("待终审")),
-  `候选 ${FACTS.activeCandidate} 行缺少待终审标记`);
+// C8-active：待终审候选必须有表格行且带待终审标记；closed 终局时检查收尾标记。
+if (FACTS.activeCandidate !== null) {
+  const activeRow = content.split("\n").find((line) => line.startsWith(`| 候选 ${FACTS.activeCandidate}（`));
+  check("C8-active-row", activeRow !== undefined, `候选 ${FACTS.activeCandidate}（当前候选）表格行缺失`);
+  check("C8-active-marker", activeRow !== undefined && (activeRow.includes("见终审结论") || activeRow.includes("待终审")),
+    `候选 ${FACTS.activeCandidate} 行缺少待终审标记`);
+} else {
+  check("C8-closed-marker", liveContent.includes("接受现状收尾"),
+    "closed=true 但记录缺少收尾终局标记（接受现状收尾）");
+}
 
-// C10：已知缺陷修复状态表述一致（修复后禁止残留"留有已知瑕疵"类陈旧声明）。
-if (FACTS.knownDefectsFixed) {
+// C10：已知缺陷修复状态表述一致。仅约束待终审状态（closed 终局时 R6-13/14 等
+// 新留档对象合法使用"留档不再修复"表述）。
+if (FACTS.knownDefectsFixed && !FACTS.closed) {
   check("C10-known-defects", !liveContent.includes("留有已知瑕疵") && !liveContent.includes("留档不再修复"),
     "knownDefectsFixed=true 但记录仍残留留有已知瑕疵/留档不再修复陈旧表述");
 }
@@ -167,10 +176,14 @@ for (const match of liveContent.matchAll(/([一二三四五六七八九十\d]+)�
   check("C11-post-invariant-freetext", stated === 5, `自由文本"${match[1]}次发生在不变量" ≠ 事实 5`);
 }
 
-// C9：终止性表述不再宣称“终局/无有效终审”（存在待终审候选时）。
-if (FACTS.activeCandidate === FACTS.maxCandidate) {
+// C9：待终审候选存在时禁"无有效通过终审"；closed 终局时禁残留待终审活引用。
+if (FACTS.activeCandidate !== null) {
   check("C9-terminal-claim", !content.includes("无有效通过终审"),
     FACTS.activeCandidate + " 待终审，不得残留“无有效通过终审”终局表述");
+} else {
+  // 注意：裸词"待终审"可作为模式名被合法引用（如 C2 盲区清单），只锚定完整陈旧语序。
+  check("C9-closed-stale", !liveContent.includes("终审为当前待执行的有效终审") && !liveContent.includes("候选 11 待终审"),
+    "closed=true 但活文档仍残留待终审活引用");
 }
 
 // 输出。
