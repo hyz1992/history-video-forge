@@ -237,8 +237,18 @@ export async function recordProviderJobUsage(
  * 累计费用超授权上界 → append-only pricing_overrun run event + catalog 禁用。
  * 只追加事件与禁用目录，绝不改写 quote/snapshot（授权是不可变历史）。
  */
+export interface OverrunCheckInput {
+  db: DbClient;
+  snapshot: RunConfigurationSnapshotRecord;
+  runId: string;
+  capability: string;
+  providerKey: string;
+  modelId: string;
+}
+
+/** 累计费用超授权上界 → append-only pricing_overrun + catalog 禁用（媒体/LLM 共用）。 */
 async function checkAndHandleOverrun(
-  input: RecordProviderJobUsageInput,
+  input: OverrunCheckInput,
   current: UsageCostRecordRecord,
 ): Promise<boolean> {
   const { snapshot } = input;
@@ -456,6 +466,21 @@ export async function recordLlmUsage(
     await db.thirdAggregateWriter.saveUsageCostRecord(record);
   }
   db.usageCostRecords.set(record.id, record);
+
+  // S2-2A 任务 9B（final 审查 I-1）：LLM 记账同样纳入 overrun 语义——
+  // snapshot 累计（actual ?? estimated）超授权上界时追加 pricing_overrun
+  // 事件并禁用对应目录项（与媒体同款；估算模式累计超界同样触发，保护方向）
+  await checkAndHandleOverrun(
+    {
+      db,
+      snapshot,
+      runId: input.runId,
+      capability: input.capability,
+      providerKey: input.providerKey,
+      modelId: input.modelId,
+    },
+    record,
+  );
 
   return { record, actualCostState };
 }

@@ -372,6 +372,130 @@ async function submitScriptViaApi(
       }
     }
   });
+
+  it("LLM token 确认费用超授权上界时追加 pricing_overrun 并禁用目录项（final I-1 锁定）", async () => {
+    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    await seedQuotableCatalog(app);
+    // 给 llm.smart 目录行加价（Map 态）：token 记账才有非零费用
+    for (const entry of app.db.providerModelCatalog.values()) {
+      if (entry.capability === "llm.smart") {
+        entry.pricingJson = {
+          unit_type: "token",
+          input_price_micros_per_million_tokens: "1000000",
+          output_price_micros_per_million_tokens: "2000000",
+        };
+      }
+    }
+    const project = await prepareScriptProject(app);
+    mockPaidScriptProvider(true);
+
+    const { response, quoteId } = await submitScriptViaApi(app, project, "9b-overrun-1");
+    expect(response.statusCode).toBe(200);
+
+    // 把该 run 的快照授权上界压到极小（Map 态直接改对象），再手动触发一次
+    // handler 执行（测试内直调，绕过 dispatcher 的终态拦截）——记账必然超界
+    const run = [...app.db.generationRuns.values()][0]!;
+    const snapshot = app.db.runConfigurationSnapshots.get(run.runConfigurationSnapshotId)!;
+    snapshot.authorizationCostMicros = "1";
+
+    const { createScriptDispatchHandler } = await import("../../../backend/src/modules/generation-run/llm-dispatch-handlers.js");
+    const handler = createScriptDispatchHandler();
+    const outcome = await handler(run, { db: app.db, project });
+    expect(outcome.status).toBe("succeeded");
+
+    const overrunEvents: Array<{ eventType: string; eventJson: Record<string, unknown> }> = [];
+    for (const events of app.db.generationRunEvents.values()) {
+      for (const event of events) {
+        if (event.eventType === "pricing_overrun") overrunEvents.push(event as never);
+      }
+    }
+    expect(overrunEvents.length).toBeGreaterThanOrEqual(1);
+    expect(overrunEvents[0]!.eventJson).toMatchObject({ capability: "llm.smart" });
+    // 对应目录项被禁用
+    const smartEntries = [...app.db.providerModelCatalog.values()].filter(
+      (entry) => entry.capability === "llm.smart",
+    );
+    expect(smartEntries.length).toBeGreaterThan(0);
+    expect(smartEntries.every((entry) => entry.status === "disabled")).toBe(true);
+    void quoteId;
+  });
+
+  it("topic.generate 提交正链路：seed 重建 + 候选入库 + token 记账（final I-2 锁定）", async () => {
+    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    await seedQuotableCatalog(app);
+    const project = await createProject(app.db, { name: "9B topic flow", ownerId: "owner-1" });
+
+    const topicCandidate = {
+      event_identity: "晏子使楚",
+      title: "晏子使楚",
+      one_line_angle: "当场顶回压场",
+      family_label: "外交压场型",
+      scope_label: "单事件",
+      estimated_duration_band: "medium",
+      why_this_now: "近期未出现同 event_id",
+      core_conflict: "楚王当众压场，晏子必须当场顶回。",
+      strong_scene: "楚王连续压场，晏子一句句顶回去。",
+      must_cover_preview: ["楚王连续压场，晏子一句句顶回去。"],
+      risk_hints: [],
+      source_hint: "《晏子春秋》",
+      recent_usage_hint: "近期未出现同 event_id",
+      viral_rubric: { hook_power: "high", novelty_gap: "high", emotion_gap: "high", share_impulse: "high", visual_promise: "high" },
+    };
+    invokeStructuredPromptMock.mockReset();
+    writeInteractionEntryMock.mockReset();
+    invokeStructuredPromptMock.mockImplementation(async (request: {
+      operationName?: string;
+      interactionLogWriter?: { write(entry: unknown): unknown };
+    }) => {
+      await request.interactionLogWriter?.write(makeInteractionEntry({
+        operationName: request.operationName,
+        responseMetadata: { promptTokens: 500, completionTokens: 300, finishReason: "stop" },
+      }));
+      if (request.operationName === "topic.selector") {
+        return { ranked_candidates: [{ candidate_id: "c1", quality_rank: 1, quality_score: 95, deductions: [], risk_summary: "ok" }] };
+      }
+      return [topicCandidate];
+    });
+
+    // quote(topic.generate) → 提交
+    const quoteRes = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/generation-cost-quotes`,
+      payload: { operation: "topic.generate" },
+      auth,
+    });
+    expect(quoteRes.statusCode).toBe(200);
+    const quote = quoteRes.json() as { quote_id: string };
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/topic/recommendations`,
+      payload: {
+        canonical_name: "晏子使楚",
+        summary: "楚王在公开场合连续压场，晏子当场顶回去。",
+        core_conflict: "楚王当众压场，晏子必须当场顶回。",
+        strong_scene: "楚王连续压场，晏子一句句顶回去。",
+        source_hint: "《晏子春秋》",
+        recent_usage_hint: "近期未出现同 event_id",
+        tags: ["diplomacy"],
+        cost_quote_id: quote.quote_id,
+        idempotency_key: "9b-topic-1",
+      },
+      auth,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { candidates: Array<{ candidate_id: string }> };
+    expect(body.candidates.length).toBeGreaterThanOrEqual(1);
+
+    // run succeeded；store 候选入库
+    const run = [...app.db.generationRuns.values()][0]!;
+    expect(run.status).toBe("succeeded");
+    expect(app.topicCandidateStore.get(project.id)?.candidatesById.size ?? 0).toBeGreaterThanOrEqual(1);
+    // 记账：topic 链（builder+selector 等）的 llm.smart usage，interactionId 以 topic_run_ 为前缀
+    const usages = [...app.db.usageCostRecords.values()];
+    expect(usages.length).toBeGreaterThanOrEqual(1);
+    expect(usages.every((u) => u.capability === "llm.smart")).toBe(true);
+    expect(usages.every((u) => u.interactionId.startsWith("topic_run_"))).toBe(true);
+  });
 });
 
 describe("五入口付费闸门覆盖（diff/contract 审查 I-2 锁定）", () => {
