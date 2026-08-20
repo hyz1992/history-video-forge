@@ -620,3 +620,74 @@ describe("paid_generation_quote_required on the single-task endpoint (验收 7 �
     expect((response.json() as Record<string, unknown>).error).toBe("paid_generation_quote_required");
   });
 });
+
+describe("publish cover generate media gate (9A 遗留同族收口)", () => {
+  /** Map 态项目 + 活动 publish package（含封面提示词，满足直连前置条件）。 */
+  async function prepareProjectWithPublishPackage(
+    app: ReturnType<typeof buildApp>,
+    name: string,
+  ): Promise<ProjectRecord> {
+    const project = await createProject(app.db, { name, ownerId: "owner-1" });
+    const now = new Date();
+    app.db.publishPackageRecords.set("pub_cover_gate", {
+      id: "pub_cover_gate",
+      projectId: project.id,
+      renderJobRecordId: "rj_cover_gate",
+      topicPackageId: TOPIC_PACKAGE_ID,
+      scriptRecordId: SCRIPT_RECORD_ID,
+      storyboardRecordId: STORYBOARD_RECORD_ID,
+      assetManifestRecordId: "am_cover_gate",
+      packageJson: { cover_prompt_draft: "战国宫廷场景，竖屏封面" },
+      validationResultJson: null,
+      executionStateJson: null,
+      createdAt: now,
+      updatedAt: now,
+    } as never);
+    project.activePublishPackageRecordId = "pub_cover_gate";
+    return project;
+  }
+
+  it("付费部署下 cover/generate 返回 paid_generation_quote_required，DashScope fetch 零调用", async () => {
+    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    await seedCatalog(app);
+    const auth = buildTestAuth({ userId: "owner-1" });
+    const project = await prepareProjectWithPublishPackage(app, "cover gate paid");
+
+    injectDashscopeEnv();
+    const fetchMock = stubDashscopeFetch();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/publish/cover/generate`,
+      payload: {},
+      auth,
+    });
+
+    // 收口目标：付费部署（凭据 + active 媒体目录）下不得静默直连 DashScope
+    expect(response.statusCode).toBe(409);
+    expect((response.json() as Record<string, unknown>).error).toBe("paid_generation_quote_required");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("无付费媒体部署（无凭据）保留原 stub/本地行为：501 dashscope_not_configured", async () => {
+    const app = buildApp();
+    const auth = buildTestAuth({ userId: "owner-1" });
+    const project = await prepareProjectWithPublishPackage(app, "cover gate local");
+
+    // 显式清空凭据 + fetch 拒绝外呼：本地路径必须保持确定性
+    vi.stubEnv("ALIYUN_DASHSCOPE_API_KEY", "");
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new Error("no external fetch allowed in local-only cover path");
+    }));
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/publish/cover/generate`,
+      payload: {},
+      auth,
+    });
+
+    expect(response.statusCode).toBe(501);
+    expect((response.json() as Record<string, unknown>).error).toBe("dashscope_not_configured");
+  });
+});

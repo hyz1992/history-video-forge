@@ -3,7 +3,7 @@ import { env } from "../../config/env";
 import { saveAssetManifestRecord } from "../assets/asset-manifest-record.repository";
 import { getProjectSnapshot } from "../projects/project-snapshot.service";
 import { runPublishGeneration } from "./publish-run.service";
-import { isPaidLlmDispatchPossible } from "../generation-cost/provider-dispatch-gate.js";
+import { isPaidLlmDispatchPossible, isPaidMediaDispatchPossible } from "../generation-cost/provider-dispatch-gate.js";
 import { extractSubmitFields, submitGenerationRun } from "../generation-run/submit-protocol.js";
 import {
   buildCoverPromptContext,
@@ -376,6 +376,20 @@ export async function coverGenerateController(
   const project = db.projects.get(projectId);
   if (!project) {
     return { statusCode: 404, body: { error: "project_not_found" } };
+  }
+
+  // S2-2A 任务 9A 遗留收口：cover/generate 直连 DashScope 媒体生成，未接入
+  // quote 提交协议（辅助入口，与 9B 辅助 LLM 入口同语义）。付费部署下必须
+  // 封口，不静默创建无限预算授权；stub/本地部署（无凭据/无 active 媒体目录）
+  // 保留原路径（无凭据时 501 dashscope_not_configured）。
+  if (isPaidMediaDispatchPossible(db)) {
+    return {
+      statusCode: 409,
+      body: {
+        error: "paid_generation_quote_required",
+        message: "当前部署可调用付费媒体 provider：封面生成暂未接入付费提交模式，请手动上传封面图",
+      },
+    };
   }
 
   if (!project.activePublishPackageRecordId) {
