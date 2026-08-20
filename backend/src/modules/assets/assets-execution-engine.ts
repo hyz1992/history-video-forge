@@ -399,7 +399,7 @@ async function recordPaidUsage(
     measuredUnits,
     providerUsage: null,
     durationMs: Date.now() - startedAtMs,
-  }).catch((error) => {
+  }).catch(async (error) => {
     // 记账失败不阻断执行主链路；显式留痕（生产态成本台账缺口可审计），
     // 不能静默吞掉——账本缺口由对账工具（needs_reconciliation 族）兜底
     const event: import("../../db/client.js").GenerationRunEventRecord = {
@@ -414,6 +414,13 @@ async function recordPaidUsage(
       },
       createdAt: new Date(),
     };
+    // 与既有事件持久化约定一致：先 writer 后 Map（writer 自身失败也容错，
+    // 审计留痕尽力而为，不阻断执行主链路）
+    if (db.thirdAggregateWriter) {
+      await db.thirdAggregateWriter
+        .appendGenerationRunEvent(event)
+        .catch(() => undefined);
+    }
     const events = db.generationRunEvents.get(assetRunId) ?? [];
     events.push(event);
     db.generationRunEvents.set(assetRunId, events);

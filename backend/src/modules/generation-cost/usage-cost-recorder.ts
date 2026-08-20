@@ -256,16 +256,24 @@ async function checkAndHandleOverrun(
   }
   if (total <= bound) return false;
 
-  // 8.4 语义为一次性动作：同 (run, capability) 已追加过 pricing_overrun 则不再
-  // 重复追加（同一 attempt 的 running 轮询 + completed 回执重放只应触发一次）；
-  // catalog 禁用幂等（已禁用条目 no-op）。
+  // 8.4 语义为一次性动作：同 (run, capability, providerKey, modelId) 已追加过
+  // pricing_overrun 则不再重复追加（同一 attempt 的 running 轮询 + completed
+  // 回执重放只应触发一次）；不同模型的超界仍各自追加事件并禁用对应目录项
+  // （M-7 细化：去重键含 providerKey/modelId，完整符合 8.4"把对应 catalog 项
+  // 标记为不适合自动新运行"）。catalog 禁用幂等（已禁用条目 no-op）。
   const existingEvents = input.db.generationRunEvents.get(input.runId) ?? [];
-  const alreadyFlagged = existingEvents.some(
-    (event) =>
-      event.eventType === "pricing_overrun" &&
-      (event.eventJson as Record<string, unknown>)["capability"] === input.capability,
-  );
+  const alreadyFlagged = existingEvents.some((event) => {
+    if (event.eventType !== "pricing_overrun") return false;
+    const payload = event.eventJson as Record<string, unknown>;
+    return (
+      payload["capability"] === input.capability &&
+      payload["provider_key"] === input.providerKey &&
+      payload["model_id"] === input.modelId
+    );
+  });
   if (alreadyFlagged) return true;
+  // 注：去重基于本实例内存镜像事件——跨实例边界（另一进程已追加落库、本实例
+  // 镜像未刷新）仍可能重复追加，属分布式最终一致性残余（M-b 标注，可接受）；
 
   const event: GenerationRunEventRecord = {
     id: input.db.generateId(),
