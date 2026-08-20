@@ -25,8 +25,9 @@ import { OPERATION_TOKEN_ESTIMATES } from "./generation-cost.service.js";
  *   计量（estimate basis + actualCostState=estimated_after_execution）。
  *   绝不把本地估算标成 provider_usage/provider_invoice（验收 8）。
  * - overrun：本 snapshot 累计实际/估算费用超过 authorizationCostMicros 时追加
- *   append-only `pricing_overrun` run event，并把对应 catalog item 置 disabled
- *   （不适合自动新运行，待管理员复核价格）；已消费 quote 不被改写（验收 5）。
+ *   append-only `pricing_overrun` run event；媒体路径（价格异常）同时把对应
+ *   catalog item 置 disabled（待管理员复核价格），LLM 路径（数量累计常规）
+ *   只留事件不禁用（I-3）；已消费 quote 不被改写（验收 5）。
  * - 金额一律十进制微元字符串；失败/未完成请求保留 estimated，actual 为 null。
  */
 
@@ -368,9 +369,10 @@ export interface RecordLlmUsageOutcome {
  *   （costBasis=provider_usage，input/output units=实际 token）；
  * - 无 token → actual=null、costBasis=estimate（估算按 operation 级 token 估算），
  *   绝不伪造实际 token。
- * 注：LLM 路径不触发 pricing_overrun（token 计价即精确费用，且估算模式按
- * interaction 累计可达授权数倍属设计取舍）；目录项缺失时保留 null actual +
- * estimate basis（不标 provider_usage 零价，避免静默少计费误导）。
+ * - snapshot 累计（actual ?? estimated）超授权上界时追加 pricing_overrun 事件
+ *   （final I-1：与媒体同款累计口径）；I-3：LLM 路径不禁用目录（授权是单次
+ *   调用 budget，run 内多 interaction 累计超界属常规数量累计）。
+ * - 目录项缺失时保留 null actual + estimate basis（不标 provider_usage 零价）。
  */
 export async function recordLlmUsage(
   input: RecordLlmUsageInput,
@@ -477,9 +479,10 @@ export async function recordLlmUsage(
   }
   db.usageCostRecords.set(record.id, record);
 
-  // S2-2A 任务 9B（final 审查 I-1）：LLM 记账同样纳入 overrun 语义——
+  // S2-2A 任务 9B（final 审查 I-1/I-3）：LLM 记账同样纳入 overrun 语义——
   // snapshot 累计（actual ?? estimated）超授权上界时追加 pricing_overrun
-  // 事件并禁用对应目录项（与媒体同款；估算模式累计超界同样触发，保护方向）
+  // 事件（估算模式累计超界同样触发，保护方向）；I-3：不禁用目录
+  // （授权是单次调用 budget，run 内多 interaction 累计超界属常规数量累计）
   await checkAndHandleOverrun(
     {
       db,
