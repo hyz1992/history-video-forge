@@ -472,6 +472,12 @@ LLM typed intent 仍负责视觉/SFX/BGM 语义，不负责配置优先级。loc
 
 `enabled_provider_types`（任务 8 终审 F5 收口）：仅 `assets.generate` 可携带，取值域与执行端同一 provider 类型枚举（tts/image/video/sfx/bgm）。未提供 = 执行端默认全开；空数组 = 全部禁用（quote 不含任何媒体计价项）。计价 workload 按该过滤收缩——授权上界不得包含执行时会被过滤掉的任务；提交必须重放同一过滤，否则按 quote 内容指纹漂移拒绝。
 
+任务 9B 补充合同（LLM 接入，2026-08-20）：
+- 付费闸门：五个 LLM 主生成入口（topic/script/storyboard/asset-plan/publish）接受 cost_quote_id / authorize_budget_override / idempotency_key 并复用 GenerationRunService（dispatcher handler 同步执行）；非 stub provider 部署下无 quote 提交返回 409 paid_generation_quote_required；stub/local 保留免 quote 本地路径。辅助 LLM 入口（storyboard segment-regen 走提交协议；topic from-custom/from-library、publish cover-prompt-optimize/title-candidates、assets prompt-optimize/upgrade-video）付费部署下 409 封口（暂未接入提交执行，登记已知限制）。
+- token 记账：usage 记录键 (snapshot, llm:<runId>:<operationName>, attemptIndex)；interactionId = <模块runId>:<operationName>:<attemptIndex>（与 interaction log 目录锚点一致，可反查）；provider 返回 token → provider_usage actual + input/output units；缺失 → null actual + estimate basis（不伪造）。
+- overrun 语义（final I-1/I-3）：LLM 记账同样按 snapshot 累计（actual ?? estimated）超授权上界追加 pricing_overrun 事件；但 LLM 路径不禁用目录（授权是单次调用 budget，run 内多 interaction 累计超界属常规数量累计）——媒体路径（价格异常）保持禁用。
+- 执行绑定延续：LLM handler 的计费上下文（resolved 快照 + plan/storyboard 身份）与 9A I-A 同源。
+
 任务 9A 补充合同（步骤 1-3 落地，2026-08-20）：
 - 付费闸门：真实付费媒体 adapter 声明 billing 身份（capability/providerKey/modelId）；引擎仅在有效 quote 绑定 run/snapshot 上下文派发，否则任务失败并记录 `paid_generation_quote_required` 原因（本地/fake adapter 不受限）。付费部署（凭据 + active 媒体目录）下旧无 quote 生成 API 返回 `409 paid_generation_quote_required`，不静默创建无限预算授权；demo/test 纯本地路径保留。
 - 执行绑定授权身份（I-A 收口）：提交把授权解析的 plan/storyboard 身份写入 run dispatch payload；执行端按绑定身份取 plan/storyboard、按快照策略与路线收敛（快照未授权 api_video 的段其 video_clip execution 置跳过）。绑定 run 无绑定 plan（纯 LLM 报价）时执行返回 `409 generation_quote_plan_binding_missing`，不回退活动指针。
