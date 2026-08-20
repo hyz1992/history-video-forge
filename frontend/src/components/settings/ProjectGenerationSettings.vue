@@ -112,11 +112,14 @@ async function save() {
     video: { strategy: draft.strategy, api_quality: draft.apiQuality },
     budgetMicros: draft.budgetMicros,
   });
-  if (!result.ok && !result.conflict) {
-    saveError.value = "保存失败，请稍后重试。";
+  if (!result.ok) {
+    if (!result.conflict) {
+      saveError.value = "保存失败，请稍后重试。";
+    }
+    // 409 冲突：保留对话框，让用户看到"配置已被其他会话更新"告警与重载后的值
     return;
   }
-  // 保存成功（含 409 冲突已由 store 重载）后关闭对话框
+  // 保存成功：表单已同步服务器值，关闭对话框
   emit("close");
 }
 </script>

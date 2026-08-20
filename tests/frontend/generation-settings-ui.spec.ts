@@ -376,4 +376,37 @@ describe("ProjectGenerationSettings（项目设置）", () => {
     expect(html).not.toContain("credential");
     expect(html).not.toContain("ALIYUN_");
   });
+
+  it("轮2 Minor-4：409 冲突时保留对话框（不关闭），冲突告警可见", async () => {
+    const store = createMockStore();
+    store.saveProjectConfig = vi.fn(async () => {
+      // 模拟真实 store：409 时置 conflict 标记（告警由 configState.conflict 驱动）
+      const slice = store.state.projectConfigs["proj-1"] as { conflict: boolean };
+      slice.conflict = true;
+      return { ok: false, conflict: true };
+    });
+    const wrapper = mountProjectSettings(store);
+    await flushPromises();
+
+    await wrapper.find('[data-testid="project-strategy-prefer_api_video"]').setValue();
+    await wrapper.find('[data-testid="save-project-config"]').trigger("click");
+    await flushPromises();
+
+    // 冲突：对话框未关闭（保存按钮仍存在），冲突告警渲染
+    expect(wrapper.find('[data-testid="save-project-config"]').exists()).toBe(true);
+    expect(wrapper.find(".el-alert").exists()).toBe(true);
+  });
+
+  it("保存成功后关闭对话框（emit close）", async () => {
+    const store = createMockStore();
+    store.saveProjectConfig = vi.fn(async () => ({ ok: true }));
+    const wrapper = mountProjectSettings(store);
+    await flushPromises();
+
+    await wrapper.find('[data-testid="project-strategy-prefer_api_video"]').setValue();
+    await wrapper.find('[data-testid="save-project-config"]').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.emitted("close")).toBeTruthy();
+  });
 });
