@@ -669,6 +669,29 @@ describe("publish cover generate media gate (9A 遗留同族收口)", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("终审 I-1 对抗：凭据存在但目录无 active 媒体行（区域未知/被禁用/内存态）仍 409 零外呼", async () => {
+    // 不 seedCatalog：目录为空（bootstrap 未运行的内存态）。
+    // 闸门不变量（R2）：封口条件必须覆盖外呼条件——凭据存在即本端点可
+    // 真实外呼，不得因目录状态放行直连。
+    const app = buildApp();
+    const auth = buildTestAuth({ userId: "owner-1" });
+    const project = await prepareProjectWithPublishPackage(app, "cover gate i1");
+
+    injectDashscopeEnv();
+    const fetchMock = stubDashscopeFetch();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/publish/cover/generate`,
+      payload: {},
+      auth,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect((response.json() as Record<string, unknown>).error).toBe("paid_generation_quote_required");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("无付费媒体部署（无凭据）保留原 stub/本地行为：501 dashscope_not_configured", async () => {
     const app = buildApp();
     const auth = buildTestAuth({ userId: "owner-1" });

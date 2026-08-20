@@ -380,9 +380,14 @@ export async function coverGenerateController(
 
   // S2-2A 任务 9A 遗留收口：cover/generate 直连 DashScope 媒体生成，未接入
   // quote 提交协议（辅助入口，与 9B 辅助 LLM 入口同语义）。付费部署下必须
-  // 封口，不静默创建无限预算授权；stub/本地部署（无凭据/无 active 媒体目录）
-  // 保留原路径（无凭据时 501 dashscope_not_configured）。
-  if (isPaidMediaDispatchPossible(db)) {
+  // 封口，不静默创建无限预算授权；stub/本地部署（无凭据）保留原路径
+  // （无凭据时 501 dashscope_not_configured）。
+  // 闸门与外呼条件同源（终审 I-1）：本端点外呼唯一前提是凭据存在——直连
+  // 路径没有 9A 主链路的 adapter 注册层二道防线，目录无 active 媒体行时
+  // （区域未知/行被禁用/内存态）isPaidMediaDispatchPossible 会放行而凭据
+  // 仍可真实外呼。因此凭据存在即封口（fail-closed），目录条件仅作并集。
+  const dashscopeApiKeyForGate = process.env.ALIYUN_DASHSCOPE_API_KEY || "";
+  if (isPaidMediaDispatchPossible(db) || dashscopeApiKeyForGate) {
     return {
       statusCode: 409,
       body: {
