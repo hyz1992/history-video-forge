@@ -15,14 +15,19 @@
 
 ## 当前阶段状态
 
-截至 2026-08-11：
+截至 2026-08-20：
+
+- `S2-2A`（配置与成本基础：用户/项目生成配置、provider 目录与后端报价、幂等付费运行、媒体/LLM 付费闸门与费用账本、设置 UI、报价确认/严格 fallback/成本明细、文档收口与 e2e/浏览器验收）已全部完成并通过 T2 终审；任务审查记录见 `docs/records/2026-08-20-s2-2a-task*.md`，设计/实施入口见 `docs/plans/README.md`。
+- 紧接后续：`S2-2B` 创作偏好 -> `S2-2C` Provider/Model 高级选择（每棒单独设计、实施、验证）。
+
+截至 2026-08-11（历史状态）：
 
 - V2 第一个大子项目 S1（用户系统、管理员权限与项目隔离）已完成全部 8 个子任务并通过端到端验收。
 - V2 S1 覆盖：Auth 基础设施（S1-1）、Admin Bootstrap CLI（S1-2）、Controller 授权与 owner 隔离（S1-3）、File routes owner 隔离（S1-4）、Admin 只读 API（S1-5a）、Admin 写操作 API（S1-5b）、后端 login/logout/me 与前端 auth（S1-6）、管理前端（S1-7）、migration owner 转换与 S1 收口验收（S1-8）。
 - migration owner（不可登录标记 `!migration-owner-no-login`）的项目可通过 admin 管理页面转移给真实 USER；转移后 USER 可正常登录并使用项目，其他用户不可访问。
 - V2 S1 收口验收测试见 `tests/backend/s1-e2e-acceptance.test.ts`（19 个用例全部通过）。
 - V2 S1 真实浏览器验收入口见 `npm run harness:s1-browser-acceptance`：覆盖匿名/admin 路由守卫、migration owner 不可登录、admin 项目转移、代管横幅、审计日志、转移后 USER 可见、其他 USER 隔离和 USER 访问管理后台拦截。基础登录浏览器验收入口见 `npm run harness:auth-flow-acceptance`。
-- `S2-0` LLM 回复速度、质量和结构化输出优化基线与 `S2-1` 多模型、多供应商切换均已完成并收口。当前下一产品任务是补齐前端 v1 六步工作区真实浏览器验收矩阵；完成验收并收口发现的问题后，再评估 `S2-2`。
+- `S2-0` LLM 回复速度、质量和结构化输出优化基线与 `S2-1` 多模型、多供应商切换均已完成并收口（历史记录；S2-2A 已完成，见上）。
 - V1 高风险稳定化已完成主要止血任务。
 - V2 数据基础 Task 8.5 已完成收口：测试矩阵、schema 复核、迁移状态机、readiness、仓储访问边界、SQLite 备份恢复、Prisma 业务切换与 JSON 写入冻结。
 - 2026-07-12 分组全量矩阵覆盖 197 个测试文件、1068 个用例并全部通过；前后端构建、SQLite 备份恢复、Prisma 重启恢复和内置浏览器深链验收通过。
