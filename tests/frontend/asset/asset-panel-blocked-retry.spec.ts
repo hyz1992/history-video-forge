@@ -290,6 +290,11 @@ describe("asset panel blocked retry", () => {
 
   it("does not show retry button for non-failed tasks", async () => {
     const router = await createRouterAt("/projects/project-retry-failed/asset");
+    costStoreState = reactive({
+      lastQuote: null,
+      costSummary: { data: null, loading: false, error: null },
+      costRecords: { data: null, loading: false, error: null },
+    });
     const assetsState = reactive({
       snapshot: {
         current_status: "assets_blocked",
@@ -575,6 +580,258 @@ describe("asset panel blocked retry", () => {
 
     // 非本地错误码：不提交、不回退
     expect(generateSingleTask).not.toHaveBeenCalled();
+
+    wrapper.unmount();
+  });
+
+  it("F-1a：提交失败后重开对话框，重试复用同一 quote 与同一 idempotency key", async () => {
+    const router = await createRouterAt("/projects/project-retry-failed/asset");
+    const failureNote = "provider call failed";
+    const assetsState = reactive({
+      snapshot: {
+        current_status: "assets_blocked",
+        active_assets: activeAssetsWithFailedTts(failureNote),
+      },
+      isLoading: false,
+      isGenerating: false,
+      isUploading: null,
+      generatingTaskId: null,
+      generatingTaskIds: new Set<string>(),
+      loadError: null,
+    });
+    let submitCount = 0;
+    const generateSingleTask = vi.fn(async () => {
+      submitCount++;
+      if (submitCount === 1) {
+        throw new Error("network_error");
+      }
+      await pendingPromise();
+    });
+    costStoreState = reactive({
+      lastQuote: null,
+      costSummary: { data: null, loading: false, error: null },
+      costRecords: { data: null, loading: false, error: null },
+    });
+
+    const wrapper = mount(AssetPanel, {
+      global: {
+        plugins: [router, ElementPlus],
+        stubs: { SegmentAssetCard: true },
+        provide: {
+          [projectStoreKey as symbol]: createProjectStoreStub() as never,
+          [workspaceStoreKey as symbol]: createWorkspaceStoreStub() as never,
+          [scriptStoreKey as symbol]: createScriptStoreStub() as never,
+          [storyboardStoreKey as symbol]: {
+            state: reactive({
+              snapshot: { current_status: "storyboard_ready", active_storyboard: { plan: { segments: [] } } },
+              isLoading: false,
+              isGenerating: false,
+              loadError: null,
+            }),
+            async loadActiveStoryboardSnapshot() {},
+          } as never,
+          [assetPlanningStoreKey as symbol]: {
+            state: reactive({
+              snapshot: {
+                current_status: "asset_plan_ready",
+                active_asset_plan: activeAssetPlanWithTts(),
+                active_asset_plan_record_id: "plan-ready",
+              },
+              isLoading: false,
+              isGenerating: false,
+              loadError: null,
+            }),
+            async loadActiveAssetPlanSnapshot() {},
+            async retryLoad() {},
+            generateAssetPlan: pendingPromise,
+          } as never,
+          [assetsStoreKey as symbol]: {
+            state: assetsState,
+            async loadProject() {},
+            generateAssets: pendingPromise,
+            generateSingleTask,
+            upgradeSegmentToVideo: pendingPromise,
+            uploadArtifact: pendingPromise,
+            acceptArtifact: pendingPromise,
+            artifactFileUrl: () => "",
+          } as never,
+          [generationCostStoreKey as symbol]: {
+            state: costStoreState,
+            createQuote: vi.fn(async () => {
+              const value = {
+                quote: {
+                  quote_id: "quote_retry_1",
+                  operation: "assets.generate",
+                  expires_at: "2099-01-01T00:00:00.000Z",
+                  configuration_hash: "fnv1a64:test",
+                  pricing_versions: ["test"],
+                  items: [],
+                  estimated_cost_cny: "0.000000",
+                  authorization_cost_cny: "0.000000",
+                  contains_unbounded_item: false,
+                  budget_limit_cny: null,
+                  over_budget: false,
+                  requires_budget_override: false,
+                },
+                idempotencyKey: "key_retry_1",
+              };
+              costStoreState.lastQuote = value;
+              return { ok: true, value };
+            }),
+            loadCostSummary: vi.fn(async () => undefined),
+            loadCostRecords: vi.fn(async () => undefined),
+          } as never,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    // 第一次：取 quote → 确认 → 提交失败（网络）
+    await wrapper.find(".asset-blocked-chip-retry").trigger("click");
+    await flushPromises();
+    await wrapper.find('[data-testid="quote-confirm"]').trigger("click");
+    await flushPromises();
+
+    // 失败后对话框重开（同一 quote），再次确认 → 同一 quote 同一 key 重提交
+    expect(generateSingleTask).toHaveBeenCalledTimes(1);
+    const confirmAgain = wrapper.find('[data-testid="quote-confirm"]');
+    expect(confirmAgain.exists()).toBe(true);
+    await confirmAgain.trigger("click");
+    await flushPromises();
+
+    expect(generateSingleTask).toHaveBeenCalledTimes(2);
+    expect(generateSingleTask).toHaveBeenNthCalledWith(2, "tts_001", {
+      quoteId: "quote_retry_1",
+      idempotencyKey: "key_retry_1",
+      authorizeBudgetOverride: false,
+    });
+
+    wrapper.unmount();
+  });
+
+  it("F-1b：quote 过期后确认不提交旧 quote，重新报价（新 quote 新 key）", async () => {
+    const router = await createRouterAt("/projects/project-retry-failed/asset");
+    const failureNote = "provider call failed";
+    const assetsState = reactive({
+      snapshot: {
+        current_status: "assets_blocked",
+        active_assets: activeAssetsWithFailedTts(failureNote),
+      },
+      isLoading: false,
+      isGenerating: false,
+      isUploading: null,
+      generatingTaskId: null,
+      generatingTaskIds: new Set<string>(),
+      loadError: null,
+    });
+    const generateSingleTask = vi.fn(async () => {
+      await pendingPromise();
+    });
+    costStoreState = reactive({
+      lastQuote: null,
+      costSummary: { data: null, loading: false, error: null },
+      costRecords: { data: null, loading: false, error: null },
+    });
+    const createQuote = vi.fn(async () => {
+      const isFirst = costStoreState.lastQuote === null;
+      const value = {
+        quote: {
+          quote_id: isFirst ? "quote_expired_1" : "quote_fresh_2",
+          operation: "assets.generate",
+          expires_at: isFirst ? "2020-01-01T00:00:00.000Z" : "2099-01-01T00:00:00.000Z",
+          configuration_hash: "fnv1a64:test",
+          pricing_versions: ["test"],
+          items: [],
+          estimated_cost_cny: "0.000000",
+          authorization_cost_cny: "0.000000",
+          contains_unbounded_item: false,
+          budget_limit_cny: null,
+          over_budget: false,
+          requires_budget_override: false,
+        },
+        idempotencyKey: isFirst ? "key_expired_1" : "key_fresh_2",
+      };
+      costStoreState.lastQuote = value;
+      return { ok: true, value };
+    });
+
+    const wrapper = mount(AssetPanel, {
+      global: {
+        plugins: [router, ElementPlus],
+        stubs: { SegmentAssetCard: true },
+        provide: {
+          [projectStoreKey as symbol]: createProjectStoreStub() as never,
+          [workspaceStoreKey as symbol]: createWorkspaceStoreStub() as never,
+          [scriptStoreKey as symbol]: createScriptStoreStub() as never,
+          [storyboardStoreKey as symbol]: {
+            state: reactive({
+              snapshot: { current_status: "storyboard_ready", active_storyboard: { plan: { segments: [] } } },
+              isLoading: false,
+              isGenerating: false,
+              loadError: null,
+            }),
+            async loadActiveStoryboardSnapshot() {},
+          } as never,
+          [assetPlanningStoreKey as symbol]: {
+            state: reactive({
+              snapshot: {
+                current_status: "asset_plan_ready",
+                active_asset_plan: activeAssetPlanWithTts(),
+                active_asset_plan_record_id: "plan-ready",
+              },
+              isLoading: false,
+              isGenerating: false,
+              loadError: null,
+            }),
+            async loadActiveAssetPlanSnapshot() {},
+            async retryLoad() {},
+            generateAssetPlan: pendingPromise,
+          } as never,
+          [assetsStoreKey as symbol]: {
+            state: assetsState,
+            async loadProject() {},
+            generateAssets: pendingPromise,
+            generateSingleTask,
+            upgradeSegmentToVideo: pendingPromise,
+            uploadArtifact: pendingPromise,
+            acceptArtifact: pendingPromise,
+            artifactFileUrl: () => "",
+          } as never,
+          [generationCostStoreKey as symbol]: {
+            state: costStoreState,
+            createQuote,
+            loadCostSummary: vi.fn(async () => undefined),
+            loadCostRecords: vi.fn(async () => undefined),
+          } as never,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    // 触发单任务生成 → 取到过期 quote → 对话框显示
+    await wrapper.find(".asset-blocked-chip-retry").trigger("click");
+    await flushPromises();
+    expect(createQuote).toHaveBeenCalledTimes(1);
+
+    // 确认过期 quote：不提交，自动重新报价（第二次 createQuote）
+    await wrapper.find('[data-testid="quote-confirm"]').trigger("click");
+    await flushPromises();
+    expect(createQuote).toHaveBeenCalledTimes(2);
+    // 旧 quote 未被提交
+    expect(generateSingleTask).not.toHaveBeenCalled();
+
+    // 新 quote 对话框出现，确认后以新 quote 新 key 提交
+    expect(costStoreState.lastQuote?.quote.quote_id).toBe("quote_fresh_2");
+    await wrapper.find('[data-testid="quote-confirm"]').trigger("click");
+    await flushPromises();
+    expect(generateSingleTask).toHaveBeenCalledTimes(1);
+    expect(generateSingleTask).toHaveBeenCalledWith("tts_001", {
+      quoteId: "quote_fresh_2",
+      idempotencyKey: "key_fresh_2",
+      authorizeBudgetOverride: false,
+    });
 
     wrapper.unmount();
   });

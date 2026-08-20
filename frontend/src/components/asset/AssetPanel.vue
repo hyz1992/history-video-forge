@@ -39,12 +39,10 @@ const { checkStageRollback } = useCompetitionGuard();
 // 过期重报价上下文。必须声明在 immediate watch 之前：setup 期间 immediate
 // watch 同步执行会访问这两个 ref，TDZ 中访问抛 ReferenceError。
 const lastQuoteRequest = ref<{ operation: string; selection?: { mode?: "missing_only"; task_ids?: string[] }; enabledProviderTypes?: string[] } | null>(null);
-const lastSubmitAction = ref<((submit: { quoteId: string; idempotencyKey: string; authorizeBudgetOverride: boolean }) => Promise<void>) | null>(null);
 
 // 任务 11 对话框状态（同样必须在 immediate watch 之前声明，避免 TDZ）
 const quoteDialogOpen = ref(false);
 const quoteLoading = ref(false);
-const quoteError = ref<string | null>(null);
 const pendingQuote = ref<GenerationQuoteDto | null>(null);
 let pendingSubmit: ((submit: { quoteId: string; idempotencyKey: string; authorizeBudgetOverride: boolean }) => Promise<void>) | null = null;
 
@@ -824,17 +822,15 @@ async function quoteAndGenerate(options: {
 }): Promise<void> {
   const pid = projectId.value;
   if (!pid) return;
-  quoteError.value = null;
   quoteLoading.value = true;
   quoteDialogOpen.value = true;
   pendingQuote.value = null;
   try {
     const result = await generationCostStore.createQuote(pid, options.request);
     if (!result.ok) {
-      quoteError.value = result.error.code;
       // 本地/无付费能力部署（stub/demo）的 quote 服务按设计不可报价（无 active
       // 目录项）→ 回退无 quote 本地路径并明确提示；付费部署下 quote 一定可用，
-      // 其余失败（网络/服务故障）展示错误并让用户重试，不误导为本地路径。
+      // 其余失败（网络/服务故障）关闭对话框并提示重试，不弹空对话框。
       if (LOCAL_QUOTE_UNAVAILABLE_CODES.has(result.error.code)) {
         ElMessage.warning(`报价服务暂不可用（${result.error.code}），已按本地路径继续`);
         quoteDialogOpen.value = false;
@@ -847,9 +843,8 @@ async function quoteAndGenerate(options: {
         }
         return;
       }
-      quoteError.value = result.error.code;
-      quoteDialogOpen.value = true;
-      ElMessage.warning(`报价失败（${result.error.code}），请重试`);
+      quoteDialogOpen.value = false;
+      ElMessage.error(`报价失败（${result.error.code}），请重试`);
       return;
     }
     pendingQuote.value = result.value.quote;
@@ -864,7 +859,6 @@ async function quoteAndGenerateWithRetry(options: {
   submit: (submit: { quoteId: string; idempotencyKey: string; authorizeBudgetOverride: boolean }) => Promise<void>;
 }): Promise<void> {
   lastQuoteRequest.value = options.request;
-  lastSubmitAction.value = options.submit;
   await quoteAndGenerate(options);
 }
 

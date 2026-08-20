@@ -10,7 +10,8 @@ import {
  * S2-2A 任务 11：报价确认对话框。
  * - 显示 estimated 与 authorization bound（预算门禁使用的可信上界）；
  * - 超预算（over_budget）或存在 unbounded item 时必须显式勾选授权；
- * - 报价失败展示错误与重试。
+ * - 报价失败由主流程处理（本地部署回退/其余提示重试），本组件只负责
+ *   报价成功后的确认展示。
  */
 
 const props = defineProps<{
