@@ -227,8 +227,9 @@ export function findProjectConfigRecord(db: DbClient, projectId: string): Projec
   return null;
 }
 
-/** 用数据库返回的真实记录同步内存 Map（同 projectId 旧记录整体替换）。 */
-function syncProjectConfigRecord(db: DbClient, record: ProjectGenerationConfigurationRecord): void {
+/** 用数据库返回的真实记录同步内存 Map（同 projectId 旧记录整体替换）。
+ *  generation-cost.repository 的 DB 权威读取复用同一实现（单一真相源）。 */
+export function syncProjectConfigRecord(db: DbClient, record: ProjectGenerationConfigurationRecord): void {
   for (const [key, existing] of db.projectGenerationConfigurations) {
     if (existing.projectId === record.projectId) db.projectGenerationConfigurations.delete(key);
   }

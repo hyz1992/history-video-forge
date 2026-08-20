@@ -272,7 +272,7 @@ quote 创建与提交阶段必须按同一份 payload 计算 fingerprint，不�
 | `projectId/userId` | owner scope |
 | `operation` | 生成 operation |
 | `idempotencyKey` | 客户端幂等键 |
-| `payloadFingerprint` | quote、selection、override 的 canonical hash |
+| `payloadFingerprint` | quote、selection、override、执行过滤的 canonical hash |
 | `quoteId` | 已消费 quote，unique nullable |
 | `runConfigurationSnapshotId` | 不可变快照，unique |
 | `dispatchPayloadJson` | 恢复执行所需的最小非敏感 payload |
@@ -287,13 +287,15 @@ quote 消费、snapshot 创建和 `GenerationRun(status=pending_dispatch)` 创�
 
 dispatcher 的恢复触发固定为三层：正常提交事务完成后立即派发；服务启动时扫描 `pending_dispatch` 和 lease 已过期的运行；服务存活期间执行低频 lease-expiry sweep，接管因局部异常遗留的可恢复运行。扫描永远跳过 `needs_reconciliation`。同一运行必须通过条件更新原子取得 lease，同一外部 call intent 必须通过稳定 request key 与数据库唯一约束防止重复计费提交。
 
+lease 与终态写入的 fencing 语义（任务 8 终审 I-2 收口）：run 状态的终态写入（dispatcher finalize）必须携带 `expectedLeaseOwner`（即本 worker id）做条件更新——已失去 lease 的 worker 迟到 finalize 不得覆盖接管者状态、不得释放接管者 lease；被拒的 finalize 丢弃写入并追加 `dispatch_finalize_fenced_out` 审计事件。fencing 按 lease owner 身份判定而非租期：lease 已过期但尚未被接管时，原 owner 的 finalize 仍合法（claim 的恢复条件保证接管者只会接手非终态 run）。`needs_reconciliation` 是对账终态，默认禁止被任何 finalize 覆盖；改写它必须显式 `allowOverwriteNeedsReconciliation`（仅限对账工具，须配审计）。
+
 ### 4.8 `GenerationRunEvent`
 
 | 字段 | 含义 |
 |---|---|
 | `id` | event UUID |
 | `generationRunId` | 关联 run |
-| `eventType` | route_auto_downgraded/fallback_accepted/pricing_overrun 等 |
+| `eventType` | route_auto_downgraded/fallback_accepted/pricing_overrun/dispatch_finalize_fenced_out 等 |
 | `segmentId` | 可空，镜头事件归属 |
 | `eventJson` | 公开原因、旧/新实际路线、actor 等 |
 | `createdAt` | append-only 时间 |
@@ -463,9 +465,12 @@ LLM typed intent 仍负责视觉/SFX/BGM 语义，不负责配置优先级。loc
   "selection": {
     "mode": "missing_only",
     "task_ids": []
-  }
+  },
+  "enabled_provider_types": ["tts"]
 }
 ```
+
+`enabled_provider_types`（任务 8 终审 F5 收口）：仅 `assets.generate` 可携带，取值域与执行端同一 provider 类型枚举（tts/image/video/sfx/bgm）。未提供 = 执行端默认全开；空数组 = 全部禁用（quote 不含任何媒体计价项）。计价 workload 按该过滤收缩——授权上界不得包含执行时会被过滤掉的任务；提交必须重放同一过滤，否则按 quote 内容指纹漂移拒绝。
 
 输出：
 
@@ -495,15 +500,18 @@ LLM typed intent 仍负责视觉/SFX/BGM 语义，不负责配置优先级。loc
 {
   "cost_quote_id": "...",
   "authorize_budget_override": true,
-  "idempotency_key": "client-generated-uuid"
+  "idempotency_key": "client-generated-uuid",
+  "enabled_provider_types": ["tts"]
 }
 ```
+
+`run_overrides` 与 `enabled_provider_types` 是 quote 创建时对应字段的重放：提交与 quote 创建必须逐字段一致，不一致按内容漂移/幂等冲突拒绝。`enabled_provider_types` 经 schema 枚举校验后既参与重校验计价，也原样写入 run 的 dispatch payload——授权过滤与执行过滤同源（bulk 与单任务提交入口共用同一合并点），防止授权上界与实际执行范围脱节。payload fingerprint 的 canonical 输入包含 operation、quote_id、selection、run_overrides 与 enabled_provider_types（数组排序归一）。
 
 后端事务步骤：
 
 1. 锁定并校验 quote owner、project、operation、过期和未消费状态。
 2. 计算 payload fingerprint；检查 `(project, operation, idempotency_key)` 是否已有 run。
-3. 重新解析配置并验证 configuration hash（漂移检测，与 quote.configurationHash 比对）。
+3. 重新解析配置并验证 configuration hash（漂移检测，与 quote.configurationHash 比对）。重解析输入（项目配置/模型目录/storyboard/override/asset plan/manifest/project 活动指针）以数据库为权威读取并同步内存镜像——任一实例的旧镜像不得让漂移检测失效（任务 8 终审 I-1' 收口）。
 4. 重新验证 catalog status、凭据 readiness 和价格版本。
 5. 按 quote 创建时相同的 canonical 输入重算 `quoteFingerprint`（SHA-256），与 quote 持久化的值比对；不一致则 quote 内容在创建后发生漂移，拒绝并重新报价。
 6. `authorizationCostMicros` 超预算或存在 unbounded item 且无授权时返回 `409 generation_budget_exceeded`。

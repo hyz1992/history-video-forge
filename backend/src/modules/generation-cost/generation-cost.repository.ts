@@ -12,6 +12,7 @@ import type {
   UsageCostRecordRecord,
 } from "../../db/client.js";
 import type { AppPrismaClient } from "../../db/prisma-client.types.js";
+import { syncProjectConfigRecord } from "../generation-config/generation-config.repository.js";
 
 /**
  * S2-2A 任务 8：generation-cost repository（quote 持久化与只读查询）。
@@ -198,7 +199,7 @@ function toRunRecord(row: {
  * 实例 B 的旧镜像不得放过实例 A 修改配置/价格/plan 之前的旧 quote。
  */
 export interface QuoteResolutionSource {
-  /** 活动指针已按 DB 刷新的 project（Map 态即传入对象）。 */
+  /** 调用方传入的 project（Prisma 态活动指针不回写该对象，见 loader 注释）。 */
   project: ProjectRecord;
   projectConfig: ProjectGenerationConfigurationRecord | null;
   catalog: ProviderModelCatalogRecord[];
@@ -214,14 +215,6 @@ const object = (value: unknown): Record<string, unknown> =>
     : {};
 const nullableObject = (value: unknown): Record<string, unknown> | null =>
   value == null ? null : object(value);
-
-/** 按 projectId 同步项目配置镜像（同 projectId 旧记录整体替换）。 */
-function syncProjectConfigRecord(db: DbClient, record: ProjectGenerationConfigurationRecord): void {
-  for (const [key, existing] of db.projectGenerationConfigurations) {
-    if (existing.projectId === record.projectId) db.projectGenerationConfigurations.delete(key);
-  }
-  db.projectGenerationConfigurations.set(record.id, record);
-}
 
 function toProjectConfigRecord(row: {
   id: string;
@@ -395,8 +388,9 @@ function toSegmentOverrideRecord(row: {
  * 加载报价/提交重解析的全部输入。
  *
  * - Prisma 态：project 行、项目配置、目录、storyboard、override、asset plan、
- *   manifest 全部直查数据库（project 不存在返回 null）；活动指针同步回传入的
- *   project 记录（storage 布局字段保持内存值，磁盘探测不属于读取路径职责）。
+ *   manifest 全部直查数据库（project 不存在返回 null）；活动指针只作为本地
+ *   变量驱动取数，**不回写共享 project 对象**——写路径是"内存先行、DB 异步
+ *   落库"，读路径回写 DB 中的旧指针会在单实例内 revert 写路径进行中的变更。
  * - Map 态：内存即存储。
  */
 export async function loadQuoteResolutionSource(
@@ -440,22 +434,24 @@ export async function loadQuoteResolutionSource(
 
   const projectRow = await prismaClient.project.findUnique({ where: { id: project.id } });
   if (!projectRow) return null;
-  // 活动指针以 DB 为权威并刷新内存镜像（防止实例 B 用旧指针重算放过旧 quote）
-  project.activeStoryboardRecordId = projectRow.activeStoryboardRecordId;
-  project.activeAssetPlanRecordId = projectRow.activeAssetPlanRecordId;
-  project.activeAssetManifestRecordId = projectRow.activeAssetManifestRecordId;
+  // 活动指针以 DB 行为准（仅本地变量，不回写共享 project 对象——写路径是
+  // "内存先行、DB 异步落库"，读路径回写旧指针会在单实例内 revert 进行中的
+  // 变更，diff 审查 I-A1）
+  const activeStoryboardRecordId = projectRow.activeStoryboardRecordId;
+  const activeAssetPlanRecordId = projectRow.activeAssetPlanRecordId;
+  const activeAssetManifestRecordId = projectRow.activeAssetManifestRecordId;
 
   const [configRow, catalogRows, storyboardRow, assetPlanRow, manifestRow] = await Promise.all([
     prismaClient.projectGenerationConfiguration.findUnique({ where: { projectId: project.id } }),
     prismaClient.providerModelCatalog.findMany(),
-    project.activeStoryboardRecordId
-      ? prismaClient.storyboardRecord.findUnique({ where: { id: project.activeStoryboardRecordId } })
+    activeStoryboardRecordId
+      ? prismaClient.storyboardRecord.findUnique({ where: { id: activeStoryboardRecordId } })
       : Promise.resolve(null),
-    project.activeAssetPlanRecordId
-      ? prismaClient.assetPlanRecord.findUnique({ where: { id: project.activeAssetPlanRecordId } })
+    activeAssetPlanRecordId
+      ? prismaClient.assetPlanRecord.findUnique({ where: { id: activeAssetPlanRecordId } })
       : Promise.resolve(null),
-    project.activeAssetManifestRecordId
-      ? prismaClient.assetManifestRecord.findUnique({ where: { id: project.activeAssetManifestRecordId } })
+    activeAssetManifestRecordId
+      ? prismaClient.assetManifestRecord.findUnique({ where: { id: activeAssetManifestRecordId } })
       : Promise.resolve(null),
   ]);
   const overrideRows = storyboardRow
@@ -465,8 +461,7 @@ export async function loadQuoteResolutionSource(
     : [];
 
   const projectConfig = configRow ? toProjectConfigRecord(configRow) : null;
-  if (projectConfig) syncProjectConfigRecord(db, projectConfig);
-  const catalog = catalogRows.map(toCatalogRecord).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  if (projectConfig) syncProjectConfigRecord(db, projectConfig);  const catalog = catalogRows.map(toCatalogRecord).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   for (const record of catalog) db.providerModelCatalog.set(record.id, record);
   // 跨项目行不可见（owner scope；正常情况下活动指针不会跨项目，防御性过滤）
   const storyboard =

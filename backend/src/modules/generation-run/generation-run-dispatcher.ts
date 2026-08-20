@@ -196,6 +196,7 @@ export function createGenerationRunDispatcher(options: {
   /**
    * fencing 拒绝的迟到 finalize（I-2）：写入被丢弃，但必须留下审计事件——
    * run 状态以当前 lease 持有者（接管者）的 finalize 为准。
+   * run 已不存在（updateRunStatus 对缺失行同样返回 null）时无从归属，不记事件。
    */
   async function appendFencedOutEventIfRejected(
     runId: string,
@@ -203,6 +204,8 @@ export function createGenerationRunDispatcher(options: {
     discardedStatus: DispatchOutcome["status"],
   ): Promise<void> {
     if (updated !== null) return;
+    const current = await options.repository.getRunById(runId);
+    if (!current) return;
     const event: GenerationRunEventRecord = {
       id: options.db.generateId(),
       generationRunId: runId,

@@ -129,6 +129,35 @@ describe("updateRunStatus lease-owner fencing (Map mode)", () => {
     expect(after.dispatchLeaseExpiresAt).toBeNull();
   });
 
+  it("a late finalize from the ORIGINAL owner still applies when the expired lease has not been taken over", async () => {
+    const app = buildApp();
+    await seedQuotableCatalog(app);
+    const project = await prepareQuoteProject(app.db);
+    const { run, repository } = await submitRun(app.db, project, "fence-map-3");
+
+    // worker-A claim 后 handler 挂起；lease 到期但无人接管
+    let releaseHandler!: () => void;
+    const gate = new Promise<void>((resolve) => { releaseHandler = resolve; });
+    const dispatcher = createGenerationRunDispatcher({
+      db: app.db, repository, workerId: "worker-A", leaseDurationMs: 30_000,
+      handlers: { "assets.generate": async () => { await gate; return { status: "succeeded" as const }; } },
+    });
+    const dispatchPromise = dispatcher.dispatch(run.id);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const stored = app.db.generationRuns.get(run.id)!;
+    stored.dispatchLeaseExpiresAt = new Date(Date.now() - 1); // lease 过期（未接管）
+
+    // 原 owner 的迟到 finalize 仍生效：fencing 按 owner 身份判定，不是按租期——
+    // 接管前唯一 owner 的终态写入合法（claim 的恢复条件保证接管者只会接手非终态 run）
+    releaseHandler();
+    await dispatchPromise;
+    const final = app.db.generationRuns.get(run.id)!;
+    expect(final.status).toBe("succeeded");
+    expect(final.dispatchLeaseOwner).toBeNull();
+    const events = app.db.generationRunEvents.get(run.id) ?? [];
+    expect(events.some((event) => event.eventType === "dispatch_finalize_fenced_out")).toBe(false);
+  });
+
   it("a late finalize from a stale worker cannot overwrite the new owner's state (dispatcher level)", async () => {
     const app = buildApp();
     await seedQuotableCatalog(app);

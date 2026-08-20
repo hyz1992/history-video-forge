@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { ApiVideoQuality, VideoGenerationStrategy } from "./generation-configuration.schema.js";
 import { GenerationOperationSchema } from "./generation-configuration-resolver.js";
+import { AssetProviderType } from "../assets/asset-manifest.schema.js";
 
 /**
  * S2-2A 任务 8：报价、成本与运行配置的 API 合同（详细设计 4.5/4.6/4.7/8/9.4 节）。
@@ -55,12 +56,10 @@ export type GenerationQuoteSelection = z.infer<
 
 /**
  * 报价/提交的 provider 类型执行过滤（与 assets 执行端 enabled_provider_types
- * 同一取值域）。quote 与提交必须重放同一过滤，否则内容指纹漂移被拒
- * （任务 8 终审 F5：授权上界不得包含执行时会被过滤掉的任务）。
+ * 同一取值域 AssetProviderType）。quote 与提交必须重放同一过滤，否则内容指纹
+ * 漂移被拒（任务 8 终审 F5：授权上界不得包含执行时会被过滤掉的任务）。
  */
-export const GenerationQuoteProviderTypesSchema = z.array(
-  z.enum(["tts", "image", "video", "sfx", "bgm"]),
-);
+export const GenerationQuoteProviderTypesSchema = z.array(AssetProviderType);
 export type GenerationQuoteProviderTypes = z.infer<
   typeof GenerationQuoteProviderTypesSchema
 >;

@@ -124,6 +124,74 @@ async function submit(
   );
 }
 
+
+/** 建 storyboard+plan 链路（DB 行 + 内存镜像同步），任务集可参数化。 */
+async function prepareActivePlanChain(
+  client: AppPrismaClient,
+  db: DbClient,
+  project: ProjectRecord,
+  tasks: Array<Record<string, unknown>>,
+) {
+  const now = new Date();
+  await client.topicPackage.create({
+    data: {
+      id: "tp1", projectId: project.id, title: "T", selectedAngle: "A",
+      familyLabel: "F", scopeLabel: "S", coreConflict: "C", strongScene: "SC",
+      stakes: "ST", packagingSeed: "PS",
+      canonicalQuotesJson: [], canonicalQuoteIntentsJson: [], durationBandJson: {},
+      narrativeTensionMapJson: {}, mustIncludeBeatsJson: [], forbiddenExpansionsJson: [],
+      riskHintsJson: [], sourceAnchorRefsJson: [], ambiguityNotesJson: [],
+      createdAt: now,
+    },
+  });
+  await client.scriptRecord.create({
+    data: {
+      id: "sr1", projectId: project.id, topicPackageId: "tp1", scriptText: "T", openingSpan: "O", endingSpan: "E",
+      estimatedDurationSec: 10, beatTraceJson: [], quoteTraceJson: [], reviewStatus: "pass",
+      createdAt: now,
+    },
+  });
+  await client.storyboardRecord.create({
+    data: {
+      id: "sb_rec_1", projectId: project.id, topicPackageId: "tp1", scriptRecordId: "sr1",
+      planJson: {
+        segments: [
+          { segment_id: "sb_001", api_video_suitability: "api_video_strongly_recommended" },
+        ],
+      },
+      validationResultJson: {}, createdAt: now,
+    },
+  });
+  await client.assetPlanRecord.create({
+    data: {
+      id: "ap_rec_1", projectId: project.id, topicPackageId: "tp1", scriptRecordId: "sr1",
+      storyboardRecordId: "sb_rec_1",
+      planJson: { tasks },
+      validationResultJson: {}, executionStateJson: {}, createdAt: now,
+    },
+  });
+  await client.project.update({
+    where: { id: project.id },
+    data: { activeStoryboardRecordId: "sb_rec_1", activeAssetPlanRecordId: "ap_rec_1" },
+  });
+  const mirrorProject = db.projects.get(project.id)!;
+  mirrorProject.activeStoryboardRecordId = "sb_rec_1";
+  mirrorProject.activeAssetPlanRecordId = "ap_rec_1";
+  db.storyboardRecords.set("sb_rec_1", {
+    id: "sb_rec_1", projectId: project.id, topicPackageId: "tp1", scriptRecordId: "sr1",
+    planJson: { segments: [{ segment_id: "sb_001", api_video_suitability: "api_video_strongly_recommended" }] },
+    validationResultJson: {}, executionStateJson: null, graphTraceSummaryJson: null, runtimeDiagnosticsJson: null,
+    createdAt: now,
+  });
+  db.assetPlanRecords.set("ap_rec_1", {
+    id: "ap_rec_1", projectId: project.id, topicPackageId: "tp1", scriptRecordId: "sr1",
+    storyboardRecordId: "sb_rec_1",
+    planJson: { tasks } as never,
+    validationResultJson: {} as never, executionStateJson: {}, graphTraceSummaryJson: null, runtimeDiagnosticsJson: null,
+    createdAt: now,
+  });
+}
+
 describe("revalidation inputs are database-authoritative (I-1')", () => {
   it("project configuration drift written by another instance rejects the old quote", async () => {
     const { client, db, project } = await createPrismaContext();
@@ -178,74 +246,9 @@ describe("revalidation inputs are database-authoritative (I-1')", () => {
 
   it("active asset plan pointer moved by another instance rejects the old quote", async () => {
     const { client, db, project } = await createPrismaContext();
-    // 建一个带 plan 的项目链路：quote 先按内存/DB 一致的 plan 生成
-    const now = new Date();
-    await client.topicPackage.create({
-      data: {
-        id: "tp1", projectId: project.id, title: "T", selectedAngle: "A",
-        familyLabel: "F", scopeLabel: "S", coreConflict: "C", strongScene: "SC",
-        stakes: "ST", packagingSeed: "PS",
-        canonicalQuotesJson: [], canonicalQuoteIntentsJson: [], durationBandJson: {},
-        narrativeTensionMapJson: {}, mustIncludeBeatsJson: [], forbiddenExpansionsJson: [],
-        riskHintsJson: [], sourceAnchorRefsJson: [], ambiguityNotesJson: [],
-        createdAt: now,
-      },
-    });
-    await client.scriptRecord.create({
-      data: {
-        id: "sr1", projectId: project.id, topicPackageId: "tp1", scriptText: "T", openingSpan: "O", endingSpan: "E",
-        estimatedDurationSec: 10, beatTraceJson: [], quoteTraceJson: [], reviewStatus: "pass",
-        createdAt: now,
-      },
-    });
-    await client.storyboardRecord.create({
-      data: {
-        id: "sb_rec_1", projectId: project.id, topicPackageId: "tp1", scriptRecordId: "sr1",
-        planJson: {
-          segments: [
-            { segment_id: "sb_001", api_video_suitability: "api_video_strongly_recommended" },
-          ],
-        },
-        validationResultJson: {}, createdAt: now,
-      },
-    });
-    await client.assetPlanRecord.create({
-      data: {
-        id: "ap_rec_1", projectId: project.id, topicPackageId: "tp1", scriptRecordId: "sr1",
-        storyboardRecordId: "sb_rec_1",
-        planJson: {
-          tasks: [
-            { task_id: "task_img_001", task_type: "image_still", source_segment_id: "sb_001", source_excerpt: "hello" },
-          ],
-        },
-        validationResultJson: {}, executionStateJson: {}, createdAt: now,
-      },
-    });
-    await client.project.update({
-      where: { id: project.id },
-      data: { activeStoryboardRecordId: "sb_rec_1", activeAssetPlanRecordId: "ap_rec_1" },
-    });
-    // 同步内存镜像，保证 quote 创建时内存/DB 一致（漂移只发生在提交前）
-    const mirrorProject = db.projects.get(project.id)!;
-    mirrorProject.activeStoryboardRecordId = "sb_rec_1";
-    mirrorProject.activeAssetPlanRecordId = "ap_rec_1";
-    db.storyboardRecords.set("sb_rec_1", {
-      id: "sb_rec_1", projectId: project.id, topicPackageId: "tp1", scriptRecordId: "sr1",
-      planJson: { segments: [{ segment_id: "sb_001", api_video_suitability: "api_video_strongly_recommended" }] },
-      validationResultJson: {}, executionStateJson: null, graphTraceSummaryJson: null, runtimeDiagnosticsJson: null,
-      createdAt: now,
-    });
-    db.assetPlanRecords.set("ap_rec_1", {
-      id: "ap_rec_1", projectId: project.id, topicPackageId: "tp1", scriptRecordId: "sr1",
-      storyboardRecordId: "sb_rec_1",
-      planJson: {
-        tasks: [
-          { task_id: "task_img_001", task_type: "image_still", source_segment_id: "sb_001", source_excerpt: "hello" },
-        ],
-      } as never,
-      validationResultJson: {} as never, executionStateJson: {}, graphTraceSummaryJson: null, runtimeDiagnosticsJson: null,
-      createdAt: now,
-    });
+    await prepareActivePlanChain(client, db, project, [
+      { task_id: "task_img_001", task_type: "image_still", source_segment_id: "sb_001", source_excerpt: "hello" },
+    ]);
     const quote = await createQuote(db, project, undefined, client);
 
     // 实例 A：激活指针移除（实例 B 内存镜像仍旧指向旧 plan）
@@ -255,6 +258,31 @@ describe("revalidation inputs are database-authoritative (I-1')", () => {
     });
 
     const result = await submit(db, project, quote.id, { key: "i1p-plan-drift-1" }, client);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("generation_quote_fingerprint_mismatch");
+  });
+
+  it("asset plan content drift (pointer intact) rejects the old quote", async () => {
+    const { client, db, project } = await createPrismaContext();
+    await prepareActivePlanChain(client, db, project, [
+      { task_id: "task_img_001", task_type: "image_still", source_segment_id: "sb_001", source_excerpt: "hello" },
+    ]);
+    const quote = await createQuote(db, project, undefined, client);
+
+    // 实例 A：指针不动，只改 plan 内容（任务集扩充 → workload 漂移）
+    await client.assetPlanRecord.update({
+      where: { id: "ap_rec_1" },
+      data: {
+        planJson: {
+          tasks: [
+            { task_id: "task_img_001", task_type: "image_still", source_segment_id: "sb_001", source_excerpt: "hello" },
+            { task_id: "task_img_002", task_type: "image_still", source_segment_id: "sb_001", source_excerpt: "world" },
+          ],
+        },
+      },
+    });
+
+    const result = await submit(db, project, quote.id, { key: "i1p-plan-content-drift-1" }, client);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("generation_quote_fingerprint_mismatch");
   });
@@ -275,77 +303,11 @@ describe("revalidation inputs are database-authoritative (I-1')", () => {
 describe("quote workload honors enabled_provider_types (F5)", () => {
   it("quote with enabled_provider_types=[tts] prices only tts media items", async () => {
     const { client, db, project } = await createPrismaContext();
-    // 带 image/video/tts 三类任务的 plan（直接写库 + 同步镜像）
-    const now = new Date();
-    await client.topicPackage.create({
-      data: {
-        id: "tp1", projectId: project.id, title: "T", selectedAngle: "A",
-        familyLabel: "F", scopeLabel: "S", coreConflict: "C", strongScene: "SC",
-        stakes: "ST", packagingSeed: "PS",
-        canonicalQuotesJson: [], canonicalQuoteIntentsJson: [], durationBandJson: {},
-        narrativeTensionMapJson: {}, mustIncludeBeatsJson: [], forbiddenExpansionsJson: [],
-        riskHintsJson: [], sourceAnchorRefsJson: [], ambiguityNotesJson: [],
-        createdAt: now,
-      },
-    });
-    await client.scriptRecord.create({
-      data: {
-        id: "sr1", projectId: project.id, topicPackageId: "tp1", scriptText: "T", openingSpan: "O", endingSpan: "E",
-        estimatedDurationSec: 10, beatTraceJson: [], quoteTraceJson: [], reviewStatus: "pass",
-        createdAt: now,
-      },
-    });
-    await client.storyboardRecord.create({
-      data: {
-        id: "sb_rec_1", projectId: project.id, topicPackageId: "tp1", scriptRecordId: "sr1",
-        planJson: {
-          segments: [
-            { segment_id: "sb_001", api_video_suitability: "api_video_strongly_recommended" },
-          ],
-        },
-        validationResultJson: {}, createdAt: now,
-      },
-    });
-    await client.assetPlanRecord.create({
-      data: {
-        id: "ap_rec_1", projectId: project.id, topicPackageId: "tp1", scriptRecordId: "sr1",
-        storyboardRecordId: "sb_rec_1",
-        planJson: {
-          tasks: [
-            { task_id: "task_img_001", task_type: "image_still", source_segment_id: "sb_001", source_excerpt: "hello" },
-            { task_id: "task_video_001", task_type: "video_clip", source_segment_id: "sb_001", source_excerpt: "hello", parameters: { duration_sec: 7 } },
-            { task_id: "task_tts_001", task_type: "tts_audio", source_segment_id: null, source_excerpt: "hello" },
-          ],
-        },
-        validationResultJson: {}, executionStateJson: {}, createdAt: now,
-      },
-    });
-    await client.project.update({
-      where: { id: project.id },
-      data: { activeStoryboardRecordId: "sb_rec_1", activeAssetPlanRecordId: "ap_rec_1" },
-    });
-    const mirrorProject = db.projects.get(project.id)!;
-    mirrorProject.activeStoryboardRecordId = "sb_rec_1";
-    mirrorProject.activeAssetPlanRecordId = "ap_rec_1";
-    db.storyboardRecords.set("sb_rec_1", {
-      id: "sb_rec_1", projectId: project.id, topicPackageId: "tp1", scriptRecordId: "sr1",
-      planJson: { segments: [{ segment_id: "sb_001", api_video_suitability: "api_video_strongly_recommended" }] },
-      validationResultJson: {}, executionStateJson: null, graphTraceSummaryJson: null, runtimeDiagnosticsJson: null,
-      createdAt: now,
-    });
-    db.assetPlanRecords.set("ap_rec_1", {
-      id: "ap_rec_1", projectId: project.id, topicPackageId: "tp1", scriptRecordId: "sr1",
-      storyboardRecordId: "sb_rec_1",
-      planJson: {
-        tasks: [
-          { task_id: "task_img_001", task_type: "image_still", source_segment_id: "sb_001", source_excerpt: "hello" },
-          { task_id: "task_video_001", task_type: "video_clip", source_segment_id: "sb_001", source_excerpt: "hello", parameters: { duration_sec: 7 } },
-          { task_id: "task_tts_001", task_type: "tts_audio", source_segment_id: null, source_excerpt: "hello" },
-        ],
-      } as never,
-      validationResultJson: {} as never, executionStateJson: {}, graphTraceSummaryJson: null, runtimeDiagnosticsJson: null,
-      createdAt: now,
-    });
+    await prepareActivePlanChain(client, db, project, [
+      { task_id: "task_img_001", task_type: "image_still", source_segment_id: "sb_001", source_excerpt: "hello" },
+      { task_id: "task_video_001", task_type: "video_clip", source_segment_id: "sb_001", source_excerpt: "hello", parameters: { duration_sec: 7 } },
+      { task_id: "task_tts_001", task_type: "tts_audio", source_segment_id: null, source_excerpt: "hello" },
+    ]);
 
     const filtered = await createQuote(db, project, ["tts"], client);
     const unfiltered = await createQuote(db, project, undefined, client);
@@ -377,6 +339,34 @@ describe("quote workload honors enabled_provider_types (F5)", () => {
       client,
     );
     expect(matched.ok).toBe(true);
+  });
+
+  it("empty enabled_provider_types (all disabled) prices no media items and submits consistently", async () => {
+    const { client, db, project } = await createPrismaContext();
+    await prepareActivePlanChain(client, db, project, [
+      { task_id: "task_img_001", task_type: "image_still", source_segment_id: "sb_001", source_excerpt: "hello" },
+      { task_id: "task_tts_001", task_type: "tts_audio", source_segment_id: null, source_excerpt: "hello" },
+    ]);
+
+    const quote = await createQuote(db, project, [], client);
+    const capabilities = (quote.itemsJson as Array<{ capability: string }>).map((item) => item.capability);
+    // 空数组 = 全部禁用：媒体项全部排除，只剩该 operation 的 LLM token 项
+    expect(capabilities).not.toContain("image.generate");
+    expect(capabilities).not.toContain("tts.synthesize");
+    expect(capabilities.every((capability: string) => capability.startsWith("llm."))).toBe(true);
+
+    const matched = await submit(db, project, quote.id, { key: "f5-empty-1", enabledProviderTypes: [] }, client);
+    expect(matched.ok).toBe(true);
+
+    // 新 quote（旧 quote 已一次性消费）：不同过滤重放 → 指纹漂移被拒
+    const secondQuote = await createQuote(db, project, [], client);
+    const mismatch = await submit(
+      db, project, secondQuote.id,
+      { key: "f5-empty-2", enabledProviderTypes: ["tts"] },
+      client,
+    );
+    expect(mismatch.ok).toBe(false);
+    if (!mismatch.ok) expect(mismatch.error.code).toBe("generation_quote_fingerprint_mismatch");
   });
 
   it("rejects enabled_provider_types on non-assets operations", async () => {

@@ -59,13 +59,14 @@ export const ManifestReadiness = z.enum([
 
 // ─── Execution Options ───────────────────────────────────────────────────────
 
+/** provider 类型取值域（执行端与报价/提交过滤共用，单一真相源）。 */
+export const AssetProviderType = z.enum(["tts", "image", "video", "sfx", "bgm"]);
+
 export const AssetExecutionOptions = z
   .object({
     execution_mode: z.enum(["auto_available", "dry_run"]),
     voice_profile_id: z.string().nullable(),
-    enabled_provider_types: z.array(
-      z.enum(["tts", "image", "video", "sfx", "bgm"]),
-    ),
+    enabled_provider_types: z.array(AssetProviderType),
     allow_manual_placeholders: z.boolean(),
   })
   .strict();

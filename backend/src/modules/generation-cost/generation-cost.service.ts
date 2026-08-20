@@ -322,7 +322,8 @@ async function resolveQuoteConfiguration(
         sourceUserPreferenceRevision: source.projectConfig.sourceUserPreferenceRevision,
       }
     : {
-        configuration: DEFAULT_GENERATION_CONFIGURATION,
+        // 拷贝而非引用共享常量（防御性：resolver/后续变更不得污染模块级默认）
+        configuration: { ...DEFAULT_GENERATION_CONFIGURATION },
         revision: 1,
         sourceUserPreferenceRevision: null as number | null,
       };

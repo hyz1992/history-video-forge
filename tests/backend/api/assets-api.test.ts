@@ -1800,3 +1800,49 @@ describe("submit protocol business failure passthrough (任务8终审 F2 回归�
     expect(typeof body.generation_run_id).toBe("string");
   });
 });
+
+describe("submit protocol filter passthrough (任务8终审 F5 整改：授权过滤=执行过滤)", () => {
+  const auth = buildTestAuth({ userId: "owner-1" });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("persists the submit-time enabled_provider_types into the run dispatch payload", async () => {
+    const { buildQuotableReadinessInput } = await import("../cost/quote-test-context.js");
+    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    await seedDashscopeDispatchCatalog(app);
+    const project = await createProject(app.db, {
+      name: "F5 Dispatch Filter",
+      ownerId: "owner-1",
+    });
+
+    const quoteRes = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/generation-cost-quotes`,
+      payload: { operation: "assets.generate", enabled_provider_types: ["tts"], selection: { task_ids: [] } },
+      auth,
+    });
+    expect(quoteRes.statusCode).toBe(200);
+    const quote = quoteRes.json() as { quote_id: string };
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/assets/generate`,
+      payload: {
+        cost_quote_id: quote.quote_id,
+        idempotency_key: "f5-dispatch-filter-1",
+        enabled_provider_types: ["tts"],
+      },
+      auth,
+    });
+    // 项目无 asset plan：业务失败按原状态码透传，但 run 已创建
+    expect(response.statusCode).toBe(409);
+
+    const runs = [...app.db.generationRuns.values()];
+    expect(runs.length).toBe(1);
+    // 授权用的过滤必须原样进入执行 payload（bulk 与单任务共用同一合并点）
+    expect((runs[0]!.dispatchPayloadJson as { enabled_provider_types?: string[] }).enabled_provider_types).toEqual(["tts"]);
+  });
+});

@@ -139,6 +139,7 @@ export {
   AssetArtifact,
   AssetAudioSummary,
   AssetExecutionOptions,
+  AssetProviderType,
   AssetTaskExecution,
   BgmPlacement,
   DEFAULT_SUBTITLE_STYLE,

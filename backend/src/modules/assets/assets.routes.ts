@@ -91,8 +91,14 @@ async function submitGenerationRun(
     return { statusCode: 400, body: { error: "generation_submit_fields_incomplete" } };
   }
   const fields = submit.fields;
-  // F5：执行过滤从提交字段重放（与 quote 创建时的 enabled_provider_types 对齐）
+  // F5：执行过滤从提交字段重放（与 quote 创建时的 enabled_provider_types 对齐）。
+  // 授权过滤与执行过滤必须同源：dispatchPayload 的 enabled_provider_types 统一
+  // 被本值覆盖（bulk/单任务两个入口单一来源，防止授权上界与执行范围脱节）
   const enabledProviderTypes = fields.enabled_provider_types;
+  const dispatchPayloadWithFilter = {
+    ...dispatchPayload,
+    enabled_provider_types: enabledProviderTypes,
+  };
   const project = context.app.db.projects.get(context.params.projectId)!;
   const actorUserId = context.auth.anonymous ? null : context.auth.userId;
   const readinessInput =
@@ -110,7 +116,7 @@ async function submitGenerationRun(
       selection,
       runOverrides: fields.run_overrides,
       enabledProviderTypes,
-      dispatchPayload,
+      dispatchPayload: dispatchPayloadWithFilter,
     },
     {
       readinessInput,
@@ -286,8 +292,6 @@ async function generateAssetsController(
     return submitGenerationRun(context, "assets.generate", selection, {
       voice_profile_id: voiceProfileId,
       execution_mode: executionMode,
-      // 未传时保持 undefined（执行端默认全开）；空数组语义是"全部禁用"，不能混用
-      enabled_provider_types: enabledProviderTypes,
       mode: requestedMode ?? null,
       task_ids: requestedTaskIds ?? [],
     });
@@ -699,7 +703,6 @@ async function generateTaskController(
     return submitGenerationRun(context, "assets.generate", { task_ids: [taskId] }, {
       voice_profile_id: voiceProfileId,
       execution_mode: "auto_available",
-      enabled_provider_types: undefined,
       mode: null,
       task_ids: [taskId],
     });
