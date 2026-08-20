@@ -651,6 +651,17 @@ async function upgradeSegmentToVideoController(
     return { statusCode: 404, body: { error: "project_not_found" } };
   }
 
+  // S2-2A 任务 9B：付费部署下明确拒绝（video 升级的 prompt 扩展暂未接入 quote 提交执行）
+  if (isPaidLlmDispatchPossible(context.app.db)) {
+    return {
+      statusCode: 409,
+      body: {
+        error: "paid_generation_quote_required",
+        message: "当前部署可调用付费 LLM provider：视频升级暂未接入付费提交模式",
+      },
+    };
+  }
+
   // DEMO_MODE: video upgrade is always visual
   if (env.demoMode) {
     return {

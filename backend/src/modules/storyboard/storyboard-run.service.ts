@@ -450,14 +450,16 @@ export async function runStoryboardSegmentRegeneration(
   }
 
   const draft = mapScriptDraft(scriptRecord);
+  // 日志锚点与计费 interactionId 共用同一 runId（R2-I-3 修复：不得二次 generateId）
+  const regenRunId = `storyboard_run_${input.db.generateId()}`;
   const plainWriter2 = createCompositeInteractionLogWriter({
     project: input.project,
     phase: "storyboard" as const,
-    runId: input.db.generateId(),
+    runId: regenRunId,
   } as never);
   // 9B：付费 quote 绑定 run 的 writer 包计费包装（LLM interaction 记账）
   const interactionLogWriter = input.billingContext
-    ? createBillingInteractionLogWriter({ billing: input.billingContext, inner: plainWriter2, interactionRunId: input.db.generateId() })
+    ? createBillingInteractionLogWriter({ billing: input.billingContext, inner: plainWriter2, interactionRunId: regenRunId })
     : plainWriter2;
 
   try {

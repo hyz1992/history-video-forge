@@ -418,6 +418,8 @@ describe("五入口付费闸门覆盖（diff/contract 审查 I-2 锁定）", () 
       { url: `/api/projects/${project.id}/storyboard/segments/seg_1/regen`, payload: { user_feedback: "更紧张" } },
       { url: `/api/projects/${project.id}/asset-plan/generate`, payload: {} },
       { url: `/api/projects/${project.id}/publish/generate`, payload: {} },
+      { url: `/api/projects/${project.id}/assets/tasks/tts_001/prompt/optimize`, payload: { current_prompt: "test" } },
+      { url: `/api/projects/${project.id}/assets/segments/seg_1/upgrade-video`, payload: {} },
     ];
 
     for (const item of cases) {
