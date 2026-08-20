@@ -783,15 +783,15 @@ function setupBackToTopObserver() {
 /*  S2-2A 任务 11：quote 确认流程 + 严格 fallback + 成本明细                    */
 /* -------------------------------------------------------------------------- */
 
-/** 本地部署 quote 服务不可报价的错误码（无 active 目录项等）；其余错误码
- * （网络/服务故障）不回退，展示错误并重试。 */
+/** 本地部署 quote 服务不可报价的错误码（与后端 quote 路由实际可达码对齐，
+ * 见 generation-cost.service.ts CreateQuoteErrorCode）：
+ * - generation_quote_resolution_failed：配置/能力解析失败（含 capability
+ *   unavailable、model disabled 等被包裹为同一码）；
+ * - generation_quote_unquotable：计价失败（目录项被 readiness 拦截/disabled）。
+ * 其余错误码（网络/服务故障、请求构造错误）不回退，展示错误并重试。 */
 const LOCAL_QUOTE_UNAVAILABLE_CODES = new Set([
   "generation_quote_resolution_failed",
-  "generation_capability_unavailable",
-  "generation_model_disabled",
-  "generation_model_parameter_incompatible",
-  "generation_provider_credential_unavailable",
-  "generation_system_constraint_denied",
+  "generation_quote_unquotable",
 ]);
 
 /** 当前 manifest 版本与执行 run（accept-fallback 的 CAS 上下文）。 */
@@ -895,8 +895,21 @@ async function handleQuoteConfirm(payload: { authorizeBudgetOverride: boolean })
     await assetsStore.loadProject();
   } catch (error) {
     const msg = error instanceof Error ? error.message : "生成失败";
-    // 提交失败（网络/服务）：允许用同一 quote 与同一 key 重试，避免歧义窗口
-    // 内新建 quote/run 造成双重执行；quote 已过期时重新报价。
+    // 业务冲突（409：quote 已消费/预算超限/配置漂移等）：同一 quote 重试
+    // 必然再失败，关闭对话框并提示重新报价；网络/服务错误允许用同一 quote
+    // 与同一 key 重试（避免歧义窗口内新建 quote/run 双重执行）。
+    const isBusinessConflict =
+      typeof error === "object" &&
+      error !== null &&
+      "status" in error &&
+      (error as { status?: unknown }).status === 409;
+    if (isBusinessConflict) {
+      pendingQuote.value = null;
+      pendingSubmit = null;
+      quoteDialogOpen.value = false;
+      ElMessage.error("生成被拒绝（" + msg + "），请重新报价后再试");
+      return;
+    }
     pendingSubmit = submit;
     if (isQuoteExpired(quote)) {
       pendingQuote.value = null;

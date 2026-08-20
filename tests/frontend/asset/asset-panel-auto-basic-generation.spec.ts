@@ -256,13 +256,12 @@ describe("asset panel basic generation gate", () => {
     await flushPromises();
     await flushPromises();
 
-    // 自动流程：quote 确认对话框自动出现（对话框由用户确认；测试中直接确认）
+    // 自动流程：quote 确认对话框必须自动出现（对话框由用户确认；测试中直接确认）
     expect(createQuote).toHaveBeenCalledTimes(1);
     const confirmBtn = wrapper.find('[data-testid="quote-confirm"]');
-    if (confirmBtn.exists()) {
-      await confirmBtn.trigger("click");
-      await flushPromises();
-    }
+    expect(confirmBtn.exists()).toBe(true);
+    await confirmBtn.trigger("click");
+    await flushPromises();
     expect(generateAssets).toHaveBeenCalledTimes(1);
     expect(generateAssets).toHaveBeenCalledWith({
       enabledProviderTypes: ["tts", "sfx", "bgm"],

@@ -578,8 +578,9 @@ describe("asset panel blocked retry", () => {
     await retryBtn.trigger("click");
     await flushPromises();
 
-    // 非本地错误码：不提交、不回退
+    // 非本地错误码：不提交、不回退，且不弹空对话框
     expect(generateSingleTask).not.toHaveBeenCalled();
+    expect(wrapper.find('[data-testid="quote-confirm"]').exists()).toBe(false);
 
     wrapper.unmount();
   });
@@ -606,6 +607,27 @@ describe("asset panel blocked retry", () => {
         throw new Error("network_error");
       }
       await pendingPromise();
+    });
+    const createQuoteMock = vi.fn(async () => {
+      const value = {
+        quote: {
+          quote_id: "quote_retry_1",
+          operation: "assets.generate",
+          expires_at: "2099-01-01T00:00:00.000Z",
+          configuration_hash: "fnv1a64:test",
+          pricing_versions: ["test"],
+          items: [],
+          estimated_cost_cny: "0.000000",
+          authorization_cost_cny: "0.000000",
+          contains_unbounded_item: false,
+          budget_limit_cny: null,
+          over_budget: false,
+          requires_budget_override: false,
+        },
+        idempotencyKey: "key_retry_1",
+      };
+      costStoreState.lastQuote = value;
+      return { ok: true, value };
     });
     costStoreState = reactive({
       lastQuote: null,
@@ -657,27 +679,7 @@ describe("asset panel blocked retry", () => {
           } as never,
           [generationCostStoreKey as symbol]: {
             state: costStoreState,
-            createQuote: vi.fn(async () => {
-              const value = {
-                quote: {
-                  quote_id: "quote_retry_1",
-                  operation: "assets.generate",
-                  expires_at: "2099-01-01T00:00:00.000Z",
-                  configuration_hash: "fnv1a64:test",
-                  pricing_versions: ["test"],
-                  items: [],
-                  estimated_cost_cny: "0.000000",
-                  authorization_cost_cny: "0.000000",
-                  contains_unbounded_item: false,
-                  budget_limit_cny: null,
-                  over_budget: false,
-                  requires_budget_override: false,
-                },
-                idempotencyKey: "key_retry_1",
-              };
-              costStoreState.lastQuote = value;
-              return { ok: true, value };
-            }),
+            createQuote: createQuoteMock,
             loadCostSummary: vi.fn(async () => undefined),
             loadCostRecords: vi.fn(async () => undefined),
           } as never,
@@ -693,7 +695,7 @@ describe("asset panel blocked retry", () => {
     await wrapper.find('[data-testid="quote-confirm"]').trigger("click");
     await flushPromises();
 
-    // 失败后对话框重开（同一 quote），再次确认 → 同一 quote 同一 key 重提交
+    // 失败后对话框重开（同一 quote，未重新报价），再次确认 → 同一 quote 同一 key 重提交
     expect(generateSingleTask).toHaveBeenCalledTimes(1);
     const confirmAgain = wrapper.find('[data-testid="quote-confirm"]');
     expect(confirmAgain.exists()).toBe(true);
@@ -706,6 +708,8 @@ describe("asset panel blocked retry", () => {
       idempotencyKey: "key_retry_1",
       authorizeBudgetOverride: false,
     });
+    // 重试路径未重新报价（createQuote 只调一次）
+    expect(createQuoteMock).toHaveBeenCalledTimes(1);
 
     wrapper.unmount();
   });
