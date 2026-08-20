@@ -461,7 +461,8 @@ export async function loadQuoteResolutionSource(
     : [];
 
   const projectConfig = configRow ? toProjectConfigRecord(configRow) : null;
-  if (projectConfig) syncProjectConfigRecord(db, projectConfig);  const catalog = catalogRows.map(toCatalogRecord).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  if (projectConfig) syncProjectConfigRecord(db, projectConfig);
+  const catalog = catalogRows.map(toCatalogRecord).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   for (const record of catalog) db.providerModelCatalog.set(record.id, record);
   // 跨项目行不可见（owner scope；正常情况下活动指针不会跨项目，防御性过滤）
   const storyboard =

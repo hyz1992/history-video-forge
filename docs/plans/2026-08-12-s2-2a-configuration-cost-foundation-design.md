@@ -511,7 +511,7 @@ LLM typed intent 仍负责视觉/SFX/BGM 语义，不负责配置优先级。loc
 
 1. 锁定并校验 quote owner、project、operation、过期和未消费状态。
 2. 计算 payload fingerprint；检查 `(project, operation, idempotency_key)` 是否已有 run。
-3. 重新解析配置并验证 configuration hash（漂移检测，与 quote.configurationHash 比对）。重解析输入（项目配置/模型目录/storyboard/override/asset plan/manifest/project 活动指针）以数据库为权威读取并同步内存镜像——任一实例的旧镜像不得让漂移检测失效（任务 8 终审 I-1' 收口）。
+3. 重新解析配置并验证 configuration hash（漂移检测，与 quote.configurationHash 比对）。重解析输入（项目配置/模型目录/storyboard/override/asset plan/manifest/project 活动指针）以数据库为权威读取——任一实例的旧镜像不得让漂移检测失效（任务 8 终审 I-1' 收口）。镜像同步边界：配置/目录/storyboard/override/plan/manifest 以 upsert 同步内存镜像；project 活动指针只按 DB 行驱动取数、**刻意不回写**共享 project 对象（写路径是内存先行、DB 异步落库，读路径回写旧指针会在单实例内 revert 进行中的变更）。
 4. 重新验证 catalog status、凭据 readiness 和价格版本。
 5. 按 quote 创建时相同的 canonical 输入重算 `quoteFingerprint`（SHA-256），与 quote 持久化的值比对；不一致则 quote 内容在创建后发生漂移，拒绝并重新报价。
 6. `authorizationCostMicros` 超预算或存在 unbounded item 且无授权时返回 `409 generation_budget_exceeded`。
