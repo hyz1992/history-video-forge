@@ -15,6 +15,7 @@ import {
   type ResolvedGenerationConfigurationV1,
 } from "../../../../shared/src/index.js";
 import type { QuoteReadinessInput } from "../generation-cost/generation-cost.service.js";
+import type { AppPrismaClient } from "../../db/prisma-client.types.js";
 
 import {
   revalidateQuoteForCommit,
@@ -53,6 +54,12 @@ export interface SubmitGenerationInput {
   idempotencyKey: string;
   selection?: GenerationQuoteSelection;
   runOverrides?: GenerationQuoteRunOverrides;
+  /**
+   * assets.generate 的 provider 类型执行过滤（F5）：必须与 quote 创建时的
+   * enabled_provider_types 一致，否则重算 workload 与 quote 指纹漂移被拒；
+   * 同 key 不同过滤按幂等 payload 冲突处理。
+   */
+  enabledProviderTypes?: string[];
   /** 恢复执行所需的最小非敏感 payload（不含密钥；凭据只在执行时从服务端解析）。 */
   dispatchPayload: Record<string, unknown>;
 }
@@ -71,15 +78,18 @@ export type SubmitGenerationResult =
 export interface SubmitGenerationDeps {
   readinessInput: QuoteReadinessInput;
   repository: GenerationRunRepository;
+  /** Prisma 激活态：提交重校验输入以数据库为权威（任务 8 终审 I-1'）。 */
+  prismaClient?: AppPrismaClient;
   now?: () => Date;
 }
 
-/** 运行幂等 payload 指纹（canonical：键排序 + selection 归一）。 */
+/** 运行幂等 payload 指纹（canonical：键排序 + selection/过滤归一）。 */
 export function computeRunPayloadFingerprint(input: {
   operation: string;
   quote_id: string;
   selection?: GenerationQuoteSelection;
   run_overrides?: GenerationQuoteRunOverrides;
+  enabled_provider_types?: string[];
 }): string {
   const normalizedSelection = input.selection
     ? {
@@ -93,6 +103,9 @@ export function computeRunPayloadFingerprint(input: {
     quote_id: input.quote_id,
     selection: normalizedSelection,
     run_overrides: input.run_overrides ?? null,
+    enabled_provider_types: input.enabled_provider_types
+      ? [...input.enabled_provider_types].sort()
+      : null,
   };
   // canonical hash（与 legacy 路径一致的确定性 hash；幂等判重键）
   return deterministicHash(canonicalStringify(payload));
@@ -120,6 +133,7 @@ export async function createOrRestoreGenerationRun(
     quote_id: quote.id,
     selection: input.selection,
     run_overrides: input.runOverrides,
+    enabled_provider_types: input.enabledProviderTypes,
   });
   const existing = await deps.repository.getRunByKey(project.id, input.operation, input.idempotencyKey);
   if (existing) {
@@ -149,8 +163,9 @@ export async function createOrRestoreGenerationRun(
       operation: input.operation,
       selection: input.selection,
       runOverrides: input.runOverrides,
+      enabledProviderTypes: input.enabledProviderTypes,
     },
-    { readinessInput: deps.readinessInput, now: deps.now },
+    { readinessInput: deps.readinessInput, now: deps.now, prismaClient: deps.prismaClient },
   );
   if (!revalidated.ok) return { ok: false, error: revalidated.error };
   if (revalidated.value.requires_budget_override && !input.authorizeBudgetOverride) {

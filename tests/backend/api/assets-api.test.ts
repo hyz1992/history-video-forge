@@ -1755,3 +1755,48 @@ describe("POST prompt optimize", () => {
     expect((res.json() as Record<string, unknown>).error).toBe("no_active_asset_plan");
   });
 });
+
+describe("submit protocol business failure passthrough (任务8终审 F2 回归锁定)", () => {
+  const auth = buildTestAuth({ userId: "owner-1" });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it("passes through the assets business error code and status instead of a flat 500", async () => {
+    const { buildQuotableReadinessInput } = await import("../cost/quote-test-context.js");
+    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    await seedDashscopeDispatchCatalog(app);
+    const project = await createProject(app.db, {
+      name: "F2 Passthrough",
+      ownerId: "owner-1",
+    });
+    // 故意不给项目挂 active asset plan：提交派发后的 assets 流程必须返回
+    // 409 active_asset_plan_missing，而不是被统一映射成 500
+
+    const quoteRes = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/generation-cost-quotes`,
+      payload: { operation: "assets.generate", selection: { task_ids: [] } },
+      auth,
+    });
+    expect(quoteRes.statusCode).toBe(200);
+    const quote = quoteRes.json() as { quote_id: string };
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/assets/generate`,
+      payload: {
+        cost_quote_id: quote.quote_id,
+        idempotency_key: "f2-passthrough-1",
+      },
+      auth,
+    });
+
+    expect(response.statusCode).toBe(409);
+    const body = response.json() as Record<string, unknown>;
+    expect(body.error).toBe("active_asset_plan_missing");
+    expect(typeof body.generation_run_id).toBe("string");
+  });
+});

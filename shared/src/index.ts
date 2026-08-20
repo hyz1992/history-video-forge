@@ -104,6 +104,7 @@ export {
   CnyDecimalString,
   GENERATION_SUBMIT_ERROR_CODES,
   GenerationQuoteItemSchema,
+  GenerationQuoteProviderTypesSchema,
   GenerationQuoteRequestSchema,
   GenerationQuoteResponseSchema,
   GenerationQuoteRunOverridesSchema,
@@ -115,6 +116,7 @@ export {
 } from "./generation/generation-cost-api.schema";
 export type {
   GenerationQuoteItem,
+  GenerationQuoteProviderTypes,
   GenerationQuoteRequest,
   GenerationQuoteResponse,
   GenerationQuoteRunOverrides,

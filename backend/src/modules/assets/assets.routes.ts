@@ -19,7 +19,12 @@ import { resolve, relative, isAbsolute, sep, extname } from "node:path";
 import { randomBytes } from "node:crypto";
 import { createOrRestoreGenerationRun } from "../generation-run/generation-run.service.js";
 import { resolveGenerationCostBootstrapInputFromEnv } from "../generation-cost/generation-cost-bootstrap.js";
-import { GenerationQuoteRunOverridesSchema, type GenerationQuoteRunOverrides, type GenerationQuoteSelection } from "../../../../shared/src/index.js";
+import {
+  GenerationQuoteProviderTypesSchema,
+  GenerationQuoteRunOverridesSchema,
+  type GenerationQuoteRunOverrides,
+  type GenerationQuoteSelection,
+} from "../../../../shared/src/index.js";
 
 // --- S2-2A 任务 8：提交协议（cost_quote_id / authorize_budget_override / idempotency_key） ---
 
@@ -33,6 +38,8 @@ type SubmitFieldsResult =
         authorize_budget_override: boolean;
         idempotency_key: string;
         run_overrides: GenerationQuoteRunOverrides;
+        /** F5：与 quote 创建时同一执行过滤重放；undefined = 未提供（全开）。 */
+        enabled_provider_types?: string[];
       };
     };
 
@@ -46,6 +53,15 @@ function extractSubmitFields(payload: Record<string, unknown>): SubmitFieldsResu
   if (!runOverridesParse.success) {
     return { present: true, invalid: true };
   }
+  // 提交可重放 quote 创建时的执行过滤（F5）；undefined = 未提供，与 quote 创建语义一致
+  let enabledProviderTypes: string[] | undefined;
+  if (payload.enabled_provider_types !== undefined) {
+    const filterParse = GenerationQuoteProviderTypesSchema.safeParse(payload.enabled_provider_types);
+    if (!filterParse.success) {
+      return { present: true, invalid: true };
+    }
+    enabledProviderTypes = filterParse.data;
+  }
   return {
     present: true,
     invalid: false,
@@ -54,6 +70,7 @@ function extractSubmitFields(payload: Record<string, unknown>): SubmitFieldsResu
       authorize_budget_override: payload.authorize_budget_override === true,
       idempotency_key: payload.idempotency_key as string,
       run_overrides: runOverridesParse.data,
+      enabled_provider_types: enabledProviderTypes,
     },
   };
 }
@@ -61,6 +78,7 @@ function extractSubmitFields(payload: Record<string, unknown>): SubmitFieldsResu
 /**
  * GenerationRunService 统一创建/恢复 run（不新增公开 /generation-runs 路由）；
  * 事务提交后立即由 dispatcher 派发。幂等重放返回既有 run 状态。
+ * Prisma 激活态传 app.prismaClient：提交重校验输入以数据库为权威（I-1'）。
  */
 async function submitGenerationRun(
   context: RouteContext,
@@ -73,6 +91,8 @@ async function submitGenerationRun(
     return { statusCode: 400, body: { error: "generation_submit_fields_incomplete" } };
   }
   const fields = submit.fields;
+  // F5：执行过滤从提交字段重放（与 quote 创建时的 enabled_provider_types 对齐）
+  const enabledProviderTypes = fields.enabled_provider_types;
   const project = context.app.db.projects.get(context.params.projectId)!;
   const actorUserId = context.auth.anonymous ? null : context.auth.userId;
   const readinessInput =
@@ -89,11 +109,13 @@ async function submitGenerationRun(
       idempotencyKey: fields.idempotency_key,
       selection,
       runOverrides: fields.run_overrides,
+      enabledProviderTypes,
       dispatchPayload,
     },
     {
       readinessInput,
       repository: context.app.generationRunRepository,
+      prismaClient: context.app.prismaClient,
     },
   );
   if (!result.ok) {

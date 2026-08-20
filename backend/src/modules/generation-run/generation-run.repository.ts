@@ -68,13 +68,21 @@ export interface GenerationRunRepository {
   renewLease(runId: string, workerId: string, leaseUntil: Date, now: Date): Promise<boolean>;
   /**
    * 更新 run 状态；releaseLease=true 时清空 lease（终态）。
-   * 不变量：needs_reconciliation 是对账终态，默认禁止被覆盖（迟到的 finalize
+   * 不变量一：needs_reconciliation 是对账终态，默认禁止被覆盖（迟到的 finalize
    * 不得抹掉对账信号）；9A 对账工具如需改写传 allowOverwriteNeedsReconciliation。
+   * 不变量二（任务 8 终审 I-2）：expectedLeaseOwner 提供时按 lease-owner 条件
+   * 更新（fencing）——已失去 lease 的 worker 迟到 finalize 不得覆盖接管者
+   * 状态、不得释放接管者 lease；owner 不匹配时不发生任何写入并返回 null。
    */
   updateRunStatus(
     runId: string,
     status: GenerationRunRecord["status"],
-    options: { releaseLease: boolean; now: Date; allowOverwriteNeedsReconciliation?: boolean },
+    options: {
+      releaseLease: boolean;
+      now: Date;
+      allowOverwriteNeedsReconciliation?: boolean;
+      expectedLeaseOwner?: string | null;
+    },
   ): Promise<GenerationRunRecord | null>;
   appendRunEvent(record: GenerationRunEventRecord): Promise<void>;
   /**
@@ -217,6 +225,10 @@ function createMapRepository(db: DbClient): GenerationRunRepository {
     async updateRunStatus(runId, status, options) {
       const run = db.generationRuns.get(runId);
       if (!run) return null;
+      // fencing（I-2）：lease 已易主时迟到 finalize 不得写入（检查-设置，单线程内原子）
+      if (options.expectedLeaseOwner !== undefined && run.dispatchLeaseOwner !== options.expectedLeaseOwner) {
+        return null;
+      }
       if (run.status === "needs_reconciliation" && !options.allowOverwriteNeedsReconciliation) {
         return run;
       }
@@ -612,16 +624,29 @@ function createPrismaRepository(db: DbClient, client: AppPrismaClient): Generati
         data["dispatchLeaseOwner"] = null;
         data["dispatchLeaseExpiresAt"] = null;
       }
-      // 条件更新：needs_reconciliation 终态默认不可覆盖（对账信号保护）
+      // 条件更新：needs_reconciliation 终态默认不可覆盖（对账信号保护）；
+      // expectedLeaseOwner 提供时按 lease-owner 条件更新（I-2 fencing）
       const where: Record<string, unknown> = { id: runId };
       if (!options.allowOverwriteNeedsReconciliation) {
         where["status"] = { not: "needs_reconciliation" };
       }
-      await client.generationRun.updateMany({ where, data });
+      if (options.expectedLeaseOwner !== undefined) {
+        where["dispatchLeaseOwner"] = options.expectedLeaseOwner;
+      }
+      const result = await client.generationRun.updateMany({ where, data });
       const row = await client.generationRun.findUnique({ where: { id: runId } });
       if (!row) return null;
       const run = toRunRecord(row);
       syncRunToMemory(db, run);
+      // 条件更新未命中 + lease 已易主 = fencing 拒绝（迟到 finalize 丢弃）。
+      // 未命中但 owner 仍匹配 = needs_reconciliation 终态保护，返回当前 run。
+      if (
+        result.count === 0 &&
+        options.expectedLeaseOwner !== undefined &&
+        run.dispatchLeaseOwner !== options.expectedLeaseOwner
+      ) {
+        return null;
+      }
       return run;
     },
     async appendRunEvent(record) {

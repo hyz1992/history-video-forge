@@ -12,6 +12,7 @@ import type { AppPrismaClient } from "../../db/prisma-client.types.js";
 import {
   canonicalStringify,
   resolveGenerationConfiguration,
+  DEFAULT_GENERATION_CONFIGURATION,
   GenerationQuoteRequestSchema,
   GenerationQuoteResponseSchema,
   ProjectCostRecordSchema,
@@ -29,7 +30,6 @@ import {
   type SegmentInput,
   type SegmentVisualStrategyOverride,
 } from "../../../../shared/src/index.js";
-import { getProjectGenerationConfiguration } from "../generation-config/generation-config.repository.js";
 import { resolveSystemGenerationConstraints } from "../generation-config/system-constraints.js";
 import {
   computePricingHash,
@@ -38,7 +38,6 @@ import {
   type PricingResultValue,
   type PricingWorkloadItem,
 } from "./pricing.service.js";
-import { listProviderModelCatalog } from "./provider-model-catalog.repository.js";
 import {
   evaluateGenerationCapabilityReadiness,
   type GenerationCapabilityReadinessInput,
@@ -48,9 +47,12 @@ import {
   listQuotesByProject,
   listSnapshotsByProject,
   listUsageRecordsByProject,
+  loadQuoteResolutionSource,
   saveGenerationCostQuote,
+  type QuoteResolutionSource,
 } from "./generation-cost.repository.js";
 import { listRunsByProject } from "../generation-run/generation-run.repository.js";
+import { isProviderTypeEnabled } from "../assets/provider-type-map.js";
 
 /**
  * S2-2A 任务 8：报价、提交重校验与成本只读查询。
@@ -136,15 +138,17 @@ export const DEFAULT_VIDEO_ESTIMATE_SECONDS = 7;
  * - image_still 任务 → image；video_clip 任务（仅 resolved route=api_video）→ video；
  * - tts_audio 任务 → tts（字符数 = source_excerpt 长度，确定性估算）；
  * - 所有 operation 附加该 operation 的 LLM token 项。
+ * F5（任务 8 终审）：enabledProviderTypes 过滤与执行端同一语义——
+ * 执行时会被过滤掉的任务不得进入授权上界；quote 与提交必须重放同一过滤。
  */
 export function buildQuoteWorkload(input: {
-  db: DbClient;
-  project: ProjectRecord;
+  source: QuoteResolutionSource;
   operation: GenerationOperation;
   resolved: ResolvedGenerationConfigurationV1;
   selection?: GenerationQuoteSelection;
+  enabledProviderTypes?: string[];
 }): PricingWorkloadItem[] {
-  const { db, project, operation, resolved } = input;
+  const { source, operation, resolved } = input;
   const workload: PricingWorkloadItem[] = [];
 
   const llmSlots = OPERATION_LLM_SLOTS[operation] ?? [];
@@ -163,9 +167,7 @@ export function buildQuoteWorkload(input: {
 
   if (operation !== "assets.generate") return workload;
 
-  const planRecord = project.activeAssetPlanRecordId
-    ? db.assetPlanRecords.get(project.activeAssetPlanRecordId)
-    : undefined;
+  const planRecord = source.assetPlan;
   if (!planRecord) return workload;
 
   const plan = planRecord.planJson as {
@@ -178,7 +180,9 @@ export function buildQuoteWorkload(input: {
     }>;
   };
   const tasks = plan.tasks ?? [];
-  const selected = selectTasksForQuote(tasks, input.selection, db, project);
+  const selected = selectTasksForQuote(tasks, input.selection, source).filter((task) =>
+    isProviderTypeEnabled(task.task_type, input.enabledProviderTypes),
+  );
 
   const routesBySegment = new Map(
     resolved.segment_visual_routes.map((route) => [route.segment_id, route.resolved_route]),
@@ -251,17 +255,14 @@ interface QuoteTaskShape {
 function selectTasksForQuote(
   tasks: QuoteTaskShape[],
   selection: GenerationQuoteSelection | undefined,
-  db: DbClient,
-  project: ProjectRecord,
+  source: QuoteResolutionSource,
 ): QuoteTaskShape[] {
   if (selection?.task_ids && selection.task_ids.length > 0) {
     const wanted = new Set(selection.task_ids);
     return tasks.filter((task) => wanted.has(task.task_id));
   }
   if (selection?.mode === "missing_only") {
-    const manifestRecord = project.activeAssetManifestRecordId
-      ? db.assetManifestRecords.get(project.activeAssetManifestRecordId)
-      : undefined;
+    const manifestRecord = source.manifest;
     const completed = new Set<string>();
     if (manifestRecord) {
       const executions = (manifestRecord.manifestJson as { executions?: Array<{ task_id?: string; status?: string }> })
@@ -281,12 +282,15 @@ function selectTasksForQuote(
 
 interface QuoteResolutionValue {
   resolved: ResolvedGenerationConfigurationV1;
-  configResult: Awaited<ReturnType<typeof getProjectGenerationConfiguration>>;
+  source: QuoteResolutionSource;
 }
 
 /**
  * 报价/提交共用的确定性解析：项目冻结配置 + 当前目录 + run override + selection。
  * 报价与提交必须走同一实现，保证 configuration_hash 与 fingerprint 可比。
+ * I-1'（任务 8 终审）：重解析输入统一经 loadQuoteResolutionSource 读取——
+ * Prisma 态以数据库为权威（项目配置/目录/storyboard/override/plan/manifest），
+ * 实例 B 的旧内存镜像不得影响重算结果。
  */
 async function resolveQuoteConfiguration(
   db: DbClient,
@@ -296,56 +300,70 @@ async function resolveQuoteConfiguration(
     runOverrides?: GenerationQuoteRunOverrides;
     selection?: GenerationQuoteSelection;
   },
+  prismaClient?: AppPrismaClient,
 ): Promise<
   | { ok: true; value: QuoteResolutionValue }
   | { ok: false; error: { code: "generation_quote_resolution_failed"; message: string } }
 > {
-  const configResult = await getProjectGenerationConfiguration(db, project.id, project.ownerId);
-  const catalog = listProviderModelCatalog(db).map((entry) => ({
-    provider_model_id: entry.id,
-    capability: entry.capability,
-    provider_key: entry.providerKey,
-    model_id: entry.modelId,
-    model_version: entry.modelVersion ?? null,
-    status: entry.status,
-    is_default: entry.isDefault,
-  }));
+  const source = await loadQuoteResolutionSource(db, project, prismaClient);
+  if (!source) {
+    return {
+      ok: false,
+      error: { code: "generation_quote_resolution_failed", message: "project not found in the database" },
+    };
+  }
+  // 配置记录缺失（旧项目未迁移）时按 backfill 同一默认值参与解析：
+  // 与 getProjectGenerationConfiguration 的 backfill 产出一致（revision 1 默认），
+  // 不在此路径产生持久化副作用。
+  const config = source.projectConfig
+    ? {
+        configuration: source.projectConfig.configurationJson,
+        revision: source.projectConfig.revision,
+        sourceUserPreferenceRevision: source.projectConfig.sourceUserPreferenceRevision,
+      }
+    : {
+        configuration: DEFAULT_GENERATION_CONFIGURATION,
+        revision: 1,
+        sourceUserPreferenceRevision: null as number | null,
+      };
 
   let segmentInputs: SegmentInput[] | undefined;
   let segmentOverrides: Record<string, SegmentVisualStrategyOverride> | undefined;
-  if (input.operation === "assets.generate" && project.activeStoryboardRecordId) {
-    const storyboard = db.storyboardRecords.get(project.activeStoryboardRecordId);
-    if (storyboard) {
-      const plan = storyboard.planJson as {
-        segments?: Array<{ segment_id?: string; api_video_suitability?: SegmentInput["api_video_suitability"] }>;
-      };
-      const segments = (plan.segments ?? []).filter((segment) => segment.segment_id);
-      segmentInputs = segments.map((segment) => ({
-        segment_id: segment.segment_id!,
-        api_video_suitability: segment.api_video_suitability!,
-      }));
-      const overrides: Record<string, SegmentVisualStrategyOverride> = {};
-      for (const override of db.storyboardSegmentOverrides.values()) {
-        if (
-          override.projectId === project.id &&
-          override.storyboardRecordId === storyboard.id &&
-          override.strategyOverride !== null
-        ) {
-          overrides[override.segmentId] = override.strategyOverride;
-        }
+  if (input.operation === "assets.generate" && source.storyboard) {
+    const storyboard = source.storyboard;
+    const plan = storyboard.planJson as {
+      segments?: Array<{ segment_id?: string; api_video_suitability?: SegmentInput["api_video_suitability"] }>;
+    };
+    const segments = (plan.segments ?? []).filter((segment) => segment.segment_id);
+    segmentInputs = segments.map((segment) => ({
+      segment_id: segment.segment_id!,
+      api_video_suitability: segment.api_video_suitability!,
+    }));
+    const overrides: Record<string, SegmentVisualStrategyOverride> = {};
+    for (const override of source.segmentOverrides) {
+      if (override.strategyOverride !== null) {
+        overrides[override.segmentId] = override.strategyOverride;
       }
-      if (Object.keys(overrides).length > 0) segmentOverrides = overrides;
     }
+    if (Object.keys(overrides).length > 0) segmentOverrides = overrides;
   }
 
   const result = resolveGenerationConfiguration({
-    projectConfiguration: configResult.configuration,
-    projectConfigurationRevision: configResult.revision,
-    sourceUserPreferenceRevision: configResult.sourceUserPreferenceRevision,
+    projectConfiguration: config.configuration,
+    projectConfigurationRevision: config.revision,
+    sourceUserPreferenceRevision: config.sourceUserPreferenceRevision,
     runOverrides: input.runOverrides ?? undefined,
     segmentOverrides,
     systemConstraints: resolveSystemGenerationConstraints(env.demoMode),
-    providerModelCatalog: catalog,
+    providerModelCatalog: source.catalog.map((entry) => ({
+      provider_model_id: entry.id,
+      capability: entry.capability,
+      provider_key: entry.providerKey,
+      model_id: entry.modelId,
+      model_version: entry.modelVersion ?? null,
+      status: entry.status,
+      is_default: entry.isDefault,
+    })),
     operation: input.operation,
     segmentInputs,
   });
@@ -355,7 +373,7 @@ async function resolveQuoteConfiguration(
       error: { code: "generation_quote_resolution_failed", message: result.error.message },
     };
   }
-  return { ok: true, value: { resolved: result.value, configResult } };
+  return { ok: true, value: { resolved: result.value, source } };
 }
 
 // --- quote 内容指纹（QuoteFingerprintPayloadV1） -----------------------------
@@ -503,7 +521,12 @@ export async function createGenerationCostQuote(
   project: ProjectRecord,
   actorUserId: string,
   input: GenerationQuoteRequest,
-  deps: { readinessInput: QuoteReadinessInput; now?: () => Date },
+  deps: {
+    readinessInput: QuoteReadinessInput;
+    now?: () => Date;
+    /** Prisma 激活态：重解析输入以数据库为权威（I-1'，与提交重校验同一来源）。 */
+    prismaClient?: AppPrismaClient;
+  },
 ): Promise<CreateQuoteResult> {
   const now = deps.now?.() ?? new Date();
   const parsed = GenerationQuoteRequestSchema.safeParse(input);
@@ -515,27 +538,32 @@ export async function createGenerationCostQuote(
   }
   const request = parsed.data;
 
-  const resolution = await resolveQuoteConfiguration(db, project, {
-    operation: request.operation,
-    runOverrides: request.run_overrides,
-    selection: request.selection,
-  });
+  const resolution = await resolveQuoteConfiguration(
+    db,
+    project,
+    {
+      operation: request.operation,
+      runOverrides: request.run_overrides,
+      selection: request.selection,
+    },
+    deps.prismaClient,
+  );
   if (!resolution.ok) return { ok: false, error: resolution.error };
-  const { resolved } = resolution.value;
+  const { resolved, source } = resolution.value;
 
   const readiness = evaluateGenerationCapabilityReadiness({
     ...deps.readinessInput,
-    catalog: listProviderModelCatalog(db),
+    catalog: source.catalog,
   });
   const workload = buildQuoteWorkload({
-    db,
-    project,
+    source,
     operation: request.operation,
     resolved,
     selection: request.selection,
+    enabledProviderTypes: request.enabled_provider_types,
   });
   const pricing = priceGenerationWorkload({
-    catalog: listProviderModelCatalog(db),
+    catalog: source.catalog,
     blockedProviderModelIds: readiness.nonQuotableProviderModelIds,
     workload,
   });
@@ -665,6 +693,11 @@ export type RevalidateQuoteResult =
  * 锁定并校验 owner/project/operation/过期/未消费；按当前配置与目录重新解析并比对
  * configuration_hash；重新计价并比对 pricing_hash；按创建时相同 canonical 输入
  * 重算 quoteFingerprint 比对。预算门禁由调用方在拿到 requires_budget_override 后执行。
+ *
+ * I-1'（任务 8 终审）：重解析输入以数据库为权威（deps.prismaClient）——
+ * 实例 B 不得按旧内存镜像重算后放过实例 A 修改配置/价格/plan 之前的旧 quote。
+ * F5：enabledProviderTypes 与 quote 创建时同一过滤重放，过滤不同 → workload
+ * 不同 → quoteFingerprint 漂移被拒。
  */
 export async function revalidateQuoteForCommit(
   db: DbClient,
@@ -674,8 +707,9 @@ export async function revalidateQuoteForCommit(
     operation: GenerationOperation;
     selection?: GenerationQuoteSelection;
     runOverrides?: GenerationQuoteRunOverrides;
+    enabledProviderTypes?: string[];
   },
-  deps: { readinessInput: QuoteReadinessInput; now?: () => Date },
+  deps: { readinessInput: QuoteReadinessInput; now?: () => Date; prismaClient?: AppPrismaClient },
 ): Promise<RevalidateQuoteResult> {
   const now = deps.now?.() ?? new Date();
   if (quote.projectId !== project.id) {
@@ -691,18 +725,23 @@ export async function revalidateQuoteForCommit(
     return { ok: false, error: { code: "generation_quote_expired", message: "quote expired; create a new quote" } };
   }
 
-  const resolution = await resolveQuoteConfiguration(db, project, {
-    operation: quote.operation,
-    runOverrides: input.runOverrides,
-    selection: input.selection,
-  });
+  const resolution = await resolveQuoteConfiguration(
+    db,
+    project,
+    {
+      operation: quote.operation,
+      runOverrides: input.runOverrides,
+      selection: input.selection,
+    },
+    deps.prismaClient,
+  );
   if (!resolution.ok) {
     return {
       ok: false,
       error: { code: "generation_quote_configuration_changed", message: `re-resolution failed: ${resolution.error.message}` },
     };
   }
-  const { resolved } = resolution.value;
+  const { resolved, source } = resolution.value;
   if (resolved.configuration_hash !== quote.configurationHash) {
     return {
       ok: false,
@@ -712,17 +751,17 @@ export async function revalidateQuoteForCommit(
 
   const readiness = evaluateGenerationCapabilityReadiness({
     ...deps.readinessInput,
-    catalog: listProviderModelCatalog(db),
+    catalog: source.catalog,
   });
   const workload = buildQuoteWorkload({
-    db,
-    project,
+    source,
     operation: quote.operation,
     resolved,
     selection: input.selection,
+    enabledProviderTypes: input.enabledProviderTypes,
   });
   const pricing = priceGenerationWorkload({
-    catalog: listProviderModelCatalog(db),
+    catalog: source.catalog,
     blockedProviderModelIds: readiness.nonQuotableProviderModelIds,
     workload,
   });
@@ -739,7 +778,7 @@ export async function revalidateQuoteForCommit(
   const quoteEntryIds = [...new Set(
     (quote.itemsJson as PricedWorkloadItem[]).map((item) => item.provider_model_id),
   )];
-  const catalogById = new Map(listProviderModelCatalog(db).map((entry) => [entry.id, entry]));
+  const catalogById = new Map(source.catalog.map((entry) => [entry.id, entry]));
   const alignedEntries = quoteEntryIds
     .map((id) => catalogById.get(id))
     .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined);

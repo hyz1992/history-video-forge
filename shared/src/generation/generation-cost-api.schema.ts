@@ -53,13 +53,35 @@ export type GenerationQuoteSelection = z.infer<
   typeof GenerationQuoteSelectionSchema
 >;
 
+/**
+ * 报价/提交的 provider 类型执行过滤（与 assets 执行端 enabled_provider_types
+ * 同一取值域）。quote 与提交必须重放同一过滤，否则内容指纹漂移被拒
+ * （任务 8 终审 F5：授权上界不得包含执行时会被过滤掉的任务）。
+ */
+export const GenerationQuoteProviderTypesSchema = z.array(
+  z.enum(["tts", "image", "video", "sfx", "bgm"]),
+);
+export type GenerationQuoteProviderTypes = z.infer<
+  typeof GenerationQuoteProviderTypesSchema
+>;
+
 export const GenerationQuoteRequestSchema = z
   .object({
     operation: GenerationOperationSchema,
     run_overrides: GenerationQuoteRunOverridesSchema,
     selection: GenerationQuoteSelectionSchema.optional(),
+    enabled_provider_types: GenerationQuoteProviderTypesSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, ctx) => {
+    // 执行过滤只对 assets 媒体 operation 有语义；其他 operation 携带属合同误用
+    if (value.operation !== "assets.generate" && value.enabled_provider_types !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "enabled_provider_types is only valid for operation assets.generate",
+      });
+    }
+  });
 export type GenerationQuoteRequest = z.infer<typeof GenerationQuoteRequestSchema>;
 
 // --- 报价响应 ---------------------------------------------------------------

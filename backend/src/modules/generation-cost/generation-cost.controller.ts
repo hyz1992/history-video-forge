@@ -33,7 +33,8 @@ export const createGenerationQuoteController = guardOwnedRoute(
       project,
       user.userId,
       request,
-      { readinessInput },
+      // I-1'：quote 创建与提交重校验同一 DB 权威输入源
+      { readinessInput, prismaClient: context.app.prismaClient },
     );
     if (!result.ok) {
       if (result.error.code === "generation_quote_invalid_input") {

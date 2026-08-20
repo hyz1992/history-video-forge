@@ -145,7 +145,12 @@ export function createGenerationRunDispatcher(options: {
         eventJson: { worker_id: options.workerId, dispatch_claim_count: claimedRun.dispatchClaimCount },
       };
       await options.repository.appendRunEvent(event);
-      await options.repository.updateRunStatus(runId, "succeeded", { releaseLease: true, now });
+      const updated = await options.repository.updateRunStatus(runId, "succeeded", {
+        releaseLease: true,
+        now,
+        expectedLeaseOwner: options.workerId,
+      });
+      await appendFencedOutEventIfRejected(runId, updated, "succeeded");
       return;
     }
     if (outcome.status === "needs_reconciliation") {
@@ -161,7 +166,12 @@ export function createGenerationRunDispatcher(options: {
       };
       await options.repository.appendRunEvent(event);
       // 终态：释放 lease，扫描与 sweep 永不重新派发该状态
-      await options.repository.updateRunStatus(runId, "needs_reconciliation", { releaseLease: true, now });
+      const updated = await options.repository.updateRunStatus(runId, "needs_reconciliation", {
+        releaseLease: true,
+        now,
+        expectedLeaseOwner: options.workerId,
+      });
+      await appendFencedOutEventIfRejected(runId, updated, "needs_reconciliation");
       return;
     }
     const event: GenerationRunEventRecord = {
@@ -175,7 +185,37 @@ export function createGenerationRunDispatcher(options: {
       },
     };
     await options.repository.appendRunEvent(event);
-    await options.repository.updateRunStatus(runId, "failed", { releaseLease: true, now });
+    const updated = await options.repository.updateRunStatus(runId, "failed", {
+      releaseLease: true,
+      now,
+      expectedLeaseOwner: options.workerId,
+    });
+    await appendFencedOutEventIfRejected(runId, updated, "failed");
+  }
+
+  /**
+   * fencing 拒绝的迟到 finalize（I-2）：写入被丢弃，但必须留下审计事件——
+   * run 状态以当前 lease 持有者（接管者）的 finalize 为准。
+   */
+  async function appendFencedOutEventIfRejected(
+    runId: string,
+    updated: GenerationRunRecord | null,
+    discardedStatus: DispatchOutcome["status"],
+  ): Promise<void> {
+    if (updated !== null) return;
+    const event: GenerationRunEventRecord = {
+      id: options.db.generateId(),
+      generationRunId: runId,
+      segmentId: null,
+      eventType: "dispatch_finalize_fenced_out",
+      eventJson: {
+        worker_id: options.workerId,
+        discarded_outcome_status: discardedStatus,
+        reason: "lease_lost_before_finalize",
+      },
+      createdAt: nowFn(),
+    };
+    await options.repository.appendRunEvent(event);
   }
 
   async function scanAndDispatch(): Promise<{ claimed: number }> {

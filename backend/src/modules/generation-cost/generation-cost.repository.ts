@@ -1,7 +1,14 @@
 import type {
+  AssetManifestRecord,
+  AssetPlanRecord,
   DbClient,
   GenerationCostQuoteRecord,
+  ProjectGenerationConfigurationRecord,
+  ProjectRecord,
+  ProviderModelCatalogRecord,
   RunConfigurationSnapshotRecord,
+  StoryboardRecord,
+  StoryboardSegmentOverrideRecord,
   UsageCostRecordRecord,
 } from "../../db/client.js";
 import type { AppPrismaClient } from "../../db/prisma-client.types.js";
@@ -182,6 +189,299 @@ function toRunRecord(row: {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+// --- 提交重校验输入（DB 权威读取，任务 8 终审 I-1'） -------------------------
+
+/**
+ * 报价/提交重解析的全部输入。Prisma 态以数据库为权威并同步内存镜像：
+ * 实例 B 的旧镜像不得放过实例 A 修改配置/价格/plan 之前的旧 quote。
+ */
+export interface QuoteResolutionSource {
+  /** 活动指针已按 DB 刷新的 project（Map 态即传入对象）。 */
+  project: ProjectRecord;
+  projectConfig: ProjectGenerationConfigurationRecord | null;
+  catalog: ProviderModelCatalogRecord[];
+  storyboard: StoryboardRecord | null;
+  segmentOverrides: StoryboardSegmentOverrideRecord[];
+  assetPlan: AssetPlanRecord | null;
+  manifest: AssetManifestRecord | null;
+}
+
+const object = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+const nullableObject = (value: unknown): Record<string, unknown> | null =>
+  value == null ? null : object(value);
+
+/** 按 projectId 同步项目配置镜像（同 projectId 旧记录整体替换）。 */
+function syncProjectConfigRecord(db: DbClient, record: ProjectGenerationConfigurationRecord): void {
+  for (const [key, existing] of db.projectGenerationConfigurations) {
+    if (existing.projectId === record.projectId) db.projectGenerationConfigurations.delete(key);
+  }
+  db.projectGenerationConfigurations.set(record.id, record);
+}
+
+function toProjectConfigRecord(row: {
+  id: string;
+  projectId: string;
+  schemaVersion: string;
+  revision: number;
+  sourceUserPreferenceRevision: number | null;
+  configurationJson: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+}): ProjectGenerationConfigurationRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    schemaVersion: row.schemaVersion,
+    revision: row.revision,
+    sourceUserPreferenceRevision: row.sourceUserPreferenceRevision,
+    configurationJson: object(row.configurationJson) as ProjectGenerationConfigurationRecord["configurationJson"],
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function toCatalogRecord(row: {
+  id: string;
+  capability: string;
+  providerKey: string;
+  modelId: string;
+  modelVersion: string | null;
+  displayName: string;
+  qualityTier: string | null;
+  speedTier: string | null;
+  parameterCapabilitiesJson: unknown;
+  pricingVersion: string;
+  pricingJson: unknown;
+  status: string;
+  isDefault: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}): ProviderModelCatalogRecord {
+  return {
+    id: row.id,
+    capability: row.capability as ProviderModelCatalogRecord["capability"],
+    providerKey: row.providerKey,
+    modelId: row.modelId,
+    modelVersion: row.modelVersion,
+    displayName: row.displayName,
+    qualityTier: row.qualityTier,
+    speedTier: row.speedTier,
+    parameterCapabilitiesJson: object(row.parameterCapabilitiesJson),
+    pricingVersion: row.pricingVersion,
+    pricingJson: object(row.pricingJson),
+    status: row.status as ProviderModelCatalogRecord["status"],
+    isDefault: row.isDefault,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function toStoryboardRecord(row: {
+  id: string;
+  projectId: string;
+  topicPackageId: string;
+  scriptRecordId: string;
+  planJson: unknown;
+  validationResultJson: unknown;
+  executionStateJson: unknown;
+  graphTraceSummaryJson: unknown;
+  runtimeDiagnosticsJson: unknown;
+  createdAt: Date;
+}): StoryboardRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    topicPackageId: row.topicPackageId,
+    scriptRecordId: row.scriptRecordId,
+    planJson: object(row.planJson),
+    validationResultJson: object(row.validationResultJson),
+    executionStateJson: nullableObject(row.executionStateJson),
+    graphTraceSummaryJson: nullableObject(row.graphTraceSummaryJson),
+    runtimeDiagnosticsJson: nullableObject(row.runtimeDiagnosticsJson),
+    createdAt: row.createdAt,
+  };
+}
+
+function toAssetPlanRecord(row: {
+  id: string;
+  projectId: string;
+  topicPackageId: string;
+  scriptRecordId: string;
+  storyboardRecordId: string;
+  planJson: unknown;
+  validationResultJson: unknown;
+  executionStateJson: unknown;
+  graphTraceSummaryJson: unknown;
+  runtimeDiagnosticsJson: unknown;
+  createdAt: Date;
+}): AssetPlanRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    topicPackageId: row.topicPackageId,
+    scriptRecordId: row.scriptRecordId,
+    storyboardRecordId: row.storyboardRecordId,
+    planJson: object(row.planJson) as never,
+    validationResultJson: object(row.validationResultJson) as never,
+    executionStateJson: object(row.executionStateJson),
+    graphTraceSummaryJson: nullableObject(row.graphTraceSummaryJson),
+    runtimeDiagnosticsJson: nullableObject(row.runtimeDiagnosticsJson),
+    createdAt: row.createdAt,
+  };
+}
+
+function toManifestRecord(row: {
+  id: string;
+  projectId: string;
+  topicPackageId: string;
+  scriptRecordId: string;
+  storyboardRecordId: string;
+  assetPlanRecordId: string;
+  revision: number;
+  manifestJson: unknown;
+  validationResultJson: unknown;
+  executionStateJson: unknown;
+  graphTraceSummaryJson: unknown;
+  runtimeDiagnosticsJson: unknown;
+  createdAt: Date;
+}): AssetManifestRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    topicPackageId: row.topicPackageId,
+    scriptRecordId: row.scriptRecordId,
+    storyboardRecordId: row.storyboardRecordId,
+    assetPlanRecordId: row.assetPlanRecordId,
+    revision: row.revision,
+    manifestJson: object(row.manifestJson),
+    validationResultJson: object(row.validationResultJson),
+    executionStateJson: nullableObject(row.executionStateJson),
+    graphTraceSummaryJson: nullableObject(row.graphTraceSummaryJson),
+    runtimeDiagnosticsJson: nullableObject(row.runtimeDiagnosticsJson),
+    createdAt: row.createdAt,
+  };
+}
+
+function toSegmentOverrideRecord(row: {
+  id: string;
+  projectId: string;
+  storyboardRecordId: string;
+  segmentId: string;
+  strategyOverride: string | null;
+  revision: number;
+  updatedByUserId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): StoryboardSegmentOverrideRecord {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    storyboardRecordId: row.storyboardRecordId,
+    segmentId: row.segmentId,
+    strategyOverride: row.strategyOverride as StoryboardSegmentOverrideRecord["strategyOverride"],
+    revision: row.revision,
+    updatedByUserId: row.updatedByUserId,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+/**
+ * 加载报价/提交重解析的全部输入。
+ *
+ * - Prisma 态：project 行、项目配置、目录、storyboard、override、asset plan、
+ *   manifest 全部直查数据库（project 不存在返回 null）；活动指针同步回传入的
+ *   project 记录（storage 布局字段保持内存值，磁盘探测不属于读取路径职责）。
+ * - Map 态：内存即存储。
+ */
+export async function loadQuoteResolutionSource(
+  db: DbClient,
+  project: ProjectRecord,
+  prismaClient?: AppPrismaClient,
+): Promise<QuoteResolutionSource | null> {
+  if (!prismaClient) {
+    let projectConfig: ProjectGenerationConfigurationRecord | null = null;
+    for (const record of db.projectGenerationConfigurations.values()) {
+      if (record.projectId === project.id) {
+        projectConfig = record;
+        break;
+      }
+    }
+    const storyboard = project.activeStoryboardRecordId
+      ? db.storyboardRecords.get(project.activeStoryboardRecordId) ?? null
+      : null;
+    const segmentOverrides = [...db.storyboardSegmentOverrides.values()].filter(
+      (override) =>
+        override.projectId === project.id &&
+        override.storyboardRecordId === storyboard?.id &&
+        override.strategyOverride !== null,
+    );
+    const assetPlan = project.activeAssetPlanRecordId
+      ? db.assetPlanRecords.get(project.activeAssetPlanRecordId) ?? null
+      : null;
+    const manifest = project.activeAssetManifestRecordId
+      ? db.assetManifestRecords.get(project.activeAssetManifestRecordId) ?? null
+      : null;
+    return {
+      project,
+      projectConfig,
+      catalog: [...db.providerModelCatalog.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+      storyboard,
+      segmentOverrides,
+      assetPlan,
+      manifest,
+    };
+  }
+
+  const projectRow = await prismaClient.project.findUnique({ where: { id: project.id } });
+  if (!projectRow) return null;
+  // 活动指针以 DB 为权威并刷新内存镜像（防止实例 B 用旧指针重算放过旧 quote）
+  project.activeStoryboardRecordId = projectRow.activeStoryboardRecordId;
+  project.activeAssetPlanRecordId = projectRow.activeAssetPlanRecordId;
+  project.activeAssetManifestRecordId = projectRow.activeAssetManifestRecordId;
+
+  const [configRow, catalogRows, storyboardRow, assetPlanRow, manifestRow] = await Promise.all([
+    prismaClient.projectGenerationConfiguration.findUnique({ where: { projectId: project.id } }),
+    prismaClient.providerModelCatalog.findMany(),
+    project.activeStoryboardRecordId
+      ? prismaClient.storyboardRecord.findUnique({ where: { id: project.activeStoryboardRecordId } })
+      : Promise.resolve(null),
+    project.activeAssetPlanRecordId
+      ? prismaClient.assetPlanRecord.findUnique({ where: { id: project.activeAssetPlanRecordId } })
+      : Promise.resolve(null),
+    project.activeAssetManifestRecordId
+      ? prismaClient.assetManifestRecord.findUnique({ where: { id: project.activeAssetManifestRecordId } })
+      : Promise.resolve(null),
+  ]);
+  const overrideRows = storyboardRow
+    ? await prismaClient.storyboardSegmentOverride.findMany({
+        where: { projectId: project.id, storyboardRecordId: storyboardRow.id },
+      })
+    : [];
+
+  const projectConfig = configRow ? toProjectConfigRecord(configRow) : null;
+  if (projectConfig) syncProjectConfigRecord(db, projectConfig);
+  const catalog = catalogRows.map(toCatalogRecord).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  for (const record of catalog) db.providerModelCatalog.set(record.id, record);
+  // 跨项目行不可见（owner scope；正常情况下活动指针不会跨项目，防御性过滤）
+  const storyboard =
+    storyboardRow && storyboardRow.projectId === project.id ? toStoryboardRecord(storyboardRow) : null;
+  if (storyboard) db.storyboardRecords.set(storyboard.id, storyboard);
+  const assetPlan = assetPlanRow && assetPlanRow.projectId === project.id ? toAssetPlanRecord(assetPlanRow) : null;
+  if (assetPlan) db.assetPlanRecords.set(assetPlan.id, assetPlan);
+  const manifest = manifestRow && manifestRow.projectId === project.id ? toManifestRecord(manifestRow) : null;
+  if (manifest) db.assetManifestRecords.set(manifest.id, manifest);
+  const segmentOverrides = overrideRows
+    .filter((row) => row.strategyOverride !== null)
+    .map(toSegmentOverrideRecord);
+  for (const record of segmentOverrides) db.storyboardSegmentOverrides.set(record.id, record);
+
+  return { project, projectConfig, catalog, storyboard, segmentOverrides, assetPlan, manifest };
 }
 
 // --- 排序辅助 ---------------------------------------------------------------
