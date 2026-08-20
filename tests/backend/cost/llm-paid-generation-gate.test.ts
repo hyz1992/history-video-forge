@@ -411,12 +411,13 @@ async function submitScriptViaApi(
     }
     expect(overrunEvents.length).toBeGreaterThanOrEqual(1);
     expect(overrunEvents[0]!.eventJson).toMatchObject({ capability: "llm.smart" });
-    // 对应目录项被禁用
+    // I-3：LLM overrun 只留事件、不禁用目录（授权是单次 budget，run 内多
+    // interaction 累计超界属常规数量累计，禁用会导致 llm.smart 家族新 quote 全失败）
     const smartEntries = [...app.db.providerModelCatalog.values()].filter(
       (entry) => entry.capability === "llm.smart",
     );
     expect(smartEntries.length).toBeGreaterThan(0);
-    expect(smartEntries.every((entry) => entry.status === "disabled")).toBe(true);
+    expect(smartEntries.some((entry) => entry.status === "active")).toBe(true);
     void quoteId;
   });
 

@@ -228,7 +228,7 @@ export async function recordProviderJobUsage(
   db.usageCostRecords.set(record.id, record);
 
   // overrun：snapshot 累计（actual ?? estimated）超过授权上界
-  const overrun = await checkAndHandleOverrun(input, record);
+  const overrun = await checkAndHandleOverrun({ ...input, disableCatalog: true }, record);
 
   return { record, actualCostState, overrun };
 }
@@ -244,9 +244,17 @@ export interface OverrunCheckInput {
   capability: string;
   providerKey: string;
   modelId: string;
+  /**
+   * 超界时是否自动禁用对应目录项（final 审查 I-3）：
+   * - 媒体路径 true：overrun 是价格异常（罕见），禁用并提示管理员复核；
+   * - LLM 路径 false：授权上界是单次调用 budget，而 run 内合法多 interaction
+   *   累计可超界（常规数量累计，非价格异常）——只追加 pricing_overrun 事件
+   *   留痕，不禁用目录（否则 llm.smart 家族新 quote 全部失败直到重启）。
+   */
+  disableCatalog: boolean;
 }
 
-/** 累计费用超授权上界 → append-only pricing_overrun + catalog 禁用（媒体/LLM 共用）。 */
+/** 累计费用超授权上界 → append-only pricing_overrun（+ 可选 catalog 禁用）。 */
 async function checkAndHandleOverrun(
   input: OverrunCheckInput,
   current: UsageCostRecordRecord,
@@ -310,15 +318,17 @@ async function checkAndHandleOverrun(
   input.db.generationRunEvents.set(input.runId, events);
 
   // 对应 catalog item 不再适合自动新运行（待管理员复核价格）
-  const catalogIds = [...input.db.providerModelCatalog.values()]
-    .filter(
-      (entry) =>
-        entry.capability === input.capability &&
-        entry.providerKey === input.providerKey &&
-        entry.modelId === input.modelId,
-    )
-    .map((entry) => entry.id);
-  await disableProviderModelCatalogEntries(input.db, catalogIds);
+  if (input.disableCatalog) {
+    const catalogIds = [...input.db.providerModelCatalog.values()]
+      .filter(
+        (entry) =>
+          entry.capability === input.capability &&
+          entry.providerKey === input.providerKey &&
+          entry.modelId === input.modelId,
+      )
+      .map((entry) => entry.id);
+    await disableProviderModelCatalogEntries(input.db, catalogIds);
+  }
   return true;
 }
 
@@ -478,6 +488,7 @@ export async function recordLlmUsage(
       capability: input.capability,
       providerKey: input.providerKey,
       modelId: input.modelId,
+      disableCatalog: false,
     },
     record,
   );
