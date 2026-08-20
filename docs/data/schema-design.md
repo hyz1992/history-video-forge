@@ -626,3 +626,31 @@ Renderer / Export v1 已有第一版持久化记录。它是 `ComposeRecord` 之
 - Renderer 运行时从 source `AssetManifestRecord.manifest_json` 与 `ComposeTimeline` 派生 Remotion props：`visualClips`、`audioClips`、`subtitleCues` 与 `subtitleStyle`。其中 subtitle artifact 会被解析为 SRT/VTT cues，`subtitle_track.metadata.subtitle_style` 会作为 `subtitleStyle` 传入 Remotion；这些渲染输入是运行时派生 props，不单独持久化为 render job 字段。
 - 本地 Remotion renderer 当前支持 image/video 视觉 clip、image + `motion_recipe` fallback、基础 pan/zoom/hold/push-in/crossfade、narration 音频 mux，以及已存在 artifact 的 BGM/SFX clip。fake TTS 与本地 BGM/SFX provider 均写入 render-ready WAV 以支持离线 smoke；真实付费 BGM/SFX provider、ducking、响度归一化和署名包装需要独立字段设计，不塞进当前 render job 基础字段。
 - `render_job_records` 不保存 DashScope 图生视频 job；发布流状态与人工审稿状态需要由后续独立 schema 设计承接。
+
+---
+
+## S2-2A 配置与成本实体映射（2026-08-20 已实现，增量迁移）
+
+新增表（`20260812090000_s2_2a_generation_configuration`）：
+
+- `user_generation_preferences`：`user_id` 唯一、`schema_version`、`revision`、`configuration_json`、时间戳。
+- `project_generation_configurations`：`project_id` 唯一、`revision`、`source_user_preference_revision`（nullable）、`configuration_json`。
+- `provider_model_catalog`：`id`（stable string PK）、`capability`、`provider_key/model_id/model_version`、`display_name`、`quality_tier/speed_tier`、`parameter_capabilities_json`、`pricing_version/pricing_json`、`status`、`is_default`、时间戳。每个 capability 恰好一个 `active + is_default=true`（readiness 校验）。
+- `storyboard_segment_overrides`：`(storyboard_record_id, segment_id)` 唯一、`project_id`（owner scope）、`strategy_override`（api_video|remotion_motion|null）、`revision`、`updated_by_user_id`。
+- `generation_cost_quotes`：`operation`、`configuration_hash`、`quote_fingerprint`、`pricing_hash`、`pricing_version_set_json`、`items_json`、`estimated_cost_micros`、`authorization_cost_micros`、`contains_unbounded_item`、`budget_limit_micros`、`over_budget`、`expires_at`、`consumed_at`（BigInt 微元）。
+- `run_configuration_snapshots`：不可变，含 `resolved_configuration_json`、`resolution_trace_json`、quote 绑定字段（成套）。
+- `generation_runs`：`(project_id, operation, idempotency_key)` 唯一、`payload_fingerprint`、`quote_id`（unique nullable）、`run_configuration_snapshot_id`（unique）、`dispatch_payload_json`、`status`、`dispatch_lease_owner/expires_at/claim_count`。
+- `generation_run_events`：append-only（`event_type`、`segment_id` nullable、`event_json`）。
+- `usage_cost_records`：`(run_configuration_snapshot_id, provider_request_key, attempt_index)` 唯一、`capability/provider_key/model_id`、`status`、`unit_type`、`input/output_units`、`estimated/actual_cost_micros`、`cost_basis`、`duration_ms`、`asset_provider_job_record_id` / `interaction_id`（可空外键关联）。
+
+关系：
+
+- `projects (1) -> project_generation_configurations (1)`
+- `projects (1) -> generation_cost_quotes (N)`、`-> generation_runs (N)`、`-> usage_cost_records (N)`
+- `generation_runs (1) -> run_configuration_snapshots (1)`、`-> generation_run_events (N)`、`-> usage_cost_records (N)`
+
+说明：
+
+- 金额一律整数微元（BigInt），API 边界转十进制字符串；前端不得用 Number 处理超安全整数。
+- snapshot 与 run event 只追加，不提供更新历史 JSON 的 repository 方法。
+- quote 消费、snapshot 创建与 pending run 创建必须在同一数据库事务；provider 外部提交继续依赖既有幂等 job/call-intent 合同。

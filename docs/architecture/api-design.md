@@ -851,3 +851,35 @@ script 摘要第一版建议至少包含：
 
 - publish API 不修改 `script_text`、`TopicPackage`、`StoryboardPlan`、`AssetPlan`、`AssetManifest`、`ComposeTimeline` 或 `RenderJobRecord`。
 - publish API 不执行事实核查或人工审稿。
+
+---
+
+## S2-2A 配置与成本 API（2026-08-20 已实现）
+
+正式合同见 `shared/src/generation/generation-configuration.schema.ts` 与 `shared/src/generation/generation-cost-api.schema.ts`（请求/响应均经共享 Zod schema 校验）。
+
+### 用户与项目生成配置
+
+- `GET /api/me/generation-preferences`：当前用户默认配置（`source: stored | backfilled_default`、`revision`、`configuration`、`updated_at`）。
+- `PATCH /api/me/generation-preferences`：请求体 `{ expected_revision, video: { strategy, api_quality }, budget: { currency: "CNY", max_paid_cost_micros_per_run } }`；revision 不匹配返回 `409 generation_preference_revision_conflict`。用户默认只在创建项目时复制为项目配置，不影响既有项目。
+- `GET /api/projects/:projectId/generation-configuration`：项目冻结配置（含 `source_user_preference_revision`、`diff_from_user_default`、`invalidation_preview`）。owner-scoped（guardOwnedRoute）。
+- `PATCH /api/projects/:projectId/generation-configuration`：项目配置 PATCH；revision 冲突码 `project_generation_configuration_revision_conflict`。只保存配置，不自动触发下游生成。
+- `GET /api/generation-capabilities`：公开 capability 目录（capability/provider/model/display_name/质量与速度标签/价格展示/availability）。不返回 base URL、env 变量名、credential id 或密钥。
+
+### 报价与提交协议
+
+- `POST /api/projects/:projectId/generation-cost-quotes`：请求 `{ operation, run_overrides?, selection?, enabled_provider_types? }`（`enabled_provider_types` 仅 `assets.generate` 可用）；响应含 `quote_id/expires_at/configuration_hash/pricing_versions/items/estimated_cost_cny/authorization_cost_cny/contains_unbounded_item/budget_limit_cny/over_budget/requires_budget_override`。金额一律 CNY 十进制字符串（微元/1e6）。失败码：`generation_quote_invalid_input`（400）、`generation_quote_resolution_failed` / `generation_quote_unquotable`（422）。
+- 提交协议（9A/9B）：现有生成 API（topic/script/storyboard/asset-plan/assets/publish）接受 `cost_quote_id + idempotency_key`（成对）与 `authorize_budget_override`、`enabled_provider_types`（assets）；`GenerationRunService` 统一创建/恢复 run，dispatcher 同步派发。同 key 同 payload 重放返回既有 run；业务冲突返回 409（`generation_quote_consumed` 等）。
+- 付费闸门：付费部署（凭据 + active 目录）下无 quote 提交返回 `409 paid_generation_quote_required`；stub/本地部署保留免 quote 本地路径。publish cover/generate 与 9B 辅助 LLM 入口同样 409 封口。
+
+### 成本只读
+
+- `GET /api/projects/:projectId/costs/summary`：总预计/授权上界/已确认实际、quote/run 计数、run 状态分布、capability 分组（`capability_breakdown`）、`over_budget_quote_count`（超额授权标记）。
+- `GET /api/projects/:projectId/costs/records`：usage 台账（run/operation/capability/provider/model/status/单位量/预计/实际/cost_basis：estimate | provider_usage | provider_invoice）。
+- `GET /api/projects/:projectId/runs/:runId/configuration`：run 状态 + 不可变 `RunConfigurationSnapshot`。
+
+全部 owner-scoped：quote/cost/run 查询均经 projectId 反查 owner，其他用户只能得到 403/404。
+
+### 严格 fallback
+
+- `POST /api/projects/:projectId/assets/runs/:runId/segments/:segmentId/accept-fallback`：请求体 `{ expected_run_id, expected_version }`（CAS 防过期/并发覆盖）；仅 `blocked_waiting_user` 段可接受；激活前校验同段 anchor 与 Remotion cue 齐备。

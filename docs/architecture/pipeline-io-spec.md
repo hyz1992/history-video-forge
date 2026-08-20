@@ -457,3 +457,27 @@ Compose v1 后端合同不承担的内容：
 - render generate 后端合同不承载前端预览 UI、发布流、人工审稿流或质量评分的交互状态；这些方向可由后续正式设计围绕 render artifact 承接。
 - 不实现 word-level forced alignment、karaoke captions 或字幕人工编辑流。
 - 不把 compose v1 扩展成最终视频语义链路。
+
+---
+
+## 8. 配置解析与成本治理链路（S2-2A，2026-08-20 已实现）
+
+### 8.1 配置来源与解析
+
+- 用户默认（`UserGenerationPreference`）只在创建项目时复制为 `ProjectGenerationConfiguration`；之后修改默认不影响既有项目。旧项目首次读取时 backfill 默认配置（`source: backfilled_default`）。
+- 唯一确定性解析器（`shared/src/generation/generation-configuration-resolver.ts`）的输入：系统约束、管理员启用范围、冻结项目配置、run override、稳定 segment override、当前 provider/model 目录快照。输出不可变 `RunConfigurationSnapshotV1`（含每个 slot 的 resolved provider/model、每段 planned route 与 reason code、配置/目录/价格 hash、结构化 warnings/errors）。
+- 分镜 `api_video_suitability` 由 storyboard prompt 输出（四档），用户逐段覆盖写入 `StoryboardSegmentOverride`（不写回不可变 `StoryboardPlan`）；四档策略 × 四档适配度由纯函数矩阵解析最终路线（`all_api_video` 严格 / `prefer_api_video` 与 `prefer_remotion` 可自动降级 / `all_remotion` 永不调用视频 provider）。
+- Asset Planning 只消费 resolved route：API 路线规划 `image_still + video_clip + render_motion_cue`（anchor/fallback/cue 齐备），Remotion 路线规划 `image_still + render_motion_cue`。
+
+### 8.2 报价、提交与费用账本
+
+- 报价（`POST /api/projects/:projectId/generation-cost-quotes`）由后端价格目录（`ProviderModelCatalog`，服务端受控 seed）与 pricing service 生成：`estimatedCostMicros`（用户理解常见支出）与 `authorizationCostMicros`（预算门禁使用的可信上界）；无法给出上界的项标记 unbounded，必须显式授权。金额一律整数微元，JSON 边界转十进制字符串。
+- 提交协议：现有生成 API 携带 `cost_quote_id + idempotency_key`（成对）与 `authorize_budget_override`；`GenerationRunService` 在同一事务消费 quote、创建不可变 snapshot 与 `pending_dispatch` run，事务提交后由可恢复 dispatcher 派发。同 key 同 payload 重放返回既有 run（幂等去重，不重复计费）；quote 过期/配置/价格/内容指纹漂移均拒绝并需重新报价。
+- 所有真实 LLM（topic/script/storyboard/asset-plan/publish）与媒体（image/video/tts）调用都经过 quote/snapshot/run；付费部署下无 quote 提交返回 `409 paid_generation_quote_required`。辅助入口（publish cover/generate、cover prompt optimize、title candidates、assets prompt optimize/upgrade-video 等）付费部署下同样 409 封口。
+- 费用账本：`UsageCostRecord` 统一计量与成本视图（estimate/provider_usage/provider_invoice 三档 basis），媒体按 provider job 三元组（run/providerRequestKey/attemptIndex）判重，LLM 按 `llm:<runId>:<operationName>:<attemptIndex>` 键记账且 interactionId 可反查 interaction log；actual 超授权上界追加 `pricing_overrun`（媒体路径禁用目录项，LLM 路径仅留痕）。
+- 实际路线变化只写 append-only `GenerationRunEvent`（`route_auto_downgraded`/`fallback_accepted`/`pricing_overrun` 等）与当前可变 manifest，`RunConfigurationSnapshot` 保持不可变。
+
+### 8.3 成本显示边界
+
+- 前端 `pricing.ts` 已降级为纯格式化/兼容层（`client_preview_only`）：本地估算只用于生成前预览文案，授权与预算决策一律来自后端 quote。
+- 成本明细页展示：总预计、授权上界、provider 已确认实际（`provider_usage`/`provider_invoice`）、无实际价格的估算（`estimate`）、按 capability/provider 分组、超额授权（`over_budget_quote_count`）标记。

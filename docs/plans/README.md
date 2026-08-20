@@ -8,11 +8,16 @@
 
 ## 当前状态
 
-截至 2026-08-13：
+截至 2026-08-20：
 
-- `S2-2` 已完成用户需求澄清与总体方案批准，当前设计入口为 [S2-2 总体设计](./2026-08-12-s2-2-generation-configuration-overall-design.md)，第一棒入口为 [S2-2A 配置与成本基础详细设计](./2026-08-12-s2-2a-configuration-cost-foundation-design.md)和[实施计划](./2026-08-12-s2-2a-configuration-cost-foundation-implementation-plan.md)。
-- 2026-08-11 已完成 `docs/plans/` 根目录历史计划归档；根目录现在只保留本 README 与当前已获批准、准备执行的 S2-2 文档。
-- 本轮计划状态治理的[设计](./archive/2026-08-11-plan-state-governance-closeout-design.md)与[实施计划](./archive/2026-08-11-plan-state-governance-closeout-implementation-plan.md)也已归入历史证据区。
+- `S2-2A 配置与成本基础` 已全部完成并通过终审（任务 1-12；用户/项目配置、目录与报价、幂等付费运行、媒体/LLM 闸门与费用账本、设置 UI、报价确认/严格 fallback/成本明细、文档收口与 e2e/浏览器验收）。设计文档为 [S2-2A 详细设计](./2026-08-12-s2-2a-configuration-cost-foundation-design.md)，实施计划为 [S2-2A 实施计划](./2026-08-12-s2-2a-configuration-cost-foundation-implementation-plan.md)，任务审查记录见 `docs/records/2026-08-20-s2-2a-task*.md`。
+- 2026-08-13 之前的 S2-2 状态记录（总体方案批准、计划归档说明）见下方历史块。
+- 下一步：`S2-2B 创作偏好 -> S2-2C Provider/Model 高级选择` 的详细设计与实施计划在 S2-2A 验收后按当日状态新建，不从历史草案续跑。
+
+历史块（2026-08-13）：
+
+- `S2-2` 已完成用户需求澄清与总体方案批准，设计入口为 [S2-2 总体设计](./2026-08-12-s2-2-generation-configuration-overall-design.md)。
+- 2026-08-11 已完成 `docs/plans/` 根目录历史计划归档；本轮计划状态治理的[设计](./archive/2026-08-11-plan-state-governance-closeout-design.md)与[实施计划](./archive/2026-08-11-plan-state-governance-closeout-implementation-plan.md)已归入历史证据区。
 
 ## Asset Planning 验证边界
 
@@ -23,9 +28,8 @@
 
 ## 当前推荐顺序
 
-1. 用户已基本完成前端 v1 六步工作区验收，并于 2026-08-12 批准启动 `S2-2`。
-2. 当前按 `S2-2A 配置与成本基础 -> S2-2B 创作偏好 -> S2-2C Provider/Model 高级选择` 连续推进；每一棒单独设计、实施、验证和提交。
-3. 当前只执行 S2-2A；B/C 的详细设计与实施计划在前一棒验收后按当日状态新建，不从历史草案续跑。
+1. `S2-2A 配置与成本基础` 已完成（2026-08-20）；下一棒为 `S2-2B 创作偏好 -> S2-2C Provider/Model 高级选择`，每一棒单独设计、实施、验证和提交。
+2. B/C 的详细设计与实施计划在 S2-2A 闸门确认后按当日状态新建，不从历史草案续跑。
 
 ## 新任务启动规则
 
