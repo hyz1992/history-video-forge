@@ -3,6 +3,7 @@ import { ScriptDraftPackage as ScriptDraftPackageSchema, StoryboardPlan } from "
 import type { DbClient, ProjectRecord, ScriptRecord, StoryboardRecord, TopicPackageRecord } from "../../db/client";
 import { LlmOutputError } from "../../runtime/llm/llm-output-error.js";
 import { createCompositeInteractionLogWriter, persistProjectRunArtifacts } from "../../runtime/trace/project-storage.js";
+import { createBillingInteractionLogWriter, type LlmBillingContext } from "../generation-cost/llm-billing-writer.js";
 import { generateStoryboardPlan, regenerateSingleSegment } from "./storyboard-generation.service";
 import { validateStoryboardPlan } from "./storyboard-local-validator";
 import { decodeStoredStoryboardPlan } from "./storyboard-plan-compatibility";
@@ -101,6 +102,8 @@ function buildTraceSummary(input: {
 
 export interface RunStoryboardGenerationInput {
   db: DbClient;
+  /** S2-2A 任务 9B：付费 quote 绑定 run 的计费上下文（LLM 记账）；免 quote 路径不传。 */
+  billingContext?: LlmBillingContext;
   project: ProjectRecord;
   userFeedback?: string;
 }
@@ -140,11 +143,15 @@ export async function runStoryboardGeneration(
   const draft = mapScriptDraft(scriptRecord);
   const topicBoundaryContext = mapTopicBoundaryContext(topicPackage);
   const runId = `storyboard_run_${input.db.generateId()}`;
-  const interactionLogWriter = createCompositeInteractionLogWriter({
+  const plainWriter1 = createCompositeInteractionLogWriter({
     project: input.project,
     phase: "storyboard",
     runId,
   });
+  // 9B：付费 quote 绑定 run 的 writer 包计费包装（LLM interaction 记账）
+  const interactionLogWriter = input.billingContext
+    ? createBillingInteractionLogWriter({ billing: input.billingContext, inner: plainWriter1 })
+    : plainWriter1;
   const previousActiveStoryboardRecordId = input.project.activeStoryboardRecordId;
 
   // Declare outside try so catch block can access them for failure-record update
@@ -399,6 +406,8 @@ export async function runStoryboardGeneration(
 }
 
 export interface RunStoryboardSegmentRegenInput {
+  /** S2-2A 任务 9B：付费 quote 绑定 run 的计费上下文（LLM 记账）；免 quote 路径不传。 */
+  billingContext?: LlmBillingContext;
   db: DbClient;
   project: ProjectRecord;
   segmentId: string;
@@ -441,11 +450,15 @@ export async function runStoryboardSegmentRegeneration(
   }
 
   const draft = mapScriptDraft(scriptRecord);
-  const interactionLogWriter = createCompositeInteractionLogWriter({
+  const plainWriter2 = createCompositeInteractionLogWriter({
     project: input.project,
     phase: "storyboard" as const,
     runId: input.db.generateId(),
   } as never);
+  // 9B：付费 quote 绑定 run 的 writer 包计费包装（LLM interaction 记账）
+  const interactionLogWriter = input.billingContext
+    ? createBillingInteractionLogWriter({ billing: input.billingContext, inner: plainWriter2 })
+    : plainWriter2;
 
   try {
     const newSegment = await regenerateSingleSegment({

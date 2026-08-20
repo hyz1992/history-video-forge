@@ -14,6 +14,7 @@ import {
   createCompositeInteractionLogWriter,
   persistProjectRunArtifacts,
 } from "../../runtime/trace/project-storage.js";
+import { createBillingInteractionLogWriter, type LlmBillingContext } from "../generation-cost/llm-billing-writer.js";
 
 function buildProjectStylePack() {
   return {
@@ -74,6 +75,8 @@ function mapTopicPackage(record: TopicPackageRecord) {
 
 export interface RunScriptGenerationInput {
   db: DbClient;
+  /** S2-2A 任务 9B：付费 quote 绑定 run 的计费上下文（LLM 记账）；免 quote 路径不传。 */
+  billingContext?: LlmBillingContext;
   project: ProjectRecord;
   allowPatch?: boolean;
   allowRegen?: boolean;
@@ -119,11 +122,15 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
     familyBiasPack,
   });
   const runId = `script_run_${input.db.generateId()}`;
-  const interactionLogWriter = createCompositeInteractionLogWriter({
+  // 9B：付费 quote 绑定 run 的 writer 包计费包装（LLM interaction 记账）
+  const plainWriter = createCompositeInteractionLogWriter({
     project: input.project,
     phase: "script",
     runId,
   });
+  const interactionLogWriter = input.billingContext
+    ? createBillingInteractionLogWriter({ billing: input.billingContext, inner: plainWriter })
+    : plainWriter;
   const previousActiveScriptRecordId = input.project.activeScriptRecordId;
   // Declare outside try so catch block can access it for failure-record update
   let generatingRecord: { id: string } | undefined;

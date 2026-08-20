@@ -2,6 +2,8 @@ import type { AppInstance, AppResponse, RouteContext } from "../../app";
 import { getProjectById } from "../projects/project.repository";
 import { demoStageGuard } from "../../shared/demo-stage-guard";
 import { runStoryboardGeneration, runStoryboardSegmentRegeneration } from "./storyboard-run.service";
+import { extractSubmitFields, submitGenerationRun } from "../generation-run/submit-protocol.js";
+import { isPaidLlmDispatchPossible } from "../generation-cost/provider-dispatch-gate.js";
 import { getStoryboardRecordById } from "./storyboard-record.repository";
 import { getSegmentOverride, upsertSegmentOverride } from "./storyboard-segment-override.repository";
 import { decodeStoredStoryboardPlan } from "./storyboard-plan-compatibility";
@@ -60,12 +62,27 @@ async function generateStoryboardController(
   const demoBlock = demoStageGuard(project, context.app.env.demoMode, "分镜");
   if (demoBlock) return demoBlock;
 
-  const payload = context.payload as StoryboardGeneratePayload | undefined;
-
+  const payload = (context.payload ?? {}) as Record<string, unknown>;
+  // S2-2A 任务 9B：quote 提交协议
+  const submit = extractSubmitFields(payload);
+  if (submit.present) {
+    if (submit.invalid) {
+      return { statusCode: 400, body: { error: "generation_submit_fields_incomplete", message: "cost_quote_id 与 idempotency_key 必须同时提供" } };
+    }
+    return submitGenerationRun(context, "storyboard.generate", undefined, {
+      user_feedback: payload.user_feedback,
+    });
+  }
+  if (isPaidLlmDispatchPossible(context.app.db)) {
+    return {
+      statusCode: 409,
+      body: { error: "paid_generation_quote_required", message: "当前部署可调用付费 LLM provider：请先创建报价并在生成请求中携带 cost_quote_id 与 idempotency_key" },
+    };
+  }
   return runStoryboardGeneration({
     db: context.app.db,
     project,
-    userFeedback: payload?.user_feedback,
+    userFeedback: (payload as StoryboardGeneratePayload | undefined)?.user_feedback,
   });
 }
 

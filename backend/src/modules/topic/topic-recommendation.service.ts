@@ -1,6 +1,10 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import type { AppResponse, ProjectTopicCandidateState } from "../../app.js";
+import type { ProjectRecord } from "../../db/client.js";
+import { StoredTopicCandidate } from "./topic-confirm.service.js";
+import { writeRefluxDraft } from "../event-library/event-library-draft.writer.js";
 
 import {
   normalizeTopicRecommendationFilter,
@@ -56,6 +60,7 @@ import {
   getProjectStorageProfile,
   persistProjectRunArtifacts,
 } from "../../runtime/trace/project-storage.js";
+import { createBillingInteractionLogWriter, type LlmBillingContext } from "../generation-cost/llm-billing-writer.js";
 
 import {
   buildTopicCandidates,
@@ -92,6 +97,8 @@ export interface TopicRecommendationOptions {
    * 自定义入口传 true（用户已锁定单一事件，不需要外部 event_identity 补位）。
    */
   disableFallback?: boolean;
+  /** S2-2A 任务 9B：付费 quote 绑定 run 的计费上下文（LLM 记账）；免 quote 路径不传。 */
+  billingContext?: LlmBillingContext;
 }
 
 export type TopicRecommendationRequestInput = Omit<
@@ -287,13 +294,21 @@ export async function recommendTopicCandidatesWithTrace(
     target_candidate_count: rawCandidateTargetCount,
     final_candidate_count: finalCandidateCount,
   };
-  const interactionLogWriter = project
+  // 9B：付费 quote 绑定 run 的 writer 包计费包装（LLM interaction 记账）
+  const plainWriter = project
     ? createCompositeInteractionLogWriter({
         project,
         phase: "topic",
         runId,
       })
     : undefined;
+  const interactionLogWriter =
+    plainWriter && options?.billingContext
+      ? createBillingInteractionLogWriter({
+          billing: options.billingContext,
+          inner: plainWriter,
+        })
+      : plainWriter;
 
   try {
     const result = await runTopicRecommendationGraph(

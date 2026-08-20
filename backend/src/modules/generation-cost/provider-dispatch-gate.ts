@@ -1,4 +1,5 @@
 import type { DbClient } from "../../db/client.js";
+import { env } from "../../config/env.js";
 
 /**
  * S2-2A 任务 7 二次重开（codex 审计 P1-A）：真实付费 provider 派发闸门。
@@ -136,6 +137,23 @@ export function isPaidMediaDispatchPossible(db: DbClient): boolean {
       entry.capability === "video.image_to_video" ||
       entry.capability === "tts.synthesize"
     ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * S2-2A 任务 9B：当前部署是否可能调用付费 LLM provider。
+ * 近似、保守方向：非 stub provider 即视为付费部署（真实 provider 调用有
+ * token 费用风险）——true 时旧无 quote 生成 API 必须返回
+ * paid_generation_quote_required；stub/local 始终保留免 quote 本地路径。
+ */
+export function isPaidLlmDispatchPossible(db: DbClient): boolean {
+  if (env.llm.provider === "stub") return false;
+  for (const entry of db.providerModelCatalog.values()) {
+    if (entry.status !== "active") continue;
+    if (entry.capability === "llm.smart" || entry.capability === "llm.flash") {
       return true;
     }
   }

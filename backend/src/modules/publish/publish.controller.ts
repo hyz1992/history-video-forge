@@ -2,6 +2,9 @@
 import { env } from "../../config/env";
 import { saveAssetManifestRecord } from "../assets/asset-manifest-record.repository";
 import { getProjectSnapshot } from "../projects/project-snapshot.service";
+import { runPublishGeneration } from "./publish-run.service";
+import { isPaidLlmDispatchPossible } from "../generation-cost/provider-dispatch-gate.js";
+import { extractSubmitFields, submitGenerationRun } from "../generation-run/submit-protocol.js";
 import {
   buildCoverPromptContext,
   generateCoverPromptDraft,
@@ -11,42 +14,10 @@ import { generateCoverImage } from "./cover-generate.service";
 import { generateDescription } from "./description-generator.service";
 import { deriveHashtags } from "./hashtag-derivation.service";
 import { getPublishLlmGateway } from "./llm-helper";
-import { savePublishPackageRecord } from "./publish-record.repository";
+import { buildDefaultPublishPackage, savePublishPackageRecord } from "./publish-record.repository";
 import { generateTitleCandidates } from "./title-generator.service";
 import { exportPublishPackage } from "./publish-export.service";
 import { createCompositeInteractionLogWriter } from "../../runtime/trace/project-storage";
-
-function buildDefaultPublishPackage(input: {
-  renderJobRecordId: string;
-  topicPackageId: string;
-  scriptRecordId: string;
-  storyboardRecordId: string;
-  assetManifestRecordId: string;
-  videoExportArtifactId: string;
-  coverArtifactId?: string | null;
-  coverPromptDraft?: string | null;
-  coverOrigin?: string;
-}): Record<string, unknown> {
-  return {
-    package_version: "publish_package_v1",
-    source_render_job_record_id: input.renderJobRecordId,
-    source_topic_package_id: input.topicPackageId,
-    source_script_record_id: input.scriptRecordId,
-    source_storyboard_record_id: input.storyboardRecordId,
-    source_asset_manifest_record_id: input.assetManifestRecordId,
-    video_export_artifact_id: input.videoExportArtifactId,
-    cover_artifact_id: input.coverArtifactId ?? null,
-    cover_prompt_draft: input.coverPromptDraft ?? null,
-    cover_origin: input.coverOrigin ?? "storyboard_image",
-    title_candidates: [],
-    selected_title: "",
-    description: "",
-    hashtags: [],
-    platform_profile: "generic",
-    readiness: "ready",
-    notes: [],
-  };
-}
 
 const EDITABLE_FIELDS = new Set([
   "title_candidates",
@@ -73,228 +44,26 @@ export async function publishGenerateController(
     return { statusCode: 404, body: { error: "project_not_found" } };
   }
 
-  // Verify render job exists and is completed
-  if (!project.activeRenderJobRecordId) {
-    return {
-      statusCode: 409,
-      body: { error: "no_active_render_job" },
-    };
-  }
-
-  const renderJob = db.renderJobRecords.get(project.activeRenderJobRecordId);
-  if (!renderJob) {
-    return {
-      statusCode: 409,
-      body: { error: "render_job_not_found" },
-    };
-  }
-
-  if (renderJob.status !== "completed") {
-    return {
-      statusCode: 409,
-      body: { error: "render_job_not_completed" },
-    };
-  }
-
-  const exportArtifact = renderJob.outputArtifactJson;
-  if (!exportArtifact) {
-    return {
-      statusCode: 409,
-      body: { error: "no_export_artifact" },
-    };
-  }
-
-  // Resolve upstream source record IDs from render job
-  const topicPackageId = project.activeTopicPackageId;
-  const scriptRecordId = project.activeScriptRecordId;
-  const storyboardRecordId = project.activeStoryboardRecordId;
-  const assetManifestRecordId = project.activeAssetManifestRecordId;
-
-  if (!topicPackageId || !scriptRecordId || !storyboardRecordId || !assetManifestRecordId) {
-    return {
-      statusCode: 409,
-      body: { error: "incomplete_upstream_pipeline" },
-    };
-  }
-
-  // Initialize cover from #1 storyboard image (copy file + register artifact)
-  let coverArtifactId: string | null = null;
-  const notes: string[] = [];
-  try {
-    const coverResult = await initializeCoverFromStoryboard(
-      db,
-      projectId,
-      assetManifestRecordId,
-    );
-    coverArtifactId = coverResult.coverArtifactId;
-  } catch (err) {
-    notes.push(
-      `cover_init_skipped: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
-
-  // Resolve upstream records
-  const topicPackage = db.topicPackages.get(topicPackageId);
-  const scriptRecord = db.scriptRecords.get(scriptRecordId);
-
-  // Save preliminary package as history; do not replace the last valid package.
-  const prePackageJson = buildDefaultPublishPackage({
-    renderJobRecordId: renderJob.id,
-    topicPackageId,
-    scriptRecordId,
-    storyboardRecordId,
-    assetManifestRecordId,
-    videoExportArtifactId: exportArtifact.artifact_id,
-    coverArtifactId,
-    coverPromptDraft: null,
-  });
-  (prePackageJson as Record<string, unknown>).readiness = "generating";
-  (prePackageJson as Record<string, unknown>).notes = notes;
-
-  const generatingRecord = await savePublishPackageRecord(db, {
-    projectId,
-    renderJobRecordId: renderJob.id,
-    topicPackageId,
-    scriptRecordId,
-    storyboardRecordId,
-    assetManifestRecordId,
-    packageJson: prePackageJson,
-    validationResultJson: null,
-    executionStateJson: { generated_at: new Date().toISOString(), generating: true },
-  });
-
-  const publishRunId = `publish_run_${db.generateId()}`;
-  const interactionLogWriter = createCompositeInteractionLogWriter({
-    project,
-    phase: "publish",
-    runId: publishRunId,
-  });
-
-  // Generate cover prompt via LLM
-  let coverPromptDraft: string | null = null;
-  let llmUsed = false;
-  try {
-    const ctx = buildCoverPromptContext(db, projectId, assetManifestRecordId);
-    coverPromptDraft = await generateCoverPromptDraft(ctx, interactionLogWriter);
-    llmUsed = true;
-  } catch (err) {
-    notes.push(
-      `cover_prompt_gen_failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
-
-  // Generate description via LLM
-  let description = "";
-  try {
-    if (topicPackage && scriptRecord) {
-      const descResult = await generateDescription({
-        topicTitle: topicPackage.title,
-        selectedAngle: topicPackage.selectedAngle,
-        scriptSummary: scriptRecord.scriptText.slice(0, 500),
-        durationSec: exportArtifact.duration_sec ?? scriptRecord.estimatedDurationSec ?? 60,
-        interactionLogWriter,
-      });
-      description = descResult.description;
-      llmUsed = true;
+  const payload = (context.payload ?? {}) as Record<string, unknown>;
+  // S2-2A 任务 9B：quote 提交协议（付费部署下无 quote 明确拒绝，不静默创建无限预算授权）
+  const submit = extractSubmitFields(payload);
+  if (submit.present) {
+    if (submit.invalid) {
+      return { statusCode: 400, body: { error: "generation_submit_fields_incomplete", message: "cost_quote_id 与 idempotency_key 必须同时提供" } };
     }
-  } catch (err) {
-    notes.push(
-      `description_gen_failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    return submitGenerationRun(context, "publish.generate", undefined, {});
+  }
+  if (isPaidLlmDispatchPossible(db)) {
+    return {
+      statusCode: 409,
+      body: {
+        error: "paid_generation_quote_required",
+        message: "当前部署可调用付费 LLM provider：请先创建报价并在生成请求中携带 cost_quote_id 与 idempotency_key",
+      },
+    };
   }
 
-  // Generate title candidates via LLM and auto-select first
-  let titleCandidates: Array<{ candidate_id: string; text: string; style: string }> = [];
-  let selectedTitle = "";
-  try {
-    if (topicPackage && scriptRecord) {
-      const titleResult = await generateTitleCandidates({
-        topicTitle: topicPackage.title,
-        selectedAngle: topicPackage.selectedAngle,
-        scriptSummary: scriptRecord.scriptText.slice(0, 300),
-        durationSec: Math.round(exportArtifact.duration_sec ?? scriptRecord.estimatedDurationSec ?? 60),
-        interactionLogWriter,
-      });
-      titleCandidates = titleResult.candidates;
-      if (titleCandidates.length > 0) {
-        selectedTitle = titleCandidates[0].text;
-      }
-      llmUsed = true;
-    }
-  } catch (err) {
-    notes.push(
-      `title_gen_failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
-
-  // Derive hashtags from structured upstream fields (non-LLM)
-  let hashtags: string[] = [];
-  if (topicPackage) {
-    hashtags = deriveHashtags({
-      familyLabel: topicPackage.familyLabel,
-      scopeLabel: topicPackage.scopeLabel,
-      topicTitle: topicPackage.title,
-    });
-  }
-
-  // Build and save the publish package
-  const packageJson = buildDefaultPublishPackage({
-    renderJobRecordId: renderJob.id,
-    topicPackageId,
-    scriptRecordId,
-    storyboardRecordId,
-    assetManifestRecordId,
-    videoExportArtifactId: exportArtifact.artifact_id,
-    coverArtifactId,
-    coverPromptDraft,
-  });
-
-  if (notes.length > 0) {
-    (packageJson as Record<string, unknown>).notes = notes;
-  }
-
-  // Set description from LLM generation
-  if (description) {
-    (packageJson as Record<string, unknown>).description = description;
-  }
-
-  // Set hashtags from derivation
-  if (hashtags.length > 0) {
-    (packageJson as Record<string, unknown>).hashtags = hashtags;
-  }
-
-  // Set title candidates and auto-selected title
-  if (titleCandidates.length > 0) {
-    (packageJson as Record<string, unknown>).title_candidates = titleCandidates;
-    (packageJson as Record<string, unknown>).selected_title = selectedTitle;
-  }
-
-  const record = await savePublishPackageRecord(db, {
-    id: generatingRecord.id,
-    projectId,
-    renderJobRecordId: renderJob.id,
-    topicPackageId,
-    scriptRecordId,
-    storyboardRecordId,
-    assetManifestRecordId,
-    packageJson,
-    validationResultJson: null,
-    executionStateJson: {
-      generated_at: new Date().toISOString(),
-      llm_used: llmUsed,
-    },
-  });
-
-  await db.thirdAggregateWriter?.activatePublish(project, record);
-  project.activePublishPackageRecordId = record.id;
-
-  // Return the snapshot with the new active_publish_package
-  const snapshot = await getProjectSnapshot(db, projectId);
-
-  return {
-    statusCode: 201,
-    body: snapshot,
-  };
+  return runPublishGeneration({ db, project });
 }
 
 export async function publishUpdateController(

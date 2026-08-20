@@ -23,6 +23,7 @@ import {
   sanitizeAssetPlanningResilienceDiagnostic,
   type TraceLogWriter,
 } from "../../runtime/trace/project-storage.js";
+import { createBillingInteractionLogWriter, type LlmBillingContext } from "../generation-cost/llm-billing-writer.js";
 import { LlmOutputError } from "../../runtime/llm/llm-output-error.js";
 import { getValidatedRuntimeEnv } from "../../config/env.js";
 import {
@@ -44,6 +45,8 @@ export interface RunAssetPlanningGenerationInput {
   project: ProjectRecord;
   /** 演示/测试态：与 storyboard 快照一致的真实系统约束来源。 */
   demoMode: boolean;
+  /** S2-2A 任务 9B：付费 quote 绑定 run 的计费上下文（LLM 记账）；免 quote 路径不传。 */
+  billingContext?: LlmBillingContext;
 }
 
 function writeTraceErrorSafely(writer: TraceLogWriter, message: string) {
@@ -63,13 +66,21 @@ const NOOP_TRACE_LOG_WRITER: TraceLogWriter = {
 function createTraceLogWriterSafely(input: {
   project: ProjectRecord;
   runId: string;
+  billingContext?: LlmBillingContext;
 }): TraceLogWriter {
   try {
-    return createCompositeInteractionLogWriter({
+    const plainWriter = createCompositeInteractionLogWriter({
       project: input.project,
       phase: "asset_planning",
       runId: input.runId,
     });
+    // 9B：付费 quote 绑定 run 的 writer 包计费包装（LLM interaction 记账）
+    return input.billingContext
+      ? (createBillingInteractionLogWriter({
+          billing: input.billingContext,
+          inner: plainWriter,
+        }) as TraceLogWriter)
+      : plainWriter;
   } catch {
     console.warn("[asset-planning] trace_writer_initialization_failed");
     return NOOP_TRACE_LOG_WRITER;
@@ -812,6 +823,7 @@ export async function runAssetPlanningGeneration(
   const interactionLogWriter = createTraceLogWriterSafely({
     project: input.project,
     runId,
+    billingContext: input.billingContext,
   });
   const previousActiveAssetPlanRecordId = input.project.activeAssetPlanRecordId;
   const previousProjectStatus = input.project.status;

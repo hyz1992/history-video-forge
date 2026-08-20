@@ -12,6 +12,7 @@ import {
   recommendTopicCandidates,
   recommendTopicCandidatesWithTrace,
 } from "./topic-recommendation.service";
+import { runTopicRecommendationWithStore } from "./topic-recommendation-flow.service";
 import {
   confirmTopicCandidate,
   type StoredTopicCandidate,
@@ -19,6 +20,8 @@ import {
 import { writeRefluxDraft } from "../event-library/event-library-draft.writer.js";
 import { createDraft } from "../event-library/event-library-draft.repository.js";
 import { refineCustomTopic } from "./topic-custom-refine.service.js";
+import { extractSubmitFields, submitGenerationRun } from "../generation-run/submit-protocol.js";
+import { isPaidLlmDispatchPossible } from "../generation-cost/provider-dispatch-gate.js";
 import { detectPromptInjection, validateCustomDigest } from "./topic-custom-input.service.js";
 
 interface TopicRecommendationSeedPayload {
@@ -284,144 +287,51 @@ export async function createTopicRecommendationsController(
   const demoBlock = demoStageGuard(project, context.app.env.demoMode, "选题");
   if (demoBlock) return demoBlock;
 
+  const rawPayload = (context.payload ?? {}) as Record<string, unknown>;
+  // S2-2A 任务 9B：quote 提交协议（付费部署下无 quote 明确拒绝）
+  const submit = extractSubmitFields(rawPayload);
+  if (submit.present) {
+    if (submit.invalid) {
+      return { statusCode: 400, body: { error: "generation_submit_fields_incomplete", message: "cost_quote_id 与 idempotency_key 必须同时提供" } };
+    }
+    return submitGenerationRun(context, "topic.generate", undefined, {
+      ...rawPayload,
+      _entry: "topic-recommend",
+    });
+  }
+  if (isPaidLlmDispatchPossible(context.app.db)) {
+    return {
+      statusCode: 409,
+      body: { error: "paid_generation_quote_required", message: "当前部署可调用付费 LLM provider：请先创建报价并在生成请求中携带 cost_quote_id 与 idempotency_key" },
+    };
+  }
+
   // Set generating state BEFORE LLM call so refresh shows progress
   project.status = "topic_generating";
   project.updatedAt = new Date();
   await context.app.db.firstAggregateWriter?.syncProject(project);
 
   try {
-    const recommendation = await recommendTopicCandidatesWithTrace(
-    context.app.db,
-    {
-      canonicalName: validatedPayload.value.canonical_name,
-      summary: validatedPayload.value.summary,
-      coreConflict: validatedPayload.value.core_conflict,
-      strongScene: validatedPayload.value.strong_scene,
-      sourceHint: validatedPayload.value.source_hint,
-      recentUsageHint: validatedPayload.value.recent_usage_hint,
-      canonicalQuotes: validatedPayload.value.canonical_quotes,
-      canonicalQuoteIntents: validatedPayload.value.canonical_quote_intents,
-      tags: validatedPayload.value.tags,
-      ...(validatedFilters?.success ? { filters: validatedFilters.data } : {}),
-    },
-    {
-      projectId: project.id,
-    },
-  );
-  const candidates = recommendation.candidates;
-
-  const storedCandidates = new Map<string, StoredTopicCandidate>();
-  const responseCandidates = [];
-
-  for (const candidate of candidates) {
-    const normalizedCandidate = await normalizeEventInput(context.app.db, {
-      rawInput: candidate.title,
-      canonicalQuotes: validatedPayload.value.canonical_quotes,
-      canonicalQuoteIntents: validatedPayload.value.canonical_quote_intents,
-      sourceType: "system_recommendation",
+    const response = await runTopicRecommendationWithStore({
+      db: context.app.db,
+      project,
+      topicCandidateStore: context.app.topicCandidateStore,
+      seed: {
+        canonicalName: validatedPayload.value.canonical_name,
+        summary: validatedPayload.value.summary,
+        coreConflict: validatedPayload.value.core_conflict,
+        strongScene: validatedPayload.value.strong_scene,
+        sourceHint: validatedPayload.value.source_hint,
+        recentUsageHint: validatedPayload.value.recent_usage_hint,
+        canonicalQuotes: validatedPayload.value.canonical_quotes,
+        canonicalQuoteIntents: validatedPayload.value.canonical_quote_intents,
+        tags: validatedPayload.value.tags,
+      },
+      filters: validatedFilters?.success ? validatedFilters.data : undefined,
+      actorUserId: context.auth.anonymous ? null : context.auth.userId,
+      prismaClient: context.app.prismaClient,
     });
-    const candidateId = randomUUID();
-    storedCandidates.set(candidateId, {
-      candidateId,
-      projectId: project.id,
-      event: normalizedCandidate.event,
-      title: candidate.title,
-      oneLineAngle: candidate.one_line_angle,
-      familyLabel: candidate.family_label,
-      scopeLabel: candidate.scope_label,
-      coreConflict: candidate.core_conflict,
-      strongScene: candidate.strong_scene,
-      mustCoverPreview: candidate.must_cover_preview,
-      sourceHint: candidate.source_hint,
-      recentUsageHint: candidate.recent_usage_hint,
-      whyThisNow: candidate.why_this_now,
-      riskHints: [...candidate.risk_hints],
-      viralRubric: candidate.viral_rubric
-        ? { ...(candidate.viral_rubric as Record<string, string>) }
-        : {},
-    });
-
-    responseCandidates.push({
-      candidate_id: candidateId,
-      ...candidate,
-    });
-  }
-
-  const topicRun = (recommendation as Record<string, unknown>).topic_run as Record<string, unknown> | undefined ?? {
-    project_id: project.id as string,
-    round_id: `topic_run_${randomUUID()}`,
-    round_index:
-      (context.app.topicCandidateStore.get(project.id)?.rounds.length ?? 0) + 1,
-    previous_round_count:
-      context.app.topicCandidateStore.get(project.id)?.rounds.length ?? 0,
-  };
-  const projectTopicState = context.app.topicCandidateStore.get(project.id) ?? {
-    candidatesById: new Map<string, StoredTopicCandidate>(),
-    rounds: [],
-  };
-
-  for (const [candidateId, storedCandidate] of storedCandidates.entries()) {
-    projectTopicState.candidatesById.set(candidateId, storedCandidate);
-  }
-
-  projectTopicState.rounds.push({
-    roundId: String(topicRun.round_id),
-    roundIndex: Number(topicRun.round_index),
-    createdAt: new Date().toISOString(),
-    candidates: [...storedCandidates.values()],
-  } as never);
-  context.app.topicCandidateStore.set(project.id, projectTopicState);
-
-  // 生成成功，状态转换为 candidates_ready
-  project.status = "topic_candidates_ready";
-  project.updatedAt = new Date();
-  await context.app.db.firstAggregateWriter?.syncProject(project);
-
-  // 推荐回流：异步写 EventLibraryDraft(recommendation_reflux)，不阻塞响应
-  const prismaClient = context.app.prismaClient;
-  if (prismaClient && !context.auth.anonymous) {
-    const ownerId = context.auth.userId;
-    setImmediate(() => {
-      for (const storedCandidate of storedCandidates.values()) {
-        writeRefluxDraft({
-          prisma: prismaClient,
-          candidate: storedCandidate,
-          projectId: project.id,
-          ownerId,
-        });
-      }
-    });
-  }
-
-  const currentRound = projectTopicState.rounds.at(-1);
-  const historyRounds = projectTopicState.rounds.slice(0, -1);
-
-  return {
-    statusCode: 200,
-    body: {
-      project_id: project.id,
-      event_id: projectTopicState.rounds.at(-1)?.candidates[0]?.event.id ?? null,
-      topic_run_id: (topicRun["round_id"] ?? topicRun["topic_run_id"]) as string,
-      topic_run_index: (topicRun["round_index"] ?? topicRun["topic_run_index"]) as number,
-      candidates: responseCandidates,
-      current_round: currentRound
-        ? {
-            round_id: currentRound.roundId,
-            round_index: currentRound.roundIndex,
-            created_at: currentRound.createdAt,
-            candidates: currentRound.candidates.map(toResponseCandidate),
-          }
-        : null,
-      history_rounds: historyRounds.map((round) => ({
-        round_id: round.roundId,
-        round_index: round.roundIndex,
-        created_at: round.createdAt,
-        candidates: round.candidates.map(toResponseCandidate),
-      })),
-      graph_trace_summary: recommendation.trace,
-      runtime_diagnostics: recommendation.diagnostics,
-    },
-  };
+    return response;
   } catch (error) {
     project.status = "topic_pending";
     project.updatedAt = new Date();

@@ -1,6 +1,12 @@
 import type { TopicRecommendationFilter } from "../../../../shared/src/topic/topic-recommendation-filter.schema.js";
 
 export interface LlmInteractionLogEntry {
+  /**
+   * S2-2A 任务 9B：稳定 interaction 标识（记账反查锚点）。
+   * 由 createBillingInteractionLogWriter 注入：`<runId>:<operationName>:<attemptIndex>`。
+   * 普通（免 quote）路径不注入，保持 null。
+   */
+  id?: string;
   generatedAt: string;
   provider: string;
   model: string;

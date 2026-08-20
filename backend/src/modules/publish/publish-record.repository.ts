@@ -9,6 +9,40 @@ export type SavePublishPackageRecordInput = Omit<
   updatedAt?: Date;
 };
 
+
+/** 默认发布包（controller 与 publish-run.service 共用；覆盖发布页可编辑字段）。 */
+export function buildDefaultPublishPackage(input: {
+  renderJobRecordId: string;
+  topicPackageId: string;
+  scriptRecordId: string;
+  storyboardRecordId: string;
+  assetManifestRecordId: string;
+  videoExportArtifactId: string;
+  coverArtifactId?: string | null;
+  coverPromptDraft?: string | null;
+  coverOrigin?: string;
+}): Record<string, unknown> {
+  return {
+    package_version: "publish_package_v1",
+    source_render_job_record_id: input.renderJobRecordId,
+    source_topic_package_id: input.topicPackageId,
+    source_script_record_id: input.scriptRecordId,
+    source_storyboard_record_id: input.storyboardRecordId,
+    source_asset_manifest_record_id: input.assetManifestRecordId,
+    video_export_artifact_id: input.videoExportArtifactId,
+    cover_artifact_id: input.coverArtifactId ?? null,
+    cover_prompt_draft: input.coverPromptDraft ?? null,
+    cover_origin: input.coverOrigin ?? "storyboard_image",
+    title_candidates: [],
+    selected_title: "",
+    description: "",
+    hashtags: [],
+    platform_profile: "generic",
+    readiness: "ready",
+    notes: [],
+  };
+}
+
 export async function savePublishPackageRecord(
   db: DbClient,
   input: SavePublishPackageRecordInput,

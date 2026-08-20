@@ -11,6 +11,7 @@ import {
   priceGenerationWorkload,
   type PricingWorkloadItem,
 } from "./pricing.service.js";
+import { OPERATION_TOKEN_ESTIMATES } from "./generation-cost.service.js";
 
 /**
  * S2-2A 任务 9A：媒体 provider 调用的 usage 成本记账（详细设计 4.9 / 8.4 / 步骤 3）。
@@ -309,4 +310,150 @@ async function checkAndHandleOverrun(
     .map((entry) => entry.id);
   await disableProviderModelCatalogEntries(input.db, catalogIds);
   return true;
+}
+
+// ─── LLM token 记账（S2-2A 任务 9B） ────────────────────────────────────────
+
+export interface RecordLlmUsageInput {
+  db: DbClient;
+  snapshot: RunConfigurationSnapshotRecord;
+  runId: string;
+  /** 计价估算上下文（缺失 token 时回退该 operation 的 token 估算）。 */
+  operationOf: import("../../../../shared/src/index.js").GenerationOperation;
+  /** 反查 interaction log 的稳定锚点（runId + operationName + attemptIndex）。 */
+  interactionId: string;
+  operationName: string;
+  capability: "llm.smart" | "llm.flash";
+  providerKey: string;
+  modelId: string;
+  /** provider 返回的精确 token；缺失时保留 null actual 与估算 basis（不伪造）。 */
+  inputTokens: number | null;
+  outputTokens: number | null;
+  durationMs?: number;
+  status: "succeeded" | "failed";
+  /** 同 run 内同一 operation 的调用序号（从 0 起），参与唯一记账键。 */
+  attemptIndex: number;
+}
+
+export interface RecordLlmUsageOutcome {
+  record: UsageCostRecordRecord;
+  actualCostState: UsageCostActualState;
+}
+
+/**
+ * LLM interaction 的 usage 记账（实施计划 9B 步骤 1）：
+ * - 唯一键 (runConfigurationSnapshotId, providerRequestKey=llm:<runId>:<operationName>,
+ *   attemptIndex)——同 interaction/attempt 重放只更新原记录，不新增费用；
+ * - 有 provider token → estimated 按实际 token 计价、actual=同值
+ *   （costBasis=provider_usage，input/output units=实际 token）；
+ * - 无 token → actual=null、costBasis=estimate（估算按 operation 级 token 估算），
+ *   绝不伪造实际 token。
+ * LLM 调用无"超出授权上界"的 execution 后确认路径（token 计价即精确费用），
+ * overrun 检查沿用媒体同款累计口径（媒体+LLM 统一按 snapshot 累计）。
+ */
+export async function recordLlmUsage(
+  input: RecordLlmUsageInput,
+): Promise<RecordLlmUsageOutcome> {
+  const { db, snapshot } = input;
+
+  const catalog = listProviderModelCatalog(db);
+  const entry = catalog.find(
+    (item) =>
+      item.capability === input.capability &&
+      item.providerKey === input.providerKey &&
+      item.modelId === input.modelId,
+  );
+
+  // 计价 token：实际 token 优先，缺失回退 operation 估算（与实际报价估算同源）
+  const estimates = OPERATION_TOKEN_ESTIMATES[input.operationOf];
+  const estimatedInput = input.inputTokens ?? estimates.estimated_input_tokens;
+  const estimatedOutput = input.outputTokens ?? estimates.estimated_output_tokens;
+
+  let estimatedCostMicros = "0";
+  if (entry) {
+    const pricingCatalog =
+      entry.status === "active"
+        ? catalog
+        : catalog.map((item) => (item.id === entry.id ? { ...item, status: "active" as const } : item));
+    const priced = priceGenerationWorkload({
+      catalog: pricingCatalog,
+      blockedProviderModelIds: [],
+      workload: [
+        {
+          capability: input.capability,
+          provider_model_id: entry.id,
+          operation: input.operationOf,
+          unit_type: "token",
+          estimated_input_tokens: estimatedInput,
+          estimated_output_tokens: estimatedOutput,
+        },
+      ],
+    });
+    if (priced.ok) {
+      estimatedCostMicros = priced.value.items[0]?.estimated_cost_micros ?? "0";
+    }
+  }
+
+  const hasExactTokens = input.inputTokens !== null && input.outputTokens !== null;
+  let actualCostMicros: string | null = null;
+  let costBasis: UsageCostRecordRecord["costBasis"] = "estimate";
+  let actualCostState: UsageCostActualState = "estimated_after_execution";
+  let inputUnits: number | null = null;
+  let outputUnits: number | null = null;
+  if (input.status === "succeeded" && hasExactTokens) {
+    // provider 确认 token → 精确计价（provider_usage）；估算与确认同源定价
+    actualCostMicros = estimatedCostMicros;
+    costBasis = "provider_usage";
+    actualCostState = "provider_confirmed";
+    inputUnits = input.inputTokens!;
+    outputUnits = input.outputTokens!;
+  }
+
+  const providerRequestKey = `llm:${input.runId}:${input.operationName}`;
+  const usageKey = {
+    runConfigurationSnapshotId: snapshot.id,
+    providerRequestKey,
+    attemptIndex: input.attemptIndex,
+  };
+
+  let existing: UsageCostRecordRecord | undefined;
+  for (const record of db.usageCostRecords.values()) {
+    if (
+      record.runConfigurationSnapshotId === usageKey.runConfigurationSnapshotId &&
+      record.providerRequestKey === usageKey.providerRequestKey &&
+      record.attemptIndex === usageKey.attemptIndex
+    ) {
+      existing = record;
+      break;
+    }
+  }
+  const now = new Date();
+  const record: UsageCostRecordRecord = {
+    id: existing?.id ?? db.generateId(),
+    runConfigurationSnapshotId: usageKey.runConfigurationSnapshotId,
+    assetProviderJobRecordId: null,
+    interactionId: input.interactionId,
+    capability: input.capability,
+    providerKey: input.providerKey,
+    modelId: input.modelId,
+    providerRequestKey: usageKey.providerRequestKey,
+    attemptIndex: usageKey.attemptIndex,
+    status: input.status,
+    unitType: "token",
+    inputUnits,
+    outputUnits,
+    estimatedCostMicros,
+    actualCostMicros,
+    costBasis,
+    durationMs: input.durationMs ?? null,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+  };
+
+  if (db.thirdAggregateWriter) {
+    await db.thirdAggregateWriter.saveUsageCostRecord(record);
+  }
+  db.usageCostRecords.set(record.id, record);
+
+  return { record, actualCostState };
 }

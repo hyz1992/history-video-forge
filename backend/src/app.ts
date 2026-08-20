@@ -20,6 +20,13 @@ import { registerGenerationCostRoutes } from "./modules/generation-cost/generati
 import { createGenerationRunRepository, type GenerationRunRepository } from "./modules/generation-run/generation-run.repository";
 import { createGenerationRunDispatcher, type GenerationRunDispatcher } from "./modules/generation-run/generation-run-dispatcher";
 import { createAssetsDispatchHandler } from "./modules/assets/assets-run.service";
+import {
+  createTopicDispatchHandler,
+  createScriptDispatchHandler,
+  createStoryboardDispatchHandler,
+  createAssetPlanDispatchHandler,
+  createPublishDispatchHandler,
+} from "./modules/generation-run/llm-dispatch-handlers.js";
 import type { QuoteReadinessInput } from "./modules/generation-cost/generation-cost.service";
 import { loadMediaLibraryCatalog } from "./modules/assets/media-library-catalog.loader";
 import { configureVoiceProfilePersistence } from "./modules/assets/voice/voice-profile.repository";
@@ -247,6 +254,12 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
       leaseDurationMs: 30_000,
       handlers: {
         "assets.generate": createAssetsDispatchHandler(),
+        // S2-2A 任务 9B：五个 LLM 生成 operation 的 dispatcher handler
+        "topic.generate": createTopicDispatchHandler({ topicCandidateStore }),
+        "script.generate": createScriptDispatchHandler(),
+        "storyboard.generate": createStoryboardDispatchHandler(),
+        "asset_plan.generate": createAssetPlanDispatchHandler(),
+        "publish.generate": createPublishDispatchHandler(),
       },
     }),
     addRoute(method, pattern, handler) {
