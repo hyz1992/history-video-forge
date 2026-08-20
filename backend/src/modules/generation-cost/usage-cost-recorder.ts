@@ -278,9 +278,8 @@ async function checkAndHandleOverrun(
 
   // 8.4 语义为一次性动作：同 (run, capability, providerKey, modelId) 已追加过
   // pricing_overrun 则不再重复追加（同一 attempt 的 running 轮询 + completed
-  // 回执重放只应触发一次）；不同模型的超界仍各自追加事件并禁用对应目录项
-  // （M-7 细化：去重键含 providerKey/modelId，完整符合 8.4"把对应 catalog 项
-  // 标记为不适合自动新运行"）。catalog 禁用幂等（已禁用条目 no-op）。
+  // 回执重放只应触发一次）；不同模型的超界仍各自追加事件，并按 disableCatalog
+  // 决定是否禁用对应目录项（媒体 true / LLM false，I-3）。禁用幂等。
   const existingEvents = input.db.generationRunEvents.get(input.runId) ?? [];
   const alreadyFlagged = existingEvents.some((event) => {
     if (event.eventType !== "pricing_overrun") return false;
