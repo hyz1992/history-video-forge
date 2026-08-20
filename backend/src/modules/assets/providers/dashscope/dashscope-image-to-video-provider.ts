@@ -196,6 +196,8 @@ export function createDashscopeImageToVideoProvider(
   return {
     providerName: "dashscope_image_to_video",
     providerType: "video",
+    // S2-2A 任务 9A：真实付费 adapter，受付费闸门与 usage 记账约束
+    billing: { capability: "video.image_to_video", providerKey: "dashscope", modelId: options.model },
     canHandle: ({ taskType }) => taskType === "video_clip",
 
     prepare: async (ctx) => {

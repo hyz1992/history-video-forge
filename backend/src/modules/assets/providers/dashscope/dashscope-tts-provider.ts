@@ -258,6 +258,8 @@ export function createDashscopeTtsProvider(
   return {
     providerName: "dashscope_tts",
     providerType: "tts",
+    // S2-2A 任务 9A：真实付费 adapter，受付费闸门与 usage 记账约束
+    billing: { capability: "tts.synthesize", providerKey: "dashscope", modelId: options.model },
     canHandle: ({ taskType }) => taskType === "tts_audio",
 
     prepare: async (ctx) => ({

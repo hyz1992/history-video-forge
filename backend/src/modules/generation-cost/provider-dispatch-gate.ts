@@ -120,3 +120,24 @@ export function checkProviderDispatchGate(
     `capability ${target.capability} 没有目录项 (${target.providerKey}:${target.modelId})，禁止真实派发`,
   );
 }
+
+/**
+ * S2-2A 任务 9A（验收 7）：当前部署是否可能派发付费媒体 provider。
+ * 与 buildProviderRegistry 的付费 adapter 注册条件同源（近似、保守方向）：
+ * 凭据存在 + 目录存在任一 active 付费媒体项。true 时旧无 quote 生成 API
+ * 必须返回 paid_generation_quote_required，不得静默创建无限预算授权。
+ */
+export function isPaidMediaDispatchPossible(db: DbClient): boolean {
+  if (!process.env.ALIYUN_DASHSCOPE_API_KEY) return false;
+  for (const entry of db.providerModelCatalog.values()) {
+    if (entry.status !== "active") continue;
+    if (
+      entry.capability === "image.generate" ||
+      entry.capability === "video.image_to_video" ||
+      entry.capability === "tts.synthesize"
+    ) {
+      return true;
+    }
+  }
+  return false;
+}

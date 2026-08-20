@@ -68,9 +68,26 @@ export interface AssetProviderNormalizeResult {
 
 // ─── Provider Adapter Interface ────────────────────────────────────────────
 
+/** 付费媒体 capability（与 provider-dispatch-gate 的 PaidMediaCapability 一致）。 */
+export type PaidMediaAdapterCapability =
+  | "image.generate"
+  | "video.image_to_video"
+  | "tts.synthesize";
+
 export interface AssetProviderAdapter {
   readonly providerName: string;
   readonly providerType: AssetProviderType;
+  /**
+   * S2-2A 任务 9A：真实付费 adapter 必须声明计费身份。
+   * 声明即受付费闸门约束：无有效 quote 绑定 run/snapshot 时引擎拒绝派发；
+   * usage 记账按 (capability, providerKey, modelId) 定价。
+   * 本地/fake adapter 不声明（零外部费用，不进成本账本）。
+   */
+  readonly billing?: {
+    capability: PaidMediaAdapterCapability;
+    providerKey: string;
+    modelId: string;
+  };
   canHandle(input: AssetProviderCanHandleInput): boolean;
   prepare(ctx: AssetProviderContext): Promise<AssetProviderPreparedJob>;
   submit(

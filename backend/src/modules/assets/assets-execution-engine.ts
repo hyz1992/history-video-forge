@@ -12,6 +12,8 @@ import type {
 import type { DbClient } from "../../db/client.js";
 import { appendAssetsRunEvent } from "./assets-run.service.js";
 import { createAssetProviderJobRecord } from "./asset-provider-job.repository.js";
+import { recordProviderJobUsage } from "../generation-cost/usage-cost-recorder.js";
+import { DEFAULT_VIDEO_ESTIMATE_SECONDS } from "../generation-cost/generation-cost.service.js";
 import type {
   AssetProviderAdapter,
   AssetProviderContext,
@@ -103,6 +105,9 @@ export async function executeAssetManifest(
     // S2-2A 任务 6：all_remotion 永不调用视频 provider——即使客户端构造了
     // video task，也按 manifest 中持久化的策略跳过，不创建 provider job；
     // 段 route 缺失时保守跳过（无法确认策略就不执行视频）。
+    // S2-2A 任务 9A（终审 I-A）：quote 绑定 run 的未授权段由 run.service 在
+    // manifest 收敛时把 video_clip execution 置为跳过（终态），引擎不再见到；
+    // 非绑定 run（free/legacy 升级路径）保持 image_with_motion 上升级语义。
     if (execution.task_type === "video_clip") {
       const route = findSegmentRoute(manifestCopy, planTask.source_segment_id);
       if (!route || (route.video_strategy ?? "prefer_remotion") === "all_remotion") {
@@ -175,11 +180,49 @@ async function runAdapterPipeline(
   planTask: AssetPlan["tasks"][number],
 ): Promise<void> {
   const execution = ctx.execution;
+  const startedAtMs = Date.now();
   const startedAt = new Date().toISOString();
   execution.status = "running";
   execution.started_at = startedAt;
   execution.attempts += 1;
   execution.provider_id = adapter.providerName;
+
+  // S2-2A 任务 9A 付费闸门（验收 1）：真实付费 adapter 只在有效 quote 绑定的
+  // run/snapshot 上下文中派发——run 存在、快照存在、quote 已绑定且携带授权上界。
+  // 本地/fake adapter（无 billing 声明）不受限（零外部费用，验收 6）。
+  let paidUsageContext: {
+    snapshot: import("../../db/client.js").RunConfigurationSnapshotRecord;
+    billing: NonNullable<AssetProviderAdapter["billing"]>;
+  } | null = null;
+  if (adapter.billing) {
+    const run = db.generationRuns.get(assetRunId);
+    const snapshot = run ? db.runConfigurationSnapshots.get(run.runConfigurationSnapshotId) : undefined;
+    const authorized =
+      run &&
+      snapshot &&
+      snapshot.quoteId !== null &&
+      snapshot.authorizationCostMicros !== null;
+    if (!authorized) {
+      execution.status = "failed";
+      execution.completed_at = new Date().toISOString();
+      execution.notes = [
+        ...execution.notes,
+        "[gate] paid provider blocked: paid_generation_quote_required — submit with a valid cost quote before dispatch",
+      ];
+      await handleVideoStrategyFailure(
+        manifest,
+        planTask,
+        execution,
+        db,
+        assetRunId,
+        ctx.assetPlan,
+        "paid_generation_quote_required",
+        "no valid quote-bound run/snapshot for paid provider dispatch",
+      );
+      return;
+    }
+    paidUsageContext = { snapshot: snapshot!, billing: adapter.billing };
+  }
 
   try {
     // prepare
@@ -200,6 +243,11 @@ async function runAdapterPipeline(
       // 支撑重试不复用旧 quote 的可审计证据。
       generationRunId: assetRunId,
       attemptIndex: Math.max(0, execution.attempts - 1),
+      // S2-2A 任务 9A：付费外部提交意图携带稳定 request key（run+task 维度，
+      // attemptIndex 区分重试），数据库唯一索引防重复计费提交。
+      providerRequestKey: adapter.billing
+        ? `assets:${assetRunId}:${execution.task_id}`
+        : null,
       rawRequestJson: prepared.rawRequestJson,
       rawResponseJson: null,
       errorCode: null,
@@ -219,6 +267,7 @@ async function runAdapterPipeline(
         ...execution.notes,
         `[engine] provider poll failed: ${pollResult.errorCode ?? "unknown"} — ${pollResult.errorMessage ?? "no message"}`,
       ];
+      await recordPaidUsage(db, ctx, paidUsageContext, assetRunId, execution, planTask, "failed", startedAtMs);
       // S2-2A 任务 6：按段视频策略处理失败（严格阻塞或自动降级）
       await handleVideoStrategyFailure(
         manifest,
@@ -240,6 +289,7 @@ async function runAdapterPipeline(
         ...execution.notes,
         "[engine] provider poll returned running; deferring finalization",
       ];
+      await recordPaidUsage(db, ctx, paidUsageContext, assetRunId, execution, planTask, "running", startedAtMs);
       return;
     }
 
@@ -281,6 +331,7 @@ async function runAdapterPipeline(
 
     // Apply artifacts to segment routes
     applyArtifactRoutes(manifest, validArtifacts, planTask);
+    await recordPaidUsage(db, ctx, paidUsageContext, assetRunId, execution, planTask, "completed", startedAtMs);
   } catch (err) {
     execution.status = "failed";
     execution.completed_at = new Date().toISOString();
@@ -289,6 +340,7 @@ async function runAdapterPipeline(
       ...execution.notes,
       `[engine] adapter pipeline error: ${message}`,
     ];
+    await recordPaidUsage(db, ctx, paidUsageContext, assetRunId, execution, planTask, "failed", startedAtMs);
     // S2-2A 任务 6：管线异常同样按段视频策略处理
     await handleVideoStrategyFailure(
       manifest,
@@ -300,6 +352,99 @@ async function runAdapterPipeline(
       "adapter_pipeline_error",
       message,
     );
+  }
+}
+
+/**
+ * S2-2A 任务 9A：付费 adapter 的 usage 记账钩子（验收 2/3/5/8）。
+ * 幂等：同 (snapshot, providerRequestKey, attemptIndex) 重放只更新原记录；
+ * overrun 处理（run event + catalog 禁用）由 recorder 内部完成。
+ */
+async function recordPaidUsage(
+  db: DbClient,
+  ctx: AssetProviderContext,
+  paidUsageContext: {
+    snapshot: import("../../db/client.js").RunConfigurationSnapshotRecord;
+    billing: NonNullable<AssetProviderAdapter["billing"]>;
+  } | null,
+  assetRunId: string,
+  execution: AssetManifest["executions"][number],
+  planTask: AssetPlan["tasks"][number],
+  jobStatus: "completed" | "failed" | "running",
+  startedAtMs: number,
+): Promise<void> {
+  if (!paidUsageContext) return;
+  const { snapshot, billing } = paidUsageContext;
+  const measuredUnits = measuredUnitsForTask(planTask);
+  if (!measuredUnits) return;
+  // 记账身份与 provider job 同一三元组（run+task 稳定 key，attemptIndex=attempts-1）
+  await recordProviderJobUsage({
+    db,
+    snapshot,
+    runId: assetRunId,
+    providerJob: {
+      id: `${assetRunId}:${execution.task_id}:${execution.attempts}`,
+      assetManifestRecordId: ctx.assetManifestRecordId,
+      assetRunId,
+      executionId: execution.execution_id,
+      taskId: execution.task_id,
+      providerType: billing.capability.startsWith("tts")
+        ? "tts"
+        : billing.capability.startsWith("image.")
+          ? "image"
+          : "video",
+      providerName: ctx.execution.provider_id ?? "dashscope",
+      providerJobId: null,
+      status: jobStatus,
+      attemptCount: execution.attempts,
+      generationRunId: assetRunId,
+      providerRequestKey: `assets:${assetRunId}:${execution.task_id}`,
+      attemptIndex: Math.max(0, execution.attempts - 1),
+      rawRequestJson: null,
+      rawResponseJson: null,
+      errorCode: null,
+      errorMessage: null,
+      submittedAt: null,
+      lastPolledAt: null,
+      completedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    capability: billing.capability,
+    providerKey: billing.providerKey,
+    modelId: billing.modelId,
+    measuredUnits,
+    providerUsage: null,
+    durationMs: Date.now() - startedAtMs,
+  }).catch(() => {
+    // 记账失败不阻断执行主链路；账本缺口由对账工具（needs_reconciliation 族）兜底
+  });
+}
+
+/** 任务类型 → 实测计量单位（确定性本地测量；与报价 workload 同一单位域）。 */
+function measuredUnitsForTask(
+  planTask: AssetPlan["tasks"][number],
+): { unitType: "image" | "video_second" | "tts_character"; count: number; quality?: string } | null {
+  switch (planTask.task_type) {
+    case "tts_audio":
+    case "subtitle_track":
+      return { unitType: "tts_character", count: planTask.source_excerpt.length };
+    case "image_still":
+      return { unitType: "image", count: 1 };
+    case "video_clip": {
+      const duration = planTask.parameters["duration_sec"];
+      const count =
+        typeof duration === "number" && Number.isFinite(duration) && duration > 0
+          ? duration
+          : DEFAULT_VIDEO_ESTIMATE_SECONDS;
+      const quality =
+        typeof planTask.parameters["api_quality"] === "string"
+          ? (planTask.parameters["api_quality"] as string)
+          : undefined;
+      return { unitType: "video_second", count, quality };
+    }
+    default:
+      return null;
   }
 }
 

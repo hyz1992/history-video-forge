@@ -19,6 +19,7 @@ import { resolve, relative, isAbsolute, sep, extname } from "node:path";
 import { randomBytes } from "node:crypto";
 import { createOrRestoreGenerationRun } from "../generation-run/generation-run.service.js";
 import { resolveGenerationCostBootstrapInputFromEnv } from "../generation-cost/generation-cost-bootstrap.js";
+import { isPaidMediaDispatchPossible } from "../generation-cost/provider-dispatch-gate.js";
 import {
   GenerationQuoteProviderTypesSchema,
   GenerationQuoteRunOverridesSchema,
@@ -299,6 +300,17 @@ async function generateAssetsController(
 
   // S2-2A 任务 6：provider 授权只来自后端 env/resolved 配置，
   // 客户端不得通过 provider_mode / dashscope api key / model 指定。
+  // S2-2A 任务 9A（验收 7）：付费部署下旧无 quote 路径明确拒绝——
+  // 不静默替用户创建无限预算授权；纯本地部署（无付费派发可能）保留本地路径。
+  if (isPaidMediaDispatchPossible(context.app.db)) {
+    return {
+      statusCode: 409,
+      body: {
+        error: "paid_generation_quote_required",
+        message: "当前部署可调用付费媒体 provider：请先创建报价并在生成请求中携带 cost_quote_id 与 idempotency_key",
+      },
+    };
+  }
   return runAssetsGeneration({
     db: context.app.db,
     project,
@@ -708,6 +720,16 @@ async function generateTaskController(
     });
   }
 
+  // S2-2A 任务 9A（验收 7）：单任务入口的付费部署闸门与 bulk 入口同一语义
+  if (isPaidMediaDispatchPossible(context.app.db)) {
+    return {
+      statusCode: 409,
+      body: {
+        error: "paid_generation_quote_required",
+        message: "当前部署可调用付费媒体 provider：请先创建报价并在生成请求中携带 cost_quote_id 与 idempotency_key",
+      },
+    };
+  }
   return runAssetsGeneration({
     db: context.app.db,
     project,

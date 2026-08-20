@@ -84,6 +84,7 @@ function makeStoryboardPlan(input: {
         linked_beats: ["public answer"],
         linked_quotes: [],
         risk_notes: ["Keep historical texture and avoid modern elements."],
+        api_video_suitability: "api_video_strongly_recommended",
       },
     ],
     global_visual_notes: [],
@@ -762,7 +763,9 @@ describe("assets generate api", () => {
   });
 
   it("passes explicit DashScope provider mode from API payload to assets execution", async () => {
-    const app = buildApp();
+    // 9A：付费链路经 quote 提交（旧无 quote 路径在付费部署下返回 paid_generation_quote_required）
+    const { buildQuotableReadinessInput } = await import("../cost/quote-test-context.js");
+    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
     const prepared = await prepareActiveAssetPlan(app);
     tempDir = join(tmpdir(), `assets-api-dashscope-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });
@@ -846,13 +849,22 @@ describe("assets generate api", () => {
 
     injectDashscopeEnv();
     await seedDashscopeDispatchCatalog(app);
+    const quoteRes = await app.inject({
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/generation-cost-quotes`,
+      payload: { operation: "assets.generate", selection: { task_ids: [] } },
+      auth,
+    });
+    expect(quoteRes.statusCode).toBe(200);
+    const quote = quoteRes.json() as { quote_id: string };
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${prepared.project.id}/assets/generate`,
       payload: {
         voice_profile_id: "voice_system_ethan",
         execution_mode: "auto_available",
-
+        cost_quote_id: quote.quote_id,
+        idempotency_key: "api-dashscope-quote-1",
       },
       auth,
     });
@@ -870,7 +882,9 @@ describe("assets generate api", () => {
   });
 
   it("passes DashScope image-to-video config from API payload to assets execution", async () => {
-    const app = buildApp();
+    // 9A：付费链路经 quote 提交
+    const { buildQuotableReadinessInput } = await import("../cost/quote-test-context.js");
+    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
     const prepared = await prepareActiveAssetPlan(app);
     const assetPlan = makeImageToVideoAssetPlan({
       storyboardRecordId: prepared.storyboardRecord.id,
@@ -995,12 +1009,22 @@ describe("assets generate api", () => {
 
         injectDashscopeEnv();
         await seedDashscopeDispatchCatalog(app);
-const response = await app.inject({
+    const quoteRes = await app.inject({
+      method: "POST",
+      url: `/api/projects/${prepared.project.id}/generation-cost-quotes`,
+      payload: { operation: "assets.generate", selection: { task_ids: [] } },
+      auth,
+    });
+    expect(quoteRes.statusCode).toBe(200);
+    const quote = quoteRes.json() as { quote_id: string };
+    const response = await app.inject({
       method: "POST",
       url: `/api/projects/${prepared.project.id}/assets/generate`,
       payload: {
         voice_profile_id: "voice_default_male_storyteller",
         execution_mode: "auto_available",
+        cost_quote_id: quote.quote_id,
+        idempotency_key: "api-dashscope-i2v-quote-1",
       },
       auth,
     });

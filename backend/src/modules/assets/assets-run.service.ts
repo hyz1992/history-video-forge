@@ -10,6 +10,7 @@ import type {
   AssetExecutionOptions,
   AssetManifest,
   AssetPlan,
+  ResolvedGenerationConfigurationV1,
 } from "../../../../shared/src/index.js";
 import {
   AssetArtifact as AssetArtifactSchema,
@@ -78,6 +79,16 @@ export interface RunAssetsGenerationInput {
    * runId 即该 run 的 id（恢复执行与事件归属复用同一 run）。
    */
   generationRunId?: string;
+  /**
+   * S2-2A 任务 9A（终审 I-A 收口）：quote 绑定 run 的授权执行上下文。
+   * 提供时 plan/storyboard 按绑定身份执行、视频策略与路线按快照解析结果
+   * 执行——授权上界与实际执行范围同源；实例内存中的活动指针不参与。
+   */
+  boundContext?: {
+    assetPlanRecordId?: string;
+    storyboardRecordId?: string;
+    resolved: ResolvedGenerationConfigurationV1;
+  };
 }
 
 /**
@@ -644,8 +655,12 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     }
   }
 
-  // Step 1: Check project has active asset plan
-  if (!project.activeAssetPlanRecordId) {
+  // Step 1: Check project has active asset plan。
+  // 9A 步骤 2（终审 I-A）：quote 绑定 run 优先使用授权时绑定的 plan 身份；
+  // 授权时无 plan（纯 LLM 报价）则按绑定语义拒绝，而不是回退活动指针。
+  const capturedAssetPlanRecordId =
+    input.boundContext?.assetPlanRecordId ?? project.activeAssetPlanRecordId;
+  if (!capturedAssetPlanRecordId) {
     return {
       statusCode: 409,
       body: {
@@ -653,8 +668,6 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
       },
     };
   }
-
-  const capturedAssetPlanRecordId = project.activeAssetPlanRecordId;
 
   // Step 2: Get the active asset plan record
   const assetPlanRecord = db.assetPlanRecords.get(capturedAssetPlanRecordId);
@@ -667,10 +680,13 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     };
   }
 
-  // Step 3: Get storyboard record to extract segment IDs
-  const storyboardRecord = db.storyboardRecords.get(
-    assetPlanRecord.storyboardRecordId,
-  );
+  // Step 3: Get storyboard record to extract segment IDs。
+  // 绑定 storyboard 优先（授权计价用的同一 storyboard）；未绑定时回退 plan 关联。
+  const storyboardRecord =
+    (input.boundContext?.storyboardRecordId
+      ? db.storyboardRecords.get(input.boundContext.storyboardRecordId)
+      : undefined) ??
+    db.storyboardRecords.get(assetPlanRecord.storyboardRecordId);
   if (!storyboardRecord) {
     return {
       statusCode: 404,
@@ -727,22 +743,65 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
 
   // Step 6a-0: S2-2A 任务 6——解析项目视频策略并写入每条 route。
   // 策略是项目冻结配置（客户端不可覆盖），决定 API 视频失败时严格阻塞或自动降级。
-  let configResult: Awaited<ReturnType<typeof getProjectGenerationConfiguration>>;
-  try {
-    configResult = await getProjectGenerationConfiguration(
-      db,
-      project.id,
-      project.ownerId,
-    );
-  } catch {
-    return {
-      statusCode: 500,
-      body: { error: "assets_video_strategy_resolution_failed" },
-    };
+  // 9A 步骤 2（终审 I-A）：quote 绑定 run 一律用快照解析结果（授权同源），
+  // 不再按当前项目配置重解析——提交后配置漂移不改变已授权运行的执行语义。
+  let videoStrategy: ResolvedGenerationConfigurationV1["effective"]["video"]["strategy"];
+  // 绑定 run 无需当前项目配置（快照为权威）；free run 仍按项目配置解析，
+  // configResult 同时供 ensureAssetsGenerationRun（free run 快照）使用。
+  let configResult: Awaited<ReturnType<typeof getProjectGenerationConfiguration>> | null = null;
+  if (input.boundContext) {
+    videoStrategy = input.boundContext.resolved.effective.video.strategy;
+  } else {
+    try {
+      configResult = await getProjectGenerationConfiguration(
+        db,
+        project.id,
+        project.ownerId,
+      );
+    } catch {
+      return {
+        statusCode: 500,
+        body: { error: "assets_video_strategy_resolution_failed" },
+      };
+    }
+    videoStrategy = configResult.configuration.video.strategy;
   }
-  const videoStrategy = configResult.configuration.video.strategy;
   for (const route of manifest.segment_routes) {
     route.video_strategy = videoStrategy;
+  }
+  // 9A 步骤 2（终审 I-A）：绑定 run 的路线按快照解析结果收敛——快照未授权
+  // api_video 的段不得以 video_clip 路线执行（授权上界=执行范围）。
+  // 收敛同时把该段 video_clip execution 置为跳过：引擎按终态跳过，
+  // 不创建 provider job、不产生外部调用（非绑定 run 的升级路径不受影响）。
+  if (input.boundContext) {
+    const authorizedRoutes = new Map(
+      input.boundContext.resolved.segment_visual_routes.map(
+        (route) => [route.segment_id, route.resolved_route] as const,
+      ),
+    );
+    const planTasksBySegment = new Map<string, string[]>();
+    for (const task of (assetPlanRecord.planJson as { tasks?: Array<{ task_id?: string; task_type?: string; source_segment_id?: string | null }> }).tasks ?? []) {
+      if (!task.task_id) continue;
+      const list = planTasksBySegment.get(task.source_segment_id ?? "") ?? [];
+      list.push(task.task_id);
+      planTasksBySegment.set(task.source_segment_id ?? "", list);
+    }
+    for (const route of manifest.segment_routes) {
+      const authorized = authorizedRoutes.get(route.segment_id);
+      if (route.visual_route_type === "video_clip" && authorized !== "api_video") {
+        route.visual_route_type = "image_with_motion";
+        const videoTaskIds = new Set(planTasksBySegment.get(route.segment_id) ?? []);
+        for (const execution of manifest.executions) {
+          if (execution.task_type !== "video_clip") continue;
+          if (!videoTaskIds.has(execution.task_id)) continue;
+          execution.status = "skipped_with_fallback";
+          execution.notes = [
+            ...execution.notes,
+            "[strategy] 段路线未授权 api_video（快照解析路线），跳过视频执行",
+          ];
+        }
+      }
+    }
   }
 
   // Step 6a: For missing_only / task_ids modes, load the existing manifest
@@ -937,7 +996,8 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     db,
     project,
     runId,
-    configResult,
+    // 绑定 run：run 已存在，ensure 提前返回不解引用；free run：上方已解析非空
+    configResult: configResult!,
     segmentIds,
   });
 
@@ -1919,7 +1979,19 @@ export function createAssetsDispatchHandler(): import("../generation-run/generat
       enabled_provider_types?: string[];
       mode?: string | null;
       task_ids?: string[];
+      bound_asset_plan_record_id?: string;
+      bound_storyboard_record_id?: string;
     };
+    // 9A 步骤 2（终审 I-A）：执行绑定授权身份——plan/storyboard 用提交时
+    // 绑定的记录，视频策略与路线用快照解析结果（授权与执行同源）。
+    const snapshot = db.runConfigurationSnapshots.get(run.runConfigurationSnapshotId);
+    const boundContext = snapshot
+      ? {
+          assetPlanRecordId: payload.bound_asset_plan_record_id,
+          storyboardRecordId: payload.bound_storyboard_record_id,
+          resolved: snapshot.resolvedConfigurationJson as unknown as ResolvedGenerationConfigurationV1,
+        }
+      : undefined;
     const response = await runAssetsGeneration({
       db,
       project,
@@ -1932,6 +2004,7 @@ export function createAssetsDispatchHandler(): import("../generation-run/generat
           ? payload.task_ids
           : undefined,
       generationRunId: run.id,
+      boundContext,
     });
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return { status: "succeeded", response };

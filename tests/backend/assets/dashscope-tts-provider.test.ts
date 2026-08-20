@@ -19,6 +19,58 @@ import {
 import { seedGlobalVoiceProfiles } from "../../../backend/src/modules/assets/voice/voice-profile.repository.js";
 import type { AssetManifest, AssetPlan } from "../../../shared/src/index.js";
 
+
+/**
+ * S2-2A 任务 9A：引擎级 adapter 测试需要 quote 绑定 run/snapshot
+ * （付费闸门：billing adapter 无授权上下文拒绝派发）。
+ */
+function createQuotedDb(assetRunId = "assets_run_001") {
+  const db = createDbClient();
+  const now = new Date();
+  const snapshot = {
+    id: "snap_quoted_001",
+    projectId: "project_quoted_001",
+    userId: null,
+    stage: "assets",
+    operation: "assets.generate",
+    runId: assetRunId,
+    projectConfigurationRevision: 1,
+    schemaVersion: "resolved_generation_configuration_v1",
+    configurationHash: "h",
+    resolvedConfigurationJson: {},
+    resolutionTraceJson: [],
+    quoteId: "quote_quoted_001",
+    quoteFingerprint: "sha256:x",
+    estimatedCostMicros: "1000000",
+    authorizationCostMicros: "999999999",
+    budgetLimitMicros: null,
+    budgetOverrideAuthorized: false,
+    pricingHash: null,
+    pricingVersionSetJson: [],
+    createdAt: now,
+    updatedAt: now,
+  };
+  db.runConfigurationSnapshots.set(snapshot.id, snapshot);
+  db.generationRuns.set(assetRunId, {
+    id: assetRunId,
+    projectId: "project_quoted_001",
+    userId: null,
+    operation: "assets.generate",
+    idempotencyKey: assetRunId,
+    payloadFingerprint: "f",
+    quoteId: "quote_quoted_001",
+    runConfigurationSnapshotId: snapshot.id,
+    dispatchPayloadJson: {},
+    status: "running",
+    dispatchLeaseOwner: "test-worker",
+    dispatchLeaseExpiresAt: new Date(now.getTime() + 30_000),
+    dispatchClaimCount: 1,
+    createdAt: now,
+    updatedAt: now,
+  });
+  return db;
+}
+
 function makeWavBuffer(input: {
   durationSec: number;
   sampleRate: number;
@@ -260,7 +312,7 @@ describe("dashscope TTS provider adapter", () => {
     });
 
     const result = await executeAssetManifest({
-      db: createDbClient(),
+      db: createQuotedDb(),
       assetManifestRecordId: "manifest_001",
       assetRunId: "assets_run_001",
       manifest: makeTtsManifest(),
@@ -328,7 +380,7 @@ describe("dashscope TTS provider adapter", () => {
     });
 
     const result = await executeAssetManifest({
-      db: createDbClient(),
+      db: createQuotedDb(),
       assetManifestRecordId: "manifest_001",
       assetRunId: "assets_run_001",
       manifest: makeTtsManifest(),
@@ -387,7 +439,7 @@ describe("dashscope TTS provider adapter", () => {
     });
 
     const result = await executeAssetManifest({
-      db: createDbClient(),
+      db: createQuotedDb(),
       assetManifestRecordId: "manifest_001",
       assetRunId: "assets_run_001",
       manifest: makeTtsManifest(),
@@ -420,7 +472,7 @@ describe("dashscope TTS provider adapter", () => {
     tempDir = join(tmpdir(), `dashscope-designed-tts-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });
 
-    const db = createDbClient();
+    const db = createQuotedDb();
     await seedGlobalVoiceProfiles(db);
 
     const manifest = makeTtsManifest();
@@ -569,7 +621,7 @@ describe("dashscope TTS provider adapter", () => {
     });
 
     const result = await executeAssetManifest({
-      db: createDbClient(),
+      db: createQuotedDb(),
       assetManifestRecordId: "manifest_001",
       assetRunId: "assets_run_001",
       manifest,
@@ -659,7 +711,7 @@ describe("dashscope TTS provider adapter", () => {
     });
 
     const result = await executeAssetManifest({
-      db: createDbClient(),
+      db: createQuotedDb(),
       assetManifestRecordId: "manifest_001",
       assetRunId: "assets_run_001",
       manifest,

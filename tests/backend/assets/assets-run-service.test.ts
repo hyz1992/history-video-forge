@@ -51,7 +51,45 @@ import type {
 } from "../../../shared/src/index.js";
 import { DEFAULT_GENERATION_CONFIGURATION } from "../../../shared/src/index.js";
 import { acceptSegmentFallback } from "../../../backend/src/modules/assets/assets-run.service.js";
+import { createGenerationCostQuote } from "../../../backend/src/modules/generation-cost/generation-cost.service.js";
+import { createGenerationRunRepository } from "../../../backend/src/modules/generation-run/generation-run.repository.js";
+import { createOrRestoreGenerationRun } from "../../../backend/src/modules/generation-run/generation-run.service.js";
+import { buildQuotableReadinessInput } from "../cost/quote-test-context.js";
 import { validateAssetsManifest } from "../../../backend/src/modules/assets/assets-local-validator.js";
+
+
+/**
+ * S2-2A 任务 9A：dashscope 付费链路测试统一经 quote 绑定 run 执行
+ * （引擎付费闸门：无 quote 绑定 run/snapshot 时拒绝付费派发）。
+ */
+async function createQuotedRun(
+  db: ReturnType<typeof createDbClient>,
+  project: Awaited<ReturnType<typeof createProject>>,
+  key: string,
+) {
+  const quote = await createGenerationCostQuote(
+    db, project, project.ownerId,
+    { operation: "assets.generate", selection: { task_ids: [] } },
+    { readinessInput: buildQuotableReadinessInput() },
+  );
+  if (!quote.ok) throw new Error(`quote failed: ${JSON.stringify(quote.error)}`);
+  const repository = createGenerationRunRepository(db);
+  const submit = await createOrRestoreGenerationRun(
+    db, project, project.ownerId,
+    {
+      operation: "assets.generate",
+      costQuoteId: quote.value.quote.id,
+      authorizeBudgetOverride: false,
+      idempotencyKey: key,
+      selection: { task_ids: [] },
+      runOverrides: undefined,
+      dispatchPayload: { execution_mode: "auto_available" },
+    },
+    { readinessInput: buildQuotableReadinessInput(), repository },
+  );
+  if (!submit.ok) throw new Error(`submit failed: ${JSON.stringify(submit.error)}`);
+  return submit.value.run.id;
+}
 
 const TOPIC_PACKAGE_ID = "topic_001";
 const SCRIPT_RECORD_ID = "script_001";
@@ -234,6 +272,7 @@ function makeImageToVideoAssetPlan(): AssetPlan {
 async function prepareProjectWithAssetPlan() {
   const db = createDbClient();
   const project = await createProject(db, { name: "assets service test" });
+  project.activeStoryboardRecordId = STORYBOARD_RECORD_ID;
   project.activeAssetPlanRecordId = ASSET_PLAN_RECORD_ID;
   project.status = "asset_plan_ready";
 
@@ -246,6 +285,8 @@ async function prepareProjectWithAssetPlan() {
       segments: [
         {
           segment_id: "sb_001",
+          // 9A：付费链路报价按适配度解析路线；强推荐使默认策略下仍可授权 api_video
+          api_video_suitability: "api_video_strongly_recommended",
         },
       ],
     },
@@ -676,11 +717,13 @@ describe("assets run service integration", () => {
 
     injectDashscopeEnv();
     await seedDashscopeDispatchCatalog(db);
+    const quotedRunId = await createQuotedRun(db, project, "dashscope-explicit-1");
 const response = await runAssetsGeneration({
       db,
       project,
       voiceProfileId: "voice_system_ethan",
       executionMode: "auto_available",
+      generationRunId: quotedRunId,
     });
     const body = response.body as { manifest: AssetManifest };
 
@@ -846,11 +889,13 @@ const response = await runAssetsGeneration({
 
     injectDashscopeEnv();
     await seedDashscopeDispatchCatalog(db);
+    const quotedRunId = await createQuotedRun(db, project, "dashscope-voice-1");
 const response = await runAssetsGeneration({
       db,
       project,
       voiceProfileId: "voice_preset_cold_authority",
       executionMode: "auto_available",
+      generationRunId: quotedRunId,
     });
 
     expect(response.statusCode).toBe(200);
@@ -975,11 +1020,13 @@ const response = await runAssetsGeneration({
 
     injectDashscopeEnv();
     await seedDashscopeDispatchCatalog(db);
+    const quotedRunId = await createQuotedRun(db, project, "dashscope-i2v-1");
 const response = await runAssetsGeneration({
       db,
       project,
       voiceProfileId: "voice_custom",
       executionMode: "auto_available",
+      generationRunId: quotedRunId,
       dashscope,
     });
     const body = response.body as { manifest: AssetManifest };
@@ -1037,9 +1084,11 @@ const response = await runAssetsGeneration({
     await seedDashscopeDispatchCatalog(db);
 
     // Step 1: full run to generate image first
+    const firstRunId = await createQuotedRun(db, project, "dashscope-i2v-single-1");
     const first = await runAssetsGeneration({
       db, project, voiceProfileId: "voice_custom",
       executionMode: "auto_available",
+      generationRunId: firstRunId,
     });
     const firstBody = first.body as { manifest: AssetManifest };
     expect(firstBody.manifest.segment_routes[0]?.primary_visual_artifact_id).toBeDefined();
@@ -1050,9 +1099,11 @@ const response = await runAssetsGeneration({
     const videoTask = assetPlan?.tasks?.find(t => t.task_type === "video_clip");
     expect(videoTask).toBeDefined();
 
+    const secondRunId = await createQuotedRun(db, project, "dashscope-i2v-single-2");
     const second = await runAssetsGeneration({
       db, project, voiceProfileId: "voice_custom",
       executionMode: "auto_available",
+      generationRunId: secondRunId,
       taskIds: [videoTask!.task_id],
     });
     const secondBody = second.body as { manifest: AssetManifest };

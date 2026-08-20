@@ -178,7 +178,16 @@ export async function createOrRestoreGenerationRun(
     };
   }
 
-  // 7-8. 同一事务：snapshot + pending_dispatch run + quote 消费 + 审计
+  // 7-8. 同一事务：snapshot + pending_dispatch run + quote 消费 + 审计。
+  // 9A 步骤 2（终审 I-A）：把授权绑定的 plan/storyboard 身份写入 dispatch
+  // payload——执行端按此身份执行，而不是实例内存中的活动指针。
+  const dispatchPayload = { ...input.dispatchPayload };
+  if (revalidated.value.bound.assetPlanRecordId !== null) {
+    dispatchPayload["bound_asset_plan_record_id"] = revalidated.value.bound.assetPlanRecordId;
+  }
+  if (revalidated.value.bound.storyboardRecordId !== null) {
+    dispatchPayload["bound_storyboard_record_id"] = revalidated.value.bound.storyboardRecordId;
+  }
   const runId = db.generateId();
   const snapshot = buildSnapshot(db, project, quote, input, revalidated.value, runId, now);
   const run: GenerationRunRecord = {
@@ -190,7 +199,7 @@ export async function createOrRestoreGenerationRun(
     payloadFingerprint,
     quoteId: quote.id,
     runConfigurationSnapshotId: snapshot.id,
-    dispatchPayloadJson: input.dispatchPayload,
+    dispatchPayloadJson: dispatchPayload,
     status: "pending_dispatch",
     dispatchLeaseOwner: null,
     dispatchLeaseExpiresAt: null,

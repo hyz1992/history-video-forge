@@ -685,6 +685,15 @@ export type RevalidateQuoteResult =
         workload: PricingWorkloadItem[];
         fingerprint_payload: QuoteFingerprintPayloadInput;
         requires_budget_override: boolean;
+        /**
+         * 授权绑定的 plan/storyboard 身份（来自与计价同一 DB 权威解析源）。
+         * 9A 步骤 2（终审 I-A）：执行端必须执行这套身份，而不是实例内存中的
+         * 活动 plan 指针——授权上界与实际执行范围由此同源。
+         */
+        bound: {
+          assetPlanRecordId: string | null;
+          storyboardRecordId: string | null;
+        };
       };
     }
   | { ok: false; error: { code: RevalidateQuoteErrorCode; message: string } };
@@ -836,6 +845,10 @@ export async function revalidateQuoteForCommit(
       workload,
       fingerprint_payload: fingerprintPayload,
       requires_budget_override: pricing.value.contains_unbounded_item || overBudget,
+      bound: {
+        assetPlanRecordId: source.assetPlan?.id ?? null,
+        storyboardRecordId: source.storyboard?.id ?? null,
+      },
     },
   };
 }
