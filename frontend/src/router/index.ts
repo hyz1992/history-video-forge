@@ -4,6 +4,7 @@ import HomePage from "../views/HomePage.vue";
 import LoginPage from "../views/LoginPage.vue";
 import ProjectWorkspace from "../views/ProjectWorkspace.vue";
 import ProjectsPage from "../views/ProjectsPage.vue";
+import SettingsPage from "../views/SettingsPage.vue";
 import AdminLayout from "../views/admin/AdminLayout.vue";
 import AdminUsersPage from "../views/admin/AdminUsersPage.vue";
 import AdminProjectsPage from "../views/admin/AdminProjectsPage.vue";
@@ -33,6 +34,11 @@ export function createAppRouter(mode: "memory" | "web" = "memory", options?: Cre
       {
         path: "/projects",
         component: ProjectsPage,
+      },
+      {
+        path: "/settings",
+        name: "user-generation-settings",
+        component: SettingsPage,
       },
       {
         path: "/projects/:projectId/:step",

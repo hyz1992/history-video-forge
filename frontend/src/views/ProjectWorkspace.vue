@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, provide, watch, type Component } from "vue";
+import { computed, onMounted, provide, ref, watch, type Component } from "vue";
 import { useRoute } from "vue-router";
 
 import {
@@ -13,6 +13,7 @@ import { useAuthStore } from "../stores/auth";
 
 import WorkspaceSidebar from "../components/workspace/WorkspaceSidebar.vue";
 import WorkspaceHeader from "../components/workspace/WorkspaceHeader.vue";
+import ProjectGenerationSettings from "../components/settings/ProjectGenerationSettings.vue";
 
 import TopicPanel from "../components/topic/TopicPanel.vue";
 import ScriptPanel from "../components/script/ScriptPanel.vue";
@@ -40,6 +41,10 @@ const isAdminDeputizing = computed(() => {
 // Create and provide workspace store locally
 const workspaceStore = createWorkspaceStore();
 provide(workspaceStoreKey, workspaceStore);
+
+// S2-2A 任务 10：项目生成设置对话框（工作区齿轮入口）
+const projectSettingsOpen = ref(false);
+const workspaceProjectId = computed(() => route.params.projectId as string | undefined);
 
 const panelMap: Record<PipelineStep, Component> = {
   topic: TopicPanel,
@@ -101,7 +106,7 @@ onMounted(async () => {
 
 <template>
   <div class="project-workspace">
-    <WorkspaceHeader />
+    <WorkspaceHeader @open-project-settings="projectSettingsOpen = true" />
     <div v-if="isAdminDeputizing" class="deputize-banner" data-testid="deputize-banner">
       <span class="deputize-icon">&#9888;</span>
       <span>正在以管理员身份查看其他用户的项目，请谨慎操作，操作将记录在审计日志。</span>
@@ -112,6 +117,11 @@ onMounted(async () => {
         <component :is="currentPanel" :key="workspaceStore.currentStepKey()" />
       </div>
     </div>
+    <ProjectGenerationSettings
+      :project-id="workspaceProjectId ?? ''"
+      :open="projectSettingsOpen"
+      @close="projectSettingsOpen = false"
+    />
   </div>
 </template>
 

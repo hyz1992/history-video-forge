@@ -11,6 +11,10 @@ const projectStore = useProjectStore();
 const authStore = useAuthStore();
 const router = useRouter();
 
+const emit = defineEmits<{
+  (e: "open-project-settings"): void;
+}>();
+
 const stepEmojiMap: Record<string, string> = {
   topic: "🎯",
   script: "📝",
@@ -89,7 +93,13 @@ function goBack() {
       <div class="topbar-divider" aria-hidden="true"></div>
       <div class="account-actions">
         <button class="btn btn-subtle" style="font-weight: 700;">我的</button>
-        <button class="btn btn-subtle icon-btn" aria-label="设置" title="设置">
+        <button
+          class="btn btn-subtle icon-btn"
+          aria-label="设置"
+          title="设置"
+          data-testid="open-project-settings"
+          @click="emit('open-project-settings')"
+        >
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.86l.04.04a2 2 0 1 1-2.83 2.83l-.04-.04a1.7 1.7 0 0 0-1.86-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.86.34l-.04.04a2 2 0 1 1-2.83-2.83l.04-.04A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.04A1.7 1.7 0 0 0 4.6 8a1.7 1.7 0 0 0-.34-1.86l-.04-.04A2 2 0 1 1 7.05 3.27l.04.04A1.7 1.7 0 0 0 8.95 3a1.7 1.7 0 0 0 1.03-1.56V1a2 2 0 1 1 4 0v.44A1.7 1.7 0 0 0 15.01 3a1.7 1.7 0 0 0 1.86-.34l.04-.04a2 2 0 1 1 2.83 2.83l-.04.04A1.7 1.7 0 0 0 19.4 8a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.04A1.7 1.7 0 0 0 19.4 15Z"/></svg>
         </button>
       </div>
