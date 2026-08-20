@@ -194,9 +194,11 @@ async function verifyProjectFreezeAndInvalidation(page: Page, setup: Setup): Pro
   await createButtons.first().click();
   await page.waitForSelector('[data-testid="generate-topic"]', { timeout: 10000 });
   await page.click('[data-testid="generate-topic"]');
-  // 项目创建后进入项目工作区（topic 阶段；stub 部署生成走本地 fallback）
+  // 项目创建后进入项目工作区（topic 阶段；stub 部署生成走本地 fallback。
+  // 注：stub 部署下 topic 生成的事件库草稿写入会失败并打 stderr 噪音
+  // event-library-reflux-draft-write-failed，不影响验收步骤）
   await page.waitForURL(/\/projects\/[^/]+(\/topic)?$/, { timeout: 30000 });
-  record("projects: 创建项目成功", true);
+  record("projects: 创建项目成功", true, page.url());
   await page.waitForSelector(".project-workspace, [data-testid='open-project-settings']", { timeout: 15000 });
 
   // 打开项目设置对话框 → 验证来源与冻结值
@@ -216,9 +218,11 @@ async function verifyProjectFreezeAndInvalidation(page: Page, setup: Setup): Pro
   record("project-settings: 保存前失效预览（策略变化→资产规划）", previewShown);
 
   // 保存项目设置：保存成功后对话框自动关闭（el-dialog 关闭后内容仍保留在
-  // DOM 中，因此用可见性判断而非 count）
+  // DOM 中，因此用可见性判断而非 count；按可见性状态等待避免固定延时抖动）
   await page.click('[data-testid="save-project-config"]');
-  await page.waitForTimeout(1500);
+  // 保存为异步 PATCH：等待保存按钮重新可点击（saving 结束）后再判断对话框
+  await page.waitForSelector('[data-testid="save-project-config"]:not(:disabled)', { timeout: 10000 });
+  await page.waitForTimeout(800);
   const saveButtonVisible = await page.locator('[data-testid="save-project-config"]').isVisible().catch(() => false);
   record("project-settings: 保存后对话框关闭", !saveButtonVisible);
 }

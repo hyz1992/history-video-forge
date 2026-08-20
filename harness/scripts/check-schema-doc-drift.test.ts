@@ -62,15 +62,17 @@ describe("check schema doc drift", () => {
   it("合法最小文档集合不返回错误", () => {
     const result = validateDocuments({
       "docs/data/field-design.md":
-        "TopicCandidateCard TopicPackage TopicDeliveryPack ScriptValidationResult viral_rubric narrative_tension_map hook_claim hook_emotion reveal_position patch_intent script_local_validation script_semantic_review stakes source_anchor_refs canonical_quotes ambiguity_notes",
+        "TopicCandidateCard TopicPackage TopicDeliveryPack ScriptValidationResult viral_rubric narrative_tension_map hook_claim hook_emotion reveal_position patch_intent script_local_validation script_semantic_review stakes source_anchor_refs canonical_quotes ambiguity_notes GenerationConfigurationV1 ProviderModelCatalog GenerationCostQuote RunConfigurationSnapshot GenerationRun UsageCostRecord",
       "docs/data/schema-design.md":
-        "TopicCandidateCard TopicPackage TopicDeliveryPack ScriptValidationResult viral_rubric narrative_tension_map",
+        "TopicCandidateCard TopicPackage TopicDeliveryPack ScriptValidationResult viral_rubric narrative_tension_map provider_model_catalog generation_cost_quotes run_configuration_snapshots generation_runs usage_cost_records api_video_suitability",
       "docs/architecture/api-design.md":
-        "viral_rubric narrative_tension_map hook_claim patch_intent script_local_validation discovery seed focus seed",
+        "viral_rubric narrative_tension_map hook_claim patch_intent script_local_validation discovery seed focus seed generation-cost-quotes generation-preferences generation-configuration generation-capabilities costs/summary accept-fallback paid_generation_quote_required",
       "docs/architecture/topic-stage-design.md":
         "Topic Package stakes source_anchor_refs canonical_quotes ambiguity_notes discovery seed focus seed",
       "docs/architecture/script-stage-design.md":
         "Script Input Bundle hard_lane core_conflict stakes source_anchor_refs canonical_quotes ambiguity_notes",
+      "docs/architecture/pipeline-io-spec.md":
+        "api_video_suitability RunConfigurationSnapshotV1 StoryboardSegmentOverride UsageCostRecord pricing_overrun",
     });
 
     expect(result).toEqual([]);

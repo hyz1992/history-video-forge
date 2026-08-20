@@ -14,10 +14,6 @@ const { invokeStructuredPromptMock } = vi.hoisted(() => ({
   invokeStructuredPromptMock: vi.fn(),
 }));
 
-const { writeInteractionEntryMock } = vi.hoisted(() => ({
-  writeInteractionEntryMock: vi.fn(),
-}));
-
 // 文件级 mock：env 为真实 LLM 部署（provider=openai），tier-aware 工厂返回 mock provider
 vi.mock("../../backend/src/config/env.js", () => {
   const env = {
@@ -84,7 +80,6 @@ function makeInteractionEntry(overrides: Record<string, unknown> = {}) {
 /** 按 operationName 返回合法结构并写 interaction entry（带 token）。 */
 function mockStageResponses() {
   invokeStructuredPromptMock.mockReset();
-  writeInteractionEntryMock.mockReset();
   invokeStructuredPromptMock.mockImplementation(async (request: {
     operationName?: string;
     interactionLogWriter?: { write(entry: unknown): unknown };
