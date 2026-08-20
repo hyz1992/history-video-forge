@@ -25,9 +25,14 @@ import { createHttpServer } from "../../../backend/src/server.js";
  * 3. 项目设置失效预览；
  * 4. 项目设置保存（乐观并发 PATCH）。
  *
- * 报价确认/严格 fallback/成本明细的交互层由 jsdom 组件测试覆盖，quote 正
- * 链路 + billing 落账由 tests/backend/s2-2a-e2e-acceptance.test.ts 覆盖
- * （付费部署路径 + mock provider）；本脚本运行环境为 stub 后端。
+ * 覆盖范围声明（与 roadmap 登记一致）：
+ * - 报价确认与成本明细交互层由 jsdom 组件测试覆盖
+ *   （tests/frontend/generation-quote-ui.spec.ts、project-cost-ui.spec.ts）；
+ * - quote 正链路 + billing 落账由 tests/backend/s2-2a-e2e-acceptance.test.ts
+ *   覆盖（付费部署路径 + mock provider，三入口 storyboard/asset-plan/publish）；
+ * - 分镜 suitability/override 展示与严格 fallback 交互层：本脚本未覆盖，
+ *   由 backend 语义测试（storyboard-segment-override 等）与 roadmap 登记的
+ *   后续任务承接，未声称已浏览器验收。
  */
 
 const USER_USERNAME = "s2a-alice";
@@ -41,6 +46,7 @@ interface AcceptanceResult {
 
 interface Setup {
   root: string;
+  client: AppPrismaClient;
   app: AppInstance;
   httpServer: Server;
   viteProc: ChildProcess;
@@ -134,12 +140,15 @@ async function startAcceptanceApp(): Promise<Setup> {
   const frontendUrl = `http://127.0.0.1:${frontendPort}`;
   await waitFor(frontendUrl, 40000);
 
-  return { root, app, httpServer, viteProc, frontendUrl };
+  return { root, client, app, httpServer, viteProc, frontendUrl };
 }
 
 async function stopAcceptanceApp(setup: Setup): Promise<void> {
   await killProcessTree(setup.viteProc);
   await new Promise<void>((resolve) => setup.httpServer.close(() => resolve()));
+  await setup.client.$disconnect().catch(() => undefined);
+  // 等待句柄释放后再清理临时目录（Windows 下 DB 文件可能被延迟占用）
+  await new Promise((resolve) => setTimeout(resolve, 500));
   rmSync(setup.root, { recursive: true, force: true });
 }
 
@@ -150,7 +159,7 @@ async function login(page: Page, frontendUrl: string): Promise<void> {
   await page.fill('input[type="text"], input[name="username"], input[placeholder*="用户" i]', USER_USERNAME);
   await page.fill('input[type="password"]', USER_PASSWORD);
   await page.click('button[type="submit"], button:has-text("登录")');
-  await page.waitForURL(/\/projects|\//, { timeout: 15000 });
+  await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: 15000 });
 }
 
 async function verifySettingsFourStrategies(page: Page): Promise<void> {
@@ -178,17 +187,16 @@ async function verifySettingsSave(page: Page): Promise<void> {
 }
 
 async function verifyProjectFreezeAndInvalidation(page: Page, setup: Setup): Promise<void> {
-  // 创建项目（用户默认 all_api_video 应冻结为项目配置）
+  // 创建项目：新建项目按钮 → CreateTopicModal → 点击"开始生成选题"创建项目
   await page.goto(new URL("/projects", page.url()).toString(), { waitUntil: "domcontentloaded" });
-  await page.waitForSelector("button:has-text('新建项目'), button:has-text('创建项目')", { timeout: 10000 });
-  await page.click("button:has-text('新建项目'), button:has-text('创建项目')");
-  await page.waitForTimeout(800);
-  // 进入第一个项目的工作区
-  const projectLinks = page.locator("a[href*='/projects/']");
-  const linkCount = await projectLinks.count();
-  record("projects: 创建项目成功", linkCount >= 1);
-  if (linkCount === 0) return;
-  await projectLinks.first().click();
+  const createButtons = page.locator("button:has-text('新建项目'), button:has-text('创建项目')");
+  await createButtons.first().waitFor({ timeout: 10000 });
+  await createButtons.first().click();
+  await page.waitForSelector('[data-testid="generate-topic"]', { timeout: 10000 });
+  await page.click('[data-testid="generate-topic"]');
+  // 项目创建后进入项目工作区（topic 阶段；stub 部署生成走本地 fallback）
+  await page.waitForURL(/\/projects\/[^/]+(\/topic)?$/, { timeout: 30000 });
+  record("projects: 创建项目成功", true);
   await page.waitForSelector(".project-workspace, [data-testid='open-project-settings']", { timeout: 15000 });
 
   // 打开项目设置对话框 → 验证来源与冻结值
@@ -207,11 +215,12 @@ async function verifyProjectFreezeAndInvalidation(page: Page, setup: Setup): Pro
   const previewShown = (previewText ?? "").includes("资产规划");
   record("project-settings: 保存前失效预览（策略变化→资产规划）", previewShown);
 
-  // 保存项目设置
+  // 保存项目设置：保存成功后对话框自动关闭（el-dialog 关闭后内容仍保留在
+  // DOM 中，因此用可见性判断而非 count）
   await page.click('[data-testid="save-project-config"]');
-  await page.waitForTimeout(800);
-  const dialogClosed = await page.locator('[data-testid="save-project-config"]').count() === 0;
-  record("project-settings: 保存后对话框关闭", dialogClosed);
+  await page.waitForTimeout(1500);
+  const saveButtonVisible = await page.locator('[data-testid="save-project-config"]').isVisible().catch(() => false);
+  record("project-settings: 保存后对话框关闭", !saveButtonVisible);
 }
 
 // --- infra helpers (同 s1-browser-acceptance) --------------------------------

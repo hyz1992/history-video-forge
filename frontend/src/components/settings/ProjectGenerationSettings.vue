@@ -114,7 +114,10 @@ async function save() {
   });
   if (!result.ok && !result.conflict) {
     saveError.value = "保存失败，请稍后重试。";
+    return;
   }
+  // 保存成功（含 409 冲突已由 store 重载）后关闭对话框
+  emit("close");
 }
 </script>
 

@@ -480,6 +480,7 @@ LLM typed intent 仍负责视觉/SFX/BGM 语义，不负责配置优先级。loc
 
 任务 9A 补充合同（步骤 1-3 落地，2026-08-20）：
 - 付费闸门：真实付费媒体 adapter 声明 billing 身份（capability/providerKey/modelId）；引擎仅在有效 quote 绑定 run/snapshot 上下文派发，否则任务失败并记录 `paid_generation_quote_required` 原因（本地/fake adapter 不受限）。付费部署（凭据 + active 媒体目录）下旧无 quote 生成 API 返回 `409 paid_generation_quote_required`，不静默创建无限预算授权；demo/test 纯本地路径保留。
+- **cover/generate 收口（2026-08-20）**：publish 封面生成直连 DashScope 媒体（无 asset plan task/provider job/usage 记账），与 9B 辅助 LLM 入口同语义，付费部署下 409 封口（凭据存在即封口，与外呼条件同源 fail-closed；stub/本地无凭据保留原 501 路径）。接入 quote 提交协议另立后续任务。
 - 执行绑定授权身份（I-A 收口）：提交把授权解析的 plan/storyboard 身份写入 run dispatch payload；执行端按绑定身份取 plan/storyboard、按快照策略与路线收敛（快照未授权 api_video 的段其 video_clip execution 置跳过）。绑定 run 无绑定 plan（纯 LLM 报价）时执行返回 `409 generation_quote_plan_binding_missing`，不回退活动指针。
 - usage 记账：provider job 携带 (generationRunId, providerRequestKey, attemptIndex) 身份三元组（数据库唯一索引防重复计费提交）；usage 记录引用真实 provider job id（外键）；provider 无精确账单时按实测计量估 actual 且 `costBasis=estimate`（不冒充 provider_usage/invoice）；记账失败追加 `usage_recording_failed` 审计事件留痕（先 writer 后 Map，writer 失败容错）。
 

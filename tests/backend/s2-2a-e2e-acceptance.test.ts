@@ -47,10 +47,6 @@ vi.mock("../../backend/src/runtime/llm/tier-aware-provider-factory.js", () => ({
   createTierAwareProviderFromEnv: vi.fn(() => ({
     invokeStructuredPrompt: invokeStructuredPromptMock,
   })),
-  resolveTierProviderSnapshot: vi.fn(() => ({
-    smart: { providerKey: "deepseek", modelId: "deepseek-v4-pro" },
-    flash: { providerKey: "zhipu", modelId: "glm-4" },
-  })),
 }));
 
 import { buildApp } from "../../backend/src/app.js";

@@ -56,6 +56,32 @@ export const DOC_TERM_RULES: Record<string, string[]> = {
     "canonical_quotes",
     "ambiguity_notes",
   ],
+  "docs/architecture/api-design.md": [
+    "generation-cost-quotes",
+    "generation-preferences",
+    "generation-configuration",
+    "generation-capabilities",
+    "costs/summary",
+    "accept-fallback",
+    "paid_generation_quote_required",
+  ],
+  "docs/data/field-design.md": [
+    "GenerationConfigurationV1",
+    "ProviderModelCatalog",
+    "GenerationCostQuote",
+    "RunConfigurationSnapshot",
+    "GenerationRun",
+    "UsageCostRecord",
+    "api_video_suitability",
+  ],
+  "docs/data/schema-design.md": [
+    "ProviderModelCatalog",
+    "GenerationCostQuote",
+    "RunConfigurationSnapshot",
+    "GenerationRun",
+    "UsageCostRecord",
+    "api_video_suitability",
+  ],
 };
 
 export function validateDocuments(documents: Record<string, string>): string[] {

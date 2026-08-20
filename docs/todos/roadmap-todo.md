@@ -100,7 +100,7 @@
 ## 剩余风险与验证缺口
 
 - [ ] 前端类型检查闸门缺失（frontend 无 tsconfig，`vite build` 不做 TS 类型检查；2026-08-20 任务 10 审查登记，计划已更正为 `npm run build:frontend` 等价替代，正式类型检查闸门待建）
-- [ ] S2-2A 任务 11 留档（2026-08-20 终审 Minor，详见 [任务 11 审查记录](../records/2026-08-20-s2-2a-task11-review-record.md)）：成本页按运行/成功失败分组未实现（设计 §11.4，待补实施）；404 重试启发式与 409 同归重新报价；批量生成成功提示提前到 quote 确认前（UX 误导）；StrictFallbackDialog 交互层测试待浏览器验收补
+- [ ] S2-2A 任务 11 留档（2026-08-20 终审 Minor，详见 [任务 11 审查记录](../records/2026-08-20-s2-2a-task11-review-record.md)）：成本页按运行/成功失败分组未实现（设计 §11.4，待补实施）；404 重试启发式待修（建议与 409 同归"重新报价"）；批量生成成功提示提前到 quote 确认前（UX 误导，建议移至提交完成后）；StrictFallbackDialog 交互层测试待补（浏览器验收未覆盖，roadmap 登记承接）；generationCostStore 未 main.ts provide（跨页不共享）+ CLIENT_PREVIEW_ONLY 死导出
 - [ ] S2-2A 任务 11 已知缺口：storyboard/asset-plan/publish 三入口 quote 正链路浏览器验收 + billing 落账已由 `tests/backend/s2-2a-e2e-acceptance.test.ts` 覆盖（mock provider 付费部署路径）；真实付费 LLM live 核对仍属显式授权范围
 - [ ] DashScope 图生视频真实小样本验证默认不执行；如要验证需明确批准成本并记录 request id、耗时、费用和失败模式
 - Asset Planning global normalization / structural repair 异常恢复目前只有 non-live 证据；后续 7 个有效 live 轮次均未触发该分支。该证据缺口不自动升级为付费 live 任务，仅在真实故障复现或另行明确授权时验证，详见 [最近一次 Asset Planning live 记录](../records/2026-08-10-asset-planning-intent-compiler-live-check.md)。

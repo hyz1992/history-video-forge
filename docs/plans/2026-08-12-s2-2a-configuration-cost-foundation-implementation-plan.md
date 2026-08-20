@@ -788,7 +788,7 @@ git commit -m "为LLM生成接入预算闸门与费用账本"
 - 新建：`tests/frontend/generation-settings-ui.spec.ts`
 - 修改：`tests/frontend/project-store.spec.ts`
 
-- [ ] **步骤 1：先写 UI/store 失败测试**
+- [x] **步骤 1：先写 UI/store 失败测试**
 
 验收点：
 
@@ -808,11 +808,11 @@ npx vitest run --configLoader runner tests/frontend/generation-config-store.spec
 
 预期：失败，页面/store 不存在。
 
-- [ ] **步骤 2：实现 store 与 API client**
+- [x] **步骤 2：实现 store 与 API client**
 
 store 保留服务器配置版本，PATCH 使用乐观并发字段；409 时重新加载并提示冲突，不覆盖较新配置。
 
-- [ ] **步骤 3：实现设置组件与路由**
+- [x] **步骤 3：实现设置组件与路由**
 
 普通用户文案优先使用体验语言：
 
@@ -823,7 +823,7 @@ store 保留服务器配置版本，PATCH 使用乐观并发字段；409 时重�
 
 在高级详情中解释严格失败/自动降级和预计成本差异。
 
-- [ ] **步骤 4：运行前端验证并提交**
+- [x] **步骤 4：运行前端验证并提交**
 
 ```powershell
 npx vitest run --configLoader runner tests/frontend/generation-config-store.spec.ts tests/frontend/generation-settings-ui.spec.ts tests/frontend/project-store.spec.ts tests/frontend/auth-store.spec.ts
@@ -843,13 +843,14 @@ git commit -m "新增用户与项目生成策略设置界面"
 - 修改：`frontend/src/components/asset/AssetPanel.vue`
 - 修改：`frontend/src/components/asset/SegmentAssetCard.vue`
 - 修改：`frontend/src/stores/assets.ts`
-- 修改：`frontend/src/utils/api.ts`
 - 修改：`frontend/src/utils/pricing.ts`
+- （计划列入但实现未需要：`frontend/src/utils/api.ts`——apiFetch/ApiError 已满足 409 检测与 PATCH 支持，无需改动）
+- （实际新增未列入：`tests/frontend/segment-route-status.spec.ts`——SegmentAssetCard 路线状态非 stub 渲染测试；实际修改未列入：`tests/frontend/asset/asset-panel-blocked-retry.spec.ts`——适配 quote 流程）
 - 新建：`tests/frontend/generation-quote-ui.spec.ts`
 - 新建：`tests/frontend/project-cost-ui.spec.ts`
 - 修改：`tests/frontend/stores/assets.test.ts`
 
-- [ ] **步骤 1：先写交互失败测试**
+- [x] **步骤 1：先写交互失败测试**
 
 覆盖：
 
@@ -868,15 +869,15 @@ npx vitest run --configLoader runner tests/frontend/generation-quote-ui.spec.ts 
 
 预期：失败，当前仍用 `frontend/src/utils/pricing.ts` 本地硬编码计价。
 
-- [ ] **步骤 2：将前端 pricing 降级为纯格式化/兼容层**
+- [x] **步骤 2：将前端 pricing 降级为纯格式化/兼容层**
 
 删除其“授权价格真相源”职责；任何本地估算只能标记 `client_preview_only`，真实提交必须使用后端 quote。
 
-- [ ] **步骤 3：实现报价与成本 UI**
+- [x] **步骤 3：实现报价与成本 UI**
 
 为每个 quote 保存 idempotency key；网络重试复用同 key，同 payload。用户改变配置/任务后生成新 key 和新 quote。
 
-- [ ] **步骤 4：运行前端回归并提交**
+- [x] **步骤 4：运行前端回归并提交**
 
 ```powershell
 npx vitest run --configLoader runner tests/frontend/generation-quote-ui.spec.ts tests/frontend/project-cost-ui.spec.ts tests/frontend/stores/assets.test.ts tests/frontend/asset/asset-panel-auto-basic-generation.spec.ts tests/frontend/asset/asset-panel-blocked-retry.spec.ts
@@ -899,7 +900,7 @@ git commit -m "新增媒体生成报价确认与成本明细"
 - 新建：`tests/harness/s2-2a-browser-acceptance.test.ts`
 - 新建：`tests/backend/s2-2a-e2e-acceptance.test.ts`
 
-- [ ] **步骤 1：从原始需求写验收清单测试**
+- [x] **步骤 1：从原始需求写验收清单测试**
 
 必须逐项标记并由自动化/浏览器证据支撑：
 
@@ -917,11 +918,11 @@ git commit -m "新增媒体生成报价确认与成本明细"
 12. 测试/demo 不触发真实视频 API；
 13. S2-2B/C 仍在 roadmap 中标记为紧接后续，不被误报完成。
 
-- [ ] **步骤 2：更新正式架构和数据/API 文档**
+- [x] **步骤 2：更新正式架构和数据/API 文档**
 
 确保文档与最终 Zod/Prisma/API 响应字段完全一致，并更新 schema doc drift 检查映射。
 
-- [ ] **步骤 3：实现浏览器验收脚本**
+- [x] **步骤 3：实现浏览器验收脚本**
 
 真实页面验证：
 
@@ -935,7 +936,7 @@ git commit -m "新增媒体生成报价确认与成本明细"
 
 浏览器验收使用 stub/fake provider，不做真实付费调用。
 
-- [ ] **步骤 4：运行受影响全量验证**
+- [x] **步骤 4：运行受影响全量验证**
 
 ```powershell
 npm run prisma:generate
@@ -956,7 +957,7 @@ git diff --check
 
 以上分批是默认验证方式，不再把全部后端测试塞进一个串行进程。数据库、费用运行和可能共享生成态存储的批次保留 `--no-file-parallelism`；其他批次允许 Vitest 正常并发。每批单独记录退出码和失败文件，上一批失败不得继续宣称整体通过。
 
-- [ ] **步骤 5：显式 live check（非默认门禁）**
+- [ ] **步骤 5：显式 live check（非默认门禁）**（未运行：真实付费 live 需显式授权，验收按未验证标注）
 
 仅在用户明确允许真实 API 成本且环境已配置时分别运行：
 
@@ -968,11 +969,11 @@ npm run harness:assets-dashscope-image-to-video-live-check
 
 未运行时验收结论必须写“未验证”，不能默认为通过。
 
-- [ ] **步骤 6：依据原始需求进行最终自审**
+- [x] **步骤 6：依据原始需求进行最终自审**
 
 逐项标注 `已修 / 部分修 / 未修 / 未验证`，证据必须指向测试命令、代码位置、浏览器报告或 live 输出。不得用实现者总结替代原始需求清单。
 
-- [ ] **步骤 7：提交 S2-2A 收口**
+- [x] **步骤 7：提交 S2-2A 收口**
 
 ```powershell
 git add docs/architecture docs/data docs/todos/roadmap-todo.md docs/plans/README.md harness/scripts/ui-acceptance/s2-2a-browser-acceptance.ts tests/harness/s2-2a-browser-acceptance.test.ts tests/backend/s2-2a-e2e-acceptance.test.ts
