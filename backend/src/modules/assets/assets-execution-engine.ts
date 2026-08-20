@@ -184,7 +184,6 @@ async function runAdapterPipeline(
   const startedAt = new Date().toISOString();
   execution.status = "running";
   execution.started_at = startedAt;
-  execution.attempts += 1;
   execution.provider_id = adapter.providerName;
 
   // S2-2A 任务 9A 付费闸门（验收 1）：真实付费 adapter 只在有效 quote 绑定的
@@ -224,12 +223,19 @@ async function runAdapterPipeline(
     paidUsageContext = { snapshot: snapshot!, billing: adapter.billing };
   }
 
+  // 闸门通过后才递增 attempt（被拦截的任务不消耗重试簿记，M2）
+  execution.attempts += 1;
+
+  // job 记录提升到 try 外：创建失败（FK/连接异常）时 catch 分支不引用未声明变量
+  let jobRecord: import("../../db/client.js").AssetProviderJobRecord | null = null;
+
   try {
     // prepare
     const prepared = await adapter.prepare(ctx);
 
-    // Create job record
-    await createAssetProviderJobRecord(db, {
+    // Create job record（付费 job 携带 call-intent 身份三元组；真实 job 记录
+    // 同时是 usage 记账的外键父记录——记账必须引用真实 id，Prisma 态 FK 强制）
+    jobRecord = await createAssetProviderJobRecord(db, {
       assetManifestRecordId,
       assetRunId,
       executionId: execution.execution_id,
@@ -267,7 +273,7 @@ async function runAdapterPipeline(
         ...execution.notes,
         `[engine] provider poll failed: ${pollResult.errorCode ?? "unknown"} — ${pollResult.errorMessage ?? "no message"}`,
       ];
-      await recordPaidUsage(db, ctx, paidUsageContext, assetRunId, execution, planTask, "failed", startedAtMs);
+      await recordPaidUsage(db, ctx, paidUsageContext, assetRunId, execution, planTask, jobRecord, "failed", startedAtMs);
       // S2-2A 任务 6：按段视频策略处理失败（严格阻塞或自动降级）
       await handleVideoStrategyFailure(
         manifest,
@@ -289,7 +295,7 @@ async function runAdapterPipeline(
         ...execution.notes,
         "[engine] provider poll returned running; deferring finalization",
       ];
-      await recordPaidUsage(db, ctx, paidUsageContext, assetRunId, execution, planTask, "running", startedAtMs);
+      await recordPaidUsage(db, ctx, paidUsageContext, assetRunId, execution, planTask, jobRecord, "running", startedAtMs);
       return;
     }
 
@@ -331,7 +337,7 @@ async function runAdapterPipeline(
 
     // Apply artifacts to segment routes
     applyArtifactRoutes(manifest, validArtifacts, planTask);
-    await recordPaidUsage(db, ctx, paidUsageContext, assetRunId, execution, planTask, "completed", startedAtMs);
+    await recordPaidUsage(db, ctx, paidUsageContext, assetRunId, execution, planTask, jobRecord, "completed", startedAtMs);
   } catch (err) {
     execution.status = "failed";
     execution.completed_at = new Date().toISOString();
@@ -340,7 +346,9 @@ async function runAdapterPipeline(
       ...execution.notes,
       `[engine] adapter pipeline error: ${message}`,
     ];
-    await recordPaidUsage(db, ctx, paidUsageContext, assetRunId, execution, planTask, "failed", startedAtMs);
+    if (jobRecord) {
+      await recordPaidUsage(db, ctx, paidUsageContext, assetRunId, execution, planTask, jobRecord, "failed", startedAtMs);
+    }
     // S2-2A 任务 6：管线异常同样按段视频策略处理
     await handleVideoStrategyFailure(
       manifest,
@@ -370,64 +378,60 @@ async function recordPaidUsage(
   assetRunId: string,
   execution: AssetManifest["executions"][number],
   planTask: AssetPlan["tasks"][number],
+  jobRecord: import("../../db/client.js").AssetProviderJobRecord,
   jobStatus: "completed" | "failed" | "running",
   startedAtMs: number,
 ): Promise<void> {
   if (!paidUsageContext) return;
   const { snapshot, billing } = paidUsageContext;
-  const measuredUnits = measuredUnitsForTask(planTask);
+  const measuredUnits = measuredUnitsForTask(planTask, snapshot);
   if (!measuredUnits) return;
-  // 记账身份与 provider job 同一三元组（run+task 稳定 key，attemptIndex=attempts-1）
+  // 记账引用真实 provider job 记录（Prisma 态 assetProviderJobRecordId 外键
+  // 强制；providerRequestKey/attemptIndex 与 job 同一身份三元组）
   await recordProviderJobUsage({
     db,
     snapshot,
     runId: assetRunId,
-    providerJob: {
-      id: `${assetRunId}:${execution.task_id}:${execution.attempts}`,
-      assetManifestRecordId: ctx.assetManifestRecordId,
-      assetRunId,
-      executionId: execution.execution_id,
-      taskId: execution.task_id,
-      providerType: billing.capability.startsWith("tts")
-        ? "tts"
-        : billing.capability.startsWith("image.")
-          ? "image"
-          : "video",
-      providerName: ctx.execution.provider_id ?? "dashscope",
-      providerJobId: null,
-      status: jobStatus,
-      attemptCount: execution.attempts,
-      generationRunId: assetRunId,
-      providerRequestKey: `assets:${assetRunId}:${execution.task_id}`,
-      attemptIndex: Math.max(0, execution.attempts - 1),
-      rawRequestJson: null,
-      rawResponseJson: null,
-      errorCode: null,
-      errorMessage: null,
-      submittedAt: null,
-      lastPolledAt: null,
-      completedAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
+    providerJob: { ...jobRecord, status: jobStatus },
     capability: billing.capability,
     providerKey: billing.providerKey,
     modelId: billing.modelId,
     measuredUnits,
     providerUsage: null,
     durationMs: Date.now() - startedAtMs,
-  }).catch(() => {
-    // 记账失败不阻断执行主链路；账本缺口由对账工具（needs_reconciliation 族）兜底
+  }).catch((error) => {
+    // 记账失败不阻断执行主链路；显式留痕（生产态成本台账缺口可审计），
+    // 不能静默吞掉——账本缺口由对账工具（needs_reconciliation 族）兜底
+    const event: import("../../db/client.js").GenerationRunEventRecord = {
+      id: db.generateId(),
+      generationRunId: assetRunId,
+      segmentId: null,
+      eventType: "usage_recording_failed",
+      eventJson: {
+        task_id: execution.task_id,
+        capability: billing.capability,
+        message: error instanceof Error ? error.message : String(error),
+      },
+      createdAt: new Date(),
+    };
+    const events = db.generationRunEvents.get(assetRunId) ?? [];
+    events.push(event);
+    db.generationRunEvents.set(assetRunId, events);
   });
 }
 
-/** 任务类型 → 实测计量单位（确定性本地测量；与报价 workload 同一单位域）。 */
+/**
+ * 任务类型 → 实测计量单位（确定性本地测量；与报价 workload 同一单位域）。
+ * video_second 的质量档位取快照 resolved.effective.video.api_quality——
+ * 与报价计价同源（diff 审查 I1：planTask 参数无人写入 api_quality，
+ * 按参数取值恒落 standard_720p，1080P 项目费用会被系统性低估）。
+ */
 function measuredUnitsForTask(
   planTask: AssetPlan["tasks"][number],
+  snapshot: import("../../db/client.js").RunConfigurationSnapshotRecord,
 ): { unitType: "image" | "video_second" | "tts_character"; count: number; quality?: string } | null {
   switch (planTask.task_type) {
     case "tts_audio":
-    case "subtitle_track":
       return { unitType: "tts_character", count: planTask.source_excerpt.length };
     case "image_still":
       return { unitType: "image", count: 1 };
@@ -437,11 +441,14 @@ function measuredUnitsForTask(
         typeof duration === "number" && Number.isFinite(duration) && duration > 0
           ? duration
           : DEFAULT_VIDEO_ESTIMATE_SECONDS;
-      const quality =
-        typeof planTask.parameters["api_quality"] === "string"
-          ? (planTask.parameters["api_quality"] as string)
-          : undefined;
-      return { unitType: "video_second", count, quality };
+      const effective = (snapshot.resolvedConfigurationJson as Record<string, unknown>)["effective"] as
+        | { video?: { api_quality?: string } }
+        | undefined;
+      return {
+        unitType: "video_second",
+        count,
+        quality: effective?.video?.api_quality ?? undefined,
+      };
     }
     default:
       return null;

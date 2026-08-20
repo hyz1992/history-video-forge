@@ -254,8 +254,18 @@ async function checkAndHandleOverrun(
     seenKeys.add(key);
     total += BigInt(record.actualCostMicros ?? record.estimatedCostMicros);
   }
-  void current;
   if (total <= bound) return false;
+
+  // 8.4 语义为一次性动作：同 (run, capability) 已追加过 pricing_overrun 则不再
+  // 重复追加（同一 attempt 的 running 轮询 + completed 回执重放只应触发一次）；
+  // catalog 禁用幂等（已禁用条目 no-op）。
+  const existingEvents = input.db.generationRunEvents.get(input.runId) ?? [];
+  const alreadyFlagged = existingEvents.some(
+    (event) =>
+      event.eventType === "pricing_overrun" &&
+      (event.eventJson as Record<string, unknown>)["capability"] === input.capability,
+  );
+  if (alreadyFlagged) return true;
 
   const event: GenerationRunEventRecord = {
     id: input.db.generateId(),

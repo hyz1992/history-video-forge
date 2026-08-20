@@ -491,3 +491,132 @@ describe("paid retry requires new quote / new run / new attempt (任务 9A 验�
     expect(second.quote.id).not.toBe(quote1.id);
   });
 });
+
+describe("I-A 收口：执行绑定授权 plan/storyboard 身份（步骤0终审条件 a 对抗测试）", () => {
+  it("陈旧内存指针指向旧 plan 时，执行按 quote 绑定的新 plan 身份（不按内存指针）", async () => {
+    integrationTempDir = join(tmpdir(), `paid-ia-bound-${Date.now()}`);
+    await mkdir(integrationTempDir, { recursive: true });
+    const app = buildApp();
+    await seedCatalog(app);
+    const project = await prepareProjectWithAssetPlan(app.db);
+    project.storageRootDir = integrationTempDir;
+
+    // 构造第二个 plan（planB）并让内存指针仍指向 planA——模拟实例 B 陈旧镜像
+    const planAId = ASSET_PLAN_RECORD_ID;
+    const planBId = "asset_plan_bound_B";
+    const now = new Date();
+    const planB = makeAssetPlan();
+    // planB 只含一个 image 任务（无 tts），执行证据可区分
+    planB.tasks = planB.tasks.filter((task) => task.task_type === "image_still");
+    app.db.assetPlanRecords.set(planBId, {
+      id: planBId,
+      projectId: project.id,
+      topicPackageId: TOPIC_PACKAGE_ID,
+      scriptRecordId: SCRIPT_RECORD_ID,
+      storyboardRecordId: STORYBOARD_RECORD_ID,
+      planJson: planB,
+      validationResultJson: {} as never,
+      executionStateJson: {},
+      graphTraceSummaryJson: null,
+      runtimeDiagnosticsJson: null,
+      createdAt: now,
+    });
+    // 指针仍指向 planA（陈旧镜像）；quote 创建与提交前把活动指针临时指向 planB
+    // （实例 A 的 DB 权威状态），提交完成后指针保持 planA——执行必须按绑定 planB
+    project.activeAssetPlanRecordId = planBId;
+    const quote = await createGenerationCostQuote(
+      app.db, project, project.ownerId,
+      { operation: "assets.generate", selection: { task_ids: [] } },
+      { readinessInput: buildQuotableReadinessInput() },
+    );
+    if (!quote.ok) throw new Error(`quote failed: ${JSON.stringify(quote.error)}`);
+    const repository = createGenerationRunRepository(app.db);
+    const submit = await createOrRestoreGenerationRun(
+      app.db, project, project.ownerId,
+      {
+        operation: "assets.generate",
+        costQuoteId: quote.value.quote.id,
+        authorizeBudgetOverride: false,
+        idempotencyKey: "ia-bound-1",
+        selection: { task_ids: [] },
+        runOverrides: undefined,
+        dispatchPayload: { execution_mode: "auto_available" },
+      },
+      { readinessInput: buildQuotableReadinessInput(), repository },
+    );
+    if (!submit.ok) throw new Error(`submit failed: ${JSON.stringify(submit.error)}`);
+    const boundPlanId = (submit.value.run.dispatchPayloadJson as Record<string, unknown>).bound_asset_plan_record_id;
+    expect(boundPlanId).toBe(planBId);
+
+    // 陈旧镜像：提交后指针改回 planA（实例 B 内存态）
+    project.activeAssetPlanRecordId = planAId;
+    injectDashscopeEnv();
+    // 完整 dashscope mock：TTS 与 image 都可用——如果执行误按内存指针 planA
+    // （含 tts 任务）就会产生 tts job；绑定语义下只会产生 planB 的 image job
+    vi.stubGlobal("fetch", vi.fn(async (url: string | URL) => {
+      const t = String(url);
+      if (t.endsWith("/api/v1/services/aigc/multimodal-generation/generation")) {
+        return new Response(JSON.stringify({ output: { audio: { url: "https://example.test/audio.wav" } } }), { status: 200 });
+      }
+      if (t.endsWith("/api/v1/services/aigc/image-generation/generation")) {
+        return new Response(JSON.stringify({ output: { task_id: "task_ia_image" } }), { status: 200 });
+      }
+      if (t.endsWith("/api/v1/tasks/task_ia_image")) {
+        return new Response(JSON.stringify({ output: { task_status: "SUCCEEDED", results: [{ url: "https://example.test/image.png" }] } }), { status: 200 });
+      }
+      if (t.startsWith("https://example.test/")) {
+        return new Response(new Uint8Array([137, 80, 78, 71]), { status: 200 });
+      }
+      throw new Error(`unexpected fetch: ${t}`);
+    }));
+    // 直接以提交 run 派发（同步 dispatcher 语义）：handler 从快照构建 boundContext
+    const { createAssetsDispatchHandler } = await import("../../../backend/src/modules/assets/assets-run.service.js");
+    const handler = createAssetsDispatchHandler();
+    const outcome = await handler(submit.value.run, { db: app.db, project });
+    // planB 只有 image 任务（无 tts/无 subtitle）：manifest 校验因占位未解析
+    // 而 blocked（stale_assets_source）——这是"按绑定 planB 执行"的间接证明；
+    // 关键证据是 provider job 集：若误按内存指针 planA 执行会产生 tts_001 job
+    expect(outcome.status).toBe("failed");
+    if (outcome.status === "failed") expect(outcome.reason_code).toBe("stale_assets_source");
+    const jobs = [...app.db.assetProviderJobRecords.values()];
+    expect(jobs.length).toBeGreaterThan(0);
+    // 绑定身份执行：只有 planB 的 image 任务（img_001），绝无 tts job
+    expect(jobs.every((job) => job.taskId === "img_001")).toBe(true);
+    expect(jobs.some((job) => job.taskId === "tts_001")).toBe(false);
+  });
+});
+
+describe("paid_generation_quote_required on the single-task endpoint (验收 7 单任务入口)", () => {
+  it("single-task generate returns paid_generation_quote_required without quote fields in paid deployment", async () => {
+    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    await seedCatalog(app);
+    const auth = buildTestAuth({ userId: "owner-1" });
+    const project = await createProject(app.db, { name: "gate api task", ownerId: "owner-1" });
+    project.activeAssetPlanRecordId = ASSET_PLAN_RECORD_ID;
+    const now = new Date();
+    app.db.storyboardRecords.set(STORYBOARD_RECORD_ID, {
+      id: STORYBOARD_RECORD_ID, projectId: project.id, topicPackageId: TOPIC_PACKAGE_ID,
+      scriptRecordId: SCRIPT_RECORD_ID,
+      planJson: makeStoryboardPlan() as unknown as Record<string, unknown>,
+      validationResultJson: {}, executionStateJson: null, graphTraceSummaryJson: null, runtimeDiagnosticsJson: null,
+      createdAt: now,
+    });
+    app.db.assetPlanRecords.set(ASSET_PLAN_RECORD_ID, {
+      id: ASSET_PLAN_RECORD_ID, projectId: project.id, topicPackageId: TOPIC_PACKAGE_ID,
+      scriptRecordId: SCRIPT_RECORD_ID, storyboardRecordId: STORYBOARD_RECORD_ID,
+      planJson: makeAssetPlan(),
+      validationResultJson: {} as never, executionStateJson: {}, graphTraceSummaryJson: null, runtimeDiagnosticsJson: null,
+      createdAt: now,
+    });
+    injectDashscopeEnv();
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/assets/tasks/tts_001/generate`,
+      payload: {},
+      auth,
+    });
+    expect(response.statusCode).toBe(409);
+    expect((response.json() as Record<string, unknown>).error).toBe("paid_generation_quote_required");
+  });
+});

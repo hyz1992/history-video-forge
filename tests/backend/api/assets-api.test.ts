@@ -1796,8 +1796,9 @@ describe("submit protocol business failure passthrough (任务8终审 F2 回归�
       name: "F2 Passthrough",
       ownerId: "owner-1",
     });
-    // 故意不给项目挂 active asset plan：提交派发后的 assets 流程必须返回
-    // 409 active_asset_plan_missing，而不是被统一映射成 500
+    // 故意不给项目挂 active asset plan：quote 无绑定 plan（纯 LLM 报价），
+    // 派发时按绑定语义返回 409 generation_quote_plan_binding_missing
+    // （I2 修复：纯 LLM 报价不得执行媒体），而不是被统一映射成 500
 
     const quoteRes = await app.inject({
       method: "POST",
@@ -1820,7 +1821,7 @@ describe("submit protocol business failure passthrough (任务8终审 F2 回归�
 
     expect(response.statusCode).toBe(409);
     const body = response.json() as Record<string, unknown>;
-    expect(body.error).toBe("active_asset_plan_missing");
+    expect(body.error).toBe("generation_quote_plan_binding_missing");
     expect(typeof body.generation_run_id).toBe("string");
   });
 });
