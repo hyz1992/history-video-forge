@@ -392,9 +392,10 @@ describe("ProjectGenerationSettings（项目设置）", () => {
     await wrapper.find('[data-testid="save-project-config"]').trigger("click");
     await flushPromises();
 
-    // 冲突：对话框未关闭（保存按钮仍存在），冲突告警渲染
+    // 冲突：对话框未关闭（保存按钮仍存在、不 emit close），冲突告警渲染
     expect(wrapper.find('[data-testid="save-project-config"]').exists()).toBe(true);
     expect(wrapper.find(".el-alert").exists()).toBe(true);
+    expect(wrapper.emitted("close")).toBeFalsy();
   });
 
   it("保存成功后关闭对话框（emit close）", async () => {
