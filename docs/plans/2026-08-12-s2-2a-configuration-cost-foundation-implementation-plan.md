@@ -782,6 +782,7 @@ git commit -m "为LLM生成接入预算闸门与费用账本"
 - 修改：`frontend/src/router/index.ts`
 - 修改：`frontend/src/views/ProjectWorkspace.vue`
 - 修改：`frontend/src/components/workspace/WorkspaceHeader.vue`
+- 修改：`frontend/src/views/ProjectsPage.vue`（轮 1 整改补入：设置齿轮入口接通 /settings，任务 10 交付物入口修复）
 - 修改：`frontend/src/utils/api.ts`
 - 新建：`tests/frontend/generation-config-store.spec.ts`
 - 新建：`tests/frontend/generation-settings-ui.spec.ts`
@@ -827,7 +828,7 @@ store 保留服务器配置版本，PATCH 使用乐观并发字段；409 时重�
 ```powershell
 npx vitest run --configLoader runner tests/frontend/generation-config-store.spec.ts tests/frontend/generation-settings-ui.spec.ts tests/frontend/project-store.spec.ts tests/frontend/auth-store.spec.ts
 npm run build:frontend
-git add frontend/src/views/SettingsPage.vue frontend/src/components/settings frontend/src/stores/generation-config.ts frontend/src/router/index.ts frontend/src/views/ProjectWorkspace.vue frontend/src/components/workspace/WorkspaceHeader.vue frontend/src/utils/api.ts tests/frontend/generation-config-store.spec.ts tests/frontend/generation-settings-ui.spec.ts tests/frontend/project-store.spec.ts
+git add frontend/src/views/SettingsPage.vue frontend/src/components/settings frontend/src/stores/generation-config.ts frontend/src/router/index.ts frontend/src/views/ProjectWorkspace.vue frontend/src/components/workspace/WorkspaceHeader.vue frontend/src/views/ProjectsPage.vue frontend/src/utils/api.ts tests/frontend/generation-config-store.spec.ts tests/frontend/generation-settings-ui.spec.ts tests/frontend/project-store.spec.ts
 git commit -m "新增用户与项目生成策略设置界面"
 ```
 

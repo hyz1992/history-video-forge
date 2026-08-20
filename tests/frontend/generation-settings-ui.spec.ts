@@ -19,9 +19,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import SettingsPage from "../../frontend/src/views/SettingsPage.vue";
 import ProjectGenerationSettings from "../../frontend/src/components/settings/ProjectGenerationSettings.vue";
 import {
+  createFetchGenerationConfigApi,
+  createGenerationConfigStore,
   generationConfigStoreKey,
   type GenerationConfigStore,
 } from "../../frontend/src/stores/generation-config";
+import { createAppRouter } from "../../frontend/src/router/index.js";
+import { authStoreKey, type AuthStore } from "../../frontend/src/stores/auth";
+
+function jsonResponse(status: number, body: unknown): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: new Headers({ "content-type": "application/json" }),
+    json: async () => body,
+  } as Response;
+}
 
 const DEFAULT_CONFIGURATION = {
   schema_version: "generation_configuration_v1",
@@ -100,10 +113,14 @@ function createMockStore(overrides: Partial<GenerationConfigStore> = {}): Genera
 }
 
 function mountSettings(store: GenerationConfigStore) {
+  const router = createAppRouter();
   return mount(SettingsPage, {
     global: {
-      plugins: [ElementPlus],
-      provide: { [generationConfigStoreKey as symbol]: store },
+      plugins: [ElementPlus, router],
+      provide: {
+        [generationConfigStoreKey as symbol]: store,
+        [authStoreKey as symbol]: { state: { user: { role: "USER" } } } as unknown as AuthStore,
+      },
     },
   });
 }
@@ -206,46 +223,61 @@ describe("SettingsPage（用户默认设置）", () => {
     expect(wrapper.find('[data-testid="preference-conflict"]').exists()).toBe(true);
   });
 
-  it("轮1 I-1：冲突置位后表单草稿同步服务器最新值（用户看得见竞争修改）", async () => {
-    const store = createMockStore();
-    const wrapper = mountSettings(store);
-    await flushPromises();
+  it("轮1 I-1：真实 409 路径（store 重载后）表单草稿跟随服务器最新值", async () => {
+    // mock fetch 序列（onMounted 会依次调用 loadUserPreference、loadCapabilities）：
+    // 1) GET preferences 200(revision=4) → 2) GET capabilities 200([])
+    // 3) PATCH 409 → 4) store 自动 GET preferences 200(revision=5, all_remotion)
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          source: "stored",
+          revision: 4,
+          configuration: DEFAULT_CONFIGURATION,
+          updated_at: "2026-08-20T10:00:00.000Z",
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(200, { capabilities: [] }))
+      .mockResolvedValueOnce(
+        jsonResponse(409, { error: "generation_preference_revision_conflict", current_revision: 5 }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          source: "stored",
+          revision: 5,
+          configuration: {
+            ...DEFAULT_CONFIGURATION,
+            video: { strategy: "all_remotion", api_quality: "standard_720p" },
+          },
+          updated_at: "2026-08-20T11:00:00.000Z",
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
 
-    // 用户改成 all_api_video（本地草稿偏离服务器值）
+    const store = createGenerationConfigStore(createFetchGenerationConfigApi());
+    const wrapper = mountSettings(store);
+    await flushPromises(); // onMounted 完成初次加载（revision=4）
+
+    // 用户编辑（本地草稿偏离服务器值）
     await wrapper.find('[data-testid="strategy-all_api_video"]').setValue();
     expect(
       (wrapper.find('[data-testid="strategy-all_api_video"]').element as HTMLInputElement).checked,
     ).toBe(true);
 
-    // 模拟 store 冲突路径：重载为服务器新值 all_remotion 并置 conflict
-    const pref = store.state.userPreference as {
-      conflict: boolean;
-      data: {
-        source: string;
-        revision: number;
-        configuration: typeof DEFAULT_CONFIGURATION;
-        updated_at: string;
-      } | null;
-    };
-    pref.data = {
-      source: "stored",
-      revision: 5,
-      configuration: {
-        ...DEFAULT_CONFIGURATION,
-        video: { strategy: "all_remotion", api_quality: "standard_720p" },
-      },
-      updated_at: "2026-08-20T11:00:00.000Z",
-    };
-    pref.conflict = true;
+    // 保存 → 409 → store 重载服务器新值并置冲突 → 表单草稿必须跟随
+    const result = await store.saveUserPreference({
+      video: { strategy: "all_api_video", api_quality: "standard_720p" },
+      budgetMicros: null,
+    });
+    expect(result.ok).toBe(false);
     await flushPromises();
 
-    // 表单草稿跟随服务器新值，而不是停留在用户的旧草稿
     expect(
       (wrapper.find('[data-testid="strategy-all_remotion"]').element as HTMLInputElement).checked,
     ).toBe(true);
     expect(
       (wrapper.find('[data-testid="strategy-all_api_video"]').element as HTMLInputElement).checked,
     ).toBe(false);
+    expect(wrapper.find('[data-testid="preference-conflict"]').exists()).toBe(true);
   });
 
   it("轮1 I-2：偏好加载失败时展示错误态，不渲染可编辑表单", async () => {
@@ -259,6 +291,37 @@ describe("SettingsPage（用户默认设置）", () => {
     expect(wrapper.find('[data-testid="preference-load-error"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="save-preference"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="strategy-prefer_remotion"]').exists()).toBe(false);
+  });
+
+  it("轮1 Minor-2：错误态重试按钮重新加载后恢复表单", async () => {
+    // 序列：1) GET preferences 失败 → 2) GET capabilities 200([])（onMounted 顺序调用）
+    // → 3) 重试 GET preferences 200(revision=1)
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new Error("network_error"))
+      .mockResolvedValueOnce(jsonResponse(200, { capabilities: [] }))
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          source: "stored",
+          revision: 1,
+          configuration: DEFAULT_CONFIGURATION,
+          updated_at: "2026-08-20T10:00:00.000Z",
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const store = createGenerationConfigStore(createFetchGenerationConfigApi());
+    const wrapper = mountSettings(store);
+    await flushPromises(); // onMounted 加载失败 → 错误态
+
+    expect(wrapper.find('[data-testid="preference-load-error"]').exists()).toBe(true);
+    await wrapper.find('[data-testid="preference-load-error"] button').trigger("click");
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="preference-load-error"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="save-preference"]').exists()).toBe(true);
+    expect(
+      (wrapper.find('[data-testid="strategy-prefer_remotion"]').element as HTMLInputElement).checked,
+    ).toBe(true);
   });
 });
 

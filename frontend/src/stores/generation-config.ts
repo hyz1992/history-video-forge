@@ -286,11 +286,12 @@ export function createGenerationConfigStore(api: GenerationConfigApi): Generatio
       return { ok: true };
     } catch (error) {
       if (isConflictError(error)) {
-        // 乐观并发冲突：重新加载服务器较新配置，不覆盖
+        // 乐观并发冲突：先完成重载赋值、再置冲突标记（同一同步块）。
+        // 组件 conflict watch（flush pre）在微任务阶段执行，必须读到最新 data，
+        // 否则表单会把草稿重置为冲突前的旧服务器值。
+        const reloaded = await api.getUserPreference().catch(() => null);
+        if (reloaded) slice.data = reloaded;
         slice.conflict = true;
-        await api.getUserPreference().then((data) => {
-          slice.data = data;
-        }).catch(() => undefined);
         return { ok: false, conflict: true };
       }
       slice.error = error instanceof Error ? error.message : "save_failed";
@@ -344,10 +345,10 @@ export function createGenerationConfigStore(api: GenerationConfigApi): Generatio
       return { ok: true };
     } catch (error) {
       if (isConflictError(error)) {
+        // 与 saveUserPreference 相同：先完成重载赋值、再置冲突标记
+        const reloaded = await api.getProjectConfig(projectId).catch(() => null);
+        if (reloaded) slice.data = reloaded;
         slice.conflict = true;
-        await api.getProjectConfig(projectId).then((data) => {
-          slice.data = data;
-        }).catch(() => undefined);
         return { ok: false, conflict: true };
       }
       slice.error = error instanceof Error ? error.message : "save_failed";
