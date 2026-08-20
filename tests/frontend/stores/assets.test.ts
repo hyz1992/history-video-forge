@@ -18,6 +18,7 @@ function createMockApi() {
     upgradeSegmentToVideo: vi.fn(),
     uploadArtifact: vi.fn(),
     acceptArtifact: vi.fn(),
+    acceptFallback: vi.fn(),
   };
 }
 
@@ -224,5 +225,67 @@ describe("createAssetsStore", () => {
 
     const url = store.artifactFileUrl("art_tts1");
     expect(url).toBe("/api/projects/proj_test_001/artifacts/art_tts1/file");
+  });
+});
+
+describe("assets store quote submission (任务 11)", () => {
+  let mockProjectStore: ReturnType<typeof createMockProjectStore>;
+  let mockApi: ReturnType<typeof createMockApi>;
+
+  beforeEach(() => {
+    mockProjectStore = createMockProjectStore();
+    mockApi = createMockApi();
+  });
+
+  it("generateAssets 透传 cost_quote_id/idempotency_key/authorize_budget_override 到 API", async () => {
+    mockApi.generateAssets.mockResolvedValue(undefined);
+    mockApi.loadProject.mockResolvedValue(MOCK_SNAPSHOT);
+    const store = createAssetsStore({ projectStore: mockProjectStore, api: mockApi });
+
+    await store.generateAssets({
+      mode: "missing_only",
+      quoteId: "quote_001",
+      idempotencyKey: "key_001",
+      authorizeBudgetOverride: true,
+    });
+
+    expect(mockApi.generateAssets).toHaveBeenCalledWith("proj_test_001", {
+      mode: "missing_only",
+      quoteId: "quote_001",
+      idempotencyKey: "key_001",
+      authorizeBudgetOverride: true,
+    });
+  });
+
+  it("generateSingleTask 透传 quote 字段", async () => {
+    mockApi.generateSingleTask.mockResolvedValue(undefined);
+    mockApi.loadProject.mockResolvedValue(MOCK_SNAPSHOT);
+    const store = createAssetsStore({ projectStore: mockProjectStore, api: mockApi });
+
+    await store.generateSingleTask("task_tts_1", {
+      quoteId: "quote_002",
+      idempotencyKey: "key_002",
+      authorizeBudgetOverride: false,
+    });
+
+    expect(mockApi.generateSingleTask).toHaveBeenCalledWith("proj_test_001", "task_tts_1", {
+      quoteId: "quote_002",
+      idempotencyKey: "key_002",
+      authorizeBudgetOverride: false,
+    });
+  });
+
+  it("acceptFallback 调用 accept-fallback 端点并重新加载", async () => {
+    mockApi.acceptFallback.mockResolvedValue(undefined);
+    mockApi.loadProject.mockResolvedValue(MOCK_SNAPSHOT);
+    const store = createAssetsStore({ projectStore: mockProjectStore, api: mockApi });
+
+    await store.acceptFallback("seg_1", "run_1", "run_1", "3");
+
+    expect(mockApi.acceptFallback).toHaveBeenCalledWith("proj_test_001", "run_1", "seg_1", {
+      expected_run_id: "run_1",
+      expected_version: "3",
+    });
+    expect(mockApi.loadProject).toHaveBeenCalled();
   });
 });

@@ -18,12 +18,17 @@ import StageGenerating from "../workspace/StageGenerating.vue";
 import StageLoadingBar from "../workspace/StageLoadingBar.vue";
 
 import SegmentAssetCard from "./SegmentAssetCard.vue";
+import GenerationQuoteDialog from "./GenerationQuoteDialog.vue";
+import StrictFallbackDialog from "./StrictFallbackDialog.vue";
+import ProjectCostSummary from "../cost/ProjectCostSummary.vue";
 import { computeCostBreakdown, estimatePlanCost, getTaskCostHint, getVideoUpgradeCostHint, estimateBlockedItemsCost, PRICING, type PlanTaskLike } from "../../utils/pricing";
 import { getAssetGeneratingView, type AssetGenerationProgress } from "../../utils/asset-generating-view";
+import { isQuoteExpired, useGenerationCostStore, type GenerationQuoteDto } from "../../stores/generation-cost";
 
 const storyboardStore = useStoryboardStore();
 const assetPlanningStore = useAssetPlanningStore();
 const assetsStore = useAssetsStore();
+const generationCostStore = useGenerationCostStore();
 const scriptStore = useScriptStore();
 const projectStore = useProjectStore();
 const workspaceStore = useWorkspaceStore();
@@ -744,6 +749,197 @@ function setupBackToTopObserver() {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  S2-2A 任务 11：quote 确认流程 + 严格 fallback + 成本明细                    */
+/* -------------------------------------------------------------------------- */
+
+const quoteDialogOpen = ref(false);
+const quoteLoading = ref(false);
+const quoteError = ref<string | null>(null);
+const pendingQuote = ref<GenerationQuoteDto | null>(null);
+let pendingSubmit: ((submit: { quoteId: string; idempotencyKey: string; authorizeBudgetOverride: boolean }) => Promise<void>) | null = null;
+
+const strictDialogOpen = ref(false);
+const strictSegmentId = ref<string | null>(null);
+const strictBusy = ref(false);
+
+const costDialogOpen = ref(false);
+
+/** 当前 manifest 版本与执行 run（accept-fallback 的 CAS 上下文）。 */
+const activeManifestVersion = computed(() => {
+  const assets = assetsStore.state.snapshot?.active_assets as unknown as { version?: string } | null;
+  return assets?.version ?? null;
+});
+const activeExecutionRunId = computed(() => {
+  const state = assetsStore.state.snapshot?.active_assets?.execution_state as Record<string, unknown> | null | undefined;
+  return typeof state?.run_id === "string" ? state.run_id : null;
+});
+
+const segmentRouteBySegmentId = computed(() => {
+  const routes = assetsStore.state.snapshot?.active_assets?.manifest?.segment_routes ?? [];
+  const map = new Map<string, { readiness: string; route_events?: Array<{ event_type?: string; reason_code?: string }> }>();
+  for (const route of routes) {
+    map.set(route.segment_id, {
+      readiness: route.readiness,
+      route_events: Array.isArray(route.route_events) ? route.route_events : [],
+    });
+  }
+  return map;
+});
+
+// 过期重报价需要记住最近一次请求与提交动作
+const lastQuoteRequest = ref<{ operation: string; selection?: { mode?: "missing_only"; task_ids?: string[] }; enabledProviderTypes?: string[] } | null>(null);
+const lastSubmitAction = ref<((submit: { quoteId: string; idempotencyKey: string; authorizeBudgetOverride: boolean }) => Promise<void>) | null>(null);
+
+async function quoteAndGenerate(options: {
+  request: { operation: string; selection?: { mode?: "missing_only"; task_ids?: string[] }; enabledProviderTypes?: string[] };
+  submit: (submit: { quoteId: string; idempotencyKey: string; authorizeBudgetOverride: boolean }) => Promise<void>;
+}): Promise<void> {
+  const pid = projectId.value;
+  if (!pid) return;
+  quoteError.value = null;
+  quoteLoading.value = true;
+  quoteDialogOpen.value = true;
+  pendingQuote.value = null;
+  try {
+    const result = await generationCostStore.createQuote(pid, options.request);
+    if (!result.ok) {
+      quoteError.value = result.error.code;
+      // 本地/无付费能力部署（stub/demo）：quote 服务按设计不可报价（无 active
+      // 目录项），回退无 quote 本地路径并明确提示；付费部署下 quote 一定可用，
+      // 若仍失败则后端 409 paid_generation_quote_required 兜底，不会静默授权。
+      ElMessage.warning(`报价服务暂不可用（${result.error.code}），已按本地路径继续`);
+      quoteDialogOpen.value = false;
+      try {
+        await options.submit({ quoteId: "", idempotencyKey: "", authorizeBudgetOverride: false });
+        await assetsStore.loadProject();
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : "生成失败";
+        ElMessage.error("生成失败：" + msg);
+      }
+      return;
+    }
+    pendingQuote.value = result.value.quote;
+    pendingSubmit = options.submit;
+  } finally {
+    quoteLoading.value = false;
+  }
+}
+
+async function quoteAndGenerateWithRetry(options: {
+  request: { operation: string; selection?: { mode?: "missing_only"; task_ids?: string[] }; enabledProviderTypes?: string[] };
+  submit: (submit: { quoteId: string; idempotencyKey: string; authorizeBudgetOverride: boolean }) => Promise<void>;
+}): Promise<void> {
+  lastQuoteRequest.value = options.request;
+  lastSubmitAction.value = options.submit;
+  await quoteAndGenerate(options);
+}
+
+async function handleQuoteConfirm(payload: { authorizeBudgetOverride: boolean }): Promise<void> {
+  const submit = pendingSubmit;
+  if (!submit || !pendingQuote.value) return;
+  // 验收点：quote 过期后重新报价，不重放旧提交
+  if (isQuoteExpired(pendingQuote.value)) {
+    ElMessage.warning("报价已过期，正在重新报价…");
+    pendingQuote.value = null;
+    if (lastQuoteRequest.value) {
+      await quoteAndGenerate({ request: lastQuoteRequest.value, submit });
+    }
+    return;
+  }
+  const quote = pendingQuote.value;
+  const idempotencyKey = generationCostStore.state.lastQuote?.idempotencyKey ?? "";
+  pendingQuote.value = null;
+  pendingSubmit = null;
+  quoteDialogOpen.value = false;
+  try {
+    await submit({
+      quoteId: quote.quote_id,
+      idempotencyKey,
+      authorizeBudgetOverride: payload.authorizeBudgetOverride,
+    });
+    await assetsStore.loadProject();
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "生成失败";
+    ElMessage.error("生成失败：" + msg);
+  }
+}
+
+function handleQuoteRetry() {
+  if (lastQuoteRequest.value && lastSubmitAction.value) {
+    quoteAndGenerate({ request: lastQuoteRequest.value, submit: lastSubmitAction.value });
+  }
+}
+
+function handleQuoteCancel() {
+  quoteDialogOpen.value = false;
+  pendingQuote.value = null;
+  pendingSubmit = null;
+}
+
+/** 严格模式失败：打开处理对话框（run id 与 manifest 版本来自快照）。 */
+function handleStrictFallback(segmentId: string) {
+  strictSegmentId.value = segmentId;
+  strictDialogOpen.value = true;
+}
+
+const strictSegmentLabel = computed(() => {
+  const sid = strictSegmentId.value;
+  if (!sid) return "";
+  const idx = segments.value.findIndex((s) => s.segment_id === sid);
+  return idx >= 0 ? `#${idx + 1}` : sid;
+});
+
+const strictFailureReason = computed(() => {
+  const sid = strictSegmentId.value;
+  if (!sid) return "";
+  const route = segmentRouteBySegmentId.value.get(sid);
+  const notes = route?.route_events?.map((e) => e.reason_code ?? e.event_type ?? "").filter(Boolean).join("；");
+  return notes || "API 视频生成失败（请重试或接受 Remotion 版本）";
+});
+
+async function handleStrictRetry() {
+  const sid = strictSegmentId.value;
+  if (!sid) return;
+  const tasks = videoTasksBySegment.get(sid) ?? [];
+  if (tasks.length === 0) {
+    ElMessage.warning("该分镜没有可重试的视频任务");
+    return;
+  }
+  strictBusy.value = true;
+  try {
+    // 重试 = 重新报价 + 单任务提交（新 quote、新 run）
+    const taskId = tasks[0]!.task_id;
+    await quoteAndGenerateWithRetry({
+      request: { operation: "assets.generate", selection: { task_ids: [taskId] } },
+      submit: async (submit) => {
+        await assetsStore.generateSingleTask(taskId, submit);
+      },
+    });
+    strictDialogOpen.value = false;
+  } finally {
+    strictBusy.value = false;
+  }
+}
+
+async function handleStrictAcceptFallback() {
+  const sid = strictSegmentId.value;
+  const runId = activeExecutionRunId.value;
+  const version = activeManifestVersion.value;
+  if (!sid || !runId || !version) return;
+  strictBusy.value = true;
+  try {
+    await assetsStore.acceptFallback(sid, runId, runId, version);
+    strictDialogOpen.value = false;
+    ElMessage.success("已接受 Remotion 版本，该分镜继续使用图片+运镜路线");
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "接受失败";
+    ElMessage.error("接受 Remotion 版本失败：" + msg);
+  } finally {
+    strictBusy.value = false;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Actions                                                                   */
 /* -------------------------------------------------------------------------- */
 
@@ -763,14 +959,22 @@ async function handleGeneratePlan() {
 
 async function handleGenerateBasic() {
   if (isAssetsBusy.value) return;
-  isStartingBasicAssets.value = true;
-  startAssetPolling();
-  try {
-    await assetsStore.generateAssets({ enabledProviderTypes: ["tts", "sfx", "bgm"] });
-  } finally {
-    isStartingBasicAssets.value = false;
-    startAssetPolling();
-  }
+  // S2-2A 任务 11：付费生成前必须先请求后端 quote 并确认
+  await quoteAndGenerateWithRetry({
+    request: {
+      operation: "assets.generate",
+      selection: { task_ids: [] },
+      enabledProviderTypes: ["tts", "sfx", "bgm"],
+    },
+    submit: async (submit) => {
+      await assetsStore.generateAssets({
+        enabledProviderTypes: ["tts", "sfx", "bgm"],
+        quoteId: submit.quoteId,
+        idempotencyKey: submit.idempotencyKey,
+        authorizeBudgetOverride: submit.authorizeBudgetOverride,
+      });
+    },
+  });
 }
 
 async function handleGenerateMissing() {
@@ -789,7 +993,18 @@ async function handleGenerateMissing() {
       { confirmButtonText: "确定生成", cancelButtonText: "取消", type: "info" },
     );
   } catch { return; }
-  await assetsStore.generateAssets({ mode: "missing_only" });
+  // S2-2A 任务 11：缺失项生成先取后端 quote 并确认
+  await quoteAndGenerateWithRetry({
+    request: { operation: "assets.generate", selection: { mode: "missing_only", task_ids: [] } },
+    submit: async (submit) => {
+      await assetsStore.generateAssets({
+        mode: "missing_only",
+        quoteId: submit.quoteId,
+        idempotencyKey: submit.idempotencyKey,
+        authorizeBudgetOverride: submit.authorizeBudgetOverride,
+      });
+    },
+  });
   if (await handleDemoGeneratingError()) return;
   if (!assetsStore.state.loadError) {
     ElMessage.success("剩余资产生成完成");
@@ -813,7 +1028,19 @@ async function handleGenerateByType(taskType: string, typeLabel: string) {
       { confirmButtonText: "确定生成", cancelButtonText: "取消", type: "info" },
     );
   } catch { return; }
-  await assetsStore.generateAssets({ mode: "selected", taskIds });
+  // S2-2A 任务 11：先取后端 quote 并确认
+  await quoteAndGenerateWithRetry({
+    request: { operation: "assets.generate", selection: { task_ids: taskIds } },
+    submit: async (submit) => {
+      await assetsStore.generateAssets({
+        mode: "selected",
+        taskIds,
+        quoteId: submit.quoteId,
+        idempotencyKey: submit.idempotencyKey,
+        authorizeBudgetOverride: submit.authorizeBudgetOverride,
+      });
+    },
+  });
   await handleDemoGeneratingError();
 }
 
@@ -831,7 +1058,19 @@ async function handleGenerateSelected() {
       { confirmButtonText: "确定生成", cancelButtonText: "取消", type: "info" },
     );
   } catch { return; }
-  await assetsStore.generateAssets({ mode: "selected", taskIds: ids });
+  // S2-2A 任务 11：先取后端 quote 并确认
+  await quoteAndGenerateWithRetry({
+    request: { operation: "assets.generate", selection: { task_ids: ids } },
+    submit: async (submit) => {
+      await assetsStore.generateAssets({
+        mode: "selected",
+        taskIds: ids,
+        quoteId: submit.quoteId,
+        idempotencyKey: submit.idempotencyKey,
+        authorizeBudgetOverride: submit.authorizeBudgetOverride,
+      });
+    },
+  });
   if (await handleDemoGeneratingError()) { selectedBlockedIds.value = []; return; }
   selectedBlockedIds.value = [];
 }
@@ -884,8 +1123,14 @@ async function handleGenerateTask(taskId: string) {
       );
     }
   } catch { return; }
+  // S2-2A 任务 11：单任务生成先取后端 quote 并确认（新 quote、新 run）
+  await quoteAndGenerateWithRetry({
+    request: { operation: "assets.generate", selection: { task_ids: [taskId] } },
+    submit: async (submit) => {
+      await assetsStore.generateSingleTask(taskId, submit);
+    },
+  });
   try {
-    await assetsStore.generateSingleTask(taskId);
     // Reload to check actual execution status
     await assetsStore.loadProject();
     const exec = executions.value.find(e => e.task_id === taskId);
@@ -1375,10 +1620,20 @@ function handleConfirm() {
           :generating-task-ids="assetsStore.state.generatingTaskIds"
           :project-id="projectId"
           :focus-task-id="focusTaskId"
+          :route-readiness="segmentRouteBySegmentId.get(segment.segment_id)?.readiness ?? null"
+          :route-events="segmentRouteBySegmentId.get(segment.segment_id)?.route_events ?? null"
           @upload-file="handleUploadFile"
           @generate-task="handleGenerateTask"
           @upgrade-video="handleUpgradeVideo"
+          @handle-strict-fallback="handleStrictFallback"
         />
+      </div>
+
+      <!-- S2-2A 任务 11：成本明细入口 -->
+      <div class="asset-cost-entry">
+        <button class="asset-cost-entry-btn" data-testid="open-cost-summary" @click="costDialogOpen = true">
+          📊 成本明细
+        </button>
       </div>
 
       <!-- 粘性底栏 -->
@@ -1427,6 +1682,32 @@ function handleConfirm() {
       :text="assetLoadingBarText"
     />
   </div>
+
+  <GenerationQuoteDialog
+    :open="quoteDialogOpen"
+    :quote="pendingQuote"
+    :loading="quoteLoading"
+    :error="quoteError"
+    @confirm="handleQuoteConfirm"
+    @cancel="handleQuoteCancel"
+    @retry="handleQuoteRetry"
+  />
+  <StrictFallbackDialog
+    :open="strictDialogOpen"
+    :segment-label="strictSegmentLabel"
+    :failure-reason="strictFailureReason"
+    :run-id="activeExecutionRunId"
+    :manifest-version="activeManifestVersion"
+    :busy="strictBusy"
+    @retry="handleStrictRetry"
+    @accept-fallback="handleStrictAcceptFallback"
+    @cancel="strictDialogOpen = false"
+  />
+  <ProjectCostSummary
+    :project-id="projectId"
+    :open="costDialogOpen"
+    @close="costDialogOpen = false"
+  />
 </template>
 
 <style scoped>
@@ -1726,6 +2007,27 @@ details[open] > .asset-overview-toggle {
 /* ---- Deprecated: kept for clean removal later ---- */
 
 /* ---- Sticky bottom bar ---- */
+.asset-cost-entry {
+  display: flex;
+  justify-content: flex-end;
+  padding: 6px 0;
+}
+
+.asset-cost-entry-btn {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(201, 162, 39, 0.22);
+  background: rgba(201, 162, 39, 0.06);
+  color: #c9a227;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.asset-cost-entry-btn:hover {
+  background: rgba(201, 162, 39, 0.13);
+}
+
 .asset-bottom-bar {
   position: sticky;
   bottom: 0;

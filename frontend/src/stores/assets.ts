@@ -83,11 +83,24 @@ export interface AssetsStoreState {
 export interface AssetsStore {
   state: Readonly<AssetsStoreState>;
   loadProject: () => Promise<void>;
-  generateAssets: (options: { enabledProviderTypes?: string[]; mode?: string; taskIds?: string[] }) => Promise<void>;
-  generateSingleTask: (taskId: string) => Promise<void>;
+  generateAssets: (options: {
+    enabledProviderTypes?: string[];
+    mode?: string;
+    taskIds?: string[];
+    /** S2-2A 任务 11：quote 提交协议字段。 */
+    quoteId?: string;
+    idempotencyKey?: string;
+    authorizeBudgetOverride?: boolean;
+  }) => Promise<void>;
+  generateSingleTask: (
+    taskId: string,
+    submit?: { quoteId?: string; idempotencyKey?: string; authorizeBudgetOverride?: boolean },
+  ) => Promise<void>;
   upgradeSegmentToVideo: (segmentId: string) => Promise<void>;
   uploadArtifact: (taskId: string, file: File) => Promise<void>;
   acceptArtifact: (taskId: string, artifactId: string) => Promise<void>;
+  /** S2-2A 任务 11：严格模式失败段的显式 fallback 接受（CAS 防过期）。 */
+  acceptFallback: (segmentId: string, runId: string, expectedRunId: string, expectedVersion: string) => Promise<void>;
   artifactFileUrl: (artifactId: string) => string;
 }
 
@@ -99,11 +112,31 @@ export const assetsStoreKey: InjectionKey<AssetsStore> = Symbol("assets-store");
 
 export interface AssetsApi {
   loadProject(projectId: string): Promise<AssetsSnapshot>;
-  generateAssets(projectId: string, options: { enabledProviderTypes?: string[]; mode?: string; taskIds?: string[] }): Promise<void>;
-  generateSingleTask(projectId: string, taskId: string): Promise<void>;
+  generateAssets(
+    projectId: string,
+    options: {
+      enabledProviderTypes?: string[];
+      mode?: string;
+      taskIds?: string[];
+      quoteId?: string;
+      idempotencyKey?: string;
+      authorizeBudgetOverride?: boolean;
+    },
+  ): Promise<void>;
+  generateSingleTask(
+    projectId: string,
+    taskId: string,
+    submit?: { quoteId?: string; idempotencyKey?: string; authorizeBudgetOverride?: boolean },
+  ): Promise<void>;
   upgradeSegmentToVideo(projectId: string, segmentId: string): Promise<void>;
   uploadArtifact(projectId: string, taskId: string, file: File): Promise<void>;
   acceptArtifact(projectId: string, taskId: string, artifactId: string): Promise<void>;
+  acceptFallback(
+    projectId: string,
+    runId: string,
+    segmentId: string,
+    payload: { expected_run_id: string; expected_version: string },
+  ): Promise<void>;
 }
 
 export function createFetchAssetsApi(baseUrl = ""): AssetsApi {
@@ -121,11 +154,25 @@ export function createFetchAssetsApi(baseUrl = ""): AssetsApi {
       if (options.enabledProviderTypes) body.enabled_provider_types = options.enabledProviderTypes;
       if (options.mode) body.mode = options.mode;
       if (options.taskIds) body.task_ids = options.taskIds;
+      if (options.quoteId) body.cost_quote_id = options.quoteId;
+      if (options.idempotencyKey) body.idempotency_key = options.idempotencyKey;
+      if (options.authorizeBudgetOverride !== undefined) {
+        body.authorize_budget_override = options.authorizeBudgetOverride;
+      }
       await apiFetch(`${baseUrl}/api/projects/${projectId}/assets/generate`, { method: "POST", body });
     },
 
-    async generateSingleTask(projectId, taskId) {
-      await apiFetch(`${baseUrl}/api/projects/${projectId}/assets/tasks/${taskId}/generate`, { method: "POST", body: {} });
+    async generateSingleTask(projectId, taskId, submit) {
+      const body: Record<string, unknown> = {};
+      if (submit?.quoteId) body.cost_quote_id = submit.quoteId;
+      if (submit?.idempotencyKey) body.idempotency_key = submit.idempotencyKey;
+      if (submit?.authorizeBudgetOverride !== undefined) {
+        body.authorize_budget_override = submit.authorizeBudgetOverride;
+      }
+      await apiFetch(`${baseUrl}/api/projects/${projectId}/assets/tasks/${taskId}/generate`, {
+        method: "POST",
+        body,
+      });
     },
 
     async upgradeSegmentToVideo(projectId, segmentId) {
@@ -153,6 +200,13 @@ export function createFetchAssetsApi(baseUrl = ""): AssetsApi {
         method: "POST",
         body: { artifact_id: artifactId },
       });
+    },
+
+    async acceptFallback(projectId, runId, segmentId, payload) {
+      await apiFetch(
+        `${baseUrl}/api/projects/${projectId}/assets/runs/${runId}/segments/${segmentId}/accept-fallback`,
+        { method: "POST", body: payload },
+      );
     },
   };
 }
@@ -218,7 +272,7 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
     }
   }
 
-  async function generateAssets(options: { enabledProviderTypes?: string[]; mode?: string; taskIds?: string[] }) {
+  async function generateAssets(options: { enabledProviderTypes?: string[]; mode?: string; taskIds?: string[]; quoteId?: string; idempotencyKey?: string; authorizeBudgetOverride?: boolean }) {
     const projectId = input.projectStore.state.projectId;
     if (!projectId) return;
 
@@ -241,7 +295,10 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
     }
   }
 
-  async function generateSingleTask(taskId: string) {
+  async function generateSingleTask(
+    taskId: string,
+    submit?: { quoteId?: string; idempotencyKey?: string; authorizeBudgetOverride?: boolean },
+  ) {
     const projectId = input.projectStore.state.projectId;
     if (!projectId) return;
 
@@ -250,7 +307,7 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
     state.generatingTaskIds.add(taskId);
 
     try {
-      await input.api.generateSingleTask(projectId, taskId);
+      await input.api.generateSingleTask(projectId, taskId, submit);
       await loadProject();
     } catch (error) {
       throw error;
@@ -305,6 +362,22 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
     }
   }
 
+  async function acceptFallback(segmentId: string, runId: string, expectedRunId: string, expectedVersion: string) {
+    const projectId = input.projectStore.state.projectId;
+    if (!projectId) return;
+
+    try {
+      await input.api.acceptFallback(projectId, runId, segmentId, {
+        expected_run_id: expectedRunId,
+        expected_version: expectedVersion,
+      });
+      await loadProject();
+    } catch (error) {
+      state.loadError = toErrorMessage(error);
+      throw error;
+    }
+  }
+
   function artifactFileUrl(artifactId: string): string {
     const projectId = input.projectStore.state.projectId;
     return `/api/projects/${projectId}/artifacts/${artifactId}/file`;
@@ -318,6 +391,7 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
     upgradeSegmentToVideo,
     uploadArtifact,
     acceptArtifact,
+    acceptFallback,
     artifactFileUrl,
   };
 }

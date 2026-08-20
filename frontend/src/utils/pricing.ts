@@ -1,9 +1,13 @@
 /**
- * DashScope pricing configuration (CNY, China mainland).
+ * DashScope pricing configuration (CNY, China mainland) — 前端展示参考值。
  * Reference: https://help.aliyun.com/zh/model-studio/model-pricing
  *
- * This is the SINGLE source of truth for all cost display in the UI.
- * Components must import helpers from here — never hardcode prices.
+ * S2-2A 任务 11：本模块已降级为纯格式化/兼容层，不再是授权价格真相源。
+ * - 所有本地估算只标记 `client_preview_only`，仅供用户理解常见支出；
+ * - 真实付费生成的授权边界一律来自后端 quote（generation-cost-quotes API）
+ *   与预算门禁，前端不得用本地价格做授权决策；
+ * - 后端价格以服务端 price catalog 为准（任务 7/8），前端价格可能与实际
+ *   计费存在差异。
  */
 
 export interface CostBreakdown {
@@ -24,12 +28,22 @@ export interface PricingConfig {
   tts: { unitPricePer10kChars: number; label: string };
 }
 
+/**
+ * 前端展示参考价格（client_preview_only）：仅用于生成前费用预览文案，
+ * 不参与任何授权/预算决策；真实提交必须使用后端 quote。
+ */
 export const PRICING: PricingConfig = {
   image: { unitPrice: 0.20, label: "wan2.6-t2i" },
   video720p: { unitPricePerSec: 0.60, label: "wan2.7-i2v (720P)" },
   video1080p: { unitPricePerSec: 1.00, label: "wan2.7-i2v (1080P)" },
   tts: { unitPricePer10kChars: 0.80, label: "qwen3-tts-vd" },
 };
+
+/**
+ * 本地预览估算标记：任何由本模块产出的估算都只用于展示（client_preview_only），
+ * 授权上界与预算比较必须来自后端 quote。
+ */
+export const CLIENT_PREVIEW_ONLY = true;
 
 /**
  * Normalize a video duration for pricing estimation, matching the

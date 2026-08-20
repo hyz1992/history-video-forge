@@ -44,12 +44,16 @@ const props = defineProps<{
   generatingTaskIds: Set<string>;
   projectId: string;
   focusTaskId: string | null;
+  /** S2-2A 任务 11：当前段的 resolved route 状态（自动降级/严格失败）。 */
+  routeReadiness: string | null;
+  routeEvents: Array<{ event_type?: string; reason_code?: string }> | null;
 }>();
 
 const emit = defineEmits<{
   "upload-file": [taskId: string, file: File];
   "generate-task": [taskId: string];
   "upgrade-video": [segmentId: string];
+  "handle-strict-fallback": [segmentId: string];
 }>();
 
 /* -------------------------------------------------------------------------- */
@@ -646,6 +650,12 @@ function nextMedia() {
 }
 </script>
 
+const autoDowngraded = computed(() =>
+  (props.routeEvents ?? []).some((event) => event.event_type === "automatic_fallback"),
+);
+
+const isStrictBlocked = computed(() => props.routeReadiness === "blocked_waiting_user");
+
 <template>
   <StageLoadingBar
     :visible="isTaskLocked"
@@ -662,6 +672,31 @@ function nextMedia() {
         <ElTag size="small" type="info">{{ narrativeRoleLabel }}</ElTag>
       </div>
       <p class="segment-header-excerpt">{{ segment.script_excerpt }}</p>
+      <div class="segment-route-status">
+        <span
+          v-if="autoDowngraded"
+          class="route-status-badge route-status-downgraded"
+          data-testid="auto-downgraded-badge"
+          title="该分镜的 API 视频失败后已自动降级为图片+运镜"
+        >
+          ⚠ 已自动降级为图片+运镜
+        </span>
+        <span
+          v-if="isStrictBlocked"
+          class="route-status-badge route-status-strict"
+          data-testid="strict-blocked-badge"
+        >
+          ✋ API 视频失败（严格模式）
+        </span>
+        <button
+          v-if="isStrictBlocked"
+          class="route-status-action"
+          data-testid="strict-handle-button"
+          @click="emit('handle-strict-fallback', segment.segment_id)"
+        >
+          处理：重试或接受 Remotion
+        </button>
+      </div>
     </div>
 
     <!-- Left: media area -->
@@ -1253,6 +1288,51 @@ function nextMedia() {
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
   color: var(--accent-text);
+}
+
+.segment-route-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.route-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.route-status-downgraded {
+  background: rgba(224, 122, 95, 0.1);
+  border: 1px solid rgba(224, 122, 95, 0.28);
+  color: #e0a883;
+}
+
+.route-status-strict {
+  background: rgba(201, 162, 39, 0.12);
+  border: 1px solid rgba(201, 162, 39, 0.32);
+  color: #e0c26b;
+}
+
+.route-status-action {
+  padding: 4px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(201, 162, 39, 0.35);
+  background: rgba(201, 162, 39, 0.1);
+  color: #c9a227;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.route-status-action:hover {
+  background: rgba(201, 162, 39, 0.18);
 }
 
 .segment-header-excerpt {

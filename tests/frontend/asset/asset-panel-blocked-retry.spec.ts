@@ -6,6 +6,7 @@ import { reactive } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import AssetPanel from "../../../frontend/src/components/asset/AssetPanel.vue";
+import { generationCostStoreKey } from "../../../frontend/src/stores/generation-cost";
 import { createAppRouter } from "../../../frontend/src/router/index.js";
 import { assetPlanningStoreKey } from "../../../frontend/src/stores/asset-planning";
 import { assetsStoreKey } from "../../../frontend/src/stores/assets";
@@ -144,6 +145,8 @@ function activeAssetsWithFailedTts(failureNote: string) {
 }
 
 describe("asset panel blocked retry", () => {
+  let costStoreState: { lastQuote: unknown; costSummary: unknown; costRecords: unknown };
+
   afterEach(() => {
     document.body.innerHTML = "";
   });
@@ -215,6 +218,39 @@ describe("asset panel blocked retry", () => {
             acceptArtifact: pendingPromise,
             artifactFileUrl: () => "",
           } as never,
+          [generationCostStoreKey as symbol]: {
+            state: (() => {
+              costStoreState = reactive({
+                lastQuote: null,
+                costSummary: { data: null, loading: false, error: null },
+                costRecords: { data: null, loading: false, error: null },
+              });
+              return costStoreState;
+            })(),
+            createQuote: vi.fn(async () => {
+              const value = {
+                quote: {
+                  quote_id: "quote_retry_1",
+                  operation: "assets.generate",
+                  expires_at: "2099-01-01T00:00:00.000Z",
+                  configuration_hash: "fnv1a64:test",
+                  pricing_versions: ["test"],
+                  items: [],
+                  estimated_cost_cny: "0.000000",
+                  authorization_cost_cny: "0.000000",
+                  contains_unbounded_item: false,
+                  budget_limit_cny: null,
+                  over_budget: false,
+                  requires_budget_override: false,
+                },
+                idempotencyKey: "key_retry_1",
+              };
+              (costStoreState as { lastQuote: unknown }).lastQuote = value;
+              return { ok: true, value };
+            }),
+            loadCostSummary: vi.fn(async () => undefined),
+            loadCostRecords: vi.fn(async () => undefined),
+          } as never,
         },
       },
     });
@@ -230,11 +266,24 @@ describe("asset panel blocked retry", () => {
     const retryBtn = wrapper.find(".asset-blocked-chip-retry");
     expect(retryBtn.exists()).toBe(true);
 
-    // 点击重试触发 generateSingleTask
+    // 点击重试：先取后端 quote，弹出费用确认对话框（任务 11）
     await retryBtn.trigger("click");
     await flushPromises();
+
+    // quote 确认对话框出现并展示报价
+    const confirmBtn = wrapper.find('[data-testid="quote-confirm"]');
+    expect(confirmBtn.exists()).toBe(true);
+    expect(wrapper.find('[data-testid="quote-estimated"]').exists()).toBe(true);
+
+    // 确认后以 quote 提交单任务生成
+    await confirmBtn.trigger("click");
+    await flushPromises();
     expect(generateSingleTask).toHaveBeenCalledTimes(1);
-    expect(generateSingleTask).toHaveBeenCalledWith("tts_001");
+    expect(generateSingleTask).toHaveBeenCalledWith("tts_001", {
+      quoteId: "quote_retry_1",
+      idempotencyKey: "key_retry_1",
+      authorizeBudgetOverride: false,
+    });
 
     wrapper.unmount();
   });
@@ -339,6 +388,103 @@ describe("asset panel blocked retry", () => {
 
     // waiting_manual_upload（非 failed）不应显示重试按钮
     expect(wrapper.find(".asset-blocked-chip-retry").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("quote 失败时回退无 quote 本地路径（stub/demo 部署不阻塞；付费部署由后端 409 兜底）", async () => {
+    const router = await createRouterAt("/projects/project-retry-failed/asset");
+    const failureNote = "provider call failed";
+    const assetsState = reactive({
+      snapshot: {
+        current_status: "assets_blocked",
+        active_assets: activeAssetsWithFailedTts(failureNote),
+      },
+      isLoading: false,
+      isGenerating: false,
+      isUploading: null,
+      generatingTaskId: null,
+      generatingTaskIds: new Set<string>(),
+      loadError: null,
+    });
+    const generateSingleTask = vi.fn(async () => {
+      assetsState.isGenerating = true;
+      await pendingPromise();
+    });
+    costStoreState = reactive({
+      lastQuote: null,
+      costSummary: { data: null, loading: false, error: null },
+      costRecords: { data: null, loading: false, error: null },
+    });
+
+    const wrapper = mount(AssetPanel, {
+      global: {
+        plugins: [router, ElementPlus],
+        stubs: { SegmentAssetCard: true },
+        provide: {
+          [projectStoreKey as symbol]: createProjectStoreStub() as never,
+          [workspaceStoreKey as symbol]: createWorkspaceStoreStub() as never,
+          [scriptStoreKey as symbol]: createScriptStoreStub() as never,
+          [storyboardStoreKey as symbol]: {
+            state: reactive({
+              snapshot: { current_status: "storyboard_ready", active_storyboard: { plan: { segments: [] } } },
+              isLoading: false,
+              isGenerating: false,
+              loadError: null,
+            }),
+            async loadActiveStoryboardSnapshot() {},
+          } as never,
+          [assetPlanningStoreKey as symbol]: {
+            state: reactive({
+              snapshot: {
+                current_status: "asset_plan_ready",
+                active_asset_plan: activeAssetPlanWithTts(),
+                active_asset_plan_record_id: "plan-ready",
+              },
+              isLoading: false,
+              isGenerating: false,
+              loadError: null,
+            }),
+            async loadActiveAssetPlanSnapshot() {},
+            async retryLoad() {},
+            generateAssetPlan: pendingPromise,
+          } as never,
+          [assetsStoreKey as symbol]: {
+            state: assetsState,
+            async loadProject() {},
+            generateAssets: pendingPromise,
+            generateSingleTask,
+            upgradeSegmentToVideo: pendingPromise,
+            uploadArtifact: pendingPromise,
+            acceptArtifact: pendingPromise,
+            artifactFileUrl: () => "",
+          } as never,
+          [generationCostStoreKey as symbol]: {
+            state: costStoreState,
+            createQuote: vi.fn(async () => ({
+              ok: false,
+              error: { code: "generation_quote_resolution_failed" },
+            })),
+            loadCostSummary: vi.fn(async () => undefined),
+            loadCostRecords: vi.fn(async () => undefined),
+          } as never,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    const retryBtn = wrapper.find(".asset-blocked-chip-retry");
+    await retryBtn.trigger("click");
+    await flushPromises();
+
+    // 回退路径：直接无 quote 提交单任务（quoteId 为空串表示无 quote 提交）
+    expect(generateSingleTask).toHaveBeenCalledTimes(1);
+    expect(generateSingleTask).toHaveBeenCalledWith("tts_001", {
+      quoteId: "",
+      idempotencyKey: "",
+      authorizeBudgetOverride: false,
+    });
+
     wrapper.unmount();
   });
 });
