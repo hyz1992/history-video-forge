@@ -125,7 +125,7 @@ export async function runPublishGeneration(
     runId: publishRunId,
   });
   const interactionLogWriter = input.billingContext
-    ? createBillingInteractionLogWriter({ billing: input.billingContext, inner: plainWriter })
+    ? createBillingInteractionLogWriter({ billing: input.billingContext, inner: plainWriter, interactionRunId: publishRunId })
     : plainWriter;
 
   // Generate cover prompt via LLM

@@ -79,6 +79,7 @@ function createTraceLogWriterSafely(input: {
       ? (createBillingInteractionLogWriter({
           billing: input.billingContext,
           inner: plainWriter,
+          interactionRunId: input.runId,
         }) as TraceLogWriter)
       : plainWriter;
   } catch {

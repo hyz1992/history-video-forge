@@ -68,6 +68,12 @@ export interface LlmBillingContext {
 export function createBillingInteractionLogWriter(input: {
   billing: LlmBillingContext;
   inner: LlmInteractionLogWriter;
+  /**
+   * 模块级 runId（如 script_run_<uuid>）——interaction log 文件目录的锚点。
+   * 提供时 interactionId 以它为前缀，usage.interactionId 可直接定位日志文件
+   * （"可反查 interaction log"合同，contract 审查 I-1）；缺省回退 GenerationRun id。
+   */
+  interactionRunId?: string;
 }): LlmInteractionLogWriter & { writeError(message: string): void } {
   const counters = new Map<string, number>();
 
@@ -76,13 +82,34 @@ export function createBillingInteractionLogWriter(input: {
       const operationName = entry.operationName ?? "unknown";
       const attemptIndex = counters.get(operationName) ?? 0;
       counters.set(operationName, attemptIndex + 1);
-      const interactionId = `${input.billing.runId}:${operationName}:${attemptIndex}`;
+      const interactionId = `${input.interactionRunId ?? input.billing.runId}:${operationName}:${attemptIndex}`;
       const enriched: LlmInteractionLogEntry = { ...entry, id: interactionId };
 
       const innerResult = input.inner.write(enriched);
 
-      void recordUsage(interactionId, operationName, attemptIndex, entry).catch(() => {
-        // 记账失败不阻断生成主链路；缺口由对账工具兜底（与媒体记账同策略）
+      void recordUsage(interactionId, operationName, attemptIndex, entry).catch((error) => {
+        // 记账失败不阻断生成主链路；显式留痕（同媒体记账策略）：
+        // usage_recording_failed 事件先 writer 后 Map，writer 失败容错
+        const event = {
+          id: input.billing.db.generateId(),
+          generationRunId: input.billing.runId,
+          segmentId: null,
+          eventType: "usage_recording_failed",
+          eventJson: {
+            operation_name: operationName,
+            interaction_id: interactionId,
+            message: error instanceof Error ? error.message : String(error),
+          },
+          createdAt: new Date(),
+        } as import("../../db/client.js").GenerationRunEventRecord;
+        if (input.billing.db.thirdAggregateWriter) {
+          void input.billing.db.thirdAggregateWriter
+            .appendGenerationRunEvent(event)
+            .catch(() => undefined);
+        }
+        const events = input.billing.db.generationRunEvents.get(input.billing.runId) ?? [];
+        events.push(event);
+        input.billing.db.generationRunEvents.set(input.billing.runId, events);
       });
 
       return innerResult;

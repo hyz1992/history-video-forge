@@ -21,7 +21,7 @@ import {
   extractSubmitFields,
   submitGenerationRun,
 } from "../generation-run/submit-protocol.js";
-import { isPaidMediaDispatchPossible } from "../generation-cost/provider-dispatch-gate.js";
+import { isPaidLlmDispatchPossible, isPaidMediaDispatchPossible } from "../generation-cost/provider-dispatch-gate.js";
 import type { GenerationQuoteSelection } from "../../../../shared/src/index.js";
 
 function readOptionalNumber(value: unknown): number | undefined {
@@ -148,6 +148,10 @@ async function generateAssetsController(
       execution_mode: executionMode,
       mode: requestedMode ?? null,
       task_ids: requestedTaskIds ?? [],
+    }, {
+      replayExtraBody: {
+        asset_manifest_record_id: project.activeAssetManifestRecordId ?? null,
+      },
     });
   }
 
@@ -231,6 +235,17 @@ async function optimizeTaskPromptController(
   const assetPlanRecord = context.app.db.assetPlanRecords.get(assetPlanRecordId);
   if (!assetPlanRecord) {
     return { statusCode: 409, body: { error: "asset_plan_not_found" } };
+  }
+
+  // S2-2A 任务 9B：付费部署下明确拒绝（prompt 优化辅助端点暂未接入 quote 提交执行）
+  if (isPaidLlmDispatchPossible(context.app.db)) {
+    return {
+      statusCode: 409,
+      body: {
+        error: "paid_generation_quote_required",
+        message: "当前部署可调用付费 LLM provider：prompt 优化暂未接入付费提交模式",
+      },
+    };
   }
 
   const payload = context.payload as {
@@ -570,6 +585,10 @@ async function generateTaskController(
       execution_mode: "auto_available",
       mode: null,
       task_ids: [taskId],
+    }, {
+      replayExtraBody: {
+        asset_manifest_record_id: project.activeAssetManifestRecordId ?? null,
+      },
     });
   }
 

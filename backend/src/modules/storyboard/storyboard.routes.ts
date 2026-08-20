@@ -37,12 +37,29 @@ async function regenerateSegmentController(
   const demoBlock = demoStageGuard(project, context.app.env.demoMode, "分镜");
   if (demoBlock) return demoBlock;
 
-  const payload = context.payload as StoryboardSegmentRegenPayload;
+  const payload = (context.payload ?? {}) as Record<string, unknown>;
+  // S2-2A 任务 9B：quote 提交协议（分段重生与主生成同一 operation；付费部署下无 quote 明确拒绝）
+  const submit = extractSubmitFields(payload);
+  if (submit.present) {
+    if (submit.invalid) {
+      return { statusCode: 400, body: { error: "generation_submit_fields_incomplete", message: "cost_quote_id 与 idempotency_key 必须同时提供" } };
+    }
+    return submitGenerationRun(context, "storyboard.generate", undefined, {
+      segment_id: context.params.segmentId,
+      user_feedback: payload.user_feedback,
+    });
+  }
+  if (isPaidLlmDispatchPossible(context.app.db)) {
+    return {
+      statusCode: 409,
+      body: { error: "paid_generation_quote_required", message: "当前部署可调用付费 LLM provider：请先创建报价并在生成请求中携带 cost_quote_id 与 idempotency_key" },
+    };
+  }
   return runStoryboardSegmentRegeneration({
     db: context.app.db,
     project,
     segmentId: context.params.segmentId,
-    userFeedback: payload.user_feedback,
+    userFeedback: payload.user_feedback as string,
   });
 }
 

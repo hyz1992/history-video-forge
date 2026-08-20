@@ -94,6 +94,8 @@ export function renderLlmInteractionMarkdown(
     "## 元数据",
     "",
     `- generated_at: ${entry.generatedAt}`,
+    // S2-2A 任务 9B：interactionId（计费反查锚点，可 grep 定位）
+    ...(entry.id ? [`- interaction_id: ${entry.id}`] : []),
     `- provider: ${entry.provider}`,
     `- model: ${entry.model}`,
     `- operation_name: ${entry.operationName}`,

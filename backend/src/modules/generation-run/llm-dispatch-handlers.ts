@@ -1,4 +1,5 @@
 import type { AppResponse } from "../../app";
+import { env } from "../../config/env.js";
 import type { DbClient, GenerationRunRecord, ProjectRecord } from "../../db/client.js";
 import type { ResolvedGenerationConfigurationV1 } from "../../../../shared/src/index.js";
 import type { GenerationOperation } from "../../../../shared/src/index.js";
@@ -97,7 +98,7 @@ export function createAssetPlanDispatchHandler(): GenerationRunDispatchHandler {
     const response = await runAssetPlanningGeneration({
       db,
       project,
-      demoMode: false,
+      demoMode: env.demoMode,
       billingContext: billingFor(run, db),
     });
     return toOutcome(response);

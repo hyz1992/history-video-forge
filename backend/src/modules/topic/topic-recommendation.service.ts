@@ -307,6 +307,7 @@ export async function recommendTopicCandidatesWithTrace(
       ? createBillingInteractionLogWriter({
           billing: options.billingContext,
           inner: plainWriter,
+          interactionRunId: runId,
         })
       : plainWriter;
 

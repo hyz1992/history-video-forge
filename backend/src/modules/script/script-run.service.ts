@@ -129,7 +129,7 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
     runId,
   });
   const interactionLogWriter = input.billingContext
-    ? createBillingInteractionLogWriter({ billing: input.billingContext, inner: plainWriter })
+    ? createBillingInteractionLogWriter({ billing: input.billingContext, inner: plainWriter, interactionRunId: runId })
     : plainWriter;
   const previousActiveScriptRecordId = input.project.activeScriptRecordId;
   // Declare outside try so catch block can access it for failure-record update

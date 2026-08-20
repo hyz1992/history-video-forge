@@ -37,22 +37,6 @@ interface TopicRecommendationSeedPayload {
   canonical_quote_intents?: Array<{ quote: string; intent: string }>;
 }
 
-function toResponseCandidate(candidate: StoredTopicCandidate) {
-  return {
-    candidate_id: candidate.candidateId,
-    title: candidate.title,
-    one_line_angle: candidate.oneLineAngle,
-    family_label: candidate.familyLabel,
-    scope_label: candidate.scopeLabel,
-    strong_scene: candidate.strongScene,
-    must_cover_preview: candidate.mustCoverPreview ?? [],
-    why_this_now: candidate.whyThisNow ?? "",
-    risk_hints: candidate.riskHints ?? [],
-    core_conflict: candidate.coreConflict,
-    source_hint: candidate.sourceHint,
-    viral_rubric: candidate.viralRubric ?? {},
-  };
-}
 
 function normalizeTopicGenerationErrorMessage(error: unknown) {
   const fallback = "topic_generate_failed";
@@ -295,8 +279,16 @@ export async function createTopicRecommendationsController(
       return { statusCode: 400, body: { error: "generation_submit_fields_incomplete", message: "cost_quote_id 与 idempotency_key 必须同时提供" } };
     }
     return submitGenerationRun(context, "topic.generate", undefined, {
-      ...rawPayload,
-      _entry: "topic-recommend",
+      canonical_name: rawPayload.canonical_name,
+      summary: rawPayload.summary,
+      core_conflict: rawPayload.core_conflict,
+      strong_scene: rawPayload.strong_scene,
+      source_hint: rawPayload.source_hint,
+      recent_usage_hint: rawPayload.recent_usage_hint,
+      canonical_quotes: rawPayload.canonical_quotes,
+      canonical_quote_intents: rawPayload.canonical_quote_intents,
+      tags: rawPayload.tags,
+      filters: rawPayload.filters,
     });
   }
   if (isPaidLlmDispatchPossible(context.app.db)) {
@@ -469,6 +461,18 @@ export async function createTopicFromCustomController(
 
   const demoBlock = demoStageGuard(project, context.app.env.demoMode, "选题");
   if (demoBlock) return demoBlock;
+
+  // S2-2A 任务 9B：付费部署下明确拒绝（自定义选题入口暂未接入 quote 提交执行，
+  // 不得无 quote 触发真实 LLM）；stub/本地部署保留原路径
+  if (isPaidLlmDispatchPossible(context.app.db)) {
+    return {
+      statusCode: 409,
+      body: {
+        error: "paid_generation_quote_required",
+        message: "当前部署可调用付费 LLM provider：自定义选题入口暂未接入付费提交模式，请使用系统推荐入口或等待后续版本",
+      },
+    };
+  }
 
   // 2. set generating state
   project.status = "topic_generating";

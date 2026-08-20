@@ -348,8 +348,9 @@ export interface RecordLlmUsageOutcome {
  *   （costBasis=provider_usage，input/output units=实际 token）；
  * - 无 token → actual=null、costBasis=estimate（估算按 operation 级 token 估算），
  *   绝不伪造实际 token。
- * LLM 调用无"超出授权上界"的 execution 后确认路径（token 计价即精确费用），
- * overrun 检查沿用媒体同款累计口径（媒体+LLM 统一按 snapshot 累计）。
+ * 注：LLM 路径不触发 pricing_overrun（token 计价即精确费用，且估算模式按
+ * interaction 累计可达授权数倍属设计取舍）；目录项缺失时保留 null actual +
+ * estimate basis（不标 provider_usage 零价，避免静默少计费误导）。
  */
 export async function recordLlmUsage(
   input: RecordLlmUsageInput,
@@ -400,8 +401,9 @@ export async function recordLlmUsage(
   let actualCostState: UsageCostActualState = "estimated_after_execution";
   let inputUnits: number | null = null;
   let outputUnits: number | null = null;
-  if (input.status === "succeeded" && hasExactTokens) {
-    // provider 确认 token → 精确计价（provider_usage）；估算与确认同源定价
+  if (input.status === "succeeded" && hasExactTokens && entry) {
+    // provider 确认 token → 精确计价（provider_usage）；估算与确认同源定价。
+    // 目录项缺失（快照解析后漂移）时保留 null actual + estimate，不伪造零价
     actualCostMicros = estimatedCostMicros;
     costBasis = "provider_usage";
     actualCostState = "provider_confirmed";

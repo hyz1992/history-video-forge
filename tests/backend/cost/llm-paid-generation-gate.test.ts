@@ -247,17 +247,6 @@ async function submitScriptViaApi(
     mockPaidScriptProvider(true);
 
     const { response } = await submitScriptViaApi(app, project, "9b-paid-1");
-    if (response.statusCode !== 200) {
-      const { createScriptDispatchHandler } = await import("../../../backend/src/modules/generation-run/llm-dispatch-handlers.js");
-      const handler = createScriptDispatchHandler();
-      const run = [...app.db.generationRuns.values()][0]!;
-      try {
-        const outcome = await handler(run, { db: app.db, project });
-        console.log("DBG outcome:", JSON.stringify(outcome).slice(0, 800));
-      } catch (error) {
-        console.log("DBG handler error:", error instanceof Error ? error.message : String(error));
-      }
-    }
     expect(response.statusCode).toBe(200);
     expect(invokeStructuredPromptMock).toHaveBeenCalled();
 
@@ -278,8 +267,9 @@ async function submitScriptViaApi(
     expect(usage.costBasis).toBe("provider_usage");
     expect(usage.inputUnits).toBe(1200);
     expect(usage.outputUnits).toBe(800);
-    // interactionId 可反查 interaction log（runId + operationName 锚点）
-    expect(usage.interactionId).toContain(runs[0]!.id);
+    // interactionId 可反查 interaction log：以模块 runId（script_run_*）为前缀，
+    // 与日志目录锚点一致（contract 审查 I-1 修复）
+    expect(usage.interactionId).toMatch(/^script_run_[0-9a-f-]+:script\.writer:\d+$/);
     expect(usage.interactionId).toContain("script.writer");
   });
 
@@ -363,5 +353,79 @@ async function submitScriptViaApi(
     const second = await createScriptQuoteAndRun(app, project, "9b-retry-2");
     expect(second.run.id).not.toBe(run.id);
     expect(second.quote.id).not.toBe(quote.id);
+  });
+  it("记账 tier 与 OPERATION_TIER_REGISTRY 对同一 promptId 的判定一致（contract M-2 锁定）", async () => {
+    const { OPERATION_TIER_REGISTRY } = await import("../../../backend/src/runtime/llm/operation-tier-registry.js");
+    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    await seedQuotableCatalog(app);
+    const project = await prepareScriptProject(app);
+    mockPaidScriptProvider(true);
+    const { response } = await submitScriptViaApi(app, project, "9b-tier-1");
+    expect(response.statusCode).toBe(200);
+    const usages = [...app.db.usageCostRecords.values()];
+    expect(usages.length).toBeGreaterThanOrEqual(1);
+    for (const usage of usages) {
+      const operationName = usage.interactionId.split(":")[1]!;
+      const registryTier = OPERATION_TIER_REGISTRY[operationName];
+      if (registryTier) {
+        expect(usage.capability).toBe(`llm.${registryTier}`);
+      }
+    }
+  });
+});
+
+describe("五入口付费闸门覆盖（diff/contract 审查 I-2 锁定）", () => {
+  const auth = buildTestAuth({ userId: "owner-1" });
+
+  it("topic/storyboard(含regen)/asset-plan/publish 无 quote 提交均返回 paid_generation_quote_required 且 provider 零调用", async () => {
+    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    await seedQuotableCatalog(app);
+    const project = await createProject(app.db, { name: "9B five gates", ownerId: "owner-1" });
+    const now = new Date();
+    app.db.topicPackages.set("tp_gate", {
+      id: "tp_gate", projectId: project.id, eventRegistryEntryId: "ev", title: "T",
+      selectedAngle: "A", familyLabel: "F", scopeLabel: "S", coreConflict: "C",
+      strongScene: "SC", stakes: "ST", packagingSeed: "PS",
+      canonicalQuotesJson: [], canonicalQuoteIntentsJson: [],
+      durationBandJson: { label: "medium" },
+      narrativeTensionMapJson: { hook_claim: "h", pressure_escalation: "p", mid_reveal: "m", peak_payoff: "pk", ending_residue: "e" },
+      mustIncludeBeatsJson: [], forbiddenExpansionsJson: [], riskHintsJson: [],
+      sourceAnchorRefsJson: ["s"], ambiguityNotesJson: [],
+      sourceMode: "system_recommendation", sourceRefJson: null, createdAt: now,
+    } as never);
+    project.activeTopicPackageId = "tp_gate";
+    app.db.storyboardRecords.set("sb_gate", {
+      id: "sb_gate", projectId: project.id, topicPackageId: "tp_gate", scriptRecordId: "sr_gate",
+      planJson: { segments: [{ segment_id: "seg_1", api_video_suitability: "remotion_sufficient" }] },
+      validationResultJson: {}, executionStateJson: null, graphTraceSummaryJson: null,
+      runtimeDiagnosticsJson: null, createdAt: now,
+    });
+    project.activeStoryboardRecordId = "sb_gate";
+    app.db.assetPlanRecords.set("ap_gate", {
+      id: "ap_gate", projectId: project.id, topicPackageId: "tp_gate", scriptRecordId: "sr_gate",
+      storyboardRecordId: "sb_gate", planJson: { tasks: [] },
+      validationResultJson: {} as never, executionStateJson: {}, graphTraceSummaryJson: null,
+      runtimeDiagnosticsJson: null, createdAt: now,
+    });
+    project.activeAssetPlanRecordId = "ap_gate";
+    project.activeAssetManifestRecordId = null;
+
+    const cases: Array<{ url: string; payload: Record<string, unknown> }> = [
+      { url: `/api/projects/${project.id}/topic/recommendations`, payload: { canonical_name: "晏子使楚", summary: "s", core_conflict: "c", strong_scene: "sc", source_hint: "h", recent_usage_hint: "r", tags: ["diplomacy"] } },
+      { url: `/api/projects/${project.id}/topic/from-custom`, payload: { rawDigest: "晏子使楚的具体事件" } },
+      { url: `/api/projects/${project.id}/script/generate`, payload: {} },
+      { url: `/api/projects/${project.id}/storyboard/generate`, payload: {} },
+      { url: `/api/projects/${project.id}/storyboard/segments/seg_1/regen`, payload: { user_feedback: "更紧张" } },
+      { url: `/api/projects/${project.id}/asset-plan/generate`, payload: {} },
+      { url: `/api/projects/${project.id}/publish/generate`, payload: {} },
+    ];
+
+    for (const item of cases) {
+      invokeStructuredPromptMock.mockReset();
+      const response = await app.inject({ method: "POST", url: item.url, payload: item.payload, auth });
+      expect(response.statusCode).toBe(409);
+      expect((response.json() as Record<string, unknown>).error).toBe("paid_generation_quote_required");
+      expect(invokeStructuredPromptMock).not.toHaveBeenCalled();
+    }
   });
 });

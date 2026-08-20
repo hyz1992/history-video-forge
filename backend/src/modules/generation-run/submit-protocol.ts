@@ -79,6 +79,7 @@ export async function submitGenerationRun(
   operation: GenerationOperation,
   selection: GenerationQuoteSelection | undefined,
   dispatchPayload: Record<string, unknown>,
+  options: { replayExtraBody?: Record<string, unknown> } = {},
 ): Promise<AppResponse> {
   const submit = extractSubmitFields(context.payload as Record<string, unknown>);
   if (!submit.present || submit.invalid || !submit.fields) {
@@ -159,6 +160,7 @@ export async function submitGenerationRun(
       generation_run_id: run.id,
       run_status: run.status,
       idempotency_replayed: !created,
+      ...options.replayExtraBody,
     },
   };
 }

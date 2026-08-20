@@ -150,7 +150,7 @@ export async function runStoryboardGeneration(
   });
   // 9B：付费 quote 绑定 run 的 writer 包计费包装（LLM interaction 记账）
   const interactionLogWriter = input.billingContext
-    ? createBillingInteractionLogWriter({ billing: input.billingContext, inner: plainWriter1 })
+    ? createBillingInteractionLogWriter({ billing: input.billingContext, inner: plainWriter1, interactionRunId: runId })
     : plainWriter1;
   const previousActiveStoryboardRecordId = input.project.activeStoryboardRecordId;
 
@@ -457,7 +457,7 @@ export async function runStoryboardSegmentRegeneration(
   } as never);
   // 9B：付费 quote 绑定 run 的 writer 包计费包装（LLM interaction 记账）
   const interactionLogWriter = input.billingContext
-    ? createBillingInteractionLogWriter({ billing: input.billingContext, inner: plainWriter2 })
+    ? createBillingInteractionLogWriter({ billing: input.billingContext, inner: plainWriter2, interactionRunId: input.db.generateId() })
     : plainWriter2;
 
   try {

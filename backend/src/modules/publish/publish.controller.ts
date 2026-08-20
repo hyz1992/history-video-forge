@@ -78,6 +78,17 @@ export async function publishUpdateController(
     return { statusCode: 404, body: { error: "project_not_found" } };
   }
 
+  // S2-2A 任务 9B：付费部署下明确拒绝（辅助端点暂未接入 quote 提交执行）
+  if (isPaidLlmDispatchPossible(db)) {
+    return {
+      statusCode: 409,
+      body: {
+        error: "paid_generation_quote_required",
+        message: "当前部署可调用付费 LLM provider：封面 prompt 优化暂未接入付费提交模式，请通过发布生成入口使用",
+      },
+    };
+  }
+
   if (!project.activePublishPackageRecordId) {
     return {
       statusCode: 409,
@@ -462,6 +473,17 @@ export async function titleCandidatesController(
   const project = db.projects.get(projectId);
   if (!project) {
     return { statusCode: 404, body: { error: "project_not_found" } };
+  }
+
+  // S2-2A 任务 9B：付费部署下明确拒绝（辅助端点暂未接入 quote 提交执行）
+  if (isPaidLlmDispatchPossible(db)) {
+    return {
+      statusCode: 409,
+      body: {
+        error: "paid_generation_quote_required",
+        message: "当前部署可调用付费 LLM provider：标题候选暂未接入付费提交模式，请通过发布生成入口使用",
+      },
+    };
   }
 
   // Collect upstream context
