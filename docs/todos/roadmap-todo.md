@@ -67,7 +67,8 @@
 
 ## 待做
 - [ ] `S2-2` 用户偏好、生成策略与成本控制：2026-08-12 已完成需求澄清与总体设计批准，拆为连续三棒：S2-2A 配置与成本基础、S2-2B 音色/画风/字幕创作偏好、S2-2C LLM/生图片/生视频/TTS Provider/Model 高级选择；当前进入 S2-2A 设计与实施计划阶段
-- [ ] S2-2A 任务 9A 前置小任务（多实例 DB 权威收口 + 派发加固，2026-08-19 登记）：任务 8（报价与幂等付费运行事务，`f979d05a..db38099`）终审遗留——I-1' 提交重校验输入（项目配置/模型目录/asset plan/storyboard/override）改 DB 读取；I-2 `updateRunStatus` 加 lease-owner 条件（fencing）；随路修 F2（提交失败错误码透传）与 F5（报价感知 enabled_provider_types）。单实例语义已完整，遗留项全部为多实例部署场景；**截止点：9A 付费闸门上线前不可再拖**（quote 强制后旧 quote 误放行会成为计费完整性问题）。范围、修复方向与 Minor 留档清单见 [任务 8 审查记录](../records/2026-08-19-s2-2a-task8-review-record.md)。
+- [x] S2-2A 任务 9A 前置小任务（多实例 DB 权威收口 + 派发加固，2026-08-20 完成）：任务 8 终审遗留 I-1'（重校验输入 DB 化）/I-2（updateRunStatus lease-owner fencing）/F2（提交失败错误码透传锁定）/F5（报价感知 enabled_provider_types）全部收口，T2 审查循环终审通过。审查过程与证据见 [任务 9A 步骤 0 审查记录](../records/2026-08-20-s2-2a-task9a-step0-review-record.md)。
+- [ ] 任务 9A 步骤 2 强制收口：执行绑定授权 plan 身份（步骤 0 终审 I-A，2026-08-20 登记）。多实例下授权按 DB 活动指针计价、执行仍读内存指针——实例 B 指针陈旧时授权新 plan、执行旧 plan，可超出授权上界（仅多实例触发，单实例不受影响）。**截止点：付费闸门（paid_generation_quote_required）上线前不可再拖**。三项条件：(a) 步骤 2 验收测试含对抗用例证明执行绑定授权时的 plan/storyboard 身份；(b) 付费闸门强制不得先于/脱离该绑定单独上线；(c) 定位与理由见 [步骤 0 审查记录](../records/2026-08-20-s2-2a-task9a-step0-review-record.md)。
 - [x] `S2-3` Prompt 治理：版本、hash、fixtures、变更说明、运行快照与 `prompts/` 正式 prompt 规则对齐（2026-07-18 完成）
 - [x] `S2-4` 选题筛选条件扩充：结构化筛选合同、连续历史区间、生成提示词、fingerprint/持久化/诊断与新建项目弹窗已落地（2026-08-08 完成；真实 LLM live check 未纳入默认验收）
 - [x] `S2-5` 事件库与自定义选题：系统推荐、事件库、自定义三入口进入同一 Topic Package 链路（2026-07-20 G7 验收通过）
