@@ -66,7 +66,8 @@
 - [ ] 补齐前端 v1 真实浏览器验收矩阵：空态、加载中、成功、失败、刷新、深链、重复操作
 
 ## 待做
-- [ ] `S2-2` 用户偏好、生成策略与成本控制：2026-08-12 已完成需求澄清与总体设计批准，拆为连续三棒：S2-2A 配置与成本基础、S2-2B 音色/画风/字幕创作偏好、S2-2C LLM/生图片/生视频/TTS Provider/Model 高级选择；当前进入 S2-2A 设计与实施计划阶段
+- [x] `S2-2` 用户偏好、生成策略与成本控制：S2-2A 配置与成本基础已完成（任务 8/9A/9B，2026-08-20 终审通过）；`S2-2B` 音色/画风/字幕创作偏好、`S2-2C` Provider/Model 高级选择待后续
+- [ ] 任务 9B 后续：publish/cover/generate 直连 DashScope 媒体无 quote 闸门（9A 遗留同族，2026-08-20 登记；stub 部署不受影响，付费部署前必须收口）
 - [x] S2-2A 任务 9A 前置小任务（多实例 DB 权威收口 + 派发加固，2026-08-20 完成）：任务 8 终审遗留 I-1'（重校验输入 DB 化）/I-2（updateRunStatus lease-owner fencing）/F2（提交失败错误码透传锁定）/F5（报价感知 enabled_provider_types）全部收口，T2 审查循环终审通过。审查过程与证据见 [任务 9A 步骤 0 审查记录](../records/2026-08-20-s2-2a-task9a-step0-review-record.md)。
 - [x] 任务 9A 步骤 2 强制收口：执行绑定授权 plan 身份（步骤 0 终审 I-A，2026-08-20 完成）。多实例下授权按 DB 活动指针计价、执行仍读内存指针——实例 B 指针陈旧时授权新 plan、执行旧 plan，可超出授权上界（仅多实例触发，单实例不受影响）。**截止点：付费闸门（paid_generation_quote_required）上线前不可再拖**。三项条件 (a)(b) 已随任务 9A 落地（对抗测试 paid-generation-gate.test.ts I-A 收口用例；闸门与绑定同一提交 b90b82d 上线），(c) 定位与理由见 [步骤 0 审查记录](../records/2026-08-20-s2-2a-task9a-step0-review-record.md)，闭环证据见 [任务 9A 审查记录](../records/2026-08-20-s2-2a-task9a-review-record.md)。
 - [x] `S2-3` Prompt 治理：版本、hash、fixtures、变更说明、运行快照与 `prompts/` 正式 prompt 规则对齐（2026-07-18 完成）
