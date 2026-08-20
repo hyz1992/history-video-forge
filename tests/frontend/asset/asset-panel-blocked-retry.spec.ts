@@ -391,7 +391,7 @@ describe("asset panel blocked retry", () => {
     wrapper.unmount();
   });
 
-  it("quote 失败时回退无 quote 本地路径（stub/demo 部署不阻塞；付费部署由后端 409 兜底）", async () => {
+  it("本地部署 quote 不可报价时回退无 quote 本地路径（付费部署由后端 409 兜底）", async () => {
     const router = await createRouterAt("/projects/project-retry-failed/asset");
     const failureNote = "provider call failed";
     const assetsState = reactive({
@@ -484,6 +484,97 @@ describe("asset panel blocked retry", () => {
       idempotencyKey: "",
       authorizeBudgetOverride: false,
     });
+
+    wrapper.unmount();
+  });
+
+  it("非本地错误码（网络/服务故障）不回退，展示错误提示", async () => {
+    const router = await createRouterAt("/projects/project-retry-failed/asset");
+    const failureNote = "provider call failed";
+    const assetsState = reactive({
+      snapshot: {
+        current_status: "assets_blocked",
+        active_assets: activeAssetsWithFailedTts(failureNote),
+      },
+      isLoading: false,
+      isGenerating: false,
+      isUploading: null,
+      generatingTaskId: null,
+      generatingTaskIds: new Set<string>(),
+      loadError: null,
+    });
+    const generateSingleTask = vi.fn(async () => {
+      await pendingPromise();
+    });
+    costStoreState = reactive({
+      lastQuote: null,
+      costSummary: { data: null, loading: false, error: null },
+      costRecords: { data: null, loading: false, error: null },
+    });
+
+    const wrapper = mount(AssetPanel, {
+      global: {
+        plugins: [router, ElementPlus],
+        stubs: { SegmentAssetCard: true },
+        provide: {
+          [projectStoreKey as symbol]: createProjectStoreStub() as never,
+          [workspaceStoreKey as symbol]: createWorkspaceStoreStub() as never,
+          [scriptStoreKey as symbol]: createScriptStoreStub() as never,
+          [storyboardStoreKey as symbol]: {
+            state: reactive({
+              snapshot: { current_status: "storyboard_ready", active_storyboard: { plan: { segments: [] } } },
+              isLoading: false,
+              isGenerating: false,
+              loadError: null,
+            }),
+            async loadActiveStoryboardSnapshot() {},
+          } as never,
+          [assetPlanningStoreKey as symbol]: {
+            state: reactive({
+              snapshot: {
+                current_status: "asset_plan_ready",
+                active_asset_plan: activeAssetPlanWithTts(),
+                active_asset_plan_record_id: "plan-ready",
+              },
+              isLoading: false,
+              isGenerating: false,
+              loadError: null,
+            }),
+            async loadActiveAssetPlanSnapshot() {},
+            async retryLoad() {},
+            generateAssetPlan: pendingPromise,
+          } as never,
+          [assetsStoreKey as symbol]: {
+            state: assetsState,
+            async loadProject() {},
+            generateAssets: pendingPromise,
+            generateSingleTask,
+            upgradeSegmentToVideo: pendingPromise,
+            uploadArtifact: pendingPromise,
+            acceptArtifact: pendingPromise,
+            artifactFileUrl: () => "",
+          } as never,
+          [generationCostStoreKey as symbol]: {
+            state: costStoreState,
+            createQuote: vi.fn(async () => ({
+              ok: false,
+              error: { code: "http_500" },
+            })),
+            loadCostSummary: vi.fn(async () => undefined),
+            loadCostRecords: vi.fn(async () => undefined),
+          } as never,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    const retryBtn = wrapper.find(".asset-blocked-chip-retry");
+    await retryBtn.trigger("click");
+    await flushPromises();
+
+    // 非本地错误码：不提交、不回退
+    expect(generateSingleTask).not.toHaveBeenCalled();
 
     wrapper.unmount();
   });

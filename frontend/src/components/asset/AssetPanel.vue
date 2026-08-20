@@ -36,6 +36,24 @@ const assetSnapshotLoaded = ref(false);
 const demoMode = useDemoMode();
 const { checkStageRollback } = useCompetitionGuard();
 
+// 过期重报价上下文。必须声明在 immediate watch 之前：setup 期间 immediate
+// watch 同步执行会访问这两个 ref，TDZ 中访问抛 ReferenceError。
+const lastQuoteRequest = ref<{ operation: string; selection?: { mode?: "missing_only"; task_ids?: string[] }; enabledProviderTypes?: string[] } | null>(null);
+const lastSubmitAction = ref<((submit: { quoteId: string; idempotencyKey: string; authorizeBudgetOverride: boolean }) => Promise<void>) | null>(null);
+
+// 任务 11 对话框状态（同样必须在 immediate watch 之前声明，避免 TDZ）
+const quoteDialogOpen = ref(false);
+const quoteLoading = ref(false);
+const quoteError = ref<string | null>(null);
+const pendingQuote = ref<GenerationQuoteDto | null>(null);
+let pendingSubmit: ((submit: { quoteId: string; idempotencyKey: string; authorizeBudgetOverride: boolean }) => Promise<void>) | null = null;
+
+const strictDialogOpen = ref(false);
+const strictSegmentId = ref<string | null>(null);
+const strictBusy = ref(false);
+
+const costDialogOpen = ref(false);
+
 /* -------------------------------------------------------------------------- */
 /*  Demo mode: block image/video generation                                    */
 /* -------------------------------------------------------------------------- */
@@ -672,7 +690,22 @@ async function triggerAutoBasicAssets() {
     isStartingBasicAssets.value = true;
     startAssetPolling();
     try {
-      await assetsStore.generateAssets({ enabledProviderTypes: ["tts", "sfx", "bgm"] });
+      // S2-2A 任务 11：自动基础生成同样先取后端 quote（付费部署下必须确认）
+      await quoteAndGenerateWithRetry({
+        request: {
+          operation: "assets.generate",
+          selection: { task_ids: [] },
+          enabledProviderTypes: ["tts", "sfx", "bgm"],
+        },
+        submit: async (submit) => {
+          await assetsStore.generateAssets({
+            enabledProviderTypes: ["tts", "sfx", "bgm"],
+            quoteId: submit.quoteId,
+            idempotencyKey: submit.idempotencyKey,
+            authorizeBudgetOverride: submit.authorizeBudgetOverride,
+          });
+        },
+      });
     } finally {
       isStartingBasicAssets.value = false;
       startAssetPolling();
@@ -752,17 +785,16 @@ function setupBackToTopObserver() {
 /*  S2-2A 任务 11：quote 确认流程 + 严格 fallback + 成本明细                    */
 /* -------------------------------------------------------------------------- */
 
-const quoteDialogOpen = ref(false);
-const quoteLoading = ref(false);
-const quoteError = ref<string | null>(null);
-const pendingQuote = ref<GenerationQuoteDto | null>(null);
-let pendingSubmit: ((submit: { quoteId: string; idempotencyKey: string; authorizeBudgetOverride: boolean }) => Promise<void>) | null = null;
-
-const strictDialogOpen = ref(false);
-const strictSegmentId = ref<string | null>(null);
-const strictBusy = ref(false);
-
-const costDialogOpen = ref(false);
+/** 本地部署 quote 服务不可报价的错误码（无 active 目录项等）；其余错误码
+ * （网络/服务故障）不回退，展示错误并重试。 */
+const LOCAL_QUOTE_UNAVAILABLE_CODES = new Set([
+  "generation_quote_resolution_failed",
+  "generation_capability_unavailable",
+  "generation_model_disabled",
+  "generation_model_parameter_incompatible",
+  "generation_provider_credential_unavailable",
+  "generation_system_constraint_denied",
+]);
 
 /** 当前 manifest 版本与执行 run（accept-fallback 的 CAS 上下文）。 */
 const activeManifestVersion = computed(() => {
@@ -786,10 +818,6 @@ const segmentRouteBySegmentId = computed(() => {
   return map;
 });
 
-// 过期重报价需要记住最近一次请求与提交动作
-const lastQuoteRequest = ref<{ operation: string; selection?: { mode?: "missing_only"; task_ids?: string[] }; enabledProviderTypes?: string[] } | null>(null);
-const lastSubmitAction = ref<((submit: { quoteId: string; idempotencyKey: string; authorizeBudgetOverride: boolean }) => Promise<void>) | null>(null);
-
 async function quoteAndGenerate(options: {
   request: { operation: string; selection?: { mode?: "missing_only"; task_ids?: string[] }; enabledProviderTypes?: string[] };
   submit: (submit: { quoteId: string; idempotencyKey: string; authorizeBudgetOverride: boolean }) => Promise<void>;
@@ -804,18 +832,24 @@ async function quoteAndGenerate(options: {
     const result = await generationCostStore.createQuote(pid, options.request);
     if (!result.ok) {
       quoteError.value = result.error.code;
-      // 本地/无付费能力部署（stub/demo）：quote 服务按设计不可报价（无 active
-      // 目录项），回退无 quote 本地路径并明确提示；付费部署下 quote 一定可用，
-      // 若仍失败则后端 409 paid_generation_quote_required 兜底，不会静默授权。
-      ElMessage.warning(`报价服务暂不可用（${result.error.code}），已按本地路径继续`);
-      quoteDialogOpen.value = false;
-      try {
-        await options.submit({ quoteId: "", idempotencyKey: "", authorizeBudgetOverride: false });
-        await assetsStore.loadProject();
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : "生成失败";
-        ElMessage.error("生成失败：" + msg);
+      // 本地/无付费能力部署（stub/demo）的 quote 服务按设计不可报价（无 active
+      // 目录项）→ 回退无 quote 本地路径并明确提示；付费部署下 quote 一定可用，
+      // 其余失败（网络/服务故障）展示错误并让用户重试，不误导为本地路径。
+      if (LOCAL_QUOTE_UNAVAILABLE_CODES.has(result.error.code)) {
+        ElMessage.warning(`报价服务暂不可用（${result.error.code}），已按本地路径继续`);
+        quoteDialogOpen.value = false;
+        try {
+          await options.submit({ quoteId: "", idempotencyKey: "", authorizeBudgetOverride: false });
+          await assetsStore.loadProject();
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : "生成失败";
+          ElMessage.error("生成失败：" + msg);
+        }
+        return;
       }
+      quoteError.value = result.error.code;
+      quoteDialogOpen.value = true;
+      ElMessage.warning(`报价失败（${result.error.code}），请重试`);
       return;
     }
     pendingQuote.value = result.value.quote;
@@ -843,11 +877,18 @@ async function handleQuoteConfirm(payload: { authorizeBudgetOverride: boolean })
     pendingQuote.value = null;
     if (lastQuoteRequest.value) {
       await quoteAndGenerate({ request: lastQuoteRequest.value, submit });
+      return;
     }
+    // 无重报价上下文：关闭对话框，避免残留旧报价
+    quoteDialogOpen.value = false;
+    pendingSubmit = null;
     return;
   }
   const quote = pendingQuote.value;
   const idempotencyKey = generationCostStore.state.lastQuote?.idempotencyKey ?? "";
+  // I-2：提交前保留 quote/key；失败后重试复用同一 quote（未过期）与同一
+  // idempotency key（同 payload 重放由后端幂等去重，不重复计费）。
+  const retryContext = { quote, idempotencyKey };
   pendingQuote.value = null;
   pendingSubmit = null;
   quoteDialogOpen.value = false;
@@ -860,13 +901,19 @@ async function handleQuoteConfirm(payload: { authorizeBudgetOverride: boolean })
     await assetsStore.loadProject();
   } catch (error) {
     const msg = error instanceof Error ? error.message : "生成失败";
-    ElMessage.error("生成失败：" + msg);
-  }
-}
-
-function handleQuoteRetry() {
-  if (lastQuoteRequest.value && lastSubmitAction.value) {
-    quoteAndGenerate({ request: lastQuoteRequest.value, submit: lastSubmitAction.value });
+    // 提交失败（网络/服务）：允许用同一 quote 与同一 key 重试，避免歧义窗口
+    // 内新建 quote/run 造成双重执行；quote 已过期时重新报价。
+    pendingSubmit = submit;
+    if (isQuoteExpired(quote)) {
+      pendingQuote.value = null;
+      if (lastQuoteRequest.value) {
+        await quoteAndGenerate({ request: lastQuoteRequest.value, submit });
+      }
+      return;
+    }
+    pendingQuote.value = retryContext.quote;
+    quoteDialogOpen.value = true;
+    ElMessage.error("生成失败：" + msg + "。已保留报价，可直接重试提交（同一次运行）");
   }
 }
 
@@ -907,12 +954,18 @@ async function handleStrictRetry() {
   }
   strictBusy.value = true;
   try {
-    // 重试 = 重新报价 + 单任务提交（新 quote、新 run）
-    const taskId = tasks[0]!.task_id;
+    // 重试 = 重新报价 + 一次提交重试该段全部视频任务（新 quote、新 run）
+    const taskIds = tasks.map((task) => task.task_id);
     await quoteAndGenerateWithRetry({
-      request: { operation: "assets.generate", selection: { task_ids: [taskId] } },
+      request: { operation: "assets.generate", selection: { task_ids: taskIds } },
       submit: async (submit) => {
-        await assetsStore.generateSingleTask(taskId, submit);
+        await assetsStore.generateAssets({
+          mode: "selected",
+          taskIds,
+          quoteId: submit.quoteId,
+          idempotencyKey: submit.idempotencyKey,
+          authorizeBudgetOverride: submit.authorizeBudgetOverride,
+        });
       },
     });
     strictDialogOpen.value = false;
@@ -959,22 +1012,29 @@ async function handleGeneratePlan() {
 
 async function handleGenerateBasic() {
   if (isAssetsBusy.value) return;
-  // S2-2A 任务 11：付费生成前必须先请求后端 quote 并确认
-  await quoteAndGenerateWithRetry({
-    request: {
-      operation: "assets.generate",
-      selection: { task_ids: [] },
-      enabledProviderTypes: ["tts", "sfx", "bgm"],
-    },
-    submit: async (submit) => {
-      await assetsStore.generateAssets({
+  isStartingBasicAssets.value = true;
+  startAssetPolling();
+  try {
+    // S2-2A 任务 11：付费生成前必须先请求后端 quote 并确认
+    await quoteAndGenerateWithRetry({
+      request: {
+        operation: "assets.generate",
+        selection: { task_ids: [] },
         enabledProviderTypes: ["tts", "sfx", "bgm"],
-        quoteId: submit.quoteId,
-        idempotencyKey: submit.idempotencyKey,
-        authorizeBudgetOverride: submit.authorizeBudgetOverride,
-      });
-    },
-  });
+      },
+      submit: async (submit) => {
+        await assetsStore.generateAssets({
+          enabledProviderTypes: ["tts", "sfx", "bgm"],
+          quoteId: submit.quoteId,
+          idempotencyKey: submit.idempotencyKey,
+          authorizeBudgetOverride: submit.authorizeBudgetOverride,
+        });
+      },
+    });
+  } finally {
+    isStartingBasicAssets.value = false;
+    startAssetPolling();
+  }
 }
 
 async function handleGenerateMissing() {
@@ -1687,10 +1747,8 @@ function handleConfirm() {
     :open="quoteDialogOpen"
     :quote="pendingQuote"
     :loading="quoteLoading"
-    :error="quoteError"
     @confirm="handleQuoteConfirm"
     @cancel="handleQuoteCancel"
-    @retry="handleQuoteRetry"
   />
   <StrictFallbackDialog
     :open="strictDialogOpen"

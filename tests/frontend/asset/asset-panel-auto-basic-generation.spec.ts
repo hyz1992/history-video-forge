@@ -9,6 +9,7 @@ import AssetPanel from "../../../frontend/src/components/asset/AssetPanel.vue";
 import { createAppRouter } from "../../../frontend/src/router/index.js";
 import { assetPlanningStoreKey } from "../../../frontend/src/stores/asset-planning";
 import { assetsStoreKey } from "../../../frontend/src/stores/assets";
+import { generationCostStoreKey } from "../../../frontend/src/stores/generation-cost";
 import { projectStoreKey } from "../../../frontend/src/stores/project";
 import { scriptStoreKey } from "../../../frontend/src/stores/script";
 import { storyboardStoreKey } from "../../../frontend/src/stores/storyboard";
@@ -169,6 +170,32 @@ describe("asset panel basic generation gate", () => {
       generatingTaskIds: new Set<string>(),
       loadError: null,
     });
+    const costStoreState = reactive({
+      lastQuote: null,
+      costSummary: { data: null, loading: false, error: null },
+      costRecords: { data: null, loading: false, error: null },
+    });
+    const createQuote = vi.fn(async () => {
+      const value = {
+        quote: {
+          quote_id: "quote_auto_1",
+          operation: "assets.generate",
+          expires_at: "2099-01-01T00:00:00.000Z",
+          configuration_hash: "fnv1a64:test",
+          pricing_versions: ["test"],
+          items: [],
+          estimated_cost_cny: "0.000000",
+          authorization_cost_cny: "0.000000",
+          contains_unbounded_item: false,
+          budget_limit_cny: null,
+          over_budget: false,
+          requires_budget_override: false,
+        },
+        idempotencyKey: "key_auto_1",
+      };
+      costStoreState.lastQuote = value;
+      return { ok: true, value };
+    });
     const generateAssets = vi.fn(async () => {
       assetsState.isGenerating = true;
       assetsState.snapshot = {
@@ -216,6 +243,12 @@ describe("asset panel basic generation gate", () => {
             acceptArtifact: pendingPromise,
             artifactFileUrl: () => "",
           } as never,
+          [generationCostStoreKey as symbol]: {
+            state: costStoreState,
+            createQuote,
+            loadCostSummary: vi.fn(async () => undefined),
+            loadCostRecords: vi.fn(async () => undefined),
+          } as never,
         },
       },
     });
@@ -223,9 +256,19 @@ describe("asset panel basic generation gate", () => {
     await flushPromises();
     await flushPromises();
 
+    // 自动流程：quote 确认对话框自动出现（对话框由用户确认；测试中直接确认）
+    expect(createQuote).toHaveBeenCalledTimes(1);
+    const confirmBtn = wrapper.find('[data-testid="quote-confirm"]');
+    if (confirmBtn.exists()) {
+      await confirmBtn.trigger("click");
+      await flushPromises();
+    }
     expect(generateAssets).toHaveBeenCalledTimes(1);
     expect(generateAssets).toHaveBeenCalledWith({
       enabledProviderTypes: ["tts", "sfx", "bgm"],
+      quoteId: "quote_auto_1",
+      idempotencyKey: "key_auto_1",
+      authorizeBudgetOverride: false,
     });
     wrapper.unmount();
   });

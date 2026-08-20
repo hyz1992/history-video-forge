@@ -56,6 +56,20 @@ const emit = defineEmits<{
   "handle-strict-fallback": [segmentId: string];
 }>();
 
+const autoDowngraded = computed(() =>
+  (props.routeEvents ?? []).some((event) => event.event_type === "automatic_fallback"),
+);
+
+const isStrictBlocked = computed(() => props.routeReadiness === "blocked_waiting_user");
+
+// M-3（contract）：自动降级原因渲染为可见文本（不只在 hover title）
+const autoDowngradeReasons = computed(() =>
+  (props.routeEvents ?? [])
+    .filter((event) => event.event_type === "automatic_fallback")
+    .map((event) => event.reason_code)
+    .filter((reason): reason is string => Boolean(reason)),
+);
+
 /* -------------------------------------------------------------------------- */
 /*  Label mappings (en → zh)                                                  */
 /* -------------------------------------------------------------------------- */
@@ -650,12 +664,6 @@ function nextMedia() {
 }
 </script>
 
-const autoDowngraded = computed(() =>
-  (props.routeEvents ?? []).some((event) => event.event_type === "automatic_fallback"),
-);
-
-const isStrictBlocked = computed(() => props.routeReadiness === "blocked_waiting_user");
-
 <template>
   <StageLoadingBar
     :visible="isTaskLocked"
@@ -680,6 +688,9 @@ const isStrictBlocked = computed(() => props.routeReadiness === "blocked_waiting
           title="该分镜的 API 视频失败后已自动降级为图片+运镜"
         >
           ⚠ 已自动降级为图片+运镜
+          <template v-if="autoDowngradeReasons.length > 0">
+            （{{ autoDowngradeReasons.join("；") }}）
+          </template>
         </span>
         <span
           v-if="isStrictBlocked"

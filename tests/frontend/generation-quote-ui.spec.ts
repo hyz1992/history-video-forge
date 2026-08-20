@@ -188,7 +188,6 @@ describe("GenerationQuoteDialog", () => {
         open: true,
         quote,
         loading: false,
-        error: null,
         ...extra,
       },
       global: { plugins: [ElementPlus] },
@@ -262,12 +261,12 @@ describe("GenerationQuoteDialog", () => {
     expect(wrapper.emitted("confirm")).toBeUndefined();
   });
 
-  it("报价失败展示错误与重试", async () => {
-    const wrapper = mountDialog(null, { error: "报价服务不可用，请重试" });
+  it("报价加载中展示 loading 态", async () => {
+    const wrapper = mountDialog(null, { loading: true });
     await flushPromises();
 
-    expect(wrapper.text()).toContain("报价服务不可用");
-    await wrapper.find('[data-testid="quote-retry"]').trigger("click");
-    expect(wrapper.emitted("retry")).toBeTruthy();
+    expect(wrapper.text()).toContain("正在向后端请求报价");
+    // 无报价时不渲染确认按钮
+    expect(wrapper.find('[data-testid="quote-confirm"]').exists()).toBe(false);
   });
 });

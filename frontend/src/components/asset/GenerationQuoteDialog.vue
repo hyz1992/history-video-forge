@@ -17,13 +17,11 @@ const props = defineProps<{
   open: boolean;
   quote: GenerationQuoteDto | null;
   loading: boolean;
-  error: string | null;
 }>();
 
 const emit = defineEmits<{
   (e: "confirm", payload: { authorizeBudgetOverride: boolean }): void;
   (e: "cancel"): void;
-  (e: "retry"): void;
 }>();
 
 const authorizeChecked = ref(false);
@@ -51,13 +49,7 @@ function confirm() {
     width="560px"
     @update:model-value="(value: boolean) => !value && emit('cancel')"
   >
-    <div v-if="error" class="quote-error" data-testid="quote-error">
-      <p>报价失败：{{ error }}</p>
-      <p class="quote-error-hint">费用确认必须先取得后端报价；报价服务不可用时无法继续生成。</p>
-      <button class="btn btn-primary" data-testid="quote-retry" @click="emit('retry')">重试报价</button>
-    </div>
-
-    <div v-else-if="loading" class="quote-loading">正在向后端请求报价…</div>
+    <div v-if="loading" class="quote-loading">正在向后端请求报价…</div>
 
     <div v-else-if="quote" class="quote-body">
       <div class="quote-totals">
@@ -117,15 +109,17 @@ function confirm() {
     </div>
 
     <template #footer>
-      <button class="btn btn-ghost" data-testid="quote-cancel" @click="emit('cancel')">取消</button>
-      <button
-        class="btn btn-primary"
-        data-testid="quote-confirm"
-        :disabled="requiresExplicitAuthorization && !authorizeChecked"
-        @click="confirm"
-      >
-        确认并生成
-      </button>
+      <template v-if="quote">
+        <button class="btn btn-ghost" data-testid="quote-cancel" @click="emit('cancel')">取消</button>
+        <button
+          class="btn btn-primary"
+          data-testid="quote-confirm"
+          :disabled="requiresExplicitAuthorization && !authorizeChecked"
+          @click="confirm"
+        >
+          确认并生成
+        </button>
+      </template>
     </template>
   </el-dialog>
 </template>
@@ -210,20 +204,6 @@ function confirm() {
 .quote-authorize input {
   margin-top: 3px;
   accent-color: #c9a227;
-}
-
-.quote-error {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 13px;
-  color: #e07a5f;
-}
-
-.quote-error-hint {
-  color: #a89f94;
-  font-size: 12px;
-  margin: 0;
 }
 
 .quote-loading {
