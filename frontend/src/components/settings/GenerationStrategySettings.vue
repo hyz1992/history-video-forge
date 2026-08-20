@@ -155,7 +155,7 @@ const amountText = computed({
           <input
             type="radio"
             name="budget-mode"
-            data-testid="budget-unlimited"
+            :data-testid="`${testIdPrefix ?? ''}budget-unlimited`"
             :value="true"
             :checked="budgetMicros === null"
             :disabled="disabled"

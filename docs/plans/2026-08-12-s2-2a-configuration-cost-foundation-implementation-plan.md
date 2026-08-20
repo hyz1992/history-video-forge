@@ -765,6 +765,12 @@ git commit -m "为LLM生成接入预算闸门与费用账本"
 
 ## Chunk 4：前端设置、报价确认、成本页与全链路验收
 
+> **验证命令更正（2026-08-20，任务 10 轮 1 审查）**：本 Chunk 各步骤原写的
+> `npx tsc -p frontend/tsconfig.json --noEmit` 在本仓库不可执行（frontend 无
+> tsconfig；vite build 不做 TS 类型检查，前端类型检查闸门缺失属项目既有状
+> 态，登记为任务 12 已知缺口）。统一以 `npm run build:frontend` 作为前端构
+> 建验证的等价替代。
+
 ### 任务 10：实现用户设置和项目设置 UI
 
 **文件：**
@@ -820,7 +826,7 @@ store 保留服务器配置版本，PATCH 使用乐观并发字段；409 时重�
 
 ```powershell
 npx vitest run --configLoader runner tests/frontend/generation-config-store.spec.ts tests/frontend/generation-settings-ui.spec.ts tests/frontend/project-store.spec.ts tests/frontend/auth-store.spec.ts
-npx tsc -p frontend/tsconfig.json --noEmit
+npm run build:frontend
 git add frontend/src/views/SettingsPage.vue frontend/src/components/settings frontend/src/stores/generation-config.ts frontend/src/router/index.ts frontend/src/views/ProjectWorkspace.vue frontend/src/components/workspace/WorkspaceHeader.vue frontend/src/utils/api.ts tests/frontend/generation-config-store.spec.ts tests/frontend/generation-settings-ui.spec.ts tests/frontend/project-store.spec.ts
 git commit -m "新增用户与项目生成策略设置界面"
 ```
@@ -873,7 +879,7 @@ npx vitest run --configLoader runner tests/frontend/generation-quote-ui.spec.ts 
 
 ```powershell
 npx vitest run --configLoader runner tests/frontend/generation-quote-ui.spec.ts tests/frontend/project-cost-ui.spec.ts tests/frontend/stores/assets.test.ts tests/frontend/asset/asset-panel-auto-basic-generation.spec.ts tests/frontend/asset/asset-panel-blocked-retry.spec.ts
-npx tsc -p frontend/tsconfig.json --noEmit
+npm run build:frontend
 git add frontend/src/components/asset frontend/src/components/cost frontend/src/stores/generation-cost.ts frontend/src/stores/assets.ts frontend/src/utils/api.ts frontend/src/utils/pricing.ts tests/frontend
 git commit -m "新增媒体生成报价确认与成本明细"
 ```
@@ -942,7 +948,7 @@ npx vitest run --configLoader runner tests/backend/api tests/backend/auth tests/
 npx vitest run --configLoader runner tests/frontend tests/harness/s2-2a-browser-acceptance.test.ts
 npx tsc -p shared/tsconfig.json --noEmit
 npx tsc -p backend/tsconfig.json --noEmit
-npx tsc -p frontend/tsconfig.json --noEmit
+npm run build:frontend
 npm run build
 git diff --check
 ```

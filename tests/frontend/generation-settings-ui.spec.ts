@@ -205,6 +205,61 @@ describe("SettingsPage（用户默认设置）", () => {
 
     expect(wrapper.find('[data-testid="preference-conflict"]').exists()).toBe(true);
   });
+
+  it("轮1 I-1：冲突置位后表单草稿同步服务器最新值（用户看得见竞争修改）", async () => {
+    const store = createMockStore();
+    const wrapper = mountSettings(store);
+    await flushPromises();
+
+    // 用户改成 all_api_video（本地草稿偏离服务器值）
+    await wrapper.find('[data-testid="strategy-all_api_video"]').setValue();
+    expect(
+      (wrapper.find('[data-testid="strategy-all_api_video"]').element as HTMLInputElement).checked,
+    ).toBe(true);
+
+    // 模拟 store 冲突路径：重载为服务器新值 all_remotion 并置 conflict
+    const pref = store.state.userPreference as {
+      conflict: boolean;
+      data: {
+        source: string;
+        revision: number;
+        configuration: typeof DEFAULT_CONFIGURATION;
+        updated_at: string;
+      } | null;
+    };
+    pref.data = {
+      source: "stored",
+      revision: 5,
+      configuration: {
+        ...DEFAULT_CONFIGURATION,
+        video: { strategy: "all_remotion", api_quality: "standard_720p" },
+      },
+      updated_at: "2026-08-20T11:00:00.000Z",
+    };
+    pref.conflict = true;
+    await flushPromises();
+
+    // 表单草稿跟随服务器新值，而不是停留在用户的旧草稿
+    expect(
+      (wrapper.find('[data-testid="strategy-all_remotion"]').element as HTMLInputElement).checked,
+    ).toBe(true);
+    expect(
+      (wrapper.find('[data-testid="strategy-all_api_video"]').element as HTMLInputElement).checked,
+    ).toBe(false);
+  });
+
+  it("轮1 I-2：偏好加载失败时展示错误态，不渲染可编辑表单", async () => {
+    const store = createMockStore();
+    const pref = store.state.userPreference as { error: string | null; data: null };
+    pref.data = null;
+    pref.error = "network_error";
+    const wrapper = mountSettings(store);
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="preference-load-error"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="save-preference"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="strategy-prefer_remotion"]').exists()).toBe(false);
+  });
 });
 
 describe("ProjectGenerationSettings（项目设置）", () => {

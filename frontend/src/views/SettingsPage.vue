@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
 import GenerationStrategySettings from "../components/settings/GenerationStrategySettings.vue";
@@ -25,16 +25,32 @@ const draft = reactive({
 const budgetInvalid = ref(false);
 const saveError = ref<string | null>(null);
 
+function applyServerData() {
+  const data = store.state.userPreference.data;
+  if (!data) return;
+  draft.strategy = data.configuration.video.strategy;
+  draft.apiQuality = data.configuration.video.api_quality;
+  draft.budgetMicros = data.configuration.budget.max_paid_cost_micros_per_run;
+}
+
 onMounted(async () => {
   await store.loadUserPreference();
-  const data = store.state.userPreference.data;
-  if (data) {
-    draft.strategy = data.configuration.video.strategy;
-    draft.apiQuality = data.configuration.video.api_quality;
-    draft.budgetMicros = data.configuration.budget.max_paid_cost_micros_per_run;
-  }
+  applyServerData();
   await store.loadCapabilities();
 });
+
+// 409 冲突重载后表单同步服务器最新值：用户看得见竞争修改，避免基于旧
+// 视图的第二次保存静默覆盖其他会话的变更。
+watch(
+  () => store.state.userPreference.conflict,
+  (conflict) => {
+    if (conflict) applyServerData();
+  },
+);
+
+const loadFailed = computed(
+  () => store.state.userPreference.error !== null && store.state.userPreference.data === null,
+);
 
 const capabilityGroups = computed(() => {
   const labels: Record<string, string> = {
@@ -86,6 +102,10 @@ function goBack() {
 
     <main class="settings-body">
       <section v-if="store.state.userPreference.loading" class="settings-loading">正在加载…</section>
+      <section v-else-if="loadFailed" class="settings-load-failed" data-testid="preference-load-error">
+        <p>用户偏好加载失败（{{ store.state.userPreference.error }}），为避免误覆盖已有配置，暂不展示编辑表单。</p>
+        <button class="btn btn-primary" @click="store.loadUserPreference().then(applyServerData)">重试加载</button>
+      </section>
       <template v-else>
         <el-alert
           v-if="store.state.userPreference.conflict"
@@ -171,6 +191,18 @@ function goBack() {
 
 .settings-loading {
   color: #a89f94;
+  font-size: 13px;
+}
+
+.settings-load-failed {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(224, 122, 95, 0.3);
+  border-radius: 10px;
+  background: rgba(224, 122, 95, 0.06);
+  color: #e0a883;
   font-size: 13px;
 }
 

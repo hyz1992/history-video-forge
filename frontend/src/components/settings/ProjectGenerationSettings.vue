@@ -38,21 +38,35 @@ const loaded = ref(false);
 const configState = computed(() => store.state.projectConfigs[props.projectId]);
 const config = computed(() => configState.value?.data ?? null);
 
+function applyServerData() {
+  const data = store.state.projectConfigs[props.projectId]?.data;
+  if (!data) return;
+  draft.strategy = data.configuration.video.strategy;
+  draft.apiQuality = data.configuration.video.api_quality;
+  draft.budgetMicros = data.configuration.budget.max_paid_cost_micros_per_run;
+}
+
 watch(
   () => [props.open, props.projectId] as const,
   async ([open, projectId]) => {
     if (!open || !projectId) return;
     loaded.value = false;
+    // 重开对话框时清空上次会话残留状态
+    saveError.value = null;
+    budgetInvalid.value = false;
     await store.loadProjectConfig(projectId);
-    const data = store.state.projectConfigs[projectId]?.data;
-    if (data) {
-      draft.strategy = data.configuration.video.strategy;
-      draft.apiQuality = data.configuration.video.api_quality;
-      draft.budgetMicros = data.configuration.budget.max_paid_cost_micros_per_run;
-    }
+    applyServerData();
     loaded.value = true;
   },
   { immediate: true },
+);
+
+// 409 冲突重载后表单同步服务器最新值，避免基于旧视图的第二次保存覆盖竞争修改
+watch(
+  () => configState.value?.conflict,
+  (conflict) => {
+    if (conflict) applyServerData();
+  },
 );
 
 const sourceNote = computed(() => {

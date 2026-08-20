@@ -159,12 +159,14 @@ export function computeConfigInvalidationPreview(
   current: { video: GenerationConfigurationDto["video"] },
   draft: { video: GenerationConfigPatchInput["video"] },
 ): ConfigurationInvalidationPreviewDto {
+  const strategyChanged = current.video.strategy !== draft.video.strategy;
+  const qualityChanged = current.video.api_quality !== draft.video.api_quality;
   const stages = new Set<string>();
-  if (current.video.strategy !== draft.video.strategy) {
+  if (strategyChanged) {
     stages.add("storyboard_route_resolution");
     stages.add("asset_planning");
   }
-  if (current.video.api_quality !== draft.video.api_quality) {
+  if (qualityChanged) {
     stages.add("asset_planning");
     stages.add("assets");
   }
@@ -174,9 +176,12 @@ export function computeConfigInvalidationPreview(
       note: "视频策略与画质未变化；预算变更只影响后续报价，不会使现有阶段产物失效。",
     };
   }
+  const note = strategyChanged
+    ? "保存后需重新解析分镜路线并重建资产规划；配置变更不会自动触发下游生成。"
+    : "保存后需更新视频任务参数并重建资产生成；配置变更不会自动触发下游生成。";
   return {
     affected_stages: [...stages],
-    note: "保存后需重新解析分镜路线并重建资产规划；配置变更不会自动触发下游生成。",
+    note,
   };
 }
 
