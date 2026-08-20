@@ -117,14 +117,14 @@ describe("generation cost store", () => {
   });
 
   it("createQuote 失败时返回错误，不污染 lastQuote", async () => {
-    fetchMock = vi.fn().mockResolvedValue(jsonResponse(422, { error: "generation_capability_unavailable" }));
+    fetchMock = vi.fn().mockResolvedValue(jsonResponse(422, { error: "generation_quote_unquotable" }));
     vi.stubGlobal("fetch", fetchMock);
     const store = createGenerationCostStore(createFetchGenerationCostApi());
 
     const result = await store.createQuote("proj-1", { operation: "assets.generate" });
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.error.code).toBe("generation_capability_unavailable");
+    if (!result.ok) expect(result.error.code).toBe("generation_quote_unquotable");
     expect(store.state.lastQuote).toBeNull();
   });
 

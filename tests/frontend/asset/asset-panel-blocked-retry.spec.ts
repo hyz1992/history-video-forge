@@ -585,6 +585,120 @@ describe("asset panel blocked retry", () => {
     wrapper.unmount();
   });
 
+  it("轮3 M-3：提交返回 409 业务冲突时不重开对话框复用旧 quote，提示重新报价", async () => {
+    const router = await createRouterAt("/projects/project-retry-failed/asset");
+    const failureNote = "provider call failed";
+    const assetsState = reactive({
+      snapshot: {
+        current_status: "assets_blocked",
+        active_assets: activeAssetsWithFailedTts(failureNote),
+      },
+      isLoading: false,
+      isGenerating: false,
+      isUploading: null,
+      generatingTaskId: null,
+      generatingTaskIds: new Set<string>(),
+      loadError: null,
+    });
+    const generateSingleTask = vi.fn(async () => {
+      // 409 业务冲突（如 quote 已消费）
+      const err = new Error("generation_quote_consumed") as Error & { status?: number };
+      err.status = 409;
+      throw err;
+    });
+    costStoreState = reactive({
+      lastQuote: null,
+      costSummary: { data: null, loading: false, error: null },
+      costRecords: { data: null, loading: false, error: null },
+    });
+
+    const wrapper = mount(AssetPanel, {
+      global: {
+        plugins: [router, ElementPlus],
+        stubs: { SegmentAssetCard: true },
+        provide: {
+          [projectStoreKey as symbol]: createProjectStoreStub() as never,
+          [workspaceStoreKey as symbol]: createWorkspaceStoreStub() as never,
+          [scriptStoreKey as symbol]: createScriptStoreStub() as never,
+          [storyboardStoreKey as symbol]: {
+            state: reactive({
+              snapshot: { current_status: "storyboard_ready", active_storyboard: { plan: { segments: [] } } },
+              isLoading: false,
+              isGenerating: false,
+              loadError: null,
+            }),
+            async loadActiveStoryboardSnapshot() {},
+          } as never,
+          [assetPlanningStoreKey as symbol]: {
+            state: reactive({
+              snapshot: {
+                current_status: "asset_plan_ready",
+                active_asset_plan: activeAssetPlanWithTts(),
+                active_asset_plan_record_id: "plan-ready",
+              },
+              isLoading: false,
+              isGenerating: false,
+              loadError: null,
+            }),
+            async loadActiveAssetPlanSnapshot() {},
+            async retryLoad() {},
+            generateAssetPlan: pendingPromise,
+          } as never,
+          [assetsStoreKey as symbol]: {
+            state: assetsState,
+            async loadProject() {},
+            generateAssets: pendingPromise,
+            generateSingleTask,
+            upgradeSegmentToVideo: pendingPromise,
+            uploadArtifact: pendingPromise,
+            acceptArtifact: pendingPromise,
+            artifactFileUrl: () => "",
+          } as never,
+          [generationCostStoreKey as symbol]: {
+            state: costStoreState,
+            createQuote: vi.fn(async () => {
+              const value = {
+                quote: {
+                  quote_id: "quote_conflict_1",
+                  operation: "assets.generate",
+                  expires_at: "2099-01-01T00:00:00.000Z",
+                  configuration_hash: "fnv1a64:test",
+                  pricing_versions: ["test"],
+                  items: [],
+                  estimated_cost_cny: "0.000000",
+                  authorization_cost_cny: "0.000000",
+                  contains_unbounded_item: false,
+                  budget_limit_cny: null,
+                  over_budget: false,
+                  requires_budget_override: false,
+                },
+                idempotencyKey: "key_conflict_1",
+              };
+              costStoreState.lastQuote = value;
+              return { ok: true, value };
+            }),
+            loadCostSummary: vi.fn(async () => undefined),
+            loadCostRecords: vi.fn(async () => undefined),
+          } as never,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    // 取 quote → 确认 → 提交被 409 拒绝
+    await wrapper.find(".asset-blocked-chip-retry").trigger("click");
+    await flushPromises();
+    await wrapper.find('[data-testid="quote-confirm"]').trigger("click");
+    await flushPromises();
+
+    // 业务冲突：对话框关闭（不重开复用旧 quote），等待用户重新报价
+    expect(generateSingleTask).toHaveBeenCalledTimes(1);
+    expect(wrapper.find('[data-testid="quote-confirm"]').exists()).toBe(false);
+
+    wrapper.unmount();
+  });
+
   it("F-1a：提交失败后重开对话框，重试复用同一 quote 与同一 idempotency key", async () => {
     const router = await createRouterAt("/projects/project-retry-failed/asset");
     const failureNote = "provider call failed";

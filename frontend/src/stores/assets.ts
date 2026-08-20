@@ -287,6 +287,9 @@ export function createAssetsStore(input: CreateAssetsStoreInput): AssetsStore {
       await loadProject();
     } catch (error) {
       state.loadError = toErrorMessage(error);
+      // 任务 11：错误上浮——quote 提交路径需要在调用方区分业务冲突（409）
+      // 与网络错误（重试复用同 quote 同 key），吞错会让重试语义失效。
+      throw error;
     } finally {
       state.isGenerating = false;
       if (options.taskIds?.length) {
