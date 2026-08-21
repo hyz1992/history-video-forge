@@ -1049,6 +1049,7 @@ function toSnapshotRecordForCost(row: {
   quoteFingerprint: string | null;
   estimatedCostMicros: string | null;
   authorizationCostMicros: string | null;
+  containsUnboundedItem: boolean;
   budgetLimitMicros: string | null;
   budgetOverrideAuthorized: boolean;
   pricingHash: string | null;
@@ -1072,6 +1073,7 @@ function toSnapshotRecordForCost(row: {
     quoteFingerprint: row.quoteFingerprint,
     estimatedCostMicros: row.estimatedCostMicros,
     authorizationCostMicros: row.authorizationCostMicros,
+    containsUnboundedItem: row.containsUnboundedItem,
     budgetLimitMicros: row.budgetLimitMicros,
     budgetOverrideAuthorized: row.budgetOverrideAuthorized,
     pricingHash: row.pricingHash,

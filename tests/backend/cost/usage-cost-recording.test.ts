@@ -48,6 +48,7 @@ function makeSnapshot(overrides: Partial<RunConfigurationSnapshotRecord> = {}): 
     quoteFingerprint: "sha256:test",
     estimatedCostMicros: "10000000",
     authorizationCostMicros: "12000000",
+    containsUnboundedItem: false,
     budgetLimitMicros: null,
     budgetOverrideAuthorized: false,
     pricingHash: "sha256:pricing",
@@ -473,5 +474,46 @@ describe("usage recording end-to-end through the Prisma writer (C-1 修复锁定
     expect(rows.length).toBe(1);
     expect(rows[0]!.assetProviderJobRecordId).toBe("job_e2e_real_001");
     expect(rows[0]!.estimatedCostMicros).toBe(outcome.record.estimatedCostMicros);
+  });
+});
+
+describe("unbounded overrun 防护（外部审查 B3 整改）", () => {
+  it("unbounded 报价（containsUnboundedItem=true，归一 0 上界）：usage 不触发 pricing_overrun，目录不禁用", async () => {
+    const app = buildApp();
+    await seedQuotableCatalog(app);
+    // unbounded + override 报价的 snapshot 持久化 authorizationCostMicros="0"
+    // （非 null，执行引擎闸门据此放行）；归一金额绝不参与上界比较
+    const snapshot = makeSnapshot({ containsUnboundedItem: true, authorizationCostMicros: "0" });
+    app.db.runConfigurationSnapshots.set("snap_usage_001", snapshot);
+    app.db.generationRuns.set("run_usage_001", makeRun());
+
+    const result = await recordProviderJobUsage(baseInput(app.db, { snapshot }));
+    expect(result.overrun).toBe(false);
+    const events = app.db.generationRunEvents.get("run_usage_001") ?? [];
+    expect(events.some((event) => event.eventType === "pricing_overrun")).toBe(false);
+    // 对应目录项保持 active（未被禁用，管理员无需复核不存在的"超界"）
+    const ttsEntries = [...app.db.providerModelCatalog.values()].filter(
+      (entry) => entry.capability === "tts.synthesize",
+    );
+    expect(ttsEntries.length).toBeGreaterThan(0);
+    expect(ttsEntries.every((entry) => entry.status === "active")).toBe(true);
+  });
+
+  it("有界报价回归：usage 累计超上界仍触发 pricing_overrun 并禁用目录", async () => {
+    const app = buildApp();
+    await seedQuotableCatalog(app);
+    const snapshot = makeSnapshot({ containsUnboundedItem: false, authorizationCostMicros: "1000" });
+    app.db.runConfigurationSnapshots.set("snap_usage_001", snapshot);
+    app.db.generationRuns.set("run_usage_001", makeRun());
+
+    const result = await recordProviderJobUsage(baseInput(app.db, { snapshot }));
+    expect(result.overrun).toBe(true);
+    const events = app.db.generationRunEvents.get("run_usage_001") ?? [];
+    expect(events.some((event) => event.eventType === "pricing_overrun")).toBe(true);
+    const ttsEntries = [...app.db.providerModelCatalog.values()].filter(
+      (entry) => entry.capability === "tts.synthesize",
+    );
+    expect(ttsEntries.length).toBeGreaterThan(0);
+    expect(ttsEntries.every((entry) => entry.status === "disabled")).toBe(true);
   });
 });

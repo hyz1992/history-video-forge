@@ -673,6 +673,7 @@ model RunConfigurationSnapshot {
   quoteFingerprint              String?
   estimatedCostMicros           String?
   authorizationCostMicros       String?
+  containsUnboundedItem         Boolean  @default(false)
   budgetLimitMicros             String?
   budgetOverrideAuthorized      Boolean  @default(false)
   pricingHash                   String?

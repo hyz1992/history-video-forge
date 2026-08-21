@@ -144,6 +144,7 @@ async function ensureAssetsGenerationRun(input: {
     quoteFingerprint: null,
     estimatedCostMicros: null,
     authorizationCostMicros: null,
+    containsUnboundedItem: false,
     budgetLimitMicros: null,
     budgetOverrideAuthorized: false,
     pricingHash: null,

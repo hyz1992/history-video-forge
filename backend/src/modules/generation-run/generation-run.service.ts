@@ -324,6 +324,7 @@ function buildSnapshot(
     quoteFingerprint: quote.quoteFingerprint,
     estimatedCostMicros: quote.estimatedCostMicros,
     authorizationCostMicros: quote.authorizationCostMicros,
+    containsUnboundedItem: quote.containsUnboundedItem,
     budgetLimitMicros: quote.budgetLimitMicros,
     budgetOverrideAuthorized: revalidated.requires_budget_override,
     pricingHash: pricing.pricing_hash,

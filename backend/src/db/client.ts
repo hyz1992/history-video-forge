@@ -350,6 +350,8 @@ export interface RunConfigurationSnapshotRecord {
   quoteFingerprint: string | null;
   estimatedCostMicros: string | null;
   authorizationCostMicros: string | null;
+  /** unbounded 报价标记：授权金额在持久化边界归一为 "0"，但绝不参与 overrun 上界比较。 */
+  containsUnboundedItem: boolean;
   budgetLimitMicros: string | null;
   budgetOverrideAuthorized: boolean;
   pricingHash: string | null;

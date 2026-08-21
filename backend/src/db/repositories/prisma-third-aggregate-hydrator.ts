@@ -97,6 +97,7 @@ export async function hydrateThirdAggregates(db: DbClient, client: AppPrismaClie
       resolutionTraceJson: row.resolutionTraceJson as unknown as unknown[],
       quoteId: row.quoteId, quoteFingerprint: row.quoteFingerprint,
       estimatedCostMicros: row.estimatedCostMicros, authorizationCostMicros: row.authorizationCostMicros,
+      containsUnboundedItem: row.containsUnboundedItem,
       budgetLimitMicros: row.budgetLimitMicros, budgetOverrideAuthorized: row.budgetOverrideAuthorized,
       pricingHash: row.pricingHash,
       pricingVersionSetJson: row.pricingVersionSetJson as unknown as string[],

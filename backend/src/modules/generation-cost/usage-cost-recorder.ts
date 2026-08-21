@@ -262,6 +262,11 @@ async function checkAndHandleOverrun(
 ): Promise<boolean> {
   const { snapshot } = input;
   if (snapshot.authorizationCostMicros === null) return false;
+  // 外部审查 B3：unbounded 报价的授权金额在持久化边界归一为 "0"（DB 金额列
+  // NOT NULL 合同），但归一金额绝不参与上界比较——授权无上界时不存在 overrun。
+  // 否则首次 usage 后 total > bound(0) 必然成立，误追加 pricing_overrun 并把
+  // 对应媒体目录项禁用（后续新 run 全被禁直到管理员复核）。
+  if (snapshot.containsUnboundedItem) return false;
   const bound = BigInt(snapshot.authorizationCostMicros);
 
   let total = 0n;
