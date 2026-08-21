@@ -883,3 +883,30 @@ script 摘要第一版建议至少包含：
 ### 严格 fallback
 
 - `POST /api/projects/:projectId/assets/runs/:runId/segments/:segmentId/accept-fallback`：请求体 `{ expected_run_id, expected_version }`（CAS 防过期/并发覆盖）；仅 `blocked_waiting_user` 段可接受；激活前校验同段 anchor 与 Remotion cue 齐备。
+
+---
+
+## S2-2B 创作偏好 API（2026-08-21 已实现）
+
+正式合同见 `shared/src/generation/generation-configuration.schema.ts`（`CreativePreferences`/`CreativeRunOverrideSchema`/`S2_2B_ConfigPatchRequest`）与 `shared/src/creative/creative-preset.schema.ts`。
+
+### 配置扩展
+
+- `PATCH /api/me/generation-preferences` 与 `PATCH /api/projects/:projectId/generation-configuration`：请求体在 A 基础上增加可选 `creative` 段（`voice_profile_id` / `art_style_preset_id` / `subtitle_style_preset_id` / `subtitle_style_overrides` 安全覆盖白名单）。`creative` 提供时整体替换；缺省时回 A 期默认（全 null + 空覆盖，旧客户端零行为变化）。capabilities 仍必须全 auto（越权返回 `400 configuration_invalid_s2_2b_scope`）。revision 冲突码与 409 语义不变。
+- 单次运行覆盖：`run_overrides.creative`（quote 创建与提交逐字段重放，既有协议）——覆盖只进入当次快照，不写回项目配置。
+- `GET /api/projects/:projectId/generation-configuration` 的 `diff_from_user_default` 与 `invalidation_preview` 扩展 creative：音色 → `assets`；画风 → `asset_planning`；字幕 → `assets`。
+
+### 创作偏好目录与音色库
+
+- `GET /api/creative-presets`：画风 + 字幕 preset 公开目录（preset_id/preset_version/display_name/description/overridable_fields/展示摘要）。
+- `GET /api/me/voice-profiles`：公共 + 本人私有音色档案公开字段（含 cached `preview_audio_uri`）；他人私有不可见；无凭据字段。
+- 音色库：`VoiceProfile` 数据库实体（Prisma 激活态为跨实例权威）；`kind=preset|system` 公共、`kind=generated` 归创建用户私有（同源授权：解析/列表/试听统一可见性过滤）。
+
+### 试听（voice.preview）
+
+- `POST /api/projects/:projectId/generation-cost-quotes`：`operation: "voice.preview"` 时试听目标经 `run_overrides.creative.voice_profile_id` 表达；计价含 `preview_text` 的 `tts_character` 与设计请求（missing 档案，无目录单价 → unbounded 项）。auto 模式报价被拒（不静默猜测试听对象）。
+- `POST /api/projects/:projectId/voice-profiles/:voiceProfileId/preview`：请求体 `{ cost_quote_id, idempotency_key, authorize_budget_override?, run_overrides? }`（付费部署必须 quote，无 quote → `409 paid_generation_quote_required`；stub/fake 保留免 quote 本地合成）。响应 `{ preview_audio_uri, source: cached|generated, provider_voice_id }`；cached 零费用直接返回。执行走 `voice.preview` dispatch handler，usage 按 `(snapshot, voice-preview:<id>, attemptIndex)` 幂等记账，回写 `preview_audio_uri`。
+
+### 音色执行绑定（快照权威）
+
+- 客户端请求体 `voice_profile_id` 已废弃：提交路径若携带且与快照 `resolved_creative.voice` 不一致 → `422 generation_voice_profile_conflict`（校验先于 quote 消费：quote 未消费、无 snapshot/run、无 provider 调用）；legacy 免 quote 路径忽略客户端值，改由项目配置 creative 解析。执行音色一律取快照（fixed → 指定档案；auto → intent 匹配）。

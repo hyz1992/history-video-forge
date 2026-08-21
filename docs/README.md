@@ -17,8 +17,9 @@
 
 截至 2026-08-21：
 
-- `S2-2A`（配置与成本基础：用户/项目生成配置、provider 目录与后端报价、幂等付费运行、媒体/LLM 付费闸门与费用账本、设置 UI、报价确认/严格 fallback/成本明细、文档收口与 e2e/浏览器验收）核心交付已完成并通过 T2 终审；2026-08-21 按外部审查（codex + claude code）整改闭环：LLM 目录异常 fail-closed（P1-1）、跨实例冷恢复 snapshot 数据库权威加载（P1-2）、记账等待账本/审计落库（P1-3）、unbounded 报价不再误触发 pricing_overrun（B3）、报价确认成功提示时序（B1）、连续 409 冲突同步（B2）。完成声明边界：后端 + API 级 e2e 验收完成（含三入口 quote 正链路与 billing 落账）；UI 浏览器验收覆盖设置/冻结/失效预览，quote 确认/严格 fallback/成本明细的浏览器级交互留待后续浏览器验收矩阵（roadmap 已登记，不阻塞 S2-2B）。任务审查记录见 `docs/records/2026-08-20-s2-2a-task*.md` 与 `docs/records/2026-08-21-s2-2a-external-review-remediation-record.md`，设计/实施入口见 `docs/plans/README.md`。
-- 紧接后续：`S2-2B` 创作偏好 -> `S2-2C` Provider/Model 高级选择（每棒单独设计、实施、验证）。
+- `S2-2A`（配置与成本基础）核心交付已完成并通过 T2 终审，外部审查整改闭环（见 [整改记录](./records/2026-08-21-s2-2a-external-review-remediation-record.md)）。
+- `S2-2B`（创作偏好：音色/画风/字幕）已完成（2026-08-21）：三类偏好从用户默认复制到项目、支持单次运行覆盖并进入运行快照（`resolved_creative` 冻结 preset 版本/解析结果/最终样式与 tts 实际模型）；画风 preset 解析结果输入 `ProjectArtBible` 与正式中文 prompt（asset-planner v1.3.0），执行端只消费快照冻结参数（注册表升级不改写已冻结运行）；字幕 preset 有限安全覆盖被 renderer 消费；音色库迁入数据库（owner/visibility 同源授权、跨实例 DB 权威）；试听走 `voice.preview` quote + 提交协议（付费部署 409 闸门、幂等、usage 落账、前端弹窗报价确认）；音色执行以快照为权威，客户端 voice_profile_id 冲突先于 quote 消费拒绝（422 generation_voice_profile_conflict）。验收：后端 e2e（`tests/backend/s2-2b-e2e-acceptance.test.ts`）+ jsdom 组件测试 + 浏览器验收脚本（`npm run harness:s2-2b-browser-acceptance`，stub/fake）；真实付费试听 live 未运行（明确标注未验证）。设计/实施入口见 [Plans 状态说明](./plans/README.md)。
+- 紧接后续：`S2-2C` Provider/Model 高级选择（独立设计、实施、验证）。
 
 截至 2026-08-11（历史状态）：
 

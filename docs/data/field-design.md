@@ -1142,3 +1142,12 @@ Renderer v1 字段只描述 `ComposeTimeline` 之后的渲染与导出结果，�
 - `GenerationRun`：`(projectId, operation, idempotencyKey)` 唯一、`payloadFingerprint`（幂等判重）、`quoteId`（unique nullable）、`runConfigurationSnapshotId`（unique）、`dispatchPayloadJson`、`status`（pending_dispatch/running/succeeded/failed/needs_reconciliation）、`dispatchLeaseOwner/ExpiresAt/ClaimCount`。quote 消费、snapshot、pending run 同事务。
 - `GenerationRunEvent`：append-only（`route_auto_downgraded`/`fallback_accepted`/`pricing_overrun`/`dispatch_finalize_fenced_out` 等），不修改 snapshot。
 - `UsageCostRecord`：`(runConfigurationSnapshotId, providerRequestKey, attemptIndex)` 唯一；`capability/providerKey/modelId`、`status`、`unitType`、`inputUnits/outputUnits`、`estimatedCostMicros/actualCostMicros`（actual 可空）、`costBasis`（estimate|provider_usage|provider_invoice）、`durationMs`。媒体按 provider job 三元组判重；LLM 键为 `llm:<runId>:<operationName>:<attemptIndex>`，`interactionId` 可反查 interaction log。
+
+### S2-2B 创作偏好字段（2026-08-21 已实现）
+
+- `GenerationConfigurationV1.creative` 扩展：`voice_profile_id` / `art_style_preset_id` / `subtitle_style_preset_id`（稳定 ID，null=auto/系统默认）+ `subtitle_style_overrides`（有限安全覆盖白名单，缺省 `{}`，旧 JSON 兼容，无迁移）。`creative` 支持单次运行覆盖（`run_overrides.creative` 逐字段覆盖，只进快照）。
+- `ResolvedGenerationConfigurationV1.resolved_creative`：`voice`（mode=auto|fixed + 稳定身份 id/kind/provider_name/target_model）、`art_style`（mode=none|fixed + preset_id/version/resolved_params）、`subtitle`（mode=none|fixed + preset_id/version + 最终 `resolved_style` + `applied_overrides`）。参与 configuration_hash（creative 或注册表版本变化自动使旧 quote 漂移失效）。旧快照 JSON 缺省为 A 期语义（auto/none/none）。
+- 画风/字幕 preset 注册表（`shared/src/creative/`）：`preset_id`（稳定）+ `preset_version`（vN）+ `resolved_params`（结构化输入数据；不含正式 prompt 指令文本）。执行端只消费快照冻结参数，注册表只在解析阶段读取。
+- `VoiceProfile`（Prisma 实体，音色库跨实例权威）：`id/kind/ownerId/visibility(public|private)/providerName/providerVoiceId/providerStatus/targetModel/previewAudioUri/usageCount/lastUsedAt/qualityScore/metadataJson`。preset/system 公共；generated 归创建用户私有；解析/列表/试听同源授权（非可见按不存在处理）。Map 态保留 JSON 写穿持久化（legacy），历史 JSON 一次性导入（无归属字段 → public）。
+- 失效预览扩展：音色 → `assets`；画风 → `asset_planning`；字幕 → `assets`。
+- `voice.preview` operation：quote 计价含 `tts_character`（preview_text）+ 设计请求（missing 档案，无目录单价 → unbounded）；usage 键 `voice-preview:<profileId>`，attempt 0=设计、1=合成。

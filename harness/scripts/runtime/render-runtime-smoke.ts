@@ -583,7 +583,26 @@ export async function runRenderRuntimeSmoke(
     input.outputDir ?? resolve(process.cwd(), "harness/scripts/runtime/output/render-runtime-smoke");
   mkdirSync(finalOutputDir, { recursive: true });
 
-  const app = buildApp({ renderAdapter: createSmokeRenderAdapter(adapter) });
+  // 付费闸门（9A）：seedCatalog 路径需要可报价 readiness（媒体凭据 + 区域）。
+  // 与 quote 测试上下文同构；无 seedCatalog 的用例不创建 quote，不受影响。
+  const app = buildApp({
+    renderAdapter: createSmokeRenderAdapter(adapter),
+    generationQuoteReadinessInput: input.seedCatalog
+      ? {
+          llm: { mode: "stub" },
+          media: {
+            registeredModels: [
+              { capability: "image.generate" as const, providerKey: "dashscope", modelId: "wan2.6-t2i" },
+              { capability: "video.image_to_video" as const, providerKey: "dashscope", modelId: "wan2.7-i2v-2026-04-25" },
+              { capability: "tts.synthesize" as const, providerKey: "dashscope", modelId: "qwen3-tts-instruct-flash" },
+            ],
+            credentialConfigured: true,
+            deploymentScope: "cn-beijing" as const,
+          },
+          environment: { demoMode: false, testEnv: false },
+        }
+      : undefined,
+  });
   if (input.seedCatalog) {
     const { buildPricingCatalogSeed } = await import(
       "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js"
@@ -622,20 +641,50 @@ export async function runRenderRuntimeSmoke(
   });
 
   const env = resolveRenderRuntimeSmokeEnv();
+  const payload: Record<string, unknown> = {
+    // S2-2A 任务 6 合同：客户端不得携带 provider_mode / dashscope api_key；
+    // 真实 provider 授权只来自后端 env（服务端凭据由 readDashscopeConfig 解析）。
+    // ttsProvider 仅影响选择的服务端 voice profile 与后续断言。
+    // S2-2B：voice_profile_id 已废弃（快照为唯一权威）；dashscope_tts 用例
+    // 的音色由项目配置 creative 决定（默认 auto → intent 匹配）。
+    execution_mode: "auto_available",
+  };
+  // S2-2B：音色由快照（项目配置 creative）决定；DashScope 用例显式选择
+  // 预置音色 Ethan（provider_voice_id 就绪，无需音色设计调用）。
+  if (input.ttsProvider === "dashscope_tts") {
+    await injectOrThrow({
+      app,
+      method: "PATCH",
+      url: `/api/projects/${projectId}/generation-configuration`,
+      payload: {
+        expected_revision: 1,
+        video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
+        budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
+        creative: {
+          voice_profile_id: "voice_system_ethan",
+          art_style_preset_id: null,
+          subtitle_style_preset_id: null,
+        },
+      },
+    });
+  }
+  // 付费闸门（9A）：种入目录 + 服务端凭据时旧无 quote 路径返回 409——
+  // 先创建 assets.generate quote 再提交（与 9A 提交协议一致）。
+  if (input.seedCatalog) {
+    const quoteBody = await injectOrThrow({
+      app,
+      method: "POST",
+      url: `/api/projects/${projectId}/generation-cost-quotes`,
+      payload: { operation: "assets.generate", selection: { task_ids: [] } },
+    });
+    payload.cost_quote_id = quoteBody.quote_id as string;
+    payload.idempotency_key = `render-smoke-${Date.now()}`;
+  }
   const assetsBody = await injectOrThrow({
     app,
     method: "POST",
     url: `/api/projects/${projectId}/assets/generate`,
-    payload: {
-      // S2-2A 任务 6 合同：客户端不得携带 provider_mode / dashscope api_key；
-      // 真实 provider 授权只来自后端 env（服务端凭据由 readDashscopeConfig 解析）。
-      // ttsProvider 仅影响选择的服务端 voice profile 与后续断言。
-      voice_profile_id:
-        input.ttsProvider === "dashscope_tts"
-          ? "voice_system_ethan"
-          : "voice_render_smoke",
-      execution_mode: "auto_available",
-    },
+    payload,
   });
   writeJson(finalOutputDir, "assets-response.json", assetsBody);
   alignActiveManifestReadinessForSmoke({ app, projectId });

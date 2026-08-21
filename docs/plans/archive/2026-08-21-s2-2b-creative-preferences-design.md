@@ -215,10 +215,11 @@ resolved_creative: {
 - **cached 路径（零费用）**：档案已有 `preview_audio_uri`（data URI）→ 前端直接播放，不发请求。
 - **本地/测试路径（免 quote）**：无真实凭据环境（stub/fake）走 fake TTS 返回合成音频——与既有"stub/local 保留免 quote 本地路径"语义一致；该路径也不创建 quote。
 - **付费路径（quote + 提交协议）**：无缓存且部署可调用付费 TTS 时：
-  1. 前端请求 `POST /api/projects/:projectId/generation-cost-quotes`（`operation: "voice.preview"`，见 §9.3）获得报价——计价项 = 设计请求（档案 `provider_status=missing` 时，request 单位）+ `preview_text` 的 `tts_character` 合成费用；无法给出可信上界的项标记 `unbounded`。
-  2. **前端弹窗展示报价**（预计金额、授权上界、unbounded 标记），用户确认后提交 `POST /api/me/voice-profiles/:voiceProfileId/preview`（携带 `cost_quote_id` + `idempotency_key` + 可选 `authorize_budget_override`）。
+  1. 前端请求 `POST /api/projects/:projectId/generation-cost-quotes`（`operation: "voice.preview"`，见 §9.3）获得报价——试听目标音色经 `run_overrides.creative.voice_profile_id` 表达（复用单次运行覆盖机制，resolved_creative 与提交重放同源，hash 一致）；计价项 = 设计请求（档案 `provider_status=missing` 时，request 单位，无目录单价则 unbounded）+ `preview_text` 的 `tts_character` 合成费用。
+  2. **前端弹窗展示报价**（预计金额、授权上界、unbounded 标记），用户确认后提交 `POST /api/projects/:projectId/voice-profiles/:voiceProfileId/preview`（携带 `cost_quote_id` + `idempotency_key` + 可选 `authorize_budget_override`）。
   3. 服务端走 GenerationRunService 事务（quote 消费 + snapshot + pending run 同一事务），dispatcher 执行试听（档案缺失时先 `resolveProviderVoice` 设计音色，再合成 `preview_text`），回写 `preview_audio_uri`，记 `UsageCostRecord` 与 AuditLog；幂等键保证重试不重复计费。
   4. 付费部署下旧无 quote 试听请求 → `409 paid_generation_quote_required`（fail-closed，与既有闸门一致）。
+- **端点形态（实现期修正）**：quote 与提交协议是 project-scoped 的既有冻结合同，因此试听端点为项目级 `POST /api/projects/:projectId/voice-profiles/:voiceProfileId/preview`；用户设置页在付费部署 + 无缓存时引导到项目设置试听（cached 音频经 `GET /api/me/voice-profiles` 直接返回，零费用）。
 - 试听文本固定使用档案 `preview_text`（schema 已限长），不接受任意文本注入。
 - 默认自动化与测试不得触发真实 provider 试听；真实试听 live check 必须显式授权并记录 quote/耗时/费用。
 
@@ -311,8 +312,8 @@ resolved_creative: {
 ### 9.3 试听（quote + 提交协议）
 
 - `GenerationOperationSchema` 新增 `"voice.preview"`（报价、GenerationRun、dispatcher 注册均按既有 operation 模式扩展）。
-- `POST /api/projects/:projectId/generation-cost-quotes`：`operation: "voice.preview"` 时计价 workload 固定（设计请求标记 + `preview_text` 字符数），不适用 `enabled_provider_types`/`selection`。
-- `POST /api/me/voice-profiles/:voiceProfileId/preview`：请求体 `{ cost_quote_id, idempotency_key, authorize_budget_override? }`；付费部署下无 quote → `409 paid_generation_quote_required`；stub/fake 环境保留免 quote 本地路径。响应 `{ preview_audio_uri, source: "generated", provider_voice_id }`（cached 路径由前端直接播放，不走本端点）。
+- `POST /api/projects/:projectId/generation-cost-quotes`：`operation: "voice.preview"` 时试听目标经 `run_overrides.creative.voice_profile_id` 表达；计价 workload 固定（设计请求标记 + `preview_text` 字符数），不适用 `enabled_provider_types`/`selection`。
+- `POST /api/projects/:projectId/voice-profiles/:voiceProfileId/preview`：请求体 `{ cost_quote_id, idempotency_key, authorize_budget_override? }`；付费部署下无 quote → `409 paid_generation_quote_required`；stub/fake 环境保留免 quote 本地路径。响应 `{ preview_audio_uri, source: "generated" | "cached", provider_voice_id }`（cached 时零费用，防御性支持）。
 - 新增 dispatch handler `createVoicePreviewDispatchHandler`（注册于 `backend/src/app.ts` 的 operation 映射）。
 
 ### 9.4 不变
@@ -336,7 +337,7 @@ quote/snapshot/run/cost API、提交协议、`enabled_provider_types`、幂等�
 
 ### 11.1 用户设置页（/settings）新增"创作设置"
 
-- **音色区**：音色卡片列表（自动匹配卡片 + 各 preset/档案卡片）；选中即 `voice_profile_id`；"自动匹配"为 `null`；每卡试听按钮（cached 直接播放；无缓存时先取报价，**弹窗展示预计金额/授权上界/unbounded 标记**，确认后提交执行并播放；stub/fake 环境直接播放合成音频）；展示特性标签（性别/年龄/音调/语速/风格评分）。
+- **音色区**：音色卡片列表（自动匹配卡片 + 各 preset/档案卡片）；选中即 `voice_profile_id`；"自动匹配"为 `null`；试听按钮（cached 直接播放；付费部署 + 无缓存时引导到项目设置试听并弹窗展示报价金额/授权上界/unbounded；stub/fake 环境直接播放合成音频）；展示特性标签（性别/年龄/音调/语速/风格评分）。
 - **画风区**：画风 preset 卡片（中文名 + 说明 + 示例基调摘要）；"不启用"为 `null`；提示画风变化需要重新生成分镜资产规划。
 - **字幕区**：字幕 preset 卡片 + 安全参数覆盖表单（字号/字重/颜色/位置/描边/边距等，按 `overridable_fields` 渲染）；实时预览框（用示例字幕文本按当前解析样式渲染）。
 - 保存走既有 store PATCH（`expected_revision` + 409 conflictEpoch 同步机制不变）。

@@ -375,7 +375,11 @@ async function resolveQuoteConfiguration(
     const plan = storyboard.planJson as {
       segments?: Array<{ segment_id?: string; api_video_suitability?: SegmentInput["api_video_suitability"] }>;
     };
-    const segments = (plan.segments ?? []).filter((segment) => segment.segment_id);
+    // 旧式 plan（无 api_video_suitability 的段）不参与报价路线解析——
+    // 无适配度即无 video 计价语义（S2-2A 兼容读取原则：新产物才带适配度）。
+    const segments = (plan.segments ?? []).filter(
+      (segment) => segment.segment_id && segment.api_video_suitability,
+    );
     segmentInputs = segments.map((segment) => ({
       segment_id: segment.segment_id!,
       api_video_suitability: segment.api_video_suitability!,

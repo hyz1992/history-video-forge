@@ -630,6 +630,10 @@ Renderer / Export v1 已有第一版持久化记录。它是 `ComposeRecord` 之
 ---
 
 ## S2-2A 配置与成本实体映射（2026-08-20 已实现，增量迁移）
+## S2-2B VoiceProfile 实体映射（2026-08-21 已实现，增量迁移）
+
+- `VoiceProfile`：`id`(PK,=voice_profile_id)/`kind`(CHECK preset|generated|system)/`ownerId`(nullable FK User, onDelete SetNull)/`visibility`(CHECK public|private, default public)/`providerName`/`providerVoiceId`/`providerStatus`(CHECK missing|creating|ready|failed|deleted)/`targetModel`/`previewAudioUri`/`usageCount`/`lastUsedAt`/`qualityScore`/`metadataJson`(展示与设计字段)/`createdAt`/`updatedAt`；索引 `(ownerId, visibility)`。迁移 `20260821130000_s2_2b_voice_profile`。
+
 
 新增表（`20260812090000_s2_2a_generation_configuration`）：
 
