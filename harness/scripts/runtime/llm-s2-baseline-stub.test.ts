@@ -234,7 +234,7 @@ describe("llm-s2-baseline stub flow", () => {
 
   it("storyboard.planner validates plan and sets repair/regen as unexercised", async () => {
     const outputDir = makeSandboxOutputDir("storyboard");
-    const segment = { segment_id: "seg-0", order: 0, script_excerpt: "excerpt", start_hint_sec: 0, end_hint_sec: 20, narrative_role: "opening" as const, visual_intent: "v", scene_description: "d", visual_elements: ["人物"], framing_hint: "wide" as const, content_type: "live_action" as const, motion_hint: "push_in" as const, editing_hint: "single" as const, on_screen_text: ["字幕"], linked_beats: ["b"], linked_quotes: ["q"], risk_notes: ["r"] };
+    const segment = { segment_id: "seg-0", order: 0, script_excerpt: "excerpt", start_hint_sec: 0, end_hint_sec: 20, narrative_role: "opening" as const, visual_intent: "v", scene_description: "d", visual_elements: ["人物"], framing_hint: "wide" as const, content_type: "live_action" as const, motion_hint: "push_in" as const, editing_hint: "single" as const, on_screen_text: ["字幕"], linked_beats: ["b"], linked_quotes: ["q"], risk_notes: ["r"], api_video_suitability: "remotion_only" as const };
     const plan = { plan_version: "storyboard_v1" as const, source_script_record_id: "s1", source_topic_package_id: "t1", estimated_total_duration_sec: 60, segments: [segment], global_visual_notes: ["暖色调"] };
     let capturedThinking: string | undefined;
 

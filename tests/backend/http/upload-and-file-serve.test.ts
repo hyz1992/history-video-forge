@@ -1,8 +1,18 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import { buildApp } from "../../../backend/src/app.js";
 import { createServer, type Server } from "node:http";
-import { writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
+import Database from "better-sqlite3";
+import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
+import { activateDatabase } from "../../../backend/src/db/database-activation.js";
+import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
+import { hashPassword } from "../../../backend/src/auth/password-hash.js";
+import { PrismaSessionStore } from "../../../backend/src/auth/session-store.js";
+import { buildTestAuth } from "../auth/test-utils.js";
+
+const USER_PASSWORD = "a-strong-user-password-99";
 
 const MINIMAL_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
@@ -53,21 +63,44 @@ describe("upload + file serve integration", () => {
   let app: ReturnType<typeof buildApp>;
   let storageRoot: string;
   let projectId: string;
+  let createdUserId: string;
   const TEST_DIR = join(process.cwd(), ".test-e2e-smoke");
 
   beforeEach(async () => {
     storageRoot = join(TEST_DIR, `storage-${Date.now()}`);
     mkdirSync(storageRoot, { recursive: true });
 
-    app = buildApp();
+    // S2-2A 起 createHttpServer 在存在 sessionStore 时强制鉴权，测试需先建库建
+    // 用户并登录（与 auth-api.test.ts 同构），否则所有 /api 请求返回 401。
+    const root = mkdtempSync(join(tmpdir(), "svf2-upload-serve-"));
+    const dbPath = join(root, "test.db");
+    const sqlite = new Database(dbPath);
+    applyAllDatabaseMigrations(sqlite);
+    sqlite.close();
+    const client = await createPrismaClient(dbPath);
+    await activateDatabase(client, { mode: "fresh" });
+    const createdUser = await client.user.create({
+      data: {
+        username: "alice",
+        displayName: "Alice",
+        passwordHash: await hashPassword(USER_PASSWORD),
+        role: "USER",
+        status: "ACTIVE",
+        mustChangePassword: false,
+      },
+    });
+    createdUserId = createdUser.id;
+
+    app = buildApp({ prismaClient: client, skipSnapshotLoad: true });
     const db = app.db;
 
-    // Create project
+    // Create project（owner 需为登录用户，guardOwnedRoute 强制所有权）
     const project = {
       id: db.generateId(),
       name: "E2E Test",
       status: "asset_plan_ready",
       storageRootDir: storageRoot,
+      ownerId: createdUserId,
       activeTopicPackageId: "tp_001",
       activeScriptRecordId: "sc_001",
       activeStoryboardRecordId: "sb_001",
@@ -167,7 +200,7 @@ describe("upload + file serve integration", () => {
     });
 
     const { createHttpServer } = await import("../../../backend/src/server.js");
-    server = createHttpServer(app);
+    server = createHttpServer(app, { sessionStore: new PrismaSessionStore(client) });
     await new Promise<void>((resolve) => server.listen(0, () => resolve()));
     port = (server.address() as any).port;
   });
@@ -178,12 +211,23 @@ describe("upload + file serve integration", () => {
   });
 
   it("full flow: generate with partial providers → upload → file serve", async () => {
+    // 登录获取会话 cookie（server 级鉴权强制）
+    const loginRes = await fetch(`http://127.0.0.1:${port}/api/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "alice", password: USER_PASSWORD }),
+    });
+    expect(loginRes.status).toBe(200);
+    const setCookie = loginRes.headers.get("set-cookie");
+    expect(setCookie).toContain("session=");
+    const cookie = setCookie!.split(";")[0]!;
+
     // Step 1: Generate with enabled_provider_types excluding image
     const genResponse = await httpRequest(port, "POST", `/api/projects/${projectId}/assets/generate`, {
       voice_profile_id: "voice_001",
       execution_mode: "dry_run",
       enabled_provider_types: ["tts", "sfx", "bgm"],
-    });
+    }, { cookie });
     expect(genResponse.status).toBe(200);
     expect(genResponse.body.manifest).toBeDefined();
 
@@ -193,10 +237,13 @@ describe("upload + file serve integration", () => {
     expect(imgExec).toBeDefined();
     expect(imgExec.status).toBe("waiting_manual_upload");
 
-    // Step 2: Upload image via app.inject (simulating multipart)
+    // Step 2: Upload image via app.inject (simulating multipart)。inject 不经过
+    // createHttpServer 的会话中间件，需直接注入 auth 上下文（与其余 guardOwnedRoute
+    // 测试同构）。
     const uploadResponse = await app.inject({
       method: "POST",
       url: `/api/projects/${projectId}/assets/tasks/img_001/artifacts/upload`,
+      auth: buildTestAuth({ userId: createdUserId, role: "USER" }),
       payload: {
         file: {
           buffer: MINIMAL_PNG,
@@ -224,7 +271,7 @@ describe("upload + file serve integration", () => {
     const fileResponse = await new Promise<{ status: number; headers: Record<string, string>; body: Buffer }>((resolve, reject) => {
       const http = require("node:http");
       const req = http.request(
-        { hostname: "127.0.0.1", port, path: `/api/projects/${projectId}/artifacts/${imgArtifact.artifact_id}/file`, method: "GET" },
+        { hostname: "127.0.0.1", port, path: `/api/projects/${projectId}/artifacts/${imgArtifact.artifact_id}/file`, method: "GET", headers: { cookie } },
         (res: any) => {
           const chunks: Buffer[] = [];
           const resHeaders: Record<string, string> = {};

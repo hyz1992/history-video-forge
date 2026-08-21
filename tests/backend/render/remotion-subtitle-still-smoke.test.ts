@@ -30,7 +30,19 @@ describe("Remotion subtitle still smoke", () => {
       outDir: join(tempDir, "bundle"),
       publicDir: null,
       enableCaching: false,
-      webpackOverride: (config) => config,
+      // 与生产打包（local-remotion-render-adapter）保持一致：shared 源码内
+      // 按仓库惯例用 .js 后缀导入同目录 .ts（如 creative-preset-registry →
+      // ./art-style-presets.js），需 extensionAlias 才能解析到 TS 源。
+      webpackOverride: (config) => ({
+        ...config,
+        resolve: {
+          ...config.resolve,
+          extensionAlias: {
+            ...config.resolve?.extensionAlias,
+            ".js": [".ts", ".tsx", ".js"],
+          },
+        },
+      }),
     });
     const inputProps = {
       timeline: {},
