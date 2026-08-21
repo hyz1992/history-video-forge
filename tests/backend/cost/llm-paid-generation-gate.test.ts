@@ -558,3 +558,69 @@ describe("五入口付费闸门覆盖（diff/contract 审查 I-2 锁定）", () 
     }
   });
 });
+
+describe("LLM 目录异常 fail-closed（外部审查 P1-1/B4 对抗测试）", () => {
+  const auth = buildTestAuth({ userId: "owner-1" });
+
+  it("真实 provider + 目录为空（bootstrap 未运行）：旧无 quote 路径仍必须 409", async () => {
+    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    // 不 seed 目录：模拟 bootstrap 未运行/纯内存态——目录异常绝不能成为免 quote 条件
+    const project = await prepareScriptProject(app);
+    mockPaidScriptProvider(true);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/script/generate`,
+      payload: {},
+      auth,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect((response.json() as Record<string, unknown>).error).toBe("paid_generation_quote_required");
+    expect(invokeStructuredPromptMock).not.toHaveBeenCalled();
+  });
+
+  it("真实 provider + 目录全部 disabled：旧无 quote 路径仍必须 409", async () => {
+    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    await seedQuotableCatalog(app);
+    for (const entry of app.db.providerModelCatalog.values()) {
+      entry.status = "disabled";
+    }
+    const project = await prepareScriptProject(app);
+    mockPaidScriptProvider(true);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/script/generate`,
+      payload: {},
+      auth,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect((response.json() as Record<string, unknown>).error).toBe("paid_generation_quote_required");
+    expect(invokeStructuredPromptMock).not.toHaveBeenCalled();
+  });
+
+  it("真实 provider + 目录无 active LLM 项（LLM 目录未物化/模型失配）：旧无 quote 路径仍必须 409", async () => {
+    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    await seedQuotableCatalog(app);
+    for (const entry of app.db.providerModelCatalog.values()) {
+      if (entry.capability === "llm.smart" || entry.capability === "llm.flash") {
+        entry.status = "disabled";
+      }
+    }
+    const project = await prepareScriptProject(app);
+    mockPaidScriptProvider(true);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/projects/${project.id}/script/generate`,
+      payload: {},
+      auth,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect((response.json() as Record<string, unknown>).error).toBe("paid_generation_quote_required");
+    expect(invokeStructuredPromptMock).not.toHaveBeenCalled();
+  });
+});

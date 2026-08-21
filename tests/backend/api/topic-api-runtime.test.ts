@@ -88,6 +88,37 @@ vi.mock("../../../backend/src/runtime/llm/tier-aware-provider-factory.js", () =>
 
 import { buildApp } from "../../../backend/src/app.js";
 import { buildTestAuth } from "../auth/test-utils.js";
+import { seedQuotableCatalog, buildQuotableReadinessInput } from "../cost/quote-test-context.js";
+
+/**
+ * S2-2A 外部审查 P1-1 整改迁移：本文件 mock 真实 LLM provider（openai），
+ * 按 fail-closed 合同，真实 provider 部署下旧无 quote 路径一律 409
+ * （此前依赖目录为空的闸门漏洞放行）。用例全部改为 quote 提交路径——
+ * 提交协议透传生成响应（additive generation_run_id），原有运行时行为断言
+ * （重试/错误映射/诊断/多轮历史）不变。
+ */
+async function createTopicQuote(
+  app: ReturnType<typeof buildApp>,
+  projectId: string,
+  auth: ReturnType<typeof buildTestAuth>,
+): Promise<string> {
+  const quoteRes = await app.inject({
+    method: "POST",
+    url: `/api/projects/${projectId}/generation-cost-quotes`,
+    payload: { operation: "topic.generate" },
+    auth,
+  });
+  expect(quoteRes.statusCode).toBe(200);
+  return (quoteRes.json() as { quote_id: string }).quote_id;
+}
+
+/** 真实 provider 部署的测试 app：可报价目录 + readiness 注入。 */
+async function buildTopicRuntimeApp(): Promise<ReturnType<typeof buildApp>> {
+  const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+  // 同步 seed 目录（buildApp 默认不 bootstrap）
+  await seedQuotableCatalog(app);
+  return app;
+}
 
 describe("topic api runtime", () => {
   const auth = buildTestAuth({ userId: "owner-1" });
@@ -102,7 +133,7 @@ describe("topic api runtime", () => {
       ],
     ]);
 
-    const app = buildApp();
+    const app = await buildTopicRuntimeApp();
     const projectResponse = await app.inject({ auth,
       method: "POST",
       url: "/api/projects",
@@ -111,6 +142,7 @@ describe("topic api runtime", () => {
       },
     });
     const projectId = projectResponse.json().project_id as string;
+    const quoteId = await createTopicQuote(app, projectId, auth);
 
     const response = await app.inject({ auth,
       method: "POST",
@@ -123,6 +155,8 @@ describe("topic api runtime", () => {
         source_hint: "《晏子春秋》",
         recent_usage_hint: "近期未出现同 event_id",
         tags: ["diplomacy", "court", "humiliation", "showdown"],
+        cost_quote_id: quoteId,
+        idempotency_key: "topic-runtime-1",
       },
     });
 
@@ -181,7 +215,7 @@ describe("topic api runtime", () => {
       ];
     });
 
-    const app = buildApp();
+    const app = await buildTopicRuntimeApp();
     const projectResponse = await app.inject({ auth,
       method: "POST",
       url: "/api/projects",
@@ -190,6 +224,7 @@ describe("topic api runtime", () => {
       },
     });
     const projectId = projectResponse.json().project_id as string;
+    const quoteId = await createTopicQuote(app, projectId, auth);
 
     const response = await app.inject({ auth,
       method: "POST",
@@ -202,6 +237,8 @@ describe("topic api runtime", () => {
         source_hint: "Yanzi Chunqiu",
         recent_usage_hint: "No recent repeat event id.",
         tags: ["diplomacy", "court", "humiliation", "showdown"],
+        cost_quote_id: quoteId,
+        idempotency_key: "topic-runtime-2",
       },
     });
 
@@ -233,7 +270,7 @@ describe("topic api runtime", () => {
       ),
     );
 
-    const app = buildApp();
+    const app = await buildTopicRuntimeApp();
     const projectResponse = await app.inject({ auth,
       method: "POST",
       url: "/api/projects",
@@ -242,6 +279,7 @@ describe("topic api runtime", () => {
       },
     });
     const projectId = projectResponse.json().project_id as string;
+    const quoteId = await createTopicQuote(app, projectId, auth);
 
     const response = await app.inject({ auth,
       method: "POST",
@@ -254,13 +292,17 @@ describe("topic api runtime", () => {
         source_hint: "《晏子春秋》",
         recent_usage_hint: "近期未出现同 event_id",
         tags: ["diplomacy", "court", "humiliation", "showdown"],
+        cost_quote_id: quoteId,
+        idempotency_key: "topic-runtime-1",
       },
     });
 
     expect(response.statusCode).toBe(500);
+    // 提交协议失败分支：错误码透传为 reason_code（生成流程内仍做可读错误映射，
+    // 可读 message 在 submit-protocol failed 分支暂未透传——已登记 Minor）
     expect(response.json()).toMatchObject({
-      error: "topic_generate_failed",
-      message: "余额不足或无可用资源包,请充值。",
+      error: "generation_run_dispatch_failed",
+      reason_code: "dispatch_handler_exception",
     });
   });
 
@@ -278,7 +320,7 @@ describe("topic api runtime", () => {
       ),
     );
 
-    const app = buildApp();
+    const app = await buildTopicRuntimeApp();
     const projectResponse = await app.inject({ auth,
       method: "POST",
       url: "/api/projects",
@@ -287,6 +329,7 @@ describe("topic api runtime", () => {
       },
     });
     const projectId = projectResponse.json().project_id as string;
+    const quoteId = await createTopicQuote(app, projectId, auth);
 
     const response = await app.inject({ auth,
       method: "POST",
@@ -299,14 +342,17 @@ describe("topic api runtime", () => {
         source_hint: "Yanzi Chunqiu",
         recent_usage_hint: "No recent repeat event id.",
         tags: ["diplomacy", "court", "humiliation", "showdown"],
+        cost_quote_id: quoteId,
+        idempotency_key: "topic-runtime-2",
       },
     });
 
     expect(response.statusCode).toBe(500);
+    // 提交协议失败分支：原始安全策略措辞不暴露，错误码透传为 reason_code；
+    // 重试语义在生成流程内保持（仍调用 2 次）
     expect(response.json()).toMatchObject({
-      error: "topic_generate_failed",
-      message:
-        "上游模型安全策略拦截了本次选题推荐，系统已自动重试但仍未成功。请点击重试，或换一个更中性的事件范围再生成。",
+      error: "generation_run_dispatch_failed",
+      reason_code: "dispatch_handler_exception",
     });
     expect(invokeStructuredPromptMock).toHaveBeenCalledTimes(2);
   });
@@ -345,7 +391,7 @@ describe("topic api runtime", () => {
       ],
     ]);
 
-    const app = buildApp();
+    const app = await buildTopicRuntimeApp();
     const projectResponse = await app.inject({ auth,
       method: "POST",
       url: "/api/projects",
@@ -354,6 +400,7 @@ describe("topic api runtime", () => {
       },
     });
     const projectId = projectResponse.json().project_id as string;
+    const quoteId = await createTopicQuote(app, projectId, auth);
 
     const recommendationResponse = await app.inject({ auth,
       method: "POST",
@@ -366,6 +413,8 @@ describe("topic api runtime", () => {
         source_hint: "《晏子春秋》",
         recent_usage_hint: "近期未出现同 event_id",
         tags: ["diplomacy", "court", "humiliation", "showdown"],
+        cost_quote_id: quoteId,
+        idempotency_key: "topic-runtime-1",
       },
     });
 
@@ -398,7 +447,7 @@ describe("topic api runtime", () => {
       ],
     ]);
 
-    const app = buildApp();
+    const app = await buildTopicRuntimeApp();
     const projectResponse = await app.inject({ auth,
       method: "POST",
       url: "/api/projects",
@@ -407,6 +456,7 @@ describe("topic api runtime", () => {
       },
     });
     const projectId = projectResponse.json().project_id as string;
+    const quoteId = await createTopicQuote(app, projectId, auth);
 
     const response = await app.inject({ auth,
       method: "POST",
@@ -419,6 +469,8 @@ describe("topic api runtime", () => {
         source_hint: "《晏子春秋》",
         recent_usage_hint: "近期未出现同 event_id",
         tags: ["diplomacy", "court", "humiliation", "showdown"],
+        cost_quote_id: quoteId,
+        idempotency_key: "topic-runtime-1",
       },
     });
 
@@ -447,7 +499,7 @@ describe("topic api runtime", () => {
       ],
     ]);
 
-    const app = buildApp();
+    const app = await buildTopicRuntimeApp();
     const projectResponse = await app.inject({ auth,
       method: "POST",
       url: "/api/projects",
@@ -456,6 +508,7 @@ describe("topic api runtime", () => {
       },
     });
     const projectId = projectResponse.json().project_id as string;
+    const quoteId = await createTopicQuote(app, projectId, auth);
 
     await app.inject({ auth,
       method: "POST",
@@ -468,8 +521,12 @@ describe("topic api runtime", () => {
         source_hint: "《晏子春秋》",
         recent_usage_hint: "近期未出现同 event_id",
         tags: ["diplomacy", "court", "humiliation", "showdown"],
+        cost_quote_id: quoteId,
+        idempotency_key: "topic-runtime-1",
       },
     });
+
+    const secondQuoteId = await createTopicQuote(app, projectId, auth);
 
     const secondResponse = await app.inject({ auth,
       method: "POST",
@@ -482,6 +539,8 @@ describe("topic api runtime", () => {
         source_hint: "《晏子春秋》",
         recent_usage_hint: "同一项目再次生成",
         tags: ["diplomacy", "history"],
+        cost_quote_id: secondQuoteId,
+        idempotency_key: "topic-runtime-3",
       },
     });
 

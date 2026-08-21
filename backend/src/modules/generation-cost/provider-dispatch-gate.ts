@@ -148,14 +148,13 @@ export function isPaidMediaDispatchPossible(db: DbClient): boolean {
  * 近似、保守方向：非 stub provider 即视为付费部署（真实 provider 调用有
  * token 费用风险）——true 时旧无 quote 生成 API 必须返回
  * paid_generation_quote_required；stub/local 始终保留免 quote 本地路径。
+ *
+ * 外部审查 P1-1/B4 整改：目录状态（空/全 disabled/无 LLM 项）绝不参与本
+ * 布尔判断——目录异常时真实 provider 依然可能被环境配置物化并直接调用，
+ * 目录必须 fail-closed（禁止免 quote 路径），而不是成为免 quote 放行条件。
+ * 目录的 active 约束由 quote 解析层（capability 解析）承担：无 active 项时
+ * 新 quote 一律不可解析，旧路径又被本闸门拒绝，真实 LLM 调用无路可达。
  */
-export function isPaidLlmDispatchPossible(db: DbClient): boolean {
-  if (env.llm.provider === "stub") return false;
-  for (const entry of db.providerModelCatalog.values()) {
-    if (entry.status !== "active") continue;
-    if (entry.capability === "llm.smart" || entry.capability === "llm.flash") {
-      return true;
-    }
-  }
-  return false;
+export function isPaidLlmDispatchPossible(_db: DbClient): boolean {
+  return env.llm.provider !== "stub";
 }
