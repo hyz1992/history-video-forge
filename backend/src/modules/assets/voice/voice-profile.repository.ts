@@ -217,14 +217,17 @@ async function seedMapProfiles(db: DbClient): Promise<void> {
 async function seedPrismaProfiles(db: DbClient): Promise<void> {
   const prisma = prismaOf(db);
   if (!prisma) return;
-  // seed/导入幂等：已存在的 id 跳过；本函数内新插入的 id 也计入 known（历史
-  // JSON 可能包含 seed 档案本身，必须先记 seed 再判重）。
-  const existing = await prisma.voiceProfile.findMany({ select: { id: true } });
-  const knownIds = new Set(existing.map((row) => row.id));
+  // P2-2（外部审查复审）：seed 用 upsert 而非 findMany+create——首次并发请求
+  // （跨实例 fresh 部署）不会因同时 create 相同 seed id 触发唯一键冲突；
+  // upsert 天然幂等，已存在行走 update（同值）分支。
+  const knownIds = new Set<string>();
   for (const seed of SHARED_VOICE_PROFILE_SEEDS) {
-    if (knownIds.has(seed.voice_profile_id)) continue;
     const normalized = normalizeProfile(seed);
-    await prisma.voiceProfile.create({ data: profileToRow(normalized) });
+    await prisma.voiceProfile.upsert({
+      where: { id: normalized.voice_profile_id },
+      create: profileToRow(normalized),
+      update: profileToRow(normalized),
+    });
     knownIds.add(normalized.voice_profile_id);
     db.voiceProfiles.set(normalized.voice_profile_id, normalized);
   }
@@ -235,7 +238,12 @@ async function seedPrismaProfiles(db: DbClient): Promise<void> {
   for (const profile of document.profiles) {
     if (knownIds.has(profile.voice_profile_id)) continue;
     const imported = normalizeLoadedProfile(profile);
-    await prisma.voiceProfile.create({ data: profileToRow(imported) });
+    // 导入同样用 upsert（并发安全的幂等导入；归档前竞态不产生重复行）
+    await prisma.voiceProfile.upsert({
+      where: { id: imported.voice_profile_id },
+      create: profileToRow(imported),
+      update: profileToRow(imported),
+    });
     knownIds.add(imported.voice_profile_id);
     db.voiceProfiles.set(imported.voice_profile_id, imported);
   }

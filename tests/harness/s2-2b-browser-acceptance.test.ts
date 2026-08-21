@@ -17,7 +17,7 @@ describe("S2-2B browser acceptance script (任务 10 步骤 3)", () => {
     expect(existsSync(scriptPath)).toBe(true);
     const source = readFileSync(scriptPath, "utf-8");
     expect(source).toContain("verifyCreativeSettings"); // 设置页创作三区渲染/保存/刷新保持
-    expect(source).toContain("verifyVoicePreviewSteps"); // P2-1：fake 试听与 cached 二次播放
+    expect(source).toContain("verifyVoicePreviewInProjectSettings"); // 复审 P1-1b：项目设置内试听（免 quote fake/cached，含网络断言）
     expect(source).toContain("verifyProjectCreativeCover"); // 项目覆盖 + 画风失效预览
     expect(source).toContain("verifySubtitlePreview"); // 字幕安全覆盖 + 预览框
     expect(source).toContain("project-invalidation-preview"); // 失效预览映射

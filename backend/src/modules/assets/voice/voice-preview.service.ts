@@ -24,6 +24,13 @@ import {
 export interface ExecuteVoicePreviewInput {
   db: DbClient;
   voiceProfileId: string;
+  /**
+   * P1-2（外部审查复审）：试听合成模型必须来自运行快照
+   * `resolved_capabilities["tts.synthesize"].model_id`（报价冻结值）。
+   * 缺省（免 quote 的 stub/fake 本地路径）回退服务端 env——该路径不产生
+   * 真实计费，仅用于 usage 归属展示。
+   */
+  synthesisModel?: string | null;
 }
 
 export interface ExecuteVoicePreviewResult {
@@ -62,12 +69,13 @@ export async function executeVoicePreview(
       apiKey,
       baseUrl: process.env.ALIYUN_DASHSCOPE_BASE_URL,
     });
-    // P1-1（外部审查）：试听合成必须与报价/usage 使用同一模型——解析出的
-    // tts.synthesize 默认模型（服务端 env TTS 模型，与正式 TTS 生成同源）。
-    // 设计音色档案的 target_model（qwen3-tts-vd）只承担音色设计 API，不参与
-    // 试听合成计价（目录无其计价条目，避免报价/执行/usage 三者不一致漏计费）。
+    // P1-1 + P1-2（外部审查两轮）：试听合成模型 = 快照冻结的
+    // tts.synthesize 模型（报价/执行/usage 同源）；仅免 quote 本地路径回退 env。
+    // 设计音色档案的 target_model（qwen3-tts-vd）只承担音色设计 API。
     const synthesisModel =
-      process.env.ALIYUN_DASHSCOPE_TTS_MODEL?.trim() || "qwen3-tts-instruct-flash";
+      input.synthesisModel?.trim() ||
+      process.env.ALIYUN_DASHSCOPE_TTS_MODEL?.trim() ||
+      "qwen3-tts-instruct-flash";
     const audioBase64 = await synthesizeWithDashscope({
       apiKey,
       baseUrl: process.env.ALIYUN_DASHSCOPE_BASE_URL,
@@ -151,7 +159,16 @@ export interface RecordVoicePreviewUsageInput {
   runId: string;
   voiceProfileId: string;
   providerKey: string;
-  modelId: string;
+  /**
+   * 合成模型（P1-2：快照 `resolved_capabilities["tts.synthesize"].model_id`
+   * 冻结值）——合成 usage 的 modelId 与目录计价条目。
+   */
+  synthesisModelId: string;
+  /**
+   * 设计请求实际调用的模型（档案 target_model，如 qwen3-tts-vd）——
+   * 设计 usage 的 modelId（目录无其计价条目，estimated 记 0，unbounded 语义）。
+   */
+  designModelId: string;
   /** 是否发生过设计请求（provider_status=missing 时报价包含 request 项）。 */
   designRequested: boolean;
   characterCount: number;
@@ -165,29 +182,35 @@ export async function recordVoicePreviewUsage(
 ): Promise<void> {
   const { db, snapshot } = input;
   const catalog = listProviderModelCatalog(db);
+  // 计价只针对合成模型（快照冻结值）：设计模型（target_model）无目录条目，
+  // 设计 usage estimated 记 0（与报价 unbounded 项语义一致，不伪造价格）。
   const entry = catalog.find(
-    (item) => item.capability === "tts.synthesize" && item.providerKey === input.providerKey && item.modelId === input.modelId,
+    (item) =>
+      item.capability === "tts.synthesize" &&
+      item.providerKey === input.providerKey &&
+      item.modelId === input.synthesisModelId,
   );
   const activeCatalog =
     entry && entry.status === "active"
       ? catalog
       : catalog.map((item) => (item.id === entry?.id ? { ...item, status: "active" as const } : item));
 
-  const attempts: Array<{ attemptIndex: number; workload: PricingWorkloadItem }> = [];
+  const attempts: Array<{
+    attemptIndex: number;
+    usageModelId: string;
+    workload: PricingWorkloadItem | null;
+  }> = [];
   if (input.designRequested) {
     attempts.push({
       attemptIndex: 0,
-      workload: {
-        capability: "tts.synthesize",
-        provider_model_id: entry?.id ?? "",
-        operation: "voice.preview",
-        unit_type: "request",
-        request_count: 1,
-      },
+      usageModelId: input.designModelId,
+      // 设计请求的报价项是 unbounded 标记（无目录单价），usage 不参与计价
+      workload: null,
     });
   }
   attempts.push({
     attemptIndex: attempts.length,
+    usageModelId: input.synthesisModelId,
     workload: {
       capability: "tts.synthesize",
       provider_model_id: entry?.id ?? "",
@@ -199,7 +222,7 @@ export async function recordVoicePreviewUsage(
 
   for (const attempt of attempts) {
     let estimatedCostMicros = "0";
-    if (entry) {
+    if (entry && attempt.workload) {
       const priced = priceGenerationWorkload({
         catalog: activeCatalog,
         blockedProviderModelIds: [],
@@ -219,16 +242,14 @@ export async function recordVoicePreviewUsage(
       interactionId: null,
       capability: "tts.synthesize",
       providerKey: input.providerKey,
-      modelId: input.modelId,
+      modelId: attempt.usageModelId,
       providerRequestKey,
       attemptIndex: attempt.attemptIndex,
       status: input.status,
-      unitType: attempt.workload.unit_type,
+      unitType: attempt.workload?.unit_type ?? "request",
       inputUnits: null,
       outputUnits:
-        attempt.workload.unit_type === "tts_character"
-          ? input.characterCount
-          : 1,
+        attempt.workload?.unit_type === "tts_character" ? input.characterCount : 1,
       estimatedCostMicros,
       actualCostMicros: input.status === "succeeded" ? estimatedCostMicros : null,
       costBasis: "estimate",
@@ -248,7 +269,7 @@ export async function recordVoicePreviewUsage(
         runId: input.runId,
         capability: "tts.synthesize",
         providerKey: input.providerKey,
-        modelId: input.modelId,
+        modelId: attempt.usageModelId,
         disableCatalog: true,
       },
       record,
@@ -268,35 +289,47 @@ export async function runVoicePreviewDispatch(input: {
   if (!profile || profile.provider_status === "deleted") {
     return { status: "failed", body: { error: "voice_profile_unavailable" } };
   }
+  // P1-2（外部审查复审）：合成模型从运行快照恢复（报价冻结值）——
+  // 模型配置变化或 S2-2C 开放选择后，执行与报价仍然同源。
+  const frozenTts = (
+    snapshot.resolvedConfigurationJson as {
+      resolved_capabilities?: { "tts.synthesize"?: { model_id?: string; provider_key?: string } };
+    }
+  ).resolved_capabilities?.["tts.synthesize"];
+  const synthesisModelId =
+    frozenTts?.model_id?.trim() ||
+    process.env.ALIYUN_DASHSCOPE_TTS_MODEL?.trim() ||
+    "qwen3-tts-instruct-flash";
+  const synthesisProviderKey = frozenTts?.provider_key?.trim() || profile.provider_name;
+
   const startedAt = Date.now();
-  try {
-    const result = await executeVoicePreview({ db, voiceProfileId });
-    // P2-2（外部审查）：付费试听成功同样写业务审计（与 fake 路径同 action）
-    const auditId = db.generateId();
-    db.auditLogs.set(auditId, {
-      id: auditId,
-      actorUserId: run.userId,
-      projectId: snapshot.projectId,
-      action: "voice.profile_previewed",
-      targetType: "voice_profile",
-      targetId: voiceProfileId,
-      metadataJson: { source: result.source, used_real_provider: result.usedRealProvider },
-      createdAt: new Date(),
-    });
-    // P1-1：usage 的合成模型与报价/执行同源（默认 TTS 模型），
-    // 目录可计价；设计请求（target_model）保持 unbounded 语义。
-    await recordVoicePreviewUsage({
+  const recordUsage = (status: "succeeded" | "failed") =>
+    recordVoicePreviewUsage({
       db,
       snapshot,
       runId: run.id,
       voiceProfileId,
-      providerKey: profile.provider_name,
-      modelId: result.synthesis_model ?? "qwen3-tts-instruct-flash",
+      providerKey: synthesisProviderKey,
+      // 合成 usage：快照冻结模型（目录可计价）；设计 usage：档案 target_model（unpriced）
+      synthesisModelId,
+      designModelId: profile.target_model,
       designRequested: profile.provider_status === "missing",
       characterCount: profile.preview_text.length,
-      status: "succeeded",
+      status,
       durationMs: Date.now() - startedAt,
     });
+
+  try {
+    const result = await executeVoicePreview({ db, voiceProfileId, synthesisModel: synthesisModelId });
+    // P2-1（外部审查复审）：业务审计经 thirdAggregateWriter 持久化（Prisma 态
+    // 写 AuditLog 表）；Map 态同步镜像供测试断言。
+    await appendVoicePreviewAudit(db, {
+      actorUserId: run.userId,
+      projectId: snapshot.projectId,
+      voiceProfileId,
+      metadata: { source: result.source, used_real_provider: result.usedRealProvider },
+    });
+    await recordUsage("succeeded");
     return {
       status: "succeeded",
       body: {
@@ -306,18 +339,7 @@ export async function runVoicePreviewDispatch(input: {
       },
     };
   } catch (error) {
-    await recordVoicePreviewUsage({
-      db,
-      snapshot,
-      runId: run.id,
-      voiceProfileId,
-      providerKey: profile.provider_name,
-      modelId: process.env.ALIYUN_DASHSCOPE_TTS_MODEL?.trim() || "qwen3-tts-instruct-flash",
-      designRequested: profile.provider_status === "missing",
-      characterCount: profile.preview_text.length,
-      status: "failed",
-      durationMs: Date.now() - startedAt,
-    });
+    await recordUsage("failed");
     return {
       status: "failed",
       body: {
@@ -326,4 +348,40 @@ export async function runVoicePreviewDispatch(input: {
       },
     };
   }
+}
+
+/**
+ * 试听业务审计（append-only）：Prisma 激活态经 thirdAggregateWriter.appendAuditLog
+ * 持久化到 AuditLog 表（重启/跨实例可见）；同时同步内存镜像（Map 态测试）。
+ */
+export async function appendVoicePreviewAudit(
+  db: DbClient,
+  input: {
+    actorUserId: string | null;
+    projectId: string | null;
+    voiceProfileId: string;
+    metadata: Record<string, unknown>;
+  },
+): Promise<void> {
+  if (db.thirdAggregateWriter?.appendAuditLog) {
+    await db.thirdAggregateWriter.appendAuditLog({
+      actorUserId: input.actorUserId,
+      projectId: input.projectId,
+      action: "voice.profile_previewed",
+      targetType: "voice_profile",
+      targetId: input.voiceProfileId,
+      metadataJson: input.metadata,
+    });
+  }
+  const auditId = db.generateId();
+  db.auditLogs.set(auditId, {
+    id: auditId,
+    actorUserId: input.actorUserId,
+    projectId: input.projectId,
+    action: "voice.profile_previewed",
+    targetType: "voice_profile",
+    targetId: input.voiceProfileId,
+    metadataJson: input.metadata,
+    createdAt: new Date(),
+  });
 }

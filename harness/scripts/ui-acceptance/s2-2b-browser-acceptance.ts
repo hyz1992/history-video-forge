@@ -68,8 +68,9 @@ async function main(): Promise<void> {
     const page = await browser.newPage();
     await login(page, setup.frontendUrl);
     await verifyCreativeSettings(page);
-    await verifyVoicePreviewSteps(page, setup);
-    await verifyProjectCreativeCover(page);
+    const projectId = await openProjectSettings(page);
+    await verifyVoicePreviewInProjectSettings(page, projectId);
+    await verifyProjectCreativeCover(page, projectId);
     await verifySubtitlePreview(page);
     await page.context().close();
   } finally {
@@ -184,30 +185,9 @@ async function verifyCreativeSettings(page: Page): Promise<void> {
 }
 
 /**
- * P2-1（外部审查）：真实页面点击试听——stub 部署（无服务端凭据）走 fake
- * 本地合成（零费用），首次点击生成音频并回写；二次点击命中 cached 直接播放。
- * 断言不出现试听错误提示（报价弹窗链路由 jsdom 组件测试覆盖）。
+ * 打开项目工作区并弹出项目设置对话框；返回项目 id（供网络断言）。
  */
-async function verifyVoicePreviewSteps(page: Page, setup: Setup): Promise<void> {
-  await page.goto(new URL("/settings", page.url()).toString(), { waitUntil: "domcontentloaded" });
-  await page.waitForSelector('[data-testid="user-creative-settings"]', { timeout: 15000 });
-  const voicePreviewButton = page.locator('[data-testid^="voice-preview-voice_"]').first();
-  await voicePreviewButton.waitFor({ timeout: 10000 });
-  const profileId = (await voicePreviewButton.getAttribute("data-testid"))?.replace("voice-preview-", "") ?? "";
-  await voicePreviewButton.click();
-  // fake 合成完成后按钮恢复可点；无错误提示
-  await page.waitForSelector('[data-testid^="voice-preview-voice_"]:not(:disabled)', { timeout: 10000 });
-  const hasError = await page.locator('[data-testid="voice-preview-error"]').count();
-  record("preview: stub 部署点击试听无错误（fake 本地合成）", hasError === 0, `profile=${profileId}`);
-  // 二次点击命中 cached（回写后零费用直接播放）
-  await voicePreviewButton.click();
-  await page.waitForTimeout(300);
-  const hasErrorAfterCached = await page.locator('[data-testid="voice-preview-error"]').count();
-  record("preview: cached 二次试听直接播放（零费用）", hasErrorAfterCached === 0);
-}
-
-/** 项目设置：创作三区 + 画风变更失效预览（资产规划）。 */
-async function verifyProjectCreativeCover(page: Page): Promise<void> {
+async function openProjectSettings(page: Page): Promise<string> {
   await page.goto(new URL("/projects", page.url()).toString(), { waitUntil: "domcontentloaded" });
   const createButtons = page.locator("button:has-text('新建项目'), button:has-text('创建项目')");
   await createButtons.first().waitFor({ timeout: 10000 });
@@ -215,13 +195,72 @@ async function verifyProjectCreativeCover(page: Page): Promise<void> {
   await page.waitForSelector('[data-testid="generate-topic"]', { timeout: 10000 });
   await page.click('[data-testid="generate-topic"]');
   await page.waitForURL(/\/projects\/[^/]+(\/topic)?$/, { timeout: 30000 });
+  const projectId = new URL(page.url()).pathname.split("/")[2] ?? "";
 
-  // 打开项目设置对话框
   const settingsButton = page.locator(
     'button:has-text("项目设置"), [data-testid="open-project-settings"]',
   ).first();
   await settingsButton.waitFor({ timeout: 10000 });
   await settingsButton.click();
+  await page.waitForSelector('[data-testid="project-creative-settings"]', { timeout: 10000 });
+  return projectId;
+}
+
+/**
+ * P1-1b（外部审查复审）：在项目设置对话框内真实点击试听并断言网络结果。
+ * stub 部署（无服务端凭据/可报价目录）走后端免 quote fake 合成：
+ * - 首次点击：POST preview → 200，source=generated（不出现报价弹窗）；
+ * - 二次点击：cached（零费用直接播放）。
+ */
+async function verifyVoicePreviewInProjectSettings(page: Page, projectId: string): Promise<void> {
+  const voicePreviewButton = page.locator('[data-testid^="voice-preview-voice_"]').first();
+  await voicePreviewButton.waitFor({ timeout: 10000 });
+  const profileId =
+    (await voicePreviewButton.getAttribute("data-testid"))?.replace("voice-preview-", "") ?? "";
+
+  // 首次点击 → 免 quote fake 合成（真实网络断言：200 + source=generated）
+  const firstResponse = await Promise.all([
+    page.waitForResponse(
+      (response) => response.url().includes(`/voice-profiles/${profileId}/preview`),
+      { timeout: 15000 },
+    ),
+    voicePreviewButton.click(),
+  ]).then(([response]) => response);
+  record(
+    "preview: stub 部署项目设置内试听返回 200（免 quote fake 合成）",
+    firstResponse.status() === 200,
+    `status=${firstResponse.status()} profile=${profileId}`,
+  );
+  const firstBody = (await firstResponse.json()) as { source?: string; preview_audio_uri?: string };
+  record(
+    "preview: 首次试听生成音频（source=generated）",
+    firstBody.source === "generated" && Boolean(firstBody.preview_audio_uri),
+    `source=${firstBody.source}`,
+  );
+  // 免 quote 路径不出现报价确认弹窗
+  const dialogText = (await page.locator("body").innerText()).includes("试听报价确认");
+  record("preview: stub 部署不出现报价确认弹窗", !dialogText);
+
+  // 二次点击 → cached（真实网络断言）
+  const secondResponse = await Promise.all([
+    page.waitForResponse(
+      (response) => response.url().includes(`/voice-profiles/${profileId}/preview`),
+      { timeout: 15000 },
+    ),
+    voicePreviewButton.click(),
+  ]).then(([response]) => response);
+  const secondBody = (await secondResponse.json()) as { source?: string };
+  record(
+    "preview: cached 二次试听直接返回（零费用）",
+    secondResponse.status() === 200 && secondBody.source === "cached",
+    `status=${secondResponse.status()} source=${secondBody.source}`,
+  );
+  void projectId;
+}
+
+/** 项目设置：创作三区 + 画风变更失效预览（资产规划）。对话框已打开。 */
+async function verifyProjectCreativeCover(page: Page, projectId: string): Promise<void> {
+  void projectId;
   await page.waitForSelector('[data-testid="project-creative-settings"]', { timeout: 10000 });
   record("project: 项目设置创作三区渲染", true);
 

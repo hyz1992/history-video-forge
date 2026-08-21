@@ -2,7 +2,7 @@ import type { AppResponse, RouteContext } from "../../../app.js";
 import { guardOwnedRoute, guardUserRoute, requireUser } from "../../../auth/authorization.js";
 import { getProjectById } from "../../projects/project.repository.js";
 import { listVoiceProfiles, getVoiceProfileById, seedGlobalVoiceProfiles } from "./voice-profile.repository.js";
-import { executeVoicePreview } from "./voice-preview.service.js";
+import { appendVoicePreviewAudit, executeVoicePreview } from "./voice-preview.service.js";
 import { submitGenerationRun } from "../../generation-run/submit-protocol.js";
 import { isPaidMediaDispatchPossible } from "../../generation-cost/provider-dispatch-gate.js";
 
@@ -112,16 +112,11 @@ export const previewVoiceProfileController = guardOwnedRoute(
         db: context.app.db,
         voiceProfileId,
       });
-      const auditId = context.app.db.generateId();
-      context.app.db.auditLogs.set(auditId, {
-        id: auditId,
+      await appendVoicePreviewAudit(context.app.db, {
         actorUserId: user.userId,
         projectId: project.id,
-        action: "voice.profile_previewed",
-        targetType: "voice_profile",
-        targetId: voiceProfileId,
-        metadataJson: { source: result.source, used_real_provider: result.usedRealProvider },
-        createdAt: new Date(),
+        voiceProfileId,
+        metadata: { source: result.source, used_real_provider: result.usedRealProvider },
       });
       return {
         statusCode: 200,
