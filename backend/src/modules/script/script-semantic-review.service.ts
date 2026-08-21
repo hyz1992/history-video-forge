@@ -1,4 +1,4 @@
-import { ScriptSemanticReviewResult } from "../../../../shared/src/index";
+import { ScriptSemanticReviewResult, type ResolvedCapabilityMap } from "../../../../shared/src/index";
 import { env, getValidatedRuntimeEnv } from "../../config/env.js";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
 import type { StructuredPromptProvider } from "../../runtime/llm/provider-contract.js";
@@ -34,10 +34,15 @@ export interface ReviewScriptSemanticsInput {
   draft: ScriptDraftInput;
   llmGateway?: LlmGateway;
   interactionLogWriter?: LlmInteractionLogWriter;
+  /**
+   * S2-2C（详细设计 §6.1）：快照冻结 capabilities（shadow reviewer 跟随
+   * smart 槽位）；来源 `billingContext.resolved.resolved_capabilities`。
+   */
+  snapshotCapabilities?: ResolvedCapabilityMap;
 }
 
 export async function reviewScriptSemantics(input: ReviewScriptSemanticsInput) {
-  const gateway = input.llmGateway ?? createSemanticReviewerGateway();
+  const gateway = input.llmGateway ?? createSemanticReviewerGateway(input.snapshotCapabilities);
   if (!gateway) {
     return buildSkippedSemanticReview();
   }
@@ -176,19 +181,27 @@ function buildSkippedSemanticReview() {
   });
 }
 
-function createSemanticReviewerGateway(): LlmGateway | null {
+/**
+ * 构造语义审校 gateway（S2-2C：快照提供且非 stub 时按快照模型构造；
+ * stub 部署返回 null = 跳过评审，与现状一致）。导出供 S2-2C 接线测试。
+ */
+export function createSemanticReviewerGateway(
+  snapshotCapabilities?: ResolvedCapabilityMap,
+): LlmGateway | null {
   if (env.llm.provider === "stub") {
     return null;
   }
 
   return createLlmGateway({
     registry: createPromptRegistry(),
-    provider: createValidatedSemanticReviewerProvider(),
+    provider: createValidatedSemanticReviewerProvider(snapshotCapabilities),
   });
 }
 
-function createValidatedSemanticReviewerProvider(): StructuredPromptProvider {
+function createValidatedSemanticReviewerProvider(snapshotCapabilities?: ResolvedCapabilityMap): StructuredPromptProvider {
   getValidatedRuntimeEnv();
 
-  return createTierAwareProviderFromEnv();
+  return createTierAwareProviderFromEnv(
+    snapshotCapabilities ? { snapshotCapabilities } : undefined,
+  );
 }

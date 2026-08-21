@@ -1,4 +1,4 @@
-import { ScriptDraftPackage } from "../../../../shared/src/index.js";
+import { ScriptDraftPackage, type ResolvedCapabilityMap } from "../../../../shared/src/index.js";
 import { createHash } from "node:crypto";
 import { env, getValidatedRuntimeEnv } from "../../config/env.js";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
@@ -47,6 +47,12 @@ export interface GenerateScriptDraftInput {
   bundle: ScriptInputBundleInput;
   llmGateway?: LlmGateway;
   interactionLogWriter?: LlmInteractionLogWriter;
+  /**
+   * S2-2C（详细设计 §6.1）：付费 dispatch 路径的快照冻结 capabilities
+   * （来源 `billingContext.resolved.resolved_capabilities` 只读引用）。
+   * 提供时 gateway 按快照模型构造（auto/fixed 一律）；缺省走 env 解析。
+   */
+  snapshotCapabilities?: ResolvedCapabilityMap;
   regenerationContext?: {
     reason: "local_validation_regen_once";
     errors: string[];
@@ -65,7 +71,7 @@ export interface GenerateScriptDraftInput {
 }
 
 export async function generateScriptDraft(input: GenerateScriptDraftInput) {
-  const gateway = input.llmGateway ?? createScriptWriterGateway();
+  const gateway = input.llmGateway ?? createScriptWriterGateway(input.snapshotCapabilities);
   const rawDraft = await gateway.invokeStructuredPrompt<unknown>({
     promptId: "script.writer",
     input: buildScriptWriterPromptInput(input),
@@ -348,10 +354,14 @@ function extractFirstString(record: Record<string, unknown>) {
   return null;
 }
 
-function createScriptWriterGateway(): LlmGateway {
+/**
+ * 构造 script writer gateway（S2-2C：快照提供且非 stub 时按快照模型构造）。
+ * 导出供 S2-2C 接线测试（vi.mock env/工厂断言快照参数透传）。
+ */
+export function createScriptWriterGateway(snapshotCapabilities?: ResolvedCapabilityMap): LlmGateway {
   const provider = env.llm.provider === "stub"
     ? createStubScriptWriterProvider()
-    : createValidatedScriptWriterProvider();
+    : createValidatedScriptWriterProvider(snapshotCapabilities);
 
   return createLlmGateway({
     registry: createPromptRegistry(),
@@ -359,10 +369,12 @@ function createScriptWriterGateway(): LlmGateway {
   });
 }
 
-function createValidatedScriptWriterProvider(): StructuredPromptProvider {
+function createValidatedScriptWriterProvider(snapshotCapabilities?: ResolvedCapabilityMap): StructuredPromptProvider {
   getValidatedRuntimeEnv();
 
-  return createTierAwareProviderFromEnv();
+  return createTierAwareProviderFromEnv(
+    snapshotCapabilities ? { snapshotCapabilities } : undefined,
+  );
 }
 
 function createStubScriptWriterProvider(): StructuredPromptProvider {

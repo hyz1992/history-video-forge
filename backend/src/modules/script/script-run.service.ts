@@ -177,6 +177,9 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
         generateScriptDraft({
           ...generateInput,
           interactionLogWriter,
+          // S2-2C（详细设计 §6.1）：单一真相源——从 billingContext.resolved
+          // 派生快照 capabilities（只读引用），执行与记账同源。
+          snapshotCapabilities: input.billingContext?.resolved.resolved_capabilities,
         }),
       validateDraft: validateScriptDraft,
       reviewSemantics: (reviewInput) =>
@@ -184,6 +187,7 @@ export async function runScriptGeneration(input: RunScriptGenerationInput) {
           ...reviewInput,
           llmGateway: input.semanticReviewGateway,
           interactionLogWriter,
+          snapshotCapabilities: input.billingContext?.resolved.resolved_capabilities,
         }),
       patchDraft: patchScriptDraft,
       regenerateDraft: (regenerateInput) =>
