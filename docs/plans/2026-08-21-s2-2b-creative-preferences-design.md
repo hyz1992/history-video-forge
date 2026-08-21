@@ -11,7 +11,7 @@
 
 S2-2B 交付三类创作偏好的完整闭环：音色可从用户默认复制到项目并进入运行快照且支持试听；画风可选择版本化 preset 并把解析结果输入 `ProjectArtBible` 与正式中文 prompt；字幕可选择版本化 preset 并允许有限安全参数覆盖，renderer 消费最终解析样式。
 
-三类偏好复用 S2-2A 的用户默认 → 项目配置 → 运行快照体系，**不新建第二套配置系统**；音色⊥TTS provider/model、画风⊥image provider/model、字幕⊥TTS/ASR 的正交性由解析器验证并冻结进快照。
+三类偏好复用 S2-2A 的用户默认 → 项目配置 → 单次运行覆盖 → 运行快照体系（对齐上位总体设计 §4.2），**不新建第二套配置系统**；音色⊥TTS provider/model、画风⊥image provider/model、字幕⊥TTS/ASR 的正交性由解析器验证并冻结进快照。
 
 ## 2. 现状与缺口
 
@@ -72,7 +72,7 @@ creative: {
   - `voice_profile_id=null` → 音色 auto：执行端按资产计划 `voice_intent` 现有确定性匹配（与当前默认行为一致，语义显式化）。
   - `art_style_preset_id=null` → 画风不启用（保持现状：LLM 自由生成 art_bible）。
   - `subtitle_style_preset_id=null` → 字幕用系统默认样式（`DEFAULT_SUBTITLE_STYLE`，即当前行为）。
-- 画风/字幕**不提供**逐分镜覆盖与单次运行覆盖：creative 只来自用户默认 → 项目配置 → 快照（S2-2B 验收点不需要 run override，保持范围最小；run override 继续只覆盖 video/budget，`RunOverridesSchema` 与 `GenerationQuoteRunOverridesSchema` 不变）。
+- **单次运行覆盖（对齐上位总体设计 §4.2"三类偏好均复用…单次覆盖…"）**：`RunOverridesSchema` 与 `GenerationQuoteRunOverridesSchema` 增加可选 `creative` 段（`voice_profile_id?` / `art_style_preset_id?` / `subtitle_style_preset_id?` / `subtitle_style_overrides?`，提供哪个覆盖哪个，缺省保持项目配置值）。run override 合并进 effective 后再解析 `resolved_creative`，只进入当次运行快照，不写回项目配置；quote 创建与提交的 `run_overrides` 逐字段重放与 payloadFingerprint 既有合同已覆盖（A 设计 §8.2），creative 加入后自动参与漂移检测。B 不提供 creative 的**逐分镜**覆盖（与 video/budget 一致，逐分镜层只承载视觉路线覆盖）。
 
 ### 3.2 PATCH 语义演进
 
@@ -140,8 +140,8 @@ interface CreativePreset<Params> {
 
 `ResolveGenerationConfigurationInput` 新增两个数据输入（保持纯函数、确定性）：
 
-- `voiceProfiles: VoiceProfile[]`：音色库快照（执行时从 `DbClient` 音色库读取；提交时以数据库为权威重读）。
-- `creativePresets: CreativePresetRegistrySnapshot`：画风/字幕注册表当前版本（静态数据）。
+- `voiceProfiles: VoiceProfile[]`：音色库快照，**已经按可见性过滤**——只含公共档案（kind=preset/system，或 visibility=public 的历史导入项）与当前用户（项目 owner）私有档案；解析/列表/试听使用同一可见性规则（同源授权）。调用方（报价/提交）在 Prisma 激活态以**数据库为权威**读取并同步内存镜像（与快照 P1-2 整改同一模式），Map 态仅供测试。
+- `creativePresets: CreativePresetRegistrySnapshot`：画风/字幕注册表当前版本（静态数据，**只在解析阶段读取，执行端不得重读**，见 §7.1）。
 
 ### 5.2 输出
 
@@ -174,6 +174,8 @@ resolved_creative: {
 
 ### 5.3 解析规则（确定性）
 
+先按 §3.1 把 run override 的 creative 段合并进 effective（`applyRunOverrides` 扩展 creative 分支，与 video/budget 同一模式；合并结果再过 `GenerationConfigurationV1` 完整校验），再对 effective.creative 执行以下确定性解析：
+
 1. **音色**：
    - `creative.voice_profile_id=null` → `mode=auto`，不校验具体档案（执行端按 voice_intent 匹配；匹配结果由 manifest 记录，符合"快照保存计划、实际由 event/manifest 记录"原则）。
    - 非 null：在 `voiceProfiles` 中查找；不存在或 `provider_status="deleted"` → 结构化错误 `generation_creative_voice_profile_unavailable`。
@@ -202,25 +204,41 @@ resolved_creative: {
 ### 6.2 执行绑定（权威迁移）
 
 - **快照是唯一权威**：assets 执行的音色由 `RunConfigurationSnapshot.resolved.resolved_creative.voice` 决定——`fixed` 用其 `voice_profile_id`，`auto` 传空串触发 intent 匹配。`createAssetsDispatchHandler` 不再以 `payload.voice_profile_id` 为来源。
-- 客户端请求体 `voice_profile_id` 字段**废弃**（前端不再发送）。提交路径（quote 协议）下若客户端仍携带且与快照解析结果不一致 → `422 generation_voice_profile_conflict`（fail-closed，不静默选择）；legacy 本地路径忽略该字段（stub/fake 部署）。
-- payload fingerprint 语义不变（字段仍可存在于负载，B 前端不发送）。
+- 客户端请求体 `voice_profile_id` 字段**废弃**（前端不再发送）。
+- **冲突校验先于 quote 消费**（保护一次性 quote）：提交路径在 `revalidateQuoteForCommit`（configuration/pricing hash、quoteFingerprint、预算门禁重校验）之后、`createRunTransaction`（snapshot + pending run + quote 消费同一事务）**之前**执行校验——若客户端仍携带 `voice_profile_id` 且与重解析出的 `resolved_creative.voice` 不一致 → `422 generation_voice_profile_conflict`。该校验失败时：quote 未被消费（consumedAt 为空）、未创建 snapshot/run、无任何 provider 调用；重试只需修正负载或重新报价。
+- legacy 本地路径（stub/fake 免 quote）忽略客户端该字段，改由项目配置 creative 解析（与快照路径同一解析函数，保证语义一致）。
 
 ### 6.3 试听
 
-- `GET /api/me/voice-profiles`：返回音色库公开字段（id/name/description/traits/gender/age/pitch/pace/preview_text/preview_audio_uri/kind/provider_status 可用性标记），不含任何凭据信息。
-- `POST /api/me/voice-profiles/:voiceProfileId/preview`：
-  - 响应 `{ preview_audio_uri: string, source: "cached" | "generated", provider_voice_id: string | null }`。
-  - 已有 `preview_audio_uri`（data URI）→ 直接返回 cached。
-  - 无缓存：解析档案（`resolveProviderVoice`，服务端凭据，绝不接受客户端 key）；成功回写 `preview_audio_uri` 并返回 generated。
-  - 无真实凭据环境：走 fake TTS（`fake-tts-provider.ts` 模式）返回合成音频，保证测试/演示可验收。
-  - 试听是**显式用户操作**，不创建 quote/GenerationRun（不进入流水线运行成本协议）；写 AuditLog；真实 provider 试听可能产生少量费用，UI 明示。默认自动化与测试不得触发真实 provider 试听。
+试听分三条路径，**只要可能触发真实付费 provider 就必须有 quote**（对齐 S2-2A §8.1 冻结合同），前端在真实付费试听前弹窗展示报价金额：
+
+- **cached 路径（零费用）**：档案已有 `preview_audio_uri`（data URI）→ 前端直接播放，不发请求。
+- **本地/测试路径（免 quote）**：无真实凭据环境（stub/fake）走 fake TTS 返回合成音频——与既有"stub/local 保留免 quote 本地路径"语义一致；该路径也不创建 quote。
+- **付费路径（quote + 提交协议）**：无缓存且部署可调用付费 TTS 时：
+  1. 前端请求 `POST /api/projects/:projectId/generation-cost-quotes`（`operation: "voice.preview"`，见 §9.3）获得报价——计价项 = 设计请求（档案 `provider_status=missing` 时，request 单位）+ `preview_text` 的 `tts_character` 合成费用；无法给出可信上界的项标记 `unbounded`。
+  2. **前端弹窗展示报价**（预计金额、授权上界、unbounded 标记），用户确认后提交 `POST /api/me/voice-profiles/:voiceProfileId/preview`（携带 `cost_quote_id` + `idempotency_key` + 可选 `authorize_budget_override`）。
+  3. 服务端走 GenerationRunService 事务（quote 消费 + snapshot + pending run 同一事务），dispatcher 执行试听（档案缺失时先 `resolveProviderVoice` 设计音色，再合成 `preview_text`），回写 `preview_audio_uri`，记 `UsageCostRecord` 与 AuditLog；幂等键保证重试不重复计费。
+  4. 付费部署下旧无 quote 试听请求 → `409 paid_generation_quote_required`（fail-closed，与既有闸门一致）。
 - 试听文本固定使用档案 `preview_text`（schema 已限长），不接受任意文本注入。
+- 默认自动化与测试不得触发真实 provider 试听；真实试听 live check 必须显式授权并记录 quote/耗时/费用。
+
+### 6.4 音色库数据模型（数据库权威与可见性）
+
+现状（`voice-profile.repository.ts` + `storage/voice-profiles/voice-profiles.json`）是进程内 Map + JSON 文件、首次加载后长期缓存、无 owner 语义——无法支撑"跨实例以数据库为权威重读"与 owner 隔离（外部审查 P1-4）。S2-2B 把音色库迁入数据库：
+
+- **Prisma 新模型 `VoiceProfile`**：权威列（`id`/`kind`/`ownerId`(nullable FK)/`visibility`(public|private)/`providerName`/`providerVoiceId`/`providerStatus`/`targetModel`/`previewAudioUri`/`usageCount`/`lastUsedAt`/`qualityScore`/`createdAt`/`updatedAt`）+ `metadataJson`（name/description/design_prompt/preview_text/推荐内容族/特征评分等展示与设计字段）。共享 `VoiceProfile` zod schema 增加 `owner_id`/`visibility` 可选字段（旧 JSON 兼容）。
+- **可见性规则**：`kind=preset|system` → 公共（`visibility=public, ownerId=null`）；`kind=generated` → 创建用户私有（`visibility=private, ownerId=userId`，auto 匹配在运行中创建档案时归属当前项目 owner）。
+- **同源授权**：配置解析（resolver 输入 = 公共 + 当前项目 owner 私有）、列表 API、试听 API 使用同一可见性过滤；非可见档案按"不存在"处理（解析报 `generation_creative_voice_profile_unavailable`，API 返回 404）。
+- **跨实例权威**：Prisma 激活态 repository 直查数据库并同步内存镜像（与快照 P1-2 整改同一模式）；Map 态仅服务测试。启动时幂等 seed 公共预设/系统档案。
+- **历史数据迁移**：一次性把 `storage/voice-profiles/voice-profiles.json` 中的非 seed 生成档案导入为 `visibility=public`（历史生成数据无归属语义，归公共避免破坏既有匹配与引用）；之后 JSON 文件退役，不再读写。
+- 音色库不参与 catalog readiness（与 `ProviderModelCatalog` 无关），也不要求每 capability 恰好一个默认项。
 
 ## 7. 画风：preset → 正式 prompt 输入 + ProjectArtBible 合并
 
 ### 7.1 输入链路
 
-- `buildGlobalPromptInput`（`asset-planning-generation.service.ts`）新增 `art_style_preset` 输入块（preset_id/version/`resolved_params` 公开字段），仅当 `resolved_creative.art_style.mode=fixed` 时携带。
+- **注册表只在解析阶段读取**：报价/提交重解析时把注册表当前版本解析进 `resolved_creative` 并随 `configuration_hash` 冻结。若注册表升级导致解析结果变化，报价→提交之间的重解析会产生 hash 漂移，旧 quote 按既有漂移检测失效（必须重新报价）——这是对"历史运行不可变"的自动保护。
+- **执行端只消费快照冻结参数**：asset-plan 派发链 `createAssetPlanDispatchHandler`（`backend/src/modules/generation-run/llm-dispatch-handlers.ts`）从 `billingContext.resolved.resolved_creative.art_style` 提取冻结的 `preset_id/version/resolved_params`，经 `runAssetPlanningGeneration` 传入 `generateAssetPlan`；`buildGlobalPromptInput` 新增 `art_style_preset` 输入块（preset_id/version/`resolved_params`），仅当 `resolved_creative.art_style.mode=fixed` 时携带。**执行期绝不重新读取注册表当前版本**——注册表升级后，已创建快照的运行仍使用快照内版本（专项测试覆盖）。
 - 正式中文 prompt 更新：`prompts/asset-planning/asset-planner.prompt.md`（版本升至 v1.3.0，同步 changes.md）新增规则：
   - global 模式收到 `art_style_preset` 时，必须把 `visual_tone_hint`/`style_keywords`/`era_style_hint` 吸收进 `art_bible` 的 `visual_tone`/`era_style`/`consistency_notes`；
   - `global_negative_prompts` 必须并入 art_bible 的负面清单（不得删除 preset 项）；
@@ -288,11 +306,14 @@ resolved_creative: {
 ### 9.2 只读目录
 
 - `GET /api/creative-presets`：画风 + 字幕 preset 公开目录（`{ art_style: [...], subtitle: [...] }`，每项 preset_id/preset_version/display_name/description/可覆盖字段清单/展示摘要；返回 `resolved_params` 的公开字段，无敏感内容）。
-- `GET /api/me/voice-profiles`：音色库公开列表（§6.3）。仅当前用户可读（guardUserRoute）。
+- `GET /api/me/voice-profiles`：音色库列表——公共档案 + 当前用户私有档案（§6.4 同源授权），返回公开字段（id/name/description/traits/gender/age/pitch/pace/preview_text/preview_audio_uri/kind/visibility）；仅当前用户可读（guardUserRoute）。
 
-### 9.3 试听
+### 9.3 试听（quote + 提交协议）
 
-- `POST /api/me/voice-profiles/:voiceProfileId/preview`（§6.3）。
+- `GenerationOperationSchema` 新增 `"voice.preview"`（报价、GenerationRun、dispatcher 注册均按既有 operation 模式扩展）。
+- `POST /api/projects/:projectId/generation-cost-quotes`：`operation: "voice.preview"` 时计价 workload 固定（设计请求标记 + `preview_text` 字符数），不适用 `enabled_provider_types`/`selection`。
+- `POST /api/me/voice-profiles/:voiceProfileId/preview`：请求体 `{ cost_quote_id, idempotency_key, authorize_budget_override? }`；付费部署下无 quote → `409 paid_generation_quote_required`；stub/fake 环境保留免 quote 本地路径。响应 `{ preview_audio_uri, source: "generated", provider_voice_id }`（cached 路径由前端直接播放，不走本端点）。
+- 新增 dispatch handler `createVoicePreviewDispatchHandler`（注册于 `backend/src/app.ts` 的 operation 映射）。
 
 ### 9.4 不变
 
@@ -315,7 +336,7 @@ quote/snapshot/run/cost API、提交协议、`enabled_provider_types`、幂等�
 
 ### 11.1 用户设置页（/settings）新增"创作设置"
 
-- **音色区**：音色卡片列表（自动匹配卡片 + 各 preset/档案卡片）；选中即 `voice_profile_id`；"自动匹配"为 `null`；每卡试听按钮（调 preview endpoint 后播放，本地不保存音频）；展示特性标签（性别/年龄/音调/语速/风格评分）。
+- **音色区**：音色卡片列表（自动匹配卡片 + 各 preset/档案卡片）；选中即 `voice_profile_id`；"自动匹配"为 `null`；每卡试听按钮（cached 直接播放；无缓存时先取报价，**弹窗展示预计金额/授权上界/unbounded 标记**，确认后提交执行并播放；stub/fake 环境直接播放合成音频）；展示特性标签（性别/年龄/音调/语速/风格评分）。
 - **画风区**：画风 preset 卡片（中文名 + 说明 + 示例基调摘要）；"不启用"为 `null`；提示画风变化需要重新生成分镜资产规划。
 - **字幕区**：字幕 preset 卡片 + 安全参数覆盖表单（字号/字重/颜色/位置/描边/边距等，按 `overridable_fields` 渲染）；实时预览框（用示例字幕文本按当前解析样式渲染）。
 - 保存走既有 store PATCH（`expected_revision` + 409 conflictEpoch 同步机制不变）。
@@ -335,38 +356,42 @@ quote/snapshot/run/cost API、提交协议、`enabled_provider_types`、幂等�
 
 ## 12. 安全与隐私
 
+- 音色库是服务端数据库权威（§6.4）：公共档案与用户私有档案分离，解析/列表/试听同源授权；非可见档案按不存在处理。
 - 试听与音色库 API 只返回公开元数据与 data URI 音频；不返回 provider 凭据、env 名、credential id、base URL。
-- 试听调用只使用服务端凭据；客户端提交任何 key 一律拒绝。
+- 试听调用只使用服务端凭据；客户端提交任何 key 一律拒绝；付费试听走 quote + 幂等提交协议，不能绕过授权。
 - 字幕覆盖白名单阻止任意样式注入（font_family/safe_area 不可覆盖、shadow 枚举化）。
-- creative 配置变更照常写 AuditLog（revision、公开 diff、actor，不记凭据）。
-- preset 注册表是服务端受控数据；配置只存稳定 ID，解析在服务端完成。
+- creative 配置变更照常写 AuditLog（revision、公开 diff、actor，不记凭据）；试听执行写 AuditLog 与 UsageCostRecord。
+- preset 注册表是服务端受控数据；配置只存稳定 ID，解析在服务端完成；执行端只消费快照冻结参数。
 
 ## 13. 测试与验收
 
 ### 13.1 单元测试
 
 - preset schema：版本字段、参数边界、未知字段拒绝、注册表唯一性（preset_id 唯一、版本非空）。
-- creative 配置 schema：overrides 白名单字段与边界（越界/未知字段拒绝）、缺省行为、旧 JSON（无新字段）兼容解析。
-- resolver：auto/fixed/none 三种模式；显式音色不存在/已删除/提供商不兼容；画风/字幕 preset 不存在；覆盖非法；`resolved_creative` 参与 configuration_hash（相同输入相同 hash；仅档案状态变化不影响 hash）。
+- creative 配置 schema：overrides 白名单字段与边界（越界/未知字段拒绝）、缺省行为、旧 JSON（无新字段）兼容解析；creative run override 的逐字段合并（提供哪个覆盖哪个、缺省保持项目值、合并结果完整校验）。
+- resolver：auto/fixed/none 三种模式；显式音色不存在/已删除/提供商不兼容/不可见（非公共非本人私有）；画风/字幕 preset 不存在；覆盖非法；`resolved_creative` 参与 configuration_hash（相同输入相同 hash；仅档案状态变化不影响 hash）。
 - 字幕解析：preset 样式 + 覆盖 → 最终样式；`style_id`/`font_family`/`safe_area` 不可覆盖。
 
 ### 13.2 Repository/API
 
 - PATCH creative（用户/项目）：成功、409 并发、旧 A 请求体兼容（无 creative 段）、未知字段仍 400。
-- `GET /api/creative-presets`、`GET /api/me/voice-profiles`：owner 隔离、公开字段、无凭据泄漏。
-- 试听：cached 直接返回；无缓存走 fake TTS 返回合成音频并回写 `preview_audio_uri`；无凭据 + 无 fake 时 fail-closed；写 AuditLog。
+- `GET /api/creative-presets`、`GET /api/me/voice-profiles`：可见性隔离（私有档案仅本人可见；其他用户不可见/不可选）、公开字段、无凭据泄漏。
+- 音色库 DB 权威：Prisma 激活态 repository 直查数据库；跨实例（冷镜像）能读到最新档案状态；历史 JSON 一次性导入为 public 后 JSON 退役。
+- 试听（fake 路径）：无缓存走 fake TTS 返回合成音频并回写 `preview_audio_uri`；无凭据 + 无 fake 时 fail-closed；写 AuditLog。
+- 试听（quote 路径）：`voice.preview` 报价（设计请求 + tts_character 分项、unbounded 标记）；付费部署无 quote → 409；提交执行后 quote 消费、usage 落账、幂等重放返回同结果不重复计费。
 
 ### 13.3 流水线集成
 
-- assets 执行音色来自快照 resolved_creative（fixed 用指定 id；auto 触发 intent 匹配）；提交路径客户端 voice_profile_id 与快照冲突 → 422。
+- assets 执行音色来自快照 resolved_creative（fixed 用指定 id；auto 触发 intent 匹配）；提交路径客户端 voice_profile_id 与快照冲突 → 422 且断言 **quote 未消费、无 snapshot/run 创建、无 provider 调用**（校验先于消费事务）。
 - art_bible 合并：负面清单并集必达、前缀兜底、LLM 生成值保留；无 preset 时行为与现状一致。
-- subtitle provider 写出最终解析样式；render 消费（既有 smoke 扩展，3 个已知基线失败保持不变）。
+- 画风执行冻结：**注册表升级后**，已创建快照的运行仍使用快照内 preset 版本参数（模拟 v1 快照 + v2 注册表执行）；报价创建后注册表升级 → 提交重解析 hash 漂移 → 旧 quote 失效需重新报价。
+- subtitle provider 写出最终解析样式；render 消费（既有 smoke 扩展）。
 - 快照冻结：preset_id/version/resolved_params/resolved_style/音色稳定身份字段 + tts 实际模型（resolved_capabilities）。
 
 ### 13.4 e2e / 浏览器验收
 
-- 新 `tests/backend/s2-2b-e2e-acceptance.test.ts`：用户默认设置 creative → 创建项目复制 → 报价 → 提交 → 快照断言（preset 版本 + resolved params + 音色身份 + 实际模型）→ assets 执行消费（fake provider）。
-- 浏览器验收（沿用 S2-2A harness 脚本模式，stub/fake provider）：设置页三区保存/刷新恢复；项目覆盖与失效预览；试听按钮播放（fake 音频）；字幕样式预览框。
+- 新 `tests/backend/s2-2b-e2e-acceptance.test.ts`：用户默认设置 creative → 创建项目复制 → 报价（含 creative run override 路径）→ 提交 → 快照断言（preset 版本 + resolved params + 音色身份 + 实际模型）→ assets 执行消费（fake provider）。
+- 浏览器验收（沿用 S2-2A harness 脚本模式，stub/fake provider）：设置页三区保存/刷新恢复；项目覆盖与失效预览；试听按钮播放（fake 音频，付费路径弹窗报价确认交互按 jsdom 覆盖）；字幕样式预览框。
 - 未运行真实付费 live 试听/TTS → 明确标注"未验证"。
 
 ### 13.5 验收清单（S2-2B 进入 S2-2C 前，总体设计 §8）
@@ -379,18 +404,19 @@ quote/snapshot/run/cost API、提交协议、`enabled_provider_types`、幂等�
 
 低耦合顺序（每步独立中文提交，上一步最小验证通过才进入下一步）：
 
-1. **共享合同**：creative 扩展（overrides 白名单）、preset 注册表与 schema、`resolved_creative` 与 resolver 扩展（TDD）。
-2. **画风链路**：`buildGlobalPromptInput` 输入块 + art_bible 确定性兜底合并 + prompt v1.3.0 与 changes 更新（`harness:check-prompts`）。
-3. **音色链路**：voice profiles / preview API + 试听服务 + assets 执行绑定迁移（快照权威 + 冲突 fail-closed）。
-4. **字幕链路**：subtitle provider 消费最终样式 + 执行上下文透传。
-5. **配置 API**：PATCH creative（B 版 schema 替换）、失效预览扩展、creative-presets 目录 API、repository scope 校验替换、AuditLog。
-6. **前端 UI**：/settings 创作设置三区 + 项目设置三区 + store 扩展 + 试听/样式预览交互。
-7. **验收收口**：e2e 验收测试、浏览器验收脚本、api-design/field-design/schema-design 文档同步、roadmap 与 docs/README.md 更新、plans 归档。
+1. **共享合同**：creative 扩展（overrides 白名单 + run override creative 段）、preset 注册表与 schema、`resolved_creative` 与 resolver 扩展（TDD）。
+2. **音色库持久化**：`VoiceProfile` Prisma 模型与迁移、repository 双模（DB 权威 + Map 测试态）、owner/visibility、历史 JSON 一次性导入、seed 幂等。
+3. **画风链路**：dispatch handler 从快照提取冻结参数 → `generateAssetPlan` 输入块 + art_bible 确定性兜底合并 + prompt v1.3.0 与 changes 更新（`harness:check-prompts`）。
+4. **音色执行绑定与试听**：assets 执行绑定快照（冲突先于 quote 消费）+ voice.preview 报价/提交/dispatch handler + 试听 fake 路径 + 列表 API。
+5. **字幕链路**：subtitle provider 消费最终样式 + 执行上下文透传。
+6. **配置 API**：PATCH creative（B 版 schema 替换）、失效预览扩展、creative-presets 目录 API、repository scope 校验替换、AuditLog。
+7. **前端 UI**：/settings 创作设置三区 + 项目设置三区 + store 扩展 + 试听报价弹窗/样式预览交互。
+8. **验收收口**：e2e 验收测试、浏览器验收脚本、api-design/field-design/schema-design 文档同步、roadmap 与 docs/README.md 更新、plans 归档。
 
 ## 15. 非目标（B 不进入）
 
 - 声音克隆、用户自定义音色创建 UI。
-- 画风/字幕的逐分镜覆盖与单次运行覆盖。
+- 画风/字幕的逐分镜覆盖（逐分镜层只承载视觉路线覆盖；creative 单次运行覆盖已支持，见 §3.1）。
 - 字幕字体文件上传、任意 CSS 注入。
 - 管理员可维护 preset 的后台管理。
 - BYOK 与任何客户端凭据入口。
