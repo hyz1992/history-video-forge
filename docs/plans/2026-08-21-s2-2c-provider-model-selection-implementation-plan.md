@@ -168,11 +168,11 @@ git commit -m "配置 API 开放 capabilities 固定选择并扩展失效预览"
 
 - 注入临时 providers.json（含 deepseek/zhipu 两 provider）+ env（apiKeyEnv 变量存在）→ `createTierAwareProviderFromEnv({ snapshotCapabilities })` 构造成功；invokeStructuredPrompt 的请求到达按快照 provider baseUrl/model 构造的 inner provider（按现有测试模式注入可观测构造）。
 - **auto 槽位同样按快照构造**：`snapshotCapabilities["llm.smart"] = { mode:"auto", provider_key, model_id, ... }`（auto 冻结值）→ smart 用该 provider/model，不读 env tier 解析。
-- **auto 漂移测试（外部审查 P1）**：快照冻结 A（auto 解析）→ 同一测试内把 env tier 默认改为 B（或 registry 默认变）→ 构造结果仍为 A。
-- snapshotCapabilities 缺省 → 行为与现状一致（env 解析）。
+- **快照后漂移测试（复审整改 P1 时序拆分）**：快照冻结 A（auto 解析）→ 同一测试内把 env tier 默认改为 B（或 registry 默认变）→ 构造结果仍为 A——本用例语义是"快照已创建后的派发"；"提交前漂移拒绝"属提交协议层，在任务 9 e2e 覆盖，**不得混入本用例**。
+- **快照完整映射（复审整改 P2）**：快照参数存在但缺任一必需槽位（如只给 `llm.smart` 不给 `llm.flash`）→ 构造抛错 fail-closed（不混合快照与 env 回退；合法快照恒五槽齐备，本用例模拟损坏快照）。
+- snapshotCapabilities 缺省 → 行为与现状一致（env 解析，含 flash 复用 smart 兼容语义）。
 - 快照指定未注册 provider → 抛错（fail-closed）；指定 provider 凭据缺失（apiKeyEnv 变量为空）→ 抛错。
 - stub 部署（`env.llm.provider === "stub"` 注入）→ 忽略快照（不抛错、走 stub 路径）。
-- 仅 smart 槽位有快照值（flash 缺省场景按实现取舍）时 flash 保持 env 解析（兼容期语义）。
 
 运行：
 
@@ -184,7 +184,7 @@ npx vitest run --configLoader runner tests/backend/runtime/tier-aware-provider-f
 
 - [ ] **步骤 2：实现**
 
-新增 `resolveModelByProviderKey(providerKey, modelId, registry, env, fallbackApiKey)`：按 registry 取 provider 条目（未注册抛错）→ 校验 baseUrl/apiKey（缺失抛错）→ `createOpenAiCompatibleProvider`。`createTierAwareProviderFromEnv` 在非 stub 且快照提供时，对 smart/flash 槽位一律用快照的 provider_key+model_id 构造 inner provider（auto/fixed 不区分）；快照缺省走现状 env 解析。保持"启动时解析失败抛错不静默回退"语义。
+新增 `resolveModelByProviderKey(providerKey, modelId, registry, env, fallbackApiKey)`：按 registry 取 provider 条目（未注册抛错）→ 校验 baseUrl/apiKey（缺失抛错）→ `createOpenAiCompatibleProvider`。`createTierAwareProviderFromEnv` 在非 stub 且快照提供时，对 smart/flash 槽位一律用快照的 provider_key+model_id 构造 inner provider（auto/fixed 不区分）；**快照提供时先校验五槽齐备（缺任一必需槽位抛错 fail-closed，不混合快照与 env）**；快照缺省走现状 env 解析。保持"启动时解析失败抛错不静默回退"语义。
 
 - [ ] **步骤 3：运行最小验证并提交**
 
@@ -239,7 +239,7 @@ npx vitest run --configLoader runner <该 service 相关测试文件>
 
 **文件：**
 
-- 修改：`backend/src/modules/assets/assets-run.service.ts`（`buildProviderRegistry({db, resolvedCapabilities?})` 按快照 model 构造 tts/image/video adapter；`runAssetsGeneration` 增加可选 `resolvedCapabilities` 透传；`createAssetsDispatchHandler` 从 snapshot 提取并注入）
+- 修改：`backend/src/modules/assets/assets-run.service.ts`（`buildProviderRegistry({db, resolvedCapabilities?})` 按快照 model 构造 tts/image/video adapter；`runAssetsGeneration` 增加可选 `resolvedCapabilities` 透传；**`createAssetsDispatchHandler` 补快照 DB 恢复与缺失拒绝**（复审整改 P1：内存镜像缺失时经 `context.repository.getSnapshotById` 以 DB 为权威加载，均缺失 → `dispatch_snapshot_missing` 拒绝派发，禁止无快照执行/回退 env））
 - 修改：`backend/src/modules/generation-cost/provider-dispatch-gate.ts`（如需要：gate 输入按 resolved 值调用，确认签名兼容）
 - 修改：`tests/backend/assets/...`（执行绑定测试，沿用既有 fake adapter 断言模式）
 - 新建：`tests/backend/assets/media-resolved-model-binding.test.ts`
@@ -251,7 +251,10 @@ npx vitest run --configLoader runner <该 service 相关测试文件>
 - `buildProviderRegistry({ resolvedCapabilities })`：resolved 中 `tts.synthesize`/`image.generate`/`video.image_to_video` 为固定模型（fake 目录注入）→ 注册的 adapter 使用该 model（断言 registry 内 adapter 配置）；**auto 槽位同源断言**：resolved 全 auto（冻结模型）→ adapter 同样按快照模型构造（外部审查 P1）。
 - resolved 缺省 → env 模型（现状回归）。
 - 媒体固定到未注册/未通过 gate 的模型 → 该 adapter 不注册（no-adapter 路径，不创建外部调用）。
-- `createAssetsDispatchHandler`：有快照时透传 resolved；无快照（数据异常）→ 既有 fail-closed 语义不变。
+- **`createAssetsDispatchHandler` 快照权威（复审整改 P1）**：
+  - 内存镜像有快照 → 透传 resolved 且按快照模型执行。
+  - **冷镜像恢复**：内存无快照 + DB 有（prisma SQLite 冷镜像）→ 经 `context.repository.getSnapshotById` 恢复执行，且 adapter 按快照模型构造（不落 env）。
+  - **彻底缺失 fail-closed**：内存与 DB 均无快照 → 返回 `dispatch_snapshot_missing`，断言无 provider 调用、无 adapter 构造。
 - 与 `voice.preview` 一致：快照冻结 tts model 被媒体执行消费。
 
 运行：
@@ -260,11 +263,11 @@ npx vitest run --configLoader runner <该 service 相关测试文件>
 npx vitest run --configLoader runner tests/backend/assets/media-resolved-model-binding.test.ts <既有 assets 执行相关测试>
 ```
 
-预期：失败，buildProviderRegistry 尚无 resolvedCapabilities 参数。
+预期：失败，buildProviderRegistry 尚无 resolvedCapabilities 参数、assets handler 尚无 DB 恢复与缺失拒绝。
 
 - [ ] **步骤 2：实现**
 
-按 §6.2。注意：env 的 baseUrl/apiKey/轮询参数不变，只替换 model；`provider_key !== "dashscope"` 时该 adapter 不注册并输出公开原因日志；免 quote 本地路径（无快照）保持 env。
+按 §6.2。注意：env 的 baseUrl/apiKey/轮询参数不变，只替换 model；`provider_key !== "dashscope"` 时该 adapter 不注册并输出公开原因日志；免 quote 本地路径（无快照、不走 dispatcher 的旧直接调用入口）保持 env。**`createAssetsDispatchHandler` 与 LLM handler 等价**：内存缺失 → repository 加载；均缺失 → `dispatch_snapshot_missing`（复用 LLM 侧 `SNAPSHOT_MISSING_OUTCOME` 模式）。
 
 - [ ] **步骤 3：运行最小验证并提交**
 
@@ -381,10 +384,13 @@ git commit -m "设置页与项目设置新增 Provider/Model 高级选择区"
 - 用户默认 fixed（llm.smart 固定候选模型 + tts.synthesize 固定）→ 创建项目复制 → GET 项目配置含 fixed。
 - quote（含 fixed 槽位计价）→ 提交 → 快照断言 `resolved_capabilities[slot].mode=fixed` + provider_key/model_id 与配置一致。
 - 执行消费：LLM 主链路 fake provider 断言调用模型 = 快照模型；媒体（fake 路径或注入目录）断言 adapter 模型 = 快照模型；usage 记账 provider/model 与快照一致。
-- **auto 漂移（外部审查 P1）**：全 auto 配置报价（解析为 A）→ 提交前修改 env/tier 默认或目录默认为 B → 派发仍调用 A（快照权威）且 usage 按 A 记账。
+- **auto 漂移两个时序（外部审查 P1，复审拆分为两个独立场景）**：
+  - **提交前漂移（拒绝）**：全 auto 配置报价（解析为 A）→ 提交前修改项目配置或目录默认为 B → 提交返回 `generation_quote_configuration_changed`（configuration_hash/catalog_hash 漂移），断言无快照/run 创建、无 provider 调用。
+  - **快照后漂移（仍执行 A）**：提交成功（快照冻结 A、pending run 已创建）→ 修改 env/tier 默认或目录默认为 B → 单独调用 dispatcher 恢复执行 → 仍调用 A 且 usage 按 A 记账。**测试流程必须用 `createOrRestoreGenerationRun` 先创建 pending run 再改默认、最后单独调 dispatcher，不得走会立即同步派发的公开提交入口。**
 - **旧客户端保留（外部审查 P1）**：项目已保存 fixed → B 形状请求体（无 capabilities 段）PATCH 只改 video → capabilities 保持不变；用户偏好入口同断言。
 - 固定模型停用场景：目录置 disabled → 报价解析失败 `generation_model_disabled`（不静默切换）。
 - 配置修改后旧 quote 提交被拒（漂移检测，capabilities 参与 hash）。
+- **assets 快照权威（复审整改 P1）**：跨实例冷镜像（内存无快照 + DB 有）恢复派发按快照模型执行；内存与 DB 均缺失 → `dispatch_snapshot_missing` 且 provider 零调用（若 e2e 环境不便构造冷镜像，该项由任务 6 媒体绑定测试覆盖并在 e2e 标注）。
 
 运行：
 

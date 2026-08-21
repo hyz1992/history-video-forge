@@ -105,7 +105,9 @@ S2_2C_ConfigPatchRequest = {
 - `resolveCapabilitySlot` fixed/auto 分支已实现，C 只需：
   1. 补测试：fixed 到 active 非默认条目（多候选目录）→ `mode:"fixed"` + 正确 provider/model；fixed 到 disabled 条目 → `generation_model_disabled`；fixed 到不存在 / 跨槽条目 → `generation_capability_unavailable`；auto 在"恰好一个默认"下解析不变。
   2. 确认 `configurationPayload` 已含 `resolved_capabilities`（hash 自动覆盖 fixed，quote 漂移检测天然生效）——已实现，补断言。
-- **auto 冻结是执行权威（外部审查 P1 整改）**：auto 分支的解析结果同样冻结实际 provider/model 进快照（现状已如此），执行端按快照构造（§6），`mode` 只说明选择来源，不改变执行绑定。补测试：auto 报价解析为模型 A → 目录默认/环境默认变化为 B → 重解析 hash 变化（旧 quote 漂移拒绝）→ 派发仍调用 A（§11 执行层覆盖）。
+- **auto 冻结是执行权威（外部审查 P1 整改）**：auto 分支的解析结果同样冻结实际 provider/model 进快照（现状已如此），执行端按快照构造（§6），`mode` 只说明选择来源，不改变执行绑定。auto 漂移防护**拆成两个独立时序**（复审整改：提交协议的重校验决定两者不可混用——`generation-cost.service.ts` 提交重解析比对 `configuration_hash`，不一致返回 `generation_quote_configuration_changed`）：
+  - **提交前漂移（拒绝）**：报价（auto 解析 A）→ 提交前目录默认或项目配置变化（A→B）→ 提交重解析 hash/catalog_hash 漂移 → `generation_quote_configuration_changed` 拒绝，不创建快照/run（既有提交协议，C 不改）。
+  - **快照后漂移（仍执行 A）**：提交成功（快照冻结 A、pending run 已创建）→ 派发/恢复重试前 env/tier 默认或目录默认为 B → 派发仍调用 A 且 usage 记 A（快照权威）。测试必须先用 `createOrRestoreGenerationRun` 创建 `pending_dispatch` run，再修改默认，最后**单独调用 dispatcher**——不能走会立即同步派发的公开提交入口完成整个时序。
 - 快照：`ResolvedProviderModel` 已含 mode/provider_model_id/provider_key/model_id，快照 schema 与数据库**零变更、零迁移**。
 - 固定模型停用语义：catalog 条目被 readiness 置 disabled（凭据缺失、区域漂移、运营停用等）后，fixed 解析失败 `generation_model_disabled`，用户需重新选择（总体设计 §4.3）；auto 则重新解析当前默认（若默认项也被禁用 → `generation_capability_unavailable`，fail-closed）。
 
@@ -118,9 +120,9 @@ S2_2C_ConfigPatchRequest = {
 - **单一真相源（外部审查 P2 整改）**：付费 dispatch 路径的 provider 构造**只消费 `LlmBillingContext.resolved.resolved_capabilities`**（billing 由 dispatch handler 从快照构建，`llm-billing-writer` 记账消费同一对象引用）——不新增可独立传值的 `resolvedCapabilities` 参数，杜绝"调用按参数 A、记账按快照 B"的分叉。
 - `createTierAwareProviderFromEnv(options?: { snapshotCapabilities?: ResolvedCapabilityMap })`：
   - 快照提供且非 stub 部署 → **无论槽位是 auto 还是 fixed**，smart/flash 都按 `snapshotCapabilities["llm.smart"|"llm.flash"].provider_key + model_id` 经 provider registry 构造 inner provider（`mode` 只说明选择来源，不改变执行绑定）；解析失败（provider 未注册 / 凭据缺失）→ 抛错（fail-closed，与现状 env 解析失败同语义）。
-  - 快照缺省（免 quote 本地路径，无 billingContext）→ env 解析（现状行为）。
+  - **快照完整映射（复审整改 P2）**：快照参数存在时五槽必须齐备（`ResolvedCapabilityMapSchema` strict 合同保证合法快照恒满足）；缺任一必需槽位（如缺 `llm.flash`）→ 构造抛错 fail-closed，**不得混合快照与 env 回退**——损坏快照按数据异常拒绝，绝不用 env 猜补。
+  - 快照缺省（免 quote 本地路径，无 billingContext）→ env 解析（现状行为；含 flash 复用 smart 的兼容语义，仅适用于此路径）。
   - `env.llm.provider === "stub"` → 忽略快照模型走 stub 路径（stub 目录只有 stub 条目，无真实调用）。
-  - flash 复用 smart 语义（兼容期）不变。
 - 接线：五个主链路 run service 已接收 `billingContext`（S2-2B 既有），其内部 provider 构造点改为：`billingContext` 存在时把 `billingContext.resolved.resolved_capabilities`（只读引用，不复制）传给工厂；`billingContext` 缺省（免 quote 本地路径）→ env。子 service（generation/helper/semantic-review）需要时透传 billingContext 或该只读引用，来源始终唯一。
 - **auto 漂移防护（外部审查 P1 整改）**：报价时 auto 解析冻结模型 A 进快照；提交/派发前即使 env/tier 默认或目录默认变化为 B，执行仍调用 A（快照权威），usage 也按 A 记账——报价-执行-记账同源不再依赖 env 稳定。测试：auto 报价为 A → 修改默认为 B → 派发仍调用 A。
 - 记账：`llm-billing-writer` 已按 `resolved.resolved_capabilities[tier]` 记录 provider/model（无改动），与执行构造同源。
@@ -129,7 +131,7 @@ S2_2C_ConfigPatchRequest = {
 
 - `buildProviderRegistry({ db, resolvedCapabilities? })`：resolved 提供时，tts/image/video 三个 DashScope adapter 的 `model` 用 `resolved.resolved_capabilities["tts.synthesize"|"image.generate"|"video.image_to_video"].model_id`（`provider_key` 必须是 `dashscope`，否则该 adapter 不注册 + 日志公开原因）；**auto/fixed 一律按 resolved**（resolved_capabilities 对 auto 同样冻结实际模型，与 LLM 侧同一原则）；env 其余参数（baseUrl/apiKey/轮询等）不变。resolved 缺省（免 quote 本地路径）→ 现状 env 模型。
 - `provider-dispatch-gate`（`checkProviderDispatchGate`）：capability/providerKey/modelId 用 resolved 值（deploymentScope 仍由 env baseUrl 推导——同部署内切模型不跨区域；目录条目区域与 env 区域一致性已由 readiness `media_deployment_scope_mismatch` 保证）。
-- `createAssetsDispatchHandler`：从 snapshot 提取 `resolved_capabilities` 传入 `runAssetsGeneration`（新增可选参数）→ `buildProviderRegistry`。免 quote 本地路径（无快照）保持 env。
+- `createAssetsDispatchHandler`（复审整改 P1）：与 LLM handler 等价的快照权威——**内存镜像缺失时经 `context.repository.getSnapshotById` 以数据库为权威加载**（跨实例冷恢复场景，dispatch context 已含 repository）；**内存与 DB 均缺失 → `dispatch_snapshot_missing` 拒绝派发**，禁止无快照执行、禁止回退 env 模型（当前实现只查内存、缺失时 boundContext=undefined 继续执行，属既有漏洞，C 必须收口）。从快照提取 `resolved_capabilities` 传入 `runAssetsGeneration`（新增可选参数）→ `buildProviderRegistry`。免 quote 本地路径（无快照的旧直接调用入口，不走 dispatcher）保持 env。
 - `voice.preview` 已按快照冻结 tts model（S2-2B），只回归确认 gate 路径一致。
 - 媒体 fixed 到非默认模型时，readiness 必须已把该模型计入 `registeredModels` 候选集（§7.3），否则 gate 拒绝——报价→执行同源由解析 + readiness + gate 三层保证。
 
@@ -212,8 +214,8 @@ seed 输入 `media.additionalModels`（首版空数组 = 只 env 默认模型单
 - PATCH schema：capabilities 可选/缺省形状、五槽 strict、fixed 形状、未知字段拒绝、scope 校验（C 版）。
 - PATCH 保留语义（外部审查 P1 整改）：已有 fixed 配置 + B 形状请求体（无 capabilities 段）→ capabilities 保持不变（用户与项目两个入口）；首次创建（无记录）缺省 → 全 auto；并发场景由 revision CAS 冲突语义覆盖。
 - resolver：fixed 多候选解析（active 非默认）、disabled/不存在/跨槽 fail 码、auto 默认解析不变且冻结实际 provider/model、fixed/auto 均参与 configuration_hash（同输入同 hash；目录默认变化 → hash 变化）。
-- LLM 执行绑定：`createTierAwareProviderFromEnv({snapshotCapabilities})` 按 registry 构造正确 provider（注入临时 providers.json + env；provider 未注册/凭据缺失抛错 fail-closed）；**auto 槽位同样按快照构造**；stub 模式忽略快照；快照缺省走 env。**auto 漂移测试**：快照冻结 A（auto 解析）→ env 默认改 B → 派发仍调用 A（fake provider 断言）。
-- 媒体执行绑定：`buildProviderRegistry({resolvedCapabilities})` 按 resolved model 构造 adapter（auto/fixed 一律断言）；gate 按 resolved 拒绝/放行。
+- LLM 执行绑定：`createTierAwareProviderFromEnv({snapshotCapabilities})` 按 registry 构造正确 provider（注入临时 providers.json + env；provider 未注册/凭据缺失抛错 fail-closed）；**auto 槽位同样按快照构造**；**快照参数存在但缺任一必需槽位 → 构造抛错（fail-closed，不混合快照与 env）**；stub 模式忽略快照；快照缺省走 env。**快照后漂移测试**：快照冻结 A（auto 解析）→ env 默认改 B → 构造结果仍为 A（fake provider 断言）。
+- 媒体执行绑定：`buildProviderRegistry({resolvedCapabilities})` 按 resolved model 构造 adapter（auto/fixed 一律断言）；gate 按 resolved 拒绝/放行；**assets dispatch 冷恢复与 fail-closed**（复审整改 P1）：内存无快照 + DB 有 → 经 repository 恢复执行且按快照模型；内存与 DB 均缺失 → `dispatch_snapshot_missing` 拒绝且 provider 零调用。
 - readiness：多候选目录——默认项 tier 匹配、非默认项候选集校验、候选不种入（bootstrap 预解析失败）、默认项唯一性不变；目录 API 元数据断言：同一模型在 smart/flash 两槽位 displayName/qualityTier/speedTier 一致且来自候选声明。
 - 失效预览：capabilities 变更映射（前端 jsdom + 后端）。
 
@@ -227,9 +229,10 @@ seed 输入 `media.additionalModels`（首版空数组 = 只 env 默认模型单
 
 用户默认 fixed 某槽（如 llm.smart 固定到候选模型 + tts 固定）→ 创建项目复制 → quote（fixed 模型计价）→ 提交 → 快照断言（mode=fixed / provider_key / model_id）→ 执行消费（fake provider 断言调用模型 = 快照模型）→ usage 记账 provider/model 与快照一致。
 
-补充场景（外部审查 P1 整改）：
+补充场景（外部审查 P1 整改，复审拆分为两个独立时序）：
 
-- **auto 漂移**：全 auto 配置报价（解析为 A）→ 提交前修改 env/tier 默认或目录默认为 B → 派发仍调用 A（快照权威）且 usage 按 A 记账。
+- **提交前漂移（拒绝）**：全 auto 配置报价（解析为 A）→ 提交前修改项目配置或目录默认为 B → 提交返回 `generation_quote_configuration_changed`（configuration_hash/catalog_hash 漂移），断言无快照/run 创建、无 provider 调用。
+- **快照后漂移（仍执行 A）**：提交成功（快照冻结 A、pending run 已创建）→ 修改 env/tier 默认或目录默认为 B → 单独调用 dispatcher 恢复执行 → 仍调用 A 且 usage 按 A 记账（测试用 `createOrRestoreGenerationRun` 创建 pending run 后改默认，不走会立即同步派发的公开提交入口）。
 - **旧客户端保留**：项目已保存 fixed → 以 B 形状请求体（无 capabilities 段）PATCH 只改 video → capabilities 保持不变（不静默清空）；用户偏好入口同断言。
 
 ### 11.4 浏览器验收
@@ -253,7 +256,8 @@ seed 输入 `media.additionalModels`（首版空数组 = 只 env 默认模型单
 | 风险 | 缓解 |
 |---|---|
 | 执行与记账分叉（provider 构造与 usage 记账读不同来源） | 单一真相源：构造只消费 `billingContext.resolved.resolved_capabilities`（与记账同一对象引用），不新增可独立传值参数 |
-| auto 模式被 env/tier 默认变化漂移（报价 A、执行 B） | 快照权威：auto/fixed 一律按快照 provider_key+model_id 构造；auto 漂移测试（报价 A → 默认改 B → 派发仍 A） |
+| auto 模式被 env/tier 默认变化漂移（报价 A、执行 B） | 快照权威：auto/fixed 一律按快照 provider_key+model_id 构造；两组时序测试——提交前漂移 → 提交 `generation_quote_configuration_changed` 拒绝；快照后漂移 → 派发仍 A |
+| assets 跨实例冷恢复绕过快照（内存缺快照继续执行） | assets handler 与 LLM 等价：内存缺失经 repository 以 DB 为权威加载；均缺失 → `dispatch_snapshot_missing` 拒绝；冷镜像恢复 + 彻底缺失 fail-closed 测试 |
 | LLM 执行绑定改动面大（工厂 + 5 个 run service 多处 provider 构造点） | 工厂先落地 + 单测；service 逐个接线 + 各自测试；每步独立中文提交；免 quote 本地路径缺省行为不变 |
 | 旧 A/B 客户端 PATCH 静默清空 fixed | capabilities 缺省 = 保留现值（仅首次创建用全 auto）；"已有 fixed + B 形状 PATCH → fixed 不变"测试（用户+项目） |
 | 首版多数槽位单候选，fixed 与 auto 表面等价 | UI 如实显示"当前仅配置 X"；fixed 语义（锁定/停用/失效）由注入多候选目录的测试完整验证 |
