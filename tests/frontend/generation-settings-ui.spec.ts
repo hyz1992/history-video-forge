@@ -24,6 +24,19 @@ import {
   generationConfigStoreKey,
   type GenerationConfigStore,
 } from "../../frontend/src/stores/generation-config";
+import {
+  createCreativePresetsStore,
+  creativePresetsStoreKey,
+  type CreativePresetsStore,
+} from "../../frontend/src/stores/creative-presets";
+
+function createCreativeMockStore(): CreativePresetsStore {
+  return createCreativePresetsStore({
+    listCreativePresets: async () => ({ art_style: [], subtitle: [] }),
+    listVoiceProfiles: async () => ({ profiles: [] }),
+    requestVoicePreview: async () => ({ preview_audio_uri: "", source: "generated", provider_voice_id: null }),
+  });
+}
 import { createAppRouter } from "../../frontend/src/router/index.js";
 import { authStoreKey, type AuthStore } from "../../frontend/src/stores/auth";
 
@@ -119,6 +132,7 @@ function mountSettings(store: GenerationConfigStore) {
       plugins: [ElementPlus, router],
       provide: {
         [generationConfigStoreKey as symbol]: store,
+        [creativePresetsStoreKey as symbol]: createCreativeMockStore(),
         [authStoreKey as symbol]: { state: { user: { role: "USER" } } } as unknown as AuthStore,
       },
     },
@@ -130,7 +144,10 @@ function mountProjectSettings(store: GenerationConfigStore) {
     props: { projectId: "proj-1", open: true },
     global: {
       plugins: [ElementPlus],
-      provide: { [generationConfigStoreKey as symbol]: store },
+      provide: {
+        [generationConfigStoreKey as symbol]: store,
+        [creativePresetsStoreKey as symbol]: createCreativeMockStore(),
+      },
     },
   });
 }
@@ -194,6 +211,12 @@ describe("SettingsPage（用户默认设置）", () => {
     expect(store.saveUserPreference).toHaveBeenCalledWith({
       video: { strategy: "all_api_video", api_quality: "standard_720p" },
       budgetMicros: "12340000",
+      creative: {
+        voice_profile_id: null,
+        art_style_preset_id: null,
+        subtitle_style_preset_id: null,
+        subtitle_style_overrides: {},
+      },
     });
   });
 
@@ -435,6 +458,12 @@ describe("ProjectGenerationSettings（项目设置）", () => {
     expect(store.saveProjectConfig).toHaveBeenCalledWith("proj-1", {
       video: { strategy: "prefer_api_video", api_quality: "standard_720p" },
       budgetMicros: null,
+      creative: {
+        voice_profile_id: null,
+        art_style_preset_id: null,
+        subtitle_style_preset_id: null,
+        subtitle_style_overrides: {},
+      },
     });
   });
 

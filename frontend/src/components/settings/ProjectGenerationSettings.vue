@@ -2,12 +2,20 @@
 import { computed, reactive, ref, watch } from "vue";
 
 import GenerationStrategySettings from "./GenerationStrategySettings.vue";
+import CreativeVoiceSettings from "./CreativeVoiceSettings.vue";
+import CreativeArtStyleSettings from "./CreativeArtStyleSettings.vue";
+import CreativeSubtitleSettings from "./CreativeSubtitleSettings.vue";
 import {
   computeConfigInvalidationPreview,
   useGenerationConfigStore,
   type ApiVideoQualityValue,
+  type CreativePreferenceInput,
   type VideoGenerationStrategyValue,
 } from "../../stores/generation-config";
+import {
+  useCreativePresetsStore,
+  type VoicePreviewResult,
+} from "../../stores/creative-presets";
 
 /**
  * S2-2A 任务 10：项目生成设置（工作区内对话框）。
@@ -30,7 +38,23 @@ const draft = reactive({
   strategy: "prefer_remotion" as VideoGenerationStrategyValue,
   apiQuality: "standard_720p" as ApiVideoQualityValue,
   budgetMicros: null as string | null,
+  // S2-2B 创作偏好
+  voiceProfileId: null as string | null,
+  artStylePresetId: null as string | null,
+  subtitlePresetId: null as string | null,
+  subtitleOverrides: {} as Record<string, unknown>,
 });
+
+const creativeStore = useCreativePresetsStore();
+
+function draftCreative(): CreativePreferenceInput {
+  return {
+    voice_profile_id: draft.voiceProfileId,
+    art_style_preset_id: draft.artStylePresetId,
+    subtitle_style_preset_id: draft.subtitlePresetId,
+    subtitle_style_overrides: draft.subtitleOverrides,
+  };
+}
 const budgetInvalid = ref(false);
 const saveError = ref<string | null>(null);
 const loaded = ref(false);
@@ -44,6 +68,10 @@ function applyServerData() {
   draft.strategy = data.configuration.video.strategy;
   draft.apiQuality = data.configuration.video.api_quality;
   draft.budgetMicros = data.configuration.budget.max_paid_cost_micros_per_run;
+  draft.voiceProfileId = data.configuration.creative.voice_profile_id;
+  draft.artStylePresetId = data.configuration.creative.art_style_preset_id;
+  draft.subtitlePresetId = data.configuration.creative.subtitle_style_preset_id;
+  draft.subtitleOverrides = { ...(data.configuration.creative.subtitle_style_overrides ?? {}) };
 }
 
 watch(
@@ -55,6 +83,7 @@ watch(
     saveError.value = null;
     budgetInvalid.value = false;
     await store.loadProjectConfig(projectId);
+    await Promise.all([creativeStore.loadCreativePresets(), creativeStore.loadVoiceProfiles()]);
     applyServerData();
     loaded.value = true;
   },
@@ -87,8 +116,14 @@ const hasDiff = computed(() => {
 const invalidationPreview = computed(() => {
   if (!config.value || !loaded.value) return null;
   return computeConfigInvalidationPreview(
-    { video: config.value.configuration.video },
-    { video: { strategy: draft.strategy, api_quality: draft.apiQuality } },
+    {
+      video: config.value.configuration.video,
+      creative: config.value.configuration.creative,
+    },
+    {
+      video: { strategy: draft.strategy, api_quality: draft.apiQuality },
+      creative: draftCreative(),
+    },
   );
 });
 
@@ -113,6 +148,7 @@ async function save() {
   const result = await store.saveProjectConfig(props.projectId, {
     video: { strategy: draft.strategy, api_quality: draft.apiQuality },
     budgetMicros: draft.budgetMicros,
+    creative: draftCreative(),
   });
   if (!result.ok) {
     if (!result.conflict) {
@@ -123,6 +159,77 @@ async function save() {
   }
   // 保存成功：表单已同步服务器值，关闭对话框
   emit("close");
+}
+
+// --- S2-2B 试听（项目级 quote + 提交协议；确认弹窗展示报价） -----------------
+const previewQuote = ref<{
+  voiceProfileId: string;
+  estimatedCostCny: string;
+  authorizationCostCny: string;
+  requiresBudgetOverride: boolean;
+} | null>(null);
+const previewPending = ref(false);
+const previewError = ref<string | null>(null);
+
+async function handleVoicePreview(voiceProfileId: string): Promise<VoicePreviewResult | null> {
+  previewError.value = null;
+  previewPending.value = true;
+  try {
+    const { createFetchGenerationCostApi } = await import("../../stores/generation-cost");
+    const quoteApi = createFetchGenerationCostApi();
+    const quote = await quoteApi.createQuote(props.projectId, {
+      operation: "voice.preview",
+      runOverrides: { creative: { voice_profile_id: voiceProfileId } },
+    });
+    previewQuote.value = {
+      voiceProfileId,
+      estimatedCostCny: quote.estimated_cost_cny,
+      authorizationCostCny: quote.authorization_cost_cny,
+      requiresBudgetOverride: quote.requires_budget_override,
+    };
+    return null;
+  } catch (error) {
+    previewError.value = error instanceof Error ? error.message : "报价失败，请稍后重试。";
+    return null;
+  } finally {
+    previewPending.value = false;
+  }
+}
+
+async function confirmPreview() {
+  if (!previewQuote.value) return;
+  const { voiceProfileId } = previewQuote.value;
+  previewPending.value = true;
+  try {
+    const { createFetchGenerationCostApi } = await import("../../stores/generation-cost");
+    const { createFetchCreativePresetsApi } = await import("../../stores/creative-presets");
+    const quoteApi = createFetchGenerationCostApi();
+    // 提交重放 quote 创建时的 run_overrides（既有协议：逐字段一致）；
+    // 幂等键客户端生成，同负载重试不重复计费。
+    const runOverrides = { creative: { voice_profile_id: voiceProfileId } };
+    const idempotencyKey = `voice-preview-${Date.now()}-${voiceProfileId}`;
+    const quote = await quoteApi.createQuote(props.projectId, {
+      operation: "voice.preview",
+      runOverrides,
+    });
+    const previewApi = createFetchCreativePresetsApi();
+    const result = await previewApi.requestVoicePreview(props.projectId, voiceProfileId, {
+      cost_quote_id: quote.quote_id,
+      idempotency_key: idempotencyKey,
+      authorize_budget_override: previewQuote.value.requiresBudgetOverride,
+      run_overrides: runOverrides,
+    });
+    if (result?.preview_audio_uri) {
+      const audio = new Audio(result.preview_audio_uri);
+      void audio.play();
+    }
+    previewQuote.value = null;
+  } catch (error) {
+    previewError.value = error instanceof Error ? error.message : "试听失败，请稍后重试。";
+    previewQuote.value = null;
+  } finally {
+    previewPending.value = false;
+  }
 }
 </script>
 
@@ -165,6 +272,28 @@ async function save() {
           test-id-prefix="project-"
         />
 
+        <section class="creative-section" data-testid="project-creative-settings">
+          <CreativeVoiceSettings
+            v-model="draft.voiceProfileId"
+            :profiles="creativeStore.state.voiceProfiles"
+            :disabled="configState?.saving"
+            :project-id="props.projectId"
+            :on-preview="handleVoicePreview"
+          />
+          <CreativeArtStyleSettings
+            v-model="draft.artStylePresetId"
+            :presets="creativeStore.state.artStylePresets"
+            :disabled="configState?.saving"
+          />
+          <CreativeSubtitleSettings
+            v-model="draft.subtitlePresetId"
+            :overrides="draft.subtitleOverrides"
+            :presets="creativeStore.state.subtitlePresets"
+            :disabled="configState?.saving"
+            @update:overrides="(value: Record<string, unknown>) => (draft.subtitleOverrides = value)"
+          />
+        </section>
+
         <section
           v-if="invalidationPreview"
           class="project-invalidation"
@@ -181,6 +310,31 @@ async function save() {
       </template>
       <p v-else class="project-settings-error">项目配置加载失败，请关闭后重试。</p>
     </div>
+    <el-dialog
+      v-if="previewQuote"
+      :model-value="true"
+      title="试听报价确认"
+      width="460px"
+      append-to-body
+    >
+      <p class="preview-quote-text">
+        该音色尚未生成试听音频，试听将产生费用：预计 {{ previewQuote.estimatedCostCny }} 元，
+        授权上界 {{ previewQuote.authorizationCostCny }} 元。
+        <template v-if="previewQuote.requiresBudgetOverride">其中包含无法预估价格的项目，需要显式确认。</template>
+      </p>
+      <template #footer>
+        <button class="btn btn-ghost" @click="previewQuote = null">取消</button>
+        <button
+          class="btn btn-primary"
+          :disabled="previewPending"
+          data-testid="confirm-voice-preview"
+          @click="confirmPreview"
+        >
+          {{ previewPending ? "试听中…" : "确认并试听" }}
+        </button>
+      </template>
+    </el-dialog>
+    <p v-if="previewError" class="project-settings-error" data-testid="voice-preview-error">{{ previewError }}</p>
     <template #footer>
       <button class="btn btn-ghost" @click="emit('close')">取消</button>
       <button
@@ -289,5 +443,19 @@ async function save() {
 .btn-primary:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.creative-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.preview-quote-text {
+  margin: 0;
+  font-size: 13px;
+  color: #d8d0c7;
+  line-height: 1.6;
 }
 </style>

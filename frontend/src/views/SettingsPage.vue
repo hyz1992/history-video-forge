@@ -3,11 +3,16 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 
 import GenerationStrategySettings from "../components/settings/GenerationStrategySettings.vue";
+import CreativeVoiceSettings from "../components/settings/CreativeVoiceSettings.vue";
+import CreativeArtStyleSettings from "../components/settings/CreativeArtStyleSettings.vue";
+import CreativeSubtitleSettings from "../components/settings/CreativeSubtitleSettings.vue";
 import {
   useGenerationConfigStore,
   type ApiVideoQualityValue,
+  type CreativePreferenceInput,
   type VideoGenerationStrategyValue,
 } from "../stores/generation-config";
+import { useCreativePresetsStore } from "../stores/creative-presets";
 
 /**
  * S2-2A 任务 10：用户默认生成设置页（/settings）。
@@ -21,7 +26,23 @@ const draft = reactive({
   strategy: "prefer_remotion" as VideoGenerationStrategyValue,
   apiQuality: "standard_720p" as ApiVideoQualityValue,
   budgetMicros: null as string | null,
+  // S2-2B 创作偏好（用户默认；只影响新项目）
+  voiceProfileId: null as string | null,
+  artStylePresetId: null as string | null,
+  subtitlePresetId: null as string | null,
+  subtitleOverrides: {} as Record<string, unknown>,
 });
+
+const creativeStore = useCreativePresetsStore();
+
+function draftCreative(): CreativePreferenceInput {
+  return {
+    voice_profile_id: draft.voiceProfileId,
+    art_style_preset_id: draft.artStylePresetId,
+    subtitle_style_preset_id: draft.subtitlePresetId,
+    subtitle_style_overrides: draft.subtitleOverrides,
+  };
+}
 const budgetInvalid = ref(false);
 const saveError = ref<string | null>(null);
 
@@ -31,12 +52,20 @@ function applyServerData() {
   draft.strategy = data.configuration.video.strategy;
   draft.apiQuality = data.configuration.video.api_quality;
   draft.budgetMicros = data.configuration.budget.max_paid_cost_micros_per_run;
+  draft.voiceProfileId = data.configuration.creative.voice_profile_id;
+  draft.artStylePresetId = data.configuration.creative.art_style_preset_id;
+  draft.subtitlePresetId = data.configuration.creative.subtitle_style_preset_id;
+  draft.subtitleOverrides = { ...(data.configuration.creative.subtitle_style_overrides ?? {}) };
 }
 
 onMounted(async () => {
   await store.loadUserPreference();
   applyServerData();
-  await store.loadCapabilities();
+  await Promise.all([
+    store.loadCapabilities(),
+    creativeStore.loadCreativePresets(),
+    creativeStore.loadVoiceProfiles(),
+  ]);
 });
 
 // 409 冲突重载后表单同步服务器最新值：用户看得见竞争修改，避免基于旧
@@ -83,6 +112,7 @@ async function save() {
   const result = await store.saveUserPreference({
     video: { strategy: draft.strategy, api_quality: draft.apiQuality },
     budgetMicros: draft.budgetMicros,
+    creative: draftCreative(),
   });
   if (!result.ok && !result.conflict) {
     saveError.value = "保存失败，请稍后重试。";
@@ -125,6 +155,27 @@ function goBack() {
           v-model:budget-invalid="budgetInvalid"
           :disabled="store.state.userPreference.saving"
         />
+
+        <section class="creative-section" data-testid="user-creative-settings">
+          <CreativeVoiceSettings
+            v-model="draft.voiceProfileId"
+            :profiles="creativeStore.state.voiceProfiles"
+            :disabled="store.state.userPreference.saving"
+            :project-id="null"
+          />
+          <CreativeArtStyleSettings
+            v-model="draft.artStylePresetId"
+            :presets="creativeStore.state.artStylePresets"
+            :disabled="store.state.userPreference.saving"
+          />
+          <CreativeSubtitleSettings
+            v-model="draft.subtitlePresetId"
+            :overrides="draft.subtitleOverrides"
+            :presets="creativeStore.state.subtitlePresets"
+            :disabled="store.state.userPreference.saving"
+            @update:overrides="(value: Record<string, unknown>) => (draft.subtitleOverrides = value)"
+          />
+        </section>
         <p v-if="saveError" class="settings-error">{{ saveError }}</p>
         <div class="settings-actions">
           <button
@@ -154,6 +205,13 @@ function goBack() {
 </template>
 
 <style scoped>
+.creative-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
 .settings-page {
   min-height: 100vh;
   background: #101010;

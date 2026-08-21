@@ -76,12 +76,21 @@ export interface PublicCapabilityEntryDto {
   availability: "enabled" | "disabled";
 }
 
+export interface CreativePreferenceInput {
+  voice_profile_id: string | null;
+  art_style_preset_id: string | null;
+  subtitle_style_preset_id: string | null;
+  subtitle_style_overrides: Record<string, unknown>;
+}
+
 export interface GenerationConfigPatchInput {
   video: {
     strategy: VideoGenerationStrategyValue;
     api_quality: ApiVideoQualityValue;
   };
   budgetMicros: string | null;
+  /** S2-2B：创作偏好（音色/画风/字幕）；提供即整体替换，缺省保持服务器现值。 */
+  creative?: CreativePreferenceInput;
 }
 
 export interface GenerationConfigApi {
@@ -90,6 +99,7 @@ export interface GenerationConfigApi {
     expected_revision: number;
     video: GenerationConfigPatchInput["video"];
     budget: { currency: "CNY"; max_paid_cost_micros_per_run: string | null };
+    creative?: CreativePreferenceInput;
   }): Promise<UserPreferenceDto>;
   getProjectConfig(projectId: string): Promise<ProjectGenerationConfigurationDto>;
   patchProjectConfig(
@@ -98,6 +108,7 @@ export interface GenerationConfigApi {
       expected_revision: number;
       video: GenerationConfigPatchInput["video"];
       budget: { currency: "CNY"; max_paid_cost_micros_per_run: string | null };
+      creative?: CreativePreferenceInput;
     },
   ): Promise<ProjectGenerationConfigurationDto>;
   listCapabilities(): Promise<{ capabilities: PublicCapabilityEntryDto[] }>;
@@ -109,9 +120,15 @@ export function createFetchGenerationConfigApi(baseUrl = ""): GenerationConfigAp
       return await apiFetch<UserPreferenceDto>(`${baseUrl}/api/me/generation-preferences`);
     },
     async patchUserPreference(request) {
+      const body: Record<string, unknown> = {
+        expected_revision: request.expected_revision,
+        video: request.video,
+        budget: request.budget,
+      };
+      if (request.creative) body.creative = request.creative;
       return await apiFetch<UserPreferenceDto>(`${baseUrl}/api/me/generation-preferences`, {
         method: "PATCH",
-        body: request,
+        body,
       });
     },
     async getProjectConfig(projectId) {
@@ -120,9 +137,15 @@ export function createFetchGenerationConfigApi(baseUrl = ""): GenerationConfigAp
       );
     },
     async patchProjectConfig(projectId, request) {
+      const body: Record<string, unknown> = {
+        expected_revision: request.expected_revision,
+        video: request.video,
+        budget: request.budget,
+      };
+      if (request.creative) body.creative = request.creative;
       return await apiFetch<ProjectGenerationConfigurationDto>(
         `${baseUrl}/api/projects/${projectId}/generation-configuration`,
-        { method: "PATCH", body: request },
+        { method: "PATCH", body },
       );
     },
     async listCapabilities() {
@@ -156,11 +179,24 @@ export function microsStringToCnyInput(micros: string | null): string {
 // --- 保存前失效预览（设计文档 §10 映射的展示层投影） --------------------------
 
 export function computeConfigInvalidationPreview(
-  current: { video: GenerationConfigurationDto["video"] },
-  draft: { video: GenerationConfigPatchInput["video"] },
+  current: { video: GenerationConfigurationDto["video"]; creative: GenerationConfigurationDto["creative"] },
+  draft: {
+    video: GenerationConfigPatchInput["video"];
+    creative?: CreativePreferenceInput;
+  },
 ): ConfigurationInvalidationPreviewDto {
   const strategyChanged = current.video.strategy !== draft.video.strategy;
   const qualityChanged = current.video.api_quality !== draft.video.api_quality;
+  // S2-2B：creative 变更（音色 → assets；画风 → asset_planning；字幕 → assets）
+  const draftCreative = draft.creative;
+  const creativeChanged = {
+    voice: draftCreative?.voice_profile_id !== current.creative.voice_profile_id,
+    art: draftCreative?.art_style_preset_id !== current.creative.art_style_preset_id,
+    subtitle:
+      draftCreative?.subtitle_style_preset_id !== current.creative.subtitle_style_preset_id ||
+      JSON.stringify(draftCreative?.subtitle_style_overrides ?? {}) !==
+        JSON.stringify(current.creative.subtitle_style_overrides ?? {}),
+  };
   const stages = new Set<string>();
   if (strategyChanged) {
     stages.add("storyboard_route_resolution");
@@ -170,15 +206,28 @@ export function computeConfigInvalidationPreview(
     stages.add("asset_planning");
     stages.add("assets");
   }
+  if (creativeChanged.voice) {
+    stages.add("assets");
+  }
+  if (creativeChanged.art) {
+    stages.add("asset_planning");
+  }
+  if (creativeChanged.subtitle) {
+    stages.add("assets");
+  }
   if (stages.size === 0) {
     return {
       affected_stages: ["none"],
-      note: "视频策略与画质未变化；预算变更只影响后续报价，不会使现有阶段产物失效。",
+      note: "视频策略、画质与创作偏好均未变化；预算变更只影响后续报价，不会使现有阶段产物失效。",
     };
   }
   const note = strategyChanged
     ? "保存后需重新解析分镜路线并重建资产规划；配置变更不会自动触发下游生成。"
-    : "保存后需更新视频任务参数并重建资产生成；配置变更不会自动触发下游生成。";
+    : creativeChanged.art
+      ? "保存后需重新生成资产规划（画风影响美术圣经与生图提示词）；配置变更不会自动触发下游生成。"
+      : creativeChanged.voice || creativeChanged.subtitle
+        ? "保存后需重新生成相关资产（音色/字幕样式影响 TTS 与字幕轨）；配置变更不会自动触发下游生成。"
+        : "保存后需更新视频任务参数并重建资产生成；配置变更不会自动触发下游生成。";
   return {
     affected_stages: [...stages],
     note,
@@ -289,6 +338,7 @@ export function createGenerationConfigStore(api: GenerationConfigApi): Generatio
         expected_revision: slice.data.revision,
         video: input.video,
         budget: { currency: "CNY", max_paid_cost_micros_per_run: input.budgetMicros },
+        ...(input.creative ? { creative: input.creative } : {}),
       });
       slice.conflict = false;
       return { ok: true };
@@ -349,6 +399,7 @@ export function createGenerationConfigStore(api: GenerationConfigApi): Generatio
         expected_revision: slice.data.revision,
         video: input.video,
         budget: { currency: "CNY", max_paid_cost_micros_per_run: input.budgetMicros },
+        ...(input.creative ? { creative: input.creative } : {}),
       });
       slice.conflict = false;
       return { ok: true };
