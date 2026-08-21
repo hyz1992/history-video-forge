@@ -124,7 +124,7 @@ S2_2C_ConfigPatchRequest = {
   - 快照缺省（免 quote 本地路径，无 billingContext）→ env 解析（现状行为；含 flash 复用 smart 的兼容语义，仅适用于此路径）。
   - `env.llm.provider === "stub"` → 忽略快照模型走 stub 路径（stub 目录只有 stub 条目，无真实调用）。
 - 接线：五个主链路 run service 已接收 `billingContext`（S2-2B 既有），其内部 provider 构造点改为：`billingContext` 存在时把 `billingContext.resolved.resolved_capabilities`（只读引用，不复制）传给工厂；`billingContext` 缺省（免 quote 本地路径）→ env。子 service（generation/helper/semantic-review）需要时透传 billingContext 或该只读引用，来源始终唯一。
-- **auto 漂移防护（外部审查 P1 整改）**：报价时 auto 解析冻结模型 A 进快照；提交/派发前即使 env/tier 默认或目录默认变化为 B，执行仍调用 A（快照权威），usage 也按 A 记账——报价-执行-记账同源不再依赖 env 稳定。测试：auto 报价为 A → 修改默认为 B → 派发仍调用 A。
+- **auto 漂移防护（外部审查 P1 整改）**：报价时 auto 解析冻结模型 A 进快照；**提交成功并冻结模型 A 后**，即使派发/恢复重试前 env、tier 或目录默认变化为 B，执行仍调用 A（快照权威），usage 也按 A 记账——报价-执行-记账同源不再依赖 env 稳定；**提交前**发生的变化由提交重校验拒绝（`generation_quote_configuration_changed`），不进入派发。测试：快照冻结 A → 修改默认为 B → 派发仍调用 A（快照后漂移）；提交前漂移拒绝见 §5/§11.3。
 - 记账：`llm-billing-writer` 已按 `resolved.resolved_capabilities[tier]` 记录 provider/model（无改动），与执行构造同源。
 
 ### 6.2 媒体：buildProviderRegistry 按快照模型构造
