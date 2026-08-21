@@ -1,11 +1,13 @@
 import { describe, expect, it, vi, beforeAll, beforeEach, afterAll } from "vitest";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // ---------------------------------------------------------------------------
-// Mock gateway that actually calls interactionLogWriter so trace files
-// are written.  No real network calls.
+// P1-1 整改后的合同测试：prompt optimize 端点未接入 quote 提交执行，真实
+// provider 部署下一律 409 paid_generation_quote_required（旧无 quote LLM
+// 路径按 fail-closed 合同不可达）；stub 部署的 200/400 行为由
+// assets-api.test.ts（stub env）覆盖。
 // ---------------------------------------------------------------------------
 
 vi.mock("../../../backend/src/runtime/llm/llm-gateway.js", () => ({
@@ -21,7 +23,7 @@ vi.mock("../../../backend/src/runtime/llm/tier-aware-provider-factory.js", () =>
 
 import { buildTestAuth } from "../auth/test-utils.js";
 
-describe("POST optimize trace writing", () => {
+describe("POST optimize paid gate (外部审查 P1-1 整改)", () => {
   const auth = buildTestAuth({ userId: "owner-1" });
   let tempDirs: string[] = [];
 
@@ -41,44 +43,13 @@ describe("POST optimize trace writing", () => {
     }
   });
 
-  it("returns 200, calls gateway with writer, writes trace files", { timeout: 15000 }, async () => {
+  it("真实 provider 部署：prompt optimize 返回 409 paid_generation_quote_required，gateway 零调用，不写 trace", async () => {
     const { buildApp } = await import("../../../backend/src/app.js");
     const { createLlmGateway } = await import(
       "../../../backend/src/runtime/llm/llm-gateway.js"
     );
 
     const app = buildApp();
-
-    // Setup mock gateway that actually writes trace files
-    const mockInvoke = vi.fn().mockImplementation(async (opts: Record<string, unknown>) => {
-      const writer = opts.interactionLogWriter as { write: (e: unknown) => Promise<void> } | undefined;
-      if (writer) {
-        await writer.write({
-          generatedAt: new Date().toISOString(),
-          provider: "mock",
-          model: "mock",
-          operationName: (opts.operationName as string) ?? "asset.prompt-optimizer",
-          promptId: (opts.promptId as string) ?? "asset.prompt-optimizer",
-          promptStage: "assets",
-          promptLanguage: "zh-CN",
-          promptFilePath: "/fake/prompt.md",
-          systemPrompt: "test",
-          input: opts.input,
-          rawOutput: JSON.stringify({ optimized_prompt: "mock optimized", change_summary: ["mock change"] }),
-          parsedOutput: { optimized_prompt: "mock optimized", change_summary: ["mock change"] },
-          errorMessage: null,
-        });
-      }
-      return {
-        optimized_prompt: "优化后明代宫廷场景，低角度特写，威严光影",
-        change_summary: ["增强光影质感", "加入低角度构图"],
-        remaining_risks: [],
-      };
-    });
-    (createLlmGateway as ReturnType<typeof vi.fn>).mockReturnValue({
-      invokeStructuredPrompt: mockInvoke,
-      invokeStrictStructured: vi.fn(),
-    });
 
     const projectId = "ot-001";
     const taskId = "task_ot_001";
@@ -128,83 +99,10 @@ describe("POST optimize trace writing", () => {
       },
     });
 
-    expect(res.statusCode).toBe(200);
-
-    // Verify trace.md was written with expected content
-    const traceDir = join(tmpDir, "trace");
-    expect(existsSync(traceDir)).toBe(true);
-    const traceMd = readFileSync(join(traceDir, "trace.md"), "utf8");
-    expect(traceMd).toContain("asset.prompt-optimizer");
-    expect(traceMd).toContain("明代宫廷场景");
-    expect(traceMd).toContain("增强光影");
-    expect(traceMd).not.toContain("api_key");
-    expect(traceMd).not.toContain("Authorization");
-    expect(traceMd).not.toContain("Bearer");
-
-    // Verify per-run interaction log
-    const assetsRunsDir = join(traceDir, "assets-runs");
-    const runDirs = readdirSync(assetsRunsDir);
-    expect(runDirs.length).toBeGreaterThan(0);
-    const runDir = join(assetsRunsDir, runDirs[0]!);
-    const llmDir = join(runDir, "llm-interactions");
-    expect(existsSync(llmDir)).toBe(true);
-    const interactionFiles = readdirSync(llmDir);
-    expect(interactionFiles.length).toBeGreaterThan(0);
-    const interactionLog = readFileSync(join(llmDir, interactionFiles[0]!), "utf8");
-    expect(interactionLog).toContain("asset.prompt-optimizer");
-    expect(interactionLog).toContain("current_prompt");
-    expect(interactionLog).toContain("user_feedback");
-    expect(interactionLog).not.toContain("api_key");
-    expect(interactionLog).not.toContain("Bearer");
-
-    // Cleanup
-    rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it("returns 400 when current_prompt is missing", async () => {
-    const { buildApp } = await import("../../../backend/src/app.js");
-    const app = buildApp();
-
-    const projectId = "ot-002";
-    const now = new Date();
-    app.db.projects.set(projectId, {
-      id: projectId, name: "OT2", status: "assets_ready",
-      ownerId: "owner-1",
-      activeTopicPackageId: null, activeScriptRecordId: null,
-      activeStoryboardRecordId: null, activeAssetPlanRecordId: "ap_002",
-      activeAssetManifestRecordId: null, activeComposeRecordId: null,
-      activeRenderJobRecordId: null,
-      latestTopicRunTraceJson: null, latestScriptRunTraceJson: null,
-      latestStoryboardRunTraceJson: null, latestAssetPlanRunTraceJson: null,
-      latestAssetsRunTraceJson: null, latestComposeRunTraceJson: null,
-      latestRenderRunTraceJson: null,
-      storageDisplayName: "OT2", storageShortId: "p_ot2",
-      storageRootDir: mkdtempSync(join(tmpdir(), "svf2-ot2-")),
-      storageRenameLocked: false,
-      createdAt: now, updatedAt: now,
-    });
-    const tmpDir2 = app.db.projects.get(projectId)!.storageRootDir;
-    tempDirs.push(tmpDir2);
-
-    app.db.assetPlanRecords.set("ap_002", {
-      id: "ap_002", projectId, topicPackageId: "tp_001", scriptRecordId: "scr_001", storyboardRecordId: "sb_001",
-      planJson: {
-        plan_version: "asset_plan_v1", art_bible: {}, visual_budget: {}, downgrade_policy: {},
-        global_audio_strategy: {}, tts_plan: {},
-        tasks: [{ task_id: "t2", task_type: "image_still", source_segment_id: null, prompt_draft: "test", parameters: {} }],
-        dependencies: [], cost_summary: {}, global_production_notes: [],
-      } as never,
-      validationResultJson: { stage: "asset_planning_local_validation", decision: "ready", errors: [], warnings: [], metrics: {} },
-      executionStateJson: {}, graphTraceSummaryJson: null, runtimeDiagnosticsJson: null, createdAt: now,
-    });
-
-    const res = await app.inject({ auth,
-      method: "POST",
-      url: `/api/projects/${projectId}/assets/tasks/t2/prompt/optimize`,
-      payload: { user_feedback: "test" },
-    });
-
-    expect(res.statusCode).toBe(400);
-    expect((res.json() as Record<string, unknown>).error).toBe("missing_current_prompt");
+    expect(res.statusCode).toBe(409);
+    expect((res.json() as Record<string, unknown>).error).toBe("paid_generation_quote_required");
+    // 真实 LLM gateway 零调用，且不写 trace（旧无 quote LLM 路径不可达）
+    expect(createLlmGateway).not.toHaveBeenCalled();
+    expect(existsSync(join(tmpDir, "trace"))).toBe(false);
   });
 });
