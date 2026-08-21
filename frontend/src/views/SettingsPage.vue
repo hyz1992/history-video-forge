@@ -41,10 +41,12 @@ onMounted(async () => {
 
 // 409 冲突重载后表单同步服务器最新值：用户看得见竞争修改，避免基于旧
 // 视图的第二次保存静默覆盖其他会话的变更。
+// B2 整改：盯 conflictEpoch（每次冲突自增）而非布尔 conflict——连续两次 409
+// 时 true→true 不触发 watcher，旧实现会漏掉第二次冲突的同步。
 watch(
-  () => store.state.userPreference.conflict,
-  (conflict) => {
-    if (conflict) applyServerData();
+  () => store.state.userPreference.conflictEpoch,
+  () => {
+    if (store.state.userPreference.conflict) applyServerData();
   },
 );
 

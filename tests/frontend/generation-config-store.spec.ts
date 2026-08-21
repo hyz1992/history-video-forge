@@ -155,6 +155,54 @@ describe("generation config store (user preference)", () => {
     expect(store.state.userPreference.data?.revision).toBe(5);
     expect(store.state.userPreference.data?.configuration.video.strategy).toBe("all_remotion");
   });
+
+  it("B2：连续两次 409 时 conflictEpoch 每次自增，data 同步到最新重载值", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, DEFAULT_PREFERENCE));
+    const api = createFetchGenerationConfigApi();
+    const store = createGenerationConfigStore(api);
+    await store.loadUserPreference();
+
+    // 第一次 409 → 重载 revision=5
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(409, { error: "generation_preference_revision_conflict", current_revision: 5 }),
+    );
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, { ...DEFAULT_PREFERENCE, revision: 5, source: "stored" }),
+    );
+    const first = await store.saveUserPreference({
+      video: { strategy: "all_api_video", api_quality: "standard_720p" },
+      budgetMicros: null,
+    });
+    expect(first.ok).toBe(false);
+    const epochAfterFirst = store.state.userPreference.conflictEpoch;
+    expect(epochAfterFirst).toBeGreaterThan(0);
+    expect(store.state.userPreference.conflict).toBe(true);
+
+    // 第二次 409（conflict 仍为 true——布尔 watcher 不会触发）→ 重载 revision=7
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(409, { error: "generation_preference_revision_conflict", current_revision: 7 }),
+    );
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, {
+        ...DEFAULT_PREFERENCE,
+        revision: 7,
+        source: "stored",
+        configuration: {
+          ...DEFAULT_PREFERENCE.configuration,
+          video: { strategy: "prefer_api_video", api_quality: "standard_720p" },
+        },
+      }),
+    );
+    const second = await store.saveUserPreference({
+      video: { strategy: "all_api_video", api_quality: "standard_720p" },
+      budgetMicros: null,
+    });
+    expect(second.ok).toBe(false);
+    // epoch 递增：watcher 每次冲突都会触发同步
+    expect(store.state.userPreference.conflictEpoch).toBe(epochAfterFirst + 1);
+    expect(store.state.userPreference.data?.revision).toBe(7);
+    expect(store.state.userPreference.data?.configuration.video.strategy).toBe("prefer_api_video");
+  });
 });
 
 describe("generation config store (project config + capabilities)", () => {

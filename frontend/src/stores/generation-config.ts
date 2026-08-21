@@ -192,6 +192,12 @@ interface PreferenceStateSlice {
   loading: boolean;
   saving: boolean;
   conflict: boolean;
+  /**
+   * 冲突代际计数（外部审查 B2 整改）：conflict 是布尔，连续两次 409 时
+   * true→true 不触发 watcher，表单不会同步最新重载值。每次冲突自增，
+   * 组件 watcher 改盯 epoch，保证每次冲突都触发同步。
+   */
+  conflictEpoch: number;
   error: string | null;
 }
 
@@ -200,6 +206,7 @@ interface ProjectConfigStateSlice {
   loading: boolean;
   saving: boolean;
   conflict: boolean;
+  conflictEpoch: number;
   error: string | null;
 }
 
@@ -235,7 +242,7 @@ export const generationConfigStoreKey: InjectionKey<GenerationConfigStore> = Sym
 
 export function createGenerationConfigStore(api: GenerationConfigApi): GenerationConfigStore {
   const state = reactive<GenerationConfigStoreState>({
-    userPreference: { data: null, loading: false, saving: false, conflict: false, error: null },
+    userPreference: { data: null, loading: false, saving: false, conflict: false, conflictEpoch: 0, error: null },
     capabilities: [],
     capabilitiesLoading: false,
     projectConfigs: {},
@@ -249,6 +256,7 @@ export function createGenerationConfigStore(api: GenerationConfigApi): Generatio
       loading: false,
       saving: false,
       conflict: false,
+      conflictEpoch: 0,
       error: null,
     };
     state.projectConfigs[projectId] = created;
@@ -292,6 +300,7 @@ export function createGenerationConfigStore(api: GenerationConfigApi): Generatio
         const reloaded = await api.getUserPreference().catch(() => null);
         if (reloaded) slice.data = reloaded;
         slice.conflict = true;
+        slice.conflictEpoch += 1;
         return { ok: false, conflict: true };
       }
       slice.error = error instanceof Error ? error.message : "save_failed";
@@ -349,6 +358,7 @@ export function createGenerationConfigStore(api: GenerationConfigApi): Generatio
         const reloaded = await api.getProjectConfig(projectId).catch(() => null);
         if (reloaded) slice.data = reloaded;
         slice.conflict = true;
+        slice.conflictEpoch += 1;
         return { ok: false, conflict: true };
       }
       slice.error = error instanceof Error ? error.message : "save_failed";

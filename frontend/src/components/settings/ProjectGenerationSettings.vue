@@ -61,11 +61,13 @@ watch(
   { immediate: true },
 );
 
-// 409 冲突重载后表单同步服务器最新值，避免基于旧视图的第二次保存覆盖竞争修改
+// 409 冲突重载后表单同步服务器最新值，避免基于旧视图的第二次保存覆盖竞争修改。
+// B2 整改：盯 conflictEpoch（每次冲突自增）而非布尔 conflict——连续两次 409
+// 时 true→true 不触发 watcher，旧实现会漏掉第二次冲突的同步。
 watch(
-  () => configState.value?.conflict,
-  (conflict) => {
-    if (conflict) applyServerData();
+  () => configState.value?.conflictEpoch,
+  () => {
+    if (configState.value?.conflict) applyServerData();
   },
 );
 

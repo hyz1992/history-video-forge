@@ -280,6 +280,78 @@ describe("SettingsPage（用户默认设置）", () => {
     expect(wrapper.find('[data-testid="preference-conflict"]').exists()).toBe(true);
   });
 
+  it("B2：连续两次 409（conflict 已为 true）草稿仍同步到第二次重载的最新值", async () => {
+    // fetch 序列：1) GET preferences 200(rev=4) → 2) GET capabilities 200([])
+    // 3) PATCH 409 → 4) store GET preferences 200(rev=5, all_remotion)
+    // 5) PATCH 409（conflict 仍为 true，布尔 watcher 不触发）→ 6) store GET 200(rev=7, prefer_api_video)
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          source: "stored",
+          revision: 4,
+          configuration: DEFAULT_CONFIGURATION,
+          updated_at: "2026-08-20T10:00:00.000Z",
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse(200, { capabilities: [] }))
+      .mockResolvedValueOnce(
+        jsonResponse(409, { error: "generation_preference_revision_conflict", current_revision: 5 }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          source: "stored",
+          revision: 5,
+          configuration: {
+            ...DEFAULT_CONFIGURATION,
+            video: { strategy: "all_remotion", api_quality: "standard_720p" },
+          },
+          updated_at: "2026-08-20T11:00:00.000Z",
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(409, { error: "generation_preference_revision_conflict", current_revision: 7 }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse(200, {
+          source: "stored",
+          revision: 7,
+          configuration: {
+            ...DEFAULT_CONFIGURATION,
+            video: { strategy: "prefer_api_video", api_quality: "standard_720p" },
+          },
+          updated_at: "2026-08-20T12:00:00.000Z",
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const store = createGenerationConfigStore(createFetchGenerationConfigApi());
+    const wrapper = mountSettings(store);
+    await flushPromises();
+
+    const saveDraft = {
+      video: { strategy: "all_api_video", api_quality: "standard_720p" },
+      budgetMicros: null,
+    };
+    await store.saveUserPreference(saveDraft);
+    await flushPromises();
+    // 第一次冲突后草稿跟随 rev=5（all_remotion）
+    expect(
+      (wrapper.find('[data-testid="strategy-all_remotion"]').element as HTMLInputElement).checked,
+    ).toBe(true);
+
+    await store.saveUserPreference(saveDraft);
+    await flushPromises();
+    // 第二次冲突（conflict 已为 true）：草稿必须跟随 rev=7（prefer_api_video）
+    // ——旧布尔 watcher 下 true→true 不触发，这里会残留 all_remotion
+    expect(
+      (wrapper.find('[data-testid="strategy-prefer_api_video"]').element as HTMLInputElement).checked,
+    ).toBe(true);
+    expect(
+      (wrapper.find('[data-testid="strategy-all_remotion"]').element as HTMLInputElement).checked,
+    ).toBe(false);
+    expect(wrapper.find('[data-testid="preference-conflict"]').exists()).toBe(true);
+  });
+
   it("轮1 I-2：偏好加载失败时展示错误态，不渲染可编辑表单", async () => {
     const store = createMockStore();
     const pref = store.state.userPreference as { error: string | null; data: null };
