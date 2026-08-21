@@ -34,8 +34,19 @@ export type DispatchOutcome =
     }
   | { status: "needs_reconciliation"; reason_code: string; message: string };
 
+export interface GenerationRunDispatchContext {
+  db: DbClient;
+  project: ProjectRecord;
+  /**
+   * 跨实例恢复（外部审查 P1-2 整改）：sweep 从 DB 恢复的 run 在本实例内存
+   * 镜像可能没有对应 snapshot/quote——handler 需要以数据库为权威加载
+   * 授权快照，缺失时 fail-closed 拒绝派发。
+   */
+  repository: GenerationRunRepository;
+}
+
 export interface GenerationRunDispatchHandler {
-  (run: GenerationRunRecord, context: { db: DbClient; project: ProjectRecord }): Promise<DispatchOutcome>;
+  (run: GenerationRunRecord, context: GenerationRunDispatchContext): Promise<DispatchOutcome>;
 }
 
 export type DispatchResult =
@@ -110,7 +121,11 @@ export function createGenerationRunDispatcher(options: {
         );
       }, Math.max(1, Math.floor(options.leaseDurationMs / 2)));
       try {
-        outcome = await handler(claimedRun, { db: options.db, project });
+        outcome = await handler(claimedRun, {
+          db: options.db,
+          project,
+          repository: options.repository,
+        });
       } catch (error) {
         outcome = {
           status: "failed",

@@ -4,7 +4,12 @@ import type { DbClient, GenerationRunRecord, ProjectRecord } from "../../db/clie
 import type { ResolvedGenerationConfigurationV1 } from "../../../../shared/src/index.js";
 import type { GenerationOperation } from "../../../../shared/src/index.js";
 import type { LlmBillingContext } from "../generation-cost/llm-billing-writer.js";
-import type { DispatchOutcome, GenerationRunDispatchHandler } from "./generation-run-dispatcher.js";
+import type {
+  DispatchOutcome,
+  GenerationRunDispatchContext,
+  GenerationRunDispatchHandler,
+} from "./generation-run-dispatcher.js";
+import type { GenerationRunRepository } from "./generation-run.repository.js";
 import { runScriptGeneration } from "../script/script-run.service.js";
 import {
   runStoryboardGeneration,
@@ -23,18 +28,36 @@ import type { ProjectTopicCandidateState } from "../../app.js";
  * 现有生成 service 并透传 AppResponse。
  */
 
-/** 从 run 快照构建 LLM 计费上下文（授权同源：快照即提交时解析结果）。 */
-function billingFor(run: GenerationRunRecord, db: DbClient): LlmBillingContext | undefined {
-  const snapshot = db.runConfigurationSnapshots.get(run.runConfigurationSnapshotId);
-  if (!snapshot) return undefined;
+/**
+ * 从 run 构建 LLM 计费上下文（授权同源：快照即提交时解析结果）。
+ * 外部审查 P1-2 整改：本实例内存镜像缺 snapshot（跨实例 sweep 冷恢复）时，
+ * 以数据库为权威经 repository 加载；repository 也找不到（数据异常）时
+ * 返回 null，调用方必须 fail-closed 拒绝派发——绝不无 billing context
+ * 执行真实 LLM（免 quote 只属于 stub/local 旧路径，不属派发协议）。
+ */
+async function resolveBillingContext(
+  run: GenerationRunRecord,
+  context: GenerationRunDispatchContext,
+): Promise<LlmBillingContext | null> {
+  const inMemory = context.db.runConfigurationSnapshots.get(run.runConfigurationSnapshotId);
+  const snapshot = inMemory ?? (await context.repository.getSnapshotById(run.runConfigurationSnapshotId));
+  if (!snapshot) return null;
   return {
-    db,
+    db: context.db,
     snapshot,
     runId: run.id,
     operation: run.operation as GenerationOperation,
     resolved: snapshot.resolvedConfigurationJson as unknown as ResolvedGenerationConfigurationV1,
   };
 }
+
+/** snapshot 不可用（数据异常）的统一 fail-closed 结局。 */
+const SNAPSHOT_MISSING_OUTCOME: DispatchOutcome = {
+  status: "failed",
+  reason_code: "dispatch_snapshot_missing",
+  message:
+    "run 的配置快照不可用（内存镜像与数据库均缺失），拒绝派发——禁止无计费上下文执行真实 LLM",
+};
 
 function toOutcome(response: AppResponse): DispatchOutcome {
   if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -51,42 +74,45 @@ function toOutcome(response: AppResponse): DispatchOutcome {
 }
 
 export function createScriptDispatchHandler(): GenerationRunDispatchHandler {
-  return async (run, { db, project }) => {
+  return async (run, context) => {
+    const billing = await resolveBillingContext(run, context);
+    if (!billing) return SNAPSHOT_MISSING_OUTCOME;
     const payload = run.dispatchPayloadJson as Record<string, unknown>;
     const response = await runScriptGeneration({
-      db,
-      project,
+      db: context.db,
+      project: context.project,
       allowPatch: payload.allow_patch as boolean | undefined,
       allowRegen: payload.allow_regen as boolean | undefined,
       allowLocalRepairRegen: payload.allow_local_repair_regen as boolean | undefined,
       forceRegen: payload.force_regen as boolean | undefined,
       userFeedback: payload.user_feedback as string | undefined,
-      billingContext: billingFor(run, db),
+      billingContext: billing,
     });
     return toOutcome(response);
   };
 }
 
 export function createStoryboardDispatchHandler(): GenerationRunDispatchHandler {
-  return async (run, { db, project }) => {
+  return async (run, context) => {
     const payload = run.dispatchPayloadJson as Record<string, unknown>;
-    const billingContext = billingFor(run, db);
+    const billing = await resolveBillingContext(run, context);
+    if (!billing) return SNAPSHOT_MISSING_OUTCOME;
     let response: AppResponse;
     if (typeof payload.segment_id === "string") {
       // 分段重生入口（同一 storyboard.generate operation）
       response = await runStoryboardSegmentRegeneration({
-        db,
-        project,
+        db: context.db,
+        project: context.project,
         segmentId: payload.segment_id,
         userFeedback: payload.user_feedback as string,
-        billingContext,
+        billingContext: billing,
       });
     } else {
       response = await runStoryboardGeneration({
-        db,
-        project,
+        db: context.db,
+        project: context.project,
         userFeedback: payload.user_feedback as string | undefined,
-        billingContext,
+        billingContext: billing,
       });
     }
     return toOutcome(response);
@@ -94,23 +120,27 @@ export function createStoryboardDispatchHandler(): GenerationRunDispatchHandler 
 }
 
 export function createAssetPlanDispatchHandler(): GenerationRunDispatchHandler {
-  return async (run, { db, project }) => {
+  return async (run, context) => {
+    const billing = await resolveBillingContext(run, context);
+    if (!billing) return SNAPSHOT_MISSING_OUTCOME;
     const response = await runAssetPlanningGeneration({
-      db,
-      project,
+      db: context.db,
+      project: context.project,
       demoMode: env.demoMode,
-      billingContext: billingFor(run, db),
+      billingContext: billing,
     });
     return toOutcome(response);
   };
 }
 
 export function createPublishDispatchHandler(): GenerationRunDispatchHandler {
-  return async (run, { db, project }) => {
+  return async (run, context) => {
+    const billing = await resolveBillingContext(run, context);
+    if (!billing) return SNAPSHOT_MISSING_OUTCOME;
     const response = await runPublishGeneration({
-      db,
-      project,
-      billingContext: billingFor(run, db),
+      db: context.db,
+      project: context.project,
+      billingContext: billing,
     });
     return toOutcome(response);
   };
@@ -119,9 +149,10 @@ export function createPublishDispatchHandler(): GenerationRunDispatchHandler {
 export function createTopicDispatchHandler(options: {
   topicCandidateStore: Map<string, ProjectTopicCandidateState>;
 }): GenerationRunDispatchHandler {
-  return async (run, { db, project }) => {
+  return async (run, context) => {
     const payload = run.dispatchPayloadJson as Record<string, unknown>;
-    const billingContext = billingFor(run, db);
+    const billing = await resolveBillingContext(run, context);
+    if (!billing) return SNAPSHOT_MISSING_OUTCOME;
     // 从提交 payload 恢复 topic 推荐 seed（controller 已做 schema 校验，此处直接映射）
     const seed = {
       canonicalName: payload.canonical_name as string,
@@ -140,12 +171,12 @@ export function createTopicDispatchHandler(options: {
     };
     const filters = payload.filters as Record<string, unknown> | undefined;
     const response = await runTopicRecommendationWithStore({
-      db,
-      project,
+      db: context.db,
+      project: context.project,
       topicCandidateStore: options.topicCandidateStore,
       seed,
       filters: filters as never,
-      billingContext,
+      billingContext: billing,
     });
     return toOutcome(response);
   };
