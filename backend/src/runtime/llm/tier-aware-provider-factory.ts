@@ -28,6 +28,10 @@
 import path from "node:path";
 
 import { env } from "../../config/env.js";
+import {
+  ResolvedCapabilityMapSchema,
+  type ResolvedCapabilityMap,
+} from "../../../../shared/src/index.js";
 import { loadProviderRegistry } from "./provider-registry.js";
 import { resolveTierModel, type ResolvedModel } from "./tier-resolver.js";
 import { createOpenAiCompatibleProvider } from "./openai-compatible-provider.js";
@@ -57,10 +61,42 @@ export interface TierProviderSnapshot {
  * - 启动时若 providers.json 解析失败或 smart tier 无法解析，抛错（不静默回退）。
  * - 单 provider 兼容模式（无 providers.json + 无 LLM_SMART_MODEL）也能工作。
  *
+ * S2-2C（详细设计 §6.1）：`snapshotCapabilities` 提供时（付费 dispatch 路径，
+ * 来源 `billingContext.resolved.resolved_capabilities`），**无论槽位是 auto 还是
+ * fixed**，smart/flash 都按快照冻结的 provider_key + model_id 经 provider
+ * registry 构造 inner provider（`mode` 只说明选择来源，不改变执行绑定）。
+ * 快照参数存在时五槽必须齐备（合法快照恒满足）；缺任一必需槽位 → 抛错
+ * fail-closed，不得混合快照与 env 回退。stub 部署忽略快照（调用方在 stub
+ * 模式下直接构造 stub provider，不经本工厂）。
+ *
  * 注意：本工厂不接管 stub 模式。调用方需自行判断 env.llm.provider === "stub"
  * 并走 stub 分支（与既有调用方模式一致，4b 改造时保留此约定）。
  */
-export function createTierAwareProviderFromEnv(): StructuredPromptProvider {
+export function createTierAwareProviderFromEnv(options?: {
+  snapshotCapabilities?: ResolvedCapabilityMap;
+}): StructuredPromptProvider {
+  // S2-2C：快照提供且非 stub 部署 → 按快照冻结模型构造（auto/fixed 一律）。
+  if (options?.snapshotCapabilities && env.llm.provider !== "stub") {
+    const configPath = resolveProvidersConfigPath();
+    const registry = loadProviderRegistry({
+      configPath,
+      envFallback: {
+        baseUrl: env.llm.baseUrl,
+        apiKey: env.llm.apiKey,
+      },
+    });
+    const models = resolveSnapshotLlmModels(
+      options.snapshotCapabilities,
+      registry,
+      process.env as Record<string, string | undefined>,
+      env.llm.apiKey,
+    );
+    return createTierAwareProvider({
+      smartProvider: createInnerProvider(models.smart),
+      flashProvider: createInnerProvider(models.flash),
+    });
+  }
+
   const snapshot = resolveTierProviderSnapshot();
 
   const smartInner = createInnerProvider(snapshot.smart);
@@ -72,6 +108,47 @@ export function createTierAwareProviderFromEnv(): StructuredPromptProvider {
     smartProvider: smartInner,
     flashProvider: flashInner,
   });
+}
+
+/**
+ * S2-2C：把快照冻结的 capabilities 解析为 smart/flash 两个 ResolvedModel。
+ *
+ * 纯函数（registry/env 显式注入，便于测试）：
+ * - 快照完整映射（复审整改 P2）：先用 `ResolvedCapabilityMapSchema` 校验五槽
+ *   齐备——缺任一必需槽位或形状损坏 → 抛错 fail-closed（合法快照由 schema
+ *   合同保证恒满足；损坏快照不得混合快照与 env 回退）。
+ * - 逐槽按 `provider_key:model_id` 经 `resolveTierModel` 解析 registry 连接与
+ *   凭据；provider 未注册或 apiKeyEnv 缺失 → TierResolverError 上抛（与 env
+ *   路径同语义，fail-closed）。
+ */
+export function resolveSnapshotLlmModels(
+  capabilities: ResolvedCapabilityMap,
+  registry: ReturnType<typeof loadProviderRegistry>,
+  envVars: Record<string, string | undefined>,
+  fallbackApiKey: string | undefined,
+): { smart: ResolvedModel; flash: ResolvedModel } {
+  const parsed = ResolvedCapabilityMapSchema.safeParse(capabilities);
+  if (!parsed.success) {
+    throw new TierAwareProviderFactoryError(
+      `快照 capabilities 不完整或损坏（${parsed.error.message}）——禁止混合快照与 env 构造`,
+    );
+  }
+  const caps = parsed.data;
+  const smart = resolveTierModel({
+    tier: "smart",
+    tierModelRaw: `${caps["llm.smart"].provider_key}:${caps["llm.smart"].model_id}`,
+    registry,
+    env: envVars,
+    fallbackApiKey,
+  });
+  const flash = resolveTierModel({
+    tier: "flash",
+    tierModelRaw: `${caps["llm.flash"].provider_key}:${caps["llm.flash"].model_id}`,
+    registry,
+    env: envVars,
+    fallbackApiKey,
+  });
+  return { smart, flash };
 }
 
 /**
