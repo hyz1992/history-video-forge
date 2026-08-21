@@ -9,6 +9,7 @@ import {
   type ResolvedVisualRoute,
   type ScriptDraftPackage,
   type StoryboardPlan,
+  type ResolvedCapabilityMap,
 } from "../../../../shared/src/index.js";
 import { env, getValidatedRuntimeEnv } from "../../config/env.js";
 import type { AssetPlanningGenerationMode } from "../../config/env.js";
@@ -299,6 +300,11 @@ export interface GenerateAssetPlanInput {
   segmentVisualRoutes: ReadonlyMap<string, ResolvedSegmentVisualRoute>;
   llmGateway?: LlmGateway;
   interactionLogWriter?: LlmInteractionLogWriter;
+  /**
+   * S2-2C（详细设计 §6.1）：快照冻结 capabilities（来源
+   * `billingContext.resolved.resolved_capabilities` 只读引用）。
+   */
+  snapshotCapabilities?: ResolvedCapabilityMap;
   chunkSize?: number;
   chunkConcurrency?: number;
   onProgress?: (progress: AssetPlanGenerationProgress) => void | Promise<void>;
@@ -444,7 +450,7 @@ export async function generateAssetPlan(
       throw new Error("asset_planning_segment_visual_route_missing");
     }
   }
-  const gateway = input.llmGateway ?? createAssetPlannerGateway();
+  const gateway = input.llmGateway ?? createAssetPlannerGateway(input.snapshotCapabilities);
   const audioSkeleton = buildLocalAudioSkeleton(input);
   const totalSegments = input.storyboard.segments.length;
 
@@ -2229,11 +2235,11 @@ function buildCostSummary(
   };
 }
 
-function createAssetPlannerGateway(): LlmGateway {
+export function createAssetPlannerGateway(snapshotCapabilities?: ResolvedCapabilityMap): LlmGateway {
   const provider =
     env.llm.provider === "stub"
       ? createStubAssetPlannerProvider()
-      : createValidatedAssetPlannerProvider();
+      : createValidatedAssetPlannerProvider(snapshotCapabilities);
 
   return createLlmGateway({
     registry: createPromptRegistry(),
@@ -2241,10 +2247,12 @@ function createAssetPlannerGateway(): LlmGateway {
   });
 }
 
-function createValidatedAssetPlannerProvider(): StructuredPromptProvider {
+function createValidatedAssetPlannerProvider(snapshotCapabilities?: ResolvedCapabilityMap): StructuredPromptProvider {
   getValidatedRuntimeEnv();
 
-  return createTierAwareProviderFromEnv();
+  return createTierAwareProviderFromEnv(
+    snapshotCapabilities ? { snapshotCapabilities } : undefined,
+  );
 }
 
 function createStubAssetPlannerProvider(): StructuredPromptProvider {

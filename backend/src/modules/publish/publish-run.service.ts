@@ -133,7 +133,12 @@ export async function runPublishGeneration(
   let llmUsed = false;
   try {
     const ctx = buildCoverPromptContext(db, projectId, assetManifestRecordId);
-    coverPromptDraft = await generateCoverPromptDraft(ctx, interactionLogWriter);
+    coverPromptDraft = await generateCoverPromptDraft(
+      ctx,
+      interactionLogWriter,
+      // S2-2C（详细设计 §6.1）：单一真相源——从 billingContext.resolved 派生
+      input.billingContext?.resolved.resolved_capabilities,
+    );
     llmUsed = true;
   } catch (err) {
     notes.push(
@@ -151,6 +156,7 @@ export async function runPublishGeneration(
         scriptSummary: scriptRecord.scriptText.slice(0, 500),
         durationSec: exportArtifact.duration_sec ?? scriptRecord.estimatedDurationSec ?? 60,
         interactionLogWriter,
+        snapshotCapabilities: input.billingContext?.resolved.resolved_capabilities,
       });
       description = descResult.description;
       llmUsed = true;
@@ -172,6 +178,7 @@ export async function runPublishGeneration(
         scriptSummary: scriptRecord.scriptText.slice(0, 300),
         durationSec: Math.round(exportArtifact.duration_sec ?? scriptRecord.estimatedDurationSec ?? 60),
         interactionLogWriter,
+        snapshotCapabilities: input.billingContext?.resolved.resolved_capabilities,
       });
       titleCandidates = titleResult.candidates;
       if (titleCandidates.length > 0) {

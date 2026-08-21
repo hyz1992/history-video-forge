@@ -163,9 +163,10 @@ export function buildCoverPromptContext(
 export async function generateCoverPromptDraft(
   ctx: CoverPromptContext,
   interactionLogWriter?: LlmInteractionLogWriter,
+  snapshotCapabilities?: import("../../../../shared/src/index").ResolvedCapabilityMap,
 ): Promise<string> {
   try {
-    const gateway = getPublishLlmGateway();
+    const gateway = getPublishLlmGateway(snapshotCapabilities);
     const result = await gateway.invokeStructuredPrompt<{ cover_prompt: string }>({
       promptId: "publish.cover-prompt-generator",
       operationName: "publish.cover-prompt-generator",

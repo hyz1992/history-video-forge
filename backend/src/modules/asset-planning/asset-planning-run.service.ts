@@ -980,6 +980,8 @@ export async function runAssetPlanningGeneration(
     onGlobalStructureEvent,
     onIntentChunkSettled,
     artStylePreset: input.artStylePreset ?? null,
+    // S2-2C（详细设计 §6.1）：单一真相源——从 billingContext.resolved 派生
+    snapshotCapabilities: input.billingContext?.resolved.resolved_capabilities,
   });
   let localValidation = validateAssetPlan(
     buildValidationInput({
@@ -1012,6 +1014,7 @@ export async function runAssetPlanningGeneration(
       validation: localValidation,
       storyboard,
       interactionLogWriter,
+      snapshotCapabilities: input.billingContext?.resolved.resolved_capabilities,
     });
     plan = repairResult.plan;
     planStructuralRepairUsed = repairResult.repairUsed;

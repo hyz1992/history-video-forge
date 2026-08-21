@@ -18,6 +18,8 @@ export interface TitleGenerationInput {
   durationSec: number;
   currentTitle?: string;
   interactionLogWriter?: LlmInteractionLogWriter;
+  /** S2-2C：快照冻结 capabilities（付费 dispatch 路径），透传给 publish gateway。 */
+  snapshotCapabilities?: import("../../../../shared/src/index").ResolvedCapabilityMap;
 }
 
 /**
@@ -28,7 +30,7 @@ export async function generateTitleCandidates(
   input: TitleGenerationInput,
 ): Promise<TitleGenerationResult> {
   try {
-    const gateway = getPublishLlmGateway();
+    const gateway = getPublishLlmGateway(input.snapshotCapabilities);
 
     const result = await gateway.invokeStructuredPrompt<{
       candidates: TitleCandidateResult[];

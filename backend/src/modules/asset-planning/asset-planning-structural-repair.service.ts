@@ -5,6 +5,7 @@ import {
   type AssetPlanningValidationResult,
   type AssetTask,
   type StoryboardPlan,
+  type ResolvedCapabilityMap,
 } from "../../../../shared/src/index.js";
 import { env, getValidatedRuntimeEnv } from "../../config/env.js";
 import { createLlmGateway, type LlmGateway } from "../../runtime/llm/llm-gateway.js";
@@ -100,6 +101,8 @@ export async function repairAssetPlanStructure(input: {
   storyboard: StoryboardPlan;
   llmGateway?: LlmGateway;
   interactionLogWriter?: LlmInteractionLogWriter;
+  /** S2-2C：快照冻结 capabilities（来源 billingContext.resolved，只读引用）。 */
+  snapshotCapabilities?: ResolvedCapabilityMap;
 }): Promise<{ plan: AssetPlan; repairUsed: boolean }> {
   if (!isRepairableValidation(input.validation)) {
     return {
@@ -108,7 +111,7 @@ export async function repairAssetPlanStructure(input: {
     };
   }
 
-  const gateway = input.llmGateway ?? createAssetPlanRepairGateway();
+  const gateway = input.llmGateway ?? createAssetPlanRepairGateway(input.snapshotCapabilities);
   const rawPatch = await gateway.invokeStructuredPrompt<unknown>({
     promptId: STRUCTURAL_REPAIR_PROMPT_ID,
     input: {
@@ -313,11 +316,11 @@ function assertDependencyPatchAllowed(
   }
 }
 
-function createAssetPlanRepairGateway(): LlmGateway {
+export function createAssetPlanRepairGateway(snapshotCapabilities?: ResolvedCapabilityMap): LlmGateway {
   const provider =
     env.llm.provider === "stub"
       ? createStubAssetPlanRepairProvider()
-      : createValidatedAssetPlanRepairProvider();
+      : createValidatedAssetPlanRepairProvider(snapshotCapabilities);
 
   return createLlmGateway({
     registry: createPromptRegistry(),
@@ -325,10 +328,12 @@ function createAssetPlanRepairGateway(): LlmGateway {
   });
 }
 
-function createValidatedAssetPlanRepairProvider(): StructuredPromptProvider {
+function createValidatedAssetPlanRepairProvider(snapshotCapabilities?: ResolvedCapabilityMap): StructuredPromptProvider {
   getValidatedRuntimeEnv();
 
-  return createTierAwareProviderFromEnv();
+  return createTierAwareProviderFromEnv(
+    snapshotCapabilities ? { snapshotCapabilities } : undefined,
+  );
 }
 
 function createStubAssetPlanRepairProvider(): StructuredPromptProvider {
