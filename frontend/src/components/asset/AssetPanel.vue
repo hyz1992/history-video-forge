@@ -45,6 +45,12 @@ const quoteDialogOpen = ref(false);
 const quoteLoading = ref(false);
 const pendingQuote = ref<GenerationQuoteDto | null>(null);
 let pendingSubmit: ((submit: { quoteId: string; idempotencyKey: string; authorizeBudgetOverride: boolean }) => Promise<void>) | null = null;
+/**
+ * 提交成功后的反馈回调（外部审查 B1 整改）：成功提示/选中项清理必须在用户
+ * 确认报价提交之后触发，不能随报价对话框打开就提前执行——付费路径下用户
+ * 未确认就看不到"完成"，取消后也不再残留"完成"状态。
+ */
+let pendingOnSuccess: (() => void | Promise<void>) | null = null;
 
 const strictDialogOpen = ref(false);
 const strictSegmentId = ref<string | null>(null);
@@ -819,6 +825,8 @@ const segmentRouteBySegmentId = computed(() => {
 async function quoteAndGenerate(options: {
   request: { operation: string; selection?: { mode?: "missing_only"; task_ids?: string[] }; enabledProviderTypes?: string[] };
   submit: (submit: { quoteId: string; idempotencyKey: string; authorizeBudgetOverride: boolean }) => Promise<void>;
+  /** 提交成功后的反馈（B1 整改）：成功提示/清理只在确认提交后触发。 */
+  onSuccess?: () => void | Promise<void>;
 }): Promise<void> {
   const pid = projectId.value;
   if (!pid) return;
@@ -837,6 +845,8 @@ async function quoteAndGenerate(options: {
         try {
           await options.submit({ quoteId: "", idempotencyKey: "", authorizeBudgetOverride: false });
           await assetsStore.loadProject();
+          // 本地路径同步完成，成功反馈同样在此触发（与付费路径的确认后时机对齐）
+          await options.onSuccess?.();
         } catch (error) {
           const msg = error instanceof Error ? error.message : "生成失败";
           ElMessage.error("生成失败：" + msg);
@@ -849,6 +859,7 @@ async function quoteAndGenerate(options: {
     }
     pendingQuote.value = result.value.quote;
     pendingSubmit = options.submit;
+    pendingOnSuccess = options.onSuccess ?? null;
   } finally {
     quoteLoading.value = false;
   }
@@ -865,17 +876,20 @@ async function quoteAndGenerateWithRetry(options: {
 async function handleQuoteConfirm(payload: { authorizeBudgetOverride: boolean }): Promise<void> {
   const submit = pendingSubmit;
   if (!submit || !pendingQuote.value) return;
+  // B1：先捕获成功回调，稍后清空待办状态（回调只在确认提交成功后执行）
+  const onSuccess = pendingOnSuccess;
   // 验收点：quote 过期后重新报价，不重放旧提交
   if (isQuoteExpired(pendingQuote.value)) {
     ElMessage.warning("报价已过期，正在重新报价…");
     pendingQuote.value = null;
     if (lastQuoteRequest.value) {
-      await quoteAndGenerate({ request: lastQuoteRequest.value, submit });
+      await quoteAndGenerate({ request: lastQuoteRequest.value, submit, onSuccess: onSuccess ?? undefined });
       return;
     }
     // 无重报价上下文：关闭对话框，避免残留旧报价
     quoteDialogOpen.value = false;
     pendingSubmit = null;
+    pendingOnSuccess = null;
     return;
   }
   const quote = pendingQuote.value;
@@ -885,6 +899,7 @@ async function handleQuoteConfirm(payload: { authorizeBudgetOverride: boolean })
   const retryContext = { quote, idempotencyKey };
   pendingQuote.value = null;
   pendingSubmit = null;
+  pendingOnSuccess = null;
   quoteDialogOpen.value = false;
   try {
     await submit({
@@ -893,6 +908,8 @@ async function handleQuoteConfirm(payload: { authorizeBudgetOverride: boolean })
       authorizeBudgetOverride: payload.authorizeBudgetOverride,
     });
     await assetsStore.loadProject();
+    // B1：成功反馈只在用户确认提交且提交成功之后触发
+    await onSuccess?.();
   } catch (error) {
     const msg = error instanceof Error ? error.message : "生成失败";
     // 业务冲突（409：quote 已消费/预算超限/配置漂移等）：同一 quote 重试
@@ -906,11 +923,13 @@ async function handleQuoteConfirm(payload: { authorizeBudgetOverride: boolean })
     if (isBusinessConflict) {
       pendingQuote.value = null;
       pendingSubmit = null;
+      pendingOnSuccess = null;
       quoteDialogOpen.value = false;
       ElMessage.error("生成被拒绝（" + msg + "），请重新报价后再试");
       return;
     }
     pendingSubmit = submit;
+    pendingOnSuccess = onSuccess;
     if (isQuoteExpired(quote)) {
       pendingQuote.value = null;
       if (lastQuoteRequest.value) {
@@ -928,6 +947,7 @@ function handleQuoteCancel() {
   quoteDialogOpen.value = false;
   pendingQuote.value = null;
   pendingSubmit = null;
+  pendingOnSuccess = null;
 }
 
 /** 严格模式失败：打开处理对话框（run id 与 manifest 版本来自快照）。 */
@@ -1071,11 +1091,14 @@ async function handleGenerateMissing() {
         authorizeBudgetOverride: submit.authorizeBudgetOverride,
       });
     },
+    // B1：成功反馈在确认提交成功后触发（付费路径下用户未确认不得提前提示"完成"）
+    onSuccess: async () => {
+      if (await handleDemoGeneratingError()) return;
+      if (!assetsStore.state.loadError) {
+        ElMessage.success("剩余资产生成完成");
+      }
+    },
   });
-  if (await handleDemoGeneratingError()) return;
-  if (!assetsStore.state.loadError) {
-    ElMessage.success("剩余资产生成完成");
-  }
 }
 
 async function handleGenerateByType(taskType: string, typeLabel: string) {
@@ -1107,8 +1130,10 @@ async function handleGenerateByType(taskType: string, typeLabel: string) {
         authorizeBudgetOverride: submit.authorizeBudgetOverride,
       });
     },
+    onSuccess: async () => {
+      await handleDemoGeneratingError();
+    },
   });
-  await handleDemoGeneratingError();
 }
 
 async function handleGenerateSelected() {
@@ -1137,9 +1162,15 @@ async function handleGenerateSelected() {
         authorizeBudgetOverride: submit.authorizeBudgetOverride,
       });
     },
+    // B1：选中项清理在确认提交成功后执行（未确认/取消不得清空选中）
+    onSuccess: async () => {
+      if (await handleDemoGeneratingError()) {
+        selectedBlockedIds.value = [];
+        return;
+      }
+      selectedBlockedIds.value = [];
+    },
   });
-  if (await handleDemoGeneratingError()) { selectedBlockedIds.value = []; return; }
-  selectedBlockedIds.value = [];
 }
 
 function toggleBlockedItem(taskId: string) {
@@ -1196,26 +1227,29 @@ async function handleGenerateTask(taskId: string) {
     submit: async (submit) => {
       await assetsStore.generateSingleTask(taskId, submit);
     },
+    // B1：状态反馈在确认提交成功后触发（付费路径下对话框打开时不得提前判定）
+    onSuccess: async () => {
+      try {
+        // Reload to check actual execution status
+        await assetsStore.loadProject();
+        const exec = executions.value.find(e => e.task_id === taskId);
+        if (exec?.status === "completed" || exec?.status === "accepted") {
+          ElMessage.success("生成完成");
+        } else if (exec?.status === "failed") {
+          ElMessage.error("生成失败：" + (exec.notes?.join("; ") || "未知错误"));
+        } else {
+          ElMessage.warning("任务已提交，状态：" + (exec?.status ?? "未知"));
+        }
+      } catch (error) {
+        if (isDemoVisualBlockedError(error)) {
+          showDemoModeBlock();
+          return;
+        }
+        const msg = error instanceof Error ? error.message : "生成失败";
+        ElMessage.error("单任务生成失败：" + msg);
+      }
+    },
   });
-  try {
-    // Reload to check actual execution status
-    await assetsStore.loadProject();
-    const exec = executions.value.find(e => e.task_id === taskId);
-    if (exec?.status === "completed" || exec?.status === "accepted") {
-      ElMessage.success("生成完成");
-    } else if (exec?.status === "failed") {
-      ElMessage.error("生成失败：" + (exec.notes?.join("; ") || "未知错误"));
-    } else {
-      ElMessage.warning("任务已提交，状态：" + (exec?.status ?? "未知"));
-    }
-  } catch (error) {
-    if (isDemoVisualBlockedError(error)) {
-      showDemoModeBlock();
-      return;
-    }
-    const msg = error instanceof Error ? error.message : "生成失败";
-    ElMessage.error("单任务生成失败：" + msg);
-  }
 }
 
 async function handleUpgradeVideo(segmentId: string) {
