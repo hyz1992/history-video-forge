@@ -85,36 +85,47 @@ export function createBillingInteractionLogWriter(input: {
       const interactionId = `${input.interactionRunId ?? input.billing.runId}:${operationName}:${attemptIndex}`;
       const enriched: LlmInteractionLogEntry = { ...entry, id: interactionId };
 
-      const innerResult = input.inner.write(enriched);
-
-      void recordUsage(interactionId, operationName, attemptIndex, entry).catch((error) => {
-        // 记账失败不阻断生成主链路；显式留痕（同媒体记账策略）：
-        // usage_recording_failed 事件先 writer 后 Map，writer 失败容错
-        const event = {
-          id: input.billing.db.generateId(),
-          generationRunId: input.billing.runId,
-          segmentId: null,
-          eventType: "usage_recording_failed",
-          eventJson: {
-            operation_name: operationName,
-            interaction_id: interactionId,
-            message: error instanceof Error ? error.message : String(error),
-          },
-          createdAt: new Date(),
-        } as import("../../db/client.js").GenerationRunEventRecord;
-        if (input.billing.db.thirdAggregateWriter) {
-          void input.billing.db.thirdAggregateWriter
-            .appendGenerationRunEvent(event)
-            .catch(() => undefined);
-        }
-        const events = input.billing.db.generationRunEvents.get(input.billing.runId) ?? [];
-        events.push(event);
-        input.billing.db.generationRunEvents.set(input.billing.runId, events);
-      });
-
-      return innerResult;
+      // 外部审查 P1-3 整改：返回的 Promise 必须等待"记账已落库 或
+      // usage_recording_failed 审计已持久化"才 resolve——run 完成时账本/
+      // 审计一定已落库，进程崩溃不会留下 succeeded run 无账本。记账异常
+      // 仍被吞掉（不影响生成主链路），但失败审计的持久化会被等待。
+      const innerPromise = Promise.resolve(input.inner.write(enriched));
+      const usageSettled = recordUsage(interactionId, operationName, attemptIndex, entry).catch(
+        (error) => recordUsageFailureEvent(error, interactionId, operationName),
+      );
+      return innerPromise.then(() => usageSettled);
     },
   };
+
+  /** 记账失败：持久化 usage_recording_failed 审计（等待落库，自身容错不抛出）。 */
+  async function recordUsageFailureEvent(
+    error: unknown,
+    interactionId: string,
+    operationName: string,
+  ): Promise<void> {
+    const event = {
+      id: input.billing.db.generateId(),
+      generationRunId: input.billing.runId,
+      segmentId: null,
+      eventType: "usage_recording_failed",
+      eventJson: {
+        operation_name: operationName,
+        interaction_id: interactionId,
+        message: error instanceof Error ? error.message : String(error),
+      },
+      createdAt: new Date(),
+    } as import("../../db/client.js").GenerationRunEventRecord;
+    if (input.billing.db.thirdAggregateWriter) {
+      try {
+        await input.billing.db.thirdAggregateWriter.appendGenerationRunEvent(event);
+      } catch {
+        // 审计写入本身失败（DB 不可用）：内存镜像仍留痕，不阻断生成主链路
+      }
+    }
+    const events = input.billing.db.generationRunEvents.get(input.billing.runId) ?? [];
+    events.push(event);
+    input.billing.db.generationRunEvents.set(input.billing.runId, events);
+  }
 
   // 透传 composite writer 的扩展方法（trace 追加器）
   const innerWithError = input.inner as LlmInteractionLogWriter & {
