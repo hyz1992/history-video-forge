@@ -861,7 +861,6 @@ describe("assets generate api", () => {
       method: "POST",
       url: `/api/projects/${prepared.project.id}/assets/generate`,
       payload: {
-        voice_profile_id: "voice_system_ethan",
         execution_mode: "auto_available",
         cost_quote_id: quote.quote_id,
         idempotency_key: "api-dashscope-quote-1",
@@ -1021,7 +1020,6 @@ describe("assets generate api", () => {
       method: "POST",
       url: `/api/projects/${prepared.project.id}/assets/generate`,
       payload: {
-        voice_profile_id: "voice_default_male_storyteller",
         execution_mode: "auto_available",
         cost_quote_id: quote.quote_id,
         idempotency_key: "api-dashscope-i2v-quote-1",

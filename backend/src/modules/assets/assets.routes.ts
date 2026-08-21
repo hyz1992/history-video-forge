@@ -22,6 +22,7 @@ import {
   submitGenerationRun,
 } from "../generation-run/submit-protocol.js";
 import { isPaidLlmDispatchPossible, isPaidMediaDispatchPossible } from "../generation-cost/provider-dispatch-gate.js";
+import { resolveCreativeVoiceForExecution } from "./voice/creative-voice-execution.js";
 import type { GenerationQuoteSelection } from "../../../../shared/src/index.js";
 
 function readOptionalNumber(value: unknown): number | undefined {
@@ -120,9 +121,6 @@ async function generateAssetsController(
   const demoBlock = checkDemoModeVisualBlock(context, targetTaskTypes);
   if (demoBlock) return demoBlock;
 
-  const voiceProfileId =
-    payload.voice_profile_id as string | undefined
-      ?? "voice_default_male_storyteller";
   const executionMode =
     payload.execution_mode as string | undefined
       ?? "auto_available";
@@ -130,6 +128,8 @@ async function generateAssetsController(
 
   // S2-2A 任务 8：提交协议（cost_quote_id / authorize_budget_override / idempotency_key）。
   // 提供任一字段时走 GenerationRunService 事务创建/恢复 run；都不提供则保持旧路径。
+  // S2-2B：客户端 voice_profile_id 已废弃——提交路径不再携带（执行音色由快照
+  // resolved_creative 决定，冲突先于 quote 消费校验）；legacy 路径忽略客户端值。
   // demo 视觉拦截与凭据拦截同样适用于提交路径（在事务创建前返回）。
   const submitFields = extractSubmitFields(payload);
   if (submitFields.present) {
@@ -144,7 +144,12 @@ async function generateAssetsController(
       task_ids: requestedTaskIds ?? [],
     };
     return submitGenerationRun(context, "assets.generate", selection, {
-      voice_profile_id: voiceProfileId,
+      // S2-2B：客户端 voice_profile_id 已废弃，但若旧客户端仍携带则原样透传，
+      // 由提交服务在 quote 消费前与快照 resolved_creative 比对（一致放行/
+      // 不一致 422）。执行端一律以快照为唯一权威。
+      ...(typeof payload.voice_profile_id === "string"
+        ? { voice_profile_id: payload.voice_profile_id }
+        : {}),
       execution_mode: executionMode,
       mode: requestedMode ?? null,
       task_ids: requestedTaskIds ?? [],
@@ -168,10 +173,24 @@ async function generateAssetsController(
       },
     };
   }
+  // S2-2B：legacy 免 quote 路径忽略客户端 voice_profile_id，
+  // 音色由项目配置 creative 解析（auto → intent 匹配）。
+  let creativeVoiceProfileId: string;
+  try {
+    creativeVoiceProfileId = await resolveCreativeVoiceForExecution(context.app.db, project);
+  } catch (error) {
+    return {
+      statusCode: 500,
+      body: {
+        error: "generation_creative_voice_resolution_failed",
+        reason_code: error instanceof Error ? error.message : "unknown",
+      },
+    };
+  }
   return runAssetsGeneration({
     db: context.app.db,
     project,
-    voiceProfileId,
+    voiceProfileId: creativeVoiceProfileId,
     executionMode,
     enabledProviderTypes,
     missingOnly,
@@ -568,10 +587,9 @@ async function generateTaskController(
   const payload = context.payload as Record<string, unknown>;
   const credentialsBlock = rejectClientProviderCredentials(payload);
   if (credentialsBlock) return credentialsBlock;
-  const voiceProfileId =
-    (payload.voice_profile_id as string | undefined) ?? "voice_default_male_storyteller";
 
   // S2-2A 任务 8：单任务生成同样接受提交协议（selection 只含该任务）。
+  // S2-2B：客户端 voice_profile_id 已废弃（快照为唯一权威；冲突先于 quote 消费）。
   const submitFields = extractSubmitFields(payload);
   if (submitFields.present) {
     if (submitFields.invalid) {
@@ -581,7 +599,9 @@ async function generateTaskController(
       };
     }
     return submitGenerationRun(context, "assets.generate", { task_ids: [taskId] }, {
-      voice_profile_id: voiceProfileId,
+      ...(typeof payload.voice_profile_id === "string"
+        ? { voice_profile_id: payload.voice_profile_id }
+        : {}),
       execution_mode: "auto_available",
       mode: null,
       task_ids: [taskId],
@@ -602,10 +622,23 @@ async function generateTaskController(
       },
     };
   }
+  // S2-2B：legacy 路径音色由项目配置 creative 解析
+  let creativeVoiceProfileId: string;
+  try {
+    creativeVoiceProfileId = await resolveCreativeVoiceForExecution(context.app.db, project);
+  } catch (error) {
+    return {
+      statusCode: 500,
+      body: {
+        error: "generation_creative_voice_resolution_failed",
+        reason_code: error instanceof Error ? error.message : "unknown",
+      },
+    };
+  }
   return runAssetsGeneration({
     db: context.app.db,
     project,
-    voiceProfileId,
+    voiceProfileId: creativeVoiceProfileId,
     executionMode: "auto_available",
     taskIds: [taskId],
   });

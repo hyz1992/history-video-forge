@@ -1999,10 +1999,17 @@ export function createAssetsDispatchHandler(): import("../generation-run/generat
           resolved: snapshot.resolvedConfigurationJson as unknown as ResolvedGenerationConfigurationV1,
         }
       : undefined;
+    // S2-2B（详细设计 §6.2）：快照是音色唯一权威——fixed 用指定档案；
+    // auto 传空串触发 intent 匹配。客户端 payload.voice_profile_id 已废弃。
+    const resolvedVoice = boundContext?.resolved.resolved_creative.voice;
+    const voiceProfileId =
+      resolvedVoice && resolvedVoice.mode === "fixed" && resolvedVoice.voice_profile_id
+        ? resolvedVoice.voice_profile_id
+        : "";
     const response = await runAssetsGeneration({
       db,
       project,
-      voiceProfileId: payload.voice_profile_id ?? "voice_default_male_storyteller",
+      voiceProfileId,
       executionMode: payload.execution_mode ?? "auto_available",
       enabledProviderTypes: payload.enabled_provider_types,
       missingOnly: payload.mode === "missing_only",

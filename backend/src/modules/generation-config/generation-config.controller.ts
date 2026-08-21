@@ -154,7 +154,12 @@ function parsePatchPayload(payload: unknown, schema: ZodTypeAny): ParsedPayload 
     schema_version: "generation_configuration_v1",
     video: p.video,
     budget: p.budget,
-    creative: { voice_profile_id: null, art_style_preset_id: null, subtitle_style_preset_id: null },
+    creative: {
+      voice_profile_id: null,
+      art_style_preset_id: null,
+      subtitle_style_preset_id: null,
+      subtitle_style_overrides: {},
+    },
     capabilities: {
       "llm.smart": { mode: "auto" },
       "llm.flash": { mode: "auto" },

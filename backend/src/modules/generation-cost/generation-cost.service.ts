@@ -13,6 +13,7 @@ import {
   canonicalStringify,
   resolveGenerationConfiguration,
   DEFAULT_GENERATION_CONFIGURATION,
+  CREATIVE_PRESET_REGISTRY_SNAPSHOT_V1,
   GenerationQuoteRequestSchema,
   GenerationQuoteResponseSchema,
   ProjectCostRecordSchema,
@@ -30,6 +31,7 @@ import {
   type SegmentInput,
   type SegmentVisualStrategyOverride,
 } from "../../../../shared/src/index.js";
+import { listVoiceProfiles } from "../assets/voice/voice-profile.repository.js";
 import { resolveSystemGenerationConstraints } from "../generation-config/system-constraints.js";
 import {
   computePricingHash,
@@ -365,6 +367,11 @@ async function resolveQuoteConfiguration(
       status: entry.status,
       is_default: entry.isDefault,
     })),
+    // S2-2B：音色库按项目 owner 可见性过滤（公共 + 本人私有）；Prisma 态
+    // repository 直查数据库（跨实例权威，与快照 P1-2 整改同一模式）。
+    voiceProfiles: await listVoiceProfiles(db, { ownerId: project.ownerId }),
+    // S2-2B：preset 注册表只在解析阶段读取（外部审查 P1-3）。
+    creativePresets: CREATIVE_PRESET_REGISTRY_SNAPSHOT_V1,
     operation: input.operation,
     segmentInputs,
   });

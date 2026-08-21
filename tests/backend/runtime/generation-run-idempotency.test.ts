@@ -64,7 +64,8 @@ function createMigratedDatabase(): string {
   return databasePath;
 }
 
-const SUBMIT_PAYLOAD = { voice_profile_id: "voice_default_male_storyteller", execution_mode: "auto_available" };
+// S2-2B：客户端 voice_profile_id 已废弃（快照为唯一权威）；auto 模式提交不再携带。
+const SUBMIT_PAYLOAD = { execution_mode: "auto_available" };
 
 async function prepareMapSubmitContext() {
   const app = buildApp();

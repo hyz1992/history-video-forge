@@ -139,6 +139,9 @@ export const GENERATION_SUBMIT_ERROR_CODES = [
   "generation_budget_exceeded",
   "generation_idempotency_payload_conflict",
   "generation_run_persistence_failed",
+  // S2-2B（外部审查 P1-5）：客户端 voice_profile_id 与快照 resolved_creative
+  // 不一致。校验先于 quote 消费事务——失败时 quote 未消费、无 snapshot/run。
+  "generation_voice_profile_conflict",
 ] as const;
 export type GenerationSubmitErrorCode = (typeof GENERATION_SUBMIT_ERROR_CODES)[number];
 

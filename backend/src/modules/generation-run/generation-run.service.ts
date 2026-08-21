@@ -12,6 +12,7 @@ import {
   type GenerationQuoteRunOverrides,
   type GenerationQuoteSelection,
   type GenerationSubmitErrorCode,
+  type ResolvedCreativeVoice,
   type ResolvedGenerationConfigurationV1,
 } from "../../../../shared/src/index.js";
 import type { QuoteReadinessInput } from "../generation-cost/generation-cost.service.js";
@@ -178,6 +179,23 @@ export async function createOrRestoreGenerationRun(
     };
   }
 
+  // S2-2B（外部审查 P1-5）：客户端 voice_profile_id 与快照 resolved_creative
+  // 不一致时，必须在 quote 消费事务之前拒绝——失败时 quote 未消费（consumedAt
+  // 为空）、未创建 snapshot/run、无任何 provider 调用；重试只需修正负载或重新报价。
+  const voiceProfileConflict = checkVoiceProfileConflict(
+    (input.dispatchPayload as { voice_profile_id?: unknown } | undefined)?.voice_profile_id,
+    revalidated.value.resolved.resolved_creative.voice,
+  );
+  if (voiceProfileConflict) {
+    return {
+      ok: false,
+      error: {
+        code: "generation_voice_profile_conflict",
+        message: voiceProfileConflict,
+      },
+    };
+  }
+
   // 7-8. 同一事务：snapshot + pending_dispatch run + quote 消费 + 审计。
   // 9A 步骤 2（终审 I-A）：把授权绑定的 plan/storyboard 身份写入 dispatch
   // payload——执行端按此身份执行，而不是实例内存中的活动指针。
@@ -297,8 +315,36 @@ export async function createOrRestoreGenerationRun(
 }
 
 /** 构建不可变运行快照（quote 绑定字段成套复制；snapshot 不提供 update）。 */
-function buildSnapshot(
-  db: DbClient,
+/**
+ * S2-2B（外部审查 P1-5）：客户端 voice_profile_id 与快照 resolved_creative
+ * 一致性校验。返回 null = 一致；返回字符串 = 冲突原因。
+ * - 快照 fixed：客户端必须携带相同 id（或省略）——不一致即冲突。
+ * - 快照 auto：客户端不得携带任何非空显式 id（执行端按 intent 匹配）。
+ */
+function checkVoiceProfileConflict(
+  clientVoiceProfileId: unknown,
+  resolvedVoice: ResolvedCreativeVoice,
+): string | null {
+  const clientId =
+    typeof clientVoiceProfileId === "string" && clientVoiceProfileId.length > 0
+      ? clientVoiceProfileId
+      : null;
+
+  if (resolvedVoice.mode === "fixed") {
+    if (clientId !== null && clientId !== resolvedVoice.voice_profile_id) {
+      return `client voice_profile_id "${clientId}" conflicts with resolved snapshot voice profile "${resolvedVoice.voice_profile_id}"`;
+    }
+    return null;
+  }
+
+  // auto：客户端显式指定即冲突（快照才是权威；B 起该字段废弃）
+  if (clientId !== null) {
+    return `client voice_profile_id "${clientId}" conflicts with resolved snapshot voice mode=auto (client field is deprecated)`;
+  }
+  return null;
+}
+
+function buildSnapshot(  db: DbClient,
   project: ProjectRecord,
   quote: GenerationCostQuoteRecord,
   input: SubmitGenerationInput,

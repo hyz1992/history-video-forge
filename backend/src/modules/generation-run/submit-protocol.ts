@@ -120,9 +120,11 @@ export async function submitGenerationRun(
     },
   );
   if (!result.ok) {
-    // 404：quote 不存在；500：服务端持久化故障（可重试）；其余业务冲突一律 409
+    // 404：quote 不存在；422：负载与快照冲突（S2-2B voice_profile_id，先于
+    // quote 消费校验）；500：服务端持久化故障（可重试）；其余业务冲突一律 409
     let statusCode = 409;
     if (result.error.code === "generation_quote_not_found") statusCode = 404;
+    if (result.error.code === "generation_voice_profile_conflict") statusCode = 422;
     if (result.error.code === "generation_run_persistence_failed") statusCode = 500;
     return { statusCode, body: { error: result.error.code, message: result.error.message } };
   }
