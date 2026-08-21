@@ -50,6 +50,39 @@ export function getUserGenerationPreference(db: DbClient, userId: string): UserP
 }
 
 /** 用数据库返回的真实记录同步内存 Map（同 userId 旧记录整体替换）。 */
+function syncUserPreferenceRecordFromDb(
+  db: DbClient,
+  record: UserGenerationPreferenceRecord,
+): UserPreferenceResult {
+  syncUserPreferenceRecord(db, record);
+  return {
+    userId: record.userId,
+    revision: record.revision,
+    configuration: record.configurationJson,
+    schemaVersion: record.schemaVersion,
+    updatedAt: record.updatedAt,
+  };
+}
+
+/**
+ * S2-2C（复审整改 P2）：以数据库为权威读取用户偏好，**不创建**。
+ * 内存有 → 直接返回；内存无且 writer 提供只读查询 → 经 DB 查询并同步内存
+ * （跨实例：另一实例创建/更新的记录在本实例内存缺失时仍能读到真实值，
+ * capabilities 缺省保留语义与 revision 检查不依赖本实例内存）；Map 态无
+ * writer → 返回内存结果（Map 即真相源）。
+ */
+export async function getUserPreferenceDbAuthoritative(
+  db: DbClient,
+  userId: string,
+): Promise<UserPreferenceResult | null> {
+  const inMemory = getUserGenerationPreference(db, userId);
+  if (inMemory) return inMemory;
+  if (db.firstAggregateWriter?.getUserGenerationPreference) {
+    const dbRecord = await db.firstAggregateWriter.getUserGenerationPreference(userId);
+    if (dbRecord) return syncUserPreferenceRecordFromDb(db, dbRecord);
+  }
+  return null;
+}
 function syncUserPreferenceRecord(db: DbClient, record: UserGenerationPreferenceRecord): void {
   for (const [key, existing] of db.userGenerationPreferences) {
     if (existing.userId === record.userId) db.userGenerationPreferences.delete(key);
@@ -119,7 +152,9 @@ export async function upsertUserGenerationPreference(
     return { ok: false, error: { code: "configuration_invalid_s2_2c_scope", reason: scopeCheck.reason } };
   }
 
-  const existing = getUserGenerationPreference(db, userId);
+  // 复审整改 P2：以 DB 为权威获取 existing（跨实例内存缺失时经 writer 查询
+  // 并同步），避免 CAS 前用空内存误报 current_revision: 0。
+  const existing = await getUserPreferenceDbAuthoritative(db, userId);
 
   // 乐观锁：expected_revision 不匹配 → 冲突
   if (existing) {
@@ -412,12 +447,16 @@ function computeInvalidationPreview(
   oldConfig: GenerationConfigurationV1,
   newConfig: GenerationConfigurationV1,
 ): InvalidationPreview {
-  const stages: string[] = [];
+  // 复审整改 P2：集合语义去重（与 GET 预览 previewFromUserDefaultDiff 一致）——
+  // 多槽同时变化（如 llm.smart + llm.flash）不得重复输出同一阶段。
+  const stages = new Set<string>();
   if (oldConfig.video.strategy !== newConfig.video.strategy) {
-    stages.push("storyboard_route_resolution", "asset_planning");
+    stages.add("storyboard_route_resolution");
+    stages.add("asset_planning");
   }
   if (oldConfig.video.api_quality !== newConfig.video.api_quality) {
-    stages.push("asset_planning", "assets");
+    stages.add("asset_planning");
+    stages.add("assets");
   }
   // S2-2C（详细设计 §4.3）：capabilities 变更的失效映射
   // llm.smart/llm.flash → llm_generation；image.generate → asset_planning+assets；
@@ -427,16 +466,18 @@ function computeInvalidationPreview(
     const to = newConfig.capabilities[slot];
     if (JSON.stringify(from) !== JSON.stringify(to)) {
       if (slot === "llm.smart" || slot === "llm.flash") {
-        stages.push("llm_generation");
+        stages.add("llm_generation");
       } else if (slot === "image.generate") {
-        stages.push("asset_planning", "assets");
+        stages.add("asset_planning");
+        stages.add("assets");
       } else {
-        stages.push("assets");
+        stages.add("assets");
       }
     }
   }
+  const ordered = [...stages];
   return {
-    affected_stages: stages.length > 0 ? stages : ["none"],
+    affected_stages: ordered.length > 0 ? ordered : ["none"],
     note: "配置变更仅保存，不自动触发下游生成；用户需显式重新规划/生成受影响阶段。",
   };
 }

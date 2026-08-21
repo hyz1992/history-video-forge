@@ -475,6 +475,12 @@ export interface DbClient {
     recordRecommendationRound(record: ProjectRecommendationRoundRecord, projectOwnerId: string): Promise<void>;
     activateTopic(project: ProjectRecord, topic: TopicPackageRecord): Promise<void>;
     saveUserGenerationPreference(record: UserGenerationPreferenceRecord): Promise<void>;
+    /**
+     * S2-2C（复审整改 P2）：DB 权威只读查询——跨实例场景下本实例内存镜像
+     * 可能没有另一实例创建/更新的记录，repository 需要以数据库为权威读取
+     * 真实值（缺省保留语义与 revision 检查不依赖本实例内存）。
+     */
+    getUserGenerationPreference?(userId: string): Promise<UserGenerationPreferenceRecord | null>;
     saveProjectGenerationConfiguration(record: ProjectGenerationConfigurationRecord): Promise<void>;
     saveProviderModelCatalogEntry(record: ProviderModelCatalogRecord): Promise<void>;
     /**

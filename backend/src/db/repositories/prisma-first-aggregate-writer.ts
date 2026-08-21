@@ -199,6 +199,17 @@ export class PrismaFirstAggregateWriter {
   }
 
   /**
+   * S2-2C（复审整改 P2）：DB 权威只读查询——跨实例内存缺失时 repository
+   * 以数据库为权威读取用户偏好（缺省保留语义与 revision 检查不依赖内存）。
+   */
+  async getUserGenerationPreference(userId: string): Promise<UserGenerationPreferenceRecord | null> {
+    const row = await this.client.userGenerationPreference.findUnique({
+      where: { userId },
+    });
+    return row ? mapUserPreferenceRow(row) : null;
+  }
+
+  /**
    * CAS 更新或创建用户偏好。
    * expectedRevision=0 → 事务内 create（唯一冲突→返回完整现有记录）。
    * expectedRevision>0 → 条件 updateMany WHERE revision=expectedRevision。

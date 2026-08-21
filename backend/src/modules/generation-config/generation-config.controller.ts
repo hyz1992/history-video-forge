@@ -3,7 +3,7 @@ import { requireUser } from "../../auth/authorization.js";
 import { guardOwnedRoute, guardUserRoute } from "../../auth/authorization.js";
 import {
   getOrBackfillUserGenerationPreference,
-  getUserGenerationPreference,
+  getUserPreferenceDbAuthoritative,
   upsertUserGenerationPreference,
   getProjectGenerationConfiguration,
   upsertProjectGenerationConfiguration,
@@ -54,7 +54,9 @@ export const patchUserPreferenceController = guardUserRoute(
     const user = requireUser(context.auth);
     // S2-2C（详细设计 §4.1）：capabilities 缺省 = 保留现有配置值（不静默清空
     // 已保存的 fixed 选择）；仅首次创建（无现有记录）缺省才用全 auto。
-    const existing = getUserGenerationPreference(context.app.db, user.userId);
+    // 复审整改 P2：以数据库为权威读取（跨实例内存缺失时经 writer 查询同步），
+    // 保证保留语义与 revision 检查不依赖本实例内存。
+    const existing = await getUserPreferenceDbAuthoritative(context.app.db, user.userId);
     const currentCapabilities = existing?.configuration.capabilities;
     const parsed = parsePatchPayload(
       context.payload,

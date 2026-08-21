@@ -6,8 +6,10 @@ import type {
   ProjectGenerationConfigurationRecord,
   UserGenerationPreferenceRecord,
 } from "../../../backend/src/db/client.js";
+import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import {
   getUserGenerationPreference,
+  getUserPreferenceDbAuthoritative,
   upsertUserGenerationPreference,
   getOrBackfillUserGenerationPreference,
   getProjectGenerationConfiguration,
@@ -286,6 +288,109 @@ describe("generation-config repository", () => {
       await expect(getProjectGenerationConfiguration(db, "p1")).rejects.toThrow("audit_log_fk_failed");
       // 内存不能有虚假记录
       expect(db.projectGenerationConfigurations.size).toBe(0);
+    });
+  });
+
+  describe("S2-2C 复审整改：DB 权威读取与失效预览去重", () => {
+    function buildFixedConfig() {
+      return {
+        ...DEFAULT_GENERATION_CONFIGURATION,
+        capabilities: {
+          ...DEFAULT_GENERATION_CONFIGURATION.capabilities,
+          "llm.smart": { mode: "fixed", provider_model_id: "llm.smart.deepseek.deepseek-v4-pro" },
+        },
+      };
+    }
+
+    it("内存缺失 + DB 已有 fixed 配置 → getUserPreferenceDbAuthoritative 返回 DB 记录并同步内存", async () => {
+      const db = createDbClient();
+      const dbRecord: UserGenerationPreferenceRecord = {
+        id: "db-id",
+        userId: "u1",
+        schemaVersion: "generation_configuration_v1",
+        revision: 2,
+        configurationJson: buildFixedConfig(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      // 模拟另一实例已创建/更新：本实例内存为空，writer 提供 DB 权威查询
+      db.firstAggregateWriter = {
+        getUserGenerationPreference: async () => dbRecord,
+      };
+      const result = await getUserPreferenceDbAuthoritative(db, "u1");
+      expect(result?.revision).toBe(2);
+      expect(result?.configuration.capabilities["llm.smart"]).toEqual({
+        mode: "fixed",
+        provider_model_id: "llm.smart.deepseek.deepseek-v4-pro",
+      });
+      // 内存已同步（后续同进程读取一致）
+      expect(getUserGenerationPreference(db, "u1")?.revision).toBe(2);
+    });
+
+    it("跨实例 PATCH：内存无记录 + DB revision=2 → expected_revision=2 不再误报 current_revision: 0", async () => {
+      const db = createDbClient();
+      const dbRecord: UserGenerationPreferenceRecord = {
+        id: "db-id",
+        userId: "u1",
+        schemaVersion: "generation_configuration_v1",
+        revision: 2,
+        configurationJson: buildFixedConfig(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      let upserted: UserGenerationPreferenceRecord | null = null;
+      db.firstAggregateWriter = {
+        getUserGenerationPreference: async () => dbRecord,
+        casUpsertUserGenerationPreference: async (record) => {
+          upserted = record;
+          return { success: true };
+        },
+      };
+      const result = await upsertUserGenerationPreference(db, "u1", {
+        expected_revision: 2,
+        configuration: {
+          ...buildFixedConfig(),
+          video: { strategy: "all_remotion", api_quality: "standard_720p" },
+        },
+      }, "u1");
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.revision).toBe(3);
+      // 保留语义：capabilities fixed 未被清空（配置由 controller 用 DB 权威值组装）
+      expect(upserted?.configurationJson.capabilities["llm.smart"]).toEqual({
+        mode: "fixed",
+        provider_model_id: "llm.smart.deepseek.deepseek-v4-pro",
+      });
+    });
+
+    it("失效预览去重：llm.smart + llm.flash 同时变化只输出一个 llm_generation", async () => {
+      const db = createDbClient();
+      const project = await createProject(db, { name: "Dedup Preview" });
+      await upsertProjectGenerationConfiguration(db, project.id, {
+        expected_revision: 1,
+        configuration: DEFAULT_GENERATION_CONFIGURATION,
+      }, "u1");
+      const changed = {
+        ...DEFAULT_GENERATION_CONFIGURATION,
+        video: { ...DEFAULT_GENERATION_CONFIGURATION.video, api_quality: "high_1080p" as const },
+        capabilities: {
+          ...DEFAULT_GENERATION_CONFIGURATION.capabilities,
+          "llm.smart": { mode: "fixed", provider_model_id: "llm.smart.deepseek.deepseek-v4-pro" },
+          "llm.flash": { mode: "fixed", provider_model_id: "llm.flash.zhipu.glm-4" },
+          "image.generate": { mode: "fixed", provider_model_id: "img.dashscope.wan2" },
+        },
+      };
+      const result = await upsertProjectGenerationConfiguration(db, project.id, {
+        expected_revision: 2,
+        configuration: changed,
+      }, "u1");
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      const stages = result.value.invalidation_preview.affected_stages;
+      // llm_generation 恰好一个（两个 LLM 槽位去重）；asset_planning/assets 恰好各一
+      expect(stages.filter((s) => s === "llm_generation").length).toBe(1);
+      expect(stages.filter((s) => s === "asset_planning").length).toBe(1);
+      expect(stages.filter((s) => s === "assets").length).toBe(1);
     });
   });
 });
