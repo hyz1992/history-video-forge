@@ -93,7 +93,7 @@ describe("generation-config repository", () => {
       expect(result.ok).toBe(true);
     });
 
-    it("rejects fixed capability in S2-2B scope（capabilities 仍必须全 auto）", async () => {
+    it("S2-2C：fixed capability 开放保存（scope 校验迁移：B 期拒绝 → C 期允许）", async () => {
       const db = createDbClient();
       const result = await upsertUserGenerationPreference(db, "u1", {
         expected_revision: null,
@@ -101,13 +101,16 @@ describe("generation-config repository", () => {
           ...DEFAULT_GENERATION_CONFIGURATION,
           capabilities: {
             ...DEFAULT_GENERATION_CONFIGURATION.capabilities,
-            "llm.smart": { mode: "fixed", provider_model_id: "attacker" },
+            "llm.smart": { mode: "fixed", provider_model_id: "llm.smart.deepseek.deepseek-v4-pro" },
           },
         },
       }, "u1");
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      expect(result.error.code).toBe("configuration_invalid_s2_2b_scope");
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.configuration.capabilities["llm.smart"]).toEqual({
+        mode: "fixed",
+        provider_model_id: "llm.smart.deepseek.deepseek-v4-pro",
+      });
     });
   });
 

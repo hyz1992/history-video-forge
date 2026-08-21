@@ -3,6 +3,7 @@ import { requireUser } from "../../auth/authorization.js";
 import { guardOwnedRoute, guardUserRoute } from "../../auth/authorization.js";
 import {
   getOrBackfillUserGenerationPreference,
+  getUserGenerationPreference,
   upsertUserGenerationPreference,
   getProjectGenerationConfiguration,
   upsertProjectGenerationConfiguration,
@@ -13,9 +14,10 @@ import {
   CreativePresetsResponse,
   GenerationCapabilitiesResponse,
   ProjectGenerationConfigurationResponse,
-  S2_2B_ConfigPatchRequest,
-  S2_2B_ProjectConfigPatchRequest,
+  S2_2C_ConfigPatchRequest,
+  S2_2C_ProjectConfigPatchRequest,
   UserGenerationPreferenceResponse,
+  type CapabilitySelectionMap,
   type CreativePreferences,
   type GenerationConfigurationV1,
 } from "../../../../shared/src/index.js";
@@ -50,14 +52,22 @@ export const getUserPreferenceController = guardUserRoute(
 export const patchUserPreferenceController = guardUserRoute(
   async (context: RouteContext): Promise<AppResponse> => {
     const user = requireUser(context.auth);
-    const parsed = parsePatchPayload(context.payload, S2_2B_ConfigPatchRequest);
+    // S2-2C（详细设计 §4.1）：capabilities 缺省 = 保留现有配置值（不静默清空
+    // 已保存的 fixed 选择）；仅首次创建（无现有记录）缺省才用全 auto。
+    const existing = getUserGenerationPreference(context.app.db, user.userId);
+    const currentCapabilities = existing?.configuration.capabilities;
+    const parsed = parsePatchPayload(
+      context.payload,
+      S2_2C_ConfigPatchRequest,
+      currentCapabilities,
+    );
     if (!parsed.ok) return parsed.response;
     const result = await upsertUserGenerationPreference(context.app.db, user.userId, {
       expected_revision: parsed.expected_revision,
       configuration: parsed.configuration,
     }, user.userId);
     if (!result.ok) {
-      if (result.error.code === "configuration_invalid_s2_2b_scope") {
+      if (result.error.code === "configuration_invalid_s2_2c_scope") {
         return { statusCode: 400, body: { error: result.error.code, reason: result.error.reason } };
       }
       return {
@@ -98,14 +108,21 @@ export const getProjectConfigController = guardOwnedRoute(
 export const patchProjectConfigController = guardOwnedRoute(
   async (context: RouteContext): Promise<AppResponse> => {
     const user = requireUser(context.auth);
-    const parsed = parsePatchPayload(context.payload, S2_2B_ProjectConfigPatchRequest);
+    // S2-2C（详细设计 §4.1）：capabilities 缺省 = 保留现有项目配置值
+    // （getProjectGenerationConfiguration 幂等 backfill，旧客户端不静默清空 fixed）。
+    const current = await getProjectGenerationConfiguration(context.app.db, context.params.projectId, user.userId);
+    const parsed = parsePatchPayload(
+      context.payload,
+      S2_2C_ProjectConfigPatchRequest,
+      current.configuration.capabilities,
+    );
     if (!parsed.ok) return parsed.response;
     const result = await upsertProjectGenerationConfiguration(context.app.db, context.params.projectId, {
       expected_revision: parsed.expected_revision!,
       configuration: parsed.configuration,
     }, user.userId);
     if (!result.ok) {
-      if (result.error.code === "configuration_invalid_s2_2b_scope") {
+      if (result.error.code === "configuration_invalid_s2_2c_scope") {
         return { statusCode: 400, body: { error: result.error.code, reason: result.error.reason } };
       }
       return {
@@ -145,7 +162,11 @@ interface ParsedPayload {
   response: AppResponse;
 }
 
-function parsePatchPayload(payload: unknown, schema: ZodTypeAny): ParsedPayload {
+function parsePatchPayload(
+  payload: unknown,
+  schema: ZodTypeAny,
+  currentCapabilities?: GenerationConfigurationV1["capabilities"],
+): ParsedPayload {
   const parseResult = schema.safeParse(payload);
   if (!parseResult.success) {
     return {
@@ -160,6 +181,7 @@ function parsePatchPayload(payload: unknown, schema: ZodTypeAny): ParsedPayload 
     video: GenerationConfigurationV1["video"];
     budget: GenerationConfigurationV1["budget"];
     creative?: CreativePreferences;
+    capabilities?: CapabilitySelectionMap;
   };
   // S2-2B：creative 提供时整体替换；缺省时回 A 期默认（全 null + 空覆盖）——
   // 对不携带 creative 的旧 A 客户端零行为变化；B 前端总是携带 creative。
@@ -169,18 +191,23 @@ function parsePatchPayload(payload: unknown, schema: ZodTypeAny): ParsedPayload 
     subtitle_style_preset_id: null,
     subtitle_style_overrides: {},
   };
-  const fullConfig: GenerationConfigurationV1 = {
-    schema_version: "generation_configuration_v1",
-    video: p.video,
-    budget: p.budget,
-    creative,
-    capabilities: {
+  // S2-2C（外部审查 P1 整改）：capabilities 提供时整体替换；缺省时**保留现有
+  // 配置值**（旧 A/B 客户端修改 video/creative 不会静默清空已保存的 fixed 选择）；
+  // 无现有记录（首次创建）才使用全 auto。
+  const capabilities: GenerationConfigurationV1["capabilities"] =
+    p.capabilities ?? currentCapabilities ?? {
       "llm.smart": { mode: "auto" },
       "llm.flash": { mode: "auto" },
       "image.generate": { mode: "auto" },
       "video.image_to_video": { mode: "auto" },
       "tts.synthesize": { mode: "auto" },
-    },
+    };
+  const fullConfig: GenerationConfigurationV1 = {
+    schema_version: "generation_configuration_v1",
+    video: p.video,
+    budget: p.budget,
+    creative,
+    capabilities,
   };
   return { ok: true, expected_revision: p.expected_revision, configuration: fullConfig, response: { statusCode: 200, body: {} } };
 }
@@ -220,6 +247,26 @@ function previewFromUserDefaultDiff(
   }
   if (creativeDiff?.from?.subtitle_style_preset_id !== creativeDiff?.to?.subtitle_style_preset_id) {
     stages.add("assets");
+  }
+  // S2-2C（详细设计 §4.3）：capabilities 变更的失效映射
+  // llm.smart/llm.flash → llm_generation；image.generate → asset_planning+assets；
+  // video.image_to_video/tts.synthesize → assets。
+  const capabilitiesDiff = diff.capabilities as
+    | { from?: Record<string, { mode?: string; provider_model_id?: string }>; to?: Record<string, { mode?: string; provider_model_id?: string }> }
+    | undefined;
+  if (capabilitiesDiff?.from && capabilitiesDiff?.to) {
+    for (const slot of ["llm.smart", "llm.flash", "image.generate", "video.image_to_video", "tts.synthesize"]) {
+      if (JSON.stringify(capabilitiesDiff.from[slot]) !== JSON.stringify(capabilitiesDiff.to[slot])) {
+        if (slot === "llm.smart" || slot === "llm.flash") {
+          stages.add("llm_generation");
+        } else if (slot === "image.generate") {
+          stages.add("asset_planning");
+          stages.add("assets");
+        } else {
+          stages.add("assets");
+        }
+      }
+    }
   }
   return {
     affected_stages: stages.size > 0 ? [...stages] : ["none"],

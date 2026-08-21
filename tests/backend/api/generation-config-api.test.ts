@@ -308,7 +308,7 @@ describe("generation-config API", () => {
       expect(creative.subtitle_style_overrides).toEqual({});
     });
 
-    it("PATCH creative 越权字段（capabilities fixed）→ 400 configuration_invalid_s2_2b_scope", async () => {
+    it("capabilities 部分提供（只给一槽）→ 400 invalid_patch_payload（五槽 strict 合同）", async () => {
       const app = buildApp();
       const res = await app.inject({
         method: "PATCH",
@@ -373,6 +373,138 @@ describe("generation-config API", () => {
       expect(artPreset.overridable_fields).toBeNull();
       const subtitlePreset = body.subtitle[0];
       expect(subtitlePreset.overridable_fields.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("S2-2C capabilities PATCH 与保留语义", () => {
+    const FULL_CAPABILITIES = {
+      "llm.smart": { mode: "fixed", provider_model_id: "llm.smart.deepseek.deepseek-v4-pro" },
+      "llm.flash": { mode: "auto" },
+      "image.generate": { mode: "auto" },
+      "video.image_to_video": { mode: "auto" },
+      "tts.synthesize": { mode: "auto" },
+    };
+
+    it("用户 PATCH 携带完整五槽 capabilities：fixed 保存并可读回", async () => {
+      const app = buildApp();
+      const res = await app.inject({
+        method: "PATCH",
+        url: "/api/me/generation-preferences",
+        payload: {
+          expected_revision: null,
+          video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
+          capabilities: FULL_CAPABILITIES,
+        },
+        auth,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().configuration.capabilities["llm.smart"]).toEqual({
+        mode: "fixed",
+        provider_model_id: "llm.smart.deepseek.deepseek-v4-pro",
+      });
+      const read = await app.inject({ method: "GET", url: "/api/me/generation-preferences", auth });
+      expect(read.json().configuration.capabilities["llm.smart"].mode).toBe("fixed");
+    });
+
+    it("保留语义：已有 fixed + 旧 B 形状请求体（无 capabilities 段）→ fixed 保持不变", async () => {
+      const app = buildApp();
+      await app.inject({
+        method: "PATCH",
+        url: "/api/me/generation-preferences",
+        payload: {
+          expected_revision: null,
+          video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
+          capabilities: FULL_CAPABILITIES,
+        },
+        auth,
+      });
+      // 旧 B 客户端只改 video，不携带 capabilities 段
+      const res = await app.inject({
+        method: "PATCH",
+        url: "/api/me/generation-preferences",
+        payload: {
+          expected_revision: 1,
+          video: { strategy: "all_remotion", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
+        },
+        auth,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().configuration.capabilities["llm.smart"]).toEqual({
+        mode: "fixed",
+        provider_model_id: "llm.smart.deepseek.deepseek-v4-pro",
+      });
+    });
+
+    it("首次创建缺省（无 capabilities 段）→ 全 auto", async () => {
+      const app = buildApp();
+      const res = await app.inject({
+        method: "PATCH",
+        url: "/api/me/generation-preferences",
+        payload: {
+          expected_revision: null,
+          video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
+        },
+        auth,
+      });
+      expect(res.statusCode).toBe(200);
+      for (const slot of Object.keys(res.json().configuration.capabilities)) {
+        expect(res.json().configuration.capabilities[slot]).toEqual({ mode: "auto" });
+      }
+    });
+
+    it("项目保留语义：项目已 fixed + 旧 B 形状请求体 → fixed 保持不变", async () => {
+      const app = buildApp();
+      const projectId = await createProjectForUser(app, auth);
+      await app.inject({
+        method: "PATCH",
+        url: `/api/projects/${projectId}/generation-configuration`,
+        payload: {
+          expected_revision: 1,
+          video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
+          capabilities: FULL_CAPABILITIES,
+        },
+        auth,
+      });
+      const res = await app.inject({
+        method: "PATCH",
+        url: `/api/projects/${projectId}/generation-configuration`,
+        payload: {
+          expected_revision: 2,
+          video: { strategy: "prefer_api_video", api_quality: "high_1080p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
+        },
+        auth,
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().configuration.capabilities["llm.smart"]).toEqual({
+        mode: "fixed",
+        provider_model_id: "llm.smart.deepseek.deepseek-v4-pro",
+      });
+    });
+
+    it("项目配置 capabilities 变更 → 失效预览覆盖对应阶段", async () => {
+      const app = buildApp();
+      const projectId = await createProjectForUser(app, auth);
+      const res = await app.inject({
+        method: "PATCH",
+        url: `/api/projects/${projectId}/generation-configuration`,
+        payload: {
+          expected_revision: 1,
+          video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
+          capabilities: FULL_CAPABILITIES,
+        },
+        auth,
+      });
+      expect(res.statusCode).toBe(200);
+      const preview = res.json().invalidation_preview as { affected_stages: string[] };
+      // llm.smart 变更 → llm_generation
+      expect(preview.affected_stages).toContain("llm_generation");
     });
   });
 });

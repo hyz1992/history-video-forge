@@ -4,8 +4,9 @@ import type {
   UserGenerationPreferenceRecord,
 } from "../../db/client.js";
 import {
+  CAPABILITY_SLOTS,
   DEFAULT_GENERATION_CONFIGURATION,
-  assertS22BScopeConstraints,
+  assertS22CScopeConstraints,
   type CapabilitySlot,
   type GenerationConfigurationV1,
 } from "../../../../shared/src/index.js";
@@ -31,7 +32,7 @@ export interface UserPreferenceResult {
 export type UserPreferenceUpsertResult =
   | { ok: true; value: UserPreferenceResult }
   | { ok: false; error: { code: "generation_preference_revision_conflict"; current_revision: number } }
-  | { ok: false; error: { code: "configuration_invalid_s2_2b_scope"; reason: string } };
+  | { ok: false; error: { code: "configuration_invalid_s2_2c_scope"; reason: string } };
 
 export function getUserGenerationPreference(db: DbClient, userId: string): UserPreferenceResult | null {
   for (const record of db.userGenerationPreferences.values()) {
@@ -112,10 +113,10 @@ export async function upsertUserGenerationPreference(
   input: { expected_revision: number | null; configuration: GenerationConfigurationV1 },
   actorUserId: string,
 ): Promise<UserPreferenceUpsertResult> {
-  // S2-2B：creative 开放（音色/画风/字幕）；capabilities 仍必须全 auto
-  const scopeCheck = assertS22BScopeConstraints(input.configuration);
+  // S2-2C：capabilities 开放（auto/fixed）；scope 校验换 C 版
+  const scopeCheck = assertS22CScopeConstraints(input.configuration);
   if (!scopeCheck.ok) {
-    return { ok: false, error: { code: "configuration_invalid_s2_2b_scope", reason: scopeCheck.reason } };
+    return { ok: false, error: { code: "configuration_invalid_s2_2c_scope", reason: scopeCheck.reason } };
   }
 
   const existing = getUserGenerationPreference(db, userId);
@@ -213,7 +214,7 @@ export interface ProjectConfigResult {
 export type ProjectConfigUpsertResult =
   | { ok: true; value: ProjectConfigResult & { invalidation_preview: InvalidationPreview } }
   | { ok: false; error: { code: "project_generation_configuration_revision_conflict"; current_revision: number } }
-  | { ok: false; error: { code: "configuration_invalid_s2_2b_scope"; reason: string } };
+  | { ok: false; error: { code: "configuration_invalid_s2_2c_scope"; reason: string } };
 
 export interface InvalidationPreview {
   affected_stages: string[];
@@ -338,11 +339,10 @@ export async function upsertProjectGenerationConfiguration(
   input: { expected_revision: number; configuration: GenerationConfigurationV1 },
   actorUserId: string,
 ): Promise<ProjectConfigUpsertResult> {
-  // P1-3：S2-2A scope 校验
-  // S2-2B：creative 开放；capabilities 仍必须全 auto
-  const scopeCheck = assertS22BScopeConstraints(input.configuration);
+  // S2-2C：capabilities 开放；scope 校验换 C 版
+  const scopeCheck = assertS22CScopeConstraints(input.configuration);
   if (!scopeCheck.ok) {
-    return { ok: false, error: { code: "configuration_invalid_s2_2b_scope", reason: scopeCheck.reason } };
+    return { ok: false, error: { code: "configuration_invalid_s2_2c_scope", reason: scopeCheck.reason } };
   }
 
   const current = await getProjectGenerationConfiguration(db, projectId, actorUserId);
@@ -419,6 +419,22 @@ function computeInvalidationPreview(
   if (oldConfig.video.api_quality !== newConfig.video.api_quality) {
     stages.push("asset_planning", "assets");
   }
+  // S2-2C（详细设计 §4.3）：capabilities 变更的失效映射
+  // llm.smart/llm.flash → llm_generation；image.generate → asset_planning+assets；
+  // video.image_to_video/tts.synthesize → assets。
+  for (const slot of CAPABILITY_SLOTS) {
+    const from = oldConfig.capabilities[slot];
+    const to = newConfig.capabilities[slot];
+    if (JSON.stringify(from) !== JSON.stringify(to)) {
+      if (slot === "llm.smart" || slot === "llm.flash") {
+        stages.push("llm_generation");
+      } else if (slot === "image.generate") {
+        stages.push("asset_planning", "assets");
+      } else {
+        stages.push("assets");
+      }
+    }
+  }
   return {
     affected_stages: stages.length > 0 ? stages : ["none"],
     note: "配置变更仅保存，不自动触发下游生成；用户需显式重新规划/生成受影响阶段。",
@@ -488,6 +504,10 @@ function computeConfigDiff(
   // S2-2B：creative（音色/画风/字幕）差异进入 diff，供失效预览投影
   if (JSON.stringify(oldConfig.creative) !== JSON.stringify(newConfig.creative)) {
     diff.creative = { from: oldConfig.creative, to: newConfig.creative };
+  }
+  // S2-2C：capabilities（auto/fixed 选择）差异进入 diff，供失效预览投影
+  if (JSON.stringify(oldConfig.capabilities) !== JSON.stringify(newConfig.capabilities)) {
+    diff.capabilities = { from: oldConfig.capabilities, to: newConfig.capabilities };
   }
   return diff;
 }
