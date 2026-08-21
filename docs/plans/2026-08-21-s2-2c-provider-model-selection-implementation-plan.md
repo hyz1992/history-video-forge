@@ -40,9 +40,9 @@
 
 覆盖（详细设计 §4.1）：
 
-- `S2_2C_ConfigPatchRequest`：`capabilities` 可选；缺省解析成功（A/B 请求体兼容）；提供时五槽 strict 齐全（缺槽/未知槽拒绝）；`{mode:"auto"}` 与 `{mode:"fixed", provider_model_id}` 均接受；fixed 缺 `provider_model_id` / 多余字段拒绝；未知顶层字段拒绝；`expected_revision` 语义不变。
+- `S2_2C_ConfigPatchRequest`：`capabilities` 可选；缺省解析成功（形状层不决定保留/覆盖语义——保留语义在任务 3 controller 层测）；提供时五槽 strict 齐全（缺槽/未知槽拒绝）；`{mode:"auto"}` 与 `{mode:"fixed", provider_model_id}` 均接受；fixed 缺 `provider_model_id` / 多余字段拒绝；未知顶层字段拒绝；`expected_revision` 语义不变。
 - `assertS22CScopeConstraints`：creative 开放（同 B）；五槽全 auto 通过；任槽 fixed 通过；fixed 形状合法但值非法（如空字符串）由 schema 层拒绝。
-- 旧 `S2_2B_ConfigPatchRequest` 请求体（无 capabilities 段）用 C 版 schema 解析成功且 capabilities 视为缺省。
+- 旧 `S2_2B_ConfigPatchRequest` 请求体（无 capabilities 段）用 C 版 schema 解析成功（capabilities 为缺省态）。
 
 运行：
 
@@ -80,8 +80,8 @@ git commit -m "新增 S2-2C 配置 PATCH 合同：capabilities 槽位开放固�
 - 多候选目录（同槽 2 个 active 条目，1 个默认）：`fixed` 到非默认 active 条目 → `resolved_capabilities[slot] = { mode:"fixed", provider_model_id/provider_key/model_id = 目标条目 }`；`auto` 仍解析默认条目。
 - `fixed` 到 disabled 条目 → `generation_model_disabled`（capability 指出槽位）。
 - `fixed` 到不存在条目 → `generation_capability_unavailable`；跨槽（fixed 的 id 属于其他槽）→ `generation_capability_unavailable`。
-- auto 在恰好一个默认下解析不变（既有断言回归）；零/多个默认 fail 语义不变。
-- fixed/auto 均参与 `configuration_hash`：相同输入相同 hash；同目录改 fixed 目标 → hash 变化（quote 漂移检测依据）。
+- auto 在恰好一个默认下解析不变（既有断言回归）；零/多个默认 fail 语义不变；**auto 冻结断言**：auto 槽位 `resolved_capabilities[slot].mode="auto"` 且 provider_key/model_id = 实际解析的默认条目（执行权威依据，外部审查 P1）。
+- fixed/auto 均参与 `configuration_hash`：相同输入相同 hash；同目录改 fixed 目标 → hash 变化；**目录默认条目变化（A→B）→ 相同 auto 配置的 hash 变化**（旧 quote 漂移检测依据）。
 - 全部能力槽（含 tts 固定后 voice 兼容性解析正常：音色 provider 与固定 tts provider 同族校验以 fixed 解析结果为基准）。
 
 运行：
@@ -114,7 +114,7 @@ git commit -m "补强解析器 fixed 多候选与停用语义测试"
 **文件：**
 
 - 修改：`backend/src/modules/generation-config/generation-config.repository.ts`（`upsertUserGenerationPreference` / `upsertProjectGenerationConfiguration` 的 scope 校验换 `assertS22CScopeConstraints`，错误码 `configuration_invalid_s2_2c_scope`；`computeConfigDiff` 增加 capabilities 段；`computeInvalidationPreview` 增加 capabilities 映射）
-- 修改：`backend/src/modules/generation-config/generation-config.controller.ts`（`parsePatchPayload` 换 C 版 schema，`capabilities` 缺省全 auto；`previewFromUserDefaultDiff` 增加 capabilities 映射）
+- 修改：`backend/src/modules/generation-config/generation-config.controller.ts`（`parsePatchPayload` 换 C 版 schema；**capabilities 缺省 = 保留现有配置值，仅首次创建（无现有记录）用全 auto**——controller 组装 fullConfig 前读取现有配置补齐；`previewFromUserDefaultDiff` 增加 capabilities 映射）
 - 修改：`tests/backend/config/generation-config-repository.test.ts`
 - 新建：`tests/backend/config/generation-config-s2-2c-patch.test.ts`
 
@@ -123,7 +123,7 @@ git commit -m "补强解析器 fixed 多候选与停用语义测试"
 覆盖（详细设计 §4.3、§8）：
 
 - PATCH 携带 `capabilities`（用户/项目）成功保存；GET 返回含 fixed 的配置。
-- 旧 A/B 请求体（无 capabilities 段）→ 配置中 capabilities 全 auto（零行为变化）。
+- **保留语义（外部审查 P1 整改）**：已有 fixed 配置 + 旧 A/B 形状请求体（无 capabilities 段，只改 video/creative）→ capabilities **保持不变**（用户与项目两个入口；不静默清空用户选择）；首次创建（用户偏好首写 `expected_revision=null` / 项目 backfill 后首写）缺省 → 全 auto。
 - 未知字段仍 400；revision 冲突码不变（409）。
 - scope 越权场景迁移：B 期"capabilities fixed 被拒"用例改为"C 允许 fixed；非法形态（如 `{mode:"fixed"}` 缺 provider_model_id）被拒"。
 - `computeConfigDiff`：capabilities 变化进入 diff（from/to 公开字段）。
@@ -140,7 +140,7 @@ npx vitest run --configLoader runner tests/backend/config/generation-config-s2-2
 
 - [ ] **步骤 2：实现接线**
 
-controller `parsePatchPayload` 使用 `S2_2C_*` schema，`capabilities` 缺省构造全 auto（A/B 兼容）；repository 两处 scope 校验换 C 版（错误码随之变化）；`computeConfigDiff` / 失效预览按 §4.3。切换后自审 B 版符号无业务引用（测试引用迁移）。
+controller `parsePatchPayload` 使用 `S2_2C_*` schema；capabilities 缺省时：先读取现有配置（用户偏好 `getUserGenerationPreference` / 项目 `getProjectGenerationConfiguration`，backfill 幂等）取其 capabilities 补齐，无现有记录（首写）用全 auto——**绝不把"缺省"翻译成"重置为 auto"**；提供时整体替换。repository 两处 scope 校验换 C 版（错误码随之变化）；`computeConfigDiff` / 失效预览按 §4.3。切换后自审 B 版符号无业务引用（测试引用迁移）。并发安全：组装基于现有值，PATCH 的 expected_revision CAS 保证竞争方 409 后重载再保存。
 
 - [ ] **步骤 3：运行最小验证并提交**
 
@@ -155,46 +155,47 @@ git commit -m "配置 API 开放 capabilities 固定选择并扩展失效预览"
 
 ## Chunk 3：LLM 执行绑定（快照权威）
 
-### 任务 4：tier-aware-provider-factory 支持 fixed overrides
+### 任务 4：tier-aware-provider-factory 按快照构造（auto/fixed 一律）
 
 **文件：**
 
-- 修改：`backend/src/runtime/llm/tier-aware-provider-factory.ts`（`createTierAwareProviderFromEnv(options?: { overrides?: { smart?/flash?: { providerKey, modelId } } })`：非 stub 时按 registry 构造 inner provider；缺省走 env 解析）
-- 新建：`tests/backend/runtime/tier-aware-provider-factory-overrides.test.ts`
+- 修改：`backend/src/runtime/llm/tier-aware-provider-factory.ts`（`createTierAwareProviderFromEnv(options?: { snapshotCapabilities?: ResolvedCapabilityMap })`：非 stub 且快照提供时，smart/flash **无论 auto/fixed** 都按快照 `provider_key + model_id` 经 registry 构造 inner provider；快照缺省走 env 解析）
+- 新建：`tests/backend/runtime/tier-aware-provider-factory-snapshot.test.ts`
 
 - [ ] **步骤 1：先写失败测试**
 
 覆盖（详细设计 §6.1）：
 
-- 注入临时 providers.json（含 deepseek/zhipu 两 provider）+ env（apiKeyEnv 变量存在）→ `createTierAwareProviderFromEnv({ overrides: { smart: { providerKey:"deepseek", modelId:"deepseek-v4-pro" } } })` 构造成功；invokeStructuredPrompt 的请求到达按 deepseek baseUrl 构造的 inner provider（断言 baseUrl/model——通过注入 fake 构造或断言 provider 行为；按现有测试模式选注入 createOpenAiCompatibleProvider 的可观测方式）。
-- overrides 缺省 → 行为与现状一致（env 解析）。
-- overrides 指定未注册 provider → 抛错（fail-closed）。
-- overrides 指定 provider 凭据缺失（apiKeyEnv 变量为空）→ 抛错。
-- stub 部署（`env.llm.provider === "stub"` 注入）→ 忽略 overrides（不抛错、走 stub 路径）。
-- 仅 smart override 时 flash 保持 env 解析（不复用 smart override）。
+- 注入临时 providers.json（含 deepseek/zhipu 两 provider）+ env（apiKeyEnv 变量存在）→ `createTierAwareProviderFromEnv({ snapshotCapabilities })` 构造成功；invokeStructuredPrompt 的请求到达按快照 provider baseUrl/model 构造的 inner provider（按现有测试模式注入可观测构造）。
+- **auto 槽位同样按快照构造**：`snapshotCapabilities["llm.smart"] = { mode:"auto", provider_key, model_id, ... }`（auto 冻结值）→ smart 用该 provider/model，不读 env tier 解析。
+- **auto 漂移测试（外部审查 P1）**：快照冻结 A（auto 解析）→ 同一测试内把 env tier 默认改为 B（或 registry 默认变）→ 构造结果仍为 A。
+- snapshotCapabilities 缺省 → 行为与现状一致（env 解析）。
+- 快照指定未注册 provider → 抛错（fail-closed）；指定 provider 凭据缺失（apiKeyEnv 变量为空）→ 抛错。
+- stub 部署（`env.llm.provider === "stub"` 注入）→ 忽略快照（不抛错、走 stub 路径）。
+- 仅 smart 槽位有快照值（flash 缺省场景按实现取舍）时 flash 保持 env 解析（兼容期语义）。
 
 运行：
 
 ```powershell
-npx vitest run --configLoader runner tests/backend/runtime/tier-aware-provider-factory-overrides.test.ts tests/backend/runtime/tier-resolver.test.ts
+npx vitest run --configLoader runner tests/backend/runtime/tier-aware-provider-factory-snapshot.test.ts tests/backend/runtime/tier-resolver.test.ts
 ```
 
-预期：失败，overrides 参数尚不存在。
+预期：失败，snapshotCapabilities 参数尚不存在。
 
 - [ ] **步骤 2：实现**
 
-新增 `resolveModelOverride(providerKey, modelId, registry, env, fallbackApiKey)`：按 registry 取 provider 条目（未注册抛错）→ 校验 baseUrl/apiKey（缺失抛错）→ `createOpenAiCompatibleProvider`。`createTierAwareProviderFromEnv` 在非 stub 时对每个 override 槽位优先用 override 构造 inner provider，否则现状 env 解析。保持"启动时解析失败抛错不静默回退"语义。
+新增 `resolveModelByProviderKey(providerKey, modelId, registry, env, fallbackApiKey)`：按 registry 取 provider 条目（未注册抛错）→ 校验 baseUrl/apiKey（缺失抛错）→ `createOpenAiCompatibleProvider`。`createTierAwareProviderFromEnv` 在非 stub 且快照提供时，对 smart/flash 槽位一律用快照的 provider_key+model_id 构造 inner provider（auto/fixed 不区分）；快照缺省走现状 env 解析。保持"启动时解析失败抛错不静默回退"语义。
 
 - [ ] **步骤 3：运行最小验证并提交**
 
 ```powershell
-npx vitest run --configLoader runner tests/backend/runtime/tier-aware-provider-factory-overrides.test.ts
+npx vitest run --configLoader runner tests/backend/runtime/tier-aware-provider-factory-snapshot.test.ts
 npx tsc -p backend/tsconfig.json --noEmit
 git diff --check
-git commit -m "LLM provider 工厂支持按固定模型构造 inner provider"
+git commit -m "LLM provider 工厂按快照模型构造 inner provider（auto/fixed 同源）"
 ```
 
-### 任务 5：五个主链路 run service 接线（快照 fixed 槽位 → provider 构造）
+### 任务 5：五个主链路 run service 接线（从 billingContext.resolved 派生，单一真相源）
 
 **文件（每个 service 一步，可拆 2-3 个提交）：**
 
@@ -203,15 +204,16 @@ git commit -m "LLM provider 工厂支持按固定模型构造 inner provider"
 - 修改：`backend/src/modules/topic/topic-recommendation-flow.service.ts`（+ `topic-recommendation.service.ts`）
 - 修改：`backend/src/modules/asset-planning/asset-planning-run.service.ts`（+ `asset-planning-generation.service.ts:2247`、`asset-planning-structural-repair.service.ts:331`）
 - 修改：`backend/src/modules/publish/publish-run.service.ts`（+ `llm-helper.ts`）
-- 修改：`backend/src/modules/generation-run/llm-dispatch-handlers.ts`（把 `billing.resolved.resolved_capabilities` 注入各 run service）
-- 修改/新建：对应各模块测试（fake provider 断言调用模型 = 快照 fixed 模型）
+- 修改/新建：对应各模块测试（fake provider 断言调用模型 = 快照模型）
+- **不改** `llm-dispatch-handlers.ts`（billing 已携带 resolved，见详细设计 §6.1 单一真相源）
 
 - [ ] **步骤 1：先写失败测试**
 
 模式（每个 service 一个用例组）：
 
-- 构造 billingContext（resolved 中 `llm.smart` 为 fixed 到候选模型）→ dispatch handler 执行 → 断言 provider 构造点收到 fixed 槽位（注入 fake provider 工厂或断言 gateway 收到的 operation 请求到达指定模型 provider）。
-- resolved 全 auto（或缺省 billingContext）→ 行为与现状一致（env 解析）。
+- 构造 billingContext（resolved 中 `llm.smart` 为 fixed 到候选模型）→ 派发执行 → 断言 provider 构造点收到快照模型（注入 fake provider 工厂或断言 gateway 收到的 operation 请求到达指定模型 provider）。
+- **auto 槽位同源断言**：resolved 全 auto（冻结模型 A）→ 执行按 A 构造（外部审查 P1：auto 也按快照）。
+- billingContext 缺省（免 quote 本地路径）→ 行为与现状一致（env 解析）。
 
 运行：
 
@@ -219,15 +221,15 @@ git commit -m "LLM provider 工厂支持按固定模型构造 inner provider"
 npx vitest run --configLoader runner <该 service 相关测试文件>
 ```
 
-预期：失败，service 尚未接收 resolvedCapabilities。
+预期：失败，service 尚未从 billingContext 派生 provider 构造输入。
 
 - [ ] **步骤 2：逐个接线**
 
-每个 run service 增加可选参数 `resolvedCapabilities?: ResolvedCapabilityMap`，其内部 provider 构造点改为：从该参数提取 `llm.smart` / `llm.flash` 的 fixed 槽位 → `createTierAwareProviderFromEnv({ overrides })`；缺省传 undefined（旧路径零行为变化）。dispatch handler 统一注入。semantic-review（shadow）跟随 smart 槽位。
+每个 run service 已接收 `billingContext`（S2-2B 既有），其内部 provider 构造点改为：`billingContext` 存在时把 `billingContext.resolved.resolved_capabilities`（只读引用，不复制、不新增可独立传值参数）传给 `createTierAwareProviderFromEnv({ snapshotCapabilities })`；缺省（免 quote 本地路径）传 undefined（旧路径零行为变化）。子 service（generation/helper/semantic-review）需要时透传 billingContext 或该只读引用，来源唯一。semantic-review（shadow）跟随 smart 槽位。**记账与执行同一对象引用，杜绝分叉（外部审查 P2）**。
 
 - [ ] **步骤 3：运行最小验证并提交**
 
-每个 service（或每组合并提交）跑其模块测试 + `npx tsc -p backend/tsconfig.json --noEmit` + `git diff --check`，独立中文提交（如"脚本/分镜/选题/资产规划/发布主链路按快照固定模型构造 LLM provider"）。
+每个 service（或每组合并提交）跑其模块测试 + `npx tsc -p backend/tsconfig.json --noEmit` + `git diff --check`，独立中文提交（如"脚本/分镜/选题/资产规划/发布主链路按快照冻结模型构造 LLM provider"）。
 
 ---
 
@@ -246,7 +248,7 @@ npx vitest run --configLoader runner <该 service 相关测试文件>
 
 覆盖（详细设计 §6.2）：
 
-- `buildProviderRegistry({ resolvedCapabilities })`：resolved 中 `tts.synthesize`/`image.generate`/`video.image_to_video` 为固定模型（fake 目录注入）→ 注册的 adapter 使用该 model（断言 registry 内 adapter 配置）。
+- `buildProviderRegistry({ resolvedCapabilities })`：resolved 中 `tts.synthesize`/`image.generate`/`video.image_to_video` 为固定模型（fake 目录注入）→ 注册的 adapter 使用该 model（断言 registry 内 adapter 配置）；**auto 槽位同源断言**：resolved 全 auto（冻结模型）→ adapter 同样按快照模型构造（外部审查 P1）。
 - resolved 缺省 → env 模型（现状回归）。
 - 媒体固定到未注册/未通过 gate 的模型 → 该 adapter 不注册（no-adapter 路径，不创建外部调用）。
 - `createAssetsDispatchHandler`：有快照时透传 resolved；无快照（数据异常）→ 既有 fail-closed 语义不变。
@@ -282,7 +284,7 @@ git commit -m "媒体执行按运行快照冻结模型构造 provider"
 **文件：**
 
 - 新建：`backend/src/modules/generation-cost/llm-model-catalog.ts`（`LLM_MODEL_CANDIDATES_V1`，详细设计 §7.1）
-- 修改：`backend/src/modules/generation-cost/pricing-catalog.seed.ts`（seed 输入扩展 `additionalModels`；LLM 候选按槽种入非默认条目，默认仍 tier 解析；媒体候选接口预留，首版空）
+- 修改：`backend/src/modules/generation-cost/pricing-catalog.seed.ts`（seed 输入扩展 `additionalModels`；LLM 候选按槽种入非默认条目，默认仍 tier 解析；**`buildLlmEntry` 扩展：displayName/qualityTier/speedTier 一律来自候选声明（按 providerKey:modelId 匹配候选表），默认与候选条目统一，不再按槽位硬编码；tier 解析模型不在候选表时回退槽位默认**；媒体候选接口预留，首版空）
 - 修改：`backend/src/modules/generation-cost/generation-cost-bootstrap.ts`（候选预解析：`resolveTierModel` 失败的候选不种入 + 诊断日志；`registeredModels` 扩展为候选集）
 - 修改：`backend/src/modules/generation-cost/generation-capability-readiness.ts`（`llm_tier_mismatch` 只对默认条目；非默认条目校验属于候选集；媒体 registeredModels 候选集精确匹配不变）
 - 修改：`tests/backend/db/generation-cost-catalog-bootstrap.test.ts`
@@ -293,6 +295,7 @@ git commit -m "媒体执行按运行快照冻结模型构造 provider"
 覆盖（详细设计 §7）：
 
 - 多候选目录 seed：非 stub 部署下 `llm.smart`/`llm.flash` 各含默认条目（tier 解析模型，isDefault=true）+ 候选条目（另一模型，isDefault=false）；每槽恰好一个默认。
+- **目录元数据合同（外部审查 P2）**：同一模型（如 deepseek-v4-pro 作为 smart 默认与 flash 候选）在 catalog 中的 displayName/qualityTier/speedTier 一致且来自候选声明（`GET /api/generation-capabilities` 断言）。
 - 候选预解析失败（provider 未注册 / 凭据缺失）→ 不种入目录（bootstrap 输出不含该 id）。
 - readiness：默认条目与 tier 不一致 → `llm_tier_mismatch`（现状语义保留）；非默认条目与候选集一致 → quotable；目录被手工改动出候选集外条目 → issue。
 - stub 部署：目录只有 stub 条目，无候选。
@@ -378,6 +381,8 @@ git commit -m "设置页与项目设置新增 Provider/Model 高级选择区"
 - 用户默认 fixed（llm.smart 固定候选模型 + tts.synthesize 固定）→ 创建项目复制 → GET 项目配置含 fixed。
 - quote（含 fixed 槽位计价）→ 提交 → 快照断言 `resolved_capabilities[slot].mode=fixed` + provider_key/model_id 与配置一致。
 - 执行消费：LLM 主链路 fake provider 断言调用模型 = 快照模型；媒体（fake 路径或注入目录）断言 adapter 模型 = 快照模型；usage 记账 provider/model 与快照一致。
+- **auto 漂移（外部审查 P1）**：全 auto 配置报价（解析为 A）→ 提交前修改 env/tier 默认或目录默认为 B → 派发仍调用 A（快照权威）且 usage 按 A 记账。
+- **旧客户端保留（外部审查 P1）**：项目已保存 fixed → B 形状请求体（无 capabilities 段）PATCH 只改 video → capabilities 保持不变；用户偏好入口同断言。
 - 固定模型停用场景：目录置 disabled → 报价解析失败 `generation_model_disabled`（不静默切换）。
 - 配置修改后旧 quote 提交被拒（漂移检测，capabilities 参与 hash）。
 

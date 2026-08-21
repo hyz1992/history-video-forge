@@ -13,7 +13,7 @@
 - `S2-2A 配置与成本基础` 已全部完成并通过终审（任务 1-12；用户/项目配置、目录与报价、幂等付费运行、媒体/LLM 闸门与费用账本、设置 UI、报价确认/严格 fallback/成本明细、文档收口与 e2e/浏览器验收），外部审查整改闭环见 `docs/records/2026-08-21-s2-2a-external-review-remediation-record.md`。设计文档为 [S2-2A 详细设计](./2026-08-12-s2-2a-configuration-cost-foundation-design.md)，实施计划为 [S2-2A 实施计划](./2026-08-12-s2-2a-configuration-cost-foundation-implementation-plan.md)，任务审查记录见 `docs/records/2026-08-20-s2-2a-task*.md`。
 - `S2-2B 创作偏好` 已完成（2026-08-21）：设计文档为 [S2-2B 详细设计](./2026-08-21-s2-2b-creative-preferences-design.md)（含外部审查整改回改），实施计划为 [S2-2B 实施计划](./2026-08-21-s2-2b-creative-preferences-implementation-plan.md)；实施共 10 个低耦合任务全部完成并独立中文提交。收口后两份计划文档按归档规则移入 `docs/plans/archive/`。
 - 2026-08-13 之前的 S2-2 状态记录（总体方案批准、计划归档说明）见下方历史块。
-- 下一步：`S2-2C Provider/Model 高级选择` 的详细设计与实施计划按当日状态新建，不从历史草案续跑。
+- 下一步：`S2-2C Provider/Model 高级选择`：详细设计见 [S2-2C 详细设计](./2026-08-21-s2-2c-provider-model-selection-design.md)，实施计划见 [S2-2C 实施计划](./2026-08-21-s2-2c-provider-model-selection-implementation-plan.md)。**状态：设计已完成并经外部审查整改（快照权威执行绑定 / PATCH 保留语义 / 单一真相源 / 候选元数据合同），待用户确认后按实施计划进入 Chunk 1**。
 
 历史块（2026-08-13）：
 
