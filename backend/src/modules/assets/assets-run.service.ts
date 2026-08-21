@@ -69,6 +69,12 @@ export interface RunAssetsGenerationInput {
   voiceProfileId: string;
   executionMode: string;
   enabledProviderTypes?: string[];
+  /**
+   * S2-2B：最终解析字幕样式（快照 resolved_creative.subtitle.resolved_style）。
+   * 投影进 manifest execution_options，subtitle provider 写入 artifact metadata，
+   * renderer 消费；null/缺省 = 系统默认样式。
+   */
+  resolvedSubtitleStyle?: unknown;
   /** Only process tasks that are not yet completed/accepted. */
   missingOnly?: boolean;
   /** Only process these specific task IDs. */
@@ -325,12 +331,15 @@ function buildExecutionOptions(input: {
   executionMode: string;
   voiceProfileId: string;
   enabledProviderTypes?: string[];
+  /** S2-2B：最终解析字幕样式（快照投影）；缺省时执行端用系统默认。 */
+  subtitleStyle?: unknown;
 }) {
   return AssetExecutionOptionsSchema.safeParse({
     execution_mode: input.executionMode,
     voice_profile_id: input.voiceProfileId,
     enabled_provider_types: input.enabledProviderTypes ?? ["tts", "image", "video", "sfx", "bgm"],
     allow_manual_placeholders: false,
+    ...(input.subtitleStyle ? { subtitle_style: input.subtitleStyle } : {}),
   });
 }
 
@@ -728,6 +737,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
     executionMode: input.executionMode,
     voiceProfileId: voiceResolution.voiceProfileId,
     enabledProviderTypes: input.enabledProviderTypes,
+    subtitleStyle: input.resolvedSubtitleStyle,
   });
   if (!executionOptionsResult.success) {
     return {
@@ -2006,6 +2016,12 @@ export function createAssetsDispatchHandler(): import("../generation-run/generat
       resolvedVoice && resolvedVoice.mode === "fixed" && resolvedVoice.voice_profile_id
         ? resolvedVoice.voice_profile_id
         : "";
+    // S2-2B（详细设计 §8）：字幕样式同样来自快照（fixed → 最终样式；
+    // none → null，执行端用系统默认）。
+    const resolvedSubtitleStyle =
+      boundContext?.resolved.resolved_creative.subtitle.mode === "fixed"
+        ? boundContext.resolved.resolved_creative.subtitle.resolved_style
+        : null;
     const response = await runAssetsGeneration({
       db,
       project,
@@ -2019,6 +2035,7 @@ export function createAssetsDispatchHandler(): import("../generation-run/generat
           : undefined,
       generationRunId: run.id,
       boundContext,
+      resolvedSubtitleStyle,
     });
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return { status: "succeeded", response };

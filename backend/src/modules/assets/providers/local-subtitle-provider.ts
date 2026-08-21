@@ -28,7 +28,19 @@ import { alignCaptionsFromAsr } from "../asr-caption-aligner.js";
 import { transcribeAudioFile } from "./dashscope/dashscope-asr-client.js";
 import { resolveArtifactFileUri } from "../artifact-file-resolver.js";
 import { readAudioDurationSec } from "../audio-duration-probe.js";
-import { DEFAULT_SUBTITLE_STYLE } from "../../../../../shared/src/index.js";
+import { DEFAULT_SUBTITLE_STYLE, SubtitleStyle } from "../../../../../shared/src/index.js";
+
+/**
+ * S2-2B：最终解析字幕样式（快照 → manifest execution_options 投影）。
+ * 缺省时用系统默认样式（与 S2-2A 行为一致）。
+ */
+function readSubtitleStyle(ctx: AssetProviderContext) {
+  const options = ctx.manifest.execution_options as
+    | { subtitle_style?: unknown }
+    | undefined;
+  const parsed = SubtitleStyle.safeParse(options?.subtitle_style);
+  return parsed.success ? parsed.data : DEFAULT_SUBTITLE_STYLE;
+}
 
 type SubtitleTimingSource =
   | "estimated"
@@ -187,7 +199,7 @@ export function createLocalSubtitleProvider(
               ? {}
               : { duration_sec: subtitleDurationSec }),
             timing_source: subtitleTimingSource,
-            subtitle_style: DEFAULT_SUBTITLE_STYLE,
+            subtitle_style: readSubtitleStyle(ctx),
           },
         },
         {
@@ -205,7 +217,7 @@ export function createLocalSubtitleProvider(
               ? {}
               : { duration_sec: subtitleDurationSec }),
             timing_source: subtitleTimingSource,
-            subtitle_style: DEFAULT_SUBTITLE_STYLE,
+            subtitle_style: readSubtitleStyle(ctx),
           },
         },
       ];

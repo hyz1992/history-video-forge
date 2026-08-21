@@ -62,12 +62,68 @@ export const ManifestReadiness = z.enum([
 /** provider 类型取值域（执行端与报价/提交过滤共用，单一真相源）。 */
 export const AssetProviderType = z.enum(["tts", "image", "video", "sfx", "bgm"]);
 
+
+export const SubtitleStyle = z
+  .object({
+    style_id: z.string().min(1),
+    font_family: z.string().min(1),
+    font_size_px: z.number().int().min(18).max(96),
+    font_weight: z.number().int().min(100).max(900),
+    line_height: z.number().min(1).max(2),
+    max_lines: z.number().int().min(1).max(4),
+    text_color: z.string().min(1),
+    stroke_color: z.string().min(1),
+    stroke_width_px: z.number().min(0).max(12),
+    shadow: z.string().min(1),
+    background_color: z.string().min(1),
+    background_opacity: z.number().min(0).max(1),
+    position: z.enum(["bottom", "middle", "top"]),
+    horizontal_margin_px: z.number().int().min(0).max(240),
+    bottom_margin_px: z.number().int().min(0).max(360),
+    top_margin_px: z.number().int().min(0).max(360),
+    safe_area_top_px: z.number().int().min(0).max(360),
+    safe_area_bottom_px: z.number().int().min(0).max(360),
+    max_width_pct: z.number().min(0.4).max(1),
+    text_align: z.enum(["left", "center", "right"]),
+  })
+  .strict();
+
+export const DEFAULT_SUBTITLE_STYLE = {
+  style_id: "subtitle_style_default_vertical",
+  font_family:
+    "Microsoft YaHei, PingFang SC, Noto Sans CJK SC, Arial, sans-serif",
+  font_size_px: 46,
+  font_weight: 700,
+  line_height: 1.5,
+  max_lines: 2,
+  text_color: "#ffffff",
+  stroke_color: "#000000",
+  stroke_width_px: 2.5,
+  shadow: "0 2px 8px rgba(0,0,0,0.6)",
+  background_color: "#000000",
+  background_opacity: 0,
+  position: "bottom",
+  horizontal_margin_px: 48,
+  bottom_margin_px: 120,
+  top_margin_px: 120,
+  safe_area_top_px: 96,
+  safe_area_bottom_px: 96,
+  max_width_pct: 0.9,
+  text_align: "center",
+} satisfies z.infer<typeof SubtitleStyle>;
+
 export const AssetExecutionOptions = z
   .object({
     execution_mode: z.enum(["auto_available", "dry_run"]),
     voice_profile_id: z.string().nullable(),
     enabled_provider_types: z.array(AssetProviderType),
     allow_manual_placeholders: z.boolean(),
+    /**
+     * S2-2B：最终解析的字幕样式（快照 resolved_creative.subtitle.resolved_style
+     * 投影到运行 manifest）。renderer 消费 subtitle artifact metadata.subtitle_style；
+     * 缺省时执行端用系统默认（DEFAULT_SUBTITLE_STYLE）。
+     */
+    subtitle_style: SubtitleStyle.optional(),
   })
   .strict();
 
@@ -123,54 +179,7 @@ const TtsMergedAudioMetadata = z
   .strict()
   .passthrough();
 
-export const SubtitleStyle = z
-  .object({
-    style_id: z.string().min(1),
-    font_family: z.string().min(1),
-    font_size_px: z.number().int().min(18).max(96),
-    font_weight: z.number().int().min(100).max(900),
-    line_height: z.number().min(1).max(2),
-    max_lines: z.number().int().min(1).max(4),
-    text_color: z.string().min(1),
-    stroke_color: z.string().min(1),
-    stroke_width_px: z.number().min(0).max(12),
-    shadow: z.string().min(1),
-    background_color: z.string().min(1),
-    background_opacity: z.number().min(0).max(1),
-    position: z.enum(["bottom", "middle", "top"]),
-    horizontal_margin_px: z.number().int().min(0).max(240),
-    bottom_margin_px: z.number().int().min(0).max(360),
-    top_margin_px: z.number().int().min(0).max(360),
-    safe_area_top_px: z.number().int().min(0).max(360),
-    safe_area_bottom_px: z.number().int().min(0).max(360),
-    max_width_pct: z.number().min(0.4).max(1),
-    text_align: z.enum(["left", "center", "right"]),
-  })
-  .strict();
 
-export const DEFAULT_SUBTITLE_STYLE = {
-  style_id: "subtitle_style_default_vertical",
-  font_family:
-    "Microsoft YaHei, PingFang SC, Noto Sans CJK SC, Arial, sans-serif",
-  font_size_px: 46,
-  font_weight: 700,
-  line_height: 1.5,
-  max_lines: 2,
-  text_color: "#ffffff",
-  stroke_color: "#000000",
-  stroke_width_px: 2.5,
-  shadow: "0 2px 8px rgba(0,0,0,0.6)",
-  background_color: "#000000",
-  background_opacity: 0,
-  position: "bottom",
-  horizontal_margin_px: 48,
-  bottom_margin_px: 120,
-  top_margin_px: 120,
-  safe_area_top_px: 96,
-  safe_area_bottom_px: 96,
-  max_width_pct: 0.9,
-  text_align: "center",
-} satisfies z.infer<typeof SubtitleStyle>;
 
 const SubtitleTrackMetadata = z
   .object({

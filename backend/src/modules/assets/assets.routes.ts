@@ -23,6 +23,7 @@ import {
 } from "../generation-run/submit-protocol.js";
 import { isPaidLlmDispatchPossible, isPaidMediaDispatchPossible } from "../generation-cost/provider-dispatch-gate.js";
 import { resolveCreativeVoiceForExecution } from "./voice/creative-voice-execution.js";
+import { resolveCreativeSubtitleForExecution } from "./voice/creative-subtitle-execution.js";
 import type { GenerationQuoteSelection } from "../../../../shared/src/index.js";
 
 function readOptionalNumber(value: unknown): number | undefined {
@@ -174,15 +175,17 @@ async function generateAssetsController(
     };
   }
   // S2-2B：legacy 免 quote 路径忽略客户端 voice_profile_id，
-  // 音色由项目配置 creative 解析（auto → intent 匹配）。
+  // 音色与字幕样式由项目配置 creative 解析（auto → intent 匹配；字幕 none → 系统默认）。
   let creativeVoiceProfileId: string;
+  let creativeSubtitleStyle: unknown = null;
   try {
     creativeVoiceProfileId = await resolveCreativeVoiceForExecution(context.app.db, project);
+    creativeSubtitleStyle = await resolveCreativeSubtitleForExecution(context.app.db, project);
   } catch (error) {
     return {
       statusCode: 500,
       body: {
-        error: "generation_creative_voice_resolution_failed",
+        error: "generation_creative_resolution_failed",
         reason_code: error instanceof Error ? error.message : "unknown",
       },
     };
@@ -195,6 +198,7 @@ async function generateAssetsController(
     enabledProviderTypes,
     missingOnly,
     taskIds: requestedTaskIds,
+    resolvedSubtitleStyle: creativeSubtitleStyle,
   });
 }
 
@@ -622,15 +626,17 @@ async function generateTaskController(
       },
     };
   }
-  // S2-2B：legacy 路径音色由项目配置 creative 解析
+  // S2-2B：legacy 路径音色与字幕样式由项目配置 creative 解析
   let creativeVoiceProfileId: string;
+  let creativeSubtitleStyle: unknown = null;
   try {
     creativeVoiceProfileId = await resolveCreativeVoiceForExecution(context.app.db, project);
+    creativeSubtitleStyle = await resolveCreativeSubtitleForExecution(context.app.db, project);
   } catch (error) {
     return {
       statusCode: 500,
       body: {
-        error: "generation_creative_voice_resolution_failed",
+        error: "generation_creative_resolution_failed",
         reason_code: error instanceof Error ? error.message : "unknown",
       },
     };
@@ -641,6 +647,7 @@ async function generateTaskController(
     voiceProfileId: creativeVoiceProfileId,
     executionMode: "auto_available",
     taskIds: [taskId],
+    resolvedSubtitleStyle: creativeSubtitleStyle,
   });
 }
 
