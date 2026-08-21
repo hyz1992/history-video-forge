@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import { SubtitleStyleOverrideSet } from "../creative/creative-preset.schema.js";
+import {
+  ArtStyleResolvedParams,
+  SubtitleStyleOverrideSet,
+} from "../creative/creative-preset.schema.js";
+import { SubtitleStyle } from "../assets/asset-manifest.schema.js";
 
 /**
  * S2-2A 生成配置合同。
@@ -386,6 +390,89 @@ export function assertS22AScopeConstraints(
   return { ok: true };
 }
 
+// --- Resolved creative（S2-2B：解析后冻结进快照的创作偏好） ------------------
+
+/**
+ * 解析后的音色选择。
+ * - `mode=auto`：执行端按资产计划 voice_intent 确定性匹配（不冻结具体档案）。
+ * - `mode=fixed`：冻结显式选择的档案**稳定身份字段**（id/kind/provider_name/
+ *   target_model）。`provider_status`/`usage_count`/`preview_audio_uri` 等执行期
+ *   可变状态**不参与解析与 hash**——保证报价→提交两次解析 hash 稳定。
+ */
+export const ResolvedCreativeVoiceSchema = z
+  .object({
+    mode: z.enum(["auto", "fixed"]),
+    voice_profile_id: z.string().min(1).nullable(),
+    kind: z.string().min(1).nullable(),
+    provider_name: z.string().min(1).nullable(),
+    target_model: z.string().min(1).nullable(),
+  })
+  .strict();
+export type ResolvedCreativeVoice = z.infer<typeof ResolvedCreativeVoiceSchema>;
+
+/** 解析后的画风选择：`mode=none` 表示不启用（保持 LLM 自由生成 art_bible）。 */
+export const ResolvedArtStyleSchema = z
+  .object({
+    mode: z.enum(["none", "fixed"]),
+    preset_id: z.string().min(1).nullable(),
+    preset_version: z.string().min(1).nullable(),
+    resolved_params: ArtStyleResolvedParams.nullable(),
+  })
+  .strict();
+export type ResolvedArtStyle = z.infer<typeof ResolvedArtStyleSchema>;
+
+/**
+ * 解析后的字幕选择：`mode=none` 表示执行端用系统默认样式（DEFAULT_SUBTITLE_STYLE）；
+ * `mode=fixed` 冻结最终完整样式（preset + 安全覆盖）与 applied_overrides。
+ */
+export const ResolvedSubtitleSchema = z
+  .object({
+    mode: z.enum(["none", "fixed"]),
+    preset_id: z.string().min(1).nullable(),
+    preset_version: z.string().min(1).nullable(),
+    resolved_style: SubtitleStyle.nullable(),
+    applied_overrides: SubtitleStyleOverrideSet,
+  })
+  .strict();
+export type ResolvedSubtitle = z.infer<typeof ResolvedSubtitleSchema>;
+
+export const ResolvedCreativeV1Schema = z
+  .object({
+    voice: ResolvedCreativeVoiceSchema,
+    art_style: ResolvedArtStyleSchema,
+    subtitle: ResolvedSubtitleSchema,
+  })
+  .strict();
+export type ResolvedCreativeV1 = z.infer<typeof ResolvedCreativeV1Schema>;
+
+/**
+ * A 期语义的 resolved_creative 缺省值（creative 全 null）：
+ * voice=auto、art_style/subtitle=none。用于读取旧快照 JSON 时的兼容缺省
+ * （历史快照没有 resolved_creative 字段）；resolver 输出总是显式构造该值。
+ */
+export const DEFAULT_RESOLVED_CREATIVE: ResolvedCreativeV1 = {
+  voice: {
+    mode: "auto",
+    voice_profile_id: null,
+    kind: null,
+    provider_name: null,
+    target_model: null,
+  },
+  art_style: {
+    mode: "none",
+    preset_id: null,
+    preset_version: null,
+    resolved_params: null,
+  },
+  subtitle: {
+    mode: "none",
+    preset_id: null,
+    preset_version: null,
+    resolved_style: null,
+    applied_overrides: {},
+  },
+};
+
 // --- Resolution trace & applied constraints --------------------------------
 
 export const ResolutionTraceEntry = z
@@ -525,6 +612,12 @@ export const ResolvedGenerationConfigurationV1Schema = z
     segment_visual_routes: z.array(ResolvedSegmentVisualRouteSchema),
     constraints_applied: z.array(AppliedConstraint),
     resolution_trace: z.array(ResolutionTraceEntry),
+    /**
+     * S2-2B 解析后的创作偏好（冻结进快照）。
+     * 缺省值 = A 期语义（voice auto / art none / subtitle none），
+     * 保证历史快照 JSON 无需迁移即可读取。
+     */
+    resolved_creative: ResolvedCreativeV1Schema.default(DEFAULT_RESOLVED_CREATIVE),
     configuration_hash: DriftHashSchema,
     /**
      * provider/model 目录内容的漂移检测 hash（不含价格）。价格变化检测由

@@ -5,6 +5,7 @@ import {
   type CapabilitySlot,
   type GenerationConfigurationV1,
   type ResolvedCapabilityMap,
+  type ResolvedCreativeV1,
   type ResolvedGenerationConfigurationV1,
   type ResolvedProviderModel,
   type ResolvedSegmentVisualRoute,
@@ -19,6 +20,9 @@ import {
   ResolvedSegmentVisualRouteSchema,
   SegmentVisualStrategyOverride as SegmentVisualStrategyOverrideSchema,
 } from "./generation-configuration.schema.js";
+import { CreativePresetRegistrySnapshot } from "../creative/creative-preset.schema.js";
+import { VoiceProfile } from "../voice/voice-profile.schema.js";
+import { applySubtitleStyleOverrides } from "../creative/subtitle-style-resolver.js";
 
 /**
  * S2-2A 确定性纯函数配置解析器。
@@ -124,6 +128,35 @@ const RunOverridesSchema = z
   .strict()
   .optional();
 
+/**
+ * S2-2B creative 逐字段覆盖合并：
+ * - 字段提供（含显式 null）→ 覆盖项目值（null 表示重置为 auto/none）；
+ * - 字段缺省（undefined）→ 保持项目值。
+ * 输入已由 ResolveGenerationConfigurationInputSchema 校验过 runOverrides 形状。
+ */
+function applyCreativeRunOverrides(
+  project: GenerationConfigurationV1["creative"],
+  overrides: NonNullable<ResolveGenerationConfigurationInput["runOverrides"]>["creative"],
+): GenerationConfigurationV1["creative"] {
+  if (!overrides) return project;
+  return {
+    voice_profile_id:
+      overrides.voice_profile_id !== undefined
+        ? overrides.voice_profile_id
+        : project.voice_profile_id,
+    art_style_preset_id:
+      overrides.art_style_preset_id !== undefined
+        ? overrides.art_style_preset_id
+        : project.art_style_preset_id,
+    subtitle_style_preset_id:
+      overrides.subtitle_style_preset_id !== undefined
+        ? overrides.subtitle_style_preset_id
+        : project.subtitle_style_preset_id,
+    subtitle_style_overrides:
+      overrides.subtitle_style_overrides ?? project.subtitle_style_overrides,
+  };
+}
+
 export const ResolveGenerationConfigurationInputSchema = z
   .object({
     /** 已冻结的项目配置（真相源）。 */
@@ -133,7 +166,7 @@ export const ResolveGenerationConfigurationInputSchema = z
      * 项目配置冻结时的来源用户默认 revision；只是元数据，运行时不再读取当前用户默认。
      */
     sourceUserPreferenceRevision: z.number().int().nonnegative().nullable(),
-    /** 单次运行覆盖，S2-2A 只允许覆盖 video/budget。 */
+    /** 单次运行覆盖：video/budget（S2-2A）与 creative（S2-2B）。 */
     runOverrides: RunOverridesSchema,
     /** 分镜级覆盖，优先级高于 run override 与项目配置，但不能绕过管理员禁用。 */
     segmentOverrides: z
@@ -144,6 +177,16 @@ export const ResolveGenerationConfigurationInputSchema = z
     operation: GenerationOperationSchema,
     /** 本次运行涉及的分镜及其 storyboard 适配度。 */
     segmentInputs: z.array(SegmentInputSchema).optional(),
+    /**
+     * S2-2B 音色库快照（已按可见性过滤：公共 + 当前项目 owner 私有）。
+     * 缺省空数组：任何显式音色都解析为不可用（fail-closed）。
+     */
+    voiceProfiles: z.array(VoiceProfile).optional(),
+    /**
+     * S2-2B 画风/字幕 preset 注册表快照。缺省空注册表：任何 preset 都解析为
+     * 不可用（fail-closed）。注册表只在解析阶段读取（外部审查 P1-3）。
+     */
+    creativePresets: CreativePresetRegistrySnapshot.optional(),
   })
   .strict();
 export type ResolveGenerationConfigurationInput = z.infer<
@@ -158,7 +201,12 @@ export type GenerationResolverErrorCode =
   | "generation_model_disabled"
   | "generation_model_parameter_incompatible"
   | "generation_provider_credential_unavailable"
-  | "generation_system_constraint_denied";
+  | "generation_system_constraint_denied"
+  // S2-2B 创作偏好失败码
+  | "generation_creative_voice_profile_unavailable"
+  | "generation_creative_voice_provider_incompatible"
+  | "generation_creative_preset_unavailable"
+  | "generation_creative_subtitle_override_invalid";
 
 export interface GenerationResolverError {
   code: GenerationResolverErrorCode;
@@ -524,6 +572,148 @@ function applyRunOverrides(
         overrides.budget?.max_paid_cost_micros_per_run ??
         project.budget.max_paid_cost_micros_per_run,
     },
+    creative: applyCreativeRunOverrides(project.creative, overrides.creative),
+  };
+}
+
+// --- S2-2B 创作偏好解析 ------------------------------------------------------
+
+function resolveCreativePreferences(
+  effective: GenerationConfigurationV1,
+  input: ResolveGenerationConfigurationInput,
+  resolvedTtsProviderKey: string,
+):
+  | { ok: true; value: ResolvedCreativeV1 }
+  | { ok: false; error: GenerationResolverError } {
+  const voiceProfiles = input.voiceProfiles ?? [];
+  const presets = input.creativePresets;
+
+  // --- 音色 ---
+  const requestedVoiceId = effective.creative.voice_profile_id;
+  let voice: ResolvedCreativeV1["voice"];
+  if (requestedVoiceId === null) {
+    voice = {
+      mode: "auto",
+      voice_profile_id: null,
+      kind: null,
+      provider_name: null,
+      target_model: null,
+    };
+  } else {
+    const profile = voiceProfiles.find(
+      (candidate) => candidate.voice_profile_id === requestedVoiceId,
+    );
+    if (!profile || profile.provider_status === "deleted") {
+      return {
+        ok: false,
+        error: {
+          code: "generation_creative_voice_profile_unavailable",
+          message: `voice profile ${requestedVoiceId} is not available (missing, invisible or deleted)`,
+        },
+      };
+    }
+    // 音色 ⊥ TTS provider/model 正交验证：档案 provider 必须与解析出的
+    // tts.synthesize 能力 provider_key 同族（规范化比较，与 resolver 排序规则一致）。
+    const normalizedProfileProvider = profile.provider_name.trim().toLowerCase();
+    const normalizedTtsProvider = resolvedTtsProviderKey.trim().toLowerCase();
+    if (normalizedProfileProvider !== normalizedTtsProvider) {
+      return {
+        ok: false,
+        error: {
+          code: "generation_creative_voice_provider_incompatible",
+          capability: "tts.synthesize",
+          message: `voice profile ${requestedVoiceId} provider "${profile.provider_name}" is incompatible with resolved tts provider "${resolvedTtsProviderKey}"`,
+        },
+      };
+    }
+    voice = {
+      mode: "fixed",
+      voice_profile_id: profile.voice_profile_id,
+      kind: profile.kind,
+      provider_name: profile.provider_name,
+      target_model: profile.target_model,
+    };
+  }
+
+  // --- 画风 ---
+  const requestedArtId = effective.creative.art_style_preset_id;
+  let artStyle: ResolvedCreativeV1["art_style"];
+  if (requestedArtId === null) {
+    artStyle = {
+      mode: "none",
+      preset_id: null,
+      preset_version: null,
+      resolved_params: null,
+    };
+  } else {
+    const preset = presets?.art_style.find((candidate) => candidate.preset_id === requestedArtId);
+    if (!preset) {
+      return {
+        ok: false,
+        error: {
+          code: "generation_creative_preset_unavailable",
+          message: `art style preset ${requestedArtId} not found in the registry`,
+        },
+      };
+    }
+    artStyle = {
+      mode: "fixed",
+      preset_id: preset.preset_id,
+      preset_version: preset.preset_version,
+      resolved_params: preset.resolved_params,
+    };
+  }
+
+  // --- 字幕 ---
+  const requestedSubtitleId = effective.creative.subtitle_style_preset_id;
+  const requestedOverrides = effective.creative.subtitle_style_overrides;
+  let subtitle: ResolvedCreativeV1["subtitle"];
+  if (requestedSubtitleId === null) {
+    subtitle = {
+      mode: "none",
+      preset_id: null,
+      preset_version: null,
+      resolved_style: null,
+      applied_overrides: {},
+    };
+  } else {
+    const preset = presets?.subtitle.find((candidate) => candidate.preset_id === requestedSubtitleId);
+    if (!preset) {
+      return {
+        ok: false,
+        error: {
+          code: "generation_creative_preset_unavailable",
+          message: `subtitle style preset ${requestedSubtitleId} not found in the registry`,
+        },
+      };
+    }
+    // preset 级白名单：覆盖字段必须在该 preset 声明的可覆盖字段内
+    for (const field of Object.keys(requestedOverrides)) {
+      if (!preset.resolved_params.overridable_fields.includes(field as never)) {
+        return {
+          ok: false,
+          error: {
+            code: "generation_creative_subtitle_override_invalid",
+            message: `subtitle override field "${field}" is not overridable for preset ${requestedSubtitleId}`,
+          },
+        };
+      }
+    }
+    subtitle = {
+      mode: "fixed",
+      preset_id: preset.preset_id,
+      preset_version: preset.preset_version,
+      resolved_style: applySubtitleStyleOverrides(
+        preset.resolved_params.style,
+        requestedOverrides,
+      ),
+      applied_overrides: requestedOverrides,
+    };
+  }
+
+  return {
+    ok: true,
+    value: { voice, art_style: artStyle, subtitle },
   };
 }
 
@@ -642,9 +832,22 @@ export function resolveGenerationConfiguration(
     });
   }
 
-  // 4. 计算确定性漂移检测 hash。
+  // 4. 解析创作偏好（S2-2B）：音色/画风/字幕冻结进 resolved_creative。
+  //    音色 provider 兼容性以 tts.synthesize 解析出的 provider_key 为基准。
+  const creativeResult = resolveCreativePreferences(
+    effective,
+    input,
+    resolvedCapabilities["tts.synthesize"].provider_key,
+  );
+  if (!creativeResult.ok) {
+    return { ok: false, error: creativeResult.error };
+  }
+  const resolvedCreative = creativeResult.value;
+
+  // 5. 计算确定性漂移检测 hash。
   //    - configuration_hash：resolved 配置的 canonical JSON hash，用于提交时比对
-  //      配置是否漂移（quote 基于的配置是否被改过）。
+  //      配置是否漂移（quote 基于的配置是否被改过）。resolved_creative 参与
+  //      canonical payload——creative 或注册表版本变化自动使旧 quote 漂移失效。
   //    - catalog_hash：provider/model 目录内容的 canonical JSON hash（不含价格），
   //      用于检测目录漂移。价格变化检测由任务 7 PricingService 的 pricing_hash 承担，
   //      resolver 不产出定价 hash。
@@ -658,6 +861,7 @@ export function resolveGenerationConfiguration(
     effective,
     resolved_capabilities: resolvedCapabilities,
     segment_visual_routes: segmentRoutes,
+    resolved_creative: resolvedCreative,
   };
   const configuration_hash = deterministicHash(canonicalStringify(configurationPayload));
   // catalog 在语义上是按 provider_model_id 标识的集合，不是有序数组。
@@ -680,6 +884,7 @@ export function resolveGenerationConfiguration(
     segment_visual_routes: segmentRoutes,
     constraints_applied: constraintsApplied,
     resolution_trace: resolutionTrace,
+    resolved_creative: resolvedCreative,
     configuration_hash,
     catalog_hash,
   };
