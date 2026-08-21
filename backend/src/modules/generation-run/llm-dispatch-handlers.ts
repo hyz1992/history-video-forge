@@ -16,6 +16,7 @@ import {
   runStoryboardSegmentRegeneration,
 } from "../storyboard/storyboard-run.service.js";
 import { runAssetPlanningGeneration } from "../asset-planning/asset-planning-run.service.js";
+import { extractArtStylePresetFromResolved } from "../asset-planning/creative-context.js";
 import { runPublishGeneration } from "../publish/publish-run.service.js";
 import { runTopicRecommendationWithStore } from "../topic/topic-recommendation-flow.service.js";
 import type { ProjectTopicCandidateState } from "../../app.js";
@@ -123,11 +124,15 @@ export function createAssetPlanDispatchHandler(): GenerationRunDispatchHandler {
   return async (run, context) => {
     const billing = await resolveBillingContext(run, context);
     if (!billing) return SNAPSHOT_MISSING_OUTCOME;
+    // S2-2B：执行端只消费快照冻结的画风参数（外部审查 P1-3），
+    // 绝不重新读取 preset 注册表当前版本。
+    const artStylePreset = extractArtStylePresetFromResolved(billing.resolved);
     const response = await runAssetPlanningGeneration({
       db: context.db,
       project: context.project,
       demoMode: env.demoMode,
       billingContext: billing,
+      artStylePreset,
     });
     return toOutcome(response);
   };

@@ -47,6 +47,21 @@ export interface RunAssetPlanningGenerationInput {
   demoMode: boolean;
   /** S2-2A 任务 9B：付费 quote 绑定 run 的计费上下文（LLM 记账）；免 quote 路径不传。 */
   billingContext?: LlmBillingContext;
+  /**
+   * S2-2B：画风 preset 冻结参数（来自运行快照 resolved_creative.art_style）。
+   * 执行端只消费快照冻结值，绝不重新读取注册表当前版本（外部审查 P1-3）。
+   */
+  artStylePreset?: {
+    preset_id: string;
+    preset_version: string;
+    resolved_params: {
+      visual_tone_hint: string;
+      global_prompt_prefix: string;
+      global_negative_prompts: string[];
+      style_keywords: string[];
+      era_style_hint: string | null;
+    };
+  } | null;
 }
 
 function writeTraceErrorSafely(writer: TraceLogWriter, message: string) {
@@ -964,6 +979,7 @@ export async function runAssetPlanningGeneration(
     onProgress,
     onGlobalStructureEvent,
     onIntentChunkSettled,
+    artStylePreset: input.artStylePreset ?? null,
   });
   let localValidation = validateAssetPlan(
     buildValidationInput({

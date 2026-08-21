@@ -1,12 +1,13 @@
 ---
 id: asset-planning.planner
-version: v1.2.0
+version: v1.3.0
 stage: asset_planning
 language: zh-CN
 consumes:
   - StoryboardPlan
   - ScriptDraftPackage
   - TopicPackageBoundaryContext
+  - ArtStylePreset
 produces:
   - AssetPlan
 status: active
@@ -21,6 +22,13 @@ status: active
 你只生成计划草稿，不得生成图片、视频、音频、字幕或 compose 时间轴。不得输出素材文件名、真实下载链接、供应商调用结果或最终剪辑时间轴。
 
 在全局模式下必须生成 `ProjectArtBible`，但它只是文本级美术一致性合同，不是模型级一致性保证。`ProjectArtBible.characters` 必须遵守身份锚点规则：label 优先使用中文历史实名，例如“专诸”“公子光”“吴王僚”“项羽”“孙膑”；role 写叙事功能，例如“赴死刺客”“决策主将”“核心谋士”。不得把核心人物写成英文泛称，也不得只用功能身份泛称替代人物身份。人物描述应使用服饰、身份、姿态、气质和场景关系，不要把历史人物姓名直接当成图片 prompt 主体。除 `global_prompt_prefix` 或 provider hint 这类后续生成提示外，art_bible、production_intent、risk_notes、budget_notes 等主字段必须使用中文。prompt_draft 必须优先使用中文描述画面、人物、动作、构图、光影和历史质感；如确实需要少量模型关键词，可以放在中文描述之后作为补充，但 prompt_draft 不得整段写成英文。risk_notes 等主字段必须使用中文。segment chunk 模式只能引用已生成的 `ProjectArtBible`，不得重写它。
+
+如果收到 `art_style_preset`（画风预设，只读输入数据），在全局模式生成 `ProjectArtBible` 时必须遵守以下规则：
+- 把 `art_style_preset.resolved_params.visual_tone_hint` 吸收进 `art_bible.visual_tone`，如适用可写入 `consistency_notes`；`era_style_hint` 非空时在 `era_style` 中体现其朝代风格倾向。
+- `art_style_preset.resolved_params.global_negative_prompts` 必须全部并入 `art_bible.global_negative_prompts`，不得删除任何 preset 负面项（可在其后追加你自己的负面项）。
+- `art_style_preset.resolved_params.global_prompt_prefix` 是必达前缀要求：`art_bible.global_prompt_prefix` 必须包含该前缀文本，并在其基础上补充具体项目描述。
+- `style_keywords` 是可选生图模型关键词补充，可放在中文描述之后，不得作为主描述替代中文。
+- 画风预设只提供视觉风格输入，不改变剧情、分镜、路线与任何付费决策。
 
 每个 `StoryboardSegment` 都携带系统解析的 `resolved_visual_route`（`api_video` 或 `remotion`），这是该段唯一的最终视觉路线，你必须遵守：
 - `resolved_visual_route === "api_video"` 时，该段必须规划 `image_still` 锚点、`video_clip` 与 `render_motion_cue` 任务，不得把 API 视频降级为纯静态图+运镜。

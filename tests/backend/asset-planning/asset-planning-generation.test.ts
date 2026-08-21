@@ -3083,3 +3083,65 @@ describe("generateAssetPlan", () => {
   // 在不 mock 内部函数的前提下可靠构造 AssetPlan.parse 失败场景；parseLlmOutput
   // 本身的行为已由 tests/backend/runtime/llm-output-error.test.ts 覆盖。
 });
+
+describe("S2-2B 画风 preset 冻结消费（generateAssetPlan 输入级）", () => {
+  const frozenV1Preset = {
+    preset_id: "art_style_classical_ink",
+    preset_version: "v1",
+    resolved_params: {
+      visual_tone_hint: "水墨工笔 v1",
+      global_prompt_prefix: "水墨风格 v1",
+      global_negative_prompts: ["油画质感 v1", "3D渲染 v1"],
+      style_keywords: [],
+      era_style_hint: null,
+    },
+  };
+
+  it("global prompt 输入携带冻结的 v1 参数，且 art_bible 合并 preset 负面清单", async () => {
+    const { gateway, calls } = makeGateway();
+    const plan = await generateAssetPlan({
+      ...makeInput(gateway),
+      artStylePreset: frozenV1Preset,
+    });
+
+    const globalCall = calls.find(
+      (call) =>
+        (call.input as { planning_mode?: string }).planning_mode === "global",
+    );
+    expect(globalCall).toBeDefined();
+    const promptInput = globalCall!.input as {
+      art_style_preset?: {
+        preset_id?: string;
+        preset_version?: string;
+        resolved_params?: { global_prompt_prefix?: string };
+      };
+    };
+    expect(promptInput.art_style_preset?.preset_id).toBe("art_style_classical_ink");
+    expect(promptInput.art_style_preset?.preset_version).toBe("v1");
+    expect(promptInput.art_style_preset?.resolved_params?.global_prompt_prefix).toBe(
+      "水墨风格 v1",
+    );
+
+    // 合并后的 art_bible：preset 负面清单必达（并集），LLM 额外项保留
+    const negatives = plan.art_bible.global_negative_prompts;
+    expect(negatives).toEqual(
+      expect.arrayContaining(["油画质感 v1", "3D渲染 v1", "现代建筑", "现代服饰"]),
+    );
+  });
+
+  it("artStylePreset=null（none）→ prompt 不携带 art_style_preset 块，art_bible 不被改写", async () => {
+    const { gateway, calls } = makeGateway();
+    const plan = await generateAssetPlan({
+      ...makeInput(gateway),
+      artStylePreset: null,
+    });
+
+    const globalCall = calls.find(
+      (call) =>
+        (call.input as { planning_mode?: string }).planning_mode === "global",
+    );
+    const promptInput = globalCall!.input as { art_style_preset?: unknown };
+    expect(promptInput.art_style_preset).toBeUndefined();
+    expect(plan.art_bible.global_negative_prompts).toEqual(["现代建筑", "现代服饰"]);
+  });
+});

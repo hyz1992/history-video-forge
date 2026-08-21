@@ -38,6 +38,7 @@ import {
   type SegmentChunkStructuralPatch as SegmentChunkStructuralPatchType,
 } from "./legacy-chunk-resilience.js";
 import { enrichAssetVisualPrompt } from "./asset-plan-prompt-enrichment.js";
+import { mergeArtStylePresetIntoArtBible } from "./art-style-preset-merge.js";
 import {
   compileAssetPlanFromIntents,
   type CompiledIntentChunkInput,
@@ -307,6 +308,22 @@ export interface GenerateAssetPlanInput {
   onIntentChunkSettled?: (
     event: IntentChunkSettledEvent,
   ) => void | Promise<void>;
+  /**
+   * S2-2B：画风 preset 冻结参数（来自运行快照 resolved_creative.art_style）。
+   * 执行端只消费快照冻结值，绝不重新读取注册表当前版本（外部审查 P1-3）。
+   * null/缺省 = 不启用画风（现状行为）。
+   */
+  artStylePreset?: {
+    preset_id: string;
+    preset_version: string;
+    resolved_params: {
+      visual_tone_hint: string;
+      global_prompt_prefix: string;
+      global_negative_prompts: string[];
+      style_keywords: string[];
+      era_style_hint: string | null;
+    };
+  } | null;
   regenerationContext?: {
     reason: "asset_planning_local_validation_regen_once";
     errors: string[];
@@ -442,6 +459,15 @@ export async function generateAssetPlan(
     input,
     rawGlobalDraft,
   });
+
+  // S2-2B：画风 preset 确定性兜底合并（本地只做配置应用，不做语义判断）。
+  // 使用快照冻结参数（input.artStylePreset），不读取注册表当前版本。
+  if (input.artStylePreset) {
+    globalDraft.art_bible = mergeArtStylePresetIntoArtBible({
+      artBible: globalDraft.art_bible,
+      preset: input.artStylePreset,
+    });
+  }
 
   const chunks = chunkStoryboardSegments(input.storyboard, input.chunkSize);
   const totalChunks = chunks.length;
@@ -1811,6 +1837,17 @@ function buildGlobalPromptInput(
     draft: input.draft,
     topic_boundary_context: input.topicBoundaryContext,
     local_tts_plan: ttsPlan,
+    // S2-2B：画风 preset 冻结参数（快照 resolved_creative.art_style，只读输入）。
+    // 仅在 fixed 模式携带；指令文本在 prompts/，这里只传数据。
+    ...(input.artStylePreset
+      ? {
+          art_style_preset: {
+            preset_id: input.artStylePreset.preset_id,
+            preset_version: input.artStylePreset.preset_version,
+            resolved_params: input.artStylePreset.resolved_params,
+          },
+        }
+      : {}),
   };
 
   if (!input.regenerationContext) {
