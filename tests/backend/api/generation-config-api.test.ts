@@ -259,4 +259,120 @@ describe("generation-config API", () => {
       expect(body.capabilities[0].availability).toBe("enabled");
     });
   });
+
+  describe("S2-2B creative PATCH 与目录 API", () => {
+    it("PATCH creative：音色/画风/字幕与安全覆盖保存成功并可读回", async () => {
+      const app = buildApp();
+      await app.inject({
+        method: "PATCH",
+        url: "/api/me/generation-preferences",
+        payload: {
+          expected_revision: null,
+          video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
+          creative: {
+            voice_profile_id: "voice_preset_cold_authority",
+            art_style_preset_id: "art_style_classical_ink",
+            subtitle_style_preset_id: "subtitle_style_bold_stroke",
+            subtitle_style_overrides: { font_size_px: 60, position: "top" },
+          },
+        },
+        auth,
+      });
+      const res = await app.inject({ method: "GET", url: "/api/me/generation-preferences", auth });
+      expect(res.statusCode).toBe(200);
+      const creative = res.json().configuration.creative;
+      expect(creative.voice_profile_id).toBe("voice_preset_cold_authority");
+      expect(creative.art_style_preset_id).toBe("art_style_classical_ink");
+      expect(creative.subtitle_style_preset_id).toBe("subtitle_style_bold_stroke");
+      expect(creative.subtitle_style_overrides).toEqual({ font_size_px: 60, position: "top" });
+    });
+
+    it("旧 A 请求体（无 creative 段）兼容：creative 回 A 期默认全 null", async () => {
+      const app = buildApp();
+      await app.inject({
+        method: "PATCH",
+        url: "/api/me/generation-preferences",
+        payload: {
+          expected_revision: null,
+          video: { strategy: "all_remotion", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
+        },
+        auth,
+      });
+      const res = await app.inject({ method: "GET", url: "/api/me/generation-preferences", auth });
+      const creative = res.json().configuration.creative;
+      expect(creative.voice_profile_id).toBeNull();
+      expect(creative.art_style_preset_id).toBeNull();
+      expect(creative.subtitle_style_preset_id).toBeNull();
+      expect(creative.subtitle_style_overrides).toEqual({});
+    });
+
+    it("PATCH creative 越权字段（capabilities fixed）→ 400 configuration_invalid_s2_2b_scope", async () => {
+      const app = buildApp();
+      const res = await app.inject({
+        method: "PATCH",
+        url: "/api/me/generation-preferences",
+        payload: {
+          expected_revision: null,
+          video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
+          capabilities: { "llm.smart": { mode: "fixed", provider_model_id: "x" } },
+        },
+        auth,
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toBe("invalid_patch_payload");
+    });
+
+    it("项目配置 PATCH creative 后失效预览覆盖 creative 变更", async () => {
+      const app = buildApp();
+      const projectId = await createProjectForUser(app, auth);
+      await app.inject({
+        method: "PATCH",
+        url: `/api/projects/${projectId}/generation-configuration`,
+        payload: {
+          expected_revision: 1,
+          video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
+          creative: {
+            voice_profile_id: "voice_preset_cold_authority",
+            art_style_preset_id: "art_style_classical_ink",
+            subtitle_style_preset_id: null,
+          },
+        },
+        auth,
+      });
+      const res = await app.inject({
+        method: "GET",
+        url: `/api/projects/${projectId}/generation-configuration`,
+        auth,
+      });
+      expect(res.statusCode).toBe(200);
+      const creative = res.json().configuration.creative;
+      expect(creative.voice_profile_id).toBe("voice_preset_cold_authority");
+      expect(creative.art_style_preset_id).toBe("art_style_classical_ink");
+      expect(creative.subtitle_style_preset_id).toBeNull();
+      // GET 的失效预览：与用户默认的 diff 影响阶段
+      const preview = res.json().invalidation_preview as { affected_stages: string[] };
+      expect(preview.affected_stages).toEqual(
+        expect.arrayContaining(["asset_planning", "assets"]),
+      );
+    });
+
+    it("GET /api/creative-presets 返回画风与字幕公开目录", async () => {
+      const app = buildApp();
+      const res = await app.inject({ method: "GET", url: "/api/creative-presets", auth });
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.art_style.length).toBeGreaterThanOrEqual(3);
+      expect(body.subtitle.length).toBeGreaterThanOrEqual(3);
+      const artPreset = body.art_style[0];
+      expect(artPreset.preset_id).toBeTruthy();
+      expect(artPreset.preset_version).toBeTruthy();
+      expect(artPreset.overridable_fields).toBeNull();
+      const subtitlePreset = body.subtitle[0];
+      expect(subtitlePreset.overridable_fields.length).toBeGreaterThan(0);
+    });
+  });
 });

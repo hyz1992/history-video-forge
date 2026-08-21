@@ -10,12 +10,18 @@ import {
 } from "./generation-config.repository.js";
 import {
   ConfigurationInvalidationPreview,
+  CreativePresetsResponse,
   GenerationCapabilitiesResponse,
   ProjectGenerationConfigurationResponse,
-  S2_2A_ConfigPatchRequest,
-  S2_2A_ProjectConfigPatchRequest,
+  S2_2B_ConfigPatchRequest,
+  S2_2B_ProjectConfigPatchRequest,
   UserGenerationPreferenceResponse,
+  type CreativePreferences,
   type GenerationConfigurationV1,
+} from "../../../../shared/src/index.js";
+import {
+  ART_STYLE_PRESET_REGISTRY_V1,
+  SUBTITLE_STYLE_PRESET_REGISTRY_V1,
 } from "../../../../shared/src/index.js";
 import type { ZodTypeAny } from "zod";
 
@@ -44,14 +50,14 @@ export const getUserPreferenceController = guardUserRoute(
 export const patchUserPreferenceController = guardUserRoute(
   async (context: RouteContext): Promise<AppResponse> => {
     const user = requireUser(context.auth);
-    const parsed = parsePatchPayload(context.payload, S2_2A_ConfigPatchRequest);
+    const parsed = parsePatchPayload(context.payload, S2_2B_ConfigPatchRequest);
     if (!parsed.ok) return parsed.response;
     const result = await upsertUserGenerationPreference(context.app.db, user.userId, {
       expected_revision: parsed.expected_revision,
       configuration: parsed.configuration,
     }, user.userId);
     if (!result.ok) {
-      if (result.error.code === "configuration_invalid_s2_2a_scope") {
+      if (result.error.code === "configuration_invalid_s2_2b_scope") {
         return { statusCode: 400, body: { error: result.error.code, reason: result.error.reason } };
       }
       return {
@@ -92,14 +98,14 @@ export const getProjectConfigController = guardOwnedRoute(
 export const patchProjectConfigController = guardOwnedRoute(
   async (context: RouteContext): Promise<AppResponse> => {
     const user = requireUser(context.auth);
-    const parsed = parsePatchPayload(context.payload, S2_2A_ProjectConfigPatchRequest);
+    const parsed = parsePatchPayload(context.payload, S2_2B_ProjectConfigPatchRequest);
     if (!parsed.ok) return parsed.response;
     const result = await upsertProjectGenerationConfiguration(context.app.db, context.params.projectId, {
       expected_revision: parsed.expected_revision!,
       configuration: parsed.configuration,
     }, user.userId);
     if (!result.ok) {
-      if (result.error.code === "configuration_invalid_s2_2a_scope") {
+      if (result.error.code === "configuration_invalid_s2_2b_scope") {
         return { statusCode: 400, body: { error: result.error.code, reason: result.error.reason } };
       }
       return {
@@ -149,17 +155,25 @@ function parsePatchPayload(payload: unknown, schema: ZodTypeAny): ParsedPayload 
       response: { statusCode: 400, body: { error: "invalid_patch_payload", detail: parseResult.error.message } },
     };
   }
-  const p = parseResult.data as { expected_revision: number | null; video: GenerationConfigurationV1["video"]; budget: GenerationConfigurationV1["budget"] };
+  const p = parseResult.data as {
+    expected_revision: number | null;
+    video: GenerationConfigurationV1["video"];
+    budget: GenerationConfigurationV1["budget"];
+    creative?: CreativePreferences;
+  };
+  // S2-2B：creative 提供时整体替换；缺省时回 A 期默认（全 null + 空覆盖）——
+  // 对不携带 creative 的旧 A 客户端零行为变化；B 前端总是携带 creative。
+  const creative: CreativePreferences = p.creative ?? {
+    voice_profile_id: null,
+    art_style_preset_id: null,
+    subtitle_style_preset_id: null,
+    subtitle_style_overrides: {},
+  };
   const fullConfig: GenerationConfigurationV1 = {
     schema_version: "generation_configuration_v1",
     video: p.video,
     budget: p.budget,
-    creative: {
-      voice_profile_id: null,
-      art_style_preset_id: null,
-      subtitle_style_preset_id: null,
-      subtitle_style_overrides: {},
-    },
+    creative,
     capabilities: {
       "llm.smart": { mode: "auto" },
       "llm.flash": { mode: "auto" },
@@ -194,8 +208,45 @@ function previewFromUserDefaultDiff(
     stages.add("asset_planning");
     stages.add("assets");
   }
+  // S2-2B：creative 变更的失效映射（详细设计 §10）
+  const creativeDiff = diff.creative as
+    | { from?: { voice_profile_id?: string | null; art_style_preset_id?: string | null; subtitle_style_preset_id?: string | null }; to?: { voice_profile_id?: string | null; art_style_preset_id?: string | null; subtitle_style_preset_id?: string | null } }
+    | undefined;
+  if (creativeDiff?.from?.voice_profile_id !== creativeDiff?.to?.voice_profile_id) {
+    stages.add("assets");
+  }
+  if (creativeDiff?.from?.art_style_preset_id !== creativeDiff?.to?.art_style_preset_id) {
+    stages.add("asset_planning");
+  }
+  if (creativeDiff?.from?.subtitle_style_preset_id !== creativeDiff?.to?.subtitle_style_preset_id) {
+    stages.add("assets");
+  }
   return {
     affected_stages: stages.size > 0 ? [...stages] : ["none"],
     note: "重新应用用户默认将影响以上阶段；配置变更不自动触发下游生成。",
   };
+}
+
+// --- 画风/字幕 preset 公开目录（S2-2B） --------------------------------------
+
+export const getCreativePresetsController = (): AppResponse => {
+  const body = CreativePresetsResponse.parse({
+    art_style: ART_STYLE_PRESET_REGISTRY_V1.map((preset) => ({
+      preset_id: preset.preset_id,
+      preset_version: preset.preset_version,
+      display_name: preset.display_name,
+      description: preset.description,
+      overridable_fields: null,
+      summary: preset.resolved_params.visual_tone_hint + "；必达负面清单 " + preset.resolved_params.global_negative_prompts.length + " 项",
+    })),
+    subtitle: SUBTITLE_STYLE_PRESET_REGISTRY_V1.map((preset) => ({
+      preset_id: preset.preset_id,
+      preset_version: preset.preset_version,
+      display_name: preset.display_name,
+      description: preset.description,
+      overridable_fields: [...preset.resolved_params.overridable_fields],
+      summary: preset.resolved_params.style.style_id,
+    })),
+  });
+  return { statusCode: 200, body };
 }

@@ -371,6 +371,29 @@ export const GenerationCapabilitiesResponse = z
   .strict();
 export type GenerationCapabilitiesResponse = z.infer<typeof GenerationCapabilitiesResponse>;
 
+/** GET /api/creative-presets 单项（画风/字幕 preset 公开目录）。 */
+export const PublicCreativePresetSchema = z
+  .object({
+    preset_id: z.string().min(1),
+    preset_version: z.string().min(1),
+    display_name: z.string().min(1),
+    description: z.string().min(1),
+    /** 字幕 preset 允许被覆盖的字段白名单（画风为 null）。 */
+    overridable_fields: z.array(z.string().min(1)).nullable(),
+    /** 展示摘要（画风：视觉基调与负面清单数量；字幕：无）。 */
+    summary: z.string().min(1),
+  })
+  .strict();
+export type PublicCreativePresetDto = z.infer<typeof PublicCreativePresetSchema>;
+
+export const CreativePresetsResponse = z
+  .object({
+    art_style: z.array(PublicCreativePresetSchema),
+    subtitle: z.array(PublicCreativePresetSchema),
+  })
+  .strict();
+export type CreativePresetsResponse = z.infer<typeof CreativePresetsResponse>;
+
 /**
  * 验证完整配置是否符合 S2-2A 约束（creative 全 null + capabilities 全 auto）。
  * 用于在持久化前拒绝 B/C 字段被提前写入。
@@ -385,6 +408,22 @@ export function assertS22AScopeConstraints(
     const sel = config.capabilities[slot as keyof typeof config.capabilities];
     if (sel.mode !== "auto") {
       return { ok: false, reason: `S2-2A 不允许 fixed capability（${slot} 必须为 auto）` };
+    }
+  }
+  return { ok: true };
+}
+
+/**
+ * S2-2B 配置 scope 校验：creative 开放（音色/画风/字幕 preset 与安全覆盖），
+ * capabilities 仍必须全 auto（S2-2C 才开放 fixed）。
+ */
+export function assertS22BScopeConstraints(
+  config: GenerationConfigurationV1,
+): { ok: true } | { ok: false; reason: string } {
+  for (const slot of Object.keys(config.capabilities)) {
+    const sel = config.capabilities[slot as keyof typeof config.capabilities];
+    if (sel.mode !== "auto") {
+      return { ok: false, reason: `S2-2B 不允许 fixed capability（${slot} 必须为 auto）` };
     }
   }
   return { ok: true };

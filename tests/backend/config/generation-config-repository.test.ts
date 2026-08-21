@@ -76,21 +76,24 @@ describe("generation-config repository", () => {
       expect(pref?.revision).toBe(1);
     });
 
-    it("rejects creative fields in S2-2A scope (P1-3)", async () => {
+    it("S2-2B：creative 字段开放（音色/画风/字幕可保存）", async () => {
       const db = createDbClient();
       const result = await upsertUserGenerationPreference(db, "u1", {
         expected_revision: null,
         configuration: {
           ...DEFAULT_GENERATION_CONFIGURATION,
-          creative: { voice_profile_id: "voice-1", art_style_preset_id: null, subtitle_style_preset_id: null },
+          creative: {
+            voice_profile_id: "voice-1",
+            art_style_preset_id: "art_style_classical_ink",
+            subtitle_style_preset_id: "subtitle_style_bold_stroke",
+            subtitle_style_overrides: { font_size_px: 52 },
+          },
         },
       }, "u1");
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      expect(result.error.code).toBe("configuration_invalid_s2_2a_scope");
+      expect(result.ok).toBe(true);
     });
 
-    it("rejects fixed capability in S2-2A scope (P1-3)", async () => {
+    it("rejects fixed capability in S2-2B scope（capabilities 仍必须全 auto）", async () => {
       const db = createDbClient();
       const result = await upsertUserGenerationPreference(db, "u1", {
         expected_revision: null,
@@ -104,7 +107,7 @@ describe("generation-config repository", () => {
       }, "u1");
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      expect(result.error.code).toBe("configuration_invalid_s2_2a_scope");
+      expect(result.error.code).toBe("configuration_invalid_s2_2b_scope");
     });
   });
 

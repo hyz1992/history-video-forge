@@ -5,7 +5,7 @@ import type {
 } from "../../db/client.js";
 import {
   DEFAULT_GENERATION_CONFIGURATION,
-  assertS22AScopeConstraints,
+  assertS22BScopeConstraints,
   type CapabilitySlot,
   type GenerationConfigurationV1,
 } from "../../../../shared/src/index.js";
@@ -31,7 +31,7 @@ export interface UserPreferenceResult {
 export type UserPreferenceUpsertResult =
   | { ok: true; value: UserPreferenceResult }
   | { ok: false; error: { code: "generation_preference_revision_conflict"; current_revision: number } }
-  | { ok: false; error: { code: "configuration_invalid_s2_2a_scope"; reason: string } };
+  | { ok: false; error: { code: "configuration_invalid_s2_2b_scope"; reason: string } };
 
 export function getUserGenerationPreference(db: DbClient, userId: string): UserPreferenceResult | null {
   for (const record of db.userGenerationPreferences.values()) {
@@ -112,10 +112,10 @@ export async function upsertUserGenerationPreference(
   input: { expected_revision: number | null; configuration: GenerationConfigurationV1 },
   actorUserId: string,
 ): Promise<UserPreferenceUpsertResult> {
-  // P1-3：S2-2A 只允许 video/budget（creative 全 null + capabilities 全 auto）
-  const scopeCheck = assertS22AScopeConstraints(input.configuration);
+  // S2-2B：creative 开放（音色/画风/字幕）；capabilities 仍必须全 auto
+  const scopeCheck = assertS22BScopeConstraints(input.configuration);
   if (!scopeCheck.ok) {
-    return { ok: false, error: { code: "configuration_invalid_s2_2a_scope", reason: scopeCheck.reason } };
+    return { ok: false, error: { code: "configuration_invalid_s2_2b_scope", reason: scopeCheck.reason } };
   }
 
   const existing = getUserGenerationPreference(db, userId);
@@ -213,7 +213,7 @@ export interface ProjectConfigResult {
 export type ProjectConfigUpsertResult =
   | { ok: true; value: ProjectConfigResult & { invalidation_preview: InvalidationPreview } }
   | { ok: false; error: { code: "project_generation_configuration_revision_conflict"; current_revision: number } }
-  | { ok: false; error: { code: "configuration_invalid_s2_2a_scope"; reason: string } };
+  | { ok: false; error: { code: "configuration_invalid_s2_2b_scope"; reason: string } };
 
 export interface InvalidationPreview {
   affected_stages: string[];
@@ -339,9 +339,10 @@ export async function upsertProjectGenerationConfiguration(
   actorUserId: string,
 ): Promise<ProjectConfigUpsertResult> {
   // P1-3：S2-2A scope 校验
-  const scopeCheck = assertS22AScopeConstraints(input.configuration);
+  // S2-2B：creative 开放；capabilities 仍必须全 auto
+  const scopeCheck = assertS22BScopeConstraints(input.configuration);
   if (!scopeCheck.ok) {
-    return { ok: false, error: { code: "configuration_invalid_s2_2a_scope", reason: scopeCheck.reason } };
+    return { ok: false, error: { code: "configuration_invalid_s2_2b_scope", reason: scopeCheck.reason } };
   }
 
   const current = await getProjectGenerationConfiguration(db, projectId, actorUserId);
@@ -483,6 +484,10 @@ function computeConfigDiff(
   }
   if (JSON.stringify(oldConfig.budget) !== JSON.stringify(newConfig.budget)) {
     diff.budget = { from: oldConfig.budget, to: newConfig.budget };
+  }
+  // S2-2B：creative（音色/画风/字幕）差异进入 diff，供失效预览投影
+  if (JSON.stringify(oldConfig.creative) !== JSON.stringify(newConfig.creative)) {
+    diff.creative = { from: oldConfig.creative, to: newConfig.creative };
   }
   return diff;
 }
