@@ -13,9 +13,11 @@ import {
   type VideoGenerationStrategyValue,
 } from "../../stores/generation-config";
 import {
+  createFetchCreativePresetsApi,
   useCreativePresetsStore,
   type VoicePreviewResult,
 } from "../../stores/creative-presets";
+import { createFetchGenerationCostApi } from "../../stores/generation-cost";
 
 /**
  * S2-2A 任务 10：项目生成设置（工作区内对话框）。
@@ -162,7 +164,11 @@ async function save() {
 }
 
 // --- S2-2B 试听（项目级 quote + 提交协议；确认弹窗展示报价） -----------------
+// P1-2（外部审查）：用户确认的报价必须是被消费的报价——弹窗展示的 quote_id
+// 在确认时原样提交（幂等键 + 授权标记 + run_overrides 重放），绝不二次创建；
+// 若期间配置/价格漂移，服务端提交校验会拒绝并要求重新报价。
 const previewQuote = ref<{
+  quoteId: string;
   voiceProfileId: string;
   estimatedCostCny: string;
   authorizationCostCny: string;
@@ -171,17 +177,21 @@ const previewQuote = ref<{
 const previewPending = ref(false);
 const previewError = ref<string | null>(null);
 
+function previewRunOverrides(voiceProfileId: string): Record<string, unknown> {
+  return { creative: { voice_profile_id: voiceProfileId } };
+}
+
 async function handleVoicePreview(voiceProfileId: string): Promise<VoicePreviewResult | null> {
   previewError.value = null;
   previewPending.value = true;
   try {
-    const { createFetchGenerationCostApi } = await import("../../stores/generation-cost");
     const quoteApi = createFetchGenerationCostApi();
     const quote = await quoteApi.createQuote(props.projectId, {
       operation: "voice.preview",
-      runOverrides: { creative: { voice_profile_id: voiceProfileId } },
+      runOverrides: previewRunOverrides(voiceProfileId),
     });
     previewQuote.value = {
+      quoteId: quote.quote_id,
       voiceProfileId,
       estimatedCostCny: quote.estimated_cost_cny,
       authorizationCostCny: quote.authorization_cost_cny,
@@ -198,26 +208,16 @@ async function handleVoicePreview(voiceProfileId: string): Promise<VoicePreviewR
 
 async function confirmPreview() {
   if (!previewQuote.value) return;
-  const { voiceProfileId } = previewQuote.value;
+  const { quoteId, voiceProfileId, requiresBudgetOverride } = previewQuote.value;
   previewPending.value = true;
   try {
-    const { createFetchGenerationCostApi } = await import("../../stores/generation-cost");
-    const { createFetchCreativePresetsApi } = await import("../../stores/creative-presets");
-    const quoteApi = createFetchGenerationCostApi();
-    // 提交重放 quote 创建时的 run_overrides（既有协议：逐字段一致）；
-    // 幂等键客户端生成，同负载重试不重复计费。
-    const runOverrides = { creative: { voice_profile_id: voiceProfileId } };
-    const idempotencyKey = `voice-preview-${Date.now()}-${voiceProfileId}`;
-    const quote = await quoteApi.createQuote(props.projectId, {
-      operation: "voice.preview",
-      runOverrides,
-    });
     const previewApi = createFetchCreativePresetsApi();
     const result = await previewApi.requestVoicePreview(props.projectId, voiceProfileId, {
-      cost_quote_id: quote.quote_id,
-      idempotency_key: idempotencyKey,
-      authorize_budget_override: previewQuote.value.requiresBudgetOverride,
-      run_overrides: runOverrides,
+      // 提交弹窗展示的同一张 quote（用户已确认其金额与授权上界）
+      cost_quote_id: quoteId,
+      idempotency_key: `voice-preview-${Date.now()}-${voiceProfileId}`,
+      authorize_budget_override: requiresBudgetOverride,
+      run_overrides: previewRunOverrides(voiceProfileId),
     });
     if (result?.preview_audio_uri) {
       const audio = new Audio(result.preview_audio_uri);

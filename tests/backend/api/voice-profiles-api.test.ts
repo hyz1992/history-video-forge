@@ -67,6 +67,22 @@ function isolateVoiceRoot(app: ReturnType<typeof buildApp>): void {
 }
 
 describe("GET /api/me/voice-profiles", () => {
+  it("P1-3：fresh 数据库首次打开设置页即返回公共 seed 音色（幂等 seed，不依赖业务请求顺序）", async () => {
+    const app = buildApp();
+    isolateVoiceRoot(app);
+    // 不显式调用 seedGlobalVoiceProfiles——目录 API 自身幂等初始化
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/me/voice-profiles",
+      auth: ownerAuth,
+    });
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { profiles: Array<{ voice_profile_id: string }> };
+    const ids = body.profiles.map((p) => p.voice_profile_id);
+    expect(ids).toContain("voice_preset_cold_authority");
+    expect(ids).toContain("voice_system_ethan");
+  });
+
   it("返回公共档案与本人私有档案；其他用户私有档案不可见；无凭据字段", async () => {
     const app = buildApp();
     isolateVoiceRoot(app);

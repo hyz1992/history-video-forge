@@ -94,6 +94,23 @@ describe("voice.preview 报价与提交", () => {
     expect(app.db.runConfigurationSnapshots.size).toBe(1);
     expect(app.db.generationRuns.size).toBe(1);
     expect(app.db.usageCostRecords.size).toBeGreaterThanOrEqual(1);
+
+    // P1-1（外部审查）：usage 合成记录与报价/执行同源——默认 TTS 模型
+    // （instruct-flash），目录可计价（estimated > 0），不因 target_model
+    // 查不到目录而记 0 费用。
+    const usageRecords = [...app.db.usageCostRecords.values()];
+    const synthesisRecord = usageRecords.find((r) => r.unitType === "tts_character");
+    expect(synthesisRecord).toBeDefined();
+    expect(synthesisRecord?.modelId).toContain("qwen3-tts-instruct-flash");
+    expect(BigInt(synthesisRecord?.estimatedCostMicros ?? "0")).toBeGreaterThan(0n);
+    expect(synthesisRecord?.providerRequestKey).toContain("voice-preview:");
+
+    // P2-2（外部审查）：付费试听成功写业务审计（与 fake 路径同 action）
+    const previewAudits = [...app.db.auditLogs.values()].filter(
+      (log) => log.action === "voice.profile_previewed",
+    );
+    expect(previewAudits.length).toBeGreaterThanOrEqual(1);
+    expect(previewAudits[0]?.targetId).toBe("voice_preset_cold_authority");
     // 回写
     const profile = app.db.voiceProfiles.get("voice_preset_cold_authority");
     expect(profile?.preview_audio_uri).toMatch(/^data:audio\/wav;base64,/);

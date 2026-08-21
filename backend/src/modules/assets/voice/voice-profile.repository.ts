@@ -1,3 +1,5 @@
+import { existsSync, renameSync } from "node:fs";
+
 import type {
   AppPrismaClient,
 } from "../../../db/prisma-client.types.js";
@@ -9,6 +11,7 @@ import {
   type VoiceProfile as VoiceProfileRecord,
 } from "../../../../../shared/src/index.js";
 import {
+  buildVoiceProfileLibraryPath,
   loadVoiceProfileLibrary,
   saveVoiceProfileLibrary,
 } from "./voice-profile-library-store.js";
@@ -225,7 +228,9 @@ async function seedPrismaProfiles(db: DbClient): Promise<void> {
     knownIds.add(normalized.voice_profile_id);
     db.voiceProfiles.set(normalized.voice_profile_id, normalized);
   }
-  // 历史 JSON 一次性导入（幂等：按 id 跳过）
+  // 历史 JSON 一次性导入（幂等：按 id 跳过），导入完成后归档为
+  // voice-profiles.json.imported（P2-3，外部审查）：此后启动不再读取历史 JSON，
+  // 数据库成为唯一权威；归档保留可追溯的原始数据，不做删除。
   const document = await loadVoiceProfileLibrary({ rootDir: db.voiceProfilePersistence.rootDir });
   for (const profile of document.profiles) {
     if (knownIds.has(profile.voice_profile_id)) continue;
@@ -234,6 +239,17 @@ async function seedPrismaProfiles(db: DbClient): Promise<void> {
     knownIds.add(imported.voice_profile_id);
     db.voiceProfiles.set(imported.voice_profile_id, imported);
   }
+  archiveLegacyLibrary(db.voiceProfilePersistence.rootDir);
+}
+
+/**
+ * 归档历史 JSON（重命名加 .imported 后缀，保留原始数据供追溯）。
+ * Map 态不使用（JSON 是 Map 态的 legacy 写穿存储，见 §6.4）。
+ */
+function archiveLegacyLibrary(rootDir?: string): void {
+  const filePath = buildVoiceProfileLibraryPath({ rootDir });
+  if (!existsSync(filePath)) return;
+  renameSync(filePath, `${filePath}.imported`);
 }
 
 /** 幂等 seed 公共预设/系统档案（Map 与 Prisma 双模）。 */

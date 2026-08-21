@@ -1,7 +1,7 @@
 import type { AppResponse, RouteContext } from "../../../app.js";
 import { guardOwnedRoute, guardUserRoute, requireUser } from "../../../auth/authorization.js";
 import { getProjectById } from "../../projects/project.repository.js";
-import { listVoiceProfiles, getVoiceProfileById } from "./voice-profile.repository.js";
+import { listVoiceProfiles, getVoiceProfileById, seedGlobalVoiceProfiles } from "./voice-profile.repository.js";
 import { executeVoicePreview } from "./voice-preview.service.js";
 import { submitGenerationRun } from "../../generation-run/submit-protocol.js";
 import { isPaidMediaDispatchPossible } from "../../generation-cost/provider-dispatch-gate.js";
@@ -19,6 +19,9 @@ import { isPaidMediaDispatchPossible } from "../../generation-cost/provider-disp
 export const listMyVoiceProfilesController = guardUserRoute(
   async (context: RouteContext): Promise<AppResponse> => {
     const user = requireUser(context.auth);
+    // P1-3（外部审查）：fresh 数据库首次打开设置页也能看到公共 seed 音色——
+    // 幂等 seed 不依赖业务请求顺序（执行链路的 seed 保持不变）。
+    await seedGlobalVoiceProfiles(context.app.db);
     const profiles = await listVoiceProfiles(context.app.db, { ownerId: user.userId });
     const body = {
       profiles: profiles.map((profile) => ({
@@ -56,6 +59,8 @@ export const previewVoiceProfileController = guardOwnedRoute(
       return { statusCode: 404, body: { error: "project_not_found" } };
     }
 
+    // P1-3：试听同样先幂等 seed（fresh DB 下公共档案可用）
+    await seedGlobalVoiceProfiles(context.app.db);
     // 可见性同源授权：公共 + 项目 owner 私有；非可见按不存在处理
     const profile = await getVoiceProfileById(context.app.db, voiceProfileId, {
       ownerId: project.ownerId,
@@ -107,8 +112,9 @@ export const previewVoiceProfileController = guardOwnedRoute(
         db: context.app.db,
         voiceProfileId,
       });
-      context.app.db.auditLogs.set(context.app.db.generateId(), {
-        id: context.app.db.generateId(),
+      const auditId = context.app.db.generateId();
+      context.app.db.auditLogs.set(auditId, {
+        id: auditId,
         actorUserId: user.userId,
         projectId: project.id,
         action: "voice.profile_previewed",

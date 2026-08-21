@@ -32,6 +32,8 @@ export interface ExecuteVoicePreviewResult {
   provider_voice_id: string | null;
   /** 真实 provider 是否参与（false = fake 占位）。 */
   usedRealProvider: boolean;
+  /** 实际合成模型（与报价/usage 同源；fake 路径为空）。 */
+  synthesis_model: string | null;
 }
 
 export async function executeVoicePreview(
@@ -48,6 +50,7 @@ export async function executeVoicePreview(
       source: "cached",
       provider_voice_id: profile.provider_voice_id,
       usedRealProvider: false,
+      synthesis_model: null,
     };
   }
 
@@ -59,10 +62,16 @@ export async function executeVoicePreview(
       apiKey,
       baseUrl: process.env.ALIYUN_DASHSCOPE_BASE_URL,
     });
+    // P1-1（外部审查）：试听合成必须与报价/usage 使用同一模型——解析出的
+    // tts.synthesize 默认模型（服务端 env TTS 模型，与正式 TTS 生成同源）。
+    // 设计音色档案的 target_model（qwen3-tts-vd）只承担音色设计 API，不参与
+    // 试听合成计价（目录无其计价条目，避免报价/执行/usage 三者不一致漏计费）。
+    const synthesisModel =
+      process.env.ALIYUN_DASHSCOPE_TTS_MODEL?.trim() || "qwen3-tts-instruct-flash";
     const audioBase64 = await synthesizeWithDashscope({
       apiKey,
       baseUrl: process.env.ALIYUN_DASHSCOPE_BASE_URL,
-      model: resolved.targetModel,
+      model: synthesisModel,
       providerVoiceId: resolved.providerVoiceId,
       text: profile.preview_text,
     });
@@ -78,6 +87,7 @@ export async function executeVoicePreview(
       source: "generated",
       provider_voice_id: resolved.providerVoiceId,
       usedRealProvider: true,
+      synthesis_model: synthesisModel,
     };
   }
 
@@ -93,6 +103,7 @@ export async function executeVoicePreview(
     source: "generated",
     provider_voice_id: profile.provider_voice_id,
     usedRealProvider: false,
+    synthesis_model: null,
   };
 }
 
@@ -260,13 +271,27 @@ export async function runVoicePreviewDispatch(input: {
   const startedAt = Date.now();
   try {
     const result = await executeVoicePreview({ db, voiceProfileId });
+    // P2-2（外部审查）：付费试听成功同样写业务审计（与 fake 路径同 action）
+    const auditId = db.generateId();
+    db.auditLogs.set(auditId, {
+      id: auditId,
+      actorUserId: run.userId,
+      projectId: snapshot.projectId,
+      action: "voice.profile_previewed",
+      targetType: "voice_profile",
+      targetId: voiceProfileId,
+      metadataJson: { source: result.source, used_real_provider: result.usedRealProvider },
+      createdAt: new Date(),
+    });
+    // P1-1：usage 的合成模型与报价/执行同源（默认 TTS 模型），
+    // 目录可计价；设计请求（target_model）保持 unbounded 语义。
     await recordVoicePreviewUsage({
       db,
       snapshot,
       runId: run.id,
       voiceProfileId,
       providerKey: profile.provider_name,
-      modelId: profile.target_model,
+      modelId: result.synthesis_model ?? "qwen3-tts-instruct-flash",
       designRequested: profile.provider_status === "missing",
       characterCount: profile.preview_text.length,
       status: "succeeded",
@@ -287,7 +312,7 @@ export async function runVoicePreviewDispatch(input: {
       runId: run.id,
       voiceProfileId,
       providerKey: profile.provider_name,
-      modelId: profile.target_model,
+      modelId: process.env.ALIYUN_DASHSCOPE_TTS_MODEL?.trim() || "qwen3-tts-instruct-flash",
       designRequested: profile.provider_status === "missing",
       characterCount: profile.preview_text.length,
       status: "failed",

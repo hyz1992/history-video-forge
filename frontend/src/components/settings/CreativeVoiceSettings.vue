@@ -40,11 +40,13 @@ async function handlePreview(profile: VoiceProfileDto) {
   previewingId.value = profile.voice_profile_id;
   try {
     const result = await props.onPreview(profile.voice_profile_id);
+    // onPreview 返回 null = 流程接管（报价弹窗已由父组件展示/报错），
+    // 子组件不再重复报错；返回音频则直接播放。
     if (result?.preview_audio_uri) {
       playAudio(result.preview_audio_uri);
-    } else {
-      previewError.value = "试听失败，请稍后重试。";
     }
+  } catch (error) {
+    previewError.value = error instanceof Error ? error.message : "试听失败，请稍后重试。";
   } finally {
     previewingId.value = null;
   }
