@@ -36,7 +36,7 @@
 - 修改：`tests/shared/generation-configuration-schema.test.ts`
 - 新建：`tests/shared/generation-configuration-s2-2c-patch.test.ts`
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 覆盖（详细设计 §4.1）：
 
@@ -52,11 +52,11 @@ npx vitest run --configLoader runner tests/shared/generation-configuration-s2-2c
 
 预期：失败，C 版符号尚不存在。
 
-- [ ] **步骤 2：实现 schema 扩展**
+- [x] **步骤 2：实现 schema 扩展**
 
 按详细设计 §4.1 实现。`capabilities` 用 `CapabilitySelectionMap.optional()`；C 版符号与 B 版并存（两阶段替换：任务 2 切换引用后自审无 B 版残留引用时删除 B 版符号——按 B 先例保留亦可，以自审结论为准，禁止两版同时被业务引用）。
 
-- [ ] **步骤 3：运行最小验证并提交**
+- [x] **步骤 3：运行最小验证并提交**
 
 ```powershell
 npx vitest run --configLoader runner tests/shared/generation-configuration-s2-2c-patch.test.ts tests/shared/generation-configuration-schema.test.ts
@@ -73,7 +73,7 @@ git commit -m "新增 S2-2C 配置 PATCH 合同：capabilities 槽位开放固�
 - 修改：`tests/backend/config/generation-configuration-resolver.test.ts`
 - 修改：`tests/shared/generation-configuration-schema.test.ts`（如需要）
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 覆盖（详细设计 §5）：
 
@@ -92,11 +92,11 @@ npx vitest run --configLoader runner tests/backend/config/generation-configurati
 
 预期：多候选 fixed 用例失败（当前目录约定单默认，需注入多候选目录构造测试输入——若 resolver 已支持，则全部通过即直接进入步骤 3 补断言）。
 
-- [ ] **步骤 2：按测试结果补齐实现**
+- [x] **步骤 2：按测试结果补齐实现**
 
 预期 resolver 无需改动（fixed 分支已实现）；如测试暴露缺口（如 catalog 归一化对多候选的处理、hash 覆盖遗漏），小步修复并说明。
 
-- [ ] **步骤 3：运行最小验证并提交**
+- [x] **步骤 3：运行最小验证并提交**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/config/generation-configuration-resolver.test.ts tests/shared
@@ -118,7 +118,7 @@ git commit -m "补强解析器 fixed 多候选与停用语义测试"
 - 修改：`tests/backend/config/generation-config-repository.test.ts`
 - 新建：`tests/backend/config/generation-config-s2-2c-patch.test.ts`
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 覆盖（详细设计 §4.3、§8）：
 
@@ -138,11 +138,11 @@ npx vitest run --configLoader runner tests/backend/config/generation-config-s2-2
 
 预期：失败，C 版尚未接线。
 
-- [ ] **步骤 2：实现接线**
+- [x] **步骤 2：实现接线**
 
 controller `parsePatchPayload` 使用 `S2_2C_*` schema；capabilities 缺省时：先读取现有配置（用户偏好 `getUserGenerationPreference` / 项目 `getProjectGenerationConfiguration`，backfill 幂等）取其 capabilities 补齐，无现有记录（首写）用全 auto——**绝不把"缺省"翻译成"重置为 auto"**；提供时整体替换。repository 两处 scope 校验换 C 版（错误码随之变化）；`computeConfigDiff` / 失效预览按 §4.3。切换后自审 B 版符号无业务引用（测试引用迁移）。并发安全：组装基于现有值，PATCH 的 expected_revision CAS 保证竞争方 409 后重载再保存。
 
-- [ ] **步骤 3：运行最小验证并提交**
+- [x] **步骤 3：运行最小验证并提交**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/config/generation-config-s2-2c-patch.test.ts tests/backend/config/generation-config-repository.test.ts
@@ -162,7 +162,7 @@ git commit -m "配置 API 开放 capabilities 固定选择并扩展失效预览"
 - 修改：`backend/src/runtime/llm/tier-aware-provider-factory.ts`（`createTierAwareProviderFromEnv(options?: { snapshotCapabilities?: ResolvedCapabilityMap })`：非 stub 且快照提供时，smart/flash **无论 auto/fixed** 都按快照 `provider_key + model_id` 经 registry 构造 inner provider；快照缺省走 env 解析）
 - 新建：`tests/backend/runtime/tier-aware-provider-factory-snapshot.test.ts`
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 覆盖（详细设计 §6.1）：
 
@@ -182,11 +182,11 @@ npx vitest run --configLoader runner tests/backend/runtime/tier-aware-provider-f
 
 预期：失败，snapshotCapabilities 参数尚不存在。
 
-- [ ] **步骤 2：实现**
+- [x] **步骤 2：实现**
 
 新增 `resolveModelByProviderKey(providerKey, modelId, registry, env, fallbackApiKey)`：按 registry 取 provider 条目（未注册抛错）→ 校验 baseUrl/apiKey（缺失抛错）→ `createOpenAiCompatibleProvider`。`createTierAwareProviderFromEnv` 在非 stub 且快照提供时，对 smart/flash 槽位一律用快照的 provider_key+model_id 构造 inner provider（auto/fixed 不区分）；**快照提供时先校验五槽齐备（缺任一必需槽位抛错 fail-closed，不混合快照与 env）**；快照缺省走现状 env 解析。保持"启动时解析失败抛错不静默回退"语义。
 
-- [ ] **步骤 3：运行最小验证并提交**
+- [x] **步骤 3：运行最小验证并提交**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/runtime/tier-aware-provider-factory-snapshot.test.ts
@@ -207,7 +207,7 @@ git commit -m "LLM provider 工厂按快照模型构造 inner provider（auto/fi
 - 修改/新建：对应各模块测试（fake provider 断言调用模型 = 快照模型）
 - **不改** `llm-dispatch-handlers.ts`（billing 已携带 resolved，见详细设计 §6.1 单一真相源）
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 模式（每个 service 一个用例组）：
 
@@ -223,11 +223,11 @@ npx vitest run --configLoader runner <该 service 相关测试文件>
 
 预期：失败，service 尚未从 billingContext 派生 provider 构造输入。
 
-- [ ] **步骤 2：逐个接线**
+- [x] **步骤 2：逐个接线**
 
 每个 run service 已接收 `billingContext`（S2-2B 既有），其内部 provider 构造点改为：`billingContext` 存在时把 `billingContext.resolved.resolved_capabilities`（只读引用，不复制、不新增可独立传值参数）传给 `createTierAwareProviderFromEnv({ snapshotCapabilities })`；缺省（免 quote 本地路径）传 undefined（旧路径零行为变化）。子 service（generation/helper/semantic-review）需要时透传 billingContext 或该只读引用，来源唯一。semantic-review（shadow）跟随 smart 槽位。**记账与执行同一对象引用，杜绝分叉（外部审查 P2）**。
 
-- [ ] **步骤 3：运行最小验证并提交**
+- [x] **步骤 3：运行最小验证并提交**
 
 每个 service（或每组合并提交）跑其模块测试 + `npx tsc -p backend/tsconfig.json --noEmit` + `git diff --check`，独立中文提交（如"脚本/分镜/选题/资产规划/发布主链路按快照冻结模型构造 LLM provider"）。
 
