@@ -588,7 +588,7 @@ git commit -m "建立生成能力目录与后端价格服务"
 - 新建：`tests/backend/api/generation-cost-api.test.ts`
 - 修改：`tests/backend/auth/authorization.test.ts`
 
-- [ ] **步骤 1：先写 quote 失败测试**
+- [x] **步骤 1：先写 quote 失败测试**
 
 API：
 
@@ -607,7 +607,7 @@ POST /api/projects/:projectId/generation-cost-quotes
 - topic/script/storyboard/asset-plan/publish 等真实 LLM operation 与 assets 媒体 operation 都必须报价；只要 resolved workload 包含付费 capability，就不能绕过 quote。
 - quote、cost summary、cost records 和 run configuration 查询全部先通过 `projectId` 反查 owner；其他用户即使猜到 quote/run/snapshot/cost id 也只能得到 403/404，不能读到金额或配置。
 
-- [ ] **步骤 2：先写幂等事务失败测试**
+- [x] **步骤 2：先写幂等事务失败测试**
 
 提交协议不新增通用公开 `/generation-runs` 路由。现有生成 API（首批为 `POST /api/projects/:projectId/assets/generate` 与单任务生成入口）按详细设计增加 `cost_quote_id`、`authorize_budget_override`、`idempotency_key`；内部由 `GenerationRunService` 统一创建/恢复 run。成本只读 API 同步实现：`GET /api/projects/:projectId/costs/summary`、`GET /api/projects/:projectId/costs/records`、`GET /api/projects/:projectId/runs/:runId/configuration`。
 
@@ -634,11 +634,11 @@ npx vitest run --configLoader runner --no-file-parallelism tests/backend/cost/ge
 
 预期：失败，服务与事务 repository 不存在。
 
-- [ ] **步骤 3：实现专用 Prisma transaction repository**
+- [x] **步骤 3：实现专用 Prisma transaction repository**
 
 必须直接通过注入的 Prisma client 执行原子事务；legacy Map 模式用单进程锁和失败回滚模拟合同，但生产激活态以数据库唯一约束为最终防线。并发测试至少启动两个 dispatcher，同时争抢同一 run，断言 provider submit 只发生一次。所有 repository 查询以已授权 `projectId` 为入口；禁止提供只凭 quote/snapshot/cost/run id 返回数据的未授权方法。
 
-- [ ] **步骤 4：实现可恢复 dispatcher**
+- [x] **步骤 4：实现可恢复 dispatcher**
 
 派发顺序：
 
@@ -651,14 +651,14 @@ npx vitest run --configLoader runner --no-file-parallelism tests/backend/cost/ge
 
 重复 dispatcher 只能恢复/轮询已有 provider job，不能凭空再次计费提交。`backend/src/server.ts` 在服务 readiness 完成后启动一次恢复扫描和低频 sweep，并在关闭时清理定时器；测试使用注入时钟/显式 tick，不依赖真实等待。
 
-- [ ] **步骤 5：注册 API 并运行恢复测试**
+- [x] **步骤 5：注册 API 并运行恢复测试**
 
 ```powershell
 npx vitest run --configLoader runner --no-file-parallelism tests/backend/cost/generation-cost-quote.test.ts tests/backend/runtime/generation-run-idempotency.test.ts tests/backend/runtime/generation-run-concurrency.test.ts tests/backend/runtime/generation-run-recovery.test.ts tests/backend/api/generation-cost-api.test.ts tests/backend/auth/authorization.test.ts
 npx tsc -p backend/tsconfig.json --noEmit
 ```
 
-- [ ] **步骤 6：自审并提交**
+- [x] **步骤 6：自审并提交**
 
 ```powershell
 git add backend/src/modules/generation-cost backend/src/modules/generation-run backend/src/app.ts backend/src/server.ts tests/backend/cost tests/backend/runtime/generation-run-idempotency.test.ts tests/backend/runtime/generation-run-concurrency.test.ts tests/backend/runtime/generation-run-recovery.test.ts tests/backend/api/generation-cost-api.test.ts tests/backend/auth/authorization.test.ts
@@ -682,7 +682,7 @@ git commit -m "实现报价与幂等付费运行事务"
 - 修改：`tests/backend/assets/asset-provider-job-repository.test.ts`
 - 修改：`tests/backend/api/assets-api.test.ts`
 
-- [ ] **步骤 1：先写付费闸门失败测试**
+- [x] **步骤 1：先写付费闸门失败测试**
 
 覆盖所有真实 image、video、TTS 提交入口：
 
@@ -701,7 +701,7 @@ npx vitest run --configLoader runner tests/backend/assets/paid-generation-gate.t
 
 预期：失败，现有入口可直接选择 provider mode。
 
-- [ ] **步骤 2：把 Assets 生成改为 GenerationRun 驱动**
+- [x] **步骤 2：把 Assets 生成改为 GenerationRun 驱动**
 
 兼容迁移策略：
 
@@ -709,11 +709,11 @@ npx vitest run --configLoader runner tests/backend/assets/paid-generation-gate.t
 - 旧无 quote API 在开发过渡期返回明确 `paid_generation_quote_required`；不得静默替用户创建无限预算授权。
 - demo/test 始终保留无真实 API 的本地路径。
 
-- [ ] **步骤 3：实现 usage recorder 与 overrun 处理**
+- [x] **步骤 3：实现 usage recorder 与 overrun 处理**
 
 provider 响应无法给出精确账单时记录 `actualCostState: estimated_after_execution`，不得标为 provider invoice actual。
 
-- [ ] **步骤 4：运行资产回归**
+- [x] **步骤 4：运行资产回归**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/assets/paid-generation-gate.test.ts tests/backend/cost/usage-cost-recording.test.ts tests/backend/assets/asset-provider-job-repository.test.ts tests/backend/assets/assets-run-service.test.ts tests/backend/assets/assets-execution-regression.test.ts tests/backend/api/assets-api.test.ts
@@ -740,21 +740,21 @@ git commit -m "为媒体生成接入预算闸门与费用账本"
 - 新建：`tests/backend/cost/llm-paid-generation-gate.test.ts`
 - 修改：`tests/backend/cost/usage-cost-recording.test.ts`
 
-- [ ] **步骤 1：先写 LLM 付费闸门与 token 记账失败测试**
+- [x] **步骤 1：先写 LLM 付费闸门与 token 记账失败测试**
 
 真实 `llm.smart`、`llm.flash` operation 必须持有效 quote/snapshot/run；同 interaction/attempt 只记一条 usage，`interactionId` 可反查 interaction log。优先使用 provider 返回的 input/output token；缺失 usage 时保留 null actual 和估算 cost basis，不伪造实际 token。
 
-- [ ] **步骤 2：接入 gateway 与既有生成入口**
+- [x] **步骤 2：接入 gateway 与既有生成入口**
 
 topic/script/storyboard/asset-plan/publish 原生成 API 接受 `cost_quote_id`、`authorize_budget_override`、`idempotency_key` 并复用 `GenerationRunService`；stub/local 只走零金额 quote 或设计允许的纯本地免 quote 路径。
 
-- [ ] **步骤 3：运行 LLM 回归**
+- [x] **步骤 3：运行 LLM 回归**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/cost/llm-paid-generation-gate.test.ts tests/backend/cost/usage-cost-recording.test.ts tests/backend/api/topic-api-runtime.test.ts tests/backend/api/script-generate-runtime.test.ts tests/backend/api/storyboard-api.test.ts tests/backend/api/asset-planning-api.test.ts tests/backend/api/publish-api.test.ts
 ```
 
-- [ ] **步骤 4：自审并提交**
+- [x] **步骤 4：自审并提交**
 
 ```powershell
 git add backend/src/runtime/llm backend/src/modules/topic/topic.routes.ts backend/src/modules/script/script.routes.ts backend/src/modules/storyboard/storyboard.routes.ts backend/src/modules/asset-planning/asset-planning.routes.ts backend/src/modules/publish/publish.routes.ts tests/backend/cost/llm-paid-generation-gate.test.ts tests/backend/cost/usage-cost-recording.test.ts tests/backend/api/topic-api-runtime.test.ts tests/backend/api/script-generate-runtime.test.ts tests/backend/api/storyboard-api.test.ts tests/backend/api/asset-planning-api.test.ts tests/backend/api/publish-api.test.ts

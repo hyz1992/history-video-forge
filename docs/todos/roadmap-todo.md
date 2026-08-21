@@ -66,7 +66,7 @@
 - [ ] 补齐前端 v1 真实浏览器验收矩阵：空态、加载中、成功、失败、刷新、深链、重复操作
 
 ## 待做
-- [x] `S2-2` 用户偏好、生成策略与成本控制：S2-2A 配置与成本基础已完成（任务 1-12 全部完成，2026-08-20 终审通过；含任务 10 设置 UI、任务 11 报价确认/严格 fallback/成本明细、任务 12 文档收口与 e2e/浏览器验收）；`S2-2B` 音色/画风/字幕创作偏好、`S2-2C` Provider/Model 高级选择为紧接后续
+- [x] `S2-2` 用户偏好、生成策略与成本控制：S2-2A 配置与成本基础核心交付已完成（任务 1-12，2026-08-20 终审通过；2026-08-21 外部审查整改闭环：LLM 目录异常 fail-closed、跨实例冷恢复 snapshot 加载、记账等待落库、unbounded overrun 误触发、报价确认成功提示时序、连续 409 冲突同步，见 [外部审查整改记录](../records/2026-08-21-s2-2a-external-review-remediation-record.md)）。完成声明边界：后端 + API 级 e2e 验收完成（含三入口 quote 正链路与 billing 落账）；UI 层 jsdom 组件测试覆盖设置/报价确认/严格 fallback 交互；真实浏览器验收覆盖设置/冻结/失效预览流程，quote 确认/严格 fallback/成本明细的浏览器级交互留待后续浏览器验收矩阵（见下方任务 11 留档，不阻塞 S2-2B）；`S2-2B` 音色/画风/字幕创作偏好、`S2-2C` Provider/Model 高级选择为紧接后续
 - [x] 任务 9B 后续：publish/cover/generate 直连 DashScope 媒体闸门（9A 遗留同族，2026-08-20 收口）：付费部署下凭据存在即返回 409 paid_generation_quote_required（终审 I-1 对抗测试锁定，commit 220d334/6ec7061）；接入 quote 提交协议另立后续任务。审查记录见 [cover 媒体闸门审查记录](../records/2026-08-20-s2-2a-cover-media-gate-review-record.md)
 - [x] S2-2A 任务 9A 前置小任务（多实例 DB 权威收口 + 派发加固，2026-08-20 完成）：任务 8 终审遗留 I-1'（重校验输入 DB 化）/I-2（updateRunStatus lease-owner fencing）/F2（提交失败错误码透传锁定）/F5（报价感知 enabled_provider_types）全部收口，T2 审查循环终审通过。审查过程与证据见 [任务 9A 步骤 0 审查记录](../records/2026-08-20-s2-2a-task9a-step0-review-record.md)。
 - [x] 任务 9A 步骤 2 强制收口：执行绑定授权 plan 身份（步骤 0 终审 I-A，2026-08-20 完成）。多实例下授权按 DB 活动指针计价、执行仍读内存指针——实例 B 指针陈旧时授权新 plan、执行旧 plan，可超出授权上界（仅多实例触发，单实例不受影响）。**截止点：付费闸门（paid_generation_quote_required）上线前不可再拖**。三项条件 (a)(b) 已随任务 9A 落地（对抗测试 paid-generation-gate.test.ts I-A 收口用例；闸门与绑定同一提交 b90b82d 上线），(c) 定位与理由见 [步骤 0 审查记录](../records/2026-08-20-s2-2a-task9a-step0-review-record.md)，闭环证据见 [任务 9A 审查记录](../records/2026-08-20-s2-2a-task9a-review-record.md)。
@@ -100,7 +100,7 @@
 ## 剩余风险与验证缺口
 
 - [ ] 前端类型检查闸门缺失（frontend 无 tsconfig，`vite build` 不做 TS 类型检查；2026-08-20 任务 10 审查登记，计划已更正为 `npm run build:frontend` 等价替代，正式类型检查闸门待建）
-- [ ] S2-2A 任务 11 留档（2026-08-20 终审 Minor，详见 [任务 11 审查记录](../records/2026-08-20-s2-2a-task11-review-record.md)）：成本页按运行/成功失败分组未实现（设计 §11.4，待补实施）；404 重试启发式待修（建议与 409 同归"重新报价"）；批量生成成功提示提前到 quote 确认前（UX 误导，建议移至提交完成后）；StrictFallbackDialog 交互层测试待补（浏览器验收未覆盖，roadmap 登记承接）；generationCostStore 未 main.ts provide（跨页不共享）+ CLIENT_PREVIEW_ONLY 死导出
+- [ ] S2-2A 任务 11 留档（2026-08-20 终审 Minor，详见 [任务 11 审查记录](../records/2026-08-20-s2-2a-task11-review-record.md)）：成本页按运行/成功失败分组未实现（设计 §11.4，待补实施）；404 重试启发式待修（建议与 409 同归"重新报价"）；批量生成成功提示时序已修复（2026-08-21 外部审查 B1，确认提交后触发）；StrictFallbackDialog 交互层测试待补（浏览器验收未覆盖，roadmap 登记承接）；generationCostStore 未 main.ts provide（跨页不共享）+ CLIENT_PREVIEW_ONLY 死导出
 - [ ] S2-2A 任务 11 已知缺口：storyboard/asset-plan/publish 三入口 quote 正链路 + billing 落账已由 API 级 e2e（`tests/backend/s2-2a-e2e-acceptance.test.ts`，mock provider 付费部署路径）覆盖，非浏览器级；报价确认 UI 由 jsdom 组件测试覆盖；浏览器脚本（stub 部署）覆盖设置/冻结/失效预览。真实付费 LLM live 核对仍属显式授权范围
 - [ ] DashScope 图生视频真实小样本验证默认不执行；如要验证需明确批准成本并记录 request id、耗时、费用和失败模式
 - Asset Planning global normalization / structural repair 异常恢复目前只有 non-live 证据；后续 7 个有效 live 轮次均未触发该分支。该证据缺口不自动升级为付费 live 任务，仅在真实故障复现或另行明确授权时验证，详见 [最近一次 Asset Planning live 记录](../records/2026-08-10-asset-planning-intent-compiler-live-check.md)。

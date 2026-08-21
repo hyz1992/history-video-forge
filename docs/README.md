@@ -15,9 +15,9 @@
 
 ## 当前阶段状态
 
-截至 2026-08-20：
+截至 2026-08-21：
 
-- `S2-2A`（配置与成本基础：用户/项目生成配置、provider 目录与后端报价、幂等付费运行、媒体/LLM 付费闸门与费用账本、设置 UI、报价确认/严格 fallback/成本明细、文档收口与 e2e/浏览器验收）已全部完成并通过 T2 终审；任务审查记录见 `docs/records/2026-08-20-s2-2a-task*.md`，设计/实施入口见 `docs/plans/README.md`。
+- `S2-2A`（配置与成本基础：用户/项目生成配置、provider 目录与后端报价、幂等付费运行、媒体/LLM 付费闸门与费用账本、设置 UI、报价确认/严格 fallback/成本明细、文档收口与 e2e/浏览器验收）核心交付已完成并通过 T2 终审；2026-08-21 按外部审查（codex + claude code）整改闭环：LLM 目录异常 fail-closed（P1-1）、跨实例冷恢复 snapshot 数据库权威加载（P1-2）、记账等待账本/审计落库（P1-3）、unbounded 报价不再误触发 pricing_overrun（B3）、报价确认成功提示时序（B1）、连续 409 冲突同步（B2）。完成声明边界：后端 + API 级 e2e 验收完成（含三入口 quote 正链路与 billing 落账）；UI 浏览器验收覆盖设置/冻结/失效预览，quote 确认/严格 fallback/成本明细的浏览器级交互留待后续浏览器验收矩阵（roadmap 已登记，不阻塞 S2-2B）。任务审查记录见 `docs/records/2026-08-20-s2-2a-task*.md` 与 `docs/records/2026-08-21-s2-2a-external-review-remediation-record.md`，设计/实施入口见 `docs/plans/README.md`。
 - 紧接后续：`S2-2B` 创作偏好 -> `S2-2C` Provider/Model 高级选择（每棒单独设计、实施、验证）。
 
 截至 2026-08-11（历史状态）：
