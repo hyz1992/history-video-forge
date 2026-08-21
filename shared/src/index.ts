@@ -47,6 +47,7 @@ export {
   AppliedConstraint,
   assertS22AScopeConstraints,
   assertS22BScopeConstraints,
+  assertS22CScopeConstraints,
   BudgetConfiguration,
   CAPABILITY_SLOTS,
   CapabilitySelectionMap,
@@ -70,6 +71,8 @@ export {
   S2_2A_ProjectConfigPatchRequest,
   S2_2B_ConfigPatchRequest,
   S2_2B_ProjectConfigPatchRequest,
+  S2_2C_ConfigPatchRequest,
+  S2_2C_ProjectConfigPatchRequest,
   DEFAULT_RESOLVED_CREATIVE,
   ResolvedArtStyleSchema,
   ResolvedCreativeV1Schema,
@@ -100,6 +103,8 @@ export type {
   S2_2A_ConfigPatchRequest as S2_2A_ConfigPatchRequestType,
   S2_2B_ConfigPatchRequest as S2_2B_ConfigPatchRequestType,
   S2_2B_ProjectConfigPatchRequest as S2_2B_ProjectConfigPatchRequestType,
+  S2_2C_ConfigPatchRequest as S2_2C_ConfigPatchRequestType,
+  S2_2C_ProjectConfigPatchRequest as S2_2C_ProjectConfigPatchRequestType,
 } from "./generation/generation-configuration.schema";
 // creative：S2-2B 版本化画风/字幕 preset 合同、注册表与字幕覆盖解析
 export {

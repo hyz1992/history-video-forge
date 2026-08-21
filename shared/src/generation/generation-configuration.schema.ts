@@ -307,6 +307,42 @@ export const S2_2B_ProjectConfigPatchRequest = z
   .strict();
 export type S2_2B_ProjectConfigPatchRequest = z.infer<typeof S2_2B_ProjectConfigPatchRequest>;
 
+/**
+ * S2-2C PATCH schema（两阶段替换：本任务新增 C 版，后端 repository/controller
+ * 在任务 3 切换引用；B 版符号按 B 先例保留为历史，切换后自审无业务引用）。
+ * 在 B 的 `{ expected_revision, video, budget, creative? }` 基础上增加可选
+ * `capabilities` 段：提供时五槽整体替换（`CapabilitySelectionMap` strict 五键）；
+ * 缺省时的语义（保留现有配置值 / 首次创建全 auto）由 controller 组装层决定，
+ * schema 层只保证形状（见 S2-2C 详细设计 §4.1）。
+ */
+export const S2_2C_ConfigPatchRequest = z
+  .object({
+    expected_revision: z.number().int().nonnegative().nullable(),
+    video: z.object({
+      strategy: VideoGenerationStrategy,
+      api_quality: ApiVideoQuality,
+    }),
+    budget: BudgetConfiguration,
+    creative: CreativePreferences.optional(),
+    capabilities: CapabilitySelectionMap.optional(),
+  })
+  .strict();
+export type S2_2C_ConfigPatchRequest = z.infer<typeof S2_2C_ConfigPatchRequest>;
+
+export const S2_2C_ProjectConfigPatchRequest = z
+  .object({
+    expected_revision: z.number().int().nonnegative(),
+    video: z.object({
+      strategy: VideoGenerationStrategy,
+      api_quality: ApiVideoQuality,
+    }),
+    budget: BudgetConfiguration,
+    creative: CreativePreferences.optional(),
+    capabilities: CapabilitySelectionMap.optional(),
+  })
+  .strict();
+export type S2_2C_ProjectConfigPatchRequest = z.infer<typeof S2_2C_ProjectConfigPatchRequest>;
+
 // --- S2-2A API 响应 DTO（实施计划任务 3：请求与响应都用共享 Zod 校验） -------
 
 /** 失效预览（配置变更影响的最早阶段，不自动触发下游）。 */
@@ -424,6 +460,24 @@ export function assertS22BScopeConstraints(
     const sel = config.capabilities[slot as keyof typeof config.capabilities];
     if (sel.mode !== "auto") {
       return { ok: false, reason: `S2-2B 不允许 fixed capability（${slot} 必须为 auto）` };
+    }
+  }
+  return { ok: true };
+}
+
+/**
+ * S2-2C 配置 scope 校验：creative 开放（同 B），capabilities 开放 auto 与 fixed。
+ * 形态合法性（mode 枚举、provider_model_id 非空）由 `ModelSelection` schema 层
+ * 保证；本函数保留为 repository/controller 的统一 scope 检查点（错误码
+ * `configuration_invalid_s2_2c_scope`），对 capabilities 只做防御性复核。
+ */
+export function assertS22CScopeConstraints(
+  config: GenerationConfigurationV1,
+): { ok: true } | { ok: false; reason: string } {
+  for (const slot of Object.keys(config.capabilities)) {
+    const sel = config.capabilities[slot as keyof typeof config.capabilities];
+    if (sel.mode !== "auto" && sel.mode !== "fixed") {
+      return { ok: false, reason: `S2-2C 不允许非法 capability 形态（${slot}）` };
     }
   }
   return { ok: true };
