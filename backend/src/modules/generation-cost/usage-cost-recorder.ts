@@ -256,7 +256,7 @@ export interface OverrunCheckInput {
 }
 
 /** 累计费用超授权上界 → append-only pricing_overrun（+ 可选 catalog 禁用）。 */
-async function checkAndHandleOverrun(
+export async function checkAndHandleOverrun(
   input: OverrunCheckInput,
   current: UsageCostRecordRecord,
 ): Promise<boolean> {

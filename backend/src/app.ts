@@ -9,6 +9,8 @@ import { registerScriptRoutes } from "./modules/script/script.routes";
 import { registerStoryboardRoutes } from "./modules/storyboard/storyboard.routes";
 import { registerAssetPlanningRoutes } from "./modules/asset-planning/asset-planning.routes";
 import { registerAssetsRoutes } from "./modules/assets/assets.routes";
+import { registerVoiceProfileRoutes } from "./modules/assets/voice/voice-profiles.routes";
+import { createVoicePreviewDispatchHandler } from "./modules/generation-run/voice-preview-dispatch-handler.js";
 import { registerComposeRoutes } from "./modules/compose/compose.routes";
 import { registerRenderRoutes } from "./modules/render/render.routes";
 import { registerPublishRoutes } from "./modules/publish/publish.routes";
@@ -261,6 +263,8 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
         "storyboard.generate": createStoryboardDispatchHandler(),
         "asset_plan.generate": createAssetPlanDispatchHandler(),
         "publish.generate": createPublishDispatchHandler(),
+        // S2-2B：音色试听（quote + 提交协议）
+        "voice.preview": createVoicePreviewDispatchHandler(),
       },
     }),
     addRoute(method, pattern, handler) {
@@ -365,6 +369,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
   registerStoryboardRoutes(app);
   registerAssetPlanningRoutes(app);
   registerAssetsRoutes(app);
+  registerVoiceProfileRoutes(app);
   registerComposeRoutes(app);
   registerRenderRoutes(app);
   registerPublishRoutes(app);

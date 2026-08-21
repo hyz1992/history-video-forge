@@ -31,7 +31,7 @@ import {
   type SegmentInput,
   type SegmentVisualStrategyOverride,
 } from "../../../../shared/src/index.js";
-import { listVoiceProfiles } from "../assets/voice/voice-profile.repository.js";
+import { getVoiceProfileById, listVoiceProfiles } from "../assets/voice/voice-profile.repository.js";
 import { resolveSystemGenerationConstraints } from "../generation-config/system-constraints.js";
 import {
   computePricingHash,
@@ -116,6 +116,7 @@ export const OPERATION_LLM_SLOTS: Record<GenerationOperation, Array<"llm.smart" 
   "asset_plan.generate": ["llm.smart", "llm.flash"],
   "assets.generate": ["llm.flash"],
   "publish.generate": ["llm.flash"],
+  "voice.preview": [],
 };
 
 /** 各 operation 的 token 估算（仅用于估算展示；授权上界由定价服务按 budget 计算）。 */
@@ -129,6 +130,8 @@ export const OPERATION_TOKEN_ESTIMATES: Record<
   "asset_plan.generate": { estimated_input_tokens: 50000, estimated_output_tokens: 30000 },
   "assets.generate": { estimated_input_tokens: 8000, estimated_output_tokens: 4000 },
   "publish.generate": { estimated_input_tokens: 10000, estimated_output_tokens: 6000 },
+  // voice.preview 是纯媒体操作（无 LLM token 项；占位保持 Record 完整性）
+  "voice.preview": { estimated_input_tokens: 0, estimated_output_tokens: 0 },
 };
 
 /** 视频任务默认估算秒数（任务参数未声明 duration_sec 时；与执行端默认 7s 对齐）。 */
@@ -149,9 +152,39 @@ export function buildQuoteWorkload(input: {
   resolved: ResolvedGenerationConfigurationV1;
   selection?: GenerationQuoteSelection;
   enabledProviderTypes?: string[];
+  /**
+   * S2-2B：voice.preview 的目标档案（可见性已过滤）。试听计价固定为
+   * 设计请求（provider_status=missing 时 1 个 request 单位）+ preview_text
+   * 的 tts_character 合成费用。
+   */
+  voiceProfile?: { provider_status: string; preview_text: string } | null;
 }): PricingWorkloadItem[] {
   const { source, operation, resolved } = input;
   const workload: PricingWorkloadItem[] = [];
+
+  // S2-2B：试听是纯媒体操作（无 LLM token 项）。
+  if (operation === "voice.preview") {
+    const voiceProfile = input.voiceProfile;
+    if (voiceProfile) {
+      if (voiceProfile.provider_status === "missing") {
+        workload.push({
+          capability: "tts.synthesize",
+          provider_model_id: resolved.resolved_capabilities["tts.synthesize"].provider_model_id,
+          operation,
+          unit_type: "request",
+          request_count: 1,
+        });
+      }
+      workload.push({
+        capability: "tts.synthesize",
+        provider_model_id: resolved.resolved_capabilities["tts.synthesize"].provider_model_id,
+        operation,
+        unit_type: "tts_character",
+        character_count: voiceProfile.preview_text.length,
+      });
+    }
+    return workload;
+  }
 
   const llmSlots = OPERATION_LLM_SLOTS[operation] ?? [];
   const estimates = OPERATION_TOKEN_ESTIMATES[operation];
@@ -285,6 +318,11 @@ function selectTasksForQuote(
 interface QuoteResolutionValue {
   resolved: ResolvedGenerationConfigurationV1;
   source: QuoteResolutionSource;
+  /**
+   * S2-2B：voice.preview 的目标档案（可见性已过滤，用于计价 workload）。
+   * 其他 operation 为 null。
+   */
+  voiceProfile: { provider_status: string; preview_text: string } | null;
 }
 
 /**
@@ -381,7 +419,32 @@ async function resolveQuoteConfiguration(
       error: { code: "generation_quote_resolution_failed", message: result.error.message },
     };
   }
-  return { ok: true, value: { resolved: result.value, source } };
+  const resolved = result.value;
+
+  // S2-2B：voice.preview 必须显式指定试听档案（run_overrides.creative.
+  // voice_profile_id）——auto 模式下没有可计价/可执行的试听目标，不静默猜测试听对象。
+  if (input.operation === "voice.preview" && resolved.resolved_creative.voice.mode !== "fixed") {
+    return {
+      ok: false,
+      error: {
+        code: "generation_quote_resolution_failed",
+        message: "voice.preview requires an explicit voice profile via run_overrides.creative.voice_profile_id",
+      },
+    };
+  }
+  let voiceProfile: QuoteResolutionValue["voiceProfile"] = null;
+  if (input.operation === "voice.preview") {
+    const profile = await getVoiceProfileById(
+      db,
+      resolved.resolved_creative.voice.voice_profile_id!,
+      { ownerId: project.ownerId },
+    );
+    voiceProfile = profile
+      ? { provider_status: profile.provider_status, preview_text: profile.preview_text }
+      : null;
+  }
+
+  return { ok: true, value: { resolved, source, voiceProfile } };
 }
 
 // --- quote 内容指纹（QuoteFingerprintPayloadV1） -----------------------------
@@ -569,6 +632,7 @@ export async function createGenerationCostQuote(
     resolved,
     selection: request.selection,
     enabledProviderTypes: request.enabled_provider_types,
+    voiceProfile: resolution.value.voiceProfile,
   });
   const pricing = priceGenerationWorkload({
     catalog: source.catalog,
@@ -776,6 +840,7 @@ export async function revalidateQuoteForCommit(
     resolved,
     selection: input.selection,
     enabledProviderTypes: input.enabledProviderTypes,
+    voiceProfile: resolution.value.voiceProfile,
   });
   const pricing = priceGenerationWorkload({
     catalog: source.catalog,

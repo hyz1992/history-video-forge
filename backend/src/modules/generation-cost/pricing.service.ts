@@ -156,6 +156,8 @@ export const OPERATION_TOKEN_BUDGETS: Record<
   "asset_plan.generate": { max_input_tokens: 100000, max_output_tokens: 80000 },
   "assets.generate": { max_input_tokens: 40000, max_output_tokens: 20000 },
   "publish.generate": { max_input_tokens: 40000, max_output_tokens: 20000 },
+  // voice.preview 无 LLM token 项；占位保持 Record 完整性
+  "voice.preview": { max_input_tokens: 0, max_output_tokens: 0 },
 };
 
 // --- 结果合同 -----------------------------------------------------------------
@@ -448,8 +450,28 @@ function priceItem(
   entry: CatalogEntry,
   pricing: CatalogPricing,
 ): { ok: true; value: PricedWorkloadItem } | { ok: false; error: { code: PricingErrorCode; message: string; provider_model_id?: string } } {
+  const base = {
+    capability: workloadItem.capability,
+    provider_model_id: entry.id,
+    unit_type: workloadItem.unit_type,
+  };
   // 单位必须与目录计价单位一致（目录未声明单位视作 unknown，不参与计价）。
   if (pricing.kind !== "unknown" && pricing.kind !== workloadItem.unit_type) {
+    // S2-2B：voice.preview 的设计请求（request 单位）没有独立目录计价单位
+    // （音色设计费价格未核实）→ 按"无法给出可信上界"标记该单项 unbounded，
+    // 预算门禁必须显式授权；不整单失败。其他 workload 的单位错配仍是
+    // 编程/目录错误，保持整单失败暴露。
+    if (workloadItem.operation === "voice.preview" && workloadItem.unit_type === "request") {
+      return {
+        ok: true,
+        value: {
+          ...base,
+          estimated_cost_micros: null,
+          authorization_cost_micros: null,
+          unbounded: true,
+        },
+      };
+    }
     return {
       ok: false,
       error: {
@@ -460,11 +482,6 @@ function priceItem(
     };
   }
 
-  const base = {
-    capability: workloadItem.capability,
-    provider_model_id: entry.id,
-    unit_type: workloadItem.unit_type,
-  };
   const unboundedItem: PricedWorkloadItem = {
     ...base,
     estimated_cost_micros: null,

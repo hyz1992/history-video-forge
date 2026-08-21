@@ -49,6 +49,9 @@ export const GenerationOperationSchema = z.enum([
   "asset_plan.generate",
   "assets.generate",
   "publish.generate",
+  // S2-2B：音色试听（quote + 提交协议；目标音色经 run_overrides.creative
+  // voice_profile_id 表达，见详细设计 §9.3）。
+  "voice.preview",
 ]);
 export type GenerationOperation = z.infer<typeof GenerationOperationSchema>;
 

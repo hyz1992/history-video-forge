@@ -55,6 +55,8 @@ const OPERATION_FALLBACK_TIER: Record<GenerationOperation, "llm.smart" | "llm.fl
   "asset_plan.generate": "llm.smart",
   "assets.generate": "llm.flash",
   "publish.generate": "llm.flash",
+  // voice.preview 不产生 LLM 记账（媒体操作）；占位保持 Record 完整性
+  "voice.preview": "llm.flash",
 };
 
 export interface LlmBillingContext {
