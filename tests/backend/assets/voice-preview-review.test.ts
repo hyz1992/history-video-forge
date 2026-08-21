@@ -4,6 +4,16 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createDbClient, type DbClient } from "../../../backend/src/db/client.js";
+import { createPrismaClient } from "../../../backend/src/db/prisma-client.js";
+import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
+import Database from "better-sqlite3";
+import { executeVoicePreview } from "../../../backend/src/modules/assets/voice/voice-preview.service.js";
+import {
+  getVoiceProfileById,
+  recordVoiceProfileUsage,
+  seedGlobalVoiceProfiles,
+  updateVoiceProfileProviderState,
+} from "../../../backend/src/modules/assets/voice/voice-profile.repository.js";
 import {
   runVoicePreviewDispatch,
   appendVoicePreviewAudit,
@@ -192,5 +202,88 @@ describe("P2-2：seed 并发安全（Map 态并发不抛错、结果唯一）", 
     const ids = [...db.voiceProfiles.keys()];
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids).toContain("voice_preset_cold_authority");
+  });
+});
+
+describe("三审 P1：Prisma 态 seed 不覆盖运行态 + 连续试听 generated → cached", () => {
+  function createPrismaDb(): { db: DbClient; disconnect: () => Promise<void> } {
+    const root = mkdtempSync(join(tmpdir(), "voice-seed-regression-"));
+    tempDirs.push(root);
+    const dbPath = join(root, "test.db");
+    const sqlite = new Database(dbPath);
+    applyAllDatabaseMigrations(sqlite);
+    sqlite.close();
+    // 异步初始化在测试内完成
+    let client: Awaited<ReturnType<typeof createPrismaClient>> | null = null;
+    const db = createDbClient();
+    configureVoiceProfilePersistence(db, { rootDir: root });
+    return {
+      db,
+      disconnect: async () => {
+        await client?.$disconnect();
+      },
+      // 延迟绑定 prisma client（需 await createPrismaClient）
+      bind: async () => {
+        client = await createPrismaClient(dbPath);
+        configureVoiceProfilePersistence(db, { rootDir: root, prismaClient: client });
+      },
+    } as { db: DbClient; disconnect: () => Promise<void>; bind: () => Promise<void> };
+  }
+
+  it("重复 seed 不覆盖 ready/provider voice/preview 缓存/usage", async () => {
+    const harness = createPrismaDb();
+    try {
+      await harness.bind();
+      const db = harness.db;
+      await seedGlobalVoiceProfiles(db);
+
+      // 模拟运行态演进：设计完成（ready + provider voice）+ 试听缓存 + 使用计数
+      await updateVoiceProfileProviderState(db, "voice_preset_cold_authority", {
+        provider_status: "ready",
+        provider_voice_id: "provider-ready-review",
+        preview_audio_uri: "data:audio/wav;base64,Y2FjaGVk",
+      });
+      await recordVoiceProfileUsage(db, "voice_preset_cold_authority", "2026-08-21T10:00:00.000Z");
+
+      // 重复 seed（route 级幂等 seed 会随每次列表/试听请求执行）
+      await seedGlobalVoiceProfiles(db);
+      await seedGlobalVoiceProfiles(db);
+
+      const profile = await getVoiceProfileById(db, "voice_preset_cold_authority");
+      expect(profile?.provider_status).toBe("ready");
+      expect(profile?.provider_voice_id).toBe("provider-ready-review");
+      expect(profile?.preview_audio_uri).toBe("data:audio/wav;base64,Y2FjaGVk");
+      expect(profile?.usage_count).toBe(1);
+    } finally {
+      await harness.disconnect();
+    }
+  });
+
+  it("Prisma 态连续试听 generated → cached（中间重复 seed 不重置缓存）", async () => {
+    const harness = createPrismaDb();
+    try {
+      await harness.bind();
+      const db = harness.db;
+      await seedGlobalVoiceProfiles(db);
+
+      const first = await executeVoicePreview({
+        db,
+        voiceProfileId: "voice_preset_cold_authority",
+      });
+      expect(first.source).toBe("generated");
+      expect(first.preview_audio_uri).toMatch(/^data:audio\/wav;base64,/);
+
+      // 中间再次 seed（模拟列表请求触发的幂等 seed）——不得清掉试听缓存
+      await seedGlobalVoiceProfiles(db);
+
+      const second = await executeVoicePreview({
+        db,
+        voiceProfileId: "voice_preset_cold_authority",
+      });
+      expect(second.source).toBe("cached");
+      expect(second.preview_audio_uri).toBe(first.preview_audio_uri);
+    } finally {
+      await harness.disconnect();
+    }
   });
 });

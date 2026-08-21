@@ -217,19 +217,21 @@ async function seedMapProfiles(db: DbClient): Promise<void> {
 async function seedPrismaProfiles(db: DbClient): Promise<void> {
   const prisma = prismaOf(db);
   if (!prisma) return;
-  // P2-2（外部审查复审）：seed 用 upsert 而非 findMany+create——首次并发请求
-  // （跨实例 fresh 部署）不会因同时 create 相同 seed id 触发唯一键冲突；
-  // upsert 天然幂等，已存在行走 update（同值）分支。
+  // P2-2（外部审查复审）+ 三审 P1：seed 用 create-only upsert（update: {}）——
+  // 并发安全（首次并发请求不因同时 create 相同 seed id 唯一键冲突），且
+  // **绝不覆盖既有运行态**：已存在行（provider_status/provider_voice_id/
+  // preview_audio_uri/usage_count 等）保持数据库现值，否则每次列表/试听请求
+  // 触发的 seed 会把 ready 档案重置回 missing、清空试听缓存并导致重复设计
+  // 与重复计费。
   const knownIds = new Set<string>();
   for (const seed of SHARED_VOICE_PROFILE_SEEDS) {
     const normalized = normalizeProfile(seed);
     await prisma.voiceProfile.upsert({
       where: { id: normalized.voice_profile_id },
       create: profileToRow(normalized),
-      update: profileToRow(normalized),
+      update: {},
     });
     knownIds.add(normalized.voice_profile_id);
-    db.voiceProfiles.set(normalized.voice_profile_id, normalized);
   }
   // 历史 JSON 一次性导入（幂等：按 id 跳过），导入完成后归档为
   // voice-profiles.json.imported（P2-3，外部审查）：此后启动不再读取历史 JSON，
@@ -238,11 +240,11 @@ async function seedPrismaProfiles(db: DbClient): Promise<void> {
   for (const profile of document.profiles) {
     if (knownIds.has(profile.voice_profile_id)) continue;
     const imported = normalizeLoadedProfile(profile);
-    // 导入同样用 upsert（并发安全的幂等导入；归档前竞态不产生重复行）
+    // 导入同样用 create-only upsert：并发安全且不覆盖已存在行的运行态
     await prisma.voiceProfile.upsert({
       where: { id: imported.voice_profile_id },
       create: profileToRow(imported),
-      update: profileToRow(imported),
+      update: {},
     });
     knownIds.add(imported.voice_profile_id);
     db.voiceProfiles.set(imported.voice_profile_id, imported);
