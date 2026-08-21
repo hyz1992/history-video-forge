@@ -790,3 +790,237 @@ describe("resolveGenerationConfiguration auto default model selection", () => {
     expect(resolved.error.code).toBe("generation_configuration_invalid");
   });
 });
+
+describe("resolveGenerationConfiguration S2-2C multi-candidate catalog fixed selection", () => {
+  // 同槽两个 active 条目：默认 + 非默认候选（目录多候选形态，S2-2C 详细设计 §7）。
+  const multiCandidateCatalog: ProviderModelCatalogEntry[] = [
+    ...fullActiveCatalog,
+    {
+      provider_model_id: "llm.smart.zhipu.glm-4",
+      capability: "llm.smart",
+      provider_key: "zhipu",
+      model_id: "glm-4",
+      status: "active",
+      is_default: false,
+    },
+  ];
+
+  it("fixed to a non-default active candidate resolves exactly to that model", () => {
+    const input = buildInput({
+      projectConfiguration: {
+        ...baseConfig,
+        capabilities: {
+          ...baseConfig.capabilities,
+          "llm.smart": {
+            mode: "fixed",
+            provider_model_id: "llm.smart.zhipu.glm-4",
+          },
+        },
+      },
+      providerModelCatalog: multiCandidateCatalog,
+    });
+    const resolved = resolveGenerationConfiguration(input);
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    expect(resolved.value.resolved_capabilities["llm.smart"]).toEqual({
+      mode: "fixed",
+      provider_model_id: "llm.smart.zhipu.glm-4",
+      provider_key: "zhipu",
+      model_id: "glm-4",
+    });
+  });
+
+  it("auto still resolves the default entry when a non-default candidate exists", () => {
+    const input = buildInput({
+      providerModelCatalog: multiCandidateCatalog,
+    });
+    const resolved = resolveGenerationConfiguration(input);
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    expect(resolved.value.resolved_capabilities["llm.smart"]).toEqual({
+      mode: "auto",
+      provider_model_id: "dashscope.qwen-max",
+      provider_key: "dashscope",
+      model_id: "qwen-max",
+    });
+  });
+
+  it("fixed to a provider_model_id belonging to another slot returns generation_capability_unavailable", () => {
+    const input = buildInput({
+      projectConfiguration: {
+        ...baseConfig,
+        capabilities: {
+          ...baseConfig.capabilities,
+          // 该 id 属于 llm.smart 槽位，但被配置到 llm.flash
+          "llm.flash": {
+            mode: "fixed",
+            provider_model_id: "llm.smart.zhipu.glm-4",
+          },
+        },
+      },
+      providerModelCatalog: multiCandidateCatalog,
+    });
+    const resolved = resolveGenerationConfiguration(input);
+    expect(resolved.ok).toBe(false);
+    if (resolved.ok) return;
+    expect(resolved.error.code).toBe("generation_capability_unavailable");
+    expect(resolved.error.capability).toBe("llm.flash");
+  });
+
+  it("fixed target change alters configuration_hash (quote drift detection basis)", () => {
+    const base = buildInput({ providerModelCatalog: multiCandidateCatalog });
+    const fixedToDefault = resolveGenerationConfiguration({
+      ...base,
+      projectConfiguration: {
+        ...baseConfig,
+        capabilities: {
+          ...baseConfig.capabilities,
+          "llm.smart": {
+            mode: "fixed",
+            provider_model_id: "dashscope.qwen-max",
+          },
+        },
+      },
+    });
+    const fixedToCandidate = resolveGenerationConfiguration({
+      ...base,
+      projectConfiguration: {
+        ...baseConfig,
+        capabilities: {
+          ...baseConfig.capabilities,
+          "llm.smart": {
+            mode: "fixed",
+            provider_model_id: "llm.smart.zhipu.glm-4",
+          },
+        },
+      },
+    });
+    expect(fixedToDefault.ok && fixedToCandidate.ok).toBe(true);
+    if (!fixedToDefault.ok || !fixedToCandidate.ok) return;
+    expect(fixedToDefault.value.configuration_hash).not.toBe(
+      fixedToCandidate.value.configuration_hash,
+    );
+  });
+
+  it("catalog default change (A→B) alters configuration_hash for identical auto configuration", () => {
+    const catalogWithDefaultB: ProviderModelCatalogEntry[] = fullActiveCatalog.map((entry) =>
+      entry.capability === "llm.smart"
+        ? {
+            ...entry,
+            provider_model_id: "dashscope.qwen-max-v2",
+            model_id: "qwen-max-v2",
+          }
+        : entry,
+    );
+    const withDefaultA = resolveGenerationConfiguration(
+      buildInput({ providerModelCatalog: fullActiveCatalog }),
+    );
+    const withDefaultB = resolveGenerationConfiguration(
+      buildInput({ providerModelCatalog: catalogWithDefaultB }),
+    );
+    expect(withDefaultA.ok && withDefaultB.ok).toBe(true);
+    if (!withDefaultA.ok || !withDefaultB.ok) return;
+    expect(withDefaultA.value.configuration_hash).not.toBe(
+      withDefaultB.value.configuration_hash,
+    );
+  });
+});
+
+describe("resolveGenerationConfiguration voice compatibility follows fixed tts provider", () => {
+  const ttsCatalog: ProviderModelCatalogEntry[] = fullActiveCatalog.map((entry) =>
+    entry.capability === "tts.synthesize" ? { ...entry, is_default: true } : entry,
+  );
+
+  function buildVoiceProfile(providerName: string) {
+    return {
+      voice_profile_id: "voice_test_profile",
+      kind: "preset" as const,
+      owner_id: null,
+      visibility: "public" as const,
+      name: "测试音色",
+      description: "测试",
+      design_prompt: "测试音色设计提示",
+      preview_text: "历史长河，风起云涌。",
+      provider_name: providerName,
+      provider_voice_id: null,
+      provider_status: "ready" as const,
+      target_model: "qwen3-tts-instruct-flash",
+      recommended_content_families: ["历史"],
+      voice_traits: ["沉稳"],
+      avoid_traits: ["轻浮"],
+      gender_tone: "male",
+      age_band: "adult",
+      pitch: "low",
+      pace: "slow",
+      energy: 0.5,
+      authority: 0.8,
+      suspense: 0.3,
+      warmth: 0.4,
+      preview_audio_uri: null,
+      usage_count: 0,
+      last_used_at: null,
+      quality_score: 0.8,
+      created_at: "2026-08-21T00:00:00.000Z",
+      updated_at: "2026-08-21T00:00:00.000Z",
+    };
+  }
+
+  it("voice profile compatible with fixed dashscope tts resolves to fixed voice", () => {
+    const input = buildInput({
+      projectConfiguration: {
+        ...baseConfig,
+        creative: { ...baseConfig.creative, voice_profile_id: "voice_test_profile" },
+        capabilities: {
+          ...baseConfig.capabilities,
+          "tts.synthesize": {
+            mode: "fixed",
+            provider_model_id: "dashscope.tts",
+          },
+        },
+      },
+      providerModelCatalog: ttsCatalog,
+      voiceProfiles: [buildVoiceProfile("dashscope")],
+    });
+    const resolved = resolveGenerationConfiguration(input);
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) return;
+    expect(resolved.value.resolved_capabilities["tts.synthesize"].mode).toBe("fixed");
+    expect(resolved.value.resolved_creative.voice).toMatchObject({
+      mode: "fixed",
+      voice_profile_id: "voice_test_profile",
+      provider_name: "dashscope",
+    });
+  });
+
+  it("voice profile incompatible with fixed tts provider returns structured failure", () => {
+    const catalogWithOpenaiTts: ProviderModelCatalogEntry[] = ttsCatalog.map((entry) =>
+      entry.capability === "tts.synthesize"
+        ? {
+            provider_model_id: "tts.openai.gpt-tts",
+            capability: "tts.synthesize" as const,
+            provider_key: "openai",
+            model_id: "gpt-tts",
+            status: "active" as const,
+            is_default: false,
+          }
+        : entry,
+    );
+    const input = buildInput({
+      projectConfiguration: {
+        ...baseConfig,
+        creative: { ...baseConfig.creative, voice_profile_id: "voice_test_profile" },
+        capabilities: {
+          ...baseConfig.capabilities,
+          "tts.synthesize": { mode: "fixed", provider_model_id: "tts.openai.gpt-tts" },
+        },
+      },
+      providerModelCatalog: catalogWithOpenaiTts,
+      voiceProfiles: [buildVoiceProfile("dashscope")],
+    });
+    const resolved = resolveGenerationConfiguration(input);
+    expect(resolved.ok).toBe(false);
+    if (resolved.ok) return;
+    expect(resolved.error.code).toBe("generation_creative_voice_provider_incompatible");
+    expect(resolved.error.capability).toBe("tts.synthesize");
+  });
+});
