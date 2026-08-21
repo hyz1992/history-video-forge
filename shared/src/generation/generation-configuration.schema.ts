@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { SubtitleStyleOverrideSet } from "../creative/creative-preset.schema.js";
+
 /**
  * S2-2A 生成配置合同。
  *
@@ -122,14 +124,42 @@ export type BudgetConfiguration = z.infer<typeof BudgetConfiguration>;
 
 // --- Creative（S2-2A 占位，B 实施时填充） -----------------------------------
 
+/**
+ * 创作偏好（S2-2B 开放写入）。
+ *
+ * - 三个 preset 槽位是稳定 ID；`null` 表示自动/系统默认（音色 auto 匹配、
+ *   画风不启用、字幕用系统默认样式）。
+ * - `subtitle_style_overrides` 是有限安全参数覆盖（白名单见 creative-preset.schema），
+ *   可选字段缺省 `{}`——旧存储 JSON（无该字段）解析自动补缺省，无需迁移。
+ * - B 阶段支持单次运行覆盖（RunOverridesSchema / GenerationQuoteRunOverridesSchema
+ *   的 creative 段），覆盖只进入当次运行快照。
+ */
 export const CreativePreferences = z
   .object({
     voice_profile_id: z.string().min(1).nullable(),
     art_style_preset_id: z.string().min(1).nullable(),
     subtitle_style_preset_id: z.string().min(1).nullable(),
+    subtitle_style_overrides: SubtitleStyleOverrideSet.default({}),
   })
   .strict();
 export type CreativePreferences = z.infer<typeof CreativePreferences>;
+
+/**
+ * 单次运行覆盖的 creative 段（逐字段覆盖语义）：
+ * - 字段提供 → 覆盖项目配置对应值；
+ * - 显式 `null` → 该槽位重置为 auto/none；
+ * - 字段缺省 → 保持项目配置值。
+ * 与 video/budget 覆盖一样：只进入当次运行快照，不写回项目配置。
+ */
+export const CreativeRunOverrideSchema = z
+  .object({
+    voice_profile_id: z.string().min(1).nullable().optional(),
+    art_style_preset_id: z.string().min(1).nullable().optional(),
+    subtitle_style_preset_id: z.string().min(1).nullable().optional(),
+    subtitle_style_overrides: SubtitleStyleOverrideSet.optional(),
+  })
+  .strict();
+export type CreativeRunOverride = z.infer<typeof CreativeRunOverrideSchema>;
 
 // --- 主配置合同 ------------------------------------------------------------
 
@@ -167,6 +197,7 @@ export const DEFAULT_GENERATION_CONFIGURATION: GenerationConfigurationV1 = {
     voice_profile_id: null,
     art_style_preset_id: null,
     subtitle_style_preset_id: null,
+    subtitle_style_overrides: {},
   },
   capabilities: {
     "llm.smart": { mode: "auto" },
@@ -238,6 +269,39 @@ export const S2_2A_ProjectConfigPatchRequest = z
   })
   .strict();
 export type S2_2A_ProjectConfigPatchRequest = z.infer<typeof S2_2A_ProjectConfigPatchRequest>;
+
+/**
+ * S2-2B PATCH schema（两阶段替换：本任务新增，任务 8 切换引用后删除 A 版）。
+ * 在 A 的 `{ expected_revision, video, budget }` 基础上增加可选 `creative` 段：
+ * - `creative` 提供时整体替换三个槽位 + 覆盖集合；
+ * - `creative` 缺省时保持现值（A 期请求体兼容）。
+ * capabilities 仍不开放（S2-2C 处理）。
+ */
+export const S2_2B_ConfigPatchRequest = z
+  .object({
+    expected_revision: z.number().int().nonnegative().nullable(),
+    video: z.object({
+      strategy: VideoGenerationStrategy,
+      api_quality: ApiVideoQuality,
+    }),
+    budget: BudgetConfiguration,
+    creative: CreativePreferences.optional(),
+  })
+  .strict();
+export type S2_2B_ConfigPatchRequest = z.infer<typeof S2_2B_ConfigPatchRequest>;
+
+export const S2_2B_ProjectConfigPatchRequest = z
+  .object({
+    expected_revision: z.number().int().nonnegative(),
+    video: z.object({
+      strategy: VideoGenerationStrategy,
+      api_quality: ApiVideoQuality,
+    }),
+    budget: BudgetConfiguration,
+    creative: CreativePreferences.optional(),
+  })
+  .strict();
+export type S2_2B_ProjectConfigPatchRequest = z.infer<typeof S2_2B_ProjectConfigPatchRequest>;
 
 // --- S2-2A API 响应 DTO（实施计划任务 3：请求与响应都用共享 Zod 校验） -------
 

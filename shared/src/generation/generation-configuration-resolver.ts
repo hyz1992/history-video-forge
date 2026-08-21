@@ -12,6 +12,7 @@ import {
   type SegmentVisualStrategyOverride,
   ApiVideoSuitability as ApiVideoSuitabilitySchema,
   CAPABILITY_SLOTS,
+  CreativeRunOverrideSchema,
   GenerationConfigurationV1 as GenerationConfigurationV1Schema,
   ResolvedCapabilityMapSchema,
   ResolvedGenerationConfigurationV1Schema,
@@ -99,8 +100,8 @@ export const SegmentInputSchema = z
 export type SegmentInput = z.infer<typeof SegmentInputSchema>;
 
 /**
- * run override 只允许覆盖 video 与 budget（S2-2A 范围）；capabilities 与 creative
- * 由项目配置决定（B/C 才开放修改）。这里用 Zod 严格刻画可覆盖字段子集。
+ * run override 覆盖 video、budget 与 creative（S2-2B 起开放 creative）。
+ * capabilities 由项目配置决定（S2-2C 才开放修改）。这里用 Zod 严格刻画可覆盖字段子集。
  */
 const RunOverridesSchema = z
   .object({
@@ -118,6 +119,7 @@ const RunOverridesSchema = z
       })
       .strict()
       .optional(),
+    creative: CreativeRunOverrideSchema.optional(),
   })
   .strict()
   .optional();

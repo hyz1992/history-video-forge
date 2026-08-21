@@ -50,6 +50,7 @@ export {
   CAPABILITY_SLOTS,
   CapabilitySelectionMap,
   CreativePreferences,
+  CreativeRunOverrideSchema,
   DEFAULT_GENERATION_CONFIGURATION,
   DRIFT_HASH_ALGORITHM,
   DriftHashSchema,
@@ -66,6 +67,8 @@ export {
   S2_2A_ConfigPatchRequest,
   S2_2A_PATCH_ALLOWED_FIELDS,
   S2_2A_ProjectConfigPatchRequest,
+  S2_2B_ConfigPatchRequest,
+  S2_2B_ProjectConfigPatchRequest,
   ConfigurationInvalidationPreview,
   GenerationCapabilitiesResponse,
   PublicCapabilityEntrySchema,
@@ -77,12 +80,32 @@ export {
 } from "./generation/generation-configuration.schema";
 export type {
   CapabilitySlot,
+  CreativeRunOverride,
   ResolvedCapabilityMap,
   ResolvedGenerationConfigurationV1,
   ResolvedProviderModel,
   ResolvedSegmentVisualRoute,
   S2_2A_ConfigPatchRequest as S2_2A_ConfigPatchRequestType,
+  S2_2B_ConfigPatchRequest as S2_2B_ConfigPatchRequestType,
+  S2_2B_ProjectConfigPatchRequest as S2_2B_ProjectConfigPatchRequestType,
 } from "./generation/generation-configuration.schema";
+// creative：S2-2B 版本化画风/字幕 preset 合同、注册表与字幕覆盖解析
+export {
+  ArtStylePreset,
+  ArtStyleResolvedParams,
+  CreativePresetRegistrySnapshot,
+  SUBTITLE_OVERRIDABLE_FIELDS,
+  SUBTITLE_SHADOW_VALUES,
+  SubtitleOverrideField,
+  SubtitlePresetResolvedParams,
+  SubtitleShadowPreset,
+  SubtitleStyleOverrideSet,
+  SubtitleStylePreset,
+} from "./creative/creative-preset.schema";
+export { ART_STYLE_PRESET_REGISTRY_V1 } from "./creative/art-style-presets";
+export { SUBTITLE_STYLE_PRESET_REGISTRY_V1 } from "./creative/subtitle-style-presets";
+export { CREATIVE_PRESET_REGISTRY_SNAPSHOT_V1 } from "./creative/creative-preset-registry";
+export { applySubtitleStyleOverrides } from "./creative/subtitle-style-resolver";
 // generation-configuration-resolver：运行时函数 + 纯类型（接口/type alias）
 export {
   canonicalStringify,

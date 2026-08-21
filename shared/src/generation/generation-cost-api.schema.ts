@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { ApiVideoQuality, VideoGenerationStrategy } from "./generation-configuration.schema.js";
 import { GenerationOperationSchema } from "./generation-configuration-resolver.js";
+import { CreativeRunOverrideSchema } from "./generation-configuration.schema.js";
 import { AssetProviderType } from "../assets/asset-manifest.schema.js";
 
 /**
@@ -15,7 +16,8 @@ import { AssetProviderType } from "../assets/asset-manifest.schema.js";
 
 /**
  * quote 请求的 run override 子集（与 resolver 的 RunOverridesSchema 同构：
- * 只允许覆盖 video/budget，capabilities/creative 由项目配置决定）。
+ * 允许覆盖 video/budget（S2-2A）与 creative（S2-2B 起），capabilities 由项目配置决定）。
+ * quote 创建与提交必须重放同一 run_overrides（逐字段一致，不一致按内容漂移拒绝）。
  */
 export const GenerationQuoteRunOverridesSchema = z
   .object({
@@ -36,6 +38,7 @@ export const GenerationQuoteRunOverridesSchema = z
       })
       .strict()
       .optional(),
+    creative: CreativeRunOverrideSchema.optional(),
   })
   .strict()
   .optional();

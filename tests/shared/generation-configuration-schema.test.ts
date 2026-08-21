@@ -4,10 +4,14 @@ import {
   ApiVideoQuality,
   ApiVideoSuitability,
   CapabilitySlot,
+  CreativePreferences,
+  CreativeRunOverrideSchema,
   DEFAULT_GENERATION_CONFIGURATION,
   GenerationConfigurationV1,
   ResolvedVisualRoute,
   RunConfigurationSnapshotV1,
+  S2_2B_ConfigPatchRequest,
+  S2_2B_ProjectConfigPatchRequest,
   VideoGenerationStrategy,
 } from "../../shared/src/index.js";
 
@@ -231,6 +235,7 @@ describe("GenerationConfigurationV1 schema", () => {
         voice_profile_id: null,
         art_style_preset_id: null,
         subtitle_style_preset_id: null,
+        subtitle_style_overrides: {},
       });
     });
 
@@ -276,6 +281,7 @@ describe("GenerationConfigurationV1 schema", () => {
           voice_profile_id: null,
           art_style_preset_id: null,
           subtitle_style_preset_id: null,
+          subtitle_style_overrides: {},
         },
         capabilities: {
           "llm.smart": { mode: "auto" },
@@ -751,6 +757,161 @@ describe("GenerationConfigurationV1 schema", () => {
           unexpected_field: true,
         }),
       ).toThrow();
+    });
+  });
+});
+
+describe("S2-2B creative 配置扩展", () => {
+  describe("CreativePreferences", () => {
+    it("接受全 null 默认值（A 期形态）", () => {
+      const parsed = CreativePreferences.parse({
+        voice_profile_id: null,
+        art_style_preset_id: null,
+        subtitle_style_preset_id: null,
+      });
+      expect(parsed.subtitle_style_overrides).toEqual({});
+    });
+
+    it("接受非空预设 id 与覆盖集合", () => {
+      const parsed = CreativePreferences.parse({
+        voice_profile_id: "voice_preset_cold_authority",
+        art_style_preset_id: "art_style_classical_ink",
+        subtitle_style_preset_id: "subtitle_style_bold_stroke",
+        subtitle_style_overrides: { font_size_px: 52, position: "top" },
+      });
+      expect(parsed.subtitle_style_overrides.font_size_px).toBe(52);
+    });
+
+    it("旧 JSON（无 subtitle_style_overrides 字段）解析成功并缺省为空对象", () => {
+      const legacy = {
+        voice_profile_id: null,
+        art_style_preset_id: null,
+        subtitle_style_preset_id: null,
+      };
+      const parsed = CreativePreferences.parse(legacy);
+      expect(parsed.subtitle_style_overrides).toEqual({});
+    });
+
+    it("拒绝白名单外覆盖字段", () => {
+      expect(() =>
+        CreativePreferences.parse({
+          voice_profile_id: null,
+          art_style_preset_id: null,
+          subtitle_style_preset_id: null,
+          subtitle_style_overrides: { font_family: "Arial" },
+        }),
+      ).toThrow();
+    });
+
+    it("拒绝未知字段（strict）", () => {
+      expect(() =>
+        CreativePreferences.parse({
+          voice_profile_id: null,
+          art_style_preset_id: null,
+          subtitle_style_preset_id: null,
+          extra: true,
+        }),
+      ).toThrow();
+    });
+  });
+
+  describe("CreativeRunOverrideSchema（单次运行覆盖）", () => {
+    it("接受仅覆盖音色的部分覆盖", () => {
+      const parsed = CreativeRunOverrideSchema.parse({
+        voice_profile_id: "voice_preset_crisp_storyteller",
+      });
+      expect(parsed.voice_profile_id).toBe("voice_preset_crisp_storyteller");
+      expect(parsed.art_style_preset_id).toBeUndefined();
+    });
+
+    it("接受显式 null（重置为 auto/none）", () => {
+      const parsed = CreativeRunOverrideSchema.parse({
+        voice_profile_id: null,
+        art_style_preset_id: null,
+        subtitle_style_preset_id: null,
+      });
+      expect(parsed.voice_profile_id).toBeNull();
+    });
+
+    it("接受覆盖集合但不允许白名单外字段", () => {
+      expect(
+        CreativeRunOverrideSchema.safeParse({
+          subtitle_style_overrides: { max_lines: 3 },
+        }).success,
+      ).toBe(true);
+      expect(
+        CreativeRunOverrideSchema.safeParse({
+          subtitle_style_overrides: { font_family: "Arial" },
+        }).success,
+      ).toBe(false);
+    });
+
+    it("拒绝未知字段（strict）", () => {
+      expect(CreativeRunOverrideSchema.safeParse({ voice: "x" }).success).toBe(false);
+    });
+  });
+
+  describe("S2_2B PATCH schema（两阶段替换：本任务新增 B 版）", () => {
+    it("用户 PATCH：video+budget+creative 全量可用", () => {
+      const parsed = S2_2B_ConfigPatchRequest.parse({
+        expected_revision: 3,
+        video: { strategy: "prefer_api_video", api_quality: "high_1080p" },
+        budget: { currency: "CNY", max_paid_cost_micros_per_run: "1000000" },
+        creative: {
+          voice_profile_id: "voice_preset_steady_documentary",
+          art_style_preset_id: null,
+          subtitle_style_preset_id: null,
+        },
+      });
+      expect(parsed.creative?.voice_profile_id).toBe("voice_preset_steady_documentary");
+    });
+
+    it("用户 PATCH：不携带 creative 段（A 期请求体兼容）", () => {
+      const parsed = S2_2B_ConfigPatchRequest.parse({
+        expected_revision: 3,
+        video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
+        budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
+      });
+      expect(parsed.creative).toBeUndefined();
+    });
+
+    it("项目 PATCH：expected_revision 必须为非负整数", () => {
+      expect(
+        S2_2B_ProjectConfigPatchRequest.safeParse({
+          expected_revision: null,
+          video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
+        }).success,
+      ).toBe(false);
+      expect(
+        S2_2B_ProjectConfigPatchRequest.safeParse({
+          expected_revision: 1,
+          video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
+          creative: { voice_profile_id: null, art_style_preset_id: null, subtitle_style_preset_id: null },
+        }).success,
+      ).toBe(true);
+    });
+
+    it("capabilities 等 A 期外字段仍被拒绝", () => {
+      expect(
+        S2_2B_ConfigPatchRequest.safeParse({
+          expected_revision: 1,
+          video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
+          capabilities: { "llm.smart": { mode: "fixed", provider_model_id: "x" } },
+        }).success,
+      ).toBe(false);
+    });
+  });
+
+  describe("DEFAULT_GENERATION_CONFIGURATION 扩展", () => {
+    it("默认配置的 creative 包含空覆盖集合且整体可解析", () => {
+      const parsed = GenerationConfigurationV1.parse(
+        DEFAULT_GENERATION_CONFIGURATION,
+      );
+      expect(parsed.creative.subtitle_style_overrides).toEqual({});
+      expect(parsed.creative.voice_profile_id).toBeNull();
     });
   });
 });
