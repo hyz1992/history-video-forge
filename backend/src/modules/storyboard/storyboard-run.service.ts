@@ -185,6 +185,8 @@ export async function runStoryboardGeneration(
       draft,
       topicBoundaryContext,
       interactionLogWriter,
+      // S2-2C（详细设计 §6.1）：单一真相源——从 billingContext.resolved 派生
+      snapshotCapabilities: input.billingContext?.resolved.resolved_capabilities,
     });
     const generateEnd = new Date().toISOString();
     const validateStart = new Date().toISOString();
@@ -219,6 +221,7 @@ export async function runStoryboardGeneration(
       topicBoundaryContext,
       interactionLogWriter,
       regenerationContext: regenContext,
+      snapshotCapabilities: input.billingContext?.resolved.resolved_capabilities,
     });
     regenEnd = new Date().toISOString();
     localValidation = validateStoryboardPlan({
@@ -464,6 +467,7 @@ export async function runStoryboardSegmentRegeneration(
 
   try {
     const newSegment = await regenerateSingleSegment({
+      snapshotCapabilities: input.billingContext?.resolved.resolved_capabilities,
       plan: existingPlan,
       targetSegmentId: input.segmentId,
       userFeedback: input.userFeedback,

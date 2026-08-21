@@ -1,6 +1,7 @@
 import {
   StoryboardPlan,
   StoryboardSegment,
+  type ResolvedCapabilityMap,
   type ScriptDraftPackage,
 } from "../../../../shared/src/index.js";
 import { env, getValidatedRuntimeEnv } from "../../config/env.js";
@@ -34,6 +35,11 @@ export interface GenerateStoryboardPlanInput {
   topicBoundaryContext: TopicBoundaryContext;
   llmGateway?: LlmGateway;
   interactionLogWriter?: LlmInteractionLogWriter;
+  /**
+   * S2-2C（详细设计 §6.1）：快照冻结 capabilities（来源
+   * `billingContext.resolved.resolved_capabilities` 只读引用）。
+   */
+  snapshotCapabilities?: ResolvedCapabilityMap;
   regenerationContext?: {
     reason: "storyboard_local_validation_regen_once";
     errors: string[];
@@ -63,7 +69,7 @@ export function buildStoryboardPlannerPromptInput(
 }
 
 export async function generateStoryboardPlan(input: GenerateStoryboardPlanInput) {
-  const gateway = input.llmGateway ?? createStoryboardPlannerGateway();
+  const gateway = input.llmGateway ?? createStoryboardPlannerGateway(input.snapshotCapabilities);
   const rawPlan = await gateway.invokeStructuredPrompt<unknown>({
     promptId: "storyboard.planner",
     input: buildStoryboardPlannerPromptInput(input),
@@ -195,6 +201,11 @@ export interface RegenerateSingleSegmentInput {
   userFeedback: string;
   llmGateway?: LlmGateway;
   interactionLogWriter?: LlmInteractionLogWriter;
+  /**
+   * S2-2C（详细设计 §6.1）：快照冻结 capabilities（来源
+   * `billingContext.resolved.resolved_capabilities` 只读引用）。
+   */
+  snapshotCapabilities?: ResolvedCapabilityMap;
 }
 
 const SEGMENT_REGEN_LOCKED_FIELDS = [
@@ -211,7 +222,7 @@ const SEGMENT_REGEN_LOCKED_FIELDS = [
 export async function regenerateSingleSegment(
   input: RegenerateSingleSegmentInput,
 ) {
-  const gateway = input.llmGateway ?? createStoryboardPlannerGateway();
+  const gateway = input.llmGateway ?? createStoryboardPlannerGateway(input.snapshotCapabilities);
 
   const targetSegment = input.plan.segments.find(
     (s) => s.segment_id === input.targetSegmentId,
@@ -265,11 +276,11 @@ function mergeSegmentWithLocks(
   return merged;
 }
 
-function createStoryboardPlannerGateway(): LlmGateway {
+export function createStoryboardPlannerGateway(snapshotCapabilities?: ResolvedCapabilityMap): LlmGateway {
   const provider =
     env.llm.provider === "stub"
       ? createStubStoryboardPlannerProvider()
-      : createValidatedStoryboardPlannerProvider();
+      : createValidatedStoryboardPlannerProvider(snapshotCapabilities);
 
   return createLlmGateway({
     registry: createPromptRegistry(),
@@ -277,10 +288,12 @@ function createStoryboardPlannerGateway(): LlmGateway {
   });
 }
 
-function createValidatedStoryboardPlannerProvider(): StructuredPromptProvider {
+function createValidatedStoryboardPlannerProvider(snapshotCapabilities?: ResolvedCapabilityMap): StructuredPromptProvider {
   getValidatedRuntimeEnv();
 
-  return createTierAwareProviderFromEnv();
+  return createTierAwareProviderFromEnv(
+    snapshotCapabilities ? { snapshotCapabilities } : undefined,
+  );
 }
 
 function createStubStoryboardPlannerProvider(): StructuredPromptProvider {

@@ -38,6 +38,7 @@ import {
   type RecommendationFilterDiagnostics,
 } from "../../runtime/llm/interaction-log.js";
 import { createTierAwareProviderFromEnv } from "../../runtime/llm/tier-aware-provider-factory.js";
+import { type ResolvedCapabilityMap } from "../../../../shared/src/index.js";
 import type {
   StrictStructuredToolSchema,
   StructuredPromptInvocation,
@@ -255,7 +256,9 @@ export async function recommendTopicCandidatesWithTrace(
 ) {
   const recommendationStartedAt = new Date();
   const existingCacheRecordIds = [...db.candidateCache.keys()];
-  const gateway = options?.llmGateway ?? createTopicRecommendationGateway();
+  const gateway =
+    options?.llmGateway ??
+    createTopicRecommendationGateway(options?.billingContext?.resolved.resolved_capabilities);
   const project = options?.projectId ? db.projects.get(options.projectId) : null;
   const runId = `topic_run_${db.generateId()}`;
   // 派生数量参数（缺省=当前行为，等价三 tab 共用 8→4）
@@ -570,11 +573,15 @@ export async function recommendTopicCandidates(
   return result.candidates;
 }
 
-function createTopicRecommendationGateway(): LlmGateway {
+export function createTopicRecommendationGateway(
+  snapshotCapabilities?: ResolvedCapabilityMap,
+): LlmGateway {
   const provider =
     env.llm.provider === "stub"
       ? createStubTopicRecommendationProvider()
-      : createTierAwareProviderFromEnv();
+      : createTierAwareProviderFromEnv(
+          snapshotCapabilities ? { snapshotCapabilities } : undefined,
+        );
 
   return createLlmGateway({
     registry: createPromptRegistry(),
