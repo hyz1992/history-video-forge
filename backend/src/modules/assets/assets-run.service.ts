@@ -710,10 +710,12 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   });
 
   // Step 4: Resolve local global voice profile before manifest build
+  // S2-2B：以项目 owner 限定音色库可见性（公共 + 本人私有，详细设计 §6.4）
   const voiceResolution = await resolveVoiceProfile({
     db,
     requestedVoiceProfileId: input.voiceProfileId,
     assetPlan: normalizedTts.assetPlan,
+    ownerId: project.ownerId,
   });
 
   // Write resolved voice profile ID back to the asset plan

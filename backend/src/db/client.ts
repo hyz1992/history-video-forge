@@ -12,6 +12,7 @@ import type {
   VoiceProfile,
 } from "../../../shared/src/index.js";
 import type { TopicRecommendationFilter } from "../../../shared/src/topic/topic-recommendation-filter.schema.js";
+import type { AppPrismaClient } from "./prisma-client.types.js";
 
 export interface ProjectRecord {
   id: string;
@@ -447,6 +448,11 @@ export interface DbClient {
     rootDir?: string;
     enabled: boolean;
     loaded: boolean;
+    /**
+     * S2-2B（详细设计 §6.4）：Prisma 激活态以数据库为音色库跨实例权威。
+     * 非空时 repository 直查数据库并同步内存镜像；空时走 Map + 历史 JSON 导入。
+     */
+    prismaClient?: AppPrismaClient;
   };
   // S2-2A 内存态集合（legacy 测试态与 Prisma 双写过渡；不塞进项目快照 JSON）
   userGenerationPreferences: Map<string, UserGenerationPreferenceRecord>;

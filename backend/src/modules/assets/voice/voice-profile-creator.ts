@@ -10,6 +10,8 @@ export interface CreateLocalVoiceProfileFromIntentInput {
   intent: VoiceIntent;
   nowIso: string;
   voiceProfileId: string;
+  /** S2-2B：生成档案归属创建用户（运行所属项目 owner）。 */
+  ownerId?: string | null;
 }
 
 function joinOrDefault(values: string[], fallback: string): string {
@@ -35,11 +37,12 @@ function buildDesignPrompt(intent: VoiceIntent): string {
 export function createLocalVoiceProfileFromIntent(
   input: CreateLocalVoiceProfileFromIntentInput,
 ): VoiceProfileRecord {
-  const { intent, nowIso, voiceProfileId } = input;
+  const { intent, nowIso, voiceProfileId, ownerId } = input;
 
   return VoiceProfile.parse({
     voice_profile_id: voiceProfileId,
     kind: "generated",
+    owner_id: ownerId ?? null,
     name: intent.narrator_persona,
     description: `${intent.content_family} 专用${intent.narrator_persona}`,
     design_prompt: buildDesignPrompt(intent),

@@ -229,8 +229,8 @@ resolved_creative: {
 - **Prisma 新模型 `VoiceProfile`**：权威列（`id`/`kind`/`ownerId`(nullable FK)/`visibility`(public|private)/`providerName`/`providerVoiceId`/`providerStatus`/`targetModel`/`previewAudioUri`/`usageCount`/`lastUsedAt`/`qualityScore`/`createdAt`/`updatedAt`）+ `metadataJson`（name/description/design_prompt/preview_text/推荐内容族/特征评分等展示与设计字段）。共享 `VoiceProfile` zod schema 增加 `owner_id`/`visibility` 可选字段（旧 JSON 兼容）。
 - **可见性规则**：`kind=preset|system` → 公共（`visibility=public, ownerId=null`）；`kind=generated` → 创建用户私有（`visibility=private, ownerId=userId`，auto 匹配在运行中创建档案时归属当前项目 owner）。
 - **同源授权**：配置解析（resolver 输入 = 公共 + 当前项目 owner 私有）、列表 API、试听 API 使用同一可见性过滤；非可见档案按"不存在"处理（解析报 `generation_creative_voice_profile_unavailable`，API 返回 404）。
-- **跨实例权威**：Prisma 激活态 repository 直查数据库并同步内存镜像（与快照 P1-2 整改同一模式）；Map 态仅服务测试。启动时幂等 seed 公共预设/系统档案。
-- **历史数据迁移**：一次性把 `storage/voice-profiles/voice-profiles.json` 中的非 seed 生成档案导入为 `visibility=public`（历史生成数据无归属语义，归公共避免破坏既有匹配与引用）；之后 JSON 文件退役，不再读写。
+- **跨实例权威**：Prisma 激活态 repository 直查数据库并同步内存镜像（与快照 P1-2 整改同一模式）；Map 态仅服务测试/无 Prisma 演示。启动时幂等 seed 公共预设/系统档案。
+- **历史数据迁移与存储分工**：Prisma 态一次性把 `storage/voice-profiles/voice-profiles.json` 中的历史档案导入数据库（无归属字段的历史生成档案导入为 `visibility=public`，避免破坏既有匹配与引用；带归属字段的记录保持原值），之后 Prisma 态不再读写 JSON；Map 态保留 JSON 写穿持久化作为 legacy 存储（既有测试与无 Prisma 演示依赖），数据库是 Prisma 激活态的跨实例真相源。
 - 音色库不参与 catalog readiness（与 `ProviderModelCatalog` 无关），也不要求每 capability 恰好一个默认项。
 
 ## 7. 画风：preset → 正式 prompt 输入 + ProjectArtBible 合并

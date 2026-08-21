@@ -186,6 +186,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
   };
   configureVoiceProfilePersistence(db, {
     rootDir: runtimeStorageRoot,
+    prismaClient: options.prismaClient,
   });
 
   // Restore persisted state from disk; Vitest only opts in when an isolated root is provided.

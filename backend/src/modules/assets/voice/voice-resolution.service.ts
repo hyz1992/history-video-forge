@@ -36,6 +36,11 @@ export interface ResolveVoiceProfileInput {
   db: DbClient;
   requestedVoiceProfileId: string;
   assetPlan: AssetPlan;
+  /**
+   * S2-2B（详细设计 §6.4）：运行所属项目 owner。决定音色库可见性
+   * （公共 + 本人私有）；创建本地生成档案时归属该用户。
+   */
+  ownerId?: string | null;
 }
 
 export interface ResolveVoiceProfileResult {
@@ -56,7 +61,9 @@ export async function resolveVoiceProfile(
 
   const requestedId = input.requestedVoiceProfileId.trim();
   if (requestedId) {
-    const requested = await getVoiceProfileById(input.db, requestedId);
+    const requested = await getVoiceProfileById(input.db, requestedId, {
+      ownerId: input.ownerId,
+    });
     if (requested && requested.provider_status !== "deleted") {
       await recordVoiceProfileUsage(input.db, requested.voice_profile_id);
       return {
@@ -73,7 +80,7 @@ export async function resolveVoiceProfile(
   }
 
   const intent = readVoiceIntent(input.assetPlan);
-  const profiles = await listVoiceProfiles(input.db);
+  const profiles = await listVoiceProfiles(input.db, { ownerId: input.ownerId });
   const matchResult = matchVoiceProfile({
     intent,
     profiles,
@@ -87,6 +94,7 @@ export async function resolveVoiceProfile(
         intent,
         nowIso: new Date().toISOString(),
         voiceProfileId: `voice_generated_${input.db.generateId()}`,
+        ownerId: input.ownerId,
       }),
     );
     await recordVoiceProfileUsage(input.db, profile.voice_profile_id);

@@ -25,6 +25,7 @@ model User {
   eventLibraryEntries EventLibraryEntry[] @relation("EventLibraryEntryOwner")
   eventLibraryDrafts  EventLibraryDraft[]  @relation("EventLibraryDraftOwner")
   generationPreference UserGenerationPreference?
+  voiceProfiles        VoiceProfile[]
 
   @@index([role, status])
 }
@@ -755,4 +756,30 @@ model UsageCostRecord {
 
   @@unique([runConfigurationSnapshotId, providerRequestKey, attemptIndex])
   @@index([runConfigurationSnapshotId])
+}
+
+// --- S2-2B 音色库（详细设计 §6.4，外部审查 P1-4） -------------------------
+
+/// 音色档案：公共（preset/system）与用户私有（generated）分离。
+/// 权威列为执行关键与归属字段；展示/设计字段存 metadataJson。
+/// Prisma 激活态以本表为跨实例权威；Map 态仅服务测试。
+model VoiceProfile {
+  id               String    @id
+  kind             String
+  ownerId          String?
+  visibility       String    @default("public")
+  providerName     String
+  providerVoiceId  String?
+  providerStatus   String
+  targetModel      String
+  previewAudioUri  String?
+  usageCount       Int       @default(0)
+  lastUsedAt       DateTime?
+  qualityScore     Float?
+  metadataJson     Json
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  owner            User?     @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+
+  @@index([ownerId, visibility])
 }

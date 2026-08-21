@@ -46,7 +46,7 @@ describe("global voice profile repository", () => {
     ]);
   });
 
-  it("stores generated profiles globally, not per project", async () => {
+  it("S2-2B：生成的档案默认归属保存者私有（可见性同源授权）", async () => {
     const db = createDbClient();
 
     await seedGlobalVoiceProfiles(db);
@@ -79,11 +79,19 @@ describe("global voice profile repository", () => {
       quality_score: null,
       created_at: "2026-05-19T00:00:00.000Z",
       updated_at: "2026-05-19T00:00:00.000Z",
+      owner_id: "user_creator",
     });
 
-    const profiles = await listVoiceProfiles(db);
+    // 无 scope 的列表只返回公共档案（详细设计 §6.4：fail-closed）
+    const publicOnly = await listVoiceProfiles(db);
     expect(
-      profiles.some((item) => item.voice_profile_id === "voice_generated_test"),
+      publicOnly.some((item) => item.voice_profile_id === "voice_generated_test"),
+    ).toBe(false);
+
+    // 保存者 scope 可见
+    const forCreator = await listVoiceProfiles(db, { ownerId: "user_creator" });
+    expect(
+      forCreator.some((item) => item.voice_profile_id === "voice_generated_test"),
     ).toBe(true);
   });
 

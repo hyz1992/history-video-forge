@@ -34,6 +34,13 @@ export const VoiceProfile = z
   .object({
     voice_profile_id: z.string().min(1),
     kind: VoiceProfileKind,
+    /**
+     * S2-2B（详细设计 §6.4）：档案归属。公共档案（preset/system）为 null；
+     * 用户生成档案为创建用户 id。可选字段兼容历史 JSON（无该字段时由
+     * repository 按 kind 归一化：generated → 私有，其余 → 公共）。
+     */
+    owner_id: z.string().min(1).nullable().optional(),
+    visibility: z.enum(["public", "private"]).optional(),
     name: z.string().min(1),
     description: z.string().min(1),
     design_prompt: z.string().min(1).max(2048),
