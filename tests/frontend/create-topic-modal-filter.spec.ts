@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import { nextTick, reactive } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -228,6 +228,7 @@ describe("CreateTopicModal recommendation filters", () => {
 
     resolveProject("project-1");
     await generation;
+    await flushPromises();
     await nextTick();
     expect(wrapper.get('[data-testid="modal-close"]').attributes("disabled")).toBeUndefined();
     expect(wrapper.get('[data-testid="advanced-toggle"]').attributes("disabled")).toBeUndefined();

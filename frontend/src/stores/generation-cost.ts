@@ -117,12 +117,16 @@ export function quoteSubmitBody(submit?: QuoteSubmitFields): Record<string, unkn
  * S2-2D：付费部署闸门 409（paid_generation_quote_required）识别。
  * store 层对这类错误上抛（不吞进 loadError），交面板报价编排处理；
  * 其余错误保持现状（loadError 展示）。
+ * 注意：apiFetch 的 ApiError.code 取响应 body.message 优先——真实后端 409
+ * 的 message 是中文文案（"当前部署可调用付费 LLM provider：请先创建报价…"），
+ * 因此同时匹配英文 error code 与中文提示。
  */
 export function isPaidQuoteRequiredError(error: unknown): boolean {
   return (
     error instanceof ApiError &&
     error.status === 409 &&
-    String(error.code).includes("paid_generation_quote_required")
+    (String(error.code).includes("paid_generation_quote_required") ||
+      String(error.code).includes("请先创建报价"))
   );
 }
 

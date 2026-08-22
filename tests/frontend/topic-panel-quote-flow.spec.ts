@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { mount } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import ElementPlus from "element-plus";
 import { reactive } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -207,5 +207,96 @@ describe("TopicPanel 报价流程（S2-2D 任务 2）", () => {
     await Promise.resolve();
     expect(costStore.createQuote).toHaveBeenCalled();
     expect(wrapper.find('[data-testid="quote-estimated"]').exists()).toBe(false);
+  });
+});
+
+describe("CreateTopicModal 报价流程（S2-2D 收口补充）", () => {
+  async function mountCreateModal(options: {
+    generateSystemRecommendations: ReturnType<typeof vi.fn>;
+    createQuote?: ReturnType<typeof vi.fn>;
+  }) {
+    const { mount } = await import("@vue/test-utils");
+    const CreateTopicModal = (await import("../../frontend/src/components/topic/CreateTopicModal.vue")).default;
+    const projectStore = {
+      state: reactive({ projectId: "project-modal-quote", currentStatus: "topic_pending", projects: [] }),
+      createProject: vi.fn(async () => "project-modal-quote"),
+      loadProjects: vi.fn(async () => []),
+      loadProject: vi.fn(),
+      deleteProject: vi.fn(),
+      syncProject: vi.fn(),
+      resolveProjectWorkspacePath: vi.fn(),
+    };
+    const topicStore = {
+      state: reactive({
+        activeTab: "system" as const,
+        candidates: [],
+        currentRound: null,
+        historyRounds: [],
+        selectedCandidate: null,
+        selectedRoundId: null,
+        isGenerating: false,
+        isConfirming: false,
+        confirmedTopicPackageId: null,
+        loadError: null,
+        snapshot: null,
+        generationSource: null,
+      }),
+      selectTab: vi.fn(),
+      generateSystemRecommendations: options.generateSystemRecommendations,
+      openCandidate: vi.fn(),
+      closeCandidate: vi.fn(),
+      confirmSelectedCandidate: vi.fn(),
+      loadExistingTopic: vi.fn(),
+      loadSnapshot: vi.fn(),
+    };
+    const costStore = {
+      state: reactive({ lastQuote: null }),
+      createQuote: options.createQuote ?? vi.fn(async () => ({ ok: true, value: { quote: makeQuote(), idempotencyKey: "key_modal_1" } })),
+      loadCostSummary: vi.fn(),
+      loadCostRecords: vi.fn(),
+    };
+    document.body.innerHTML = ""; // 清理上一用例残留的 Teleport DOM
+    const wrapper = mount(CreateTopicModal, {
+      attachTo: document.body,
+      props: { visible: true },
+      global: {
+        plugins: [ElementPlus],
+        provide: {
+          [projectStoreKey as symbol]: projectStore as never,
+          [topicStoreKey as symbol]: topicStore as never,
+          [generationCostStoreKey as symbol]: costStore as never,
+        },
+      },
+    });
+    await Promise.resolve();
+    return { wrapper, topicStore, costStore };
+  }
+
+  it("新建项目对话框：409 → 报价弹窗 → 确认 → emit confirmed", async () => {
+    const generateSystemRecommendations = vi
+      .fn()
+      .mockRejectedValueOnce(PAID_REQUIRED)
+      .mockResolvedValueOnce(undefined);
+    const { wrapper, costStore } = await mountCreateModal({ generateSystemRecommendations });
+    (document.querySelector('[data-testid="generate-topic"]') as HTMLButtonElement).click();
+    await flushPromises();
+
+    expect(costStore.createQuote).toHaveBeenCalledWith("project-modal-quote", { operation: "topic.generate" });
+    expect(document.querySelector('[data-testid="quote-estimated"]')).not.toBeNull();
+
+    (document.querySelector('[data-testid="quote-confirm"]') as HTMLButtonElement).click();
+    await flushPromises();
+    expect(wrapper.emitted("confirmed")).toBeTruthy();
+    expect(document.querySelector('[data-testid="quote-estimated"]')).toBeNull();
+  });
+
+  it("新建项目对话框：stub 直连成功 → 直接 emit confirmed，无报价", async () => {
+    const generateSystemRecommendations = vi.fn(async () => undefined);
+    const { wrapper, costStore } = await mountCreateModal({ generateSystemRecommendations });
+    (document.querySelector('[data-testid="generate-topic"]') as HTMLButtonElement).click();
+    await flushPromises();
+    expect(wrapper.emitted("confirmed")).toBeTruthy();
+    expect(costStore.createQuote).not.toHaveBeenCalled();
+    wrapper.unmount();
   });
 });

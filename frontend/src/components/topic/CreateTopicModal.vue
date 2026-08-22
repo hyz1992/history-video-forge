@@ -27,6 +27,9 @@ import {
   type TopicRecommendationFilterDraft,
   type TopicTab,
 } from "../../stores/topic";
+import { useGenerationCostStore } from "../../stores/generation-cost";
+import { createQuoteAwareGeneration } from "../../composables/useQuoteAwareGeneration";
+import GenerationQuoteDialog from "../asset/GenerationQuoteDialog.vue";
 import CustomTopicInput from "../event-library/CustomTopicInput.vue";
 import EventLibraryBrowser from "../event-library/EventLibraryBrowser.vue";
 
@@ -38,6 +41,22 @@ const emit = defineEmits<{
 
 const projectStore = useProjectStore();
 const topicStore = useTopicStore();
+const costStore = useGenerationCostStore();
+
+// S2-2D：新建项目对话框的选题生成同样走"免 quote 优先 → 409 进报价"
+// （项目创建后才可报价，projectId 经 projectStore 读取）。
+const quoteAware = createQuoteAwareGeneration({
+  operation: "topic.generate",
+  createQuoteRequest: () => ({ operation: "topic.generate" }),
+  tryDirect: () => topicStore.generateSystemRecommendations(loadTopicRecommendationFilterDraft()),
+  submitWithQuote: (submit) =>
+    topicStore.generateSystemRecommendations(loadTopicRecommendationFilterDraft(), submit),
+  costStore,
+  projectId: () => projectStore.state.projectId ?? "",
+  onQuoteUnavailable: (message) => {
+    error.value = message;
+  },
+});
 const activeTab = ref<TopicTab>("system");
 const isGenerating = ref(false);
 const excludeInput = ref("");
@@ -227,13 +246,45 @@ async function handleGenerate() {
   try {
     await projectStore.createProject();
     topicStore.selectTab(activeTab.value);
-    void topicStore.generateSystemRecommendations(snapshot);
-    emit("confirmed");
+    // S2-2D：免 quote 优先 → 409 进报价（真实付费部署弹报价确认弹窗）
+    const result = await quoteAware.run();
+    if (result.ok) {
+      emit("confirmed");
+      return;
+    }
+    if (result.reason === "pending_confirmation") {
+      return; // 弹窗等待确认；确认后由 handleQuoteConfirm 收尾
+    }
+    if (topicStore.state.loadError) {
+      error.value = topicStore.state.loadError;
+    } else if (result.reason === "quote_unavailable") {
+      error.value = result.message;
+    } else {
+      error.value = result.message;
+    }
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : "创建项目失败，请重试";
   } finally {
     isGenerating.value = false;
   }
+}
+
+/** S2-2D：报价弹窗确认 → 携带 quote 提交；过期自动重新报价；冲突提示重新报价。 */
+async function handleQuoteConfirm(payload: { authorizeBudgetOverride: boolean }) {
+  const result = await quoteAware.confirm(payload.authorizeBudgetOverride);
+  if (result.ok) {
+    emit("confirmed");
+    return;
+  }
+  if (result.reason === "expired") {
+    error.value = "报价已过期，正在重新报价";
+    await quoteAware.run();
+    return;
+  }
+  if (result.reason === "conflict") {
+    error.value = "生成被拒绝（" + result.message + "），请重新报价后再试";
+  }
+  // error（网络不确定）：弹窗保留，用户可直接重试确认（同一 quote + 幂等键）
 }
 
 function close() {
@@ -567,6 +618,15 @@ onBeforeUnmount(restorePreviousFocus);
           </button>
         </div>
       </section>
+
+      <!-- S2-2D：真实付费部署的报价确认弹窗（stub/fake 部署不出现） -->
+      <GenerationQuoteDialog
+        :open="quoteAware.state.confirmVisible"
+        :quote="quoteAware.state.quote"
+        :loading="quoteAware.state.pending"
+        @confirm="handleQuoteConfirm"
+        @cancel="quoteAware.cancel()"
+      />
     </div>
   </Teleport>
 </template>

@@ -927,3 +927,11 @@ script 摘要第一版建议至少包含：
 - 执行端（LLM provider 构造、媒体 adapter 构造、dispatch gate、usage 记账）一律消费 `RunConfigurationSnapshot.resolved.resolved_capabilities`；auto/fixed 同源（mode 只说明选择来源）。`createTierAwareProviderFromEnv({ snapshotCapabilities })` 按快照 provider_key+model_id 经 provider registry 构造；`buildProviderRegistry({ resolvedCapabilities })` 按快照 model 构造 tts/image/video adapter（provider_key 非 dashscope → 不注册）。
 - `createAssetsDispatchHandler` 与 LLM handler 等价：内存镜像缺失 → repository 以数据库为权威加载；内存与 DB 均缺失 → `dispatch_snapshot_missing` 拒绝派发（禁止无快照执行/回退 env）。
 - 漂移防护两个时序：提交前配置/目录变化 → 提交重校验 `409 generation_quote_configuration_changed`（capabilities 参与 configuration_hash）；快照创建后变化 → 派发仍按快照模型执行与记账。
+
+## S2-2D 前端生成面板报价流程接入（2026-08-22 已实现）
+
+- 背景：真实付费部署（`LLM_PROVIDER != stub`）下 topic/script/storyboard/publish 四个生成面板此前未接入报价流程，`409 paid_generation_quote_required` 只作为裸报错展示（S2-2A 遗留未完成项）。
+- 交互模式（四面板统一，复用 `GenerationQuoteDialog` + `useQuoteAwareGeneration` 编排 helper）：**免 quote 优先 → 409 进报价**——stub/fake 部署直连生成（零行为变化）；真实部署收到 409 后自动创建报价 → 报价确认弹窗（预计费用/授权上界/unbounded 强制授权勾选）→ 确认后携带 `cost_quote_id + idempotency_key + authorize_budget_override` 提交同一张 quote。
+- 错误语义（沿用 AssetPanel）：报价创建失败（`generation_quote_resolution_failed`/`generation_quote_unquotable`）→ 提示报价服务暂不可用（本地部署回退）；提交 409/422 业务冲突 → 关闭弹窗提示重新报价（不重放旧 quote）；网络失败 → 保留弹窗复用同一 quote+幂等键重试；quote 过期 → 自动重新创建。
+- store 层：四 store 生成函数透传 `QuoteSubmitFields`（映射 `cost_quote_id`/`idempotency_key`/`authorize_budget_override`，缺省不携带）；对 `paid_generation_quote_required` 409 上抛（不吞进 loadError），其余错误保持 loadError 展示语义。
+- 覆盖入口：topic（系统推荐/事件库）、script（自动首稿/重新生成）、storyboard（整体生成/分段重生）、publish（发布包/封面）。voice.preview 试听与 asset 面板既有报价流程不变。

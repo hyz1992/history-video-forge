@@ -68,6 +68,16 @@ describe("isPaidQuoteRequiredError", () => {
     expect(isPaidQuoteRequiredError(new ApiError(500, "paid_generation_quote_required", "x"))).toBe(false);
     expect(isPaidQuoteRequiredError(GENERIC_ERROR)).toBe(false);
   });
+
+  it("真实后端 409 的 ApiError.code 为中文 message 时同样识别（apiFetch 语义）", () => {
+    // apiFetch 的 ApiError.code 取响应 body.message 优先——真实 409 message 是中文文案
+    const real = new ApiError(
+      409,
+      "当前部署可调用付费 LLM provider：请先创建报价并在生成请求中携带 cost_quote_id 与 idempotency_key",
+      "",
+    );
+    expect(isPaidQuoteRequiredError(real)).toBe(true);
+  });
 });
 
 describe("createQuoteAwareGeneration 编排（S2-2D 任务 1）", () => {
