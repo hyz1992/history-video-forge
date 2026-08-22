@@ -34,7 +34,7 @@
 - 修改：`frontend/src/stores/script.ts` 等四个 store 的既有测试
 - 新建：`tests/frontend/stores/quote-aware-generation-store.test.ts`（四 store 透传）
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 覆盖（详细设计 §5 store 部分）：
 
@@ -50,13 +50,13 @@ npx vitest run --configLoader runner tests/frontend/stores/quote-aware-generatio
 
 预期：失败，四 store 尚无 quote 参数。
 
-- [ ] **步骤 2：实现 store 透传与共享 helper**
+- [x] **步骤 2：实现 store 透传与共享 helper**
 
 按详细设计 §3.2/§3.3。helper 的编排语义严格对照 AssetPanel `quoteAndGenerate`
 （B1 成功反馈时机、409 业务冲突不重放、过期重报、网络失败复用、LOCAL_QUOTE_UNAVAILABLE
 回退），差异点：先免 quote 直连、仅 409 paid_generation_quote_required 进报价。
 
-- [ ] **步骤 3：运行最小验证并提交**
+- [x] **步骤 3：运行最小验证并提交**
 
 ```powershell
 npx vitest run --configLoader runner tests/frontend/stores/quote-aware-generation-store.test.ts
@@ -74,7 +74,7 @@ git commit -m "生成 store 透传报价字段并新增免报价优先编排 hel
 - 修改：`frontend/src/components/topic/TopicPanel.vue` + `frontend/src/stores/topic.ts`
 - 新建：`tests/frontend/topic-panel-quote-flow.spec.ts`
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 覆盖（详细设计 §4/§5）：
 
@@ -96,11 +96,11 @@ npx vitest run --configLoader runner tests/frontend/topic-panel-quote-flow.spec.
 
 预期：失败，TopicPanel 未接入。
 
-- [ ] **步骤 2：实现接入**
+- [x] **步骤 2：实现接入**
 
 按详细设计 §3.3 接入 helper；`topic.ts` 生成函数已具备透传参数（任务 1）。
 
-- [ ] **步骤 3：运行最小验证并提交**
+- [x] **步骤 3：运行最小验证并提交**
 
 ```powershell
 npx vitest run --configLoader runner tests/frontend/topic-panel-quote-flow.spec.ts tests/frontend/topic-panel-filter-draft.spec.ts
@@ -117,13 +117,13 @@ git commit -m "选题面板接入报价确认流程"
 - 修改：`frontend/src/components/script/ScriptPanel.vue` + `frontend/src/stores/script.ts`
 - 新建：`tests/frontend/script-panel-quote-flow.spec.ts`
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 同任务 2 覆盖集（operation: script.generate；首稿与 regenerate 两个入口）。
 
-- [ ] **步骤 2：实现接入**
+- [x] **步骤 2：实现接入**
 
-- [ ] **步骤 3：运行最小验证并提交**
+- [x] **步骤 3：运行最小验证并提交**
 
 ```powershell
 npx vitest run --configLoader runner tests/frontend/script-panel-quote-flow.spec.ts
@@ -140,13 +140,13 @@ git commit -m "文案面板接入报价确认流程"
 - 修改：`frontend/src/components/storyboard/StoryboardPanel.vue` + `frontend/src/stores/storyboard.ts`
 - 新建：`tests/frontend/storyboard-panel-quote-flow.spec.ts`
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 同任务 2 覆盖集（operation: storyboard.generate；生成/分段重生入口）。
 
-- [ ] **步骤 2：实现接入**
+- [x] **步骤 2：实现接入**
 
-- [ ] **步骤 3：运行最小验证并提交**
+- [x] **步骤 3：运行最小验证并提交**
 
 ```powershell
 npx vitest run --configLoader runner tests/frontend/storyboard-panel-quote-flow.spec.ts
@@ -163,13 +163,13 @@ git commit -m "分镜面板接入报价确认流程"
 - 修改：`frontend/src/components/publish/PublishPanel.vue` + `frontend/src/stores/publish.ts`
 - 新建：`tests/frontend/publish-panel-quote-flow.spec.ts`
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 同任务 2 覆盖集（operation: publish.generate；发布包/封面两个入口）。
 
-- [ ] **步骤 2：实现接入**
+- [x] **步骤 2：实现接入**
 
-- [ ] **步骤 3：运行最小验证并提交**
+- [x] **步骤 3：运行最小验证并提交**
 
 ```powershell
 npx vitest run --configLoader runner tests/frontend/publish-panel-quote-flow.spec.ts
@@ -194,7 +194,7 @@ git diff --check
 
 预期：全绿（既有基线失败登记除外）。
 
-- [ ] **步骤 2：文档同步**
+- [x] **步骤 2：文档同步**
 
 `docs/architecture/api-design.md`（S2-2D 前端报价接入章节）、`docs/README.md`
 （S2-2D 完成登记）、`docs/todos/roadmap-todo.md`（S2-2D 完成登记）。
@@ -207,7 +207,7 @@ git diff --check
 `docs/records/2026-08-22-s2-2d-inapp-browser-acceptance-record.md`；真实付费 live
 不运行（标注未验证）。
 
-- [ ] **步骤 4：收口提交 + 计划归档**
+- [x] **步骤 4：收口提交 + 计划归档**
 
 ```powershell
 git commit -m "S2-2D 收口：全量回归、文档同步与浏览器验收记录"
