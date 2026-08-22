@@ -407,10 +407,10 @@ git commit -m "新增 S2-2C 端到端验收测试"
 
 ### 任务 10：浏览器验收 + 文档收口 + 全量回归
 
-- [ ] **步骤 1：注册浏览器验收脚本** `harness/scripts/ui-acceptance/s2-2c-browser-acceptance.ts` + package.json `harness:s2-2c-browser-acceptance`（沿用 s2-2b 脚本模式，stub/fake 部署；Playwright 入口本机缺 Chromium 不实跑，保持"未验证"）。
-- [ ] **步骤 2：内置浏览器等价验收**（沿用 S2-2B 记录模式）写 `docs/records/2026-08-21-s2-2c-inapp-browser-acceptance-record.md`：登录 → 设置页高级区五槽渲染/选择/保存/刷新恢复 → 项目创建继承 → 项目设置高级区 + 失效预览 → 单候选文案 → 截图留痕；真实付费 live 不运行。
-- [ ] **步骤 3：文档同步**：`docs/architecture/api-design.md`（S2-2C 配置扩展章节）、`docs/data/field-design.md`（capabilities 可写语义）、`docs/data/schema-design.md`（目录多候选说明，无新表）、`docs/todos/roadmap-todo.md`（S2-2C 完成登记）、`docs/README.md`（当前状态更新）。
-- [ ] **步骤 4：全量回归**（串行，避免多路并行超时假失败）：
+- [x] **步骤 1：注册浏览器验收脚本** `harness/scripts/ui-acceptance/s2-2c-browser-acceptance.ts` + package.json `harness:s2-2c-browser-acceptance`（沿用 s2-2b 脚本模式，stub/fake 部署；Playwright 入口本机缺 Chromium 不实跑，保持"未验证"）。
+- [x] **步骤 2：内置浏览器等价验收**（沿用 S2-2B 记录模式）写 `docs/records/2026-08-21-s2-2c-inapp-browser-acceptance-record.md`：登录 → 设置页高级区五槽渲染/选择/保存/刷新恢复 → 项目创建继承 → 项目设置高级区 + 失效预览 → 单候选文案 → 截图留痕；真实付费 live 不运行。
+- [x] **步骤 3：文档同步**：`docs/architecture/api-design.md`（S2-2C 配置扩展章节）、`docs/data/field-design.md`（capabilities 可写语义）、`docs/data/schema-design.md`（目录多候选说明，无新表）、`docs/todos/roadmap-todo.md`（S2-2C 完成登记）、`docs/README.md`（当前状态更新）。
+- [x] **步骤 4：全量回归**（串行，避免多路并行超时假失败）：
 
 ```powershell
 npx vitest run --configLoader runner tests/backend          # 后端全量
@@ -424,13 +424,13 @@ git diff --check
 
 预期：三组全绿（既有基线失败登记除外，错误签名不得恶化）。
 
-- [ ] **步骤 5：收口提交**（文档 + 验收记录 + 勾选回写）：
+- [x] **步骤 5：收口提交**（文档 + 验收记录 + 勾选回写）：
 
 ```powershell
 git commit -m "S2-2C 收口：验收记录、文档同步与计划归档"
 ```
 
-- [ ] **步骤 6：计划归档**：本设计 + 实施计划移入 `docs/plans/archive/`，`docs/plans/README.md` 状态更新（S2-2C 完成，下一步按 roadmap）。
+- [x] **步骤 6：计划归档**：本设计 + 实施计划移入 `docs/plans/archive/`，`docs/plans/README.md` 状态更新（S2-2C 完成，下一步按 roadmap）。
 
 ---
 
