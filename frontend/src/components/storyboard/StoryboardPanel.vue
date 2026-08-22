@@ -8,6 +8,9 @@ import { type StoryboardSegment } from "../../stores/storyboard";
 import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore } from "../../stores/workspace";
 import { PIPELINE_STEPS } from "../../stores/workspace";
+import { useGenerationCostStore } from "../../stores/generation-cost";
+import { createQuoteAwareGeneration } from "../../composables/useQuoteAwareGeneration";
+import GenerationQuoteDialog from "../asset/GenerationQuoteDialog.vue";
 import { useStagePolling } from "../../composables/useStagePolling";
 import { resolvePipelineStagePhase } from "../../composables/usePipelineStagePhase";
 import StageGenerating from "../workspace/StageGenerating.vue";
@@ -59,7 +62,31 @@ const roleTagTypeMap: Record<string, "primary" | "success" | "warning" | "danger
 const storyboardStore = useStoryboardStore();
 const projectStore = useProjectStore();
 const workspaceStore = useWorkspaceStore();
+const costStore = useGenerationCostStore();
 const initialLoadDone = ref(false);
+
+// S2-2D：免 quote 优先 → 409 进报价（stub/fake 部署零行为变化）。整体生成与
+// 分段重生共用同一编排，动作经闭包变量区分。
+let currentStoryboardAction: "generate" | "segment_regen" = "generate";
+let pendingSegmentId: string | undefined;
+let pendingSegmentFeedback: string | undefined;
+const quoteAware = createQuoteAwareGeneration({
+  operation: "storyboard.generate",
+  createQuoteRequest: () => ({ operation: "storyboard.generate" }),
+  tryDirect: () =>
+    currentStoryboardAction === "segment_regen"
+      ? storyboardStore.regenerateSegment(pendingSegmentId!, pendingSegmentFeedback)
+      : storyboardStore.generateStoryboard(),
+  submitWithQuote: (submit) =>
+    currentStoryboardAction === "segment_regen"
+      ? storyboardStore.regenerateSegment(pendingSegmentId!, pendingSegmentFeedback, submit)
+      : storyboardStore.generateStoryboard(submit),
+  costStore,
+  projectId: () => projectStore.state.projectId ?? "",
+  onQuoteUnavailable: (message) => {
+    ElMessage.warning(message);
+  },
+});
 
 const { startPolling } = useStagePolling({
   loadSnapshot: () => storyboardStore.loadActiveStoryboardSnapshot(),
@@ -165,12 +192,14 @@ async function triggerAutoGenerate() {
     pendingAutoGenerate.value = true;
     startPolling();
     try {
-      await storyboardStore.generateStoryboard();
+      currentStoryboardAction = "generate";
+      const result = await quoteAware.run();
+      if (result.ok && !storyboardStore.state.loadError) {
+        ElMessage.success("分镜规划生成完成");
+      }
+      // pending_confirmation：报价弹窗等待确认；quote_unavailable：已提示
     } finally {
       pendingAutoGenerate.value = false;
-    }
-    if (!storyboardStore.state.loadError) {
-      ElMessage.success("分镜规划生成完成");
     }
     return;
   }
@@ -312,15 +341,17 @@ async function handleGenerate() {
   pendingAutoGenerate.value = true;
   startPolling();
   try {
-    await storyboardStore.generateStoryboard();
+    currentStoryboardAction = "generate";
+    const result = await quoteAware.run();
+    if (result.ok && !storyboardStore.state.loadError) {
+      ElMessage.success("分镜规划生成完成");
+    }
+    // pending_confirmation：报价弹窗等待确认；quote_unavailable：已提示
   } catch (error) {
     const message = error instanceof Error ? error.message : "分镜规划生成失败";
     ElMessage.warning(message);
   } finally {
     pendingAutoGenerate.value = false;
-  }
-  if (!storyboardStore.state.loadError) {
-    ElMessage.success("分镜规划生成完成");
   }
 }
 
@@ -366,22 +397,50 @@ async function handleSegmentRegenSubmit(userFeedback: string) {
   if (!segmentRegenTarget.value) return;
   isRegeneratingSegment.value = true;
   try {
-    const ok = await storyboardStore.regenerateSegment(
-      segmentRegenTarget.value.segment_id,
-      userFeedback,
-    );
-    if (!ok) {
-      ElMessage.error("分镜片段重新生成失败");
+    currentStoryboardAction = "segment_regen";
+    pendingSegmentId = segmentRegenTarget.value.segment_id;
+    pendingSegmentFeedback = userFeedback;
+    const result = await quoteAware.run();
+    if (storyboardStore.state.loadError) {
+      ElMessage.error("分镜片段重新生成失败：" + storyboardStore.state.loadError);
       return;
     }
-    showSegmentRegenModal.value = false;
-    ElMessage.success("分镜片段重新生成完成");
+    if (result.ok) {
+      showSegmentRegenModal.value = false;
+      ElMessage.success("分镜片段重新生成完成");
+    }
+    // pending_confirmation：报价弹窗等待确认；quote_unavailable：已提示
   } catch (error) {
     const message = error instanceof Error ? error.message : "分镜片段重新生成失败";
     ElMessage.warning(message);
   } finally {
     isRegeneratingSegment.value = false;
   }
+}
+
+/** S2-2D：报价弹窗确认 → 携带 quote 提交；过期自动重新报价；冲突提示重新报价。 */
+async function handleQuoteConfirm(payload: { authorizeBudgetOverride: boolean }) {
+  const result = await quoteAware.confirm(payload.authorizeBudgetOverride);
+  if (result.ok) {
+    if (!storyboardStore.state.loadError) {
+      ElMessage.success(
+        currentStoryboardAction === "segment_regen" ? "分镜片段重新生成完成" : "分镜规划生成完成",
+      );
+      if (currentStoryboardAction === "segment_regen") {
+        showSegmentRegenModal.value = false;
+      }
+    }
+    return;
+  }
+  if (result.reason === "expired") {
+    ElMessage.warning("报价已过期，正在重新报价");
+    await quoteAware.run();
+    return;
+  }
+  if (result.reason === "conflict") {
+    ElMessage.warning("生成被拒绝（" + result.message + "），请重新报价后再试");
+  }
+  // error（网络不确定）：弹窗保留，用户可直接重试确认（同一 quote + 幂等键）
 }
 
 /* -------------------------------------------------------------------------- */
@@ -871,6 +930,15 @@ function scrollToTop() {
       :segment-index="segmentRegenIndex"
       :submitting="isRegeneratingSegment"
       @submit="handleSegmentRegenSubmit"
+    />
+
+    <!-- S2-2D：真实付费部署的报价确认弹窗（stub/fake 部署不出现） -->
+    <GenerationQuoteDialog
+      :open="quoteAware.state.confirmVisible"
+      :quote="quoteAware.state.quote"
+      :loading="quoteAware.state.pending"
+      @confirm="handleQuoteConfirm"
+      @cancel="quoteAware.cancel()"
     />
   </div>
 </template>
