@@ -487,6 +487,47 @@ describe("generation-config API", () => {
       });
     });
 
+    it("跨实例 PATCH：DB 有 fixed 配置（本实例内存无）→ 无 capabilities 段保留 DB 值且 revision 不误报", async () => {
+      const app = buildApp();
+      const now = new Date();
+      const dbRecord = {
+        id: "db-id",
+        userId: "user-a",
+        schemaVersion: "generation_configuration_v1",
+        revision: 3,
+        configurationJson: {
+          ...DEFAULT_GENERATION_CONFIGURATION,
+          capabilities: {
+            ...DEFAULT_GENERATION_CONFIGURATION.capabilities,
+            "llm.smart": { mode: "fixed", provider_model_id: "llm.smart.deepseek.deepseek-v4-pro" },
+          },
+        },
+        createdAt: now,
+        updatedAt: now,
+      };
+      // 模拟 Prisma 态：注入带 DB 权威查询与 CAS 的 writer（本实例内存无记录）
+      app.db.firstAggregateWriter = {
+        getUserGenerationPreference: async () => dbRecord,
+        casUpsertUserGenerationPreference: async () => ({ success: true }),
+      };
+      const res = await app.inject({
+        method: "PATCH",
+        url: "/api/me/generation-preferences",
+        payload: {
+          expected_revision: 3,
+          video: { strategy: "all_remotion", api_quality: "standard_720p" },
+          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
+        },
+        auth,
+      });
+      expect(res.statusCode).toBe(200);
+      // 缺省 capabilities 段 → 从 DB 权威值保留 fixed（不静默清空）
+      expect(res.json().configuration.capabilities["llm.smart"]).toEqual({
+        mode: "fixed",
+        provider_model_id: "llm.smart.deepseek.deepseek-v4-pro",
+      });
+    });
+
     it("项目配置 capabilities 变更 → 失效预览覆盖对应阶段", async () => {
       const app = buildApp();
       const projectId = await createProjectForUser(app, auth);

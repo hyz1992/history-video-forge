@@ -66,22 +66,20 @@ function syncUserPreferenceRecordFromDb(
 
 /**
  * S2-2C（复审整改 P2）：以数据库为权威读取用户偏好，**不创建**。
- * 内存有 → 直接返回；内存无且 writer 提供只读查询 → 经 DB 查询并同步内存
- * （跨实例：另一实例创建/更新的记录在本实例内存缺失时仍能读到真实值，
- * capabilities 缺省保留语义与 revision 检查不依赖本实例内存）；Map 态无
- * writer → 返回内存结果（Map 即真相源）。
+ * writer 提供只读查询时**总是**以 DB 为权威并刷新内存（跨实例：另一实例
+ * 已更新记录时，本实例即使缓存旧 revision/旧 capabilities 也会被 DB 值覆盖，
+ * 防止 CAS 前误报冲突与缺省保留读取旧值）；Map 态无 writer → 返回内存结果
+ * （Map 即真相源）。
  */
 export async function getUserPreferenceDbAuthoritative(
   db: DbClient,
   userId: string,
 ): Promise<UserPreferenceResult | null> {
-  const inMemory = getUserGenerationPreference(db, userId);
-  if (inMemory) return inMemory;
   if (db.firstAggregateWriter?.getUserGenerationPreference) {
     const dbRecord = await db.firstAggregateWriter.getUserGenerationPreference(userId);
     if (dbRecord) return syncUserPreferenceRecordFromDb(db, dbRecord);
   }
-  return null;
+  return getUserGenerationPreference(db, userId);
 }
 function syncUserPreferenceRecord(db: DbClient, record: UserGenerationPreferenceRecord): void {
   for (const [key, existing] of db.userGenerationPreferences) {

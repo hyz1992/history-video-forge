@@ -302,6 +302,42 @@ describe("generation-config repository", () => {
       };
     }
 
+    it("内存有过期记录 + DB 已更新（revision 2→3）→ DB 权威刷新并替换旧内存", async () => {
+      const db = createDbClient();
+      // 本实例缓存旧记录（revision=2，全 auto）
+      const staleRecord: UserGenerationPreferenceRecord = {
+        id: "stale-id",
+        userId: "u1",
+        schemaVersion: "generation_configuration_v1",
+        revision: 2,
+        configurationJson: { ...DEFAULT_GENERATION_CONFIGURATION },
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      db.userGenerationPreferences.set(staleRecord.id, staleRecord);
+      // 另一实例已把 DB 更新到 revision=3（fixed 配置）
+      const dbRecord: UserGenerationPreferenceRecord = {
+        id: "db-id",
+        userId: "u1",
+        schemaVersion: "generation_configuration_v1",
+        revision: 3,
+        configurationJson: buildFixedConfig(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      db.firstAggregateWriter = {
+        getUserGenerationPreference: async () => dbRecord,
+      };
+      const result = await getUserPreferenceDbAuthoritative(db, "u1");
+      // DB 权威：返回 revision=3 而非旧内存 2
+      expect(result?.revision).toBe(3);
+      expect(result?.configuration.capabilities["llm.smart"].mode).toBe("fixed");
+      // 内存已刷新为 DB 记录且旧记录被替换（同 userId 仅一条）
+      const synced = getUserGenerationPreference(db, "u1");
+      expect(synced?.revision).toBe(3);
+      expect([...db.userGenerationPreferences.values()].filter((r) => r.userId === "u1").length).toBe(1);
+    });
+
     it("内存缺失 + DB 已有 fixed 配置 → getUserPreferenceDbAuthoritative 返回 DB 记录并同步内存", async () => {
       const db = createDbClient();
       const dbRecord: UserGenerationPreferenceRecord = {
