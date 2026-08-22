@@ -1,4 +1,5 @@
 import type { ProviderModelCatalogRecord } from "../../db/client.js";
+import type { LlmModelCandidate } from "./llm-model-catalog.js";
 
 /**
  * S2-2A 任务 7：服务端受控 provider/model 目录与价格 seed。
@@ -37,6 +38,20 @@ export type LlmTierSeedInput =
       flash?: { providerKey: string; modelId: string } | { reusesSmart: true };
     }
   | { mode: "resolution_failed" };
+
+/**
+ * 媒体 additionalModels 候选（S2-2C §7.2）：运营扩展媒体候选的接口。
+ * 首版为空数组（不伪造模型）；候选价格未核实一律 unpriced（诚实原则），
+ * 运营核实后在定价表登记即可获得可信上界。
+ */
+export interface MediaAdditionalModel {
+  capability: "image.generate" | "video.image_to_video" | "tts.synthesize";
+  providerKey: string;
+  modelId: string;
+  displayName?: string;
+  qualityTier?: string | null;
+  speedTier?: string | null;
+}
 
 /**
  * tier → slot 目标解析的唯一实现（seed 与 readiness 共用，禁止各自复制一份）。
@@ -157,13 +172,21 @@ export function resolveDashscopeDeploymentScope(
  * - 媒体三项（image / video / tts）固定映射当前真实 DashScope 模型
  *   （与 assets-run readDashscopeConfig 的服务端默认模型一致），目录 id 与
  *   价格按部署区域区分；unknown 区域不种媒体行（fail-closed）。
+ *   `media.additionalModels`（S2-2C §7.2）种入对应槽位非默认候选行，价格
+ *   未核实一律 unpriced（运营核实后登记）。
  * - LLM 两项按传入 tier 映射当前真实 provider/model；stub 模式映射为零外部费用。
+ *   `llm.candidates`（S2-2C §7.1）在非 stub 下按槽种入非默认候选行
+ *   （与默认重合去重）；条目元数据（displayName/qualityTier/speedTier）一律
+ *   来自候选声明（外部审查 P2），tier 解析模型不在候选表时回退槽位默认。
  * - 每个 capability 恰好一个 active + isDefault=true 项（resolver auto 硬合同；
  *   readiness 会再校验一次，零个/多个默认项都会失败）。
  */
 export function buildPricingCatalogSeed(input: {
-  llm: LlmTierSeedInput;
-  media: { deploymentScope: DashscopeDeploymentScope };
+  llm: LlmTierSeedInput & { candidates?: LlmModelCandidate[] };
+  media: {
+    deploymentScope: DashscopeDeploymentScope;
+    additionalModels?: MediaAdditionalModel[];
+  };
 }): ProviderModelCatalogRecord[] {
   const scope = input.media.deploymentScope;
   if (scope === "unknown") {
@@ -265,6 +288,44 @@ export function buildPricingCatalogSeed(input: {
     }),
   ];
 
+  // S2-2C §7.2：媒体候选种入对应槽位（非默认；与默认行同 provider:model 去重）。
+  // 候选价格未核实 → unpriced（unbounded，预算门禁必须显式授权）。
+  const defaultMediaKeys = new Set(
+    entries.map((e) => `${e.capability}\u0000${e.providerKey}\u0000${e.modelId}`),
+  );
+  for (const candidate of input.media.additionalModels ?? []) {
+    const key = `${candidate.capability}\u0000${candidate.providerKey}\u0000${candidate.modelId}`;
+    if (defaultMediaKeys.has(key)) continue;
+    defaultMediaKeys.add(key);
+    entries.push(
+      toRecord({
+        id: `${candidate.capability}.${candidate.providerKey}.${scope}.${candidate.modelId}`,
+        capability: candidate.capability,
+        providerKey: candidate.providerKey,
+        modelId: candidate.modelId,
+        displayName: candidate.displayName ?? `${candidate.providerKey}:${candidate.modelId}`,
+        qualityTier: candidate.qualityTier ?? null,
+        speedTier: candidate.speedTier ?? null,
+        parameterCapabilitiesJson: { deployment_scope: scope },
+        pricingVersion: `dashscope-media-${scope}-2026-08-17-candidate`,
+        pricingJson: {
+          unit_type:
+            candidate.capability === "image.generate"
+              ? "image"
+              : candidate.capability === "video.image_to_video"
+                ? "video_second"
+                : "tts_character",
+          currency: "CNY",
+          unpriced: true,
+          effective_at: SEED_EFFECTIVE_AT,
+          source_note:
+            "媒体候选模型价格未核实：按 unbounded 处理（预算门禁必须显式授权），运营核实后登记",
+        },
+        isDefault: false,
+      }),
+    );
+  }
+
   entries.push(...buildLlmSeedEntries(input.llm));
   return entries;
 }
@@ -275,7 +336,7 @@ function mediaPricingVersion(scope: Exclude<DashscopeDeploymentScope, "unknown">
 }
 
 function buildLlmSeedEntries(
-  llm: LlmTierSeedInput,
+  llm: LlmTierSeedInput & { candidates?: LlmModelCandidate[] },
 ): ProviderModelCatalogRecord[] {
   if (llm.mode === "stub") {
     return [
@@ -305,13 +366,14 @@ function buildLlmSeedEntries(
   const smart = resolveLlmTierTarget(llm, "llm.smart");
   const flash = resolveLlmTierTarget(llm, "llm.flash");
 
-  return [
+  const entries = [
     buildLlmEntry({
       slot: "llm.smart",
       providerKey: smart.providerKey,
       modelId: smart.modelId,
       pricing: llmTokenPricing(smart),
       isDefault: true,
+      candidates: llm.candidates,
     }),
     buildLlmEntry({
       slot: "llm.flash",
@@ -319,8 +381,40 @@ function buildLlmSeedEntries(
       modelId: flash.modelId,
       pricing: llmTokenPricing(flash),
       isDefault: true,
+      candidates: llm.candidates,
     }),
   ];
+
+  // S2-2C §7.1：每个候选种入 smart/flash 两个槽位（非默认条目）；
+  // 与槽位默认（tier 解析结果）重合的候选去重，不重复种入。
+  if (llm.candidates && llm.candidates.length > 0) {
+    const slotTargets: Array<{ slot: "llm.smart" | "llm.flash"; target: { providerKey: string; modelId: string } }> = [
+      { slot: "llm.smart", target: smart },
+      { slot: "llm.flash", target: flash },
+    ];
+    for (const { slot, target } of slotTargets) {
+      for (const candidate of llm.candidates) {
+        if (
+          candidate.providerKey === target.providerKey &&
+          candidate.modelId === target.modelId
+        ) {
+          continue; // 与默认重合：去重
+        }
+        entries.push(
+          buildLlmEntry({
+            slot,
+            providerKey: candidate.providerKey,
+            modelId: candidate.modelId,
+            pricing: llmTokenPricing(candidate),
+            isDefault: false,
+            candidates: llm.candidates,
+          }),
+        );
+      }
+    }
+  }
+
+  return entries;
 }
 
 function stubTokenPricing(): Record<string, unknown> {
@@ -363,21 +457,32 @@ function llmTokenPricing(target: {
   };
 }
 
+/**
+ * LLM 目录条目构造（S2-2C §7.1 元数据合同，外部审查 P2）：
+ * displayName/qualityTier/speedTier 一律来自候选声明（按 providerKey:modelId
+ * 匹配），默认条目与候选条目统一；tier 解析模型不在候选表时回退槽位默认
+ * （displayName=provider:model，质量/速度按槽位硬编码现状）。
+ */
 function buildLlmEntry(input: {
   slot: "llm.smart" | "llm.flash";
   providerKey: string;
   modelId: string;
   pricing: Record<string, unknown>;
   isDefault: boolean;
+  candidates?: LlmModelCandidate[];
 }): ProviderModelCatalogRecord {
+  const declared = input.candidates?.find(
+    (candidate) =>
+      candidate.providerKey === input.providerKey && candidate.modelId === input.modelId,
+  );
   return toRecord({
     id: `llm.${input.slot === "llm.smart" ? "smart" : "flash"}.${input.providerKey}.${input.modelId}`,
     capability: input.slot,
     providerKey: input.providerKey,
     modelId: input.modelId,
-    displayName: `${input.providerKey}:${input.modelId}`,
-    qualityTier: input.slot === "llm.smart" ? "high" : "standard",
-    speedTier: input.slot === "llm.smart" ? "slow" : "fast",
+    displayName: declared?.displayName ?? `${input.providerKey}:${input.modelId}`,
+    qualityTier: declared?.qualityTier ?? (input.slot === "llm.smart" ? "high" : "standard"),
+    speedTier: declared?.speedTier ?? (input.slot === "llm.smart" ? "slow" : "fast"),
     parameterCapabilitiesJson: {},
     // LLM 价格版本与具体 provider/model 绑定；未核实条目也有稳定版本号，
     // 保证 unbounded 状态本身可被 pricing hash 追踪。

@@ -175,6 +175,42 @@ describe("generation cost catalog bootstrap (prisma)", () => {
     expect(llmRows.some((e) => e.status === "disabled")).toBe(true); // 迁移占位行
   });
 
+  it("S2-2C：带 LLM 候选的 bootstrap 种入非默认候选行并全通过 readiness", async () => {
+    const { db } = await createBootstrappedContext();
+    const result = await bootstrapGenerationCostCatalog(db, {
+      llm: RESOLVED_LLM_INPUT,
+      llmCandidates: [
+        { providerKey: "deepseek", modelId: "deepseek-v4-pro", displayName: "DeepSeek V4 Pro", qualityTier: "high", speedTier: "slow" },
+        { providerKey: "zhipu", modelId: "glm-4", displayName: "智谱 GLM-4", qualityTier: "standard", speedTier: "fast" },
+      ],
+      media: CONFIGURED_MEDIA_INPUT,
+      environment: NORMAL_ENVIRONMENT,
+    });
+    expect(result.readiness.ok).toBe(true);
+    expect(result.disabledProviderModelIds).toEqual([]);
+
+    // 候选条目落库 active + 非默认；元数据来自候选声明（与默认条目统一）
+    const flashCandidate = listProviderModelCatalog(db).find(
+      (e) => e.capability === "llm.flash" && !e.isDefault && e.status === "active",
+    );
+    expect(flashCandidate).toBeDefined();
+    expect(flashCandidate?.providerKey).toBe("deepseek");
+    expect(flashCandidate?.modelId).toBe("deepseek-v4-pro");
+    expect(flashCandidate?.status).toBe("active");
+    expect(flashCandidate?.displayName).toBe("DeepSeek V4 Pro");
+    const smartDefault = listProviderModelCatalog(db).find(
+      (e) => e.capability === "llm.smart" && e.isDefault,
+    );
+    expect(smartDefault?.displayName).toBe(flashCandidate?.displayName);
+    // 每槽恰好一个默认（候选不破坏唯一性硬约束）
+    for (const slot of ["llm.smart", "llm.flash"] as const) {
+      const defaults = listProviderModelCatalog(db).filter(
+        (e) => e.capability === slot && e.status === "active" && e.isDefault,
+      );
+      expect(defaults, slot).toHaveLength(1);
+    }
+  });
+
   it("rolls back the whole batch when any catalog upsert fails mid-way", async () => {
     const { client, db } = await createBootstrappedContext();
     const before = await client.providerModelCatalog.count();

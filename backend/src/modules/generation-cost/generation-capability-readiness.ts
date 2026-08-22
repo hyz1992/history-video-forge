@@ -5,6 +5,7 @@ import {
   type DashscopeDeploymentScope,
   type LlmTierSeedInput,
 } from "./pricing-catalog.seed.js";
+import type { LlmModelCandidate } from "./llm-model-catalog.js";
 
 /**
  * S2-2A 任务 7：生成能力 readiness 交叉校验。
@@ -31,6 +32,7 @@ export type ReadinessIssueCode =
   | "catalog_multiple_active_defaults"
   | "llm_tier_mismatch"
   | "llm_provider_unavailable"
+  | "llm_candidate_not_declared"
   | "media_adapter_unregistered"
   | "media_model_not_registered"
   | "media_credential_unconfigured"
@@ -55,6 +57,12 @@ export interface MediaRegisteredModel {
 export interface GenerationCapabilityReadinessInput {
   catalog: ProviderModelCatalogRecord[];
   llm: LlmTierSeedInput;
+  /**
+   * S2-2C（§7.3）：本轮 seed 声明的 LLM 候选集（bootstrap 预解析后的子集）。
+   * 非默认 LLM 条目必须属于该集合（防目录手工改动漂移）；缺省（旧调用方 /
+   * 无候选部署）时非默认 LLM 条目一律按目录漂移拒绝（安全方向）。
+   */
+  llmCandidates?: LlmModelCandidate[];
   media: {
     /**
      * 当前实际注册的媒体 adapter 支持矩阵（每个 capability 实际配置的
@@ -266,6 +274,25 @@ function validateLlmEntry(
       provider_model_id: entry.id,
       message: "LLM tier 解析失败（provider 未注册或服务端凭据缺失），LLM 目录项不可报价",
     });
+    return;
+  }
+
+  // S2-2C（§7.3）分层校验：llm_tier_mismatch 只对默认条目；非默认条目
+  // （候选）按 (providerKey, modelId) 校验属于本轮候选集——目录被手工改动
+  // 出候选集外、或无候选声明时出现非默认条目，都按目录漂移拒绝。
+  if (!entry.isDefault) {
+    const declared = input.llmCandidates?.some(
+      (candidate) =>
+        candidate.providerKey === entry.providerKey && candidate.modelId === entry.modelId,
+    );
+    if (!declared) {
+      pushIssue(entry, {
+        code: "llm_candidate_not_declared",
+        capability: entry.capability,
+        provider_model_id: entry.id,
+        message: `LLM 非默认目录项 (${entry.providerKey}:${entry.modelId}) 不在本轮候选声明中（目录漂移或候选预解析未通过），不得报价或进入新运行`,
+      });
+    }
     return;
   }
 

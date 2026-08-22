@@ -1,12 +1,16 @@
 import { env } from "../../config/env.js";
+import path from "node:path";
 import type { DbClient } from "../../db/client.js";
 import { resolveTierProviderSnapshot, type TierProviderSnapshot } from "../../runtime/llm/tier-aware-provider-factory.js";
+import { loadProviderRegistry } from "../../runtime/llm/provider-registry.js";
+import { resolveTierModel } from "../../runtime/llm/tier-resolver.js";
 import { readDashscopeConfig } from "../assets/assets-run.service.js";
 import {
   buildPricingCatalogSeed,
   resolveDashscopeDeploymentScope,
   type DashscopeDeploymentScope,
   type LlmTierSeedInput,
+  type MediaAdditionalModel,
 } from "./pricing-catalog.seed.js";
 import {
   applyProviderModelCatalogSeed,
@@ -18,6 +22,7 @@ import {
   type GenerationCapabilityReadinessInput,
   type GenerationCapabilityReadinessResult,
 } from "./generation-capability-readiness.js";
+import { LLM_MODEL_CANDIDATES_V1, type LlmModelCandidate } from "./llm-model-catalog.js";
 
 /**
  * S2-2A 任务 7 重开（codex 审计 P1-1）：生成成本目录启动 bootstrap。
@@ -38,7 +43,13 @@ import {
 export type GenerationCostBootstrapInput = Omit<
   GenerationCapabilityReadinessInput,
   "catalog"
->;
+> & {
+  /**
+   * S2-2C（§7.2）：媒体 additionalModels（seed 输入透传，不属 readiness 校验）。
+   * 首版为空数组（接口就位，不伪造模型）。
+   */
+  mediaAdditionalModels?: MediaAdditionalModel[];
+};
 
 export interface GenerationCostBootstrapResult {
   readiness: GenerationCapabilityReadinessResult;
@@ -66,6 +77,19 @@ export interface GenerationCostBootstrapEnvDeps {
   readDashscopeMediaConfig: () => DashscopeMediaConfigProjection;
   demoMode: boolean;
   testEnv: boolean;
+  /**
+   * S2-2C（§7.1）：本轮 LLM 候选声明（缺省 = 不种候选，兼容旧调用方/测试）。
+   * 生产绑定传 LLM_MODEL_CANDIDATES_V1。
+   */
+  llmCandidates?: LlmModelCandidate[];
+  /**
+   * S2-2C（§7.1）：候选连接预解析（provider 注册 + 凭据健康检查）。
+   * 失败返回 ok:false → 该候选不种入目录（只输出公开原因日志，失败详情
+   * 可能含 env 变量名，不得外泄）。
+   */
+  resolveCandidateModel?: (candidate: LlmModelCandidate) => { ok: true } | { ok: false };
+  /** S2-2C（§7.2）：媒体 additionalModels（首版空数组）。 */
+  mediaAdditionalModels?: MediaAdditionalModel[];
 }
 
 /**
@@ -97,26 +121,55 @@ export function resolveGenerationCostBootstrapInput(
     }
   }
 
+  // S2-2C（§7.1）：候选预解析——resolveCandidateModel 失败的候选不种入目录
+  // （provider 未注册 / 凭据缺失），只输出公开原因诊断日志（失败详情可能含
+  // env 变量名，不外泄）；stub 模式不种候选。
+  let llmCandidates: LlmModelCandidate[] | undefined;
+  if (deps.llmProvider !== "stub" && deps.llmCandidates && deps.llmCandidates.length > 0) {
+    llmCandidates = [];
+    for (const candidate of deps.llmCandidates) {
+      const resolved = deps.resolveCandidateModel?.(candidate) ?? { ok: true };
+      if (resolved.ok) {
+        llmCandidates.push(candidate);
+      } else {
+        console.warn(
+          `[generation-cost-bootstrap] LLM 候选 (${candidate.providerKey}:${candidate.modelId}) 预解析失败（provider 未注册或服务端凭据缺失），不种入目录`,
+        );
+      }
+    }
+  }
+
   if (!deps.mediaCredentialConfigured) {
     return {
       llm,
+      llmCandidates,
       media: {
         registeredModels: [],
         credentialConfigured: false,
         deploymentScope: "cn-beijing",
       },
       environment: { demoMode: deps.demoMode, testEnv: deps.testEnv },
+      mediaAdditionalModels: deps.mediaAdditionalModels ?? [],
     };
   }
   const media = deps.readDashscopeMediaConfig();
   const deploymentScope = resolveDashscopeDeploymentScope(media.baseUrl);
+  // S2-2C（§7.2）：registeredModels 扩展为候选集（env 默认 ∪ additionalModels），
+  // 目录项与候选集精确匹配的 readiness 校验随目录多候选一起生效。
+  const additionalModels = deps.mediaAdditionalModels ?? [];
   return {
     llm,
+    llmCandidates,
     media: {
       registeredModels:
         deploymentScope === "unknown"
           ? [] // 区域未知：无已核实价格真相，不注册任何媒体模型（fail-closed）
           : [
+              ...additionalModels.map((m) => ({
+                capability: m.capability,
+                providerKey: m.providerKey,
+                modelId: m.modelId,
+              })),
               { capability: "image.generate", providerKey: "dashscope", modelId: media.imageModel },
               { capability: "video.image_to_video", providerKey: "dashscope", modelId: media.imageToVideoModel },
               { capability: "tts.synthesize", providerKey: "dashscope", modelId: media.ttsModel },
@@ -125,6 +178,7 @@ export function resolveGenerationCostBootstrapInput(
       deploymentScope,
     },
     environment: { demoMode: deps.demoMode, testEnv: deps.testEnv },
+    mediaAdditionalModels: additionalModels,
   };
 }
 
@@ -145,6 +199,29 @@ export function resolveGenerationCostBootstrapInputFromEnv(): GenerationCostBoot
     },
     demoMode: env.demoMode,
     testEnv: env.nodeEnv === "test",
+    llmCandidates: LLM_MODEL_CANDIDATES_V1,
+    resolveCandidateModel: (candidate) => {
+      const configPath =
+        env.llm.providersConfigPath ??
+        path.resolve(process.cwd(), "backend/providers.json");
+      try {
+        resolveTierModel({
+          tier: "smart",
+          tierModelRaw: `${candidate.providerKey}:${candidate.modelId}`,
+          registry: loadProviderRegistry({
+            configPath,
+            envFallback: { baseUrl: env.llm.baseUrl, apiKey: env.llm.apiKey },
+          }),
+          env: process.env as Record<string, string | undefined>,
+          fallbackApiKey: env.llm.apiKey,
+        });
+        return { ok: true };
+      } catch {
+        return { ok: false };
+      }
+    },
+    // S2-2C（§7.2）：媒体候选接口就位，首版空数组（不伪造模型）
+    mediaAdditionalModels: [],
   });
 }
 
@@ -156,16 +233,20 @@ export async function bootstrapGenerationCostCatalog(
   db: DbClient,
   input: GenerationCostBootstrapInput,
 ): Promise<GenerationCostBootstrapResult> {
+  const { mediaAdditionalModels = [], ...readinessInput } = input;
   await applyProviderModelCatalogSeed(
     db,
     buildPricingCatalogSeed({
-      llm: input.llm,
-      media: { deploymentScope: input.media.deploymentScope },
+      llm: { ...input.llm, candidates: input.llmCandidates },
+      media: {
+        deploymentScope: input.media.deploymentScope,
+        additionalModels: mediaAdditionalModels,
+      },
     }),
   );
 
   const readiness = evaluateGenerationCapabilityReadiness({
-    ...input,
+    ...readinessInput,
     catalog: listProviderModelCatalog(db),
   });
 
