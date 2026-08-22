@@ -1,6 +1,6 @@
 import { inject, reactive, readonly, type InjectionKey } from "vue";
 import { apiFetch, notifyUnauthorized } from "../utils/api";
-import { quoteSubmitBody, type QuoteSubmitFields } from "./generation-cost";
+import { isPaidQuoteRequiredError, quoteSubmitBody, type QuoteSubmitFields } from "./generation-cost";
 
 import type { ProjectStore } from "./project";
 
@@ -310,6 +310,8 @@ export function createPublishStore(input: CreatePublishStoreInput): PublishStore
       state.snapshot = await input.api.generatePackage(projectId, submit);
       syncPublishReadiness(state.snapshot);
     } catch (error) {
+      // S2-2D：付费闸门 409 上抛（不吞进 loadError），交面板报价编排
+      if (isPaidQuoteRequiredError(error)) throw error;
       state.loadError = toErrorMessage(error);
     } finally {
       state.isGenerating = false;
@@ -370,6 +372,8 @@ export function createPublishStore(input: CreatePublishStoreInput): PublishStore
     try {
       state.snapshot = await input.api.generateCover(projectId, submit);
     } catch (error) {
+      // S2-2D：付费闸门 409 上抛（不吞进 loadError），交面板报价编排
+      if (isPaidQuoteRequiredError(error)) throw error;
       state.loadError = toErrorMessage(error);
     } finally {
       state.isGeneratingCover = false;
