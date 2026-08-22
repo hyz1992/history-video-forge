@@ -1,5 +1,5 @@
 import { inject, reactive, readonly, type InjectionKey } from "vue";
-import { apiFetch } from "../utils/api";
+import { apiFetch, ApiError } from "../utils/api";
 
 /**
  * S2-2A 任务 11：报价与成本 store。
@@ -111,6 +111,19 @@ export function quoteSubmitBody(submit?: QuoteSubmitFields): Record<string, unkn
       ? { authorize_budget_override: submit.authorizeBudgetOverride }
       : {}),
   };
+}
+
+/**
+ * S2-2D：付费部署闸门 409（paid_generation_quote_required）识别。
+ * store 层对这类错误上抛（不吞进 loadError），交面板报价编排处理；
+ * 其余错误保持现状（loadError 展示）。
+ */
+export function isPaidQuoteRequiredError(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status === 409 &&
+    String(error.code).includes("paid_generation_quote_required")
+  );
 }
 
 export interface GenerationCostApi {

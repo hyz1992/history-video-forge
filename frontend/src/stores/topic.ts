@@ -11,7 +11,7 @@ import {
   type TopicRecommendationPeriodId,
 } from "../../../shared/src";
 import { apiFetch } from "../utils/api";
-import { quoteSubmitBody, type QuoteSubmitFields } from "./generation-cost";
+import { isPaidQuoteRequiredError, quoteSubmitBody, type QuoteSubmitFields } from "./generation-cost";
 
 import type { ProjectStore } from "./project";
 
@@ -406,6 +406,8 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
       state.selectedCandidate = response.candidates[0] ?? null;
       state.selectedRoundId = state.currentRound?.round_id ?? null;
     } catch (error) {
+      // S2-2D：付费闸门 409 上抛（不吞进 loadError），交面板报价编排
+      if (isPaidQuoteRequiredError(error)) throw error;
       state.loadError =
         error instanceof Error ? error.message : "topic_generation_failed";
       state.candidates = previousCandidates;
@@ -452,6 +454,8 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
       state.selectedCandidate = response.candidates[0] ?? null;
       state.selectedRoundId = state.currentRound?.round_id ?? null;
     } catch (error) {
+      // S2-2D：付费闸门 409 上抛（不吞进 loadError），交面板报价编排
+      if (isPaidQuoteRequiredError(error)) throw error;
       state.loadError =
         error instanceof Error ? error.message : "topic_generation_failed";
       state.candidates = previousCandidates;

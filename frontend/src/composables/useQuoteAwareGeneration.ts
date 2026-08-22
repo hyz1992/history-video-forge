@@ -1,6 +1,7 @@
 import { reactive } from "vue";
 import { ApiError } from "../utils/api";
 import {
+  isPaidQuoteRequiredError,
   isQuoteExpired,
   type GenerationCostStore,
   type GenerationQuoteDto,
@@ -27,14 +28,6 @@ export const LOCAL_QUOTE_UNAVAILABLE_CODES = [
   "generation_quote_resolution_failed",
   "generation_quote_unquotable",
 ] as const;
-
-export function isPaidQuoteRequiredError(error: unknown): boolean {
-  return (
-    error instanceof ApiError &&
-    error.status === 409 &&
-    String(error.code).includes("paid_generation_quote_required")
-  );
-}
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);

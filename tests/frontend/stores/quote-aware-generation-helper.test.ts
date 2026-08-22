@@ -20,11 +20,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import { reactive } from "vue";
 import { ApiError } from "../../../frontend/src/utils/api";
+import { createQuoteAwareGeneration } from "../../../frontend/src/composables/useQuoteAwareGeneration";
 import {
-  createQuoteAwareGeneration,
   isPaidQuoteRequiredError,
-} from "../../../frontend/src/composables/useQuoteAwareGeneration";
-import type { GenerationCostStore, GenerationQuoteDto } from "../../../frontend/src/stores/generation-cost";
+  type GenerationCostStore,
+  type GenerationQuoteDto,
+} from "../../../frontend/src/stores/generation-cost";
 
 function makeQuote(overrides: Partial<GenerationQuoteDto> = {}): GenerationQuoteDto {
   return {
