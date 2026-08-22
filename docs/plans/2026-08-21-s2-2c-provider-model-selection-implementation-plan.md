@@ -172,7 +172,7 @@ git commit -m "配置 API 开放 capabilities 固定选择并扩展失效预览"
 - **快照完整映射（复审整改 P2）**：快照参数存在但缺任一必需槽位（如只给 `llm.smart` 不给 `llm.flash`）→ 构造抛错 fail-closed（不混合快照与 env 回退；合法快照恒五槽齐备，本用例模拟损坏快照）。
 - snapshotCapabilities 缺省 → 行为与现状一致（env 解析，含 flash 复用 smart 兼容语义）。
 - 快照指定未注册 provider → 抛错（fail-closed）；指定 provider 凭据缺失（apiKeyEnv 变量为空）→ 抛错。
-- stub 部署（`env.llm.provider === "stub"` 注入）→ 忽略快照（不抛错、走 stub 路径）。
+- stub 部署验收（复审整改 P2-3）：**经真实调用方 gateway 驱动**（如 `createScriptWriterGateway({ snapshotCapabilities })`，stub env 注入）→ 走 stub 分支（`createStubScriptWriterProvider`）、`createTierAwareProviderFromEnv` **零调用**、不解析快照模型；工厂不接管 stub 构造（调用方 stub 分支负责），stub 下直接调用工厂属不应发生的防御路径。
 
 运行：
 

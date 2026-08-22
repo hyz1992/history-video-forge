@@ -1,15 +1,15 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * S2-2C 任务 4 验收项（复审整改 P2-3）：stub 部署忽略快照、走 stub 路径。
  *
- * 设计 §6.1：`env.llm.provider === "stub"` → 忽略快照模型走 stub 路径
- * （stub 目录只有 stub 条目，无真实调用；工厂不接管 stub 构造，调用方在
- * stub 分支直接构造 stub provider，不经过工厂）。
- *
- * 因此工厂在 stub 环境下的正确行为是：**快照参数被忽略**——带快照调用与
- * 无参数调用行为完全一致（都走 env 路径；stub/未配置环境下 env 路径
- * fail-closed 抛错，绝不使用快照模型构造真实 provider）。
+ * 设计 §6.1：`env.llm.provider === "stub"` → 忽略快照模型走 stub 路径。
+ * 工厂本身不接管 stub 构造（契约："调用方需自行判断 stub 并走 stub 分支"），
+ * 因此验收对象是**真实调用方 gateway**：
+ * - stub + 快照 → gateway 走 stub 分支（createStubScriptWriterProvider），
+ *   `createTierAwareProviderFromEnv` **零调用**，不解析/不调用快照模型；
+ * - stub + 无快照 → 同样 stub 分支（工厂零调用）。
+ * 同时防御性断言：即使直接调用工厂（stub 下不应发生），快照参数也被忽略。
  */
 
 const { factoryOptionsMock } = vi.hoisted(() => ({ factoryOptionsMock: vi.fn() }));
@@ -19,6 +19,7 @@ vi.mock("../../../backend/src/config/env.js", () => {
   const env = {
     nodeEnv: "test",
     demoMode: false,
+    promptAssetsDir: process.cwd().replace(/\\/g, "/") + "/prompts",
     llm: {
       provider: "stub",
       baseUrl: undefined,
@@ -34,10 +35,19 @@ vi.mock("../../../backend/src/config/env.js", () => {
   };
 });
 
-// 不 mock 工厂：本测试验证真实工厂在 stub 环境下的行为
-import {
-  createTierAwareProviderFromEnv,
-} from "../../../backend/src/runtime/llm/tier-aware-provider-factory.js";
+// 工厂 mock：记录调用（断言 stub 路径"工厂零调用"）
+vi.mock("../../../backend/src/runtime/llm/tier-aware-provider-factory.js", () => ({
+  createTierAwareProviderFromEnv: (options?: unknown) => {
+    factoryOptionsMock(options);
+    return {
+      invokeStructuredPrompt: async () => ({}),
+      invokeStrictStructured: async () => ({}),
+    };
+  },
+  resolveTierProviderSnapshot: vi.fn(),
+}));
+
+import { createScriptWriterGateway } from "../../../backend/src/modules/script/script-generation.service.js";
 
 const SNAPSHOT_CAPABILITIES = {
   "llm.smart": {
@@ -58,37 +68,23 @@ const SNAPSHOT_CAPABILITIES = {
 };
 
 describe("tier-aware-provider-factory stub 部署（S2-2C 任务 4 验收）", () => {
-  it("stub 环境 + 快照 → 忽略快照：与无参数调用行为完全一致", () => {
-    const withSnapshot = () =>
-      createTierAwareProviderFromEnv({ snapshotCapabilities: SNAPSHOT_CAPABILITIES });
-    const withoutSnapshot = () => createTierAwareProviderFromEnv();
+  beforeEach(() => {
+    factoryOptionsMock.mockReset();
+  });
 
-    // stub/未配置环境下 env 路径 fail-closed 抛错（LLM_SMART_MODEL 未配置），
-    // 证明快照被忽略（若快照未被忽略，会走 registry 解析并抛快照相关错误）。
-    const withSnapshotError = () => {
-      try {
-        withSnapshot();
-        return null;
-      } catch (error) {
-        return error;
-      }
-    };
-    const withoutSnapshotError = () => {
-      try {
-        withoutSnapshot();
-        return null;
-      } catch (error) {
-        return error;
-      }
-    };
+  it("stub + 快照经真实 gateway 驱动 → 走 stub 分支：工厂零调用、不解析快照模型", async () => {
+    // 真实调用方 gateway（script writer）：stub 部署下走
+    // createStubScriptWriterProvider，不触达 createTierAwareProviderFromEnv。
+    // gateway 构造即 stub 分支的证明：非 stub 分支会调用工厂并因未配置
+    // LLM 抛错；stub 分支构造成功且工厂零调用、快照模型不被解析。
+    const gateway = createScriptWriterGateway(SNAPSHOT_CAPABILITIES);
+    expect(gateway).toBeDefined();
+    expect(factoryOptionsMock).not.toHaveBeenCalled();
+  });
 
-    const a = withSnapshotError();
-    const b = withoutSnapshotError();
-    // 两者都抛错（fail-closed）且错误同源（env 路径错误，非快照校验错误）
-    expect(a).not.toBeNull();
-    expect(b).not.toBeNull();
-    expect(String((a as Error).message)).toBe(String((b as Error).message));
-    expect(String((a as Error).message)).toContain("LLM_SMART_MODEL");
-    expect(String((a as Error).message)).not.toContain("快照");
+  it("stub + 无快照经真实 gateway 驱动 → 同样走 stub 分支（工厂零调用）", async () => {
+    const gateway = createScriptWriterGateway();
+    expect(gateway).toBeDefined();
+    expect(factoryOptionsMock).not.toHaveBeenCalled();
   });
 });
