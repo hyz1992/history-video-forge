@@ -179,7 +179,7 @@ describe("topic store recommendation input", () => {
     const draft = medievalDraft({ storytelling_lens: "aftermath" });
     await store.generateSystemRecommendations(draft);
 
-    expect(api.generateSystemRecommendations).toHaveBeenCalledWith("project-1", draft);
+    expect(api.generateSystemRecommendations).toHaveBeenCalledWith("project-1", draft, undefined);
   });
 
   it("returns the loaded snapshot so polling can inspect topic generation status", async () => {

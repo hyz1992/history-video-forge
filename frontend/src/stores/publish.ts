@@ -1,5 +1,6 @@
 import { inject, reactive, readonly, type InjectionKey } from "vue";
 import { apiFetch, notifyUnauthorized } from "../utils/api";
+import { quoteSubmitBody, type QuoteSubmitFields } from "./generation-cost";
 
 import type { ProjectStore } from "./project";
 
@@ -114,11 +115,11 @@ export interface PublishStoreState {
 export interface PublishStore {
   state: Readonly<PublishStoreState>;
   loadProject: () => Promise<void>;
-  generatePackage: () => Promise<void>;
+  generatePackage: (submit?: QuoteSubmitFields) => Promise<void>;
   updatePackage: (updates: Record<string, unknown>) => Promise<void>;
   optimizeCoverPrompt: () => Promise<OptimizeResult>;
   uploadCover: (fileUri: string, mimeType?: string, width?: number, height?: number) => Promise<void>;
-  generateCover: () => Promise<void>;
+  generateCover: (submit?: QuoteSubmitFields) => Promise<void>;
   loadTitleCandidates: () => Promise<TitleCandidatesResult>;
   exportPackage: () => Promise<ExportManifest>;
 }
@@ -131,11 +132,11 @@ export const publishStoreKey: InjectionKey<PublishStore> = Symbol("publish-store
 
 export interface PublishApi {
   loadProject(projectId: string): Promise<PublishSnapshot>;
-  generatePackage(projectId: string): Promise<PublishSnapshot>;
+  generatePackage(projectId: string, submit?: QuoteSubmitFields): Promise<PublishSnapshot>;
   updatePackage(projectId: string, updates: Record<string, unknown>): Promise<PublishSnapshot>;
   optimizeCoverPrompt(projectId: string): Promise<OptimizeResult>;
   uploadCover(projectId: string, fileUri: string, mimeType: string, width?: number, height?: number): Promise<PublishSnapshot>;
-  generateCover(projectId: string): Promise<PublishSnapshot>;
+  generateCover(projectId: string, submit?: QuoteSubmitFields): Promise<PublishSnapshot>;
   loadTitleCandidates(projectId: string): Promise<TitleCandidatesResult>;
   exportPackage(projectId: string): Promise<ExportManifest>;
 }
@@ -151,8 +152,8 @@ export function createFetchPublishApi(baseUrl = ""): PublishApi {
       };
     },
 
-    async generatePackage(projectId) {
-      const data = await apiFetch<Record<string, unknown>>(`${baseUrl}/api/projects/${projectId}/publish/generate`, { method: "POST" });
+    async generatePackage(projectId, submit) {
+      const data = await apiFetch<Record<string, unknown>>(`${baseUrl}/api/projects/${projectId}/publish/generate`, { method: "POST", body: quoteSubmitBody(submit) });
       return {
         current_status: data.current_status ?? null,
         active_publish_package: data.active_publish_package ?? null,
@@ -188,8 +189,8 @@ export function createFetchPublishApi(baseUrl = ""): PublishApi {
       };
     },
 
-    async generateCover(projectId) {
-      const data = await apiFetch<Record<string, unknown>>(`${baseUrl}/api/projects/${projectId}/publish/cover/generate`, { method: "POST" });
+    async generateCover(projectId, submit) {
+      const data = await apiFetch<Record<string, unknown>>(`${baseUrl}/api/projects/${projectId}/publish/cover/generate`, { method: "POST", body: quoteSubmitBody(submit) });
       return {
         current_status: data.current_status ?? null,
         active_publish_package: data.active_publish_package ?? null,
@@ -299,14 +300,14 @@ export function createPublishStore(input: CreatePublishStoreInput): PublishStore
     }
   }
 
-  async function generatePackage() {
+  async function generatePackage(submit?: QuoteSubmitFields) {
     const projectId = input.projectStore.state.projectId;
     if (!projectId) return;
 
     state.isGenerating = true;
     state.loadError = null;
     try {
-      state.snapshot = await input.api.generatePackage(projectId);
+      state.snapshot = await input.api.generatePackage(projectId, submit);
       syncPublishReadiness(state.snapshot);
     } catch (error) {
       state.loadError = toErrorMessage(error);
@@ -360,14 +361,14 @@ export function createPublishStore(input: CreatePublishStoreInput): PublishStore
     }
   }
 
-  async function generateCover() {
+  async function generateCover(submit?: QuoteSubmitFields) {
     const projectId = input.projectStore.state.projectId;
     if (!projectId) return;
 
     state.isGeneratingCover = true;
     state.loadError = null;
     try {
-      state.snapshot = await input.api.generateCover(projectId);
+      state.snapshot = await input.api.generateCover(projectId, submit);
     } catch (error) {
       state.loadError = toErrorMessage(error);
     } finally {

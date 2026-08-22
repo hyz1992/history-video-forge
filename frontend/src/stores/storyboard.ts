@@ -1,5 +1,6 @@
 import { inject, reactive, readonly, type InjectionKey } from "vue";
 import { apiFetch } from "../utils/api";
+import { quoteSubmitBody, type QuoteSubmitFields } from "./generation-cost";
 
 import type { ProjectStore } from "./project";
 
@@ -70,8 +71,8 @@ export interface StoryboardSnapshot {
 
 export interface StoryboardApi {
   loadSnapshot(projectId: string): Promise<StoryboardSnapshot>;
-  generateStoryboard(projectId: string): Promise<void>;
-  regenerateStoryboard(projectId: string, userFeedback: string): Promise<void>;
+  generateStoryboard(projectId: string, submit?: QuoteSubmitFields): Promise<void>;
+  regenerateStoryboard(projectId: string, userFeedback: string, submit?: QuoteSubmitFields): Promise<void>;
   updateSegmentStrategy(
     projectId: string,
     segmentId: string,
@@ -82,6 +83,7 @@ export interface StoryboardApi {
     projectId: string,
     segmentId: string,
     userFeedback: string,
+    submit?: QuoteSubmitFields,
   ): Promise<void>;
 }
 
@@ -95,13 +97,16 @@ export function createFetchStoryboardApi(baseUrl = ""): StoryboardApi {
         active_storyboard_record_id: data.active_storyboard_record_id ?? null,
       };
     },
-    async generateStoryboard(projectId) {
-      await apiFetch(`${baseUrl}/api/projects/${projectId}/storyboard/generate`, { method: "POST" });
-    },
-    async regenerateStoryboard(projectId, userFeedback) {
+    async generateStoryboard(projectId, submit) {
       await apiFetch(`${baseUrl}/api/projects/${projectId}/storyboard/generate`, {
         method: "POST",
-        body: { user_feedback: userFeedback },
+        body: quoteSubmitBody(submit),
+      });
+    },
+    async regenerateStoryboard(projectId, userFeedback, submit) {
+      await apiFetch(`${baseUrl}/api/projects/${projectId}/storyboard/generate`, {
+        method: "POST",
+        body: { user_feedback: userFeedback, ...quoteSubmitBody(submit) },
       });
     },
     async updateSegmentStrategy(projectId, segmentId, strategy, expectedRevision = null) {
@@ -116,10 +121,10 @@ export function createFetchStoryboardApi(baseUrl = ""): StoryboardApi {
       });
       return response;
     },
-    async regenerateSegment(projectId, segmentId, userFeedback) {
+    async regenerateSegment(projectId, segmentId, userFeedback, submit) {
       await apiFetch(`${baseUrl}/api/projects/${projectId}/storyboard/segments/${segmentId}/regen`, {
         method: "POST",
-        body: { user_feedback: userFeedback },
+        body: { user_feedback: userFeedback, ...quoteSubmitBody(submit) },
       });
     },
   };
@@ -141,8 +146,8 @@ export interface StoryboardStoreState {
 export interface StoryboardStore {
   state: Readonly<StoryboardStoreState>;
   loadActiveStoryboardSnapshot: () => Promise<void>;
-  generateStoryboard: () => Promise<void>;
-  regenerateWithFeedback: (userFeedback: string) => Promise<void>;
+  generateStoryboard: (submit?: QuoteSubmitFields) => Promise<void>;
+  regenerateWithFeedback: (userFeedback: string, submit?: QuoteSubmitFields) => Promise<void>;
   updateSegmentStrategyPreference: (
     segmentId: string,
     strategy: "remotion_motion" | "api_video" | null,
@@ -150,6 +155,7 @@ export interface StoryboardStore {
   regenerateSegment: (
     segmentId: string,
     userFeedback: string,
+    submit?: QuoteSubmitFields,
   ) => Promise<boolean>;
   retryLoad: () => Promise<void>;
 }
@@ -224,17 +230,17 @@ export function createStoryboardStore(
     }
   }
 
-  async function generateStoryboard() {
+  async function generateStoryboard(submit?: QuoteSubmitFields) {
     const projectId = input.projectStore.state.projectId;
     if (!projectId) return;
-    return startGeneration(() => input.api.generateStoryboard(projectId));
+    return startGeneration(() => input.api.generateStoryboard(projectId, submit));
   }
 
-  async function regenerateWithFeedback(userFeedback: string) {
+  async function regenerateWithFeedback(userFeedback: string, submit?: QuoteSubmitFields) {
     const projectId = input.projectStore.state.projectId;
     if (!projectId) return;
     return startGeneration(() =>
-      input.api.regenerateStoryboard(projectId, userFeedback),
+      input.api.regenerateStoryboard(projectId, userFeedback, submit),
     );
   }
 
@@ -329,6 +335,7 @@ export function createStoryboardStore(
   async function regenerateSegment(
     segmentId: string,
     userFeedback: string,
+    submit?: QuoteSubmitFields,
   ) {
     const projectId = input.projectStore.state.projectId;
     if (!projectId) {
@@ -339,7 +346,7 @@ export function createStoryboardStore(
     state.loadError = null;
 
     try {
-      await input.api.regenerateSegment(projectId, segmentId, userFeedback);
+      await input.api.regenerateSegment(projectId, segmentId, userFeedback, submit);
       await loadActiveStoryboardSnapshot();
       return true;
     } catch (error) {

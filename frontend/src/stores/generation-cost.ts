@@ -88,6 +88,31 @@ export interface QuoteRequestInput {
   enabledProviderTypes?: string[];
 }
 
+/**
+ * S2-2D：生成请求携带的报价提交字段（映射 cost_quote_id / idempotency_key /
+ * authorize_budget_override）。四 LLM 生成 store 的生成函数透传同一组字段。
+ */
+export interface QuoteSubmitFields {
+  quoteId: string;
+  idempotencyKey: string;
+  authorizeBudgetOverride?: boolean;
+}
+
+/**
+ * S2-2D：报价提交字段 → 生成请求体映射（四 LLM 生成 store 共用）。
+ * 缺省返回空对象：免 quote 路径请求体与现状完全一致。
+ */
+export function quoteSubmitBody(submit?: QuoteSubmitFields): Record<string, unknown> {
+  if (!submit) return {};
+  return {
+    cost_quote_id: submit.quoteId,
+    idempotency_key: submit.idempotencyKey,
+    ...(submit.authorizeBudgetOverride !== undefined
+      ? { authorize_budget_override: submit.authorizeBudgetOverride }
+      : {}),
+  };
+}
+
 export interface GenerationCostApi {
   createQuote(projectId: string, request: QuoteRequestInput): Promise<GenerationQuoteDto>;
   getCostSummary(projectId: string): Promise<ProjectCostSummaryDto>;
