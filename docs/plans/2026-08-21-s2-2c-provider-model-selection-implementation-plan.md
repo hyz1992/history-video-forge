@@ -293,7 +293,7 @@ git commit -m "媒体执行按运行快照冻结模型构造 provider"
 - 修改：`tests/backend/db/generation-cost-catalog-bootstrap.test.ts`
 - 新建：`tests/backend/config/llm-model-catalog-readiness.test.ts`
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 覆盖（详细设计 §7）：
 
@@ -313,11 +313,11 @@ npx vitest run --configLoader runner tests/backend/config/llm-model-catalog-read
 
 预期：失败，seed/readiness 尚未支持多候选。
 
-- [ ] **步骤 2：实现**
+- [x] **步骤 2：实现**
 
 seed 输入扩展 + 候选预解析 + readiness 分层。媒体 `additionalModels` 首版传空数组（接口就位，不伪造模型）。
 
-- [ ] **步骤 3：运行最小验证并提交**
+- [x] **步骤 3：运行最小验证并提交**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/config/llm-model-catalog-readiness.test.ts tests/backend/db/generation-cost-catalog-bootstrap.test.ts tests/backend/config/provider-model-catalog.test.ts
