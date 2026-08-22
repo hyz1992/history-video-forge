@@ -340,7 +340,7 @@ git commit -m "生成目录支持每能力槽多候选与分层 readiness 校验
 - 修改：`frontend/src/stores/generation-config.ts`（`GenerationConfigPatchInput.capabilities`；PATCH 携带；`computeConfigInvalidationPreview` capabilities 映射）
 - 修改/新建：前端 jsdom 测试（settings-ui / generation-config-store 规格）
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 覆盖：
 
@@ -356,11 +356,11 @@ npx vitest run --configLoader runner tests/frontend
 
 预期：失败，组件与 store 尚未实现。
 
-- [ ] **步骤 2：实现**
+- [x] **步骤 2：实现**
 
 按详细设计 §9。候选列表用 `store.state.capabilities`（availability=enabled 过滤既有逻辑）。保存时始终携带完整五槽（从草稿组装）。项目设置对话框同三区模式接入并复用失效预览。
 
-- [ ] **步骤 3：运行最小验证并提交**
+- [x] **步骤 3：运行最小验证并提交**
 
 ```powershell
 npx vitest run --configLoader runner tests/frontend
