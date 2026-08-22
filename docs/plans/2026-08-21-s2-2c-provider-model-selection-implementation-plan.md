@@ -398,7 +398,7 @@ git commit -m "设置页与项目设置新增 Provider/Model 高级选择区"
 npx vitest run --configLoader runner tests/backend/s2-2c-e2e-acceptance.test.ts
 ```
 
-- [ ] **步骤 2：实现并提交**
+- [x] **步骤 2：实现并提交**
 
 ```powershell
 git diff --check
