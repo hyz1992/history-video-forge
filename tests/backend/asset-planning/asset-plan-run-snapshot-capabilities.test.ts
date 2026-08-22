@@ -1,16 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * S2-2C 复审整改 P2-4：asset-planning run-service 级快照派生测试。
+ * S2-2C 复审整改 P2-4：asset-planning run-service 级快照派生测试（planner 透传）。
  *
- * 验证 `runAssetPlanningGeneration` 从 `billingContext.resolved.resolved_capabilities`
- * 派生 snapshotCapabilities 并传给 planner/repair gateway 构造（单一真相源）；
- * 无 billingContext（免 quote 本地路径）→ 工厂收到 undefined。探针方案：mock
- * provider 抛 S2-2C_SNAPSHOT_PROBE，run service 分类返回失败响应。
- * fixture 复用 asset-planning-run-error-classification.test.ts 的既有形状。
+ * `generateAssetPlan` 被 mock（记录 `input.snapshotCapabilities`）——直接验证
+ * run service → generation service 的参数透传（run-service 派生单一真相源），
+ * 工厂层由 gateway 级测试覆盖；`repairAssetPlanStructure` 的透传由
+ * asset-plan-run-repair-snapshot.test.ts 覆盖（legacy regen_once 可达分支）。
  */
 
-const { factoryOptionsMock } = vi.hoisted(() => ({ factoryOptionsMock: vi.fn() }));
+const { generateAssetPlanMock } = vi.hoisted(() => ({
+  generateAssetPlanMock: vi.fn(),
+}));
 
 vi.mock("../../../backend/src/config/env.js", () => {
   const env = {
@@ -33,20 +34,14 @@ vi.mock("../../../backend/src/config/env.js", () => {
   };
 });
 
-vi.mock("../../../backend/src/runtime/llm/tier-aware-provider-factory.js", () => ({
-  createTierAwareProviderFromEnv: (options?: unknown) => {
-    factoryOptionsMock(options);
-    return {
-      invokeStructuredPrompt: async () => {
-        throw new Error("S2-2C_SNAPSHOT_PROBE");
-      },
-      invokeStrictStructured: async () => {
-        throw new Error("S2-2C_SNAPSHOT_PROBE");
-      },
-    };
+// 仅 mock generateAssetPlan：保留 generation service 其余导出
+vi.mock(
+  "../../../backend/src/modules/asset-planning/asset-planning-generation.service.js",
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof import("../../../backend/src/modules/asset-planning/asset-planning-generation.service.js")>();
+    return { ...actual, generateAssetPlan: generateAssetPlanMock };
   },
-  resolveTierProviderSnapshot: vi.fn(),
-}));
+);
 
 import { createDbClient } from "../../../backend/src/db/client.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
@@ -230,30 +225,36 @@ function buildBillingContext(db: ReturnType<typeof createDbClient>, project: { i
   };
 }
 
-describe("asset-planning run-service 快照派生（S2-2C 复审 P2-4）", () => {
+describe("asset-planning run-service 快照派生：planner 透传（S2-2C 复审 P2-4）", () => {
   beforeEach(() => {
-    factoryOptionsMock.mockReset();
+    generateAssetPlanMock.mockReset();
   });
 
-  it("billingContext 提供 → gateway 构造收到快照 capabilities（单一真相源）", async () => {
+  it("billingContext 提供 → generateAssetPlan 收到快照 capabilities（单一真相源）", async () => {
+    generateAssetPlanMock.mockImplementation(async () => ({ plan_version: "asset_plan_v1" }));
     const { db, project } = await prepareActiveStoryboard();
     const billingContext = buildBillingContext(db, project);
-    const response = await runAssetPlanningGeneration({
+    await runAssetPlanningGeneration({
       db,
       project,
       demoMode: false,
       billingContext: billingContext as never,
     });
-    expect(response.statusCode).toBeGreaterThanOrEqual(400);
-    expect(factoryOptionsMock).toHaveBeenCalledWith({
-      snapshotCapabilities: SNAPSHOT_CAPABILITIES,
-    });
+    expect(generateAssetPlanMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        snapshotCapabilities: SNAPSHOT_CAPABILITIES,
+      }),
+    );
   });
 
-  it("无 billingContext（免 quote 本地路径）→ 工厂收到 undefined", async () => {
+  it("无 billingContext（免 quote 本地路径）→ generateAssetPlan 收到 undefined", async () => {
+    generateAssetPlanMock.mockImplementation(async () => ({ plan_version: "asset_plan_v1" }));
     const { db, project } = await prepareActiveStoryboard();
-    const response = await runAssetPlanningGeneration({ db, project, demoMode: false });
-    expect(response.statusCode).toBeGreaterThanOrEqual(400);
-    expect(factoryOptionsMock).toHaveBeenCalledWith(undefined);
+    await runAssetPlanningGeneration({ db, project, demoMode: false });
+    expect(generateAssetPlanMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        snapshotCapabilities: undefined,
+      }),
+    );
   });
 });

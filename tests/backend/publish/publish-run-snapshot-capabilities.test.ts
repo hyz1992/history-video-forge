@@ -208,12 +208,10 @@ describe("publish run-service 快照派生（S2-2C 复审 P2-4）", () => {
     });
     // LLM 探针错误被逐调用 catch（notes），主流程继续返回发布包（201 创建语义）
     expect(response.statusCode).toBe(201);
-    // cover/description/title 三个 gateway 构造都收到同一快照引用
-    const calls = factoryOptionsMock.mock.calls.filter(
-      (call) => call[0] !== undefined,
-    );
-    expect(calls.length).toBeGreaterThanOrEqual(1);
-    for (const call of calls) {
+    // 精确断言：cover/description/title 三个 gateway 构造**恰好 3 次**，
+    // 每次参数都是同一快照引用（快照路径不命中进程级缓存，逐调用构造）。
+    expect(factoryOptionsMock).toHaveBeenCalledTimes(3);
+    for (const call of factoryOptionsMock.mock.calls) {
       expect(call[0]).toEqual({ snapshotCapabilities: SNAPSHOT_CAPABILITIES });
     }
   });
@@ -222,8 +220,8 @@ describe("publish run-service 快照派生（S2-2C 复审 P2-4）", () => {
     const { db, project } = await preparePublishPipeline();
     const response = await runPublishGeneration({ db, project });
     expect(response.statusCode).toBe(201);
-    for (const call of factoryOptionsMock.mock.calls) {
-      expect(call[0]).toBeUndefined();
-    }
+    // 缺省路径命中进程级缓存：三个子 service 复用同一 gateway → 工厂恰好构造 1 次
+    expect(factoryOptionsMock).toHaveBeenCalledTimes(1);
+    expect(factoryOptionsMock).toHaveBeenCalledWith(undefined);
   });
 });

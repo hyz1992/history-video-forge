@@ -9,7 +9,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * - stub + 快照 → gateway 走 stub 分支（createStubScriptWriterProvider），
  *   `createTierAwareProviderFromEnv` **零调用**，不解析/不调用快照模型；
  * - stub + 无快照 → 同样 stub 分支（工厂零调用）。
- * 同时防御性断言：即使直接调用工厂（stub 下不应发生），快照参数也被忽略。
  */
 
 const { factoryOptionsMock } = vi.hoisted(() => ({ factoryOptionsMock: vi.fn() }));
