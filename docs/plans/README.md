@@ -13,7 +13,8 @@
 - `S2-2A 配置与成本基础` 已全部完成并通过终审（任务 1-12；用户/项目配置、目录与报价、幂等付费运行、媒体/LLM 闸门与费用账本、设置 UI、报价确认/严格 fallback/成本明细、文档收口与 e2e/浏览器验收），外部审查整改闭环见 `docs/records/2026-08-21-s2-2a-external-review-remediation-record.md`。设计文档为 [S2-2A 详细设计](./2026-08-12-s2-2a-configuration-cost-foundation-design.md)，实施计划为 [S2-2A 实施计划](./2026-08-12-s2-2a-configuration-cost-foundation-implementation-plan.md)，任务审查记录见 `docs/records/2026-08-20-s2-2a-task*.md`。
 - `S2-2B 创作偏好` 已完成（2026-08-21）：设计文档为 [S2-2B 详细设计](./2026-08-21-s2-2b-creative-preferences-design.md)（含外部审查整改回改），实施计划为 [S2-2B 实施计划](./2026-08-21-s2-2b-creative-preferences-implementation-plan.md)；实施共 10 个低耦合任务全部完成并独立中文提交。收口后两份计划文档按归档规则移入 `docs/plans/archive/`。
 - 2026-08-13 之前的 S2-2 状态记录（总体方案批准、计划归档说明）见下方历史块。
-- 下一步：`S2-2C Provider/Model 高级选择`：详细设计见 [S2-2C 详细设计](./2026-08-21-s2-2c-provider-model-selection-design.md)，实施计划见 [S2-2C 实施计划](./2026-08-21-s2-2c-provider-model-selection-implementation-plan.md)。**状态：实施中——任务 1-5 已完成（PATCH 合同 / resolver 测试 / 配置 API+保留语义 / LLM 工厂快照构造 / 五条 LLM 主链接线，含两轮复审整改：DB 权威读取、失效预览去重、stub 验收、run-service 派生测试）；任务 6-10（媒体执行绑定 / 目录多候选 readiness / 前端高级区 / e2e / 浏览器验收与收口）待实施**。
+- `S2-2C Provider/Model 高级选择` 已完成（2026-08-22）：设计文档为 [S2-2C 详细设计](./2026-08-21-s2-2c-provider-model-selection-design.md)，实施计划为 [S2-2C 实施计划](./2026-08-21-s2-2c-provider-model-selection-implementation-plan.md)；实施共 10 个低耦合任务全部完成并独立中文提交（配置 API 开放五槽 capabilities / 目录多候选与 readiness 分层 / LLM 与媒体执行端按运行快照冻结模型构造 / 前端高级设置区 / e2e / 浏览器验收脚本与内置浏览器等价验收记录）。收口后两份计划文档按归档规则移入 `docs/plans/archive/`。
+- 下一步：按 `docs/todos/roadmap-todo.md` 与总体路线推进（S2-2 之后的下一个阶段）。
 
 历史块（2026-08-13）：
 
