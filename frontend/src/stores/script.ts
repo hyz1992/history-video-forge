@@ -1,6 +1,6 @@
 import { inject, reactive, readonly, type InjectionKey } from "vue";
 import { apiFetch } from "../utils/api";
-import { quoteSubmitBody, type QuoteSubmitFields } from "./generation-cost";
+import { isPaidQuoteRequiredError, quoteSubmitBody, type QuoteSubmitFields } from "./generation-cost";
 
 import type { ProjectStore } from "./project";
 
@@ -336,6 +336,8 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
         });
       }
     } catch (error) {
+      // S2-2D：付费闸门 409 上抛（不吞进 loadError），交面板报价编排
+      if (isPaidQuoteRequiredError(error)) throw error;
       state.loadError = toErrorMessage(error);
       state.snapshot = {
         project_id: projectId,
