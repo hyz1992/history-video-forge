@@ -5,10 +5,12 @@ import GenerationStrategySettings from "./GenerationStrategySettings.vue";
 import CreativeVoiceSettings from "./CreativeVoiceSettings.vue";
 import CreativeArtStyleSettings from "./CreativeArtStyleSettings.vue";
 import CreativeSubtitleSettings from "./CreativeSubtitleSettings.vue";
+import CapabilitySlotSettings from "./CapabilitySlotSettings.vue";
 import {
   computeConfigInvalidationPreview,
   useGenerationConfigStore,
   type ApiVideoQualityValue,
+  type CapabilitySlotSelectionMap,
   type CreativePreferenceInput,
   type VideoGenerationStrategyValue,
 } from "../../stores/generation-config";
@@ -46,6 +48,8 @@ const draft = reactive({
   artStylePresetId: null as string | null,
   subtitlePresetId: null as string | null,
   subtitleOverrides: {} as Record<string, unknown>,
+  // S2-2C Provider/Model 高级选择（五槽；保存时携带完整五槽）
+  capabilities: {} as CapabilitySlotSelectionMap,
 });
 
 const creativeStore = useCreativePresetsStore();
@@ -75,6 +79,7 @@ function applyServerData() {
   draft.artStylePresetId = data.configuration.creative.art_style_preset_id;
   draft.subtitlePresetId = data.configuration.creative.subtitle_style_preset_id;
   draft.subtitleOverrides = { ...(data.configuration.creative.subtitle_style_overrides ?? {}) };
+  draft.capabilities = { ...(data.configuration.capabilities ?? {}) };
 }
 
 watch(
@@ -122,10 +127,12 @@ const invalidationPreview = computed(() => {
     {
       video: config.value.configuration.video,
       creative: config.value.configuration.creative,
+      capabilities: config.value.configuration.capabilities,
     },
     {
       video: { strategy: draft.strategy, api_quality: draft.apiQuality },
       creative: draftCreative(),
+      capabilities: draft.capabilities,
     },
   );
 });
@@ -134,6 +141,7 @@ const previewStageLabels: Record<string, string> = {
   storyboard_route_resolution: "分镜路线解析",
   asset_planning: "资产规划",
   assets: "资产生成",
+  llm_generation: "LLM 生成（选题/文案/分镜/资产规划/发布）",
   quote: "报价",
   none: "无",
 };
@@ -152,6 +160,7 @@ async function save() {
     video: { strategy: draft.strategy, api_quality: draft.apiQuality },
     budgetMicros: draft.budgetMicros,
     creative: draftCreative(),
+    capabilities: draft.capabilities,
   });
   if (!result.ok) {
     if (!result.conflict) {
@@ -347,6 +356,16 @@ async function confirmPreview() {
           />
         </section>
 
+        <section class="project-capability-section" data-testid="project-capability-settings">
+          <h4 class="project-capability-title">高级设置：Provider/Model 选择</h4>
+          <CapabilitySlotSettings
+            v-model="draft.capabilities"
+            :entries="store.state.capabilities"
+            :disabled="configState?.saving"
+            test-id-prefix="project-"
+          />
+        </section>
+
         <section
           v-if="invalidationPreview"
           class="project-invalidation"
@@ -503,6 +522,21 @@ async function confirmPreview() {
   flex-direction: column;
   gap: 12px;
   margin-top: 4px;
+}
+
+.project-capability-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid rgba(201, 162, 39, 0.14);
+  padding-top: 14px;
+}
+
+.project-capability-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: #d8d0c7;
 }
 
 .preview-quote-text {

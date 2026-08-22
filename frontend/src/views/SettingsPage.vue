@@ -6,9 +6,11 @@ import GenerationStrategySettings from "../components/settings/GenerationStrateg
 import CreativeVoiceSettings from "../components/settings/CreativeVoiceSettings.vue";
 import CreativeArtStyleSettings from "../components/settings/CreativeArtStyleSettings.vue";
 import CreativeSubtitleSettings from "../components/settings/CreativeSubtitleSettings.vue";
+import CapabilitySlotSettings from "../components/settings/CapabilitySlotSettings.vue";
 import {
   useGenerationConfigStore,
   type ApiVideoQualityValue,
+  type CapabilitySlotSelectionMap,
   type CreativePreferenceInput,
   type VideoGenerationStrategyValue,
 } from "../stores/generation-config";
@@ -31,6 +33,8 @@ const draft = reactive({
   artStylePresetId: null as string | null,
   subtitlePresetId: null as string | null,
   subtitleOverrides: {} as Record<string, unknown>,
+  // S2-2C Provider/Model 高级选择（五槽；保存时携带完整五槽）
+  capabilities: {} as CapabilitySlotSelectionMap,
 });
 
 const creativeStore = useCreativePresetsStore();
@@ -56,6 +60,7 @@ function applyServerData() {
   draft.artStylePresetId = data.configuration.creative.art_style_preset_id;
   draft.subtitlePresetId = data.configuration.creative.subtitle_style_preset_id;
   draft.subtitleOverrides = { ...(data.configuration.creative.subtitle_style_overrides ?? {}) };
+  draft.capabilities = { ...(data.configuration.capabilities ?? {}) };
 }
 
 onMounted(async () => {
@@ -83,26 +88,6 @@ const loadFailed = computed(
   () => store.state.userPreference.error !== null && store.state.userPreference.data === null,
 );
 
-const capabilityGroups = computed(() => {
-  const labels: Record<string, string> = {
-    "llm.smart": "文案智脑（自动）",
-    "llm.flash": "快速模型（自动）",
-    "image.generate": "分镜图生成（自动）",
-    "video.image_to_video": "分镜视频生成（自动）",
-    "tts.synthesize": "口播配音（自动）",
-  };
-  const groups = new Map<string, { label: string; models: string[] }>();
-  for (const entry of store.state.capabilities) {
-    const group = groups.get(entry.capability) ?? {
-      label: labels[entry.capability] ?? `${entry.capability}（自动）`,
-      models: [],
-    };
-    group.models.push(entry.display_name);
-    groups.set(entry.capability, group);
-  }
-  return [...groups.values()];
-});
-
 async function save() {
   saveError.value = null;
   if (budgetInvalid.value) {
@@ -113,6 +98,7 @@ async function save() {
     video: { strategy: draft.strategy, api_quality: draft.apiQuality },
     budgetMicros: draft.budgetMicros,
     creative: draftCreative(),
+    capabilities: draft.capabilities,
   });
   if (!result.ok && !result.conflict) {
     saveError.value = "保存失败，请稍后重试。";
@@ -189,15 +175,16 @@ function goBack() {
         </div>
 
         <section class="capability-section">
-          <h3 class="capability-title">当前平台可用模型（只读）</h3>
-          <p class="capability-hint">生成任务当前使用「自动」模式，由平台按能力目录自动选择；普通用户暂不支持指定具体模型。</p>
-          <div v-if="capabilityGroups.length > 0" class="capability-summary" data-testid="capability-summary">
-            <div v-for="group in capabilityGroups" :key="group.label" class="capability-group">
-              <span class="capability-group-label">{{ group.label }}</span>
-              <span class="capability-group-models">{{ group.models.join(" / ") }}</span>
-            </div>
-          </div>
-          <p v-else class="capability-empty">当前部署没有已启用的外部模型（本地/演示模式）。</p>
+          <h3 class="capability-title">高级设置：Provider/Model 选择</h3>
+          <p class="capability-hint">
+            选择各生成能力使用的模型：自动 = 平台按能力目录推荐；也可固定到目录中的具体模型（候选随部署目录自动扩展）。
+          </p>
+          <CapabilitySlotSettings
+            v-model="draft.capabilities"
+            :entries="store.state.capabilities"
+            :disabled="store.state.userPreference.saving"
+            data-testid="capability-settings"
+          />
         </section>
       </template>
     </main>

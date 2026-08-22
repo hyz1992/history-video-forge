@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   cnyInputToMicrosString,
+  computeConfigInvalidationPreview,
   createFetchGenerationConfigApi,
   createGenerationConfigStore,
   microsStringToCnyInput,
@@ -317,5 +318,137 @@ describe("generation config store (project config + capabilities)", () => {
 
     expect(store.state.capabilities.length).toBe(1);
     expect(store.state.capabilities[0]?.availability).toBe("enabled");
+  });
+});
+
+describe("S2-2C capabilities PATCH 与失效预览（任务 8）", () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function createMockApi(): GenerationConfigApi & {
+    getProjectConfig: ReturnType<typeof vi.fn>;
+    patchProjectConfig: ReturnType<typeof vi.fn>;
+    listCapabilities: ReturnType<typeof vi.fn>;
+  } {
+    return {
+      getUserPreference: vi.fn(),
+      patchUserPreference: vi.fn(),
+      getProjectConfig: vi.fn(),
+      patchProjectConfig: vi.fn(),
+      listCapabilities: vi.fn(),
+    };
+  }
+
+  it("saveUserPreference 携带 capabilities 段（用户偏好入口）", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, DEFAULT_PREFERENCE));
+    const api = createFetchGenerationConfigApi();
+    const store = createGenerationConfigStore(api);
+    await store.loadUserPreference();
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(200, { ...DEFAULT_PREFERENCE, revision: 2, source: "stored" }),
+    );
+    const result = await store.saveUserPreference({
+      video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
+      budgetMicros: null,
+      capabilities: {
+        "llm.smart": { mode: "fixed", provider_model_id: "llm.smart.deepseek.deepseek-v4-pro" },
+        "llm.flash": { mode: "auto" },
+        "image.generate": { mode: "auto" },
+        "video.image_to_video": { mode: "auto" },
+        "tts.synthesize": { mode: "auto" },
+      },
+    });
+    expect(result.ok).toBe(true);
+    const [, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+    expect(body.capabilities).toEqual({
+      "llm.smart": { mode: "fixed", provider_model_id: "llm.smart.deepseek.deepseek-v4-pro" },
+      "llm.flash": { mode: "auto" },
+      "image.generate": { mode: "auto" },
+      "video.image_to_video": { mode: "auto" },
+      "tts.synthesize": { mode: "auto" },
+    });
+  });
+
+  it("saveProjectConfig 携带 capabilities 段（项目配置入口）", async () => {
+    const api = createMockApi();
+    api.getProjectConfig.mockResolvedValue({
+      source: "stored",
+      revision: 3,
+      configuration: DEFAULT_PREFERENCE.configuration,
+      updated_at: "2026-08-20T10:00:00.000Z",
+      source_user_preference_revision: 2,
+      diff_from_user_default: null,
+      invalidation_preview: { affected_stages: ["none"], note: "一致" },
+    });
+    api.patchProjectConfig.mockResolvedValue({
+      source: "stored",
+      revision: 4,
+      configuration: DEFAULT_PREFERENCE.configuration,
+      updated_at: "2026-08-20T10:00:00.000Z",
+      source_user_preference_revision: 2,
+      diff_from_user_default: null,
+      invalidation_preview: { affected_stages: ["none"], note: "一致" },
+    });
+    const store = createGenerationConfigStore(api);
+    await store.loadProjectConfig("proj-1");
+
+    const result = await store.saveProjectConfig("proj-1", {
+      video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
+      budgetMicros: null,
+      capabilities: { "tts.synthesize": { mode: "fixed", provider_model_id: "tts.synthesize.dashscope.cn-beijing.custom" } },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(api.patchProjectConfig).toHaveBeenCalledWith(
+      "proj-1",
+      expect.objectContaining({
+        capabilities: { "tts.synthesize": { mode: "fixed", provider_model_id: "tts.synthesize.dashscope.cn-beijing.custom" } },
+      }),
+    );
+  });
+
+  it("computeConfigInvalidationPreview：capabilities 变更映射（llm→llm_generation；image→asset_planning+assets；video/tts→assets）", () => {
+    const current = {
+      video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
+      creative: { voice_profile_id: null, art_style_preset_id: null, subtitle_style_preset_id: null, subtitle_style_overrides: {} },
+      capabilities: {
+        "llm.smart": { mode: "auto" },
+        "llm.flash": { mode: "auto" },
+        "image.generate": { mode: "auto" },
+        "video.image_to_video": { mode: "auto" },
+        "tts.synthesize": { mode: "auto" },
+      },
+    };
+    const baseDraft = { video: current.video, creative: current.creative };
+    const fixed = (slot: string) => ({
+      ...baseDraft,
+      capabilities: { ...current.capabilities, [slot]: { mode: "fixed" as const, provider_model_id: "catalog-id" } },
+    });
+
+    expect(computeConfigInvalidationPreview(current, fixed("llm.smart")).affected_stages).toEqual(["llm_generation"]);
+    expect(computeConfigInvalidationPreview(current, fixed("llm.flash")).affected_stages).toEqual(["llm_generation"]);
+    expect(
+      computeConfigInvalidationPreview(current, fixed("image.generate")).affected_stages.sort(),
+    ).toEqual(["asset_planning", "assets"]);
+    expect(computeConfigInvalidationPreview(current, fixed("video.image_to_video")).affected_stages).toEqual(["assets"]);
+    expect(computeConfigInvalidationPreview(current, fixed("tts.synthesize")).affected_stages).toEqual(["assets"]);
+    // 无 capabilities 变化 → 不出现（视频/创作均未变 → none）
+    expect(computeConfigInvalidationPreview(current, baseDraft).affected_stages).toEqual(["none"]);
+    // capabilities 缺省（旧调用方）→ 不产生 capabilities 阶段（video 变化仍正常反映）
+    const videoOnly = computeConfigInvalidationPreview(current, {
+      video: { strategy: "all_remotion", api_quality: "standard_720p" },
+      creative: current.creative,
+    });
+    expect(videoOnly.affected_stages).toEqual(["storyboard_route_resolution", "asset_planning"]);
   });
 });

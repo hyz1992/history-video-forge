@@ -208,6 +208,7 @@ describe("SettingsPage（用户默认设置）", () => {
     await wrapper.find('[data-testid="save-preference"]').trigger("click");
     await flushPromises();
 
+    // S2-2C：保存调用携带完整五槽 capabilities（详细断言见 capability-slot-settings-ui.spec.ts）
     expect(store.saveUserPreference).toHaveBeenCalledWith({
       video: { strategy: "all_api_video", api_quality: "standard_720p" },
       budgetMicros: "12340000",
@@ -217,18 +218,26 @@ describe("SettingsPage（用户默认设置）", () => {
         subtitle_style_preset_id: null,
         subtitle_style_overrides: {},
       },
+      capabilities: {
+        "llm.smart": { mode: "auto" },
+        "llm.flash": { mode: "auto" },
+        "image.generate": { mode: "auto" },
+        "video.image_to_video": { mode: "auto" },
+        "tts.synthesize": { mode: "auto" },
+      },
     });
   });
 
-  it("能力摘要只显示自动/真实 enabled 项，不含凭据或环境变量", async () => {
+  it("高级设置区渲染五槽与真实 enabled 候选，不含凭据或环境变量（S2-2C 取代只读摘要）", async () => {
     const store = createMockStore();
     const wrapper = mountSettings(store);
     await flushPromises();
 
-    const summary = wrapper.find('[data-testid="capability-summary"]');
-    expect(summary.exists()).toBe(true);
-    expect(summary.text()).toContain("自动");
-    expect(summary.text()).toContain("通义万相 文生图");
+    expect(wrapper.text()).toContain("高级设置：Provider/Model 选择");
+    expect(wrapper.find('[data-testid="cap-slot-llm.smart"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="cap-slot-tts.synthesize"]').exists()).toBe(true);
+    // 候选只来自目录 enabled 项（fake provider 不展示）
+    expect(wrapper.text()).toContain("通义万相 文生图");
 
     const html = wrapper.html();
     expect(html).not.toContain("api_key");
@@ -463,6 +472,13 @@ describe("ProjectGenerationSettings（项目设置）", () => {
         art_style_preset_id: null,
         subtitle_style_preset_id: null,
         subtitle_style_overrides: {},
+      },
+      capabilities: {
+        "llm.smart": { mode: "auto" },
+        "llm.flash": { mode: "auto" },
+        "image.generate": { mode: "auto" },
+        "video.image_to_video": { mode: "auto" },
+        "tts.synthesize": { mode: "auto" },
       },
     });
   });
