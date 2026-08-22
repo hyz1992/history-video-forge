@@ -10,6 +10,7 @@ import type {
   AssetExecutionOptions,
   AssetManifest,
   AssetPlan,
+  ResolvedCapabilityMap,
   ResolvedGenerationConfigurationV1,
 } from "../../../../shared/src/index.js";
 import {
@@ -26,7 +27,7 @@ import { buildInitialAssetManifest } from "./assets-manifest-builder";
 import { validateAssetsManifest } from "./assets-local-validator";
 import { createAssetProviderRegistry } from "./assets-provider-registry.js";
 import type { AssetProviderAdapter } from "./assets-provider-adapter.js";
-import { checkProviderDispatchGate } from "../generation-cost/provider-dispatch-gate.js";
+import { checkProviderDispatchGate, type PaidMediaCapability } from "../generation-cost/provider-dispatch-gate.js";
 import { resolveDashscopeDeploymentScope } from "../generation-cost/pricing-catalog.seed.js";
 import { executeAssetManifest } from "./assets-execution-engine.js";
 import { createFakeTtsProvider } from "./providers/fake-tts-provider.js";
@@ -95,6 +96,12 @@ export interface RunAssetsGenerationInput {
     storyboardRecordId?: string;
     resolved: ResolvedGenerationConfigurationV1;
   };
+  /**
+   * S2-2C 任务 6（§6.2）：运行快照冻结的 resolved_capabilities（只读引用）。
+   * 提供时 buildProviderRegistry 按快照 model 构造 tts/image/video adapter
+   * （auto/fixed 一律）；缺省（免 quote 本地路径）→ env 模型（现状）。
+   */
+  resolvedCapabilities?: ResolvedCapabilityMap;
 }
 
 /**
@@ -410,7 +417,10 @@ function readOptionalDashscopeBaseUrl(value: string | undefined): string | undef
 
 // S2-2A 任务 7 二次重开（codex P1-A）：导出供 gate 相关测试直接构造 registry。
 // 真实 DashScope adapter 注册前必须通过权威目录 gate。
-export function buildProviderRegistry(input: { db: DbClient }) {
+export function buildProviderRegistry(input: {
+  db: DbClient;
+  resolvedCapabilities?: ResolvedCapabilityMap;
+}) {
   // S2-2A 任务 6：provider 授权只来自后端 env（API key 存在时启用真实 provider），
   // 客户端不得指定 provider_mode / model / api key。
   const providerMode: AssetsProviderMode | undefined =
@@ -423,6 +433,32 @@ export function buildProviderRegistry(input: { db: DbClient }) {
     // 不 fetch、不建 provider job（视频走策略状态机，其余任务跳过）。
     // 目录由启动 bootstrap 按当前环境物化：demo/test、模型失配、区域未知、
     // 凭据缺失都会在此 fail-closed；目录为空（bootstrap 未运行）同样拒绝。
+    // S2-2C 任务 6（§6.2）：resolvedCapabilities 提供时 tts/image/video 一律按
+    // 快照冻结的 model_id 构造（auto/fixed 同源，mode 只说明选择来源）；槽位
+    // 缺失或 provider_key 非 dashscope → 该 adapter 不注册（no-adapter
+    // fail-closed，输出公开原因日志）；resolved 缺省（免 quote 本地路径）→
+    // env 模型（现状回归）。
+    const snapshotMediaModel = (
+      capability: PaidMediaCapability,
+      envModel: string,
+    ): string | null => {
+      if (input.resolvedCapabilities === undefined) return envModel;
+      const slot = input.resolvedCapabilities[capability];
+      if (!slot) {
+        console.warn(
+          `[assets-snapshot-binding] capability ${capability} 未在运行快照中解析，禁止注册真实 adapter（快照损坏或合同变更）`,
+        );
+        return null;
+      }
+      if (slot.provider_key !== "dashscope") {
+        console.warn(
+          `[assets-snapshot-binding] capability ${capability} 快照 provider (${slot.provider_key}) 不是 dashscope，该 adapter 不注册`,
+        );
+        return null;
+      }
+      return slot.model_id;
+    };
+
     const adapters: AssetProviderAdapter[] = [
       createLocalSubtitleProvider({
         dashscopeApiKey: dashscope.apiKey,
@@ -433,68 +469,77 @@ export function buildProviderRegistry(input: { db: DbClient }) {
       createLocalBgmProvider(input.db),
     ];
 
-    const gateTts = checkProviderDispatchGate(input.db, {
-      capability: "tts.synthesize",
-      providerKey: "dashscope",
-      modelId: dashscope.ttsModel,
-      deploymentScope: resolveDashscopeDeploymentScope(dashscope.baseUrl),
-    });
-    if (gateTts.allowed) {
-      adapters.unshift(
-        createDashscopeTtsProvider({
-          apiKey: dashscope.apiKey,
-          baseUrl: dashscope.baseUrl,
-          model: dashscope.ttsModel,
-          format: dashscope.ttsFormat,
-          sampleRate: dashscope.ttsSampleRate,
-          db: input.db,
-        }),
-      );
-    } else {
-      warnDispatchGateBlocked("tts.synthesize", gateTts);
+    const ttsModel = snapshotMediaModel("tts.synthesize", dashscope.ttsModel);
+    if (ttsModel !== null) {
+      const gateTts = checkProviderDispatchGate(input.db, {
+        capability: "tts.synthesize",
+        providerKey: "dashscope",
+        modelId: ttsModel,
+        deploymentScope: resolveDashscopeDeploymentScope(dashscope.baseUrl),
+      });
+      if (gateTts.allowed) {
+        adapters.unshift(
+          createDashscopeTtsProvider({
+            apiKey: dashscope.apiKey,
+            baseUrl: dashscope.baseUrl,
+            model: ttsModel,
+            format: dashscope.ttsFormat,
+            sampleRate: dashscope.ttsSampleRate,
+            db: input.db,
+          }),
+        );
+      } else {
+        warnDispatchGateBlocked("tts.synthesize", gateTts);
+      }
     }
 
-    const gateImage = checkProviderDispatchGate(input.db, {
-      capability: "image.generate",
-      providerKey: "dashscope",
-      modelId: dashscope.imageModel,
-      deploymentScope: resolveDashscopeDeploymentScope(dashscope.baseUrl),
-    });
-    if (gateImage.allowed) {
-      adapters.unshift(
-        createDashscopeImageProvider({
-          apiKey: dashscope.apiKey,
-          baseUrl: dashscope.baseUrl,
-          model: dashscope.imageModel,
-          size: dashscope.imageSize,
-          pollIntervalMs: dashscope.imagePollIntervalMs,
-          maxPollAttempts: dashscope.imageMaxPollAttempts,
-        }),
-      );
-    } else {
-      warnDispatchGateBlocked("image.generate", gateImage);
+    const imageModel = snapshotMediaModel("image.generate", dashscope.imageModel);
+    if (imageModel !== null) {
+      const gateImage = checkProviderDispatchGate(input.db, {
+        capability: "image.generate",
+        providerKey: "dashscope",
+        modelId: imageModel,
+        deploymentScope: resolveDashscopeDeploymentScope(dashscope.baseUrl),
+      });
+      if (gateImage.allowed) {
+        adapters.unshift(
+          createDashscopeImageProvider({
+            apiKey: dashscope.apiKey,
+            baseUrl: dashscope.baseUrl,
+            model: imageModel,
+            size: dashscope.imageSize,
+            pollIntervalMs: dashscope.imagePollIntervalMs,
+            maxPollAttempts: dashscope.imageMaxPollAttempts,
+          }),
+        );
+      } else {
+        warnDispatchGateBlocked("image.generate", gateImage);
+      }
     }
 
-    const gateVideo = checkProviderDispatchGate(input.db, {
-      capability: "video.image_to_video",
-      providerKey: "dashscope",
-      modelId: dashscope.imageToVideoModel,
-      deploymentScope: resolveDashscopeDeploymentScope(dashscope.baseUrl),
-    });
-    if (gateVideo.allowed) {
-      adapters.unshift(
-        createDashscopeImageToVideoProvider({
-          apiKey: dashscope.apiKey,
-          baseUrl: dashscope.baseUrl,
-          model: dashscope.imageToVideoModel,
-          resolution: dashscope.imageToVideoResolution,
-          durationSec: dashscope.imageToVideoDurationSec,
-          pollIntervalMs: dashscope.imageToVideoPollIntervalMs,
-          maxPollAttempts: dashscope.imageToVideoMaxPollAttempts,
-        }),
-      );
-    } else {
-      warnDispatchGateBlocked("video.image_to_video", gateVideo);
+    const videoModel = snapshotMediaModel("video.image_to_video", dashscope.imageToVideoModel);
+    if (videoModel !== null) {
+      const gateVideo = checkProviderDispatchGate(input.db, {
+        capability: "video.image_to_video",
+        providerKey: "dashscope",
+        modelId: videoModel,
+        deploymentScope: resolveDashscopeDeploymentScope(dashscope.baseUrl),
+      });
+      if (gateVideo.allowed) {
+        adapters.unshift(
+          createDashscopeImageToVideoProvider({
+            apiKey: dashscope.apiKey,
+            baseUrl: dashscope.baseUrl,
+            model: videoModel,
+            resolution: dashscope.imageToVideoResolution,
+            durationSec: dashscope.imageToVideoDurationSec,
+            pollIntervalMs: dashscope.imageToVideoPollIntervalMs,
+            maxPollAttempts: dashscope.imageToVideoMaxPollAttempts,
+          }),
+        );
+      } else {
+        warnDispatchGateBlocked("video.image_to_video", gateVideo);
+      }
     }
 
     return createAssetProviderRegistry(adapters);
@@ -1043,7 +1088,10 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   if (executionOptions.execution_mode === "dry_run") {
     manifest.artifacts = [];
   } else if (executionOptions.execution_mode === "auto_available") {
-    const registry = buildProviderRegistry({ db });
+    const registry = buildProviderRegistry({
+      db,
+      resolvedCapabilities: input.resolvedCapabilities,
+    });
 
     const tempManifestRecord = await saveAssetManifestRecord(db, {
       projectId: project.id,
@@ -1977,6 +2025,19 @@ export async function acceptArtifact(input: AcceptArtifactInput) {
 // ─── GenerationRun dispatcher handler（S2-2A 任务 8） ────────────────────────
 
 /**
+ * snapshot 不可用（数据异常）的统一 fail-closed 结局（与 LLM handler
+ * SNAPSHOT_MISSING_OUTCOME 同一模式）。当前实现只查内存镜像、缺失时
+ * boundContext=undefined 继续执行属既有漏洞（外部审查 P1 整改，S2-2C 收口）。
+ */
+const SNAPSHOT_MISSING_OUTCOME: import("../generation-run/generation-run-dispatcher.js").DispatchOutcome =
+  {
+    status: "failed",
+    reason_code: "dispatch_snapshot_missing",
+    message:
+      "run 的配置快照不可用（内存镜像与数据库均缺失），拒绝派发——禁止无快照执行媒体生成或回退 env 模型",
+  };
+
+/**
  * assets.generate 的 dispatcher handler。
  *
  * 从 run.dispatchPayloadJson 恢复执行输入（提交时持久化的最小非敏感 payload；
@@ -1989,7 +2050,8 @@ export async function acceptArtifact(input: AcceptArtifactInput) {
  * needs_reconciliation 细化在任务 9A 接入。
  */
 export function createAssetsDispatchHandler(): import("../generation-run/generation-run-dispatcher.js").GenerationRunDispatchHandler {
-  return async (run, { db, project }) => {
+  return async (run, context) => {
+    const { db, project, repository } = context;
     const payload = run.dispatchPayloadJson as {
       voice_profile_id?: string;
       execution_mode?: string;
@@ -1999,19 +2061,24 @@ export function createAssetsDispatchHandler(): import("../generation-run/generat
       bound_asset_plan_record_id?: string;
       bound_storyboard_record_id?: string;
     };
+    // S2-2C 任务 6（复审整改 P1）：与 LLM handler 等价的快照权威——内存镜像
+    // 缺失时经 repository 以数据库为权威加载（跨实例冷恢复）；内存与 DB 均
+    // 缺失 → dispatch_snapshot_missing 拒绝派发，禁止无快照执行/回退 env。
+    const inMemorySnapshot = db.runConfigurationSnapshots.get(run.runConfigurationSnapshotId);
+    const snapshot =
+      inMemorySnapshot ?? (await repository.getSnapshotById(run.runConfigurationSnapshotId));
+    if (!snapshot) return SNAPSHOT_MISSING_OUTCOME;
+    const resolved = snapshot.resolvedConfigurationJson as unknown as ResolvedGenerationConfigurationV1;
     // 9A 步骤 2（终审 I-A）：执行绑定授权身份——plan/storyboard 用提交时
     // 绑定的记录，视频策略与路线用快照解析结果（授权与执行同源）。
-    const snapshot = db.runConfigurationSnapshots.get(run.runConfigurationSnapshotId);
-    const boundContext = snapshot
-      ? {
-          assetPlanRecordId: payload.bound_asset_plan_record_id,
-          storyboardRecordId: payload.bound_storyboard_record_id,
-          resolved: snapshot.resolvedConfigurationJson as unknown as ResolvedGenerationConfigurationV1,
-        }
-      : undefined;
+    const boundContext = {
+      assetPlanRecordId: payload.bound_asset_plan_record_id,
+      storyboardRecordId: payload.bound_storyboard_record_id,
+      resolved,
+    };
     // S2-2B（详细设计 §6.2）：快照是音色唯一权威——fixed 用指定档案；
     // auto 传空串触发 intent 匹配。客户端 payload.voice_profile_id 已废弃。
-    const resolvedVoice = boundContext?.resolved.resolved_creative.voice;
+    const resolvedVoice = boundContext.resolved.resolved_creative.voice;
     const voiceProfileId =
       resolvedVoice && resolvedVoice.mode === "fixed" && resolvedVoice.voice_profile_id
         ? resolvedVoice.voice_profile_id
@@ -2019,7 +2086,7 @@ export function createAssetsDispatchHandler(): import("../generation-run/generat
     // S2-2B（详细设计 §8）：字幕样式同样来自快照（fixed → 最终样式；
     // none → null，执行端用系统默认）。
     const resolvedSubtitleStyle =
-      boundContext?.resolved.resolved_creative.subtitle.mode === "fixed"
+      boundContext.resolved.resolved_creative.subtitle.mode === "fixed"
         ? boundContext.resolved.resolved_creative.subtitle.resolved_style
         : null;
     const response = await runAssetsGeneration({
@@ -2035,6 +2102,7 @@ export function createAssetsDispatchHandler(): import("../generation-run/generat
           : undefined,
       generationRunId: run.id,
       boundContext,
+      resolvedCapabilities: boundContext.resolved.resolved_capabilities,
       resolvedSubtitleStyle,
     });
     if (response.statusCode >= 200 && response.statusCode < 300) {

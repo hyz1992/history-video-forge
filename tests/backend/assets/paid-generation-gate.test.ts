@@ -572,7 +572,11 @@ describe("I-A 收口：执行绑定授权 plan/storyboard 身份（步骤0终审
     // 直接以提交 run 派发（同步 dispatcher 语义）：handler 从快照构建 boundContext
     const { createAssetsDispatchHandler } = await import("../../../backend/src/modules/assets/assets-run.service.js");
     const handler = createAssetsDispatchHandler();
-    const outcome = await handler(submit.value.run, { db: app.db, project });
+    const outcome = await handler(submit.value.run, {
+      db: app.db,
+      project,
+      repository: createGenerationRunRepository(app.db),
+    });
     // planB 只有 image 任务（无 tts/无 subtitle）：manifest 校验因占位未解析
     // 而 blocked（stale_assets_source）——这是"按绑定 planB 执行"的间接证明；
     // 关键证据是 provider job 集：若误按内存指针 planA 执行会产生 tts_001 job
