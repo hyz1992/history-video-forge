@@ -49,7 +49,9 @@ let createGenerationCostQuote: typeof import("../../backend/src/modules/generati
 let createGenerationRunRepository: typeof import("../../backend/src/modules/generation-run/generation-run.repository.js").createGenerationRunRepository;
 let createOrRestoreGenerationRun: typeof import("../../backend/src/modules/generation-run/generation-run.service.js").createOrRestoreGenerationRun;
 let LLM_MODEL_CANDIDATES_V1: import("../../backend/src/modules/generation-cost/llm-model-catalog.js").LlmModelCandidate[];
-let GenerationCapabilityReadinessInput: import("../../backend/src/modules/generation-cost/generation-capability-readiness.js").GenerationCapabilityReadinessInput;
+/** 纯类型别名（interface 无运行时导出，禁止动态 import 赋值）。 */
+type GenerationCapabilityReadinessInput =
+  import("../../backend/src/modules/generation-cost/generation-capability-readiness.js").GenerationCapabilityReadinessInput;
 let buildTestAuth: typeof import("./auth/test-utils.js").buildTestAuth;
 let buildQuotableReadinessInput: typeof import("./cost/quote-test-context.js").buildQuotableReadinessInput;
 let REAL_TIER_INPUT: import("./cost/quote-test-context.js").LlmTierSeedInput;
@@ -86,7 +88,6 @@ beforeAll(async () => {
   createGenerationRunRepository = (await import("../../backend/src/modules/generation-run/generation-run.repository.js")).createGenerationRunRepository;
   createOrRestoreGenerationRun = (await import("../../backend/src/modules/generation-run/generation-run.service.js")).createOrRestoreGenerationRun;
   LLM_MODEL_CANDIDATES_V1 = (await import("../../backend/src/modules/generation-cost/llm-model-catalog.js")).LLM_MODEL_CANDIDATES_V1;
-  GenerationCapabilityReadinessInput = (await import("../../backend/src/modules/generation-cost/generation-capability-readiness.js")).GenerationCapabilityReadinessInput;
   buildTestAuth = (await import("./auth/test-utils.js")).buildTestAuth;
   auth = buildTestAuth({ userId: "owner-1" });
   const context = await import("./cost/quote-test-context.js");

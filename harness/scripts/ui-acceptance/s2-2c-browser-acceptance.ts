@@ -249,13 +249,19 @@ async function verifyProjectSettingsCapabilityArea(page: Page): Promise<void> {
   const projectSlots = await page.locator('[data-testid^="project-cap-slot-"]').count();
   record("project: 高级区五槽渲染", projectSlots === 5, `count=${projectSlots}`);
 
-  // 固定 smart → 失效预览出现 LLM 生成阶段
-  await page.click('[data-testid="project-cap-candidate-llm.smart-llm.smart.zhipu.glm-4"]');
+  // 新项目继承用户默认的 fixed 选择（设置页已固定智谱 GLM-4）→ 先断言继承值
+  const inheritedChecked = await page.locator(
+    '[data-testid="project-cap-candidate-llm.smart-llm.smart.zhipu.glm-4"]',
+  ).isChecked();
+  record("project: 继承用户默认 fixed（智谱 GLM-4）", inheritedChecked);
+
+  // 改选另一候选（DeepSeek V4 Pro）→ 产生配置变化 → 失效预览出现 LLM 生成阶段
+  await page.click('[data-testid="project-cap-candidate-llm.smart-llm.smart.deepseek.deepseek-v4-pro"]');
   await page.waitForSelector('[data-testid="project-invalidation-preview"]', { timeout: 10000 });
   const previewText = await page
     .locator('[data-testid="project-invalidation-preview"]')
     .innerText();
-  record("project: 固定 smart 后失效预览含 LLM 生成", previewText.includes("LLM 生成"), previewText.slice(0, 80));
+  record("project: 改选候选后失效预览含 LLM 生成", previewText.includes("LLM 生成"), previewText.slice(0, 80));
 }
 
 // --- infra（与 s2-2b 脚本同构） ----------------------------------------------
