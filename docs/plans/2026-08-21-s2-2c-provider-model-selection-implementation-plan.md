@@ -244,7 +244,7 @@ npx vitest run --configLoader runner <该 service 相关测试文件>
 - 修改：`tests/backend/assets/...`（执行绑定测试，沿用既有 fake adapter 断言模式）
 - 新建：`tests/backend/assets/media-resolved-model-binding.test.ts`
 
-- [ ] **步骤 1：先写失败测试**
+- [x] **步骤 1：先写失败测试**
 
 覆盖（详细设计 §6.2）：
 
@@ -265,11 +265,11 @@ npx vitest run --configLoader runner tests/backend/assets/media-resolved-model-b
 
 预期：失败，buildProviderRegistry 尚无 resolvedCapabilities 参数、assets handler 尚无 DB 恢复与缺失拒绝。
 
-- [ ] **步骤 2：实现**
+- [x] **步骤 2：实现**
 
 按 §6.2。注意：env 的 baseUrl/apiKey/轮询参数不变，只替换 model；`provider_key !== "dashscope"` 时该 adapter 不注册并输出公开原因日志；免 quote 本地路径（无快照、不走 dispatcher 的旧直接调用入口）保持 env。**`createAssetsDispatchHandler` 与 LLM handler 等价**：内存缺失 → repository 加载；均缺失 → `dispatch_snapshot_missing`（复用 LLM 侧 `SNAPSHOT_MISSING_OUTCOME` 模式）。
 
-- [ ] **步骤 3：运行最小验证并提交**
+- [x] **步骤 3：运行最小验证并提交**
 
 ```powershell
 npx vitest run --configLoader runner tests/backend/assets/media-resolved-model-binding.test.ts
