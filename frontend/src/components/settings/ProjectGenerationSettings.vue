@@ -91,7 +91,12 @@ watch(
     saveError.value = null;
     budgetInvalid.value = false;
     await store.loadProjectConfig(projectId);
-    await Promise.all([creativeStore.loadCreativePresets(), creativeStore.loadVoiceProfiles()]);
+    await Promise.all([
+      creativeStore.loadCreativePresets(),
+      creativeStore.loadVoiceProfiles(),
+      // S2-2C：高级设置区候选列表与目录同源（store 统一加载）
+      store.loadCapabilities(),
+    ]);
     applyServerData();
     loaded.value = true;
   },

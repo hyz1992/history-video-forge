@@ -1150,4 +1150,8 @@ Renderer v1 字段只描述 `ComposeTimeline` 之后的渲染与导出结果，�
 - 画风/字幕 preset 注册表（`shared/src/creative/`）：`preset_id`（稳定）+ `preset_version`（vN）+ `resolved_params`（结构化输入数据；不含正式 prompt 指令文本）。执行端只消费快照冻结参数，注册表只在解析阶段读取。
 - `VoiceProfile`（Prisma 实体，音色库跨实例权威）：`id/kind/ownerId/visibility(public|private)/providerName/providerVoiceId/providerStatus/targetModel/previewAudioUri/usageCount/lastUsedAt/qualityScore/metadataJson`。preset/system 公共；generated 归创建用户私有；解析/列表/试听同源授权（非可见按不存在处理）。Map 态保留 JSON 写穿持久化（legacy），历史 JSON 一次性导入（无归属字段 → public）。
 - 失效预览扩展：音色 → `assets`；画风 → `asset_planning`；字幕 → `assets`。
+- S2-2C（2026-08-22）：`GenerationConfigurationV1.capabilities` 变为可写——五槽 `{mode:"auto"|"fixed", provider_model_id?}`（provider_model_id = 目录条目 id）。PATCH 缺省 = 保留服务器现值（首次创建全 auto）；参与 `configuration_hash`（fixed/auto 选择变化自动使旧 quote 漂移失效）。
+- `ResolvedGenerationConfigurationV1.resolved_capabilities`：五槽各冻结 `mode/provider_model_id/provider_key/model_id`（auto 同样冻结实际解析结果——执行权威依据）。
+- 目录多候选（无新表）：每槽恰好一个 `active + is_default=true` 默认条目（resolver auto 硬合同）+ 若干非默认候选条目。LLM 候选来自服务端常量 `LLM_MODEL_CANDIDATES_V1`（`providerKey/modelId/displayName/qualityTier/speedTier` 声明式元数据，同一模型跨槽位一致）；媒体候选经 seed 输入 `media.additionalModels` 预留（首版空）。
+- readiness 分层：`llm_tier_mismatch` 只对默认条目（与 tier 解析一致）；非默认条目按 (providerKey, modelId) 属于候选集校验（`llm_candidate_not_declared` 防目录手工改动漂移）；媒体 registeredModels = env 默认 ∪ additionalModels 候选。
 - `voice.preview` operation：quote 计价含 `tts_character`（preview_text）+ 设计请求（missing 档案，无目录单价 → unbounded）；usage 键 `voice-preview:<profileId>`，attempt 0=设计、1=合成。

@@ -640,6 +640,7 @@ Renderer / Export v1 已有第一版持久化记录。它是 `ComposeRecord` 之
 - `user_generation_preferences`：`user_id` 唯一、`schema_version`、`revision`、`configuration_json`、时间戳。
 - `project_generation_configurations`：`project_id` 唯一、`revision`、`source_user_preference_revision`（nullable）、`configuration_json`。
 - `provider_model_catalog`：`id`（stable string PK）、`capability`、`provider_key/model_id/model_version`、`display_name`、`quality_tier/speed_tier`、`parameter_capabilities_json`、`pricing_version/pricing_json`、`status`、`is_default`、时间戳。每个 capability 恰好一个 `active + is_default=true`（readiness 校验）。
+- `provider_model_catalog` 多候选（S2-2C，2026-08-22，无新表/无迁移）：每槽恰好一个 `active + is_default=true` 默认条目 + 非默认候选条目；LLM 候选由 seed（`LLM_MODEL_CANDIDATES_V1`）种入 smart/flash 两槽，与默认重合去重；候选预解析失败（provider 未注册/凭据缺失）不种入。readiness 分层校验：默认条目与 tier 一致；非默认条目属于候选集（`llm_candidate_not_declared` 防漂移）。
 - `storyboard_segment_overrides`：`(storyboard_record_id, segment_id)` 唯一、`project_id`（owner scope）、`strategy_override`（api_video|remotion_motion|null）、`revision`、`updated_by_user_id`。分镜的 AI 适配度字段 `api_video_suitability`（四档）属于不可变 `StoryboardPlan` 的 segment（不写回 override）；最终路线由解析器按策略 × 适配度矩阵决定。
 - `generation_cost_quotes`：`operation`、`configuration_hash`、`quote_fingerprint`、`pricing_hash`、`pricing_version_set_json`、`items_json`、`estimated_cost_micros`、`authorization_cost_micros`、`contains_unbounded_item`、`budget_limit_micros`、`over_budget`、`expires_at`、`consumed_at`（BigInt 微元）。
 - `run_configuration_snapshots`：不可变，含 `resolved_configuration_json`、`resolution_trace_json`、quote 绑定字段（成套）。

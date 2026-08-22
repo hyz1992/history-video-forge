@@ -621,13 +621,14 @@ describe("S2-2A e2e：验收清单可独立断言项（任务 12 步骤 1）", (
     }
   });
 
-  it("验收 13：S2-2B/C 在 roadmap 中标记为紧接后续（文档检查）", async () => {
+  it("验收 13：S2-2B/C 在 roadmap 中登记完成状态（文档检查）", async () => {
     const roadmap = await import("fs/promises").then((fs) =>
       fs.readFile("docs/todos/roadmap-todo.md", "utf-8"),
     );
     expect(roadmap).toContain("S2-2B");
     expect(roadmap).toContain("S2-2C");
-    // S2-2B/C 标记为紧接 S2-2A 的后续
-    expect(roadmap).toContain("紧接后续");
+    // S2-2B 已完成（2026-08-21）；S2-2C 紧随完成（2026-08-22，含验收/浏览器脚本/未验证标注）
+    expect(roadmap).toContain("S2-2B 创作偏好（音色/画风/字幕）已完成");
+    expect(roadmap).toContain("S2-2C` Provider/Model 高级选择已完成");
   });
 });

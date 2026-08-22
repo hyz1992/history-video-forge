@@ -910,3 +910,20 @@ script 摘要第一版建议至少包含：
 ### 音色执行绑定（快照权威）
 
 - 客户端请求体 `voice_profile_id` 已废弃：提交路径若携带且与快照 `resolved_creative.voice` 不一致 → `422 generation_voice_profile_conflict`（校验先于 quote 消费：quote 未消费、无 snapshot/run、无 provider 调用）；legacy 免 quote 路径忽略客户端值，改由项目配置 creative 解析。执行音色一律取快照（fixed → 指定档案；auto → intent 匹配）。
+
+## S2-2C Provider/Model 高级选择（2026-08-22 已实现）
+
+正式合同见 `shared/src/generation/generation-configuration.schema.ts`（`S2_2C_ConfigPatchRequest`/`S2_2C_ProjectConfigPatchRequest`/`assertS22CScopeConstraints`）与 `shared/src/generation/generation-configuration-resolver.ts`（fixed/auto 解析、`ResolvedCapabilityMapSchema`）。
+
+### 配置扩展（capabilities 可写）
+
+- `PATCH /api/me/generation-preferences` 与 `PATCH /api/projects/:projectId/generation-configuration`：请求体在 B 基础上增加可选 `capabilities` 段——五个槽位（`llm.smart`/`llm.flash`/`image.generate`/`video.image_to_video`/`tts.synthesize`）strict 齐全，每槽 `{mode:"auto"}` 或 `{mode:"fixed", provider_model_id}`（= 目录条目 id）。**缺省 = 保留服务器现值**（首次创建全 auto；旧 A/B 形状请求体零行为变化）；提供时整体替换。scope 越权返回 `400 configuration_invalid_s2_2c_scope`；revision 冲突码与 409 语义不变。
+- `GET /api/generation-capabilities`：返回目录全部 active 条目（含多候选——每槽一个 `is_default=true` 默认 + 非默认候选；stub 部署只有 stub 条目）。DTO 无凭据字段。
+- 失效预览（`invalidation_preview` 与 `diff_from_user_default`）capabilities 映射：`llm.smart`/`llm.flash` → `llm_generation`；`image.generate` → `asset_planning`+`assets`；`video.image_to_video`/`tts.synthesize` → `assets`；无变化不出现。
+- 候选目录：LLM 候选由服务端常量 `LLM_MODEL_CANDIDATES_V1` 声明（deepseek-v4-pro / glm-4，真实在用模型）；bootstrap 预解析（provider 注册 + 凭据健康）失败的候选不种入目录。条目元数据（displayName/qualityTier/speedTier）一律来自候选声明，同一模型跨槽位一致。
+
+### 执行绑定（快照权威，报价-执行-记账同源）
+
+- 执行端（LLM provider 构造、媒体 adapter 构造、dispatch gate、usage 记账）一律消费 `RunConfigurationSnapshot.resolved.resolved_capabilities`；auto/fixed 同源（mode 只说明选择来源）。`createTierAwareProviderFromEnv({ snapshotCapabilities })` 按快照 provider_key+model_id 经 provider registry 构造；`buildProviderRegistry({ resolvedCapabilities })` 按快照 model 构造 tts/image/video adapter（provider_key 非 dashscope → 不注册）。
+- `createAssetsDispatchHandler` 与 LLM handler 等价：内存镜像缺失 → repository 以数据库为权威加载；内存与 DB 均缺失 → `dispatch_snapshot_missing` 拒绝派发（禁止无快照执行/回退 env）。
+- 漂移防护两个时序：提交前配置/目录变化 → 提交重校验 `409 generation_quote_configuration_changed`（capabilities 参与 configuration_hash）；快照创建后变化 → 派发仍按快照模型执行与记账。

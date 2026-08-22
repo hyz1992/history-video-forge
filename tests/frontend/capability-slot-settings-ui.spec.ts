@@ -316,6 +316,8 @@ describe("ProjectGenerationSettings 高级设置区（S2-2C 任务 8）", () => 
     await flushPromises();
 
     expect(wrapper.find('[data-testid="project-cap-slot-llm.smart"]').exists()).toBe(true);
+    // 高级区候选与目录同源：打开对话框即加载 capabilities（真实页面缺陷修复）
+    expect(store.loadCapabilities).toHaveBeenCalled();
 
     // 固定 smart → 失效预览出现 LLM 生成阶段
     await wrapper.find('[data-testid="project-cap-candidate-llm.smart-llm.smart.zhipu.glm-4"]').setValue();
