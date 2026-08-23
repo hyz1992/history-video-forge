@@ -52,6 +52,11 @@ import {
   createPublishStore,
   publishStoreKey,
 } from "./stores/publish";
+import {
+  createFetchGenerationCostApi,
+  createGenerationCostStore,
+  generationCostStoreKey,
+} from "./stores/generation-cost";
 import { initTheme } from "./composables/useTheme";
 import { initDemoMode } from "./composables/useDemoMode";
 import CompetitionNoticeDialog from "./components/common/CompetitionNoticeDialog.vue";
