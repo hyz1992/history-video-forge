@@ -33,7 +33,6 @@ const DEFAULT_PREFERENCE = {
   configuration: {
     schema_version: "generation_configuration_v1",
     video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-    budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
     creative: { voice_profile_id: null, art_style_preset_id: null, subtitle_style_preset_id: null },
     capabilities: {
       "llm.smart": { mode: "auto" },
@@ -45,36 +44,6 @@ const DEFAULT_PREFERENCE = {
   },
   updated_at: "2026-08-20T10:00:00.000Z",
 };
-
-describe("budget micros conversion", () => {
-  it("CNY 输入转换为微元十进制字符串", () => {
-    expect(cnyInputToMicrosString("12.34")).toBe("12340000");
-    expect(cnyInputToMicrosString("0.5")).toBe("500000");
-    expect(cnyInputToMicrosString("0")).toBe("0");
-    expect(cnyInputToMicrosString(" 8 ")).toBe("8000000");
-  });
-
-  it("非法输入返回 null（负数/非数字/超过 6 位小数）", () => {
-    expect(cnyInputToMicrosString("-1")).toBeNull();
-    expect(cnyInputToMicrosString("abc")).toBeNull();
-    expect(cnyInputToMicrosString("1.2345678")).toBeNull();
-    expect(cnyInputToMicrosString("")).toBeNull();
-  });
-
-  it("微元字符串转换为 CNY 展示（截去尾零）", () => {
-    expect(microsStringToCnyInput("12340000")).toBe("12.34");
-    expect(microsStringToCnyInput("500000")).toBe("0.5");
-    expect(microsStringToCnyInput("0")).toBe("0");
-    expect(microsStringToCnyInput(null)).toBe("");
-  });
-
-  it("超大金额不走 Number（微元超出 Number.MAX_SAFE_INTEGER 仍可往返）", () => {
-    const huge = "9007199254740993"; // > MAX_SAFE_INTEGER
-    const cny = microsStringToCnyInput(huge);
-    expect(typeof cny).toBe("string");
-    expect(cnyInputToMicrosString(cny)).toBe(huge);
-  });
-});
 
 describe("generation config store (user preference)", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -98,7 +67,7 @@ describe("generation config store (user preference)", () => {
     expect(store.state.userPreference.loading).toBe(false);
   });
 
-  it("saveUserPreference 携带 expected_revision 并以微元十进制字符串序列化预算", async () => {
+  it("saveUserPreference 携带 expected_revision 且提交体不含预算字段", async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(200, DEFAULT_PREFERENCE));
     const api = createFetchGenerationConfigApi();
     const store = createGenerationConfigStore(api);
@@ -109,7 +78,6 @@ describe("generation config store (user preference)", () => {
     );
     const result = await store.saveUserPreference({
       video: { strategy: "all_api_video", api_quality: "high_1080p" },
-      budgetMicros: "2550000",
     });
 
     expect(result.ok).toBe(true);
@@ -117,9 +85,8 @@ describe("generation config store (user preference)", () => {
     const body = JSON.parse(String(init.body)) as Record<string, unknown>;
     expect(body.expected_revision).toBe(1);
     expect(body.video).toEqual({ strategy: "all_api_video", api_quality: "high_1080p" });
-    expect(body.budget).toEqual({ currency: "CNY", max_paid_cost_micros_per_run: "2550000" });
-    // 提交体不含 creative/capabilities/凭据字段
-    expect(Object.keys(body).sort()).toEqual(["budget", "expected_revision", "video"]);
+    // 提交体不含 budget/creative/capabilities/凭据字段
+    expect(Object.keys(body).sort()).toEqual(["expected_revision", "video"]);
   });
 
   it("409 冲突时置冲突标记并重新加载，不覆盖较新配置", async () => {
@@ -146,7 +113,6 @@ describe("generation config store (user preference)", () => {
 
     const result = await store.saveUserPreference({
       video: { strategy: "all_api_video", api_quality: "standard_720p" },
-      budgetMicros: null,
     });
 
     expect(result.ok).toBe(false);
@@ -172,7 +138,6 @@ describe("generation config store (user preference)", () => {
     );
     const first = await store.saveUserPreference({
       video: { strategy: "all_api_video", api_quality: "standard_720p" },
-      budgetMicros: null,
     });
     expect(first.ok).toBe(false);
     const epochAfterFirst = store.state.userPreference.conflictEpoch;
@@ -196,7 +161,6 @@ describe("generation config store (user preference)", () => {
     );
     const second = await store.saveUserPreference({
       video: { strategy: "all_api_video", api_quality: "standard_720p" },
-      budgetMicros: null,
     });
     expect(second.ok).toBe(false);
     // epoch 递增：watcher 每次冲突都会触发同步
@@ -260,14 +224,12 @@ describe("generation config store (project config + capabilities)", () => {
 
     const result = await store.saveProjectConfig("proj-1", {
       video: { strategy: "prefer_api_video", api_quality: "standard_720p" },
-      budgetMicros: null,
     });
 
     expect(api.patchProjectConfig).toHaveBeenCalledWith("proj-1", {
       expected_revision: 3,
       video: { strategy: "prefer_api_video", api_quality: "standard_720p" },
-      budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-    });
+      });
     expect(result.ok).toBe(false);
     expect(store.state.projectConfigs["proj-1"]?.conflict).toBe(true);
     // 冲突后重新拉取服务器配置
@@ -358,7 +320,6 @@ describe("S2-2C capabilities PATCH 与失效预览（任务 8）", () => {
     );
     const result = await store.saveUserPreference({
       video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-      budgetMicros: null,
       capabilities: {
         "llm.smart": { mode: "fixed", provider_model_id: "llm.smart.deepseek.deepseek-v4-pro" },
         "llm.flash": { mode: "auto" },
@@ -404,7 +365,6 @@ describe("S2-2C capabilities PATCH 与失效预览（任务 8）", () => {
 
     const result = await store.saveProjectConfig("proj-1", {
       video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-      budgetMicros: null,
       capabilities: { "tts.synthesize": { mode: "fixed", provider_model_id: "tts.synthesize.dashscope.cn-beijing.custom" } },
     });
 

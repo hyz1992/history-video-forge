@@ -43,10 +43,6 @@ export interface GenerationConfigurationDto {
     strategy: VideoGenerationStrategyValue;
     api_quality: ApiVideoQualityValue;
   };
-  budget: {
-    currency: "CNY";
-    max_paid_cost_micros_per_run: string | null;
-  };
   creative: {
     voice_profile_id: string | null;
     art_style_preset_id: string | null;
@@ -106,7 +102,6 @@ export interface GenerationConfigPatchInput {
     strategy: VideoGenerationStrategyValue;
     api_quality: ApiVideoQualityValue;
   };
-  budgetMicros: string | null;
   /** S2-2B：创作偏好（音色/画风/字幕）；提供即整体替换，缺省保持服务器现值。 */
   creative?: CreativePreferenceInput;
   /**
@@ -121,7 +116,6 @@ export interface GenerationConfigApi {
   patchUserPreference(request: {
     expected_revision: number;
     video: GenerationConfigPatchInput["video"];
-    budget: { currency: "CNY"; max_paid_cost_micros_per_run: string | null };
     creative?: CreativePreferenceInput;
     capabilities?: CapabilitySlotSelectionMap;
   }): Promise<UserPreferenceDto>;
@@ -131,7 +125,6 @@ export interface GenerationConfigApi {
     request: {
       expected_revision: number;
       video: GenerationConfigPatchInput["video"];
-      budget: { currency: "CNY"; max_paid_cost_micros_per_run: string | null };
       creative?: CreativePreferenceInput;
       capabilities?: CapabilitySlotSelectionMap;
     },
@@ -148,7 +141,6 @@ export function createFetchGenerationConfigApi(baseUrl = ""): GenerationConfigAp
       const body: Record<string, unknown> = {
         expected_revision: request.expected_revision,
         video: request.video,
-        budget: request.budget,
       };
       if (request.creative) body.creative = request.creative;
       if (request.capabilities) body.capabilities = request.capabilities;
@@ -166,7 +158,6 @@ export function createFetchGenerationConfigApi(baseUrl = ""): GenerationConfigAp
       const body: Record<string, unknown> = {
         expected_revision: request.expected_revision,
         video: request.video,
-        budget: request.budget,
       };
       if (request.creative) body.creative = request.creative;
       if (request.capabilities) body.capabilities = request.capabilities;
@@ -401,7 +392,6 @@ export function createGenerationConfigStore(api: GenerationConfigApi): Generatio
       slice.data = await api.patchUserPreference({
         expected_revision: slice.data.revision,
         video: input.video,
-        budget: { currency: "CNY", max_paid_cost_micros_per_run: input.budgetMicros },
         ...(input.creative ? { creative: input.creative } : {}),
         ...(input.capabilities ? { capabilities: input.capabilities } : {}),
       });
@@ -463,7 +453,6 @@ export function createGenerationConfigStore(api: GenerationConfigApi): Generatio
       slice.data = await api.patchProjectConfig(projectId, {
         expected_revision: slice.data.revision,
         video: input.video,
-        budget: { currency: "CNY", max_paid_cost_micros_per_run: input.budgetMicros },
         ...(input.creative ? { creative: input.creative } : {}),
         ...(input.capabilities ? { capabilities: input.capabilities } : {}),
       });

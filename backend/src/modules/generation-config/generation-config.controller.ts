@@ -181,7 +181,6 @@ function parsePatchPayload(
   const p = parseResult.data as {
     expected_revision: number | null;
     video: GenerationConfigurationV1["video"];
-    budget: GenerationConfigurationV1["budget"];
     creative?: CreativePreferences;
     capabilities?: CapabilitySelectionMap;
   };
@@ -207,7 +206,6 @@ function parsePatchPayload(
   const fullConfig: GenerationConfigurationV1 = {
     schema_version: "generation_configuration_v1",
     video: p.video,
-    budget: p.budget,
     creative,
     capabilities,
   };

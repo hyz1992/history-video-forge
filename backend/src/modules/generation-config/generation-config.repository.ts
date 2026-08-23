@@ -537,9 +537,6 @@ function computeConfigDiff(
   if (JSON.stringify(oldConfig.video) !== JSON.stringify(newConfig.video)) {
     diff.video = { from: oldConfig.video, to: newConfig.video };
   }
-  if (JSON.stringify(oldConfig.budget) !== JSON.stringify(newConfig.budget)) {
-    diff.budget = { from: oldConfig.budget, to: newConfig.budget };
-  }
   // S2-2B：creative（音色/画风/字幕）差异进入 diff，供失效预览投影
   if (JSON.stringify(oldConfig.creative) !== JSON.stringify(newConfig.creative)) {
     diff.creative = { from: oldConfig.creative, to: newConfig.creative };

@@ -119,13 +119,6 @@ const RunOverridesSchema = z
       })
       .strict()
       .optional(),
-    budget: z
-      .object({
-        max_paid_cost_micros_per_run:
-          GenerationConfigurationV1Schema.shape.budget.shape.max_paid_cost_micros_per_run.optional(),
-      })
-      .strict()
-      .optional(),
     creative: CreativeRunOverrideSchema.optional(),
   })
   .strict()
@@ -568,12 +561,6 @@ function applyRunOverrides(
     video: {
       strategy: overrides.video?.strategy ?? project.video.strategy,
       api_quality: overrides.video?.api_quality ?? project.video.api_quality,
-    },
-    budget: {
-      currency: "CNY",
-      max_paid_cost_micros_per_run:
-        overrides.budget?.max_paid_cost_micros_per_run ??
-        project.budget.max_paid_cost_micros_per_run,
     },
     creative: applyCreativeRunOverrides(project.creative, overrides.creative),
   };

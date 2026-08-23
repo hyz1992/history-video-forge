@@ -2,8 +2,6 @@
 import { computed } from "vue";
 
 import {
-  cnyInputToMicrosString,
-  microsStringToCnyInput,
   type VideoGenerationStrategyValue,
   type ApiVideoQualityValue,
 } from "../../stores/generation-config";
@@ -17,7 +15,6 @@ import {
 const props = defineProps<{
   strategy: VideoGenerationStrategyValue;
   apiQuality: ApiVideoQualityValue;
-  budgetMicros: string | null;
   disabled?: boolean;
   testIdPrefix?: string;
 }>();
@@ -25,8 +22,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "update:strategy", value: VideoGenerationStrategyValue): void;
   (e: "update:apiQuality", value: ApiVideoQualityValue): void;
-  (e: "update:budgetMicros", value: string | null): void;
-  (e: "update:budgetInvalid", value: boolean): void;
 }>();
 
 const STRATEGY_OPTIONS: Array<{
@@ -61,37 +56,6 @@ const QUALITY_OPTIONS: Array<{ value: ApiVideoQualityValue; label: string }> = [
   { value: "high_1080p", label: "高质量 1080P" },
 ];
 
-function selectUnlimited() {
-  emit("update:budgetMicros", null);
-  emit("update:budgetInvalid", false);
-}
-
-const budgetLimited = computed(() => props.budgetMicros !== null);
-
-function enableBudgetAmount() {
-  if (props.budgetMicros === null) {
-    emit("update:budgetMicros", "0");
-    emit("update:budgetInvalid", false);
-  }
-}
-
-const amountText = computed({
-  get: () => microsStringToCnyInput(props.budgetMicros),
-  set: (text: string) => {
-    if (text.trim() === "") {
-      emit("update:budgetMicros", "0");
-      emit("update:budgetInvalid", false);
-      return;
-    }
-    const micros = cnyInputToMicrosString(text);
-    if (micros === null) {
-      emit("update:budgetInvalid", true);
-      return;
-    }
-    emit("update:budgetMicros", micros);
-    emit("update:budgetInvalid", false);
-  },
-});
 </script>
 
 <template>
@@ -146,46 +110,6 @@ const amountText = computed({
           {{ option.label }}
         </label>
       </div>
-    </section>
-
-    <section class="settings-section">
-      <h4 class="settings-section-title">单次付费预算</h4>
-      <div class="budget-options">
-        <label class="budget-option">
-          <input
-            type="radio"
-            name="budget-mode"
-            :data-testid="`${testIdPrefix ?? ''}budget-unlimited`"
-            :value="true"
-            :checked="budgetMicros === null"
-            :disabled="disabled"
-            @change="selectUnlimited"
-          />
-          不设上限
-        </label>
-        <label class="budget-option">
-          <input
-            type="radio"
-            name="budget-mode"
-            :data-testid="`${testIdPrefix ?? ''}budget-amount-enabled`"
-            :checked="budgetLimited"
-            :disabled="disabled"
-            @change="enableBudgetAmount"
-          />
-          设置金额（元）
-        </label>
-        <input
-          v-if="budgetLimited"
-          v-model="amountText"
-          class="budget-amount-input"
-          type="text"
-          inputmode="decimal"
-          placeholder="如 12.34"
-          :data-testid="`${testIdPrefix ?? ''}budget-amount`"
-          :disabled="disabled"
-        />
-      </div>
-      <p class="settings-hint">预算在每次付费生成前的报价确认时生效；超预算的生成需要你显式授权才会执行。</p>
     </section>
   </div>
 </template>
@@ -269,16 +193,14 @@ const amountText = computed({
   color: #c9a227;
 }
 
-.quality-options,
-.budget-options {
+.quality-options {
   display: flex;
   align-items: center;
   gap: 18px;
   flex-wrap: wrap;
 }
 
-.quality-option,
-.budget-option {
+.quality-option {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -287,19 +209,8 @@ const amountText = computed({
   cursor: pointer;
 }
 
-.quality-option input,
-.budget-option input {
+.quality-option input {
   accent-color: #c9a227;
-}
-
-.budget-amount-input {
-  width: 140px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(201, 162, 39, 0.2);
-  background: rgba(255, 255, 255, 0.03);
-  color: #f5f0e8;
-  font-size: 13px;
 }
 
 .settings-hint {

@@ -202,7 +202,6 @@ describe("S2-2C e2e 验收", () => {
       payload: {
         expected_revision: null,
         video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-        budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
         capabilities: {
           "llm.smart": { mode: "fixed", provider_model_id: "llm.smart.zhipu.glm-4" },
           "llm.flash": { mode: "auto" },
@@ -247,7 +246,6 @@ describe("S2-2C e2e 验收", () => {
       payload: {
         expected_revision: 1,
         video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-        budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
         capabilities: FIXED_SMART_CAPABILITIES,
       },
       auth,
@@ -348,7 +346,6 @@ describe("S2-2C e2e 验收", () => {
       payload: {
         expected_revision: 1,
         video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-        budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
         capabilities: FIXED_SMART_CAPABILITIES,
       },
       auth,
@@ -445,7 +442,6 @@ describe("S2-2C e2e 验收", () => {
       payload: {
         expected_revision: null,
         video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-        budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
         capabilities: {
           "llm.smart": { mode: "auto" },
           "llm.flash": { mode: "auto" },
@@ -465,7 +461,6 @@ describe("S2-2C e2e 验收", () => {
       payload: {
         expected_revision: 1,
         video: { strategy: "all_remotion", api_quality: "standard_720p" },
-        budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
       },
       auth,
     });
@@ -487,7 +482,6 @@ describe("S2-2C e2e 验收", () => {
       payload: {
         expected_revision: 1,
         video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-        budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
         capabilities: FIXED_SMART_CAPABILITIES,
       },
       auth,
@@ -500,7 +494,6 @@ describe("S2-2C e2e 验收", () => {
       payload: {
         expected_revision: 2,
         video: { strategy: "prefer_api_video", api_quality: "high_1080p" },
-        budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
       },
       auth,
     });
@@ -528,7 +521,6 @@ describe("S2-2C e2e 验收", () => {
       payload: {
         expected_revision: 1,
         video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-        budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
         capabilities: {
           "llm.smart": { mode: "fixed", provider_model_id: "llm.smart.deepseek.deepseek-v4-pro" },
           "llm.flash": { mode: "auto" },
@@ -575,7 +567,6 @@ describe("S2-2C e2e 验收", () => {
       payload: {
         expected_revision: 2,
         video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-        budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
         capabilities: FIXED_SMART_CAPABILITIES,
       },
       auth,

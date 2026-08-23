@@ -548,7 +548,6 @@ describe("S2-2A e2e：验收清单可独立断言项（任务 12 步骤 1）", (
       payload: {
         expected_revision: null,
         video: { strategy: "all_api_video", api_quality: "high_1080p" },
-        budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
       },
       auth,
     });
@@ -574,7 +573,6 @@ describe("S2-2A e2e：验收清单可独立断言项（任务 12 步骤 1）", (
       payload: {
         expected_revision: 1,
         video: { strategy: "all_remotion", api_quality: "standard_720p" },
-        budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
       },
       auth,
     });

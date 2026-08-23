@@ -44,8 +44,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: 1,
           video: { strategy: "all_api_video", api_quality: "high_1080p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-        },
+          },
         auth,
       });
       expect(res.statusCode).toBe(200);
@@ -64,8 +63,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: 99,
           video: { strategy: "all_api_video", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-        },
+          },
         auth,
       });
       expect(res.statusCode).toBe(409);
@@ -81,8 +79,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: 1,
           video: { strategy: "all_api_video", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-          creative: { voice_profile_id: "voice-1" },  // 越权字段
+            creative: { voice_profile_id: "voice-1" },  // 越权字段
         },
         auth,
       });
@@ -97,8 +94,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: null,
           video: { strategy: "prefer_api_video", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-        },
+          },
         auth,
       });
       const res = await app.inject({ method: "GET", url: "/api/me/generation-preferences", auth: otherAuth });
@@ -144,8 +140,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: 1,
           video: { strategy: "all_remotion", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-        },
+          },
         auth,
       });
       expect(res.statusCode).toBe(200);
@@ -165,8 +160,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: 99,
           video: { strategy: "all_remotion", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-        },
+          },
         auth,
       });
       expect(res.statusCode).toBe(409);
@@ -183,8 +177,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: null,
           video: { strategy: "all_api_video", api_quality: "high_1080p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-        },
+          },
         auth,
       });
       const projectId = await createProjectForUser(app, auth);
@@ -206,8 +199,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: null,
           video: { strategy: "all_api_video", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-        },
+          },
         auth,
       });
       const projectId = await createProjectForUser(app, auth);
@@ -217,8 +209,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: 2,
           video: { strategy: "all_remotion", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-        },
+          },
         auth,
       });
       const res = await app.inject({
@@ -269,8 +260,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: null,
           video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-          creative: {
+            creative: {
             voice_profile_id: "voice_preset_cold_authority",
             art_style_preset_id: "art_style_classical_ink",
             subtitle_style_preset_id: "subtitle_style_bold_stroke",
@@ -296,8 +286,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: null,
           video: { strategy: "all_remotion", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-        },
+          },
         auth,
       });
       const res = await app.inject({ method: "GET", url: "/api/me/generation-preferences", auth });
@@ -316,8 +305,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: null,
           video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-          capabilities: { "llm.smart": { mode: "fixed", provider_model_id: "x" } },
+            capabilities: { "llm.smart": { mode: "fixed", provider_model_id: "x" } },
         },
         auth,
       });
@@ -334,8 +322,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: 1,
           video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-          creative: {
+            creative: {
             voice_profile_id: "voice_preset_cold_authority",
             art_style_preset_id: "art_style_classical_ink",
             subtitle_style_preset_id: null,
@@ -393,8 +380,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: null,
           video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-          capabilities: FULL_CAPABILITIES,
+            capabilities: FULL_CAPABILITIES,
         },
         auth,
       });
@@ -415,8 +401,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: null,
           video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-          capabilities: FULL_CAPABILITIES,
+            capabilities: FULL_CAPABILITIES,
         },
         auth,
       });
@@ -427,8 +412,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: 1,
           video: { strategy: "all_remotion", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-        },
+          },
         auth,
       });
       expect(res.statusCode).toBe(200);
@@ -446,8 +430,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: null,
           video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-        },
+          },
         auth,
       });
       expect(res.statusCode).toBe(200);
@@ -465,8 +448,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: 1,
           video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-          capabilities: FULL_CAPABILITIES,
+            capabilities: FULL_CAPABILITIES,
         },
         auth,
       });
@@ -476,8 +458,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: 2,
           video: { strategy: "prefer_api_video", api_quality: "high_1080p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-        },
+          },
         auth,
       });
       expect(res.statusCode).toBe(200);
@@ -516,8 +497,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: 3,
           video: { strategy: "all_remotion", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-        },
+          },
         auth,
       });
       expect(res.statusCode).toBe(200);
@@ -537,8 +517,7 @@ describe("generation-config API", () => {
         payload: {
           expected_revision: 1,
           video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-          budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
-          capabilities: FULL_CAPABILITIES,
+            capabilities: FULL_CAPABILITIES,
         },
         auth,
       });

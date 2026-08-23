@@ -221,7 +221,6 @@ describe("S2-2B e2e 验收", () => {
       payload: {
         expected_revision: null,
         video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-        budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
         creative: {
           voice_profile_id: "voice_preset_cold_authority",
           art_style_preset_id: "art_style_classical_ink",
@@ -316,7 +315,6 @@ describe("S2-2B e2e 验收", () => {
       payload: {
         expected_revision: 1,
         video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-        budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
         creative: {
           voice_profile_id: "voice_preset_cold_authority",
           art_style_preset_id: null,
@@ -380,7 +378,6 @@ describe("S2-2B e2e 验收", () => {
       payload: {
         expected_revision: 1,
         video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-        budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
         creative: {
           voice_profile_id: null,
           art_style_preset_id: "art_style_classical_ink",
@@ -398,7 +395,6 @@ describe("S2-2B e2e 验收", () => {
       payload: {
         expected_revision: 2,
         video: { strategy: "all_remotion", api_quality: "standard_720p" },
-        budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
       },
       auth,
     });

@@ -101,31 +101,6 @@ export const CapabilitySelectionMap = z
   .strict();
 export type CapabilitySelectionMap = z.infer<typeof CapabilitySelectionMap>;
 
-// --- 预算 ------------------------------------------------------------------
-
-/**
- * 微元金额的十进制字符串。
- *
- * 约束（与详细设计第 4 节和第 8 节一致）：
- * - 数据库/内部计算使用整数微元，不使用浮点。
- * - JSON API 边界统一序列化为十进制字符串，避免 number 超出安全整数。
- * - 字符串只允许 0-9 数字（无小数点、无符号、无科学计数法），表示整数微元。
- */
-const decimalMicrosString = z
-  .string()
-  .regex(/^(0|[1-9][0-9]*)$/, "micros amount must be a non-negative decimal integer string");
-
-export const BudgetConfiguration = z
-  .object({
-    currency: z.literal("CNY"),
-    /**
-     * 单次运行的最大付费授权上限（微元）。`null` 表示不设上限。
-     */
-    max_paid_cost_micros_per_run: decimalMicrosString.nullable(),
-  })
-  .strict();
-export type BudgetConfiguration = z.infer<typeof BudgetConfiguration>;
-
 // --- Creative（S2-2A 占位，B 实施时填充） -----------------------------------
 
 /**
@@ -176,7 +151,6 @@ export const GenerationConfigurationV1 = z
         api_quality: ApiVideoQuality,
       })
       .strict(),
-    budget: BudgetConfiguration,
     creative: CreativePreferences,
     capabilities: CapabilitySelectionMap,
   })
@@ -192,10 +166,6 @@ export const DEFAULT_GENERATION_CONFIGURATION: GenerationConfigurationV1 = {
   video: {
     strategy: "prefer_remotion",
     api_quality: "standard_720p",
-  },
-  budget: {
-    currency: "CNY",
-    max_paid_cost_micros_per_run: null,
   },
   creative: {
     voice_profile_id: null,
@@ -225,7 +195,6 @@ export const S2_2A_PATCH_ALLOWED_FIELDS = z
       strategy: VideoGenerationStrategy,
       api_quality: ApiVideoQuality,
     }),
-    budget: BudgetConfiguration,
     // 强制 creative 全 null（A 阶段不接受 B/C 字段）
     creative: z.object({
       voice_profile_id: z.null(),
@@ -253,7 +222,6 @@ export const S2_2A_ConfigPatchRequest = z
       strategy: VideoGenerationStrategy,
       api_quality: ApiVideoQuality,
     }),
-    budget: BudgetConfiguration,
   })
   .strict();
 export type S2_2A_ConfigPatchRequest = z.infer<typeof S2_2A_ConfigPatchRequest>;
@@ -269,7 +237,6 @@ export const S2_2A_ProjectConfigPatchRequest = z
       strategy: VideoGenerationStrategy,
       api_quality: ApiVideoQuality,
     }),
-    budget: BudgetConfiguration,
   })
   .strict();
 export type S2_2A_ProjectConfigPatchRequest = z.infer<typeof S2_2A_ProjectConfigPatchRequest>;
@@ -288,7 +255,6 @@ export const S2_2B_ConfigPatchRequest = z
       strategy: VideoGenerationStrategy,
       api_quality: ApiVideoQuality,
     }),
-    budget: BudgetConfiguration,
     creative: CreativePreferences.optional(),
   })
   .strict();
@@ -301,7 +267,6 @@ export const S2_2B_ProjectConfigPatchRequest = z
       strategy: VideoGenerationStrategy,
       api_quality: ApiVideoQuality,
     }),
-    budget: BudgetConfiguration,
     creative: CreativePreferences.optional(),
   })
   .strict();
@@ -322,7 +287,6 @@ export const S2_2C_ConfigPatchRequest = z
       strategy: VideoGenerationStrategy,
       api_quality: ApiVideoQuality,
     }),
-    budget: BudgetConfiguration,
     creative: CreativePreferences.optional(),
     capabilities: CapabilitySelectionMap.optional(),
   })
@@ -336,7 +300,6 @@ export const S2_2C_ProjectConfigPatchRequest = z
       strategy: VideoGenerationStrategy,
       api_quality: ApiVideoQuality,
     }),
-    budget: BudgetConfiguration,
     creative: CreativePreferences.optional(),
     capabilities: CapabilitySelectionMap.optional(),
   })

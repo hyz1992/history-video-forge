@@ -42,7 +42,6 @@ const store = useGenerationConfigStore();
 const draft = reactive({
   strategy: "prefer_remotion" as VideoGenerationStrategyValue,
   apiQuality: "standard_720p" as ApiVideoQualityValue,
-  budgetMicros: null as string | null,
   // S2-2B 创作偏好
   voiceProfileId: null as string | null,
   artStylePresetId: null as string | null,
@@ -62,7 +61,6 @@ function draftCreative(): CreativePreferenceInput {
     subtitle_style_overrides: draft.subtitleOverrides,
   };
 }
-const budgetInvalid = ref(false);
 const saveError = ref<string | null>(null);
 const loaded = ref(false);
 
@@ -74,7 +72,6 @@ function applyServerData() {
   if (!data) return;
   draft.strategy = data.configuration.video.strategy;
   draft.apiQuality = data.configuration.video.api_quality;
-  draft.budgetMicros = data.configuration.budget.max_paid_cost_micros_per_run;
   draft.voiceProfileId = data.configuration.creative.voice_profile_id;
   draft.artStylePresetId = data.configuration.creative.art_style_preset_id;
   draft.subtitlePresetId = data.configuration.creative.subtitle_style_preset_id;
@@ -89,7 +86,6 @@ watch(
     loaded.value = false;
     // 重开对话框时清空上次会话残留状态
     saveError.value = null;
-    budgetInvalid.value = false;
     await store.loadProjectConfig(projectId);
     await Promise.all([
       creativeStore.loadCreativePresets(),
@@ -157,13 +153,8 @@ function previewStageText(stages: string[]): string {
 
 async function save() {
   saveError.value = null;
-  if (budgetInvalid.value) {
-    saveError.value = "预算金额格式不正确：请输入非负金额，最多 6 位小数。";
-    return;
-  }
   const result = await store.saveProjectConfig(props.projectId, {
     video: { strategy: draft.strategy, api_quality: draft.apiQuality },
-    budgetMicros: draft.budgetMicros,
     creative: draftCreative(),
     capabilities: draft.capabilities,
   });
@@ -333,8 +324,6 @@ async function confirmPreview() {
         <GenerationStrategySettings
           v-model:strategy="draft.strategy"
           v-model:api-quality="draft.apiQuality"
-          v-model:budget-micros="draft.budgetMicros"
-          v-model:budget-invalid="budgetInvalid"
           :disabled="configState?.saving"
           test-id-prefix="project-"
         />
@@ -417,7 +406,7 @@ async function confirmPreview() {
       <button
         class="btn btn-primary"
         data-testid="save-project-config"
-        :disabled="configState?.saving || budgetInvalid || !loaded"
+        :disabled="configState?.saving || !loaded"
         @click="save"
       >
         {{ configState?.saving ? "保存中…" : "保存项目设置" }}

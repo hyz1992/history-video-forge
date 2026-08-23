@@ -52,7 +52,6 @@ function jsonResponse(status: number, body: unknown): Response {
 const DEFAULT_CONFIGURATION = {
   schema_version: "generation_configuration_v1",
   video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-  budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
   creative: { voice_profile_id: null, art_style_preset_id: null, subtitle_style_preset_id: null },
   capabilities: {
     "llm.smart": { mode: "auto" },
@@ -172,60 +171,12 @@ describe("SettingsPage（用户默认设置）", () => {
     expect(selected.checked).toBe(true);
   });
 
-  it("API 画质可选 720P/1080P；预算支持不设上限与 CNY 金额", async () => {
-    const store = createMockStore();
-    const wrapper = mountSettings(store);
-    await flushPromises();
-
-    expect(wrapper.text()).toContain("标准 720P");
-    expect(wrapper.text()).toContain("高质量 1080P");
-
-    const unlimited = wrapper.find('[data-testid="budget-unlimited"]');
-    expect(unlimited.exists()).toBe(true);
-    // 初始为“不设上限”：金额输入框只在切换到“设置金额”后出现
-    expect(wrapper.find('[data-testid="budget-amount"]').exists()).toBe(false);
-    await wrapper.find('[data-testid="budget-amount-enabled"]').setValue();
-    expect(wrapper.find('[data-testid="budget-amount"]').exists()).toBe(true);
-  });
-
   it("明确说明用户默认只影响新项目", async () => {
     const store = createMockStore();
     const wrapper = mountSettings(store);
     await flushPromises();
 
     expect(wrapper.text()).toContain("只影响新项目");
-  });
-
-  it("保存时把 CNY 金额转换为微元十进制字符串提交", async () => {
-    const store = createMockStore();
-    const wrapper = mountSettings(store);
-    await flushPromises();
-
-    await wrapper.find('[data-testid="strategy-all_api_video"]').setValue();
-    await wrapper.find('[data-testid="budget-amount-enabled"]').setValue();
-    const amountInput = wrapper.find('[data-testid="budget-amount"]');
-    await amountInput.setValue("12.34");
-    await wrapper.find('[data-testid="save-preference"]').trigger("click");
-    await flushPromises();
-
-    // S2-2C：保存调用携带完整五槽 capabilities（详细断言见 capability-slot-settings-ui.spec.ts）
-    expect(store.saveUserPreference).toHaveBeenCalledWith({
-      video: { strategy: "all_api_video", api_quality: "standard_720p" },
-      budgetMicros: "12340000",
-      creative: {
-        voice_profile_id: null,
-        art_style_preset_id: null,
-        subtitle_style_preset_id: null,
-        subtitle_style_overrides: {},
-      },
-      capabilities: {
-        "llm.smart": { mode: "auto" },
-        "llm.flash": { mode: "auto" },
-        "image.generate": { mode: "auto" },
-        "video.image_to_video": { mode: "auto" },
-        "tts.synthesize": { mode: "auto" },
-      },
-    });
   });
 
   it("高级设置区渲染五槽与真实 enabled 候选，不含凭据或环境变量（S2-2C 取代只读摘要）", async () => {
@@ -298,7 +249,6 @@ describe("SettingsPage（用户默认设置）", () => {
     // 保存 → 409 → store 重载服务器新值并置冲突 → 表单草稿必须跟随
     const result = await store.saveUserPreference({
       video: { strategy: "all_api_video", api_quality: "standard_720p" },
-      budgetMicros: null,
     });
     expect(result.ok).toBe(false);
     await flushPromises();
@@ -362,7 +312,6 @@ describe("SettingsPage（用户默认设置）", () => {
 
     const saveDraft = {
       video: { strategy: "all_api_video", api_quality: "standard_720p" },
-      budgetMicros: null,
     };
     await store.saveUserPreference(saveDraft);
     await flushPromises();
@@ -466,7 +415,6 @@ describe("ProjectGenerationSettings（项目设置）", () => {
 
     expect(store.saveProjectConfig).toHaveBeenCalledWith("proj-1", {
       video: { strategy: "prefer_api_video", api_quality: "standard_720p" },
-      budgetMicros: null,
       creative: {
         voice_profile_id: null,
         art_style_preset_id: null,
