@@ -233,7 +233,7 @@ const auth = buildTestAuth({ userId: "owner-1" });
 
 describe("S2-2B 字幕样式消费", () => {
   it("提交路径 fixed：快照解析样式进入 subtitle artifact metadata", async () => {
-    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    const app = buildApp();
     const { project } = await prepare(app);
     isolateVoiceRoot(app);
     await seedGlobalVoiceProfiles(app.db);
@@ -243,21 +243,11 @@ describe("S2-2B 字幕样式消费", () => {
       subtitle_style_overrides: { font_size_px: 60 },
     });
 
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${project.id}/generation-cost-quotes`,
-      payload: { operation: "assets.generate", selection: { task_ids: [] } },
-      auth,
-    });
-    expect(quoteRes.statusCode).toBe(200);
-    const quote = quoteRes.json() as { quote_id: string };
-
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/assets/generate`,
       payload: {
         execution_mode: "auto_available",
-        cost_quote_id: quote.quote_id,
         idempotency_key: "subtitle-consumption-1",
       },
       auth,
@@ -280,25 +270,17 @@ describe("S2-2B 字幕样式消费", () => {
   });
 
   it("提交路径 none：subtitle artifact 使用系统默认样式", async () => {
-    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    const app = buildApp();
     const { project } = await prepare(app);
     isolateVoiceRoot(app);
     await seedGlobalVoiceProfiles(app.db);
     await seedQuotableCatalog(app);
 
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${project.id}/generation-cost-quotes`,
-      payload: { operation: "assets.generate", selection: { task_ids: [] } },
-      auth,
-    });
-    const quote = quoteRes.json() as { quote_id: string };
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/assets/generate`,
       payload: {
         execution_mode: "auto_available",
-        cost_quote_id: quote.quote_id,
         idempotency_key: "subtitle-consumption-none-1",
       },
       auth,

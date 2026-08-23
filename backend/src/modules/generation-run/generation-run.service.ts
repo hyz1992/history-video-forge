@@ -13,7 +13,6 @@ import {
   type ResolvedCreativeVoice,
   type ResolvedGenerationConfigurationV1,
 } from "../../../../shared/src/index.js";
-import type { QuoteReadinessInput } from "../generation-cost/generation-cost.service.js";
 import { resolveQuoteConfiguration } from "../generation-cost/generation-cost.service.js";
 import type { AppPrismaClient } from "../../db/prisma-client.types.js";
 import type {
@@ -62,7 +61,6 @@ export type SubmitGenerationResult =
   | { ok: false; error: { code: GenerationSubmitErrorCode; message: string } };
 
 export interface SubmitGenerationDeps {
-  readinessInput: QuoteReadinessInput;
   repository: GenerationRunRepository;
   /** Prisma 激活态：提交重解析输入以数据库为权威（跨实例一致性）。 */
   prismaClient?: AppPrismaClient;

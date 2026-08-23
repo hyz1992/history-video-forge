@@ -1817,8 +1817,7 @@ describe("submit protocol filter passthrough (任务8终审 F5 整改：授权�
   });
 
   it("persists the submit-time enabled_provider_types into the run dispatch payload", async () => {
-    const { buildQuotableReadinessInput } = await import("../cost/quote-test-context.js");
-    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    const app = buildApp();
     seedGenerationCatalog(app);
     await seedDashscopeDispatchCatalog(app);
     const project = await createProject(app.db, {
@@ -1826,20 +1825,10 @@ describe("submit protocol filter passthrough (任务8终审 F5 整改：授权�
       ownerId: "owner-1",
     });
 
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${project.id}/generation-cost-quotes`,
-      payload: { operation: "assets.generate", enabled_provider_types: ["tts"], selection: { task_ids: [] } },
-      auth,
-    });
-    expect(quoteRes.statusCode).toBe(200);
-    const quote = quoteRes.json() as { quote_id: string };
-
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/assets/generate`,
       payload: {
-        cost_quote_id: quote.quote_id,
         idempotency_key: "f5-dispatch-filter-1",
         enabled_provider_types: ["tts"],
       },

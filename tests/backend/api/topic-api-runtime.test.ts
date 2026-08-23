@@ -92,29 +92,14 @@ import { seedQuotableCatalog, buildQuotableReadinessInput } from "../cost/quote-
 
 /**
  * S2-2A 外部审查 P1-1 整改迁移：本文件 mock 真实 LLM provider（openai），
- * 按 fail-closed 合同，真实 provider 部署下旧无 quote 路径一律 409
- * （此前依赖目录为空的闸门漏洞放行）。用例全部改为 quote 提交路径——
- * 提交协议透传生成响应（additive generation_run_id），原有运行时行为断言
+ * 2026-08-23（报价体系移除）：用例直接提交（幂等键可选），提交协议透传
+ * 生成响应（additive generation_run_id），原有运行时行为断言
  * （重试/错误映射/诊断/多轮历史）不变。
  */
-async function createTopicQuote(
-  app: ReturnType<typeof buildApp>,
-  projectId: string,
-  auth: ReturnType<typeof buildTestAuth>,
-): Promise<string> {
-  const quoteRes = await app.inject({
-    method: "POST",
-    url: `/api/projects/${projectId}/generation-cost-quotes`,
-    payload: { operation: "topic.generate" },
-    auth,
-  });
-  expect(quoteRes.statusCode).toBe(200);
-  return (quoteRes.json() as { quote_id: string }).quote_id;
-}
 
-/** 真实 provider 部署的测试 app：可报价目录 + readiness 注入。 */
+/** 真实 provider 部署的测试 app：可解析目录（buildApp 默认不 bootstrap）。 */
 async function buildTopicRuntimeApp(): Promise<ReturnType<typeof buildApp>> {
-  const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+  const app = buildApp();
   // 同步 seed 目录（buildApp 默认不 bootstrap）
   await seedQuotableCatalog(app);
   return app;
@@ -142,7 +127,6 @@ describe("topic api runtime", () => {
       },
     });
     const projectId = projectResponse.json().project_id as string;
-    const quoteId = await createTopicQuote(app, projectId, auth);
 
     const response = await app.inject({ auth,
       method: "POST",
@@ -155,7 +139,6 @@ describe("topic api runtime", () => {
         source_hint: "《晏子春秋》",
         recent_usage_hint: "近期未出现同 event_id",
         tags: ["diplomacy", "court", "humiliation", "showdown"],
-        cost_quote_id: quoteId,
         idempotency_key: "topic-runtime-1",
       },
     });
@@ -224,7 +207,6 @@ describe("topic api runtime", () => {
       },
     });
     const projectId = projectResponse.json().project_id as string;
-    const quoteId = await createTopicQuote(app, projectId, auth);
 
     const response = await app.inject({ auth,
       method: "POST",
@@ -237,7 +219,6 @@ describe("topic api runtime", () => {
         source_hint: "Yanzi Chunqiu",
         recent_usage_hint: "No recent repeat event id.",
         tags: ["diplomacy", "court", "humiliation", "showdown"],
-        cost_quote_id: quoteId,
         idempotency_key: "topic-runtime-2",
       },
     });
@@ -279,7 +260,6 @@ describe("topic api runtime", () => {
       },
     });
     const projectId = projectResponse.json().project_id as string;
-    const quoteId = await createTopicQuote(app, projectId, auth);
 
     const response = await app.inject({ auth,
       method: "POST",
@@ -292,7 +272,6 @@ describe("topic api runtime", () => {
         source_hint: "《晏子春秋》",
         recent_usage_hint: "近期未出现同 event_id",
         tags: ["diplomacy", "court", "humiliation", "showdown"],
-        cost_quote_id: quoteId,
         idempotency_key: "topic-runtime-1",
       },
     });
@@ -329,7 +308,6 @@ describe("topic api runtime", () => {
       },
     });
     const projectId = projectResponse.json().project_id as string;
-    const quoteId = await createTopicQuote(app, projectId, auth);
 
     const response = await app.inject({ auth,
       method: "POST",
@@ -342,7 +320,6 @@ describe("topic api runtime", () => {
         source_hint: "Yanzi Chunqiu",
         recent_usage_hint: "No recent repeat event id.",
         tags: ["diplomacy", "court", "humiliation", "showdown"],
-        cost_quote_id: quoteId,
         idempotency_key: "topic-runtime-2",
       },
     });
@@ -400,7 +377,6 @@ describe("topic api runtime", () => {
       },
     });
     const projectId = projectResponse.json().project_id as string;
-    const quoteId = await createTopicQuote(app, projectId, auth);
 
     const recommendationResponse = await app.inject({ auth,
       method: "POST",
@@ -413,7 +389,6 @@ describe("topic api runtime", () => {
         source_hint: "《晏子春秋》",
         recent_usage_hint: "近期未出现同 event_id",
         tags: ["diplomacy", "court", "humiliation", "showdown"],
-        cost_quote_id: quoteId,
         idempotency_key: "topic-runtime-1",
       },
     });
@@ -456,7 +431,6 @@ describe("topic api runtime", () => {
       },
     });
     const projectId = projectResponse.json().project_id as string;
-    const quoteId = await createTopicQuote(app, projectId, auth);
 
     const response = await app.inject({ auth,
       method: "POST",
@@ -469,7 +443,6 @@ describe("topic api runtime", () => {
         source_hint: "《晏子春秋》",
         recent_usage_hint: "近期未出现同 event_id",
         tags: ["diplomacy", "court", "humiliation", "showdown"],
-        cost_quote_id: quoteId,
         idempotency_key: "topic-runtime-1",
       },
     });
@@ -508,7 +481,6 @@ describe("topic api runtime", () => {
       },
     });
     const projectId = projectResponse.json().project_id as string;
-    const quoteId = await createTopicQuote(app, projectId, auth);
 
     await app.inject({ auth,
       method: "POST",
@@ -521,12 +493,9 @@ describe("topic api runtime", () => {
         source_hint: "《晏子春秋》",
         recent_usage_hint: "近期未出现同 event_id",
         tags: ["diplomacy", "court", "humiliation", "showdown"],
-        cost_quote_id: quoteId,
         idempotency_key: "topic-runtime-1",
       },
     });
-
-    const secondQuoteId = await createTopicQuote(app, projectId, auth);
 
     const secondResponse = await app.inject({ auth,
       method: "POST",
@@ -539,7 +508,6 @@ describe("topic api runtime", () => {
         source_hint: "《晏子春秋》",
         recent_usage_hint: "同一项目再次生成",
         tags: ["diplomacy", "history"],
-        cost_quote_id: secondQuoteId,
         idempotency_key: "topic-runtime-3",
       },
     });

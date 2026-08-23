@@ -5,7 +5,6 @@ import {
   type GenerationQuoteSelection,
 } from "../../../../shared/src/index.js";
 import { createOrRestoreGenerationRun } from "./generation-run.service.js";
-import { resolveGenerationCostBootstrapInputFromEnv } from "../generation-cost/generation-cost-bootstrap.js";
 
 /**
  * S2-2 生成提交协议（2026-08-23 报价体系移除后简化版）。
@@ -70,8 +69,6 @@ export async function submitGenerationRun(
   };
   const project = context.app.db.projects.get(context.params.projectId)!;
   const actorUserId = context.auth.anonymous ? null : context.auth.userId;
-  const readinessInput =
-    context.app.generationQuoteReadinessInput ?? resolveGenerationCostBootstrapInputFromEnv();
   // 客户端不提供幂等键时服务端生成（单次请求语义；客户端幂等重试应自行携带）
   const idempotencyKey = submit.idempotency_key ?? `${operation}-${context.app.db.generateId()}`;
 
@@ -87,7 +84,6 @@ export async function submitGenerationRun(
       dispatchPayload: dispatchPayloadWithFilter,
     },
     {
-      readinessInput,
       repository: context.app.generationRunRepository,
       prismaClient: context.app.prismaClient,
     },

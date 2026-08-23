@@ -45,7 +45,7 @@ let createProject: (db: import("../../backend/src/db/client.js").DbClient, input
 let saveTopicPackage: typeof import("../../backend/src/modules/topic/topic-package.repository.js").saveTopicPackage;
 let buildPricingCatalogSeed: typeof import("../../backend/src/modules/generation-cost/pricing-catalog.seed.js").buildPricingCatalogSeed;
 let applyProviderModelCatalogSeed: typeof import("../../backend/src/modules/generation-cost/provider-model-catalog.repository.js").applyProviderModelCatalogSeed;
-let createGenerationCostQuote: typeof import("../../backend/src/modules/generation-cost/generation-cost.service.js").createGenerationCostQuote;
+
 let createGenerationRunRepository: typeof import("../../backend/src/modules/generation-run/generation-run.repository.js").createGenerationRunRepository;
 let createOrRestoreGenerationRun: typeof import("../../backend/src/modules/generation-run/generation-run.service.js").createOrRestoreGenerationRun;
 let LLM_MODEL_CANDIDATES_V1: import("../../backend/src/modules/generation-cost/llm-model-catalog.js").LlmModelCandidate[];
@@ -84,7 +84,6 @@ beforeAll(async () => {
   saveTopicPackage = (await import("../../backend/src/modules/topic/topic-package.repository.js")).saveTopicPackage;
   buildPricingCatalogSeed = (await import("../../backend/src/modules/generation-cost/pricing-catalog.seed.js")).buildPricingCatalogSeed;
   applyProviderModelCatalogSeed = (await import("../../backend/src/modules/generation-cost/provider-model-catalog.repository.js")).applyProviderModelCatalogSeed;
-  createGenerationCostQuote = (await import("../../backend/src/modules/generation-cost/generation-cost.service.js")).createGenerationCostQuote;
   createGenerationRunRepository = (await import("../../backend/src/modules/generation-run/generation-run.repository.js")).createGenerationRunRepository;
   createOrRestoreGenerationRun = (await import("../../backend/src/modules/generation-run/generation-run.service.js")).createOrRestoreGenerationRun;
   LLM_MODEL_CANDIDATES_V1 = (await import("../../backend/src/modules/generation-cost/llm-model-catalog.js")).LLM_MODEL_CANDIDATES_V1;

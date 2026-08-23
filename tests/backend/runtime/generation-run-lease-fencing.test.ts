@@ -17,7 +17,6 @@ import { hydrateThirdAggregates } from "../../../backend/src/db/repositories/pri
 import { createGenerationRunRepository } from "../../../backend/src/modules/generation-run/generation-run.repository.js";
 import { createOrRestoreGenerationRun } from "../../../backend/src/modules/generation-run/generation-run.service.js";
 import { createGenerationRunDispatcher } from "../../../backend/src/modules/generation-run/generation-run-dispatcher.js";
-import { createGenerationCostQuote } from "../../../backend/src/modules/generation-cost/generation-cost.service.js";
 import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
 import { buildQuotableReadinessInput, prepareQuoteProject, seedQuotableCatalog } from "../cost/quote-test-context.js";
 
@@ -69,21 +68,13 @@ async function submitRun(
   key: string,
   prismaClient?: Awaited<ReturnType<typeof createPrismaClient>>,
 ) {
-  const quoteResult = await createGenerationCostQuote(
-    db, project, project.ownerId, { operation: "assets.generate" },
-    { readinessInput: buildQuotableReadinessInput(), prismaClient },
-  );
-  if (!quoteResult.ok) throw new Error("quote creation failed");
   const repository = createGenerationRunRepository(db, prismaClient);
   const submit = await createOrRestoreGenerationRun(
     db, project, project.ownerId,
     {
       operation: "assets.generate",
-      costQuoteId: quoteResult.value.quote.id,
-      authorizeBudgetOverride: false,
       idempotencyKey: key,
       selection: { task_ids: [] },
-      runOverrides: undefined,
       dispatchPayload: { execution_mode: "auto_available" },
     },
     { readinessInput: buildQuotableReadinessInput(), repository, prismaClient },

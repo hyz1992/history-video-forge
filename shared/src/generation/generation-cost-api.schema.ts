@@ -153,11 +153,7 @@ export const ProjectCostSummarySchema = z
   .object({
     currency: z.literal("CNY"),
     total_estimated_cost_cny: CnyDecimalString,
-    total_authorization_cost_cny: CnyDecimalString,
     total_actual_cost_cny: CnyDecimalString,
-    quote_count: z.number().int().nonnegative(),
-    consumed_quote_count: z.number().int().nonnegative(),
-    over_budget_quote_count: z.number().int().nonnegative(),
     run_count: z.number().int().nonnegative(),
     run_status_counts: z
       .object({
@@ -230,7 +226,6 @@ export const GenerationRunConfigurationResponseSchema = z
       "needs_reconciliation",
     ]),
     operation: z.string().min(1),
-    quote_id: z.string().min(1).nullable(),
     configuration_hash: z.string().min(1),
     snapshot: z.record(z.string(), z.unknown()),
     created_at: z.string().datetime({ offset: true }),

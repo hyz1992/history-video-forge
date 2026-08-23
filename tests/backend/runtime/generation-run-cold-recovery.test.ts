@@ -61,7 +61,6 @@ import { PrismaThirdAggregateWriter } from "../../../backend/src/db/repositories
 import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import { seedQuotableCatalog, buildQuotableReadinessInput } from "../cost/quote-test-context.js";
-import { createGenerationCostQuote } from "../../../backend/src/modules/generation-cost/generation-cost.service.js";
 import { createGenerationRunRepository } from "../../../backend/src/modules/generation-run/generation-run.repository.js";
 import type { GenerationRunRepository } from "../../../backend/src/modules/generation-run/generation-run.repository.js";
 import { createOrRestoreGenerationRun } from "../../../backend/src/modules/generation-run/generation-run.service.js";
@@ -212,19 +211,11 @@ async function submitScriptRun(
   project: Awaited<ReturnType<typeof setupColdRecoveryEnv>>["project"],
   key: string,
 ) {
-  const quote = await createGenerationCostQuote(
-    app.db, project, project.ownerId,
-    { operation: "script.generate" },
-    { readinessInput: buildQuotableReadinessInput() },
-  );
-  if (!quote.ok) throw new Error(`quote failed: ${JSON.stringify(quote.error)}`);
   const repository = createGenerationRunRepository(app.db, app.prismaClient);
   const submit = await createOrRestoreGenerationRun(
     app.db, project, project.ownerId,
     {
       operation: "script.generate",
-      costQuoteId: quote.value.quote.id,
-      authorizeBudgetOverride: false,
       idempotencyKey: key,
       dispatchPayload: { allow_patch: false, allow_regen: false },
     },

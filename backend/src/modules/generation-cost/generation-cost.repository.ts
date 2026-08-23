@@ -2,7 +2,6 @@ import type {
   AssetManifestRecord,
   AssetPlanRecord,
   DbClient,
-  GenerationCostQuoteRecord,
   ProjectGenerationConfigurationRecord,
   ProjectRecord,
   ProviderModelCatalogRecord,
@@ -15,62 +14,15 @@ import type { AppPrismaClient } from "../../db/prisma-client.types.js";
 import { syncProjectConfigRecord } from "../generation-config/generation-config.repository.js";
 
 /**
- * S2-2A 任务 8：generation-cost repository（quote 持久化与只读查询）。
+ * S2-2A 任务 8：generation-cost repository（成本只读查询；2026-08-23 报价
+ * 体系移除后保留 snapshot/usage/解析源）。
  *
  * 所有查询必须以已授权 `projectId` 为入口（owner scope 反查在 controller 完成）；
- * 禁止提供只凭 quote/snapshot/cost id 返回数据的未授权方法。
+ * 禁止提供只凭 snapshot/cost id 返回数据的未授权方法。
  * 内存态读写 DbClient 的 Map；Prisma 激活态经 thirdAggregateWriter 双写，
  * 只读查询传入 prismaClient 时以数据库为权威（跨进程一致性，外部审查 N1）：
  * 查询结果同步回内存镜像，单实例内读写语义保持一致。
  */
-
-// --- quote 写入 -------------------------------------------------------------
-
-export async function saveGenerationCostQuote(
-  db: DbClient,
-  record: GenerationCostQuoteRecord,
-): Promise<void> {
-  if (db.thirdAggregateWriter) {
-    await db.thirdAggregateWriter.saveGenerationCostQuote(record);
-  }
-  db.generationCostQuotes.set(record.id, record);
-}
-
-// --- quote 只读（project-scoped） -------------------------------------------
-
-export async function findQuoteById(
-  db: DbClient,
-  projectId: string,
-  quoteId: string,
-  prismaClient?: AppPrismaClient,
-): Promise<GenerationCostQuoteRecord | null> {
-  if (prismaClient) {
-    const row = await prismaClient.generationCostQuote.findUnique({ where: { id: quoteId } });
-    if (!row || row.projectId !== projectId) return null;
-    const record = toQuoteRecord(row);
-    db.generationCostQuotes.set(record.id, record);
-    return record;
-  }
-  const record = db.generationCostQuotes.get(quoteId);
-  if (!record || record.projectId !== projectId) return null;
-  return record;
-}
-
-export async function listQuotesByProject(
-  db: DbClient,
-  projectId: string,
-  prismaClient?: AppPrismaClient,
-): Promise<GenerationCostQuoteRecord[]> {
-  if (prismaClient) {
-    const rows = await prismaClient.generationCostQuote.findMany({ where: { projectId } });
-    const records = rows.map(toQuoteRecord);
-    for (const record of records) db.generationCostQuotes.set(record.id, record);
-    return records.sort(compareByCreatedAt);
-  }
-  return sortByCreatedAt(
-    [...db.generationCostQuotes.values()].filter((record) => record.projectId === projectId),
-  );
-}
 
 // --- snapshot / usage 只读（project-scoped） ---------------------------------
 
@@ -494,47 +446,6 @@ function sortByCreatedAt<T extends { createdAt: Date }>(records: T[]): T[] {
 
 // --- Prisma row → record 转换 -------------------------------------------------
 
-function toQuoteRecord(row: {
-  id: string;
-  projectId: string;
-  userId: string | null;
-  operation: string;
-  configurationHash: string;
-  quoteFingerprint: string;
-  pricingHash: string;
-  pricingVersionSetJson: unknown;
-  itemsJson: unknown;
-  estimatedCostMicros: string;
-  authorizationCostMicros: string;
-  containsUnboundedItem: boolean;
-  budgetLimitMicros: string | null;
-  overBudget: boolean;
-  expiresAt: Date;
-  consumedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
-}): GenerationCostQuoteRecord {
-  return {
-    id: row.id,
-    projectId: row.projectId,
-    userId: row.userId,
-    operation: row.operation,
-    configurationHash: row.configurationHash,
-    quoteFingerprint: row.quoteFingerprint,
-    pricingHash: row.pricingHash,
-    pricingVersionSetJson: row.pricingVersionSetJson as string[],
-    itemsJson: row.itemsJson as unknown[],
-    estimatedCostMicros: row.estimatedCostMicros,
-    authorizationCostMicros: row.authorizationCostMicros,
-    containsUnboundedItem: row.containsUnboundedItem,
-    budgetLimitMicros: row.budgetLimitMicros,
-    overBudget: row.overBudget,
-    expiresAt: row.expiresAt,
-    consumedAt: row.consumedAt,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-  };
-}
 
 function toSnapshotRecord(row: {
   id: string;

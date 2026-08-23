@@ -268,14 +268,6 @@ describe("generation cost owner isolation (S2-2A 任务 8)", () => {
       expect(res.json()).toMatchObject({ error: "project_not_found" });
     }
 
-    const quoteAttempt = await app.inject({
-      method: "POST",
-      url: `/api/projects/${projectId}/generation-cost-quotes`,
-      payload: { operation: "topic.generate" },
-      auth: userB,
-    });
-    expect(quoteAttempt.statusCode).toBe(404);
-    expect(quoteAttempt.json()).toMatchObject({ error: "project_not_found" });
   });
 
   it("anonymous user cannot create quotes or read costs", async () => {
@@ -283,13 +275,6 @@ describe("generation cost owner isolation (S2-2A 任务 8)", () => {
     const userA = createAuthenticatedAuthContext({ userId: "user-a", username: "a", displayName: "A", role: "USER", sessionId: "s-a" });
     const created = await app.inject({ method: "POST", url: "/api/projects", payload: { name: "A项目" }, auth: userA });
     const projectId = created.json().project_id as string;
-
-    const quoteAttempt = await app.inject({
-      method: "POST",
-      url: `/api/projects/${projectId}/generation-cost-quotes`,
-      payload: { operation: "topic.generate" },
-    });
-    expect(quoteAttempt.statusCode).toBe(401);
 
     const summary = await app.inject({ method: "GET", url: `/api/projects/${projectId}/costs/summary` });
     expect(summary.statusCode).toBe(401);

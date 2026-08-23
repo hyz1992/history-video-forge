@@ -219,21 +219,14 @@ describe("generation cost API", () => {
     const configBody = config.json();
     expect(configBody.run_id).toBe(run.id);
     expect(configBody.run_status).toBe("succeeded");
-    expect(configBody.quote_id).toBeNull();
 
     // 其他用户：一律 404（project 反查 owner，禁止凭 id 读数据）
     for (const url of [
       `/api/projects/${project.id}/costs/summary`,
       `/api/projects/${project.id}/costs/records`,
       `/api/projects/${project.id}/runs/${run.id}/configuration`,
-      `/api/projects/${project.id}/generation-cost-quotes`,
     ]) {
-      const res = await app.inject({
-        method: url.endsWith("generation-cost-quotes") ? "POST" : "GET",
-        url,
-        payload: url.endsWith("generation-cost-quotes") ? { operation: "assets.generate" } : undefined,
-        auth: otherAuth,
-      });
+      const res = await app.inject({ method: "GET", url, auth: otherAuth });
       expect(res.statusCode, url).toBe(404);
       expect(res.json().error).toBe("project_not_found");
     }

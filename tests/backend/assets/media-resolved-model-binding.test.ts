@@ -61,7 +61,6 @@ import { applyAllDatabaseMigrations } from "../db/migration-test-utils.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import { buildProviderRegistry, createAssetsDispatchHandler } from "../../../backend/src/modules/assets/assets-run.service.js";
 import { buildPricingCatalogSeed } from "../../../backend/src/modules/generation-cost/pricing-catalog.seed.js";
-import { createGenerationCostQuote } from "../../../backend/src/modules/generation-cost/generation-cost.service.js";
 import { createGenerationRunRepository } from "../../../backend/src/modules/generation-run/generation-run.repository.js";
 import type { GenerationRunRepository } from "../../../backend/src/modules/generation-run/generation-run.repository.js";
 import { createOrRestoreGenerationRun } from "../../../backend/src/modules/generation-run/generation-run.service.js";
@@ -305,34 +304,25 @@ function buildFrozenMediaReadiness(): GenerationCapabilityReadinessInput {
   };
 }
 
-/** 创建 quote 并提交为 quote 绑定的 GenerationRun（付费执行上下文）。 */
+/** 2026-08-23（报价体系移除）：直连创建 GenerationRun（付费执行上下文）。 */
 async function createQuoteBoundAssetsRun(
   app: ReturnType<typeof buildApp>,
   project: ProjectRecord,
   key: string,
   repository: GenerationRunRepository = createGenerationRunRepository(app.db),
 ) {
-  const quote = await createGenerationCostQuote(
-    app.db, project, project.ownerId,
-    { operation: "assets.generate", selection: { task_ids: [] } },
-    { readinessInput: buildFrozenMediaReadiness() },
-  );
-  if (!quote.ok) throw new Error(`quote failed: ${JSON.stringify(quote.error)}`);
   const submit = await createOrRestoreGenerationRun(
     app.db, project, project.ownerId,
     {
       operation: "assets.generate",
-      costQuoteId: quote.value.quote.id,
-      authorizeBudgetOverride: false,
       idempotencyKey: key,
       selection: { task_ids: [] },
-      runOverrides: undefined,
       dispatchPayload: { execution_mode: "auto_available" },
     },
     { readinessInput: buildFrozenMediaReadiness(), repository },
   );
   if (!submit.ok) throw new Error(`submit failed: ${JSON.stringify(submit.error)}`);
-  return { quote: quote.value.quote, run: submit.value.run, snapshotId: submit.value.snapshot.id };
+  return { run: submit.value.run, snapshotId: submit.value.snapshot.id };
 }
 
 /** DashScope TTS + image 的最小 fetch mock（tts 含音频下载，image 含提交/轮询/下载）。 */

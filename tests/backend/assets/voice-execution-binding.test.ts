@@ -203,7 +203,7 @@ const auth = buildTestAuth({ userId: "owner-voice" });
 
 describe("S2-2B assets 音色执行绑定", () => {
   it("提交路径 fixed：快照音色进入 manifest（voice_profile_id 与快照一致时放行）", async () => {
-    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    const app = buildApp();
     const prepared = await prepare(app);
     await seedGlobalVoiceProfiles(app.db);
     await seedQuotableCatalog(app);
@@ -211,22 +211,12 @@ describe("S2-2B assets 音色执行绑定", () => {
       voice_profile_id: "voice_preset_cold_authority",
     });
 
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${prepared.project.id}/generation-cost-quotes`,
-      payload: { operation: "assets.generate", selection: { task_ids: [] } },
-      auth,
-    });
-    expect(quoteRes.statusCode).toBe(200);
-    const quote = quoteRes.json() as { quote_id: string };
-
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${prepared.project.id}/assets/generate`,
       payload: {
         voice_profile_id: "voice_preset_cold_authority",
         execution_mode: "auto_available",
-        cost_quote_id: quote.quote_id,
         idempotency_key: "voice-binding-fixed-1",
       },
       auth,
@@ -240,25 +230,16 @@ describe("S2-2B assets 音色执行绑定", () => {
   });
 
   it("提交路径 auto：不携带 voice_profile_id → 快照 auto 触发 intent 匹配", async () => {
-    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    const app = buildApp();
     const prepared = await prepare(app);
     await seedGlobalVoiceProfiles(app.db);
     await seedQuotableCatalog(app);
-
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${prepared.project.id}/generation-cost-quotes`,
-      payload: { operation: "assets.generate", selection: { task_ids: [] } },
-      auth,
-    });
-    const quote = quoteRes.json() as { quote_id: string };
 
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${prepared.project.id}/assets/generate`,
       payload: {
         execution_mode: "auto_available",
-        cost_quote_id: quote.quote_id,
         idempotency_key: "voice-binding-auto-1",
       },
       auth,
@@ -270,7 +251,7 @@ describe("S2-2B assets 音色执行绑定", () => {
   });
 
   it("冲突先于 quote 消费：客户端 voice_profile_id 与快照不一致 → 422，quote 未消费、无 snapshot/run、无 provider 调用", async () => {
-    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    const app = buildApp();
     const prepared = await prepare(app);
     await seedGlobalVoiceProfiles(app.db);
     await seedQuotableCatalog(app);
@@ -278,22 +259,12 @@ describe("S2-2B assets 音色执行绑定", () => {
       voice_profile_id: "voice_preset_cold_authority",
     });
 
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${prepared.project.id}/generation-cost-quotes`,
-      payload: { operation: "assets.generate", selection: { task_ids: [] } },
-      auth,
-    });
-    expect(quoteRes.statusCode).toBe(200);
-    const quote = quoteRes.json() as { quote_id: string };
-
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${prepared.project.id}/assets/generate`,
       payload: {
         voice_profile_id: "voice_preset_crisp_storyteller",
         execution_mode: "auto_available",
-        cost_quote_id: quote.quote_id,
         idempotency_key: "voice-binding-conflict-1",
       },
       auth,
@@ -302,12 +273,7 @@ describe("S2-2B assets 音色执行绑定", () => {
     expect(response.statusCode).toBe(422);
     expect(response.json()).toMatchObject({ error: "generation_voice_profile_conflict" });
 
-    // quote 未消费
-    const quoteRecord = [...app.db.generationCostQuotes.values()].find(
-      (q) => q.id === quote.quote_id,
-    );
-    expect(quoteRecord?.consumedAt).toBeNull();
-    // 无 snapshot / run 创建
+    // 冲突先于 run 创建：无 snapshot / run / provider 调用
     expect(app.db.runConfigurationSnapshots.size).toBe(0);
     expect(app.db.generationRuns.size).toBe(0);
   });

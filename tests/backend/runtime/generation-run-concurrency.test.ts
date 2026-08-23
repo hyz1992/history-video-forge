@@ -7,7 +7,6 @@ import {
   createGenerationRunDispatcher,
   type GenerationRunDispatchHandler,
 } from "../../../backend/src/modules/generation-run/generation-run-dispatcher.js";
-import { createGenerationCostQuote } from "../../../backend/src/modules/generation-cost/generation-cost.service.js";
 import { buildQuotableReadinessInput, prepareQuoteProject, seedQuotableCatalog } from "../cost/quote-test-context.js";
 import type { GenerationRunRecord } from "../../../backend/src/db/client.js";
 
@@ -46,21 +45,13 @@ function mutableClock() {
 }
 
 async function prepareRun(db: ReturnType<typeof buildApp>["db"], project: ReturnType<typeof prepareQuoteProject> extends Promise<infer T> ? T : never) {
-  const quoteResult = await createGenerationCostQuote(
-    db, project, project.ownerId, { operation: "assets.generate" },
-    { readinessInput: buildQuotableReadinessInput() },
-  );
-  if (!quoteResult.ok) throw new Error("quote creation failed");
   const repository = createGenerationRunRepository(db);
   const submit = await createOrRestoreGenerationRun(
     db, project, project.ownerId,
     {
       operation: "assets.generate",
-      costQuoteId: quoteResult.value.quote.id,
-      authorizeBudgetOverride: false,
       idempotencyKey: `run-${Math.random().toString(36).slice(2)}`,
       selection: { task_ids: [] },
-      runOverrides: undefined,
       dispatchPayload: { execution_mode: "auto_available" },
     },
     { readinessInput: buildQuotableReadinessInput(), repository },
