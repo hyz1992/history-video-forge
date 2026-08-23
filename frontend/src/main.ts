@@ -114,6 +114,7 @@ app.provide(assetsStoreKey, assetsStore);
 app.provide(composeStoreKey, composeStore);
 app.provide(renderStoreKey, renderStore);
 app.provide(publishStoreKey, publishStore);
+app.provide(generationCostStoreKey, createGenerationCostStore(createFetchGenerationCostApi()));
 
 import { onUnauthorized } from "./utils/api";
 

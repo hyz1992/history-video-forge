@@ -19,7 +19,6 @@ import StageLoadingBar from "../workspace/StageLoadingBar.vue";
 
 import SegmentAssetCard from "./SegmentAssetCard.vue";
 import StrictFallbackDialog from "./StrictFallbackDialog.vue";
-import ProjectCostSummary from "../cost/ProjectCostSummary.vue";
 import { computeCostBreakdown, estimatePlanCost, getTaskCostHint, getVideoUpgradeCostHint, estimateBlockedItemsCost, PRICING, type PlanTaskLike } from "../../utils/pricing";
 import { getAssetGeneratingView, type AssetGenerationProgress } from "../../utils/asset-generating-view";
 
@@ -38,7 +37,6 @@ const strictDialogOpen = ref(false);
 const strictSegmentId = ref<string | null>(null);
 const strictBusy = ref(false);
 
-const costDialogOpen = ref(false);
 
 /* -------------------------------------------------------------------------- */
 /*  Demo mode: block image/video generation                                    */
@@ -1587,9 +1585,6 @@ function handleConfirm() {
 
       <!-- S2-2A 任务 11：成本明细入口 -->
       <div class="asset-cost-entry">
-        <button class="asset-cost-entry-btn" data-testid="open-cost-summary" @click="costDialogOpen = true">
-          📊 成本明细
-        </button>
       </div>
 
       <!-- 粘性底栏 -->
@@ -1656,11 +1651,6 @@ function handleConfirm() {
     @retry="handleStrictRetry"
     @accept-fallback="handleStrictAcceptFallback"
     @cancel="strictDialogOpen = false"
-  />
-  <ProjectCostSummary
-    :project-id="projectId"
-    :open="costDialogOpen"
-    @close="costDialogOpen = false"
   />
 </template>
 

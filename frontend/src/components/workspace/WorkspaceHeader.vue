@@ -13,6 +13,7 @@ const router = useRouter();
 
 const emit = defineEmits<{
   (e: "open-project-settings"): void;
+  (e: "open-cost-panel"): void;
 }>();
 
 const stepEmojiMap: Record<string, string> = {
@@ -92,6 +93,14 @@ function goBack() {
       </div>
       <div class="topbar-divider" aria-hidden="true"></div>
       <div class="account-actions">
+        <button
+          class="btn btn-subtle"
+          data-testid="open-cost-panel"
+          title="项目费用清单"
+          @click="emit('open-cost-panel')"
+        >
+          💰 费用
+        </button>
         <button class="btn btn-subtle" style="font-weight: 700;">我的</button>
         <button
           class="btn btn-subtle icon-btn"

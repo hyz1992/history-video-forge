@@ -14,6 +14,7 @@ import { useAuthStore } from "../stores/auth";
 import WorkspaceSidebar from "../components/workspace/WorkspaceSidebar.vue";
 import WorkspaceHeader from "../components/workspace/WorkspaceHeader.vue";
 import ProjectGenerationSettings from "../components/settings/ProjectGenerationSettings.vue";
+import ProjectCostPanel from "../components/cost/ProjectCostPanel.vue";
 
 import TopicPanel from "../components/topic/TopicPanel.vue";
 import ScriptPanel from "../components/script/ScriptPanel.vue";
@@ -44,6 +45,7 @@ provide(workspaceStoreKey, workspaceStore);
 
 // S2-2A 任务 10：项目生成设置对话框（工作区齿轮入口）
 const projectSettingsOpen = ref(false);
+const costPanelOpen = ref(false);
 const workspaceProjectId = computed(() => route.params.projectId as string | undefined);
 
 const panelMap: Record<PipelineStep, Component> = {
@@ -106,7 +108,7 @@ onMounted(async () => {
 
 <template>
   <div class="project-workspace">
-    <WorkspaceHeader @open-project-settings="projectSettingsOpen = true" />
+    <WorkspaceHeader @open-project-settings="projectSettingsOpen = true" @open-cost-panel="costPanelOpen = true" />
     <div v-if="isAdminDeputizing" class="deputize-banner" data-testid="deputize-banner">
       <span class="deputize-icon">&#9888;</span>
       <span>正在以管理员身份查看其他用户的项目，请谨慎操作，操作将记录在审计日志。</span>
@@ -121,6 +123,11 @@ onMounted(async () => {
       :project-id="workspaceProjectId ?? ''"
       :open="projectSettingsOpen"
       @close="projectSettingsOpen = false"
+    />
+    <ProjectCostPanel
+      :project-id="workspaceProjectId ?? ''"
+      :open="costPanelOpen"
+      @close="costPanelOpen = false"
     />
   </div>
 </template>

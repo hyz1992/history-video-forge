@@ -5,15 +5,17 @@ import ElementPlus from "element-plus";
 import { reactive } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-/** S2-2A 任务 11：成本明细页 失败测试（实现前红灯）。
+/** 2026-08-23：项目费用清单面板（跨阶段共用，默认收起）。
  *
- * 覆盖实施计划任务 11 步骤 1 验收：
- * - 成本页区分估算、授权上界、执行后估算、provider actual；
- * - 按 capability/provider 分组展示；
- * - 超额授权标记。
+ * 覆盖：
+ * - 打开时加载 summary 与 records，展示总预计/已确认实际；
+ * - 按流水线阶段分组（operation → 阶段 key 映射）；
+ * - 明细行区分 provider actual（provider_usage）与估算（estimate）；
+ * - 金额展示保持字符串精度（不经 Number 计算）；
+ * - 加载失败展示错误态。
  */
 
-import ProjectCostSummary from "../../frontend/src/components/cost/ProjectCostSummary.vue";
+import ProjectCostPanel from "../../frontend/src/components/cost/ProjectCostPanel.vue";
 import {
   generationCostStoreKey,
   type GenerationCostStore,
@@ -21,16 +23,11 @@ import {
 
 function createMockCostStore(): GenerationCostStore {
   const state = reactive({
-    lastQuote: null,
     costSummary: {
       data: {
         currency: "CNY",
         total_estimated_cost_cny: "3.200000",
-        total_authorization_cost_cny: "3.800000",
         total_actual_cost_cny: "1.500000",
-        quote_count: 2,
-        consumed_quote_count: 1,
-        over_budget_quote_count: 1,
         run_count: 2,
         run_status_counts: { pending_dispatch: 0, running: 0, succeeded: 1, failed: 1, needs_reconciliation: 0 },
         capability_breakdown: [
@@ -65,115 +62,146 @@ function createMockCostStore(): GenerationCostStore {
           },
           {
             id: "usage_2",
+            run_id: "run_1",
+            run_status: "succeeded",
+            snapshot_id: "snap_1",
+            operation: "script.generate",
+            capability: "llm.smart",
+            provider_key: "deepseek",
+            model_id: "deepseek-v4-pro",
+            status: "succeeded",
+            unit_type: "token",
+            input_units: 500,
+            output_units: 300,
+            estimated_cost_cny: "2.200000",
+            actual_cost_cny: "1.300000",
+            cost_basis: "provider_usage",
+            duration_ms: 3400,
+            created_at: "2026-08-20T09:00:00.000Z",
+          },
+          {
+            id: "usage_3",
             run_id: "run_2",
             run_status: "succeeded",
             snapshot_id: "snap_2",
             operation: "assets.generate",
             capability: "tts.synthesize",
             provider_key: "dashscope",
-            model_id: "qwen3-tts",
+            model_id: "qwen3-tts-instruct-flash",
             status: "succeeded",
             unit_type: "tts_character",
-            input_units: 100,
+            input_units: 820,
             output_units: null,
             estimated_cost_cny: "0.800000",
             actual_cost_cny: null,
             cost_basis: "estimate",
-            duration_ms: 800,
-            created_at: "2026-08-20T11:00:00.000Z",
+            duration_ms: 900,
+            created_at: "2026-08-20T08:00:00.000Z",
           },
         ],
-        total: 2,
+        total: 3,
       },
       loading: false,
       error: null,
     },
   });
+
   return {
     state,
-    createQuote: vi.fn(),
-    loadCostSummary: vi.fn(async () => undefined),
-    loadCostRecords: vi.fn(async () => undefined),
-  } as unknown as GenerationCostStore;
+    async loadCostSummary() {},
+    async loadCostRecords() {},
+  };
 }
 
-function mountCostSummary(store: GenerationCostStore) {
-  return mount(ProjectCostSummary, {
-    props: { projectId: "proj-1", open: true },
+function mountPanel(store: GenerationCostStore, open = true, projectId = "proj-1") {
+  return mount(ProjectCostPanel, {
+    props: { projectId, open },
     global: {
       plugins: [ElementPlus],
-      provide: { [generationCostStoreKey as symbol]: store },
+      provide: {
+        [generationCostStoreKey as symbol]: store,
+      },
     },
   });
 }
 
 afterEach(() => {
-  vi.unstubAllGlobals();
+  document.body.innerHTML = "";
 });
 
-describe("ProjectCostSummary", () => {
-  it("加载 summary 与 records 并展示预计/实际/估算", async () => {
+describe("ProjectCostPanel（费用清单面板）", () => {
+  it("打开时加载 summary 与 records 并展示总预计/已确认实际", async () => {
     const store = createMockCostStore();
-    const wrapper = mountCostSummary(store);
+    const loadSummary = vi.spyOn(store, "loadCostSummary");
+    const loadRecords = vi.spyOn(store, "loadCostRecords");
+    const wrapper = mountPanel(store);
     await flushPromises();
 
-    expect(store.loadCostSummary).toHaveBeenCalledWith("proj-1");
-    expect(store.loadCostRecords).toHaveBeenCalledWith("proj-1");
-
+    expect(loadSummary).toHaveBeenCalledWith("proj-1");
+    expect(loadRecords).toHaveBeenCalledWith("proj-1");
     const text = wrapper.text();
-    expect(text).toContain("3.2"); // 总预计
-    expect(text).toContain("1.5"); // 总实际（provider 已确认）
-    expect(text).toContain("3.8"); // 授权上界
+    expect(text).toContain("总预计费用");
+    expect(text).toContain("¥3.2");
+    expect(text).toContain("已确认实际");
+    expect(text).toContain("¥1.5");
+    expect(text).toContain("成功 1");
   });
 
-  it("按 capability 分组展示 breakdown", async () => {
+  it("按流水线阶段分组（assets.generate → 资产，script.generate → 文案）", async () => {
     const store = createMockCostStore();
-    const wrapper = mountCostSummary(store);
+    const wrapper = mountPanel(store);
     await flushPromises();
 
-    const groups = wrapper.findAll('[data-testid="cost-capability-group"]');
+    const groups = wrapper.findAll('[data-testid="cost-stage-group"]');
     expect(groups.length).toBe(2);
-    expect(groups[0]?.text()).toContain("image.generate");
-    expect(groups[1]?.text()).toContain("tts.synthesize");
+    expect(groups[0]!.text()).toContain("文案");
+    expect(groups[0]!.text()).toContain("deepseek-v4-pro");
+    expect(groups[1]!.text()).toContain("资产");
+    expect(groups[1]!.text()).toContain("wan2.6-t2i");
+    expect(groups[1]!.text()).toContain("qwen3-tts-instruct-flash");
   });
 
   it("区分 provider actual（provider_usage）与估算（estimate）", async () => {
     const store = createMockCostStore();
-    const wrapper = mountCostSummary(store);
+    const wrapper = mountPanel(store);
     await flushPromises();
 
     const text = wrapper.text();
-    // image.generate 记录为 provider_usage（已确认实际）
     expect(text).toContain("已确认实际");
-    // tts.synthesize 记录为 estimate（估算）
     expect(text).toContain("估算");
-  });
-
-  it("超额授权标记（over_budget_quote_count > 0）", async () => {
-    const store = createMockCostStore();
-    const wrapper = mountCostSummary(store);
-    await flushPromises();
-
-    const badge = wrapper.find('[data-testid="over-budget-badge"]');
-    expect(badge.exists()).toBe(true);
-    expect(badge.text()).toContain("1");
   });
 
   it("金额展示保持字符串精度（不经 Number 计算）", async () => {
     const store = createMockCostStore();
-    store.state.costSummary.data!.total_actual_cost_cny = "9007199254740993.120000";
-    const wrapper = mountCostSummary(store);
+    const wrapper = mountPanel(store);
     await flushPromises();
 
-    expect(wrapper.text()).toContain("9007199254740993.12");
+    const text = wrapper.text();
+    expect(text).toContain("¥0.2");
+    expect(text).toContain("¥2.2");
+    expect(text).toContain("¥1.3");
   });
 
-  it("加载失败展示错误态", async () => {
+  it("无记录时展示空状态", async () => {
     const store = createMockCostStore();
-    store.state.costSummary.error = "cost_load_failed";
-    const wrapper = mountCostSummary(store);
+    store.state.costRecords.data!.records = [];
+    store.state.costSummary.data!.total_estimated_cost_cny = "0.000000";
+    const wrapper = mountPanel(store);
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="cost-empty"]').exists()).toBe(true);
+  });
+
+  it("加载失败展示错误态并可重试", async () => {
+    const store = createMockCostStore();
+    store.state.costSummary.error = "network down";
+    const loadSummary = vi.spyOn(store, "loadCostSummary");
+    const wrapper = mountPanel(store);
     await flushPromises();
 
     expect(wrapper.find('[data-testid="cost-load-error"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain("network down");
+    await wrapper.find('[data-testid="cost-load-error"] button').trigger("click");
+    expect(loadSummary).toHaveBeenCalled();
   });
 });
