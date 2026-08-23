@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
+import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 import type { AuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 
@@ -49,6 +50,7 @@ describe("script api", () => {
 
   it("POST /api/projects/:projectId/script/generate returns a sync runtime result", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const auth = buildTestAuth();
     const prepared = await prepareConfirmedTopic(app, auth);
 
@@ -73,6 +75,7 @@ describe("script api", () => {
 
   it("semantic review output stays within the allowed decision set and can expose patch_intent", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const auth = buildTestAuth();
     const prepared = await prepareConfirmedTopic(app, auth);
 
@@ -96,6 +99,7 @@ describe("script api", () => {
 
   it("internal lift patch does not mutate must_include_beats, scope, or narrative_tension_map", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const auth = buildTestAuth();
     const prepared = await prepareConfirmedTopic(app, auth);
 

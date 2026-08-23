@@ -87,37 +87,7 @@ function buildApiApp() {
 }
 
 describe("generation cost API", () => {
-  it("POST generation-cost-quotes returns the design response contract with decimal string amounts", async () => {
-    const app = buildApiApp();
-    await seedQuotableCatalog(app);
-    const auth = buildTestAuth({ userId: "user-a" });
-    const { project } = await prepareAssetsApiProject(app, auth);
-
-    const res = await app.inject({
-      method: "POST",
-      url: `/api/projects/${project.id}/generation-cost-quotes`,
-      payload: { operation: "assets.generate", selection: { task_ids: [] } },
-      auth,
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.quote_id).toBeTruthy();
-    expect(body.operation).toBe("assets.generate");
-    expect(body.expires_at).toBeTruthy();
-    expect(body.configuration_hash).toMatch(/^fnv1a64:/);
-    expect(Array.isArray(body.pricing_versions)).toBe(true);
-    expect(body.items.length).toBeGreaterThan(0);
-    for (const item of body.items) {
-      expect(item.estimated_cost_cny).toMatch(/^(0|[1-9][0-9]*)\.\d{6}$/);
-      expect(item.authorization_cost_cny).toMatch(/^(0|[1-9][0-9]*)\.\d{6}$/);
-    }
-    expect(body.estimated_cost_cny).toMatch(/^(0|[1-9][0-9]*)\.\d{6}$/);
-    expect(body.authorization_cost_cny).toMatch(/^(0|[1-9][0-9]*)\.\d{6}$/);
-    expect(typeof body.contains_unbounded_item).toBe("boolean");
-    expect(body.requires_budget_override).toBe(false);
-  });
-
-  it("submit protocol: assets/generate consumes the quote and creates a pending run; replay returns the same run", async () => {
+  it("submit protocol: assets/generate creates a run directly; replay with same key returns the same run", async () => {
     const app = buildApiApp();
     await seedQuotableCatalog(app);
     const auth = buildTestAuth({ userId: "user-a" });
@@ -136,21 +106,10 @@ describe("generation cost API", () => {
       metrics: { task_count: 3, execution_count: 0, artifact_count: 0, segment_route_count: 1 },
     });
 
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${project.id}/generation-cost-quotes`,
-      payload: { operation: "assets.generate", selection: { task_ids: [] } },
-      auth,
-    });
-    expect(quoteRes.statusCode).toBe(200);
-    const quoteId = quoteRes.json().quote_id as string;
-
     const submitRes = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/assets/generate`,
       payload: {
-        cost_quote_id: quoteId,
-        authorize_budget_override: false,
         idempotency_key: "api-key-1",
         execution_mode: "auto_available",
       },
@@ -160,16 +119,11 @@ describe("generation cost API", () => {
     const submitBody = submitRes.json();
     expect(submitBody.generation_run_id).toBeTruthy();
 
-    const storedQuote = app.db.generationCostQuotes.get(quoteId)!;
-    expect(storedQuote.consumedAt).not.toBeNull();
-
-    // 幂等重放：同 key 同 payload → 同 run，不再消费
+    // 幂等重放：同 key 同 payload → 同 run
     const replayRes = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/assets/generate`,
       payload: {
-        cost_quote_id: quoteId,
-        authorize_budget_override: false,
         idempotency_key: "api-key-1",
         execution_mode: "auto_available",
       },
@@ -199,18 +153,10 @@ describe("generation cost API", () => {
       metrics: { task_count: 3, execution_count: 0, artifact_count: 0, segment_route_count: 1 },
     });
 
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${project.id}/generation-cost-quotes`,
-      payload: { operation: "assets.generate", selection: { task_ids: [] } },
-      auth,
-    });
-    const quoteId = quoteRes.json().quote_id as string;
-
     const first = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/assets/generate`,
-      payload: { cost_quote_id: quoteId, idempotency_key: "conflict-key", mode: "missing_only", task_ids: [] },
+      payload: { idempotency_key: "conflict-key", mode: "missing_only", task_ids: [] },
       auth,
     });
     expect(first.statusCode).toBe(200);
@@ -218,52 +164,11 @@ describe("generation cost API", () => {
     const conflict = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/assets/generate`,
-      payload: { cost_quote_id: quoteId, idempotency_key: "conflict-key", mode: "missing_only", task_ids: ["task_img_001"] },
+      payload: { idempotency_key: "conflict-key", mode: "missing_only", task_ids: ["task_img_001"] },
       auth,
     });
     expect(conflict.statusCode).toBe(409);
     expect(conflict.json().error).toBe("generation_idempotency_payload_conflict");
-  });
-
-  it("submit with expired quote returns 409 generation_quote_expired", async () => {
-    const app = buildApiApp();
-    await seedQuotableCatalog(app);
-    const auth = buildTestAuth({ userId: "user-a" });
-    const { project } = await prepareAssetsApiProject(app, auth);
-
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${project.id}/generation-cost-quotes`,
-      payload: { operation: "assets.generate" },
-      auth,
-    });
-    const quoteId = quoteRes.json().quote_id as string;
-    app.db.generationCostQuotes.get(quoteId)!.expiresAt = new Date(Date.now() - 1000);
-
-    const res = await app.inject({
-      method: "POST",
-      url: `/api/projects/${project.id}/assets/generate`,
-      payload: { cost_quote_id: quoteId, idempotency_key: "expired-key" },
-      auth,
-    });
-    expect(res.statusCode).toBe(409);
-    expect(res.json().error).toBe("generation_quote_expired");
-  });
-
-  it("submit with unknown quote returns 404 generation_quote_not_found", async () => {
-    const app = buildApiApp();
-    await seedQuotableCatalog(app);
-    const auth = buildTestAuth({ userId: "user-a" });
-    const { project } = await prepareAssetsApiProject(app, auth);
-
-    const res = await app.inject({
-      method: "POST",
-      url: `/api/projects/${project.id}/assets/generate`,
-      payload: { cost_quote_id: "no-such-quote", idempotency_key: "missing-key" },
-      auth,
-    });
-    expect(res.statusCode).toBe(404);
-    expect(res.json().error).toBe("generation_quote_not_found");
   });
 
   it("cost read APIs are owner-scoped: other users get 404, owner gets contract responses", async () => {
@@ -273,14 +178,7 @@ describe("generation cost API", () => {
     const otherAuth = buildTestAuth({ userId: "user-b" });
     const { project } = await prepareAssetsApiProject(app, auth);
 
-    // 先创建一条已消费记录（quote + run）
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${project.id}/generation-cost-quotes`,
-      payload: { operation: "assets.generate" },
-      auth,
-    });
-    const quoteId = quoteRes.json().quote_id as string;
+    // 先创建一条 run（2026-08-23：直接提交，无需 quote）
     buildInitialAssetManifestMock.mockReturnValueOnce(makeManifest({
       assetPlanRecordId: project.activeAssetPlanRecordId!,
       storyboardRecordId: project.activeStoryboardRecordId!,
@@ -297,7 +195,7 @@ describe("generation cost API", () => {
     await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/assets/generate`,
-      payload: { cost_quote_id: quoteId, idempotency_key: "read-key-1" },
+      payload: { idempotency_key: "read-key-1" },
       auth,
     });
 
@@ -321,7 +219,7 @@ describe("generation cost API", () => {
     const configBody = config.json();
     expect(configBody.run_id).toBe(run.id);
     expect(configBody.run_status).toBe("succeeded");
-    expect(configBody.quote_id).toBe(quoteId);
+    expect(configBody.quote_id).toBeNull();
 
     // 其他用户：一律 404（project 反查 owner，禁止凭 id 读数据）
     for (const url of [
@@ -362,17 +260,10 @@ describe("generation cost API submit payload fidelity (final review fixes)", () 
       metrics: { task_count: 3, execution_count: 0, artifact_count: 0, segment_route_count: 1 },
     });
 
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${project.id}/generation-cost-quotes`,
-      payload: { operation: "assets.generate" },
-      auth,
-    });
-    const quoteId = quoteRes.json().quote_id as string;
     const res = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/assets/generate`,
-      payload: { cost_quote_id: quoteId, idempotency_key: "payload-fidelity-1" },
+      payload: { idempotency_key: "payload-fidelity-1" },
       auth,
     });
     expect(res.statusCode).toBe(200);

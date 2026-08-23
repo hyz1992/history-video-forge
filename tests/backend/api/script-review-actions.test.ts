@@ -70,6 +70,7 @@ vi.mock("../../../backend/src/modules/script/script-generation.service.js", () =
 }));
 
 import { buildApp } from "../../../backend/src/app.js";
+import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 
 describe("script review actions api", () => {
@@ -116,6 +117,7 @@ describe("script review actions api", () => {
     generateScriptDraft.mockResolvedValueOnce(weakDraft);
 
     const app = buildApp();
+    seedGenerationCatalog(app);
     const projectId = await prepareConfirmedTopic(app);
 
     const response = await app.inject({ auth,
@@ -143,6 +145,7 @@ describe("script review actions api", () => {
       .mockResolvedValueOnce(regeneratedDraft);
 
     const app = buildApp();
+    seedGenerationCatalog(app);
     const projectId = await prepareConfirmedTopic(app);
 
     const response = await app.inject({ auth,
@@ -167,6 +170,7 @@ describe("script review actions api", () => {
     generateScriptDraft.mockResolvedValueOnce(regeneratedDraft);
 
     const app = buildApp();
+    seedGenerationCatalog(app);
     const projectId = await prepareConfirmedTopic(app);
 
     const firstScriptResponse = await app.inject({ auth,

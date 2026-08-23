@@ -711,10 +711,10 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   }
 
   // Step 1: Check project has active asset plan。
-  // 9A 步骤 2（终审 I-A）：quote 绑定 run 优先使用授权时绑定的 plan 身份；
-  // 授权时无 plan（纯 LLM 报价，boundContext 存在但无绑定 plan）按绑定语义
-  // 拒绝——回退活动指针会让纯 LLM 报价放行未授权媒体派发（diff 审查 I2）。
-  // 非绑定 run（free/legacy 直调）保持既有活动指针语义。
+  // 9A 步骤 2（终审 I-A）：绑定 run 优先使用授权时绑定的 plan 身份；
+  // 绑定 run 无绑定 plan（纯 LLM 运行）同样拒绝——回退活动指针会让纯 LLM
+  // 运行放行未授权媒体派发（diff 审查 I2）。非绑定运行保持活动指针语义。
+  // 2026-08-23（报价体系移除）：无 plan 统一返回 active_asset_plan_missing。
   const capturedAssetPlanRecordId =
     input.boundContext !== undefined
       ? input.boundContext.assetPlanRecordId
@@ -722,9 +722,7 @@ export async function runAssetsGeneration(input: RunAssetsGenerationInput) {
   if (!capturedAssetPlanRecordId) {
     return {
       statusCode: 409,
-      body: input.boundContext !== undefined
-        ? { error: "generation_quote_plan_binding_missing", message: "quote 未覆盖任何媒体任务（无绑定 plan）；无法执行媒体生成" }
-        : { error: "active_asset_plan_missing" },
+      body: { error: "active_asset_plan_missing", message: "本次运行未绑定资产规划（无可用 plan）；无法执行媒体生成" },
     };
   }
 

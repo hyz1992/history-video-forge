@@ -255,6 +255,7 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
       repository: generationRunRepository,
       workerId: `main-dispatcher-${process.pid}`,
       leaseDurationMs: 30_000,
+      prismaClient: options.prismaClient,
       handlers: {
         "assets.generate": createAssetsDispatchHandler(),
         // S2-2A 任务 9B：五个 LLM 生成 operation 的 dispatcher handler

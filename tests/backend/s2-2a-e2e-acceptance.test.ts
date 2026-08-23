@@ -342,30 +342,21 @@ async function prepareProjectWithUpstream(app: ReturnType<typeof buildApp>): Pro
 describe("S2-2A e2e：三入口 quote 正链路 + billing 落账（9B 缺口收口）", () => {
   const auth = buildTestAuth({ userId: "owner-1" });
 
-  /** 创建 quote 并通过 API 提交，返回响应与 run。 */
-  async function submitWithQuote(
+  /** 2026-08-23（报价体系移除）：直连提交（幂等键可选），返回响应。 */
+  async function submitDirect(
     app: ReturnType<typeof buildApp>,
     project: ProjectRecord,
-    operation: string,
     url: string,
     key: string,
     payload: Record<string, unknown> = {},
   ) {
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${project.id}/generation-cost-quotes`,
-      payload: { operation },
-      auth,
-    });
-    expect(quoteRes.statusCode).toBe(200);
-    const quote = quoteRes.json() as { quote_id: string };
     const response = await app.inject({
       method: "POST",
       url,
-      payload: { ...payload, cost_quote_id: quote.quote_id, idempotency_key: key },
+      payload: { ...payload, idempotency_key: key },
       auth,
     });
-    return { response, quoteId: quote.quote_id };
+    return { response };
   }
 
   function assertBilling(
@@ -396,8 +387,8 @@ describe("S2-2A e2e：三入口 quote 正链路 + billing 落账（9B 缺口收�
     mockStageResponses();
     const project = await prepareProjectWithUpstream(app);
 
-    const { response, quoteId } = await submitWithQuote(
-      app, project, "storyboard.generate",
+    const { response } = await submitDirect(
+      app, project,
       `/api/projects/${project.id}/storyboard/generate`,
       "e2e-storyboard-1",
     );
@@ -406,7 +397,7 @@ describe("S2-2A e2e：三入口 quote 正链路 + billing 落账（9B 缺口收�
     const body = response.json() as Record<string, unknown>;
     expect(body.storyboard_record_id).toBeTruthy();
     expect(body.generation_run_id).toBeTruthy();
-    const run = [...app.db.generationRuns.values()].find((r) => r.quoteId === quoteId);
+    const run = [...app.db.generationRuns.values()].find((r) => r.idempotencyKey === "e2e-storyboard-1");
     expect(run?.status).toBe("succeeded");
     assertBilling(app, "storyboard_run", ["storyboard.planner"]);
   });
@@ -417,28 +408,25 @@ describe("S2-2A e2e：三入口 quote 正链路 + billing 落账（9B 缺口收�
     mockStageResponses();
     const project = await prepareProjectWithUpstream(app);
 
-    // 前置：storyboard record（asset-plan 的输入；付费部署下同样走 quote 提交）
-    const sbRes = await submitWithQuote(
-      app, project, "storyboard.generate",
+    // 前置：storyboard record（asset-plan 的输入；统一走 run 提交）
+    const sbRes = await submitDirect(
+      app, project,
       `/api/projects/${project.id}/storyboard/generate`,
       "e2e-sb-for-ap",
     );
     expect(sbRes.response.statusCode).toBe(200);
     expect(project.activeStoryboardRecordId).toBeTruthy();
 
-    const { response, quoteId } = await submitWithQuote(
-      app, project, "asset_plan.generate",
+    const { response } = await submitDirect(
+      app, project,
       `/api/projects/${project.id}/asset-plan/generate`,
       "e2e-assetplan-1",
     );
 
-    if (response.statusCode !== 200) {
-      console.log("AP RESP:", JSON.stringify(response.json()).slice(0, 1000));
-    }
     expect(response.statusCode).toBe(200);
     const body = response.json() as Record<string, unknown>;
     expect(body.asset_plan_record_id).toBeTruthy();
-    const run = [...app.db.generationRuns.values()].find((r) => r.quoteId === quoteId);
+    const run = [...app.db.generationRuns.values()].find((r) => r.idempotencyKey === "e2e-assetplan-1");
     expect(run?.status).toBe("succeeded");
     assertBilling(app, "asset_plan_run", [
       "asset-planning.planner",
@@ -452,16 +440,15 @@ describe("S2-2A e2e：三入口 quote 正链路 + billing 落账（9B 缺口收�
     mockStageResponses();
     const project = await prepareProjectWithUpstream(app);
 
-    // 前置：完整上游（storyboard + asset plan + manifest + compose + render completed；
-    // 付费部署下前置生成同样走 quote 提交）
-    const sbRes = await submitWithQuote(
-      app, project, "storyboard.generate",
+    // 前置：完整上游（storyboard + asset plan + manifest + compose + render completed）
+    const sbRes = await submitDirect(
+      app, project,
       `/api/projects/${project.id}/storyboard/generate`,
       "e2e-sb-for-pub",
     );
     expect(sbRes.response.statusCode).toBe(200);
-    const apRes = await submitWithQuote(
-      app, project, "asset_plan.generate",
+    const apRes = await submitDirect(
+      app, project,
       `/api/projects/${project.id}/asset-plan/generate`,
       "e2e-ap-for-pub",
     );
@@ -532,14 +519,14 @@ describe("S2-2A e2e：三入口 quote 正链路 + billing 落账（9B 缺口收�
     } as never);
     project.activeRenderJobRecordId = renderId;
 
-    const { response, quoteId } = await submitWithQuote(
-      app, project, "publish.generate",
+    const { response } = await submitDirect(
+      app, project,
       `/api/projects/${project.id}/publish/generate`,
       "e2e-publish-1",
     );
 
     expect(response.statusCode).toBe(201);
-    const run = [...app.db.generationRuns.values()].find((r) => r.quoteId === quoteId);
+    const run = [...app.db.generationRuns.values()].find((r) => r.idempotencyKey === "e2e-publish-1");
     expect(run?.status).toBe("succeeded");
     assertBilling(app, "publish_run", [
       "publish.cover-prompt-generator",

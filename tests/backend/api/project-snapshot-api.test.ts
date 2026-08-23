@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
+import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 import type { AuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 
@@ -61,6 +62,7 @@ describe("project snapshot api", () => {
 
   it("GET /api/projects/:projectId returns topic/script snapshot for restoring the current state", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const auth = buildTestAuth();
     const projectId = await prepareProjectWithScript(app, auth);
 
@@ -101,6 +103,7 @@ describe("project snapshot api", () => {
 
   it("returns restore metadata for draft and formal projects", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const auth = buildTestAuth();
 
     const projectResponse = await app.inject({
@@ -175,6 +178,7 @@ describe("project snapshot api", () => {
 
   it("persists readable trace directories and keeps latest topic/script run summaries after re-confirming a topic", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const auth = buildTestAuth();
 
     const projectResponse = await app.inject({

@@ -4,7 +4,6 @@ import type { AppPrismaClient } from "../../db/prisma-client.types.js";
 import type { AppResponse, RouteContext } from "../../app";
 import type { StoredTopicCandidate } from "../topic/topic-confirm.service";
 import { getProjectById } from "../projects/project.repository";
-import { isPaidLlmDispatchPossible } from "../generation-cost/provider-dispatch-gate.js";
 import { requireUser } from "../../auth/authorization.js";
 import { demoStageGuard } from "../../shared/demo-stage-guard";
 import {
@@ -237,17 +236,8 @@ export async function createTopicFromLibraryController(
   const demoBlock = demoStageGuard(project, context.app.env.demoMode, "选题");
   if (demoBlock) return demoBlock;
 
-  // S2-2A 任务 9B：付费部署下明确拒绝（事件库入口暂未接入 quote 提交执行，
-  // 不得无 quote 触发真实 LLM；与 from-custom 同族）；stub/本地部署保留
-  if (isPaidLlmDispatchPossible(context.app.db)) {
-    return {
-      statusCode: 409,
-      body: {
-        error: "paid_generation_quote_required",
-        message: "当前部署可调用付费 LLM provider：事件库选题入口暂未接入付费提交模式，请使用系统推荐入口或等待后续版本",
-      },
-    };
-  }
+  // 2026-08-23（报价体系移除）：事件库入口不再封口，恢复本地直连执行
+  // （不建 run/不记账，登记已知限制：辅助入口费用不入项目成本清单）
 
   // Look up event library entry
   const entry = await prisma.eventLibraryEntry.findFirst({

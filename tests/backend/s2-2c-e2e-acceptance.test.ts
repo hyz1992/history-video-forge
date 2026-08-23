@@ -255,24 +255,13 @@ describe("S2-2C e2e 验收", () => {
     });
     expect(patchProject.statusCode).toBe(200);
 
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${project.id}/generation-cost-quotes`,
-      payload: { operation: "script.generate" },
-      auth,
-    });
-    expect(quoteRes.statusCode).toBe(200);
-    const quote = quoteRes.json() as { quote_id: string };
-
     const submit = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/script/generate`,
       payload: {
         allow_patch: false,
         allow_regen: false,
-        cost_quote_id: quote.quote_id,
         idempotency_key: "s2-2c-e2e-fixed-1",
-        authorize_budget_override: true,
       },
       auth,
     });
@@ -316,24 +305,13 @@ describe("S2-2C e2e 验收", () => {
     const project = await prepareScriptProject(app);
     const fetchMock = stubChatFetch();
 
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${project.id}/generation-cost-quotes`,
-      payload: { operation: "script.generate" },
-      auth,
-    });
-    expect(quoteRes.statusCode).toBe(200);
-    const quote = quoteRes.json() as { quote_id: string };
-
     const submit = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/script/generate`,
       payload: {
         allow_patch: false,
         allow_regen: false,
-        cost_quote_id: quote.quote_id,
         idempotency_key: "s2-2c-e2e-auto-1",
-        authorize_budget_override: true,
       },
       auth,
     });
@@ -358,23 +336,13 @@ describe("S2-2C e2e 验收", () => {
     }
   });
 
-  it("4：提交前漂移（拒绝）——报价后修改 capabilities → 提交 409 generation_quote_configuration_changed，无快照/run/provider 调用", async () => {
+  it("4：提交按当前配置解析——fixed 配置的提交快照冻结 fixed 模型", async () => {
     const app = buildApp({ generationQuoteReadinessInput: e2eReadiness() });
     await seedMultiCandidateCatalog(app);
     const project = await prepareScriptProject(app);
     const fetchMock = stubChatFetch();
 
-    // 全 auto 报价（解析为目录默认 A）
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${project.id}/generation-cost-quotes`,
-      payload: { operation: "script.generate" },
-      auth,
-    });
-    expect(quoteRes.statusCode).toBe(200);
-    const quote = quoteRes.json() as { quote_id: string };
-
-    // 提交前修改项目配置 capabilities（auto → fixed 候选 B）
+    // 项目配置 capabilities：auto → fixed 候选 B（提交时解析为当前配置）
     const patchProject = await app.inject({
       method: "PATCH",
       url: `/api/projects/${project.id}/generation-configuration`,
@@ -394,18 +362,25 @@ describe("S2-2C e2e 验收", () => {
       payload: {
         allow_patch: false,
         allow_regen: false,
-        cost_quote_id: quote.quote_id,
         idempotency_key: "s2-2c-e2e-drift-1",
-        authorize_budget_override: true,
       },
       auth,
     });
-    expect(submit.statusCode).toBe(409);
-    expect((submit.json() as Record<string, unknown>).error).toBe("generation_quote_configuration_changed");
-    // 无快照/run 创建、无 provider 调用（不进入派发）
-    expect(app.db.runConfigurationSnapshots.size).toBe(0);
-    expect(app.db.generationRuns.size).toBe(0);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(submit.statusCode).toBe(200);
+    // 快照冻结提交时的 fixed 配置（无报价漂移概念；每次提交独立解析）
+    const snapshot = [...app.db.runConfigurationSnapshots.values()][0]!;
+    const resolved = snapshot.resolvedConfigurationJson as {
+      resolved_capabilities: {
+        "llm.smart": { mode: string; provider_model_id: string; provider_key: string; model_id: string };
+      };
+    };
+    expect(resolved.resolved_capabilities["llm.smart"]).toEqual({
+      mode: "fixed",
+      provider_model_id: "llm.smart.zhipu.glm-4",
+      provider_key: "zhipu",
+      model_id: "glm-4",
+    });
+    expect(fetchMock).toHaveBeenCalled();
   });
 
   it("5：快照后漂移（仍执行 A）——pending run 冻结 A 后改目录默认为 B，dispatcher 恢复仍调用 A 且 usage 记 A", async () => {
@@ -415,18 +390,10 @@ describe("S2-2C e2e 验收", () => {
     const fetchMock = stubChatFetch();
 
     const repository = createGenerationRunRepository(app.db);
-    const quote = await createGenerationCostQuote(
-      app.db, project, project.ownerId,
-      { operation: "script.generate" },
-      { readinessInput: e2eReadiness() },
-    );
-    if (!quote.ok) throw new Error(`quote failed: ${JSON.stringify(quote.error)}`);
     const submit = await createOrRestoreGenerationRun(
       app.db, project, project.ownerId,
       {
         operation: "script.generate",
-        costQuoteId: quote.value.quote.id,
-        authorizeBudgetOverride: true,
         idempotencyKey: "s2-2c-e2e-snapshot-drift-1",
         dispatchPayload: { allow_patch: false, allow_regen: false },
       },
@@ -581,32 +548,27 @@ describe("S2-2C e2e 验收", () => {
     smartDefault.status = "disabled";
     smartDefault.isDefault = false;
 
-    // 报价解析失败（resolver fixed → disabled → generation_model_disabled，
-    // service 层包装为 generation_quote_resolution_failed，message 指出 disabled）——
+    // 提交解析失败（resolver fixed → disabled → generation_model_disabled，
+    // 提交路径包装为 generation_run_resolution_failed，message 指出 disabled）——
     // 绝不静默切换到其他模型
-    const quote = await createGenerationCostQuote(
-      app.db, project, project.ownerId,
-      { operation: "script.generate" },
-      { readinessInput: e2eReadiness() },
-    );
-    expect(quote.ok).toBe(false);
-    if (!quote.ok) {
-      expect(quote.error.code).toBe("generation_quote_resolution_failed");
-      expect(quote.error.message).toMatch(/disabled/);
-    }
-
-    // capabilities 参与 configuration_hash：fixed 到 A 报价后改为 fixed 到 B →
-    // 旧 quote 提交被拒（漂移检测）
-    smartDefault.status = "active";
-    smartDefault.isDefault = true;
-    const quoteRes = await app.inject({
+    const submitBlocked = await app.inject({
       method: "POST",
-      url: `/api/projects/${project.id}/generation-cost-quotes`,
-      payload: { operation: "script.generate" },
+      url: `/api/projects/${project.id}/script/generate`,
+      payload: {
+        allow_patch: false,
+        allow_regen: false,
+        idempotency_key: "s2-2c-e2e-blocked-1",
+      },
       auth,
     });
-    expect(quoteRes.statusCode).toBe(200);
-    const quote2 = quoteRes.json() as { quote_id: string };
+    expect(submitBlocked.statusCode).toBe(409);
+    expect((submitBlocked.json() as Record<string, unknown>).error).toBe("generation_run_resolution_failed");
+    expect(JSON.stringify(submitBlocked.json())).toMatch(/disabled/);
+    expect(app.db.generationRuns.size).toBe(0);
+
+    // 恢复 active → 改 fixed B → 新提交按当前配置解析（每次提交独立解析）
+    smartDefault.status = "active";
+    smartDefault.isDefault = true;
 
     const patchProjectB = await app.inject({
       method: "PATCH",
@@ -628,14 +590,22 @@ describe("S2-2C e2e 验收", () => {
       payload: {
         allow_patch: false,
         allow_regen: false,
-        cost_quote_id: quote2.quote_id,
         idempotency_key: "s2-2c-e2e-hash-1",
-        authorize_budget_override: true,
       },
       auth,
     });
-    expect(submit.statusCode).toBe(409);
-    expect((submit.json() as Record<string, unknown>).error).toBe("generation_quote_configuration_changed");
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(submit.statusCode).toBe(200);
+    // 快照冻结提交时的 fixed B（capabilities 参与每次提交的独立解析）
+    const snapshot = [...app.db.runConfigurationSnapshots.values()][0]!;
+    const resolved = snapshot.resolvedConfigurationJson as {
+      resolved_capabilities: {
+        "llm.smart": { mode: string; provider_model_id: string };
+      };
+    };
+    expect(resolved.resolved_capabilities["llm.smart"]).toMatchObject({
+      mode: "fixed",
+      provider_model_id: "llm.smart.zhipu.glm-4",
+    });
+    expect(fetchMock).toHaveBeenCalled();
   });
 });

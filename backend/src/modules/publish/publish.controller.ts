@@ -2,9 +2,7 @@
 import { env } from "../../config/env";
 import { saveAssetManifestRecord } from "../assets/asset-manifest-record.repository";
 import { getProjectSnapshot } from "../projects/project-snapshot.service";
-import { runPublishGeneration } from "./publish-run.service";
-import { isPaidLlmDispatchPossible, isPaidMediaDispatchPossible } from "../generation-cost/provider-dispatch-gate.js";
-import { extractSubmitFields, submitGenerationRun } from "../generation-run/submit-protocol.js";
+import { submitGenerationRun } from "../generation-run/submit-protocol.js";
 import {
   buildCoverPromptContext,
   generateCoverPromptDraft,
@@ -44,26 +42,8 @@ export async function publishGenerateController(
     return { statusCode: 404, body: { error: "project_not_found" } };
   }
 
-  const payload = (context.payload ?? {}) as Record<string, unknown>;
-  // S2-2A 任务 9B：quote 提交协议（付费部署下无 quote 明确拒绝，不静默创建无限预算授权）
-  const submit = extractSubmitFields(payload);
-  if (submit.present) {
-    if (submit.invalid) {
-      return { statusCode: 400, body: { error: "generation_submit_fields_incomplete", message: "cost_quote_id 与 idempotency_key 必须同时提供" } };
-    }
-    return submitGenerationRun(context, "publish.generate", undefined, {});
-  }
-  if (isPaidLlmDispatchPossible(db)) {
-    return {
-      statusCode: 409,
-      body: {
-        error: "paid_generation_quote_required",
-        message: "当前部署可调用付费 LLM provider：请先创建报价并在生成请求中携带 cost_quote_id 与 idempotency_key",
-      },
-    };
-  }
-
-  return runPublishGeneration({ db, project });
+  // 2026-08-23（报价体系移除）：生成统一走 run 提交协议（无需 quote 字段）
+  return submitGenerationRun(context, "publish.generate", undefined, {});
 }
 
 export async function publishUpdateController(
@@ -160,16 +140,8 @@ export async function coverPromptOptimizeController(
     return { statusCode: 404, body: { error: "project_not_found" } };
   }
 
-  // S2-2A 任务 9B：付费部署下明确拒绝（封面 prompt 优化暂未接入 quote 提交执行）
-  if (isPaidLlmDispatchPossible(db)) {
-    return {
-      statusCode: 409,
-      body: {
-        error: "paid_generation_quote_required",
-        message: "当前部署可调用付费 LLM provider：封面 prompt 优化暂未接入付费提交模式，请通过发布生成入口使用",
-      },
-    };
-  }
+  // 2026-08-23（报价体系移除）：辅助入口不再封口，恢复本地直连执行
+  // （不建 run/不记账，登记已知限制：辅助入口费用不入项目成本清单）
 
   if (!project.activePublishPackageRecordId) {
     return {
@@ -378,24 +350,9 @@ export async function coverGenerateController(
     return { statusCode: 404, body: { error: "project_not_found" } };
   }
 
-  // S2-2A 任务 9A 遗留收口：cover/generate 直连 DashScope 媒体生成，未接入
-  // quote 提交协议（辅助入口，与 9B 辅助 LLM 入口同语义）。付费部署下必须
-  // 封口，不静默创建无限预算授权；stub/本地部署（无凭据）保留原路径
-  // （无凭据时 501 dashscope_not_configured）。
-  // 闸门与外呼条件同源（终审 I-1）：本端点外呼唯一前提是凭据存在——直连
-  // 路径没有 9A 主链路的 adapter 注册层二道防线，目录无 active 媒体行时
-  // （区域未知/行被禁用/内存态）isPaidMediaDispatchPossible 会放行而凭据
-  // 仍可真实外呼。因此凭据存在即封口（fail-closed），目录条件仅作并集。
-  const dashscopeApiKeyForGate = process.env.ALIYUN_DASHSCOPE_API_KEY || "";
-  if (isPaidMediaDispatchPossible(db) || dashscopeApiKeyForGate) {
-    return {
-      statusCode: 409,
-      body: {
-        error: "paid_generation_quote_required",
-        message: "当前部署可调用付费媒体 provider：封面生成暂未接入付费提交模式，请手动上传封面图",
-      },
-    };
-  }
+  // 2026-08-23（报价体系移除）：封面生成不再封口，恢复本地直连执行
+  // （不建 run/不记账，登记已知限制：辅助入口费用不入项目成本清单）。
+  // 凭据缺失仍由下方外呼路径返回 501 dashscope_not_configured。
 
   if (!project.activePublishPackageRecordId) {
     return {
@@ -494,16 +451,8 @@ export async function titleCandidatesController(
     return { statusCode: 404, body: { error: "project_not_found" } };
   }
 
-  // S2-2A 任务 9B：付费部署下明确拒绝（辅助端点暂未接入 quote 提交执行）
-  if (isPaidLlmDispatchPossible(db)) {
-    return {
-      statusCode: 409,
-      body: {
-        error: "paid_generation_quote_required",
-        message: "当前部署可调用付费 LLM provider：标题候选暂未接入付费提交模式，请通过发布生成入口使用",
-      },
-    };
-  }
+  // 2026-08-23（报价体系移除）：辅助入口不再封口，恢复本地直连执行
+  // （不建 run/不记账，登记已知限制：辅助入口费用不入项目成本清单）
 
   // Collect upstream context
   const topicPackage = project.activeTopicPackageId

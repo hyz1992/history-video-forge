@@ -3,8 +3,6 @@ import { guardOwnedRoute, guardUserRoute, requireUser } from "../../../auth/auth
 import { getProjectById } from "../../projects/project.repository.js";
 import { listVoiceProfiles, getVoiceProfileById, seedGlobalVoiceProfiles } from "./voice-profile.repository.js";
 import { appendVoicePreviewAudit, executeVoicePreview } from "./voice-preview.service.js";
-import { submitGenerationRun } from "../../generation-run/submit-protocol.js";
-import { isPaidMediaDispatchPossible } from "../../generation-cost/provider-dispatch-gate.js";
 
 /**
  * S2-2B 音色目录与试听 API（详细设计 §6.3/§9.2/§9.3）。
@@ -81,32 +79,8 @@ export const previewVoiceProfileController = guardOwnedRoute(
       };
     }
 
-    const payload = context.payload as Record<string, unknown>;
-    const submitFields = extractPreviewSubmitFields(payload);
-    if (submitFields.present) {
-      if (submitFields.invalid) {
-        return {
-          statusCode: 400,
-          body: { error: "generation_submit_fields_incomplete", message: "cost_quote_id 与 idempotency_key 必须同时提供" },
-        };
-      }
-      return submitGenerationRun(context, "voice.preview", undefined, {
-        voice_profile_id: voiceProfileId,
-      });
-    }
-
-    // 付费部署：试听可能触发真实付费 TTS/设计 → 必须 quote（fail-closed）
-    if (isPaidMediaDispatchPossible(context.app.db)) {
-      return {
-        statusCode: 409,
-        body: {
-          error: "paid_generation_quote_required",
-          message: "当前部署可调用付费媒体 provider：请先创建 voice.preview 报价并在试听请求中携带 cost_quote_id 与 idempotency_key",
-        },
-      };
-    }
-
-    // stub/fake 本地路径：免 quote 合成（不进入运行成本协议；写审计留痕）
+    // 2026-08-23（报价体系移除）：试听恢复免 quote 直连执行（不建 run/不记账；
+    // cached 零费用直接返回；真实 TTS 合成写审计留痕）
     try {
       const result = await executeVoicePreview({
         db: context.app.db,
@@ -137,18 +111,6 @@ export const previewVoiceProfileController = guardOwnedRoute(
     }
   },
 );
-
-function extractPreviewSubmitFields(payload: Record<string, unknown>): {
-  present: boolean;
-  invalid: boolean;
-} {
-  const hasQuote = typeof payload.cost_quote_id === "string" && payload.cost_quote_id.length > 0;
-  const hasKey = typeof payload.idempotency_key === "string" && payload.idempotency_key.length > 0;
-  return {
-    present: hasQuote || hasKey,
-    invalid: hasQuote !== hasKey,
-  };
-}
 
 export function registerVoiceProfileRoutes(app: {
   addRoute: (

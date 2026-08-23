@@ -14,6 +14,7 @@ vi.mock("../../../backend/src/modules/assets/assets-local-validator.js", () => (
 }));
 
 import { buildApp } from "../../../backend/src/app.js";
+import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning/asset-plan-record.repository.js";
 import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository.js";
@@ -601,6 +602,7 @@ describe("assets generate api", () => {
 
   it("returns 404 when the project does not exist", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
 
     const response = await app.inject({
       method: "POST",
@@ -617,6 +619,7 @@ describe("assets generate api", () => {
 
   it("returns 409 when active asset plan is missing", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const project = await createProject(app.db, {
       name: "Assets Missing Plan",
       ownerId: "owner-1",
@@ -630,13 +633,14 @@ describe("assets generate api", () => {
     });
 
     expect(response.statusCode).toBe(409);
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       error: "active_asset_plan_missing",
     });
   });
 
   it("creates, validates, persists, and activates a manifest from active asset plan", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const prepared = await prepareActiveAssetPlan(app);
     prepared.project.activeComposeRecordId = "compose_record_old";
     prepared.project.activeRenderJobRecordId = "render_job_record_old";
@@ -676,7 +680,6 @@ describe("assets generate api", () => {
       method: "POST",
       url: `/api/projects/${prepared.project.id}/assets/generate`,
       payload: {
-        voice_profile_id: "voice_preset_cold_authority",
         execution_mode: "auto_available",
       },
       auth,
@@ -764,8 +767,7 @@ describe("assets generate api", () => {
 
   it("passes explicit DashScope provider mode from API payload to assets execution", async () => {
     // 9A：付费链路经 quote 提交（旧无 quote 路径在付费部署下返回 paid_generation_quote_required）
-    const { buildQuotableReadinessInput } = await import("../cost/quote-test-context.js");
-    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    const app = buildApp();
     const prepared = await prepareActiveAssetPlan(app);
     tempDir = join(tmpdir(), `assets-api-dashscope-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });
@@ -849,21 +851,13 @@ describe("assets generate api", () => {
 
     injectDashscopeEnv();
     await seedDashscopeDispatchCatalog(app);
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${prepared.project.id}/generation-cost-quotes`,
-      payload: { operation: "assets.generate", selection: { task_ids: [] } },
-      auth,
-    });
-    expect(quoteRes.statusCode).toBe(200);
-    const quote = quoteRes.json() as { quote_id: string };
+    // 2026-08-23（报价体系移除）：直接提交（无需 quote；真实凭据由执行端服务端解析）
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${prepared.project.id}/assets/generate`,
       payload: {
         execution_mode: "auto_available",
-        cost_quote_id: quote.quote_id,
-        idempotency_key: "api-dashscope-quote-1",
+        idempotency_key: "api-dashscope-submit-1",
       },
       auth,
     });
@@ -882,8 +876,7 @@ describe("assets generate api", () => {
 
   it("passes DashScope image-to-video config from API payload to assets execution", async () => {
     // 9A：付费链路经 quote 提交
-    const { buildQuotableReadinessInput } = await import("../cost/quote-test-context.js");
-    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    const app = buildApp();
     const prepared = await prepareActiveAssetPlan(app);
     const assetPlan = makeImageToVideoAssetPlan({
       storyboardRecordId: prepared.storyboardRecord.id,
@@ -1008,21 +1001,13 @@ describe("assets generate api", () => {
 
         injectDashscopeEnv();
         await seedDashscopeDispatchCatalog(app);
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${prepared.project.id}/generation-cost-quotes`,
-      payload: { operation: "assets.generate", selection: { task_ids: [] } },
-      auth,
-    });
-    expect(quoteRes.statusCode).toBe(200);
-    const quote = quoteRes.json() as { quote_id: string };
-    const response = await app.inject({
-      method: "POST",
-      url: `/api/projects/${prepared.project.id}/assets/generate`,
-      payload: {
-        execution_mode: "auto_available",
-        cost_quote_id: quote.quote_id,
-        idempotency_key: "api-dashscope-i2v-quote-1",
+        // 2026-08-23（报价体系移除）：直接提交（无需 quote）
+        const response = await app.inject({
+          method: "POST",
+          url: `/api/projects/${prepared.project.id}/assets/generate`,
+          payload: {
+            execution_mode: "auto_available",
+            idempotency_key: "api-dashscope-i2v-submit-1",
       },
       auth,
     });
@@ -1038,6 +1023,7 @@ describe("assets generate api", () => {
 
   it("rejects client provider credentials with 400 client_provider_credentials_not_allowed", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const prepared = await prepareActiveAssetPlan(app);
     for (const payload of [
       { provider_mode: "dashscope" },
@@ -1058,6 +1044,7 @@ describe("assets generate api", () => {
 
   it("rejects client provider credentials on single-task and upgrade-video entries", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const prepared = await prepareActiveAssetPlan(app);
     const planRecord = app.db.assetPlanRecords.get(prepared.assetPlanRecord.id)!;
     const imageTask = (planRecord.planJson as { tasks: Array<{ task_id: string; task_type: string }> }).tasks.find(
@@ -1091,6 +1078,7 @@ describe("assets generate api", () => {
 
   it("supports execution_mode dry_run and confirms no provider adapter is invoked", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const prepared = await prepareActiveAssetPlan(app);
 
     const manifest = makeAssetManifest({
@@ -1118,7 +1106,6 @@ describe("assets generate api", () => {
       method: "POST",
       url: `/api/projects/${prepared.project.id}/assets/generate`,
       payload: {
-        voice_profile_id: "voice_default_male_storyteller",
         execution_mode: "dry_run",
       },
       auth,
@@ -1134,6 +1121,7 @@ describe("assets generate api", () => {
 
   it("returns 409 stale_assets_source if active asset plan changes before activation", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const prepared = await prepareActiveAssetPlan(app);
 
     const manifest = makeAssetManifest({
@@ -1165,7 +1153,6 @@ describe("assets generate api", () => {
       method: "POST",
       url: `/api/projects/${prepared.project.id}/assets/generate`,
       payload: {
-        voice_profile_id: "voice_default_male_storyteller",
         execution_mode: "auto_available",
       },
       auth,
@@ -1183,6 +1170,7 @@ describe("assets generate api", () => {
 
   it("project status becomes assets_blocked when manifest is not ready", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const prepared = await prepareActiveAssetPlan(app);
 
     const manifest = makeAssetManifest({
@@ -1210,7 +1198,6 @@ describe("assets generate api", () => {
       method: "POST",
       url: `/api/projects/${prepared.project.id}/assets/generate`,
       payload: {
-        voice_profile_id: "voice_default_male_storyteller",
         execution_mode: "auto_available",
       },
       auth,
@@ -1237,6 +1224,7 @@ describe("manual artifact registration", () => {
 
   it("returns 404 project_not_found for missing project on register", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
 
     const response = await app.inject({
       method: "POST",
@@ -1258,6 +1246,7 @@ describe("manual artifact registration", () => {
 
   it("returns 409 active_assets_missing when no active manifest on register", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const project = await createProject(app.db, {
       name: "No Manifest",
       ownerId: "owner-1",
@@ -1283,6 +1272,7 @@ describe("manual artifact registration", () => {
 
   it("returns 404 asset_task_not_found for unknown task id on register", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const prepared = await prepareActiveManifest(app);
 
     const response = await app.inject({
@@ -1305,6 +1295,7 @@ describe("manual artifact registration", () => {
 
   it("returns 422 asset_manual_upload_type_not_allowed for disallowed MIME type", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const prepared = await prepareActiveManifest(app);
 
     const response = await app.inject({
@@ -1327,6 +1318,7 @@ describe("manual artifact registration", () => {
 
   it("registers manual artifact, sets execution to completed, and re-validates", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const prepared = await prepareActiveManifest(app);
 
     // The img_001 execution in the test manifest starts with status "planned"
@@ -1398,6 +1390,7 @@ describe("manual artifact registration", () => {
 
   it("updates readiness from blocked to ready_for_compose when all blocking items resolved", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const prepared = await prepareActiveManifest(app);
 
     // Mock validator to return ready_for_compose after the image is registered
@@ -1439,6 +1432,7 @@ describe("manual artifact registration", () => {
 
   it("accepts an existing artifact and updates execution status to accepted", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const prepared = await prepareActiveManifest(app);
 
     // First, register a manual artifact so there is one to accept
@@ -1787,31 +1781,21 @@ describe("submit protocol business failure passthrough (任务8终审 F2 回归�
   });
 
   it("passes through the assets business error code and status instead of a flat 500", async () => {
-    const { buildQuotableReadinessInput } = await import("../cost/quote-test-context.js");
-    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    const app = buildApp();
+    seedGenerationCatalog(app);
     await seedDashscopeDispatchCatalog(app);
     const project = await createProject(app.db, {
       name: "F2 Passthrough",
       ownerId: "owner-1",
     });
-    // 故意不给项目挂 active asset plan：quote 无绑定 plan（纯 LLM 报价），
-    // 派发时按绑定语义返回 409 generation_quote_plan_binding_missing
-    // （I2 修复：纯 LLM 报价不得执行媒体），而不是被统一映射成 500
-
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${project.id}/generation-cost-quotes`,
-      payload: { operation: "assets.generate", selection: { task_ids: [] } },
-      auth,
-    });
-    expect(quoteRes.statusCode).toBe(200);
-    const quote = quoteRes.json() as { quote_id: string };
+    // 故意不给项目挂 active asset plan：提交 run 无绑定 plan，派发时按
+    // 绑定语义返回 409 active_asset_plan_missing（纯 LLM 运行不得执行媒体），
+    // 而不是被统一映射成 500
 
     const response = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/assets/generate`,
       payload: {
-        cost_quote_id: quote.quote_id,
         idempotency_key: "f2-passthrough-1",
       },
       auth,
@@ -1819,7 +1803,7 @@ describe("submit protocol business failure passthrough (任务8终审 F2 回归�
 
     expect(response.statusCode).toBe(409);
     const body = response.json() as Record<string, unknown>;
-    expect(body.error).toBe("generation_quote_plan_binding_missing");
+    expect(body.error).toBe("active_asset_plan_missing");
     expect(typeof body.generation_run_id).toBe("string");
   });
 });
@@ -1835,6 +1819,7 @@ describe("submit protocol filter passthrough (任务8终审 F5 整改：授权�
   it("persists the submit-time enabled_provider_types into the run dispatch payload", async () => {
     const { buildQuotableReadinessInput } = await import("../cost/quote-test-context.js");
     const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+    seedGenerationCatalog(app);
     await seedDashscopeDispatchCatalog(app);
     const project = await createProject(app.db, {
       name: "F5 Dispatch Filter",

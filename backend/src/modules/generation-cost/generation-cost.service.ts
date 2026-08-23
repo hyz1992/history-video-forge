@@ -315,7 +315,7 @@ function selectTasksForQuote(
 
 // --- 解析 -------------------------------------------------------------------
 
-interface QuoteResolutionValue {
+export interface QuoteResolutionValue {
   resolved: ResolvedGenerationConfigurationV1;
   source: QuoteResolutionSource;
   /**
@@ -331,8 +331,10 @@ interface QuoteResolutionValue {
  * I-1'（任务 8 终审）：重解析输入统一经 loadQuoteResolutionSource 读取——
  * Prisma 态以数据库为权威（项目配置/目录/storyboard/override/plan/manifest），
  * 实例 B 的旧内存镜像不得影响重算结果。
+ * 2026-08-23（报价体系移除）：run service 提交路径复用本函数完成快照解析
+ * 与 plan/storyboard 绑定身份提取。
  */
-async function resolveQuoteConfiguration(
+export async function resolveQuoteConfiguration(
   db: DbClient,
   project: ProjectRecord,
   input: {

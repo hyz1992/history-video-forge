@@ -20,8 +20,7 @@ import {
 import { writeRefluxDraft } from "../event-library/event-library-draft.writer.js";
 import { createDraft } from "../event-library/event-library-draft.repository.js";
 import { refineCustomTopic } from "./topic-custom-refine.service.js";
-import { extractSubmitFields, submitGenerationRun } from "../generation-run/submit-protocol.js";
-import { isPaidLlmDispatchPossible } from "../generation-cost/provider-dispatch-gate.js";
+import { submitGenerationRun } from "../generation-run/submit-protocol.js";
 import { detectPromptInjection, validateCustomDigest } from "./topic-custom-input.service.js";
 
 interface TopicRecommendationSeedPayload {
@@ -272,68 +271,20 @@ export async function createTopicRecommendationsController(
   if (demoBlock) return demoBlock;
 
   const rawPayload = (context.payload ?? {}) as Record<string, unknown>;
-  // S2-2A 任务 9B：quote 提交协议（付费部署下无 quote 明确拒绝）
-  const submit = extractSubmitFields(rawPayload);
-  if (submit.present) {
-    if (submit.invalid) {
-      return { statusCode: 400, body: { error: "generation_submit_fields_incomplete", message: "cost_quote_id 与 idempotency_key 必须同时提供" } };
-    }
-    return submitGenerationRun(context, "topic.generate", undefined, {
-      canonical_name: rawPayload.canonical_name,
-      summary: rawPayload.summary,
-      core_conflict: rawPayload.core_conflict,
-      strong_scene: rawPayload.strong_scene,
-      source_hint: rawPayload.source_hint,
-      recent_usage_hint: rawPayload.recent_usage_hint,
-      canonical_quotes: rawPayload.canonical_quotes,
-      canonical_quote_intents: rawPayload.canonical_quote_intents,
-      tags: rawPayload.tags,
-      filters: rawPayload.filters,
-    });
-  }
-  if (isPaidLlmDispatchPossible(context.app.db)) {
-    return {
-      statusCode: 409,
-      body: { error: "paid_generation_quote_required", message: "当前部署可调用付费 LLM provider：请先创建报价并在生成请求中携带 cost_quote_id 与 idempotency_key" },
-    };
-  }
-
-  // Set generating state BEFORE LLM call so refresh shows progress
-  project.status = "topic_generating";
-  project.updatedAt = new Date();
-  await context.app.db.firstAggregateWriter?.syncProject(project);
-
-  try {
-    const response = await runTopicRecommendationWithStore({
-      db: context.app.db,
-      project,
-      topicCandidateStore: context.app.topicCandidateStore,
-      seed: {
-        canonicalName: validatedPayload.value.canonical_name,
-        summary: validatedPayload.value.summary,
-        coreConflict: validatedPayload.value.core_conflict,
-        strongScene: validatedPayload.value.strong_scene,
-        sourceHint: validatedPayload.value.source_hint,
-        recentUsageHint: validatedPayload.value.recent_usage_hint,
-        canonicalQuotes: validatedPayload.value.canonical_quotes,
-        canonicalQuoteIntents: validatedPayload.value.canonical_quote_intents,
-        tags: validatedPayload.value.tags,
-      },
-      filters: validatedFilters?.success ? validatedFilters.data : undefined,
-      actorUserId: context.auth.anonymous ? null : context.auth.userId,
-      prismaClient: context.app.prismaClient,
-    });
-    return response;
-  } catch (error) {
-    project.status = "topic_pending";
-    project.updatedAt = new Date();
-    await context.app.db.firstAggregateWriter?.syncProject(project).catch(() => undefined);
-    const message = normalizeTopicGenerationErrorMessage(error);
-    return {
-      statusCode: 500,
-      body: { error: "topic_generate_failed", message },
-    };
-  }
+  // 2026-08-23（报价体系移除）：生成统一走 run 提交协议（无需 quote 字段，
+  // 幂等键可选；快照/记账由提交服务统一创建；dispatch handler 内设置生成状态）
+  return submitGenerationRun(context, "topic.generate", undefined, {
+    canonical_name: rawPayload.canonical_name,
+    summary: rawPayload.summary,
+    core_conflict: rawPayload.core_conflict,
+    strong_scene: rawPayload.strong_scene,
+    source_hint: rawPayload.source_hint,
+    recent_usage_hint: rawPayload.recent_usage_hint,
+    canonical_quotes: rawPayload.canonical_quotes,
+    canonical_quote_intents: rawPayload.canonical_quote_intents,
+    tags: rawPayload.tags,
+    filters: rawPayload.filters,
+  });
 }
 
 /** 顺序无关的浅层深等比较，避免 JSON.stringify 因字段顺序不同而误判 */
@@ -462,17 +413,8 @@ export async function createTopicFromCustomController(
   const demoBlock = demoStageGuard(project, context.app.env.demoMode, "选题");
   if (demoBlock) return demoBlock;
 
-  // S2-2A 任务 9B：付费部署下明确拒绝（自定义选题入口暂未接入 quote 提交执行，
-  // 不得无 quote 触发真实 LLM）；stub/本地部署保留原路径
-  if (isPaidLlmDispatchPossible(context.app.db)) {
-    return {
-      statusCode: 409,
-      body: {
-        error: "paid_generation_quote_required",
-        message: "当前部署可调用付费 LLM provider：自定义选题入口暂未接入付费提交模式，请使用系统推荐入口或等待后续版本",
-      },
-    };
-  }
+  // 2026-08-23（报价体系移除）：辅助入口不再封口，恢复本地直连执行
+  // （不建 run/不记账，登记已知限制：辅助入口费用不入项目成本清单）
 
   // 2. set generating state
   project.status = "topic_generating";

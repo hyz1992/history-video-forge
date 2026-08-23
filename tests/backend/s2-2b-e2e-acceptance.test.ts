@@ -247,22 +247,12 @@ describe("S2-2B e2e 验收", () => {
     expect(frozenCreative.subtitle_style_preset_id).toBe("subtitle_style_bold_stroke");
     expect(frozenCreative.subtitle_style_overrides).toEqual({ font_size_px: 60 });
 
-    // 报价 → 提交 → 快照冻结断言
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${project.id}/generation-cost-quotes`,
-      payload: { operation: "assets.generate", selection: { task_ids: [] } },
-      auth,
-    });
-    expect(quoteRes.statusCode).toBe(200);
-    const quote = quoteRes.json() as { quote_id: string };
-
+    // 直连提交 → 快照冻结断言（2026-08-23：无需 quote）
     const submit = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/assets/generate`,
       payload: {
         execution_mode: "auto_available",
-        cost_quote_id: quote.quote_id,
         idempotency_key: "s2-2b-e2e-assets-1",
       },
       auth,
@@ -312,98 +302,71 @@ describe("S2-2B e2e 验收", () => {
     expect(subtitleMeta.subtitle_style?.font_size_px).toBe(60);
   });
 
-  it("2：creative 单次运行覆盖进入当次快照，不写回项目配置", async () => {
+  it("2：项目配置 creative 进入当次快照；run_overrides 提交入口已随报价体系移除", async () => {
     const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
     isolateVoiceRoot(app);
     await seedGlobalVoiceProfiles(app.db);
     await seedQuotableCatalog(app);
     const { project } = await prepareProjectWithAssetPlan(app);
 
-    // 项目配置默认（无 creative）
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${project.id}/generation-cost-quotes`,
+    // 项目配置设置音色（替代原 run_overrides 语义：执行音色由项目配置/快照决定）
+    const patchConfig = await app.inject({
+      method: "PATCH",
+      url: `/api/projects/${project.id}/generation-configuration`,
       payload: {
-        operation: "assets.generate",
-        run_overrides: {
-          creative: { voice_profile_id: "voice_preset_cold_authority" },
+        expected_revision: 1,
+        video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
+        budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
+        creative: {
+          voice_profile_id: "voice_preset_cold_authority",
+          art_style_preset_id: null,
+          subtitle_style_preset_id: null,
         },
-        selection: { task_ids: [] },
       },
       auth,
     });
-    expect(quoteRes.statusCode).toBe(200);
-    const quote = quoteRes.json() as { quote_id: string };
+    expect(patchConfig.statusCode).toBe(200);
 
     const submit = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/assets/generate`,
       payload: {
         execution_mode: "auto_available",
-        cost_quote_id: quote.quote_id,
         idempotency_key: "s2-2b-e2e-override-1",
-        run_overrides: {
-          creative: { voice_profile_id: "voice_preset_cold_authority" },
-        },
       },
       auth,
     });
     expect(submit.statusCode).toBe(200);
 
-    // 快照 effective 使用 override；项目配置不被改写
+    // 快照 effective 使用项目配置音色
     const snapshot = [...app.db.runConfigurationSnapshots.values()][0]!;
     const resolved = snapshot.resolvedConfigurationJson as {
       effective: { creative: { voice_profile_id: string | null } };
     };
     expect(resolved.effective.creative.voice_profile_id).toBe("voice_preset_cold_authority");
-
-    const projectConfig = await app.inject({
-      method: "GET",
-      url: `/api/projects/${project.id}/generation-configuration`,
-      auth,
-    });
-    expect(projectConfig.json().configuration.creative.voice_profile_id).toBeNull();
   });
 
-  it("5：voice.preview 试听 quote + 提交 → 回写音频 + usage 落账", async () => {
-    const app = buildApp({ generationQuoteReadinessInput: buildQuotableReadinessInput() });
+  it("5：voice.preview 试听直连 → 回写音频（不建 run/不记账）", async () => {
+    const app = buildApp();
     isolateVoiceRoot(app);
     await seedGlobalVoiceProfiles(app.db);
-    await seedQuotableCatalog(app);
     const { project } = await prepareProjectWithAssetPlan(app);
-
-    const quoteRes = await app.inject({
-      method: "POST",
-      url: `/api/projects/${project.id}/generation-cost-quotes`,
-      payload: {
-        operation: "voice.preview",
-        run_overrides: { creative: { voice_profile_id: "voice_preset_cold_authority" } },
-      },
-      auth,
-    });
-    expect(quoteRes.statusCode).toBe(200);
-    const quote = quoteRes.json() as { quote_id: string; items: Array<{ unit_type: string }> };
-    expect(quote.items.some((item) => item.unit_type === "tts_character")).toBe(true);
 
     const preview = await app.inject({
       method: "POST",
       url: `/api/projects/${project.id}/voice-profiles/voice_preset_cold_authority/preview`,
-      payload: {
-        cost_quote_id: quote.quote_id,
-        idempotency_key: "s2-2b-e2e-preview-1",
-        authorize_budget_override: true,
-        run_overrides: { creative: { voice_profile_id: "voice_preset_cold_authority" } },
-      },
+      payload: {},
       auth,
     });
     expect(preview.statusCode).toBe(200);
     const previewBody = preview.json() as { preview_audio_uri?: string };
     expect(previewBody.preview_audio_uri).toMatch(/^data:audio\/wav;base64,/);
-    // 回写 + usage 落账
+    // 回写（直连路径，无 run/usage）
     expect(app.db.voiceProfiles.get("voice_preset_cold_authority")?.preview_audio_uri).toMatch(
       /^data:audio\/wav;base64,/,
     );
-    expect(app.db.usageCostRecords.size).toBeGreaterThanOrEqual(1);
+    expect(app.db.generationRuns.size).toBe(0);
+    expect(app.db.usageCostRecords.size).toBe(0);
   });
 
   it("4+6：画风变更失效预览正确；旧 A 请求体兼容（creative 回 A 期默认）", async () => {

@@ -5,6 +5,7 @@ import type {
   ProjectRecord,
 } from "../../db/client.js";
 import type { GenerationRunRepository } from "./generation-run.repository.js";
+import type { AppPrismaClient } from "../../db/prisma-client.types.js";
 
 /**
  * S2-2A 任务 8：可恢复 GenerationRun dispatcher（详细设计 4.7）。
@@ -39,10 +40,12 @@ export interface GenerationRunDispatchContext {
   project: ProjectRecord;
   /**
    * 跨实例恢复（外部审查 P1-2 整改）：sweep 从 DB 恢复的 run 在本实例内存
-   * 镜像可能没有对应 snapshot/quote——handler 需要以数据库为权威加载
+   * 镜像可能没有对应 snapshot——handler 需要以数据库为权威加载
    * 授权快照，缺失时 fail-closed 拒绝派发。
    */
   repository: GenerationRunRepository;
+  /** 2026-08-23：Prisma 激活态透传给 handler（推荐回流等 DB 副作用写入）。 */
+  prismaClient?: AppPrismaClient;
 }
 
 export interface GenerationRunDispatchHandler {
@@ -69,6 +72,7 @@ export function createGenerationRunDispatcher(options: {
   workerId: string;
   leaseDurationMs: number;
   now?: () => Date;
+  prismaClient?: AppPrismaClient;
   handlers: Record<string, GenerationRunDispatchHandler>;
 }): GenerationRunDispatcher {
   const nowFn = options.now ?? (() => new Date());
@@ -125,6 +129,7 @@ export function createGenerationRunDispatcher(options: {
           db: options.db,
           project,
           repository: options.repository,
+          prismaClient: options.prismaClient,
         });
       } catch (error) {
         outcome = {

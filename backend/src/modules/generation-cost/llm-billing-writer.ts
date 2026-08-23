@@ -76,7 +76,10 @@ export function createBillingInteractionLogWriter(input: {
    * （"可反查 interaction log"合同，contract 审查 I-1）；缺省回退 GenerationRun id。
    */
   interactionRunId?: string;
-}): LlmInteractionLogWriter & { writeError(message: string): void } {
+}): LlmInteractionLogWriter & {
+  writeError(message: string): void;
+  writeDiagnostic(label: string, payload: unknown): void;
+} {
   const counters = new Map<string, number>();
 
   const writer = {
@@ -130,13 +133,19 @@ export function createBillingInteractionLogWriter(input: {
   }
 
   // 透传 composite writer 的扩展方法（trace 追加器）
-  const innerWithError = input.inner as LlmInteractionLogWriter & {
+  const innerWithExtensions = input.inner as LlmInteractionLogWriter & {
     writeError?: (message: string) => void;
+    writeDiagnostic?: (label: string, payload: unknown) => void;
   };
   return {
     ...writer,
     writeError(message: string) {
-      innerWithError.writeError?.(message);
+      innerWithExtensions.writeError?.(message);
+    },
+    // 2026-08-23 修复：计费包装此前未透传 writeDiagnostic，生成链路的
+    // 诊断写入（intent chunk 等）在 run 路径下被静默丢弃。
+    writeDiagnostic(label: string, payload: unknown) {
+      innerWithExtensions.writeDiagnostic?.(label, payload);
     },
   };
 

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
+import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import { saveAssetPlanRecord } from "../../../backend/src/modules/asset-planning/asset-plan-record.repository.js";
 import { saveScriptRecord } from "../../../backend/src/modules/script/script-record.repository.js";
@@ -311,8 +312,9 @@ describe("S2-2B assets 音色执行绑定", () => {
     expect(app.db.generationRuns.size).toBe(0);
   });
 
-  it("legacy 免 quote 路径：忽略客户端 voice_profile_id，改用项目配置 creative", async () => {
+  it("直连提交：执行音色来自快照 resolved creative（项目配置），客户端不再携带", async () => {
     const app = buildApp({});
+    seedGenerationCatalog(app);
     const prepared = await prepare(app);
     await seedGlobalVoiceProfiles(app.db);
     setProjectCreative(app, prepared.project.id, {
@@ -323,7 +325,6 @@ describe("S2-2B assets 音色执行绑定", () => {
       method: "POST",
       url: `/api/projects/${prepared.project.id}/assets/generate`,
       payload: {
-        voice_profile_id: "voice_preset_crisp_storyteller",
         execution_mode: "dry_run",
       },
       auth,
@@ -331,7 +332,7 @@ describe("S2-2B assets 音色执行绑定", () => {
 
     expect(response.statusCode).toBe(200);
     const body = response.json() as { manifest: AssetManifest };
-    // 客户端值被忽略，项目配置的 cold_authority 生效
+    // 快照 resolved creative（项目配置 cold_authority）生效
     expect(body.manifest.audio_summary.voice_profile_id).toBe(
       "voice_preset_cold_authority",
     );

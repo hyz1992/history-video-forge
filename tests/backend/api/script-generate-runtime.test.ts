@@ -21,6 +21,7 @@ vi.mock("../../../backend/src/modules/script/script-generation.service.js", () =
 }));
 
 import { buildApp } from "../../../backend/src/app.js";
+import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 
 describe("script generate api runtime", () => {
@@ -64,6 +65,7 @@ describe("script generate api runtime", () => {
 
   it("uses the formal writer path and preserves draft/local_validation/semantic_review fields", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const projectId = await prepareConfirmedTopic(app);
 
     const response = await app.inject({ auth,

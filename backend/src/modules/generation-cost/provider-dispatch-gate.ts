@@ -1,5 +1,4 @@
 import type { DbClient } from "../../db/client.js";
-import { env } from "../../config/env.js";
 
 /**
  * S2-2A 任务 7 二次重开（codex 审计 P1-A）：真实付费 provider 派发闸门。
@@ -123,38 +122,8 @@ export function checkProviderDispatchGate(
 }
 
 /**
- * S2-2A 任务 9A（验收 7）：当前部署是否可能派发付费媒体 provider。
- * 与 buildProviderRegistry 的付费 adapter 注册条件同源（近似、保守方向）：
- * 凭据存在 + 目录存在任一 active 付费媒体项。true 时旧无 quote 生成 API
- * 必须返回 paid_generation_quote_required，不得静默创建无限预算授权。
+ * 2026-08-23（S2-2 报价体系移除）：isPaidMediaDispatchPossible 与
+ * isPaidLlmDispatchPossible 已删除——生成入口不再要求 quote 提交，
+ * 付费部署直接执行并记账；付费适配器注册仍由 checkProviderDispatchGate
+ * （adapter 级权威目录校验）把关。
  */
-export function isPaidMediaDispatchPossible(db: DbClient): boolean {
-  if (!process.env.ALIYUN_DASHSCOPE_API_KEY) return false;
-  for (const entry of db.providerModelCatalog.values()) {
-    if (entry.status !== "active") continue;
-    if (
-      entry.capability === "image.generate" ||
-      entry.capability === "video.image_to_video" ||
-      entry.capability === "tts.synthesize"
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
- * S2-2A 任务 9B：当前部署是否可能调用付费 LLM provider。
- * 近似、保守方向：非 stub provider 即视为付费部署（真实 provider 调用有
- * token 费用风险）——true 时旧无 quote 生成 API 必须返回
- * paid_generation_quote_required；stub/local 始终保留免 quote 本地路径。
- *
- * 外部审查 P1-1/B4 整改：目录状态（空/全 disabled/无 LLM 项）绝不参与本
- * 布尔判断——目录异常时真实 provider 依然可能被环境配置物化并直接调用，
- * 目录必须 fail-closed（禁止免 quote 路径），而不是成为免 quote 放行条件。
- * 目录的 active 约束由 quote 解析层（capability 解析）承担：无 active 项时
- * 新 quote 一律不可解析，旧路径又被本闸门拒绝，真实 LLM 调用无路可达。
- */
-export function isPaidLlmDispatchPossible(_db: DbClient): boolean {
-  return env.llm.provider !== "stub";
-}

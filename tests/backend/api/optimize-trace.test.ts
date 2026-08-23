@@ -4,15 +4,15 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // ---------------------------------------------------------------------------
-// P1-1 整改后的合同测试：prompt optimize 端点未接入 quote 提交执行，真实
-// provider 部署下一律 409 paid_generation_quote_required（旧无 quote LLM
-// 路径按 fail-closed 合同不可达）；stub 部署的 200/400 行为由
-// assets-api.test.ts（stub env）覆盖。
+// 2026-08-23（报价体系移除）后的合同测试：prompt optimize 辅助入口不再 409
+// 封口——真实 provider 部署直连调用 LLM gateway 并写 trace（不建 run/不记账，
+// 登记已知限制）；stub 部署的 200/400 行为由 assets-api.test.ts（stub env）覆盖。
 // ---------------------------------------------------------------------------
 
+const invokeStructuredPromptMock = vi.hoisted(() => vi.fn());
 vi.mock("../../../backend/src/runtime/llm/llm-gateway.js", () => ({
   createLlmGateway: vi.fn(() => ({
-    invokeStructuredPrompt: vi.fn(),
+    invokeStructuredPrompt: invokeStructuredPromptMock,
     invokeStrictStructured: vi.fn(),
   })),
 }));
@@ -23,7 +23,7 @@ vi.mock("../../../backend/src/runtime/llm/tier-aware-provider-factory.js", () =>
 
 import { buildTestAuth } from "../auth/test-utils.js";
 
-describe("POST optimize paid gate (外部审查 P1-1 整改)", () => {
+describe("POST optimize direct dispatch (2026-08-23)", () => {
   const auth = buildTestAuth({ userId: "owner-1" });
   let tempDirs: string[] = [];
 
@@ -43,7 +43,7 @@ describe("POST optimize paid gate (外部审查 P1-1 整改)", () => {
     }
   });
 
-  it("真实 provider 部署：prompt optimize 返回 409 paid_generation_quote_required，gateway 零调用，不写 trace", async () => {
+  it("真实 provider 部署：prompt optimize 直连调用 gateway 并写 trace", async () => {
     const { buildApp } = await import("../../../backend/src/app.js");
     const { createLlmGateway } = await import(
       "../../../backend/src/runtime/llm/llm-gateway.js"
@@ -88,6 +88,12 @@ describe("POST optimize paid gate (外部审查 P1-1 整改)", () => {
       executionStateJson: {}, graphTraceSummaryJson: null, runtimeDiagnosticsJson: null, createdAt: now,
     });
 
+    // 直连执行：gateway 被调用并返回结构化优化结果，trace 写入
+    invokeStructuredPromptMock.mockResolvedValueOnce({
+      optimized_prompt: "明代宫廷场景，增强光影，低角度特写",
+      change_summary: ["增强光影", "低角度特写"],
+    });
+
     const res = await app.inject({ auth,
       method: "POST",
       url: `/api/projects/${projectId}/assets/tasks/${taskId}/prompt/optimize`,
@@ -99,10 +105,12 @@ describe("POST optimize paid gate (外部审查 P1-1 整改)", () => {
       },
     });
 
-    expect(res.statusCode).toBe(409);
-    expect((res.json() as Record<string, unknown>).error).toBe("paid_generation_quote_required");
-    // 真实 LLM gateway 零调用，且不写 trace（旧无 quote LLM 路径不可达）
-    expect(createLlmGateway).not.toHaveBeenCalled();
-    expect(existsSync(join(tmpDir, "trace"))).toBe(false);
+    expect(res.statusCode).toBe(200);
+    expect((res.json() as Record<string, unknown>).optimized_prompt).toBe(
+      "明代宫廷场景，增强光影，低角度特写",
+    );
+    expect(createLlmGateway).toHaveBeenCalled();
+    expect(invokeStructuredPromptMock).toHaveBeenCalledTimes(1);
+    expect(existsSync(join(tmpDir, "trace"))).toBe(true);
   });
 });

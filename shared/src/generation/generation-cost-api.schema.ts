@@ -139,6 +139,8 @@ export const GENERATION_SUBMIT_ERROR_CODES = [
   "generation_budget_exceeded",
   "generation_idempotency_payload_conflict",
   "generation_run_persistence_failed",
+  // 2026-08-23（报价体系移除）：提交路径重解析失败（配置/目录/绑定源不可用）。
+  "generation_run_resolution_failed",
   // S2-2B（外部审查 P1-5）：客户端 voice_profile_id 与快照 resolved_creative
   // 不一致。校验先于 quote 消费事务——失败时 quote 未消费、无 snapshot/run。
   "generation_voice_profile_conflict",

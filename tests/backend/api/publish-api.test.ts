@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
+import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 import { saveAssetManifestRecord } from "../../../backend/src/modules/assets/asset-manifest-record.repository.js";
 import { saveComposeRecord } from "../../../backend/src/modules/compose/compose-record.repository.js";
@@ -18,6 +19,7 @@ describe("publish API", () => {
 
   async function setupProjectWithRender() {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const db = app.db;
 
     const project = await createProject(db, { name: "Publish API Test", ownerId: "owner-1" });
@@ -172,6 +174,7 @@ describe("publish API", () => {
 
   it("POST generate returns 404 for non-existent project", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
 
     const res = await app.inject({
       auth,
@@ -184,6 +187,7 @@ describe("publish API", () => {
 
   it("POST generate returns 409 when no render job", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const db = app.db;
     const project = await createProject(db, { name: "No Render", ownerId: "owner-1" });
 
@@ -200,6 +204,7 @@ describe("publish API", () => {
 
   it("POST generate returns 409 when render job not completed", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const db = app.db;
     const project = await createProject(db, { name: "Failed Render", ownerId: "owner-1" });
 
@@ -227,6 +232,7 @@ describe("publish API", () => {
 
   it("POST generate returns 409 when upstream pipeline incomplete", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const db = app.db;
     const project = await createProject(db, { name: "Incomplete Pipeline", ownerId: "owner-1" });
 
@@ -325,6 +331,7 @@ describe("publish API", () => {
 
   it("PATCH returns 409 when no active publish package", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const db = app.db;
     const project = await createProject(db, { name: "No Publish Pkg", ownerId: "owner-1" });
 
@@ -407,6 +414,7 @@ describe("publish API", () => {
 
   it("POST cover/prompt/optimize returns 409 when no active publish package", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const db = app.db;
     const project = await createProject(db, { name: "No Publish", ownerId: "owner-1" });
 
@@ -617,6 +625,7 @@ describe("publish API", () => {
 
   it("POST title/candidates returns 409 when upstream pipeline incomplete", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const db = app.db;
     const project = await createProject(db, { name: "No Upstream", ownerId: "owner-1" });
 
@@ -632,6 +641,7 @@ describe("publish API", () => {
 
   it("POST title/candidates returns 404 for non-existent project", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
 
     const res = await app.inject({
       auth,

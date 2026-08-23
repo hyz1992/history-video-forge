@@ -51,7 +51,6 @@ import type {
 } from "../../../shared/src/index.js";
 import { DEFAULT_GENERATION_CONFIGURATION } from "../../../shared/src/index.js";
 import { acceptSegmentFallback } from "../../../backend/src/modules/assets/assets-run.service.js";
-import { createGenerationCostQuote } from "../../../backend/src/modules/generation-cost/generation-cost.service.js";
 import { createGenerationRunRepository } from "../../../backend/src/modules/generation-run/generation-run.repository.js";
 import { createOrRestoreGenerationRun } from "../../../backend/src/modules/generation-run/generation-run.service.js";
 import { buildQuotableReadinessInput } from "../cost/quote-test-context.js";
@@ -59,30 +58,21 @@ import { validateAssetsManifest } from "../../../backend/src/modules/assets/asse
 
 
 /**
- * S2-2A 任务 9A：dashscope 付费链路测试统一经 quote 绑定 run 执行
- * （引擎付费闸门：无 quote 绑定 run/snapshot 时拒绝付费派发）。
+ * 2026-08-23（报价体系移除）：dashscope 付费链路测试统一经 run 提交创建
+ * run/snapshot（付费派发与记账需要 run 上下文）。
  */
 async function createQuotedRun(
   db: ReturnType<typeof createDbClient>,
   project: Awaited<ReturnType<typeof createProject>>,
   key: string,
 ) {
-  const quote = await createGenerationCostQuote(
-    db, project, project.ownerId,
-    { operation: "assets.generate", selection: { task_ids: [] } },
-    { readinessInput: buildQuotableReadinessInput() },
-  );
-  if (!quote.ok) throw new Error(`quote failed: ${JSON.stringify(quote.error)}`);
   const repository = createGenerationRunRepository(db);
   const submit = await createOrRestoreGenerationRun(
     db, project, project.ownerId,
     {
       operation: "assets.generate",
-      costQuoteId: quote.value.quote.id,
-      authorizeBudgetOverride: false,
       idempotencyKey: key,
       selection: { task_ids: [] },
-      runOverrides: undefined,
       dispatchPayload: { execution_mode: "auto_available" },
     },
     { readinessInput: buildQuotableReadinessInput(), repository },

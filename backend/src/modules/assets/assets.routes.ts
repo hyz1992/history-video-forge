@@ -1,7 +1,6 @@
 import type { AppInstance, AppResponse, RouteContext } from "../../app";
 import { getProjectById } from "../projects/project.repository";
 import {
-  runAssetsGeneration,
   registerManualArtifact,
   acceptArtifact,
   acceptSegmentFallback,
@@ -18,12 +17,8 @@ import { writeFileSync, mkdirSync } from "node:fs";
 import { resolve, relative, isAbsolute, sep, extname } from "node:path";
 import { randomBytes } from "node:crypto";
 import {
-  extractSubmitFields,
   submitGenerationRun,
 } from "../generation-run/submit-protocol.js";
-import { isPaidLlmDispatchPossible, isPaidMediaDispatchPossible } from "../generation-cost/provider-dispatch-gate.js";
-import { resolveCreativeVoiceForExecution } from "./voice/creative-voice-execution.js";
-import { resolveCreativeSubtitleForExecution } from "./voice/creative-subtitle-execution.js";
 import type { GenerationQuoteSelection } from "../../../../shared/src/index.js";
 
 function readOptionalNumber(value: unknown): number | undefined {
@@ -127,78 +122,27 @@ async function generateAssetsController(
       ?? "auto_available";
   const missingOnly = requestedMode === "missing_only";
 
-  // S2-2A 任务 8：提交协议（cost_quote_id / authorize_budget_override / idempotency_key）。
-  // 提供任一字段时走 GenerationRunService 事务创建/恢复 run；都不提供则保持旧路径。
-  // S2-2B：客户端 voice_profile_id 已废弃——提交路径不再携带（执行音色由快照
-  // resolved_creative 决定，冲突先于 quote 消费校验）；legacy 路径忽略客户端值。
-  // demo 视觉拦截与凭据拦截同样适用于提交路径（在事务创建前返回）。
-  const submitFields = extractSubmitFields(payload);
-  if (submitFields.present) {
-    if (submitFields.invalid) {
-      return {
-        statusCode: 400,
-        body: { error: "generation_submit_fields_incomplete", message: "cost_quote_id 与 idempotency_key 必须同时提供" },
-      };
-    }
-    const selection: GenerationQuoteSelection = {
-      mode: missingOnly ? "missing_only" : undefined,
-      task_ids: requestedTaskIds ?? [],
-    };
-    return submitGenerationRun(context, "assets.generate", selection, {
-      // S2-2B：客户端 voice_profile_id 已废弃，但若旧客户端仍携带则原样透传，
-      // 由提交服务在 quote 消费前与快照 resolved_creative 比对（一致放行/
-      // 不一致 422）。执行端一律以快照为唯一权威。
-      ...(typeof payload.voice_profile_id === "string"
-        ? { voice_profile_id: payload.voice_profile_id }
-        : {}),
-      execution_mode: executionMode,
-      mode: requestedMode ?? null,
-      task_ids: requestedTaskIds ?? [],
-    }, {
-      replayExtraBody: {
-        asset_manifest_record_id: project.activeAssetManifestRecordId ?? null,
-      },
-    });
-  }
-
-  // S2-2A 任务 6：provider 授权只来自后端 env/resolved 配置，
-  // 客户端不得通过 provider_mode / dashscope api key / model 指定。
-  // S2-2A 任务 9A（验收 7）：付费部署下旧无 quote 路径明确拒绝——
-  // 不静默替用户创建无限预算授权；纯本地部署（无付费派发可能）保留本地路径。
-  if (isPaidMediaDispatchPossible(context.app.db)) {
-    return {
-      statusCode: 409,
-      body: {
-        error: "paid_generation_quote_required",
-        message: "当前部署可调用付费媒体 provider：请先创建报价并在生成请求中携带 cost_quote_id 与 idempotency_key",
-      },
-    };
-  }
-  // S2-2B：legacy 免 quote 路径忽略客户端 voice_profile_id，
-  // 音色与字幕样式由项目配置 creative 解析（auto → intent 匹配；字幕 none → 系统默认）。
-  let creativeVoiceProfileId: string;
-  let creativeSubtitleStyle: unknown = null;
-  try {
-    creativeVoiceProfileId = await resolveCreativeVoiceForExecution(context.app.db, project);
-    creativeSubtitleStyle = await resolveCreativeSubtitleForExecution(context.app.db, project);
-  } catch (error) {
-    return {
-      statusCode: 500,
-      body: {
-        error: "generation_creative_resolution_failed",
-        reason_code: error instanceof Error ? error.message : "unknown",
-      },
-    };
-  }
-  return runAssetsGeneration({
-    db: context.app.db,
-    project,
-    voiceProfileId: creativeVoiceProfileId,
-    executionMode,
-    enabledProviderTypes,
-    missingOnly,
-    taskIds: requestedTaskIds,
-    resolvedSubtitleStyle: creativeSubtitleStyle,
+  // 2026-08-23（报价体系移除）：生成统一走 run 提交协议（无需 quote 字段；
+  // S2-2B：客户端 voice_profile_id 已废弃——执行音色由快照 resolved_creative 决定，
+  // 冲突由提交服务在 run 创建前校验）。
+  // demo 视觉拦截与凭据拦截在路由注册前已生效（与提交路径同一防线）。
+  const selection: GenerationQuoteSelection = {
+    mode: missingOnly ? "missing_only" : undefined,
+    task_ids: requestedTaskIds ?? [],
+  };
+  return submitGenerationRun(context, "assets.generate", selection, {
+    // S2-2B：旧客户端若仍携带 voice_profile_id 则原样透传，由提交服务与快照
+    // resolved_creative 比对（一致放行/不一致 422）。执行端一律以快照为唯一权威。
+    ...(typeof payload.voice_profile_id === "string"
+      ? { voice_profile_id: payload.voice_profile_id }
+      : {}),
+    execution_mode: executionMode,
+    mode: requestedMode ?? null,
+    task_ids: requestedTaskIds ?? [],
+  }, {
+    replayExtraBody: {
+      asset_manifest_record_id: project.activeAssetManifestRecordId ?? null,
+    },
   });
 }
 
@@ -260,16 +204,8 @@ async function optimizeTaskPromptController(
     return { statusCode: 409, body: { error: "asset_plan_not_found" } };
   }
 
-  // S2-2A 任务 9B：付费部署下明确拒绝（prompt 优化辅助端点暂未接入 quote 提交执行）
-  if (isPaidLlmDispatchPossible(context.app.db)) {
-    return {
-      statusCode: 409,
-      body: {
-        error: "paid_generation_quote_required",
-        message: "当前部署可调用付费 LLM provider：prompt 优化暂未接入付费提交模式",
-      },
-    };
-  }
+  // 2026-08-23（报价体系移除）：辅助入口不再封口，恢复本地直连执行
+  // （不建 run/不记账，登记已知限制：辅助入口费用不入项目成本清单）
 
   const payload = context.payload as {
     user_feedback?: string;
@@ -592,62 +528,18 @@ async function generateTaskController(
   const credentialsBlock = rejectClientProviderCredentials(payload);
   if (credentialsBlock) return credentialsBlock;
 
-  // S2-2A 任务 8：单任务生成同样接受提交协议（selection 只含该任务）。
-  // S2-2B：客户端 voice_profile_id 已废弃（快照为唯一权威；冲突先于 quote 消费）。
-  const submitFields = extractSubmitFields(payload);
-  if (submitFields.present) {
-    if (submitFields.invalid) {
-      return {
-        statusCode: 400,
-        body: { error: "generation_submit_fields_incomplete", message: "cost_quote_id 与 idempotency_key 必须同时提供" },
-      };
-    }
-    return submitGenerationRun(context, "assets.generate", { task_ids: [taskId] }, {
-      ...(typeof payload.voice_profile_id === "string"
-        ? { voice_profile_id: payload.voice_profile_id }
-        : {}),
-      execution_mode: "auto_available",
-      mode: null,
-      task_ids: [taskId],
-    }, {
-      replayExtraBody: {
-        asset_manifest_record_id: project.activeAssetManifestRecordId ?? null,
-      },
-    });
-  }
-
-  // S2-2A 任务 9A（验收 7）：单任务入口的付费部署闸门与 bulk 入口同一语义
-  if (isPaidMediaDispatchPossible(context.app.db)) {
-    return {
-      statusCode: 409,
-      body: {
-        error: "paid_generation_quote_required",
-        message: "当前部署可调用付费媒体 provider：请先创建报价并在生成请求中携带 cost_quote_id 与 idempotency_key",
-      },
-    };
-  }
-  // S2-2B：legacy 路径音色与字幕样式由项目配置 creative 解析
-  let creativeVoiceProfileId: string;
-  let creativeSubtitleStyle: unknown = null;
-  try {
-    creativeVoiceProfileId = await resolveCreativeVoiceForExecution(context.app.db, project);
-    creativeSubtitleStyle = await resolveCreativeSubtitleForExecution(context.app.db, project);
-  } catch (error) {
-    return {
-      statusCode: 500,
-      body: {
-        error: "generation_creative_resolution_failed",
-        reason_code: error instanceof Error ? error.message : "unknown",
-      },
-    };
-  }
-  return runAssetsGeneration({
-    db: context.app.db,
-    project,
-    voiceProfileId: creativeVoiceProfileId,
-    executionMode: "auto_available",
-    taskIds: [taskId],
-    resolvedSubtitleStyle: creativeSubtitleStyle,
+  // 2026-08-23（报价体系移除）：单任务生成统一走 run 提交协议（selection 只含该任务）
+  return submitGenerationRun(context, "assets.generate", { task_ids: [taskId] }, {
+    ...(typeof payload.voice_profile_id === "string"
+      ? { voice_profile_id: payload.voice_profile_id }
+      : {}),
+    execution_mode: "auto_available",
+    mode: null,
+    task_ids: [taskId],
+  }, {
+    replayExtraBody: {
+      asset_manifest_record_id: project.activeAssetManifestRecordId ?? null,
+    },
   });
 }
 
@@ -691,16 +583,8 @@ async function upgradeSegmentToVideoController(
     return { statusCode: 404, body: { error: "project_not_found" } };
   }
 
-  // S2-2A 任务 9B：付费部署下明确拒绝（video 升级的 prompt 扩展暂未接入 quote 提交执行）
-  if (isPaidLlmDispatchPossible(context.app.db)) {
-    return {
-      statusCode: 409,
-      body: {
-        error: "paid_generation_quote_required",
-        message: "当前部署可调用付费 LLM provider：视频升级暂未接入付费提交模式",
-      },
-    };
-  }
+  // 2026-08-23（报价体系移除）：辅助入口不再封口，恢复本地直连执行
+  // （不建 run/不记账，登记已知限制：辅助入口费用不入项目成本清单）
 
   // DEMO_MODE: video upgrade is always visual
   if (env.demoMode) {

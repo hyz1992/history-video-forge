@@ -1,78 +1,53 @@
 import type { AppResponse, RouteContext } from "../../app";
 import {
   GenerationQuoteProviderTypesSchema,
-  GenerationQuoteRunOverridesSchema,
   type GenerationOperation,
-  type GenerationQuoteRunOverrides,
   type GenerationQuoteSelection,
 } from "../../../../shared/src/index.js";
 import { createOrRestoreGenerationRun } from "./generation-run.service.js";
 import { resolveGenerationCostBootstrapInputFromEnv } from "../generation-cost/generation-cost-bootstrap.js";
 
 /**
- * S2-2A 任务 9A/9B：生成 API 的 quote 提交协议（公共实现）。
+ * S2-2 生成提交协议（2026-08-23 报价体系移除后简化版）。
  *
- * 兼容迁移合同（实施计划 9A 步骤 2 / 9B 步骤 2）：
- * - UI 仍调用现有生成 API，但必须先取得 quote，并在同一现有请求中提交
- *   cost_quote_id / authorize_budget_override / idempotency_key；
- * - GenerationRun 是后端内部运行记录，不新增公开提交链路；
- * - 提交后由 dispatcher 同步派发（operation handler 执行生成并透传响应）。
+ * 生成 API 不再要求 cost_quote_id / authorize_budget_override / run_overrides：
+ * 任何部署都直接走 GenerationRunService 创建/恢复 run（统一创建不可变快照、
+ * 幂等判重与请求级记账；stub/fake 部署同样落账零金额记录）。
  *
- * 本模块是 9A assets 与 9B 五个 LLM 入口的单一实现，杜绝各模块复制。
+ * - `idempotency_key` 可选：提供时按 (project, operation, key) 判重，相同
+ *   payload 指纹重放返回既有 run；不提供时服务端生成随机 key（单次请求语义）。
+ * - `enabled_provider_types` 可选：仅 assets.generate 有语义，作为执行过滤
+ *   原样进入 run 的 dispatch payload（与执行端过滤同源）。
  */
 
-export type SubmitFieldsResult =
-  | { present: false }
-  | {
-      present: true;
-      invalid: boolean;
-      fields?: {
-        cost_quote_id: string;
-        authorize_budget_override: boolean;
-        idempotency_key: string;
-        run_overrides: GenerationQuoteRunOverrides;
-        /** F5：与 quote 创建时同一执行过滤重放；undefined = 未提供（全开）。 */
-        enabled_provider_types?: string[];
-      };
-    };
+export interface SubmitFieldsResult {
+  idempotency_key?: string;
+  enabled_provider_types?: string[];
+  /** enabled_provider_types 提供了但格式非法。 */
+  invalid?: boolean;
+}
 
 export function extractSubmitFields(payload: Record<string, unknown>): SubmitFieldsResult {
-  const hasQuote = typeof payload.cost_quote_id === "string" && payload.cost_quote_id.length > 0;
-  const hasKey = typeof payload.idempotency_key === "string" && payload.idempotency_key.length > 0;
-  if (!hasQuote && !hasKey) return { present: false };
-  if (!hasQuote || !hasKey) return { present: true, invalid: true };
-  // 提交可重放 quote 创建时的 run_overrides（GenerationQuoteRunOverridesSchema strict 校验）
-  const runOverridesParse = GenerationQuoteRunOverridesSchema.safeParse(payload.run_overrides);
-  if (!runOverridesParse.success) {
-    return { present: true, invalid: true };
-  }
-  // 提交可重放 quote 创建时的执行过滤（F5）；undefined = 未提供，与 quote 创建语义一致
+  const idempotencyKey =
+    typeof payload.idempotency_key === "string" && payload.idempotency_key.length > 0
+      ? payload.idempotency_key
+      : undefined;
   let enabledProviderTypes: string[] | undefined;
   if (payload.enabled_provider_types !== undefined) {
     const filterParse = GenerationQuoteProviderTypesSchema.safeParse(payload.enabled_provider_types);
     if (!filterParse.success) {
-      return { present: true, invalid: true };
+      return { idempotency_key: idempotencyKey, invalid: true };
     }
     enabledProviderTypes = filterParse.data;
   }
-  return {
-    present: true,
-    invalid: false,
-    fields: {
-      cost_quote_id: payload.cost_quote_id as string,
-      authorize_budget_override: payload.authorize_budget_override === true,
-      idempotency_key: payload.idempotency_key as string,
-      run_overrides: runOverridesParse.data,
-      enabled_provider_types: enabledProviderTypes,
-    },
-  };
+  return { idempotency_key: idempotencyKey, enabled_provider_types: enabledProviderTypes };
 }
 
 /**
- * GenerationRunService 统一创建/恢复 run（不新增公开 /generation-runs 路由）；
- * 事务提交后立即由 dispatcher 派发（operation handler 同步执行并透传响应）。
+ * 统一生成提交：创建/恢复 GenerationRun（无 quote）。事务提交后立即由
+ * dispatcher 派发（operation handler 同步执行并透传响应）。
  * 幂等重放返回既有 run 状态。Prisma 激活态传 app.prismaClient：
- * 提交重校验输入以数据库为权威（I-1'）。
+ * 重解析输入以数据库为权威（跨实例一致性）。
  */
 export async function submitGenerationRun(
   context: RouteContext,
@@ -82,14 +57,13 @@ export async function submitGenerationRun(
   options: { replayExtraBody?: Record<string, unknown> } = {},
 ): Promise<AppResponse> {
   const submit = extractSubmitFields(context.payload as Record<string, unknown>);
-  if (!submit.present || submit.invalid || !submit.fields) {
-    return { statusCode: 400, body: { error: "generation_submit_fields_incomplete" } };
+  if (submit.invalid) {
+    return {
+      statusCode: 400,
+      body: { error: "generation_submit_fields_incomplete", message: "enabled_provider_types 格式非法" },
+    };
   }
-  const fields = submit.fields;
-  // F5：执行过滤从提交字段重放（与 quote 创建时的 enabled_provider_types 对齐）。
-  // 授权过滤与执行过滤必须同源：dispatchPayload 的 enabled_provider_types 统一
-  // 被本值覆盖（各入口单一来源，防止授权上界与执行范围脱节）
-  const enabledProviderTypes = fields.enabled_provider_types;
+  const enabledProviderTypes = submit.enabled_provider_types;
   const dispatchPayloadWithFilter = {
     ...dispatchPayload,
     enabled_provider_types: enabledProviderTypes,
@@ -98,6 +72,8 @@ export async function submitGenerationRun(
   const actorUserId = context.auth.anonymous ? null : context.auth.userId;
   const readinessInput =
     context.app.generationQuoteReadinessInput ?? resolveGenerationCostBootstrapInputFromEnv();
+  // 客户端不提供幂等键时服务端生成（单次请求语义；客户端幂等重试应自行携带）
+  const idempotencyKey = submit.idempotency_key ?? `${operation}-${context.app.db.generateId()}`;
 
   const result = await createOrRestoreGenerationRun(
     context.app.db,
@@ -105,11 +81,8 @@ export async function submitGenerationRun(
     actorUserId ?? "system",
     {
       operation,
-      costQuoteId: fields.cost_quote_id,
-      authorizeBudgetOverride: fields.authorize_budget_override,
-      idempotencyKey: fields.idempotency_key,
+      idempotencyKey,
       selection,
-      runOverrides: fields.run_overrides,
       enabledProviderTypes,
       dispatchPayload: dispatchPayloadWithFilter,
     },
@@ -120,10 +93,9 @@ export async function submitGenerationRun(
     },
   );
   if (!result.ok) {
-    // 404：quote 不存在；422：负载与快照冲突（S2-2B voice_profile_id，先于
-    // quote 消费校验）；500：服务端持久化故障（可重试）；其余业务冲突一律 409
+    // 422：负载与快照冲突（voice_profile_id）；500：服务端持久化故障（可重试）；
+    // 其余业务冲突（配置解析失败/幂等负载冲突）一律 409
     let statusCode = 409;
-    if (result.error.code === "generation_quote_not_found") statusCode = 404;
     if (result.error.code === "generation_voice_profile_conflict") statusCode = 422;
     if (result.error.code === "generation_run_persistence_failed") statusCode = 500;
     return { statusCode, body: { error: result.error.code, message: result.error.message } };

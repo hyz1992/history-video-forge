@@ -6,7 +6,6 @@ import type {
   UsageCostRecordRecord,
 } from "../../db/client.js";
 import { listProviderModelCatalog } from "./provider-model-catalog.repository.js";
-import { disableProviderModelCatalogEntries } from "./provider-model-catalog.repository.js";
 import {
   priceGenerationWorkload,
   type PricingWorkloadItem,
@@ -24,10 +23,8 @@ import { OPERATION_TOKEN_ESTIMATES } from "./generation-cost.service.js";
  *   actual 仅在可确认时填写——provider 回执（provider_usage）或执行后本地实测
  *   计量（estimate basis + actualCostState=estimated_after_execution）。
  *   绝不把本地估算标成 provider_usage/provider_invoice（验收 8）。
- * - overrun：本 snapshot 累计实际/估算费用超过 authorizationCostMicros 时追加
- *   append-only `pricing_overrun` run event；媒体路径（价格异常）同时把对应
- *   catalog item 置 disabled（待管理员复核价格），LLM 路径（数量累计常规）
- *   只留事件不禁用（I-3）；已消费 quote 不被改写（验收 5）。
+ * - 2026-08-23（报价体系移除）：授权上界不存在，overrun 检查与 catalog 禁用
+ *   一并移除；预计/实际差异由项目成本清单展示，价格异常由人工复核。
  * - 金额一律十进制微元字符串；失败/未完成请求保留 estimated，actual 为 null。
  */
 
@@ -51,7 +48,7 @@ export interface RecordProviderJobUsageInput {
   db: DbClient;
   /** 授权与计价上下文（quote 绑定 run 的快照）。 */
   snapshot: RunConfigurationSnapshotRecord;
-  /** run event 归属（pricing_overrun 审计）。 */
+  /** run event 归属（审计留痕）。 */
   runId: string;
   providerJob: AssetProviderJobRecord;
   capability: "image.generate" | "video.image_to_video" | "tts.synthesize";
@@ -66,8 +63,6 @@ export interface RecordProviderJobUsageInput {
 export interface RecordProviderJobUsageOutcome {
   record: UsageCostRecordRecord;
   actualCostState: UsageCostActualState;
-  /** 本 snapshot 累计费用是否超出授权上界（副作用：run event + catalog 禁用）。 */
-  overrun: boolean;
 }
 
 /** provider job 状态 → usage 记录生命周期状态（设计 4.9）。 */
@@ -228,113 +223,7 @@ export async function recordProviderJobUsage(
   }
   db.usageCostRecords.set(record.id, record);
 
-  // overrun：snapshot 累计（actual ?? estimated）超过授权上界
-  const overrun = await checkAndHandleOverrun({ ...input, disableCatalog: true }, record);
-
-  return { record, actualCostState, overrun };
-}
-
-/**
- * 累计费用超授权上界 → append-only pricing_overrun run event + catalog 禁用。
- * 只追加事件与禁用目录，绝不改写 quote/snapshot（授权是不可变历史）。
- */
-export interface OverrunCheckInput {
-  db: DbClient;
-  snapshot: RunConfigurationSnapshotRecord;
-  runId: string;
-  capability: string;
-  providerKey: string;
-  modelId: string;
-  /**
-   * 超界时是否自动禁用对应目录项（final 审查 I-3）：
-   * - 媒体路径 true：overrun 是价格异常（罕见），禁用并提示管理员复核；
-   * - LLM 路径 false：授权上界是单次调用 budget，而 run 内合法多 interaction
-   *   累计可超界（常规数量累计，非价格异常）——只追加 pricing_overrun 事件
-   *   留痕，不禁用目录（否则 llm.smart 家族新 quote 全部失败直到重启）。
-   */
-  disableCatalog: boolean;
-}
-
-/** 累计费用超授权上界 → append-only pricing_overrun（+ 可选 catalog 禁用）。 */
-export async function checkAndHandleOverrun(
-  input: OverrunCheckInput,
-  current: UsageCostRecordRecord,
-): Promise<boolean> {
-  const { snapshot } = input;
-  if (snapshot.authorizationCostMicros === null) return false;
-  // 外部审查 B3：unbounded 报价的授权金额在持久化边界归一为 "0"（DB 金额列
-  // NOT NULL 合同），但归一金额绝不参与上界比较——授权无上界时不存在 overrun。
-  // 否则首次 usage 后 total > bound(0) 必然成立，误追加 pricing_overrun 并把
-  // 对应媒体目录项禁用（后续新 run 全被禁直到管理员复核）。
-  if (snapshot.containsUnboundedItem) return false;
-  const bound = BigInt(snapshot.authorizationCostMicros);
-
-  let total = 0n;
-  const seenKeys = new Set<string>();
-  for (const record of input.db.usageCostRecords.values()) {
-    if (record.runConfigurationSnapshotId !== snapshot.id) continue;
-    // 镜像中可能同时存在同键新旧对象（Map set 替换后不会，防御性去重）
-    const key = `${record.providerRequestKey}:${record.attemptIndex}`;
-    if (seenKeys.has(key)) continue;
-    seenKeys.add(key);
-    total += BigInt(record.actualCostMicros ?? record.estimatedCostMicros);
-  }
-  if (total <= bound) return false;
-
-  // 8.4 语义为一次性动作：同 (run, capability, providerKey, modelId) 已追加过
-  // pricing_overrun 则不再重复追加（同一 attempt 的 running 轮询 + completed
-  // 回执重放只应触发一次）；不同模型的超界仍各自追加事件，并按 disableCatalog
-  // 决定是否禁用对应目录项（媒体 true / LLM false，I-3）。禁用幂等。
-  const existingEvents = input.db.generationRunEvents.get(input.runId) ?? [];
-  const alreadyFlagged = existingEvents.some((event) => {
-    if (event.eventType !== "pricing_overrun") return false;
-    const payload = event.eventJson as Record<string, unknown>;
-    return (
-      payload["capability"] === input.capability &&
-      payload["provider_key"] === input.providerKey &&
-      payload["model_id"] === input.modelId
-    );
-  });
-  if (alreadyFlagged) return true;
-  // 注：去重基于本实例内存镜像事件——跨实例边界（另一进程已追加落库、本实例
-  // 镜像未刷新）仍可能重复追加，属分布式最终一致性残余（M-b 标注，可接受）；
-
-  const event: GenerationRunEventRecord = {
-    id: input.db.generateId(),
-    generationRunId: input.runId,
-    segmentId: null,
-    eventType: "pricing_overrun",
-    eventJson: {
-      capability: input.capability,
-      provider_key: input.providerKey,
-      model_id: input.modelId,
-      usage_record_id: current.id,
-      total_cost_micros: total.toString(),
-      authorization_cost_micros: snapshot.authorizationCostMicros,
-      reason: "actual_exceeds_authorization_bound",
-    },
-    createdAt: new Date(),
-  };
-  if (input.db.thirdAggregateWriter) {
-    await input.db.thirdAggregateWriter.appendGenerationRunEvent(event);
-  }
-  const events = input.db.generationRunEvents.get(input.runId) ?? [];
-  events.push(event);
-  input.db.generationRunEvents.set(input.runId, events);
-
-  // 对应 catalog item 不再适合自动新运行（待管理员复核价格）
-  if (input.disableCatalog) {
-    const catalogIds = [...input.db.providerModelCatalog.values()]
-      .filter(
-        (entry) =>
-          entry.capability === input.capability &&
-          entry.providerKey === input.providerKey &&
-          entry.modelId === input.modelId,
-      )
-      .map((entry) => entry.id);
-    await disableProviderModelCatalogEntries(input.db, catalogIds);
-  }
-  return true;
+  return { record, actualCostState };
 }
 
 // ─── LLM token 记账（S2-2A 任务 9B） ────────────────────────────────────────
@@ -373,9 +262,7 @@ export interface RecordLlmUsageOutcome {
  *   （costBasis=provider_usage，input/output units=实际 token）；
  * - 无 token → actual=null、costBasis=estimate（估算按 operation 级 token 估算），
  *   绝不伪造实际 token。
- * - snapshot 累计（actual ?? estimated）超授权上界时追加 pricing_overrun 事件
- *   （final I-1：与媒体同款累计口径）；I-3：LLM 路径不禁用目录（授权是单次
- *   调用 budget，run 内多 interaction 累计超界属常规数量累计）。
+ * - 2026-08-23（报价体系移除）：授权上界不存在，pricing_overrun 事件不再产生。
  * - 目录项缺失时保留 null actual + estimate basis（不标 provider_usage 零价）。
  */
 export async function recordLlmUsage(
@@ -482,23 +369,6 @@ export async function recordLlmUsage(
     await db.thirdAggregateWriter.saveUsageCostRecord(record);
   }
   db.usageCostRecords.set(record.id, record);
-
-  // S2-2A 任务 9B（final 审查 I-1/I-3）：LLM 记账同样纳入 overrun 语义——
-  // snapshot 累计（actual ?? estimated）超授权上界时追加 pricing_overrun
-  // 事件（估算模式累计超界同样触发，保护方向）；I-3：不禁用目录
-  // （授权是单次调用 budget，run 内多 interaction 累计超界属常规数量累计）
-  await checkAndHandleOverrun(
-    {
-      db,
-      snapshot,
-      runId: input.runId,
-      capability: input.capability,
-      providerKey: input.providerKey,
-      modelId: input.modelId,
-      disableCatalog: false,
-    },
-    record,
-  );
 
   return { record, actualCostState };
 }

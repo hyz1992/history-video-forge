@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
+import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
 import { TopicCandidateCard } from "../../../shared/src/index.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 import { createDbClient } from "../../../backend/src/db/client.js";
@@ -612,6 +613,7 @@ describe("topic runtime recommendation", () => {
 
   it("rejects malformed topic recommendation payloads missing seed fields", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const auth = buildTestAuth();
     const projectResponse = await app.inject({
       method: "POST",
@@ -669,6 +671,7 @@ describe("topic runtime recommendation", () => {
     } as any);
 
     const app = buildApp();
+    seedGenerationCatalog(app);
     const auth = buildTestAuth();
     const projectResponse = await app.inject({
       method: "POST",

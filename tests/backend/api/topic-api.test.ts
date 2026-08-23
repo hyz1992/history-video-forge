@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import { buildApp } from "../../../backend/src/app.js";
+import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 
 describe("topic api", () => {
   it("creates a project", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
 
     const response = await app.inject({
       method: "POST",
@@ -25,6 +27,7 @@ describe("topic api", () => {
 
   it("returns topic recommendations for a project", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const auth = buildTestAuth();
     const projectResponse = await app.inject({
       method: "POST",
@@ -65,6 +68,7 @@ describe("topic api", () => {
 
   it("confirms a candidate into TopicPackage and moves project to script_ready", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const auth = buildTestAuth();
     const projectResponse = await app.inject({
       method: "POST",

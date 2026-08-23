@@ -1,7 +1,6 @@
 import type { DbClient, GenerationRunRecord, RunConfigurationSnapshotRecord, UsageCostRecordRecord } from "../../../db/client.js";
 import { priceGenerationWorkload, type PricingWorkloadItem } from "../../generation-cost/pricing.service.js";
 import { listProviderModelCatalog } from "../../generation-cost/provider-model-catalog.repository.js";
-import { checkAndHandleOverrun } from "../../generation-cost/usage-cost-recorder.js";
 import { createToneWavBuffer } from "../providers/audio-fixture.js";
 import { resolveProviderVoice } from "./provider-voice-resolution.service.js";
 import {
@@ -261,19 +260,6 @@ export async function recordVoicePreviewUsage(
       await db.thirdAggregateWriter.saveUsageCostRecord(record);
     }
     db.usageCostRecords.set(record.id, record);
-
-    await checkAndHandleOverrun(
-      {
-        db,
-        snapshot,
-        runId: input.runId,
-        capability: "tts.synthesize",
-        providerKey: input.providerKey,
-        modelId: attempt.usageModelId,
-        disableCatalog: true,
-      },
-      record,
-    );
   }
 }
 

@@ -182,6 +182,9 @@ export function createTopicDispatchHandler(options: {
       seed,
       filters: filters as never,
       billingContext: billing,
+      prismaClient: context.prismaClient,
+      // 推荐回流（EventLibraryDraft）以 run 的提交者为归属
+      actorUserId: run.userId ?? undefined,
     });
     return toOutcome(response);
   };

@@ -7,6 +7,7 @@ vi.mock("../../../backend/src/modules/storyboard/storyboard-generation.service.j
 }));
 
 import { buildApp } from "../../../backend/src/app.js";
+import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 import { createProject } from "../../../backend/src/modules/projects/project.repository.js";
 import { getProjectSnapshot } from "../../../backend/src/modules/projects/project-snapshot.service.js";
@@ -135,6 +136,7 @@ describe("storyboard api", () => {
 
   it("returns 404 when the project does not exist", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
 
     const response = await app.inject({
       auth,
@@ -143,13 +145,14 @@ describe("storyboard api", () => {
     });
 
     expect(response.statusCode).toBe(404);
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       error: "project_not_found",
     });
   });
 
   it("returns 409 when active script is missing", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const project = await createProject(app.db, {
       name: "Storyboard Missing Script",
       ownerId: "owner-1",
@@ -162,13 +165,14 @@ describe("storyboard api", () => {
     });
 
     expect(response.statusCode).toBe(409);
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       error: "active_script_record_missing",
     });
   });
 
   it("returns 404 when the active script record was deleted", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const project = await createProject(app.db, {
       name: "Storyboard Deleted Script",
       ownerId: "owner-1",
@@ -182,13 +186,14 @@ describe("storyboard api", () => {
     });
 
     expect(response.statusCode).toBe(404);
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       error: "script_record_not_found",
     });
   });
 
   it("returns 404 when the script topic package was deleted", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const prepared = await prepareActiveScript(app);
     app.db.topicPackages.delete(prepared.topicPackage.id);
 
@@ -199,13 +204,14 @@ describe("storyboard api", () => {
     });
 
     expect(response.statusCode).toBe(404);
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       error: "topic_package_not_found",
     });
   });
 
   it("generates, validates, persists, and activates storyboard from active script", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const prepared = await prepareActiveScript(app);
     prepared.project.activeAssetPlanRecordId = "asset_plan_record_old";
     prepared.project.activeAssetManifestRecordId = "asset_manifest_record_old";
@@ -292,6 +298,7 @@ describe("storyboard api", () => {
 
   it("does not activate storyboard when local validation still fails after regen once", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const prepared = await prepareActiveScript(app);
     const invalidPlan = {
       ...makeValidPlan({
@@ -361,6 +368,7 @@ describe("storyboard api", () => {
 
   it("does not activate storyboard on unexpected error and cleans up generating state", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const prepared = await prepareActiveScript(app);
     generateStoryboardPlanMock.mockRejectedValue(new Error("LLM timeout"));
 
@@ -387,6 +395,7 @@ describe("storyboard api", () => {
 
   it("rolls back to storyboard_ready when validation fails and previous active storyboard exists", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const prepared = await prepareActiveScript(app);
 
     // Create a previous active storyboard by directly inserting into the in-memory DB
@@ -479,6 +488,7 @@ describe("storyboard api", () => {
 
   it("PATCH strategy writes independent override with revision and does not mutate planJson", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const { prepared, storyboardRecordId } = await prepareActiveStoryboard(app);
 
     const response = await app.inject({
@@ -514,6 +524,7 @@ describe("storyboard api", () => {
   // unavailable_reason 统一映射），不能置空。
   it("PATCH strategy in demo mode returns unavailable_reason for provider-disabled downgrade", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     // 注入演示态（env.demoMode=true → apiVideoProviderEnabled=false）
     (app.env as { demoMode: boolean }).demoMode = true;
     // seed 完整 catalog（resolver 需要每 capability 一个 active 默认项才能成功解析，
@@ -571,6 +582,7 @@ describe("storyboard api", () => {
 
   it("PATCH strategy with stale revision returns 409 storyboard_segment_override_revision_conflict", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const { prepared } = await prepareActiveStoryboard(app);
 
     await app.inject({
@@ -599,6 +611,7 @@ describe("storyboard api", () => {
 
   it("PATCH strategy with illegal override value returns 400", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const { prepared } = await prepareActiveStoryboard(app);
 
     const response = await app.inject({

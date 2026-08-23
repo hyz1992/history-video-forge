@@ -7,6 +7,7 @@ import { createProject } from "../../../backend/src/modules/projects/project.rep
 import { confirmTopicCandidate, type StoredTopicCandidate } from "../../../backend/src/modules/topic/topic-confirm.service.js";
 import { buildScriptInputBundle } from "../../../backend/src/modules/script/script-input-bundle.builder.js";
 import { buildApp } from "../../../backend/src/app.js";
+import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
 import { createAuthenticatedAuthContext } from "../../../backend/src/auth/auth-context.js";
 
 function makeBaseCandidate(event: ReturnType<typeof createDbClient> extends infer DB
@@ -251,6 +252,7 @@ describe("三入口 confirm 合并", () => {
 describe("confirm HTTP route — sourceMode 校验", () => {
   it("accepts confirm without sourceMode (向后兼容)", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const auth = createAuthenticatedAuthContext({
       userId: "u-confirm", username: "u-confirm", displayName: "U", role: "ADMIN", sessionId: "s",
     });
@@ -291,6 +293,7 @@ describe("confirm HTTP route — sourceMode 校验", () => {
 
   it("rejects invalid sourceMode value", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const auth = createAuthenticatedAuthContext({
       userId: "u-confirm2", username: "u-confirm2", displayName: "U2", role: "ADMIN", sessionId: "s",
     });
@@ -332,6 +335,7 @@ describe("confirm HTTP route — sourceMode 校验", () => {
 
   it("rejects sourceMode mismatch with candidate's actual source", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const auth = createAuthenticatedAuthContext({
       userId: "u-confirm3", username: "u-confirm3", displayName: "U3", role: "ADMIN", sessionId: "s",
     });
@@ -374,6 +378,7 @@ describe("confirm HTTP route — sourceMode 校验", () => {
 
   it("rejects sourceRef mismatch (recommended candidate has null sourceRef)", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const auth = createAuthenticatedAuthContext({
       userId: "u-confirm4", username: "u-confirm4", displayName: "U4", role: "ADMIN", sessionId: "s",
     });
@@ -416,6 +421,7 @@ describe("confirm HTTP route — sourceMode 校验", () => {
 
   it("accepts sourceRef with different field order (order-insensitive comparison)", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const auth = createAuthenticatedAuthContext({
       userId: "u-confirm5", username: "u-confirm5", displayName: "U5", role: "ADMIN", sessionId: "s",
     });

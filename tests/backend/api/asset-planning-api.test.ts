@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -430,6 +430,7 @@ describe("asset planning api", () => {
         invokeStrictStructured: vi.fn(),
       };
       const app = buildApp();
+      seedGenerationCatalog(app);
       const prepared = await prepareActiveStoryboard(app);
       const previousActiveId = "asset_plan_record_previous";
       prepared.project.activeAssetPlanRecordId = previousActiveId;
@@ -482,6 +483,7 @@ describe("asset planning api", () => {
     process.env.ASSET_PLANNING_GENERATION_MODE = "intent_compiler";
     try {
       const app = buildApp();
+      seedGenerationCatalog(app);
       const prepared = await prepareActiveStoryboard(app);
       generateAssetPlanMock
         .mockImplementationOnce(async () => {
@@ -533,6 +535,7 @@ describe("asset planning api", () => {
 
   it("returns 404 when the project does not exist", async () => {
     const app = buildApp();
+      seedGenerationCatalog(app);
 
     const response = await app.inject({
       method: "POST",
@@ -541,13 +544,14 @@ describe("asset planning api", () => {
     });
 
     expect(response.statusCode).toBe(404);
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       error: "project_not_found",
     });
   });
 
   it("returns 409 when active storyboard is missing", async () => {
     const app = buildApp();
+      seedGenerationCatalog(app);
     const project = await createProject(app.db, {
       name: "Asset Plan Missing Storyboard",
       ownerId: "owner-1",
@@ -560,13 +564,14 @@ describe("asset planning api", () => {
     });
 
     expect(response.statusCode).toBe(409);
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       error: "active_storyboard_missing",
     });
   });
 
   it("returns 404 when the active storyboard record was deleted", async () => {
     const app = buildApp();
+      seedGenerationCatalog(app);
     const project = await createProject(app.db, {
       name: "Asset Plan Deleted Storyboard",
       ownerId: "owner-1",
@@ -580,13 +585,14 @@ describe("asset planning api", () => {
     });
 
     expect(response.statusCode).toBe(404);
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       error: "storyboard_record_not_found",
     });
   });
 
   it("returns 404 when the storyboard source script was deleted", async () => {
     const app = buildApp();
+      seedGenerationCatalog(app);
     const prepared = await prepareActiveStoryboard(app);
     app.db.scriptRecords.delete(prepared.scriptRecord.id);
 
@@ -597,17 +603,20 @@ describe("asset planning api", () => {
     });
 
     expect(response.statusCode).toBe(404);
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       error: "source_record_not_found",
     });
   });
 
-  it("returns 500 before invoking LLM or persisting any record when route resolution fails", async () => {
+  it("returns 409 and creates no run when configuration resolution fails at submit time", async () => {
     const app = buildApp();
+      seedGenerationCatalog(app);
     const prepared = await prepareActiveStoryboard(app);
-    // 破坏 catalog：resolver 无法解析任何 capability 默认项 → 结构化失败
+    // 破坏 catalog：resolver 无法解析任何 capability 默认项 → 提交解析失败
+    // （2026-08-23 报价体系移除：解析失败提前到提交阶段，run 不创建）
     app.db.providerModelCatalog.clear();
     const recordsBefore = app.db.assetPlanRecords.size;
+    const runsBefore = app.db.generationRuns.size;
 
     const response = await app.inject({
       method: "POST",
@@ -615,14 +624,11 @@ describe("asset planning api", () => {
       auth,
     });
 
-    expect(response.statusCode).toBe(500);
+    expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({
-      error: "asset_plan_route_resolution_failed",
-      // 透传 resolver 的公开安全字段，便于 UI 精确提示
-      reason_code: "generation_capability_unavailable",
-      capability: expect.any(String),
+      error: "generation_run_resolution_failed",
     });
-    expect(response.json().detail).toEqual(expect.any(String));
+    expect(app.db.generationRuns.size).toBe(runsBefore);
     expect(generateAssetPlanMock).not.toHaveBeenCalled();
     expect(repairAssetPlanStructureMock).not.toHaveBeenCalled();
     expect(app.db.assetPlanRecords.size).toBe(recordsBefore);
@@ -632,6 +638,7 @@ describe("asset planning api", () => {
 
   it("returns 404 when the storyboard source topic was deleted", async () => {
     const app = buildApp();
+      seedGenerationCatalog(app);
     const prepared = await prepareActiveStoryboard(app);
     app.db.topicPackages.delete(prepared.topicPackage.id);
 
@@ -642,13 +649,14 @@ describe("asset planning api", () => {
     });
 
     expect(response.statusCode).toBe(404);
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       error: "source_record_not_found",
     });
   });
 
   it("generates, validates, persists, and activates an asset plan from active storyboard", async () => {
     const app = buildApp();
+      seedGenerationCatalog(app);
     const prepared = await prepareActiveStoryboard(app);
     prepared.project.activeAssetManifestRecordId = "asset_manifest_record_old";
     prepared.project.activeComposeRecordId = "compose_record_old";
@@ -737,6 +745,7 @@ describe("asset planning api", () => {
 
   it("restores every pre-activation project field when asset plan activation rejects", async () => {
     const app = buildApp();
+      seedGenerationCatalog(app);
     const prepared = await prepareActiveStoryboard(app);
     const oldUpdatedAt = new Date("2025-01-02T03:04:05.000Z");
     const oldAssetPlanTrace = { phase: "asset_planning", run_id: "old_plan_run" };
@@ -803,6 +812,7 @@ describe("asset planning api", () => {
     storageRoots.push(root);
     process.env.STORAGE_ROOT_DIR = root;
     const app = buildApp();
+      seedGenerationCatalog(app);
     const prepared = await prepareActiveStoryboard(app);
     const rawSecret = `RAW_SUCCESS_CHUNK_SECRET_${"x".repeat(200)}`;
     generateAssetPlanMock.mockImplementationOnce(async (input) => {
@@ -888,6 +898,7 @@ describe("asset planning api", () => {
   it("returns 422 in legacy mode without full regeneration when local validation remains invalid", async () => {
     process.env.ASSET_PLANNING_GENERATION_MODE = "legacy";
     const app = buildApp();
+      seedGenerationCatalog(app);
     const prepared = await prepareActiveStoryboard(app);
     generateAssetPlanMock.mockResolvedValue(
       makeAssetPlan({
@@ -932,6 +943,7 @@ describe("asset planning api", () => {
     process.env.ASSET_PLANNING_GENERATION_MODE = "intent_compiler";
     try {
       const app = buildApp();
+      seedGenerationCatalog(app);
       const prepared = await prepareActiveStoryboard(app);
       generateAssetPlanMock.mockResolvedValueOnce(
         makeAssetPlan({
@@ -973,6 +985,7 @@ describe("asset planning api", () => {
   it("repairs a structurally invalid legacy asset plan once without full regeneration", async () => {
     process.env.ASSET_PLANNING_GENERATION_MODE = "legacy";
     const app = buildApp();
+      seedGenerationCatalog(app);
     const prepared = await prepareActiveStoryboard(app);
     const invalidPlan = makeAssetPlan({
       storyboardRecordId: prepared.storyboardRecord.id,
@@ -1029,6 +1042,7 @@ describe("asset planning api", () => {
     storageRoots.push(root);
     process.env.STORAGE_ROOT_DIR = root;
     const app = buildApp();
+      seedGenerationCatalog(app);
     const prepared = await prepareActiveStoryboard(app);
     generateAssetPlanMock.mockImplementationOnce(async (input) => {
       await input.onGlobalStructureEvent?.({
@@ -1088,6 +1102,7 @@ describe("asset planning api", () => {
     storageRoots.push(root);
     process.env.STORAGE_ROOT_DIR = root;
     const app = buildApp();
+      seedGenerationCatalog(app);
     const prepared = await prepareActiveStoryboard(app);
     generateAssetPlanMock.mockImplementationOnce(async (input) => {
       await input.onGlobalStructureEvent?.({
@@ -1162,6 +1177,7 @@ describe("asset planning api", () => {
     storageRoots.push(root);
     process.env.STORAGE_ROOT_DIR = root;
     const app = buildApp();
+      seedGenerationCatalog(app);
     const prepared = await prepareActiveStoryboard(app);
     generateAssetPlanMock.mockImplementationOnce(async (input) => {
       await input.onGlobalStructureEvent?.({
@@ -1193,7 +1209,7 @@ describe("asset planning api", () => {
     });
 
     expect(response.statusCode).toBe(500);
-    expect(response.json()).toEqual({
+    expect(response.json()).toMatchObject({
       error: "asset_legacy_audio_timing_rebind_ambiguous",
       repair_used: false,
       failure_class: "deterministic_resilience",
@@ -1230,6 +1246,7 @@ describe("asset planning api", () => {
     storageRoots.push(root);
     process.env.STORAGE_ROOT_DIR = root;
     const app = buildApp();
+      seedGenerationCatalog(app);
     const prepared = await prepareActiveStoryboard(app);
     const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     generateAssetPlanMock.mockImplementationOnce(async (input) => {
@@ -1293,6 +1310,7 @@ describe("asset planning api", () => {
     storageRoots.push(root);
     process.env.STORAGE_ROOT_DIR = root;
     const app = buildApp();
+      seedGenerationCatalog(app);
     const prepared = await prepareActiveStoryboard(app);
     generateAssetPlanMock.mockImplementationOnce(async (input) => {
       await input.onGlobalStructureEvent?.({
@@ -1358,6 +1376,7 @@ describe("asset planning api", () => {
 
   it("caps normalized paths at 50 while retaining the pre-truncation count", async () => {
     const app = buildApp();
+      seedGenerationCatalog(app);
     const prepared = await prepareActiveStoryboard(app);
     generateAssetPlanMock.mockImplementationOnce(async (input) => {
       await input.onGlobalStructureEvent?.({
@@ -1385,6 +1404,7 @@ describe("asset planning api", () => {
 
   it("persists repair success diagnostics without full regeneration", async () => {
     const app = buildApp();
+      seedGenerationCatalog(app);
     const prepared = await prepareActiveStoryboard(app);
     const valid = makeAssetPlan({
       storyboardRecordId: prepared.storyboardRecord.id,
@@ -1412,6 +1432,7 @@ describe("asset planning api", () => {
     storageRoots.push(root);
     process.env.STORAGE_ROOT_DIR = root;
     const app = buildApp();
+      seedGenerationCatalog(app);
     const prepared = await prepareActiveStoryboard(app);
     const initial_issues = Array.from({ length: 22 }, (_, index) => ({ path: ["tasks", index, "risk_notes"], message: `RAW_GLOBAL_SECRET_${index}`, value: "secret_token_123" }));
     const patch_issues = [{ path: ["art_bible", "props", 0, "consistency_notes"], message: "RAW_GLOBAL_SECRET_PATCH", value: "secret_token_123" }];
@@ -1458,6 +1479,7 @@ describe("asset planning api", () => {
     storageRoots.push(root);
     process.env.STORAGE_ROOT_DIR = root;
     const app = buildApp();
+      seedGenerationCatalog(app);
     const prepared = await prepareActiveStoryboard(app);
     generateAssetPlanMock.mockImplementationOnce(async (input) => {
       await input.onGlobalStructureEvent?.({ type: "repair_started", issues: [] });
@@ -1494,6 +1516,7 @@ describe("asset planning api", () => {
     storageRoots.push(root);
     process.env.STORAGE_ROOT_DIR = root;
     const app = buildApp();
+      seedGenerationCatalog(app);
     const prepared = await prepareActiveStoryboard(app);
     const warning = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     generateAssetPlanMock.mockImplementationOnce(async (input) => {
@@ -1528,6 +1551,7 @@ describe("asset planning api", () => {
     storageRoots.push(root);
     process.env.STORAGE_ROOT_DIR = root;
     const app = buildApp();
+      seedGenerationCatalog(app);
     const prepared = await prepareActiveStoryboard(app);
     const profile = getProjectStorageProfile(prepared.project)!;
     const traceDir = resolve(root, profile.trace_dir);
@@ -1579,6 +1603,7 @@ describe("asset planning api", () => {
 
   it("returns 409 and does not activate when the active storyboard changes during generation", async () => {
     const app = buildApp();
+      seedGenerationCatalog(app);
     const prepared = await prepareActiveStoryboard(app);
     generateAssetPlanMock.mockImplementationOnce(async () => {
       prepared.project.activeStoryboardRecordId = "storyboard_record_new";

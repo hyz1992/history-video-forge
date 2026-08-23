@@ -186,8 +186,9 @@ async function runAdapterPipeline(
   execution.started_at = startedAt;
   execution.provider_id = adapter.providerName;
 
-  // S2-2A 任务 9A 付费闸门（验收 1）：真实付费 adapter 只在有效 quote 绑定的
-  // run/snapshot 上下文中派发——run 存在、快照存在、quote 已绑定且携带授权上界。
+  // S2-2A 任务 9A 付费闸门（验收 1）：真实付费 adapter 只在 run/snapshot 上下文
+  // 中派发。2026-08-23（报价体系移除）：quote 校验已移除——run 存在且快照
+  // 存在即视为已授权上下文（记账与防重复计费由 run/snapshot 承担）。
   // 本地/fake adapter（无 billing 声明）不受限（零外部费用，验收 6）。
   let paidUsageContext: {
     snapshot: import("../../db/client.js").RunConfigurationSnapshotRecord;
@@ -196,17 +197,12 @@ async function runAdapterPipeline(
   if (adapter.billing) {
     const run = db.generationRuns.get(assetRunId);
     const snapshot = run ? db.runConfigurationSnapshots.get(run.runConfigurationSnapshotId) : undefined;
-    const authorized =
-      run &&
-      snapshot &&
-      snapshot.quoteId !== null &&
-      snapshot.authorizationCostMicros !== null;
-    if (!authorized) {
+    if (!run || !snapshot) {
       execution.status = "failed";
       execution.completed_at = new Date().toISOString();
       execution.notes = [
         ...execution.notes,
-        "[gate] paid provider blocked: paid_generation_quote_required — submit with a valid cost quote before dispatch",
+        "[gate] paid provider blocked: paid_dispatch_context_missing — no run/snapshot context for paid provider dispatch",
       ];
       await handleVideoStrategyFailure(
         manifest,
@@ -215,12 +211,12 @@ async function runAdapterPipeline(
         db,
         assetRunId,
         ctx.assetPlan,
-        "paid_generation_quote_required",
-        "no valid quote-bound run/snapshot for paid provider dispatch",
+        "paid_dispatch_context_missing",
+        "no run/snapshot context for paid provider dispatch",
       );
       return;
     }
-    paidUsageContext = { snapshot: snapshot!, billing: adapter.billing };
+    paidUsageContext = { snapshot, billing: adapter.billing };
   }
 
   // 闸门通过后才递增 attempt（被拦截的任务不消耗重试簿记，M2）

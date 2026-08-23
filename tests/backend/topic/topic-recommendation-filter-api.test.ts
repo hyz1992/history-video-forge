@@ -25,6 +25,7 @@ vi.mock(
 );
 
 import { buildApp } from "../../../backend/src/app.js";
+import { seedGenerationCatalog } from "../helpers/seed-generation-catalog.js";
 import { buildTestAuth } from "../auth/test-utils.js";
 
 const seedPayload = {
@@ -72,6 +73,7 @@ describe("topic recommendation filter HTTP chain", () => {
 
   it("passes a validated and normalized filter through controller and service to builder", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const projectId = await createProject(app);
 
     const response = await app.inject({
@@ -137,6 +139,7 @@ describe("topic recommendation filter HTTP chain", () => {
     ["overlong exclude term", { exclude_terms: ["x".repeat(41)] }],
   ])("rejects %s before invoking the builder", async (_name, filters) => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const projectId = await createProject(app);
 
     const response = await app.inject({
@@ -159,6 +162,7 @@ describe("topic recommendation filter HTTP chain", () => {
 
   it("prioritizes an invalid recommendation seed over an invalid filter", async () => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const projectId = await createProject(app);
 
     const response = await app.inject({
@@ -187,6 +191,7 @@ describe("topic recommendation filter HTTP chain", () => {
     ["blank exclusions", { exclude_terms: [" ", "  "] }],
   ])("keeps %s filters out of builder input", async (_name, filters) => {
     const app = buildApp();
+    seedGenerationCatalog(app);
     const projectId = await createProject(app);
     const payload = filters === undefined
       ? seedPayload
