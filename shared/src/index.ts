@@ -48,7 +48,6 @@ export {
   assertS22AScopeConstraints,
   assertS22BScopeConstraints,
   assertS22CScopeConstraints,
-  BudgetConfiguration,
   CAPABILITY_SLOTS,
   CapabilitySelectionMap,
   CreativePreferences,
