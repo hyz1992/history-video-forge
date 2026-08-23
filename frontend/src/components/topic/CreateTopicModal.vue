@@ -230,12 +230,10 @@ async function handleGenerate() {
   try {
     await projectStore.createProject();
     topicStore.selectTab(activeTab.value);
-    // 2026-08-23（报价体系移除）：直连生成
-    await topicStore.generateSystemRecommendations(loadTopicRecommendationFilterDraft());
-    if (topicStore.state.loadError) {
-      error.value = topicStore.state.loadError;
-      return;
-    }
+    // 2026-08-23 修复回归：创建项目后不等待 LLM 生成完成——立即关闭弹窗
+    // 进入项目页（topic 阶段显示生成中 loading，由轮询驱动）。S2-2D 报价
+    // 时代改为 await 导致用户长时间停留在"创建中…"按钮。
+    void topicStore.generateSystemRecommendations(snapshot);
     emit("confirmed");
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : "创建项目失败，请重试";
