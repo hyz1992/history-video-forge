@@ -252,6 +252,7 @@ export async function recordVoicePreviewUsage(
       estimatedCostMicros,
       actualCostMicros: input.status === "succeeded" ? estimatedCostMicros : null,
       costBasis: "estimate",
+      unitDetailJson: null,
       durationMs: input.durationMs ?? null,
       createdAt: now,
       updatedAt: now,

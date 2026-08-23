@@ -535,6 +535,7 @@ function toUsageRecord(row: {
     estimatedCostMicros: row.estimatedCostMicros,
     actualCostMicros: row.actualCostMicros,
     costBasis: row.costBasis as UsageCostRecordRecord["costBasis"],
+    unitDetailJson: null,
     durationMs: row.durationMs,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
