@@ -10,8 +10,6 @@ import {
 import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 import { useGenerationCostStore } from "../../stores/generation-cost";
-import { createQuoteAwareGeneration } from "../../composables/useQuoteAwareGeneration";
-import GenerationQuoteDialog from "../asset/GenerationQuoteDialog.vue";
 import { useStagePolling } from "../../composables/useStagePolling";
 import { resolvePipelineStagePhase } from "../../composables/usePipelineStagePhase";
 import StageGenerating from "../workspace/StageGenerating.vue";
@@ -25,21 +23,6 @@ const costStore = useGenerationCostStore();
 const route = useRoute();
 const router = useRouter();
 const { checkStageRollback } = useCompetitionGuard();
-
-// S2-2D：免 quote 优先 → 409 进报价（stub/fake 部署零行为变化；真实付费部署
-// 自动进入报价确认流程，不再把 paid_generation_quote_required 当裸报错）。
-const quoteAware = createQuoteAwareGeneration({
-  operation: "topic.generate",
-  createQuoteRequest: () => ({ operation: "topic.generate" }),
-  tryDirect: () => topicStore.generateSystemRecommendations(loadTopicRecommendationFilterDraft()),
-  submitWithQuote: (submit) =>
-    topicStore.generateSystemRecommendations(loadTopicRecommendationFilterDraft(), submit),
-  costStore,
-  projectId: () => String(route.params.projectId ?? ""),
-  onQuoteUnavailable: (message) => {
-    ElMessage.warning(message);
-  },
-});
 
 const SCRIPT_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "script");
 
@@ -192,20 +175,16 @@ async function handleRefreshBatch() {
   await nextTick();
   try {
     startPolling();
-    const result = await quoteAware.run();
+    // 2026-08-23（报价体系移除）：直连生成（幂等键由后端生成）
+    await topicStore.generateSystemRecommendations(loadTopicRecommendationFilterDraft());
     if (topicStore.state.loadError) {
       ElMessage.warning("刷新失败：" + topicStore.state.loadError);
       isRefreshing.value = false;
       return;
     }
-    if (result.ok) {
-      setTimeout(() => {
-        isRefreshing.value = false;
-      }, 400);
-    } else {
-      // pending_confirmation（弹窗等待确认）/ quote_unavailable（已提示）
+    setTimeout(() => {
       isRefreshing.value = false;
-    }
+    }, 400);
   } catch (error) {
     isRefreshing.value = false;
     const message = error instanceof Error ? error.message : "刷新失败";
@@ -216,33 +195,12 @@ async function handleRefreshBatch() {
 async function handleRegenerate() {
   if (!checkStageRollback("topic")) return;
   startPolling();
-  const result = await quoteAware.run();
+  await topicStore.generateSystemRecommendations(loadTopicRecommendationFilterDraft());
   if (topicStore.state.loadError) {
     ElMessage.warning("重新生成失败：" + topicStore.state.loadError);
     return;
   }
-  if (result.ok) {
-    ElMessage.success("已重新生成选题");
-  }
-  // pending_confirmation：弹窗等待确认；quote_unavailable：onQuoteUnavailable 已提示
-}
-
-/** S2-2D：报价弹窗确认 → 携带 quote 提交；过期自动重新报价；冲突提示重新报价。 */
-async function handleQuoteConfirm(payload: { authorizeBudgetOverride: boolean }) {
-  const result = await quoteAware.confirm(payload.authorizeBudgetOverride);
-  if (result.ok) {
-    ElMessage.success("已重新生成选题");
-    return;
-  }
-  if (result.reason === "expired") {
-    ElMessage.warning("报价已过期，正在重新报价");
-    await quoteAware.run();
-    return;
-  }
-  if (result.reason === "conflict") {
-    ElMessage.warning("生成被拒绝（" + result.message + "），请重新报价后再试");
-  }
-  // error（网络不确定）：弹窗保留，用户可直接重试确认（同一 quote + 幂等键）
+  ElMessage.success("已重新生成选题");
 }
 
 async function handleRefreshGeneratingStatus() {
@@ -477,14 +435,6 @@ function roundLabel(round: { label?: string; round_index?: number }) {
       text="正在刷新选题…"
     />
 
-    <!-- S2-2D：真实付费部署的报价确认弹窗（stub/fake 部署不出现） -->
-    <GenerationQuoteDialog
-      :open="quoteAware.state.confirmVisible"
-      :quote="quoteAware.state.quote"
-      :loading="quoteAware.state.pending"
-      @confirm="handleQuoteConfirm"
-      @cancel="quoteAware.cancel()"
-    />
   </div>
 </template>
 

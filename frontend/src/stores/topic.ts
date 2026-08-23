@@ -11,7 +11,6 @@ import {
   type TopicRecommendationPeriodId,
 } from "../../../shared/src";
 import { apiFetch } from "../utils/api";
-import { isPaidQuoteRequiredError, quoteSubmitBody, type QuoteSubmitFields } from "./generation-cost";
 
 import type { ProjectStore } from "./project";
 
@@ -74,13 +73,11 @@ export interface TopicApi {
   generateSystemRecommendations: (
     projectId: string,
     filters: TopicRecommendationFilters,
-    submit?: QuoteSubmitFields,
-  ) => Promise<TopicRecommendationsResponse>;
+      ) => Promise<TopicRecommendationsResponse>;
   generateFromLibrary: (
     projectId: string,
     body: { event_library_entry_id: string; angle_id?: string },
-    submit?: QuoteSubmitFields,
-  ) => Promise<TopicRecommendationsResponse>;
+      ) => Promise<TopicRecommendationsResponse>;
   confirmCandidate: (
     projectId: string,
     candidateId: string,
@@ -116,8 +113,8 @@ export interface TopicStoreState {
 export interface TopicStore {
   state: Readonly<TopicStoreState>;
   selectTab: (tab: TopicTab) => void;
-  generateSystemRecommendations: (filters?: TopicRecommendationFilters, submit?: QuoteSubmitFields) => Promise<void>;
-  generateFromLibrary: (entryId: string, angleId?: string, submit?: QuoteSubmitFields) => Promise<void>;
+  generateSystemRecommendations: (filters?: TopicRecommendationFilters, ) => Promise<void>;
+  generateFromLibrary: (entryId: string, angleId?: string, ) => Promise<void>;
   openCandidate: (candidate: TopicCandidate, roundId?: string | null) => void;
   closeCandidate: () => void;
   confirmSelectedCandidate: () => Promise<void>;
@@ -309,7 +306,7 @@ export function createFetchTopicApi(baseUrl = ""): TopicApi {
         };
       }
     },
-    async generateSystemRecommendations(projectId, filters, submit) {
+    async generateSystemRecommendations(projectId, filters) {
       const normalizedFilters = buildTopicRecommendationFilters(filters);
       return await apiFetch<TopicRecommendationsResponse>(
         `${baseUrl}/api/projects/${projectId}/topic/recommendations`,
@@ -318,15 +315,14 @@ export function createFetchTopicApi(baseUrl = ""): TopicApi {
           body: {
             ...buildRecommendationSeed(normalizedFilters),
             ...(normalizedFilters ? { filters: normalizedFilters } : {}),
-            ...quoteSubmitBody(submit),
           },
         },
       );
     },
-    async generateFromLibrary(projectId, body, submit) {
+    async generateFromLibrary(projectId, body) {
       return await apiFetch<TopicRecommendationsResponse>(
         `${baseUrl}/api/projects/${projectId}/topic/from-library`,
-        { method: "POST", body: { ...body, ...quoteSubmitBody(submit) } },
+        { method: "POST", body: { ...body } },
       );
     },
     async confirmCandidate(projectId, candidateId) {
@@ -376,8 +372,7 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
 
   async function generateSystemRecommendations(
     filters: TopicRecommendationFilters = createDefaultTopicRecommendationFilterDraft(),
-    submit?: QuoteSubmitFields,
-  ) {
+      ) {
     state.isGenerating = true;
     state.loadError = null;
     state.generationSource = "system";
@@ -394,7 +389,7 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
       resetForProject(projectId);
       state.isGenerating = true;
       state.snapshot = { current_status: "topic_generating" };
-      const response = await input.api.generateSystemRecommendations(projectId, filters, submit);
+      const response = await input.api.generateSystemRecommendations(projectId, filters);
       loadedProjectId = response.project_id ?? projectId;
       state.candidates = response.candidates;
       state.currentRound =
@@ -406,8 +401,6 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
       state.selectedCandidate = response.candidates[0] ?? null;
       state.selectedRoundId = state.currentRound?.round_id ?? null;
     } catch (error) {
-      // S2-2D：付费闸门 409 上抛（不吞进 loadError），交面板报价编排
-      if (isPaidQuoteRequiredError(error)) throw error;
       state.loadError =
         error instanceof Error ? error.message : "topic_generation_failed";
       state.candidates = previousCandidates;
@@ -422,7 +415,7 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
     }
   }
 
-  async function generateFromLibrary(entryId: string, angleId?: string, submit?: QuoteSubmitFields) {
+  async function generateFromLibrary(entryId: string, angleId?: string, ) {
     state.isGenerating = true;
     state.loadError = null;
     state.generationSource = "library";
@@ -442,7 +435,7 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
       const response = await input.api.generateFromLibrary(projectId, {
         event_library_entry_id: entryId,
         ...(angleId ? { angle_id: angleId } : {}),
-      }, submit);
+      });
       loadedProjectId = response.project_id ?? projectId;
       state.candidates = response.candidates;
       state.currentRound =
@@ -454,8 +447,6 @@ export function createTopicStore(input: CreateTopicStoreInput): TopicStore {
       state.selectedCandidate = response.candidates[0] ?? null;
       state.selectedRoundId = state.currentRound?.round_id ?? null;
     } catch (error) {
-      // S2-2D：付费闸门 409 上抛（不吞进 loadError），交面板报价编排
-      if (isPaidQuoteRequiredError(error)) throw error;
       state.loadError =
         error instanceof Error ? error.message : "topic_generation_failed";
       state.candidates = previousCandidates;

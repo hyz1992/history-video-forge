@@ -7,8 +7,6 @@ import { useScriptStore } from "../../stores/script";
 import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 import { useGenerationCostStore } from "../../stores/generation-cost";
-import { createQuoteAwareGeneration } from "../../composables/useQuoteAwareGeneration";
-import GenerationQuoteDialog from "../asset/GenerationQuoteDialog.vue";
 import { useStagePolling } from "../../composables/useStagePolling";
 import { resolvePipelineStagePhase } from "../../composables/usePipelineStagePhase";
 import StageGenerating from "../workspace/StageGenerating.vue";
@@ -24,24 +22,6 @@ const costStore = useGenerationCostStore();
 // 自动进入报价确认流程）。首稿与重新生成共用同一编排，动作经闭包变量区分。
 let currentScriptAction: "initial" | "regen" = "initial";
 let pendingRegenFeedback: string | undefined;
-const quoteAware = createQuoteAwareGeneration({
-  operation: "script.generate",
-  createQuoteRequest: () => ({ operation: "script.generate" }),
-  tryDirect: () =>
-    currentScriptAction === "regen"
-      ? scriptStore.runRegenOnce(pendingRegenFeedback)
-      : scriptStore.generateInitialScript(),
-  submitWithQuote: (submit) =>
-    currentScriptAction === "regen"
-      ? scriptStore.runRegenOnce(pendingRegenFeedback, submit)
-      : scriptStore.generateInitialScript(submit),
-  costStore,
-  projectId: () => projectStore.state.projectId ?? "",
-  onQuoteUnavailable: (message) => {
-    ElMessage.warning(message);
-  },
-});
-
 const STORYBOARD_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "storyboard");
 const router = useRouter();
 const projectStore = useProjectStore();
@@ -104,11 +84,10 @@ async function triggerAutoGenerate() {
     startPolling();
     try {
       currentScriptAction = "initial";
-      const result = await quoteAware.run();
-      if (result.ok && !scriptStore.state.loadError) {
+      await scriptStore.generateInitialScript();
+      if (!scriptStore.state.loadError) {
         ElMessage.success("文案已生成");
       }
-      // pending_confirmation：报价弹窗等待确认；quote_unavailable：已提示
     } finally {
       pendingAutoGenerate.value = false;
     }
@@ -412,39 +391,18 @@ async function handleRegenSubmit(userFeedback: string) {
   try {
     currentScriptAction = "regen";
     pendingRegenFeedback = userFeedback || undefined;
-    const result = await quoteAware.run();
+    await scriptStore.runRegenOnce(pendingRegenFeedback);
     if (scriptStore.state.loadError) {
       ElMessage.warning("文案重新生成失败：" + scriptStore.state.loadError);
-    } else if (result.ok) {
+    } else {
       ElMessage.success("文案重新生成完成");
     }
-    // pending_confirmation：报价弹窗等待确认；quote_unavailable：已提示
   } catch (error) {
     const message = error instanceof Error ? error.message : "文案重新生成失败";
     ElMessage.warning(message);
   } finally {
     isRegenerating.value = false;
   }
-}
-
-/** S2-2D：报价弹窗确认 → 携带 quote 提交；过期自动重新报价；冲突提示重新报价。 */
-async function handleQuoteConfirm(payload: { authorizeBudgetOverride: boolean }) {
-  const result = await quoteAware.confirm(payload.authorizeBudgetOverride);
-  if (result.ok) {
-    if (!scriptStore.state.loadError) {
-      ElMessage.success(currentScriptAction === "regen" ? "文案重新生成完成" : "文案已生成");
-    }
-    return;
-  }
-  if (result.reason === "expired") {
-    ElMessage.warning("报价已过期，正在重新报价");
-    await quoteAware.run();
-    return;
-  }
-  if (result.reason === "conflict") {
-    ElMessage.warning("生成被拒绝（" + result.message + "），请重新报价后再试");
-  }
-  // error（网络不确定）：弹窗保留，用户可直接重试确认（同一 quote + 幂等键）
 }
 
 function handleRetry() {
@@ -676,13 +634,6 @@ function handleConfirm() {
     />
 
     <!-- S2-2D：真实付费部署的报价确认弹窗（stub/fake 部署不出现） -->
-    <GenerationQuoteDialog
-      :open="quoteAware.state.confirmVisible"
-      :quote="quoteAware.state.quote"
-      :loading="quoteAware.state.pending"
-      @confirm="handleQuoteConfirm"
-      @cancel="quoteAware.cancel()"
-    />
 
     <StageLoadingBar
       :visible="isRegenerating"

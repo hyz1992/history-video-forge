@@ -257,22 +257,14 @@ describe("assets store quote submission (任务 11)", () => {
     });
   });
 
-  it("generateSingleTask 透传 quote 字段", async () => {
+  it("generateSingleTask 直连调用（无 quote 字段）", async () => {
     mockApi.generateSingleTask.mockResolvedValue(undefined);
     mockApi.loadProject.mockResolvedValue(MOCK_SNAPSHOT);
     const store = createAssetsStore({ projectStore: mockProjectStore, api: mockApi });
 
-    await store.generateSingleTask("task_tts_1", {
-      quoteId: "quote_002",
-      idempotencyKey: "key_002",
-      authorizeBudgetOverride: false,
-    });
+    await store.generateSingleTask("task_tts_1");
 
-    expect(mockApi.generateSingleTask).toHaveBeenCalledWith("proj_test_001", "task_tts_1", {
-      quoteId: "quote_002",
-      idempotencyKey: "key_002",
-      authorizeBudgetOverride: false,
-    });
+    expect(mockApi.generateSingleTask).toHaveBeenCalledWith("proj_test_001", "task_tts_1");
   });
 
   it("acceptFallback 调用 accept-fallback 端点并重新加载", async () => {

@@ -47,13 +47,10 @@ export interface VoicePreviewResult {
   provider_voice_id: string | null;
 }
 
+/** 2026-08-23（报价体系移除）：试听直连，无额外提交字段。 */
 export interface VoicePreviewRequestOptions {
-  /** quote 提交协议（付费部署必需）：cost_quote_id + idempotency_key 成对。 */
-  cost_quote_id?: string;
-  idempotency_key?: string;
-  authorize_budget_override?: boolean;
-  /** 提交重放 quote 创建时的 run_overrides（既有协议：逐字段一致）。 */
-  run_overrides?: Record<string, unknown>;
+  /** 预留：未来如需要单次覆盖语义可在此扩展。 */
+  [key: string]: unknown;
 }
 
 export interface CreativePresetsApi {

@@ -1,6 +1,5 @@
 import { inject, reactive, readonly, type InjectionKey } from "vue";
 import { apiFetch } from "../utils/api";
-import { isPaidQuoteRequiredError, quoteSubmitBody, type QuoteSubmitFields } from "./generation-cost";
 
 import type { ProjectStore } from "./project";
 
@@ -75,9 +74,9 @@ export interface ScriptHistoryEntry {
 
 export interface ScriptApi {
   loadSnapshot(projectId: string): Promise<ScriptSnapshot>;
-  generateInitialScript(projectId: string, submit?: QuoteSubmitFields): Promise<void>;
-  runPatchOnce(projectId: string, submit?: QuoteSubmitFields): Promise<void>;
-  runRegenOnce(projectId: string, userFeedback?: string, submit?: QuoteSubmitFields): Promise<void>;
+  generateInitialScript(projectId: string, ): Promise<void>;
+  runPatchOnce(projectId: string, ): Promise<void>;
+  runRegenOnce(projectId: string, userFeedback?: string, ): Promise<void>;
 }
 
 export interface ScriptStoreState {
@@ -91,12 +90,12 @@ export interface ScriptStoreState {
 
 export interface ScriptStore {
   state: Readonly<ScriptStoreState>;
-  generateInitialScript: (submit?: QuoteSubmitFields) => Promise<void>;
+  generateInitialScript: () => Promise<void>;
   loadActiveScriptSnapshot: () => Promise<void>;
   retryLoadActiveScriptSnapshot: () => Promise<void>;
   selectHistoryEntry: (entryId: string) => void;
-  runPatchOnce: (submit?: QuoteSubmitFields) => Promise<void>;
-  runRegenOnce: (userFeedback?: string, submit?: QuoteSubmitFields) => Promise<void>;
+  runPatchOnce: () => Promise<void>;
+  runRegenOnce: (userFeedback?: string, ) => Promise<void>;
 }
 
 export interface CreateScriptStoreInput {
@@ -111,22 +110,22 @@ export function createFetchScriptApi(baseUrl = ""): ScriptApi {
     async loadSnapshot(projectId) {
       return await apiFetch<ScriptSnapshot>(`${baseUrl}/api/projects/${projectId}`);
     },
-    async generateInitialScript(projectId, submit) {
+    async generateInitialScript(projectId) {
       await apiFetch(`${baseUrl}/api/projects/${projectId}/script/generate`, {
         method: "POST",
-        body: { allow_patch: false, allow_regen: false, ...quoteSubmitBody(submit) },
+        body: { allow_patch: false, allow_regen: false },
       });
     },
-    async runPatchOnce(projectId, submit) {
+    async runPatchOnce(projectId) {
       await apiFetch(`${baseUrl}/api/projects/${projectId}/script/generate`, {
         method: "POST",
-        body: { allow_patch: true, allow_regen: false, ...quoteSubmitBody(submit) },
+        body: { allow_patch: true, allow_regen: false },
       });
     },
-    async runRegenOnce(projectId, userFeedback, submit) {
+    async runRegenOnce(projectId, userFeedback) {
       await apiFetch(`${baseUrl}/api/projects/${projectId}/script/generate`, {
         method: "POST",
-        body: { allow_patch: false, allow_regen: true, force_regen: true, user_feedback: userFeedback || null, ...quoteSubmitBody(submit) },
+        body: { allow_patch: false, allow_regen: true, force_regen: true, user_feedback: userFeedback || null },
       });
     },
   };
@@ -299,7 +298,7 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
     await loadActiveScriptSnapshot();
   }
 
-  async function generateInitialScript(submit?: QuoteSubmitFields) {
+  async function generateInitialScript() {
     const projectId = input.projectStore.state.projectId;
     if (!projectId) {
       return;
@@ -319,7 +318,7 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
     });
 
     try {
-      await input.api.generateInitialScript(projectId, submit);
+      await input.api.generateInitialScript(projectId);
       await loadActiveScriptSnapshot();
       // Verify the backend actually produced a script
       if (!state.snapshot?.active_script) {
@@ -336,8 +335,6 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
         });
       }
     } catch (error) {
-      // S2-2D：付费闸门 409 上抛（不吞进 loadError），交面板报价编排
-      if (isPaidQuoteRequiredError(error)) throw error;
       state.loadError = toErrorMessage(error);
       state.snapshot = {
         project_id: projectId,
@@ -365,7 +362,7 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
     });
   }
 
-  async function runPatchOnce(submit?: QuoteSubmitFields) {
+  async function runPatchOnce() {
     const projectId = input.projectStore.state.projectId;
     if (!projectId) {
       return;
@@ -383,14 +380,14 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
       current_status: "script_reviewing",
     });
     try {
-      await input.api.runPatchOnce(projectId, submit);
+      await input.api.runPatchOnce(projectId);
       await loadActiveScriptSnapshot();
     } finally {
       state.isRunningAction = false;
     }
   }
 
-  async function runRegenOnce(userFeedback?: string, submit?: QuoteSubmitFields) {
+  async function runRegenOnce(userFeedback?: string, ) {
     const projectId = input.projectStore.state.projectId;
     if (!projectId) {
       return;
@@ -408,7 +405,7 @@ export function createScriptStore(input: CreateScriptStoreInput): ScriptStore {
       current_status: "script_reviewing",
     });
     try {
-      await input.api.runRegenOnce(projectId, userFeedback, submit);
+      await input.api.runRegenOnce(projectId, userFeedback);
       await loadActiveScriptSnapshot();
     } finally {
       state.isRunningAction = false;

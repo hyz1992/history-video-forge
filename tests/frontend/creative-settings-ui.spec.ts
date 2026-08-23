@@ -167,7 +167,7 @@ describe("CreativeSubtitleSettings", () => {
   });
 });
 
-describe("ProjectGenerationSettings 试听报价弹窗（复审：先试听后报价 + 稳定幂等键）", () => {
+describe("ProjectGenerationSettings 试听直连（2026-08-23）", () => {
   it("stub 路径：免 quote 试听直接成功播放，不创建报价", async () => {
     const { flushPromises, mount } = await import("@vue/test-utils");
     const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
@@ -195,96 +195,6 @@ describe("ProjectGenerationSettings 试听报价弹窗（复审：先试听后�
     expect(play).toHaveBeenCalled();
     expect(calls.filter((c) => c.url.includes("/generation-cost-quotes"))).toHaveLength(0);
     expect(wrapper.find('[data-testid="voice-preview-error"]').exists()).toBe(false);
-  });
-
-  it("付费路径：409 后报价弹窗；确认提交同一 quote_id；失败重试复用同一幂等键", async () => {
-    const { flushPromises, mount } = await import("@vue/test-utils");
-    const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
-    let previewSubmitCount = 0;
-    let failNextSubmit = false;
-
-    const fetchMock = vi.fn(async (url: string | URL, init?: RequestInit) => {
-      const urlText = String(url);
-      const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
-      if (urlText.endsWith("/generation-cost-quotes")) {
-        calls.push({ url: urlText, body });
-        return new Response(
-          JSON.stringify({
-            quote_id: "quote-preview-1",
-            estimated_cost_cny: "0.080000",
-            authorization_cost_cny: "0.100000",
-            requires_budget_override: true,
-            contains_unbounded_item: true,
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      }
-      if (urlText.endsWith("/preview")) {
-        calls.push({ url: urlText, body });
-        if (!body.cost_quote_id) {
-          // 免 quote 直连被付费闸门拒绝
-          return new Response(
-            JSON.stringify({
-              error: "paid_generation_quote_required",
-              message: "当前部署可调用付费媒体 provider：请先创建报价并在试听请求中携带 cost_quote_id 与 idempotency_key",
-            }),
-            { status: 409, headers: { "content-type": "application/json" } },
-          );
-        }
-        previewSubmitCount += 1;
-        if (failNextSubmit) {
-          failNextSubmit = false;
-          throw new Error("network timeout");
-        }
-        return new Response(
-          JSON.stringify({ preview_audio_uri: "data:audio/wav;base64,dGVzdA==", source: "generated", provider_voice_id: null }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      }
-      throw new Error(`unexpected fetch: ${urlText}`);
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    vi.stubGlobal("Audio", vi.fn(() => ({ play: async () => undefined })));
-
-    const wrapper = await mountProjectSettingsForPreview();
-    await flushPromises();
-
-    // 免 quote 直连被 409 拒绝 → 报价弹窗展示（teleport 到 body）
-    await wrapper.find('[data-testid="voice-preview-voice_preset_eerie_suspense"]').trigger("click");
-    await flushPromises();
-    const bodyText = () => document.body.textContent ?? "";
-    expect(bodyText()).toContain("试听报价确认");
-    expect(bodyText()).toContain("0.080000");
-    const quoteCreated = calls.filter((c) => c.url.includes("/generation-cost-quotes"));
-    expect(quoteCreated).toHaveLength(1);
-
-    // 第一次确认：网络不确定失败 → 弹窗保留（同 quote + 幂等键可重试）
-    failNextSubmit = true;
-    await clickConfirmPreview();
-    await flushPromises();
-    expect(previewSubmitCount).toBe(1);
-    expect(bodyText()).toContain("试听报价确认"); // 状态保留，未清空
-
-    // 第二次确认：复用同一 quote_id + 同一幂等键 → 成功
-    await clickConfirmPreview();
-    await flushPromises();
-    expect(previewSubmitCount).toBe(2);
-    const submitCalls = calls.filter((c) => c.url.endsWith("/preview") && c.body.cost_quote_id);
-    expect(submitCalls).toHaveLength(2);
-    for (const submitCall of submitCalls) {
-      expect(submitCall.body.cost_quote_id).toBe("quote-preview-1");
-      expect(submitCall.body.authorize_budget_override).toBe(true);
-      expect(submitCall.body.run_overrides).toEqual({
-        creative: { voice_profile_id: "voice_preset_eerie_suspense" },
-      });
-    }
-    // 两次提交使用同一幂等键（网络重试安全：服务端判重回放原结果）
-    expect(submitCalls[0]!.body.idempotency_key).toBe(submitCalls[1]!.body.idempotency_key);
-    expect(String(submitCalls[0]!.body.idempotency_key)).toMatch(/^voice-preview-/);
-    // 全程只创建过一张报价
-    expect(calls.filter((c) => c.url.includes("/generation-cost-quotes"))).toHaveLength(1);
-    // 成功后弹窗关闭
-    expect(bodyText()).not.toContain("试听报价确认");
   });
 });
 

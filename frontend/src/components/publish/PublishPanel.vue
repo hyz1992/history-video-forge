@@ -28,8 +28,6 @@ import { usePublishStore, type TitleCandidate } from "../../stores/publish";
 import { useProjectStore } from "../../stores/project";
 import { useWorkspaceStore, PIPELINE_STEPS } from "../../stores/workspace";
 import { useGenerationCostStore } from "../../stores/generation-cost";
-import { createQuoteAwareGeneration } from "../../composables/useQuoteAwareGeneration";
-import GenerationQuoteDialog from "../asset/GenerationQuoteDialog.vue";
 import { useRouter, useRoute } from "vue-router";
 import StageGenerating from "../workspace/StageGenerating.vue";
 
@@ -40,26 +38,7 @@ const costStore = useGenerationCostStore();
 const router = useRouter();
 const route = useRoute();
 
-// S2-2D：免 quote 优先 → 409 进报价（stub/fake 部署零行为变化）。发布包与
-// 封面生成共用同一编排，动作经闭包变量区分。
 let currentPublishAction: "package" | "cover" = "package";
-const quoteAware = createQuoteAwareGeneration({
-  operation: "publish.generate",
-  createQuoteRequest: () => ({ operation: "publish.generate" }),
-  tryDirect: () =>
-    currentPublishAction === "cover"
-      ? publishStore.generateCover()
-      : publishStore.generatePackage(),
-  submitWithQuote: (submit) =>
-    currentPublishAction === "cover"
-      ? publishStore.generateCover(submit)
-      : publishStore.generatePackage(submit),
-  costStore,
-  projectId: () => projectStore.state.projectId ?? "",
-  onQuoteUnavailable: (message) => {
-    ElMessage.warning(message);
-  },
-});
 
 const COMPOSE_RENDER_STEP_INDEX = PIPELINE_STEPS.findIndex((s) => s.key === "compose-render");
 
@@ -235,15 +214,12 @@ function removeHashtag(tag: string) {
 
 async function handleGenerate() {
   currentPublishAction = "package";
-  const result = await quoteAware.run();
+  await publishStore.generatePackage();
   if (publishStore.state.loadError) {
     ElMessage.warning("发布包生成失败：" + publishStore.state.loadError);
     return;
   }
-  if (result.ok) {
-    ElMessage.success("发布包已生成");
-  }
-  // pending_confirmation：报价弹窗等待确认；quote_unavailable：已提示
+  ElMessage.success("发布包已生成");
 }
 
 async function handleOptimizeCover() {
@@ -273,40 +249,15 @@ function confirmGenerateCover() {
 async function handleGenerateCover() {
   showCoverGenerateConfirm.value = false;
   currentPublishAction = "cover";
-  const result = await quoteAware.run();
+  await publishStore.generateCover();
   if (publishStore.state.loadError) {
     ElMessage.warning("封面图生成失败：" + publishStore.state.loadError);
     return;
   }
-  if (result.ok) {
-    ElMessage.success("封面图生成任务已提交，请稍后刷新查看");
-  }
-  // pending_confirmation：报价弹窗等待确认；quote_unavailable：已提示
+  ElMessage.success("封面图生成任务已提交，请稍后刷新查看");
 }
 
-/** S2-2D：报价弹窗确认 → 携带 quote 提交；过期自动重新报价；冲突提示重新报价。 */
-async function handleQuoteConfirm(payload: { authorizeBudgetOverride: boolean }) {
-  const result = await quoteAware.confirm(payload.authorizeBudgetOverride);
-  if (result.ok) {
-    if (!publishStore.state.loadError) {
-      ElMessage.success(
-        currentPublishAction === "cover"
-          ? "封面图生成任务已提交，请稍后刷新查看"
-          : "发布包已生成",
-      );
-    }
-    return;
-  }
-  if (result.reason === "expired") {
-    ElMessage.warning("报价已过期，正在重新报价");
-    await quoteAware.run();
-    return;
-  }
-  if (result.reason === "conflict") {
-    ElMessage.warning("生成被拒绝（" + result.message + "），请重新报价后再试");
-  }
-  // error（网络不确定）：弹窗保留，用户可直接重试确认（同一 quote + 幂等键）
-}
+
 
 async function handleLoadTitleCandidates() {
   isLoadingCandidates.value = true;
@@ -760,13 +711,6 @@ onMounted(async () => {
     </el-dialog>
 
     <!-- S2-2D：真实付费部署的报价确认弹窗（stub/fake 部署不出现） -->
-    <GenerationQuoteDialog
-      :open="quoteAware.state.confirmVisible"
-      :quote="quoteAware.state.quote"
-      :loading="quoteAware.state.pending"
-      @confirm="handleQuoteConfirm"
-      @cancel="quoteAware.cancel()"
-    />
   </div>
 </template>
 

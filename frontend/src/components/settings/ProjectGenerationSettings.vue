@@ -19,7 +19,6 @@ import {
   useCreativePresetsStore,
   type VoicePreviewResult,
 } from "../../stores/creative-presets";
-import { createFetchGenerationCostApi } from "../../stores/generation-cost";
 import { ApiError } from "../../utils/api";
 
 /**
@@ -62,6 +61,8 @@ function draftCreative(): CreativePreferenceInput {
   };
 }
 const saveError = ref<string | null>(null);
+const previewError = ref<string | null>(null);
+const previewPending = ref(false);
 const loaded = ref(false);
 
 const configState = computed(() => store.state.projectConfigs[props.projectId]);
@@ -170,53 +171,15 @@ async function save() {
 }
 
 // --- S2-2B 试听（项目级） ----------------------------------------------------
-// 外部审查两轮整改后的合同：
-// - stub/fake 部署（无可报价 provider）先直接请求免 quote 试听——成功即播放，
-//   不创建报价；只有服务端返回 409 paid_generation_quote_required（付费部署）
-//   才进入报价流程。
-// - 报价流程：创建 quote → 弹窗展示金额/授权上界 → 用户确认后提交**同一张**
-//   quote（quote_id 原样提交，绝不二次创建；run_overrides 重放）。
-// - 幂等键在报价创建时生成并随报价保存；提交失败（网络不确定）保留弹窗，
-//   重试复用同一 quote_id + idempotency_key——服务端已消费时重放返回原结果，
-//   不重复执行/计费。成功或用户取消才清空。
-const previewQuote = ref<{
-  quoteId: string;
-  voiceProfileId: string;
-  idempotencyKey: string;
-  estimatedCostCny: string;
-  authorizationCostCny: string;
-  requiresBudgetOverride: boolean;
-} | null>(null);
-const previewPending = ref(false);
-const previewError = ref<string | null>(null);
-
-function previewRunOverrides(voiceProfileId: string): Record<string, unknown> {
-  return { creative: { voice_profile_id: voiceProfileId } };
-}
-
-function isPaidQuoteRequiredError(error: unknown): boolean {
-  return (
-    error instanceof ApiError &&
-    error.status === 409 &&
-    (String(error.code).includes("paid_generation_quote_required") ||
-      String(error.code).includes("请先创建报价"))
-  );
-}
-
-function newPreviewIdempotencyKey(voiceProfileId: string): string {
-  const random =
-    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID()
-      : String(Date.now());
-  return `voice-preview-${random}-${voiceProfileId}`;
-}
-
+// 2026-08-23（报价体系移除）：试听直连执行——cached 零费用直接返回；
+// 真实 TTS 合成写审计留痕；不建 run/不记账（登记已知限制）。
 async function handleVoicePreview(voiceProfileId: string): Promise<VoicePreviewResult | null> {
   previewError.value = null;
   previewPending.value = true;
   const previewApi = createFetchCreativePresetsApi();
   try {
-    // 先走免 quote 试听：stub/fake 部署直接返回合成音频（零费用）
+    // 2026-08-23（报价体系移除）：试听直连执行（cached 零费用直接返回；
+    // 真实 TTS 合成写审计留痕）
     const direct = await previewApi.requestVoicePreview(props.projectId, voiceProfileId);
     if (direct?.preview_audio_uri) {
       playPreviewAudio(direct.preview_audio_uri);
@@ -224,30 +187,8 @@ async function handleVoicePreview(voiceProfileId: string): Promise<VoicePreviewR
     }
     return null;
   } catch (error) {
-    if (!isPaidQuoteRequiredError(error)) {
-      previewError.value = error instanceof Error ? error.message : "试听失败，请稍后重试。";
-      return null;
-    }
-    // 付费部署（409 paid_generation_quote_required）→ 报价确认流程
-    try {
-      const quoteApi = createFetchGenerationCostApi();
-      const quote = await quoteApi.createQuote(props.projectId, {
-        operation: "voice.preview",
-        runOverrides: previewRunOverrides(voiceProfileId),
-      });
-      previewQuote.value = {
-        quoteId: quote.quote_id,
-        voiceProfileId,
-        idempotencyKey: newPreviewIdempotencyKey(voiceProfileId),
-        estimatedCostCny: quote.estimated_cost_cny,
-        authorizationCostCny: quote.authorization_cost_cny,
-        requiresBudgetOverride: quote.requires_budget_override,
-      };
-      return null;
-    } catch (quoteError) {
-      previewError.value = quoteError instanceof Error ? quoteError.message : "报价失败，请稍后重试。";
-      return null;
-    }
+    previewError.value = error instanceof Error ? error.message : "试听失败，请稍后重试。";
+    return null;
   } finally {
     previewPending.value = false;
   }
@@ -260,35 +201,6 @@ function playPreviewAudio(uri: string): void {
   });
 }
 
-async function confirmPreview() {
-  if (!previewQuote.value) return;
-  const { quoteId, voiceProfileId, idempotencyKey, requiresBudgetOverride } = previewQuote.value;
-  previewPending.value = true;
-  previewError.value = null;
-  try {
-    const previewApi = createFetchCreativePresetsApi();
-    const result = await previewApi.requestVoicePreview(props.projectId, voiceProfileId, {
-      // 提交弹窗展示的同一张 quote（用户已确认其金额与授权上界）；
-      // 幂等键为报价创建时生成的稳定值——失败重试复用，服务端按
-      // (project, operation, idempotency_key) 判重返回原结果。
-      cost_quote_id: quoteId,
-      idempotency_key: idempotencyKey,
-      authorize_budget_override: requiresBudgetOverride,
-      run_overrides: previewRunOverrides(voiceProfileId),
-    });
-    if (result?.preview_audio_uri) {
-      playPreviewAudio(result.preview_audio_uri);
-    }
-    previewQuote.value = null;
-  } catch (error) {
-    // 网络不确定失败：保留报价确认状态（同一 quote + 幂等键可安全重试；
-    // 服务端若已消费，重放会返回原结果）。用户可点取消放弃。
-    previewError.value =
-      error instanceof Error ? error.message : "试听失败，请重试（将复用同一报价与幂等键）。";
-  } finally {
-    previewPending.value = false;
-  }
-}
 </script>
 
 <template>
@@ -376,30 +288,6 @@ async function confirmPreview() {
       </template>
       <p v-else class="project-settings-error">项目配置加载失败，请关闭后重试。</p>
     </div>
-    <el-dialog
-      v-if="previewQuote"
-      :model-value="true"
-      title="试听报价确认"
-      width="460px"
-      append-to-body
-    >
-      <p class="preview-quote-text">
-        该音色尚未生成试听音频，试听将产生费用：预计 {{ previewQuote.estimatedCostCny }} 元，
-        授权上界 {{ previewQuote.authorizationCostCny }} 元。
-        <template v-if="previewQuote.requiresBudgetOverride">其中包含无法预估价格的项目，需要显式确认。</template>
-      </p>
-      <template #footer>
-        <button class="btn btn-ghost" @click="previewQuote = null">取消</button>
-        <button
-          class="btn btn-primary"
-          :disabled="previewPending"
-          data-testid="confirm-voice-preview"
-          @click="confirmPreview"
-        >
-          {{ previewPending ? "试听中…" : "确认并试听" }}
-        </button>
-      </template>
-    </el-dialog>
     <p v-if="previewError" class="project-settings-error" data-testid="voice-preview-error">{{ previewError }}</p>
     <template #footer>
       <button class="btn btn-ghost" @click="emit('close')">取消</button>

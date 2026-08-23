@@ -18,39 +18,21 @@ import StageGenerating from "../workspace/StageGenerating.vue";
 import StageLoadingBar from "../workspace/StageLoadingBar.vue";
 
 import SegmentAssetCard from "./SegmentAssetCard.vue";
-import GenerationQuoteDialog from "./GenerationQuoteDialog.vue";
 import StrictFallbackDialog from "./StrictFallbackDialog.vue";
 import ProjectCostSummary from "../cost/ProjectCostSummary.vue";
 import { computeCostBreakdown, estimatePlanCost, getTaskCostHint, getVideoUpgradeCostHint, estimateBlockedItemsCost, PRICING, type PlanTaskLike } from "../../utils/pricing";
 import { getAssetGeneratingView, type AssetGenerationProgress } from "../../utils/asset-generating-view";
-import { isQuoteExpired, useGenerationCostStore, type GenerationQuoteDto } from "../../stores/generation-cost";
+
 
 const storyboardStore = useStoryboardStore();
 const assetPlanningStore = useAssetPlanningStore();
 const assetsStore = useAssetsStore();
-const generationCostStore = useGenerationCostStore();
 const scriptStore = useScriptStore();
 const projectStore = useProjectStore();
 const workspaceStore = useWorkspaceStore();
 const assetSnapshotLoaded = ref(false);
 const demoMode = useDemoMode();
 const { checkStageRollback } = useCompetitionGuard();
-
-// 过期重报价上下文。必须声明在 immediate watch 之前：setup 期间 immediate
-// watch 同步执行会访问这两个 ref，TDZ 中访问抛 ReferenceError。
-const lastQuoteRequest = ref<{ operation: string; selection?: { mode?: "missing_only"; task_ids?: string[] }; enabledProviderTypes?: string[] } | null>(null);
-
-// 任务 11 对话框状态（同样必须在 immediate watch 之前声明，避免 TDZ）
-const quoteDialogOpen = ref(false);
-const quoteLoading = ref(false);
-const pendingQuote = ref<GenerationQuoteDto | null>(null);
-let pendingSubmit: ((submit: { quoteId: string; idempotencyKey: string; authorizeBudgetOverride: boolean }) => Promise<void>) | null = null;
-/**
- * 提交成功后的反馈回调（外部审查 B1 整改）：成功提示/选中项清理必须在用户
- * 确认报价提交之后触发，不能随报价对话框打开就提前执行——付费路径下用户
- * 未确认就看不到"完成"，取消后也不再残留"完成"状态。
- */
-let pendingOnSuccess: (() => void | Promise<void>) | null = null;
 
 const strictDialogOpen = ref(false);
 const strictSegmentId = ref<string | null>(null);
@@ -795,73 +777,24 @@ function setupBackToTopObserver() {
  *   unavailable、model disabled 等被包裹为同一码）；
  * - generation_quote_unquotable：计价失败（目录项被 readiness 拦截/disabled）。
  * 其余错误码（网络/服务故障、请求构造错误）不回退，展示错误并重试。 */
-const LOCAL_QUOTE_UNAVAILABLE_CODES = new Set([
-  "generation_quote_resolution_failed",
-  "generation_quote_unquotable",
-]);
-
-/** 当前 manifest 版本与执行 run（accept-fallback 的 CAS 上下文）。 */
-const activeManifestVersion = computed(() => {
-  const assets = assetsStore.state.snapshot?.active_assets as unknown as { version?: string } | null;
-  return assets?.version ?? null;
-});
-const activeExecutionRunId = computed(() => {
-  const state = assetsStore.state.snapshot?.active_assets?.execution_state as Record<string, unknown> | null | undefined;
-  return typeof state?.run_id === "string" ? state.run_id : null;
-});
-
-const segmentRouteBySegmentId = computed(() => {
-  const routes = assetsStore.state.snapshot?.active_assets?.manifest?.segment_routes ?? [];
-  const map = new Map<string, { readiness: string; route_events?: Array<{ event_type?: string; reason_code?: string }> }>();
-  for (const route of routes) {
-    map.set(route.segment_id, {
-      readiness: route.readiness,
-      route_events: Array.isArray(route.route_events) ? route.route_events : [],
-    });
-  }
-  return map;
-});
-
+/**
+ * 2026-08-23（报价体系移除）：资产生成直连执行（幂等键由后端生成）。
+ * 调用点负责生成前的预估费用确认（ElMessageBox）。
+ */
 async function quoteAndGenerate(options: {
   request: { operation: string; selection?: { mode?: "missing_only"; task_ids?: string[] }; enabledProviderTypes?: string[] };
   submit: (submit: { quoteId: string; idempotencyKey: string; authorizeBudgetOverride: boolean }) => Promise<void>;
-  /** 提交成功后的反馈（B1 整改）：成功提示/清理只在确认提交后触发。 */
+  /** 生成成功后的反馈（选中项清理/成功提示）。 */
   onSuccess?: () => void | Promise<void>;
 }): Promise<void> {
-  const pid = projectId.value;
-  if (!pid) return;
-  quoteLoading.value = true;
-  quoteDialogOpen.value = true;
-  pendingQuote.value = null;
   try {
-    const result = await generationCostStore.createQuote(pid, options.request);
-    if (!result.ok) {
-      // 本地/无付费能力部署（stub/demo）的 quote 服务按设计不可报价（无 active
-      // 目录项）→ 回退无 quote 本地路径并明确提示；付费部署下 quote 一定可用，
-      // 其余失败（网络/服务故障）关闭对话框并提示重试，不弹空对话框。
-      if (LOCAL_QUOTE_UNAVAILABLE_CODES.has(result.error.code)) {
-        ElMessage.warning(`报价服务暂不可用（${result.error.code}），已按本地路径继续`);
-        quoteDialogOpen.value = false;
-        try {
-          await options.submit({ quoteId: "", idempotencyKey: "", authorizeBudgetOverride: false });
-          await assetsStore.loadProject();
-          // 本地路径同步完成，成功反馈同样在此触发（与付费路径的确认后时机对齐）
-          await options.onSuccess?.();
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : "生成失败";
-          ElMessage.error("生成失败：" + msg);
-        }
-        return;
-      }
-      quoteDialogOpen.value = false;
-      ElMessage.error(`报价失败（${result.error.code}），请重试`);
-      return;
-    }
-    pendingQuote.value = result.value.quote;
-    pendingSubmit = options.submit;
-    pendingOnSuccess = options.onSuccess ?? null;
-  } finally {
-    quoteLoading.value = false;
+    await options.submit({ quoteId: "", idempotencyKey: "", authorizeBudgetOverride: false });
+    await assetsStore.loadProject();
+    await options.onSuccess?.();
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "生成失败";
+    ElMessage.error("生成失败：" + msg);
+    throw error;
   }
 }
 
@@ -869,85 +802,7 @@ async function quoteAndGenerateWithRetry(options: {
   request: { operation: string; selection?: { mode?: "missing_only"; task_ids?: string[] }; enabledProviderTypes?: string[] };
   submit: (submit: { quoteId: string; idempotencyKey: string; authorizeBudgetOverride: boolean }) => Promise<void>;
 }): Promise<void> {
-  lastQuoteRequest.value = options.request;
   await quoteAndGenerate(options);
-}
-
-async function handleQuoteConfirm(payload: { authorizeBudgetOverride: boolean }): Promise<void> {
-  const submit = pendingSubmit;
-  if (!submit || !pendingQuote.value) return;
-  // B1：先捕获成功回调，稍后清空待办状态（回调只在确认提交成功后执行）
-  const onSuccess = pendingOnSuccess;
-  // 验收点：quote 过期后重新报价，不重放旧提交
-  if (isQuoteExpired(pendingQuote.value)) {
-    ElMessage.warning("报价已过期，正在重新报价…");
-    pendingQuote.value = null;
-    if (lastQuoteRequest.value) {
-      await quoteAndGenerate({ request: lastQuoteRequest.value, submit, onSuccess: onSuccess ?? undefined });
-      return;
-    }
-    // 无重报价上下文：关闭对话框，避免残留旧报价
-    quoteDialogOpen.value = false;
-    pendingSubmit = null;
-    pendingOnSuccess = null;
-    return;
-  }
-  const quote = pendingQuote.value;
-  const idempotencyKey = generationCostStore.state.lastQuote?.idempotencyKey ?? "";
-  // I-2：提交前保留 quote/key；失败后重试复用同一 quote（未过期）与同一
-  // idempotency key（同 payload 重放由后端幂等去重，不重复计费）。
-  const retryContext = { quote, idempotencyKey };
-  pendingQuote.value = null;
-  pendingSubmit = null;
-  pendingOnSuccess = null;
-  quoteDialogOpen.value = false;
-  try {
-    await submit({
-      quoteId: quote.quote_id,
-      idempotencyKey,
-      authorizeBudgetOverride: payload.authorizeBudgetOverride,
-    });
-    await assetsStore.loadProject();
-    // B1：成功反馈只在用户确认提交且提交成功之后触发
-    await onSuccess?.();
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : "生成失败";
-    // 业务冲突（409：quote 已消费/预算超限/配置漂移等）：同一 quote 重试
-    // 必然再失败，关闭对话框并提示重新报价；网络/服务错误允许用同一 quote
-    // 与同一 key 重试（避免歧义窗口内新建 quote/run 双重执行）。
-    const isBusinessConflict =
-      typeof error === "object" &&
-      error !== null &&
-      "status" in error &&
-      (error as { status?: unknown }).status === 409;
-    if (isBusinessConflict) {
-      pendingQuote.value = null;
-      pendingSubmit = null;
-      pendingOnSuccess = null;
-      quoteDialogOpen.value = false;
-      ElMessage.error("生成被拒绝（" + msg + "），请重新报价后再试");
-      return;
-    }
-    pendingSubmit = submit;
-    pendingOnSuccess = onSuccess;
-    if (isQuoteExpired(quote)) {
-      pendingQuote.value = null;
-      if (lastQuoteRequest.value) {
-        await quoteAndGenerate({ request: lastQuoteRequest.value, submit });
-      }
-      return;
-    }
-    pendingQuote.value = retryContext.quote;
-    quoteDialogOpen.value = true;
-    ElMessage.error("生成失败：" + msg + "。已保留报价，可直接重试提交（同一次运行）");
-  }
-}
-
-function handleQuoteCancel() {
-  quoteDialogOpen.value = false;
-  pendingQuote.value = null;
-  pendingSubmit = null;
-  pendingOnSuccess = null;
 }
 
 /** 严格模式失败：打开处理对话框（run id 与 manifest 版本来自快照）。 */

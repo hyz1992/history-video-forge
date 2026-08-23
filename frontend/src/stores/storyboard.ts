@@ -1,6 +1,5 @@
 import { inject, reactive, readonly, type InjectionKey } from "vue";
 import { apiFetch } from "../utils/api";
-import { isPaidQuoteRequiredError, quoteSubmitBody, type QuoteSubmitFields } from "./generation-cost";
 
 import type { ProjectStore } from "./project";
 
@@ -71,8 +70,8 @@ export interface StoryboardSnapshot {
 
 export interface StoryboardApi {
   loadSnapshot(projectId: string): Promise<StoryboardSnapshot>;
-  generateStoryboard(projectId: string, submit?: QuoteSubmitFields): Promise<void>;
-  regenerateStoryboard(projectId: string, userFeedback: string, submit?: QuoteSubmitFields): Promise<void>;
+  generateStoryboard(projectId: string, ): Promise<void>;
+  regenerateStoryboard(projectId: string, userFeedback: string, ): Promise<void>;
   updateSegmentStrategy(
     projectId: string,
     segmentId: string,
@@ -83,8 +82,7 @@ export interface StoryboardApi {
     projectId: string,
     segmentId: string,
     userFeedback: string,
-    submit?: QuoteSubmitFields,
-  ): Promise<void>;
+      ): Promise<void>;
 }
 
 export function createFetchStoryboardApi(baseUrl = ""): StoryboardApi {
@@ -97,16 +95,16 @@ export function createFetchStoryboardApi(baseUrl = ""): StoryboardApi {
         active_storyboard_record_id: data.active_storyboard_record_id ?? null,
       };
     },
-    async generateStoryboard(projectId, submit) {
+    async generateStoryboard(projectId) {
       await apiFetch(`${baseUrl}/api/projects/${projectId}/storyboard/generate`, {
         method: "POST",
-        body: quoteSubmitBody(submit),
+        body: {},
       });
     },
-    async regenerateStoryboard(projectId, userFeedback, submit) {
+    async regenerateStoryboard(projectId, userFeedback) {
       await apiFetch(`${baseUrl}/api/projects/${projectId}/storyboard/generate`, {
         method: "POST",
-        body: { user_feedback: userFeedback, ...quoteSubmitBody(submit) },
+        body: { user_feedback: userFeedback },
       });
     },
     async updateSegmentStrategy(projectId, segmentId, strategy, expectedRevision = null) {
@@ -121,10 +119,10 @@ export function createFetchStoryboardApi(baseUrl = ""): StoryboardApi {
       });
       return response;
     },
-    async regenerateSegment(projectId, segmentId, userFeedback, submit) {
+    async regenerateSegment(projectId, segmentId, userFeedback) {
       await apiFetch(`${baseUrl}/api/projects/${projectId}/storyboard/segments/${segmentId}/regen`, {
         method: "POST",
-        body: { user_feedback: userFeedback, ...quoteSubmitBody(submit) },
+        body: { user_feedback: userFeedback },
       });
     },
   };
@@ -146,8 +144,8 @@ export interface StoryboardStoreState {
 export interface StoryboardStore {
   state: Readonly<StoryboardStoreState>;
   loadActiveStoryboardSnapshot: () => Promise<void>;
-  generateStoryboard: (submit?: QuoteSubmitFields) => Promise<void>;
-  regenerateWithFeedback: (userFeedback: string, submit?: QuoteSubmitFields) => Promise<void>;
+  generateStoryboard: () => Promise<void>;
+  regenerateWithFeedback: (userFeedback: string, ) => Promise<void>;
   updateSegmentStrategyPreference: (
     segmentId: string,
     strategy: "remotion_motion" | "api_video" | null,
@@ -155,8 +153,7 @@ export interface StoryboardStore {
   regenerateSegment: (
     segmentId: string,
     userFeedback: string,
-    submit?: QuoteSubmitFields,
-  ) => Promise<boolean>;
+      ) => Promise<boolean>;
   retryLoad: () => Promise<void>;
 }
 
@@ -230,17 +227,17 @@ export function createStoryboardStore(
     }
   }
 
-  async function generateStoryboard(submit?: QuoteSubmitFields) {
+  async function generateStoryboard() {
     const projectId = input.projectStore.state.projectId;
     if (!projectId) return;
-    return startGeneration(() => input.api.generateStoryboard(projectId, submit));
+    return startGeneration(() => input.api.generateStoryboard(projectId));
   }
 
-  async function regenerateWithFeedback(userFeedback: string, submit?: QuoteSubmitFields) {
+  async function regenerateWithFeedback(userFeedback: string, ) {
     const projectId = input.projectStore.state.projectId;
     if (!projectId) return;
     return startGeneration(() =>
-      input.api.regenerateStoryboard(projectId, userFeedback, submit),
+      input.api.regenerateStoryboard(projectId, userFeedback),
     );
   }
 
@@ -284,8 +281,6 @@ export function createStoryboardStore(
         });
       }
     } catch (error) {
-      // S2-2D：付费闸门 409 上抛（不吞进 loadError），交面板报价编排
-      if (isPaidQuoteRequiredError(error)) throw error;
       state.loadError = toErrorMessage(error);
       state.snapshot = {
         current_status: previousStatus,
@@ -337,8 +332,7 @@ export function createStoryboardStore(
   async function regenerateSegment(
     segmentId: string,
     userFeedback: string,
-    submit?: QuoteSubmitFields,
-  ) {
+      ) {
     const projectId = input.projectStore.state.projectId;
     if (!projectId) {
       console.warn("[storyboard] regenerateSegment aborted — no active projectId");
@@ -348,12 +342,10 @@ export function createStoryboardStore(
     state.loadError = null;
 
     try {
-      await input.api.regenerateSegment(projectId, segmentId, userFeedback, submit);
+      await input.api.regenerateSegment(projectId, segmentId, userFeedback);
       await loadActiveStoryboardSnapshot();
       return true;
     } catch (error) {
-      // S2-2D：付费闸门 409 上抛（不吞进 loadError），交面板报价编排
-      if (isPaidQuoteRequiredError(error)) throw error;
       state.loadError = toErrorMessage(error);
       return false;
     }
