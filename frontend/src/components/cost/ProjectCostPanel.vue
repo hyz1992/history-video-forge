@@ -121,6 +121,12 @@ function recordTitle(record: ProjectCostRecordDto): string {
   const units: string[] = [];
   if (record.input_units !== null) units.push(`${record.input_units}${UNIT_LABELS[record.unit_type] ?? ""} 输入`);
   if (record.output_units !== null) units.push(`${record.output_units}${UNIT_LABELS[record.unit_type] ?? ""} 输出`);
+  // 规格明细（图片分辨率、视频画质）
+  const detail = record.unit_detail;
+  if (detail) {
+    if (typeof detail.resolution === "string") units.push(detail.resolution);
+    if (typeof detail.quality === "string") units.push(detail.quality);
+  }
   const unitText = units.join(" · ") || "—";
   return `${capability} · ${record.model_id}${unitText !== "—" ? ` · ${unitText}` : ""}`;
 }

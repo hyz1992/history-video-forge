@@ -16,7 +16,6 @@ import {
   ProjectCostSummarySchema,
   GenerationRunConfigurationResponseSchema,
   type GenerationOperation,
-  type GenerationQuoteRunOverrides,
   type GenerationQuoteSelection,
   type ProjectCostRecord,
   type ProjectCostSummary,
@@ -118,7 +117,7 @@ export async function resolveQuoteConfiguration(
   project: ProjectRecord,
   input: {
     operation: GenerationOperation;
-    runOverrides?: GenerationQuoteRunOverrides;
+    runOverrides?: unknown;
     selection?: GenerationQuoteSelection;
   },
   prismaClient?: AppPrismaClient,
@@ -322,6 +321,7 @@ export async function listProjectCostRecords(
       estimated_cost_cny: microsToCnyDecimal(record.estimatedCostMicros),
       actual_cost_cny: record.actualCostMicros === null ? null : microsToCnyDecimal(record.actualCostMicros),
       cost_basis: record.costBasis,
+      unit_detail: record.unitDetailJson,
       duration_ms: record.durationMs,
       created_at: record.createdAt.toISOString(),
     });

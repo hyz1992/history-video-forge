@@ -46,6 +46,8 @@ export interface ProjectCostRecordDto {
   estimated_cost_cny: string;
   actual_cost_cny: string | null;
   cost_basis: "estimate" | "provider_usage" | "provider_invoice";
+  /** 2026-08-23：单位规格明细（图片分辨率、视频画质等）。 */
+  unit_detail: Record<string, unknown> | null;
   duration_ms: number | null;
   created_at: string;
 }

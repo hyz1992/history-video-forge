@@ -137,7 +137,8 @@ export async function hydrateThirdAggregates(db: DbClient, client: AppPrismaClie
       unitType: row.unitType as UsageCostRecordRecord["unitType"],
       inputUnits: row.inputUnits, outputUnits: row.outputUnits,
       estimatedCostMicros: row.estimatedCostMicros, actualCostMicros: row.actualCostMicros,
-      costBasis: row.costBasis as UsageCostRecordRecord["costBasis"], durationMs: row.durationMs,
+      costBasis: row.costBasis as UsageCostRecordRecord["costBasis"],
+      unitDetailJson: row.unitDetailJson as Record<string, unknown> | null, durationMs: row.durationMs,
       createdAt: row.createdAt, updatedAt: row.updatedAt,
     };
     db.usageCostRecords.set(record.id, record);

@@ -748,6 +748,8 @@ model UsageCostRecord {
   estimatedCostMicros           String
   actualCostMicros              String?
   costBasis                     String
+  /** 2026-08-23：单位规格明细（图片分辨率、视频画质等），供费用清单展示。 */
+  unitDetailJson                Json?
   durationMs                    Int?
   createdAt                     DateTime @default(now())
   updatedAt                     DateTime @updatedAt

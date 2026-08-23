@@ -35,6 +35,11 @@ export interface ProviderJobUsageMeasuredUnits {
   count: number;
   /** video_second 专用：目录按画质分价（缺省按 standard_720p）。 */
   quality?: string;
+  /**
+   * 2026-08-23：单位规格明细（图片分辨率、视频画质等），进入
+   * UsageCostRecord.unitDetailJson，供项目费用清单展示规格/数量/价格。
+   */
+  detail?: Record<string, unknown>;
 }
 
 export interface ProviderJobUsageProviderReceipt {
@@ -213,6 +218,7 @@ export async function recordProviderJobUsage(
     estimatedCostMicros,
     actualCostMicros,
     costBasis,
+    unitDetailJson: input.measuredUnits.detail ?? null,
     durationMs: input.durationMs ?? null,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
@@ -360,6 +366,7 @@ export async function recordLlmUsage(
     estimatedCostMicros,
     actualCostMicros,
     costBasis,
+    unitDetailJson: null,
     durationMs: input.durationMs ?? null,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,

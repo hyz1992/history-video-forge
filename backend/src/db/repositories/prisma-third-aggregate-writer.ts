@@ -364,7 +364,8 @@ export class PrismaThirdAggregateWriter {
       status: record.status, unitType: record.unitType,
       inputUnits: record.inputUnits, outputUnits: record.outputUnits,
       estimatedCostMicros: record.estimatedCostMicros, actualCostMicros: record.actualCostMicros,
-      costBasis: record.costBasis, durationMs: record.durationMs, updatedAt: record.updatedAt,
+      costBasis: record.costBasis, unitDetailJson: record.unitDetailJson as never,
+      durationMs: record.durationMs, updatedAt: record.updatedAt,
     };
     await this.client.usageCostRecord.upsert({
       where: {

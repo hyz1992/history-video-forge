@@ -175,6 +175,30 @@ describe("usage cost recording (任务 9A 验收 2/3/8)", () => {
     expect(result.record.inputUnits).toBe(1);
   });
 
+  it("验收9（2026-08-23）: 单位规格明细（图片分辨率等）进入 usage 记录", async () => {
+    const app = buildApp();
+    await seedQuotableCatalog(app);
+    app.db.runConfigurationSnapshots.set("snap_usage_001", makeSnapshot());
+    app.db.generationRuns.set("run_usage_001", makeRun());
+
+    const result = await recordProviderJobUsage(
+      baseInput(app.db, {
+        measuredUnits: { unitType: "image", count: 1, detail: { resolution: "1280x720" } },
+      }),
+    );
+    expect(result.record.unitType).toBe("image");
+    expect(result.record.unitDetailJson).toEqual({ resolution: "1280x720" });
+
+    // 无规格时不残留空对象
+    const plain = await recordProviderJobUsage(
+      baseInput(app.db, {
+        providerJob: makeProviderJob({ attemptIndex: 1 }),
+        measuredUnits: { unitType: "image", count: 1 },
+      }),
+    );
+    expect(plain.record.unitDetailJson).toBeNull();
+  });
+
   it("验收8: provider 无法给出账单时按实测计量估 actual，标记 estimated_after_execution 而非 provider actual", async () => {
     const app = buildApp();
     await seedQuotableCatalog(app);

@@ -108,6 +108,8 @@ export const ProjectCostRecordSchema = z
     estimated_cost_cny: CnyDecimalString,
     actual_cost_cny: CnyDecimalString.nullable(),
     cost_basis: z.enum(["estimate", "provider_usage", "provider_invoice"]),
+    /** 2026-08-23：单位规格明细（图片分辨率、视频画质等）；旧数据缺省为 null。 */
+    unit_detail: z.record(z.string(), z.unknown()).nullable().default(null),
     duration_ms: z.number().int().nonnegative().nullable(),
     created_at: z.string().datetime({ offset: true }),
   })

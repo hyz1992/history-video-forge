@@ -14,6 +14,7 @@ import { appendAssetsRunEvent } from "./assets-run.service.js";
 import { createAssetProviderJobRecord } from "./asset-provider-job.repository.js";
 import { recordProviderJobUsage } from "../generation-cost/usage-cost-recorder.js";
 import { DEFAULT_VIDEO_ESTIMATE_SECONDS } from "../generation-cost/generation-cost.service.js";
+import { readDashscopeConfig } from "./assets-run.service.js";
 import type {
   AssetProviderAdapter,
   AssetProviderContext,
@@ -432,12 +433,20 @@ async function recordPaidUsage(
 function measuredUnitsForTask(
   planTask: AssetPlan["tasks"][number],
   snapshot: import("../../db/client.js").RunConfigurationSnapshotRecord,
-): { unitType: "image" | "video_second" | "tts_character"; count: number; quality?: string } | null {
+): { unitType: "image" | "video_second" | "tts_character"; count: number; quality?: string; detail?: Record<string, unknown> } | null {
   switch (planTask.task_type) {
     case "tts_audio":
       return { unitType: "tts_character", count: planTask.source_excerpt.length };
-    case "image_still":
-      return { unitType: "image", count: 1 };
+    case "image_still": {
+      // 2026-08-23：图片规格（分辨率）来自执行端实际使用的 DashScope 配置，
+      // 进入 usage 明细供费用清单展示（规格/数量/模型/价格）。
+      const dashscope = readDashscopeConfig(undefined);
+      return {
+        unitType: "image",
+        count: 1,
+        detail: dashscope.imageSize ? { resolution: dashscope.imageSize } : undefined,
+      };
+    }
     case "video_clip": {
       const duration = planTask.parameters["duration_sec"];
       const count =
@@ -451,6 +460,9 @@ function measuredUnitsForTask(
         unitType: "video_second",
         count,
         quality: effective?.video?.api_quality ?? undefined,
+        detail: effective?.video?.api_quality
+          ? { quality: effective.video.api_quality }
+          : undefined,
       };
     }
     default:

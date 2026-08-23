@@ -405,6 +405,8 @@ export interface UsageCostRecordRecord {
   estimatedCostMicros: string;
   actualCostMicros: string | null;
   costBasis: "estimate" | "provider_usage" | "provider_invoice";
+  /** 2026-08-23：单位规格明细（{ resolution?, quality? } 等）。 */
+  unitDetailJson: Record<string, unknown> | null;
   durationMs: number | null;
   createdAt: Date;
   updatedAt: Date;
