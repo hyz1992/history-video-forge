@@ -659,7 +659,6 @@ export async function runRenderRuntimeSmoke(
       payload: {
         expected_revision: 1,
         video: { strategy: "prefer_remotion", api_quality: "standard_720p" },
-        budget: { currency: "CNY", max_paid_cost_micros_per_run: null },
         creative: {
           voice_profile_id: "voice_system_ethan",
           art_style_preset_id: null,
@@ -668,16 +667,8 @@ export async function runRenderRuntimeSmoke(
       },
     });
   }
-  // 付费闸门（9A）：种入目录 + 服务端凭据时旧无 quote 路径返回 409——
-  // 先创建 assets.generate quote 再提交（与 9A 提交协议一致）。
+  // 2026-08-23（报价体系移除）：种子目录后直接提交（无 quote；幂等键可选）。
   if (input.seedCatalog) {
-    const quoteBody = await injectOrThrow({
-      app,
-      method: "POST",
-      url: `/api/projects/${projectId}/generation-cost-quotes`,
-      payload: { operation: "assets.generate", selection: { task_ids: [] } },
-    });
-    payload.cost_quote_id = quoteBody.quote_id as string;
     payload.idempotency_key = `render-smoke-${Date.now()}`;
   }
   const assetsBody = await injectOrThrow({

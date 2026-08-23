@@ -1127,21 +1127,21 @@ Renderer v1 字段只描述 `ComposeTimeline` 之后的渲染与导出结果，�
 
 ### 用户默认与项目冻结配置
 
-- `UserGenerationPreference`：`userId`（唯一）、`schemaVersion`、`revision`（乐观并发，≥1）、`configurationJson`（完整 `GenerationConfigurationV1`：`video.strategy` 四档 / `video.api_quality` 720p|1080p / `budget.max_paid_cost_micros_per_run` 微元十进制字符串或 null / `creative` 三槽 null / `capabilities` 五槽 auto）。更新必须携带 `expected_revision`，不匹配返回 `409 generation_preference_revision_conflict`。
+- `UserGenerationPreference`：`userId`（唯一）、`schemaVersion`、`revision`（乐观并发，≥1）、`configurationJson`（完整 `GenerationConfigurationV1`：`video.strategy` 四档 / `video.api_quality` 720p|1080p / `creative` 三槽 null / `capabilities` 五槽 auto；2026-08-23：`budget` 已移除）。更新必须携带 `expected_revision`，不匹配返回 `409 generation_preference_revision_conflict`。
 - `ProjectGenerationConfiguration`：`projectId`（唯一）、`revision`、`sourceUserPreferenceRevision`（创建时来源，backfill 为 null）、`configurationJson`。项目创建与配置创建在同一事务完成。
-- 失效预览（`configuration_invalidation_preview`）：视频策略变化 → `storyboard_route_resolution + asset_planning`；API 画质变化 → `asset_planning + assets`；预算变化 → 不使现有阶段产物失效（只影响后续报价）。
+- 失效预览（`configuration_invalidation_preview`）：视频策略变化 → `storyboard_route_resolution + asset_planning`；API 画质变化 → `asset_planning + assets`。
 
-### Provider 目录与报价
+### Provider 目录与成本账本（2026-08-23 报价移除后）
 
-- `ProviderModelCatalog`：`capability`（五个 slot）、`providerKey/modelId/modelVersion`、`displayName`、`qualityTier/speedTier`、`parameterCapabilitiesJson`、`pricingVersion/pricingJson`、`status`（active|disabled）、`isDefault`。每个 capability 恰好一个 `active + isDefault=true` 项（readiness 硬校验）。
-- `GenerationCostQuote`：`operation`、`configurationHash`（FNV-1a64 漂移检测）、`quoteFingerprint`（SHA-256 内容指纹，提交时重算比对）、`pricingHash/VersionSet`、`itemsJson`、`estimatedCostMicros/authorizationCostMicros`、`containsUnboundedItem`、`budgetLimitMicros`、`overBudget`、`expiresAt/consumedAt`。10 分钟有效期、一次性消费。
-- `RunConfigurationSnapshot`：不可变（repository 不提供 update），含 `resolvedConfigurationJson`、`resolutionTraceJson`、`quoteId/quoteFingerprint/pricingHash/VersionSet`（成套出现或成套缺失）。
+- `ProviderModelCatalog`：`capability`（五个 slot）、`providerKey/modelId/modelVersion`、`displayName`、`qualityTier/speedTier`、`parameterCapabilitiesJson`、`pricingVersion/pricingJson`、`status`（active|disabled）、`isDefault`。每个 capability 恰好一个 `active + isDefault=true` 项（readiness 硬校验）。目录仍用于执行绑定与记账计价。
+- `GenerationCostQuote`：**2026-08-23 已废弃**（报价体系移除；表保留，代码与 API 不再写入/暴露）。
+- `RunConfigurationSnapshot`：不可变（repository 不提供 update），含 `resolvedConfigurationJson`、`resolutionTraceJson`；2026-08-23 起新快照为 free 形态（quote 绑定字段置空/零，历史快照字段保留）。
 
 ### 运行与费用账本
 
 - `GenerationRun`：`(projectId, operation, idempotencyKey)` 唯一、`payloadFingerprint`（幂等判重）、`quoteId`（unique nullable）、`runConfigurationSnapshotId`（unique）、`dispatchPayloadJson`、`status`（pending_dispatch/running/succeeded/failed/needs_reconciliation）、`dispatchLeaseOwner/ExpiresAt/ClaimCount`。quote 消费、snapshot、pending run 同事务。
 - `GenerationRunEvent`：append-only（`route_auto_downgraded`/`fallback_accepted`/`pricing_overrun`/`dispatch_finalize_fenced_out` 等），不修改 snapshot。
-- `UsageCostRecord`：`(runConfigurationSnapshotId, providerRequestKey, attemptIndex)` 唯一；`capability/providerKey/modelId`、`status`、`unitType`、`inputUnits/outputUnits`、`estimatedCostMicros/actualCostMicros`（actual 可空）、`costBasis`（estimate|provider_usage|provider_invoice）、`durationMs`。媒体按 provider job 三元组判重；LLM 键为 `llm:<runId>:<operationName>:<attemptIndex>`，`interactionId` 可反查 interaction log。
+- `UsageCostRecord`：`(runConfigurationSnapshotId, providerRequestKey, attemptIndex)` 唯一；`capability/providerKey/modelId`、`status`、`unitType`、`inputUnits/outputUnits`、`estimatedCostMicros/actualCostMicros`（actual 可空）、`costBasis`（estimate|provider_usage|provider_invoice）、`unitDetailJson`（2026-08-23：图片分辨率/视频画质等规格明细）、`durationMs`。媒体按 provider job 三元组判重；LLM 键为 `llm:<runId>:<operationName>:<attemptIndex>`，`interactionId` 可反查 interaction log。
 
 ### S2-2B 创作偏好字段（2026-08-21 已实现）
 

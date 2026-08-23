@@ -861,24 +861,24 @@ script 摘要第一版建议至少包含：
 ### 用户与项目生成配置
 
 - `GET /api/me/generation-preferences`：当前用户默认配置（`source: stored | backfilled_default`、`revision`、`configuration`、`updated_at`）。
-- `PATCH /api/me/generation-preferences`：请求体 `{ expected_revision, video: { strategy, api_quality }, budget: { currency: "CNY", max_paid_cost_micros_per_run } }`；revision 不匹配返回 `409 generation_preference_revision_conflict`。用户默认只在创建项目时复制为项目配置，不影响既有项目。
+- `PATCH /api/me/generation-preferences`：请求体 `{ expected_revision, video: { strategy, api_quality } }`（2026-08-23：单次预算已移除）；revision 不匹配返回 `409 generation_preference_revision_conflict`。用户默认只在创建项目时复制为项目配置，不影响既有项目。
 - `GET /api/projects/:projectId/generation-configuration`：项目冻结配置（含 `source_user_preference_revision`、`diff_from_user_default`、`invalidation_preview`）。owner-scoped（guardOwnedRoute）。
 - `PATCH /api/projects/:projectId/generation-configuration`：项目配置 PATCH；revision 冲突码 `project_generation_configuration_revision_conflict`。只保存配置，不自动触发下游生成。
 - `GET /api/generation-capabilities`：公开 capability 目录（capability/provider/model/display_name/质量与速度标签/价格展示/availability）。不返回 base URL、env 变量名、credential id 或密钥。
 
-### 报价与提交协议
+### 生成提交协议（2026-08-23 报价体系移除后简化）
 
-- `POST /api/projects/:projectId/generation-cost-quotes`：请求 `{ operation, run_overrides?, selection?, enabled_provider_types? }`（`enabled_provider_types` 仅 `assets.generate` 可用）；响应含 `quote_id/expires_at/configuration_hash/pricing_versions/items/estimated_cost_cny/authorization_cost_cny/contains_unbounded_item/budget_limit_cny/over_budget/requires_budget_override`。金额一律 CNY 十进制字符串（微元/1e6）。失败码：`generation_quote_invalid_input`（400）、`generation_quote_resolution_failed` / `generation_quote_unquotable`（422）。
-- 提交协议（9A/9B）：现有生成 API（topic/script/storyboard/asset-plan/assets/publish）接受 `cost_quote_id + idempotency_key`（成对）与 `authorize_budget_override`、`enabled_provider_types`（assets）；`GenerationRunService` 统一创建/恢复 run，dispatcher 同步派发。同 key 同 payload 重放返回既有 run；业务冲突返回 409（`generation_quote_consumed` 等）。
-- 付费闸门：付费部署（凭据 + active 目录）下无 quote 提交返回 `409 paid_generation_quote_required`；stub/本地部署保留免 quote 本地路径。publish cover/generate 与 9B 辅助 LLM 入口同样 409 封口。
+- 现有生成 API（topic/script/storyboard/asset-plan/assets/publish）直接提交即执行：`GenerationRunService` 统一创建不可变快照 + run（free 形态，无 quote 绑定），dispatcher 同步派发并落请求级记账。`idempotency_key` 可选（提供时按 `(project, operation, key)` 判重，同 payload 重放返回既有 run；不提供时服务端生成随机 key）；`enabled_provider_types`（仅 `assets.generate`）原样进入 run 的 dispatch payload 作为执行过滤。
+- 提交解析以数据库为权威（项目配置/目录/storyboard/plan/manifest）；解析失败返回 `409 generation_run_resolution_failed`（如模型停用、目录无 active 项）。客户端 `voice_profile_id` 已废弃：携带且与快照 resolved creative 不一致 → `422 generation_voice_profile_conflict`。
+- 辅助 LLM/媒体入口（事件库/自定义选题、封面 prompt 优化、标题候选、assets prompt 优化、视频升级、封面生成、voice.preview 试听）恢复直连执行；其中辅助入口不建 run/不记账（登记已知限制：这些操作的费用不入项目成本清单）。
 
 ### 成本只读
 
-- `GET /api/projects/:projectId/costs/summary`：总预计/授权上界/已确认实际、quote/run 计数、run 状态分布、capability 分组（`capability_breakdown`）、`over_budget_quote_count`（超额授权标记）。
+- `GET /api/projects/:projectId/costs/summary`：总预计费用/已确认实际、run 计数与状态分布、capability 分组（`capability_breakdown`）。预计费用按请求级 usage 记录聚合（快照金额为 free 形态零值）。
 - `GET /api/projects/:projectId/costs/records`：usage 台账（run/operation/capability/provider/model/status/单位量/预计/实际/cost_basis：estimate | provider_usage | provider_invoice）。
 - `GET /api/projects/:projectId/runs/:runId/configuration`：run 状态 + 不可变 `RunConfigurationSnapshot`。
 
-全部 owner-scoped：quote/cost/run 查询均经 projectId 反查 owner，其他用户只能得到 403/404。
+全部 owner-scoped：cost/run 查询均经 projectId 反查 owner，其他用户只能得到 403/404。
 
 ### 严格 fallback
 
@@ -902,14 +902,13 @@ script 摘要第一版建议至少包含：
 - `GET /api/me/voice-profiles`：公共 + 本人私有音色档案公开字段（含 cached `preview_audio_uri`）；他人私有不可见；无凭据字段。
 - 音色库：`VoiceProfile` 数据库实体（Prisma 激活态为跨实例权威）；`kind=preset|system` 公共、`kind=generated` 归创建用户私有（同源授权：解析/列表/试听统一可见性过滤）。
 
-### 试听（voice.preview）
+### 试听（voice.preview，2026-08-23 恢复直连）
 
-- `POST /api/projects/:projectId/generation-cost-quotes`：`operation: "voice.preview"` 时试听目标经 `run_overrides.creative.voice_profile_id` 表达；计价含 `preview_text` 的 `tts_character` 与设计请求（missing 档案，无目录单价 → unbounded 项）。auto 模式报价被拒（不静默猜测试听对象）。
-- `POST /api/projects/:projectId/voice-profiles/:voiceProfileId/preview`：请求体 `{ cost_quote_id, idempotency_key, authorize_budget_override?, run_overrides? }`（付费部署必须 quote，无 quote → `409 paid_generation_quote_required`；stub/fake 保留免 quote 本地合成）。响应 `{ preview_audio_uri, source: cached|generated, provider_voice_id }`；cached 零费用直接返回。执行走 `voice.preview` dispatch handler，usage 按 `(snapshot, voice-preview:<id>, attemptIndex)` 幂等记账，回写 `preview_audio_uri`。
+- `POST /api/projects/:projectId/voice-profiles/:voiceProfileId/preview`：直连执行（无 quote/提交协议）——cached 零费用直接返回；真实 TTS 合成写审计留痕并回写 `preview_audio_uri`；不建 run/不记账（登记已知限制）。响应 `{ preview_audio_uri, source: cached|generated, provider_voice_id }`。
 
 ### 音色执行绑定（快照权威）
 
-- 客户端请求体 `voice_profile_id` 已废弃：提交路径若携带且与快照 `resolved_creative.voice` 不一致 → `422 generation_voice_profile_conflict`（校验先于 quote 消费：quote 未消费、无 snapshot/run、无 provider 调用）；legacy 免 quote 路径忽略客户端值，改由项目配置 creative 解析。执行音色一律取快照（fixed → 指定档案；auto → intent 匹配）。
+- 客户端请求体 `voice_profile_id` 已废弃：提交路径若携带且与快照 `resolved_creative.voice` 不一致 → `422 generation_voice_profile_conflict`（校验先于 run 创建：无 snapshot/run、无 provider 调用）。执行音色一律取快照（fixed → 指定档案；auto → intent 匹配）。
 
 ## S2-2C Provider/Model 高级选择（2026-08-22 已实现）
 
@@ -928,10 +927,9 @@ script 摘要第一版建议至少包含：
 - `createAssetsDispatchHandler` 与 LLM handler 等价：内存镜像缺失 → repository 以数据库为权威加载；内存与 DB 均缺失 → `dispatch_snapshot_missing` 拒绝派发（禁止无快照执行/回退 env）。
 - 漂移防护两个时序：提交前配置/目录变化 → 提交重校验 `409 generation_quote_configuration_changed`（capabilities 参与 configuration_hash）；快照创建后变化 → 派发仍按快照模型执行与记账。
 
-## S2-2D 前端生成面板报价流程接入（2026-08-22 已实现）
+## S2-2D 前端报价流程移除与费用清单（2026-08-23 已实现）
 
-- 背景：真实付费部署（`LLM_PROVIDER != stub`）下 topic/script/storyboard/publish 四个生成面板此前未接入报价流程，`409 paid_generation_quote_required` 只作为裸报错展示（S2-2A 遗留未完成项）。
-- 交互模式（四面板统一，复用 `GenerationQuoteDialog` + `useQuoteAwareGeneration` 编排 helper）：**免 quote 优先 → 409 进报价**——stub/fake 部署直连生成（零行为变化）；真实部署收到 409 后自动创建报价 → 报价确认弹窗（预计费用/授权上界/unbounded 强制授权勾选）→ 确认后携带 `cost_quote_id + idempotency_key + authorize_budget_override` 提交同一张 quote。
-- 错误语义（沿用 AssetPanel）：报价创建失败（`generation_quote_resolution_failed`/`generation_quote_unquotable`）→ 提示报价服务暂不可用（本地部署回退）；提交 409/422 业务冲突 → 关闭弹窗提示重新报价（不重放旧 quote）；网络失败 → 保留弹窗复用同一 quote+幂等键重试；quote 过期 → 自动重新创建。
-- store 层：四 store 生成函数透传 `QuoteSubmitFields`（映射 `cost_quote_id`/`idempotency_key`/`authorize_budget_override`，缺省不携带）；对 `paid_generation_quote_required` 409 上抛（不吞进 loadError），其余错误保持 loadError 展示语义。
-- 覆盖入口：topic（系统推荐/事件库）、script（自动首稿/重新生成）、storyboard（整体生成/分段重生）、publish（发布包/封面）。voice.preview 试听与 asset 面板既有报价流程不变。
+- 背景：报价确认弹窗体系被判定为严重影响体验且与产品预期不符，S2-2 报价/授权体系整体移除。
+- 交互：四个生成面板（topic/script/storyboard/publish）与新建项目对话框、asset 面板、voice.preview 试听全部恢复直连生成（无报价弹窗、无 409 门禁）。资产生成手动入口保留生成前的预估费用确认（ElMessageBox，前端估算），自动触发与重试不弹窗。
+- 费用清单：工作区顶栏新增"费用"按钮，打开跨阶段共用的费用面板（默认收起）；按流水线阶段分组展示请求级消费明细（LLM 模型/token 输入输出/价格、图片规格/数量/模型/价格、视频画质/秒数/价格、TTS 字符数），区分预计与已确认实际（cost_basis 标注）。
+- store 层：生成函数不再携带 quote 字段；`generation-cost` store 保留成本只读（summary/records），在应用入口全局 provide 共享。
