@@ -108,7 +108,7 @@ onMounted(async () => {
 
 <template>
   <div class="project-workspace">
-    <WorkspaceHeader @open-project-settings="projectSettingsOpen = true" @open-cost-panel="costPanelOpen = true" />
+    <WorkspaceHeader @open-project-settings="projectSettingsOpen = true" />
     <div v-if="isAdminDeputizing" class="deputize-banner" data-testid="deputize-banner">
       <span class="deputize-icon">&#9888;</span>
       <span>正在以管理员身份查看其他用户的项目，请谨慎操作，操作将记录在审计日志。</span>
@@ -129,10 +129,42 @@ onMounted(async () => {
       :open="costPanelOpen"
       @close="costPanelOpen = false"
     />
+    <button
+      class="cost-fab"
+      data-testid="open-cost-panel"
+      title="项目费用清单"
+      @click="costPanelOpen = true"
+    >
+      💰 费用
+    </button>
   </div>
 </template>
 
 <style scoped>
+.cost-fab {
+  position: fixed;
+  left: 24px;
+  bottom: 24px;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(201, 162, 39, 0.35);
+  background: rgba(31, 27, 24, 0.92);
+  color: #f5f0e8;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.cost-fab:hover {
+  background: rgba(201, 162, 39, 0.18);
+  transform: translateY(-1px);
+}
+
 .project-workspace {
   display: flex;
   flex-direction: column;
