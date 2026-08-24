@@ -19,8 +19,9 @@ import { recordLlmUsage } from "./usage-cost-recorder.js";
  * 保持原 writer 不记账。
  */
 
-/** promptId → LLM tier（与 generation-cost.service OPERATION_LLM_SLOTS 对齐）。 */
-const PROMPT_ID_TO_TIER: Record<string, "llm.smart" | "llm.flash"> = {
+/** promptId → LLM tier（与 generation-cost.service OPERATION_LLM_SLOTS 对齐）。
+ * 导出供补记脚本（harness）复用同一映射真相源，避免二次维护漂移。 */
+export const PROMPT_ID_TO_TIER: Record<string, "llm.smart" | "llm.flash"> = {
   // topic.generate（llm.smart）
   "topic.candidate-builder": "llm.smart",
   "topic.candidate-builder-repair": "llm.smart",
@@ -47,8 +48,9 @@ const PROMPT_ID_TO_TIER: Record<string, "llm.smart" | "llm.flash"> = {
   "asset.prompt-optimizer": "llm.flash",
 };
 
-/** operation → 回退 tier（未知 promptId 时按 operation 默认 slot 记账）。 */
-const OPERATION_FALLBACK_TIER: Record<GenerationOperation, "llm.smart" | "llm.flash"> = {
+/** operation → 回退 tier（未知 promptId 时按 operation 默认 slot 记账）。
+ * 导出供补记脚本（harness）复用同一映射真相源，避免二次维护漂移。 */
+export const OPERATION_FALLBACK_TIER: Record<GenerationOperation, "llm.smart" | "llm.flash"> = {
   "topic.generate": "llm.smart",
   "script.generate": "llm.smart",
   "storyboard.generate": "llm.smart",

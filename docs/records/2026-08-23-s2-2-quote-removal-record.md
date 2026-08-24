@@ -32,3 +32,18 @@
 ## 结论
 
 报价移除后的核心 UI（顶栏费用入口、默认收起的费用面板、无报价弹窗、无预算 UI、试听直连）在真实浏览器环境验证通过。后端 242 文件 2144 用例、前端 29 文件 190 用例与构建全部通过。
+
+## 补记：费用面板"运行成功但无消费记录"问题（2026-08-24）
+
+用户反馈：项目已完成选题与文案生成，费用面板显示"运行：成功 2"但"暂无消费记录"。
+
+根因：`20260823000000_s2_2_usage_unit_detail` 迁移（UsageCostRecord 增加 unitDetailJson 列）是在两次生成 run 完成之后才部署的。生成期间 LLM 记账落库因列缺失整体失败，审计事件 `usage_recording_failed` 留痕了每次失败的 interaction_id，interaction 日志（`storage/projects/.../trace/*-runs/<runId>/llm-interactions/*.md`）保留了真实 token 用量；run 本身仍正常成功。记账失败不阻断生成主链路（既定留痕策略），因此用户看到"成功 2 / 暂无消费记录"。
+
+修复：
+1. 迁移部署（commit a4ab4fa）后，后续 run 的记账路径已恢复（同一 writer/同一列集合，无其他遗留断点）。
+2. 新增维护脚本 `harness/scripts/maintenance/backfill-missing-usage-records.ts`：按 `usage_recording_failed` 审计反查 interaction 日志，复用生产 `recordLlmUsage` 以同一语义补写 UsageCostRecord（幂等，已存在的记账键跳过）。本次为 2 个 run 补记 4 条 token 记账（topic 3569+2968 / 4699+1219；script 3271+753 / 3019+1175）。
+3. 浏览器实测：费用面板按"选题/文案"阶段展示 4 条明细（模型 deepseek-v4-pro、输入/输出 token、succeeded）。
+
+金额显示 ¥0 的原因：目录中 deepseek-v4-pro 未登记已核实公开单价（unpriced 诚实原则），按 0 计不伪造价格；运营核实价格写入 ProviderModelCatalog 后，新记账将按目录价计价。
+
+边界：脚本只处理 status=succeeded 的单 attempt interaction；failed run 与多 attempt 汇总日志不补记（防伪造）。
