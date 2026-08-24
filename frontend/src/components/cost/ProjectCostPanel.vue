@@ -154,6 +154,7 @@ const runStatusSummary = computed(() => {
     :model-value="open"
     title="项目费用清单"
     size="480px"
+    direction="ltr"
     @update:model-value="(value: boolean) => !value && emit('close')"
   >
     <div v-if="store.state.costSummary.error" class="cost-error" data-testid="cost-load-error">
