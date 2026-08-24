@@ -65,8 +65,16 @@ interface StageGroup {
   key: string;
   label: string;
   records: ProjectCostRecordDto[];
+  /** 组内是否存在有目录价的消费（LLM 只展示用量，不计金额）。 */
+  priced: boolean;
   estimated: string;
   actual: string;
+}
+
+/** LLM token 消费只展示用量（模型/token），不展示金额：
+ * provider 交互不返回价格，目录价未经核实且官网价格持续变动。 */
+function isLlm(record: ProjectCostRecordDto): boolean {
+  return record.capability === "llm.smart" || record.capability === "llm.flash";
 }
 
 const stageGroups = computed<StageGroup[]>(() => {
@@ -81,7 +89,10 @@ const stageGroups = computed<StageGroup[]>(() => {
     const list = byStage.get(key) ?? [];
     let estimated = 0n;
     let actual = 0n;
+    let priced = false;
     for (const record of list) {
+      if (isLlm(record)) continue;
+      priced = true;
       estimated += BigInt(record.estimated_cost_cny.replace(".", ""));
       if (record.actual_cost_cny !== null) actual += BigInt(record.actual_cost_cny.replace(".", ""));
     }
@@ -90,8 +101,20 @@ const stageGroups = computed<StageGroup[]>(() => {
       const abs = value < 0n ? -value : value;
       return `${sign}${abs.toString().slice(0, -6) || "0"}.${abs.toString().slice(-6).padStart(6, "0")}`;
     };
-    return { key, label: STAGE_LABELS[key] ?? key, records: list, estimated: micros(estimated), actual: micros(actual) };
+    return { key, label: STAGE_LABELS[key] ?? key, records: list, priced, estimated: micros(estimated), actual: micros(actual) };
   });
+});
+
+/** 面板顶部总额：与阶段小计同源聚合（排除 LLM 金额），保证明细与汇总一致。 */
+const totals = computed(() => {
+  let estimated = 0n;
+  let actual = 0n;
+  for (const group of stageGroups.value) {
+    estimated += BigInt(group.estimated.replace(".", ""));
+    if (group.actual !== "0.000000") actual += BigInt(group.actual.replace(".", ""));
+  }
+  const micros = (value: bigint) => `${value.toString().slice(0, -6) || "0"}.${value.toString().slice(-6).padStart(6, "0")}`;
+  return { estimated: micros(estimated), actual: micros(actual) };
 });
 
 const COST_BASIS_LABELS: Record<string, string> = {
@@ -168,13 +191,16 @@ const runStatusSummary = computed(() => {
       <div class="cost-totals">
         <div class="cost-total">
           <span class="cost-total-label">总预计费用</span>
-          <span class="cost-total-value" data-testid="cost-total-estimated">¥{{ microsDecimalToCnyDisplay(summary.total_estimated_cost_cny) }}</span>
+          <span class="cost-total-value" data-testid="cost-total-estimated">¥{{ microsDecimalToCnyDisplay(totals.estimated) }}</span>
         </div>
         <div class="cost-total">
           <span class="cost-total-label">已确认实际</span>
-          <span class="cost-total-value" data-testid="cost-total-actual">¥{{ microsDecimalToCnyDisplay(summary.total_actual_cost_cny) }}</span>
+          <span class="cost-total-value" data-testid="cost-total-actual">¥{{ microsDecimalToCnyDisplay(totals.actual) }}</span>
         </div>
       </div>
+      <p class="cost-llm-note" data-testid="cost-llm-note">
+        LLM 消费按 token 用量展示，价格以供应商官网为准，不在此计入金额。
+      </p>
       <p v-if="runStatusSummary" class="cost-run-status">运行：{{ runStatusSummary }}</p>
 
       <div v-if="stageGroups.length === 0" class="cost-empty" data-testid="cost-empty">
@@ -184,10 +210,11 @@ const runStatusSummary = computed(() => {
       <section v-for="group in stageGroups" :key="group.key" class="cost-stage" data-testid="cost-stage-group">
         <header class="cost-stage-header">
           <span class="cost-stage-name">{{ group.label }}</span>
-          <span class="cost-stage-total">
+          <span v-if="group.priced" class="cost-stage-total">
             预计 ¥{{ microsDecimalToCnyDisplay(group.estimated) }}
             <template v-if="group.actual !== '0.000000'"> · 实际 ¥{{ microsDecimalToCnyDisplay(group.actual) }}</template>
           </span>
+          <span v-else class="cost-stage-total">—</span>
         </header>
         <ul class="cost-stage-records">
           <li v-for="record in group.records" :key="record.id" class="cost-record" data-testid="cost-record">
@@ -195,7 +222,10 @@ const runStatusSummary = computed(() => {
               <span class="cost-record-title">{{ recordTitle(record) }}</span>
               <span class="cost-record-status">{{ record.status }}</span>
             </div>
-            <div class="cost-record-amounts">
+            <div v-if="isLlm(record)" class="cost-record-amounts">
+              <span class="cost-record-unpriced" data-testid="cost-record-unpriced">—</span>
+            </div>
+            <div v-else class="cost-record-amounts">
               <span class="cost-record-estimated">¥{{ microsDecimalToCnyDisplay(record.estimated_cost_cny) }}</span>
               <span v-if="record.actual_cost_cny !== null" class="cost-record-actual">
                 ¥{{ microsDecimalToCnyDisplay(record.actual_cost_cny) }}
@@ -247,6 +277,12 @@ const runStatusSummary = computed(() => {
 }
 
 .cost-run-status {
+  margin: 0;
+  font-size: 12px;
+  color: #8a8178;
+}
+
+.cost-llm-note {
   margin: 0;
   font-size: 12px;
   color: #8a8178;

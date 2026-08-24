@@ -47,3 +47,12 @@
 金额显示 ¥0 的原因：目录中 deepseek-v4-pro 未登记已核实公开单价（unpriced 诚实原则），按 0 计不伪造价格；运营核实价格写入 ProviderModelCatalog 后，新记账将按目录价计价。
 
 边界：脚本只处理 status=succeeded 的单 attempt interaction；failed run 与多 attempt 汇总日志不补记（防伪造）。
+
+## 补记：LLM 消费不展示金额的产品决策（2026-08-24）
+
+用户确认：LLM provider 交互只返回 token 用量（prompt/completion tokens），不返回价格；价格只能来自服务端目录，而目录价格未经核实且官网价格持续变动。据此决策：
+
+- 费用面板中 LLM（llm.smart/llm.flash）记录只展示模型与 token 用量，金额一律显示 "—"，不展示 ¥0/估算价/目录价（避免"免费"或"过时价格"误导）。
+- 顶部"总预计费用/已确认实际"与阶段小计只聚合有目录价的媒体消费（图片/视频/TTS），与明细同源；纯 LLM 阶段显示 "—"。
+- 面板新增说明文字："LLM 消费按 token 用量展示，价格以供应商官网为准，不在此计入金额。"
+- 账本（UsageCostRecord 金额字段）与后端 costs API 不变：token 用量是事实，金额字段保留按目录价的历史估算值，仅展示层不呈现 LLM 金额。

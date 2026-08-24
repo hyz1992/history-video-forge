@@ -130,7 +130,7 @@ afterEach(() => {
 });
 
 describe("ProjectCostPanel（费用清单面板）", () => {
-  it("打开时加载 summary 与 records 并展示总预计/已确认实际", async () => {
+  it("打开时加载 summary 与 records 并展示总预计/已确认实际（仅媒体金额）", async () => {
     const store = createMockCostStore();
     const loadSummary = vi.spyOn(store, "loadCostSummary");
     const loadRecords = vi.spyOn(store, "loadCostRecords");
@@ -141,9 +141,10 @@ describe("ProjectCostPanel（费用清单面板）", () => {
     expect(loadRecords).toHaveBeenCalledWith("proj-1");
     const text = wrapper.text();
     expect(text).toContain("总预计费用");
-    expect(text).toContain("¥3.2");
+    // 顶部总额排除 LLM（媒体：image 0.2 + tts 0.8）
+    expect(text).toContain("¥1");
     expect(text).toContain("已确认实际");
-    expect(text).toContain("¥1.5");
+    expect(text).toContain("¥0.2");
     expect(text).toContain("成功 1");
   });
 
@@ -161,14 +162,21 @@ describe("ProjectCostPanel（费用清单面板）", () => {
     expect(groups[1]!.text()).toContain("qwen3-tts-instruct-flash");
   });
 
-  it("区分 provider actual（provider_usage）与估算（estimate）", async () => {
+  it("LLM 消费只展示用量不展示金额，其余记录区分 provider actual 与估算", async () => {
     const store = createMockCostStore();
     const wrapper = mountPanel(store);
     await flushPromises();
 
     const text = wrapper.text();
+    // LLM 行金额占位 "—"，不出现 LLM 金额
+    expect(wrapper.findAll('[data-testid="cost-record-unpriced"]').length).toBe(1);
+    expect(text).not.toContain("¥2.2");
+    expect(text).not.toContain("¥1.3");
+    // 媒体行保留 basis 标注
     expect(text).toContain("已确认实际");
     expect(text).toContain("估算");
+    // LLM 用量说明
+    expect(text).toContain("LLM 消费按 token 用量展示");
   });
 
   it("金额展示保持字符串精度（不经 Number 计算）", async () => {
@@ -178,8 +186,7 @@ describe("ProjectCostPanel（费用清单面板）", () => {
 
     const text = wrapper.text();
     expect(text).toContain("¥0.2");
-    expect(text).toContain("¥2.2");
-    expect(text).toContain("¥1.3");
+    expect(text).toContain("¥0.8");
   });
 
   it("无记录时展示空状态", async () => {
